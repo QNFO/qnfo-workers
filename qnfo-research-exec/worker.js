@@ -14,7 +14,7 @@ var __defProp2222 = Object.defineProperty;
 var __name2222 = /* @__PURE__ */ __name222((target, value) => __defProp2222(target, "name", { value, configurable: true }), "__name");
 var __defProp22222 = Object.defineProperty;
 var __name22222 = /* @__PURE__ */ __name2222((target, value) => __defProp22222(target, "name", { value, configurable: true }), "__name");
-var VERSION = "0.13.0-verify-precision"; /* 0.13.0 (agent_issues 2221, 2247, 2206, 2207, 2252, 2292, 2262, 2170, 2211, 2052, 2337, 2272): VERIFY-STATED-PRECISION-1 the worker decides each CLAIM line at the precision the paper states (the script compared at 1e-6, so a correctly rounded value read as a mismatch and the paper re-ran from ground); a verification that printed no CLAIM line is retried, never passed; GROUND-SECOND-SOURCE-1 arXiv requests are spaced across slots and retried with backoff, and DataCite (arXiv DOIs) supplies entries when arXiv is thin or refusing; RESEARCH-PARK-REVIEW-1 a review row parks; REVISE-NO-UNREVISED-1 a revise with no applied edit tries the second model and then fails the pass instead of advancing; REVIEW-HARD-GATE-1 HARD findings left at the cycle cap withhold the paper; gate-structure requires the closing sections; CITATION-UNVERIFIED-HOLD-1 an unconfirmed citation defers and then holds the publish (DataCite is the second arXiv lookup); AI-ROUTER-SECOND-PATH-DRILL-1 daily drill. */ /* 0.12.5 AI-STAGE-ATTRIBUTION-2 (agent_issues 2264): each research_parallel slot runs in its own AsyncLocalStorage store, so ai_call_counters stage labels belong to the slot that made the call. PROMPT-CACHE-AFFINITY-1 (agent_issues 2116, PROMPT-CACHE-PREFIX-4): aiText sends x-session-affinity keyed on the 4 KB after the shared preamble (the paper or writer input), so the stages of one paper share an instance and its preamble + paper prefix; ops_config research_affinity_scope = prefix restores the old one-key-per-model hash. */ /* 0.12.3 NOZ-DOI-1 (2026-10-11): the pipeline publishes in-house only and calls no external DOI registrar: the deposit, version-request, metadata-edit and related-link stages are gone, new and revised papers write doi, zenodo_doi and zenodo_url NULL, and the folded errata and reviser members carry the same change. */ /* 0.12.2 ENSEMBLE-PREFIX-STAGGER-1 (agent_issues 2116, PROMPT-CACHE-PREFIX-3): the second glm-5.3-flash writer leg starts research_prefix_stagger_ms (default 12 s) after the first, so it reads the shared preamble + grounding prompt from the prefix cache instead of prefilling it in parallel. */ /* 0.12.0 ACCURACY-GROUND-1 (owner directive 2026-10-10, pillar research): generated text is checked against the text it was given. The reviser audit prompt no longer lets a "low" edit assert content (bridge sentences, comparisons, definitions) and a deterministic guard demotes any low edit that adds a name, figure, year, link or new content words to high; the errata drafter writes a correction only from the errata email or the paper and a name, year, figure, DOI or link in neither makes the draft high risk (never sent); the writer, reconcile and review preambles require every statement about a cited work to be derivable from its supplied bibliography entry, and say so when the entry is thin. */ /* 0.11.2 PROMPT-CACHE-PREFIX-2 (agent_issues 2116): review, revise-patch, revise and verify prompts put the paper right after the shared preamble as a context block, before the task selector and per-call text, so consecutive stages on one paper share preamble + paper as a cached prefix. Models, max_tokens, parsers and gates unchanged. */ /* 0.11.1 LEAN-ENSEMBLE-1 (agent_issues 2118, 1795): while a fleet_budget ai_spend cap is breached the writer ensemble runs its two disjoint-family legs instead of three (the third was a second glm-5.3-flash leg); reconcile joins only drafts of the current grounding; ops_config research_lean_ensemble = off restores three legs. */ // /* 0.10.5 REVISE-PATCH-PARSE-1 (agent_issues 2211): the revise patch array is parsed tolerantly (LaTeX backslashes kept, code fences and bracketed prose before the array skipped, each edit object read on its own when the array does not parse), so a LaTeX-heavy or truncated answer no longer loses every edit; 14 of 335 calls in 7 days proposed 0 edits from long output. The four publish binds pass pub.doi and pub.record as || null, so a result shape missing a key can no longer throw D1_TYPE_ERROR (the 0.10.3 outage). */ /* 0.10.4 INHOUSE-PUBLISH-3: the in-house publish result carries conceptdoi and record as null, so publishStageV2 no longer binds undefined (D1_TYPE_ERROR every tick under 0.10.3). */ // 0.9.65 ERRATA-FOLD-1 (#1756, 2026-10-06, pillar cost): errata-hub runs here as a member (errataMod) at its own minutes on the */15 tick (:00 watch, :15 respond, :30 publish), awaited; GET /errata-hub/health; nodejs_compat, BROWSER and SEND_EMAIL move here with it. 0.9.64 REVISER-FOLD-1 (#1756, 2026-10-06, pillar cost): qnfo-paper-reviser runs here as a member (reviserMod) on the :30 tick of every fourth hour; GET /reviser/health; its private routes answer a service binding whose props name the member. 0.9.63 RELATED-LEGACY-FIELDS-1 (#1907, 2026-10-06): the related-link drain fills the legacy upload_type / publication_type from an InvenioRDM resource_type before the PUT (record 22025544 failed with "metadata.resource_type: Missing data for required field"); the error row is re-queued once this is live. // MATH-LATEX-2 (2026-10-05, #1891): MATH_RULE in the writer, reconcile and revise prompts; pseudoMathScan() turns plain-text math into a HARD review finding and a math-scan event at verify; ops_config research_math_gate=enforce makes it a pre-publish gate (revise once, then park). // WRITER-FLASH-1 (2026-10-05, #1795): the second ensemble writer leg and the revise-patch retry leave glm-5.3 (3,279 neurons per call) for glm-5.3-flash and gpt-oss-120b. // PRIOR-WORK-EMPTY-1 (2026-10-02): no empty "Prior Work" section; References matched at line start. // 0.9.54 RUN-INTERNAL-1 (#1783, ported from code task ct_zvckl6t5d4e1fd): POST /run?sync=1 and POST /run/drain-v2 refuse public hostnames (*.workers.dev, qnfo.org); the cron and service-binding callers (qnfo-research-supervisor RESEARCH_EXEC, the dashboard SVC binding) are unaffected; METADATA-VERIFY-ORDER-1 (2026-10-02, #1732): verifyMetadataBackfill writes issue_triage.close_evidence before it closes the issue (the close-evidence trigger aborted the old order, so the backfill could never close itself); 0.9.52 UTF8-DEPLOY-1 (2026-10-02): no code change; redeployed so the live copy is UTF-8 (the old deploy path double-encoded every non-ASCII character) /* 0.13.0 NOZ-DOI-1 (2026-10-11): history entries about the retired external deposit stages are in git. */
+var VERSION = "0.14.0-paper-complete"; /* 0.14.0 PAPER-COMPLETE-1 + PRACTICAL-RELEVANCE-1 (owner directive 2026-10-12, pillar research): papers have no maximum length and are never published cut off. Every Workers AI call stops at 8192 output tokens (larger budgets time out, 3046), so a full paper never fit one call: 10 papers published 2026-10-09..12 end mid-sentence or mid-equation, with sections cited that do not exist (factoring-hardness-as-a-bayesian-prior...). A new stage `complete` sits between reconcile and review: paperCompleteness() checks the required sections, a clean ending, balanced display math and that every "Section N" cited exists; an incomplete paper is continued (from its last whole paragraph) or has a missing middle section written and inserted in place, COMPLETE_ROUNDS_PER_TICK rounds per tick with no length or round cap, only a no-progress guard. Review, revise and verify send an incomplete paper back to `complete` instead of patch-revising it; the 24k/34k/20k-char slices that fed models truncated papers are gone; the length ceilings in the prompts are removed. Every paper now carries "## 7. Practical Implications and Engineering Pathways" and opens with the real-world problem it addresses (process and style rules only, no topic nouns); missing it is a structure finding. COMPLETENESS-SWEEP-1: once a day the worker queues a remediation row for every published pipeline paper that fails the truncation checks, so the full pipeline rewrites and republishes it as a new version; remediation papers now pass the structure gate too. REFS-MOJIBAKE-1: reference titles double-encoded as Latin-1 are repaired when the list is rendered. */ /* 0.13.0 (agent_issues 2221, 2247, 2206, 2207, 2252, 2292, 2262, 2170, 2211, 2052, 2337, 2272): VERIFY-STATED-PRECISION-1 the worker decides each CLAIM line at the precision the paper states (the script compared at 1e-6, so a correctly rounded value read as a mismatch and the paper re-ran from ground); a verification that printed no CLAIM line is retried, never passed; GROUND-SECOND-SOURCE-1 arXiv requests are spaced across slots and retried with backoff, and DataCite (arXiv DOIs) supplies entries when arXiv is thin or refusing; RESEARCH-PARK-REVIEW-1 a review row parks; REVISE-NO-UNREVISED-1 a revise with no applied edit tries the second model and then fails the pass instead of advancing; REVIEW-HARD-GATE-1 HARD findings left at the cycle cap withhold the paper; gate-structure requires the closing sections; CITATION-UNVERIFIED-HOLD-1 an unconfirmed citation defers and then holds the publish (DataCite is the second arXiv lookup); AI-ROUTER-SECOND-PATH-DRILL-1 daily drill. */ /* 0.12.5 AI-STAGE-ATTRIBUTION-2 (agent_issues 2264): each research_parallel slot runs in its own AsyncLocalStorage store, so ai_call_counters stage labels belong to the slot that made the call. PROMPT-CACHE-AFFINITY-1 (agent_issues 2116, PROMPT-CACHE-PREFIX-4): aiText sends x-session-affinity keyed on the 4 KB after the shared preamble (the paper or writer input), so the stages of one paper share an instance and its preamble + paper prefix; ops_config research_affinity_scope = prefix restores the old one-key-per-model hash. */ /* 0.12.3 NOZ-DOI-1 (2026-10-11): the pipeline publishes in-house only and calls no external DOI registrar: the deposit, version-request, metadata-edit and related-link stages are gone, new and revised papers write doi, zenodo_doi and zenodo_url NULL, and the folded errata and reviser members carry the same change. */ /* 0.12.2 ENSEMBLE-PREFIX-STAGGER-1 (agent_issues 2116, PROMPT-CACHE-PREFIX-3): the second glm-5.3-flash writer leg starts research_prefix_stagger_ms (default 12 s) after the first, so it reads the shared preamble + grounding prompt from the prefix cache instead of prefilling it in parallel. */ /* 0.12.0 ACCURACY-GROUND-1 (owner directive 2026-10-10, pillar research): generated text is checked against the text it was given. The reviser audit prompt no longer lets a "low" edit assert content (bridge sentences, comparisons, definitions) and a deterministic guard demotes any low edit that adds a name, figure, year, link or new content words to high; the errata drafter writes a correction only from the errata email or the paper and a name, year, figure, DOI or link in neither makes the draft high risk (never sent); the writer, reconcile and review preambles require every statement about a cited work to be derivable from its supplied bibliography entry, and say so when the entry is thin. */ /* 0.11.2 PROMPT-CACHE-PREFIX-2 (agent_issues 2116): review, revise-patch, revise and verify prompts put the paper right after the shared preamble as a context block, before the task selector and per-call text, so consecutive stages on one paper share preamble + paper as a cached prefix. Models, max_tokens, parsers and gates unchanged. */ /* 0.11.1 LEAN-ENSEMBLE-1 (agent_issues 2118, 1795): while a fleet_budget ai_spend cap is breached the writer ensemble runs its two disjoint-family legs instead of three (the third was a second glm-5.3-flash leg); reconcile joins only drafts of the current grounding; ops_config research_lean_ensemble = off restores three legs. */ // /* 0.10.5 REVISE-PATCH-PARSE-1 (agent_issues 2211): the revise patch array is parsed tolerantly (LaTeX backslashes kept, code fences and bracketed prose before the array skipped, each edit object read on its own when the array does not parse), so a LaTeX-heavy or truncated answer no longer loses every edit; 14 of 335 calls in 7 days proposed 0 edits from long output. The four publish binds pass pub.doi and pub.record as || null, so a result shape missing a key can no longer throw D1_TYPE_ERROR (the 0.10.3 outage). */ /* 0.10.4 INHOUSE-PUBLISH-3: the in-house publish result carries conceptdoi and record as null, so publishStageV2 no longer binds undefined (D1_TYPE_ERROR every tick under 0.10.3). */ // 0.9.65 ERRATA-FOLD-1 (#1756, 2026-10-06, pillar cost): errata-hub runs here as a member (errataMod) at its own minutes on the */15 tick (:00 watch, :15 respond, :30 publish), awaited; GET /errata-hub/health; nodejs_compat, BROWSER and SEND_EMAIL move here with it. 0.9.64 REVISER-FOLD-1 (#1756, 2026-10-06, pillar cost): qnfo-paper-reviser runs here as a member (reviserMod) on the :30 tick of every fourth hour; GET /reviser/health; its private routes answer a service binding whose props name the member. 0.9.63 RELATED-LEGACY-FIELDS-1 (#1907, 2026-10-06): the related-link drain fills the legacy upload_type / publication_type from an InvenioRDM resource_type before the PUT (record 22025544 failed with "metadata.resource_type: Missing data for required field"); the error row is re-queued once this is live. // MATH-LATEX-2 (2026-10-05, #1891): MATH_RULE in the writer, reconcile and revise prompts; pseudoMathScan() turns plain-text math into a HARD review finding and a math-scan event at verify; ops_config research_math_gate=enforce makes it a pre-publish gate (revise once, then park). // WRITER-FLASH-1 (2026-10-05, #1795): the second ensemble writer leg and the revise-patch retry leave glm-5.3 (3,279 neurons per call) for glm-5.3-flash and gpt-oss-120b. // PRIOR-WORK-EMPTY-1 (2026-10-02): no empty "Prior Work" section; References matched at line start. // 0.9.54 RUN-INTERNAL-1 (#1783, ported from code task ct_zvckl6t5d4e1fd): POST /run?sync=1 and POST /run/drain-v2 refuse public hostnames (*.workers.dev, qnfo.org); the cron and service-binding callers (qnfo-research-supervisor RESEARCH_EXEC, the dashboard SVC binding) are unaffected; METADATA-VERIFY-ORDER-1 (2026-10-02, #1732): verifyMetadataBackfill writes issue_triage.close_evidence before it closes the issue (the close-evidence trigger aborted the old order, so the backfill could never close itself); 0.9.52 UTF8-DEPLOY-1 (2026-10-02): no code change; redeployed so the live copy is UTF-8 (the old deploy path double-encoded every non-ASCII character) /* 0.13.0 NOZ-DOI-1 (2026-10-11): history entries about the retired external deposit stages are in git. */
 // WORKERS-AI-ATTRIBUTION-1 (2026-10-01, #1681): per-worker Workers AI attribution. Returns a shallow env copy whose AI
 // binding records each .run() (calls, errors, ms, tokens, neurons) into qnfo-audit ai_call_counters (purpose 'binding').
 // Neurons = usage tokens x Cloudflare's published per-model rates (neurons per M tokens). Fail-soft; env is never mutated.
@@ -1663,14 +1663,16 @@ var RESEARCH_SHARED_PREAMBLE = [
   "You are one of three independent research writers producing a full-length preprint for open publication. All three writers receive the SAME input block; write independently and do not imitate a template beyond the required structure.",
   "Requirements:",
   "- Output ONLY the paper markdown, starting directly with '# <Title>'.",
-  "- Required headings, in order: '# <Title>', '## Abstract', '## 1. Introduction', '## 2. Background and Related Work', '## 3. Methods', '## 4. Analysis', '## 5. Results', '## 6. Discussion', '## 7. Conclusion', '## References'.",
-  "- Length: 15000-22000 characters. A serious paper, not a stub.",
+  "- Required headings, in order: '# <Title>', '## Abstract', '## 1. Introduction', '## 2. Background and Related Work', '## 3. Methods', '## 4. Analysis', '## 5. Results', '## 6. Discussion', '## 7. Practical Implications and Engineering Pathways', '## 8. Conclusion', '## References'.",
+  "- Length: no maximum. Write every required section in full, as long as its substance needs; at least 20000 characters. Never stop early, never compress a section into a summary of itself, and never end a sentence, equation or table unfinished: the paper ends only after its Conclusion and References.",
+  "- Section 1 (Introduction) opens with the concrete real-world problem the work bears on: who faces it, what it costs or blocks today, and what decision, design or capability would change if the paper's result holds. Answer 'so what?' before stating the contributions.",
   "- Abstract: 150-220 words summarizing problem, method, results, significance.",
   "- Section 2 MUST discuss at least 8 works from the provided Bibliography, cited as [1], [2], ... in the bibliography's exact numbering, each with one or two sentences of substantive context. Every statement about what a cited work did, found, argued or used must be derivable from that entry's own supplied text (its title and summary in the Bibliography) and nothing else: your memory of a work is not a source. When an entry's summary is thin, say in one sentence that the summary supplied gives no further detail, and relate the work to your argument only through what the summary states. Never a bare citation, and never a finding, method, number, date or name that the entry does not state.",
   "- Section 4 (Analysis) MUST show explicit derivations: state every input number with its source, show every arithmetic step. No 'it can be shown' hand-waving.",
   "- Section 5 (Results): report ONLY numbers you actually computed in Section 4, or clearly-labeled projections with stated assumptions and uncertainty bounds. NEVER invent data, simulation results, or empirical measurements.",
   "- Derive at least one concrete numerical result with full arithmetic.",
   "- Section 6 (Discussion): limitations, failure modes, what would falsify the claims, open questions. Argue against yourself.",
+  "- Section 7 (Practical Implications and Engineering Pathways): translate the result into practice. Name who could use it and for what decision, process, product or policy; describe how it would be built, deployed, manufactured or adopted (components, materials, data, tooling, process steps, interfaces and integration points as relevant); state what stands between the result and real use (maturity, cost drivers, scale-up and manufacturability constraints, regulation, required evidence); and give the smallest concrete next experiment, prototype or pilot that would test it. Every number here is computed in Section 4 or labeled a projection with stated assumptions. When the work has no credible near-term application, say so plainly and state what would have to become true for one to exist; never invent an application, market, cost or performance figure.",
   "- References: list ONLY works from the provided Bibliography, in the same order, numbered [1]..[n]. Copy titles and identifiers EXACTLY from the bibliography. NEVER invent a reference. If the bibliography has fewer than 8 works, cite all of them and state the limitation in the Discussion.",
   "- No meta-commentary about writing, authorship, or AI. No 'Let me', no thinking text, no placeholder text, no '[to verify]' markers. Every quantitative claim is either computed here or explicitly labeled a projection with stated assumptions.",
   "- Write for an adjacent-field expert; define jargon once.",
@@ -1681,8 +1683,8 @@ var RESEARCH_SHARED_PREAMBLE = [
   "Steps:",
   "1. Read all available drafts. Extract every substantive claim (numbered C1..Cn) and attribute each to source drafts (A/B/C) with agreement status: CONVERGENT (>=2 drafts, same substance), DIVERGENT (conflicting), or SINGLE (one draft only).",
   "2. For DIVERGENT claims: report the conflict explicitly in '## Appendix A. Divergence report' - state each side and the convention/assumption behind the disagreement. NEVER silently resolve a divergence; choose one convention for the main text and document that choice.",
-  "3. Write the reconciled paper using the best-substantiated version of each convergent claim. Required headings in order: '# <Title>', '## Abstract', '## 1. Introduction', '## 2. Background and Related Work', '## 3. Methods', '## 4. Analysis', '## 5. Results', '## 6. Discussion', '## 7. Conclusion', '## References', '## Appendix A. Divergence report', '## Appendix B. Claim attribution'.",
-  "4. Length: 18000-30000 characters.",
+  "3. Write the reconciled paper using the best-substantiated version of each convergent claim. Required headings in order: '# <Title>', '## Abstract', '## 1. Introduction', '## 2. Background and Related Work', '## 3. Methods', '## 4. Analysis', '## 5. Results', '## 6. Discussion', '## 7. Practical Implications and Engineering Pathways', '## 8. Conclusion', '## References', '## Appendix A. Divergence report', '## Appendix B. Claim attribution'.",
+  "4. Length: no maximum. Carry every substantive section of the drafts through in full and complete any section a draft left unfinished; never end mid-sentence or mid-equation. Keep the Introduction's real-world problem statement and Section 7's practical pathway (who uses it, how it is built or adopted, what blocks it, the next concrete test), merging the drafts' versions under the same grounding rules.",
   "5. Section 2 must discuss at least 8 bibliography works. Keep only statements about a work that its supplied entry supports; drop or reword any a draft added from memory, and where an entry is thin say so. References section lists ONLY bibliography works, in the bibliography's exact order and numbering. Never invent references.",
   "6. Quantitative claims: computed with shown arithmetic, or labeled projections with stated assumptions. No '[to verify]', no invented data.",
   "7. Appendix B: the claim table (C1..Cn, source drafts, agreement status).",
@@ -1695,11 +1697,12 @@ var RESEARCH_SHARED_PREAMBLE = [
   "1. Citation integrity: every reference in '## References' MUST appear in the provided BIBLIOGRAPHY with its machine identifier; invented/unsourced/unverifiable references = HARD.",
   "2. Quantitative honesty: any quantitative claim NOT derived with shown arithmetic in the paper AND NOT labeled as a projection with stated assumptions = HARD.",
   "3. Arithmetic: spot-check 2-3 derivations; an arithmetic error in a headline number = HARD.",
-  "4. Structure: missing required sections, References with fewer than 8 entries, body shorter than 15000 characters = HARD.",
+  "4. Structure: missing required sections (including Section 7 Practical Implications and Engineering Pathways), a paper that ends mid-sentence or mid-equation, a cross-reference to a section that does not exist, References with fewer than 8 entries, body shorter than 15000 characters = HARD.",
   "5. Prose gates: meta-commentary, reasoning preamble, 'Let me', '[to verify]' markers, placeholder text = HARD.",
   "6. Depth: superficial literature treatment, unexplained jargon, unstated limitations = SOFT.",
   "7. Divergence honesty: Appendix A present when drafts diverged = SOFT if missing.",
   "8. Source support: any statement about what a cited work did, found or argued, or any claim about the outside world, that is not stated in that work's supplied Bibliography entry or the grounding input = HARD. Quote the unsupported sentence in claim.",
+  "9. Practical relevance: an application, cost, market or performance figure in Section 7 that is neither derived in the paper nor labeled a projection with stated assumptions = HARD; a Section 7 that names no user, no build or adoption path, no blocker or no next concrete test, or an Introduction that never states the real-world problem = SOFT.",
   'verdict = "revise" iff hard is non-empty. Do not pad hard with soft issues.',
   "### TASK REVISE",
   "You are the revising author. Apply the reviewer's HARD fixes to the paper. Return ONLY the full revised paper markdown with the same required structure and headings.",
@@ -1719,7 +1722,14 @@ var RESEARCH_SHARED_PREAMBLE = [
   "Write ONE self-contained Python 3 script (stdlib only: math, fractions) that independently computes each claim from its stated inputs and prints for each:",
   "CLAIM <id>: computed=<value> expected=<value-or-none> match=yes|no",
   "Print computed with at least 8 significant digits. Print expected as a plain number carrying exactly the digits the paper states, no more and no fewer, converted to the unit of computed; keep it a string literal in the script so no digit is added or dropped. A claim matches when computed, rounded to the number of significant digits the paper states, equals the stated value. Compute from the stated inputs and formula; do NOT copy the paper's answer as the computation - the script must reproduce the derivation. Print a final line 'VERIFICATION SUMMARY: N claims, M match, K mismatch'.",
-  "Output the script inside a single python fenced block, nothing else."
+  "Output the script inside a single python fenced block, nothing else.",
+  "### TASK CONTINUE",
+  "The PAPER SO FAR in the shared context stopped before it was finished. Continue it from exactly where it stops: the next paragraph, the rest of the current section, then every remaining required section in the required order, ending with the Conclusion.",
+  "Output ONLY the continuation markdown. Do not repeat the title, the abstract or any text already written; do not restart or summarize earlier sections; do not write the References list (it is rendered from the bibliography).",
+  "Follow every WRITER requirement above: derivations with shown arithmetic, no invented data, cite only the numbered Bibliography in the grounding, LaTeX for all mathematics, no meta-commentary. Keep the paper's notation, numbering and conventions, and refer only to sections that exist or that you write now.",
+  "### TASK SECTION",
+  "Write ONE missing section of the PAPER in the shared context, named below, so it can be inserted in its required place. Output ONLY that section, starting with its '## N. Heading' line, consistent with the paper's existing notation, numbers and citations.",
+  "Follow every WRITER requirement above for that section. State only what the paper already derives or what the grounding supports; label projections with their assumptions; never invent data, applications, costs or references."
 ].join("\n");
 
 function stagePrompt(name, body) {
@@ -2134,7 +2144,7 @@ async function stageGround(env, row) {
     "## Research idea",
     idea,
     "## Existing paper under revision (remediation only)",
-    existing ? existing.slice(0, 24e3) : "(none - new paper)",
+    existing ? existing : "(none - new paper)",
     "## Source material (fetched from arXiv)",
     srcText || "(no arXiv source embedded in idea)",
     "## Related literature (arXiv, real identifiers)",
@@ -2266,6 +2276,312 @@ __name2(stageEnsemble, "stageEnsemble");
 __name22(stageEnsemble, "stageEnsemble");
 __name222(stageEnsemble, "stageEnsemble");
 __name2222(stageEnsemble, "stageEnsemble");
+// PAPER-COMPLETE-1 (0.14.0, owner directive 2026-10-12: "papers shall have no maximum limit"; pillar research). Workers AI stops
+// every call at AI_TEXT_MAX_OUT (8192 tokens; larger budgets end in 3046 timeouts), so a reconciled paper longer than one call's
+// output was cut wherever the budget ran out, and renderReferences then appended a clean reference list that hid the cut:
+// factoring-hardness-as-a-bayesian-prior-... (row 2d279690) was published ending "\qquad p" inside an equation, with Sections
+// 4.3-8 missing and "Section 6" cited. The `complete` stage below finishes a paper over as many calls as it needs. There is no
+// length cap and no round cap; the only stop is COMPLETE_STALL_MAX consecutive rounds that add nothing, which re-drafts the row.
+var COMPLETE_ROUNDS_PER_TICK = 2;
+var COMPLETE_TICK_BUDGET_MS = 6 * 60 * 1e3;
+var COMPLETE_MIN_GAIN = 300;
+var COMPLETE_STALL_MAX = 3;
+// Required body sections in order. Numbers are not part of the match, so older papers numbered differently still match.
+var PAPER_SECTION_ORDER = [
+  { key: "Introduction", n: 1, heading: "Introduction", re: /^##[ \t]*(?:\d+\.?[ \t]*)?Introduction\b/im },
+  { key: "Background", n: 2, heading: "Background and Related Work", re: /^##[ \t]*(?:\d+\.?[ \t]*)?(?:Background|Related Work|Prior Work|Literature)\b/im },
+  { key: "Methods", n: 3, heading: "Methods", re: /^##[ \t]*(?:\d+\.?[ \t]*)?(?:Methods?|Methodology|Model|Framework)\b/im },
+  { key: "Analysis", n: 4, heading: "Analysis", re: /^##[ \t]*(?:\d+\.?[ \t]*)?(?:Analysis|Derivations?)\b/im },
+  { key: "Results", n: 5, heading: "Results", re: /^##[ \t]*(?:\d+\.?[ \t]*)?Results\b/im },
+  { key: "Discussion", n: 6, heading: "Discussion", re: /^##[ \t]*(?:\d+\.?[ \t]*)?Discussion\b/im },
+  { key: "Practical", n: 7, heading: "Practical Implications and Engineering Pathways", re: /^##[ \t]*(?:\d+\.?[ \t]*)?Practical\b/im },
+  { key: "Conclusion", n: 8, heading: "Conclusion", re: /^##[ \t]*(?:\d+\.?[ \t]*)?Conclusions?\b/im }
+];
+// Legacy mode (the published-paper sweep): papers drafted before 0.14.0 have no Practical section and sometimes merge
+// Background or Analysis, so only the signs of a cut are judged there.
+var LEGACY_REQUIRED = { Introduction: 1, Discussion: 1, Conclusion: 1 };
+var CLEAN_END_RE = /(?:[.!?:;)\]}"'”’*_`|]|\$|\$\$|\\\]|^-{3,})[ \t]*$/;
+function paperBodyPart(md) {
+  var s = String(md || "");
+  var hm = REFS_HEAD_RE.exec(s);
+  return (hm ? s.slice(0, hm.index) : s).replace(/\s+$/, "");
+}
+function lastLineOf(s) {
+  var lines = String(s || "").split("\n");
+  for (var i = lines.length - 1; i >= 0; i--) if (lines[i].trim()) return lines[i].trim();
+  return "";
+}
+function endsCleanly(body) {
+  var t = String(body || "").replace(/\s+$/, "");
+  if (!t) return false;
+  if (((t.match(/\$\$/g) || []).length % 2) === 1) return false;
+  if (((t.match(/^```/gm) || []).length % 2) === 1) return false;
+  var last = lastLineOf(t);
+  if (/^#{1,6}\s/.test(last)) return false;
+  return CLEAN_END_RE.test(last);
+}
+function paperCompleteness(md, opts) {
+  var o = opts || {};
+  var body = paperBodyPart(md);
+  var reasons = [];
+  var present = [], missing = [];
+  PAPER_SECTION_ORDER.forEach(function(s) {
+    var m = s.re.exec(body);
+    if (m) present.push({ key: s.key, idx: m.index });
+    else if (!o.legacy || LEGACY_REQUIRED[s.key]) missing.push(s.key);
+  });
+  if (missing.length) reasons.push("missing: " + missing.join(", "));
+  var clean = endsCleanly(body);
+  if (!clean) reasons.push("ends mid-text: «" + lastLineOf(body).slice(-60) + "»");
+  var heads = [];
+  var hre = /^##[ \t]+(\d+)\.?[ \t]/gm, hm;
+  while ((hm = hre.exec(body)) !== null) heads.push(parseInt(hm[1], 10));
+  var maxSec = heads.length ? Math.max.apply(null, heads) : 0;
+  var dangling = [];
+  if (maxSec > 0) {
+    var rre = /\bSections?\s+(\d+)(?:\.\d+)*/g, rm;
+    while ((rm = rre.exec(body)) !== null) {
+      var k = parseInt(rm[1], 10);
+      if (k > maxSec && dangling.indexOf(k) < 0) dangling.push(k);
+    }
+  }
+  if (dangling.length) reasons.push("cites missing section " + dangling.join("/"));
+  // A last required section shorter than a real section is the shape of a cut taken at a heading.
+  var conc = PAPER_SECTION_ORDER[PAPER_SECTION_ORDER.length - 1].re.exec(body);
+  var thinEnd = !!conc && body.slice(conc.index).replace(/^.*\n/, "").trim().length < 200;
+  if (thinEnd) reasons.push("conclusion has no body");
+  var lastPresent = present.length ? present.reduce(function(a, b) { return b.idx > a.idx ? b : a; }) : null;
+  var lastIdx = lastPresent ? PAPER_SECTION_ORDER.findIndex(function(s) { return s.key === lastPresent.key; }) : -1;
+  var tail = missing.filter(function(k) { return PAPER_SECTION_ORDER.findIndex(function(s) { return s.key === k; }) > lastIdx; });
+  var middle = missing.filter(function(k) { return tail.indexOf(k) < 0; });
+  return { complete: reasons.length === 0, reasons: reasons, missing: missing, tailMissing: tail, middleMissing: middle, truncated: !clean || thinEnd || tail.length > 0 || dangling.length > 0, maxSec: maxSec, bodyChars: body.length };
+}
+// The text a continuation starts from: the body without its (mechanical) reference list, cut back to the last whole
+// paragraph when it ends mid-sentence, inside display math or inside a code fence.
+function completionBase(md) {
+  var body = paperBodyPart(md);
+  var guard = 0;
+  while (!endsCleanly(body) && guard++ < 40) {
+    var cut = body.lastIndexOf("\n\n");
+    if (cut < body.length * 0.5) break;
+    body = body.slice(0, cut).replace(/\s+$/, "");
+  }
+  // A trailing heading with no text under it is rewritten by the continuation, not kept twice.
+  var last = lastLineOf(body);
+  if (/^#{1,6}\s/.test(last)) body = body.slice(0, body.lastIndexOf(last)).replace(/\s+$/, "");
+  return body;
+}
+function headingKey(line) {
+  return String(line || "").replace(/^#{1,6}[ \t]*/, "").replace(/^\d+(?:\.\d+)*\.?[ \t]*/, "").trim().toLowerCase();
+}
+function stitchContinuation(base, cont) {
+  var c = String(cont || "").replace(/\r/g, "").trim();
+  var fence = c.match(/^```[a-z]*\n([\s\S]*?)\n```\s*$/i);
+  if (fence) c = fence[1].trim();
+  c = c.replace(/^(?:(?:here is|here's|continuing|continuation|sure|okay)[^\n]*\n)+/i, "").trim();
+  c = c.replace(/^#[ \t][^\n]*\n/, "").trim();
+  var rh = REFS_HEAD_RE.exec(c);
+  if (rh) {
+    var after = c.slice(rh.index + rh[0].length);
+    var nx = after.search(/^#{1,2}\s/m);
+    c = (c.slice(0, rh.index) + (nx >= 0 ? "\n\n" + after.slice(nx) : "")).trim();
+  }
+  // Drop whole blocks that restart a section the base already has.
+  var have = {};
+  String(base).split("\n").forEach(function(l) { if (/^#{2,4}\s/.test(l)) have[headingKey(l)] = 1; });
+  var blocks = c.split(/\n(?=#{2,4}\s)/);
+  var keep = [], dropping = true;
+  blocks.forEach(function(b, i) {
+    var first = b.split("\n")[0];
+    var isHead = /^#{2,4}\s/.test(first);
+    if (dropping && isHead && have[headingKey(first)]) return;
+    if (i === 0 && !isHead) { keep.push(b); return; }
+    dropping = false;
+    keep.push(b);
+  });
+  c = keep.join("\n").trim();
+  // Drop a verbatim restatement of the base's last paragraph.
+  var lastPara = String(base).slice(String(base).lastIndexOf("\n\n") + 2).trim();
+  if (lastPara.length > 40 && c.indexOf(lastPara) === 0) c = c.slice(lastPara.length).trim();
+  if (!c) return String(base);
+  return String(base).replace(/\s+$/, "") + "\n\n" + c + "\n";
+}
+// Insert a written section before the next required section that is present, renumbering the numbered "## N." headings
+// that follow and the "Section N" cross-references that pointed at them.
+function insertSection(md, key, sectionMd) {
+  var s = String(md);
+  var at = PAPER_SECTION_ORDER.findIndex(function(x) { return x.key === key; });
+  var pos = -1;
+  for (var j = at + 1; j < PAPER_SECTION_ORDER.length && pos < 0; j++) {
+    var m = PAPER_SECTION_ORDER[j].re.exec(s);
+    if (m) pos = m.index;
+  }
+  if (pos < 0) {
+    var hm = REFS_HEAD_RE.exec(s);
+    pos = hm ? hm.index : s.length;
+  }
+  var before = s.slice(0, pos).replace(/\s+$/, ""), after = s.slice(pos);
+  var prevNums = (before.match(/^##[ \t]+(\d+)\.?[ \t]/gm) || []).map(function(h) { return parseInt(h.replace(/\D+/g, " ").trim(), 10); });
+  var n = prevNums.length ? Math.max.apply(null, prevNums) + 1 : PAPER_SECTION_ORDER[at].n;
+  var sec = String(sectionMd || "").trim().replace(/^##[ \t]*(?:\d+\.?[ \t]*)?/, "## " + n + ". ");
+  if (!/^## /.test(sec)) sec = "## " + n + ". " + PAPER_SECTION_ORDER[at].heading + "\n\n" + sec;
+  var shiftHead = function(t) { return t.replace(/^(##[ \t]+)(\d+)(\.?[ \t])/gm, function(_, a, d, b) { var k = parseInt(d, 10); return a + (k >= n ? k + 1 : k) + b; }).replace(/^(###[ \t]+)(\d+)(\.\d)/gm, function(_, a, d, b) { var k = parseInt(d, 10); return a + (k >= n ? k + 1 : k) + b; }); };
+  var shiftRefs = function(t) { return t.replace(/\b(Sections?\s+)(\d+)/g, function(_, a, d) { var k = parseInt(d, 10); return a + (k >= n ? k + 1 : k); }); };
+  var refsAt = REFS_HEAD_RE.exec(after);
+  var afterBody = refsAt ? after.slice(0, refsAt.index) : after, afterRefs = refsAt ? after.slice(refsAt.index) : "";
+  return shiftRefs(before) + "\n\n" + sec + "\n\n" + shiftRefs(shiftHead(afterBody)).replace(/^\s+/, "") + afterRefs;
+}
+// REFS-MOJIBAKE-1: a UTF-8 title read as Windows-1252 shows "â€”" for an em dash. Re-encode and decode it once, only when
+// the string has the pattern and the result is valid UTF-8.
+var CP1252_REV = { 8364: 128, 8218: 130, 402: 131, 8222: 132, 8230: 133, 8224: 134, 8225: 135, 710: 136, 8240: 137, 352: 138, 8249: 139, 338: 140, 381: 142, 8216: 145, 8217: 146, 8220: 147, 8221: 148, 8226: 149, 8211: 150, 8212: 151, 732: 152, 8482: 153, 353: 154, 8250: 155, 339: 156, 382: 158, 376: 159 };
+function fixMojibake(s) {
+  var t = String(s == null ? "" : s);
+  if (!/[Â-ô][\u0080-¿ŒœŠšŸŽžƒˆ˜–—‘-„†-•…‰‹›€™]/.test(t)) return t;
+  var bytes = [];
+  for (var i = 0; i < t.length; i++) {
+    var c = t.charCodeAt(i);
+    if (c < 256) bytes.push(c);
+    else if (CP1252_REV[c] !== undefined) bytes.push(CP1252_REV[c]);
+    else return t;
+  }
+  try {
+    return new TextDecoder("utf-8", { fatal: true }).decode(new Uint8Array(bytes));
+  } catch (e) {
+    return t;
+  }
+}
+async function completeCall(env, prompt) {
+  var out = await aiText(env, MODELS[0], prompt, 3e4, "low");
+  if (!out || out.trim().length < COMPLETE_MIN_GAIN) {
+    var alt = await gwCall(env, prompt, 3e4);
+    if (alt && alt.length > (out ? out.length : 0)) out = alt;
+  }
+  return String(out || "");
+}
+async function stageComplete(env, row) {
+  __attrStageSet("complete");
+  var t0 = Date.now();
+  var paper = await r2Get(env, String(row.id) + "/reconciled.md");
+  var grounding = await r2Get(env, String(row.id) + "/grounding.md") || "";
+  var ctx = {};
+  try {
+    ctx = JSON.parse(row.context || "{}") || {};
+  } catch (e) {
+  }
+  if (!paper) {
+    await markError(env, row, "complete: reconciled.md missing");
+    return { ok: false, stage: "complete" };
+  }
+  var groundBlock = "GROUNDING (the input block and the numbered Bibliography; cite only these):\n" + grounding;
+  var rounds = 0, gainedTotal = 0, steps = [];
+  var stall = ctx.completeStall || 0;
+  while (rounds < COMPLETE_ROUNDS_PER_TICK && Date.now() - t0 < COMPLETE_TICK_BUDGET_MS) {
+    var pc = paperCompleteness(paper);
+    if (pc.complete) break;
+    var next = paper, mode;
+    if (pc.truncated) {
+      mode = "continue";
+      var base = completionBase(paper);
+      var remaining = pc.tailMissing.map(function(k) { var s = PAPER_SECTION_ORDER.find(function(x) { return x.key === k; }); return s ? s.heading : k; });
+      var out = await completeCall(env, stageContextPrompt("CONTINUE", "PAPER SO FAR", base, groundBlock + "\n\nREMAINING REQUIRED SECTIONS, in order, after finishing the current one: " + (remaining.length ? remaining.join("; ") : "(none; finish the current section and the Conclusion)")));
+      next = stitchContinuation(base, out);
+      if (next.length - base.length < COMPLETE_MIN_GAIN) {
+        next = paper;
+      } else {
+        // Keep the reference list (and any appendices after it) and render it from the bibliography the body now cites.
+        var _rh = REFS_HEAD_RE.exec(paper);
+        if (_rh) next = next.replace(/\s+$/, "") + "\n\n" + paper.slice(_rh.index);
+        try {
+          var _rr = renderReferences(next, grounding);
+          if (_rr.cited) next = _rr.paper;
+        } catch (eRr) {
+        }
+      }
+    } else {
+      mode = "section";
+      var key = pc.middleMissing[0];
+      var spec = PAPER_SECTION_ORDER.find(function(x) { return x.key === key; });
+      var secOut = await completeCall(env, stageContextPrompt("SECTION", "PAPER", paper, groundBlock + "\n\nSECTION TO WRITE: '## " + spec.n + ". " + spec.heading + "'"));
+      var sec = stitchContinuation("", secOut).trim();
+      if (sec.length >= COMPLETE_MIN_GAIN && !spec.re.test(paper)) next = insertSection(paper, key, sec);
+    }
+    var gain = next.length - paper.length;
+    steps.push(mode + ":" + gain);
+    if (next === paper || gain < COMPLETE_MIN_GAIN && mode === "section") {
+      stall++;
+    } else {
+      stall = 0;
+      gainedTotal += gain;
+      paper = next;
+      await r2Put(env, String(row.id) + "/reconciled.md", paper);
+    }
+    rounds++;
+    if (stall >= COMPLETE_STALL_MAX) break;
+  }
+  var pcEnd = paperCompleteness(paper);
+  var total = (ctx.completeRounds || 0) + rounds;
+  await logEvent(env, "complete", "row=" + row.id + " rounds=" + rounds + " total=" + total + " gained=" + gainedTotal + " steps=" + steps.join(",") + " chars=" + paper.length + " complete=" + pcEnd.complete + (pcEnd.complete ? "" : " left=" + pcEnd.reasons.join("; ").slice(0, 200)), pcEnd.complete ? "ok" : "warn");
+  if (pcEnd.complete) {
+    var nctx = Object.assign({}, ctx, { completeRounds: total, completeStall: 0 });
+    delete nctx.completeFrom;
+    await env.QNFO_AUDIT.prepare("UPDATE research_queue SET stage='review', context=? WHERE id=?").bind(JSON.stringify(nctx).slice(0, 6e3), row.id).run();
+    return { ok: true, stage: "complete->review", rounds: total, chars: paper.length };
+  }
+  if (stall >= COMPLETE_STALL_MAX) {
+    await markError(env, row, "complete: " + stall + " rounds added nothing; still " + pcEnd.reasons.join("; ").slice(0, 160));
+    return { ok: false, stage: "complete", stalled: stall };
+  }
+  await env.QNFO_AUDIT.prepare("UPDATE research_queue SET context=? WHERE id=?").bind(JSON.stringify(Object.assign({}, ctx, { completeRounds: total, completeStall: stall })).slice(0, 6e3), row.id).run();
+  return { ok: true, stage: "complete", rounds: total, chars: paper.length, left: pcEnd.reasons };
+}
+__name(stageComplete, "stageComplete");
+// COMPLETENESS-SWEEP-1: once a day (03:00 UTC tick) every published pipeline paper is checked for the signs of a cut; each one
+// found gets a remediation row (its original idea, source remediation, the paper's slug), so ground -> ... -> verify rewrite it
+// whole and remediationPublish queues the new version. SWEEP_MAX_PER_RUN is a rate (backpressure), not a filter: the rest
+// are picked up on the next day's run. The sweep never touches hand-written papers (identifier not qnf- and no queue row).
+var SWEEP_MAX_PER_RUN = 25;
+// Due on the 03:00 UTC tick, and on any tick when no sweep has run for 26 h (the first tick after a deploy, or a missed day).
+async function completenessSweepDue(env, ms) {
+  var d = new Date(ms);
+  if (d.getUTCHours() === 3 && d.getUTCMinutes() < 15) return true;
+  try {
+    var last = await env.QNFO_AUDIT.prepare("SELECT ts FROM cloud_ops_events WHERE job = ? AND kind = 'completeness-sweep' AND ts > ? LIMIT 1").bind(WORKER, new Date(ms - 26 * 3600 * 1e3).toISOString()).first();
+    return !last;
+  } catch (e) {
+    return false;
+  }
+}
+async function completenessSweep(env) {
+  var out = { scanned: 0, truncated: 0, queued: 0, skipped: 0, slugs: [] };
+  if (!env.LIVING_PAPER) return Object.assign(out, { error: "LIVING_PAPER binding missing" });
+  var offset = 0;
+  for (;;) {
+    var page = await env.LIVING_PAPER.prepare("SELECT slug, title, body_md FROM papers WHERE status IN ('published','distributed') ORDER BY slug LIMIT 40 OFFSET ?1").bind(offset).all();
+    var rows = page && page.results || [];
+    if (!rows.length) break;
+    offset += rows.length;
+    for (var i = 0; i < rows.length; i++) {
+      var p = rows[i];
+      var src = await env.QNFO_AUDIT.prepare("SELECT id, idea, summary, source FROM research_queue WHERE paper_slug = ?1 AND source <> 'remediation' ORDER BY created_at DESC LIMIT 1").bind(p.slug).first();
+      if (!src) continue;
+      out.scanned++;
+      var pc = paperCompleteness(p.body_md, { legacy: true });
+      if (pc.complete) continue;
+      out.truncated++;
+      var open = await env.QNFO_AUDIT.prepare("SELECT id FROM research_queue WHERE paper_slug = ?1 AND source = 'remediation' AND status NOT IN ('published','wontfix') LIMIT 1").bind(p.slug).first();
+      if (open || out.queued >= SWEEP_MAX_PER_RUN) {
+        out.skipped++;
+        continue;
+      }
+      var rid = "rem-" + crypto.randomUUID();
+      await env.QNFO_AUDIT.prepare("INSERT INTO research_queue (id, source, source_id, idea, summary, score, decision, status, paper_slug, created_at, stage, attempt, revise_count, recover_count) VALUES (?1, 'remediation', ?2, ?3, ?4, 0.95, 'ACCEPT', 'queued', ?5, ?6, 'ground', 0, 0, 0)").bind(rid, "completeness:" + src.id, String(src.idea || p.title || ""), ("COMPLETENESS-SWEEP-1: the published version is incomplete (" + pc.reasons.join("; ") + "); rewrite it whole under the current writer rules and republish as a new version.").slice(0, 1e3), p.slug, nowIso()).run();
+      out.queued++;
+      out.slugs.push(p.slug.slice(0, 60));
+    }
+  }
+  return out;
+}
+
 async function stageReconcile(env, row) {
   __attrStageSet("reconcile");
   const parts = [];
@@ -2277,7 +2593,7 @@ async function stageReconcile(env, row) {
     if (!d) continue;
     const fpi = String(await r2Get(env, String(row.id) + "/draft-" + i + ".fp") || "").trim();
     if (i > 0 && fp0 && fpi && fpi !== fp0) continue;
-    parts.push("=== WRITER " + String.fromCharCode(97 + i) + " DRAFT ===\n" + d.slice(0, 24e3));
+    parts.push("=== WRITER " + String.fromCharCode(97 + i) + " DRAFT ===\n" + d);
   }
   if (parts.length < 1) {
     await markError(env, row, "reconcile: drafts missing");
@@ -2289,8 +2605,8 @@ async function stageReconcile(env, row) {
     var _soloNl = solo.indexOf(String.fromCharCode(10));
     if (_soloNl >= 0) solo = solo.slice(_soloNl + 1);
     await r2Put(env, String(row.id) + "/reconciled.md", solo);
-    await env.QNFO_AUDIT.prepare("UPDATE research_queue SET stage='review', context=? WHERE id=?").bind(JSON.stringify({ cycles: 0, solo: true }).slice(0, 6e3), row.id).run();
-    return { ok: true, stage: "reconcile->review", len: solo.length, solo: true };
+    await env.QNFO_AUDIT.prepare("UPDATE research_queue SET stage='complete', context=? WHERE id=?").bind(JSON.stringify({ cycles: 0, solo: true }).slice(0, 6e3), row.id).run();
+    return { ok: true, stage: "reconcile->complete", len: solo.length, solo: true };
   }
   const _rc0 = Date.now();
   let reconciled = await gwCall(env, RECONCILE_PROMPT + "\n\n" + parts.join("\n\n"), 3e4);
@@ -2313,12 +2629,12 @@ async function stageReconcile(env, row) {
     }
     await logEvent(env, "reconcile-degrade", "reconcile output short (" + (reconciled ? reconciled.length : 0) + " < 10000 chars after retry); reconciled from best leg (len=" + body.length + ")", "warn");
     await r2Put(env, String(row.id) + "/reconciled.md", body);
-    await env.QNFO_AUDIT.prepare("UPDATE research_queue SET stage='review', context=? WHERE id=?").bind(JSON.stringify({ cycles: 0, degraded: true }).slice(0, 6e3), row.id).run();
-    return { ok: true, stage: "reconcile->review", len: body.length, degraded: true };
+    await env.QNFO_AUDIT.prepare("UPDATE research_queue SET stage='complete', context=? WHERE id=?").bind(JSON.stringify({ cycles: 0, degraded: true }).slice(0, 6e3), row.id).run();
+    return { ok: true, stage: "reconcile->complete", len: body.length, degraded: true };
   }
   await r2Put(env, String(row.id) + "/reconciled.md", reconciled);
-  await env.QNFO_AUDIT.prepare("UPDATE research_queue SET stage='review', context=? WHERE id=?").bind(JSON.stringify({ cycles: 0 }).slice(0, 6e3), row.id).run();
-  return { ok: true, stage: "reconcile->review", len: reconciled.length };
+  await env.QNFO_AUDIT.prepare("UPDATE research_queue SET stage='complete', context=? WHERE id=?").bind(JSON.stringify({ cycles: 0 }).slice(0, 6e3), row.id).run();
+  return { ok: true, stage: "reconcile->complete", len: reconciled.length };
 }
 __name(stageReconcile, "stageReconcile");
 __name2(stageReconcile, "stageReconcile");
@@ -2334,8 +2650,14 @@ async function stageReview(env, row) {
     ctx = JSON.parse(row.context || "{}");
   } catch (e) {
   }
+  // PAPER-COMPLETE-1: an unfinished paper goes back to `complete` (a reviewer finding cannot write the missing half).
+  const _pcR = paperCompleteness(paper);
+  if (!_pcR.complete) {
+    await env.QNFO_AUDIT.prepare("UPDATE research_queue SET stage='complete', context=? WHERE id=?").bind(JSON.stringify(Object.assign({}, ctx, { completeFrom: "review" })).slice(0, 6e3), row.id).run();
+    return { ok: true, stage: "review->complete", incomplete: _pcR.reasons };
+  }
   const bib = (grounding.split("## Bibliography")[1] || "").slice(0, 8e3);
-  const revRaw = await gwCall(env, stageContextPrompt("REVIEW", "PAPER", paper.slice(0, 34e3), "BIBLIOGRAPHY (numbered; the paper may cite only these):\n" + bib), 12e3);
+  const revRaw = await gwCall(env, stageContextPrompt("REVIEW", "PAPER", paper, "BIBLIOGRAPHY (numbered; the paper may cite only these):\n" + bib), 12e3);
   let findings = { verdict: "revise", hard: [{ id: "review-parse", severity: "HARD", claim: "review output", reason: "unparseable review output", fix: "re-run review" }], soft: [] };
   try {
     const m = String(revRaw).match(/\{[\s\S]*\}/);
@@ -2409,10 +2731,15 @@ async function stageRevise(env, row) {
     ctx = JSON.parse(row.context || "{}");
   } catch (e) {
   }
+  // PAPER-COMPLETE-1: missing sections or a cut-off ending are written by the `complete` stage, not by patch edits.
+  if (!paperCompleteness(paper).complete) {
+    await env.QNFO_AUDIT.prepare("UPDATE research_queue SET stage='complete', context=? WHERE id=?").bind(JSON.stringify(Object.assign({}, ctx, { completeFrom: "revise" })).slice(0, 6e3), row.id).run();
+    return { ok: true, stage: "revise->complete" };
+  }
   if (paper.length >= 1e4) {
     // Workers AI directly at low reasoning effort: the gateway path ran the same model at default effort and aborted at
     // its 240 s budget (12:08Z), and a short JSON answer does not need deep reasoning.
-    const _pprompt = stageContextPrompt("REVISE_PATCH", "PAPER", paper.slice(0, 34e3), "FIXES (JSON):\n" + fixes.slice(0, 8e3));
+    const _pprompt = stageContextPrompt("REVISE_PATCH", "PAPER", paper, "FIXES (JSON):\n" + fixes.slice(0, 8e3));
     let _praw = await aiText(env, MODELS[0], _pprompt, 8192, "low");
     // WRITER-FLASH-1: the retry for a short JSON patch uses gpt-oss-120b (another family, ~500 neurons) instead of glm-5.3 (~3,300).
     let _pmodel = MODELS[0];
@@ -2438,7 +2765,7 @@ async function stageRevise(env, row) {
     if (_p.applied > 0 && _p.text.length >= 1e4) {
       await r2Put(env, String(row.id) + "/reconciled.md", _p.text);
       const _c2 = (ctx.cycles || 0) + 1;
-      await env.QNFO_AUDIT.prepare("UPDATE research_queue SET stage='review', context=? WHERE id=?").bind(JSON.stringify({ cycles: _c2, patch: _p.applied, verifyPass: ctx.verifyPass || 0 }).slice(0, 6e3), row.id).run();
+      await env.QNFO_AUDIT.prepare("UPDATE research_queue SET stage=" + (paperCompleteness(_p.text).complete ? "'review'" : "'complete'") + ", context=? WHERE id=?").bind(JSON.stringify({ cycles: _c2, patch: _p.applied, verifyPass: ctx.verifyPass || 0 }).slice(0, 6e3), row.id).run();
       return { ok: true, stage: "revise->review", cycle: _c2, patch: _p.applied };
     }
     // REVISE-WALL-1 (2026-10-01): a full rewrite of a paper this long cannot fit the 8192-token budget next to the reasoning
@@ -2471,14 +2798,14 @@ async function stageRevise(env, row) {
       return { ok: false, stage: "revise", withheld: "revise-noop", fixes: _fx.length };
     }
   }
-  let revised = await gwCall(env, stageContextPrompt("REVISE", "PAPER", paper.slice(0, 34e3), "FIXES (JSON):\n" + fixes.slice(0, 8e3)), 3e4);
+  let revised = await gwCall(env, stageContextPrompt("REVISE", "PAPER", paper, "FIXES (JSON):\n" + fixes.slice(0, 8e3)), 3e4);
   const _len1 = revised ? revised.length : 0;
   let _len2 = -1;
   if (!revised || revised.length < 1e4) {
     // REVISE-RETRY-1 (2026-09-29): one bounded retry before terminal escalation.
     // The prior code escalated on the first short output: an absolute 1e4 floor with no
     // retry permanently wedged the row (RESEARCH-TERMINAL cluster).
-    let _r2 = await gwCall(env, stageContextPrompt("REVISE", "PAPER", paper.slice(0, 34e3), "FIXES (JSON):\n" + fixes.slice(0, 8e3)) + "\n\nIMPORTANT: output the COMPLETE revised paper, start to finish. Do not summarize and do not truncate.", 3e4);
+    let _r2 = await gwCall(env, stageContextPrompt("REVISE", "PAPER", paper, "FIXES (JSON):\n" + fixes.slice(0, 8e3)) + "\n\nIMPORTANT: output the COMPLETE revised paper, start to finish. Do not summarize and do not truncate.", 3e4);
     _len2 = _r2 ? _r2.length : 0;
     if (_r2 && _r2.length > (revised ? revised.length : 0)) revised = _r2;
   }
@@ -2490,7 +2817,7 @@ async function stageRevise(env, row) {
   }
   await r2Put(env, String(row.id) + "/reconciled.md", revised);
   const c2 = (ctx.cycles || 0) + 1;
-  await env.QNFO_AUDIT.prepare("UPDATE research_queue SET stage='review', context=? WHERE id=?").bind(JSON.stringify({ cycles: c2, verifyPass: ctx.verifyPass || 0 }).slice(0, 6e3), row.id).run();
+  await env.QNFO_AUDIT.prepare("UPDATE research_queue SET stage=" + (paperCompleteness(revised).complete ? "'review'" : "'complete'") + ", context=? WHERE id=?").bind(JSON.stringify({ cycles: c2, verifyPass: ctx.verifyPass || 0 }).slice(0, 6e3), row.id).run();
   return { ok: true, stage: "revise->review", cycle: c2 };
 }
 __name(stageRevise, "stageRevise");
@@ -2509,7 +2836,7 @@ function renderReferences(paper, grounding) {
   const entries = {};
   for (const line of bibTxt.split("\n")) {
     const m = line.match(/^\[(\d+)\]\s+(.+)$/);
-    if (m) entries[m[1]] = m[2].trim();
+    if (m) entries[m[1]] = fixMojibake(m[2].trim());
   }
   // Keep any section that follows the old list (appendices): only the list itself is replaced.
   const src = String(paper);
@@ -2557,6 +2884,7 @@ var REQUIRED_SECTIONS = [
   ["Abstract", /^#{1,3}[ \t]*Abstract\b/im],
   ["Results", /^#{1,3}[ \t]*(?:\d+\.?[ \t]*)?Results\b/im],
   ["Discussion", /^#{1,3}[ \t]*(?:\d+\.?[ \t]*)?Discussion\b/im],
+  ["Practical Implications", /^#{1,3}[ \t]*(?:\d+\.?[ \t]*)?Practical\b/im],
   ["Conclusion", /^#{1,3}[ \t]*(?:\d+\.?[ \t]*)?Conclusions?\b/im]
 ];
 // VERIFY-STATED-PRECISION-1 (0.13.0, agent_issues 2221 LOOP-BREAKER-1 verify; pillar research): the verify stage read the
@@ -2655,6 +2983,8 @@ function finalGates(paper, opts) {
     }).map(function(s) {
       return s[0];
     });
+    const _pcG = paperCompleteness(String(paper));
+    if (!_pcG.complete && !_miss.length) fixes.push({ id: "gate-complete", severity: "HARD", claim: "paper incomplete: " + _pcG.reasons.join("; "), reason: "PAPER-COMPLETE-1: the paper stops before its end or cites sections that do not exist", fix: "Finish the paper: complete the cut-off text and every remaining required section." });
     if (_miss.length) fixes.push({ id: "gate-structure", severity: "HARD", claim: "required sections missing: " + _miss.join(", "), reason: "the paper omits required sections or stops before them", fix: "Write each missing section in its required place, reporting only what the paper already derives." });
   }
   if (/\[to verify\]/i.test(paper)) fixes.push({ id: "gate-toverify", severity: "HARD", claim: "[to verify] markers present", reason: "unverified quantitative claim markers in body", fix: "Replace every marked claim with a computed value or move it to Discussion as an explicitly-labeled hypothesis." });
@@ -2714,15 +3044,21 @@ async function stageVerify(env, row) {
     }
   } catch (eRR) {
   }
-  const gateOpts = { bibCount: bibCountFromGrounding(await r2Get(env, String(row.id) + "/grounding.md")), minChars: row.source === "remediation" ? MIN_PAPER_CHARS : PUBLISH_FLOOR_CHARS, structure: row.source !== "remediation" };
+  const gateOpts = { bibCount: bibCountFromGrounding(await r2Get(env, String(row.id) + "/grounding.md")), minChars: row.source === "remediation" ? MIN_PAPER_CHARS : PUBLISH_FLOOR_CHARS, structure: true };
   let ctx = {};
   try {
     ctx = JSON.parse(row.context || "{}") || {};
   } catch (e) {
   }
+  // PAPER-COMPLETE-1: never verify (or publish) a paper that stops before its end; finish it first.
+  const _pcV = paperCompleteness(paper);
+  if (!_pcV.complete) {
+    await env.QNFO_AUDIT.prepare("UPDATE research_queue SET stage='complete', context=? WHERE id=?").bind(JSON.stringify(Object.assign({}, ctx, { completeFrom: "verify" })).slice(0, 6e3), row.id).run();
+    return { ok: true, stage: "verify->complete", incomplete: _pcV.reasons };
+  }
   // A verification that did not run is retried after a pause; until then the row waits without a model call.
   if (ctx.verifyUnrunAt && Date.now() - (Date.parse(ctx.verifyUnrunAt) || 0) < VERIFY_UNRUN_WAIT_MS) return { ok: true, stage: "verify", deferred: "verification retry pending" };
-  const exRaw = await gwCall(env, stageContextPrompt("VERIFY_EXTRACT", "PAPER", paper.slice(0, 34e3), ""), 8e3);
+  const exRaw = await gwCall(env, stageContextPrompt("VERIFY_EXTRACT", "PAPER", paper, ""), 8e3);
   let claims = [];
   try {
     const m = String(exRaw).match(/\[[\s\S]*\]/);
@@ -2756,7 +3092,7 @@ async function stageVerify(env, row) {
     await env.QNFO_AUDIT.prepare("UPDATE research_queue SET stage='publish', status='review' WHERE id=?").bind(row.id).run();
     return { ok: true, stage: "verify->publish", claims: 0 };
   }
-  const genRaw = await gwCall(env, stageContextPrompt("VERIFY_GEN", "PAPER", paper.slice(0, 2e4), "CLAIMS (JSON):\n" + JSON.stringify(claims)), 12e3);
+  const genRaw = await gwCall(env, stageContextPrompt("VERIFY_GEN", "PAPER", paper, "CLAIMS (JSON):\n" + JSON.stringify(claims)), 12e3);
   let code = genRaw;
   const cm = String(genRaw).match(/```python\n([\s\S]*?)```/);
   if (cm) code = cm[1];
@@ -3327,7 +3663,7 @@ __name2222(remediationPublish, "remediationPublish");
 // research_parallel sets the width (1 restores single-flight without a deploy); the lease still serialises invocations.
 var RESEARCH_PARALLEL_DEFAULT = 2;
 var RESEARCH_PARALLEL_MAX = 4;
-var INFLIGHT_SQL = "SELECT * FROM research_queue WHERE (status='review' AND stage='publish') OR (status='researching' AND stage IN ('ground','ensemble','reconcile','review','revise','verify')) ORDER BY COALESCE(claimed_at, created_at) ASC LIMIT ?1";
+var INFLIGHT_SQL = "SELECT * FROM research_queue WHERE (status='review' AND stage='publish') OR (status='researching' AND stage IN ('ground','ensemble','reconcile','complete','review','revise','verify')) ORDER BY COALESCE(claimed_at, created_at) ASC LIMIT ?1";
 async function researchParallel(env) {
   try {
     const r = await env.QNFO_AUDIT.prepare("SELECT value FROM ops_config WHERE key = 'research_parallel'").first();
@@ -3352,7 +3688,7 @@ async function runSlot(env, slot, width, inflight) {
       return { status: r2.ok ? "ok" : "error", res: r2, slot };
     }
     if (row) {
-      const fn = { ground: stageGround, ensemble: stageEnsemble, reconcile: stageReconcile, review: stageReview, revise: stageRevise, verify: stageVerify }[row.stage];
+      const fn = { ground: stageGround, ensemble: stageEnsemble, reconcile: stageReconcile, complete: stageComplete, review: stageReview, revise: stageRevise, verify: stageVerify }[row.stage];
       const r2 = await fn(env, row);
       if (r2 && r2.deferred) return { status: "ok", claimed: 0, deferred: true, res: r2, slot };
       await logEvent(env, "done", JSON.stringify(r2).slice(0, 600), doneStatus(r2));
@@ -3390,12 +3726,12 @@ async function run(env) {
       await logEvent(env, "done", JSON.stringify(r2).slice(0, 600), doneStatus(r2));
       return { status: r2.ok ? "ok" : "error", res: r2 };
     }
-    const stages = ["ground", "ensemble", "reconcile", "review", "revise", "verify"];
+    const stages = ["ground", "ensemble", "reconcile", "complete", "review", "revise", "verify"];
     for (let si = 0; si < stages.length; si++) {
       const st = stages[si];
       row = await env.QNFO_AUDIT.prepare("SELECT * FROM research_queue WHERE status='researching' AND stage=?1 LIMIT 1").bind(st).first();
       if (row) {
-        const fn = { ground: stageGround, ensemble: stageEnsemble, reconcile: stageReconcile, review: stageReview, revise: stageRevise, verify: stageVerify }[st];
+        const fn = { ground: stageGround, ensemble: stageEnsemble, reconcile: stageReconcile, complete: stageComplete, review: stageReview, revise: stageRevise, verify: stageVerify }[st];
         const r2 = await fn(env, row);
         if (r2 && r2.deferred) return { status: "ok", claimed: 0, deferred: true, res: r2 };
         await logEvent(env, "done", JSON.stringify(r2).slice(0, 600), doneStatus(r2));
@@ -25981,6 +26317,14 @@ var worker_default = {
       }
       if (env.RESEARCH_HALT === "1") return;
       try {
+        if (await completenessSweepDue(env, Number(event && event.scheduledTime) || Date.now())) {
+          const sw = await completenessSweep(env);
+          await logEvent(env, "completeness-sweep", JSON.stringify(sw).slice(0, 700), sw.error ? "error" : "ok");
+        }
+      } catch (eSw) {
+        await logEvent(env, "error", "completenessSweep threw: " + String(eSw && eSw.message || eSw).slice(0, 200), "error");
+      }
+      try {
         const lr = await runLeased(env, "cron-" + Date.now().toString(36), 8, RUN_LOOP_BUDGET_MS);
         if (lr.busy) await logEvent(env, "lease-busy", "cron skipped: another run holds the single-flight lease", "ok");
       } catch (e) {
@@ -26030,6 +26374,11 @@ var worker_default = {
 };
 export {
   worker_default as default,
+  paperCompleteness,
+  completionBase,
+  stitchContinuation,
+  insertSection,
+  fixMojibake,
   groundQueries,
   markError,
   mathGate,
