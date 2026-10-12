@@ -6,6 +6,8 @@ main = "worker.js"
 # 2026-09-08 Python only; 2026-10-01 Durable Object eviction (this worker has no Durable Object). The 2026-08-04
 # nodejs_compat default is already in effect at the live date; scripts/compat-risk-scan.mjs finds nothing. No WebSockets.
 # compat-advance: reviewed 2026-10-12
+# COMPAT-ADVANCE-WAVE-2 (2026-10-12): this file changes so the canonical deploy runs and the declared date above is applied
+# (GET ops.qnfo.org/compat read "next deploy advances to 2026-10-10" with no deploy since the declaration).
 compatibility_date = "2026-10-10"
 
 
