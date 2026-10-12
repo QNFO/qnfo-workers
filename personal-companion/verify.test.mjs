@@ -242,5 +242,13 @@ const count = (p, t) => p.prepare("SELECT COUNT(*) n FROM " + t).get().n;
   ok((again.checked || 0) === 0 && (again.withdrawn || 0) === 0, "an audited piece is not audited again", again);
 }
 
+// ---- FACTCHECK-NOTHINK-1 / VERDICT-TOLERANT-1 ------------------------------------------------------------------------------------
+{
+  const fx = V.factCheckExtra;
+  ok("reasoning is switched off for kimi, nemotron, gpt-oss and deepseek, and left alone for others", fx("@cf/moonshotai/kimi-k2.6").chat_template_kwargs.thinking === false && fx("@cf/nvidia/nemotron-3-120b-a12b").chat_template_kwargs.enable_thinking === false && fx("@cf/openai/gpt-oss-120b").reasoning.effort === "low" && fx("@cf/deepseek-ai/deepseek-v4-pro-0813").chat_template_kwargs.thinking === false && Object.keys(fx("@cf/zai-org/glm-5.3")).length === 0);
+  ok("a verdict wrapped in prose is read", V.parseFactVerdict('Here is my answer: {"unsupported": ["x -- y"], "verdict": "fail"} Hope this helps {done}').verdict === "fail");
+  ok("a truncated JSON reply still yields its explicit verdict and quotes", (() => { const r = V.parseFactVerdict('{"unsupported": ["the claim -- not in source", "another -- no"], "verdict": "fail"'); return r && r.verdict === "fail" && r.unsupported.length === 2; })());
+  ok("a reply with no verdict field is still no verdict", V.parseFactVerdict("The draft looks fine to me.") === null);
+}
 console.log(pass + " passed, " + fail + " failed");
 if (fail) process.exit(1);
