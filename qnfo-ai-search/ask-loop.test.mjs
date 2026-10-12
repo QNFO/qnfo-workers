@@ -130,7 +130,7 @@ let limited = null;
 for (let i = 0; i < 13; i++) { const r = await call("/api/ask", { query: "question number " + i + " about adelic statistics" }, "7.7.7.7"); const e = sse(r.text, "error")[0]; if (e) limited = e.error; }
 ok(limited && /12 questions this hour/.test(limited) && sse((await call("/api/ask", { query: "one more adelic question" }, "7.7.7.7")).text, "meta").length === 1, "over the per-address cap: sources-only with a clear note");
 // 5. the 03:41 tick: measure, golden, judge, tune, fix, housekeeping
-sq.exec("UPDATE ask_events SET judge=1, answer='x [1]', context='[1] y'");
+sq.exec("UPDATE ask_events SET judge=2, answer='x [1]', context='[1] y'");
 await worker.scheduled({ scheduledTime: Date.UTC(2026, 9, 3, 3, 41) }, env, ctx);
 await Promise.allSettled(waits.splice(0));
 const runs = sq.prepare("SELECT kind, ok, note FROM ask_loop_runs").all();
@@ -170,13 +170,13 @@ ok(models.includes("@cf/deepseek-ai/deepseek-v4-flash-0731"), "the judge is a di
 // 7. ASK-JUDGE-1: a judge that cannot judge says why in ask_loop_runs instead of reporting a bare judged:0
 {
   const real = AI.run;
-  sq.exec("UPDATE ask_events SET judged_total=NULL, judged_supported=NULL, judge=1, answer='x [1]', context='[1] y' WHERE id IN (SELECT id FROM ask_events LIMIT 2)");
-  AI.run = async (m, o) => { if (/deepseek/.test(m)) return { response: "<think>reasoning that never reaches an answer</think>" + "so ".repeat(80) }; return real(m, o); };
+  sq.exec("UPDATE ask_events SET judged_total=NULL, judged_supported=NULL, judge=2, answer='x [1]', context='[1] y' WHERE id IN (SELECT id FROM ask_events LIMIT 2)");
+  AI.run = async (m, o) => { if (/deepseek|glm/.test(m) && /supported by its numbered excerpts/.test(JSON.stringify(o.messages || ""))) return { response: "<think>reasoning that never reaches an answer</think>" + "so ".repeat(80) }; return real(m, o); };
   await worker.scheduled({ scheduledTime: Date.UTC(2026, 9, 4, 3, 41) }, env, ctx);
   await Promise.allSettled(waits.splice(0));
   let jr = JSON.parse(sq.prepare("SELECT note FROM ask_loop_runs WHERE kind='judge' ORDER BY id DESC LIMIT 1").get().note);
   ok(jr.judged === 0 && jr.failed && jr.failed.no_json === 2 && /so so/.test(jr.failed.head || ""), "an unparseable judge reply is counted and its head is kept: " + JSON.stringify(jr));
-  AI.run = async (m, o) => { if (/deepseek/.test(m)) throw new Error("model unavailable: 5007"); return real(m, o); };
+  AI.run = async (m, o) => { if (/deepseek|glm/.test(m) && /supported by its numbered excerpts/.test(JSON.stringify(o.messages || ""))) throw new Error("model unavailable: 5007"); return real(m, o); };
   await worker.scheduled({ scheduledTime: Date.UTC(2026, 9, 5, 3, 41) }, env, ctx);
   await Promise.allSettled(waits.splice(0));
   jr = JSON.parse(sq.prepare("SELECT note FROM ask_loop_runs WHERE kind='judge' ORDER BY id DESC LIMIT 1").get().note);
@@ -216,6 +216,41 @@ ok(models.includes("@cf/deepseek-ai/deepseek-v4-flash-0731"), "the judge is a di
   const ev2 = sq.prepare("SELECT detail FROM ask_evals WHERE kind = 'retrieval-champion' ORDER BY id DESC LIMIT 1").get();
   const defs = ev2 ? JSON.parse(ev2.detail).defs : null;
   ok(defs && defs["joules-per-solution-metric"] === 1 && defs["distinction-lattice-framework"] === 1, "the retrieval eval always includes the defined terms' golden questions and records their ranks: " + JSON.stringify(defs));
+}
+
+// 8b. ASK-JUDGE-CONTEXT-1 (2.4.2, agent_issues 2165): the judge reads the excerpt text the writer read; only verdicts made
+// on that full text feed the metric; a judge that returns no JSON hands the answer to a second model family.
+{
+  const real = AI.run;
+  let seen = null;
+  AI.run = async (m, o) => { if (o && o.stream) seen = o.messages[o.messages.length - 1].content; return real(m, o); };
+  await call("/api/ask", { query: "Judge context question: what does JPCUB measure in joules?" }, "6.6.6.6");
+  AI.run = real;
+  const row = sq.prepare("SELECT judge, answer, context FROM ask_events WHERE query LIKE 'Judge context question%' ORDER BY ts DESC LIMIT 1").get();
+  ok(row && row.judge === 2 && row.answer && row.context, "every answer is sampled for the judge and marked as full-context (judge = 2): " + JSON.stringify(row && row.judge));
+  ok(seen && seen.includes(row.context), "the stored judge context is the excerpt text the writer was given, character for character");
+  const wsrc = readFileSync(join(here, "worker.js"), "utf8");
+  ok(!/excerpt\.slice\(0, 1800\)/.test(wsrc), "no 1800-character cut of the judge context remains");
+  // a verdict made on the truncated context (judge = 1) is kept but not counted
+  sq.exec("UPDATE ask_events SET judged_supported=NULL, judged_total=NULL, judge=0");
+  sq.exec("UPDATE ask_events SET judge=1, judged_supported=0, judged_total=30 WHERE id IN (SELECT id FROM ask_events WHERE limited IS NULL AND cached=0 LIMIT 1)");
+  sq.exec("UPDATE ask_events SET judge=2, judged_supported=18, judged_total=20, answer='x [1]', context='[1] y' WHERE id IN (SELECT id FROM ask_events WHERE limited IS NULL AND cached=0 AND judge=0 LIMIT 1)");
+  await worker.scheduled({ scheduledTime: Date.UTC(2026, 9, 8, 4, 41) }, env, ctx);
+  await Promise.allSettled(waits.splice(0));
+  ok(sq.prepare("SELECT last_value v FROM metric_registry WHERE metric='ask_grounded_share_7d'").get().v === "0.9", "only full-context verdicts feed ask_grounded_share_7d: " + sq.prepare("SELECT last_value v FROM metric_registry WHERE metric='ask_grounded_share_7d'").get().v);
+  ok(sq.prepare("SELECT judged_total t FROM ask_events WHERE judge=1").get().t === 30, "the old verdict stays in the table");
+  // the first judge thinks and never answers: the second family judges
+  sq.exec("UPDATE ask_events SET judged_supported=NULL, judged_total=NULL WHERE judge=2");
+  const legs = [];
+  AI.run = async (m, o) => { const isJudge = /supported by its numbered excerpts/.test(JSON.stringify(o.messages || "")); if (isJudge) legs.push([m, o.max_tokens]); if (isJudge && /deepseek/.test(m)) return { response: "<think>thinking only</think>" }; return real(m, o); };
+  await worker.scheduled({ scheduledTime: Date.UTC(2026, 9, 9, 3, 41) }, env, ctx);
+  await Promise.allSettled(waits.splice(0));
+  AI.run = real;
+  const jn = JSON.parse(sq.prepare("SELECT note FROM ask_loop_runs WHERE kind='judge' ORDER BY id DESC LIMIT 1").get().note);
+  ok(jn.judged === 1 && jn.second_judge === 1 && !jn.failed, "a no-JSON judge reply is judged by the second model, not lost: " + JSON.stringify(jn));
+  ok(legs.length === 2 && /deepseek/.test(legs[0][0]) && /glm/.test(legs[1][0]) && legs[1][1] === 8000, "the second judge is another family with a reasoning budget: " + JSON.stringify(legs));
+  const vm = /var VERSION = "(\d+)\.(\d+)\.(\d+)/.exec(wsrc);
+  ok(vm && Number(vm[1]) * 1e6 + Number(vm[2]) * 1e3 + Number(vm[3]) >= 2004002, "VERSION is at least 2.4.2");
 }
 
 // 9. ASK-HUNG-REQUEST-1 (#1839): no await on /api/ask can hang. Timers run 500 times faster in this section (the 150 s
