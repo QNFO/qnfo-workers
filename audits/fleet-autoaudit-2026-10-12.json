@@ -1,5 +1,5 @@
 {
-  "audited_at": "2026-10-12 17:49:19",
+  "audited_at": "2026-10-12 20:23:39",
   "d1_write_failures": [],
   "d1_writes_ok": 115,
   "guard": {
@@ -548,7 +548,7 @@
       },
       {
         "dir": "q08-signal-engine",
-        "version": "0.14.2",
+        "version": "0.14.3",
         "worker": "q08-signal-engine"
       },
       {
@@ -588,7 +588,7 @@
       },
       {
         "dir": "qnfo-email",
-        "version": "2.8.0-voice-drafter",
+        "version": "2.9.0-email-tick",
         "worker": "qnfo-email"
       },
       {
@@ -944,9 +944,9 @@
       "worker": "personal-life-search"
     },
     "q08-signal-engine": {
-      "before": "0.14.2",
+      "before": "0.14.3",
       "http": 200,
-      "live": "0.14.2",
+      "live": "0.14.3",
       "match": 1,
       "note": "SYNC",
       "worker": "q08-signal-engine"
@@ -1179,9 +1179,9 @@
       "worker": "qnfo-deploy-guard"
     },
     "qnfo-email": {
-      "before": "2.8.0-voice-drafter",
+      "before": "2.9.0-email-tick",
       "http": 200,
-      "live": "2.8.0-voice-drafter",
+      "live": "2.9.0-email-tick",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-email"
