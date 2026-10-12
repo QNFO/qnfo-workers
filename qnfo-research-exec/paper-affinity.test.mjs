@@ -55,7 +55,8 @@ W.reset(); ok(await W.aiRunOpts(db(undefined), M, "short") === undefined, "aiRun
 const ai = cut("async function aiText(env, model, prompt, maxTokens, effort)");
 ok(/const _runOpts = await aiRunOpts\(env, model, prompt\);/.test(ai), "aiText computes the affinity options");
 ok((ai.match(/env\.AI\.run\(model, _opts, _runOpts\)/g) || []).length === 2, "both aiText model calls pass them");
-const wrap = cut("function __aiAttrEnv(");
+// 0.16.0 AI-STAGE-ATTRIBUTION-2: the wrapped binding is built by __aiAttrBinding (one per env or slot); the PROMPT-CACHE-1 key logic lives there.
+const wrap = cut("function __aiAttrBinding(");
 ok(/opts\.extraHeaders\["x-session-affinity"\]\) return opts;/.test(wrap), "the attribution wrapper keeps a key the caller set");
 console.log(pass + " passed, " + fail + " failed");
 process.exit(fail ? 1 : 0);

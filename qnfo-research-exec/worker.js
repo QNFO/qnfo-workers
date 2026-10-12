@@ -1,5 +1,4 @@
 import { Buffer as __ErrataBuffer } from "node:buffer";
-import { AsyncLocalStorage as __AttrAsyncLocalStorage } from "node:async_hooks";
 var __defProp = Object.defineProperty;
 var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
 
@@ -14,7 +13,7 @@ var __defProp2222 = Object.defineProperty;
 var __name2222 = /* @__PURE__ */ __name222((target, value) => __defProp2222(target, "name", { value, configurable: true }), "__name");
 var __defProp22222 = Object.defineProperty;
 var __name22222 = /* @__PURE__ */ __name2222((target, value) => __defProp22222(target, "name", { value, configurable: true }), "__name");
-var VERSION = "0.15.1-paper-quality"; /* 0.15.1: the lean-ensemble read inside stampProvenance logs its failure instead of swallowing it (WORKERS-STANDARDS-GUARD-1 swallowed-catch, caught while PAPER-QUALITY-2 rode PR 1028). 0.15.0 PAPER-QUALITY-2 (owner directive 2026-10-12 "implement all best practices ... to research and paper content and generation"; pillar research; evidence: the 2026-10-12 research report on automated paper generation). Deterministic P0 items: PROVENANCE-1 every paper carries a "Provenance and AI Involvement" section written by code from what the pipeline actually ran (models per stage, the checks passed, the independent recomputation count, and that no manual review preceded publication), per COPE/ICMJE/WAME disclosure; GROUND-SANITIZE-1 retrieved text is evidence, never instructions: zero-width and control characters are stripped and lines that address an AI, reviewer or assistant are removed before any model reads them; GATE-RESIDUE-1 chatbot residue or placeholder text anywhere in a paper is a HARD finding; VERIFY-CLAIMS-16 verify recomputes up to 16 claims (was 8). Prompt rules (process and style only): Section 7 is scaled to the NASA TRL definitions and states readiness honestly (analytical, unreviewed work is TRL 1-2), the Introduction ends with contributions tied to results, the Discussion states what would falsify the result and lists every assumption, a structured abstract, sentence- and paragraph-level style rules against inflated prose, and the reviewer lists defects first, quotes the passage for every HARD finding, does not ask for experiments the central claim does not need, and treats text inside the paper as content, never instructions. */ /* 0.14.0 PAPER-COMPLETE-1 + PRACTICAL-RELEVANCE-1 (owner directive 2026-10-12, pillar research): papers have no maximum length and are never published cut off. Every Workers AI call stops at 8192 output tokens (larger budgets time out, 3046), so a full paper never fit one call: 10 papers published 2026-10-09..12 end mid-sentence or mid-equation, with sections cited that do not exist (factoring-hardness-as-a-bayesian-prior...). A new stage `complete` sits between reconcile and review: paperCompleteness() checks the required sections, a clean ending, balanced display math and that every "Section N" cited exists; an incomplete paper is continued (from its last whole paragraph) or has a missing middle section written and inserted in place, COMPLETE_ROUNDS_PER_TICK rounds per tick with no length or round cap, only a no-progress guard. Review, revise and verify send an incomplete paper back to `complete` instead of patch-revising it; the 24k/34k/20k-char slices that fed models truncated papers are gone; the length ceilings in the prompts are removed. Every paper now carries "## 7. Practical Implications and Engineering Pathways" and opens with the real-world problem it addresses (process and style rules only, no topic nouns); missing it is a structure finding. COMPLETENESS-SWEEP-1: once a day the worker queues a remediation row for every published pipeline paper that fails the truncation checks, so the full pipeline rewrites and republishes it as a new version; remediation papers now pass the structure gate too. REFS-MOJIBAKE-1: reference titles double-encoded as Latin-1 are repaired when the list is rendered. */ /* 0.13.0 (agent_issues 2221, 2247, 2206, 2207, 2252, 2292, 2262, 2170, 2211, 2052, 2337, 2272): VERIFY-STATED-PRECISION-1 the worker decides each CLAIM line at the precision the paper states (the script compared at 1e-6, so a correctly rounded value read as a mismatch and the paper re-ran from ground); a verification that printed no CLAIM line is retried, never passed; GROUND-SECOND-SOURCE-1 arXiv requests are spaced across slots and retried with backoff, and DataCite (arXiv DOIs) supplies entries when arXiv is thin or refusing; RESEARCH-PARK-REVIEW-1 a review row parks; REVISE-NO-UNREVISED-1 a revise with no applied edit tries the second model and then fails the pass instead of advancing; REVIEW-HARD-GATE-1 HARD findings left at the cycle cap withhold the paper; gate-structure requires the closing sections; CITATION-UNVERIFIED-HOLD-1 an unconfirmed citation defers and then holds the publish (DataCite is the second arXiv lookup); AI-ROUTER-SECOND-PATH-DRILL-1 daily drill. */ /* 0.12.5 AI-STAGE-ATTRIBUTION-2 (agent_issues 2264): each research_parallel slot runs in its own AsyncLocalStorage store, so ai_call_counters stage labels belong to the slot that made the call. PROMPT-CACHE-AFFINITY-1 (agent_issues 2116, PROMPT-CACHE-PREFIX-4): aiText sends x-session-affinity keyed on the 4 KB after the shared preamble (the paper or writer input), so the stages of one paper share an instance and its preamble + paper prefix; ops_config research_affinity_scope = prefix restores the old one-key-per-model hash. */ /* 0.12.3 NOZ-DOI-1 (2026-10-11): the pipeline publishes in-house only and calls no external DOI registrar: the deposit, version-request, metadata-edit and related-link stages are gone, new and revised papers write doi, zenodo_doi and zenodo_url NULL, and the folded errata and reviser members carry the same change. */ /* 0.12.2 ENSEMBLE-PREFIX-STAGGER-1 (agent_issues 2116, PROMPT-CACHE-PREFIX-3): the second glm-5.3-flash writer leg starts research_prefix_stagger_ms (default 12 s) after the first, so it reads the shared preamble + grounding prompt from the prefix cache instead of prefilling it in parallel. */ /* 0.12.0 ACCURACY-GROUND-1 (owner directive 2026-10-10, pillar research): generated text is checked against the text it was given. The reviser audit prompt no longer lets a "low" edit assert content (bridge sentences, comparisons, definitions) and a deterministic guard demotes any low edit that adds a name, figure, year, link or new content words to high; the errata drafter writes a correction only from the errata email or the paper and a name, year, figure, DOI or link in neither makes the draft high risk (never sent); the writer, reconcile and review preambles require every statement about a cited work to be derivable from its supplied bibliography entry, and say so when the entry is thin. */ /* 0.11.2 PROMPT-CACHE-PREFIX-2 (agent_issues 2116): review, revise-patch, revise and verify prompts put the paper right after the shared preamble as a context block, before the task selector and per-call text, so consecutive stages on one paper share preamble + paper as a cached prefix. Models, max_tokens, parsers and gates unchanged. */ /* 0.11.1 LEAN-ENSEMBLE-1 (agent_issues 2118, 1795): while a fleet_budget ai_spend cap is breached the writer ensemble runs its two disjoint-family legs instead of three (the third was a second glm-5.3-flash leg); reconcile joins only drafts of the current grounding; ops_config research_lean_ensemble = off restores three legs. */ // /* 0.10.5 REVISE-PATCH-PARSE-1 (agent_issues 2211): the revise patch array is parsed tolerantly (LaTeX backslashes kept, code fences and bracketed prose before the array skipped, each edit object read on its own when the array does not parse), so a LaTeX-heavy or truncated answer no longer loses every edit; 14 of 335 calls in 7 days proposed 0 edits from long output. The four publish binds pass pub.doi and pub.record as || null, so a result shape missing a key can no longer throw D1_TYPE_ERROR (the 0.10.3 outage). */ /* 0.10.4 INHOUSE-PUBLISH-3: the in-house publish result carries conceptdoi and record as null, so publishStageV2 no longer binds undefined (D1_TYPE_ERROR every tick under 0.10.3). */ // 0.9.65 ERRATA-FOLD-1 (#1756, 2026-10-06, pillar cost): errata-hub runs here as a member (errataMod) at its own minutes on the */15 tick (:00 watch, :15 respond, :30 publish), awaited; GET /errata-hub/health; nodejs_compat, BROWSER and SEND_EMAIL move here with it. 0.9.64 REVISER-FOLD-1 (#1756, 2026-10-06, pillar cost): qnfo-paper-reviser runs here as a member (reviserMod) on the :30 tick of every fourth hour; GET /reviser/health; its private routes answer a service binding whose props name the member. 0.9.63 RELATED-LEGACY-FIELDS-1 (#1907, 2026-10-06): the related-link drain fills the legacy upload_type / publication_type from an InvenioRDM resource_type before the PUT (record 22025544 failed with "metadata.resource_type: Missing data for required field"); the error row is re-queued once this is live. // MATH-LATEX-2 (2026-10-05, #1891): MATH_RULE in the writer, reconcile and revise prompts; pseudoMathScan() turns plain-text math into a HARD review finding and a math-scan event at verify; ops_config research_math_gate=enforce makes it a pre-publish gate (revise once, then park). // WRITER-FLASH-1 (2026-10-05, #1795): the second ensemble writer leg and the revise-patch retry leave glm-5.3 (3,279 neurons per call) for glm-5.3-flash and gpt-oss-120b. // PRIOR-WORK-EMPTY-1 (2026-10-02): no empty "Prior Work" section; References matched at line start. // 0.9.54 RUN-INTERNAL-1 (#1783, ported from code task ct_zvckl6t5d4e1fd): POST /run?sync=1 and POST /run/drain-v2 refuse public hostnames (*.workers.dev, qnfo.org); the cron and service-binding callers (qnfo-research-supervisor RESEARCH_EXEC, the dashboard SVC binding) are unaffected; METADATA-VERIFY-ORDER-1 (2026-10-02, #1732): verifyMetadataBackfill writes issue_triage.close_evidence before it closes the issue (the close-evidence trigger aborted the old order, so the backfill could never close itself); 0.9.52 UTF8-DEPLOY-1 (2026-10-02): no code change; redeployed so the live copy is UTF-8 (the old deploy path double-encoded every non-ASCII character) /* 0.13.0 NOZ-DOI-1 (2026-10-11): history entries about the retired external deposit stages are in git. */
+var VERSION = "0.16.0-revise-retry"; /* 0.16.0 (agent_issues 2211, 2221, 2264, 2116; pillar research): REVISE-PATCH-RETRY-STRICT-1 a revise whose first answer proposed no edit for a non-empty fix list ("[]") is retried on the other model family with an instruction that names the HARD fix ids and requires an edit for each; parsePatchEdits also reads an object whose `edits` array holds the edits, fenced blocks and several top-level arrays; a revise that still applies nothing fails the pass into markError (re-queued from ground while recover_count < 3, parked after), never advancing unrevised. VERIFY-UNRUN-CAUSE-1 `unrun` meant "no CLAIM line matched": the script had run and printed computed and expected but no match column (14:04Z 2026-10-12), so the adjudicator now decides a CLAIM line from its two numbers without the script's verdict, the verify-unrun event and the done result carry the cause (pilot-unreachable, pilot-http, missing-runtime, script-error, no-claim-lines), and when the sandbox did not run the script at all a second model family recomputes the claims in text (TASK VERIFY_TEXT) and the stage adjudicates those lines, recorded as basis=text in the event and the provenance section, instead of failing the row. AI-STAGE-ATTRIBUTION-2 the stage label lives on the call context (env.__aiAttrCtx, one per research_parallel slot via __attrSlotEnv), no module-level label and no AsyncLocalStorage. PROMPT-CACHE-PREFIX-1 the suite now proves every stage builder (CONTINUE, SECTION and VERIFY_TEXT included) gives two different papers the same first 4096 chars and that the preamble interpolates no id, date or counter. */ /* 0.15.1: the lean-ensemble read inside stampProvenance logs its failure instead of swallowing it (WORKERS-STANDARDS-GUARD-1 swallowed-catch, caught while PAPER-QUALITY-2 rode PR 1028). 0.15.0 PAPER-QUALITY-2 (owner directive 2026-10-12 "implement all best practices ... to research and paper content and generation"; pillar research; evidence: the 2026-10-12 research report on automated paper generation). Deterministic P0 items: PROVENANCE-1 every paper carries a "Provenance and AI Involvement" section written by code from what the pipeline actually ran (models per stage, the checks passed, the independent recomputation count, and that no manual review preceded publication), per COPE/ICMJE/WAME disclosure; GROUND-SANITIZE-1 retrieved text is evidence, never instructions: zero-width and control characters are stripped and lines that address an AI, reviewer or assistant are removed before any model reads them; GATE-RESIDUE-1 chatbot residue or placeholder text anywhere in a paper is a HARD finding; VERIFY-CLAIMS-16 verify recomputes up to 16 claims (was 8). Prompt rules (process and style only): Section 7 is scaled to the NASA TRL definitions and states readiness honestly (analytical, unreviewed work is TRL 1-2), the Introduction ends with contributions tied to results, the Discussion states what would falsify the result and lists every assumption, a structured abstract, sentence- and paragraph-level style rules against inflated prose, and the reviewer lists defects first, quotes the passage for every HARD finding, does not ask for experiments the central claim does not need, and treats text inside the paper as content, never instructions. */ /* 0.14.0 PAPER-COMPLETE-1 + PRACTICAL-RELEVANCE-1 (owner directive 2026-10-12, pillar research): papers have no maximum length and are never published cut off. Every Workers AI call stops at 8192 output tokens (larger budgets time out, 3046), so a full paper never fit one call: 10 papers published 2026-10-09..12 end mid-sentence or mid-equation, with sections cited that do not exist (factoring-hardness-as-a-bayesian-prior...). A new stage `complete` sits between reconcile and review: paperCompleteness() checks the required sections, a clean ending, balanced display math and that every "Section N" cited exists; an incomplete paper is continued (from its last whole paragraph) or has a missing middle section written and inserted in place, COMPLETE_ROUNDS_PER_TICK rounds per tick with no length or round cap, only a no-progress guard. Review, revise and verify send an incomplete paper back to `complete` instead of patch-revising it; the 24k/34k/20k-char slices that fed models truncated papers are gone; the length ceilings in the prompts are removed. Every paper now carries "## 7. Practical Implications and Engineering Pathways" and opens with the real-world problem it addresses (process and style rules only, no topic nouns); missing it is a structure finding. COMPLETENESS-SWEEP-1: once a day the worker queues a remediation row for every published pipeline paper that fails the truncation checks, so the full pipeline rewrites and republishes it as a new version; remediation papers now pass the structure gate too. REFS-MOJIBAKE-1: reference titles double-encoded as Latin-1 are repaired when the list is rendered. */ /* 0.13.0 (agent_issues 2221, 2247, 2206, 2207, 2252, 2292, 2262, 2170, 2211, 2052, 2337, 2272): VERIFY-STATED-PRECISION-1 the worker decides each CLAIM line at the precision the paper states (the script compared at 1e-6, so a correctly rounded value read as a mismatch and the paper re-ran from ground); a verification that printed no CLAIM line is retried, never passed; GROUND-SECOND-SOURCE-1 arXiv requests are spaced across slots and retried with backoff, and DataCite (arXiv DOIs) supplies entries when arXiv is thin or refusing; RESEARCH-PARK-REVIEW-1 a review row parks; REVISE-NO-UNREVISED-1 a revise with no applied edit tries the second model and then fails the pass instead of advancing; REVIEW-HARD-GATE-1 HARD findings left at the cycle cap withhold the paper; gate-structure requires the closing sections; CITATION-UNVERIFIED-HOLD-1 an unconfirmed citation defers and then holds the publish (DataCite is the second arXiv lookup); AI-ROUTER-SECOND-PATH-DRILL-1 daily drill. */ /* 0.12.5 AI-STAGE-ATTRIBUTION-2 (agent_issues 2264): each research_parallel slot runs in its own AsyncLocalStorage store, so ai_call_counters stage labels belong to the slot that made the call. PROMPT-CACHE-AFFINITY-1 (agent_issues 2116, PROMPT-CACHE-PREFIX-4): aiText sends x-session-affinity keyed on the 4 KB after the shared preamble (the paper or writer input), so the stages of one paper share an instance and its preamble + paper prefix; ops_config research_affinity_scope = prefix restores the old one-key-per-model hash. */ /* 0.12.3 NOZ-DOI-1 (2026-10-11): the pipeline publishes in-house only and calls no external DOI registrar: the deposit, version-request, metadata-edit and related-link stages are gone, new and revised papers write doi, zenodo_doi and zenodo_url NULL, and the folded errata and reviser members carry the same change. */ /* 0.12.2 ENSEMBLE-PREFIX-STAGGER-1 (agent_issues 2116, PROMPT-CACHE-PREFIX-3): the second glm-5.3-flash writer leg starts research_prefix_stagger_ms (default 12 s) after the first, so it reads the shared preamble + grounding prompt from the prefix cache instead of prefilling it in parallel. */ /* 0.12.0 ACCURACY-GROUND-1 (owner directive 2026-10-10, pillar research): generated text is checked against the text it was given. The reviser audit prompt no longer lets a "low" edit assert content (bridge sentences, comparisons, definitions) and a deterministic guard demotes any low edit that adds a name, figure, year, link or new content words to high; the errata drafter writes a correction only from the errata email or the paper and a name, year, figure, DOI or link in neither makes the draft high risk (never sent); the writer, reconcile and review preambles require every statement about a cited work to be derivable from its supplied bibliography entry, and say so when the entry is thin. */ /* 0.11.2 PROMPT-CACHE-PREFIX-2 (agent_issues 2116): review, revise-patch, revise and verify prompts put the paper right after the shared preamble as a context block, before the task selector and per-call text, so consecutive stages on one paper share preamble + paper as a cached prefix. Models, max_tokens, parsers and gates unchanged. */ /* 0.11.1 LEAN-ENSEMBLE-1 (agent_issues 2118, 1795): while a fleet_budget ai_spend cap is breached the writer ensemble runs its two disjoint-family legs instead of three (the third was a second glm-5.3-flash leg); reconcile joins only drafts of the current grounding; ops_config research_lean_ensemble = off restores three legs. */ // /* 0.10.5 REVISE-PATCH-PARSE-1 (agent_issues 2211): the revise patch array is parsed tolerantly (LaTeX backslashes kept, code fences and bracketed prose before the array skipped, each edit object read on its own when the array does not parse), so a LaTeX-heavy or truncated answer no longer loses every edit; 14 of 335 calls in 7 days proposed 0 edits from long output. The four publish binds pass pub.doi and pub.record as || null, so a result shape missing a key can no longer throw D1_TYPE_ERROR (the 0.10.3 outage). */ /* 0.10.4 INHOUSE-PUBLISH-3: the in-house publish result carries conceptdoi and record as null, so publishStageV2 no longer binds undefined (D1_TYPE_ERROR every tick under 0.10.3). */ // 0.9.65 ERRATA-FOLD-1 (#1756, 2026-10-06, pillar cost): errata-hub runs here as a member (errataMod) at its own minutes on the */15 tick (:00 watch, :15 respond, :30 publish), awaited; GET /errata-hub/health; nodejs_compat, BROWSER and SEND_EMAIL move here with it. 0.9.64 REVISER-FOLD-1 (#1756, 2026-10-06, pillar cost): qnfo-paper-reviser runs here as a member (reviserMod) on the :30 tick of every fourth hour; GET /reviser/health; its private routes answer a service binding whose props name the member. 0.9.63 RELATED-LEGACY-FIELDS-1 (#1907, 2026-10-06): the related-link drain fills the legacy upload_type / publication_type from an InvenioRDM resource_type before the PUT (record 22025544 failed with "metadata.resource_type: Missing data for required field"); the error row is re-queued once this is live. // MATH-LATEX-2 (2026-10-05, #1891): MATH_RULE in the writer, reconcile and revise prompts; pseudoMathScan() turns plain-text math into a HARD review finding and a math-scan event at verify; ops_config research_math_gate=enforce makes it a pre-publish gate (revise once, then park). // WRITER-FLASH-1 (2026-10-05, #1795): the second ensemble writer leg and the revise-patch retry leave glm-5.3 (3,279 neurons per call) for glm-5.3-flash and gpt-oss-120b. // PRIOR-WORK-EMPTY-1 (2026-10-02): no empty "Prior Work" section; References matched at line start. // 0.9.54 RUN-INTERNAL-1 (#1783, ported from code task ct_zvckl6t5d4e1fd): POST /run?sync=1 and POST /run/drain-v2 refuse public hostnames (*.workers.dev, qnfo.org); the cron and service-binding callers (qnfo-research-supervisor RESEARCH_EXEC, the dashboard SVC binding) are unaffected; METADATA-VERIFY-ORDER-1 (2026-10-02, #1732): verifyMetadataBackfill writes issue_triage.close_evidence before it closes the issue (the close-evidence trigger aborted the old order, so the backfill could never close itself); 0.9.52 UTF8-DEPLOY-1 (2026-10-02): no code change; redeployed so the live copy is UTF-8 (the old deploy path double-encoded every non-ASCII character) /* 0.13.0 NOZ-DOI-1 (2026-10-11): history entries about the retired external deposit stages are in git. */
 // WORKERS-AI-ATTRIBUTION-1 (2026-10-01, #1681): per-worker Workers AI attribution. Returns a shallow env copy whose AI
 // binding records each .run() (calls, errors, ms, tokens, neurons) into qnfo-audit ai_call_counters (purpose 'binding').
 // Neurons = usage tokens x Cloudflare's published per-model rates (neurons per M tokens). Fail-soft; env is never mutated.
@@ -23,32 +22,51 @@ var __AI_ATTR_RATES = { "@cf/zai-org/glm-5.3": [127273, 400000], "@cf/zai-org/gl
 // attributed to this worker but not to a pipeline stage, and the next cost lever (27-30 verify failures a day re-arm whole
 // runs from ground) could not be sized. Each stage function sets __AI_ATTR_STAGE on entry and the counter row becomes
 // purpose 'binding:<stage>' (ground, ensemble, reconcile, review, revise, verify). Readers that sum neurons per worker or
-// day are unchanged. Measurement only: no prompt, model, route or call count changes. A label set by one stage can tag a
-// call of another only if two stages of different rows overlap in one isolate, which the one-stage-per-run cron avoids.
-var __AI_ATTR_STAGE = "";
-// AI-STAGE-ATTRIBUTION-2 (0.12.5, agent_issues 2264): since 0.10.0 a tick runs research_parallel slots at once in one isolate,
-// so the module-level label set by one slot tagged the other slot's calls (2026-10-09: 219 glm-5.3-flash calls under
-// binding:ground, a stage that makes no model call). Each slot now runs inside its own AsyncLocalStorage store, the stage
-// functions set the label there (__attrStageSet) and the counter row reads it back for the call in flight (__attrStageGet).
-// Outside a slot (single-flight run(), HTTP callers) the module-level label is used as before. Measurement only.
-var __AI_ATTR_ALS = (function () { try { return new __AttrAsyncLocalStorage(); } catch (e) { return null; } })();
-function __attrStageSet(stage) {
-  __AI_ATTR_STAGE = stage;
-  try { var st = __AI_ATTR_ALS && __AI_ATTR_ALS.getStore(); if (st) st.stage = stage; } catch (e) {}
+// day are unchanged. Measurement only: no prompt, model, route or call count changes.
+// AI-STAGE-ATTRIBUTION-2 (0.16.0, agent_issues 2264): since 0.10.0 a tick runs research_parallel slots at once in one isolate,
+// so a module-level label set by one slot tagged the other slot's calls (2026-10-09: 219 glm-5.3-flash calls under
+// binding:ground, a stage that makes no model call); 0.12.5 moved the label into an AsyncLocalStorage store but kept the
+// module-level fallback that slots still wrote. The label now travels with the call context and nothing else: __aiAttrEnv
+// gives its env copy a context object (env.__aiAttrCtx) that the wrapped binding reads for each call, __attrSlotEnv gives
+// every research_parallel slot its own env copy with a fresh context and its own wrapped binding, and each stage function
+// sets the label on the env it was called with (__attrStageSet(env, stage)). No module-level label, no AsyncLocalStorage.
+function __attrStageSet(env, stage) {
+  if (env && env.__aiAttrCtx) env.__aiAttrCtx.stage = String(stage || "");
 }
-function __attrStageGet() {
-  try { var st = __AI_ATTR_ALS && __AI_ATTR_ALS.getStore(); if (st) return st.stage || ""; } catch (e) {}
-  return __AI_ATTR_STAGE;
+function __attrStageGet(env) {
+  return env && env.__aiAttrCtx && env.__aiAttrCtx.stage || "";
 }
-function __attrSlotRun(fn) {
-  return __AI_ATTR_ALS ? __AI_ATTR_ALS.run({ stage: "" }, fn) : fn();
+// A per-slot env: the same bindings, a fresh attribution context, its own wrapped AI binding reading that context.
+function __attrSlotEnv(env) {
+  try {
+    if (!env || !env.__aiAttrSrc) return env;
+    var s = env.__aiAttrSrc, attrCtx = { stage: "" };
+    var copy = Object.assign({}, env);
+    copy[s.aiKey] = __aiAttrBinding(s.ai, s.db, s.worker, attrCtx);
+    copy.__aiAttrCtx = attrCtx;
+    return copy;
+  } catch (e) {
+    return env;
+  }
 }
 function __aiAttrEnv(env, worker, aiKey, dbKey) {
   try {
     if (!env || env.__aiAttr) return env;
     var ai = env[aiKey], db = env[dbKey];
     if (!ai || typeof ai.run !== "function" || !db) return env;
-    var wrapped = new Proxy(ai, { get: function (t, p) {
+    var attrCtx = { stage: "" };
+    var copy = Object.assign({}, env);
+    copy[aiKey] = __aiAttrBinding(ai, db, worker, attrCtx);
+    copy.__aiAttr = 1;
+    copy.__aiAttrCtx = attrCtx;
+    copy.__aiAttrSrc = { ai: ai, db: db, worker: worker, aiKey: aiKey };
+    return copy;
+  } catch (e) {
+    return env;
+  }
+}
+function __aiAttrBinding(ai, db, worker, attrCtx) {
+    return new Proxy(ai, { get: function (t, p) {
       if (p !== "run") { var v = Reflect.get(t, p); return typeof v === "function" ? v.bind(t) : v; }
       return async function (model, input, opts) {
         var t0 = Date.now(), ok = 1, res;
@@ -62,18 +80,11 @@ function __aiAttrEnv(env, worker, aiKey, dbKey) {
             var r = __AI_ATTR_RATES[String(model)] || [0, 0];
             var neurons = (inTok * r[0] + outTok * r[1]) / 1e6;
             await db.prepare("INSERT INTO ai_call_counters (day, worker, purpose, model, calls, errors, in_chars, ms, in_tok, out_tok, neurons) VALUES (?1,?2,?10,?3,1,?4,?5,?6,?7,?8,?9) ON CONFLICT(day, worker, purpose, model) DO UPDATE SET calls=calls+1, errors=errors+excluded.errors, in_chars=in_chars+excluded.in_chars, ms=ms+excluded.ms, in_tok=in_tok+excluded.in_tok, out_tok=out_tok+excluded.out_tok, neurons=neurons+excluded.neurons")
-              .bind(new Date().toISOString().slice(0, 10), worker, String(model).slice(0, 120), ok ? 0 : 1, chars, Date.now() - t0, inTok, outTok, neurons, __attrStageGet() ? "binding:" + __attrStageGet() : "binding").run();
+              .bind(new Date().toISOString().slice(0, 10), worker, String(model).slice(0, 120), ok ? 0 : 1, chars, Date.now() - t0, inTok, outTok, neurons, attrCtx && attrCtx.stage ? "binding:" + attrCtx.stage : "binding").run();
           } catch (e2) {}
         }
       };
     } });
-    var copy = Object.assign({}, env);
-    copy[aiKey] = wrapped;
-    copy.__aiAttr = 1;
-    return copy;
-  } catch (e) {
-    return env;
-  }
 }
 var WORKER = "qnfo-research-exec";
 var NL = String.fromCharCode(10);
@@ -1724,7 +1735,12 @@ var RESEARCH_SHARED_PREAMBLE = [
   "Write ONE self-contained Python 3 script (stdlib only: math, fractions) that independently computes each claim from its stated inputs and prints for each:",
   "CLAIM <id>: computed=<value> expected=<value-or-none> match=yes|no",
   "Print computed with at least 8 significant digits. Print expected as a plain number carrying exactly the digits the paper states, no more and no fewer, converted to the unit of computed; keep it a string literal in the script so no digit is added or dropped. A claim matches when computed, rounded to the number of significant digits the paper states, equals the stated value. Compute from the stated inputs and formula; do NOT copy the paper's answer as the computation - the script must reproduce the derivation. Print a final line 'VERIFICATION SUMMARY: N claims, M match, K mismatch'.",
+  "Every CLAIM line carries all four fields, computed, expected and match included; a line missing one cannot be adjudicated.",
   "Output the script inside a single python fenced block, nothing else.",
+  "### TASK VERIFY_TEXT",
+  "The execution sandbox is unavailable, so no script can run. Recompute each claim in CLAIMS yourself from its stated inputs and formula, showing every arithmetic step in plain text, and then print for each claim one line in exactly this form:",
+  "CLAIM <id>: computed=<value> expected=<value-or-none> match=yes|no",
+  "Print computed with at least 6 significant digits and expected with exactly the digits the paper states, converted to the unit of computed. Compute from the inputs and formula; do NOT copy the paper's answer as the computation. End with 'VERIFICATION SUMMARY: N claims, M match, K mismatch'. Output the steps and the CLAIM lines only, no other prose.",
   "### TASK CONTINUE",
   "The PAPER SO FAR in the shared context stopped before it was finished. Continue it from exactly where it stops: the next paragraph, the rest of the current section, then every remaining required section in the required order, ending with the Conclusion.",
   "Output ONLY the continuation markdown. Do not repeat the title, the abstract or any text already written; do not restart or summarize earlier sections; do not write the References list (it is rendered from the bibliography).",
@@ -1767,6 +1783,28 @@ var REVISE_PATCH_PROMPT = stagePrompt("REVISE_PATCH", "FIXES (JSON):\n");
 function repairJsonBackslashes(t) {
   return String(t).replace(/\\(u[0-9a-fA-F]{4}|["\\\/]|[bfnrt](?![a-z])|)/g, function(m, esc) { return esc ? m : "\\\\"; });
 }
+// REVISE-PATCH-PARSE-2 (0.16.0, agent_issues 2211): the balanced top-level JSON values of the text (arrays and objects, with
+// strings and escapes skipped), so an answer made of several arrays, an object whose `edits` array holds the edits, or an
+// array after bracketed prose is read whole; the first-to-last-bracket slice and the per-object regex stay as fallbacks.
+function topLevelJsonValues(t) {
+  const out = [];
+  let depth = 0, start = -1, inStr = false;
+  for (let i = 0; i < t.length; i++) {
+    const ch = t[i];
+    if (inStr) {
+      if (ch === "\\") i++;
+      else if (ch === '"') inStr = false;
+      continue;
+    }
+    if (ch === '"') { if (depth > 0) inStr = true; continue; }
+    if (ch === "[" || ch === "{") { if (depth === 0) start = i; depth++; continue; }
+    if (ch === "]" || ch === "}") {
+      if (depth > 0) depth--;
+      if (depth === 0 && start >= 0) { out.push(t.slice(start, i + 1)); start = -1; }
+    }
+  }
+  return out;
+}
 function parsePatchEdits(raw) {
   const t = String(raw || "").replace(/```(?:json)?/gi, "");
   const tryParse = function(x) {
@@ -1774,12 +1812,26 @@ function parsePatchEdits(raw) {
     try { return JSON.parse(x); } catch (e) {}
     return null;
   };
+  const editsOf = function(v) {
+    if (Array.isArray(v)) return v;
+    if (v && typeof v === "object") for (const k of ["edits", "patches", "changes"]) if (Array.isArray(v[k])) return v[k];
+    return null;
+  };
+  const onlyObjects = function(arr) {
+    return arr.filter(function(e) { return e && typeof e === "object" && !Array.isArray(e); });
+  };
+  let found = [];
+  for (const seg of topLevelJsonValues(t)) {
+    const v = editsOf(tryParse(seg));
+    if (v) found = found.concat(v);
+  }
+  if (found.length) return onlyObjects(found);
   const b = t.lastIndexOf("]");
   let a = t.search(/\[\s*\{/);
   if (a < 0) a = t.indexOf("[");
   if (a >= 0 && b > a) {
     const whole = tryParse(t.slice(a, b + 1));
-    if (Array.isArray(whole)) return whole;
+    if (Array.isArray(whole)) return onlyObjects(whole);
   }
   const out = [];
   const re = /\{\s*"find"\s*:\s*"((?:[^"\\]|\\.)*)"\s*,\s*"replace"\s*:\s*"((?:[^"\\]|\\.)*)"\s*\}/g;
@@ -2017,7 +2069,7 @@ async function dataciteArxiv(terms, opts) {
   return { ok: false, status: last, entries: [] };
 }
 async function stageGround(env, row) {
-  __attrStageSet("ground");
+  __attrStageSet(env, "ground");
   const idea = row.idea || row.summary || "";
   const rid = String(row.id);
   let existing = "";
@@ -2203,7 +2255,7 @@ async function ensemblePrefixStaggerMs(env) {
   return ENSEMBLE_PREFIX_STAGGER_MS;
 }
 async function stageEnsemble(env, row) {
-  __attrStageSet("ensemble");
+  __attrStageSet(env, "ensemble");
   const grounding = await r2Get(env, String(row.id) + "/grounding.md");
   if (!grounding) {
     await markError(env, row, "ensemble: grounding missing");
@@ -2461,7 +2513,7 @@ async function completeCall(env, prompt) {
   return String(out || "");
 }
 async function stageComplete(env, row) {
-  __attrStageSet("complete");
+  __attrStageSet(env, "complete");
   var t0 = Date.now();
   var paper = await r2Get(env, String(row.id) + "/reconciled.md");
   var grounding = await r2Get(env, String(row.id) + "/grounding.md") || "";
@@ -2643,7 +2695,9 @@ function uniqueModels(list) {
 function provenanceSection(info) {
   var o = info || {};
   var verifyLine = o.ran && o.claims > 0
-    ? "Independent recomputation: a separately generated script recomputed " + o.claims + " quantitative claim" + (o.claims === 1 ? "" : "s") + " from the paper's stated inputs; " + (o.mismatches || 0) + " differed from the stated value at the stated precision."
+    ? (o.basis === "text"
+      ? "Independent recomputation: the execution sandbox was unavailable, so a second language model recomputed " + o.claims + " quantitative claim" + (o.claims === 1 ? "" : "s") + " step by step in text from the paper's stated inputs (no code was executed); " + (o.mismatches || 0) + " differed from the stated value at the stated precision."
+      : "Independent recomputation: a separately generated script recomputed " + o.claims + " quantitative claim" + (o.claims === 1 ? "" : "s") + " from the paper's stated inputs; " + (o.mismatches || 0) + " differed from the stated value at the stated precision.")
     : "Independent recomputation: no quantitative claim with stated inputs and formula was extracted, so no number in this paper was recomputed.";
   return [
     PROVENANCE_HEAD,
@@ -2683,7 +2737,7 @@ async function stampProvenance(env, row, paper, info) {
 }
 
 async function stageReconcile(env, row) {
-  __attrStageSet("reconcile");
+  __attrStageSet(env, "reconcile");
   const parts = [];
   // LEAN-ENSEMBLE-1: a lean run writes two drafts, so a draft-2 left by an earlier attempt on another grounding must not
   // join. A draft joins only when its grounding fingerprint (draft-N.fp) matches draft-0's; a draft with no sidecar is kept.
@@ -2742,7 +2796,7 @@ __name22(stageReconcile, "stageReconcile");
 __name222(stageReconcile, "stageReconcile");
 __name2222(stageReconcile, "stageReconcile");
 async function stageReview(env, row) {
-  __attrStageSet("review");
+  __attrStageSet(env, "review");
   const paper = await r2Get(env, String(row.id) + "/reconciled.md");
   const grounding = await r2Get(env, String(row.id) + "/grounding.md");
   let ctx = { cycles: 0 };
@@ -2823,7 +2877,7 @@ __name22(stageReview, "stageReview");
 __name222(stageReview, "stageReview");
 __name2222(stageReview, "stageReview");
 async function stageRevise(env, row) {
-  __attrStageSet("revise");
+  __attrStageSet(env, "revise");
   const paper = await r2Get(env, String(row.id) + "/reconciled.md");
   const fixes = await r2Get(env, String(row.id) + "/fixes.json");
   let ctx = { cycles: 0 };
@@ -2848,12 +2902,29 @@ async function stageRevise(env, row) {
       _pmodel = MODELS[2];
     }
     let _p = applyRevisePatch(paper, _praw);
+    let _fx = [];
+    try {
+      const _fj = JSON.parse(fixes || "[]");
+      _fx = Array.isArray(_fj) ? _fj : _fj && Array.isArray(_fj.hard) ? _fj.hard : [];
+    } catch (e) {
+    }
+    const _hardIds = _fx.filter(function(f) {
+      return f && f.id && f.id !== "review-parse";
+    }).map(function(f) {
+      return String(f.id).slice(0, 40);
+    }).slice(0, 12);
     // REVISE-NO-UNREVISED-1 (0.13.0, agent_issues 2211): 52 of 647 patch calls in four days applied no edit (one long edit
     // whose excerpt is not in the paper) and the paper went on to review unchanged. The second model family gets the same
     // prompt before the pass is judged.
-    if (!_p.applied && _pmodel !== MODELS[2]) {
-      await logEvent(env, "revise-patch", "row=" + row.id + " model=" + _pmodel + " proposed=" + _p.proposed + " applied=0 raw_chars=" + String(_praw || "").length + " out_chars=" + _p.text.length + " second-model retry", "warn");
-      const _praw2 = await aiText(env, MODELS[2], _pprompt, 8192, "low");
+    // REVISE-PATCH-RETRY-STRICT-1 (0.16.0, agent_issues 2211): when the answer proposed no edit at all for a non-empty fix
+    // list (an empty array, raw_chars=2: 4 of the 12 revise-noop events on 2026-10-12), the same prompt asked again gets the
+    // same "[]". The retry then names the HARD fix ids and requires one edit per id; the addendum follows the per-call text,
+    // so the cached preamble + paper prefix is unchanged. It runs on the other model family, or again on that family with
+    // the stricter text when the first fallback already used it.
+    const _strict = _p.proposed === 0 && _hardIds.length ? "\n\nSTRICT RETRY: the previous answer proposed no edit, which is not acceptable for a non-empty fix list. The HARD fixes to resolve are: " + _hardIds.join(", ") + ". Return at least one edit for EACH of these fix ids, as a JSON array of {\"find\",\"replace\"} objects and nothing else; an empty array is a wrong answer. Where a fix cannot be met from the PAPER and the FIXES, resolve it by replacing the offending sentence with an empty string." : "";
+    if (!_p.applied && (_pmodel !== MODELS[2] || _strict)) {
+      await logEvent(env, "revise-patch", "row=" + row.id + " model=" + _pmodel + " proposed=" + _p.proposed + " applied=0 raw_chars=" + String(_praw || "").length + " out_chars=" + _p.text.length + " second-model retry" + (_strict ? " (strict: " + _hardIds.join(",") + ")" : ""), "warn");
+      const _praw2 = await aiText(env, MODELS[2], _pprompt + _strict, 8192, "low");
       const _p2 = applyRevisePatch(paper, _praw2);
       if (_p2.applied || !_praw) {
         _praw = _praw2;
@@ -2878,24 +2949,20 @@ async function stageRevise(env, row) {
     // REVISE-NO-UNREVISED-1 (0.13.0, agent_issues 2211) replaces the advance above: a paper whose HARD fixes produced no
     // applied edit from either model is not sent on as if it had been revised. The one exception is a review whose output
     // could not be read (the only finding is the review-parse placeholder): there is nothing to edit, so review runs again
-    // (twice at most). Otherwise the pass fails with its reason and the recover loop drafts the paper again.
+    // (twice at most). Otherwise the pass fails with its reason and the recover loop drafts the paper again: markError
+    // re-queues the row from ground with recover_count+1 while recover_count < 3 and parks it after (PARKED-POISON-1), so
+    // the loop-breaker never sees a verify failure after a no-op revise.
     if (paper.length >= 1.2e4) {
-      let _fx = [];
-      try {
-        const _fj = JSON.parse(fixes || "[]");
-        _fx = Array.isArray(_fj) ? _fj : _fj && Array.isArray(_fj.hard) ? _fj.hard : [];
-      } catch (e) {
-      }
       const _onlyParse = _fx.length > 0 && _fx.every(function(f) {
         return f && f.id === "review-parse";
       });
-      await logEvent(env, "revise-noop", "row=" + row.id + " no applicable patch edit (proposed=" + _p.proposed + ", raw=" + String(_praw || "").length + " chars, fixes=" + _fx.length + "); " + (_onlyParse ? "the review output was unreadable, review runs again" : "the paper does not advance unrevised"), "warn");
+      await logEvent(env, "revise-noop", "row=" + row.id + " no applicable patch edit (proposed=" + _p.proposed + ", raw=" + String(_praw || "").length + " chars, fixes=" + _fx.length + (_hardIds.length ? ", ids=" + _hardIds.join(",") : "") + ", strict_retry=" + (_strict ? "yes" : "no") + "); " + (_onlyParse ? "the review output was unreadable, review runs again" : "the paper does not advance unrevised; revise failed, recover path"), "warn");
       if (_onlyParse && (ctx.reparse || 0) < 2) {
         await env.QNFO_AUDIT.prepare("UPDATE research_queue SET stage='review', context=? WHERE id=?").bind(JSON.stringify({ cycles: ctx.cycles || 0, patch: 0, verifyPass: ctx.verifyPass || 0, reparse: (ctx.reparse || 0) + 1 }).slice(0, 6e3), row.id).run();
         return { ok: true, stage: "revise->review", cycle: ctx.cycles || 0, patch: 0, rereview: true };
       }
-      await markError(env, row, "revise: no applicable edit for " + _fx.length + " HARD fixes from two models (not advanced unrevised)");
-      return { ok: false, stage: "revise", withheld: "revise-noop", fixes: _fx.length };
+      await markError(env, row, "revise: no applicable edit for " + _fx.length + " HARD fixes (" + _hardIds.join(",").slice(0, 120) + ") from two models, strict retry included (not advanced unrevised)");
+      return { ok: false, stage: "revise", withheld: "revise-noop", fixes: _fx.length, fixIds: _hardIds.slice(0, 8), proposed: _p.proposed };
     }
   }
   let revised = await gwCall(env, stageContextPrompt("REVISE", "PAPER", paper, "FIXES (JSON):\n" + fixes.slice(0, 8e3)), 3e4);
@@ -3034,13 +3101,18 @@ function adjudicateVerification(out, claims) {
   const byId = {};
   for (const c of Array.isArray(claims) ? claims : []) if (c && c.id != null) byId[String(c.id).toLowerCase()] = c;
   const rows = [];
-  const re = /^[ \t]*CLAIM[ \t]+([^\s:]+)[ \t]*:[ \t]*computed[ \t]*=[ \t]*(\S+)[ \t]+expected[ \t]*=[ \t]*(\S+)[ \t]+match[ \t]*=[ \t]*(yes|no)\b/gim;
+  // VERIFY-UNRUN-CAUSE-1 (0.16.0, agent_issues 2221): the match column is optional. The worker decides every line from its
+  // two numbers anyway; a script that printed computed and expected but no match=yes|no (row 6f7dd283, 16 claims, 14:04Z
+  // 2026-10-12) used to read as "no CLAIM line", so a verification that had run counted as unrun and the row was retried.
+  // A line with neither two numbers nor a script verdict is kept as undecided and counts as neither a match nor a mismatch.
+  const re = /^[ \t]*CLAIM[ \t]+([^\s:]+)[ \t]*:[ \t]*computed[ \t]*=[ \t]*(\S+)[ \t]+expected[ \t]*=[ \t]*(\S+)(?:[ \t]+match[ \t]*=[ \t]*(yes|no)\b)?/gim;
   let m;
   while ((m = re.exec(String(out || ""))) !== null) {
-    const script = m[4].toLowerCase() === "yes";
+    const script = m[4] ? m[4].toLowerCase() === "yes" : null;
     const c = numLit(m[2]), e = numLit(m[3]);
-    let match = script, basis = "script verdict (values not both numeric)";
+    let decided = script !== null, match = !!script, basis = decided ? "script verdict (values not both numeric)" : "undecided: values not both numeric and no script verdict";
     if (c && e) {
+      decided = true;
       const claim = byId[String(m[1]).toLowerCase()];
       const fromPaper = claim ? statedSig(e, claim.statement) : 0;
       const sig = fromPaper ? Math.max(fromPaper, 2) : Math.max(e.sig, 3);
@@ -3055,17 +3127,38 @@ function adjudicateVerification(out, claims) {
         basis = sig + " significant digits (" + (fromPaper ? "as the paper states, at least 2" : "as printed, at least 3") + ")";
       }
     }
-    rows.push({ id: m[1], computed: m[2], expected: m[3], script, match, basis });
+    rows.push({ id: m[1], computed: m[2], expected: m[3], script, match, decided, basis });
   }
-  return { ran: rows.length > 0, rows, mismatches: rows.filter(function(r) {
-    return !r.match;
+  return { ran: rows.some(function(r) {
+    return r.decided;
+  }), rows, mismatches: rows.filter(function(r) {
+    return r.decided && !r.match;
+  }).length, undecided: rows.filter(function(r) {
+    return !r.decided;
   }).length };
 }
 function adjudicationMd(adj) {
-  if (!adj.ran) return "## Adjudication\n\nThe script printed no CLAIM line, so nothing was verified by this run.\n";
-  return "## Adjudication\n\nEach line is decided from its two printed numbers at the precision the paper states: the stated value matches when the computed value agrees with it to half a unit in the last stated digit, or to one unit when that is within one percent. The script's own match column is kept for reference.\n\n| claim | computed | stated | script | decision | basis |\n|---|---|---|---|---|---|\n" + adj.rows.map(function(r) {
-    return "| " + r.id + " | " + r.computed + " | " + r.expected + " | " + (r.script ? "yes" : "no") + " | " + (r.match ? "match" : "MISMATCH") + " | " + r.basis + " |";
-  }).join("\n") + "\n\nMismatches: " + adj.mismatches + " of " + adj.rows.length + ".\n";
+  if (!adj.ran) return "## Adjudication\n\n" + (adj.rows && adj.rows.length ? "The output printed " + adj.rows.length + " CLAIM line(s) but none carried two numbers or a verdict, so nothing was decided by this run." : "The script printed no CLAIM line, so nothing was verified by this run.") + "\n";
+  return "## Adjudication\n\n" + (adj.basis === "text" ? "The execution sandbox was unavailable, so a second model recomputed each claim step by step in text; no code was executed. " : "") + "Each line is decided from its two printed numbers at the precision the paper states: the stated value matches when the computed value agrees with it to half a unit in the last stated digit, or to one unit when that is within one percent. The script's own match column is kept for reference.\n\n| claim | computed | stated | script | decision | basis |\n|---|---|---|---|---|---|\n" + adj.rows.map(function(r) {
+    return "| " + r.id + " | " + r.computed + " | " + r.expected + " | " + (r.script === null ? "-" : r.script ? "yes" : "no") + " | " + (!r.decided ? "undecided" : r.match ? "match" : "MISMATCH") + " | " + r.basis + " |";
+  }).join("\n") + "\n\nMismatches: " + adj.mismatches + " of " + adj.rows.length + (adj.undecided ? " (" + adj.undecided + " undecided)" : "") + ".\n";
+}
+// VERIFY-UNRUN-CAUSE-1 (0.16.0, agent_issues 2221): why an execution output has no decidable CLAIM line. `runtime` is true
+// when the sandbox never ran the script (the pilot was unreachable or refused, the interpreter or a module is missing): the
+// paper is not at fault and the stage degrades to the text-level recomputation. A script that ran and crashed, or ran and
+// printed another shape, is a defect of the generated script and keeps the bounded retry.
+function verifyUnrunCause(out) {
+  const s = String(out || "");
+  const line = function(re) {
+    const m = s.match(re);
+    return m ? String(m[0]).replace(/\s+/g, " ").slice(0, 160) : "";
+  };
+  if (/^EXEC ERROR:/.test(s)) return { kind: "pilot-unreachable", runtime: true, detail: s.slice(12, 160).replace(/\s+/g, " ") };
+  if (/^no output \(HTTP \d+\)/.test(s)) return { kind: "pilot-http", runtime: true, detail: s.slice(0, 80) };
+  if (/ModuleNotFoundError|No module named|command not found|python3?: not found|\[exit 127\]/i.test(s)) return { kind: "missing-runtime", runtime: true, detail: line(/.*(?:ModuleNotFoundError|No module named|not found|\[exit 127\]).*/i) };
+  if (/Traceback \(most recent call last\)|\[exit [1-9]\d*\]/.test(s)) return { kind: "script-error", runtime: false, detail: line(/^\w*(?:Error|Exception)\b.*$/m) || line(/\[exit \d+\]/) };
+  if (/^[ \t]*CLAIM\b/m.test(s)) return { kind: "claim-lines-undecidable", runtime: false, detail: line(/^[ \t]*CLAIM\b.*$/m) };
+  return { kind: "no-claim-lines", runtime: false, detail: s.replace(/\s+/g, " ").slice(0, 160) };
 }
 var VERIFY_UNRUN_WAIT_MS = 10 * 60 * 1e3;
 function finalGates(paper, opts) {
@@ -3135,7 +3228,7 @@ async function parkMathRow(env, row, pm) {
   await logEvent(env, "math-park", "parked research row " + String(row.id).slice(0, 8) + " pseudo_math=" + pm.count, "warn");
 }
 async function stageVerify(env, row) {
-  __attrStageSet("verify");
+  __attrStageSet(env, "verify");
   let paper = await r2Get(env, String(row.id) + "/reconciled.md");
   try {
     const _rr = renderReferences(paper, await r2Get(env, String(row.id) + "/grounding.md"));
@@ -3201,7 +3294,7 @@ async function stageVerify(env, row) {
   if (cm) code = cm[1];
   if (!code || code.length < 40) {
     await markError(env, row, "verify: no verification script generated");
-    return { ok: false, stage: "verify" };
+    return { ok: false, stage: "verify", cause: "no-script", detail: String(genRaw || "").replace(/\s+/g, " ").slice(0, 120) };
   }
   await r2Put(env, String(row.id) + "/verification.py", code);
   let out = "";
@@ -3222,25 +3315,46 @@ async function stageVerify(env, row) {
   } catch (e) {
     out = "EXEC ERROR: " + String(e && e.message || e).slice(0, 200);
   }
-  const adj = adjudicateVerification(out, claims);
-  const verifMd = "# Verification report\n\n## Extracted claims\n" + JSON.stringify(claims, null, 2) + "\n\n## Script\n```python\n" + code + "\n```\n\n## Execution output\n```\n" + out + "\n```\n\n" + adjudicationMd(adj);
-  await r2Put(env, String(row.id) + "/verification.md", verifMd);
+  let adj = adjudicateVerification(out, claims);
+  adj.basis = "script";
+  let textOut = "";
   if (!adj.ran) {
-    // VERIFY-UNRUN-1 (0.13.0): claims were extracted but the script printed no CLAIM line (it failed, the pilot did not
-    // answer, or the output has another shape). That used to read as "no mismatch" and the paper went to publish with
-    // nothing checked. The stage is tried again after a pause, three times in all, then the pass fails.
-    const _un = (ctx.verifyUnrun || 0) + 1;
-    await logEvent(env, "verify-unrun", "row=" + row.id + " attempt=" + _un + " claims=" + claims.length + " output=" + String(out).replace(/\s+/g, " ").slice(0, 200), "warn");
-    if (_un < 3) {
-      await env.QNFO_AUDIT.prepare("UPDATE research_queue SET context=? WHERE id=?").bind(JSON.stringify(Object.assign({}, ctx, { verifyUnrun: _un, verifyUnrunAt: nowIso() })).slice(0, 6e3), row.id).run();
-      return { ok: false, stage: "verify", unrun: _un };
+    const cause = verifyUnrunCause(out);
+    if (cause.runtime) {
+      // VERIFY-TEXT-FALLBACK-1 (0.16.0, agent_issues 2221): the sandbox did not run the script at all (pilot unreachable or
+      // refusing, interpreter or module missing). The paper is not at fault, so instead of three spaced retries and a
+      // failed pass the stage degrades to the text-level adjudication it already has: a model from the other family
+      // recomputes each claim step by step and prints the same CLAIM lines, and the worker decides them at the stated
+      // precision exactly as it decides the script's. Weaker than executed code; the event, the report and the provenance
+      // section all say so (basis=text).
+      textOut = String(await aiText(env, MODELS[2], stageContextPrompt("VERIFY_TEXT", "PAPER", paper, "CLAIMS (JSON):\n" + JSON.stringify(claims)), 8192, "low") || "");
+      const adjT = adjudicateVerification(textOut, claims);
+      await logEvent(env, "verify-text-fallback", "row=" + row.id + " cause=" + cause.kind + " detail=" + cause.detail + " text_lines=" + adjT.rows.length + " decided=" + (adjT.rows.length - adjT.undecided) + " mismatches=" + adjT.mismatches, adjT.ran ? "warn" : "error");
+      if (adjT.ran) {
+        adj = adjT;
+        adj.basis = "text";
+      }
     }
-    await markError(env, row, "verify: the verification script produced no result in " + _un + " attempts (nothing verified)");
-    return { ok: false, stage: "verify", unrun: _un };
+    if (!adj.ran) {
+      // VERIFY-UNRUN-1 (0.13.0): claims were extracted but no CLAIM line could be decided. That used to read as "no
+      // mismatch" and the paper went to publish with nothing checked. The stage is tried again after a pause, three times
+      // in all, then the pass fails; the event and the done result name the cause instead of a bare counter.
+      const _un = (ctx.verifyUnrun || 0) + 1;
+      await r2Put(env, String(row.id) + "/verification.md", "# Verification report\n\n## Extracted claims\n" + JSON.stringify(claims, null, 2) + "\n\n## Script\n```python\n" + code + "\n```\n\n## Execution output\n```\n" + out + "\n```\n\n" + (textOut ? "## Text-level recomputation\n```\n" + textOut.slice(0, 2e4) + "\n```\n\n" : "") + adjudicationMd(adj));
+      await logEvent(env, "verify-unrun", "row=" + row.id + " attempt=" + _un + " claims=" + claims.length + " cause=" + cause.kind + " detail=" + cause.detail + " output=" + String(out).replace(/\s+/g, " ").slice(0, 200), "warn");
+      if (_un < 3) {
+        await env.QNFO_AUDIT.prepare("UPDATE research_queue SET context=? WHERE id=?").bind(JSON.stringify(Object.assign({}, ctx, { verifyUnrun: _un, verifyUnrunAt: nowIso() })).slice(0, 6e3), row.id).run();
+        return { ok: false, stage: "verify", unrun: _un, cause: cause.kind, detail: cause.detail.slice(0, 120) };
+      }
+      await markError(env, row, "verify: the verification script produced no result in " + _un + " attempts (" + cause.kind + ": " + cause.detail.slice(0, 120) + "); nothing verified");
+      return { ok: false, stage: "verify", unrun: _un, cause: cause.kind, detail: cause.detail.slice(0, 120) };
+    }
   }
+  const verifMd = "# Verification report\n\n## Extracted claims\n" + JSON.stringify(claims, null, 2) + "\n\n## Script\n```python\n" + code + "\n```\n\n## Execution output\n```\n" + out + "\n```\n\n" + (textOut ? "## Text-level recomputation\n```\n" + textOut.slice(0, 2e4) + "\n```\n\n" : "") + adjudicationMd(adj);
+  await r2Put(env, String(row.id) + "/verification.md", verifMd);
   const mismatch = adj.mismatches > 0;
-  await logEvent(env, "verify-adjudication", "row=" + row.id + " claims=" + adj.rows.length + " mismatches=" + adj.mismatches + " script_no=" + adj.rows.filter(function(r) {
-    return !r.script;
+  await logEvent(env, "verify-adjudication", "row=" + row.id + " basis=" + adj.basis + " claims=" + adj.rows.length + " mismatches=" + adj.mismatches + " undecided=" + adj.undecided + " script_no=" + adj.rows.filter(function(r) {
+    return r.script === false;
   }).length, mismatch ? "warn" : "ok");
   const gates = finalGates(paper, gateOpts);
   const _pm = await mathGate(env, row, paper, gates);
@@ -3263,9 +3377,9 @@ async function stageVerify(env, row) {
     await markError(env, row, "verify: unresolved after revision - mismatch=" + mismatch + " gates=" + gates.reason);
     return { ok: false, stage: "verify", withheld: "verify-unresolved", mismatches: adj.mismatches, gate: gates.reason };
   }
-  await stampProvenance(env, row, paper, { claims: adj.rows.length, mismatches: adj.mismatches, ran: adj.ran });
+  await stampProvenance(env, row, paper, { claims: adj.rows.length, mismatches: adj.mismatches, ran: adj.ran, basis: adj.basis });
   await env.QNFO_AUDIT.prepare("UPDATE research_queue SET stage='publish', status='review' WHERE id=?").bind(row.id).run();
-  return { ok: true, stage: "verify->publish", claims: claims.length };
+  return { ok: true, stage: "verify->publish", claims: claims.length, basis: adj.basis };
 }
 __name(stageVerify, "stageVerify");
 __name2(stageVerify, "stageVerify");
@@ -3914,7 +4028,7 @@ async function runLeased(env, holder, maxStages, budgetMs) {
         // One snapshot per round: slot k owns inflight[k], so a row that leaves the list mid-round cannot shift another
         // slot onto a row already being advanced.
         const inflight = (await env.QNFO_AUDIT.prepare(INFLIGHT_SQL).bind(width).all()).results || [];
-        round = await Promise.all(Array.from({ length: width }, function(_, k) { return __attrSlotRun(function() { return runSlot(env, k, width, inflight); }); }));
+        round = await Promise.all(Array.from({ length: width }, function(_, k) { return runSlot(__attrSlotEnv(env), k, width, inflight); }));
       } else {
         round = [await run(env)];
       }
@@ -26511,7 +26625,10 @@ export {
   publishStageV2,
   runSlot,
   applyRevisePatch,
+  parsePatchEdits,
   adjudicateVerification,
+  adjudicationMd,
+  verifyUnrunCause,
   numLit,
   statedLiterals,
   finalGates,
