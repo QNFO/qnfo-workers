@@ -52,7 +52,12 @@ SKIP_NAME_RE = re.compile(r"(^_)|(^|\.)(_domainkey|_dmarc|cf-bounce|mail|smtp|im
 
 # Hosts whose root is intentionally empty: the service answers at one path (an MCP endpoint answers 401 without a key,
 # which classify() reads as alive). A host not listed here is probed at "/".
-PROBE_PATHS = {"mcp.q08.org": "/mcp"}
+PROBE_PATHS = {
+    "mcp.q08.org": "/mcp",
+    # HOST-CENSUS-BROKEN-1 (agent_issues 2130, 2026-10-12): these workers answer 404 JSON at "/" by design and 200 at /health.
+    "lifecycle.qnfo.org": "/health",
+    "research-exec.qnfo.org": "/health",
+}
 
 
 def classify(status, body, err):
@@ -222,7 +227,7 @@ def selftest():
         got = classify(st, body, err)
         if got != want:
             return {"ok": False, "case": [st, err], "got": got, "want": want}
-    if PROBE_PATHS.get("mcp.q08.org") != "/mcp" or PROBE_PATHS.get("papers.qnfo.org", "/") != "/":
+    if PROBE_PATHS.get("mcp.q08.org") != "/mcp" or PROBE_PATHS.get("lifecycle.qnfo.org") != "/health" or PROBE_PATHS.get("research-exec.qnfo.org") != "/health" or PROBE_PATHS.get("papers.qnfo.org", "/") != "/":
         return {"ok": False, "probe_paths": PROBE_PATHS}
     for pat, want in (("papers.qnfo.org/*", "papers.qnfo.org"), ("qnfo.org/ipatent*", "qnfo.org"), ("*.qnfo.org/*", None), ("", None)):
         if host_of_route(pat) != want:

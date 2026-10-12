@@ -30,9 +30,12 @@ jobs:
         with:
           fetch-depth: 0
 
+      # GATE-NODE-22-1 (2026-10-12): the whole job runs on Node 22. Several offline suites import node:sqlite (Node 22+); the
+      # job used to start on Node 20 and switch to 22 only in a later conditional step, so a PR that skipped that step failed
+      # IDEA-CHAIN-SINGLE-PRODUCER-1 with "No such built-in module: node:sqlite" (PR 989, 2026-10-12 13:12Z) while others passed.
       - uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          node-version: "22"
 
       - name: Determine changed worker dirs
         id: changed
