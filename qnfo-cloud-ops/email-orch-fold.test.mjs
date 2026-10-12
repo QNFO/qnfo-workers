@@ -7,6 +7,7 @@
 // declares props.caller.
 // Run: node qnfo-cloud-ops/email-orch-fold.test.mjs   -> prints "N passed, 0 failed"
 import { readFileSync, existsSync } from "node:fs";
+import { versionAtLeast } from "../scripts/version-at-least.mjs";
 const IMPORT = 'import { connect } from "cloudflare:sockets";';
 const src = readFileSync(new URL("./worker.js", import.meta.url), "utf8");
 const guest = readFileSync(new URL("../qnfo-email-orchestrator/worker.js", import.meta.url), "utf8");
@@ -25,8 +26,7 @@ const ok = (c, m, x) => { if (c) pass++; else { fail++; console.log("FAIL " + m 
   const missing = body.filter((l) => l.trim() && !src.includes(l.trim()));
   ok(missing.length === 1 && missing[0].startsWith("var VERSION = "), "every orchestrator line is in the host except its VERSION line", missing.map((l) => l.slice(0, 60)));
   // a minimum, not an exact pin (CLAUDE.md: an exact VERSION pin breaks on the next bump)
-  const hv = String(mod.__hv).split("-")[0].split(".").map(Number);
-  ok((hv[0] > 1 || (hv[0] === 1 && hv[1] >= 20)) && /^0\.5\.([5-9]|\d\d)-folded$/.test(mod.__mv), "host >= 1.20.0, member >= 0.5.5-folded", [mod.__hv, mod.__mv]);
+  ok(versionAtLeast(mod.__hv, "1.20.0") && versionAtLeast(mod.__mv, "0.5.5") && String(mod.__mv).endsWith("-folded"), "host >= 1.20.0, member >= 0.5.5-folded", [mod.__hv, mod.__mv]);
   ok((src.match(/var VERSION = "/g) || []).length === 1, "one quoted VERSION constant in the bundle");
 }
 
