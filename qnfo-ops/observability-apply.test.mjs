@@ -50,7 +50,8 @@ ok(/out\.observability = parseDeclaredObservability\(toml\);/.test(src), "the in
 ok(/let _obsOut = _declObs && _settingsRead \? mergeObservability\(_liveObs, _declObs\) : null;/.test(src), "merged only when the live settings were read");
 ok(/_obsOut \? \{ observability: _obsOut \} : \{\}/.test(src), "the upload metadata carries it");
 const k = src.indexOf("if (!resp.ok && _obsOut) {");
-ok(k > 0 && /_obsOut = null;\s+resp = await fetch\(_putUrl, \{ method: "PUT", headers: _putHeaders, body: _buildBody\(\) \}\);/.test(src.slice(k, k + 600)), "a refusal is retried once without the block");
+// CF-API-RETRY-1 (2.43.1): the re-upload goes through cfFetchRetry with the body builder.
+ok(k > 0 && /_obsOut = null;\s+resp = await cfFetchRetry\(_putUrl, \{ method: "PUT", headers: _putHeaders \}, \{ body: _buildBody \}\);/.test(src.slice(k, k + 600)), "a refusal is retried once without the block");
 ok(k > src.indexOf("for (let _pr = 0; _pr < 3") && k < src.indexOf('status: "failed", notes: "cf_worker_deploy FAILED'), "the fallback runs after the dangling-binding retries and before the failure is recorded");
 
 // every worker's wrangler.toml in the repo parses to something the merge accepts
