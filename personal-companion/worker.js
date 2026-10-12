@@ -6,7 +6,7 @@ import { WorkflowEntrypoint } from "cloudflare:workers";
 var __defProp2 = Object.defineProperty;
 var __name2 = /* @__PURE__ */ __name((target, value) => __defProp2(target, "name", { value, configurable: true }), "__name");
 var __name22 = __name2;
-var VERSION = "1.15.11-opener-word"; // 1.15.11 OPENER-WORD-1: the name check no longer reads a sentence-opening ordinary word as part of the proper name that follows it ("Should InstantFusion", "Translating ImageNet" were rejected in runs 4986-4998); the rest of the phrase is still checked and every invented figure, year and name elsewhere still fails. // 1.15.10 REJECT-CONTEXT-1: a validation rejection logs the surrounding text of every flagged name, year and figure (the 500-character raw prefix never reached them, so a false positive such as "name not in the source: Failure" could not be diagnosed from companion_runs). // 1.15.9 FACTCHECK-NOTHINK-1 + VERDICT-TOLERANT-1: fact-check reviewers run with reasoning off where a measured switch exists (kimi, nemotron, gpt-oss, deepseek: 0.7-2.6 s instead of 4-9 s and a 110 s timeout on long drafts), and a verdict is read from the explicit fields when the JSON is wrapped or truncated. // 1.15.8 COMPANION-FACTCHECK-PARALLEL-1: fact-check reviewers asked in parallel with one retry of the failed ones (two-family rule unchanged). // 1.15.7 GROUND-HYPHEN-1: the name check treats unicode hyphens as "-" and a hyphenated source name grants its parts (every Dex-One2Many note was rejected as "name not in the source: Dex One2Many"). // 1.15.6 COMPANION-STARVED-RETRY-1: while nothing has published for 6h, a failed generation is retried at the next hourly tick (50 min after the last run, at most 16 failed runs a day) instead of waiting for the next of five slots. // 1.15.5 COMPANION-FACTCHECK-POOL-1: reviewers run one at a time with 8000 tokens and every failure cause is recorded in the unavailable reason (the 20:00 UTC slot ended fact-check unavailable). // 1.15.4 COMPANION-GROUND-ACRONYMS-2: the name check skips all-caps acronyms (IP, TCP, ACLs) and sentence-opening prepositions and connectives ("Unlike the OpenAI"); the two-family fact-check still reviews them (reading.q08 steward: accept rate 2% over 47 attempts). // 1.15.3 COMPANION-AI-OBJECT-REPLY-1: a Workers AI reply that is a parsed JSON object ("[object Object]") no longer loses the fact-check verdict (same defect as q08-signal-engine 0.11.4). // 1.15.2 COMPANION-GROUND-ACRONYMS-1: the name check no longer rejects common technical acronyms (API, DNS: reading.q08 steward collapse, 41 attempts at 2% accepted). // 1.15.0 COMPANION-SOURCES-1 (pillar: personal): every run since 1.14.1 ended blocked "insufficient anchors" with no reason; source fetches now send a descriptive User-Agent, retry with backoff and record each HTTP status/error in the blocked run detail; Wikipedia and arXiv are independent providers (arXiv alone needs 2 recent papers, Wikipedia alone 2 articles), unpublished fetched material is cached and reused during an outage, a blocked generation is retried at the next hourly tick, and the steward collapse alert resolves once a piece is accepted. The accuracy gate is unchanged. 1.14.1 1.14.0 COMPANION-VERIFY-1 (pillar: personal; owner directive 2026-10-10: published content is 100% accurate, independently fact-checked, process-and-style-only prompts, fail closed): every piece must pass a deterministic grounding check (each capitalised name, year and figure occurs in its source material) and a two-family LLM fact-check before it is stored, shown or mailed; critic or reviewer outage publishes nothing; the forced publish of critic-rejected drafts (1.13.3) is removed; topics come from live Wikipedia and arXiv, the hard-coded topic table and example nouns in the prompts are gone; companion_audits / companion_retractions give an audit and public-retraction path (410 notice, /retractions, /api/retractions); pieces without a recorded source are withdrawn. 1.13.3 COMPANION-FORCED-FALLBACK-1 (#2106, #2126): the strongest critic-rejected draft that passed validation is published as gate forced once the companion has been silent for STALL_HOURS (12h); the forced branch was unreachable and nothing published for 81h. 1.13.1 COMPANION-FALLBACK-TUNE-1: gpt-oss-120b writes first (kimi-k2.6 spent the 300 s timeout per attempt), a short-only draft is extended instead of rewritten, and a run stops starting attempts after 10 min (#2126). 1.13.0 COMPANION-PUBLISH-STALL-AUTO-1: hourly companion_hours_since_last_piece metric, a self-filed and self-closed stall issue (12h + 2 failed runs). COMPANION-DEEPSEEK-402-FALLBACK-1: DeepSeek 401/402/403 opens a 60-min breaker and writer/critic fall through to Workers AI (kimi-k2.6 / glm-5.3 / gpt-oss-120b, role-ordered); the compose stage logs the call error. 1.12.3: the hourly tick creates companion_broadcasts, so the resume read never meets a missing table and the table shows the release runs live. 1.12.2 BROADCAST-BATCH-1 (agent_issues 2042, 2026-10-06, pillar personal): a piece broadcast and the daily digest no longer spend two suppression lookups plus a send per subscriber in one invocation (about 3 subrequests each, so a list above about 330 would hit the subrequest limit mid-send): opt-outs are read in batches of 50 (two queries per batch), at most SEND_CAP_PER_RUN sends go out per run, and a cursor in companion_broadcasts lets the hourly tick resume the rest. Suppression fails closed: if the opt-out lists cannot be read, nobody is mailed in that run and the cursor stays. // 1.12.0 PERSONAL-RESILIENCE-1 (#1953): a stale unsent brief claim is retried inside 08:00-12:00 Amsterdam; owner questions are claimed before the mail leaves (rolled back on a failed send, not re-sent when only the sent_at mark failed); an undeliverable question is flagged once per row; calendar_meta owner_notice_enabled is the owner kill switch for the brief and owner questions; the daily cap starts at the real Amsterdam midnight; notice size is bounded; subscriber sends page past 500 rows. // 1.11.0-brief-claim: 1.11.0 MORNING-BRIEF-CLAIM-1 + OWNER-QUESTION-UNDELIVERABLE-1: the brief claims its day before sending (failed send releases it), answered after-event questions drop out of "Questions waiting", and a question stuck at the attempt cap files one agent_issues row. // 1.10.2 EMAIL-CALLER-PROPS-1 (#1923): the EMAIL binding authenticates by service-binding props (caller personal-companion) instead of an EMAIL_API_KEY the worker never held (its only secret is DEEPSEEK_API_KEY), which is why every EMAIL-path send got 401. // 1.10.1 ANSWER-RATE-KIND-1: the answer-rate metric counts after-event questions only (triage refs are ISO weeks and could never match, which would have fired a false breach). // 1.10.0 CONNECTION-LEDGER-1 step 2 + CONNECTION-ENGAGEMENT-1: each hourly tick queues at most one follow-up question a day for a due Ledger person (template text, no model call) and refreshes metrics ledger_people_seen_twice and owner_question_answer_rate_14d in qnfo-audit.metric_registry. // 1.9.3 MORNING-BRIEF-OWNER-NOTICE-1: the morning brief goes out as an owner notice (sendOwnerNotice, same path as owner questions) so it is no longer silenced by the owner digest opt-out, which stays untouched so essay mail stays off; the brief lists waiting owner questions. // 1.9.2 OWNER-QUESTIONS-DIRECT-1: live probe got "email 401 unauthorized" from qnfo-email (EMAIL_API_KEY not valid), so owner questions send through the native SEND_EMAIL binding the morning brief already uses; the EMAIL path stays as fallback. // 1.9.1 OWNER-QUESTIONS-RENAME-1: qnfo-audit.owner_prompts already belongs to the fleet dashboard (different schema) // 1.8.0 CRON-SINGLE-TRIGGER-1 (#1785): one hourly trigger, CRON_TABLE in code
+var VERSION = "1.15.14-needle-parse"; // 1.15.14 GROUNDING-NEEDLE-PARSE-1: the grounding repair (1.15.13) read no needle from the real messages ("figure not in the source: 8.34" contains "not", so it was skipped and the repair never ran); the needle is now the text after "not in the source:". P_STYLE gains a process rule: numbers are quoted as the source states them, never computed or converted. // 1.15.12 TOPIC-COOLDOWN-1: an arXiv-only topic that failed twice in 14 days is not picked again (the cooldown covered Wikipedia topics only, so one paper was retried every hour with the same draft: runs 4986-5042); the rejection log passes the piece text, not the object, to problemContext (its context was always empty). // 1.15.11 OPENER-WORD-1: the name check no longer reads a sentence-opening ordinary word as part of the proper name that follows it ("Should InstantFusion", "Translating ImageNet" were rejected in runs 4986-4998); the rest of the phrase is still checked and every invented figure, year and name elsewhere still fails. // 1.15.10 REJECT-CONTEXT-1: a validation rejection logs the surrounding text of every flagged name, year and figure (the 500-character raw prefix never reached them, so a false positive such as "name not in the source: Failure" could not be diagnosed from companion_runs). // 1.15.9 FACTCHECK-NOTHINK-1 + VERDICT-TOLERANT-1: fact-check reviewers run with reasoning off where a measured switch exists (kimi, nemotron, gpt-oss, deepseek: 0.7-2.6 s instead of 4-9 s and a 110 s timeout on long drafts), and a verdict is read from the explicit fields when the JSON is wrapped or truncated. // 1.15.8 COMPANION-FACTCHECK-PARALLEL-1: fact-check reviewers asked in parallel with one retry of the failed ones (two-family rule unchanged). // 1.15.7 GROUND-HYPHEN-1: the name check treats unicode hyphens as "-" and a hyphenated source name grants its parts (every Dex-One2Many note was rejected as "name not in the source: Dex One2Many"). // 1.15.6 COMPANION-STARVED-RETRY-1: while nothing has published for 6h, a failed generation is retried at the next hourly tick (50 min after the last run, at most 16 failed runs a day) instead of waiting for the next of five slots. // 1.15.5 COMPANION-FACTCHECK-POOL-1: reviewers run one at a time with 8000 tokens and every failure cause is recorded in the unavailable reason (the 20:00 UTC slot ended fact-check unavailable). // 1.15.4 COMPANION-GROUND-ACRONYMS-2: the name check skips all-caps acronyms (IP, TCP, ACLs) and sentence-opening prepositions and connectives ("Unlike the OpenAI"); the two-family fact-check still reviews them (reading.q08 steward: accept rate 2% over 47 attempts). // 1.15.3 COMPANION-AI-OBJECT-REPLY-1: a Workers AI reply that is a parsed JSON object ("[object Object]") no longer loses the fact-check verdict (same defect as q08-signal-engine 0.11.4). // 1.15.2 COMPANION-GROUND-ACRONYMS-1: the name check no longer rejects common technical acronyms (API, DNS: reading.q08 steward collapse, 41 attempts at 2% accepted). // 1.15.0 COMPANION-SOURCES-1 (pillar: personal): every run since 1.14.1 ended blocked "insufficient anchors" with no reason; source fetches now send a descriptive User-Agent, retry with backoff and record each HTTP status/error in the blocked run detail; Wikipedia and arXiv are independent providers (arXiv alone needs 2 recent papers, Wikipedia alone 2 articles), unpublished fetched material is cached and reused during an outage, a blocked generation is retried at the next hourly tick, and the steward collapse alert resolves once a piece is accepted. The accuracy gate is unchanged. 1.14.1 1.14.0 COMPANION-VERIFY-1 (pillar: personal; owner directive 2026-10-10: published content is 100% accurate, independently fact-checked, process-and-style-only prompts, fail closed): every piece must pass a deterministic grounding check (each capitalised name, year and figure occurs in its source material) and a two-family LLM fact-check before it is stored, shown or mailed; critic or reviewer outage publishes nothing; the forced publish of critic-rejected drafts (1.13.3) is removed; topics come from live Wikipedia and arXiv, the hard-coded topic table and example nouns in the prompts are gone; companion_audits / companion_retractions give an audit and public-retraction path (410 notice, /retractions, /api/retractions); pieces without a recorded source are withdrawn. 1.13.3 COMPANION-FORCED-FALLBACK-1 (#2106, #2126): the strongest critic-rejected draft that passed validation is published as gate forced once the companion has been silent for STALL_HOURS (12h); the forced branch was unreachable and nothing published for 81h. 1.13.1 COMPANION-FALLBACK-TUNE-1: gpt-oss-120b writes first (kimi-k2.6 spent the 300 s timeout per attempt), a short-only draft is extended instead of rewritten, and a run stops starting attempts after 10 min (#2126). 1.13.0 COMPANION-PUBLISH-STALL-AUTO-1: hourly companion_hours_since_last_piece metric, a self-filed and self-closed stall issue (12h + 2 failed runs). COMPANION-DEEPSEEK-402-FALLBACK-1: DeepSeek 401/402/403 opens a 60-min breaker and writer/critic fall through to Workers AI (kimi-k2.6 / glm-5.3 / gpt-oss-120b, role-ordered); the compose stage logs the call error. 1.12.3: the hourly tick creates companion_broadcasts, so the resume read never meets a missing table and the table shows the release runs live. 1.12.2 BROADCAST-BATCH-1 (agent_issues 2042, 2026-10-06, pillar personal): a piece broadcast and the daily digest no longer spend two suppression lookups plus a send per subscriber in one invocation (about 3 subrequests each, so a list above about 330 would hit the subrequest limit mid-send): opt-outs are read in batches of 50 (two queries per batch), at most SEND_CAP_PER_RUN sends go out per run, and a cursor in companion_broadcasts lets the hourly tick resume the rest. Suppression fails closed: if the opt-out lists cannot be read, nobody is mailed in that run and the cursor stays. // 1.12.0 PERSONAL-RESILIENCE-1 (#1953): a stale unsent brief claim is retried inside 08:00-12:00 Amsterdam; owner questions are claimed before the mail leaves (rolled back on a failed send, not re-sent when only the sent_at mark failed); an undeliverable question is flagged once per row; calendar_meta owner_notice_enabled is the owner kill switch for the brief and owner questions; the daily cap starts at the real Amsterdam midnight; notice size is bounded; subscriber sends page past 500 rows. // 1.11.0-brief-claim: 1.11.0 MORNING-BRIEF-CLAIM-1 + OWNER-QUESTION-UNDELIVERABLE-1: the brief claims its day before sending (failed send releases it), answered after-event questions drop out of "Questions waiting", and a question stuck at the attempt cap files one agent_issues row. // 1.10.2 EMAIL-CALLER-PROPS-1 (#1923): the EMAIL binding authenticates by service-binding props (caller personal-companion) instead of an EMAIL_API_KEY the worker never held (its only secret is DEEPSEEK_API_KEY), which is why every EMAIL-path send got 401. // 1.10.1 ANSWER-RATE-KIND-1: the answer-rate metric counts after-event questions only (triage refs are ISO weeks and could never match, which would have fired a false breach). // 1.10.0 CONNECTION-LEDGER-1 step 2 + CONNECTION-ENGAGEMENT-1: each hourly tick queues at most one follow-up question a day for a due Ledger person (template text, no model call) and refreshes metrics ledger_people_seen_twice and owner_question_answer_rate_14d in qnfo-audit.metric_registry. // 1.9.3 MORNING-BRIEF-OWNER-NOTICE-1: the morning brief goes out as an owner notice (sendOwnerNotice, same path as owner questions) so it is no longer silenced by the owner digest opt-out, which stays untouched so essay mail stays off; the brief lists waiting owner questions. // 1.9.2 OWNER-QUESTIONS-DIRECT-1: live probe got "email 401 unauthorized" from qnfo-email (EMAIL_API_KEY not valid), so owner questions send through the native SEND_EMAIL binding the morning brief already uses; the EMAIL path stays as fallback. // 1.9.1 OWNER-QUESTIONS-RENAME-1: qnfo-audit.owner_prompts already belongs to the fleet dashboard (different schema) // 1.8.0 CRON-SINGLE-TRIGGER-1 (#1785): one hourly trigger, CRON_TABLE in code
 var MODELS = [
   "@cf/moonshotai/kimi-k2.6",
   "@cf/openai/gpt-oss-120b",
@@ -107,6 +107,7 @@ var P_STYLE = L(
   "Epistemic contract (every piece is fact-checked line by line against the source material before anyone sees it; one unsupported claim and it is discarded):",
   "- The SOURCE MATERIAL below is the only source of facts. Your own memory is not a source, even for things you are certain of.",
   "- Every name of a person, place, organisation, work or product, every date and year, every number and every quotation must appear in the source material. If it is not there, it is not in the piece.",
+  "- Quote a number exactly as the source states it, with its own unit. Never compute, convert, round, average, scale or combine numbers, and never state a figure the source gives only as a range or in words; describe it without the digits instead.",
   "- Do not add examples, precedents, historical episodes or comparisons from outside the source material. A scenario you need must be an explicit hypothetical that names no real person, organisation, product, date or number.",
   "- Reasoning that follows from the source material is welcome. State it as reasoning (it follows that, if this holds then), never as a further reported fact.",
   "- State uncertainty at its true size. Never inflate confidence to make a piece land better. If the source material does not settle a point, say it does not.",
@@ -714,7 +715,7 @@ async function pickTopic(env, form) {
     var pp = papers.slice(0, 3);
     anchors = (wiki.length ? wiki : []).concat(pp);
     id = "arxiv:" + pp[0].title; subject = pp[0].title;
-    if (used.indexOf(id) >= 0) { anchors = []; }
+    if (used.indexOf(id) >= 0 || cooled[id]) { anchors = []; }
   }
   var cacheOk = await ensureAnchorCache(env);
   var cacheId = 0, fromCache = false;
@@ -1931,6 +1932,52 @@ async function generate(env, form, opts) {
       return { ok: false, error: "insufficient anchors: " + (topic.diag || "") };
     }
     var ground = anchorsText(anchors);
+    var repairGroundingDraft = function(piece, problems, form, ground) {
+      var allGrounding = problems.length > 0 && problems.every(function (p) {
+        return typeof p === "string" && p.toLowerCase().replace(/^[\s-]+/, "").indexOf("grounding:") === 0;
+      });
+      if (!allGrounding) return null;
+      var needles = groundingNeedles(problems);
+      if (!needles.length) return null;
+      var splitSentences = function (s) {
+        var text = String(s || "");
+        var out = [], buf = "";
+        for (var i = 0; i < text.length; i++) {
+          buf += text[i];
+          if (".!?".indexOf(text[i]) !== -1) {
+            var t = buf.trim();
+            if (t) out.push(t);
+            buf = "";
+          }
+        }
+        var tail = buf.trim();
+        if (tail) out.push(tail);
+        return out;
+      };
+      var filterField = function (text, stats) {
+        var sents = splitSentences(text);
+        var kept = [];
+        sents.forEach(function (sen) {
+          stats.total++;
+          var low = sen.toLowerCase();
+          var bad = needles.some(function (n) { return low.indexOf(n.toLowerCase()) !== -1; });
+          if (bad) { stats.removed++; } else { kept.push(sen); }
+        });
+        return kept.join(" ");
+      };
+      var stats = { total: 0, removed: 0 };
+      var repaired = {
+        title: piece.title,
+        subtitle: piece.subtitle,
+        lede: filterField(piece.lede, stats),
+        body_md: filterField(piece.body_md, stats)
+      };
+      if (stats.removed === 0) return null;
+      if (stats.removed > Math.ceil(stats.total / 4)) return null;
+      var v2 = validatePiece(repaired, form, ground);
+      if (!v2.ok) return null;
+      return { ok: true, piece: repaired, removed: stats.removed, v: v2 };
+    };
     var attempt = 0;
     var best = null;
     var feedback = "";
@@ -1953,7 +2000,15 @@ async function generate(env, form, opts) {
       }
       var v = validatePiece(piece, form, ground);
       if (!v.ok) {
-        await logRun(env, form, model, topic.id, "rejected", "validate: " + v.problems.join("; ") + " || in context: " + problemContext(piece, v.problems) + " || raw: " + String(comp.raw || "").slice(0, 300), Date.now() - t0);
+        var gr = repairGroundingDraft(piece, v.problems, form, ground);
+        if (gr && gr.ok) {
+          await logRun(env, form, model, topic.id, "stage", "grounding repair: removed " + gr.removed + " sentences", Date.now() - t0);
+          piece = gr.piece;
+          v = gr.v;
+        }
+      }
+      if (!v.ok) {
+        await logRun(env, form, model, topic.id, "rejected", "validate: " + v.problems.join("; ") + " || in context: " + problemContext(String(piece.title || "") + "\n" + String(piece.lede || "") + "\n" + String(piece.body_md || ""), v.problems) + " || raw: " + String(comp.raw || "").slice(0, 300), Date.now() - t0);
         feedback = "The previous draft failed validation for these reasons: " + v.problems.join("; ") + ". Fix them and try again. Remove every name, year and figure that is not in the source material.";
         // COMPANION-FALLBACK-TUNE-1: a draft whose only problem is being short is extended, not rewritten from scratch
         // (12:00Z run: gpt-oss drafts of 1591 and 1764 words against the 2000-word essay floor were thrown away).
@@ -3041,7 +3096,26 @@ async function aiRunAttr(env, worker, purpose, model, input, opts) {
   }
 }
 // end aiRunAttr
-var __verify = { problemContext: problemContext, factCheckExtra: factCheckExtra, blockedRetryDue: blockedRetryDue, steward: steward, fetchCfg: fetchCfg, fetchUA: fetchUA, groundingProblems: groundingProblems, parseFactVerdict: parseFactVerdict, factCheck: factCheck, verifyPiece: verifyPiece, auditPublished: auditPublished, retractPiece: retractPiece, pieceVerified: pieceVerified, recordAudit: recordAudit, generate: generate, pickTopic: pickTopic, sendMail: sendMail, pickReviewers: pickReviewers, familyOf: familyOf, anchorsBlock: anchorsBlock, prompts: { P_STYLE: P_STYLE, P_ESSAY: P_ESSAY, P_NOTES: P_NOTES, P_SERIAL: P_SERIAL, P_CRITIQUE: P_CRITIQUE, FACTCHECK_PROMPT: FACTCHECK_PROMPT }, VISIBLE_SQL: VISIBLE_SQL, REVIEW_POOL: REVIEW_POOL };
+function groundingNeedles(problems) {
+  var needles = [];
+  (problems || []).forEach(function (p) {
+    var rest = String(p).replace(/^grounding:\s*/i, "").trim();
+    var q = rest.match(/"([^"]{2,})"/g);
+    if (q) {
+      q.forEach(function (m) { needles.push(m.slice(1, -1)); });
+    } else {
+      var ns = rest.match(/not in the source:\s*(.+)$/);
+      if (ns) needles.push(ns[1].trim());
+      else {
+        var sq = rest.match(/'([^']{2,})'/g);
+        if (sq) sq.forEach(function (m) { needles.push(m.slice(1, -1)); });
+        else if (rest.length > 0 && rest.length < 120 && !/\bnot\b|\bfound\b|\bsource\b|\bunsupported\b/i.test(rest)) needles.push(rest);
+      }
+    }
+  });
+  return needles.filter(function (n, i, a) { return n.length > 0 && a.indexOf(n) === i; });
+}
+var __verify = { groundingNeedles: groundingNeedles, problemContext: problemContext, factCheckExtra: factCheckExtra, blockedRetryDue: blockedRetryDue, steward: steward, fetchCfg: fetchCfg, fetchUA: fetchUA, groundingProblems: groundingProblems, parseFactVerdict: parseFactVerdict, factCheck: factCheck, verifyPiece: verifyPiece, auditPublished: auditPublished, retractPiece: retractPiece, pieceVerified: pieceVerified, recordAudit: recordAudit, generate: generate, pickTopic: pickTopic, sendMail: sendMail, pickReviewers: pickReviewers, familyOf: familyOf, anchorsBlock: anchorsBlock, prompts: { P_STYLE: P_STYLE, P_ESSAY: P_ESSAY, P_NOTES: P_NOTES, P_SERIAL: P_SERIAL, P_CRITIQUE: P_CRITIQUE, FACTCHECK_PROMPT: FACTCHECK_PROMPT }, VISIBLE_SQL: VISIBLE_SQL, REVIEW_POOL: REVIEW_POOL };
 export {
   __verify,
   GenerationFlow,

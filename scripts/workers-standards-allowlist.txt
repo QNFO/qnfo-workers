@@ -1,0 +1,12 @@
+# workers-standards-allowlist.txt -- reviewed exceptions to scripts/workers_standards_guard.py (WORKERS-STANDARDS-GUARD-2).
+#
+# One exception per line:
+#   <repo path> <rule or *> <text that occurs in the flagged line> # <who reviewed it, when, and why the pattern is right here>
+#
+# The text after " # " is required: a line without a reason is ignored, because the reason is the record.
+# Prefer `// standards-ok: <reason>` on the line itself in a worker.js; use this file where a comment cannot go
+# (a wrangler.toml value, generated or vendored code). Rules: math-random-token, pass-through-on-exception, destructured-ctx,
+# secret-compare, floating-promise, observability-removed, traces-removed, observability-disabled, observability-incomplete,
+# new-worker-observability, queue-consumer-no-dlq.
+#
+# No exceptions on 2026-10-12: main and every open pull request pass without one.
