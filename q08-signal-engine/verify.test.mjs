@@ -250,5 +250,17 @@ globalThis.fetch = origFetch;
   const v = V.parseFactVerdict(JSON.stringify({ unsupported: ["the provider faces little measurable pressure to fix it -- not in source", "Benchmarks such as Active Memory can be advertised -- not in source"], verdict: "fail" }));
   check("only the named item fails the draft", v.verdict === "fail" && v.unsupported.length === 1 && v.inferences.length === 1, v);
 }
+// Q08-FACT-SHAPE-2 (0.14.6, runs 347-348)
+{
+  const sp = V.splitFactItems([
+    "FACT: If a prosecutor needs to satisfy that requirement, inserting a dramatic allegation can increase the likelihood that the judge signs the warrant -- not in source",
+    "FACT: the same pattern could appear wherever a vendor declares a product unpatchable -- not in source",
+    "FACT: officials can improve the apparent strength of their application by adding unsubstantiated facts -- not in source",
+    "FACT: the surveillance was directed at the individuals named in the affidavit, Lemon, Fort and Richardson -- not in source",
+    "FACT: producer Richardson, a colleague of the host -- 'colleague' not in source"
+  ]);
+  check("FACT-labelled general reasoning is reasoning", sp.inferences.length === 2, sp);
+  check("a FACT-labelled plain modal claim, a named claim and a quoted reason stay FACTs", sp.facts.length === 3, sp);
+}
 console.log("verify.test.mjs: " + passes + " passed, " + fails + " failed");
 process.exit(fails ? 1 : 0);
