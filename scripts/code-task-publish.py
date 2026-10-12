@@ -434,21 +434,14 @@ VERSION_DECL = re.compile(r'^((?:var|const|let) VERSION\s*=\s*")(\d+)\.(\d+)\.(\
 MAX_EDITS = 8  # = the orchestrator's MAX_EDITS
 
 
-WANT_RE = re.compile(r"^(\d+)\.(\d+)\.(\d+)(-[A-Za-z0-9][A-Za-z0-9-]*)?$")
-
-
-def bump_version(cur: str, text: str, want=None) -> str:
+def bump_version(cur: str, text: str) -> str:
     """The orchestrator's bumpVersion: patch number + 1 with the -codeagent tag, when the declaration is unchanged and unique.
-    GOAL-VERSION-1: ctx.version_want (the version the goal names) is used instead when it is the next step from the current
-    base: the same major, and a higher patch of the same minor or the next minor."""
+    A rebuild always takes this patch bump, also for a task whose goal named a VERSION (GOAL-VERSION-1, ctx.version_want):
+    the merge runner judges a rebuilt branch by re-applying the edits with the same bump (REBASE-INTEGRITY-1, cmRebaseText),
+    so any other VERSION here would read as "other content was pushed"."""
     a, b = VERSION_DECL.search(cur), VERSION_DECL.search(text)
     if not a or not b or a.group(0) != b.group(0) or text.count(a.group(0)) != 1:
         return text
-    w = WANT_RE.match(want) if isinstance(want, str) else None
-    if w:
-        c, k = [int(w.group(i)) for i in (1, 2, 3)], [int(a.group(i)) for i in (2, 3, 4)]
-        if c[0] == k[0] and ((c[1] == k[1] and c[2] > k[2]) or c[1] == k[1] + 1):
-            return text.replace(a.group(0), a.group(1) + want + a.group(6))
     return text.replace(a.group(0), a.group(1) + a.group(2) + "." + a.group(3) + "." + str(int(a.group(4)) + 1) + "-codeagent" + a.group(6))
 
 
@@ -494,7 +487,7 @@ def rebase_edits(repo_dir, path, ctx, base):
     if err:
         return None, None, err
     if path.endswith((".js", ".mjs")):
-        text = bump_version(cur, text, ctx.get("version_want"))
+        text = bump_version(cur, text)
     if text == cur:
         return None, None, "re-applying the edits changes nothing on " + base + " (the change may already be on main)"
     files = {path}
@@ -513,6 +506,29 @@ def rebase_edits(repo_dir, path, ctx, base):
     note = ("REBASE-BEFORE-PUBLISH-1: the parked patch did not apply to " + base + "@" + head + "; " + str(len(edits)) +
             " edit" + ("" if len(edits) == 1 else "s") + " re-applied to the current file" + (", mirror rewritten" if mirror in files else "") + " (no model call)")
     return files, note, None
+
+
+def mirror_section(patch, path, mirror):
+    """The source's section of the patch rewritten for its mirror: the same hunks, the three header lines under the mirror's
+    path. Other files' sections (a multi-file task's companions) are left out. None when the source has no section."""
+    out, take = [], False
+    for ln in patch.splitlines():
+        if ln.startswith("diff --git "):
+            take = ln == "diff --git a/" + path + " b/" + path
+            if take:
+                ln = "diff --git a/" + mirror + " b/" + mirror
+        elif take and ln == "--- a/" + path:
+            ln = "--- a/" + mirror
+        elif take and ln == "+++ b/" + path:
+            ln = "+++ b/" + mirror
+        if take:
+            out.append(ln)
+    return "\n".join(out) + "\n" if out else None
+
+
+def note_carry(store, tid, carried):
+    return store.changes("UPDATE code_tasks SET ctx=json_set(COALESCE(ctx, '{}'), '$.patch', ?, '$.mirror', ?, '$.mirror_carried', ?), updated_at=? WHERE id=?",
+                         [carried["patch"], carried["mirror"], "MIRROR-CARRY-1: the parked patch changed the source only; its mirror equalled the source on the base and carries the same hunks", now(), tid])
 
 
 def note_rebase(store, tid, note):
@@ -576,19 +592,20 @@ def publish_one(task, repo_dir, base, pr, delegate=False):
                 return "publish_failed", None, why + "; rebase: " + rb_err, None
         else:
             git(repo_dir, "apply", pf)
-            # MIRROR-CARRY-1 (2026-10-12): a worker.js patch parked without its deployed-current mirror (the orchestrator saw the
-            # mirror differ from the source when it read the file, or the task was filed by hand) reached CI and failed
-            # mirror-guard, or the merge runner refused it ("the verified patch does not apply to <dir>/deployed-current.worker.js
-            # at the merge base": ct_yghmskhqci2vv1, ct_h7lmh3yuwbv3wv). When the mirror on the base is byte-identical to the
-            # source on the base, the patched source is copied over it and the branch carries both; a mirror that differs on
-            # the base is left alone (that drift is not this change's).
+            # MIRROR-CARRY-1 (2026-10-12): a worker.js patch parked without its deployed-current mirror (the orchestrator read the
+            # mirror while it lagged the source on main, or the task was filed by hand) reached CI and failed mirror-guard.
+            # When the mirror on the base is byte-identical to the source on the base, the patched source is copied over it and
+            # the parked patch gains the mirror's section (the source's own hunks under the mirror's path, which is how the
+            # orchestrator writes it), so the merge runner's integrity check finds the pull request's files in the patch. A
+            # mirror that differs on the base is left alone (that drift is not this change's).
             if mirror and mirror not in files and os.path.isfile(os.path.join(repo_dir, mirror)):
                 src_base = git(repo_dir, "show", "origin/" + base + ":" + path, check=False)
                 mir_base = git(repo_dir, "show", "origin/" + base + ":" + mirror, check=False)
-                if src_base.returncode == 0 and mir_base.returncode == 0 and src_base.stdout == mir_base.stdout:
+                section = mirror_section(patch, path, mirror)
+                if section and src_base.returncode == 0 and mir_base.returncode == 0 and src_base.stdout == mir_base.stdout:
                     shutil.copyfile(os.path.join(repo_dir, path), os.path.join(repo_dir, mirror))
                     files = set(files) | {mirror}
-                    note = "MIRROR-CARRY-1: the patch changed " + path + " only; its mirror equalled the source on " + base + " and now carries the same text"
+                    task["_carried"] = {"patch": patch + ("" if patch.endswith("\n") else "\n") + section, "mirror": mirror}
         # VERIFY-DEFER-PUBLISHER-1: a JavaScript task the orchestrator could not verify is parsed here or not pushed at all.
         if ctx.get("verify_deferred") and any(f.endswith((".js", ".mjs")) for f in files) and not shutil.which("node"):
             git(repo_dir, "reset", "-q", "--hard")
@@ -642,6 +659,10 @@ def publish_all(store, repo_dir, base, pr, log=print, delegate=False):
             log(f"::warning::syntax_retry {t['id']}: {err} (sent back to the orchestrator, no branch pushed)")
             continue
         finish(store, t["id"], st, url, err)
+        if t.get("_carried") and st in ("published", "branch_pushed"):
+            note_carry(store, t["id"], t["_carried"])
+            out["mirror_carried"] = out.get("mirror_carried", 0) + 1
+            log(f"::notice::MIRROR-CARRY-1 {t['id']}: the mirror carries the source's change and the parked patch names it")
         if note:
             note_rebase(store, t["id"], note)
             out["rebased"] = out.get("rebased", 0) + 1
@@ -1029,12 +1050,9 @@ def selftest():
     else:
         print("SKIP suite check selftest: node 22+ not installed")
 
-    # 7c. GOAL-VERSION-1: the version the goal names is used when it is the next step from the current base, else the patch bump
-    check("bump_version: a wanted next-minor version replaces the patch bump",
-          bump_version('var VERSION = "1.12.4-x";\nq', 'var VERSION = "1.12.4-x";\nz', "1.13.0-ds402-fallback") == 'var VERSION = "1.13.0-ds402-fallback";\nz')
-    check("bump_version: a wanted version that is not ahead, jumps a major or two minors, or is malformed falls back to the patch bump",
-          all(bump_version('var VERSION = "1.12.4-x";\nq', 'var VERSION = "1.12.4-x";\nz', w) == 'var VERSION = "1.12.5-codeagent";\nz'
-              for w in ("1.12.4-same", "1.12.3", "2.0.0", "1.14.0", "1.13", "1.13.0 or so", None, 7)))
+    # 7c. a rebuild takes the patch bump even when the goal named a VERSION (the merge runner rebuilds with the same rule)
+    check("bump_version takes no wanted version: the rebuild is the patch bump the merge runner expects",
+          bump_version('var VERSION = "1.12.4-x";\nq', 'var VERSION = "1.12.4-x";\nz') == 'var VERSION = "1.12.5-codeagent";\nz')
 
     # 7d. MIRROR-CARRY-1, MULTI-FILE-CODE-TASKS-1 and VERIFY-DEFER-PUBLISHER-1
     if shutil.which("node"):
@@ -1079,7 +1097,16 @@ def selftest():
         t = row(store, "ct_mirrorcarry1")
         check("mirror carry: a patch without its mirror publishes with the mirror identical to the source",
               t["status"] == "published" and show(remote, "codeagent-mirrorcarry1:w/worker.js") == show(remote, "codeagent-mirrorcarry1:w/deployed-current.worker.js")
-              and "1.2.4-codeagent" in show(remote, "codeagent-mirrorcarry1:w/deployed-current.worker.js") and "MIRROR-CARRY-1" in str(json.loads(t["ctx"]).get("rebased", "")), dict(t))
+              and "1.2.4-codeagent" in show(remote, "codeagent-mirrorcarry1:w/deployed-current.worker.js") and r.get("mirror_carried") == 1, dict(t))
+        cxm = json.loads(t["ctx"])
+        pm = os.path.join(tempfile.mkdtemp(prefix="ctp-carry-"), "carried.patch")
+        with open(pm, "w", encoding="utf-8", newline="") as fh:
+            fh.write(cxm["patch"])
+        _sh(work, "git", "checkout", "-q", "--detach", "origin/main")
+        chk = subprocess.run(["git", "apply", "--check", pm], cwd=work, capture_output=True, text=True)
+        check("mirror carry: the parked patch now names both files, applies to main, and the task is not marked rebased",
+              chk.returncode == 0 and cxm.get("mirror") == "w/deployed-current.worker.js" and "rebased" not in cxm and "MIRROR-CARRY-1" in cxm.get("mirror_carried", "")
+              and sorted(set(re.findall(r"^\+\+\+ b/(.+)$", cxm["patch"], re.M))) == ["w/deployed-current.worker.js", "w/worker.js"], (chk.stderr, list(cxm)))
 
         # multi-file: the worker, its test and a new migration land on one branch; the suite passes because the test moved with the code
         remote, work, store = js_fixture()
@@ -1092,6 +1119,9 @@ def selftest():
               t["status"] == "published" and "v = 2" in show(remote, "codeagent-multifile001:w/worker.js") and "v is two" in show(remote, "codeagent-multifile001:w/v.test.mjs")
               and show(remote, "codeagent-multifile001:migrations/2026-10-12-v.sql") == mig_body
               and show(remote, "codeagent-multifile001:w/worker.js") == show(remote, "codeagent-multifile001:w/deployed-current.worker.js"), dict(t))
+        cxf = json.loads(t["ctx"])
+        check("multi-file: the carried mirror section is the worker's alone (4 files in the parked patch, each once)",
+              sorted(re.findall(r"^diff --git a/(\S+) ", cxf["patch"], re.M)) == ["migrations/2026-10-12-v.sql", "w/deployed-current.worker.js", "w/v.test.mjs", "w/worker.js"], re.findall(r"^diff --git a/(\S+) ", cxf["patch"], re.M))
         check("multi-file: the same code change without its test is sent back by the suite check",
               tb["status"] == "queued" and "FAIL w/v.test.mjs" in (tb["last_error"] or ""), dict(tb))
         for tid, paths, patch in (("ct_multibad0001", ["w/worker.js"], src_patch), ("ct_multibad0002", ["w/deployed-current.worker.js"], src_patch),

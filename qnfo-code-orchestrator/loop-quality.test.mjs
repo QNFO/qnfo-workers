@@ -214,6 +214,24 @@ const GOOD = block("  for (const r of refs) out.push(String(r));", "  for (const
   ok(["search-fuzzy", "window-clamp", "dangling-ref-gate", "repair-shows-edits", "verify-deferred", "goal-version", "multi-file"].every((c) => h.capabilities.indexOf(c) >= 0), "7c /health names the new capabilities", h.capabilities);
 }
 
+// ===== 7d. EDITS-RESOLVED-1: edits that applied through a tolerant match are parked as the file's own text =====
+{
+  serve(FIX);
+  const loose = block("      for (const r of refs) out.push(String(r));", "      for (const r of refs) out.push(String(r).trim().toLowerCase());");
+  const { env } = envWith([loose]);
+  await addTask(env, GOAL, ANCHOR);
+  await tick(env);
+  const t = row(env), cx = JSON.parse(t.ctx);
+  ok(t.status === "ready_to_publish" && cx.edits.length === 1 && cx.edits[0].search === "  for (const r of refs) out.push(String(r));" && cx.edits[0].replace === "  for (const r of refs) out.push(String(r).trim().toLowerCase());" && FIX.split(cx.edits[0].search).length === 2, "7d a SEARCH indented differently from the file is parked as the file's exact text (it occurs once in the whole file, so a rebuild can re-apply it)", { st: t.status, edits: cx.edits });
+  ok(/\+  for \(const r of refs\) out\.push\(String\(r\)\.trim\(\)\.toLowerCase\(\)\);/.test(cx.patch), "7e the parked patch is the same change");
+  serve(FIX);
+  const { env: env2 } = envWith([GOOD]);
+  await addTask(env2, GOAL, ANCHOR);
+  await tick(env2);
+  const cx2 = JSON.parse(row(env2).ctx);
+  ok(cx2.edits[0].search === "  for (const r of refs) out.push(String(r));" && cx2.edits[0].replace === "  for (const r of refs) out.push(String(r).trim().toLowerCase());", "7f an exact SEARCH is parked as the model wrote it", cx2.edits);
+}
+
 // ===== 8. INTAKE-ANCHOR-INHERIT-1: a retry without a code-anchor line starts from its earlier task's anchor =====
 {
   serve(FIX);
