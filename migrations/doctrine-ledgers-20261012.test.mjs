@@ -1,6 +1,6 @@
-// DOCTRINE-LEDGERS-20261012 offline suite for migrations/2026-10-12-20 to -23 (KERNEL-REGISTRIES-1, TICK-DRIVER-ROSTER-1,
-// CALIBRATION-SCORER-1, SLA-MECHANISMS-1; agent_issues 2231, 2235, 2241, 2232, 2233, 2234, 2251, 2192, 2194, 2193, 2195, 2197, 1297).
-// It applies the four files, twice each, to an in-memory SQLite database built from the qnfo-audit objects they touch (sql
+// DOCTRINE-LEDGERS-20261012 offline suite for migrations/2026-10-12-20 to -24 (KERNEL-REGISTRIES-1, TICK-DRIVER-ROSTER-1,
+// CALIBRATION-SCORER-1, SLA-MECHANISMS-1, REGISTER-DISPOSITIONS-1; agent_issues 2231, 2235, 2241, 2232, 2233, 2234, 2251, 2192,
+// 2194, 2193, 2195, 2197, 1297, 2148, 2294-2297). It applies the five files, twice each, to an in-memory SQLite database built from the qnfo-audit objects they touch (sql
 // read from sqlite_master on 2026-10-12) and checks what each fleet_tick trigger wrote. Every file ends by inserting a
 // fleet_tick row, so applying a file is also a run of its trigger. Run: node migrations/doctrine-ledgers-20261012.test.mjs
 import { DatabaseSync } from "node:sqlite";
@@ -136,6 +136,8 @@ BEGIN INSERT INTO issue_lifecycle (issue_id, event, from_status, to_status, has_
 CREATE TRIGGER issue_close_evidence_required BEFORE UPDATE OF status ON agent_issues WHEN NEW.status IN ('closed','resolved','wontfix') AND OLD.status NOT IN ('closed','resolved','wontfix') AND NOT EXISTS (SELECT 1 FROM issue_triage t WHERE t.issue_id = NEW.id AND t.close_evidence IS NOT NULL AND TRIM(t.close_evidence) <> '') BEGIN SELECT RAISE(ABORT,'close-without-evidence'); END;
 CREATE TABLE ask_events (id TEXT PRIMARY KEY, ts TEXT, qhash TEXT, query TEXT, answer TEXT);
 CREATE TABLE chatbox_conversations (id TEXT PRIMARY KEY, thread_id TEXT, source TEXT, worker TEXT, model TEXT, messages_json TEXT, prompt TEXT, response TEXT, ts TEXT, ua TEXT);
+CREATE TABLE task_dod_register (id INTEGER PRIMARY KEY AUTOINCREMENT, source_table TEXT, source_row_id TEXT, wbs_code TEXT, title TEXT, owner TEXT, gtd_context TEXT, epic_id TEXT, sprint_id TEXT, dod TEXT, status TEXT, evidence_pointer TEXT, due TEXT, created_at TEXT, updated_at TEXT);
+CREATE TABLE worker_usage_daily (day TEXT NOT NULL, script TEXT NOT NULL, requests_24h INTEGER, errors_24h INTEGER, requests_7d INTEGER, errors_7d INTEGER, source TEXT, ts TEXT, PRIMARY KEY (day, script));
 `;
 const SEED = String.raw`
 INSERT INTO metric_registry (metric,layer,kind,source_of_truth,refresh_cadence,state,refresh_class,last_value) VALUES
@@ -154,6 +156,7 @@ INSERT INTO ops_ai_log (id,ts,response,source) VALUES ('a1',strftime('%Y-%m-%dT%
  ('a6',strftime('%Y-%m-%dT%H:%M:%fZ','now','-2 days'),'There are two options here.','public');
 INSERT INTO ask_events (id,ts,query,answer) VALUES ('k1',strftime('%Y-%m-%dT%H:%M:%fZ','now','-15 minutes'),'q','The paper derives it. You could also read section 2.'),('k2',strftime('%Y-%m-%dT%H:%M:%fZ','now','-15 minutes'),'q',NULL);
 INSERT INTO chatbox_conversations (id,source,worker,response,ts) VALUES ('c1','chatbox','qnfo-ai','Which direction should this take?',strftime('%Y-%m-%dT%H:%M:%fZ','now','-15 minutes')),('c2','other','qnfo-ai','Alternatively the lemma holds.',strftime('%Y-%m-%dT%H:%M:%fZ','now','-15 minutes'));
+INSERT INTO task_dod_register (id,title,owner,status,evidence_pointer,due,updated_at) VALUES (328,'a','agent','open','ev328','2026-10-03','2026-09-26 09:19:36'),(331,'b','agent','open','ev331','2026-10-03','x'),(341,'c','agent','open',NULL,'2026-10-03','x'),(345,'d','agent','open','ev345','2026-10-03','x'),(333,'e','agent','open','ev333','2026-10-04','x');
 INSERT INTO owner_prompts (id,ts,prompt,response) VALUES ('o1',strftime('%Y-%m-%dT%H:%M:%fZ','now','-30 minutes'),'Why do I keep having to ask for this every time','ok, done');
 INSERT INTO session_records (session_id,summary,handoff_notes,created_at) VALUES ('s1','did x','Let me know if you want the rest', datetime('now','-10 minutes'));
 INSERT INTO objectives (objective_key,statement,status,ratified_on) VALUES ('o-core','keep it running','ACTIVE','2026-10-01');
@@ -191,7 +194,7 @@ INSERT INTO decision_log (id,ts,actor,assumption,action,evidence,outcome,blast_r
  (38,'2026-10-11T15:01:06Z','s','a','a','e','o','b','r','free text');
 INSERT INTO queue_sla (stuck_type,queue,definition,cycle_min,sla_min,auto_fix,owner,summary_column) VALUES ('intent-untriaged','intents','d',10,60,'f','o','intents_pending');
 `;
-const FILES = ["2026-10-12-20-kernel-registries.sql", "2026-10-12-21-tick-driver-roster.sql", "2026-10-12-22-calibration-scorer.sql", "2026-10-12-23-sla-mechanisms.sql"];
+const FILES = ["2026-10-12-20-kernel-registries.sql", "2026-10-12-21-tick-driver-roster.sql", "2026-10-12-22-calibration-scorer.sql", "2026-10-12-23-sla-mechanisms.sql", "2026-10-12-24-register-dispositions.sql"];
 const db = new DatabaseSync(":memory:");
 db.exec(SCHEMA);
 db.exec(SEED);
@@ -318,6 +321,18 @@ for (const p of all("SELECT class, verify_probe FROM remediation_contracts WHERE
   let r = null; try { r = one(p.verify_probe); } catch (e) { r = { err: String(e.message) }; }
   ok(r && r.expected === "0" && typeof r.observed === "string", "detector " + p.class + " runs and returns expected and observed", r);
 }
+
+// 5. REGISTER-DISPOSITIONS-1.
+const reg = Object.fromEntries(all("SELECT id, status, evidence_pointer e FROM task_dod_register").map((r) => [r.id, r]));
+ok(reg[328].status === "cancelled" && reg[345].status === "cancelled" && reg[331].status === "done" && reg[341].status === "done" && reg[333].status === "open", "the four register rows are terminal; a row outside the change is untouched", Object.values(reg).map((r) => r.id + ":" + r.status));
+ok(/^ev328 \| REGISTER-DISPOSITIONS-1 2026-10-12: superseded/.test(reg[328].e) && reg[328].e.split("REGISTER-DISPOSITIONS-1").length === 2 && /agent_issues 2075/.test(reg[345].e), "each row keeps its old evidence and gains one disposition line naming its successor", reg[328].e);
+ok(one("SELECT COUNT(*) n FROM bak_20261012_register_rows WHERE status = 'open'").n === 4, "the rows are backed up as they were");
+ok(metric("workers_idle_7d") === null, "workers_idle_7d reads NULL while there is no fresh usage snapshot", metric("workers_idle_7d"));
+db.exec("INSERT INTO worker_usage_daily (day, script, requests_7d, ts) SELECT date('now'), service, 50, strftime('%Y-%m-%dT%H:%M:%fZ', 'now') FROM service_registry WHERE state = 'live' AND service <> 'idea-hub'");
+db.exec("INSERT INTO worker_usage_daily (day, script, requests_7d, ts) VALUES (date('now'), 'qnfo-x1', 9, strftime('%Y-%m-%dT%H:%M:%fZ', 'now')), (date('now'), 'qnfo-x2', 9, strftime('%Y-%m-%dT%H:%M:%fZ', 'now')), (date('now'), 'qnfo-x3', 9, strftime('%Y-%m-%dT%H:%M:%fZ', 'now')), (date('now'), 'qnfo-x4', 9, strftime('%Y-%m-%dT%H:%M:%fZ', 'now')), (date('now'), 'qnfo-x5', 9, strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))");
+db.exec("UPDATE worker_usage_daily SET requests_7d = 2 WHERE script = 'qnfo-pdf'");
+db.exec("INSERT INTO fleet_tick (source) VALUES ('migration:test')");
+ok(metric("workers_idle_7d") === "2", "a live worker under 3 requests in 7 days, and one absent from the snapshot, are counted idle", metric("workers_idle_7d"));
 
 console.log(pass + " passed, " + fail + " failed");
 if (fail) process.exit(1);
