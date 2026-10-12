@@ -1,5 +1,5 @@
 {
-  "audited_at": "2026-10-12 14:39:52",
+  "audited_at": "2026-10-12 15:16:31",
   "d1_write_failures": [],
   "d1_writes_ok": 115,
   "guard": {
@@ -548,7 +548,7 @@
       },
       {
         "dir": "q08-signal-engine",
-        "version": "0.13.2",
+        "version": "0.14.0",
         "worker": "q08-signal-engine"
       },
       {
@@ -568,7 +568,7 @@
       },
       {
         "dir": "qnfo-cloud-ops",
-        "version": "1.26.0-draft-grounding",
+        "version": "1.26.1-inbox",
         "worker": "qnfo-cloud-ops"
       },
       {
@@ -598,7 +598,7 @@
       },
       {
         "dir": "qnfo-fleet-dashboard",
-        "version": "1.30.1-kpi",
+        "version": "1.32.0-watchmaker-ops",
         "worker": "qnfo-fleet-dashboard"
       },
       {
@@ -648,7 +648,7 @@
       },
       {
         "dir": "qnfo-research-exec",
-        "version": "0.15.1-paper-quality",
+        "version": "0.16.0-revise-retry",
         "worker": "qnfo-research-exec"
       },
       {
@@ -944,9 +944,9 @@
       "worker": "personal-life-search"
     },
     "q08-signal-engine": {
-      "before": "0.13.2",
+      "before": "0.14.0",
       "http": 200,
-      "live": "0.13.2",
+      "live": "0.14.0",
       "match": 1,
       "note": "SYNC",
       "worker": "q08-signal-engine"
@@ -1129,9 +1129,9 @@
       "worker": "qnfo-citation-watch"
     },
     "qnfo-cloud-ops": {
-      "before": "1.26.0-draft-grounding",
+      "before": "1.26.1-inbox",
       "http": 200,
-      "live": "1.26.0-draft-grounding",
+      "live": "1.26.1-inbox",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-cloud-ops"
@@ -1276,9 +1276,9 @@
       "worker": "qnfo-fleet-control"
     },
     "qnfo-fleet-dashboard": {
-      "before": "1.30.1-kpi",
+      "before": "1.32.0-watchmaker-ops",
       "http": 200,
-      "live": "1.30.1-kpi",
+      "live": "1.32.0-watchmaker-ops",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-fleet-dashboard"
@@ -1500,9 +1500,9 @@
       "worker": "qnfo-register-guard"
     },
     "qnfo-research-exec": {
-      "before": "0.15.1-paper-quality",
+      "before": "0.16.0-revise-retry",
       "http": 200,
-      "live": "0.15.1-paper-quality",
+      "live": "0.16.0-revise-retry",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-research-exec"
