@@ -2,7 +2,7 @@ var __defProp = Object.defineProperty;
 var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
 
 // worker.js
-var VERSION = "0.5.3-send-retry"; // 0.5.3 CLEARED-SEND-RETRY-1: a cleared reply whose send fails keeps its auto-send marker and is retried up to 3 times (row 56 dead-ended on a 401 on 2026-10-05); the EMAIL binding declares props.caller so qnfo-email 2.5.1+ authenticates this worker without a key copy (#1923 class, CLAUDE.md #1703); 0.5.2 SLA-SES-ENVELOPE-1 (#1957): an Amazon SES message-id envelope (010101a1...-000000@sesmail.<domain>) is a transactional or bulk sender, so INBOUND-SLA-1 closes it as automated instead of holding it as an unknown person (iPostal1 mailbox notices reached the owner queue as "mail:ipostal1.com"; the owner closed the card, note 38). // 0.5.1: a failed send records a unique failure row (same-millisecond failures left a stale claim that read as an acknowledgement) /* 0.5.0 INBOUND-SLA-1 (2026-10-02, pillar: reach): no human inbound message waits more than 72h without a fleet action; category->action map, decision log, kill switch ops_config inbound_sla_enabled, metrics inbound_first_response_h_median_30d + inbound_unactioned_72h. 0.4.3 CAPABILITY-SELF-REPORT-1 */
+var VERSION = "0.5.5-grounded"; // 0.5.5 DRAFT-GROUNDING-1 (agent_issues 2282, 2272): the triage prompt names no example subject and escalates anything needing expertise, judgement, a decision, an opinion or a commitment; ungroundedTerms() escalates a draft with a name, number or date absent from the inbound email; stripSignoff() cuts a model-written closing; SLA-GRACE-1 (agent_issues 2204): grace 12 h, was 24 h, the same number as the metric target. 0.5.3 0.5.3 CLEARED-SEND-RETRY-1: a cleared reply whose send fails keeps its auto-send marker and is retried up to 3 times (row 56 dead-ended on a 401 on 2026-10-05); the EMAIL binding declares props.caller so qnfo-email 2.5.1+ authenticates this worker without a key copy (#1923 class, CLAUDE.md #1703); 0.5.2 SLA-SES-ENVELOPE-1 (#1957): an Amazon SES message-id envelope (010101a1...-000000@sesmail.<domain>) is a transactional or bulk sender, so INBOUND-SLA-1 closes it as automated instead of holding it as an unknown person (iPostal1 mailbox notices reached the owner queue as "mail:ipostal1.com"; the owner closed the card, note 38). // 0.5.1: a failed send records a unique failure row (same-millisecond failures left a stale claim that read as an acknowledgement) /* 0.5.0 INBOUND-SLA-1 (2026-10-02, pillar: reach): no human inbound message waits more than 72h without a fleet action; category->action map, decision log, kill switch ops_config inbound_sla_enabled, metrics inbound_first_response_h_median_30d + inbound_unactioned_72h. 0.4.3 CAPABILITY-SELF-REPORT-1 */
 var CLEARED_SEND_MAX_TRIES = 3;
 var CAPS = ["reply-drafts", "cadence-log", "email-filters", "inbound-sla"];
 var LIMS = ["cron-only: no public route; the reply-draft pass runs on its */15 and 3-hourly crons, INBOUND-SLA-1 on */15, its metrics on the 3-hourly cron", "never sends outreach or follow-ups; replies only to inbound mail, through qnfo-email /send", "INBOUND-SLA-1 mails nobody outside the research-outreach campaign and never a funder or hiring manager (docs/STRATEGY.md section 5): those messages are held and recorded for the weekly identity review", "publishes this capability row from the cron"];
@@ -67,23 +67,32 @@ var INBOUND_SLA = { deadline_h: 72, ack_max_age_d: 14, ack_sender_window_d: 30, 
 // The category -> action map. action: close | skip (terminal, nothing sent), hold (nothing sent; recorded for the weekly
 // identity review), hold_ack (one holding acknowledgement if the sender is a research correspondent, then hold), answer
 // (a gated short answer from the drafter, else as hold_ack). after_h: grace before acting (0 = at once).
-var INBOUND_SLA_RULES = {
+var DRAFT_CALENDAR_RX = /^(january|february|march|april|june|july|august|september|october|november|december|monday|tuesday|wednesday|thursday|friday|saturday|sunday|today|tomorrow|yesterday|tonight)$/;
+  var DRAFT_SIGNOFF_RX = /^(?:(?:best|kind|warm)(?:est)?(?: regards| wishes)?|regards|sincerely|yours(?: sincerely| truly| faithfully)?|cheers|thanks|thank you|many thanks)[,.!]?$/i;
+  var DRAFT_OPENERS = {};
+  "a an and as at but by dear for from hello hi i if in it its my no noted of on or our please received so thank thanks that the this to understood we with yes you your".split(" ").forEach(function(x) { DRAFT_OPENERS[x] = 1; });
+  // SLA-GRACE-1 (agent_issues 2204, METRIC-FIX-RELAPSED-1): the grace before a hold, acknowledgement or answer was 24 h, the
+  // same number as the metric's target (median first action <= 24 h), and the step runs at :00, :20, :30 and :50, so every
+  // graced message was first acted on at 24.0 to 24.4 h and the median sat just above target whenever a graced message was
+  // the middle one (24.1 to 24.3 on 2026-10-10 to 10-12). The grace is half the target; the owner still has it to answer first.
+  var SLA_GRACE_H = 12;
+  var INBOUND_SLA_RULES = {
   answered: { action: "close", after_h: 0, why: "an outbound reply to the sender is recorded after this message" },
   funder_receipt: { action: "close", after_h: 0, why: "a funder's submission receipt; recorded in funding/APPLICATIONS.md, GRANT-FOLLOWUP-1 watches replies" },
   funder_handled: { action: "close", after_h: 0, why: "a funder decision already recorded in funding/APPLICATIONS.md (GRANT-FOLLOWUP-1 handled_through)" },
-  funder: { action: "hold", after_h: 24, why: "a funder: STRATEGY s5 sends no automatic email to a funder; GRANT-FOLLOWUP-1 files the reply as agent_issues" },
+  funder: { action: "hold", after_h: SLA_GRACE_H, why: "a funder: STRATEGY s5 sends no automatic email to a funder; GRANT-FOLLOWUP-1 files the reply as agent_issues" },
   automated: { action: "close", after_h: 0, why: "automated sender, receipt, auto-reply or list mail; never replied to" },
   solicitation: { action: "skip", after_h: 0, why: "publication or conference solicitation; no reply owed" },
   opt_out: { action: "close", after_h: 0, suppress: true, why: "the sender asked not to be contacted; added to email_suppression (OUTREACH-CONSENT-1)" },
-  employment: { action: "hold", after_h: 24, why: "employment terms or a hiring manager: STRATEGY s5 never automatic" },
-  commercial: { action: "hold", after_h: 24, why: "a commercial offer that would commit money or the owner's time: STRATEGY s5 never automatic" },
-  legal: { action: "hold_ack", after_h: 24, why: "a legal matter: no substantive answer in the owner's name" },
-  personal: { action: "hold_ack", after_h: 24, why: "a health, personal or privacy matter: no substantive answer in the owner's name" },
-  money: { action: "hold_ack", after_h: 24, why: "would commit money: no substantive answer in the owner's name" },
-  press: { action: "hold_ack", after_h: 24, why: "a press or media request: no statement in the owner's name" },
+  employment: { action: "hold", after_h: SLA_GRACE_H, why: "employment terms or a hiring manager: STRATEGY s5 never automatic" },
+  commercial: { action: "hold", after_h: SLA_GRACE_H, why: "a commercial offer that would commit money or the owner's time: STRATEGY s5 never automatic" },
+  legal: { action: "hold_ack", after_h: SLA_GRACE_H, why: "a legal matter: no substantive answer in the owner's name" },
+  personal: { action: "hold_ack", after_h: SLA_GRACE_H, why: "a health, personal or privacy matter: no substantive answer in the owner's name" },
+  money: { action: "hold_ack", after_h: SLA_GRACE_H, why: "would commit money: no substantive answer in the owner's name" },
+  press: { action: "hold_ack", after_h: SLA_GRACE_H, why: "a press or media request: no statement in the owner's name" },
   thread_close: { action: "close", after_h: 0, why: "the message closes the thread (thanks, acknowledgement or decline) and asks nothing" },
-  research_reply: { action: "answer", after_h: 24, why: "a research correspondent inside the research-outreach campaign" },
-  unknown_human: { action: "hold", after_h: 24, why: "a named person outside the research-outreach campaign: STRATEGY s5 never automatic" }
+  research_reply: { action: "answer", after_h: SLA_GRACE_H, why: "a research correspondent inside the research-outreach campaign" },
+  unknown_human: { action: "hold", after_h: SLA_GRACE_H, why: "a named person outside the research-outreach campaign: STRATEGY s5 never automatic" }
 };
 // Funder domains: the submitted applications in qnfo-cloud-ops GRANT_APPLICATIONS (funding/APPLICATIONS.md) plus funders
 // already in correspondence. handled_through: a decision on or before that day is already recorded.
@@ -685,7 +694,7 @@ var worker_default = {
   async cheapClassify(env, row) {
     var body = String(row.body_text || "").slice(0, 2500);
     var NL = String.fromCharCode(10);
-    var sys = "You triage inbound email for an assistant answering on its owner's behalf. Decide ONE action. DRAFT: the email is a simple logistical or scheduling message answerable from its own content (meeting confirm, receipt, availability, a thanks, a short logistics question) - output a 1-2 sentence polite professional reply that introduces no fact not present in the email. ESCALATE: anything technical, scientific, licensing, legal, financial, a review or opinion request, or anything you cannot answer with certainty - output only the word ESCALATE. Output exactly either 'DRAFT: <text>' or 'ESCALATE'.";
+    var sys = "You triage one inbound email for an assistant that answers on its owner's behalf. Decide ONE action. ESCALATE: the email asks for expertise, judgement, a decision, an opinion or a commitment, or it cannot be answered from the text of the email alone - output only the word ESCALATE. DRAFT: otherwise - output 'DRAFT: ' followed by a reply of one or two plain sentences built only from what the email itself states. Every name, number and date in the reply must appear in the email. Add no greeting name, no sign-off, no signature and no promise. When unsure, ESCALATE. Output exactly either 'DRAFT: <text>' or 'ESCALATE'.";
     var usr = "From: " + (row.sender || "") + NL + "Subject: " + (row.subject || "") + NL + NL + body;
     var out = { escalate: false, reason: "", draft: "" };
     try {
@@ -695,11 +704,50 @@ var worker_default = {
       if (!txt) { out.escalate = true; out.reason = "empty-model-output"; return out; }
       if (up.indexOf("ESCALATE") === 0) { out.escalate = true; out.reason = "model-escalate"; return out; }
       if (up.indexOf("DRAFT:") === 0) { out.draft = txt.slice(6).trim(); } else { out.draft = txt; }
-      if (!out.draft) { out.escalate = true; out.reason = "unparseable"; }
+      out.draft = this.stripSignoff(out.draft);
+        if (!out.draft) { out.escalate = true; out.reason = "unparseable"; return out; }
+        // DRAFT-GROUNDING-1 (ACCURACY-FLEET-2b): a draft that names anything the inbound email does not is never sent.
+        var ung = this.ungroundedTerms(out.draft, (row.subject || "") + NL + String(row.body_text || ""));
+        if (ung.length) { out.escalate = true; out.reason = "ungrounded-draft: " + ung.length + " term(s) not in the inbound email"; out.draft = ""; }
       return out;
     } catch (e) { out.escalate = true; out.reason = "model-error:" + e.message; return out; }
   },
-  async listEmailFilters(request, env) {
+  // DRAFT-GROUNDING-1 (ACCURACY-FLEET-2b, agent_issues 2282 and 2272): the mechanical check between the drafter and a send.
+    // Returns every number, month or weekday name, and capitalised word of the draft that the inbound email does not
+    // contain. A word that opens a sentence is exempt only when it is a common function word (DRAFT_OPENERS); any other
+    // capitalised word is treated as a name. No model, no network; an empty list is the only pass.
+    ungroundedTerms(draft, source) {
+      var d = String(draft || ""), s = String(source || "").toLowerCase();
+      var srcWords = {}, sw = s.match(/[a-zÀ-ɏ][a-zÀ-ɏ'-]*/g) || [];
+      for (var i = 0; i < sw.length; i++) srcWords[sw[i].replace(/'s$/, "")] = 1;
+      var srcNums = {}, sn = s.match(/\d+(?:[.,:\/-]\d+)*/g) || [];
+      for (var j = 0; j < sn.length; j++) { srcNums[sn[j]] = 1; var parts = sn[j].split(/[.,:\/-]/); for (var p = 0; p < parts.length; p++) srcNums[parts[p].replace(/^0+(?=\d)/, "")] = 1; }
+      var bad = [], seen = {};
+      var add = function(t) { if (!seen[t]) { seen[t] = 1; bad.push(t); } };
+      var dn = d.match(/\d+(?:[.,:\/-]\d+)*/g) || [];
+      for (var k = 0; k < dn.length; k++) {
+        if (srcNums[dn[k]]) continue;
+        var ps = dn[k].split(/[.,:\/-]/), all = true;
+        for (var q = 0; q < ps.length; q++) if (!srcNums[ps[q].replace(/^0+(?=\d)/, "")]) all = false;
+        if (!all) add(dn[k]);
+      }
+      var words = d.match(/[A-Za-zÀ-ɏ][A-Za-zÀ-ɏ'-]*/g) || [];
+      for (var w = 0; w < words.length; w++) {
+        var word = words[w].replace(/'s$/i, ""), low = word.toLowerCase();
+        if (DRAFT_CALENDAR_RX.test(low)) { if (!srcWords[low]) add(word); continue; }
+        if (word.charAt(0) === word.charAt(0).toLowerCase()) continue;
+        if (srcWords[low] || DRAFT_OPENERS[low]) continue;
+        add(word);
+      }
+      return bad;
+    },
+    // The fleet appends its own fixed sign-off; a closing the model wrote anyway is cut from the first closing line on.
+    stripSignoff(draft) {
+      var lines = String(draft || "").replace(/\r/g, "").split("\n"), keep = [];
+      for (var i = 0; i < lines.length; i++) { if (i > 0 && DRAFT_SIGNOFF_RX.test(lines[i].trim())) break; keep.push(lines[i]); }
+      return keep.join("\n").replace(/\s+(?:best|kind|warm)(?:est)? (?:regards|wishes),?[^.!?]*$/i, "").trim();
+    },
+    async listEmailFilters(request, env) {
     var a = this.auth(env, request);
     if (!a.ok) return this.cors(json({ ok: false, error: "auth: " + a.reason }, 401));
     try {
