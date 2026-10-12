@@ -1,82 +1,50 @@
 {
  "ok": true,
  "marker": "REMEDIATION-CONSUMER-1",
- "verifier": "remediation-consumer@6e30b9dfecad",
- "due": 9,
- "pass": 0,
- "fail": 9,
+ "verifier": "remediation-consumer@acd3aee51a80",
+ "due": 5,
+ "pass": 3,
+ "fail": 2,
  "skipped": 0,
  "contracts": [
   {
-   "class": "issue-2231",
-   "issue_id": 2231,
+   "class": "issue-2353",
+   "issue_id": 2353,
    "verdict": "fail",
    "expected": "ok",
-   "observed": "pending: 0 of 7 registry tables, 1 of 2 lineage objects, 0 of 7 registry metrics with a value",
+   "observed": "pending: filed by ci:apply-migrations, which owns it for 48h",
    "written": true
   },
   {
-   "class": "issue-2235",
-   "issue_id": 2235,
-   "verdict": "fail",
+   "class": "issue-2119",
+   "issue_id": 2119,
+   "verdict": "pass",
    "expected": "ok",
-   "observed": "pending: 0 of 4 tables (false_stop_register, trust_ledger, trust_transitions, doctrine_proposals), 0 of 3 metrics refreshed by the tick in 3 h",
+   "observed": "ok",
    "written": true
   },
   {
-   "class": "issue-2241",
-   "issue_id": 2241,
-   "verdict": "fail",
+   "class": "issue-2133",
+   "issue_id": 2133,
+   "verdict": "pass",
    "expected": "ok",
-   "observed": "pending: 0 of 3 tables (false_stop_register, false_stop_phrases, false_stop_hits), 0 of 2 scan views, false_stops_7d refreshed in 3 h: 0",
+   "observed": "ok",
    "written": true
   },
   {
-   "class": "issue-2192",
-   "issue_id": 2192,
+   "class": "issue-2204",
+   "issue_id": 2204,
    "verdict": "fail",
    "expected": "ok",
-   "observed": "pending: 2 computed metrics on a 1h or 10m cadence not refreshed in 3 h (tick_slot_coverage_24h, owner_dispatched_items_7d)",
+   "observed": "median 24.1 h",
    "written": true
   },
   {
-   "class": "issue-2233",
-   "issue_id": 2233,
-   "verdict": "fail",
-   "expected": "ok",
-   "observed": "pending: 0 of 3 objects (v_issue_queue_v2, queue_pulls, issue_priority_scores), driver_drain_24h with a value refreshed in 3 h: 0",
-   "written": true
-  },
-  {
-   "class": "issue-2197",
-   "issue_id": 2197,
-   "verdict": "fail",
-   "expected": "ok",
-   "observed": "pending: v_triage_gap 0 open issues without a triage row, repair trigger sla_mechanisms_tick_10m installed: 0",
-   "written": true
-  },
-  {
-   "class": "issue-2234",
-   "issue_id": 2234,
-   "verdict": "fail",
-   "expected": "ok",
-   "observed": "pending: v_executor_roster 0, 0 of 2 roster metrics with a value refreshed in 3 h",
-   "written": true
-  },
-  {
-   "class": "close-predicate-monotone",
-   "issue_id": 1297,
-   "verdict": "fail",
-   "expected": "guarded",
-   "observed": "unguarded",
-   "written": true
-  },
-  {
-   "class": "issue-2148",
-   "issue_id": 2148,
-   "verdict": "fail",
-   "expected": "ok",
-   "observed": "pending: workers_idle_7d registered and refreshed in 3 h: 0, its trigger row: 0",
+   "class": "fm-probe-awaits-missing-heartbeat",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "0",
+   "observed": "0",
    "written": true
   }
  ],
@@ -103,13 +71,14 @@
   "http",
   "runner-https"
  ],
+ "https": 1,
  "budget_exhausted": false,
- "runtime_verified_share_24h": 4.9,
+ "runtime_verified_share_24h": 5,
  "host_census": {
   "skipped": "ran within 6h"
  },
- "spent_ms": 20178,
- "head": "6e30b9dfecad4f70d5ef5064cbfb65edb9f00d1f",
+ "spent_ms": 9212,
+ "head": "acd3aee51a80f0bd73b4f22def19bf19705aa3ec",
  "job_status": "success",
- "ts": "2026-10-12T06:34:17Z"
+ "ts": "2026-10-12T06:37:37Z"
 }
