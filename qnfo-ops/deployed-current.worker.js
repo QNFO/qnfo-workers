@@ -29,7 +29,7 @@ __name2222(fnv32, "fnv32");
 __name22222(fnv32, "fnv32");
 var __defProp222222 = Object.defineProperty;
 var __name222222 = /* @__PURE__ */ __name22222((target, value) => __defProp222222(target, "name", { value, configurable: true }), "__name");
-var VERSION = "2.40.2-doi-scrub"; /* 2.40.2 NOZ-DOI-1 (2026-10-10): the schema map drops a retired registry column. 2.40.1 NO-MEMORY-FACTS-1 (owner directive 2026-10-10): the public read-only prompt answers only from tool results and the question text. */ /* 2.40.0 OPS-INTERNAL-CALLER-1 (2026-10-09, pillar autonomy): a request that arrives through a service binding declaring props = { caller = "qnfo-email" } is authenticated as the router key, so qnfo-email owner commands stop answering HTTP 401 "Unauthorized - set Bearer OPS_ROUTER_AUTH_KEY" (its OPS_KEY copy no longer matched after the 2026-10-01 rotation). Public requests never carry props. 2.39.2 OPS-CONTEXT-COMPACT-1 (agent_issues 2068, pillar cost): truncateToContext compacts every tool result older than the newest OPS_TOOL_KEEP_ROUNDS (2) tool-bearing rounds to its first OPS_TOOL_COMPACT_CHARS (1200) chars plus a marker that says how much was cut and to re-run the tool for the full output; user, assistant and system messages are never compacted. Every round of an agent loop used to resend all earlier tool output (MAX_TOOL_RESULT_CHARS 16384 each) until the 262k window filled, so cost grew with the square of the round count: BUDGET-AUTO-PROMOTE-1 jobs on 2026-10-03/06 used 2.46M-2.68M prompt tokens for 27-33 tool calls, two ending ok=0. Pure function compactToolRounds, replayed by context-compact.test.mjs. 2.39.1 2.39.1 OPS-COST-SOFT-1 (BUDGET-SOFT-ROUTE-1): the ops daily cost cap (OPS_DAILY_CAP_USD) no longer answers HTTP 429 on chat or /v1/jobs; the request or job runs on the free tier (budgetFallback, no paid exec upstream). The request-count cap and the per-job runaway cap stay. 2.39.0 RULE-8-RETIRED-1 (2026-10-06, pillar autonomy, owner directive: "Rule 8 is now deleted entirely"): system prompt item 15(d) HARD LIMITS becomes DECIDE AND RECORD - spend caps, guard metrics, probes and deletions are the agent's own decisions, recorded with the reason and a live measurement under rule 7; opt-out, outreach consent and cadence caps and the personal/research separation still hold. 2.38.47 (2026-10-06, pillar core): REGISTRY-SYNC-FOLDED-1 (agent_issues 2031): a FLEET entry for a folded member (qnfo-backlog-exec, a member of qnfo-lifecycle since BACKLOG-FOLD-1) carries kind member and its host route, so registryRefresh writes service_registry with the URL that serves it and kind member instead of the deleted worker's dead workers.dev URL as a live worker (07:30:59Z wrote https://qnfo-backlog-exec.q08.workers.dev and fleet_status reported it "Worker not found"); OPS-D1-LIMIT-WORD-1 (agent_issues 2033): ops_d1_query finds an existing LIMIT clause as a trailing word, not as the first "limit" substring, so a query that names a column such as limited and ends in LIMIT 10 is no longer given a second LIMIT 100 (D1_ERROR near "LIMIT": syntax error, 07:53:42Z). */
+var VERSION = "2.41.0-observability-apply"; /* 2.41.0 OBSERVABILITY-DECLARED-APPLY-1 (2026-10-12, pillar core): the canonical deploy sent compatibility date, flags, bindings and containers in the upload metadata but never the observability settings, so a worker's [observability], [observability.logs] and [observability.traces] blocks in wrangler.toml never reached Cloudflare (same inert-config class as the crons of #1337 and the flags of COMPAT-FLAGS-DECLARED-APPLY-1). The deploy now overlays the declared keys on the live settings and sends the result; a worker that declares nothing is uploaded as before, and a Cloudflare refusal of the block is retried once without it and reported (observability_apply). RAND-ID-CRYPTO-1: randId and the /v1/responses ids draw from crypto.getRandomValues instead of Math.random. */ /* 2.40.2 NOZ-DOI-1 (2026-10-10): the schema map drops a retired registry column. 2.40.1 NO-MEMORY-FACTS-1 (owner directive 2026-10-10): the public read-only prompt answers only from tool results and the question text. */ /* 2.40.0 OPS-INTERNAL-CALLER-1 (2026-10-09, pillar autonomy): a request that arrives through a service binding declaring props = { caller = "qnfo-email" } is authenticated as the router key, so qnfo-email owner commands stop answering HTTP 401 "Unauthorized - set Bearer OPS_ROUTER_AUTH_KEY" (its OPS_KEY copy no longer matched after the 2026-10-01 rotation). Public requests never carry props. 2.39.2 OPS-CONTEXT-COMPACT-1 (agent_issues 2068, pillar cost): truncateToContext compacts every tool result older than the newest OPS_TOOL_KEEP_ROUNDS (2) tool-bearing rounds to its first OPS_TOOL_COMPACT_CHARS (1200) chars plus a marker that says how much was cut and to re-run the tool for the full output; user, assistant and system messages are never compacted. Every round of an agent loop used to resend all earlier tool output (MAX_TOOL_RESULT_CHARS 16384 each) until the 262k window filled, so cost grew with the square of the round count: BUDGET-AUTO-PROMOTE-1 jobs on 2026-10-03/06 used 2.46M-2.68M prompt tokens for 27-33 tool calls, two ending ok=0. Pure function compactToolRounds, replayed by context-compact.test.mjs. 2.39.1 2.39.1 OPS-COST-SOFT-1 (BUDGET-SOFT-ROUTE-1): the ops daily cost cap (OPS_DAILY_CAP_USD) no longer answers HTTP 429 on chat or /v1/jobs; the request or job runs on the free tier (budgetFallback, no paid exec upstream). The request-count cap and the per-job runaway cap stay. 2.39.0 RULE-8-RETIRED-1 (2026-10-06, pillar autonomy, owner directive: "Rule 8 is now deleted entirely"): system prompt item 15(d) HARD LIMITS becomes DECIDE AND RECORD - spend caps, guard metrics, probes and deletions are the agent's own decisions, recorded with the reason and a live measurement under rule 7; opt-out, outreach consent and cadence caps and the personal/research separation still hold. 2.38.47 (2026-10-06, pillar core): REGISTRY-SYNC-FOLDED-1 (agent_issues 2031): a FLEET entry for a folded member (qnfo-backlog-exec, a member of qnfo-lifecycle since BACKLOG-FOLD-1) carries kind member and its host route, so registryRefresh writes service_registry with the URL that serves it and kind member instead of the deleted worker's dead workers.dev URL as a live worker (07:30:59Z wrote https://qnfo-backlog-exec.q08.workers.dev and fleet_status reported it "Worker not found"); OPS-D1-LIMIT-WORD-1 (agent_issues 2033): ops_d1_query finds an existing LIMIT clause as a trailing word, not as the first "limit" substring, so a query that names a column such as limited and ends in LIMIT 10 is no longer given a second LIMIT 100 (D1_ERROR near "LIMIT": syntax error, 07:53:42Z). */
 // FOLD-WAVE-2 (2.38.45, 2026-10-06, #1756): qnfo-archive is retired (its 04:00 KG seed got HTTP 401 on every batch), so its
 // ARCHIVE probe binding leaves FLEET, BINDING_KEYS, wrangler.toml and the fleet_status text. BACKLOG now reaches the
 // qnfo-backlog-exec member inside qnfo-lifecycle (props.member); the code calling it is unchanged.
@@ -755,8 +755,15 @@ __name222(iso, "iso");
 __name2222(iso, "iso");
 __name22222(iso, "iso");
 __name222222(iso, "iso");
+function rndHex8() {
+  const a = new Uint8Array(4);
+  crypto.getRandomValues(a);
+  let h = "";
+  for (let i = 0; i < 4; i++) h += (a[i] < 16 ? "0" : "") + a[i].toString(16);
+  return h;
+}
 function randId(prefix) {
-  return (prefix || "id-") + Math.random().toString(16).slice(2, 10) + Date.now().toString(16).slice(-6);
+  return (prefix || "id-") + rndHex8() + Date.now().toString(16).slice(-6);
 }
 __name(randId, "randId");
 __name2(randId, "randId");
@@ -2858,6 +2865,81 @@ __name22(cfWorkerRead, "cfWorkerRead");
 __name222(cfWorkerRead, "cfWorkerRead");
 __name2222(cfWorkerRead, "cfWorkerRead");
 __name22222(cfWorkerRead, "cfWorkerRead");
+// OBSERVABILITY-DECLARED-APPLY-1 (2.41.0). Two pure functions, replayed by observability-apply.test.mjs.
+// parseDeclaredObservability reads [observability], [observability.logs], [observability.traces] and
+// [observability.issues] (or the inline-table form logs = { ... } inside [observability]) and returns only the keys the
+// Workers script-upload metadata documents; null when the file declares none. mergeObservability overlays the declared
+// keys on the live settings, so a key the file does not name keeps its live value (a file that says only enabled = true
+// never switches off traces someone enabled), and fills the two fields the API requires on logs.
+var OBS_KEYS = { "": { enabled: "b", head_sampling_rate: "n", redact_query_string: "b" }, logs: { enabled: "b", invocation_logs: "b", head_sampling_rate: "n", persist: "b", destinations: "a" }, traces: { enabled: "b", head_sampling_rate: "n", persist: "b", destinations: "a" }, issues: { enabled: "b" } };
+function obsValue(kind, raw) {
+  const v = String(raw).trim().replace(/,$/, "").trim();
+  if (kind === "b") return v === "true" ? true : v === "false" ? false : void 0;
+  if (kind === "n") { const n = Number(v); return v !== "" && isFinite(n) && n >= 0 && n <= 1 ? n : void 0; }
+  if (kind === "a") { const m = v.match(/^\[(.*)\]$/); return m ? (m[1].match(/"([^"]*)"/g) || []).map(function(q) { return q.slice(1, -1); }) : void 0; }
+  return void 0;
+}
+function parseDeclaredObservability(toml) {
+  const out = {};
+  let sec = null;
+  const put = function(sub, key, raw) {
+    const kinds = OBS_KEYS[sub];
+    if (!kinds || !kinds[key]) return;
+    const val = obsValue(kinds[key], raw);
+    if (val === void 0) return;
+    if (sub === "") out[key] = val;
+    else { if (!out[sub]) out[sub] = {}; out[sub][key] = val; }
+  };
+  for (const raw of String(toml || "").split(/\r?\n/)) {
+    const l = raw.replace(/#.*$/, "").trim();
+    if (!l) continue;
+    const h = l.match(/^\[\[?\s*([A-Za-z0-9_.-]+)\s*\]\]?$/);
+    if (h) {
+      sec = h[1] === "observability" ? "" : h[1].indexOf("observability.") === 0 ? h[1].slice(14) : null;
+      continue;
+    }
+    if (sec === null) continue;
+    const eq = l.match(/^([A-Za-z0-9_]+)\s*=\s*(.+)$/);
+    if (!eq) continue;
+    const inl = sec === "" && OBS_KEYS[eq[1]] && eq[1] !== "" ? eq[2].trim().match(/^\{(.*)\}$/) : null;
+    if (inl) {
+      const rx = /([A-Za-z0-9_]+)\s*=\s*(\[[^\]]*\]|[^,]+)/g;
+      let m;
+      while ((m = rx.exec(inl[1])) !== null) put(eq[1], m[1], m[2]);
+    } else put(sec, eq[1], eq[2]);
+  }
+  return Object.keys(out).length ? out : null;
+}
+function mergeObservability(live, declared) {
+  if (!declared || typeof declared !== "object" || !Object.keys(declared).length) return null;
+  const clean = function(o) {
+    const r = {};
+    for (const k of Object.keys(o || {})) { if (o[k] !== null && o[k] !== void 0) r[k] = o[k]; }
+    return r;
+  };
+  const lv = live && typeof live === "object" ? live : {};
+  const out = {};
+  for (const k of Object.keys(OBS_KEYS[""])) {
+    if (declared[k] !== void 0) out[k] = declared[k];
+    else if (lv[k] !== null && lv[k] !== void 0) out[k] = lv[k];
+  }
+  for (const sub of ["logs", "traces", "issues"]) {
+    const d = declared[sub], l = lv[sub];
+    if (!d && !(l && typeof l === "object")) continue;
+    const m = {};
+    const src = Object.assign({}, clean(l), clean(d));
+    for (const k of Object.keys(OBS_KEYS[sub])) { if (src[k] !== void 0) m[k] = src[k]; }
+    out[sub] = m;
+  }
+  if (typeof out.enabled !== "boolean") out.enabled = !!(out.logs && out.logs.enabled || out.traces && out.traces.enabled);
+  if (out.logs) {
+    if (typeof out.logs.enabled !== "boolean") out.logs.enabled = out.enabled;
+    if (typeof out.logs.invocation_logs !== "boolean") out.logs.invocation_logs = true;
+  }
+  if (out.traces && typeof out.traces.enabled !== "boolean") out.traces.enabled = false;
+  if (out.issues && typeof out.issues.enabled !== "boolean") delete out.issues;
+  return out;
+}
 async function installDeclaredBindings(env, worker) {
   const out = { installed: 0, note: null, bindings: [] };
   try {
@@ -2886,6 +2968,7 @@ async function installDeclaredBindings(env, worker) {
        carried only the LIVE compatibility_flags, so a flag added to wrangler.toml never reached Cloudflare (same
        inert-config class as #1337's crons). Surface the declared flags so cfWorkerDeploy can UNION them in. */
     out.compat_flags = [];
+    out.observability = parseDeclaredObservability(toml);
     const _cfm = String(toml).match(/^\s*compatibility_flags\s*=\s*\[([^\]]*)\]/m);
     if (_cfm) out.compat_flags = (_cfm[1].match(/"([^"]+)"/g) || []).map(function(q) { return q.slice(1, -1); });
     const sections = [];
@@ -3054,6 +3137,7 @@ async function cfWorkerDeploy(env, args) {
   let bindingPropsApplied = 0;
   let bindingInstallNote = null;
   let _declFlags = [];
+  let _declObs = null;
   // BINDING-INSTALL-MERGE-1 (2026-09-29, issue #1448, FATAL): this installer used to run ONLY when
   // bindingsOut.length === 0, so a worker that already carried any non-secret binding
   // could NEVER gain a newly declared one. Canonical victim: qnfo-research-exec never
@@ -3066,6 +3150,7 @@ async function cfWorkerDeploy(env, args) {
     const _ins = await installDeclaredBindings(env, worker);
     bindingInstallNote = _ins.note || null;
     if (_ins && Array.isArray(_ins.compat_flags)) _declFlags = _ins.compat_flags.slice();
+    if (_ins && _ins.observability) _declObs = _ins.observability;
     const _decl = _ins && Array.isArray(_ins.bindings) ? _ins.bindings : [];
     if (bindingsOut.length === 0 && _decl.length) {
       bindingsOut = _decl;
@@ -3107,6 +3192,8 @@ async function cfWorkerDeploy(env, args) {
     // container.error at 19:30:43.591Z -- 8s later). Read it from the SAME GET /settings
     // call already used for compatibility_date.
     let _containers = [];
+    let _liveObs = null;
+    let _settingsRead = false;
     try {
       const _sResp = await fetch("https://api.cloudflare.com/client/v4/accounts/" + CF_ACCOUNT_ID + "/workers/scripts/" + encodeURIComponent(worker) + "/settings", { headers: { "Authorization": "Bearer " + env.CF_API_TOKEN } });
       if (_sResp.ok) {
@@ -3115,6 +3202,8 @@ async function cfWorkerDeploy(env, args) {
         if (_sr && _sr.compatibility_date) _compatDate = String(_sr.compatibility_date);
         if (_sr && Array.isArray(_sr.compatibility_flags)) _compatFlags = _sr.compatibility_flags.slice();
         if (_sr && Array.isArray(_sr.containers)) _containers = _sr.containers.slice();
+        if (_sr) _settingsRead = true;
+        if (_sr && _sr.observability && typeof _sr.observability === "object") _liveObs = _sr.observability;
       }
     } catch (_e) {
     }
@@ -3133,8 +3222,12 @@ async function cfWorkerDeploy(env, args) {
           + "allow_container_config_drop:true only for a deliberate teardown."
       };
     }
+    // OBSERVABILITY-DECLARED-APPLY-1: sent only when wrangler.toml declares a block AND the live settings were read
+    // (an overlay on unread settings could switch off what is on). _obsOut is cleared when Cloudflare refuses it.
+    let _obsOut = _declObs && _settingsRead ? mergeObservability(_liveObs, _declObs) : null;
+    let _obsNote = _obsOut ? "applied" : _declObs ? "skipped: live settings unreadable" : "none declared";
     const _buildBody = function () {
-    const metadataPart = JSON.stringify(Object.assign(_mp, { bindings: bindingsOut }, { compatibility_date: _compatDate }, _compatFlags.length ? { compatibility_flags: _compatFlags } : {}, Object.keys(_exports).length ? { exports: _exports } : {}, _containers.length ? { containers: _containers } : {}));
+    const metadataPart = JSON.stringify(Object.assign(_mp, { bindings: bindingsOut }, { compatibility_date: _compatDate }, _obsOut ? { observability: _obsOut } : {}, _compatFlags.length ? { compatibility_flags: _compatFlags } : {}, Object.keys(_exports).length ? { exports: _exports } : {}, _containers.length ? { containers: _containers } : {}));
     const body = ["--" + boundary, 'Content-Disposition: form-data; name="metadata"', "Content-Type: application/json", "", metadataPart, "--" + boundary, 'Content-Disposition: form-data; name="worker.js"; filename="worker.js"', "Content-Type: application/javascript+module", "", content, "--" + boundary + "--"].join("\r\n");
     return body;
     };
@@ -3190,12 +3283,19 @@ async function cfWorkerDeploy(env, args) {
       resp = await fetch(_putUrl, { method: "PUT", headers: _putHeaders, body: _buildBody() });
       j = await resp.json().catch(() => ({}));
     }
+    if (!resp.ok && _obsOut) {
+      // The settings overlay must never be what stops a deploy: upload once more exactly as before 2.41.0.
+      _obsNote = "refused, deployed without it: " + JSON.stringify(j && j.errors || j).slice(0, 160);
+      _obsOut = null;
+      resp = await fetch(_putUrl, { method: "PUT", headers: _putHeaders, body: _buildBody() });
+      j = await resp.json().catch(() => ({}));
+    }
     if (!resp.ok) {
       const _ledFail = await recordDeployLedger(env, { resource_name: worker, action: "deploy", version_id: versionNote || null, status: "failed", notes: "cf_worker_deploy FAILED http=" + resp.status + " worker=" + worker + " content_bytes=" + content.length + " expected_version=" + String(args && args.expected_version || "n/a") + " err=" + JSON.stringify(j).slice(0, 200) });
       return { ok: false, error: "CF API " + resp.status + ": " + JSON.stringify(j).slice(0, 400), ledger: _ledFail };
     }
-    const _ledOk = await recordDeployLedger(env, { resource_name: worker, action: "deploy", version_id: versionNote || null, status: "success", notes: "cf_worker_deploy ok http=" + resp.status + " worker=" + worker + " bindings_preserved=" + bindingsOut.length + (_droppedBindings.length ? " dropped_dangling_bindings=" + _droppedBindings.map(function (d) { return d.name + "->" + d.service; }).join(",") : "") + " etag=" + ((j && j.result && j.result.etag) ? j.result.etag : "n/a") + " content_bytes=" + content.length + " expected_version=" + String(args && args.expected_version || "n/a") });
-    return { ledger: _ledOk, ok: true, worker, deployed: true, http: resp.status, dropped_dangling_bindings: _droppedBindings, version: versionNote || "deployed", bindings_preserved: bindingsOut.length, bindings_installed: bindingsInstalled, binding_props_applied: bindingPropsApplied, binding_install_note: bindingInstallNote, warning: bindingsOut.length === 0 ? "BINDING-INSTALL-WHEN-EMPTY-1: deployed with ZERO bindings and none installable from wrangler.toml - this worker may be a silent no-op" : null, result: j && j.result ? { id: j.result.id, etag: j.result.etag } : null };
+    const _ledOk = await recordDeployLedger(env, { resource_name: worker, action: "deploy", version_id: versionNote || null, status: "success", notes: "cf_worker_deploy ok http=" + resp.status + " worker=" + worker + " bindings_preserved=" + bindingsOut.length + " observability=" + _obsNote.slice(0, 60) + (_droppedBindings.length ? " dropped_dangling_bindings=" + _droppedBindings.map(function (d) { return d.name + "->" + d.service; }).join(",") : "") + " etag=" + ((j && j.result && j.result.etag) ? j.result.etag : "n/a") + " content_bytes=" + content.length + " expected_version=" + String(args && args.expected_version || "n/a") });
+    return { ledger: _ledOk, ok: true, worker, deployed: true, http: resp.status, dropped_dangling_bindings: _droppedBindings, version: versionNote || "deployed", bindings_preserved: bindingsOut.length, bindings_installed: bindingsInstalled, binding_props_applied: bindingPropsApplied, observability_apply: _obsNote, observability: _obsOut, binding_install_note: bindingInstallNote, warning: bindingsOut.length === 0 ? "BINDING-INSTALL-WHEN-EMPTY-1: deployed with ZERO bindings and none installable from wrangler.toml - this worker may be a silent no-op" : null, result: j && j.result ? { id: j.result.id, etag: j.result.etag } : null };
   } catch (e) {
     return { ok: false, error: "cf_worker_deploy failed: " + (e && e.message || String(e)).slice(0, 300) };
   }
@@ -7034,11 +7134,11 @@ var worker_default = {
         const text = msg.content ? String(msg.content) : "";
         const toolCalls = Array.isArray(msg.tool_calls) && msg.tool_calls.length ? msg.tool_calls : null;
         const output = toolCalls ? toolCalls.map(function(tc) {
-          const fid = tc.id || "fc_" + Math.random().toString(16).slice(2, 10);
+          const fid = tc.id || "fc_" + rndHex8();
           return { type: "function_call", id: fid, call_id: fid, name: tc.function && tc.function.name ? tc.function.name : "", arguments: tc.function && tc.function.arguments ? String(tc.function.arguments) : "{}" };
-        }) : [{ type: "message", id: "msg_" + Math.random().toString(16).slice(2, 10), role: "assistant", content: [{ type: "output_text", text }] }];
+        }) : [{ type: "message", id: "msg_" + rndHex8(), role: "assistant", content: [{ type: "output_text", text }] }];
         const respObj = {
-          id: "resp_" + Math.random().toString(16).slice(2, 10),
+          id: "resp_" + rndHex8(),
           object: "response",
           created_at: Math.floor(Date.now() / 1e3),
           status: toolCalls ? "requires_action" : "completed",
