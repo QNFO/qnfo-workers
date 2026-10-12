@@ -693,12 +693,15 @@ def spare_domain_canon(zone_name: str, mode: str, token: str, fetch=None, sleep=
                 st, j = call("PATCH", "/zones/%s/dns_records/%s" % (zid, d["id"]), token, d["body"])
             dns_done.append({"host": d["host"], "op": d["op"], "http": st, "errors": j.get("errors")})
         checks = []
-        for attempt in range(4):
+        # A record that just turned proxied keeps answering from the old target until resolvers drop the unproxied answer
+        # (run 121, 2026-10-12: qwav.uk verified at once, qwave.tech still answered 200 after 45 s and was restored). Allow five
+        # minutes before judging.
+        for attempt in range(10):
             checks = [canon_verify(zone, fetch), canon_verify("www." + zone, fetch)]
             if all(c["ok"] for c in checks):
                 break
-            if attempt < 3:
-                sleep(15)
+            if attempt < 9:
+                sleep(30)
         ok = all(c["ok"] for c in checks)
         restored = None
         if not ok and rule_needed:

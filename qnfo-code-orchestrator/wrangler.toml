@@ -14,9 +14,11 @@ enabled = true
   invocation_logs = true
   head_sampling_rate = 1
 
+  # TRACES-SAMPLING-BEFORE-BILLING-1 (2026-10-12, agent_issues 2348): stored traces bill from 2026-12-01; logs stay at 1 (one cron
+  # tick per 10 minutes, every invocation matters), traces are sampled at 5% like the rest of the fleet.
   [observability.traces]
   enabled = true
-  head_sampling_rate = 1
+  head_sampling_rate = 0.05
 
 # qnfo-code-orchestrator v0.2.0 -- durable code-task loop (D1 state, model ladder, container + Dynamic Workers verifiers, PR-gated)
 # v0.1.1 history: integration slice: reads repos via qnfo-code-agent
