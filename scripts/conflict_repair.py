@@ -19,7 +19,8 @@ WHAT  The doer for STALE-PR-CONFLICT-REPAIR-1 issues (qnfo-fleet-control files o
            workflows that accept a dispatch (a pull request opened with GITHUB_TOKEN starts none by itself), comments on
            the old pull request and closes it as superseded by the new number.
       Every run writes one cloud_ops_events row (kind conflict-repair-reapplied, status ok | warn) and a branch_hygiene_log
-      row; a pull request head that was already attempted is skipped (one attempt per head sha).
+      row; a pull request head that was already re-applied and pushed is skipped. An --all run also writes an hourly
+      heartbeat row (id conflict-repair-tick-<UTC hour>) so the watchmaker can prove the doer ran.
       It never merges, never force-pushes, never touches main, and refuses a pull request that changes .github/ (the
       Actions token may not push workflow files).
 USAGE python3 scripts/conflict_repair.py --pr <n> [--push] [--keep-branch]
@@ -317,6 +318,25 @@ def ledger(pr_number, head_sha, status, text, meta):
         return False
 
 
+def heartbeat(found, push):
+    """One row per hour that the doer ran over the repair issues (the watchmaker reads it: a recurring operation proves it ran)."""
+    acct, token = os.environ.get("CLOUDFLARE_ACCOUNT_ID") or os.environ.get("CF_ACCOUNT_ID"), os.environ.get("CLOUDFLARE_API_TOKEN")
+    if not (acct and token):
+        return False
+    try:
+        from apply_migrations import d1
+        d1(acct, token, DB_ID, "INSERT OR REPLACE INTO cloud_ops_events (id, ts, kind, status, text, job) VALUES (?1, strftime('%Y-%m-%dT%H:%M:%SZ', 'now'), 'conflict-repair-tick', 'ok', ?2, 'conflict-repair')",
+           [heartbeat_id(time.gmtime()), "CONFLICT-REPAIR-DOER-1 tick: %d repair issue%s read%s" % (found, "" if found == 1 else "s", "" if push else " (dry run)")])
+        return True
+    except Exception as e:  # noqa: BLE001
+        emit("::warning::conflict-repair: heartbeat not written: " + str(e)[:200])
+        return False
+
+
+def heartbeat_id(t):
+    return "conflict-repair-tick-" + time.strftime("%Y%m%dT%H", t)
+
+
 def attempted(pr_number, head_sha):
     acct, token = os.environ.get("CLOUDFLARE_ACCOUNT_ID") or os.environ.get("CF_ACCOUNT_ID"), os.environ.get("CLOUDFLARE_API_TOKEN")
     if not (acct and token):
@@ -411,6 +431,7 @@ def selftest():
         emit(("PASS " if c else "FAIL ") + name + ("" if c or detail is None else " -- " + repr(detail)[:400]))
         if not c:
             fails.append(name)
+    ok(heartbeat_id(time.gmtime(0)) == "conflict-repair-tick-19700101T00" and "conflict-repair-tick-" <= heartbeat_id(time.gmtime()) < "conflict-repair-tick.", "the hourly heartbeat id sorts inside the range the watchmaker query reads")
     os.environ["CONFLICT_REPAIR_SELFTEST_TOKEN"] = "x"
     ce = clean_env()
     ok("CONFLICT_REPAIR_SELFTEST_TOKEN" not in ce and not any(SECRET_ENV.search(k) for k in ce) and "PATH" in ce, "clean_env drops every credential-named variable and keeps PATH")
@@ -495,6 +516,8 @@ def main(argv=None):
     except Exception as e:  # noqa: BLE001
         emit("::warning::conflict-repair: cannot read the repair issues: " + str(e)[:200])
         numbers = []
+    if a.all:
+        heartbeat(len(numbers), a.push)
     if not numbers:
         emit(json.dumps({"conflict_repair": "nothing to do"}))
         return 0
