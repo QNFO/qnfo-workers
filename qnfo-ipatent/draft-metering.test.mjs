@@ -31,7 +31,7 @@ const post = async (e) => {
   const r = await W.fetch(new Request("https://ipatent.qnfo.org/api/draft", { method: "POST", headers: { "Content-Type": "application/json", "User-Agent": "Mozilla/5.0 (Macintosh) Safari/605" }, body: JSON.stringify({ title: "Folding drawer hinge", description: "A drawer hinge with a torsion spring around a stainless pivot pin so the front folds flat against the cabinet side and closes itself." }) }), e, ctx);
   return { status: r.status, j: await r.json().catch(() => null) };
 };
-const rows = () => audit.prepare("SELECT * FROM ai_call_counters ORDER BY model").all();
+const rows = () => audit.prepare("SELECT * FROM ai_call_counters WHERE purpose = 'draft' ORDER BY model").all();   // 3.17.0 also writes draft-done and mechanism rows (cost.test.mjs)
 
 let r = await post(env);
 ok(r.status === 200 && calls.length === 1, "a draft succeeds on the first model", { status: r.status, calls });
