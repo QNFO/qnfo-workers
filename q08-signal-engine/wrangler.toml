@@ -1,6 +1,14 @@
 name = "q08-signal-engine"
 main = "worker.js"
-compatibility_date = "2026-08-01"
+# COMPAT-ADVANCE-WAVE-2 (2026-10-12, metric workers_compat_date_behind, qnfo-ops COMPAT-DATE-DECLARED-APPLY-1): the date moves
+# from 2026-08-01 to 2026-10-10 on the next canonical deploy. Reviewed against qnfo-ops COMPAT_FLIPS between the two dates:
+# 2026-08-04 nodejs_compat default on (this worker reads no timer id as a number, has no typeof process/Buffer branch and
+# imports no node: module);
+# 2026-10-01 Durable Object eviction (no Durable Object here). /ops/deploy reads /health through its
+# COMPAT-HEALTH-BINDINGS-2 binding before the upload, keeps the date only when /health answers with the deployed VERSION
+# and otherwise restores the previous date (deployment_history compat-restore).
+# compat-advance: reviewed 2026-10-12
+compatibility_date = "2026-10-10"
 workers_dev = true
 
 # Q08-ROUTE-1 (2026-09-26): q08.org/* and www.q08.org/* MUST be Workers routes to this
