@@ -15,8 +15,9 @@ const calls = { ai: [], fetch: [], d1: [] };
 let aiPlan = {};
 const realFetch = globalThis.fetch;
 globalThis.fetch = async (url, init) => {
-  calls.fetch.push(String(url));
-  if (String(url).indexOf("api.deepseek.com") >= 0) return new Response(JSON.stringify({ error: { message: "Insufficient Balance" } }), { status: 402 });
+  const host = new URL(String(url)).hostname;
+  calls.fetch.push(host);
+  if (host === "api.deepseek.com") return new Response(JSON.stringify({ error: { message: "Insufficient Balance" } }), { status: 402 });
   return new Response("blocked in test", { status: 599 });
 };
 const env = () => ({
@@ -56,7 +57,7 @@ ok(calls.d1.some((c) => /'model-unknown-id'/.test(c.sql)), "the unknown id left 
 // 2 the breaker is now open in this isolate: no second paid round trip, same answer path.
 reset();
 r = await chat({ model: "deepseek-v4-flash", messages: msgs, max_tokens: 32 });
-ok(r.status === 200 && r.j._router.served_by === "deepseek-v4-flash-wa" && !calls.fetch.some((u) => u.indexOf("deepseek.com") >= 0), "with the breaker open the twin serves at once, no DeepSeek call", { f: calls.fetch, rt: r.j && r.j._router });
+ok(r.status === 200 && r.j._router.served_by === "deepseek-v4-flash-wa" && !calls.fetch.includes("api.deepseek.com"), "with the breaker open the twin serves at once, no DeepSeek call", { f: calls.fetch, rt: r.j && r.j._router });
 ok(r.j._router.model_resolution === undefined, "an exact id carries no resolution note");
 
 // 3 a small answer on glm-5.3-flash asks for low reasoning effort; a long one does not.
