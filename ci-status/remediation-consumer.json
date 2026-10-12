@@ -1,26 +1,66 @@
 {
  "ok": true,
  "marker": "REMEDIATION-CONSUMER-1",
- "verifier": "remediation-consumer@2e60c5387f05",
- "due": 2,
- "pass": 2,
- "fail": 0,
+ "verifier": "remediation-consumer@6b78c3aba280",
+ "due": 7,
+ "pass": 3,
+ "fail": 4,
  "skipped": 0,
  "contracts": [
   {
-   "class": "issue-2443",
-   "issue_id": 2443,
-   "verdict": "pass",
-   "expected": "closed",
-   "observed": "closed",
+   "class": "issue-2410",
+   "issue_id": 2410,
+   "verdict": "fail",
+   "expected": "drained",
+   "observed": "backlog 413",
    "written": true
   },
   {
-   "class": "issue-2301",
-   "issue_id": 2301,
+   "class": "issue-2433",
+   "issue_id": 2433,
    "verdict": "pass",
    "expected": "ok",
    "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "issue-2435",
+   "issue_id": 2435,
+   "verdict": "fail",
+   "expected": "1",
+   "observed": "0",
+   "written": true
+  },
+  {
+   "class": "issue-2434",
+   "issue_id": 2434,
+   "verdict": "fail",
+   "expected": "ok",
+   "observed": "pending: filed by qnfo-fleet-control, which owns it for 48h",
+   "written": true
+  },
+  {
+   "class": "fm-tick-reopen-dup-title",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "0",
+   "observed": "0",
+   "written": true
+  },
+  {
+   "class": "issue-2448",
+   "issue_id": 2448,
+   "verdict": "fail",
+   "expected": "0",
+   "observed": "1786",
+   "written": true
+  },
+  {
+   "class": "issue-2308",
+   "issue_id": 2308,
+   "verdict": "pass",
+   "expected": "1",
+   "observed": "1",
    "written": true
   }
  ],
@@ -47,14 +87,13 @@
   "http",
   "runner-https"
  ],
- "https": 1,
  "budget_exhausted": false,
  "runtime_verified_share_24h": 5.9,
  "host_census": {
   "skipped": "ran within 6h"
  },
- "spent_ms": 10872,
- "head": "2e60c5387f05209c9729c81b3f5a0a4d8cde8af7",
+ "spent_ms": 18695,
+ "head": "6b78c3aba2807225bcdf4b531512cf5da32418c5",
  "job_status": "success",
- "ts": "2026-10-12T15:21:41Z"
+ "ts": "2026-10-12T15:25:45Z"
 }
