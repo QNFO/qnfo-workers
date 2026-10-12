@@ -6,7 +6,7 @@
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
-import { discover, select, CONTROL_PLANE, SHARED } from "./run-suites.mjs";
+import { discover, select, CONTROL_PLANE, SHARED, ALWAYS } from "./run-suites.mjs";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 let pass = 0, fail = 0;
@@ -17,9 +17,9 @@ ok(all.length >= 150 && all.includes("scripts/run-suites.test.mjs") && all.inclu
 ok(all.every((s) => /^[^/]+\/[^/]+\.test\.mjs$/.test(s)), "every discovered path is <dir>/<name>.test.mjs");
 
 let s = select(all, ["radar-hub"]);
-ok(s.suites.length >= 3 && s.suites.every((x) => x.startsWith("radar-hub/")), "a changed worker runs exactly its own suites", s);
+ok(s.suites.length >= 3 && s.suites.every((x) => x.startsWith("radar-hub/") || ALWAYS.includes(x)) && ALWAYS.every((x) => s.suites.includes(x)), "a changed worker runs exactly its own suites plus the repository guards (SUITE-GUARDS-ALWAYS-1)", s);
 s = select(all, ["radar-hub", "idea-hub", ""]);
-ok(s.suites.some((x) => x.startsWith("idea-hub/")) && s.suites.some((x) => x.startsWith("radar-hub/")) && s.suites.every((x) => /^(idea|radar)-hub\//.test(x)), "two changed workers run both sets and nothing else");
+ok(s.suites.some((x) => x.startsWith("idea-hub/")) && s.suites.some((x) => x.startsWith("radar-hub/")) && s.suites.every((x) => /^(idea|radar)-hub\//.test(x) || ALWAYS.includes(x)), "two changed workers run both sets, the repository guards and nothing else");
 for (const d of ["qnfo-fleet-control", "qnfo-gateway", "qnfo-code-orchestrator"]) {
   s = select(all, ["radar-hub", d]);
   ok(s.suites.length === all.length && /full set/.test(s.reason), "a control-plane change (" + d + ") runs every suite", s.reason);
@@ -31,7 +31,7 @@ for (const d of SHARED) {
 s = select(all, []);
 ok(s.suites.length === 0 && /no worker directory/.test(s.reason), "no change runs nothing");
 s = select(all, ["docs"]);
-ok(s.suites.every((x) => x.startsWith("docs/")), "a docs-only change runs only the docs suites (docs/doctrine-readings.test.mjs since #853), never a worker suite", s.suites);
+ok(s.suites.every((x) => x.startsWith("docs/") || ALWAYS.includes(x)) && !s.suites.some((x) => /^qnfo-/.test(x)), "a docs-only change runs only the docs suites (docs/doctrine-readings.test.mjs since #853) and the repository guards, never a worker suite", s.suites);
 
 const fc = readFileSync(join(root, "qnfo-fleet-control", "worker.js"), "utf8");
 const m = /var TP_CONTROL_PLANE = (\[[^\]]*\]);/.exec(fc);

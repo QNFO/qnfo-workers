@@ -11,8 +11,8 @@ const end = src.indexOf("// ---- CHARTER-LOOP-1:BEGIN");
 if (start < 0 || end < 0 || end < start) { console.error("pdf-relay.test: PDF-BACKLOG-RELAY-1 block not found"); process.exit(1); }
 const sandbox = { console, Date, JSON, Math, Number, String, Promise, __export: null };
 vm.createContext(sandbox);
-vm.runInContext(src.slice(start, end) + "\n__export = { pdfBacklogRelay, PDF_RELAY_QUIET_MIN };", sandbox, { filename: "pdf-relay-block.js" });
-const { pdfBacklogRelay, PDF_RELAY_QUIET_MIN } = sandbox.__export;
+vm.runInContext(src.slice(start, end) + "\n__export = { pdfBacklogRelay, PDF_RELAY_QUIET_MIN, PDF_RELAY_MAX_BATCHES, PDF_RELAY_BUDGET_MS };", sandbox, { filename: "pdf-relay-block.js" });
+const { pdfBacklogRelay, PDF_RELAY_QUIET_MIN, PDF_RELAY_MAX_BATCHES, PDF_RELAY_BUDGET_MS } = sandbox.__export;
 
 let passed = 0, failed = 0;
 const eq = (a, b, msg) => { if (JSON.stringify(a) === JSON.stringify(b)) passed++; else { failed++; console.log("FAIL", msg, "got", JSON.stringify(a), "want", JSON.stringify(b)); } };
@@ -45,13 +45,29 @@ const jsonResponse = (status, body) => ({ ok: status < 400, status, json: async 
 // 2. no event for longer than the quiet window: the relay calls POST /backlog/tick and records the batch
 {
   let seen = null;
-  const { env, writes } = fakeEnv(new Date(Date.now() - (PDF_RELAY_QUIET_MIN + 1) * 60000).toISOString(), async (url, init) => { seen = { url, method: init && init.method }; return jsonResponse(200, { rendered: 6, backlog_after: 470, errors: [] }); });
+  let calls = 0;
+  const { env, writes } = fakeEnv(new Date(Date.now() - (PDF_RELAY_QUIET_MIN + 1) * 60000).toISOString(), async (url, init) => { calls++; seen = { url, method: init && init.method }; return jsonResponse(200, calls === 1 ? { rendered: 6, backlog_after: 470, errors: [] } : { rendered: 0, backlog_after: 470, errors: [] }); });
   const out = await pdfBacklogRelay(env);
   eq(out.ran, true, "relays once the last event is older than the quiet window");
-  eq(seen, { url: "https://qnfo-pdf/backlog/tick?budget_ms=60000", method: "POST" }, "POST to the service-binding hostname (PDF-RENDER-INTERNAL-1 form)");
-  eq([out.rendered, out.backlog_after, out.http], [6, 470, 200], "the batch result is carried");
+  eq(seen, { url: "https://qnfo-pdf/backlog/tick?budget_ms=90000", method: "POST" }, "POST to the service-binding hostname (PDF-RENDER-INTERNAL-1 form) with the 90 s budget");
+  eq([out.rendered, out.backlog_after, out.http, out.batches], [6, 470, 200, 2], "the batch result is carried; a batch that renders nothing ends the chain");
   eq(writes[0].params[2].includes('"ran":true'), true, "the ledger meta carries the result");
-  eq(/relayed one SCHOLAR-PDF-ALL-1 batch: rendered 6, backlog 470/.test(writes[0].params[1]), true, "the ledger text names the batch");
+  eq(/relayed 2 SCHOLAR-PDF-ALL-1 batches: rendered 6, backlog 470/.test(writes[0].params[1]), true, "the ledger text names the batches");
+}
+// 2b. PDF-RELAY-CADENCE-1: while every batch renders and leaves a backlog, one tick chains up to PDF_RELAY_MAX_BATCHES calls
+{
+  let calls = 0;
+  const { env, writes } = fakeEnv(null, async () => { calls++; return jsonResponse(200, { rendered: 9, backlog_after: 480 - 9 * calls, errors: [] }); });
+  const out = await pdfBacklogRelay(env);
+  eq([calls, out.batches, out.rendered, out.backlog_after], [3, 3, 27, 453], "three batches, the rendered counts summed, the last backlog kept");
+  eq(writes.length, 1, "one ledger row for the whole tick");
+}
+// 2c. the chain stops when the backlog is drained
+{
+  let calls = 0;
+  const { env } = fakeEnv(null, async () => { calls++; return jsonResponse(200, { rendered: 4, backlog_after: 0, errors: [] }); });
+  const out = await pdfBacklogRelay(env);
+  eq([calls, out.batches, out.backlog_after], [1, 1, 0], "a drained backlog ends the chain after one batch");
 }
 // 3. never ran (no event at all): relays
 {
@@ -79,7 +95,8 @@ const jsonResponse = (status, body) => ({ ok: status < 400, status, json: async 
   eq(out.skipped, "no SVC_QNFO_PDF binding", "no binding: skipped");
   eq(writes.length, 0, "no ledger row before the binding exists");
 }
-eq(PDF_RELAY_QUIET_MIN, 25, "quiet window is 25 minutes (two cron ticks and a half)");
+eq(PDF_RELAY_QUIET_MIN, 15, "quiet window is 15 minutes: shorter than the 20-minute tick, so every tick relays while the cron is silent (PDF-RELAY-CADENCE-1)");
+eq([PDF_RELAY_MAX_BATCHES, PDF_RELAY_BUDGET_MS], [3, 90000], "up to three 90-second batches a tick");
 
 console.log(`pdf-relay.test: ${passed} passed, ${failed} failed`);
 process.exit(failed ? 1 : 0);
