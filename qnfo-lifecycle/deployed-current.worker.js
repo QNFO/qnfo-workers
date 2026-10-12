@@ -1,4 +1,4 @@
-var VERSION = "1.10.1-doi-scrub"; /* 1.10.0-spare-domains SPARE-DOMAINS-1 (agent_issues 2077, pillar reach): twelve spare-domain hostnames (ipatent.me, qwav.net, qwav.uk, qwave.tech, q-wave.tech, empoweringchange.today and their www) answer 301 to their canonical site (ipatent.qnfo.org, qwav.org, qnfo.org), path and query kept. 1.9.1-retired-hosts RETIRED-HOSTS-1: twelve retired qnfo.org hostnames answer 410 Gone (noindex) instead of 522 via Workers routes on this worker (agent_issues 2010). 1.9.0-calendar-fold CALENDAR-FOLD-2 (2026-10-06, T3.10, agent_issues 2010, pillar cost, OWNER-STANDING-GRANT-1): calendar-api (ICS publish, notes intake, event feedback, owner questions) runs here as the member calendarApiFoldMod on the hourly tick, awaited; its feedback-link key is HMAC-derived from this worker's CF_API_TOKEN by the fold kit (CAL_KEY_SEED), never copied or minted; public /calendar/health, /calendar/e/<id> (GET page, POST answer) and /calendar/events.ics; binders personal-api, qnfo-intent-orchestrator and radar-hub reach it with props.member (FOLD-KIT-1). Was 1.8.1-one-worker-count. */ // 1.8.1 ONE-WORKER-COUNT-1 (2026-10-06, pillar core, transformation lever T5.10): runMetricFreshness no longer writes metric_registry.worker_count; qnfo-fleet-control 0.4.137 writes it from the live scripts census beside fleet_budget.workers (COUNT(service_registry) counted retired rows too, 32 against 31 on 2026-10-06). 1.8.0 BACKLOG-FOLD-1 (#1756, pillar cost): qnfo-backlog-exec runs here as a member (backlogMod) on the 02:00 tick; GET /backlog/health; qnfo-ops reaches its drain over the BACKLOG binding (props.member). qnfo-archive (retired: its KG seed got HTTP 401 on every batch) leaves runPing. 1.7.3 LIFECYCLE-PING-1042-1 (#1994): wrangler.toml sets global_fetch_strictly_public, so runPing and runSync reach *.q08.workers.dev (150 PING FAIL HTTP 404 rows were Cloudflare error 1042). 1.7.2 METRIC-CADENCE-UNITS-1 + METRIC-UNMEASURED-CLASS-1 (#1865): "*/3h" and "2h" cadences parse with their unit; never-measured UNMEASURED/n/a metrics are their own class. 1.7.0 CRON-SINGLE-TRIGGER-1 (#1785): one hourly trigger, CRON_TABLE in code. Worker Contract v1 VERSION constant (read by version-bump-guard / drift checks)
+var VERSION = "1.11.0-noz-scrub"; /* 1.11.0-noz-scrub NOZ-SCRUB-LOOP-1 (2026-10-12, agent_issues 2273 and 2278, pillar research): a new hourly step cleans the stored living-paper.papers rows that still name the dead deposit registrar or carry its DOIs (up to 60 rows, 6 MB or 20 s a tick; line-local scrub; DOI/URL columns of the registrar set NULL; old value of every changed field kept first in living-paper.papers_bak_nozdoi; idempotent, residual rows marked and not retried; GET /noz-scrub/status; ledger cloud_ops_events job noz-scrub). Was 1.10.1-doi-scrub. 1.10.0-spare-domains SPARE-DOMAINS-1 (agent_issues 2077, pillar reach): twelve spare-domain hostnames (ipatent.me, qwav.net, qwav.uk, qwave.tech, q-wave.tech, empoweringchange.today and their www) answer 301 to their canonical site (ipatent.qnfo.org, qwav.org, qnfo.org), path and query kept. 1.9.1-retired-hosts RETIRED-HOSTS-1: twelve retired qnfo.org hostnames answer 410 Gone (noindex) instead of 522 via Workers routes on this worker (agent_issues 2010). 1.9.0-calendar-fold CALENDAR-FOLD-2 (2026-10-06, T3.10, agent_issues 2010, pillar cost, OWNER-STANDING-GRANT-1): calendar-api (ICS publish, notes intake, event feedback, owner questions) runs here as the member calendarApiFoldMod on the hourly tick, awaited; its feedback-link key is HMAC-derived from this worker's CF_API_TOKEN by the fold kit (CAL_KEY_SEED), never copied or minted; public /calendar/health, /calendar/e/<id> (GET page, POST answer) and /calendar/events.ics; binders personal-api, qnfo-intent-orchestrator and radar-hub reach it with props.member (FOLD-KIT-1). Was 1.8.1-one-worker-count. */ // 1.8.1 ONE-WORKER-COUNT-1 (2026-10-06, pillar core, transformation lever T5.10): runMetricFreshness no longer writes metric_registry.worker_count; qnfo-fleet-control 0.4.137 writes it from the live scripts census beside fleet_budget.workers (COUNT(service_registry) counted retired rows too, 32 against 31 on 2026-10-06). 1.8.0 BACKLOG-FOLD-1 (#1756, pillar cost): qnfo-backlog-exec runs here as a member (backlogMod) on the 02:00 tick; GET /backlog/health; qnfo-ops reaches its drain over the BACKLOG binding (props.member). qnfo-archive (retired: its KG seed got HTTP 401 on every batch) leaves runPing. 1.7.3 LIFECYCLE-PING-1042-1 (#1994): wrangler.toml sets global_fetch_strictly_public, so runPing and runSync reach *.q08.workers.dev (150 PING FAIL HTTP 404 rows were Cloudflare error 1042). 1.7.2 METRIC-CADENCE-UNITS-1 + METRIC-UNMEASURED-CLASS-1 (#1865): "*/3h" and "2h" cadences parse with their unit; never-measured UNMEASURED/n/a metrics are their own class. 1.7.0 CRON-SINGLE-TRIGGER-1 (#1785): one hourly trigger, CRON_TABLE in code. Worker Contract v1 VERSION constant (read by version-bump-guard / drift checks)
 const QNFO_VERSION = VERSION;
 var __defProp = Object.defineProperty;
 var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
@@ -2388,7 +2388,217 @@ function withRetiredHosts(inner) {
 }
 var __retired_hosts_default = withRetiredHosts(__fk_calendarApi_default);
 // ---- RETIRED-HOSTS-1:END ----
+// ---- NOZ-SCRUB-LOOP-1:BEGIN (qnfo-lifecycle 1.11.0, 2026-10-12, pillar research; agent_issues 2273, 2278) ----
+// Owner directive 2026-10-10 (NOZ-DOI-1): the Zenodo account is blocked and every 10.5281/zenodo.* DOI is dead, so no
+// paper row may name the registrar or carry one of its DOIs. Read on 2026-10-12: 877 living-paper.papers rows still did
+// (621 in title, abstract or body; 509 published by the outcome probe of 2273). The gateway already cleans text at emit
+// time (qnfo-gateway retiredLines); this loop cleans the stored rows themselves, so every other reader is clean too.
+// Each hourly tick takes up to NOZ_BATCH rows (and at most NOZ_BYTES of text, NOZ_MS of wall time) that still match
+// NOZ_MATCH_SQL, writes the old value of every field it changes to papers_bak_nozdoi (one row per field, the first copy
+// is kept on a re-run), then updates the row in the same D1 batch. Text fields go through nozLineScrub, the line-local
+// scrubber of qnfo-fleet-control NOZ-DOI-1 (only a line that names the registrar is touched, so code, math and
+// spacing elsewhere are byte-identical), extended for list mentions ("arXiv, Zenodo", "CERN's Zenodo and"). DOI and URL
+// columns that point at the registrar are set NULL; body_html (no reader in the fleet) is set NULL when it names it.
+// A title that scrubs to nothing (the "[Zenodo] 10.5281/..." placeholder rows) takes the body's first heading, else
+// "Untitled record". A row that still matches after its update is marked (field "__residual") and not retried, so the
+// loop cannot spin. Rollback: UPDATE papers SET <field> = (SELECT old_value FROM papers_bak_nozdoi b WHERE
+// b.src_rowid = papers.rowid AND b.field = '<field>') WHERE rowid IN (SELECT src_rowid FROM papers_bak_nozdoi WHERE
+// field = '<field>'). GET /noz-scrub/status reports what is left. Tick ledger: qnfo-audit cloud_ops_events job noz-scrub.
+var NOZ_BATCH = 60;
+var NOZ_BYTES = 6e6;
+var NOZ_MS = 20000;
+var NOZ_RE_ID = "10\\.5281\\/zenodo(?:[.,]?\\d+)?";
+var NOZ_RE_URLID = "(?:https?:\\/\\/)?(?:dx\\.)?doi\\.org\\/" + NOZ_RE_ID;
+var NOZ_RE_URL = "(?:https?:\\/\\/)?(?:(?:dx\\.)?doi\\.org\\/" + NOZ_RE_ID + "|(?:www\\.|sandbox\\.)?zenodo\\.org[^\\s)\\]>\"']*)";
+var NOZ_RE_LABEL = "(?:\\*{0,2}(?:DOI|doi)\\s*:?\\s*\\*{0,2}\\s*)?";
+var NOZ_WHOLE = [
+  new RegExp("^[ \\t]*(?:[-*] )?(?:\\*\\*)?DOI(?:\\*\\*)?\\s*:?(?:\\*\\*)?\\s*(?:\\[?`?" + NOZ_RE_ID + "`?\\]?(?:\\(" + NOZ_RE_URLID + "\\))?|<a [^>]*" + NOZ_RE_ID + "[^>]*>[^<]*<\\/a>)\\s*$", "i"),
+  new RegExp("^[ \\t]*(?:<[^>]*>\\s*)*<strong>DOI:?<\\/strong>.*" + NOZ_RE_ID + ".*$", "i"),
+  new RegExp("^[ \\t]*(?:doi|zenodo_doi|zenodo_url|zenodo|concept_doi|related_doi)\\s*:\\s*[\"']?(?:https?:\\/\\/[^\\s\"']*)?(?:" + NOZ_RE_ID + ")?[\"']?\\s*$", "i"),
+  /^[ \t]*[-*] Zenodo(?: \(DOI\))?:.*$/i,
+  new RegExp("^[ \\t]*<td[^>]*>\\s*<code>\\s*\\[?(?:DOI:?\\s*)?" + NOZ_RE_ID + "\\]?\\s*<\\/code>\\s*<\\/td>\\s*$", "i"),
+  new RegExp("^[ \\t]*\\[?" + NOZ_RE_ID + "\\]?(?:\\(" + NOZ_RE_URLID + "\\))?[.,;]?\\s*$", "i"),
+  new RegExp("^[ \\t]*\\|\\s*\\**(?:DOI|Zenodo)\\**:?\\s*\\|\\s*\\[?`?(?:" + NOZ_RE_URL + "|" + NOZ_RE_ID + ")`?\\]?(?:\\([^)]*\\))?\\s*\\|\\s*$", "i")
+];
+var NOZ_HAS = /zenodo|10\.5281\//i;
+// One line in, the cleaned line out, or null when the whole line goes.
+function nozLineScrub(l) {
+  if (!NOZ_HAS.test(l)) return l;
+  if (NOZ_WHOLE.some(function (re) { return re.test(l); })) return null;
+  var s = l, lead = (l.match(/^[ \t]*/) || [""])[0], startsWord = l.trim().charAt(0);
+  // "Companion to DOI <id>, ..." keeps its sentence: the identifier becomes a plain reference.
+  s = s.replace(new RegExp("\\b(to|of|see|cf\\.)\\s+(?:the\\s+)?(?:DOI|doi):?\\s*" + NOZ_RE_ID + "(?=\\s*[,;.)]|\\s+(?:and|which|for)\\b)", "g"), "$1 an earlier paper");
+  s = s.replace(new RegExp("\\[([^\\]]*)\\]\\(" + NOZ_RE_URL + "\\)", "g"), function (m, t) { return /^\s*(?:DOI:?\s*)?`?(?:10\.5281|https?:|doi\.org|zenodo)/i.test(t) || /^\s*DOI\b/i.test(t) ? "\u0001" : t; });
+  s = s.replace(new RegExp("<a [^>]*(?:" + NOZ_RE_ID + "|zenodo\\.org)[^>]*>([^<]*)<\\/a>", "gi"), function (m, t) { return /10\.5281|zenodo|DOI/i.test(t) ? "\u0001" : t; });
+  s = s.replace(new RegExp(NOZ_RE_LABEL + "`?(?:" + NOZ_RE_URL + "|" + NOZ_RE_ID + ")`?", "gi"), "\u0001");
+  for (var k = 0; k < 3; k++) {
+    s = s.replace(/[(\[]\s*\*{0,2}\s*(?:DOI:?\s*)?\*{0,2}\s*\u0001\s*\*{0,2}\s*[)\]]/g, "\u0001");
+    s = s.replace(/(?:\*{0,2}\b(?:DOI|doi)\b\s*:?\*{0,2}\s*)+\u0001/g, "\u0001");
+    s = s.replace(/\b(?:concept|version|record)\s*:?\s*\u0001/gi, "\u0001");
+    s = s.replace(/\u0001\s*[;,]\s*\u0001/g, "\u0001");
+    s = s.replace(/(?:\b(?:at|via|under)\s+)?\bDOIs\s*:?\s*\u0001/g, "\u0001");
+    s = s.replace(/[ \t]+\|[ \t]*\u0001(?=[ \t]*[.*])/g, "\u0001");
+  }
+  s = s.replace(/\s*(?:—|--|-|;|,)\s*\u0001\s*(?=[)\]])/g, "\u0001");
+  s = s.replace(/[ \t]*\u0001+/g, "");
+  // Mentions in a list of venues or services: drop the registrar and keep the list.
+  s = s.replace(/\(\s*\*?Zenodo\*?\s*,\s*/g, "(").replace(/,\s*\*?Zenodo\*?(?=\s*[,)|\]])/g, "");
+  s = s.replace(/\b(?:deposited|archived|published|hosted|available) (?:on|to|at|in|via) Zenodo (?:and|,)\s+/g, "");
+  s = s.replace(/\b(like|as|including|both)\s+(?:CERN['’]s\s+)?\*?Zenodo\*?\s+(?:and|or)(?:\s+|$)/g, "$1 ").replace(/\bCERN['’]s\s+\*?Zenodo\*?\s+(?:and|or)(?:\s+|$)/g, "").replace(/,?\s+(?:and|or)\s+(?:CERN['’]s\s+)?\*?Zenodo\*?(?=[\s.,;)]|$)/g, "");
+  s = s.replace(/\b([Aa]n?|[Tt]he|[Tt]his|[Tt]hat|[Ii]ts|[Oo]ur|[Mm]y)\s+Zenodo\s+(document|preprint|paper|record|deposit|version|report|copy|release|page|entry|upload)/g, function (m, a, n) { return (/^an$/i.test(a) ? (a[0] === "A" ? "A" : "a") : a) + " " + n; });
+  s = s.replace(/([.*_)])\s+\*?Zenodo\*?(?:,\s*\d{4})?\.(?=[\s.]|$)/g, "$1").replace(/\s*·\s*\|/g, " |");
+  s = s.replace(/[.,]\s*\*?Zenodo\*?(?:,\s*\(?\d{4}\)?)?(?=[.,;\s]|$)/g, "");
+  s = s.replace(/[”"’]\s*\*?Zenodo\*?(?:,\s*\(?\d{4}\)?)?/g, function (m) { return m[0]; });
+  s = s.replace(/\b(?:published |deposited |archived |hosted |available )?(?:on|to|at|in|via|through) Zenodo(?: with (?:registered )?DOIs?)?(?: at\b)?/gi, "");
+  s = s.replace(/\b(?:single-authored )?Zenodo (?:deposits?|records?)\b/gi, "publications").replace(/\bZenodo-registered\b/gi, "registered").replace(/\bZenodo DOIs?\b/g, "DOIs");
+  s = s.replace(/\s*DOI:?\s*<code>\s*<\/code>/g, "").replace(/\s*<code>\s*<\/code>/g, "").replace(/<p>\s*<strong>DOI:?<\/strong>\s*<\/p>/g, "").replace(/<strong>DOI:?<\/strong>\s*(?=<\/|$)/g, "").replace(/\s*\bDOI:?\s*$/g, "");
+  s = s.replace(/\*\*DOI:?\*\*\s*(?=\*\*)/g, "").replace(/\*\*DOI\*\*:?\s*(?=\*\*|$)/g, "");
+  if (/zenodo/i.test(s)) {
+    var m = s.match(/^(\s*(?:[-*+]|\d+[.)]|\[\d+\])?\s*(?:<[^>]+>)*)([\s\S]*)$/);
+    var kept = m[2].split(/(?<=[.!?])\s+/).filter(function (p) { return !/zenodo/i.test(p); }).join(" ").replace(/\s+$/, "");
+    if (!/[A-Za-z0-9]/.test(kept)) return null;
+    s = m[1] + kept;
+  }
+  if (/\*\*\s*$/.test(s) && ((s.match(/\*/g) || []).length % 2) === 1) s = s.replace(/\*\*(\s*)$/, "*$1");
+  s = s.replace(/\(\s*[,;.]?\s*\)/g, "").replace(/\[\s*\]/g, "").replace(/,\s*([.)])/g, "$1").replace(/(\S)[ \t]+([.,;:)])/g, "$1$2").replace(/(\S)[ \t]{2,}(?=\S)/g, "$1 ").replace(/[ \t]+$/g, "").replace(/\.\.(?!\.)/g, ".");
+  s = s.replace(/\.\*\.$/, ".*").replace(/\|\s+\|/g, "| |");
+  s = s.replace(/([.!?])(["”’*]+)\.(?=\s|$)/g, "$1$2").replace(/^(\s*\[\d+\])\.\s/, "$1 ").replace(/(\*\*[^*\s][^*]*?)[ \t]+\*\*/g, "$1**");
+  // An identifier that opened the line leaves no stray separator or indentation behind; the line keeps its own indent.
+  s = s.replace(/,(["”’*]*)\.(?=\s|$)/g, ".$1").replace(/^[ \t]*/, "");
+  if (startsWord !== "|") s = s.replace(/^(?:[|.,;][ \t]*)+/, "");
+  else s = s.replace(/^(?:[.,;][ \t]*)+/, "");
+  s = lead + s;
+  return /[A-Za-z0-9]/.test(s) ? s : null;
+}
+// Whole text: line-local, so a line that does not name the registrar is returned byte-identical.
+function nozTextScrub(text) {
+  if (text == null) return text;
+  var t = String(text);
+  if (!NOZ_HAS.test(t)) return t;
+  var out = [], lines = t.split("\n");
+  for (var i = 0; i < lines.length; i++) {
+    var cr = /\r$/.test(lines[i]), r = nozLineScrub(cr ? lines[i].slice(0, -1) : lines[i]);
+    if (r !== null) out.push(cr ? r + "\r" : r);
+  }
+  return out.join("\n").replace(/\n{4,}/g, "\n\n\n");
+}
+function nozDeadId(v) { return v != null && /10\.5281\/|zenodo/i.test(String(v)); }
+function nozFirstHeading(md) {
+  var m = String(md || "").match(/^#{1,2}[ \t]+(.+?)[ \t#]*$/m);
+  return m ? m[1].replace(/\*\*/g, "").trim().slice(0, 300) : "";
+}
+// Pure: a papers row in, { changes: {field: newValue}, residual: [fields] } out. A field absent from changes is untouched.
+function nozRowScrub(row) {
+  var ch = {};
+  ["body_md", "abstract", "references"].forEach(function (f) {
+    if (row[f] == null || !NOZ_HAS.test(String(row[f]))) return;
+    var v = nozTextScrub(row[f]);
+    if (f !== "body_md" && v != null && !/[A-Za-z0-9]/.test(v)) v = null;
+    if (v !== row[f]) ch[f] = v;
+  });
+  if (row.title != null && /zenodo/i.test(String(row.title))) {
+    var t = (nozTextScrub(String(row.title).replace(/\[\s*zenodo\s*\]/gi, "")) || "").replace(/\s+/g, " ").trim();
+    if (!/[A-Za-z]{2}/.test(t)) t = nozFirstHeading(ch.body_md !== undefined ? ch.body_md : row.body_md);
+    if (!/[A-Za-z]{2}/.test(t) || /zenodo/i.test(t)) t = "Untitled record";
+    ch.title = t;
+  }
+  ["doi", "zenodo_doi", "zenodo_url", "pdf_url", "html_url"].forEach(function (f) {
+    if (row[f] == null || row[f] === "") return;
+    if (f === "zenodo_doi" || f === "zenodo_url" || nozDeadId(row[f])) ch[f] = null;
+  });
+  if (row.body_html != null && /zenodo/i.test(String(row.body_html))) ch.body_html = null;
+  var after = Object.assign({}, row, ch), residual = [];
+  ["title", "abstract", "body_md", "body_html", "references", "pdf_url", "html_url"].forEach(function (f) { if (after[f] != null && /zenodo/i.test(String(after[f]))) residual.push(f); });
+  if (nozDeadId(after.doi)) residual.push("doi");
+  return { changes: ch, residual: residual };
+}
+var NOZ_FIELDS = ["title", "abstract", "body_md", "body_html", "references", "doi", "zenodo_doi", "zenodo_url", "pdf_url", "html_url"];
+var NOZ_MATCH_SQL = "(instr(lower(COALESCE(body_md,'')),'zenodo') > 0 OR instr(lower(COALESCE(abstract,'')),'zenodo') > 0 OR instr(lower(COALESCE(title,'')),'zenodo') > 0"
+  + " OR instr(lower(COALESCE(body_html,'')),'zenodo') > 0 OR instr(lower(COALESCE(\"references\",'')),'zenodo') > 0 OR instr(lower(COALESCE(pdf_url,'')||COALESCE(html_url,'')),'zenodo') > 0"
+  + " OR lower(COALESCE(doi,'')) LIKE '%10.5281/%' OR instr(lower(COALESCE(doi,'')),'zenodo') > 0 OR COALESCE(zenodo_doi,'') <> '' OR COALESCE(zenodo_url,'') <> '')";
+var NOZ_BAK_DDL = "CREATE TABLE IF NOT EXISTS papers_bak_nozdoi (src_rowid INTEGER NOT NULL, identifier TEXT, slug TEXT, field TEXT NOT NULL, old_value TEXT, backed_up_at TEXT NOT NULL, worker_version TEXT, UNIQUE (src_rowid, field))";
+function nozCol(f) { return f === "references" ? "\"references\"" : f; }
+async function nozScrubTick(env, opts) {
+  var db = env.LIVING_PAPER, o = opts || {}, t0 = Date.now();
+  var out = { at: new Date().toISOString(), version: typeof QNFO_VERSION === "string" ? QNFO_VERSION : "", selected: 0, updated: 0, fields: 0, residual: 0, bytes: 0, errors: [] };
+  if (!db) { out.errors.push("no LIVING_PAPER binding"); return out; }
+  var batch = o.batch || NOZ_BATCH, maxBytes = o.bytes || NOZ_BYTES, maxMs = o.ms || NOZ_MS;
+  await db.prepare(NOZ_BAK_DDL).run();
+  var ids = await db.prepare("SELECT rowid AS rid, COALESCE(length(body_md),0) + COALESCE(length(body_html),0) AS sz FROM papers WHERE " + NOZ_MATCH_SQL
+    + " AND rowid NOT IN (SELECT src_rowid FROM papers_bak_nozdoi WHERE field = '__residual') ORDER BY CASE WHEN status = 'published' THEN 0 ELSE 1 END, rowid LIMIT ?1").bind(batch).all();
+  var rows = (ids && ids.results) || [];
+  out.selected = rows.length;
+  for (var i = 0; i < rows.length; i++) {
+    if (Date.now() - t0 > maxMs || (out.bytes > 0 && out.bytes + Number(rows[i].sz || 0) > maxBytes)) break;
+    try {
+      var row = await db.prepare("SELECT rowid AS rid, identifier, slug, " + NOZ_FIELDS.map(nozCol).join(", ") + " FROM papers WHERE rowid = ?1").bind(rows[i].rid).first();
+      if (!row) continue;
+      out.bytes += Number(rows[i].sz || 0);
+      var r = nozRowScrub(row), keys = Object.keys(r.changes), now = new Date().toISOString(), stmts = [];
+      for (var k = 0; k < keys.length; k++) {
+        stmts.push(db.prepare("INSERT OR IGNORE INTO papers_bak_nozdoi (src_rowid, identifier, slug, field, old_value, backed_up_at, worker_version) VALUES (?1,?2,?3,?4,?5,?6,?7)")
+          .bind(row.rid, row.identifier, row.slug, keys[k], row[keys[k]] == null ? null : String(row[keys[k]]), now, out.version));
+      }
+      if (keys.length) {
+        var up = db.prepare("UPDATE papers SET " + keys.map(function (f, j) { return nozCol(f) + " = ?" + (j + 2); }).join(", ") + ", updated_at = datetime('now') WHERE rowid = ?1");
+        stmts.push(up.bind.apply(up, [row.rid].concat(keys.map(function (f) { return r.changes[f]; }))));
+      }
+      if (r.residual.length || !keys.length) {
+        stmts.push(db.prepare("INSERT OR IGNORE INTO papers_bak_nozdoi (src_rowid, identifier, slug, field, old_value, backed_up_at, worker_version) VALUES (?1,?2,?3,'__residual',?4,?5,?6)")
+          .bind(row.rid, row.identifier, row.slug, (r.residual.length ? r.residual : ["no-change"]).join(","), now, out.version));
+        out.residual++;
+      }
+      await db.batch(stmts);
+      if (keys.length) { out.updated++; out.fields += keys.length; }
+    } catch (e) {
+      out.errors.push(String(rows[i].rid) + ": " + String(e && e.message || e).slice(0, 160));
+    }
+  }
+  out.ms = Date.now() - t0;
+  return out;
+}
+async function nozScrubStatus(env) {
+  var db = env.LIVING_PAPER;
+  if (!db) return { error: "no LIVING_PAPER binding" };
+  await db.prepare(NOZ_BAK_DDL).run();
+  var a = await db.prepare("SELECT COUNT(*) AS n, COALESCE(SUM(status = 'published'), 0) AS published FROM papers WHERE " + NOZ_MATCH_SQL).first();
+  var b = await db.prepare("SELECT COUNT(DISTINCT src_rowid) AS rows_scrubbed, COALESCE(SUM(field = '__residual'), 0) AS residual, MAX(backed_up_at) AS last FROM papers_bak_nozdoi").first();
+  return { marker: "NOZ-SCRUB-LOOP-1", version: typeof QNFO_VERSION === "string" ? QNFO_VERSION : "", remaining: a ? a.n : null, remaining_published: a ? a.published : null, rows_scrubbed: b ? b.rows_scrubbed : null, residual: b ? b.residual : null, last_backup: b ? b.last : null, batch: NOZ_BATCH, cadence: "hourly (0 * * * *)" };
+}
+function withNozScrub(inner) {
+  var out = Object.assign({}, inner, {
+    async fetch(request, env, ctx) {
+      var u = new URL(request.url);
+      if (u.pathname === "/noz-scrub/status" && request.method === "GET") {
+        var st;
+        try { st = await nozScrubStatus(env); } catch (e) { st = { error: String(e && e.message || e).slice(0, 200) }; }
+        return new Response(JSON.stringify(st), { status: st.error ? 500 : 200, headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" } });
+      }
+      return inner.fetch(request, env, ctx);
+    },
+    async scheduled(event, env, ctx) {
+      var first = null;
+      try { await inner.scheduled(event, env, ctx); } catch (e) { first = e; }
+      try {
+        var r = await nozScrubTick(env);
+        console.log("[qnfo-lifecycle] noz-scrub:", JSON.stringify(r));
+        if ((r.selected || r.errors.length) && env.QNFO_AUDIT) {
+          await env.QNFO_AUDIT.prepare("INSERT INTO cloud_ops_events (id, ts, kind, text, meta, job, status) VALUES (?1,?2,'job-run',?3,?4,'noz-scrub',?5)")
+            .bind("jr-noz-scrub-" + Date.now().toString(36), r.at, "NOZ-SCRUB-LOOP-1: " + r.updated + " of " + r.selected + " papers rows scrubbed (" + r.fields + " fields, " + r.residual + " residual)", JSON.stringify(r).slice(0, 800), r.errors.length ? "error" : "ok").run();
+        }
+      } catch (e) {
+        console.error("[qnfo-lifecycle] noz-scrub error:", String(e && e.message || e));
+      }
+      if (first) throw first;
+    }
+  });
+  ["__foldHost", "__foldMember"].forEach(function (k) { if (inner[k] !== undefined) Object.defineProperty(out, k, { value: inner[k], enumerable: false }); });
+  Object.defineProperty(out, "__noz", { value: { line: nozLineScrub, text: nozTextScrub, row: nozRowScrub, tick: nozScrubTick, status: nozScrubStatus, matchSql: NOZ_MATCH_SQL }, enumerable: false });
+  return out;
+}
+var __noz_scrub_default = withNozScrub(__retired_hosts_default);
+// ---- NOZ-SCRUB-LOOP-1:END ----
 export {
-  __retired_hosts_default as default
+  __noz_scrub_default as default
 };
 //# sourceMappingURL=worker.js.map
