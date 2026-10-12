@@ -137,6 +137,17 @@ await N.tick(env, { batch: 10 });
 ok(db.prepare("SELECT old_value FROM papers_bak_nozdoi WHERE identifier = 'id-0' AND field = 'body_md'").get().old_value === originals["id-0"][6], "a re-run keeps the first backup copy");
 ok(remaining() === 0, "the re-run cleans the rows again", remaining());
 
+// An old value above the D1 row limit is backed up in parts and restores exactly.
+const bigHtml = "<p>" + "x".repeat(950000) + " see Zenodo</p>";
+db.prepare("INSERT INTO papers (identifier, title, body_html, status, slug) VALUES ('id-big', 'Big', ?, 'published', 'big')").run(bigHtml);
+await N.tick(env, { batch: 10 });
+const parts = db.prepare("SELECT field, length(old_value) AS n FROM papers_bak_nozdoi WHERE identifier = 'id-big' ORDER BY field").all();
+ok(parts.length === 3 && parts.every((p) => /^body_html#\d$/.test(p.field) && p.n <= 400000) && db.prepare("SELECT body_html FROM papers WHERE identifier = 'id-big'").get().body_html === null, "a 950k body_html is cleared and backed up in three parts", parts);
+const joined = db.prepare("SELECT old_value FROM papers_bak_nozdoi WHERE identifier = 'id-big' AND field LIKE 'body_html#%' ORDER BY CAST(substr(field, 11) AS INTEGER)").all().map((r) => r.old_value).join("");
+ok(joined === bigHtml, "the parts concatenate to the original value");
+db.prepare("DELETE FROM papers WHERE identifier = 'id-big'").run();
+db.prepare("DELETE FROM papers_bak_nozdoi WHERE identifier = 'id-big'").run();
+
 // The status route answers JSON with what is left.
 const sr = await W.fetch(new Request("https://qnfo-lifecycle.q08.workers.dev/noz-scrub/status"), env, { waitUntil() {} });
 const sj = await sr.json();

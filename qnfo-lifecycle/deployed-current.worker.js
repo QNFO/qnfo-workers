@@ -2403,10 +2403,12 @@ var __retired_hosts_default = withRetiredHosts(__fk_calendarApi_default);
 // "Untitled record". A row that still matches after its update is marked (field "__residual") and not retried, so the
 // loop cannot spin. Rollback: UPDATE papers SET <field> = (SELECT old_value FROM papers_bak_nozdoi b WHERE
 // b.src_rowid = papers.rowid AND b.field = '<field>') WHERE rowid IN (SELECT src_rowid FROM papers_bak_nozdoi WHERE
-// field = '<field>'). GET /noz-scrub/status reports what is left. Tick ledger: qnfo-audit cloud_ops_events job noz-scrub.
+// field = '<field>'); an old value above NOZ_CHUNK characters (D1 rows hold 2 MB) is kept as parts '<field>#0', '#1', ...
+// and is restored by concatenating them in part order. GET /noz-scrub/status reports what is left. Tick ledger: qnfo-audit cloud_ops_events job noz-scrub.
 var NOZ_BATCH = 60;
 var NOZ_BYTES = 6e6;
 var NOZ_MS = 20000;
+var NOZ_CHUNK = 400000;
 var NOZ_RE_ID = "10\\.5281\\/zenodo(?:[.,]?\\d+)?";
 var NOZ_RE_URLID = "(?:https?:\\/\\/)?(?:dx\\.)?doi\\.org\\/" + NOZ_RE_ID;
 var NOZ_RE_URL = "(?:https?:\\/\\/)?(?:(?:dx\\.)?doi\\.org\\/" + NOZ_RE_ID + "|(?:www\\.|sandbox\\.)?zenodo\\.org[^\\s)\\]>\"']*)";
@@ -2536,8 +2538,18 @@ async function nozScrubTick(env, opts) {
       out.bytes += Number(rows[i].sz || 0);
       var r = nozRowScrub(row), keys = Object.keys(r.changes), now = new Date().toISOString(), stmts = [];
       for (var k = 0; k < keys.length; k++) {
-        stmts.push(db.prepare("INSERT OR IGNORE INTO papers_bak_nozdoi (src_rowid, identifier, slug, field, old_value, backed_up_at, worker_version) VALUES (?1,?2,?3,?4,?5,?6,?7)")
-          .bind(row.rid, row.identifier, row.slug, keys[k], row[keys[k]] == null ? null : String(row[keys[k]]), now, out.version));
+        var old = row[keys[k]] == null ? null : String(row[keys[k]]);
+        // A D1 row holds at most 2 MB, so an old value above NOZ_CHUNK characters is kept as parts "<field>#0", "#1", ...
+        // (rollback concatenates them in part order); everything else is one row named after the field.
+        if (old != null && old.length > NOZ_CHUNK) {
+          for (var c = 0; c * NOZ_CHUNK < old.length; c++) {
+            stmts.push(db.prepare("INSERT OR IGNORE INTO papers_bak_nozdoi (src_rowid, identifier, slug, field, old_value, backed_up_at, worker_version) VALUES (?1,?2,?3,?4,?5,?6,?7)")
+              .bind(row.rid, row.identifier, row.slug, keys[k] + "#" + c, old.slice(c * NOZ_CHUNK, (c + 1) * NOZ_CHUNK), now, out.version));
+          }
+        } else {
+          stmts.push(db.prepare("INSERT OR IGNORE INTO papers_bak_nozdoi (src_rowid, identifier, slug, field, old_value, backed_up_at, worker_version) VALUES (?1,?2,?3,?4,?5,?6,?7)")
+            .bind(row.rid, row.identifier, row.slug, keys[k], old, now, out.version));
+        }
       }
       if (keys.length) {
         var up = db.prepare("UPDATE papers SET " + keys.map(function (f, j) { return nozCol(f) + " = ?" + (j + 2); }).join(", ") + ", updated_at = datetime('now') WHERE rowid = ?1");
