@@ -1,237 +1,12 @@
 {
  "ok": true,
  "marker": "REMEDIATION-CONSUMER-1",
- "verifier": "remediation-consumer@057094264b4c",
- "due": 28,
- "pass": 2,
- "fail": 26,
+ "verifier": "remediation-consumer@237a722df6b0",
+ "due": 0,
+ "pass": 0,
+ "fail": 0,
  "skipped": 0,
- "contracts": [
-  {
-   "class": "issue-1898",
-   "issue_id": 1898,
-   "verdict": "fail",
-   "expected": "ok",
-   "observed": "pending: grant-followup has not read Gmail in 24h (\"gmail\":\"no-credential: GMAIL_PASS unset\"},\"gmail_)",
-   "written": true
-  },
-  {
-   "class": "issue-2014",
-   "issue_id": 2014,
-   "verdict": "fail",
-   "expected": "ok",
-   "observed": "pending: metric ops_tool_budget_bail_7d not measured yet (migrations/2026-10-12-ops-budget-bail-metric.sql, PR 942)",
-   "written": true
-  },
-  {
-   "class": "issue-2033",
-   "issue_id": 2033,
-   "verdict": "fail",
-   "expected": "1",
-   "observed": "0",
-   "written": true
-  },
-  {
-   "class": "issue-2141",
-   "issue_id": 2141,
-   "verdict": "fail",
-   "expected": "1",
-   "observed": "0",
-   "written": true
-  },
-  {
-   "class": "belief-issues-probed-hourly",
-   "issue_id": null,
-   "verdict": "fail",
-   "expected": "1",
-   "observed": "0",
-   "written": true
-  },
-  {
-   "class": "issue-2286",
-   "issue_id": 2286,
-   "verdict": "fail",
-   "expected": "ok",
-   "observed": "pending: filed by q08-signal-engine, which owns it for 48h",
-   "written": true
-  },
-  {
-   "class": "issue-2193",
-   "issue_id": 2193,
-   "verdict": "fail",
-   "expected": "1",
-   "observed": "0",
-   "written": true
-  },
-  {
-   "class": "issue-2357",
-   "issue_id": 2357,
-   "verdict": "fail",
-   "expected": "1",
-   "observed": "0",
-   "written": true
-  },
-  {
-   "class": "issue-2371",
-   "issue_id": 2371,
-   "verdict": "fail",
-   "expected": "ok",
-   "observed": "missing-marker:scripts/continuity_snapshot.py",
-   "written": true
-  },
-  {
-   "class": "issue-2249",
-   "issue_id": 2249,
-   "verdict": "fail",
-   "expected": "ok",
-   "observed": "status=404",
-   "written": true
-  },
-  {
-   "class": "issue-2372",
-   "issue_id": 2372,
-   "verdict": "fail",
-   "expected": "ok",
-   "observed": "missing-marker",
-   "written": true
-  },
-  {
-   "class": "issue-2052",
-   "issue_id": 2052,
-   "verdict": "fail",
-   "expected": "1",
-   "observed": "0",
-   "written": true
-  },
-  {
-   "class": "issue-2170",
-   "issue_id": 2170,
-   "verdict": "fail",
-   "expected": "1",
-   "observed": "0",
-   "written": true
-  },
-  {
-   "class": "issue-2211",
-   "issue_id": 2211,
-   "verdict": "fail",
-   "expected": "1",
-   "observed": "0",
-   "written": true
-  },
-  {
-   "class": "issue-2337",
-   "issue_id": 2337,
-   "verdict": "fail",
-   "expected": "1",
-   "observed": "0",
-   "written": true
-  },
-  {
-   "class": "issue-2206",
-   "issue_id": 2206,
-   "verdict": "fail",
-   "expected": "ok",
-   "observed": "pending: the row has not yet been re-run by qnfo-research-exec 0.13.0 (PR 990 re-arms it at merge)",
-   "written": true
-  },
-  {
-   "class": "issue-2207",
-   "issue_id": 2207,
-   "verdict": "fail",
-   "expected": "ok",
-   "observed": "pending: the row has not yet been re-run by qnfo-research-exec 0.13.0 (PR 990 re-arms it at merge)",
-   "written": true
-  },
-  {
-   "class": "issue-2252",
-   "issue_id": 2252,
-   "verdict": "fail",
-   "expected": "ok",
-   "observed": "pending: the row has not yet been re-run by qnfo-research-exec 0.13.0 (PR 990 re-arms it at merge)",
-   "written": true
-  },
-  {
-   "class": "issue-2262",
-   "issue_id": 2262,
-   "verdict": "fail",
-   "expected": "ok",
-   "observed": "pending: the row has not yet been re-run by qnfo-research-exec 0.13.0 (PR 990 re-arms it at merge)",
-   "written": true
-  },
-  {
-   "class": "issue-2292",
-   "issue_id": 2292,
-   "verdict": "fail",
-   "expected": "ok",
-   "observed": "pending: the row has not yet been re-run by qnfo-research-exec 0.13.0 (PR 990 re-arms it at merge)",
-   "written": true
-  },
-  {
-   "class": "issue-2301",
-   "issue_id": 2301,
-   "verdict": "fail",
-   "expected": "ok",
-   "observed": "missing-marker",
-   "written": true
-  },
-  {
-   "class": "issue-2269",
-   "issue_id": 2269,
-   "verdict": "fail",
-   "expected": "ok",
-   "observed": "missing-marker",
-   "written": true
-  },
-  {
-   "class": "research-terminal-a2033fc2",
-   "issue_id": 2358,
-   "verdict": "pass",
-   "expected": "parked+queue-moving",
-   "observed": "parked+queue-moving",
-   "written": true
-  },
-  {
-   "class": "issue-2358",
-   "issue_id": 2358,
-   "verdict": "pass",
-   "expected": "ok",
-   "observed": "ok",
-   "written": true
-  },
-  {
-   "class": "issue-1651",
-   "issue_id": 1651,
-   "verdict": "fail",
-   "expected": "tracked",
-   "observed": "stale",
-   "written": true
-  },
-  {
-   "class": "issue-2308",
-   "issue_id": 2308,
-   "verdict": "fail",
-   "expected": "ok",
-   "observed": "status=404",
-   "written": true
-  },
-  {
-   "class": "issue-2307",
-   "issue_id": 2307,
-   "verdict": "fail",
-   "expected": "ok",
-   "observed": "present-marker",
-   "written": true
-  },
-  {
-   "class": "issue-2354",
-   "issue_id": 2354,
-   "verdict": "fail",
-   "expected": "1",
-   "observed": "0",
-   "written": true
-  }
- ],
+ "contracts": [],
  "trusted_transports": [
   "binding-http",
   "cf-api",
@@ -255,14 +30,13 @@
   "http",
   "runner-https"
  ],
- "https": 6,
  "budget_exhausted": false,
  "runtime_verified_share_24h": 5.1,
  "host_census": {
   "skipped": "ran within 6h"
  },
- "spent_ms": 22963,
- "head": "057094264b4c9fbff081a4efbbf4495d869fd4c6",
+ "spent_ms": 3921,
+ "head": "237a722df6b0a50e6d76ffa51ade8edeb3d79cf8",
  "job_status": "success",
- "ts": "2026-10-12T08:50:58Z"
+ "ts": "2026-10-12T08:55:01Z"
 }
