@@ -1,4 +1,4 @@
--- PDF-BACKLOG-RELAY-1 (2026-10-12, agent_issues 2410, charter pillar reach; qnfo-pdf 1.3.0, qnfo-fleet-control 0.19.0). The */10 cron
+-- PDF-BACKLOG-RELAY-1 (2026-10-12, agent_issues 2410, charter pillar reach; qnfo-pdf 1.3.0, qnfo-fleet-control 0.19.1). The */10 cron
 -- written for qnfo-pdf by the canonical deploy (schedules PUT 200 at 12:02:36Z and 12:04:27Z) never invoked scheduled(): the account
 -- telemetry shows zero scheduled events for qnfo-pdf at 12:10, 12:20, 12:30 and 12:40Z while every other */10 worker (qnfo-cloud-ops,
 -- qnfo-code-orchestrator) fired, with identical settings (usage model, observability, placement) and 33 cron triggers in the account.
@@ -26,7 +26,7 @@ INSERT OR REPLACE INTO failure_modes (fm_key, failure_mode, root_cause, remediat
   'every loop that is a single cron on a single worker');
 
 INSERT INTO capability_ledger (capability, provenance, prerequisites, reliability, acquired_at, last_exercised_at, evidence)
-SELECT 'pdf-backlog-second-path', 'PDF-BACKLOG-RELAY-1 (qnfo-pdf 1.3.0 POST /backlog/tick, qnfo-fleet-control 0.19.0 pdfBacklogRelay, migrations/2026-10-12-33-pdf-backlog-relay.sql)',
+SELECT 'pdf-backlog-second-path', 'PDF-BACKLOG-RELAY-1 (qnfo-pdf 1.3.0 POST /backlog/tick, qnfo-fleet-control 0.19.1 pdfBacklogRelay, migrations/2026-10-12-33-pdf-backlog-relay.sql)',
        'SVC_QNFO_PDF service binding installed by the canonical deploy; qnfo-fleet-control */20 cron', 'first relayed batch writes cloud_ops_events pdf-backlog (source relay) and pdf-backlog-relay',
        strftime('%Y-%m-%dT%H:%M:%SZ', 'now'), NULL, 'the Scholar PDF backlog drains even when the qnfo-pdf cron does not fire'
 WHERE NOT EXISTS (SELECT 1 FROM capability_ledger WHERE capability = 'pdf-backlog-second-path');

@@ -93,7 +93,7 @@ props = { caller = "qnfo-fleet-control" }
 binding = "SVC_QNFO_INFRA"
 service = "qnfo-infra"
 
-# PDF-BACKLOG-RELAY-1 (0.19.0): the */20 tick relays qnfo-pdf POST /backlog/tick while its own cron is silent (SCHOLAR-PDF-ALL-1, #2410).
+# PDF-BACKLOG-RELAY-1 (0.19.1): the */20 tick relays qnfo-pdf POST /backlog/tick while its own cron is silent (SCHOLAR-PDF-ALL-1, #2410).
 [[services]]
 binding = "SVC_QNFO_PDF"
 service = "qnfo-pdf"
