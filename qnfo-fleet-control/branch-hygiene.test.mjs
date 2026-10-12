@@ -319,6 +319,18 @@ const scenario = () => ({
   eq([exp.hold, exp.expired], [false, true], "pure: a hold older than " + W.BH_HOLD_EXPIRE_H + "h expires with a logged release");
   eq(W.bhHoldDecide([cmt(1, "CYCLE-TIME-1: closed because the body says do not merge")], H, NOW).hold, false, "pure: the lane's own comments never count");
   eq(W.bhHoldDecide([], H, NOW), { hold: false, why: "no comments" }, "pure: no comments, no hold");
+  // MERGE-RUNNER-READS-HOLDS-1 (0.22.1): evMergePr itself refuses a held PR, so the code-task and evolve runners honour a HOLD
+  {
+    const seen = [];
+    const fake = { evApi: async (env, m, p) => { seen.push(m + " " + p); if (p === "/commits/hx") return { ok: true, status: 200, j: { commit: { committer: { date: new Date(Date.now() - 2 * 36e5).toISOString() } } } }; if (p.startsWith("/issues/90/comments")) return { ok: true, status: 200, j: [{ created_at: new Date(Date.now() - 36e5).toISOString(), body: "HOLD: duplicated gate block", user: { login: "rwnq8" } }] }; return { ok: true, status: 200, j: { sha: "m" } }; } };
+    const ctx = vm.createContext({ evApi: fake.evApi, __name: (f) => f, console, Date, Math, JSON, Number, String, Object, Array, RegExp, isNaN, encodeURIComponent, Promise, setTimeout, __export: null });
+    vm.runInContext(src.slice(src.indexOf("var BH_HOLD_COMMENT_RE"), src.indexOf("__name(bhReadHold")) + "\n" + grab("evMergePr") + "\nEV_MERGE_RETRY_WAIT_MS = 0;\n__export = { evMergePr };", ctx);
+    const mg = await ctx.__export.evMergePr({}, 90, "hx", "t", "m");
+    eq([mg.ok, mg.status, mg.held, seen.some((x) => x.startsWith("PUT"))], [false, 423, true, false], "a held PR is not merged by evMergePr (423, no PUT)");
+    seen.length = 0;
+    const mg2 = await ctx.__export.evMergePr({}, 90, "hx", "t", "m", { holdsRead: true });
+    eq([mg2.ok, seen.some((x) => x.startsWith("PUT /pulls/90/merge")), seen.some((x) => x.includes("/comments"))], [true, true, false], "holdsRead (the lane) skips the second read and merges");
+  }
   // a failed comment read is reported, never a hold
   const sc2 = { branches: [br("main", 0, true)], compare: {}, prs: { 67: mkpr(67, "h67") }, pulls: [{ number: 67, state: "open", updated_at: hAgo(3), head: prs[62].head && { ref: "claude/h67", sha: "h67", repo: R } }], files: { 67: docs }, checks: { h67: chk("h67") }, commentsStatus: 500 };
   const r2 = await run(sc2);
