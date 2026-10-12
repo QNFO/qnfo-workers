@@ -1,5 +1,5 @@
 -- COMPAT-EXPOSURE-1 (2026-10-12, pillar core), the D1 half of COMPAT-DATE-DECLARED-APPLY-1 (qnfo-ops 2.42.0).
--- Measured 2026-10-12 (GET /settings of all 28 live workers): 22 at compatibility date 2026-08-01, qnfo-ai-search at
+-- Measured 2026-10-12 (GET /settings of all 28 live workers): 21 at compatibility date 2026-08-01, qnfo-ai-search at
 -- 2026-07-09, qnfo-lifecycle and qnfo-memory-mcp at 2026-08-10, idea-hub and qnfo-pdf at 2026-09-01, qnfo-fleet-control at
 -- 2026-09-08. The canonical deploy re-sent the live date on every upload and never read wrangler.toml, so no date could
 -- advance; nothing measured how far behind the fleet was.
@@ -54,7 +54,7 @@ INSERT OR IGNORE INTO failure_modes (fm_key, failure_mode, root_cause, remediati
   'cfWorkerDeploy read compatibility_date from the live GET /settings and sent it back on every upload; the date in wrangler.toml was never parsed (the same inert-config class as the crons of 1337, the flags of COMPAT-FLAGS-DECLARED-APPLY-1 and the observability blocks of OBSERVABILITY-DECLARED-APPLY-1)',
   'COMPAT-DATE-DECLARED-APPLY-1 (qnfo-ops 2.42.0): /ops/deploy applies a later declared date that carries a compat-advance review line, verifies /health against the deployed VERSION and restores the previous date when it does not answer; the exposure table and workers_compat_date_behind measure the gap',
   'no worker whose wrangler.toml carries a reviewed later date stays unadvanced across snapshots 7 days apart', 'fm-compat-date-inert', '2026-10-12', NULL,
-  'a wrangler.toml declares a later compatibility_date than the live worker has', 'the fleet stays at the date each worker was created or last hand-deployed with, 22 of 28 at 2026-08-01', 'every live worker: runtime fixes and defaults behind a date never arrive');
+  'a wrangler.toml declares a later compatibility_date than the live worker has', 'the fleet stays at the date each worker was created or last hand-deployed with, 21 of 28 at 2026-08-01', 'every live worker: runtime fixes and defaults behind a date never arrive');
 
 INSERT OR IGNORE INTO remediation_contracts (class, issue_id, precondition, action, verify_probe, verify_transport, max_attempts, escalate_to, expected_cadence_h, status, module) VALUES
  ('fm-compat-date-inert', NULL, 'COMPAT-DATE-DECLARED-APPLY-1', 'failure-mode detector',
