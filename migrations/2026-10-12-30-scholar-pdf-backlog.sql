@@ -7,6 +7,9 @@
 --   capability_ledger row. No queue_sla row: the loop holds no items of its own (the backlog is derived from living-paper.papers), and its
 --   stall is the fm detector, which measures age, not count (QUEUE-SLA-1).
 -- spof-review: the cron's second path for the same outcome is the on-demand GET /pdf/<slug> render that already serves callers, and fm-pdf-backlog-stalled runs from the hourly remediation tick, not from the worker it watches.
+-- Re-touched 2026-10-12 12:10Z (migration_runs 119/120 error): control_registry.kind took 'audit' / 'loop', which its CHECK constraint refuses
+-- (hold, filter, pause, kill-switch, gate, cap, guard, lease); now 'guard'. Statements before the register row had applied; every statement is
+-- idempotent, so the re-run completes the file. CHECK-ENUM-LINT-1 in scripts/apply_migrations.py --check now refuses such a literal offline.
 -- APPLY-BY: ci
 -- DB: qnfo-audit
 -- Rollback: DELETE FROM metric_registry WHERE metric = 'scholar_pdf_backlog'; DELETE FROM analytics_metric_triggers WHERE metric_key = 'scholar_pdf_backlog'; DELETE FROM control_registry WHERE control = 'scholar-pdf-backlog-loop'; DELETE FROM failure_modes WHERE fm_key = 'pdf-backlog-stalled'; DELETE FROM remediation_contracts WHERE class = 'fm-pdf-backlog-stalled'; DELETE FROM capability_ledger WHERE capability = 'scholar-pdf-every-paper'
@@ -25,7 +28,7 @@ SELECT 'scholar_pdf_backlog', 'Scholar coverage: more than 50 public papers stil
 WHERE NOT EXISTS (SELECT 1 FROM analytics_metric_triggers WHERE metric_key = 'scholar_pdf_backlog');
 
 INSERT OR REPLACE INTO control_registry (control, location, kind, guards_against, critical_path, disposition, disposition_state, alternate_path, alternate_tested_at, evidence, issue_id, reviewed_at) VALUES
- ('scholar-pdf-backlog-loop', 'qnfo-pdf/worker.js scheduled() (cron */10, SCHOLAR-PDF-ALL-1)', 'loop',
+ ('scholar-pdf-backlog-loop', 'qnfo-pdf/worker.js scheduled() (cron */10, SCHOLAR-PDF-ALL-1)', 'guard',
   'a published paper page without citation_pdf_url, so Google Scholar indexes no full text for it', 0, 'keep', 'applied',
   'GET /pdf/<slug> on qnfo-pdf renders on demand (the pre-existing path); fm-pdf-backlog-stalled from the hourly remediation tick detects a stopped loop; a paper that failed 3 times in 24 h is skipped for the day so one bad body cannot hold the tick', '2026-10-12T12:30:00Z',
   'qnfo-pdf/pdf-backlog.test.mjs: newest-first selection, pdf_path writes, metric and run event, failure isolation, poison skip, stale refresh, oversize flag. Measured 2026-10-12: 472 published, 2 distributed and 3 external_preprint papers without a PDF.', 2410, strftime('%Y-%m-%dT%H:%M:%SZ', 'now'));
