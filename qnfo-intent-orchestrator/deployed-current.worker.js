@@ -5,7 +5,7 @@ var __name = (target, value) => __defProp(target, "name", { value, configurable:
 var __defProp2 = Object.defineProperty;
 var __name2 = /* @__PURE__ */ __name((target, value) => __defProp2(target, "name", { value, configurable: true }), "__name");
 var NL = String.fromCharCode(10);
-var VERSION = "1.3.10-routable-models"; /* 1.3.10 MODEL-ID-AUDIT-1 (2026-10-11): the classifier asked qnfo-ai for the bare id glm-5.2, which its MODELS table does not route (it fell back to deepseek-v4-flash while the stats recorded glm-5.2). It now asks glm-5.3-flash with deepseek-v4-flash as the second leg. */ /* 1.3.9 NO-TOPIC-HARDCODE-1 (owner directive 2026-10-10): the triage prompt names no program or field; cluster_key tags come from the tags already in research_candidates. */
+var VERSION = "1.4.0-activity-store"; /* 1.4.0 AUTOAUDIT-DEAD-CALLERS-1 (2026-10-12, agent_issues 2302, pillar personal): an activity intent is stored in this worker's own vector index and ends done or failed with the error logged (it called a retired worker through a removed binding and the empty catch dropped it); GET /personal/search serves the personal index to qnfo-tools-mcp. */ /* 1.3.10 MODEL-ID-AUDIT-1 (2026-10-11): the classifier asked qnfo-ai for the bare id glm-5.2, which its MODELS table does not route (it fell back to deepseek-v4-flash while the stats recorded glm-5.2). It now asks glm-5.3-flash with deepseek-v4-flash as the second leg. */ /* 1.3.9 NO-TOPIC-HARDCODE-1 (owner directive 2026-10-10): the triage prompt names no program or field; cluster_key tags come from the tags already in research_candidates. */
 var ROUTER = "https://qnfo-ai.q08.workers.dev";
 var AGENT_ORCH = "https://qnfo-agent-orchestrator.q08.workers.dev";
 var PROMOTE_THRESHOLD = 60;
@@ -133,8 +133,39 @@ async function storeNote(env, intent) {
       if (v) await env.VZ_R.upsert([{ id: "intent:" + intent.id, values: v, metadata: { doc: "note", kind: "intent", path: "intents/" + day + "/" + intent.id + ".md", text: clamp(text, 800), ts: intent.created_at } }]);
     }
   } catch (e) {
+    console.error(JSON.stringify({ at: "note-store", intent: intent.id, error: String(e && e.message || e).slice(0, 300) }));
   }
 }
+async function embedText(env, text) {
+  const resp = await env.AI.run("@cf/baai/bge-base-en-v1.5", { text: [clamp(text, 1e3)] });
+  return (resp && resp.data || []).find((x) => Array.isArray(x) && x.length === 768) || null;
+}
+__name(embedText, "embedText");
+async function storeActivity(env, intent, when) {
+  try {
+    const title = intent.summary || intent.desire.slice(0, 120);
+    const v = await embedText(env, title + NL + intent.desire);
+    if (!v) return { ok: false, error: "embedding returned no vector" };
+    const index = intent.domain === "personal" ? env.VZ_P : env.VZ_R;
+    if (!index) return { ok: false, error: "vector index binding missing" };
+    await index.upsert([{ id: "activity:" + intent.id, values: v, metadata: { doc: "activity", kind: "intent", path: "activities/" + when + "/" + intent.id + ".md", date: when, title: clamp(title, 200), category: intent.domain === "research" ? "research" : "other", text: clamp(intent.desire, 800), ts: intent.created_at } }]);
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: String(e && e.message || e).slice(0, 300) };
+  }
+}
+__name(storeActivity, "storeActivity");
+async function personalSearch(env, q, topK) {
+  const v = await embedText(env, q);
+  if (!v) throw new Error("embedding returned no vector");
+  const res = await env.VZ_P.query(v, { topK, returnMetadata: "all" });
+  const files = (res && res.matches || []).map((m) => {
+    const md = m.metadata || {};
+    return { path: md.path || m.id, bestScore: m.score, snippet: clamp(md.text || md.title || "", 400), doc: md.doc || null, ts: md.ts || null };
+  });
+  return { count: files.length, files };
+}
+__name(personalSearch, "personalSearch");
 __name(storeNote, "storeNote");
 __name2(storeNote, "storeNote");
 async function handleIntent(env, body, source, device) {
@@ -155,7 +186,7 @@ async function handleIntent(env, body, source, device) {
   if (!cls.summary) {
     cls.summary = clamp(desire.replace(/^calendar event:\s*/i, "").trim(), 120);
   }
-  const id = "int-" + Math.random().toString(16).slice(2, 10) + Date.now().toString(36);
+  const id = "int-" + crypto.randomUUID().replace(/-/g, "").slice(0, 8) + Date.now().toString(36);
   const now = (/* @__PURE__ */ new Date()).toISOString();
   const type = ["note", "task", "event", "email", "reminder", "research", "activity", "unknown"].includes(cls.type) ? cls.type : "note";
   const domain = ["research", "personal", "qwav", "general"].includes(cls.domain) ? cls.domain : "general";
@@ -177,17 +208,20 @@ async function handleIntent(env, body, source, device) {
     intent.status = "done";
   }
   if (type === "activity") {
-    try {
-      const when = cls.due || now.slice(0, 10);
-      await env.PLS.fetch("https://personal-life-search.q08.workers.dev/ingest", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", "X-Index-Token": env.INDEX_TOKEN },
-        body: JSON.stringify({ items: [{ doc: "activity", date: when, title: cls.summary || desire.slice(0, 120), category: domain === "research" ? "research" : "other", venue: "", notes: desire.slice(0, 500) }] })
-      });
+    // AUTOAUDIT-DEAD-CALLERS-1 (#2302): the activity goes into this worker's own vector indexes (the store the retired
+    // search worker fronted); the outcome is always recorded on the intent row, never swallowed.
+    const when = cls.due || now.slice(0, 10);
+    const act = await storeActivity(env, intent, when);
+    if (act.ok) {
       status = "done";
       intent.status = "done";
-      await env.D1.prepare("UPDATE intents SET processed_at=?1 WHERE id=?2").bind(now, id).run();
-    } catch (e) {
+      await env.D1.prepare("UPDATE intents SET status='done', processed_at=?1 WHERE id=?2").bind(now, id).run();
+    } else {
+      status = "failed";
+      intent.status = "failed";
+      intent.error = act.error;
+      console.error(JSON.stringify({ at: "activity-store", intent: id, error: act.error }));
+      await env.D1.prepare("UPDATE intents SET status='failed', processed_at=?1 WHERE id=?2").bind(now, id).run();
     }
   }
   return intent;
@@ -406,7 +440,7 @@ async function triageIntent(env, row) {
     }
     const score = scoreOf(t);
     if (score >= PROMOTE_THRESHOLD) {
-      const cid = "cand-" + Math.random().toString(16).slice(2, 10) + Date.now().toString(36);
+      const cid = "cand-" + crypto.randomUUID().replace(/-/g, "").slice(0, 8) + Date.now().toString(36);
       await env.D1.prepare("INSERT INTO research_candidates (id, cluster_key, question, merit, impact, novelty, feasibility, score, intent_ids, status, created_at) VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11)").bind(cid, t.cluster_key, t.question, t.merit, t.impact, t.novelty, t.feasibility, score, JSON.stringify([id]), "promoted", now).run();
       await env.D1.prepare("UPDATE intents SET status='triaged', processed_at=? WHERE id=?").bind(now, id).run();
       await storeIntentEmbed(env, row);
@@ -576,7 +610,7 @@ var worker_default = {
       if (ctx && ctx.waitUntil && env.QNFO_OPS && env.REGISTRY_TOKEN) {
         ctx.waitUntil(selfRegister(env).catch((e) => console.log("self-register err", e && e.message || e)));
       }
-      return new Response(JSON.stringify({ ok: true, worker: "qnfo-intent-orchestrator", version: VERSION, capabilities: ["intent-intake", "intent-triage", "research-dispatch", "daily-digest"], limitations: ["every route except /health needs a bearer token", "AI classification at intake is bounded at 8 s (INTAKE-PERSIST-BUDGET-1)", "the digest is sent at 06:00 and triage plus research dispatch run at 06:30 daily"] }), { headers: { "Content-Type": "application/json", ...cors } });
+      return new Response(JSON.stringify({ ok: true, worker: "qnfo-intent-orchestrator", version: VERSION, capabilities: ["intent-intake", "intent-triage", "research-dispatch", "daily-digest", "personal-search"], limitations: ["every route except /health needs a bearer token", "AI classification at intake is bounded at 8 s (INTAKE-PERSIST-BUDGET-1)", "the digest is sent at 06:00 and triage plus research dispatch run at 06:30 daily"] }), { headers: { "Content-Type": "application/json", ...cors } });
     }
     const token = (request.headers.get("Authorization") || "").replace(/^Bearer\s+/i, "");
     if (!auth(token, env)) return new Response("unauthorized", { status: 401, headers: cors });
@@ -598,6 +632,18 @@ var worker_default = {
         })().catch((e) => console.log("inline triage err", e && e.message || e)));
       }
       return new Response(JSON.stringify(intent), { status: 201, headers: { "Content-Type": "application/json", ...cors } });
+    }
+    if (path === "/personal/search" && method === "GET") {
+      // AUTOAUDIT-DEAD-CALLERS-1 (#2302): the personal index search qnfo-tools-mcp used to get from the retired search worker.
+      const q = clamp(url.searchParams.get("q"), 300);
+      if (!q) return new Response(JSON.stringify({ error: "q required" }), { status: 400, headers: { "Content-Type": "application/json", ...cors } });
+      const topK = Math.min(Math.max(parseInt(url.searchParams.get("topK") || "8", 10) || 8, 1), 20);
+      try {
+        return new Response(JSON.stringify(await personalSearch(env, q, topK)), { headers: { "Content-Type": "application/json", ...cors } });
+      } catch (e) {
+        console.error(JSON.stringify({ at: "personal-search", error: String(e && e.message || e).slice(0, 300) }));
+        return new Response(JSON.stringify({ error: "search failed" }), { status: 502, headers: { "Content-Type": "application/json", ...cors } });
+      }
     }
     if (path === "/intents" && method === "GET") {
       const status = url.searchParams.get("status") || "";
