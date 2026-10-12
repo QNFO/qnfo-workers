@@ -1,8 +1,15 @@
 {
-  "audited_at": "2026-10-12 15:47:28",
+  "audited_at": "2026-10-12 16:16:40",
   "d1_write_failures": [],
   "d1_writes_ok": 115,
   "guard": {
+    "_drift_confirm": {
+      "first_pass": [
+        "q08-signal-engine"
+      ],
+      "refreshed": true,
+      "second_pass": []
+    },
     "_guard_rc": 0,
     "ahead": [],
     "cf_script_list": true,
@@ -548,7 +555,7 @@
       },
       {
         "dir": "q08-signal-engine",
-        "version": "0.14.1",
+        "version": "0.14.2",
         "worker": "q08-signal-engine"
       },
       {
@@ -588,12 +595,12 @@
       },
       {
         "dir": "qnfo-email",
-        "version": "2.6.1-notice-reply-match",
+        "version": "2.7.0-cold-human-notice",
         "worker": "qnfo-email"
       },
       {
         "dir": "qnfo-fleet-control",
-        "version": "0.20.0-lane-holds",
+        "version": "0.20.1-advisor-dedupe",
         "worker": "qnfo-fleet-control"
       },
       {
@@ -638,7 +645,7 @@
       },
       {
         "dir": "qnfo-ops",
-        "version": "2.43.0-props-restore",
+        "version": "2.43.1-cf-api-retry",
         "worker": "qnfo-ops"
       },
       {
@@ -944,9 +951,9 @@
       "worker": "personal-life-search"
     },
     "q08-signal-engine": {
-      "before": "0.14.1",
+      "before": "0.14.2",
       "http": 200,
-      "live": "0.14.1",
+      "live": "0.14.2",
       "match": 1,
       "note": "SYNC",
       "worker": "q08-signal-engine"
@@ -1179,9 +1186,9 @@
       "worker": "qnfo-deploy-guard"
     },
     "qnfo-email": {
-      "before": "2.6.1-notice-reply-match",
+      "before": "2.7.0-cold-human-notice",
       "http": 200,
-      "live": "2.6.1-notice-reply-match",
+      "live": "2.7.0-cold-human-notice",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-email"
@@ -1268,9 +1275,9 @@
       "worker": "qnfo-fleet-calibrator"
     },
     "qnfo-fleet-control": {
-      "before": "0.20.0-lane-holds",
+      "before": "0.20.1-advisor-dedupe",
       "http": 200,
-      "live": "0.20.0-lane-holds",
+      "live": "0.20.1-advisor-dedupe",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-fleet-control"
@@ -1412,9 +1419,9 @@
       "worker": "qnfo-observability"
     },
     "qnfo-ops": {
-      "before": "2.43.0-props-restore",
+      "before": "2.43.1-cf-api-retry",
       "http": 200,
-      "live": "2.43.0-props-restore",
+      "live": "2.43.1-cf-api-retry",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-ops"
