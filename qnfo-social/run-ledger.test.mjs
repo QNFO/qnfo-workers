@@ -46,6 +46,8 @@ globalThis.fetch = async (url, init) => {
   if (u === "https://api.buffer.com") {
     if (body.includes("organizations")) return J({ data: { account: { organizations: [{ id: "org1" }] } } });
     if (body.includes("channels(")) return J({ data: { channels: [{ id: "chL", service: "linkedin", name: "Rowan", isDisconnected: false }] } });
+    // BUFFER-POST-STATS-1 (0.13.0): the 07:00 run reads the channel's sent posts (documented shape; no statistics yet).
+    if (body.includes("posts(")) return J({ data: { posts: { edges: [{ node: { id: "bp1", channelId: "chL", status: "sent", sentAt: new Date().toISOString(), externalLink: null, metricsUpdatedAt: null, metrics: null } }], pageInfo: { hasNextPage: false, endCursor: null } } } });
   }
   return new Response("not found", { status: 404 });
 };
@@ -100,6 +102,7 @@ db.prepare("INSERT INTO social_threads (slug, title, posts, status, posted_at, p
 await W.scheduled({ cron: "0 7 * * *" }, env);
 const en = row("social-engagement-" + today);
 ok(en && en.status === "ok" && JSON.parse(en.meta).result.posts_found === 1 && db.prepare("SELECT COUNT(*) n FROM social_engagements WHERE note = 'qnfo-social'").get().n === 4, "07:00 records the engagement collector and its four metrics");
+ok(JSON.parse(en.meta).result.buffer && JSON.parse(en.meta).result.buffer.channels.linkedin.pending === 1 && db.prepare("SELECT COUNT(*) n FROM social_engagements WHERE platform = 'buffer' AND metric <> 'auth_status'").get().n === 0, "07:00 also records the Buffer read, and a post without statistics yet writes no metric row");
 ok(["profile-sync", "drain", "scan", "engagement"].every((op) => proof(op)), "every social op has a proof the watchmaker can read");
 
 // 4. A ledger failure never stops a run.
