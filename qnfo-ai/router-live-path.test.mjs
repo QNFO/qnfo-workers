@@ -20,24 +20,28 @@ globalThis.fetch = async (url, init) => {
   if (host === "api.deepseek.com") return new Response(JSON.stringify({ error: { message: "Insufficient Balance" } }), { status: 402 });
   return new Response("blocked in test", { status: 599 });
 };
+let envExtra = {};
+let d1First = null;
 const env = () => ({
+  ...envExtra,
   ROUTER_AUTH_KEY: "test-key",
   DEEPSEEK_API_KEY: "x",
   AI: {
     async run(model, input, opts) {
       calls.ai.push({ model, input, opts });
+      if (/bge-/.test(model)) return { data: [[0.1, 0.2, 0.3]] };
       const p = aiPlan[model] || { ms: 1, text: "answer from " + model };
       await new Promise((r) => setTimeout(r, p.ms));
       if (p.throws) throw new Error(p.throws);
       return { choices: [{ message: { content: p.text }, finish_reason: "stop" }], usage: { prompt_tokens: 10, completion_tokens: 5, prompt_tokens_details: { cached_tokens: 4 } } };
     }
   },
-  QNFO_AUDIT: { prepare(sql) { const st = { bind(...a) { st.args = a; return st; }, async run() { calls.d1.push({ sql, args: st.args }); return { meta: {} }; }, async all() { return { results: [] }; }, async first() { return null; } }; return st; } }
+  QNFO_AUDIT: { prepare(sql) { const st = { bind(...a) { st.args = a; return st; }, async run() { calls.d1.push({ sql, args: st.args }); return { meta: {} }; }, async all() { return { results: [] }; }, async first() { return d1First ? d1First(sql, st.args) : null; } }; return st; } }
 });
 const waits = [];
 const ctx = { waitUntil(p) { waits.push(Promise.resolve(p).catch(() => {})); }, props: {} };
-const chat = async (body, key) => {
-  const r = await worker.fetch(new Request("https://ai.test/v1/chat/completions", { method: "POST", headers: { "Content-Type": "application/json", Authorization: "Bearer " + (key || "test-key"), "User-Agent": "QNFO-AI-Calibration/test" }, body: JSON.stringify(body) }), env(), ctx);
+const chat = async (body, key, ua) => {
+  const r = await worker.fetch(new Request("https://ai.test/v1/chat/completions", { method: "POST", headers: { "Content-Type": "application/json", Authorization: "Bearer " + (key || "test-key"), "User-Agent": ua || "QNFO-AI-Calibration/test" }, body: JSON.stringify(body) }), env(), ctx);
   let j = null;
   try { j = await r.json(); } catch (e) {}
   return { status: r.status, j, headers: r.headers };
@@ -118,6 +122,25 @@ r = await get("/v1/models", { headers: { Authorization: "Bearer test-key" } });
 ok(r.status === 200 && r.j.data.some((m) => m.id === "llama-3.3-70b-instruct-fp8-fast") && r.j.data.length >= 11, "the keyed roster lists the fast llama");
 r = await get("/v1/models", { headers: { Authorization: "Bearer nope" } });
 ok(r.status === 200 && r.j.data.length === 1 && r.j.data[0].id === "qnfo", "a wrong key still gets the single public model");
+
+// 9b the semantic cache: served only for the same prompt, never for a near neighbour, never for a liveness probe.
+reset();
+const cachedPrompt = "State the routing rule of this endpoint in one line";
+envExtra = { LOG_VZ: { async query() { return { matches: [{ id: "r:q-abc", score: 0.99, metadata: { kind: "response", model: "glm-5.3-flash", text: "The rule is that every id resolves by a named rule and is reported." } }] }; } } };
+d1First = (sql) => /FROM ai_queries WHERE id/.test(sql) ? { prompt: cachedPrompt, response: "The rule is that every id resolves by a named rule and is reported." } : null;
+r = await chat({ model: "glm-5.3-flash", messages: [{ role: "user", content: cachedPrompt }], max_tokens: 200 }, null, "suite/1");
+ok(r.status === 200 && r.j._router && r.j._router.cache === "semantic" && !calls.ai.some((x) => !/bge-/.test(x.model)), "the same prompt is served from the cache with no model call", { rt: r.j && r.j._router, ai: calls.ai.map((x) => x.model) });
+reset();
+r = await chat({ model: "glm-5.3-flash", messages: [{ role: "user", content: cachedPrompt + " for item 24" }], max_tokens: 200 }, null, "suite/1");
+ok(r.status === 200 && (!r.j._router || r.j._router.cache !== "semantic") && calls.ai.some((x) => x.model === "@cf/zai-org/glm-5.3-flash"), "a near neighbour (score 0.99, different prompt) is not served from the cache", r.j && r.j._router);
+reset();
+r = await chat({ model: "glm-5.3-flash", messages: [{ role: "user", content: cachedPrompt }], max_tokens: 200 });
+ok(r.status === 200 && r.j._router.cache !== "semantic" && calls.ai.some((x) => x.model === "@cf/zai-org/glm-5.3-flash"), "a liveness probe never reads the cache");
+reset();
+r = await chat({ model: "glm-5.3-flash", messages: [{ role: "user", content: cachedPrompt }], max_tokens: 200, cache: false }, null, "suite/1");
+ok(r.status === 200 && r.j._router.cache !== "semantic", "cache: false skips the cache");
+envExtra = {};
+d1First = null;
 
 // 10 cached tokens reach the ledger statement.
 await Promise.all(waits);
