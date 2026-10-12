@@ -150,12 +150,28 @@ const count = (p, t) => p.prepare("SELECT COUNT(*) n FROM " + t).get().n;
 }
 
 // ---- an invented name or year never publishes --------------------------------------------------------------------------------
+// GROUNDING-REPAIR-1 (issue 2354): one ungrounded sentence among many is removed before the reviewers see the draft, and the piece
+// that publishes contains no invented item; a draft whose invented items run through more than a quarter of its sentences is still
+// rejected by the deterministic check before any reviewer is called.
 {
   installFetch();
   const p = world(), mw = modelWorld({ draft: () => goodBody(LEDE + " Dr. Delmore Quill showed this in 1863.") });
   const out = await V.generate(makeEnv(p, mw), "essay", {});
-  ok(out.ok === false && count(p, "companion_pieces") === 0, "a draft with an invented name and year is not published", out);
+  ok(out.ok === true && count(p, "companion_pieces") === 1, "a draft with one invented sentence is repaired and published without it", out);
+  const row = p.prepare("SELECT lede, body_md FROM companion_pieces").get();
+  ok(row && !/Quill|1863/.test(String(row.lede) + String(row.body_md)) && /Alpha Subject/.test(String(row.lede)), "the published piece carries no invented name or year and keeps the grounded lede", row && row.lede);
+  const st = p.prepare("SELECT detail FROM companion_runs WHERE status = 'stage' AND detail LIKE 'grounding repair:%' LIMIT 1").get();
+  ok(st && st.detail === "grounding repair: removed 1 sentences", "the repair is logged as a companion_runs stage row", st);
+  ok(mw.log.review >= 2 && mw.log.writer === 1, "the repaired draft still went to two fact-check reviewers, with no second writer call", mw.log);
+}
+{
+  installFetch();
+  const invented = "Dr. Delmore Quill showed in 1863 that the Alpha Subject drifts when it is read at the Beta Station.";
+  const p = world(), mw = modelWorld({ draft: () => goodBody(LEDE).split(sentence.trim()).join(invented) });
+  const out = await V.generate(makeEnv(p, mw), "essay", {});
+  ok(out.ok === false && count(p, "companion_pieces") === 0, "a draft whose invented name and year run through most sentences is not published", out);
   ok(mw.log.review === 0, "the deterministic check rejected it before any model reviewer was called", mw.log);
+  ok(count(p, "companion_runs") > 0 && p.prepare("SELECT COUNT(*) n FROM companion_runs WHERE detail LIKE 'grounding repair:%'").get().n === 0, "no repair was accepted above the quarter cap");
   const rj = p.prepare("SELECT detail FROM companion_runs WHERE status = 'rejected' LIMIT 1").get();
   ok(rj && /grounding/.test(rj.detail) && /1863/.test(rj.detail), "the run log names the ungrounded year", rj);
 }
