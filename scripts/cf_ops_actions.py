@@ -823,8 +823,10 @@ def noz_scrub(text, doi_map: dict, self_slug: str):
         else the line goes; a key named after the registrar (zenodo_doi, zenodo_url, ...) goes; any other value takes the body rules.
       fenced code (``` or ~~~): only the link, URL and DOI rewrites.
       prose: **DOI:** <doi> -> **URL:** <own page or mapped page>; "Zenodo. <doi>." -> "QNFO. <url>."; DOI/doi: <doi> -> <url>;
-        doi.org and zenodo.org links -> <url>; any remaining <doi> token -> <url>; then the word: "(Zenodo)" removed, "Zenodo DOI(s)" ->
-        "DOI(s)", "on|via|at Zenodo" -> "at papers.qnfo.org", any other "Zenodo" -> "the QNFO archive"; doubled spaces and " ." tidied.
+        doi.org and zenodo.org links -> <url>; any remaining <doi> token -> <url>; then the word: "@zenodo<key>" -> "@qnfo<key>",
+        ".zenodo_versions.json" -> ".archive_versions.json", "zenodo_doi" -> "archive_doi", "(Zenodo)" removed, "Zenodo DOI(s)" ->
+        "DOI(s)", "on|via|at|to|in Zenodo" -> "at papers.qnfo.org", any other "Zenodo" -> "the QNFO archive"; doubled spaces and " ."
+        tidied. Fenced code takes the same rules (every public mention is in scope).
     Scrubbing the result again changes nothing (the suite proves it)."""
     if not text:
         return text, 0, []
@@ -849,9 +851,14 @@ def noz_scrub(text, doi_map: dict, self_slug: str):
         s = sub(_NZ_REF_RE, lambda m: "QNFO. " + url(m.group(1)) + m.group(2), s)
         s = sub(_NZ_LABEL_RE, lambda m: url(m.group(1)), s)
         s = ids(s)
+        # NOZ-LEFTOVERS-1 (dry run 126, 2026-10-12: 13 leftovers in 474 rows): pandoc citation keys "[@zenodo22035210]" keep their
+        # key shape under a neutral prefix, the scaffolding file name and the registry column name lose the registrar's name.
+        s = sub(re.compile(r"@zenodo(\w+)", re.I), r"@qnfo\1", s)
+        s = sub(re.compile(r"\.?zenodo_versions\.json", re.I), ".archive_versions.json", s)
+        s = sub(re.compile(r"\bzenodo_(doi|url|id|record)s?\b", re.I), lambda m: "archive_" + m.group(1).lower() + ("s" if m.group(0).lower().endswith("s") else ""), s)
         s = sub(re.compile(r"[ \t]*\(\s*zenodo\s*\)", re.I), "", s)
         s = sub(re.compile(r"\bzenodo[ \t]+(DOIs?)\b", re.I), r"\1", s)
-        s = sub(re.compile(r"\b(on|via|at)[ \t]+zenodo\b", re.I), lambda m: ("At" if m.group(1)[0].isupper() else "at") + " papers.qnfo.org", s)
+        s = sub(re.compile(r"\b(on|via|at|to|in)[ \t]+zenodo\b", re.I), lambda m: ("At" if m.group(1)[0].isupper() else "at") + " papers.qnfo.org", s)
         s = sub(re.compile(r"\bzenodo\b", re.I), "the QNFO archive", s)
         s = re.sub(r"\(\s*\)", "", s)
         s = re.sub(r"(?<=\S)[ \t]+(?=[.,;](?:\s|$))", "", s)
@@ -897,7 +904,9 @@ def noz_scrub(text, doi_map: dict, self_slug: str):
         if not NOZ_HAS.search(ln):
             out.append(ln)
         elif in_code:
-            out.append(ids(ln))
+            # the owner directive covers every public mention, so a fenced block takes the same word rules as prose
+            # (dry run 126: "will be published on Zenodo" sat inside a fenced block and survived the first pass)
+            out.append(prose(ln))
         else:
             out.append(prose(ln))
     new = "\n".join(out)
