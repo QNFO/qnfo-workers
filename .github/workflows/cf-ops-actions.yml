@@ -34,6 +34,7 @@ on:
           - unbind-d1
           - delete-d1
           - unbind-service
+          - gen-activitypub-key
       target:
         description: "worker name (worker-history, delete-worker), KV namespace id (kv-secret-scan), index name (delete-vectorize-index) ops-workspace path (r2-get) or zone (zaraz-remove-tool) or database name (d1-backup, delete-d1) or WORKER:BINDING (unbind-d1, unbind-service)"
         required: false

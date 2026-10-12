@@ -764,6 +764,10 @@ jobs:
       - name: DANGLING-SERVICE-UNBIND-1 offline suite (cf_ops_actions unbind-service)
         if: ${{ !cancelled() }}
         run: python3 scripts/cf_ops_unbind_service_test.py
+      # ACTIVITYPUB-WEBFINGER-1 (2249): gen-activitypub-key never rotates, runs under the secret lock, never prints the key.
+      - name: ACTIVITYPUB-WEBFINGER-1 offline suite (cf_ops_actions gen-activitypub-key)
+        if: ${{ !cancelled() }}
+        run: python3 scripts/cf_ops_gen_ap_key_test.py
       # DELETE-AFTER-UNBIND-1 (TP-9 lever 1, #2025): delete-worker refuses while any live service binding targets the worker.
       - name: DELETE-AFTER-UNBIND-1 offline suite (cf_ops_actions delete-worker)
         if: ${{ !cancelled() }}
