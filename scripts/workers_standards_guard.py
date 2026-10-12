@@ -61,6 +61,10 @@ def check_config(base, path):
 def main():
     base = sys.argv[1] if len(sys.argv) > 1 else os.environ.get("GUARD_BASE", "origin/main")
     try:
+        # MERGE-BASE-1: diff against the point the change branched from, not the moving tip of the base branch. After main advances,
+        # `git diff origin/main` shows main's newer commits in reverse and blames this change for them (PR 980: nine false violations).
+        mb = git("merge-base", base, "HEAD").strip()
+        if mb: base = mb
         names = [n for n in git("diff", "--name-only", base).split("\n") if n]
         viol = []
         for n in names:
