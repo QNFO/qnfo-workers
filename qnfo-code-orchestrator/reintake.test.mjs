@@ -125,7 +125,7 @@ function mkEnv(issues, tasks, opts) {
   await __intake(w.env, 2);
   ok(w.inserted.length === 1, "only a line of its own counts, not the words in prose", w.inserted);
 }
-// CI-FEEDBACK-1 (0.5.0): a retry leads with why the previous task failed, and the goal still fits validTask's 2000 chars.
+// CI-FEEDBACK-1 (0.5.0): a retry leads with why the previous task failed, and the goal still fits validTask's GOAL_MAX (6000 since GOAL-ROOM-1; 2000 before).
 {
   const failNote = "required check(s) failed on c9d25b5: gate=failure; failing: gate: FAIL q08-signal-engine/quality.test.mjs | AssertionError [ERR_ASSERTION]: Expected values to be strictly equal: | 4000 !== 2000 | at q08-signal-engine/quality.test.mjs:190:37 {";
   ok(__prevFail({ id: "ct_a", merge_note: failNote }) === "PREVIOUS ATTEMPT ct_a FAILED: " + failNote + " Keep every behaviour the worker's existing tests pin; change only what the goal needs.", "the previous failure is quoted from the task's merge_note");
@@ -135,12 +135,14 @@ function mkEnv(issues, tasks, opts) {
   ok(g0 === "[issue #9] X-1: title\nbody", "a first task's goal is unchanged in shape", g0);
   const long = "y".repeat(1500);
   const g1 = __goal("[issue #9]", 1, "X-1: " + "t".repeat(300), __prevFail({ id: "ct_a", merge_note: "z".repeat(5000) }), long);
-  ok(g1.length <= 2000 && /^\[issue #9\] \[retry 1\] X-1: t+\nPREVIOUS ATTEMPT ct_a FAILED: z{700} Keep every behaviour/.test(g1), "the failure comes first, is capped, and the body is cut so the goal stays within 2000 chars", g1.length);
+  ok(g1.length <= 6000 && /^\[issue #9\] \[retry 1\] X-1: t+\nPREVIOUS ATTEMPT ct_a FAILED: z{700} Keep every behaviour/.test(g1) && g1.endsWith("\n" + long), "GOAL-ROOM-1: the failure comes first and is capped, and a 1500-char body is kept whole (it was cut at 2000 before 0.11.0)", g1.length);
+  const g2 = __goal("[issue #9]", 1, "X-1: " + "t".repeat(300), __prevFail({ id: "ct_a", merge_note: "z".repeat(5000) }), "v".repeat(9000));
+  ok(g2.length <= 6000 && g2.length > 5900 && /^\[issue #9\] \[retry 1\] X-1: t+\nPREVIOUS ATTEMPT ct_a FAILED: z{700} Keep every behaviour/.test(g2), "GOAL-ROOM-1: an over-long body is cut so the goal stays within GOAL_MAX (6000), failure line still first", g2.length);
   const issues = [{ id: 2085, title: "METRIC-TRIGGER-806-X: panel", source: "qnfo-fleet-control", description: "Read the ensemble.\n" + "w".repeat(1400) + "\ncode-task: repo=qnfo-workers path=qnfo-infra/worker.js" }];
   const tasks = [{ id: "ct_0jiys30uonkcps", goal: "[issue #2085] METRIC-TRIGGER-806-X", status: "failed", last_error: "merge-runner: " + failNote, merge_note: failNote, created_at: "2026-10-06T23:00:00Z", updated_at: "2026-10-07T00:00:00Z" }];
   const w2 = mkEnv(issues, tasks);
   await __intake(w2.env, 2);
-  ok(w2.inserted.length === 1 && w2.inserted[0].goal.length <= 2000 && /^\[issue #2085\] \[retry 1\] METRIC-TRIGGER-806-X: panel\nPREVIOUS ATTEMPT ct_0jiys30uonkcps FAILED: required check\(s\) failed on c9d25b5: gate=failure; failing: gate: FAIL q08-signal-engine\/quality\.test\.mjs/.test(w2.inserted[0].goal) && /4000 !== 2000/.test(w2.inserted[0].goal), "end to end: the retried task's goal carries the failing suite and values ahead of the long issue body", w2.inserted[0] && w2.inserted[0].goal.slice(0, 300));
+  ok(w2.inserted.length === 1 && w2.inserted[0].goal.length <= 6000 && /^\[issue #2085\] \[retry 1\] METRIC-TRIGGER-806-X: panel\nPREVIOUS ATTEMPT ct_0jiys30uonkcps FAILED: required check\(s\) failed on c9d25b5: gate=failure; failing: gate: FAIL q08-signal-engine\/quality\.test\.mjs/.test(w2.inserted[0].goal) && /4000 !== 2000/.test(w2.inserted[0].goal), "end to end: the retried task's goal carries the failing suite and values ahead of the long issue body", w2.inserted[0] && w2.inserted[0].goal.slice(0, 300));
 }
 console.log(pass + " passed, " + fail + " failed");
 process.exit(fail ? 1 : 0);
