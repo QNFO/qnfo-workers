@@ -61,5 +61,19 @@ const ok = (c, m, x) => { if (c) pass++; else { fail++; console.log("FAIL " + m 
 ok(/\ncrons = \["30 6 \* \* \*", "0 18 \* \* \*"\]\n/.test(toml), "wrangler.toml keeps the host's two crons and adds none for the member");
 ok(existsSync(new URL("../qnfo-paper-indexer/FOLDED", import.meta.url)), "qnfo-paper-indexer carries a FOLDED marker");
 
+// WORKERS-STANDARDS-1 (host 1.3.4): the index token check is constant time and accepts exactly the configured value.
+{
+  ok(!/token !== env\.INDEX_TOKEN/.test(src) && /function indexTokenOk\(/.test(src), "no direct comparison of the index token remains");
+  const envT = { INDEX_TOKEN: "idx-secret-1" };
+  const hit = async (tok) => { try { const r = await mod.__member.fetch(new Request("https://x/purge", { method: "POST", headers: tok === null ? {} : { "X-Index-Token": tok } }), envT, { waitUntil() {} }); return r.status; } catch (e) { return "threw"; } };
+  ok(await hit("wrong-secret-1") === 401 && await hit("idx-secret-") === 401 && await hit("idx-secret-1x") === 401 && await hit(null) === 401, "a wrong, short, long or missing index token is refused");
+  ok(await hit("idx-secret-1") !== 401, "the configured index token is still accepted");
+  const bearer = await (async () => { try { const r = await mod.__member.fetch(new Request("https://x/purge", { method: "POST", headers: { Authorization: "Bearer idx-secret-1" } }), envT, { waitUntil() {} }); return r.status; } catch (e) { return "threw"; } })();
+  ok(bearer !== 401, "the bearer form of the same token is still accepted");
+  const unset = await (async () => { try { const r = await mod.__member.fetch(new Request("https://x/purge", { method: "POST", headers: { "X-Index-Token": "anything" } }), {}, { waitUntil() {} }); return r.status; } catch (e) { return "threw"; } })();
+  ok(unset === 401, "an unset secret accepts nothing");
+  ok(versionAtLeast(mod.__hv, "1.3.4"), "host is at least 1.3.4", mod.__hv);
+}
+
 console.log(pass + " passed, " + fail + " failed");
 process.exit(fail ? 1 : 0);

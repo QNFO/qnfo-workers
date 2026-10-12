@@ -1,8 +1,8 @@
-// qnfo-deploy-guard v1.3.23 (SECRET-ONLY-LEDGER-1: a ledgered secret rotation is not a code deploy for NON-CANONICAL-DEPLOY-1) - deploy lock + secret lock + work claims (one procedure: the D1 work_claims ledger and the code loop's tasks are read and written by /work-lock) + concurrent-mutation detector + cost watchdog + heartbeat (expected_version enforcement + per-session attribution + registry version refresh on redeploy + NON-CANONICAL-DEPLOY-1 detection excluding synthetic/test rows AND failed canonical attempts + SETTINGS-ONLY ledger rows + DEPLOY-TICKET-AUTORESOLVE-1 + CAPABILITY-SNAPSHOT-1 + WORK-CLAIM-1 + WORK-CLAIM-UNIFY-1)
+// qnfo-deploy-guard v1.3.24 (LEASE-TOKEN-CSPRNG-1: lease tokens come from crypto.getRandomValues; 1.3.23 SECRET-ONLY-LEDGER-1: a ledgered secret rotation is not a code deploy for NON-CANONICAL-DEPLOY-1) - deploy lock + secret lock + work claims (one procedure: the D1 work_claims ledger and the code loop's tasks are read and written by /work-lock) + concurrent-mutation detector + cost watchdog + heartbeat (expected_version enforcement + per-session attribution + registry version refresh on redeploy + NON-CANONICAL-DEPLOY-1 detection excluding synthetic/test rows AND failed canonical attempts + SETTINGS-ONLY ledger rows + DEPLOY-TICKET-AUTORESOLVE-1 + CAPABILITY-SNAPSHOT-1 + WORK-CLAIM-1 + WORK-CLAIM-UNIFY-1)
 // Worker Contract v1: VERSION constant + GET /health
 // Data: https://ops.qnfo.org/fleet (modified_on per worker) + https://ops.qnfo.org/cost (spend)
 // NOTE: source of truth is this file; GET /workers/scripts/<name> TRUNCATES large bodies - never patch from a GET.
-var VERSION = "1.3.23-secret-only-ledger";
+var VERSION = "1.3.24-lease-token-csprng";
 var WORKER = "qnfo-deploy-guard";
 var LOCK_PREFIX = "deploylock:";
 var DENY_PREFIX = "deploydeny:";
@@ -14,7 +14,18 @@ var FLEET_URLS = ["https://ops.qnfo.org/fleet", "https://qnfo-ops.q08.workers.de
 var COST_URLS = ["https://ops.qnfo.org/cost", "https://qnfo-ops.q08.workers.dev/cost"];
 function json(o, s) { return new Response(JSON.stringify(o), { status: s || 200, headers: { "content-type": "application/json", "access-control-allow-origin": "*" } }); }
 function nowIso() { return new Date().toISOString(); }
-function tok() { return Math.random().toString(36).slice(2, 10) + Math.random().toString(36).slice(2, 10); }
+// LEASE-TOKEN-CSPRNG-1 (1.3.24, WORKERS-STANDARDS-1): a lease token is a bearer secret (whoever holds it can release or
+// renew the deploy lock, a secret lock or a work claim), so it comes from crypto.getRandomValues, not Math.random. Same
+// shape as before: 16 characters of [a-z0-9]. Bytes at or above 252 are redrawn so every character is equally likely.
+var TOK_ALPHABET = "abcdefghijklmnopqrstuvwxyz0123456789";
+function tok() {
+  var out = "";
+  while (out.length < 16) {
+    var buf = crypto.getRandomValues(new Uint8Array(24));
+    for (var i = 0; i < buf.length && out.length < 16; i++) { if (buf[i] < 252) out += TOK_ALPHABET[buf[i] % 36]; }
+  }
+  return out;
+}
 function ms(s) { if (!s) return NaN; var v = new Date(String(s).replace(" ", "T") + (String(s).indexOf("Z") >= 0 ? "" : "Z")).getTime(); return isNaN(v) ? NaN : v; }
 function getJson(urls, tout) {
   return (async function () {

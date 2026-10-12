@@ -87,6 +87,15 @@ crons = ["*/15 * * * *"]
 enabled = true
 head_sampling_rate = 1
 
+# WORKERS-STANDARDS-1 (owner standards 2026-10-12): logs and traces declared. Workers docs: `enabled` alone turns on logs only;
+# traces need [observability.traces]. Sampled at the default rate of 1.
+[observability.logs]
+enabled = true
+invocation_logs = true
+
+[observability.traces]
+enabled = true
+
 # CANONICAL-DEPLOY-AUTO-1 (2026-09-29, issue #1406): comment-only touch so that
 # .github/workflows/canonical-deploy.yml fires for this worker. That workflow deploys
 # through scripts/canonical_deploy.py, which acquires the deploy-guard lock, writes the
@@ -94,3 +103,4 @@ head_sampling_rate = 1
 # (BINDING-INSTALL-MERGE-1, issue #1448), and PUTs the [triggers] crons above so they
 # stop being inert. Deployed artifact is unchanged by this comment; only the deploy
 # PATH changes, which is the actual defect.
+head_sampling_rate = 0.05 # TRACES-SAMPLING-BEFORE-BILLING-1: stored traces bill from 2026-12-01

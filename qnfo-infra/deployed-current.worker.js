@@ -5,7 +5,7 @@ var __name = (target, value) => __defProp(target, "name", { value, configurable:
 var __defProp2 = Object.defineProperty;
 var __name2 = /* @__PURE__ */ __name((target, value) => __defProp2(target, "name", { value, configurable: true }), "__name");
 var NL = String.fromCharCode(10);
-var VERSION = "1.3.3-doi-scrub"; // 1.3.1 INDEXER-FOLD-1 (#1756): qnfo-paper-indexer runs here as a member (its two jobs on this worker's existing 06:30 trigger, no cron added; /indexer/* read routes).
+var VERSION = "1.3.4-index-token-ct"; // 1.3.4 WORKERS-STANDARDS-1 (2026-10-12, pillar security): the indexer member compares X-Index-Token in constant time (same accepted value). // 1.3.1 INDEXER-FOLD-1 (#1756): qnfo-paper-indexer runs here as a member (its two jobs on this worker's existing 06:30 trigger, no cron added; /indexer/* read routes).
 function auth(token, env) {
   const exp = env.INFRA_TOKEN;
   if (!exp || !token) return false;
@@ -455,6 +455,15 @@ var indexerMod = (function() {
   // NOZ-DOI-1 (2026-10-10): the Zenodo account is blocked; every 10.5281/zenodo.* DOI is dead and is never measured or emitted.
   function isZenodoId(d) { return /10\.5281\/|zenodo/i.test(String(d || "")); }
 
+  // WORKERS-STANDARDS-1 (host 1.3.4): the index token is compared in constant time; the accepted value is unchanged
+  // (it was a direct inequality test). An unset secret accepts nothing.
+  function indexTokenOk(token, env) {
+    if (!env.INDEX_TOKEN || !token) return false;
+    const a = new TextEncoder().encode(String(token)), b = new TextEncoder().encode(String(env.INDEX_TOKEN));
+    let d = a.byteLength ^ b.byteLength;
+    for (let i = 0; i < a.byteLength; i++) d |= a[i] ^ b[i % b.byteLength];
+    return d === 0;
+  }
   function auth(req, env) {
     if (!env.IMPACT_TOKEN) return false;
     const t = (req.headers.get("Authorization") || "").replace(/^Bearer\s+/i, "");
@@ -739,7 +748,7 @@ var indexerMod = (function() {
       const slug = url.searchParams.get("slug");
       if (path === "/webhook" || path === "/index" || path === "/purge") {
         const token = request.headers.get("X-Index-Token") || (request.headers.get("Authorization") || "").replace(/^Bearer\s+/i, "");
-        if (token !== env.INDEX_TOKEN) return json({ error: "unauthorized" }, 401);
+        if (!indexTokenOk(token, env)) return json({ error: "unauthorized" }, 401);
       }
       try {
         switch (path) {

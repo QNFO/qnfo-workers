@@ -232,6 +232,18 @@ const GOOD = block("  for (const r of refs) out.push(String(r));", "  for (const
   ok(cx2.edits[0].search === "  for (const r of refs) out.push(String(r));" && cx2.edits[0].replace === "  for (const r of refs) out.push(String(r).trim().toLowerCase());", "7f an exact SEARCH is parked as the model wrote it", cx2.edits);
 }
 
+// ===== 7g. READ-KEEPS-REPAIR-1: a task sent back to read keeps its repair count, the reason and the refusal =====
+{
+  serve(FIX);
+  const { env, calls } = envWith([GOOD]);
+  await addTask(env, GOAL, ANCHOR);
+  const refusal = { reasons: [{ by: "goal-review", line: 44, why: "the loop never trims" }] };
+  env.AUDIT_DB._db.prepare("UPDATE code_tasks SET ctx = ?").run(JSON.stringify({ anchor: ANCHOR, repair_round: 1, lastError: "the merge runner refused your pull request: the loop never trims", refusal }));
+  await tick(env);
+  const t = row(env), cx = JSON.parse(t.ctx);
+  ok(t.status === "ready_to_publish" && cx.repair_round === 1 && JSON.stringify(cx.refusal) === JSON.stringify(refusal) && /Your previous attempt FAILED: the merge runner refused your pull request: the loop never trims/.test(calls[0].prompt), "7g the read step keeps repair_round and refusal, and the first proposal after it is told the reason", { st: t.status, rr: cx.repair_round, refusal: cx.refusal, tail: calls[0] && calls[0].prompt.slice(-200) });
+}
+
 // ===== 8. INTAKE-ANCHOR-INHERIT-1: a retry without a code-anchor line starts from its earlier task's anchor =====
 {
   serve(FIX);

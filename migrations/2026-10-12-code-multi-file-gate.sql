@@ -17,7 +17,7 @@ INSERT OR IGNORE INTO ops_config (key, value, note, updated_at) VALUES ('code_me
   'MULTI-FILE-CODE-TASKS-1 (qnfo-code-orchestrator 0.12.0, agent_issues 2074, migrations/2026-10-12-code-multi-file-gate.sql): on = code-task intake takes a line with two to four path= entries (the task path and its companions). Off until qnfo-fleet-control cmTaskGates allows the paths in code_tasks.ctx.paths; that change turns it on. Read per multi-path issue at intake; a missing row or a failed read means off.',
   datetime('now'));
 
-INSERT OR REPLACE INTO control_registry (control, location, kind, guards_against, critical_path, disposition, disposition_state, alternate_path, alternate_tested_at, evidence, issue_id)
+INSERT OR IGNORE INTO control_registry (control, location, kind, guards_against, critical_path, disposition, disposition_state, alternate_path, alternate_tested_at, evidence, issue_id)
 VALUES ('code_merge_multi_file', 'qnfo-audit.ops_config code_merge_multi_file read by qnfo-code-orchestrator multiFileOn (0.12.0, intakeIssues)', 'gate',
   'multi-file code tasks that are built and pushed and then refused by the merge runner, which allows only the task path and its mirror (qnfo-fleet-control cmTaskGates): a model call and a failed code_tasks row each', 0, 'remove', 'planned',
   'POST /v1/tasks with extras builds a multi-file task whatever the key says; a multi-path issue keeps its code-task line while it waits and is taken on the first tick after the key reads on; single-path lines are never affected',

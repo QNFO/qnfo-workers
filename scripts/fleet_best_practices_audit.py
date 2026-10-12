@@ -10,14 +10,14 @@ TODAY = datetime.date.today()
 SECRET_NAME = r"(?:TOKEN|SECRET|KEY|PASSWORD|SIGNATURE|HMAC|AUTH)"
 CHECKS = {
     "math-random-token": (re.compile(r"Math\.random\(\)[^;\n]{0,80}(?:toString\(36\)|toString\(16\)|slice|substr)"), "Math.random used to build an identifier or token: use crypto.randomUUID()/getRandomValues"),
-    "pass-through-on-exception": (re.compile(r"passThroughOnException"), "passThroughOnException hides failures: explicit try/catch and an error response"),
+    "pass-through-on-exception": (re.compile(r"\.passThroughOnException\s*\("), "passThroughOnException hides failures: explicit try/catch and an error response"),
     "destructured-ctx": (re.compile(r"(?:const|let|var)\s*\{[^}]*\b(?:waitUntil|passThroughOnException)\b[^}]*\}\s*=\s*(?:ctx|context)\b"), "destructuring ctx loses the receiver (Illegal invocation)"),
     "rest-api-for-binding": (re.compile(r"api\.cloudflare\.com/client/v4/accounts/[^`'\"]{0,60}/(?:d1|kv|r2|queues|workflows)\b"), "REST API call for a resource a binding reaches"),
     "secret-compare": (re.compile(r"(?:===|!==)\s*(?:env|this\.env)\.[A-Z_]*" + SECRET_NAME + r"[A-Z_]*\b|\benv\.[A-Z_]*" + SECRET_NAME + r"[A-Z_]*\s*(?:===|!==)"), "string comparison of a secret: use a constant-time compare"),
-    "ai-response-string-assumption": (re.compile(r"\.response\.(?:trim|match|replace|split|toLowerCase|slice)\("), "Workers AI `response` can be a parsed object: normalise before string methods"),
+    "ai-response-string-assumption": (re.compile(r"\b(?:res|resp|result|out|output|ai\w*|r)\.response\.(?:trim|match|replace|split|toLowerCase|slice)\("), "Workers AI `response` can be a parsed object: normalise before string methods"),
     "unbounded-body-buffer": (re.compile(r"await\s+(?:request|req)\.(?:text|arrayBuffer|blob)\(\)"), "request body buffered without a size guard"),
 }
-AI_RUN = re.compile(r"\benv\.AI\.run\(|\bAI\.run\(")
+AI_RUN = re.compile(r"\bAI\.run\(\s*[^,()]+,\s*\{")  # only a call whose input is an inline object: a pass-through wrapper takes its caller's limits
 
 def toml_val(text, key):
     m = re.search(r"^\s*" + re.escape(key) + r"\s*=\s*(.+?)\s*(?:#.*)?$", text, re.M)
@@ -51,6 +51,7 @@ def scan_worker(d):
         for i, ln in enumerate(lines, 1):
             if ln.lstrip().startswith("//"): continue
             for name, (rx, why) in CHECKS.items():
+                if name == "ai-response-string-assumption" and "typeof" in ln: continue  # guarded on the same line
                 if rx.search(ln): out["code"].append((name, i, why))
         src = "\n".join(lines)
         for m in AI_RUN.finditer(src):

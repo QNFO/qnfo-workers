@@ -29,6 +29,14 @@ props = { caller = "qnfo-email" }
 [observability]
 enabled = true
 head_sampling_rate = 1
+# Workers standards 2026-10-12: logs and traces both on (shape per developers.cloudflare.com/workers/observability/traces).
+[observability.logs]
+enabled = true
+head_sampling_rate = 1
+
+[observability.traces]
+enabled = true
+head_sampling_rate = 0.05 # TRACES-SAMPLING-BEFORE-BILLING-1: stored traces bill from 2026-12-01
 
 [[d1_databases]]
 binding = "AUDIT_DB"

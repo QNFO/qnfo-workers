@@ -2,7 +2,16 @@ var __defProp = Object.defineProperty;
 var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
 
 // worker.js
-var VERSION = "1.1.10-doi-scrub"; // 1.1.8 DIGEST-LINKS-UTM-1 (2026-10-06, pillar reach; transformation lever T7.10): every paper link in the
+var VERSION = "1.2.0-funnel"; // 1.2.0 (2026-10-12, pillar reach, issue 1753) SUBSCRIBE-FUNNEL-1: every step of the sign-up
+// funnel is counted in qnfo-audit.subscribe_funnel (day, stage, source, n; a counter, never an address): box and page views,
+// submits by outcome (accepted, honeypot, invalid, rate-limited, suppressed, repeat), confirmation mails sent or failed,
+// confirm-page views, confirmations and unsubscribes. GET /funnel returns the 30-day funnel and names its largest leak (open,
+// counts only); GET /subscribe is a sign-up page of its own (one field, works without scripts) that a post or a mail can link
+// to; POST /funnel/view lets another surface count a view of its box. SUBSCRIBE-SEND-HONEST-1: a sign-up whose confirmation
+// mail could not be sent answers with an error instead of "check your inbox". SUBSCRIBE-RESEND-BOUND-1: a pending address gets
+// at most one confirmation mail an hour, however often the form is submitted with it (the form could be used to mail one
+// address without limit). The digest token is compared in constant time; event ids come from crypto.randomUUID.
+// 1.1.10-doi-scrub // 1.1.8 DIGEST-LINKS-UTM-1 (2026-10-06, pillar reach; transformation lever T7.10): every paper link in the
 // weekly digest carries utm_source=digest&utm_medium=email&utm_campaign=<slug> and the confirmation mail's corpus link
 // utm_source=confirm&utm_medium=email&utm_campaign=corpus, so a digest read becomes a measured visit once qnfo-gateway 3.10.0
 // (UTM-CLICK-LEDGER-1, T7.9) counts tagged page loads into reach_signals source utm (channel digest, campaign slug). No
@@ -86,11 +95,104 @@ async function logEvent(env, kind, status, text, meta) {
     if (!env.AUDIT) return;
     await env.AUDIT.prepare(
       "INSERT INTO cloud_ops_events (id, ts, kind, text, meta, job, status) VALUES (?1, ?2, ?3, ?4, ?5, 'subscribers', ?6)"
-    ).bind(kind + "-" + Date.now().toString(36) + Math.random().toString(36).slice(2, 8), (/* @__PURE__ */ new Date()).toISOString(), kind, String(text).slice(0, 300), JSON.stringify(Object.assign({ v: VERSION }, meta || {})), status).run();
+    ).bind(kind + "-" + Date.now().toString(36) + crypto.randomUUID().replace(/-/g, "").slice(0, 6), (/* @__PURE__ */ new Date()).toISOString(), kind, String(text).slice(0, 300), JSON.stringify(Object.assign({ v: VERSION }, meta || {})), status).run();
   } catch (e) {
   }
 }
 __name(logEvent, "logEvent");
+// SUBSCRIBE-FUNNEL-1 (1.2.0, issue 1753): one counter row per day, stage and source. No address, no IP, no token.
+var FUNNEL_DDL = "CREATE TABLE IF NOT EXISTS subscribe_funnel (day TEXT NOT NULL, stage TEXT NOT NULL, source TEXT NOT NULL DEFAULT '', n INTEGER NOT NULL DEFAULT 0, PRIMARY KEY (day, stage, source))";
+var FUNNEL_READY = new WeakSet();
+var FUNNEL_STAGES = ["box_view", "page_view", "submit", "confirm_mail_sent", "confirm_page", "confirmed"];
+var BOT_UA_RE = /bot|crawl|spider|slurp|headless|preview|scan|monitor|curl|wget|python|http-client|safelinks/i;
+function funnelSource(v) {
+  const x = String(v == null ? "" : v).toLowerCase().replace(/[^a-z0-9._-]/g, "").slice(0, 40);
+  return x || "unknown";
+}
+__name(funnelSource, "funnelSource");
+async function funnel(env, stage, source) {
+  try {
+    if (!env.AUDIT) return;
+    if (!FUNNEL_READY.has(env.AUDIT)) {
+      await env.AUDIT.prepare(FUNNEL_DDL).run();
+      FUNNEL_READY.add(env.AUDIT);
+    }
+    await env.AUDIT.prepare(
+      "INSERT INTO subscribe_funnel (day, stage, source, n) VALUES (date('now'), ?1, ?2, 1) ON CONFLICT(day, stage, source) DO UPDATE SET n = n + 1"
+    ).bind(String(stage), funnelSource(source)).run();
+  } catch (e) {
+    console.error(JSON.stringify({ event: "subscribe_funnel_write_failed", stage: String(stage), error: String(e && e.message || e).slice(0, 200) }));
+  }
+}
+__name(funnel, "funnel");
+// The 30-day funnel and its largest leak: the step with the lowest pass-through among steps that had any input.
+function funnelSummary(rows) {
+  const stages = {}, bySource = {};
+  for (const r of rows || []) {
+    const n = Number(r.n) || 0;
+    stages[r.stage] = (stages[r.stage] || 0) + n;
+    if (!bySource[r.source]) bySource[r.source] = {};
+    bySource[r.source][r.stage] = (bySource[r.source][r.stage] || 0) + n;
+  }
+  const views = (stages.box_view || 0) + (stages.page_view || 0);
+  const steps = [
+    { step: "view -> submit", from: views, to: stages.submit || 0 },
+    { step: "submit -> confirmation mail sent", from: stages.submit || 0, to: stages.confirm_mail_sent || 0 },
+    { step: "confirmation mail sent -> confirm page opened", from: stages.confirm_mail_sent || 0, to: stages.confirm_page || 0 },
+    { step: "confirm page opened -> confirmed", from: stages.confirm_page || 0, to: stages.confirmed || 0 }
+  ];
+  let leak = null;
+  for (const st of steps) {
+    st.rate = st.from > 0 ? Math.round(st.to / st.from * 1e4) / 1e4 : null;
+    if (st.rate !== null && (leak === null || st.rate < leak.rate)) leak = st;
+  }
+  return { stages, by_source: bySource, steps, largest_leak: leak ? { step: leak.step, from: leak.from, to: leak.to, rate: leak.rate } : null };
+}
+__name(funnelSummary, "funnelSummary");
+async function handleFunnel(env) {
+  let rows = [];
+  try {
+    const r = await env.AUDIT.prepare("SELECT stage, source, SUM(n) AS n FROM subscribe_funnel WHERE day >= date('now','-30 days') GROUP BY stage, source").all();
+    rows = r && r.results || [];
+  } catch (e) {
+    rows = [];
+  }
+  const out = funnelSummary(rows);
+  out.worker = "qnfo-subscribers";
+  out.version = VERSION;
+  out.window_days = 30;
+  out.limits = ["counts only: no address, IP or token is stored", "box_view is counted only for surfaces that report it (POST /funnel/view?source=<surface>); page_view is this worker's own /subscribe page; both skip declared bots", "a surface that reports no view shows submits without a view count"];
+  return json(out);
+}
+__name(handleFunnel, "handleFunnel");
+async function handleFunnelView(request, env) {
+  const u = new URL(request.url);
+  const ua = String(request.headers.get("User-Agent") || "");
+  await funnel(env, BOT_UA_RE.test(ua) || !ua ? "box_view_bot" : "box_view", u.searchParams.get("source") || "unknown");
+  return new Response(null, { status: 204, headers: { "Access-Control-Allow-Origin": "*", "Cache-Control": "no-store" } });
+}
+__name(handleFunnelView, "handleFunnelView");
+// The sign-up page: one field, a plain form post (no script needed), the same double opt-in as every other box.
+function subscribePage(source, note) {
+  return html('<h1>New QNFO papers by email</h1><p>One short weekly digest: titles and links, nothing else. Nothing is sent until you confirm by email, and every digest carries a one-click unsubscribe.</p>' + (note ? '<p role="status" style="color:#1b1915"><strong>' + escAttr(note) + "</strong></p>" : "") + '<form method="post" action="/subscribe" style="margin-top:1.4rem"><label for="sub-email" style="position:absolute;left:-9999px">Email address</label><input id="sub-email" type="email" name="email" required autocomplete="email" placeholder="you@example.com" style="font:inherit;font-size:1rem;padding:.7rem .8rem;border:1px solid #cfc8ba;border-radius:8px;min-width:16rem;max-width:100%"> <input type="text" name="hp" tabindex="-1" autocomplete="off" aria-hidden="true" style="position:absolute;left:-9999px"><input type="hidden" name="source" value="' + escAttr(funnelSource(source)) + '"><button type="submit" style="font:inherit;font-size:1rem;padding:.7rem 1.4rem;border:0;border-radius:8px;background:#24315e;color:#fff;cursor:pointer">Subscribe</button></form>');
+}
+__name(subscribePage, "subscribePage");
+async function handleSubscribePage(request, env) {
+  const u = new URL(request.url);
+  const source = u.searchParams.get("utm_source") || u.searchParams.get("source") || "subscribe-page";
+  const ua = String(request.headers.get("User-Agent") || "");
+  await funnel(env, BOT_UA_RE.test(ua) || !ua ? "page_view_bot" : "page_view", source);
+  return subscribePage(source);
+}
+__name(handleSubscribePage, "handleSubscribePage");
+// Constant-time comparison of two secrets: both are hashed, so neither length nor a prefix match shows in the timing.
+async function safeEqual(a, b) {
+  const x = await sha256Hex(String(a)), y = await sha256Hex(String(b));
+  let d = 0;
+  for (let i = 0; i < x.length; i++) d |= x.charCodeAt(i) ^ y.charCodeAt(i);
+  return d === 0;
+}
+__name(safeEqual, "safeEqual");
 function emailDomain(to) {
   return String(to || "").toLowerCase().split("@").pop().slice(0, 120);
 }
@@ -182,39 +284,61 @@ function digestText(papers, token) {
 __name(digestText, "digestText");
 async function handleSubscribe(request, env) {
   let body = {};
+  // A plain form post (the /subscribe page, no script) is answered with a page; a JSON post (the site's boxes) with JSON.
+  const ctype = String(request.headers.get("Content-Type") || "").toLowerCase();
+  const isForm = ctype.includes("application/x-www-form-urlencoded") || ctype.includes("multipart/form-data");
   try {
-    body = await request.json();
+    if (isForm) {
+      const f = await request.formData();
+      body = { email: f.get("email"), hp: f.get("hp"), website: f.get("website"), source: f.get("source") };
+    } else body = await request.json();
   } catch (e) {
     body = {};
   }
+  const src = String(body && body.source || "qnfo.org").slice(0, 80);
+  const reply = function(data, status) {
+    if (!isForm) return json(data, status);
+    if (data.ok) return html("<h1>Check your inbox</h1><p>" + (data.pending === false ? "This address is already subscribed. The next digest will reach you by email." : "A confirmation link is on its way. Your subscription starts when you open it and press the button. If nothing arrives within a few minutes, look in the spam folder.") + "</p>", status);
+    return subscribePage(src, data.error || "The sign-up did not go through. Please try again.");
+  };
   const email = normEmail(body && body.email);
   const hp = String(body && (body.hp || body.website) || "");
-  if (hp) return json({ ok: true, pending: true });
-  if (!validEmail(email)) return json({ ok: false, error: "Please enter a valid email address." }, 400);
+  if (hp) {
+    await funnel(env, "submit_honeypot", src);
+    return reply({ ok: true, pending: true });
+  }
+  if (!validEmail(email)) {
+    await funnel(env, "submit_invalid", src);
+    return reply({ ok: false, error: "Please enter a valid email address." }, 400);
+  }
   // SUPPRESSION-BYPASS-AT-SUBSCRIBE-1 (#1276): honor email_suppression at sign-up
   // so an owner-suppressed address cannot silently re-enter the list. Return a
   // soft success (do not reveal suppression) and skip the INSERT + confirmation.
   try {
     const sup = await env.AUDIT.prepare("SELECT 1 AS x FROM email_suppression WHERE lower(email) = ?1").bind(email).first();
-    if (sup) return json({ ok: true, pending: false, confirmation_sent: false, suppressed: true });
+    if (sup) {
+      await funnel(env, "submit_suppressed", src);
+      return reply({ ok: true, pending: false, confirmation_sent: false, suppressed: true });
+    }
   } catch (e) {}
   // SUBSCRIBE-CLIENT-IP-1: the gateway forwards the visitor identity as X-Forwarded-For / X-Client-UA;
   // read those first so worker-to-worker subrequests don't rate-limit the whole site as one visitor.
   const ip = request.headers.get("X-Forwarded-For") || request.headers.get("CF-Connecting-IP") || "";
   const ua = String(request.headers.get("X-Client-UA") || request.headers.get("User-Agent") || "").slice(0, 300);
   const ipHash = ip ? await sha256Hex(ip) : "";
-  const source = String(body && body.source || "qnfo.org").slice(0, 80);
+  const source = src;
   try {
     if (ipHash) {
       const r = await env.AUDIT.prepare(
         "SELECT COUNT(*) AS c FROM subscribers WHERE ip_hash = ?1 AND created_at >= datetime('now','-1 hour')"
       ).bind(ipHash).first();
       if (r && r.c >= RATE_LIMIT_PER_HOUR) {
-        return json({ ok: false, error: "Too many sign-ups from this network. Please try again later." }, 429);
+        await funnel(env, "submit_rate_limited", src);
+        return reply({ ok: false, error: "Too many sign-ups from this network. Please try again later." }, 429);
       }
     }
     const existing = await env.AUDIT.prepare(
-      "SELECT email, status, welcomed_at, unsub_token FROM subscribers WHERE email = ?1"
+      "SELECT email, status, welcomed_at, unsub_token, (welcomed_at IS NOT NULL AND welcomed_at >= datetime('now','-60 minutes')) AS mailed_recently FROM subscribers WHERE email = ?1"
     ).bind(email).first();
     let token = existing && existing.unsub_token ? existing.unsub_token : "";
     if (!token) token = crypto.randomUUID().replace(/-/g, "");
@@ -222,17 +346,30 @@ async function handleSubscribe(request, env) {
       "INSERT INTO subscribers (email, status, source, unsub_token, ip_hash, user_agent, created_at) VALUES (?1, 'pending', ?2, ?3, ?4, ?5, datetime('now')) ON CONFLICT(email) DO UPDATE SET status = CASE WHEN subscribers.status = 'subscribed' THEN 'subscribed' ELSE 'pending' END, updated_at = datetime('now'), source = excluded.source"
     ).bind(email, source, token, ipHash, ua).run();
     const alreadyConfirmed = !!(existing && existing.status === "subscribed");
-    let sent = false;
-    if (!alreadyConfirmed) {
-      const res = await sendEmail(env, email, "Confirm your QNFO subscription", confirmText(token), "confirm");
-      if (res && res.ok) {
-        sent = true;
-        await env.AUDIT.prepare("UPDATE subscribers SET welcomed_at = datetime('now') WHERE email = ?1").bind(email).run();
-      }
+    if (alreadyConfirmed) {
+      await funnel(env, "submit_already_confirmed", src);
+      return reply({ ok: true, pending: false, confirmation_sent: false });
     }
-    return json({ ok: true, pending: !alreadyConfirmed, confirmation_sent: sent });
+    // SUBSCRIBE-RESEND-BOUND-1: one confirmation mail an hour per address, however often the form is submitted with it.
+    if (existing && Number(existing.mailed_recently) === 1) {
+      await funnel(env, "submit_repeat", src);
+      return reply({ ok: true, pending: true, confirmation_sent: false, already_sent: true });
+    }
+    await funnel(env, "submit", src);
+    const res = await sendEmail(env, email, "Confirm your QNFO subscription", confirmText(token), "confirm");
+    if (res && res.ok) {
+      await env.AUDIT.prepare("UPDATE subscribers SET welcomed_at = datetime('now') WHERE email = ?1").bind(email).run();
+      await funnel(env, "confirm_mail_sent", src);
+      return reply({ ok: true, pending: true, confirmation_sent: true });
+    }
+    // SUBSCRIBE-SEND-HONEST-1: the row stays pending and a retry sends again; the visitor is not told to check an inbox
+    // that will stay empty.
+    await funnel(env, "confirm_mail_failed", src);
+    return reply({ ok: false, pending: true, confirmation_sent: false, error: "We could not send the confirmation email just now. Please try again in a few minutes." }, 502);
   } catch (e) {
-    return json({ ok: false, error: "Sign-up failed. Please try again shortly." }, 500);
+    console.error(JSON.stringify({ event: "subscribe_failed", error: String(e && e.message || e).slice(0, 200) }));
+    await funnel(env, "submit_error", src);
+    return reply({ ok: false, error: "Sign-up failed. Please try again shortly." }, 500);
   }
 }
 __name(handleSubscribe, "handleSubscribe");
@@ -273,12 +410,14 @@ async function handleConfirm(request, env) {
       return html("<h1>Already confirmed</h1><p>Your subscription is active. The next digest will reach you by email.</p>");
     }
     if (method !== "POST") {
+      await funnel(env, "confirm_page", "email");
       await logEvent(env, "subscribers-confirm", "page", "subscribers confirm page shown (" + emailDomain(row.email) + ")", { method, changed: 0, domain: emailDomain(row.email) });
       return confirmButtonPage(u.origin, token);
     }
     const r = await env.AUDIT.prepare(
       "UPDATE subscribers SET status='subscribed', confirmed_at=datetime('now'), updated_at=datetime('now') WHERE unsub_token = ?1"
     ).bind(token).run();
+    await funnel(env, "confirmed", "email");
     await logEvent(env, "subscribers-confirm", "confirmed", "subscribers confirmed (" + emailDomain(row.email) + ")", { method, changed: Number(r && r.meta && r.meta.changes || 0), domain: emailDomain(row.email) });
     return html("<h1>Subscription confirmed</h1><p>You are on the list. The next digest of new QNFO papers will reach you by email.</p>");
   } catch (e) {
@@ -296,6 +435,7 @@ async function handleUnsubscribe(request, env) {
     ).bind(token).run();
     const changed = r && r.meta && r.meta.changes ? r.meta.changes : 0;
     if (!changed) return html("<h1>Link not recognised</h1><p>This unsubscribe link is invalid or has already been used.</p>", 404);
+    await funnel(env, "unsubscribed", "email");
     return html("<h1>You're unsubscribed</h1><p>You will not receive any further QNFO research digests.</p>");
   } catch (e) {
     return html("<h1>Something went wrong</h1><p>Please try again later.</p>", 500);
@@ -382,8 +522,8 @@ async function health(env) {
     status: "ok",
     worker: "qnfo-subscribers",
     version: VERSION,
-    capabilities: ["subscribe", "double-opt-in", "unsubscribe", "weekly-digest"],
-    limitations: ["no send before double opt-in", "a confirmation link confirms only when its page's button is pressed (POST); a GET never confirms", "the digest sends only on the Sunday 16:00 UTC cron or an authenticated POST /run/digest", "suppressed addresses are never mailed"],
+    capabilities: ["subscribe", "double-opt-in", "unsubscribe", "weekly-digest", "subscribe-page", "funnel-counts"],
+    limitations: ["no send before double opt-in", "a confirmation link confirms only when its page's button is pressed (POST); a GET never confirms", "the digest sends only on the Sunday 16:00 UTC cron or an authenticated POST /run/digest", "suppressed addresses are never mailed", "a pending address gets at most one confirmation mail an hour", "GET /funnel shows counts only; a view is counted only on this worker's /subscribe page or when a surface reports it"],
     subscribers: confirmed,
     pending,
     send_email: !!env.SEND_EMAIL,
@@ -402,12 +542,15 @@ var worker_default = {
     }
     if (p === "/health" && method === "GET") return health(env);
     if (p === "/subscribe" && method === "POST") return handleSubscribe(request, env);
+    if (p === "/subscribe" && method === "GET") return handleSubscribePage(request, env);
+    if (p === "/funnel" && method === "GET") return handleFunnel(env);
+    if (p === "/funnel/view" && method === "POST") return handleFunnelView(request, env);
     if (p === "/confirm" && (method === "GET" || method === "POST")) return handleConfirm(request, env);
     if (p === "/unsubscribe" && (method === "GET" || method === "POST")) return handleUnsubscribe(request, env);
     if (p === "/run/digest" && method === "POST") {
       const auth = request.headers.get("Authorization") || "";
       const token = auth.replace(/^Bearer\s+/i, "");
-      if (!env.SUBSCRIBERS_TOKEN || token !== env.SUBSCRIBERS_TOKEN) return json({ ok: false, error: "unauthorized" }, 401);
+      if (!env.SUBSCRIBERS_TOKEN || !token || !await safeEqual(token, env.SUBSCRIBERS_TOKEN)) return json({ ok: false, error: "unauthorized" }, 401);
       let o = {};
       try {
         o = await request.json();
@@ -426,6 +569,9 @@ var worker_default = {
   }
 };
 export {
-  worker_default as default
+  worker_default as default,
+  funnelSummary,
+  funnelSource,
+  safeEqual
 };
 //# sourceMappingURL=worker.js.map

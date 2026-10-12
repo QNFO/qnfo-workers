@@ -2,14 +2,14 @@
  "ok": true,
  "marker": "REMEDIATION-CONTRACT-BRIDGE-1",
  "probe_map_entries": 44,
- "open_issues": 192,
- "with_contract_before": 192,
+ "open_issues": 182,
+ "with_contract_before": 182,
  "upgraded_sentinel_to_active": 0,
  "inserted_active": 0,
  "inserted_needs_machine_probe": 0,
- "active_contracts": 279,
- "active_with_executable_probe": 272,
- "active_with_prose_probe": 7,
+ "active_contracts": 326,
+ "active_with_executable_probe": 310,
+ "active_with_prose_probe": 16,
  "prose_probe_contracts": [
   {
    "class": "issue-1996",
@@ -45,28 +45,60 @@
    "class": "issue-2302",
    "issue_id": 2302,
    "reason": "not-a-select"
+  },
+  {
+   "class": "issue-2349",
+   "issue_id": 2349,
+   "reason": "not-a-select"
+  },
+  {
+   "class": "issue-2350",
+   "issue_id": 2350,
+   "reason": "not-a-select"
+  },
+  {
+   "class": "issue-2351",
+   "issue_id": 2351,
+   "reason": "not-a-select"
+  },
+  {
+   "class": "issue-2352",
+   "issue_id": 2352,
+   "reason": "not-a-select"
+  },
+  {
+   "class": "issue-2355",
+   "issue_id": 2355,
+   "reason": "not-a-select"
+  },
+  {
+   "class": "issue-2362",
+   "issue_id": 2362,
+   "reason": "not-a-select"
+  },
+  {
+   "class": "issue-2363",
+   "issue_id": 2363,
+   "reason": "not-a-select"
+  },
+  {
+   "class": "issue-2366",
+   "issue_id": 2366,
+   "reason": "not-a-select"
+  },
+  {
+   "class": "issue-2371",
+   "issue_id": 2371,
+   "reason": "not-a-select"
   }
  ],
- "contracts_needs_machine_probe": 21,
- "open_issues_without_active_contract": 15,
+ "contracts_needs_machine_probe": 9,
+ "open_issues_without_active_contract": 2,
  "residual_gap_ids": [
-  2273,
-  2194,
   2222,
-  2272,
-  2337,
-  2339,
-  2341,
-  2344,
-  2283,
-  2338,
-  2340,
-  2342,
-  2343,
-  2345,
-  2346
+  2232
  ],
- "head": "329a52ad2e90ef9b2a04e594d15c8c874a274f55",
+ "head": "fad7fe08812383862418fe4c8bb2865d6e969711",
  "job_status": "success",
- "ts": "2026-10-12T05:45:44Z"
+ "ts": "2026-10-12T10:01:46Z"
 }

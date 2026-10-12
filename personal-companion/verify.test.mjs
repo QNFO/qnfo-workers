@@ -262,5 +262,20 @@ const count = (p, t) => p.prepare("SELECT COUNT(*) n FROM " + t).get().n;
   ok("a truncated JSON reply still yields its explicit verdict and quotes", (() => { const r = V.parseFactVerdict('{"unsupported": ["the claim -- not in source", "another -- no"], "verdict": "fail"'); return r && r.verdict === "fail" && r.unsupported.length === 2; })());
   ok("a reply with no verdict field is still no verdict", V.parseFactVerdict("The draft looks fine to me.") === null);
 }
+// ---- REJECT-CONTEXT-1 -----------------------------------------------------------------------------------------------------------
+{
+  const c = V.problemContext("The study ran first. Later the Failure rate rose sharply in every trial.", ["name not in the source: Failure", "year not in the source: 1999"]);
+  ok(/Failure => .*the Failure rate rose/.test(c) && !/1999/.test(c), "a flagged name is logged with its surrounding text; an absent item adds nothing", c);
+  ok(V.problemContext("", ["name not in the source: X"]) === "" && V.problemContext("t", null) === "", "empty inputs give an empty context");
+}
+// ---- OPENER-WORD-1 ----------------------------------------------------------------------------------------------------------------
+{
+  const src = "InstantFusion lets two image generators share a latent interface. ImageNet is the benchmark used.";
+  const g = (txt) => V.groundingProblems(txt, src, { today: "2026-10-12" });
+  ok(g("Should InstantFusion be used here? Translating ImageNet results is the open question.").length === 0, "a sentence-opening ordinary word before a source name is not a name problem", g("Should InstantFusion be used here? Translating ImageNet results is the open question."));
+  ok(g("Later, Zorblax InstantFusion appeared.").some((x) => /Zorblax/.test(x)), "an invented name mid-sentence still fails");
+  ok(g("Zorblax Quimby invented the method.").some((x) => /Quimby/.test(x)), "an invented name after the opener still fails");
+  ok(g("Results reached 78 % on the benchmark.").some((x) => /78/.test(x)), "an invented figure still fails");
+}
 console.log(pass + " passed, " + fail + " failed");
 if (fail) process.exit(1);
