@@ -149,14 +149,14 @@ ok(!T.top.some((p) => p.id === U3) && T.snapshot === "2026-10-12" && T.top.every
 const ppc = v.reach.posts_per_channel.rows, pr = (ch, tb) => ppc.find((x) => x.channel === ch && x.table === tb);
 ok(pr("bluesky", "social_threads").total === 2 && pr("bluesky", "social_threads").last_7d === 1 && pr("mastodon", "social_media_posts").via === "Buffer" && pr("mastodon", "social_media_posts").last_7d === 1 && !pr("x", "social_media_posts") && pr("bluesky", "dissemination_tracker").total === 1 && pr("bluesky", "dissemination_tracker").last_30d === 1, "posts per channel, each ledger on its own, failed posts left out");
 const S = v.reach.subscribers, C = v.reach.credibility;
-ok(S.total === 3 && S.subscribed === 1 && S.pending === 2 && S.funnel_30d === null && S.notes.some((n) => /not measured/.test(n)) && !JSON.stringify(S).includes("example.org"), "subscribers by state, counts only; the funnel is unmeasured while its table is missing");
+ok(S.total === 3 && S.subscribed === 1 && S.pending === 2 && S.funnel_30d === null && S.notes.some((n) => /not measured/.test(n)) && !/@/.test(JSON.stringify(S)), "subscribers by state, counts only; the funnel is unmeasured while its table is missing");
 ok(C.citations.citations === 3 && C.citations.works === 2 && C.citations.day === "2026-10-11" && C.mentions.find((m) => m.source === "openalex-citation").last_30d === 1 && C.mentions.find((m) => m.source === "bluesky").last_30d === 0 && C.recent[0].url === "https://example.org/w1" && C.recent[1].url === null, "credibility: latest citation day, mentions by source, unsafe link dropped");
 ok(C.mail_outcomes.find((m) => m.outcome === "(awaiting)").n === 1 && C.mail_outcomes.find((m) => m.outcome === "positive").n === 1, "mail outcomes counted, a null outcome is awaiting");
 const B = v.buffer;
 ok(B.integration.posting === true && B.integration.per_post_statistics === false && B.statistics_collector.posts_with_statistics_30d === 0 && B.statistics_collector.last_run === "2026-09-20" && B.notes.some((n) => /not measured/.test(n)), "Buffer: posting works, per-post statistics are reported as not collected");
 ok(B.channels.length === 2 && B.channels.find((c) => c.service === "x").connected === false && B.posts.length === 2 && B.posts.find((p) => p.id === "buf-m-1").buffer_status === "ok" && B.posts.find((p) => p.id === "buf-l-1").buffer_status === null && B.posts.every((p) => p.impressions === null && p.likes === null && p.buffer_clicks === null), "Buffer channels and posts; a bad engagement_metrics JSON is tolerated; no statistic is invented");
 ok(v.unreadable.map((u) => u.read).sort().join() === "funnel,other_replies,social_reply_day" && v.unreadable.every((u) => u.reason === "table not created yet"), "the envelope lists exactly the reads that returned nothing");
-ok(!JSON.stringify(v).includes("person@example.org"), "no outreach address leaves the block");
+ok(!/[a-z0-9]@[a-z0-9]/i.test(JSON.stringify(v)), "no address leaves the block");
 
 // ---- cache
 const before = reads;
