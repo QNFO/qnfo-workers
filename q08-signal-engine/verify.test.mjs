@@ -284,5 +284,15 @@ globalThis.fetch = origFetch;
   check("a reason that only objects to the wording is a paraphrase", sp.inferences.length === 2, sp);
   check("a wording complaint that also names a figure, and a partial support, stay FACTs", sp.facts.length === 2, sp);
 }
+// Q08-PRUNE-FUZZY-1 (0.14.10, run 353)
+{
+  const txt = "# A title that names the mechanism\n\nThe lab measured expression in every tissue. The article already holds a publishable connection between the genotype, the expression data and the phenotype it reports. Nobody had asked for the third table.\n\nworth your time: yes - x";
+  const pr = V.pruneUnsupported(txt, ["unsupported claim: the article already contains a publishable link between genotype, expression, and phenotype -- not in source"]);
+  check("a paraphrased item removes the closest sentence", pr.removed.length === 1 && /publishable connection/.test(pr.removed[0]) && /measured expression/.test(pr.text) && /third table/.test(pr.text), pr);
+  const pr2 = V.pruneUnsupported(txt, ["unsupported claim: the regulator fined the company twice for missing filings -- not in source"]);
+  check("an item that matches nothing removes nothing", pr2.removed.length === 0, pr2);
+  const pr3 = V.pruneUnsupported(txt, ["unsupported claim: Nobody had asked for the third table -- not in source"]);
+  check("an exact match still removes exactly that sentence", pr3.removed.length === 1 && /third table/.test(pr3.removed[0]), pr3);
+}
 console.log("verify.test.mjs: " + passes + " passed, " + fails + " failed");
 process.exit(fails ? 1 : 0);
