@@ -1,34 +1,82 @@
 {
  "ok": true,
  "marker": "REMEDIATION-CONSUMER-1",
- "verifier": "remediation-consumer@5e6316181849",
- "due": 3,
- "pass": 1,
- "fail": 2,
+ "verifier": "remediation-consumer@6e30b9dfecad",
+ "due": 9,
+ "pass": 0,
+ "fail": 9,
  "skipped": 0,
  "contracts": [
   {
-   "class": "issue-1903",
-   "issue_id": 1903,
+   "class": "issue-2231",
+   "issue_id": 2231,
    "verdict": "fail",
    "expected": "ok",
-   "observed": "status=404",
+   "observed": "pending: 0 of 7 registry tables, 1 of 2 lineage objects, 0 of 7 registry metrics with a value",
    "written": true
   },
   {
-   "class": "issue-2049",
-   "issue_id": 2049,
+   "class": "issue-2235",
+   "issue_id": 2235,
    "verdict": "fail",
    "expected": "ok",
-   "observed": "missing-marker",
+   "observed": "pending: 0 of 4 tables (false_stop_register, trust_ledger, trust_transitions, doctrine_proposals), 0 of 3 metrics refreshed by the tick in 3 h",
    "written": true
   },
   {
-   "class": "fm-ipatent-automated-drafts-counted",
-   "issue_id": null,
-   "verdict": "pass",
+   "class": "issue-2241",
+   "issue_id": 2241,
+   "verdict": "fail",
    "expected": "ok",
-   "observed": "ok",
+   "observed": "pending: 0 of 3 tables (false_stop_register, false_stop_phrases, false_stop_hits), 0 of 2 scan views, false_stops_7d refreshed in 3 h: 0",
+   "written": true
+  },
+  {
+   "class": "issue-2192",
+   "issue_id": 2192,
+   "verdict": "fail",
+   "expected": "ok",
+   "observed": "pending: 2 computed metrics on a 1h or 10m cadence not refreshed in 3 h (tick_slot_coverage_24h, owner_dispatched_items_7d)",
+   "written": true
+  },
+  {
+   "class": "issue-2233",
+   "issue_id": 2233,
+   "verdict": "fail",
+   "expected": "ok",
+   "observed": "pending: 0 of 3 objects (v_issue_queue_v2, queue_pulls, issue_priority_scores), driver_drain_24h with a value refreshed in 3 h: 0",
+   "written": true
+  },
+  {
+   "class": "issue-2197",
+   "issue_id": 2197,
+   "verdict": "fail",
+   "expected": "ok",
+   "observed": "pending: v_triage_gap 0 open issues without a triage row, repair trigger sla_mechanisms_tick_10m installed: 0",
+   "written": true
+  },
+  {
+   "class": "issue-2234",
+   "issue_id": 2234,
+   "verdict": "fail",
+   "expected": "ok",
+   "observed": "pending: v_executor_roster 0, 0 of 2 roster metrics with a value refreshed in 3 h",
+   "written": true
+  },
+  {
+   "class": "close-predicate-monotone",
+   "issue_id": 1297,
+   "verdict": "fail",
+   "expected": "guarded",
+   "observed": "unguarded",
+   "written": true
+  },
+  {
+   "class": "issue-2148",
+   "issue_id": 2148,
+   "verdict": "fail",
+   "expected": "ok",
+   "observed": "pending: workers_idle_7d registered and refreshed in 3 h: 0, its trigger row: 0",
    "written": true
   }
  ],
@@ -55,14 +103,13 @@
   "http",
   "runner-https"
  ],
- "https": 2,
  "budget_exhausted": false,
  "runtime_verified_share_24h": 4.9,
  "host_census": {
   "skipped": "ran within 6h"
  },
- "spent_ms": 7581,
- "head": "5e631618184954e9649e91f38c4519916b9839e5",
+ "spent_ms": 20178,
+ "head": "6e30b9dfecad4f70d5ef5064cbfb65edb9f00d1f",
  "job_status": "success",
- "ts": "2026-10-12T06:29:46Z"
+ "ts": "2026-10-12T06:34:17Z"
 }
