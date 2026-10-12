@@ -1,5 +1,5 @@
 {
-  "audited_at": "2026-10-12 16:48:31",
+  "audited_at": "2026-10-12 17:20:35",
   "d1_write_failures": [],
   "d1_writes_ok": 115,
   "guard": {
@@ -573,7 +573,7 @@
       },
       {
         "dir": "qnfo-code-orchestrator",
-        "version": "0.13.0-functional-canary",
+        "version": "0.14.0-worker-timer-gate",
         "worker": "qnfo-code-orchestrator"
       },
       {
@@ -593,7 +593,7 @@
       },
       {
         "dir": "qnfo-fleet-control",
-        "version": "0.21.0-observability-drift-watch",
+        "version": "0.22.0-chaos-drill",
         "worker": "qnfo-fleet-control"
       },
       {
@@ -1146,9 +1146,9 @@
       "worker": "qnfo-code-agent"
     },
     "qnfo-code-orchestrator": {
-      "before": "0.13.0-functional-canary",
+      "before": "0.14.0-worker-timer-gate",
       "http": 200,
-      "live": "0.13.0-functional-canary",
+      "live": "0.14.0-worker-timer-gate",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-code-orchestrator"
@@ -1268,9 +1268,9 @@
       "worker": "qnfo-fleet-calibrator"
     },
     "qnfo-fleet-control": {
-      "before": "0.21.0-observability-drift-watch",
+      "before": "0.22.0-chaos-drill",
       "http": 200,
-      "live": "0.21.0-observability-drift-watch",
+      "live": "0.22.0-chaos-drill",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-fleet-control"
