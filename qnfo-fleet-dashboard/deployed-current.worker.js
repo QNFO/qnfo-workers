@@ -5973,15 +5973,19 @@ var kpiCache = null;
 var KPI_PROPERTIES = [
   { key: "q08", label: "Q08", hosts: ["q08.org", "www.q08.org"] },
   { key: "reading", label: "reading.Q08", hosts: ["reading.q08.org"] },
-  { key: "qnfo", label: "QNFO and papers", hosts: ["qnfo.org", "www.qnfo.org", "papers.qnfo.org", "archive.qnfo.org", "legal.qnfo.org"] },
+  { key: "qnfo", label: "QNFO and papers", hosts: ["qnfo.org", "www.qnfo.org", "papers.qnfo.org", "ideas.qnfo.org", "archive.qnfo.org", "legal.qnfo.org"] },
   { key: "qwav", label: "QWAV", hosts: ["ask.qwav.tech", "qwav.tech", "www.qwav.tech", "qwav.org", "www.qwav.org"] },
   { key: "ipatent", label: "iPatent", hosts: ["ipatent.qnfo.org"] },
   { key: "fleet", label: "Fleet dashboard", hosts: ["fleet.qnfo.org"] }
 ];
 var KPI_PRIORITIES = ["critical", "high", "medium", "low"];
 function kpiProperty(host) {
-  const h = String(host || "").trim().toLowerCase();
+  const h = String(host || "").trim().toLowerCase().replace(/\.$/, "");
   for (const p of KPI_PROPERTIES) if (p.hosts.indexOf(h) >= 0) return p.key;
+  // A host the list does not name belongs to the property of its domain (ideas.qnfo.org, deep.qwav.tech).
+  if (/(^|\.)qwav\.(tech|org)$/.test(h)) return "qwav";
+  if (/(^|\.)q08\.org$/.test(h)) return "q08";
+  if (/(^|\.)qnfo\.org$/.test(h)) return "qnfo";
   return "other";
 }
 function kpiDay(ms) {
@@ -6053,7 +6057,7 @@ var KPI_SQL = {
   thread_day: "SELECT substr(posted_at, 1, 10) AS day, COUNT(*) AS n FROM social_threads WHERE status = 'posted' AND substr(posted_at, 1, 10) >= ?1 GROUP BY 1",
   smp_day: "SELECT substr(published_at, 1, 10) AS day, platform, COUNT(*) AS n FROM social_media_posts WHERE status = 'published' AND platform LIKE 'buffer%' AND substr(published_at, 1, 10) >= ?1 GROUP BY 1, 2",
   reply_mail_day: "SELECT substr(sent_at, 1, 10) AS day, COUNT(*) AS n FROM outreach_log WHERE status = 'replied' AND substr(sent_at, 1, 10) >= ?1 GROUP BY 1",
-  utm_day: "SELECT date AS day, channel, SUM(value) AS n FROM reach_signals WHERE source = 'utm' AND metric = 'clicks_human' AND date >= ?1 GROUP BY 1, 2",
+  utm_day: "SELECT date AS day, channel, SUM(value) AS n FROM reach_signals WHERE source = 'utm' AND metric = 'clicks_human' AND channel <> 'probe' AND date >= ?1 GROUP BY 1, 2",
   mention_day: "SELECT date AS day, channel, SUM(value) AS n FROM reach_signals WHERE source = 'mention-radar' AND metric = 'mentions' AND date >= ?1 GROUP BY 1, 2",
   social_reply_day: "SELECT substr(created_at, 1, 10) AS day, platform AS channel, COUNT(*) AS n FROM social_replies WHERE substr(created_at, 1, 10) >= ?1 GROUP BY 1, 2",
   posts_threads: "SELECT COUNT(*) AS total, SUM(CASE WHEN substr(posted_at, 1, 10) >= ?1 THEN 1 ELSE 0 END) AS n7, SUM(CASE WHEN substr(posted_at, 1, 10) >= ?2 THEN 1 ELSE 0 END) AS n30, MAX(posted_at) AS last FROM social_threads WHERE status = 'posted'",
@@ -6062,7 +6066,7 @@ var KPI_SQL = {
   bsky_posts: "SELECT post_id, MAX(collected_at) AS collected_at, SUM(CASE WHEN metric = 'likes' THEN value END) AS likes, SUM(CASE WHEN metric = 'reposts' THEN value END) AS reposts, SUM(CASE WHEN metric = 'quotes' THEN value END) AS quotes, SUM(CASE WHEN metric = 'replies' THEN value END) AS replies FROM social_engagements WHERE platform = 'bluesky' AND collected_at = (SELECT MAX(collected_at) FROM social_engagements WHERE platform = 'bluesky') GROUP BY post_id ORDER BY (COALESCE(SUM(CASE WHEN metric IN ('likes', 'reposts', 'quotes') THEN value END), 0)) DESC, post_id LIMIT 60",
   threads: "SELECT slug, substr(title, 1, 140) AS title, post_uri, posted_at FROM social_threads WHERE status = 'posted' ORDER BY posted_at DESC LIMIT 400",
   smp_recent: "SELECT id, platform, buffer_id, url, substr(content_preview, 1, 110) AS preview, published_at, project_id, engagement_metrics FROM social_media_posts WHERE status = 'published' AND platform LIKE 'buffer%' ORDER BY published_at DESC LIMIT 60",
-  utm_campaign: "SELECT channel, entity_id AS campaign, SUM(value) AS clicks FROM reach_signals WHERE source = 'utm' AND metric = 'clicks_human' AND date >= ?1 GROUP BY 1, 2",
+  utm_campaign: "SELECT channel, entity_id AS campaign, SUM(value) AS clicks FROM reach_signals WHERE source = 'utm' AND metric = 'clicks_human' AND channel <> 'probe' AND date >= ?1 GROUP BY 1, 2",
   other_replies: "SELECT post_id, COUNT(*) AS n FROM social_replies GROUP BY 1",
   buffer_stats: "SELECT post_id, metric, value, collected_at FROM social_engagements WHERE platform = 'buffer' AND metric <> 'auth_status' AND substr(collected_at, 1, 10) >= ?1 ORDER BY collected_at ASC LIMIT 4000",
   buffer_auth: "SELECT collected_at, value, substr(note, 1, 80) AS note FROM social_engagements WHERE platform = 'buffer' AND metric = 'auth_status' ORDER BY collected_at DESC LIMIT 1",
@@ -6230,7 +6234,7 @@ function kpiShapeActions(r, nowMs, days) {
     if (!ss.length) ev.push({ event: label, source: src, daily: days.map(function() { return 0; }), total: 0 });
     for (const s of ss) ev.push({ event: s.key, source: src, daily: s.daily, total: s.total });
   };
-  addE(r.utm_day, "link clicks", function(x) { return "link clicks from " + x.channel; }, "reach_signals utm clicks_human");
+  addE(r.utm_day, "link clicks", function(x) { return "link clicks from " + x.channel; }, "reach_signals utm clicks_human, probe excluded");
   addE(r.reply_mail_day, "email replies", function() { return "email replies"; }, "outreach_log status replied");
   addE(r.social_reply_day, "replies by other accounts", function(x) { return "replies by other accounts on " + x.channel; }, "social_replies");
   addE(r.mention_day, "mentions found", function(x) { return "mentions found on " + x.channel; }, "reach_signals mention-radar");
@@ -6262,6 +6266,11 @@ function kpiShapePosts(r, nowMs) {
   const clicks = {};
   for (const x of r.utm_campaign.rows || []) clicks[kpiChannel(x.channel) + "|" + String(x.campaign)] = (clicks[kpiChannel(x.channel) + "|" + String(x.campaign)] || 0) + (Number(x.clicks) || 0);
   const clicksOk = !!r.utm_campaign.rows;
+  // The gateway stores a campaign tag cut at 64 characters, so a long slug is matched on its first 64.
+  const clicksOf = function(ch, slug) {
+    const a = clicks[ch + "|" + slug], b = clicks[ch + "|" + String(slug).slice(0, 64)];
+    return a !== undefined ? a : b !== undefined ? b : 0;
+  };
   const others = r.other_replies.rows ? {} : null;
   for (const x of r.other_replies.rows || []) others[x.post_id] = Number(x.n) || 0;
   const byUri = {};
@@ -6277,7 +6286,7 @@ function kpiShapePosts(r, nowMs) {
     const likes = kpiNum(x.likes), reposts = kpiNum(x.reposts), quotes = kpiNum(x.quotes);
     posts.push({ channel: "bluesky", via: "direct", id: x.post_id, title: t ? String(t.title || t.slug || "") : null, slug: t ? t.slug : null, url: kpiBskyUrl(x.post_id), published: t ? t.posted_at : null,
       likes: likes, reposts: reposts, quotes: quotes, replies_all: kpiNum(x.replies), replies_by_others: others ? others[x.post_id] || 0 : null, impressions: null,
-      clicks: t && clicksOk ? clicks["bluesky|" + t.slug] || 0 : null });
+      clicks: t && clicksOk ? clicksOf("bluesky", t.slug) : null });
   }
   const bstat = {};
   for (const x of r.buffer_stats.rows || []) {
@@ -6293,7 +6302,7 @@ function kpiShapePosts(r, nowMs) {
     try { st = (JSON.parse(p.engagement_metrics || "{}") || {}).buffer_status || null; } catch (e) { st = null; }
     const row = { channel: ch, via: "Buffer", id: p.buffer_id || p.id, title: String(p.preview || p.project_id || ""), slug: p.project_id || null, url: kpiHttpUrl(p.url), published: p.published_at || null,
       likes: s && s.likes !== undefined ? s.likes : null, reposts: s && s.reposts !== undefined ? s.reposts : null, quotes: null, replies_all: s && s.replies !== undefined ? s.replies : null, replies_by_others: null,
-      impressions: s && s.impressions !== undefined ? s.impressions : null, clicks: p.project_id && clicksOk ? clicks[ch + "|" + p.project_id] || 0 : null, buffer_status: st, stats_collected: s ? s.collected_at : null, buffer_clicks: s && s.clicks !== undefined ? s.clicks : null };
+      impressions: s && s.impressions !== undefined ? s.impressions : null, clicks: p.project_id && clicksOk ? clicksOf(ch, p.project_id) : null, buffer_status: st, stats_collected: s ? s.collected_at : null, buffer_clicks: s && s.clicks !== undefined ? s.clicks : null };
     posts.push(row);
     bufferPosts.push(row);
   }
@@ -6309,7 +6318,7 @@ function kpiShapePosts(r, nowMs) {
   out.top = posts.filter(function(p) { return p.score !== null && p.score > 0; }).slice(0, 15).map(function(p, i) { return Object.assign({ rank: i + 1 }, p); });
   if (!r.bsky_posts.rows) out.notes.push("bluesky engagement: " + r.bsky_posts.err);
   if (!others) out.notes.push("replies by other accounts are not measured yet (social_replies: " + r.other_replies.err + ")");
-  out.notes.push("score = likes + reposts + quotes + replies by other accounts + link clicks, counting only what is measured for that post; Bluesky's reply count includes the fleet's own thread posts and is not scored; no platform gives the fleet impressions today");
+  out.notes.push("score = likes + reposts + quotes + replies by other accounts + link clicks, counting only what is measured for that post; Bluesky's reply count includes the fleet's own thread posts and is not scored; no platform gives the fleet impressions today; link clicks are counted per channel and campaign, so two posts of one campaign on one channel show the same count; the gateway's own probe clicks are left out");
   return { panel: out, bufferPosts: bufferPosts, bufferStatPosts: Object.keys(bstat).length };
 }
 function kpiShapeBuffer(r, nowMs, bufferPosts, statPosts) {

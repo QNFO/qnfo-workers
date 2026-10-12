@@ -63,6 +63,9 @@ for (const [h, pv, vi] of [["q08.org", 30, 12], ["www.q08.org", 2, 1], ["ipatent
 rs("2026-10-11", "utm", "bluesky", "campaign", "slug-one", "clicks_human", 4);
 rs("2026-10-10", "utm", "mastodon", "campaign", "proj-m", "clicks_human", 7);
 rs("2026-10-10", "utm", "mastodon", "campaign", "proj-m", "clicks_bot", 50);
+rs("2026-10-11", "utm", "probe", "campaign", "t79", "clicks_human", 9);
+const LONG = "a-very-long-campaign-slug-that-the-gateway-cuts-at-sixty-four-characters-exactly";
+rs("2026-10-11", "utm", "linkedin", "campaign", LONG.slice(0, 64), "clicks_human", 2);
 rs("2026-10-11", "mention-radar", "bluesky", "site", "qnfo", "mentions", 2);
 rs("2026-10-11", "openalex", "openalex", "doi", "10.1/a", "citations", 3); rs("2026-10-11", "openalex", "openalex", "doi", "10.1/b", "citations", 0); rs("2026-10-01", "openalex", "openalex", "doi", "10.1/a", "citations", 99);
 for (const [at, st] of [["2026-10-08 09:00:51", "sent"], ["2026-10-08 09:00:55", "sent"], ["2026-10-09 09:00:31", "followup"], ["2026-10-10 09:00:10", "replied"], ["2026-10-09 08:00:00", "heartbeat"], ["2026-08-01 09:00:00", "sent"]]) ins("INSERT INTO outreach_log (email, sent_at, status) VALUES ('person@example.org', ?, ?)", at, st);
@@ -76,7 +79,7 @@ eng("bluesky", U1, "likes", 50, "2026-10-11"); // an older snapshot is never rea
 eng("buffer", "auth", "auth_status", 1, "2026-09-20", "ok (graphql)");
 const smp = (id, plat, bid, proj, at, status, em) => ins("INSERT INTO social_media_posts (id, platform, post_id, url, content_preview, published_at, buffer_id, project_id, status, engagement_metrics) VALUES (?, ?, ?, NULL, ?, ?, ?, ?, ?, ?)", id, plat, bid, "Preview of " + proj, at, bid, proj, status, em);
 smp("ch-m-1", "buffer-mastodon", "buf-m-1", "proj-m", "2026-10-10 14:30:31", "published", '{"via":"channel-drain","buffer_status":"ok"}');
-smp("ch-l-1", "buffer-linkedin", "buf-l-1", "proj-l", "2026-10-12 00:30:53", "published", "not json");
+smp("ch-l-1", "buffer-linkedin", "buf-l-1", LONG, "2026-10-12 00:30:53", "published", "not json");
 smp("ch-x-0", "buffer-x", "buf-x-0", "proj-x", "2026-08-27 04:51:26", "failed", "{}");
 ins("INSERT INTO dissemination_tracker (id, channel, action, posted_at) VALUES ('d1', 'bluesky', 'posted', '2026-09-29 12:30:44'), ('d2', 'bluesky', 'queued', NULL)");
 ins("INSERT INTO social_channels (channel_id, service, name, connected, checked_at) VALUES ('1', 'mastodon', 'QNFO', 1, '2026-10-12T00:30:52.379Z'), ('2', 'twitter', 'Handle', 0, '2026-10-12T00:30:52.379Z')");
@@ -98,7 +101,7 @@ const K = ctx.K, env = { AUDIT: shim };
 const j = (x) => JSON.parse(JSON.stringify(x));
 
 // ---- helpers
-ok(K.kpiProperty("WWW.Q08.org") === "q08" && K.kpiProperty("reading.q08.org") === "reading" && K.kpiProperty("papers.qnfo.org") === "qnfo" && K.kpiProperty("ask.qwav.tech") === "qwav" && K.kpiProperty("ipatent.qnfo.org") === "ipatent" && K.kpiProperty("example.net") === "other", "hosts map to the owner's five properties, the dashboard, or other");
+ok(K.kpiProperty("WWW.Q08.org") === "q08" && K.kpiProperty("reading.q08.org") === "reading" && K.kpiProperty("papers.qnfo.org") === "qnfo" && K.kpiProperty("ask.qwav.tech") === "qwav" && K.kpiProperty("ipatent.qnfo.org") === "ipatent" && K.kpiProperty("example.net") === "other" && K.kpiProperty("ideas.qnfo.org") === "qnfo" && K.kpiProperty("deep.qwav.tech") === "qwav" && K.kpiProperty("fleet.qnfo.org") === "fleet" && K.kpiProperty("notq08.org") === "other", "hosts map to the owner's five properties, the dashboard, or other");
 ok(K.kpiBskyUrl(U1) === "https://bsky.app/profile/did:plc:abc123/post/3aaa" && K.kpiBskyUrl("buffer:xyz") === null && K.kpiBskyUrl("at://x\"/app.bsky.feed.post/1") === null, "a Bluesky uri becomes its public link; anything else has none");
 ok(K.kpiHttpUrl("https://example.org/a") === "https://example.org/a" && K.kpiHttpUrl("javascript:alert(1)") === null && K.kpiHttpUrl("https://e.org/\"><script>") === null, "only plain http(s) links are kept");
 ok(K.kpiChannel("buffer-linkedin") === "linkedin" && K.kpiChannel("twitter") === "x" && K.kpiChannel("buffer/twitter") === "x" && K.kpiChannel("mastodon/mstdn.science") === "mastodon", "platform names fold to channels");
@@ -135,13 +138,13 @@ ok(P.all.find((x) => x.day === "2026-10-10").pageviews === 100 && P.all.find((x)
 const A = v.reach.actions, E = v.reach.events, ser = (list, k, key) => list.find((s) => s[key] === k);
 ok(ser(A.series, "email (first message)", "channel").total === 2 && ser(A.series, "email (follow-up)", "channel").total === 1 && ser(A.series, "bluesky", "channel").total === 2 && ser(A.series, "mastodon (via Buffer)", "channel").total === 1 && ser(A.series, "linkedin (via Buffer)", "channel").total === 1 && A.total === 7, "actions per channel: mail, direct posts, Buffer posts; heartbeat, failed and out-of-window rows left out");
 ok(ser(A.series, "bluesky", "channel").daily[v.days.indexOf("2026-10-11")] === 1 && ser(A.series, "bluesky", "channel").daily[v.days.indexOf("2026-10-12")] === 0, "an action series is per day");
-ok(ser(E.series, "link clicks from mastodon", "event").total === 7 && ser(E.series, "link clicks from bluesky", "event").total === 4 && ser(E.series, "email replies", "event").total === 1 && ser(E.series, "mentions found on bluesky", "event").total === 2, "events: human link clicks (bot clicks left out), mail replies, mentions");
+ok(ser(E.series, "link clicks from mastodon", "event").total === 7 && ser(E.series, "link clicks from bluesky", "event").total === 4 && ser(E.series, "email replies", "event").total === 1 && ser(E.series, "mentions found on bluesky", "event").total === 2 && !ser(E.series, "link clicks from probe", "event"), "events: human link clicks (bot and probe clicks left out), mail replies, mentions");
 const sr = ser(E.series, "replies by other accounts", "event");
-ok(sr && sr.total === null && sr.daily === null && sr.reason === "table not created yet" && E.total === 14, "a table that does not exist yet is an unmeasured series, and the total leaves it out");
+ok(sr && sr.total === null && sr.daily === null && sr.reason === "table not created yet" && E.total === 16, "a table that does not exist yet is an unmeasured series, and the total leaves it out");
 const T = v.reach.top_posts;
-ok(T.top.length === 3 && T.top[1].title === "Preview of proj-m" && T.top[1].score === 7 && T.top[1].url === null && T.top[1].likes === null && T.top[1].impressions === null, "a Buffer post ranks on the fleet's click count; its platform figures and link are null, not 0");
+ok(T.top.length === 4 && T.top[1].title === "Preview of proj-m" && T.top[1].score === 7 && T.top[1].url === null && T.top[1].likes === null && T.top[1].impressions === null, "a Buffer post ranks on the fleet's click count; its platform figures and link are null, not 0");
 ok(T.top[0].id === U1 && T.top[0].score === 7 && T.top[0].clicks === 4 && T.top[0].likes === 2 && T.top[0].url === "https://bsky.app/profile/did:plc:abc123/post/3aaa" && T.top[0].replies_by_others === null && T.top[0].replies_all === 1, "a Bluesky post: latest snapshot only, link built, clicks by campaign, own-thread replies not scored");
-ok(T.top[2].id === U2 && T.top[2].title === "Thread two" && T.top[2].score === 6 && !T.top.some((p) => p.title === "Preview of proj-l") && T.ranked_of === 5, "a uri inside a JSON post_uri still finds its thread; a tie goes to the newer post; a measured 0 is not ranked");
+ok(T.top[2].id === U2 && T.top[2].title === "Thread two" && T.top[2].score === 6 && T.top[3].id === "buf-l-1" && T.top[3].clicks === 2 && T.ranked_of === 5, "a uri inside a JSON post_uri still finds its thread; a tie goes to the newer post; a campaign tag cut at 64 characters still matches its post");
 ok(!T.top.some((p) => p.id === U3) && T.snapshot === "2026-10-12" && T.top.every((p, i) => p.rank === i + 1), "a post with no reader action is not ranked; ranks are 1..n");
 const ppc = v.reach.posts_per_channel.rows, pr = (ch, tb) => ppc.find((x) => x.channel === ch && x.table === tb);
 ok(pr("bluesky", "social_threads").total === 2 && pr("bluesky", "social_threads").last_7d === 1 && pr("mastodon", "social_media_posts").via === "Buffer" && pr("mastodon", "social_media_posts").last_7d === 1 && !pr("x", "social_media_posts") && pr("bluesky", "dissemination_tracker").total === 1 && pr("bluesky", "dissemination_tracker").last_30d === 1, "posts per channel, each ledger on its own, failed posts left out");
