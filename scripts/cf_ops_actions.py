@@ -70,6 +70,14 @@ ACTIONS
                          newest d1_fold_backups row verifies, its R2 copy verifies, every jnlaudit_* copy matches, no fleet_tasks
                          definition names JNL or the database, and the live manifest is unchanged (owner directive 2026-10-05:
                          no observation window).
+  noz-scrub-bodies --model dry|live
+                         NO-ZENODO-DOI-5 (#2278, umbrella #2273): rewrite every published, distributed or external_preprint
+                         living-paper body and abstract that still names the retired registrar or a 10.5281 DOI, deterministically
+                         (noz_scrub: front matter, doi.org links, reference entries, **DOI:** lines, the word itself -> papers.qnfo.org
+                         pages). dry (default) prints per-row counts, the first 10 before/after lines and every leftover, writes
+                         nothing. live creates bak_20261012_noz_bodies first (idempotent), then one optimistic UPDATE per row with
+                         the old body as the predicate (a concurrent edit is skipped, never overwritten), then re-counts the rows
+                         still matching; exit 0 only when that count is 0.
 
 Every action prints one line `RESULT_JSON=<json>` so the job log is machine-readable.
 """
@@ -694,6 +702,21 @@ def spare_domain_canon(zone_name: str, mode: str, token: str, fetch=None, sleep=
             if not unpaused["ok"]:
                 rc = 1
                 continue
+        # EDGE-CERT-1: a zone that was paused (or whose Universal SSL was switched off) answers every https request with a TLS
+        # handshake failure however its records and rules read (empoweringchange.today, 2026-10-12 14:33Z: A records on
+        # Cloudflare, no certificate). Universal SSL is switched on when it is off, and the certificate packs are recorded.
+        ssl = {"universal_enabled": None, "enabled_now": False, "packs": []}
+        st, j = call("GET", "/zones/%s/ssl/universal/settings" % zid, token)
+        if st == 200:
+            ssl["universal_enabled"] = bool((j.get("result") or {}).get("enabled"))
+            if not ssl["universal_enabled"] and mode != "dry":
+                st2, j2 = call("PATCH", "/zones/%s/ssl/universal/settings" % zid, token, {"enabled": True})
+                ssl["enabled_now"] = st2 == 200 and j2.get("success") is not False
+                ssl["enable_http"] = st2
+        st, j = call("GET", "/zones/%s/ssl/certificate_packs?status=all" % zid, token)
+        if st == 200:
+            ssl["packs"] = [{"type": c.get("type"), "status": c.get("status"), "hosts": c.get("hosts")} for c in (j.get("result") or [])][:5]
+        emit({"action": "spare-domain-canon", "stage": "ssl", "zone": zone, "ssl": ssl})
         st, j = call("GET", "/zones/%s/rulesets/phases/%s/entrypoint" % (zid, REDIRECT_PHASE), token)
         before = ((j.get("result") or {}).get("rules") or []) if st == 200 else []
         emit({"action": "spare-domain-canon", "stage": "backup", "zone": zone, "http": st, "ruleset_rules": before})
@@ -737,11 +760,16 @@ def spare_domain_canon(zone_name: str, mode: str, token: str, fetch=None, sleep=
                 sleep(30)
         ok = all(c["ok"] for c in checks)
         restored = None
-        if not ok and rule_needed:
+        # A host that answers nothing (status 0: DNS, TLS or timeout) is not made worse by the rule, and a restore would only mean
+        # a re-run once the certificate is up; the rule is kept and the run still fails so the cause is read. A host that
+        # answered something other than the redirect (a 200 from the old target) is the case the restore exists for.
+        answered = [c for c in checks if not c["ok"] and c["status"] != 0]
+        if not ok and rule_needed and answered:
             st, j = call("PUT", "/zones/%s/rulesets/phases/%s/entrypoint" % (zid, REDIRECT_PHASE), token, {"rules": before})
             restored = {"http": st, "rules": len(before)}
+        if not ok:
             rc = 1
-        emit({"action": "spare-domain-canon", "ok": ok, "zone": zone, "target": target, "unpaused": unpaused, "rule_written": rule_needed, "dns": dns_done, "verify": checks, "restored": restored})
+        emit({"action": "spare-domain-canon", "ok": ok, "zone": zone, "target": target, "unpaused": unpaused, "ssl": ssl, "rule_written": rule_needed, "dns": dns_done, "verify": checks, "restored": restored, "kept_rule_on_connection_error": bool(not ok and rule_needed and not answered)})
     return rc
 
 
@@ -754,6 +782,224 @@ def d1q(acct: str, token: str, sql: str, params: list) -> tuple[bool, list]:
         return False, [str(j.get("errors"))[:300]]
     res = j.get("result") or [{}]
     return True, res[0].get("results") or []
+
+
+# NO-ZENODO-DOI-5 (2026-10-12, agent_issues 2278, umbrella 2273; owner directive 2026-10-10: remove every Zenodo reference
+# fleet-wide; pillar reach). The living-paper bodies and abstracts still carry the retired registrar: front-matter DOIs,
+# doi.org links, reference entries, "**DOI:**" lines and the word itself. noz_scrub() is a pure, deterministic rewrite that the
+# offline suite (scripts/cf_ops_noz_scrub_test.py) proves; noz_scrub_bodies() runs it over the papers D1, dry by default,
+# live only after the backup table exists, with the old body as the UPDATE predicate so a concurrent edit is never overwritten.
+NOZ_PAPERS_BASE = "https://papers.qnfo.org/papers"
+NOZ_STATUSES = "('published', 'distributed', 'external_preprint')"
+NOZ_BAK_TABLE = "bak_20261012_noz_bodies"
+NOZ_MATCH_SQL = "(lower(body_md) LIKE '%zenodo%' OR lower(body_md) LIKE '%10.5281%' OR lower(abstract) LIKE '%zenodo%' OR lower(abstract) LIKE '%10.5281%')"
+NOZ_PAGE = 50
+NOZ_HAS = re.compile(r"zenodo|10\.5281", re.I)
+_NZ = r"10\.5281/zenodo(?:\.([A-Za-z0-9]+))?"                      # group 1: <n> (a placeholder like XXXXXXX counts too)
+_NDOI_ORG = r"(?:https?://)?(?:dx\.)?doi\.org/"
+_NZ_RE = re.compile(_NZ)
+_NZ_URL_RE = re.compile(r"https?://(?:dx\.)?doi\.org/" + _NZ + r"/?", re.I)
+_NZ_LINK_RE = re.compile(r"\[([^\]\n]*)\]\(" + _NDOI_ORG + _NZ + r"/?\)", re.I)
+_NZ_ORG_RE = re.compile(r"https?://(?:www\.|sandbox\.)?zenodo\.org(?:/(?:records?/|doi/10\.5281/zenodo\.)([A-Za-z0-9]+))?(?:[^\s)\]>\"'.,;:]|[.,;:](?![\s)\]>\"']|$))*", re.I)
+_NZ_DOI_LINE_RE = re.compile(r"\*\*DOI:?\*\*:?[ \t]*`?(?:" + _NDOI_ORG + r")?" + _NZ + r"/?`?", re.I)
+_NZ_REF_RE = re.compile(r"\bZenodo\.[ \t]+(?:" + _NDOI_ORG + r")?" + _NZ + r"/?(\.?)", re.I)
+_NZ_LABEL_RE = re.compile(r"\bdoi:?[ \t]*`?(?:" + _NDOI_ORG + r")?" + _NZ + r"/?`?", re.I)
+_NZ_FM_DOI_RE = re.compile(r"^([ \t]*)doi:[ \t]*[\"']?" + _NZ + r"[\"']?[ \t]*$", re.I)
+_NZ_FM_SUP_RE = re.compile(r"^([ \t]*)superseded_by:[ \t]*[\"']?(?:" + _NDOI_ORG + r")?" + _NZ + r"/?[\"']?[ \t]*$", re.I)
+_NZ_FM_KEY_RE = re.compile(r"^[ \t]*[A-Za-z0-9_-]*zenodo[A-Za-z0-9_-]*[ \t]*:", re.I)
+
+
+def noz_url(n, doi_map: dict) -> str:
+    """The papers.qnfo.org URL for a 10.5281/zenodo.<n> DOI: the paper's own page when the DOI maps to a slug, else the index."""
+    slug = doi_map.get("10.5281/zenodo." + n) if n else None
+    return NOZ_PAPERS_BASE + "/" + slug + "/" if slug else NOZ_PAPERS_BASE
+
+
+def noz_scrub(text, doi_map: dict, self_slug: str):
+    """Pure rewrite of one paper body or abstract. Returns (new_text, change_count, leftover_contexts).
+
+    Rules, in order, per line (only lines that mention zenodo or 10.5281 are touched, so unrelated text is byte-identical):
+      front matter (the leading --- block only): doi: "10.5281/zenodo.<n>" -> doi: ""; superseded_by: "<doi>" -> "<slug>" when mapped,
+        else the line goes; a key named after the registrar (zenodo_doi, zenodo_url, ...) goes; any other value takes the body rules.
+      fenced code (``` or ~~~): only the link, URL and DOI rewrites.
+      prose: **DOI:** <doi> -> **URL:** <own page or mapped page>; "Zenodo. <doi>." -> "QNFO. <url>."; DOI/doi: <doi> -> <url>;
+        doi.org and zenodo.org links -> <url>; any remaining <doi> token -> <url>; then the word: "(Zenodo)" removed, "Zenodo DOI(s)" ->
+        "DOI(s)", "on|via|at Zenodo" -> "at papers.qnfo.org", any other "Zenodo" -> "the QNFO archive"; doubled spaces and " ." tidied.
+    Scrubbing the result again changes nothing (the suite proves it)."""
+    if not text:
+        return text, 0, []
+    url = lambda n: noz_url(n, doi_map)  # noqa: E731
+    own = NOZ_PAPERS_BASE + "/" + self_slug + "/" if self_slug else NOZ_PAPERS_BASE
+    changes = [0]
+
+    def sub(rx, repl, s):
+        s, k = rx.subn(repl, s)
+        changes[0] += k
+        return s
+
+    def ids(s):  # links, URLs and DOI tokens -> papers.qnfo.org (the only rewrites allowed inside fenced code)
+        s = sub(_NZ_LINK_RE, lambda m: url(m.group(2)) if NOZ_HAS.search(m.group(1)) or re.search(r"doi\.org", m.group(1), re.I) else "[" + m.group(1) + "](" + url(m.group(2)) + ")", s)
+        s = sub(_NZ_URL_RE, lambda m: url(m.group(1)), s)
+        s = sub(_NZ_ORG_RE, lambda m: url(m.group(1)), s)
+        s = sub(_NZ_RE, lambda m: url(m.group(1)), s)
+        return s
+
+    def prose(s):
+        s = sub(_NZ_DOI_LINE_RE, lambda m: "**URL:** " + (own if doi_map.get("10.5281/zenodo." + (m.group(1) or "")) == self_slug and self_slug else url(m.group(1))), s)
+        s = sub(_NZ_REF_RE, lambda m: "QNFO. " + url(m.group(1)) + m.group(2), s)
+        s = sub(_NZ_LABEL_RE, lambda m: url(m.group(1)), s)
+        s = ids(s)
+        s = sub(re.compile(r"[ \t]*\(\s*zenodo\s*\)", re.I), "", s)
+        s = sub(re.compile(r"\bzenodo[ \t]+(DOIs?)\b", re.I), r"\1", s)
+        s = sub(re.compile(r"\b(on|via|at)[ \t]+zenodo\b", re.I), lambda m: ("At" if m.group(1)[0].isupper() else "at") + " papers.qnfo.org", s)
+        s = sub(re.compile(r"\bzenodo\b", re.I), "the QNFO archive", s)
+        s = re.sub(r"\(\s*\)", "", s)
+        s = re.sub(r"(?<=\S)[ \t]+(?=[.,;](?:\s|$))", "", s)
+        s = re.sub(r"(\S)[ \t]{2,}(?=\S)", r"\1 ", s)
+        return s.rstrip(" \t")
+
+    lines = text.split("\n")
+    out = []
+    i = 0
+    # front matter: a leading --- block
+    if lines and lines[0].strip() == "---":
+        end = next((k for k in range(1, len(lines)) if lines[k].strip() == "---"), None)
+        if end is not None:
+            out.append(lines[0])
+            for ln in lines[1:end]:
+                if not NOZ_HAS.search(ln):
+                    out.append(ln)
+                    continue
+                m = _NZ_FM_DOI_RE.match(ln)
+                if m:
+                    out.append(m.group(1) + 'doi: ""')
+                    changes[0] += 1
+                    continue
+                m = _NZ_FM_SUP_RE.match(ln)
+                if m:
+                    slug = doi_map.get("10.5281/zenodo." + (m.group(2) or ""))
+                    if slug:
+                        out.append(m.group(1) + 'superseded_by: "' + slug + '"')
+                    changes[0] += 1
+                    continue
+                if _NZ_FM_KEY_RE.match(ln):
+                    changes[0] += 1
+                    continue
+                out.append(prose(ln))
+            out.append(lines[end])
+            i = end + 1
+    in_code = False
+    for ln in lines[i:]:
+        if re.match(r"^[ \t]*(```|~~~)", ln):
+            in_code = not in_code
+            out.append(ids(ln) if NOZ_HAS.search(ln) else ln)
+            continue
+        if not NOZ_HAS.search(ln):
+            out.append(ln)
+        elif in_code:
+            out.append(ids(ln))
+        else:
+            out.append(prose(ln))
+    new = "\n".join(out)
+    left = []
+    for m in NOZ_HAS.finditer(new):
+        left.append(new[max(0, m.start() - 40):m.end() + 40].replace("\n", " "))
+        if len(left) >= 5:
+            break
+    return new, changes[0], left
+
+
+def noz_changed_lines(before: str, after: str) -> list:
+    """(old, new) line pairs that differ, in order; a removed line pairs with ''."""
+    import difflib
+    a, b = (before or "").split("\n"), (after or "").split("\n")
+    pairs = []
+    for tag, i1, i2, j1, j2 in difflib.SequenceMatcher(None, a, b, autojunk=False).get_opcodes():
+        if tag == "equal":
+            continue
+        olds, news = a[i1:i2], b[j1:j2]
+        for k in range(max(len(olds), len(news))):
+            pairs.append((olds[k] if k < len(olds) else "", news[k] if k < len(news) else ""))
+    return pairs
+
+
+def noz_scrub_bodies(acct: str, token: str, mode: str = "dry", run=None) -> int:
+    """NO-ZENODO-DOI-5: scrub the living-paper bodies and abstracts. dry (default) rewrites in memory and prints the plan; live
+    first creates the backup table (idempotent), then one optimistic UPDATE per row (old body as predicate), then re-counts."""
+    if mode not in ("dry", "live"):
+        emit({"action": "noz-scrub-bodies", "ok": False, "error": "mode must be dry or live (the model input)", "mode": mode})
+        return 2
+    run = run or (lambda sql, params=None: d1q(acct, token, sql, params or []))
+    ok, rows = run("SELECT slug, doi, zenodo_doi FROM papers WHERE status IN " + NOZ_STATUSES + " AND (doi LIKE '10.5281/%' OR zenodo_doi LIKE '10.5281/%')")
+    if not ok:
+        emit({"action": "noz-scrub-bodies", "ok": False, "stage": "doi-map", "error": str(rows)[:300]})
+        return 1
+    doi_map = {}
+    for r in rows:
+        for k in ("doi", "zenodo_doi"):
+            v = (r.get(k) or "").strip()
+            if v.startswith("10.5281/") and r.get("slug"):
+                doi_map.setdefault(v, r["slug"])
+    todo, off = [], 0
+    while True:
+        ok, page = run("SELECT slug, body_md, abstract FROM papers WHERE status IN " + NOZ_STATUSES + " AND " + NOZ_MATCH_SQL + " ORDER BY slug LIMIT " + str(NOZ_PAGE) + " OFFSET ?1", [off])
+        if not ok:
+            emit({"action": "noz-scrub-bodies", "ok": False, "stage": "read", "offset": off, "error": str(page)[:300]})
+            return 1
+        todo.extend(page)
+        if len(page) < NOZ_PAGE:
+            break
+        off += NOZ_PAGE
+    plan, leftovers, total_changes, snippets = [], [], 0, []
+    for r in todo:
+        slug = r.get("slug") or ""
+        body, abstract = r.get("body_md"), r.get("abstract")
+        nb, cb, lb = noz_scrub(body, doi_map, slug)
+        na, ca, la = noz_scrub(abstract, doi_map, slug)
+        total_changes += cb + ca
+        print("noz-scrub-bodies %s: body %d change(s), abstract %d change(s)%s" % (slug, cb, ca, "" if not (lb or la) else ", LEFTOVER " + str(len(lb) + len(la))))
+        leftovers.extend({"slug": slug, "field": f, "context": c} for f, lst in (("body_md", lb), ("abstract", la)) for c in lst)
+        if len(snippets) < 10:
+            for o, n in noz_changed_lines((body or "") + "\n" + (abstract or ""), (nb or "") + "\n" + (na or "")):
+                if len(snippets) >= 10:
+                    break
+                snippets.append({"slug": slug, "before": o[:200], "after": n[:200]})
+        plan.append({"slug": slug, "body": body, "new_body": nb, "abstract": abstract, "new_abstract": na, "changes": cb + ca})
+    for s in snippets:
+        print("  %s\n    - %s\n    + %s" % (s["slug"], s["before"], s["after"]))
+    for l in leftovers:
+        print("  LEFTOVER %s %s: ...%s..." % (l["slug"], l["field"], l["context"]))
+    summary = {"action": "noz-scrub-bodies", "mode": mode, "doi_map": len(doi_map), "rows": len(todo), "rows_changed": sum(1 for p in plan if p["changes"]),
+               "changes": total_changes, "leftovers": len(leftovers), "snippets": snippets[:10], "leftover_contexts": leftovers}
+    if mode == "dry":
+        emit({**summary, "ok": True, "dry": True})
+        return 0
+    ok, r = run("CREATE TABLE IF NOT EXISTS " + NOZ_BAK_TABLE + " AS SELECT slug, status, body_md, abstract FROM papers WHERE status IN " + NOZ_STATUSES + " AND " + NOZ_MATCH_SQL)
+    if not ok:
+        emit({**summary, "ok": False, "stage": "backup", "error": str(r)[:300]})
+        return 1
+    okc, cnt = run("SELECT COUNT(*) AS n FROM " + NOZ_BAK_TABLE)
+    backed = (cnt[0].get("n") if okc and cnt else None)
+    updated, skipped, failed = 0, 0, []
+    for p in plan:
+        if not p["changes"]:
+            continue
+        if p["body"] is None:
+            sql, params = "UPDATE papers SET body_md = ?1, abstract = ?2, updated_at = datetime('now') WHERE slug = ?3 AND body_md IS NULL RETURNING slug", [p["new_body"], p["new_abstract"], p["slug"]]
+        else:
+            sql, params = "UPDATE papers SET body_md = ?1, abstract = ?2, updated_at = datetime('now') WHERE slug = ?3 AND body_md = ?4 RETURNING slug", [p["new_body"], p["new_abstract"], p["slug"], p["body"]]
+        ok, res = run(sql, params)
+        if not ok:
+            failed.append({"slug": p["slug"], "error": str(res)[:200]})
+        elif res:
+            updated += 1
+        else:
+            skipped += 1  # the body changed under us (optimistic predicate): left for the next run
+    okn, after = run("SELECT COUNT(*) AS n FROM papers WHERE status IN " + NOZ_STATUSES + " AND " + NOZ_MATCH_SQL)
+    remaining = after[0].get("n") if okn and after else None
+    print("noz-scrub-bodies live: backed up %s row(s) in %s, updated %d, skipped %d (concurrent edit), failed %d, remaining %s" % (backed, NOZ_BAK_TABLE, updated, skipped, len(failed), remaining))
+    emit({**summary, "ok": remaining == 0, "dry": False, "backup_table": NOZ_BAK_TABLE, "backed_up": backed, "updated": updated, "skipped": skipped, "failed": failed, "remaining": remaining})
+    return 0 if remaining == 0 else 1
 
 
 # D1-FOLD-1 (2026-10-05, agent_issues 1822, owner delegated the decision 2026-10-05): fleet_budget.d1_databases is 11 against
@@ -1297,7 +1543,7 @@ def gen_activitypub_key(worker: str, acct: str, token: str, keygen=_rsa_keypair,
 
 def main() -> int:
     ap = argparse.ArgumentParser()
-    ap.add_argument("action", choices=["d1-backup", "unbind-d1", "delete-d1", "unbind-service", "worker-history", "kv-secret-scan", "ops-intake-probe", "report", "r2-get", "delete-worker", "delete-vectorize-index", "gateway-logs", "ai-neurons", "gateway-cost", "access-probe", "zaraz-remove-tool", "zaraz-get", "zaraz-set-ga4", "spare-domain-canon", "gen-activitypub-key"])
+    ap.add_argument("action", choices=["d1-backup", "unbind-d1", "delete-d1", "unbind-service", "worker-history", "kv-secret-scan", "ops-intake-probe", "report", "r2-get", "delete-worker", "delete-vectorize-index", "gateway-logs", "ai-neurons", "gateway-cost", "access-probe", "zaraz-remove-tool", "zaraz-get", "zaraz-set-ga4", "spare-domain-canon", "gen-activitypub-key", "noz-scrub-bodies"])
     ap.add_argument("--target", default="")
     ap.add_argument("--model", default="")
     ap.add_argument("--gateway", default="default")
@@ -1332,6 +1578,8 @@ def main() -> int:
         return zaraz_set_ga4(a.target, a.model, token)
     if a.action == "spare-domain-canon":
         return spare_domain_canon(a.target, a.model, token)
+    if a.action == "noz-scrub-bodies":
+        return noz_scrub_bodies(acct, token, a.model or "dry")
     if a.action == "r2-get":
         return r2_get(acct, token, a.target)
     if a.action == "worker-history":

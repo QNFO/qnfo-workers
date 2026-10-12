@@ -43,4 +43,27 @@ for (const [n, p] of Object.entries({ REVIEW: rv, REVISE_PATCH: rp, REVISE: rf, 
   assert.ok(t > p.indexOf("=== END PAPER ==="), n + ": task selector follows the paper");
 }
 assert.ok(rp.endsWith("FIXES (JSON):\n[{\"id\":\"h1\"}]") && rv.includes("=== END PAPER ===\n\n=== TASK: REVIEW"), "per-call text follows the task selector");
+
+// PROMPT-CACHE-PREFIX-1 (0.16.0, agent_issues 2116): every stage builder, the complete-stage tasks (CONTINUE, SECTION) and the
+// text-level verification (VERIFY_TEXT) included, gives two different papers the same first 4096 chars, and the preamble
+// literal interpolates no row id, date, version or counter, so the static prefix is byte-identical across papers and ticks.
+const p1 = "# Paper one\n\n" + "A sentence about qubits and their coherence. ".repeat(600);
+const p2 = "# Paper two\n\n" + "A sentence about networks and their routing. ".repeat(700);
+for (const [n, label, body] of [["CONTINUE", "PAPER SO FAR", "GROUNDING (the input block and the numbered Bibliography; cite only these):\n[1] a\n\nREMAINING REQUIRED SECTIONS, in order, after finishing the current one: Results; Discussion"], ["SECTION", "PAPER", "GROUNDING (the input block and the numbered Bibliography; cite only these):\n[1] a\n\nSECTION TO WRITE: '## 3. Methods'"], ["VERIFY_TEXT", "PAPER", "CLAIMS (JSON):\n[]"], ["REVIEW", "PAPER", "BIBLIOGRAPHY (numbered; the paper may cite only these):\n[1] a"], ["REVISE_PATCH", "PAPER", "FIXES (JSON):\n[]"], ["REVISE", "PAPER", "FIXES (JSON):\n[]"], ["VERIFY_EXTRACT", "PAPER", ""], ["VERIFY_GEN", "PAPER", "CLAIMS (JSON):\n[]"]]) {
+  const x = stageContextPrompt(n, label, p1, body), y = stageContextPrompt(n, label, p2, body);
+  assert.equal(x.slice(0, 4096), y.slice(0, 4096), n + ": two papers share the first 4096 chars");
+  assert.equal(x.slice(0, 4096), WRITER_PROMPT.slice(0, 4096), n + ": the prefix is the writer's too");
+  assert.ok(x.indexOf(p1.slice(0, 200)) > 4096, n + ": the paper starts after the static prefix");
+}
+assert.equal((WRITER_PROMPT + "\n\n" + "INPUT BLOCK for paper one\n" + p1).slice(0, 4096), (WRITER_PROMPT + "\n\n" + "INPUT BLOCK for paper two\n" + p2).slice(0, 4096), "the writer legs of two groundings share the first 4096 chars");
+assert.equal((RECONCILE_PROMPT + "\n\n" + p1).slice(0, 4096), (RECONCILE_PROMPT + "\n\n" + p2).slice(0, 4096), "the reconcile prompts of two papers share the first 4096 chars");
+assert.ok(RESEARCH_SHARED_PREAMBLE.includes("### TASK VERIFY_TEXT\n"), "preamble names task VERIFY_TEXT");
+import { readFileSync } from "node:fs";
+const src = readFileSync(new URL("./worker.js", import.meta.url), "utf8");
+const la = src.indexOf("var RESEARCH_SHARED_PREAMBLE = [");
+const lb = src.indexOf("].join(", la);
+assert.ok(la > 0 && lb > la, "the preamble is one array literal");
+const lit = src.slice(la, lb);
+assert.ok(!/row\.|nowIso|new Date|Date\.now|\bVERSION\b|PIPELINE_VERSION|recover_count|attempt|Math\.random|\$\{/.test(lit), "the preamble literal interpolates no row id, date, version, counter or template expression");
+assert.ok(!/\bslot\b|\bctx\./.test(lit), "the preamble literal reads no per-slot or per-row context");
 console.log("prompt-prefix tests passed");

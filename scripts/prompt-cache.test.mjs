@@ -8,12 +8,20 @@ import vm from "node:vm";
 const WORKERS = ["errata-hub", "personal-api", "q08-signal-engine", "qnfo-ai-search", "qnfo-ai", "qnfo-ops", "qnfo-research-exec"];
 let pass = 0, fail = 0;
 const ok = (c, m, x) => { if (c) pass++; else { fail++; console.log("FAIL " + m + (x !== undefined ? " :: " + JSON.stringify(x).slice(0, 300) : "")); } };
-function extract(src) {
-  const i = src.indexOf("function __aiAttrEnv(");
+function fnText(src, name) {
+  const i = src.indexOf("function " + name + "(");
   if (i < 0) return null;
   let d = 0, j = src.indexOf("{", i);
   for (let k = j; k < src.length; k++) { if (src[k] === "{") d++; else if (src[k] === "}") { d--; if (d === 0) return src.slice(i, k + 1); } }
   return null;
+}
+// AI-STAGE-ATTRIBUTION-2 (qnfo-research-exec 0.16.0): the wrapper may delegate the Proxy to __aiAttrBinding(ai, db, worker, attrCtx)
+// so the stage travels in a per-env context instead of a module global; the slice then carries both functions.
+function extract(src) {
+  const env = fnText(src, "__aiAttrEnv");
+  if (!env) return null;
+  const binding = fnText(src, "__aiAttrBinding");
+  return binding ? env + "\n" + binding : env;
 }
 for (const w of WORKERS) {
   const src = readFileSync(new URL("../" + w + "/worker.js", import.meta.url), "utf8");

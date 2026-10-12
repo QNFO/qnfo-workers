@@ -35,12 +35,13 @@ on:
           - delete-d1
           - unbind-service
           - gen-activitypub-key
+          - noz-scrub-bodies
       target:
         description: "worker name (worker-history, delete-worker), KV namespace id (kv-secret-scan), index name (delete-vectorize-index) ops-workspace path (r2-get) or zone (zaraz-remove-tool) or database name (d1-backup, delete-d1) or WORKER:BINDING (unbind-d1, unbind-service)"
         required: false
         default: ""
       model:
-        description: "model filter (gateway-logs), tool match (zaraz-remove-tool), or dry|live for zaraz-set-ga4 and spare-domain-canon"
+        description: "model filter (gateway-logs), tool match (zaraz-remove-tool), or dry|live for zaraz-set-ga4, spare-domain-canon and noz-scrub-bodies"
         required: false
         default: ""
       gateway:

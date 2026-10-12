@@ -34,7 +34,7 @@ export function discover(root) {
 // The suites a change needs: every suite of each changed directory, or all of them for a control-plane or shared change.
 // SUITE-GUARDS-ALWAYS-1 (2026-10-12): the repository-wide guard suites scan every suite or worker, so they run for any
 // change at all; PR 946 (one worker) merged a range-regex VERSION pin that version-pin-guard refused on the next full-set run.
-export const ALWAYS = ["scripts/version-pin-guard.test.mjs", "scripts/cron-single-trigger.test.mjs"];
+export const ALWAYS = ["scripts/version-pin-guard.test.mjs", "scripts/cron-single-trigger.test.mjs", "scripts/prompt-cache.test.mjs"];
 export function select(all, changedDirs) {
   const dirs = Array.from(new Set((changedDirs || []).map((d) => String(d).trim()).filter(Boolean)));
   const wide = dirs.filter((d) => CONTROL_PLANE.includes(d) || SHARED.includes(d));
