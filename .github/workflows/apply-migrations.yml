@@ -18,8 +18,12 @@ on:
         description: "Space-separated migration paths to apply (opted-in files only; an applied sha256 is skipped)"
         required: true
 
+# MIGRATION-UNAPPLIED-1 (2026-10-12): one shared group keeps only ONE pending run, so two merges in quick succession cancelled the
+# middle run (runs 93 and 94) and its migrations never ran. One group per run: applies are idempotent by convention and a file
+# already applied at its sha256 is skipped, so two runs side by side are safe. scripts/remediation_consumer.py applies anything
+# the push trigger still misses, within the hour.
 concurrency:
-  group: apply-migrations
+  group: apply-migrations-${{ github.run_id }}
   cancel-in-progress: false
 
 permissions:

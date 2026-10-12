@@ -135,6 +135,8 @@ because each one was broken at least once; the linked issue holds the evidence.
   delete). apply-migrations.yml applies the file when it merges and records it in `migration_runs`. A failure files
   `MIGRATION-APPLY-FAILED-1`. Do not also apply it by hand; check `migration_runs` for an `ok` row instead. deploy-gate runs
   `scripts/apply_migrations.py --check` on every changed migration, so a bad header fails the PR.
+  A merged file the push run missed (MIGRATION-UNAPPLIED-1: runs cancelled by the old shared concurrency group on 2026-10-12) is
+  applied by `scripts/remediation_consumer.py` on its next run; metric `migrations_unapplied` and event `migration-sweep` record it.
 - A worker's `*.test.mjs` suites run on every PR that touches the worker (scripts/run-suites.mjs). The full set runs for
   control-plane, `scripts/`, `.github/` and `migrations/` changes. A new suite needs no deploy-gate line. A suite that
   pins an exact VERSION breaks on the next bump; assert a minimum instead.
