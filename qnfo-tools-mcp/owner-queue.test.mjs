@@ -170,7 +170,7 @@ await t("existing tools unchanged: health lists them and version is bumped", asy
   reset(); const { env } = mkEnv();
   const r = await worker.fetch(new Request("https://t/health"), env, { waitUntil() {} });
   const j = await r.json();
-  ok(j.version.startsWith("1.2.0"), j.version);
+  { const vm = /^(\d+)\.(\d+)\.(\d+)/.exec(j.version); ok(vm && Number(vm[1]) * 1e6 + Number(vm[2]) * 1e3 + Number(vm[3]) >= 1002000, j.version); } // a minimum, never an exact pin (SUITE-RUNNER-1)
   for (const n of ["web_search", "email_respond", "owner_queue", "owner_act"]) ok(j.tools.includes(n), n);
 });
 
