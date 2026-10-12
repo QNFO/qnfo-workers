@@ -60,7 +60,7 @@ function makeGh(sc) {
     if (method === "GET" && (m = /^\/commits\/([^/]+)\/check-runs/.exec(path))) return ok({ check_runs: (sc.checks || {})[m[1]] || [] });
     if (method === "GET" && (m = /^\/commits\/([^/]+)\/status$/.exec(path))) return ok({ state: "pending", total_count: 0 });
     if (method === "PUT" && (m = /^\/pulls\/(\d+)\/merge$/.exec(path))) { (sc.merges = sc.merges || []).push({ pr: Number(m[1]), body }); return sc.mergeStatus ? ok({ message: "Base branch was modified" }, sc.mergeStatus) : ok({ sha: "m" + m[1], merged: true }); }
-    if (method === "PUT" && /\/update-branch$/.test(path)) return ok({}, 202);
+    if (method === "PUT" && /\/update-branch$/.test(path)) { (sc.updates = sc.updates || []).push({ path, body }); return sc.updateStatus ? ok({ message: "merge conflict between base and head" }, sc.updateStatus) : ok({}, 202); }
     if (method === "GET" && path.startsWith("/pulls")) return ok(sc.pulls || []);
     if (method === "GET" && path.startsWith("/compare/main...")) { const sha = decodeURIComponent(path.split("...")[1]); return sc.compare[sha] ? ok(sc.compare[sha]) : ok(null, 404); }
     if (method === "POST" && path === "/git/refs") return sc.archiveFails ? ok({ message: "Validation Failed" }, 422) : ok({}, 201);
@@ -85,7 +85,7 @@ async function run(sc, opts, d1In) {
   const sandbox = { evApi: gh.evApi, EVOLVE_REPO: "QNFO/qnfo-workers", __name: (f) => f, console, Date, Math, JSON, Number, String, Object, Array, RegExp, isNaN, encodeURIComponent, Promise, __export: null };
   vm.createContext(sandbox);
   const deps = ["var EVOLVE_REQUIRED = ", "var CM_OK = ", "var EVOLVE_DENY = ", "var CM_DENY = "].map((k) => { const i = src.indexOf(k); return src.slice(i, src.indexOf("\n", i)); }).concat(["cmRequired", "cmChecks", "evMergePr"].map(grab)).join("\n");
-  vm.runInContext(deps + "\n" + src.slice(a, b + END.length) + "\nBH_MERGEABLE_WAIT_MS = 0;\n__export = { bhDecide, bhMergeDecide, bhRepairDecide, bhRepairIssue, branchHygieneTick, BH_MAX_ACTIONS };", sandbox, { filename: "bh-block.js" });
+  vm.runInContext(deps + "\n" + src.slice(a, b + END.length) + "\nBH_MERGEABLE_WAIT_MS = 0;\n__export = { bhDecide, bhMergeDecide, bhRepairDecide, bhRepairIssue, bhConflictDecide, bhConflictIssue, bhNudgeDecide, branchHygieneTick, BH_MAX_ACTIONS, BH_NUDGE_MAX };", sandbox, { filename: "bh-block.js" });
   const env = { GITHUB_TOKEN: "x", AUDIT: d1.AUDIT };
   const out = await sandbox.__export.branchHygieneTick(env, Object.assign({ now: NOW }, opts || {}));
   return { out, calls: gh.calls, d1, W: sandbox.__export };
@@ -319,6 +319,98 @@ const scenario = () => ({
   eq(d(p70, files, req.concat([{ id: 5, name: "Analyze (python)", status: "in_progress", conclusion: null }]), {}).repair, false, "repair pure: a running check -> wait");
   eq(d(mkpr(72, "x", { head: { ref: "codeagent-x", sha: "x", repo: R } }), files, req.concat([codeql]), {}).repair, false, "repair pure: a code-loop branch is the merge runner's");
   eq(d(p70, files, req.concat([codeql, Object.assign({}, codeql, { id: 778, conclusion: "success" })]), {}).repair, false, "repair pure: a re-run that passed supersedes the failure");
+}
+
+{ // STALE-PR-CONFLICT-REPAIR-1 (PR 870, 2026-10-10; carried from PR 910): a quiet green PR that conflicts with main -> one repair issue, never a merge, never silent
+  const R = { full_name: "QNFO/qnfo-workers" };
+  const mkpr = (n, sha, extra) => Object.assign({ number: n, state: "open", draft: false, mergeable: false, mergeable_state: "dirty", title: "qnfo-ai 5.33.0 ACCURACY-GROUND-1", labels: [], updated_at: hAgo(3), head: { ref: "claude/c" + n, sha, repo: R }, base: { ref: "main", repo: R } }, extra || {});
+  const req = ["gate", "guard", "mirror-guard", "comparator"].map((nm, i) => ({ id: 200 + i, name: nm, status: "completed", conclusion: "success" }));
+  const files = [{ filename: "qnfo-ai/worker.js" }, { filename: "qnfo-ai/deployed-current.worker.js" }, { filename: "qnfo-ai/accuracy-ground.test.mjs" }];
+  const p80 = mkpr(80, "c80");
+  const mk = () => ({ branches: [br("main", 0, true)], compare: {}, prs: { 80: p80 }, pulls: [p80].map((p) => ({ number: p.number, state: "open", updated_at: p.updated_at, head: p.head })), files: { 80: files }, checks: { c80: req } });
+  const s1 = mk();
+  const r1 = await run(s1);
+  const iss = () => r1.d1.db.prepare("SELECT title, description, status, priority, typeof(created_at) AS ct FROM agent_issues ORDER BY id").all();
+  eq([r1.out.merged_prs, (s1.merges || []).length, (s1.updates || []).length], [[], 0, 0], "conflict: a conflicting PR is never merged and never nudged");
+  eq(iss().length, 1, "conflict: exactly one issue for the dirty PR");
+  eq(iss()[0].title, "STALE-PR-CONFLICT-REPAIR-1 PR 80: merge conflicts with main on a quiet session pull request", "conflict: the title names the PR");
+  eq([iss()[0].priority, iss()[0].status, iss()[0].ct], ["high", "open", "integer"], "conflict: filed high and open, created_at in integer milliseconds");
+  eq(/qnfo-ai\/worker\.js, qnfo-ai\/deployed-current\.worker\.js/.test(iss()[0].description) && /\/pulls\/80\/commits/.test(iss()[0].description) && /superseded by #<new>/.test(iss()[0].description) && /DoD: PR 80 is merged, or closed as superseded/.test(iss()[0].description), true, "conflict: the issue carries the files, the commit source, the supersede step and the closing condition");
+  eq(r1.d1.db.prepare("SELECT pr FROM branch_hygiene_log WHERE action = 'conflict-repair-issue'").all().map((r) => r.pr), [80], "conflict: the filing is logged in branch_hygiene_log");
+  eq(r1.d1.db.prepare("SELECT COUNT(*) AS n FROM cloud_ops_events WHERE kind = 'stale-pr-conflict-repair'").get().n, 1, "conflict: one stale-pr-conflict-repair event");
+  const s2 = mk();
+  await run(s2, undefined, r1.d1);
+  eq(iss().length, 1, "conflict: a second tick files no duplicate while the issue is open");
+  eq(r1.d1.db.prepare("SELECT COUNT(*) AS n FROM branch_hygiene_log WHERE action = 'merge-refused' AND pr = 80").get().n, 1, "refusal log: two ticks, same head and reason -> one merge-refused row");
+  const s3 = mk();
+  s3.config = [["stale_pr_conflict_repair_enabled", "off"]];
+  const r3 = await run(s3);
+  eq([r3.d1.db.prepare("SELECT COUNT(*) AS n FROM agent_issues").get().n, r3.d1.db.prepare("SELECT COUNT(*) AS n FROM branch_hygiene_log WHERE action = 'merge-refused'").get().n], [0, 1], "conflict: the switch off files nothing, and the refusal is still logged");
+  const d = r1.W.bhConflictDecide;
+  eq(d(p80, files).conflict, true, "conflict pure: dirty and quiet -> repair");
+  eq(d(mkpr(81, "x", { mergeable: true, mergeable_state: "clean" }), files).conflict, false, "conflict pure: a clean PR is the merge lane's");
+  eq(d(mkpr(82, "x", { mergeable: null, mergeable_state: "unknown" }), files).conflict, false, "conflict pure: unknown is not dirty");
+  eq(d(mkpr(83, "x", { draft: true }), files).conflict, false, "conflict pure: a draft is left alone");
+  eq(d(mkpr(84, "x", { title: "WIP qnfo-ai" }), files).conflict, false, "conflict pure: a hold is respected");
+  eq(d(mkpr(85, "x", { head: { ref: "codeagent-x", sha: "x", repo: R } }), files).conflict, false, "conflict pure: a code-loop branch is the merge runner's");
+  eq(d(mkpr(86, "x", { head: { ref: "f", sha: "x", repo: { full_name: "someone/fork" } } }), files).conflict, false, "conflict pure: a fork is never repaired here");
+}
+
+{ // MERGEABILITY-NUDGE-1 + MERGE-REFUSAL-LOG-1 (agent_issues 2230; PR 834, 2026-10-09): mergeable null on a green quiet PR -> update-branch, a row, never a silent skip
+  const R = { full_name: "QNFO/qnfo-workers" };
+  const mkpr = (n, sha, extra) => Object.assign({ number: n, state: "open", draft: false, mergeable: null, mergeable_state: "unknown", title: "qnfo-social 0.9.1", labels: [], updated_at: hAgo(3), head: { ref: "claude/n" + n, sha, repo: R }, base: { ref: "main", repo: R } }, extra || {});
+  const req = ["gate", "guard", "mirror-guard", "comparator"].map((nm, i) => ({ id: 300 + i, name: nm, status: "completed", conclusion: "success" }));
+  const files = [{ filename: "qnfo-social/worker.js" }, { filename: "qnfo-social/deployed-current.worker.js" }];
+  const mk = (pr, checks) => ({ branches: [br("main", 0, true)], compare: {}, prs: { [pr.number]: pr }, pulls: [{ number: pr.number, state: "open", updated_at: pr.updated_at, head: pr.head }], files: { [pr.number]: files }, checks: { [pr.head.sha]: checks || req } });
+  const p90 = mkpr(90, "n90");
+  const s1 = mk(p90);
+  const r1 = await run(s1);
+  const log = (d1, action) => d1.db.prepare("SELECT pr, sha, why FROM branch_hygiene_log WHERE action = ?1 ORDER BY id").all(action);
+  eq([r1.out.merged_prs, r1.out.nudged_prs, r1.out.closed_prs], [[], [90], []], "nudge: a null-mergeable green PR is nudged, not merged, not closed");
+  eq((s1.updates || []).map((u) => [u.path, u.body && u.body.expected_head_sha]), [["/pulls/90/update-branch", "n90"]], "nudge: update-branch is pinned to the head that was read");
+  eq(r1.calls.filter((c) => c === "GET /pulls/90").length, 3, "nudge: mergeability is re-read before the nudge");
+  eq(log(r1.d1, "merge-nudge").map((r) => [r.pr, r.sha, /MERGEABILITY-NUDGE-1/.test(r.why)]), [[90, "n90", true]], "nudge: one merge-nudge row with the reason");
+  for (let i = 0; i < 3; i++) await run(mk(p90), undefined, r1.d1);
+  eq(log(r1.d1, "merge-nudge").length, r1.W.BH_NUDGE_MAX, "nudge: capped per pull request");
+  eq(log(r1.d1, "merge-refused").map((r) => [r.pr, /mergeable null/.test(r.why) && /already nudged 3 times/.test(r.why)]), [[90, true]], "nudge: past the cap the refusal is logged with its reason");
+  const sOff = mk(p90);
+  sOff.config = [["stale_pr_nudge_enabled", "off"]];
+  const rOff = await run(sOff);
+  eq([(sOff.updates || []).length, log(rOff.d1, "merge-refused").length, log(rOff.d1, "merge-nudge").length], [0, 1, 0], "nudge: the switch off restores the logged refusal");
+  const sFail = mk(p90);
+  sFail.updateStatus = 422;
+  const rFail = await run(sFail);
+  eq([rFail.out.nudged_prs || [], log(rFail.d1, "merge-refused").map((r) => /update-branch HTTP 422/.test(r.why))], [[], [true]], "nudge: a refused update-branch is a logged refusal");
+  const p91 = mkpr(91, "n91", { mergeable: true, mergeable_state: "behind" });
+  const s2 = mk(p91);
+  const r2 = await run(s2);
+  eq([r2.out.nudged_prs, (s2.updates || []).length], [[91], 1], "nudge: a branch that is only behind main is brought up to date");
+  const p92 = mkpr(92, "n92");
+  const s4 = mk(p92, req.slice(1).concat([{ id: 399, name: "gate", status: "completed", conclusion: "failure" }]));
+  const r4 = await run(s4);
+  eq([(s4.updates || []).length, log(r4.d1, "merge-refused").length], [0, 1], "nudge: a PR with a failing required check is not nudged; the refusal is logged");
+  const p93 = mkpr(93, "n93", { updated_at: hAgo(30) });
+  const s5 = mk(p93);
+  const r5 = await run(s5);
+  eq([r5.out.nudged_prs, r5.out.closed_prs], [[93], []], "nudge: a nudged PR is not closed on the same tick, even past 24h");
+  const nd = r1.W.bhNudgeDecide, why = { merge: false, why: "GitHub reports mergeable null, mergeable_state unknown" };
+  eq(nd(p90, why).nudge, true, "nudge pure: null -> nudge");
+  eq(nd(mkpr(94, "x", { mergeable: false, mergeable_state: "dirty" }), { merge: false, why: "GitHub reports mergeable false, mergeable_state dirty" }).nudge, false, "nudge pure: a conflict is never nudged");
+  eq(nd(mkpr(95, "x", { mergeable: true, mergeable_state: "unstable" }), { merge: false, why: "GitHub reports mergeable true, mergeable_state unstable" }).nudge, false, "nudge pure: unstable belongs to the check-repair lane");
+  eq(nd(p90, { merge: false, why: "it changes .github/workflows/x.yml; workflows and repository settings are never merged automatically" }).nudge, false, "nudge pure: another refusal reason is not nudged");
+  eq(nd(mkpr(96, "x", { draft: true }), why).nudge, false, "nudge pure: a draft is left alone");
+}
+
+{ // SECRET-COMPARE-1 (0.17.0): constant-time token comparison accepts exactly what === accepted between two set strings
+  const sb = { TextEncoder, Math, __name: (f) => f, out: null };
+  vm.createContext(sb);
+  vm.runInContext(grab("secretEq") + "\nout = secretEq;", sb);
+  const se = sb.out;
+  eq([se("abc123", "abc123"), se("abc123", "abc124"), se("abc", "abc123"), se("abc123", "abc"), se("", ""), se("éx", "éx")], [true, false, false, false, true, true], "secretEq: equal strings only");
+  eq([se(null, "a"), se("a", undefined), se(undefined, undefined), se(null, null)], [false, false, false, false], "secretEq: a missing token or secret never matches");
+  eq(/\b[A-Za-z0-9]+ [!=]== env\.[A-Z_]*(TOKEN|SECRET|KEY)\b/.test(src), false, "no direct comparison of a presented token with a stored secret remains");
+  const ver = /var VERSION = "(\d+)\.(\d+)\.(\d+)/.exec(src);
+  eq(!!ver && (Number(ver[1]) > 0 || Number(ver[2]) >= 17), true, "VERSION is at least 0.17.0");
 }
 
 console.log(`${passed} passed, ${failed} failed`);

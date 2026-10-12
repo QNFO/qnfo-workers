@@ -113,7 +113,7 @@ async function timedFetch(url, opts) {
 
 // ---------------------------------------------------------------- sandbox
 const sandbox = {
-  __name: (f) => f, timedFetch, aiRunAttr: async () => null, console, TextDecoder, TextEncoder, atob, btoa, encodeURIComponent,
+  __name: (f) => f, timedFetch, aiRunAttr: async () => null, console, crypto: globalThis.crypto, Uint8Array, TextDecoder, TextEncoder, atob, btoa, encodeURIComponent,
   b64encode: (s) => Buffer.from(String(s), "utf8").toString("base64"), DIFF_MAX_D: 600, __export: null,
 };
 vm.createContext(sandbox);
