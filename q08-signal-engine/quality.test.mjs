@@ -170,6 +170,19 @@ console.log("quality.test.mjs section 12 ok");
   ({ env } = mkEnv({ judge: () => verdict(2, false), editor: EDITED }));
   r = await q.runLevels(env, base());
   assert.equal(r.gateResult.ok, false); assert.match(r.gateResult.problems[0], /still not worth reading/);
+  // C2. Q08-EDITOR-ROUND-2: a close miss (mean 3) on the second panel gets a second editor pass and a third panel
+  ({ env, calls } = mkEnv({ judge: (m, n) => (n <= 4 ? verdict(3, false) : verdict(5, true)), editor: EDITED }));
+  r = await q.runLevels(env, base());
+  assert.equal(r.gateResult.ok, true); assert.equal(calls.filter((c) => !c.judge).length, 2, "two editor passes");
+  assert.ok(r.rows.some((x) => x.role === "editor" && x.round === 3));
+  // C3. the third panel also misses: the piece is dropped with the third panel's reason
+  ({ env, calls } = mkEnv({ judge: () => verdict(3, false), editor: EDITED }));
+  r = await q.runLevels(env, base());
+  assert.equal(r.gateResult.ok, false); assert.match(r.gateResult.problems[0], /still not worth reading/); assert.equal(calls.filter((c) => !c.judge).length, 2);
+  // C4. a far miss (mean 2) gets no second editor pass
+  ({ env, calls } = mkEnv({ judge: () => verdict(2, false), editor: EDITED }));
+  r = await q.runLevels(env, base());
+  assert.equal(calls.filter((c) => !c.judge).length, 1);
   // D. every judge errors: fail open, and the gap is written down
   ({ env } = mkEnv({ judge: () => new Error("down"), editor: EDITED }));
   r = await q.runLevels(env, base());
