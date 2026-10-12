@@ -1,4 +1,5 @@
 import { Buffer as __ErrataBuffer } from "node:buffer";
+import { AsyncLocalStorage as __AttrAsyncLocalStorage } from "node:async_hooks";
 var __defProp = Object.defineProperty;
 var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
 
@@ -13,7 +14,7 @@ var __defProp2222 = Object.defineProperty;
 var __name2222 = /* @__PURE__ */ __name222((target, value) => __defProp2222(target, "name", { value, configurable: true }), "__name");
 var __defProp22222 = Object.defineProperty;
 var __name22222 = /* @__PURE__ */ __name2222((target, value) => __defProp22222(target, "name", { value, configurable: true }), "__name");
-var VERSION = "0.12.3-doi-scrub"; /* 0.12.3 NOZ-DOI-1 (2026-10-11): the pipeline publishes in-house only and calls no external DOI registrar: the deposit, version-request, metadata-edit and related-link stages are gone, new and revised papers write doi, zenodo_doi and zenodo_url NULL, and the folded errata and reviser members carry the same change. */ /* 0.12.2 ENSEMBLE-PREFIX-STAGGER-1 (agent_issues 2116, PROMPT-CACHE-PREFIX-3): the second glm-5.3-flash writer leg starts research_prefix_stagger_ms (default 12 s) after the first, so it reads the shared preamble + grounding prompt from the prefix cache instead of prefilling it in parallel. */ /* 0.12.0 ACCURACY-GROUND-1 (owner directive 2026-10-10, pillar research): generated text is checked against the text it was given. The reviser audit prompt no longer lets a "low" edit assert content (bridge sentences, comparisons, definitions) and a deterministic guard demotes any low edit that adds a name, figure, year, link or new content words to high; the errata drafter writes a correction only from the errata email or the paper and a name, year, figure, DOI or link in neither makes the draft high risk (never sent); the writer, reconcile and review preambles require every statement about a cited work to be derivable from its supplied bibliography entry, and say so when the entry is thin. */ /* 0.11.2 PROMPT-CACHE-PREFIX-2 (agent_issues 2116): review, revise-patch, revise and verify prompts put the paper right after the shared preamble as a context block, before the task selector and per-call text, so consecutive stages on one paper share preamble + paper as a cached prefix. Models, max_tokens, parsers and gates unchanged. */ /* 0.11.1 LEAN-ENSEMBLE-1 (agent_issues 2118, 1795): while a fleet_budget ai_spend cap is breached the writer ensemble runs its two disjoint-family legs instead of three (the third was a second glm-5.3-flash leg); reconcile joins only drafts of the current grounding; ops_config research_lean_ensemble = off restores three legs. */ // /* 0.10.5 REVISE-PATCH-PARSE-1 (agent_issues 2211): the revise patch array is parsed tolerantly (LaTeX backslashes kept, code fences and bracketed prose before the array skipped, each edit object read on its own when the array does not parse), so a LaTeX-heavy or truncated answer no longer loses every edit; 14 of 335 calls in 7 days proposed 0 edits from long output. The four publish binds pass pub.doi and pub.record as || null, so a result shape missing a key can no longer throw D1_TYPE_ERROR (the 0.10.3 outage). */ /* 0.10.4 INHOUSE-PUBLISH-3: the in-house publish result carries conceptdoi and record as null, so publishStageV2 no longer binds undefined (D1_TYPE_ERROR every tick under 0.10.3). */ // 0.9.65 ERRATA-FOLD-1 (#1756, 2026-10-06, pillar cost): errata-hub runs here as a member (errataMod) at its own minutes on the */15 tick (:00 watch, :15 respond, :30 publish), awaited; GET /errata-hub/health; nodejs_compat, BROWSER and SEND_EMAIL move here with it. 0.9.64 REVISER-FOLD-1 (#1756, 2026-10-06, pillar cost): qnfo-paper-reviser runs here as a member (reviserMod) on the :30 tick of every fourth hour; GET /reviser/health; its private routes answer a service binding whose props name the member. 0.9.63 RELATED-LEGACY-FIELDS-1 (#1907, 2026-10-06): the related-link drain fills the legacy upload_type / publication_type from an InvenioRDM resource_type before the PUT (record 22025544 failed with "metadata.resource_type: Missing data for required field"); the error row is re-queued once this is live. // MATH-LATEX-2 (2026-10-05, #1891): MATH_RULE in the writer, reconcile and revise prompts; pseudoMathScan() turns plain-text math into a HARD review finding and a math-scan event at verify; ops_config research_math_gate=enforce makes it a pre-publish gate (revise once, then park). // WRITER-FLASH-1 (2026-10-05, #1795): the second ensemble writer leg and the revise-patch retry leave glm-5.3 (3,279 neurons per call) for glm-5.3-flash and gpt-oss-120b. // PRIOR-WORK-EMPTY-1 (2026-10-02): no empty "Prior Work" section; References matched at line start. // 0.9.54 RUN-INTERNAL-1 (#1783, ported from code task ct_zvckl6t5d4e1fd): POST /run?sync=1 and POST /run/drain-v2 refuse public hostnames (*.workers.dev, qnfo.org); the cron and service-binding callers (qnfo-research-supervisor RESEARCH_EXEC, the dashboard SVC binding) are unaffected; METADATA-VERIFY-ORDER-1 (2026-10-02, #1732): verifyMetadataBackfill writes issue_triage.close_evidence before it closes the issue (the close-evidence trigger aborted the old order, so the backfill could never close itself); 0.9.52 UTF8-DEPLOY-1 (2026-10-02): no code change; redeployed so the live copy is UTF-8 (the old deploy path double-encoded every non-ASCII character) /* 0.13.0 NOZ-DOI-1 (2026-10-11): history entries about the retired external deposit stages are in git. */
+var VERSION = "0.12.5-slot-attr"; /* 0.12.5 AI-STAGE-ATTRIBUTION-2 (agent_issues 2264): each research_parallel slot runs in its own AsyncLocalStorage store, so ai_call_counters stage labels belong to the slot that made the call. PROMPT-CACHE-AFFINITY-1 (agent_issues 2116, PROMPT-CACHE-PREFIX-4): aiText sends x-session-affinity keyed on the 4 KB after the shared preamble (the paper or writer input), so the stages of one paper share an instance and its preamble + paper prefix; ops_config research_affinity_scope = prefix restores the old one-key-per-model hash. */ /* 0.12.3 NOZ-DOI-1 (2026-10-11): the pipeline publishes in-house only and calls no external DOI registrar: the deposit, version-request, metadata-edit and related-link stages are gone, new and revised papers write doi, zenodo_doi and zenodo_url NULL, and the folded errata and reviser members carry the same change. */ /* 0.12.2 ENSEMBLE-PREFIX-STAGGER-1 (agent_issues 2116, PROMPT-CACHE-PREFIX-3): the second glm-5.3-flash writer leg starts research_prefix_stagger_ms (default 12 s) after the first, so it reads the shared preamble + grounding prompt from the prefix cache instead of prefilling it in parallel. */ /* 0.12.0 ACCURACY-GROUND-1 (owner directive 2026-10-10, pillar research): generated text is checked against the text it was given. The reviser audit prompt no longer lets a "low" edit assert content (bridge sentences, comparisons, definitions) and a deterministic guard demotes any low edit that adds a name, figure, year, link or new content words to high; the errata drafter writes a correction only from the errata email or the paper and a name, year, figure, DOI or link in neither makes the draft high risk (never sent); the writer, reconcile and review preambles require every statement about a cited work to be derivable from its supplied bibliography entry, and say so when the entry is thin. */ /* 0.11.2 PROMPT-CACHE-PREFIX-2 (agent_issues 2116): review, revise-patch, revise and verify prompts put the paper right after the shared preamble as a context block, before the task selector and per-call text, so consecutive stages on one paper share preamble + paper as a cached prefix. Models, max_tokens, parsers and gates unchanged. */ /* 0.11.1 LEAN-ENSEMBLE-1 (agent_issues 2118, 1795): while a fleet_budget ai_spend cap is breached the writer ensemble runs its two disjoint-family legs instead of three (the third was a second glm-5.3-flash leg); reconcile joins only drafts of the current grounding; ops_config research_lean_ensemble = off restores three legs. */ // /* 0.10.5 REVISE-PATCH-PARSE-1 (agent_issues 2211): the revise patch array is parsed tolerantly (LaTeX backslashes kept, code fences and bracketed prose before the array skipped, each edit object read on its own when the array does not parse), so a LaTeX-heavy or truncated answer no longer loses every edit; 14 of 335 calls in 7 days proposed 0 edits from long output. The four publish binds pass pub.doi and pub.record as || null, so a result shape missing a key can no longer throw D1_TYPE_ERROR (the 0.10.3 outage). */ /* 0.10.4 INHOUSE-PUBLISH-3: the in-house publish result carries conceptdoi and record as null, so publishStageV2 no longer binds undefined (D1_TYPE_ERROR every tick under 0.10.3). */ // 0.9.65 ERRATA-FOLD-1 (#1756, 2026-10-06, pillar cost): errata-hub runs here as a member (errataMod) at its own minutes on the */15 tick (:00 watch, :15 respond, :30 publish), awaited; GET /errata-hub/health; nodejs_compat, BROWSER and SEND_EMAIL move here with it. 0.9.64 REVISER-FOLD-1 (#1756, 2026-10-06, pillar cost): qnfo-paper-reviser runs here as a member (reviserMod) on the :30 tick of every fourth hour; GET /reviser/health; its private routes answer a service binding whose props name the member. 0.9.63 RELATED-LEGACY-FIELDS-1 (#1907, 2026-10-06): the related-link drain fills the legacy upload_type / publication_type from an InvenioRDM resource_type before the PUT (record 22025544 failed with "metadata.resource_type: Missing data for required field"); the error row is re-queued once this is live. // MATH-LATEX-2 (2026-10-05, #1891): MATH_RULE in the writer, reconcile and revise prompts; pseudoMathScan() turns plain-text math into a HARD review finding and a math-scan event at verify; ops_config research_math_gate=enforce makes it a pre-publish gate (revise once, then park). // WRITER-FLASH-1 (2026-10-05, #1795): the second ensemble writer leg and the revise-patch retry leave glm-5.3 (3,279 neurons per call) for glm-5.3-flash and gpt-oss-120b. // PRIOR-WORK-EMPTY-1 (2026-10-02): no empty "Prior Work" section; References matched at line start. // 0.9.54 RUN-INTERNAL-1 (#1783, ported from code task ct_zvckl6t5d4e1fd): POST /run?sync=1 and POST /run/drain-v2 refuse public hostnames (*.workers.dev, qnfo.org); the cron and service-binding callers (qnfo-research-supervisor RESEARCH_EXEC, the dashboard SVC binding) are unaffected; METADATA-VERIFY-ORDER-1 (2026-10-02, #1732): verifyMetadataBackfill writes issue_triage.close_evidence before it closes the issue (the close-evidence trigger aborted the old order, so the backfill could never close itself); 0.9.52 UTF8-DEPLOY-1 (2026-10-02): no code change; redeployed so the live copy is UTF-8 (the old deploy path double-encoded every non-ASCII character) /* 0.13.0 NOZ-DOI-1 (2026-10-11): history entries about the retired external deposit stages are in git. */
 // WORKERS-AI-ATTRIBUTION-1 (2026-10-01, #1681): per-worker Workers AI attribution. Returns a shallow env copy whose AI
 // binding records each .run() (calls, errors, ms, tokens, neurons) into qnfo-audit ai_call_counters (purpose 'binding').
 // Neurons = usage tokens x Cloudflare's published per-model rates (neurons per M tokens). Fail-soft; env is never mutated.
@@ -25,6 +26,23 @@ var __AI_ATTR_RATES = { "@cf/zai-org/glm-5.3": [127273, 400000], "@cf/zai-org/gl
 // day are unchanged. Measurement only: no prompt, model, route or call count changes. A label set by one stage can tag a
 // call of another only if two stages of different rows overlap in one isolate, which the one-stage-per-run cron avoids.
 var __AI_ATTR_STAGE = "";
+// AI-STAGE-ATTRIBUTION-2 (0.12.5, agent_issues 2264): since 0.10.0 a tick runs research_parallel slots at once in one isolate,
+// so the module-level label set by one slot tagged the other slot's calls (2026-10-09: 219 glm-5.3-flash calls under
+// binding:ground, a stage that makes no model call). Each slot now runs inside its own AsyncLocalStorage store, the stage
+// functions set the label there (__attrStageSet) and the counter row reads it back for the call in flight (__attrStageGet).
+// Outside a slot (single-flight run(), HTTP callers) the module-level label is used as before. Measurement only.
+var __AI_ATTR_ALS = (function () { try { return new __AttrAsyncLocalStorage(); } catch (e) { return null; } })();
+function __attrStageSet(stage) {
+  __AI_ATTR_STAGE = stage;
+  try { var st = __AI_ATTR_ALS && __AI_ATTR_ALS.getStore(); if (st) st.stage = stage; } catch (e) {}
+}
+function __attrStageGet() {
+  try { var st = __AI_ATTR_ALS && __AI_ATTR_ALS.getStore(); if (st) return st.stage || ""; } catch (e) {}
+  return __AI_ATTR_STAGE;
+}
+function __attrSlotRun(fn) {
+  return __AI_ATTR_ALS ? __AI_ATTR_ALS.run({ stage: "" }, fn) : fn();
+}
 function __aiAttrEnv(env, worker, aiKey, dbKey) {
   try {
     if (!env || env.__aiAttr) return env;
@@ -44,7 +62,7 @@ function __aiAttrEnv(env, worker, aiKey, dbKey) {
             var r = __AI_ATTR_RATES[String(model)] || [0, 0];
             var neurons = (inTok * r[0] + outTok * r[1]) / 1e6;
             await db.prepare("INSERT INTO ai_call_counters (day, worker, purpose, model, calls, errors, in_chars, ms, in_tok, out_tok, neurons) VALUES (?1,?2,?10,?3,1,?4,?5,?6,?7,?8,?9) ON CONFLICT(day, worker, purpose, model) DO UPDATE SET calls=calls+1, errors=errors+excluded.errors, in_chars=in_chars+excluded.in_chars, ms=ms+excluded.ms, in_tok=in_tok+excluded.in_tok, out_tok=out_tok+excluded.out_tok, neurons=neurons+excluded.neurons")
-              .bind(new Date().toISOString().slice(0, 10), worker, String(model).slice(0, 120), ok ? 0 : 1, chars, Date.now() - t0, inTok, outTok, neurons, __AI_ATTR_STAGE ? "binding:" + __AI_ATTR_STAGE : "binding").run();
+              .bind(new Date().toISOString().slice(0, 10), worker, String(model).slice(0, 120), ok ? 0 : 1, chars, Date.now() - t0, inTok, outTok, neurons, __attrStageGet() ? "binding:" + __attrStageGet() : "binding").run();
           } catch (e2) {}
         }
       };
@@ -1337,19 +1355,61 @@ var AI_TEXT_MAX_OUT = { "@cf/zai-org/glm-5.3-flash": 8192, "@cf/zai-org/glm-5.3"
 // cannot be disabled) and default to the maximum, so a short structured answer (the revise patch JSON) spent the whole
 // 8192-token budget reasoning and returned 0 chars (12:12Z). Callers that need a short answer pass effort "low". If the
 // API rejects the field (anything but a timeout), the call is retried once without it.
+// PROMPT-CACHE-AFFINITY-1 (0.12.4, agent_issues 2116 PROMPT-CACHE-PREFIX-4, pillar cost): after 0.12.2 the glm-5.3-flash cached
+// share held at 25.5% (2026-10-11, 2,632,320/10,303,108; target 30%) and a hit still averaged ~3.5k tokens (2,632,320/745), about
+// the 9.5k-char preamble. Every stage prompt now starts with the same RESEARCH_SHARED_PREAMBLE, so the 4 KB affinity hash in
+// __aiAttrEnv gave every call of a model ONE x-session-affinity key: the papers of both parallel slots and every stage compete
+// for one key's cache, and a paper prefix (preamble + paper, ~8-10k tokens) is rarely still there when the next stage of that
+// paper runs. The key now hashes the 4 KB that FOLLOW the preamble (the shared-context block or the writer input), so the
+// review, revise-patch, revise and verify calls of one paper and the writer legs of one grounding land on the same instance,
+// and the preamble stays a cached prefix on each. ops_config research_affinity_scope = 'prefix' restores the old key without a
+// deploy (read once per isolate per 5 minutes). Prompts that do not start with the preamble keep the old key.
+var RESEARCH_AFFINITY_TTL_MS = 3e5;
+var _researchAffinityScope = null;
+var _researchAffinityAt = 0;
+async function researchAffinityScope(env) {
+  var now = Date.now();
+  if (_researchAffinityScope !== null && now - _researchAffinityAt < RESEARCH_AFFINITY_TTL_MS) return _researchAffinityScope;
+  var scope = "paper";
+  try {
+    var r = await env.QNFO_AUDIT.prepare("SELECT value FROM ops_config WHERE key = 'research_affinity_scope'").first();
+    if (r && String(r.value).trim().toLowerCase() === "prefix") scope = "prefix";
+  } catch (e) {}
+  _researchAffinityScope = scope;
+  _researchAffinityAt = now;
+  return scope;
+}
+function paperAffinityKey(model, prompt) {
+  var s = String(prompt || "");
+  if (s.length < RESEARCH_SHARED_PREAMBLE.length + 1024 || s.indexOf(RESEARCH_SHARED_PREAMBLE) !== 0) return null;
+  var t = String(model) + "|pp|" + s.slice(RESEARCH_SHARED_PREAMBLE.length, RESEARCH_SHARED_PREAMBLE.length + 4096);
+  var h = 2166136261;
+  for (var i = 0; i < t.length; i++) { h ^= t.charCodeAt(i); h = Math.imul(h, 16777619); }
+  return "pp-" + (h >>> 0).toString(36);
+}
+async function aiRunOpts(env, model, prompt) {
+  try {
+    if (await researchAffinityScope(env) !== "paper") return undefined;
+    var k = paperAffinityKey(model, prompt);
+    return k ? { extraHeaders: { "x-session-affinity": k } } : undefined;
+  } catch (e) {
+    return undefined;
+  }
+}
 async function aiText(env, model, prompt, maxTokens, effort) {
   const cappedTokens = Math.min(maxTokens, AI_TEXT_MAX_OUT[model] || 8192);
   try {
     const _opts = { messages: [{ role: "user", content: prompt }], max_tokens: cappedTokens, temperature: 0.3 };
     if (/^@cf\/zai-org\/glm-/.test(model)) _opts.reasoning_effort = effort || 'low';
+    const _runOpts = await aiRunOpts(env, model, prompt);
     let r;
     try {
-      r = await env.AI.run(model, _opts);
+      r = await env.AI.run(model, _opts, _runOpts);
     } catch (e0) {
       if (!_opts.reasoning_effort || /3046|timeout/i.test(String(e0 && e0.message || e0))) throw e0;
       await logEvent(env, "ai-warn", "aiText model=" + model + " rejected reasoning_effort, retrying without: " + String(e0 && e0.message || e0).slice(0, 160));
       delete _opts.reasoning_effort;
-      r = await env.AI.run(model, _opts);
+      r = await env.AI.run(model, _opts, _runOpts);
     }
     if (typeof r === "string") return r;
     if (r && typeof r.response === "string" && r.response) return r.response;
@@ -1746,7 +1806,7 @@ function groundQueries(idea, parentTitle) {
   }).join(" OR ")]);
 }
 async function stageGround(env, row) {
-  __AI_ATTR_STAGE = "ground";
+  __attrStageSet("ground");
   const idea = row.idea || row.summary || "";
   const rid = String(row.id);
   let existing = "";
@@ -1917,7 +1977,7 @@ async function ensemblePrefixStaggerMs(env) {
   return ENSEMBLE_PREFIX_STAGGER_MS;
 }
 async function stageEnsemble(env, row) {
-  __AI_ATTR_STAGE = "ensemble";
+  __attrStageSet("ensemble");
   const grounding = await r2Get(env, String(row.id) + "/grounding.md");
   if (!grounding) {
     await markError(env, row, "ensemble: grounding missing");
@@ -1993,7 +2053,7 @@ __name22(stageEnsemble, "stageEnsemble");
 __name222(stageEnsemble, "stageEnsemble");
 __name2222(stageEnsemble, "stageEnsemble");
 async function stageReconcile(env, row) {
-  __AI_ATTR_STAGE = "reconcile";
+  __attrStageSet("reconcile");
   const parts = [];
   // LEAN-ENSEMBLE-1: a lean run writes two drafts, so a draft-2 left by an earlier attempt on another grounding must not
   // join. A draft joins only when its grounding fingerprint (draft-N.fp) matches draft-0's; a draft with no sidecar is kept.
@@ -2052,7 +2112,7 @@ __name22(stageReconcile, "stageReconcile");
 __name222(stageReconcile, "stageReconcile");
 __name2222(stageReconcile, "stageReconcile");
 async function stageReview(env, row) {
-  __AI_ATTR_STAGE = "review";
+  __attrStageSet("review");
   const paper = await r2Get(env, String(row.id) + "/reconciled.md");
   const grounding = await r2Get(env, String(row.id) + "/grounding.md");
   let ctx = { cycles: 0 };
@@ -2094,7 +2154,7 @@ __name22(stageReview, "stageReview");
 __name222(stageReview, "stageReview");
 __name2222(stageReview, "stageReview");
 async function stageRevise(env, row) {
-  __AI_ATTR_STAGE = "revise";
+  __attrStageSet("revise");
   const paper = await r2Get(env, String(row.id) + "/reconciled.md");
   const fixes = await r2Get(env, String(row.id) + "/fixes.json");
   let ctx = { cycles: 0 };
@@ -2266,7 +2326,7 @@ async function parkMathRow(env, row, pm) {
   await logEvent(env, "math-park", "parked research row " + String(row.id).slice(0, 8) + " pseudo_math=" + pm.count, "warn");
 }
 async function stageVerify(env, row) {
-  __AI_ATTR_STAGE = "verify";
+  __attrStageSet("verify");
   let paper = await r2Get(env, String(row.id) + "/reconciled.md");
   try {
     const _rr = renderReferences(paper, await r2Get(env, String(row.id) + "/grounding.md"));
@@ -2962,7 +3022,7 @@ async function runLeased(env, holder, maxStages, budgetMs) {
         // One snapshot per round: slot k owns inflight[k], so a row that leaves the list mid-round cannot shift another
         // slot onto a row already being advanced.
         const inflight = (await env.QNFO_AUDIT.prepare(INFLIGHT_SQL).bind(width).all()).results || [];
-        round = await Promise.all(Array.from({ length: width }, function(_, k) { return runSlot(env, k, width, inflight); }));
+        round = await Promise.all(Array.from({ length: width }, function(_, k) { return __attrSlotRun(function() { return runSlot(env, k, width, inflight); }); }));
       } else {
         round = [await run(env)];
       }
