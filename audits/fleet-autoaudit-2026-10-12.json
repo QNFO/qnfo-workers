@@ -1,5 +1,5 @@
 {
-  "audited_at": "2026-10-12 08:51:30",
+  "audited_at": "2026-10-12 09:33:20",
   "d1_write_failures": [],
   "d1_writes_ok": 114,
   "guard": {
@@ -544,7 +544,7 @@
       },
       {
         "dir": "q08-signal-engine",
-        "version": "0.11.15",
+        "version": "0.11.16",
         "worker": "q08-signal-engine"
       },
       {
@@ -554,12 +554,12 @@
       },
       {
         "dir": "qnfo-ai-calibration",
-        "version": "1.3.3-amh-roster-prune",
+        "version": "1.3.4-run-id-crypto",
         "worker": "qnfo-ai-calibration"
       },
       {
         "dir": "qnfo-ai-search",
-        "version": "2.4.1-doi-scrub",
+        "version": "2.4.2-judge-context",
         "worker": "qnfo-ai-search"
       },
       {
@@ -584,7 +584,7 @@
       },
       {
         "dir": "qnfo-email",
-        "version": "2.6.0-notice-reply",
+        "version": "2.6.1-notice-reply-match",
         "worker": "qnfo-email"
       },
       {
@@ -629,12 +629,12 @@
       },
       {
         "dir": "qnfo-observability",
-        "version": "1.4.3-escalate-recurrence",
+        "version": "1.4.4-error-ratio-census",
         "worker": "qnfo-observability"
       },
       {
         "dir": "qnfo-ops",
-        "version": "2.40.2-doi-scrub",
+        "version": "2.41.0-observability-apply",
         "worker": "qnfo-ops"
       },
       {
@@ -649,17 +649,17 @@
       },
       {
         "dir": "qnfo-social",
-        "version": "0.11.1-doi-scrub",
+        "version": "0.12.0-whole-sentences",
         "worker": "qnfo-social"
       },
       {
         "dir": "qnfo-subscribers",
-        "version": "1.1.10-doi-scrub",
+        "version": "1.2.0-funnel",
         "worker": "qnfo-subscribers"
       },
       {
         "dir": "qnfo-tools-mcp",
-        "version": "1.2.0-owner-queue",
+        "version": "1.2.1-personal-search-repoint",
         "worker": "qnfo-tools-mcp"
       },
       {
@@ -932,9 +932,9 @@
       "worker": "personal-life-search"
     },
     "q08-signal-engine": {
-      "before": "0.11.15",
+      "before": "0.11.16",
       "http": 200,
-      "live": "0.11.15",
+      "live": "0.11.16",
       "match": 1,
       "note": "SYNC",
       "worker": "q08-signal-engine"
@@ -975,17 +975,17 @@
       "worker": "qnfo-ai"
     },
     "qnfo-ai-calibration": {
-      "before": "1.3.3-amh-roster-prune",
+      "before": "1.3.4-run-id-crypto",
       "http": 200,
-      "live": "1.3.3-amh-roster-prune",
+      "live": "1.3.4-run-id-crypto",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-ai-calibration"
     },
     "qnfo-ai-search": {
-      "before": "2.4.1-doi-scrub",
+      "before": "2.4.2-judge-context",
       "http": 200,
-      "live": "2.4.1-doi-scrub",
+      "live": "2.4.2-judge-context",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-ai-search"
@@ -1167,9 +1167,9 @@
       "worker": "qnfo-deploy-guard"
     },
     "qnfo-email": {
-      "before": "2.6.0-notice-reply",
+      "before": "2.6.1-notice-reply-match",
       "http": 200,
-      "live": "2.6.0-notice-reply",
+      "live": "2.6.1-notice-reply-match",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-email"
@@ -1392,17 +1392,17 @@
       "worker": "qnfo-memory-mcp-legacy-dup"
     },
     "qnfo-observability": {
-      "before": "1.4.3-escalate-recurrence",
+      "before": "1.4.4-error-ratio-census",
       "http": 200,
-      "live": "1.4.3-escalate-recurrence",
+      "live": "1.4.4-error-ratio-census",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-observability"
     },
     "qnfo-ops": {
-      "before": "2.40.2-doi-scrub",
+      "before": "2.41.0-observability-apply",
       "http": 200,
-      "live": "2.40.2-doi-scrub",
+      "live": "2.41.0-observability-apply",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-ops"
@@ -1550,17 +1550,17 @@
       "worker": "qnfo-skills-discovery"
     },
     "qnfo-social": {
-      "before": "0.11.1-doi-scrub",
+      "before": "0.12.0-whole-sentences",
       "http": 200,
-      "live": "0.11.1-doi-scrub",
+      "live": "0.12.0-whole-sentences",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-social"
     },
     "qnfo-subscribers": {
-      "before": "1.1.10-doi-scrub",
+      "before": "1.2.0-funnel",
       "http": 200,
-      "live": "1.1.10-doi-scrub",
+      "live": "1.2.0-funnel",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-subscribers"
@@ -1575,9 +1575,9 @@
       "worker": "qnfo-thread-ingest"
     },
     "qnfo-tools-mcp": {
-      "before": "1.2.0-owner-queue",
+      "before": "1.2.1-personal-search-repoint",
       "http": 200,
-      "live": "1.2.0-owner-queue",
+      "live": "1.2.1-personal-search-repoint",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-tools-mcp"
