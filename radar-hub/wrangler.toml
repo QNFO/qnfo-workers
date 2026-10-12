@@ -65,3 +65,17 @@ class_name = "JobMarketWatchWorkflow"
 # CRON-SINGLE-TRIGGER-1 (2026-10-02, #1785): ONE hourly trigger; worker.js CRON_TABLE holds the former list
 # (0 5 * * 2, 30 8 * * *, 0 6 1 * *, 0 9 * * 7, 0 11 1,15 * *, 0 7 * * 2, 30 5 * * 2, 0 6 * * *) and runs each entry in the hour it fired.
 crons = ["0 * * * *"]
+
+[observability]
+enabled = true
+head_sampling_rate = 1
+
+# WORKERS-STANDARDS-1 (owner standards 2026-10-12): logs and traces declared. Workers docs: `enabled` alone turns on logs only;
+# traces need [observability.traces]. Traces are sampled at the default rate of 1.
+[observability.logs]
+enabled = true
+invocation_logs = true
+
+[observability.traces]
+enabled = true
+head_sampling_rate = 0.05 # TRACES-SAMPLING-BEFORE-BILLING-1: stored traces bill from 2026-12-01

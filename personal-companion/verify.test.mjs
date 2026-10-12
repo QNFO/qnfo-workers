@@ -57,6 +57,18 @@ const AI0 = { run: async (model, input) => { const c = input.messages[0].content
   const r = await V.verifyPiece({ AI: AI0 }, goodText, source, "@cf/openai/gpt-oss-120b", "s2", {});
   const fs = new Set(calls.map((c) => V.familyOf(c.model)));
   ok(r.ok && calls.length === 2 && fs.size === 2 && !fs.has("openai"), "two reviewers, two families, neither the writer's, both pass", { ok: r.ok, n: calls.length, fs: [...fs] });
+}
+{
+  // COMPANION-FACTCHECK-PARALLEL-1 (1.15.8): a reviewer that times out in round 1 is replaced in round 2 by the untried ones
+  calls = []; let first = null;
+  script = (model) => { if (first === null) first = model; return model === first ? new Error("The operation was aborted due to timeout") : '{"unsupported":[],"verdict":"pass"}'; };
+  const r = await V.verifyPiece({ AI: AI0 }, goodText, source, "@cf/openai/gpt-oss-120b", "s2", {});
+  const fs = new Set(calls.map((c) => V.familyOf(c.model)));
+  ok(r.ok && calls.length >= 3 && calls.length <= 5 && !fs.has("openai") && (r.judges || []).length === 2, "a timed-out reviewer is replaced in a second parallel round; two verdicts still decide", { ok: r.ok, n: calls.length, judges: (r.judges || []).map((j) => j.model) });
+  script = () => new Error("The operation was aborted due to timeout");
+  calls = [];
+  const r2 = await V.verifyPiece({ AI: AI0 }, goodText, source, "@cf/openai/gpt-oss-120b", "s3", {});
+  ok(!r2.ok && r2.unavailable === true && calls.length <= 8, "every reviewer failing in both rounds still fails closed (nothing publishes)", { ok: r2.ok, n: calls.length });
   ok(calls.every((c) => /SOURCE MATERIAL/.test(c.c) && /Alpha Subject/.test(c.c)), "reviewers see the source material and the draft");
 }
 {
@@ -242,5 +254,28 @@ const count = (p, t) => p.prepare("SELECT COUNT(*) n FROM " + t).get().n;
   ok((again.checked || 0) === 0 && (again.withdrawn || 0) === 0, "an audited piece is not audited again", again);
 }
 
+// ---- FACTCHECK-NOTHINK-1 / VERDICT-TOLERANT-1 ------------------------------------------------------------------------------------
+{
+  const fx = V.factCheckExtra;
+  ok("reasoning is switched off for kimi, nemotron, gpt-oss and deepseek, and left alone for others", fx("@cf/moonshotai/kimi-k2.6").chat_template_kwargs.thinking === false && fx("@cf/nvidia/nemotron-3-120b-a12b").chat_template_kwargs.enable_thinking === false && fx("@cf/openai/gpt-oss-120b").reasoning.effort === "low" && fx("@cf/deepseek-ai/deepseek-v4-pro-0813").chat_template_kwargs.thinking === false && Object.keys(fx("@cf/zai-org/glm-5.3")).length === 0);
+  ok("a verdict wrapped in prose is read", V.parseFactVerdict('Here is my answer: {"unsupported": ["x -- y"], "verdict": "fail"} Hope this helps {done}').verdict === "fail");
+  ok("a truncated JSON reply still yields its explicit verdict and quotes", (() => { const r = V.parseFactVerdict('{"unsupported": ["the claim -- not in source", "another -- no"], "verdict": "fail"'); return r && r.verdict === "fail" && r.unsupported.length === 2; })());
+  ok("a reply with no verdict field is still no verdict", V.parseFactVerdict("The draft looks fine to me.") === null);
+}
+// ---- REJECT-CONTEXT-1 -----------------------------------------------------------------------------------------------------------
+{
+  const c = V.problemContext("The study ran first. Later the Failure rate rose sharply in every trial.", ["name not in the source: Failure", "year not in the source: 1999"]);
+  ok(/Failure => .*the Failure rate rose/.test(c) && !/1999/.test(c), "a flagged name is logged with its surrounding text; an absent item adds nothing", c);
+  ok(V.problemContext("", ["name not in the source: X"]) === "" && V.problemContext("t", null) === "", "empty inputs give an empty context");
+}
+// ---- OPENER-WORD-1 ----------------------------------------------------------------------------------------------------------------
+{
+  const src = "InstantFusion lets two image generators share a latent interface. ImageNet is the benchmark used.";
+  const g = (txt) => V.groundingProblems(txt, src, { today: "2026-10-12" });
+  ok(g("Should InstantFusion be used here? Translating ImageNet results is the open question.").length === 0, "a sentence-opening ordinary word before a source name is not a name problem", g("Should InstantFusion be used here? Translating ImageNet results is the open question."));
+  ok(g("Later, Zorblax InstantFusion appeared.").some((x) => /Zorblax/.test(x)), "an invented name mid-sentence still fails");
+  ok(g("Zorblax Quimby invented the method.").some((x) => /Quimby/.test(x)), "an invented name after the opener still fails");
+  ok(g("Results reached 78 % on the benchmark.").some((x) => /78/.test(x)), "an invented figure still fails");
+}
 console.log(pass + " passed, " + fail + " failed");
 if (fail) process.exit(1);

@@ -133,5 +133,28 @@ const get = (path) => w.fetch(new Request("https://q08.org" + path, { headers: {
   check("an object-shaped AI reply still yields a verdict", fc.unavailable === false && fc.ok === true && fc.judges.length === 2, fc);
 }
 globalThis.fetch = origFetch;
+// ---- Q08-PRUNE-1: delete the sentences the reviewers quote ----------------------------------------------------------------------
+{
+  const essay = "# A rule that checks itself\n\nThe committee reviewed the draft. It found 3 gaps in the register. Many programs assume the register is complete.\n\nThe fix is to add a second reader. A second reader catches what the first misses.\n\nworth your time: yes - names the mechanism";
+  const r = V.pruneUnsupported(essay, ["unsupported claim: Many programs assume the register is complete. -- not in source", "figure not in the source: 3"]);
+  check("prune removes the quoted sentence and the sentence with the ungrounded figure", r.removed.length === 2 && !/Many programs/.test(r.text) && !/3 gaps/.test(r.text), r);
+  check("prune keeps the title, the other sentences and the verdict line", /^# A rule that checks itself/.test(r.text) && /second reader catches/.test(r.text) && /worth your time: yes/.test(r.text), r.text);
+  check("prune with nothing locatable changes nothing", V.pruneUnsupported(essay, ["unsupported claim: something that is not there at all in the draft -- x"]).removed.length === 0);
+}
+// ---- FACTCHECK-NOTHINK-1 / VERDICT-TOLERANT-1 ------------------------------------------------------------------------------------
+{
+  const fx = V.factCheckExtra;
+  check("reasoning is switched off for kimi, nemotron, gpt-oss and deepseek, and left alone for others", fx("@cf/moonshotai/kimi-k2.6").chat_template_kwargs.thinking === false && fx("@cf/nvidia/nemotron-3-120b-a12b").chat_template_kwargs.enable_thinking === false && fx("@cf/openai/gpt-oss-120b").reasoning.effort === "low" && fx("@cf/deepseek-ai/deepseek-v4-pro-0813").chat_template_kwargs.thinking === false && Object.keys(fx("@cf/zai-org/glm-5.3")).length === 0);
+  check("a verdict wrapped in prose is read", V.parseFactVerdict('Here is my answer: {"unsupported": ["x -- y"], "verdict": "fail"} Hope this helps {done}').verdict === "fail");
+  check("a truncated JSON reply still yields its explicit verdict and quotes", (() => { const r = V.parseFactVerdict('{"unsupported": ["the claim -- not in source", "another -- no"], "verdict": "fail"'); return r && r.verdict === "fail" && r.unsupported.length === 2; })());
+  check("a reply with no verdict field is still no verdict", V.parseFactVerdict("The draft looks fine to me.") === null);
+}
+// ---- SINGLE-LETTER-1 -------------------------------------------------------------------------------------------------------------
+{
+  const src = "The method scales with the input size and is described by its worst-case bound.";
+  const g = (txt) => V.groundingProblems(txt, src, { today: "2026-10-12" });
+  check("Big-O notation is not a name (O(1), O(N), O(n^2))", ["The O(1) lookup helps.", "Complexity is O(N) in the worst case.", "An O(n^2) loop is slow."].every((s) => g(s).length === 0), ["The O(1) lookup helps.", "Complexity is O(N) in the worst case.", "An O(n^2) loop is slow."].map(g));
+  check("an invented multi-letter name still fails", g("The idea came from Zorblax Quimby in the lab.").some((x) => /Zorblax|Quimby/.test(x)));
+}
 console.log("verify.test.mjs: " + passes + " passed, " + fails + " failed");
 process.exit(fails ? 1 : 0);

@@ -16,6 +16,15 @@ binding = "AI"
 enabled = true
 head_sampling_rate = 1
 
+# OBSERVABILITY-TRACES-1 (2026-10-12): the top-level switch alone does not enable traces.
+[observability.logs]
+enabled = true
+head_sampling_rate = 1
+
+[observability.traces]
+enabled = true
+head_sampling_rate = 0.1
+
 
 # v4.4.0 — internal RAG (/v1/search) + query history (/v1/history)
 # PAPER_VZ -> qwav-research-v2 (768-dim, bge-base-en-v1.5) — same index qnfo-archive uses

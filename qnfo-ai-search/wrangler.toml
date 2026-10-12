@@ -34,3 +34,13 @@ crons = ["41 * * * *"]
 [observability]
 enabled = true
 head_sampling_rate = 1
+
+# WORKERS-STANDARDS-1 (owner standards 2026-10-12): logs and traces declared. Workers docs: `enabled` alone turns on logs only;
+# traces need [observability.traces]. Traces are sampled at the default rate of 1 (low-traffic worker).
+[observability.logs]
+enabled = true
+invocation_logs = true
+
+[observability.traces]
+enabled = true
+head_sampling_rate = 0.05 # TRACES-SAMPLING-BEFORE-BILLING-1: stored traces bill from 2026-12-01

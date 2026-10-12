@@ -114,7 +114,7 @@ const FLEET = [
   "research-daily-brief"
 ];
 
-var VERSION = "1.4.3-escalate-recurrence"; // 1.4.3 NO-SILENT-DROP-1 (2026-10-08, pillar autonomy; owner directive "The system shall never silently drop issues"): evReview escalates an issue_ledger incident unless an OPEN agent_issue has its title; before this, any issue with the title in any status (a closed one included) swallowed every recurrence. // 1.4.0 WATCHMAKER-INVERTED-MEASURED-1 (agent_issues 2027) + SAI-KAIZEN-GRADIENT-1 (agent_issues 2054), pillar autonomy: the scorer member writes watchmaker_inverted as a MEASURED dimension, 5 x (1 - counted/ops) from the latest watchmaker_runs row (was a hand score of 4.8 from 2026-09-24, past due), and computeSai's kaizen term is 1 / (1 + step x open issues), keeping a gradient at every backlog size, in parity with qnfo-fleet-dashboard. 1.3.2 FOLD-HYGIENE-1 (#1756): the public /scorer/preview logs a failure and answers "preview failed" instead of the exception text (CodeQL js/stack-trace-exposure, PR 668). 1.3.1 SCORER-FOLD-1 (#1756): qnfo-autonomy-scorer runs here as a member (05:17 UTC daily, awaited; /scorer/* read routes). 1.2.16 FIX-ALERTS-DIGEST-CONSUMER: mark digest anomaly alerts consumed
+var VERSION = "1.4.4-error-ratio-census"; // 1.4.4 WORKER-LOGS-SAMPLED-ERROR-VISIBILITY-1 (2026-10-12, agent_issues 1223, pillar autonomy): the digest's error ratio divides captured failures by the script's requests in the worker_usage_daily census (worker_logs holds failures only, so its self-ratio alerted "100%" hourly for idea-hub, qnfo-ai-search and qnfo-gateway); client disconnects are not failures; the digest and /fleet/summary state the log contract. // 1.4.3 NO-SILENT-DROP-1 (2026-10-08, pillar autonomy; owner directive "The system shall never silently drop issues"): evReview escalates an issue_ledger incident unless an OPEN agent_issue has its title; before this, any issue with the title in any status (a closed one included) swallowed every recurrence. // 1.4.0 WATCHMAKER-INVERTED-MEASURED-1 (agent_issues 2027) + SAI-KAIZEN-GRADIENT-1 (agent_issues 2054), pillar autonomy: the scorer member writes watchmaker_inverted as a MEASURED dimension, 5 x (1 - counted/ops) from the latest watchmaker_runs row (was a hand score of 4.8 from 2026-09-24, past due), and computeSai's kaizen term is 1 / (1 + step x open issues), keeping a gradient at every backlog size, in parity with qnfo-fleet-dashboard. 1.3.2 FOLD-HYGIENE-1 (#1756): the public /scorer/preview logs a failure and answers "preview failed" instead of the exception text (CodeQL js/stack-trace-exposure, PR 668). 1.3.1 SCORER-FOLD-1 (#1756): qnfo-autonomy-scorer runs here as a member (05:17 UTC daily, awaited; /scorer/* read routes). 1.2.16 FIX-ALERTS-DIGEST-CONSUMER: mark digest anomaly alerts consumed
 const NAME = 'qnfo-observability';
 const KNOWN = new Set(FLEET);
 // FLEET-SIZE-LIVE-1 (2026-09-23): derive the fleet set from the LIVE service_registry (census
@@ -252,27 +252,57 @@ async function ingestTrace(env) {
 }
 
 // PRECONDITION: worker_logs populated. POSTCONDITION: cloud_ops_events digest row + alerts for error-ratio anomalies.
+// WORKER-LOGS-SAMPLED-ERROR-VISIBILITY-1 (1.4.4, agent_issues 1223). worker_logs is not a census of invocations: since
+// qnfo-ops ERROR-DETAIL-CAPTURE-1 it holds the failed events copied from Workers Logs (event_type telemetry:*) plus the
+// Logpush rows of the few scripts that opt in. Dividing its bad rows by its own row count therefore read 100% for every
+// script with 20 captured failures (2026-10-12 05:17Z: idea-hub 78/78, qnfo-ai-search 78/78, qnfo-gateway 26/26, against
+// 607, 944 and 7497 requests in the unsampled census). The ratio's denominator is now the script's requests_24h in the
+// latest worker_usage_daily census; a script with captured failures and no census row is listed as unrated, never
+// alerted on a self-ratio; a client disconnect (outcome canceled) is counted apart, not as a failure.
+var LOG_CONTRACT = "worker_logs holds failed events only (telemetry:* rows copied from Workers Logs by qnfo-ops) plus Logpush rows of opted-in scripts; it is not an invocation census. Request and error totals come from worker_usage_daily (Cloudflare analytics, unsampled). A script absent from worker_logs had no captured failure; it is not silent.";
+async function usageCensus(env) {
+  try {
+    const r = await env.AUDIT.prepare("SELECT day, script, requests_24h, errors_24h FROM worker_usage_daily WHERE day = (SELECT MAX(day) FROM worker_usage_daily)").all();
+    const by = {}; let day = null;
+    for (const x of (r.results || [])) { by[x.script] = { requests: Number(x.requests_24h) || 0, errors: Number(x.errors_24h) || 0 }; day = x.day; }
+    return { day: day, by: by };
+  } catch (e) {
+    console.error(JSON.stringify({ at: "usage-census", error: String(e && e.message || e).slice(0, 200) }));
+    return { day: null, by: {} };
+  }
+}
 async function digest(env, ingestResult) {
   const dayAgo = Date.now() - 86400000;
-  const agg = await env.AUDIT.prepare(`SELECT script_name, COUNT(*) n, SUM(CASE WHEN outcome != 'ok' OR status >= 500 THEN 1 ELSE 0 END) bad, MAX(ts_ms) last_ts, MAX(status) max_status
+  const agg = await env.AUDIT.prepare(`SELECT script_name, COUNT(*) n, SUM(CASE WHEN (outcome != 'ok' AND outcome != 'canceled') OR status >= 500 THEN 1 ELSE 0 END) bad, SUM(CASE WHEN outcome = 'canceled' THEN 1 ELSE 0 END) canceled, SUM(CASE WHEN event_type LIKE 'telemetry:%' THEN 1 ELSE 0 END) captured, MAX(ts_ms) last_ts, MAX(status) max_status
     FROM worker_logs WHERE ts_ms >= ? GROUP BY script_name`).bind(dayAgo).all();
   const rows = (agg.results || []);
   const seen = new Set(rows.map(r => r.script_name));
   const fl = await liveFleet(env);
+  const census = await usageCensus(env);
   const summary = {
     generated_at: nowIso(),
     version: VERSION,
     ingest: ingestResult,
+    log_contract: LOG_CONTRACT,
+    census_day: census.day,
+    census_scripts: Object.keys(census.by).length,
     total_events_24h: rows.reduce((a, r) => a + r.n, 0),
     workers_seen_24h: rows.length,
-    workers_silent_24h: fl.filter(w => !seen.has(w)),
+    workers_silent_24h: fl.filter(w => !seen.has(w) && !(census.by[w] && census.by[w].requests > 0)),
+    workers_without_captured_failures_24h: fl.filter(w => !seen.has(w)).length,
+    unrated: [],
     anomalies: [],
   };
   for (const r of rows) {
-    const ratio = r.bad / r.n;
-    if (r.n >= 20 && ratio > 0.5) {
-      summary.anomalies.push({ worker: r.script_name, events: r.n, bad: r.bad, ratio: Math.round(ratio * 100) / 100 });
-      await env.AUDIT.prepare('INSERT INTO alerts (source, level, message, digested) VALUES (?, ?, ?, "digest")').bind(NAME, 'warning', NAME + ': ' + r.script_name + ' error ratio ' + Math.round(ratio * 100) + '% (' + r.bad + '/' + r.n + ' last 24h)').run();
+    const bad = Number(r.bad) || 0, c = census.by[r.script_name];
+    // A script whose rows are all captured failures has no denominator of its own.
+    const selfRated = (Number(r.captured) || 0) < r.n;
+    const denom = c && c.requests > 0 ? Math.max(c.requests, r.n) : (selfRated ? r.n : 0);
+    if (!denom) { if (bad) summary.unrated.push({ worker: r.script_name, bad: bad, canceled: Number(r.canceled) || 0 }); continue; }
+    const ratio = bad / denom;
+    if (denom >= 20 && ratio > 0.5) {
+      summary.anomalies.push({ worker: r.script_name, events: denom, bad: bad, ratio: Math.round(ratio * 100) / 100, denominator: c && c.requests > 0 ? "worker_usage_daily" : "worker_logs" });
+      await env.AUDIT.prepare('INSERT INTO alerts (source, level, message, digested) VALUES (?, ?, ?, "digest")').bind(NAME, 'warning', NAME + ': ' + r.script_name + ' error ratio ' + Math.round(ratio * 100) + '% (' + bad + '/' + denom + ' last 24h)').run();
     }
   }
   // RECURRENCE-FIX (2026-09-14): id was hour-granular ('fleet-obs-<YYYY-MM-DDTHH>-digest'), so any
@@ -290,7 +320,7 @@ async function logEvent(env, body, req) {
   const w = String(body.worker || '').slice(0, 120);
   if (!w) return json({ ok: false, error: 'worker required' }, 400);
   const row = {
-    hash: 'c' + fnv1a(nowIso() + '|' + w + '|' + String(body.event || '') + '|' + Math.random().toString(36).slice(2)),
+    hash: 'c' + fnv1a(nowIso() + '|' + w + '|' + String(body.event || '') + '|' + crypto.randomUUID()),
     ts: Date.now(),
     ingestedAt: nowIso(),
     script: w,
@@ -1137,7 +1167,7 @@ export default {
       const latestProbe = {};
       for (const row of (probes.results || [])) { if (!latestProbe[row.name] || row.ts > latestProbe[row.name].ts) latestProbe[row.name] = row; }
       const agg = await env.AUDIT.prepare(`SELECT script_name, COUNT(*) n, SUM(CASE WHEN outcome != 'ok' OR status >= 500 THEN 1 ELSE 0 END) bad, MAX(ts_ms) last_ts FROM worker_logs WHERE ts_ms >= ? GROUP BY script_name`).bind(Date.now() - 86400000).all();
-      return json({ ok: true, generated_at: nowIso(), version: VERSION, fleet_size: (await liveFleet(env)).length, fleet_size_source: "service_registry", probes: latestProbe, log_stats: agg.results || [] });
+      return json({ ok: true, generated_at: nowIso(), version: VERSION, fleet_size: (await liveFleet(env)).length, fleet_size_source: "service_registry", probes: latestProbe, log_stats: agg.results || [], log_contract: LOG_CONTRACT });
     }
     // JOBS-STATUS-PUBLIC-1 (2026-09-13, v1.1.4): keyless read-only view of the qnfo-ops async-job ledger.
     // WHY: the operator requirement is that a job status link be visible WITHOUT a key. The ops bearer is the

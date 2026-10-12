@@ -141,7 +141,8 @@ because each one was broken at least once; the linked issue holds the evidence.
   - `d1-query@<db>` reads any other account D1 by name (the consumer). qnfo-identity and qnfo-outreach are refused, because the run log is public.
 - An issue about live behaviour names what closes it on a line of its own: `runtime-probe: {"url": "https://...", "status": 200, "contains": "<marker>"}`. D1 triggers make that line the issue's runner-https contract (PROBE-BIRTH-RUNTIME-1). Never choose a URL and marker that already pass while the defect exists. The runners' write-keyword guard scans string literals too, so a probe's failure text must not contain words like "update ".
 - A removal is probed too (AUTOAUDIT-PROBES-1): a runtime-probe takes `"absent": "<text>"` (case-insensitive, must not occur),
-  and an issue whose defect is the code on main names `code-probe: {"paths": ["<dir>/worker.js"], "absent"|"contains": "<exact text>"}`
+  a deploy check uses `"min_version": "x.y.z"` (passes at or above it, read from the JSON `version`; MIN-VERSION-PROBE-1), never an
+  exact VERSION string in `contains`, which fails for good after the next bump; and an issue whose defect is the code on main names `code-probe: {"paths": ["<dir>/worker.js"], "absent"|"contains": "<exact text>"}`
   on a line of its own; D1 triggers make it a `code-read` contract that the consumer runs against its checkout of main. Use it
   where the code state is the defect; behaviour still needs a runtime or D1 probe. The consumer drains every due contract
   per run (PROBE-DRAIN-1).
