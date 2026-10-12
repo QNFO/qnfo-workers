@@ -1,5 +1,5 @@
 {
-  "audited_at": "2026-10-12 10:06:11",
+  "audited_at": "2026-10-12 10:38:24",
   "d1_write_failures": [],
   "d1_writes_ok": 114,
   "guard": {
@@ -539,7 +539,7 @@
       },
       {
         "dir": "personal-companion",
-        "version": "1.15.12-topic-cooldown",
+        "version": "1.15.14-needle-parse",
         "worker": "personal-companion"
       },
       {
@@ -888,9 +888,9 @@
       "worker": "personal-api"
     },
     "personal-companion": {
-      "before": "1.15.12-topic-cooldown",
+      "before": "1.15.14-needle-parse",
       "http": 200,
-      "live": "1.15.12-topic-cooldown",
+      "live": "1.15.14-needle-parse",
       "match": 1,
       "note": "SYNC",
       "worker": "personal-companion"
