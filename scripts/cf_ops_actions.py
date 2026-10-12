@@ -1601,6 +1601,10 @@ def nozg_text(s: str, doi_map: dict) -> str:
     s = _NZ_URL_RE.sub(lambda m: url(m.group(1)), s)
     s = _NZ_ORG_RE.sub(lambda m: url(m.group(1)), s)
     s = _NZ_RE.sub(lambda m: url(m.group(1)), s)
+    arch = lambda m: "ARCHIVE" if m.group(0).isupper() else ("Archive" if m.group(0)[0].isupper() else "archive")  # noqa: E731
+    if not re.search(r"\s", s.strip()):
+        # a single token (a type value, an identifier, a URL): the name is replaced in place, never by the prose phrase
+        return re.sub(r"zenodo", arch, s, flags=re.I).strip()
     s = re.sub(r"zenodo_publish\.py", "archive_publish.py", s, flags=re.I)
     s = re.sub(r"\bZENODO-PUBLISH\b", "ARCHIVE-PUBLISH", s)
     s = re.sub(r"\bzenodo_(\w+)", lambda m: "archive_" + m.group(1), s, flags=re.I)
@@ -1608,7 +1612,7 @@ def nozg_text(s: str, doi_map: dict) -> str:
     s = re.sub(r"\bzenodo[ \t]+(DOIs?)\b", r"\1", s, flags=re.I)
     s = re.sub(r"\b(on|via|at|to|in)[ \t]+zenodo\b", lambda m: ("At" if m.group(1)[0].isupper() else "at") + " papers.qnfo.org", s, flags=re.I)
     s = re.sub(r"\bzenodo\b", "the QNFO archive", s, flags=re.I)
-    s = re.sub(r"zenodo", "archive", s, flags=re.I)
+    s = re.sub(r"zenodo", arch, s, flags=re.I)
     s = re.sub(r"\(\s*\)", "", s)
     s = re.sub(r"(\S)[ \t]{2,}(?=\S)", r"\1 ", s)
     return s.strip(" \t")
@@ -1757,9 +1761,13 @@ def noz_scrub_graph(acct: str, token: str, mode: str = "dry", run=None, run_lp=N
         return 1
     doi_map = {}
     for r in rows:
+        # a slug that itself carries the registrar's name belonged to a bodyless placeholder row (removed 2026-10-12, backup
+        # bak_20261012_noz_kg_shells) and has no page: such a record stays unmapped (archive-record-<n>, the archive index URL)
+        if not r.get("slug") or re.search(r"zenodo", str(r["slug"]), re.I):
+            continue
         for k in ("doi", "zenodo_doi"):
             v = (r.get(k) or "").strip()
-            if v.lower().startswith("10.5281/") and r.get("slug"):
+            if v.lower().startswith("10.5281/"):
                 doi_map.setdefault(v, r["slug"])
     ok1, nodes = run("SELECT id, label, name, properties FROM nodes WHERE " + NOZG_MATCH_NODE)
     ok2, edges = run("SELECT id, source_id, target_id, properties FROM edges WHERE " + NOZG_MATCH_EDGE +

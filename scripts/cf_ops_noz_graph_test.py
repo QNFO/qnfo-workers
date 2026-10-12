@@ -45,6 +45,10 @@ ok(m.nozg_text("see 10.5281/zenodo.999", DOI_MAP) == "see " + P, "text: an unmap
 ok(m.nozg_text("zenodoish-thing", DOI_MAP) == "archiveish-thing", "text: the catch-all turns a glued word into archive")
 ok(m.nozg_text("Compare 10.1038/nphys1234 (Nature)", DOI_MAP) == "Compare 10.1038/nphys1234 (Nature)", "text: a third-party DOI is untouched")
 ok(m.nozg_text("", DOI_MAP) == "" and m.nozg_text("plain", DOI_MAP) == "plain", "text: empty and clean strings pass through")
+# dry run 133 (2026-10-12): a one-token value took the prose phrase ("type":"the QNFO archive") and a slug of a deleted shell row
+# was rewritten inside its URL ("papers/the QNFO archive-105281archive<n>/")
+ok(m.nozg_text("zenodo", DOI_MAP) == "archive" and m.nozg_text("zenodo-sync", DOI_MAP) == "archive-sync", "text: a single token takes archive in place, never the prose phrase")
+ok(m.nozg_text("https://papers.qnfo.org/papers/zenodo-105281zenodo21017184/", DOI_MAP) == "https://papers.qnfo.org/papers/archive-105281archive21017184/", "text: a URL stays one token")
 
 # 2. properties
 props = json.dumps({"zenodo_id": 20329449, "doi": "10.5281/zenodo.111", "title": "Signal and Worker", "date": "2026-05-21", "record_url": "https://zenodo.org/records/111",
@@ -213,7 +217,8 @@ class FakeGraph:
 
 emitted = []
 m.emit = lambda obj: emitted.append(obj)
-LP = lambda sql, params=None: (True, [{"slug": "alpha-paper", "doi": "10.5281/zenodo.111", "zenodo_doi": None}, {"slug": "beta-paper", "doi": None, "zenodo_doi": "10.5281/zenodo.222"}])  # noqa: E731
+LP = lambda sql, params=None: (True, [{"slug": "alpha-paper", "doi": "10.5281/zenodo.111", "zenodo_doi": None}, {"slug": "beta-paper", "doi": None, "zenodo_doi": "10.5281/zenodo.222"},  # noqa: E731
+                                     {"slug": "zenodo-105281zenodo999", "doi": "10.5281/zenodo.999", "zenodo_doi": None}])  # a deleted shell row's slug: never a map target
 
 fake = FakeGraph(NODES, EDGES, PUBS)
 with contextlib.redirect_stdout(io.StringIO()) as buf:
