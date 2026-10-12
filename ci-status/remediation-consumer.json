@@ -1,23 +1,23 @@
 {
  "ok": true,
  "marker": "REMEDIATION-CONSUMER-1",
- "verifier": "remediation-consumer@22d8abd8cacf",
+ "verifier": "remediation-consumer@d67b99bbab0d",
  "due": 2,
- "pass": 2,
- "fail": 0,
+ "pass": 1,
+ "fail": 1,
  "skipped": 0,
  "contracts": [
   {
-   "class": "issue-1889",
-   "issue_id": 1889,
-   "verdict": "pass",
-   "expected": "disjoint",
-   "observed": "disjoint",
+   "class": "issue-2303",
+   "issue_id": 2303,
+   "verdict": "fail",
+   "expected": "ok",
+   "observed": "missing-marker",
    "written": true
   },
   {
-   "class": "issue-2110",
-   "issue_id": 2110,
+   "class": "issue-2248",
+   "issue_id": 2248,
    "verdict": "pass",
    "expected": "ok",
    "observed": "ok",
@@ -47,10 +47,13 @@
   "http",
   "runner-https"
  ],
+ "https": 2,
  "budget_exhausted": false,
  "runtime_verified_share_24h": 6.9,
  "host_census": {
-  "skipped": "ran within 6h"
+  "updated": 2130,
+  "hosts": 59,
+  "broken": 4
  },
  "migrations": {
   "opted_in": 128,
@@ -59,8 +62,8 @@
   "failed": [],
   "metric": 0
  },
- "spent_ms": 8425,
- "head": "22d8abd8cacf426e26c88f67225b2a016ccdeeaf",
+ "spent_ms": 21344,
+ "head": "d67b99bbab0d135f12d86bd5caf0519d438afed4",
  "job_status": "success",
- "ts": "2026-10-12T20:40:58Z"
+ "ts": "2026-10-12T21:06:05Z"
 }
