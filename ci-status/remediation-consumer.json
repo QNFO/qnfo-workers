@@ -1,7 +1,7 @@
 {
  "ok": true,
  "marker": "REMEDIATION-CONSUMER-1",
- "verifier": "remediation-consumer@3b4cfd21d83c",
+ "verifier": "remediation-consumer@03291c77ac30",
  "due": 0,
  "pass": 0,
  "fail": 0,
@@ -31,7 +31,7 @@
   "runner-https"
  ],
  "budget_exhausted": false,
- "runtime_verified_share_24h": 7.1,
+ "runtime_verified_share_24h": 7,
  "host_census": {
   "skipped": "ran within 6h"
  },
@@ -42,8 +42,8 @@
   "failed": [],
   "metric": 0
  },
- "spent_ms": 10381,
- "head": "3b4cfd21d83c4c053cb3db4742b31c09201cdb1d",
+ "spent_ms": 6562,
+ "head": "03291c77ac30c19c793a26ed8faeda5268214153",
  "job_status": "success",
- "ts": "2026-10-12T21:22:11Z"
+ "ts": "2026-10-12T21:53:36Z"
 }
