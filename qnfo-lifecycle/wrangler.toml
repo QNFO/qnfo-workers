@@ -1,6 +1,12 @@
 name = "qnfo-lifecycle"
 main = "worker.js"
-compatibility_date = "2026-08-10"
+# COMPAT-ADVANCE-WAVE-1 (2026-10-12, metric workers_compat_date_behind, qnfo-ops COMPAT-DATE-DECLARED-APPLY-1): the date moves
+# to 2026-10-10 on the next canonical deploy. Reviewed against qnfo-ops COMPAT_FLIPS between the old date and this one:
+# 2026-08-04 nodejs_compat default on (this worker reads no timer id as a number, has no typeof process/Buffer branch and
+# imports no node: module), 2026-10-01 Durable Object eviction (no Durable Object here). /ops/deploy keeps the date only
+# when /health answers with the deployed VERSION and otherwise restores the previous date (deployment_history compat-restore).
+# compat-advance: reviewed 2026-10-12
+compatibility_date = "2026-10-10"
 # LIFECYCLE-PING-1042-1 (2026-10-05, agent_issues 1994): runPing and runSync fetch *.q08.workers.dev; without
 # global_fetch_strictly_public that subrequest is Cloudflare error 1042 (same zone), served as HTTP 404. Measured:
 # 150 "[lifecycle] PING FAIL ... HTTP 404" rows in worker_logs 2026-10-02..05 while both URLs answer 200 from outside.

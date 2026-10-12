@@ -268,3 +268,92 @@ class_name = "AgenticOpsExec"
 [exports.AgenticOpsExec]
 type = "durable-object"
 storage = "sqlite"
+
+# COMPAT-HEALTH-BINDINGS-2 (2.44.0, 2026-10-12): the compat-date gate (COMPAT-DATE-DECLARED-APPLY-1) reads a worker's /health
+# before and after an upload that advances its compatibility date. A Worker cannot fetch another Worker's workers.dev host on
+# its own account (error 1042), so each live worker without a FLEET binding or a custom domain gets a binding here; the names
+# match COMPAT_HEALTH_BINDINGS in worker.js. Read-only use (GET /health).
+[[services]]
+binding = "CH_PERSONAL_API"
+service = "personal-api"
+environment = "production"
+
+[[services]]
+binding = "CH_PERSONAL_COMPANION"
+service = "personal-companion"
+environment = "production"
+
+[[services]]
+binding = "CH_Q08_SIGNAL_ENGINE"
+service = "q08-signal-engine"
+environment = "production"
+
+[[services]]
+binding = "CH_QNFO_AI_CALIBRATION"
+service = "qnfo-ai-calibration"
+environment = "production"
+
+[[services]]
+binding = "CH_QNFO_CLOUD_OPS"
+service = "qnfo-cloud-ops"
+environment = "production"
+
+[[services]]
+binding = "CH_QNFO_CODE_ORCHESTRATOR"
+service = "qnfo-code-orchestrator"
+environment = "production"
+
+[[services]]
+binding = "CH_QNFO_FLEET_CONTROL"
+service = "qnfo-fleet-control"
+environment = "production"
+
+[[services]]
+binding = "CH_QNFO_FLEET_DASHBOARD"
+service = "qnfo-fleet-dashboard"
+environment = "production"
+
+[[services]]
+binding = "CH_QNFO_INFRA"
+service = "qnfo-infra"
+environment = "production"
+
+[[services]]
+binding = "CH_QNFO_IPATENT"
+service = "qnfo-ipatent"
+environment = "production"
+
+[[services]]
+binding = "CH_QNFO_OBSERVABILITY"
+service = "qnfo-observability"
+environment = "production"
+
+[[services]]
+binding = "CH_QNFO_PDF"
+service = "qnfo-pdf"
+environment = "production"
+
+[[services]]
+binding = "CH_QNFO_RESEARCH_EXEC"
+service = "qnfo-research-exec"
+environment = "production"
+
+[[services]]
+binding = "CH_QNFO_SOCIAL"
+service = "qnfo-social"
+environment = "production"
+
+[[services]]
+binding = "CH_QNFO_SUBSCRIBERS"
+service = "qnfo-subscribers"
+environment = "production"
+
+[[services]]
+binding = "CH_QNFO_TOOLS_MCP"
+service = "qnfo-tools-mcp"
+environment = "production"
+
+[[services]]
+binding = "CH_RADAR_HUB"
+service = "radar-hub"
+environment = "production"

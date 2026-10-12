@@ -2,7 +2,7 @@ var __defProp = Object.defineProperty;
 var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
 
 // worker.js
-var VERSION = "0.5.7-solicit-journal"; // 0.5.7 MAIL-ASK-1 (2026-10-12): SLA_SOLICIT_RX matches journal call-for-paper mail and reads 1200 body characters (source of the member folded into qnfo-cloud-ops 1.26.1); merged on top of 0.5.6 DRAFT-GROUNDING-1, both behaviours kept. // 0.5.6 DRAFT-GROUNDING-1 (agent_issues 2282, 2272): the triage prompt names no example subject and escalates anything needing expertise, judgement, a decision, an opinion or a commitment; ungroundedTerms() escalates a draft with a name, number or date absent from the inbound email; stripSignoff() cuts a model-written closing; SLA-GRACE-1 (agent_issues 2204): grace 12 h, was 24 h, the same number as the metric target. 0.5.3 0.5.3 CLEARED-SEND-RETRY-1: a cleared reply whose send fails keeps its auto-send marker and is retried up to 3 times (row 56 dead-ended on a 401 on 2026-10-05); the EMAIL binding declares props.caller so qnfo-email 2.5.1+ authenticates this worker without a key copy (#1923 class, CLAUDE.md #1703); 0.5.2 SLA-SES-ENVELOPE-1 (#1957): an Amazon SES message-id envelope (010101a1...-000000@sesmail.<domain>) is a transactional or bulk sender, so INBOUND-SLA-1 closes it as automated instead of holding it as an unknown person (iPostal1 mailbox notices reached the owner queue as "mail:ipostal1.com"; the owner closed the card, note 38). // 0.5.1: a failed send records a unique failure row (same-millisecond failures left a stale claim that read as an acknowledgement) /* 0.5.0 INBOUND-SLA-1 (2026-10-02, pillar: reach): no human inbound message waits more than 72h without a fleet action; category->action map, decision log, kill switch ops_config inbound_sla_enabled, metrics inbound_first_response_h_median_30d + inbound_unactioned_72h. 0.4.3 CAPABILITY-SELF-REPORT-1 */
+var VERSION = "0.5.8-crypto-ids"; // 0.5.8 WORKERS-BP-DEBT-2 (2026-10-12): the inbound-sla failure id takes rndB36 (crypto.getRandomValues) instead of Math.random; host parity with qnfo-cloud-ops 1.26.2. 0.5.7-solicit-journal; // 0.5.7 MAIL-ASK-1 (2026-10-12): SLA_SOLICIT_RX matches journal call-for-paper mail and reads 1200 body characters (source of the member folded into qnfo-cloud-ops 1.26.1); merged on top of 0.5.6 DRAFT-GROUNDING-1, both behaviours kept. // 0.5.6 DRAFT-GROUNDING-1 (agent_issues 2282, 2272): the triage prompt names no example subject and escalates anything needing expertise, judgement, a decision, an opinion or a commitment; ungroundedTerms() escalates a draft with a name, number or date absent from the inbound email; stripSignoff() cuts a model-written closing; SLA-GRACE-1 (agent_issues 2204): grace 12 h, was 24 h, the same number as the metric target. 0.5.3 0.5.3 CLEARED-SEND-RETRY-1: a cleared reply whose send fails keeps its auto-send marker and is retried up to 3 times (row 56 dead-ended on a 401 on 2026-10-05); the EMAIL binding declares props.caller so qnfo-email 2.5.1+ authenticates this worker without a key copy (#1923 class, CLAUDE.md #1703); 0.5.2 SLA-SES-ENVELOPE-1 (#1957): an Amazon SES message-id envelope (010101a1...-000000@sesmail.<domain>) is a transactional or bulk sender, so INBOUND-SLA-1 closes it as automated instead of holding it as an unknown person (iPostal1 mailbox notices reached the owner queue as "mail:ipostal1.com"; the owner closed the card, note 38). // 0.5.1: a failed send records a unique failure row (same-millisecond failures left a stale claim that read as an acknowledgement) /* 0.5.0 INBOUND-SLA-1 (2026-10-02, pillar: reach): no human inbound message waits more than 72h without a fleet action; category->action map, decision log, kill switch ops_config inbound_sla_enabled, metrics inbound_first_response_h_median_30d + inbound_unactioned_72h. 0.4.3 CAPABILITY-SELF-REPORT-1 */
 var CLEARED_SEND_MAX_TRIES = 3;
 var CAPS = ["reply-drafts", "cadence-log", "email-filters", "inbound-sla"];
 var LIMS = ["cron-only: no public route; the reply-draft pass runs on its */15 and 3-hourly crons, INBOUND-SLA-1 on */15, its metrics on the 3-hourly cron", "never sends outreach or follow-ups; replies only to inbound mail, through qnfo-email /send", "INBOUND-SLA-1 mails nobody outside the research-outreach campaign and never a funder or hiring manager (docs/STRATEGY.md section 5): those messages are held and recorded for the weekly identity review", "publishes this capability row from the cron"];
@@ -360,6 +360,15 @@ async function slaFailures(env, qid) {
 }
 // Claim the thread (one message of each kind per thread, atomically), write the text to the queue row first so the
 // qnfo-audit tone trigger can refuse it, then send through qnfo-email /send (suppression and tone checks again).
+// WORKERS-BP-DEBT-2: n base-36 characters from the platform CSPRNG, for event and row ids (never Math.random).
+function rndB36(n) {
+  const a = new Uint8Array(n);
+  crypto.getRandomValues(a);
+  let s = "";
+  for (let i = 0; i < n; i++) s += (a[i] % 36).toString(36);
+  return s;
+}
+__name(rndB36, "rndB36");
 async function slaSendOnce(env, row, f, kind, body) {
   var claim = "inbound-sla-" + kind + "-" + f.threadKey;
   var meta = JSON.stringify({ queue_id: row.qid, kind: kind, domain: slaDomain(f.sender), sender_key: f.senderKey, version: VERSION });
@@ -370,7 +379,7 @@ async function slaSendOnce(env, row, f, kind, body) {
   var fail = async function(why) {
     // The failure id must be unique: two failures in the same millisecond collided on the primary key, the rename
     // threw, and the leftover 'sending' claim then counted as an acknowledgement already sent to this sender.
-    var fid = "inbound-sla-fail-" + row.qid + "-" + Date.now() + "-" + Math.random().toString(36).slice(2, 8);
+    var fid = "inbound-sla-fail-" + row.qid + "-" + Date.now() + "-" + rndB36(6);
     var ftext = ("INBOUND-SLA-1 " + kind + " q" + row.qid + " failed: " + why).slice(0, 200);
     try {
       await slaRun(env.AUDIT_DB, "UPDATE cloud_ops_events SET id = ?1, status = 'failed', text = ?2 WHERE id = ?3", [fid, ftext, claim]);
