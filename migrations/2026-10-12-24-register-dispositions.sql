@@ -26,6 +26,9 @@
 --        flag: metric workers_idle_7d = live services with fewer than 3 requests in 7 days in the newest snapshot (or no
 --        row in it), with a trigger whose lever is the retire procedure of OWNER-STANDING-GRANT-1. Refreshed hourly by
 --        workers_idle_tick; reads NULL when the snapshot is older than 36 hours, so staleness is not read as "none idle".
+-- Re-run note (2026-10-12): statements 1 to 9 applied at 08:04Z; the tick at the end failed on the first recurrence guard
+-- (agent_issues 2365; corrected by 2026-10-12-25-recurrence-guard-twin.sql). Every statement is idempotent, so the re-run
+-- changes nothing but the tick: the row updates match only status open, the backup table and the metric rows exist.
 -- APPLY-BY: ci
 -- DB: qnfo-audit
 -- Rollback: UPDATE task_dod_register SET status = (SELECT b.status FROM bak_20261012_register_rows b WHERE b.id = task_dod_register.id), evidence_pointer = (SELECT b.evidence_pointer FROM bak_20261012_register_rows b WHERE b.id = task_dod_register.id), updated_at = (SELECT b.updated_at FROM bak_20261012_register_rows b WHERE b.id = task_dod_register.id) WHERE id IN (SELECT id FROM bak_20261012_register_rows); DROP TRIGGER IF EXISTS workers_idle_tick; DELETE FROM analytics_metric_triggers WHERE metric_key = 'workers_idle_7d'; DELETE FROM metric_registry WHERE metric = 'workers_idle_7d'
