@@ -365,3 +365,8 @@ environment = "production"
 binding = "CH_RADAR_HUB"
 service = "radar-hub"
 environment = "production"
+
+[[services]]
+binding = "CH_IDEA_HUB"
+service = "idea-hub"
+environment = "production"
