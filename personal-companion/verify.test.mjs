@@ -262,5 +262,11 @@ const count = (p, t) => p.prepare("SELECT COUNT(*) n FROM " + t).get().n;
   ok("a truncated JSON reply still yields its explicit verdict and quotes", (() => { const r = V.parseFactVerdict('{"unsupported": ["the claim -- not in source", "another -- no"], "verdict": "fail"'); return r && r.verdict === "fail" && r.unsupported.length === 2; })());
   ok("a reply with no verdict field is still no verdict", V.parseFactVerdict("The draft looks fine to me.") === null);
 }
+// ---- REJECT-CONTEXT-1 -----------------------------------------------------------------------------------------------------------
+{
+  const c = V.problemContext("The study ran first. Later the Failure rate rose sharply in every trial.", ["name not in the source: Failure", "year not in the source: 1999"]);
+  ok(/Failure => .*the Failure rate rose/.test(c) && !/1999/.test(c), "a flagged name is logged with its surrounding text; an absent item adds nothing", c);
+  ok(V.problemContext("", ["name not in the source: X"]) === "" && V.problemContext("t", null) === "", "empty inputs give an empty context");
+}
 console.log(pass + " passed, " + fail + " failed");
 if (fail) process.exit(1);
