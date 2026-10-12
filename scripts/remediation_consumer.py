@@ -57,6 +57,7 @@ RUNTIME PROBES (PROBE-TRANSPORT-MONOCULTURE-1, agent_issues 2060, 2026-10-06)
 """
 
 import json
+import re
 import concurrent.futures
 import os
 import sys
@@ -274,7 +275,10 @@ def parse_https_probe(spec):
         return None, "not-an-object"
     # ABSENT-PROBE-1 (2026-10-11): "absent" is a case-insensitive token the body must NOT contain, so a removal (a scrub, a
     # retired string) has a machine probe; before it the six NO-ZENODO-DOI issues could only carry needs-machine-probe.
-    unknown = set(p) - {"url", "status", "contains", "absent", "max_ms"}
+    # MIN-VERSION-PROBE-1 (2026-10-12): "min_version" passes when the JSON body's "version" is at or above it (numeric core
+    # compared, any -suffix ignored), so a deploy check survives the next bump; an exact "contains": "0.16.0-x" failed for good
+    # once 0.16.1 shipped (#2309, #2304, #2335).
+    unknown = set(p) - {"url", "status", "contains", "absent", "min_version", "max_ms"}
     if unknown:
         return None, "unknown-key:%s" % sorted(unknown)[0]
     if not host_allowed(p.get("url")):
@@ -288,10 +292,19 @@ def parse_https_probe(spec):
     a = p.get("absent")
     if a is not None and (not isinstance(a, str) or not a or len(a) > 200):
         return None, "bad-absent"
+    mv = p.get("min_version")
+    if mv is not None and (not isinstance(mv, str) or version_core(mv) is None):
+        return None, "bad-min_version"
     m = p.get("max_ms")
     if m is not None and (not isinstance(m, int) or m <= 0 or m > HTTPS_TIMEOUT_S * 1000):
         return None, "bad-max_ms"
-    return {"url": p["url"], "status": st, "contains": c, "absent": a, "max_ms": m}, None
+    return {"url": p["url"], "status": st, "contains": c, "absent": a, "min_version": mv, "max_ms": m}, None
+
+
+def version_core(v):
+    """(major, minor, patch) of a VERSION string such as '0.16.1-perf-pin', or None."""
+    mt = re.match(r"^\s*v?(\d+)\.(\d+)\.(\d+)", str(v or ""))
+    return tuple(int(x) for x in mt.groups()) if mt else None
 
 
 class _AllowlistRedirect(urllib.request.HTTPRedirectHandler):
@@ -312,6 +325,16 @@ def judge_https(probe, status, elapsed_ms, body):
         return "missing-marker"
     if probe.get("absent") and probe["absent"].lower().encode("utf-8") in (body or b"").lower():
         return "present-marker"
+    if probe.get("min_version"):
+        try:
+            live = json.loads((body or b"{}").decode("utf-8", "replace")).get("version")
+        except (ValueError, AttributeError):
+            live = None
+        lc = version_core(live)
+        if lc is None:
+            return "no-version"
+        if lc < version_core(probe["min_version"]):
+            return "version=%s" % str(live)[:40]
     if probe.get("max_ms") and elapsed_ms > probe["max_ms"]:
         return "slow=%dms" % elapsed_ms
     return "ok"
@@ -530,6 +553,12 @@ def _selftest():
         if parse_code_probe(bad)[1] != want:
             print(json.dumps({"ok": False, "case": "code-read-parse", "spec": bad, "got": parse_code_probe(bad)[1]}))
             return 1
+    pv = {"url": "https://qnfo.org/", "status": 200, "contains": None, "absent": None, "min_version": "0.16.0", "max_ms": None}
+    if (judge_https(pv, 200, 5, b'{"version": "0.16.1-perf-pin"}') != "ok" or judge_https(pv, 200, 5, b'{"version": "0.16.0-x"}') != "ok"
+            or judge_https(pv, 200, 5, b'{"version": "0.15.9"}') != "version=0.15.9" or judge_https(pv, 200, 5, b"<html>") != "no-version"
+            or parse_https_probe('{"url": "https://qnfo.org/", "min_version": "latest"}')[1] != "bad-min_version"):
+        print(json.dumps({"ok": False, "case": "min-version"}))
+        return 1
     if parse_https_probe('{"url": "https://qnfo.org/", "absent": ""}')[1] != "bad-absent":
         print(json.dumps({"ok": False, "case": "absent-parse"}))
         return 1

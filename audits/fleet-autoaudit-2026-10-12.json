@@ -1,8 +1,15 @@
 {
-  "audited_at": "2026-10-12 00:00:26",
+  "audited_at": "2026-10-12 05:48:56",
   "d1_write_failures": [],
   "d1_writes_ok": 114,
   "guard": {
+    "_drift_confirm": {
+      "first_pass": [
+        "personal-companion"
+      ],
+      "refreshed": true,
+      "second_pass": []
+    },
     "_guard_rc": 0,
     "ahead": [],
     "cf_script_list": true,
@@ -539,7 +546,7 @@
       },
       {
         "dir": "personal-companion",
-        "version": "1.15.7-ground-hyphen",
+        "version": "1.15.9-factcheck-nothink",
         "worker": "personal-companion"
       },
       {
@@ -644,7 +651,7 @@
       },
       {
         "dir": "qnfo-research-exec",
-        "version": "0.12.3-doi-scrub",
+        "version": "0.12.5-slot-attr",
         "worker": "qnfo-research-exec"
       },
       {
@@ -888,9 +895,9 @@
       "worker": "personal-api"
     },
     "personal-companion": {
-      "before": "1.15.7-ground-hyphen",
+      "before": "1.15.9-factcheck-nothink",
       "http": 200,
-      "live": "1.15.7-ground-hyphen",
+      "live": "1.15.9-factcheck-nothink",
       "match": 1,
       "note": "SYNC",
       "worker": "personal-companion"
@@ -1488,9 +1495,9 @@
       "worker": "qnfo-register-guard"
     },
     "qnfo-research-exec": {
-      "before": "0.12.3-doi-scrub",
+      "before": "0.12.5-slot-attr",
       "http": 200,
-      "live": "0.12.3-doi-scrub",
+      "live": "0.12.5-slot-attr",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-research-exec"

@@ -105,6 +105,20 @@ jobs:
         if: ${{ !cancelled() }}
         run: python3 scripts/cloudflare-only-host-guard.py
 
+      # WORKERS-STANDARDS-GUARD-1 (owner directive 2026-10-12, WORKERS-BEST-PRACTICES-1): a change may not ADD a known Workers anti-pattern
+      # (Math.random ids/tokens, passThroughOnException, destructured ctx, string-compared secrets) or remove/omit observability and traces.
+      # Diff-only, so existing debt other PRs are fixing never blocks this one; `// standards-ok: <reason>` marks a false positive.
+      - name: WORKERS-STANDARDS-GUARD-1 (no new Workers anti-patterns)
+        if: ${{ !cancelled() }}
+        run: |
+          python3 scripts/workers_standards_guard.test.py
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            git fetch --no-tags origin "${{ github.base_ref }}"
+            python3 scripts/workers_standards_guard.py "origin/${{ github.base_ref }}"
+          else
+            python3 scripts/workers_standards_guard.py HEAD~1
+          fi
+
       # IDENTITY-WEEKLY-1: the weekly identity review that replaced a claude.ai Routine runs in qnfo-fleet-dashboard,
       # the only worker bound to the private qnfo-identity store; its offline suite (synthetic doc, stubbed APIs,
       # recording D1, Monday-once throttle) must stay green.
