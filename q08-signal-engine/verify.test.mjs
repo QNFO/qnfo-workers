@@ -210,5 +210,22 @@ globalThis.fetch = origFetch;
   const keep = V.pruneInferences({ text: "# T\n\nShort.\n\nworth your time: yes - x", model: "m" }, { inferences: ["Short. -- reasoning"] }, [], false);
   check("an inference is kept when deleting it would take the draft under the floor", keep.removed === 0 && /Short/.test(keep.piece.text));
 }
+// ---- Q08-FACT-INFERENCE-2: unlabelled items are classified by the reviewer's stated reason (run 338) ----------------------------
+{
+  const sp = V.splitFactItems([
+    "runs an API, a database and live collaboration on a private server -- inference from source",
+    "stores every design and upload under the user's control -- inference from source",
+    "The project advertises itself as free -- in source, but the second half is an inference",
+    "a single Docker-Compose command -- not in source",
+    "released on 4 March 2026 -- date not in source; an inference",
+    "the maintainers burned out -- assumption about mechanism",
+    "costs fell 40 percent -- generalization with a figure not in source"
+  ]);
+  check("run 338 items whose reason says inference become INFERENCE", sp.inferences.length === 4 && sp.inferences.some((x) => /private server/.test(x)) && sp.inferences.some((x) => /burned out/.test(x)) && sp.inferences.some((x) => /advertises itself/.test(x)), sp);
+  check("'not in source', a date or a figure keeps an unlabelled item a FACT", sp.facts.length === 3 && sp.facts.some((x) => /Docker-Compose/.test(x)) && sp.facts.some((x) => /4 March/.test(x)) && sp.facts.some((x) => /40 percent/.test(x)), sp);
+  const v = V.parseFactVerdict(JSON.stringify({ unsupported: ["runs an API on a private server -- inference from source", "the maintainers burned out -- assumption about mechanism"], verdict: "fail" }));
+  check("a reviewer that lists only inferences without labels no longer fails the draft", v.verdict === "pass" && v.inferences.length === 2, v);
+  check("an item with no reason at all stays a FACT", V.splitFactItems(["a bare quotation with no reason"]).facts.length === 1);
+}
 console.log("verify.test.mjs: " + passes + " passed, " + fails + " failed");
 process.exit(fails ? 1 : 0);
