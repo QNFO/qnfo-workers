@@ -1,8 +1,15 @@
 {
-  "audited_at": "2026-10-12 05:17:36",
+  "audited_at": "2026-10-12 05:48:56",
   "d1_write_failures": [],
   "d1_writes_ok": 114,
   "guard": {
+    "_drift_confirm": {
+      "first_pass": [
+        "personal-companion"
+      ],
+      "refreshed": true,
+      "second_pass": []
+    },
     "_guard_rc": 0,
     "ahead": [],
     "cf_script_list": true,
@@ -539,7 +546,7 @@
       },
       {
         "dir": "personal-companion",
-        "version": "1.15.7-ground-hyphen",
+        "version": "1.15.9-factcheck-nothink",
         "worker": "personal-companion"
       },
       {
@@ -888,9 +895,9 @@
       "worker": "personal-api"
     },
     "personal-companion": {
-      "before": "1.15.7-ground-hyphen",
+      "before": "1.15.9-factcheck-nothink",
       "http": 200,
-      "live": "1.15.7-ground-hyphen",
+      "live": "1.15.9-factcheck-nothink",
       "match": 1,
       "note": "SYNC",
       "worker": "personal-companion"
