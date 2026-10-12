@@ -43,6 +43,8 @@ class Fake:
         self.paused = paused
         self.unpause_ok = unpause_ok
         self.verify_location = "https://qwav.org/"
+        self.ssl_enabled = True
+        self.verify_status0 = False
 
     def call(self, method, path, token, body=None, timeout=60):
         self.calls.append((method, path, body))
@@ -50,6 +52,13 @@ class Fake:
             return 200, {"result": [{"id": z, "name": n} for z, n in self.zones], "result_info": {"total_pages": 1}}
         if path.count("/") == 2 and path.startswith("/zones/") and method == "GET":
             return 200, {"result": {"id": path.split("/")[2], "paused": self.paused}}
+        if "/ssl/universal/settings" in path and method == "GET":
+            return 200, {"result": {"enabled": self.ssl_enabled}}
+        if "/ssl/universal/settings" in path and method == "PATCH":
+            self.ssl_enabled = True
+            return 200, {"success": True, "result": {"enabled": True}}
+        if "/ssl/certificate_packs" in path:
+            return 200, {"result": [{"type": "universal", "status": "pending_validation" if not self.ssl_enabled else "active", "hosts": ["x"]}]}
         if path.count("/") == 2 and path.startswith("/zones/") and method == "PATCH":
             if self.unpause_ok:
                 self.paused = False
@@ -71,6 +80,8 @@ class Fake:
         host = url.split("/")[2]
         if self.verify_ok:
             return 301, self.verify_location
+        if self.verify_status0:
+            return 0, "error:URLError"
         return 200, ""
 
 
@@ -85,7 +96,7 @@ def run(fake, target="", mode="live"):
 f = Fake(rules_before=[], dns=[{"id": "r1", "type": "CNAME", "name": "qwav.uk", "content": "qwav.pages.dev", "proxied": False}])
 rc = run(f, "qwav.uk")
 ok(rc == 0, "fresh zone returns 0", rc)
-ok(f.emitted and f.emitted[0].get("stage") == "zone" and f.emitted[0]["paused"] is False and f.emitted[1].get("stage") == "backup" and f.emitted[1]["ruleset_rules"] == [], "the zone status then the backup are emitted before any write (ZONE-DELEGATION-1)", f.emitted[:2])
+ok(f.emitted and f.emitted[0].get("stage") == "zone" and f.emitted[0]["paused"] is False and f.emitted[1].get("stage") == "ssl" and f.emitted[2].get("stage") == "backup" and f.emitted[2]["ruleset_rules"] == [], "the zone status, the ssl state and the backup are emitted before any write (ZONE-DELEGATION-1, EDGE-CERT-1)", f.emitted[:3])
 puts = [c for c in f.calls if c[0] == "PUT" and "/rulesets/phases/http_request_dynamic_redirect/entrypoint" in c[1]]
 ok(len(puts) == 1 and len(puts[0][2]["rules"]) == 1, "exactly one ruleset PUT with one rule", puts)
 rule = puts[0][2]["rules"][0]
@@ -98,7 +109,7 @@ ok(len(patches) == 1 and patches[0][1].endswith("/dns_records/r1") and patches[0
 ok(len(posts) == 1 and posts[0][2]["name"] == "www.qwav.uk" and posts[0][2]["content"] == "qwav.pages.dev" and posts[0][2]["proxied"] is True, "the missing www record is created as a proxied CNAME", posts)
 final = f.emitted[-1]
 ok(final["ok"] is True and final["rule_written"] is True and all(c["ok"] for c in final["verify"]) and final["restored"] is None, "the final report is ok with both hosts verified", final)
-ok([e.get("stage") for e in f.emitted[:3]] == ["zone", "backup", None], "zone, backup, then the final report: no write stage precedes the backup", [e.get("stage") for e in f.emitted])
+ok([e.get("stage") for e in f.emitted[:4]] == ["zone", "ssl", "backup", None], "zone, ssl, backup, then the final report: no write stage precedes the backup", [e.get("stage") for e in f.emitted])
 ok(not [c for c in f.calls if c[0] == "PATCH" and c[1].count("/") == 2], "an unpaused zone gets no zone PATCH", f.calls)
 
 # 2. idempotent: the rule already present and records proxied -> no PUT, no DNS write
@@ -152,6 +163,21 @@ rc = run(f9, "ipatent.me", mode="dry")
 ok(rc == 0 and not [c for c in f9.calls if c[0] in ("PUT", "PATCH", "POST")] and f9.emitted[-1]["paused"] is True, "dry mode reports the pause and writes nothing", f9.emitted[-1])
 ok(m.canon_verify("ipatent.me", fetch=lambda u: (301, "https://ipatent.qnfo.org/"), target="https://ipatent.qnfo.org")["ok"] is True, "verify accepts the zone's own target")
 ok(m.canon_verify("ipatent.me", fetch=lambda u: (301, "https://qwav.org/"), target="https://ipatent.qnfo.org")["ok"] is False, "verify refuses another zone's target")
+
+# 8. EDGE-CERT-1: Universal SSL off is switched on before the rule; a connection error during verification keeps the rule (no restore)
+f10 = Fake(rules_before=[], dns=[], zones=[("z-ec", "empoweringchange.today")], paused=True)
+f10.ssl_enabled = False
+f10.verify_ok = False
+f10.verify_status0 = True
+rc = run(f10, "empoweringchange.today")
+ssl_patches = [c for c in f10.calls if c[0] == "PATCH" and "/ssl/universal/settings" in c[1]]
+puts10 = [c for c in f10.calls if c[0] == "PUT"]
+ok(len(ssl_patches) == 1 and ssl_patches[0][2] == {"enabled": True}, "Universal SSL is switched on when it was off", ssl_patches)
+ok(rc == 1 and len(puts10) == 1 and f10.emitted[-1]["restored"] is None and f10.emitted[-1]["kept_rule_on_connection_error"] is True, "a connection error keeps the rule and still fails the run", f10.emitted[-1])
+ok(f10.emitted[-1]["ssl"]["enabled_now"] is True and f10.emitted[-1]["ssl"]["universal_enabled"] is False, "the report carries the ssl state", f10.emitted[-1]["ssl"])
+f11 = Fake(rules_before=[], dns=[], zones=[("z-ec", "empoweringchange.today")])
+rc = run(f11, "empoweringchange.today", mode="dry")
+ok(not [c for c in f11.calls if c[0] in ("PUT", "PATCH", "POST")], "dry mode never switches ssl on", f11.calls)
 
 # 6. canon_verify reads a 301 to qwav.org as ok and anything else as not ok
 ok(m.canon_verify("qwav.uk", fetch=lambda u: (301, "https://qwav.org/x?y=1"))["ok"] is True, "301 to qwav.org is ok")

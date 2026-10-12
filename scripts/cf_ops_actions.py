@@ -702,6 +702,21 @@ def spare_domain_canon(zone_name: str, mode: str, token: str, fetch=None, sleep=
             if not unpaused["ok"]:
                 rc = 1
                 continue
+        # EDGE-CERT-1: a zone that was paused (or whose Universal SSL was switched off) answers every https request with a TLS
+        # handshake failure however its records and rules read (empoweringchange.today, 2026-10-12 14:33Z: A records on
+        # Cloudflare, no certificate). Universal SSL is switched on when it is off, and the certificate packs are recorded.
+        ssl = {"universal_enabled": None, "enabled_now": False, "packs": []}
+        st, j = call("GET", "/zones/%s/ssl/universal/settings" % zid, token)
+        if st == 200:
+            ssl["universal_enabled"] = bool((j.get("result") or {}).get("enabled"))
+            if not ssl["universal_enabled"] and mode != "dry":
+                st2, j2 = call("PATCH", "/zones/%s/ssl/universal/settings" % zid, token, {"enabled": True})
+                ssl["enabled_now"] = st2 == 200 and j2.get("success") is not False
+                ssl["enable_http"] = st2
+        st, j = call("GET", "/zones/%s/ssl/certificate_packs?status=all" % zid, token)
+        if st == 200:
+            ssl["packs"] = [{"type": c.get("type"), "status": c.get("status"), "hosts": c.get("hosts")} for c in (j.get("result") or [])][:5]
+        emit({"action": "spare-domain-canon", "stage": "ssl", "zone": zone, "ssl": ssl})
         st, j = call("GET", "/zones/%s/rulesets/phases/%s/entrypoint" % (zid, REDIRECT_PHASE), token)
         before = ((j.get("result") or {}).get("rules") or []) if st == 200 else []
         emit({"action": "spare-domain-canon", "stage": "backup", "zone": zone, "http": st, "ruleset_rules": before})
@@ -745,11 +760,16 @@ def spare_domain_canon(zone_name: str, mode: str, token: str, fetch=None, sleep=
                 sleep(30)
         ok = all(c["ok"] for c in checks)
         restored = None
-        if not ok and rule_needed:
+        # A host that answers nothing (status 0: DNS, TLS or timeout) is not made worse by the rule, and a restore would only mean
+        # a re-run once the certificate is up; the rule is kept and the run still fails so the cause is read. A host that
+        # answered something other than the redirect (a 200 from the old target) is the case the restore exists for.
+        answered = [c for c in checks if not c["ok"] and c["status"] != 0]
+        if not ok and rule_needed and answered:
             st, j = call("PUT", "/zones/%s/rulesets/phases/%s/entrypoint" % (zid, REDIRECT_PHASE), token, {"rules": before})
             restored = {"http": st, "rules": len(before)}
+        if not ok:
             rc = 1
-        emit({"action": "spare-domain-canon", "ok": ok, "zone": zone, "target": target, "unpaused": unpaused, "rule_written": rule_needed, "dns": dns_done, "verify": checks, "restored": restored})
+        emit({"action": "spare-domain-canon", "ok": ok, "zone": zone, "target": target, "unpaused": unpaused, "ssl": ssl, "rule_written": rule_needed, "dns": dns_done, "verify": checks, "restored": restored, "kept_rule_on_connection_error": bool(not ok and rule_needed and not answered)})
     return rc
 
 
