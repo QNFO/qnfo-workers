@@ -56,6 +56,8 @@ def scan_worker(d):
         src = "\n".join(lines)
         for m in AI_RUN.finditer(src):
             seg = src[m.end(): m.end() + 600]
+            head = src[m.start(): m.end()]
+            if re.search(r"bge|embed|EMBED", head) or re.match(r"\s*(text|image|audio|prompt)\s*:", seg): continue  # embedding or media model: no token budget applies
             if "max_tokens" not in seg and "max_completion_tokens" not in seg:
                 out["code"].append(("ai-run-no-token-budget", src.count("\n", 0, m.start()) + 1, "env.AI.run call without an explicit token budget in view"))
     return out
