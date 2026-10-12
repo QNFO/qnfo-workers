@@ -51,6 +51,27 @@ check("the :30 tick reaches generation when stalled (it reads the published and 
   check("no writer verdict line: the text is left as it is", C.carryVerdictLine(dropped, "# T\n\nno line") === dropped);
 }
 
+// Q08-EDITOR-TITLE-CARRY-1 (0.14.4, run 343)
+{ const C = mod.__carry;
+{
+  const orig = "# The defrost command nobody authenticated\n\nBody.\n\nworth your time: yes - names the mechanism";
+  const long = "# " + "A very long editor title that keeps going ".repeat(4) + "\n\nEdited body.\n\nworth your time: yes - x";
+  const fixed = C.carryTitle(long, orig);
+  check("an editor title over 100 characters is replaced by the writer's", fixed.startsWith("# The defrost command nobody authenticated\n") && /Edited body\./.test(fixed));
+  check("a passing editor title is kept", C.carryTitle("# Short editor title\n\nEdited.", orig) === "# Short editor title\n\nEdited.");
+  check("a missing editor title gets the writer's", C.carryTitle("Edited body only.", orig).startsWith("# The defrost command nobody authenticated\n\nEdited body only."));
+  check("a writer title that also fails is not carried", C.carryTitle(long, "# " + "x".repeat(120) + "\n\nb") === long);
+  check("carryFormat carries both title and verdict", /^# The defrost/.test(C.carryFormat("# " + "y".repeat(120) + "\n\nEdited.", orig)) && /worth your time: yes - names the mechanism$/.test(C.carryFormat("# " + "y".repeat(120) + "\n\nEdited.", orig)));
+}
+}
+
+// Q08-HANDLE-STRIP-1 (0.14.4, run 346)
+{ const C = mod.__carry;
+  check("a standalone handle loses its @", C.stripHandles("as @openai said, and (@anthropic)") === "as openai said, and (anthropic)");
+  check("an e-mail address is untouched", C.stripHandles("write to a@b.org") === "write to a@b.org");
+  check("the @cf/ model prefix is untouched", C.stripHandles("ran on @cf/meta/llama") === "ran on @cf/meta/llama");
+  check("normalizeDraft strips handles before the gate", !/@openai/.test(C.normalizeDraft("# T\n\nper @openai.")));
+}
 Date.now = realNow;
 console.log("stall-retry.test.mjs: " + passes + " passed, " + fails + " failed");
 process.exit(fails ? 1 : 0);
