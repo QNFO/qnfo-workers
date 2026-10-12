@@ -36,7 +36,7 @@ head_sampling_rate = 1
 
 [observability.traces]
 enabled = true
-head_sampling_rate = 1
+head_sampling_rate = 0.05 # TRACES-SAMPLING-BEFORE-BILLING-1: stored traces bill from 2026-12-01
 
 [[d1_databases]]
 binding = "AUDIT_DB"

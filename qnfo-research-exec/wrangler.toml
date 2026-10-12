@@ -103,3 +103,4 @@ enabled = true
 # (BINDING-INSTALL-MERGE-1, issue #1448), and PUTs the [triggers] crons above so they
 # stop being inert. Deployed artifact is unchanged by this comment; only the deploy
 # PATH changes, which is the actual defect.
+head_sampling_rate = 0.05 # TRACES-SAMPLING-BEFORE-BILLING-1: stored traces bill from 2026-12-01
