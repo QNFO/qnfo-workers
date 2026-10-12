@@ -1,15 +1,8 @@
 {
-  "audited_at": "2026-10-12 14:07:29",
+  "audited_at": "2026-10-12 14:39:52",
   "d1_write_failures": [],
-  "d1_writes_ok": 114,
+  "d1_writes_ok": 115,
   "guard": {
-    "_drift_confirm": {
-      "first_pass": [
-        "qnfo-fleet-control"
-      ],
-      "refreshed": true,
-      "second_pass": []
-    },
     "_guard_rc": 0,
     "ahead": [],
     "cf_script_list": true,
@@ -26,6 +19,10 @@
     "no_live_version": [],
     "no_repo_version": [],
     "not_a_worker": [
+      {
+        "dir": "archive",
+        "worker": "archive"
+      },
       {
         "dir": "audits",
         "worker": "audits"
@@ -67,7 +64,7 @@
         "worker": "scripts"
       }
     ],
-    "not_a_worker_count": 10,
+    "not_a_worker_count": 11,
     "not_deployed_dirs": [
       "agent-orchestrator",
       "ai-health-prober",
@@ -546,12 +543,12 @@
       },
       {
         "dir": "personal-companion",
-        "version": "1.15.14-needle-parse",
+        "version": "1.16.0-grounding-repair",
         "worker": "personal-companion"
       },
       {
         "dir": "q08-signal-engine",
-        "version": "0.12.0",
+        "version": "0.13.2",
         "worker": "q08-signal-engine"
       },
       {
@@ -686,6 +683,14 @@
       "note": "NOT_DEPLOYED",
       "retired": "FOLDED",
       "worker": "ai-health-prober"
+    },
+    "archive": {
+      "before": null,
+      "http": 404,
+      "live": null,
+      "match": 0,
+      "note": "NOT_A_WORKER",
+      "worker": "archive"
     },
     "audit-hub": {
       "before": null,
@@ -895,9 +900,9 @@
       "worker": "personal-api"
     },
     "personal-companion": {
-      "before": "1.15.14-needle-parse",
+      "before": "1.16.0-grounding-repair",
       "http": 200,
-      "live": "1.15.14-needle-parse",
+      "live": "1.16.0-grounding-repair",
       "match": 1,
       "note": "SYNC",
       "worker": "personal-companion"
@@ -939,9 +944,9 @@
       "worker": "personal-life-search"
     },
     "q08-signal-engine": {
-      "before": "0.12.0",
+      "before": "0.13.2",
       "http": 200,
-      "live": "0.12.0",
+      "live": "0.13.2",
       "match": 1,
       "note": "SYNC",
       "worker": "q08-signal-engine"
