@@ -512,16 +512,19 @@ function fakeLoader(spinMs) {
     if (seed) await env.AUDIT_DB.prepare("INSERT INTO ops_config (key, value) VALUES ('code_orchestrator_dynamic_cpu', ?)").bind(JSON.stringify(seed)).run();
     const q = await call(env, "POST", "/v1/tasks", { repo: "qnfo-workers", path: "a/x.mjs", goal: "g" });
     await call(env, "POST", "/v1/tick", {});
-    return { env, row: await env.AUDIT_DB.prepare("SELECT status, last_error FROM code_tasks WHERE id=?").bind(q.body.id).first() };
+    return { env, row: await env.AUDIT_DB.prepare("SELECT status, last_error, ctx FROM code_tasks WHERE id=?").bind(q.body.id).first() };
   };
   const a = await mk(null);
-  check("js auto: with no measurement the JS verifier stays off", a.row.status === "needs_human" && /verification/.test(a.row.last_error || ""), a.row);
+  // VERIFY-DEFER-PUBLISHER-1 (0.12.0): with the verifier off, a pull-mode JavaScript task goes on to the publisher (node --check and
+  // the worker's suites run there before any push) with the reason in ctx.verify_deferred, instead of parking needs_human.
+  const deferred = (r) => r.status === "ready_to_publish" && /verification/.test(String(JSON.parse(r.ctx || "{}").verify_deferred || "")) && !r.last_error;
+  check("js auto: with no measurement the JS verifier stays off and the verify is deferred to the publisher", deferred(a.row), { status: a.row.status, last_error: a.row.last_error });
   const b = await mk({ enforced: true, ts: new Date().toISOString() });
-  check("js auto: a fresh enforced measurement turns the JS verifier on", b.row.status === "ready_to_publish", b.row);
+  check("js auto: a fresh enforced measurement turns the JS verifier on (nothing deferred)", b.row.status === "ready_to_publish" && !JSON.parse(b.row.ctx || "{}").verify_deferred, { status: b.row.status });
   const c = await mk({ enforced: true, ts: new Date(Date.now() - 9 * 86400000).toISOString() });
-  check("js auto: a measurement older than 8 days turns it off again", c.row.status === "needs_human", c.row);
+  check("js auto: a measurement older than 8 days turns it off again (deferred)", deferred(c.row), { status: c.row.status, last_error: c.row.last_error });
   const d = await mk({ enforced: false, ts: new Date().toISOString() });
-  check("js auto: a not-enforced measurement keeps it off", d.row.status === "needs_human", d.row);
+  check("js auto: a not-enforced measurement keeps it off (deferred)", deferred(d.row), { status: d.row.status, last_error: d.row.last_error });
   // the cron writes the measurement itself
   await worker.scheduled({}, a.env, { waitUntil: (p) => { a.env.__p = (a.env.__p || []).concat([p]); } });
   await Promise.all(a.env.__p || []);

@@ -309,8 +309,10 @@ def suite_feedback(results):
 
 def suite_check(repo_dir, files, base):
     """None when the touched worker's suites pass (or were red on the base already); else the feedback for the model."""
-    dirs = sorted({f.split("/")[0] for f in files if "/" in f})
-    if not dirs or any(d in ("scripts", ".github", "migrations") for d in dirs):
+    # Shared paths select every suite in CI and are left to it; a worker directory changed beside one (MULTI-FILE-CODE-TASKS-1:
+    # a worker and its migration) still has its own suites run here.
+    dirs = sorted({f.split("/")[0] for f in files if "/" in f} - {"scripts", ".github", "migrations"})
+    if not dirs:
         return None
     if node_major() < 22:
         print("::warning::PUBLISH-SUITE-CHECK-1 skipped: node 22+ is not installed")
@@ -332,9 +334,83 @@ def suite_check(repo_dir, files, base):
     return suite_feedback(new)
 
 
+# MULTI-FILE-CODE-TASKS-1 (2026-10-12, agent_issues 2074): a task may carry companion files beside its own path. The
+# orchestrator lists the ones its patch changes in ctx.paths; the rule it applied is repeated here, so a row written by
+# anything else cannot widen what a code-loop branch touches: a companion is a migrations/<name>.sql or a file in the task
+# path's own top directory, never a worker source, a mirror or a DENY_PATH file, and at most MAX_EXTRAS of them.
+MAX_EXTRAS = 3
+MIGRATION_RE = re.compile(r"^migrations/[A-Za-z0-9._-]+\.sql$")
+WORKER_SRC_RE = re.compile(r"(^|/)(deployed-current\.)?worker\.js$")
+
+
+def companion_paths(path, ctx):
+    """(set of allowed companion paths, error)."""
+    raw = ctx.get("paths")
+    if raw is None:
+        return set(), None
+    if not isinstance(raw, list) or len(raw) > MAX_EXTRAS or not all(isinstance(x, str) and x for x in raw):
+        return None, "ctx.paths is not a list of at most %d paths" % MAX_EXTRAS
+    top = path.split("/")[0] if "/" in path else ""
+    for x in raw:
+        if x.startswith("/") or ".." in x or "\\" in x or DENY_PATH.search(x) or WORKER_SRC_RE.search(x) or x == path:
+            return None, "companion path refused by policy: " + x[:100]
+        if not (MIGRATION_RE.match(x) or (top and x.startswith(top + "/"))):
+            return None, "companion path is outside " + (top or "the task's directory") + "/ and migrations/: " + x[:100]
+    return set(raw), None
+
+
+def migration_errors(repo_dir, files):
+    """The header check the CI gate runs (scripts/apply_migrations.py --check) for the migrations a patch adds or changes."""
+    migs = sorted(f for f in files if MIGRATION_RE.match(f))
+    tool = os.path.join(repo_dir, "scripts", "apply_migrations.py")
+    if not migs or not os.path.isfile(tool):
+        return None
+    try:
+        r = subprocess.run([sys.executable, tool, "--check", *migs], cwd=repo_dir, capture_output=True, text=True, timeout=120)
+    except subprocess.TimeoutExpired:
+        return None
+    if r.returncode == 0:
+        return None
+    lines = [ln.strip() for ln in ((r.stdout or "") + (r.stderr or "")).splitlines() if ln.strip()]
+    return ("MIGRATION " + ", ".join(migs) + ": " + " | ".join(lines[-4:]))[:600]
+
+
+def rebase_companions(repo_dir, ctx, allowed, base):
+    """Re-apply the companions' own edits (ctx.x[].edits) to the checked-out base. Returns (files written, error)."""
+    out = set()
+    for x in ctx.get("x") or []:
+        xp, edits = (x or {}).get("path"), (x or {}).get("edits")
+        if xp not in allowed or not edits:
+            continue
+        fp = os.path.join(repo_dir, xp)
+        if x.get("new"):
+            if os.path.exists(fp):
+                return None, xp + " was to be created and exists on " + base + " now"
+            body = (edits[0] or {}).get("replace") if len(edits) == 1 else None
+            if not isinstance(body, str) or not body.strip():
+                return None, xp + ": the new file has no content parked"
+            os.makedirs(os.path.dirname(fp) or repo_dir, exist_ok=True)
+            with open(fp, "w", encoding="utf-8", newline="") as fh:
+                fh.write(body if body.endswith("\n") else body + "\n")
+            out.add(xp)
+            continue
+        if not os.path.isfile(fp):
+            return None, xp + " is not a file on " + base
+        cur = _read_text(fp)
+        text, err = apply_edits(cur, edits)
+        if err:
+            return None, xp + ": " + err
+        if text != cur:
+            with open(fp, "w", encoding="utf-8", newline="") as fh:
+                fh.write(text)
+            out.add(xp)
+    return out, None
+
+
 def requeue_for_syntax(store, tid, err):
     """Send a task whose patch does not parse back to the orchestrator's propose step with the parser's message."""
-    lang = "the worker's suites fail after applying the edits and pass on main without them (PUBLISH-SUITE-CHECK-1); keep the change and fix what these tests assert: " if err.startswith("FAIL ") else \
+    lang = "the migration does not pass the CI header check (scripts/apply_migrations.py --check): " if err.startswith("MIGRATION ") else \
+        "the worker's suites fail after applying the edits and pass on main without them (PUBLISH-SUITE-CHECK-1); keep the change and fix what these tests assert: " if err.startswith("FAIL ") else \
         "Python does not parse after applying the edits (compile, PUBLISH-PY-CHECK-1): " if "SyntaxError" in err and ".py:" in err else \
         "JavaScript does not parse after applying the edits (node --check, PUBLISH-JS-CHECK-1): "
     msg = (lang + err)[:1200]
@@ -358,11 +434,21 @@ VERSION_DECL = re.compile(r'^((?:var|const|let) VERSION\s*=\s*")(\d+)\.(\d+)\.(\
 MAX_EDITS = 8  # = the orchestrator's MAX_EDITS
 
 
-def bump_version(cur: str, text: str) -> str:
-    """The orchestrator's bumpVersion: patch number + 1 with the -codeagent tag, when the declaration is unchanged and unique."""
+WANT_RE = re.compile(r"^(\d+)\.(\d+)\.(\d+)(-[A-Za-z0-9][A-Za-z0-9-]*)?$")
+
+
+def bump_version(cur: str, text: str, want=None) -> str:
+    """The orchestrator's bumpVersion: patch number + 1 with the -codeagent tag, when the declaration is unchanged and unique.
+    GOAL-VERSION-1: ctx.version_want (the version the goal names) is used instead when it is the next step from the current
+    base: the same major, and a higher patch of the same minor or the next minor."""
     a, b = VERSION_DECL.search(cur), VERSION_DECL.search(text)
     if not a or not b or a.group(0) != b.group(0) or text.count(a.group(0)) != 1:
         return text
+    w = WANT_RE.match(want) if isinstance(want, str) else None
+    if w:
+        c, k = [int(w.group(i)) for i in (1, 2, 3)], [int(a.group(i)) for i in (2, 3, 4)]
+        if c[0] == k[0] and ((c[1] == k[1] and c[2] > k[2]) or c[1] == k[1] + 1):
+            return text.replace(a.group(0), a.group(1) + want + a.group(6))
     return text.replace(a.group(0), a.group(1) + a.group(2) + "." + a.group(3) + "." + str(int(a.group(4)) + 1) + "-codeagent" + a.group(6))
 
 
@@ -408,7 +494,7 @@ def rebase_edits(repo_dir, path, ctx, base):
     if err:
         return None, None, err
     if path.endswith((".js", ".mjs")):
-        text = bump_version(cur, text)
+        text = bump_version(cur, text, ctx.get("version_want"))
     if text == cur:
         return None, None, "re-applying the edits changes nothing on " + base + " (the change may already be on main)"
     files = {path}
@@ -457,7 +543,11 @@ def publish_one(task, repo_dir, base, pr, delegate=False):
         files = set(re.findall(r"^\+\+\+ b/(.+)$", patch, re.M)) | set(re.findall(r"^--- a/(.+)$", patch, re.M))
         # PATCH-MODE-1: a worker source may carry its deployed-current mirror in the same patch (mirror-guard), nothing else.
         mirror = path[: -len("worker.js")] + "deployed-current.worker.js" if path.endswith("/worker.js") or path == "worker.js" else None
-        if files != {path} and not (mirror and files == {path, mirror}):
+        extra, x_err = companion_paths(path, ctx)
+        if x_err:
+            return "publish_failed", None, x_err, None
+        allowed = {path} | ({mirror} if mirror else set()) | extra
+        if path not in files or not files <= allowed:
             return "publish_failed", None, "patch touches files other than the task path: " + ",".join(sorted(files))[:150], None
 
         have = pr.existing(branch)  # idempotency: a crashed earlier run may already have opened the PR
@@ -476,14 +566,37 @@ def publish_one(task, repo_dir, base, pr, delegate=False):
         if chk.returncode != 0:
             why = "patch does not apply to " + base + ": " + (chk.stderr or "").strip()[:250]
             files, note, rb_err = rebase_edits(repo_dir, path, ctx, base)
+            if not rb_err and extra:
+                more, rb_err = rebase_companions(repo_dir, ctx, extra, base)
+                if not rb_err:
+                    files = set(files) | more
             if rb_err:
                 git(repo_dir, "reset", "-q", "--hard")
+                git(repo_dir, "clean", "-qfd")
                 return "publish_failed", None, why + "; rebase: " + rb_err, None
         else:
             git(repo_dir, "apply", pf)
-        bad = js_syntax_errors(repo_dir, sorted(files)) or suite_check(repo_dir, sorted(files), base)
+            # MIRROR-CARRY-1 (2026-10-12): a worker.js patch parked without its deployed-current mirror (the orchestrator saw the
+            # mirror differ from the source when it read the file, or the task was filed by hand) reached CI and failed
+            # mirror-guard, or the merge runner refused it ("the verified patch does not apply to <dir>/deployed-current.worker.js
+            # at the merge base": ct_yghmskhqci2vv1, ct_h7lmh3yuwbv3wv). When the mirror on the base is byte-identical to the
+            # source on the base, the patched source is copied over it and the branch carries both; a mirror that differs on
+            # the base is left alone (that drift is not this change's).
+            if mirror and mirror not in files and os.path.isfile(os.path.join(repo_dir, mirror)):
+                src_base = git(repo_dir, "show", "origin/" + base + ":" + path, check=False)
+                mir_base = git(repo_dir, "show", "origin/" + base + ":" + mirror, check=False)
+                if src_base.returncode == 0 and mir_base.returncode == 0 and src_base.stdout == mir_base.stdout:
+                    shutil.copyfile(os.path.join(repo_dir, path), os.path.join(repo_dir, mirror))
+                    files = set(files) | {mirror}
+                    note = "MIRROR-CARRY-1: the patch changed " + path + " only; its mirror equalled the source on " + base + " and now carries the same text"
+        # VERIFY-DEFER-PUBLISHER-1: a JavaScript task the orchestrator could not verify is parsed here or not pushed at all.
+        if ctx.get("verify_deferred") and any(f.endswith((".js", ".mjs")) for f in files) and not shutil.which("node"):
+            git(repo_dir, "reset", "-q", "--hard")
+            return "publish_failed", None, "the orchestrator deferred this task's JavaScript verify to the publisher, and node is not installed here", None
+        bad = js_syntax_errors(repo_dir, sorted(files)) or migration_errors(repo_dir, sorted(files)) or suite_check(repo_dir, sorted(files), base)
         if bad:
             git(repo_dir, "reset", "-q", "--hard")
+            git(repo_dir, "clean", "-qfd")
             git(repo_dir, "checkout", "-q", "--detach", "origin/" + base)
             return "syntax_retry", None, bad, None
         git(repo_dir, "add", "--", *sorted(files))
@@ -915,6 +1028,128 @@ def selftest():
         check("suite check: shared paths are left to CI", suite_check(sroot, ["scripts/x.py"], "main") is None)
     else:
         print("SKIP suite check selftest: node 22+ not installed")
+
+    # 7c. GOAL-VERSION-1: the version the goal names is used when it is the next step from the current base, else the patch bump
+    check("bump_version: a wanted next-minor version replaces the patch bump",
+          bump_version('var VERSION = "1.12.4-x";\nq', 'var VERSION = "1.12.4-x";\nz', "1.13.0-ds402-fallback") == 'var VERSION = "1.13.0-ds402-fallback";\nz')
+    check("bump_version: a wanted version that is not ahead, jumps a major or two minors, or is malformed falls back to the patch bump",
+          all(bump_version('var VERSION = "1.12.4-x";\nq', 'var VERSION = "1.12.4-x";\nz', w) == 'var VERSION = "1.12.5-codeagent";\nz'
+              for w in ("1.12.4-same", "1.12.3", "2.0.0", "1.14.0", "1.13", "1.13.0 or so", None, 7)))
+
+    # 7d. MIRROR-CARRY-1, MULTI-FILE-CODE-TASKS-1 and VERIFY-DEFER-PUBLISHER-1
+    if shutil.which("node"):
+        def js_fixture():
+            remote, work, store = fixture()
+            os.makedirs(os.path.join(work, "w"))
+            os.makedirs(os.path.join(work, "migrations"))
+            src = 'var VERSION = "1.2.3-main"; // live\nexport const v = 1;\nexport default { fetch() { return new Response("a"); } };\n'
+            for f in ("w/worker.js", "w/deployed-current.worker.js"):
+                with open(os.path.join(work, f), "w") as fh:
+                    fh.write(src)
+            with open(os.path.join(work, "w/v.test.mjs"), "w") as fh:
+                fh.write("import { v } from './worker.js';\nif (v !== 1) { console.log('FAIL v is one :: ' + v); process.exit(1); }\n")
+            with open(os.path.join(work, "migrations/.keep"), "w") as fh:
+                fh.write("")
+            _sh(work, "git", "add", "-A")
+            _sh(work, "git", "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "-m", "js")
+            _sh(work, "git", "push", "-q", "origin", "main")
+            _sh(work, "git", "fetch", "-q", "origin", "main")
+            return remote, work, store
+
+        def show(remote, ref):
+            return subprocess.run(["git", "--git-dir", remote, "show", ref], capture_output=True, text=True).stdout
+
+        src_patch = ("diff --git a/w/worker.js b/w/worker.js\n--- a/w/worker.js\n+++ b/w/worker.js\n@@ -1,3 +1,3 @@\n-var VERSION = \"1.2.3-main\"; // live\n-export const v = 1;\n"
+                     "+var VERSION = \"1.2.4-codeagent\"; // live\n+export const v = 2;\n export default { fetch() { return new Response(\"a\"); } };\n")
+        test_patch = ("diff --git a/w/v.test.mjs b/w/v.test.mjs\n--- a/w/v.test.mjs\n+++ b/w/v.test.mjs\n@@ -1,2 +1,2 @@\n import { v } from './worker.js';\n"
+                      "-if (v !== 1) { console.log('FAIL v is one :: ' + v); process.exit(1); }\n+if (v !== 2) { console.log('FAIL v is two :: ' + v); process.exit(1); }\n")
+        mig_body = "-- APPLY-BY: ci\n-- DB: qnfo-audit\n-- Rollback: SELECT 1;\nSELECT 1;\n"
+        mig_patch = ("diff --git a/migrations/2026-10-12-v.sql b/migrations/2026-10-12-v.sql\nnew file mode 100644\n--- /dev/null\n+++ b/migrations/2026-10-12-v.sql\n@@ -0,0 +1,4 @@\n"
+                     + "".join("+" + ln + "\n" for ln in mig_body.splitlines()))
+
+        def add_ctx(store, tid, ctx, path="w/worker.js"):
+            store.changes("INSERT INTO code_tasks (id,repo,path,goal,status,step,ctx,branch,created_at,updated_at) VALUES (?,?,?,?,?,'done',?,?,?,?)",
+                          [tid, REPO_NAME, path, "v is two", "ready_to_publish", json.dumps(ctx), "codeagent-" + tid[3:15], now(), now()])
+
+        # a source-only patch: the mirror that equalled the source on main is carried; the suite the change breaks sends it back
+        remote, work, store = js_fixture()
+        pr = FakePR()
+        add_ctx(store, "ct_mirrorcarry1", {"patch": src_patch.replace("export const v = 2;", "export const v = 1; // same")})
+        r = publish_all(store, work, "main", pr, quiet)
+        t = row(store, "ct_mirrorcarry1")
+        check("mirror carry: a patch without its mirror publishes with the mirror identical to the source",
+              t["status"] == "published" and show(remote, "codeagent-mirrorcarry1:w/worker.js") == show(remote, "codeagent-mirrorcarry1:w/deployed-current.worker.js")
+              and "1.2.4-codeagent" in show(remote, "codeagent-mirrorcarry1:w/deployed-current.worker.js") and "MIRROR-CARRY-1" in str(json.loads(t["ctx"]).get("rebased", "")), dict(t))
+
+        # multi-file: the worker, its test and a new migration land on one branch; the suite passes because the test moved with the code
+        remote, work, store = js_fixture()
+        pr = FakePR()
+        add_ctx(store, "ct_multifile001", {"patch": src_patch + test_patch + mig_patch, "paths": ["w/v.test.mjs", "migrations/2026-10-12-v.sql"]})
+        add_ctx(store, "ct_multibreak01", {"patch": src_patch, "paths": []})
+        r = publish_all(store, work, "main", pr, quiet)
+        t, tb = row(store, "ct_multifile001"), row(store, "ct_multibreak01")
+        check("multi-file: one branch carries the worker, its mirror, the test and the new migration",
+              t["status"] == "published" and "v = 2" in show(remote, "codeagent-multifile001:w/worker.js") and "v is two" in show(remote, "codeagent-multifile001:w/v.test.mjs")
+              and show(remote, "codeagent-multifile001:migrations/2026-10-12-v.sql") == mig_body
+              and show(remote, "codeagent-multifile001:w/worker.js") == show(remote, "codeagent-multifile001:w/deployed-current.worker.js"), dict(t))
+        check("multi-file: the same code change without its test is sent back by the suite check",
+              tb["status"] == "queued" and "FAIL w/v.test.mjs" in (tb["last_error"] or ""), dict(tb))
+        for tid, paths, patch in (("ct_multibad0001", ["w/worker.js"], src_patch), ("ct_multibad0002", ["w/deployed-current.worker.js"], src_patch),
+                                  ("ct_multibad0003", ["scripts/x.py"], src_patch + good), ("ct_multibad0004", [".github/workflows/x.yml"], src_patch),
+                                  ("ct_multibad0005", ["w/a.mjs", "w/b.mjs", "w/c.mjs", "w/d.mjs"], src_patch), ("ct_multibad0006", "w/v.test.mjs", src_patch),
+                                  ("ct_multibad0007", ["w/v.test.mjs"], src_patch + good)):
+            add_ctx(store, tid, {"patch": patch, "paths": paths})
+        publish_all(store, work, "main", pr, quiet)
+        bad_rows = [row(store, "ct_multibad000%d" % i) for i in range(1, 8)]
+        check("multi-file: a worker source, a mirror, another directory, a denied path, too many, a non-list, and a file outside ctx.paths are all refused",
+              all(b["status"] == "publish_failed" and b["last_error"] for b in bad_rows), [dict(b)["last_error"] for b in bad_rows])
+
+        # a stale multi-file patch is rebuilt from the edits of every file
+        remote, work, store = js_fixture()
+        pr = FakePR()
+        stale_src = src_patch.replace("1.2.3-main", "1.2.2-old").replace("1.2.4-codeagent", "1.2.3-codeagent")
+        add_ctx(store, "ct_multirebase1", {"patch": stale_src + test_patch + mig_patch, "paths": ["w/v.test.mjs", "migrations/2026-10-12-v.sql"],
+                                           "edits": [{"search": "export const v = 1;", "replace": "export const v = 2;"}], "mirror": "w/deployed-current.worker.js",
+                                           "x": [{"path": "w/v.test.mjs", "edits": [{"search": "if (v !== 1) { console.log('FAIL v is one :: ' + v); process.exit(1); }", "replace": "if (v !== 2) { console.log('FAIL v is two :: ' + v); process.exit(1); }"}]},
+                                                 {"path": "migrations/2026-10-12-v.sql", "new": True, "edits": [{"search": "", "replace": mig_body.rstrip("\n")}]}]})
+        r = publish_all(store, work, "main", pr, quiet)
+        t = row(store, "ct_multirebase1")
+        check("multi-file rebase: every file is rebuilt on the current base (VERSION from main, test edit, new migration)",
+              t["status"] == "published" and '"1.2.4-codeagent"' in show(remote, "codeagent-multirebase1:w/worker.js") and "v is two" in show(remote, "codeagent-multirebase1:w/v.test.mjs")
+              and show(remote, "codeagent-multirebase1:migrations/2026-10-12-v.sql") == mig_body, dict(t))
+
+        # the CI header check for a migration runs here when the repository has the tool; a failure goes back to propose
+        remote, work, store = js_fixture()
+        with open(os.path.join(work, "scripts/apply_migrations.py"), "w") as fh:
+            fh.write("import sys\nprint('FAIL ' + sys.argv[-1] + ': no -- Rollback: header')\nsys.exit(1)\n")
+        _sh(work, "git", "add", "-A")
+        _sh(work, "git", "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "-m", "tool")
+        _sh(work, "git", "push", "-q", "origin", "HEAD:main")
+        _sh(work, "git", "fetch", "-q", "origin", "main")
+        pr = FakePR()
+        add_ctx(store, "ct_multimig0001", {"patch": src_patch + test_patch + mig_patch, "paths": ["w/v.test.mjs", "migrations/2026-10-12-v.sql"]})
+        r = publish_all(store, work, "main", pr, quiet)
+        t = row(store, "ct_multimig0001")
+        check("multi-file: a migration the CI header check refuses is sent back with the check's words, nothing pushed",
+              t["status"] == "queued" and t["step"] == "propose" and "apply_migrations.py --check" in (t["last_error"] or "") and "Rollback" in (t["last_error"] or "")
+              and show(remote, "codeagent-multimig0001:w/worker.js") == "", dict(t))
+        check("multi-file: the failed attempt leaves no untracked file behind", not os.path.exists(os.path.join(work, "migrations/2026-10-12-v.sql")))
+
+        # VERIFY-DEFER-PUBLISHER-1: a deferred JavaScript verify is never pushed from a runner without node
+        remote, work, store = js_fixture()
+        pr = FakePR()
+        add_ctx(store, "ct_deferred0001", {"patch": src_patch + test_patch, "paths": ["w/v.test.mjs"], "verify_deferred": "JavaScript verification is off"})
+        real_which = shutil.which
+        shutil.which = lambda name, *a, **k: None if name == "node" else real_which(name, *a, **k)
+        try:
+            st, url, err, _ = publish_one(row(store, "ct_deferred0001"), work, "main", pr)
+        finally:
+            shutil.which = real_which
+        check("deferred verify: without node the task is not pushed and says why", st == "publish_failed" and "node is not installed" in (err or "") and show(remote, "codeagent-deferred0001:w/worker.js") == "", (st, err))
+        r = publish_all(store, work, "main", pr, quiet)
+        check("deferred verify: with node it is parsed, its suites run, and it publishes", row(store, "ct_deferred0001")["status"] == "published", dict(row(store, "ct_deferred0001")))
+    else:
+        print("SKIP mirror-carry / multi-file selftest: node not installed")
 
     # 8. CODE-TASK-MERGE-RUNNER-1: with the fleet as PR opener the branch is pushed and no PR is created here
     remote, work, store = fixture()
