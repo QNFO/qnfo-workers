@@ -29,7 +29,7 @@ __name2222(fnv32, "fnv32");
 __name22222(fnv32, "fnv32");
 var __defProp222222 = Object.defineProperty;
 var __name222222 = /* @__PURE__ */ __name22222((target, value) => __defProp222222(target, "name", { value, configurable: true }), "__name");
-var VERSION = "2.42.3-debt"; /* 2.42.3 WORKERS-BP-DEBT-1 (#2431, pillar security): the container clone retry suffix takes rndHex8 instead of Math.random; the fleet audit reads 0 fail-class findings for this worker. 2.42.2: a comment count corrected (21 workers at 2026-08-01). 2.42.1: the COMPAT-RESTORE-FAILED-1 issue row carries epoch ms, and the /compat routes log error detail instead of returning it. 2.42.0 COMPAT-DATE-DECLARED-APPLY-1 (2026-10-12, pillar core): the canonical deploy re-sent each worker's live compatibility date and never read wrangler.toml, so no date in the fleet could advance. /ops/deploy now applies a later declared date when the file carries the line "# compat-advance: reviewed YYYY-MM-DD", the date is not after the review or today, and the worker's /health can be read from qnfo-ops; it keeps the date only when /health then answers with the deployed VERSION and otherwise uploads the previous date again (deployment_history action compat-restore, which also stops a retry under the same review). A date never moves back, a refusal by Cloudflare falls back to the live date, and the cf_worker_deploy tool never advances one. COMPAT-EXPOSURE-1: GET /compat lists every live worker's live date, wrangler.toml date, nodejs_compat state and the default changes between (table worker_compat_state, metric workers_compat_date_behind); the cron refreshes it every 6 h, POST /compat/refresh on demand. */ /* 2.41.0 OBSERVABILITY-DECLARED-APPLY-1 (2026-10-12, pillar core): the canonical deploy sent compatibility date, flags, bindings and containers in the upload metadata but never the observability settings, so a worker's [observability], [observability.logs] and [observability.traces] blocks in wrangler.toml never reached Cloudflare (same inert-config class as the crons of #1337 and the flags of COMPAT-FLAGS-DECLARED-APPLY-1). The deploy now overlays the declared keys on the live settings and sends the result; a worker that declares nothing is uploaded as before, and a Cloudflare refusal of the block is retried once without it and reported (observability_apply). RAND-ID-CRYPTO-1: randId and the /v1/responses ids draw from crypto.getRandomValues instead of Math.random. */ /* 2.40.2 NOZ-DOI-1 (2026-10-10): the schema map drops a retired registry column. 2.40.1 NO-MEMORY-FACTS-1 (owner directive 2026-10-10): the public read-only prompt answers only from tool results and the question text. */ /* 2.40.0 OPS-INTERNAL-CALLER-1 (2026-10-09, pillar autonomy): a request that arrives through a service binding declaring props = { caller = "qnfo-email" } is authenticated as the router key, so qnfo-email owner commands stop answering HTTP 401 "Unauthorized - set Bearer OPS_ROUTER_AUTH_KEY" (its OPS_KEY copy no longer matched after the 2026-10-01 rotation). Public requests never carry props. 2.39.2 OPS-CONTEXT-COMPACT-1 (agent_issues 2068, pillar cost): truncateToContext compacts every tool result older than the newest OPS_TOOL_KEEP_ROUNDS (2) tool-bearing rounds to its first OPS_TOOL_COMPACT_CHARS (1200) chars plus a marker that says how much was cut and to re-run the tool for the full output; user, assistant and system messages are never compacted. Every round of an agent loop used to resend all earlier tool output (MAX_TOOL_RESULT_CHARS 16384 each) until the 262k window filled, so cost grew with the square of the round count: BUDGET-AUTO-PROMOTE-1 jobs on 2026-10-03/06 used 2.46M-2.68M prompt tokens for 27-33 tool calls, two ending ok=0. Pure function compactToolRounds, replayed by context-compact.test.mjs. 2.39.1 2.39.1 OPS-COST-SOFT-1 (BUDGET-SOFT-ROUTE-1): the ops daily cost cap (OPS_DAILY_CAP_USD) no longer answers HTTP 429 on chat or /v1/jobs; the request or job runs on the free tier (budgetFallback, no paid exec upstream). The request-count cap and the per-job runaway cap stay. 2.39.0 RULE-8-RETIRED-1 (2026-10-06, pillar autonomy, owner directive: "Rule 8 is now deleted entirely"): system prompt item 15(d) HARD LIMITS becomes DECIDE AND RECORD - spend caps, guard metrics, probes and deletions are the agent's own decisions, recorded with the reason and a live measurement under rule 7; opt-out, outreach consent and cadence caps and the personal/research separation still hold. 2.38.47 (2026-10-06, pillar core): REGISTRY-SYNC-FOLDED-1 (agent_issues 2031): a FLEET entry for a folded member (qnfo-backlog-exec, a member of qnfo-lifecycle since BACKLOG-FOLD-1) carries kind member and its host route, so registryRefresh writes service_registry with the URL that serves it and kind member instead of the deleted worker's dead workers.dev URL as a live worker (07:30:59Z wrote https://qnfo-backlog-exec.q08.workers.dev and fleet_status reported it "Worker not found"); OPS-D1-LIMIT-WORD-1 (agent_issues 2033): ops_d1_query finds an existing LIMIT clause as a trailing word, not as the first "limit" substring, so a query that names a column such as limited and ends in LIMIT 10 is no longer given a second LIMIT 100 (D1_ERROR near "LIMIT": syntax error, 07:53:42Z). */
+var VERSION = "2.43.0-props-restore"; /* 2.43.0 BINDING-PROPS-RESTORE-1 (2026-10-12, #2445, pillar autonomy): when SECRET-CHANGE-WATCH-1 records a new secret-triggered version of a worker whose wrangler.toml declares props on a [[services]] binding, the tick reads the worker's live settings and, when a declared props object is missing or differs, dispatches canonical-deploy.yml with workers=<name> (one dispatch per worker and secret version, ledger cloud_ops_events kind binding-props-restore), so the props a dashboard secret edit strips come back within one tick without a session (2026-10-12 09:33Z: qnfo-fleet-dashboard lost props.caller on SVC_QNFO_AI and every ask answered HTTP 401 until a redeploy at 11:37Z). 2.42.3 WORKERS-BP-DEBT-1 (#2431, pillar security): the container clone retry suffix takes rndHex8 instead of Math.random; the fleet audit reads 0 fail-class findings for this worker. 2.42.2: a comment count corrected (21 workers at 2026-08-01). 2.42.1: the COMPAT-RESTORE-FAILED-1 issue row carries epoch ms, and the /compat routes log error detail instead of returning it. 2.42.0 COMPAT-DATE-DECLARED-APPLY-1 (2026-10-12, pillar core): the canonical deploy re-sent each worker's live compatibility date and never read wrangler.toml, so no date in the fleet could advance. /ops/deploy now applies a later declared date when the file carries the line "# compat-advance: reviewed YYYY-MM-DD", the date is not after the review or today, and the worker's /health can be read from qnfo-ops; it keeps the date only when /health then answers with the deployed VERSION and otherwise uploads the previous date again (deployment_history action compat-restore, which also stops a retry under the same review). A date never moves back, a refusal by Cloudflare falls back to the live date, and the cf_worker_deploy tool never advances one. COMPAT-EXPOSURE-1: GET /compat lists every live worker's live date, wrangler.toml date, nodejs_compat state and the default changes between (table worker_compat_state, metric workers_compat_date_behind); the cron refreshes it every 6 h, POST /compat/refresh on demand. */ /* 2.41.0 OBSERVABILITY-DECLARED-APPLY-1 (2026-10-12, pillar core): the canonical deploy sent compatibility date, flags, bindings and containers in the upload metadata but never the observability settings, so a worker's [observability], [observability.logs] and [observability.traces] blocks in wrangler.toml never reached Cloudflare (same inert-config class as the crons of #1337 and the flags of COMPAT-FLAGS-DECLARED-APPLY-1). The deploy now overlays the declared keys on the live settings and sends the result; a worker that declares nothing is uploaded as before, and a Cloudflare refusal of the block is retried once without it and reported (observability_apply). RAND-ID-CRYPTO-1: randId and the /v1/responses ids draw from crypto.getRandomValues instead of Math.random. */ /* 2.40.2 NOZ-DOI-1 (2026-10-10): the schema map drops a retired registry column. 2.40.1 NO-MEMORY-FACTS-1 (owner directive 2026-10-10): the public read-only prompt answers only from tool results and the question text. */ /* 2.40.0 OPS-INTERNAL-CALLER-1 (2026-10-09, pillar autonomy): a request that arrives through a service binding declaring props = { caller = "qnfo-email" } is authenticated as the router key, so qnfo-email owner commands stop answering HTTP 401 "Unauthorized - set Bearer OPS_ROUTER_AUTH_KEY" (its OPS_KEY copy no longer matched after the 2026-10-01 rotation). Public requests never carry props. 2.39.2 OPS-CONTEXT-COMPACT-1 (agent_issues 2068, pillar cost): truncateToContext compacts every tool result older than the newest OPS_TOOL_KEEP_ROUNDS (2) tool-bearing rounds to its first OPS_TOOL_COMPACT_CHARS (1200) chars plus a marker that says how much was cut and to re-run the tool for the full output; user, assistant and system messages are never compacted. Every round of an agent loop used to resend all earlier tool output (MAX_TOOL_RESULT_CHARS 16384 each) until the 262k window filled, so cost grew with the square of the round count: BUDGET-AUTO-PROMOTE-1 jobs on 2026-10-03/06 used 2.46M-2.68M prompt tokens for 27-33 tool calls, two ending ok=0. Pure function compactToolRounds, replayed by context-compact.test.mjs. 2.39.1 2.39.1 OPS-COST-SOFT-1 (BUDGET-SOFT-ROUTE-1): the ops daily cost cap (OPS_DAILY_CAP_USD) no longer answers HTTP 429 on chat or /v1/jobs; the request or job runs on the free tier (budgetFallback, no paid exec upstream). The request-count cap and the per-job runaway cap stay. 2.39.0 RULE-8-RETIRED-1 (2026-10-06, pillar autonomy, owner directive: "Rule 8 is now deleted entirely"): system prompt item 15(d) HARD LIMITS becomes DECIDE AND RECORD - spend caps, guard metrics, probes and deletions are the agent's own decisions, recorded with the reason and a live measurement under rule 7; opt-out, outreach consent and cadence caps and the personal/research separation still hold. 2.38.47 (2026-10-06, pillar core): REGISTRY-SYNC-FOLDED-1 (agent_issues 2031): a FLEET entry for a folded member (qnfo-backlog-exec, a member of qnfo-lifecycle since BACKLOG-FOLD-1) carries kind member and its host route, so registryRefresh writes service_registry with the URL that serves it and kind member instead of the deleted worker's dead workers.dev URL as a live worker (07:30:59Z wrote https://qnfo-backlog-exec.q08.workers.dev and fleet_status reported it "Worker not found"); OPS-D1-LIMIT-WORD-1 (agent_issues 2033): ops_d1_query finds an existing LIMIT clause as a trailing word, not as the first "limit" substring, so a query that names a column such as limited and ends in LIMIT 10 is no longer given a second LIMIT 100 (D1_ERROR near "LIMIT": syntax error, 07:53:42Z). */
 // FOLD-WAVE-2 (2.38.45, 2026-10-06, #1756): qnfo-archive is retired (its 04:00 KG seed got HTTP 401 on every batch), so its
 // ARCHIVE probe binding leaves FLEET, BINDING_KEYS, wrangler.toml and the fleet_status text. BACKLOG now reaches the
 // qnfo-backlog-exec member inside qnfo-lifecycle (props.member); the code calling it is unchanged.
@@ -6145,6 +6145,15 @@ async function secretChangeWatch(env, lookbackMs) {
         if (r && r.meta && r.meta.changes) { out.new_events++; fresh++; }
       } catch (e) { }
     }
+    // BINDING-PROPS-RESTORE-1 (2.43.0, agent_issues 2445): a new secret version may have copied the bindings without their props.
+    if (fresh) {
+      out.props_restore = out.props_restore || [];
+      try {
+        out.props_restore.push(await bindingPropsRestore(env, name, vs[vs.length - 1].number, H));
+      } catch (e) {
+        out.props_restore.push({ worker: name, error: String(e && e.message || e).slice(0, 160) });
+      }
+    }
     // One issue per worker per change day (the day of the first change, not of the scan), filed on first sight only.
     if (!fresh) continue;
     const title = "SECRET-CHANGE-OBSERVED: " + name + " " + String(vs[0].created_on).slice(0, 10);
@@ -6171,6 +6180,77 @@ async function secretChangeWatch(env, lookbackMs) {
   return out;
 }
 __name(secretChangeWatch, "secretChangeWatch");
+// BINDING-PROPS-RESTORE-1 (2.43.0, 2026-10-12, agent_issues 2445, failure mode binding-props-lost-on-dash-secret): a secret
+// added or edited in the Cloudflare dashboard creates a new version that copies the service bindings without their props, and
+// the callees that authenticate by props.caller (qnfo-ai, qnfo-ops, qnfo-email; INTERNAL-CALLER-PROPS-1) answer HTTP 401 until
+// the worker is redeployed through the canonical path, which re-applies the declared props (BINDING-PROPS-APPLY-1). On
+// 2026-10-12 the dashboard lost them at 09:33Z and a session redeployed it at 11:37Z. Now the secret watch does it: for a
+// worker with a fresh secret-triggered version it reads <worker>/wrangler.toml on main, and when a [[services]] binding declares
+// props = { ... } that the live settings do not carry, it dispatches canonical-deploy.yml (workflow_dispatch, workers=<name>)
+// once per worker and secret version; the ledger row (cloud_ops_events kind binding-props-restore) is the dedupe and the
+// closing probe of the issue. Values are never read; the settings read is the same GET the deploy route uses.
+// tomlServiceProps is pure: every [[services]] block with binding, service and an inline props table -> { name, service, props }.
+function tomlServiceProps(toml) {
+  const out = [];
+  const blocks = String(toml || "").split(/^\s*\[\[services\]\]\s*$/m).slice(1);
+  for (const b of blocks) {
+    const body = b.split(/^\s*\[/m)[0];
+    const name = (body.match(/^\s*binding\s*=\s*"([^"]+)"/m) || [])[1];
+    const service = (body.match(/^\s*service\s*=\s*"([^"]+)"/m) || [])[1];
+    const pm = body.match(/^\s*props\s*=\s*\{([^}]*)\}/m);
+    if (!name || !pm) continue;
+    const props = {};
+    const re = /([A-Za-z0-9_]+)\s*=\s*"([^"]*)"/g;
+    let m;
+    while ((m = re.exec(pm[1])) !== null) props[m[1]] = m[2];
+    if (Object.keys(props).length) out.push({ name, service: service || null, props });
+  }
+  return out;
+}
+__name(tomlServiceProps, "tomlServiceProps");
+async function bindingPropsRestore(env, name, version, H) {
+  const res = { worker: name, version, declared: 0, lost: [], dispatched: false };
+  const gh = { "Accept": "application/vnd.github.raw", "User-Agent": "qnfo-ops-props-restore" };
+  if (env.GITHUB_TOKEN) gh["Authorization"] = "Bearer " + env.GITHUB_TOKEN;
+  const tr = await fetch("https://api.github.com/repos/QNFO/qnfo-workers/contents/" + encodeURIComponent(name) + "/wrangler.toml?ref=main", { headers: gh });
+  if (tr.status === 404) { res.skipped = "no wrangler.toml on main"; return res; }
+  if (!tr.ok) { res.error = "wrangler.toml HTTP " + tr.status; return res; }
+  const decl = tomlServiceProps(await tr.text());
+  res.declared = decl.length;
+  if (!decl.length) { res.skipped = "no service binding declares props"; return res; }
+  let live = null;
+  try {
+    const sr = await fetch("https://api.cloudflare.com/client/v4/accounts/" + CF_ACCOUNT_ID + "/workers/scripts/" + encodeURIComponent(name) + "/settings", { headers: H });
+    const sj = await sr.json().catch(function() { return {}; });
+    if (sr.ok && sj && sj.result && Array.isArray(sj.result.bindings)) live = sj.result.bindings;
+    else res.settings = "HTTP " + sr.status;
+  } catch (e) {
+    res.settings = String(e && e.message || e).slice(0, 120);
+  }
+  if (live) {
+    for (const d of decl) {
+      const b = live.find(function(x) { return x && x.type === "service" && x.name === d.name; });
+      if (!b || JSON.stringify(b.props || null) !== JSON.stringify(d.props)) res.lost.push(d.name);
+    }
+    if (!res.lost.length) { res.skipped = "live props match the declaration"; return res; }
+  } else {
+    res.lost = decl.map(function(d) { return d.name; }); // settings unreadable: the redeploy is idempotent, so restore anyway
+  }
+  const id = "binding-props-restore-" + name + "-" + version;
+  const ins = await env.QNFO_AUDIT.prepare("INSERT OR IGNORE INTO cloud_ops_events (id, ts, kind, text, meta, job, status) VALUES (?1, ?2, 'binding-props-restore', ?3, ?4, 'qnfo-ops', 'pending')").bind(id, iso(), name + ": service-binding props on " + res.lost.join(", ") + " missing after secret version " + version + "; canonical redeploy dispatched (BINDING-PROPS-RESTORE-1)", JSON.stringify({ worker: name, version, lost: res.lost, settings: res.settings || "read" })).run();
+  if (!(ins && ins.meta && ins.meta.changes)) { res.skipped = "already dispatched for this secret version"; return res; }
+  if (!env.GITHUB_TOKEN) {
+    await env.QNFO_AUDIT.prepare("UPDATE cloud_ops_events SET status = 'error', text = text || ' (no GITHUB_TOKEN: not dispatched)' WHERE id = ?1").bind(id).run();
+    res.error = "no GITHUB_TOKEN";
+    return res;
+  }
+  const dr = await fetch("https://api.github.com/repos/QNFO/qnfo-workers/actions/workflows/canonical-deploy.yml/dispatches", { method: "POST", headers: Object.assign({}, gh, { "Accept": "application/vnd.github+json", "Content-Type": "application/json" }), body: JSON.stringify({ ref: "main", inputs: { workers: name } }) });
+  res.dispatched = dr.status === 204;
+  await env.QNFO_AUDIT.prepare("UPDATE cloud_ops_events SET status = ?2, meta = json_set(meta, '$.dispatch_http', ?3) WHERE id = ?1").bind(id, res.dispatched ? "dispatched" : "error", dr.status).run();
+  if (!res.dispatched) res.error = "dispatch HTTP " + dr.status;
+  return res;
+}
+__name(bindingPropsRestore, "bindingPropsRestore");
 // ---- ERROR-DETAIL-CAPTURE-1:BEGIN (2.38.40, 2026-10-02, pillar core, agent_issues 1826) ----
 // The dashboard counted 33 worker errors in 24h (Cloudflare analytics) while worker_logs held no non-ok row and no
 // exception text for any of them, so no error could be diagnosed from D1. worker_logs is filled from Workers Trace

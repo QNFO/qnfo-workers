@@ -19,8 +19,12 @@ const { __scope, __enqueue, __intake, __deny, __repair } = await import(pathToFi
 let pass = 0, fail = 0;
 const ok = (c, m, x) => { if (c) pass++; else { fail++; console.log("FAIL " + m + (x !== undefined ? " :: " + JSON.stringify(x).slice(0, 300) : "")); } };
 
-for (const w of ["qnfo-fleet-control", "qnfo-gateway", "qnfo-ai", "qnfo-observability", "qnfo-ops"]) {
+for (const w of ["qnfo-fleet-control", "qnfo-deploy-guard", "qnfo-observability", "qnfo-ops", "qnfo-code-orchestrator"]) {
   ok(/control-plane/.test(String(__scope("qnfo-workers", w + "/worker.js"))), w + "/worker.js is a session task");
+}
+// CONTROL-PLANE-FUNCTIONAL-CANARY-1 (0.13.0, agent_issues 2176): the two workers with a functional canary and an automatic revert are planned.
+for (const w of ["qnfo-ai", "qnfo-gateway"]) {
+  ok(__scope("qnfo-workers", w + "/worker.js") === null && !__deny.includes(w), w + "/worker.js is in the loop's scope (functional canary)");
 }
 ok(__scope("qnfo-workers", "qnfo-infra/worker.js") === null, "an ordinary worker is in scope");
 ok(__scope("qnfo-workers", "qnfo-infra/deployed-current.worker.js") === null, "its mirror path is in scope too");
@@ -57,18 +61,18 @@ function mkEnv(issues) {
 
 {
   const { env, tasks } = mkEnv([]);
-  const r = await __enqueue(env, { repo: "qnfo-workers", path: "qnfo-gateway/worker.js", goal: "[issue #1] a goal long enough to pass validation of the task body" });
+  const r = await __enqueue(env, { repo: "qnfo-workers", path: "qnfo-ops/worker.js", goal: "[issue #1] a goal long enough to pass validation of the task body" });
   ok(r.ok === false && r.status === 422 && r.session === true && /control-plane/.test(r.error), "enqueue refuses a control-plane path with a session-task answer", r);
   ok(tasks.length === 0, "no code task row is written for it");
 }
 {
   const issues = [
-    { id: 2023, title: "METRIC-TRIGGER-498 paper render", source: "qnfo-fleet-control", description: "Fix the render.\ncode-task: repo=qnfo-workers path=qnfo-gateway/worker.js\ncode-anchor: function renderPaper(" },
+    { id: 2023, title: "METRIC-TRIGGER-498 registry render", source: "qnfo-fleet-control", description: "Fix the render.\ncode-task: repo=qnfo-workers path=qnfo-ops/worker.js\ncode-anchor: function renderRegistry(" },
   ];
   const { env, tasks } = mkEnv(issues);
   const out = await __intake(env, 2);
   ok(out.ok && out.created.length === 0 && tasks.length === 0, "intake builds no task for a control-plane code-task line", out);
-  ok(/session-task: repo=qnfo-workers path=qnfo-gateway\/worker\.js/.test(issues[0].description) && !/code-task: repo=/.test(issues[0].description), "the issue's code-task line became a session-task line", issues[0].description);
+  ok(/session-task: repo=qnfo-workers path=qnfo-ops\/worker\.js/.test(issues[0].description) && !/code-task: repo=/.test(issues[0].description), "the issue's code-task line became a session-task line", issues[0].description);
   ok(/MERGE-SCOPE-INTAKE-1 .*control-plane/.test(issues[0].description), "the issue says why", issues[0].description);
 }
 {

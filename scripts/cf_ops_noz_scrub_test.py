@@ -137,14 +137,18 @@ ok(len(left) == 5, "leftover contexts are capped at five (a glued word no rule n
 
 # 11. the action against a fake d1q
 class FakeD1:
-    def __init__(self, papers, fail_backup=False):
+    def __init__(self, papers, fail_backup=False, scope_all=False):
         self.papers = papers  # slug -> dict(status, doi, zenodo_doi, body_md, abstract)
         self.calls = []
         self.fail_backup = fail_backup
         self.backup_rows = None
+        self.scope_all = scope_all  # the fake answers as the SQL's status filter would (public statuses, or every row for --target all)
+
+    def public(self, p):
+        return self.scope_all or p["status"] in ("published", "distributed", "external_preprint")
 
     def matching(self):
-        return sorted(s for s, p in self.papers.items() if p["status"] in ("published", "distributed", "external_preprint")
+        return sorted(s for s, p in self.papers.items() if self.public(p)
                       and any(k in (f or "").lower() for f in (p["body_md"], p["abstract"]) for k in ("zenodo", "10.5281")))
 
     def __call__(self, acct, token, sql, params):
@@ -152,7 +156,7 @@ class FakeD1:
         s = sql.strip()
         if s.startswith("SELECT slug, doi, zenodo_doi"):
             return True, [{"slug": k, "doi": p["doi"], "zenodo_doi": p["zenodo_doi"]} for k, p in sorted(self.papers.items())
-                          if p["status"] in ("published", "distributed", "external_preprint") and ((p["doi"] or "").startswith("10.5281/") or (p["zenodo_doi"] or "").startswith("10.5281/"))]
+                          if self.public(p) and ((p["doi"] or "").startswith("10.5281/") or (p["zenodo_doi"] or "").startswith("10.5281/"))]
         if s.startswith("SELECT slug, body_md, abstract"):
             off = params[0]
             rows = self.matching()[off:off + m.NOZ_PAGE]
@@ -269,6 +273,23 @@ with contextlib.redirect_stdout(io.StringIO()):
     rc = m.noz_scrub_bodies("acct", "tok", "dry")
 pages = [c for c in fake.calls if c[0].startswith("SELECT slug, body_md, abstract")]
 ok(rc == 0 and [c[1][0] for c in pages] == [0, 50, 100] and emitted[-1]["rows"] == 120, "bodies are read 50 at a time by OFFSET", ([c[1] for c in pages], emitted[-1]["rows"]))
+
+# --target all: every status is read and written, into its own backup table; the public-scope SQL keeps its status filter
+fake = FakeD1(papers(), scope_all=True)
+m.d1q = fake
+with contextlib.redirect_stdout(io.StringIO()):
+    rc = m.noz_scrub_bodies("acct", "tok", "live", scope="all")
+rep = emitted[-1]
+ok(rc == 0 and rep["scope"] == "all" and rep["updated"] == 3 and rep["backup_table"] == m.NOZ_BAK_TABLE + "_all", "scope all rewrites the draft too and backs up into the _all table", rep)
+ok(fake.papers["draft-paper"]["body_md"] != "Draft on Zenodo." and "zenodo" not in fake.papers["draft-paper"]["body_md"].lower(), "the draft is scrubbed under scope all", fake.papers["draft-paper"]["body_md"])
+reads = [c[0] for c in fake.calls if c[0].startswith("SELECT slug, body_md, abstract") or c[0].startswith("CREATE TABLE") or c[0].startswith("SELECT COUNT(*) AS n FROM papers")]
+ok(reads and all("WHERE 1 = 1 AND" in c for c in reads), "scope all reads, backs up and re-counts without a status filter", reads)
+ok(all("status IN" not in c[0] for c in fake.calls if c[0].startswith("SELECT slug, doi, zenodo_doi")), "the DOI -> slug map is read from every row in both scopes")
+fake = FakeD1(papers())
+m.d1q = fake
+with contextlib.redirect_stdout(io.StringIO()):
+    rc = m.noz_scrub_bodies("acct", "tok", "dry")
+ok(all("WHERE status IN ('published', 'distributed', 'external_preprint') AND" in c[0] for c in fake.calls if c[0].startswith("SELECT slug, body_md, abstract")), "the default scope keeps the public status filter")
 
 print("%d passed, %d failed" % (passed, failed))
 sys.exit(1 if failed else 0)

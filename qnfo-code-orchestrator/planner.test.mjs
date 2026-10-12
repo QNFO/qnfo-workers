@@ -99,9 +99,10 @@ const FIX = (anchor, extra) => JSON.stringify(Object.assign({ code_fixable: true
 // 4. no plannable worker; control-plane workers never planned
 {
   const { env, prompts } = envWith([]);
-  issue(env, { title: "METRIC-TRIGGER-7-Z: cost gap", description: "Find the top callers in ai_spend_ledger (owner qnfo-fleet-control) and fix qnfo-ai routing" });
+  // CONTROL-PLANE-FUNCTIONAL-CANARY-1 (0.13.0): qnfo-ai and qnfo-gateway are planned now; the verifier workers still never are.
+  issue(env, { title: "METRIC-TRIGGER-7-Z: cost gap", description: "Find the top callers in ai_spend_ledger (owner qnfo-fleet-control) and fix the qnfo-ops deploy route" });
   const r = await plan(env);
-  ok(r.outcome === "not-code" && /names no worker/.test(plans(env)[0].detail) && prompts.length === 0, "4 control-plane workers (qnfo-fleet-control, qnfo-ai) are never planned", plans(env)[0]);
+  ok(r.outcome === "not-code" && /names no worker/.test(plans(env)[0].detail) && prompts.length === 0, "4 control-plane workers (qnfo-fleet-control, qnfo-ops) are never planned", plans(env)[0]);
 }
 // 5. the model says not code; 6. a made-up anchor is caught
 {
