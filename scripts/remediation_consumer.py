@@ -650,8 +650,41 @@ def _selftest():
     if not hc.get("ok"):
         print(json.dumps({"ok": False, "case": "host-census", "detail": hc}))
         return 1
+    # MIGRATION-UNAPPLIED-1: the pure comparison and the sweep with a fake applier
+    import tempfile
+    mroot = tempfile.mkdtemp(prefix="rc-mig-")
+    os.makedirs(os.path.join(mroot, "migrations"))
+    for name, head in (("a.sql", "-- APPLY-BY: ci\n-- DB: qnfo-audit\nSELECT 1;\n"), ("b.sql", "-- APPLY-BY: ci\n-- DB: qnfo-audit\nSELECT 2;\n"), ("c.sql", "-- hand-applied\nSELECT 3;\n")):
+        with open(os.path.join(mroot, "migrations", name), "w", encoding="utf-8") as fh:
+            fh.write(head)
+    opted = opted_in_migrations(mroot)
+    if opted != ["migrations/a.sql", "migrations/b.sql"]:
+        print(json.dumps({"ok": False, "case": "migrations-opted-in", "got": opted}))
+        return 1
+    if unapplied_migrations(opted, ["migrations/a.sql"]) != ["migrations/b.sql"] or unapplied_migrations(opted, opted) != []:
+        print(json.dumps({"ok": False, "case": "migrations-unapplied"}))
+        return 1
+    writes, applied = [], []
+    g2 = globals()
+    saved_d1 = g2["d1"]
+
+    def fake_d1_m(sql, params=None):
+        if sql.startswith("SELECT DISTINCT file FROM migration_runs"):
+            return [{"file": "migrations/a.sql"}]
+        writes.append((sql[:40], list(params or [])))
+        return []
+    g2["d1"] = fake_d1_m
+    try:
+        res = migrations_sweep({}, apply=lambda path, text: (applied.append(path), 0)[1], root=mroot)
+    finally:
+        g2["d1"] = saved_d1
+    if res.get("unapplied") != ["migrations/b.sql"] or applied != ["migrations/b.sql"] or res.get("metric") != 0 \
+            or not any(w[0].startswith("UPDATE metric_registry") and w[1][0] == "0" for w in writes) \
+            or not any(w[0].startswith("INSERT INTO cloud_ops_events") for w in writes):
+        print(json.dumps({"ok": False, "case": "migrations-sweep", "got": res, "applied": applied, "writes": writes}))
+        return 1
     print(json.dumps({"ok": True, "marker": "REMEDIATION-CONSUMER-1",
-                      "selftest": "classify+probe-guard+runner-https+host-census green"}))
+                      "selftest": "classify+probe-guard+runner-https+host-census+migration-sweep green"}))
     return 0
 
 
@@ -841,6 +874,82 @@ def merge_out(out, local):
             out[k] = out.get(k, 0) + v
 
 
+# MIGRATION-UNAPPLIED-1 (2026-10-12). apply-migrations.yml runs on each push to main, but two merges in quick succession left
+# the middle run cancelled by the workflow's single concurrency group (runs 93 and 94 on 2026-10-12: migrations
+# 2026-10-12-code-multi-file-gate.sql, 2026-10-12-merge-side-root-causes.sql; 2026-10-12-reach-replies-subscribe-funnel.sql had no
+# run at all), so three merged migrations were silent for hours: no table, no metric, no failure filed. This runner works in a
+# checkout of main and holds the same D1 token, so every run lists the opted-in files, compares them with migration_runs and
+# applies the ones with no ok or superseded row through scripts/apply_migrations.py (which records the run and files
+# MIGRATION-APPLY-FAILED-1 on an error). Metric migrations_unapplied is the count left after the attempt.
+MIGRATION_HEADER_RE = re.compile(r"^-- APPLY-BY: ci\s*$", re.M)
+
+
+def opted_in_migrations(root):
+    """Repository-relative paths of migrations/*.sql files that opt in to the runner, sorted."""
+    out = []
+    d = os.path.join(root, "migrations")
+    if not os.path.isdir(d):
+        return out
+    for name in sorted(os.listdir(d)):
+        if not name.endswith(".sql"):
+            continue
+        try:
+            with open(os.path.join(d, name), encoding="utf-8") as fh:
+                head = fh.read(4000)
+        except OSError:
+            continue
+        if MIGRATION_HEADER_RE.search(head):
+            out.append("migrations/" + name)
+    return out
+
+
+def unapplied_migrations(opted_in, applied_files):
+    """The opted-in files with no ok or superseded migration_runs row (pure)."""
+    done = set(applied_files or [])
+    return [f for f in opted_in if f not in done]
+
+
+def migrations_sweep(out, apply=None, root=None):
+    """List, compare, apply; never raises. Writes the metric and one cloud_ops_events row when anything was missing."""
+    res = {"opted_in": 0, "unapplied": [], "applied_now": [], "failed": [], "metric": None}
+    try:
+        root = root or REPO_ROOT
+        files = opted_in_migrations(root)
+        res["opted_in"] = len(files)
+        rows = d1("SELECT DISTINCT file FROM migration_runs WHERE status IN ('ok', 'superseded')")
+        missing = unapplied_migrations(files, [r.get("file") for r in rows])
+        res["unapplied"] = missing
+        for path in missing:
+            try:
+                with open(os.path.join(root, path), encoding="utf-8") as fh:
+                    text = fh.read()
+                rc = (apply or _apply_migration)(path, text)
+                (res["applied_now"] if rc == 0 else res["failed"]).append(path)
+            except Exception as e:  # noqa: BLE001 - one bad file must not stop the sweep
+                res["failed"].append(path + ": " + str(e)[:160])
+        left = len(res["failed"])
+        res["metric"] = left
+        d1("UPDATE metric_registry SET last_value = ?1, last_refreshed = ?2, state = 'MEASURED' WHERE metric = 'migrations_unapplied'",
+           [str(left), time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())])
+        if missing:
+            d1("INSERT INTO cloud_ops_events (id, ts, kind, text, meta, job, status) VALUES (?1, ?2, 'migration-sweep', ?3, ?4, 'remediation-consumer', ?5)",
+               ["migration-sweep-%d" % int(time.time()), time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+                "MIGRATION-UNAPPLIED-1: %d opted-in migration(s) had no run: applied now %s; failed %s" % (len(missing), ", ".join(res["applied_now"]) or "none", ", ".join(res["failed"]) or "none"),
+                json.dumps(res)[:3000], "error" if res["failed"] else "ok"])
+    except Exception as e:  # noqa: BLE001
+        res["error"] = str(e)[:200]
+    out["migrations"] = res
+    return res
+
+
+def _apply_migration(path, text):
+    """scripts/apply_migrations.py in the same directory; its apply_file records migration_runs and files failures."""
+    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+    import apply_migrations  # noqa: E402 - sibling script, imported only when a file is missing
+    commit = os.environ.get("GITHUB_SHA", "") or "remediation-consumer"
+    return apply_migrations.apply_file(path, text, ACCOUNT, TOKEN, commit, emit=log)
+
+
 def main():
     t0 = time.time()
     out = {"ok": True, "marker": "REMEDIATION-CONSUMER-1", "verifier": VERIFIER,
@@ -885,6 +994,9 @@ def main():
         out["host_census"] = host_census.run(d1, lambda path: _req("GET", CF_API + path), VERIFIER)
     except Exception as e:  # noqa: BLE001
         out["host_census_error"] = str(e)[:200]
+
+    # MIGRATION-UNAPPLIED-1: merged migrations the push-triggered runner never ran are applied here, within the hour.
+    migrations_sweep(out)
 
     spent = int((time.time() - t0) * 1000)
     try:
