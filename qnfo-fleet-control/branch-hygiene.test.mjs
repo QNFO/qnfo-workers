@@ -72,6 +72,9 @@ function makeGh(sc) {
     if (method === "PATCH" && path.startsWith("/pulls/")) return ok({});
     if (method === "PATCH" && path === "") return ok({});
     if (method === "GET" && (m = /^\/check-runs\/(\d+)\/annotations/.exec(path))) return ok((sc.annotations || {})[m[1]] || []);
+    // STALE-PR-LANE-READS-HOLDS-1: sc.comments[n] = issue comments (oldest first); sc.commitAt[sha] = the head commit's date.
+    if (method === "GET" && (m = /^\/issues\/(\d+)\/comments/.exec(path))) return sc.commentsStatus ? ok({ message: "boom" }, sc.commentsStatus) : ok((sc.comments || {})[m[1]] || []);
+    if (method === "GET" && (m = /^\/commits\/([^/?]+)$/.exec(path))) return ok({ sha: m[1], commit: { committer: { date: (sc.commitAt || {})[m[1]] || hAgo(5) } } });
     return ok(null, 404);
   };
   return { evApi, calls };
@@ -86,8 +89,8 @@ async function run(sc, opts, d1In) {
   const gh = makeGh(sc);
   const sandbox = { evApi: gh.evApi, EVOLVE_REPO: "QNFO/qnfo-workers", __name: (f) => f, console, Date, Math, JSON, Number, String, Object, Array, RegExp, isNaN, encodeURIComponent, Promise, __export: null };
   vm.createContext(sandbox);
-  const deps = ["var EVOLVE_REQUIRED = ", "var CM_OK = ", "var EVOLVE_DENY = ", "var CM_DENY = "].map((k) => { const i = src.indexOf(k); return src.slice(i, src.indexOf("\n", i)); }).concat(["cmRequired", "cmChecks", "evMergePr"].map(grab)).join("\n");
-  vm.runInContext(deps + "\n" + src.slice(a, b + END.length) + "\nBH_MERGEABLE_WAIT_MS = 0;\nEV_MERGE_RETRY_WAIT_MS = 0;\n__export = { bhDecide, bhMergeDecide, bhRepairDecide, bhRepairIssue, bhConflictDecide, bhConflictIssue, bhNudgeDecide, branchHygieneTick, BH_MAX_ACTIONS, BH_NUDGE_MAX };", sandbox, { filename: "bh-block.js" });
+  const deps = ["var EVOLVE_REQUIRED = ", "var CM_OK = ", "var EVOLVE_DENY = ", "var CM_CONTROL_PLANE = ", "var CM_LOOP_CANARIED = ", "var CM_DENY = "].map((k) => { const i = src.indexOf(k); return src.slice(i, src.indexOf("\n", i)); }).concat(["cmRequired", "cmChecks", "evMergePr"].map(grab)).join("\n");
+  vm.runInContext(deps + "\n" + src.slice(a, b + END.length) + "\nBH_MERGEABLE_WAIT_MS = 0;\nEV_MERGE_RETRY_WAIT_MS = 0;\n__export = { bhDecide, bhMergeDecide, bhRepairDecide, bhRepairIssue, bhConflictDecide, bhConflictIssue, bhNudgeDecide, bhHoldDecide, branchHygieneTick, BH_MAX_ACTIONS, BH_NUDGE_MAX, BH_HOLD_EXPIRE_H };", sandbox, { filename: "bh-block.js" });
   const env = { GITHUB_TOKEN: "x", AUDIT: d1.AUDIT };
   const out = await sandbox.__export.branchHygieneTick(env, Object.assign({ now: NOW }, opts || {}));
   return { out, calls: gh.calls, d1, W: sandbox.__export };
@@ -277,6 +280,53 @@ const scenario = () => ({
   eq(noCanary.merge === false && /no \/health canary/.test(noCanary.why), true, "pure: a control-plane worker without a /health canary is never merged");
   const docsOnly = dec(prj(57, "x", "h"), [{ filename: "docs/a.md" }, { filename: "qnfo-ops/README.md" }], green("h", ["gate", "mirror-guard", "comparator"]));
   eq(docsOnly.merge === true && (docsOnly.control_plane || []).length === 0, true, "pure: a non-deployable file under a control-plane worker dir is not a control-plane change");
+}
+{ // STALE-PR-LANE-READS-HOLDS-1 (agent_issues 2389): a review comment newer than the head that asks for changes refuses the merge
+  const R = { full_name: "QNFO/qnfo-workers" };
+  const mkpr = (n, sha) => ({ number: n, state: "open", draft: false, merged: false, mergeable: true, mergeable_state: "clean", title: "docs " + n, body: "", labels: [], updated_at: hAgo(3), head: { ref: "claude/h" + n, sha, repo: R }, base: { ref: "main", repo: R } });
+  const prs = { 62: mkpr(62, "h62"), 63: mkpr(63, "h63"), 64: mkpr(64, "h64"), 65: mkpr(65, "h65"), 66: mkpr(66, "h66") };
+  const docs = [{ filename: "docs/a.md" }];
+  const chk = (sha) => ["gate", "mirror-guard", "comparator"].map((nm, i) => ({ id: 200 + i, name: nm, status: "completed", conclusion: "success", head_sha: sha }));
+  const cmt = (ageH, body, login) => ({ body, created_at: hAgo(ageH), user: { login: login || "rwnq8" } });
+  const sc = {
+    branches: [br("main", 0, true)], compare: {}, prs, pulls: Object.values(prs).map((x) => ({ number: x.number, state: "open", updated_at: x.updated_at, head: x.head })),
+    files: { 62: docs, 63: docs, 64: docs, 65: docs, 66: docs },
+    checks: { h62: chk("h62"), h63: chk("h63"), h64: chk("h64"), h65: chk("h65"), h66: chk("h66") },
+    commitAt: { h62: hAgo(5), h63: hAgo(5), h64: hAgo(5), h65: hAgo(5), h66: hAgo(5) },
+    comments: {
+      62: [cmt(4, "Looks good overall."), cmt(1, "HOLD: part 4 has a problem worth fixing before this merges.")],
+      63: [cmt(2, "HOLD: wait for the migration."), cmt(1, "Resolved: the migration landed, hold released.")],
+      64: [cmt(6, "Do not merge until I look.")],                                              // older than the head commit: the push cleared it
+      65: [cmt(1, "STALE-PR-MERGE-FIRST-1 (qnfo-fleet-control): refused because the pull request asks not to be merged (do not merge)")], // the lane's own words
+      66: [cmt(30, "HOLD: fix the typo before this merges.")],                                  // 30 h old hold on a 5 h old head? no: the head is newer, so it is cleared; see pure cases for expiry
+    },
+  };
+  const { out, calls, d1, W } = await run(sc);
+  eq(out.merged_prs.sort(), [63, 64, 65, 66], "a released hold, a hold older than the head and the lane's own comment do not stop the merge; the HOLD on 62 does");
+  eq(out.held_prs, [62], "the held PR is reported");
+  eq(calls.includes("GET /issues/62/comments?per_page=100") && calls.includes("GET /commits/h62"), true, "the lane read the comments and the head commit's date");
+  const row = d1.db.prepare("SELECT why FROM branch_hygiene_log WHERE action = 'merge-refused' AND pr = 62").get();
+  eq(!!row && /a review comment asks for changes/.test(row.why) && /HOLD: part 4/.test(row.why), true, "the refusal is logged with the comment");
+  eq(out.closed_prs.includes(62), false, "a held PR is kept open on this tick");
+  // pure
+  const H = Date.parse("2026-10-03T05:00:00Z");
+  eq(W.bhHoldDecide([cmt(1, "changes requested: the probe URL is wrong")], H, NOW).hold, true, "pure: 'changes requested' holds");
+  eq(W.bhHoldDecide([cmt(1, "please fix it before it merges")], H, NOW).hold, true, "pure: 'fix it before it merges' holds");
+  eq(W.bhHoldDecide([cmt(1, "the holdout list is fine")], H, NOW).hold, false, "pure: the word hold inside another word does not hold");
+  eq(W.bhHoldDecide([cmt(1, "HOLD: x"), cmt(0.5, "unhold, fixed in the next push")], H, NOW).hold, false, "pure: a later release clears the hold");
+  eq(W.bhHoldDecide([cmt(0.5, "resolved earlier"), cmt(0.2, "HOLD: new problem")], H, NOW).hold, true, "pure: a release before the hold does not clear it");
+  const exp = W.bhHoldDecide([cmt(W.BH_HOLD_EXPIRE_H + 1, "HOLD: old")], 0, NOW);
+  eq([exp.hold, exp.expired], [false, true], "pure: a hold older than " + W.BH_HOLD_EXPIRE_H + "h expires with a logged release");
+  eq(W.bhHoldDecide([cmt(1, "CYCLE-TIME-1: closed because the body says do not merge")], H, NOW).hold, false, "pure: the lane's own comments never count");
+  eq(W.bhHoldDecide([], H, NOW), { hold: false, why: "no comments" }, "pure: no comments, no hold");
+  // a failed comment read is reported, never a hold
+  const sc2 = { branches: [br("main", 0, true)], compare: {}, prs: { 67: mkpr(67, "h67") }, pulls: [{ number: 67, state: "open", updated_at: hAgo(3), head: prs[62].head && { ref: "claude/h67", sha: "h67", repo: R } }], files: { 67: docs }, checks: { h67: chk("h67") }, commentsStatus: 500 };
+  const r2 = await run(sc2);
+  eq(r2.out.merged_prs, [67], "a comments read that fails (HTTP 500) does not stop a green PR");
+  // kill switch
+  const sc3 = { branches: [br("main", 0, true)], compare: {}, prs: { 68: mkpr(68, "h68") }, pulls: [{ number: 68, state: "open", updated_at: hAgo(3), head: { ref: "claude/h68", sha: "h68", repo: R } }], files: { 68: docs }, checks: { h68: chk("h68") }, comments: { 68: [cmt(1, "HOLD: no")] }, config: [["stale_pr_holds_enabled", "0"]] };
+  const r3 = await run(sc3);
+  eq(r3.out.merged_prs, [68], "ops_config stale_pr_holds_enabled = 0 stops the comment read, not the merge");
 }
 { // kill switch and dry run: no merge
   const R = { full_name: "QNFO/qnfo-workers" };

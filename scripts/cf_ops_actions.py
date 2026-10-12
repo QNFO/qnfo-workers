@@ -70,8 +70,9 @@ ACTIONS
                          newest d1_fold_backups row verifies, its R2 copy verifies, every jnlaudit_* copy matches, no fleet_tasks
                          definition names JNL or the database, and the live manifest is unchanged (owner directive 2026-10-05:
                          no observation window).
-  noz-scrub-bodies --model dry|live
+  noz-scrub-bodies --model dry|live [--target all]
                          NO-ZENODO-DOI-5 (#2278, umbrella #2273): rewrite every published, distributed or external_preprint
+                         (--target all: every status, backup table bak_20261012_noz_bodies_all)
                          living-paper body and abstract that still names the retired registrar or a 10.5281 DOI, deterministically
                          (noz_scrub: front matter, doi.org links, reference entries, **DOI:** lines, the word itself -> papers.qnfo.org
                          pages). dry (default) prints per-row counts, the first 10 before/after lines and every leftover, writes
@@ -935,14 +936,21 @@ def noz_changed_lines(before: str, after: str) -> list:
     return pairs
 
 
-def noz_scrub_bodies(acct: str, token: str, mode: str = "dry", run=None) -> int:
+def noz_scrub_bodies(acct: str, token: str, mode: str = "dry", run=None, scope: str = "public") -> int:
     """NO-ZENODO-DOI-5: scrub the living-paper bodies and abstracts. dry (default) rewrites in memory and prints the plan; live
-    first creates the backup table (idempotent), then one optimistic UPDATE per row (old body as predicate), then re-counts."""
+    first creates the backup table (idempotent), then one optimistic UPDATE per row (old body as predicate), then re-counts.
+    scope "public" (default) reads the publicly served statuses (NOZ_STATUSES); scope "all" (--target all) reads every row, so
+    a quarantined, duplicate, draft or superseded paper is clean before a status change serves it (the probe of #2278 counts
+    every status). The all-scope backup is its own table (NOZ_BAK_TABLE + "_all"): CREATE TABLE IF NOT EXISTS adds no rows to
+    an existing table, so the public run's backup is never mistaken for a full one."""
     if mode not in ("dry", "live"):
         emit({"action": "noz-scrub-bodies", "ok": False, "error": "mode must be dry or live (the model input)", "mode": mode})
         return 2
+    st_sql = ("status IN " + NOZ_STATUSES) if scope != "all" else "1 = 1"
+    bak = NOZ_BAK_TABLE if scope != "all" else NOZ_BAK_TABLE + "_all"
     run = run or (lambda sql, params=None: d1q(acct, token, sql, params or []))
-    ok, rows = run("SELECT slug, doi, zenodo_doi FROM papers WHERE status IN " + NOZ_STATUSES + " AND (doi LIKE '10.5281/%' OR zenodo_doi LIKE '10.5281/%')")
+    # the DOI -> slug map is read from every row whatever the scope: a public paper may cite a superseded one by its old DOI
+    ok, rows = run("SELECT slug, doi, zenodo_doi FROM papers WHERE (doi LIKE '10.5281/%' OR zenodo_doi LIKE '10.5281/%')")
     if not ok:
         emit({"action": "noz-scrub-bodies", "ok": False, "stage": "doi-map", "error": str(rows)[:300]})
         return 1
@@ -954,7 +962,7 @@ def noz_scrub_bodies(acct: str, token: str, mode: str = "dry", run=None) -> int:
                 doi_map.setdefault(v, r["slug"])
     todo, off = [], 0
     while True:
-        ok, page = run("SELECT slug, body_md, abstract FROM papers WHERE status IN " + NOZ_STATUSES + " AND " + NOZ_MATCH_SQL + " ORDER BY slug LIMIT " + str(NOZ_PAGE) + " OFFSET ?1", [off])
+        ok, page = run("SELECT slug, body_md, abstract FROM papers WHERE " + st_sql + " AND " + NOZ_MATCH_SQL + " ORDER BY slug LIMIT " + str(NOZ_PAGE) + " OFFSET ?1", [off])
         if not ok:
             emit({"action": "noz-scrub-bodies", "ok": False, "stage": "read", "offset": off, "error": str(page)[:300]})
             return 1
@@ -981,16 +989,16 @@ def noz_scrub_bodies(acct: str, token: str, mode: str = "dry", run=None) -> int:
         print("  %s\n    - %s\n    + %s" % (s["slug"], s["before"], s["after"]))
     for l in leftovers:
         print("  LEFTOVER %s %s: ...%s..." % (l["slug"], l["field"], l["context"]))
-    summary = {"action": "noz-scrub-bodies", "mode": mode, "doi_map": len(doi_map), "rows": len(todo), "rows_changed": sum(1 for p in plan if p["changes"]),
+    summary = {"action": "noz-scrub-bodies", "mode": mode, "scope": scope, "doi_map": len(doi_map), "rows": len(todo), "rows_changed": sum(1 for p in plan if p["changes"]),
                "changes": total_changes, "leftovers": len(leftovers), "snippets": snippets[:10], "leftover_contexts": leftovers}
     if mode == "dry":
         emit({**summary, "ok": True, "dry": True})
         return 0
-    ok, r = run("CREATE TABLE IF NOT EXISTS " + NOZ_BAK_TABLE + " AS SELECT slug, status, body_md, abstract FROM papers WHERE status IN " + NOZ_STATUSES + " AND " + NOZ_MATCH_SQL)
+    ok, r = run("CREATE TABLE IF NOT EXISTS " + bak + " AS SELECT slug, status, body_md, abstract FROM papers WHERE " + st_sql + " AND " + NOZ_MATCH_SQL)
     if not ok:
         emit({**summary, "ok": False, "stage": "backup", "error": str(r)[:300]})
         return 1
-    okc, cnt = run("SELECT COUNT(*) AS n FROM " + NOZ_BAK_TABLE)
+    okc, cnt = run("SELECT COUNT(*) AS n FROM " + bak)
     backed = (cnt[0].get("n") if okc and cnt else None)
     updated, skipped, failed = 0, 0, []
     for p in plan:
@@ -1007,10 +1015,10 @@ def noz_scrub_bodies(acct: str, token: str, mode: str = "dry", run=None) -> int:
             updated += 1
         else:
             skipped += 1  # the body changed under us (optimistic predicate): left for the next run
-    okn, after = run("SELECT COUNT(*) AS n FROM papers WHERE status IN " + NOZ_STATUSES + " AND " + NOZ_MATCH_SQL)
+    okn, after = run("SELECT COUNT(*) AS n FROM papers WHERE " + st_sql + " AND " + NOZ_MATCH_SQL)
     remaining = after[0].get("n") if okn and after else None
-    print("noz-scrub-bodies live: backed up %s row(s) in %s, updated %d, skipped %d (concurrent edit), failed %d, remaining %s" % (backed, NOZ_BAK_TABLE, updated, skipped, len(failed), remaining))
-    emit({**summary, "ok": remaining == 0, "dry": False, "backup_table": NOZ_BAK_TABLE, "backed_up": backed, "updated": updated, "skipped": skipped, "failed": failed, "remaining": remaining})
+    print("noz-scrub-bodies live: backed up %s row(s) in %s, updated %d, skipped %d (concurrent edit), failed %d, remaining %s" % (backed, bak, updated, skipped, len(failed), remaining))
+    emit({**summary, "ok": remaining == 0, "dry": False, "backup_table": bak, "backed_up": backed, "updated": updated, "skipped": skipped, "failed": failed, "remaining": remaining})
     return 0 if remaining == 0 else 1
 
 
@@ -1591,7 +1599,7 @@ def main() -> int:
     if a.action == "spare-domain-canon":
         return spare_domain_canon(a.target, a.model, token)
     if a.action == "noz-scrub-bodies":
-        return noz_scrub_bodies(acct, token, a.model or "dry")
+        return noz_scrub_bodies(acct, token, a.model or "dry", scope=("all" if (a.target or "").strip() == "all" else "public"))
     if a.action == "r2-get":
         return r2_get(acct, token, a.target)
     if a.action == "worker-history":

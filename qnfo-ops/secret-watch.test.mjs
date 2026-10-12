@@ -38,8 +38,12 @@ function d1(db) {
   return { prepare: prep, async batch(list) { const out = []; for (const s of list) out.push(await s.run()); return out; } };
 }
 
-function mk(env = {}) {
+// BINDING-PROPS-RESTORE-1 fixtures: fx.toml is qnfo-ops/wrangler.toml on main (null = 404), fx.liveProps the props the live
+// SVC_QNFO_AI binding carries (undefined = none). Dispatches of canonical-deploy.yml are recorded in t.dispatches.
+const TOML_PROPS = 'name = "qnfo-ops"\n\n[[services]]\nbinding = "SVC_QNFO_AI"\nservice = "qnfo-ai"\n# INTERNAL-CALLER-PROPS-1\nprops = { caller = "qnfo-ops" }\n\n[[d1_databases]]\nbinding = "QNFO_AUDIT"\ndatabase_id = "x"\n';
+function mk(env = {}, fx = {}) {
   const db = new DatabaseSync(":memory:");
+  const dispatches = [];
   db.exec(`CREATE TABLE cloud_ops_events (id TEXT PRIMARY KEY, ts TEXT, kind TEXT, text TEXT, meta TEXT, job TEXT, status TEXT);
   CREATE TABLE agent_issues (id INTEGER PRIMARY KEY AUTOINCREMENT, title TEXT, description TEXT, source TEXT, category TEXT, priority TEXT, status TEXT, linked_session TEXT, created_at INTEGER, updated_at INTEGER);
   CREATE TABLE ops_jobs (id TEXT PRIMARY KEY, status TEXT, error TEXT, updated_at TEXT);`);
@@ -56,9 +60,12 @@ function mk(env = {}) {
     if (/\/scripts\/qnfo-ai\/versions/.test(url)) return J({ result: { items: [{ number: 90, metadata: { created_on: old, source: "api" }, annotations: { "workers/triggered_by": "secret" } }] } });
     if (/\/scripts\/qnfo-email\/versions/.test(url)) return J({ result: { items: [{ number: 12, metadata: { created_on: recent, source: "wrangler" }, annotations: { "workers/triggered_by": "upload" } }] } });
     if (/\/scripts\/qnfo-ops\/secrets/.test(url)) return J({ result: [{ name: "OPS_ROUTER_AUTH_KEY", type: "secret_text", value: SECRET_VALUE }, { name: "OPS_ROUTER_AUTH_KEY_2", type: "secret_text" }] });
+    if (/api\.github\.com\/repos\/QNFO\/qnfo-workers\/contents\/qnfo-ops\/wrangler\.toml/.test(url)) return fx.toml == null ? new Response("nf", { status: 404 }) : new Response(fx.toml, { status: 200 });
+    if (/\/scripts\/qnfo-ops\/settings$/.test(url)) return J({ result: { bindings: [Object.assign({ type: "service", name: "SVC_QNFO_AI", service: "qnfo-ai" }, fx.liveProps ? { props: fx.liveProps } : {}), { type: "d1", name: "QNFO_AUDIT" }] } });
+    if (/\/actions\/workflows\/canonical-deploy\.yml\/dispatches$/.test(url)) { dispatches.push({ method: o && o.method, body: JSON.parse(o && o.body || "{}"), auth: !!(o && o.headers && o.headers.Authorization) }); return new Response(null, { status: 204 }); }
     return new Response("{}", { status: 503 });
   };
-  return { db, calls, env: Object.assign({ QNFO_AUDIT: d1(db), CF_API_TOKEN: "cf-test" }, env) };
+  return { db, calls, dispatches, env: Object.assign({ QNFO_AUDIT: d1(db), CF_API_TOKEN: "cf-test", GITHUB_TOKEN: "gh-test" }, env) };
 }
 const tick = async (t) => {
   const pending = [];
@@ -81,6 +88,7 @@ const tick = async (t) => {
   ok(all.indexOf(SECRET_VALUE) < 0, "A no secret value stored anywhere");
   const hb = t.db.prepare("SELECT status, text FROM cloud_ops_events WHERE kind = 'secret-watch-tick'").all();
   ok(hb.length === 1 && hb[0].status === "ok" && /3 scripts, 2 secret change/.test(hb[0].text), "A heartbeat written: " + JSON.stringify(hb));
+  ok(t.dispatches.length === 0 && t.db.prepare("SELECT COUNT(*) AS n FROM cloud_ops_events WHERE kind = 'binding-props-restore'").get().n === 0, "A a worker without wrangler.toml props on main gets no redeploy");
 
   // B. a second tick adds nothing new except its heartbeat.
   await tick(t);
@@ -97,6 +105,39 @@ const tick = async (t) => {
   ok(!threw, "C cron completes without CF_API_TOKEN");
   ok(t.db.prepare("SELECT COUNT(*) AS n FROM cloud_ops_events WHERE kind IN ('secret-change', 'secret-watch-tick')").get().n === 0, "C nothing written without the token");
   ok(!t.calls.some((u) => /\/versions/.test(u)), "C no Cloudflare version reads without the token");
+}
+
+// D. BINDING-PROPS-RESTORE-1 (agent_issues 2445): the secret version left the declared props off the live service binding ->
+// one canonical-deploy dispatch for the worker, recorded once; the next tick dispatches nothing more for the same version.
+{
+  const t = mk({}, { toml: TOML_PROPS });
+  await tick(t);
+  ok(t.dispatches.length === 1 && t.dispatches[0].method === "POST" && t.dispatches[0].auth && t.dispatches[0].body.ref === "main" && t.dispatches[0].body.inputs.workers === "qnfo-ops", "D canonical-deploy.yml dispatched once with workers=qnfo-ops: " + JSON.stringify(t.dispatches));
+  const ev = t.db.prepare("SELECT id, status, text, meta FROM cloud_ops_events WHERE kind = 'binding-props-restore'").all();
+  ok(ev.length === 1 && ev[0].id === "binding-props-restore-qnfo-ops-435" && ev[0].status === "dispatched" && /SVC_QNFO_AI/.test(ev[0].text) && JSON.parse(ev[0].meta).dispatch_http === 204, "D one ledger row keyed to the worker and the newest secret version: " + JSON.stringify(ev));
+  ok(t.calls.some((u) => /\/scripts\/qnfo-ops\/settings$/.test(u)) && !t.calls.some((u) => /PATCH/.test(u)), "D the live settings were read (GET only)");
+  ok(JSON.stringify(ev).indexOf(SECRET_VALUE) < 0, "D no secret value in the ledger");
+  await tick(t);
+  ok(t.dispatches.length === 1 && t.db.prepare("SELECT COUNT(*) AS n FROM cloud_ops_events WHERE kind = 'binding-props-restore'").get().n === 1, "D a second tick dispatches nothing more for the same secret version");
+}
+// E. the live binding already carries the declared props -> nothing to restore, no dispatch, no row.
+{
+  const t = mk({}, { toml: TOML_PROPS, liveProps: { caller: "qnfo-ops" } });
+  await tick(t);
+  ok(t.dispatches.length === 0 && t.db.prepare("SELECT COUNT(*) AS n FROM cloud_ops_events WHERE kind = 'binding-props-restore'").get().n === 0, "E matching live props: no redeploy");
+}
+// F. props differ (a stale caller) -> restored like missing props.
+{
+  const t = mk({}, { toml: TOML_PROPS, liveProps: { caller: "someone-else" } });
+  await tick(t);
+  ok(t.dispatches.length === 1, "F differing props are restored too");
+}
+// G. without GITHUB_TOKEN the row records the missing token and nothing is dispatched.
+{
+  const t = mk({ GITHUB_TOKEN: undefined }, { toml: TOML_PROPS });
+  await tick(t);
+  const ev = t.db.prepare("SELECT status, text FROM cloud_ops_events WHERE kind = 'binding-props-restore'").all();
+  ok(t.dispatches.length === 0 && ev.length === 1 && ev[0].status === "error" && /no GITHUB_TOKEN/.test(ev[0].text), "G no token: recorded as error, not dispatched: " + JSON.stringify(ev));
 }
 
 say(pass + " passed, " + fail + " failed");

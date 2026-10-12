@@ -99,6 +99,10 @@ because each one was broken at least once; the linked issue holds the evidence.
   ```
   W=<worker>; R=repos/QNFO/qnfo-workers; for x in main $(gh api "$R/pulls?state=open&per_page=100" --jq '.[]|"\(.head.sha)#\(.number)"'); do gh api "$R/contents/$W/worker.js?ref=${x%#*}" -H 'Accept: application/vnd.github.raw' 2>/dev/null | grep -m1 -oE 'var VERSION = "[^"]*"' | sed -E "s/.*\"(.*)\"/\1 ${x#*#}/"; done | sort -V | tail -3
   ```
+- A blocking review of another session's pull request is a PR comment that starts with `HOLD:` and says what must change
+  (STALE-PR-LANE-READS-HOLDS-1, qnfo-fleet-control 0.20.0, #2389): the stale-PR lane refuses to merge while a comment newer than
+  the head commit asks for changes, until a later comment says `resolved` or `hold released`, a new push lands, or 24 h pass.
+  GitHub's request-changes review is not available to the account that authored the PR, so the comment is the review channel.
 - Messages from other sessions reach you only between turns. Read your session's notifications before you merge, and
   leave a green control-plane pull request you authored to the stale-PR lane (CONTROL-PLANE-SELF-MERGE-1, about 2h
   quiet) unless a live defect needs it sooner: lever T1.23 counts only lane merges (FAILURE-AUDIT-1, 2026-10-07: three
