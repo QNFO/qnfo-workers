@@ -61,7 +61,7 @@ ok(calls.d1.some((c) => /'model-unknown-id'/.test(c.sql)), "the unknown id left 
 // 2 the breaker is now open in this isolate: no second paid round trip, same answer path.
 reset();
 r = await chat({ model: "deepseek-v4-flash", messages: msgs, max_tokens: 32 });
-ok(r.status === 200 && r.j._router.served_by === "deepseek-v4-flash-wa" && !calls.fetch.includes("api.deepseek.com"), "with the breaker open the twin serves at once, no DeepSeek call", { f: calls.fetch, rt: r.j && r.j._router });
+ok(r.status === 200 && r.j._router.served_by === "deepseek-v4-flash-wa" && calls.fetch.every((h) => h !== "api.deepseek.com"), "with the breaker open the twin serves at once, no DeepSeek call", { f: calls.fetch, rt: r.j && r.j._router });
 ok(r.j._router.model_resolution === undefined, "an exact id carries no resolution note");
 
 // 3 a small answer on glm-5.3-flash asks for low reasoning effort; a long one does not.
