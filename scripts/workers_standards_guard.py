@@ -12,9 +12,16 @@ It fails a change only for what the change ADDS, so existing debt that other ses
                                  (a presence test against undefined, null or "" passes)
       floating-promise           a whole statement that starts a promise and drops it: fetch(...), env.<BINDING>.<io call>(...),
                                  caches.default.put/delete(...), with no await, return, assignment, void or ctx.waitUntil (WORKERS-STANDARDS-GUARD-2)
+      interpolated-sql           a template literal with ${} inside prepare(`...`): bind the value instead (WORKERS-STANDARDS-GUARD-3)
+      swallowed-catch            an empty catch block or .catch(function () {}) / .catch(() => {}): the failure never reaches Workers Logs
+                                 (WORKERS-BP-LOGGING-1); log it or record it, or mark the line standards-ok with the reason
+      ai-response-string-assumption  `.response.trim()` and friends on a Workers AI result: in JSON mode `response` is a parsed object
   * a wrangler.toml change that removes an [observability] block or its traces, switches logs or traces off, edits the block and leaves it
     without logs and traces, or a brand-new worker (new wrangler.toml) without logs and traces enabled;
-  * a wrangler.toml change that adds a [[queues.consumers]] block without dead_letter_queue (a failed message is otherwise discarded).
+  * a wrangler.toml change that adds a [[queues.consumers]] block without dead_letter_queue (a failed message is otherwise discarded);
+  * (GUARD-3) a wrangler.toml change that adds a [[send_email]] block with no destination_address / allowed_destination_addresses /
+    allowed_sender_addresses, adds `new_classes` (KV-backed Durable Object storage; new classes use new_sqlite_classes), or moves
+    compatibility_date to 2026-08-04 or later while worker.js imports node:* under a `no_nodejs_compat` opt-out (the import then fails).
 A line can carry `// standards-ok: <reason>` when a hit is a false positive (the reason is the record). A reviewed exception that cannot carry
 a comment (toml, generated code) is a line in scripts/workers-standards-allowlist.txt: `<path> <rule> <text that occurs in the line> # reason`.
 The same run asks SPOF-REVIEW-GATE-1 (scripts/spof_review.py) whether the change adds a cron, D1 trigger, external host or credential
@@ -32,7 +39,14 @@ RULES = {
     "pass-through-on-exception": (re.compile(r"\.passThroughOnException\s*\("), "passThroughOnException hides failures: use try/catch and an explicit error response"),
     "destructured-ctx": (re.compile(r"(?:const|let|var)\s*\{[^}]*\b(?:waitUntil|passThroughOnException)\b[^}]*\}\s*=\s*(?:ctx|context|this\.ctx)\b|\b(?:fetch|scheduled|queue|email|tail)\s*\([^)]*\{[^}]*\b(?:waitUntil|passThroughOnException)\b[^}:]*\}\s*\)\s*\{"), "destructuring ctx loses the receiver (Illegal invocation)"),
     "secret-compare": (re.compile(EQ + r"\s*" + ENV_SECRET + "|" + ENV_SECRET + r"\s*" + EQ), "string comparison of a secret: use a constant-time compare"),
+    # WORKERS-STANDARDS-GUARD-3 (2026-10-12): D1 limits page (100 bound parameters, prepared statements), WORKERS-BP-LOGGING-1 (agent_issues 2342),
+    # Workers AI JSON mode (`response` is an object).
+    "interpolated-sql": (re.compile(r"prepare\s*\(\s*`[^`]*\$\{"), "SQL built by interpolation: bind the value with prepare(...).bind(...)"),
+    "swallowed-catch": (re.compile(r"\.catch\s*\(\s*(?:function\s*\([^)]*\)\s*\{\s*\}|\([^)]*\)\s*=>\s*\{\s*\}|[A-Za-z_$][\w$]*\s*=>\s*\{\s*\})\s*\)|\bcatch\s*(?:\([^)]*\))?\s*\{\s*\}"), "a swallowed error never reaches Workers Logs: log console.error(JSON.stringify({...})) or record the failure"),
+    "ai-response-string-assumption": (re.compile(r"\b(?:res|resp|result|out|output|ai\w*|r)\.response\.(?:trim|match|replace|split|toLowerCase|slice)\("), "Workers AI `response` is a parsed object in JSON mode: normalise (typeof check) before string methods"),
 }
+NODE_IMPORT = re.compile(r"(?:^|\n)\s*import\s[^\n]*\sfrom\s*[\"']node:|require\(\s*[\"']node:")
+NODE_DEFAULT_DATE = "2026-08-04"
 # A presence test is not a comparison of the secret's value.
 PRESENCE = re.compile(ENV_SECRET + r"\s*" + EQ + r"\s*(?:undefined|null|\"\"|''|void 0)|(?:undefined|null|\"\"|''|void 0|typeof\s+" + ENV_SECRET + r")\s*" + EQ + r"\s*(?:" + ENV_SECRET + r"|[\"']undefined[\"'])")
 # floating-promise: the statement, from its first character, is a call that returns a promise, and it ends the line with `;`.
@@ -80,6 +94,7 @@ def check_code(lines, full=None):
         s = text.strip()
         if s.startswith("//") or s.startswith("*") or "standards-ok:" in text: continue
         for name, (rx, why) in RULES.items():
+            if name == "ai-response-string-assumption" and "typeof" in text: continue  # guarded on the same line
             probe = PRESENCE.sub(" ", text) if name == "secret-compare" else text
             if rx.search(probe): bad.append((name, ln, why, text))
         if FLOATING.match(text):
@@ -161,7 +176,37 @@ def check_config(base, path, added=None):
     for q, dlq in sorted(consumers(new).items()):
         if not dlq and was.get(q) is not False:
             bad.append(("queue-consumer-no-dlq", 1, "queue consumer `%s` has no dead_letter_queue: a message that fails max_retries times is discarded" % q, 'queue = "%s"' % q))
+    # WORKERS-STANDARDS-GUARD-3: config shapes judged on what the change adds.
+    if len(unrestricted_send_email(new)) > len(unrestricted_send_email(old)):
+        bad.append(("send-email-unrestricted", 1, "a new [[send_email]] binding names no destination_address, allowed_destination_addresses or allowed_sender_addresses", "[[send_email]]"))
+    if re.search(r"^\s*new_classes\s*=", strip_comments(new), re.M) and not re.search(r"^\s*new_classes\s*=", strip_comments(old or ""), re.M):
+        bad.append(("legacy-do-storage", 1, "new_classes declares KV-backed Durable Object storage: new classes use new_sqlite_classes", "new_classes"))
+    nd = toml_value(new, "compatibility_date"); od = toml_value(old or "", "compatibility_date")
+    if nd and nd >= NODE_DEFAULT_DATE and (not od or od < NODE_DEFAULT_DATE):
+        flags = toml_flags(new)
+        src_path = os.path.join(os.path.dirname(path), "worker.js")
+        src = open(src_path, errors="replace").read() if os.path.exists(src_path) else ""
+        if "no_nodejs_compat" in flags and NODE_IMPORT.search(src):
+            bad.append(("node-opt-out-with-imports", 1, "compatibility_date %s with no_nodejs_compat while worker.js imports node:* (the import fails at that date)" % nd, "compatibility_date"))
     return bad
+
+def toml_value(cfg, key):
+    m = re.search(r"^\s*" + re.escape(key) + r"\s*=\s*\"([^\"]*)\"", strip_comments(cfg or ""), re.M)
+    return m.group(1) if m else None
+
+def toml_flags(cfg):
+    m = re.search(r"^\s*compatibility_flags\s*=\s*\[([^\]]*)\]", strip_comments(cfg or ""), re.M)
+    return re.findall(r"[\"']([^\"']+)[\"']", m.group(1)) if m else []
+
+def unrestricted_send_email(cfg):
+    """Bodies of the [[send_email]] blocks of a wrangler.toml that set no destination or sender restriction."""
+    text, out = strip_comments(cfg or ""), []
+    for m in re.finditer(r"^[ \t]*\[\[send_email\]\][ \t]*$", text, re.M):
+        rest = text[m.end():]
+        n = re.search(r"^[ \t]*\[", rest, re.M)
+        body = rest[:n.start()] if n else rest
+        if not re.search(r"^[ \t]*(?:destination_address|allowed_destination_addresses|allowed_sender_addresses)[ \t]*=", body, re.M): out.append(body)
+    return out
 
 def spof_gate(base):
     """SPOF-REVIEW-GATE-1 rides this step so it runs on every pull request without a workflow change (scripts/spof_review.py).

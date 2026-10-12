@@ -29,4 +29,19 @@ database_id = "70a58cb3-b2cd-498d-877f-ecca86859a22"
 binding = "RELEASES"
 bucket_name = "qnfo-releases"
 
+# SCHOLAR-PDF-ALL-1 (1.2.0, agent_issues 2410, pillar reach): the backlog loop records each run in cloud_ops_events (job qnfo-pdf) and
+# writes metric_registry.scholar_pdf_backlog; the canonical deploy installs this binding (BINDING-INSTALL). Reads and writes stay to
+# those two tables.
+[[d1_databases]]
+binding = "AUDIT"
+database_name = "qnfo-audit"
+database_id = "35e2e573-92f3-46ac-83c6-22f6429fc5e5"
+
+# SCHOLAR-PDF-ALL-1: one fire every 10 minutes (CRON-RATE-CEILING-1: 144 a day), PDF_BACKLOG_BATCH renders per fire; 472 papers without a
+# PDF on 2026-10-12 clear in about 14 hours. The second path for the same outcome is the on-demand GET /pdf/<slug> render; a stalled loop
+# is detected by fm-pdf-backlog-stalled (migrations/2026-10-12-30-scholar-pdf-backlog.sql).
+[triggers]
+crons = ["*/10 * * * *"]
+
 [vars]
+PDF_BACKLOG_BATCH = "6"
