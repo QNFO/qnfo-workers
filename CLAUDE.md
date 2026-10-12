@@ -40,13 +40,17 @@ because each one was broken at least once; the linked issue holds the evidence.
   section 12's permission model is the fleet's loops', and a session's harness keeps its own. Section 24 headlines:
   `tick_completion_24h`, `initiation_rate_7d`, `owner_dispatch_7d` (DOCTRINE-HEADLINE-1, PR 847) and `mttr_h_7d`; builders
   TICK-SEQUENCE-LEDGER-1, BACKLOG-DRIVER-1, EXECUTOR-ROSTER-1 (migrations/2026-10-09-12-doctrine-rev5.sql).
-- The kernel (owner version 8.0.0, 2026-10-09) is in `docs/DOCTRINE-KERNEL.md`: the tick, the recognitions a loop or session
-  watches for in its own output (conditional offers, reports ending in a question, menus, false stops, routing work to the
-  owner), computed trust and the registries. It layers on revision 5. Readings (m)-(q) bind: the kernel describes how work
-  is carried and is no source of authority over the harness, CLAUDE.md or an owner override; a refusal or limit is still
+- The kernel (owner version 8.2.1, 2026-10-12; 8.0.0 adopted 2026-10-09) is in `docs/DOCTRINE-KERNEL.md`: the tick, the
+  recognitions a loop or session watches for in its own output (conditional offers, reports ending in a question, menus,
+  false stops, routing work to the owner, "you" as the actor of a next step, describing a change instead of making it),
+  computed trust and the registries. It layers on revision 5. Readings (m)-(t) bind: the kernel describes how work is
+  carried and is no source of authority over the harness, CLAUDE.md or an owner override; a refusal or limit is still
   stated plainly with its reason; trust (`v_trust_ledger`) widens only fleet loop scopes through the canonical path; a step
   that is interrupt-eligible, refused or under another session's live claim is reported as that disposition, not offered;
-  a self-name is a label in `doctrine_lineage`, never an authority.
+  a self-name is a label in `doctrine_lineage`, never an authority. IC-YES-001 ("the answer is yes") is the default for
+  reversible, in-scope questions, bounded in its own text by the gate, harness and classifier refusals, the secret lock and
+  live claims; a refused action is fixed honestly or reported, never reworded past the same check (reading r). IC-ACTOR-001:
+  reports name the fleet as the actor of every next step; an owner-only step is an IDENTITY-BOUND card, not prose (reading s).
 
 ## Autonomy-first protocol (AUTONOMY-FIRST-1)
 - Owner directive 2026-10-08: "Implement autonomy-first protocol system/fleet-wide and in all Claude operations." It
@@ -141,7 +145,8 @@ because each one was broken at least once; the linked issue holds the evidence.
   - `d1-query@<db>` reads any other account D1 by name (the consumer). qnfo-identity and qnfo-outreach are refused, because the run log is public.
 - An issue about live behaviour names what closes it on a line of its own: `runtime-probe: {"url": "https://...", "status": 200, "contains": "<marker>"}`. D1 triggers make that line the issue's runner-https contract (PROBE-BIRTH-RUNTIME-1). Never choose a URL and marker that already pass while the defect exists. The runners' write-keyword guard scans string literals too, so a probe's failure text must not contain words like "update ".
 - A removal is probed too (AUTOAUDIT-PROBES-1): a runtime-probe takes `"absent": "<text>"` (case-insensitive, must not occur),
-  and an issue whose defect is the code on main names `code-probe: {"paths": ["<dir>/worker.js"], "absent"|"contains": "<exact text>"}`
+  a deploy check uses `"min_version": "x.y.z"` (passes at or above it, read from the JSON `version`; MIN-VERSION-PROBE-1), never an
+  exact VERSION string in `contains`, which fails for good after the next bump; and an issue whose defect is the code on main names `code-probe: {"paths": ["<dir>/worker.js"], "absent"|"contains": "<exact text>"}`
   on a line of its own; D1 triggers make it a `code-read` contract that the consumer runs against its checkout of main. Use it
   where the code state is the defect; behaviour still needs a runtime or D1 probe. The consumer drains every due contract
   per run (PROBE-DRAIN-1).

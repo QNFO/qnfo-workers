@@ -5,7 +5,7 @@ var __name = (target, value) => __defProp(target, "name", { value, configurable:
 var __defProp2 = Object.defineProperty;
 var __name2 = /* @__PURE__ */ __name((target, value) => __defProp2(target, "name", { value, configurable: true }), "__name");
 var NL = String.fromCharCode(10);
-var VERSION = "1.4.0-activity-store"; /* 1.4.0 AUTOAUDIT-DEAD-CALLERS-1 (2026-10-12, agent_issues 2302, pillar personal): an activity intent is stored in this worker's own vector index and ends done or failed with the error logged (it called a retired worker through a removed binding and the empty catch dropped it); GET /personal/search serves the personal index to qnfo-tools-mcp. */ /* 1.3.10 MODEL-ID-AUDIT-1 (2026-10-11): the classifier asked qnfo-ai for the bare id glm-5.2, which its MODELS table does not route (it fell back to deepseek-v4-flash while the stats recorded glm-5.2). It now asks glm-5.3-flash with deepseek-v4-flash as the second leg. */ /* 1.3.9 NO-TOPIC-HARDCODE-1 (owner directive 2026-10-10): the triage prompt names no program or field; cluster_key tags come from the tags already in research_candidates. */
+var VERSION = "1.4.1-activity-store"; /* 1.4.1 (2026-10-12): merged with main 1.3.11-codeagent. The activity is stored in this worker's own vector index (the result that decides done or failed); main's forward to personal-api /activity is kept as a second, best-effort copy whose failure is logged and never fails the intent (the route answered 404 on 2026-10-12). */ /* 1.4.0 AUTOAUDIT-DEAD-CALLERS-1 (2026-10-12, agent_issues 2302, pillar personal): an activity intent is stored in this worker's own vector index and ends done or failed with the error logged (it called a retired worker through a removed binding and the empty catch dropped it); GET /personal/search serves the personal index to qnfo-tools-mcp. */ /* 1.3.10 MODEL-ID-AUDIT-1 (2026-10-11): the classifier asked qnfo-ai for the bare id glm-5.2, which its MODELS table does not route (it fell back to deepseek-v4-flash while the stats recorded glm-5.2). It now asks glm-5.3-flash with deepseek-v4-flash as the second leg. */ /* 1.3.9 NO-TOPIC-HARDCODE-1 (owner directive 2026-10-10): the triage prompt names no program or field; cluster_key tags come from the tags already in research_candidates. */
 var ROUTER = "https://qnfo-ai.q08.workers.dev";
 var AGENT_ORCH = "https://qnfo-agent-orchestrator.q08.workers.dev";
 var PROMOTE_THRESHOLD = 60;
@@ -222,6 +222,19 @@ async function handleIntent(env, body, source, device) {
       intent.error = act.error;
       console.error(JSON.stringify({ at: "activity-store", intent: id, error: act.error }));
       await env.D1.prepare("UPDATE intents SET status='failed', processed_at=?1 WHERE id=?2").bind(now, id).run();
+    }
+    // Kept from main 1.3.11-codeagent: a copy goes to personal-api. Best effort: the local store above decides the
+    // intent's status, and a failure here is logged, not swallowed and not fatal.
+    try {
+      const payload = { doc: "activity", date: when, title: cls.summary || desire.slice(0, 120), category: domain === "research" ? "research" : "other", venue: "", notes: desire.slice(0, 500) };
+      const headers = { "Content-Type": "application/json" };
+      if (env.INDEX_TOKEN) headers["X-Index-Token"] = env.INDEX_TOKEN;
+      const resp = await withTimeout(fetch("https://personal-api.q08.workers.dev/activity", { method: "POST", headers, body: JSON.stringify(payload) }), 5e3, "personal-api activity");
+      intent.forwarded = resp.ok;
+      if (!resp.ok) console.log("activity forward failed:", "personal-api returned " + resp.status);
+    } catch (e) {
+      intent.forwarded = false;
+      console.log("activity forward failed:", String(e && e.message || e).slice(0, 240));
     }
   }
   return intent;

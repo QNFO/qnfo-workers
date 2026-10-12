@@ -11,6 +11,16 @@ compatibility_date = "2026-08-01"
 enabled = true
 head_sampling_rate = 1
 
+# Workers Logs and traces (owner standards 2026-10-12): the top-level switch alone does not enable traces.
+[observability.logs]
+enabled = true
+invocation_logs = true
+head_sampling_rate = 1
+
+[observability.traces]
+enabled = true
+head_sampling_rate = 0.05 # TRACES-SAMPLING-BEFORE-BILLING-1: stored traces bill from 2026-12-01
+
 [[d1_databases]]
 binding = "IPATENT_DB"
 database_name = "ipatent-db"

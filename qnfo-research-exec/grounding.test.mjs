@@ -50,9 +50,14 @@ const env = {
 };
 let arxivDown = false;
 let arxivCalls = [];
+// GROUND-SECOND-SOURCE-1: DataCite is asked only when the bibliography is short; by default it is down too.
+let dataciteCalls = [];
+let dataciteAnswer = () => new Response("down", { status: 503 });
+const dcRecord = (id, title, abstract) => ({ attributes: { doi: "10.48550/arxiv." + id, titles: [{ title }], descriptions: abstract ? [{ descriptionType: "Abstract", description: abstract }] : [] } });
 const feed = (n) => "<feed>" + Array.from({ length: n }, (_, i) => `<entry><id>http://arxiv.org/abs/2601.0${1000 + i}v1</id><title>Paper ${i}</title><summary>S${i}</summary></entry>`).join("") + "</feed>";
 globalThis.fetch = async (url) => {
   const u = decodeURIComponent(String(url));
+  if (u.startsWith("https://api.datacite.org/")) { dataciteCalls.push(u); return dataciteAnswer(); }
   if (!u.startsWith("https://export.arxiv.org/")) return new Response("unexpected " + u, { status: 404 });
   arxivCalls.push(u);
   if (arxivDown) return new Response("Rate exceeded.", { status: 503 });
@@ -73,18 +78,21 @@ assert.ok(arxivCalls.some((u) => / OR /.test(u)), "the OR fallback must be sent 
 assert.equal(get("healthy").stage, "ensemble");
 assert.equal(JSON.parse(get("healthy").context).bibCount, 10);
 assert.match(r2.get("pipeline/healthy/grounding.md"), /\n\[10\] QNFO: Corpus paper B/);
+assert.equal(dataciteCalls.length, 0, "a full bibliography does not call the second source");
 
-// 2b. arXiv down: each query is retried once, the 2-entry grounding stops at ground (no ensemble), one recover is spent.
+// 2b. arXiv and DataCite down: each query is tried three times, the 2-entry grounding stops at ground, one recover is spent.
 arxivDown = true; arxivCalls = [];
 res = await stageGround(env, row("thin", 1));
 assert.equal(res.ok, false);
 assert.equal(res.stage, "ground");
 assert.equal(res.bibCount, 2);
 assert.equal(res.arxivErrors, 6);
-assert.equal(arxivCalls.length, 12, "6 queries, each retried once");
+assert.equal(arxivCalls.length, 18, "6 queries, three attempts each");
+assert.equal(dataciteCalls.length, 2, "the second source is tried twice");
+assert.equal(res.withheld, undefined, "a transport failure is an error, not a withheld paper");
 let t = get("thin");
 assert.equal(t.status, "queued"); assert.equal(t.stage, "ground"); assert.equal(t.recover_count, 2);
-assert.match(t.error, /^ground: bibliography 2 < 5 entries \(gate-refcount cannot pass\)/);
+assert.match(t.error, /^ground: bibliography 2 < 5 entries \(gate-refcount cannot pass\); arxiv_http_errors=6; second_source=error/);
 assert.equal(audit.prepare("SELECT count(*) n FROM cloud_ops_events WHERE kind = 'ground-thin'").get().n, 1);
 assert.ok(r2.has("pipeline/thin/grounding.md"), "the thin grounding is kept for diagnosis");
 
@@ -95,5 +103,52 @@ t = get("exhausted");
 assert.equal(t.status, "wontfix"); assert.equal(t.stage, "parked");
 assert.match(t.error, /^PARKED-POISON-1: recover_count exhausted \(3\); last error: ground: bibliography 2 < 5/);
 assert.equal(audit.prepare("SELECT count(*) n FROM agent_issues WHERE title LIKE 'RESEARCH-TERMINAL exhauste%'").get().n, 1);
+
+// 2d. arXiv refusing, DataCite answering: relevant arXiv records fill the bibliography, the row advances, and an
+// off-topic record, a record without an abstract and a duplicate are left out.
+arxivCalls = []; dataciteCalls = [];
+dataciteAnswer = () => new Response(JSON.stringify({ data: [
+  dcRecord("2601.10001", "Weight sequence classification for numeration systems", "We classify each weight sequence for which arithmetic is polynomial-time."),
+  dcRecord("2601.10002", "Polynomial-time arithmetic in nonlinear numeration systems", "A weight sequence and its arithmetic are studied."),
+  dcRecord("2601.10003", "Tree-based numeration systems", "Nonlinear tree-based numeration systems and their synthesis."),
+  dcRecord("2601.10003", "Tree-based numeration systems", "Nonlinear tree-based numeration systems and their synthesis."),
+  dcRecord("2601.10004", "An unrelated survey of galaxy morphology", "Spiral arms and bars in nearby galaxies."),
+  dcRecord("2601.10005", "Weight sequence classification without a summary", ""),
+  dcRecord("hep-th/9901001", "Arithmetic of weight sequence families", "Weight sequence classification revisited.")
+] }), { status: 200 });
+res = await stageGround(env, row("second", 0));
+assert.equal(res.ok, true, "DataCite records carry the row past the floor");
+assert.equal(res.bibCount, 6, "4 relevant arXiv records + 2 corpus entries");
+const g2 = r2.get("pipeline/second/grounding.md");
+assert.match(g2, /\[1\] arXiv:2601\.10001 \| Weight sequence classification for numeration systems\n  We classify/);
+assert.match(g2, /arXiv:hep-th\/9901001 \| /);
+assert.ok(!/galaxy/.test(g2), "an off-topic record is not cited");
+assert.ok(!/without a summary/.test(g2), "a record with no abstract is not cited");
+assert.equal((g2.match(/arXiv:2601\.10003 \|/g) || []).length, 2, "one bibliography line and one literature line, no duplicate");
+assert.equal(get("second").stage, "ensemble");
+const ev2 = audit.prepare("SELECT text, status FROM cloud_ops_events WHERE kind = 'ground-second-source' ORDER BY ts DESC, rowid DESC LIMIT 1").get();
+assert.match(ev2.text, /source=datacite status=200 returned=6 added=4/);
+
+// 2e. every source answers and the literature is thin: the floor withholds the row (a warning, not a transport error).
+arxivDown = false;
+globalThis.fetch = async (url) => {
+  const u = decodeURIComponent(String(url));
+  if (u.startsWith("https://api.datacite.org/")) return new Response(JSON.stringify({ data: [] }), { status: 200 });
+  return new Response("<feed></feed>");
+};
+res = await stageGround(env, row("thinlit", 0));
+assert.equal(res.ok, false); assert.equal(res.withheld, "thin-literature");
+assert.match(get("thinlit").error, /arxiv_http_errors=0; second_source=ok$/);
+
+// 2f. a refusal is retried and the retry's answer is used.
+let n429 = 0;
+globalThis.fetch = async (url) => {
+  const u = decodeURIComponent(String(url));
+  if (u.startsWith("https://api.datacite.org/")) return new Response(JSON.stringify({ data: [] }), { status: 200 });
+  if (/ OR /.test(u) && n429++ < 2) return new Response("Rate exceeded.", { status: 429, headers: { "retry-after": "1" } });
+  return new Response(feed(/ OR /.test(u) ? 8 : 0));
+};
+res = await stageGround(env, row("retried", 0));
+assert.equal(res.ok, true); assert.equal(res.bibCount, 10); assert.equal(n429, 3, "two refusals, then the answer");
 
 console.log("grounding tests passed");

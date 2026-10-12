@@ -3,11 +3,10 @@ var __name = (target, value) => __defProp(target, "name", { value, configurable:
 
 // worker.js
 var ROUTER = "https://qnfo-ai.q08.workers.dev";
-var PL_SEARCH = "https://personal-life-search.q08.workers.dev";
 var EMAIL_BASE = "https://qnfo-email.internal";
 var NL = String.fromCharCode(10);
 var FLEET = "https://fleet.qnfo.org";
-var VERSION = "1.2.0-owner-queue"; // OWNER-QUEUE-MCP-1: owner_queue / owner_code / owner_act reach the fleet.qnfo.org queue from any MCP client; 1.1.6-capability-contract: MCP-TOKEN-NO-SCOPE-SEPARATION (954): MCP_TOKEN=read+write, MCP_READ_TOKEN=read-only
+var VERSION = "1.2.1-personal-search-repoint"; // 1.2.1 AUTOAUDIT-DEAD-CALLERS-1 (2026-10-12, agent_issues 2302, pillar personal): personal_search calls qnfo-intent-orchestrator /personal/search over the existing binding (it called a retired worker through a removed binding and failed on every call); topK is honoured; the retired worker leaves deps. // OWNER-QUEUE-MCP-1: owner_queue / owner_code / owner_act reach the fleet.qnfo.org queue from any MCP client; 1.1.6-capability-contract: MCP-TOKEN-NO-SCOPE-SEPARATION (954): MCP_TOKEN=read+write, MCP_READ_TOKEN=read-only
 var TOOLS = [
   { name: "web_search", description: "Search the web via DuckDuckGo (QNFO router). Returns title/url/snippet.", inputSchema: { type: "object", properties: { q: { type: "string", description: "search query" }, k: { type: "number", description: "result count (1-10)" } }, required: ["q"] } },
   { name: "web_fetch", description: "Fetch a URL and extract readable text (SSRF-guarded).", inputSchema: { type: "object", properties: { url: { type: "string" }, max: { type: "number", description: "max chars (500-20000)" } }, required: ["url"] } },
@@ -170,8 +169,13 @@ async function callTool(env, name, args) {
     return { count: j.count || 0, intents: (j.intents || []).map((x) => ({ id: x.id, type: x.type, domain: x.domain, summary: x.summary || x.desire.slice(0, 100), due: x.due, status: x.status, created_at: x.created_at })) };
   }
   if (name === "personal_search") {
-    const r = await env.PL_SEARCH.fetch(PL_SEARCH + "/search?q=" + encodeURIComponent(String(args.q || "").slice(0, 300)) + "&topK=" + k);
-    const j = await r.json();
+    // AUTOAUDIT-DEAD-CALLERS-1 (#2302): the personal index is served by qnfo-intent-orchestrator GET /personal/search
+    // (1.4.0), reached over the binding and key this worker already holds; the search worker it used to call is retired.
+    const tk = Math.min(parseInt(args.topK || args.k || 5, 10) || 5, 20);
+    const r = await env.QNFO_INTENT.fetch("https://qnfo-intent-orchestrator.q08.workers.dev/personal/search?q=" + encodeURIComponent(String(args.q || "").slice(0, 300)) + "&topK=" + tk, {
+      headers: { "Authorization": "Bearer " + env.INTENT_TOKEN }
+    });
+    const j = await r.json().catch(() => ({}));
     if (!r.ok) return { error: j.error || "HTTP " + r.status };
     return { count: j.count || 0, files: (j.files || []).map((f) => ({ path: f.path, score: f.bestScore, snippet: f.snippet })) };
   }
@@ -306,7 +310,7 @@ async function selfRegister(env) {
     routes: ["/health", "/mcp/sse", "/mcp/messages", "/mcp"],
     tools: TOOLS.map((t) => ({ name: t.name, description: t.description })),
     models: [],
-    deps: ["qnfo-ai (router RT)", "qnfo-infra", "qnfo-intent-orchestrator", "qnfo-email", "personal-life-search"]
+    deps: ["qnfo-ai (router RT)", "qnfo-infra", "qnfo-intent-orchestrator", "qnfo-email"]
   };
   const resp = await env.QNFO_OPS.fetch("https://qnfo-ops.internal/registry/register", {
     method: "POST",

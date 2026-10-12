@@ -145,5 +145,17 @@ const ok = (c, m) => { if (c) pass++; else { fail++; console.log("FAIL " + m); }
   ok(Array.isArray(j.responses) && j.responses.length === 1, "E3 a token holder also sees the owner's own responses");
   r = await call(env, "/api/owner/prompts", { headers: T }); ok(r.status === 200, "E4 a token holder can read the prompt log");
 }
+// F. WORKERS-BEST-PRACTICES-1 (1.29.3): LOOP_TOKEN checks are constant-time; near-miss tokens stay refused
+{
+  const { env } = mk();
+  for (const [i, t] of [LOOP.slice(0, -1), LOOP + "x", LOOP.toUpperCase(), ""].entries()) {
+    let r = await post(env, "/api/loop/sync", {}, { "x-loop-token": t });
+    ok(r.status === 401, "F" + (i + 1) + " /api/loop/sync refuses near-miss token " + i);
+    r = await post(env, "/api/owner/respond", { key: "ha:orcid-link-works", kind: "done" }, { "x-loop-token": t });
+    ok(r.status === 403, "F" + (i + 1) + "b owner respond refuses near-miss token " + i);
+  }
+  const r = await post(env, "/api/loop/sync", {}, { "x-loop-token": LOOP });
+  ok(r.status !== 401, "F5 the exact token passes the /api/loop/sync gate");
+}
 console.log(pass + " passed, " + fail + " failed");
 process.exit(fail ? 1 : 0);

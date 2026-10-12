@@ -16,6 +16,10 @@ let passed = 0, failed = 0;
 const t = async (name, fn) => { try { await fn(); passed++; console.log("ok   " + name); } catch (e) { failed++; console.log("FAIL " + name + ": " + (e && e.message || e)); } };
 const ok = (c, m) => { if (!c) throw new Error(m || "assertion"); };
 
+// No network: the best-effort forward to personal-api (kept from main 1.3.11) is answered here.
+const forwards = [];
+let forwardStatus = 404;
+globalThis.fetch = async (url, init = {}) => { forwards.push({ url: String(url), body: init.body ? JSON.parse(init.body) : null }); if (forwardStatus === "throw") throw new Error("network down"); return new Response("{}", { status: forwardStatus }); };
 function d1(db) {
   const stmt = (sql, args = []) => ({
     bind: (...a) => stmt(sql, a),
@@ -43,9 +47,21 @@ await t("worker.js names no retired search worker and no removed binding", async
   ok(!/personal-life-search/.test(src), "retired worker named");
   ok(!/env\.PLS\b/.test(src), "removed binding used");
 });
-await t("VERSION is at least 1.4.0", async () => {
+await t("the forward to personal-api is best effort: a 404 or a network error leaves a stored activity done", async () => {
+  for (const st of [404, "throw", 200]) {
+    forwardStatus = st; forwards.length = 0;
+    const { env, db } = mkEnv();
+    const j = await (await post(env, "I attended a workshop on 2026-10-09, status " + st)).json();
+    const row = db.prepare("SELECT status, processed_at FROM intents WHERE id = ?").get(j.id);
+    ok(j.status === "done" && row.status === "done" && row.processed_at, st + ": " + JSON.stringify(j));
+    ok(forwards.length === 1 && forwards[0].url === "https://personal-api.q08.workers.dev/activity" && forwards[0].body.doc === "activity" && forwards[0].body.date === "2026-10-09", st + ": forward " + JSON.stringify(forwards));
+    ok(j.forwarded === (st === 200), st + ": forwarded flag " + j.forwarded);
+  }
+  forwardStatus = 404;
+});
+await t("VERSION is at least 1.4.1", async () => {
   const m = /var VERSION = "(\d+)\.(\d+)\.(\d+)/.exec(src);
-  ok(m && (Number(m[1]) > 1 || (Number(m[1]) === 1 && Number(m[2]) >= 4)), "version " + (m && m[0]));
+  ok(m && Number(m[1]) * 1e6 + Number(m[2]) * 1e3 + Number(m[3]) >= 1004001, "version " + (m && m[0]));
 });
 await t("ids are not drawn from Math.random", async () => { ok(!/Math\.random\(\)/.test(src)); });
 await t("an activity intent is stored and ends done with processed_at", async () => {

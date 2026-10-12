@@ -28,7 +28,7 @@
 //   LIMITS    public AI use is capped per visitor (hashed IP, hourly) and globally (daily); over a cap, or with the
 //             fleet's 30-day AI spend at SPEND_CAP_TOTAL_USD, the answer is sources-only (no model call).
 
-var VERSION = "2.4.1-doi-scrub"; // 2.4.0 ASK-GROUND-2 (2026-10-10, pillar core, owner directive: answers verifiable against supplied text, no hard-coded topics in prompts, fail closed): the system prompt no longer names the program's topics and forbids general-knowledge content (the labelled "outside the corpus" allowance is gone); tokens are held back and the finished answer loses every sentence that cites a missing excerpt number, carries a DOI, link, arXiv id, author citation or figure that no excerpt or the question contains, or is labelled general knowledge, before it is sent, cached or judged; a question with no excerpt gets a fixed no-answer text and no model call; the page lede, input placeholder and fallback question seeds name no topics. Tests: ask-ground.test.mjs. // 2.3.0 BUDGET-SOFT-ROUTE-1 (2026-10-06, pillar cost, owner directive): a breached ai_spend cap or the global daily count no longer stops anything; public answers use LEAN_MODEL (arm lean, not cached), the corpus feeder uploads CORPUS_SYNC_LEAN a tick, golden-question generation makes QGEN_LEAN_CALLS calls. // 2.2.8 ASK-CORPUS-FEEDER-1 (#2029, pillar research): an hourly loop leg uploads published papers the vector index lacks (ledger ask_corpus_sync; no upload while an ai_spend cap is breached); QGEN-COMPLETE-1: a golden question must be a complete question (ends with "?", not cut at max_tokens), at most QGEN_MAX_CALLS model calls a run and none while an ai_spend cap is breached, and evals use complete questions only; 2.2.7 ASK-LEXICAL-CATALOG-1 (pillar research): retrieve() also ranks the published catalog (titles and abstracts from papers.qnfo.org, BM25, no model call) because the AI Search vector index has had no feeder since 2026-08-11 and held 0 of the 22 golden papers; catalog metadata replaces per-source detail fetches where it has an abstract; 2.2.6 TP-7 lever 1 (TRANSFORMATION-PROGRAM-1 T7.1, #2015, pillar reach): ask.qwav.tech carries a subscribe box (type="email" plus a honeypot) that posts cross-origin to the qnfo.org double opt-in (POST https://qnfo.org/api/subscribe, CORS already allows this origin) with source ask.qwav.tech; nobody is subscribed without clicking the confirmation link; no binding, no model call; 2.2.5 WORKERS-AI-ATTRIBUTION-2 (#1997): env.AI wrapped with __aiAttrEnv in fetch and scheduled, so ask, question-generation and judge calls are counted in ai_call_counters (worker qnfo-ai-search); 2.2.4: a code comment no longer quotes a NARRATIVE-PROMPT-GUARD-1 phrase (no behaviour change); 2.2.3 ASK-HUNG-REQUEST-1 (#1839, pillar: reach): every await on /api/ask has a deadline (stream writes 15 s, retrieval 25 s, graph 12 s, model start 30 s, model idle 45 s, whole answer 150 s), so a visitor who stops reading ends the answer as limited 'client-gone' and an upstream overrun ends it with an error event; the event is always logged (9 'had hung' exceptions in 72h had none); ASK-RETRIEVAL-DEFINITIONS-1 (#1813): a glossary of the program's own terms (JPCUB, joules-per-solution, distinction-lattice, DLF; extensible in pipeline_flags 'ask_glossary') puts the defining paper first, named entities alone feed the keyword pass, paper sections split at level-1 headings and match on six-letter stems, the prompt no longer asks for an open problem on every answer, and the retrieval eval always includes the defined terms' golden questions and records their ranks (ask_evals.detail.defs); ASK-IDEA-HANDOFF-1 (#1936): an answer the corpus cannot give says that the question goes to the ideas pipeline (idea-hub ASK-GAP-1) and links ideas.qnfo.org; idea thread links use /s/<id> (the #/s/ form landed on the home page); 2.2.2 ASK-JUDGE-1 (pillar: reach): judge() reported judged:0 on 2026-10-03 with 3 eligible answers because every failure was swallowed; it now counts and names them (errors, no_json, bad_counts, last_error, head of the first unparseable output) in ask_loop_runs, and its output budget is 3000 tokens (was 1200; deepseek-v4-flash is a reasoning model, so a thinking-only reply is the suspected cause, unverified until the next 03:41 tick); 2.2.1 FLEET-CTL-ROLLOUT-1.6 (#1775): fleet command-line link before </body>; ASK-GRAPH-ELLIPSIS-1 (#1769): graph labels end in ASCII "..."; ASCII-SOURCE-1: non-ASCII written as escapes (the deploy uploads Latin-1; the page showed mojibake)
+var VERSION = "2.4.2-judge-context"; // 2.4.2 ASK-JUDGE-CONTEXT-1 (2026-10-12, agent_issues 2165, pillar core): the grounding judge reads the same excerpt text as the writer (it got the first 1800 characters of each excerpt while the writer got up to 4800, so claims from the rest of an excerpt were counted unsupported); only verdicts made on the full text (ask_events.judge = 2) feed ask_grounded_share_7d and the A/B arms; every answer is sampled; a judge reply with no JSON or an error goes once to a second model family. Tests: ask-loop.test.mjs section 8b. // 2.4.0 ASK-GROUND-2 (2026-10-10, pillar core, owner directive: answers verifiable against supplied text, no hard-coded topics in prompts, fail closed): the system prompt no longer names the program's topics and forbids general-knowledge content (the labelled "outside the corpus" allowance is gone); tokens are held back and the finished answer loses every sentence that cites a missing excerpt number, carries a DOI, link, arXiv id, author citation or figure that no excerpt or the question contains, or is labelled general knowledge, before it is sent, cached or judged; a question with no excerpt gets a fixed no-answer text and no model call; the page lede, input placeholder and fallback question seeds name no topics. Tests: ask-ground.test.mjs. // 2.3.0 BUDGET-SOFT-ROUTE-1 (2026-10-06, pillar cost, owner directive): a breached ai_spend cap or the global daily count no longer stops anything; public answers use LEAN_MODEL (arm lean, not cached), the corpus feeder uploads CORPUS_SYNC_LEAN a tick, golden-question generation makes QGEN_LEAN_CALLS calls. // 2.2.8 ASK-CORPUS-FEEDER-1 (#2029, pillar research): an hourly loop leg uploads published papers the vector index lacks (ledger ask_corpus_sync; no upload while an ai_spend cap is breached); QGEN-COMPLETE-1: a golden question must be a complete question (ends with "?", not cut at max_tokens), at most QGEN_MAX_CALLS model calls a run and none while an ai_spend cap is breached, and evals use complete questions only; 2.2.7 ASK-LEXICAL-CATALOG-1 (pillar research): retrieve() also ranks the published catalog (titles and abstracts from papers.qnfo.org, BM25, no model call) because the AI Search vector index has had no feeder since 2026-08-11 and held 0 of the 22 golden papers; catalog metadata replaces per-source detail fetches where it has an abstract; 2.2.6 TP-7 lever 1 (TRANSFORMATION-PROGRAM-1 T7.1, #2015, pillar reach): ask.qwav.tech carries a subscribe box (type="email" plus a honeypot) that posts cross-origin to the qnfo.org double opt-in (POST https://qnfo.org/api/subscribe, CORS already allows this origin) with source ask.qwav.tech; nobody is subscribed without clicking the confirmation link; no binding, no model call; 2.2.5 WORKERS-AI-ATTRIBUTION-2 (#1997): env.AI wrapped with __aiAttrEnv in fetch and scheduled, so ask, question-generation and judge calls are counted in ai_call_counters (worker qnfo-ai-search); 2.2.4: a code comment no longer quotes a NARRATIVE-PROMPT-GUARD-1 phrase (no behaviour change); 2.2.3 ASK-HUNG-REQUEST-1 (#1839, pillar: reach): every await on /api/ask has a deadline (stream writes 15 s, retrieval 25 s, graph 12 s, model start 30 s, model idle 45 s, whole answer 150 s), so a visitor who stops reading ends the answer as limited 'client-gone' and an upstream overrun ends it with an error event; the event is always logged (9 'had hung' exceptions in 72h had none); ASK-RETRIEVAL-DEFINITIONS-1 (#1813): a glossary of the program's own terms (JPCUB, joules-per-solution, distinction-lattice, DLF; extensible in pipeline_flags 'ask_glossary') puts the defining paper first, named entities alone feed the keyword pass, paper sections split at level-1 headings and match on six-letter stems, the prompt no longer asks for an open problem on every answer, and the retrieval eval always includes the defined terms' golden questions and records their ranks (ask_evals.detail.defs); ASK-IDEA-HANDOFF-1 (#1936): an answer the corpus cannot give says that the question goes to the ideas pipeline (idea-hub ASK-GAP-1) and links ideas.qnfo.org; idea thread links use /s/<id> (the #/s/ form landed on the home page); 2.2.2 ASK-JUDGE-1 (pillar: reach): judge() reported judged:0 on 2026-10-03 with 3 eligible answers because every failure was swallowed; it now counts and names them (errors, no_json, bad_counts, last_error, head of the first unparseable output) in ask_loop_runs, and its output budget is 3000 tokens (was 1200; deepseek-v4-flash is a reasoning model, so a thinking-only reply is the suspected cause, unverified until the next 03:41 tick); 2.2.1 FLEET-CTL-ROLLOUT-1.6 (#1775): fleet command-line link before </body>; ASK-GRAPH-ELLIPSIS-1 (#1769): graph labels end in ASCII "..."; ASCII-SOURCE-1: non-ASCII written as escapes (the deploy uploads Latin-1; the page showed mojibake)
 var WORKER = "qnfo-ai-search";
 var DEFAULT_INSTANCE = "qnfo-corpus";
 
@@ -63,6 +63,14 @@ var FALLBACK_MODEL_2 = "@cf/zai-org/glm-5.3-flash";
 var REASONING_TOKENS = { "@cf/zai-org/glm-5.3-flash": 8000, "@cf/qwen/qwen3-30b-a3b-fp8": 8000 };
 var JUDGE_MODEL = "@cf/deepseek-ai/deepseek-v4-flash-0731";
 var JUDGE_MAX_TOKENS = 3000;
+// ASK-JUDGE-CONTEXT-1 (2.4.2, agent_issues 2165): ask_events.judge = JUDGE_FULL marks an answer stored with the full
+// excerpt text the writer saw; only those verdicts feed ask_grounded_share_7d and the A/B arms (a verdict made against
+// the truncated context, judge = 1, stays in the table and is not counted). With a few answers a day the old one-in-four
+// sample took a week to reach 20 claims, so every answer is sampled (judge() is bounded per run). A judge reply with no
+// JSON (a reasoning model that spent its budget thinking: 2 of 2 on 2026-10-12) or an error goes once to JUDGE_MODEL_2,
+// a third model family, before it is counted as a failure.
+var JUDGE_FULL = 2, JUDGE_SAMPLE = 1;
+var JUDGE_MODEL_2 = "@cf/zai-org/glm-5.3-flash", JUDGE_MAX_TOKENS_2 = 8000;
 var QGEN_MODEL = "@cf/zai-org/glm-5.3-flash";
 // BUDGET-SOFT-ROUTE-1 (2.3.0, owner directive 2026-10-06: "AI spend budget should never stop any process, pipeline, or
 // workflow, only limit/suggest what models may be used"). A breached ai_spend cap or the global daily answer count no
@@ -309,7 +317,7 @@ async function instances(env) {
 }
 async function ingest(request, env) {
   var tok = request.headers.get("X-Sync-Token") || "";
-  if (!(env.SYNC_TOKEN && tok === env.SYNC_TOKEN)) return json({ error: "Unauthorized: missing or invalid X-Sync-Token" }, 401);
+  if (!(env.SYNC_TOKEN && secretEq(tok, env.SYNC_TOKEN))) return json({ error: "Unauthorized: missing or invalid X-Sync-Token" }, 401);
   try {
     var body = await request.json();
     var name = body.instance || DEFAULT_INSTANCE;
@@ -842,8 +850,15 @@ function groundText(sources, query, history, pinned) {
   return g.join("\n");
 }
 // ---- ASK-GROUND-END ----
+// ASK-JUDGE-CONTEXT-1 (2.4.2): the writer and the grounding judge read the same excerpt text. Before this the judge got
+// the first 1800 characters of each excerpt while the writer got up to s.cap (4800 for a pinned paper, 3600 for a
+// defining paper, 2600 otherwise), so a claim taken from the rest of an excerpt was counted as unsupported.
+function excerptBlock(s) {
+  return "[" + s.n + "] " + s.title + (s.doi ? " (DOI " + s.doi + ")" : "") + (s.defines ? " [defines the term '" + s.defines + "']" : "") + (s.published ? "" : " [unpublished corpus file]") + "\n" + String(s.excerpt || "").slice(0, s.cap || 2600);
+}
+function excerptBlocks(sources) { return sources.map(excerptBlock).join("\n\n---\n\n"); }
 function buildMessages(query, sources, graph, history, pinned) {
-  var ex = sources.length ? sources.map(function (s) { return "[" + s.n + "] " + s.title + (s.doi ? " (DOI " + s.doi + ")" : "") + (s.defines ? " [defines the term '" + s.defines + "']" : "") + (s.published ? "" : " [unpublished corpus file]") + "\n" + s.excerpt.slice(0, s.cap || 2600); }).join("\n\n---\n\n") : "(no matching excerpts)";
+  var ex = sources.length ? excerptBlocks(sources) : "(no matching excerpts)";
   var byId = {};
   graph.nodes.forEach(function (n) { byId[n.id] = n; });
   var concepts = graph.nodes.filter(function (n) { return n.label !== "Paper"; }).slice(0, 12).map(function (n) { return n.label + ": " + n.name; });
@@ -895,7 +910,7 @@ async function logEvent(env, ev) {
   try {
     await ensureAskSchema(env);
     await d.prepare("INSERT OR REPLACE INTO ask_events (id, ts, qhash, query, turn, cached, limited, cfg, arm, model, retrieval_ms, ttft_ms, total_ms, sources, top_score, graph_nodes, threads, answer_chars, cites, cites_invalid, uncovered, followups, in_tok, out_tok, usd, error, judge, answer, context) VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15,?16,?17,?18,?19,?20,?21,?22,?23,?24,?25,?26,?27,?28,?29)")
-      .bind(ev.id, ev.ts, ev.qhash, ev.query, ev.turn, ev.cached ? 1 : 0, ev.limited || null, ev.cfg || null, ev.arm || null, ev.model || null, ev.retrieval_ms || null, ev.ttft_ms || null, ev.total_ms || null, ev.sources || 0, ev.top_score || null, ev.graph_nodes || 0, ev.threads || 0, ev.answer_chars || 0, ev.cites || 0, ev.cites_invalid || 0, ev.uncovered || 0, ev.followups || 0, ev.in_tok || 0, ev.out_tok || 0, ev.usd || 0, ev.error || null, ev.judge ? 1 : 0, ev.judge ? String(ev.answer || "").slice(0, 6000) : null, ev.judge ? String(ev.context || "").slice(0, 12000) : null).run();
+      .bind(ev.id, ev.ts, ev.qhash, ev.query, ev.turn, ev.cached ? 1 : 0, ev.limited || null, ev.cfg || null, ev.arm || null, ev.model || null, ev.retrieval_ms || null, ev.ttft_ms || null, ev.total_ms || null, ev.sources || 0, ev.top_score || null, ev.graph_nodes || 0, ev.threads || 0, ev.answer_chars || 0, ev.cites || 0, ev.cites_invalid || 0, ev.uncovered || 0, ev.followups || 0, ev.in_tok || 0, ev.out_tok || 0, ev.usd || 0, ev.error || null, Number(ev.judge) || 0, ev.judge ? String(ev.answer || "").slice(0, 6000) : null, ev.judge ? String(ev.context || "").slice(0, 12000) : null).run();
   } catch (e) {}
 }
 async function feedback(request, env) {
@@ -911,6 +926,13 @@ async function feedback(request, env) {
   await d.prepare("INSERT INTO ask_feedback (event_id, ts, helpful) VALUES (?1, ?2, ?3) ON CONFLICT(event_id) DO NOTHING").bind(id, new Date().toISOString(), b.helpful).run();
   return json({ ok: true });
 }
+// WORKERS-STANDARDS-1 (2.4.2): secrets are compared in constant time (same accepted values as the === it replaces).
+function secretEq(a, b) {
+  var x = new TextEncoder().encode(String(a == null ? "" : a)), y = new TextEncoder().encode(String(b == null ? "" : b));
+  var d = x.byteLength ^ y.byteLength;
+  for (var i = 0; i < x.byteLength; i++) d |= x[i] ^ y[i % (y.byteLength || 1)];
+  return d === 0;
+}
 function stripThink(s) { return s.replace(/<think>[\s\S]*?<\/think>/g, "").replace(/<\/?think>/g, ""); }
 
 async function ask(request, env, ctx) {
@@ -921,7 +943,7 @@ async function ask(request, env, ctx) {
   var history = Array.isArray(body.history) ? body.history.slice(-2) : [];
   var paperSlug = /^[a-z0-9][a-z0-9-]{2,180}$/.test(String(body.paper || "")) ? String(body.paper) : "";
   var t0 = Date.now();
-  var id = "a_" + t0.toString(36) + Math.random().toString(36).slice(2, 8);
+  var id = "a_" + t0.toString(36) + crypto.randomUUID().replace(/-/g, "").slice(0, 6);
   var qhash = await sha(query.toLowerCase().replace(/\s+/g, " "));
   var conf = await deadline(loadConfig(env), ASK_SETUP_MS, "config").catch(function () { return { champion: Object.assign({}, DEFAULT_CONFIG), challenger: null }; });
   var arm = conf.challenger && Math.random() < CHALLENGER_SHARE ? "challenger" : "champion";
@@ -1032,8 +1054,8 @@ async function ask(request, env, ctx) {
       ev.in_tok = Number(usage && (usage.prompt_tokens || usage.input_tokens)) || inTok;
       ev.out_tok = Number(usage && (usage.completion_tokens || usage.output_tokens)) || Math.ceil(text.length / 3.5);
       ev.usd = recordSpend(env, ctx, model, ev.in_tok, ev.out_tok);
-      // One answer in four keeps its text and excerpts for the grounding judge.
-      if (Math.random() < 0.25 && sp.body.length > 80 && sources.length) { ev.judge = 1; ev.answer = sp.body; ev.context = sources.map(function (s) { return "[" + s.n + "] " + s.title + "\n" + s.excerpt.slice(0, 1800); }).join("\n\n"); }
+      // A sampled answer keeps its text and the excerpts exactly as the writer saw them for the grounding judge.
+      if (Math.random() < JUDGE_SAMPLE && sp.body.length > 80 && sp.body !== NOT_SUPPORTED_TEXT && sources.length) { ev.judge = JUDGE_FULL; ev.answer = sp.body; ev.context = excerptBlocks(sources); }
       var done = { id: id, followups: sp.followups, model: model.replace(/^@cf\//, ""), ms: Date.now() - t0, cached: false, uncovered: ev.uncovered };
       await send("done", done);
       if (cacheKey && sp.body.length > 80 && sp.body !== NOT_SUPPORTED_TEXT && sources.length) {
@@ -1095,7 +1117,7 @@ async function loopTick(env, now) {
 async function measure(env) {
   var d = db(env);
   var since7 = new Date(Date.now() - 7 * 864e5).toISOString(), since30 = new Date(Date.now() - 30 * 864e5).toISOString();
-  var a = await d.prepare("SELECT COUNT(*) n, SUM(CASE WHEN error IS NOT NULL THEN 1 ELSE 0 END) err, SUM(cites) cites, SUM(cites_invalid) inv, SUM(usd) usd, SUM(judged_supported) js, SUM(judged_total) jt FROM ask_events WHERE ts >= ?1 AND cached = 0 AND limited IS NULL").bind(since7).first();
+  var a = await d.prepare("SELECT COUNT(*) n, SUM(CASE WHEN error IS NOT NULL THEN 1 ELSE 0 END) err, SUM(cites) cites, SUM(cites_invalid) inv, SUM(usd) usd, SUM(CASE WHEN judge=2 THEN judged_supported END) js, SUM(CASE WHEN judge=2 THEN judged_total END) jt FROM ask_events WHERE ts >= ?1 AND cached = 0 AND limited IS NULL").bind(since7).first();
   var lat = await d.prepare("SELECT total_ms FROM ask_events WHERE ts >= ?1 AND cached = 0 AND limited IS NULL AND total_ms IS NOT NULL ORDER BY total_ms").bind(since7).all();
   var fb = await d.prepare("SELECT COUNT(*) n, SUM(helpful) h FROM ask_feedback WHERE ts >= ?1").bind(since30).first();
   var mrr = await d.prepare("SELECT score, n FROM ask_evals WHERE kind='retrieval-champion' ORDER BY id DESC LIMIT 1").first();
@@ -1208,7 +1230,7 @@ async function tuneRetrieval(env) {
 }
 // ---- IMPROVE: ASK-TUNE-1 generation (online A/B on CHALLENGER_SHARE of live traffic, judged)
 async function armStats(env, cfgId, sinceIso) {
-  return await db(env).prepare("SELECT COUNT(*) n, SUM(CASE WHEN error IS NOT NULL THEN 1 ELSE 0 END) err, SUM(usd) usd, SUM(judged_supported) js, SUM(judged_total) jt, SUM(CASE WHEN judged_total IS NOT NULL THEN 1 ELSE 0 END) judged FROM ask_events WHERE cfg=?1 AND ts >= ?2 AND cached=0 AND limited IS NULL").bind(cfgId, sinceIso).first();
+  return await db(env).prepare("SELECT COUNT(*) n, SUM(CASE WHEN error IS NOT NULL THEN 1 ELSE 0 END) err, SUM(usd) usd, SUM(CASE WHEN judge=2 THEN judged_supported END) js, SUM(CASE WHEN judge=2 THEN judged_total END) jt, SUM(CASE WHEN judge=2 AND judged_total IS NOT NULL THEN 1 ELSE 0 END) judged FROM ask_events WHERE cfg=?1 AND ts >= ?2 AND cached=0 AND limited IS NULL").bind(cfgId, sinceIso).first();
 }
 async function tuneGeneration(env) {
   var conf = await loadConfig(env);
@@ -1249,13 +1271,13 @@ async function tuneGeneration(env) {
   return { decided: adopt ? "adopted" : "rejected", change: chal.change, champion: { grounded: round(ga), cost: ca, error: round(ea) }, challenger: { grounded: round(gb), cost: cb, error: round(eb) } };
 }
 async function baselineFor(env) {
-  var s = await db(env).prepare("SELECT SUM(judged_supported) js, SUM(judged_total) jt FROM ask_events WHERE ts >= ?1 AND cached=0").bind(new Date(Date.now() - 7 * 864e5).toISOString()).first();
+  var s = await db(env).prepare("SELECT SUM(CASE WHEN judge=2 THEN judged_supported END) js, SUM(CASE WHEN judge=2 THEN judged_total END) jt FROM ask_events WHERE ts >= ?1 AND cached=0").bind(new Date(Date.now() - 7 * 864e5).toISOString()).first();
   var f = await db(env).prepare("SELECT COUNT(*) n, SUM(helpful) h FROM ask_feedback WHERE ts >= ?1").bind(new Date(Date.now() - 30 * 864e5).toISOString()).first();
   return { grounded: Number(s && s.jt) >= 20 ? round(Number(s.js) / Number(s.jt)) : null, helpful: Number(f && f.n) >= 10 ? round(Number(f.h) / Number(f.n)) : null };
 }
 async function maybeRevert(env, champ) {
   var b = champ.baseline || {};
-  var s = await db(env).prepare("SELECT SUM(judged_supported) js, SUM(judged_total) jt FROM ask_events WHERE cfg=?1 AND cached=0").bind(champ.id).first();
+  var s = await db(env).prepare("SELECT SUM(CASE WHEN judge=2 THEN judged_supported END) js, SUM(CASE WHEN judge=2 THEN judged_total END) jt FROM ask_events WHERE cfg=?1 AND cached=0").bind(champ.id).first();
   var f = await db(env).prepare("SELECT COUNT(*) n, SUM(f.helpful) h FROM ask_feedback f JOIN ask_events e ON e.id=f.event_id WHERE e.cfg=?1").bind(champ.id).first();
   var g = Number(s && s.jt) >= 20 ? Number(s.js) / Number(s.jt) : null;
   var h = Number(f && f.n) >= 10 ? Number(f.h) / Number(f.n) : null;
@@ -1278,28 +1300,36 @@ async function expStatus(env, id, status) {
 async function judge(env, max) {
   var d = db(env);
   if (!env.AI) return { skipped: "no AI binding" };
-  var rows = (await d.prepare("SELECT id, query, answer, context FROM ask_events WHERE judge=1 AND judged_total IS NULL AND answer IS NOT NULL ORDER BY ts DESC LIMIT ?1").bind(max).all()).results || [];
-  var done = 0, sup = 0, tot = 0, errors = 0, noJson = 0, badCounts = 0, lastError = null, head = null;
+  var rows = (await d.prepare("SELECT id, query, answer, context FROM ask_events WHERE judge=?2 AND judged_total IS NULL AND answer IS NOT NULL ORDER BY ts DESC LIMIT ?1").bind(max, JUDGE_FULL).all()).results || [];
+  var done = 0, sup = 0, tot = 0, errors = 0, noJson = 0, badCounts = 0, lastError = null, head = null, second = 0;
   for (var i = 0; i < rows.length; i++) {
     var r = rows[i];
     var msg = [
       { role: "system", content: "You check whether an answer is supported by its numbered excerpts. Split the ANSWER into its factual claims (skip follow-up questions and statements that the corpus does not cover something). For each claim decide SUPPORTED (the cited or any excerpt states it) or UNSUPPORTED. Reply with JSON only: {\"supported\": <int>, \"total\": <int>, \"worst\": \"<the most clearly unsupported claim, or empty>\"}." },
       { role: "user", content: "QUESTION: " + r.query + "\n\nEXCERPTS:\n" + r.context + "\n\nANSWER:\n" + r.answer },
     ];
+    var verdict = null, legs = [[JUDGE_MODEL, JUDGE_MAX_TOKENS], [JUDGE_MODEL_2, JUDGE_MAX_TOKENS_2]], why = null;
+    for (var li = 0; li < legs.length && !verdict; li++) {
+      try {
+        var out = await env.AI.run(legs[li][0], { messages: msg, max_tokens: legs[li][1], temperature: 0 });
+        var t = stripThink(String((out && (out.response || (out.choices && out.choices[0] && out.choices[0].message && out.choices[0].message.content))) || ""));
+        recordSpend(env, null, legs[li][0], Math.ceil((r.context.length + r.answer.length) / 3.5), 150, "judge");
+        var m = t.match(/\{[\s\S]*\}/);
+        if (!m) { why = "no_json"; if (head === null) head = t.replace(/\s+/g, " ").slice(0, 80); continue; }
+        var j = JSON.parse(m[0]);
+        var s = Math.max(0, Math.floor(Number(j.supported) || 0)), n = Math.max(0, Math.floor(Number(j.total) || 0));
+        if (!n || s > n) { why = "bad_counts"; continue; }
+        verdict = { s: s, n: n, leg: li };
+      } catch (e) { why = "error"; lastError = String((e && e.message) || e).slice(0, 160); }
+    }
+    if (!verdict) { if (why === "no_json") noJson++; else if (why === "bad_counts") badCounts++; else errors++; continue; }
     try {
-      var out = await env.AI.run(JUDGE_MODEL, { messages: msg, max_tokens: JUDGE_MAX_TOKENS, temperature: 0 });
-      var t = stripThink(String((out && (out.response || (out.choices && out.choices[0] && out.choices[0].message && out.choices[0].message.content))) || ""));
-      recordSpend(env, null, JUDGE_MODEL, Math.ceil((r.context.length + r.answer.length) / 3.5), 150, "judge");
-      var m = t.match(/\{[\s\S]*\}/);
-      if (!m) { noJson++; if (head === null) head = t.replace(/\s+/g, " ").slice(0, 80); continue; }
-      var j = JSON.parse(m[0]);
-      var s = Math.max(0, Math.floor(Number(j.supported) || 0)), n = Math.max(0, Math.floor(Number(j.total) || 0));
-      if (!n || s > n) { badCounts++; continue; }
-      await d.prepare("UPDATE ask_events SET judged_supported=?2, judged_total=?3 WHERE id=?1").bind(r.id, s, n).run();
-      done++; sup += s; tot += n;
-    } catch (e) { errors++; lastError = String((e && e.message) || e).slice(0, 160); }
+      await d.prepare("UPDATE ask_events SET judged_supported=?2, judged_total=?3 WHERE id=?1").bind(r.id, verdict.s, verdict.n).run();
+      done++; sup += verdict.s; tot += verdict.n; if (verdict.leg) second++;
+    } catch (e2) { errors++; lastError = String((e2 && e2.message) || e2).slice(0, 160); }
   }
   var res = { judged: done, supported: sup, total: tot };
+  if (second) res.second_judge = second;
   if (rows.length && done < rows.length) res.failed = { attempted: rows.length, errors: errors, no_json: noJson, bad_counts: badCounts, last_error: lastError, head: head };
   return res;
 }

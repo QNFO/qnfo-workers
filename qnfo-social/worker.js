@@ -15,7 +15,7 @@
 // Vars (optional): SOCIAL_WEEKLY_CAP. D1: DB (qnfo-audit.social_threads, dissemination_tracker, pipeline_flags; 0.7.28 also
 // social_learner_posts, ops_config social_learner_enabled / social_learner_pending, metric_registry). AI: env.AI.
 
-var VERSION = "0.11.1-doi-scrub"; // 0.11.1 NOZ-DOI-1 (owner decision 2026-10-10, pillar reach): the dead-registry paper scan, the selected-works refill and every 10.5281 identifier are removed; the 06:00 run only sweeps and repairs drafts, contentGate refuses (and the drain suppresses) any post carrying a dead-registry identifier or link, and prompts and the checker link only to a URL or a third-party DOI. // 0.11.0 SOCIAL-GROUND-1 (owner directive 2026-10-10, pillar reach): checkThread first runs a mechanical check that every capitalised name, year and figure in a thread occurs in the title, author or abstract it was written from (an invented one is an issue, no model can override it); composePrompt and the checker prompt state that the model's own knowledge is not a source and name no example topics; the checker stays fail-closed (unavailable = draft). // 0.10.0-open-q08 0.10.0 Q08-OPEN-1 (owner directive 2026-10-09, pillar reach): q08.org links and q08 rows are no longer refused or skipped, the REACH-SELECT title hold is dropped in the channel drain, an attention share of 0 keeps one slot instead of holding a channel or Bluesky, the Bluesky weekly cap defaults to 7 and the Buffer channel caps to LinkedIn 5 (drafts only), Mastodon 10, X 10 (ceiling 14); the mojibake guard, the pause flag and the LinkedIn draft rule stay.  // 0.9.2 // 0.9.2 PROMOTE-ROUTE-2: a channel whose last post was a curated thread gets the newest unposted paper next. // 0.9.1 PROMPT-CACHE-COUNT-3b (issue 2114, 2026-10-08, pillar cost): the 0.8.3 ai_cache_counters write named columns the table does not have (purpose, cached), so every insert failed silently; it now writes the fleet schema (day, worker, model, calls, cached_calls, in_tok, cached_tok).  // 0.9.0 PROMOTE-ROUTE-1 (2026-10-07, pillar reach, owner directive "no siloes"): the channel drain takes queued research papers from dissemination_tracker (newest first, after curated queued threads, before recycled posted threads), so a published paper reaches LinkedIn, Mastodon and X while Bluesky is at attention share 0. // 0.8.2 UTM-VISITS-1 (2026-10-06, pillar reach, transformation lever T7.9 half 2): learnerVisits reads the gateway's tagged loads first (reach_signals source utm, metric clicks_human, campaign = the paper slug, channel = the utm_source of the post's channel; UTM-CLICK-LEDGER-1, qnfo-gateway 3.10.0 + qnfo-fleet-dashboard 1.26.0, PR 688): a direct count of the visits a post caused beats the bot-filtered RUM lift, which stays the fallback when the window carries no tagged row. 0.8.1 LEARNER-CHANNEL-ARM-1 was
+var VERSION = "0.12.0-whole-sentences"; // 0.12.0 (2026-10-12, pillar reach) SOCIAL-POST-TRUNCATION-2 (issue 1902): a post too long for its channel is never cut mid-sentence: Bluesky continues it as replies split at sentence boundaries (splitForThread; the link and its card stay on the root), the Buffer channels and the LinkedIn text keep whole sentences and drop trailing ones (fitWhole); the ellipsis cut is the last resort for a single sentence longer than the limit. REACH-SIGNALS-1 (issue 2225): the 07:00 engagement run stores each reply by another account (social_replies: hashed author, delay from the post in minutes, text length, word count; never the text) from the public getPostThread endpoint; no reply is posted. SUBSCRIBE-LINE-ACCURATE-1 (issue 1753): the LinkedIn subscribe line said monthly while the list is a weekly digest and linked the page top; it now states the cadence the list has and links the form. Ledger ids come from crypto.randomUUID. // 0.11.1-doi-scrub // 0.11.1 NOZ-DOI-1 (owner decision 2026-10-10, pillar reach): the dead-registry paper scan, the selected-works refill and every 10.5281 identifier are removed; the 06:00 run only sweeps and repairs drafts, contentGate refuses (and the drain suppresses) any post carrying a dead-registry identifier or link, and prompts and the checker link only to a URL or a third-party DOI. // 0.11.0 SOCIAL-GROUND-1 (owner directive 2026-10-10, pillar reach): checkThread first runs a mechanical check that every capitalised name, year and figure in a thread occurs in the title, author or abstract it was written from (an invented one is an issue, no model can override it); composePrompt and the checker prompt state that the model's own knowledge is not a source and name no example topics; the checker stays fail-closed (unavailable = draft). // 0.10.0-open-q08 0.10.0 Q08-OPEN-1 (owner directive 2026-10-09, pillar reach): q08.org links and q08 rows are no longer refused or skipped, the REACH-SELECT title hold is dropped in the channel drain, an attention share of 0 keeps one slot instead of holding a channel or Bluesky, the Bluesky weekly cap defaults to 7 and the Buffer channel caps to LinkedIn 5 (drafts only), Mastodon 10, X 10 (ceiling 14); the mojibake guard, the pause flag and the LinkedIn draft rule stay.  // 0.9.2 // 0.9.2 PROMOTE-ROUTE-2: a channel whose last post was a curated thread gets the newest unposted paper next. // 0.9.1 PROMPT-CACHE-COUNT-3b (issue 2114, 2026-10-08, pillar cost): the 0.8.3 ai_cache_counters write named columns the table does not have (purpose, cached), so every insert failed silently; it now writes the fleet schema (day, worker, model, calls, cached_calls, in_tok, cached_tok).  // 0.9.0 PROMOTE-ROUTE-1 (2026-10-07, pillar reach, owner directive "no siloes"): the channel drain takes queued research papers from dissemination_tracker (newest first, after curated queued threads, before recycled posted threads), so a published paper reaches LinkedIn, Mastodon and X while Bluesky is at attention share 0. // 0.8.2 UTM-VISITS-1 (2026-10-06, pillar reach, transformation lever T7.9 half 2): learnerVisits reads the gateway's tagged loads first (reach_signals source utm, metric clicks_human, campaign = the paper slug, channel = the utm_source of the post's channel; UTM-CLICK-LEDGER-1, qnfo-gateway 3.10.0 + qnfo-fleet-dashboard 1.26.0, PR 688): a direct count of the visits a post caused beats the bot-filtered RUM lift, which stays the fallback when the window carries no tagged row. 0.8.1 LEARNER-CHANNEL-ARM-1 was
 // 0.8.1 (2026-10-06, LEARNER-CHANNEL-ARM-1, transformation lever T7.13, pillar reach; owner directive "execute the suggestions"): the
 // distribution learner gains a channel arm (bluesky, linkedin, mastodon, x): Buffer channel posts become learner rows credited
 // from the reach ledger's buffer metrics, the posterior carries a channel allocation, and the channel drain visits the Buffer
@@ -149,7 +149,9 @@ function applyLink(text, link, max) {
     return truncateSafe(s.replace(/doi:?\s*10\.\d{4,9}\/[^\s"'<>)\]]+/i, link), max);
   }
   const budget = max - link.length - 3;
-  const head = truncateSafe(s, Math.max(budget, 1));
+  // SOCIAL-POST-TRUNCATION-2: keep whole sentences; the mid-text cut is the last resort (one sentence over the budget).
+  const whole = fitWhole(s, Math.max(budget, 1));
+  const head = whole !== null ? whole : truncateSafe(s, Math.max(budget, 1));
   return head + ' \u2014 ' + link;
 }
 
@@ -229,6 +231,63 @@ function fitKeepUrls(text, max) {
   }
   const out = join().replace(/^[\s:\u2014\u2013-]+/, '').trimEnd();
   return len(out) <= max ? out : null;
+}
+// SOCIAL-POST-TRUNCATION-2 (0.12.0, agent_issues #1902): prose is never cut mid-sentence to make room. proseUnits splits a
+// text into sentences and lines (separators kept, so the units join back to the text; a URL holds no whitespace and is
+// never split). splitForThread packs whole units into posts of at most `max` code points (the first of at most
+// `firstMax`, so a caller can leave room for the link on the root); a single sentence longer than a post is packed by
+// words. fitWhole keeps the text inside `max` by dropping whole trailing sentences that carry no URL; it returns null when
+// that cannot fit (one sentence longer than the limit), and the caller falls back to the ellipsis cut.
+function cpLen(x) { return Array.from(String(x || '')).length; }
+function proseUnits(text) {
+  const parts = String(text || '').split(/((?<=[.!?…]["')\]]?)[ \t]+|\s*\n+\s*)/);
+  const units = [];
+  for (let i = 0; i < parts.length; i += 2) {
+    if (parts[i] === '' && i > 0 && i === parts.length - 1) break;
+    units.push({ sep: i > 0 ? parts[i - 1] : '', text: parts[i] });
+  }
+  return units;
+}
+function packUnits(units, max, firstMax) {
+  const out = [];
+  let cur = '';
+  const room = function() { return out.length === 0 ? firstMax : max; };
+  for (const u of units) {
+    if (!u.text) continue;
+    if (cur && cpLen(cur + u.sep + u.text) <= room()) { cur += u.sep + u.text; continue; }
+    if (cur) { out.push(cur); cur = ''; }
+    if (cpLen(u.text) <= room()) { cur = u.text; continue; }
+    // one unit longer than a post: pack it by words; a single word longer than a post is cut into pieces.
+    for (const w of u.text.split(/\s+/).filter(Boolean)) {
+      if (cur && cpLen(cur + ' ' + w) <= room()) { cur += ' ' + w; continue; }
+      if (cur) { out.push(cur); cur = ''; }
+      let pts = Array.from(w);
+      while (pts.length > room()) { out.push(pts.slice(0, room()).join('')); pts = pts.slice(room()); }
+      cur = pts.join('');
+    }
+  }
+  if (cur) out.push(cur);
+  return out;
+}
+function splitForThread(text, max, firstMax) {
+  const s = String(text || '').trim();
+  max = max || 290;
+  firstMax = Math.max(1, Math.min(firstMax || max, max));
+  if (cpLen(s) <= firstMax) return s ? [s] : [];
+  return packUnits(proseUnits(s), max, firstMax);
+}
+function fitWhole(text, max) {
+  const s = String(text || '').trim();
+  if (cpLen(s) <= max) return s;
+  const units = proseUnits(s).filter(function(u) { return u.text; });
+  const join = function() { return units.map(function(u, i) { return (i ? u.sep : '') + u.text; }).join(''); };
+  while (cpLen(join()) > max) {
+    let at = -1, prose = 0;
+    for (let i = 0; i < units.length; i++) if (!/https?:\/\//.test(units[i].text)) { prose++; at = i; }
+    if (prose < 2 || at < 0) return null;
+    units.splice(at, 1);
+  }
+  return join();
 }
 // Tag, then fit. Fail-soft: if the tagged text cannot fit (a URL longer than the limit), post it untagged.
 function tagAndFit(text, max, source, campaign) {
@@ -410,11 +469,11 @@ async function postText(s, text, reply, opts) {
   if (reply) record.reply = reply;
   const facets = tagFacets(buildFacets(record.text), opts.utmSource || 'bluesky', opts.campaign);
   if (facets.length) record.facets = facets;
-  if (opts.embed && facets.length) {
+  if (opts.embed && (facets.length || opts.embed.uri)) {
     record.embed = {
       $type: 'app.bsky.embed.external',
       external: {
-        uri: facets[0].features[0].uri,
+        uri: facets.length ? facets[0].features[0].uri : utmTag(String(opts.embed.uri), opts.utmSource || 'bluesky', opts.campaign),
         title: String(opts.embed.title || 'QNFO').slice(0, 300),
         description: String(opts.embed.desc || 'QNFO research').slice(0, 1000)
       }
@@ -458,19 +517,41 @@ async function deleteRecord(s, uri) {
   if (!r.ok) throw new Error('delete ' + r.status + ' ' + (await r.text()).slice(0, 200));
   return r.json();
 }
+// The posts a thread goes out as: every drafted post whole when it fits, else continued in further posts (pure).
+function threadPlan(posts, link, max) {
+  max = max || 290;
+  const plan = [];
+  (posts || []).forEach(function(p, i) {
+    const raw = typeof p === 'string' ? p : String((p && p.text) || '');
+    const createdAt = p && p.createdAt ? p.createdAt : undefined;
+    let chunks;
+    if (i === 0 && link) {
+      const linked = applyLink(raw, link, 1e6);          // link attached (or the DOI swapped for it), nothing cut
+      if (cpLen(linked) <= max) chunks = [linked];
+      else if (raw.includes(link) || linked.indexOf(' \u2014 ' + link) < 0) chunks = splitForThread(linked, max);
+      else {
+        // the root takes as many whole sentences as fit beside the link; the rest follow as replies
+        chunks = splitForThread(raw, max, Math.max(1, max - cpLen(link) - 3));
+        chunks[0] = chunks[0] + ' \u2014 ' + link;
+      }
+    } else chunks = splitForThread(raw, max);
+    chunks.forEach(function(c, k) { plan.push({ text: c, createdAt: k === 0 ? createdAt : undefined }); });
+  });
+  return plan;
+}
 async function postThread(s, posts, threadOpts) {
   let root = null, parent = null;
   const uris = [];
   threadOpts = threadOpts || {};
-  for (let i = 0; i < posts.length; i++) {
-    const p = posts[i];
-    let text = typeof p === 'string' ? p : String((p && p.text) || '');
+  // SOCIAL-POST-TRUNCATION-2: a post longer than one Bluesky post continues as replies, split at sentence boundaries,
+  // instead of losing its end. The link (and its card) stays on the root post.
+  const plan = threadPlan(posts, threadOpts.link, 290);
+  for (let i = 0; i < plan.length; i++) {
+    const p = plan[i];
+    const text = p.text;
     const reply = i > 0 ? { root: root, parent: parent } : undefined;
-    const opts = { createdAt: p && p.createdAt ? p.createdAt : undefined, campaign: threadOpts.campaign };
-    if (i === 0) {
-      if (threadOpts.link) text = applyLink(text, threadOpts.link, 290);
-      if (threadOpts.embed) opts.embed = threadOpts.embed;
-    }
+    const opts = { createdAt: p.createdAt, campaign: threadOpts.campaign };
+    if (i === 0 && threadOpts.embed) opts.embed = threadOpts.link ? Object.assign({ uri: threadOpts.link }, threadOpts.embed) : threadOpts.embed;
     const res = await postText(s, text, reply, opts);
     uris.push(res.uri);
     // POST-SENT-TEXT-1: a caller that passes threadOpts.sent = [] gets the posted texts, in order.
@@ -884,7 +965,9 @@ var CHANNEL_PLATFORM = { linkedin: 'buffer-linkedin', mastodon: 'buffer-mastodon
 var CHANNEL_MAX_CHARS = { linkedin: 1300, mastodon: 280, twitter: 280 };
 var CHANNEL_REPEAT_DAYS = 30;
 var CHANNEL_ORDER = ['linkedin', 'mastodon', 'twitter'];
-var SUBSCRIBE_LINE = 'Research notes by email, monthly at most: https://qnfo.org/';
+// SUBSCRIBE-LINE-ACCURATE-1 (0.12.0, issue 1753): the list is a weekly digest of new papers (qnfo-subscribers); the line
+// says so and links the form itself, not the top of the page.
+var SUBSCRIBE_LINE = 'New papers by email, one short weekly digest: https://qnfo.org/#subscribe';
 async function channelCaps(env) {
   const caps = Object.assign({}, CHANNEL_WEEKLY_CAP);
   try {
@@ -976,7 +1059,7 @@ async function channelCarried(env, channel, slug) {
 }
 async function recordChannelPost(env, channel, slug, res, text, via) {
   await ensureChannelSchema(env);
-  const id = 'ch-' + (BUFFER_UTM_SOURCE[channel] || channel) + '-' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+  const id = 'ch-' + (BUFFER_UTM_SOURCE[channel] || channel) + '-' + Date.now().toString(36) + crypto.randomUUID().replace(/-/g, '').slice(0, 6);
   try {
     await env.DB.prepare("INSERT INTO social_media_posts (id, platform, post_id, url, content_preview, published_at, buffer_id, project_id, status, engagement_metrics) VALUES (?1,?2,?3,NULL,?4,datetime('now'),?3,?5,'published',?6)")
       .bind(id, CHANNEL_PLATFORM[channel], String(res.post_id), String(text || '').slice(0, 200), slug ? String(slug) : null, JSON.stringify({ via: via, buffer_status: res.status })).run();
@@ -991,8 +1074,11 @@ function channelText(channel, posts, link, title) {
   const list = (posts || []).map(function(p) { return typeof p === 'string' ? p : String((p && p.text) || ''); }).map(function(t) { return t.trim(); }).filter(Boolean);
   let body = list.join('\n\n');
   if (link && body.indexOf(link) < 0) body = applyLink(body, link, max - 60);
-  const fitted = fitKeepUrls(body, max - SUBSCRIBE_LINE.length - 2);
-  const base = fitted !== null ? fitted : truncateSafe(body, max - SUBSCRIBE_LINE.length - 2);
+  const room = max - SUBSCRIBE_LINE.length - 2;
+  // SOCIAL-POST-TRUNCATION-2: whole sentences first; the ellipsis cut only when one sentence alone is over the limit.
+  let fitted = fitWhole(body, room);
+  if (fitted === null) fitted = fitKeepUrls(body, room);
+  const base = fitted !== null ? fitted : truncateSafe(body, room);
   return base + '\n\n' + SUBSCRIBE_LINE;
 }
 // Candidate rows for a channel: queued selected rows oldest first, then rows posted since the cadence epoch newest first;
@@ -1286,7 +1372,7 @@ async function routeGate(env, who, texts, opts) {
 }
 async function recordAdhoc(env, kind, title, texts, uriValue) {
   await ensureSocialSchema(env);
-  const slug = kind + '-' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+  const slug = kind + '-' + Date.now().toString(36) + crypto.randomUUID().replace(/-/g, '').slice(0, 6);
   try {
     await env.DB.prepare("INSERT INTO social_threads (slug, title, posts, status, posted_at, post_uri, flags, updated_at) VALUES (?,?,?,'posted',datetime('now'),?,?,datetime('now'))").bind(slug, String(title || '').slice(0, 300), JSON.stringify(texts || []), uriValue || null, 'adhoc-route').run();
   } catch (e) { console.log('SOCIAL-ADHOC-GATE-1 record failed ' + slug + ': ' + String(e).slice(0, 120)); }
@@ -1305,6 +1391,63 @@ function blueskyUriOf(v) {
   if (s.charAt(0) === '{') { try { const o = JSON.parse(s); if (o && typeof o.bluesky === 'string' && o.bluesky.indexOf('at://') === 0) return o.bluesky; } catch (e) {} }
   return null;
 }
+// REACH-SIGNALS-1 (0.12.0, agent_issues #2225, pillar reach): social_engagements keeps daily counts, so how fast and how
+// substantive the replies are could not be computed. For each post that has replies, the public AppView thread (no
+// credential) is read one level deep and every reply by ANOTHER account is stored once (reply_uri is the key): a hash of the
+// author's DID, the delay from the post in minutes, the text length and the word count. The reply text and the handle are
+// never stored, and nothing is posted or liked. Metrics reply_velocity_60m_share_30d and substantive_reply_share_30d are
+// computed in D1 from this table (migrations/2026-10-12-reach-replies-subscribe-funnel.sql). Sentiment is not measured.
+var REPLY_THREADS_PER_RUN = 25;
+var SOCIAL_REPLIES_DDL = "CREATE TABLE IF NOT EXISTS social_replies (reply_uri TEXT PRIMARY KEY, platform TEXT NOT NULL, post_id TEXT NOT NULL, author_hash TEXT, post_created_at TEXT, created_at TEXT, delay_min REAL, text_len INTEGER NOT NULL DEFAULT 0, word_count INTEGER NOT NULL DEFAULT 0, collected_at TEXT NOT NULL)";
+function replyWordCount(text) {
+  return String(text || '').replace(/https?:\/\/\S+/g, ' ').split(/\s+/).filter(function(w) { return /[\p{L}\p{N}]/u.test(w); }).length;
+}
+// Pure: the rows one getPostThread answer yields (replies by other accounts only).
+function replyRowsOf(thread) {
+  const rows = [];
+  const root = thread && thread.post;
+  if (!root || !root.uri) return rows;
+  const rootDid = root.author && root.author.did;
+  const postAt = root.record && root.record.createdAt ? String(root.record.createdAt) : null;
+  const postMs = postAt ? Date.parse(postAt) : NaN;
+  for (const r of (thread.replies || [])) {
+    const rp = r && r.post;
+    if (!rp || !rp.uri || !rp.author || !rp.author.did || rp.author.did === rootDid) continue;
+    const text = String((rp.record && rp.record.text) || '');
+    const at = rp.record && rp.record.createdAt ? String(rp.record.createdAt) : (rp.indexedAt ? String(rp.indexedAt) : null);
+    const ms = at ? Date.parse(at) : NaN;
+    rows.push({ reply_uri: String(rp.uri), post_id: String(root.uri), did: String(rp.author.did), post_created_at: postAt, created_at: at,
+      delay_min: Number.isFinite(ms) && Number.isFinite(postMs) ? Math.max(0, Math.round((ms - postMs) / 6e4 * 10) / 10) : null,
+      text_len: Array.from(text).length, word_count: replyWordCount(text) });
+  }
+  return rows;
+}
+async function sha256Hex16(v) {
+  const b = new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(String(v))));
+  let h = '';
+  for (let i = 0; i < 8; i++) h += b[i].toString(16).padStart(2, '0');
+  return h;
+}
+async function collectReplies(env, uris) {
+  const out = { threads: 0, stored: 0, errors: 0 };
+  await env.DB.prepare(SOCIAL_REPLIES_DDL).run();
+  const now = new Date().toISOString();
+  const stmts = [];
+  for (const uri of (uris || []).slice(0, REPLY_THREADS_PER_RUN)) {
+    try {
+      const r = await fetch('https://public.api.bsky.app/xrpc/app.bsky.feed.getPostThread?depth=1&parentHeight=0&uri=' + encodeURIComponent(uri), { headers: { 'User-Agent': 'qnfo-social/' + VERSION } });
+      if (!r.ok) { out.errors++; continue; }
+      const j = await r.json();
+      out.threads++;
+      for (const row of replyRowsOf(j && j.thread)) {
+        stmts.push(env.DB.prepare("INSERT INTO social_replies (reply_uri, platform, post_id, author_hash, post_created_at, created_at, delay_min, text_len, word_count, collected_at) VALUES (?1,'bluesky',?2,?3,?4,?5,?6,?7,?8,?9) ON CONFLICT(reply_uri) DO NOTHING")
+          .bind(row.reply_uri, row.post_id, await sha256Hex16(row.did), row.post_created_at, row.created_at, row.delay_min, row.text_len, row.word_count, now));
+      }
+    } catch (e) { out.errors++; }
+  }
+  if (stmts.length) { await env.DB.batch(stmts); out.stored = stmts.length; }
+  return out;
+}
 async function collectEngagement(env) {
   const day = new Date().toISOString().slice(0, 10);
   const uris = [];
@@ -1320,6 +1463,7 @@ async function collectEngagement(env) {
     for (const r of (b.results || [])) add(blueskyUriOf(r.post_id));
   } catch (e) { console.log('SOCIAL-ENGAGEMENT-SELF-1 dissemination read failed: ' + String(e).slice(0, 120)); }
   const stmts = [];
+  const withReplies = [];
   let found = 0, errors = 0;
   for (let i = 0; i < uris.length; i += 25) {
     const chunk = uris.slice(i, i + 25);
@@ -1329,6 +1473,7 @@ async function collectEngagement(env) {
       const j = await r.json();
       for (const p of (j && j.posts) || []) {
         found++;
+        if (Number(p.replyCount || 0) > 0) withReplies.push(String(p.uri));
         const m = { likes: p.likeCount, reposts: p.repostCount, replies: p.replyCount, quotes: p.quoteCount };
         for (const k of Object.keys(m)) {
           stmts.push(env.DB.prepare("INSERT INTO social_engagements (platform, post_id, metric, value, note, collected_at) VALUES (?,?,?,?,?,?) ON CONFLICT(platform, post_id, metric, collected_at) DO UPDATE SET value=excluded.value").bind('bluesky', String(p.uri), k, Number(m[k] || 0), 'qnfo-social', day));
@@ -1338,6 +1483,8 @@ async function collectEngagement(env) {
   }
   if (stmts.length) await env.DB.batch(stmts);
   const out = { day: day, uris: uris.length, posts_found: found, rows: stmts.length, errors: errors };
+  // REACH-SIGNALS-1 (issue 2225): the replies themselves, for the posts that have any. Its failure never fails the counts.
+  try { out.replies = await collectReplies(env, withReplies); } catch (e) { out.replies = { error: String(e && e.message || e).slice(0, 160) }; }
   console.log('SOCIAL-ENGAGEMENT-SELF-1 ' + JSON.stringify(out));
   return out;
 }
@@ -1351,6 +1498,22 @@ async function collectEngagement(env) {
 // deleting published content or retiring a host - requires a HARD 404/410. A redirect that lands
 // on a bare homepage is 'misrouted': a config bug to FIX, not content to delete. Root cause: a
 // transient q08.org->qnfo.org 301 was misread as 'retirement' and 71 live posts were deleted on it.
+// Read at most `cap` bytes of a response body as text (0.12.0): an external page is never buffered whole.
+async function readTextCapped(r, cap) {
+  if (!r || !r.body || typeof r.body.getReader !== 'function') return String(await r.text()).slice(0, cap);
+  const reader = r.body.getReader();
+  const dec = new TextDecoder();
+  let out = '', n = 0;
+  try {
+    while (n < cap) {
+      const x = await reader.read();
+      if (x.done) break;
+      n += x.value.byteLength;
+      out += dec.decode(x.value, { stream: true });
+    }
+  } finally { try { await reader.cancel(); } catch (e) {} }
+  return out;
+}
 async function probeLink(url, marker) {
   try {
     const r = await fetch(url, { method: "GET", redirect: "manual", headers: { "User-Agent": "Mozilla/5.0 (qnfo-social link-probe)" } });
@@ -1359,7 +1522,7 @@ async function probeLink(url, marker) {
       if (marker) {
         // LINK-RESOLUTION-GATE R4: a bare 200 is not enough - a catch-all (e.g. a list page)
         // also returns 200. Require the marker (the paper slug) to appear in the fetched body.
-        const body = await r.text();
+        const body = await readTextCapped(r, 2e6);
         if (body.indexOf(marker) < 0) return { verdict: "misrouted", status: st };
       }
       return { verdict: "live", status: st };
@@ -2577,13 +2740,13 @@ async function aiRunAttr(env, worker, purpose, model, input, opts) {
             await db.prepare("INSERT INTO ai_cache_counters (day, worker, model, calls, cached_calls, in_tok, cached_tok) VALUES (?1,?2,?3,1,?4,?5,?6) ON CONFLICT(day, worker, model) DO UPDATE SET calls=calls+1, cached_calls=cached_calls+excluded.cached_calls, in_tok=in_tok+excluded.in_tok, cached_tok=cached_tok+excluded.cached_tok").bind(day, worker, String(model).slice(0, 120), Number(cached) > 0 ? 1 : 0, Number(in_tok) || 0, Number(cached) || 0).run();
           }
         })();
-        wr.catch(function() {});
+        await wr.catch(function() {}); // awaited (0.12.0): a write started and left floating can be dropped when the invocation ends
       }
     } catch (e3) {}
   }
 }
 // end aiRunAttr
-export { threadGroundingIssues, groundingProblems, composePrompt, repairPrompt, buildFacets, truncateSafe, applyLink, findDoi, byteLen, extractUrls, utmHost, sentPostsJson, utmTag, utmTagText,fitKeepUrls, tagAndFit, tagFacets, postText, postUriValue, weeklyCap, socialGate, drainQueue, drainDissemination, repairMojibake, contentGate, markPosted, routeGate, collectEngagement, blueskyUriOf, bufferPost, syncProfile, PROFILE_DESCRIPTION, bufferChannelAudit, linkedinMode, recordSocialRun, profileRunStatus, drainRunStatus, engagementRunStatus, autoScan,
+export { readTextCapped, probeLink, proseUnits, splitForThread, fitWhole, threadPlan, postThread, pickBufferText, collectReplies, replyRowsOf, replyWordCount, threadGroundingIssues, groundingProblems, composePrompt, repairPrompt, buildFacets, truncateSafe, applyLink, findDoi, byteLen, extractUrls, utmHost, sentPostsJson, utmTag, utmTagText,fitKeepUrls, tagAndFit, tagFacets, postText, postUriValue, weeklyCap, socialGate, drainQueue, drainDissemination, repairMojibake, contentGate, markPosted, routeGate, collectEngagement, blueskyUriOf, bufferPost, syncProfile, PROFILE_DESCRIPTION, bufferChannelAudit, linkedinMode, recordSocialRun, profileRunStatus, drainRunStatus, engagementRunStatus, autoScan,
   drainChannels, channelsRunStatus, channelText, channelCaps, channelWindow, channelCarried, pickChannelRow, CHANNEL_WEEKLY_CAP, CHANNEL_PLATFORM, CHANNEL_MAX_CHARS, CHANNEL_REPEAT_DAYS, SUBSCRIBE_LINE,
   learnerClassify, learnerIsQuestion, learnerTopicOf, learnerSlotOf, learnerBeta, learnerPrior, learnerPosterior, learnerChoose, learnerPBest,
   learnerEnabled, learnerPick, learnerEngagementOf, learnerVisits, learnerRewardOf, learnerWeeklyUpdate, learnerWeeklyTick, learnerCreditPending, learnerDailyCredit, attentionShares, shareCap, attentionOrder, learnerChannelOrder, learnerChannelEngagement, LEARNER_CHANNELS, LEARNER_CHANNEL_OF,
