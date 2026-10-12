@@ -62,7 +62,8 @@ const jsonResponse = (status, body) => ({ ok: status < 400, status, json: async 
 {
   const { env, writes } = fakeEnv(null, async () => jsonResponse(403, { ok: false, error: "forbidden" }));
   const out = await pdfBacklogRelay(env);
-  eq([out.ran, out.http, out.error], [false, 403, "http 403"], "a 403 is recorded as an error, not thrown");
+  eq((await pdfBacklogRelay(fakeEnv(null, async () => ({ ok: false, status: 502, json: async () => { throw new Error("not json"); } })).env)).error, "http 502", "a non-JSON failure is recorded by its status");
+  eq([out.ran, out.http, out.error], [false, 403, "forbidden"], "a 403 with a JSON body is recorded as an error (the body reason), not thrown");
   eq(writes[0].params[3], "error", "the ledger row is status error");
 }
 {

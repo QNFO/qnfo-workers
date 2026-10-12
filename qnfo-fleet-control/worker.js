@@ -4775,7 +4775,7 @@ async function pdfBacklogRelay(env) {
     try { j = await r.json(); } catch (e) { j = null; }
     out.ran = r.ok;
     if (j) { out.rendered = j.rendered; out.backlog_after = j.backlog_after; if (j.errors && j.errors.length) out.error = String(j.errors[0]).slice(0, 200); }
-    else if (!r.ok) out.error = "http " + r.status;
+    if (!r.ok) out.error = String((j && j.error) || out.error || ("http " + r.status)).slice(0, 200);
   } catch (e) {
     out.error = String(e && e.message || e).slice(0, 200);
   }
