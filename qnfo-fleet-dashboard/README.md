@@ -78,6 +78,23 @@ File or clear an action from any worker/session (header `x-loop-token`, secret `
 - State cached in qnfo-audit D1 `fleet_dashboard_state`; money snapshot in `fleet_loop_meta` key `human_gov_snapshot`; queue in `human_actions`.
 - Secret `CF_TOKEN` (account analytics read); `LOOP_TOKEN` guards the POST endpoints.
 
+## Metrics tab (FLEET-KPI-1, v1.30.0, pillar reach)
+`GET /kpi` (page) and `GET /api/kpi` (the same data as JSON) are open to everyone. Every figure is computed from `qnfo-audit`
+when the page is opened and kept in memory for 60 seconds; each panel names its source table and the time it was computed.
+A value nothing measures is `null` in the JSON and "not measured" on the page, never 0; a missing table or a failed read
+makes that one panel unmeasured and is listed under `unreadable`.
+
+| Section | What it shows | Source |
+|---|---|---|
+| Issues | open now, by priority and category; opened and closed per day (14 days); median age; oldest; closed with evidence in 24 h and 7 d; code-loop tasks merged and failed | `agent_issues`, `issue_lifecycle`, `code_tasks` |
+| Reach | bot-filtered page views per property and day (visits once the ingest's per-host row exists); outreach actions and events per channel and day; posts per channel; posts ranked by reader actions, with links; subscribers; mentions and citations | `reach_signals`, `outreach_log`, `social_threads`, `social_media_posts`, `social_engagements`, `social_replies`, `subscribers`, `subscribe_funnel`, `external_mentions`, `dissemination_tracker`, `outreach_learner_sends` |
+| Buffer | connected channels, posts sent through Buffer, per-post statistics | `social_channels`, `social_media_posts`, `social_engagements` (platform `buffer`) |
+
+The block never reads the private `qnfo-outreach` database and returns counts, public post links and public mention links
+only. The daily reach ingest writes one `cf-rum-human` row per host (`entity_type = 'host'`, metrics `pageviews` and
+`visits`). Suite: `node --no-warnings qnfo-fleet-dashboard/kpi.test.mjs`. Chart colours are a validated pair per theme
+(light `#008A7B` / `#B5562A`, dark `#2AA595` / `#D06C3E`); the page has no script and every chart has a table.
+
 ## Work-with-me contacts (WORK-WITH-ME-METRIC-1, v1.17.2, pillar reach)
 - qnfo.org/work-with-me (qnfo-gateway WORK-WITH-ME-1) offers five ways to work with the owner; each button mails
   rowan.quni@qnfo.org with a subject that starts `[work-with-me:<offer>]` (`jpcub`, `agent-review`, `talk`, `research`, `role`,

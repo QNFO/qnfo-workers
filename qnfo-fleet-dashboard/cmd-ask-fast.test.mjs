@@ -64,5 +64,18 @@ const d1 = { prepare: (sql) => { const st = db.prepare(sql); return { all: async
   const fbn = f.cmdFallback({ v: null }, "x");
   ok(/does not cover this question/.test(fbn), "a question with no topical facts is told so plainly", fbn);
 }
+{ // CMD-AI-TIMEOUT-1 (1.29.4, agent_issues 2316): timeout_ms goes to the router just under the call's abort; a 504 is named and hands over
+  const bodies = [], f = mk();
+  const r504 = { ok: false, status: 504, json: async () => ({ error: "router_timeout" }) };
+  const e = { SVC_QNFO_AI: { fetch: async (u, o) => { const b = JSON.parse(o.body); bodies.push(b); return b.model === "glm-5.3-flash" ? r504 : resp(200, "after 504 " + b.model); } } };
+  const t0 = Date.now();
+  const r = await f.cmdRaceModels(e, [{ role: "user", content: "q" }], 9000);
+  ok(r.ok && r.model === "deepseek-v4-flash-wa" && Date.now() - t0 < 1500, "a 504 router_timeout hands over to the next model at once", r);
+  ok(bodies.length === 2 && bodies.every((b) => Number.isInteger(b.timeout_ms) && b.timeout_ms > 6000 && b.timeout_ms < 9000), "every call carries timeout_ms just under its own abort", bodies.map((b) => b.timeout_ms));
+  const all = await f.cmdRaceModels({ SVC_QNFO_AI: { fetch: async () => r504 } }, [{ role: "user", content: "q" }], 9000);
+  ok(!all.ok && (all.error.match(/router_timeout/g) || []).length === f.ASK_MODELS.length, "when every model times out in the router each failure is named router_timeout", all);
+  const v = /var VERSION = "(\d+)\.(\d+)\.(\d+)/.exec(src);
+  ok(v && Number(v[1]) * 1e6 + Number(v[2]) * 1e3 + Number(v[3]) >= 1029004, "VERSION is at least 1.29.4", v && v[0]);
+}
 console.log(fail ? fail + " failed" : pass + " passed");
 if (fail) process.exit(1);
