@@ -565,12 +565,22 @@ def zaraz_set_ga4(zone_name: str, mode: str, token: str) -> int:
     if mode == "dry":
         emit({"action": "zaraz-set-ga4", "ok": True, "dry": True, "zone": zone_name, "trigger": tid, "would_write_tools": list(tools)})
         return 0
-    st, j = call("PUT", "/zones/%s/settings/zaraz/config" % zid, token, cfg)
+    # The API requires a 'permissions' list on component tools but documents no values: try the usual ones until it validates.
+    tkey = "ga4-" + zone_name.replace(".", "-")
+    tried = []
+    for perms in (["access_client_kv"], [], ["access_client_kv", "execute_unsafe_scripts"]):
+        tools[tkey]["permissions"] = perms
+        st, j = call("PUT", "/zones/%s/settings/zaraz/config" % zid, token, cfg)
+        tried.append({"permissions": perms, "http": st})
+        if st in (200, 201) and j.get("success") is not False:
+            break
+        if "permissions" not in json.dumps(j.get("errors") or []):
+            break
     if st not in (200, 201) or j.get("success") is False:
-        emit({"action": "zaraz-set-ga4", "ok": False, "stage": "put-config", "http": st, "errors": j.get("errors")})
+        emit({"action": "zaraz-set-ga4", "ok": False, "stage": "put-config", "http": st, "errors": j.get("errors"), "tried": tried})
         return 1
     st2, p = call("POST", "/zones/%s/settings/zaraz/publish" % zid, token, {"description": "ZARAZ-GA4-1: GA4 " + GA4_ID})
-    emit({"action": "zaraz-set-ga4", "ok": st2 in (200, 201), "zone": zone_name, "published_http": st2, "errors": p.get("errors") if isinstance(p, dict) else None})
+    emit({"action": "zaraz-set-ga4", "ok": st2 in (200, 201), "zone": zone_name, "permissions": tools[tkey].get("permissions"), "published_http": st2, "errors": p.get("errors") if isinstance(p, dict) else None})
     return 0 if st2 in (200, 201) else 1
 
 
