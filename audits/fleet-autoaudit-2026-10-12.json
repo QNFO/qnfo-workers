@@ -1,8 +1,16 @@
 {
-  "audited_at": "2026-10-12 06:26:19",
+  "audited_at": "2026-10-12 07:44:16",
   "d1_write_failures": [],
   "d1_writes_ok": 114,
   "guard": {
+    "_drift_confirm": {
+      "first_pass": [
+        "qnfo-fleet-dashboard",
+        "qnfo-infra"
+      ],
+      "refreshed": true,
+      "second_pass": []
+    },
     "_guard_rc": 0,
     "ahead": [],
     "cf_script_list": true,
@@ -594,17 +602,17 @@
       },
       {
         "dir": "qnfo-fleet-dashboard",
-        "version": "1.29.2-cmd-ask-models",
+        "version": "1.29.3-loop-ct",
         "worker": "qnfo-fleet-dashboard"
       },
       {
         "dir": "qnfo-gateway",
-        "version": "3.14.3-doi-scrub",
+        "version": "3.14.4-sync-ct",
         "worker": "qnfo-gateway"
       },
       {
         "dir": "qnfo-infra",
-        "version": "1.3.3-doi-scrub",
+        "version": "1.3.4-index-token-ct",
         "worker": "qnfo-infra"
       },
       {
@@ -1264,9 +1272,9 @@
       "worker": "qnfo-fleet-control"
     },
     "qnfo-fleet-dashboard": {
-      "before": "1.29.2-cmd-ask-models",
+      "before": "1.29.3-loop-ct",
       "http": 200,
-      "live": "1.29.2-cmd-ask-models",
+      "live": "1.29.3-loop-ct",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-fleet-dashboard"
@@ -1290,9 +1298,9 @@
       "worker": "qnfo-fleet-feed"
     },
     "qnfo-gateway": {
-      "before": "3.14.3-doi-scrub",
+      "before": "3.14.4-sync-ct",
       "http": 200,
-      "live": "3.14.3-doi-scrub",
+      "live": "3.14.4-sync-ct",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-gateway"
@@ -1334,9 +1342,9 @@
       "worker": "qnfo-impact"
     },
     "qnfo-infra": {
-      "before": "1.3.3-doi-scrub",
+      "before": "1.3.4-index-token-ct",
       "http": 200,
-      "live": "1.3.3-doi-scrub",
+      "live": "1.3.4-index-token-ct",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-infra"
