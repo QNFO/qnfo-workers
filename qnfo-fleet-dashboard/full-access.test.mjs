@@ -86,5 +86,19 @@ const C = sb.__c, env = { AUDIT: D1, IDENTITY: D1 }, owner = { session: { stepup
   const r = await C.conRead(env, "sql identity select key from owner_docs", {}, null);
   ok(r && r.need === "code", "reading identity needs the owner's code", r);
 }
+// --- MAIL-ASK-1: questions about mail reach the message text; journal call-for-paper mail is a solicitation ---
+{
+  const sb2 = { RegExp, String }; vm.createContext(sb2);
+  vm.runInContext(cut("var MAIL_SOLICIT_RX = ", "var MAIL_NO_CARD") + "\n" + cut("var MAIL_ASK_RX = ", "async function mailAskFacts(") + "\n__m = { MAIL_SOLICIT_RX, MAIL_ASK_RX, MAIL_FOLLOWUP_RX, mailDomainNamed };", sb2);
+  const M = sb2.__m;
+  const subj = "We Invite Your Research Article for Upcoming Issue: International Journal of Quantum Technologies";
+  const body = 'Dear Dr. Rowan Brad Quni-Gudzinas,\r\n\r\nYour posted article: "Dimensionless Physics: A Unified Framework" fits for\r\nour journal scope.\r\n\r\nGreetings from our esteemed International Journal of Quantum Technologies\r\nISSN: 3068-9090 database.\r\n\r\nEasy to contribute: submit your full-length article to this mail as an\r\nattachment before October 27th, 2026';
+  ok(M.MAIL_SOLICIT_RX.test(subj) && M.MAIL_SOLICIT_RX.test(body), "emails 989/990 (theresearchletters.org call for papers) read as a solicitation, by subject and by body");
+  for (const real of ["Could you look at my paper draft before Friday?", "I would like to invite your group to collaborate on a grant", "Re: your article on emergent gravity - a question about eq. 4", "Thank you for the talk; can we meet next week?"]) ok(!M.MAIL_SOLICIT_RX.test(real), "a person's mail stays a person: " + real);
+  ok(M.MAIL_ASK_RX.test("WHAT'S UP WITH RESEARCHLETTERS EMAILS?"), "plural 'emails' is a mail question (the 2026-10-12 miss)");
+  ok(M.mailDomainNamed("WHAT'S UP WITH RESEARCHLETTERS EMAILS?", "theresearchletters.org") && !M.mailDomainNamed("what about letters", "theresearchletters.org"), "a typed name without the 'the' or the TLD finds the card's domain");
+  ok(M.MAIL_ASK_RX.test("AND WHAT DO THEY SAY? DON'T WASTE MY TIME HERE!") && M.MAIL_FOLLOWUP_RX.test("AND WHAT DO THEY SAY?"), "the follow-up 'and what do they say?' reads the mail cards");
+  ok(/body_text = mailBodyHead\(f\.body, 1500\)/.test(src) && /substr\(COALESCE\(body_text, ''\), 1, 1600\) AS body_head FROM emails WHERE \(lower\(sender\)/.test(src), "the owner's Ask context carries up to 1500 characters of each message");
+}
 console.log(pass + " passed, " + fail + " failed");
 if (fail) process.exit(1);

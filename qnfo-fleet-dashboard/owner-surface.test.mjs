@@ -174,7 +174,7 @@ const ok = (c, m) => { if (c) pass++; else { fail++; console.log("FAIL " + m); }
 // M15. the rules are the orchestrator's
 {
   const dash = readFileSync(join(here, "worker.js"), "utf8");
-  const orch = readFileSync(join(here, "..", "qnfo-email-orchestrator", "worker.js"), "utf8");
+  const orch = readFileSync(join(here, "..", "qnfo-cloud-ops", "worker.js"), "utf8"); // the orchestrator runs folded inside qnfo-cloud-ops (EMAIL-ORCH-FOLD-1)
   const rx = (src, name) => { const m = new RegExp("var " + name + " = (/.*/[a-z]*);\\n").exec(src); return m ? m[1] : null; };
   for (const [a, b] of [["MAIL_INTERNAL_RX", "SLA_INTERNAL_RX"], ["MAIL_MACHINE_RX", "SLA_MACHINE_RX"], ["MAIL_RECEIPT_RX", "SLA_RECEIPT_RX"], ["MAIL_SOLICIT_RX", "SLA_SOLICIT_RX"]]) ok(rx(dash, a) && rx(dash, a) === rx(orch, b), "M15 " + a + " is the orchestrator's " + b);
   const arr = (src, name) => { const i = src.indexOf("var " + name + " = ["); const j = src.indexOf("];", i); return i < 0 ? null : vm.runInNewContext("(" + src.slice(i + ("var " + name + " = ").length, j + 1) + ")"); };
@@ -252,9 +252,9 @@ const ok = (c, m) => { if (c) pass++; else { fail++; console.log("FAIL " + m); }
   await cmd(env, "Is the message from foresight.org really a real person? If so, who?", T);
   await flush();
   const sys = calls[0].messages[0].content;
-  ok(sys.includes('"from_address":"grants@foresight.org"') && sys.includes('"from_name":"Foresight Institute"') && /"body_first_300":"Dear Rowan Brad Quni-Gudzinas, Thank you for applying/.test(sys), "C6 the owner's context adds the sender's name, address and the first characters of the body");
-  const b = /"body_first_300":"([^"]*)"/.exec(sys);
-  ok(b && b[1].length <= 300 && !sys.includes("TAIL-BEYOND-300-CHARS"), "C7 never more than 300 body characters (" + (b && b[1].length) + ")");
+  ok(sys.includes('"from_address":"grants@foresight.org"') && sys.includes('"from_name":"Foresight Institute"') && /"body_text":"Dear Rowan Brad Quni-Gudzinas, Thank you for applying/.test(sys), "C6 the owner's context adds the sender's name, address and the first characters of the body");
+  const b = /"body_text":"([^"]*)"/.exec(sys);
+  ok(b && b[1].length <= 1500 && b[1].length > 300, "C7 the owner reads up to 1500 body characters (MAIL-ASK-1, 1.31.0; was 300) (" + (b && b[1].length) + ")");
 }
 {
   const { env, calls } = mk();
