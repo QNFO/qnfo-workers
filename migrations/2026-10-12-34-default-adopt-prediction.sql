@@ -9,8 +9,9 @@
 -- BACKUP: bak_20261012_default_adopt_trigger
 -- Rollback: DROP TRIGGER IF EXISTS human_actions_default_adopt_ai; -- then recreate it from bak_20261012_default_adopt_trigger.sql (the pre-change text); UPDATE decision_log SET predicted_outcome = NULL, reach_gain = NULL, surfaces_tested = NULL WHERE actor = 'trigger:human_actions_default_adopt_ai' AND id IN (63, 68)
 
-CREATE TABLE IF NOT EXISTS bak_20261012_default_adopt_trigger (name TEXT, sql TEXT, saved_at TEXT DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')));
-INSERT INTO bak_20261012_default_adopt_trigger (name, sql) SELECT name, sql FROM sqlite_master WHERE type = 'trigger' AND name = 'human_actions_default_adopt_ai';
+-- Re-touched 2026-10-12 13:30Z (migration_runs 134: "BACKUP table ... does not exist"): the runner recognises a self-made backup only in the
+-- CREATE TABLE <table> AS SELECT form (BACKUP-CREATES-1); the earlier CREATE + INSERT pair read as a missing table.
+CREATE TABLE IF NOT EXISTS bak_20261012_default_adopt_trigger AS SELECT name, sql, strftime('%Y-%m-%dT%H:%M:%SZ', 'now') AS saved_at FROM sqlite_master WHERE type = 'trigger' AND name = 'human_actions_default_adopt_ai';
 
 DROP TRIGGER IF EXISTS human_actions_default_adopt_ai;
 
