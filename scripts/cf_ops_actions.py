@@ -527,6 +527,7 @@ def zaraz_get(only: str, token: str) -> int:
         cfg = j.get("result") or {}
         st2, w = call("GET", "/zones/%s/settings/zaraz/workflow" % zid, token)
         emit({"action": "zaraz-get", "zone": name, "ok": True, "zarazEnabled": cfg.get("zarazEnabled"), "debugKey": bool(cfg.get("debugKey")),
+              "settings": {k: v for k, v in (cfg.get("settings") or {}).items() if not any(x.lower() in k.lower() for x in SECRETISH)},
               "workflow": w.get("result") if st2 == 200 else st2,
               "tools": [{"id": k, "name": t.get("name"), "component": t.get("component"), "enabled": t.get("enabled")} for k, t in (cfg.get("tools") or {}).items()],
               "triggers": {k: {"name": t.get("name"), "system": t.get("system"), "loadRules": t.get("loadRules")} for k, t in (cfg.get("triggers") or {}).items()},
@@ -562,6 +563,11 @@ def zaraz_set_ga4(zone_name: str, mode: str, token: str) -> int:
         "settings": {"measurementID": GA4_ID, "hideOriginalIP": True, "ecommerce": False, "hideIPAddress": True},
         "actions": {}, "neoEvents": [{"actionType": "pageview", "blockingTriggers": [], "firingTriggers": [tid], "data": {}}]}
     cfg["tools"], cfg["triggers"], cfg["zarazEnabled"] = tools, trigs, True
+    # ZARAZ-AUTOINJECT-1 (2026-10-12): a tool is useless when the zone does not inject the Zaraz script into its HTML; the
+    # qnfo.org config had autoInjectScript off (measured: ga4-qnfo-org published, no /cdn-cgi/zaraz/s.js on any page).
+    settings = cfg.get("settings") or {}
+    settings["autoInjectScript"] = True
+    cfg["settings"] = settings
     if mode == "dry":
         emit({"action": "zaraz-set-ga4", "ok": True, "dry": True, "zone": zone_name, "trigger": tid, "would_write_tools": list(tools)})
         return 0
