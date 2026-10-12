@@ -14982,7 +14982,7 @@ function renderFullHTML(md, opts) {
 __name(renderFullHTML, "renderFullHTML");
 
 // worker.js
-var VERSION = "1.2.0-scholar-pdf-all"; /* 1.2.0 SCHOLAR-PDF-ALL-1 (2026-10-12, agent_issues 2410, pillar reach): a cron every 10 minutes renders the PDF of every published, distributed or external_preprint paper that has none (472 of 567 on 2026-10-12) and re-renders a paper whose body changed after its stored PDF, PDF_BACKLOG_BATCH (6) per tick, newest first; writes papers.pdf_path so papers.qnfo.org emits citation_pdf_url (Google Scholar indexes a PDF only through that tag); a paper whose render failed 3 times in 24 h is skipped for the day; metric scholar_pdf_backlog and cloud_ops_events job qnfo-pdf (AUDIT binding) record each run. */ // 1.1.0 MATH-BROWSER-1 (#1890, re-applied from closed PR #555): internal GET /math-check/<slug>. 1.0.2 UTF8-DEPLOY-1 (2026-10-02): redeployed so the live copy is UTF-8
+var VERSION = "1.3.0-backlog-relay"; /* 1.3.0 PDF-BACKLOG-RELAY-1 (2026-10-12, #2410): POST /backlog/tick runs one SCHOLAR-PDF-ALL-1 batch for service-binding callers and the run event names its source (cron or relay); qnfo-fleet-control 0.19.0 relays the tick every 20 minutes while no pdf-backlog event has landed for 25 minutes, because the ten-minute cron written at 12:04Z never fired. 1.2.0 1.2.0 SCHOLAR-PDF-ALL-1 (2026-10-12, agent_issues 2410, pillar reach): a cron every 10 minutes renders the PDF of every published, distributed or external_preprint paper that has none (472 of 567 on 2026-10-12) and re-renders a paper whose body changed after its stored PDF, PDF_BACKLOG_BATCH (6) per tick, newest first; writes papers.pdf_path so papers.qnfo.org emits citation_pdf_url (Google Scholar indexes a PDF only through that tag); a paper whose render failed 3 times in 24 h is skipped for the day; metric scholar_pdf_backlog and cloud_ops_events job qnfo-pdf (AUDIT binding) record each run. */ // 1.1.0 MATH-BROWSER-1 (#1890, re-applied from closed PR #555): internal GET /math-check/<slug>. 1.0.2 UTF8-DEPLOY-1 (2026-10-02): redeployed so the live copy is UTF-8
 function escHtml(s) {
   return String(s == null ? "" : s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 }
@@ -15158,7 +15158,7 @@ async function renderPdfBacklog(env, deps, opts) {
     } catch (e) {
       out.errors.push("metric write: " + String(e && e.message || e).slice(0, 120));
     }
-    await recordPdfEvent(env, "pdf-backlog", "rendered " + out.rendered + " (refreshed " + out.refreshed + "), failed " + out.failed + ", backlog " + out.backlog_before + " -> " + out.backlog_after, { rendered: out.rendered, refreshed: out.refreshed, failed: out.failed, oversize: out.oversize, backlog_after: out.backlog_after, ms: out.ms, slugs: out.slugs.slice(0, 20) }, out.failed && !out.rendered ? "error" : "ok");
+    await recordPdfEvent(env, "pdf-backlog", ((opts && opts.source) || "cron") + ": rendered " + out.rendered + " (refreshed " + out.refreshed + "), failed " + out.failed + ", backlog " + out.backlog_before + " -> " + out.backlog_after, { source: (opts && opts.source) || "cron", rendered: out.rendered, refreshed: out.refreshed, failed: out.failed, oversize: out.oversize, backlog_after: out.backlog_after, ms: out.ms, slugs: out.slugs.slice(0, 20) }, out.failed && !out.rendered ? "error" : "ok");
   }
   return out;
 }
@@ -15177,8 +15177,8 @@ var worker_default = {
         ok: true,
         worker: "qnfo-pdf",
         version: VERSION,
-        capabilities: ["markdown-to-pdf", "markdown-to-html", "corpus-paper-render", "math-browser-check", "scholar-pdf-backlog"],
-        limitations: ["POST /pdf and /html (arbitrary Markdown) answer only service-binding callers; public callers get 403", "GET /pdf/<slug> and /html/<slug> render corpus papers only", "each render opens a Cloudflare Browser Rendering session", "GET /math-check/<slug> (MathJax typeset report of the live page) answers only service-binding callers; qnfo-gateway samples 5 papers a day", "the */10 cron renders PDF_BACKLOG_BATCH (6) missing or stale paper PDFs per tick (SCHOLAR-PDF-ALL-1); a paper that failed 3 times in 24 h waits a day"],
+        capabilities: ["markdown-to-pdf", "markdown-to-html", "corpus-paper-render", "math-browser-check", "scholar-pdf-backlog", "backlog-tick-relay"],
+        limitations: ["POST /backlog/tick (one SCHOLAR-PDF-ALL-1 batch on demand, PDF-BACKLOG-RELAY-1) answers only service-binding callers; qnfo-fleet-control relays it every 20 minutes while the cron is silent", "POST /pdf and /html (arbitrary Markdown) answer only service-binding callers; public callers get 403", "GET /pdf/<slug> and /html/<slug> render corpus papers only", "each render opens a Cloudflare Browser Rendering session", "GET /math-check/<slug> (MathJax typeset report of the live page) answers only service-binding callers; qnfo-gateway samples 5 papers a day", "the */10 cron renders PDF_BACKLOG_BATCH (6) missing or stale paper PDFs per tick (SCHOLAR-PDF-ALL-1); a paper that failed 3 times in 24 h waits a day"],
         browser: !!env.BROWSER,
         living: !!env.LIVING,
         releases: !!env.RELEASES,
@@ -15218,6 +15218,17 @@ var worker_default = {
       } catch (e) {
         return Response.json({ ok: false, slug, error: String(e && e.message || e) }, { status: 502 });
       }
+    }
+    if (path2 === "/backlog/tick" && request.method === "POST") {
+      // PDF-BACKLOG-RELAY-1 (1.3.0, 2026-10-12): the second path to the SCHOLAR-PDF-ALL-1 tick. The */10 cron written at 12:04Z
+      // never invoked scheduled() (four ticks, zero scheduled events in the account telemetry while every other */10 worker fired),
+      // so qnfo-fleet-control's 20-minute cron relays the tick through its service binding whenever no pdf-backlog event landed in
+      // the last 25 minutes. Internal only, the PDF-RENDER-INTERNAL-1 test: a service-binding request carries https://qnfo-pdf/..., a
+      // hostname a public request cannot carry. The relay keeps a short budget so the caller's waitUntil finishes inside its tick.
+      if (/\.workers\.dev$|(^|\.)qnfo\.org$/i.test(url.hostname)) return Response.json({ ok: false, error: "forbidden: POST /backlog/tick is internal only (PDF-BACKLOG-RELAY-1)" }, { status: 403 });
+      var relayBudget = Math.min(90000, Math.max(10000, Number(url.searchParams.get("budget_ms")) || 60000));
+      var relayOut = await renderPdfBacklog(env, { renderFullHTML, renderPdf, stash }, { source: "relay", budgetMs: relayBudget });
+      return Response.json(Object.assign({ version: VERSION, source: "relay" }, relayOut));
     }
     if (path2 === "/pdf" || path2 === "/html") {
       // PDF-RENDER-INTERNAL-1 (2026-10-01, #1735 sweep): rendering an arbitrary posted body opens a Browser Rendering session
