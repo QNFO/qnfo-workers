@@ -3040,7 +3040,7 @@ async function compatAfterDeploy(env, a, log, opts) {
     log.push({ step: "compat-restore", ok: out.restored, compatibility_date: out.restored ? a.compat.from : a.compat.to, tried: a.compat.to, why, error: out.restore_error });
     if (!out.restored && env.QNFO_AUDIT) {
       try {
-        const now = iso();
+        const now = Date.now();
         const title = "COMPAT-RESTORE-FAILED-1: " + a.worker + " runs at compatibility date " + a.compat.to + " without a verified /health";
         const dup = await env.QNFO_AUDIT.prepare("SELECT id FROM agent_issues WHERE title = ?1 AND status = 'open' LIMIT 1").bind(title).first();
         if (!dup) await env.QNFO_AUDIT.prepare("INSERT INTO agent_issues (title, description, source, category, priority, status, linked_session, created_at, updated_at) VALUES (?1, ?2, 'qnfo-ops', 'reliability', 'high', 'open', ?3, ?4, ?4)").bind(title, ("Pillar core (COMPAT-DATE-DECLARED-APPLY-1). The canonical deploy advanced " + a.worker + " from compatibility date " + a.compat.from + " to " + a.compat.to + ", its /health did not answer with VERSION " + a.version + " (" + why + "), and the upload that puts " + a.compat.from + " back failed: " + out.restore_error + ". Owner: qnfo-ops. Fix: set compatibility_date back to " + a.compat.from + " in " + a.worker + "/wrangler.toml or remove its compat-advance line, then redeploy; read GET https://ops.qnfo.org/compat for the live date.").slice(0, 4000), "qnfo-ops/" + VERSION, now).run();
