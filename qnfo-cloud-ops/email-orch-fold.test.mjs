@@ -21,7 +21,7 @@ const ok = (c, m, x) => { if (c) pass++; else { fail++; console.log("FAIL " + m 
 // 1. the member is the orchestrator's code
 {
   const lines = guest.split("\n");
-  const body = lines.slice(lines.findIndex((l) => l.startsWith('var VERSION = "0.5.3-send-retry";')), lines.indexOf("export {"));
+  const body = lines.slice(lines.findIndex((l) => l.startsWith('var VERSION = "')), lines.indexOf("export {"));
   const missing = body.filter((l) => l.trim() && !src.includes(l.trim()));
   ok(missing.length === 1 && missing[0].startsWith("var VERSION = "), "every orchestrator line is in the host except its VERSION line", missing.map((l) => l.slice(0, 60)));
   // a minimum, not an exact pin (CLAUDE.md: an exact VERSION pin breaks on the next bump)

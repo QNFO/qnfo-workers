@@ -81,6 +81,7 @@ const addTask = async (env, goal, anchor) => (await worker.fetch(new Request("ht
 const row = (env) => env.AUDIT_DB._db.prepare("SELECT * FROM code_tasks").get();
 const events = (env, kind) => env.AUDIT_DB._db.prepare("SELECT * FROM cloud_ops_events WHERE kind = ?").all(kind);
 const block = (a, b) => "<<<<<<< SEARCH\n" + a + "\n=======\n" + b + "\n>>>>>>> REPLACE";
+const NOKW_GOAL = "Make the reply friendlier where \"const WORKER\" is set.";
 const GOAL = "At ready_to_publish, also push the branch through the GitHub Contents API with the fleet token, then set status branch_pushed.";
 const REAL = [
   `  const r = await fetch("https://api.github.com/repos/QNFO/qnfo-workers/contents/" + task.path, { method: "PUT", headers: { authorization: "Bearer " + env.GITHUB_TOKEN } });`,
@@ -125,11 +126,32 @@ const REAL = [
   ok(t.status === "ready_to_publish" && cx.anchor === AUDIT_LINE && calls.length === 2 && ev.length === 1 && JSON.parse(ev[0].meta).n === 2, "C1 an anchor that occurs twice is replaced by the pick and the task lands", { st: t.status, anchor: cx.anchor, err: t.last_error });
 }
 
+// ===== D0. ANCHOR-KEYWORD-FALLBACK-1 (0.12.0): a useless pick, or a model call that throws, falls back to the first unique line
+// that holds the goal's earliest keyword; no second model call for the anchor =====
+{
+  serve(MID);
+  const { env, calls } = envWith(["  nothing like this line exists in the file();", block(AUDIT_LINE, REAL)]);
+  await addTask(env, GOAL, DUP_LINE);
+  await tick(env);
+  const t = row(env), cx = JSON.parse(t.ctx), ev = events(env, "code-task.anchor-located");
+  ok(t.status === "ready_to_publish" && cx.anchor === AUDIT_LINE && calls.length === 2 && ev.length === 1 && /^keyword:/.test(JSON.parse(ev[0].meta).model), "D0a a useless pick falls back to the unique line holding the goal's keyword and the task lands", { st: t.status, anchor: cx.anchor, err: t.last_error, ev: ev.map((e) => e.meta) });
+}
+{
+  serve(MID);
+  const { env, calls } = envWith([block(AUDIT_LINE, REAL)]);
+  const run = env.AI.run; let first = true;
+  env.AI.run = async (model, input) => { if (first) { first = false; throw new Error("3046: Request timeout"); } return run(model, input); };
+  await addTask(env, GOAL);
+  await tick(env);
+  const t = row(env), cx = JSON.parse(t.ctx);
+  ok(t.status === "ready_to_publish" && cx.anchor === AUDIT_LINE && calls.length === 1, "D0b a locator call that throws no longer parks the task: the keyword line is the anchor", { st: t.status, anchor: cx.anchor, err: t.last_error });
+}
+
 // ===== D. a pick that is not a unique line of the file: the task parks with both reasons =====
 {
   serve(MID);
   const { env, calls } = envWith(["  nothing like this line exists in the file();"]);
-  await addTask(env, GOAL, DUP_LINE);
+  await addTask(env, NOKW_GOAL, DUP_LINE); // its one keyword hits a line too short to be an anchor: ANCHOR-KEYWORD-FALLBACK-1 has no line to offer
   await tick(env);
   const t = row(env);
   ok(t.status === "needs_human" && /anchor occurs 2 times in the file/.test(t.last_error) && /ANCHOR-LOCATOR-1 found no unique line near the goal either/.test(t.last_error) && calls.length === 1 && events(env, "code-task.anchor-located").length === 0, "D1 a useless pick parks the task needs_human with the old reason plus the locator's, one model call", { st: t.status, err: t.last_error, calls: calls.length });
@@ -137,7 +159,7 @@ const REAL = [
 {
   serve(MID);
   const { env, calls } = envWith([DUP_LINE]);
-  await addTask(env, GOAL);
+  await addTask(env, NOKW_GOAL);
   await tick(env);
   const t = row(env);
   ok(t.status === "needs_human" && /needs an anchor/.test(t.last_error) && /ANCHOR-LOCATOR-1/.test(t.last_error) && calls.length === 1, "D2 a pick that occurs twice is refused like any anchor", { st: t.status, err: t.last_error });

@@ -253,6 +253,56 @@ def compound_terms(sql):
     return (max(counts.values()) + 1) if counts else 1
 
 
+# CHECK-ENUM-LINT-1 (2026-10-12): the registers carry CHECK constraints the runner cannot see offline, and a literal outside the
+# allowed set fails the file at that statement with everything before it applied (migrations 2026-10-12-29 and -30 failed on
+# control_registry.kind 'audit' and 'loop'; runs 119 and 120). --check now refuses a literal that the live constraint would refuse.
+ENUMS = {
+    "control_registry": {"kind": {"hold", "filter", "pause", "kill-switch", "gate", "cap", "guard", "lease"},
+                         "disposition": {"remove", "demote", "replace", "keep"},
+                         "disposition_state": {"planned", "applied"}},
+}
+INSERT_HEAD = re.compile(r"^\s*INSERT\s+(?:OR\s+(?:REPLACE|IGNORE|ABORT|FAIL|ROLLBACK)\s+)?INTO\s+\"?([A-Za-z_][A-Za-z0-9_]*)\"?\s*\(", re.I)
+
+
+def enum_violations(sql):
+    """['table.column literal'] for every literal in an INSERT ... VALUES that a known CHECK constraint refuses."""
+    out = []
+    m = INSERT_HEAD.match(sql)
+    if not m or m.group(1).lower() not in ENUMS:
+        return out
+    enums = ENUMS[m.group(1).lower()]
+    open_i = m.end() - 1
+    close_i = _close(sql, open_i)
+    if close_i < 0:
+        return out
+    cols = [c.strip().strip('"').lower() for c in _split_top(sql[open_i + 1:close_i])]
+    watch = {i: c for i, c in enumerate(cols) if c in enums}
+    if not watch:
+        return out
+    v = re.compile(r"\bVALUES\b", re.I).search(sql, close_i)
+    if not v:
+        return out
+    i = v.end()
+    while True:
+        p = sql.find("(", i)
+        if p < 0:
+            break
+        q = _close(sql, p)
+        if q < 0:
+            break
+        vals = _split_top(sql[p + 1:q])
+        for idx, col in watch.items():
+            if idx < len(vals) and re.fullmatch(r"'(?:[^']|'')*'", vals[idx]):
+                lit = vals[idx][1:-1].replace("''", "'")
+                if lit not in enums[col]:
+                    out.append(m.group(1).lower() + "." + col + " '" + lit + "' (allowed: " + ", ".join(sorted(enums[col])) + ")")
+        i = q + 1
+        rest = sql[i:].lstrip()
+        if not rest.startswith(","):
+            break
+    return out
+
+
 def plan(path, text):
     """Validate one file. Returns (opted_in, problems, info)."""
     lines = header(text)
@@ -286,6 +336,9 @@ def plan(path, text):
             if cadence_rejected(cad):
                 problems.append("metric_registry refresh_cadence '" + cad[:60] + "' is not a canonical token (D1 trigger "
                                 "METRIC-CADENCE-CANONICAL-1 aborts it: use */N, */Nh, Nm, Nh or hourly|daily|weekly|monthly)")
+    for s in stmts:
+        for bad in enum_violations(body(s)):
+            problems.append("CHECK constraint would refuse " + bad + " (CHECK-ENUM-LINT-1)")
     destructive = [s for s in stmts if DESTRUCTIVE.match(body(s))]
     backup = header_value(lines, "BACKUP")
     if destructive and not backup:

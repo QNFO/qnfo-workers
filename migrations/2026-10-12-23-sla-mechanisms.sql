@@ -21,7 +21,8 @@
 --         repairs, then the detector fm-triage-gap proves it).
 --   1297  closures that do not hold. Four closed issues (1794, 1855, 2036, 2081) had an active or holding contract that
 --         failed 3 to 22 times after the closure and its last pass, and were never reopened by REMEDIATION-REOPEN-1 in the
---         worker tick. Second path, in D1: recurrence_guard_tick reopens such an issue hourly, with the failure and the
+--         worker tick. Second path, in D1 (the trigger itself is in 2026-10-12-25-recurrence-guard-twin.sql since the
+--         correction of 2026-10-12): recurrence_guard_tick reopens such an issue hourly, with the failure and the
 --         prior close evidence in its description, puts the contract back to active and logs the action. It gives the
 --         worker two hours first, counts 'pending' and 'pending: <reason>' as deferrals (REMEDIATION-PENDING-PREFIX-1),
 --         acts only while the newest verdict is itself a failure, and never touches a wontfix issue. Nothing is deleted.
@@ -138,41 +139,16 @@ BEGIN
     AND issue_id IN (SELECT id FROM agent_issues WHERE status = 'open');
 END;
 
-CREATE TRIGGER IF NOT EXISTS recurrence_guard_tick AFTER INSERT ON fleet_tick
-WHEN (strftime('%M', 'now') < '10' OR NEW.source LIKE 'migration:%')
-  AND COALESCE((SELECT value FROM ops_config WHERE key = 'queue_sla_autofix'), 'on') <> 'off'
-BEGIN
-  INSERT INTO recurrence_guard_actions (issue_id, class, fails, last_observed, prior_status, prior_close_evidence)
-    SELECT x.issue_id, x.class, x.fails, x.last_observed, x.status, x.close_evidence
-    FROM (
-      SELECT c.issue_id, c.class, a.status, c.max_attempts, t.close_evidence,
-        (SELECT COUNT(*) FROM remediation_verifications v WHERE v.class = c.class AND v.pass = 0
-           AND COALESCE(v.observed, '') <> '' AND lower(trim(v.observed)) NOT LIKE 'pending%'
-           AND v.verified_at > MAX(datetime(a.updated_at / 1000, 'unixepoch'),
-                 COALESCE((SELECT MAX(p.verified_at) FROM remediation_verifications p WHERE p.class = c.class AND p.pass = 1), '1970-01-01'))) AS fails,
-        (SELECT substr(v.observed, 1, 120) FROM remediation_verifications v WHERE v.class = c.class ORDER BY v.verified_at DESC LIMIT 1) AS last_observed
-      FROM remediation_contracts c JOIN agent_issues a ON a.id = c.issue_id LEFT JOIN issue_triage t ON t.issue_id = a.id
-      WHERE c.status IN ('active', 'holding') AND a.status IN ('closed', 'resolved') AND typeof(a.updated_at) = 'integer'
-        AND a.updated_at < (CAST(strftime('%s', 'now') AS INTEGER) - 7200) * 1000
-    ) x
-    WHERE x.fails >= MAX(1, COALESCE(x.max_attempts, 3))
-      AND COALESCE(x.last_observed, '') <> '' AND lower(trim(x.last_observed)) NOT LIKE 'pending%';
-  UPDATE agent_issues SET status = 'open', updated_at = CAST(strftime('%s', 'now') AS INTEGER) * 1000,
-      description = COALESCE(description, '') || char(10) || 'REOPENED ' || strftime('%Y-%m-%dT%H:%M:%SZ', 'now') || ' (RECURRENCE-GUARD-SQL-1, qnfo-audit recurrence_guard_tick): '
-        || COALESCE((SELECT 'contract ' || g.class || ' failed ' || g.fails || 'x after the closure and its last pass (last observed ' || COALESCE(g.last_observed, '?') || '). Prior close_evidence: ' || substr(COALESCE(g.prior_close_evidence, '(none)'), 1, 300)
-                       FROM recurrence_guard_actions g WHERE g.issue_id = agent_issues.id ORDER BY g.id DESC LIMIT 1), 'a contract failed after the closure')
-  WHERE status IN ('closed', 'resolved')
-    AND id IN (SELECT issue_id FROM recurrence_guard_actions WHERE applied = 0);
-  UPDATE issue_triage SET reopened_count = COALESCE(reopened_count, 0) + 1, triage_state = 'triaged', close_evidence = NULL
-  WHERE issue_id IN (SELECT issue_id FROM recurrence_guard_actions WHERE applied = 0)
-    AND issue_id IN (SELECT id FROM agent_issues WHERE status = 'open');
-  UPDATE remediation_contracts SET status = 'active'
-  WHERE status = 'holding' AND class IN (SELECT class FROM recurrence_guard_actions WHERE applied = 0);
-  INSERT INTO queue_sla_actions (stuck_type, n, note)
-    SELECT 'closure-relapse', COUNT(*), group_concat(issue_id, ',') FROM recurrence_guard_actions
-    WHERE applied = 0 HAVING COUNT(*) > 0;
-  UPDATE recurrence_guard_actions SET applied = 1 WHERE applied = 0;
-END;
+-- recurrence_guard_tick is created by 2026-10-12-25-recurrence-guard-twin.sql (RECURRENCE-GUARD-TWIN-1). The first version
+-- lived here; its reopen broke the unique open-title index when the closed issue had an open twin, which failed this file's
+-- last statement at 08:04Z and the 09:00Z cron tick. Whatever version is installed is kept as text and removed here, so the
+-- tick at the end of this file and of 2026-10-12-24 runs without it; file 25 installs the corrected trigger.
+INSERT INTO bak_20261012_sla_views (name, sql, backed_up_at)
+SELECT m.name, m.sql, strftime('%Y-%m-%dT%H:%M:%SZ', 'now') FROM sqlite_master m
+WHERE m.type = 'trigger' AND m.name = 'recurrence_guard_tick'
+  AND NOT EXISTS (SELECT 1 FROM bak_20261012_sla_views b WHERE b.name = m.name AND b.sql = m.sql);
+
+DROP TRIGGER IF EXISTS recurrence_guard_tick;
 
 INSERT OR IGNORE INTO failure_modes (fm_key, failure_mode, root_cause, remediation, detector, probe_class, first_seen, issue_id, trigger_condition, symptom, blast_radius) VALUES
  ('contract-cadence-drift', 'an open issue''s closing probe is due hours or a day ahead',

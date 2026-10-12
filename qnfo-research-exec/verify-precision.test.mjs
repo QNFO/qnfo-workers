@@ -88,7 +88,7 @@ const filler = "The derivation proceeds from the stated inputs and each step is 
 const paperMd = (opts) => {
   const o = opts || {};
   const sec = (h) => "## " + h + "\n\n" + filler.repeat(22) + "\n\n";
-  return "# A Test Paper On Rounded Values\n\n" + sec("Abstract") + sec("1. Introduction") + "## 2. Background and Related Work\n\nPrior work [1], [2], [3], [4], [5], [6], [7], [8] frames the question. " + filler.repeat(20) + "\n\n" + sec("3. Methods") + sec("4. Analysis") + (o.truncated ? "" : sec("5. Results") + sec("6. Discussion") + sec("7. Conclusion")) + "## References\n\n[1] placeholder\n";
+  return "# A Test Paper On Rounded Values\n\n" + sec("Abstract") + sec("1. Introduction") + "## 2. Background and Related Work\n\nPrior work [1], [2], [3], [4], [5], [6], [7], [8] frames the question. " + filler.repeat(20) + "\n\n" + sec("3. Methods") + sec("4. Analysis") + (o.truncated ? "" : sec("5. Results") + sec("6. Discussion") + sec("7. Practical Implications and Engineering Pathways") + sec("8. Conclusion")) + "## References\n\n[1] placeholder\n";
 };
 const grounding = "# Grounding block\n\n## Bibliography (cite ONLY these; keep this exact order and numbering)\n\n" + Array.from({ length: 8 }, (_, i) => "[" + (i + 1) + "] arXiv:2601.0100" + i + " | Title " + i + "\n  Summary " + i).join("\n");
 const put = (id, opts) => { r2.set("pipeline/" + id + "/reconciled.md", paperMd(opts)); r2.set("pipeline/" + id + "/grounding.md", grounding); };
@@ -104,7 +104,7 @@ const verifyAnswer = (task) => task === "VERIFY_EXTRACT" ? claimsJson : task ===
 
 // ---- 3. structure gate -----------------------------------------------------------------------------------------------
 let g = finalGates(paperMd({ truncated: true }) , { bibCount: 8, minChars: 100, structure: true });
-ok(g.fixes.some((f) => f.id === "gate-structure" && /Results, Discussion, Conclusion/.test(f.claim)), "a paper that stops before its closing sections fails gate-structure", g.reason);
+ok(g.fixes.some((f) => f.id === "gate-structure" && /Results, Discussion, Practical Implications, Conclusion/.test(f.claim)), "a paper that stops before its closing sections fails gate-structure", g.reason);
 ok(!finalGates(paperMd({ truncated: true }), { bibCount: 8, minChars: 100 }).fixes.some((f) => f.id === "gate-structure"), "a remediation paper keeps its own structure");
 ok(!finalGates(paperMd(), { bibCount: 8, minChars: 100, structure: true }).fixes.some((f) => f.id === "gate-structure"), "a complete paper passes gate-structure");
 
@@ -122,7 +122,7 @@ res = await stageVerify(env, row("v-bad2", "verify", { cycles: 1, verifyPass: 1 
 ok(res.ok === false && res.withheld === "verify-unresolved" && res.mismatches === 1 && get("v-bad2").status === "queued" && /mismatch=true gates=$/.test(get("v-bad2").error), "a second failing pass withholds the paper and re-arms the row, as before", res);
 put("v-trunc", { truncated: true }); pilotOut = "CLAIM Q1: computed=4.2800119e-21 expected=4.28e-21 match=yes";
 res = await stageVerify(env, row("v-trunc", "verify", { cycles: 1, verifyPass: 0 }));
-ok(res.stage === "verify->revise" && /gate-structure/.test(res.gate), "a truncated paper is sent back by gate-structure", res);
+ok(res.stage === "verify->complete" && get("v-trunc").stage === "complete" && res.incomplete.some((r) => /missing: Results, Discussion, Practical, Conclusion/.test(r)), "a truncated paper goes back to the complete stage before any verification (PAPER-COMPLETE-1)", res);
 put("v-unrun"); pilotOut = "Traceback (most recent call last):\nNameError: name 'x' is not defined";
 let nCalls = ai.calls.length;
 res = await stageVerify(env, row("v-unrun", "verify", { cycles: 1, verifyPass: 0 }));

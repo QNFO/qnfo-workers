@@ -5,6 +5,7 @@
 -- SCAN h on human_actions by source, SCAN k on code_tasks by status; 102,441 rows read per call) and of v_failure_mode_status
 -- (SCAN v on remediation_verifications by class; 1,391,979 rows read per call). Six additive indexes close them. Nothing is
 -- dropped or rewritten; every view returns the same rows.
+-- REAPPLY 2026-10-12: the first merge (PR 968, e44872c) was cancelled by the next push to main before the runner applied it (concurrency), so this commit re-touches the file; the CREATE INDEX IF NOT EXISTS statements are idempotent.
 -- APPLY-BY: ci
 -- DB: qnfo-audit
 -- Rollback: DROP INDEX IF EXISTS idx_rc_issue_status; DROP INDEX IF EXISTS idx_rv_class_id; DROP INDEX IF EXISTS idx_rv_class_verified; DROP INDEX IF EXISTS idx_work_claims_issue; DROP INDEX IF EXISTS idx_human_actions_source; DROP INDEX IF EXISTS idx_code_tasks_status

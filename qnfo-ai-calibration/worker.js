@@ -3,7 +3,7 @@ var __name = (target, value) => __defProp(target, "name", { value, configurable:
 var PROBER_CRON = "*/20 * * * *";
 
 // worker.js
-var VERSION = "1.3.4-run-id-crypto"; /* 1.3.4 WORKERS-STANDARDS-1 (2026-10-12, pillar security): the calibration run id is drawn from crypto.randomUUID instead of Math.random (same shape). */ /* 1.3.3 AMH-ROSTER-PRUNE-1 (2026-10-06, pillar autonomy, lever T5.11): the dead per-tick ai_model_health prune is removed (wrong bind receiver, never ran; fixed as written it would have deleted the canonical roster rows); the 24 never-probed external ids were pruned once after a backup by migration. 1.3.2 FOLD-HYGIENE-1 + FRESHNESS-REGISTERS-RETIRED-1 writer side (2026-10-06, agent_issues 1756 and 2028, pillar autonomy): the prober member's freshness SIGNALS no longer grade kaizen_candidates (qnfo-kaizen was retired in PR 657, so the register read stale forever, and the 07:40Z tick re-wrote the row PR 677 had deleted); version_queue is an event register with a 336 h window (the reviser queues a version only when a paper needs one, so idleness is not staleness); amh_coverage grades the probe roster (MODELS), not the 24 external ids registered 2026-09-19 that no probe covers, and names how many it leaves out (AMH-COVERAGE-ROSTER-1). 1.3.1 PROBER-ON-CAL-TICK-1 (2026-10-06, #1756): the every-20-minutes trigger registered for the member never fired (no prober run at 06:40 or 07:00 while the every-30-minutes calibration ran), so the member now runs on the every-30-minutes tick next to the calibration, the host awaits its waitUntil work, and the every-20-minutes trigger is dropped (one cron fewer). 1.3.0 PROBER-FOLD-1 (2026-10-06, pillar core, #1756): ai-health-prober runs here as a member (proberMod, the every-20-minutes cron, /prober/health and /prober/freshness, /prober/run behind the calibration key); the separate ai-health-prober worker is retired by fold. 1.2.9 GW-402-UNFUNDED-1 (2026-10-05, pillar: cost; agent_issues #1992, root cause shared with #1986): a provider's HTTP 402 ("Insufficient Balance", DeepSeek, owner decision 2026-10-05: do not top up) is an unfunded account, not a degraded model. The sweep classed it "other", set ai_model_health deepseek/deepseek-v4-flash degraded on every window with >= 2 such calls (15 at 16:00Z), and qnfo-fleet-control refiled MODEL-DEGRADED (#1992, #1256, #1099 ...). Now status 402 or an insufficient-balance/payment-required body is error_class "unfunded": recorded in ai_gateway_failures, never a [gw-fail] issue, never a degraded health row, and ignored (like rate-capacity) by the 24h reconcile that clears a degraded row, so the row recovers on the next sweep. The spend-side fix (stop paying for the failed first round trip) is #1986 in qnfo-ops. */
+var VERSION = "1.4.0-probe-cadence-cost"; /* 1.4.0 PROBE-CADENCE-COST-1 (2026-10-12, pillar cost, agent_issues 2118): the full model/vision/tools/stream/routing sweep runs every 4th 30-minute tick (ai_calibration_config model_sweep_every_ticks); the ticks between re-probe only models whose ai_model_health row is not ok. About 2,500 Workers AI calls a day through qnfo-ai become about 700. */ /* 1.3.4 WORKERS-STANDARDS-1 (2026-10-12, pillar security): the calibration run id is drawn from crypto.randomUUID instead of Math.random (same shape). */ /* 1.3.3 AMH-ROSTER-PRUNE-1 (2026-10-06, pillar autonomy, lever T5.11): the dead per-tick ai_model_health prune is removed (wrong bind receiver, never ran; fixed as written it would have deleted the canonical roster rows); the 24 never-probed external ids were pruned once after a backup by migration. 1.3.2 FOLD-HYGIENE-1 + FRESHNESS-REGISTERS-RETIRED-1 writer side (2026-10-06, agent_issues 1756 and 2028, pillar autonomy): the prober member's freshness SIGNALS no longer grade kaizen_candidates (qnfo-kaizen was retired in PR 657, so the register read stale forever, and the 07:40Z tick re-wrote the row PR 677 had deleted); version_queue is an event register with a 336 h window (the reviser queues a version only when a paper needs one, so idleness is not staleness); amh_coverage grades the probe roster (MODELS), not the 24 external ids registered 2026-09-19 that no probe covers, and names how many it leaves out (AMH-COVERAGE-ROSTER-1). 1.3.1 PROBER-ON-CAL-TICK-1 (2026-10-06, #1756): the every-20-minutes trigger registered for the member never fired (no prober run at 06:40 or 07:00 while the every-30-minutes calibration ran), so the member now runs on the every-30-minutes tick next to the calibration, the host awaits its waitUntil work, and the every-20-minutes trigger is dropped (one cron fewer). 1.3.0 PROBER-FOLD-1 (2026-10-06, pillar core, #1756): ai-health-prober runs here as a member (proberMod, the every-20-minutes cron, /prober/health and /prober/freshness, /prober/run behind the calibration key); the separate ai-health-prober worker is retired by fold. 1.2.9 GW-402-UNFUNDED-1 (2026-10-05, pillar: cost; agent_issues #1992, root cause shared with #1986): a provider's HTTP 402 ("Insufficient Balance", DeepSeek, owner decision 2026-10-05: do not top up) is an unfunded account, not a degraded model. The sweep classed it "other", set ai_model_health deepseek/deepseek-v4-flash degraded on every window with >= 2 such calls (15 at 16:00Z), and qnfo-fleet-control refiled MODEL-DEGRADED (#1992, #1256, #1099 ...). Now status 402 or an insufficient-balance/payment-required body is error_class "unfunded": recorded in ai_gateway_failures, never a [gw-fail] issue, never a degraded health row, and ignored (like rate-capacity) by the 24h reconcile that clears a degraded row, so the row recovers on the next sweep. The spend-side fix (stop paying for the failed first round trip) is #1986 in qnfo-ops. */
 var DEEPSEEK = "https://api.deepseek.com/v1";
 var ACCOUNT = "edb167b78c9fb901ea5bca3ce58ccc4b";
 var CATALOG = "https://api.cloudflare.com/client/v4/accounts/" + ACCOUNT;
@@ -45,6 +45,32 @@ function internalId(m) {
 }
 __name(internalId, "internalId");
 var DEFAULT_VISION = "kimi-k2.6,kimi-k2.7-code,glm-5.3-flash";
+// PROBE-CADENCE-COST-1 (1.4.0, agent_issues 2118 METRIC-TRIGGER-353, pillar cost). Measured 2026-10-12 (ai_spend_ledger, caller
+// qnfo-ai-calibration): the */30 sweep made about 2,500 Workers AI calls a day through qnfo-ai (glm-5.3-flash 720, bge 650,
+// kimi-k2.6 430, kimi-k2.7-code 380, gpt-oss-120b 150 ...), every model probed 48 times a day although every one passed 48 of 48
+// in the last 24 h, while the folded prober member already probes the roster directly. The full sweep (models, vision, tools,
+// stream, routing) now runs on one tick in MODEL_SWEEP_EVERY_TICKS (ai_calibration_config model_sweep_every_ticks, default 4 =
+// every 2 h); the ticks between re-probe only the models whose ai_model_health row is not ok (degraded, failing, never probed),
+// so a failure still escalates on the next tick. The gateway sweep, health, roster and endpoint checks run every tick (no model
+// calls). A manual /run is always a full sweep. Revert: set model_sweep_every_ticks to 1.
+var MODEL_SWEEP_EVERY_TICKS = 4;
+var CAL_TICK_MS = 18e5;
+function fullSweepDue(nowMs, everyTicks, trigger) {
+  if (trigger !== "cron") return true;
+  var n = parseInt(everyTicks, 10);
+  if (!(n > 1)) return true;
+  // the cron can fire a few seconds after :00/:30, so round to the nearest tick instead of flooring
+  return Math.round(nowMs / CAL_TICK_MS) % n === 0;
+}
+__name(fullSweepDue, "fullSweepDue");
+function leanSweepModels(models, healthRows) {
+  var healthy = {};
+  (healthRows || []).forEach(function(r) {
+    if (r && r.status === "ok" && !(Number(r.consecutive_failures) > 0)) healthy[r.model_id] = 1;
+  });
+  return models.filter(function(m) { return !healthy[m]; });
+}
+__name(leanSweepModels, "leanSweepModels");
 function json(resp, status) {
   return new Response(JSON.stringify(resp), { status: status || 200, headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" } });
 }
@@ -610,7 +636,21 @@ async function calibration(env, trigger) {
     } catch (e) {
     }
   }
-  await runPool(ALL_MODELS, 4, async function(m) {
+  var sweepEvery = await cfgGet(env, "model_sweep_every_ticks", String(MODEL_SWEEP_EVERY_TICKS));
+  var fullSweep = fullSweepDue(t0, sweepEvery, trigger);
+  var sweepModels = ALL_MODELS;
+  if (!fullSweep) {
+    try {
+      var hr = await env.QNFO_AUDIT.prepare("SELECT model_id, status, consecutive_failures FROM ai_model_health").all();
+      sweepModels = leanSweepModels(ALL_MODELS, hr.results || []);
+    } catch (eH) {
+      // ai_model_health unreadable: fall back to the full sweep rather than go blind
+      fullSweep = true;
+    }
+    if (!fullSweep) results.push({ probe: "cadence", target: "model-sweep", status: "pass", latency_ms: 0, detail: "lean tick: re-probed " + sweepModels.length + " not-ok of " + ALL_MODELS.length + " models; full sweep every " + sweepEvery + " ticks (PROBE-CADENCE-COST-1)" });
+  }
+  if (fullSweep) sweepModels = ALL_MODELS;
+  await runPool(sweepModels, 4, async function(m) {
     var res = await probeCompletion(env, m);
     results.push(Object.assign({ probe: "model", target: m }, res));
     if (res.status !== "pass" && /http=40[13]\b/.test(String(res.detail || ""))) return res;
@@ -634,14 +674,16 @@ async function calibration(env, trigger) {
     }
     return res;
   });
-  await runPool(visionModels, 2, async function(m) {
-    var res = await probeVision(env, m);
-    results.push(Object.assign({ probe: "vision", target: m }, res));
-    return res;
-  });
-  results.push(Object.assign({ probe: "tools", target: "deepseek-v4-flash" }, await probeTools(env)));
-  results.push(Object.assign({ probe: "stream", target: "deepseek-v4-flash" }, await probeStream(env)));
-  results = results.concat(await probeRouting(env));
+  if (fullSweep) {
+    await runPool(visionModels, 2, async function(m) {
+      var res = await probeVision(env, m);
+      results.push(Object.assign({ probe: "vision", target: m }, res));
+      return res;
+    });
+    results.push(Object.assign({ probe: "tools", target: "deepseek-v4-flash" }, await probeTools(env)));
+    results.push(Object.assign({ probe: "stream", target: "deepseek-v4-flash" }, await probeStream(env)));
+    results = results.concat(await probeRouting(env));
+  }
   results.push(await (async function(){ var t0=Date.now(); try { var r=await jfetch(env,"https://qnfo-ops.internal/health",null,null,2e4,"QNFO_OPS"); return {probe:"endpoint",target:"qnfo-ops/health",status:r.status===200?"pass":"fail",latency_ms:Date.now()-t0,detail:r.status===200?"ok":"http="+r.status}; } catch(e){ return {probe:"endpoint",target:"qnfo-ops/health",status:"fail",latency_ms:Date.now()-t0,detail:"err "+String(e&&e.message||e).slice(0,120)}; } })());
   results.push(await (async function(){ var t0=Date.now(); try { var r=await jfetch(env,"https://personal-api.internal/health",null,null,2e4,"PT_API"); return {probe:"endpoint",target:"personal-api/health",status:r.status===200?"pass":"fail",latency_ms:Date.now()-t0,detail:r.status===200?"ok":"http="+r.status}; } catch(e){ return {probe:"endpoint",target:"personal-api/health",status:"fail",latency_ms:Date.now()-t0,detail:"err "+String(e&&e.message||e).slice(0,120)}; } })());
   // RETIRED-DIRECT-PATH-REMOVAL-1 (#1267): api.deepseek.com direct path is retired; DEEPSEEK_KEY is expired (HTTP 401 every run) and the fleet routes deepseek via AI Gateway / Workers-AI (@cf/deepseek-ai/*). Probing it only manufactured a permanent fail that the digest then masked.
@@ -668,7 +710,7 @@ async function calibration(env, trigger) {
   } catch (e) {
     results.push({ probe: "persist", target: "d1", status: "fail", latency_ms: 0, detail: "err " + String(e && e.message || e).slice(0, 150) });
   }
-  return { run_id: runId, trigger, duration_ms: Date.now() - t0, total: results.length, pass, fail, drifts: driftCount, failing_models: Object.keys(failing), drift_models: Object.keys(driftByModel), results };
+  return { run_id: runId, trigger, full_sweep: fullSweep, models_probed: sweepModels.length, duration_ms: Date.now() - t0, total: results.length, pass, fail, drifts: driftCount, failing_models: Object.keys(failing), drift_models: Object.keys(driftByModel), results };
 }
 __name(calibration, "calibration");
 // ---- PROBER-FOLD-1 (2026-10-06, agent_issues 1756, owner standing grant / charter rule 9) ----
@@ -1001,7 +1043,7 @@ var worker_default = {
       pu.pathname = sub;
       return proberMod.fetch(new Request(pu.toString(), request), env, ctx);
     }
-    if (path === "/health") return json({ ok: true, worker: "qnfo-ai-calibration", version: VERSION, bindings: { qnfo_audit: !!env.QNFO_AUDIT, ai: !!env.AI }, crons: ["*/30 * * * *"], members: { "ai-health-prober": PROBER_VERSION }, capabilities: ["model-calibration", "drift-detection", "model-health"], limitations: ["calibrates on the */30 cron; POST /run and GET /results require the router key", "fails closed when the key is not configured"] });
+    if (path === "/health") return json({ ok: true, worker: "qnfo-ai-calibration", version: VERSION, bindings: { qnfo_audit: !!env.QNFO_AUDIT, ai: !!env.AI }, crons: ["*/30 * * * *"], members: { "ai-health-prober": PROBER_VERSION }, capabilities: ["model-calibration", "drift-detection", "model-health"], limitations: ["calibrates on the */30 cron; the full model sweep runs every model_sweep_every_ticks ticks (default 4), the ticks between re-probe only not-ok models; POST /run and GET /results require the router key", "fails closed when the key is not configured"] });
     if (path === "/manifest") return json({ service: "qnfo-ai-calibration", kind: "worker", version: VERSION, purpose: "autonomous periodic stress-testing/calibration of QNFO AI endpoints (self-auditing, self-correcting, self-improving)", capabilities: ["endpoint-stress-sweeps", "catalog-truth-audit", "vision-tools-stream-routing-boundary-probes", "health-table-publishing", "ticket-lifecycle-self-heal", "config-driven-thresholds"], routes: ["/health", "/manifest", "/run", "/results", "/"], crons: ["*/30 * * * *"] });
     if (path === "/run" && request.method === "POST") {
       if (!await authorized(request, env)) return json({ error: "unauthorized" }, 401);

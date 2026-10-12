@@ -186,11 +186,14 @@ console.log("quality.test.mjs section 12 ok");
   const g0 = base(); g0.gateResult = { ok: false, problems: ["x"] };
   r = await q.runLevels({ AI: { run: async () => { throw new Error("must not be called"); } } }, g0);
   assert.equal(r.gateResult.ok, false);
-  // H. reasoning-model replies: the <think> block is stripped and the 2000-token budget is requested
+  // H. reasoning-model replies: the <think> block is stripped and at least the 6000-token budget is requested (Q08-READER-NOTHINK-1)
   let seenTokens = null;
   const thinker = { AI: { run: async (m, a) => { seenTokens = a.max_tokens; return { response: '<think>{"score": 1} hmm</think>{"would_read_to_end": true, "score": 5, "slop_tells": [], "fix": ""}' }; } } };
   const tv = await q.readerTest(thinker, "@cf/qwen/qwen3-30b-a3b-fp8", "# t\n\nbody");
-  assert.equal(tv.score, 5); assert.equal(seenTokens, 2000);
+  assert.equal(tv.score, 5); assert.ok(seenTokens >= 6000);
+  let seenArgs = null;
+  await q.readerTest({ AI: { run: async (m, a) => { seenArgs = a; return { response: '{"would_read_to_end": true, "score": 4, "slop_tells": [], "fix": ""}' }; } } }, "@cf/deepseek-ai/deepseek-v4-flash-0731", "# t\n\nbody");
+  assert.equal(seenArgs.chat_template_kwargs.thinking, false);
 }
 
 // 14. schema ordering: a q08_reader_tests table created by 0.8.4 (no role, no family) is upgraded, then writes and reads work
