@@ -1,5 +1,5 @@
 {
-  "audited_at": "2026-10-12 15:16:31",
+  "audited_at": "2026-10-12 15:47:28",
   "d1_write_failures": [],
   "d1_writes_ok": 115,
   "guard": {
@@ -548,7 +548,7 @@
       },
       {
         "dir": "q08-signal-engine",
-        "version": "0.14.0",
+        "version": "0.14.1",
         "worker": "q08-signal-engine"
       },
       {
@@ -573,7 +573,7 @@
       },
       {
         "dir": "qnfo-code-orchestrator",
-        "version": "0.12.4-goal-room",
+        "version": "0.13.0-functional-canary",
         "worker": "qnfo-code-orchestrator"
       },
       {
@@ -593,7 +593,7 @@
       },
       {
         "dir": "qnfo-fleet-control",
-        "version": "0.19.5-relay-cadence",
+        "version": "0.20.0-lane-holds",
         "worker": "qnfo-fleet-control"
       },
       {
@@ -638,7 +638,7 @@
       },
       {
         "dir": "qnfo-ops",
-        "version": "2.42.3-debt",
+        "version": "2.43.0-props-restore",
         "worker": "qnfo-ops"
       },
       {
@@ -944,9 +944,9 @@
       "worker": "personal-life-search"
     },
     "q08-signal-engine": {
-      "before": "0.14.0",
+      "before": "0.14.1",
       "http": 200,
-      "live": "0.14.0",
+      "live": "0.14.1",
       "match": 1,
       "note": "SYNC",
       "worker": "q08-signal-engine"
@@ -1146,9 +1146,9 @@
       "worker": "qnfo-code-agent"
     },
     "qnfo-code-orchestrator": {
-      "before": "0.12.4-goal-room",
+      "before": "0.13.0-functional-canary",
       "http": 200,
-      "live": "0.12.4-goal-room",
+      "live": "0.13.0-functional-canary",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-code-orchestrator"
@@ -1268,9 +1268,9 @@
       "worker": "qnfo-fleet-calibrator"
     },
     "qnfo-fleet-control": {
-      "before": "0.19.5-relay-cadence",
+      "before": "0.20.0-lane-holds",
       "http": 200,
-      "live": "0.19.5-relay-cadence",
+      "live": "0.20.0-lane-holds",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-fleet-control"
@@ -1412,9 +1412,9 @@
       "worker": "qnfo-observability"
     },
     "qnfo-ops": {
-      "before": "2.42.3-debt",
+      "before": "2.43.0-props-restore",
       "http": 200,
-      "live": "2.42.3-debt",
+      "live": "2.43.0-props-restore",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-ops"
