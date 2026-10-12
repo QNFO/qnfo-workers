@@ -114,3 +114,28 @@ id = "d3768b93a76640be83151b00a8b42717"
 binding = "Q08"
 database_name = "q08-signal"
 database_id = "10fd74b7-c4b3-43c7-9ca5-855213f44a69"
+
+# DASHBOARD-FULL-ACCESS-1 (1.31.0, 2026-10-12): the command line's second model path. When qnfo-ai refuses a leg (the
+# SVC_QNFO_AI binding lost its props after a dashboard secret edit at 09:33Z and every ask answered HTTP 401) the same
+# Workers AI model runs through this binding.
+[ai]
+binding = "AI"
+
+# DASHBOARD-FULL-ACCESS-1: console "call" targets (owner session). Each authenticates by props.caller, never a key copy.
+[[services]]
+binding = "SVC_QNFO_EMAIL"
+service = "qnfo-email"
+environment = "production"
+props = { caller = "qnfo-fleet-dashboard" }
+
+[[services]]
+binding = "SVC_QNFO_CLOUD_OPS"
+service = "qnfo-cloud-ops"
+environment = "production"
+props = { caller = "qnfo-fleet-dashboard" }
+
+[[services]]
+binding = "SVC_QNFO_FLEET_CONTROL"
+service = "qnfo-fleet-control"
+environment = "production"
+props = { caller = "qnfo-fleet-dashboard" }

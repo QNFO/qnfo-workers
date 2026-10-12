@@ -1,0 +1,23 @@
+-- DASHBOARD-FULL-ACCESS-1 (2026-10-12, pillar autonomy; owner: "the fleet dashboard is my one-stop assistant to the Quniverse
+-- and shall have full access to all resources"). At 09:33:20Z a secret (GA4_SA_KEY) was added to qnfo-fleet-dashboard in the
+-- Cloudflare dashboard. That made version 288, which copied the bindings without their props, so SVC_QNFO_AI lost
+-- caller = "qnfo-fleet-dashboard" and qnfo-ai answered every command-line ask with HTTP 401 (cmd_log cmd-f2864009cff9ed6ed595,
+-- 11:32Z: "glm-5.3-flash: http 401 | deepseek-v4-flash-wa: http 401 | gpt-oss-120b: http 401"). A canonical redeploy at 11:37Z
+-- (run 38243852007) re-applied the props (BINDING-PROPS-APPLY-1) and the next ask answered on glm-5.3-flash. qnfo-fleet-dashboard
+-- 1.31.0 adds the second path (direct AI binding). This file records the failure mode, its detector, and the fleet-wide follow-up:
+-- any worker whose secret is edited in the Cloudflare dashboard loses the props of its service bindings the same way.
+-- APPLY-BY: ci
+-- DB: qnfo-audit
+-- Rollback: DELETE FROM remediation_contracts WHERE class = 'fm-binding-props-lost-on-dash-secret'; DELETE FROM failure_modes WHERE fm_key = 'binding-props-lost-on-dash-secret'; UPDATE agent_issues SET status = 'superseded' WHERE title LIKE 'BINDING-PROPS-RESTORE-1:%' AND status = 'open'
+
+INSERT OR IGNORE INTO failure_modes (fm_key, failure_mode, root_cause, remediation, detector, probe_class, first_seen, issue_id, trigger_condition, symptom, blast_radius) VALUES
+ ('binding-props-lost-on-dash-secret', 'a service binding loses its props.caller and the callee answers HTTP 401', 'a secret added or edited in the Cloudflare dashboard creates a new version that copies the bindings without their props (qnfo-fleet-dashboard version 288, 2026-10-12 09:33Z, "Add secret: GA4_SA_KEY"); qnfo-ai, qnfo-ops and qnfo-email authenticate internal callers only by props.caller', 'a canonical redeploy of the caller (canonical-deploy.yml workflow_dispatch workers=<name>) re-applies the declared props (qnfo-ops BINDING-PROPS-APPLY-1); qnfo-fleet-dashboard 1.31.0 answers through its direct AI binding meanwhile', 'no command-line ask in the last 24h failed with http 401 from qnfo-ai or was answered only by the direct path', 'fm-binding-props-lost-on-dash-secret', '2026-10-12', NULL, 'a worker secret is put from the Cloudflare dashboard instead of the secret-lock path', 'cmd_log rows whose error names http 401 or whose model ends in (direct)', 'every service binding of that worker that authenticates by props: model calls, ops calls, email routes');
+
+INSERT OR IGNORE INTO remediation_contracts (class, issue_id, precondition, action, verify_probe, verify_transport, max_attempts, escalate_to, expected_cadence_h, status, module, budget_ms, max_items, requires_container) VALUES
+ ('fm-binding-props-lost-on-dash-secret', NULL, 'DASHBOARD-FULL-ACCESS-1', 'failure-mode detector', 'SELECT ''1'' AS expected, CASE WHEN (SELECT COUNT(*) FROM cmd_log WHERE ts > datetime(''now'', ''-24 hours'') AND ts > ''2026-10-12 12:00:00'' AND (COALESCE(error, '''') LIKE ''%http 401%'' OR COALESCE(model, '''') LIKE ''%(direct)%'')) = 0 THEN ''1'' ELSE ''0'' END AS observed', 'd1-query', 3, 'qnfo-fleet-dashboard', 1, 'holding', 'failure-mode', 45000, 5, 0);
+
+INSERT INTO agent_issues (title, description, source, category, priority, status, created_at, updated_at)
+SELECT 'BINDING-PROPS-RESTORE-1: a dashboard secret edit strips service-binding props; redeploy the worker automatically',
+ 'Charter pillar: autonomy. Failure mode binding-props-lost-on-dash-secret (migrations/2026-10-12-dashboard-binding-props-loss.sql): on 2026-10-12 a secret added to qnfo-fleet-dashboard in the Cloudflare dashboard created a version without the props of its service bindings, and qnfo-ai answered every command-line ask with HTTP 401 until a canonical redeploy at 11:37Z re-applied them. qnfo-ops SECRET-CHANGE-WATCH-1 already records each worker secret change in cloud_ops_events; the remedy is for that step to dispatch canonical-deploy.yml with workers=<name> when the changed worker declares props on a [[services]] binding in its wrangler.toml, so the props come back within one tick without a session. Owner: qnfo-ops. Done when a secret change on a props-declaring worker is followed by a deployment_history row for that worker within 30 minutes.',
+ 'session:DASHBOARD-FULL-ACCESS-1', 'reliability', 'high', 'open', CAST(strftime('%s','now') AS INTEGER) * 1000, CAST(strftime('%s','now') AS INTEGER) * 1000
+WHERE NOT EXISTS (SELECT 1 FROM agent_issues WHERE title LIKE 'BINDING-PROPS-RESTORE-1:%' AND status = 'open');
