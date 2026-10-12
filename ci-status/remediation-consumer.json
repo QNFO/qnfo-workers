@@ -1,122 +1,18 @@
 {
  "ok": true,
  "marker": "REMEDIATION-CONSUMER-1",
- "verifier": "remediation-consumer@3ef2183dca38",
- "due": 14,
+ "verifier": "remediation-consumer@7320bd9a39d4",
+ "due": 1,
  "pass": 0,
- "fail": 14,
+ "fail": 1,
  "skipped": 0,
  "contracts": [
   {
-   "class": "issue-2404",
-   "issue_id": 2404,
+   "class": "issue-2417",
+   "issue_id": 2417,
    "verdict": "fail",
    "expected": "ok",
-   "observed": "missing-marker:qnfo-research-exec/worker.js",
-   "written": true
-  },
-  {
-   "class": "issue-2401",
-   "issue_id": 2401,
-   "verdict": "fail",
-   "expected": "2",
-   "observed": "0",
-   "written": true
-  },
-  {
-   "class": "issue-2402",
-   "issue_id": 2402,
-   "verdict": "fail",
-   "expected": "ok",
-   "observed": "missing-marker:qnfo-research-exec/worker.js",
-   "written": true
-  },
-  {
-   "class": "issue-2403",
-   "issue_id": 2403,
-   "verdict": "fail",
-   "expected": "ok",
-   "observed": "missing-marker:qnfo-research-exec/worker.js",
-   "written": true
-  },
-  {
-   "class": "issue-2405",
-   "issue_id": 2405,
-   "verdict": "fail",
-   "expected": "ok",
-   "observed": "missing-marker:qnfo-research-exec/worker.js",
-   "written": true
-  },
-  {
-   "class": "issue-2406",
-   "issue_id": 2406,
-   "verdict": "fail",
-   "expected": "ok",
-   "observed": "missing-marker:qnfo-research-exec/worker.js",
-   "written": true
-  },
-  {
-   "class": "issue-2407",
-   "issue_id": 2407,
-   "verdict": "fail",
-   "expected": "ok",
-   "observed": "missing-marker:qnfo-research-exec/worker.js",
-   "written": true
-  },
-  {
-   "class": "issue-2408",
-   "issue_id": 2408,
-   "verdict": "fail",
-   "expected": "ok",
-   "observed": "missing-marker:qnfo-research-exec/worker.js",
-   "written": true
-  },
-  {
-   "class": "issue-2409",
-   "issue_id": 2409,
-   "verdict": "fail",
-   "expected": "ok",
-   "observed": "missing-marker:qnfo-idea-triage/worker.js",
-   "written": true
-  },
-  {
-   "class": "issue-2411",
-   "issue_id": 2411,
-   "verdict": "fail",
-   "expected": "ok",
-   "observed": "missing-marker:qnfo-ops/worker.js",
-   "written": true
-  },
-  {
-   "class": "issue-2396",
-   "issue_id": 2396,
-   "verdict": "fail",
-   "expected": "ok",
-   "observed": "missing-marker:qnfo-ops/worker.js",
-   "written": true
-  },
-  {
-   "class": "issue-2410",
-   "issue_id": 2410,
-   "verdict": "fail",
-   "expected": "ok",
-   "observed": "missing-marker",
-   "written": true
-  },
-  {
-   "class": "issue-2412",
-   "issue_id": 2412,
-   "verdict": "fail",
-   "expected": "ok",
-   "observed": "missing-marker",
-   "written": true
-  },
-  {
-   "class": "issue-2413",
-   "issue_id": 2413,
-   "verdict": "fail",
-   "expected": "ok",
-   "observed": "status=404",
+   "observed": "missing-marker:scripts/host_census.py",
    "written": true
   }
  ],
@@ -143,14 +39,13 @@
   "http",
   "runner-https"
  ],
- "https": 3,
  "budget_exhausted": false,
- "runtime_verified_share_24h": 5.6,
+ "runtime_verified_share_24h": 5.5,
  "host_census": {
   "skipped": "ran within 6h"
  },
- "spent_ms": 17104,
- "head": "3ef2183dca3835bb7fad92f586ba2cf4f34cafb9",
+ "spent_ms": 8450,
+ "head": "7320bd9a39d4c94ad16c1d7ddb27d0a9f991775e",
  "job_status": "success",
- "ts": "2026-10-12T11:46:37Z"
+ "ts": "2026-10-12T11:56:58Z"
 }
