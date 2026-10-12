@@ -47,7 +47,7 @@ ok(seen.length === 4 && seen[1].model === "@cf/zai-org/glm-5.3-flash" && seen[1]
 const total = rows.reduce((s, r) => s + r.neurons, 0);
 ok(total > 0 && rows.every((r) => r.purpose.indexOf("binding") === 0), "every row still starts with 'binding', so per-worker and per-day sums are unchanged");
 
-// AI-STAGE-ATTRIBUTION-2 (0.12.4, agent_issues 2264): two research_parallel slots interleave in one isolate. Each slot runs in
+// AI-STAGE-ATTRIBUTION-2 (0.12.5, agent_issues 2264): two research_parallel slots interleave in one isolate. Each slot runs in
 // its own AsyncLocalStorage store (the worker's __attrSlotRun), sets its label, awaits, then calls the model: every call is
 // counted under its own slot's stage, not the label the other slot set last.
 const { AsyncLocalStorage } = await import("node:async_hooks");
