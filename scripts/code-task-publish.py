@@ -34,6 +34,7 @@ import datetime
 import json
 import os
 import re
+import secrets
 import shutil
 import sqlite3
 import subprocess
@@ -589,6 +590,11 @@ def publish_one(task, repo_dir, base, pr, delegate=False):
             if rb_err:
                 git(repo_dir, "reset", "-q", "--hard")
                 git(repo_dir, "clean", "-qfd")
+                # STALE-PUBLISH-REPROPOSE-1 (2026-10-12, agent_issues 2380): an edit whose SEARCH text is gone from main means main
+                # moved under the task (hot monolith files; 9 publish_failed rows in 7 days). That is not a failure of the change
+                # but of its base: the task ends superseded and publish_all enqueues the same goal on current main.
+                if STALE_SEARCH_RE.search(rb_err):
+                    return "superseded", None, "STALE-PUBLISH-REPROPOSE-1: " + why + "; rebase: " + rb_err + "; re-proposed on current main", None
                 return "publish_failed", None, why + "; rebase: " + rb_err, None
         else:
             git(repo_dir, "apply", pf)
@@ -637,6 +643,46 @@ def publish_one(task, repo_dir, base, pr, delegate=False):
         return "publish_failed", None, str(e)[:300], None
 
 
+STALE_SEARCH_RE = re.compile(r"edit \d+: SEARCH text occurs 0 times")
+REPROPOSE_NOTE = "[reproposed from {old}: main moved under the task before publish (STALE-PUBLISH-REPROPOSE-1); rebuild the same change on current main]"
+
+
+def _new_task_id():
+    alphabet = "0123456789abcdefghijklmnopqrstuvwxyz"
+    return "ct_" + "".join(secrets.choice(alphabet) for _ in range(14))
+
+
+def repropose(store, task, log=print):
+    """STALE-PUBLISH-REPROPOSE-1: one new queued task with the superseded task's repo, path, goal and anchor, so the orchestrator
+    rebuilds the change on current main (its ANCHOR-REPAIR-1 re-finds the anchor). The goal keeps its "[issue #N]" head, so
+    INTAKE_MAX_TASKS counts it. Returns the new id, or None when the row could not be written."""
+    try:
+        ctx = json.loads(task.get("ctx") or "{}")
+    except ValueError:
+        ctx = {}
+    goal = str(task.get("goal") or "").rstrip()
+    note = REPROPOSE_NOTE.format(old=task["id"])
+    if note not in goal:
+        goal = (goal[:5600] + "\n" + note) if len(goal) > 5600 else goal + "\n" + note
+    c0 = {"reproposed_from": task["id"]}
+    if isinstance(ctx.get("anchor"), str) and ctx.get("anchor"):
+        c0["anchor"] = ctx["anchor"]
+    if isinstance(ctx.get("extras"), list) and ctx.get("extras"):
+        c0["extras"] = ctx["extras"]
+    nid = _new_task_id()
+    try:
+        n = store.changes("INSERT INTO code_tasks (id, repo, path, goal, status, step, attempts, ctx, created_at, updated_at) VALUES (?,?,?,?, 'queued','read',0,?,?,?)",
+                          [nid, task.get("repo"), task.get("path"), goal, json.dumps(c0), now(), now()])
+    except Exception as e:  # noqa: BLE001 - the superseded row already says why; a missing successor is logged, never silent
+        log(f"::error::repropose {task['id']}: could not enqueue the successor: {e}")
+        return None
+    if n != 1:
+        log(f"::error::repropose {task['id']}: the successor row was not written")
+        return None
+    store.changes("UPDATE code_tasks SET ctx=json_set(COALESCE(ctx, '{}'), '$.reproposed_as', ?), updated_at=? WHERE id=?", [nid, now(), task["id"]])
+    return nid
+
+
 def publish_all(store, repo_dir, base, pr, log=print, delegate=False):
     ready = list_ready(store)
     if not ready:
@@ -659,6 +705,13 @@ def publish_all(store, repo_dir, base, pr, log=print, delegate=False):
             log(f"::warning::syntax_retry {t['id']}: {err} (sent back to the orchestrator, no branch pushed)")
             continue
         finish(store, t["id"], st, url, err)
+        if st == "superseded":
+            nid = repropose(store, t, log)
+            out["reproposed"] = out.get("reproposed", 0) + (1 if nid else 0)
+            if not nid:
+                out["failed"] += 1
+            log(f"::notice::superseded {t['id']}: {err} -> {nid or 'no successor'}")
+            continue
         if t.get("_carried") and st in ("published", "branch_pushed"):
             note_carry(store, t["id"], t["_carried"])
             out["mirror_carried"] = out.get("mirror_carried", 0) + 1
@@ -892,11 +945,23 @@ def selftest():
     shown = subprocess.run(["git", "--git-dir", remote, "show", "codeagent-rebaseok0001:scripts/x.py"], capture_output=True, text=True)
     check("rebased branch carries the re-applied edit", shown.stdout == "def f():\n    return 2\n", shown.stderr)
     tg, ts = row(store, "ct_rebasegone01"), row(store, "ct_rebasesame01")
-    check("edit whose SEARCH is gone: publish_failed with both reasons, nothing pushed",
-          tg["status"] == "publish_failed" and "does not apply" in tg["last_error"] and "rebase: edit 1: SEARCH text occurs 0 times" in tg["last_error"], dict(tg))
+    check("edit whose SEARCH is gone: superseded with both reasons, nothing pushed (STALE-PUBLISH-REPROPOSE-1)",
+          tg["status"] == "superseded" and "does not apply" in tg["last_error"] and "rebase: edit 1: SEARCH text occurs 0 times" in tg["last_error"], dict(tg))
+    succ_id = json.loads(tg["ctx"] or "{}").get("reproposed_as")
+    succ = row(store, succ_id) if succ_id else None
+    check("stale base: one successor task queued on the same path with the goal, the note and the provenance",
+          succ is not None and succ["status"] == "queued" and succ["step"] == "read" and succ["path"] == tg["path"]
+          and succ["goal"].startswith("return 2") and "reproposed from ct_rebasegone01" in succ["goal"]
+          and json.loads(succ["ctx"]).get("reproposed_from") == "ct_rebasegone01" and r.get("reproposed") == 1, dict(succ) if succ else succ_id)
     check("edits that change nothing: publish_failed, never an empty branch", ts["status"] == "publish_failed" and "changes nothing" in ts["last_error"], dict(ts))
     brg = subprocess.run(["git", "--git-dir", remote, "branch", "--list", "codeagent-rebasegone01", "codeagent-rebasesame01"], capture_output=True, text=True)
-    check("failed rebases push no branch", brg.stdout.strip() == "" and r["failed"] == 2)
+    check("failed and superseded rebases push no branch", brg.stdout.strip() == "" and r["failed"] == 1)
+    add_edits("ct_rebaseanch01", stale, [{"search": "    return 7", "replace": "    return 2"}])
+    store.changes("UPDATE code_tasks SET ctx=json_set(ctx, '$.anchor', ?) WHERE id=?", ["def f():", "ct_rebaseanch01"])
+    r2 = publish_all(store, work, "main", pr, quiet)
+    ta = row(store, "ct_rebaseanch01")
+    sa = row(store, json.loads(ta["ctx"]).get("reproposed_as"))
+    check("stale base: the anchor is carried to the successor", sa is not None and json.loads(sa["ctx"]).get("anchor") == "def f():" and r2.get("reproposed") == 1, dict(sa) if sa else None)
     check("rebase helpers: apply_edits refuses an ambiguous SEARCH and overlapping edits",
           apply_edits("a b a", [{"search": "a", "replace": "c"}])[1].startswith("edit 1: SEARCH text occurs 2 times")
           and apply_edits("abc", [{"search": "ab", "replace": "x"}, {"search": "bc", "replace": "y"}])[1] == "edits overlap"
