@@ -38,7 +38,7 @@ const sandbox = {
 };
 vm.createContext(sandbox);
 vm.runInContext(
-  block + "\n__export = { charterTarget, charterMeets, charterNum, charterEvaluate, charterRender, charterSplice, CHARTER_PILLARS, CHARTER_MVP, CHARTER_BEGIN, CHARTER_END, CHARTER_VERSION };",
+  block + "\n__export = { charterTarget, charterMeets, charterNum, charterEvaluate, charterRender, charterSplice, CHARTER_PILLARS, CHARTER_MVP, CHARTER_BEGIN, CHARTER_END, CHARTER_VERSION, CHARTER_FOLDS_SQL };",
   sandbox,
   { filename: "charter-block.js" },
 );
@@ -174,6 +174,45 @@ eq(C.charterEvaluate(liveWins, "2026-10-06T07:00:00.000Z").mvp_up, C.CHARTER_MVP
 const ev3 = C.charterEvaluate({}, "2026-10-01T10:33:00.000Z");
 eq(ev3.mvp_up, 0, "empty facts: nothing serving, nothing thrown");
 eq(ev3.health, null, "empty facts: health n/a");
+
+// --- MVP-FOLD-LATEST-1 (0.18.1, #2259): the fold map is the latest FOLD row per worker, not the latest row ----------------
+// worker_removals 41 folded qnfo-paper-reviser into qnfo-research-exec (2026-10-06); the D1 trigger worker_removals_from_live_audit
+// appended row 66 OBSERVED-REMOVED when the script was deleted (2026-10-09); 0.4.129's "MAX(id) is a fold" then dropped the fold.
+{
+  let sqlite = null;
+  try { sqlite = await import("node:sqlite"); } catch (e) { sqlite = null; }
+  if (!sqlite) {
+    console.log("charter.test: node:sqlite unavailable (Node < 22); CHARTER_FOLDS_SQL replay skipped");
+  } else {
+    const db = new sqlite.DatabaseSync(":memory:");
+    db.exec("CREATE TABLE worker_removals (id INTEGER PRIMARY KEY AUTOINCREMENT, worker TEXT NOT NULL, removed_at TEXT, action TEXT, target TEXT, rationale TEXT, evidence TEXT, source TEXT, recorded_at TEXT DEFAULT (datetime('now')))");
+    const ins = db.prepare("INSERT INTO worker_removals (id, worker, action, target) VALUES (?, ?, ?, ?)");
+    ins.run(39, "qnfo-paper-indexer", "folded", "qnfo-infra");                 // plain fold, latest row: mapped
+    ins.run(41, "qnfo-paper-reviser", "folded", "qnfo-research-exec");        // fold ...
+    ins.run(66, "qnfo-paper-reviser", "OBSERVED-REMOVED", null);              // ... followed by the trigger's row: still mapped
+    ins.run(21, "vault-indexer", "fold", "personal-companion");               // the 'fold' spelling
+    ins.run(70, "qnfo-twin-maintain", "OBSERVED-REMOVED", null);              // removed, never folded: not mapped
+    ins.run(44, "errata-hub", "folded", "qnfo-research-exec");
+    ins.run(71, "errata-hub", "RESTORED", null);                              // put back in service after the fold: not mapped
+    ins.run(45, "radar-hub", "folded", "");                                   // a fold with no host: not mapped
+    ins.run(50, "calendar-api", "folded", "personal-api");
+    ins.run(52, "calendar-api", "folded", "qnfo-lifecycle");                  // re-folded: the latest fold wins
+    const rows = db.prepare(C.CHARTER_FOLDS_SQL).all();
+    const map = {};
+    rows.forEach((r) => { map[r.worker] = r.host; });
+    eq(map["qnfo-paper-reviser"], "qnfo-research-exec", "a fold followed by OBSERVED-REMOVED stays mapped to its host");
+    eq(map["qnfo-paper-indexer"], "qnfo-infra", "a plain fold is mapped");
+    eq(map["vault-indexer"], "personal-companion", "the 'fold' spelling is mapped");
+    eq(map["qnfo-twin-maintain"], undefined, "a removed worker that was never folded is not mapped");
+    eq(map["errata-hub"], undefined, "a RESTORED row after the fold ends the fold");
+    eq(map["radar-hub"], undefined, "a fold without a host is not mapped");
+    eq(map["calendar-api"], "qnfo-lifecycle", "the latest fold wins when a worker is re-folded");
+    eq(rows.length, 4, "exactly the four live folds are returned");
+    // the 0.4.129 query, for the record: it loses the reviser once row 66 exists
+    const old = db.prepare("SELECT r.worker AS worker, r.target AS host FROM worker_removals r WHERE r.id = (SELECT MAX(id) FROM worker_removals WHERE worker = r.worker) AND lower(coalesce(r.action, '')) IN ('folded', 'fold') AND coalesce(r.target, '') <> ''").all();
+    eq(old.some((r) => r.worker === "qnfo-paper-reviser"), false, "the pre-0.18.1 query dropped the fold once the trigger row landed (the #2259 defect)");
+  }
+}
 
 // --- render + splice ----------------------------------------------------------
 const md = C.charterRender(ev);
