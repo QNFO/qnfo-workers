@@ -61,5 +61,13 @@ check("generate passes the pack to the writer and to the fact-check ground", /va
 check("the directive asks for components, data flow, the design decision and the trade-off", /Name the components involved/.test(L.Q08_DIRECTIVE) && /how data, requests or control move between them/.test(L.Q08_DIRECTIVE) && /design decision, default, constraint or assumption/.test(L.Q08_DIRECTIVE) && /trade-off/.test(L.Q08_DIRECTIVE));
 check("the directive no longer says 'no required arc' beside the required structure", !/No required arc/.test(L.Q08_DIRECTIVE));
 check("readers judge how the technology works", /how the technology involved works/.test(L.READER_PROMPT));
+// Q08-ENTITY-BACKGROUND-1 (0.25.0, run 390): the systems a headline names get their own background article
+{
+  const E = C.backgroundEntities;
+  const e1 = E({ title: "Apple's new 'Switch to Safari' campaign details why you should ditch Chrome" });
+  check("named products and organisations are picked from the headline", e1.includes("Apple") && e1.includes("Safari") && e1.includes("Chrome") && e1.length <= 4, e1);
+  check("question words and generic verbs are not entities", !E({ title: "Show HN: How We Built a Faster Queue" }).some((x) => /^(Show|How|We)$/.test(x)));
+  check("a repository title names its project", E({ title: "mhtsec/ARTEX" })[0] === "ARTEX");
+}
 console.log("context.test.mjs: " + passes + " passed, " + fails + " failed");
 process.exit(fails ? 1 : 0);
