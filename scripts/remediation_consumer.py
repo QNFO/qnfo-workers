@@ -86,7 +86,7 @@ WRITE_KW = (
 CONTRACT_SQL = """
 SELECT class, issue_id, precondition, action, verify_probe, verify_transport,
        max_attempts, escalate_to, expected_cadence_h, module, budget_ms,
-       next_due_at, max_items, attempts, last_verdict
+       next_due_at, max_items, attempts, last_verdict, ts
 FROM remediation_contracts
 WHERE (status = 'active' OR (status = 'holding' AND verify_transport = 'runner-https'))
   AND verify_transport NOT IN ('external-https', 'd1-query@portfolio-state')
@@ -586,6 +586,12 @@ def _selftest():
         if err2 or run_code_probe(pr2, tmp) != want:
             print(json.dumps({"ok": False, "case": "code-read", "spec": spec, "got": err2 or run_code_probe(pr2, tmp)}))
             return 1
+    if (contract_epoch("2026-10-13 11:26:05") != 1791890765 or contract_epoch("2026-10-13T11:26:05Z") != 1791890765
+            or contract_epoch("") is not None or not newer_than_checkout("2026-10-13 11:26:05", 1791890700)
+            or newer_than_checkout("2026-10-13 11:26:05", 1791890800) or newer_than_checkout("2026-10-13 11:26:05", None)
+            or newer_than_checkout(None, 1791890700)):
+        print(json.dumps({"ok": False, "case": "code-read-fresh-checkout"}))
+        return 1
     for bad, want in (('{"paths": ["../etc/passwd"], "absent": "x"}', "bad-path"), ('{"paths": ["/etc/passwd"], "absent": "x"}', "bad-path"),
                       ('{"paths": ["a"]}', "no-condition"), ('{"paths": ["a"], "absent": "x", "sql": 1}', "unknown-key:sql")):
         if parse_code_probe(bad)[1] != want:
@@ -774,6 +780,44 @@ def run_code_probe(probe, root=None):
     return "ok"
 
 
+# CODE-READ-FRESH-CHECKOUT-1 (2026-10-13): a run checks out main when it starts, and a migration that merges while it runs can add a
+# code-read detector whose marker only that merge brings. fm-factcheck-waits-for-slowest was judged "missing-marker" at 11:26:08 UTC by
+# the run of f5a8bda, a checkout that predates its own merge, and read as a recurrence. A failing code-read verdict on a contract created
+# after the checkout's commit is not written: the next run, on a newer checkout, judges it. A pass is always written.
+_CHECKOUT_EPOCH = []
+
+
+def checkout_epoch(root=None):
+    """Commit time (unix seconds) of the checked-out HEAD, or None when git cannot say."""
+    if root is None and _CHECKOUT_EPOCH:
+        return _CHECKOUT_EPOCH[0]
+    import subprocess
+    val = None
+    try:
+        r = subprocess.run(["git", "-C", root or REPO_ROOT, "log", "-1", "--format=%ct"], capture_output=True, text=True, timeout=10)
+        val = int(r.stdout.strip()) if r.returncode == 0 and r.stdout.strip().isdigit() else None
+    except (OSError, ValueError, subprocess.SubprocessError) as e:
+        print("CODE-READ-FRESH-CHECKOUT-1: git log failed: %s" % e, file=sys.stderr)
+        val = None
+    if root is None:
+        _CHECKOUT_EPOCH.append(val)
+    return val
+
+
+def contract_epoch(ts):
+    """Unix seconds of a remediation_contracts.ts value ('YYYY-MM-DD HH:MM:SS' UTC, or ISO), or None."""
+    m = re.match(r"^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2}):(\d{2})", str(ts or ""))
+    if not m:
+        return None
+    import calendar
+    return calendar.timegm(tuple(int(x) for x in m.groups()) + (0, 0, 0))
+
+
+def newer_than_checkout(ts, epoch):
+    ce = contract_epoch(ts)
+    return ce is not None and epoch is not None and ce > epoch
+
+
 def consume_code(c, rec, out, trusted):
     """Run one code-read contract against this checkout of main."""
     probe, why = parse_code_probe(c.get("verify_probe"))
@@ -787,6 +831,11 @@ def consume_code(c, rec, out, trusted):
         return
     obs = run_code_probe(probe)
     passed, verdict = classify("ok", obs)
+    if passed != 1 and newer_than_checkout(c.get("ts"), checkout_epoch()):
+        rec.update({"expected": "ok", "observed": obs, "verdict": "checkout-older-than-contract",
+                    "reason": "contract created %s, after this checkout's commit; the next run judges it" % c.get("ts")})
+        out["skipped"] += 1
+        return
     rec.update({"expected": "ok", "observed": obs, "verdict": verdict})
     d1(
         "INSERT INTO remediation_verifications "
