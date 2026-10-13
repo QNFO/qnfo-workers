@@ -6,14 +6,14 @@
   "service": "qnfo-lifecycle",
   "account_id": "edb167b78c9fb901ea5bca3ce58ccc4b",
   "token_present": true,
-  "stage": "verified",
-  "status": "success",
-  "http": 200,
-  "error": null,
+  "stage": "fallback-route",
+  "status": "failed",
+  "http": 409,
+  "error": "fallback-route http=409 body={\"result\": null, \"success\": false, \"errors\": [{\"code\": 10020, \"message\": \"A route with the same pattern already exists (used by Worker: qnfo-lifecycle). Either delete the existing route or try a different pattern.\"}], \"messages\": []} ; custom-domain http=405 body=attach http=405 body={\"success\": false, \"errors\": [{\"code\": 10405, \"message\": \"Method not allowed for this authentication scheme\"}], \"messages\": [], \"result\": null}",
   "zone_id": "84e9dc1d7fb72629ccdbe3174ed24420",
   "already_attached": null,
   "custom_domain_http": 405,
-  "route_http": 200,
-  "dns_http": 200,
-  "ts": "2026-09-30T20:44:16Z"
+  "route_http": 409,
+  "dns_http": null,
+  "ts": "2026-10-13T20:13:20Z"
 }
