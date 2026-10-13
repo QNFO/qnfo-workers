@@ -27,5 +27,21 @@ const fsrc = (await import("node:fs")).readFileSync(new URL("./worker.js", impor
 check("forecast drafts are gated with the lede check", /forecastProblems\(piece, banned\)\.concat\(ledeProblems\(piece\.text, fctx\)\)/.test(fsrc) && /forecastProblems\(retry, banned\)\.concat\(ledeProblems\(retry\.text, fctx\)\)/.test(fsrc));
 check("no prompt or page prescribes cold structural objectivity any more", !/cold structural objectivity/i.test(fsrc) && !/Cold, structural, timeless/.test(fsrc));
 check("the forecast directive has a LEDE rule", /LEDE \(inverted pyramid, checked\): the first paragraph, at most 70 words, tells a reader who has never seen q08 what is being forecast/.test(fsrc));
+// Q08-LEDE-SPLIT-1 (0.17.5, run 368)
+{
+  const s1 = "Kevin Kelly published a list of predictions about artificial intelligence in 2016, and a post on his blog this week checks each one against what happened.";
+  const s2 = "He finds that most of the predictions about cheap cloud intelligence came true sooner than he expected.";
+  const s3 = "The ones about how people would feel about it did not, and he says so plainly in a closing section that lists each miss and what he got wrong about the way companies and users would adopt the tools over the following decade, from the first chat assistants in offices to the coding tools that most developers now use every day at work.";
+  const draft = "# Kevin Kelly checks his 2016 AI predictions\n\n" + [s1, s2, s3].join(" ") + "\n\nSecond paragraph.\n\nworth your time: yes - x";
+  const out = L.splitLongLede(draft);
+  const first = L.ledeOf(out);
+  check("an overlong lede is split at a sentence boundary", first === s1 + " " + s2 && out.includes("\n\n" + s3 + "\n\n"), out);
+  check("the split lede passes the lede check", L.ledeProblems(out, { source: "hn", title: "Kevin Kelly's 2016 AI Predictions, 10 Years Later", url: "https://kk.org/x" }).length === 0, L.ledeProblems(out, { source: "hn", title: "Kevin Kelly's 2016 AI Predictions, 10 Years Later" }));
+  check("no word is added or removed", out.replace(/\s+/g, " ") === draft.replace(/\s+/g, " "));
+  check("a short lede is left alone", L.splitLongLede("# T\n\nShort lede here.\n\nBody.") === "# T\n\nShort lede here.\n\nBody.");
+  const one = "# T\n\n" + "word ".repeat(120).trim() + ".\n\nBody.";
+  check("a single overlong sentence is left for the gate", L.splitLongLede(one) === one);
+  check("normalizeDraft applies the split", L.ledeOf(L.normalizeDraft(draft)) === s1 + " " + s2);
+}
 console.log("lede.test.mjs: " + passes + " passed, " + fails + " failed");
 process.exit(fails ? 1 : 0);
