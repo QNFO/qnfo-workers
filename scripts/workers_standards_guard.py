@@ -16,6 +16,10 @@ It fails a change only for what the change ADDS, so existing debt that other ses
       swallowed-catch            an empty catch block or .catch(function () {}) / .catch(() => {}): the failure never reaches Workers Logs
                                  (WORKERS-BP-LOGGING-1); log it or record it, or mark the line standards-ok with the reason
       ai-response-string-assumption  `.response.trim()` and friends on a Workers AI result: in JSON mode `response` is a parsed object
+      undefined-call             a bare call to a name the file never defines, declares, imports or receives (UNDEFINED-CALL-GUARD-1)
+  * (WRITE-SUCCESS-CODES-1) a worker.js or scripts/*.py line that accepts only HTTP 200 (`== 200`, `!= 200`, `=== 200`, `!== 200`)
+    within 8 lines after a POST/PUT/PATCH: a write's success is any 2xx (Cloudflare answers 201 when a Worker secret is created, and
+    run 38258885817 reported a completed secret write as a failure, filed as ci-watchdog #1033). Use `200 <= (st or 0) < 300` / `r.ok`;
   * a wrangler.toml change that removes an [observability] block or its traces, switches logs or traces off, edits the block and leaves it
     without logs and traces, or a brand-new worker (new wrangler.toml) without logs and traces enabled;
   * a wrangler.toml change that adds a [[queues.consumers]] block without dead_letter_queue (a failed message is otherwise discarded);
@@ -54,7 +58,149 @@ IO_CALL = r"(?:prepare\s*\(.*\)\s*\.\s*(?:bind\s*\(.*\)\s*\.\s*)?(?:run|all|firs
 FLOATING = re.compile(r"^\s*(?:(?:globalThis\.)?fetch\s*\(|(?:env|this\.env)\.[A-Za-z_]\w*\s*\.\s*" + IO_CALL + r"\s*\(|caches\.default\.(?:put|delete)\s*\().*\)\s*;\s*(?://.*)?$")
 # The previous line leaves an expression open (an await, a waitUntil( argument, an assignment, an arrow body...): the call is consumed there.
 OPEN_PREV = re.compile(r"(?:[(\[,=?:&|+]|=>|\bawait|\breturn|\bvoid|\byield)\s*$")
+# WRITE-SUCCESS-CODES-1: a status check that accepts only 200, and the write call it judges (looked for in the 8 lines above).
+ONLY_200 = re.compile(r"\b[\w.]+\s*(?:===|!==|==|!=)\s*200\b|\b200\s*(?:===|!==|==|!=)\s*[\w.]+")
+WRITE_CALL = re.compile(r"[\"'](?:PUT|POST|PATCH)[\"']")
+def write_200_only(lines, full):
+    """(rule, line, why, text) for each added line that accepts only HTTP 200 shortly after a write call."""
+    bad = []
+    for ln, text in lines:
+        s = text.strip()
+        if s.startswith(("//", "#", "*")) or "standards-ok:" in text or not ONLY_200.search(text): continue
+        above = "\n".join(full[max(0, ln - 9):ln]) if full else text
+        if WRITE_CALL.search(above):
+            bad.append(("write-200-only", ln, "a write succeeded with any 2xx (201 Created, 204 No Content): accept 200 <= status < 300 or r.ok, not only 200", text))
+    return bad
+
 ALLOWLIST = os.path.join(os.path.dirname(os.path.abspath(__file__)), "workers-standards-allowlist.txt")
+
+# UNDEFINED-CALL-GUARD-1 (2026-10-13, metrics code_review_refusals_7d 14 and code_task_success_rate_30d 0.25): five code-loop tasks in 7 days
+# ended on the goal reviewers' refusal because the patch called a helper it never defined (parseRefLine, checkCondition, parseGa4Report:
+# a ReferenceError the first time the line runs). An added line that calls a bare name the file never defines, declares, imports, receives
+# as a parameter or uses as a value fails here, so scripts/code-task-publish.py sends the task back to the model with the name before any
+# pull request or review. The file is tokenised first (strings, templates, comments and regex literals blanked), and `name(...) {` is a
+# method definition, not a call. Measured on 2026-10-13: 0 hits over every line of the 28 live worker.js files; the shapes of the refused
+# patches are caught. A false positive carries `// standards-ok: <reason>` like every other rule.
+JS_KEYWORDS = set("""if for while switch catch function return typeof new await async yield void delete in of do else try with throw case
+instanceof super import export class extends default finally break continue var let const this null true false undefined get set static""".split())
+JS_GLOBALS = set("""parseInt parseFloat isNaN isFinite String Number Boolean Array Object Symbol BigInt Date RegExp Error TypeError RangeError
+SyntaxError ReferenceError EvalError URIError AggregateError Promise Map Set WeakMap WeakSet WeakRef FinalizationRegistry Proxy Reflect
+encodeURIComponent decodeURIComponent encodeURI decodeURI escape unescape setTimeout clearTimeout setInterval clearInterval queueMicrotask
+structuredClone fetch atob btoa Response Request Headers URL URLSearchParams URLPattern TextEncoder TextDecoder TextEncoderStream
+TextDecoderStream AbortController AbortSignal FormData Blob File ReadableStream WritableStream TransformStream CompressionStream
+DecompressionStream crypto require eval Function Uint8Array Uint8ClampedArray Int8Array Uint16Array Int16Array Uint32Array Int32Array
+Float32Array Float64Array BigInt64Array BigUint64Array ArrayBuffer SharedArrayBuffer DataView WebSocket WebSocketPair HTMLRewriter Event
+EventTarget CustomEvent MessageChannel ByteLengthQueuingStrategy CountQueuingStrategy FixedLengthStream IdentityTransformStream DOMException
+Intl console globalThis caches navigator scheduler performance setImmediate clearImmediate Buffer process alert EventSource
+importScripts postMessage addEventListener removeEventListener dispatchEvent getComputedStyle requestAnimationFrame cancelAnimationFrame
+matchMedia PLACEHOLDER XMLSerializer DOMParser IntersectionObserver MutationObserver ResizeObserver PerformanceObserver DataTransfer Image Node
+NodeFilter Element HTMLElement Document DocumentFragment Range Selection CSS getSelection KeyboardEvent MouseEvent PointerEvent InputEvent
+FocusEvent TouchEvent ClipboardEvent ShadowRoot Worker Notification""".split())
+REGEX_PREV = set("(,=:[!&|?{};+-*%<>~^")
+REGEX_WORDS = {"return", "typeof", "case", "in", "of", "delete", "void", "throw", "new", "else", "do", "yield", "await"}
+
+def mask(src):
+    """The source with string, template, comment and regex-literal contents blanked (newlines kept), so positions and lines are unchanged."""
+    out = list(src); n = len(src); i = 0; prev = ""; word = ""
+    def blank(a, b):
+        for k in range(max(a, 0), min(b, n)):
+            if out[k] != "\n": out[k] = " "
+    def skip_template(j):
+        # j is just after the opening backtick; returns index of the closing backtick
+        while j < n:
+            ch = src[j]
+            if ch == "\\": j += 2; continue
+            if ch == "`": return j
+            if ch == "$" and j + 1 < n and src[j + 1] == "{":
+                depth = 1; j += 2
+                while j < n and depth:
+                    c2 = src[j]
+                    if c2 == "\\": j += 2; continue
+                    if c2 == "`": j = skip_template(j + 1) + 1; continue
+                    if c2 in "\"'":
+                        q = c2; j += 1
+                        while j < n and src[j] != q and src[j] != "\n": j += 2 if src[j] == "\\" else 1
+                        j += 1; continue
+                    if c2 == "{": depth += 1
+                    elif c2 == "}": depth -= 1
+                    j += 1
+                continue
+            j += 1
+        return n
+    while i < n:
+        c = src[i]
+        if c == "/" and i + 1 < n and src[i + 1] == "/":
+            j = src.find("\n", i); j = n if j < 0 else j; blank(i, j); i = j; continue
+        if c == "/" and i + 1 < n and src[i + 1] == "*":
+            j = src.find("*/", i + 2); j = n if j < 0 else j + 2; blank(i, j); i = j; continue
+        if c in "\"'":
+            j = i + 1
+            while j < n and src[j] != c and src[j] != "\n": j += 2 if src[j] == "\\" else 1
+            blank(i + 1, j); i = j + 1; prev = "a"; word = ""; continue
+        if c == "`":
+            j = skip_template(i + 1); blank(i + 1, j); i = j + 1; prev = "a"; word = ""; continue
+        if c == "/" and (prev == "" or prev in REGEX_PREV or word in REGEX_WORDS):
+            j = i + 1; in_class = False
+            while j < n and src[j] != "\n":
+                ch = src[j]
+                if ch == "\\": j += 2; continue
+                if ch == "[": in_class = True
+                elif ch == "]": in_class = False
+                elif ch == "/" and not in_class: break
+                j += 1
+            blank(i + 1, j); i = j + 1
+            while i < n and (src[i].isalpha()): i += 1
+            prev = "a"; word = ""; continue
+        if c.isspace(): i += 1; continue
+        if c.isalnum() or c in "_$":
+            j = i
+            while j < n and (src[j].isalnum() or src[j] in "_$"): j += 1
+            word = src[i:j]; prev = "a"; i = j; continue
+        prev = c; word = ""; i += 1
+    return "".join(out)
+
+CALL = re.compile(r"(?<![\w$.#])([A-Za-z_$][\w$]*)\s*\(")
+IDENT = re.compile(r"(?<![\w$])[A-Za-z_$][\w$]*")
+METHOD_DEF = re.compile(r"^\s*(?:(?:async|static|get|set|override|public|private|protected)\s+)*\*?\s*#?([A-Za-z_$][\w$]*)\s*\([^()]*\)\s*\{")
+
+def defined_names(code):
+    names = set()
+    for m in re.finditer(r"\bfunction\s*\*?\s*([A-Za-z_$][\w$]*)", code): names.add(m.group(1))
+    for line in code.split("\n"):
+        md = METHOD_DEF.match(line)
+        if md: names.add(md.group(1))
+    for m in IDENT.finditer(code):
+        j = m.end()
+        while j < len(code) and code[j] in " \t": j += 1
+        if j >= len(code) or code[j] != "(": names.add(m.group(0))
+    return names
+
+def closes_into_block(line, open_idx):
+    """True when the parenthesis opened at open_idx closes and is followed by `{`: `name(...) {` is a method definition, never a call."""
+    depth = 0
+    for k in range(open_idx, len(line)):
+        if line[k] == "(": depth += 1
+        elif line[k] == ")":
+            depth -= 1
+            if depth == 0:
+                rest = line[k + 1:].lstrip()
+                return rest.startswith("{")
+    return False
+
+def undefined_calls_in(code_lines, defs, linenos):
+    out = []
+    for ln in linenos:
+        if ln < 1 or ln > len(code_lines): continue
+        line = code_lines[ln - 1]
+        md = METHOD_DEF.match(line)
+        for m in CALL.finditer(line):
+            name = m.group(1)
+            if md and m.start(1) == md.start(1): continue
+            if closes_into_block(line, m.end() - 1): continue
+            if name in JS_KEYWORDS or name in JS_GLOBALS or name in defs: continue
+            if re.search(r"\bfunction\s*\*?\s*$", line[:m.start()]): continue
+            out.append((ln, name))
+    return out
 
 def git(*a):
     r = subprocess.run(["git", *a], capture_output=True, text=True)
@@ -105,7 +251,21 @@ def check_code(lines, full=None):
                 prev = full[i] if i >= 0 else ""
             if not OPEN_PREV.search(re.sub(r"\s//(?!/).*$", "", prev).rstrip()):
                 bad.append(("floating-promise", ln, "a promise is started and dropped: await it, return it or pass it to ctx.waitUntil()", text))
+    if full and lines:
+        bad += undefined_call_findings(lines, full)
     return bad
+
+def undefined_call_findings(lines, full):
+    """undefined-call findings for the added lines (lineno, text) against the whole new file `full` (list of lines)."""
+    keep = {}
+    for ln, text in lines:
+        s = text.strip()
+        if s.startswith("//") or s.startswith("*") or "standards-ok:" in text: continue
+        keep[ln] = text
+    if not keep: return []
+    code = mask("\n".join(full)); defs = defined_names(code)
+    return [("undefined-call", ln, "a call to %s(), which this file never defines, declares, imports or receives: define it, call an existing helper, or call it on its object" % name, keep[ln])
+            for ln, name in undefined_calls_in(code.split("\n"), defs, sorted(keep))]
 
 def strip_comments(cfg): return "\n".join(l for l in cfg.split("\n") if not l.strip().startswith("#"))
 
@@ -234,7 +394,12 @@ def main():
             if os.path.exists(os.path.join(d, "RETIRED")) or os.path.exists(os.path.join(d, "FOLDED")): continue
             if re.fullmatch(r"[^/]+/worker\.js", n) and os.path.exists(n):
                 full = open(n, encoding="utf-8", errors="replace").read().split("\n")
-                viol += [(n, *v) for v in check_code(added_lines(base, n), full)]
+                added = added_lines(base, n)
+                viol += [(n, *v) for v in check_code(added, full)]
+                viol += [(n, *v) for v in write_200_only(added, full)]
+            elif re.fullmatch(r"scripts/[^/]+\.py", n) and os.path.exists(n) and not re.search(r"(_test|\.test)\.py$", n):
+                full = open(n, encoding="utf-8", errors="replace").read().split("\n")
+                viol += [(n, *v) for v in write_200_only(added_lines(base, n), full)]
             elif re.fullmatch(r"[^/]+/wrangler\.(toml|jsonc)", n):
                 viol += [(n, *v) for v in check_config(base, n, added_lines(base, n))]
         viol = [v for v in viol if not allowed(allow, v[0], v[1], v[4])]
@@ -245,7 +410,7 @@ def main():
         print("WORKERS-STANDARDS-GUARD-1: ok (%d changed files checked against %s)" % (len(names), base)); return spof
     print("WORKERS-STANDARDS-GUARD-1: %d violation(s) added by this change:" % len(viol))
     for f, name, ln, why, _ in viol: print("  %s:%d [%s] %s" % (f, ln, name, why))
-    print("Fix it, mark a false positive with `// standards-ok: <reason>` on the line, or record a reviewed exception in scripts/workers-standards-allowlist.txt.")
+    print("Fix it, mark a false positive with `// standards-ok: <reason>` (`# standards-ok: <reason>` in Python) on the line, or record a reviewed exception in scripts/workers-standards-allowlist.txt.")
     return 1
 
 if __name__ == "__main__":

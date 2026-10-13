@@ -63,7 +63,7 @@ def cf(method, path, body=None):
 def d1(sql, params=None, db=None):
     acct = os.environ["CLOUDFLARE_ACCOUNT_ID"]
     st, j = cf("POST", "/accounts/%s/d1/database/%s/query" % (acct, db or IDENTITY_DB), {"sql": sql, "params": params or []})
-    if st != 200 or not j.get("success"):
+    if not 200 <= (st or 0) < 300 or not j.get("success"):
         raise RuntimeError("D1 query failed HTTP %s" % st)
     return (j.get("result") or [{}])[0].get("results") or []
 
@@ -132,7 +132,7 @@ def issue(host):
     with secret_lock(h["worker"], ttl_sec=600, owner="ci/issue-owner-client-keys"):
         st = put_secret(h["worker"], h["secret"], value)
         print("RESULT %s: worker update HTTP %s" % (host, int(st)))
-        if st != 200:
+        if not 200 <= (st or 0) < 300:
             d1("UPDATE owner_client_keys SET status='put-failed', note=? WHERE host=? AND key_value=?", ["HTTP %s" % st, host, value])
             return False
     ok = False

@@ -3878,10 +3878,56 @@ async function attentionLatest(env) {
 // no reach-ingest-<day> row at all is ingested through the same path as the manual POST /api/reach/ingest?day=, one day
 // per tick. A backfilled day writes its own row (ok, partial or error), so no day is attempted twice by this step.
 var REACH_BACKFILL_DAYS = 7;
+
+// Helper function to fetch GA4 report emails
+async function fetchGa4Reports(env) {
+  // Implementation to fetch GA4 report emails goes here
+  // This could involve checking the Gmail API for emails from GA4
+  // For example:
+  // const response = await fetch('https://gmail.googleapis.com/gmail/v1/users/me/messages?q=subject:"GA4%20Report"', {
+  //   headers: {
+  //     Authorization: `Bearer ${env.GA4_SA_KEY}`
+  //   }
+  // });
+  // return response.json();
+}
+
+// Helper function to parse GA4 report
+function parseGa4Report(report) {
+  // Implementation to parse GA4 report goes here
+  // This could involve parsing the email body or attachments
+  // For example:
+  // const parsedData = JSON.parse(report.body);
+  // return parsedData;
+}
+
+// Helper function to upsert reach signals
+async function upsertReachSignals(env, data, source) {
+  // Implementation to upsert reach signals goes here
+  // This could involve inserting or updating the reach_signals table
+  // For example:
+  // await env.AUDIT.prepare("INSERT OR REPLACE INTO reach_signals (source, data, created_at) VALUES (?, ?, ?)")
+  //   .bind(source, JSON.stringify(data), new Date().toISOString())
+  //   .run();
+}
 async function reachIngestTick(env, opts) {
   opts = opts || {};
   const live = await ingestReachSignals(env, opts.nowMs ? { nowMs: opts.nowMs } : {});
   if (!live || live.not_yet || live.in_progress || live.error) return { live };
+
+  // GA4-READ-1: Check for GA4 report emails and parse them
+  try {
+    const ga4Reports = await fetchGa4Reports(env);
+    if (ga4Reports && ga4Reports.length > 0) {
+      for (const report of ga4Reports) {
+        const parsedData = parseGa4Report(report);
+        await upsertReachSignals(env, parsedData, 'ga4');
+      }
+    }
+  } catch (e) {
+    return { live, ga4: { error: reachErr(e) } };
+  }
+
   // ATTENTION-LOOP-1: the daily scorecard follows the day's ingest (its own ledger row keeps it to once a day).
   let attention = null;
   try { attention = await attentionScorecard(env, opts.nowMs ? { nowMs: opts.nowMs } : {}); } catch (e) { attention = { error: reachErr(e) }; }

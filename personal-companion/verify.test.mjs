@@ -122,7 +122,7 @@ function modelWorld(o) {
     const sys = (input.messages && input.messages[0] && input.messages[0].content) || "";
     if (input.text) return { data: [] };
     if (/strict fact-checker/.test(sys)) { log.review++; if (o.reviewDown) throw new Error("reviewer down"); return { response: o.review ? o.review(model, sys) : '{"unsupported":[],"verdict":"pass"}' }; }
-    if (/adversarial reader/.test(sys)) { log.critic++; if (o.criticDown) throw new Error("critic down"); return { response: o.critic || '{"specificity":8,"argument":8,"objection":8,"voice":8,"grounding":9,"verdict":"accept","why":"ok"}' }; }
+    if (/adversarial reader/.test(sys)) { log.critic++; if (o.criticDown) throw new Error("critic down"); return { response: o.critic || '{"specificity":8,"argument":8,"objection":8,"voice":8,"grounding":9,"systems":8,"verdict":"accept","why":"ok"}' }; }
     log.writer++; return { response: typeof o.draft === "function" ? o.draft(log.writer, input) : (o.draft || goodBody()) };
   } };
   return { AI, log };

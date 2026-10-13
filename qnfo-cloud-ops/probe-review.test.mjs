@@ -49,7 +49,11 @@ contract("issue-4", 4, "SELECT '1' AS expected, '0' AS observed", { module: "pro
 contract("issue-5", 5, "SELECT 'ok' AS expected, 'pending' AS observed", { module: "probe-template-v2-loop" });
 contract("issue-6", 6, "SELECT 'ok' AS expected, 'ok' AS observed");
 contract("issue-7", 7, '{"url":"https://x"}', { transport: "runner-https" });
+contract("fm-standing-1", 1, "SELECT '0' AS expected, '0' AS observed", { module: "failure-mode" });
+contract("fm-standing-2", 2, "SELECT '0' AS expected, '0' AS observed", { status: "probe-review-refused" });
+contract("belief-standing-3", 3, "SELECT '1' AS expected, '1' AS observed");
 const sel = db.prepare(P.PROBE_REVIEW_SELECT).all().map((r) => r.class);
+ok(!sel.some((c) => /^(fm|belief)-/.test(c)), "PROBE-REVIEW-DETECTORS-1: standing fm-/belief- detectors are never judged, even with an issue_id or a refused status", sel);
 ok(sel.join(",") === "issue-1,issue-2,issue-3", "selection: open issues, d1-query SELECT probes, no template or METRIC-TRIGGER or closed or https contract", sel);
 
 let calls = [];

@@ -199,8 +199,21 @@ def retired_by_id(workflow_id, workflows: list[dict]):
     return w
 
 
+def split_action(subject: str, workflows: list[dict]) -> tuple[str, str | None]:
+    """CI-ACTION-IDENTITY-1: ('cf-ops-actions', 'cf-ops-actions gen-activitypub-key qnfo-gateway') for a per-action subject
+    (ci_watchdog.action_key: a dispatched run whose run-name names the action); (subject, None) for a plain workflow subject."""
+    title = " ".join((subject or "").split())
+    names = {w.get("name") for w in workflows or []}
+    if title in names or " " not in title:
+        return title, None
+    head = title.split(" ", 1)[0]
+    return (head, title) if head in names else (title, None)
+
+
 def latest_green(subject: str, since_iso: str | None, workflows: list[dict] | None = None):
-    """Newest successful run of workflow `subject` created strictly after since_iso."""
+    """Newest successful run of workflow `subject` created strictly after since_iso. For a per-action subject only a run
+    with the same run title counts: a green `report` never closes a failed `gen-activitypub-key` (CI-ACTION-IDENTITY-1)."""
+    subject, action_title = split_action(subject, workflows if workflows is not None else list_workflows())
     cands = _subject_candidates(subject)
     wf_id = None
     for w in (workflows if workflows is not None else list_workflows()):
@@ -216,6 +229,8 @@ def latest_green(subject: str, since_iso: str | None, workflows: list[dict] | No
               if (r.get("name") or "") in cands]
     for r in rs:  # newest first
         if r.get("conclusion") != "success":
+            continue
+        if action_title and " ".join((r.get("display_title") or "").split())[:100] != action_title:
             continue
         if since_iso and (r.get("created_at") or "") <= since_iso:
             continue
@@ -278,7 +293,7 @@ def main() -> int:
         # green-run rule only runs when the failure time is known; a retired workflow needs no timestamp.
         g = latest_green(subj, fail_created, all_wfs) if fail_created else None
         if not g:
-            rw = retired_by_id(fail_wf_id, all_wfs) or retired_workflow(subj, all_wfs)
+            rw = retired_by_id(fail_wf_id, all_wfs) or retired_workflow(split_action(subj, all_wfs)[0], all_wfs)
             if rw:
                 comment = (
                     f"Auto-closed by `scripts/ci_watchdog_resolve.py` (workflow retired).\n\n"
