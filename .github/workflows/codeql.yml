@@ -1,0 +1,71 @@
+name: codeql
+
+# GHA-AUDIT-CODEQL-1 (issue 2509, pillar security/cost, 2026-10-13).
+#
+# The repository ran CodeQL "default setup", which scans every push to main. GHA-AUDIT-1
+# counted 26 such runs in 88 minutes (about 6 runner-hours), most of them for the fleet
+# bots' `ci(status) [skip ci]` artifact commits, competing for the runner slots that
+# canonical-deploy and the remediation loops need.
+#
+# This advanced setup scans the same languages, but:
+#   - a `[skip ci]` commit skips it (default setup ignores that marker);
+#   - pushes that touch only the bot artifact trees (ci-status/**, audits/**) are ignored;
+#   - a weekly schedule still sweeps the whole tree.
+#
+# GitHub rejects advanced-setup uploads while default setup is enabled, so default setup
+# must be turned off in Settings > Code security > CodeQL analysis (or by
+# PATCH /repos/{owner}/{repo}/code-scanning/default-setup {"state":"not-configured"}
+# with a token holding security_events admin).
+
+on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - 'ci-status/**'
+      - 'audits/**'
+  pull_request:
+    branches: [main]
+    paths-ignore:
+      - 'ci-status/**'
+      - 'audits/**'
+  schedule:
+    - cron: '17 4 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# GHA-AUDIT-1: a newer push to a PR cancels the superseded run; push runs are grouped per sha and never cancel.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event_name == 'pull_request' && github.event.pull_request.number || github.sha }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  analyze:
+    name: analyze (${{ matrix.language }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      actions: read
+      contents: read
+      security-events: write
+    strategy:
+      fail-fast: false
+      matrix:
+        language: [actions, javascript-typescript, python]
+    steps:
+      - uses: actions/checkout@v6
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v4
+        with:
+          languages: ${{ matrix.language }}
+          build-mode: none
+          config: |
+            paths-ignore:
+              - ci-status
+              - audits
+              - archive
+      - name: Perform CodeQL analysis
+        uses: github/codeql-action/analyze@v4
+        with:
+          category: "/language:${{ matrix.language }}"
