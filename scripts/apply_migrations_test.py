@@ -205,6 +205,15 @@ INSERT OR REPLACE INTO ops_config (key, value) VALUES ('after_deep', '1');
 rc = M.apply_file("migrations/deep.sql", deep, "a", "t", "c7", emit)
 ok(rc == 1 and "D1-TRIGGER-DEPTH-1" in out[-1] and not db.execute("SELECT 1 FROM sqlite_master WHERE name = 'hb_feed'").fetchone()
    and not db.execute("SELECT 1 FROM ops_config WHERE key = 'after_deep'").fetchone(), "a trigger that makes a write too deep is dropped at once and the file stops", out[-1])
+# D1-TRIGGER-DEPTH-RETRY-1: the same content is not re-run (each re-run re-creates the trigger and fails writes until the canary drops it).
+n_retry = len(calls)
+rc = M.apply_file("migrations/deep.sql", deep, "a", "t", "c7b", emit)
+created_again = [q for q in calls[n_retry:] if q.lstrip().upper().startswith("CREATE TRIGGER")]
+ok(rc == 1 and "D1-TRIGGER-DEPTH-RETRY-1" in out[-1] and not created_again, "a file the depth canary refused is not re-run with the same content", (out[-1], calls[n_retry:]))
+ok(db.execute("SELECT COUNT(*) FROM migration_runs WHERE file = 'migrations/deep.sql' AND status = 'error'").fetchone()[0] == 1,
+   "and the refused retry adds no second error row")
+rc = M.apply_file("migrations/deep.sql", deep.replace("-- depth test", "-- depth test, changed"), "a", "t", "c7c", emit)
+ok(rc == 1 and "D1-TRIGGER-DEPTH-1" in out[-1] and "RETRY" not in out[-1], "a changed file (new sha256) runs again", out[-1])
 C.call = real_call
 shallow = deep.replace("migrations/deep", "x")
 rc = M.apply_file("migrations/shallow.sql", shallow, "a", "t", "c8", emit)
