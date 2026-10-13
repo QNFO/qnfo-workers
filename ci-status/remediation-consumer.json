@@ -1,85 +1,12 @@
 {
  "ok": true,
  "marker": "REMEDIATION-CONSUMER-1",
- "verifier": "remediation-consumer@f5bba82abfab",
- "due": 9,
- "pass": 5,
- "fail": 4,
+ "verifier": "remediation-consumer@0245306b23c2",
+ "due": 0,
+ "pass": 0,
+ "fail": 0,
  "skipped": 0,
- "contracts": [
-  {
-   "class": "fm-notice-reply-encoded-subject",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "ok",
-   "observed": "ok",
-   "written": true
-  },
-  {
-   "class": "issue-2339",
-   "issue_id": 2339,
-   "verdict": "fail",
-   "expected": "ok",
-   "observed": "pending: under 24 hours since qnfo-ai-search 2.5.0 first ran",
-   "written": true
-  },
-  {
-   "class": "fm-mail-draft-fabrication",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "0",
-   "observed": "0",
-   "written": true
-  },
-  {
-   "class": "issue-2165",
-   "issue_id": 2165,
-   "verdict": "fail",
-   "expected": "ok",
-   "observed": "pending: fewer than 20 judged claims on answers written by 2.5.0 or later",
-   "written": true
-  },
-  {
-   "class": "fm-zaraz-autoinject-worker-html",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "ok",
-   "observed": "ok",
-   "written": true
-  },
-  {
-   "class": "issue-2473",
-   "issue_id": 2473,
-   "verdict": "fail",
-   "expected": "ok",
-   "observed": "missing-marker:qnfo-research-exec/worker.js",
-   "written": true
-  },
-  {
-   "class": "fm-outward-prose-no-lede",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "0",
-   "observed": "0",
-   "written": true
-  },
-  {
-   "class": "fm-unbounded-ready-queue",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "0",
-   "observed": "0",
-   "written": true
-  },
-  {
-   "class": "issue-2483",
-   "issue_id": 2483,
-   "verdict": "fail",
-   "expected": "ok",
-   "observed": "present-marker:scripts/ai-attribution-personal-companion-test.mjs",
-   "written": true
-  }
- ],
+ "contracts": [],
  "trusted_transports": [
   "binding-http",
   "cf-api",
@@ -103,21 +30,20 @@
   "http",
   "runner-https"
  ],
- "https": 2,
  "budget_exhausted": false,
- "runtime_verified_share_24h": 9.8,
+ "runtime_verified_share_24h": 9.9,
  "host_census": {
   "skipped": "ran within 6h"
  },
  "migrations": {
-  "opted_in": 154,
+  "opted_in": 156,
   "unapplied": [],
   "applied_now": [],
   "failed": [],
   "metric": 0
  },
- "spent_ms": 18615,
- "head": "f5bba82abfabc40bfadc96bab4b32cdb15d93339",
+ "spent_ms": 5749,
+ "head": "0245306b23c2f8d9cc79f45632c3f9356bb351bb",
  "job_status": "success",
- "ts": "2026-10-13T08:31:35Z"
+ "ts": "2026-10-13T08:42:56Z"
 }
