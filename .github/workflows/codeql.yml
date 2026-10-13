@@ -16,6 +16,12 @@ name: codeql
 # must be turned off in Settings > Code security > CodeQL analysis (or by
 # PATCH /repos/{owner}/{repo}/code-scanning/default-setup {"state":"not-configured"}
 # with a token holding security_events admin).
+#
+# CODEQL-DEFAULT-PRECHECK-1 (2026-10-13): until that switch is made, every PR showed three red
+# `analyze` checks ("CodeQL analyses from advanced configurations cannot be processed when the
+# default setup is enabled", PR 1212). The precheck reads the default-setup state with this
+# workflow's own token and skips the analysis while default setup is configured, so the
+# analysis takes over by itself the moment default setup is turned off. A failed read runs it.
 
 on:
   push:
@@ -41,8 +47,26 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
+  precheck:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      security-events: read
+    outputs:
+      default_setup: ${{ steps.state.outputs.default_setup }}
+    steps:
+      - id: state
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          s=$(gh api "repos/${{ github.repository }}/code-scanning/default-setup" --jq .state 2>/dev/null || echo unknown)
+          echo "default setup: $s"
+          echo "default_setup=$s" >> "$GITHUB_OUTPUT"
+
   analyze:
     name: analyze (${{ matrix.language }})
+    needs: precheck
+    if: needs.precheck.outputs.default_setup != 'configured'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:
