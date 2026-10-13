@@ -173,5 +173,17 @@ ok(/never state an inferred arrangement, funding, motive or behaviour as a repor
   const cq = src.slice(src.indexOf("async function critiquePiece("), src.indexOf("__name(critiquePiece"));
   ok(/var wb = writerBand\(form, writerIsFallback\(env\)\)/.test(cq), "the critic is told the same band");
 }
+// ---- CRITIC-LIST-1 (1.22.2): the critic lists every invented claim; one prune round deletes them all -----------------------------------
+{
+  const text = "# T\n\nThe concession obliged the operator to maintain service levels for oil shipments. The fare structure became market oriented in 1995. The line carried oil and minerals.";
+  const inv = ["The concession obliged the operator to maintain service levels for oil shipments", "\u201cThe fare structure became market oriented in 1995.\u201d", "a sentence the piece does not contain at all", 42];
+  const q = V.criticQuotes("The piece invents a contractual term.", text, inv);
+  ok(q.length === 2 && q[0].indexOf("The concession obliged") === 0 && q[1] === "The fare structure became market oriented in 1995", "the listed quotations the piece contains are taken, trimmed of quote marks; others are dropped", q);
+  ok(V.criticQuotes("It invents 'the line carried oil and minerals' here.", text, []).length === 1, "a quotation in the reason still counts when the list is empty");
+  const many = Array.from({ length: 12 }, (_, i) => "unique claim number " + i + " stands here");
+  ok(V.criticQuotes("", many.join(". ") + ".", many).length === V.CRITIC_INVENTED_MAX && V.CRITIC_INVENTED_MAX === 8, "at most 8 quotations are taken");
+  ok(/invented: every concrete claim you found that the source material does not support/.test(P.P_CRITIQUE) && /"invented":\["exact quotation", \.\.\.\]/.test(P.P_CRITIQUE), "the critic is asked for the list");
+  ok(/var cq = criticQuotes\(q\.why, pieceText\(piece\), q\.invented\);/.test(src), "the critic prune uses the list");
+}
 console.log(pass + " passed, " + fail + " failed");
 if (fail) process.exit(1);
