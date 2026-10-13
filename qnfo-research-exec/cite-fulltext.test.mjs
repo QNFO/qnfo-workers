@@ -99,6 +99,39 @@ const HTML = page(sec(1, "Introduction", LONG("Computable reals are the limits o
   const out = await attachFullTexts([{ n: 1, id: "qnfo:bare", text: "QNFO: Bare\n  " + corpusSummary("", bare).slice(0, 400), body: bare, url: "https://papers.qnfo.org/papers/bare" }], { spacingMs: 0 });
   ok(out.bib.length === 1 && /§ Text, part 1: A body with no heading/.test(out.bib[0].text), "a heading-less corpus paper is cited with its full-text excerpts, not dropped", out.bib[0] && out.bib[0].text.slice(0, 200));
 }
+// 5c. SOURCE-VOICE-1: sentences from published papers (living-paper, 2026-10-13) that describe the pipeline's inputs.
+{
+  const LIVE = [
+    "Every input number in this section is either a definition internal to the paper, or a count taken from bibliography entry [12].",
+    "Systems whose state spaces are naturally hierarchical may be more naturally $p$-adic; no supplied bibliography entry supports a specific physical instance.",
+    "This follows from the stated uniform-amplitude assumption only; bibliography entry [4] does not report this number.",
+    "Because the supplied bibliography entry is truncated before the scaling statements, we label them as attributed-but-unverified hypotheses.",
+    "No bibliography entry or input block supplies a measured timescale for any detection platform.",
+    "The question posed in the re-entry prompt is deliberately open.",
+    "The grounding block assigns status $Q$ (open question) to the parent paper.",
+    "Since [1] reports $F$ but not $T_L^{(0)}$ in the fetched abstract, we treat it as a free scale.",
+    "Three independent drafts (A, B, C) were written from the same input block.",
+    "The supplied summary of [1] is truncated and gives no further detail on spectral or dynamical aspects.",
+    "The abstract supplies no further detail on the second branch of the dichotomy.",
+    "Four are programme documents, two of which carry only titles.",
+    "The QNFO corpus entries [12], [13], and [14] are supplied with no summary text.",
+    "whether the budget is tolerable depends on the state magnitudes involved, which the corpus does not specify."
+  ];
+  for (const t of LIVE) ok(summaryOnlyCitations(t).length > 0, "caught: " + t.slice(0, 70));
+  const CLEAN = [
+    "The holographic principle does not specify the exact nature of these pixels, but it demands their existence.",
+    "The DNA does not specify the location of every capillary.",
+    "Retrieval-augmented generation passes the retrieved text to the model with the query.",
+    "Each block of the input is hashed before the grounding of the circuit to the ground plane.",
+    "[4] proves that every computable real has a computable modulus of convergence.",
+    "We assume the Pauli operators have eigenvalues $\\pm 1$."
+  ];
+  for (const t of CLEAN) ok(summaryOnlyCitations(t).length === 0, "clean: " + t.slice(0, 70), summaryOnlyCitations(t));
+  const src = readFileSync(new URL("./worker.js", import.meta.url), "utf8");
+  const pre = src.slice(src.indexOf("var RESEARCH_SHARED_PREAMBLE = ["), src.indexOf('].join("\\n");', src.indexOf("var RESEARCH_SHARED_PREAMBLE = [")));
+  ok((pre.match(/SOURCE_VOICE_RULE/g) || []).length >= 3, "the writer, reconcile and revise prompts carry SOURCE_VOICE_RULE", (pre.match(/SOURCE_VOICE_RULE/g) || []).length);
+  ok(!/produced drafts on the same input block/.test(pre), "the reconcile prompt no longer names the input block");
+}
 // 6. sweep, prompts and provenance
 {
   const src = readFileSync(new URL("./worker.js", import.meta.url), "utf8");

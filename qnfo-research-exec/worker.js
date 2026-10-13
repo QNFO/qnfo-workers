@@ -324,7 +324,8 @@ __name222(cleanTitle, "cleanTitle");
 __name2222(cleanTitle, "cleanTitle");
 __name22222(cleanTitle, "cleanTitle");
 function cleanAbstract(md) {
-  const m = String(md || "").match(/##\s*Abstract\s*\n\s*([\s\S]{60,2000})/i);
+  // ABSTRACT-BACKFILL-1: the abstract ends at the next heading or rule (the old 2000-char slice ran on into the Introduction).
+  const m = String(md || "").match(/##\s*Abstract\s*\n\s*([\s\S]{60,2000}?)(?=\n#{1,4}\s|\n---\s*\n|\n\*\*Keywords|$)/i);
   if (!m) return "";
   const a = m[1].trim();
   if (/Let me|the user wants|carefully|fictional|hypothetical/i.test(a.slice(0, 200))) return "";
@@ -1133,6 +1134,8 @@ async function publishV2(env, row) {
       var vAbsM2 = vBody.match(/abstract:\s*["']?([^"'\n]{40,600})["']?/i);
       if (vAbsM2) vAbstract = String(vAbsM2[1]).trim();
     }
+    // ABSTRACT-BACKFILL-1: the body's own Abstract section or opening passage before the title (a title is not a summary).
+    if (!vAbstract) vAbstract = cleanAbstract(vBody) || clipSentence(corpusSummary(null, vBody), 1200);
     if (!vAbstract) vAbstract = String(row.title || "QNFO research paper");
     var vPub = await publishInHouse(env, vTitle, vAbstract, vBody, vSlug);
     if (!vPub.ok) {
@@ -1147,7 +1150,9 @@ async function publishV2(env, row) {
       }
     }
   } else {
-    await env.LIVING_PAPER.prepare("UPDATE papers SET title=?, body_md=?, version=?, doi=NULL, zenodo_doi=NULL, zenodo_url=NULL, updated_at=datetime('now') WHERE slug=?").bind(vTitle, vBody, row.version_to || "2.0.0", vSlug).run();
+    // A revision's abstract follows its body when the body states one; otherwise the stored abstract stays.
+    var vRevAbs = cleanAbstract(vBody) || clipSentence(corpusSummary(null, vBody), 1200);
+    await env.LIVING_PAPER.prepare("UPDATE papers SET title=?, body_md=?, version=?, abstract=COALESCE(NULLIF(?, ''), abstract), doi=NULL, zenodo_doi=NULL, zenodo_url=NULL, updated_at=datetime('now') WHERE slug=?").bind(vTitle, vBody, row.version_to || "2.0.0", vRevAbs, vSlug).run();
   }
   try {
     // The dissemination row advances the post queue (qnfo-social drainDissemination). A first publication gets a fresh row; a
@@ -1633,6 +1638,11 @@ __name2222(b64, "b64");
 // pre-publish gates use. The earlier MATH-LATEX-1 gate (#424, md2tex_v3) converts for the PDF path only, so it never saw the
 // paper body that research-exec publishes.
 var MATH_RULE = "- Mathematics: write every formula, equation, variable with a subscript or superscript, and power of ten in LaTeX, inline as $...$ and display as $$...$$ on its own lines (for example $T_1$, $10^{-4}$, $\\approx$, $|\\langle\\alpha|\\beta\\rangle|^2$). Never write math as plain text: no Unicode superscripts or subscripts (x\u00b2, 10\u207b\u2074, T\u2081), no Unicode math operators (\u2248 \u2264 \u2297 \u221a \u2211 \u27e8 \u27e9), no bare ^ or _ outside $...$. Put any diagram or ASCII art inside a fenced code block.";
+// SOURCE-VOICE-1 (CITE-FULLTEXT-3, 0.17.0): 71 of 577 published papers described the pipeline's inputs to their readers
+// ("the supplied bibliography entry", "the input block", "the summary is truncated", "the re-entry prompt", "listed here
+// only to acknowledge the corpus"), because the prompts named those inputs and asked for thin entries to be disclosed. A
+// paper speaks about the works it cites and its own assumptions, never about how it was given them.
+var SOURCE_VOICE_RULE = "- Source voice: the paper never mentions how its sources reached it. Never write 'bibliography entry', 'supplied', 'provided' or 'fetched' text, summary, abstract or excerpt, 'input block', 'grounding', 're-entry prompt', 'corpus entry', or that a source is truncated, thin, empty or unavailable. Cite a work by its number for what it states ('[4] proves ...'); state an input the sources do not give as the paper's own assumption ('We assume ...'); leave out a work that supports no specific point.";
 var PSEUDO_MATH_MAX = 2;
 var PM_SUPSUB_RE = /[\u2070\u00b9\u00b2\u00b3\u2074-\u207f\u2080-\u209c\u1d62-\u1d6a\u2c7c]+/g;
 var PM_OPS_RE = /[\u2264\u2265\u2248\u2260\u226a\u226b\u2208\u2209\u2297\u2295\u2211\u220f\u221a\u222b\u2202\u2207\u27e8\u27e9\u221e\u00b1\u2213\u221d\u2261\u2282\u2286\u222a\u2229]/g;
@@ -1690,8 +1700,9 @@ var RESEARCH_SHARED_PREAMBLE = [
   "- Style: put known context at the start of a sentence and the new or important point at its end. Each paragraph makes one claim, stated in its first sentence. Prefer specific quantities, conditions and mechanisms to evaluative adjectives; use an intensifier or a significance adjective only when a number or comparison in the same sentence supports it. No rhetorical questions, no rhythmic triplets, no 'not only ... but also', no closing paragraph that restates the section. A list item contains a verb and a checkable assertion.",
   "- Every claim about the world outside the paper (events, dates, people, organisations, numbers, findings of other works) must be stated in the INPUT BLOCK or the Bibliography entries, or computed in Section 4. Your memory is not a source: a claim with no supplied support is left out.",
   MATH_RULE,
+  SOURCE_VOICE_RULE,
   "### TASK RECONCILE",
-  "You are the reconciling editor. Two or three independent writers produced drafts on the same input block. Produce the SINGLE reconciled preprint.",
+  "You are the reconciling editor. Two or three independent writers produced drafts from the same sources. Produce the SINGLE reconciled preprint.",
   "Steps:",
   "1. Read all available drafts. Extract every substantive claim (numbered C1..Cn) and attribute each to source drafts (A/B/C) with agreement status: CONVERGENT (>=2 drafts, same substance), DIVERGENT (conflicting), or SINGLE (one draft only).",
   "2. For DIVERGENT claims: report the conflict explicitly in '## Appendix A. Divergence report' - state each side and the convention/assumption behind the disagreement. NEVER silently resolve a divergence; choose one convention for the main text and document that choice.",
@@ -1702,6 +1713,7 @@ var RESEARCH_SHARED_PREAMBLE = [
   "7. Appendix B: the claim table (C1..Cn, source drafts, agreement status).",
   "8. Output ONLY the paper markdown. No meta-commentary.",
   "9. " + MATH_RULE.slice(2) + " Convert any plain-text or Unicode math taken from the drafts.",
+  "10. " + SOURCE_VOICE_RULE.slice(2) + " Rewrite any such sentence a draft contains; Appendix A names the drafts A, B and C and their conventions, never their inputs.",
   "### TASK REVIEW",
   "You are an adversarial reviewer. Audit this preprint for publication readiness. Output STRICT JSON only:",
   '{"verdict":"pass"|"revise","hard":[{"id":string,"severity":"HARD","claim":string,"reason":string,"fix":string}],"soft":[{"id":string,"severity":"SOFT","claim":string,"reason":string,"fix":string}]}',
@@ -1711,7 +1723,7 @@ var RESEARCH_SHARED_PREAMBLE = [
   "2. Quantitative honesty: any quantitative claim NOT derived with shown arithmetic in the paper AND NOT labeled as a projection with stated assumptions = HARD.",
   "3. Arithmetic: spot-check 2-3 derivations; an arithmetic error in a headline number = HARD.",
   "4. Structure: missing required sections (including Section 7 Practical Implications and Engineering Pathways), a paper that ends mid-sentence or mid-equation, a cross-reference to a section that does not exist, References with fewer than 8 entries, body shorter than 15000 characters = HARD.",
-  "5. Prose gates: meta-commentary, reasoning preamble, 'Let me', '[to verify]' markers, placeholder text = HARD.",
+  "5. Prose gates: meta-commentary, reasoning preamble, 'Let me', '[to verify]' markers, placeholder text = HARD. Any sentence about how the sources reached the paper (a 'bibliography entry', 'supplied' or 'fetched' summary, abstract or text, 'input block', 'grounding', 're-entry prompt', a source being truncated, thin, empty or unavailable) = HARD.",
   "6. Depth: superficial literature treatment, unexplained jargon, unstated limitations = SOFT.",
   "7. Divergence honesty: Appendix A present when drafts diverged = SOFT if missing.",
   "8. Source support: any statement about what a cited work did, found or argued, or any claim about the outside world, that is not stated in that work's supplied Bibliography entry (including its full-text excerpts) or the grounding input = HARD. A sentence that says a source's summary or abstract gives no detail or is empty, relates to a work only through its title, lists a work only to acknowledge it, or cites a work only for its existence or framing instead of a specific point from its full text = HARD. Quote the sentence in claim.",
@@ -1721,12 +1733,13 @@ var RESEARCH_SHARED_PREAMBLE = [
   "You are the revising author. Apply the reviewer's HARD fixes to the paper. Return ONLY the full revised paper markdown with the same required structure and headings.",
   "For each fix: correct the quantitative claim using the computed value, remove or move-to-Discussion-as-explicitly-labeled-hypothesis unverifiable claims, replace invented references with bibliography entries (or remove the sentence), fix structure and length. Do not add new unsupported claims. Output ONLY the paper.",
   MATH_RULE,
+  SOURCE_VOICE_RULE,
   "### TASK REVISE_PATCH",
   "You are the revising author. Resolve each HARD fix below by editing the paper in place.",
   'Return ONLY a JSON array, no prose and no code fence: [{"find":"<exact verbatim excerpt of the PAPER, 40 to 800 characters, occurring once>","replace":"<corrected text>"}].',
   "Copy each find excerpt character for character from the PAPER. Use at most 8 edits. To remove a sentence, replace it with an empty string.",
   "Every replace text writes its mathematics in LaTeX inside $...$ (inline) or $$...$$ (display), never as Unicode superscripts, subscripts or operators.",
-  "A replace text states only what the PAPER or the FIXES already state: it adds no name, citation, identifier, link, number or finding from memory. When a fix cannot be met from the PAPER and the FIXES, remove the sentence.",
+  "A replace text states only what the PAPER or the FIXES already state: it adds no name, citation, identifier, link, number or finding from memory. When a fix cannot be met from the PAPER and the FIXES, remove the sentence. A replace text never mentions bibliography entries, supplied or fetched text, summaries, abstracts, the input block or the grounding.",
   "### TASK VERIFY_EXTRACT",
   "Extract every QUANTITATIVE claim from this paper that can be independently computed. Output STRICT JSON array:",
   '[{"id":"Q1","statement":"...","inputs":"named numbers with values","formula":"math in plain text"}]',
@@ -2255,7 +2268,7 @@ async function attachFullTexts(bib, opts) {
 var SUMMARY_ONLY_PATTERNS = [
   /\bsummary supplied\b/i,
   /\b(?:supplied|provided|available|retrieved) (?:summary|abstract|bibliography entry)\b[^.]{0,60}\b(?:gives|provides|offers|contains|states|includes) no\b/i,
-  /\b(?:summary|abstract|bibliography entry|entry) (?:gives|provides|offers|contains|states|includes) no (?:further |additional |more )?(?:detail|details|information|specifics)\b/i,
+  /\b(?:summary|abstract|bibliography entry|entry) (?:gives|supplies|provides|offers|contains|states|includes) no (?:further |additional |more )?(?:detail|details|information|specifics)\b/i,
   /\b(?:summary|abstract) (?:does not|doesn't|did not) (?:specify|state|give|report|detail|describe|provide)\b/i,
   /\bcite[sd]? (?:it|this|this work|them|these works?) only for\b/i,
   /\bcit\w*\b[^.]{0,80}\b(?:only|merely|solely) for (?:its|their|the) (?:existence|framing)\b/i,
@@ -2265,7 +2278,18 @@ var SUMMARY_ONLY_PATTERNS = [
   /\b(?:relate|refer|cite)[sd]? to it only through (?:its|that|the) title\b|\bonly through (?:its|that|the) title\b/i,
   /\btitle-level (?:thesis|claim|framing)\b/i,
   /\b(?:listed|included|cited|mentioned) (?:here )?only to acknowledge\b/i,
-  /\bno claim of ours depends on (?:it|this|them)\b/i
+  /\bno claim of ours depends on (?:it|this|them)\b/i,
+  // SOURCE-VOICE-1: the pipeline's own inputs named to the reader.
+  /\bbibliography entr(?:y|ies)\b/i,
+  /\b(?:supplied|provided|fetched) (?:bibliography |corpus )?(?:entr(?:y|ies)|summar(?:y|ies)|abstracts?|excerpts?|text|grounding|corpus)\b/i,
+  /\bretrieved (?:entr(?:y|ies)|summar(?:y|ies)|abstracts?)\b/i,
+  /\b(?:input|grounding) block\b/i,
+  /\b(?:summary|abstract|entry)(?: of \[\d+\])? (?:is|was) truncated\b|\btruncated (?:summary|abstract|entry)\b/i,
+  /\bre-entry prompt\b/i,
+  /\bsupplied with (?:no|an empty|only)\b/i,
+  /\b(?:carr(?:y|ies)|ha(?:s|ve)) only (?:a |their |its )?titles?\b/i,
+  /\bthe (?:corpus|bibliography) does not (?:specify|state|give|report|supply|provide)\b/i,
+  /\b(?:entry|entries) (?:\[\d+\](?:\s*(?:and|,|\u2013|-)\s*\[\d+\])* )?(?:carr(?:y|ies)|ha(?:s|ve)) (?:only (?:a )?titles?|no (?:summary|abstract|text))\b/i
 ];
 function summaryOnlyCitations(paper) {
   var s = String(paper || "");
@@ -2827,28 +2851,45 @@ __name(stageComplete, "stageComplete");
 // whole and remediationPublish queues the new version. SWEEP_MAX_PER_RUN is a rate (backpressure), not a filter: the rest
 // are picked up on the next day's run. The sweep never touches hand-written papers (identifier not qnf- and no queue row).
 var SWEEP_MAX_PER_RUN = 25;
+// The sweep's rule set. A sweep logged under an older rule set does not count, so the first tick after a deploy that changes
+// what the sweep looks for runs it at once instead of at the next 03:00 (CITE-FULLTEXT-3).
+var SWEEP_RULES = "complete+cite-fulltext-3";
 // Due on the 03:00 UTC tick, and on any tick when no sweep has run for 26 h (the first tick after a deploy, or a missed day).
 async function completenessSweepDue(env, ms) {
   var d = new Date(ms);
   if (d.getUTCHours() === 3 && d.getUTCMinutes() < 15) return true;
   try {
-    var last = await env.QNFO_AUDIT.prepare("SELECT ts FROM cloud_ops_events WHERE job = ? AND kind = 'completeness-sweep' AND ts > ? LIMIT 1").bind(WORKER, new Date(ms - 26 * 3600 * 1e3).toISOString()).first();
+    var last = await env.QNFO_AUDIT.prepare("SELECT ts FROM cloud_ops_events WHERE job = ? AND kind = 'completeness-sweep' AND ts > ? AND instr(text, ?) > 0 LIMIT 1").bind(WORKER, new Date(ms - 26 * 3600 * 1e3).toISOString(), '"rules":"' + SWEEP_RULES + '"').first();
     return !last;
   } catch (e) {
     return false;
   }
 }
 async function completenessSweep(env) {
-  var out = { scanned: 0, truncated: 0, queued: 0, skipped: 0, slugs: [] };
+  var out = { rules: SWEEP_RULES, scanned: 0, truncated: 0, queued: 0, skipped: 0, slugs: [], abstractsFilled: 0, abstractSlugs: [] };
   if (!env.LIVING_PAPER) return Object.assign(out, { error: "LIVING_PAPER binding missing" });
   var offset = 0;
   for (;;) {
-    var page = await env.LIVING_PAPER.prepare("SELECT slug, title, body_md FROM papers WHERE status IN ('published','distributed') ORDER BY slug LIMIT 40 OFFSET ?1").bind(offset).all();
+    var page = await env.LIVING_PAPER.prepare("SELECT slug, title, abstract, body_md FROM papers WHERE status IN ('published','distributed') ORDER BY slug LIMIT 40 OFFSET ?1").bind(offset).all();
     var rows = page && page.results || [];
     if (!rows.length) break;
     offset += rows.length;
     for (var i = 0; i < rows.length; i++) {
       var p = rows[i];
+      // ABSTRACT-BACKFILL-1 (CITE-FULLTEXT-2): 269 of 575 published papers had a NULL abstract, so every reader of the column
+      // (grounding, search cards, feeds) saw an empty summary of a paper whose body is complete. The column is filled from the
+      // body's own Abstract section or opening passage; only an empty column is written, so a stored abstract is never replaced
+      // (revert: SET abstract = NULL for the slugs in the abstract-backfill event).
+      if (String(p.abstract || "").trim().length < 40 && String(p.body_md || "").length >= 400) {
+        var fill = clipSentence(corpusSummary(p.abstract, p.body_md), 1200);
+        if (fill.length >= 80) {
+          var wr = await env.LIVING_PAPER.prepare("UPDATE papers SET abstract = ?1 WHERE slug = ?2 AND (abstract IS NULL OR length(trim(abstract)) < 40)").bind(fill, p.slug).run();
+          if (wr && wr.meta && wr.meta.changes) {
+            out.abstractsFilled++;
+            out.abstractSlugs.push(p.slug.slice(0, 80));
+          }
+        }
+      }
       var src = await env.QNFO_AUDIT.prepare("SELECT id, idea, summary, source FROM research_queue WHERE paper_slug = ?1 AND source <> 'remediation' ORDER BY created_at DESC LIMIT 1").bind(p.slug).first();
       if (!src) continue;
       out.scanned++;
@@ -3425,7 +3466,7 @@ function finalGates(paper, opts) {
   const refCount = (refsPart.match(/^[ \t]*(?:[-*][ \t]*)?(?:\[\d+\]|\d+\.)[ \t]+\S/gm) || []).length;
   if (refCount < minRefs) fixes.push({ id: "gate-refcount", severity: "HARD", claim: "too few references", reason: "rendered references " + refCount + " < " + minRefs, fix: "List at least " + minRefs + " works from the provided bibliography in the References section, numbered [1]..[n], and cite each in the text with substantive context." });
   const _sumOnly = summaryOnlyCitations(paper);
-  if (_sumOnly.length) fixes.push({ id: "gate-fulltext-citation", severity: "HARD", claim: "citation made from a summary, not the full text: " + _sumOnly.join(" | "), reason: "CITE-FULLTEXT-1: papers cite full texts, never a work's summary alone and never a work only for its existence or framing", fix: "Rewrite each quoted sentence to state the specific method, result or number the cited work's full-text excerpts in the Bibliography give; if they give nothing that bears on the sentence, remove that citation from the sentence." });
+  if (_sumOnly.length) fixes.push({ id: "gate-fulltext-citation", severity: "HARD", claim: "citation made from a summary, not the full text: " + _sumOnly.join(" | "), reason: "CITE-FULLTEXT-1 / SOURCE-VOICE-1: papers cite full texts, never a work's summary alone or only for its existence or framing, and never describe how their sources reached them", fix: "Rewrite each quoted sentence to state the specific method, result or number the cited work's full-text excerpts in the Bibliography give, citing it by number; state an input no source gives as the paper's own assumption; never mention bibliography entries, supplied or fetched text, summaries, the input block or the grounding. If nothing bears on the sentence, remove that citation from it." });
   const _res = chatbotResidue(paper);
   if (_res.length) fixes.push({ id: "gate-residue", severity: "HARD", claim: "assistant residue or placeholder text: " + _res.join(" | "), reason: "GATE-RESIDUE-1: conversational assistant text, placeholders or unfinished markers in a published paper", fix: "Delete each quoted fragment; where it stands in for content, write that content from what the paper already derives." });
   if (/(Let me|The user|I'll|I need to|Okay,|Alright,|Here's what)/i.test(String(paper).slice(0, 500))) fixes.push({ id: "gate-preamble", severity: "HARD", claim: "reasoning preamble", reason: "meta text at body start", fix: "Remove all thinking/planning text; output only the paper." });
@@ -3713,7 +3754,7 @@ async function ensurePaperRow(env, row) {
   if (!md) return { error: "reconciled.md missing" };
   const body = String(md).trim();
   const title = cleanTitle(body) || extractTitle(body, "") || String(row.idea || "QNFO research paper").slice(0, 140);
-  const abstract = cleanAbstract(body) || title;
+  const abstract = cleanAbstract(body) || clipSentence(corpusSummary(null, body), 1200) || title;
   const identifier = "qnf-" + String(row.id);
   let slug = row.paper_slug || slugify(title);
   const clash = await env.LIVING_PAPER.prepare("SELECT identifier FROM papers WHERE slug=?1 AND identifier<>?2 LIMIT 1").bind(slug, identifier).first();
@@ -26776,7 +26817,11 @@ var worker_default = {
       try {
         if (await completenessSweepDue(env, Number(event && event.scheduledTime) || Date.now())) {
           const sw = await completenessSweep(env);
+          const swSlugs = sw.abstractSlugs || [];
+          delete sw.abstractSlugs;
           await logEvent(env, "completeness-sweep", JSON.stringify(sw).slice(0, 700), sw.error ? "error" : "ok");
+          // ABSTRACT-BACKFILL-1: the filled slugs, a few per event, are the revert list.
+          for (let k = 0; k < swSlugs.length; k += 8) await logEvent(env, "abstract-backfill", swSlugs.slice(k, k + 8).join(" "), "ok");
         }
       } catch (eSw) {
         await logEvent(env, "error", "completenessSweep threw: " + String(eSw && eSw.message || eSw).slice(0, 200), "error");
@@ -26845,6 +26890,9 @@ export {
   fullTextExcerpt,
   mdSections,
   corpusSummary,
+  completenessSweep,
+  completenessSweepDue,
+  cleanAbstract,
   arxivFullText,
   attachFullTexts,
   summaryOnlyCitations,
