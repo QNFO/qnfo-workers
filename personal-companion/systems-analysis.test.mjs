@@ -158,5 +158,20 @@ ok(/never state an inferred arrangement, funding, motive or behaviour as a repor
   const sr = src.slice(src.indexOf("async function starvedRetryDue(env) {"), src.indexOf("async function steward(env) {"));
   ok(/return !!f && f\.n < STARVED_RETRY_MAX_24H;/.test(sr) && !/f\.n < 16/.test(sr), "the daily bar reads the constant, not 16");
 }
+// ---- WRITER-FIT-1 (1.22.1): the fallback writer is asked for the length its floor needs, at a lower temperature -------------------------
+{
+  ok(JSON.stringify(V.writerBand("essay", false)) === "[2000,2800]" && JSON.stringify(V.writerBand("notes", false)) === "[1800,2400]", "a DeepSeek writer keeps the full band");
+  const e = V.writerBand("essay", true), n = V.writerBand("notes", true);
+  ok(e[0] === 1150 && e[1] === 1650 && n[0] === 1000 && n[1] === 1500, "the fallback is asked for 15% over its floor, a 500-word band", { e, n });
+  ok(e[0] > V.floorFor("essay") / 1 * 0 + 1000 && n[0] > 850, "the band starts above the fallback floor (essay 1000, notes 850)");
+  ok(V.writerIsFallback({}) === true && V.writerIsFallback({ DEEPSEEK_API_KEY: "k" }) === false, "no DeepSeek key means the fallback band");
+  ok(V.WRITER_TEMPERATURE_FB === 0.35 && V.CRITIC_TEMPERATURE === 0.2, "the writer samples at 0.35 and the critic at 0.2");
+  const cw = src.slice(src.indexOf("async function callWorkersAI("), src.indexOf("async function callModel("));
+  ok(/temperature: role === "critic" \? CRITIC_TEMPERATURE : WRITER_TEMPERATURE_FB/.test(cw), "the Workers AI call picks the temperature by role");
+  const cp = src.slice(src.indexOf("async function composePiece("), src.indexOf("async function composePiece(") + 4000);
+  ok(/var band = writerBand\(form, writerIsFallback\(env\)\)/.test(cp) && /\.replace\(\/\\d\{4\} to \\d\{4\} words\/, bandText\)/.test(cp) && /a shorter piece that adds nothing is better than a longer one that invents/.test(cp), "composePiece puts the band in the form contract and the length rule");
+  const cq = src.slice(src.indexOf("async function critiquePiece("), src.indexOf("__name(critiquePiece"));
+  ok(/var wb = writerBand\(form, writerIsFallback\(env\)\)/.test(cq), "the critic is told the same band");
+}
 console.log(pass + " passed, " + fail + " failed");
 if (fail) process.exit(1);
