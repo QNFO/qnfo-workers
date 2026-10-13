@@ -347,5 +347,13 @@ globalThis.fetch = origFetch;
   check("the abstract-only fallback is gone (code probe)", !src.includes("if (!story && bestThin) { story = bestThin.cand;"));
   check("a thin candidate needs fetched full text", V.THIN_MIN_ARTICLE >= 600 && /thinOk = bestThin && String\(bestThin\.art \|\| ""\)\.length >= THIN_MIN_ARTICLE/.test(src));
 }
+// Q08-PRUNE-VERDICT-1 (0.17.6, run 369)
+{
+  const txt = "# A title\n\nThe lab measured expression in every tissue. The article already holds a publishable connection between the genotype and the phenotype.\nworth your time: yes - names the mechanism";
+  const pr = V.pruneUnsupported(txt, ["unsupported claim: The article already holds a publishable connection between the genotype and the phenotype -- not in source"]);
+  check("a verdict line in the last paragraph survives the prune unchanged", pr.removed.length === 1 && /\n\nworth your time: yes - names the mechanism$/.test(pr.text) && /measured expression/.test(pr.text), pr);
+  const pr2 = V.pruneUnsupported(txt, ["unsupported claim: names the mechanism and nothing else at all -- x"]);
+  check("a needle that would hit the verdict line removes nothing from it", /worth your time: yes - names the mechanism$/.test(pr2.text), pr2);
+}
 console.log("verify.test.mjs: " + passes + " passed, " + fails + " failed");
 process.exit(fails ? 1 : 0);
