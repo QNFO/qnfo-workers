@@ -1,8 +1,8 @@
-// qnfo-deploy-guard v1.3.24 (LEASE-TOKEN-CSPRNG-1: lease tokens come from crypto.getRandomValues; 1.3.23 SECRET-ONLY-LEDGER-1: a ledgered secret rotation is not a code deploy for NON-CANONICAL-DEPLOY-1) - deploy lock + secret lock + work claims (one procedure: the D1 work_claims ledger and the code loop's tasks are read and written by /work-lock) + concurrent-mutation detector + cost watchdog + heartbeat (expected_version enforcement + per-session attribution + registry version refresh on redeploy + NON-CANONICAL-DEPLOY-1 detection excluding synthetic/test rows AND failed canonical attempts + SETTINGS-ONLY ledger rows + DEPLOY-TICKET-AUTORESOLVE-1 + CAPABILITY-SNAPSHOT-1 + WORK-CLAIM-1 + WORK-CLAIM-UNIFY-1)
+// qnfo-deploy-guard v1.3.25 (SECOND-PATH-CANONICAL-1: a successful deploy by canonical-deploy.yml's second path, direct_content_deploy, is not a non-canonical deploy; 1.3.24 LEASE-TOKEN-CSPRNG-1: lease tokens come from crypto.getRandomValues; 1.3.23 SECRET-ONLY-LEDGER-1: a ledgered secret rotation is not a code deploy for NON-CANONICAL-DEPLOY-1) - deploy lock + secret lock + work claims (one procedure: the D1 work_claims ledger and the code loop's tasks are read and written by /work-lock) + concurrent-mutation detector + cost watchdog + heartbeat (expected_version enforcement + per-session attribution + registry version refresh on redeploy + NON-CANONICAL-DEPLOY-1 detection excluding synthetic/test rows AND failed canonical attempts + SETTINGS-ONLY ledger rows + DEPLOY-TICKET-AUTORESOLVE-1 + CAPABILITY-SNAPSHOT-1 + WORK-CLAIM-1 + WORK-CLAIM-UNIFY-1)
 // Worker Contract v1: VERSION constant + GET /health
 // Data: https://ops.qnfo.org/fleet (modified_on per worker) + https://ops.qnfo.org/cost (spend)
 // NOTE: source of truth is this file; GET /workers/scripts/<name> TRUNCATES large bodies - never patch from a GET.
-var VERSION = "1.3.24-lease-token-csprng";
+var VERSION = "1.3.25-second-path-canonical";
 var WORKER = "qnfo-deploy-guard";
 var LOCK_PREFIX = "deploylock:";
 var DENY_PREFIX = "deploydeny:";
@@ -154,6 +154,15 @@ function isSecretOnly(row) {
   if (n.indexOf("SECRET-ONLY") === 0) return true;
   return /secret[- ]?(rotat|put|set\b|change)/i.test(a + " " + n) && !/^v?\d+\.\d+/.test(v);
 }
+// SECOND-PATH-CANONICAL-1 (v1.3.25, 2026-10-13, agent_issues 2391): canonical-deploy.yml has a second deploy path
+// (DEPLOY-SECOND-PATH-1, agent_issues 2178): when /ops/deploy does not answer for a target, scripts/direct_content_deploy.py
+// PUTs the same main code to Cloudflare's /content endpoint and ledgers it in deployment_history as deployed_by
+// "canonical-deploy/direct_content_deploy" (mirrored into fleet_deploys with that actor). That is the canonical workflow's own
+// path, so a successful row of it is not a non-canonical deploy; its note lacks "opsDeploy route", so every fallback (idea-hub,
+// 2026-10-13 06:54Z, fleet_deploys 5795) raised DEPLOY-NON-CANONICAL-DEPLOY: fleet again and issue_refile_reopen reopened 2391.
+// A failed attempt of the second path (ok 0) is still flagged, as a failed canonical attempt is.
+var SECOND_PATH_ACTOR = "canonical-deploy/direct_content_deploy";
+function isSecondPath(row) { return String(row && row.actor || "") === SECOND_PATH_ACTOR; }
 var MUT_SLACK_MS = 180000;
 // WRANGLER-CONTAINER-LEDGER-1 (#1708/#1709): qnfo-code-orchestrator is also a container worker deployed by wrangler
 // (deploy-code-orchestrator.yml) because canonical-deploy skips any directory with [[containers]]. It is NOT in qnfo-ops
@@ -299,6 +308,7 @@ async function scan(env) {
     // them the container-aware deployers (raw_put.py with CONTAINER-CONFIG-PRESERVE-1, restore_container_config.py)
     // ARE the canonical path. Without this, the fleet non-canonical ticket could never clear.
     if (CONTAINER_WORKERS.indexOf(ncw) >= 0) { if (nlr.ok === 0) nonCanon.push(ncw); continue; }
+    if (isSecondPath(nlr)) { if (nlr.ok === 0) nonCanon.push(ncw); continue; } // SECOND-PATH-CANONICAL-1
     if (nnote.indexOf("opsDeploy route") < 0 || nlr.ok === 0) nonCanon.push(ncw); // non-canonical path OR a FAILED canonical attempt (ok:0 carries the canonical note)
   }
   if (nonCanon.length) anomalies.push({ type: "non-canonical-deploy", worker: "fleet", count: nonCanon.length, sample: nonCanon.slice(0, 12) });
