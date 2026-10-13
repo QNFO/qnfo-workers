@@ -314,5 +314,16 @@ globalThis.fetch = origFetch;
   const three = "# The queue nobody measured\n\n" + [1, 2].map(() => para + " " + para).join("\n\n") + "\n\nworth your time: yes - names the mechanism";
   check("2 substantial paragraphs are still refused", V.prunedGateProblems(three, []).some((p) => /insufficient prose/.test(p)));
 }
+// Q08-PARAPHRASE-2 (0.15.2, run 357)
+{
+  const sp = V.splitFactItems([
+    "FACT: the author then explicitly requested that the agent set up a feedback loop -- not in source, slightly different wording",
+    "FACT: the agent only built the feedback loop after the human explicitly asked for it -- slightly different wording in source",
+    "FACT: the author gave the agent the network address and device details -- not in source",
+    "FACT: the kit sold for 400 dollars -- different wording; figure not in source"
+  ]);
+  check("FACT-labelled wording-only items are paraphrases", sp.inferences.length === 2, sp);
+  check("a plain FACT and a wording complaint naming a figure stay FACTs", sp.facts.length === 2, sp);
+}
 console.log("verify.test.mjs: " + passes + " passed, " + fails + " failed");
 process.exit(fails ? 1 : 0);
