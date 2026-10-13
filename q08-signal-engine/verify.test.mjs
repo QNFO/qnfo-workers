@@ -366,5 +366,12 @@ globalThis.fetch = origFetch;
   check("a lede hit sends the draft to the model revision", /if \(pr\.ledeHit\) \{ trail\.push\("r" \+ \(round \+ 1\) \+ " prune blocked: a flagged claim is in the lede"\)/.test(src));
   check("every pruned draft is re-checked with ledeProblems", /prunedGateProblems\(pr\.text, a\.banned\)\.concat\(ledeProblems\(pr\.text, a\.src\)\)/.test(src));
 }
+// 0.18.2 (run 375)
+{
+  const g = V.groundingProblems("The README of the project describes a CAD tool on GitHub that runs in the browser.", "A CAD tool that runs in the browser.", { today: "2026-10-13" });
+  check("README and GitHub are not names the source must contain", !g.some((x) => /README|GitHub/.test(x)), g);
+  const src = (await import("node:fs")).readFileSync(new URL("./worker.js", import.meta.url), "utf8");
+  check("the fact revision is told to keep a lede naming the subject", /keep the first paragraph a news lede, at most 70 words, that names/.test(src) && /factRevisionPrompt\(a\.prompt, cur\.text, revProblems, a\.ground,/.test(src));
+}
 console.log("verify.test.mjs: " + passes + " passed, " + fails + " failed");
 process.exit(fails ? 1 : 0);
