@@ -138,4 +138,17 @@ for good in ['  } catch (e) { console.error(JSON.stringify({ evt: "x", error: St
 ok(rules('  const text = res.response.trim();') == ["ai-response-string-assumption"], "a string method on a Workers AI response fails")
 ok(rules('  const text = typeof res.response === "string" ? res.response.trim() : JSON.stringify(res.response);') == [], "a typeof-guarded response passes")
 ok(W.unrestricted_send_email('[[send_email]]\nname = "A"\n\n[[send_email]]\nname = "B"\ndestination_address = "x@y.z"\n[vars]\n') .__len__() == 1, "one of two send_email blocks is unrestricted")
+# UNDEFINED-CALL-GUARD-1: a call to a name the whole file never defines fails; defined, received, method and string cases pass
+def ucall(full_text, ln):
+    full = full_text.split("\n"); return sorted({v[0] for v in W.check_code([(ln, full[ln - 1])], full)})
+ok(ucall("function main(t) {\n  return t.split(',').map(function (l) { return parseRefLine(l); });\n}", 2) == ["undefined-call"], "a call to a helper the file never defines fails (parseRefLine)")
+ok(ucall("async function verify(a) {\n  if (await checkCondition(a)) return 1;\n}", 2) == ["undefined-call"], "an awaited call to an undefined function fails (checkCondition)")
+ok(ucall("function helper(x) { return x; }\nfunction main() { return helper(2); }", 2) == [], "a call to a function defined in the file passes")
+ok(ucall("var helper = (x) => x;\nconst y = helper(2);", 2) == [] and ucall("import { pick } from './a.js';\nconst y = pick(1);", 2) == [], "an arrow assigned to a name and an imported name pass")
+ok(ucall("function f(cb) {\n  return cb(1);\n}", 2) == [] and ucall("const g = (fn) =>\n  fn();", 2) == [], "a parameter called as a function passes")
+ok(ucall("var o = {\n  run(a) { return a; },\n};", 2) == [] and ucall("export default {async scheduled(event,env,ctx){ctx.waitUntil(go(env))}};\nfunction go(e) {}", 1) == [], "a method shorthand definition is not a call")
+ok(ucall("var s = 'call notDefined(x) in a string';\nvar t = `grid: minmax(1px, 2px)`;\nvar r = /foo\\(bar\\)/g;", 2) == [] and ucall("var a = 1;\nvar s = 'x notDefined(1)';", 2) == [], "calls inside strings, templates and regex literals pass")
+ok(ucall("const u = new URL(x);\nconst r = await fetch(u); setTimeout(f, 1); const h = new Headers();", 2) == [], "Workers and JS globals pass")
+ok(ucall("function main() {\n  return parseRefLine(1); // standards-ok: defined by the bundler\n}", 2) == [], "a marked line passes")
+ok(ucall("function main() {\n  return obj.parseRefLine(1) + this.#priv(2);\n}", 2) == [], "method calls on an object or a private member pass")
 print("workers_standards_guard: %s" %("FAILED %d" % fails if fails else "all passed")); sys.exit(1 if fails else 0)
