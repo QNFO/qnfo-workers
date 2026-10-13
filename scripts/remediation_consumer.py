@@ -75,7 +75,7 @@ VERIFIER = "remediation-consumer@%s" % (os.environ.get("GITHUB_SHA", "local")[:1
 MAX_ITEMS = int(os.environ.get("REMEDIATION_MAX_ITEMS", "10"))
 # PROBE-DRAIN-1: a run drains the due set within this budget (the job also runs other steps inside its 15-minute timeout).
 PROBE_BUDGET_S = int(os.environ.get("REMEDIATION_BUDGET_S", "300"))
-PROBE_WORKERS = max(1, int(os.environ.get("REMEDIATION_WORKERS", "4")))
+PROBE_WORKERS = max(1, int(os.environ.get("REMEDIATION_WORKERS", "8")))  # REMEDIATION-2X-1: was 4
 
 WRITE_KW = (
     "insert into", "update ", "delete from", "drop table", "drop index",
@@ -623,7 +623,8 @@ def _selftest():
         return 1
     # PROBE-DRAIN-1: hourly contracts come due inside their 60-minute window; counters from parallel probes add up; a run
     # drains every due batch and never probes a contract twice.
-    if next_due_offset(1) != "+45 minutes" or next_due_offset(6) != "+345 minutes" or next_due_offset(0.25) != "+30 minutes":
+    # REMEDIATION-2X-1: half the earlier offsets (45, 345, 30 minutes).
+    if next_due_offset(1) != "+22 minutes" or next_due_offset(6) != "+172 minutes" or next_due_offset(0.25) != "+15 minutes":
         print(json.dumps({"ok": False, "case": "next-due-offset"}))
         return 1
     agg = {"pass": 1, "fail": 0, "skipped": 0}
@@ -897,8 +898,11 @@ def consume_d1(c, rec, out, trusted):
 
 def next_due_offset(cadence_h):
     """PROBE-DRAIN-1: due 15 minutes before the cadence, so an hourly contract is probed inside its 60-minute window
-    (issues_unprobed_60m) by a run that starts on the hour, instead of always just after it."""
-    return "+%d minutes" % max(30, int(float(cadence_h) * 60) - 15)
+    (issues_unprobed_60m) by a run that starts on the hour, instead of always just after it.
+    REMEDIATION-2X-1 (owner directive 2026-10-13: every issue remediation and consumer run at least twice as fast, issues
+    drained faster than they accumulate): a contract is due again after half that interval (an hourly one in 22 minutes,
+    was 45), never sooner than 15 minutes (was 30), so a fix is verified and its issue closed in half the time."""
+    return "+%d minutes" % max(15, (int(float(cadence_h) * 60) - 15) // 2)
 
 
 def consume_one(c, trusted):

@@ -284,8 +284,8 @@ r = await X.deployDriftCf(env(db), at(20), io);
 ok(db.st.lws.head === "h5" && Object.values(db.st.table).every((x) => /no live version/.test(x.state)), "the next tick finishes the scan", db.st.lws);
 
 // 13. Wiring: the */20 tick, the binding with its caller props, the migration's probe component.
-const tick = src.slice(src.indexOf('if (cron === "*/20 * * * *")'), src.indexOf('if (cron === "0 3 * * *")'));
-ok(/deployDriftCf\(env\)\.catch/.test(tick), "deployDriftCf runs in the */20 block");
+const tick = src.slice(src.indexOf('if (cron === "*/10 * * * *")'), src.indexOf('if (cron === "0 3 * * *")'));
+ok(/deployDriftCf\(env\)\.catch/.test(tick), "deployDriftCf runs in the 10-minute block (REMEDIATION-2X-1; was */20)");
 const wt = readFileSync(new URL("./wrangler.toml", import.meta.url), "utf8");
 ok(/\[\[services\]\]\s*\nbinding = "SVC_QNFO_OPS"\nservice = "qnfo-ops"\nenvironment = "production"\nprops = \{ caller = "qnfo-fleet-control" \}/.test(wt), "wrangler.toml binds SVC_QNFO_OPS with props.caller");
 const mig = readFileSync(new URL("../migrations/2026-10-13-16-deploy-drift-cf.sql", import.meta.url), "utf8");
