@@ -32,7 +32,7 @@ ok(/If the DRAFT contains a line <!-- analysis -->/.test(P.FACTCHECK_PROMPT) && 
 const vp = src.slice(src.indexOf("async function verifyPiece(env, text, ground, writerModel, seedText, opts) {"), src.indexOf("// Everything a reader is shown"));
 ok(/var det = groundingProblems\(stripAnalysisMark\(text\), ground, opts\);/.test(vp) && /var fc = await factCheck\(env, reviewText\(text\), ground, writerModel, seedText\);/.test(vp), "names, years and figures are checked on the whole text; the reviewers read the review text");
 const cp = src.slice(src.indexOf("async function critiquePiece(env, piece, form, ground) {"), src.indexOf("__name(critiquePiece"));
-ok(/"BODY:" \+ NL \+ reviewText\(String\(piece\.body_md \|\| ""\)\)/.test(cp) && /"LEDE: " \+ stripAnalysisMark\(piece\.lede \|\| ""\)/.test(cp), "the critic reads the review text of the body");
+ok(/"LEDE: " \+ stripAnalysisMark\(piece\.lede \|\| ""\)/.test(cp), "the critic reads the lede without the line");
 // persistPiece stores, indexes and files the piece without the line
 const binds = [], puts = [];
 const env = {
@@ -48,7 +48,7 @@ ok(V.ledeOf({ body_md: "<!-- analysis -->\n\nThe subject is here." }) === "The s
 ok(/^analysis marked \d+% after \d+ chars$/.test(V.analysisSplitInfo(marked)), "ANALYSIS-SPLIT-DIAG-1: a valid split is logged with its share", V.analysisSplitInfo(marked));
 ok(V.analysisSplitInfo("# T\n\n" + report) === "analysis unmarked", "an unmarked draft is logged as unmarked");
 ok(/^analysis dropped: report \d+ chars < 600$/.test(V.analysisSplitInfo(early)) && /^analysis dropped: analysis \d+% > 60%$/.test(V.analysisSplitInfo(heavy)) && V.analysisSplitInfo(twice) === "analysis dropped: more than one line", "a dropped split names the rail", [V.analysisSplitInfo(early), V.analysisSplitInfo(heavy), V.analysisSplitInfo(twice)]);
-ok(/"stage", "critique \(" \+ analysisSplitInfo\(String\(piece\.body_md \|\| ""\)\) \+ "\)"/.test(src), "the critique stage row carries the split diagnosis");
+ok(/"stage", "critique \(" \+ analysisSplitInfo\(splitText\(piece\)\) \+ "\)"/.test(src), "the critique stage row carries the split diagnosis");
 const gen = src.slice(src.indexOf("// FINAL-READ-1 (1.22.4"), src.indexOf("best = { piece: finalPiece, quality: q, words: v.words, vr: vr };"));
 ok(/if \(pieceText\(finalPiece\) !== pieceText\(piece\)\) \{/.test(gen) && /var qf = await critiquePiece\(env, finalPiece, form, ground\);/.test(gen), "FINAL-READ-1: a text changed after the critic's last read is read again");
 ok(/if \(!qf\) \{[\s\S]{0,200}continue;/.test(gen) && /if \(sfin\.missing \|\| sfin\.worst < floorForForm\) \{[\s\S]{0,500}continue;/.test(gen), "the final read fails closed: no reader or a score below the floor rejects the attempt");
@@ -68,6 +68,19 @@ ok(/q = qf;/.test(gen) && gen.indexOf("q = qf;") < gen.length, "the stored score
   ok(V.withAutoMark(p0) !== p0 && V.withAutoMark({ title: "T", body_md: lede }).body_md === lede, "withAutoMark returns a new piece only when it placed a line");
   const gl = src.slice(src.indexOf("var split = splitLongLede(piece);"), src.indexOf("var v = validatePiece(piece, form, ground, vopts);"));
   ok(/piece = withAutoMark\(piece\);/.test(gl) && /var rp = rev && rev\.piece \? withAutoMark\(splitLongLede\(rev\.piece\)\) : null;/.test(src), "fresh drafts and revisions are auto-marked before the gate");
+}
+{
+  // SPLIT-LEDE-1: run 5682's shape: a 500-character lede stored apart, 323 characters of body reporting, then the line
+  const lede = ("The 2015 Kogi State gubernatorial election chose the governor of Kogi State, Nigeria, on 21 November 2015, as the source reports. ").repeat(4);
+  const bodyRep = ("The source records the candidates and the result of the vote in each district. ").repeat(4);
+  const ana = "The incentive for a party is to keep a candidate the courts may replace, so the cost of a late death falls on the voters.";
+  const p = { title: "T", lede: lede, body_md: bodyRep + "\n\n" + V.ANALYSIS_MARK + "\n\n" + ana };
+  ok(V.analysisSplitOk(p.body_md) === false && V.analysisSplitOk(V.splitText(p)) === true, "SPLIT-LEDE-1: the lede counts toward the 600 characters of reporting");
+  ok(/^analysis marked \d+% after \d+ chars$/.test(V.analysisSplitInfo(V.splitText(p))), "the diagnosis reads lede and body together", V.analysisSplitInfo(V.splitText(p)));
+  const unmarked = { title: "T", lede: lede, body_md: bodyRep + "\n\n" + bodyRep + "\n\n" + ana + "\n\n" + ana };
+  ok(V.withAutoMark(unmarked).body_md.indexOf(V.ANALYSIS_MARK) > 0, "the auto-marker counts the lede too");
+  const cq = src.slice(src.indexOf("async function critiquePiece("), src.indexOf("__name(critiquePiece"));
+  ok(/analysisSplitOk\(splitText\(piece\)\) \? String\(piece\.body_md \|\| ""\) : stripAnalysisMark\(piece\.body_md\)/.test(cq), "the critic reads the marked body when the rails hold on lede and body");
 }
 const vmx = /var VERSION = "(\d+)\.(\d+)\.(\d+)/.exec(src);
 ok(vmx && (+vmx[1] > 1 || (+vmx[1] === 1 && +vmx[2] >= 22)), "VERSION is at least 1.22.0", vmx && vmx[0]);
