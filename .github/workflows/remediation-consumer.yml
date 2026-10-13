@@ -114,6 +114,16 @@ jobs:
         run: |
           python3 scripts/blocker_redteam_runner.py --selftest && python3 scripts/blocker_redteam_runner.py
 
+      # FLEET-JOURNEYS-1 (2026-10-13, owner question: how to know every worker works end to end, not just simple probes): seven
+      # multi-worker journeys driven from this runner (deploy coherence, binding census, lock round trip, papers path, ask path,
+      # loop heartbeats, AI router), at most once per 50 minutes; each failing journey self-files and self-closes an issue.
+      # Never fails the job.
+      - name: Run the end-to-end fleet journeys
+        continue-on-error: true
+        timeout-minutes: 6
+        run: |
+          python3 scripts/fleet_journeys.py --selftest && python3 scripts/fleet_journeys.py
+
       # CLAIM-REAPER-1 (owner request 2026-10-09, scheduled audits that remediate): releases work claims whose PR merged or
       # closed 30+ minutes ago, in work_claims and deploy_locks, so a session that stopped without releasing does not block
       # the file for the rest of its TTL. Reads PR state with this run's token; never fails the job.

@@ -1,0 +1,591 @@
+#!/usr/bin/env python3
+# FLEET-JOURNEYS-1 (2026-10-13, pillar core). Owner question, verbatim: "Test all worker functionality and
+# interconnectedness/routing. How to know if all workers actually work as intended end-to-end in real-world complex
+# processes and workflows (not just simple probe results)?"
+"""End-to-end journeys across the fleet, run from the GitHub runner.
+
+WHY
+  Measured 2026-10-13 23:30Z: all 28 live workers answered GET /health 200 from the runner, yet in the same minute qnfo-ops
+  /fleet (the census that crosses service bindings) could not see 5 of them (cf-1042, healthy null), the dashboard verdict
+  was DEGRADED with an integration-chain signal, and papers.qnfo.org reported 2 pages with render defects. A /health 200
+  proves an isolate starts; it does not prove that a request crosses the bindings it depends on, that the data a loop
+  writes is the data the next worker reads, or that a cron loop ran recently. This runner drives the fleet's real
+  processes from outside the account (a Worker cannot fetch a sibling's *.workers.dev host, issue 1190) and asserts the
+  effect at the far end of each one.
+
+WHAT
+  Each journey is a chain of requests where a later step consumes what an earlier one returned, so a broken hop fails the
+  journey, not just a probe:
+    deploy-coherence   repo VERSION on main == live /health version == qnfo-ops /registry version, per live worker
+                       (a commit younger than DEPLOY_GRACE_MIN is "deploying", not a failure)
+    binding-census     qnfo-ops /fleet crosses its service bindings to each worker; any healthy=false fails, healthy=null
+                       (the census cannot see the worker) is reported as blind and fails above BLIND_MAX
+    lock-roundtrip     qnfo-deploy-guard acquire -> /work-locks lists it -> release -> /work-locks no longer lists it
+                       (worker + KV lease + D1 work_claims, written and read back by the public API)
+    papers-path        papers.qnfo.org /api/papers -> the item's page -> /feed.json -> OAI-PMH GetRecord for the same id
+                       (qnfo-gateway host routing, D1 papers, the feed and the harvest surface agree on one paper)
+    ask-path           ask.qwav.tech /api/ask (qnfo-ai-search -> GATEWAY binding -> retrieval -> Workers AI) streams an
+                       answer whose [n] citations are within its sources, and every cited source URL resolves on
+                       papers.qnfo.org. One model call per run (edge-cached answers are free); JOURNEY_SKIP_AI=1 skips it.
+    loop-heartbeats    the cron loops ran recently: fleet-control /loops and /chaos-drill, dashboard /api/loop and
+                       /api/state, ai-search /api/loop, gateway /api/render-health
+    ai-router          qnfo-ai /health declares its bindings, /v1/models lists models, /v1/ensemble/policy answers
+
+  Results: one cloud_ops_events row per journey per run (kind fleet-journey, status ok|fail, meta = failed steps only;
+  this repository is public, so response bodies never leave the probe), metric fleet_journeys_failing, and one self-filing,
+  self-closing agent_issues row per failing journey (title "FLEET-JOURNEY-FAILED-1: <journey>"), closed with the passing
+  run as evidence the first time that journey passes again.
+
+RUNS  A step of remediation-consumer.yml (hourly, dispatched by qnfo-cloud-ops when the consumer is idle 60 min); at most
+      once per JOURNEY_EVERY_MIN. --dry-run prints the journeys without writing D1. Never fails the job.
+"""
+import json
+import os
+import re
+import subprocess
+import sys
+import time
+import urllib.error
+import urllib.request
+
+UA = "qnfo-fleet-journeys/1 (+https://fleet.qnfo.org)"
+JOURNEY_EVERY_MIN = int(os.environ.get("JOURNEY_EVERY_MIN", "50"))
+DEPLOY_GRACE_MIN = int(os.environ.get("JOURNEY_DEPLOY_GRACE_MIN", "45"))
+BLIND_MAX = int(os.environ.get("JOURNEY_BLIND_MAX", "0"))
+TIMEOUT = int(os.environ.get("JOURNEY_TIMEOUT_S", "30"))
+ISSUE_PREFIX = "FLEET-JOURNEY-FAILED-1"
+METRIC = "fleet_journeys_failing"
+REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+OPS = "https://qnfo-ops.q08.workers.dev"
+GUARD = "https://qnfo-deploy-guard.q08.workers.dev"
+CONTROL = "https://qnfo-fleet-control.q08.workers.dev"
+DASH = "https://fleet.qnfo.org"
+PAPERS = "https://papers.qnfo.org"
+ASK = "https://ask.qwav.tech"
+AI = "https://qnfo-ai.q08.workers.dev"
+LOCK_KEY = "file:journeys/fleet-journeys.probe"
+
+# Freshness budgets in minutes: each is about two cycles of the loop it watches, so one late tick is not a failure.
+FRESH = {
+    "fleet-control portfolio_last": 150,   # hourly
+    "fleet-control charter_last": 26 * 60,  # daily
+    "fleet-control chaos last_drill": 13 * 60,  # every 6 h
+    "dashboard last_sync": 45,             # 15 min
+    "dashboard last_execute": 45,          # 15 min
+    "dashboard state generated_at": 45,    # 15 min
+    "ai-search loop runs[0]": 150,         # hourly
+    "gateway render last_checked": 26 * 60,  # daily
+}
+
+
+# ---------------------------------------------------------------- transport
+
+class Http:
+    """GET/POST from the runner. Every call is logged as (method, url, status, ms) for the run record."""
+
+    def __init__(self, opener=None):
+        self.opener = opener or self._urlopen
+        self.calls = []
+
+    @staticmethod
+    def _urlopen(method, url, body, headers):
+        req = urllib.request.Request(url, data=body, method=method, headers=headers)
+        try:
+            with urllib.request.urlopen(req, timeout=TIMEOUT) as r:
+                return r.status, r.read(512 * 1024).decode("utf-8", "replace")
+        except urllib.error.HTTPError as e:
+            return e.code, e.read(64 * 1024).decode("utf-8", "replace")
+
+    def req(self, method, url, data=None):
+        headers = {"User-Agent": UA, "Accept": "application/json, text/event-stream, text/html;q=0.8"}
+        body = None
+        if data is not None:
+            body = json.dumps(data).encode("utf-8")
+            headers["Content-Type"] = "application/json"
+        t0 = time.time()
+        last = None
+        for attempt in range(2):  # one retry, for transport errors only; an HTTP status is an answer
+            try:
+                status, text = self.opener(method, url, body, headers)
+                self.calls.append((method, url, status, int((time.time() - t0) * 1000)))
+                return status, text
+            except Exception as e:  # noqa: BLE001
+                last = e
+                if attempt == 0:
+                    time.sleep(2)
+        self.calls.append((method, url, 0, int((time.time() - t0) * 1000)))
+        return 0, "transport:%s" % type(last).__name__
+
+    def json(self, method, url, data=None):
+        status, text = self.req(method, url, data)
+        try:
+            return status, json.loads(text)
+        except Exception:  # noqa: BLE001
+            return status, None
+
+
+class Journey:
+    def __init__(self, name):
+        self.name = name
+        self.steps = []
+
+    def check(self, step, ok, detail=""):
+        self.steps.append({"step": step, "ok": bool(ok), "detail": str(detail)[:240]})
+        return bool(ok)
+
+    @property
+    def ok(self):
+        return bool(self.steps) and all(s["ok"] for s in self.steps)
+
+
+def age_min(iso, now=None):
+    """Minutes since an ISO-8601 or 'YYYY-MM-DD HH:MM:SS' UTC timestamp; None when unparseable."""
+    if not iso:
+        return None
+    s = str(iso).replace(" ", "T")[:19]
+    try:
+        t = time.mktime(time.strptime(s, "%Y-%m-%dT%H:%M:%S")) - time.timezone
+    except ValueError:
+        return None
+    return ((now or time.time()) - t) / 60.0
+
+
+def fresh(j, label, iso, now=None):
+    a = age_min(iso, now)
+    lim = FRESH[label]
+    return j.check("fresh: " + label, a is not None and a <= lim, "age %s min, budget %d" % ("?" if a is None else int(a), lim))
+
+
+# ---------------------------------------------------------------- repo state
+
+def live_dirs(root=REPO):
+    """Worker dirs on this checkout that deploy: a wrangler.toml, a worker.js, and no RETIRED or FOLDED marker."""
+    out = {}
+    for d in sorted(os.listdir(root)):
+        p = os.path.join(root, d)
+        if not os.path.isfile(os.path.join(p, "wrangler.toml")) or not os.path.isfile(os.path.join(p, "worker.js")):
+            continue
+        if os.path.exists(os.path.join(p, "RETIRED")) or os.path.exists(os.path.join(p, "FOLDED")):
+            continue
+        name = d
+        with open(os.path.join(p, "wrangler.toml"), encoding="utf-8") as f:
+            m = re.search(r'^name\s*=\s*"([^"]+)"', f.read(), re.M)
+            if m:
+                name = m.group(1)
+        with open(os.path.join(p, "worker.js"), encoding="utf-8", errors="replace") as f:
+            v = re.search(r'var VERSION = "([^"]*)"', f.read(200000))
+        out[name] = {"dir": d, "version": v.group(1) if v else None}
+    return out
+
+
+def commit_age_min(path, root=REPO):
+    try:
+        ts = subprocess.run(["git", "-C", root, "log", "-1", "--format=%ct", "--", path], capture_output=True, text=True, timeout=20).stdout.strip()
+        return (time.time() - int(ts)) / 60.0 if ts else None
+    except Exception:  # noqa: BLE001
+        return None
+
+
+# ---------------------------------------------------------------- journeys
+
+def j_deploy_coherence(h, repo=None, commit_age=commit_age_min):
+    j = Journey("deploy-coherence")
+    repo = repo if repo is not None else live_dirs()
+    j.check("repo lists live workers", len(repo) > 0, "%d" % len(repo))
+    st, reg = h.json("GET", OPS + "/registry")
+    regv = {r.get("service"): r.get("version") for r in ((reg or {}).get("registry") or [])}
+    j.check("qnfo-ops /registry answers", st == 200 and regv, "http %s, %d rows" % (st, len(regv)))
+    for name, info in sorted(repo.items()):
+        st, hj = h.json("GET", "https://%s.q08.workers.dev/health" % name)
+        live = (hj or {}).get("version") if isinstance(hj, dict) else None
+        if not j.check("%s /health answers" % name, st == 200 and live, "http %s" % st):
+            continue
+        want = info.get("version")
+        if want and live != want:
+            a = commit_age(os.path.join(info["dir"], "worker.js"))
+            if a is not None and a < DEPLOY_GRACE_MIN:
+                j.check("%s deploying" % name, True, "main %s, live %s, commit %d min old" % (want, live, int(a)))
+                continue  # the registry follows the deploy; judge it on the next run
+            j.check("%s live == main" % name, False, "main %s, live %s" % (want, live))
+        if name in regv and regv[name] and regv[name] != live:
+            j.check("%s registry == live" % name, False, "registry %s, live %s" % (regv[name], live))
+    return j
+
+
+def j_binding_census(h):
+    j = Journey("binding-census")
+    st, d = h.json("GET", OPS + "/fleet")
+    rows = (d or {}).get("fleet") or []
+    if not j.check("qnfo-ops /fleet answers", st == 200 and rows, "http %s, %d rows" % (st, len(rows))):
+        return j
+    down = [r.get("name") for r in rows if r.get("healthy") is False]
+    blind = [r.get("name") for r in rows if r.get("healthy") is None]
+    j.check("no worker unhealthy through the census", not down, ",".join(down))
+    j.check("census sees every worker (blind <= %d)" % BLIND_MAX, len(blind) <= BLIND_MAX, ",".join(blind))
+    return j
+
+
+def j_lock_roundtrip(h):
+    j = Journey("lock-roundtrip")
+    owner = "fleet-journeys-%d" % int(time.time())
+    st, a = h.json("POST", GUARD + "/work-lock/acquire", {"key": LOCK_KEY, "owner": owner, "intent": "FLEET-JOURNEYS-1 round trip", "ttl_sec": 120})
+    token = (a or {}).get("token")
+    if not j.check("acquire", st == 200 and (a or {}).get("acquired") and token, "http %s acquired %s holder %s" % (st, (a or {}).get("acquired"), (a or {}).get("holder"))):
+        return j
+    try:
+        st, l1 = h.json("GET", GUARD + "/work-locks")
+        listed = any(owner == (c.get("holder") or c.get("owner")) for c in ((l1 or {}).get("claims") or []))
+        j.check("/work-locks lists the claim", st == 200 and listed, "http %s" % st)
+    finally:
+        st, r = h.json("POST", GUARD + "/work-lock/release", {"key": LOCK_KEY, "token": token, "outcome": "done"})
+        j.check("release", st == 200, "http %s %s" % (st, json.dumps(r)[:120]))
+    st, l2 = h.json("GET", GUARD + "/work-locks")
+    still = any(owner == (c.get("holder") or c.get("owner")) for c in ((l2 or {}).get("claims") or []))
+    j.check("/work-locks no longer lists it", st == 200 and not still, "http %s" % st)
+    return j
+
+
+def j_papers_path(h):
+    j = Journey("papers-path")
+    st, d = h.json("GET", PAPERS + "/api/papers?limit=1")
+    items = (d or {}).get("items") or []
+    if not j.check("/api/papers lists a paper", st == 200 and items and (d or {}).get("total", 0) > 0, "http %s total %s" % (st, (d or {}).get("total"))):
+        return j
+    it = items[0]
+    slug, pid, title = it.get("slug"), it.get("id"), (it.get("title") or "")
+    st, page = h.req("GET", PAPERS + "/papers/" + str(slug))
+    # The page may typeset or escape the title; the first 24 plain characters are enough to prove it is this paper.
+    norm = lambda x: re.sub(r"\s+", " ", re.sub(r"[^A-Za-z0-9 ]", " ", re.sub(r"<[^>]+>", " ", x))).strip().lower()  # noqa: E731
+    probe = norm(title)[:24].strip()
+    j.check("paper page renders the listed paper", st == 200 and probe and probe in norm(page), "http %s" % st)
+    st, feed = h.json("GET", PAPERS + "/feed.json")
+    fitems = (feed or {}).get("items") or []
+    j.check("feed.json carries the newest paper", st == 200 and any(str(slug) in json.dumps(x) for x in fitems), "http %s, %d items" % (st, len(fitems)))
+    if pid:
+        st, oai = h.req("GET", PAPERS + "/oai?verb=GetRecord&metadataPrefix=oai_dc&identifier=" + urllib.request.quote(str(pid), safe=":"))
+        j.check("OAI-PMH GetRecord returns the same id", st == 200 and str(pid) in oai and "<error" not in oai, "http %s" % st)
+    return j
+
+
+def parse_sse(text):
+    events = []
+    ev, data = None, []
+    for line in text.splitlines() + [""]:
+        if line.startswith("event:"):
+            ev = line[6:].strip()
+        elif line.startswith("data:"):
+            data.append(line[5:].strip())
+        elif not line.strip() and (ev or data):
+            try:
+                events.append((ev, json.loads("\n".join(data))))
+            except Exception:  # noqa: BLE001
+                events.append((ev, None))
+            ev, data = None, []
+    return events
+
+
+ASK_QUERY = os.environ.get("JOURNEY_ASK_QUERY", "What is the silent radix?")
+
+
+def j_ask_path(h):
+    j = Journey("ask-path")
+    st, text = h.req("POST", ASK + "/api/ask", {"query": ASK_QUERY})
+    events = parse_sse(text) if st == 200 else []
+    if not j.check("ask streams", st == 200 and events, "http %s, %d events" % (st, len(events))):
+        return j
+    meta = next((d for e, d in events if e == "meta" and isinstance(d, dict)), {}) or {}
+    sources = meta.get("sources") or []
+    answer = "".join((d or {}).get("t", "") for e, d in events if e == "token" and isinstance(d, dict))
+    done = next((d for e, d in events if e == "done"), None)
+    j.check("retrieval returned sources", len(sources) > 0, "%d" % len(sources))
+    j.check("answer is non-empty and finished", len(answer) > 80 and done is not None, "%d chars, done %s" % (len(answer), done is not None))
+    cites = sorted({int(n) for grp in re.findall(r"\[(\d+(?:\s*,\s*\d+)*)\]", answer) for n in re.split(r"\s*,\s*", grp)})
+    j.check("answer cites its sources", cites and max(cites) <= len(sources) and min(cites) >= 1, "cites %s of %d" % (cites[:8], len(sources)))
+    for n in [c for c in cites if 1 <= c <= len(sources)][:3]:
+        url = (sources[n - 1] or {}).get("url") or ""
+        if url.startswith(PAPERS):
+            st, _ = h.req("GET", url)
+            j.check("cited source [%d] resolves" % n, st == 200, "%s http %s" % (url[len(PAPERS):][:80], st))
+    return j
+
+
+def j_loop_heartbeats(h, now=None):
+    j = Journey("loop-heartbeats")
+    st, d = h.json("GET", CONTROL + "/loops")
+    d = d or {}
+    j.check("fleet-control LOOP-WATCH healthy", st == 200 and d.get("healthy") is True, "findings %s" % json.dumps(d.get("findings"))[:160])
+    fresh(j, "fleet-control portfolio_last", (d.get("portfolio_last") or {}).get("ts"), now)
+    fresh(j, "fleet-control charter_last", (d.get("charter_last") or {}).get("ts"), now)
+    st, c = h.json("GET", CONTROL + "/chaos-drill")
+    c = c or {}
+    fresh(j, "fleet-control chaos last_drill", c.get("last_drill"), now)
+    j.check("chaos drill: every component tested in 24 h", st == 200 and c.get("untested_24h") == 0, "untested %s" % c.get("untested_24h"))
+    failing = [p.get("component") for p in (c.get("probes") or []) if p.get("enabled") and p.get("last_pass") == 0]
+    j.check("chaos drill: no enabled component failing", not failing, "; ".join(str(x)[:50] for x in failing))
+    st, l = h.json("GET", DASH + "/api/loop")
+    l = l or {}
+    fresh(j, "dashboard last_sync", l.get("last_sync"), now)
+    fresh(j, "dashboard last_execute", l.get("last_execute"), now)
+    fails = ((l.get("last_execute_summary") or {}).get("failed") or 0)
+    j.check("dashboard executor: no failed actions", fails == 0, "failed %s" % fails)
+    st, s = h.json("GET", DASH + "/api/state")
+    s = s or {}
+    fresh(j, "dashboard state generated_at", s.get("generated_at"), now)
+    j.check("dashboard state: no error-level issues", st == 200 and ((s.get("issue_counts") or {}).get("err", 1) == 0), "issue_counts %s verdict %s" % (s.get("issue_counts"), s.get("verdict")))
+    st, a = h.json("GET", ASK + "/api/loop")
+    runs = (a or {}).get("runs") or []
+    fresh(j, "ai-search loop runs[0]", runs[0].get("ts") if runs else None, now)
+    st, r = h.json("GET", PAPERS + "/api/render-health")
+    fresh(j, "gateway render last_checked", (r or {}).get("last_checked"), now)
+    return j
+
+
+def j_ai_router(h):
+    j = Journey("ai-router")
+    st, d = h.json("GET", AI + "/health")
+    b = (d or {}).get("bindings") or {}
+    # Bindings the router's own routes cross (service bindings and D1); the vector indexes and optional keys are reported, not judged.
+    need = ("ai", "auth", "query_db", "qnfo_infra", "qnfo_intent")
+    missing = [k for k in need if not b.get(k)]
+    j.check("qnfo-ai /health declares its routing bindings", st == 200 and not missing, "missing %s" % ",".join(missing))
+    st, m = h.json("GET", AI + "/v1/models")
+    j.check("/v1/models lists models", st == 200 and len((m or {}).get("data") or []) > 0, "http %s" % st)
+    st, p = h.json("GET", AI + "/v1/ensemble/policy")
+    j.check("/v1/ensemble/policy answers", st == 200 and isinstance(p, dict), "http %s" % st)
+    return j
+
+
+JOURNEYS = [j_deploy_coherence, j_binding_census, j_lock_roundtrip, j_papers_path, j_ask_path, j_loop_heartbeats, j_ai_router]
+
+
+def run_all(h=None, skip_ai=None):
+    h = h or Http()
+    skip_ai = os.environ.get("JOURNEY_SKIP_AI") == "1" if skip_ai is None else skip_ai
+    out = []
+    for fn in JOURNEYS:
+        if skip_ai and fn is j_ask_path:
+            continue
+        t0 = time.time()
+        try:
+            j = fn(h)
+        except Exception as e:  # noqa: BLE001 - a crashed journey is a failed journey, never a silent one
+            j = Journey(fn.__name__[2:].replace("_", "-"))
+            j.check("journey ran", False, "%s: %s" % (type(e).__name__, e))
+        out.append({"journey": j.name, "ok": j.ok, "ms": int((time.time() - t0) * 1000), "steps": len(j.steps),
+                    "failed": [s for s in j.steps if not s["ok"]], "passed": [s["step"] for s in j.steps if s["ok"]]})
+    return out
+
+
+# ---------------------------------------------------------------- record
+
+def due(d1):
+    rows = d1("SELECT MAX(ts) AS t FROM cloud_ops_events WHERE kind = 'fleet-journey'")
+    t = rows[0].get("t") if rows else None
+    a = age_min(t)
+    return a is None or a >= JOURNEY_EVERY_MIN
+
+
+def record(d1, results, verifier, now=None):
+    at = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(now or time.time()))
+    failing = [r for r in results if not r["ok"]]
+    for r in results:
+        meta = json.dumps({"failed": r["failed"], "steps": r["steps"], "ms": r["ms"], "verifier": verifier})[:6000]
+        d1("INSERT OR REPLACE INTO cloud_ops_events (id, ts, kind, text, meta, job, status) VALUES (?1, ?2, 'fleet-journey', ?3, ?4, 'fleet-journey', ?5)",
+           ["fleet-journey-%s-%s" % (r["journey"], at), at, "journey %s: %d of %d steps passed" % (r["journey"], r["steps"] - len(r["failed"]), r["steps"]),
+            meta, "ok" if r["ok"] else "fail"])
+    d1("UPDATE metric_registry SET last_value = ?2, last_refreshed = ?3, state = 'MEASURED' WHERE metric = ?1", [METRIC, str(len(failing)), at])
+    now_ms = int((now or time.time()) * 1000)
+    actions = {}
+    for r in results:
+        title_like = "%s: %s%%" % (ISSUE_PREFIX, r["journey"])
+        open_rows = d1("SELECT id FROM agent_issues WHERE status = 'open' AND title LIKE ?1", [title_like])
+        if r["ok"]:
+            for o in open_rows:
+                d1("UPDATE issue_triage SET close_evidence = ?1 WHERE issue_id = ?2",
+                   ["FLEET-JOURNEYS-1 %s: journey %s passed all %d steps end to end from the GitHub runner (%s); cloud_ops_events id fleet-journey-%s-%s"
+                    % (at, r["journey"], r["steps"], verifier, r["journey"], at), o["id"]])
+                d1("UPDATE agent_issues SET status = 'closed', close_channel = 'auto-recovery', updated_at = ?1 WHERE id = ?2", [now_ms, o["id"]])
+            if open_rows:
+                actions[r["journey"]] = "closed %s" % ",".join(str(o["id"]) for o in open_rows)
+            continue
+        listing = "; ".join("%s (%s)" % (s["step"], s["detail"]) for s in r["failed"])[:1500]
+        title = "%s: %s (%d of %d steps failing)" % (ISSUE_PREFIX, r["journey"], len(r["failed"]), r["steps"])
+        desc = ("Filed by scripts/fleet_journeys.py (FLEET-JOURNEYS-1) from the GitHub runner at %s. The %s journey drives a real multi-worker "
+                "process end to end and checks the effect at its far end (the module docstring names every step). Failing steps: %s. Each run "
+                "is in qnfo-audit cloud_ops_events (kind fleet-journey). Fix the hop the first failing step names; this issue closes itself the "
+                "first run the journey passes every step. Pillar core.") % (at, r["journey"], listing)
+        if open_rows:
+            d1("UPDATE agent_issues SET title = ?1, description = ?2, updated_at = ?3 WHERE id = ?4", [title, desc, now_ms, open_rows[0]["id"]])
+            actions[r["journey"]] = "updated %s" % open_rows[0]["id"]
+        else:
+            d1("INSERT INTO agent_issues (title, description, source, category, priority, status, created_at, updated_at) "
+               "SELECT ?1, ?2, 'fleet-journeys', 'reliability', 'high', 'open', ?3, ?3 WHERE NOT EXISTS "
+               "(SELECT 1 FROM agent_issues WHERE status = 'open' AND title LIKE ?4)", [title, desc, now_ms, title_like])
+            actions[r["journey"]] = "filed"
+    return {"at": at, "journeys": len(results), "failing": [r["journey"] for r in failing], "issues": actions}
+
+
+def run(d1, verifier, h=None, force=False):
+    if not force and not due(d1):
+        return {"skipped": "ran within %d min" % JOURNEY_EVERY_MIN}
+    results = run_all(h)
+    out = record(d1, results, verifier)
+    out["results"] = [{"journey": r["journey"], "ok": r["ok"], "ms": r["ms"], "failed": [s["step"] for s in r["failed"]]} for r in results]
+    return out
+
+
+# ---------------------------------------------------------------- selftest
+
+def selftest():
+    """Offline: canned answers for every URL prove each journey's pass and fail paths and the record/issue lifecycle."""
+    now = time.time()
+    iso = lambda m: time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(now - m * 60))  # noqa: E731
+    state = {"claims": []}
+
+    def site(break_hop=None):
+        def opener(method, url, body, headers):
+            b = json.loads(body) if body else {}
+            if url == OPS + "/registry":
+                return 200, json.dumps({"registry": [{"service": "w1", "version": "1.0.0"}]})
+            if url == "https://w1.q08.workers.dev/health":
+                return 200, json.dumps({"version": "1.0.1" if break_hop == "deploy" else "1.0.0"})
+            if url == OPS + "/fleet":
+                return 200, json.dumps({"fleet": [{"name": "w1", "healthy": None if break_hop == "blind" else True}]})
+            if url == GUARD + "/work-lock/acquire":
+                state["claims"].append({"holder": b["owner"]})
+                return 200, json.dumps({"acquired": True, "token": "t"})
+            if url == GUARD + "/work-lock/release":
+                if break_hop != "release":
+                    state["claims"].clear()
+                return 200, "{}"
+            if url == GUARD + "/work-locks":
+                return 200, json.dumps({"claims": list(state["claims"])})
+            if url == PAPERS + "/api/papers?limit=1":
+                return 200, json.dumps({"total": 1, "items": [{"id": "oai:papers.qnfo.org:p1", "slug": "p1", "title": "A Paper on Things"}]})
+            if url == PAPERS + "/papers/p1":
+                return (404, "") if break_hop == "page" else (200, "<h1>A Paper on <em>Things</em></h1>")
+            if url == PAPERS + "/feed.json":
+                return 200, json.dumps({"items": [{"url": PAPERS + "/papers/p1"}]})
+            if url.startswith(PAPERS + "/oai?"):
+                return 200, "<record><identifier>oai:papers.qnfo.org:p1</identifier></record>"
+            if url == ASK + "/api/ask":
+                cite = "[3]" if break_hop == "cite" else "[1]"
+                return 200, ('event: meta\ndata: {"sources":[{"url":"%s/papers/p1"}]}\n\nevent: token\ndata: {"t":"%s"}\n\nevent: done\ndata: {"id":"a"}\n\n'
+                             % (PAPERS, "The answer is long enough to count as a real answer to the question asked here, " + cite))
+            if url == CONTROL + "/loops":
+                return 200, json.dumps({"healthy": True, "findings": [], "portfolio_last": {"ts": iso(30)}, "charter_last": {"ts": iso(600)}})
+            if url == CONTROL + "/chaos-drill":
+                return 200, json.dumps({"last_drill": iso(60), "untested_24h": 0, "probes": [{"component": "x", "enabled": 1, "last_pass": 1}]})
+            if url == DASH + "/api/loop":
+                return 200, json.dumps({"last_sync": iso(500 if break_hop == "stale" else 5), "last_execute": iso(5), "last_execute_summary": {"failed": 0}})
+            if url == DASH + "/api/state":
+                return 200, json.dumps({"generated_at": iso(5), "issue_counts": {"err": 0}})
+            if url == ASK + "/api/loop":
+                return 200, json.dumps({"runs": [{"ts": iso(20)}]})
+            if url == PAPERS + "/api/render-health":
+                return 200, json.dumps({"last_checked": iso(300).replace("T", " ").rstrip("Z")})
+            if url == AI + "/health":
+                return 200, json.dumps({"bindings": {"ai": True, "auth": True, "query_db": True, "qnfo_infra": True, "qnfo_intent": True}})
+            if url == AI + "/v1/models":
+                return 200, json.dumps({"data": [{"id": "qnfo"}]})
+            if url == AI + "/v1/ensemble/policy":
+                return 200, "{}"
+            return 404, ""
+        return opener
+
+    repo = {"w1": {"dir": "w1", "version": "1.0.0"}}
+    old = lambda p: 600  # noqa: E731
+    young = lambda p: 5  # noqa: E731
+    checks = []
+
+    def expect(label, cond):
+        checks.append((label, bool(cond)))
+
+    def run_one(fn, hop=None, **kw):
+        state["claims"].clear()
+        return fn(Http(site(hop)), **kw)
+
+    expect("deploy passes", run_one(j_deploy_coherence, repo=repo, commit_age=old).ok)
+    expect("deploy mismatch fails", not run_one(j_deploy_coherence, "deploy", repo=repo, commit_age=old).ok)
+    expect("deploy mismatch in grace passes", run_one(j_deploy_coherence, "deploy", repo=repo, commit_age=young).ok)
+    expect("census passes", run_one(j_binding_census).ok)
+    expect("census blind fails", not run_one(j_binding_census, "blind").ok)
+    expect("lock passes", run_one(j_lock_roundtrip).ok)
+    expect("lock left behind fails", not run_one(j_lock_roundtrip, "release").ok)
+    expect("papers passes", run_one(j_papers_path).ok)
+    expect("papers page 404 fails", not run_one(j_papers_path, "page").ok)
+    expect("ask passes", run_one(j_ask_path).ok)
+    expect("ask out-of-range citation fails", not run_one(j_ask_path, "cite").ok)
+    expect("loops pass", run_one(j_loop_heartbeats).ok)
+    expect("stale loop fails", not run_one(j_loop_heartbeats, "stale").ok)
+    expect("ai router passes", run_one(j_ai_router).ok)
+    expect("age_min parses both forms", abs(age_min(iso(10)) - 10) < 1 and abs(age_min(iso(10).replace("T", " ").rstrip("Z")) - 10) < 1)
+
+    # Record lifecycle on a fake D1: a failing journey files once, updates on the next failure, closes on a pass.
+    issues, triage, events, metric = {}, {}, [], {}
+
+    def d1(sql, params=None):
+        p = params or []
+        if sql.startswith("INSERT OR REPLACE INTO cloud_ops_events"):
+            events.append(p)
+            return []
+        if sql.startswith("UPDATE metric_registry"):
+            metric[p[0]] = p[1]
+            return []
+        if sql.startswith("SELECT id FROM agent_issues"):
+            pre = p[0].rstrip("%")
+            return [{"id": i} for i, v in issues.items() if v["status"] == "open" and v["title"].startswith(pre)]
+        if sql.startswith("INSERT INTO agent_issues"):
+            issues[len(issues) + 1] = {"title": p[0], "status": "open"}
+            return []
+        if sql.startswith("UPDATE agent_issues SET title"):
+            issues[p[3]]["title"] = p[0]
+            return []
+        if sql.startswith("UPDATE issue_triage"):
+            triage[p[1]] = p[0]
+            return []
+        if sql.startswith("UPDATE agent_issues SET status = 'closed'"):
+            issues[p[1]]["status"] = "closed"
+            return []
+        return []
+
+    bad = [{"journey": "papers-path", "ok": False, "ms": 1, "steps": 3, "failed": [{"step": "x", "ok": False, "detail": "y"}], "passed": []}]
+    good = [{"journey": "papers-path", "ok": True, "ms": 1, "steps": 3, "failed": [], "passed": ["a", "b", "c"]}]
+    r1 = record(d1, bad, "selftest")
+    r2 = record(d1, bad, "selftest")
+    expect("first failure files one issue", r1["issues"].get("papers-path") == "filed" and len(issues) == 1)
+    expect("second failure updates it", r2["issues"].get("papers-path") == "updated 1" and len(issues) == 1)
+    expect("metric counts failing journeys", metric.get(METRIC) == "1")
+    r3 = record(d1, good, "selftest")
+    expect("a pass closes it with evidence", issues[1]["status"] == "closed" and "passed all 3 steps" in triage.get(1, "") and r3["issues"].get("papers-path") == "closed 1")
+    expect("metric returns to 0", metric.get(METRIC) == "0")
+    expect("one event per journey per run", len(events) == 3)
+
+    failed = [c for c, ok in checks if not ok]
+    return {"selftest": "ok" if not failed else "fail", "checks": len(checks), "failed": failed}
+
+
+def main(argv):
+    if "--selftest" in argv:
+        st = selftest()
+        print(json.dumps(st))
+        return 0 if st["selftest"] == "ok" else 1
+    if "--dry-run" in argv:
+        res = run_all()
+        print(json.dumps(res, indent=1))
+        print("\n".join("%s %-18s %3d steps %6d ms  %s" % ("PASS" if r["ok"] else "FAIL", r["journey"], r["steps"], r["ms"],
+                        "; ".join("%s (%s)" % (s["step"], s["detail"]) for s in r["failed"])[:400]) for r in res), file=sys.stderr)
+        return 0
+    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+    import remediation_consumer as RC  # noqa: E402
+    try:
+        out = run(RC.d1, "github-runner/%s" % os.environ.get("GITHUB_RUN_ID", "local"), force="--force" in argv)
+    except Exception as e:  # noqa: BLE001 - never fails the job; the missing heartbeat is itself measured
+        out = {"fleet_journeys": "error", "error": "%s: %s" % (type(e).__name__, str(e)[:200])}
+    print(json.dumps(out))
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))
