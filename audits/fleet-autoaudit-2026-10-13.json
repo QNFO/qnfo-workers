@@ -1,5 +1,5 @@
 {
-  "audited_at": "2026-10-13 19:20:17",
+  "audited_at": "2026-10-13 19:50:31",
   "d1_write_failures": [],
   "d1_writes_ok": 115,
   "guard": {
@@ -543,12 +543,12 @@
       },
       {
         "dir": "personal-companion",
-        "version": "1.22.4-final-read",
+        "version": "1.22.5-analysis-auto",
         "worker": "personal-companion"
       },
       {
         "dir": "q08-signal-engine",
-        "version": "0.23.1",
+        "version": "0.24.1",
         "worker": "q08-signal-engine"
       },
       {
@@ -568,12 +568,12 @@
       },
       {
         "dir": "qnfo-cloud-ops",
-        "version": "1.26.3-review-skips-detectors",
+        "version": "1.27.1-probe-cadence-30m",
         "worker": "qnfo-cloud-ops"
       },
       {
         "dir": "qnfo-code-orchestrator",
-        "version": "0.14.4-exec-log-signature",
+        "version": "0.15.0-edit-repair-hints",
         "worker": "qnfo-code-orchestrator"
       },
       {
@@ -593,7 +593,7 @@
       },
       {
         "dir": "qnfo-fleet-control",
-        "version": "0.26.1-ci-feedback-order",
+        "version": "0.26.2-remediation-2x",
         "worker": "qnfo-fleet-control"
       },
       {
@@ -900,9 +900,9 @@
       "worker": "personal-api"
     },
     "personal-companion": {
-      "before": "1.22.4-final-read",
+      "before": "1.22.5-analysis-auto",
       "http": 200,
-      "live": "1.22.4-final-read",
+      "live": "1.22.5-analysis-auto",
       "match": 1,
       "note": "SYNC",
       "worker": "personal-companion"
@@ -944,9 +944,9 @@
       "worker": "personal-life-search"
     },
     "q08-signal-engine": {
-      "before": "0.23.1",
+      "before": "0.24.1",
       "http": 200,
-      "live": "0.23.1",
+      "live": "0.24.1",
       "match": 1,
       "note": "SYNC",
       "worker": "q08-signal-engine"
@@ -1129,9 +1129,9 @@
       "worker": "qnfo-citation-watch"
     },
     "qnfo-cloud-ops": {
-      "before": "1.26.3-review-skips-detectors",
+      "before": "1.27.1-probe-cadence-30m",
       "http": 200,
-      "live": "1.26.3-review-skips-detectors",
+      "live": "1.27.1-probe-cadence-30m",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-cloud-ops"
@@ -1146,9 +1146,9 @@
       "worker": "qnfo-code-agent"
     },
     "qnfo-code-orchestrator": {
-      "before": "0.14.4-exec-log-signature",
+      "before": "0.15.0-edit-repair-hints",
       "http": 200,
-      "live": "0.14.4-exec-log-signature",
+      "live": "0.15.0-edit-repair-hints",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-code-orchestrator"
@@ -1268,9 +1268,9 @@
       "worker": "qnfo-fleet-calibrator"
     },
     "qnfo-fleet-control": {
-      "before": "0.26.1-ci-feedback-order",
+      "before": "0.26.2-remediation-2x",
       "http": 200,
-      "live": "0.26.1-ci-feedback-order",
+      "live": "0.26.2-remediation-2x",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-fleet-control"
