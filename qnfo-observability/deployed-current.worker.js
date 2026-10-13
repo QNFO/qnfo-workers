@@ -114,7 +114,7 @@ const FLEET = [
   "research-daily-brief"
 ];
 
-var VERSION = "1.4.4-error-ratio-census"; // 1.4.4 WORKER-LOGS-SAMPLED-ERROR-VISIBILITY-1 (2026-10-12, agent_issues 1223, pillar autonomy): the digest's error ratio divides captured failures by the script's requests in the worker_usage_daily census (worker_logs holds failures only, so its self-ratio alerted "100%" hourly for idea-hub, qnfo-ai-search and qnfo-gateway); client disconnects are not failures; the digest and /fleet/summary state the log contract. // 1.4.3 NO-SILENT-DROP-1 (2026-10-08, pillar autonomy; owner directive "The system shall never silently drop issues"): evReview escalates an issue_ledger incident unless an OPEN agent_issue has its title; before this, any issue with the title in any status (a closed one included) swallowed every recurrence. // 1.4.0 WATCHMAKER-INVERTED-MEASURED-1 (agent_issues 2027) + SAI-KAIZEN-GRADIENT-1 (agent_issues 2054), pillar autonomy: the scorer member writes watchmaker_inverted as a MEASURED dimension, 5 x (1 - counted/ops) from the latest watchmaker_runs row (was a hand score of 4.8 from 2026-09-24, past due), and computeSai's kaizen term is 1 / (1 + step x open issues), keeping a gradient at every backlog size, in parity with qnfo-fleet-dashboard. 1.3.2 FOLD-HYGIENE-1 (#1756): the public /scorer/preview logs a failure and answers "preview failed" instead of the exception text (CodeQL js/stack-trace-exposure, PR 668). 1.3.1 SCORER-FOLD-1 (#1756): qnfo-autonomy-scorer runs here as a member (05:17 UTC daily, awaited; /scorer/* read routes). 1.2.16 FIX-ALERTS-DIGEST-CONSUMER: mark digest anomaly alerts consumed
+var VERSION = "1.4.5-cron-heartbeat"; // 1.4.5 CRON-ONLY-HEARTBEAT-1 (2026-10-13, agent_issues 2397, pillar autonomy): each hourly scheduled run ends with a qnfo-audit fleet_heartbeat upsert (ok=0 when the run threw); write errors are logged. 1.4.4 WORKER-LOGS-SAMPLED-ERROR-VISIBILITY-1 (2026-10-12, agent_issues 1223, pillar autonomy): the digest's error ratio divides captured failures by the script's requests in the worker_usage_daily census (worker_logs holds failures only, so its self-ratio alerted "100%" hourly for idea-hub, qnfo-ai-search and qnfo-gateway); client disconnects are not failures; the digest and /fleet/summary state the log contract. // 1.4.3 NO-SILENT-DROP-1 (2026-10-08, pillar autonomy; owner directive "The system shall never silently drop issues"): evReview escalates an issue_ledger incident unless an OPEN agent_issue has its title; before this, any issue with the title in any status (a closed one included) swallowed every recurrence. // 1.4.0 WATCHMAKER-INVERTED-MEASURED-1 (agent_issues 2027) + SAI-KAIZEN-GRADIENT-1 (agent_issues 2054), pillar autonomy: the scorer member writes watchmaker_inverted as a MEASURED dimension, 5 x (1 - counted/ops) from the latest watchmaker_runs row (was a hand score of 4.8 from 2026-09-24, past due), and computeSai's kaizen term is 1 / (1 + step x open issues), keeping a gradient at every backlog size, in parity with qnfo-fleet-dashboard. 1.3.2 FOLD-HYGIENE-1 (#1756): the public /scorer/preview logs a failure and answers "preview failed" instead of the exception text (CodeQL js/stack-trace-exposure, PR 668). 1.3.1 SCORER-FOLD-1 (#1756): qnfo-autonomy-scorer runs here as a member (05:17 UTC daily, awaited; /scorer/* read routes). 1.2.16 FIX-ALERTS-DIGEST-CONSUMER: mark digest anomaly alerts consumed
 const NAME = 'qnfo-observability';
 const KNOWN = new Set(FLEET);
 // FLEET-SIZE-LIVE-1 (2026-09-23): derive the fleet set from the LIVE service_registry (census
@@ -1057,19 +1057,25 @@ var scorerMod = (function() {
 export default {
   // PRECONDITION: cron trigger 17 * * * *. POSTCONDITION: ingest + digest executed hourly, server-side.
   async scheduled(controller, env, ctx) {
+    let hbOk = true;
     try {
       await ensureSchema(env);
       const r = await ingestTrace(env);
       const summary = await digest(env, r);
       await assessIntegration(env);
       ctx.waitUntil(evReview(env).catch(function (e) { console.error('evReview failed', String(e && e.message || e)); })); // OBSERVABILITY-ESCALATION-1 (#1809): escalate undigested alerts hourly
-    } catch (e) { console.error('scheduled failed', String(e && e.message || e)); }
+    } catch (e) { hbOk = false; console.error('scheduled failed', String(e && e.message || e)); }
     // SCORER-FOLD-1: the folded qnfo-autonomy-scorer runs once a day, on the 05:17 UTC tick (its old "17 5 * * *").
     if (new Date(Number(controller && controller.scheduledTime) || Date.now()).getUTCHours() === 5) {
       // The scorer hands its run to waitUntil; the host collects and awaits it so the run is not cut at 30 seconds.
       const pending = [];
-      try { await scorerMod.scheduled(controller, env, { waitUntil: function (p) { pending.push(Promise.resolve(p)); }, passThroughOnException: function () {} }); await Promise.allSettled(pending); } catch (e) { console.error('scorer member failed', String(e && e.message || e)); }
+      try { await scorerMod.scheduled(controller, env, { waitUntil: function (p) { pending.push(Promise.resolve(p)); }, passThroughOnException: function () {} }); await Promise.allSettled(pending); } catch (e) { hbOk = false; console.error('scorer member failed', String(e && e.message || e)); }
     }
+    // CRON-ONLY-HEARTBEAT-1 (agent_issues 2397, pillar autonomy): each hourly run ends with one fleet_heartbeat upsert (ok=0 when the
+    // run above threw). The write is caught and logged; it never fails the run.
+    try {
+      await env.AUDIT.prepare("INSERT INTO fleet_heartbeat (worker, version, ts, ok) VALUES (?1, ?2, ?3, ?4) ON CONFLICT(worker) DO UPDATE SET version=excluded.version, ts=excluded.ts, ok=excluded.ok").bind("qnfo-observability", VERSION, new Date().toISOString(), hbOk ? 1 : 0).run();
+    } catch (e) { console.error('qnfo-observability fleet_heartbeat write failed', String(e && e.message || e).slice(0, 200)); }
   },
 
   async fetch(req, env, ctx) {
