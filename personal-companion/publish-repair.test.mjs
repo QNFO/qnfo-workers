@@ -179,14 +179,14 @@ const notesOf = (extra) => ({ title: "Notes on the drift at the station", subtit
 // ---- the critic and the notes placeholder objection ------------------------------------------------------------------------------------
 {
   let seen = "";
-  const env = { AI: { run: async (m, input) => { seen = input.messages[1].content; return { response: '{"specificity":8,"argument":8,"objection":2,"voice":8,"grounding":9,"verdict":"accept","why":"ok"}' }; } } };
+  const env = { AI: { run: async (m, input) => { seen = input.messages[1].content; return { response: '{"specificity":8,"argument":8,"objection":2,"voice":8,"grounding":9,"systems":8,"verdict":"accept","why":"ok"}' }; } } };
   await V.critiquePiece(env, notesOf(""), "notes", source);
   ok(/STATED OBJECTION: \(no separate objection section/.test(seen) && seen.indexOf(V.NOTES_OBJECTION_PLACEHOLDER) === -1, "the critic is not shown the notes placeholder as the stated objection");
   const essay = { title: "T", lede: "L", body_md: "B", objection: "The strongest objection is that fourteen readings are too few to separate drift from noise." };
   await V.critiquePiece(env, essay, "essay", source);
   ok(seen.indexOf("STATED OBJECTION: The strongest objection is that fourteen") !== -1, "an essay's real objection is still shown");
   const loop = src.slice(src.indexOf("async function generate("), src.indexOf("var CRON_TABLE"));
-  ok(/var dims = form === "notes" \? \["specificity", "argument", "voice"\] : \["specificity", "argument", "objection", "voice"\];/.test(loop), "the notes objection score does not gate; essays and serials keep it");
+  ok(/var dims = form === "notes" \? \["specificity", "argument", "voice", "systems"\] : \["specificity", "argument", "objection", "voice", "systems"\];/.test(loop), "the notes objection score does not gate; essays and serials keep it; the systems score gates every form (COMPANION-SYSTEMS-ANALYSIS-1)");
 }
 
 // ---- end to end with an in-memory D1 and a scripted model world ----------------------------------------------------------------------
@@ -219,7 +219,7 @@ function modelWorld(o) {
     const sys = (input.messages && input.messages[0] && input.messages[0].content) || "";
     if (input.text) return { data: [] };
     if (/strict fact-checker/.test(sys)) { log.review++; return { response: o.review(model, sys, log.review) }; }
-    if (/adversarial reader/.test(sys)) { log.critic++; return { response: '{"specificity":8,"argument":8,"objection":8,"voice":8,"grounding":9,"verdict":"accept","why":"ok"}' }; }
+    if (/adversarial reader/.test(sys)) { log.critic++; return { response: '{"specificity":8,"argument":8,"objection":8,"voice":8,"grounding":9,"systems":8,"verdict":"accept","why":"ok"}' }; }
     log.writer++; return { response: typeof o.draft === "function" ? o.draft(log.writer) : o.draft };
   } };
   return { AI, log };

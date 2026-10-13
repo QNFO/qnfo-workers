@@ -53,7 +53,7 @@ function models(o) {
     const sys = (input.messages && input.messages[0] && input.messages[0].content) || "";
     if (input.text) return { data: [] };
     if (/strict fact-checker/.test(sys)) { if (o.reviewDown) throw new Error("reviewer down"); return { response: '{"unsupported":[],"verdict":"pass"}' }; }
-    if (/adversarial reader/.test(sys)) return { response: '{"specificity":8,"argument":8,"objection":8,"voice":8,"grounding":9,"verdict":"accept","why":"ok"}' };
+    if (/adversarial reader/.test(sys)) return { response: '{"specificity":8,"argument":8,"objection":8,"voice":8,"grounding":9,"systems":8,"verdict":"accept","why":"ok"}' };
     return { response: draft() };
   } };
 }
