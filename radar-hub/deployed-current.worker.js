@@ -2315,7 +2315,7 @@ export default {
   async scheduled(event, env, ctx) {
     const state = { ok: 1 }, pending = [];
     // the events and personal radars hand their work to ctx.waitUntil: collect those promises (still passed on) so the heartbeat follows them
-    const hubCtx = { waitUntil(pr) { pending.push(Promise.resolve(pr)); if (ctx && ctx.waitUntil) ctx.waitUntil(pr); }, passThroughOnException() { if (ctx && ctx.passThroughOnException) ctx.passThroughOnException(); } };
+    const hubCtx = { waitUntil(pr) { pending.push(Promise.resolve(pr)); if (ctx && ctx.waitUntil) ctx.waitUntil(pr); } };
     try {
       await hubRun.scheduled(event, env, hubCtx);
       const settled = await Promise.allSettled(pending);
