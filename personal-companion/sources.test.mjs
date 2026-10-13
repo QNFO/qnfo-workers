@@ -156,5 +156,22 @@ for (const status of [429, 403]) {
   await V.steward(env);
   ok(count(p, "companion_runs") === 15 + 0 || p.prepare("SELECT COUNT(*) n FROM companion_runs WHERE form = 'steward'").get().n === 2, "and it is not re-raised or re-resolved", p.prepare("SELECT status FROM companion_runs WHERE form = 'steward'").all());
 }
+// ANCHOR-FULL-ARTICLE-1 / ARXIV-WINDOW-WEEK-1 (1.19.3): the extract request asks for the whole article (MediaWiki reads any present
+// boolean, "exintro=0" included, as true), and the recent-papers window spans 7 days so a weekend still holds listed papers.
+{
+  const V = await load(); net.wiki = "up"; net.arxiv = "up";
+  const seen = [];
+  const prev = globalThis.fetch;
+  globalThis.fetch = async (url, init) => { seen.push(String(url)); return prev(url, init); };
+  const a = await V.fetchWiki("Alpha Subject");
+  globalThis.fetch = prev;
+  const xu = seen.find((u) => u.includes("prop=extracts")) || "";
+  ok(a && a.text.length > 2500 && xu && !/exintro/.test(xu), "the Wikipedia extract request carries no exintro parameter and returns the article", xu);
+  const now = Date.parse("2026-10-13T08:02:00Z");
+  const w = V.arxivWindow(now);
+  const m = w.match(/^submittedDate:\[(\d{12})\+TO\+(\d{12})\]$/);
+  const ms = (st) => Date.UTC(+st.slice(0, 4), +st.slice(4, 6) - 1, +st.slice(6, 8), +st.slice(8, 10), +st.slice(10, 12));
+  ok(m && (ms(m[2]) - ms(m[1])) / 864e5 === 7 && m[2] === "202610130802", "the arXiv recent window spans 7 days up to now", w);
+}
 console.log(pass + " passed, " + fail + " failed");
 if (fail) process.exit(1);
