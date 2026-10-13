@@ -1,6 +1,6 @@
 -- APPLY-BY: ci
 -- DB: qnfo-audit
--- Rollback: UPDATE agent_issues SET status = 'open', close_channel = NULL, updated_at = CAST(strftime('%s','now') AS INTEGER)*1000 WHERE id IN (1726, 2037, 2325) AND status = 'closed' AND close_channel = 'issue-triage-20261013'; UPDATE remediation_contracts SET status = 'active' WHERE class IN ('issue-1726', 'issue-2037') AND status = 'superseded'; UPDATE remediation_contracts SET verify_probe = (SELECT b.verify_probe FROM bak_20261013_issue_triage_contracts b WHERE b.class = remediation_contracts.class), verify_transport = (SELECT b.verify_transport FROM bak_20261013_issue_triage_contracts b WHERE b.class = remediation_contracts.class) WHERE class IN ('issue-2130', 'issue-2272', 'issue-2346', 'issue-2366', 'issue-2409', 'issue-2419')
+-- Rollback: UPDATE agent_issues SET status = 'open', close_channel = NULL, updated_at = CAST(strftime('%s','now') AS INTEGER)*1000 WHERE id IN (1726, 2037, 2325, 2340, 2347) AND status = 'closed' AND close_channel = 'issue-triage-20261013'; UPDATE remediation_contracts SET status = 'active' WHERE class IN ('issue-1726', 'issue-2037', 'issue-2340', 'issue-2347') AND status = 'superseded'; UPDATE agent_issues SET description = replace(replace(description, 'code-task: repo=qnfo-workers path=idea-hub/worker.js', 'code-task: repo=qnfo-workers path=qnfo-idea-triage/worker.js'), 'code-anchor: async function scoreIdea(env, desire, lean) {', 'code-anchor: return 0.3 * c.novelty + 0.3 * c.technical_merit + 0.2 * c.impact_potential + 0.2 * c.exposure_potential;') WHERE id = 2409; UPDATE remediation_contracts SET verify_probe = (SELECT b.verify_probe FROM bak_20261013_issue_triage_contracts b WHERE b.class = remediation_contracts.class), verify_transport = (SELECT b.verify_transport FROM bak_20261013_issue_triage_contracts b WHERE b.class = remediation_contracts.class) WHERE class IN ('issue-2130', 'issue-2272', 'issue-2346', 'issue-2366', 'issue-2409', 'issue-2419')
 -- ISSUE-TRIAGE-20261013 (2026-10-13, session_01Kddqwk5gQT5qSSHVKjT2EA, pillar autonomy): triage of every open agent_issues row
 -- (141 open at 07:05Z) with evidence read live between 06:50Z and 07:05Z. Every closure below is guarded: it is applied only
 -- if the issue is still open when this file runs (and, for 2325, only if no named model is degraded then). A probe change is
@@ -157,3 +157,26 @@ INSERT INTO decision_log (actor, assumption, action, evidence, outcome, blast_ra
    'issue 2366 closed within 24 h, and 2272 and 2419 the same way through their corrected contracts',
    'none directly; 2130 and 2409 now name their real gaps (lapsed spare domains still in the census; the novelty screen belongs in idea-hub)',
    'surfaces: d1-query qnfo-audit, runner-side curl of 6 census hosts, GitHub REST pulls and contents, code-read of main');
+-- ADDED BY THE SESSION (2026-10-13 07:15 UTC), from the triage report's two open decisions:
+--   2340 WORKERS-BP-CT-COMPARE-1 and 2347 WORKERS-SECRET-COMPARE-REMAINING-1 SUPERSEDED by #2432 (WORKERS-BP-DEBT-1:
+--        qnfo-research-exec). grep of origin/main 968f5ab at 07:14 UTC for (===|!==) against env.*(TOKEN|SECRET|KEY): 0 in
+--        qnfo-ai-search, qnfo-ai, qnfo-fleet-control, qnfo-cloud-ops, qnfo-infra, qnfo-subscribers, qnfo-tools-mcp; 5 in
+--        qnfo-research-exec, the same five lines workers_bp_findings (run 2026-10-13T06:52:02Z) lists and #2432 carries.
+--   2409 IDEA-NOVELTY-1: the code-task line named qnfo-idea-triage/worker.js (FOLDED); it now names idea-hub/worker.js, where
+--        scoreIdea runs, anchored at its declaration (occurs once on main).
+INSERT INTO issue_triage (issue_id, rc, triage_state, owner, sla_due_at, remediation, close_evidence)
+SELECT a.id, 'ISSUE-TRIAGE-20261013', 'resolved', 'session_01Kddqwk5gQT5qSSHVKjT2EA', datetime('now'),
+  'superseded by #2432: the only remaining string-compared secrets are the five in qnfo-research-exec',
+  'superseded by #2432 (WORKERS-BP-DEBT-1: qnfo-research-exec). grep of origin/main at 2026-10-13 07:14 UTC: 0 string-compared env secrets in qnfo-ai-search, qnfo-ai, qnfo-fleet-control, qnfo-cloud-ops, qnfo-infra, qnfo-subscribers, qnfo-tools-mcp; 5 in qnfo-research-exec, the lines workers_bp_findings run 2026-10-13T06:52:02Z lists and #2432 carries'
+FROM agent_issues a WHERE a.id IN (2340, 2347) AND a.status = 'open'
+ON CONFLICT(issue_id) DO UPDATE SET close_evidence = excluded.close_evidence, triage_state = 'resolved';
+UPDATE agent_issues SET close_channel = 'issue-triage-20261013', updated_at = CAST(strftime('%s','now') AS INTEGER)*1000
+WHERE id IN (2340, 2347) AND status = 'closed' AND close_channel IS NULL;
+UPDATE agent_issues SET status = 'closed', close_channel = 'issue-triage-20261013', updated_at = CAST(strftime('%s','now') AS INTEGER)*1000
+WHERE id IN (2340, 2347) AND status = 'open';
+UPDATE agent_issues SET
+  description = replace(replace(description, 'code-task: repo=qnfo-workers path=qnfo-idea-triage/worker.js', 'code-task: repo=qnfo-workers path=idea-hub/worker.js'),
+    'code-anchor: return 0.3 * c.novelty + 0.3 * c.technical_merit + 0.2 * c.impact_potential + 0.2 * c.exposure_potential;',
+    'code-anchor: async function scoreIdea(env, desire, lean) {'),
+  updated_at = CAST(strftime('%s','now') AS INTEGER)*1000
+WHERE id = 2409 AND status = 'open' AND instr(description, 'path=qnfo-idea-triage/worker.js') > 0;
