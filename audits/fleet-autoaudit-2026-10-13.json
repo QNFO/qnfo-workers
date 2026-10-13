@@ -1,15 +1,8 @@
 {
-  "audited_at": "2026-10-13 06:13:35",
+  "audited_at": "2026-10-13 06:43:24",
   "d1_write_failures": [],
   "d1_writes_ok": 115,
   "guard": {
-    "_drift_confirm": {
-      "first_pass": [
-        "qnfo-ai-search"
-      ],
-      "refreshed": true,
-      "second_pass": []
-    },
     "_guard_rc": 0,
     "ahead": [],
     "cf_script_list": true,
@@ -550,7 +543,7 @@
       },
       {
         "dir": "personal-companion",
-        "version": "1.18.0-paper-fulltext",
+        "version": "1.19.0-stall-digest",
         "worker": "personal-companion"
       },
       {
@@ -570,7 +563,7 @@
       },
       {
         "dir": "qnfo-ai-search",
-        "version": "2.5.0-ask-ground-3",
+        "version": "2.5.1-source-voice",
         "worker": "qnfo-ai-search"
       },
       {
@@ -600,7 +593,7 @@
       },
       {
         "dir": "qnfo-fleet-control",
-        "version": "0.24.0-research-backpressure",
+        "version": "0.24.1-large-file-read",
         "worker": "qnfo-fleet-control"
       },
       {
@@ -610,7 +603,7 @@
       },
       {
         "dir": "qnfo-gateway",
-        "version": "3.18.0-ap-key",
+        "version": "3.18.1-render-defects",
         "worker": "qnfo-gateway"
       },
       {
@@ -907,9 +900,9 @@
       "worker": "personal-api"
     },
     "personal-companion": {
-      "before": "1.18.0-paper-fulltext",
+      "before": "1.19.0-stall-digest",
       "http": 200,
-      "live": "1.18.0-paper-fulltext",
+      "live": "1.19.0-stall-digest",
       "match": 1,
       "note": "SYNC",
       "worker": "personal-companion"
@@ -1002,9 +995,9 @@
       "worker": "qnfo-ai-calibration"
     },
     "qnfo-ai-search": {
-      "before": "2.5.0-ask-ground-3",
+      "before": "2.5.1-source-voice",
       "http": 200,
-      "live": "2.5.0-ask-ground-3",
+      "live": "2.5.1-source-voice",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-ai-search"
@@ -1275,9 +1268,9 @@
       "worker": "qnfo-fleet-calibrator"
     },
     "qnfo-fleet-control": {
-      "before": "0.24.0-research-backpressure",
+      "before": "0.24.1-large-file-read",
       "http": 200,
-      "live": "0.24.0-research-backpressure",
+      "live": "0.24.1-large-file-read",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-fleet-control"
@@ -1309,9 +1302,9 @@
       "worker": "qnfo-fleet-feed"
     },
     "qnfo-gateway": {
-      "before": "3.18.0-ap-key",
+      "before": "3.18.1-render-defects",
       "http": 200,
-      "live": "3.18.0-ap-key",
+      "live": "3.18.1-render-defects",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-gateway"
