@@ -152,5 +152,11 @@ ok(/never state an inferred arrangement, funding, motive or behaviour as a repor
   ok(/var pool = await fetchRandomTitles\(TOPIC_POOL\);/.test(w) && /intros = await fetchWikiIntros\(fresh\);/.test(w) && /var titles = scored\.map\(function \(x\) \{ return x\.t; \}\);/.test(w), "wikiAnchors screens the pool and reads candidates in screened order");
   ok(/try \{ intros = await fetchWikiIntros\(fresh\); \} catch \(eI\)/.test(w), "a failed intro request leaves the old order and is noted");
 }
+// ---- STARVED-RETRY-HOURLY-1 (1.21.7): one retry per hourly tick ----------------------------------------------------------------------
+{
+  ok(V.STARVED_RETRY_MAX_24H === 24, "the starved retry may run every hourly tick (24 failed runs a day)");
+  const sr = src.slice(src.indexOf("async function starvedRetryDue(env) {"), src.indexOf("async function steward(env) {"));
+  ok(/return !!f && f\.n < STARVED_RETRY_MAX_24H;/.test(sr) && !/f\.n < 16/.test(sr), "the daily bar reads the constant, not 16");
+}
 console.log(pass + " passed, " + fail + " failed");
 if (fail) process.exit(1);
