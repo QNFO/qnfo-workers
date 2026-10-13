@@ -219,7 +219,7 @@ globalThis.fetch = origFetch;
 
   const para = (i) => "The maintainer in case " + ["one", "two", "three", "four", "five", "six", "seven"][i] + " read every patch by hand, because the project accepted contributions from anyone and checked each one before merging it. The queue of patches grew each week while the number of maintainers stayed the same.";
   const inf = "So the volunteers who review the patches simply run out of hours before the queue runs out of patches.";
-  const essay = "# The queue that outgrew its reviewers\n\n" + [0, 1, 2, 3, 4, 5, 6].map((i) => para(i) + (i === 3 ? " " + inf : "")).join("\n\n") + "\n\nworth your time: yes - names the mechanism";
+  const essay = "# The queue that outgrew its reviewers\n\n" + [0, 1, 2, 3, 4, 5, 6].map((i) => para(i) + (i === 1 ? " " + inf : "")).join("\n\n") + "\n\nworth your time: yes - names the mechanism";
   const ground = essay.replace(" " + inf, "");
   let calls = 0;
   const env = { AI: { run: async () => { calls++; return { response: JSON.stringify({ unsupported: ["INFERENCE: " + inf + " -- not stated in source"], verdict: "fail" }) }; } } };
@@ -229,6 +229,10 @@ globalThis.fetch = origFetch;
   const envFact = { AI: { run: async () => { calls++; return { response: JSON.stringify({ unsupported: ["FACT: " + inf + " -- not stated in source"], verdict: "fail" }) }; } } };
   const rf = await V.verifyAndRevise(envFact, { piece: { text: essay, model: "@cf/nvidia/nemotron-3-120b-a12b" }, prompt: "P", banned: [], ground, seedText: "s", forecast: false });
   check("the same sentence labelled FACT still goes through the prune-and-re-verify repair", calls >= 4 && rf.problems.some((p) => /^repair trail: r1 prune -1/.test(p)), { ok: rf.ok, calls, problems: rf.problems.slice(-1) });
+  // Q08-ANALYSIS-KEEP-1: the same inference inside the analysis section (paragraph 4 here, after the auto split) is kept.
+  const essayA = "# The queue that outgrew its reviewers\n\n" + [0, 1, 2, 3, 4, 5, 6].map((i) => para(i) + (i === 3 ? " " + inf : "")).join("\n\n") + "\n\nworth your time: yes - names the mechanism";
+  const keptA = V.pruneInferences({ text: essayA, model: "m" }, { inferences: [inf + " -- reasoning"] }, [], false);
+  check("an inference inside the analysis section is not pruned", keptA.removed === 0 && keptA.piece.text.includes("run out of hours") && !keptA.piece.text.includes("<!--"), keptA.removed);
   const keep = V.pruneInferences({ text: "# T\n\nShort.\n\nworth your time: yes - x", model: "m" }, { inferences: ["Short. -- reasoning"] }, [], false);
   check("an inference is kept when deleting it would take the draft under the floor", keep.removed === 0 && /Short/.test(keep.piece.text));
 }
