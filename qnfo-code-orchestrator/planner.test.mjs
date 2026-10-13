@@ -5,6 +5,7 @@
 import { DatabaseSync } from "node:sqlite";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import path from "node:path";
+import fs from "node:fs";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const worker = (await import(pathToFileURL(path.join(here, "worker.js")).href)).default;
@@ -114,15 +115,16 @@ const FIX = (anchor, extra) => JSON.stringify(Object.assign({ code_fixable: true
   r = await plan(env);
   ok(r.issue === b && r.outcome === "invalid" && tasks(env).length === 0, "6 an anchor that is not in the file never becomes a task", plans(env).find((p) => p.issue_id === b));
 }
+const WIP = Number((/^const PLAN_WIP = (\d+);/m.exec(fs.readFileSync(new URL("./worker.js", import.meta.url), "utf8")) || [])[1] || 3); // CODE-LOOP-2X-1: PLAN_WIP 6
 // 7. caps: work in progress and the daily cap
 {
   const { env, prompts } = envWith([]);
   const d = env.AUDIT_DB._db;
   await plan(env); // creates the schema
-  for (let i = 0; i < 3; i++) d.prepare("INSERT INTO code_tasks (id, repo, path, goal, status, step, attempts, created_at, updated_at) VALUES (?, 'qnfo-workers', 'x/worker.js', 'g', 'queued', 'read', 0, 'n', 'n')").run("ct_w" + i);
+  for (let i = 0; i < WIP; i++) d.prepare("INSERT INTO code_tasks (id, repo, path, goal, status, step, attempts, created_at, updated_at) VALUES (?, 'qnfo-workers', 'x/worker.js', 'g', 'queued', 'read', 0, 'n', 'n')").run("ct_w" + i);
   issue(env, { title: "METRIC-TRIGGER-12-C: q08-signal-engine", description: "/api/f" });
   let r = await plan(env);
-  ok(!r.planned && /work in progress/.test(r.why) && prompts.length === 0, "7a no planning while 3 code tasks are unfinished", r);
+  ok(!r.planned && /work in progress/.test(r.why) && prompts.length === 0, "7a no planning while PLAN_WIP code tasks are unfinished", r);
   d.exec("DELETE FROM code_tasks");
   // PLAN-WIP-HANDOFF-1: tasks waiting on the merge runner are not this worker's work in progress, but are bounded.
   for (let i = 0; i < 10; i++) d.prepare("INSERT INTO code_tasks (id, repo, path, goal, status, step, attempts, created_at, updated_at) VALUES (?, 'qnfo-workers', 'x/worker.js', 'g', ?, 'done', 0, 'n', 'n')").run("ct_h" + i, ["branch_pushed", "published", "pr_open"][i % 3]);
