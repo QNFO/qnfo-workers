@@ -68,7 +68,7 @@ const cp = W.composePrompt(doi, title, abstract).split("Title: ")[0];
 ok(/Your own knowledge is not a source/.test(cp) && /state results no more strongly than the abstract/.test(cp), "composer prompt: own knowledge is not a source");
 ok(!/falsifiab/i.test(cp), "composer prompt no longer asks for a falsifiability claim the abstract may not make");
 const cps = readFileSync(new URL("./worker.js", import.meta.url), "utf8");
-const checkerPrompt = cps.slice(cps.indexOf("async function checkThread"), cps.indexOf("function parseIssues"));
+const checkerPrompt = cps.slice(cps.indexOf("async function checkThread"), cps.indexOf("const parseIssues = parseCheckerIssues"));
 ok(/Your own knowledge does not count as support/.test(checkerPrompt), "checker prompt: own knowledge does not count");
 ok(!/health|climate|energy|money|\bbills?\b|habit|medic|finance|medieval|guild/i.test(cp + checkerPrompt.replace(/PAPER:.*$/m, "")), "generative and checker instructions name no example topics", (cp + checkerPrompt).match(/health|climate|energy|money|bill|habit|medic|finance|medieval|guild/i));
 
