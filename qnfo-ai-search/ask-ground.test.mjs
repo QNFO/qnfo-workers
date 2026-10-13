@@ -45,6 +45,27 @@ ok(groundBody("The excerpts do not cover costs; this is outside the corpus.", gr
 ok(groundBody("# Heading only\nIt cost 5000 units.", ground, 2).text === "", "a heading left with nothing under it is not an answer");
 ok(groundBody("```js\nconst n = 987654;\n```\nThe ratio is 0.75.", ground, 2).text.indexOf("987654") > 0, "code blocks are untouched");
 
+// ---- ASK-GROUND-3 (2.5.0, agent_issues 2165): inferences the excerpts do not make are removed, and so is a heading left empty ----
+const spec = [
+  "The device ran 42 trials [1].",
+  "To falsify it, one would need to find a case where the ratio is not 0.75 [1].",
+  "Based on the title, it likely shows a quantitative account of the method.",
+  "Falsification of the claims would require showing that the analysis is flawed.",
+  "Presumably the method generalizes [2].",
+  "The excerpts do not state what would falsify the result.",
+].join(" ");
+const gs = groundBody(spec, ground, sources.length);
+ok(/42 trials/.test(gs.text) && /do not state what would falsify/.test(gs.text), "a supported sentence and a plain not-stated sentence survive the speculation check", gs.text);
+ok(!/one would need|Based on the title|would require showing|Presumably/i.test(gs.text) && gs.removed === 4, "speculation sentences (one would need to, based on the title, would require showing, presumably) are removed", gs);
+const groundSpec = groundText([{ n: 1, title: "Paper Three", excerpt: "To refute it one would need to observe a ratio above 0.9." }], "q", [], null);
+ok(/one would need to observe/.test(groundBody("The paper says one would need to observe a ratio above 0.9 to refute it [1].", groundSpec, 1).text), "a speculation marker the excerpt itself uses is kept");
+const gh = groundBody("The device ran 42 trials [1].\n\n### Falsification\nOne would need to show the ratio fails [1].\n\n### Method\nThe method is described in the second excerpt [2].", ground, sources.length);
+ok(!/### Falsification/.test(gh.text) && /### Method/.test(gh.text) && /42 trials/.test(gh.text), "a heading whose sentences were all removed is dropped, the others stay", gh.text);
+ok(/```\n# not a heading\n```/.test(groundBody("The ratio is 0.75 [1].\n\n```\n# not a heading\n```", ground, 2).text), "a # line inside a code fence is not treated as an empty heading");
+ok(/Never infer it from a title, from the question or from general reasoning/.test(sysBlock) && /Do not state a relation between two sources/.test(sysBlock), "the system prompt forbids inferring what no excerpt states and unstated relations between sources");
+const bm = src.slice(src.indexOf("function buildMessages"), src.indexOf("function splitFollowups"));
+ok(!/KNOWLEDGE GRAPH/.test(bm) && /The question names source \[1\]/.test(bm), "the writer prompt carries no knowledge-graph lines and names a quoted paper as source [1]");
+
 // ---- end to end ----
 let modelCalls = 0, modelText = "";
 const J = (o, st) => new Response(JSON.stringify(o), { status: st || 200, headers: { "content-type": "application/json" } });
