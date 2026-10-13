@@ -113,9 +113,15 @@ props = { caller = "qnfo-cloud-ops" }
 binding = "QNFO_OPS"
 service = "qnfo-ops"
 
+# SEND-EMAIL-SENDER-RESTRICT-1 (2026-10-13, agent_issues 2421, pillar security; applied by qnfo-ops 2.45.0 on the next canonical
+# deploy): the binding may send only as the two addresses worker.js sends as, read from its three env.SEND_EMAIL.send calls:
+# sendDigest from alerts@qnfo.org, and the outreach first touch and follow-up from OUTREACH_FROM (rowan.quni@qnfo.org).
+# A new sender address in worker.js must be added here in the same PR, or its send is refused. One line: the installer reads
+# one line per key.
 [[send_email]]
 binding = "SEND_EMAIL"
 name = "SEND_EMAIL"
+allowed_sender_addresses = ["alerts@qnfo.org", "rowan.quni@qnfo.org"]
 
 [[r2_buckets]]
 binding = "VAULT"

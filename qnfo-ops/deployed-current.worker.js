@@ -29,7 +29,7 @@ __name2222(fnv32, "fnv32");
 __name22222(fnv32, "fnv32");
 var __defProp222222 = Object.defineProperty;
 var __name222222 = /* @__PURE__ */ __name22222((target, value) => __defProp222222(target, "name", { value, configurable: true }), "__name");
-var VERSION = "2.44.1-compat-ledger-reason"; /* 2.44.1 COMPAT-LEDGER-REASON-1 (2026-10-12, pillar core): a deploy whose wrangler.toml declares a later compatibility date than the live one and does not advance it writes the gate's reason into its deployment_history note (compat_not_advanced=...), so a refusal is auditable from D1 (idea-hub stayed at 2026-09-01 in run 659 with no record of why); idea-hub gets its CH_IDEA_HUB health binding (the custom-domain read from ops.qnfo.org is a same-zone subrequest). 2.44.0 COMPAT-HEALTH-BINDINGS-22.44.0 COMPAT-HEALTH-BINDINGS-2 (2026-10-12, metric workers_compat_date_behind 27, pillar core): the compat gate of COMPAT-DATE-DECLARED-APPLY-1 reads a worker's /health through a service binding or a custom domain, and 17 of the 28 live workers had neither, so their declared dates could never advance; wrangler.toml now binds each of them (CH_<WORKER>) and COMPAT_HEALTH_BINDINGS names the bindings. KERNEL-REPLY-1 (metric false_stops_7d 5, doctrine kernel recognitions): the chat prompt gains rule 16: a reply ends with the result, never with a question, an offer or a menu for the user; what is optional is decided. 2.43.1 CF-API-RETRY-1 (2026-10-12, #2396, pillar autonomy): the deploy route's Cloudflare API calls (bindings read, settings read, the script PUT and its re-uploads) retry a transient answer (HTTP 429, 5xx, error code 10013, a network error) up to three times with backoff or Retry-After, the multipart body rebuilt per attempt; a definite refusal (10020, 10021, other 4xx) returns at once. 2.43.0 BINDING-PROPS-RESTORE-1 (2026-10-12, #2445, pillar autonomy): when SECRET-CHANGE-WATCH-1 records a new secret-triggered version of a worker whose wrangler.toml declares props on a [[services]] binding, the tick reads the worker's live settings and, when a declared props object is missing or differs, dispatches canonical-deploy.yml with workers=<name> (one dispatch per worker and secret version, ledger cloud_ops_events kind binding-props-restore), so the props a dashboard secret edit strips come back within one tick without a session (2026-10-12 09:33Z: qnfo-fleet-dashboard lost props.caller on SVC_QNFO_AI and every ask answered HTTP 401 until a redeploy at 11:37Z). 2.42.3 WORKERS-BP-DEBT-1 (#2431, pillar security): the container clone retry suffix takes rndHex8 instead of Math.random; the fleet audit reads 0 fail-class findings for this worker. 2.42.2: a comment count corrected (21 workers at 2026-08-01). 2.42.1: the COMPAT-RESTORE-FAILED-1 issue row carries epoch ms, and the /compat routes log error detail instead of returning it. 2.42.0 COMPAT-DATE-DECLARED-APPLY-1 (2026-10-12, pillar core): the canonical deploy re-sent each worker's live compatibility date and never read wrangler.toml, so no date in the fleet could advance. /ops/deploy now applies a later declared date when the file carries the line "# compat-advance: reviewed YYYY-MM-DD", the date is not after the review or today, and the worker's /health can be read from qnfo-ops; it keeps the date only when /health then answers with the deployed VERSION and otherwise uploads the previous date again (deployment_history action compat-restore, which also stops a retry under the same review). A date never moves back, a refusal by Cloudflare falls back to the live date, and the cf_worker_deploy tool never advances one. COMPAT-EXPOSURE-1: GET /compat lists every live worker's live date, wrangler.toml date, nodejs_compat state and the default changes between (table worker_compat_state, metric workers_compat_date_behind); the cron refreshes it every 6 h, POST /compat/refresh on demand. */ /* 2.41.0 OBSERVABILITY-DECLARED-APPLY-1 (2026-10-12, pillar core): the canonical deploy sent compatibility date, flags, bindings and containers in the upload metadata but never the observability settings, so a worker's [observability], [observability.logs] and [observability.traces] blocks in wrangler.toml never reached Cloudflare (same inert-config class as the crons of #1337 and the flags of COMPAT-FLAGS-DECLARED-APPLY-1). The deploy now overlays the declared keys on the live settings and sends the result; a worker that declares nothing is uploaded as before, and a Cloudflare refusal of the block is retried once without it and reported (observability_apply). RAND-ID-CRYPTO-1: randId and the /v1/responses ids draw from crypto.getRandomValues instead of Math.random. */ /* 2.40.2 NOZ-DOI-1 (2026-10-10): the schema map drops a retired registry column. 2.40.1 NO-MEMORY-FACTS-1 (owner directive 2026-10-10): the public read-only prompt answers only from tool results and the question text. */ /* 2.40.0 OPS-INTERNAL-CALLER-1 (2026-10-09, pillar autonomy): a request that arrives through a service binding declaring props = { caller = "qnfo-email" } is authenticated as the router key, so qnfo-email owner commands stop answering HTTP 401 "Unauthorized - set Bearer OPS_ROUTER_AUTH_KEY" (its OPS_KEY copy no longer matched after the 2026-10-01 rotation). Public requests never carry props. 2.39.2 OPS-CONTEXT-COMPACT-1 (agent_issues 2068, pillar cost): truncateToContext compacts every tool result older than the newest OPS_TOOL_KEEP_ROUNDS (2) tool-bearing rounds to its first OPS_TOOL_COMPACT_CHARS (1200) chars plus a marker that says how much was cut and to re-run the tool for the full output; user, assistant and system messages are never compacted. Every round of an agent loop used to resend all earlier tool output (MAX_TOOL_RESULT_CHARS 16384 each) until the 262k window filled, so cost grew with the square of the round count: BUDGET-AUTO-PROMOTE-1 jobs on 2026-10-03/06 used 2.46M-2.68M prompt tokens for 27-33 tool calls, two ending ok=0. Pure function compactToolRounds, replayed by context-compact.test.mjs. 2.39.1 2.39.1 OPS-COST-SOFT-1 (BUDGET-SOFT-ROUTE-1): the ops daily cost cap (OPS_DAILY_CAP_USD) no longer answers HTTP 429 on chat or /v1/jobs; the request or job runs on the free tier (budgetFallback, no paid exec upstream). The request-count cap and the per-job runaway cap stay. 2.39.0 RULE-8-RETIRED-1 (2026-10-06, pillar autonomy, owner directive: "Rule 8 is now deleted entirely"): system prompt item 15(d) HARD LIMITS becomes DECIDE AND RECORD - spend caps, guard metrics, probes and deletions are the agent's own decisions, recorded with the reason and a live measurement under rule 7; opt-out, outreach consent and cadence caps and the personal/research separation still hold. 2.38.47 (2026-10-06, pillar core): REGISTRY-SYNC-FOLDED-1 (agent_issues 2031): a FLEET entry for a folded member (qnfo-backlog-exec, a member of qnfo-lifecycle since BACKLOG-FOLD-1) carries kind member and its host route, so registryRefresh writes service_registry with the URL that serves it and kind member instead of the deleted worker's dead workers.dev URL as a live worker (07:30:59Z wrote https://qnfo-backlog-exec.q08.workers.dev and fleet_status reported it "Worker not found"); OPS-D1-LIMIT-WORD-1 (agent_issues 2033): ops_d1_query finds an existing LIMIT clause as a trailing word, not as the first "limit" substring, so a query that names a column such as limited and ends in LIMIT 10 is no longer given a second LIMIT 100 (D1_ERROR near "LIMIT": syntax error, 07:53:42Z). */
+var VERSION = "2.45.0-limits-sender-restrict"; /* 2.45.0 LIMITS-DECLARED-APPLY-1 + SEND-EMAIL-SENDER-RESTRICT-1 (2026-10-13, agent_issues 2420 and 2421, pillars core and security): the canonical deploy sends a worker's declared [limits] (cpu_ms, subrequests; positive integers only) as the upload metadata `limits`, which it never sent, so a [limits] table stops being inert (a refusal is retried once without it; ledger note limits=...); a [[send_email]] block's destination_address, allowed_destination_addresses and allowed_sender_addresses ride on the binding, also on a binding already live (only the declared keys; a refusal restores the live binding; ledger note send_email_restrict=...). A file without them uploads byte-identical metadata. The metadata object is built fresh per attempt, so the observability fallback no longer re-sends the block it means to drop. */ /* 2.44.1 COMPAT-LEDGER-REASON-1 (2026-10-12, pillar core): a deploy whose wrangler.toml declares a later compatibility date than the live one and does not advance it writes the gate's reason into its deployment_history note (compat_not_advanced=...), so a refusal is auditable from D1 (idea-hub stayed at 2026-09-01 in run 659 with no record of why); idea-hub gets its CH_IDEA_HUB health binding (the custom-domain read from ops.qnfo.org is a same-zone subrequest). 2.44.0 COMPAT-HEALTH-BINDINGS-22.44.0 COMPAT-HEALTH-BINDINGS-2 (2026-10-12, metric workers_compat_date_behind 27, pillar core): the compat gate of COMPAT-DATE-DECLARED-APPLY-1 reads a worker's /health through a service binding or a custom domain, and 17 of the 28 live workers had neither, so their declared dates could never advance; wrangler.toml now binds each of them (CH_<WORKER>) and COMPAT_HEALTH_BINDINGS names the bindings. KERNEL-REPLY-1 (metric false_stops_7d 5, doctrine kernel recognitions): the chat prompt gains rule 16: a reply ends with the result, never with a question, an offer or a menu for the user; what is optional is decided. 2.43.1 CF-API-RETRY-1 (2026-10-12, #2396, pillar autonomy): the deploy route's Cloudflare API calls (bindings read, settings read, the script PUT and its re-uploads) retry a transient answer (HTTP 429, 5xx, error code 10013, a network error) up to three times with backoff or Retry-After, the multipart body rebuilt per attempt; a definite refusal (10020, 10021, other 4xx) returns at once. 2.43.0 BINDING-PROPS-RESTORE-1 (2026-10-12, #2445, pillar autonomy): when SECRET-CHANGE-WATCH-1 records a new secret-triggered version of a worker whose wrangler.toml declares props on a [[services]] binding, the tick reads the worker's live settings and, when a declared props object is missing or differs, dispatches canonical-deploy.yml with workers=<name> (one dispatch per worker and secret version, ledger cloud_ops_events kind binding-props-restore), so the props a dashboard secret edit strips come back within one tick without a session (2026-10-12 09:33Z: qnfo-fleet-dashboard lost props.caller on SVC_QNFO_AI and every ask answered HTTP 401 until a redeploy at 11:37Z). 2.42.3 WORKERS-BP-DEBT-1 (#2431, pillar security): the container clone retry suffix takes rndHex8 instead of Math.random; the fleet audit reads 0 fail-class findings for this worker. 2.42.2: a comment count corrected (21 workers at 2026-08-01). 2.42.1: the COMPAT-RESTORE-FAILED-1 issue row carries epoch ms, and the /compat routes log error detail instead of returning it. 2.42.0 COMPAT-DATE-DECLARED-APPLY-1 (2026-10-12, pillar core): the canonical deploy re-sent each worker's live compatibility date and never read wrangler.toml, so no date in the fleet could advance. /ops/deploy now applies a later declared date when the file carries the line "# compat-advance: reviewed YYYY-MM-DD", the date is not after the review or today, and the worker's /health can be read from qnfo-ops; it keeps the date only when /health then answers with the deployed VERSION and otherwise uploads the previous date again (deployment_history action compat-restore, which also stops a retry under the same review). A date never moves back, a refusal by Cloudflare falls back to the live date, and the cf_worker_deploy tool never advances one. COMPAT-EXPOSURE-1: GET /compat lists every live worker's live date, wrangler.toml date, nodejs_compat state and the default changes between (table worker_compat_state, metric workers_compat_date_behind); the cron refreshes it every 6 h, POST /compat/refresh on demand. */ /* 2.41.0 OBSERVABILITY-DECLARED-APPLY-1 (2026-10-12, pillar core): the canonical deploy sent compatibility date, flags, bindings and containers in the upload metadata but never the observability settings, so a worker's [observability], [observability.logs] and [observability.traces] blocks in wrangler.toml never reached Cloudflare (same inert-config class as the crons of #1337 and the flags of COMPAT-FLAGS-DECLARED-APPLY-1). The deploy now overlays the declared keys on the live settings and sends the result; a worker that declares nothing is uploaded as before, and a Cloudflare refusal of the block is retried once without it and reported (observability_apply). RAND-ID-CRYPTO-1: randId and the /v1/responses ids draw from crypto.getRandomValues instead of Math.random. */ /* 2.40.2 NOZ-DOI-1 (2026-10-10): the schema map drops a retired registry column. 2.40.1 NO-MEMORY-FACTS-1 (owner directive 2026-10-10): the public read-only prompt answers only from tool results and the question text. */ /* 2.40.0 OPS-INTERNAL-CALLER-1 (2026-10-09, pillar autonomy): a request that arrives through a service binding declaring props = { caller = "qnfo-email" } is authenticated as the router key, so qnfo-email owner commands stop answering HTTP 401 "Unauthorized - set Bearer OPS_ROUTER_AUTH_KEY" (its OPS_KEY copy no longer matched after the 2026-10-01 rotation). Public requests never carry props. 2.39.2 OPS-CONTEXT-COMPACT-1 (agent_issues 2068, pillar cost): truncateToContext compacts every tool result older than the newest OPS_TOOL_KEEP_ROUNDS (2) tool-bearing rounds to its first OPS_TOOL_COMPACT_CHARS (1200) chars plus a marker that says how much was cut and to re-run the tool for the full output; user, assistant and system messages are never compacted. Every round of an agent loop used to resend all earlier tool output (MAX_TOOL_RESULT_CHARS 16384 each) until the 262k window filled, so cost grew with the square of the round count: BUDGET-AUTO-PROMOTE-1 jobs on 2026-10-03/06 used 2.46M-2.68M prompt tokens for 27-33 tool calls, two ending ok=0. Pure function compactToolRounds, replayed by context-compact.test.mjs. 2.39.1 2.39.1 OPS-COST-SOFT-1 (BUDGET-SOFT-ROUTE-1): the ops daily cost cap (OPS_DAILY_CAP_USD) no longer answers HTTP 429 on chat or /v1/jobs; the request or job runs on the free tier (budgetFallback, no paid exec upstream). The request-count cap and the per-job runaway cap stay. 2.39.0 RULE-8-RETIRED-1 (2026-10-06, pillar autonomy, owner directive: "Rule 8 is now deleted entirely"): system prompt item 15(d) HARD LIMITS becomes DECIDE AND RECORD - spend caps, guard metrics, probes and deletions are the agent's own decisions, recorded with the reason and a live measurement under rule 7; opt-out, outreach consent and cadence caps and the personal/research separation still hold. 2.38.47 (2026-10-06, pillar core): REGISTRY-SYNC-FOLDED-1 (agent_issues 2031): a FLEET entry for a folded member (qnfo-backlog-exec, a member of qnfo-lifecycle since BACKLOG-FOLD-1) carries kind member and its host route, so registryRefresh writes service_registry with the URL that serves it and kind member instead of the deleted worker's dead workers.dev URL as a live worker (07:30:59Z wrote https://qnfo-backlog-exec.q08.workers.dev and fleet_status reported it "Worker not found"); OPS-D1-LIMIT-WORD-1 (agent_issues 2033): ops_d1_query finds an existing LIMIT clause as a trailing word, not as the first "limit" substring, so a query that names a column such as limited and ends in LIMIT 10 is no longer given a second LIMIT 100 (D1_ERROR near "LIMIT": syntax error, 07:53:42Z). */
 // FOLD-WAVE-2 (2.38.45, 2026-10-06, #1756): qnfo-archive is retired (its 04:00 KG seed got HTTP 401 on every batch), so its
 // ARCHIVE probe binding leaves FLEET, BINDING_KEYS, wrangler.toml and the fleet_status text. BACKLOG now reaches the
 // qnfo-backlog-exec member inside qnfo-lifecycle (props.member); the code calling it is unchanged.
@@ -3217,6 +3217,72 @@ function mergeObservability(live, declared) {
   if (out.issues && typeof out.issues.enabled !== "boolean") delete out.issues;
   return out;
 }
+/* LIMITS-DECLARED-APPLY-1 (2.45.0, 2026-10-13, agent_issues 2420, pillar core). The canonical deploy never sent `limits`, so a
+   [limits] table in a worker's wrangler.toml was inert (qnfo-ops declares cpu_ms = 300000 and runs at the default; GET /settings
+   read 2026-10-13 shows no limits). The Workers Script Upload API documents metadata `limits: { cpu_ms, subrequests }`, both
+   optional numbers (developers.cloudflare.com/api/resources/workers/subresources/scripts/methods/update, read 2026-10-13), so
+   both are carried. Only the top-level [limits] table (or limits = { ... } before any table) is read, only these two keys, only
+   positive integers in TOML form (300000, 300_000, +300000); a float, a string, zero, a negative or any other key is ignored.
+   Returns only the declared keys, or null when nothing valid is declared: then the upload carries no `limits` key at all. */
+var LIMIT_KEYS = ["cpu_ms", "subrequests"];
+function limitValue(raw) {
+  const v = String(raw).trim().replace(/,$/, "").trim();
+  if (!/^\+?[1-9](?:_?[0-9])*$/.test(v)) return void 0;
+  const n = Number(v.replace(/[+_]/g, ""));
+  return Number.isSafeInteger(n) && n > 0 ? n : void 0;
+}
+function parseDeclaredLimits(toml) {
+  const out = {};
+  let sec = "";
+  const put = function(key, raw) {
+    if (LIMIT_KEYS.indexOf(key) === -1) return;
+    const n = limitValue(raw);
+    if (n !== void 0) out[key] = n;
+  };
+  for (const raw of String(toml || "").split(/\r?\n/)) {
+    const l = raw.replace(/#.*$/, "").trim();
+    if (!l) continue;
+    const h = l.match(/^(\[\[?)\s*([A-Za-z0-9_.-]+)\s*\]\]?$/);
+    if (h) {
+      sec = h[1] === "[" && h[2] === "limits" ? "limits" : null;
+      continue;
+    }
+    if (sec === null) continue;
+    const eq = l.match(/^([A-Za-z0-9_]+)\s*=\s*(.+)$/);
+    if (!eq) continue;
+    if (sec === "limits") put(eq[1], eq[2]);
+    else if (eq[1] === "limits") {
+      const inl = eq[2].trim().match(/^\{(.*)\}$/);
+      const rx = /([A-Za-z0-9_]+)\s*=\s*([^,]+)/g;
+      let m;
+      while (inl && (m = rx.exec(inl[1])) !== null) put(m[1], m[2]);
+    }
+  }
+  return Object.keys(out).length ? out : null;
+}
+/* SEND-EMAIL-SENDER-RESTRICT-1 (2.45.0, 2026-10-13, agent_issues 2421, pillar security). The installer pushed a [[send_email]]
+   block as { type, name } only, so a declared restriction never reached Cloudflare. The Script Upload API's send_email binding
+   documents destination_address (string), allowed_destination_addresses and allowed_sender_addresses (string arrays), the
+   same names wrangler.toml uses (read 2026-10-13). sendEmailRestrictions takes the section's raw key/value map and returns
+   only the restriction keys that are declared and well formed: an address must look like local@domain, an array keeps its
+   quoted items, and an empty or unreadable value is dropped (an empty allowlist would stop all mail; an array must sit on one
+   line, as the installer's section parser reads one line per key). A block that declares none returns {}, so the binding
+   object stays exactly { type: "send_email", name }. */
+var SEND_EMAIL_RESTRICT_KEYS = ["destination_address", "allowed_destination_addresses", "allowed_sender_addresses"];
+function sendEmailRestrictions(kv) {
+  const out = {};
+  const k = kv && typeof kv === "object" ? kv : {};
+  const addr = function(s) { return typeof s === "string" && /^[^\s@"'\[\],]+@[^\s@"'\[\],]+\.[^\s@"'\[\],]+$/.test(s); };
+  const d = typeof k.destination_address === "string" ? k.destination_address.trim() : "";
+  if (addr(d)) out.destination_address = d;
+  for (const key of ["allowed_destination_addresses", "allowed_sender_addresses"]) {
+    const m = typeof k[key] === "string" ? k[key].trim().match(/^\[(.*)\]$/) : null;
+    if (!m) continue;
+    const items = (m[1].match(/"([^"]*)"/g) || []).map(function(q) { return q.slice(1, -1).trim(); });
+    if (items.length && items.every(addr)) out[key] = items;
+  }
+  return out;
+}
 async function installDeclaredBindings(env, worker) {
   const out = { installed: 0, note: null, bindings: [] };
   try {
@@ -3246,6 +3312,7 @@ async function installDeclaredBindings(env, worker) {
        inert-config class as #1337's crons). Surface the declared flags so cfWorkerDeploy can UNION them in. */
     out.compat_flags = [];
     out.observability = parseDeclaredObservability(toml);
+    try { out.limits = parseDeclaredLimits(toml); } catch (_el) { out.limits = null; }
     try { out.compat = parseDeclaredCompat(toml); } catch (_ec) { out.compat = null; }
     const _cfm = String(toml).match(/^\s*compatibility_flags\s*=\s*\[([^\]]*)\]/m);
     if (_cfm) out.compat_flags = (_cfm[1].match(/"([^"]+)"/g) || []).map(function(q) { return q.slice(1, -1); });
@@ -3294,7 +3361,7 @@ async function installDeclaredBindings(env, worker) {
       else if (s.name === "durable_objects.bindings" && k.class_name) decl.push({ type: "durable_object_namespace", name: nm, class_name: k.class_name });
       else if (s.name === "queues" && k.queue_name) decl.push({ type: "queue", name: nm, queue_name: k.queue_name });
       else if (s.name === "workflows" && k.class_name) decl.push({ type: "workflow", name: nm, class_name: k.class_name });
-      else if (s.name === "send_email") decl.push({ type: "send_email", name: nm });
+      else if (s.name === "send_email") decl.push(Object.assign({ type: "send_email", name: nm }, sendEmailRestrictions(k)));
       else if (s.name === "browser") decl.push({ type: "browser", name: nm });
       else if (s.name === "ai_search") decl.push({ type: "ai_search", name: nm });
       else if (s.name === "artifacts") decl.push({ type: "artifacts", name: nm });
@@ -3473,7 +3540,12 @@ async function cfWorkerDeploy(env, args) {
   let bindingInstallNote = null;
   let _declFlags = [];
   let _declObs = null;
+  let _declLimits = null;
   let _declCompat = null;
+  // SEND-EMAIL-SENDER-RESTRICT-1: the live send_email bindings the declared restrictions changed, as they were before.
+  let sendEmailRestrictApplied = 0;
+  let _sendEmailNote = null;
+  const _sendEmailBefore = [];
   // BINDING-INSTALL-MERGE-1 (2026-09-29, issue #1448, FATAL): this installer used to run ONLY when
   // bindingsOut.length === 0, so a worker that already carried any non-secret binding
   // could NEVER gain a newly declared one. Canonical victim: qnfo-research-exec never
@@ -3487,6 +3559,7 @@ async function cfWorkerDeploy(env, args) {
     bindingInstallNote = _ins.note || null;
     if (_ins && Array.isArray(_ins.compat_flags)) _declFlags = _ins.compat_flags.slice();
     if (_ins && _ins.observability) _declObs = _ins.observability;
+    if (_ins && _ins.limits) _declLimits = _ins.limits;
     if (_ins && _ins.compat) _declCompat = _ins.compat;
     const _decl = _ins && Array.isArray(_ins.bindings) ? _ins.bindings : [];
     if (bindingsOut.length === 0 && _decl.length) {
@@ -3504,6 +3577,18 @@ async function cfWorkerDeploy(env, args) {
             if (_live && JSON.stringify(_live.props || null) !== JSON.stringify(_b.props)) {
               _live.props = _b.props;
               bindingPropsApplied++;
+            }
+          }
+          // SEND-EMAIL-SENDER-RESTRICT-1: the same exception for a restriction declared on a [[send_email]] block (the live
+          // binding of qnfo-cloud-ops reads { name, type } only, so a declared allowlist would otherwise never arrive). Only the
+          // keys the file declares are set; a live restriction the file does not name is kept, so a deploy never loosens one.
+          if (_b.type === "send_email") {
+            const _live = bindingsOut.find(function(x) { return x && x.type === "send_email" && x.name === _b.name; });
+            const _keys = SEND_EMAIL_RESTRICT_KEYS.filter(function(rk) { return _b[rk] !== void 0 && _live && JSON.stringify(_live[rk]) !== JSON.stringify(_b[rk]); });
+            if (_keys.length) {
+              _sendEmailBefore.push({ binding: _live, before: JSON.parse(JSON.stringify(_live)) });
+              for (const rk of _keys) _live[rk] = _b[rk];
+              sendEmailRestrictApplied++;
             }
           }
           continue;
@@ -3601,8 +3686,14 @@ async function cfWorkerDeploy(env, args) {
     // (an overlay on unread settings could switch off what is on). _obsOut is cleared when Cloudflare refuses it.
     let _obsOut = _declObs && _settingsRead ? mergeObservability(_liveObs, _declObs) : null;
     let _obsNote = _obsOut ? "applied" : _declObs ? "skipped: live settings unreadable" : "none declared";
+    // LIMITS-DECLARED-APPLY-1: sent only when wrangler.toml declares a valid [limits] key; _limitsOut is cleared when
+    // Cloudflare refuses it (the deploy then goes out exactly as before 2.45.0).
+    let _limitsOut = _declLimits && typeof _declLimits === "object" && Object.keys(_declLimits).length ? _declLimits : null;
+    let _limitsNote = _limitsOut ? "applied" : "none declared";
+    // The metadata object is built fresh per attempt: Object.assign used to target _mp itself, so a key an earlier attempt
+    // carried (observability) stayed in every retry and the "retried without it" fallbacks re-sent it. Same key order.
     const _buildBody = function () {
-    const metadataPart = JSON.stringify(Object.assign(_mp, { bindings: bindingsOut }, { compatibility_date: _compatDate }, _obsOut ? { observability: _obsOut } : {}, _compatFlags.length ? { compatibility_flags: _compatFlags } : {}, Object.keys(_exports).length ? { exports: _exports } : {}, _containers.length ? { containers: _containers } : {}));
+    const metadataPart = JSON.stringify(Object.assign({}, _mp, { bindings: bindingsOut }, { compatibility_date: _compatDate }, _obsOut ? { observability: _obsOut } : {}, _limitsOut ? { limits: _limitsOut } : {}, _compatFlags.length ? { compatibility_flags: _compatFlags } : {}, Object.keys(_exports).length ? { exports: _exports } : {}, _containers.length ? { containers: _containers } : {}));
     const body = ["--" + boundary, 'Content-Disposition: form-data; name="metadata"', "Content-Type: application/json", "", metadataPart, "--" + boundary, 'Content-Disposition: form-data; name="worker.js"; filename="worker.js"', "Content-Type: application/javascript+module", "", content, "--" + boundary + "--"].join("\r\n");
     return body;
     };
@@ -3676,13 +3767,34 @@ async function cfWorkerDeploy(env, args) {
       resp = await cfFetchRetry(_putUrl, { method: "PUT", headers: _putHeaders }, { body: _buildBody });
       j = await resp.json().catch(() => ({}));
     }
+    if (!resp.ok && _limitsOut) {
+      // LIMITS-DECLARED-APPLY-1: the declared limits must never be what stops a deploy: upload once more without them.
+      _limitsNote = "refused, deployed without it: " + JSON.stringify(j && j.errors || j).slice(0, 160);
+      _limitsOut = null;
+      resp = await cfFetchRetry(_putUrl, { method: "PUT", headers: _putHeaders }, { body: _buildBody });
+      j = await resp.json().catch(() => ({}));
+    }
+    if (!resp.ok && _sendEmailBefore.length) {
+      // SEND-EMAIL-SENDER-RESTRICT-1: a refused restriction on a live send_email binding is taken back to the live binding
+      // exactly as it was read, and the upload is sent once more. A binding first installed by this deploy keeps what the file
+      // declares (that is the new binding, not a change to a working one).
+      for (const _s of _sendEmailBefore) {
+        for (const _k of Object.keys(_s.binding)) delete _s.binding[_k];
+        Object.assign(_s.binding, _s.before);
+      }
+      _sendEmailBefore.length = 0;
+      sendEmailRestrictApplied = 0;
+      _sendEmailNote = "refused, deployed with the live binding: " + JSON.stringify(j && j.errors || j).slice(0, 160);
+      resp = await cfFetchRetry(_putUrl, { method: "PUT", headers: _putHeaders }, { body: _buildBody });
+      j = await resp.json().catch(() => ({}));
+    }
     if (!resp.ok) {
       const _ledFail = await recordDeployLedger(env, { resource_name: worker, action: "deploy", version_id: versionNote || null, status: "failed", notes: "cf_worker_deploy FAILED http=" + resp.status + " worker=" + worker + " content_bytes=" + content.length + " expected_version=" + String(args && args.expected_version || "n/a") + " err=" + JSON.stringify(j).slice(0, 200) });
       return { ok: false, error: "CF API " + resp.status + ": " + JSON.stringify(j).slice(0, 400), ledger: _ledFail };
     }
     const _compatNote = _compat.restore ? " compat-restore from=" + (_compat.from || "n/a") + " " + String(args && args.compat_restore_note || "").slice(0, 120) : _compat.applied ? " compat_date=" + _compat.from + "->" + _compat.to + " reviewed=" + _compat.reviewed : " compat_date=" + _compatDate + (_compat.declared_date && _compat.live_date && _compat.declared_date > _compat.live_date ? " compat_not_advanced=" + String(_compat.reason || "").replace(/\s+/g, "_").slice(0, 160) : "");
-    const _ledOk = await recordDeployLedger(env, { resource_name: worker, action: _compat.restore ? "compat-restore" : "deploy", version_id: versionNote || null, status: "success", notes: "cf_worker_deploy ok http=" + resp.status + " worker=" + worker + _compatNote + " bindings_preserved=" + bindingsOut.length + " observability=" + _obsNote.slice(0, 60) + (_droppedBindings.length ? " dropped_dangling_bindings=" + _droppedBindings.map(function (d) { return d.name + "->" + d.service; }).join(",") : "") + " etag=" + ((j && j.result && j.result.etag) ? j.result.etag : "n/a") + " content_bytes=" + content.length + " expected_version=" + String(args && args.expected_version || "n/a") });
-    return { ledger: _ledOk, ok: true, worker, deployed: true, http: resp.status, dropped_dangling_bindings: _droppedBindings, version: versionNote || "deployed", bindings_preserved: bindingsOut.length, bindings_installed: bindingsInstalled, binding_props_applied: bindingPropsApplied, observability_apply: _obsNote, observability: _obsOut, compatibility_date: _compatDate, compat: _compat, binding_install_note: bindingInstallNote, warning: bindingsOut.length === 0 ? "BINDING-INSTALL-WHEN-EMPTY-1: deployed with ZERO bindings and none installable from wrangler.toml - this worker may be a silent no-op" : null, result: j && j.result ? { id: j.result.id, etag: j.result.etag } : null };
+    const _ledOk = await recordDeployLedger(env, { resource_name: worker, action: _compat.restore ? "compat-restore" : "deploy", version_id: versionNote || null, status: "success", notes: "cf_worker_deploy ok http=" + resp.status + " worker=" + worker + _compatNote + " bindings_preserved=" + bindingsOut.length + " observability=" + _obsNote.slice(0, 60) + (_declLimits ? " limits=" + _limitsNote.slice(0, 60) : "") + (sendEmailRestrictApplied ? " send_email_restrict=applied:" + sendEmailRestrictApplied : _sendEmailNote ? " send_email_restrict=" + _sendEmailNote.slice(0, 60) : "") + (_droppedBindings.length ? " dropped_dangling_bindings=" + _droppedBindings.map(function (d) { return d.name + "->" + d.service; }).join(",") : "") + " etag=" + ((j && j.result && j.result.etag) ? j.result.etag : "n/a") + " content_bytes=" + content.length + " expected_version=" + String(args && args.expected_version || "n/a") });
+    return { ledger: _ledOk, ok: true, worker, deployed: true, http: resp.status, dropped_dangling_bindings: _droppedBindings, version: versionNote || "deployed", bindings_preserved: bindingsOut.length, bindings_installed: bindingsInstalled, binding_props_applied: bindingPropsApplied, observability_apply: _obsNote, observability: _obsOut, limits_apply: _limitsNote, limits: _limitsOut, send_email_restrict_applied: sendEmailRestrictApplied, send_email_restrict_note: _sendEmailNote, compatibility_date: _compatDate, compat: _compat, binding_install_note: bindingInstallNote, warning: bindingsOut.length === 0 ? "BINDING-INSTALL-WHEN-EMPTY-1: deployed with ZERO bindings and none installable from wrangler.toml - this worker may be a silent no-op" : null, result: j && j.result ? { id: j.result.id, etag: j.result.etag } : null };
   } catch (e) {
     return { ok: false, error: "cf_worker_deploy failed: " + (e && e.message || String(e)).slice(0, 300) };
   }
