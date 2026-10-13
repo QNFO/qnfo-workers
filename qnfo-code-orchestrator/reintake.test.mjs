@@ -60,7 +60,7 @@ function mkEnv(issues, tasks, opts) {
       },
       async all() {
         if (/FROM code_tasks/.test(q) && (opts.tasksUnreadable || (opts.noMergeNote && /merge_note/.test(q)))) throw new Error("D1_ERROR: no such column: merge_note");
-        if (/FROM agent_issues WHERE status='open' AND description LIKE '%code-task:%'/.test(q)) return { results: issues.filter((r) => r.description.includes("code-task:")) };
+        if (/FROM agent_issues (a LEFT JOIN v_issue_queue_v2 q ON q\.id = a\.id )?WHERE (a\.)?status='open' AND (a\.)?description LIKE '%code-task:%'/.test(q)) return { results: issues.filter((r) => r.description.includes("code-task:")) };
         if (/FROM code_tasks WHERE goal LIKE \?/.test(q)) { const tag = String(a[0]).replace(/%$/, ""); return { results: tasks.filter((t) => t.goal.indexOf(tag) === 0).sort((x, y) => (x.created_at < y.created_at ? 1 : -1)) }; }
         if (/FROM service_registry/.test(q)) return { results: [{ service: "qnfo-infra" }, { service: "qnfo-cloud-ops" }] };
         return { results: [] };
