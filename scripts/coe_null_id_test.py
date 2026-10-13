@@ -3,8 +3,8 @@
 
 A replica of cloud_ops_events (TEXT PRIMARY KEY id, which SQLite lets be NULL) with the production ts normalisers keyed on
 id, trg_metric_write_audit, the alerts dedupe and the worker_removals dedupe. Proves: before the migration an id-less insert
-keeps its space-format ts and an ISO alert from hours earlier swallows a new one; after it every insert gets an id and an
-ISO ts by rowid, the audit trigger writes an id, the backfill fixes existing rows, the alert dedupe only folds alerts from the last
+keeps its space-format ts and an ISO alert from hours earlier swallows a new one; after it every writer supplies an id and the rows get an
+ISO ts from the id-keyed normalisers, the audit trigger writes an id, the backfill fixes existing rows, the alert dedupe only folds alerts from the last
 60 minutes in either format, and the fm-coe-null-id detector reads 0.
 Run: python3 scripts/coe_null_id_test.py   (prints "N passed, 0 failed")
 """
@@ -111,9 +111,9 @@ ok(con.execute("SELECT COUNT(*) FROM cloud_ops_events WHERE substr(ts, 11, 1) = 
 ok(con.execute("SELECT ts FROM cloud_ops_events WHERE kind = 'dispose-blocked'").fetchone()[0] == "2026-10-13T08:00:00.000Z",
    "backfill: a space ts becomes the ISO form the normaliser writes")
 
-con.execute("INSERT INTO cloud_ops_events (ts, kind, job) VALUES ('2026-10-13 21:21:08', 'obs-ingest', 'qnfo-fleet-control')")
+con.execute("INSERT INTO cloud_ops_events (id, ts, kind, job) VALUES ('obs-1', '2026-10-13 21:21:08', 'obs-ingest', 'qnfo-fleet-control')")
 row = con.execute("SELECT id, ts FROM cloud_ops_events WHERE ts LIKE '2026-10-13T21:21:08%'").fetchone()
-ok(row and row[1] == "2026-10-13T21:21:08.000Z", "after: an id-less insert gets an ISO ts (the normaliser matches rowid)", row)
+ok(row and row[1] == "2026-10-13T21:21:08.000Z", "after: a writer-supplied id gets an ISO ts from the id-keyed normaliser", row)
 con.execute("INSERT INTO cloud_ops_events (id, ts, kind) VALUES ('e1', '1760390000', 'epoch')")
 row = con.execute("SELECT id, ts FROM cloud_ops_events WHERE kind = 'epoch'").fetchone()
 ok(row[1].endswith(".000Z") and row[1][10] == "T", "after: an epoch ts is normalised", row)

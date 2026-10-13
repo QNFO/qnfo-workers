@@ -1,7 +1,7 @@
 -- APPLY-BY: ci
 -- DB: qnfo-audit
 -- BACKUP: bak_20261013_coe_null_id
--- spof-review: the replaced triggers keep their tables and events; the rowid-keyed normalisers are one D1 path, and the second is on the read side: the dedupes and views here compare through datetime(), which reads both formats, and fm-coe-null-id reports a lapse within the hour
+-- spof-review: the replaced triggers keep their tables and events; the id-keyed normalisers are one D1 path, and the second is on the read side: the dedupes and views here compare through datetime(), which reads both formats, and fm-coe-null-id reports a lapse within the hour
 -- Rollback: recreate the triggers and views from the rows of bak_20261013_coe_null_id with obj = 'sql'; restore ids and ts with UPDATE cloud_ops_events SET id = NULL, ts = b.ts FROM bak_20261013_coe_null_id b WHERE b.obj = 'row' AND cloud_ops_events.rowid = b.rid
 --
 -- COE-NULL-ID-1 / TS-FORMAT-MIX-1 (GHA-AUDIT-1 follow-up, 2026-10-13; charter pillar autonomy). Root cause of the mixed
@@ -18,7 +18,7 @@
 --   * views that window ISO columns with datetime() as text: v_cost_fleet_30d (llm_gateway_log, cost_router_metrics,
 --     ai_queries), issue_ledger_exclusion_aware (cloud_ops_events), v_closeouts_no_verdict (handoffs.timestamp), and the
 --     worker_removals_from_live_audit dedupe (6 of 90 rows ISO).
--- Fix: the normalisers address the row by rowid; the audit trigger writes an id (qnfo-fleet-control: COE-NULL-ID-WRITER-1); the
+-- Fix: the id-keyed normalisers stay (D1 refused rowid-keyed ones for depth); the audit trigger writes an id (qnfo-fleet-control: COE-NULL-ID-WRITER-1); the
 -- existing rows are backfilled; the dedupe and the views compare through datetime(), which reads both formats.
 
 CREATE TABLE IF NOT EXISTS bak_20261013_coe_null_id AS
@@ -33,26 +33,12 @@ CREATE TABLE IF NOT EXISTS bak_20261013_coe_null_id AS
 -- 1. No id-fill trigger: an UPDATE of cloud_ops_events inside its own INSERT trigger pulls the table's whole UPDATE-trigger
 --    tree into every insert, and D1 refused it as "triggers nested too deep" (migration_runs 224, 2026-10-13 21:49Z; the
 --    runner's D1-TRIGGER-DEPTH-1 canary dropped it at once). Ids are written by the writers instead: trg_metric_write_audit
---    below, and qnfo-fleet-control by COE-NULL-ID-WRITER-1. The rowid-keyed normalisers below need no id.
+--    below, and qnfo-fleet-control by COE-NULL-ID-WRITER-1. The id-keyed normalisers then reach those rows.
 DROP TRIGGER IF EXISTS cloud_ops_events_id_fill_ins;
 
--- 2. The timestamp normalisers address the row by rowid.
-DROP TRIGGER IF EXISTS cloud_ops_events_ts_norm_ins;
-CREATE TRIGGER cloud_ops_events_ts_norm_ins AFTER INSERT ON cloud_ops_events WHEN NEW.ts IS NOT NULL AND length(NEW.ts) = 19
-BEGIN
-  UPDATE cloud_ops_events SET ts = replace(substr(NEW.ts, 1, 19), ' ', 'T') || '.000Z' WHERE rowid = NEW.rowid;
-END;
-DROP TRIGGER IF EXISTS cloud_ops_events_ts_norm_upd;
-CREATE TRIGGER cloud_ops_events_ts_norm_upd AFTER UPDATE OF ts ON cloud_ops_events WHEN NEW.ts IS NOT NULL AND length(NEW.ts) = 19
-BEGIN
-  UPDATE cloud_ops_events SET ts = replace(substr(NEW.ts, 1, 19), ' ', 'T') || '.000Z' WHERE rowid = NEW.rowid;
-END;
-DROP TRIGGER IF EXISTS cloud_ops_events_ts_norm_epoch_ins;
-CREATE TRIGGER cloud_ops_events_ts_norm_epoch_ins AFTER INSERT ON cloud_ops_events
-WHEN NEW.ts IS NOT NULL AND length(NEW.ts) = 10 AND NEW.ts GLOB '[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]'
-BEGIN
-  UPDATE cloud_ops_events SET ts = strftime('%Y-%m-%dT%H:%M:%S.000Z', CAST(NEW.ts AS INTEGER), 'unixepoch') WHERE rowid = NEW.rowid;
-END;
+-- 2. The id-keyed timestamp normalisers stay as they are. Rewritten to match rowid, D1 refused them as "triggers nested too
+--    deep" (migration_runs 225, 2026-10-13 21:56Z; the runner's D1-TRIGGER-DEPTH-1 canary restored the old ones at once),
+--    while the id-keyed text passes the same canary. With ids from the writers and the backfill below they reach every row.
 
 -- 3. The metric write audit writes its own id.
 DROP TRIGGER IF EXISTS trg_metric_write_audit;
@@ -109,7 +95,7 @@ INSERT OR REPLACE INTO failure_modes (fm_key, failure_mode, root_cause, remediat
 ('coe-null-id',
  'cloud_ops_events rows without an id keep a space-format ts and are invisible to every id-keyed trigger and reader',
  'id is TEXT PRIMARY KEY, which SQLite allows to be NULL; trg_metric_write_audit and qnfo-fleet-control insert without an id, and the ts normalisers matched WHERE id = NEW.id',
- 'the normalisers match rowid; trg_metric_write_audit writes an id; qnfo-fleet-control writes ids (COE-NULL-ID-WRITER-1); existing rows backfilled (COE-NULL-ID-1)',
+ 'ids reach every row, so the id-keyed normalisers apply; trg_metric_write_audit writes an id; qnfo-fleet-control writes ids (COE-NULL-ID-WRITER-1); existing rows backfilled (COE-NULL-ID-1)',
  'no id-less row outside the three qnfo-fleet-control kinds that COE-NULL-ID-WRITER-1 fixes, and no space-format ts since yesterday on the formerly id-less kinds',
  'fm-coe-null-id', '2026-10-13', NULL,
  'any writer that omits the id column', '2,247 id-less rows; 636 kept a space ts; same-day windows against ISO cutoffs undercounted them',
@@ -133,13 +119,13 @@ INSERT OR REPLACE INTO control_registry (control, location, kind, guards_against
 ('cloud_ops_events_ts_norm_ins', 'qnfo-audit trigger (migrations/2026-10-13-coe-null-id-ts-normalise.sql)', 'guard',
  'a space-format or epoch ts in cloud_ops_events, which ISO-windowed readers miscount', 0, 'replace', 'applied',
  'readers compare through datetime(), which reads both formats; fm-coe-null-id reports a space ts or a new id-less writer within the hour',
- datetime('now'), 'replaces the id-keyed normalisers that no-oped on 2,247 id-less rows; they now match rowid', NULL, datetime('now'));
+ datetime('now'), 'the id-keyed normalisers no-oped on 2,247 id-less rows; ids now come from the writers and the backfill (rowid-keyed ones exceed D1 trigger depth)', NULL, datetime('now'));
 
 INSERT INTO decision_log (actor, assumption, action, evidence, outcome, blast_radius, rollback_path, capability_gain,
   predicted_outcome, reach_gain, surfaces_tested) VALUES
 ('session_018gmMjMgWAuzVh7gHPBcosA',
  'a normaliser keyed on a nullable primary key is a no-op for exactly the rows it exists to fix',
- 'COE-NULL-ID-1: rowid-keyed ts normalisers, id in trg_metric_write_audit, backfill; datetime() in the alerts and worker_removals dedupes and three views',
+ 'COE-NULL-ID-1: id in trg_metric_write_audit, backfill; datetime() in the alerts and worker_removals dedupes and three views',
  'read 2026-10-13 21:40Z: 2,247 NULL ids (1,469 metric-write-audit, 636 fleet-control), 636 space-format ts; alerts 907 space / 90 ISO',
  'applied by apply-migrations', 'cloud_ops_events writes, two dedupe triggers, three views', 'see the Rollback header',
  'every cloud_ops_events row is addressable and ISO-stamped; windows read mixed-format columns correctly',
