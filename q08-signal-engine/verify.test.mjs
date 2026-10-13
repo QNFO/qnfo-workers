@@ -377,5 +377,12 @@ globalThis.fetch = origFetch;
   const src = (await import("node:fs")).readFileSync(new URL("./worker.js", import.meta.url), "utf8");
   check("the fact revision is told to keep a lede naming the subject", /keep the first paragraph a news lede, at most 70 words, that names/.test(src) && /factRevisionPrompt\(a\.prompt, cur\.text, revProblems, a\.ground,/.test(src));
 }
+// ---- Q08-NAME-COMPOUND-1 (0.23.1, run 386) ------------------------------------------------------------------------------------
+{
+  const src = "Redesigning source control at Anthropic. The team built a new system and Claude wrote parts of the tooling.";
+  const g = (txt) => V.groundingProblems(txt, src, { today: "2026-10-13" });
+  check("a hyphenated compound with a lowercase tail is checked only on its capitalised part", g("The team described Anthropic's AI-driven workflow and its Claude-generated changes.").length === 0, g("The team described Anthropic's AI-driven workflow and its Claude-generated changes."));
+  check("an invented name inside a compound still fails", g("The team described its Zorblax-generated changes.").some((x) => /Zorblax/.test(x)));
+}
 console.log("verify.test.mjs: " + passes + " passed, " + fails + " failed");
 process.exit(fails ? 1 : 0);
