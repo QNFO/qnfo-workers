@@ -43,7 +43,8 @@ const row = { id: "r1", context: "{}", recover_count: 0, source: "idea-hub", sta
   ok(res && res.ok === false && res.stage === "revise" && res.withheld === "revise-noop" && res.proposed === 0 && Array.isArray(res.fixIds) && res.fixIds[0] === "h1", "the pass fails as revise-noop with the fix ids", res);
   const upd = t.sqls.filter((s) => /UPDATE research_queue/.test(s.sql));
   ok(!upd.some((s) => /stage='review'/.test(s.sql)), "the row is NOT advanced to review", upd.map((s) => s.sql));
-  ok(upd.some((s) => /status='queued', stage='ground'/.test(s.sql) && /recover_count=recover_count\+1/.test(s.sql) && s.args[1] === "r1" && /not advanced unrevised/.test(s.args[0]) && /h1/.test(s.args[0])), "markError re-queues the row from ground with recover_count+1 and the reason (the recovery path)", upd.map((s) => [s.sql, s.args]));
+  // RERUN-ROUTE-1 (0.18.0, agent_issues 2473): a revise failure re-enters once at revise with its findings, not at ground.
+  ok(upd.some((s) => /status='researching', stage='revise'/.test(s.sql) && /recover_count=recover_count\+1/.test(s.sql) && s.args[3] === "r1" && /^RERUN-ROUTE-1 revise-once: /.test(s.args[0]) && /not advanced unrevised/.test(s.args[0]) && /h1/.test(s.args[0])), "markError re-enters the row once at revise with recover_count+1 and the reason (the recovery path)", upd.map((s) => [s.sql, s.args]));
   ok(t.store["pipeline/r1/reconciled.md"] === PAPER, "the paper in R2 is untouched");
   const ev = t.sqls.filter((s) => /INSERT INTO cloud_ops_events/.test(s.sql)).map((s) => s.args[2] + ": " + s.args[3]);
   ok(ev.some((e) => /^revise-noop: /.test(e) && /ids=h1/.test(e) && /strict_retry=yes/.test(e) && /revise failed, recover path/.test(e)), "the revise-noop event names the fix ids, the strict retry and the disposition", ev);

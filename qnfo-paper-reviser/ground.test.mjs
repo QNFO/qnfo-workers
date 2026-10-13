@@ -41,7 +41,9 @@ function seedPaper(papers, slug, recid) {
     .run(slug, "10.9999/test." + recid, "10.9999/test." + recid, "Paper " + slug, BODY);
 }
 let auditReply = "", lastPrompt = "";
-const ai = { async run(model, input) { lastPrompt = JSON.stringify(input); return { response: auditReply }; } };
+// REVISER-REREAD-1 (1.4.0): the second reader of an applied revision answers pass here; its own suite is
+// qnfo-research-exec/reviser-reread.test.mjs.
+const ai = { async run(model, input) { const s = JSON.stringify(input); if (s.includes("second, independent reader")) return { response: '{"verdict":"pass","hard":[]}' }; lastPrompt = s; return { response: auditReply }; } };
 globalThis.fetch = async (url) => {
   const u = String(url);
   if (u.includes("/versions")) return new Response(JSON.stringify({ hits: { hits: [{ doi: "x" }] } }), { status: 200, headers: { "content-type": "application/json" } });
