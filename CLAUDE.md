@@ -360,6 +360,13 @@ because each one was broken at least once; the linked issue holds the evidence.
   correlated (a 9-judge, 7-family panel is worth about 2.2 votes), so layers must come from disjoint model families, stay few and
   small, keep the non-model layers (deterministic gate, reader votes, owner verdict), and record their verdicts. While a
   `fleet_budget` cap is breached the layers use the cheapest models (BUDGET-SOFT-ROUTE-1); they are not removed.
+- Cite full texts and keep the pipeline out of the prose (CITE-FULLTEXT-1, SOURCE-VOICE-1; owner directives 2026-10-13:
+  "Papers shall cite full texts, not merely reference work summaries"; a paper saying it lacks a source's full text is
+  "highly inappropriate"). A generator that writes about other works grounds each one on its full text (arXiv HTML, a QNFO
+  paper's `body_md`), never a title or a truncated abstract, and drops a work it cannot read in full. Reader-facing text never
+  mentions how its sources reached it (bibliography entries, supplied or fetched summaries, input or grounding blocks,
+  truncated or empty sources). Prompts never ask a model to disclose a thin source; `narrative-prompt-guard.py` fails CI on it.
+  Code that reads `papers.abstract` must not treat NULL as "no summary": the body holds the paper (fm-paper-abstract-empty).
 
 ## One priority queue, no due dates (PRIORITY-QUEUE-1)
 - Owner directive 2026-10-03: dates are not important, the order of priority is. D1 `qnfo-audit.v_issue_queue` is the
