@@ -18,6 +18,7 @@ hour sees the first's rows and stops) every model in ALL_MODELS answers the same
 - **Items.** Operands come from a seed derived from the UTC hour; the code computes the expected value. No fixed list, nothing
   written by hand. `ai_calibration_config truth_probe_items` (0..5, default 2) sets the items an hour; 0 turns the probe off
   (about 20 router calls an hour at 2 items and 10 models).
+- **Hedge off.** Every request carries `hedge: false`. Without it the router's fast lane (TURN-BUDGET-1: `max_tokens` <= 1024, no tools) races a llama leg, and in the first run 16 of 20 answers came from llama, not the model asked. `served_by` still records who answered.
 - **Rows.** `ai_calibration_truth` (run_id, ts, item_id, model, expected, got, correct, served_by, latency_ms), one per item and
   model, created if missing, 30 days kept. A call that fails, or returns an empty reply (a reasoning model out of its 16 tokens),
   writes no row: it is not a wrong answer. A reply with text and no integer is wrong. `served_by` is the response's
