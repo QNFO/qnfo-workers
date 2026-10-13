@@ -87,7 +87,7 @@ const notes = { title: "Notes on the drift at the station", subtitle: "", lede: 
   const rl = repair(notes, ["notes length 900"].concat(validatePiece(notes, "notes", source).problems), "notes", source);
   ok(rl && rl.ok && !/Zorblax/.test(rl.piece.body_md), "a length problem next to a grounding problem: the grounding sentence goes and the draft is re-validated in full (1.17.0)");
   ok(repair(notes, ["banned: delve"], "notes", source) === null, "a banned phrase the draft does not contain removes nothing, so no repair");
-  ok(repair(notes, ["emoji present", "grounding: name not in the source: Zorblax Engine"], "notes", source) === null, "any problem other than grounding, banned or length is not repaired");
+  ok(repair(notes, ["notes items 2", "grounding: name not in the source: Zorblax Engine"], "notes", source) === null, "any problem other than grounding, banned, symbols or length is not repaired");
   ok(repair(notes, [], "notes", source) === null && repair(notes, null, "notes", source) === null, "no problems, no repair");
   ok(repair(notes, ["grounding: something the needle parser cannot read"], "notes", source) === null, "a grounding problem with no readable needle is left alone");
 }
