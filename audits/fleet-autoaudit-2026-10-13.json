@@ -1,8 +1,15 @@
 {
-  "audited_at": "2026-10-13 05:42:59",
+  "audited_at": "2026-10-13 06:13:35",
   "d1_write_failures": [],
   "d1_writes_ok": 115,
   "guard": {
+    "_drift_confirm": {
+      "first_pass": [
+        "qnfo-ai-search"
+      ],
+      "refreshed": true,
+      "second_pass": []
+    },
     "_guard_rc": 0,
     "ahead": [],
     "cf_script_list": true,
@@ -543,17 +550,17 @@
       },
       {
         "dir": "personal-companion",
-        "version": "1.16.1-ground-descriptor",
+        "version": "1.18.0-paper-fulltext",
         "worker": "personal-companion"
       },
       {
         "dir": "q08-signal-engine",
-        "version": "0.17.0",
+        "version": "0.17.3",
         "worker": "q08-signal-engine"
       },
       {
         "dir": "qnfo-ai",
-        "version": "5.35.1-router-resolve",
+        "version": "5.36.0-fleet-cap-steer",
         "worker": "qnfo-ai"
       },
       {
@@ -563,7 +570,7 @@
       },
       {
         "dir": "qnfo-ai-search",
-        "version": "2.4.2-judge-context",
+        "version": "2.5.0-ask-ground-3",
         "worker": "qnfo-ai-search"
       },
       {
@@ -593,7 +600,7 @@
       },
       {
         "dir": "qnfo-fleet-control",
-        "version": "0.22.1-merge-holds",
+        "version": "0.24.0-research-backpressure",
         "worker": "qnfo-fleet-control"
       },
       {
@@ -900,9 +907,9 @@
       "worker": "personal-api"
     },
     "personal-companion": {
-      "before": "1.16.1-ground-descriptor",
+      "before": "1.18.0-paper-fulltext",
       "http": 200,
-      "live": "1.16.1-ground-descriptor",
+      "live": "1.18.0-paper-fulltext",
       "match": 1,
       "note": "SYNC",
       "worker": "personal-companion"
@@ -944,9 +951,9 @@
       "worker": "personal-life-search"
     },
     "q08-signal-engine": {
-      "before": "0.17.0",
+      "before": "0.17.3",
       "http": 200,
-      "live": "0.17.0",
+      "live": "0.17.3",
       "match": 1,
       "note": "SYNC",
       "worker": "q08-signal-engine"
@@ -979,9 +986,9 @@
       "worker": "qnfo-agent-ws"
     },
     "qnfo-ai": {
-      "before": "5.35.1-router-resolve",
+      "before": "5.36.0-fleet-cap-steer",
       "http": 200,
-      "live": "5.35.1-router-resolve",
+      "live": "5.36.0-fleet-cap-steer",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-ai"
@@ -995,9 +1002,9 @@
       "worker": "qnfo-ai-calibration"
     },
     "qnfo-ai-search": {
-      "before": "2.4.2-judge-context",
+      "before": "2.5.0-ask-ground-3",
       "http": 200,
-      "live": "2.4.2-judge-context",
+      "live": "2.5.0-ask-ground-3",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-ai-search"
@@ -1268,9 +1275,9 @@
       "worker": "qnfo-fleet-calibrator"
     },
     "qnfo-fleet-control": {
-      "before": "0.22.1-merge-holds",
+      "before": "0.24.0-research-backpressure",
       "http": 200,
-      "live": "0.22.1-merge-holds",
+      "live": "0.24.0-research-backpressure",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-fleet-control"
