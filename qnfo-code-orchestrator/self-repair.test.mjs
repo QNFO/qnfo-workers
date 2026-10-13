@@ -167,7 +167,7 @@ function fileIssue(env) {
   const lease1 = row(env, id).lease_until;
   expire(env, id); await tick(env);
   const r2 = row(env, id);
-  ok(r2.status === "queued" && r2.attempts === 6 && Date.parse(r2.lease_until) > Date.now() + 5.5 * 3600e3 && /round 2 of 3/.test(r2.last_error), "B1 round 2 failed: the second backoff is about 6 hours", { st: r2.status, a: r2.attempts, lease: r2.lease_until });
+  ok(r2.status === "queued" && r2.attempts === 6 && Date.parse(r2.lease_until) > Date.now() + 1.5 * 3600e3 && Date.parse(r2.lease_until) <= Date.now() + 2 * 3600e3 + 60e3 && /round 2 of 3/.test(r2.last_error), "B1 round 2 failed: the second backoff is about 2 hours (CODE-BACKOFF-SLA-1: inside the 180-minute stuck SLA)", { st: r2.status, a: r2.attempts, lease: r2.lease_until });
   ok(Date.parse(lease1) < Date.parse(r2.lease_until), "B1 the backoff grows between rounds");
   expire(env, id); await tick(env);
   const r3 = row(env, id);
@@ -204,7 +204,7 @@ function fileIssue(env) {
 {
   const { env } = envWith([]);
   const h = await (await worker.fetch(new Request("https://x/health"), env)).json();
-  ok(atLeast(h.version, "0.3.0") && /^\d+\.\d+\.\d+-/.test(h.version) && h.capabilities.includes("self-repair") && h.limitations.some((l) => /SELF-REPAIR-1/.test(l) && /1h, then 6h/.test(l) && /3 rounds/.test(l)), "D1 /health names the self-repair capability and its limits", { v: h.version, l: h.limitations.filter((l) => /SELF-REPAIR/.test(l)) });
+  ok(atLeast(h.version, "0.3.0") && /^\d+\.\d+\.\d+-/.test(h.version) && h.capabilities.includes("self-repair") && h.limitations.some((l) => /SELF-REPAIR-1/.test(l) && /1h, then 2h/.test(l) && /3 rounds/.test(l)), "D1 /health names the self-repair capability and its limits", { v: h.version, l: h.limitations.filter((l) => /SELF-REPAIR/.test(l)) });
 }
 
 console.log("self-repair: " + pass + " passed, " + fail + " failed");
