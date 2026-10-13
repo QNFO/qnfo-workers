@@ -6,6 +6,7 @@ import { readFileSync, writeFileSync, mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
+import vm from "node:vm";
 
 const here = dirname(fileURLToPath(import.meta.url));
 let failed = 0, passed = 0;
@@ -290,6 +291,81 @@ ok(models.includes("@cf/deepseek-ai/deepseek-v4-flash-0731"), "the judge is a di
   const d = sse(u.text, "done")[0];
   ok(d && d.uncovered === 1, "the done event says when the corpus does not cover the question");
   AI.run = real;
+}
+// 11. ASK-GROUND-3 and ASK-CRAWLER-GATE-1 (2.5.0, agent_issues 2165 and 2339)
+{
+  const wsrc = readFileSync(join(here, "worker.js"), "utf8");
+  const vv = /var VERSION = "(\d+)\.(\d+)\.(\d+)/.exec(wsrc);
+  ok(vv && Number(vv[1]) * 1e6 + Number(vv[2]) * 1e3 + Number(vv[3]) >= 2005000, "VERSION is at least 2.5.0");
+  // 11a. a declared crawler or a prefetch gets no retrieval, no model call and no ask_events row; it is counted in ask_rate
+  const post = async (headers, q) => {
+    const r = await worker.fetch(new Request("https://ask.qwav.tech/api/ask", { method: "POST", headers: Object.assign({ "content-type": "application/json", "CF-Connecting-IP": "4.4.4.4" }, headers), body: JSON.stringify({ query: q }) }), env, ctx);
+    const t = await r.text();
+    await Promise.allSettled(waits.splice(0));
+    return { status: r.status, text: t };
+  };
+  const ev0 = sq.prepare("SELECT COUNT(*) n FROM ask_events").get().n, m0 = models.length;
+  const bot = await post({ "User-Agent": "Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)" }, "What does crawler question one ask about adelic statistics?");
+  const pre = await post({ "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/151.0.0.0 Safari/537.36", "Sec-Purpose": "prefetch;prerender" }, "What does prefetch question two ask about adelic statistics?");
+  const hl = await post({ "User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/151.0.0.0 Safari/537.36" }, "What does headless question three ask about adelic statistics?");
+  ok(bot.status === 403 && JSON.parse(bot.text).automated === "crawler" && pre.status === 403 && JSON.parse(pre.text).automated === "prefetch" && hl.status === 403, "a crawler user agent, a prefetch and a headless browser get a 403 that says why: " + [bot.status, pre.status, hl.status].join(","));
+  ok(sq.prepare("SELECT COUNT(*) n FROM ask_events").get().n === ev0 && models.length === m0, "no ask_events row and no model call for automated clients");
+  const day = new Date().toISOString().slice(0, 10);
+  ok((sq.prepare("SELECT n FROM ask_rate WHERE k = ?").get("auto:crawler:" + day) || {}).n === 2 && (sq.prepare("SELECT n FROM ask_rate WHERE k = ?").get("auto:prefetch:" + day) || {}).n === 1, "automated requests are counted per kind and day in ask_rate");
+  const human = await post({ "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/151.0.0.0 Safari/537.36" }, "What does a reader ask about adelic statistics today?");
+  const api = await post({ "User-Agent": "curl/8.9.1" }, "What does an API client ask about adelic statistics today?");
+  ok(human.status === 200 && sse(human.text, "done").length === 1 && api.status === 200 && sse(api.text, "done").length === 1, "a browser and an API client (curl) are answered as before");
+  ok(/Disallow: \/api\/ask/.test((await call("/robots.txt")).text), "robots.txt disallows /api/ask");
+  // 11b. the page asks a ?q= question only after a trusted pointer, touch or key event (or the Ask button)
+  const pg = (await call("/")).text;
+  const bootSrc = pg.slice(pg.indexOf("function boot(){"), pg.indexOf('window.addEventListener("popstate"'));
+  const runBoot = (webdriver) => {
+    const listeners = {}, asked = [], t = { value: "", style: {}, form: { addEventListener() {} } }, hint = { textContent: "" };
+    const ctxv = vm.createContext({ URLSearchParams, location: { search: "?q=" + encodeURIComponent("What does \u201cQuantum Statistics from the Adelic Product Formula\u201d show?") }, navigator: { webdriver }, window: { addEventListener(n, f) { listeners[n] = f; }, removeEventListener(n) { delete listeners[n]; } }, $: (s) => ({ "#q0": t, "#landing": {}, ".hint": hint })[s] || null, grow() {}, ask(q) { asked.push(q); }, busy: false });
+    vm.runInContext(bootSrc + "\nboot();", ctxv);
+    return { listeners, asked, t, hint };
+  };
+  const b1 = runBoot(false);
+  ok(b1.asked.length === 0 && /Quantum Statistics/.test(b1.t.value) && /ready/.test(b1.hint.textContent) && typeof b1.listeners.pointermove === "function", "a deep link fills the box and waits; nothing is asked on load");
+  b1.listeners.pointermove({ isTrusted: false, type: "pointermove" });
+  ok(b1.asked.length === 0, "a synthetic (untrusted) event does not ask");
+  b1.listeners.keydown({ isTrusted: true, type: "keydown", target: { tagName: "TEXTAREA" } });
+  ok(b1.asked.length === 0, "typing in the box does not ask the original question");
+  b1.listeners.pointermove({ isTrusted: true, type: "pointermove", target: {} });
+  ok(b1.asked.length === 1 && /Quantum Statistics/.test(b1.asked[0]) && !b1.listeners.pointermove, "the first trusted pointer event asks once and removes the listeners");
+  const b2 = runBoot(true);
+  ok(b2.asked.length === 0 && !Object.keys(b2.listeners).length && /Quantum Statistics/.test(b2.t.value), "an automated browser (navigator.webdriver) gets the question in the box and no listener");
+  // 11c. ASK-NAMED-PAPER-1: a quoted title gets that paper's body sections as source [1], and the judge stores the whole context
+  const pq = PAPERS.find((p) => p.slug === "adelic-quantum-statistics");
+  pq.body_md = "# 1. The Result\n\n" + "The squarefree origin of quantum statistics follows from the adelic product formula at every place. ".repeat(14) + "\n\n# 5. What Would Falsify It\n\nThe result is refuted if a measured exchange phase is not a product of local signs over the places. " + "A single counterexample place falsifies the statistics claim. ".repeat(20) + "\n\n# 6. Show And Tell\n\n" + "Quantum statistics show the product formula at work across places. ".repeat(20);
+  const realGet = AI_SEARCH.get;
+  AI_SEARCH.get = () => ({ items: { async upload() { return {}; } }, async search() { return { chunks: Array.from({ length: 8 }, (_, i) => ({ score: 0.6 - i * 0.01, text: "# Long Related Paper " + i + "\n\n" + ("Related statistics sentence number " + i + " for the context length check. ").repeat(60), item: { key: "long-related-" + i + ".md" } })) }; } });
+  const real = AI.run;
+  let seen = null;
+  AI.run = async (m, o) => { if (o && o.stream) seen = o.messages[o.messages.length - 1].content; return real(m, o); };
+  const nq = await call("/api/ask", { query: "What does \u201cQuantum Statistics from the Adelic Product Formula\u201d show, and what would falsify it?" }, "3.3.3.3");
+  AI.run = real; AI_SEARCH.get = realGet;
+  const nm = sse(nq.text, "meta")[0];
+  ok(nm && nm.sources[0].slug === "adelic-quantum-statistics" && nm.sources[0].named === true && nm.sources.filter((s) => s.slug === "adelic-quantum-statistics").length === 1, "the quoted paper is source [1], once, marked as named");
+  ok(seen && /The question names source \[1\] \(Quantum Statistics from the Adelic Product Formula\)/.test(seen) && /The result is refuted if a measured exchange phase/.test(seen) && !/KNOWLEDGE GRAPH/.test(seen), "the writer gets the paper's falsification section and no knowledge-graph lines");
+  const nrow = sq.prepare("SELECT query, judge, context FROM ask_events WHERE query LIKE 'What does %Adelic Product Formula%' ORDER BY ts DESC LIMIT 1").get();
+  ok(nrow && !/^\[paper:/.test(nrow.query) && nrow.judge === 2 && nrow.context.length > 12000 && seen.includes(nrow.context), "the judge context is stored whole (" + (nrow && nrow.context.length) + " characters, over the old 12000 cut) and equals the writer's excerpts");
+  const phrase = await call("/api/ask", { query: 'Which papers use the "adelic product" idea?' }, "3.3.3.4");
+  ok(sse(phrase.text, "meta")[0].sources.every((s) => !s.named), "a quoted phrase that is not a title (under half of the title's words) names no paper");
+  // 11d. the grounded share counts every judged full-context answer, including one whose reader left; the judge runs hourly
+  sq.exec("UPDATE ask_events SET judged_supported=NULL, judged_total=NULL, judge=0");
+  const nowIso = new Date().toISOString();
+  sq.prepare("INSERT INTO ask_events (id, ts, cached, limited, cfg, judge, answer, context, judged_supported, judged_total) VALUES ('a_gone1', ?, 0, 'client-gone', 'c0', 2, 'x [1]', '[1] y', 16, 20)").run(nowIso);
+  sq.prepare("INSERT INTO ask_events (id, ts, cached, limited, cfg, judge, answer, context) VALUES ('a_fresh1', ?, 0, NULL, 'c0', 2, 'x [1]', '[1] y')").run(nowIso);
+  sq.prepare("INSERT INTO ask_events (id, ts, cached, limited, cfg, judge, answer, context, judged_supported, judged_total) VALUES ('a_ip1', ?, 0, 'ip', 'c0', 2, 'x [1]', '[1] y', 0, 50)").run(nowIso);
+  await worker.scheduled({ scheduledTime: Date.UTC(2026, 9, 13, 5, 41) }, env, ctx);
+  await Promise.allSettled(waits.splice(0));
+  const hj = sq.prepare("SELECT kind, note FROM ask_loop_runs ORDER BY id DESC LIMIT 3").all().map((r) => r.kind);
+  ok(hj.includes("judge") && sq.prepare("SELECT judged_total t FROM ask_events WHERE id='a_fresh1'").get().t === 4, "an hourly tick judges new answers: " + hj.join(","));
+  const gm = sq.prepare("SELECT last_value v, formula f FROM metric_registry WHERE metric='ask_grounded_share_7d'").get();
+  ok(gm.v === "0.7917" && /client-gone/.test(gm.f), "ask_grounded_share_7d = (16 + 3) / (20 + 4) counts the client-gone answer, not the ip-limited row, and the registry formula says so: " + JSON.stringify(gm));
+  const mn = JSON.parse(sq.prepare("SELECT note FROM ask_loop_runs WHERE kind='measure' ORDER BY id DESC LIMIT 1").get().note);
+  ok(mn.grounded_claims_7d === 24, "the measure note records the judged claims behind the share: " + JSON.stringify(mn.grounded_claims_7d));
 }
 console.log(passed + " passed, " + failed + " failed");
 process.exit(failed ? 1 : 0);

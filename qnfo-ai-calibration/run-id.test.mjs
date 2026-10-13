@@ -14,7 +14,10 @@ ok(!/Math\.random\(\)/.test(code), "no Math.random call remains in the bundle");
 const expr = (/var runId = ([^;]+);/.exec(line) || [])[1];
 const ids = new Set();
 for (let i = 0; i < 200; i++) ids.add(new Function("t0", "return " + expr)(1790000000000));
-ok(ids.size === 200 && [...ids].every((id) => /^cal-1790000000000-[0-9a-f]{6}$/.test(id)), "ids keep the cal-<ms>-<six hex> shape and do not repeat in 200 draws", [...ids].slice(0, 2));
+// RUN-ID-TEST-BIRTHDAY-1 (2026-10-13): 200 draws of a 24-bit value collide about once in 800 runs (birthday bound), which
+// failed this suite once on an unrelated pull request; at most one repeat is allowed, which still fails a constant or
+// low-entropy generator (two or more repeats in 200 draws happen about once in a million runs of a sound one).
+ok(ids.size >= 199 && [...ids].every((id) => /^cal-1790000000000-[0-9a-f]{6}$/.test(id)), "ids keep the cal-<ms>-<six hex> shape and repeat at most once in 200 draws", [...ids].slice(0, 2));
 const v = (/var VERSION = "([^"]+)"/.exec(src) || [])[1];
 ok(versionAtLeast(v, "1.3.4"), "VERSION is at least 1.3.4", v);
 
