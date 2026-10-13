@@ -17,6 +17,7 @@
     "cloud-ops-cron-dow-1.json",
     "container-binding-guard-1.json",
     "container-config-autoverify.json",
+    "container-config-restore-2.json",
     "container-config-selfheal-cron.json",
     "container-restore-bindings-now.json",
     "container-selfaudit.json",
@@ -55,6 +56,6 @@
     "version-precedence-2.json",
     "version-quote-1.json"
   ],
-  "count": 52,
+  "count": 53,
   "note": "Only these filenames exist in ci-status/ for this run. Any other ci-status/<name>.json is absent by construction - do not poll it."
 }
