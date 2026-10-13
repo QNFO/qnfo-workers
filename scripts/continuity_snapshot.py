@@ -14,6 +14,18 @@ WHAT  Proves the fleet's state can be rebuilt from durable stores alone, from th
            sha256, Time Travel bookmark; spof_registry 'qnfo-audit D1' gets its alternate and alternate_tested_at.
         4. metric asset_freshness_90d from living-paper (published papers updated in 90 days / published).
       Runs only when the newest ok snapshot is older than 20 hours (--force overrides). Never fails the job.
+
+D1-EXPORT-BEYOND-TIME-TRAVEL-1 (issue 2371, 2026-10-13, pillar core; doctrine section 14): Time Travel keeps 30 days and the
+      daily snapshot covers 22 tables of one database, capped at PAGE x MAX_PAGES rows. Weekly, each database in
+      EXPORT_DATABASES is exported in full: every table listed from sqlite_master, paged by rowid (LIMIT/OFFSET for a WITHOUT
+      ROWID table) with no row cap, into gzipped JSON lines under R2 qnfo-backups export/<database>/<yyyymmdd>/<table>.jsonl.gz
+      (a table above PART_ROWS rows continues in <table>.part<n>.jsonl.gz). Paging by rowid, not the D1 export API, because a
+      running export blocks other requests to the database. A database is skipped while its newest export row is younger
+      than 6 days. The step stops at EXPORT_BUDGET_SEC and resumes on the next run from the progress file
+      export/<database>/_progress.json, so no single run has to fit a 355 MB database. One continuity_snapshots row per
+      database (r2_prefix qnfo-backups/export/<database>/...) records live rows, exported rows and integrity (worst
+      exported/live ratio). qnfo-identity and qnfo-outreach are never read (private; the run log is public), and no row
+      content is printed.
 """
 import gzip
 import hashlib
@@ -37,6 +49,15 @@ STATE_TABLES = ["agent_issues", "issue_triage", "issue_lifecycle", "agent_issues
                 "capability_ledger", "blocker_redteam", "metric_registry", "analytics_metric_triggers", "queue_sla",
                 "migration_runs", "human_actions", "ops_config", "fleet_budget", "work_claims", "research_queue"]
 PRIVATE_TABLES = {"human_actions", "ops_config", "work_claims", "fleet_budget", "research_queue"}
+
+EXPORT_DATABASES = ["qnfo-audit", "q08-signal", "living-paper", "personal-life", "portfolio-state", "qnfo-graph", "ipatent-db",
+                    "qnfo-cms"]
+EXPORT_REFUSED = ("qnfo-identity", "qnfo-outreach")
+EXPORT_PAGE = 500
+PART_ROWS = 20000
+EXPORT_MAX_AGE_DAYS = 6
+EXPORT_BUDGET_SEC = float(os.environ.get("EXPORT_BUDGET_SEC") or 270)
+_STARTED = time.time()
 
 
 def cf(method, path, body=None, ctype=None, timeout=60):
@@ -104,13 +125,11 @@ def freshness(d1, plane):
         return {"error": str(e)[:160]}
 
 
-def main(argv=None, d1=None, plane=None, call=cf, out_dir=None):
-    argv = argv if argv is not None else sys.argv[1:]
-    d1, plane = d1 or RC.d1, plane or RC.d1_plane
+def daily(argv, d1, plane, call=cf, out_dir=None):
     out_dir = out_dir or os.environ.get("SNAPSHOT_DIR") or ""
     fresh = freshness(d1, plane)
     try:
-        recent = d1("SELECT id FROM continuity_snapshots WHERE ok = 1 AND ts > strftime('%Y-%m-%dT%H:%M:%SZ', 'now', '-20 hours') LIMIT 1")
+        recent = d1("SELECT id FROM continuity_snapshots WHERE ok = 1 AND r2_prefix LIKE ?1 AND ts > strftime('%Y-%m-%dT%H:%M:%SZ', 'now', '-20 hours') LIMIT 1", [BUCKET + "/continuity/%"])
     except Exception as e:  # noqa: BLE001
         print(json.dumps({"continuity": "ledger-missing", "error": str(e)[:160]}))
         return 0
@@ -167,6 +186,190 @@ def main(argv=None, d1=None, plane=None, call=cf, out_dir=None):
     return 0
 
 
+def r2_put_obj(key, data, ctype, call=cf):
+    st, _ = call("PUT", "/accounts/%s/r2/buckets/%s/objects/%s" % (RC.ACCOUNT, BUCKET, urllib.parse.quote(key, safe="/")), data, ctype, 120)
+    return 200 <= st < 300
+
+
+def r2_get_json(key, call=cf):
+    """The JSON object at key, or None when it does not exist. Any other failure raises."""
+    try:
+        st, j = call("GET", "/accounts/%s/r2/buckets/%s/objects/%s" % (RC.ACCOUNT, BUCKET, urllib.parse.quote(key, safe="/")))
+    except urllib.error.HTTPError as e:
+        if e.code == 404:
+            return None
+        raise
+    if st == 404 or not isinstance(j, dict):
+        return None
+    return j
+
+
+def export_query(d1, plane, database):
+    """A literal-SQL reader for one database: the default D1 for qnfo-audit, the plane API for the others."""
+    if database in EXPORT_REFUSED:
+        raise RuntimeError("export of %s refused (private)" % database)
+    if database == RC.DB_NAME:
+        return lambda sql: d1(sql)
+    return lambda sql: plane("d1-query@" + database, sql)
+
+
+def list_tables(q):
+    rows = q("SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' AND name NOT LIKE '_cf_%' ORDER BY name")
+    return [r["name"] for r in rows if r.get("name")]
+
+
+def export_table(q, table, st, put, deadline):
+    """Pages one table from st['last'] on; writes a part to R2 every PART_ROWS rows. Returns True when the table is done.
+    st holds live, exported, parts, last, mode, bytes and shas, and is advanced only after a part is stored."""
+    qt = '"%s"' % table.replace('"', '""')
+    if "live" not in st:
+        st["live"] = int((q("SELECT COUNT(*) AS n FROM %s" % qt) or [{"n": 0}])[0]["n"] or 0)
+    st.setdefault("exported", 0)
+    st.setdefault("parts", 0)
+    st.setdefault("last", -1 if st.get("mode", "rowid") == "rowid" else 0)
+    st.setdefault("mode", "rowid")
+    st.setdefault("bytes", 0)
+    st.setdefault("shas", [])
+    buf, cursor, done = [], st["last"], False
+    while True:
+        if st["mode"] == "rowid":
+            try:
+                page = q("SELECT rowid AS _rowid, * FROM %s WHERE rowid > %d ORDER BY rowid LIMIT %d" % (qt, int(cursor), EXPORT_PAGE))
+            except Exception as e:  # noqa: BLE001
+                if "rowid" not in str(e).lower() or st["exported"] or buf:
+                    raise
+                st["mode"], st["last"], cursor = "offset", 0, 0  # WITHOUT ROWID table: page by offset
+                continue
+        else:
+            page = q("SELECT * FROM %s LIMIT %d OFFSET %d" % (qt, EXPORT_PAGE, int(cursor)))
+        buf.extend(page)
+        if page:
+            cursor = page[-1]["_rowid"] if st["mode"] == "rowid" else cursor + len(page)
+        done = len(page) < EXPORT_PAGE
+        if buf and (done or len(buf) >= PART_ROWS or time.time() >= deadline):
+            data = gz_lines(buf)
+            key = "%s.jsonl.gz" % table if st["parts"] == 0 else "%s.part%d.jsonl.gz" % (table, st["parts"])
+            if not put(key, data):
+                raise RuntimeError("r2 put refused for %s" % key)
+            st["parts"] += 1
+            st["exported"] += len(buf)
+            st["bytes"] += len(data)
+            st["shas"].append(hashlib.sha256(data).hexdigest())
+            st["last"] = cursor
+            buf = []
+        elif not buf and done and st["parts"] == 0:
+            data = gz_lines([])  # an empty table still gets its (empty) file
+            if not put("%s.jsonl.gz" % table, data):
+                raise RuntimeError("r2 put refused for %s.jsonl.gz" % table)
+            st["parts"] = 1
+            st["bytes"] += len(data)
+            st["shas"].append(hashlib.sha256(data).hexdigest())
+        if done:
+            st["done"] = True
+            return True
+        if time.time() >= deadline:
+            return False
+
+
+def export_database(d1, plane, database, call, deadline):
+    """Exports one database, resuming from its progress file. Returns 'skipped', 'paused' or 'done'."""
+    recent = d1("SELECT id FROM continuity_snapshots WHERE r2_prefix LIKE ?1 AND ts > strftime('%Y-%m-%dT%H:%M:%SZ', 'now', ?2) LIMIT 1",
+                [BUCKET + "/export/" + database + "/%", "-%d days" % EXPORT_MAX_AGE_DAYS])
+    if recent:
+        return "skipped"
+    q = export_query(d1, plane, database)
+    pkey = "export/%s/_progress.json" % database
+    prog = r2_get_json(pkey, call)
+    if not prog or prog.get("complete") or not prog.get("stamp"):
+        prog = {"database": database, "stamp": time.strftime("%Y%m%d", time.gmtime()), "tables": {}, "errors": {}}
+    prefix = "export/%s/%s/" % (database, prog["stamp"])
+    if "order" not in prog:
+        prog["order"] = list_tables(q)
+
+    def put(name, data):
+        return r2_put_obj(prefix + name, data, "application/gzip", call)
+
+    def save():
+        if not r2_put_obj(pkey, json.dumps(prog, sort_keys=True).encode("utf-8"), "application/json", call):
+            raise RuntimeError("r2 put refused for %s" % pkey)
+
+    since_save = 0
+    for t in prog["order"]:
+        st = prog["tables"].setdefault(t, {})
+        if st.get("done") or t in prog["errors"]:
+            continue
+        if time.time() >= deadline:
+            save()
+            return "paused"
+        try:
+            finished = export_table(q, t, st, put, deadline)
+        except Exception as e:  # noqa: BLE001
+            prog["errors"][t] = str(e)[:160]
+            print(json.dumps({"d1-export": database, "table": t, "error": str(e)[:160]}))
+            save()
+            continue
+        since_save += 1
+        if not finished:
+            save()
+            return "paused"
+        if since_save >= 20:
+            save()
+            since_save = 0
+    tables, live, exported, size, worst, digest = {}, 0, 0, 0, 1.0, hashlib.sha256()
+    for t in prog["order"]:
+        st = prog["tables"].get(t) or {}
+        if t in prog["errors"]:
+            worst = 0.0
+            tables[t] = [st.get("live"), st.get("exported", 0), "error"]
+            continue
+        lv, ex = int(st.get("live") or 0), int(st.get("exported") or 0)
+        worst = min(worst, min(1.0, ex / lv) if lv else 1.0)
+        tables[t] = [lv, ex]
+        live, exported, size = live + lv, exported + ex, size + int(st.get("bytes") or 0)
+        for h in st.get("shas") or []:
+            digest.update(h.encode("ascii"))
+    errs = ["%s: %s" % (k, v) for k, v in sorted(prog["errors"].items())]
+    ok = 0 if errs else 1
+    note = ("D1-EXPORT-BEYOND-TIME-TRAVEL-1 %s: %d tables, live %d, exported %d; " % (database, len(tables), live, exported)
+            + ("; ".join(errs) or "ok"))[:400]
+    d1("INSERT INTO continuity_snapshots (tables_json, rows_total, bytes, sha256, r2_prefix, artifact, time_travel_bookmark, integrity, ok, note) "
+       "VALUES (?1, ?2, ?3, ?4, ?5, NULL, NULL, ?6, ?7, ?8)",
+       [json.dumps({"database": database, "live_rows": live, "exported_rows": exported, "tables": tables}, separators=(",", ":"))[:200000],
+        exported, size, digest.hexdigest(), BUCKET + "/" + prefix, round(worst, 4), ok, note])
+    d1("INSERT INTO cloud_ops_events (id, ts, kind, status, text, job) VALUES (?1, strftime('%Y-%m-%dT%H:%M:%SZ', 'now'), 'd1-export', ?2, ?3, 'continuity-snapshot')",
+       ["d1-export-%s-%s" % (database, prog["stamp"]), "ok" if ok else "warn", note])
+    prog["complete"] = True
+    save()
+    print(json.dumps({"d1-export": database, "status": "done", "live": live, "exported": exported, "integrity": round(worst, 4), "errors": len(errs)}))
+    return "done"
+
+
+def export_step(d1, plane, call=cf, deadline=None):
+    """Weekly full export of EXPORT_DATABASES. Never raises."""
+    deadline = deadline if deadline is not None else _STARTED + EXPORT_BUDGET_SEC
+    out = {}
+    for db in EXPORT_DATABASES:
+        if db in EXPORT_REFUSED:
+            continue
+        try:
+            out[db] = export_database(d1, plane, db, call, deadline)
+        except Exception as e:  # noqa: BLE001
+            out[db] = "failed: %s" % str(e)[:160]
+        if out[db] == "paused":
+            break
+    print(json.dumps({"d1-export": out}))
+    return out
+
+
+def main(argv=None, d1=None, plane=None, call=cf, out_dir=None, deadline=None):
+    argv = argv if argv is not None else sys.argv[1:]
+    d1, plane = d1 or RC.d1, plane or RC.d1_plane
+    daily(argv, d1, plane, call, out_dir)
+    if "--no-export" not in argv:
+        export_step(d1, plane, call, deadline)
+    return 0
+
+
 def selftest():
     import sqlite3
     import tempfile
@@ -200,7 +403,7 @@ INSERT INTO human_actions VALUES (1, 'owner card');
 
     RC.resolve_db_id = lambda: "db"
     d = tempfile.mkdtemp()
-    assert main(["--force"], d1, lambda t, s: [{"n": 10, "f": 9}], call, d) == 0
+    assert main(["--force", "--no-export"], d1, lambda t, s: [{"n": 10, "f": 9}], call, d) == 0
     snap = d1("SELECT * FROM continuity_snapshots")[0]
     tj = json.loads(snap["tables_json"])
     assert snap["ok"] == 1 and snap["integrity"] == 1.0 and tj["agent_issues"]["snapshot"] == 1202, snap
@@ -210,8 +413,101 @@ INSERT INTO human_actions VALUES (1, 'owner card');
         assert sum(1 for _ in fh) == 1202 - 12  # personal-category issues excluded
     assert d1("SELECT alternate_tested_at FROM spof_registry")[0]["alternate_tested_at"]
     assert d1("SELECT last_value FROM metric_registry")[0]["last_value"] == "0.9"
-    assert main([], d1, lambda t, s: [{"n": 0, "f": 0}], call, d) == 0 and len(d1("SELECT id FROM continuity_snapshots")) == 1  # fresh: skipped
+    assert main(["--no-export"], d1, lambda t, s: [{"n": 0, "f": 0}], call, d) == 0 and len(d1("SELECT id FROM continuity_snapshots")) == 1  # fresh: skipped
+    export_selftest(c, d1)
     print("continuity_snapshot selftest ok")
+
+
+def export_selftest(c, d1):
+    """D1-EXPORT-BEYOND-TIME-TRAVEL-1, offline: qnfo-audit plus a second database through the plane, a table above
+    30,000 rows (the daily snapshot's cap), a WITHOUT ROWID table, resume after the budget runs out, the weekly skip, and
+    the refused private databases."""
+    import sqlite3
+    global EXPORT_DATABASES
+    saved = EXPORT_DATABASES
+    second = sqlite3.connect(":memory:")
+    second.executescript("""
+CREATE TABLE papers (id INTEGER PRIMARY KEY, title TEXT);
+CREATE TABLE tags (k TEXT PRIMARY KEY, v TEXT) WITHOUT ROWID;
+CREATE TABLE empty_one (id INTEGER PRIMARY KEY);
+INSERT INTO tags VALUES ('a', '1'), ('b', '2'), ('c', '3');
+""")
+    second.executemany("INSERT INTO papers VALUES (?, ?)", [(i, "p%d" % i) for i in range(1, 30502)])
+    planes = {"d1-query@living-paper": second}
+    asked = []
+
+    def plane(transport, sql):
+        asked.append(transport)
+        if transport not in planes:
+            raise RuntimeError("plane %s: plane-not-found" % transport)
+        cur = planes[transport].execute(sql)
+        cols = [x[0] for x in cur.description] if cur.description else []
+        return [dict(zip(cols, x)) for x in cur.fetchall()]
+
+    store = {}
+
+    def call(method, path, body=None, ctype=None, timeout=60):
+        key = urllib.parse.unquote(path.split("/objects/", 1)[1]) if "/objects/" in path else path
+        if method == "PUT":
+            store[key] = body
+            return 200, {}
+        if key not in store:
+            raise urllib.error.HTTPError(path, 404, "not found", None, None)
+        return 200, json.loads(store[key].decode("utf-8"))
+
+    def lines(key):
+        return [json.loads(x) for x in gzip.decompress(store[key]).decode("utf-8").splitlines()]
+
+    try:
+        EXPORT_DATABASES = ["qnfo-audit", "living-paper", "qnfo-identity", "qnfo-outreach"]
+        before = len(d1("SELECT id FROM continuity_snapshots"))
+        # 1. an expired budget: nothing exported, a progress file for qnfo-audit, no ledger row.
+        out = export_step(d1, plane, call, deadline=time.time() - 1)
+        assert out == {"qnfo-audit": "paused"}, out
+        assert len(d1("SELECT id FROM continuity_snapshots")) == before
+        # 2. a budget that lasts: both databases finish, resuming qnfo-audit from its progress file.
+        out = export_step(d1, plane, call, deadline=time.time() + 600)
+        assert out == {"qnfo-audit": "done", "living-paper": "done"}, out
+        assert not any("qnfo-identity" in a or "qnfo-outreach" in a for a in asked), asked
+        rows = d1("SELECT * FROM continuity_snapshots WHERE r2_prefix LIKE 'qnfo-backups/export/%' ORDER BY id")
+        assert len(rows) == 2 and all(r["ok"] == 1 and r["integrity"] == 1.0 for r in rows), rows
+        lp = json.loads(rows[1]["tables_json"])
+        assert lp["database"] == "living-paper" and lp["live_rows"] == lp["exported_rows"] == 30501 + 3, lp
+        assert lp["tables"]["papers"] == [30501, 30501] and lp["tables"]["tags"] == [3, 3], lp
+        stamp = time.strftime("%Y%m%d", time.gmtime())
+        pre = "export/living-paper/%s/" % stamp
+        assert rows[1]["r2_prefix"] == "qnfo-backups/" + pre, rows[1]
+        got = lines(pre + "papers.jsonl.gz") + lines(pre + "papers.part1.jsonl.gz")
+        assert len(got) == 30501 and got[-1]["id"] == 30501 and pre + "papers.part2.jsonl.gz" not in store  # no row cap
+        assert sorted(r["k"] for r in lines(pre + "tags.jsonl.gz")) == ["a", "b", "c"]
+        assert lines(pre + "empty_one.jsonl.gz") == []
+        audit = json.loads(rows[0]["tables_json"])
+        assert audit["tables"]["agent_issues"] == [1202, 1202] and "continuity_snapshots" in audit["tables"], audit
+        assert len(lines("export/qnfo-audit/%s/agent_issues.jsonl.gz" % stamp)) == 1202  # private store: personal rows kept
+        # 3. the weekly skip: both databases have an export row younger than 6 days.
+        assert export_step(d1, plane, call, deadline=time.time() + 600) == {"qnfo-audit": "skipped", "living-paper": "skipped"}
+        # 4. a database that cannot be reached is recorded as failed and does not stop the others.
+        EXPORT_DATABASES = ["q08-signal"]
+        assert export_step(d1, plane, call, deadline=time.time() + 600)["q08-signal"].startswith("failed")
+        # 5. a table cut by the budget resumes from its last rowid without loss or duplicates.
+        parts = {}
+        st = {}
+        q = export_query(d1, plane, "living-paper")
+        assert export_table(q, "papers", st, lambda k, b: parts.__setitem__(k, b) or True, time.time() - 1) is False
+        assert st["exported"] == EXPORT_PAGE and st["parts"] == 1 and not st.get("done"), st
+        assert export_table(q, "papers", st, lambda k, b: parts.__setitem__(k, b) or True, time.time() + 600) is True
+        ids = [json.loads(x)["id"] for k in sorted(parts) for x in gzip.decompress(parts[k]).decode("utf-8").splitlines()]
+        assert sorted(ids) == list(range(1, 30502)) and st["exported"] == 30501, (len(ids), st["exported"])
+        # 6. export rows never satisfy the daily snapshot's 20-hour freshness check.
+        c.execute("DELETE FROM continuity_snapshots WHERE r2_prefix LIKE 'qnfo-backups/continuity/%'")
+        assert not d1("SELECT id FROM continuity_snapshots WHERE ok = 1 AND r2_prefix LIKE ?1", [BUCKET + "/continuity/%"])
+        try:
+            export_query(d1, plane, "qnfo-identity")
+            raise AssertionError("qnfo-identity must be refused")
+        except RuntimeError:
+            pass
+    finally:
+        EXPORT_DATABASES = saved
 
 
 if __name__ == "__main__":

@@ -825,6 +825,11 @@ jobs:
       - name: ci-watchdog selftest
         if: ${{ !cancelled() }}
         run: python3 scripts/ci-watchdog-selftest.py
+      # D1-EXPORT-BEYOND-TIME-TRAVEL-1 (#2371): the continuity snapshot and the weekly full D1 export, offline (it ran only
+      # inside remediation-consumer before, so a broken selftest stopped the snapshot instead of failing the PR).
+      - name: continuity_snapshot selftest (scripts/continuity_snapshot.py)
+        if: ${{ !cancelled() }}
+        run: python3 scripts/continuity_snapshot.py --selftest
       - name: DANGLING-BINDING-10143-1 offline check (qnfo-ops 2.38.43)
         if: ${{ !cancelled() }}
         run: node --no-warnings qnfo-ops/dangling-10143.test.mjs
