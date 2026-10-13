@@ -26,15 +26,16 @@ WHAT
                        (qnfo-gateway host routing, D1 papers, the feed and the harvest surface agree on one paper)
     ask-path           ask.qwav.tech /api/ask (qnfo-ai-search -> GATEWAY binding -> retrieval -> Workers AI) streams an
                        answer whose [n] citations are within its sources, and every cited source URL resolves on
-                       papers.qnfo.org. One model call per run (edge-cached answers are free); JOURNEY_SKIP_AI=1 skips it.
+                       papers.qnfo.org. One model call; opt-in here (JOURNEY_ASK=1), every 6 h server-side.
     loop-heartbeats    the cron loops ran recently: fleet-control /loops and /chaos-drill, dashboard /api/loop and
                        /api/state, ai-search /api/loop, gateway /api/render-health
     ai-router          qnfo-ai /health declares its bindings, /v1/models lists models, /v1/ensemble/policy answers
 
-  Results: one cloud_ops_events row per journey per run (kind fleet-journey, status ok|fail, meta = failed steps only;
-  this repository is public, so response bodies never leave the probe), metric fleet_journeys_failing, and one self-filing,
-  self-closing agent_issues row per failing journey (title "FLEET-JOURNEY-FAILED-1: <journey>"), closed with the passing
-  run as evidence the first time that journey passes again.
+  Results: one journey_runs row per journey per run (runner gha; failed steps and the hops taken, never response bodies: this repository
+  is public), the shared metric fleet_journeys_failing, and the shared self-closing issue "FLEET-JOURNEY-FAILED-1: <journey> (...)".
+  FLEET-JOURNEYS-2: qnfo-fleet-control 0.27.0 runs the same journeys server-side every 20 minutes through service bindings (runner cf)
+  and adds traffic-health from real traffic; this runner is the second path, from outside the account, over the public hostnames. An
+  issue closes when one runner passes and the other's newest run in 2 h did not fail. The ask journey runs here only with JOURNEY_ASK=1.
 
 RUNS  A step of remediation-consumer.yml (hourly, dispatched by qnfo-cloud-ops when the consumer is idle 60 min); at most
       once per JOURNEY_EVERY_MIN. --dry-run prints the journeys without writing D1. Never fails the job.
@@ -361,60 +362,89 @@ JOURNEYS = [j_deploy_coherence, j_binding_census, j_lock_roundtrip, j_papers_pat
 
 def run_all(h=None, skip_ai=None):
     h = h or Http()
-    skip_ai = os.environ.get("JOURNEY_SKIP_AI") == "1" if skip_ai is None else skip_ai
+    # FLEET-JOURNEYS-2: qnfo-fleet-control asks every 6 h server-side (ai-search answers about 11 real questions a day, so an hourly
+    # synthetic one would swamp its metrics); this runner asks only when JOURNEY_ASK=1.
+    skip_ai = os.environ.get("JOURNEY_ASK") != "1" if skip_ai is None else skip_ai
     out = []
     for fn in JOURNEYS:
         if skip_ai and fn is j_ask_path:
             continue
         t0 = time.time()
+        c0 = len(h.calls)
         try:
             j = fn(h)
         except Exception as e:  # noqa: BLE001 - a crashed journey is a failed journey, never a silent one
             j = Journey(fn.__name__[2:].replace("_", "-"))
             j.check("journey ran", False, "%s: %s" % (type(e).__name__, e))
         out.append({"journey": j.name, "ok": j.ok, "ms": int((time.time() - t0) * 1000), "steps": len(j.steps),
-                    "failed": [s for s in j.steps if not s["ok"]], "passed": [s["step"] for s in j.steps if s["ok"]]})
+                    "failed": [s for s in j.steps if not s["ok"]], "passed": [s["step"] for s in j.steps if s["ok"]],
+                    "path": [{"via": "https", "to": _host_worker(u), "path": _host_path(u), "status": st, "ms": ms} for (_m, u, st, ms) in h.calls[c0:]]})
     return out
+
+
+def _host_path(url):
+    m = re.match(r"https?://([^/?#]+)([^?#]*)", url)
+    return (m.group(1) + m.group(2))[:120] if m else url[:120]
+
+
+HOST_WORKER = {"papers.qnfo.org": "qnfo-gateway", "ask.qwav.tech": "qnfo-ai-search", "fleet.qnfo.org": "qnfo-fleet-dashboard"}
+
+
+def _host_worker(url):
+    host = (re.match(r"https?://([^/?#]+)", url) or [None, ""])[1]
+    if host.endswith(".q08.workers.dev"):
+        return host[: -len(".q08.workers.dev")]
+    return HOST_WORKER.get(host, host)
 
 
 # ---------------------------------------------------------------- record
 
 def due(d1):
-    rows = d1("SELECT MAX(ts) AS t FROM cloud_ops_events WHERE kind = 'fleet-journey'")
+    rows = d1("SELECT MAX(ts) AS t FROM journey_runs WHERE runner = 'gha'")
     t = rows[0].get("t") if rows else None
     a = age_min(t)
     return a is None or a >= JOURNEY_EVERY_MIN
 
 
 def record(d1, results, verifier, now=None):
-    at = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(now or time.time()))
+    """One journey_runs row per journey (runner gha), the shared metric, and the shared self-closing issue per failing journey."""
+    now = now or time.time()
+    at = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(now))
+    since = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(now - 7200))
     failing = [r for r in results if not r["ok"]]
     for r in results:
-        meta = json.dumps({"failed": r["failed"], "steps": r["steps"], "ms": r["ms"], "verifier": verifier})[:6000]
-        d1("INSERT OR REPLACE INTO cloud_ops_events (id, ts, kind, text, meta, job, status) VALUES (?1, ?2, 'fleet-journey', ?3, ?4, 'fleet-journey', ?5)",
-           ["fleet-journey-%s-%s" % (r["journey"], at), at, "journey %s: %d of %d steps passed" % (r["journey"], r["steps"] - len(r["failed"]), r["steps"]),
-            meta, "ok" if r["ok"] else "fail"])
-    d1("UPDATE metric_registry SET last_value = ?2, last_refreshed = ?3, state = 'MEASURED' WHERE metric = ?1", [METRIC, str(len(failing)), at])
-    now_ms = int((now or time.time()) * 1000)
+        d1("INSERT INTO journey_runs (ts, runner, journey, ok, steps, failed, ms, failed_json, path_json, version) VALUES (?1, 'gha', ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
+           [at, r["journey"], 1 if r["ok"] else 0, r["steps"], len(r["failed"]), r["ms"], json.dumps(r["failed"])[:4000], json.dumps(r.get("path") or [])[:4000], verifier])
+    # Same rule as qnfo-fleet-control: a journey fails while its newest run (either runner, within 2 h) failed.
+    m = d1("SELECT COUNT(*) AS n FROM (SELECT journey FROM journey_runs r WHERE ts > ?1 AND id = (SELECT MAX(id) FROM journey_runs x WHERE x.journey = r.journey "
+           "AND x.runner = r.runner AND x.ts > ?1) GROUP BY journey HAVING MIN(ok) = 0)", [since])
+    d1("UPDATE metric_registry SET last_value = ?2, last_refreshed = ?3, state = 'MEASURED' WHERE metric = ?1", [METRIC, str((m[0] or {}).get("n", len(failing)) if m else len(failing)), at])
+    now_ms = int(now * 1000)
     actions = {}
     for r in results:
-        title_like = "%s: %s%%" % (ISSUE_PREFIX, r["journey"])
+        title_like = "%s: %s %%" % (ISSUE_PREFIX, r["journey"])
         open_rows = d1("SELECT id FROM agent_issues WHERE status = 'open' AND title LIKE ?1", [title_like])
         if r["ok"]:
+            if not open_rows:
+                continue
+            other = d1("SELECT ok FROM journey_runs WHERE journey = ?1 AND runner <> 'gha' AND ts > ?2 ORDER BY id DESC LIMIT 1", [r["journey"], since])
+            if other and int(other[0].get("ok") or 0) == 0:
+                actions[r["journey"]] = "kept open: the server-side runner's newest run failed"
+                continue
             for o in open_rows:
                 d1("UPDATE issue_triage SET close_evidence = ?1 WHERE issue_id = ?2",
-                   ["FLEET-JOURNEYS-1 %s: journey %s passed all %d steps end to end from the GitHub runner (%s); cloud_ops_events id fleet-journey-%s-%s"
-                    % (at, r["journey"], r["steps"], verifier, r["journey"], at), o["id"]])
+                   ["FLEET-JOURNEYS-1 %s: journey %s passed all %d steps end to end from the GitHub runner (%s); journey_runs runner gha; path %s"
+                    % (at, r["journey"], r["steps"], verifier, " > ".join("%s %s" % (x["to"], x["status"]) for x in (r.get("path") or []))[:300]), o["id"]])
                 d1("UPDATE agent_issues SET status = 'closed', close_channel = 'auto-recovery', updated_at = ?1 WHERE id = ?2", [now_ms, o["id"]])
-            if open_rows:
-                actions[r["journey"]] = "closed %s" % ",".join(str(o["id"]) for o in open_rows)
+            actions[r["journey"]] = "closed %s" % ",".join(str(o["id"]) for o in open_rows)
             continue
-        listing = "; ".join("%s (%s)" % (s["step"], s["detail"]) for s in r["failed"])[:1500]
+        listing = "; ".join("%s (%s)" % (x["step"], x["detail"]) for x in r["failed"])[:1500]
+        path = " > ".join("%s %s %s %dms" % (x["to"], x["path"], x["status"], x["ms"]) for x in (r.get("path") or []))[:1200]
         title = "%s: %s (%d of %d steps failing)" % (ISSUE_PREFIX, r["journey"], len(r["failed"]), r["steps"])
-        desc = ("Filed by scripts/fleet_journeys.py (FLEET-JOURNEYS-1) from the GitHub runner at %s. The %s journey drives a real multi-worker "
-                "process end to end and checks the effect at its far end (the module docstring names every step). Failing steps: %s. Each run "
-                "is in qnfo-audit cloud_ops_events (kind fleet-journey). Fix the hop the first failing step names; this issue closes itself the "
-                "first run the journey passes every step. Pillar core.") % (at, r["journey"], listing)
+        desc = ("Filed by scripts/fleet_journeys.py (FLEET-JOURNEYS-1) from the GitHub runner, outside the account, at %s. The %s journey drives a "
+                "real multi-worker process end to end over the public hostnames and checks the effect at its far end. Failing steps: %s. Path "
+                "taken: %s. Every run is in qnfo-audit journey_runs; GET https://qnfo-fleet-control.q08.workers.dev/journeys shows both runners. "
+                "This issue closes itself the first run the journey passes every step. Pillar core.") % (at, r["journey"], listing, path or "none")
         if open_rows:
             d1("UPDATE agent_issues SET title = ?1, description = ?2, updated_at = ?3 WHERE id = ?4", [title, desc, now_ms, open_rows[0]["id"]])
             actions[r["journey"]] = "updated %s" % open_rows[0]["id"]
@@ -522,45 +552,47 @@ def selftest():
     expect("ai router passes", run_one(j_ai_router).ok)
     expect("age_min parses both forms", abs(age_min(iso(10)) - 10) < 1 and abs(age_min(iso(10).replace("T", " ").rstrip("Z")) - 10) < 1)
 
-    # Record lifecycle on a fake D1: a failing journey files once, updates on the next failure, closes on a pass.
-    issues, triage, events, metric = {}, {}, [], {}
+    # Record lifecycle on an in-memory SQLite with the production columns: a failing journey files once, updates on the next failure,
+    # stays open while the server-side runner's newest run fails, and closes with evidence once both pass.
+    import sqlite3
+    con = sqlite3.connect(":memory:")
+    con.executescript("""CREATE TABLE journey_runs (id INTEGER PRIMARY KEY AUTOINCREMENT, ts TEXT NOT NULL, runner TEXT NOT NULL, journey TEXT NOT NULL,
+        ok INTEGER NOT NULL, steps INTEGER, failed INTEGER, ms INTEGER, failed_json TEXT, path_json TEXT, healed_json TEXT, version TEXT);
+      CREATE TABLE agent_issues (id INTEGER PRIMARY KEY AUTOINCREMENT, title TEXT, description TEXT, source TEXT, category TEXT, priority TEXT,
+        status TEXT, close_channel TEXT, created_at INTEGER, updated_at INTEGER);
+      CREATE TABLE issue_triage (issue_id INTEGER PRIMARY KEY, close_evidence TEXT);
+      CREATE TRIGGER t AFTER INSERT ON agent_issues BEGIN INSERT INTO issue_triage (issue_id) VALUES (NEW.id); END;
+      CREATE TABLE metric_registry (metric TEXT PRIMARY KEY, last_value TEXT, last_refreshed TEXT, state TEXT);
+      INSERT INTO metric_registry (metric) VALUES ('fleet_journeys_failing');""")
+    con.row_factory = sqlite3.Row
 
     def d1(sql, params=None):
-        p = params or []
-        if sql.startswith("INSERT OR REPLACE INTO cloud_ops_events"):
-            events.append(p)
-            return []
-        if sql.startswith("UPDATE metric_registry"):
-            metric[p[0]] = p[1]
-            return []
-        if sql.startswith("SELECT id FROM agent_issues"):
-            pre = p[0].rstrip("%")
-            return [{"id": i} for i, v in issues.items() if v["status"] == "open" and v["title"].startswith(pre)]
-        if sql.startswith("INSERT INTO agent_issues"):
-            issues[len(issues) + 1] = {"title": p[0], "status": "open"}
-            return []
-        if sql.startswith("UPDATE agent_issues SET title"):
-            issues[p[3]]["title"] = p[0]
-            return []
-        if sql.startswith("UPDATE issue_triage"):
-            triage[p[1]] = p[0]
-            return []
-        if sql.startswith("UPDATE agent_issues SET status = 'closed'"):
-            issues[p[1]]["status"] = "closed"
-            return []
-        return []
+        cur = con.execute(re.sub(r"\?(\d+)", lambda m: ":p" + m.group(1), sql), {"p%d" % (i + 1): v for i, v in enumerate(params or [])})
+        rows = [dict(r) for r in cur.fetchall()]
+        con.commit()
+        return rows
 
-    bad = [{"journey": "papers-path", "ok": False, "ms": 1, "steps": 3, "failed": [{"step": "x", "ok": False, "detail": "y"}], "passed": []}]
-    good = [{"journey": "papers-path", "ok": True, "ms": 1, "steps": 3, "failed": [], "passed": ["a", "b", "c"]}]
-    r1 = record(d1, bad, "selftest")
-    r2 = record(d1, bad, "selftest")
-    expect("first failure files one issue", r1["issues"].get("papers-path") == "filed" and len(issues) == 1)
-    expect("second failure updates it", r2["issues"].get("papers-path") == "updated 1" and len(issues) == 1)
-    expect("metric counts failing journeys", metric.get(METRIC) == "1")
-    r3 = record(d1, good, "selftest")
-    expect("a pass closes it with evidence", issues[1]["status"] == "closed" and "passed all 3 steps" in triage.get(1, "") and r3["issues"].get("papers-path") == "closed 1")
-    expect("metric returns to 0", metric.get(METRIC) == "0")
-    expect("one event per journey per run", len(events) == 3)
+    q = lambda sql: [dict(r) for r in con.execute(sql).fetchall()]  # noqa: E731
+    path = [{"via": "https", "to": "qnfo-gateway", "path": "papers.qnfo.org/papers/p1", "status": 500, "ms": 9}]
+    bad = [{"journey": "papers-path", "ok": False, "ms": 1, "steps": 3, "failed": [{"step": "x", "ok": False, "detail": "y"}], "passed": [], "path": path}]
+    good = [{"journey": "papers-path", "ok": True, "ms": 1, "steps": 3, "failed": [], "passed": ["a", "b", "c"], "path": [dict(path[0], status=200)]}]
+    t = now
+    r1 = record(d1, bad, "selftest", now=t)
+    r2 = record(d1, bad, "selftest", now=t + 60)
+    iss = q("SELECT * FROM agent_issues")
+    expect("first failure files one issue", r1["issues"].get("papers-path") == "filed" and len(iss) == 1 and "qnfo-gateway papers.qnfo.org/papers/p1 500" in iss[0]["description"])
+    expect("second failure updates it", r2["issues"].get("papers-path") == "updated 1" and len(q("SELECT id FROM agent_issues")) == 1)
+    expect("metric counts failing journeys", q("SELECT last_value v FROM metric_registry")[0]["v"] == "1")
+    con.execute("INSERT INTO journey_runs (ts, runner, journey, ok) VALUES (?, 'cf', 'papers-path', 0)", [time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(t + 90))])
+    r3 = record(d1, good, "selftest", now=t + 120)
+    expect("stays open while the server-side newest run fails", q("SELECT status FROM agent_issues")[0]["status"] == "open" and "kept open" in r3["issues"].get("papers-path", ""))
+    con.execute("INSERT INTO journey_runs (ts, runner, journey, ok) VALUES (?, 'cf', 'papers-path', 1)", [time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(t + 150))])
+    r4 = record(d1, good, "selftest", now=t + 180)
+    row = q("SELECT a.status, t.close_evidence FROM agent_issues a JOIN issue_triage t ON t.issue_id = a.id")[0]
+    expect("closes with evidence once both runners pass", row["status"] == "closed" and "passed all 3 steps" in row["close_evidence"] and "qnfo-gateway 200" in row["close_evidence"] and r4["issues"].get("papers-path") == "closed 1")
+    expect("metric returns to 0", q("SELECT last_value v FROM metric_registry")[0]["v"] == "0")
+    expect("one gha row per journey per run", q("SELECT COUNT(*) n FROM journey_runs WHERE runner = 'gha'")[0]["n"] == 4)
+    expect("host to worker mapping", _host_worker("https://papers.qnfo.org/x") == "qnfo-gateway" and _host_worker("https://qnfo-ops.q08.workers.dev/fleet") == "qnfo-ops")
 
     failed = [c for c, ok in checks if not ok]
     return {"selftest": "ok" if not failed else "fail", "checks": len(checks), "failed": failed}
