@@ -15,7 +15,7 @@
 // Vars (optional): SOCIAL_WEEKLY_CAP. D1: DB (qnfo-audit.social_threads, dissemination_tracker, pipeline_flags; 0.7.28 also
 // social_learner_posts, ops_config social_learner_enabled / social_learner_pending, metric_registry). AI: env.AI.
 
-var VERSION = "0.13.1-compose-abstract"; // 0.13.1 also LEDE-SOCIAL-1 (2026-10-13, from the fleet lede audit of session_01BCBpN3cZdS57dweqCs9rwt): post 1 of a composed thread is the lede (what the paper is, by whom, its main finding), and checkThread holds a thread whose post 1 neither names the author nor shares a significant title word (threadLedeIssues) for the repair pass. 0.13.1 SOURCE-VOICE-SOCIAL-1 (agent_issues 2472, pillar reach): POST /compose stores the abstract it grounded the thread on, so reachRepairDrafts and recheckDrafts no longer skip its held drafts (179 of 182 social_threads rows had no abstract on 2026-10-13). // 0.13.0 (2026-10-12, pillar reach) BUFFER-POST-STATS-1 (issue 2374): the 07:00 engagement run also reads Buffer with this worker's own token: per connected channel the sent posts of the last 30 days with their statistics and public link; one social_engagements row per post and metric (platform buffer, post_id = the Buffer post id), the link into social_media_posts.url, an auth_status row every run, and per network buffer_channel rows that say how many sent posts carried statistics and how many carried none (never zeros in place of a missing statistic). Bounded: 6 channels, 3 pages of 30 posts each, 10 s per call, 512 KB per body. // 0.12.0-whole-sentences // 0.12.0 (2026-10-12, pillar reach) SOCIAL-POST-TRUNCATION-2 (issue 1902): a post too long for its channel is never cut mid-sentence: Bluesky continues it as replies split at sentence boundaries (splitForThread; the link and its card stay on the root), the Buffer channels and the LinkedIn text keep whole sentences and drop trailing ones (fitWhole); the ellipsis cut is the last resort for a single sentence longer than the limit. REACH-SIGNALS-1 (issue 2225): the 07:00 engagement run stores each reply by another account (social_replies: hashed author, delay from the post in minutes, text length, word count; never the text) from the public getPostThread endpoint; no reply is posted. SUBSCRIBE-LINE-ACCURATE-1 (issue 1753): the LinkedIn subscribe line said monthly while the list is a weekly digest and linked the page top; it now states the cadence the list has and links the form. Ledger ids come from crypto.randomUUID. // 0.11.1-doi-scrub // 0.11.1 NOZ-DOI-1 (owner decision 2026-10-10, pillar reach): the dead-registry paper scan, the selected-works refill and every 10.5281 identifier are removed; the 06:00 run only sweeps and repairs drafts, contentGate refuses (and the drain suppresses) any post carrying a dead-registry identifier or link, and prompts and the checker link only to a URL or a third-party DOI. // 0.11.0 SOCIAL-GROUND-1 (owner directive 2026-10-10, pillar reach): checkThread first runs a mechanical check that every capitalised name, year and figure in a thread occurs in the title, author or abstract it was written from (an invented one is an issue, no model can override it); composePrompt and the checker prompt state that the model's own knowledge is not a source and name no example topics; the checker stays fail-closed (unavailable = draft). // 0.10.0-open-q08 0.10.0 Q08-OPEN-1 (owner directive 2026-10-09, pillar reach): q08.org links and q08 rows are no longer refused or skipped, the REACH-SELECT title hold is dropped in the channel drain, an attention share of 0 keeps one slot instead of holding a channel or Bluesky, the Bluesky weekly cap defaults to 7 and the Buffer channel caps to LinkedIn 5 (drafts only), Mastodon 10, X 10 (ceiling 14); the mojibake guard, the pause flag and the LinkedIn draft rule stay.  // 0.9.2 // 0.9.2 PROMOTE-ROUTE-2: a channel whose last post was a curated thread gets the newest unposted paper next. // 0.9.1 PROMPT-CACHE-COUNT-3b (issue 2114, 2026-10-08, pillar cost): the 0.8.3 ai_cache_counters write named columns the table does not have (purpose, cached), so every insert failed silently; it now writes the fleet schema (day, worker, model, calls, cached_calls, in_tok, cached_tok).  // 0.9.0 PROMOTE-ROUTE-1 (2026-10-07, pillar reach, owner directive "no siloes"): the channel drain takes queued research papers from dissemination_tracker (newest first, after curated queued threads, before recycled posted threads), so a published paper reaches LinkedIn, Mastodon and X while Bluesky is at attention share 0. // 0.8.2 UTM-VISITS-1 (2026-10-06, pillar reach, transformation lever T7.9 half 2): learnerVisits reads the gateway's tagged loads first (reach_signals source utm, metric clicks_human, campaign = the paper slug, channel = the utm_source of the post's channel; UTM-CLICK-LEDGER-1, qnfo-gateway 3.10.0 + qnfo-fleet-dashboard 1.26.0, PR 688): a direct count of the visits a post caused beats the bot-filtered RUM lift, which stays the fallback when the window carries no tagged row. 0.8.1 LEARNER-CHANNEL-ARM-1 was
+var VERSION = "0.14.0-utm-credit"; // 0.14.0 (2026-10-13, pillar reach): SOCIAL-CHECK-FAIL-CLOSED-1 (issue 2501): the checker reply parser skips stray arrays such as "[1]", reads issue lists keyed issue, problem, claim or text, and returns null (thread held as draft) when no valid issue array is present. MASTODON-PUBLIC-STATS-1 (issues 2481, 2374): the 07:00 Buffer statistics run reads favourites, reblogs and replies of up to 30 sent Mastodon posts from the public status API when Buffer returns no metrics (platform buffer rows, post_id = the Buffer id). LEARNER-COVERAGE-1 (issue 2381): every drained post is recorded for the learner (chosen_by backfill when no learner decision; the 24h spacing applies to learner-chosen posts only). UTM-CREDIT-1 (issue 2036): a post without an engagement snapshot is credited on its utm clicks, and no-data rows of the last 14 days are re-read for them. CRON-ONLY-HEARTBEAT-1 (issue 2397): every scheduled run ends with a fleet_heartbeat upsert (ok=0 when it threw). // 0.13.1 also LEDE-SOCIAL-1 (2026-10-13, from the fleet lede audit of session_01BCBpN3cZdS57dweqCs9rwt): post 1 of a composed thread is the lede (what the paper is, by whom, its main finding), and checkThread holds a thread whose post 1 neither names the author nor shares a significant title word (threadLedeIssues) for the repair pass. 0.13.1 SOURCE-VOICE-SOCIAL-1 (agent_issues 2472, pillar reach): POST /compose stores the abstract it grounded the thread on, so reachRepairDrafts and recheckDrafts no longer skip its held drafts (179 of 182 social_threads rows had no abstract on 2026-10-13). // 0.13.0 (2026-10-12, pillar reach) BUFFER-POST-STATS-1 (issue 2374): the 07:00 engagement run also reads Buffer with this worker's own token: per connected channel the sent posts of the last 30 days with their statistics and public link; one social_engagements row per post and metric (platform buffer, post_id = the Buffer post id), the link into social_media_posts.url, an auth_status row every run, and per network buffer_channel rows that say how many sent posts carried statistics and how many carried none (never zeros in place of a missing statistic). Bounded: 6 channels, 3 pages of 30 posts each, 10 s per call, 512 KB per body. // 0.12.0-whole-sentences // 0.12.0 (2026-10-12, pillar reach) SOCIAL-POST-TRUNCATION-2 (issue 1902): a post too long for its channel is never cut mid-sentence: Bluesky continues it as replies split at sentence boundaries (splitForThread; the link and its card stay on the root), the Buffer channels and the LinkedIn text keep whole sentences and drop trailing ones (fitWhole); the ellipsis cut is the last resort for a single sentence longer than the limit. REACH-SIGNALS-1 (issue 2225): the 07:00 engagement run stores each reply by another account (social_replies: hashed author, delay from the post in minutes, text length, word count; never the text) from the public getPostThread endpoint; no reply is posted. SUBSCRIBE-LINE-ACCURATE-1 (issue 1753): the LinkedIn subscribe line said monthly while the list is a weekly digest and linked the page top; it now states the cadence the list has and links the form. Ledger ids come from crypto.randomUUID. // 0.11.1-doi-scrub // 0.11.1 NOZ-DOI-1 (owner decision 2026-10-10, pillar reach): the dead-registry paper scan, the selected-works refill and every 10.5281 identifier are removed; the 06:00 run only sweeps and repairs drafts, contentGate refuses (and the drain suppresses) any post carrying a dead-registry identifier or link, and prompts and the checker link only to a URL or a third-party DOI. // 0.11.0 SOCIAL-GROUND-1 (owner directive 2026-10-10, pillar reach): checkThread first runs a mechanical check that every capitalised name, year and figure in a thread occurs in the title, author or abstract it was written from (an invented one is an issue, no model can override it); composePrompt and the checker prompt state that the model's own knowledge is not a source and name no example topics; the checker stays fail-closed (unavailable = draft). // 0.10.0-open-q08 0.10.0 Q08-OPEN-1 (owner directive 2026-10-09, pillar reach): q08.org links and q08 rows are no longer refused or skipped, the REACH-SELECT title hold is dropped in the channel drain, an attention share of 0 keeps one slot instead of holding a channel or Bluesky, the Bluesky weekly cap defaults to 7 and the Buffer channel caps to LinkedIn 5 (drafts only), Mastodon 10, X 10 (ceiling 14); the mojibake guard, the pause flag and the LinkedIn draft rule stay.  // 0.9.2 // 0.9.2 PROMOTE-ROUTE-2: a channel whose last post was a curated thread gets the newest unposted paper next. // 0.9.1 PROMPT-CACHE-COUNT-3b (issue 2114, 2026-10-08, pillar cost): the 0.8.3 ai_cache_counters write named columns the table does not have (purpose, cached), so every insert failed silently; it now writes the fleet schema (day, worker, model, calls, cached_calls, in_tok, cached_tok).  // 0.9.0 PROMOTE-ROUTE-1 (2026-10-07, pillar reach, owner directive "no siloes"): the channel drain takes queued research papers from dissemination_tracker (newest first, after curated queued threads, before recycled posted threads), so a published paper reaches LinkedIn, Mastodon and X while Bluesky is at attention share 0. // 0.8.2 UTM-VISITS-1 (2026-10-06, pillar reach, transformation lever T7.9 half 2): learnerVisits reads the gateway's tagged loads first (reach_signals source utm, metric clicks_human, campaign = the paper slug, channel = the utm_source of the post's channel; UTM-CLICK-LEDGER-1, qnfo-gateway 3.10.0 + qnfo-fleet-dashboard 1.26.0, PR 688): a direct count of the visits a post caused beats the bot-filtered RUM lift, which stays the fallback when the window carries no tagged row. 0.8.1 LEARNER-CHANNEL-ARM-1 was
 // 0.8.1 (2026-10-06, LEARNER-CHANNEL-ARM-1, transformation lever T7.13, pillar reach; owner directive "execute the suggestions"): the
 // distribution learner gains a channel arm (bluesky, linkedin, mastodon, x): Buffer channel posts become learner rows credited
 // from the reach ledger's buffer metrics, the posterior carries a channel allocation, and the channel drain visits the Buffer
@@ -689,6 +689,45 @@ function threadLedeIssues(title, posts) {
   if (!words.length || words.some(function(w) { return p1.indexOf(w) >= 0; })) return [];
   return [{ post: 1, issue: "LEDE-SOCIAL-1: post 1 must say what the paper is (its subject in the title's words, or 'a paper by " + SOCIAL_AUTHOR + "') before any hook" }];
 }
+// SOCIAL-CHECK-FAIL-CLOSED-1 (0.13.2, agent_issues 2501): the checker reply is read fail-closed. Before, the first bracketed
+// array that parsed won, so "see [1] ... [{...}]" read as [] (a clean thread), and an issue list keyed `problem` or `claim`
+// was filtered to nothing. Now: an array counts only when every element is an object; arrays of numbers or strings are
+// skipped and the scan goes on; an object counts as an issue under `issue`, `problem`, `claim` or `text` (any other object
+// is kept as an issue too, never dropped); a clean verdict is only the whole reply being exactly []; anything else
+// (a bracket but no valid issue array, or no array at all) returns null, which keeps the thread as a draft.
+function checkerIssueOf(x) {
+  for (const k of ['issue', 'problem', 'claim', 'text']) {
+    if (typeof x[k] === 'string' && x[k].trim()) return { post: x.post === undefined ? null : x.post, issue: x[k].trim() };
+  }
+  return { post: x.post === undefined ? null : x.post, issue: 'unparsed checker finding: ' + JSON.stringify(x).slice(0, 200) };
+}
+function checkerIssueArray(parsed) {
+  if (!Array.isArray(parsed) || !parsed.length) return null;
+  if (!parsed.every(function(x) { return x && typeof x === 'object' && !Array.isArray(x); })) return null;
+  return parsed.map(checkerIssueOf);
+}
+function parseCheckerIssues(text) {
+  if (!text) return null;
+  const cleaned = String(text).replace(/\x60\x60\x60(?:json)?/g, '').trim();
+  if (/^\[\s*\]$/.test(cleaned)) return [];
+  let whole;
+  try { whole = JSON.parse(cleaned); } catch (e) { whole = undefined; /* not one JSON value: scan for an embedded array below */ }
+  const direct = checkerIssueArray(whole);
+  if (direct) return direct;
+  for (let lo = cleaned.indexOf('['); lo >= 0; lo = cleaned.indexOf('[', lo + 1)) {
+    let depth = 0, hi = -1;
+    for (let j = lo; j < cleaned.length; j++) {
+      if (cleaned[j] === '[') depth++;
+      else if (cleaned[j] === ']') { depth--; if (depth === 0) { hi = j; break; } }
+    }
+    if (hi < 0) continue;
+    let parsed;
+    try { parsed = JSON.parse(cleaned.slice(lo, hi + 1)); } catch (e2) { continue; /* not JSON (e.g. "[sic]"): keep scanning */ }
+    const found = checkerIssueArray(parsed);
+    if (found) return found;
+  }
+  return null;
+}
 // Returns: [] = checked and faithful; [{post,issue},...] = problems found;
 // null = CHECKER UNAVAILABLE (fail-closed - callers must NOT auto-queue).
 async function checkThread(env, title, abstract, posts, doi) {
@@ -706,30 +745,7 @@ async function checkThread(env, title, abstract, posts, doi) {
     "PAPER: " + JSON.stringify({ title: title, author: SOCIAL_AUTHOR, link: paperLink(doi), abstract: abstract }),
     "THREAD: " + JSON.stringify(posts)
   ].join('\n');
-  function parseIssues(text) {
-    if (!text) return null;
-    const cleaned = String(text).replace(/\x60\x60\x60(?:json)?/g, '').trim();
-    try {
-      const parsed = JSON.parse(cleaned);
-      if (Array.isArray(parsed)) return parsed.filter(function(x){ return x && x.issue; });
-    } catch (e) {}
-    const opens = [];
-    for (let i = 0; i < cleaned.length; i++) if (cleaned[i] === '[') opens.push(i);
-    for (let k = 0; k < opens.length; k++) {
-      const lo = opens[k];
-      let depth = 0, hi = -1;
-      for (let j = lo; j < cleaned.length; j++) {
-        if (cleaned[j] === '[') depth++;
-        else if (cleaned[j] === ']') { depth--; if (depth === 0) { hi = j; break; } }
-      }
-      if (hi < 0) continue;
-      try {
-        const parsed = JSON.parse(cleaned.slice(lo, hi + 1));
-        if (Array.isArray(parsed)) return parsed.filter(function(x){ return x && x.issue; });
-      } catch (e2) {}
-    }
-    return null;
-  }
+  const parseIssues = parseCheckerIssues;
   const ai1 = await aiRunAttr(env, "qnfo-social", "checker", CHECKER_MODEL, { messages: [{ role: 'user', content: base }], max_tokens: 2000 });
   let text = extractText(ai1).trim();
   let issues = parseIssues(text);
@@ -1601,6 +1617,48 @@ function bufferStatsPlan(nodes, service, nowMs, known) {
   }
   return out;
 }
+// MASTODON-PUBLIC-STATS-1 (0.14.0): per-post counts from the public status API (no credential) for sent Mastodon posts
+// whose Buffer metrics are null and whose public link is https://<host>/@<user>/<numeric id>. Newest first, at most
+// MASTODON_PUBLIC_MAX statuses a run, 8 s each; a non-200 answer or an unreadable body is an error and skips that post.
+var MASTODON_PUBLIC_MAX = 30;
+var MASTODON_PUBLIC_TIMEOUT_MS = 8000;
+var MASTODON_STATUS_RE = /^https:\/\/([a-z0-9][a-z0-9.-]{0,251}[a-z0-9])\/@[A-Za-z0-9_.@-]{1,120}\/(\d{1,25})\/?$/i;
+function mastodonStatusRef(url) {
+  const m = MASTODON_STATUS_RE.exec(String(url || ''));
+  return m ? { host: m[1].toLowerCase(), id: m[2] } : null;
+}
+async function mastodonPublicStats(nodes, nowMs) {
+  const out = { rows: [], requests: 0, errors: 0 };
+  const cands = [];
+  for (const n of nodes || []) {
+    if (!n || !n.id || (n.status && String(n.status).toLowerCase() !== 'sent')) continue;
+    if (Array.isArray(n.metrics) && n.metrics.length) continue;
+    const ref = mastodonStatusRef(n.externalLink);
+    if (!ref) continue;
+    const t = Date.parse(String(n.sentAt || ''));
+    if (isFinite(t) && nowMs - t > BUFFER_STATS_DAYS * 864e5) continue;
+    cands.push({ id: String(n.id), ref: ref, t: isFinite(t) ? t : 0 });
+  }
+  cands.sort(function(a, b) { return b.t - a.t; });
+  for (const c of cands.slice(0, MASTODON_PUBLIC_MAX)) {
+    out.requests++;
+    try {
+      const r = await fetch('https://' + c.ref.host + '/api/v1/statuses/' + c.ref.id, { headers: { 'Accept': 'application/json', 'User-Agent': 'qnfo-social (MASTODON-PUBLIC-STATS-1)' }, signal: AbortSignal.timeout(MASTODON_PUBLIC_TIMEOUT_MS) });
+      if (r.status !== 200) { out.errors++; console.log('MASTODON-PUBLIC-STATS-1 ' + c.ref.host + ' status ' + c.ref.id + ': HTTP ' + r.status); continue; }
+      const j = JSON.parse(await readTextCapped(r, 262144));
+      let had = 0;
+      for (const k of [['favourites', 'favourites_count'], ['reblogs', 'reblogs_count'], ['replies', 'replies_count']]) {
+        const v = Number(j && j[k[1]]);
+        if (j && j[k[1]] !== null && j[k[1]] !== undefined && isFinite(v)) { out.rows.push({ post_id: c.id, metric: k[0], value: v }); had++; }
+      }
+      if (!had) { out.errors++; console.log('MASTODON-PUBLIC-STATS-1 ' + c.ref.host + ' status ' + c.ref.id + ': no counts in the answer'); }
+    } catch (e) {
+      out.errors++;
+      console.log('MASTODON-PUBLIC-STATS-1 ' + c.ref.host + ' status ' + c.ref.id + ' failed: ' + String(e && e.message || e).slice(0, 120));
+    }
+  }
+  return out;
+}
 async function collectBufferStats(env, nowMs) {
   if (!env.BUFFER_TOKEN) return { skipped: 'no BUFFER_TOKEN' };
   const now = nowMs || Date.now();
@@ -1677,6 +1735,14 @@ async function collectBufferStats(env, nowMs) {
     }
     const plan = bufferStatsPlan(nodes, svc, now, known);
     for (const r of plan.rows) eng('buffer', r.post_id, r.metric, r.value, r.note);
+    if (svc === 'mastodon') {
+      // MASTODON-PUBLIC-STATS-1 (0.14.0, agent_issues 2481 / 2374): Buffer answers metrics null for every post on this
+      // account, while Mastodon publishes each status's counts on its open API. Read them for the posts Buffer left empty.
+      const mp = await mastodonPublicStats(nodes, now);
+      for (const r of mp.rows) eng('buffer', r.post_id, r.metric, r.value, 'mastodon public api');
+      out.mastodon_public = { requests: mp.requests, rows: mp.rows.length, errors: mp.errors };
+      out.errors += mp.errors; out.rows += mp.rows.length;
+    }
     for (const u of plan.urls) stmts.push(env.DB.prepare("UPDATE social_media_posts SET url = ?1 WHERE buffer_id = ?2 AND (url IS NULL OR url = '')").bind(u.url, u.id));
     out.posts += plan.sent; out.rows += plan.rows.length; out.urls += plan.urls.length;
     for (const k of ['sent', 'measured', 'pending', 'unmeasured', 'age_unknown']) a[k] += plan[k];
@@ -1811,6 +1877,7 @@ async function drainDissemination(env, opts) {
       await env.DB.prepare("UPDATE dissemination_tracker SET action='posted', posted_at=datetime('now'), post_url=?, post_id=?, post_text_snippet=COALESCE(?, post_text_snippet), updated_at=datetime('now') WHERE id=?").bind(postUrl, r.uri, typeof r.stored_text === 'string' && r.stored_text ? r.stored_text : (typeof r.text === 'string' && r.text ? r.text : null), row.id).run();
       posted++;
       if (decision) learner = await learnerRecordPost(env, decision, r.uri, opts.nowMs);
+      else await learnerRecordPost(env, learnerBackfillDecision(row, 'dissem', opts.nowMs), r.uri, opts.nowMs);
     } catch (e) {
       failed++;
       await env.DB.prepare("UPDATE dissemination_tracker SET action='failed', post_text_snippet=?, updated_at=datetime('now') WHERE id=?").bind(String(e).slice(0, 180), row.id).run();
@@ -1947,6 +2014,7 @@ async function drainQueue(env, opts) {
       await markPosted(env, row.id, postUriValue(uris[0], bufferResult), sent);
       posted++;
       if (decision) learner = await learnerRecordPost(env, decision, uris[0], opts.nowMs);
+      else await learnerRecordPost(env, learnerBackfillDecision(row, 'thread', opts.nowMs), uris[0], opts.nowMs);
       // SOCIAL-RUN-LEDGER-1: what Buffer did with this post, per platform, for the run record.
       if (bufferResult && Array.isArray(bufferResult.results)) for (const br of bufferResult.results) buffer.push(String(br.platform || 'buffer') + ':' + String(br.status || '?'));
       else if (bufferResult) buffer.push('buffer:' + (bufferResult.skipped ? 'skipped' : 'error'));
@@ -2339,13 +2407,24 @@ async function learnerPick(env, who, nowMs) {
 async function learnerRecordPost(env, dec, bskyUri, nowMs) {
   const iso = new Date(nowMs || Date.now()).toISOString();
   const key = (dec.source === 'dissem' ? 'dissem:' : 'thread:') + dec.id;
+  const by = dec.chosen_by === 'backfill' ? 'backfill' : 'learner';
   try {
     await ensureLearnerSchema(env);
-    await env.DB.prepare("INSERT OR IGNORE INTO social_learner_posts (post_key, slug, bsky_uri, link_slug, topic, format, slot, n_posts, posted_at, chosen_by, decision, status, created_at, channel) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, 'learner', ?10, ?11, ?9, 'bluesky')")
-      .bind(key, dec.slug || null, bskyUri || null, dec.link_slug || null, dec.topic || null, dec.format || null, dec.slot || null, Number(dec.n_posts) || 1, iso, JSON.stringify(dec), dec.topic ? 'pending' : 'not-arm').run();
+    await env.DB.prepare("INSERT OR IGNORE INTO social_learner_posts (post_key, slug, bsky_uri, link_slug, topic, format, slot, n_posts, posted_at, chosen_by, decision, status, created_at, channel) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?12, ?10, ?11, ?9, 'bluesky')")
+      .bind(key, dec.slug || null, bskyUri || null, dec.link_slug || null, dec.topic || null, dec.format || null, dec.slot || null, Number(dec.n_posts) || 1, iso, JSON.stringify(dec), dec.topic ? 'pending' : 'not-arm', by).run();
   } catch (e) { console.log('SOCIAL-DISTRIBUTION-LEARNER-1 post record failed ' + key + ': ' + String(e && e.message || e).slice(0, 160)); }
-  await learnerSaveState(env, { decision: null, last_post_at: iso, last_post_key: key });
-  return { posted: key, topic: dec.topic, format: dec.format, slot: dec.slot };
+  // LEARNER-COVERAGE-1: the 24h spacing marker belongs to learner-chosen posts only; a backfilled post never holds the next.
+  if (by === 'learner') await learnerSaveState(env, { decision: null, last_post_at: iso, last_post_key: key });
+  return { posted: key, topic: dec.topic, format: dec.format, slot: dec.slot, chosen_by: by };
+}
+// LEARNER-COVERAGE-1 (0.14.0, agent_issues 2381): a post the drain sent without a learner decision (learner off, no
+// answer, or the old order) is recorded too, with arms built from the row itself (topic and format from learnerClassify,
+// slot from the posted hour, link slug from the utm campaign), so its utm clicks reach the posterior at the 72h credit.
+function learnerBackfillDecision(row, source, nowMs) {
+  const a = learnerClassify(row, source);
+  const campaign = source === 'dissem' ? (row && row.paper_slug) : (row && row.slug);
+  return { source: source, id: row && row.id, slug: a.slug || null, topic: a.topic || null, format: a.format || null, n_posts: a.n_posts || 1,
+    link_slug: a.link_slug || (campaign ? String(campaign) : null), slot: learnerSlotOf(nowMs || Date.now()), chosen_by: 'backfill', decided_at: new Date(nowMs || Date.now()).toISOString(), version: VERSION };
 }
 
 // ---- reward ----
@@ -2507,15 +2586,22 @@ async function learnerWeeklyUpdate(env, nowMs) {
   return out;
 }
 // ATTENTION-LOOP-1 (0.8.0): the credit step on its own, so it runs daily (learnerDailyCredit) as well as inside the weekly
-// update. A post is credited once (UPDATE ... WHERE status = 'pending'), whichever tick reaches it first.
+// update. A post is credited once (UPDATE ... WHERE status IN ('pending', 'no-data')), whichever tick reaches it first.
+// UTM-CREDIT-1 (0.14.0, agent_issues 2036 / 2381): a post with no engagement snapshot is credited on its measured utm clicks
+// (learnerVisits source utm) instead of going no-data, and a no-data row of the last LEARNER_UTM_RECREDIT_DAYS days is
+// re-read once a day so clicks that landed after the verdict still reach the posterior (on 2026-10-13 the Mastodon and X
+// posts of 10-07 and 10-08 read no-data while reach_signals held 3 to 7 human utm clicks each).
+var LEARNER_UTM_RECREDIT_DAYS = 14;
 async function learnerCreditPending(env, now, out) {
   const iso = new Date(now).toISOString();
-  const pend = await env.DB.prepare("SELECT post_key, slug, bsky_uri, link_slug, topic, format, slot, n_posts, posted_at, chosen_by, channel, buffer_id FROM social_learner_posts WHERE status = 'pending' ORDER BY posted_at ASC LIMIT 60").all();
+  const since = new Date(now - LEARNER_UTM_RECREDIT_DAYS * 864e5).toISOString();
+  const pend = await env.DB.prepare("SELECT post_key, slug, bsky_uri, link_slug, topic, format, slot, n_posts, posted_at, chosen_by, channel, buffer_id, status FROM social_learner_posts WHERE status = 'pending' OR (status = 'no-data' AND link_slug IS NOT NULL AND topic IS NOT NULL AND posted_at >= ?1) ORDER BY CASE status WHEN 'pending' THEN 0 ELSE 1 END, posted_at ASC LIMIT 60").bind(since).all();
   for (const p of (pend && pend.results) || []) {
     const t0 = learnerParseTs(p.posted_at);
     if (!isFinite(t0)) continue;
     const w = learnerWindow(t0);
-    if (now < w.end + LEARNER_CREDIT_GRACE_MS) { out.waiting++; continue; }
+    const recredit = p.status === 'no-data';
+    if (!recredit && now < w.end + LEARNER_CREDIT_GRACE_MS) { out.waiting++; continue; }
     const ch = p.channel || 'bluesky';
     const arms = { topic: p.topic, format: p.format, slot: p.slot, channel: ch };
     let eng;
@@ -2525,8 +2611,14 @@ async function learnerCreditPending(env, now, out) {
     } else {
       // LEARNER-CHANNEL-ARM-1: Buffer reports a post's metrics about a day late, so a closed window waits one more day.
       eng = await learnerChannelEngagement(env, p.buffer_id, w);
-      if (!eng && now < w.end + LEARNER_CHANNEL_GRACE_MS) { out.waiting++; continue; }
+      if (!eng && !recredit && now < w.end + LEARNER_CHANNEL_GRACE_MS) { out.waiting++; continue; }
     }
+    let vis = null;
+    if (!eng) {
+      vis = await learnerVisits(env, p.link_slug, w.from, ch);
+      if (vis && vis.source === 'utm') eng = { e: 0, likes: 0, reposts: 0, quotes: 0, replies: 0, self_replies: 0, snapshot_day: null, measured: 'none: credited on utm clicks only' };
+    }
+    if (!eng && recredit) continue;
     if (!eng) {
       // Snapshots are written for the collection day only, so a closed window with none will never get one: final.
       const detail = { window: [w.from, w.to], reason: (ch === 'bluesky' ? 'no social_engagements snapshot' : 'no reach_signals buffer row for ' + ch) + ' inside the 72h window; posterior unchanged' };
@@ -2536,14 +2628,15 @@ async function learnerCreditPending(env, now, out) {
       await learnerLogEvent(env, 'social-learner-reward-' + p.post_key, 'social-learner-reward', 'no-data', 'qnfo-social learner: ' + p.post_key + ' has no engagement snapshot inside its 72h window; no update', { post_key: p.post_key, arms: arms, detail: detail }, now);
       continue;
     }
-    const vis = await learnerVisits(env, p.link_slug, w.from, ch);
+    if (!vis) vis = await learnerVisits(env, p.link_slug, w.from, ch);
     const rw = learnerRewardOf(eng, vis.visits);
     const detail = { engagement: eng, visits: vis, x: rw.x, reward: rw.reward, window: [w.from, w.to], chosen_by: p.chosen_by };
-    const u = await env.DB.prepare("UPDATE social_learner_posts SET status = 'credited', engagement = ?2, visits = ?3, reward = ?4, reward_detail = ?5, credited_at = ?6 WHERE post_key = ?1 AND status = 'pending'").bind(p.post_key, eng.e, vis.visits, rw.reward, JSON.stringify(detail), iso).run();
+    if (recredit) detail.recredited_from = 'no-data';
+    const u = await env.DB.prepare("UPDATE social_learner_posts SET status = 'credited', engagement = ?2, visits = ?3, reward = ?4, reward_detail = ?5, credited_at = ?6 WHERE post_key = ?1 AND status = ?7").bind(p.post_key, eng.e, vis.visits, rw.reward, JSON.stringify(detail), iso, recredit ? 'no-data' : 'pending').run();
     if (learnerChanges(u) === 0) continue;
     out.credited++;
     out.rewards.push({ post: p.post_key, topic: p.topic, format: p.format, slot: p.slot, e: eng.e, v: vis.visits, r: rw.reward });
-    await learnerLogEvent(env, 'social-learner-reward-' + p.post_key, 'social-learner-reward', 'credited',
+    await learnerLogEvent(env, 'social-learner-reward-' + p.post_key + (recredit ? '-utm' : ''), 'social-learner-reward', 'credited',
       'qnfo-social learner: ' + p.post_key + ' (' + p.topic + ', ' + p.format + ', ' + (p.slot || 'no slot') + ') e=' + eng.e + ' v=' + vis.visits + ' reward ' + rw.reward,
       { post_key: p.post_key, arms: arms, update: { alpha_plus: rw.reward, beta_plus: lr4(1 - rw.reward) }, detail: detail }, now);
   }
@@ -2697,8 +2790,14 @@ async function releaseCardApproved(env) {
   return { queued, rejected };
 }
 
-export default {
-  async scheduled(event, env) {
+// CRON-ONLY-HEARTBEAT-1 (agent_issues 2397, FLEET-HARDENING-2, pillar autonomy): each scheduled run ends with one
+// fleet_heartbeat upsert (ok=0 when the run threw). The write is caught and logged; it never fails or delays the run.
+async function socialHeartbeat(env, ok) {
+  try {
+    await env.DB.prepare("INSERT INTO fleet_heartbeat (worker, version, ts, ok) VALUES (?1, ?2, ?3, ?4) ON CONFLICT(worker) DO UPDATE SET version=excluded.version, ts=excluded.ts, ok=excluded.ok").bind("qnfo-social", VERSION, new Date().toISOString(), ok ? 1 : 0).run();
+  } catch (e) { console.error("qnfo-social fleet_heartbeat write failed: " + String(e && e.message || e).slice(0, 200)); }
+}
+async function socialScheduled(event, env) {
     // SOCIAL-RUN-LEDGER-1: every operation below records its run with recordSocialRun (defined after drainQueue).
     if (event.cron === '0 6 * * *') {
       const sc = await autoScan(env);
@@ -2741,6 +2840,17 @@ export default {
     await recordSocialRun(env, 'channels', channelsRunStatus(ch), ch);
     await retractDeadLinks(env);
     await restoreMisdeleted(env);
+}
+
+export default {
+  async scheduled(event, env) {
+    let ok = true, err = null;
+    try { await socialScheduled(event, env); } catch (e) {
+      ok = false; err = e;
+      console.error("qnfo-social scheduled run threw (" + String(event && event.cron) + "): " + String(e && e.message || e).slice(0, 300));
+    }
+    await socialHeartbeat(env, ok);
+    if (err) throw err;
   },
 
   async fetch(request, env) {
@@ -2962,4 +3072,4 @@ export { collectBufferStats, bufferStatsPlan, bufferRefusedFields, bufferStatsQu
   drainChannels, channelsRunStatus, channelText, channelCaps, channelWindow, channelCarried, pickChannelRow, CHANNEL_WEEKLY_CAP, CHANNEL_PLATFORM, CHANNEL_MAX_CHARS, CHANNEL_REPEAT_DAYS, SUBSCRIBE_LINE,
   learnerClassify, learnerIsQuestion, learnerTopicOf, learnerSlotOf, learnerBeta, learnerPrior, learnerPosterior, learnerChoose, learnerPBest,
   learnerEnabled, learnerPick, learnerEngagementOf, learnerVisits, learnerRewardOf, learnerWeeklyUpdate, learnerWeeklyTick, learnerCreditPending, learnerDailyCredit, attentionShares, shareCap, attentionOrder, learnerChannelOrder, learnerChannelEngagement, LEARNER_CHANNELS, LEARNER_CHANNEL_OF,
-  learnerEngagementRate, learnerReport, ensureLearnerSchema, setLearnerRng, LEARNER_SLOTS, LEARNER_METRIC, LEARNER_METRIC_DEF , pickPaperRow, PAPER_PROMOTE_DAYS };
+  learnerEngagementRate, learnerReport, parseCheckerIssues, socialHeartbeat, mastodonPublicStats, mastodonStatusRef, learnerBackfillDecision, learnerRecordPost, MASTODON_PUBLIC_MAX, ensureLearnerSchema, setLearnerRng, LEARNER_SLOTS, LEARNER_METRIC, LEARNER_METRIC_DEF , pickPaperRow, PAPER_PROMOTE_DAYS };
