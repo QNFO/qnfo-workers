@@ -1,50 +1,18 @@
 {
  "ok": true,
  "marker": "REMEDIATION-CONSUMER-1",
- "verifier": "remediation-consumer@4695913be16b",
- "due": 5,
- "pass": 4,
+ "verifier": "remediation-consumer@b52b707167f5",
+ "due": 1,
+ "pass": 0,
  "fail": 1,
  "skipped": 0,
  "contracts": [
   {
-   "class": "fm-notice-reply-encoded-subject",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "ok",
-   "observed": "ok",
-   "written": true
-  },
-  {
-   "class": "fm-zaraz-autoinject-worker-html",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "ok",
-   "observed": "ok",
-   "written": true
-  },
-  {
-   "class": "fm-outward-prose-no-lede",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "0",
-   "observed": "0",
-   "written": true
-  },
-  {
-   "class": "fm-unbounded-ready-queue",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "0",
-   "observed": "0",
-   "written": true
-  },
-  {
-   "class": "issue-2473",
-   "issue_id": 2473,
+   "class": "issue-2480",
+   "issue_id": 2480,
    "verdict": "fail",
    "expected": "ok",
-   "observed": "missing-marker:qnfo-research-exec/worker.js",
+   "observed": "pending: filed by qnfo-fleet-control, which owns it for 48h",
    "written": true
   }
  ],
@@ -71,21 +39,20 @@
   "http",
   "runner-https"
  ],
- "https": 2,
  "budget_exhausted": false,
  "runtime_verified_share_24h": 9.1,
  "host_census": {
   "skipped": "ran within 6h"
  },
  "migrations": {
-  "opted_in": 142,
+  "opted_in": 143,
   "unapplied": [],
   "applied_now": [],
   "failed": [],
   "metric": 0
  },
- "spent_ms": 10240,
- "head": "4695913be16b05e87c9c9fc1d344a57a09925341",
+ "spent_ms": 8701,
+ "head": "b52b707167f5c6ab9edae8be17db38aaa16ed1b4",
  "job_status": "success",
- "ts": "2026-10-13T06:53:26Z"
+ "ts": "2026-10-13T07:04:53Z"
 }
