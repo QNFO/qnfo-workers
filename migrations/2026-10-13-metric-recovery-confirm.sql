@@ -8,7 +8,9 @@
 --   breach (hit = 1, or no value)                                  -> '0'   (as before)
 --   first reading with hit = 0                                     -> 'recovering' (no pass; the issue stays open)
 --   hit = 0, the contract's previous verification read 'recovering'
---     or '1', and metric_registry.last_refreshed is later than it  -> '1'   (pass; the auto-close closes the issue)
+--     and metric_registry.last_refreshed is later than it          -> '1'   (pass; the auto-close closes the issue)
+--   hit = 0 and the previous verification read '1'                 -> '1'   (a pass stays a pass; the hold never reopens
+--                                                                             a recovered issue between two refreshes)
 -- A metric with no refresh stamp needs the recovery to hold 50 minutes. Only the integer trigger id (from the title) and the
 -- integer issue id reach the probe text, as before. The post-close hold (REMEDIATION-HOLD-1) reads the same probe: a held contract
 -- whose previous verification passed keeps passing while hit = 0, and a breach reads '0' and reopens, as before.
@@ -38,9 +40,9 @@ BEGIN
         || (SELECT CAST(substr(title, 16) AS INTEGER) FROM agent_issues WHERE id = NEW.issue_id)
         || ') IS NOT NULL THEN CASE WHEN (SELECT COUNT(*) FROM (SELECT observed, verified_at FROM remediation_verifications WHERE class = ''issue-'
         || CAST(NEW.issue_id AS INTEGER)
-        || ''' ORDER BY id DESC LIMIT 1) p WHERE p.observed IN (''1'', ''recovering'') AND datetime(p.verified_at) < COALESCE(datetime((SELECT last_refreshed FROM metric_registry WHERE metric = (SELECT metric_key FROM analytics_metric_triggers WHERE id = '
+        || ''' ORDER BY id DESC LIMIT 1) p WHERE p.observed = ''1'' OR (p.observed = ''recovering'' AND datetime(p.verified_at) < COALESCE(datetime((SELECT last_refreshed FROM metric_registry WHERE metric = (SELECT metric_key FROM analytics_metric_triggers WHERE id = '
         || (SELECT CAST(substr(title, 16) AS INTEGER) FROM agent_issues WHERE id = NEW.issue_id)
-        || '))), datetime(''now'', ''-50 minutes''))) > 0 THEN ''1'' ELSE ''recovering'' END ELSE ''0'' END AS observed'
+        || '))), datetime(''now'', ''-50 minutes'')))) > 0 THEN ''1'' ELSE ''recovering'' END ELSE ''0'' END AS observed'
   WHERE class = NEW.class
     AND EXISTS (SELECT 1 FROM agent_issues WHERE id = NEW.issue_id AND title LIKE 'METRIC-TRIGGER-%' AND CAST(substr(title, 16) AS INTEGER) > 0);
 END;
@@ -53,9 +55,9 @@ SET module = 'probe-template-v1h',
       || (SELECT CAST(substr(a.title, 16) AS INTEGER) FROM agent_issues a WHERE a.id = remediation_contracts.issue_id)
       || ') IS NOT NULL THEN CASE WHEN (SELECT COUNT(*) FROM (SELECT observed, verified_at FROM remediation_verifications WHERE class = ''issue-'
       || CAST(remediation_contracts.issue_id AS INTEGER)
-      || ''' ORDER BY id DESC LIMIT 1) p WHERE p.observed IN (''1'', ''recovering'') AND datetime(p.verified_at) < COALESCE(datetime((SELECT last_refreshed FROM metric_registry WHERE metric = (SELECT metric_key FROM analytics_metric_triggers WHERE id = '
+      || ''' ORDER BY id DESC LIMIT 1) p WHERE p.observed = ''1'' OR (p.observed = ''recovering'' AND datetime(p.verified_at) < COALESCE(datetime((SELECT last_refreshed FROM metric_registry WHERE metric = (SELECT metric_key FROM analytics_metric_triggers WHERE id = '
       || (SELECT CAST(substr(a.title, 16) AS INTEGER) FROM agent_issues a WHERE a.id = remediation_contracts.issue_id)
-      || '))), datetime(''now'', ''-50 minutes''))) > 0 THEN ''1'' ELSE ''recovering'' END ELSE ''0'' END AS observed'
+      || '))), datetime(''now'', ''-50 minutes'')))) > 0 THEN ''1'' ELSE ''recovering'' END ELSE ''0'' END AS observed'
 WHERE module = 'probe-template-v1'
   AND issue_id IS NOT NULL
   AND EXISTS (SELECT 1 FROM agent_issues a WHERE a.id = remediation_contracts.issue_id AND a.title LIKE 'METRIC-TRIGGER-%' AND CAST(substr(a.title, 16) AS INTEGER) > 0);
