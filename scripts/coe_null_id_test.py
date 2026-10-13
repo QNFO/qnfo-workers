@@ -71,6 +71,9 @@ CREATE TABLE remediation_contracts (class TEXT PRIMARY KEY, issue_id INTEGER, pr
   verify_transport TEXT, max_attempts INTEGER, escalate_to TEXT, expected_cadence_h REAL, status TEXT, ts TEXT,
   last_attempt_at TEXT, last_verdict TEXT, module TEXT, budget_ms INTEGER, next_due_at TEXT, max_items INTEGER,
   requires_container INTEGER, attempts INTEGER);
+CREATE TABLE control_registry (control TEXT PRIMARY KEY, location TEXT, kind TEXT CHECK (kind IN ('hold', 'filter', 'pause',
+  'kill-switch', 'gate', 'cap', 'guard', 'lease')), guards_against TEXT, critical_path INTEGER, disposition TEXT,
+  disposition_state TEXT, alternate_path TEXT, alternate_tested_at TEXT, evidence TEXT, issue_id INTEGER, reviewed_at TEXT);
 CREATE TABLE decision_log (id INTEGER PRIMARY KEY AUTOINCREMENT, ts TEXT, actor TEXT, assumption TEXT, action TEXT, evidence TEXT,
   outcome TEXT, blast_radius TEXT, rollback_path TEXT, capability_gain TEXT, predicted_outcome TEXT, reach_gain TEXT,
   surfaces_tested TEXT, outcome_matched INTEGER);

@@ -1,6 +1,7 @@
 -- APPLY-BY: ci
 -- DB: qnfo-audit
 -- BACKUP: bak_20261013_coe_null_id
+-- spof-review: the replaced triggers keep their tables and events; the id fill and the rowid-keyed normalisers are one D1 path, and the second is on the read side: the dedupes and views here compare through datetime(), which reads both formats, and fm-coe-null-id reports a lapse within the hour
 -- Rollback: recreate the triggers and views from the rows of bak_20261013_coe_null_id with obj = 'sql'; restore ids and ts with UPDATE cloud_ops_events SET id = NULL, ts = b.ts FROM bak_20261013_coe_null_id b WHERE b.obj = 'row' AND cloud_ops_events.rowid = b.rid
 --
 -- COE-NULL-ID-1 / TS-FORMAT-MIX-1 (GHA-AUDIT-1 follow-up, 2026-10-13; charter pillar autonomy). Root cause of the mixed
@@ -127,6 +128,13 @@ INSERT OR REPLACE INTO remediation_contracts (class, issue_id, precondition, act
 ('fm-coe-null-id', NULL, 'COE-NULL-ID-1', 'failure-mode detector',
  'SELECT ''0'' AS expected, CAST((SELECT COUNT(*) FROM cloud_ops_events WHERE id IS NULL) + (SELECT COUNT(*) FROM cloud_ops_events WHERE kind IN (''obs-ingest'', ''obs-reassert'', ''dispose-blocked'', ''metric-write-audit'') AND ts >= strftime(''%Y-%m-%d'', ''now'', ''-1 day'') AND substr(ts, 11, 1) = '' '') AS TEXT) AS observed',
  'd1-query', 3, 'qnfo-fleet-control', 1, 'active', datetime('now'), 'failure-mode', 45000, 5, 0, 0);
+
+INSERT OR REPLACE INTO control_registry (control, location, kind, guards_against, critical_path, disposition, disposition_state,
+  alternate_path, alternate_tested_at, evidence, issue_id, reviewed_at) VALUES
+('cloud_ops_events_id_fill_ins', 'qnfo-audit trigger (migrations/2026-10-13-coe-null-id-ts-normalise.sql)', 'guard',
+ 'an id-less cloud_ops_events row that id-keyed triggers, normalisers and readers cannot address', 0, 'keep', 'applied',
+ 'readers compare through datetime(), which reads both formats; fm-coe-null-id reports a NULL id or a space ts within the hour',
+ datetime('now'), 'replaces the id-keyed normalisers that no-oped on 2,247 rows; normalisers now match rowid', NULL, datetime('now'));
 
 INSERT INTO decision_log (actor, assumption, action, evidence, outcome, blast_radius, rollback_path, capability_gain,
   predicted_outcome, reach_gain, surfaces_tested) VALUES
