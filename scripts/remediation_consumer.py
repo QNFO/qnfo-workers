@@ -406,13 +406,21 @@ def fails_since_last_pass(cls):
     return int(rows[0].get("n") or 0) if rows else 0
 
 
+def is_standing_detector(cls):
+    """DETECTOR-NEVER-PARKS-2: fm-<key> and belief-<key> contracts never park after a pass."""
+    return isinstance(cls, str) and (cls.startswith("fm-") or cls.startswith("belief-"))
+
+
 def https_after_verdict(c, passed, observed, out):
     """Status transitions for a runner-https contract. Returns (next_status or None, cadence_h)."""
     cls, cad = c.get("class"), max(1, int(c.get("expected_cadence_h") or 1))
     liveness = c.get("module") == LIVENESS_MODULE
     max_att = max(1, int(c.get("max_attempts") or 3))
     if passed == 1:
-        if liveness:
+        # DETECTOR-NEVER-PARKS-2 (2026-10-13): a failure-mode or belief detector is a standing probe, as fleet-control's
+        # remediation tick already treats its d1-query ones; a pass keeps it active at its own cadence instead of parking it
+        # in holding (fm-detector-parked failed on fm-notice-reply-encoded-subject and fm-zaraz-autoinject-worker-html).
+        if liveness or is_standing_detector(cls):
             return None, cad
         if rt_pass_streak_days(cls) >= RT_HOLD_D:
             return "closed", cad
@@ -483,6 +491,16 @@ def _selftest():
         if p != want_pass or v != want_verdict:
             print(json.dumps({"ok": False, "case": sql, "got": [p, v],
                               "want": [want_pass, want_verdict]}))
+            return 1
+    # DETECTOR-NEVER-PARKS-2: a passing fm- or belief- runner-https detector stays active at its cadence (no D1 read);
+    # an issue contract is not a standing detector.
+    for cls_, want in (("fm-notice-reply-encoded-subject", True), ("belief-x", True), ("issue-2109", False), (None, False)):
+        if is_standing_detector(cls_) != want:
+            print(json.dumps({"ok": False, "case": "is_standing_detector", "cls": cls_}))
+            return 1
+    for cls_ in ("fm-zaraz-autoinject-worker-html", "belief-runner-https"):
+        if https_after_verdict({"class": cls_, "expected_cadence_h": 1, "max_attempts": 3}, 1, "ok", {}) != (None, 1):
+            print(json.dumps({"ok": False, "case": "detector parked after a pass", "cls": cls_}))
             return 1
     probes = [
         ("SELECT 1", True), ("WITH x AS (SELECT 1) SELECT * FROM x", True),
