@@ -80,6 +80,23 @@ check("the :30 tick reaches generation when stalled (it reads the published and 
   const tc = C.carryTitle("# The Hidden Cost Of Every Sealed Appliance\n\nEdited.", orig);
   check("an editor Title Case title is replaced by the writer's", tc.startsWith("# The defrost command"), tc.slice(0, 80));
 }
+// PUBLISH-STALL-DIGEST-1 (0.17.2): the open stall issue is refreshed with a stage digest and escalates after 24 h
+{
+  check("stage of a fact-check failure", S.stallStage({ status: "gate_failed", error: "accuracy: unsupported claim: x" }) === "fact-check");
+  check("stage of a panel failure", S.stallStage({ status: "gate_failed", error: "ensemble: the edited draft was still not worth reading (panel mean 3 of 5)" }) === "reader panel");
+  check("stage of a writer gate failure", S.stallStage({ status: "gate_failed", error: "handles: @openai; stock framing tell" }) === "writer gate");
+  check("digest counts stages, most first", S.stallDigest([{ status: "gate_failed", error: "accuracy: a" }, { status: "gate_failed", error: "accuracy: b" }, { status: "gate_failed", error: "ensemble: the edited draft was still not worth reading" }]) === "fact-check 2, reader panel 1");
+  at("2026-10-12T15:30:05Z");
+  const runs = [{ id: 3, status: "gate_failed", piece_published: 0, error: "accuracy: unsupported claim: x" }, { id: 2, status: "gate_failed", piece_published: 0, error: "accuracy: y" }, { id: 1, status: "gate_failed", piece_published: 0, error: "ensemble: the edited draft was still not worth reading (panel mean 2.5 of 5)" }];
+  const DB = { prepare: (sql) => { const st = { bind: () => st, all: async () => ({ results: runs }), first: async () => (/MAX\(published_at\)/.test(sql) ? { m: "2026-10-10T06:04:59Z" } : null) }; return st; } };
+  const writes = [];
+  const AUDIT = { prepare: (sql) => { const st = { args: [], bind: (...a) => { st.args = a; return st; }, first: async () => (/SELECT id FROM agent_issues/.test(sql) ? { id: 2222 } : null), all: async () => ({ results: [] }), run: async () => { writes.push({ sql, args: st.args }); return {}; } }; return st; } };
+  await S.stallDetector({ DB, AUDIT });
+  const up = writes.find((w) => /^UPDATE agent_issues SET title=\?1, description=\?2, priority=\?3/.test(w.sql));
+  check("an open stall issue is rewritten, not left stale", !!up && /57h since the last piece/.test(up.args[0]) && /fact-check 2, reader panel 1/.test(up.args[1]) && up.args[2] === "critical" && up.args[4] === 2222, up && up.args.slice(0, 3));
+  check("no second issue is inserted while one is open", !writes.some((w) => /^INSERT INTO agent_issues/.test(w.sql)));
+}
+
 Date.now = realNow;
 console.log("stall-retry.test.mjs: " + passes + " passed, " + fails + " failed");
 process.exit(fails ? 1 : 0);
