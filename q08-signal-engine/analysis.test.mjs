@@ -34,5 +34,19 @@ check("reader cuts count paragraphs as the readers saw them (the marker is not a
 const src = (await import("node:fs")).readFileSync(new URL("./worker.js", import.meta.url), "utf8");
 check("every publish path strips the marker", (src.match(/piece\.text = stripAnalysisMark\(piece\.text\.replace\(/g) || []).length === 3);
 check("the directive asks for the marker", /Begin the systems analysis with a line of its own that contains exactly <!-- analysis -->/.test(mod.__lede.Q08_DIRECTIVE));
+// Q08-ANALYSIS-AUTO-1 (0.19.2, run 378)
+{
+  const r1 = "Mozilla announced Firefox Enterprise this week, a managed version of its browser for companies, in a post on its blog. ".repeat(3);
+  const r2 = "The package adds central policy controls and a longer support window for business customers who deploy it. ".repeat(3);
+  const a1 = "The incentive for Mozilla is to sell support, because the browser itself is free; that means the paid tier carries the cost. ".repeat(2);
+  const unmarked = "# Mozilla sells a managed Firefox\n\n" + [r1, r2, a1].join("\n\n") + "\n\nworth your time: yes - x";
+  const sp = A.splitAnalysis(unmarked);
+  check("an unmarked draft gets its analysis found automatically", sp.mode === "auto" && /incentive for Mozilla/.test(sp.analysis) && !/incentive/.test(sp.report), sp);
+  const plain = "# T\n\n" + [r1, r2, r2].join("\n\n");
+  check("a draft with no reasoning paragraph after the context is not split", A.splitAnalysis(plain).mode === "none");
+  check("a marked draft reports marked", A.splitAnalysis(essay).mode === "marked");
+  const early = "# T\n\n" + [a1, r1, r2].join("\n\n");
+  check("reasoning in the lede or context paragraphs is never the analysis start", A.splitAnalysis(early).mode === "none");
+}
 console.log("analysis.test.mjs: " + passes + " passed, " + fails + " failed");
 process.exit(fails ? 1 : 0);

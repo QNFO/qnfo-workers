@@ -168,7 +168,7 @@ globalThis.fetch = origFetch;
   check("the pruned draft is under the 2800-character writing floor but clears the prune floor", essay.replace(" " + bad, "").length < 2800 && essay.replace(" " + bad, "").length >= V.PRUNE_FLOOR && g0.length === 0, { len: essay.replace(" " + bad, "").length, g0 });
   check("a draft under the prune floor is still refused", V.prunedGateProblems("# The queue nobody measured\n\nShort.", []).some((p) => /too short after pruning/.test(p)));
   const r = await V.verifyAndRevise(env, { piece: { text: essay, model: "@cf/openai/gpt-oss-120b" }, prompt: "P", banned: [], ground, seedText: "s", forecast: false });
-  check("the short pruned draft is verified and published without a model revision", r.ok === true && !r.piece.text.includes("sealed appliance") && r.pruned === 1 && calls === 4, { ok: r.ok, problems: r.problems, calls });
+  check("the short pruned draft is verified and published without a model revision", r.ok === true && !r.piece.text.includes("sealed appliance") && r.pruned === 1 && (calls === 4 || calls === 8), { ok: r.ok, problems: r.problems, calls }); // 8 when Q08-ANALYSIS-AUTO-1 finds an analysis section (two more reviews per round)
   check("five prune rounds", V.PRUNE_ROUNDS === 5);
   let n2 = 0;
   const envNever = { AI: { run: async () => { n2++; return { response: JSON.stringify({ unsupported: ["nothing that occurs in the draft at all here -- x"], verdict: "fail" }) }; } } };
@@ -224,7 +224,7 @@ globalThis.fetch = origFetch;
   let calls = 0;
   const env = { AI: { run: async () => { calls++; return { response: JSON.stringify({ unsupported: ["INFERENCE: " + inf + " -- not stated in source"], verdict: "fail" }) }; } } };
   const r = await V.verifyAndRevise(env, { piece: { text: essay, model: "@cf/nvidia/nemotron-3-120b-a12b" }, prompt: "P", banned: [], ground, seedText: "s", forecast: false });
-  check("reviewers flagging only reasoning no longer fail the run; the inference is deleted and no second review is needed", r.ok === true && !r.piece.text.includes("run out of hours") && r.pruned === 1 && calls === 2, { ok: r.ok, problems: r.problems, calls });
+  check("reviewers flagging only reasoning no longer fail the run; the inference is deleted and no second review is needed", r.ok === true && !r.piece.text.includes("run out of hours") && r.pruned === 1 && (calls === 2 || calls === 4), { ok: r.ok, problems: r.problems, calls }); // 4 with the analysis review (Q08-ANALYSIS-AUTO-1)
   calls = 0;
   const envFact = { AI: { run: async () => { calls++; return { response: JSON.stringify({ unsupported: ["FACT: " + inf + " -- not stated in source"], verdict: "fail" }) }; } } };
   const rf = await V.verifyAndRevise(envFact, { piece: { text: essay, model: "@cf/nvidia/nemotron-3-120b-a12b" }, prompt: "P", banned: [], ground, seedText: "s", forecast: false });
