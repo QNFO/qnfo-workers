@@ -103,7 +103,7 @@ ok(/never state an inferred arrangement, funding, motive or behaviour as a repor
   ok(V.CRITIC_PRUNE_ROUNDS === 3, "CRITIC-PRUNE-2: up to three critic prune rounds");
   ok(a > 0 && b > a && c > b && d > c, "the critic prune runs before the rejection and before the fact-check", { a, b, c, d });
 }
-// ---- CONTEXT-LINKS-1 + BLOCKQUOTE-GROUND-1 (1.21.4) ---------------------------------------------------------------------------------
+// ---- CONTEXT-LINKS-1 + BLOCKQUOTE-GROUND-1 (1.21.5) ---------------------------------------------------------------------------------
 {
   const text = "The book was compiled by Ilya Ehrenburg and Vasily Grossman. Grossman wrote the Treblinka report. Ehrenburg edited the eyewitness texts. The Eastern Orthodox Church is mentioned once. Kiev appears once.";
   const r = V.rankLinked(["Euphoria (2017 film)", "Church (building)", "Vasily Grossman", "Ilya Ehrenburg", "Kiev", "The Black Book of Soviet Jewry (1946)", "Ilya Ehrenburg (disambiguation)"], text, "The Black Book of Soviet Jewry");
