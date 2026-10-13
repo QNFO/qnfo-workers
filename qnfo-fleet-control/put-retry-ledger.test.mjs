@@ -60,5 +60,11 @@ ok(src.indexOf("(ts, kind, job, text) VALUES (datetime('now')") < 0, "no id-less
 ok((src.match(/\(id, ts, kind, job, text\) VALUES \('fc-' \|\| lower\(hex\(randomblob\(8\)\)\), strftime\('%Y-%m-%dT%H:%M:%fZ', 'now'\),/g) || []).length >= 6, "six inserts carry an fc- id and an ISO ts");
 ok(src.indexOf("kind='dispose-blocked' AND text LIKE ? AND ts > datetime(") < 0, "dispose-blocked dedupe compares through datetime(ts)");
 
+// 6. HOLDING-OPEN-REARM-2: an open issue's contract is re-armed before the pass/hold branches run.
+const tick = src.slice(src.indexOf("async function remediationContractsTick("), src.indexOf("async function remediationContractsTick(") + 20000);
+const iDet = tick.indexOf("if (rtStandingDetector(c.class))"), iOpen = tick.indexOf('} else if (c.issue_status === "open" && (verdict !== "pass" || await rtIssueOpen(db, c.issue_id))) {'), iPass = tick.indexOf('} else if (verdict === "pass") {');
+ok(iDet > 0 && iOpen > iDet && iPass > iOpen, "open-issue branch sits between the detector branch and the pass/hold branch", { iDet, iOpen, iPass });
+ok(/rtIssueOpen\(db, c\.issue_id\)\)\) \{[\s\S]{0,900}if \(c\.contract_status === "holding"\) nextStatus = "active";/.test(tick), "a holding contract on an open issue becomes active");
+
 console.log(pass + " passed, " + fail + " failed");
 process.exit(fail ? 1 : 0);
