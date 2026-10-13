@@ -3,7 +3,7 @@ var __name = (target, value) => __defProp(target, "name", { value, configurable:
 var PROBER_CRON = "*/20 * * * *";
 
 // worker.js
-var VERSION = "1.4.0-probe-cadence-cost"; /* 1.4.0 PROBE-CADENCE-COST-1 (2026-10-12, pillar cost, agent_issues 2118): the full model/vision/tools/stream/routing sweep runs every 4th 30-minute tick (ai_calibration_config model_sweep_every_ticks); the ticks between re-probe only models whose ai_model_health row is not ok. About 2,500 Workers AI calls a day through qnfo-ai become about 700. */ /* 1.3.4 WORKERS-STANDARDS-1 (2026-10-12, pillar security): the calibration run id is drawn from crypto.randomUUID instead of Math.random (same shape). */ /* 1.3.3 AMH-ROSTER-PRUNE-1 (2026-10-06, pillar autonomy, lever T5.11): the dead per-tick ai_model_health prune is removed (wrong bind receiver, never ran; fixed as written it would have deleted the canonical roster rows); the 24 never-probed external ids were pruned once after a backup by migration. 1.3.2 FOLD-HYGIENE-1 + FRESHNESS-REGISTERS-RETIRED-1 writer side (2026-10-06, agent_issues 1756 and 2028, pillar autonomy): the prober member's freshness SIGNALS no longer grade kaizen_candidates (qnfo-kaizen was retired in PR 657, so the register read stale forever, and the 07:40Z tick re-wrote the row PR 677 had deleted); version_queue is an event register with a 336 h window (the reviser queues a version only when a paper needs one, so idleness is not staleness); amh_coverage grades the probe roster (MODELS), not the 24 external ids registered 2026-09-19 that no probe covers, and names how many it leaves out (AMH-COVERAGE-ROSTER-1). 1.3.1 PROBER-ON-CAL-TICK-1 (2026-10-06, #1756): the every-20-minutes trigger registered for the member never fired (no prober run at 06:40 or 07:00 while the every-30-minutes calibration ran), so the member now runs on the every-30-minutes tick next to the calibration, the host awaits its waitUntil work, and the every-20-minutes trigger is dropped (one cron fewer). 1.3.0 PROBER-FOLD-1 (2026-10-06, pillar core, #1756): ai-health-prober runs here as a member (proberMod, the every-20-minutes cron, /prober/health and /prober/freshness, /prober/run behind the calibration key); the separate ai-health-prober worker is retired by fold. 1.2.9 GW-402-UNFUNDED-1 (2026-10-05, pillar: cost; agent_issues #1992, root cause shared with #1986): a provider's HTTP 402 ("Insufficient Balance", DeepSeek, owner decision 2026-10-05: do not top up) is an unfunded account, not a degraded model. The sweep classed it "other", set ai_model_health deepseek/deepseek-v4-flash degraded on every window with >= 2 such calls (15 at 16:00Z), and qnfo-fleet-control refiled MODEL-DEGRADED (#1992, #1256, #1099 ...). Now status 402 or an insufficient-balance/payment-required body is error_class "unfunded": recorded in ai_gateway_failures, never a [gw-fail] issue, never a degraded health row, and ignored (like rate-capacity) by the 24h reconcile that clears a degraded row, so the row recovers on the next sweep. The spend-side fix (stop paying for the failed first round trip) is #1986 in qnfo-ops. */
+var VERSION = "1.5.0-task-truth"; /* 1.5.0 CALIBRATION-TASK-TRUTH-1 (2026-10-13, pillar research, agent_issues 2338): once an hour every model answers a few integer sums, differences and products whose operands come from the UTC hour and whose answers the code computes; one row per item and model in ai_calibration_truth (right or wrong, served_by), 30 days kept, GET /truth gives the pair table (n11, n10, n01, n00, kappa) of the last 7 days; ai_calibration_config truth_probe_items sets the items an hour, 0 is off. */ /* 1.4.0 1.4.0 PROBE-CADENCE-COST-1 (2026-10-12, pillar cost, agent_issues 2118): the full model/vision/tools/stream/routing sweep runs every 4th 30-minute tick (ai_calibration_config model_sweep_every_ticks); the ticks between re-probe only models whose ai_model_health row is not ok. About 2,500 Workers AI calls a day through qnfo-ai become about 700. */ /* 1.3.4 WORKERS-STANDARDS-1 (2026-10-12, pillar security): the calibration run id is drawn from crypto.randomUUID instead of Math.random (same shape). */ /* 1.3.3 AMH-ROSTER-PRUNE-1 (2026-10-06, pillar autonomy, lever T5.11): the dead per-tick ai_model_health prune is removed (wrong bind receiver, never ran; fixed as written it would have deleted the canonical roster rows); the 24 never-probed external ids were pruned once after a backup by migration. 1.3.2 FOLD-HYGIENE-1 + FRESHNESS-REGISTERS-RETIRED-1 writer side (2026-10-06, agent_issues 1756 and 2028, pillar autonomy): the prober member's freshness SIGNALS no longer grade kaizen_candidates (qnfo-kaizen was retired in PR 657, so the register read stale forever, and the 07:40Z tick re-wrote the row PR 677 had deleted); version_queue is an event register with a 336 h window (the reviser queues a version only when a paper needs one, so idleness is not staleness); amh_coverage grades the probe roster (MODELS), not the 24 external ids registered 2026-09-19 that no probe covers, and names how many it leaves out (AMH-COVERAGE-ROSTER-1). 1.3.1 PROBER-ON-CAL-TICK-1 (2026-10-06, #1756): the every-20-minutes trigger registered for the member never fired (no prober run at 06:40 or 07:00 while the every-30-minutes calibration ran), so the member now runs on the every-30-minutes tick next to the calibration, the host awaits its waitUntil work, and the every-20-minutes trigger is dropped (one cron fewer). 1.3.0 PROBER-FOLD-1 (2026-10-06, pillar core, #1756): ai-health-prober runs here as a member (proberMod, the every-20-minutes cron, /prober/health and /prober/freshness, /prober/run behind the calibration key); the separate ai-health-prober worker is retired by fold. 1.2.9 GW-402-UNFUNDED-1 (2026-10-05, pillar: cost; agent_issues #1992, root cause shared with #1986): a provider's HTTP 402 ("Insufficient Balance", DeepSeek, owner decision 2026-10-05: do not top up) is an unfunded account, not a degraded model. The sweep classed it "other", set ai_model_health deepseek/deepseek-v4-flash degraded on every window with >= 2 such calls (15 at 16:00Z), and qnfo-fleet-control refiled MODEL-DEGRADED (#1992, #1256, #1099 ...). Now status 402 or an insufficient-balance/payment-required body is error_class "unfunded": recorded in ai_gateway_failures, never a [gw-fail] issue, never a degraded health row, and ignored (like rate-capacity) by the 24h reconcile that clears a degraded row, so the row recovers on the next sweep. The spend-side fix (stop paying for the failed first round trip) is #1986 in qnfo-ops. */
 var DEEPSEEK = "https://api.deepseek.com/v1";
 var ACCOUNT = "edb167b78c9fb901ea5bca3ce58ccc4b";
 var CATALOG = "https://api.cloudflare.com/client/v4/accounts/" + ACCOUNT;
@@ -140,6 +140,120 @@ async function runPool(items, limit, fn) {
   return out;
 }
 __name(runPool, "runPool");
+// ---- CALIBRATION-TASK-TRUTH-1:BEGIN (1.5.0, pillar research, agent_issues 2338) ----
+// Ground truth for the error-correlation estimate (HRAW W-H1, agent_issues 2145): until now ai_calibration_results held
+// reachability only, ensemble-run rows one judge verdict per call and ask_evals one aggregate score per run, so no row said
+// whether a model was right or wrong on an item with a known answer. Once an hour (the */30 cron fires twice; the second sees
+// the first's rows and stops) every model in ALL_MODELS answers the same few integer sums, differences and products. The
+// generator picks the operands from a seed derived from the UTC hour and the code computes the expected value, so there is no
+// fixed list and nothing is written by hand. A call that fails or returns nothing is not a wrong answer and writes no row; a
+// reply with text but no integer is wrong. ai_calibration_config truth_probe_items (0..5, default 2) sets the items an hour;
+// 0 turns the probe off. GET /truth returns the pair table of the last 7 days.
+var TRUTH_KEEP_MS = 30 * 864e5;
+var TRUTH_WINDOW_MS = 7 * 864e5;
+function truthRng(seed) {
+  var a = seed >>> 0; // mulberry32
+  return function () {
+    a = (a + 0x6D2B79F5) >>> 0;
+    var t = a;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+function truthHour(nowMs) { return Math.floor(nowMs / 36e5); }
+function truthItems(hour, n) {
+  var rnd = truthRng(hour * 2654435761), items = [];
+  for (var i = 0; i < n; i++) {
+    var kind = Math.floor(rnd() * 3), a = 100 + Math.floor(rnd() * 900), b = 100 + Math.floor(rnd() * 900), q, v;
+    if (kind === 0) { q = a + " + " + b; v = a + b; }
+    else if (kind === 1) { q = a + " - " + b; v = a - b; }
+    else { a = 11 + Math.floor(rnd() * 89); b = 11 + Math.floor(rnd() * 89); q = a + " * " + b; v = a * b; }
+    items.push({ item_id: "h" + hour + "-" + i, prompt: "Compute " + q + ". Reply with only the integer, nothing else.", expected: String(v) });
+  }
+  return items;
+}
+// The last integer in the reply ("17 * 23 = 391" gives 391); thousands separators are dropped; null when there is none.
+function truthExtract(text) {
+  var m = String(text == null ? "" : text).replace(/(\d),(?=\d{3}(?!\d))/g, "$1").match(/-?\d+/g);
+  return m && m.length ? String(parseInt(m[m.length - 1], 10)) : null;
+}
+// rows: { item_id, model, correct }. Per pair of models on the items both answered: n11 both right, n10 only the first
+// right, n01 only the second right, n00 both wrong, and Cohen's kappa on correct/wrong (null when undefined).
+function truthPairs(rows) {
+  var by = {}, seen = {}, acc = {};
+  rows.forEach(function (r) {
+    (by[r.item_id] = by[r.item_id] || {})[r.model] = r.correct ? 1 : 0;
+    seen[r.model] = 1;
+    var a = acc[r.model] = acc[r.model] || { model: r.model, n: 0, correct: 0 };
+    a.n++; if (r.correct) a.correct++;
+  });
+  var ms = Object.keys(seen).sort(), pairs = [];
+  for (var i = 0; i < ms.length; i++) for (var j = i + 1; j < ms.length; j++) {
+    var n11 = 0, n10 = 0, n01 = 0, n00 = 0;
+    for (var it in by) {
+      var x = by[it][ms[i]], y = by[it][ms[j]];
+      if (x === undefined || y === undefined) continue;
+      if (x && y) n11++; else if (x) n10++; else if (y) n01++; else n00++;
+    }
+    var n = n11 + n10 + n01 + n00, kappa = null;
+    if (n > 0) {
+      var po = (n11 + n00) / n, pa = (n11 + n10) / n, pb = (n11 + n01) / n, pe = pa * pb + (1 - pa) * (1 - pb);
+      if (pe < 1) kappa = Math.round((po - pe) / (1 - pe) * 1e4) / 1e4;
+    }
+    pairs.push({ a: ms[i], b: ms[j], n: n, n11: n11, n10: n10, n01: n01, n00: n00, kappa: kappa });
+  }
+  return { models: ms.map(function (m) { return acc[m]; }), pairs: pairs };
+}
+async function truthEnsure(env) {
+  await env.QNFO_AUDIT.prepare("CREATE TABLE IF NOT EXISTS ai_calibration_truth (run_id TEXT, ts INTEGER, item_id TEXT, model TEXT, expected TEXT, got TEXT, correct INTEGER, served_by TEXT, latency_ms INTEGER, PRIMARY KEY (run_id, item_id, model))").run();
+  await env.QNFO_AUDIT.prepare("CREATE INDEX IF NOT EXISTS idx_ai_calibration_truth_ts ON ai_calibration_truth (ts)").run();
+}
+async function truthTick(env, nowMs) {
+  try {
+    var nItems = parseInt(await cfgGet(env, "truth_probe_items", "2"), 10);
+    if (isNaN(nItems) || nItems < 0 || nItems > 5) nItems = 2;
+    if (nItems === 0) return { ran: false, reason: "off" };
+    await truthEnsure(env);
+    var hour = truthHour(nowMs), runId = "truth-" + hour;
+    var have = await env.QNFO_AUDIT.prepare("SELECT 1 AS x FROM ai_calibration_truth WHERE run_id = ?1 LIMIT 1").bind(runId).first();
+    if (have) return { ran: false, reason: "done this hour", run_id: runId };
+    var jobs = [];
+    truthItems(hour, nItems).forEach(function (it) { ALL_MODELS.forEach(function (m) { jobs.push({ it: it, m: m }); }); });
+    var rows = [], errors = 0, unscorable = 0;
+    await runPool(jobs, 4, async function (j) {
+      var t0 = Date.now();
+      try {
+        var r = await jfetch(env, "https://qnfo-ai.internal/v1/chat/completions", { Authorization: "Bearer " + env.QNFO_ROUTER_KEY }, { model: j.m, messages: [{ role: "user", content: j.it.prompt }], max_tokens: 16, stream: false }, 30e3, "QNFO_AI");
+        var msg = r.data && r.data.choices && r.data.choices[0] && r.data.choices[0].message;
+        if (r.status !== 200 || !msg) { errors++; return; }
+        var content = msg.content == null ? "" : String(msg.content);
+        if (!content.trim()) { unscorable++; return; } // a reasoning model that spent max_tokens thinking: no answer, not a wrong one
+        var got = truthExtract(content);
+        var served = (r.data._router && r.data._router.served_by) || r.data.model || j.m;
+        rows.push({ run_id: runId, ts: nowMs, item_id: j.it.item_id, model: j.m, expected: j.it.expected, got: got == null ? "" : got, correct: got === j.it.expected ? 1 : 0, served_by: String(served).slice(0, 80), latency_ms: Date.now() - t0 });
+      } catch (e) { errors++; }
+    });
+    if (rows.length) {
+      var stmt = env.QNFO_AUDIT.prepare("INSERT OR IGNORE INTO ai_calibration_truth (run_id, ts, item_id, model, expected, got, correct, served_by, latency_ms) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)");
+      await env.QNFO_AUDIT.batch(rows.map(function (x) { return stmt.bind(x.run_id, x.ts, x.item_id, x.model, x.expected, x.got, x.correct, x.served_by, x.latency_ms); }));
+    }
+    await env.QNFO_AUDIT.prepare("DELETE FROM ai_calibration_truth WHERE ts < ?1").bind(nowMs - TRUTH_KEEP_MS).run();
+    return { ran: true, run_id: runId, items: nItems, rows: rows.length, errors: errors, unscorable: unscorable };
+  } catch (e) {
+    return { ran: false, error: String(e && e.message || e).slice(0, 120) };
+  }
+}
+// A reply served by another model than the one asked is the other model's answer; it stays in the table (served_by) and is
+// left out of the pair table, so a fallback never counts as the asked model's error.
+async function truthReport(env, nowMs) {
+  await truthEnsure(env);
+  var res = await env.QNFO_AUDIT.prepare("SELECT item_id, model, correct, served_by FROM ai_calibration_truth WHERE ts >= ?1").bind(nowMs - TRUTH_WINDOW_MS).all();
+  var all = res.results || [], kept = all.filter(function (r) { return r.served_by === r.model; });
+  var t = truthPairs(kept);
+  return { ok: true, window_days: 7, rows: all.length, excluded_served_by_other: all.length - kept.length, models: t.models, pairs: t.pairs };
+}
+// ---- CALIBRATION-TASK-TRUTH-1:END ----
 async function probeCompletion(env, model) {
   var t0 = Date.now();
   try {
@@ -1058,7 +1172,8 @@ var worker_default = {
       var health = await env.QNFO_AUDIT.prepare("SELECT * FROM ai_model_health ORDER BY model_id").all();
       return json({ ok: true, latest_runs: runs.results, health: health.results, results: res.results });
     }
-    if (path === "/") return json({ service: "qnfo-ai-calibration", version: VERSION, routes: ["/health", "/manifest", "/run", "/results"] });
+    if (path === "/truth" && request.method === "GET") return json(await truthReport(env, Date.now()));
+    if (path === "/") return json({ service: "qnfo-ai-calibration", version: VERSION, routes: ["/health", "/manifest", "/run", "/results", "/truth"] });
     return json({ error: "not found" }, 404);
   },
   async scheduled(controller, env, ctx) {
@@ -1072,7 +1187,7 @@ var worker_default = {
       await Promise.allSettled(pending);
     })();
     if (controller && controller.cron === PROBER_CRON) { await member; return; }
-    await Promise.allSettled([member, calibration(env, "cron")]);
+    await Promise.allSettled([member, calibration(env, "cron"), truthTick(env, Date.now())]);
   }
 };
 export {
