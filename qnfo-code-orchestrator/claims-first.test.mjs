@@ -96,7 +96,9 @@ ok(db.prepare("SELECT COUNT(*) AS n FROM cloud_ops_events WHERE kind = 'code-tas
 
 // 5. the file is free again: the task takes the claim and steps
 guard.held = null; guard.calls.length = 0;
-db.prepare("UPDATE code_tasks SET lease_until = NULL WHERE id = ?").run(a.id);
+// attempts reset: a third failed read would end the round, and since 0.14.2 a task in a SELF-REPAIR-1 backoff releases its
+// claim (CLAIM-HELD-IN-BACKOFF-1, claim-backoff.test.mjs); this test needs the task to keep its claim until it is merged.
+db.prepare("UPDATE code_tasks SET lease_until = NULL, attempts = 0 WHERE id = ?").run(a.id);
 t = await tick();
 ok(t.done.length === 1 && !t.done[0].deferred && ctxOf(a.id).claim && ctxOf(a.id).claim.token === "tok2", "once the file is free the task claims it and steps", { t, c: ctxOf(a.id).claim });
 
@@ -130,7 +132,8 @@ ok(releases().length === 1 && releases()[0].body.outcome === "abandoned" && rele
   const envNo = Object.assign({}, env, { DEPLOY_GUARD: undefined });
   let guardCalls = 0; const f0 = globalThis.fetch; globalThis.fetch = async (...a) => { if (/deploy-guard|work-lock/.test(String(a[0]))) guardCalls++; return f0(...a); };
   const c9 = await (await worker.fetch(new Request("https://x/v1/tasks", { method: "POST", headers: hdr, body: JSON.stringify({ repo: "qnfo-workers", path: "fx-worker/other.js", goal: "no binding" }) }), envNo)).json();
-  const t9 = await (await worker.fetch(new Request("https://x/v1/tick", { method: "POST", headers: hdr, body: JSON.stringify({ maxSteps: 0, plan: false, intake: false }) }), envNo)).json();
+  // maxSteps 1: 0 reads as the default 8, and three failed reads park the task in a backoff the sweep skips (CLAIM-HELD-IN-BACKOFF-1).
+  const t9 = await (await worker.fetch(new Request("https://x/v1/tick", { method: "POST", headers: hdr, body: JSON.stringify({ maxSteps: 1, plan: false, intake: false }) }), envNo)).json();
   ok(c9.ok && !ctxOf(c9.id).claim && t9.claims && t9.claims.errors >= 1 && t9.claims.taken === 0 && guardCalls === 0, "without the binding no claim is taken, the sweep counts it, and no guard call leaves the worker", { c9, claims: t9.claims, guardCalls });
   globalThis.fetch = f0;
 }
