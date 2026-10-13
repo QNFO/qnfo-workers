@@ -1,5 +1,5 @@
 {
-  "audited_at": "2026-10-13 10:04:58",
+  "audited_at": "2026-10-13 11:29:03",
   "d1_write_failures": [],
   "d1_writes_ok": 115,
   "guard": {
@@ -543,7 +543,7 @@
       },
       {
         "dir": "personal-companion",
-        "version": "1.19.4-prune-extend",
+        "version": "1.19.6-factcheck-first-two",
         "worker": "personal-companion"
       },
       {
@@ -900,9 +900,9 @@
       "worker": "personal-api"
     },
     "personal-companion": {
-      "before": "1.19.4-prune-extend",
+      "before": "1.19.6-factcheck-first-two",
       "http": 200,
-      "live": "1.19.4-prune-extend",
+      "live": "1.19.6-factcheck-first-two",
       "match": 1,
       "note": "SYNC",
       "worker": "personal-companion"
