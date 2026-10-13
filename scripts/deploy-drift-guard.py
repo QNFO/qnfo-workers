@@ -539,6 +539,13 @@ def main():
         _marker = next((m for m in ("FOLDED", "RETIRED") if os.path.isfile(os.path.join(ROOT, d, m))), None)
         if _marker and deployed is not None and worker in deployed:
             retired_present.append((d, worker, _marker))
+        # FOLDED-NO-PROBE-1 (2026-10-13): a FOLDED/RETIRED directory whose worker is absent from the account is the expected state,
+        # so its host is not probed. The probe of a host that no longer exists can time out instead of answering 404, which filed
+        # qnfo-twin-maintain (folded into personal-api 2026-10-01) as LIVE_ERR "The read operation timed out" and re-prompted every
+        # drain session for an item with nothing to do. It stays in not_deployed with its marker (AUTOAUDIT-ACTIONABLE-1).
+        if _marker and deployed is not None and worker not in deployed:
+            not_deployed.append((d, worker))
+            continue
         rv, rpath, rtext = repo_artifact(d)
         live, lv = live_result(worker)
         if not live and lv is None:
