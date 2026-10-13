@@ -294,5 +294,14 @@ globalThis.fetch = origFetch;
   const pr3 = V.pruneUnsupported(txt, ["unsupported claim: Nobody had asked for the third table -- not in source"]);
   check("an exact match still removes exactly that sentence", pr3.removed.length === 1 && /third table/.test(pr3.removed[0]), pr3);
 }
+// Q08-FLOOR-PARAS-1 (0.14.11, run 354)
+{
+  const para = "The operator watched the queue grow while the dashboard stayed green, because it measured the database and not the disk below it.";
+  const five = "# The queue nobody measured\n\n" + [1, 2, 3, 4].map(() => para + " " + para).join("\n\n") + "\n\nworth your time: yes - names the mechanism";
+  const g = V.prunedGateProblems(five, []);
+  check("a pruned draft with 4 substantial paragraphs passes the prose rule", !g.some((p) => /insufficient prose/.test(p)), g);
+  const three = "# The queue nobody measured\n\n" + [1, 2].map(() => para + " " + para).join("\n\n") + "\n\nworth your time: yes - names the mechanism";
+  check("2 substantial paragraphs are still refused", V.prunedGateProblems(three, []).some((p) => /insufficient prose/.test(p)));
+}
 console.log("verify.test.mjs: " + passes + " passed, " + fails + " failed");
 process.exit(fails ? 1 : 0);
