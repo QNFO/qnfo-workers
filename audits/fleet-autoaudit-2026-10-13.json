@@ -1,5 +1,5 @@
 {
-  "audited_at": "2026-10-13 16:09:23",
+  "audited_at": "2026-10-13 17:11:49",
   "d1_write_failures": [],
   "d1_writes_ok": 115,
   "guard": {
@@ -533,7 +533,7 @@
     "sync_workers": [
       {
         "dir": "idea-hub",
-        "version": "1.8.5-zaraz-load",
+        "version": "1.8.6-proposal-headroom",
         "worker": "idea-hub"
       },
       {
@@ -543,12 +543,12 @@
       },
       {
         "dir": "personal-companion",
-        "version": "1.21.5-context-links",
+        "version": "1.21.7-hourly-retry",
         "worker": "personal-companion"
       },
       {
         "dir": "q08-signal-engine",
-        "version": "0.20.0",
+        "version": "0.20.1",
         "worker": "q08-signal-engine"
       },
       {
@@ -598,7 +598,7 @@
       },
       {
         "dir": "qnfo-fleet-dashboard",
-        "version": "1.35.2-codeagent",
+        "version": "1.36.0-reply-instruction",
         "worker": "qnfo-fleet-dashboard"
       },
       {
@@ -779,9 +779,9 @@
       "worker": "funding"
     },
     "idea-hub": {
-      "before": "1.8.5-zaraz-load",
+      "before": "1.8.6-proposal-headroom",
       "http": 200,
-      "live": "1.8.5-zaraz-load",
+      "live": "1.8.6-proposal-headroom",
       "match": 1,
       "note": "SYNC",
       "worker": "idea-hub"
@@ -900,9 +900,9 @@
       "worker": "personal-api"
     },
     "personal-companion": {
-      "before": "1.21.5-context-links",
+      "before": "1.21.7-hourly-retry",
       "http": 200,
-      "live": "1.21.5-context-links",
+      "live": "1.21.7-hourly-retry",
       "match": 1,
       "note": "SYNC",
       "worker": "personal-companion"
@@ -944,9 +944,9 @@
       "worker": "personal-life-search"
     },
     "q08-signal-engine": {
-      "before": "0.20.0",
+      "before": "0.20.1",
       "http": 200,
-      "live": "0.20.0",
+      "live": "0.20.1",
       "match": 1,
       "note": "SYNC",
       "worker": "q08-signal-engine"
@@ -1276,9 +1276,9 @@
       "worker": "qnfo-fleet-control"
     },
     "qnfo-fleet-dashboard": {
-      "before": "1.35.2-codeagent",
+      "before": "1.36.0-reply-instruction",
       "http": 200,
-      "live": "1.35.2-codeagent",
+      "live": "1.36.0-reply-instruction",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-fleet-dashboard"
