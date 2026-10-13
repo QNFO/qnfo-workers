@@ -5,7 +5,7 @@ import { WorkflowEntrypoint } from "cloudflare:workers";
 // 1.1.3 (2026-10-02, pillar: reach): JOB-MARKET-INLINE-1 (the weekly job-market scan runs from the cron and records a
 // handoffs row with a claim_sheet), MENTION-RADAR-LEDGER-1 (one cloud_ops_events row per mention-radar run day),
 // EVENTS-RADAR-CF-DOW-1 (events cron moved from Sunday to Monday, the day its weekly sources are read).
-var VERSION = "1.3.5-crypto-id";
+var VERSION = "1.4.0-cron-heartbeat";
 function rhex(n) { var b = new Uint8Array(Math.ceil(n / 2)); crypto.getRandomValues(b); return Array.prototype.map.call(b, function (x) { return ("0" + x.toString(16)).slice(-2); }).join("").slice(0, n); } // 1.3.5 CRYPTO-IDS-1: outreach_queue ids draw from crypto.getRandomValues. // 1.3.4-doi-scrub NOZ-DOI-1 (2026-10-10): the weekly attribution-audit job and its cron branch are gone; the citation watch tracks no static DOIs; the mention radar tracks only non-retired DOIs. // // 1.3.3 NO-TOPIC-HARDCODE-1 (owner directive 2026-10-10): the arXiv radar builds its query, keyword list and classes from the owner's accepted ideas in idea_proposals instead of fixed tables; with none on file it skips. // 1.3.2 RADAR-VENUE-SILENT-1 (2026-10-06, pillar: personal): a per-venue consecutive-zero counter kept as one row in the existing personal_radar table; a normally productive venue (>= 2 productive days) with zero usable candidates for 3 consecutive days files ONE agent_issues row "RADAR-VENUE-SILENT-1: <venue>" (source radar-hub, personal, low, epoch-ms), a failed fetch is a gap not a zero, a same-day re-run does not double count, and the run report names silent venues. 1.3.1 (2026-10-06): the intake run result never echoes exception text (CodeQL js/stack-trace-exposure on PR 662); details go to the worker log. 1.3.0 SIGNAL-INTAKE-SOURCES-1 (2026-10-06, agent_issues 1947, pillar: research): a D1-driven interdisciplinary feed intake (radar_sources kind 'signal': arXiv beyond quant-ph, journals, science news, community feeds) scored by lexicon with no model call into idea_proposals (name intake:<family>), bounded per run and per family, deduped by URL in signal_intake_seen, in the 08:30Z slot (no new cron); metric signal_source_families_7d; GET /intake, POST /intake/run; the events radar skips kind 'signal' rows. 1.2.4 RADAR-TASTE-SHRINK-1 + RADAR-TITLE-NOISE-2 (pillar: personal): taste prior shrunk by n/(n+3) with a 0.6 floor under 5 feedback rows and a half-the-day safety valve; Stedelijk date-range, Iamsterdam navigation and Eventbrite chrome titles dropped or cleaned. 1.2.3 RADAR-TITLE-NOISE-1 (pillar: personal): clean readable calendar titles for personal radar rows, dedupe key unchanged. 1.2.2 RADAR-TASTE-LEARN-1 (pillar: personal): the personal radar learns per-venue and per-domain taste from calendar_feedback. 1.2.1 AWAY-GATE-1 (pillar: personal): the personal radar skips Amsterdam events while a lodging row places the owner elsewhere. 1.2.0 CRON-SINGLE-TRIGGER-1 (#1785): one hourly trigger, CRON_TABLE in code
 var eventsMod = (function(){
 var __defProp = Object.defineProperty;
@@ -2241,6 +2241,42 @@ async function cronTickDispatch(event, one) {
   if (TICK_PARALLEL) { await Promise.all(due.map(run)); return; }
   for (var i = 0; i < due.length; i++) await run(due[i]);
 }
+// CRON-ONLY-HEARTBEAT-1 (agent_issues 2397, charter pillar: autonomy): one fleet_heartbeat upsert when a scheduled run has finished,
+// so the fleet can tell when this worker's cron stops. ok is 1 when the run did not throw. A failed write is logged and never thrown.
+async function cronHeartbeat(env, ok) {
+  try {
+    await env.AUDIT.prepare("INSERT INTO fleet_heartbeat (worker, version, ts, ok) VALUES (?1, ?2, ?3, ?4) ON CONFLICT(worker) DO UPDATE SET version=excluded.version, ts=excluded.ts, ok=excluded.ok").bind("radar-hub", VERSION, new Date().toISOString(), ok).run();
+  } catch (e) { console.error("fleet_heartbeat radar-hub: " + String(e && e.message || e)); }
+}
+// The hub's cron router (the handler this worker always had). The exported scheduled() below runs it, then writes the heartbeat.
+// cronTickDispatch logs and swallows a table entry's error by design (one failing job does not stop the rest), so ok is 0 only when the handler
+// throws or a waitUntil promise rejects; the swallowed entries stay visible in the logs.
+var hubRun = {
+  async scheduled(event, env, ctx) {
+    return cronTickDispatch(event, async function (event) {
+    const c = event.cron;
+    // EVENTS-RADAR-CF-DOW-1 (1.1.3): the events radar scans its 34 weekly sources only when strftime('%w') is 1 (Monday),
+    // but "0 5 * * 1" is Sunday in Cloudflare's numbering (1=Sunday..7=Saturday): every run (events_radar 2026-09-06, 13,
+    // 20, all Sundays) skipped them. "0 5 * * 2" is Monday 05:00Z. The old spelling stays routed for a stale registration.
+    if (c === "0 5 * * 2" || c === "0 5 * * 1") return eventsMod.default.scheduled(event, env, ctx);
+    // MENTION-RADAR-1: the daily 08:30Z slot also runs the external-mention discovery; each job is isolated.
+    if (c === "30 8 * * *") {
+      // SIGNAL-INTAKE-SOURCES-1: the interdisciplinary feed intake shares this daily slot (no new cron); isolated like the others.
+      await Promise.allSettled([
+        arxivMod.scheduled(event, env, ctx),
+        mentionMod.run(env).then((o) => console.log("mention-radar", JSON.stringify(o)), (e) => console.error("mention-radar", String((e && e.message) || e))),
+        intakeMod.run(env).then((o) => console.log("signal-intake", JSON.stringify(o).slice(0, 1500)), (e) => console.error("signal-intake", String((e && e.message) || e)))
+      ]);
+      return;
+    }
+    if (c === "0 6 1 * *" || c === "0 9 * * 7") return researchMod.scheduled(event, env, ctx);
+    if (c === "0 11 1,15 * *") return citationMod.scheduled(event, env, ctx);
+    if (c === "0 7 * * 2") return jmwMod.default.scheduled(event, env, ctx);
+    if (c === "30 5 * * 2") return perMod.default.scheduled(event, env, ctx);
+    if (c === "0 6 * * *") return perMod.default.scheduled(event, env, ctx);
+    });
+  },
+};
 export default {
   async fetch(request, env, ctx) {
     const p = new URL(request.url).pathname;
@@ -2277,27 +2313,18 @@ export default {
     return new Response("radar-hub", { status: 200 });
   },
   async scheduled(event, env, ctx) {
-    return cronTickDispatch(event, async function (event) {
-    const c = event.cron;
-    // EVENTS-RADAR-CF-DOW-1 (1.1.3): the events radar scans its 34 weekly sources only when strftime('%w') is 1 (Monday),
-    // but "0 5 * * 1" is Sunday in Cloudflare's numbering (1=Sunday..7=Saturday): every run (events_radar 2026-09-06, 13,
-    // 20, all Sundays) skipped them. "0 5 * * 2" is Monday 05:00Z. The old spelling stays routed for a stale registration.
-    if (c === "0 5 * * 2" || c === "0 5 * * 1") return eventsMod.default.scheduled(event, env, ctx);
-    // MENTION-RADAR-1: the daily 08:30Z slot also runs the external-mention discovery; each job is isolated.
-    if (c === "30 8 * * *") {
-      // SIGNAL-INTAKE-SOURCES-1: the interdisciplinary feed intake shares this daily slot (no new cron); isolated like the others.
-      await Promise.allSettled([
-        arxivMod.scheduled(event, env, ctx),
-        mentionMod.run(env).then((o) => console.log("mention-radar", JSON.stringify(o)), (e) => console.error("mention-radar", String((e && e.message) || e))),
-        intakeMod.run(env).then((o) => console.log("signal-intake", JSON.stringify(o).slice(0, 1500)), (e) => console.error("signal-intake", String((e && e.message) || e)))
-      ]);
-      return;
+    const state = { ok: 1 }, pending = [];
+    // the events and personal radars hand their work to ctx.waitUntil: collect those promises (still passed on) so the heartbeat follows them
+    const hubCtx = { waitUntil(pr) { pending.push(Promise.resolve(pr)); if (ctx && ctx.waitUntil) ctx.waitUntil(pr); }, passThroughOnException() { if (ctx && ctx.passThroughOnException) ctx.passThroughOnException(); } };
+    try {
+      await hubRun.scheduled(event, env, hubCtx);
+      const settled = await Promise.allSettled(pending);
+      if (settled.some(function (r) { return r.status === "rejected"; })) state.ok = 0;
+    } catch (err) {
+      state.ok = 0;
+      throw err;
+    } finally {
+      await cronHeartbeat(env, state.ok);
     }
-    if (c === "0 6 1 * *" || c === "0 9 * * 7") return researchMod.scheduled(event, env, ctx);
-    if (c === "0 11 1,15 * *") return citationMod.scheduled(event, env, ctx);
-    if (c === "0 7 * * 2") return jmwMod.default.scheduled(event, env, ctx);
-    if (c === "30 5 * * 2") return perMod.default.scheduled(event, env, ctx);
-    if (c === "0 6 * * *") return perMod.default.scheduled(event, env, ctx);
-    });
   },
 };

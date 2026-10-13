@@ -5,7 +5,7 @@ var __name = (target, value) => __defProp(target, "name", { value, configurable:
 var __defProp2 = Object.defineProperty;
 var __name2 = /* @__PURE__ */ __name((target, value) => __defProp2(target, "name", { value, configurable: true }), "__name");
 var NL = String.fromCharCode(10);
-var VERSION = "1.4.1-activity-store"; /* 1.4.1 (2026-10-12): merged with main 1.3.11-codeagent. The activity is stored in this worker's own vector index (the result that decides done or failed); main's forward to personal-api /activity is kept as a second, best-effort copy whose failure is logged and never fails the intent (the route answered 404 on 2026-10-12). */ /* 1.4.0 AUTOAUDIT-DEAD-CALLERS-1 (2026-10-12, agent_issues 2302, pillar personal): an activity intent is stored in this worker's own vector index and ends done or failed with the error logged (it called a retired worker through a removed binding and the empty catch dropped it); GET /personal/search serves the personal index to qnfo-tools-mcp. */ /* 1.3.10 MODEL-ID-AUDIT-1 (2026-10-11): the classifier asked qnfo-ai for the bare id glm-5.2, which its MODELS table does not route (it fell back to deepseek-v4-flash while the stats recorded glm-5.2). It now asks glm-5.3-flash with deepseek-v4-flash as the second leg. */ /* 1.3.9 NO-TOPIC-HARDCODE-1 (owner directive 2026-10-10): the triage prompt names no program or field; cluster_key tags come from the tags already in research_candidates. */
+var VERSION = "1.5.0-cron-heartbeat"; /* 1.5.0 CRON-ONLY-HEARTBEAT-1 (2026-10-13, agent_issues 2397, pillar autonomy): scheduled() upserts fleet_heartbeat when the run ends (ok 0 when the work threw or the triage cron logged an error); the write is try/caught and never fails the cron. */ /* 1.4.1-activity-store: 1.4.1 (2026-10-12): merged with main 1.3.11-codeagent. The activity is stored in this worker's own vector index (the result that decides done or failed); main's forward to personal-api /activity is kept as a second, best-effort copy whose failure is logged and never fails the intent (the route answered 404 on 2026-10-12). */ /* 1.4.0 AUTOAUDIT-DEAD-CALLERS-1 (2026-10-12, agent_issues 2302, pillar personal): an activity intent is stored in this worker's own vector index and ends done or failed with the error logged (it called a retired worker through a removed binding and the empty catch dropped it); GET /personal/search serves the personal index to qnfo-tools-mcp. */ /* 1.3.10 MODEL-ID-AUDIT-1 (2026-10-11): the classifier asked qnfo-ai for the bare id glm-5.2, which its MODELS table does not route (it fell back to deepseek-v4-flash while the stats recorded glm-5.2). It now asks glm-5.3-flash with deepseek-v4-flash as the second leg. */ /* 1.3.9 NO-TOPIC-HARDCODE-1 (owner directive 2026-10-10): the triage prompt names no program or field; cluster_key tags come from the tags already in research_candidates. */
 var ROUTER = "https://qnfo-ai.q08.workers.dev";
 var AGENT_ORCH = "https://qnfo-agent-orchestrator.q08.workers.dev";
 var PROMOTE_THRESHOLD = 60;
@@ -587,6 +587,8 @@ __name(selfRegister, "selfRegister");
 __name2(selfRegister, "selfRegister");
 var worker_default = {
   async scheduled(event, env) {
+    let hbOk = 1;
+    try {
     if (event.cron === "0 6 * * *") {
       const day = (/* @__PURE__ */ new Date()).toISOString().slice(0, 10);
       const rows = await env.D1.prepare("SELECT * FROM intents WHERE substr(created_at,1,10) = ?1 AND status != 'done' AND status != 'rejected' AND status != 'deduped' AND status != 'triaged'").bind(day).all();
@@ -609,7 +611,19 @@ var worker_default = {
         const d = await autoDispatch(env);
         console.log("[triage-cron]", JSON.stringify({ counts: t.counts, sync: s.slice(0, 5), dispatch: d }).slice(0, 2500));
       } catch (e) {
+        hbOk = 0;
         console.log("[triage-cron] error:", e && e.message || e);
+      }
+    }
+    } catch (e) {
+      hbOk = 0;
+      throw e;
+    } finally {
+      // CRON-ONLY-HEARTBEAT-1 (agent_issues 2397): the row means the scheduled run finished; the write never throws or fails the cron.
+      try {
+        await env.D1.prepare("INSERT INTO fleet_heartbeat (worker, version, ts, ok) VALUES (?1, ?2, ?3, ?4) ON CONFLICT(worker) DO UPDATE SET version=excluded.version, ts=excluded.ts, ok=excluded.ok").bind("qnfo-intent-orchestrator", VERSION, (/* @__PURE__ */ new Date()).toISOString(), hbOk).run();
+      } catch (e) {
+        console.error("[cron-heartbeat] write failed:", e && e.message || e);
       }
     }
   },

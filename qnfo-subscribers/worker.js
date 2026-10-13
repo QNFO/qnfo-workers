@@ -2,7 +2,8 @@ var __defProp = Object.defineProperty;
 var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
 
 // worker.js
-var VERSION = "1.2.0-funnel"; // 1.2.0 (2026-10-12, pillar reach, issue 1753) SUBSCRIBE-FUNNEL-1: every step of the sign-up
+var VERSION = "1.3.0-cron-heartbeat"; // 1.3.0 (2026-10-13, pillar autonomy, issue 2397) CRON-ONLY-HEARTBEAT-1: the weekly cron upserts qnfo-audit.fleet_heartbeat after the digest run.
+// 1.2.0 (2026-10-12, pillar reach, issue 1753) SUBSCRIBE-FUNNEL-1: every step of the sign-up
 // funnel is counted in qnfo-audit.subscribe_funnel (day, stage, source, n; a counter, never an address): box and page views,
 // submits by outcome (accepted, honeypot, invalid, rate-limited, suppressed, repeat), confirmation mails sent or failed,
 // confirm-page views, confirmations and unsubscribes. GET /funnel returns the 30-day funnel and names its largest leak (open,
@@ -565,7 +566,22 @@ var worker_default = {
     return json({ error: "not found", path: p }, 404);
   },
   async scheduled(event, env, ctx) {
-    ctx.waitUntil(runDigest(env, {}));
+    // CRON-ONLY-HEARTBEAT-1 (agent_issues 2397): the heartbeat row is written after the digest run, so it means "the scheduled run finished".
+    ctx.waitUntil((async () => {
+      let ok = 1;
+      try {
+        const r = await runDigest(env, {});
+        if (r && r.ok === false) ok = 0;
+      } catch (e) {
+        ok = 0;
+        console.error(JSON.stringify({ event: "scheduled_digest_failed", error: String(e && e.message || e).slice(0, 200) }));
+      }
+      try {
+        await env.AUDIT.prepare("INSERT INTO fleet_heartbeat (worker, version, ts, ok) VALUES (?1, ?2, ?3, ?4) ON CONFLICT(worker) DO UPDATE SET version=excluded.version, ts=excluded.ts, ok=excluded.ok").bind("qnfo-subscribers", VERSION, (/* @__PURE__ */ new Date()).toISOString(), ok).run();
+      } catch (e) {
+        console.error(JSON.stringify({ event: "fleet_heartbeat_write_failed", error: String(e && e.message || e).slice(0, 200) }));
+      }
+    })());
   }
 };
 export {

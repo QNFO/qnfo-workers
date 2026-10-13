@@ -14982,7 +14982,7 @@ function renderFullHTML(md, opts) {
 __name(renderFullHTML, "renderFullHTML");
 
 // worker.js
-var VERSION = "1.3.1-backlog-relay"; /* 1.3.1 (1.3.0 plus a changelog wording fix; version-bump-guard counts every byte) PDF-BACKLOG-RELAY-1 (2026-10-12, #2410): POST /backlog/tick runs one SCHOLAR-PDF-ALL-1 batch for service-binding callers and the run event names its source (cron or relay); qnfo-fleet-control 0.19.1 relays the tick every 20 minutes while no pdf-backlog event has landed for 25 minutes, because the ten-minute cron written at 12:04Z never fired. 1.2.0 1.2.0 SCHOLAR-PDF-ALL-1 (2026-10-12, agent_issues 2410, pillar reach): a cron every 10 minutes renders the PDF of every published, distributed or external_preprint paper that has none (472 of 567 on 2026-10-12) and re-renders a paper whose body changed after its stored PDF, PDF_BACKLOG_BATCH (6) per tick, newest first; writes papers.pdf_path so papers.qnfo.org emits citation_pdf_url (Google Scholar indexes a PDF only through that tag); a paper whose render failed 3 times in 24 h is skipped for the day; metric scholar_pdf_backlog and cloud_ops_events job qnfo-pdf (AUDIT binding) record each run. */ // 1.1.0 MATH-BROWSER-1 (#1890, re-applied from closed PR #555): internal GET /math-check/<slug>. 1.0.2 UTF8-DEPLOY-1 (2026-10-02): redeployed so the live copy is UTF-8
+var VERSION = "1.4.0-cron-heartbeat"; /* 1.4.0 CRON-ONLY-HEARTBEAT-1 (agent_issues 2397, pillar autonomy): scheduled() upserts a qnfo-audit fleet_heartbeat row (worker qnfo-pdf) after the backlog run, ok 1 when it did not throw, so the fleet can tell when the cron stops. 1.3.1 (1.3.0 plus a changelog wording fix; version-bump-guard counts every byte) PDF-BACKLOG-RELAY-1 (2026-10-12, #2410): POST /backlog/tick runs one SCHOLAR-PDF-ALL-1 batch for service-binding callers and the run event names its source (cron or relay); qnfo-fleet-control 0.19.1 relays the tick every 20 minutes while no pdf-backlog event has landed for 25 minutes, because the ten-minute cron written at 12:04Z never fired. 1.2.0 1.2.0 SCHOLAR-PDF-ALL-1 (2026-10-12, agent_issues 2410, pillar reach): a cron every 10 minutes renders the PDF of every published, distributed or external_preprint paper that has none (472 of 567 on 2026-10-12) and re-renders a paper whose body changed after its stored PDF, PDF_BACKLOG_BATCH (6) per tick, newest first; writes papers.pdf_path so papers.qnfo.org emits citation_pdf_url (Google Scholar indexes a PDF only through that tag); a paper whose render failed 3 times in 24 h is skipped for the day; metric scholar_pdf_backlog and cloud_ops_events job qnfo-pdf (AUDIT binding) record each run. */ // 1.1.0 MATH-BROWSER-1 (#1890, re-applied from closed PR #555): internal GET /math-check/<slug>. 1.0.2 UTF8-DEPLOY-1 (2026-10-02): redeployed so the live copy is UTF-8
 function escHtml(s) {
   return String(s == null ? "" : s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 }
@@ -15163,11 +15163,25 @@ async function renderPdfBacklog(env, deps, opts) {
   return out;
 }
 // SCHOLAR-PDF-ALL-1 end
+// CRON-ONLY-HEARTBEAT-1 (1.4.0, agent_issues 2397): one fleet_heartbeat row says the scheduled run finished; a write failure is logged, never thrown.
+async function writeCronHeartbeat(env, ok) {
+  try {
+    await env.AUDIT.prepare("INSERT INTO fleet_heartbeat (worker, version, ts, ok) VALUES (?1, ?2, ?3, ?4) ON CONFLICT(worker) DO UPDATE SET version=excluded.version, ts=excluded.ts, ok=excluded.ok").bind("qnfo-pdf", VERSION, new Date().toISOString(), ok).run();
+  } catch (e) {
+    console.error(JSON.stringify({ evt: "cron-heartbeat-write-failed", worker: "qnfo-pdf", error: String(e && e.message || e).slice(0, 200) }));
+  }
+}
 var worker_default = {
   async scheduled(controller, env, ctx) {
     // SCHOLAR-PDF-ALL-1: one cron, one job; the batch size and the 10-minute cadence keep each tick well inside the cron CPU and wall limits.
-    var out = await renderPdfBacklog(env, { renderFullHTML, renderPdf, stash }, {});
-    console.log(JSON.stringify(Object.assign({ evt: "pdf-backlog", cron: controller && controller.cron, version: VERSION }, out)));
+    var hbOk = 0;
+    try {
+      var out = await renderPdfBacklog(env, { renderFullHTML, renderPdf, stash }, {});
+      console.log(JSON.stringify(Object.assign({ evt: "pdf-backlog", cron: controller && controller.cron, version: VERSION }, out)));
+      hbOk = 1;
+    } finally {
+      await writeCronHeartbeat(env, hbOk);
+    }
   },
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
