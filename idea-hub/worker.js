@@ -89,7 +89,7 @@
 // Carries forward v1.0.5-boundary-match-20260926 (fix #1168 FEED-GATE-SUBSTRING-COLLISION-1:
 //   single alphanumeric denylist tokens are matched with word boundaries
 //   (?<![a-z0-9])token(?![a-z0-9]); phrases keep substring matching).
-var VERSION = "1.8.6-proposal-headroom"; // 1.8.6 PROPOSAL-HEADROOM-1 (agent_issues 2489): the batch producers fill the triage queue only up to 25, so it stays under the chain limit of 30; nothing is dropped. 1.8.5 ZARAZ-MANUAL-LOAD-1 (#2345): pages load /cdn-cgi/zaraz/i.js themselves because Zaraz auto-inject does not touch Worker-served HTML. 1.8.4 ZARAZ-GA4-1: inline gtag.js removed (Zaraz serves GA4, one count per page view). 1.8.3 1.8.3 NOZ-DOI-1 (2026-10-11): the home page links no DOI of the dead registrar; re-entry keys a paper by its DOI when it has one and by its slug otherwise (papers written from now on carry no DOI), and REENTRY_OWNER_TYPES names the owner identifier types without the registrar. 1.8.2 // 1.8.2 NO-TOPIC-HARDCODE-1 (owner directive 2026-10-10): the think-loop fallback seed names no topic (it lists the loop's own recent questions from self_questions) and the scorecard prompt names no field. 1.8.1 OWNER-CORPUS-RATE-1 (#2185): a full research_queue slows the owner-corpus leg to 2 notes per cycle instead of pausing it. // 1.8.0 HOLD-RELEASE-REENTRY-1 (#2174): re-entry signals from non-owner papers are admitted at REENTRY_NONOWNER_PER_DAY (2) per UTC day instead of expired; the rest wait as new; owner-paper re-entries unlimited. // 1.7.6 CORPUS-REASONING-1 (#2185): owner-corpus extraction passes reasoning_effort low so dense notes no longer return an empty reply. // 1.7.3 OWNER-SIGNAL-INTAKE-2b: a pipeline paper whose research row came from an owner proposal counts as an owner paper for re-entry. // 1.7.2 REASONING-BUDGET-1 + OWNER-SIGNAL-INTAKE-2 + PROMPT-CACHE-COUNT-2 (2026-10-07, pillars research and cost): glm-5.3-flash is a reasoning model and spent all 700 scoring tokens thinking (finish length, empty content; measured 2026-10-07 11:40Z: 1,538 completion tokens needed), so triage scoring failed on rows 828/831 every hour; scoring and notebook extraction now get REASONING_MAX_TOKENS 2000. A failed notebook extraction is retried (3 tries, a day apart) instead of being lost; dated pre-fleet notes are read first; re-entry consumes only signals of the owner's own papers and drops sentences that merely mention an open question; aiRunAttr keeps ai_call_counters and adds ai_cache_counters plus the PROMPT-CACHE-1 session-affinity header (issue 2113, replacing code task ct_yghmskhqci2vv1, which dropped the call counters). // 1.7.0 OWNER-SIGNAL-INTAKE-1 (#1947 #2103 #2104, pillar research, owner directive 2026-10-07 "an integrated platform where all information is shared and leveraged across the fleet. No siloes!"): owner-authored proposals are ACCEPTed (scored for the record, never held by the model), ask-gap rows skip the chat-question filter, a new owner-corpus feeder distils research ideas from the owner's Obsidian notebook (notes_intake + R2 obsidian-vault) into the one intake, re-entry reads only the owner's own papers (slug/doi/internal types), and the think loop is seeded from the owner's accepted ideas instead of fixed quantum themes. Supersedes code task ct_hdaim0vx7h7vvl (1.6.2-codeagent). // 1.6.1 RULE-8-RETIRED-1 (2026-10-06, pillar cost): the /health limitation no longer says triage makes no model call while an ai_spend cap is breached; it scores on one cheap model since 1.6.0. // 1.6.0 BUDGET-SOFT-ROUTE-1 (2026-10-06, pillar cost, owner directive): an ai_spend cap no longer defers triage; proposals are scored by one cheap model while a cap is breached, deferred_budget rows are released every run, and diversity-held rows are released regardless of the caps. // 1.5.8 IDEA-DIVERSITY-CAP-1 (#1947, pillar research): triage holds a generated ACCEPT as deferred_diversity while its topic cluster would exceed half of the 30-day accepts (classifier identical to qnfo-cloud-ops IDEA_TOPIC_CLUSTERS), releases held rows best score first with no model call; 1.5.7 REACH-IDEA-1 (#2001, pillar reach): the home page carries a subscribe box (email input) posting to /api/subscribe, which forwards to the qnfo-subscribers double opt-in with source ideas.qnfo.org; 1.5.6 reentry-drain; 1.5.5 triage-budget; 1.5.4 (2026-10-05, #1919 #1920 + slow build): QNFO pages carry the 1200x630 share card and an iPatent link; ideasCached serves a stale copy at once and rebuilds in the background (an uncached build took ~12 s)
+var VERSION = "1.9.0-novelty-screen"; // 1.9.0 IDEA-NOVELTY-1 (agent_issues 2409): triage screens each generated ACCEPT against its nearest QNFO-corpus and arXiv neighbours (overlap labelled by a model of another family; duplicate, substantial overlap with no stated delta, or a low practical payoff outside the foundational quota hold it). HUB-CACHE-VERSION-2 (agent_issues 2484): the cached ideas.qnfo.org pages carry the VERSION that built them, and a copy from another version is rebuilt while the request waits up to 2.5 s. 1.8.6 PROPOSAL-HEADROOM-1 (agent_issues 2489): the batch producers fill the triage queue only up to 25, so it stays under the chain limit of 30; nothing is dropped. 1.8.5 ZARAZ-MANUAL-LOAD-1 (#2345): pages load /cdn-cgi/zaraz/i.js themselves because Zaraz auto-inject does not touch Worker-served HTML. 1.8.4 ZARAZ-GA4-1: inline gtag.js removed (Zaraz serves GA4, one count per page view). 1.8.3 1.8.3 NOZ-DOI-1 (2026-10-11): the home page links no DOI of the dead registrar; re-entry keys a paper by its DOI when it has one and by its slug otherwise (papers written from now on carry no DOI), and REENTRY_OWNER_TYPES names the owner identifier types without the registrar. 1.8.2 // 1.8.2 NO-TOPIC-HARDCODE-1 (owner directive 2026-10-10): the think-loop fallback seed names no topic (it lists the loop's own recent questions from self_questions) and the scorecard prompt names no field. 1.8.1 OWNER-CORPUS-RATE-1 (#2185): a full research_queue slows the owner-corpus leg to 2 notes per cycle instead of pausing it. // 1.8.0 HOLD-RELEASE-REENTRY-1 (#2174): re-entry signals from non-owner papers are admitted at REENTRY_NONOWNER_PER_DAY (2) per UTC day instead of expired; the rest wait as new; owner-paper re-entries unlimited. // 1.7.6 CORPUS-REASONING-1 (#2185): owner-corpus extraction passes reasoning_effort low so dense notes no longer return an empty reply. // 1.7.3 OWNER-SIGNAL-INTAKE-2b: a pipeline paper whose research row came from an owner proposal counts as an owner paper for re-entry. // 1.7.2 REASONING-BUDGET-1 + OWNER-SIGNAL-INTAKE-2 + PROMPT-CACHE-COUNT-2 (2026-10-07, pillars research and cost): glm-5.3-flash is a reasoning model and spent all 700 scoring tokens thinking (finish length, empty content; measured 2026-10-07 11:40Z: 1,538 completion tokens needed), so triage scoring failed on rows 828/831 every hour; scoring and notebook extraction now get REASONING_MAX_TOKENS 2000. A failed notebook extraction is retried (3 tries, a day apart) instead of being lost; dated pre-fleet notes are read first; re-entry consumes only signals of the owner's own papers and drops sentences that merely mention an open question; aiRunAttr keeps ai_call_counters and adds ai_cache_counters plus the PROMPT-CACHE-1 session-affinity header (issue 2113, replacing code task ct_yghmskhqci2vv1, which dropped the call counters). // 1.7.0 OWNER-SIGNAL-INTAKE-1 (#1947 #2103 #2104, pillar research, owner directive 2026-10-07 "an integrated platform where all information is shared and leveraged across the fleet. No siloes!"): owner-authored proposals are ACCEPTed (scored for the record, never held by the model), ask-gap rows skip the chat-question filter, a new owner-corpus feeder distils research ideas from the owner's Obsidian notebook (notes_intake + R2 obsidian-vault) into the one intake, re-entry reads only the owner's own papers (slug/doi/internal types), and the think loop is seeded from the owner's accepted ideas instead of fixed quantum themes. Supersedes code task ct_hdaim0vx7h7vvl (1.6.2-codeagent). // 1.6.1 RULE-8-RETIRED-1 (2026-10-06, pillar cost): the /health limitation no longer says triage makes no model call while an ai_spend cap is breached; it scores on one cheap model since 1.6.0. // 1.6.0 BUDGET-SOFT-ROUTE-1 (2026-10-06, pillar cost, owner directive): an ai_spend cap no longer defers triage; proposals are scored by one cheap model while a cap is breached, deferred_budget rows are released every run, and diversity-held rows are released regardless of the caps. // 1.5.8 IDEA-DIVERSITY-CAP-1 (#1947, pillar research): triage holds a generated ACCEPT as deferred_diversity while its topic cluster would exceed half of the 30-day accepts (classifier identical to qnfo-cloud-ops IDEA_TOPIC_CLUSTERS), releases held rows best score first with no model call; 1.5.7 REACH-IDEA-1 (#2001, pillar reach): the home page carries a subscribe box (email input) posting to /api/subscribe, which forwards to the qnfo-subscribers double opt-in with source ideas.qnfo.org; 1.5.6 reentry-drain; 1.5.5 triage-budget; 1.5.4 (2026-10-05, #1919 #1920 + slow build): QNFO pages carry the 1200x630 share card and an iPatent link; ideasCached serves a stale copy at once and rebuilds in the background (an uncached build took ~12 s)
 // ---- QDS-SHELL:BEGIN (generated from qnfo-gateway QDS-1; links https://qnfo.org/qds.css and qds.js) ----
 var QDS_OWNER_ORCID = "0009-0002-4317-5604";
 // The QNFO design system (QDS). Tokens, type and components live in ONE stylesheet served from here at
@@ -358,6 +358,132 @@ async function scoreIdea(env, desire, lean) {
   var decision = score >= ACCEPT_MIN && card.feasibility >= FEAS_MIN && card.risk <= RISK_MAX ? "ACCEPT" : "HOLD";
   return { score: Math.round(score * 1000) / 1000, decision: decision, rationale: card.rationale, model: models.join("+") };
 }
+// IDEA-NOVELTY-1 (1.9.0, agent_issues 2409, pillar research): a literature-grounded novelty and triviality screen. The
+// scorecard's novelty comes from the idea text alone, and model-intuition novelty is unreliable (Si et al.: LLM ideas rated
+// more novel than expert ideas scored worse after execution; an AI Scientist audit found its check marked all 12 ideas
+// novel). After the scorecard answers ACCEPT for a generated proposal, triage retrieves its nearest neighbours in the QNFO
+// corpus (PAPER_VZ, the Ask QNFO index, read back from living-paper papers) and on arXiv (export API, relevance order), and
+// NOVELTY_MODELS (llama, then gemma: no model of either family is in T_MODELS or T_CHAIN; lean order while an ai_spend
+// cap is breached, BUDGET-SOFT-ROUTE-1) labels each neighbour's overlap
+// none | partial | substantial | duplicate with the overlapping element, quotes the delta the idea itself states, and gives
+// an anchored practical payoff (5 = a named decision or design parameter changes if the result holds; 3 = a named open
+// question narrows; 1 = nothing named changes) and whether the idea is foundational theory.
+//   duplicate                          HOLD (the neighbour and the element are named in the rationale)
+//   substantial with no stated delta   HOLD
+//   payoff < NOVELTY_PAYOFF_MIN        HOLD, unless foundational and foundational-quota accepts are under
+//                                      NOVELTY_FOUNDATIONAL_QUOTA of the 30-day accepts (at least one; tag foundational-quota)
+// An accept keeps a short tag with labels and numbers only (no titles), so the topic classifier that reads the rationale
+// (IDEA-DIVERSITY-CAP-1 and the idea_topic_concentration_30d metric) sees no new words. When no neighbour can be read or no
+// labelling model answers, the proposal passes unscreened and the run counts it (novelty.unscreened in cloud_ops_events
+// idea-triage-budget), so an outage of the screen never stops triage. Owner and notebook rows are never screened.
+var NOVELTY_K = 4, NOVELTY_PAYOFF_MIN = 3, NOVELTY_FOUNDATIONAL_QUOTA = 0.3;
+var NOVELTY_MODELS = ["@cf/meta/llama-3.3-70b-instruct-fp8-fast", "@cf/google/gemma-4-26b-a4b-it"];
+var NOVELTY_EMBED = "@cf/baai/bge-base-en-v1.5";
+var NOVELTY_LABELS = ["none", "partial", "substantial", "duplicate"];
+var NOVELTY_STOP = /^(about|above|after|again|against|among|another|based|being|below|between|both|could|does|doing|during|each|either|every|from|further|have|having|here|into|itself|more|most|much|must|other|over|same|should|some|such|than|that|their|them|then|there|these|they|this|those|through|under|until|very|what|when|where|whether|which|while|whose|will|with|within|without|would|your|using|study|paper|approach|method|novel|propose|proposed|research|question|questions|result|results|show|shows|whether)$/i;
+function noveltyTerms(text) {
+  var seen = {}, out = [];
+  String(text || "").toLowerCase().replace(/[^a-z0-9\- ]+/g, " ").split(/\s+/).forEach(function (w) {
+    w = w.replace(/^-+|-+$/g, "");
+    if (w.length < 5 || NOVELTY_STOP.test(w) || seen[w]) return;
+    seen[w] = 1; out.push(w);
+  });
+  return out.sort(function (a, b) { return b.length - a.length; }).slice(0, 6);
+}
+function arxivEntries(xml) {
+  var out = [], re = /<entry>([\s\S]*?)<\/entry>/g, m;
+  var pick = function (s, tag) { var x = s.match(new RegExp("<" + tag + "[^>]*>([\\s\\S]*?)</" + tag + ">")); return x ? x[1].replace(/\s+/g, " ").trim() : ""; };
+  while ((m = re.exec(String(xml || ""))) && out.length < NOVELTY_K) {
+    var id = pick(m[1], "id").replace(/^https?:\/\/arxiv\.org\/abs\//, "");
+    var title = pick(m[1], "title"), summary = pick(m[1], "summary");
+    if (title) out.push({ ref: "arXiv " + id, title: title, text: summary.slice(0, 1200) });
+  }
+  return out;
+}
+async function arxivNeighbours(idea) {
+  var terms = noveltyTerms(idea);
+  if (terms.length < 2) return [];
+  var queries = [terms.slice(0, 3).map(function (t) { return "all:" + t; }).join(" AND "), terms.map(function (t) { return "all:" + t; }).join(" OR ")];
+  for (var i = 0; i < queries.length; i++) {
+    var init = typeof AbortSignal !== "undefined" && AbortSignal.timeout ? { signal: AbortSignal.timeout(8000) } : {};
+    var r = await fetch("https://export.arxiv.org/api/query?sortBy=relevance&max_results=" + NOVELTY_K + "&search_query=" + encodeURIComponent(queries[i]), init);
+    if (!r.ok) throw new Error("arXiv HTTP " + r.status);
+    var es = arxivEntries(await r.text());
+    if (es.length) return es;
+  }
+  return [];
+}
+async function corpusNeighbours(env, idea) {
+  if (!env.PAPER_VZ || !env.LIVING_PAPER) return [];
+  var emb = await aiRunAttr(env, "idea-hub", "novelty-embed", NOVELTY_EMBED, { text: [String(idea || "").slice(0, 1500)] });
+  var vec = emb && emb.data && emb.data[0];
+  if (!vec) throw new Error("no embedding");
+  var hits = await env.PAPER_VZ.query(vec, { topK: 12, returnValues: false, returnMetadata: "all" });
+  var slugs = [];
+  ((hits && hits.matches) || []).forEach(function (h) { var s = h && h.metadata && h.metadata.slug; if (s && slugs.indexOf(s) < 0 && slugs.length < NOVELTY_K) slugs.push(String(s)); });
+  var out = [];
+  for (var i = 0; i < slugs.length; i++) {
+    // papers.abstract may be NULL for a paper whose body holds it (fm-paper-abstract-empty): fall back to the body.
+    var p = await env.LIVING_PAPER.prepare("SELECT title, COALESCE(NULLIF(abstract, ''), substr(body_md, 1, 1500)) AS s FROM papers WHERE slug = ?1 LIMIT 1").bind(slugs[i]).first();
+    if (p && p.title) out.push({ ref: "QNFO " + slugs[i], title: String(p.title), text: String(p.s || "").slice(0, 1200) });
+  }
+  return out;
+}
+var NOVELTY_PROMPT = "You compare a proposed research idea with existing work. For each numbered neighbour, label its overlap with the IDEA: " +
+  "none | partial | substantial | duplicate (duplicate = the neighbour already asks or answers the same question), and name the overlapping element in at most 80 characters. " +
+  "delta = the difference from the closest neighbour that the IDEA text itself states, quoted or closely paraphrased from the IDEA; empty when the IDEA states none (do not invent one). " +
+  "payoff 1-5, anchored: 5 = a named decision or design parameter changes if the result holds; 4 = a named method or model choice changes; 3 = a named open question narrows; 2 = only general understanding improves; 1 = nothing named changes. " +
+  "foundational = true when the IDEA is foundational theory whose value is conceptual rather than a decision. " +
+  "Return JSON ONLY: {\"neighbours\":[{\"n\":1,\"overlap\":\"none\",\"element\":\"\"}],\"delta\":\"\",\"payoff\":3,\"foundational\":false}\n";
+function noveltyLabel(raw) {
+  var m = String(raw || "").match(/\{[\s\S]*\}/);
+  if (!m) return null;
+  var j = JSON.parse(m[0]);
+  if (!j || !Array.isArray(j.neighbours)) return null;
+  var p = Math.round(Number(j.payoff));
+  return {
+    neighbours: j.neighbours.map(function (x) { return { n: Number(x && x.n), overlap: NOVELTY_LABELS.indexOf(String(x && x.overlap || "").toLowerCase()) >= 0 ? String(x.overlap).toLowerCase() : "none", element: String(x && x.element || "").slice(0, 80) }; }),
+    delta: String(j.delta || "").trim().slice(0, 200),
+    payoff: isFinite(p) ? Math.max(1, Math.min(5, p)) : null,
+    foundational: j.foundational === true || String(j.foundational).toLowerCase() === "true"
+  };
+}
+// Pure verdict over the labelled neighbours: { hold, foundational_quota, tag }. mix: the 30-day accepted mix (n,
+// foundational) or null (unreadable: the quota then allows).
+function noveltyVerdict(lab, nbrs, mix) {
+  var worst = -1, at = null;
+  lab.neighbours.forEach(function (x) { var k = NOVELTY_LABELS.indexOf(x.overlap); if (k > worst && nbrs[x.n - 1]) { worst = k; at = x; } });
+  var label = worst >= 0 ? NOVELTY_LABELS[worst] : "none", nb = at ? nbrs[at.n - 1] : null;
+  var counts = NOVELTY_LABELS.map(function (l) { return lab.neighbours.filter(function (x) { return x.overlap === l; }).length; }).join("/");
+  var base = "[novelty " + nbrs.length + " neighbours none/partial/substantial/duplicate " + counts + "; payoff " + (lab.payoff === null ? "?" : lab.payoff);
+  if (label === "duplicate") return { hold: true, tag: base + "; HOLD duplicate of " + nb.ref + " (" + at.element + ")]" };
+  if (label === "substantial" && !lab.delta) return { hold: true, tag: base + "; HOLD substantial overlap with " + nb.ref + " (" + at.element + ") and no stated delta]" };
+  if (lab.payoff !== null && lab.payoff < NOVELTY_PAYOFF_MIN) {
+    var room = !mix || (mix.foundational || 0) < Math.max(1, Math.ceil(NOVELTY_FOUNDATIONAL_QUOTA * (mix.n + 1)));
+    if (lab.foundational && room) return { hold: false, foundational_quota: true, tag: base + "; foundational-quota]" };
+    return { hold: true, tag: base + "; HOLD practical payoff below " + NOVELTY_PAYOFF_MIN + (lab.foundational ? ", foundational quota full" : "") + "]" };
+  }
+  return { hold: false, tag: base + (label === "substantial" ? "; delta stated" : "") + "]" };
+}
+async function noveltyScreen(env, idea, mix, lean) {
+  var nbrs = [], errs = [];
+  try { nbrs = nbrs.concat(await corpusNeighbours(env, idea)); } catch (e) { errs.push("corpus: " + String(e && e.message || e).slice(0, 80)); }
+  try { nbrs = nbrs.concat(await arxivNeighbours(idea)); } catch (e) { errs.push("arxiv: " + String(e && e.message || e).slice(0, 80)); }
+  if (!nbrs.length) return { screened: false, error: errs.join("; ") || "no neighbours" };
+  var prompt = NOVELTY_PROMPT + "IDEA: " + String(idea || "").slice(0, 2000) + "\n" + nbrs.map(function (n, i) { return "NEIGHBOUR " + (i + 1) + " (" + n.ref + "): " + n.title + ". " + n.text; }).join("\n");
+  var models = lean ? NOVELTY_MODELS.slice().reverse() : NOVELTY_MODELS;
+  for (var i = 0; i < models.length; i++) {
+    try {
+      var r = await aiRunAttr(env, "idea-hub", "novelty", models[i], { messages: [{ role: "user", content: prompt }], max_tokens: REASONING_MAX_TOKENS, temperature: 0.1 });
+      var lab = noveltyLabel(tExtract(r));
+      if (!lab) { errs.push(models[i] + ": no labels"); continue; }
+      var v = noveltyVerdict(lab, nbrs, mix);
+      v.screened = true; v.model = models[i]; v.errors = errs;
+      return v;
+    } catch (e) { errs.push(models[i] + ": " + String(e && e.message || e).slice(0, 80)); }
+  }
+  return { screened: false, error: errs.join("; ") };
+}
 var NOISE_RE = [/^call (the )?[a-z_]+( tool)?(\s|$)/i, /(email_check|express_intent|intents_list|social_compose|search_research|search_papers tool)/i, /output the (complete )?raw json/i, /^reply with the single word/i, /^give this conversation a name/i, /^max \d+ chars/i, /based on the chat history/i, /rotation verification/i, /redirect probe/i, /auto-express block/i, /wrapped in/i, /^ok$/i];
 function isNoise(t) { t = String(t || ""); return NOISE_RE.some(function (re) { return re.test(t); }); }
 function isQuestion(t) { t = String(t || "").trim(); return t.length < 160 && /\?\s*$/.test(t) && /^(what|who|where|when|why|how|is|are|do|does|did|can|could|should|would|will|has|have|quick|one line|one sentence|in one sentence|probe)/i.test(t); }
@@ -415,8 +541,8 @@ function ownerDecision(kind, s) {
 }
 async function acceptedMix(env) {
   var rs = (await env.QNFO_AUDIT.prepare("SELECT name, idea, rationale FROM idea_proposals WHERE decision = 'ACCEPT' AND " + DIVERSITY_WINDOW_SQL).all()).results || [];
-  var mix = { n: rs.length, by: {} };
-  rs.forEach(function (r) { var k = proposalCluster(r.name, r.idea, r.rationale); mix.by[k] = (mix.by[k] || 0) + 1; });
+  var mix = { n: rs.length, by: {}, foundational: 0 };
+  rs.forEach(function (r) { var k = proposalCluster(r.name, r.idea, r.rationale); mix.by[k] = (mix.by[k] || 0) + 1; if (/foundational-quota/.test(String(r.rationale || ""))) mix.foundational++; });
   return mix;
 }
 // True when one more accept in `cluster` would put that cluster above the cap (only once DIVERSITY_MIN_N accepts exist).
@@ -460,7 +586,7 @@ async function diversityRelease(env, mix, breached, out) {
 // the breached caps to cloud_ops_events id 'idea-triage-budget'; /health reports the count. Producers count deferred
 // rows in their backpressure, so the backlog cannot grow without bound during a breach.
 async function triageProposals(env) {
-  var out = { triaged: 0, accepted: 0, errors: 0, deferred: 0, released: 0, diversity_held: 0, diversity_released: 0, diversity_expired: 0 };
+  var out = { triaged: 0, accepted: 0, errors: 0, deferred: 0, released: 0, diversity_held: 0, diversity_released: 0, diversity_expired: 0, novelty: { screened: 0, held: 0, foundational_quota: 0, unscreened: 0, last_error: null } };
   var budget = await aiBudgetBreach(env);
   out.budget_breached = budget.breached;
   out.lean = budget.breached;
@@ -494,6 +620,19 @@ async function triageProposals(env) {
       if (s.error) s = { score: null, decision: "HOLD", rationale: "scoring unavailable: " + String(s.error).slice(0, 80) };
       s = ownerDecision(kind, s);
       if (kind !== "generated") out.owner_accepted = (out.owner_accepted || 0) + (s.decision === "ACCEPT" ? 1 : 0);
+      // IDEA-NOVELTY-1: a generated ACCEPT is screened against the literature before the diversity cap sees it.
+      var fq = false;
+      if (s.decision === "ACCEPT" && kind === "generated") {
+        var nv = await noveltyScreen(env, row.idea, mix, budget.breached);
+        if (!nv.screened) { out.novelty.unscreened++; out.novelty.last_error = String(nv.error || "").slice(0, 300); }
+        else {
+          out.novelty.screened++;
+          if (nv.errors && nv.errors.length) out.novelty.last_error = nv.errors.join("; ").slice(0, 300);
+          s.rationale = nv.tag + " " + (s.rationale || "");
+          if (nv.hold) { s.decision = "HOLD"; out.novelty.held++; }
+          else if (nv.foundational_quota) { fq = true; out.novelty.foundational_quota++; }
+        }
+      }
       var cluster = s.decision === "ACCEPT" ? proposalCluster(row.name, row.idea, s.rationale) : null;
       if (cluster && mix && !diversityExempt(row) && diversityBlocks(mix, cluster)) {
         var pct = Math.round(100 * ((mix.by[cluster] || 0) + 1) / (mix.n + 1));
@@ -505,7 +644,7 @@ async function triageProposals(env) {
       if (s.decision === "ACCEPT") {
         await enqueueAccepted(env, row.id, row.idea, s.score, now);
         out.accepted++;
-        if (mix) { mix.n++; mix.by[cluster] = (mix.by[cluster] || 0) + 1; }
+        if (mix) { mix.n++; mix.by[cluster] = (mix.by[cluster] || 0) + 1; if (fq) mix.foundational++; }
       }
     } catch (e) { out.errors++; }
   }
@@ -520,7 +659,7 @@ async function triageProposals(env) {
     out.diversity_held_total = Number(dd && dd.n) || 0;
     var at = new Date().toISOString();
     await env.QNFO_AUDIT.prepare("INSERT OR REPLACE INTO cloud_ops_events (id, ts, kind, text, meta, job, status) VALUES ('idea-triage-budget', ?1, 'idea-triage-budget', ?2, ?3, 'idea-hub', ?4)")
-      .bind(at, "idea triage: " + (budget.breached ? "AI budget caps breached, scored lean on one cheap model; " : "caps clear; ") + out.released + " released, " + out.triaged + " triaged, " + out.deferred_total + " waiting as deferred_budget, " + out.diversity_held_total + " as deferred_diversity", JSON.stringify({ version: VERSION, breached: budget.breached, caps: budget.caps, deferred_run: out.deferred, released_run: out.released, deferred_total: out.deferred_total, triaged_run: out.triaged, diversity_held_run: out.diversity_held, diversity_released_run: out.diversity_released, diversity_expired_run: out.diversity_expired, diversity_held_total: out.diversity_held_total, diversity: out.diversity || null }), budget.breached ? "lean" : "ok").run();
+      .bind(at, "idea triage: " + (budget.breached ? "AI budget caps breached, scored lean on one cheap model; " : "caps clear; ") + out.released + " released, " + out.triaged + " triaged, " + out.deferred_total + " waiting as deferred_budget, " + out.diversity_held_total + " as deferred_diversity", JSON.stringify({ version: VERSION, breached: budget.breached, caps: budget.caps, deferred_run: out.deferred, released_run: out.released, deferred_total: out.deferred_total, triaged_run: out.triaged, diversity_held_run: out.diversity_held, diversity_released_run: out.diversity_released, diversity_expired_run: out.diversity_expired, diversity_held_total: out.diversity_held_total, diversity: out.diversity || null, novelty: out.novelty }), budget.breached ? "lean" : "ok").run();
   } catch (e) {}
   // OWNER-SIGNAL-INTAKE-1: metric owner_signal_share_30d (registered with its trigger in
   // migrations/2026-10-07-owner-signal-intake.sql) is the share of research_queue rows created in the last 30 days that
@@ -1073,6 +1212,11 @@ async function ideasThread(env, rawId) {
 async function ideasCached(req, ctx, make) {
   // IDEAS-SWR-1 (1.5.4): a cached copy is served at once; older than IDEAS_FRESH_MS it is rebuilt in the background, so a
   // visitor never waits on the ~12 s uncached build. The internal build stamp is not sent to visitors.
+  // HUB-CACHE-VERSION-2 (1.9.0, agent_issues 2484, failure mode edge-copy-version-skew; qnfo-gateway HUB-CACHE-VERSION-1 is
+  // the same fix for qnfo.org): the stored copy carries X-Ideas-Version = VERSION. A copy built by another version (or
+  // stored before this stamp) is rebuilt while the request waits up to IDEAS_VERSION_WAIT_MS; a 200 build in time is served,
+  // otherwise the old copy is served marked X-Ideas-Cache: stale-version and the build finishes through ctx.waitUntil. So no
+  // colo serves a previous version's render past one slow build after a deploy. Neither stamp is sent to visitors.
   const cache = typeof caches !== "undefined" ? caches.default : null;
   const key = new Request(new URL(req.url).origin + new URL(req.url).pathname + "?__swr=1", { method: "GET" });
   const store = async function() {
@@ -1081,20 +1225,38 @@ async function ideasCached(req, ctx, make) {
     const body = await res.text();
     const hd = new Headers(res.headers);
     hd.set("X-Ideas-Built", String(Date.now()));
+    hd.set("X-Ideas-Version", VERSION);
     hd.set("Cache-Control", "public, max-age=604800");
-    try { await cache.put(key, new Response(body, { status: 200, headers: hd })); } catch (e) {}
+    try { await cache.put(key, new Response(body, { status: 200, headers: hd })); } catch (e) { console.log("ideasCached: cache.put failed: " + (e && e.message || e)); }
     return new Response(body, { status: 200, headers: res.headers });
   };
+  const logFail = function(e) { console.log("ideasCached: rebuild failed: " + (e && e.message || e)); return null; };
+  const served = function(r, mark) {
+    const hd = new Headers(r.headers);
+    hd.delete("X-Ideas-Built");
+    hd.delete("X-Ideas-Version");
+    hd.set("Cache-Control", "public, max-age=14400");
+    if (mark) hd.set("X-Ideas-Cache", mark);
+    return new Response(r.body, { status: 200, headers: hd });
+  };
   let hit = null;
-  if (cache) { try { hit = await cache.match(key); } catch (e) { hit = null; } }
+  if (cache) { try { hit = await cache.match(key); } catch (e) { console.log("ideasCached: cache.match failed: " + (e && e.message || e)); hit = null; } }
   if (!hit) return store();
+  if (hit.headers.get("X-Ideas-Version") !== VERSION) {
+    const build = store().catch(logFail);
+    let timer = null;
+    const timeout = new Promise(function(resolve) { timer = setTimeout(function() { resolve(null); }, IDEAS_VERSION_WAIT_MS); });
+    const fresh = await Promise.race([build, timeout]);
+    if (timer !== null) clearTimeout(timer);
+    if (fresh && fresh.status === 200) return fresh;
+    if (!fresh && ctx && ctx.waitUntil) ctx.waitUntil(build);
+    return served(hit, "stale-version");
+  }
   const age = Date.now() - Number(hit.headers.get("X-Ideas-Built") || 0);
-  if (age > IDEAS_FRESH_MS && ctx && ctx.waitUntil) ctx.waitUntil(store().catch(function() {}));
-  const hd = new Headers(hit.headers);
-  hd.delete("X-Ideas-Built");
-  hd.set("Cache-Control", "public, max-age=14400");
-  return new Response(hit.body, { status: 200, headers: hd });
+  if (age > IDEAS_FRESH_MS && ctx && ctx.waitUntil) ctx.waitUntil(store().catch(logFail));
+  return served(hit, null);
 }
+var IDEAS_VERSION_WAIT_MS = 2500;
 var IDEAS_FRESH_MS = 15 * 60 * 1000;
 // ---- IDEAS-QDS-1:END ----
 
@@ -1158,4 +1320,4 @@ async function subscribeProxy(req) {
     return json({ ok: false, error: "Sign-up is unavailable right now. Please try again shortly." }, 502);
   } finally { clearTimeout(timer); }
 }
-export default{async scheduled(event,env,ctx){ctx.waitUntil(ideationCycle(env))},async fetch(req,env,ctx){const u=new URL(req.url);if(u.pathname==='/robots.txt')return new Response('User-agent: *\nAllow: /\nSitemap: https://ideas.qnfo.org/sitemap.xml\n',{headers:{'Content-Type':'text/plain; charset=utf-8','Cache-Control':'public, max-age=86400'}});if(u.pathname==='/sitemap.xml')return new Response('<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"><url><loc>https://ideas.qnfo.org/</loc><changefreq>daily</changefreq></url></urlset>',{headers:{'Content-Type':'application/xml; charset=utf-8','Cache-Control':'public, max-age=3600'}});/* SEO-HYGIENE-1: robots + sitemap (home only: the idea pages are machine-generated questions, not invited into the index) */if(req.method==='OPTIONS')return new Response(null,{status:204,headers:cors()});try{if(u.pathname==='/api/subscribe'&&req.method==='POST')return await subscribeProxy(req);if(u.pathname==='/health'){let qt=-1;try{qt=(await quarantined(env)).size}catch(e){}let td=-1,tdd=-1;try{const r=await env.QNFO_AUDIT.prepare("SELECT COUNT(*) AS n FROM idea_proposals WHERE status='deferred_budget'").first();td=Number(r&&r.n)||0;const r2=await env.QNFO_AUDIT.prepare("SELECT COUNT(*) AS n FROM idea_proposals WHERE status='deferred_diversity'").first();tdd=Number(r2&&r2.n)||0}catch(e){}let oc=null;try{oc={};((await env.QNFO_AUDIT.prepare("SELECT outcome, COUNT(*) AS n FROM owner_corpus_seen GROUP BY outcome").all()).results||[]).forEach(function(x){oc[x.outcome]=x.n})}catch(e){oc=null}return json({ok:true,worker:'idea-hub',version:VERSION,private:false,owner_signal_intake:{vault_bound:!!env.VAULT,corpus_seen:oc,reentry_owner_types:REENTRY_OWNER_TYPES,corpus_score_min:OWNER_CORPUS_SCORE_MIN},triage_deferred_budget:td,triage_deferred_diversity:tdd,diversity_cap:{max_share:DIVERSITY_MAX_SHARE,min_n:DIVERSITY_MIN_N},public_filter:true,thread_filter:true,strict_filter:true,match_mode:'boundary',quarantine_wired:true,errata_wired:true,quarantine_threads:qt,mutation_routes:false,capabilities:["public-ideas-feed", "questions-feed", "rss", "session-pages", "ideation", "qds-pages", "owner-intake"],limitations:["read-only public surface: /, /s/*, /rss.xml, /api/sessions, /api/session/* load with no credential", "chat threads: only a first research-domain question passes the public filter; personal, ops and quarantined threads are never shown", "the feed also carries the pipeline's own open questions and triaged proposals (kind q-N / p-N, source ideation)", "/api/ask, /api/proposals and /run answer 503; POST /api/intake is owner-authenticated; POST /api/subscribe forwards an address to the qnfo-subscribers double opt-in (source ideas.qnfo.org; nobody is subscribed without clicking the confirmation link)", "ideation runs on the hourly :23 cron", "while a fleet_budget ai_spend cap is breached, triage still runs and scores on one cheap model (BUDGET-SOFT-ROUTE-1); rows left as status deferred_budget by older versions are released every run (count in triage_deferred_budget)", "a generated proposal scored ACCEPT waits as deferred_diversity (count in triage_deferred_diversity) while its topic cluster would exceed half of the 30-day accepts; owner and intake:* rows are never held"],bindings:{audit:!!env.QNFO_AUDIT}})}if(u.pathname==='/api/gate'){const q=u.searchParams.get('q')||'';return json({q,public:publicTitle(q),internal:has(q,INTERNAL),ops:has(q,OPS),junk:has(q,JUNK),research:has(q,RESEARCH),match_mode:'boundary'})}if(u.pathname==='/rss.xml')return rss(env);if(u.pathname==='/api/sessions'||u.pathname==='/api/feed')return sessions(u,env);if(u.pathname.startsWith('/api/session/'))return session(u.pathname,env);if(u.pathname==='/api/suggest')return json({policy:'research-domain only; personal/ops/actions/runtime metadata are never suggested',groups:[]});if(u.pathname==='/api/ask'||u.pathname==='/api/proposals'||u.pathname==='/run')return json({error:'mutation or ask route disabled on public ideas surface'},503);if(u.pathname==='/'||u.pathname==='/index.html')return ideasCached(req,ctx,function(){return ideasHome(env)});if(u.pathname.startsWith('/s/')&&u.pathname.length>3)return ideasCached(req,ctx,function(){return ideasThread(env,u.pathname.slice(3))});if(u.pathname==='/api/intake'){if(!ownerOk(req,env))return json({error:'Authentication required'},401);if(req.method!=='POST')return json({error:'POST required'},405);return await intake(req,env)}return json({error:'Not found'},404)}catch(e){return json({error:'Server error: '+(e&&e.message||String(e))},500)}}};
+export default{async scheduled(event,env,ctx){ctx.waitUntil(ideationCycle(env))},async fetch(req,env,ctx){const u=new URL(req.url);if(u.pathname==='/robots.txt')return new Response('User-agent: *\nAllow: /\nSitemap: https://ideas.qnfo.org/sitemap.xml\n',{headers:{'Content-Type':'text/plain; charset=utf-8','Cache-Control':'public, max-age=86400'}});if(u.pathname==='/sitemap.xml')return new Response('<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"><url><loc>https://ideas.qnfo.org/</loc><changefreq>daily</changefreq></url></urlset>',{headers:{'Content-Type':'application/xml; charset=utf-8','Cache-Control':'public, max-age=3600'}});/* SEO-HYGIENE-1: robots + sitemap (home only: the idea pages are machine-generated questions, not invited into the index) */if(req.method==='OPTIONS')return new Response(null,{status:204,headers:cors()});try{if(u.pathname==='/api/subscribe'&&req.method==='POST')return await subscribeProxy(req);if(u.pathname==='/health'){let qt=-1;try{qt=(await quarantined(env)).size}catch(e){console.error(JSON.stringify({worker:"idea-hub",route:"/health",read:"quarantine",error:String(e&&e.message||e)}))}let td=-1,tdd=-1;try{const r=await env.QNFO_AUDIT.prepare("SELECT COUNT(*) AS n FROM idea_proposals WHERE status='deferred_budget'").first();td=Number(r&&r.n)||0;const r2=await env.QNFO_AUDIT.prepare("SELECT COUNT(*) AS n FROM idea_proposals WHERE status='deferred_diversity'").first();tdd=Number(r2&&r2.n)||0}catch(e){console.error(JSON.stringify({worker:"idea-hub",route:"/health",read:"deferred",error:String(e&&e.message||e)}))}let oc=null;try{oc={};((await env.QNFO_AUDIT.prepare("SELECT outcome, COUNT(*) AS n FROM owner_corpus_seen GROUP BY outcome").all()).results||[]).forEach(function(x){oc[x.outcome]=x.n})}catch(e){oc=null;console.error(JSON.stringify({worker:"idea-hub",route:"/health",read:"owner_corpus_seen",error:String(e&&e.message||e)}))}return json({ok:true,worker:'idea-hub',version:VERSION,private:false,owner_signal_intake:{vault_bound:!!env.VAULT,corpus_seen:oc,reentry_owner_types:REENTRY_OWNER_TYPES,corpus_score_min:OWNER_CORPUS_SCORE_MIN},triage_deferred_budget:td,triage_deferred_diversity:tdd,diversity_cap:{max_share:DIVERSITY_MAX_SHARE,min_n:DIVERSITY_MIN_N},novelty_screen:{models:NOVELTY_MODELS,neighbours_per_source:NOVELTY_K,sources:["qnfo-corpus","arxiv"],payoff_min:NOVELTY_PAYOFF_MIN,foundational_quota:NOVELTY_FOUNDATIONAL_QUOTA,corpus_bound:!!(env.PAPER_VZ&&env.LIVING_PAPER)},public_filter:true,thread_filter:true,strict_filter:true,match_mode:'boundary',quarantine_wired:true,errata_wired:true,quarantine_threads:qt,mutation_routes:false,capabilities:["public-ideas-feed", "questions-feed", "rss", "session-pages", "ideation", "qds-pages", "owner-intake", "novelty-screen"],limitations:["read-only public surface: /, /s/*, /rss.xml, /api/sessions, /api/session/* load with no credential", "chat threads: only a first research-domain question passes the public filter; personal, ops and quarantined threads are never shown", "the feed also carries the pipeline's own open questions and triaged proposals (kind q-N / p-N, source ideation)", "/api/ask, /api/proposals and /run answer 503; POST /api/intake is owner-authenticated; POST /api/subscribe forwards an address to the qnfo-subscribers double opt-in (source ideas.qnfo.org; nobody is subscribed without clicking the confirmation link)", "ideation runs on the hourly :23 cron", "while a fleet_budget ai_spend cap is breached, triage still runs and scores on one cheap model (BUDGET-SOFT-ROUTE-1); rows left as status deferred_budget by older versions are released every run (count in triage_deferred_budget)", "a generated proposal scored ACCEPT waits as deferred_diversity (count in triage_deferred_diversity) while its topic cluster would exceed half of the 30-day accepts; owner and intake:* rows are never held"],bindings:{audit:!!env.QNFO_AUDIT}})}if(u.pathname==='/api/gate'){const q=u.searchParams.get('q')||'';return json({q,public:publicTitle(q),internal:has(q,INTERNAL),ops:has(q,OPS),junk:has(q,JUNK),research:has(q,RESEARCH),match_mode:'boundary'})}if(u.pathname==='/rss.xml')return rss(env);if(u.pathname==='/api/sessions'||u.pathname==='/api/feed')return sessions(u,env);if(u.pathname.startsWith('/api/session/'))return session(u.pathname,env);if(u.pathname==='/api/suggest')return json({policy:'research-domain only; personal/ops/actions/runtime metadata are never suggested',groups:[]});if(u.pathname==='/api/ask'||u.pathname==='/api/proposals'||u.pathname==='/run')return json({error:'mutation or ask route disabled on public ideas surface'},503);if(u.pathname==='/'||u.pathname==='/index.html')return ideasCached(req,ctx,function(){return ideasHome(env)});if(u.pathname.startsWith('/s/')&&u.pathname.length>3)return ideasCached(req,ctx,function(){return ideasThread(env,u.pathname.slice(3))});if(u.pathname==='/api/intake'){if(!ownerOk(req,env))return json({error:'Authentication required'},401);if(req.method!=='POST')return json({error:'POST required'},405);return await intake(req,env)}return json({error:'Not found'},404)}catch(e){return json({error:'Server error: '+(e&&e.message||String(e))},500)}}};
