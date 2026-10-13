@@ -79,13 +79,15 @@ const notes = { title: "Notes on the drift at the station", subtitle: "", lede: 
 {
   const short = { title: "Short notes", lede: "", body_md: ["## One", "", grounded[0] + " Zorblax Quimby ran it.", "", "## Two", "", grounded[1], "", "## Three", "", grounded[2], grounded[3], grounded[4]].join("\n"), objection: "" };
   const r = repair(short, ["grounding: name not in the source: Zorblax Quimby"], "notes", source);
-  ok(r === null, "a repaired draft below the length floor is not accepted");
+  ok(r && r.ok === false && r.piece && !/Zorblax/.test(r.piece.body_md), "a repaired draft below the length floor is not accepted; the cleaned draft is handed to the extend path (1.17.0)");
 }
 
 // ---- a non-grounding problem -> no repair ---------------------------------------------------------------------------------------
 {
-  ok(repair(notes, ["notes length 900", "grounding: name not in the source: Zorblax Engine"], "notes", source) === null, "a length problem next to a grounding problem leaves the draft to the feedback path");
-  ok(repair(notes, ["banned: delve"], "notes", source) === null, "a banned-word problem is not repaired");
+  const rl = repair(notes, ["notes length 900"].concat(validatePiece(notes, "notes", source).problems), "notes", source);
+  ok(rl && rl.ok && !/Zorblax/.test(rl.piece.body_md), "a length problem next to a grounding problem: the grounding sentence goes and the draft is re-validated in full (1.17.0)");
+  ok(repair(notes, ["banned: delve"], "notes", source) === null, "a banned phrase the draft does not contain removes nothing, so no repair");
+  ok(repair(notes, ["emoji present", "grounding: name not in the source: Zorblax Engine"], "notes", source) === null, "any problem other than grounding, banned or length is not repaired");
   ok(repair(notes, [], "notes", source) === null && repair(notes, null, "notes", source) === null, "no problems, no repair");
   ok(repair(notes, ["grounding: something the needle parser cannot read"], "notes", source) === null, "a grounding problem with no readable needle is left alone");
 }
@@ -113,7 +115,7 @@ const notes = { title: "Notes on the drift at the station", subtitle: "", lede: 
 // ---- the compose loop uses it, logs a stage row, and the style prompt carries the process line --------------------------------------
 {
   const loop = src.slice(src.indexOf("async function generate("), src.indexOf("var CRON_TABLE"));
-  ok(/var gr = repairGroundingDraft\(piece, v\.problems, form, ground\);/.test(loop), "the compose loop calls the repair where validatePiece fails");
+  ok(/var gr = repairGroundingDraft\(piece, v\.problems, form, ground, vopts\);/.test(loop), "the compose loop calls the repair where validatePiece fails");
   ok(/logRun\(env, form, model, topic\.id, "stage", "grounding repair: removed " \+ gr\.removed \+ " sentences"/.test(loop), "the repair is logged as a companion_runs stage row");
   ok(loop.indexOf("repairGroundingDraft(") < loop.indexOf("var shortOnly = expandFeedback(v.problems, form, piece);"), "the repair runs before the feedback path");
   ok(!/await (callModel|composePiece|aiRun)[^\n]*grounding/.test(loop), "the repair makes no model call");
