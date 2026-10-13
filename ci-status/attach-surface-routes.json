@@ -4,8 +4,8 @@
   "token_present": true,
   "stage": "partial",
   "status": "failed",
-  "error": "ipatent.me: present unverified; www.ipatent.me: present unverified; qwav.uk: created unverified; www.qwav.uk: created unverified; qwave.tech: failed no proxied DNS record; a route would be inert (records: [{\"type\": \"CNAME\", \"content\": \"qwav.pages.dev\", \"proxied\": false}]); www.qwave.tech: failed no proxied DNS record; a route would be inert (records: [{\"type\": \"CNAME\", \"content\": \"qwav.pages.dev\", \"proxied\": false}]); q-wave.tech: created unverified; www.q-wave.tech: present unverified; empoweringchange.today: created unverified; www.empoweringchange.today: present unverified; qwav.org: created unverified; www.qwav.org: created unverified",
-  "gateway_version": "3.14.1-doi-scrub",
+  "error": "ipatent.me: present unverified; www.ipatent.me: present unverified; empoweringchange.today: created unverified; www.empoweringchange.today: present unverified; qwav.org: created unverified; www.qwav.org: created unverified",
+  "gateway_version": "3.18.3-hub-version",
   "hosts": {
     "archive.qnfo.org": {
       "zone": "qnfo.org",
@@ -135,56 +135,49 @@
     },
     "qwav.uk": {
       "zone": "qwav.uk",
-      "route_id": "e410d240326347cb8161e2f869debbae",
+      "route_id": "da26d4194f484676a2d51d170b4e6499",
       "status": "created",
       "detail": null,
-      "dns_record": "0f1c1268147e961468551a007c870a11",
-      "dns_proxied_from": false,
-      "verified": false,
-      "rolled_back": true,
-      "dns_restored": true
+      "verified": true
     },
     "www.qwav.uk": {
       "zone": "qwav.uk",
-      "route_id": "20e70b36ed8c4634bccadf4ee602138e",
+      "route_id": "c0d5644ffb674e43ab671e4393cc1809",
       "status": "created",
       "detail": null,
-      "dns_record": "11e6ea752e81afb31289f2a45b1be8f8",
-      "dns_proxied_from": false,
-      "verified": false,
-      "rolled_back": true,
-      "dns_restored": true
+      "verified": true
     },
     "qwave.tech": {
       "zone": "qwave.tech",
-      "route_id": null,
-      "status": "failed",
-      "detail": "no proxied DNS record; a route would be inert (records: [{\"type\": \"CNAME\", \"content\": \"qwav.pages.dev\", \"proxied\": false}])"
+      "route_id": "099bcad6230641d58d834363fa6127fc",
+      "status": "created",
+      "detail": null,
+      "verified": true
     },
     "www.qwave.tech": {
       "zone": "qwave.tech",
-      "route_id": null,
-      "status": "failed",
-      "detail": "no proxied DNS record; a route would be inert (records: [{\"type\": \"CNAME\", \"content\": \"qwav.pages.dev\", \"proxied\": false}])"
+      "route_id": "6c0ccea65ce947c7be86ac21f8d68dac",
+      "status": "created",
+      "detail": null,
+      "verified": true
     },
     "q-wave.tech": {
       "zone": "q-wave.tech",
-      "route_id": "c48b3ddd9cff47369d0320e39ee93b33",
+      "route_id": "96a4d00b9e6d41d9b46885d23f0a6092",
       "status": "created",
       "detail": null,
-      "verified": false,
-      "rolled_back": true
+      "verified": true
     },
     "www.q-wave.tech": {
       "zone": "q-wave.tech",
       "route_id": "50d6985908954440b31cdbc3c20d7055",
       "status": "present",
       "detail": null,
-      "verified": false
+      "verified": true
     },
     "empoweringchange.today": {
       "zone": "empoweringchange.today",
-      "route_id": "d8e7c3d4e2354d93b02d0dba774c81eb",
+      "route_id": "d26d7d15c64f46efb9acfdfd33b17a8c",
       "status": "created",
       "detail": null,
       "verified": false,
@@ -199,7 +192,7 @@
     },
     "qwav.org": {
       "zone": "qwav.org",
-      "route_id": "136f36f678694b0680d72fdf0da858bd",
+      "route_id": "27e10cc91eaa4335bc6200ce7f8097ab",
       "status": "created",
       "detail": null,
       "dns_record": "bf15ded6489cd075d294f307eb16a2e5",
@@ -213,7 +206,7 @@
     },
     "www.qwav.org": {
       "zone": "qwav.org",
-      "route_id": "4cdec070b7cc4da5a3baf05366014f65",
+      "route_id": "1f77eb6eb6744a938e6b521b4d9a2966",
       "status": "created",
       "detail": null,
       "dns_record": "26ff1daa55c154d3a62c0a6ae7400a7d",
@@ -226,6 +219,6 @@
       "dns_restored": true
     }
   },
-  "ts": "2026-10-10T10:48:11Z",
-  "lifecycle_version": "1.10.1-doi-scrub"
+  "ts": "2026-10-13T12:50:12Z",
+  "lifecycle_version": "1.11.1-noz-scrub"
 }
