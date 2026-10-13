@@ -103,5 +103,21 @@ check("the directive asks for the marker", /Begin the systems analysis with a li
   const onlyPara = A.paraphraseItemsDropped({ ok: false, unavailable: false, unsupported: ["Current transport protocols fall short -- wording not in source"] });
   check("a check failed only on a conceded paraphrase passes", onlyPara.ok === true && onlyPara.unsupported.length === 0);
 }
+// ---- Q08-SOURCE-CONCESSION-1 + Q08-PRUNE-BODY-FLOOR-1 (0.24.2, run 388) -------------------------------------------------------------
+{
+  const A = (await import("./worker.js")).__analysis;
+  const V = (await import("./worker.js")).__verify;
+  const r = A.paraphraseItemsDropped({ ok: false, unavailable: false, unsupported: [
+    "the company expects the sale process to finish by the end of November or early December 2026 -- date not directly from source, but from FAQ in source",
+    "the same comment described the filing as the \u201cshell that was left after Google hi-quired the founding team\u201d -- quote from comment, not main source text, but idea is in source",
+    "the filing triggers a United States bankruptcy court to oversee the sale -- not in source" ] });
+  check("items whose reasons concede the content is in the source material are dropped, concrete or not", r.unsupported.length === 1 && /bankruptcy court/.test(r.unsupported[0]) && r.ok === false, r);
+  check("a plain 'not in source' item still counts", A.paraphraseItemsDropped({ ok: false, unsupported: ["Disney paid 40 million -- figure not in source"] }).unsupported.length === 1);
+  const para = "The relay forwards bundles when a contact window opens and drops the oldest when its buffer fills, so the excess age on Earth depends on which bundles survive the wait. ";
+  const body = Array.from({ length: 6 }, () => para.repeat(3)).join("\n\n");
+  const ok = "# A title that names the subject\n\n" + body + "\n\nworth your time: yes - x";
+  check("the prune floor is measured on the published body", V.prunedGateProblems(ok, []).every((p) => !/too short/.test(p)), V.prunedGateProblems(ok, []).slice(0, 2));
+  check("a pruned stub is refused with its body length", V.prunedGateProblems("# T\n\n" + para + "\n\nworth your time: yes - x", []).some((p) => /too short after pruning \(\d+ chars of body; floor 2800\)/.test(p)));
+}
 console.log("analysis.test.mjs: " + passes + " passed, " + fails + " failed");
 process.exit(fails ? 1 : 0);
