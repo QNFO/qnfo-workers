@@ -5,7 +5,7 @@ var __name = (target, value) => __defProp(target, "name", { value, configurable:
 var __defProp2 = Object.defineProperty;
 var __name2 = /* @__PURE__ */ __name((target, value) => __defProp2(target, "name", { value, configurable: true }), "__name");
 var NL = String.fromCharCode(10);
-var VERSION = "1.4.0-context-passage"; // 1.4.0 SOURCE-VOICE-1 (agent_issues 2468, owner directive 2026-10-13 "Papers shall cite full texts, not merely reference work summaries"; pillar research): a PAPER_VZ hit in /context carries the passage of the paper's body that matched (the indexer's own chunk, from metadata.chunk), after the abstract when one is stored; it was title + status + abstract.slice(0, 220), so a paper with no abstract (269 of 575 published on 2026-10-13) reached qnfo-ai's retrieved context as its title alone. renderContext gives a paper hit up to 1300 characters (300 before). isZenodoId was defined only inside the folded indexer member, so the /context enrichment and metaLine threw a ReferenceError on every paper hit and returned "slug <x> (enrich error)"; it is now defined at module scope too. // 1.3.4 WORKERS-STANDARDS-1 (2026-10-12, pillar security): the indexer member compares X-Index-Token in constant time (same accepted value). // 1.3.1 INDEXER-FOLD-1 (#1756): qnfo-paper-indexer runs here as a member (its two jobs on this worker's existing 06:30 trigger, no cron added; /indexer/* read routes).
+var VERSION = "1.5.0-cron-heartbeat"; // 1.5.0 CRON-ONLY-HEARTBEAT-1 (agent_issues 2397, pillar autonomy): scheduled() upserts its fleet_heartbeat row after the run, ok=0 when the work threw. // 1.4.0 SOURCE-VOICE-1 (agent_issues 2468, owner directive 2026-10-13 "Papers shall cite full texts, not merely reference work summaries"; pillar research): a PAPER_VZ hit in /context carries the passage of the paper's body that matched (the indexer's own chunk, from metadata.chunk), after the abstract when one is stored; it was title + status + abstract.slice(0, 220), so a paper with no abstract (269 of 575 published on 2026-10-13) reached qnfo-ai's retrieved context as its title alone. renderContext gives a paper hit up to 1300 characters (300 before). isZenodoId was defined only inside the folded indexer member, so the /context enrichment and metaLine threw a ReferenceError on every paper hit and returned "slug <x> (enrich error)"; it is now defined at module scope too. // 1.3.4 WORKERS-STANDARDS-1 (2026-10-12, pillar security): the indexer member compares X-Index-Token in constant time (same accepted value). // 1.3.1 INDEXER-FOLD-1 (#1756): qnfo-paper-indexer runs here as a member (its two jobs on this worker's existing 06:30 trigger, no cron added; /indexer/* read routes).
 function auth(token, env) {
   const exp = env.INFRA_TOKEN;
   if (!exp || !token) return false;
@@ -846,8 +846,7 @@ var indexerMod = (function() {
 function indexerEnv(env) {
   return Object.assign({}, env, { LIVING_PAPER: env.LIVING, QNFO_AUDIT: env.AUDIT });
 }
-var worker_default = {
-  async scheduled(event, env, ctx) {
+async function runScheduled(event, env, ctx) {
     // INDEXER-FOLD-1: the folded qnfo-paper-indexer member's two jobs (its old "0 4" impact collection and "5 6" render
     // metrics) run on this worker's existing 06:30 trigger, impact first, both after the gateway's 06:00 sweep. No cron is
     // added: a newly registered trigger was seen not to fire (PROBER-ON-CAL-TICK-1), and the cron count drops by two. A
@@ -869,6 +868,16 @@ var worker_default = {
       const r = await collectRecords(env);
       await store(env, "records", r);
     }
+}
+var worker_default = {
+  async scheduled(event, env, ctx) {
+    // CRON-ONLY-HEARTBEAT-1 (agent_issues 2397): the row means "the scheduled run finished"; the write never throws or masks the run's error.
+    let ok = 1, err = null;
+    try { await runScheduled(event, env, ctx); } catch (e) { ok = 0; err = e; }
+    try {
+      await env.AUDIT.prepare("INSERT INTO fleet_heartbeat (worker, version, ts, ok) VALUES (?1, ?2, ?3, ?4) ON CONFLICT(worker) DO UPDATE SET version=excluded.version, ts=excluded.ts, ok=excluded.ok").bind("qnfo-infra", VERSION, new Date().toISOString(), ok).run();
+    } catch (e) { console.error(JSON.stringify({ worker: "qnfo-infra", event: "fleet-heartbeat-write-failed", error: String(e && e.message || e) })); }
+    if (err) throw err;
   },
   async fetch(request, env) {
     const url = new URL(request.url);

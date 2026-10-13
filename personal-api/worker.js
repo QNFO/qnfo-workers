@@ -106,7 +106,7 @@ function clampMaxTokens(requested, isReason) {
 __name(clampMaxTokens, "clampMaxTokens");
 __name2(clampMaxTokens, "clampMaxTokens");
 __name22(clampMaxTokens, "clampMaxTokens");
-var VERSION = "4.8.6-crypto-ids"; // 4.8.6 CRYPTO-IDS-1: the 18 row ids and the feed fallback id come from crypto.getRandomValues (rhex), not Math.random; same id shapes. // 4.8.5 // 4.8.5-doi-scrub NOZ-DOI-1: the separation prompt names no external registry. 4.8.4 below.
+var VERSION = "4.9.0-cron-heartbeat"; // 4.9.0 CRON-ONLY-HEARTBEAT-1 (agent_issues 2397): the scheduled run upserts its qnfo-audit fleet_heartbeat row when it finishes. // 4.8.6 CRYPTO-IDS-1: the 18 row ids and the feed fallback id come from crypto.getRandomValues (rhex), not Math.random; same id shapes. // 4.8.5 // 4.8.5-doi-scrub NOZ-DOI-1: the separation prompt names no external registry. 4.8.4 below.
 // CRYPTO-IDS-1 (WORKERS-BEST-PRACTICES-1): row ids and nonces come from crypto.getRandomValues, never Math.random. rhex(n) returns n lowercase hex characters (same shape as the old Math.random().toString(16).slice(2, 2 + n)).
 function rhex(n) { var b = new Uint8Array(Math.ceil(n / 2)); crypto.getRandomValues(b); var h = ""; for (var i = 0; i < b.length; i++) h += (b[i] + 256).toString(16).slice(1); return h.slice(0, n); }
 // 4.8.4 NO-TOPIC-HARDCODE-1 (owner directive 2026-10-10): the twin, planner and predictor prompts no longer carry the owner's profile gates as hard-coded text; they apply only the gates found in the retrieved profile facets. //4.8.2 LEDGER-PAGE-1 (#1951): the Ledger sync drains calendar-api /feedback by after_id in pages of 500 (max 10 pages per run, id cursor feedback_after_id) so rows beyond the newest 500 are no longer skipped; AWAY-AMS-1 (#1883): inside an away window the brief keeps Google/ICS and manual calendar events whose location is in the Amsterdam area and hides only radar/twin suggestions and catalog rows. // 4.8.0 TWIN-FLASH-1 (owner directive 2026-10-05, #1818): twin primary model glm-5.3-flash (reasoning_effort low), deepseek-v4-pro per-request fallback, automatic revert when today's flash failure share >= 20% over >= 10 calls; 4.7.2 WORKERS-AI-ATTRIBUTION-1 for personal-api (#1833): every env.AI.run (embeddings, OCR/vision, chat, Durable Object chat) is counted in qnfo-audit.ai_call_counters (purpose binding: calls, tokens, neurons; counts only, no text) through the same __aiAttrEnv shim qnfo-research-exec uses; no new model call, no behaviour change. // 4.7.1 TOOL-TRACE-MEMORY-1 (#1805): internal tool-trace chat rows (model tool/mcp-tool) no longer reach thread memory or the cross-thread context.
@@ -1837,8 +1837,10 @@ async function cronBuildBrief(env) {
       await env.PERSONAL.prepare("INSERT OR REPLACE INTO brief_cron_runs (ts, brief_ok, predictions, predictions_reason, version) VALUES (?1, 1, ?2, ?3, ?4)").bind((/* @__PURE__ */ new Date()).toISOString(), pw && Array.isArray(pw.predictions) ? pw.predictions.length : 0, pw && pw.degraded ? String(pw.reason || "degraded").slice(0, 400) : null, VERSION).run();
     } catch (e) {}
     console.log("personal-api cron brief built:", (b.calendar.today || []).length, "today events,", (b.open.tasks || []).length, "open tasks");
+    return true;
   } catch (e) {
     console.log("personal-api cron error:", e && e.message || e);
+    return false;
   }
 }
 __name(cronBuildBrief, "cronBuildBrief");
@@ -3323,7 +3325,15 @@ var api_default = {
     try { await msSyncAll(env); } catch (e) { console.log("msgraph sync error:", e && e.message || e); }
     // CONNECTION-LEDGER-1: fold new `went` answers (names met) into the Ledger. Never blocks the brief.
     try { await ledgerSyncFeedback(env); } catch (e) { console.log("ledger sync error:", e && e.message || e); }
-    await cronBuildBrief(env);
+    // CRON-ONLY-HEARTBEAT-1 (agent_issues 2397): after the run, one fleet_heartbeat upsert says the scheduled run finished (ok=0 when the brief step failed or threw). Never throws, never delays the work above.
+    let hbOk = 0;
+    try {
+      hbOk = (await cronBuildBrief(env)) === false ? 0 : 1;
+    } finally {
+      try {
+        await env.AUDIT.prepare("INSERT INTO fleet_heartbeat (worker, version, ts, ok) VALUES (?1, ?2, ?3, ?4) ON CONFLICT(worker) DO UPDATE SET version=excluded.version, ts=excluded.ts, ok=excluded.ok").bind("personal-api", VERSION, new Date().toISOString(), hbOk).run();
+      } catch (e) { console.error(JSON.stringify({ worker: "personal-api", event: "fleet-heartbeat-failed", error: String(e && e.message || e).slice(0, 200) })); }
+    }
   }
 };
 // ============================================================================================================
