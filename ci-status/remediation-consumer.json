@@ -1,14 +1,14 @@
 {
  "ok": true,
  "marker": "REMEDIATION-CONSUMER-1",
- "verifier": "remediation-consumer@ead0b3f7ffda",
- "due": 2,
- "pass": 2,
- "fail": 0,
+ "verifier": "remediation-consumer@4695913be16b",
+ "due": 5,
+ "pass": 4,
+ "fail": 1,
  "skipped": 0,
  "contracts": [
   {
-   "class": "fm-honeypot-named-for-autofill",
+   "class": "fm-notice-reply-encoded-subject",
    "issue_id": null,
    "verdict": "pass",
    "expected": "ok",
@@ -16,11 +16,35 @@
    "written": true
   },
   {
-   "class": "fm-math-delim-pairing-shift",
+   "class": "fm-zaraz-autoinject-worker-html",
    "issue_id": null,
    "verdict": "pass",
    "expected": "ok",
    "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "fm-outward-prose-no-lede",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "0",
+   "observed": "0",
+   "written": true
+  },
+  {
+   "class": "fm-unbounded-ready-queue",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "0",
+   "observed": "0",
+   "written": true
+  },
+  {
+   "class": "issue-2473",
+   "issue_id": 2473,
+   "verdict": "fail",
+   "expected": "ok",
+   "observed": "missing-marker:qnfo-research-exec/worker.js",
    "written": true
   }
  ],
@@ -47,20 +71,21 @@
   "http",
   "runner-https"
  ],
+ "https": 2,
  "budget_exhausted": false,
- "runtime_verified_share_24h": 9,
+ "runtime_verified_share_24h": 9.1,
  "host_census": {
   "skipped": "ran within 6h"
  },
  "migrations": {
-  "opted_in": 139,
+  "opted_in": 142,
   "unapplied": [],
   "applied_now": [],
   "failed": [],
   "metric": 0
  },
- "spent_ms": 13480,
- "head": "ead0b3f7ffda8e09d3268c80c969a61ea05945ee",
+ "spent_ms": 10240,
+ "head": "4695913be16b05e87c9c9fc1d344a57a09925341",
  "job_status": "success",
- "ts": "2026-10-13T06:43:36Z"
+ "ts": "2026-10-13T06:53:26Z"
 }
