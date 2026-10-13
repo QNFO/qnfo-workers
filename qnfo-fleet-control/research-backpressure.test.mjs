@@ -16,7 +16,7 @@ let fails = 0, n = 0;
 const check = (c, m, x) => { n++; if (!c) { fails++; console.log("FAIL " + m + (x !== undefined ? " -- " + JSON.stringify(x) : "")); } };
 const vm1 = /var VERSION = "(\d+)\.(\d+)\./.exec(src);
 check(vm1 && (+vm1[1] > 0 || +vm1[2] >= 24), "VERSION at least 0.24");
-const sched = src.slice(src.indexOf("async scheduled(event, env, ctx) {\n    const cron = event.cron;"));
+const sched = src.slice(src.indexOf("async scheduled(event, env, ctx) {\n    // CRON-DISPATCH-ELIMINATION-1"));
 const twenty = sched.slice(0, sched.indexOf('if (cron === "0 3 * * *")'));
 check(/researchBackpressureTick\(env\)/.test(twenty), "the 20-minute cron runs the backpressure tick");
 

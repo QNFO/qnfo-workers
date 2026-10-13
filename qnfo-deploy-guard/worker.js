@@ -2,7 +2,7 @@
 // Worker Contract v1: VERSION constant + GET /health
 // Data: https://ops.qnfo.org/fleet (modified_on per worker) + https://ops.qnfo.org/cost (spend)
 // NOTE: source of truth is this file; GET /workers/scripts/<name> TRUNCATES large bodies - never patch from a GET.
-var VERSION = "1.3.25-second-path-canonical";
+var VERSION = "1.3.26-log-catches";
 var WORKER = "qnfo-deploy-guard";
 var LOCK_PREFIX = "deploylock:";
 var DENY_PREFIX = "deploydeny:";
@@ -35,7 +35,7 @@ function getJson(urls, tout) {
         var r = await fetch(urls[i], { signal: c.signal, headers: { accept: "application/json" } });
         clearTimeout(t);
         if (r.ok) { var j = await r.json(); if (j) return { ok: true, j: j, url: urls[i] }; }
-      } catch (e) {}
+      } catch (e) { console.error(JSON.stringify({ evt: "deploy-guard:getJson:caught", error: String((e && e.message) || e) })); }
     }
     return { ok: false, j: null, url: null };
   })();
@@ -74,7 +74,7 @@ async function ensureRegistry(env, fleet) {
       await auditRun(env, "INSERT OR IGNORE INTO service_registry (service, kind, version, base_url, purpose, capabilities, routes, tools, models, deps, updated_at, state) VALUES (?1,'worker',NULL,?2,'AUTO-REGISTERED by deploy-guard: live worker absent from the registry (register-at-deploy); purpose/bindings pending full reconcile','[]','[\"/health\']','','','[]',?3,'live')", [w, "https://" + w + ".q08.workers.dev", nowIso()]);
       set[w] = 1; added.push(w);
     }
-  } catch (e) {}
+  } catch (e) { console.error(JSON.stringify({ evt: "deploy-guard:ensureRegistry:caught", error: String((e && e.message) || e) })); }
   return added;
 }
 // REGISTRY-VERSION-CURRENCY-1 (2026-09-21): on redeploy, fetch the worker's live /health and
@@ -96,7 +96,7 @@ async function refreshRegistryVersion(env, w, explicitVer) {
       var r = await fetch(url, { signal: c.signal, headers: { accept: "application/json" } });
       clearTimeout(t);
       if (r.ok) { var j = await r.json(); if (j && j.version) liveVer = String(j.version); }
-    } catch (e) {}
+    } catch (e) { console.error(JSON.stringify({ evt: "deploy-guard:refreshRegistryVersion:caught", error: String((e && e.message) || e) })); }
     var ver = "";
     if (explicitVer && String(explicitVer)) {
       if (liveVer && liveVer !== String(explicitVer)) return null;
@@ -191,7 +191,7 @@ function workerSettled(w, since, rc) {
   return null;
 }
 function burstWorkers(desc) {
-  try { var j = JSON.parse(desc); if (j && Array.isArray(j.workers)) return j.workers; } catch (e) {}
+  try { var j = JSON.parse(desc); if (j && Array.isArray(j.workers)) return j.workers; } catch (e) { console.error(JSON.stringify({ evt: "deploy-guard:burstWorkers:caught", error: String((e && e.message) || e) })); }
   return null;
 }
 async function autoResolve(env, rc) {
@@ -244,7 +244,7 @@ async function scan(env) {
   var cost = null;
   if (ca.ok && ca.j) {
     var thr = { day_usd: 10, month_usd: 150 };
-    try { var tv = await env.FLEET_CONFIG.get(THR_KEY); if (tv) thr = JSON.parse(tv); } catch (e) {}
+    try { var tv = await env.FLEET_CONFIG.get(THR_KEY); if (tv) thr = JSON.parse(tv); } catch (e) { console.error(JSON.stringify({ evt: "deploy-guard:scan:caught", error: String((e && e.message) || e) })); }
     var day = (ca.j.utc_day && ca.j.utc_day.cost) || 0;
     var month = (ca.j.last_30d && ca.j.last_30d.cost) || 0;
     cost = { day_usd: day, month_usd: month, cap_per_utc_day: ca.j.cap_per_utc_day, thresholds: thr };
@@ -252,14 +252,14 @@ async function scan(env) {
   var ledger = await auditAll(env, "SELECT id, worker, actor, to_sha, ts, note, ok FROM fleet_deploys ORDER BY id", []);
   var lastLedger = {}; var ledgerBy = {};
   for (var i = 0; i < ledger.length; i++) { lastLedger[ledger[i].worker] = ledger[i]; (ledgerBy[ledger[i].worker] = ledgerBy[ledger[i].worker] || []).push(ledger[i]); }
-  var prev = {}; try { var pv = await env.FLEET_CONFIG.get(SNAP_KEY); if (pv) prev = JSON.parse(pv) || {}; } catch (e) {}
+  var prev = {}; try { var pv = await env.FLEET_CONFIG.get(SNAP_KEY); if (pv) prev = JSON.parse(pv) || {}; } catch (e) { console.error(JSON.stringify({ evt: "deploy-guard:scan:caught", error: String((e && e.message) || e) })); }
   var active = {};
-  try { var al = await auditAll(env, "SELECT worker, owner, since, expires_at FROM deploy_locks WHERE typeof(expires_at) IN ('integer','real') AND expires_at > ?1", [Date.now()]); for (var j = 0; j < al.length; j++) active[al[j].worker] = al[j]; } catch (e) {}
+  try { var al = await auditAll(env, "SELECT worker, owner, since, expires_at FROM deploy_locks WHERE typeof(expires_at) IN ('integer','real') AND expires_at > ?1", [Date.now()]); for (var j = 0; j < al.length; j++) active[al[j].worker] = al[j]; } catch (e) { console.error(JSON.stringify({ evt: "deploy-guard:scan:caught", error: String((e && e.message) || e) })); }
   var denials = [];
-  try { var dn = await env.FLEET_CONFIG.list({ prefix: DENY_PREFIX }); for (var d = 0; d < dn.keys.length; d++) { var dv = await env.FLEET_CONFIG.get(dn.keys[d].name); if (dv) { try { denials.push(JSON.parse(dv)); } catch (e) {} } } } catch (e) {}
+  try { var dn = await env.FLEET_CONFIG.list({ prefix: DENY_PREFIX }); for (var d = 0; d < dn.keys.length; d++) { var dv = await env.FLEET_CONFIG.get(dn.keys[d].name); if (dv) { try { denials.push(JSON.parse(dv)); } catch (e) { console.error(JSON.stringify({ evt: "deploy-guard:scan:caught", error: String((e && e.message) || e) })); } } } } catch (e) { console.error(JSON.stringify({ evt: "deploy-guard:scan:caught", error: String((e && e.message) || e) })); }
   var fleet = (fp.ok && fp.j && fp.j.fleet) ? fp.j.fleet : [];
   var regAdded = [];
-  try { regAdded = await ensureRegistry(env, fleet); } catch (e) {}
+  try { regAdded = await ensureRegistry(env, fleet); } catch (e) { console.error(JSON.stringify({ evt: "deploy-guard:scan:caught", error: String((e && e.message) || e) })); }
   var snapshot = {}; var changed = []; var anomalies = [];
   for (var k = 0; k < fleet.length; k++) {
     var ww = fleet[k]; var mo = ww.modified_on || null;
@@ -327,16 +327,16 @@ async function scan(env) {
   var resolved = [];
   if (fp.ok) {
     var audit = {};
-    try { var ar = await auditAll(env, "SELECT worker, match, note, probed_at FROM worker_live_audit", []); for (var ai = 0; ai < ar.length; ai++) audit[ar[ai].worker] = ar[ai]; } catch (e) {}
+    try { var ar = await auditAll(env, "SELECT worker, match, note, probed_at FROM worker_live_audit", []); for (var ai = 0; ai < ar.length; ai++) audit[ar[ai].worker] = ar[ai]; } catch (e) { console.error(JSON.stringify({ evt: "deploy-guard:scan:caught", error: String((e && e.message) || e) })); }
     try { resolved = await autoResolve(env, { haveLive: haveLive, liveNames: liveNames, snapshot: snapshot, ledgerBy: ledgerBy, audit: audit, seen: seen, nonCanon: nonCanon, denials: denials.length, cost: cost }); } catch (e) { resolved = [{ error: String(e && e.message || e).slice(0, 200) }]; }
     if (resolved.length) await fileAlert(env, "info", "deploy-guard auto-resolved " + resolved.length + " ticket(s): " + resolved.map(function (r) { return r.id; }).join(","));
   }
   var ok = fp.ok ? 1 : 0;
-  try { await auditRun(env, "INSERT INTO fleet_heartbeat (worker,version,ts,ok) VALUES (?1,?2,?3,?4) ON CONFLICT(worker) DO UPDATE SET version=excluded.version, ts=excluded.ts, ok=excluded.ok", [WORKER, VERSION, nowIso(), ok]); } catch (e) {}
+  try { await auditRun(env, "INSERT INTO fleet_heartbeat (worker,version,ts,ok) VALUES (?1,?2,?3,?4) ON CONFLICT(worker) DO UPDATE SET version=excluded.version, ts=excluded.ts, ok=excluded.ok", [WORKER, VERSION, nowIso(), ok]); } catch (e) { console.error(JSON.stringify({ evt: "deploy-guard:scan:caught", error: String((e && e.message) || e) })); }
   var report = { ts: nowIso(), version: VERSION, fleet_probe_ok: fp.ok, fleet_url: fp.url, workers_seen: fleet.length, changed_since_last: changed.length, anomalies: uniq, filed: filed, resolved: resolved, non_canonical: nonCanon, active_locks: Object.keys(active), recent_denials: denials.length, registry_added: regAdded, cost: cost, baseline: Object.keys(prev).length === 0, elapsed_ms: Date.now() - t0 };
-  try { await env.FLEET_CONFIG.put(SNAP_KEY, JSON.stringify(snapshot), { expirationTtl: 604800 }); } catch (e) {}
-  try { await env.FLEET_CONFIG.put(REPORT_KEY, JSON.stringify(report), { expirationTtl: 604800 }); } catch (e) {}
-  if (fp.ok) { try { var dn2 = await env.FLEET_CONFIG.list({ prefix: DENY_PREFIX }); for (var z = 0; z < dn2.keys.length; z++) { await env.FLEET_CONFIG.delete(dn2.keys[z].name); } } catch (e) {} }
+  try { await env.FLEET_CONFIG.put(SNAP_KEY, JSON.stringify(snapshot), { expirationTtl: 604800 }); } catch (e) { console.error(JSON.stringify({ evt: "deploy-guard:scan:caught", error: String((e && e.message) || e) })); }
+  try { await env.FLEET_CONFIG.put(REPORT_KEY, JSON.stringify(report), { expirationTtl: 604800 }); } catch (e) { console.error(JSON.stringify({ evt: "deploy-guard:scan:caught", error: String((e && e.message) || e) })); }
+  if (fp.ok) { try { var dn2 = await env.FLEET_CONFIG.list({ prefix: DENY_PREFIX }); for (var z = 0; z < dn2.keys.length; z++) { await env.FLEET_CONFIG.delete(dn2.keys[z].name); } } catch (e) { console.error(JSON.stringify({ evt: "deploy-guard:scan:caught", error: String((e && e.message) || e) })); } }
   return report;
 }
 // CAPABILITY-SNAPSHOT-1 (2026-10-01, charter gate C6, issue #1628): qnfo-ops /capability-audit measures the capability
@@ -351,7 +351,7 @@ var CAP_EVERY_MS = 6 * 3600 * 1000;
 var CAP_KEY = "capsnap:last";
 async function capabilitySnapshot(env, force) {
   var last = null;
-  try { var lv = await env.FLEET_CONFIG.get(CAP_KEY); if (lv) last = JSON.parse(lv); } catch (e) {}
+  try { var lv = await env.FLEET_CONFIG.get(CAP_KEY); if (lv) last = JSON.parse(lv); } catch (e) { console.error(JSON.stringify({ evt: "deploy-guard:capabilitySnapshot:caught", error: String((e && e.message) || e) })); }
   var lastMs = last && last.ts ? ms(last.ts) : NaN;
   var minGap = force ? 600000 : CAP_EVERY_MS;
   if (isFinite(lastMs) && Date.now() - lastMs < minGap) return { ran: false, reason: "fresh", last: last };
@@ -389,8 +389,8 @@ async function capabilitySnapshot(env, force) {
     for (var h = 0; h < have.length; h++) {
       if (!live[have[h].service]) { await auditRun(env, "DELETE FROM capability_audit_snapshot WHERE service=?1", [have[h].service]); out.removed++; }
     }
-  } catch (e) {}
-  try { await env.FLEET_CONFIG.put(CAP_KEY, JSON.stringify(out), { expirationTtl: 604800 }); } catch (e) {}
+  } catch (e) { console.error(JSON.stringify({ evt: "deploy-guard:one:caught", error: String((e && e.message) || e) })); }
+  try { await env.FLEET_CONFIG.put(CAP_KEY, JSON.stringify(out), { expirationTtl: 604800 }); } catch (e) { console.error(JSON.stringify({ evt: "deploy-guard:one:caught", error: String((e && e.message) || e) })); }
   return Object.assign({ ran: true }, out);
 }
 function changes(r) { return (r && r.meta && typeof r.meta.changes === "number") ? r.meta.changes : (r && typeof r.changes === "number" ? r.changes : 0); }
@@ -419,7 +419,7 @@ async function acquireLease(env, b, quiet) {
   if (ins4 && ins4.ok === false) return [500, { error: "lock_db_unavailable", detail: ins4.error }];
   if (!changes(ins4)) {
     var cur = await readLock(env, w4);
-    if (!quiet) { try { await env.FLEET_CONFIG.put(DENY_PREFIX + Date.now() + "-" + tok(), JSON.stringify({ worker: w4, owner: String(b.owner || "unknown"), held_by: cur ? cur.owner : null, at: nowIso() }), { expirationTtl: 3600 }); } catch (e) {} }
+    if (!quiet) { try { await env.FLEET_CONFIG.put(DENY_PREFIX + Date.now() + "-" + tok(), JSON.stringify({ worker: w4, owner: String(b.owner || "unknown"), held_by: cur ? cur.owner : null, at: nowIso() }), { expirationTtl: 3600 }); } catch (e) { console.error(JSON.stringify({ evt: "deploy-guard:acquireLease:caught", error: String((e && e.message) || e) })); } }
     return [409, { acquired: false, holder: cur ? cur.owner : "unknown", held_by: cur ? cur.owner : "unknown", held_since: cur ? cur.since : null, expires_at: cur ? new Date(cur.expires_at).toISOString() : null }];
   }
   return [200, { acquired: true, token: raw4, holder: String(b.owner || "unknown"), expires_at: new Date(now4 + ttl * 1000).toISOString() }];
@@ -541,7 +541,7 @@ async function workList(env) {
   return [200, { claims: claims, count: claims.length, in_flight: inf, in_flight_count: inf.length, now: new Date(now6).toISOString(), rule: "take POST /work-lock/acquire {key, owner, intent} before starting an issue or a file; skip a key another session holds; review in_flight work on the same path instead of writing a second fix" }];
 }
 export default {
-  async scheduled(event, env, ctx) { ctx.waitUntil(scan(env).catch(function () {})); ctx.waitUntil(capabilitySnapshot(env, false).catch(function () {})); },
+  async scheduled(event, env, ctx) { ctx.waitUntil(scan(env).catch(function (e) { console.error(JSON.stringify({ evt: "deploy-guard:workList:caught", error: String((e && e.message) || e) })); })); ctx.waitUntil(capabilitySnapshot(env, false).catch(function (e) { console.error(JSON.stringify({ evt: "deploy-guard:workList:caught", error: String((e && e.message) || e) })); })); },
   async fetch(request, env, ctx) {
     var url = new URL(request.url); var p = url.pathname;
     // CONCURRENT-SESSION-SHARED-SECRET-CLOBBER-1 (#1701): shared-secret mutations (rotate/PUT of a worker secret) are
@@ -566,7 +566,7 @@ export default {
       if (wr[0] === 200 && wHeld) {
         // WORK-CLAIM-UNIFY-1: close the ledger row with what came of the work.
         var wpr = Number(wrb.pr); wpr = (isFinite(wpr) && wpr > 0) ? Math.floor(wpr) : null;
-        var wout = /^(merged|closed|duplicate|abandoned|done)$/.test(String(wrb.outcome || "")) ? String(wrb.outcome) : null;
+        var wout = /^(merged|closed|duplicate|abandoned|done|backoff)$/.test(String(wrb.outcome || "")) ? String(wrb.outcome) : null;
         await auditRun(env, "UPDATE work_claims SET released_at=?1, pr=COALESCE(?2, pr), outcome=COALESCE(?3, outcome) WHERE released_at IS NULL AND path=?4 AND holder=?5", [isoS(Date.now()), wpr, wout, claimTarget(wrk).path, wHeld.owner]);
       }
       return json(Object.assign({ key: wrk }, wr[1]), wr[0]);
@@ -589,9 +589,9 @@ export default {
     if (p === "/ledger" && request.method === "POST") {
       var bl = await request.json().catch(function () { return {}; }); if (!bl.worker) return json({ error: "worker required" }, 400);
       var rl = await auditRun(env, "INSERT INTO fleet_deploys (worker, actor, session_id, from_sha, to_sha, source_path, ok, note, ts) VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9)", [String(bl.worker), String(bl.actor || "unknown"), bl.session_id ? String(bl.session_id) : null, bl.from || null, bl.to || null, bl.source_path || null, bl.ok === false ? 0 : 1, String(bl.note || "").slice(0, 400), nowIso()]);
-      try { await ensureRegistry(env, [{ name: String(bl.worker) }]); } catch (e) {}
+      try { await ensureRegistry(env, [{ name: String(bl.worker) }]); } catch (e) { console.error(JSON.stringify({ evt: "deploy-guard:fetch:caught", error: String((e && e.message) || e) })); }
       var refreshedVer = null;
-      try { refreshedVer = await refreshRegistryVersion(env, String(bl.worker), bl.version || bl.to || bl.to_version); } catch (e) {}
+      try { refreshedVer = await refreshRegistryVersion(env, String(bl.worker), bl.version || bl.to || bl.to_version); } catch (e) { console.error(JSON.stringify({ evt: "deploy-guard:fetch:caught", error: String((e && e.message) || e) })); }
       return json({ logged: true, ok: rl && rl.ok !== false, error: rl && rl.error, registry_version: refreshedVer });
     }
     if (p === "/thresholds" && request.method === "POST") { var bt = await request.json().catch(function () { return {}; }); await env.FLEET_CONFIG.put(THR_KEY, JSON.stringify({ day_usd: Number(bt.day_usd || 10), month_usd: Number(bt.month_usd || 150) })); return json({ set: true }); }
