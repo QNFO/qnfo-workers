@@ -186,7 +186,8 @@ const notesOf = (extra) => ({ title: "Notes on the drift at the station", subtit
   await V.critiquePiece(env, essay, "essay", source);
   ok(seen.indexOf("STATED OBJECTION: The strongest objection is that fourteen") !== -1, "an essay's real objection is still shown");
   const loop = src.slice(src.indexOf("async function generate("), src.indexOf("var CRON_TABLE"));
-  ok(/var dims = form === "notes" \? \["specificity", "argument", "voice", "systems"\] : \["specificity", "argument", "objection", "voice", "systems"\];/.test(loop), "the notes objection score does not gate; essays and serials keep it; the systems score gates every form (COMPANION-SYSTEMS-ANALYSIS-1)");
+  const cw = src.slice(src.indexOf("function critiqueWorst("), src.indexOf("function criticQuotes("));
+  ok(/var dims = form === "notes" \? \["specificity", "argument", "voice", "systems"\] : \["specificity", "argument", "objection", "voice", "systems"\];/.test(cw) && /critiqueWorst\(q, form\)/.test(loop), "the notes objection score does not gate; essays and serials keep it; the systems score gates every form (COMPANION-SYSTEMS-ANALYSIS-1)");
 }
 
 // ---- end to end with an in-memory D1 and a scripted model world ----------------------------------------------------------------------
