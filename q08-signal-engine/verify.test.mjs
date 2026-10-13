@@ -185,6 +185,17 @@ globalThis.fetch = origFetch;
   } } };
   const r3 = await V.verifyAndRevise(envRev, { piece: { text: longEssay, model: "@cf/openai/gpt-oss-120b" }, prompt: "P", banned: [], ground: longEssay, seedText: "s", forecast: false });
   check("a fact revision without a title keeps the draft's title and publishes", revised && r3.ok === true && /^# The queue nobody measured/.test(r3.piece.text), { ok: r3.ok, problems: r3.problems, revised });
+  // Q08-REVISION-FLOOR-1 (0.15.1, run 356): a revision under 2800 characters but above the prune floor is accepted
+  let revised2 = false;
+  const midEssay = "# The queue nobody measured\n\n" + [0, 1, 2, 3, 4, 5].map((i) => para(i)).join("\n\n") + "\n\nworth your time: yes - names the mechanism";
+  const midBody = midEssay.replace(/^# .*\n\n/, "").replace(/\n\nworth your time:.*$/, "");
+  const envMid = { AI: { run: async (m, a2) => {
+    const pr = (a2.messages || []).map((x) => x.content).join("\n") + (a2.prompt || "");
+    if (/FACT REVISION/.test(pr)) { revised2 = true; return { response: midBody + "\n\nworth your time: yes - names the mechanism" }; }
+    return revised2 ? { response: '{"unsupported": [], "verdict": "pass"}' } : { response: JSON.stringify({ unsupported: ["nothing that occurs in the draft at all here -- x"], verdict: "fail" }) };
+  } } };
+  const r4 = await V.verifyAndRevise(envMid, { piece: { text: midEssay, model: "@cf/openai/gpt-oss-120b" }, prompt: "P", banned: [], ground: midEssay, seedText: "s", forecast: false });
+  check("a fact revision between the prune floor and 2800 characters publishes", revised2 && r4.ok === true && midEssay.length < 2800 && midEssay.length >= V.PRUNE_FLOOR, { ok: r4.ok, problems: r4.problems, len: midEssay.length });
 }
 // ---- Q08-EDIT-FLOOR-1: the editor pass may cut to EDIT_FLOOR; a forecast keeps the writing floor -------------------------------
 {
