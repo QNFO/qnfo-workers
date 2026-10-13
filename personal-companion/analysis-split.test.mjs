@@ -45,6 +45,10 @@ ok(binds.length > 0 && String(binds[0][5]).indexOf("<!--") < 0 && /The incentive
 ok(puts.every((x) => x.indexOf("<!--") < 0), "the media copy carries no analysis line");
 ok(V.stripPieceMark({ lede: "<!-- analysis -->\nL", body_md: "B" }).lede === "L", "a line in the lede is removed too");
 ok(V.ledeOf({ body_md: "<!-- analysis -->\n\nThe subject is here." }) === "The subject is here.", "the line is never read as the lede");
+ok(/^analysis marked \d+% after \d+ chars$/.test(V.analysisSplitInfo(marked)), "ANALYSIS-SPLIT-DIAG-1: a valid split is logged with its share", V.analysisSplitInfo(marked));
+ok(V.analysisSplitInfo("# T\n\n" + report) === "analysis unmarked", "an unmarked draft is logged as unmarked");
+ok(/^analysis dropped: report \d+ chars < 600$/.test(V.analysisSplitInfo(early)) && /^analysis dropped: analysis \d+% > 60%$/.test(V.analysisSplitInfo(heavy)) && V.analysisSplitInfo(twice) === "analysis dropped: more than one line", "a dropped split names the rail", [V.analysisSplitInfo(early), V.analysisSplitInfo(heavy), V.analysisSplitInfo(twice)]);
+ok(/"stage", "critique \(" \+ analysisSplitInfo\(String\(piece\.body_md \|\| ""\)\) \+ "\)"/.test(src), "the critique stage row carries the split diagnosis");
 const vmx = /var VERSION = "(\d+)\.(\d+)\.(\d+)/.exec(src);
 ok(vmx && (+vmx[1] > 1 || (+vmx[1] === 1 && +vmx[2] >= 22)), "VERSION is at least 1.22.0", vmx && vmx[0]);
 console.log(pass + " passed, " + fail + " failed");
