@@ -1,5 +1,5 @@
 {
-  "audited_at": "2026-10-13 07:44:34",
+  "audited_at": "2026-10-13 08:14:33",
   "d1_write_failures": [],
   "d1_writes_ok": 115,
   "guard": {
@@ -543,7 +543,7 @@
       },
       {
         "dir": "personal-companion",
-        "version": "1.19.2-ground-matcher",
+        "version": "1.19.3-full-sources",
         "worker": "personal-companion"
       },
       {
@@ -573,7 +573,7 @@
       },
       {
         "dir": "qnfo-code-orchestrator",
-        "version": "0.14.1-queue-v2",
+        "version": "0.14.2-claim-backoff",
         "worker": "qnfo-code-orchestrator"
       },
       {
@@ -603,7 +603,7 @@
       },
       {
         "dir": "qnfo-gateway",
-        "version": "3.18.2-page-policy",
+        "version": "3.18.3-hub-version",
         "worker": "qnfo-gateway"
       },
       {
@@ -900,9 +900,9 @@
       "worker": "personal-api"
     },
     "personal-companion": {
-      "before": "1.19.2-ground-matcher",
+      "before": "1.19.3-full-sources",
       "http": 200,
-      "live": "1.19.2-ground-matcher",
+      "live": "1.19.3-full-sources",
       "match": 1,
       "note": "SYNC",
       "worker": "personal-companion"
@@ -1146,9 +1146,9 @@
       "worker": "qnfo-code-agent"
     },
     "qnfo-code-orchestrator": {
-      "before": "0.14.1-queue-v2",
+      "before": "0.14.2-claim-backoff",
       "http": 200,
-      "live": "0.14.1-queue-v2",
+      "live": "0.14.2-claim-backoff",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-code-orchestrator"
@@ -1302,9 +1302,9 @@
       "worker": "qnfo-fleet-feed"
     },
     "qnfo-gateway": {
-      "before": "3.18.2-page-policy",
+      "before": "3.18.3-hub-version",
       "http": 200,
-      "live": "3.18.2-page-policy",
+      "live": "3.18.3-hub-version",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-gateway"
