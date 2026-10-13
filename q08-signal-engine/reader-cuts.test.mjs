@@ -16,7 +16,7 @@ const para = (i) => "Paragraph " + i + " tells how the operator watched the queu
 const essay = "# The queue nobody measured\n\n" + [1, 2, 3, 4, 5, 6, 7, 8].map(para).join("\n\n") + "\n\nworth your time: yes - names the mechanism";
 const cut = C.applyReaderCuts(essay, "Delete paragraphs 4, 6, and 7.");
 check("applyReaderCuts removes exactly those body paragraphs and keeps title and verdict", cut && cut.cut.join() === "4,6,7" && !/Paragraph 4 |Paragraph 6 |Paragraph 7 /.test(cut.text) && /Paragraph 5 /.test(cut.text) && /^# The queue/.test(cut.text) && /worth your time: yes/.test(cut.text), cut);
-check("more than half the body is never cut", C.applyReaderCuts(essay, "Delete paragraphs 1 through 5.") === null);
+check("more than half the body is never cut", C.applyReaderCuts(essay, "Delete paragraphs 2 through 6.") === null);
 // runLevels: the first panel names cuts, the deterministic cut is used, no editor model call is made
 const W = "@cf/nvidia/nemotron-3-120b-a12b";
 const longPara = (i) => para(i) + " " + para(i) + " " + para(i);
@@ -29,5 +29,8 @@ const env = { AI: { run: async (model, args) => {
 } } };
 const r = await Q.runLevels(env, { piece: { text: long, model: W }, prompt: "P", banned: [], seedText: "s", gateResult: { ok: true, problems: [] } });
 check("runLevels publishes the reader-cut draft without an editor model call", r.gateResult.ok && editorCalls === 0 && !/Paragraph 4 /.test(r.piece.text) && r.rows.some((x) => x.role === "reader_cuts"), { ok: r.gateResult.ok, editorCalls, rows: r.rows.map((x) => x.role) });
+// Q08-LEDE-1 (0.17.0): the lede (first body paragraph) is never cut
+const c1 = C.applyReaderCuts(essay, "Delete paragraphs 1 and 4.");
+check("a cut naming paragraph 1 keeps the lede", c1 && c1.cut.join() === "4" && /Paragraph 1 /.test(c1.text), c1);
 console.log("reader-cuts.test.mjs: " + passes + " passed, " + fails + " failed");
 process.exit(fails ? 1 : 0);
