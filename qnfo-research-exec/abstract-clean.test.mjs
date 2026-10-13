@@ -40,6 +40,14 @@ ok(abstractNeedsRepair("--- title: 'Valuation Without R: A Category-Theoretic Fo
   const meta = "---\nauthor: Rowan Brad Quni\nORCID: 0009-0002-4317-5604\ntitle: Critical Examination\naliases:\n  - Critical Examination\n---\n\n# Critical Examination\n\nThe null hypotheses of fundamental physics are examined against three competing ontological frameworks in turn.\n";
   ok(bodySummary(meta).startsWith("The null hypotheses of fundamental physics"), "a metadata-only front matter is skipped", bodySummary(meta));
 }
+// 0.17.5: the last live row (critical-examination-of-the-null-hypotheses-in-fundamental-physics) shares paragraphs between a
+// bold label and a "## " heading, and between links and ORCID/DOI lines.
+{
+  const ce = ["---","author: Rowan Brad Quni","ORCID: 0009-0002-4317-5604","title: Critical Examination","modified: 2025-08-03T12:15:37Z","---","","---","","**Research Plan**","## A Critical Examination of Spacetime, Mass, and Gravity","","**Version:** 1.1","**Date**: August 3, 2025","","[Rowan Brad Quni](mailto:rowan.quni@qnfo.org), [QNFO](https://qnfo.org/)","ORCID: [0009-0002-4317-5604](https://orcid.org/0009-0002-4317-5604)","DOI: https://papers.qnfo.org/papers","","---","","This document outlines a comprehensive research program designed to conduct a rigorous, comparative meta-analysis concerning the fundamental nature of reality."].join("\n");
+  const s = bodySummary(ce);
+  ok(s.startsWith("This document outlines a comprehensive research program") && !abstractNeedsRepair(s), "headings, labels and link lines sharing a paragraph are dropped", s);
+  ok(bodySummary("Prose that opens the paragraph and runs long enough to count as the summary of this body here.\n## Stray heading inside\nMore prose.\n").indexOf("##") < 0, "a heading line inside a prose paragraph is dropped");
+}
 // CodeQL alerts 404/405 (PR 1116): the link-only check must stay linear on adversarial input.
 {
   const evil = "[]()" + "*[]()".repeat(30000) + "!\n\nA prose paragraph long enough to count as the summary of this body, with plenty of letters in it.";
