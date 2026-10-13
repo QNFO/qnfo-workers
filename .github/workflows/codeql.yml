@@ -19,9 +19,11 @@ name: codeql
 #
 # CODEQL-DEFAULT-PRECHECK-1 (2026-10-13): until that switch is made, every PR showed three red
 # `analyze` checks ("CodeQL analyses from advanced configurations cannot be processed when the
-# default setup is enabled", PR 1212). The precheck reads the default-setup state with this
-# workflow's own token and skips the analysis while default setup is configured, so the
-# analysis takes over by itself the moment default setup is turned off. A failed read runs it.
+# default setup is enabled", PR 1212). The precheck asks whether default setup's dynamic
+# workflow (dynamic/github-code-scanning/codeql) is active, which `actions: read` can see (the
+# default-setup endpoint itself needs admin and answers 403 to this token), and skips the analysis
+# while it is, so the analysis takes over by itself once default setup is turned off. A failed
+# read runs it.
 
 on:
   push:
@@ -51,7 +53,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
-      security-events: read
+      actions: read
     outputs:
       default_setup: ${{ steps.state.outputs.default_setup }}
     steps:
@@ -59,7 +61,12 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          s=$(gh api "repos/${{ github.repository }}/code-scanning/default-setup" --jq .state 2>/dev/null || echo unknown)
+          if out=$(gh api "repos/${{ github.repository }}/actions/workflows" --paginate \
+                --jq '.workflows[] | select(.path == "dynamic/github-code-scanning/codeql") | .state' 2>/dev/null); then
+            if printf '%s\n' "$out" | grep -qx active; then s=configured; else s=not-configured; fi
+          else
+            s=unknown
+          fi
           echo "default setup: $s"
           echo "default_setup=$s" >> "$GITHUB_OUTPUT"
 
