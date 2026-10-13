@@ -25,6 +25,8 @@ const CATALOG = [
 for (let i = 0; i < 450; i++) CATALOG.push({ slug: "filler-" + i, title: "Filler study " + i + " on " + ["spin chains", "graph colouring", "error budgets", "photonic links", "market design"][i % 5], doi: null, abstract: i % 2 ? "" : "A routine note about topic number " + i + " with ordinary words only." });
 const DETAIL = { "beyond-the-qubit": { slug: "beyond-the-qubit", title: "Beyond the Qubit", doi: null, abstract: "An essay." }, "orchestrating-the-quantum-future": { slug: "orchestrating-the-quantum-future", title: "Orchestrating the Quantum Future", doi: null, abstract: "Orchestration essay." } };
 CATALOG.forEach((p) => { DETAIL[p.slug] = p; });
+// SOURCE-VOICE-ASK-1 (2.5.1): the detail route carries the body; a catalog-only source is read for its matching sections.
+DETAIL["the-q-generalized-diameter"] = Object.assign({}, DETAIL["the-q-generalized-diameter"], { body_md: "# The q-Generalized Diameter\n\n## 1. Introduction\nWe study self-similar hierarchies of many kinds and their history in the literature of ordinary physics.\n\n## 3. Level count between the electron radius and the Compton wavelength\nThe number of levels N needed to span the classical electron radius and the reduced Compton wavelength is N = ln(alpha^-1) / ln q for scaling ratio q, so a smaller ratio needs more levels.\n\n## References\nNone." });
 
 const state = { listCalls: 0, detailCalls: [], listMode: "ok", chunks: [] };
 async function fakeFetch(url) {
@@ -63,7 +65,10 @@ ok(r.some((x) => x.slug === "beyond-the-qubit"), "the vector results are still a
 ok(!r.some((x) => /^audit-test/.test(x.slug)), "junk slugs from the catalog never become sources");
 ok(state.listCalls === 3, "the catalog (454 rows) is read in 3 pages of 200", state.listCalls);
 ok(r[0].doi === "10.1234/qnfo.11" && r[0].published === true && /papers\.qnfo\.org\/papers\/the-q-generalized-diameter$/.test(r[0].url), "the catalog row supplies title, DOI and URL", r[0]);
-ok(state.detailCalls.indexOf("the-q-generalized-diameter") < 0 && state.detailCalls.indexOf("beyond-the-qubit") >= 0, "catalog rows with an abstract need no detail fetch; vector-only sources are still fetched", state.detailCalls);
+ok(state.detailCalls.indexOf("the-q-generalized-diameter") >= 0 && state.detailCalls.indexOf("beyond-the-qubit") >= 0, "a catalog-only source is read for its body (SOURCE-VOICE-ASK-1); vector-only sources are still fetched for metadata", state.detailCalls);
+ok(/Level count between the electron radius/.test(r[0].excerpt) && /N = ln\(alpha/.test(r[0].excerpt), "the catalog-only source cites the body section that answers the question, not its title and abstract alone", r[0].excerpt.slice(0, 200));
+ok(!/References/.test(r[0].excerpt), "the references section never becomes the excerpt");
+ok(state.detailCalls.indexOf("physics-solved") < 0 || r.slice(0, cfg.max_sources).some((x) => x.slug === "physics-solved"), "only sources among the first max_sources are read in full", state.detailCalls);
 
 // 2. Cached: a second question in the TTL reads no catalog page.
 state.detailCalls = [];
