@@ -245,7 +245,7 @@ def attach(zone_name, host, zones):
         recs = addr
         rid = recs[0].get("id")
         st, pj = req("PATCH", "/zones/%s/dns_records/%s" % (zone, rid), {"proxied": True})
-        if st == 200 and pj.get("success"):
+        if 200 <= (st or 0) < 300 and pj.get("success"):
             h.update(dns_record=rid, dns_proxied_from=False)
             print("dns proxied: %s (%s -> %s)" % (host, rid, recs[0].get("content")))
             time.sleep(20)
@@ -396,7 +396,7 @@ def main():
                     print("rollback %s http=%s ok=%s" % (host, st, j.get("success")))
                 if RESULT["hosts"][host].get("dns_proxied_from") is False:
                     st, j = req("PATCH", "/zones/%s/dns_records/%s" % (zones[zone_name], RESULT["hosts"][host]["dns_record"]), {"proxied": False})
-                    RESULT["hosts"][host]["dns_restored"] = bool(st == 200 and j.get("success"))
+                    RESULT["hosts"][host]["dns_restored"] = bool(200 <= (st or 0) < 300 and j.get("success"))
         else:
             ok = False
     if ok:

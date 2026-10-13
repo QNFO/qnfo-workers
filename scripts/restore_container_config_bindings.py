@@ -224,7 +224,7 @@ def main():
     st, resp = req("PUT", API + "/content", tok, data=body,
                    ctype="multipart/form-data; boundary=" + b)
     print("PUT /content -> HTTP %s" % st)
-    if st != 200:
+    if not 200 <= (st or 0) < 300:
         print("  body: %s" % json.dumps(resp)[:1500])
         print("FAIL (fail-closed): /content PUT rejected; script NOT restored (#1485 still open)")
         return 3

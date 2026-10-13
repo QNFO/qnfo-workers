@@ -151,4 +151,18 @@ ok(ucall("var s = 'call notDefined(x) in a string';\nvar t = `grid: minmax(1px, 
 ok(ucall("const u = new URL(x);\nconst r = await fetch(u); setTimeout(f, 1); const h = new Headers();", 2) == [], "Workers and JS globals pass")
 ok(ucall("function main() {\n  return parseRefLine(1); // standards-ok: defined by the bundler\n}", 2) == [], "a marked line passes")
 ok(ucall("function main() {\n  return obj.parseRefLine(1) + this.#priv(2);\n}", 2) == [], "method calls on an object or a private member pass")
+# WRITE-SUCCESS-CODES-1: a write judged by "== 200" only (CF answers 201 when it creates a secret; ci-watchdog #1033)
+wf = ['    c, _ = call("PUT", "/accounts/a/d1/database/x/import", token, body)', '    ok = c == 200']
+ok([v[0] for v in W.write_200_only([(2, wf[1])], wf)] == ["write-200-only"], "a PUT judged by == 200 fails")
+ok(W.write_200_only([(2, '    ok = 200 <= (c or 0) < 300')], [wf[0], '    ok = 200 <= (c or 0) < 300']) == [], "a 2xx range passes")
+ok(W.write_200_only([(2, '  if (r.status === 200) done();')], ['  const r = await fetch(u, { method: "POST" });', '  if (r.status === 200) done();']) != [], "JS: a POST judged by === 200 fails")
+ok(W.write_200_only([(2, '  if (r.status === 200) read();')], ['  const r = await fetch(u);', '  if (r.status === 200) read();']) == [], "a GET may check for 200")
+ok(W.write_200_only([(2, '    ok = c == 200  # standards-ok: endpoint documents 200 only')], [wf[0], '    ok = c == 200  # standards-ok: endpoint documents 200 only']) == [], "a marked line passes")
+with tempfile.TemporaryDirectory() as t4:
+    q = pathlib.Path(t4); sh(t4, "git", "init", "-q"); sh(t4, "git", "config", "user.email", "a@b.c"); sh(t4, "git", "config", "user.name", "t")
+    (q / "scripts").mkdir(); (q / "scripts/act.py").write_text("x = 1\n"); sh(t4, "git", "add", "-A"); sh(t4, "git", "commit", "-qm", "base")
+    (q / "scripts/act.py").write_text('x = 1\nst, j = call("POST", "/d1/query", token, body)\nif st != 200:\n    raise SystemExit(1)\n')
+    r = guard(t4); ok(r.returncode == 1 and "write-200-only" in r.stdout and "scripts/act.py:3" in r.stdout, "scripts/*.py is checked too: " + r.stdout)
+    (q / "scripts/act_test.py").write_text('st, j = call("POST", "/x", t, b)\nassert st == 200\n'); (q / "scripts/act.py").write_text("x = 1\n")
+    sh(t4, "git", "add", "-A"); r = guard(t4); ok(r.returncode == 0, "test files may assert 200: " + r.stdout)
 print("workers_standards_guard: %s" %("FAILED %d" % fails if fails else "all passed")); sys.exit(1 if fails else 0)

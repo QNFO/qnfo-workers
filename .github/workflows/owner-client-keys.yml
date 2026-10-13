@@ -1,4 +1,7 @@
 name: owner-client-keys
+# CI-ACTION-IDENTITY-1 (2026-10-13): the run title names the action, so scripts/ci_watchdog.py files a failure per action and
+# a green run of a different action never closes it (ci-watchdog #1033: gen-activitypub-key under the cf-ops-actions name).
+run-name: owner-client-keys ${{ inputs.mode }}
 
 # OWNER-CLIENT-KEY-DRIFT-1 (#1886, charter pillar security). The owner's Chatbox and DeepChat providers lost access when the
 # 2026-10-01 rotation skipped client consumers. This dispatch-only workflow issues a dedicated owner-client key per host
