@@ -53,5 +53,15 @@ ok(/never state an inferred arrangement, funding, motive or behaviour as a repor
   const src2 = src.slice(src.indexOf("var CF_FALLBACK = {"), src.indexOf("var FB_MIN_TOKENS"));
   ok(/critic: \["@cf\/moonshotai\/kimi-k2\.6", "@cf\/deepseek-ai\/deepseek-v4-pro-0813", "@cf\/openai\/gpt-oss-120b", "@cf\/zai-org\/glm-5\.3"\]/.test(src2), "deepseek-v4-pro is second in the critic chain, glm last");
 }
+// ---- SYSTEMS-TOPIC-1 (1.21.0): the primary article names actors making choices; catalogue entries are skipped -------------------------
+{
+  const f = V.systemsFit, pad = (s) => s + " " + "filler ".repeat(500);
+  ok(f({ text: pad("1065 Amundsenia (prov. designation: A926 PC) is a stony asteroid and Mars-crosser from the innermost regions of the asteroid belt.") }).ok === false, "a minor planet (run 5412's topic) is not a systems topic");
+  ok(f({ text: pad("Acleris foo is a species of moth of the family Tortricidae. It is found in Japan.") }).why === "catalogue entry" && f({ text: pad("Westbury is a village in Wiltshire, England.") }).ok === false, "a species and a village are catalogue entries");
+  ok(f({ text: pad("The Forth Road Bridge Act was passed by Parliament after the council and the government negotiated funding; the company opposed the tolls and the ministry adopted a policy.") }).ok === true, "an article about institutions deciding is a systems topic");
+  ok(f({ text: pad("The quick brown fox is a phrase. It is short.") }).ok === false && /few decision terms/.test(f({ text: pad("A phrase.") }).why), "an article without decision terms does not fit");
+  const w = src.slice(src.indexOf("async function wikiAnchors("), src.indexOf("async function paperAnchors("));
+  ok(/if \(!primary && fallback\) \{ primary = fallback;/.test(w), "when no candidate fits, the first long-enough article is still used");
+}
 console.log(pass + " passed, " + fail + " failed");
 if (fail) process.exit(1);
