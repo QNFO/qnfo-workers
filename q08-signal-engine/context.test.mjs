@@ -46,5 +46,16 @@ check("generate passes the pack to the writer and to the fact-check ground", /va
   check("a repository source is labelled as such", /a GitHub repository \(storytold\/cadcraft\)/.test(gh) && /Repository description and README excerpt: A CAD tool\./.test(gh), gh);
   check("generate builds the essay ground with labelledGround", /var essayGround = labelledGround\(story, friction, article, background, ownerNotes\);/.test((await import("node:fs")).readFileSync(new URL("./worker.js", import.meta.url), "utf8")));
 }
+// Q08-SOURCE-ORDER-1 (0.19.3)
+{
+  const O = mod.__order;
+  const c = [{ source: "hn", id: 1 }, { source: "hn", id: 2 }, { source: "github", id: "g" }, { source: "arxiv", id: "a" }];
+  const o1 = O.orderCandidates(c, "hn").map((x) => x.id);
+  check("after a story, a paper goes first and repositories go last", JSON.stringify(o1) === JSON.stringify(["a", 1, 2, "g"]), o1);
+  const o2 = O.orderCandidates(c, "arxiv").map((x) => x.id);
+  check("after a paper, stories go first and repositories go last", JSON.stringify(o2) === JSON.stringify([1, 2, "a", "g"]), o2);
+  const o3 = O.orderCandidates([{ source: "github", id: "g" }, { source: "github", id: "h" }], "github").map((x) => x.id);
+  check("with only repositories, they are still used", JSON.stringify(o3) === JSON.stringify(["g", "h"]), o3);
+}
 console.log("context.test.mjs: " + passes + " passed, " + fails + " failed");
 process.exit(fails ? 1 : 0);
