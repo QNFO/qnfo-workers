@@ -104,6 +104,7 @@ const NOW = 1791900000000, HOUR = Math.floor(NOW / 36e5);
   const r1 = await mod.truthTick(env, NOW);
   ok(r1.ran === true && r1.items === 2 && calls.length === 6, "first tick asks every model every item (2 items x 3 models)", { r1, n: calls.length });
   ok(calls.every((c) => c.max_tokens === 16 && c.stream === false), "each call is max_tokens 16, not streamed");
+  ok(calls.every((c) => c.hedge === false), "each call opts out of the router hedge (TURN-BUDGET-1 fast lane), so the asked model answers");
   const rows = db.prepare("SELECT * FROM ai_calibration_truth ORDER BY item_id, model").all();
   ok(rows.filter((x) => x.model === "m-a").length === 2 && rows.filter((x) => x.model === "m-a").every((x) => x.correct === 1 && x.got === x.expected && x.served_by === "m-a"), "a right model has right rows with its served_by");
   ok(rows.filter((x) => x.model === "m-b").length === 2 && rows.filter((x) => x.model === "m-b").every((x) => x.correct === 0 && x.got !== x.expected), "a wrong model has wrong rows");
@@ -166,7 +167,7 @@ const NOW = 1791900000000, HOUR = Math.floor(NOW / 36e5);
 ok(/path === "\/truth" && request\.method === "GET"\) return json\(await truthReport\(env, Date\.now\(\)\)\)/.test(src), "GET /truth is served, open like the other aggregate reads");
 ok(/Promise\.allSettled\(\[member, calibration\(env, "cron"\), truthTick\(env, Date\.now\(\)\)\]\)/.test(src), "the cron tick runs the truth probe beside the calibration");
 const v = /var VERSION = "([^"]+)"/.exec(src)[1];
-ok(versionAtLeast(v, "1.5.0"), "VERSION is at least 1.5.0 (a new capability is a minor bump)", v);
+ok(versionAtLeast(v, "1.5.1"), "VERSION is at least 1.5.1 (the hedge opt-out)", v);
 
 console.log(pass + " passed, " + fail + " failed");
 process.exit(fail ? 1 : 0);
