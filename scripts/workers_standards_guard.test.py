@@ -139,7 +139,7 @@ ok(rules('  const text = res.response.trim();') == ["ai-response-string-assumpti
 ok(rules('  const text = typeof res.response === "string" ? res.response.trim() : JSON.stringify(res.response);') == [], "a typeof-guarded response passes")
 ok(W.unrestricted_send_email('[[send_email]]\nname = "A"\n\n[[send_email]]\nname = "B"\ndestination_address = "x@y.z"\n[vars]\n') .__len__() == 1, "one of two send_email blocks is unrestricted")
 # WRITE-SUCCESS-CODES-1: a write judged by "== 200" only (CF answers 201 when it creates a secret; ci-watchdog #1033)
-wf = ['    c, _ = call("PUT", "/accounts/a/workers/scripts/w/secrets", token, body)', '    ok = c == 200']
+wf = ['    c, _ = call("PUT", "/accounts/a/d1/database/x/import", token, body)', '    ok = c == 200']
 ok([v[0] for v in W.write_200_only([(2, wf[1])], wf)] == ["write-200-only"], "a PUT judged by == 200 fails")
 ok(W.write_200_only([(2, '    ok = 200 <= (c or 0) < 300')], [wf[0], '    ok = 200 <= (c or 0) < 300']) == [], "a 2xx range passes")
 ok(W.write_200_only([(2, '  if (r.status === 200) done();')], ['  const r = await fetch(u, { method: "POST" });', '  if (r.status === 200) done();']) != [], "JS: a POST judged by === 200 fails")
