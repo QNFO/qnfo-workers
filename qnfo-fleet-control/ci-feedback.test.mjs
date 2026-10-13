@@ -45,5 +45,20 @@ check(/d\.action === "refuse" && d\.stale_check && g\.checks && g\.checks\.lengt
 check(/actions\/jobs\/" \+ c\.id \+ "\/logs"/.test(src), "the excerpt reads the failed check run's job log");
 check(/last_error: \("merge-runner: " \+ why\)\.slice\(0, 1200\), merge_note: String\(why\)\.slice\(0, 1200\)/.test(src), "merge_note and last_error keep 1200 chars");
 
+// CI-FEEDBACK-ORDER-1 (0.26.1): code_tasks ct_j25aciskebfq1f (2026-10-13 02:01Z) was refused with an excerpt of personal-api log lines that
+// passing suites print on purpose; the failing suite came later in the log and never reached the repair round.
+{
+  const noise = [];
+  for (let i = 0; i < 12; i++) noise.push("2026-10-13T02:00:4" + (i % 10) + ".1Z # personal-api chat log error: Cannot read properties of undefined (reading 'run') #" + i);
+  noise.push("2026-10-13T02:00:50.1Z ensureSchemaV3: env.PERSONAL.batch is not a function");
+  const tail = ["2026-10-13T02:00:55.1Z FAIL     88 ms  qnfo-fleet-dashboard/kpi.test.mjs", "2026-10-13T02:00:55.2Z AssertionError [ERR_ASSERTION]: the KPI page lists open issues", "2026-10-13T02:00:55.3Z     at qnfo-fleet-dashboard/kpi.test.mjs:41:3"];
+  const lo = cmFailureLines(noise.concat(tail).join("\n"));
+  check(lo[0] === "FAIL qnfo-fleet-dashboard/kpi.test.mjs", "ORDER-1: the failing suite leads the excerpt even after many runtime-error prints", lo);
+  check(lo.some((l) => /^AssertionError \[ERR_ASSERTION\]: the KPI page lists open issues/.test(l)) && lo.some((l) => /^at qnfo-fleet-dashboard\/kpi\.test\.mjs:41:3/.test(l)), "ORDER-1: its assertion and failing line follow", lo);
+  check(lo.length === CI_FEEDBACK_LINES && lo.slice(3).every((l) => /personal-api chat log error|is not a function/.test(l)), "ORDER-1: runtime-error prints fill only the lines left", lo);
+  const only = cmFailureLines(noise.join("\n"));
+  check(only.length === CI_FEEDBACK_LINES && /personal-api chat log error/.test(only[0]), "ORDER-1: with no failing suite in the log, the runtime-error prints are still reported", only);
+}
+
 console.log(fails ? fails + " FAILED" : "ci-feedback: all assertions passed");
 process.exit(fails ? 1 : 0);

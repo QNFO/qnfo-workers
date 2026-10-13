@@ -1,6 +1,6 @@
 -- APPLY-BY: ci
 -- DB: qnfo-audit
--- Rollback: DELETE FROM remediation_contracts WHERE class IN ('fm-second-path-flagged-non-canonical', 'fm-companion-context-invented', 'fm-blockquote-quote-unchecked', 'fm-exec-log-shared-signature'); DELETE FROM failure_modes WHERE fm_key IN ('second-path-flagged-non-canonical', 'companion-context-invented', 'blockquote-quote-unchecked', 'exec-log-shared-signature'); DELETE FROM decision_log WHERE instr(action, 'SECOND-PATH-CANONICAL-1:') = 1 OR instr(action, 'EXEC-LOG-SIGNATURE-1:') = 1 OR instr(action, 'COMPANION-CONTEXT-20261013:') = 1 OR instr(action, 'ABSTRACT-REPAIR-NOW-1:') = 1
+-- Rollback: DELETE FROM remediation_contracts WHERE class IN ('fm-second-path-flagged-non-canonical', 'fm-companion-context-invented', 'fm-blockquote-quote-unchecked', 'fm-exec-log-shared-signature', 'fm-ci-excerpt-noise-first'); DELETE FROM failure_modes WHERE fm_key IN ('second-path-flagged-non-canonical', 'companion-context-invented', 'blockquote-quote-unchecked', 'exec-log-shared-signature', 'ci-excerpt-noise-first'); DELETE FROM decision_log WHERE instr(action, 'SECOND-PATH-CANONICAL-1:') = 1 OR instr(action, 'EXEC-LOG-SIGNATURE-1:') = 1 OR instr(action, 'CI-FEEDBACK-ORDER-1:') = 1 OR instr(action, 'COMPANION-CONTEXT-20261013:') = 1 OR instr(action, 'ABSTRACT-REPAIR-NOW-1:') = 1
 -- SECOND-PATH-CANONICAL-1 and the companion changes of 2026-10-13 15:00-15:20 UTC (pillars core and personal; DOCTRINE-1 registries).
 -- (1) qnfo-deploy-guard 1.3.25 (same pull request): a successful deploy by canonical-deploy.yml's second path
 --     (scripts/direct_content_deploy.py, actor canonical-deploy/direct_content_deploy) is not a non-canonical deploy. The idea-hub
@@ -11,6 +11,8 @@
 -- (2b) qnfo-code-orchestrator 0.14.4 EXEC-LOG-SIGNATURE-1 (same pull request): a proposal syntax check is logged by its label and the
 --     error it found, as status rejected; LOOP-BREAKER-1 (agent_issues 2488) had read four unrelated rejected drafts (09:21, 10:41,
 --     12:11, 14:01 UTC) as one recurring failure because every check logged the same 80-character script prefix.
+-- (2c) qnfo-fleet-control 0.26.1 CI-FEEDBACK-ORDER-1 (same pull request): the CI excerpt a refused code-loop pull request carries into its
+--     repair round lists the failing suites and assertions first; ct_j25aciskebfq1f's excerpt was personal-api log noise.
 -- (3) The one published paper fm-paper-abstract-empty counted (critical-examination-of-the-null-hypotheses-in-fundamental-physics)
 --     received the abstract qnfo-research-exec 0.17.5 bodySummary computes for it, written by this session at 15:16 UTC with the
 --     sweep's own backup (living-paper abstract_repair_bak). 0.17.5 changed bodySummary but not SWEEP_RULES, so its sweep would only
@@ -35,7 +37,12 @@ INSERT OR IGNORE INTO failure_modes (fm_key, failure_mode, root_cause, remediati
   'the orchestrator container logged every exec as its first 80 characters of code with status error; every proposal syntax check runs the same script prefix, and LOOP-BREAKER-1 groups error events by their first 48 characters',
   'EXEC-LOG-SIGNATURE-1 (qnfo-code-orchestrator 0.14.4): a labelled exec is logged by its label and output; a py-compile exit 3 is status rejected',
   'qnfo-code-orchestrator/worker.js on main logs exec through execLogEntry', 'fm-exec-log-shared-signature', '2026-10-13', 2488,
-  'three proposal syntax checks fail within 24 h', 'cloud_ops_events orchestrator.exec status error with identical text "exec: import base64,sys ..."; LOOP-BREAKER-1 issue 2488', 'the loop breaker''s signal for the code loop');
+  'three proposal syntax checks fail within 24 h', 'cloud_ops_events orchestrator.exec status error with identical text "exec: import base64,sys ..."; LOOP-BREAKER-1 issue 2488', 'the loop breaker''s signal for the code loop'),
+ ('ci-excerpt-noise-first', 'a refused code-loop pull request carries log noise instead of its failing suite into the repair round, so the repair cannot fix the failure',
+  'cmFailureLines kept lines in log order up to CI_FEEDBACK_LINES (10) and counted any line naming a runtime error; passing personal-api suites print such lines on purpose, so they filled the excerpt before the FAIL line',
+  'CI-FEEDBACK-ORDER-1 (qnfo-fleet-control 0.26.1): failing-suite and assertion lines are collected first over the whole log; runtime-error prints fill the lines left',
+  'qnfo-fleet-control/worker.js on main orders the CI excerpt', 'fm-ci-excerpt-noise-first', '2026-10-13', NULL,
+  'a required check fails in a run whose log carries runtime-error prints before the failing suite', 'code_tasks ct_j25aciskebfq1f last_error "gate: # personal-api chat log error: Cannot read properties of undefined (reading ''run'') | ensureSchemaV3: env.PERSONAL.batch is not a function"', 'every code-loop repair of a failed required check');
 INSERT OR IGNORE INTO remediation_contracts (class, issue_id, precondition, action, verify_probe, verify_transport, max_attempts, escalate_to, expected_cadence_h, status, module, budget_ms, max_items, requires_container, next_due_at) VALUES
  ('fm-second-path-flagged-non-canonical', NULL, 'SECOND-PATH-CANONICAL-1', 'failure-mode detector',
   '{"paths": ["qnfo-deploy-guard/worker.js"], "contains": "if (isSecondPath(nlr)) { if (nlr.ok === 0) nonCanon.push(ncw); continue; }"}',
@@ -48,7 +55,18 @@ INSERT OR IGNORE INTO remediation_contracts (class, issue_id, precondition, acti
   'code-read', 3, 'qnfo-fleet-control', 1, 'active', 'failure-mode', 45000, 5, 0, datetime('now')),
  ('fm-exec-log-shared-signature', NULL, 'EXEC-LOG-SIGNATURE-1', 'failure-mode detector',
   '{"paths": ["qnfo-code-orchestrator/worker.js"], "contains": "const entry = execLogEntry(code, body.label, out);"}',
+  'code-read', 3, 'qnfo-fleet-control', 1, 'active', 'failure-mode', 45000, 5, 0, datetime('now')),
+ ('fm-ci-excerpt-noise-first', NULL, 'CI-FEEDBACK-ORDER-1', 'failure-mode detector',
+  '{"paths": ["qnfo-fleet-control/worker.js"], "contains": "return prim.concat(sec).slice(0, max);"}',
   'code-read', 3, 'qnfo-fleet-control', 1, 'active', 'failure-mode', 45000, 5, 0, datetime('now'));
+INSERT INTO decision_log (actor, assumption, action, evidence, outcome, blast_radius, rollback_path, capability_gain, predicted_outcome, reach_gain, surfaces_tested)
+SELECT 'session_01Kddqwk5gQT5qSSHVKjT2EA', 'a repair round can fix only the failure it is shown',
+  'CI-FEEDBACK-ORDER-1: qnfo-fleet-control 0.26.1 puts the failing suites and assertions first in the CI excerpt of a refused code-loop pull request; runtime-error prints fill the lines left',
+  'code_tasks ct_j25aciskebfq1f (2026-10-13 02:01Z, qnfo-fleet-dashboard) failed with an excerpt of personal-api log lines; cmFailureLines kept log order and the 10-line quota filled before the FAIL line',
+  'pull request to the stale-PR lane (control plane)', 'the CI excerpt the code loop repairs from', 'revert of qnfo-fleet-control 0.26.1',
+  'the code loop repairs the failure that refused it', 'in the 7 days after 0.26.1 is live, every code_tasks last_error that starts "merge-runner: required check(s) failed" and has a failing: excerpt names a FAIL or not ok line when the log had one', 'none',
+  'd1:code_tasks; code:qnfo-fleet-control cmFailureLines, cmFailureExcerpt'
+WHERE NOT EXISTS (SELECT 1 FROM decision_log WHERE instr(action, 'CI-FEEDBACK-ORDER-1:') = 1);
 INSERT INTO decision_log (actor, assumption, action, evidence, outcome, blast_radius, rollback_path, capability_gain, predicted_outcome, reach_gain, surfaces_tested)
 SELECT 'session_01Kddqwk5gQT5qSSHVKjT2EA', 'a verifier rejecting a model draft is the loop working; logging it as an orchestrator error makes the loop breaker chase a pattern that is only a shared script prefix',
   'EXEC-LOG-SIGNATURE-1: qnfo-code-orchestrator 0.14.4 logs a labelled exec by label and output, and a proposal syntax error (py-compile exit 3) as status rejected',
