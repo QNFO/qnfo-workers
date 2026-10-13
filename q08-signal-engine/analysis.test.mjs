@@ -76,5 +76,17 @@ check("the directive asks for the marker", /Begin the systems analysis with a li
   check("a marker placed before 600 characters of reporting moves later instead of being dropped", sp.mode === "marked-shifted" && sp.analysis && sp.analysis.includes("Operators are rewarded") && sp.report.length >= 600, { mode: sp.mode, rl: sp.report.length });
   check("a marker that is already valid is kept where the writer put it", A.splitAnalysis("# T\n\n" + rp + "\n\n" + rp + "\n\n" + rp + "\n\n<!-- analysis -->\n\n" + an + "\n\nworth your time: yes - x").mode === "marked");
 }
+// ---- Q08-ANALYSIS-CONCRETE-1 (0.20.3, run 383) ------------------------------------------------------------------------------
+{
+  const A = (await import("./worker.js")).__analysis;
+  check("abstract reasoning is not a concrete analysis item", !A.concreteClaim("'Adopting the platform, however, requires learning a new workflow and integrating its outputs into existing practices.' -- source does not mention adoption"));
+  check("an open question is not a concrete analysis item", !A.concreteClaim("'Whether the perceived benefit of a verifiable configuration hash will motivate enough users to adopt the platform remains unresolved.' -- not discussed"));
+  check("a named organisation doing something is concrete", A.concreteClaim("FACT: the platform was adopted by Google for its swarm lab -- not in source"));
+  check("a figure is concrete", A.concreteClaim("simulation cuts cost by 40 percent -- not in source"));
+  check("a quotation is concrete", A.concreteClaim("the authors call it \u201ca turning point for the field\u201d -- quote not in source"));
+  check("a bare reviewer fail stays (fail-closed)", A.concreteClaim("the reviewer rejected the draft without naming a claim"));
+  const fa = A.concreteAnalysisItems({ ok: false, unavailable: false, unsupported: ["'Adopting the platform requires learning a new workflow.' -- not in source"], inferences: [], judges: [] });
+  check("a check that listed only abstract reasoning passes", fa.ok === true && fa.unsupported.length === 0 && fa.droppedAbstract === 1, fa);
+}
 console.log("analysis.test.mjs: " + passes + " passed, " + fails + " failed");
 process.exit(fails ? 1 : 0);
