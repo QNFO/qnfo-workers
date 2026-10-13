@@ -57,5 +57,34 @@ const NOW = Date.parse("2026-10-07T08:00:00Z");
   const r = await companionStallDetector(T.env, NOW);
   ok(r.hours === 3 && r.closed === 0, "fresh piece: " + JSON.stringify(r));
 }
+// PUBLISH-STALL-DIGEST-1 (1.19.0): the open issue is rewritten every stalled tick (hours, 24 h stage digest, newest rejections),
+// turns critical after 24 h, and a second issue is never inserted (agent_issues 2222 kept "13h" for 73 h with no stage breakdown)
+{
+  const V = mod.__verify;
+  ok(V.stallAttemptStage("critique objection=3 :: weak") === "critique" && V.stallAttemptStage("fact-check factcheck: unsupported claim: x") === "fact-check"
+    && V.stallAttemptStage("validate: notes length 1007; banned: testament to || raw: ...") === "validate-banned" && V.stallAttemptStage("validate: notes length 1082 || in context:") === "validate-length"
+    && V.stallAttemptStage("validate: grounding: name not in the source: X || raw") === "validate-grounding" && V.stallAttemptStage("time budget spent after 4 attempts") === "time budget"
+    && V.stallAttemptStage("duplicate title: x") === "other", "each attempt maps to its stage");
+  ok(V.companionStallDigest([{ detail: "critique a=1 :: x" }, { detail: "validate: notes length 9" }, { detail: "validate: notes length 8" }]) === "validate-length 2, critique 1", "the digest counts stages, most first");
+  const T = setup();
+  T.p.exec("INSERT INTO companion_pieces (slug, created_at) VALUES ('old', '2026-10-04T08:00:00Z')");
+  T.p.exec("INSERT INTO companion_runs (run_at, form, model, topic, status, detail) VALUES ('2026-10-07T04:05Z','notes','m','a','rejected','validate: notes length 1007; banned: testament to || raw: x'), ('2026-10-07T04:06Z','notes','m','a','rejected','critique objection=3 :: weak'), ('2026-10-07T04:07Z','notes','m','a','stage','time budget spent after 4 attempts'), ('2026-10-07T04:07Z','notes','m','a','failed','no piece survived the gate'), ('2026-10-07T07:05Z','notes','m','b','rejected','fact-check factcheck: unsupported claim: iron tools -- not in source'), ('2026-10-07T07:06Z','notes','m','b','failed','no piece survived the gate'), ('2026-10-05T07:06Z','notes','m','z','rejected','critique old :: outside the 24 h window')");
+  T.a.exec("INSERT INTO agent_issues (title, description, priority, status, created_at, updated_at) VALUES ('COMPANION-PUBLISH-STALL-AUTO-1: reading.q08.org published nothing for 13h; last 2 generation runs failed', 'old text', 'high', 'open', 1, 1)");
+  const r = await companionStallDetector(T.env, NOW);
+  const rows = T.a.prepare("SELECT * FROM agent_issues").all();
+  ok(r.updated === true && rows.length === 1, "the open issue is updated, not a second one inserted: " + JSON.stringify(r));
+  ok(/published nothing for 72h/.test(rows[0].title) && rows[0].priority === "critical", "title carries the current hours and priority is critical after 24 h: " + rows[0].title + " " + rows[0].priority);
+  ok(/validate-banned 1/.test(rows[0].description) && /critique 1/.test(rows[0].description) && /fact-check 1/.test(rows[0].description) && /time budget 1/.test(rows[0].description) && !/outside the 24 h window/.test(rows[0].description), "the description carries the 24 h stage digest only", rows[0].description);
+  ok(/Newest rejections: #\d+ fact-check: fact-check factcheck: unsupported claim: iron tools/.test(rows[0].description) && /2 failed or blocked runs/.test(rows[0].description), "and the newest rejection details");
+  ok(!/old text/.test(rows[0].description) && rows[0].updated_at === NOW, "the old text is replaced and updated_at moves");
+  // a 14h stall with no open issue inserts one at high priority
+  const T2 = setup();
+  T2.p.exec("INSERT INTO companion_pieces (slug, created_at) VALUES ('old', '2026-10-06T18:00:00Z')");
+  T2.p.exec("INSERT INTO companion_runs (run_at, form, model, topic, status, detail) VALUES ('2026-10-07T04:01Z','essay','m','a','failed','g'), ('2026-10-07T07:01Z','essay','m','b','failed','g')");
+  const r2 = await companionStallDetector(T2.env, NOW);
+  const i2 = T2.a.prepare("SELECT * FROM agent_issues").all();
+  ok(r2.filed === true && i2.length === 1 && i2[0].priority === "high", "under 24 h: one new issue at high priority");
+  ok(!/catch \(eM\) \{\}|\.catch\(function \(\) \{\}\)/.test(src.slice(src.indexOf("async function companionStallDetector"), src.indexOf("async function companionStallDetector") + 6000)), "no swallowed catch in the stall detector");
+}
 console.log(pass + " passed, " + fail + " failed");
 if (fail) process.exit(1);
