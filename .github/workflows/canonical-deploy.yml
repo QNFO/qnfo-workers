@@ -175,6 +175,7 @@ jobs:
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: |
           set -uo pipefail
+          : > /tmp/compat_pending.jsonl
           python3 scripts/direct_content_deploy.py --selftest
           # DEPLOY-SECOND-PATH-1 drill: exercise the second path on purpose for one worker, at its current main code.
           if [ -n "${IN_DRILL:-}" ] && [ "${IN_DRY:-false}" != "true" ]; then
@@ -201,8 +202,10 @@ jobs:
             # DEPLOY-LOOP-CONTINUES-1 (2026-10-12, run 38255625967): the step shell is bash -e, so a non-zero exit here ended the step at the
             # FIRST target (idea-hub: /ops/deploy read timed out after 180 s, exit 3) and the other four targets and the second deploy
             # path never ran. The exit code is captured without tripping -e, so every target is attempted and the fallback file is drained.
+            # COMPAT-VERIFY-RUNNER-1: --compat-verify caller lets /ops/deploy advance a reviewed compatibility date whose /health
+            # qnfo-ops cannot read; each such answer is a line in /tmp/compat_pending.jsonl for the verify step below.
             rc=0
-            python3 scripts/canonical_deploy.py --worker "$name" --path "$path" --fallback-file /tmp/fallback.txt $DRY $CR || rc=$?
+            python3 scripts/canonical_deploy.py --worker "$name" --path "$path" --fallback-file /tmp/fallback.txt --compat-verify caller --compat-pending-file /tmp/compat_pending.jsonl $DRY $CR || rc=$?
             if [ $rc -eq 0 ]; then
               echo "OK $name"
             elif [ $rc -eq 3 ]; then
@@ -220,6 +223,31 @@ jobs:
           fi
           echo "deploy_fail=$fail"
           exit $fail
+
+      # COMPAT-VERIFY-RUNNER-1 (2026-10-13, agent_issues 2411, pillar core): the deploy loop asks /ops/deploy with
+      # compat_verify caller, so a reviewed compatibility date advances even when qnfo-ops cannot read the worker's /health
+      # (a Worker cannot fetch its own account's workers.dev hosts, error 1042; qnfo-ops itself is one). Each such answer
+      # (compat.pending_verify) is a line in /tmp/compat_pending.jsonl. This step polls each worker's /health from the runner
+      # (the canary's host, plus ops.qnfo.org for qnfo-ops) for up to 2 minutes for the deployed VERSION and answers
+      # POST /ops/compat-verify: ok true records the verification, ok false makes qnfo-ops upload the deployed source again
+      # with the previous date. It runs before the canary, so a date that broke a control-plane worker is put back before the
+      # canary decides on a revert, and after a failed deploy step too, because another target's date may still await its
+      # check. It never fails itself, so the canary still runs; a restore that failed is the output restore_failed, which the
+      # gate after the canary turns into a failed run. A verify miss whose restore worked is a warning, not a failure.
+      - name: Verify advanced compatibility dates from the runner
+        id: compat
+        if: ${{ !cancelled() && github.event.inputs.dry_run != 'true' }}
+        env:
+          OPS_ROUTER_AUTH_KEY: ${{ secrets.OPS_ROUTER_AUTH_KEY }}
+          # COMPAT-RESTORE-DIRECT-1: the runner's own restore when qnfo-ops cannot put the previous date back (PATCH settings).
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          set -uo pipefail
+          rc=0
+          python3 scripts/compat_verify_runner.py --pending /tmp/compat_pending.jsonl --window-min 2 --poll-sec 10 || rc=$?
+          if [ "$rc" -ne 0 ]; then echo "restore_failed=1" >> "$GITHUB_OUTPUT"; else echo "restore_failed=0" >> "$GITHUB_OUTPUT"; fi
+          exit 0
 
       # CONTROL-PLANE-CANARY-1 (2026-10-06, CONTROL-PLANE-SELF-MERGE-1, owner directive 2026-10-06): after a push-mode
       # deploy, poll /health of every control-plane worker in the target set for the pushed VERSION. A version that does
@@ -247,6 +275,15 @@ jobs:
           MODE=""
           if [ "${EVENT_NAME}" != "push" ]; then MODE="--no-revert"; echo "dispatched deploy: verify-only canary"; fi
           python3 scripts/canary_revert.py --targets /tmp/targets.txt --pushed "$GITHUB_SHA" --canary-min 8 --poll-sec 20 $MODE
+
+      # COMPAT-VERIFY-RUNNER-1: a compatibility date that did not verify and could not be put back leaves a worker at an
+      # unverified date (qnfo-ops files COMPAT-RESTORE-FAILED-1 when its restore upload failed); that, and only that, fails the
+      # run. It runs after the canary so the canary is never skipped for it.
+      - name: Fail the run when an unverified compatibility date could not be restored
+        if: ${{ !cancelled() && steps.compat.outputs.restore_failed == '1' }}
+        run: |
+          echo "::error::an advanced compatibility date did not answer its VERSION on /health and qnfo-ops did not put the previous date back; read the step Verify advanced compatibility dates from the runner"
+          exit 1
 
       # STATUS-THROTTLE-1 (ACTIONS-QUOTA-1, 2026-10-02): the file held only head and ts, so it carried no outcome, and
       # it was committed on every run (127 of main's 648 commits in the 24h to 2026-10-02 09Z), each one starting a

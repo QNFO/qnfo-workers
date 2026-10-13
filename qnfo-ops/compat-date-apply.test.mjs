@@ -263,7 +263,8 @@ async function deploy(h, args) {
 
 // ---- wiring in worker.js
 ok(/try \{ out\.compat = parseDeclaredCompat\(toml\); \} catch \(_ec\) \{ out\.compat = null; \}/.test(src), "the installer surfaces the declared date");
-ok(/compat_gate: function\(_dec\) \{ return toVer \|\| srcVer \? compatAdvanceGate\(env, worker, _dec\) : \{ allow: false/.test(src), "/ops/deploy passes the health gate, and no gate without a VERSION");
+// COMPAT-VERIFY-RUNNER-1 (2.46.0): the gate also gets the caller-verify flag of the request (compat-verify-runner.test.mjs).
+ok(/compat_gate: function\(_dec\) \{ return toVer \|\| srcVer \? compatAdvanceGate\(env, worker, _dec, \{ caller_verify: _callerVerify \}\) : \{ allow: false/.test(src), "/ops/deploy passes the health gate, and no gate without a VERSION");
 ok((src.match(/compat_gate:/g) || []).length === 1, "only /ops/deploy passes a gate");
 const k1 = src.indexOf("if (dep.compat && dep.compat.applied) {"), k0 = src.indexOf('log.push({ step: "verify", live_version: live });'), k2 = src.indexOf("// DEPLOY-GUARD-LEDGER-SYNC-1 (2026-09-26)");
 ok(k0 > 0 && k1 > k0 && k2 > k1, "the verify-or-restore step runs after the live-version verification and before the guard ledger");
