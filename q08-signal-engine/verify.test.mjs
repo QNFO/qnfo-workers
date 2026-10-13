@@ -325,5 +325,21 @@ globalThis.fetch = origFetch;
   check("FACT-labelled wording-only items are paraphrases", sp.inferences.length === 2, sp);
   check("a plain FACT and a wording complaint naming a figure stay FACTs", sp.facts.length === 2, sp);
 }
+// Q08-GITHUB-README-1 (0.16.0, run 358)
+{
+  check("a repository URL reads its raw README", V.articleUrlFor({ url: "https://github.com/storytold/gridcraft" }) === "https://raw.githubusercontent.com/storytold/gridcraft/HEAD/README.md");
+  check("a trailing slash and .git are handled", V.githubReadmeUrl("https://github.com/a/b.git") === "https://raw.githubusercontent.com/a/b/HEAD/README.md" && V.githubReadmeUrl("https://github.com/a/b/") === "https://raw.githubusercontent.com/a/b/HEAD/README.md");
+  check("a deeper GitHub URL and other hosts are left alone", V.articleUrlFor({ url: "https://github.com/a/b/issues/3" }) === "https://github.com/a/b/issues/3" && V.articleUrlFor({ url: "https://example.org/x" }) === "https://example.org/x");
+  check("arXiv still reads its HTML rendering", V.articleUrlFor({ url: "https://arxiv.org/abs/2601.00001" }) === "https://arxiv.org/html/2601.00001");
+  const realFetch = globalThis.fetch, seen = [];
+  globalThis.fetch = async (u) => { seen.push(String(u)); if (/raw\.githubusercontent/.test(u)) return new Response("x".repeat(50), { status: 404, headers: { "content-type": "text/plain" } }); return new Response("<html><body>" + "The project page text. ".repeat(20) + "</body></html>", { status: 200, headers: { "content-type": "text/html" } }); };
+  const t1 = await V.fetchArticleText("https://raw.githubusercontent.com/a/b/HEAD/README.md");
+  check("a repository without a README falls back to its page", /project page text/.test(t1) && seen.join() === "https://raw.githubusercontent.com/a/b/HEAD/README.md,https://github.com/a/b", seen);
+  seen.length = 0;
+  globalThis.fetch = async (u) => { seen.push(String(u)); return new Response("# gridcraft\n\nCopy-on-write workbooks and a dependency-graph calculation engine. ".repeat(5), { status: 200, headers: { "content-type": "text/plain; charset=utf-8" } }); };
+  const t2 = await V.fetchArticleText("https://raw.githubusercontent.com/storytold/gridcraft/HEAD/README.md");
+  check("a README is read as source text", /Copy-on-write/.test(t2) && seen.length === 1, seen);
+  globalThis.fetch = realFetch;
+}
 console.log("verify.test.mjs: " + passes + " passed, " + fails + " failed");
 process.exit(fails ? 1 : 0);
