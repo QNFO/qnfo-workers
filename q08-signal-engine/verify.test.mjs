@@ -341,5 +341,11 @@ globalThis.fetch = origFetch;
   check("a README is read as source text", /Copy-on-write/.test(t2) && seen.length === 1, seen);
   globalThis.fetch = realFetch;
 }
+// Q08-FULLTEXT-1 (0.17.1, agent_issues 2470)
+{
+  const src = (await import("node:fs")).readFileSync(join(dirname(fileURLToPath(import.meta.url)), "worker.js"), "utf8");
+  check("the abstract-only fallback is gone (code probe)", !src.includes("if (!story && bestThin) { story = bestThin.cand;"));
+  check("a thin candidate needs fetched full text", V.THIN_MIN_ARTICLE >= 600 && /thinOk = bestThin && String\(bestThin\.art \|\| ""\)\.length >= THIN_MIN_ARTICLE/.test(src));
+}
 console.log("verify.test.mjs: " + passes + " passed, " + fails + " failed");
 process.exit(fails ? 1 : 0);
