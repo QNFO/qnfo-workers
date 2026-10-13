@@ -54,7 +54,10 @@ const env = {
     routerCalls++;
     const body = JSON.parse(opts.body);
     const p = body.messages[0].content;
-    const content = /adversarial reviewer/.test(p) ? '{"verdict":"pass","hard":[],"soft":[]}' : "[]";
+    // VERIFY-EXTRACT-FAIL-CLOSED-1 (0.18.0): the extractor answers with its own list. The review JSON this mock used to return for
+    // every prompt that carries the shared preamble is not a claim list, and it now fails the extraction closed instead of
+    // reading as "qualitative".
+    const content = p.includes("=== TASK: VERIFY_EXTRACT ===") ? "[]" : /adversarial reviewer/.test(p) ? '{"verdict":"pass","hard":[],"soft":[]}' : "[]";
     return new Response(JSON.stringify({ choices: [{ message: { content } }] }), { status: 200, headers: { "Content-Type": "application/json" } });
   } },
   AI: { async run() { throw new Error("no Workers AI call expected in this test"); } }
