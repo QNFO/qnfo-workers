@@ -111,6 +111,16 @@ binding = "SVC_QNFO_INTENT"
 service = "qnfo-intent-orchestrator"
 environment = "production"
 
+# DEPLOY-DRIFT-CF-1 (0.26.0): the */20 tick deploys a worker whose main VERSION has been ahead of live for 45 minutes, with no
+# canonical-deploy run active, through qnfo-ops POST /ops/deploy (the deploy's second runner; spof_registry 'GitHub Actions').
+# qnfo-ops authenticates this binding by props.caller (OPS-INTERNAL-CALLER-1, #1703), never by a copy of the router key.
+# Installed by qnfo-ops BINDING-PROPS-APPLY-1 on the canonical deploy.
+[[services]]
+binding = "SVC_QNFO_OPS"
+service = "qnfo-ops"
+environment = "production"
+props = { caller = "qnfo-fleet-control" }
+
 # FleetAdvisor Durable Object (advisor + calibration subsystem; stateless -- uses no
 # state.storage). LIVE namespace: qnfo-fleet-control_FleetAdvisor (class FleetAdvisor,
 # script qnfo-fleet-control). This binding is what made the toml binding-INCOMPLETE before
