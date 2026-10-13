@@ -1,5 +1,5 @@
 {
-  "audited_at": "2026-10-13 09:21:23",
+  "audited_at": "2026-10-13 10:04:58",
   "d1_write_failures": [],
   "d1_writes_ok": 115,
   "guard": {
@@ -573,7 +573,7 @@
       },
       {
         "dir": "qnfo-code-orchestrator",
-        "version": "0.14.2-claim-backoff",
+        "version": "0.14.3-backoff-sla",
         "worker": "qnfo-code-orchestrator"
       },
       {
@@ -598,7 +598,7 @@
       },
       {
         "dir": "qnfo-fleet-dashboard",
-        "version": "1.35.0-mail-draft-complete",
+        "version": "1.35.1-codeagent",
         "worker": "qnfo-fleet-dashboard"
       },
       {
@@ -648,7 +648,7 @@
       },
       {
         "dir": "qnfo-research-exec",
-        "version": "0.17.4-abstract-frontmatter",
+        "version": "0.17.5-abstract-lines",
         "worker": "qnfo-research-exec"
       },
       {
@@ -1146,9 +1146,9 @@
       "worker": "qnfo-code-agent"
     },
     "qnfo-code-orchestrator": {
-      "before": "0.14.2-claim-backoff",
+      "before": "0.14.3-backoff-sla",
       "http": 200,
-      "live": "0.14.2-claim-backoff",
+      "live": "0.14.3-backoff-sla",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-code-orchestrator"
@@ -1276,9 +1276,9 @@
       "worker": "qnfo-fleet-control"
     },
     "qnfo-fleet-dashboard": {
-      "before": "1.35.0-mail-draft-complete",
+      "before": "1.35.1-codeagent",
       "http": 200,
-      "live": "1.35.0-mail-draft-complete",
+      "live": "1.35.1-codeagent",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-fleet-dashboard"
@@ -1500,9 +1500,9 @@
       "worker": "qnfo-register-guard"
     },
     "qnfo-research-exec": {
-      "before": "0.17.4-abstract-frontmatter",
+      "before": "0.17.5-abstract-lines",
       "http": 200,
-      "live": "0.17.4-abstract-frontmatter",
+      "live": "0.17.5-abstract-lines",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-research-exec"
