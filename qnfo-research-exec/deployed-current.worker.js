@@ -277,6 +277,13 @@ __name22(runModel, "runModel");
 __name222(runModel, "runModel");
 __name2222(runModel, "runModel");
 __name22222(runModel, "runModel");
+// SOURCE-VOICE-1: the qnfo-ai router (the fallback path) adds its own reader notices to an answer: a "No source material was
+// retrieved" opening and a "statements removed ... not in the supplied sources" footer (qnfo-ai ACCURACY-GROUND-1). A paper's
+// prompt carries its own sources, so those notices describe the router's inputs, not the paper's; they are removed here, and the
+// requests send rag:false so the router adds no retrieved block of its own.
+function stripRouterNotices(text) {
+  return String(text || "").replace(/^\s*No source material was retrieved for this question[^\n]*\n+/i, "").replace(/\n+_\d+ statements? removed: each carried a DOI[^\n]*_\s*$/i, "");
+}
 async function gatewayPaper(env, prompt) {
   if (!routerUsable(env)) {
     await logEvent(env, "ai-error", "gateway: neither the QNFO_AI binding nor ROUTER_TOKEN is available");
@@ -287,14 +294,14 @@ async function gatewayPaper(env, prompt) {
     ctrl.abort();
   }, 12e4);
   try {
-    const r = await routerFetch(env, ROUTER, { method: "POST", headers: routerHeaders(env, true), body: JSON.stringify({ model: GATEWAY_MODEL, max_tokens: MAX_PAPER, temperature: 0.3, messages: [{ role: "user", content: prompt }] }), signal: ctrl.signal });
+    const r = await routerFetch(env, ROUTER, { method: "POST", headers: routerHeaders(env, true), body: JSON.stringify({ model: GATEWAY_MODEL, max_tokens: MAX_PAPER, temperature: 0.3, rag: false, messages: [{ role: "user", content: prompt }] }), signal: ctrl.signal });
     if (!r.ok) {
       await logEvent(env, "ai-error", "gateway " + r.status);
       return "";
     }
     const d = await r.json();
     const c = d && d.choices && d.choices[0] && d.choices[0].message && d.choices[0].message.content;
-    if (c && String(c).trim().length > 40) return String(c).trim();
+    if (c && String(c).trim().length > 40) return stripRouterNotices(c).trim();
     await logEvent(env, "ai-empty", "gateway empty/shallow");
     return "";
   } catch (e) {
@@ -1537,7 +1544,7 @@ async function gwCall(env, prompt, maxTokens) {
     ctrl.abort();
   }, 24e4);
   try {
-    const r = await routerFetch(env, ROUTER, { method: "POST", headers: routerHeaders(env, true), body: JSON.stringify({ model: GATEWAY_MODEL, max_tokens: maxTokens, temperature: 0.3, messages: [{ role: "user", content: prompt }] }), signal: ctrl.signal });
+    const r = await routerFetch(env, ROUTER, { method: "POST", headers: routerHeaders(env, true), body: JSON.stringify({ model: GATEWAY_MODEL, max_tokens: maxTokens, temperature: 0.3, rag: false, messages: [{ role: "user", content: prompt }] }), signal: ctrl.signal });
     clearTimeout(t);
     if (!r.ok) {
       var _eb = "";
@@ -1567,7 +1574,7 @@ async function gwCall(env, prompt, maxTokens) {
     if (typeof c === "string" && c && !_canned) {
       if (_gwBreaker && _gwBreaker.failTs > 0) await logEvent(env, "gw-ok", "gateway answered (len=" + c.length + "); breaker closed", "ok");
       gwBreakerTrip(true);
-      return c;
+      return stripRouterNotices(c);
     }
     gwBreakerTrip(false);
     await logEvent(env, _canned ? "gw-canned" : "gw-fallback", _canned ? "gateway returned canned FALLBACK_TEXT (len=" + String(c).trim().length + "); falling back to Workers AI" : "gateway empty content; falling back to Workers AI", "warn");
@@ -2286,6 +2293,7 @@ var SUMMARY_ONLY_PATTERNS = [
   /\b(?:input|grounding) block\b/i,
   /\b(?:summary|abstract|entry)(?: of \[\d+\])? (?:is|was) truncated\b|\btruncated (?:summary|abstract|entry)\b/i,
   /\bre-entry prompt\b/i,
+  /\bno source material was retrieved\b|\bstatements? removed: each carried a DOI\b|\bnot in the supplied sources\b/i,
   /\bsupplied with (?:no|an empty|only)\b/i,
   /\b(?:carr(?:y|ies)|ha(?:s|ve)) only (?:a |their |its )?titles?\b/i,
   /\bthe (?:corpus|bibliography) does not (?:specify|state|give|report|supply|provide)\b/i,
@@ -26892,6 +26900,7 @@ export {
   corpusSummary,
   completenessSweep,
   completenessSweepDue,
+  stripRouterNotices,
   cleanAbstract,
   arxivFullText,
   attachFullTexts,

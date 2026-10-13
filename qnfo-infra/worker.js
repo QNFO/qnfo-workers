@@ -5,7 +5,7 @@ var __name = (target, value) => __defProp(target, "name", { value, configurable:
 var __defProp2 = Object.defineProperty;
 var __name2 = /* @__PURE__ */ __name((target, value) => __defProp2(target, "name", { value, configurable: true }), "__name");
 var NL = String.fromCharCode(10);
-var VERSION = "1.3.4-index-token-ct"; // 1.3.4 WORKERS-STANDARDS-1 (2026-10-12, pillar security): the indexer member compares X-Index-Token in constant time (same accepted value). // 1.3.1 INDEXER-FOLD-1 (#1756): qnfo-paper-indexer runs here as a member (its two jobs on this worker's existing 06:30 trigger, no cron added; /indexer/* read routes).
+var VERSION = "1.4.0-context-passage"; // 1.4.0 SOURCE-VOICE-1 (agent_issues 2468, owner directive 2026-10-13 "Papers shall cite full texts, not merely reference work summaries"; pillar research): a PAPER_VZ hit in /context carries the passage of the paper's body that matched (the indexer's own chunk, from metadata.chunk), after the abstract when one is stored; it was title + status + abstract.slice(0, 220), so a paper with no abstract (269 of 575 published on 2026-10-13) reached qnfo-ai's retrieved context as its title alone. renderContext gives a paper hit up to 1300 characters (300 before). isZenodoId was defined only inside the folded indexer member, so the /context enrichment and metaLine threw a ReferenceError on every paper hit and returned "slug <x> (enrich error)"; it is now defined at module scope too. // 1.3.4 WORKERS-STANDARDS-1 (2026-10-12, pillar security): the indexer member compares X-Index-Token in constant time (same accepted value). // 1.3.1 INDEXER-FOLD-1 (#1756): qnfo-paper-indexer runs here as a member (its two jobs on this worker's existing 06:30 trigger, no cron added; /indexer/* read routes).
 function auth(token, env) {
   const exp = env.INFRA_TOKEN;
   if (!exp || !token) return false;
@@ -312,6 +312,22 @@ function metaLine(doc, m) {
 }
 __name(metaLine, "metaLine");
 __name2(metaLine, "metaLine");
+// A retired registrar DOI is never shown (module scope; the indexer member keeps its own copy).
+function isZenodoId(d) { return /10\.5281\/|zenodo/i.test(String(d || "")); }
+// SOURCE-VOICE-1: the text of a paper hit is the passage that matched (the indexer's chunk number in the vector metadata),
+// after the abstract when one is stored; a hit with no usable chunk falls back to the body's opening.
+function paperHitPassage(row, chunk) {
+  var abs = String(row && row.abstract || "").replace(/\s+/g, " ").trim();
+  var body = String(row && row.body_md || "");
+  var passage = "";
+  if (body) {
+    var chunks = typeof indexerMod !== "undefined" && indexerMod && typeof indexerMod.chunkText === "function" ? indexerMod.chunkText(body) : [];
+    var i = parseInt(String(chunk == null ? "" : chunk), 10);
+    passage = String(chunks[Number.isFinite(i) && i >= 0 && i < chunks.length ? i : 0] || body.slice(0, 1e3));
+  }
+  passage = passage.replace(/^#+\s*/gm, "").replace(/\s+/g, " ").trim();
+  return ((abs ? abs.slice(0, 300) + " \u2014 " : "") + passage.slice(0, 900)).trim();
+}
 async function retrieveRecords(env, q, scope, k) {
   const out = { query: q, scope, ts: (/* @__PURE__ */ new Date()).toISOString(), sources: {} };
   const K = Math.min(Math.max(parseInt(k || "4", 10) || 4, 1), 8);
@@ -328,8 +344,8 @@ async function retrieveRecords(env, q, scope, k) {
           const slug = String((h.metadata || {}).slug || "").trim();
           if (slug && env.LIVING) {
             try {
-              const row = await env.LIVING.prepare("SELECT identifier, title, authors, doi, slug, status, abstract FROM papers WHERE slug = ?1 LIMIT 1").bind(slug).first();
-              if (row) enriched.push({ score: h.score, id: h.id, text: (row.title || row.identifier || slug) + (row.doi && !isZenodoId(row.doi) ? " | DOI " + row.doi : "") + " | status " + (row.status || "") + " | " + String(row.abstract || "").slice(0, 220), meta: { ...h.metadata, title: row.title, doi: isZenodoId(row.doi) ? "" : (row.doi || ""), abstract: row.abstract || "" } });
+              const row = await env.LIVING.prepare("SELECT identifier, title, authors, doi, slug, status, abstract, body_md FROM papers WHERE slug = ?1 LIMIT 1").bind(slug).first();
+              if (row) enriched.push({ score: h.score, id: h.id, text: (row.title || row.identifier || slug) + (row.doi && !isZenodoId(row.doi) ? " | DOI " + row.doi : "") + " | status " + (row.status || "") + " | " + paperHitPassage(row, (h.metadata || {}).chunk), meta: { ...h.metadata, title: row.title, doi: isZenodoId(row.doi) ? "" : (row.doi || ""), abstract: row.abstract || "" } });
               else enriched.push({ score: h.score, id: h.id, text: "slug " + slug + " (not in living-paper)", meta: h.metadata });
             } catch (e) {
               enriched.push({ score: h.score, id: h.id, text: "slug " + slug + " (enrich error)", meta: h.metadata });
@@ -414,7 +430,7 @@ function renderContext(retrieved) {
     any = true;
     L.push("- " + label[src] + ":");
     for (const it of items.slice(0, 4)) {
-      const txt = (typeof it.text === "string" ? it.text : it.title || it.name || it.subject || JSON.stringify(it).slice(0, 160)).slice(0, 300);
+      const txt = (typeof it.text === "string" ? it.text : it.title || it.name || it.subject || JSON.stringify(it).slice(0, 160)).slice(0, src === "PAPER_VZ" ? 1300 : 300);
       L.push("  [" + (it.score != null ? it.score : "") + "] " + txt.replace(/\n/g, " "));
     }
   }
@@ -823,6 +839,8 @@ var indexerMod = (function() {
       } catch (e) { console.error("[qnfo-paper-indexer] scheduled error:", e.message); }
     }
   };
+  // SOURCE-VOICE-1: /context re-derives the matched passage of a paper hit with the chunker that indexed it.
+  worker_default.chunkText = chunkText;
   return worker_default;
 })();
 function indexerEnv(env) {

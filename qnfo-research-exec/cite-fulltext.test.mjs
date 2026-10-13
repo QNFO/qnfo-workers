@@ -9,7 +9,7 @@
 //  6. the daily sweep and the provenance section carry the rule.
 // Run: node qnfo-research-exec/cite-fulltext.test.mjs   -> prints "N passed, 0 failed"
 import { readFileSync } from "node:fs";
-import { fullTextSections, fullTextExcerpt, mdSections, corpusSummary, arxivFullText, attachFullTexts, summaryOnlyCitations, finalGates, provenanceSection } from "./worker.js";
+import { stripRouterNotices, fullTextSections, fullTextExcerpt, mdSections, corpusSummary, arxivFullText, attachFullTexts, summaryOnlyCitations, finalGates, provenanceSection } from "./worker.js";
 
 globalThis.setTimeout = (fn) => { fn(); return 0; };
 let pass = 0, fail = 0;
@@ -131,6 +131,14 @@ const HTML = page(sec(1, "Introduction", LONG("Computable reals are the limits o
   const pre = src.slice(src.indexOf("var RESEARCH_SHARED_PREAMBLE = ["), src.indexOf('].join("\\n");', src.indexOf("var RESEARCH_SHARED_PREAMBLE = [")));
   ok((pre.match(/SOURCE_VOICE_RULE/g) || []).length >= 3, "the writer, reconcile and revise prompts carry SOURCE_VOICE_RULE", (pre.match(/SOURCE_VOICE_RULE/g) || []).length);
   ok(!/produced drafts on the same input block/.test(pre), "the reconcile prompt no longer names the input block");
+}
+// 5d. the router's own notices never reach a paper.
+{
+  const raw = "No source material was retrieved for this question, so this answer is limited to reasoning and explanation. It states no sourced facts, figures or citations.\n\n# Title\n\nBody [1].\n\n_2 statements removed: each carried a DOI, link, author citation or figure that is not in the supplied sources._";
+  ok(stripRouterNotices(raw) === "# Title\n\nBody [1].", "the router's opening notice and footer are removed", stripRouterNotices(raw));
+  ok(summaryOnlyCitations(raw).length > 0, "and the gate catches them if they get through");
+  const src = readFileSync(new URL("./worker.js", import.meta.url), "utf8");
+  ok((src.match(/temperature: 0\.3, rag: false, messages/g) || []).length === 2, "both paper router calls send rag:false");
 }
 // 6. sweep, prompts and provenance
 {
