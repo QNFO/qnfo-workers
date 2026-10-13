@@ -217,7 +217,7 @@ def put_metadata(tok, metadata, code, label, report):
     st, body = req("PUT", API, tok, payload, "multipart/form-data; boundary=" + b)
     report["attempts"].append({"shape": label, "http": st, "err": err_text(body)[:400]})
     print("[%s] PUT /content -> HTTP %s" % (label, st))
-    if st != 200:
+    if not 200 <= (st or 0) < 300:
         print("  rejected: %s" % err_text(body)[:400])
     return st, body
 

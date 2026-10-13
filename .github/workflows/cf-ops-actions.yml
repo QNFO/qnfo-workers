@@ -1,4 +1,7 @@
 name: cf-ops-actions
+# CI-ACTION-IDENTITY-1 (2026-10-13): the run title names the action, so scripts/ci_watchdog.py files a failure per action and
+# a green run of a different action never closes it (ci-watchdog #1033: gen-activitypub-key under the cf-ops-actions name).
+run-name: cf-ops-actions ${{ inputs.action }} ${{ inputs.target }}
 
 # CF-OPS-ACTIONS-1 (2026-10-01). Allowlisted Cloudflare API actions for steps an agent session cannot
 # run (it holds no CF token): delete a script whose repo directory carries a RETIRED/FOLDED marker,

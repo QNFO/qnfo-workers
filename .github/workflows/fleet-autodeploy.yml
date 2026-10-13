@@ -1,4 +1,7 @@
 name: fleet-autodeploy
+# CI-ACTION-IDENTITY-1 (2026-10-13): the run title names the action, so scripts/ci_watchdog.py files a failure per action and
+# a green run of a different action never closes it (ci-watchdog #1033: gen-activitypub-key under the cf-ops-actions name).
+run-name: ${{ github.event_name == 'workflow_dispatch' && format('fleet-autodeploy {0}', inputs.mode) || '' }}
 
 # FLEET-AUTODEPLOY-1 / FLEET-AUTOAUDIT-1 (2026-09-29).
 #
