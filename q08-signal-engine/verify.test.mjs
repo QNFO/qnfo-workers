@@ -160,15 +160,15 @@ globalThis.fetch = origFetch;
 {
   const para = (i) => "The operator in case " + ["one", "two", "three", "four", "five", "six"][i] + " watched the queue grow while the dashboard stayed green, because the dashboard measured the database and not the disk beneath it. Each hour the gap between what was measured and what was felt widened, and nobody owned the space between the two numbers.";
   const bad = "Every vendor now sells a sealed appliance that hides this queue from its buyers, and the whole industry has quietly agreed to it.";
-  const essay = "# The queue nobody measured\n\n" + [0, 1, 2, 3, 4, 5].map((i) => para(i) + (i === 2 ? " " + bad : "")).join("\n\n") + "\n\nworth your time: yes - names the mechanism";
+  const essay = "# The queue nobody measured\n\n" + [0, 1, 2, 3, 4, 5, 0, 1, 2, 3, 4].map((i, k) => para(i) + (k === 2 ? " " + bad : "")).join("\n\n") + "\n\nworth your time: yes - names the mechanism";
   const ground = essay.replace(bad, "");
   let calls = 0;
   const env = { AI: { run: async () => { calls++; return calls <= 2 ? { response: JSON.stringify({ unsupported: [bad + " -- not in source"], verdict: "fail" }) } : { response: '{"unsupported": [], "verdict": "pass"}' }; } } };
   const g0 = V.prunedGateProblems(essay.replace(bad, ""), []);
-  check("the pruned draft is under the 2800-character writing floor but clears the prune floor", essay.replace(" " + bad, "").length < 2800 && essay.replace(" " + bad, "").length >= V.PRUNE_FLOOR && g0.length === 0, { len: essay.replace(" " + bad, "").length, g0 });
+  check("the pruned draft clears the prune floor (the publish floor since Q08-PRUNE-FLOOR-2)", V.PRUNE_FLOOR >= 3000 && essay.replace(" " + bad, "").length >= V.PRUNE_FLOOR && g0.length === 0, { len: essay.replace(" " + bad, "").length, g0 });
   check("a draft under the prune floor is still refused", V.prunedGateProblems("# The queue nobody measured\n\nShort.", []).some((p) => /too short after pruning/.test(p)));
   const r = await V.verifyAndRevise(env, { piece: { text: essay, model: "@cf/openai/gpt-oss-120b" }, prompt: "P", banned: [], ground, seedText: "s", forecast: false });
-  check("the short pruned draft is verified and published without a model revision", r.ok === true && !r.piece.text.includes("sealed appliance") && r.pruned === 1 && (calls === 4 || calls === 8), { ok: r.ok, problems: r.problems, calls }); // 8 when Q08-ANALYSIS-AUTO-1 finds an analysis section (two more reviews per round)
+  check("the pruned draft is verified and published without a model revision", r.ok === true && !r.piece.text.includes("sealed appliance") && r.pruned === 1 && (calls === 4 || calls === 8), { ok: r.ok, problems: r.problems, calls }); // 8 when Q08-ANALYSIS-AUTO-1 finds an analysis section (two more reviews per round)
   check("five prune rounds", V.PRUNE_ROUNDS === 5);
   let n2 = 0;
   const envNever = { AI: { run: async () => { n2++; return { response: JSON.stringify({ unsupported: ["nothing that occurs in the draft at all here -- x"], verdict: "fail" }) }; } } };
@@ -187,7 +187,7 @@ globalThis.fetch = origFetch;
   check("a fact revision without a title keeps the draft's title and publishes", revised && r3.ok === true && /^# The queue nobody measured/.test(r3.piece.text), { ok: r3.ok, problems: r3.problems, revised });
   // Q08-REVISION-FLOOR-1 (0.15.1, run 356): a revision under 2800 characters but above the prune floor is accepted
   let revised2 = false;
-  const midEssay = "# The queue nobody measured\n\n" + [0, 1, 2, 3, 4, 5].map((i) => para(i)).join("\n\n") + "\n\nworth your time: yes - names the mechanism";
+  const midEssay = "# The queue nobody measured\n\n" + [0, 1, 2, 3, 4, 5, 0, 1, 2, 3, 4].map((i) => para(i)).join("\n\n") + "\n\nworth your time: yes - names the mechanism";
   const midBody = midEssay.replace(/^# .*\n\n/, "").replace(/\n\nworth your time:.*$/, "");
   const envMid = { AI: { run: async (m, a2) => {
     const pr = (a2.messages || []).map((x) => x.content).join("\n") + (a2.prompt || "");
@@ -195,7 +195,7 @@ globalThis.fetch = origFetch;
     return revised2 ? { response: '{"unsupported": [], "verdict": "pass"}' } : { response: JSON.stringify({ unsupported: ["nothing that occurs in the draft at all here -- x"], verdict: "fail" }) };
   } } };
   const r4 = await V.verifyAndRevise(envMid, { piece: { text: midEssay, model: "@cf/openai/gpt-oss-120b" }, prompt: "P", banned: [], ground: midEssay, seedText: "s", forecast: false });
-  check("a fact revision between the prune floor and 2800 characters publishes", revised2 && r4.ok === true && midEssay.length < 2800 && midEssay.length >= V.PRUNE_FLOOR, { ok: r4.ok, problems: r4.problems, len: midEssay.length });
+  check("a fact revision at or above the prune floor publishes", revised2 && r4.ok === true && midEssay.length >= V.PRUNE_FLOOR, { ok: r4.ok, problems: r4.problems, len: midEssay.length });
 }
 // ---- Q08-EDIT-FLOOR-1: the editor pass may cut to EDIT_FLOOR; a forecast keeps the writing floor -------------------------------
 {
@@ -219,7 +219,7 @@ globalThis.fetch = origFetch;
 
   const para = (i) => "The maintainer in case " + ["one", "two", "three", "four", "five", "six", "seven"][i] + " read every patch by hand, because the project accepted contributions from anyone and checked each one before merging it. The queue of patches grew each week while the number of maintainers stayed the same.";
   const inf = "So the volunteers who review the patches simply run out of hours before the queue runs out of patches.";
-  const essay = "# The queue that outgrew its reviewers\n\n" + [0, 1, 2, 3, 4, 5, 6].map((i) => para(i) + (i === 1 ? " " + inf : "")).join("\n\n") + "\n\nworth your time: yes - names the mechanism";
+  const essay = "# The queue that outgrew its reviewers\n\n" + [0, 1, 2, 3, 4, 5, 6, 0, 1, 2, 3, 4, 5, 6].map((i, k) => para(i) + (k === 1 ? " " + inf : "")).join("\n\n") + "\n\nworth your time: yes - names the mechanism";
   const ground = essay.replace(" " + inf, "");
   let calls = 0;
   const env = { AI: { run: async () => { calls++; return { response: JSON.stringify({ unsupported: ["INFERENCE: " + inf + " -- not stated in source"], verdict: "fail" }) }; } } };
@@ -229,8 +229,8 @@ globalThis.fetch = origFetch;
   const envFact = { AI: { run: async () => { calls++; return { response: JSON.stringify({ unsupported: ["FACT: " + inf + " -- not stated in source"], verdict: "fail" }) }; } } };
   const rf = await V.verifyAndRevise(envFact, { piece: { text: essay, model: "@cf/nvidia/nemotron-3-120b-a12b" }, prompt: "P", banned: [], ground, seedText: "s", forecast: false });
   check("the same sentence labelled FACT still goes through the prune-and-re-verify repair", calls >= 4 && rf.problems.some((p) => /^repair trail: r1 prune -1/.test(p)), { ok: rf.ok, calls, problems: rf.problems.slice(-1) });
-  // Q08-ANALYSIS-KEEP-1: the same inference inside the analysis section (paragraph 4 here, after the auto split) is kept.
-  const essayA = "# The queue that outgrew its reviewers\n\n" + [0, 1, 2, 3, 4, 5, 6].map((i) => para(i) + (i === 3 ? " " + inf : "")).join("\n\n") + "\n\nworth your time: yes - names the mechanism";
+  // Q08-ANALYSIS-KEEP-1: the same inference inside the analysis section (paragraph 11 here, after the auto split) is kept.
+  const essayA = "# The queue that outgrew its reviewers\n\n" + [0, 1, 2, 3, 4, 5, 6, 0, 1, 2, 3, 4, 5, 6].map((i, k) => para(i) + (k === 10 ? " " + inf : "")).join("\n\n") + "\n\nworth your time: yes - names the mechanism";
   const keptA = V.pruneInferences({ text: essayA, model: "m" }, { inferences: [inf + " -- reasoning"] }, [], false);
   check("an inference inside the analysis section is not pruned", keptA.removed === 0 && keptA.piece.text.includes("run out of hours") && !keptA.piece.text.includes("<!--"), keptA.removed);
   const keep = V.pruneInferences({ text: "# T\n\nShort.\n\nworth your time: yes - x", model: "m" }, { inferences: ["Short. -- reasoning"] }, [], false);
