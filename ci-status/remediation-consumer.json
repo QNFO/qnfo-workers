@@ -1,29 +1,12 @@
 {
  "ok": true,
  "marker": "REMEDIATION-CONSUMER-1",
- "verifier": "remediation-consumer@055722abdef8",
- "due": 2,
- "pass": 2,
+ "verifier": "remediation-consumer@1dfde1473140",
+ "due": 0,
+ "pass": 0,
  "fail": 0,
  "skipped": 0,
- "contracts": [
-  {
-   "class": "issue-2345",
-   "issue_id": 2345,
-   "verdict": "pass",
-   "expected": "ok",
-   "observed": "ok",
-   "written": true
-  },
-  {
-   "class": "issue-2385",
-   "issue_id": 2385,
-   "verdict": "pass",
-   "expected": "ok",
-   "observed": "ok",
-   "written": true
-  }
- ],
+ "contracts": [],
  "trusted_transports": [
   "binding-http",
   "cf-api",
@@ -47,21 +30,20 @@
   "http",
   "runner-https"
  ],
- "https": 2,
  "budget_exhausted": false,
- "runtime_verified_share_24h": 11.9,
+ "runtime_verified_share_24h": 11.7,
  "host_census": {
   "skipped": "ran within 6h"
  },
  "migrations": {
-  "opted_in": 167,
+  "opted_in": 168,
   "unapplied": [],
   "applied_now": [],
   "failed": [],
   "metric": 0
  },
- "spent_ms": 10924,
- "head": "055722abdef861857280ec1bf332378904916c77",
+ "spent_ms": 7631,
+ "head": "1dfde14731401de036d5499f58756f8ec57beccd",
  "job_status": "success",
- "ts": "2026-10-13T13:32:31Z"
+ "ts": "2026-10-13T13:48:39Z"
 }
