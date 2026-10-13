@@ -29,7 +29,7 @@ __name2222(fnv32, "fnv32");
 __name22222(fnv32, "fnv32");
 var __defProp222222 = Object.defineProperty;
 var __name222222 = /* @__PURE__ */ __name22222((target, value) => __defProp222222(target, "name", { value, configurable: true }), "__name");
-var VERSION = "2.47.1-cron-heartbeat"; /* 2.47.1 CRON-ONLY-HEARTBEAT-1 (2026-10-13, agent_issues 2397, pillar autonomy): each half-hourly scheduled run ends with a qnfo-audit fleet_heartbeat upsert (ok=0 when a step failed); write errors are logged. 2.47.0 DEPLOY-DRIFT-CF-1 (2026-10-13, pillars core and autonomy): POST /ops/deploy trusts the service-binding caller qnfo-fleet-control (OPS_INTERNAL_DEPLOY_CALLERS, ctx.props.caller, that path only), the Cloudflare-side second deploy runner for the canonical path; a body {"preflight": true} answers 200 with the caller after the auth check, without a lock or a deploy. */ /* 2.46.0 COMPAT-VERIFY-RUNNER-1 (2026-10-13, agent_issues 2411, metric workers_compat_date_behind, pillar core): /ops/deploy refused every reviewed compatibility-date advance it could not verify from inside the account, because a Worker cannot read its own account's workers.dev hosts (error 1042, issue 1190): qnfo-ops itself stayed at 2026-08-01 under a reviewed 2026-10-10 (deployment_history 2026-10-13T07:01Z, compat_not_advanced=/health of qnfo-ops cannot be read from qnfo-ops). A request with compat_verify: "caller" now advances such a date when that unreadable /health is the only refusal (review line, later date, no restored advance under the same review and a source VERSION are still required), writes the ledger note compat_date=<old>-><new> pending_verify and answers compat.pending_verify with previous_date, new_date, expected_version and source_sha. canonical-deploy.yml polls /health from the GitHub runner (scripts/compat_verify_runner.py) and answers POST /ops/compat-verify (router key): ok true records the verification (deployment_history action compat-verify, cloud_ops_events kind compat-verify); ok false uploads the deployed source again with the previous date under the deploy and secret locks (deployment_history action compat-restore, the same restore step the in-account verify uses, which also stops a retry under the same review). A request without the field behaves exactly as before. */ /* 2.45.1 KERNEL-REPLY-2 (2026-10-13, metric false_stops_7d): the public read-only and code-only prompts end with the kernel reply rule the operator prompt already had (KERNEL-REPLY-1): five of the seven false_stop_hits are qnfo-ops replies of 2026-10-05..10 (ops_ai_log) that end in an offer, a question or a menu; the operator prompt has carried KERNEL-REPLY-1 since 2026-10-12, the public and code prompts did not. */ /* 2.45.0 LIMITS-DECLARED-APPLY-1 + SEND-EMAIL-SENDER-RESTRICT-1 (2026-10-13, agent_issues 2420 and 2421, pillars core and security): the canonical deploy sends a worker's declared [limits] (cpu_ms, subrequests; positive integers only) as the upload metadata `limits`, which it never sent, so a [limits] table stops being inert (a refusal is retried once without it; ledger note limits=...); a [[send_email]] block's destination_address, allowed_destination_addresses and allowed_sender_addresses ride on the binding, also on a binding already live (only the declared keys; a refusal restores the live binding; ledger note send_email_restrict=...). A file without them uploads byte-identical metadata. The metadata object is built fresh per attempt, so the observability fallback no longer re-sends the block it means to drop. */ /* 2.44.1 COMPAT-LEDGER-REASON-1 (2026-10-12, pillar core): a deploy whose wrangler.toml declares a later compatibility date than the live one and does not advance it writes the gate's reason into its deployment_history note (compat_not_advanced=...), so a refusal is auditable from D1 (idea-hub stayed at 2026-09-01 in run 659 with no record of why); idea-hub gets its CH_IDEA_HUB health binding (the custom-domain read from ops.qnfo.org is a same-zone subrequest). 2.44.0 COMPAT-HEALTH-BINDINGS-22.44.0 COMPAT-HEALTH-BINDINGS-2 (2026-10-12, metric workers_compat_date_behind 27, pillar core): the compat gate of COMPAT-DATE-DECLARED-APPLY-1 reads a worker's /health through a service binding or a custom domain, and 17 of the 28 live workers had neither, so their declared dates could never advance; wrangler.toml now binds each of them (CH_<WORKER>) and COMPAT_HEALTH_BINDINGS names the bindings. KERNEL-REPLY-1 (metric false_stops_7d 5, doctrine kernel recognitions): the chat prompt gains rule 16: a reply ends with the result, never with a question, an offer or a menu for the user; what is optional is decided. 2.43.1 CF-API-RETRY-1 (2026-10-12, #2396, pillar autonomy): the deploy route's Cloudflare API calls (bindings read, settings read, the script PUT and its re-uploads) retry a transient answer (HTTP 429, 5xx, error code 10013, a network error) up to three times with backoff or Retry-After, the multipart body rebuilt per attempt; a definite refusal (10020, 10021, other 4xx) returns at once. 2.43.0 BINDING-PROPS-RESTORE-1 (2026-10-12, #2445, pillar autonomy): when SECRET-CHANGE-WATCH-1 records a new secret-triggered version of a worker whose wrangler.toml declares props on a [[services]] binding, the tick reads the worker's live settings and, when a declared props object is missing or differs, dispatches canonical-deploy.yml with workers=<name> (one dispatch per worker and secret version, ledger cloud_ops_events kind binding-props-restore), so the props a dashboard secret edit strips come back within one tick without a session (2026-10-12 09:33Z: qnfo-fleet-dashboard lost props.caller on SVC_QNFO_AI and every ask answered HTTP 401 until a redeploy at 11:37Z). 2.42.3 WORKERS-BP-DEBT-1 (#2431, pillar security): the container clone retry suffix takes rndHex8 instead of Math.random; the fleet audit reads 0 fail-class findings for this worker. 2.42.2: a comment count corrected (21 workers at 2026-08-01). 2.42.1: the COMPAT-RESTORE-FAILED-1 issue row carries epoch ms, and the /compat routes log error detail instead of returning it. 2.42.0 COMPAT-DATE-DECLARED-APPLY-1 (2026-10-12, pillar core): the canonical deploy re-sent each worker's live compatibility date and never read wrangler.toml, so no date in the fleet could advance. /ops/deploy now applies a later declared date when the file carries the line "# compat-advance: reviewed YYYY-MM-DD", the date is not after the review or today, and the worker's /health can be read from qnfo-ops; it keeps the date only when /health then answers with the deployed VERSION and otherwise uploads the previous date again (deployment_history action compat-restore, which also stops a retry under the same review). A date never moves back, a refusal by Cloudflare falls back to the live date, and the cf_worker_deploy tool never advances one. COMPAT-EXPOSURE-1: GET /compat lists every live worker's live date, wrangler.toml date, nodejs_compat state and the default changes between (table worker_compat_state, metric workers_compat_date_behind); the cron refreshes it every 6 h, POST /compat/refresh on demand. */ /* 2.41.0 OBSERVABILITY-DECLARED-APPLY-1 (2026-10-12, pillar core): the canonical deploy sent compatibility date, flags, bindings and containers in the upload metadata but never the observability settings, so a worker's [observability], [observability.logs] and [observability.traces] blocks in wrangler.toml never reached Cloudflare (same inert-config class as the crons of #1337 and the flags of COMPAT-FLAGS-DECLARED-APPLY-1). The deploy now overlays the declared keys on the live settings and sends the result; a worker that declares nothing is uploaded as before, and a Cloudflare refusal of the block is retried once without it and reported (observability_apply). RAND-ID-CRYPTO-1: randId and the /v1/responses ids draw from crypto.getRandomValues instead of Math.random. */ /* 2.40.2 NOZ-DOI-1 (2026-10-10): the schema map drops a retired registry column. 2.40.1 NO-MEMORY-FACTS-1 (owner directive 2026-10-10): the public read-only prompt answers only from tool results and the question text. */ /* 2.40.0 OPS-INTERNAL-CALLER-1 (2026-10-09, pillar autonomy): a request that arrives through a service binding declaring props = { caller = "qnfo-email" } is authenticated as the router key, so qnfo-email owner commands stop answering HTTP 401 "Unauthorized - set Bearer OPS_ROUTER_AUTH_KEY" (its OPS_KEY copy no longer matched after the 2026-10-01 rotation). Public requests never carry props. 2.39.2 OPS-CONTEXT-COMPACT-1 (agent_issues 2068, pillar cost): truncateToContext compacts every tool result older than the newest OPS_TOOL_KEEP_ROUNDS (2) tool-bearing rounds to its first OPS_TOOL_COMPACT_CHARS (1200) chars plus a marker that says how much was cut and to re-run the tool for the full output; user, assistant and system messages are never compacted. Every round of an agent loop used to resend all earlier tool output (MAX_TOOL_RESULT_CHARS 16384 each) until the 262k window filled, so cost grew with the square of the round count: BUDGET-AUTO-PROMOTE-1 jobs on 2026-10-03/06 used 2.46M-2.68M prompt tokens for 27-33 tool calls, two ending ok=0. Pure function compactToolRounds, replayed by context-compact.test.mjs. 2.39.1 2.39.1 OPS-COST-SOFT-1 (BUDGET-SOFT-ROUTE-1): the ops daily cost cap (OPS_DAILY_CAP_USD) no longer answers HTTP 429 on chat or /v1/jobs; the request or job runs on the free tier (budgetFallback, no paid exec upstream). The request-count cap and the per-job runaway cap stay. 2.39.0 RULE-8-RETIRED-1 (2026-10-06, pillar autonomy, owner directive: "Rule 8 is now deleted entirely"): system prompt item 15(d) HARD LIMITS becomes DECIDE AND RECORD - spend caps, guard metrics, probes and deletions are the agent's own decisions, recorded with the reason and a live measurement under rule 7; opt-out, outreach consent and cadence caps and the personal/research separation still hold. 2.38.47 (2026-10-06, pillar core): REGISTRY-SYNC-FOLDED-1 (agent_issues 2031): a FLEET entry for a folded member (qnfo-backlog-exec, a member of qnfo-lifecycle since BACKLOG-FOLD-1) carries kind member and its host route, so registryRefresh writes service_registry with the URL that serves it and kind member instead of the deleted worker's dead workers.dev URL as a live worker (07:30:59Z wrote https://qnfo-backlog-exec.q08.workers.dev and fleet_status reported it "Worker not found"); OPS-D1-LIMIT-WORD-1 (agent_issues 2033): ops_d1_query finds an existing LIMIT clause as a trailing word, not as the first "limit" substring, so a query that names a column such as limited and ends in LIMIT 10 is no longer given a second LIMIT 100 (D1_ERROR near "LIMIT": syntax error, 07:53:42Z). */
+var VERSION = "2.47.2-log-catches"; /* 2.47.1 CRON-ONLY-HEARTBEAT-1 (2026-10-13, agent_issues 2397, pillar autonomy): each half-hourly scheduled run ends with a qnfo-audit fleet_heartbeat upsert (ok=0 when a step failed); write errors are logged. 2.47.0 DEPLOY-DRIFT-CF-1 (2026-10-13, pillars core and autonomy): POST /ops/deploy trusts the service-binding caller qnfo-fleet-control (OPS_INTERNAL_DEPLOY_CALLERS, ctx.props.caller, that path only), the Cloudflare-side second deploy runner for the canonical path; a body {"preflight": true} answers 200 with the caller after the auth check, without a lock or a deploy. */ /* 2.46.0 COMPAT-VERIFY-RUNNER-1 (2026-10-13, agent_issues 2411, metric workers_compat_date_behind, pillar core): /ops/deploy refused every reviewed compatibility-date advance it could not verify from inside the account, because a Worker cannot read its own account's workers.dev hosts (error 1042, issue 1190): qnfo-ops itself stayed at 2026-08-01 under a reviewed 2026-10-10 (deployment_history 2026-10-13T07:01Z, compat_not_advanced=/health of qnfo-ops cannot be read from qnfo-ops). A request with compat_verify: "caller" now advances such a date when that unreadable /health is the only refusal (review line, later date, no restored advance under the same review and a source VERSION are still required), writes the ledger note compat_date=<old>-><new> pending_verify and answers compat.pending_verify with previous_date, new_date, expected_version and source_sha. canonical-deploy.yml polls /health from the GitHub runner (scripts/compat_verify_runner.py) and answers POST /ops/compat-verify (router key): ok true records the verification (deployment_history action compat-verify, cloud_ops_events kind compat-verify); ok false uploads the deployed source again with the previous date under the deploy and secret locks (deployment_history action compat-restore, the same restore step the in-account verify uses, which also stops a retry under the same review). A request without the field behaves exactly as before. */ /* 2.45.1 KERNEL-REPLY-2 (2026-10-13, metric false_stops_7d): the public read-only and code-only prompts end with the kernel reply rule the operator prompt already had (KERNEL-REPLY-1): five of the seven false_stop_hits are qnfo-ops replies of 2026-10-05..10 (ops_ai_log) that end in an offer, a question or a menu; the operator prompt has carried KERNEL-REPLY-1 since 2026-10-12, the public and code prompts did not. */ /* 2.45.0 LIMITS-DECLARED-APPLY-1 + SEND-EMAIL-SENDER-RESTRICT-1 (2026-10-13, agent_issues 2420 and 2421, pillars core and security): the canonical deploy sends a worker's declared [limits] (cpu_ms, subrequests; positive integers only) as the upload metadata `limits`, which it never sent, so a [limits] table stops being inert (a refusal is retried once without it; ledger note limits=...); a [[send_email]] block's destination_address, allowed_destination_addresses and allowed_sender_addresses ride on the binding, also on a binding already live (only the declared keys; a refusal restores the live binding; ledger note send_email_restrict=...). A file without them uploads byte-identical metadata. The metadata object is built fresh per attempt, so the observability fallback no longer re-sends the block it means to drop. */ /* 2.44.1 COMPAT-LEDGER-REASON-1 (2026-10-12, pillar core): a deploy whose wrangler.toml declares a later compatibility date than the live one and does not advance it writes the gate's reason into its deployment_history note (compat_not_advanced=...), so a refusal is auditable from D1 (idea-hub stayed at 2026-09-01 in run 659 with no record of why); idea-hub gets its CH_IDEA_HUB health binding (the custom-domain read from ops.qnfo.org is a same-zone subrequest). 2.44.0 COMPAT-HEALTH-BINDINGS-22.44.0 COMPAT-HEALTH-BINDINGS-2 (2026-10-12, metric workers_compat_date_behind 27, pillar core): the compat gate of COMPAT-DATE-DECLARED-APPLY-1 reads a worker's /health through a service binding or a custom domain, and 17 of the 28 live workers had neither, so their declared dates could never advance; wrangler.toml now binds each of them (CH_<WORKER>) and COMPAT_HEALTH_BINDINGS names the bindings. KERNEL-REPLY-1 (metric false_stops_7d 5, doctrine kernel recognitions): the chat prompt gains rule 16: a reply ends with the result, never with a question, an offer or a menu for the user; what is optional is decided. 2.43.1 CF-API-RETRY-1 (2026-10-12, #2396, pillar autonomy): the deploy route's Cloudflare API calls (bindings read, settings read, the script PUT and its re-uploads) retry a transient answer (HTTP 429, 5xx, error code 10013, a network error) up to three times with backoff or Retry-After, the multipart body rebuilt per attempt; a definite refusal (10020, 10021, other 4xx) returns at once. 2.43.0 BINDING-PROPS-RESTORE-1 (2026-10-12, #2445, pillar autonomy): when SECRET-CHANGE-WATCH-1 records a new secret-triggered version of a worker whose wrangler.toml declares props on a [[services]] binding, the tick reads the worker's live settings and, when a declared props object is missing or differs, dispatches canonical-deploy.yml with workers=<name> (one dispatch per worker and secret version, ledger cloud_ops_events kind binding-props-restore), so the props a dashboard secret edit strips come back within one tick without a session (2026-10-12 09:33Z: qnfo-fleet-dashboard lost props.caller on SVC_QNFO_AI and every ask answered HTTP 401 until a redeploy at 11:37Z). 2.42.3 WORKERS-BP-DEBT-1 (#2431, pillar security): the container clone retry suffix takes rndHex8 instead of Math.random; the fleet audit reads 0 fail-class findings for this worker. 2.42.2: a comment count corrected (21 workers at 2026-08-01). 2.42.1: the COMPAT-RESTORE-FAILED-1 issue row carries epoch ms, and the /compat routes log error detail instead of returning it. 2.42.0 COMPAT-DATE-DECLARED-APPLY-1 (2026-10-12, pillar core): the canonical deploy re-sent each worker's live compatibility date and never read wrangler.toml, so no date in the fleet could advance. /ops/deploy now applies a later declared date when the file carries the line "# compat-advance: reviewed YYYY-MM-DD", the date is not after the review or today, and the worker's /health can be read from qnfo-ops; it keeps the date only when /health then answers with the deployed VERSION and otherwise uploads the previous date again (deployment_history action compat-restore, which also stops a retry under the same review). A date never moves back, a refusal by Cloudflare falls back to the live date, and the cf_worker_deploy tool never advances one. COMPAT-EXPOSURE-1: GET /compat lists every live worker's live date, wrangler.toml date, nodejs_compat state and the default changes between (table worker_compat_state, metric workers_compat_date_behind); the cron refreshes it every 6 h, POST /compat/refresh on demand. */ /* 2.41.0 OBSERVABILITY-DECLARED-APPLY-1 (2026-10-12, pillar core): the canonical deploy sent compatibility date, flags, bindings and containers in the upload metadata but never the observability settings, so a worker's [observability], [observability.logs] and [observability.traces] blocks in wrangler.toml never reached Cloudflare (same inert-config class as the crons of #1337 and the flags of COMPAT-FLAGS-DECLARED-APPLY-1). The deploy now overlays the declared keys on the live settings and sends the result; a worker that declares nothing is uploaded as before, and a Cloudflare refusal of the block is retried once without it and reported (observability_apply). RAND-ID-CRYPTO-1: randId and the /v1/responses ids draw from crypto.getRandomValues instead of Math.random. */ /* 2.40.2 NOZ-DOI-1 (2026-10-10): the schema map drops a retired registry column. 2.40.1 NO-MEMORY-FACTS-1 (owner directive 2026-10-10): the public read-only prompt answers only from tool results and the question text. */ /* 2.40.0 OPS-INTERNAL-CALLER-1 (2026-10-09, pillar autonomy): a request that arrives through a service binding declaring props = { caller = "qnfo-email" } is authenticated as the router key, so qnfo-email owner commands stop answering HTTP 401 "Unauthorized - set Bearer OPS_ROUTER_AUTH_KEY" (its OPS_KEY copy no longer matched after the 2026-10-01 rotation). Public requests never carry props. 2.39.2 OPS-CONTEXT-COMPACT-1 (agent_issues 2068, pillar cost): truncateToContext compacts every tool result older than the newest OPS_TOOL_KEEP_ROUNDS (2) tool-bearing rounds to its first OPS_TOOL_COMPACT_CHARS (1200) chars plus a marker that says how much was cut and to re-run the tool for the full output; user, assistant and system messages are never compacted. Every round of an agent loop used to resend all earlier tool output (MAX_TOOL_RESULT_CHARS 16384 each) until the 262k window filled, so cost grew with the square of the round count: BUDGET-AUTO-PROMOTE-1 jobs on 2026-10-03/06 used 2.46M-2.68M prompt tokens for 27-33 tool calls, two ending ok=0. Pure function compactToolRounds, replayed by context-compact.test.mjs. 2.39.1 2.39.1 OPS-COST-SOFT-1 (BUDGET-SOFT-ROUTE-1): the ops daily cost cap (OPS_DAILY_CAP_USD) no longer answers HTTP 429 on chat or /v1/jobs; the request or job runs on the free tier (budgetFallback, no paid exec upstream). The request-count cap and the per-job runaway cap stay. 2.39.0 RULE-8-RETIRED-1 (2026-10-06, pillar autonomy, owner directive: "Rule 8 is now deleted entirely"): system prompt item 15(d) HARD LIMITS becomes DECIDE AND RECORD - spend caps, guard metrics, probes and deletions are the agent's own decisions, recorded with the reason and a live measurement under rule 7; opt-out, outreach consent and cadence caps and the personal/research separation still hold. 2.38.47 (2026-10-06, pillar core): REGISTRY-SYNC-FOLDED-1 (agent_issues 2031): a FLEET entry for a folded member (qnfo-backlog-exec, a member of qnfo-lifecycle since BACKLOG-FOLD-1) carries kind member and its host route, so registryRefresh writes service_registry with the URL that serves it and kind member instead of the deleted worker's dead workers.dev URL as a live worker (07:30:59Z wrote https://qnfo-backlog-exec.q08.workers.dev and fleet_status reported it "Worker not found"); OPS-D1-LIMIT-WORD-1 (agent_issues 2033): ops_d1_query finds an existing LIMIT clause as a trailing word, not as the first "limit" substring, so a query that names a column such as limited and ends in LIMIT 10 is no longer given a second LIMIT 100 (D1_ERROR near "LIMIT": syntax error, 07:53:42Z). */
 // FOLD-WAVE-2 (2.38.45, 2026-10-06, #1756): qnfo-archive is retired (its 04:00 KG seed got HTTP 401 on every batch), so its
 // ARCHIVE probe binding leaves FLEET, BINDING_KEYS, wrangler.toml and the fleet_status text. BACKLOG now reaches the
 // qnfo-backlog-exec member inside qnfo-lifecycle (props.member); the code calling it is unchanged.
@@ -103,15 +103,15 @@ function __aiAttrEnv(env, worker, aiKey, dbKey) {
         try { res = await t.run(model, input, (function () { /* PROMPT-CACHE-1: same model + same first 4 KB of prompt -> same instance, so Workers AI prefix caching bills repeated context at the cached-input rate (glm-5.3-flash $0.03 vs $0.15 per M) */ try { if (opts && opts.extraHeaders && opts.extraHeaders["x-session-affinity"]) return opts; var m = input && input.messages, c = m && m.length ? m[0].content : (input && input.prompt); var s = typeof c === "string" ? c : JSON.stringify(c || ""); if (s.length < 1024) return opts; s = String(model) + "|" + s.slice(0, 4096); var h = 2166136261; for (var i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); } var o = Object.assign({}, opts || {}); o.extraHeaders = Object.assign({}, o.extraHeaders || {}, { "x-session-affinity": "pc-" + (h >>> 0).toString(36) }); return o; } catch (ePc) { return opts; } })()); return res; } catch (e) { ok = 0; throw e; }
         finally {
           try {
-            var u = res && typeof res === "object" && res.usage || {}; if (!/bge|embed|whisper|m2m100|resnet|flux|sdxl/i.test(String(model))) try { var cTok = Number(u.prompt_tokens_details && u.prompt_tokens_details.cached_tokens || u.cached_tokens || u.input_tokens_details && u.input_tokens_details.cached_tokens || 0) || 0; await db.prepare("INSERT INTO ai_cache_counters (day, worker, model, calls, cached_calls, in_tok, cached_tok) VALUES (?1,?2,?3,1,?4,?5,?6) ON CONFLICT(day, worker, model) DO UPDATE SET calls=calls+1, cached_calls=cached_calls+excluded.cached_calls, in_tok=in_tok+excluded.in_tok, cached_tok=cached_tok+excluded.cached_tok").bind(new Date().toISOString().slice(0, 10), worker, String(model).slice(0, 120), cTok > 0 ? 1 : 0, Number(u.prompt_tokens || u.input_tokens || 0) || 0, cTok).run(); } catch (eCc) {}
-            var chars = 0; try { chars = JSON.stringify(input && (input.messages || input.prompt || input.text) || input || "").length; } catch (e1) {}
+            var u = res && typeof res === "object" && res.usage || {}; if (!/bge|embed|whisper|m2m100|resnet|flux|sdxl/i.test(String(model))) try { var cTok = Number(u.prompt_tokens_details && u.prompt_tokens_details.cached_tokens || u.cached_tokens || u.input_tokens_details && u.input_tokens_details.cached_tokens || 0) || 0; await db.prepare("INSERT INTO ai_cache_counters (day, worker, model, calls, cached_calls, in_tok, cached_tok) VALUES (?1,?2,?3,1,?4,?5,?6) ON CONFLICT(day, worker, model) DO UPDATE SET calls=calls+1, cached_calls=cached_calls+excluded.cached_calls, in_tok=in_tok+excluded.in_tok, cached_tok=cached_tok+excluded.cached_tok").bind(new Date().toISOString().slice(0, 10), worker, String(model).slice(0, 120), cTok > 0 ? 1 : 0, Number(u.prompt_tokens || u.input_tokens || 0) || 0, cTok).run(); } catch (eCc) { console.error(JSON.stringify({ evt: "ops:__aiAttrEnv:caught", error: String((eCc && eCc.message) || eCc) })); }
+            var chars = 0; try { chars = JSON.stringify(input && (input.messages || input.prompt || input.text) || input || "").length; } catch (e1) { console.error(JSON.stringify({ evt: "ops:__aiAttrEnv:caught", error: String((e1 && e1.message) || e1) })); }
             var inTok = Number(u.prompt_tokens || u.input_tokens || 0) || Math.round(chars / 4);
             var outTok = Number(u.completion_tokens || u.output_tokens || 0);
             var r = __AI_ATTR_RATES[String(model)] || [0, 0];
             var neurons = (inTok * r[0] + outTok * r[1]) / 1e6;
             await db.prepare("INSERT INTO ai_call_counters (day, worker, purpose, model, calls, errors, in_chars, ms, in_tok, out_tok, neurons) VALUES (?1,?2,'binding',?3,1,?4,?5,?6,?7,?8,?9) ON CONFLICT(day, worker, purpose, model) DO UPDATE SET calls=calls+1, errors=errors+excluded.errors, in_chars=in_chars+excluded.in_chars, ms=ms+excluded.ms, in_tok=in_tok+excluded.in_tok, out_tok=out_tok+excluded.out_tok, neurons=neurons+excluded.neurons")
               .bind(new Date().toISOString().slice(0, 10), worker, String(model).slice(0, 120), ok ? 0 : 1, chars, Date.now() - t0, inTok, outTok, neurons).run();
-          } catch (e2) {}
+          } catch (e2) { console.error(JSON.stringify({ evt: "ops:__aiAttrEnv:caught", error: String((e2 && e2.message) || e2) })); }
         }
       };
     } });
@@ -315,8 +315,8 @@ async function opsBudgetPromote(env, work, toolLog, iter, deadlineHit) {
     msgs.push({ role: "user", content: BUDGET_PROMOTE_MARKER + " The interactive turn above ran " + done + " tool call(s) and hit its " + (deadlineHit ? "wall-clock deadline" : "round cap") + " at round " + iter + ". Continue the ORIGINAL task from exactly where it stopped, using the tool results above; do not repeat steps that already succeeded. Deliver the completed result with evidence." });
     const created = await createJobFromBody(env, { model: "ops-exec", messages: msgs });
     if (!created || created.error || !created.id) return null;
-    try { await env.QNFO_AUDIT.prepare("UPDATE ops_jobs SET origin = 'budget-promote' WHERE id = ?1").bind(created.id).run(); } catch (e) { }
-    try { await env.QNFO_AUDIT.prepare("INSERT INTO cloud_ops_events (id, ts, kind, text, meta, job, status) VALUES (?1, ?2, 'ops_budget_promote', ?3, ?4, 'qnfo-ops', 'ok')").bind(randId("evt-"), iso(), "promoted to " + created.id, snippet({ iter: iter, tools: done, deadlineHit: !!deadlineHit, version: VERSION }, 400)).run(); } catch (e) { }
+    try { await env.QNFO_AUDIT.prepare("UPDATE ops_jobs SET origin = 'budget-promote' WHERE id = ?1").bind(created.id).run(); } catch (e) { console.error(JSON.stringify({ evt: "ops:opsBudgetPromote:caught", error: String((e && e.message) || e) })); }
+    try { await env.QNFO_AUDIT.prepare("INSERT INTO cloud_ops_events (id, ts, kind, text, meta, job, status) VALUES (?1, ?2, 'ops_budget_promote', ?3, ?4, 'qnfo-ops', 'ok')").bind(randId("evt-"), iso(), "promoted to " + created.id, snippet({ iter: iter, tools: done, deadlineHit: !!deadlineHit, version: VERSION }, 400)).run(); } catch (e) { console.error(JSON.stringify({ evt: "ops:opsBudgetPromote:caught", error: String((e && e.message) || e) })); }
     return { id: created.id };
   } catch (e) {
     return null;
@@ -584,7 +584,7 @@ async function chatCacheLookup(env, prompt, modelId) {
       const v = await env.OPS_CACHE_KV.get(k, "json");
       if (v && typeof v.a === "string" && v.a.length >= 40 && v.p === _pk) return { kind: "exact-kv", answer: v.a };
     }
-  } catch (e) { }
+  } catch (e) { console.error(JSON.stringify({ evt: "ops:chatCacheLookup:caught", error: String((e && e.message) || e) })); }
   try {
     if (env.SEMCACHE_VZ && env.WAI) {
       const emb = await env.WAI.run("@cf/baai/bge-base-en-v1.5", { text: [String(prompt || "").slice(0, 500)] });
@@ -608,7 +608,7 @@ async function chatCacheStore(env, prompt, answer, modelId) {
       const k = "opschat:" + VERSION + ":" + fnv32(_pk + "|" + String(modelId || ""));
       await env.OPS_CACHE_KV.put(k, JSON.stringify({ a: String(answer).slice(0, 4000), p: _pk, t: iso() }), { expirationTtl: 3600 });
     }
-  } catch (e) { }
+  } catch (e) { console.error(JSON.stringify({ evt: "ops:chatCacheStore:caught", error: String((e && e.message) || e) })); }
   try {
     if (env.SEMCACHE_VZ && env.WAI) {
       const emb = await env.WAI.run("@cf/baai/bge-base-en-v1.5", { text: [String(prompt || "").slice(0, 500)] });
@@ -1076,7 +1076,7 @@ async function opsPublicGate(env, ip) {
       const n = Number(await env.OPS_CACHE_KV.get(vk)) || 0;
       if (n >= perHour) return { blocked: true, error: "public read mode answers " + perHour + " questions per visitor per hour; please try again later" };
       await env.OPS_CACHE_KV.put(vk, String(n + 1), { expirationTtl: 7200 });
-    } catch (e) { }
+    } catch (e) { console.error(JSON.stringify({ evt: "ops:opsPublicGate:caught", error: String((e && e.message) || e) })); }
   }
   return { blocked: false };
 }
@@ -1277,7 +1277,7 @@ async function fleetStatus(env) {
           rh = { ok: true, http: r2.status, version: b2.version || b2.VERSION || "", error: null };
           probeKind = "workers-dev-retry";
         }
-      } catch (e) {}
+      } catch (e) { console.error(JSON.stringify({ evt: "ops:fleetStatus:caught", error: String((e && e.message) || e) })); }
     }
     return { name: w.id, healthy: rh ? rh.ok : null, http: rh ? rh.http : null, version: rh ? rh.version : "", error: rh ? rh.error : null, count: null, probe: probeKind, base_url: base, modified_on: w.modified_on || null, handlers: hs.map(function(h) {
       return Array.isArray(h) ? String(h[0]) : String(h);
@@ -1302,7 +1302,7 @@ async function fleetStatus(env) {
         x.heartbeat_age_min = Math.round(age / 6e4);
         if (!x.version && h.version) x.version = h.version;
       }
-    } catch (e) {}
+    } catch (e) { console.error(JSON.stringify({ evt: "ops:fleetStatus:caught", error: String((e && e.message) || e) })); }
   }
   out.sort(function(a, b) {
     return a.name < b.name ? -1 : a.name > b.name ? 1 : 0;
@@ -1536,7 +1536,7 @@ async function d1Query(env, args) {
             "SELECT name FROM sqlite_master WHERE type='table' ORDER BY name";
         }
       }
-    } catch (e2) {}
+    } catch (e2) { console.error(JSON.stringify({ evt: "ops:d1Query:caught", error: String((e2 && e2.message) || e2) })); }
     return out;
   }
 }
@@ -2267,7 +2267,7 @@ function fleetWorkerNamesForHost(host) {
       hh = hh.toLowerCase();
       if (hh === h && out.indexOf(k) < 0) out.push(k);
     }
-  } catch (e) {}
+  } catch (e) { console.error(JSON.stringify({ evt: "ops:fleetWorkerNamesForHost:caught", error: String((e && e.message) || e) })); }
   return out;
 }
 
@@ -2458,7 +2458,7 @@ async function githubRepoRead(env, args) {
       } else if (_pr && _pr.status === 404) {
         _hint = " - parent dir '" + _parent + "' also not found; repo root may be the right starting point";
       }
-    } catch (_e) {}
+    } catch (_e) { console.error(JSON.stringify({ evt: "ops:githubRepoRead:caught", error: String((_e && _e.message) || _e) })); }
     return { ok: false, error: "path not found: " + path + _hint };
   }
   if (res.status === 403 && !env.GITHUB_TOKEN) return { ok: false, error: "GitHub rate-limited (unauthenticated); set GITHUB_TOKEN secret" };
@@ -4706,14 +4706,14 @@ async function gitCloneExec(env, args) {
   // GITCLONE-WARM-RETRY-1 (issue #1465): warm the container, then retry once on
   // a timeout-class failure. Without this a cold start consumes the whole budget
   // and every clone reports "container timeout after Nms".
-  try { await containerDispatch(env, "/health", {}, 2e4); } catch (e) { }
+  try { await containerDispatch(env, "/health", {}, 2e4); } catch (e) { console.error(JSON.stringify({ evt: "ops:gitCloneExec:caught", error: String((e && e.message) || e) })); }
   let effName = name;
   let cloneJ = await containerDispatch(env, "/git/clone", { url: url2, branch, depth, name: effName }, timeout);
   let warmRetried = false;
   if (!cloneJ.ok && /timeout|timed out|ETIMEDOUT/i.test(String(cloneJ.error || "") + " " + String((cloneJ.result || {}).stderr || ""))) {
     warmRetried = true;
     effName = name + "-r" + rndHex8().slice(0, 4); // WORKERS-BP-DEBT-1 (#2431): the retry suffix comes from the CSPRNG, not Math.random
-    try { await containerDispatch(env, "/health", {}, 3e4); } catch (e) { }
+    try { await containerDispatch(env, "/health", {}, 3e4); } catch (e) { console.error(JSON.stringify({ evt: "ops:gitCloneExec:caught", error: String((e && e.message) || e) })); }
     cloneJ = await containerDispatch(env, "/git/clone", { url: url2, branch, depth, name: effName }, timeout);
   }
   if (!cloneJ.ok) return { ok: false, error: "clone failed: " + (cloneJ.error || JSON.stringify(cloneJ.result || {}).slice(0, 200)), clone_result: cloneJ.result, warm_retry: warmRetried };
@@ -4943,9 +4943,9 @@ async function ensureSchema(env) {
     // OPS-TRACE-1 (2026-09-26): attribution + task-level-join columns. upstream_model records the REAL served
     // upstream (ONE-MODEL-PER-ENDPOINT-1 hides it behind the public 'ops' alias); job_id gives an exact
     // task-level join to ops_jobs.status so calibration can use per-TASK outcomes, not per-call ok.
-    try { await env.QNFO_AUDIT.prepare("ALTER TABLE ops_ai_log ADD COLUMN upstream_model TEXT").run(); } catch (eA1) {}
-    try { await env.QNFO_AUDIT.prepare("ALTER TABLE ops_ai_log ADD COLUMN job_id TEXT").run(); } catch (eA2) {}
-    try { await env.QNFO_AUDIT.prepare("ALTER TABLE llm_gateway_log ADD COLUMN upstream_model TEXT").run(); } catch (eA3) {}
+    try { await env.QNFO_AUDIT.prepare("ALTER TABLE ops_ai_log ADD COLUMN upstream_model TEXT").run(); } catch (eA1) { console.error(JSON.stringify({ evt: "ops:ensureSchema:caught", error: String((eA1 && eA1.message) || eA1) })); }
+    try { await env.QNFO_AUDIT.prepare("ALTER TABLE ops_ai_log ADD COLUMN job_id TEXT").run(); } catch (eA2) { console.error(JSON.stringify({ evt: "ops:ensureSchema:caught", error: String((eA2 && eA2.message) || eA2) })); }
+    try { await env.QNFO_AUDIT.prepare("ALTER TABLE llm_gateway_log ADD COLUMN upstream_model TEXT").run(); } catch (eA3) { console.error(JSON.stringify({ evt: "ops:ensureSchema:caught", error: String((eA3 && eA3.message) || eA3) })); }
   } catch (e) {
   }
 }
@@ -5101,7 +5101,7 @@ async function dsPaidBlocked(env, model) {
       const r = await env.QNFO_AUDIT.prepare("SELECT ts FROM cloud_ops_events WHERE kind = 'ds-402-breaker' ORDER BY ts DESC LIMIT 1").first();
       const t = r && r.ts ? Date.parse(r.ts) : 0;
       if (t && t + DS_402_BREAKER_MS > now) _ds402Until = t + DS_402_BREAKER_MS;
-    } catch (_) {}
+    } catch (_) { console.error(JSON.stringify({ evt: "ops:dsPaidBlocked:caught", error: String((_ && _.message) || _) })); }
   }
   return now < _ds402Until;
 }
@@ -5111,7 +5111,7 @@ async function dsPaidTrip(env, model, status, where) {
   _ds402Until = Date.now() + DS_402_BREAKER_MS;
   if (!_wasOpen) {
     console.log("OPS_DS_402_BREAKER open " + Math.round(DS_402_BREAKER_MS / 6e4) + "m via " + where + " (" + model + ")");
-    try { await env.QNFO_AUDIT.prepare("INSERT INTO cloud_ops_events (id, ts, kind, text, meta, job, status) VALUES (?1, ?2, 'ds-402-breaker', ?3, ?4, 'qnfo-ops', 'open')").bind(randId("evt-"), iso(), "deepseek 402: paid path skipped for " + Math.round(DS_402_BREAKER_MS / 6e4) + " min", JSON.stringify({ where: where, model: model, until: new Date(_ds402Until).toISOString(), version: VERSION })).run(); } catch (_) {}
+    try { await env.QNFO_AUDIT.prepare("INSERT INTO cloud_ops_events (id, ts, kind, text, meta, job, status) VALUES (?1, ?2, 'ds-402-breaker', ?3, ?4, 'qnfo-ops', 'open')").bind(randId("evt-"), iso(), "deepseek 402: paid path skipped for " + Math.round(DS_402_BREAKER_MS / 6e4) + " min", JSON.stringify({ where: where, model: model, until: new Date(_ds402Until).toISOString(), version: VERSION })).run(); } catch (_) { console.error(JSON.stringify({ evt: "ops:dsPaidTrip:caught", error: String((_ && _.message) || _) })); }
   }
   return true;
 }
@@ -5143,7 +5143,7 @@ async function callDeepSeek(env, messages, maxTokens, tools, opts) {
   }
   const msgs = truncateToContext(messages, OPS_PROMPT_CTX - Math.max(maxTokens || 0, 0) - 8192);
   let modelToUse = o.upstreamModel || UPSTREAM_MODEL;
-  if (tools && tools.length) { try { const _inc = await agentLoopIncapable(env); if (_inc[modelToUse]) modelToUse = UPSTREAM_TOOLCALL_MODEL; } catch (_) {} }
+  if (tools && tools.length) { try { const _inc = await agentLoopIncapable(env); if (_inc[modelToUse]) modelToUse = UPSTREAM_TOOLCALL_MODEL; } catch (_) { console.error(JSON.stringify({ evt: "ops:callDeepSeek:caught", error: String((_ && _.message) || _) })); } }
   if (await dsPaidBlocked(env, modelToUse)) { const _fbB = await budgetFallback(env, messages, maxTokens, tools, o); if (_fbB) return _fbB; }
   const _isOAI = isOAIUpstream(modelToUse);
   let body = _isOAI ? { model: modelToUse, messages: msgs, max_completion_tokens: Math.min(maxTokens, gwMaxOut(env)), stream: false } : { model: modelToUse, messages: msgs, max_tokens: Math.min(maxTokens, gwMaxOut(env)), temperature: o.temperature != null ? o.temperature : 0.5, top_p: o.topP != null ? o.topP : 0.9, stream: false };
@@ -5220,7 +5220,7 @@ async function callDeepSeekStream(env, messages, maxTokens, tools, opts, onDelta
   }
   const msgs = truncateToContext(messages, OPS_PROMPT_CTX - Math.max(maxTokens || 0, 0) - 8192);
   let modelToUse = o.upstreamModel || UPSTREAM_MODEL;
-  if (tools && tools.length) { try { const _inc = await agentLoopIncapable(env); if (_inc[modelToUse]) modelToUse = UPSTREAM_TOOLCALL_MODEL; } catch (_) {} }
+  if (tools && tools.length) { try { const _inc = await agentLoopIncapable(env); if (_inc[modelToUse]) modelToUse = UPSTREAM_TOOLCALL_MODEL; } catch (_) { console.error(JSON.stringify({ evt: "ops:callDeepSeekStream:caught", error: String((_ && _.message) || _) })); } }
   if (await dsPaidBlocked(env, modelToUse)) { const _fbB = await budgetFallback(env, messages, maxTokens, tools, o); if (_fbB) return _fbB; }
   const _isOAI = isOAIUpstream(modelToUse);
   const body = _isOAI ? { model: modelToUse, messages: msgs, max_completion_tokens: Math.min(maxTokens, gwMaxOut(env)), stream: true } : { model: modelToUse, messages: msgs, max_tokens: Math.min(maxTokens, gwMaxOut(env)), temperature: o.temperature != null ? o.temperature : 0.5, top_p: o.topP != null ? o.topP : 0.9, stream: true };
@@ -5235,7 +5235,7 @@ async function callDeepSeekStream(env, messages, maxTokens, tools, opts, onDelta
     if (resp.ok && resp.body) break;
     const _st = resp.status;
     let _tx = "";
-    try { _tx = await resp.text(); } catch (e) {}
+    try { _tx = await resp.text(); } catch (e) { console.error(JSON.stringify({ evt: "ops:callDeepSeekStream:caught", error: String((e && e.message) || e) })); }
     _dsLastErr = "deepseek stream " + _st + ": " + String(_tx || "").slice(0, 200);
     if (_st === 429) { console.log("OPS_GW_429_FREE_FALLBACK stream " + _dsLastErr.slice(0, 120)); break; }
     if (await dsPaidTrip(env, body.model, _st, "callDeepSeekStream")) break;
@@ -5824,7 +5824,7 @@ async function handleChatCore(env, body, ua, ctx, pub) {
       _t2Blocked = !!(_t2d && Number(_t2d.s) >= _t2cap);
       if (_t2Blocked) ctx.waitUntil(logEscalation(env, "chat", UPSTREAM_MODEL, UPSTREAM_GLM_MODEL, "tier2-daily-cap", "T2 daily cap reached; degrading to free tier for this request"));
     }
-  } catch (e) { }
+  } catch (e) { console.error(JSON.stringify({ evt: "ops:handleChatCore:caught", error: String((e && e.message) || e) })); }
   const model = body && body.model;
   // OPS-PUBLIC-READ-1: public read mode keeps the latest messages that fit OPS_PUBLIC_MAX_CHARS (at most 12), runs the
   // single public model and ignores model ids that would select a paid upstream or a raw relay.
@@ -6198,7 +6198,7 @@ async function handleChatCore(env, body, ua, ctx, pub) {
               if (isStream) emitChunk({ role: "assistant", content }, null);
               return await finalize();
             }
-          } catch (e) { }
+          } catch (e) { console.error(JSON.stringify({ evt: "ops:handleChatCore:caught", error: String((e && e.message) || e) })); }
         }
         const deadlineHit = Date.now() > loopDeadline;
         const withTools = iter < maxIters && !deadlineHit;
@@ -6555,7 +6555,7 @@ async function secretChangeWatch(env, lookbackMs) {
       try {
         const r = await env.QNFO_AUDIT.prepare("INSERT OR IGNORE INTO cloud_ops_events (id, ts, kind, text, meta, job, status) VALUES (?1, ?2, 'secret-change', ?3, ?4, 'qnfo-ops', 'observed')").bind("secret-change-" + name + "-" + v.number, String(v.created_on), name + " secrets changed (version " + v.number + ")", JSON.stringify({ worker: name, version: v.number, created_on: v.created_on, source: v.source })).run();
         if (r && r.meta && r.meta.changes) { out.new_events++; fresh++; }
-      } catch (e) { }
+      } catch (e) { console.error(JSON.stringify({ evt: "ops:secretChangeWatch:caught", error: String((e && e.message) || e) })); }
     }
     // BINDING-PROPS-RESTORE-1 (2.43.0, agent_issues 2445): a new secret version may have copied the bindings without their props.
     if (fresh) {
@@ -6577,7 +6577,7 @@ async function secretChangeWatch(env, lookbackMs) {
         const sr = await fetch(base + "/" + encodeURIComponent(name) + "/secrets", { headers: H });
         const sj = await sr.json().catch(function() { return {}; });
         secretNames = (sj && sj.result || []).map(function(x) { return x && x.name; }).filter(Boolean);
-      } catch (e) { }
+      } catch (e) { console.error(JSON.stringify({ evt: "ops:secretChangeWatch:caught", error: String((e && e.message) || e) })); }
       const desc = "SECRET-CHANGE-WATCH-1 (qnfo-ops " + VERSION + "): Cloudflare recorded " + vs.length + " secret-triggered version(s) of " + name + " between " + vs[0].created_on + " and " + vs[vs.length - 1].created_on + " (versions " + vs.map(function(v) { return v.number; }).join(", ") + "). Current secret names: " + (secretNames.join(", ") || "unreadable") + ". Values are never read. Definition of done: every consumer of each changed secret (workers holding a copy, GitHub Actions secrets, the owner's clients; see audits/2026-10-01-credential-rotation-runbook.md) works with the current value, a rotated-out value is not re-accepted, and the evidence is in issue_triage.close_evidence. Next time take the secret-lock first (CLAUDE.md, #1701).";
       const now = Date.now();
       await env.QNFO_AUDIT.prepare("INSERT INTO agent_issues (title, description, source, category, priority, status, linked_session, created_at, updated_at) VALUES (?1, ?2, 'qnfo-ops', 'security', 'medium', 'open', ?3, ?4, ?4)").bind(title, desc.slice(0, 4000), "qnfo-ops/" + VERSION, now).run();
@@ -6588,7 +6588,7 @@ async function secretChangeWatch(env, lookbackMs) {
   }
   try {
     await env.QNFO_AUDIT.prepare("INSERT INTO cloud_ops_events (id, ts, kind, text, meta, job, status) VALUES (?1, ?2, 'secret-watch-tick', ?3, ?4, 'qnfo-ops', ?5)").bind(randId("evt-"), iso(), "secret watch: " + out.scripts + " scripts, " + out.changes + " secret change(s)", JSON.stringify(out).slice(0, 1500), out.scripts > 0 ? "ok" : "error").run();
-  } catch (e) { }
+  } catch (e) { console.error(JSON.stringify({ evt: "ops:secretChangeWatch:caught", error: String((e && e.message) || e) })); }
   return out;
 }
 __name(secretChangeWatch, "secretChangeWatch");
@@ -6760,7 +6760,7 @@ async function errorDetailCapture(env, windowMs) {
     var txt = "error capture: http " + out.http + ", " + out.events + " error event(s) in " + Math.round((to - from) / 6e4) + " min, " + out.inserted + " new worker_logs row(s) across " + Object.keys(out.scripts).length + " worker(s)" + (out.error ? "; " + out.error : "") + (out.write_error ? "; write: " + out.write_error : "");
     await env.QNFO_AUDIT.prepare("INSERT INTO cloud_ops_events (id, ts, kind, text, meta, job, status) VALUES (?1, ?2, 'error-capture-tick', ?3, ?4, 'qnfo-ops', ?5)")
       .bind(randId("evt-"), iso(), txt.slice(0, 500), JSON.stringify(out).slice(0, 2000), st).run();
-  } catch (e) { }
+  } catch (e) { console.error(JSON.stringify({ evt: "ops:errorDetailCapture:caught", error: String((e && e.message) || e) })); }
   return out;
 }
 __name(errorDetailCapture, "errorDetailCapture");
@@ -7279,7 +7279,7 @@ var AgenticOpsExec = class extends DurableObject {
           const _fm = _fc && _fc.message || {};
           finalText = stripToolFrames(String(_fm.content || "").trim());
         } catch (e) { finalText = ""; }
-        try { await logToolBudgetBail(this.env, "do-session", 0, "", maxIters, false); } catch (e) { }
+        try { await logToolBudgetBail(this.env, "do-session", 0, "", maxIters, false); } catch (e) { console.error(JSON.stringify({ evt: "ops:webSocketMessage:caught", error: String((e && e.message) || e) })); }
         if (!finalText) finalText = "(tool loop did not converge within " + maxIters + " iterations)";
       }
       await this.ctx.storage.put(historyKey, history);
@@ -7541,7 +7541,7 @@ async function opsDeploy(env, args) {
       sLock = { acquired: false, error: String(_e3 && _e3.message || _e3).slice(0, 120) };
     }
     if (sDenied) {
-      try { await dg(DG + "/lock/release", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ worker, token: lock.token }) }); } catch (_e4) {}
+      try { await dg(DG + "/lock/release", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ worker, token: lock.token }) }); } catch (_e4) { console.error(JSON.stringify({ evt: "ops:opsDeploy:caught", error: String((_e4 && _e4.message) || _e4) })); }
       return { ok: false, error: "secret-lock DENIED (another holder has secrets:" + worker + ")", secret_lock: sLock, log };
     }
     if (!sLock || !sLock.acquired || !sLock.token) {
@@ -7631,7 +7631,7 @@ async function opsDeploy(env, args) {
         for (let _gi = 0; _gi < 4; _gi++) {
           const gl = await dg(DG + "/ledger", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ worker, to: _glVer, actor: "qnfo-ops/ops-deploy", ok: !!(dep && dep.ok), note: "auto-advance deploy-guard registry after deploy" }) });
           let gj = {};
-          try { gj = await gl.json(); } catch (_ge) {}
+          try { gj = await gl.json(); } catch (_ge) { console.error(JSON.stringify({ evt: "ops:opsDeploy:caught", error: String((_ge && _ge.message) || _ge) })); }
           log.push({ step: "guard-ledger", attempt: _gi, http: gl.status, registry_version: gj && gj.registry_version || null });
           if (gj && gj.registry_version && (!_glVer || String(gj.registry_version) === String(_glVer))) break;
           if (_gi < 3) await new Promise(function (r) { setTimeout(r, 4000); });
