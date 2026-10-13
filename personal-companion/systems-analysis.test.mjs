@@ -63,5 +63,21 @@ ok(/never state an inferred arrangement, funding, motive or behaviour as a repor
   const w = src.slice(src.indexOf("async function wikiAnchors("), src.indexOf("async function paperAnchors("));
   ok(/if \(!primary && fallback\) \{ primary = fallback;/.test(w), "when no candidate fits, the first long-enough article is still used");
 }
+// ---- QUOTE-GROUND-1 + OBJECTION-OWN-WORDS-1 (1.21.1): quotations are verbatim from the sources; the objection is the writer's ------------
+{
+  const src0 = "Julius Kahn patented the Kahn system of reinforced concrete in 1903. He said the bar must be rigidly connected to the concrete. Eleanor Roosevelt wrote about Charles Platt that his gardens were a marvel of order.";
+  const gp = V.groundingProblems;
+  const fake = "# The Kahn system\n\nCritics said that \"the Kahn system was merely a minor improvement on earlier methods\" and little more.";
+  const p1 = gp(fake, src0, {});
+  ok(p1.some((x) => /^quotation not in the source: "the Kahn system was merely a minor improvement on earlier methods"/.test(x)), "an invented quotation of five or more words is flagged with its text", p1);
+  ok(gp("# Kahn\n\nKahn said \u201cthe bar must be rigidly connected to the concrete\u201d in 1903.", src0, {}).filter((x) => /quotation/.test(x)).length === 0, "a quotation that is verbatim in the source (curly quotes) passes");
+  ok(gp("# Kahn\n\nThe phrase \"rigid bar\" recurs.", src0, {}).filter((x) => /quotation/.test(x)).length === 0, "a quotation under five words is left to the reviewers");
+  const n = V.groundingNeedles(p1.filter((x) => /quotation/.test(x)));
+  ok(n.length === 1 && n[0] === "the Kahn system was merely a minor improvement on earlier methods", "the grounding repair receives the quotation as its needle", n);
+  ok(V.QUOTE_MIN_WORDS === 5, "quotations of five or more words are checked");
+  ok(/stated fairly in your own words as an objection a careful reader could raise/.test(P.P_STYLE) && /Never put it in quotation marks and never attribute it to critics/.test(P.P_STYLE) && !/in the objector's own terms/.test(P.P_STYLE), "the objection is the writer's own, never a quotation or an unnamed critic");
+  ok(!/in the objector's terms/.test(P.P_ESSAY) && /never as a quotation or an unnamed critic/.test(P.P_ESSAY), "the essay form says the same");
+  ok(/a paragraph that would read the same for any other subject is boilerplate and is rejected/.test(P.P_STYLE) && /quote only words that appear verbatim in the source material, attributed to the person the source attributes them to/.test(P.P_STYLE), "the analysis is specific and quotations keep their attribution");
+}
 console.log(pass + " passed, " + fail + " failed");
 if (fail) process.exit(1);
