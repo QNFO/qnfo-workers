@@ -1,6 +1,6 @@
-// WORKERS-AI-SPEND-UNATTRIBUTED-RISING-1 (#1681): offline proof for personal-companion aiRunAttr. Run: node scripts/ai-attribution-personal-companion-test.mjs
+// WORKERS-AI-SPEND-UNATTRIBUTED-RISING-1 (#1681): offline proof for personal-companion aiRunAttr. Run: node personal-companion/ai-attribution.test.mjs (a *.test.mjs in the worker directory, so scripts/run-suites.mjs runs it on every personal-companion change; AI-ATTRIBUTION-COMPANION-TEST-STALE-1, #2483)
 import fs from "node:fs";
-const src = fs.readFileSync(new URL("../personal-companion/worker.js", import.meta.url), "utf8");
+const src = fs.readFileSync(new URL("./worker.js", import.meta.url), "utf8");
 const a = src.indexOf("var AI_ATTR_DB_BINDINGS");
 const b = src.indexOf("// end aiRunAttr");
 if (a < 0 || b < a) throw new Error("helper markers missing");
@@ -13,7 +13,9 @@ const ok = (c, m) => { if (!c) { fail++; console.error("FAIL", m); } };
 // static: every env.AI.run is inside the helper only
 const outside = src.slice(0, a) + src.slice(b);
 ok(!/\benv\.AI\.run\(/.test(outside), "raw env.AI.run left outside helper");
-ok((src.match(/aiRunAttr\(env, "personal-companion"/g) || []).length === 5, "expected 5 migrated call sites");
+const attributed = (src.match(/aiRunAttr\(env, "personal-companion"/g) || []).length;
+ok(attributed >= 5, "expected at least 5 attributed call sites, found " + attributed);
+// every call site goes through the helper: a minimum, not an exact count, so a new AI call does not break this suite
 
 function mkDb(mode, log) {
   return { prepare(sql) {
