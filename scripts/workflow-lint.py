@@ -38,6 +38,8 @@ RULES ENFORCED (fail closed; exit 1 on any violation)
                            reading (issue 1381). Fix by splitting commit-back: persist
                            the artifact unconditionally, keep the source commit-back
                            green-only so the repo never runs ahead of live.
+  R4 GHA-HARDENING-1       top-level `permissions:`, timeout-minutes on every job, and
+                           no action on a Node 20 major (see NODE24_MIN_MAJOR).
 
 Exit: 0 every workflow valid and artifact-safe
       1 at least one violation (fail closed)
@@ -219,6 +221,41 @@ def unfiltered_deployers(files: list[str]) -> list[str]:
     return out
 
 
+# GHA-HARDENING-1 (R4, blocking; GHA-AUDIT-1 2026-10-13). Three properties every workflow keeps:
+#   * no action pinned to a Node 20 major: GitHub deprecated Node 20 on runners (changelog 2025-09-19) and force-runs those
+#     actions on Node 24 with a warning on every job; the lowest Node 24 major of each action the fleet uses is below;
+#   * every job declares timeout-minutes (the default is 360 minutes, so one hung step holds a runner slot for six hours
+#     while the fleet's own bots push to main every few minutes);
+#   * the workflow declares a top-level `permissions:` block (without it the token gets the repository default).
+NODE24_MIN_MAJOR = {
+    "actions/checkout": 5,
+    "actions/setup-python": 6,
+    "actions/setup-node": 5,
+    "actions/upload-artifact": 6,
+    "actions/download-artifact": 6,
+    "actions/cache": 5,
+    "peter-evans/create-pull-request": 8,
+    "cloudflare/wrangler-action": 4,
+}
+USES_MAJOR_RE = re.compile(r"^([\w.-]+/[\w.-]+)@v(\d+)\b")
+
+
+def hardening_violations(doc: dict) -> list[str]:
+    out: list[str] = []
+    if "permissions" not in doc:
+        out.append("no top-level `permissions:` block (declare the least the token needs, e.g. contents: read)")
+    for name, job in (doc.get("jobs") or {}).items():
+        if not isinstance(job, dict):
+            continue
+        if "uses" not in job and "timeout-minutes" not in job:
+            out.append(f"job `{name}` has no timeout-minutes (default 360)")
+        for step in job.get("steps") or []:
+            m = USES_MAJOR_RE.match(str((step or {}).get("uses") or "")) if isinstance(step, dict) else None
+            if m and m.group(1) in NODE24_MIN_MAJOR and int(m.group(2)) < NODE24_MIN_MAJOR[m.group(1)]:
+                out.append(f"job `{name}` uses {m.group(0)} (Node 20; use @v{NODE24_MIN_MAJOR[m.group(1)]} or later)")
+    return out
+
+
 def run_blocks(doc: dict) -> list[str]:
     out: list[str] = []
     jobs = doc.get("jobs")
@@ -297,6 +334,13 @@ def main() -> int:
                 print(f"BROKEN {p}: failure-run artifact would be discarded")
                 continue
             notes.append("ci-status staged")
+
+        hard = hardening_violations(doc)
+        if hard:
+            for h in hard:
+                bad.append(f"{p}: GHA-HARDENING-1 -- {h}")
+            print(f"BROKEN {p}: GHA-HARDENING-1 ({len(hard)} finding(s))")
+            continue
 
         print(f"OK     {p} jobs={sorted(jobs)}" + (f" [{'; '.join(notes)}]" if notes else ""))
 

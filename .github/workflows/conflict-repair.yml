@@ -56,17 +56,17 @@ jobs:
       INPUT_PUSH: ${{ github.event.inputs.push }}
     steps:
       # A workflow_run checks out the trigger's SHA, which can be stale; the repair is cut from the CURRENT main.
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           ref: main
           fetch-depth: 0
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.11"
 
       # The re-applied worker's suites run before the branch is pushed; they need node:sqlite (Node 22).
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v6
         with:
           node-version: "22"
 

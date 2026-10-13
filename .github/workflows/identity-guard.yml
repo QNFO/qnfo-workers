@@ -17,13 +17,18 @@ on:
 permissions:
   contents: read
 
+# GHA-AUDIT-1: a newer push to a PR cancels the superseded run; push runs are grouped per sha and never cancel.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event_name == 'pull_request' && github.event.pull_request.number || github.sha }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   identity-guard:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.11"
       - name: Identity lexicon guard
@@ -31,7 +36,7 @@ jobs:
 
       # Offline suites for the identity changes that ride the canonical deploy (node:sqlite needs Node 22):
       # PROFILE-SYNC-1 (qnfo-social).
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v6
         with:
           node-version: "22"
       - name: Bluesky profile sync offline suite (qnfo-social)

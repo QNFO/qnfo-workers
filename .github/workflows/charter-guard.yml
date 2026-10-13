@@ -50,15 +50,15 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 6
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           fetch-depth: 0
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v6
         with:
           node-version: '20'
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: '3.11'
 
@@ -100,7 +100,7 @@ jobs:
 
       # OBJECTIVE-CONSTRAINTS-1 (owner-ratified goals 41, 43, 57): the suite replays the hourly tick against an in-memory
       # SQLite D1 (node:sqlite needs Node 22, so this step switches runtime; the steps after it are Python).
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v6
         with:
           node-version: '22'
 
