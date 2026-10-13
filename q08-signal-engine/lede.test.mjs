@@ -43,5 +43,17 @@ check("the forecast directive has a LEDE rule", /LEDE \(inverted pyramid, checke
   check("a single overlong sentence is left for the gate", L.splitLongLede(one) === one);
   check("normalizeDraft applies the split", L.ledeOf(L.normalizeDraft(draft)) === s1 + " " + s2);
 }
+// ---- Q08-VERDICT-NORM-1 (0.20.2, run 382) ------------------------------------------------------------------------------------
+{
+  const canon = /worth your time:\s*(yes|flat|no)\s*[\u2014\u2013-]\s*\S[^\n]*$/im;
+  for (const v of ["**Worth your time:** yes. It explains the incentive.", "worth your time - flat: the source says most of it", "Worth your time: Yes, it names the parties", "_worth your time:_ **no** \u2014 retells the post"]) {
+    const out = L.normalizeVerdictLine("# T\n\nBody.\n\n" + v);
+    check("near-miss verdict is normalised: " + v.slice(0, 30), canon.test(out) && out.includes("Body."), out.slice(-80));
+  }
+  check("the writer's own verdict word is kept", /worth your time: no \u2014/.test(L.normalizeVerdictLine("x\n\n_worth your time:_ **no** \u2014 retells the post")));
+  check("a canonical line is left unchanged", L.normalizeVerdictLine("a\n\nworth your time: yes - x") === "a\n\nworth your time: yes - x");
+  check("no verdict at all is not invented", !/worth your time/i.test(L.normalizeVerdictLine("# T\n\nBody only.")));
+  check("a verdict-only problem list is recognised; a self-verdict no is not", L.verdictOnlyProblem(["missing or malformed 'worth your time' verdict line"]) && !L.verdictOnlyProblem(["self-verdict 'no' \u2014 essay does not clear the worth-reading bar"]));
+}
 console.log("lede.test.mjs: " + passes + " passed, " + fails + " failed");
 process.exit(fails ? 1 : 0);
