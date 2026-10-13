@@ -1,91 +1,357 @@
 {
  "ok": true,
  "marker": "REMEDIATION-CONSUMER-1",
- "verifier": "remediation-consumer@489c824cb31e",
- "due": 5,
- "pass": 3,
- "fail": 1,
- "skipped": 1,
+ "verifier": "remediation-consumer@ef613cb07c66",
+ "due": 82,
+ "pass": 41,
+ "fail": 41,
+ "skipped": 0,
  "contracts": [
   {
-   "class": "issue-2304",
-   "issue_id": 2304,
+   "class": "issue-2301",
+   "issue_id": 2301,
    "verdict": "pass",
    "expected": "ok",
    "observed": "ok",
    "written": true
   },
   {
-   "class": "issue-2424",
-   "issue_id": 2424,
+   "class": "fm-factcheck-waits-for-slowest",
+   "issue_id": null,
    "verdict": "pass",
    "expected": "ok",
    "observed": "ok",
    "written": true
   },
   {
-   "class": "issue-2307",
-   "issue_id": 2307,
+   "class": "fm-code-read-stale-checkout",
+   "issue_id": null,
    "verdict": "pass",
    "expected": "ok",
    "observed": "ok",
    "written": true
   },
   {
-   "class": "issue-2490",
-   "issue_id": 2490,
-   "verdict": "vacuous-probe-result",
-   "expected": "closed",
-   "observed": null,
-   "reason": "probe returned no expected/observed pair"
+   "class": "fm-patch-calls-undefined-helper",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
   },
   {
-   "class": "issue-2498",
-   "issue_id": 2498,
+   "class": "fm-paper-abstract-empty",
+   "issue_id": 2468,
+   "verdict": "pass",
+   "expected": "0",
+   "observed": "0",
+   "written": true
+  },
+  {
+   "class": "issue-2223",
+   "issue_id": 2223,
    "verdict": "fail",
    "expected": "ok",
-   "observed": "pending: filed by qnfo-research-exec, which owns it for 48h",
+   "observed": "the improvement loop still finds this in its latest run (IMPROVEMENT-LOOP-1 closes it when the finding clears)",
    "written": true
-  }
- ],
- "trusted_transports": [
-  "binding-http",
-  "cf-api",
-  "code-read",
-  "container",
-  "curl",
-  "d1-query",
-  "d1-query@ipatent-db",
-  "d1-query@living-paper",
-  "d1-query@personal-life",
-  "d1-query@portfolio-state",
-  "d1-query@q08-signal",
-  "d1-query@qnfo-cms",
-  "d1-query@qnfo-graph",
-  "dns",
-  "edge-ext",
-  "external",
-  "external-curl",
-  "external-http",
-  "external-https",
-  "http",
-  "runner-https"
- ],
- "https": 3,
- "budget_exhausted": false,
- "runtime_verified_share_24h": 12.5,
- "host_census": {
-  "skipped": "ran within 6h"
- },
- "migrations": {
-  "opted_in": 169,
-  "unapplied": [],
-  "applied_now": [],
-  "failed": [],
-  "metric": 0
- },
- "spent_ms": 13844,
- "head": "489c824cb31e9b89f8f9928b6725d0dcc5c09a69",
- "job_status": "success",
- "ts": "2026-10-13T15:05:36Z"
-}
+  },
+  {
+   "class": "issue-2475",
+   "issue_id": 2475,
+   "verdict": "fail",
+   "expected": "0",
+   "observed": "2",
+   "written": true
+  },
+  {
+   "class": "issue-2158",
+   "issue_id": 2158,
+   "verdict": "fail",
+   "expected": "ok",
+   "observed": "the improvement loop still finds this in its latest run (IMPROVEMENT-LOOP-1 closes it when the finding clears)",
+   "written": true
+  },
+  {
+   "class": "issue-2199",
+   "issue_id": 2199,
+   "verdict": "fail",
+   "expected": "1",
+   "observed": "0",
+   "written": true
+  },
+  {
+   "class": "issue-2323",
+   "issue_id": 2323,
+   "verdict": "fail",
+   "expected": "ok",
+   "observed": "the improvement loop still finds this in its latest run (IMPROVEMENT-LOOP-1 closes it when the finding clears)",
+   "written": true
+  },
+  {
+   "class": "issue-2322",
+   "issue_id": 2322,
+   "verdict": "fail",
+   "expected": "ok",
+   "observed": "the improvement loop still finds this in its latest run (IMPROVEMENT-LOOP-1 closes it when the finding clears)",
+   "written": true
+  },
+  {
+   "class": "issue-1780",
+   "issue_id": 1780,
+   "verdict": "fail",
+   "expected": "1",
+   "observed": "0",
+   "written": true
+  },
+  {
+   "class": "issue-2346",
+   "issue_id": 2346,
+   "verdict": "fail",
+   "expected": "ok",
+   "observed": "pending: the newest workers best-practice audit reads 0 fail and 532 advisory findings at 2026-10-13T15:03:51Z (target 0)",
+   "written": true
+  },
+  {
+   "class": "fm-exact-version-probe",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "0",
+   "observed": "0",
+   "written": true
+  },
+  {
+   "class": "fm-code-task-dies-at-ci",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "0",
+   "observed": "0",
+   "written": true
+  },
+  {
+   "class": "fm-code-patch-stale-dead-end",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "0",
+   "observed": "0",
+   "written": true
+  },
+  {
+   "class": "issue-2155",
+   "issue_id": 2155,
+   "verdict": "fail",
+   "expected": "ok",
+   "observed": "the improvement loop still finds this in its latest run (IMPROVEMENT-LOOP-1 closes it when the finding clears)",
+   "written": true
+  },
+  {
+   "class": "fm-companion-draft-cache-replay",
+   "issue_id": null,
+   "verdict": "fail",
+   "expected": "1",
+   "observed": "0",
+   "written": true
+  },
+  {
+   "class": "fm-sla-grace-equals-target",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "fm-ratio-over-failure-only-table",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "issue-2089",
+   "issue_id": 2089,
+   "verdict": "fail",
+   "expected": "ok",
+   "observed": "the improvement loop still finds this in its latest run (IMPROVEMENT-LOOP-1 closes it when the finding clears)",
+   "written": true
+  },
+  {
+   "class": "fm-companion-gate-discards-repairable",
+   "issue_id": null,
+   "verdict": "fail",
+   "expected": "1",
+   "observed": "0",
+   "written": true
+  },
+  {
+   "class": "issue-2157",
+   "issue_id": 2157,
+   "verdict": "fail",
+   "expected": "ok",
+   "observed": "the improvement loop still finds this in its latest run (IMPROVEMENT-LOOP-1 closes it when the finding clears)",
+   "written": true
+  },
+  {
+   "class": "issue-2326",
+   "issue_id": 2326,
+   "verdict": "fail",
+   "expected": "ok",
+   "observed": "the improvement loop still finds this in its latest run (IMPROVEMENT-LOOP-1 closes it when the finding clears)",
+   "written": true
+  },
+  {
+   "class": "fm-publish-stall-filed-not-fixed",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "0",
+   "observed": "0",
+   "written": true
+  },
+  {
+   "class": "issue-2327",
+   "issue_id": 2327,
+   "verdict": "fail",
+   "expected": "ok",
+   "observed": "the improvement loop still finds this in its latest run (IMPROVEMENT-LOOP-1 closes it when the finding clears)",
+   "written": true
+  },
+  {
+   "class": "issue-2328",
+   "issue_id": 2328,
+   "verdict": "fail",
+   "expected": "ok",
+   "observed": "the improvement loop still finds this in its latest run (IMPROVEMENT-LOOP-1 closes it when the finding clears)",
+   "written": true
+  },
+  {
+   "class": "issue-2218",
+   "issue_id": 2218,
+   "verdict": "fail",
+   "expected": "1",
+   "observed": "0",
+   "written": true
+  },
+  {
+   "class": "fm-judge-context-narrower-than-writer",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "0",
+   "observed": "0",
+   "written": true
+  },
+  {
+   "class": "fm-remediation-tick-starved",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "0",
+   "observed": "0",
+   "written": true
+  },
+  {
+   "class": "fm-stuck-view-sla-drift",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "1",
+   "observed": "1",
+   "written": true
+  },
+  {
+   "class": "fm-host-census-false-positive",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "1",
+   "observed": "1",
+   "written": true
+  },
+  {
+   "class": "fm-code-refusal-not-repaired",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "0",
+   "observed": "0",
+   "written": true
+  },
+  {
+   "class": "fm-code-review-noise-defect",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "0",
+   "observed": "0",
+   "written": true
+  },
+  {
+   "class": "issue-2461",
+   "issue_id": 2461,
+   "verdict": "fail",
+   "expected": "ok",
+   "observed": "the improvement loop still finds this in its latest run (IMPROVEMENT-LOOP-1 closes it when the finding clears)",
+   "written": true
+  },
+  {
+   "class": "issue-1716",
+   "issue_id": 1716,
+   "verdict": "fail",
+   "expected": "1",
+   "observed": "0",
+   "written": true
+  },
+  {
+   "class": "issue-2466",
+   "issue_id": 2466,
+   "verdict": "fail",
+   "expected": "ok",
+   "observed": "the improvement loop still finds this in its latest run (IMPROVEMENT-LOOP-1 closes it when the finding clears)",
+   "written": true
+  },
+  {
+   "class": "issue-1753",
+   "issue_id": 1753,
+   "verdict": "fail",
+   "expected": "1",
+   "observed": "0",
+   "written": true
+  },
+  {
+   "class": "fm-d1-like-pattern-length",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "0",
+   "observed": "0",
+   "written": true
+  },
+  {
+   "class": "issue-1760",
+   "issue_id": 1760,
+   "verdict": "fail",
+   "expected": "ok",
+   "observed": "pending",
+   "written": true
+  },
+  {
+   "class": "fm-code-multi-file-refused",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "0",
+   "observed": "0",
+   "written": true
+  },
+  {
+   "class": "fm-code-merge-race-moved-head",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "1",
+   "observed": "1",
+   "written": true
+  },
+  {
+   "class": "fm-lane-null-first-read-nudge",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "0",
+   "observed": "0",
+   "written": true
+  },
+  {
+   "class": "fm-code-publish-waits-for-push",
+   "issue_id": null,
+   "v
