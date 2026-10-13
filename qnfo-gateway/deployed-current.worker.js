@@ -1,4 +1,4 @@
-var VERSION="3.18.3-hub-version"; /* 3.18.3 HUB-CACHE-VERSION-1 (2026-10-13, pillar reach, failure mode zaraz-autoinject-worker-html): the qnfo.org hub copy in each colo's cache now carries the VERSION that built it, and a copy built by another version is rebuilt while the request waits up to 2.5 s instead of being served stale; the runner probe of 07:39 UTC read a pre-3.16.1 copy without /cdn-cgi/zaraz/i.js while every fresh render carried it. */ /* 3.18.2 PAGE-POLICY-1 (2026-10-13, pillar reach, agent_issues 2343 WEB-PERF-EDGE-1): every HTML response carries Referrer-Policy strict-origin-when-cross-origin (no-referrer when the query carries a token) and Permissions-Policy camera=(), microphone=(), geolocation=() from the worker (qnfo.org had neither; the subdomains had them only from a zone rule), and an HTML response without Cache-Control gets public, max-age=300, s-maxage=3600, stale-while-revalidate=86400 when it is a public GET 200, no-store otherwise; handlers that set their own are unchanged, JSON untouched. 3.18.1 RENDER-DEFECTS-2300 (2026-10-13, pillar reach, agent_issues 2300 2158 2357): PANDOC-FENCE-GLUE-1 reads a code fence glued to prose or to its last code line as a fence (ultrametric-intelligence printed its Python as prose and typeset its identifiers); MATH-RESIDUE-5 typesets a formula glued to a name by a product sign; RAIL-MATH-1 gives /api/paper-context title_tex and excerpt_tex (formulas kept as TeX, plain-text math typeset, currency escaped) and the Related and Versions panels paint them, since every residue the browser sample counted on chapter-1 and log20240505010101strangeloopbook on 2026-10-12 was panel text; a formula ending in an escaped brace is lifted as math; MathJax knows the Sha macro. 3.18.0 ACTIVITYPUB-KEY-1 (2026-10-12, pillar reach, #2249 #2413): the actor publishes publicKeyPem when AP_PUBLIC_KEY is set (cf-ops gen-activitypub-key); merged with main 3.17.1 (REACH-RENDER-1). */
+var VERSION="3.18.4-cron-heartbeat"; /* 3.18.4 FLEET-HARDENING-2 (2026-10-13, agent_issues 2397, pillar autonomy): the daily cron ends with a qnfo-audit fleet_heartbeat upsert through a new AUDIT binding (ok=0 when the IndexNow step threw, which was swallowed before and is now logged). */ /* 3.18.3 HUB-CACHE-VERSION-1 (2026-10-13, pillar reach, failure mode zaraz-autoinject-worker-html): the qnfo.org hub copy in each colo's cache now carries the VERSION that built it, and a copy built by another version is rebuilt while the request waits up to 2.5 s instead of being served stale; the runner probe of 07:39 UTC read a pre-3.16.1 copy without /cdn-cgi/zaraz/i.js while every fresh render carried it. */ /* 3.18.2 PAGE-POLICY-1 (2026-10-13, pillar reach, agent_issues 2343 WEB-PERF-EDGE-1): every HTML response carries Referrer-Policy strict-origin-when-cross-origin (no-referrer when the query carries a token) and Permissions-Policy camera=(), microphone=(), geolocation=() from the worker (qnfo.org had neither; the subdomains had them only from a zone rule), and an HTML response without Cache-Control gets public, max-age=300, s-maxage=3600, stale-while-revalidate=86400 when it is a public GET 200, no-store otherwise; handlers that set their own are unchanged, JSON untouched. 3.18.1 RENDER-DEFECTS-2300 (2026-10-13, pillar reach, agent_issues 2300 2158 2357): PANDOC-FENCE-GLUE-1 reads a code fence glued to prose or to its last code line as a fence (ultrametric-intelligence printed its Python as prose and typeset its identifiers); MATH-RESIDUE-5 typesets a formula glued to a name by a product sign; RAIL-MATH-1 gives /api/paper-context title_tex and excerpt_tex (formulas kept as TeX, plain-text math typeset, currency escaped) and the Related and Versions panels paint them, since every residue the browser sample counted on chapter-1 and log20240505010101strangeloopbook on 2026-10-12 was panel text; a formula ending in an escaped brace is lifted as math; MathJax knows the Sha macro. 3.18.0 ACTIVITYPUB-KEY-1 (2026-10-12, pillar reach, #2249 #2413): the actor publishes publicKeyPem when AP_PUBLIC_KEY is set (cf-ops gen-activitypub-key); merged with main 3.17.1 (REACH-RENDER-1). */
 // UTM-CLICK-LEDGER-1 (3.10.0, 2026-10-06, transformation lever T7.9, pillar reach): a GET for an HTML page that carries
 // utm_source is counted into qnfo-graph utm_clicks (day, host, path, source, medium, campaign, bot/human, country; no cookie,
 // no IP), so a post or digest joins to the visits it caused; qnfo-fleet-dashboard reads it into reach_signals source utm.
@@ -4487,6 +4487,7 @@ var gateway_worker_default = {
     return notFoundPage(request, env, host, p, null);
   },
   async scheduled(event, env, ctx) {
+    var cronOk = true;
     try {
       // DISCOVERY-1 (2026-10-06): every submission is logged (living-paper indexnow_log) so search reach is measurable,
       // and on Mondays the qnfo.org core pages are submitted on their own host (key file now served there too).
@@ -4497,6 +4498,8 @@ var gateway_worker_default = {
         await indexNowLog(env, "qnfo.org", qr);
       }
     } catch (e) {
+      console.log("DISCOVERY-1 indexnow failed: " + String(e && e.message || e).slice(0, 200));
+      cronOk = false;
     }
     await askRatePrune(env);
     try {
@@ -4508,6 +4511,15 @@ var gateway_worker_default = {
       await browserMathSample(env);
     } catch (e) {
       console.log("MATH-BROWSER-2 sample failed: " + String(e && e.message || e).slice(0, 200));
+    }
+    // FLEET-HARDENING-2 (agent_issues 2397): the daily run ends with its fleet_heartbeat row (ok=0 when the IndexNow step threw); a
+    // failed write is logged and never fails the run.
+    if (env.AUDIT) {
+      try {
+        await env.AUDIT.prepare("INSERT INTO fleet_heartbeat (worker, version, ts, ok) VALUES (?1, ?2, ?3, ?4) ON CONFLICT(worker) DO UPDATE SET version=excluded.version, ts=excluded.ts, ok=excluded.ok").bind("qnfo-gateway", VERSION, new Date().toISOString(), cronOk ? 1 : 0).run();
+      } catch (e) {
+        console.log("FLEET-HARDENING-2 heartbeat write failed: " + String(e && e.message || e).slice(0, 200));
+      }
     }
   }
 };
