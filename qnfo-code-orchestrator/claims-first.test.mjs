@@ -1,5 +1,5 @@
 // CLAIMS-FIRST-1 (0.3.21, transformation lever T1.14): every code task holds the WORK-CLAIM-1 claim on its file through
-// qnfo-deploy-guard /work-lock from enqueue to its end; a file a session holds makes the task wait; a finished task releases
+// qnfo-deploy-guard /work-lock from its first step to its end (CLAIM-AT-RUN-1, 0.14.5; enqueue takes none); a file a session holds makes the task wait; a finished task releases
 // its claim with the pull request and the outcome; the guard unreachable never breaks the loop.
 // Run: node qnfo-code-orchestrator/claims-first.test.mjs
 import { DatabaseSync } from "node:sqlite";
@@ -66,21 +66,23 @@ const ctxOf = (id) => JSON.parse(row(id).ctx || "{}");
 const acquires = () => guard.calls.filter((x) => x.path === "/work-lock/acquire");
 const releases = () => guard.calls.filter((x) => x.path === "/work-lock/release");
 
-// 1. enqueue takes the claim
+// 1. CLAIM-AT-RUN-1 (0.14.5): enqueue takes no claim; the task takes it at its first step
 const a = await addTask("claims-first fixture: a task holds its file");
 ok(a.ok && /^ct_/.test(a.id), "task enqueued", a);
+ok(acquires().length === 0 && !ctxOf(a.id).claim, "enqueue sends no acquire and records no claim", { calls: guard.calls, ctx: ctxOf(a.id) });
+let t = await tick();
 let c = ctxOf(a.id).claim;
-ok(acquires().length === 1 && acquires()[0].body.key === "file:fx-worker/worker.js" && acquires()[0].body.owner === "qnfo-code-orchestrator:" + a.id && acquires()[0].body.ttl_sec === 7200 && /claims-first fixture/.test(acquires()[0].body.intent) && !acquires()[0].body.token, "enqueue acquires file:<path> as qnfo-code-orchestrator:<task> with the goal as intent, ttl 7200", acquires());
+ok(t.steps === 1 && !t.done[0].deferred && acquires().length === 1 && acquires()[0].body.key === "file:fx-worker/worker.js" && acquires()[0].body.owner === "qnfo-code-orchestrator:" + a.id && acquires()[0].body.ttl_sec === 7200 && /claims-first fixture/.test(acquires()[0].body.intent) && !acquires()[0].body.token, "the first step acquires file:<path> as qnfo-code-orchestrator:<task> with the goal as intent, ttl 7200", acquires());
 ok(c && c.token === "tok1" && c.key === "file:fx-worker/worker.js" && c.expires_at && !c.released_at, "the claim (token, expiry) is recorded on the task", c);
 
 // 2. a fresh claim costs no guard call at the step; the step itself runs
 guard.calls.length = 0;
-let t = await tick();
+t = await tick();
 ok(acquires().length === 0 && t.steps === 1 && !t.done[0].deferred, "a task with a fresh claim steps without a guard call", { calls: guard.calls, t });
 ok(t.claims && typeof t.claims.taken === "number" && t.claims.held === 0, "the tick reports the claims sweep", t.claims);
 
 // 3. a claim near expiry is renewed with its token
-db.prepare("UPDATE code_tasks SET ctx = json_set(ctx, '$.claim.expires_at', ?), status = 'queued', lease_until = NULL WHERE id = ?").run(new Date(Date.now() + 10 * 60e3).toISOString(), a.id);
+db.prepare("UPDATE code_tasks SET ctx = json_set(ctx, '$.claim.expires_at', ?), status = 'queued', lease_until = NULL, attempts = 1 WHERE id = ?").run(new Date(Date.now() + 10 * 60e3).toISOString(), a.id);
 guard.calls.length = 0;
 t = await tick();
 ok(acquires().length >= 1 && acquires()[0].body.token === "tok1" && ctxOf(a.id).claim.renewals >= 1 && Date.parse(ctxOf(a.id).claim.expires_at) - Date.now() > 60 * 60e3, "a claim under 45 minutes from expiry is renewed with its token", { ren: acquires(), c: ctxOf(a.id).claim });
@@ -152,13 +154,13 @@ ok(atLeast(h.version, "0.3.21") && (h.limitations || []).some((l) => /CLAIMS-FIR
   db.prepare("UPDATE code_tasks SET status = 'closed' WHERE status = 'queued'").run();
   guard.held = null; guard.lease = {}; guard.calls.length = 0;
   const k = await (await worker.fetch(new Request("https://x/v1/tasks", { method: "POST", headers: hdr, body: JSON.stringify({ repo: "qnfo-workers", path: "fx-worker/keep.md", goal: "claims-ctx fixture: change the line" }) }), env)).json();
-  const tok = ctxOf(k.id).claim && ctxOf(k.id).claim.token;
-  ok(k.ok && tok, "11a the task holds a claim at enqueue", ctxOf(k.id));
-  const selfRefused = await (await guardFetch(GUARD + "/work-lock/acquire", { body: JSON.stringify({ key: "file:fx-worker/keep.md", owner: "qnfo-code-orchestrator:" + k.id, ttl_sec: 7200 }) })).json();
-  ok(selfRefused.acquired === false && selfRefused.holder === "qnfo-code-orchestrator:" + k.id, "11b the stub refuses a token-less acquire with the task's own lease, as the guard does", selfRefused);
+  ok(k.ok && !ctxOf(k.id).claim, "11a the task holds no claim at enqueue (CLAIM-AT-RUN-1)", ctxOf(k.id));
   guard.calls.length = 0;
   let tk = await tick();
-  ok(tk.steps === 1 && !tk.done[0].deferred && tk.done[0].step === "read" && row(k.id).step === "propose" && acquires().length === 0, "11c the read step ran on the fresh claim without a guard call", tk);
+  const tok = ctxOf(k.id).claim && ctxOf(k.id).claim.token;
+  ok(tk.steps === 1 && !tk.done[0].deferred && tk.done[0].step === "read" && row(k.id).step === "propose" && acquires().length === 1 && !acquires()[0].body.token && tok, "11c the read step ran after taking the claim at its start", { tk, calls: guard.calls });
+  const selfRefused = await (await guardFetch(GUARD + "/work-lock/acquire", { body: JSON.stringify({ key: "file:fx-worker/keep.md", owner: "qnfo-code-orchestrator:" + k.id, ttl_sec: 7200 }) })).json();
+  ok(selfRefused.acquired === false && selfRefused.holder === "qnfo-code-orchestrator:" + k.id, "11b the stub refuses a token-less acquire with the task's own lease, as the guard does", selfRefused);
   let ck = ctxOf(k.id);
   ok(ck.base === "# keep\n\nline\n" && ck.claim && ck.claim.token === tok, "11d after the read step the rebuilt ctx still carries the claim token", { claim: ck.claim, hasBase: !!ck.base });
   tk = await tick();
