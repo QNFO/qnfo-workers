@@ -1,5 +1,5 @@
 {
-  "audited_at": "2026-10-13 08:14:33",
+  "audited_at": "2026-10-13 08:48:07",
   "d1_write_failures": [],
   "d1_writes_ok": 115,
   "guard": {
@@ -593,7 +593,7 @@
       },
       {
         "dir": "qnfo-fleet-control",
-        "version": "0.25.0-metric-refresher-2",
+        "version": "0.26.0-deploy-drift-cf",
         "worker": "qnfo-fleet-control"
       },
       {
@@ -608,7 +608,7 @@
       },
       {
         "dir": "qnfo-infra",
-        "version": "1.3.4-index-token-ct",
+        "version": "1.4.0-context-passage",
         "worker": "qnfo-infra"
       },
       {
@@ -638,7 +638,7 @@
       },
       {
         "dir": "qnfo-ops",
-        "version": "2.46.0-compat-verify-runner",
+        "version": "2.47.0-deploy-caller",
         "worker": "qnfo-ops"
       },
       {
@@ -648,12 +648,12 @@
       },
       {
         "dir": "qnfo-research-exec",
-        "version": "0.16.0-revise-retry",
+        "version": "0.17.3-abstract-clean",
         "worker": "qnfo-research-exec"
       },
       {
         "dir": "qnfo-social",
-        "version": "0.13.0-buffer-stats",
+        "version": "0.13.1-compose-abstract",
         "worker": "qnfo-social"
       },
       {
@@ -1268,9 +1268,9 @@
       "worker": "qnfo-fleet-calibrator"
     },
     "qnfo-fleet-control": {
-      "before": "0.25.0-metric-refresher-2",
+      "before": "0.26.0-deploy-drift-cf",
       "http": 200,
-      "live": "0.25.0-metric-refresher-2",
+      "live": "0.26.0-deploy-drift-cf",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-fleet-control"
@@ -1346,9 +1346,9 @@
       "worker": "qnfo-impact"
     },
     "qnfo-infra": {
-      "before": "1.3.4-index-token-ct",
+      "before": "1.4.0-context-passage",
       "http": 200,
-      "live": "1.3.4-index-token-ct",
+      "live": "1.4.0-context-passage",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-infra"
@@ -1412,9 +1412,9 @@
       "worker": "qnfo-observability"
     },
     "qnfo-ops": {
-      "before": "2.46.0-compat-verify-runner",
+      "before": "2.47.0-deploy-caller",
       "http": 200,
-      "live": "2.46.0-compat-verify-runner",
+      "live": "2.47.0-deploy-caller",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-ops"
@@ -1500,9 +1500,9 @@
       "worker": "qnfo-register-guard"
     },
     "qnfo-research-exec": {
-      "before": "0.16.0-revise-retry",
+      "before": "0.17.3-abstract-clean",
       "http": 200,
-      "live": "0.16.0-revise-retry",
+      "live": "0.17.3-abstract-clean",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-research-exec"
@@ -1562,9 +1562,9 @@
       "worker": "qnfo-skills-discovery"
     },
     "qnfo-social": {
-      "before": "0.13.0-buffer-stats",
+      "before": "0.13.1-compose-abstract",
       "http": 200,
-      "live": "0.13.0-buffer-stats",
+      "live": "0.13.1-compose-abstract",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-social"
