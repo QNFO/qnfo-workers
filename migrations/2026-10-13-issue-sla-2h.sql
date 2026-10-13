@@ -10,11 +10,12 @@
 --   issue_drain_ratio_24h        target >= 1.5 (was > 1), trigger lt 1.5 (was lt 1).
 --   issue_auto_close_2h_share_24h  NEW: of the opened and reopened events 2 to 26 hours old, the share whose issue reached a
 --                                disposition within 2 hours of that event and was not closed by a session (close_channel not
---                                session*, claude*, issue-triage*). Target 1.0, trigger lt 1.0.
+--                                session*, claude*, issue-triage*; issue_triage.owner not session*, claude*, because the triage
+--                                close-sync triggers close an issue with no channel). Target 1.0, trigger lt 1.0.
 -- Measured with these queries on 2026-10-13 at 22:04Z: 120 open, 90 older than 24 h, drain 1.154; issue_auto_close_2h_share_24h
 -- 0.443 (47 of 106 open and reopen events of the window closed server-side within 2 h; per issue, 19 of 70).
 -- Refresh: trigger issue_auto_close_2h_tick on every fleet tick (no CTE: SQLite refuses WITH inside a trigger body). Reads only
--- issue_lifecycle and agent_issues and writes only metric_registry.
+-- issue_lifecycle, agent_issues and issue_triage and writes only metric_registry.
 -- spof-review: a measurement on the two fleet_tick producers (cron:qnfo-code-orchestrator, cron:qnfo-fleet-dashboard); metric_staleness_breach_rec records a stale refresh.
 -- APPLY-BY: ci
 -- DB: qnfo-audit
@@ -37,7 +38,7 @@ WHERE metric = 'issues_open_over_24h';
 
 INSERT OR IGNORE INTO metric_registry (metric, layer, kind, formula, source_of_truth, baseline, target, owner, disposition_actor, refresh_cadence, warning_band, kill_band, last_value, last_refreshed, state, refresh_class) VALUES
  ('issue_auto_close_2h_share_24h', 'operational', 'target',
-  'issue_lifecycle opened or reopened events between 26 and 2 hours old whose issue has a dispositioned event within 2 hours of that event and whose agent_issues.close_channel is not session*, claude* or issue-triage* / those events (denominator at least 1)',
+  'issue_lifecycle opened or reopened events between 26 and 2 hours old whose issue has a dispositioned event within 2 hours of that event and whose agent_issues.close_channel is not session*, claude* or issue-triage* and whose issue_triage.owner is not session* or claude* (the triage close-sync triggers close with no channel) / those events (denominator at least 1)',
   'qnfo-audit.issue_lifecycle, agent_issues (ISSUE-SLA-2H-1, migrations/2026-10-13-issue-sla-2h.sql)',
   '0.443 on 2026-10-13 22:04Z (47 of 106 open and reopen events closed server-side within 2 h)',
   '1.0 (owner directive 2026-10-13: every open issue resolved, deployed and closed server-side within 2 hours of opening)',
@@ -51,7 +52,9 @@ BEGIN
                  WHERE d.issue_id = o.issue_id AND d.event = 'dispositioned' AND d.ts >= o.ts
                    AND d.ts <= strftime('%Y-%m-%dT%H:%M:%SZ', o.ts, '+2 hours')
                    AND COALESCE(a.close_channel, '') NOT LIKE 'session%' AND COALESCE(a.close_channel, '') NOT LIKE 'claude%'
-                   AND COALESCE(a.close_channel, '') NOT LIKE 'issue-triage%') THEN 1 ELSE 0 END) / MAX(1, COUNT(*)), 3)
+                   AND COALESCE(a.close_channel, '') NOT LIKE 'issue-triage%'
+                   AND NOT EXISTS (SELECT 1 FROM issue_triage t WHERE t.issue_id = d.issue_id
+                                   AND (COALESCE(t.owner, '') LIKE 'session%' OR COALESCE(t.owner, '') LIKE 'claude%'))) THEN 1 ELSE 0 END) / MAX(1, COUNT(*)), 3)
       FROM issue_lifecycle o
       WHERE o.event IN ('opened', 'reopened')
         AND o.ts > strftime('%Y-%m-%dT%H:%M:%SZ', 'now', '-26 hours') AND o.ts <= strftime('%Y-%m-%dT%H:%M:%SZ', 'now', '-2 hours')) AS TEXT)
