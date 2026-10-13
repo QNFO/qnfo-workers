@@ -1,6 +1,6 @@
 -- APPLY-BY: ci
 -- DB: qnfo-audit
--- Rollback: DROP TRIGGER IF EXISTS agent_issues_directive_newline_ai; DELETE FROM remediation_contracts WHERE class = 'fm-directive-literal-newline'; DELETE FROM failure_modes WHERE fm_key = 'directive-literal-newline'
+-- Rollback: DROP TRIGGER IF EXISTS agent_issues_directive_newline_ai; DELETE FROM control_registry WHERE control = 'issue-directive-newline-guard'; DELETE FROM remediation_contracts WHERE class = 'fm-directive-literal-newline'; DELETE FROM failure_modes WHERE fm_key = 'directive-literal-newline'
 -- ISSUE-DIRECTIVE-NEWLINE-1 (2026-10-13, pillar autonomy, metrics breach_code_task_pct and code_task_success_rate_30d).
 -- Two open issues joined their machine-read lines with the two characters backslash and n instead of a newline: 2381
 -- LEARNER-COVERAGE-1 (2 such joins, filed 2026-10-12) and 2473 RESEARCH-RERUN-COST-1 (4 joins, filed 2026-10-13 05:19 UTC), both
@@ -29,6 +29,14 @@ BEGIN
     '\nruntime-probe:', char(10) || 'runtime-probe:'), '\nsession-task:', char(10) || 'session-task:'), '\ndepends-on:', char(10) || 'depends-on:')
   WHERE id = NEW.id;
 END;
+INSERT OR IGNORE INTO control_registry (control, location, kind, guards_against, critical_path, disposition, disposition_state, alternate_path, alternate_tested_at, evidence, issue_id, reviewed_at) VALUES
+ ('issue-directive-newline-guard', 'qnfo-audit trigger agent_issues_directive_newline_ai (migrations/2026-10-13-17-issue-directive-newline.sql)', 'guard',
+  'an issue whose code-task, code-anchor, code-probe, runtime-probe, session-task or depends-on line is joined to the line before it by a literal backslash-n, so no doer parses it',
+  0, 'keep', 'applied',
+  'fm-directive-literal-newline (d1-query, hourly) counts open issues that still hold the join, which catches a description change the insert trigger does not see and a dropped trigger; the guard only rewrites the separator and never refuses an insert',
+  strftime('%Y-%m-%dT%H:%M:%SZ', 'now'),
+  'agent_issues 2381 and 2473 at 07:40 UTC: 2 and 4 joins, no code task in code_tasks; a local SQLite run of this file repaired the 2473 text so qnfo-code-orchestrator INTAKE_MARK matches it',
+  2473, strftime('%Y-%m-%dT%H:%M:%SZ', 'now'));
 INSERT OR IGNORE INTO failure_modes (fm_key, failure_mode, root_cause, remediation, detector, probe_class, first_seen, issue_id, trigger_condition, symptom, blast_radius) VALUES
  ('directive-literal-newline', 'an issue''s machine-read lines (code-task, code-anchor, code-probe, runtime-probe) are joined by a literal backslash-n, so no doer can parse them',
   'a session wrote the description to D1 as an escaped JSON or SQL string; SQLite keeps the backslash, and the code loop intake needs the path at the end of a line, so 2381 and 2473 never became code tasks',
