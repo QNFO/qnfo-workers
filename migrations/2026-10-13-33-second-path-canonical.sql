@@ -1,6 +1,6 @@
 -- APPLY-BY: ci
 -- DB: qnfo-audit
--- Rollback: DELETE FROM remediation_contracts WHERE class IN ('fm-second-path-flagged-non-canonical', 'fm-companion-context-invented', 'fm-blockquote-quote-unchecked'); DELETE FROM failure_modes WHERE fm_key IN ('second-path-flagged-non-canonical', 'companion-context-invented', 'blockquote-quote-unchecked'); DELETE FROM decision_log WHERE instr(action, 'SECOND-PATH-CANONICAL-1:') = 1 OR instr(action, 'COMPANION-CONTEXT-20261013:') = 1 OR instr(action, 'ABSTRACT-REPAIR-NOW-1:') = 1
+-- Rollback: DELETE FROM remediation_contracts WHERE class IN ('fm-second-path-flagged-non-canonical', 'fm-companion-context-invented', 'fm-blockquote-quote-unchecked', 'fm-exec-log-shared-signature'); DELETE FROM failure_modes WHERE fm_key IN ('second-path-flagged-non-canonical', 'companion-context-invented', 'blockquote-quote-unchecked', 'exec-log-shared-signature'); DELETE FROM decision_log WHERE instr(action, 'SECOND-PATH-CANONICAL-1:') = 1 OR instr(action, 'EXEC-LOG-SIGNATURE-1:') = 1 OR instr(action, 'COMPANION-CONTEXT-20261013:') = 1 OR instr(action, 'ABSTRACT-REPAIR-NOW-1:') = 1
 -- SECOND-PATH-CANONICAL-1 and the companion changes of 2026-10-13 15:00-15:20 UTC (pillars core and personal; DOCTRINE-1 registries).
 -- (1) qnfo-deploy-guard 1.3.25 (same pull request): a successful deploy by canonical-deploy.yml's second path
 --     (scripts/direct_content_deploy.py, actor canonical-deploy/direct_content_deploy) is not a non-canonical deploy. The idea-hub
@@ -8,6 +8,9 @@
 --     issue_refile_reopen reopened it after every close. The guard's own DEPLOY-TICKET-AUTORESOLVE-1 closes 2391 on its next scan
 --     once the deploy lands.
 -- (2) personal-companion 1.21.4 and 1.21.5 (PR 1150, merged 15:19 UTC): CRITIC-PRUNE-2, CONTEXT-LINKS-1, BLOCKQUOTE-GROUND-1.
+-- (2b) qnfo-code-orchestrator 0.14.4 EXEC-LOG-SIGNATURE-1 (same pull request): a proposal syntax check is logged by its label and the
+--     error it found, as status rejected; LOOP-BREAKER-1 (agent_issues 2488) had read four unrelated rejected drafts (09:21, 10:41,
+--     12:11, 14:01 UTC) as one recurring failure because every check logged the same 80-character script prefix.
 -- (3) The one published paper fm-paper-abstract-empty counted (critical-examination-of-the-null-hypotheses-in-fundamental-physics)
 --     received the abstract qnfo-research-exec 0.17.5 bodySummary computes for it, written by this session at 15:16 UTC with the
 --     sweep's own backup (living-paper abstract_repair_bak). 0.17.5 changed bodySummary but not SWEEP_RULES, so its sweep would only
@@ -27,7 +30,12 @@ INSERT OR IGNORE INTO failure_modes (fm_key, failure_mode, root_cause, remediati
   'QUOTE-GROUND-1 matched quoted spans between quotation marks; a "> " blockquote carries none',
   'BLOCKQUOTE-GROUND-1 (personal-companion 1.21.5): a blockquote of five or more words must occur verbatim in the source, and the grounding repair deletes its line',
   'personal-companion/worker.js on main checks blockquotes', 'fm-blockquote-quote-unchecked', '2026-10-13', 2222,
-  'a draft that sets a quotation as a blockquote', 'companion_runs 5550: critique grounding=0 for an invented Ehrenburg blockquote', 'every companion piece');
+  'a draft that sets a quotation as a blockquote', 'companion_runs 5550: critique grounding=0 for an invented Ehrenburg blockquote', 'every companion piece'),
+ ('exec-log-shared-signature', 'unrelated rejected code-loop proposals read as one recurring orchestrator failure, and the syntax error each one had is never logged',
+  'the orchestrator container logged every exec as its first 80 characters of code with status error; every proposal syntax check runs the same script prefix, and LOOP-BREAKER-1 groups error events by their first 48 characters',
+  'EXEC-LOG-SIGNATURE-1 (qnfo-code-orchestrator 0.14.4): a labelled exec is logged by its label and output; a py-compile exit 3 is status rejected',
+  'qnfo-code-orchestrator/worker.js on main logs exec through execLogEntry', 'fm-exec-log-shared-signature', '2026-10-13', 2488,
+  'three proposal syntax checks fail within 24 h', 'cloud_ops_events orchestrator.exec status error with identical text "exec: import base64,sys ..."; LOOP-BREAKER-1 issue 2488', 'the loop breaker''s signal for the code loop');
 INSERT OR IGNORE INTO remediation_contracts (class, issue_id, precondition, action, verify_probe, verify_transport, max_attempts, escalate_to, expected_cadence_h, status, module, budget_ms, max_items, requires_container, next_due_at) VALUES
  ('fm-second-path-flagged-non-canonical', NULL, 'SECOND-PATH-CANONICAL-1', 'failure-mode detector',
   '{"paths": ["qnfo-deploy-guard/worker.js"], "contains": "if (isSecondPath(nlr)) { if (nlr.ok === 0) nonCanon.push(ncw); continue; }"}',
@@ -37,7 +45,18 @@ INSERT OR IGNORE INTO remediation_contracts (class, issue_id, precondition, acti
   'code-read', 3, 'qnfo-fleet-control', 1, 'active', 'failure-mode', 45000, 5, 0, datetime('now')),
  ('fm-blockquote-quote-unchecked', NULL, 'BLOCKQUOTE-GROUND-1', 'failure-mode detector',
   '{"paths": ["personal-companion/worker.js"], "contains": "if (/^\\s*>/.test(l)) { if (!cur) { cur = []; blocks.push(cur); }"}',
+  'code-read', 3, 'qnfo-fleet-control', 1, 'active', 'failure-mode', 45000, 5, 0, datetime('now')),
+ ('fm-exec-log-shared-signature', NULL, 'EXEC-LOG-SIGNATURE-1', 'failure-mode detector',
+  '{"paths": ["qnfo-code-orchestrator/worker.js"], "contains": "const entry = execLogEntry(code, body.label, out);"}',
   'code-read', 3, 'qnfo-fleet-control', 1, 'active', 'failure-mode', 45000, 5, 0, datetime('now'));
+INSERT INTO decision_log (actor, assumption, action, evidence, outcome, blast_radius, rollback_path, capability_gain, predicted_outcome, reach_gain, surfaces_tested)
+SELECT 'session_01Kddqwk5gQT5qSSHVKjT2EA', 'a verifier rejecting a model draft is the loop working; logging it as an orchestrator error makes the loop breaker chase a pattern that is only a shared script prefix',
+  'EXEC-LOG-SIGNATURE-1: qnfo-code-orchestrator 0.14.4 logs a labelled exec by label and output, and a proposal syntax error (py-compile exit 3) as status rejected',
+  'cloud_ops_events orchestrator.exec status error at 09:21, 10:41, 12:11 and 14:01 UTC 2026-10-13, each text the same 80-character prefix of the pyCompile script; agent_issues 2488 LOOP-BREAKER-1 filed on that signature',
+  'pull request to the stale-PR lane (control plane)', 'the orchestrator exec log', 'revert of qnfo-code-orchestrator 0.14.4',
+  'the loop breaker sees real orchestrator failures, and a rejected draft says what was wrong with it', 'no orchestrator.exec event with status error and the pyCompile prefix is written after 0.14.4 is live, and agent_issues 2488 closes on its 6-hour quiet rule', 'none',
+  'd1:cloud_ops_events, v_loop_breaker_signatures; code:qnfo-code-orchestrator PyContainer /exec, pyCompile'
+WHERE NOT EXISTS (SELECT 1 FROM decision_log WHERE instr(action, 'EXEC-LOG-SIGNATURE-1:') = 1);
 INSERT INTO decision_log (actor, assumption, action, evidence, outcome, blast_radius, rollback_path, capability_gain, predicted_outcome, reach_gain, surfaces_tested)
 SELECT 'session_01Kddqwk5gQT5qSSHVKjT2EA', 'a path the canonical workflow itself takes is canonical; a detector that flags it raises a ticket nobody can close',
   'SECOND-PATH-CANONICAL-1: qnfo-deploy-guard 1.3.25 treats a successful canonical-deploy/direct_content_deploy row as canonical and still flags a failed one',
