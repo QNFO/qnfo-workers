@@ -304,5 +304,15 @@ const count = (p, t) => p.prepare("SELECT COUNT(*) n FROM " + t).get().n;
   const row = p.prepare("SELECT lede, body_md FROM companion_pieces").get();
   ok(row && !/iron tools/.test(row.lede + row.body_md), "the published piece carries none of the flagged sentences");
 }
+// ---- STARVED-RETRY-BOUNDARY-1 (1.19.5): a failed run that ended 45 minutes before the tick is retried --------------------------------
+{
+  const p = world();
+  p.exec("CREATE TABLE IF NOT EXISTS companion_runs (id INTEGER PRIMARY KEY AUTOINCREMENT, run_at TEXT, form TEXT, model TEXT, topic TEXT, status TEXT, detail TEXT, ms INTEGER)");
+  const at = (minAgo) => new Date(Date.now() - minAgo * 60000).toISOString();
+  p.prepare("INSERT INTO companion_runs (run_at, form, model, topic, status, detail, ms) VALUES (?, 'notes', 'm', 't', 'failed', 'no piece survived the gate', 1)").run(at(49.8));
+  ok(await V.starvedRetryDue({ PERSONAL: wrap(p) }) === true, "a failed run 49.8 minutes old (the 2026-10-13 10:01 tick) is retried");
+  p.prepare("INSERT INTO companion_runs (run_at, form, model, topic, status, detail, ms) VALUES (?, 'notes', 'm', 't', 'failed', 'no piece survived the gate', 1)").run(at(35));
+  ok(await V.starvedRetryDue({ PERSONAL: wrap(p) }) === false, "a failed run 35 minutes old is not retried yet (40-minute bar)");
+}
 console.log(pass + " passed, " + fail + " failed");
 if (fail) process.exit(1);
