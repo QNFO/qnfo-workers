@@ -127,5 +127,30 @@ ok(/never state an inferred arrangement, funding, motive or behaviour as a repor
   const pr = V.pruneUnsupported(piece, V.groundingNeedles(gq.filter((x) => /quotation/.test(x))).map((x) => "unsupported claim: " + x));
   ok(pr.removed.length === 1 && !/We must write down/.test(pr.piece.body_md) && /The record stayed/.test(pr.piece.body_md), "the blockquote's line is the one the repair deletes", pr);
 }
+// ---- TOPIC-PRESCREEN-1 (1.21.6): the intros of 20 random articles are screened in one request; the best-fitting are read first ------
+{
+  ok(V.TOPIC_POOL === 20, "the screen draws 20 random titles");
+  ok(V.introScore("Palazzolo v. Rhode Island was a case in which the Supreme Court ruled on a regulation and the rights of the owner; the court decided that the policy of the council...") >= 4, "a court case naming decisions scores high");
+  ok(V.introScore("1065 Amundsenia is a stony asteroid and Mars-crosser.") === -1, "a catalogue entry scores below every other candidate");
+  ok(V.introScore("") === 0 && V.introScore("Ozren is a mountain range.") === 0, "an intro without decision terms scores 0");
+  const intros = { "Ozren": "Ozren is a mountain range.", "1065 Amundsenia": "1065 Amundsenia is a stony asteroid.", "Palazzolo v. Rhode Island": "a case in which the Supreme Court ruled on a regulation and the policy of the council and the rights of the owner" };
+  const sc = V.screenTopics(["Ozren", "1065 Amundsenia", "Palazzolo v. Rhode Island", "Unknown Page"], intros);
+  ok(sc[0].t === "Palazzolo v. Rhode Island" && sc[sc.length - 1].t === "1065 Amundsenia", "best-fitting first, catalogue last", sc);
+  ok(sc.length === 4, "no candidate is dropped by the screen (the fallback can still use any)", sc);
+  const raw = V.screenTopics(["B", "A", "C"], {});
+  ok(raw.map((x) => x.t).join() === "B,A,C", "with no intros the random order is kept, as before", raw);
+  const saved = globalThis.fetch;
+  globalThis.fetch = async (url) => {
+    const u = String(url);
+    if (u.includes("exintro=1")) return new Response(JSON.stringify({ query: { normalized: [{ from: "palazzolo v. Rhode Island", to: "Palazzolo v. Rhode Island" }], redirects: [{ from: "Old Name", to: "New Name" }], pages: { 1: { title: "Palazzolo v. Rhode Island", extract: "The  court ruled." }, 2: { title: "New Name", extract: "A policy." } } } }), { status: 200 });
+    return new Response("{}", { status: 404 });
+  };
+  const got = await V.fetchWikiIntros(["palazzolo v. Rhode Island", "Old Name", "Missing"]);
+  globalThis.fetch = saved;
+  ok(got["palazzolo v. Rhode Island"] === "The court ruled." && got["Old Name"] === "A policy." && got.Missing === undefined, "intros map back to the requested titles through normalisation and redirects", got);
+  const w = src.slice(src.indexOf("async function wikiAnchors(used, cooled, seed) {"), src.indexOf("async function paperAnchors("));
+  ok(/var pool = await fetchRandomTitles\(TOPIC_POOL\);/.test(w) && /intros = await fetchWikiIntros\(fresh\);/.test(w) && /var titles = scored\.map\(function \(x\) \{ return x\.t; \}\);/.test(w), "wikiAnchors screens the pool and reads candidates in screened order");
+  ok(/try \{ intros = await fetchWikiIntros\(fresh\); \} catch \(eI\)/.test(w), "a failed intro request leaves the old order and is noted");
+}
 console.log(pass + " passed, " + fail + " failed");
 if (fail) process.exit(1);
