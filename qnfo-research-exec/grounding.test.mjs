@@ -30,9 +30,11 @@ audit.exec(`CREATE TABLE research_queue (id TEXT PRIMARY KEY, source TEXT, sourc
 CREATE TABLE cloud_ops_events (id TEXT, ts TEXT, kind TEXT, text TEXT, meta TEXT, job TEXT, status TEXT);
 CREATE TABLE agent_issues (id INTEGER PRIMARY KEY, title TEXT, description TEXT, source TEXT, category TEXT, priority TEXT, status TEXT, created_at INTEGER, updated_at INTEGER);`);
 const lp = new DatabaseSync(":memory:");
-lp.exec(`CREATE TABLE papers (slug TEXT, title TEXT, doi TEXT, abstract TEXT, status TEXT);
-INSERT INTO papers VALUES ('nonlinear-tree-based-numeration-systems-a-consolidated-synthesis', '${PARENT_574}', '10.9999/test.22749402', 'parent abstract', 'published'),
-  ('corpus-a', 'Corpus paper A', '10.9999/test.1', 'a', 'published'), ('corpus-b', 'Corpus paper B', '10.9999/test.2', 'b', 'published');`);
+// CITE-FULLTEXT-1: a corpus paper is cited from its body, an arXiv work from its HTML full text.
+const BODY = "# T\n\n## 1. Introduction\n\n" + "The weight sequence fixes the carry rule of the numeration system. ".repeat(12) + "\n\n## 5. Results\n\n" + "Addition runs in quadratic time for every linear weight sequence. ".repeat(12) + "\n\n## References\n\n[1] x";
+lp.exec(`CREATE TABLE papers (slug TEXT, title TEXT, doi TEXT, abstract TEXT, status TEXT, body_md TEXT);
+INSERT INTO papers VALUES ('nonlinear-tree-based-numeration-systems-a-consolidated-synthesis', '${PARENT_574}', '10.9999/test.22749402', 'parent abstract', 'published', ''),
+  ('corpus-a', 'Corpus paper A', '10.9999/test.1', 'a', 'published', '${BODY}'), ('corpus-b', 'Corpus paper B', '10.9999/test.2', 'b', 'published', '${BODY}');`);
 const d1 = (db) => ({ prepare(sql) {
   let args = [];
   const o = { bind(...a) { args = a; return o; },
@@ -54,10 +56,13 @@ let arxivCalls = [];
 let dataciteCalls = [];
 let dataciteAnswer = () => new Response("down", { status: 503 });
 const dcRecord = (id, title, abstract) => ({ attributes: { doi: "10.48550/arxiv." + id, titles: [{ title }], descriptions: abstract ? [{ descriptionType: "Abstract", description: abstract }] : [] } });
+const fullHtml = (u) => '<html><body><h1 class="ltx_title">W</h1><div class="ltx_abstract">abstract</div><section class="ltx_section"><h2 class="ltx_title ltx_title_section">1 Introduction</h2><p>' + "Intro text for " + u + ". ".repeat(1) + "We study the carry rule. ".repeat(40) + '</p></section><section class="ltx_section"><h2 class="ltx_title ltx_title_section">4 Results</h2><p>' + "The bound <math alttext=\"n^{2}\"><mi>n</mi></math> holds for every sequence. ".repeat(40) + '</p></section><section class="ltx_bibliography"><h2>References</h2><p>[1] other</p></section></body></html>';
+const htmlUrl = (u) => u.startsWith("https://arxiv.org/html/") || u.startsWith("https://ar5iv.labs.arxiv.org/html/");
 const feed = (n) => "<feed>" + Array.from({ length: n }, (_, i) => `<entry><id>http://arxiv.org/abs/2601.0${1000 + i}v1</id><title>Paper ${i}</title><summary>S${i}</summary></entry>`).join("") + "</feed>";
 globalThis.fetch = async (url) => {
   const u = decodeURIComponent(String(url));
   if (u.startsWith("https://api.datacite.org/")) { dataciteCalls.push(u); return dataciteAnswer(); }
+  if (htmlUrl(u)) return new Response(fullHtml(u));
   if (!u.startsWith("https://export.arxiv.org/")) return new Response("unexpected " + u, { status: 404 });
   arxivCalls.push(u);
   if (arxivDown) return new Response("Rate exceeded.", { status: 503 });
@@ -78,6 +83,13 @@ assert.ok(arxivCalls.some((u) => / OR /.test(u)), "the OR fallback must be sent 
 assert.equal(get("healthy").stage, "ensemble");
 assert.equal(JSON.parse(get("healthy").context).bibCount, 10);
 assert.match(r2.get("pipeline/healthy/grounding.md"), /\n\[10\] QNFO: Corpus paper B/);
+// CITE-FULLTEXT-1: every entry carries its full-text excerpts, results first in rank and in document order on the page.
+const g1 = r2.get("pipeline/healthy/grounding.md");
+assert.equal((g1.match(/Full text \(https:\/\/arxiv\.org\/html\/2601\.0\d{4}v1\)/g) || []).length, 8, "every arXiv entry was read from its HTML full text");
+assert.equal((g1.match(/Full text \(https:\/\/papers\.qnfo\.org\/papers\/corpus-[ab]\)/g) || []).length, 2, "every corpus entry was read from its body");
+assert.match(g1, /\u00a7 4 Results: The bound \$n\^\{2\}\$ holds/, "math keeps its LaTeX");
+assert.ok(!/\[1\] other/.test(g1) && !/abstract\n/.test(g1.split("## Bibliography")[1]), "the cited work's own bibliography is not excerpted");
+assert.match(audit.prepare("SELECT text FROM cloud_ops_events WHERE kind = 'ground-fulltext' ORDER BY rowid DESC LIMIT 1").get().text, /candidates=10 kept_arxiv=8 kept_qnfo=2 dropped_no_fulltext=0 transport_errors=0/);
 assert.equal(dataciteCalls.length, 0, "a full bibliography does not call the second source");
 
 // 2b. arXiv and DataCite down: each query is tried three times, the 2-entry grounding stops at ground, one recover is spent.
@@ -92,7 +104,7 @@ assert.equal(dataciteCalls.length, 2, "the second source is tried twice");
 assert.equal(res.withheld, undefined, "a transport failure is an error, not a withheld paper");
 let t = get("thin");
 assert.equal(t.status, "queued"); assert.equal(t.stage, "ground"); assert.equal(t.recover_count, 2);
-assert.match(t.error, /^ground: bibliography 2 < 5 entries \(gate-refcount cannot pass\); arxiv_http_errors=6; second_source=error/);
+assert.match(t.error, /^ground: bibliography 2 < 5 entries with full text \(gate-refcount cannot pass\); fulltext_dropped=0; fulltext_transport_errors=0; arxiv_http_errors=6; second_source=error/);
 assert.equal(audit.prepare("SELECT count(*) n FROM cloud_ops_events WHERE kind = 'ground-thin'").get().n, 1);
 assert.ok(r2.has("pipeline/thin/grounding.md"), "the thin grounding is kept for diagnosis");
 
@@ -145,6 +157,7 @@ let n429 = 0;
 globalThis.fetch = async (url) => {
   const u = decodeURIComponent(String(url));
   if (u.startsWith("https://api.datacite.org/")) return new Response(JSON.stringify({ data: [] }), { status: 200 });
+  if (htmlUrl(u)) return new Response(fullHtml(u));
   if (/ OR /.test(u) && n429++ < 2) return new Response("Rate exceeded.", { status: 429, headers: { "retry-after": "1" } });
   return new Response(feed(/ OR /.test(u) ? 8 : 0));
 };

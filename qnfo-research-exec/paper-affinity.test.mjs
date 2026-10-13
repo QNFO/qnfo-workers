@@ -12,7 +12,7 @@ const varDef = (name) => { const s = src.indexOf("var " + name + " = "); if (s <
 const mathRule = varDef("MATH_RULE");
 const pre = src.slice(src.indexOf("var RESEARCH_SHARED_PREAMBLE = "), src.indexOf('].join("\\n");', src.indexOf("var RESEARCH_SHARED_PREAMBLE = ")) + 13);
 const build = new Function([
-  mathRule, pre, varDef("RESEARCH_AFFINITY_TTL_MS"), "var _researchAffinityScope = null; var _researchAffinityAt = 0;",
+  mathRule, varDef("SOURCE_VOICE_RULE"), pre, varDef("RESEARCH_AFFINITY_TTL_MS"), "var _researchAffinityScope = null; var _researchAffinityAt = 0;",
   cut("function stagePrompt("), cut("function stageContextPrompt("), cut("async function researchAffinityScope("),
   cut("function paperAffinityKey("), cut("async function aiRunOpts("),
   "return { RESEARCH_SHARED_PREAMBLE, stagePrompt, stageContextPrompt, researchAffinityScope, paperAffinityKey, aiRunOpts, reset: function () { _researchAffinityScope = null; _researchAffinityAt = 0; } };"

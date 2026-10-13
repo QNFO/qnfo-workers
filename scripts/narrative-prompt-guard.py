@@ -36,6 +36,16 @@ PATTERNS = [
     ("place the answer in the program", r"place the answer in the program"),
     ("emit/append a program|placement|fit table",
      r"(append|add|emit|include|produce|output|use|build)\s+(a\s+|the\s+)?(program|placement|fit)[-\s]?table"),
+    # SOURCE-VOICE-1 (2026-10-13, agent_issues 2468; owner: "Papers shall cite full texts, not merely reference work
+    # summaries" and "highly inappropriate for a research paper to say so explicitly"): a prompt must never tell a writer to
+    # report to its readers that a source was thin, empty or summarised. 78 of 147 pipeline papers did, because the
+    # qnfo-research-exec writer prompt said "say in one sentence that the summary supplied gives no further detail".
+    ("disclose a thin source entry",
+     r"(?:where|when|if)\s+(?:an?\s+|the\s+)?(?:bibliography\s+)?entry(?:'s\s+summary)?\s+is\s+(?:thin|empty|missing)[^\"\n]{0,30}(?:say|state|note)"),
+    ("say the summary gives no detail",
+     r"say\s+(?:in\s+one\s+sentence\s+)?that\s+the\s+(?:summary|abstract|entry)\s+(?:supplied\s+)?(?:gives|supplies|provides|is)\s+(?:no|thin|empty)"),
+    ("relate a work only through its summary or title", r"relate\s+the\s+work\s+to\s+your\s+argument\s+only\s+through"),
+    ("disclose where the supplied summary is thin", r"state\s+plainly\s+where\s+the\s+supplied\s+(?:summary|abstract)"),
 ]
 
 # Positive anchors: the flagship narrative prompt must retain its PROCESS items, so a

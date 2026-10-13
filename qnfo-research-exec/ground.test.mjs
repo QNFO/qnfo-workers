@@ -5,7 +5,7 @@
 //  2. a correction whose names, years and links are in the email or paper stays as the drafter rated it;
 //  3. the same code is in errata-hub, qnfo-errata-respond and the research-exec members (line for line);
 //  4. the writer / reconcile / review preambles tie every statement about a cited work to its supplied bibliography entry and
-//     ask for a note when the entry is thin; the shared preamble stays long enough to be a cached prefix;
+//     require the cited work's full text (CITE-FULLTEXT-1, 0.17.0: the thin-summary note is gone); the shared preamble stays long enough to be a cached prefix;
 //  5. no example nouns remain in the errata drafter's version-label hint.
 // Run: node qnfo-research-exec/ground.test.mjs   -> prints "N passed, 0 failed"
 import { readFileSync } from "node:fs";
@@ -73,7 +73,7 @@ const item = { sender: "Jordan Lee <jordan@example.org>", subject: "Miscitation 
 {
   const a = host.indexOf("var RESEARCH_SHARED_PREAMBLE = ["), b = host.indexOf('].join("\\n");', a);
   const pre = host.slice(a, b);
-  ok(/derivable from that entry's own supplied text/.test(pre) && /your memory of a work is not a source/.test(pre) && /supplied gives no further detail/.test(pre), "the writer rule ties statements about a cited work to its supplied entry and asks for a thin-entry note");
+  ok(/derivable from that entry's own supplied text/.test(pre) && /your memory of a work is not a source/.test(pre) && /Cite full texts, not summaries/.test(pre) && !/say in one sentence that the summary supplied gives no further detail/.test(pre), "the writer rule ties statements about a cited work to its full-text entry and no longer asks for a thin-summary note (CITE-FULLTEXT-1)");
   ok(/Keep only statements about a work that its supplied entry supports/.test(pre), "the reconcile rule drops statements added from memory");
   ok(/Source support: any statement about what a cited work did/.test(pre), "the review rule flags unsupported statements about cited works as HARD");
   ok(!/what they did, how it relates to your argument/.test(pre), "the old permissive wording is gone");

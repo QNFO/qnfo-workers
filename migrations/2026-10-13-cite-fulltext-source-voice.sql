@@ -1,0 +1,43 @@
+-- CITE-FULLTEXT-1..3, SOURCE-VOICE-1, ABSTRACT-BACKFILL-1 (2026-10-13, pillar research; agent_issues 2468). Owner directives
+-- 2026-10-13: "Papers shall cite full texts, not merely reference work summaries"; "It is unacceptable to not have access to
+-- internal QNFO corpus in full text, and highly inappropriate for a research paper to say so explicitly"; "Audit and remediate
+-- this type of failure mode and its root causes systemwide across the fleet."
+-- Audit (living-paper, 2026-10-13): 70 of 147 published pipeline papers (identifier qnf-) and 1 hand-written paper describe
+-- the pipeline's inputs to the reader ("the summary supplied gives no further detail", "supplied with an empty summary",
+-- "bibliography entry [4] does not report", "the input block", "the re-entry prompt", "the fetched abstract"); 269 of 575
+-- published papers had a NULL abstract although the body is complete. Root causes: grounding gave the writers a title and a
+-- 300-400 character abstract per cited work (never the full text or the corpus body); the prompts named the inputs and told
+-- the writers to disclose thin entries; no gate looked for it; the abstract column was never derived from the body (two
+-- publish paths fell back to the title). qnfo-research-exec 0.17.0 reads full texts, adds SOURCE_VOICE_RULE and the
+-- gate-fulltext-citation finding, rewrites affected published papers through the sweep and fills empty abstracts.
+-- This file records the failure modes and their detectors, and makes issue 2468 close on the whole backlog (it closed on one
+-- page before).
+-- APPLY-BY: ci
+-- DB: qnfo-audit
+-- Rollback: DELETE FROM failure_modes WHERE fm_key = 'infra-context-enrich-error'; DELETE FROM remediation_contracts WHERE class IN ('fm-paper-source-voice', 'fm-paper-abstract-empty'); DELETE FROM failure_modes WHERE fm_key IN ('paper-source-voice', 'paper-abstract-empty'); UPDATE remediation_contracts SET verify_probe = '{"url": "https://papers.qnfo.org/papers/physical-irrelevance-of-uncountability-computable-reals-suffice-for-continuum-ph", "status": 200, "absent": "summary supplied gives no further detail"}', verify_transport = 'runner-https' WHERE class = 'issue-2468'
+
+INSERT OR IGNORE INTO failure_modes (fm_key, failure_mode, root_cause, remediation, detector, probe_class, first_seen, issue_id, trigger_condition, symptom, blast_radius) VALUES
+ ('paper-source-voice', 'a published paper cites a work from its summary alone, or tells the reader how its sources reached it',
+  'grounding passed a title and a truncated abstract per cited work and the abstract column (often NULL) for QNFO papers instead of their full text; the writer prompt told models to say when an entry was thin and named the pipeline inputs (input block, bibliography entry, grounding); no deterministic gate checked the text',
+  'qnfo-research-exec 0.17.0: CITE-FULLTEXT-1/2 full-text excerpts for every cited work (arXiv HTML, ar5iv, living-paper body; a work without readable full text is not cited), SOURCE_VOICE_RULE in the writer, reconcile, review and revise prompts, HARD gate-fulltext-citation at the final gate, and the completeness sweep rewrites every published pipeline paper that has it',
+  'no published paper created on or after 2026-10-14 contains the summary-only or pipeline-input phrasing', 'fm-paper-source-voice', '2026-10-09', 2468,
+  'a cited work or corpus paper reaches the writers without its full text', 'papers.qnfo.org text such as "the summary supplied gives no further detail", "supplied with an empty summary", "the input block"', 'public research output: 70 of 147 pipeline papers on 2026-10-13'),
+ ('paper-abstract-empty', 'a published paper has no abstract although its body is complete',
+  'imports and the version publisher stored no abstract (or the title) and nothing derived it from the body; cleanAbstract ran 2000 characters past the Abstract heading',
+  'ABSTRACT-BACKFILL-1 (qnfo-research-exec 0.17.0): the sweep fills an empty abstract from the body''s Abstract section or opening passage; publish and revision paths derive it from the body before the title',
+  'no published paper with a body of 400 or more characters has an abstract under 40 characters', 'fm-paper-abstract-empty', '2026-10-13', 2468,
+  'a paper is imported or versioned without an abstract field', 'empty summary lines in grounding, search cards and feeds', 'every reader of papers.abstract: 269 of 575 published papers on 2026-10-13');
+
+INSERT OR IGNORE INTO failure_modes (fm_key, failure_mode, root_cause, remediation, detector, probe_class, first_seen, issue_id, trigger_condition, symptom, blast_radius) VALUES
+ ('infra-context-enrich-error', 'qnfo-infra /context returns every research-paper hit as "slug <x> (enrich error)"',
+  'INDEXER-FOLD-1 moved isZenodoId inside the folded indexer member, while retrieveRecords and metaLine at module scope still call it, so the enrichment threw a ReferenceError that its catch turned into the error text; and the enrichment text was title + status + abstract.slice(0, 220) even when it worked',
+  'qnfo-infra 1.4.0: isZenodoId at module scope, and a paper hit carries the matched body passage (paperHitPassage, the indexer''s own chunk) after the abstract; qnfo-infra/context-passage.test.mjs runs retrieveRecords end to end',
+  'qnfo-infra/context-passage.test.mjs on every PR that touches qnfo-infra (scripts/run-suites.mjs)', NULL, '2026-10-06', 2468,
+  'a module-scope caller of a function that a fold moved into a member closure', 'qnfo-ai retrieved context lists research papers as slugs with no text', 'every RAG answer and research prompt that retrieves QNFO papers');
+
+INSERT OR IGNORE INTO remediation_contracts (class, issue_id, precondition, action, verify_probe, verify_transport, max_attempts, escalate_to, expected_cadence_h, status, module, budget_ms, max_items, requires_container) VALUES
+ ('fm-paper-source-voice', 2468, 'SOURCE-VOICE-1', 'failure-mode detector', 'SELECT ''0'' AS expected, CAST((SELECT COUNT(*) FROM papers WHERE status IN (''published'',''distributed'') AND created_at >= ''2026-10-14'' AND (lower(body_md) LIKE ''%summary supplied%'' OR lower(body_md) LIKE ''%empty summary%'' OR lower(body_md) LIKE ''%gives no further detail%'' OR lower(body_md) LIKE ''%only through that title%'' OR lower(body_md) LIKE ''%only through its title%'' OR lower(body_md) LIKE ''%only to acknowledge%'' OR lower(body_md) LIKE ''%existence and framing%'' OR lower(body_md) LIKE ''%no claim of ours depends%'' OR lower(body_md) LIKE ''%bibliography entr%'' OR lower(body_md) LIKE ''%supplied entr%'' OR lower(body_md) LIKE ''%supplied summar%'' OR lower(body_md) LIKE ''%supplied abstract%'' OR lower(body_md) LIKE ''%input block%'' OR lower(body_md) LIKE ''%grounding block%'' OR lower(body_md) LIKE ''%re-entry prompt%'' OR lower(body_md) LIKE ''%fetched abstract%'')) AS TEXT) AS observed', 'd1-query@living-paper', 3, 'qnfo-research-exec', 24, 'active', 'failure-mode', 45000, 5, 0),
+ ('fm-paper-abstract-empty', 2468, 'ABSTRACT-BACKFILL-1', 'failure-mode detector', 'SELECT ''0'' AS expected, CAST((SELECT COUNT(*) FROM papers WHERE status IN (''published'',''distributed'') AND length(coalesce(body_md, '''')) >= 400 AND length(trim(coalesce(abstract, ''''))) < 40) AS TEXT) AS observed', 'd1-query@living-paper', 3, 'qnfo-research-exec', 24, 'active', 'failure-mode', 45000, 5, 0);
+
+-- Issue 2468 closes when no published pipeline paper still carries the phrasing (the sweep drains 25 per run).
+UPDATE remediation_contracts SET verify_probe = 'SELECT ''0'' AS expected, CAST((SELECT COUNT(*) FROM papers WHERE status IN (''published'',''distributed'') AND identifier LIKE ''qnf-%'' AND (lower(body_md) LIKE ''%summary supplied%'' OR lower(body_md) LIKE ''%empty summary%'' OR lower(body_md) LIKE ''%gives no further detail%'' OR lower(body_md) LIKE ''%only through that title%'' OR lower(body_md) LIKE ''%only through its title%'' OR lower(body_md) LIKE ''%only to acknowledge%'' OR lower(body_md) LIKE ''%existence and framing%'' OR lower(body_md) LIKE ''%no claim of ours depends%'' OR lower(body_md) LIKE ''%bibliography entr%'' OR lower(body_md) LIKE ''%supplied entr%'' OR lower(body_md) LIKE ''%supplied summar%'' OR lower(body_md) LIKE ''%supplied abstract%'' OR lower(body_md) LIKE ''%input block%'' OR lower(body_md) LIKE ''%grounding block%'' OR lower(body_md) LIKE ''%re-entry prompt%'' OR lower(body_md) LIKE ''%fetched abstract%'')) AS TEXT) AS observed', verify_transport = 'd1-query@living-paper' WHERE class = 'issue-2468';
