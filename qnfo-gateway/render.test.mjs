@@ -5,8 +5,8 @@ import { dirname, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 const here = dirname(fileURLToPath(import.meta.url));
 const dir = mkdtempSync(join(tmpdir(), "gwr-"));
-writeFileSync(join(dir, "w.mjs"), readFileSync(join(here, "worker.js"), "utf8") + "\nexport { renderMarkdown, lpStructure, lpDoi, renderDefectCount, subscribeSource, renderReadingHTML };\n");
-const { renderMarkdown, lpStructure, lpDoi, renderDefectCount, subscribeSource, renderReadingHTML } = await import(pathToFileURL(join(dir, "w.mjs")).href);
+writeFileSync(join(dir, "w.mjs"), readFileSync(join(here, "worker.js"), "utf8") + "\nexport { renderMarkdown, lpStructure, lpDoi, renderDefectCount, subscribeSource, renderReadingHTML, lpTexText, mdiRender, LP_PAPER_JS, LP_MATHJAX };\n");
+const { renderMarkdown, lpStructure, lpDoi, renderDefectCount, subscribeSource, renderReadingHTML, lpTexText, mdiRender, LP_PAPER_JS, LP_MATHJAX } = await import(pathToFileURL(join(dir, "w.mjs")).href);
 let fails = 0;
 const ok = (c, m, x) => { console.log((c ? "PASS " : "FAIL ") + m); if (!c) { fails++; if (x) console.log("   ", JSON.stringify(x).slice(0, 400)); } };
 const math = (h) => (h.replace(/<span class="usd">\$<\/span>/g, "\u00a4").replace(/<[^>]+>/g, " ").match(/\$[^$]+\$/g) || []);
@@ -145,5 +145,33 @@ h = renderMarkdown("for any vertex *v* in V, A_V(*v*) is the attribute. Formally
 ok(!/A_V\(|A_E1\(\(|A_V1\(/.test(h.replace(/\$[^$]+\$/g, " ")) && !/\$[^$]*\*[^$]*\$/.test(h) && /<em>v<\/em> ∈ V1/.test(h) && renderDefectCount(h) === 0, "MATH-RESIDUE-4: emphasised arguments of a subscripted function are typeset with it, and *v* stays emphasis", h);
 h = renderMarkdown("derive the closed-form continuous optimum q* = 1 + \\sqrt{x} here, and there are *n* = 5 variables and *k* = 3 dimensions.");
 ok(/<em>n<\/em> = 5/.test(h) && /<em>k<\/em> = 3/.test(h) && !/q<em>/.test(h), "MATH-RESIDUE-4: a starred symbol (q*) is not read as emphasis; a wrapped one (*n*) is", h);
+
+// PANDOC-FENCE-GLUE-1 / MATH-RESIDUE-5 / RAIL-MATH-1 (3.18.1, agent_issues 2300 and 2357): the inputs are the source lines of
+// the pages /api/render-health still flagged after MATH-DELIM-2, and the panel text behind the browser sample's failures.
+// residue() is what qnfo-pdf mathReport counts in text MathJax leaves alone.
+const residue = (s) => (s.replace(/<[^>]+>/g, " ").replace(/\\\$/g, " ").replace(/\$[^$]+\$/g, " ").replace(/(?<![\w\\])[A-Za-z][A-Za-z0-9]+_\w+/g, " ").match(/[A-Za-zͰ-Ͽ\)\]][_^][{(]?[A-Za-z0-9+\-]|[²³¹⁰-₟]/g) || []).length;
+h = renderMarkdown("and coordinate-free, invariant-based\nresolution. ```python ““” Ultrametric Intelligence Core: Pure\nNon-Archimedean Logic Version 1.3 ““”\nfrom typing import Dict, List, Tuple |\n\nclass TokenNode: def **init**(self, word: str, idx: int):\nself.word = word self.idx = idx self.n = word_to_int(word) self.v_g =\nvaluation(self.n, 2) self.v_b = valuation(self.n, 3) |\n\ndef is_sentiment(self) -> bool: return self.v_g > 0 or\nself.v_b > 0 |\n\nposition {node.idx}: INTENSIFIER applied”) return “”.join(lines)\n``` |\n\n## A.3 Glossary of Symbols\n\nText.");
+const pre = h.match(/<pre[\s\S]*?<\/pre>/g) || [];
+ok(pre.length === 1 && /^<pre class="lang-python">/.test(pre[0]) && /self\.v_g =\nvaluation\(self\.n, 2\)/.test(pre[0]) && /\*\*init\*\*/.test(pre[0]) && /invariant-based resolution\.<\/p>/.test(h) && /<h2>A\.3 Glossary of Symbols<\/h2>/.test(h) && !/```/.test(h) && residue(h.replace(/<pre[\s\S]*?<\/pre>/g, " ")) === 0, "PANDOC-FENCE-GLUE-1: a fence glued to prose and a closer glued to code make one code block (ultrametric-intelligence)", h);
+h = renderMarkdown("# Appendix B: Computational Assets **Python Simulation of\nthe Brouwerian Subject** ```python import random |\n\n### Appendix C: Visualizations |\n\n**C.1 The Ur-Intuition Diagram** *A representation of time.*\n```mermaid graph TD M[(“The Moment of Life”)] –>|Falls Apart|\nS{Separation} |\n\nstyle M fill:#f9f,stroke:#333,stroke-width:2px ``` |\n\n**C.2 The Matrix of Unborn Points** text.");
+ok(/<h3>Appendix C: Visualizations/.test(h) && (h.match(/<pre/g) || []).length === 1 && /<pre class="lang-mermaid"><code>graph TD/.test(h) && /<strong>C\.2 The Matrix of Unborn Points<\/strong>/.test(h), "PANDOC-FENCE-GLUE-1: an opener whose closer was lost never pairs with the next block's opener (reconstructive-ontology-of-brouwerian-intuitionism)", h);
+h = renderMarkdown("Inline ```a_b``` code and a normal block:\n\n```python\nx_1 = 2\n```\n\nAfter.");
+ok(/<pre class="lang-python"><code>x_1 = 2\n<\/code><\/pre>/.test(h) && /<p>After\.<\/p>/.test(h), "PANDOC-FENCE-GLUE-1: fences on their own lines and inline spans are unchanged", h);
+h = renderMarkdown("4. Soft-merge the selected pair:\nx_new = Σ_{k,l} π_kl · (|cluster_k|·x_k + |cluster_l|·x_l) / (|cluster_k|+|cluster_l|)\n5. Update the sizes; x_k·y_k and N·m stay as they were.");
+ok(/\(\|cluster_k\|·\$x_\{k\}\$ \+ \|cluster_l\|·\$x_\{l\}\$\)/.test(h) && math(h).includes("$x_{k}\\cdot y_{k}$") && /N·m stay/.test(h) && residue(h) === 0, "MATH-RESIDUE-5: a formula glued to a name by a product sign is typeset; the name and the sign stay text (ultrametric-intelligence)", h);
+let e = lpTexText("Formulates Zitterbewegung as a p-adic topological observable. Establishes that the ZBW current J_mu_ZBW carries a Z_2 invariant encoding the Dirac/Majorana distinction, and proposes ultrametric readout protocols via Bruhat-Tits buildings.", 170);
+ok(e.includes("a $Z_{2}$ invariant") && /…$/.test(e) && e.length < 200 && residue(e) <= 2, "RAIL-MATH-1: plain-text math in a related excerpt is typeset (the 3 residues of chapter-1's panel on 2026-10-12 were J_m, u_Z and Z_2)", e);
+e = lpTexText("<p>The Morita p-adic Gamma function $\\Gamma_p(n) = (-1)^n \\prod_{k=1,\\,p \\nmid k}^{n-1} k$ is a p-adic analytic object that interpolates factorials while explicitly skipping multiples of $p$. This document provides", 170);
+ok(e.includes("$\\Gamma_p(n) = (-1)^n \\prod_{k=1,\\,p \\nmid k}^{n-1} k$") && !/∏|nmid k\^n/.test(e) && residue(e) === 0, "RAIL-MATH-1: a formula in an excerpt stays TeX (it was flattened to 'Γ_p(n) = (-1)^n ∏_k=1, p nmid k^n-1 k')", e);
+e = lpTexText("A primary-source ledger of a 263-day solo AI-accelerated research program: $1,032.08 API costs, 323,381 requests", 170) + " | " + lpTexText("The $1,032 Research Program: What Fifty Billion Tokens Taught Me", 0);
+ok(e.includes("\\$1,032.08 API") && e.includes("The \\$1,032 Research") && !/(^|[^\\])\$/.test(e), "RAIL-MATH-1: a currency dollar is escaped, so MathJax cannot pair two of them", e);
+e = lpTexText("Non-Archimedean (ultrametric) geometry, in which the strong triangle inequality $d(x,z) \\le \\max\\{d(x,y),d(y,z)\\}$ replaces the Euclidean one", 170);
+ok(e.includes(" $d(x,z) \\le \\max\\{d(x,y),d(y,z)\\}$ ") && !/usd/.test(mdiRender("the inequality $d(x,z) \\le \\max\\{d(x,y),d(y,z)\\}$ holds", "html")), "RAIL-MATH-1: a formula ending in an escaped brace is lifted as math (it printed between literal dollars)", e);
+e = lpTexText("Energy $$E = m c^2$$ then " + "words ".repeat(30) + "and $\\sum_{k=1}^{n} a_k b_k c_k d_k e_k f_k g_k h_k$ last", 120);
+ok(e.includes("$E = m c^2$") && !e.includes("$$") && (e.replace(/\\\$/g, "").match(/\$/g) || []).length % 2 === 0 && /…$/.test(e), "RAIL-MATH-1: display math becomes inline and the cut never falls inside a formula", e);
+new Function(LP_PAPER_JS);
+const txf = new Function(/function esc\(s\)\{[^\n]*\}\n/.exec(LP_PAPER_JS)[0] + /function tx\(s\)\{[^\n]*\}\n/.exec(LP_PAPER_JS)[0] + "return tx;")();
+ok(LP_PAPER_JS.includes("tx(x.excerpt_tex || x.excerpt)") && (LP_PAPER_JS.match(/tx\(x\.title_tex \|\| x\.title\)/g) || []).length === 2 && txf("The \\$1,032 program, $x_1$ <b>") === 'The <span class="usd">$</span>1,032 program, $x_1$ &lt;b&gt;', "RAIL-MATH-1: the panels paint the TeX fields, and an escaped dollar is a currency span (as in the body)");
+ok(LP_MATHJAX.includes('Sha:"{\\\\unicode{x0428}}"'), "RAIL-MATH-1: \\Sha is a MathJax macro (27 formulas of a-universal-adelic-normalization-principle errored)");
 
 process.exit(fails ? 1 : 0);
