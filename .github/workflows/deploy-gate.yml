@@ -37,14 +37,14 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
 
       # GATE-NODE-22-1 (2026-10-12): the whole job runs on Node 22. Several offline suites import node:sqlite (Node 22+); the
       # job used to start on Node 20 and switch to 22 only in a later conditional step, so a PR that skipped that step failed
       # IDEA-CHAIN-SINGLE-PRODUCER-1 with "No such built-in module: node:sqlite" (PR 989, 2026-10-12 13:12Z) while others passed.
-      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: "22"
 
@@ -146,7 +146,7 @@ jobs:
       # OWNER-EDIT-1 + IDENTITY-STORE-1: the owner edits owner_docs (the Identity doc) on fleet.qnfo.org, stored in the
       # private qnfo-identity D1. The suite drives the real fetch handler against in-memory SQLite D1s (node:sqlite needs
       # Node 22, so this last step switches runtime).
-      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: "22"
 
