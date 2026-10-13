@@ -30,5 +30,12 @@ for (const good of ["Zitterbewegung (ZBW) — the trembling motion of a Dirac wa
   ok(abstractNeedsRepair(good) === false, "a prose abstract stays: " + good.slice(0, 40));
 ok(corpusSummary("## Module 9: Observer Theory **Author:** R", F.stc).startsWith("Formalize the observer"), "corpusSummary replaces a raw-prefix abstract with the body's prose");
 ok(corpusSummary("A stored prose abstract that is long enough to be kept as it is.", F.stc) === "A stored prose abstract that is long enough to be kept as it is.", "corpusSummary keeps a prose abstract");
+// CodeQL alerts 404/405 (PR 1116): the link-only check must stay linear on adversarial input.
+{
+  const evil = "[]()" + "*[]()".repeat(30000) + "!\n\nA prose paragraph long enough to count as the summary of this body, with plenty of letters in it.";
+  const t0 = Date.now(); const out = bodySummary(evil, 1200);
+  ok(Date.now() - t0 < 2000, "bodySummary is linear on a link-repetition string", Date.now() - t0);
+  ok(out.startsWith("A prose paragraph"), "and still finds the prose", out.slice(0, 60));
+}
 console.log(pass + " passed, " + fail + " failed");
 process.exit(fail ? 1 : 0);

@@ -2204,7 +2204,8 @@ function bodySummary(body, max) {
     if (!t) return false;
     if (/^#{1,6}\s/.test(x.first) || /^[-*_]{3,}$/.test(t) || /^[|>]/.test(t) || /^(?:[-*+]|\d+\.)\s/.test(t)) return false;
     if (META.test(x.first) || /^(?:title|author|authors|date|status|license|affiliation|doi|keywords)\s*:/i.test(t)) return false;
-    if (/^(?:\**\[[^\]]*\]\([^)]*\)\**[\s|\u00b7,-]*)+$/.test(t)) return false;
+    // A paragraph of links only: remove each link, and nothing but separators or emphasis may remain (linear, no nested quantifier).
+    if (/\]\(/.test(t) && !t.replace(/\[[^\]\n]*\]\([^)\n]*\)/g, "").replace(/[\s|\u00b7,*_-]/g, "")) return false;
     if (/^\*{1,3}[^*]+\*{1,3}$/.test(t) || /^_[^_]+_$/.test(t)) return false;
     return true;
   }).map(function(x) {
