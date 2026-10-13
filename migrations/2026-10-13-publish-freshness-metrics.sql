@@ -14,7 +14,7 @@
 -- Idempotent: INSERT OR IGNORE, CREATE TRIGGER IF NOT EXISTS, UPDATE.
 -- APPLY-BY: ci
 -- DB: qnfo-audit
--- Rollback: DROP TRIGGER IF EXISTS publish_freshness_tick; DELETE FROM analytics_metric_triggers WHERE notes = 'PUBLISH-FRESHNESS-1 2026-10-13'; DELETE FROM metric_registry WHERE metric IN ('papers_hours_since_last_publish', 'ideas_hours_since_last_proposal', 'social_hours_since_last_post')
+-- Rollback: DELETE FROM spof_registry WHERE component = 'publish freshness metrics'; DROP TRIGGER IF EXISTS publish_freshness_tick; DELETE FROM analytics_metric_triggers WHERE notes = 'PUBLISH-FRESHNESS-1 2026-10-13'; DELETE FROM metric_registry WHERE metric IN ('papers_hours_since_last_publish', 'ideas_hours_since_last_proposal', 'social_hours_since_last_post')
 
 INSERT OR IGNORE INTO metric_registry (metric, layer, kind, formula, source_of_truth, baseline, target, owner, disposition_actor, refresh_cadence, warning_band, kill_band, state, refresh_class) VALUES
  ('papers_hours_since_last_publish', 'surface', 'guard', 'hours since MAX(research_queue.published_at): how long papers.qnfo.org has gone without a newly published paper', 'qnfo-audit.research_queue', '0.7 h on 2026-10-13 (22-31 papers a day since 2026-10-09)', '< 48', 'qnfo-research-exec', 'analytics_metric_triggers papers_hours_since_last_publish', '1h', '> 24', '> 72', 'UNMEASURED', 'd1-trigger'),
@@ -57,3 +57,7 @@ INSERT OR IGNORE INTO analytics_metric_triggers (metric_key, title, source_table
 SELECT v.metric_key, v.title, 'registry', 'gt', v.threshold, 3, v.action || ' Definition of done: the metric is back inside its threshold in metric_registry; record the before and after values in issue_triage.close_evidence. If the remedy does not move the metric within a day, say so on the issue and try a different lever (remedy_efficacy_30d counts it).', v.owner, 'agent_issues', 12, 1, 'PUBLISH-FRESHNESS-1 2026-10-13'
 FROM v
 WHERE NOT EXISTS (SELECT 1 FROM analytics_metric_triggers x WHERE x.metric_key = v.metric_key AND x.enabled = 1);
+
+-- SPOF-REVIEW-GATE-1: the new D1 trigger rides the fleet_tick heartbeat. It only measures; no publishing path depends on it.
+INSERT OR IGNORE INTO spof_registry (component, critical_path, alternate_path, alternate_tested_at, evidence, issue_id, reviewed_at) VALUES
+ ('publish freshness metrics', 'qnfo-audit trigger publish_freshness_tick on fleet_tick (PUBLISH-FRESHNESS-1)', 'the metrics'' own last_refreshed ages when the heartbeat stops, which the fleet''s stale-metric checks and LOOP-WATCH-1 heartbeat watch report; q08 and personal-companion keep their own worker-written stall metrics', NULL, 'measurement only: a stopped trigger delays stall detection for papers, ideas and social, it never stops a publishing surface', NULL, '2026-10-13');
