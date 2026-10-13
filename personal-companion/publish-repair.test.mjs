@@ -263,5 +263,46 @@ const count = (p, t) => p.prepare("SELECT COUNT(*) n FROM " + t).get().n;
   ok(out.ok === true && mw.log.writer === 2, "the second draft with a proper lede publishes", { out, log: mw.log });
 }
 
+// ---- FACT-WORDING-1 (1.19.4) ---------------------------------------------------------------------------------------------------------
+{
+  const s = V.splitFactItems([
+    "FACT: The object that forwards the call is commonly called a wrapper -- The source says 'frequently called', not 'commonly called'",
+    "FACT: allowing a class to expose some behavior while delegating the rest -- 'delegating' misstates source, which says forwarding",
+    "FACT: the source says 'twice a year', not 'three times a year' -- The source says 'twice a year', not 'three times a year'",
+    "FACT: the bridge is called the old crossing -- The source says 'new crossing', not 'old crossing'"
+  ]);
+  ok(s.inferences.some((f) => /commonly called a wrapper/.test(f)), "a one-word synonym swap the reviewer reports as source says 'A', not 'B' is wording, not a fact", s);
+  ok(s.facts.some((f) => /delegating the rest/.test(f)), "a different concept (delegating for forwarding) stays a fact", s);
+  ok(s.facts.some((f) => /twice a year/.test(f)), "a changed frequency phrase of more than one word stays a fact", s);
+  ok(s.facts.some((f) => /old crossing/.test(f)), "an antonym swap (new for old) stays a fact: only swaps inside a synonym group are wording", s);
+  ok(s.facts.length + s.inferences.length === 4, "the swap rule never drops an item", s);
+}
+// ---- PRUNE-THEN-EXTEND-1 (1.19.4): a cleaned draft that is only too short is extended, not revised from the original ----------------
+{
+  const p = world();
+  const BAD = Array.from({ length: 10 }, (_, i) => "Yet the surveyors in group " + "abcdefghij"[i] + " worked without the benefit of iron tools, carrying the planks across soft ground by hand for long seasons while the record keepers looked on and wrote nothing of it down at all.");
+  const shortBody = "# Drift in the readings\n\n" + E_LEDE + "\n\n" + paras(1) + " " + BAD.join(" ") + "\n\n## What would falsify this\n\nIf the record of 14 measurements in 1987 were re-run and the drift vanished, the claim would fail.\n\n## The objection\n\nThe strongest objection is that fourteen readings are too few to separate drift from noise, and the record cannot settle that.\n\n" + paras(1);
+  const longBody = essayBody(E_LEDE);
+  let secondPrompt = "";
+  const mw = modelWorld({
+    draft: (n) => n === 1 ? shortBody : longBody,
+    review: (m, sys) => {
+      const d = sys.indexOf("--- DRAFT ---") >= 0 ? sys.slice(sys.indexOf("--- DRAFT ---")) : sys;
+      const hits = BAD.filter((b) => d.indexOf(b.slice(0, 60)) !== -1);
+      return hits.length ? JSON.stringify({ unsupported: hits.map((b) => "FACT: " + b + " -- source does not mention iron tools"), verdict: "fail" }) : '{"unsupported":[],"verdict":"pass"}';
+    }
+  });
+  const AI0 = mw.AI.run;
+  let writes = 0;
+  mw.AI.run = async (model, input) => { const sys = (input.messages && input.messages[0] && input.messages[0].content) || ""; if (!/strict fact-checker|adversarial reader/.test(sys) && !input.text) { writes++; if (writes === 2) secondPrompt = JSON.stringify(input.messages); } return AI0(model, input); };
+  const out = await V.generate({ PERSONAL: wrap(p), AI: mw.AI }, "essay", {});
+  if (!out.ok) console.log(JSON.stringify(p.prepare("SELECT status, substr(detail,1,160) d FROM companion_runs").all()).slice(0, 4000));
+  ok(out.ok === true && count(p, "companion_pieces") === 1, "the pruned, too-short draft is extended and published", out);
+  const flagged = "abcdefgh".split("").map((g) => "group " + g + " worked");
+  ok(/too short/.test(secondPrompt) && flagged.every((f) => secondPrompt.indexOf(f) === -1) && secondPrompt.indexOf("group i worked") !== -1, "the extension starts from the cleaned draft: the 8 flagged sentences are gone, the 2 the reviewers did not list remain", secondPrompt.length);
+  ok(p.prepare("SELECT COUNT(*) n FROM companion_runs WHERE detail LIKE '%extending the pruned draft%'").get().n === 1, "the run log says the pruned draft was extended");
+  const row = p.prepare("SELECT lede, body_md FROM companion_pieces").get();
+  ok(row && !/iron tools/.test(row.lede + row.body_md), "the published piece carries none of the flagged sentences");
+}
 console.log(pass + " passed, " + fail + " failed");
 if (fail) process.exit(1);
