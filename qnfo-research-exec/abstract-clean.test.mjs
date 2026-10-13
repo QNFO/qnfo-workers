@@ -30,6 +30,16 @@ for (const good of ["Zitterbewegung (ZBW) — the trembling motion of a Dirac wa
   ok(abstractNeedsRepair(good) === false, "a prose abstract stays: " + good.slice(0, 40));
 ok(corpusSummary("## Module 9: Observer Theory **Author:** R", F.stc).startsWith("Formalize the observer"), "corpusSummary replaces a raw-prefix abstract with the body's prose");
 ok(corpusSummary("A stored prose abstract that is long enough to be kept as it is.", F.stc) === "A stored prose abstract that is long enough to be kept as it is.", "corpusSummary keeps a prose abstract");
+// 0.17.4: front matter. The live abstracts began "--- title: ..." (filled by 0.17.0 from such bodies) and were not flagged.
+ok(abstractNeedsRepair("--- title: 'Valuation Without R: A Category-Theoretic Foundation for Finite Measurement' author: \"QNFO\" date: \"2026-08-04\""), "an abstract that starts with --- is flagged");
+{
+  const folded = "---\ntitle: 'Valuation Without R'\nauthor: \"QNFO\"\ndoi: \"\"\nabstract: >\n  Measurement in physics is always finite and approximate — yet its mathematical\n  foundations are embedded in the Archimedean continuum of real numbers.\n---\n\n# V\n\nBody prose that should not be chosen because the front matter has an abstract of its own.\n";
+  ok(bodySummary(folded).startsWith("Measurement in physics is always finite and approximate — yet its mathematical foundations"), "a folded front-matter abstract is used", bodySummary(folded));
+  const radix = "---\ntitle: \"Radix-Agnostic Detection\"\nauthor: \"R\"\nstatus: \"published\"\n---\n\n**Abstract**\n\nDiscrete scale invariance (DSI) — invariance under a discrete set of\nrescalings $x \\to \\lambda^n x$ — predicts log-periodic oscillations in the logarithmic coordinate.\n";
+  ok(bodySummary(radix).startsWith("Discrete scale invariance (DSI)"), "front matter without an abstract field is skipped", bodySummary(radix));
+  const meta = "---\nauthor: Rowan Brad Quni\nORCID: 0009-0002-4317-5604\ntitle: Critical Examination\naliases:\n  - Critical Examination\n---\n\n# Critical Examination\n\nThe null hypotheses of fundamental physics are examined against three competing ontological frameworks in turn.\n";
+  ok(bodySummary(meta).startsWith("The null hypotheses of fundamental physics"), "a metadata-only front matter is skipped", bodySummary(meta));
+}
 // CodeQL alerts 404/405 (PR 1116): the link-only check must stay linear on adversarial input.
 {
   const evil = "[]()" + "*[]()".repeat(30000) + "!\n\nA prose paragraph long enough to count as the summary of this body, with plenty of letters in it.";
