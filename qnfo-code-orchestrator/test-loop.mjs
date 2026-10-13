@@ -385,7 +385,7 @@ function fakeLoader(spinMs) {
   await ins(12, "Newer low", "code-task: repo=qnfo-workers path=docs/l.md", "low");
   await call(env, "POST", "/v1/tick", { maxSteps: 0 });
   const rows = (await env.AUDIT_DB.prepare("SELECT path FROM code_tasks ORDER BY rowid").all()).results.map((r) => r.path);
-  check("intake: critical is taken before an older medium, low waits (master queue order)", rows[0] === "docs/c.md" && rows.indexOf("docs/l.md") < 0, rows);
+  check("intake: critical is taken before an older medium, low comes last (master queue order)", rows[0] === "docs/c.md" && rows[1] === "docs/m.md" && (rows.indexOf("docs/l.md") < 0 || rows.indexOf("docs/l.md") === rows.length - 1), rows); // CODE-LOOP-2X-1: 4 per tick takes the low one too, last
 }
 // ---- KEYLESS-READ-1: with no CODE_AGENT_KEY the read step uses the public raw endpoint ----
 {

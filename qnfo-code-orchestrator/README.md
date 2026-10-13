@@ -26,7 +26,7 @@ queued --read--> propose --> verify --(fail, attempts<3)--> propose  (NEXT model
 ```
 - **State**: D1 `code_tasks` (migration `migrations/2026-10-01-code-tasks.sql`; the worker also creates it lazily). Every step is
   bounded and idempotent; a crashed isolate's 90 s lease expires and the next tick resumes the task. FIFO claim.
-- **Continuation without a human**: cron `*/10 * * * *` (the CRON-RATE-CEILING-1 floor) runs up to 8 steps / 20 s per tick.
+- **Continuation without a human**: cron `*/10 * * * *` (the CRON-RATE-CEILING-1 floor) runs up to 16 steps / 40 s per tick (CODE-LOOP-2X-1).
 - **Model independence + cost**: the ladder is data (`MODEL_LADDER`, comma-separated, cheapest first; default: qwen2.5-coder-32b, then the frontier coders kimi-k2.7-code and glm-5.3 on a failed attempt; LADDER-FRONTIER-1).
   A failed verify escalates one rung and feeds the verifier error back. Queue cap 20, 3 attempts, size caps.
 - **Verifiers** (deterministic; a task with no verifier ends `needs_human`, never an unverified PR):
