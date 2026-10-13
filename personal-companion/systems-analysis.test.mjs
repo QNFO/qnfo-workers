@@ -167,7 +167,7 @@ ok(/never state an inferred arrangement, funding, motive or behaviour as a repor
   ok(V.writerIsFallback({}) === true && V.writerIsFallback({ DEEPSEEK_API_KEY: "k" }) === false, "no DeepSeek key means the fallback band");
   ok(V.WRITER_TEMPERATURE_FB === 0.35 && V.CRITIC_TEMPERATURE === 0.2, "the writer samples at 0.35 and the critic at 0.2");
   const cw = src.slice(src.indexOf("async function callWorkersAI("), src.indexOf("async function callModel("));
-  ok(/temperature: role === "critic" \? CRITIC_TEMPERATURE : WRITER_TEMPERATURE_FB/.test(cw), "the Workers AI call picks the temperature by role");
+  ok(/temperature: role === "critic"(?: \|\| role === "editor")? \? CRITIC_TEMPERATURE : WRITER_TEMPERATURE_FB/.test(cw), "the Workers AI call picks the temperature by role (the editor of REFRAME-REPAIR-1 samples like the critic)");
   const cp = src.slice(src.indexOf("async function composePiece("), src.indexOf("async function composePiece(") + 4000);
   ok(/var band = writerBand\(form, writerIsFallback\(env\)\)/.test(cp) && /\.replace\(\/\\d\{4\} to \\d\{4\} words\/, bandText\)/.test(cp) && /a shorter piece that adds nothing is better than a longer one that invents/.test(cp), "composePiece puts the band in the form contract and the length rule");
   const cq = src.slice(src.indexOf("async function critiquePiece("), src.indexOf("__name(critiquePiece"));
