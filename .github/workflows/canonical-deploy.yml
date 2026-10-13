@@ -239,6 +239,9 @@ jobs:
         if: ${{ !cancelled() && github.event.inputs.dry_run != 'true' }}
         env:
           OPS_ROUTER_AUTH_KEY: ${{ secrets.OPS_ROUTER_AUTH_KEY }}
+          # COMPAT-RESTORE-DIRECT-1: the runner's own restore when qnfo-ops cannot put the previous date back (PATCH settings).
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: |
           set -uo pipefail
           rc=0

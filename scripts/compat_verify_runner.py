@@ -16,7 +16,10 @@ WHY    qnfo-ops verifies an advance by reading the worker's /health, and a Worke
 USAGE  python3 scripts/compat_verify_runner.py --pending /tmp/compat_pending.jsonl [--window-min 2] [--poll-sec 10] [--dry-run]
        python3 scripts/compat_verify_runner.py --selftest
        Reads OPS_ROUTER_AUTH_KEY (the /ops/deploy key), OPS_DEPLOY_URL (default https://ops.qnfo.org/ops/deploy; the verify
-       route is its sibling, qnfo-ops's workers.dev host is the second path) and GITHUB_RUN_ID.
+       route is its sibling, qnfo-ops's workers.dev host is the second path), GITHUB_RUN_ID, and CLOUDFLARE_API_TOKEN with
+       CLOUDFLARE_ACCOUNT_ID for COMPAT-RESTORE-DIRECT-1: when qnfo-ops cannot restore a date that did not verify (qnfo-ops
+       itself broken by its own advance, or unreachable), the runner sets the previous date with Cloudflare's PATCH
+       script-settings call, which changes only that key.
 EXIT   0 when every pending date was verified and recorded, or was not verified and qnfo-ops put the previous date back (a
        warning names it). 1 when a date was not verified and the restore failed or could not be asked for: the worker then runs
        at an unverified date, and qnfo-ops has filed COMPAT-RESTORE-FAILED-1 when it tried. A record that fails after a
@@ -56,6 +59,47 @@ def verify_urls(deploy_url=None):
     base = str(deploy_url or OPS_DEPLOY_URL).rstrip("/")
     first = (base[: -len("/ops/deploy")] if base.endswith("/ops/deploy") else base.rsplit("/", 1)[0]) + "/ops/compat-verify"
     return [first] + ([SECOND_VERIFY_URL] if SECOND_VERIFY_URL != first else [])
+
+
+# COMPAT-RESTORE-DIRECT-1 (2026-10-13): the second restore path. ok false asks qnfo-ops to upload the source again with the
+# previous date; when that answer fails (qnfo-ops itself broken by its own advance, or unreachable), the runner sets the
+# previous date with Cloudflare's PATCH script-settings call and the repository token (CLOUDFLARE_API_TOKEN,
+# CLOUDFLARE_ACCOUNT_ID). A PATCH changes only the keys it names: bindings, observability and code stay as they are.
+CF_API = "https://api.cloudflare.com/client/v4"
+
+
+def cf_patch_compat(worker, date, token, account, timeout=30):
+    """PATCH /accounts/{account}/workers/scripts/{worker}/settings with {"compatibility_date": date}. Returns (status, json)."""
+    boundary = "----qnfo-compat-" + str(int(time.time() * 1000))
+    part = json.dumps({"compatibility_date": date})
+    body = ("--" + boundary + "\r\nContent-Disposition: form-data; name=\"settings\"\r\nContent-Type: application/json\r\n\r\n"
+            + part + "\r\n--" + boundary + "--\r\n").encode("utf-8")
+    req = urllib.request.Request(CF_API + "/accounts/" + account + "/workers/scripts/" + worker + "/settings", data=body, method="PATCH",
+                                 headers={"Authorization": "Bearer " + token, "Content-Type": "multipart/form-data; boundary=" + boundary, "User-Agent": UA})
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as r:
+            return r.status, json.loads(r.read().decode("utf-8") or "{}")
+    except urllib.error.HTTPError as e:
+        try:
+            return e.code, json.loads(e.read().decode("utf-8") or "{}")
+        except Exception:
+            return e.code, {}
+    except Exception as e:  # network error: no status
+        return 0, {"error": type(e).__name__}
+
+
+def direct_restore(worker, previous_date, patch=cf_patch_compat, env=None):
+    """The runner's own restore. Returns (restored: bool, detail: str); never raises, never prints the token."""
+    env = os.environ if env is None else env
+    token, account = (env.get("CLOUDFLARE_API_TOKEN") or "").strip(), (env.get("CLOUDFLARE_ACCOUNT_ID") or "").strip()
+    if not token or not account:
+        return False, "no CLOUDFLARE_API_TOKEN or CLOUDFLARE_ACCOUNT_ID in the step"
+    st, js = patch(worker, previous_date, token, account)
+    got = ((js or {}).get("result") or {}).get("compatibility_date")
+    if 200 <= st < 300 and (js or {}).get("success") and (got is None or str(got)[:10] == str(previous_date)[:10]):
+        return True, "PATCH settings HTTP " + str(st) + (", compatibility_date " + str(got) if got else "")
+    errs = (js or {}).get("errors") or (js or {}).get("error") or ""
+    return False, "PATCH settings HTTP " + str(st) + " " + json.dumps(errs)[:200]
 
 
 def read_pending(text):
@@ -157,12 +201,13 @@ def verdict_body(entry, result, via, run_id):
     return body
 
 
-def settle(entries, token, window_min=2, poll_sec=10, run_id=None, get=fetch_json, post=post_json, clock=time.monotonic, sleep=time.sleep, urls=None):
+def settle(entries, token, window_min=2, poll_sec=10, run_id=None, get=fetch_json, post=post_json, clock=time.monotonic, sleep=time.sleep, urls=None, restore=None):
     """Poll every pending worker, then answer each verdict. Returns (exit_code, [outcome])."""
     wanted = {e["worker"]: str(e["expected_version"]) for e in entries}
     via = {}
     results = poll(wanted, window_min, poll_sec, fetch=make_fetch(wanted, via, get), clock=clock, sleep=sleep)
     urls = urls or verify_urls()
+    restore = restore or direct_restore
     rc, outcomes = 0, []
     for e in entries:
         w = e["worker"]
@@ -186,9 +231,14 @@ def settle(entries, token, window_min=2, poll_sec=10, run_id=None, get=fetch_jso
             o["outcome"] = "restored" if js.get("restored") else ("settled" if js.get("already") or js.get("noop") else "answered")
             emit("::warning::compat-verify: " + w + " did not answer " + e["expected_version"] + " within " + str(window_min) + " min (" + res.get("state", "") + ", saw " + str(res.get("seen")) + "); qnfo-ops answered " + o["outcome"] + ", the date is " + str(js.get("compatibility_date") or js.get("live_date") or e["previous_date"]))
         else:
-            o["outcome"] = "restore-failed"
-            rc = 1
-            emit("::error::compat-verify: " + w + " did not answer " + e["expected_version"] + " at " + e["new_date"] + " and the restore to " + e["previous_date"] + " failed (HTTP " + str(o["status"]) + ": " + json.dumps(js)[:300] + ")")
+            ok2, detail = restore(w, e["previous_date"])
+            if ok2:
+                o["outcome"] = "restored-direct"
+                emit("::warning::compat-verify: " + w + " did not answer " + e["expected_version"] + " at " + e["new_date"] + "; qnfo-ops could not restore it (HTTP " + str(o["status"]) + "), so the runner set " + e["previous_date"] + " directly (" + detail + ")")
+            else:
+                o["outcome"] = "restore-failed"
+                rc = 1
+                emit("::error::compat-verify: " + w + " did not answer " + e["expected_version"] + " at " + e["new_date"] + " and the restore to " + e["previous_date"] + " failed (qnfo-ops HTTP " + str(o["status"]) + ": " + json.dumps(js)[:300] + "; direct: " + detail + ")")
         outcomes.append(o)
     return rc, outcomes
 
@@ -249,14 +299,28 @@ def selftest():
 
     # restore failure is the only failing exit; a failed record after a verified /health is a warning
     clock, sleep = clocked()
-    rc, outs = settle([dict(good, worker="v")], "tok", 1, 10, get=get, post=lambda u, b, t: (502, {"ok": False, "restored": False, "restore_error": "CF API 400", "retryable": True}), clock=clock, sleep=sleep, urls=["https://ops/x"])
+    no_direct = lambda w, d: (False, "no direct path in the test")  # noqa: E731
+    rc, outs = settle([dict(good, worker="v")], "tok", 1, 10, get=get, post=lambda u, b, t: (502, {"ok": False, "restored": False, "restore_error": "CF API 400", "retryable": True}), clock=clock, sleep=sleep, urls=["https://ops/x"], restore=no_direct)
     ok(rc == 1 and outs[0]["outcome"] == "restore-failed", "a failed restore fails the step", outs)
+    # COMPAT-RESTORE-DIRECT-1: when qnfo-ops cannot restore (it is the broken worker, or unreachable), the runner's PATCH does
+    clock, sleep = clocked()
+    direct_calls = []
+    rc, outs = settle([dict(good, worker="qnfo-ops")], "tok", 1, 10, get=lambda url: (0, {}), post=lambda u, b, t: (0, {"error": "URLError"}), clock=clock, sleep=sleep, urls=["https://ops/x"], restore=lambda w, d: (direct_calls.append((w, d)) or True, "PATCH settings HTTP 200"))
+    ok(rc == 0 and outs[0]["outcome"] == "restored-direct" and direct_calls == [("qnfo-ops", "2026-08-01")], "qnfo-ops broken by its own advance is restored by the runner directly", [outs, direct_calls])
+    fake_patch = lambda w, d, t, a: (200, {"success": True, "result": {"compatibility_date": d}})  # noqa: E731
+    ok(direct_restore("qnfo-ops", "2026-08-01", patch=fake_patch, env={"CLOUDFLARE_API_TOKEN": "t", "CLOUDFLARE_ACCOUNT_ID": "a"})[0] is True, "direct_restore accepts a PATCH that reports the previous date")
+    ok(direct_restore("qnfo-ops", "2026-08-01", patch=lambda w, d, t, a: (200, {"success": True, "result": {"compatibility_date": "2026-10-10"}}), env={"CLOUDFLARE_API_TOKEN": "t", "CLOUDFLARE_ACCOUNT_ID": "a"})[0] is False, "direct_restore refuses a PATCH whose answer keeps the new date")
+    ok(direct_restore("qnfo-ops", "2026-08-01", patch=lambda w, d, t, a: (403, {"success": False, "errors": [{"code": 10000}]}), env={"CLOUDFLARE_API_TOKEN": "t", "CLOUDFLARE_ACCOUNT_ID": "a"})[0] is False, "direct_restore reports a refused PATCH")
+    r_noenv = direct_restore("qnfo-ops", "2026-08-01", patch=fake_patch, env={})
+    ok(r_noenv[0] is False and "CLOUDFLARE_API_TOKEN" in r_noenv[1], "direct_restore without the repository token says so and does nothing", r_noenv)
+    leak = direct_restore("qnfo-ops", "2026-08-01", patch=lambda w, d, t, a: (401, {"success": False, "errors": [{"message": "bad"}]}), env={"CLOUDFLARE_API_TOKEN": "sekret-token", "CLOUDFLARE_ACCOUNT_ID": "a"})
+    ok("sekret-token" not in leak[1], "the token never appears in the detail")
     seen_n.clear()
     clock, sleep = clocked()
     rc, outs = settle([good], "tok", 1, 10, get=get, post=lambda u, b, t: (0, {"error": "timeout"}), clock=clock, sleep=sleep, urls=["https://ops/x"])
     ok(rc == 0 and outs[0]["outcome"] == "kept-unrecorded", "a verified date whose record fails is a warning, not a failure", outs)
     clock, sleep = clocked()
-    rc, outs = settle([dict(good, worker="v")], "", 1, 10, get=get, post=post, clock=clock, sleep=sleep, urls=["https://ops/x"])
+    rc, outs = settle([dict(good, worker="v")], "", 1, 10, get=get, post=post, clock=clock, sleep=sleep, urls=["https://ops/x"], restore=no_direct)
     ok(rc == 1 and outs[0]["outcome"] == "restore-failed", "without the key a date that did not verify is a failure (nothing could restore it)", outs)
     clock, sleep = clocked()
     rc, outs = settle([dict(good, worker="v")], "tok", 1, 10, get=get, post=lambda u, b, t: (200, {"ok": True, "already": "compat-restore"}), clock=clock, sleep=sleep, urls=["https://ops/x"])
