@@ -25,11 +25,13 @@ const art = (name) => ("The " + name + " is the subject of this article. " + sen
 const SRC = { "Alpha Subject": art("Alpha Subject"), "Beta Station": art("Beta Station"), "Gamma Committee": art("Gamma Committee") };
 const entry = (n) => "<entry><id>http://arxiv.org/abs/" + n + "</id><title>Paper " + n + " on drift</title><summary>" + sentence.repeat(3) + "</summary></entry>";
 // state: wiki / arxiv are "up" or an HTTP status number or "throw"
-const net = { wiki: "up", arxiv: "up", uas: [] };
+const net = { wiki: "up", arxiv: "up", html: "up", ar5iv: "up", uas: [] };
+// COMPANION-PAPER-FULLTEXT-1: a paper's full text, as the arXiv HTML rendering serves it (the abstract is not in it)
+const fullHtml = (n) => "<html><head><script>var x = 1;</script><style>p{}</style></head><body><nav>menu</nav><article><h1>Paper " + n + " on drift</h1><p>Full text of paper " + n + ". " + sentence.repeat(25) + "</p><math><annotation encoding=\"application/x-tex\">x^2</annotation></math><section class=\"ltx_bibliography\">REFERENCE LIST</section></article></body></html>";
 globalThis.fetch = async (url, init) => {
   const u = new URL(String(url)), host = u.hostname, s = String(url);
   net.uas.push(init && init.headers && init.headers["User-Agent"]);
-  const mode = host === "en.wikipedia.org" ? net.wiki : host === "export.arxiv.org" ? net.arxiv : "up";
+  const mode = host === "en.wikipedia.org" ? net.wiki : host === "export.arxiv.org" ? net.arxiv : host === "arxiv.org" ? net.html : host === "ar5iv.labs.arxiv.org" ? net.ar5iv : "up";
   if (mode === "throw") throw new Error("network down");
   if (typeof mode === "number") return new Response("denied", { status: mode });
   if (host === "en.wikipedia.org") {
@@ -39,6 +41,7 @@ globalThis.fetch = async (url, init) => {
     return new Response(JSON.stringify({ query: { pages: { 1: { title: t, extract: SRC[t] || "" } } } }), { status: 200 });
   }
   if (host === "export.arxiv.org") return new Response("<feed>" + entry(1) + entry(2) + entry(3) + "</feed>", { status: 200 });
+  if ((host === "arxiv.org" || host === "ar5iv.labs.arxiv.org") && /\/html\/\d+$/.test(u.pathname)) return new Response(fullHtml(u.pathname.split("/").pop()), { status: 200, headers: { "content-type": "text/html" } });
   return new Response("{}", { status: 404 });
 };
 const LEDE = "The Alpha Subject drifts when it is read at the Beta Station.";
@@ -70,6 +73,7 @@ for (const status of [429, 403]) {
   ok(out.ok === true && count(p, "companion_pieces") === 1, "Wikipedia " + status + ": an arXiv-only topic publishes", out);
   const row = p.prepare("SELECT ground_text FROM companion_pieces").get(), au = p.prepare("SELECT verdict, models FROM companion_audits").get();
   ok(out.topic && /^arxiv:/.test(out.topic) && row && /Paper 1 on drift/.test(row.ground_text) && /Paper 2 on drift/.test(row.ground_text), "its ground is at least two recent papers' text", out.topic);
+  ok(row && /Full text of paper 1\./.test(row.ground_text) && /Full text of paper 2\./.test(row.ground_text) && !/REFERENCE LIST|var x = 1|x\^2|menu/.test(row.ground_text), "COMPANION-PAPER-FULLTEXT-1: papers are read from their full text, without scripts, navigation, TeX annotations or the reference list", row && row.ground_text.slice(0, 300));
   ok(au && au.verdict === "pass" && /,/.test(au.models), "it passed the two-reviewer audit like any other piece", au);
   ok(net.uas.every((x) => /^qnfo-personal-companion\//.test(String(x))), "every source request carried the descriptive User-Agent");
 }
@@ -105,6 +109,34 @@ for (const status of [429, 403]) {
   const env = { PERSONAL: wrap(p), AI: models() };
   const out = await V.generate(env, "essay", {});
   ok(out.ok === true && count(p, "companion_pieces") === 1 && p.prepare("SELECT done FROM companion_anchor_cache").get().done === 1, "with both providers down the cached material is reused and the piece passes the full gate", out);
+  net.wiki = "up"; net.arxiv = "up";
+}
+// ---- COMPANION-PAPER-FULLTEXT-1: ar5iv fallback; no full text means no paper anchor (never the abstract) -------------------------------
+{
+  const V = await load(); net.wiki = 429; net.arxiv = "up"; net.html = 404; net.ar5iv = "up";
+  const p = world(), env = { PERSONAL: wrap(p), AI: models() };
+  const out = await V.generate(env, "essay", {});
+  const row = p.prepare("SELECT ground_text FROM companion_pieces").get();
+  ok(out.ok === true && row && /Full text of paper 1\./.test(row.ground_text), "the arXiv HTML rendering missing: the ar5iv full text is used", out);
+  net.html = 404; net.ar5iv = 404;
+  const p2 = world(), env2 = { PERSONAL: wrap(p2), AI: models() };
+  const out2 = await V.generate(env2, "essay", {});
+  ok(out2.ok === false && count(p2, "companion_pieces") === 0 && /insufficient anchors/.test(out2.error) && /paper full text/.test(out2.error), "no readable full text anywhere: the papers are dropped and the abstracts are not used", out2);
+  net.wiki = "up"; net.html = "up"; net.ar5iv = "up";
+  ok(V.arxivIdOf("http://arxiv.org/abs/2510.01234v2") === "2510.01234v2" && V.paperFullTextUrls("http://arxiv.org/abs/2510.01234v2").join(" ") === "https://arxiv.org/html/2510.01234v2 https://ar5iv.labs.arxiv.org/html/2510.01234v2", "full-text URLs from an arXiv id");
+  const src2 = readFileSync(new URL("./worker.js", import.meta.url), "utf8");
+  ok(src2.indexOf("their abstracts are the whole ground") === -1 && !/\.slice\(0, 1200\) \}\);/.test(src2), "no abstract-as-ground path remains (agent_issues 2469 code-probe)");
+  ok(/never write about the source material/.test(V.prompts.P_STYLE) && !/If the source material does not settle a point, say it does not/.test(V.prompts.P_STYLE), "uncertainty is stated about the claim, never about the source material");
+}
+{
+  // material cached before 1.17.0 holds abstract-only paper anchors: they are dropped on reuse
+  const V = await load(); net.wiki = "throw"; net.arxiv = 500;
+  const p = world();
+  p.exec("CREATE TABLE companion_anchor_cache (id INTEGER PRIMARY KEY AUTOINCREMENT, topic_id TEXT, a TEXT, anchors_json TEXT NOT NULL, created_at TEXT NOT NULL, attempts INTEGER DEFAULT 0, done INTEGER DEFAULT 0)");
+  const abs = [1, 2, 3].map((n) => ({ kind: "paper", ref: "http://arxiv.org/abs/" + n, title: "Paper " + n + " on drift", text: sentence.repeat(3) }));
+  p.prepare("INSERT INTO companion_anchor_cache (topic_id, a, anchors_json, created_at) VALUES (?,?,?,?)").run("arxiv:Paper 1 on drift", "Paper 1 on drift", JSON.stringify(abs), new Date().toISOString());
+  const out = await V.generate({ PERSONAL: wrap(p), AI: models() }, "essay", {});
+  ok(out.ok === false && count(p, "companion_pieces") === 0, "cached abstract-only papers are not reused as ground", out);
   net.wiki = "up"; net.arxiv = "up";
 }
 // ---- the steward alert resolves itself --------------------------------------------------------------------------------------------------
