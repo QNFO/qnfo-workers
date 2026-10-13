@@ -6,7 +6,7 @@
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
-import { discover, select, CONTROL_PLANE, SHARED, ALWAYS } from "./run-suites.mjs";
+import { discover, select, syntaxTargets, isModuleSource, CONTROL_PLANE, SHARED, ALWAYS } from "./run-suites.mjs";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 let pass = 0, fail = 0;
@@ -32,6 +32,14 @@ s = select(all, []);
 ok(s.suites.length === 0 && /no worker directory/.test(s.reason), "no change runs nothing");
 s = select(all, ["docs"]);
 ok(s.suites.every((x) => x.startsWith("docs/") || ALWAYS.includes(x)) && !s.suites.some((x) => /^qnfo-/.test(x)), "a docs-only change runs only the docs suites (docs/doctrine-readings.test.mjs since #853) and the repository guards, never a worker suite", s.suites);
+
+// SUITE-SYNTAX-CHECK-1: the changed worker files are syntax-checked; shared paths are not worker directories
+let syn = syntaxTargets(root, ["qnfo-email", "scripts", "migrations", ""], false);
+ok(syn.includes("qnfo-email/worker.js") && syn.includes("qnfo-email/deployed-current.worker.js") && !syn.some((x) => /^(scripts|migrations)\//.test(x)), "a changed worker's two files are syntax-checked, shared paths are not", syn);
+syn = syntaxTargets(root, [], true);
+ok(syn.includes("qnfo-fleet-control/worker.js") && syn.length >= 20, "--all syntax-checks every worker directory", syn.length);
+ok(syntaxTargets(root, ["no-such-dir"], false).length === 0, "a directory without worker.js is skipped");
+ok(isModuleSource("// c\nexport default {};") && isModuleSource("import { x } from 'y';") && !isModuleSource("addEventListener('fetch', h);\nvar exported = 1;"), "module-shaped sources are told apart from scripts");
 
 const fc = readFileSync(join(root, "qnfo-fleet-control", "worker.js"), "utf8");
 const m = /var TP_CONTROL_PLANE = (\[[^\]]*\]);/.exec(fc);

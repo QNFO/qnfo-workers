@@ -70,7 +70,8 @@ const mkDraft = (o) => {
   const prob = o.prob || 0.55, pct = Math.round(prob * 100);
   const f = good(); f.probability = prob;
   const body = ["# Maintainers will fork the library before the vendor ships its rewrite", "",
-    "The maintainers of a widely used library are arguing in public about a vendor rewrite that would cut them out of the roadmap. " + para.repeat(5), "",
+    "The maintainers of a widely used library are arguing in public about a vendor rewrite that would cut them out of the roadmap; this forecast says they will fork the library before the rewrite ships.", "",
+    para.repeat(5), "",
     "How situations like this ended before is the first anchor: when a steward and a sponsor stopped sharing a roadmap, the steward usually forked within a year. " + para.repeat(5), "",
     "The most likely course runs in order. The sponsor posts a rewrite date, the maintainers ask for a shared governance seat, and the sponsor declines. " + para.repeat(5), "",
     "That path is judged at " + pct + " percent by the writer, with the rival scenarios below it. " + para.repeat(5), "",

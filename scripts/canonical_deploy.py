@@ -76,15 +76,37 @@ def die(code: int, msg: str) -> "NoReturn":  # type: ignore[valid-type]
     sys.exit(code)
 
 
-def post_deploy(worker: str, path: str, ref: str, token: str, timeout: int, allow_create: bool = False) -> dict:
-    """POST one deploy request to the canonical route. Returns parsed JSON.
-
-    Fails closed: a non-2xx status is surfaced verbatim, never swallowed.
-    """
+def deploy_body(worker: str, path: str, ref: str, allow_create: bool = False, compat_verify: str | None = None) -> dict:
+    """The JSON body of one /ops/deploy request."""
     body = {"worker": worker, "path": path, "ref": ref}
     # WORKER-RESURRECTION-GUARD-1: the route refuses to CREATE an absent worker unless this is set.
     if allow_create:
         body["allow_create"] = True
+    # COMPAT-VERIFY-RUNNER-1 (qnfo-ops 2.46.0): "caller" lets the route advance a reviewed compatibility date whose /health
+    # qnfo-ops cannot read (error 1042); this caller then verifies it from the runner (scripts/compat_verify_runner.py).
+    if compat_verify:
+        body["compat_verify"] = compat_verify
+    return body
+
+
+def pending_entry(worker: str, path: str, res: dict) -> dict | None:
+    """COMPAT-VERIFY-RUNNER-1: the line --compat-pending-file records for a deploy whose answer says compat.pending_verify,
+    else None. The runner polls /health for expected_version and answers POST /ops/compat-verify with these fields."""
+    c = res.get("compat") if isinstance(res, dict) else None
+    if not res.get("ok") or not isinstance(c, dict) or c.get("pending_verify") is not True:
+        return None
+    if not c.get("previous_date") or not c.get("new_date") or not c.get("expected_version"):
+        return None
+    return {"worker": worker, "path": c.get("path") or path, "previous_date": c["previous_date"], "new_date": c["new_date"],
+            "expected_version": c["expected_version"], "reviewed": c.get("reviewed"), "source_sha": c.get("source_sha")}
+
+
+def post_deploy(worker: str, path: str, ref: str, token: str, timeout: int, allow_create: bool = False, compat_verify: str | None = None) -> dict:
+    """POST one deploy request to the canonical route. Returns parsed JSON.
+
+    Fails closed: a non-2xx status is surfaced verbatim, never swallowed.
+    """
+    body = deploy_body(worker, path, ref, allow_create, compat_verify)
     payload = json.dumps(body).encode()
     req = urllib.request.Request(
         OPS_DEPLOY_URL,
@@ -148,7 +170,7 @@ def lock_contended(res: dict) -> bool:
     return "lock not acquired" in json.dumps(res)[:4000]
 
 
-def deploy_with_contention(worker: str, path: str, ref: str, token: str, timeout: int, allow_create: bool = False) -> dict:
+def deploy_with_contention(worker: str, path: str, ref: str, token: str, timeout: int, allow_create: bool = False, compat_verify: str | None = None) -> dict:
     """DEPLOY-LOCK-CONTENTION-1 (2026-09-30). One push to main can start TWO deployers for the same worker
     (deploy-qnfo-ops.yml -> raw_put.py and this workflow -> /ops/deploy; or a fleet-control heal), and the
     deploy-guard lock correctly lets only one through. Measured: canonical-deploy runs 36758875374 and
@@ -158,7 +180,7 @@ def deploy_with_contention(worker: str, path: str, ref: str, token: str, timeout
     want = repo_version(path)
     deadline = time.time() + LOCK_WAIT_S
     while True:
-        res = post_deploy(worker, path, ref, token, timeout, allow_create)
+        res = post_deploy(worker, path, ref, token, timeout, allow_create, compat_verify)
         if res.get("ok") or not lock_contended(res):
             return res
         lv = live_version(worker)
@@ -237,6 +259,8 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--dry-run", action="store_true", help="print the plan, call nothing")
     ap.add_argument("--fallback-file", help="DEPLOY-SECOND-PATH-1: write '<worker> <path>' for each worker whose route was unreachable; exit 3 when every failure is one")
     ap.add_argument("--allow-create", action="store_true", help="allow creating a worker that does not exist on the account (WORKER-RESURRECTION-GUARD-1)")
+    ap.add_argument("--compat-verify", choices=["caller"], default=None, help="COMPAT-VERIFY-RUNNER-1: this caller verifies an advanced compatibility date whose /health qnfo-ops cannot read")
+    ap.add_argument("--compat-pending-file", help="COMPAT-VERIFY-RUNNER-1: append one JSON line per deploy whose answer says compat.pending_verify (read by scripts/compat_verify_runner.py)")
     args = ap.parse_args(argv)
 
     if args.worker and args.manifest:
@@ -264,7 +288,7 @@ def main(argv: list[str] | None = None) -> int:
     for worker, path in targets:
         t0 = time.time()
         print(f"\n==> {worker} ({path})", flush=True)
-        res = deploy_with_contention(worker, path, args.ref, token, args.timeout, args.allow_create)
+        res = deploy_with_contention(worker, path, args.ref, token, args.timeout, args.allow_create, args.compat_verify)
         dt = time.time() - t0
         ok = bool(res.get("ok"))
         skipped = (not ok) and (not args.allow_create) and is_resurrection_refusal(res)
@@ -274,9 +298,14 @@ def main(argv: list[str] | None = None) -> int:
         verdict = "SKIP (absent worker; creation refused by WORKER-RESURRECTION-GUARD-1, not requested)" if skipped else ("OK" if ok else "FAIL")
         print(f"    {verdict} in {dt:.1f}s  status={res.get('status')}")
         # Surface the route's own fields without assuming a fixed schema.
-        for key in ("converged", "version", "version_id", "modified_on", "ledger", "lock", "schedules", "crons", "error", "detail"):
+        for key in ("converged", "version", "version_id", "modified_on", "ledger", "lock", "schedules", "crons", "compat", "error", "detail"):
             if key in res:
                 print(f"    {key}: {json.dumps(res[key])[:400]}")
+        pend = pending_entry(worker, path, res)
+        if pend and args.compat_pending_file:
+            with open(args.compat_pending_file, "a", encoding="utf-8") as fh:
+                fh.write(json.dumps(pend) + "\n")
+            print(f"    compat: {pend['previous_date']} -> {pend['new_date']} awaits the runner's /health check for {pend['expected_version']} (COMPAT-VERIFY-RUNNER-1)")
         # ROUTE-LOG-VISIBLE-1: print the route's own per-step log for the declared-config steps, so a skipped or
         # failed schedules / workers_dev apply is visible in CI instead of silently absent (SCHEDULES-PATH-OFF-BY-ONE-1).
         # DEPLOY-ERROR-VISIBLE-1: a failed route returns the Cloudflare error inside res["error"] as an escaped JSON

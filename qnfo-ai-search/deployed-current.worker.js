@@ -28,7 +28,7 @@
 //   LIMITS    public AI use is capped per visitor (hashed IP, hourly) and globally (daily); over a cap, or with the
 //             fleet's 30-day AI spend at SPEND_CAP_TOTAL_USD, the answer is sources-only (no model call).
 
-var VERSION = "2.4.2-judge-context"; // 2.4.2 ASK-JUDGE-CONTEXT-1 (2026-10-12, agent_issues 2165, pillar core): the grounding judge reads the same excerpt text as the writer (it got the first 1800 characters of each excerpt while the writer got up to 4800, so claims from the rest of an excerpt were counted unsupported); only verdicts made on the full text (ask_events.judge = 2) feed ask_grounded_share_7d and the A/B arms; every answer is sampled; a judge reply with no JSON or an error goes once to a second model family. Tests: ask-loop.test.mjs section 8b. // 2.4.0 ASK-GROUND-2 (2026-10-10, pillar core, owner directive: answers verifiable against supplied text, no hard-coded topics in prompts, fail closed): the system prompt no longer names the program's topics and forbids general-knowledge content (the labelled "outside the corpus" allowance is gone); tokens are held back and the finished answer loses every sentence that cites a missing excerpt number, carries a DOI, link, arXiv id, author citation or figure that no excerpt or the question contains, or is labelled general knowledge, before it is sent, cached or judged; a question with no excerpt gets a fixed no-answer text and no model call; the page lede, input placeholder and fallback question seeds name no topics. Tests: ask-ground.test.mjs. // 2.3.0 BUDGET-SOFT-ROUTE-1 (2026-10-06, pillar cost, owner directive): a breached ai_spend cap or the global daily count no longer stops anything; public answers use LEAN_MODEL (arm lean, not cached), the corpus feeder uploads CORPUS_SYNC_LEAN a tick, golden-question generation makes QGEN_LEAN_CALLS calls. // 2.2.8 ASK-CORPUS-FEEDER-1 (#2029, pillar research): an hourly loop leg uploads published papers the vector index lacks (ledger ask_corpus_sync; no upload while an ai_spend cap is breached); QGEN-COMPLETE-1: a golden question must be a complete question (ends with "?", not cut at max_tokens), at most QGEN_MAX_CALLS model calls a run and none while an ai_spend cap is breached, and evals use complete questions only; 2.2.7 ASK-LEXICAL-CATALOG-1 (pillar research): retrieve() also ranks the published catalog (titles and abstracts from papers.qnfo.org, BM25, no model call) because the AI Search vector index has had no feeder since 2026-08-11 and held 0 of the 22 golden papers; catalog metadata replaces per-source detail fetches where it has an abstract; 2.2.6 TP-7 lever 1 (TRANSFORMATION-PROGRAM-1 T7.1, #2015, pillar reach): ask.qwav.tech carries a subscribe box (type="email" plus a honeypot) that posts cross-origin to the qnfo.org double opt-in (POST https://qnfo.org/api/subscribe, CORS already allows this origin) with source ask.qwav.tech; nobody is subscribed without clicking the confirmation link; no binding, no model call; 2.2.5 WORKERS-AI-ATTRIBUTION-2 (#1997): env.AI wrapped with __aiAttrEnv in fetch and scheduled, so ask, question-generation and judge calls are counted in ai_call_counters (worker qnfo-ai-search); 2.2.4: a code comment no longer quotes a NARRATIVE-PROMPT-GUARD-1 phrase (no behaviour change); 2.2.3 ASK-HUNG-REQUEST-1 (#1839, pillar: reach): every await on /api/ask has a deadline (stream writes 15 s, retrieval 25 s, graph 12 s, model start 30 s, model idle 45 s, whole answer 150 s), so a visitor who stops reading ends the answer as limited 'client-gone' and an upstream overrun ends it with an error event; the event is always logged (9 'had hung' exceptions in 72h had none); ASK-RETRIEVAL-DEFINITIONS-1 (#1813): a glossary of the program's own terms (JPCUB, joules-per-solution, distinction-lattice, DLF; extensible in pipeline_flags 'ask_glossary') puts the defining paper first, named entities alone feed the keyword pass, paper sections split at level-1 headings and match on six-letter stems, the prompt no longer asks for an open problem on every answer, and the retrieval eval always includes the defined terms' golden questions and records their ranks (ask_evals.detail.defs); ASK-IDEA-HANDOFF-1 (#1936): an answer the corpus cannot give says that the question goes to the ideas pipeline (idea-hub ASK-GAP-1) and links ideas.qnfo.org; idea thread links use /s/<id> (the #/s/ form landed on the home page); 2.2.2 ASK-JUDGE-1 (pillar: reach): judge() reported judged:0 on 2026-10-03 with 3 eligible answers because every failure was swallowed; it now counts and names them (errors, no_json, bad_counts, last_error, head of the first unparseable output) in ask_loop_runs, and its output budget is 3000 tokens (was 1200; deepseek-v4-flash is a reasoning model, so a thinking-only reply is the suspected cause, unverified until the next 03:41 tick); 2.2.1 FLEET-CTL-ROLLOUT-1.6 (#1775): fleet command-line link before </body>; ASK-GRAPH-ELLIPSIS-1 (#1769): graph labels end in ASCII "..."; ASCII-SOURCE-1: non-ASCII written as escapes (the deploy uploads Latin-1; the page showed mojibake)
+var VERSION = "2.5.1-source-voice"; // 2.5.1 SOURCE-VOICE-ASK-1 (2026-10-13, agent_issues 2471, parent 2468, pillar research): a source found only by the keyword pass or the catalog's BM25 entered the writer's context as its title and abstract (its title alone for the 269 published papers with no abstract); retrieve() now reads such a source among the first max_sources in full and gives it the body sections that best match the question, as a pinned paper gets. 2.5.0 ASK-GROUND-3 (2026-10-13, agent_issues 2165, pillar core). Measured in qnfo-audit.ask_events (7 days, 141 events): ask_grounded_share_7d has not refreshed since 2.4.2, because full-context verdicts were counted only on rows with limited IS NULL (9 judged claims, under the 20 the metric needs), so metric_registry kept 0.561 from the truncated-context judge; 36 of the 45 full-context claims judged since were on answers written and sent in full whose reader then left. Of the 8 unsupported claims, 6 answered "what would falsify it" from no excerpt ("one would need to show", "based on the title, it likely"), 1 cited an excerpt the judge never saw (the stored judge context was cut at 12000 characters on 7 of 13 rows) and 1 linked two sources. Changes: the judge context is stored whole (JUDGE_CONTEXT_MAX); the grounded share and the A/B arms count every judged full-context answer that was written in full, whether or not its reader stayed; the judge also runs on every hourly tick (JUDGE_HOURLY); a question that quotes a published paper's title gets that paper's abstract and best-matching sections as source [1] (ASK-NAMED-PAPER-1: the abstract alone cannot say what would falsify a paper); the writer prompt forbids inferring what no excerpt states and no longer carries the knowledge-graph lines it could not cite; the deterministic check also removes speculation sentences ("based on the title", "one would need to", "presumably") absent from the excerpts and headings left empty. ASK-CRAWLER-GATE-1 (agent_issues 2339, pillar reach): 121 of the 141 events ended client-gone, 112 of them the paper-page deep-link question, from rendering crawlers (desktop Chrome user agents from CN, SG and HK every 15 to 30 minutes, which also post Cloudflare RUM beacons); a ?q= link now waits for a trusted pointer, touch or key event or the Ask button before it asks (never under navigator.webdriver), a declared crawler or a prefetch gets a 403 with no retrieval, model call or ask_events row (counted in ask_rate as auto:<kind>:<day>), and robots.txt disallows /api/ask and /api/feedback. Tests: ask-ground.test.mjs (speculation, empty headings), ask-loop.test.mjs section 11. // 2.4.2 ASK-JUDGE-CONTEXT-1 (2026-10-12, agent_issues 2165, pillar core): the grounding judge reads the same excerpt text as the writer (it got the first 1800 characters of each excerpt while the writer got up to 4800, so claims from the rest of an excerpt were counted unsupported); only verdicts made on the full text (ask_events.judge = 2) feed ask_grounded_share_7d and the A/B arms; every answer is sampled; a judge reply with no JSON or an error goes once to a second model family. Tests: ask-loop.test.mjs section 8b. // 2.4.0 ASK-GROUND-2 (2026-10-10, pillar core, owner directive: answers verifiable against supplied text, no hard-coded topics in prompts, fail closed): the system prompt no longer names the program's topics and forbids general-knowledge content (the labelled "outside the corpus" allowance is gone); tokens are held back and the finished answer loses every sentence that cites a missing excerpt number, carries a DOI, link, arXiv id, author citation or figure that no excerpt or the question contains, or is labelled general knowledge, before it is sent, cached or judged; a question with no excerpt gets a fixed no-answer text and no model call; the page lede, input placeholder and fallback question seeds name no topics. Tests: ask-ground.test.mjs. // 2.3.0 BUDGET-SOFT-ROUTE-1 (2026-10-06, pillar cost, owner directive): a breached ai_spend cap or the global daily count no longer stops anything; public answers use LEAN_MODEL (arm lean, not cached), the corpus feeder uploads CORPUS_SYNC_LEAN a tick, golden-question generation makes QGEN_LEAN_CALLS calls. // 2.2.8 ASK-CORPUS-FEEDER-1 (#2029, pillar research): an hourly loop leg uploads published papers the vector index lacks (ledger ask_corpus_sync; no upload while an ai_spend cap is breached); QGEN-COMPLETE-1: a golden question must be a complete question (ends with "?", not cut at max_tokens), at most QGEN_MAX_CALLS model calls a run and none while an ai_spend cap is breached, and evals use complete questions only; 2.2.7 ASK-LEXICAL-CATALOG-1 (pillar research): retrieve() also ranks the published catalog (titles and abstracts from papers.qnfo.org, BM25, no model call) because the AI Search vector index has had no feeder since 2026-08-11 and held 0 of the 22 golden papers; catalog metadata replaces per-source detail fetches where it has an abstract; 2.2.6 TP-7 lever 1 (TRANSFORMATION-PROGRAM-1 T7.1, #2015, pillar reach): ask.qwav.tech carries a subscribe box (type="email" plus a honeypot) that posts cross-origin to the qnfo.org double opt-in (POST https://qnfo.org/api/subscribe, CORS already allows this origin) with source ask.qwav.tech; nobody is subscribed without clicking the confirmation link; no binding, no model call; 2.2.5 WORKERS-AI-ATTRIBUTION-2 (#1997): env.AI wrapped with __aiAttrEnv in fetch and scheduled, so ask, question-generation and judge calls are counted in ai_call_counters (worker qnfo-ai-search); 2.2.4: a code comment no longer quotes a NARRATIVE-PROMPT-GUARD-1 phrase (no behaviour change); 2.2.3 ASK-HUNG-REQUEST-1 (#1839, pillar: reach): every await on /api/ask has a deadline (stream writes 15 s, retrieval 25 s, graph 12 s, model start 30 s, model idle 45 s, whole answer 150 s), so a visitor who stops reading ends the answer as limited 'client-gone' and an upstream overrun ends it with an error event; the event is always logged (9 'had hung' exceptions in 72h had none); ASK-RETRIEVAL-DEFINITIONS-1 (#1813): a glossary of the program's own terms (JPCUB, joules-per-solution, distinction-lattice, DLF; extensible in pipeline_flags 'ask_glossary') puts the defining paper first, named entities alone feed the keyword pass, paper sections split at level-1 headings and match on six-letter stems, the prompt no longer asks for an open problem on every answer, and the retrieval eval always includes the defined terms' golden questions and records their ranks (ask_evals.detail.defs); ASK-IDEA-HANDOFF-1 (#1936): an answer the corpus cannot give says that the question goes to the ideas pipeline (idea-hub ASK-GAP-1) and links ideas.qnfo.org; idea thread links use /s/<id> (the #/s/ form landed on the home page); 2.2.2 ASK-JUDGE-1 (pillar: reach): judge() reported judged:0 on 2026-10-03 with 3 eligible answers because every failure was swallowed; it now counts and names them (errors, no_json, bad_counts, last_error, head of the first unparseable output) in ask_loop_runs, and its output budget is 3000 tokens (was 1200; deepseek-v4-flash is a reasoning model, so a thinking-only reply is the suspected cause, unverified until the next 03:41 tick); 2.2.1 FLEET-CTL-ROLLOUT-1.6 (#1775): fleet command-line link before </body>; ASK-GRAPH-ELLIPSIS-1 (#1769): graph labels end in ASCII "..."; ASCII-SOURCE-1: non-ASCII written as escapes (the deploy uploads Latin-1; the page showed mojibake)
 var WORKER = "qnfo-ai-search";
 var DEFAULT_INSTANCE = "qnfo-corpus";
 
@@ -71,6 +71,11 @@ var JUDGE_MAX_TOKENS = 3000;
 // a third model family, before it is counted as a failure.
 var JUDGE_FULL = 2, JUDGE_SAMPLE = 1;
 var JUDGE_MODEL_2 = "@cf/zai-org/glm-5.3-flash", JUDGE_MAX_TOKENS_2 = 8000;
+// ASK-GROUND-3 (2.5.0): the stored judge context was cut at 12000 characters while the writer reads up to max_sources
+// excerpts of up to 4800 (7 of 13 full-context rows were cut; one answer cited [5], which the judge never saw). The whole
+// excerpt text is stored up to JUDGE_CONTEXT_MAX, above the largest writer context (8 sources x 4800 plus headers). The
+// judge runs on every hourly tick for up to JUDGE_HOURLY answers, so a verdict no longer waits for the 03:41 tick.
+var JUDGE_CONTEXT_MAX = 48000, JUDGE_HOURLY = 4;
 var QGEN_MODEL = "@cf/zai-org/glm-5.3-flash";
 // BUDGET-SOFT-ROUTE-1 (2.3.0, owner directive 2026-10-06: "AI spend budget should never stop any process, pipeline, or
 // workflow, only limit/suggest what models may be used"). A breached ai_spend cap or the global daily answer count no
@@ -163,7 +168,7 @@ var ASK_METRICS = [
   { metric: "ask_error_rate_7d", kind: "reliability", target: "<= 0.02", warning: "> 0.05", kill: "> 0.15", formula: "share of ask_events over 7d with a non-empty error", fix: "error", tunable: false },
   { metric: "ask_p95_total_ms_7d", kind: "reliability", target: "<= 20000", warning: "> 25000", kill: "> 40000", formula: "95th percentile of ask_events.total_ms over 7d (non-cached)", fix: "latency", tunable: false },
   { metric: "ask_citation_validity_7d", kind: "quality", target: ">= 0.98", warning: "< 0.95", kill: "< 0.9", formula: "1 - SUM(cites_invalid)/SUM(cites) over 7d: a citation is invalid when its number is not one of the answer's numbered sources", fix: "citations", tunable: false },
-  { metric: "ask_grounded_share_7d", kind: "quality", target: ">= 0.85", warning: "< 0.8", kill: "< 0.7", formula: "judged supported claims / judged claims over 7d (ASK-LOOP-1 grounding judge " + JUDGE_MODEL + " on a sample of answers with their excerpts)", tunable: true },
+  { metric: "ask_grounded_share_7d", kind: "quality", target: ">= 0.85", warning: "< 0.8", kill: "< 0.7", formula: "judged supported claims / judged claims over 7d (ASK-LOOP-1 grounding judge " + JUDGE_MODEL + " on every answer written in full, against the whole excerpt text the writer read: ask_events.judge = 2, judged_total not null, limited null or client-gone, not cached; unmeasured below 20 claims)", tunable: true },
   { metric: "ask_retrieval_mrr", kind: "quality", target: ">= 0.6", warning: "< 0.5", kill: "< 0.3", formula: "mean reciprocal rank of the expected paper among the answer's sources, golden set (questions written from paper abstracts), champion config, latest daily eval", tunable: true },
   { metric: "ask_helpful_rate_30d", kind: "outcome", target: ">= 0.75", warning: "< 0.6", kill: "< 0.4", formula: "helpful / rated answers over 30d (visitor ratings); unmeasured below 10 ratings", tunable: true },
   { metric: "ask_cost_per_answer_usd_7d", kind: "cost", target: "<= 0.002", warning: "> 0.005", kill: "> 0.01", formula: "SUM(ask_events.usd) / answers over 7d, priced at Cloudflare neuron rates", tunable: true },
@@ -241,7 +246,8 @@ var worker_default = {
       if (path === "/api/recent") return cached(request, ctx, 600, function () { return recent(env); });
       if (path === "/api/explore") return explore(env, url.searchParams.get("node") || "");
       if (path === "/api/loop") return loopReport(env);
-      if (path === "/robots.txt") return new Response("User-agent: *\nAllow: /\nSitemap: https://papers.qnfo.org/sitemap.xml\n", { headers: { "content-type": "text/plain" } });
+      // ASK-CRAWLER-GATE-1 (2.5.0): a renderer that honours robots.txt loads the page but does not post the question.
+      if (path === "/robots.txt") return new Response("User-agent: *\nAllow: /\nDisallow: /api/ask\nDisallow: /api/feedback\nSitemap: https://papers.qnfo.org/sitemap.xml\n", { headers: { "content-type": "text/plain" } });
       return json({ error: "Not found", path: path }, 404);
     } catch (e) {
       return json({ error: String((e && e.message) || e).slice(0, 300) }, 500);
@@ -305,6 +311,11 @@ async function sha(s) {
 }
 function db(env) { return env.QNFO_AUDIT || null; }
 function today(d) { return (d || new Date()).toISOString().slice(0, 10); }
+// WORKERS-BP-LOGGING-1: a failure that is tolerated still reaches Workers Logs; returns null so it can end a .catch.
+function logErr(at, e) {
+  console.error(JSON.stringify({ worker: WORKER, version: VERSION, at: at, error: String((e && e.message) || e).slice(0, 300) }));
+  return null;
+}
 
 // ---------------------------------------------------------------- 1.0.x routes (unchanged behaviour)
 async function instances(env) {
@@ -350,13 +361,14 @@ function health(env) {
     status: "ok",
     worker: WORKER,
     version: VERSION,
-    capabilities: ["ai-search-query", "ai-search-ingest", "instance-list", "ask-page", "grounded-answer-stream", "knowledge-graph-subgraph", "answer-feedback", "ask-loop-measure", "ask-loop-eval", "ask-loop-tune", "ask-loop-fix-dispatch"],
+    capabilities: ["ai-search-query", "ai-search-ingest", "instance-list", "ask-page", "grounded-answer-stream", "knowledge-graph-subgraph", "answer-feedback", "ask-loop-measure", "ask-loop-eval", "ask-loop-tune", "ask-loop-fix-dispatch", "ask-named-paper", "ask-crawler-gate"],
     limitations: [
       "POST /ingest needs X-Sync-Token; every other route is a public read or a capped public write (OPEN-ACCESS-1)",
       "answers are written only from qnfo-corpus excerpts by one cheap Workers AI model chosen by ASK-TUNE-1; the model is told to say when the corpus does not cover a question",
       "public answers are capped at " + PER_IP_HOUR + " per hashed address per hour and " + GLOBAL_DAY + " per UTC day; over a cap, or with 30-day fleet AI spend at SPEND_CAP_TOTAL_USD, answers are sources-only",
       "the graph panel shows public research labels only; ops, infrastructure and personal nodes are filtered out",
       "ASK-LOOP-1 runs on the hourly :41 cron (daily eval and tuning in the 03:41 tick); code changes go through the code loop and merge runner, never directly",
+      "a declared crawler or a prefetch gets no answer on /api/ask (403, not logged as a question), and a ?q= link on the page asks only after a pointer, touch or key event or the Ask button",
     ],
     bindings: { ai_search: !!env.AI_SEARCH, sync_token: !!env.SYNC_TOKEN, ai: !!env.AI, audit: !!env.QNFO_AUDIT, gateway: !!env.GATEWAY, ideas: !!env.IDEAS },
   });
@@ -608,7 +620,7 @@ async function retrieve(env, query, cfg) {
     ((k && k.papers) || []).forEach(function (p, pi) {
       if (!p.slug || groups.has(p.slug)) return;
       var inTitle = String(p.title || "").toLowerCase().indexOf(terms[ti]) >= 0;
-      groups.set(p.slug, { slug: p.slug, score: (inTitle ? cfg.kw_title_score : cfg.kw_abstract_score) - pi * 0.01, chunks: [String(p.title || "") + "\n\n" + String(p.abstract || "")] });
+      groups.set(p.slug, { slug: p.slug, score: (inTitle ? cfg.kw_title_score : cfg.kw_abstract_score) - pi * 0.01, chunks: [stubChunk(p.title, p.abstract)], stubs: 1 });
     });
   });
   chunks.forEach(function (c) {
@@ -624,9 +636,9 @@ async function retrieve(env, query, cfg) {
   var cat = await catP, lex = lexSearch(cat, query, LEX_TOP), tq = titleQueryTokens(query);
   var addLex = function (h, s, rank) {
     var g = groups.get(h.slug);
-    if (!g) { groups.set(h.slug, { slug: h.slug, score: s, lex: rank, chunks: [h.doc.title + "\n\n" + h.doc.abstract] }); return; }
+    if (!g) { groups.set(h.slug, { slug: h.slug, score: s, lex: rank, chunks: [stubChunk(h.doc.title, h.doc.abstract)], stubs: 1 }); return; }
     g.score = Math.max(g.score, s); g.lex = g.lex || rank;
-    if (!g.chunks.length) g.chunks.push(h.doc.title + "\n\n" + h.doc.abstract);
+    if (!g.chunks.length) { g.chunks.push(stubChunk(h.doc.title, h.doc.abstract)); g.stubs = (g.stubs || 0) + 1; }
   };
   lex.forEach(function (h, i) { if (h.s >= LEX_MIN_REL * lex[0].s) addLex(h, LEX_SCORE - i * LEX_STEP, i + 1); });
   if (tq.length) {
@@ -642,7 +654,19 @@ async function retrieve(env, query, cfg) {
   }
   var top = Array.from(groups.values()).sort(function (a, b) { return b.score - a.score; }).slice(0, cfg.max_sources + 3);
   // A catalog row with an abstract is the source's metadata; only the others are fetched one by one (ASK-LEXICAL-CATALOG-1).
-  var metas = await Promise.all(top.map(function (g) { var c = cat && cat.bySlug.get(g.slug); return c && c.abstract ? { slug: c.slug, title: c.title, doi: c.doi, abstract: c.abstract } : up(env, "GATEWAY", UP.papers, "/papers/" + encodeURIComponent(g.slug), null, 8000); }));
+  // SOURCE-VOICE-ASK-1: a source among the first max_sources whose only text is its title and abstract is read in full
+  // instead, and the body sections that best match the question become its excerpt (pinPaper); the read is also its metadata.
+  var metas = await Promise.all(top.map(function (g, i) {
+    var c = cat && cat.bySlug.get(g.slug);
+    var catMeta = c && c.abstract ? { slug: c.slug, title: c.title, doi: c.doi, abstract: c.abstract } : null;
+    if (i < cfg.max_sources && stubOnly(g)) {
+      return pinPaper(env, g.slug, query).then(function (p) {
+        if (p && p.excerpt && p.excerpt.length > stubLength(g)) { g.chunks = [p.excerpt]; g.stubs = 0; g.body = true; }
+        return p || catMeta;
+      }, function (e) { logErr("source-voice body " + g.slug, e); return catMeta; });
+    }
+    return catMeta || up(env, "GATEWAY", UP.papers, "/papers/" + encodeURIComponent(g.slug), null, 8000);
+  }));
   var items = top.map(function (g, i) {
     var m = metas[i];
     return {
@@ -674,6 +698,16 @@ async function retrieve(env, query, cfg) {
   out.ms = Date.now() - t0;
   return out;
 }
+// SOURCE-VOICE-ASK-1 (2.5.1, agent_issues 2471, parent 2468; owner 2026-10-13: "Papers shall cite full texts, not merely
+// reference work summaries"): the keyword pass and the catalog's BM25 hits gave a source its title and abstract as its only
+// excerpt, and with no abstract (269 of 575 published papers on 2026-10-13) its title alone, so the writer had none of the
+// work's own text to cite and was told to say that the excerpts did not cover the question. Such a chunk is now a
+// placeholder (stubs counts them): retrieve() reads a stub-only source among the first max_sources in full and replaces the
+// placeholder with the body sections that best match the question, as a pinned paper gets; it stays only when the paper
+// cannot be read or has no more text than the placeholder.
+function stubChunk(title, abstract) { return String(title || "") + "\n\n" + String(abstract || ""); }
+function stubOnly(g) { return !!(g && g.stubs && g.stubs >= g.chunks.length); }
+function stubLength(g) { return g.chunks.reduce(function (n, c) { return n + String(c || "").length; }, 0); }
 // PAPER-PIN-1: the paper a visitor is reading on papers.qnfo.org, as source [1]: its abstract plus the sections of its
 // body that share most terms with the question (the gateway's JSON detail route; published papers only).
 async function pinPaper(env, slug, query) {
@@ -694,6 +728,33 @@ async function pinPaper(env, slug, query) {
   var pick = secs.slice().sort(function (a, b) { return b.score - a.score; }).slice(0, 3).sort(function (a, b) { return a.i - b.i; });
   var excerpt = (abs ? "Abstract: " + abs.slice(0, 900) + "\n\n" : "") + pick.map(function (x) { return x.text.slice(0, 1600); }).join("\n\n\u2026\n\n");
   return { slug: p.slug, title: p.title, doi: nzDoi(p.doi), url: "https://papers.qnfo.org/papers/" + p.slug, published: true, score: 1, abstract: abs.replace(/\s+/g, " ").slice(0, 320), excerpt: excerpt || abs, cap: 4800, pinned: true, versions: 1 };
+}
+// ASK-NAMED-PAPER-1 (2.5.0, agent_issues 2165): the paper pages link here with "What does <quoted title> show, and what
+// would falsify it?". Retrieval found the paper, but as its catalog abstract only, and an abstract rarely states what would
+// falsify the work, so the writer inferred it ("one would need to show ...") and the judge counted those sentences as
+// unsupported (6 of 8 unsupported claims, 2026-10-12). A question that quotes the title of a published paper now gets that
+// paper the way a pinned one does: its abstract plus the body sections that best match the question (pinPaper), as source
+// [1]. It runs beside retrieval, so it adds a gateway read but no wait; no match, or an unreadable paper, changes nothing.
+function quotedTitle(q) {
+  var m = String(q || "").match(/[\u201c"]([^\u201d"]{3,200})[\u201d"]/);
+  return m ? m[1] : "";
+}
+async function namedPaper(env, query) {
+  var span = quotedTitle(query);
+  var tq = Array.from(new Set(lexTokens(span)));
+  if (tq.length < 2) return null;
+  var cat = await deadline(catalogIndex(env), CATALOG_WAIT_MS, "catalog").catch(function (e) { return logErr("named-paper catalog", e); });
+  if (!cat || !cat.n) return null;
+  // The quoted span must be the title (at least half of its words), not a phrase that a longer title happens to contain.
+  var hits = cat.docs.filter(function (d) {
+    var have = new Set(lexTokens(d.slug.replace(/[-_]+/g, " ") + " " + d.title));
+    return tq.every(function (w) { return have.has(w); }) && tq.length * 2 >= new Set(lexTokens(d.title)).size;
+  });
+  if (!hits.length) return null;
+  // Versions of one work: the title closest in length to the quoted span, then the newest.
+  hits.sort(function (a, b) { return Math.abs(lexTokens(a.title).length - tq.length) - Math.abs(lexTokens(b.title).length - tq.length) || String(b.created_at || "").localeCompare(String(a.created_at || "")); });
+  var p = await pinPaper(env, hits[0].slug, query);
+  return p ? Object.assign(p, { pinned: false, named: true }) : null;
 }
 async function relatedThreads(env, q) {
   var s = await sessions(env);
@@ -776,6 +837,8 @@ var SYSTEM = [
   "Rules:",
   "- Ground every factual claim in the numbered EXCERPTS. Cite them inline as [1], [2] right after the claim. Never cite a number that is not in the excerpts, and never write a name, date, figure, identifier, link or citation that no excerpt states.",
   "- If the excerpts do not cover the question, say so plainly in the first sentence, then give only what they do support. Add nothing from general knowledge, labelled or not: a statement no excerpt supports is left out, and a sentence that is not supported is deleted before the answer is published.",
+  "- When the question asks for something no excerpt states (for example what would falsify a result, or what a paper shows when an excerpt gives little more than its title), write one sentence saying that the excerpts do not state it. Never infer it from a title, from the question or from general reasoning: no \"likely\", no \"based on the title\", no \"one would need to show\".",
+  "- Every sentence that states a finding carries the citation of the excerpt that states it. Do not state a relation between two sources (that one builds on, supports or relates to another) unless an excerpt states it.",
   "- Distinguish what a paper proves or measures from what it conjectures or proposes. Mention an open problem or failure mode only when an excerpt states one that bears on the question; never add a generic one.",
   "- When an excerpt is marked as defining a term the question names, take the definition from that excerpt.",
   "- Lead with the direct answer in 1-3 sentences, then supporting detail. Use Markdown: short sections with ### headings only when the answer is long, lists for enumerations, a table for comparisons. Write math in $...$ or $$...$$.",
@@ -790,6 +853,10 @@ var SYSTEM = [
 // general knowledge. Only the checked text is sent, cached and logged. No excerpt, no model call.
 var NO_EXCERPTS_TEXT = "No excerpt in the corpus matches this question, so no answer is given. Rephrase the question, or open the papers directly.";
 var NOT_SUPPORTED_TEXT = "The retrieved excerpts do not cover this question in a form that can be stated without going beyond them, so no answer is given. The sources shown are the closest matches.";
+// ASK-GROUND-3 (2.5.0, agent_issues 2165): 6 of the 8 claims the judge found unsupported on 2026-10-12 were inferences, not
+// excerpt content ("To falsify it, one would need to find a case where ...", "based on the title, it likely shows ...").
+// A sentence carrying one of these markers is removed unless an excerpt uses the same words.
+var SPECULATION = /\b(?:based (?:solely |only |mainly |purely )?on (?:the|its) title|one would (?:need|have) to|we would need to|would (?:need|have) to (?:show|find|demonstrate|prove|establish|observe)|would require (?:showing|finding|demonstrating)|presumably|(?:it is|it's|this is) (?:likely|plausible|possible|probable) that|(?:likely|probably) (?:shows|means|implies|describes|refers|discusses|argues|proposes|suggests|covers|addresses|explores|examines|deals))\b/i;
 function groundNums(text) {
   var set = new Set();
   (String(text || "").match(/\d[\d,]*(?:\.\d+)?/g) || []).forEach(function (n) { set.add(n.replace(/,/g, "").replace(/\.0+$/, "")); });
@@ -807,6 +874,8 @@ function sentenceProblems(sent, gl, gnums, nSources) {
   (s.match(/\barxiv:\s*\d{4}\.\d{4,5}/gi) || []).forEach(function (a) { if (gl.indexOf(a.toLowerCase().replace(/\s+/g, "")) < 0 && gl.indexOf(a.toLowerCase()) < 0) out.push("arxiv: " + a); });
   if (/\bet al\b/i.test(s) && gl.indexOf("et al") < 0) out.push("author citation: et al");
   if (/general knowledge|outside (?:of )?the (?:corpus|excerpts|sources)/i.test(s) && !/\b(?:do(?:es)? not|not|no)\b[^.]{0,40}\b(?:cover|address|contain|discuss|state|support)/i.test(s)) out.push("labelled as outside the corpus");
+  var spec = s.match(SPECULATION);
+  if (spec && gl.indexOf(spec[0].toLowerCase()) < 0) out.push("speculation: " + spec[0]);
   var body = s.replace(cre, " ").replace(/^\s*(?:[-*+]\s+|\d{1,2}[.)]\s+)/, " ").replace(/10\.\d{4,9}\/\S+/g, " ").replace(/https?:\/\/\S+/gi, " ");
   var re = /(\$?)(\d[\d,]*(?:\.\d+)?)(\s*(?:%|percent|[a-z]{2,}\b)?)/gi, m;
   while ((m = re.exec(body))) {
@@ -837,10 +906,24 @@ function groundBody(body, ground, nSources) {
     }
     parts[pi] = lines.join("\n").replace(/\n{3,}/g, "\n\n");
   }
-  var text = parts.join("").trim();
+  var text = dropEmptyHeadings(parts.join("").trim());
   // A heading with nothing under it is not an answer.
   if (text && !text.replace(/^\s*#{1,6}\s.*$/gm, "").trim()) text = "";
   return { text: text, removed: removed };
+}
+// ASK-GROUND-3 (2.5.0): a section whose sentences were all removed loses its heading too (outside code fences).
+function dropEmptyHeadings(text) {
+  var ls = String(text || "").split("\n"), out = [], fence = false, head = /^\s*#{1,6}\s/;
+  for (var i = 0; i < ls.length; i++) {
+    if (/^\s*```/.test(ls[i])) { fence = !fence; out.push(ls[i]); continue; }
+    if (!fence && head.test(ls[i])) {
+      var j = i + 1;
+      while (j < ls.length && !ls[j].trim()) j++;
+      if (j >= ls.length || head.test(ls[j])) continue;
+    }
+    out.push(ls[i]);
+  }
+  return out.join("\n").replace(/\n{3,}/g, "\n\n").trim();
 }
 function groundText(sources, query, history, pinned) {
   var g = [String(query || "")];
@@ -857,18 +940,19 @@ function excerptBlock(s) {
   return "[" + s.n + "] " + s.title + (s.doi ? " (DOI " + s.doi + ")" : "") + (s.defines ? " [defines the term '" + s.defines + "']" : "") + (s.published ? "" : " [unpublished corpus file]") + "\n" + String(s.excerpt || "").slice(0, s.cap || 2600);
 }
 function excerptBlocks(sources) { return sources.map(excerptBlock).join("\n\n---\n\n"); }
+// ASK-GROUND-3 (2.5.0): the writer reads the excerpts and nothing else that the judge does not also read. The knowledge-graph
+// lines (concept names and relations, "for orientation only") are no longer in the prompt: they could not be cited, and
+// relations between sources that no excerpt states were judged unsupported. The graph is still sent to the page (meta.graph).
 function buildMessages(query, sources, graph, history, pinned) {
   var ex = sources.length ? excerptBlocks(sources) : "(no matching excerpts)";
-  var byId = {};
-  graph.nodes.forEach(function (n) { byId[n.id] = n; });
-  var concepts = graph.nodes.filter(function (n) { return n.label !== "Paper"; }).slice(0, 12).map(function (n) { return n.label + ": " + n.name; });
-  var rels = graph.edges.slice(0, 14).map(function (e) { var a = byId[e.source], b = byId[e.target]; return a && b ? a.name + " -" + e.type + "-> " + b.name : null; }).filter(Boolean);
-  var kg = concepts.length || rels.length ? "\n\nKNOWLEDGE GRAPH CONTEXT (QNFO graph; for orientation only, cite only excerpts):\n" + concepts.concat(rels).join("\n") : "";
   var msgs = [{ role: "system", content: SYSTEM }];
   (history || []).slice(-2).forEach(function (h) {
     if (h && h.q && h.a) { msgs.push({ role: "user", content: String(h.q).slice(0, 600) }); msgs.push({ role: "assistant", content: String(h.a).slice(0, 1500) }); }
   });
-  msgs.push({ role: "user", content: "EXCERPTS:\n\n" + ex + kg + (pinned ? "\n\nThe visitor is reading source [1] (" + pinned.title + ") and asks about it. Answer from [1] first; use the other sources only to connect it to related work, and say which is which." : "") + "\n\nQUESTION: " + query });
+  var lead = !pinned ? "" : pinned.named
+    ? "\n\nThe question names source [1] (" + pinned.title + "). Answer from [1] first; use another source only for what that source itself states, and say which source says what."
+    : "\n\nThe visitor is reading source [1] (" + pinned.title + ") and asks about it. Answer from [1] first; use another source only for what that source itself states, and say which source says what.";
+  msgs.push({ role: "user", content: "EXCERPTS:\n\n" + ex + lead + "\n\nQUESTION: " + query });
   return msgs;
 }
 function splitFollowups(text) {
@@ -910,7 +994,7 @@ async function logEvent(env, ev) {
   try {
     await ensureAskSchema(env);
     await d.prepare("INSERT OR REPLACE INTO ask_events (id, ts, qhash, query, turn, cached, limited, cfg, arm, model, retrieval_ms, ttft_ms, total_ms, sources, top_score, graph_nodes, threads, answer_chars, cites, cites_invalid, uncovered, followups, in_tok, out_tok, usd, error, judge, answer, context) VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15,?16,?17,?18,?19,?20,?21,?22,?23,?24,?25,?26,?27,?28,?29)")
-      .bind(ev.id, ev.ts, ev.qhash, ev.query, ev.turn, ev.cached ? 1 : 0, ev.limited || null, ev.cfg || null, ev.arm || null, ev.model || null, ev.retrieval_ms || null, ev.ttft_ms || null, ev.total_ms || null, ev.sources || 0, ev.top_score || null, ev.graph_nodes || 0, ev.threads || 0, ev.answer_chars || 0, ev.cites || 0, ev.cites_invalid || 0, ev.uncovered || 0, ev.followups || 0, ev.in_tok || 0, ev.out_tok || 0, ev.usd || 0, ev.error || null, Number(ev.judge) || 0, ev.judge ? String(ev.answer || "").slice(0, 6000) : null, ev.judge ? String(ev.context || "").slice(0, 12000) : null).run();
+      .bind(ev.id, ev.ts, ev.qhash, ev.query, ev.turn, ev.cached ? 1 : 0, ev.limited || null, ev.cfg || null, ev.arm || null, ev.model || null, ev.retrieval_ms || null, ev.ttft_ms || null, ev.total_ms || null, ev.sources || 0, ev.top_score || null, ev.graph_nodes || 0, ev.threads || 0, ev.answer_chars || 0, ev.cites || 0, ev.cites_invalid || 0, ev.uncovered || 0, ev.followups || 0, ev.in_tok || 0, ev.out_tok || 0, ev.usd || 0, ev.error || null, Number(ev.judge) || 0, ev.judge ? String(ev.answer || "").slice(0, 6000) : null, ev.judge ? String(ev.context || "").slice(0, JUDGE_CONTEXT_MAX) : null).run();
   } catch (e) {}
 }
 async function feedback(request, env) {
@@ -935,7 +1019,36 @@ function secretEq(a, b) {
 }
 function stripThink(s) { return s.replace(/<think>[\s\S]*?<\/think>/g, "").replace(/<\/?think>/g, ""); }
 
+// ASK-CRAWLER-GATE-1 (2.5.0, agent_issues 2339): 121 of 141 ask events in 7 days ended client-gone, 112 of them the paper-page
+// deep-link question, posted by rendering crawlers that load ask.qwav.tech/?q=..., let the page ask, and leave before the
+// answer (each one ran retrieval, 30 a model call). The page now waits for a person's pointer, touch or key event (boot);
+// this server-side check refuses the clients that say what they are: a crawler user agent, a headless client hint, a
+// Cloudflare verified bot, or a prefetch or prerender. They get a 403 with no retrieval, no model call and no ask_events
+// row; each is counted in ask_rate as auto:<kind>:<day> (kept 2 days by housekeeping). curl and scripts that read the
+// answer are API clients, not crawlers, and are answered as before (OPEN-ACCESS-1).
+var AUTOMATED_UA = /(?:bot|crawler|spider)[\/;)+-]|crawler|spider|slurp|headlesschrome|lighthouse|prerender|phantomjs|ptst\/|facebookexternalhit|google-inspectiontool|bytespider|baiduspider|yandex(?:bot|images|render)|petalbot|semrush|ahrefs|mj12bot|dotbot/i;
+var AUTOMATED_TEXT = "Answers are written for readers in a browser. This request came from an automated client (a crawler or a prefetch), so no answer was generated.";
+function automatedClient(request) {
+  var h = request.headers;
+  var purpose = String(h.get("Sec-Purpose") || h.get("Purpose") || h.get("X-Purpose") || h.get("X-Moz") || "").toLowerCase();
+  if (/prefetch|prerender|preview/.test(purpose)) return "prefetch";
+  if (AUTOMATED_UA.test(String(h.get("User-Agent") || "")) || /headless/i.test(String(h.get("Sec-CH-UA") || ""))) return "crawler";
+  var bm = request.cf && request.cf.botManagement;
+  if (bm && bm.verifiedBot === true) return "crawler";
+  return "";
+}
+async function countAutomated(env, kind) {
+  if (!db(env)) return;
+  try { await ensureAskSchema(env); await bump(env, "auto:" + kind + ":" + today()); }
+  catch (e) { logErr("count-automated", e); }
+}
+
 async function ask(request, env, ctx) {
+  var auto = automatedClient(request);
+  if (auto) {
+    ctx.waitUntil(countAutomated(env, auto));
+    return json({ error: AUTOMATED_TEXT, automated: auto }, 403, { "Cache-Control": "no-store" });
+  }
   var body;
   try { body = await request.json(); } catch (e) { return json({ error: "Body must be JSON: {\"query\": \"...\"}" }, 400); }
   var query = String(body.query || body.q || "").trim().slice(0, 1000);
@@ -980,11 +1093,14 @@ async function ask(request, env, ctx) {
         deadline(conceptSeeds(env, rq), ASK_RETRIEVE_MS, "concepts").catch(function () { return []; }),
         deadline(relatedThreads(env, rq), ASK_RETRIEVE_MS, "related threads").catch(function () { return []; }),
         deadline(admit(env, request), ASK_SETUP_MS * 2, "admission").catch(function () { return { ok: true }; }),
+        // ASK-NAMED-PAPER-1: a quoted title gets its paper's body sections, read beside retrieval.
+        pin ? null : deadline(namedPaper(env, query), ASK_RETRIEVE_MS, "the named paper").catch(function (e) { return logErr("named-paper", e); }),
       ]);
       var sources = got[0], concepts = got[1], threads = got[2], adm = got[3];
+      if (!pin && got[4]) pin = got[4];
       if (pin) {
-        var ms = sources.ms, pn = pin.title.toLowerCase().slice(0, 40);
-        sources = [pin].concat(sources.filter(function (x) { return x.slug !== pin.slug && String(x.title).toLowerCase().slice(0, 40) !== pn; })).slice(0, cfg.max_sources).map(function (x, i) { return Object.assign(x, { n: i + 1 }); });
+        var ms = sources.ms, pn = pin.title.toLowerCase().slice(0, 40), lead = pin;
+        sources = [lead].concat(sources.filter(function (x) { return x.slug !== lead.slug && String(x.title).toLowerCase().slice(0, 40) !== pn; })).slice(0, cfg.max_sources).map(function (x, i) { return Object.assign(x, { n: i + 1 }); });
         sources.ms = ms;
       }
       ev.retrieval_ms = sources.ms;
@@ -1099,6 +1215,8 @@ async function loopTick(env, now) {
   if (!db(env)) return;
   await ensureAskSchema(env);
   var out = [];
+  // ASK-GROUND-3 (2.5.0): verdicts every hour (the 03:41 tick judges its own, larger batch below).
+  if (now.getUTCHours() !== 3) out.push(await loopRun(env, "judge", function () { return judge(env, JUDGE_HOURLY); }));
   out.push(await loopRun(env, "measure", function () { return measure(env); }));
   out.push(await loopRun(env, "corpus-sync", function () { return corpusSync(env); }));
   if (now.getUTCHours() === 3) {
@@ -1117,7 +1235,12 @@ async function loopTick(env, now) {
 async function measure(env) {
   var d = db(env);
   var since7 = new Date(Date.now() - 7 * 864e5).toISOString(), since30 = new Date(Date.now() - 30 * 864e5).toISOString();
-  var a = await d.prepare("SELECT COUNT(*) n, SUM(CASE WHEN error IS NOT NULL THEN 1 ELSE 0 END) err, SUM(cites) cites, SUM(cites_invalid) inv, SUM(usd) usd, SUM(CASE WHEN judge=2 THEN judged_supported END) js, SUM(CASE WHEN judge=2 THEN judged_total END) jt FROM ask_events WHERE ts >= ?1 AND cached = 0 AND limited IS NULL").bind(since7).first();
+  var a = await d.prepare("SELECT COUNT(*) n, SUM(CASE WHEN error IS NOT NULL THEN 1 ELSE 0 END) err, SUM(cites) cites, SUM(cites_invalid) inv, SUM(usd) usd FROM ask_events WHERE ts >= ?1 AND cached = 0 AND limited IS NULL").bind(since7).first();
+  // ASK-GROUND-3 (2.5.0): grounding is a property of the written text, so every judged full-context answer counts, including
+  // one whose reader left after it was sent (limited 'client-gone'; only an answer written and sent in full is stored for the
+  // judge). Counting non-limited rows only left 9 judged claims in 7 days, under the 20 needed, and metric_registry kept
+  // the 0.561 measured by the truncated-context judge from 2026-10-12T08:41 on.
+  var gr = await d.prepare("SELECT SUM(judged_supported) js, SUM(judged_total) jt FROM ask_events WHERE ts >= ?1 AND cached = 0 AND judge = ?2 AND judged_total IS NOT NULL AND (limited IS NULL OR limited = ?3)").bind(since7, JUDGE_FULL, CLIENT_GONE).first();
   var lat = await d.prepare("SELECT total_ms FROM ask_events WHERE ts >= ?1 AND cached = 0 AND limited IS NULL AND total_ms IS NOT NULL ORDER BY total_ms").bind(since7).all();
   var fb = await d.prepare("SELECT COUNT(*) n, SUM(helpful) h FROM ask_feedback WHERE ts >= ?1").bind(since30).first();
   var mrr = await d.prepare("SELECT score, n FROM ask_evals WHERE kind='retrieval-champion' ORDER BY id DESC LIMIT 1").first();
@@ -1129,7 +1252,7 @@ async function measure(env) {
     ask_error_rate_7d: n >= 5 ? round((Number(a.err) || 0) / n) : null,
     ask_p95_total_ms_7d: ms.length >= 5 ? ms[Math.min(ms.length - 1, Math.floor(ms.length * 0.95))] : null,
     ask_citation_validity_7d: Number(a && a.cites) >= 10 ? round(1 - (Number(a.inv) || 0) / Number(a.cites)) : null,
-    ask_grounded_share_7d: Number(a && a.jt) >= 20 ? round(Number(a.js) / Number(a.jt)) : null,
+    ask_grounded_share_7d: Number(gr && gr.jt) >= 20 ? round(Number(gr.js) / Number(gr.jt)) : null,
     ask_retrieval_mrr: mrr && Number(mrr.n) >= 10 ? round(Number(mrr.score)) : null,
     ask_helpful_rate_30d: Number(fb && fb.n) >= 10 ? round(Number(fb.h) / Number(fb.n)) : null,
     ask_cost_per_answer_usd_7d: answered >= 5 ? round((Number(a.usd) || 0) / answered, 6) : null,
@@ -1141,10 +1264,11 @@ async function measure(env) {
       .bind(m.metric, m.kind, m.formula, m.target, m.warning, m.kill).run();
     var v = vals[m.metric];
     if (v === null || v === undefined) continue;
-    await d.prepare("UPDATE metric_registry SET last_value=?1, last_refreshed=?2, state='MEASURED' WHERE metric=?3").bind(String(v), nowIso, m.metric).run();
+    // The registry's formula follows the code that computes the value (ASK-GROUND-3 changed the grounded share's sample).
+    await d.prepare("UPDATE metric_registry SET last_value=?1, last_refreshed=?2, state='MEASURED', formula=?4 WHERE metric=?3").bind(String(v), nowIso, m.metric, m.formula).run();
     written.push(m.metric + "=" + v);
   }
-  return { n: n, written: written };
+  return { n: n, grounded_claims_7d: Number(gr && gr.jt) || 0, written: written };
 }
 function round(x, k) { var p = Math.pow(10, k || 4); return Math.round(x * p) / p; }
 
@@ -1230,7 +1354,8 @@ async function tuneRetrieval(env) {
 }
 // ---- IMPROVE: ASK-TUNE-1 generation (online A/B on CHALLENGER_SHARE of live traffic, judged)
 async function armStats(env, cfgId, sinceIso) {
-  return await db(env).prepare("SELECT COUNT(*) n, SUM(CASE WHEN error IS NOT NULL THEN 1 ELSE 0 END) err, SUM(usd) usd, SUM(CASE WHEN judge=2 THEN judged_supported END) js, SUM(CASE WHEN judge=2 THEN judged_total END) jt, SUM(CASE WHEN judge=2 AND judged_total IS NOT NULL THEN 1 ELSE 0 END) judged FROM ask_events WHERE cfg=?1 AND ts >= ?2 AND cached=0 AND limited IS NULL").bind(cfgId, sinceIso).first();
+  // Volume, errors and cost count answered requests; grounding counts every judged full-context answer (ASK-GROUND-3).
+  return await db(env).prepare("SELECT SUM(CASE WHEN limited IS NULL THEN 1 ELSE 0 END) n, SUM(CASE WHEN limited IS NULL AND error IS NOT NULL THEN 1 ELSE 0 END) err, SUM(CASE WHEN limited IS NULL THEN usd END) usd, SUM(CASE WHEN judge=?3 AND judged_total IS NOT NULL THEN judged_supported END) js, SUM(CASE WHEN judge=?3 AND judged_total IS NOT NULL THEN judged_total END) jt, SUM(CASE WHEN judge=?3 AND judged_total IS NOT NULL THEN 1 ELSE 0 END) judged FROM ask_events WHERE cfg=?1 AND ts >= ?2 AND cached=0 AND (limited IS NULL OR limited = ?4)").bind(cfgId, sinceIso, JUDGE_FULL, CLIENT_GONE).first();
 }
 async function tuneGeneration(env) {
   var conf = await loadConfig(env);
@@ -2107,9 +2232,28 @@ function drawGraph(el, g){
 }
 
 /* ---------- deep links ---------- */
+/* ASK-CRAWLER-GATE-1 (2.5.0, agent_issues 2339): rendering crawlers opened the paper-page links (?q=...), let this page ask,
+   and left before the answer (112 of 141 questions in 7 days). The question is put in the box and asked at the first
+   trusted pointer, touch or key event outside the box, or by the Ask button; an automated browser (navigator.webdriver)
+   waits for the button. A prerendered page fires no such event until a person is looking at it. */
 function boot(){
   var q = new URLSearchParams(location.search).get("q");
-  if (q && q.trim().length >= 3) ask(q.trim());
+  if (!q || q.trim().length < 3) return;
+  q = q.trim();
+  var t = $("#q0"), hint = $(".hint", $("#landing")), names = ["pointerdown", "pointermove", "touchstart", "wheel", "keydown"];
+  t.value = q; grow(t);
+  if (hint) hint.textContent = "Your question is ready. It is asked as soon as you move the pointer, touch the page or press Ask.";
+  function off(){ names.forEach(function(n){ window.removeEventListener(n, go, true); }); }
+  function go(e){
+    if (!e || e.isTrusted !== true) return;
+    if (e.type === "keydown" && e.target && /^(TEXTAREA|INPUT)$/.test(e.target.tagName)) return;
+    off();
+    if (busy || t.value.trim() !== q) return;
+    t.value = ""; grow(t); ask(q);
+  }
+  t.form.addEventListener("submit", off);
+  if (navigator.webdriver) return;
+  names.forEach(function(n){ window.addEventListener(n, go, { capture: true, passive: true }); });
 }
 window.addEventListener("popstate", function(){ if (!new URLSearchParams(location.search).get("q")) $("#newq").click(); });
 if (document.readyState === "complete") boot(); else window.addEventListener("load", boot);

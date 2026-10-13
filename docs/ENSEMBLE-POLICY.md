@@ -53,6 +53,29 @@ So the fleet does not get risk-free by stacking models. It gets lower risk by (1
    not rising (its existing trigger fires at 6000, which is a ceiling, not the bar for this change).
 8. Do not tune the panel to a pass rate. Raising or lowering the bar to hit publication volume turns the layer into a rubber stamp
    or a wall; change the bar only with the correlation and reader-vote evidence in hand.
+9. **Lede first (LEDE-RULE-1, owner 2026-10-13: "poorly written and lacks context without a lede that fills in for the reader what
+   is being discussed (inverted pyramid journalism)").** A piece for outside readers opens with a news lede: who did or said what,
+   where it appeared (named: the post and its author, the paper and where it was posted, the repository), when if the source says,
+   and why it matters, in at most about 70 words; then the context a newcomer needs; facts most important first; analysis last.
+   The writer is told what its source is (kind, title, link) so it can name it, and attribution by name is allowed. A deterministic
+   check enforces it (q08 `ledeProblems`: the first paragraph names the subject, does not open on an abstract noun such as "the
+   pattern" or "the mechanism", and stays short); editors keep the lede, automatic cuts never remove it, and reader judges score
+   the opening first. Never prescribe a detached "structural" register that makes the case "a probe, never the subject".
+10. **A stalled surface is visible and actionable (PUBLISH-STALL-DIGEST-1, PUBLISH-FRESHNESS-1).** Every scheduled publisher has an
+    hours-since-last-publish metric with a trigger. A stall issue is rewritten on every stalled tick with the current hours and a
+    24-hour breakdown of the stage each run ended at, and turns critical after 24 hours; an issue filed once and left unchanged is
+    the failure mode `publish-stall-filed-not-fixed`.
+
+### Fleet audit, 2026-10-13 (lede and stall coverage)
+
+| Surface | Writer | Lede rule | Stall measure |
+|---|---|---|---|
+| q08.org essays and forecasts | q08-signal-engine | 0.17.0 / 0.17.3, checked by `ledeProblems` | `q08_hours_since_last_piece`, stall issue refreshed (0.17.2) |
+| reading.q08.org | personal-companion | added by the companion publish fix | `companion_hours_since_last_piece`, stall issue refresh in the same fix |
+| Bluesky / Buffer threads | qnfo-social | LEDE-SOCIAL-1 (post 1 says what the paper is and who wrote it) | `social_hours_since_last_post` (> 168 h; weekly caps hold it) |
+| papers.qnfo.org | qnfo-research-exec | the Introduction opens on the concrete problem (prompt) | `papers_hours_since_last_publish` (> 48 h) |
+| ideas.qnfo.org | idea-hub | not applicable (short questions) | `ideas_hours_since_last_proposal` (> 24 h) |
+| ask.qwav.tech, papers ask, iPatent, email replies | qnfo-ai-search, qnfo-gateway, qnfo-ipatent, qnfo-cloud-ops, qnfo-email | answer first (a reply, not an article) | exempt: they publish only when asked |
 
 ## Adoption
 

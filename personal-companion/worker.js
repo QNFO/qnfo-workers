@@ -6,7 +6,7 @@ import { WorkflowEntrypoint } from "cloudflare:workers";
 var __defProp2 = Object.defineProperty;
 var __name2 = /* @__PURE__ */ __name((target, value) => __defProp2(target, "name", { value, configurable: true }), "__name");
 var __name22 = __name2;
-var VERSION = "1.16.1-ground-descriptor"; // 1.16.1 GROUND-DESCRIPTOR-1 + TOPIC-COOLDOWN-2 + REJECT-CONTEXT-2 (issues 2222, 2354): the name check no longer rejects a capitalised descriptor word ("American", "Midwestern", "Archival"), a dotted initialism ("U.S.") or a title abbreviation ("St.") as a name not in the source, and a word whose stem the source contains ("archival" from "archive") is grounded; runs 5128-5134 rejected five drafts of one topic for those alone. The topic cooldown counts rejected attempts, so a topic that failed every attempt is not retried every hour for 14 days (one article was tried 29 times in a day). The rejection log's "in context" field now finds its needle (it stripped one label of two and was always empty). // 1.16.0 GROUNDING-REPAIR-1 (issue 2354, COMPANION-GROUNDING-REPAIR-1): the repair is a top-level function with its own suite; it keeps paragraph breaks and headings (the 1.15.13 join lost every newline, so a repaired notes piece counted zero items), carries the objection and every other field over (the rebuilt piece dropped it, so every repaired essay failed "objection too thin" and the repair never accepted a draft), splits sentences without breaking on decimals or abbreviations, normalises hyphens and quotes like the name check, and caps removals at a strict quarter. P_STYLE gains one process line before the Forbidden list: figures, dates, names and quotations exactly as the sources state them, never computed or recalled. // 1.15.14 GROUNDING-NEEDLE-PARSE-1: the grounding repair (1.15.13) read no needle from the real messages ("figure not in the source: 8.34" contains "not", so it was skipped and the repair never ran); the needle is now the text after "not in the source:". P_STYLE gains a process rule: numbers are quoted as the source states them, never computed or converted. // 1.15.12 TOPIC-COOLDOWN-1: an arXiv-only topic that failed twice in 14 days is not picked again (the cooldown covered Wikipedia topics only, so one paper was retried every hour with the same draft: runs 4986-5042); the rejection log passes the piece text, not the object, to problemContext (its context was always empty). // 1.15.11 OPENER-WORD-1: the name check no longer reads a sentence-opening ordinary word as part of the proper name that follows it ("Should InstantFusion", "Translating ImageNet" were rejected in runs 4986-4998); the rest of the phrase is still checked and every invented figure, year and name elsewhere still fails. // 1.15.10 REJECT-CONTEXT-1: a validation rejection logs the surrounding text of every flagged name, year and figure (the 500-character raw prefix never reached them, so a false positive such as "name not in the source: Failure" could not be diagnosed from companion_runs). // 1.15.9 FACTCHECK-NOTHINK-1 + VERDICT-TOLERANT-1: fact-check reviewers run with reasoning off where a measured switch exists (kimi, nemotron, gpt-oss, deepseek: 0.7-2.6 s instead of 4-9 s and a 110 s timeout on long drafts), and a verdict is read from the explicit fields when the JSON is wrapped or truncated. // 1.15.8 COMPANION-FACTCHECK-PARALLEL-1: fact-check reviewers asked in parallel with one retry of the failed ones (two-family rule unchanged). // 1.15.7 GROUND-HYPHEN-1: the name check treats unicode hyphens as "-" and a hyphenated source name grants its parts (every Dex-One2Many note was rejected as "name not in the source: Dex One2Many"). // 1.15.6 COMPANION-STARVED-RETRY-1: while nothing has published for 6h, a failed generation is retried at the next hourly tick (50 min after the last run, at most 16 failed runs a day) instead of waiting for the next of five slots. // 1.15.5 COMPANION-FACTCHECK-POOL-1: reviewers run one at a time with 8000 tokens and every failure cause is recorded in the unavailable reason (the 20:00 UTC slot ended fact-check unavailable). // 1.15.4 COMPANION-GROUND-ACRONYMS-2: the name check skips all-caps acronyms (IP, TCP, ACLs) and sentence-opening prepositions and connectives ("Unlike the OpenAI"); the two-family fact-check still reviews them (reading.q08 steward: accept rate 2% over 47 attempts). // 1.15.3 COMPANION-AI-OBJECT-REPLY-1: a Workers AI reply that is a parsed JSON object ("[object Object]") no longer loses the fact-check verdict (same defect as q08-signal-engine 0.11.4). // 1.15.2 COMPANION-GROUND-ACRONYMS-1: the name check no longer rejects common technical acronyms (API, DNS: reading.q08 steward collapse, 41 attempts at 2% accepted). // 1.15.0 COMPANION-SOURCES-1 (pillar: personal): every run since 1.14.1 ended blocked "insufficient anchors" with no reason; source fetches now send a descriptive User-Agent, retry with backoff and record each HTTP status/error in the blocked run detail; Wikipedia and arXiv are independent providers (arXiv alone needs 2 recent papers, Wikipedia alone 2 articles), unpublished fetched material is cached and reused during an outage, a blocked generation is retried at the next hourly tick, and the steward collapse alert resolves once a piece is accepted. The accuracy gate is unchanged. 1.14.1 1.14.0 COMPANION-VERIFY-1 (pillar: personal; owner directive 2026-10-10: published content is 100% accurate, independently fact-checked, process-and-style-only prompts, fail closed): every piece must pass a deterministic grounding check (each capitalised name, year and figure occurs in its source material) and a two-family LLM fact-check before it is stored, shown or mailed; critic or reviewer outage publishes nothing; the forced publish of critic-rejected drafts (1.13.3) is removed; topics come from live Wikipedia and arXiv, the hard-coded topic table and example nouns in the prompts are gone; companion_audits / companion_retractions give an audit and public-retraction path (410 notice, /retractions, /api/retractions); pieces without a recorded source are withdrawn. 1.13.3 COMPANION-FORCED-FALLBACK-1 (#2106, #2126): the strongest critic-rejected draft that passed validation is published as gate forced once the companion has been silent for STALL_HOURS (12h); the forced branch was unreachable and nothing published for 81h. 1.13.1 COMPANION-FALLBACK-TUNE-1: gpt-oss-120b writes first (kimi-k2.6 spent the 300 s timeout per attempt), a short-only draft is extended instead of rewritten, and a run stops starting attempts after 10 min (#2126). 1.13.0 COMPANION-PUBLISH-STALL-AUTO-1: hourly companion_hours_since_last_piece metric, a self-filed and self-closed stall issue (12h + 2 failed runs). COMPANION-DEEPSEEK-402-FALLBACK-1: DeepSeek 401/402/403 opens a 60-min breaker and writer/critic fall through to Workers AI (kimi-k2.6 / glm-5.3 / gpt-oss-120b, role-ordered); the compose stage logs the call error. 1.12.3: the hourly tick creates companion_broadcasts, so the resume read never meets a missing table and the table shows the release runs live. 1.12.2 BROADCAST-BATCH-1 (agent_issues 2042, 2026-10-06, pillar personal): a piece broadcast and the daily digest no longer spend two suppression lookups plus a send per subscriber in one invocation (about 3 subrequests each, so a list above about 330 would hit the subrequest limit mid-send): opt-outs are read in batches of 50 (two queries per batch), at most SEND_CAP_PER_RUN sends go out per run, and a cursor in companion_broadcasts lets the hourly tick resume the rest. Suppression fails closed: if the opt-out lists cannot be read, nobody is mailed in that run and the cursor stays. // 1.12.0 PERSONAL-RESILIENCE-1 (#1953): a stale unsent brief claim is retried inside 08:00-12:00 Amsterdam; owner questions are claimed before the mail leaves (rolled back on a failed send, not re-sent when only the sent_at mark failed); an undeliverable question is flagged once per row; calendar_meta owner_notice_enabled is the owner kill switch for the brief and owner questions; the daily cap starts at the real Amsterdam midnight; notice size is bounded; subscriber sends page past 500 rows. // 1.11.0-brief-claim: 1.11.0 MORNING-BRIEF-CLAIM-1 + OWNER-QUESTION-UNDELIVERABLE-1: the brief claims its day before sending (failed send releases it), answered after-event questions drop out of "Questions waiting", and a question stuck at the attempt cap files one agent_issues row. // 1.10.2 EMAIL-CALLER-PROPS-1 (#1923): the EMAIL binding authenticates by service-binding props (caller personal-companion) instead of an EMAIL_API_KEY the worker never held (its only secret is DEEPSEEK_API_KEY), which is why every EMAIL-path send got 401. // 1.10.1 ANSWER-RATE-KIND-1: the answer-rate metric counts after-event questions only (triage refs are ISO weeks and could never match, which would have fired a false breach). // 1.10.0 CONNECTION-LEDGER-1 step 2 + CONNECTION-ENGAGEMENT-1: each hourly tick queues at most one follow-up question a day for a due Ledger person (template text, no model call) and refreshes metrics ledger_people_seen_twice and owner_question_answer_rate_14d in qnfo-audit.metric_registry. // 1.9.3 MORNING-BRIEF-OWNER-NOTICE-1: the morning brief goes out as an owner notice (sendOwnerNotice, same path as owner questions) so it is no longer silenced by the owner digest opt-out, which stays untouched so essay mail stays off; the brief lists waiting owner questions. // 1.9.2 OWNER-QUESTIONS-DIRECT-1: live probe got "email 401 unauthorized" from qnfo-email (EMAIL_API_KEY not valid), so owner questions send through the native SEND_EMAIL binding the morning brief already uses; the EMAIL path stays as fallback. // 1.9.1 OWNER-QUESTIONS-RENAME-1: qnfo-audit.owner_prompts already belongs to the fleet dashboard (different schema) // 1.8.0 CRON-SINGLE-TRIGGER-1 (#1785): one hourly trigger, CRON_TABLE in code
+var VERSION = "1.19.2-ground-matcher"; // 1.19.2 GROUND-MATCHER-2 (companion_runs 5121-5276): the name check ends a sentence at terminal punctuation followed by a closing quote, bracket or markdown emphasis (an opener such as "Delivered" or "Records" was read as a name), skips single capital letters (SINGLE-LETTER-1), checks two names joined by "and" one by one ("Irish and Mediterranean"), and grounds a plural possessive ("Danes' Road"); invented names, years and figures still fail and the sentence-deleting repair still runs before a rejection. // 1.19.1 LEDE-SPLIT-1 (run 5342-5364: three of five drafts failed on "lede too long", 137-174 words, which also blocked the grounding and banned-phrase repair): an over-long first paragraph is split at a sentence boundary, the opening sentences up to 100 words stay the lede and the rest becomes the first body paragraph; nothing is added or removed. // 1.19.0 PUBLISH-STALL-DIGEST-1 (fleet audit 2026-10-13; agent_issues 2222 said "13h" for 73 h with no stage breakdown): every stalled tick rewrites the open COMPANION-PUBLISH-STALL-AUTO-1 issue with the current hours, a 24 h digest of the stage each rejected attempt ended at (critique, fact-check, validate-banned, validate-length, validate-grounding, time budget, other) and the newest rejections; priority is critical after 24 h; a new issue is inserted only when none is open; stall failures are logged, not swallowed. // 1.18.0 COMPANION-PAPER-FULLTEXT-1 (below, shipped with 1.17.0 in one PR). 1.17.0 COMPANION-PUBLISH-REPAIR-1 + COMPANION-LEDE-1 (stall 73h, companion_runs 4549-5339; 154 rejected attempts in 72h: grounding 102, length 42, banned 32, critique 17, fact-check 8): writer and critic calls skip the AI Gateway cache (runs 5242-5276 replayed the 01:00Z drafts verbatim at 02:00Z and 03:00Z, composed in 0.1 s each); the deterministic repair also deletes banned-phrase sentences and, when only the length is left, hands the cleaned draft to the extend path; a repaired or pruned draft is held to 85% of the floor in effect, and the Workers AI fallback floor is 50% of the writing floor (its notes drafts measured 771-1189 words, essays 1263-1374); the fact-check labels each finding FACT or INFERENCE, only FACT findings fail a draft (unlabelled ones count as FACT), and the quoted FACT sentences are deleted and the draft re-verified in full for up to five rounds before the one model revision (inference sentences are deleted after a pass when the draft can spare them); the notes critic no longer scores the placeholder objection (run 5329: "well-grounded ... its stated objection is weak"); every piece opens with an inverted-pyramid lede that names the subject and its source, checked deterministically (names the subject, no abstract or question opening, at most 120 words). COMPANION-PAPER-FULLTEXT-1 (agent_issues 2469; owner 2026-10-13: papers cite full texts, not summaries): a paper anchor is the paper's full text from the arXiv HTML rendering or ar5iv, never its abstract; a paper with no readable full text is dropped (also from cached material); the writer states uncertainty about the claim, never about the source material. //1.16.1 GROUND-DESCRIPTOR-1 + TOPIC-COOLDOWN-2 + REJECT-CONTEXT-2 (issues 2222, 2354): the name check no longer rejects a capitalised descriptor word ("American", "Midwestern", "Archival"), a dotted initialism ("U.S.") or a title abbreviation ("St.") as a name not in the source, and a word whose stem the source contains ("archival" from "archive") is grounded; runs 5128-5134 rejected five drafts of one topic for those alone. The topic cooldown counts rejected attempts, so a topic that failed every attempt is not retried every hour for 14 days (one article was tried 29 times in a day). The rejection log's "in context" field now finds its needle (it stripped one label of two and was always empty). // 1.16.0 GROUNDING-REPAIR-1 (issue 2354, COMPANION-GROUNDING-REPAIR-1): the repair is a top-level function with its own suite; it keeps paragraph breaks and headings (the 1.15.13 join lost every newline, so a repaired notes piece counted zero items), carries the objection and every other field over (the rebuilt piece dropped it, so every repaired essay failed "objection too thin" and the repair never accepted a draft), splits sentences without breaking on decimals or abbreviations, normalises hyphens and quotes like the name check, and caps removals at a strict quarter. P_STYLE gains one process line before the Forbidden list: figures, dates, names and quotations exactly as the sources state them, never computed or recalled. // 1.15.14 GROUNDING-NEEDLE-PARSE-1: the grounding repair (1.15.13) read no needle from the real messages ("figure not in the source: 8.34" contains "not", so it was skipped and the repair never ran); the needle is now the text after "not in the source:". P_STYLE gains a process rule: numbers are quoted as the source states them, never computed or converted. // 1.15.12 TOPIC-COOLDOWN-1: an arXiv-only topic that failed twice in 14 days is not picked again (the cooldown covered Wikipedia topics only, so one paper was retried every hour with the same draft: runs 4986-5042); the rejection log passes the piece text, not the object, to problemContext (its context was always empty). // 1.15.11 OPENER-WORD-1: the name check no longer reads a sentence-opening ordinary word as part of the proper name that follows it ("Should InstantFusion", "Translating ImageNet" were rejected in runs 4986-4998); the rest of the phrase is still checked and every invented figure, year and name elsewhere still fails. // 1.15.10 REJECT-CONTEXT-1: a validation rejection logs the surrounding text of every flagged name, year and figure (the 500-character raw prefix never reached them, so a false positive such as "name not in the source: Failure" could not be diagnosed from companion_runs). // 1.15.9 FACTCHECK-NOTHINK-1 + VERDICT-TOLERANT-1: fact-check reviewers run with reasoning off where a measured switch exists (kimi, nemotron, gpt-oss, deepseek: 0.7-2.6 s instead of 4-9 s and a 110 s timeout on long drafts), and a verdict is read from the explicit fields when the JSON is wrapped or truncated. // 1.15.8 COMPANION-FACTCHECK-PARALLEL-1: fact-check reviewers asked in parallel with one retry of the failed ones (two-family rule unchanged). // 1.15.7 GROUND-HYPHEN-1: the name check treats unicode hyphens as "-" and a hyphenated source name grants its parts (every Dex-One2Many note was rejected as "name not in the source: Dex One2Many"). // 1.15.6 COMPANION-STARVED-RETRY-1: while nothing has published for 6h, a failed generation is retried at the next hourly tick (50 min after the last run, at most 16 failed runs a day) instead of waiting for the next of five slots. // 1.15.5 COMPANION-FACTCHECK-POOL-1: reviewers run one at a time with 8000 tokens and every failure cause is recorded in the unavailable reason (the 20:00 UTC slot ended fact-check unavailable). // 1.15.4 COMPANION-GROUND-ACRONYMS-2: the name check skips all-caps acronyms (IP, TCP, ACLs) and sentence-opening prepositions and connectives ("Unlike the OpenAI"); the two-family fact-check still reviews them (reading.q08 steward: accept rate 2% over 47 attempts). // 1.15.3 COMPANION-AI-OBJECT-REPLY-1: a Workers AI reply that is a parsed JSON object ("[object Object]") no longer loses the fact-check verdict (same defect as q08-signal-engine 0.11.4). // 1.15.2 COMPANION-GROUND-ACRONYMS-1: the name check no longer rejects common technical acronyms (API, DNS: reading.q08 steward collapse, 41 attempts at 2% accepted). // 1.15.0 COMPANION-SOURCES-1 (pillar: personal): every run since 1.14.1 ended blocked "insufficient anchors" with no reason; source fetches now send a descriptive User-Agent, retry with backoff and record each HTTP status/error in the blocked run detail; Wikipedia and arXiv are independent providers (arXiv alone needs 2 recent papers, Wikipedia alone 2 articles), unpublished fetched material is cached and reused during an outage, a blocked generation is retried at the next hourly tick, and the steward collapse alert resolves once a piece is accepted. The accuracy gate is unchanged. 1.14.1 1.14.0 COMPANION-VERIFY-1 (pillar: personal; owner directive 2026-10-10: published content is 100% accurate, independently fact-checked, process-and-style-only prompts, fail closed): every piece must pass a deterministic grounding check (each capitalised name, year and figure occurs in its source material) and a two-family LLM fact-check before it is stored, shown or mailed; critic or reviewer outage publishes nothing; the forced publish of critic-rejected drafts (1.13.3) is removed; topics come from live Wikipedia and arXiv, the hard-coded topic table and example nouns in the prompts are gone; companion_audits / companion_retractions give an audit and public-retraction path (410 notice, /retractions, /api/retractions); pieces without a recorded source are withdrawn. 1.13.3 COMPANION-FORCED-FALLBACK-1 (#2106, #2126): the strongest critic-rejected draft that passed validation is published as gate forced once the companion has been silent for STALL_HOURS (12h); the forced branch was unreachable and nothing published for 81h. 1.13.1 COMPANION-FALLBACK-TUNE-1: gpt-oss-120b writes first (kimi-k2.6 spent the 300 s timeout per attempt), a short-only draft is extended instead of rewritten, and a run stops starting attempts after 10 min (#2126). 1.13.0 COMPANION-PUBLISH-STALL-AUTO-1: hourly companion_hours_since_last_piece metric, a self-filed and self-closed stall issue (12h + 2 failed runs). COMPANION-DEEPSEEK-402-FALLBACK-1: DeepSeek 401/402/403 opens a 60-min breaker and writer/critic fall through to Workers AI (kimi-k2.6 / glm-5.3 / gpt-oss-120b, role-ordered); the compose stage logs the call error. 1.12.3: the hourly tick creates companion_broadcasts, so the resume read never meets a missing table and the table shows the release runs live. 1.12.2 BROADCAST-BATCH-1 (agent_issues 2042, 2026-10-06, pillar personal): a piece broadcast and the daily digest no longer spend two suppression lookups plus a send per subscriber in one invocation (about 3 subrequests each, so a list above about 330 would hit the subrequest limit mid-send): opt-outs are read in batches of 50 (two queries per batch), at most SEND_CAP_PER_RUN sends go out per run, and a cursor in companion_broadcasts lets the hourly tick resume the rest. Suppression fails closed: if the opt-out lists cannot be read, nobody is mailed in that run and the cursor stays. // 1.12.0 PERSONAL-RESILIENCE-1 (#1953): a stale unsent brief claim is retried inside 08:00-12:00 Amsterdam; owner questions are claimed before the mail leaves (rolled back on a failed send, not re-sent when only the sent_at mark failed); an undeliverable question is flagged once per row; calendar_meta owner_notice_enabled is the owner kill switch for the brief and owner questions; the daily cap starts at the real Amsterdam midnight; notice size is bounded; subscriber sends page past 500 rows. // 1.11.0-brief-claim: 1.11.0 MORNING-BRIEF-CLAIM-1 + OWNER-QUESTION-UNDELIVERABLE-1: the brief claims its day before sending (failed send releases it), answered after-event questions drop out of "Questions waiting", and a question stuck at the attempt cap files one agent_issues row. // 1.10.2 EMAIL-CALLER-PROPS-1 (#1923): the EMAIL binding authenticates by service-binding props (caller personal-companion) instead of an EMAIL_API_KEY the worker never held (its only secret is DEEPSEEK_API_KEY), which is why every EMAIL-path send got 401. // 1.10.1 ANSWER-RATE-KIND-1: the answer-rate metric counts after-event questions only (triage refs are ISO weeks and could never match, which would have fired a false breach). // 1.10.0 CONNECTION-LEDGER-1 step 2 + CONNECTION-ENGAGEMENT-1: each hourly tick queues at most one follow-up question a day for a due Ledger person (template text, no model call) and refreshes metrics ledger_people_seen_twice and owner_question_answer_rate_14d in qnfo-audit.metric_registry. // 1.9.3 MORNING-BRIEF-OWNER-NOTICE-1: the morning brief goes out as an owner notice (sendOwnerNotice, same path as owner questions) so it is no longer silenced by the owner digest opt-out, which stays untouched so essay mail stays off; the brief lists waiting owner questions. // 1.9.2 OWNER-QUESTIONS-DIRECT-1: live probe got "email 401 unauthorized" from qnfo-email (EMAIL_API_KEY not valid), so owner questions send through the native SEND_EMAIL binding the morning brief already uses; the EMAIL path stays as fallback. // 1.9.1 OWNER-QUESTIONS-RENAME-1: qnfo-audit.owner_prompts already belongs to the fleet dashboard (different schema) // 1.8.0 CRON-SINGLE-TRIGGER-1 (#1785): one hourly trigger, CRON_TABLE in code
 var MODELS = [
   "@cf/moonshotai/kimi-k2.6",
   "@cf/openai/gpt-oss-120b",
@@ -92,7 +92,8 @@ var P_STYLE = L(
   "He reads for the pleasure of a true thing well put. He is not impressed by fluency, by volume, or by enthusiasm.",
   "",
   "Voice: plain scholarly prose. Concrete before abstract. Short declaratives, occasionally a long sentence that earns its length.",
-  "Open on a particular taken from the source material. Never on a generality. Present tense where possible. Active voice. Name the actor.",
+  "LEDE (inverted pyramid, checked before anything else): the first paragraph, at most 110 words and before any heading, tells a reader who has never heard of the subject what it is, where it comes from (name the source in plain words: the Wikipedia article on it, or the arXiv paper and its title) and why it matters. Name the subject in the first sentence. Then the most important facts from the source, most important first, and only then the analysis. Never open on a generality, an aphorism, a question or an abstract noun ('the idea of', 'the pattern').",
+  "Present tense where possible. Active voice. Name the actor.",
   "Figures, dates, names and quotations: use one only exactly as the source material states it. Never compute, round, convert, estimate, combine or recall a number from memory; if a point needs a figure the sources do not give, make the point without one.",
   "",
   "Forbidden, without exception:",
@@ -111,7 +112,7 @@ var P_STYLE = L(
   "- Quote a number exactly as the source states it, with its own unit. Never compute, convert, round, average, scale or combine numbers, and never state a figure the source gives only as a range or in words; describe it without the digits instead.",
   "- Do not add examples, precedents, historical episodes or comparisons from outside the source material. A scenario you need must be an explicit hypothetical that names no real person, organisation, product, date or number.",
   "- Reasoning that follows from the source material is welcome. State it as reasoning (it follows that, if this holds then), never as a further reported fact.",
-  "- State uncertainty at its true size. Never inflate confidence to make a piece land better. If the source material does not settle a point, say it does not.",
+  "- State uncertainty about the claim at its true size. Never inflate confidence to make a piece land better. Where the evidence leaves a point open, say the point is open, in terms of the subject itself; never write about the source material (what it covers, omits or does not say).",
   "- The strongest objection to your central claim must appear in the piece, in the objector's own terms, with an honest assessment of how bad it is. It may rest on the source material or be pure logic; it may not rest on facts from outside it. Where it sits is your choice; do not give it the same heading or the same position twice in a row.",
   "",
   "The source material is raw research notes, usually encyclopedic extracts in a register you must not copy. Never reproduce their sentences. Banned habits they carry: definitional lead sentences, hedged attributions ('commentators have linked', 'observers note', 'a study found', 'some argue'), and disambiguation-style enumeration. If you need a definition, state it in your own words.",
@@ -393,9 +394,17 @@ function readWord(s, i) {
 __name(readWord, "readWord");
 __name2(readWord, "readWord");
 __name22(readWord, "readWord");
+// COMPANION-LEDE-1: the kind of source in plain words, so the lede can name where the subject comes from and the fact-check
+// material carries the same words ("the Wikipedia article on ...", "the arXiv paper ...").
+function sourceLabel(a) {
+  var ref = String(a && a.ref || ""), kind = String(a && a.kind || "");
+  if (/wikipedia\.org/i.test(ref)) return "Wikipedia article";
+  if (kind === "paper" || /arxiv/i.test(ref)) return "arXiv paper";
+  return kind || "source";
+}
 function anchorsText(anchors) {
   var parts = [];
-  for (var i = 0; i < anchors.length; i++) parts.push(String(anchors[i].title || "") + " " + String(anchors[i].text || ""));
+  for (var i = 0; i < anchors.length; i++) parts.push(sourceLabel(anchors[i]) + ": " + String(anchors[i].title || "") + " " + String(anchors[i].text || ""));
   return parts.join(" ");
 }
 function wordCount(s) {
@@ -627,9 +636,63 @@ async function fetchArxivQuery(label, query, sortBy) {
     var title = firstTag(chunks[i], "title");
     var summary = firstTag(chunks[i], "summary");
     var id = firstTag(chunks[i], "id");
-    if (title && summary && squish(summary).length > 300) out.push({ kind: "paper", ref: id, title: squish(title), text: squish(summary).slice(0, 1200) });
+    // a candidate only: its text is the paper's full text, read by withFullText (COMPANION-PAPER-FULLTEXT-1); the abstract is never ground
+    if (title && summary && squish(summary).length > 300) out.push({ kind: "paper", ref: id, title: squish(title) });
   }
   if (!out.length) diagNote(label + ": no usable entries");
+  return out;
+}
+// COMPANION-PAPER-FULLTEXT-1 (1.17.0, agent_issues 2469; owner directive 2026-10-13: "Papers shall cite full texts, not merely reference
+// work summaries"). A paper anchor was its arXiv abstract cut to 1200 characters, so a piece about a paper rested on a summary. Each
+// candidate paper is now read from its full text: the arXiv HTML rendering (https://arxiv.org/html/<id>), else ar5iv
+// (https://ar5iv.labs.arxiv.org/html/<id>), the pattern of q08-signal-engine articleUrlFor/fetchArticleText. A paper with no readable full
+// text is dropped, never kept as an abstract. At most PAPER_FULLTEXT_TRIES candidates are fetched per run (subrequest budget).
+var PAPER_MIN_CHARS = 3000;
+var PAPER_FULLTEXT_TRIES = 5;
+var PAPER_TEXT_MAX = 12e3;
+function arxivIdOf(ref) {
+  var m = String(ref || "").match(/arxiv\.org\/(?:abs|pdf|html)\/([^\s?#]+?)(?:\.pdf)?\/?(?:[?#].*)?$/i);
+  return m ? m[1] : "";
+}
+function paperFullTextUrls(ref) {
+  var id = arxivIdOf(ref);
+  return id ? ["https://arxiv.org/html/" + id, "https://ar5iv.labs.arxiv.org/html/" + id] : [];
+}
+function decodeEntities(s) {
+  return String(s || "").replace(/&#(\d+);/g, function (m, n) { var c = Number(n); return c > 0 && c < 1114112 ? String.fromCodePoint(c) : " "; })
+    .replace(/&#x([0-9a-f]+);/gi, function (m, n) { var c = parseInt(n, 16); return c > 0 && c < 1114112 ? String.fromCodePoint(c) : " "; })
+    .replace(/&nbsp;/g, " ").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, "\"").replace(/&#39;|&apos;/g, "'").replace(/&amp;/g, "&");
+}
+// The readable body of an arXiv/ar5iv HTML page: scripts, styles, navigation, MathML annotations and the reference list removed.
+function paperHtmlText(html) {
+  var h = String(html || "").slice(0, 600000);
+  var a = h.search(/<article\b/i);
+  if (a >= 0) h = h.slice(a);
+  h = h.replace(/<(script|style|nav|header|footer|noscript|annotation|annotation-xml|svg)\b[\s\S]*?<\/\1>/gi, " ")
+    .replace(/<section[^>]*class="[^"]*ltx_bibliography[\s\S]*$/i, " ")
+    .replace(/<\/(p|div|h[1-6]|li|section|tr|figcaption)>/gi, " ");
+  return squish(decodeEntities(stripTags(h)));
+}
+async function fetchPaperFullText(ref) {
+  var urls = paperFullTextUrls(ref);
+  for (var i = 0; i < urls.length; i++) {
+    try {
+      var r = await fetch(urls[i], { headers: { "User-Agent": fetchUA(), "Accept": "text/html" }, signal: AbortSignal.timeout(15e3), redirect: "follow" });
+      if (!r.ok) { diagNote("paper full text " + urls[i].split("/")[2] + ": HTTP " + r.status); continue; }
+      var t = paperHtmlText(await r.text());
+      if (t.length >= PAPER_MIN_CHARS && !/^\s*(?:No HTML for|Conversion to HTML had a Fatal error)/i.test(t)) return { text: t.slice(0, PAPER_TEXT_MAX), url: urls[i] };
+      diagNote("paper full text " + urls[i].split("/")[2] + ": " + t.length + " chars");
+    } catch (e) { diagNote("paper full text: " + String(e && e.message || e).slice(0, 60)); }
+  }
+  return null;
+}
+// Replaces each candidate's abstract with its full text; candidates without one are dropped. Returns at most `want` papers.
+async function withFullText(papers, want) {
+  var out = [];
+  for (var i = 0; i < papers.length && i < PAPER_FULLTEXT_TRIES && out.length < want; i++) {
+    var ft = await fetchPaperFullText(papers[i].ref);
+    if (ft) out.push({ kind: "paper", ref: papers[i].ref, title: papers[i].title, text: ft.text, full: true });
+  }
   return out;
 }
 var ANCHOR_MIN_CHARS = 2500;
@@ -650,7 +713,7 @@ function pickSeeded(list, seed, k) {
 var GROUND_MAX = 18000;
 function fitAnchors(anchors) {
   var n = anchors.length || 1, per = Math.max(900, Math.floor(GROUND_MAX / n));
-  return anchors.map(function (a) { return { kind: a.kind, ref: a.ref, title: a.title, text: String(a.text || "").slice(0, per) }; });
+  return anchors.map(function (a) { var o = { kind: a.kind, ref: a.ref, title: a.title, text: String(a.text || "").slice(0, per) }; if (a.full) o.full = true; return o; });
 }
 async function wikiAnchors(used, cooled, seed) {
   var titles = await fetchRandomTitles(14);
@@ -675,7 +738,7 @@ async function paperAnchors(subject, seed) {
   var papers = [];
   if (subject) papers = await fetchArxivQuery("arxiv subject", "all:%22" + encodeURIComponent(subject) + "%22", "relevance");
   if (!papers.length) papers = pickSeeded(await fetchArxivQuery("arxiv recent", arxivWindow(Date.now())), seed, 8);
-  return papers;
+  return withFullText(papers, 3); // COMPANION-PAPER-FULLTEXT-1: full texts only, never the abstract
 }
 async function ensureAnchorCache(env) {
   try {
@@ -714,7 +777,7 @@ async function pickTopic(env, form) {
   var anchors = [], id = "", subject = "";
   if (wiki.length >= 2) { anchors = wiki.concat(papers.slice(0, 2)); id = "wiki:" + wiki[0].title; subject = wiki[0].title; }
   else if (papers.length >= 2) {
-    // Wikipedia unavailable (or too thin): the piece rests on recent papers alone; their abstracts are the whole ground.
+    // Wikipedia unavailable (or too thin): the piece rests on recent papers alone, each read from its full text (COMPANION-PAPER-FULLTEXT-1).
     var pp = papers.slice(0, 3);
     anchors = (wiki.length ? wiki : []).concat(pp);
     id = "arxiv:" + pp[0].title; subject = pp[0].title;
@@ -725,7 +788,10 @@ async function pickTopic(env, form) {
   if (anchors.length < 2 && cacheOk) {
     try {
       var cr2 = await env.PERSONAL.prepare("SELECT id, topic_id, a, anchors_json FROM companion_anchor_cache WHERE done = 0 AND attempts < 3 AND created_at > ? ORDER BY id DESC LIMIT 1").bind(new Date(Date.now() - 3 * 864e5).toISOString()).first();
+      // COMPANION-PAPER-FULLTEXT-1: material cached before 1.17.0 holds paper abstracts; a paper anchor without its full text is dropped
       var cached = cr2 && JSON.parse(cr2.anchors_json);
+      if (cached) cached = cached.filter(function (a) { return a && (a.kind !== "paper" || a.full === true); });
+      if (cached && String(cr2.topic_id || "").indexOf("arxiv:") === 0 && !cached.some(function (a) { return a.title === cr2.a; })) cached = null; // its subject paper was dropped
       if (cached && cached.length >= 2) {
         anchors = cached; id = cr2.topic_id; subject = cr2.a; cacheId = cr2.id; fromCache = true;
         await env.PERSONAL.prepare("UPDATE companion_anchor_cache SET attempts = attempts + 1 WHERE id = ?").bind(cr2.id).run();
@@ -798,7 +864,9 @@ async function callWorkersAI(env, messages, maxTokens, timeoutMs, chain, prevErr
     try {
       var r = await aiRunAttr(env, "personal-companion", "compose-fallback", m,
         { messages: messages, max_tokens: Math.min(Math.max(Number(maxTokens) || 0, FB_MIN_TOKENS), 14e3), temperature: 0.7 },
-        { gateway: { id: "default" }, signal: AbortSignal.timeout(Math.max(Number(timeoutMs) || 0, FB_MIN_TIMEOUT_MS)) });
+        // COMPANION-PUBLISH-REPAIR-1: skipCache. The default AI Gateway caches identical requests, so a retry with the same prompt got the
+        // same draft back in 0.1 s (runs 5242-5254 and 5264-5276 replayed the 01:00Z drafts verbatim); every writer and critic call is fresh.
+        { gateway: { id: "default", skipCache: true }, signal: AbortSignal.timeout(Math.max(Number(timeoutMs) || 0, FB_MIN_TIMEOUT_MS)) });
       var t = cfText(r);
       if (typeof t.text === "string" && t.text.trim().length > 80) return { model: m, text: t.text };
       errs.push(m + ": empty (clen=" + String(t.text || "").length + " rlen=" + t.rlen + ")");
@@ -1045,12 +1113,13 @@ function anchorsBlock(topic, anchors, life, profile) {
   var lines = [];
   lines.push("--- briefing. Never reproduce any wording from this briefing in the piece. ---");
   lines.push("subject: " + topic.a);
+  if (anchors.length) lines.push("the subject comes from: the " + sourceLabel(anchors[0]) + " \"" + anchors[0].title + "\" (name it in the lede)");
   lines.push("The other items are supporting source material: use those that bear on the subject, ignore the rest. Do not force a connection the sources do not make.");
   lines.push("");
   lines.push("SOURCE MATERIAL, concrete and checkable; the only things you may assert as fact (nothing outside it, not even what you are sure is true):");
   for (var i = 0; i < anchors.length; i++) {
     var a = anchors[i];
-    lines.push("[" + (i + 1) + "] " + a.kind + " :: " + a.title);
+    lines.push("[" + (i + 1) + "] " + sourceLabel(a) + " :: " + a.title);
     lines.push("    ref: " + a.ref);
     lines.push("    " + a.text);
     lines.push("");
@@ -1118,9 +1187,10 @@ function extractLede(md) {
 __name(extractLede, "extractLede");
 __name2(extractLede, "extractLede");
 __name22(extractLede, "extractLede");
+var NOTES_OBJECTION_PLACEHOLDER = "Each item stands or falls on its own.";
 async function composePiece(env, form, topic, anchors, life, profile, continuity, feedback, revision) {
   var formContract = form === "essay" ? P_ESSAY : form === "serial" ? P_SERIAL : P_NOTES;
-  var outRule = form === "notes" ? "Output format: plain markdown only, no JSON, no code fences. First line: a single heading starting with # and a short title for the whole set. Then each movement as its own ## heading followed by several developed paragraphs." : "Output format: plain markdown only, no JSON, no code fences. First line: a single heading starting with # and the title. Use ## for sections. The strongest objection must appear in the piece, but never under the same heading or in the same position twice in a row; place it where the argument needs it";
+  var outRule = form === "notes" ? "Output format: plain markdown only, no JSON, no code fences. First line: a single heading starting with # and a short title for the whole set. Then the lede paragraph, with no heading above it. Then each movement as its own ## heading followed by several developed paragraphs." : "Output format: plain markdown only, no JSON, no code fences. First line: a single heading starting with # and the title. Then the lede paragraph, with no heading above it. Use ## for sections after it. The strongest objection must appear in the piece, but never under the same heading or in the same position twice in a row; place it where the argument needs it";
   var P_ADV1 = L("ADVERSARIAL-REASONING-1 (binding): DISAGREE-WITH-EVIDENCE - state disagreement plainly with counter-evidence when evidence contradicts the user/source/corpus; SEEK-DISCONFIRMATION - name and test the strongest argument against the current answer; EXPOSE-FAILURE-MODES - state at least one concrete failure mode per substantive response; LABEL-UNCERTAINTY - tie confidence to evidence, never inflate it, and say I do not know with a reason when required.");
   var sys = [P_STYLE, P_ADV1, "", formContract, "", outRule].join(NL);
   var concreteRule = "Every claim must be tied to a named, checkable particular that appears in the source material, and you may name nothing that does not appear there. A sentence that could have been written without the source material is a failed sentence. Write the title and every heading in sentence case: capitalise only the first word and names that appear in the source material.";
@@ -1155,7 +1225,7 @@ async function composePiece(env, form, topic, anchors, life, profile, continuity
       subtitle: "",
       lede: ledeObj.lede,
       body_md: ledeObj.rest,
-      objection: objection || (form === "notes" ? "Each item stands or falls on its own." : "")
+      objection: objection || (form === "notes" ? NOTES_OBJECTION_PLACEHOLDER : "")
     },
     model: r.model,
     raw: String(r.text || "")
@@ -1166,7 +1236,12 @@ __name2(composePiece, "composePiece");
 __name22(composePiece, "composePiece");
 async function critiquePiece(env, piece, form, ground) {
   var band = form === "essay" ? "2000 to 2800 words" : form === "serial" ? "1800 to 2400 words" : "1800 to 2400 words in 3 to 5 movements";
-  var user = "SOURCE MATERIAL:" + NL + String(ground || "").slice(0, GROUND_MAX + 2000) + NL + NL + "FORM: " + form + " (" + band + ")" + NL + NL + "TITLE: " + piece.title + NL + "LEDE: " + (piece.lede || "") + NL + "STATED OBJECTION: " + (piece.objection || "") + NL + NL + "BODY:" + NL + piece.body_md;
+  // COMPANION-CRITIC-OBJECTION-1 (1.17.0): the notes form has no objection section, and composePiece filled the field with a placeholder
+  // ("Each item stands or falls on its own."), which the critic then scored as the piece's objection (run 5329: "richly detailed and
+  // well-grounded in the source, but its stated objection is weak", objection=3, rejected). The critic now reads the body for it.
+  var objText = String(piece.objection || "").trim();
+  var objLine = !objText || objText === NOTES_OBJECTION_PLACEHOLDER ? "(no separate objection section; judge the objection the body raises, if any)" : objText;
+  var user = "SOURCE MATERIAL:" + NL + String(ground || "").slice(0, GROUND_MAX + 2000) + NL + NL + "FORM: " + form + " (" + band + ")" + NL + NL + "TITLE: " + piece.title + NL + "LEDE: " + (piece.lede || "") + NL + "STATED OBJECTION: " + objLine + NL + NL + "BODY:" + NL + piece.body_md;
   var r = await callModel(env, [{ role: "system", content: P_CRITIQUE }, { role: "user", content: user }], 900, CRITIQUE_TIMEOUT_MS, CRITIC_MODEL, "critic");
   return r && r.text ? parseJsonLoose(r.text) : null;
 }
@@ -1178,10 +1253,17 @@ var LENGTH_FLOOR = { essay: 2000, serial: 1800, notes: 1700 };
 // COMPANION-FALLBACK-FLOOR-1: measured 2026-10-07/08, 40+ gpt-oss-120b drafts all landed at 1100-1750 words and none passed the
 // 1700-2000 floor, so nothing published for 78h. A draft written by the Workers AI fallback is held to 70% of the floor
 // (the critic, banned-phrase and citation gates are unchanged); DeepSeek drafts keep the full floor.
-var FALLBACK_FLOOR_RATIO = 0.7;
-function floorFor(form) {
+// COMPANION-PUBLISH-REPAIR-1 (1.17.0): 0.7 -> 0.5. In the 72h to 2026-10-13 05:16Z the fallback's drafts measured 771-1189 words (notes, 28
+// rejected for length) and 1263-1374 (essays, 10), so 42 attempts failed on length alone or with it; a longer demand on a three-article
+// source is also what pushed the writer to add particulars the sources do not hold. The prompt still asks for the full length.
+var FALLBACK_FLOOR_RATIO = 0.5;
+// A draft repaired by deleting sentences (grounding, banned phrase, fact-check items) was written at full length; it is held to this share
+// of the floor in effect (the q08-signal-engine PRUNE_FLOOR pattern), so a deletion that cannot add a fact is not undone by the floor.
+var REPAIR_FLOOR_SHARE = 0.85;
+function floorFor(form, share) {
   var f = LENGTH_FLOOR[form];
-  return f && lastCallFallback ? Math.round(f * FALLBACK_FLOOR_RATIO) : f;
+  if (f && lastCallFallback) f = Math.round(f * FALLBACK_FLOOR_RATIO);
+  return f && share ? Math.round(f * share) : f;
 }
 // COMPANION-FALLBACK-TUNE-1: when the only validation problem is a length below the form's floor, the next attempt gets the
 // draft itself and is asked to extend it (keep every claim, title and section; deepen the argument from the anchors) to the
@@ -1199,18 +1281,66 @@ function expandFeedback(problems, form, piece) {
     "treatment of the strongest objection. Keep every sentence that is already there unless extending it. The draft follows." + NL + NL +
     "# " + String(piece && piece.title || "") + NL + NL + String(piece && piece.body_md || "").slice(0, 24e3);
 }
-function validatePiece(piece, form, ground) {
+// COMPANION-LEDE-1 (1.17.0; owner 2026-10-13: every piece opens with a proper lede, inverted pyramid). The lede is the first paragraph a
+// reader sees (piece.lede, else the first prose paragraph of the body). It must share at least one significant word with the subject's
+// title (the first five letters, so "trackway" matches "trackways"), must not open on abstract framing or a question, and stays short.
+var LEDE_MAX_WORDS = 120;
+var LEDE_ABSTRACT_RE = /^\s*(?:(?:the|this|that|these|such|our)\s+(?:very\s+)?(?:idea|notion|concept|question|problem|pattern|mechanism|story|history|tension|dynamics?|nature|essence|meaning|paradox)\s+of\b|in\s+(?:a|an|the|our|today's)\s+(?:world|age|era|time|times)\b|throughout\s+(?:history|time|the\s+ages)\b|since\s+the\s+dawn\b|(?:imagine|consider|picture)\b|what\s+(?:if|does|do|is|makes|happens)\b|(?:we|you)\s+(?:often|rarely|tend|all|like)\b|there\s+is\s+something\b|few\s+\w+\s+(?:are|have|capture)\b)/i;
+var LEDE_STOP = /^(this|that|with|from|have|were|their|there|which|when|what|into|than|then|they|them|been|also|only|more|most|such|does|each|over|will|would|could|should|about|after|before|because|while|where|your|using|based|towards?|new|how|why|the|and|for)$/;
+function ledeWords(t) { return String(t || "").toLowerCase().replace(/[‐-―−]/g, "-").split(/[^a-z0-9À-ɏ]+/).filter(function (w) { return w.length >= 4 && !LEDE_STOP.test(w); }); }
+function ledeOf(piece) {
+  var l = String(piece && piece.lede || "").trim();
+  if (l) return l;
+  var paras = String(piece && piece.body_md || "").split(/\n\s*\n/);
+  for (var i = 0; i < paras.length; i++) { var p = paras[i].trim(); if (p && p.charAt(0) !== "#" && p.indexOf("- ") !== 0 && p.indexOf("> ") !== 0) return p.replace(/\s+/g, " "); }
+  return "";
+}
+function ledeProblems(piece, subject) {
+  var lede = ledeOf(piece), out = [];
+  if (!lede) return ["lede missing: open with a paragraph that says what the subject is and where it comes from"];
+  var n = lede.split(/\s+/).filter(Boolean).length;
+  if (n > LEDE_MAX_WORDS) out.push("lede too long (" + n + " words; the first paragraph is at most " + LEDE_MAX_WORDS + ")");
+  var first = (lede.match(/^[\s\S]*?[.!?](?=\s|$)/) || [lede])[0];
+  if (LEDE_ABSTRACT_RE.test(lede.replace(/^[*_\s]+/, "")) || /\?\s*$/.test(first)) out.push("lede opens on abstract framing or a question ('" + lede.slice(0, 50) + "'): open by saying what the subject is and where it comes from");
+  var want = ledeWords(subject);
+  var have = ledeWords(lede).map(function (w) { return w.slice(0, 5); });
+  if (want.length && !want.some(function (w) { return have.indexOf(w.slice(0, 5)) >= 0; })) out.push("lede does not name the subject: the first paragraph must say what " + String(subject).slice(0, 80) + " is and where it comes from");
+  return out;
+}
+// LEDE-SPLIT-1 (1.19.1, run 5342-5364: three of five drafts failed only or mainly on "lede too long", 137-174 words). An over-long first
+// paragraph is split at a sentence boundary: the opening sentences up to LEDE_SPLIT_WORDS stay the lede, the rest becomes the first body
+// paragraph. Nothing is added or removed, so no fact changes; a single sentence longer than the limit is left to the check.
+var LEDE_SPLIT_WORDS = 100;
+function splitLongLede(piece) {
+  var lede = String(piece && piece.lede || "").trim();
+  var count = function (s) { return String(s).split(/\s+/).filter(Boolean).length; };
+  if (!lede || count(lede) <= LEDE_MAX_WORDS) return piece;
+  var raw = lede.match(/[\s\S]*?[.!?]+["')\]’”]*(?=\s|$)\s*|[\s\S]+$/g) || [lede], sents = [];
+  raw.forEach(function (x) { if (sents.length && SENT_ABBREV_RE.test(sents[sents.length - 1])) sents[sents.length - 1] += x; else sents.push(x); });
+  var kept = [], n = 0, i = 0;
+  for (; i < sents.length; i++) { var w = count(sents[i]); if (kept.length && n + w > LEDE_SPLIT_WORDS) break; kept.push(sents[i]); n += w; }
+  if (i >= sents.length) return piece;
+  var head = kept.join("").trim(), rest = sents.slice(i).join("").trim();
+  var body = String(piece.body_md || "");
+  // when the lede was read out of the body (a draft that opened with a heading) the body already holds the paragraph: shorten only the lede
+  if (body.indexOf(lede) !== -1) return Object.assign({}, piece, { lede: head });
+  return Object.assign({}, piece, { lede: head, body_md: rest + "\n\n" + body });
+}
+// opts (optional): floorShare lowers the length floor for a repaired draft (REPAIR_FLOOR_SHARE); subject turns on the lede check (essay, notes).
+function validatePiece(piece, form, ground, opts) {
+  var o = opts || {};
   var problems = [];
   if (!piece || !piece.body_md) return { ok: false, problems: ["no body"] };
   var md = String(piece.body_md);
   var wc = wordCount(md);
-  if (form === "essay" && (wc < floorFor("essay") || wc > 3200)) problems.push("essay length " + wc);
-  if (form === "serial" && (wc < floorFor("serial") || wc > 2800)) problems.push("serial length " + wc);
+  if (form === "essay" && (wc < floorFor("essay", o.floorShare) || wc > 3200)) problems.push("essay length " + wc);
+  if (form === "serial" && (wc < floorFor("serial", o.floorShare) || wc > 2800)) problems.push("serial length " + wc);
   if (form === "notes") {
     var items = countHeadings(md, 2);
     if (items < 3) problems.push("notes items " + items);
-    if (wc < floorFor("notes") || wc > 3200) problems.push("notes length " + wc);
+    if (wc < floorFor("notes", o.floorShare) || wc > 3200) problems.push("notes length " + wc);
   }
+  if (o.subject && form !== "serial") ledeProblems(piece, o.subject).forEach(function (p) { problems.push(p); });
   var hits = bannedHits(md + " " + String(piece.title || "") + " " + String(piece.lede || ""));
   if (hits.length) problems.push("banned: " + hits.join(", "));
   if (hasEmoji(md)) problems.push("emoji present");
@@ -1235,45 +1365,106 @@ __name22(validatePiece, "validatePiece");
 // and abbreviations ("Dr.") do not end a sentence, and every other field of the piece (objection, subtitle) is carried over unchanged.
 // Removing an unsupported sentence can only reduce the claims, so the two-family fact-check that follows runs unchanged.
 var GROUNDING_PREFIX = "grounding:";
-function repairGroundingDraft(piece, problems, form, ground) {
-  var list = Array.isArray(problems) ? problems : [];
-  var allGrounding = list.length > 0 && list.every(function (p) {
-    return typeof p === "string" && p.toLowerCase().replace(/^[\s-]+/, "").indexOf(GROUNDING_PREFIX) === 0;
+// Sentence deletion shared by the repair and the fact-check prune. `cutFn(units)` receives every sentence unit ({ sn, field, cut }) of the
+// lede and the body (markdown heading lines are never units, so a notes piece keeps its "## " items) and marks the ones to delete.
+// Paragraph breaks are kept, decimals and abbreviations do not end a sentence, every other field of the piece is carried over.
+var SENT_ABBREV_RE = /(?:^|[\s(])(?:[A-Z]|Dr|Mr|Mrs|Ms|Prof|St|No|vs|cf|Fig|Eq|et al|e\.g|i\.e|pp?)\.\s*$/;
+function deleteSentences(piece, cutFn) {
+  var fields = { lede: String(piece && piece.lede || ""), body_md: String(piece && piece.body_md || "") }, units = [], layout = {};
+  Object.keys(fields).forEach(function (f) {
+    layout[f] = fields[f].split("\n").map(function (line) {
+      if (!line.trim() || /^\s*#/.test(line)) return { fixed: line };
+      var raw = line.match(/[\s\S]*?[.!?]+["')\]\u2019\u201d]*(?=\s|$)\s*|[\s\S]+$/g) || [line];
+      var parts = [];
+      raw.forEach(function (x) { if (parts.length && SENT_ABBREV_RE.test(parts[parts.length - 1])) parts[parts.length - 1] += x; else parts.push(x); });
+      return { parts: parts.map(function (sn) { var u = { sn: sn, field: f, cut: false, blank: !sn.trim() }; if (!u.blank) units.push(u); return u; }) };
+    });
   });
-  if (!allGrounding || !piece) return null;
+  cutFn(units);
+  var removed = units.filter(function (u) { return u.cut; }).map(function (u) { return u.sn.replace(/\s+/g, " ").trim(); });
+  var rebuilt = {};
+  Object.keys(layout).forEach(function (f) {
+    rebuilt[f] = layout[f].map(function (l) {
+      if (l.fixed !== undefined) return l.fixed;
+      var out = l.parts.filter(function (u) { return !u.cut; }).map(function (u) { return u.sn; }).join("");
+      return out.trim() ? out.replace(/\s+$/, "") : null;
+    }).filter(function (l) { return l !== null; }).join("\n").replace(/\n{3,}/g, "\n\n").trim();
+  });
+  return { piece: Object.assign({}, piece, rebuilt), removed: removed, total: units.length };
+}
+// COMPANION-PUBLISH-REPAIR-1 (1.17.0): the repair also takes "banned: a, b" problems (each sentence holding a banned phrase is deleted;
+// the FRAMING-REPAIR-1 pattern of q08-signal-engine) and a length problem next to them. 32 attempts in 72h failed on banned phrases and
+// 24 on grounding with a length shortfall, all thrown away. A banned phrase in the title, or any other problem (emoji, items, lede,
+// objection), is not repairable here. The result is accepted when the repaired draft passes validatePiece at REPAIR_FLOOR_SHARE of the
+// floor; when only its length is left, it is returned with ok false so the extend path extends the cleaned draft instead of the original.
+function repairGroundingDraft(piece, problems, form, ground, opts) {
+  var list = Array.isArray(problems) ? problems : [];
+  if (!list.length || !piece) return null;
+  var grounding = [], phrases = [], other = [];
+  list.forEach(function (p) {
+    var s = String(p).replace(/^[\s-]+/, ""), low = s.toLowerCase();
+    if (low.indexOf(GROUNDING_PREFIX) === 0) grounding.push(s);
+    else if (low.indexOf("banned: ") === 0) low.slice(8).split(/,\s*/).forEach(function (b) { if (b.trim()) phrases.push(b.trim()); });
+    else if (/^(essay|serial|notes) length \d+$/.test(low)) {}
+    else other.push(s);
+  });
+  if (other.length || (!grounding.length && !phrases.length)) return null;
+  var titleLow = String(piece.title || "").toLowerCase();
+  if (phrases.some(function (b) { return titleLow.indexOf(b) !== -1; })) return null;
   var norm = function (s) { return String(s || "").toLowerCase().replace(/[\u2010-\u2015\u2212]/g, "-").replace(/[\u2018\u2019]/g, "'"); };
-  var needles = groundingNeedles(list).map(norm).filter(function (n) { return n.trim().length > 0; });
-  if (!needles.length) return null;
-  var stats = { total: 0, removed: 0 };
-  var hasNeedle = function (sen) { var low = norm(sen); return needles.some(function (n) { return low.indexOf(n) !== -1; }); };
-  var abbrev = /(?:^|[\s(])(?:[A-Z]|Dr|Mr|Mrs|Ms|Prof|St|No|vs|cf|Fig|Eq|et al|e\.g|i\.e|pp?)\.\s*$/;
-  var filterLine = function (line) {
-    if (!line.trim()) return line;
-    var raw = line.match(/[\s\S]*?[.!?]+["')\]\u2019\u201d]*(?=\s|$)\s*|[\s\S]+$/g) || [line];
-    var parts = [];
-    raw.forEach(function (x) {
-      if (parts.length && abbrev.test(parts[parts.length - 1])) parts[parts.length - 1] += x;
-      else parts.push(x);
+  var gNeedles = groundingNeedles(grounding).map(norm).filter(function (n) { return n.trim().length > 0; });
+  if (grounding.length && !gNeedles.length) return null;
+  var needles = gNeedles.concat(phrases.map(norm));
+  var d = deleteSentences(piece, function (units) {
+    units.forEach(function (u) { var low = norm(u.sn); if (needles.some(function (n) { return low.indexOf(n) !== -1; })) u.cut = true; });
+  });
+  var removed = d.removed.length;
+  if (removed === 0) return null;
+  if (removed * 4 > d.total) return null;
+  var v2 = validatePiece(d.piece, form, ground, Object.assign({}, opts || {}, { floorShare: REPAIR_FLOOR_SHARE }));
+  if (!v2.ok) {
+    var shortOnly = v2.problems.length === 1 && /^(essay|serial|notes) length \d+$/.test(v2.problems[0]) && v2.words < floorFor(form, REPAIR_FLOOR_SHARE);
+    return shortOnly ? { ok: false, piece: d.piece, removed: removed, total: d.total, v: v2 } : null;
+  }
+  return { ok: true, piece: d.piece, removed: removed, total: d.total, v: v2 };
+}
+// COMPANION-FACT-PRUNE-1 (1.17.0; q08-signal-engine Q08-PRUNE-1 and Q08-PRUNE-FUZZY-1): the reviewers quote the unsupported sentences, so
+// the safest repair deletes exactly those sentences (deletion cannot add a fact; a model revision can). A quotation matches a sentence
+// that contains its first 60 normalised characters (or is contained in it); a quotation that matches nothing removes the one sentence that
+// shares the most of its content words (at least 4 and 60% of them). The caller re-verifies the result in full.
+var FUZZY_MIN_SHARED = 4, FUZZY_MIN_SHARE = 0.6;
+function normForMatch(t) { return String(t || "").toLowerCase().replace(/[\u2010-\u2015\u2212]/g, "-").replace(/[\u2018\u2019]/g, "'").replace(/[\u201c\u201d"*_]/g, "").replace(/[^a-z0-9' -]+/g, " ").replace(/\s+/g, " ").trim(); }
+function contentWords(t) { return normForMatch(t).split(" ").filter(function (w) { return w.length >= 4 && !/^(that|this|with|from|have|were|their|there|which|when|what|into|than|then|they|them|been|also|only|more|most|such|does|each|over|will|would|could|should|about|after|before|because|while|where)$/.test(w); }); }
+function pruneUnsupported(piece, problems) {
+  var needles = [];
+  (problems || []).forEach(function (pr) {
+    var m = String(pr).match(/^unsupported claim:\s*([\s\S]*?)(?:\s+--\s+[\s\S]*)?$/);
+    if (!m) return;
+    var raw = m[1].replace(/^\s*(?:FACT|INFERENCE)\s*:\s*/i, ""), q = normForMatch(raw);
+    if (q.length >= 18) needles.push({ nd: q.slice(0, 90), raw: raw, hit: false });
+  });
+  if (!needles.length) return { piece: piece, removed: [], total: 0 };
+  return deleteSentences(piece, function (units) {
+    units.forEach(function (x) {
+      var ns = normForMatch(x.sn);
+      needles.forEach(function (n) {
+        var hit = ns.indexOf(n.nd.slice(0, Math.min(n.nd.length, 60))) >= 0 || (ns.length >= 30 && n.nd.indexOf(ns.slice(0, Math.min(ns.length, 60))) >= 0);
+        if (hit) { x.cut = true; n.hit = true; }
+      });
     });
-    var kept = [];
-    parts.forEach(function (sen) {
-      if (!sen.trim()) { kept.push(sen); return; }
-      stats.total++;
-      if (hasNeedle(sen)) stats.removed++; else kept.push(sen);
+    needles.forEach(function (n) {
+      if (n.hit) return;
+      var want = contentWords(n.raw);
+      if (want.length < FUZZY_MIN_SHARED) return;
+      var best = null, bestShared = 0;
+      units.forEach(function (x) {
+        if (x.cut) return;
+        var have = contentWords(x.sn), shared = want.filter(function (w) { return have.indexOf(w) >= 0; }).length;
+        if (shared > bestShared) { bestShared = shared; best = x; }
+      });
+      if (best && bestShared >= FUZZY_MIN_SHARED && bestShared / want.length >= FUZZY_MIN_SHARE) { best.cut = true; n.hit = true; }
     });
-    var out = kept.join("");
-    return out.trim() ? out.replace(/\s+$/, "") : null;
-  };
-  var filterField = function (text) {
-    var lines = String(text || "").split("\n").map(filterLine).filter(function (l) { return l !== null; });
-    return lines.join("\n").replace(/\n{3,}/g, "\n\n").trim();
-  };
-  var repaired = Object.assign({}, piece, { lede: filterField(piece.lede), body_md: filterField(piece.body_md) });
-  if (stats.removed === 0) return null;
-  if (stats.removed * 4 > stats.total) return null;
-  var v2 = validatePiece(repaired, form, ground);
-  if (!v2.ok) return null;
-  return { ok: true, piece: repaired, removed: stats.removed, total: stats.total, v: v2 };
+  });
 }
 __name(repairGroundingDraft, "repairGroundingDraft");
 async function similarExists(env, text, excludeSlug) {
@@ -1698,14 +1889,14 @@ function pickReviewers(exclude, k, seed) {
   return out;
 }
 var GROUND_LEAD = new Set(["the","a","an","in","on","at","when","if","but","and","so","as","that","this","these","those","it","its","each","every","most","some","no","for","with","without","before","after","once","while","because","since","what","where","who","why","how","then","there","here","not","only","even","still","yet","or","nor","by","from","to","of","their","his","her","our","your","one","two","three","such","both","many","any","all","i","we","you","he","she","they","my","whether","although","though","until","unless","instead","perhaps","suppose","imagine","consider","now","today","later","earlier","first","second","third","finally","meanwhile","however","which","whose","than","also","just","every","another","other","either","neither","same","more","less","few","several","unlike","like","despite","across","through","during","under","over","between","among","within","against","beyond","per","via","consequently","therefore","thus","hence","moreover","furthermore","similarly","likewise","otherwise","accordingly","additionally","specifically","ultimately","eventually","typically","usually","often","sometimes","rather","indeed","western","eastern","northern","southern","central"]);
-var GROUND_OK = new Set(["january","february","march","april","may","june","july","august","september","october","november","december","monday","tuesday","wednesday","thursday","friday","saturday","sunday","arxiv","markdown","json","html","gpu","cpu","vpn","api","ai","llm","sdk","ceo","cto","url","dns","pdf","csv","sql","usb","ram","ssd","gps","ui","ux","os",
+var GROUND_OK = new Set(["january","february","march","april","may","june","july","august","september","october","november","december","monday","tuesday","wednesday","thursday","friday","saturday","sunday","arxiv","wikipedia","markdown","json","html","gpu","cpu","vpn","api","ai","llm","sdk","ceo","cto","url","dns","pdf","csv","sql","usb","ram","ssd","gps","ui","ux","os",
   // GROUND-DESCRIPTOR-1: title and street abbreviations are words, not names ("St.", "Mt.", "Dr." were rejected as names not in the source)
   "st","mt","dr","mr","mrs","ms","prof","jr","sr","vol","no","ft","ave","rd","blvd","inc","ltd","co","fig","vs","etc","al"]);
 // GROUND-DESCRIPTOR-1 (1.16.1, issues 2222/2354): a capitalised single word shaped like a nationality, regional or derived adjective
 // ("American", "Midwestern", "Archival", "Victorian") describes, it does not name an entity; runs 5128-5134 rejected five drafts of one
 // topic for "American" and "Midwestern" alone (5131 had no other problem). Such a word is left to the two-family fact-check like
 // acronyms are. A multi-word name is still checked word by word, so "American Planning Association" absent from the source still fails.
-var GROUND_DESCRIPTOR_RE = /^(?:[a-z]{3,}(?:an|ian|ern|ese|ish|ic|ist)|[a-z]{4,}al)$/;
+var GROUND_DESCRIPTOR_RE = /^(?:[a-z]{3,}(?:an|ian|ern|ese|ic|ist)|[a-z]{2,}ish|[a-z]{4,}al)$/; // GROUND-MATCHER-2: "Irish" (2 letters before -ish)
 // A word whose stem the source contains is grounded ("archival" from "archive", "american" from "america", "midwestern" from "midwest").
 function stemGrounded(w, words) {
   var stems = [], m = /^([a-z]{4,}?)(?:ians?|ans?|ern|ese|ish|ists?|ic|al|ed|ing|es|s)$/.exec(w);
@@ -1762,7 +1953,9 @@ function groundingProblems(text, ground, opts) {
     add(isYear ? "year not in the source" : "figure not in the source", raw.trim());
   }
   // names: capitalised words or phrases that are not at the start of a sentence and are absent from the source
-  var sentences = body.split(/(?<=[.!?:;—])\s+|\n+/);
+  // GROUND-MATCHER-2 (1.19.2): a sentence also ends at terminal punctuation followed by a closing quote, bracket or markdown emphasis
+  // ("It's a trap!” Delivered ...", "documents.** Records from ..."); the next sentence's opener was read as a name (runs 5121-5276).
+  var sentences = body.split(/(?<=[.!?:;—][”’"')\]*_]*)\s+|\n+/);
   sentences.forEach(function (sent) {
     var toks = sent.match(/[A-Za-z0-9][A-Za-z0-9&'.’-]*|[,;]/g) || [];
     var i = 0;
@@ -1770,8 +1963,8 @@ function groundingProblems(text, ground, opts) {
       var t = toks[i];
       if (!/^[A-Z]/.test(t) || /^[A-Z]$/.test(t) && toks[i + 1] && !/^[A-Z]/.test(toks[i + 1])) { i++; continue; }
       var j = i, phrase = [];
-      while (j < toks.length && /^[A-Z][A-Za-z0-9&'.’-]*$/.test(toks[j])) { phrase.push(toks[j]); j++; if (toks[j] && /^(of|the|and|for|de|von|van|del|la)$/i.test(toks[j]) && toks[j + 1] && /^[A-Z]/.test(toks[j + 1])) { phrase.push(toks[j]); j++; } }
-      phrase = phrase.filter(function (w) { return !/^[A-Z]{2,5}s?[.,;:]?$/.test(w) && !/^[A-Z]\.$/.test(w) && !/^(?:[A-Z]\.){2,}[A-Z]?[.,;:]?$/.test(w); }); // acronyms, initials and dotted initialisms (U.S., D.C.) are left to the two-family fact-check
+      while (j < toks.length && /^[A-Z][A-Za-z0-9&'.’-]*$/.test(toks[j])) { phrase.push(toks[j]); j++; if (toks[j] && /^(of|the|for|de|von|van|del|la)$/i.test(toks[j]) && toks[j + 1] && /^[A-Z]/.test(toks[j + 1])) { phrase.push(toks[j]); j++; } }
+      phrase = phrase.filter(function (w) { return !/^[A-Z]{2,5}s?[.,;:]?$/.test(w) && !/^[A-Z][.,;:]?$/.test(w) && !/^(?:[A-Z]\.){2,}[A-Z]?[.,;:]?$/.test(w); }); // acronyms, initials, single letters (SINGLE-LETTER-1: "S", "Model B") and dotted initialisms (U.S., D.C.) are left to the two-family fact-check
       var lead = 0; while (lead < phrase.length - 1 && GROUND_LEAD.has(phrase[lead].toLowerCase().replace(/[^a-z]/g, ""))) lead++;
       var core = phrase.slice(lead);
       var first = (i === 0);
@@ -1783,7 +1976,7 @@ function groundingProblems(text, ground, opts) {
         var joined = core.join(" ").replace(/[’]/g, "'");
         var low = joined.toLowerCase().replace(/[^a-z0-9' ]/g, " ").replace(/\s+/g, " ").trim();
         if (low && !GROUND_OK.has(low)) {
-          var miss = low.split(" ").filter(function (w) { return w && !GROUND_OK.has(w) && !GROUND_LEAD.has(w) && !words.has(w) && !words.has(w.replace(/'s$/, "")) && !/^\d+$/.test(w) && !stemGrounded(w, words); });
+          var miss = low.split(" ").filter(function (w) { return w && !GROUND_OK.has(w) && !GROUND_LEAD.has(w) && !words.has(w) && !words.has(w.replace(/'s$/, "")) && !words.has(w.replace(/'$/, "")) && !/^\d+$/.test(w) && !stemGrounded(w, words); });
           if (miss.length === 1 && core.length === 1 && GROUND_DESCRIPTOR_RE.test(miss[0])) miss = []; // GROUND-DESCRIPTOR-1
           if (miss.length) add("name not in the source", joined);
         }
@@ -1796,9 +1989,64 @@ function groundingProblems(text, ground, opts) {
 var FACTCHECK_PROMPT = [
   "You are a strict fact-checker for a publication that must contain no unsupported claim. You are given SOURCE MATERIAL and a DRAFT.",
   "List every sentence or clause in the DRAFT, headings and title included, that asserts something about the real world and is not stated in, or a direct paraphrase of, the SOURCE MATERIAL. That covers events, dates, people, organisations, places, works, products, laws, institutions, numbers, quotations, studies, historical episodes and precedents, claims about what the reader does or has done, and statements that a practice or fact is 'known' or 'common'.",
-  "Your own knowledge does not count as support, even if you are sure the claim is true: if it is not in the SOURCE MATERIAL, it is unsupported. A claim that distorts what the SOURCE MATERIAL says (a changed number, a stronger or different relationship, a cause where the source gives only a sequence) is unsupported too. These are NOT violations: reasoning that follows from the source's facts and is presented as reasoning, definitions, and a clearly labelled hypothetical that names no real person, organisation, product, date or number.",
-  "Answer with exactly one JSON object and nothing else: {\"unsupported\": [up to 8 short quotations copied from the DRAFT, each followed by ' -- ' and the reason in a few words], \"verdict\": \"pass\" or \"fail\"}. verdict is \"pass\" only when unsupported is empty."
+  "Your own knowledge does not count as support, even if you are sure the claim is true: if it is not in the SOURCE MATERIAL, it is unsupported. A claim that distorts what the SOURCE MATERIAL says (a changed number, a stronger or different relationship, a cause where the source gives only a sequence) is unsupported too. These are NOT violations: reasoning that follows from the source's facts and is presented as reasoning, conditional statements that follow from them, mentions of the source itself (the Wikipedia article, the arXiv paper), definitions, and a clearly labelled hypothetical that names no real person, organisation, product, date or number.",
+  "Example of the expected answer: {\"unsupported\": [\"FACT: the road was finished in 1952 -- date not in source\", \"INFERENCE: so the builders worked under pressure -- reasoning from the source\"], \"verdict\": \"fail\"}.",
+  "Label each item you list. FACT: a specific real-world assertion: something happened, exists, was said, decided, built or measured; any name of a person, organisation, work, product or place; any date, number, count or quotation; any study, event or precedent. INFERENCE: reasoning, interpretation, generalisation or consequence the writer draws from the source's facts, with no specific name, date, number or quotation of its own. When unsure, label it FACT.",
+  "Answer with exactly one JSON object and nothing else: {\"unsupported\": [up to 8 items, each starting with 'FACT: ' or 'INFERENCE: ', then a short quotation copied from the DRAFT, then ' -- ' and the reason in a few words], \"verdict\": \"pass\" or \"fail\"}. verdict is \"fail\" when any FACT item is listed, else \"pass\"."
 ].join("\n");
+// COMPANION-FACT-INFERENCE-1 (1.17.0; pattern of q08-signal-engine 0.13.2-0.15.2). Run 5334 failed on items that were the piece's own
+// reasoning ("Their reliance on oak ... underscores a commitment") next to real fact errors ("without the benefit of iron tools -- source
+// does not mention iron tools"). Each item is labelled; only FACT items fail a draft and unlabelled items count as FACT, so the check stays
+// fail-closed. An item is read as an INFERENCE when it is labelled so, or when its reason calls it reasoning, interpretation, generalisation
+// or a paraphrase and names no date, figure, name or quotation, or when its quoted text has no digit, quotation or capitalised name and uses
+// reasoning wording. Names, years and figures are refused deterministically by groundingProblems before any reviewer runs.
+var INFERENCE_REASON_RE = /\b(inferen\w*|interpret\w*|generali[sz]\w*|assum\w*|speculat\w*|paraphras\w*|reasoning|opinion|editoriali[sz]\w*|characteri[sz]\w*)\b/i;
+var FACT_REASON_RE = /\b(dates?|years?|numbers?|figures?|statistics?|names?|quot\w*|percent\w*|prices?|counts?|amounts?|fabricat\w*|invent\w*|false|wrong|incorrect|contradict\w*)\b/i;
+// The reason objects only to the wording ("not a direct quote", "slightly different wording"): the content is in the source.
+function wordingOnly(reason) { reason = String(reason || ""); return /\b(?:as an? (?:direct|exact|verbatim) quot\w*|not (?:a )?(?:direct|exact|verbatim) quot\w*|verbatim|exact wording|different wording|worded differently|paraphras\w*)\b/i.test(reason) && !/\b(?:dates?|years?|numbers?|figures?|names?|percent\w*|prices?|fabricat\w*|invent\w*|false|wrong|incorrect|contradict\w*)\b/i.test(reason); }
+function reasonIsInference(item) {
+  var i = String(item).lastIndexOf(" -- ");
+  if (i < 0) return false;
+  var reason = String(item).slice(i + 4);
+  var saysSupported = /\bin (?:the )?source\b/i.test(reason) && !/\bnot (?:[\w-]+ ){0,2}in (?:the )?source\b/i.test(reason) && !/\b(?:no|nothing|absent|missing|lacks?)\b/i.test(reason);
+  if (wordingOnly(reason)) return true;
+  return (INFERENCE_REASON_RE.test(reason) || saysSupported) && !FACT_REASON_RE.test(reason);
+}
+var REASONING_MARK_RE = /\b(incentives?|pressures?|mechanisms?|structures?|repeats?|wherever|whenever|because|therefore|thus|hence|so that|cannot|can|could|may|might|would|should|tends?|likely|underscores?|suggests?|implies|means|translates?|prevent\w*|despite|based on|leads? to|result\w* in|unless|if|weak|stronger|weaker)\b/i;
+var GENERAL_MARK_RE = /\b(wherever|whenever|any|every|mechanisms?|patterns?|incentives?|structures?|if|unless|therefore|thus|hence|would|could|might|tends?)\b/i;
+function claimIsReasoning(item, labelledFact) {
+  var s = String(item), i = s.lastIndexOf(" -- ");
+  if (i < 0) return false;
+  var claim = s.slice(0, i).trim(), reason = s.slice(i + 4);
+  if (FACT_REASON_RE.test(reason) || /["“‘'][^"”’']{3,}["”’']/.test(reason)) return false;
+  if (/[0-9"“”]/.test(claim)) return false;
+  if (claim.split(/\s+/).slice(1).some(function (w) { return /^[^a-z]*[A-Z]/.test(w) && w !== "I"; })) return false;
+  return labelledFact ? GENERAL_MARK_RE.test(claim) : REASONING_MARK_RE.test(claim);
+}
+function factItemText(x) {
+  if (x == null) return "";
+  if (typeof x !== "object") return String(x);
+  var pick = function (keys) { for (var i = 0; i < keys.length; i++) { if (x[keys[i]] != null && String(x[keys[i]]).trim()) return String(x[keys[i]]).trim(); } return ""; };
+  var label = pick(["label", "type", "kind", "category"]).toUpperCase();
+  var claim = pick(["claim", "quote", "quotation", "text", "sentence", "item", "excerpt"]);
+  var reason = pick(["reason", "why", "explanation", "note", "issue"]);
+  if (!claim) return JSON.stringify(x).slice(0, 260);
+  return ((label === "FACT" || label === "INFERENCE") ? label + ": " : "") + claim + (reason ? " -- " + reason : "");
+}
+function splitFactItems(items) {
+  var facts = [], inferences = [];
+  (items || []).forEach(function (x) {
+    var s = String(x).replace(/\s+/g, " ").trim();
+    if (!s) return;
+    var m = s.match(/^\**\s*(FACT|INFERENCE)\s*\**\s*[:\-]\s*/i);
+    var rest = m ? s.slice(m[0].length) : s;
+    var cut = rest.lastIndexOf(" -- ");
+    if (m && (m[1].toUpperCase() === "INFERENCE" || claimIsReasoning(rest, true) || (cut > 0 && wordingOnly(rest.slice(cut + 4))))) inferences.push(rest.slice(0, 260));
+    else if (!m && (reasonIsInference(s) || claimIsReasoning(s))) inferences.push(s.slice(0, 260));
+    else facts.push(rest.slice(0, 260));
+  });
+  return { facts: facts.filter(Boolean), inferences: inferences.filter(Boolean) };
+}
 function parseFactVerdict(text) {
   // VERDICT-TOLERANT-1: a reviewer that wraps its JSON in prose, trails off before the closing brace or prints the JSON twice still gave a verdict.
   var t = String(text || "").replace(/<think>[\s\S]*?<\/think>/gi, "");
@@ -1814,10 +2062,14 @@ function parseFactVerdict(text) {
   }
   var v = String(o && o.verdict || "").toLowerCase().trim();
   if (v !== "pass" && v !== "fail") return null;
-  var u = Array.isArray(o.unsupported) ? o.unsupported.map(function (x) { return String(x).replace(/\s+/g, " ").trim().slice(0, 260); }).filter(Boolean).slice(0, 8) : [];
-  if (v === "pass" && u.length) v = "fail";
-  if (v === "fail" && !u.length) u = ["the reviewer rejected the draft without naming a claim"];
-  return { verdict: v, unsupported: u };
+  var listed = Array.isArray(o.unsupported) ? o.unsupported.map(factItemText).map(function (x) { return x.replace(/\s+/g, " ").trim(); }).filter(Boolean).slice(0, 8) : [];
+  // COMPANION-FACT-INFERENCE-1: the verdict follows the FACT items. A fail that names nothing stays a fail (fail-closed); a fail or pass that
+  // names only INFERENCE items is a pass with those sentences to delete when the draft can spare them.
+  var sp = splitFactItems(listed), u = sp.facts;
+  if (u.length) v = "fail";
+  else if (v === "fail" && !sp.inferences.length) u = ["the reviewer rejected the draft without naming a claim"];
+  else v = "pass";
+  return { verdict: v, unsupported: u, inferences: sp.inferences };
 }
 // Workers AI returns `response` as a parsed OBJECT when a model replies with bare JSON (llama, qwen): String() of it is "[object Object]",
 // so the verdict parser rejected it (found in q08-signal-engine run 312). Normalise any reply shape to text.
@@ -1874,8 +2126,8 @@ async function factCheck(env, draft, ground, writerModel, seedText) {
   Object.keys(lastFail).forEach(function (m) { failures.push(lastFail[m]); });
   failures = failures.map(function (r) { return String(r.model).split("/").pop() + ": " + r.error; });
   if (got.length < 2) return { ok: false, unavailable: true, unsupported: [], judges: got, reason: "fewer than two fact-check verdicts from other model families (" + failures.join(" | ").slice(0, 400) + ")" };
-  var uns = []; got.forEach(function (g) { g.unsupported.forEach(function (u) { if (uns.indexOf(u) < 0) uns.push(u); }); });
-  return { ok: got.every(function (g) { return g.verdict === "pass"; }), unavailable: false, unsupported: uns.slice(0, 10), judges: got, reason: "" };
+  var uns = [], inf = []; got.forEach(function (g) { g.unsupported.forEach(function (u) { if (uns.indexOf(u) < 0) uns.push(u); }); (g.inferences || []).forEach(function (u) { if (inf.indexOf(u) < 0) inf.push(u); }); });
+  return { ok: got.every(function (g) { return g.verdict === "pass"; }), unavailable: false, unsupported: uns.slice(0, 10), inferences: inf.slice(0, 12), judges: got, reason: "" };
 }
 // Full verification of one draft: deterministic grounding first (free), then the two-family review. `text` includes the title.
 async function verifyPiece(env, text, ground, writerModel, seedText, opts) {
@@ -1884,7 +2136,7 @@ async function verifyPiece(env, text, ground, writerModel, seedText, opts) {
   var fc = await factCheck(env, text, ground, writerModel, seedText);
   if (fc.unavailable) return { ok: false, stage: "factcheck", problems: ["fact-check unavailable: " + fc.reason], judges: fc.judges, unavailable: true };
   if (!fc.ok) return { ok: false, stage: "factcheck", problems: fc.unsupported.map(function (u) { return "unsupported claim: " + u; }), judges: fc.judges, unavailable: false };
-  return { ok: true, stage: "pass", problems: [], judges: fc.judges, unavailable: false };
+  return { ok: true, stage: "pass", problems: [], judges: fc.judges, unavailable: false, inferences: fc.inferences || [] };
 }
 // Everything a reader is shown: title, subtitle, lede (stored apart from the body when the piece does not open with a heading) and body.
 function pieceText(piece) { return "# " + String(piece.title || "") + "\n\n" + (piece.subtitle ? String(piece.subtitle) + "\n\n" : "") + (piece.lede ? String(piece.lede) + "\n\n" : "") + String(piece.body_md || ""); }
@@ -1975,6 +2227,10 @@ function factRevisionPrompt(problems, ground) {
 // deterministic grounding check, (2) the adversarial reader, whose outage fails closed, and (3) the two-family fact-check, whose
 // outage fails closed. There is no forced publish: when every draft fails, nothing is published and the stall detector says so.
 var REVISE_BEFORE_MS = 42e4;
+// COMPANION-FACT-PRUNE-1: a prune round starts only before 660 s, so the round (one review, at most REVIEW_TIMEOUT_MS) and the persist finish
+// inside the 15-minute cron wall; reviewers answer in 1-3 s with reasoning off (FACTCHECK-NOTHINK-1).
+var PRUNE_ROUNDS = 5;
+var PRUNE_START_BEFORE_MS = 66e4;
 async function generate(env, form, opts) {
   var t0 = Date.now();
   opts = opts || {};
@@ -2005,6 +2261,8 @@ async function generate(env, form, opts) {
       return { ok: false, error: "insufficient anchors: " + (topic.diag || "") };
     }
     var ground = anchorsText(anchors);
+    var vopts = { subject: topic.a }; // COMPANION-LEDE-1: the lede must name the subject (essay and notes)
+    var repairOpts = { subject: topic.a, floorShare: REPAIR_FLOOR_SHARE };
     var attempt = 0;
     var best = null;
     var feedback = "";
@@ -2025,11 +2283,21 @@ async function generate(env, form, opts) {
       if (!piece) {
         continue;
       }
-      var v = validatePiece(piece, form, ground);
+      var split = splitLongLede(piece);
+      if (split !== piece) {
+        await logRun(env, form, model, topic.id, "stage", "lede split: " + String(piece.lede || "").split(/\s+/).filter(Boolean).length + " -> " + String(split.lede || "").split(/\s+/).filter(Boolean).length + " words", Date.now() - t0);
+        piece = split;
+      }
+      var v = validatePiece(piece, form, ground, vopts);
       if (!v.ok) {
-        var gr = repairGroundingDraft(piece, v.problems, form, ground);
+        var gr = repairGroundingDraft(piece, v.problems, form, ground, vopts);
         if (gr && gr.ok) {
           await logRun(env, form, model, topic.id, "stage", "grounding repair: removed " + gr.removed + " sentences", Date.now() - t0);
+          piece = gr.piece;
+          v = gr.v;
+        } else if (gr && gr.piece) {
+          // COMPANION-PUBLISH-REPAIR-1: only the length is left; the extend path below gets the cleaned draft, not the one with the flagged sentences
+          await logRun(env, form, model, topic.id, "stage", "grounding repair: removed " + gr.removed + " sentences; still short (" + gr.v.problems.join("; ") + "), extending the cleaned draft", Date.now() - t0);
           piece = gr.piece;
           v = gr.v;
         }
@@ -2085,7 +2353,8 @@ async function generate(env, form, opts) {
         continue;
       }
       var q = crit;
-      var dims = ["specificity", "argument", "objection", "voice"];
+      // COMPANION-CRITIC-OBJECTION-1: the notes form has no objection section, so its objection score is recorded but does not gate
+      var dims = form === "notes" ? ["specificity", "argument", "voice"] : ["specificity", "argument", "objection", "voice"];
       var worst = 10;
       var worstName = "";
       var missing = false;
@@ -2110,11 +2379,28 @@ async function generate(env, form, opts) {
       await logRun(env, form, model, topic.id, "stage", "fact-check", Date.now() - t0);
       var vr = await verifyPiece(env, pieceText(piece), ground, model, topic.id + ":" + attempt, {});
       var finalPiece = piece;
+      // COMPANION-FACT-PRUNE-1 (1.17.0): before any model revision, delete exactly the sentences the reviewers quoted as FACT errors and
+      // verify the result again in full (grounding and both reviewers), up to PRUNE_ROUNDS rounds while a round can still finish inside the
+      // cron wall. The pruned draft is held to REPAIR_FLOOR_SHARE of the floor and must keep a lede that names the subject.
+      var pruneTrail = [];
+      for (var pround = 1; pround <= PRUNE_ROUNDS && !vr.ok && !vr.unavailable && vr.stage === "factcheck" && Date.now() - t0 < PRUNE_START_BEFORE_MS; pround++) {
+        var pr = pruneUnsupported(finalPiece, vr.problems);
+        if (!pr.removed.length) { pruneTrail.push("r" + pround + " located nothing"); break; }
+        var pv = validatePiece(pr.piece, form, ground, repairOpts);
+        if (!pv.ok) { pruneTrail.push("r" + pround + " -" + pr.removed.length + " blocked: " + pv.problems.slice(0, 2).join("; ").slice(0, 120)); break; }
+        pruneTrail.push("r" + pround + " -" + pr.removed.length + " (" + pv.words + " words)");
+        await logRun(env, form, model, topic.id, "stage", "fact prune r" + pround + ": removed " + pr.removed.length + " sentences, re-verifying", Date.now() - t0);
+        finalPiece = pr.piece; v = pv;
+        vr = await verifyPiece(env, pieceText(finalPiece), ground, model, topic.id + ":" + attempt + ":p" + pround, {});
+      }
+      if (pruneTrail.length) await logRun(env, form, model, topic.id, "stage", "fact prune trail: " + pruneTrail.join(", ") + (vr.ok ? " -> pass" : ""), Date.now() - t0);
       if (!vr.ok && !vr.unavailable && Date.now() - t0 < REVISE_BEFORE_MS) {
         await logRun(env, form, model, topic.id, "rejected", "fact-check " + vr.stage + ": " + vr.problems.slice(0, 4).join(" | ").slice(0, 600) + " (one corrective revision)", Date.now() - t0);
-        var rev = await composePiece(env, form, topic, anchors, life, profile, continuity, "", { title: piece.title, body_md: piece.body_md, problems: vr.problems });
-        var rp = rev && rev.piece;
-        var rv = rp ? validatePiece(rp, form, ground) : { ok: false, problems: ["fact revision produced no draft"] };
+        var rev = await composePiece(env, form, topic, anchors, life, profile, continuity, "", { title: finalPiece.title, body_md: (finalPiece.lede ? finalPiece.lede + NL + NL : "") + finalPiece.body_md, problems: vr.problems });
+        var rp = rev && rev.piece ? splitLongLede(rev.piece) : null;
+        // the revision keeps the draft's title when it dropped the "# " line (composePiece then falls back to the topic name)
+        if (rp && !/^\s*(?:```[^\n]*\n)?\s*# /.test(String(rev.raw || ""))) rp.title = finalPiece.title;
+        var rv = rp ? validatePiece(rp, form, ground, repairOpts) : { ok: false, problems: ["fact revision produced no draft"] };
         if (rp && rv.ok) {
           vr = await verifyPiece(env, pieceText(rp), ground, rev.model, topic.id + ":" + attempt + ":rev", {});
           if (vr.ok) { finalPiece = rp; model = rev.model; v = rv; }
@@ -2132,8 +2418,16 @@ async function generate(env, form, opts) {
         feedback = "The previous draft was rejected by independent fact-checkers; every item is a claim the source material does not support. Write a new draft that makes none of them and adds no other fact from outside the source material: " + vr.problems.slice(0, 8).join(" | ");
         continue;
       }
+      // COMPANION-FACT-INFERENCE-1: sentences the reviewers listed as the piece's own reasoning are deleted when the draft can spare them
+      // (it still validates at the repair floor); deletion cannot add a fact, so no second review is needed.
+      if ((vr.inferences || []).length) {
+        var pi = pruneUnsupported(finalPiece, vr.inferences.map(function (u) { return "unsupported claim: " + u; }));
+        var piv = pi.removed.length ? validatePiece(pi.piece, form, ground, repairOpts) : null;
+        if (piv && piv.ok) { finalPiece = pi.piece; v = piv; }
+        await logRun(env, form, model, topic.id, "stage", "inference prune: " + (piv && piv.ok ? "removed " + pi.removed.length + " sentences" : pi.removed.length ? "kept (" + piv.problems.slice(0, 2).join("; ").slice(0, 120) + ")" : "located nothing") + " of " + vr.inferences.length + " items", Date.now() - t0);
+      }
       q.gate = "passed";
-      q.factcheck = { stage: vr.stage, models: (vr.judges || []).map(function (j) { return j.model; }) };
+      q.factcheck = { stage: vr.stage, models: (vr.judges || []).map(function (j) { return j.model; }), pruned: pruneTrail.join(", ") };
       best = { piece: finalPiece, quality: q, words: v.words, vr: vr };
       break;
     }
@@ -2204,6 +2498,32 @@ async function cronTickDispatch(event, one) {
 // runs failed (with their causes), and closes it with evidence when a piece lands. No model call.
 var STALL_HOURS = 12;
 var STALL_TITLE = "COMPANION-PUBLISH-STALL-AUTO-1";
+// PUBLISH-STALL-DIGEST-1 (1.19.0, fleet audit 2026-10-13; the q08-signal-engine 0.17.2 pattern). The stall issue was filed once and never
+// refreshed: agent_issues 2222 still said "published nothing for 13h" after 73 h, with no word on which stage failed, so no doer acted.
+// Every stalled tick now rewrites the open issue: the hours in the title, a 24 h breakdown of the stage each rejected attempt ended at
+// (and runs that ran out of time), the newest rejection details, and priority critical after 24 h. A new issue is inserted only when none
+// is open. Failures are logged, never swallowed. The auto-close with evidence on recovery is unchanged.
+function stallAttemptStage(detail) {
+  var d = String(detail || "");
+  if (/^time budget spent/.test(d)) return "time budget";
+  if (/^critique |^critic /.test(d)) return "critique";
+  if (/^fact-check/.test(d)) return "fact-check";
+  if (/^validate:/.test(d)) {
+    var head = d.split(" || ")[0];
+    if (/banned:/.test(head)) return "validate-banned";
+    if (/(?:essay|notes|serial) length \d+/.test(head)) return "validate-length";
+    if (/grounding:/.test(head)) return "validate-grounding";
+    if (/\blede\b/.test(head)) return "validate-lede";
+    return "validate-other";
+  }
+  return "other";
+}
+function companionStallDigest(rows) {
+  var n = {}, order = [];
+  (rows || []).forEach(function (r) { var k = stallAttemptStage(r && r.detail); if (!n[k]) { n[k] = 0; order.push(k); } n[k]++; });
+  return order.sort(function (x, y) { return n[y] - n[x]; }).map(function (k) { return k + " " + n[k]; }).join(", ");
+}
+function stallLog(at, e) { console.error(JSON.stringify({ at: "personal-companion." + at, error: String(e && e.message || e).slice(0, 300) })); }
 async function companionStallDetector(env, nowMs) {
   if (!env.AUDIT || !env.PERSONAL) return { skipped: "no binding" };
   var now = nowMs || Date.now();
@@ -2212,13 +2532,13 @@ async function companionStallDetector(env, nowMs) {
   var hours = lastMs ? Math.round((now - lastMs) / 36e5 * 10) / 10 : null;
   try {
     await env.AUDIT.prepare("UPDATE metric_registry SET last_value = ?2, last_refreshed = ?3, state = 'MEASURED' WHERE metric = ?1").bind("companion_hours_since_last_piece", hours == null ? null : String(hours), new Date(now).toISOString()).run();
-  } catch (eM) {}
-  var open = await env.AUDIT.prepare("SELECT id FROM agent_issues WHERE status='open' AND title LIKE ?1").bind(STALL_TITLE + ":%").all();
+  } catch (eM) { stallLog("stall.metric", eM); }
+  var open = await env.AUDIT.prepare("SELECT id FROM agent_issues WHERE status='open' AND title LIKE ?1 ORDER BY id DESC").bind(STALL_TITLE + ":%").all();
   var openIds = ((open && open.results) || []).map(function (o) { return o.id; });
   if (hours != null && hours < STALL_HOURS) {
     for (var i = 0; i < openIds.length; i++) {
       var ev = "personal-companion " + VERSION + " stall detector: piece " + lastRow.slug + " created " + lastRow.created_at + " (" + hours + "h ago) at " + new Date(now).toISOString();
-      await env.AUDIT.prepare("UPDATE issue_triage SET close_evidence=?1 WHERE issue_id=?2").bind(ev, openIds[i]).run().catch(function () {});
+      await env.AUDIT.prepare("UPDATE issue_triage SET close_evidence=?1 WHERE issue_id=?2").bind(ev, openIds[i]).run().catch(function (e) { stallLog("stall.close-evidence", e); });
       await env.AUDIT.prepare("UPDATE agent_issues SET status='closed', close_channel='auto-recovery', updated_at=?1 WHERE id=?2").bind(now, openIds[i]).run();
     }
     return { hours: hours, closed: openIds.length };
@@ -2226,13 +2546,22 @@ async function companionStallDetector(env, nowMs) {
   var fr = await env.PERSONAL.prepare("SELECT run_at, status, model, topic, detail FROM companion_runs WHERE status IN ('ok','failed','blocked') AND form <> 'steward' ORDER BY id DESC LIMIT 2").all();
   var runs = (fr && fr.results) || [];
   if (runs.length < 2 || runs.some(function (r) { return r.status === "ok"; })) return { hours: hours, stalled: false };
-  if (openIds.length) return { hours: hours, stalled: true, open: openIds[0] };
+  var since = new Date(now - 864e5).toISOString();
+  var dayQ = await env.PERSONAL.prepare("SELECT id, status, detail FROM companion_runs WHERE run_at >= ?1 AND form <> 'steward' AND (status = 'rejected' OR (status = 'stage' AND detail LIKE 'time budget spent%')) ORDER BY id DESC LIMIT 200").bind(since).all();
+  var dayRows = (dayQ && dayQ.results) || [];
+  var runsQ = await env.PERSONAL.prepare("SELECT COUNT(*) n FROM companion_runs WHERE run_at >= ?1 AND form <> 'steward' AND status IN ('failed','blocked')").bind(since).first();
+  var newest = dayRows.filter(function (r) { return r.status === "rejected"; }).slice(0, 3).map(function (r) { return "#" + r.id + " " + stallAttemptStage(r.detail) + ": " + String(r.detail || "").split(" || ")[0].slice(0, 200); }).join(" | ");
   var causes = runs.map(function (r) { return r.run_at + " " + (r.model || "-") + " " + (r.topic || "") + ": " + String(r.detail || "").slice(0, 120); }).join(" | ");
   var errs = await env.PERSONAL.prepare("SELECT detail FROM companion_runs WHERE status='stage' AND detail LIKE '%err:%' ORDER BY id DESC LIMIT 1").first();
   var title = STALL_TITLE + ": reading.q08.org published nothing for " + (hours == null ? "ever" : Math.round(hours) + "h") + "; last 2 generation runs failed";
-  var desc = "Filed automatically by personal-companion " + VERSION + " companionStallDetector. Last 2 generation runs: " + causes + (errs && errs.detail ? ". Latest model-call error: " + String(errs.detail).slice(0, 400) : "") + ". Check companion_runs in personal-life D1 (stage rows carry the call error since 1.13.0). Closes itself when a piece is created.\ncode-task: repo=qnfo-workers path=personal-companion/worker.js";
-  await env.AUDIT.prepare("INSERT INTO agent_issues (title, description, source, category, priority, status, created_at, updated_at) SELECT ?1, ?2, 'personal-companion', 'reliability', 'high', 'open', ?3, ?3 WHERE NOT EXISTS (SELECT 1 FROM agent_issues WHERE status='open' AND title LIKE ?4)").bind(title, desc, now, STALL_TITLE + ":%").run();
-  return { hours: hours, stalled: true, filed: true };
+  var desc = "Filed and refreshed automatically by personal-companion " + VERSION + " companionStallDetector (PUBLISH-STALL-DIGEST-1), " + new Date(now).toISOString() + ". Stage each rejected attempt ended at, last 24 h (" + dayRows.length + " rows, " + ((runsQ && runsQ.n) || 0) + " failed or blocked runs): " + (companionStallDigest(dayRows) || "none") + ". Newest rejections: " + (newest || "none") + ". Last 2 generation runs: " + causes + (errs && errs.detail ? ". Latest model-call error: " + String(errs.detail).slice(0, 300) : "") + ". Fix the stage with the most attempts first; the full rows are in companion_runs (personal-life D1). Closes itself with evidence when a piece is created.\ncode-task: repo=qnfo-workers path=personal-companion/worker.js";
+  var prio = hours == null || hours >= 24 ? "critical" : "high";
+  if (openIds.length) {
+    await env.AUDIT.prepare("UPDATE agent_issues SET title=?1, description=?2, priority=?3, updated_at=?4 WHERE id=?5").bind(title, desc, prio, now, openIds[0]).run();
+    return { hours: hours, stalled: true, open: openIds[0], updated: true, priority: prio };
+  }
+  await env.AUDIT.prepare("INSERT INTO agent_issues (title, description, source, category, priority, status, created_at, updated_at) SELECT ?1, ?2, 'personal-companion', 'reliability', ?5, 'open', ?3, ?3 WHERE NOT EXISTS (SELECT 1 FROM agent_issues WHERE status='open' AND title LIKE ?4)").bind(title, desc, now, STALL_TITLE + ":%", prio).run();
+  return { hours: hours, stalled: true, filed: true, priority: prio };
 }
 var worker_default = {
   async fetch(request, env, ctx) {
@@ -3142,7 +3471,7 @@ function groundingNeedles(problems) {
   });
   return needles.filter(function (n, i, a) { return n.length > 0 && a.indexOf(n) === i; });
 }
-var __verify = { groundingNeedles: groundingNeedles, stemGrounded: stemGrounded, repairGroundingDraft: repairGroundingDraft, GROUNDING_PREFIX: GROUNDING_PREFIX, problemContext: problemContext, factCheckExtra: factCheckExtra, blockedRetryDue: blockedRetryDue, steward: steward, fetchCfg: fetchCfg, fetchUA: fetchUA, groundingProblems: groundingProblems, parseFactVerdict: parseFactVerdict, factCheck: factCheck, verifyPiece: verifyPiece, auditPublished: auditPublished, retractPiece: retractPiece, pieceVerified: pieceVerified, recordAudit: recordAudit, generate: generate, pickTopic: pickTopic, sendMail: sendMail, pickReviewers: pickReviewers, familyOf: familyOf, anchorsBlock: anchorsBlock, prompts: { P_STYLE: P_STYLE, P_ESSAY: P_ESSAY, P_NOTES: P_NOTES, P_SERIAL: P_SERIAL, P_CRITIQUE: P_CRITIQUE, FACTCHECK_PROMPT: FACTCHECK_PROMPT }, VISIBLE_SQL: VISIBLE_SQL, REVIEW_POOL: REVIEW_POOL };
+var __verify = { splitLongLede: splitLongLede, stallAttemptStage: stallAttemptStage, companionStallDigest: companionStallDigest, arxivIdOf: arxivIdOf, paperFullTextUrls: paperFullTextUrls, paperHtmlText: paperHtmlText, ledeProblems: ledeProblems, ledeOf: ledeOf, pruneUnsupported: pruneUnsupported, deleteSentences: deleteSentences, splitFactItems: splitFactItems, sourceLabel: sourceLabel, anchorsText: anchorsText, floorFor: floorFor, critiquePiece: critiquePiece, REPAIR_FLOOR_SHARE: REPAIR_FLOOR_SHARE, FALLBACK_FLOOR_RATIO: FALLBACK_FLOOR_RATIO, NOTES_OBJECTION_PLACEHOLDER: NOTES_OBJECTION_PLACEHOLDER, groundingNeedles: groundingNeedles, stemGrounded: stemGrounded, repairGroundingDraft: repairGroundingDraft, GROUNDING_PREFIX: GROUNDING_PREFIX, problemContext: problemContext, factCheckExtra: factCheckExtra, blockedRetryDue: blockedRetryDue, steward: steward, fetchCfg: fetchCfg, fetchUA: fetchUA, groundingProblems: groundingProblems, parseFactVerdict: parseFactVerdict, factCheck: factCheck, verifyPiece: verifyPiece, auditPublished: auditPublished, retractPiece: retractPiece, pieceVerified: pieceVerified, recordAudit: recordAudit, generate: generate, pickTopic: pickTopic, sendMail: sendMail, pickReviewers: pickReviewers, familyOf: familyOf, anchorsBlock: anchorsBlock, prompts: { P_STYLE: P_STYLE, P_ESSAY: P_ESSAY, P_NOTES: P_NOTES, P_SERIAL: P_SERIAL, P_CRITIQUE: P_CRITIQUE, FACTCHECK_PROMPT: FACTCHECK_PROMPT }, VISIBLE_SQL: VISIBLE_SQL, REVIEW_POOL: REVIEW_POOL };
 export {
   __verify,
   GenerationFlow,

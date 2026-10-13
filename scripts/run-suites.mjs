@@ -11,7 +11,8 @@
 //        and the control plane can only be opened to the loop (T1.8) once its PRs run the full set (T5.4).
 // USAGE  node scripts/run-suites.mjs --all | --changed-file /tmp/changed.txt [--jobs 4] [--timeout 180] [--list]
 //        Exit 1 when any selected suite fails or times out. No network, no secrets; suites are run with node.
-import { readdirSync, existsSync, readFileSync, statSync } from "node:fs";
+import { readdirSync, existsSync, readFileSync, statSync, mkdtempSync, copyFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { spawn } from "node:child_process";
 import { join } from "node:path";
 
@@ -43,6 +44,38 @@ export function select(all, changedDirs) {
   return { suites: picked, reason: dirs.length ? "suites of " + dirs.join(", ") + " plus the repository guards" : "no worker directory changed" };
 }
 
+// SUITE-SYNTAX-CHECK-1 (2026-10-13, failure mode version-note-comment-terminator): node --check every worker.js and
+// deployed-current.worker.js of the changed worker directories (all worker directories with --all), before any suite. Only
+// charter-guard (qnfo-fleet-control) and code-loop-test (qnfo-code-orchestrator) syntax-checked a worker before, so a
+// VERSION note containing the two characters that close a block comment broke a worker that has no suite.
+export function syntaxTargets(root, changedDirs, everyWorker) {
+  let dirs;
+  if (everyWorker) dirs = readdirSync(root).filter((d) => !d.startsWith(".") && existsSync(join(root, d, "worker.js")));
+  else dirs = Array.from(new Set((changedDirs || []).map((d) => String(d).trim()).filter((d) => d && !SHARED.includes(d))));
+  const out = [];
+  for (const d of dirs.sort()) for (const f of ["worker.js", "deployed-current.worker.js"]) if (existsSync(join(root, d, f))) out.push(d + "/" + f);
+  return out;
+}
+
+// node 22 "--check" on a .js file that is an ES module exits 0 without parsing it as a module (module detection), so a
+// worker with "export default" passed even with a syntax error; a module-shaped file is checked as a .mjs copy instead.
+export function isModuleSource(text) { return /^\s*(export\s|import\s*[\w{*"'])/m.test(String(text || "")); }
+function checkSyntax(root, file) {
+  return new Promise((resolve) => {
+    const t0 = Date.now();
+    let target = file;
+    if (isModuleSource(readFileSync(join(root, file), "utf8"))) {
+      target = join(mkdtempSync(join(tmpdir(), "syntax-")), file.replace(/[\\/]/g, "__") + ".mjs");
+      copyFileSync(join(root, file), target);
+    }
+    const child = spawn(process.execPath, ["--check", target], { cwd: root, stdio: ["ignore", "pipe", "pipe"] });
+    let out = "";
+    child.stdout.on("data", (b) => { out += b; });
+    child.stderr.on("data", (b) => { out += b; });
+    child.on("close", (code) => resolve({ suite: file + " (node --check)", code: code === null ? 124 : code, ms: Date.now() - t0, out }));
+  });
+}
+
 function runOne(root, suite, timeoutS) {
   return new Promise((resolve) => {
     const t0 = Date.now();
@@ -60,17 +93,21 @@ async function main() {
   const arg = (k, d) => { const i = argv.indexOf(k); return i >= 0 ? argv[i + 1] : d; };
   const root = process.cwd();
   const all = discover(root);
-  let sel;
-  if (argv.includes("--all")) sel = { suites: all, reason: "--all" };
+  let sel, syn;
+  if (argv.includes("--all")) { sel = { suites: all, reason: "--all" }; syn = syntaxTargets(root, [], true); }
   else {
     const f = arg("--changed-file", null);
     if (!f || !existsSync(f)) { console.error("usage: run-suites.mjs --all | --changed-file <file of changed top-level dirs>"); process.exit(2); }
-    sel = select(all, readFileSync(f, "utf8").split(/\r?\n/));
+    const changed = readFileSync(f, "utf8").split(/\r?\n/);
+    sel = select(all, changed);
+    syn = syntaxTargets(root, changed, false);
   }
   console.log("SUITE-RUNNER-1: " + sel.suites.length + " of " + all.length + " suites (" + sel.reason + ")");
   if (argv.includes("--list")) { sel.suites.forEach((s) => console.log("  " + s)); return; }
   const jobs = Math.max(1, Number(arg("--jobs", 4)) || 4), timeoutS = Math.max(10, Number(arg("--timeout", 180)) || 180);
   const queue = sel.suites.slice(), results = [];
+  for (const file of syn) { const r = await checkSyntax(root, file); if (r.code !== 0) results.push(r); }
+  console.log("SUITE-SYNTAX-CHECK-1: " + syn.length + " worker file(s) syntax-checked, " + results.length + " failed");
   await Promise.all(Array.from({ length: jobs }, async () => { while (queue.length) results.push(await runOne(root, queue.shift(), timeoutS)); }));
   results.sort((a, b) => a.suite.localeCompare(b.suite));
   const failed = results.filter((r) => r.code !== 0);

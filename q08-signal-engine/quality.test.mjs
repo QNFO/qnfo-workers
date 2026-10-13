@@ -161,7 +161,7 @@ console.log("quality.test.mjs section 12 ok");
   // B. first panel fails, the editor (other family) fixes it, a fresh panel passes
   ({ env, calls } = mkEnv({ judge: (m, n) => (n <= 2 ? verdict(2, false) : verdict(5, true)), editor: EDITED }));
   r = await q.runLevels(env, base());
-  assert.equal(r.gateResult.ok, true); assert.equal(r.piece.text, EDITED);
+  assert.equal(r.gateResult.ok, true); assert.equal(r.piece.text, mod.__lede.normalizeDraft(EDITED));
   const ed = calls.find((c) => !c.judge); assert.notEqual(q.familyOf(ed.model), "nvidia", "the editor is not the writer's family");
   const j1 = calls.filter((c) => c.judge).slice(0, 2).map((c) => q.familyOf(c.model)), j2 = calls.filter((c) => c.judge).slice(2, 4).map((c) => q.familyOf(c.model));
   assert.ok(j2.every((f) => !j1.includes(f)), "the second panel is fresh: " + j1 + " vs " + j2);
@@ -194,7 +194,7 @@ console.log("quality.test.mjs section 12 ok");
   // F. first panel fails, the editor works, the second panel is unavailable: edited draft publishes and the gap is written down
   ({ env } = mkEnv({ judge: (m, n) => (n <= 2 ? verdict(2, false) : new Error("down")), editor: EDITED }));
   r = await q.runLevels(env, base());
-  assert.equal(r.gateResult.ok, true); assert.equal(r.piece.text, EDITED); assert.ok(r.rows.some((x) => x.role === "panel_unavailable" && x.round === 2));
+  assert.equal(r.gateResult.ok, true); assert.equal(r.piece.text, mod.__lede.normalizeDraft(EDITED)); assert.ok(r.rows.some((x) => x.role === "panel_unavailable" && x.round === 2));
   // G. a gate that already failed is passed through untouched
   const g0 = base(); g0.gateResult = { ok: false, problems: ["x"] };
   r = await q.runLevels({ AI: { run: async () => { throw new Error("must not be called"); } } }, g0);

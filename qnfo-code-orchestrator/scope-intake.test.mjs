@@ -49,7 +49,7 @@ function mkEnv(issues) {
       async first() { log.push({ q, a }); if (/COUNT\(\*\) AS n FROM code_tasks/.test(q)) return { n: 0 }; return null; },
       async all() {
         log.push({ q, a });
-        if (/FROM agent_issues WHERE status='open' AND description LIKE '%code-task:%'/.test(q)) return { results: issues.filter((r) => r.description.includes("code-task:")) };
+        if (/FROM agent_issues (a LEFT JOIN v_issue_queue_v2 q ON q\.id = a\.id )?WHERE (a\.)?status='open' AND (a\.)?description LIKE '%code-task:%'/.test(q)) return { results: issues.filter((r) => r.description.includes("code-task:")) };
         if (/FROM service_registry/.test(q)) return { results: [{ service: "qnfo-infra" }, { service: "qnfo-gateway" }, { service: "qnfo-fleet-control" }] };
         return { results: [] };
       },
