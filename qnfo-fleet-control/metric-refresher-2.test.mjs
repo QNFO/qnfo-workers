@@ -75,7 +75,7 @@ r = await metricRefresher2({ AUDIT_DB: db }, NOW);
 ok(!r.ok && r.errors.length === 4 && !db.calls.some((c) => /INSERT INTO metric_registry|UPDATE metric_registry/.test(c.sql)), "unregistered metrics are reported, never created");
 
 // 5. Wired into the 20-minute tick.
-ok(/metricRefresher2\(env\)\.catch/.test(src.slice(src.indexOf('if (cron === "*/20 * * * *")'), src.indexOf('if (cron === "0 3 * * *")'))), "metricRefresher2 runs in the */20 block");
+ok(/metricRefresher2\(env\)\.catch/.test(src.slice(src.indexOf('if (cron === "*/10 * * * *")'), src.indexOf('if (cron === "0 3 * * *")'))), "metricRefresher2 runs in the 10-minute block (REMEDIATION-2X-1; was */20)");
 
 console.log(pass + " passed, " + fail + " failed");
 process.exit(fail ? 1 : 0);

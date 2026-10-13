@@ -17,13 +17,18 @@ let fails = 0, n = 0;
 const check = (c, m, x) => { n++; if (!c) { fails++; console.log("FAIL " + m + (x !== undefined ? " -- " + JSON.stringify(x) : "")); } };
 
 const vm1 = /var VERSION = "(\d+)\.(\d+)\./.exec(src);
-check(vm1 && (+vm1[1] > 0 || +vm1[2] >= 23), "VERSION at least 0.23");
+check(vm1 && (+vm1[1] > 0 || +vm1[2] >= 26), "VERSION at least 0.26 (REMEDIATION-2X-1 is 0.26.2)");
 
 // wiring: the 20-minute block runs the tick with a budget; the hourly fan-out no longer does
 const sched = src.slice(src.indexOf("async scheduled(event, env, ctx) {\n    const cron = event.cron;"));
 const twenty = sched.slice(0, sched.indexOf('if (cron === "0 3 * * *")'));
+// REMEDIATION-2X-1 (0.26.2): the slot is the 10-minute cron, and the remediation tick is not gated to the 20-minute grid.
+check(/if \(cron === "\*\/10 \* \* \* \*"\)/.test(twenty), "the slot is the 10-minute cron");
+check(/\n\s+ctx\.waitUntil\(remediationContractsTick\(env, \{ budgetMs: 25000 \}\)/.test(twenty), "the remediation tick runs in every 10-minute slot (not behind onTwentyGrid)");
+check(/\n\s+ctx\.waitUntil\(codeMergeTick\(env, mergeSlot \? \{\} : \{ openOnly: true \}\)/.test(twenty) && /var mergeSlot = slotMin >= 30 && slotMin < 40;/.test(twenty), "code-loop merges run at minute 30 as well as on the hourly tick");
+check(/\n\s+ctx\.waitUntil\(branchHygieneTick\(env, \{ laneOnly: true \}\)/.test(twenty), "the stale-PR lane runs in every 10-minute slot");
 const hourly = sched.slice(sched.indexOf('if (cron === "0 4 1 * *" || cron === "30 3 * * 1")'), sched.indexOf("return deployDefault.scheduled(event, env, ctx);"));
-check(/remediationContractsTick\(env, \{ budgetMs: 25000 \}\)/.test(twenty), "the 20-minute cron runs the remediation tick with a 25 s budget");
+check(/remediationContractsTick\(env, \{ budgetMs: 25000 \}\)/.test(twenty), "the 10-minute cron runs the remediation tick with a 25 s budget");
 check(!/remediationContractsTick\(env/.test(hourly), "the hourly fan-out no longer runs the remediation tick");
 
 const wrap = (db, delayMs) => {
@@ -48,10 +53,12 @@ const ctx = vm.createContext({ VERSION: "test", __name: (f) => f, Date, Math, Nu
 const W = vm.runInContext(src.slice(a, b) + "\n;({ remediationContractsTick, rtNextDueOffset, RT_REPROBE_EARLY_MIN });", ctx, { filename: "fleet-control#REMEDIATION-TICK-SLOT-1" });
 
 // next-due offsets
-check(W.rtNextDueOffset(1) === "+35 minutes", "an hourly contract is due again in 35 minutes", W.rtNextDueOffset(1));
+// REMEDIATION-2X-1: half the earlier offset (35 -> 18 minutes), floor 10 minutes; the 24 h post-close hold is unchanged.
+check(W.rtNextDueOffset(1) === "+18 minutes", "an hourly contract is due again in 18 minutes", W.rtNextDueOffset(1));
 check(W.rtNextDueOffset(24) === "+1415 minutes", "a daily hold is due again 25 minutes early", W.rtNextDueOffset(24));
-check(W.rtNextDueOffset(0.25) === "+20 minutes" && W.rtNextDueOffset(0) === "+35 minutes", "never sooner than 20 minutes; a missing cadence reads as hourly");
-check(35 + 20 < 60, "a 20-minute slot re-probes an hourly contract inside 60 minutes");
+check(W.rtNextDueOffset(6) === "+168 minutes", "a 6-hour contract is due again in half its earlier 335 minutes", W.rtNextDueOffset(6));
+check(W.rtNextDueOffset(0.25) === "+10 minutes" && W.rtNextDueOffset(0) === "+18 minutes", "never sooner than 10 minutes; a missing cadence reads as hourly");
+check(18 + 10 <= 30, "a 10-minute slot re-probes an hourly contract inside 30 minutes (was 55)");
 
 // a probe's next_due_at lands about 35 minutes out
 {
@@ -61,7 +68,7 @@ check(35 + 20 < 60, "a 20-minute slot re-probes an hourly contract inside 60 min
   const out = await W.remediationContractsTick({ AUDIT: wrap(db) });
   const row = db.prepare("SELECT last_verdict, CAST(ROUND((julianday(next_due_at) - julianday('now')) * 1440) AS INTEGER) AS mins FROM remediation_contracts WHERE class = 'fm-a'").get();
   check(out.fail === 1 && row.last_verdict === "fail", "the probe still runs and records its verdict", row);
-  check(row.mins >= 34 && row.mins <= 35, "next_due_at is 35 minutes out", row);
+  check(row.mins >= 17 && row.mins <= 18, "next_due_at is 18 minutes out", row);
   check(out.budget_left === 0, "no budget set: nothing left behind");
 }
 

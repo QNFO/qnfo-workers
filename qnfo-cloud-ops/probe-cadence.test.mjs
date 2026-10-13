@@ -18,7 +18,9 @@ const { PROBE_CADENCE_REPO, PROBE_CADENCE_WORKFLOW, PROBE_CADENCE_EVENT, PROBE_C
 
 const now = Date.parse("2026-10-06T18:00:00Z");
 const ago = (min) => new Date(now - min * 60000).toISOString();
-check(PROBE_CADENCE_STALE_MIN === 60 && PROBE_CADENCE_REPO === "QNFO/qnfo-workers" && PROBE_CADENCE_WORKFLOW === "remediation-consumer.yml", "60-minute window on the consumer workflow of this repository");
+// REMEDIATION-2X-1 (1.27.1): the window is 30 minutes (was 60), and never longer than that again.
+check(PROBE_CADENCE_STALE_MIN <= 30 && PROBE_CADENCE_REPO === "QNFO/qnfo-workers" && PROBE_CADENCE_WORKFLOW === "remediation-consumer.yml", "a window of at most 30 minutes on the consumer workflow of this repository");
+check(probeCadenceDecide(ago(35), null, now, PROBE_CADENCE_STALE_MIN).dispatch === true, "a consumer idle for 35 min is dispatched at the shipped window");
 let d = probeCadenceDecide(ago(12), null, now, 60);
 check(d.dispatch === false && /ran 12 min ago/.test(d.why), "a consumer that ran 12 min ago is left alone", d);
 d = probeCadenceDecide(ago(75), null, now, 60);
