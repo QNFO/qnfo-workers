@@ -48,5 +48,23 @@ check("the directive asks for the marker", /Begin the systems analysis with a li
   const early = "# T\n\n" + [a1, r1, r2].join("\n\n");
   check("reasoning in the lede or context paragraphs is never the analysis start", A.splitAnalysis(early).mode === "none");
 }
+// ---- Q08-ANALYSIS-DEPTH-1 / Q08-DANGLING-CUT-1 (0.20.0, run 380) ----------------------------------------------------------------
+{
+  const A = (await import("./worker.js")).__analysis;
+  const V = (await import("./worker.js")).__verify;
+  const rep = "Character.ai filed for Chapter 11 bankruptcy protection and said it is pursuing a sale of its assets to Disney, according to The Verge on Oct 13 2026. ".repeat(3) + "\n\n" + "Character.ai is a chatbot service built by former Google developers; Disney offered $20 million for some of its assets and hired its former chief executive. ".repeat(3);
+  const thin = "# T\n\n" + rep + "\n\n<!-- analysis -->\n\nThis information gap discourages rival offers, reinforcing the lead bidder's position because the bidder already employs the staff.\n\nworth your time: yes - x";
+  const tp = A.analysisDepthProblems(thin);
+  check("run 380's two-sentence analysis is held as too thin", tp.some((p) => /^systems analysis too thin/.test(p)), tp);
+  check("its opening 'This information gap' is flagged as referring to nothing", tp.some((p) => /opens with 'This information gap/.test(p)), tp);
+  const deep = "# T\n\n" + rep + "\n\n<!-- analysis -->\n\n" + "Disney is rewarded for buying the staff it already hired, because the founders' knowledge left with them and a rival bidder would pay for a shell. ".repeat(3) + "\n\n" + "Creditors pay for that arrangement, because the court sees one bid and the users who pay subscriptions have no seat at the table. ".repeat(3) + "\n\nworth your time: yes - x";
+  check("a two-paragraph analysis over the floor with a grounded opening passes", A.analysisDepthProblems(deep).length === 0, A.analysisDepthProblems(deep));
+  check("a demonstrative whose noun the piece used is not dangling", A.danglingOpening("This bankruptcy leaves users waiting.", "the bankruptcy filing") === false);
+  check("'This means' is not dangling", A.danglingOpening("This means the bidder waits.", "") === false);
+  check("a piece with no analysis at all is held", A.analysisDepthProblems("# T\n\n" + rep + "\n\nworth your time: yes - x").some((p) => /^no systems analysis section/.test(p)));
+  const txt = "# T\n\nLede sentence names the company and the filing date here.\n\nThe filing lists liabilities and names one bidder for the assets. The bidder hides its valuation from rivals. This information gap discourages rival offers. The court sets a date.\n\nworth your time: yes - x";
+  const pr = V.pruneUnsupported(txt, ["unsupported claim: The bidder hides its valuation from rivals."]);
+  check("a 'This <noun>' sentence left after a cut goes with it", pr.removed.length === 2 && !pr.text.includes("information gap") && pr.text.includes("The court sets a date"), pr);
+}
 console.log("analysis.test.mjs: " + passes + " passed, " + fails + " failed");
 process.exit(fails ? 1 : 0);
