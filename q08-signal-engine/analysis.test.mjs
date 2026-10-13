@@ -66,5 +66,15 @@ check("the directive asks for the marker", /Begin the systems analysis with a li
   const pr = V.pruneUnsupported(txt, ["unsupported claim: The bidder hides its valuation from rivals."]);
   check("a 'This <noun>' sentence left after a cut goes with it", pr.removed.length === 2 && !pr.text.includes("information gap") && pr.text.includes("The court sets a date"), pr);
 }
+// ---- Q08-MARK-SHIFT-1 (0.20.1, run 381) -----------------------------------------------------------------------------------------
+{
+  const A = (await import("./worker.js")).__analysis;
+  const rp = "The paper by the grid team reports a detector trained on cost rather than accuracy, published on arXiv this week with its full method. ".repeat(2);
+  const an = "Operators are rewarded for low cost, so a detector graded on accuracy optimises the wrong target, and the expensive misses go unpunished. ".repeat(3);
+  const early = "# T\n\n" + rp + "\n\n<!-- analysis -->\n\n" + rp + "\n\n" + rp + "\n\n" + an + "\n\n" + an + "\n\nworth your time: yes - x";
+  const sp = A.splitAnalysis(early);
+  check("a marker placed before 600 characters of reporting moves later instead of being dropped", sp.mode === "marked-shifted" && sp.analysis && sp.analysis.includes("Operators are rewarded") && sp.report.length >= 600, { mode: sp.mode, rl: sp.report.length });
+  check("a marker that is already valid is kept where the writer put it", A.splitAnalysis("# T\n\n" + rp + "\n\n" + rp + "\n\n" + rp + "\n\n<!-- analysis -->\n\n" + an + "\n\nworth your time: yes - x").mode === "marked");
+}
 console.log("analysis.test.mjs: " + passes + " passed, " + fails + " failed");
 process.exit(fails ? 1 : 0);
