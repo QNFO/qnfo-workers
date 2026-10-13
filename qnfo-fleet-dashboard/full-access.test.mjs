@@ -77,7 +77,7 @@ const C = sb.__c, env = { AUDIT: D1, IDENTITY: D1 }, owner = { session: { stepup
   ok(/#7/.test(s.text) && s.actions[0].cmd === "mail 7", "mail <word> searches and offers to open each one", s);
   const one = await C.conRead(env, "inbox 7", {}, owner);
   ok(/Subject: Invitation to review/.test(one.text) && /We invite you to review a manuscript/.test(one.text) && one.text.length > 5000 && one.text.length < 6600, "mail <id> reads the message in full (up to 6000 characters)", one.text.length);
-  ok(one.actions[0].fill === "reply 7 " && one.actions[1].cmd === "spam 7" && one.actions[2].cmd === "mail theresearchletters.org", "the reader offers Reply (fills the line), Spam and more from the sender", one.actions);
+  ok(one.actions[0].cmd === "draft a reply to message #7" && one.actions[0].label === "Reply" && one.actions[1].cmd === "spam 7" && one.actions[2].cmd === "mail theresearchletters.org", "the reader offers Reply (a complete draft, MAIL-REPLY-INSTRUCTION-1), Spam and more from the sender", one.actions);
 }
 {
   ok(sb.__c.CON_DBS.q08 === "Q08" && sb.__c.CON_DBS.identity === "IDENTITY", "sql reads q08 and identity");
@@ -127,7 +127,7 @@ const C = sb.__c, env = { AUDIT: D1, IDENTITY: D1 }, owner = { session: { stepup
   const r4 = await R.conMailSpam({ AUDIT: D }, [989, 990]);
   ok(r4.ok && db2.prepare("SELECT COUNT(*) n FROM emails WHERE id IN (989, 990) AND status = 'spam'").get().n === 2 && db2.prepare("SELECT decision FROM email_reply_queue WHERE id = 66").get().decision === "skip" && db2.prepare("SELECT COUNT(*) n FROM email_sender_policy WHERE pattern = 'parker.knight@theresearchletters.org' AND kind = 'junk'").get().n === 1, "spam marks both, closes the held row and adds the sender to the junk policy once", r4);
   ok(/var CON_OPS = [\s\S]*mailreply: \{ destructive: true/.test(src), "sending in the owner's name needs a fresh code (destructive)");
-  ok(/data-fleet-fill="reply ' \+ Math\.max/.test(src) && /closest\('\[data-fleet-fill\]'\)/.test(src) && !/Open the qnfo inbox and reply/.test(src), "inbox cards carry Reply, Read and Spam; the card no longer sends the owner elsewhere");
+  ok(/data-fleet-cmd="draft a reply to message #' \+ Math\.max/.test(src) && /closest\('\[data-fleet-cmd\]'\)/.test(src) && !/Open the qnfo inbox and reply/.test(src), "inbox cards carry Reply, Read and Spam; the card no longer sends the owner elsewhere");
 }
 console.log(pass + " passed, " + fail + " failed");
 if (fail) process.exit(1);

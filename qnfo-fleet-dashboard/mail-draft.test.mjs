@@ -73,5 +73,22 @@ const ASK = "I'm not going back and forth with kottevarun@gmail.com. Draft a rep
   ok(/only the signed-in owner/.test(r.answer) && !/EB-1A/.test(r.answer), "a visitor is asked to sign in and sees no text");
   ok(f.mailDraftGuard("As you said, the Machine Learning Engineer role is open.", "machine learning engineer role").dropped.length === 0, "a phrase a record contains is kept");
 }
+// MAIL-REPLY-INSTRUCTION-1 (1.36.0): the owner's "reply 984 always show me draft first before sending" is an instruction.
+{
+  const { f } = mk("x", row);
+  const sb2 = { RegExp, Number, String }; vm.createContext(sb2);
+  vm.runInContext(cut("var MAIL_REPLY_LITERAL_RX", "// \"send it\" after a draft") + "\n__g = mailReplyInstruction;", sb2);
+  const g = sb2.__g;
+  const a = g("reply 984 always show me draft first before sending");
+  ok(a && a.id === 984 && a.instruction === "always show me draft first before sending", "the screenshot's text is an instruction, not the email", a);
+  ok(g("reply 984 thank him and decline politely").id === 984, "a short instruction is a draft request");
+  ok(g("reply 4211 Dear Varun,\n\nThanks.\n\nBest regards,\nRowan Quni\nrowan.quni@qnfo.org") === null, "a filled draft (Edit, then send) is sent as written");
+  ok(g("reply 7 Hi Ana, Tuesday works for me.") === null, "text that opens with a greeting is sent as written");
+  ok(g("mail 984") === null, "other commands are untouched");
+  ok(/const ri = mailReplyInstruction\(text\);\s*if \(ri\) text = "draft a reply to message #" \+ ri\.id/.test(src), "the command route turns the instruction into a draft request");
+  ok(f.MAIL_DRAFT_RX.test("draft a reply to message #984. Owner's instruction: always show me draft first before sending"), "the rewritten text takes the draft path");
+  ok(/data-fleet-cmd="draft a reply to message #' \+ Math\.max\.apply\(null, mids\) \+ '">Reply<\/button>/.test(src) && !/data-fleet-fill="reply '/.test(src), "the inbox card's Reply runs a complete draft");
+  ok(/conCmd\("draft a reply to message #" \+ e\.id, "Reply"\)/.test(src), "mail <id>'s Reply runs a complete draft");
+}
 console.log(pass + " passed, " + fail + " failed");
 if (fail) process.exit(1);
