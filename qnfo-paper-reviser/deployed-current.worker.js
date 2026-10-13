@@ -2,7 +2,7 @@ var __defProp = Object.defineProperty;
 var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
 
 // worker.js
-var VERSION = "1.3.1-doi-scrub"; // 1.3.1 NOZ-DOI-1 (2026-10-11): no external record service is called; candidates are the published papers, the already-revised test reads the paper version, provenance files are regenerated from the body, and the paper key in logs, queues and errata is the slug (status reports published_total).  1.3.0 1.3.0 REVISER-GROUND-1 (owner directive 2026-10-10): a low-severity edit must add no assertion (surface category, short, every name/figure/year/link and nearly every content word already in the paper); anything else is high and flagged, so bridge sentences are never auto-applied from memory; the audit prompt says so. // 1.2.7 REVISER-FLAGGED-DEADEND-1 (#1812): high findings become internal_errata rows (unconfirmed until a second model confirms); 1.2.6 LICENSE-ONE-1 (#517): new packages under QNFO-ULA v2.0; 1.2.5 CHANGELOG-ANCHOR-1 (2026-10-02): changelog block anchored to a References heading at line start (no bare "#" line). 1.2.4: FIX-REVISER-GARBAGE (2026-09-14): reject reasoning/outline output before queue
+var VERSION = "1.3.2-secret-compare"; // 1.3.2 WORKERS-BP-DEBT-1 (#2432, pillar security): the request-secret checks compare in constant time (rxSecretEqual) instead of with === or !==. 1.3.1 NOZ-DOI-1 (2026-10-11): no external record service is called; candidates are the published papers, the already-revised test reads the paper version, provenance files are regenerated from the body, and the paper key in logs, queues and errata is the slug (status reports published_total).  1.3.0 1.3.0 REVISER-GROUND-1 (owner directive 2026-10-10): a low-severity edit must add no assertion (surface category, short, every name/figure/year/link and nearly every content word already in the paper); anything else is high and flagged, so bridge sentences are never auto-applied from memory; the audit prompt says so. // 1.2.7 REVISER-FLAGGED-DEADEND-1 (#1812): high findings become internal_errata rows (unconfirmed until a second model confirms); 1.2.6 LICENSE-ONE-1 (#517): new packages under QNFO-ULA v2.0; 1.2.5 CHANGELOG-ANCHOR-1 (2026-10-02): changelog block anchored to a References heading at line start (no bare "#" line). 1.2.4: FIX-REVISER-GARBAGE (2026-09-14): reject reasoning/outline output before queue
 var MODEL = "@cf/deepseek-ai/deepseek-v4-flash-0731"; // 2026-09-08 model audit: 24k-ctx fp8-fast -> 1.3M ctx fc+reasoning
 var BATCH = 3;
 var UA = "QNFO-paper-reviser/" + VERSION + " (+https://papers.qnfo.org)";
@@ -12,9 +12,20 @@ function json(data, status) {
   return new Response(JSON.stringify(data), { status, headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" } });
 }
 __name(json, "json");
+// WORKERS-BP-DEBT-1 (#2432, pillar security): the reviser and errata request secrets are compared in constant time
+// (rxSecretEqual), not with === / !==, whose early exit leaks how many leading bytes of a guess match.
+function rxSecretEqual(given, expected) {
+  if (typeof given !== "string" || typeof expected !== "string" || !expected) return false;
+  const enc = new TextEncoder();
+  const a = enc.encode(given), b = enc.encode(expected);
+  if (a.length !== b.length) return false;
+  let d = 0;
+  for (let i = 0; i < a.length; i++) d |= a[i] ^ b[i];
+  return d === 0;
+}
 function authorized(request, env) {
   if (!env.REVISER_TOKEN) return false;
-  return (request.headers.get("X-Reviser-Token") || "") === env.REVISER_TOKEN;
+  return rxSecretEqual(request.headers.get("X-Reviser-Token") || "", env.REVISER_TOKEN);
 }
 __name(authorized, "authorized");
 function bibEsc(s) {
