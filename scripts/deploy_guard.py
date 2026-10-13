@@ -50,7 +50,7 @@ def main(argv):
         ev = argv[4] if len(argv) > 4 else None
         st, j = call("POST", "/lock/acquire", {"worker": w, "owner": OWNER, "actor": OWNER, "session_id": SESSION, "ttl_sec": ttl, "expected_version": ev})
         print(json.dumps(j))
-        if st == 200:
+        if 200 <= (st or 0) < 300:
             print("LOCK_TOKEN=" + str(j.get("token", "")))
             return 0
         return 2 if st == 409 else 3
@@ -59,7 +59,7 @@ def main(argv):
         if len(argv) < 4:
             print("usage: release <worker> <token>"); return 3
         st, j = call("POST", "/lock/release", {"worker": argv[2], "token": argv[3]})
-        print(json.dumps(j)); return 0 if st == 200 or j.get("released") else 3
+        print(json.dumps(j)); return 0 if 200 <= (st or 0) < 300 or j.get("released") else 3
 
     if cmd == "with-lock":
         if "--" not in argv or len(argv) < 5:
@@ -68,7 +68,7 @@ def main(argv):
         w = argv[2]; frm = argv[3]; to = argv[4]
         runcmd = argv[sep + 1:]
         st, j = call("POST", "/lock/acquire", {"worker": w, "owner": OWNER, "actor": OWNER, "session_id": SESSION, "ttl_sec": 1800, "expected_version": frm})
-        if st != 200 or not j.get("acquired"):
+        if not 200 <= (st or 0) < 300 or not j.get("acquired"):
             print("DEPLOY-GUARD: REFUSED (fail-closed). " + json.dumps(j)); return 2
         token = j.get("token")
         try:

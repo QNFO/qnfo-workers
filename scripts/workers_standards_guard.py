@@ -16,6 +16,9 @@ It fails a change only for what the change ADDS, so existing debt that other ses
       swallowed-catch            an empty catch block or .catch(function () {}) / .catch(() => {}): the failure never reaches Workers Logs
                                  (WORKERS-BP-LOGGING-1); log it or record it, or mark the line standards-ok with the reason
       ai-response-string-assumption  `.response.trim()` and friends on a Workers AI result: in JSON mode `response` is a parsed object
+  * (WRITE-SUCCESS-CODES-1) a worker.js or scripts/*.py line that accepts only HTTP 200 (`== 200`, `!= 200`, `=== 200`, `!== 200`)
+    within 8 lines after a POST/PUT/PATCH: a write's success is any 2xx (Cloudflare answers 201 when a Worker secret is created, and
+    run 38258885817 reported a completed secret write as a failure, filed as ci-watchdog #1033). Use `200 <= (st or 0) < 300` / `r.ok`;
   * a wrangler.toml change that removes an [observability] block or its traces, switches logs or traces off, edits the block and leaves it
     without logs and traces, or a brand-new worker (new wrangler.toml) without logs and traces enabled;
   * a wrangler.toml change that adds a [[queues.consumers]] block without dead_letter_queue (a failed message is otherwise discarded);
@@ -54,6 +57,20 @@ IO_CALL = r"(?:prepare\s*\(.*\)\s*\.\s*(?:bind\s*\(.*\)\s*\.\s*)?(?:run|all|firs
 FLOATING = re.compile(r"^\s*(?:(?:globalThis\.)?fetch\s*\(|(?:env|this\.env)\.[A-Za-z_]\w*\s*\.\s*" + IO_CALL + r"\s*\(|caches\.default\.(?:put|delete)\s*\().*\)\s*;\s*(?://.*)?$")
 # The previous line leaves an expression open (an await, a waitUntil( argument, an assignment, an arrow body...): the call is consumed there.
 OPEN_PREV = re.compile(r"(?:[(\[,=?:&|+]|=>|\bawait|\breturn|\bvoid|\byield)\s*$")
+# WRITE-SUCCESS-CODES-1: a status check that accepts only 200, and the write call it judges (looked for in the 8 lines above).
+ONLY_200 = re.compile(r"\b[\w.]+\s*(?:===|!==|==|!=)\s*200\b|\b200\s*(?:===|!==|==|!=)\s*[\w.]+")
+WRITE_CALL = re.compile(r"[\"'](?:PUT|POST|PATCH)[\"']")
+def write_200_only(lines, full):
+    """(rule, line, why, text) for each added line that accepts only HTTP 200 shortly after a write call."""
+    bad = []
+    for ln, text in lines:
+        s = text.strip()
+        if s.startswith(("//", "#", "*")) or "standards-ok:" in text or not ONLY_200.search(text): continue
+        above = "\n".join(full[max(0, ln - 9):ln]) if full else text
+        if WRITE_CALL.search(above):
+            bad.append(("write-200-only", ln, "a write succeeded with any 2xx (201 Created, 204 No Content): accept 200 <= status < 300 or r.ok, not only 200", text))
+    return bad
+
 ALLOWLIST = os.path.join(os.path.dirname(os.path.abspath(__file__)), "workers-standards-allowlist.txt")
 
 def git(*a):
@@ -234,7 +251,12 @@ def main():
             if os.path.exists(os.path.join(d, "RETIRED")) or os.path.exists(os.path.join(d, "FOLDED")): continue
             if re.fullmatch(r"[^/]+/worker\.js", n) and os.path.exists(n):
                 full = open(n, encoding="utf-8", errors="replace").read().split("\n")
-                viol += [(n, *v) for v in check_code(added_lines(base, n), full)]
+                added = added_lines(base, n)
+                viol += [(n, *v) for v in check_code(added, full)]
+                viol += [(n, *v) for v in write_200_only(added, full)]
+            elif re.fullmatch(r"scripts/[^/]+\.py", n) and os.path.exists(n) and not re.search(r"(_test|\.test)\.py$", n):
+                full = open(n, encoding="utf-8", errors="replace").read().split("\n")
+                viol += [(n, *v) for v in write_200_only(added_lines(base, n), full)]
             elif re.fullmatch(r"[^/]+/wrangler\.(toml|jsonc)", n):
                 viol += [(n, *v) for v in check_config(base, n, added_lines(base, n))]
         viol = [v for v in viol if not allowed(allow, v[0], v[1], v[4])]
@@ -245,7 +267,7 @@ def main():
         print("WORKERS-STANDARDS-GUARD-1: ok (%d changed files checked against %s)" % (len(names), base)); return spof
     print("WORKERS-STANDARDS-GUARD-1: %d violation(s) added by this change:" % len(viol))
     for f, name, ln, why, _ in viol: print("  %s:%d [%s] %s" % (f, ln, name, why))
-    print("Fix it, mark a false positive with `// standards-ok: <reason>` on the line, or record a reviewed exception in scripts/workers-standards-allowlist.txt.")
+    print("Fix it, mark a false positive with `// standards-ok: <reason>` (`# standards-ok: <reason>` in Python) on the line, or record a reviewed exception in scripts/workers-standards-allowlist.txt.")
     return 1
 
 if __name__ == "__main__":

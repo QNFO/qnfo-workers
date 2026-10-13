@@ -137,7 +137,7 @@ def call(method: str, path: str, token: str, body: dict | None = None, timeout: 
 
 def graphql(query: str, token: str) -> dict:
     st, j = call("POST", "/graphql", token, {"query": query})
-    if st != 200 or j.get("errors"):
+    if not 200 <= (st or 0) < 300 or j.get("errors"):
         return {"_error": {"status": st, "errors": j.get("errors")}}
     return j.get("data") or {}
 
@@ -508,7 +508,7 @@ def zaraz_remove_tool(zone_name: str, match: str, token: str) -> int:
         return 1
     st, w = call("GET", "/zones/%s/settings/zaraz/workflow" % zid, token)
     published = None
-    if st == 200 and str(w.get("result")) == "preview":
+    if 200 <= (st or 0) < 300 and str(w.get("result")) == "preview":
         st2, p = call("POST", "/zones/%s/settings/zaraz/publish" % zid, token, {"description": "ZARAZ-TOOL-REMOVE-1: remove " + str(removed["name"])})
         published = st2
     st, j = call("GET", "/zones/%s/settings/zaraz/config" % zid, token)
@@ -704,7 +704,7 @@ def spare_domain_canon(zone_name: str, mode: str, token: str, fetch=None, sleep=
         unpaused = None
         if paused and mode != "dry":
             st, j = call("PATCH", "/zones/%s" % zid, token, {"paused": False})
-            unpaused = {"http": st, "ok": st == 200 and j.get("success") is not False, "errors": j.get("errors")}
+            unpaused = {"http": st, "ok": 200 <= (st or 0) < 300 and j.get("success") is not False, "errors": j.get("errors")}
             emit({"action": "spare-domain-canon", "stage": "unpause", "zone": zone, "result": unpaused})
             if not unpaused["ok"]:
                 rc = 1
@@ -718,7 +718,7 @@ def spare_domain_canon(zone_name: str, mode: str, token: str, fetch=None, sleep=
             ssl["universal_enabled"] = bool((j.get("result") or {}).get("enabled"))
             if not ssl["universal_enabled"] and mode != "dry":
                 st2, j2 = call("PATCH", "/zones/%s/ssl/universal/settings" % zid, token, {"enabled": True})
-                ssl["enabled_now"] = st2 == 200 and j2.get("success") is not False
+                ssl["enabled_now"] = 200 <= (st2 or 0) < 300 and j2.get("success") is not False
                 ssl["enable_http"] = st2
         st, j = call("GET", "/zones/%s/ssl/certificate_packs?status=all" % zid, token)
         if st == 200:
@@ -788,7 +788,7 @@ GRAPH_DB = "a1954b92-d681-4d02-b1f6-f9a2eb4c265d"  # qnfo-graph (NO-ZENODO-DOI-7
 
 def d1q(acct: str, token: str, sql: str, params: list, db: str = LIVING_PAPER_DB) -> tuple[bool, list]:
     st, j = call("POST", f"/accounts/{acct}/d1/database/{db}/query", token, {"sql": sql, "params": params}, timeout=90)
-    if st != 200 or not j.get("success"):
+    if not 200 <= (st or 0) < 300 or not j.get("success"):
         return False, [str(j.get("errors"))[:300]]
     res = j.get("result") or [{}]
     return True, res[0].get("results") or []
@@ -1047,7 +1047,7 @@ D1_BACKUP_BUCKET = "qnfo-backups"
 
 def d1x(acct: str, token: str, db: str, sql: str, params: list | None = None) -> tuple[bool, list]:
     st, j = call("POST", f"/accounts/{acct}/d1/database/{db}/query", token, {"sql": sql, "params": params or []}, timeout=90)
-    if st != 200 or not j.get("success"):
+    if not 200 <= (st or 0) < 300 or not j.get("success"):
         return False, [str(j.get("errors"))[:300]]
     res = j.get("result") or [{}]
     return True, res[0].get("results") or []

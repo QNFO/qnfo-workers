@@ -43,7 +43,7 @@ def cf(method, path, body=None, timeout=30):
 
 def gql(query, call=cf):
     st, j = call("POST", "/graphql", {"query": query})
-    if st != 200 or j.get("errors"):
+    if not 200 <= (st or 0) < 300 or j.get("errors"):
         raise RuntimeError("graphql %s %s" % (st, json.dumps(j.get("errors"))[:200]))
     acc = (((j.get("data") or {}).get("viewer") or {}).get("accounts") or [{}])[0]
     return acc

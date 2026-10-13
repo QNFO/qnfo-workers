@@ -180,7 +180,7 @@ def main():
     st, body = req("PUT", API, tok, payload, "multipart/form-data; boundary=" + boundary)
     print("PUT /content -> HTTP %s" % st)
     print("  body: %s" % str(body)[:600])
-    if st != 200:
+    if not 200 <= (st or 0) < 300:
         print("FAIL (fail-closed): /content PUT rejected; script NOT restored (#1485 still open)")
         return 3
 

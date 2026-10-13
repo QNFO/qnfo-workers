@@ -466,9 +466,45 @@ def _now_z() -> str:
 # it: (1) skip a failure superseded by a later green run of the same workflow on
 # the same branch; (2) skip a run id that a CLOSED ci-watchdog issue inside the
 # window already cites (covers failures the resolver closed as "retired").
+# CI-ACTION-IDENTITY-1 (2026-10-13, ci-watchdog #1033): cf-ops-actions, owner-client-keys and fleet-autodeploy run a
+# different action per manual dispatch. Keyed by the workflow name, a failed gen-activitypub-key and a green report run
+# were one subject: the finding said only "unknown: cf-ops-actions, inspect the job log", and any green action superseded
+# or closed it. Those workflows now carry a run-name that names the action; a workflow_dispatch run whose title extends the
+# workflow name is filed, superseded and closed per action.
+def action_key(run: dict) -> str | None:
+    """'<workflow> <action> [target]' for a dispatched run whose run-name names the action, else None. Pure."""
+    name = (run.get("name") or "").strip()
+    title = " ".join((run.get("display_title") or "").split())
+    if run.get("event") != "workflow_dispatch" or not name or not title.startswith(name + " "):
+        return None
+    return title[:100]
+
+
+# The one line an action prints with its outcome (scripts/cf_ops_actions.py emit(): RESULT_JSON={...}).
+def result_json(log: str) -> dict | None:
+    """The last RESULT_JSON object in a job log, or None. Pure."""
+    last = None
+    for m in re.finditer(r"RESULT_JSON=(\{.*\})\s*$", log or "", re.M):
+        try:
+            last = json.loads(m.group(1))
+        except ValueError:
+            continue
+    return last if isinstance(last, dict) else None
+
+
+def result_hint(res: dict) -> str:
+    """A filed finding's fix line from the action's own result instead of 'inspect the job log'."""
+    keep = {k: res.get(k) for k in ("action", "ok", "refused", "error", "stage", "http", "errors", "put_http", "verified_present", "next_step") if res.get(k) not in (None, "", [])}
+    why = res.get("refused") or res.get("error") or res.get("stage") or "reported ok=false"
+    nxt = (" Next step it names: " + str(res["next_step"]) + ".") if res.get("next_step") else ""
+    return (f"the action's own result says {str(why)[:200]}.{nxt} Result: `{json.dumps(keep, sort_keys=True)[:600]}`. "
+            "A successful re-run of the same action (same run title) closes this finding.")
+
+
 def superseded_by_green(run: dict, pool: list[dict]) -> dict | None:
     """Newest-first `pool` is the run list already in hand; pure, no API call."""
     key = run.get("workflow_id") or run.get("name")
+    akey = action_key(run)
     branch = run.get("head_branch")
     created = run.get("created_at") or ""
     best = None
@@ -479,6 +515,8 @@ def superseded_by_green(run: dict, pool: list[dict]) -> dict | None:
             continue
         if o.get("head_branch") != branch or o.get("conclusion") != "success":
             continue
+        if akey and action_key(o) != akey:
+            continue  # CI-ACTION-IDENTITY-1: only the same action's green run is evidence
         if (o.get("created_at") or "") > created and (best is None or (o.get("created_at") or "") > (best.get("created_at") or "")):
             best = o
     return best
@@ -657,8 +695,12 @@ def main() -> int:
                         if k2 != "unknown":
                             kl, hint = k2, h2
                             break
+                        res = result_json(txt)
+                        if res is not None and res.get("ok") is False:
+                            kl, hint = "action-result", result_hint(res)
+                            break
             findings.append({
-                "class": kl, "subject": name,
+                "class": kl, "subject": action_key(r) or name,
                 "evidence": f"{r['created_at'][:19]} {name} [{r.get('event')}/{r.get('head_branch')}] run={r['id']} retired={retired}",
                 "retired": retired, "run_id": r["id"], "hint": hint, "sha": (r.get("head_sha") or "")[:8],
                 "attempt": int(r.get("run_attempt") or 1),
