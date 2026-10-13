@@ -9,7 +9,7 @@
 //  6. the daily sweep and the provenance section carry the rule.
 // Run: node qnfo-research-exec/cite-fulltext.test.mjs   -> prints "N passed, 0 failed"
 import { readFileSync } from "node:fs";
-import { fullTextSections, fullTextExcerpt, mdSections, arxivFullText, attachFullTexts, summaryOnlyCitations, finalGates, provenanceSection } from "./worker.js";
+import { fullTextSections, fullTextExcerpt, mdSections, corpusSummary, arxivFullText, attachFullTexts, summaryOnlyCitations, finalGates, provenanceSection } from "./worker.js";
 
 globalThis.setTimeout = (fn) => { fn(); return 0; };
 let pass = 0, fail = 0;
@@ -79,6 +79,25 @@ const HTML = page(sec(1, "Introduction", LONG("Computable reals are the limits o
   const f = g.fixes.find((x) => x.id === "gate-fulltext-citation");
   ok(f && f.severity === "HARD" && /CITE-FULLTEXT-1/.test(f.reason) && /full-text excerpts/.test(f.fix), "the final gate files a HARD gate-fulltext-citation finding", f);
   ok(!finalGates("# T\n\n## 2. Background\n\n[6] proves that every computable real has a computable modulus.\n", { bibCount: 8, minChars: 10 }).fixes.some((x) => x.id === "gate-fulltext-citation"), "a citation from the full text passes");
+}
+// 5b. CITE-FULLTEXT-2: the corpus is always read in full text, and the sentence from entries [11]/[12] is a HARD finding.
+{
+  const LIVE2 = "Entry [11], The \u211a-vs-\u211d Question: Why Physical Law Requires Only the Rational Numbers, is supplied with an empty summary; we note its title-level thesis \u2014 that physical law requires only the rationals \u2014 as the most radical version of the computable-sufficiency position, and we relate to it only through that title, since no further detail is available. Entry [12], COMMUTATIVE PHYSICS, likewise has an empty summary and is listed here only to acknowledge the corpus; no claim of ours depends on it.";
+  ok(summaryOnlyCitations(LIVE2).length === 5, "the [11]/[12] sentence is caught on several counts", summaryOnlyCitations(LIVE2));
+  for (const t of ["Entry [4] has no summary; we cite it for context.", "No abstract is available for [9]."]) ok(summaryOnlyCitations(t).length > 0, "caught: " + t);
+  for (const t of ["We report no summary statistic beyond the mean.", "Table 2 lists the abstract algebra used.", "Section 3 has no abstract dependence on the title."]) ok(summaryOnlyCitations(t).length === 0, "ordinary prose is not caught: " + t, summaryOnlyCitations(t));
+  // A memo with a ## Abstract section and a null abstract column (qnr-justification-memo).
+  const memo = "\uFEFF# The Q-vs-R Question\n\n**Author:** QNFO\n\n---\n\n## Abstract\n\n" + LONG("Measurements yield rationals, so the base field is Q.", 6) + "\n\n**Keywords:** x\n\n---\n\n## 1. Measurement Finitude\n\n" + LONG("Every instrument reports finitely many digits.", 30);
+  ok(/^Measurements yield rationals/.test(corpusSummary(null, memo)), "a null abstract falls back to the body's Abstract section", corpusSummary(null, memo).slice(0, 80));
+  ok(corpusSummary("A real abstract of the work that is long enough.", memo).startsWith("A real abstract"), "a stored abstract is used as it is");
+  ok(mdSections(memo).some((x) => x.head === "1. Measurement Finitude"), "the memo's sections are read", mdSections(memo).map((x) => x.head));
+  const bare = LONG("A body with no heading at all still states its result: the bound is 3.", 80);
+  const bs = mdSections(bare);
+  ok(bs.length >= 3 && bs[0].head === "Text, part 1" && corpusSummary("", bare).startsWith("A body with no heading"), "a body with no heading is read as passages", bs.map((x) => x.head));
+  const bold = "# Title\n\n**1. Introduction**\n\n" + LONG("Bold-numbered heading body.", 20) + "\n\n**2. Results**\n\n" + LONG("The result is 7.", 30);
+  ok(mdSections(bold).map((x) => x.head).join("|") === "1. Introduction|2. Results", "bold numbered headings are headings", mdSections(bold).map((x) => x.head));
+  const out = await attachFullTexts([{ n: 1, id: "qnfo:bare", text: "QNFO: Bare\n  " + corpusSummary("", bare).slice(0, 400), body: bare, url: "https://papers.qnfo.org/papers/bare" }], { spacingMs: 0 });
+  ok(out.bib.length === 1 && /§ Text, part 1: A body with no heading/.test(out.bib[0].text), "a heading-less corpus paper is cited with its full-text excerpts, not dropped", out.bib[0] && out.bib[0].text.slice(0, 200));
 }
 // 6. sweep, prompts and provenance
 {
