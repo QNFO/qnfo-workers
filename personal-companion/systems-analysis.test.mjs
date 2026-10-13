@@ -99,8 +99,33 @@ ok(/never state an inferred arrangement, funding, motive or behaviour as a repor
   const w2 = V.critiqueWorst({ specificity: 8, argument: 3, voice: 8, grounding: 9 }, "essay");
   ok(w2.missing === true && w2.worst === 0, "a missing gating score fails closed", w2);
   const loop = src.slice(src.indexOf("async function generate("), src.indexOf("var CRON_TABLE"));
-  const a = loop.indexOf("if (worst < floorForForm && worstName === \"grounding\") {"), b = loop.indexOf("var crit2 = await critiquePiece(env, cpr.piece, form, ground);"), c = loop.indexOf("if (worst < floorForForm) {"), d = loop.indexOf("await logRun(env, form, model, topic.id, \"stage\", \"fact-check\"");
+  const a = loop.indexOf("for (var cround = 1; cround <= CRITIC_PRUNE_ROUNDS && worst < floorForForm && worstName === \"grounding\"; cround++) {"), b = loop.indexOf("var crit2 = await critiquePiece(env, cpr.piece, form, ground);"), c = loop.indexOf("if (worst < floorForForm) {"), d = loop.indexOf("await logRun(env, form, model, topic.id, \"stage\", \"fact-check\"");
+  ok(V.CRITIC_PRUNE_ROUNDS === 3, "CRITIC-PRUNE-2: up to three critic prune rounds");
   ok(a > 0 && b > a && c > b && d > c, "the critic prune runs before the rejection and before the fact-check", { a, b, c, d });
+}
+// ---- CONTEXT-LINKS-1 + BLOCKQUOTE-GROUND-1 (1.21.5) ---------------------------------------------------------------------------------
+{
+  const text = "The book was compiled by Ilya Ehrenburg and Vasily Grossman. Grossman wrote the Treblinka report. Ehrenburg edited the eyewitness texts. The Eastern Orthodox Church is mentioned once. Kiev appears once.";
+  const r = V.rankLinked(["Euphoria (2017 film)", "Church (building)", "Vasily Grossman", "Ilya Ehrenburg", "Kiev", "The Black Book of Soviet Jewry (1946)", "Ilya Ehrenburg (disambiguation)"], text, "The Black Book of Soviet Jewry");
+  ok(r.length === 3 && r.indexOf("Vasily Grossman") >= 0 && r.indexOf("Ilya Ehrenburg") >= 0 && r.indexOf("Kiev") === 2, "CONTEXT-LINKS-1: the people the source names most rank first, a place named once follows", r);
+  ok(r.indexOf("Euphoria (2017 film)") < 0, "a link the source never names is not ranked", r);
+  ok(r.indexOf("Church (building)") < 0, "a one-word title counts only where it stands alone, not inside a longer name", r);
+  ok(r.indexOf("The Black Book of Soviet Jewry (1946)") < 0, "a variant of the subject's own title is not context", r);
+  ok(r.indexOf("Ilya Ehrenburg (disambiguation)") < 0, "one article per name: the plain title wins over its variant", r);
+  ok(V.linkMentionScore("Vasily Grossman", text, "The Black Book of Soviet Jewry") === 3, "a full name counts twice, a bare surname once", V.linkMentionScore("Vasily Grossman", text, "The Black Book of Soviet Jewry"));
+  ok(V.linkMentionScore("Fur trade", "The fur trade grew. Trade rose. Trade fell.", "Hanseatic League") === 0, "a common-noun title earns no last-word bonus and lowercase text does not count");
+  ok(V.linkMentionScore("Time Variance Authority", "The Authority built dams. The Authority sold power.", "Tennessee Valley Authority") === 0, "the subject's own title word earns no bonus");
+  const w = src.slice(src.indexOf("async function wikiAnchors(used, cooled, seed) {"), src.indexOf("async function paperAnchors("));
+  ok(/var named = rankLinked\(pool, primary\.text, primary\.title\);/.test(w) && /named\.slice\(0, 4\)\.concat\(pickSeeded\(/.test(w), "wikiAnchors reads the named links first and fills with seeded random links");
+  const ground = "Ehrenburg recorded the testimony of survivors in Vilnius and Minsk.";
+  const bq = "# The Black Book\n\nEhrenburg wrote:\n\n> We must write down every name, so that no one forgets what happened here.\n\nThe book followed.";
+  const gq = V.groundingProblems(bq, ground, {});
+  ok(gq.some((x) => /^quotation not in the source: "We must write down every name, so that no one forgets what happened here\."/.test(x)), "BLOCKQUOTE-GROUND-1: an invented blockquote is flagged with its text", gq);
+  ok(!V.groundingProblems("# B\n\n> Ehrenburg recorded the testimony of survivors in Vilnius and Minsk.\n\nAfter.", ground, {}).some((x) => /quotation/.test(x)), "a verbatim blockquote passes");
+  ok(!V.groundingProblems("# B\n\n> Short line here.\n\nAfter.", ground, {}).some((x) => /quotation/.test(x)), "a blockquote under five words is left to the reviewers");
+  const piece = { title: "The Black Book", lede: "", body_md: "Ehrenburg recorded the testimony of survivors in Vilnius and Minsk.\n\n> We must write down every name, so that no one forgets what happened here.\n\nThe record stayed." };
+  const pr = V.pruneUnsupported(piece, V.groundingNeedles(gq.filter((x) => /quotation/.test(x))).map((x) => "unsupported claim: " + x));
+  ok(pr.removed.length === 1 && !/We must write down/.test(pr.piece.body_md) && /The record stayed/.test(pr.piece.body_md), "the blockquote's line is the one the repair deletes", pr);
 }
 console.log(pass + " passed, " + fail + " failed");
 if (fail) process.exit(1);
