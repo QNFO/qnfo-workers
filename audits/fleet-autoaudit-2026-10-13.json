@@ -1,12 +1,11 @@
 {
-  "audited_at": "2026-10-13 20:21:04",
+  "audited_at": "2026-10-13 21:28:02",
   "d1_write_failures": [],
   "d1_writes_ok": 115,
   "guard": {
     "_drift_confirm": {
       "first_pass": [
-        "personal-companion",
-        "q08-signal-engine"
+        "personal-companion"
       ],
       "refreshed": true,
       "second_pass": []
@@ -19,13 +18,7 @@
     "cron_only": [],
     "cron_only_count": 0,
     "drift": [],
-    "live_err": [
-      {
-        "dir": "qnfo-twin-maintain",
-        "err": "ERR:The read operation timed out",
-        "worker": "qnfo-twin-maintain"
-      }
-    ],
+    "live_err": [],
     "multi_version": [],
     "multi_version_count": 0,
     "name_resolution": true,
@@ -150,13 +143,14 @@
       "qnfo-signal-loop",
       "qnfo-skill-sync",
       "qnfo-thread-ingest",
+      "qnfo-twin-maintain",
       "qnfo-venue-radar",
       "research-daily-brief",
       "retired-deposit-stage",
       "skills-discovery",
       "vault-indexer"
     ],
-    "not_deployed_notdrift": 75,
+    "not_deployed_notdrift": 76,
     "not_deployed_workers": [
       {
         "dir": "agent-orchestrator",
@@ -509,6 +503,11 @@
         "worker": "qnfo-thread-ingest"
       },
       {
+        "dir": "qnfo-twin-maintain",
+        "marker": "FOLDED",
+        "worker": "qnfo-twin-maintain"
+      },
+      {
         "dir": "qnfo-venue-radar",
         "marker": "RETIRED",
         "worker": "qnfo-venue-radar"
@@ -551,12 +550,12 @@
       },
       {
         "dir": "personal-companion",
-        "version": "1.22.6-split-lede",
+        "version": "1.23.0-reframe-repair",
         "worker": "personal-companion"
       },
       {
         "dir": "q08-signal-engine",
-        "version": "0.24.2",
+        "version": "0.25.0",
         "worker": "q08-signal-engine"
       },
       {
@@ -611,7 +610,7 @@
       },
       {
         "dir": "qnfo-gateway",
-        "version": "3.18.3-hub-version",
+        "version": "3.18.4-cron-heartbeat",
         "worker": "qnfo-gateway"
       },
       {
@@ -908,9 +907,9 @@
       "worker": "personal-api"
     },
     "personal-companion": {
-      "before": "1.22.6-split-lede",
+      "before": "1.23.0-reframe-repair",
       "http": 200,
-      "live": "1.22.6-split-lede",
+      "live": "1.23.0-reframe-repair",
       "match": 1,
       "note": "SYNC",
       "worker": "personal-companion"
@@ -952,9 +951,9 @@
       "worker": "personal-life-search"
     },
     "q08-signal-engine": {
-      "before": "0.24.2",
+      "before": "0.25.0",
       "http": 200,
-      "live": "0.24.2",
+      "live": "0.25.0",
       "match": 1,
       "note": "SYNC",
       "worker": "q08-signal-engine"
@@ -1310,9 +1309,9 @@
       "worker": "qnfo-fleet-feed"
     },
     "qnfo-gateway": {
-      "before": "3.18.3-hub-version",
+      "before": "3.18.4-cron-heartbeat",
       "http": 200,
-      "live": "3.18.3-hub-version",
+      "live": "3.18.4-cron-heartbeat",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-gateway"
@@ -1604,10 +1603,11 @@
     },
     "qnfo-twin-maintain": {
       "before": null,
-      "http": 0,
+      "http": 404,
       "live": null,
       "match": 0,
-      "note": "LIVE_ERR",
+      "note": "NOT_DEPLOYED",
+      "retired": "FOLDED",
       "worker": "qnfo-twin-maintain"
     },
     "qnfo-venue-radar": {
