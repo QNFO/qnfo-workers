@@ -1,82 +1,34 @@
 {
  "ok": true,
  "marker": "REMEDIATION-CONSUMER-1",
- "verifier": "remediation-consumer@e900675a4ff7",
- "due": 9,
- "pass": 4,
- "fail": 5,
+ "verifier": "remediation-consumer@9c60ebfb5c45",
+ "due": 3,
+ "pass": 0,
+ "fail": 3,
  "skipped": 0,
  "contracts": [
   {
-   "class": "issue-2165",
-   "issue_id": 2165,
+   "class": "issue-2017",
+   "issue_id": 2017,
    "verdict": "fail",
    "expected": "ok",
-   "observed": "pending: fewer than 20 judged claims on answers written by 2.5.0 or later",
+   "observed": "pending: fewer than 80% of PRs opened within 20 min of code-task.ready since 2026-10-06T08:00",
    "written": true
   },
   {
-   "class": "issue-2339",
-   "issue_id": 2339,
+   "class": "issue-2018",
+   "issue_id": 2018,
    "verdict": "fail",
    "expected": "ok",
-   "observed": "pending: under 24 hours since qnfo-ai-search 2.5.0 first ran",
+   "observed": "pending: qnfo-code-orchestrator 0.3.17 not live yet (0.14.1-queue-v2)",
    "written": true
   },
   {
-   "class": "fm-mail-draft-fabrication",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "0",
-   "observed": "0",
-   "written": true
-  },
-  {
-   "class": "fm-notice-reply-encoded-subject",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "ok",
-   "observed": "ok",
-   "written": true
-  },
-  {
-   "class": "fm-zaraz-autoinject-worker-html",
-   "issue_id": null,
+   "class": "issue-2480",
+   "issue_id": 2480,
    "verdict": "fail",
    "expected": "ok",
-   "observed": "missing-marker",
-   "written": true
-  },
-  {
-   "class": "fm-outward-prose-no-lede",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "0",
-   "observed": "0",
-   "written": true
-  },
-  {
-   "class": "fm-unbounded-ready-queue",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "0",
-   "observed": "0",
-   "written": true
-  },
-  {
-   "class": "issue-2473",
-   "issue_id": 2473,
-   "verdict": "fail",
-   "expected": "ok",
-   "observed": "missing-marker:qnfo-research-exec/worker.js",
-   "written": true
-  },
-  {
-   "class": "issue-2483",
-   "issue_id": 2483,
-   "verdict": "fail",
-   "expected": "ok",
-   "observed": "present-marker:scripts/ai-attribution-personal-companion-test.mjs",
+   "observed": "pending: filed by qnfo-fleet-control, which owns it for 48h",
    "written": true
   }
  ],
@@ -103,9 +55,8 @@
   "http",
   "runner-https"
  ],
- "https": 2,
  "budget_exhausted": false,
- "runtime_verified_share_24h": 9.4,
+ "runtime_verified_share_24h": 9.5,
  "host_census": {
   "skipped": "ran within 6h"
  },
@@ -116,8 +67,8 @@
   "failed": [],
   "metric": 0
  },
- "spent_ms": 19353,
- "head": "e900675a4ff7b226471e60f9713ff1e5864dca91",
+ "spent_ms": 8429,
+ "head": "9c60ebfb5c45c100bb90286511f1e7c2d0401d54",
  "job_status": "success",
- "ts": "2026-10-13T07:41:46Z"
+ "ts": "2026-10-13T07:51:42Z"
 }
