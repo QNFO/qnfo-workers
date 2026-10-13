@@ -11,6 +11,11 @@ WHAT  The second deploy path for canonical-deploy.yml. When qnfo-ops /ops/deploy
       --drill exercises the path on purpose for one worker at its current main code and, on success, sets
       spof_registry.alternate_tested_at for 'qnfo-ops /ops/deploy' (doctrine section 10: an untested alternate is no
       alternate).
+      DEPLOY-SECOND-PATH-LEDGER-1 (2026-10-13, agent_issues 2451): every deploy attempt (not a skip) also writes one
+      qnfo-audit.deployment_history row (action deploy-direct, status success|failed, version_id the worker's VERSION,
+      notes with the version, the run and why the fallback ran), so CHAOS-DRILL-1 can read this alternate from D1
+      (spof_alternate_probes 'qnfo-ops /ops/deploy'). A ledger write that fails is one stderr line and never changes the
+      deploy's result; an exception while deploying one worker is a failed attempt and the next target still runs.
 WHY   Every canonical deploy, canary reverts included, went through qnfo-ops; a broken qnfo-ops could not deploy its own fix.
 """
 import argparse
@@ -26,6 +31,14 @@ import uuid
 
 API = "https://api.cloudflare.com/client/v4"
 SPOF = "qnfo-ops /ops/deploy"
+# qnfo-audit's id, used when the by-name lookup returns nothing (the same id scripts/apply_migrations.py writes to).
+AUDIT_DB_ID = "35e2e573-92f3-46ac-83c6-22f6429fc5e5"
+LEDGER_SQL = ("INSERT INTO deployment_history (resource_type, resource_name, action, version_id, deployed_by, deployed_at, status, notes) "
+              "VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)")
+DEPLOYED_BY = "canonical-deploy/direct_content_deploy"
+REASON_FALLBACK = "qnfo-ops /ops/deploy unreachable (connection error, timeout or 5xx): canonical_deploy.py listed the worker in the fallback file"
+REASON_DRILL = "drill: the second path exercised on purpose (--drill)"
+REASON_DIRECT = "direct run: --worker named on the command line, no drill"
 
 
 def env(name):
@@ -62,17 +75,54 @@ def multipart(src, module):
 
 
 def d1(acct, token, sql, params=None, call=cf):
+    """One parameterised statement on qnfo-audit; raises when D1 does not answer success."""
     st, j = call("GET", "/accounts/%s/d1/database?name=qnfo-audit" % acct, token)
     dbs = [d for d in (j.get("result") or []) if d.get("name") == "qnfo-audit"]
-    if not dbs:
-        return False
-    st, j = call("POST", "/accounts/%s/d1/database/%s/query" % (acct, dbs[0].get("uuid")), token,
+    db = (dbs[0].get("uuid") if dbs else None) or AUDIT_DB_ID
+    st, j = call("POST", "/accounts/%s/d1/database/%s/query" % (acct, db), token,
                  json.dumps({"sql": sql, "params": params or []}).encode(), {"Content-Type": "application/json"})
-    return bool(j.get("success"))
+    if not j.get("success"):
+        raise RuntimeError("D1 HTTP %s: %s" % (st, json.dumps(j.get("errors") or j)[:300]))
+    return True
+
+
+def redact(text, token):
+    s = " ".join(str(text).split())
+    return s.replace(token, "***") if token else s
+
+
+def record(acct, token, what, sql, params, call=cf):
+    """A ledger write never fails a deploy: an error is one stderr line (token redacted) and the run goes on."""
+    try:
+        return d1(acct, token, sql, params, call)
+    except Exception as e:  # noqa: BLE001
+        print("::warning::%s write failed; the deploy result stands: %s" % (what, redact("%s: %s" % (type(e).__name__, e), token)[:300]),
+              file=sys.stderr)
+        return False
+
+
+def ledger_params(worker, r, reason, run, stamp):
+    """The deployment_history row (LEDGER_SQL) for one deploy attempt."""
+    ver = r.get("version")
+    notes = "DEPLOY-SECOND-PATH-1 %s %s via PUT /content (repository token), run %s; reason: %s" % (
+        worker, ver or "(VERSION unknown)", run, reason)
+    if not r.get("ok"):
+        notes += "; failed: HTTP %s %s" % (r.get("http"), r.get("error") or "")
+    return ["worker", worker, "deploy-direct", ver, DEPLOYED_BY, stamp, "success" if r.get("ok") else "failed", notes[:500]]
+
+
+def read_file(p):
+    with open(p, encoding="utf-8") as fh:
+        return fh.read()
+
+
+def version_of(src):
+    m = re.search(r'(?:var|const|let)\s+VERSION\s*=\s*["\']([^"\']+)["\']', src)
+    return m.group(1) if m else None
 
 
 def deploy_one(acct, token, worker, path, call=cf, read=None):
-    read = read or (lambda p: open(p, encoding="utf-8").read())
+    read = read or read_file
     wdir = os.path.dirname(path) or "."
     toml = os.path.join(wdir, "wrangler.toml")
     try:
@@ -87,8 +137,7 @@ def deploy_one(acct, token, worker, path, call=cf, read=None):
     body, ctype = multipart(src, is_module(src))
     st, j = call("PUT", "/accounts/%s/workers/scripts/%s/content" % (acct, urllib.parse.quote(worker)), token, body, {"Content-Type": ctype}, 120)
     ok = 200 <= st < 300 and bool(j.get("success", True))
-    m = re.search(r'(?:var|const|let)\s+VERSION\s*=\s*["\']([^"\']+)["\']', src)
-    return {"worker": worker, "ok": ok, "http": st, "version": m.group(1) if m else None,
+    return {"worker": worker, "ok": ok, "http": st, "version": version_of(src),
             "error": None if ok else json.dumps(j.get("errors") or j)[:400]}
 
 
@@ -105,35 +154,46 @@ def main(argv=None, call=cf, read=None):
         return 1
     targets = []
     if a.worker:
-        targets.append((a.worker, a.path or a.worker + "/worker.js"))
+        targets.append((a.worker, a.path or a.worker + "/worker.js", REASON_DRILL if a.drill else REASON_DIRECT))
     if a.targets and os.path.exists(a.targets):
         for line in open(a.targets, encoding="utf-8"):
             p = line.split()
             if p:
-                targets.append((p[0], p[1] if len(p) > 1 else p[0] + "/worker.js"))
+                targets.append((p[0], p[1] if len(p) > 1 else p[0] + "/worker.js", REASON_FALLBACK))
     if not targets:
         print("no fallback targets")
         return 0
     failed = 0
     run = env("GITHUB_RUN_ID") or "local"
-    for worker, path in targets:
-        r = deploy_one(acct, token, worker, path, call, read)
+    for worker, path, reason in targets:
+        try:
+            r = deploy_one(acct, token, worker, path, call, read)
+        except Exception as e:  # noqa: BLE001 - one worker's exception is a failed attempt; the next target still runs
+            try:
+                ver = version_of((read or read_file)(path))
+            except Exception:  # noqa: BLE001
+                ver = None
+            r = {"worker": worker, "ok": False, "http": None, "version": ver,
+                 "error": redact("%s: %s" % (type(e).__name__, e), token)[:400]}
         print(json.dumps(r))
+        if r.get("skipped"):
+            continue
+        stamp = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+        record(acct, token, "deployment_history", LEDGER_SQL, ledger_params(worker, r, reason, run, stamp), call)
         if not r["ok"]:
             failed += 1
             print("::error::fallback deploy failed for %s" % worker)
             continue
-        if r.get("skipped"):
-            continue
-        stamp = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
-        d1(acct, token, "INSERT INTO cloud_ops_events (id, ts, kind, status, text, job) VALUES (?1, ?2, 'deploy-fallback', 'ok', ?3, 'canonical-deploy')",
-           ["deploy-fallback-%s-%s" % (worker, stamp), stamp, "DEPLOY-SECOND-PATH-1 %s %s via PUT /content (repository token), run %s%s"
-            % (worker, r.get("version"), run, " drill" if a.drill else "")], call)
+        record(acct, token, "cloud_ops_events",
+               "INSERT INTO cloud_ops_events (id, ts, kind, status, text, job) VALUES (?1, ?2, 'deploy-fallback', 'ok', ?3, 'canonical-deploy')",
+               ["deploy-fallback-%s-%s" % (worker, stamp), stamp, "DEPLOY-SECOND-PATH-1 %s %s via PUT /content (repository token), run %s%s"
+                % (worker, r.get("version"), run, " drill" if a.drill else "")], call)
         if a.drill:
-            d1(acct, token, "UPDATE spof_registry SET alternate_path = COALESCE(NULLIF(alternate_path, ''), ?1), alternate_tested_at = ?2, "
-               "evidence = COALESCE(evidence, '') || ?3 WHERE component = ?4",
-               ["canonical-deploy.yml falls back to scripts/direct_content_deploy.py (PUT /content with the repository token) when /ops/deploy is unreachable",
-                stamp, " | drill %s: %s %s deployed by the second path (run %s)" % (stamp, worker, r.get("version"), run), SPOF], call)
+            record(acct, token, "spof_registry",
+                   "UPDATE spof_registry SET alternate_path = COALESCE(NULLIF(alternate_path, ''), ?1), alternate_tested_at = ?2, "
+                   "evidence = COALESCE(evidence, '') || ?3 WHERE component = ?4",
+                   ["canonical-deploy.yml falls back to scripts/direct_content_deploy.py (PUT /content with the repository token) when /ops/deploy is unreachable",
+                    stamp, " | drill %s: %s %s deployed by the second path (run %s)" % (stamp, worker, r.get("version"), run), SPOF], call)
     return 1 if failed else 0
 
 
@@ -148,7 +208,7 @@ def selftest():
         return files[p]
 
     def call(method, path, token, body=None, headers=None, timeout=60):
-        calls.append((method, path))
+        calls.append((method, path, body if "/query" in path else None))
         if path.endswith("/absent/settings"):
             return 404, {}
         if "d1/database?name" in path:
@@ -162,12 +222,14 @@ def selftest():
 
     os.environ["CLOUDFLARE_ACCOUNT_ID"], os.environ["CLOUDFLARE_API_TOKEN"] = "acct", "tok"
     assert main(["--worker", "w", "--path", "w/worker.js", "--drill"], call, read) == 0
-    assert ("PUT", "/accounts/acct/workers/scripts/w/content") in calls
-    assert sum(1 for m, p in calls if p.endswith("/query")) == 2, calls
+    assert ("PUT", "/accounts/acct/workers/scripts/w/content", None) in calls
+    q = [json.loads(b) for m, p, b in calls if p.endswith("/query")]
+    assert len(q) == 3, calls  # deployment_history, cloud_ops_events, spof_registry
+    assert "INTO deployment_history" in q[0]["sql"] and q[0]["params"][2:4] == ["deploy-direct", "1.2.3"] and q[0]["params"][6] == "success", q[0]
     calls.clear()
-    assert main(["--worker", "absent", "--path", "w/worker.js"], call, read) == 0 and not any(m == "PUT" for m, p in calls)
+    assert main(["--worker", "absent", "--path", "w/worker.js"], call, read) == 0 and not any(c[0] == "PUT" or "/query" in c[1] for c in calls)
     calls.clear()
-    assert main(["--worker", "c", "--path", "c/worker.js"], call, read) == 0 and not any(m == "PUT" for m, p in calls)
+    assert main(["--worker", "c", "--path", "c/worker.js"], call, read) == 0 and not any(c[0] == "PUT" or "/query" in c[1] for c in calls)
     assert not is_module("addEventListener('fetch', e => {})") and is_module("export default {}")
     print("direct_content_deploy selftest ok")
 
