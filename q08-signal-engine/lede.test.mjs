@@ -22,5 +22,10 @@ const pr = L.buildPrompt({ core_concept: "c", friction_point: "f", signal_streng
 check("the writer prompt carries the SOURCE block and the LEDE rule", /--- SOURCE \(name it in the lede/.test(pr) && /title: Leaving Tech/.test(pr) && /LEDE \(inverted pyramid/.test(pr));
 check("the directive no longer forbids naming the post", !/Never refer to 'the article' or 'the post'/.test(L.Q08_DIRECTIVE) && !/the incident is a probe, never the subject/.test(L.Q08_DIRECTIVE));
 check("readers judge the opening first", /Judge first the opening/.test(L.READER_PROMPT));
+// 0.17.3: forecasts and the site copy
+const fsrc = (await import("node:fs")).readFileSync(new URL("./worker.js", import.meta.url), "utf8");
+check("forecast drafts are gated with the lede check", /forecastProblems\(piece, banned\)\.concat\(ledeProblems\(piece\.text, fctx\)\)/.test(fsrc) && /forecastProblems\(retry, banned\)\.concat\(ledeProblems\(retry\.text, fctx\)\)/.test(fsrc));
+check("no prompt or page prescribes cold structural objectivity any more", !/cold structural objectivity/i.test(fsrc) && !/Cold, structural, timeless/.test(fsrc));
+check("the forecast directive has a LEDE rule", /LEDE \(inverted pyramid, checked\): the first paragraph, at most 70 words, tells a reader who has never seen q08 what is being forecast/.test(fsrc));
 console.log("lede.test.mjs: " + passes + " passed, " + fails + " failed");
 process.exit(fails ? 1 : 0);
