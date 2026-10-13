@@ -1,4 +1,4 @@
-var VERSION="3.18.2-page-policy"; /* 3.18.2 PAGE-POLICY-1 (2026-10-13, pillar reach, agent_issues 2343 WEB-PERF-EDGE-1): every HTML response carries Referrer-Policy strict-origin-when-cross-origin (no-referrer when the query carries a token) and Permissions-Policy camera=(), microphone=(), geolocation=() from the worker (qnfo.org had neither; the subdomains had them only from a zone rule), and an HTML response without Cache-Control gets public, max-age=300, s-maxage=3600, stale-while-revalidate=86400 when it is a public GET 200, no-store otherwise; handlers that set their own are unchanged, JSON untouched. 3.18.1 RENDER-DEFECTS-2300 (2026-10-13, pillar reach, agent_issues 2300 2158 2357): PANDOC-FENCE-GLUE-1 reads a code fence glued to prose or to its last code line as a fence (ultrametric-intelligence printed its Python as prose and typeset its identifiers); MATH-RESIDUE-5 typesets a formula glued to a name by a product sign; RAIL-MATH-1 gives /api/paper-context title_tex and excerpt_tex (formulas kept as TeX, plain-text math typeset, currency escaped) and the Related and Versions panels paint them, since every residue the browser sample counted on chapter-1 and log20240505010101strangeloopbook on 2026-10-12 was panel text; a formula ending in an escaped brace is lifted as math; MathJax knows the Sha macro. 3.18.0 ACTIVITYPUB-KEY-1 (2026-10-12, pillar reach, #2249 #2413): the actor publishes publicKeyPem when AP_PUBLIC_KEY is set (cf-ops gen-activitypub-key); merged with main 3.17.1 (REACH-RENDER-1). */
+var VERSION="3.18.3-hub-version"; /* 3.18.3 HUB-CACHE-VERSION-1 (2026-10-13, pillar reach, failure mode zaraz-autoinject-worker-html): the qnfo.org hub copy in each colo's cache now carries the VERSION that built it, and a copy built by another version is rebuilt while the request waits up to 2.5 s instead of being served stale; the runner probe of 07:39 UTC read a pre-3.16.1 copy without /cdn-cgi/zaraz/i.js while every fresh render carried it. */ /* 3.18.2 PAGE-POLICY-1 (2026-10-13, pillar reach, agent_issues 2343 WEB-PERF-EDGE-1): every HTML response carries Referrer-Policy strict-origin-when-cross-origin (no-referrer when the query carries a token) and Permissions-Policy camera=(), microphone=(), geolocation=() from the worker (qnfo.org had neither; the subdomains had them only from a zone rule), and an HTML response without Cache-Control gets public, max-age=300, s-maxage=3600, stale-while-revalidate=86400 when it is a public GET 200, no-store otherwise; handlers that set their own are unchanged, JSON untouched. 3.18.1 RENDER-DEFECTS-2300 (2026-10-13, pillar reach, agent_issues 2300 2158 2357): PANDOC-FENCE-GLUE-1 reads a code fence glued to prose or to its last code line as a fence (ultrametric-intelligence printed its Python as prose and typeset its identifiers); MATH-RESIDUE-5 typesets a formula glued to a name by a product sign; RAIL-MATH-1 gives /api/paper-context title_tex and excerpt_tex (formulas kept as TeX, plain-text math typeset, currency escaped) and the Related and Versions panels paint them, since every residue the browser sample counted on chapter-1 and log20240505010101strangeloopbook on 2026-10-12 was panel text; a formula ending in an escaped brace is lifted as math; MathJax knows the Sha macro. 3.18.0 ACTIVITYPUB-KEY-1 (2026-10-12, pillar reach, #2249 #2413): the actor publishes publicKeyPem when AP_PUBLIC_KEY is set (cf-ops gen-activitypub-key); merged with main 3.17.1 (REACH-RENDER-1). */
 // UTM-CLICK-LEDGER-1 (3.10.0, 2026-10-06, transformation lever T7.9, pillar reach): a GET for an HTML page that carries
 // utm_source is counted into qnfo-graph utm_clicks (day, host, path, source, medium, campaign, bot/human, country; no cookie,
 // no IP), so a post or digest joins to the visits it caused; qnfo-fleet-dashboard reads it into reach_signals source utm.
@@ -2111,15 +2111,26 @@ __name(handleHub, "handleHub");
 // rebuild (handleHub's catch returns an empty hub with max-age=60) is never cached over a good copy.
 var HUB_CACHE_KEY = "https://qnfo.org/__hub-cache-v1";
 var HUB_FRESH_MS = 5 * 60 * 1000;
+// HUB-CACHE-VERSION-1 (3.18.3, failure mode zaraz-autoinject-worker-html recurring 2026-10-13 07:39 UTC): the stored copy is kept
+// 24 h per colo and was served stale to the first visitor after any deploy, so a colo that is rarely hit kept serving the home
+// page an older gateway rendered (a copy built before 3.16.1 has no /cdn-cgi/zaraz/i.js; the GitHub runner's probe read one).
+// Each copy now carries the VERSION that built it. A copy built by another version is rebuilt while the request waits up to
+// HUB_VERSION_WAIT_MS; only when that rebuild fails or is slower is the old copy served (marked stale-version), and the rebuild
+// still finishes in the background.
+var HUB_VERSION_WAIT_MS = 2500;
 async function hubBuildAndStore(env, cache) {
   const res = await handleHub(env);
   if (res.status !== 200 || /max-age=60\b/.test(res.headers.get("Cache-Control") || "")) return res;
   const html = await res.text();
   const hd = new Headers(res.headers);
   hd.set("X-Hub-Built", String(Date.now()));
+  hd.set("X-Hub-Version", VERSION);
   hd.set("Cache-Control", "public, max-age=86400");
   try { await cache.put(new Request(HUB_CACHE_KEY), new Response(html, { status: 200, headers: hd })); } catch (e) {}
   return new Response(html, { status: 200, headers: res.headers });
+}
+function hubIsGood(res) {
+  return !!res && res.status === 200 && !/max-age=60\b/.test(res.headers.get("Cache-Control") || "");
 }
 async function handleHubCached(env, ctx) {
   const cache = typeof caches !== "undefined" && caches.default;
@@ -2127,12 +2138,26 @@ async function handleHubCached(env, ctx) {
   let hit = null;
   try { hit = await cache.match(new Request(HUB_CACHE_KEY)); } catch (e) { hit = null; }
   if (!hit) return hubBuildAndStore(env, cache);
+  const versionStale = hit.headers.get("X-Hub-Version") !== VERSION;
+  if (versionStale) {
+    const build = hubBuildAndStore(env, cache).catch(function(e) { console.error(JSON.stringify({ event: "hub_version_rebuild_failed", error: String(e && e.message || e).slice(0, 200) })); return null; });
+    let timer = null;
+    const waited = await Promise.race([build, new Promise(function(resolve) { timer = setTimeout(function() { resolve(null); }, HUB_VERSION_WAIT_MS); })]);
+    if (timer) clearTimeout(timer);
+    if (hubIsGood(waited)) {
+      const rh = new Headers(waited.headers);
+      rh.set("X-Hub-Cache", "rebuilt-version");
+      return new Response(waited.body, { status: 200, headers: rh });
+    }
+    if (ctx && ctx.waitUntil) ctx.waitUntil(build);
+  }
   const age = Date.now() - Number(hit.headers.get("X-Hub-Built") || 0);
-  if (age > HUB_FRESH_MS && ctx && ctx.waitUntil) ctx.waitUntil(hubBuildAndStore(env, cache).catch(function() {}));
+  if (!versionStale && age > HUB_FRESH_MS && ctx && ctx.waitUntil) ctx.waitUntil(hubBuildAndStore(env, cache).catch(function(e) { console.error(JSON.stringify({ event: "hub_rebuild_failed", error: String(e && e.message || e).slice(0, 200) })); }));
   const hd = new Headers(hit.headers);
   hd.set("Cache-Control", "public, max-age=300");
-  hd.set("X-Hub-Cache", age > HUB_FRESH_MS ? "stale-revalidating" : "fresh");
+  hd.set("X-Hub-Cache", versionStale ? "stale-version" : age > HUB_FRESH_MS ? "stale-revalidating" : "fresh");
   hd.delete("X-Hub-Built");
+  hd.delete("X-Hub-Version");
   return new Response(hit.body, { status: 200, headers: hd });
 }
 __name2(handleHub, "handleHub");
