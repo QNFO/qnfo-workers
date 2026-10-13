@@ -4,7 +4,7 @@
   "token_present": true,
   "stage": "partial",
   "status": "failed",
-  "error": "ipatent.me: present unverified; www.ipatent.me: present unverified; empoweringchange.today: created unverified; www.empoweringchange.today: present unverified; qwav.org: created unverified; www.qwav.org: created unverified",
+  "error": "ipatent.me: present unverified; www.ipatent.me: present unverified; empoweringchange.today: created unverified; www.empoweringchange.today: present unverified; qwav.org: skipped failed verification and rolled back within 48h (SPARE-DOMAINS-ORDER-1); see agent_issues QWAV-ORG-GATEWAY-VERIFY-1; www.qwav.org: skipped failed verification and rolled back within 48h (SPARE-DOMAINS-ORDER-1); see agent_issues QWAV-ORG-GATEWAY-VERIFY-1",
   "gateway_version": "3.18.3-hub-version",
   "hosts": {
     "archive.qnfo.org": {
@@ -136,35 +136,35 @@
     "qwav.uk": {
       "zone": "qwav.uk",
       "route_id": "da26d4194f484676a2d51d170b4e6499",
-      "status": "created",
+      "status": "present",
       "detail": null,
       "verified": true
     },
     "www.qwav.uk": {
       "zone": "qwav.uk",
       "route_id": "c0d5644ffb674e43ab671e4393cc1809",
-      "status": "created",
+      "status": "present",
       "detail": null,
       "verified": true
     },
     "qwave.tech": {
       "zone": "qwave.tech",
       "route_id": "099bcad6230641d58d834363fa6127fc",
-      "status": "created",
+      "status": "present",
       "detail": null,
       "verified": true
     },
     "www.qwave.tech": {
       "zone": "qwave.tech",
       "route_id": "6c0ccea65ce947c7be86ac21f8d68dac",
-      "status": "created",
+      "status": "present",
       "detail": null,
       "verified": true
     },
     "q-wave.tech": {
       "zone": "q-wave.tech",
       "route_id": "96a4d00b9e6d41d9b46885d23f0a6092",
-      "status": "created",
+      "status": "present",
       "detail": null,
       "verified": true
     },
@@ -177,7 +177,7 @@
     },
     "empoweringchange.today": {
       "zone": "empoweringchange.today",
-      "route_id": "d26d7d15c64f46efb9acfdfd33b17a8c",
+      "route_id": "6c7c1530e9e34a10b75f07afa9adb230",
       "status": "created",
       "detail": null,
       "verified": false,
@@ -192,33 +192,17 @@
     },
     "qwav.org": {
       "zone": "qwav.org",
-      "route_id": "27e10cc91eaa4335bc6200ce7f8097ab",
-      "status": "created",
-      "detail": null,
-      "dns_record": "bf15ded6489cd075d294f307eb16a2e5",
-      "dns_proxied_from": false,
-      "pages_detach_http": 200,
-      "pages_detached": "qwav",
-      "verified": false,
-      "pages_reattached": true,
-      "rolled_back": true,
-      "dns_restored": true
+      "route_id": null,
+      "status": "skipped",
+      "detail": "failed verification and rolled back within 48h (SPARE-DOMAINS-ORDER-1); see agent_issues QWAV-ORG-GATEWAY-VERIFY-1"
     },
     "www.qwav.org": {
       "zone": "qwav.org",
-      "route_id": "1f77eb6eb6744a938e6b521b4d9a2966",
-      "status": "created",
-      "detail": null,
-      "dns_record": "26ff1daa55c154d3a62c0a6ae7400a7d",
-      "dns_proxied_from": false,
-      "pages_detach_http": 200,
-      "pages_detached": "qwav",
-      "verified": false,
-      "pages_reattached": true,
-      "rolled_back": true,
-      "dns_restored": true
+      "route_id": null,
+      "status": "skipped",
+      "detail": "failed verification and rolled back within 48h (SPARE-DOMAINS-ORDER-1); see agent_issues QWAV-ORG-GATEWAY-VERIFY-1"
     }
   },
-  "ts": "2026-10-13T12:50:12Z",
+  "ts": "2026-10-13T20:22:22Z",
   "lifecycle_version": "1.11.1-noz-scrub"
 }
