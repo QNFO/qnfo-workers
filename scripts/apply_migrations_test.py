@@ -245,5 +245,24 @@ _, probs_sel, _ = M.plan("migrations/sel.sql", en_hdr + "INSERT INTO control_reg
 ok(not [p for p in probs_sel if "CHECK-ENUM-LINT-1" in p], "an INSERT ... SELECT is not parsed as VALUES (no false claim)", probs_sel)
 ok(M.enum_violations("INSERT INTO other_table (kind) VALUES ('audit')") == [], "tables without a known constraint are not judged")
 
+# APPEND-ONLY-LINT-1 (2026-10-13): decision_log and issue_lifecycle refuse UPDATE, DELETE and REPLACE at apply time.
+for stmt in ("UPDATE decision_log SET outcome = 'x' WHERE id = 1;", "DELETE FROM issue_lifecycle WHERE id = 1;",
+             "INSERT OR REPLACE INTO decision_log (id, actor) VALUES (1, 'a');", "UPDATE OR IGNORE \"decision_log\" SET actor = 'b';"):
+    _, pr, _ = M.plan("migrations/ao.sql", en_hdr + stmt + "\n")
+    ok(any("APPEND-ONLY-LINT-1" in p for p in pr), "a write to an append-only table is refused: " + stmt[:40], pr)
+_, pr, _ = M.plan("migrations/ao-ok.sql", en_hdr + "INSERT INTO decision_log (actor) VALUES ('a');\nUPDATE decision_log_view_cache SET x = 1;\n")
+ok(not [p for p in pr if "APPEND-ONLY-LINT-1" in p], "an INSERT into decision_log and a table that only shares the prefix pass", pr)
+
+# BACKUP-CREATES-2 (2026-10-13, migration_runs 134): CREATE TABLE <backup> (...) + INSERT INTO <backup> SELECT is a self-made backup.
+pair = ("-- APPLY-BY: ci\n-- DB: qnfo-audit\n-- BACKUP: bak_pair\n-- Rollback: restore from bak_pair\n"
+        "CREATE TABLE IF NOT EXISTS bak_pair (name TEXT, sql TEXT);\nINSERT INTO bak_pair (name, sql) SELECT name, sql FROM sqlite_master WHERE type = 'trigger';\n"
+        "DROP TRIGGER IF EXISTS t1;\n")
+_, pr, inf = M.plan("migrations/pair.sql", pair)
+ok(not pr and inf.get("creates_backup"), "a CREATE + INSERT ... SELECT backup ahead of the DROP counts as self-made", (pr, inf))
+_, pr, inf = M.plan("migrations/pair-late.sql", pair.replace("DROP TRIGGER IF EXISTS t1;\n", "").replace("CREATE TABLE IF NOT EXISTS bak_pair", "DROP TRIGGER IF EXISTS t1;\nCREATE TABLE IF NOT EXISTS bak_pair"))
+ok(not inf.get("creates_backup"), "a backup made after the DROP does not count", inf)
+_, pr, inf = M.plan("migrations/pair-empty.sql", pair.replace("INSERT INTO bak_pair (name, sql) SELECT name, sql FROM sqlite_master WHERE type = 'trigger';\n", ""))
+ok(not inf.get("creates_backup"), "an empty CREATE TABLE without the INSERT ... SELECT does not count", inf)
+
 print(f"{passed} passed, {failed} failed")
 sys.exit(1 if failed else 0)

@@ -25,12 +25,18 @@ on:
 permissions:
   contents: write
 
+# GHA-AUDIT-1: two canonical-deploy completions a minute apart used to start two probes that both commit
+# ci-status/fleet-telemetry.json; one group serialises them (the second sees the fresh file and exits on its 6-hour gate).
+concurrency:
+  group: fleet-telemetry-probe-${{ github.event_name == 'pull_request' && github.event.pull_request.number || 'main' }}
+  cancel-in-progress: false
+
 jobs:
   probe:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           fetch-depth: 50
       - name: At most every 6 hours when chained from a deploy
@@ -50,7 +56,7 @@ jobs:
 
       - name: Upload the telemetry snapshot
         if: always() && steps.due.outputs.run == '1'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: fleet-telemetry
           path: ci-status/fleet-telemetry.json

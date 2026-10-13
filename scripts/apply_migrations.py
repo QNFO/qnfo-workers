@@ -47,6 +47,13 @@ CADENCE_REJECT_SQL = ("SELECT ?1 IS NOT NULL AND trim(?1) <> '' AND (instr(trim(
 METRIC_INSERT = re.compile(r"^\s*(?:INSERT|REPLACE)\s+(?:OR\s+\w+\s+)?INTO\s+\"?metric_registry\"?\s*\(", re.I)
 METRIC_UPDATE_CADENCE = re.compile(r"^\s*UPDATE\s+\"?metric_registry\"?\s+SET\b.*?\brefresh_cadence\s*=\s*'((?:[^']|'')*)'", re.I | re.S)
 DESTRUCTIVE = re.compile(r"^\s*(DELETE\s+FROM|DROP\s+(TABLE|INDEX|VIEW|TRIGGER))\b", re.I)
+# APPEND-ONLY-LINT-1 (GHA-AUDIT-1, 2026-10-13): decision_log and issue_lifecycle carry BEFORE UPDATE/DELETE triggers that
+# RAISE(ABORT) (decision_log_no_update/_no_delete, issue_lifecycle_no_update/_no_delete, read from sqlite_master
+# 2026-10-13). A migration that updates, deletes or REPLACEs a row there passed --check and failed on main (migration_runs
+# 2026-10-12, 2026-10-12-34-default-adopt-prediction.sql statement 4). Append a new row instead.
+APPEND_ONLY = ("decision_log", "issue_lifecycle")
+APPEND_ONLY_WRITE = re.compile(r"^\s*(?:UPDATE(?:\s+OR\s+\w+)?|DELETE\s+FROM|(?:INSERT\s+OR\s+REPLACE|REPLACE)\s+INTO)\s+\"?("
+                               + "|".join(APPEND_ONLY) + r")\"?\b", re.I)
 LEDGER_DDL = ("CREATE TABLE IF NOT EXISTS migration_runs (id INTEGER PRIMARY KEY AUTOINCREMENT, file TEXT NOT NULL, "
               "sha256 TEXT NOT NULL, commit_sha TEXT, db TEXT, status TEXT NOT NULL, statements INTEGER, error TEXT, "
               "applied_by TEXT, applied_at TEXT DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now')))")
@@ -339,6 +346,11 @@ def plan(path, text):
     for s in stmts:
         for bad in enum_violations(body(s)):
             problems.append("CHECK constraint would refuse " + bad + " (CHECK-ENUM-LINT-1)")
+    for s in stmts:
+        m = APPEND_ONLY_WRITE.match(body(s))
+        if m:
+            problems.append(m.group(1).lower() + " is append-only (its D1 trigger aborts UPDATE, DELETE and REPLACE); "
+                            "INSERT a new row instead (APPEND-ONLY-LINT-1)")
     destructive = [s for s in stmts if DESTRUCTIVE.match(body(s))]
     backup = header_value(lines, "BACKUP")
     if destructive and not backup:
@@ -352,6 +364,12 @@ def plan(path, text):
         first = next((i for i, s in enumerate(stmts) if DESTRUCTIVE.match(body(s))), len(stmts))
         mk = re.compile(r"^\s*CREATE\s+TABLE\s+(IF\s+NOT\s+EXISTS\s+)?\"?" + re.escape(backup) + r"\"?\s+AS\s+SELECT\b", re.I)
         creates = any(mk.match(body(s)) for s in stmts[:first])
+        # BACKUP-CREATES-2 (2026-10-13): the CREATE TABLE <backup> (...) + INSERT INTO <backup> SELECT pair is a self-made
+        # backup too; the runner used to demand that table already exist and failed the file on main (migration_runs 134).
+        mk_ddl = re.compile(r"^\s*CREATE\s+TABLE\s+(IF\s+NOT\s+EXISTS\s+)?\"?" + re.escape(backup) + r"\"?\s*\(", re.I)
+        mk_fill = re.compile(r"^\s*INSERT\s+(?:OR\s+\w+\s+)?INTO\s+\"?" + re.escape(backup) + r"\"?[\s(].*\bSELECT\b", re.I | re.S)
+        head = [body(s) for s in stmts[:first]]
+        creates = creates or (any(mk_ddl.match(h) for h in head) and any(mk_fill.match(h) for h in head))
     return True, problems, {"db": db, "statements": len(stmts), "destructive": len(destructive), "backup": backup, "creates_backup": creates}
 
 

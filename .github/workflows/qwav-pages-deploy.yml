@@ -33,13 +33,13 @@ jobs:
     timeout-minutes: 20
     steps:
       - name: Check out QNFO/qwav
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           repository: QNFO/qwav
           ref: ${{ inputs.ref }}
           path: site
           fetch-depth: 1
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v6
         with:
           node-version: "22"
       - name: Refuse a tree that still names the retired deposit service in a public page

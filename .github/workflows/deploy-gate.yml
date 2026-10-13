@@ -22,18 +22,29 @@ on:
 # suite no longer hides the result of every later suite; the job still fails if any step failed. On 2026-10-05 the dashboard
 # breakage stopped the gate at objective-apply and the suites after it never ran on PRs #617-#619.
 
+# GHA-AUDIT-1 (2026-10-13): the gate only reads the repository (Cloudflare calls use the CF token), so the GitHub token is
+# read-only. A newer push to the same PR cancels the superseded gate run; push runs on main are grouped per sha and never
+# cancel one another. The longest gate in the 2026-10-13 sample took 460 s, so 30 minutes bounds a hung step.
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event_name == 'pull_request' && github.event.pull_request.number || github.sha }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   gate:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           fetch-depth: 0
 
       # GATE-NODE-22-1 (2026-10-12): the whole job runs on Node 22. Several offline suites import node:sqlite (Node 22+); the
       # job used to start on Node 20 and switch to 22 only in a later conditional step, so a PR that skipped that step failed
       # IDEA-CHAIN-SINGLE-PRODUCER-1 with "No such built-in module: node:sqlite" (PR 989, 2026-10-12 13:12Z) while others passed.
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v6
         with:
           node-version: "22"
 
@@ -132,7 +143,7 @@ jobs:
       # OWNER-EDIT-1 + IDENTITY-STORE-1: the owner edits owner_docs (the Identity doc) on fleet.qnfo.org, stored in the
       # private qnfo-identity D1. The suite drives the real fetch handler against in-memory SQLite D1s (node:sqlite needs
       # Node 22, so this last step switches runtime).
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v6
         with:
           node-version: "22"
 
@@ -793,6 +804,10 @@ jobs:
           if [ "$EVENT" = "pull_request" ]; then BASE="origin/$BASE_REF"; else BASE="HEAD^"; fi
           files=$(git diff --name-only --diff-filter=AM "$BASE" HEAD -- 'migrations/*.sql' 2>/dev/null || true)
           if [ -n "$files" ]; then python3 scripts/apply_migrations.py --check $files; else echo "no migration changed"; fi
+      # ISSUE-DUP-ABORT-1 (2026-10-13): a duplicate open title filed by a trigger no longer aborts the write that fired it.
+      - name: ISSUE-DUP-ABORT-1 offline replay (migrations/2026-10-13-issue-dup-annotate.sql)
+        if: ${{ !cancelled() }}
+        run: python3 scripts/issue_dup_annotate_test.py
       # PROBE-TEMPLATES-1 (T5.2): a METRIC-TRIGGER issue's contract is born with its trigger's probe (D1 trigger
       # contract_probe_templates_v1); the suite replays the migration on a replica of the production schema.
       - name: PROBE-TEMPLATES-1 offline suite (migrations/2026-10-06-probe-templates.sql)

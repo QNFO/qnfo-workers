@@ -168,18 +168,18 @@ jobs:
       # then compares LIVE (current) against an OLD tree and reports false DRIFT / repo-ahead (seen 3x in one
       # hour: qnfo-fleet-control 0.4.54, personal-companion 1.7.2, dashboard/ops). A push run keeps its own
       # SHA; every other trigger audits the CURRENT head of main.
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           ref: ${{ github.event_name == 'push' && github.sha || 'main' }}
           # DEPLOY-SETTLE-1: the audit asks 'when did this worker's directory last change?'; a shallow clone answers
           # with HEAD's age for every path. The whole repo packs to ~5 MB, so full history is cheap.
           fetch-depth: 0
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.11"
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v6
         with:
           node-version: "20"
 
@@ -218,7 +218,7 @@ jobs:
 
       - name: upload the self-audit snapshot
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: fleet-autoaudit
           path: /tmp/fleet-autoaudit/

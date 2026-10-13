@@ -23,9 +23,10 @@ permissions:
 jobs:
   autosync:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.11"
       - name: detect repo-internal mirror drift (report)
@@ -40,7 +41,7 @@ jobs:
       - name: regenerate mirrors from source
         run: python scripts/mirror-guard.py --fix
       - name: propose repair PR
-        uses: peter-evans/create-pull-request@v6
+        uses: peter-evans/create-pull-request@v8
         with:
           branch: mirror-autosync/repair
           delete-branch: true
