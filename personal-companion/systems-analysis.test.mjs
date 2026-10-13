@@ -86,5 +86,21 @@ ok(/never state an inferred arrangement, funding, motive or behaviour as a repor
   ok(i > 0 && j > i && k > j, "the revision is repaired after validation and before the fact-check", { i, j, k });
   ok(/problems: \(rv\.problems \|\| \[\]\)\.concat\(vr\.problems \|\| \[\]\)/.test(loop), "a failed revision logs its own problems first");
 }
+// ---- CRITIC-PRUNE-1 (1.21.3): a grounding rejection that quotes the draft deletes those sentences and is read once more -------------------
+{
+  const draft = "# The 18th Military Police Brigade\n\nThe battalion is headquartered in Vilseck. Fourteen companies serve under the battalion. The source lists five companies by name.";
+  const why = "The piece invents a claim that 'Fourteen companies serve under the battalion' when the source lists exactly five subordinate companies; this concrete numerical claim is false.";
+  ok(JSON.stringify(V.criticQuotes(why, draft)) === JSON.stringify(["Fourteen companies serve under the battalion"]), "the critic's quotation of the draft is found", V.criticQuotes(why, draft));
+  ok(V.criticQuotes("the source only states '21 October 1977 in Germany' for the inactivation", draft).length === 0, "a quotation of the source that the draft does not contain is ignored");
+  ok(V.criticQuotes("it says 'five' twice", draft).length === 0, "a quotation under three words is ignored");
+  ok(V.criticQuotes('fabricates \u201cThe battalion is headquartered in Vilseck\u201d and \u201cFourteen companies serve under the battalion\u201d', draft).length === 2, "curly double quotes are read");
+  const w = V.critiqueWorst({ specificity: 8, argument: 8, voice: 8, systems: 8, grounding: 0 }, "notes");
+  ok(w.worst === 0 && w.worstName === "grounding" && w.missing === false, "a grounding failure is the worst score when every gating score passes", w);
+  const w2 = V.critiqueWorst({ specificity: 8, argument: 3, voice: 8, grounding: 9 }, "essay");
+  ok(w2.missing === true && w2.worst === 0, "a missing gating score fails closed", w2);
+  const loop = src.slice(src.indexOf("async function generate("), src.indexOf("var CRON_TABLE"));
+  const a = loop.indexOf("if (worst < floorForForm && worstName === \"grounding\") {"), b = loop.indexOf("var crit2 = await critiquePiece(env, cpr.piece, form, ground);"), c = loop.indexOf("if (worst < floorForForm) {"), d = loop.indexOf("await logRun(env, form, model, topic.id, \"stage\", \"fact-check\"");
+  ok(a > 0 && b > a && c > b && d > c, "the critic prune runs before the rejection and before the fact-check", { a, b, c, d });
+}
 console.log(pass + " passed, " + fail + " failed");
 if (fail) process.exit(1);
