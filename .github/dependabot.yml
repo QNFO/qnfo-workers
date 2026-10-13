@@ -1,0 +1,21 @@
+# ACTIONS-PIN-UPDATE-1 (GHA-AUDIT-1, 2026-10-13; charter pillar security). Every workflow pins its actions to a commit SHA with
+# a "# vN" comment (scripts/workflow-lint.py R4 GHA-HARDENING-1). Dependabot keeps those pins current: one grouped pull
+# request a month moves the SHAs and comments together, so a Node runtime deprecation or a security release is not missed
+# again (on 2026-10-13 every action was a Node 20 major). The pull request runs the same gates as any other; workflow-lint
+# refuses a bump onto a Node 20 major.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directories:
+      - "/"
+      - "/research-code/agentic-collapse"
+      - "/research-code/ignorance-audit"
+      - "/research-code/ultrametric-lean"
+    schedule:
+      interval: monthly
+    groups:
+      actions:
+        patterns: ["*"]
+    commit-message:
+      prefix: "ci(actions)"
+    open-pull-requests-limit: 2

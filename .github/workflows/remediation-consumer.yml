@@ -75,9 +75,9 @@ jobs:
       # the 15 minute job timeout (measured: 4273 ms for 1 contract).
       REMEDIATION_MAX_ITEMS: "40"
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
 
-      - uses: actions/setup-python@v6
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
         with:
           python-version: "3.11"
 
@@ -149,7 +149,7 @@ jobs:
       - name: Upload the public-safe continuity snapshot
         if: always() && hashFiles('continuity-snapshot/*.jsonl.gz') != ''
         continue-on-error: true
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
         with:
           name: continuity-snapshot
           path: continuity-snapshot/
@@ -180,7 +180,7 @@ jobs:
       # STATUS-THROTTLE-1: every run's snapshot is kept here, so batching the git copy below loses no snapshot.
       - name: Upload the status artifact
         if: always()
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
         with:
           name: remediation-consumer-status
           path: ci-status/remediation-consumer.json
