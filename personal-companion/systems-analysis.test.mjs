@@ -79,5 +79,12 @@ ok(/never state an inferred arrangement, funding, motive or behaviour as a repor
   ok(!/in the objector's terms/.test(P.P_ESSAY) && /never as a quotation or an unnamed critic/.test(P.P_ESSAY), "the essay form says the same");
   ok(/a paragraph that would read the same for any other subject is boilerplate and is rejected/.test(P.P_STYLE) && /quote only words that appear verbatim in the source material, attributed to the person the source attributes them to/.test(P.P_STYLE), "the analysis is specific and quotations keep their attribution");
 }
+// ---- REVISION-REPAIR-1 (1.21.2): the fact revision is repaired before it is judged; its own problems are logged first ------------------
+{
+  const loop = src.slice(src.indexOf("async function generate("), src.indexOf("var CRON_TABLE"));
+  const i = loop.indexOf("var rv = rp ? validatePiece(rp, form, ground, repairOpts)"), j = loop.indexOf("var rgr = repairGroundingDraft(rp, rv.problems, form, ground, repairOpts);"), k = loop.indexOf("vr = await verifyPiece(env, pieceText(rp), ground, rev.model");
+  ok(i > 0 && j > i && k > j, "the revision is repaired after validation and before the fact-check", { i, j, k });
+  ok(/problems: \(rv\.problems \|\| \[\]\)\.concat\(vr\.problems \|\| \[\]\)/.test(loop), "a failed revision logs its own problems first");
+}
 console.log(pass + " passed, " + fail + " failed");
 if (fail) process.exit(1);
