@@ -1,62 +1,14 @@
 {
  "ok": true,
  "marker": "REMEDIATION-CONSUMER-1",
- "verifier": "remediation-consumer@0adc22e0cef7",
- "due": 11,
- "pass": 6,
- "fail": 5,
+ "verifier": "remediation-consumer@f5bba82abfab",
+ "due": 9,
+ "pass": 5,
+ "fail": 4,
  "skipped": 0,
  "contracts": [
   {
-   "class": "issue-2272",
-   "issue_id": 2272,
-   "verdict": "pass",
-   "expected": "ok",
-   "observed": "ok",
-   "written": true
-  },
-  {
-   "class": "issue-2366",
-   "issue_id": 2366,
-   "verdict": "pass",
-   "expected": "ok",
-   "observed": "ok",
-   "written": true
-  },
-  {
-   "class": "issue-2130",
-   "issue_id": 2130,
-   "verdict": "fail",
-   "expected": "ok",
-   "observed": "pending: host census: 59 hosts, 8 broken at 2026-10-13T03:40:49Z (cloud_ops_events host-census-2026-10-13)",
-   "written": true
-  },
-  {
-   "class": "issue-2346",
-   "issue_id": 2346,
-   "verdict": "fail",
-   "expected": "ok",
-   "observed": "pending: the newest workers best-practice audit reads 5 fail and 533 advisory findings at 2026-10-13T08:10:19Z (target 0)",
-   "written": true
-  },
-  {
-   "class": "issue-2409",
-   "issue_id": 2409,
-   "verdict": "fail",
-   "expected": "ok",
-   "observed": "missing-marker:idea-hub/worker.js",
-   "written": true
-  },
-  {
-   "class": "issue-2419",
-   "issue_id": 2419,
-   "verdict": "pass",
-   "expected": "8",
-   "observed": "8",
-   "written": true
-  },
-  {
-   "class": "fm-honeypot-named-for-autofill",
+   "class": "fm-notice-reply-encoded-subject",
    "issue_id": null,
    "verdict": "pass",
    "expected": "ok",
@@ -64,35 +16,67 @@
    "written": true
   },
   {
-   "class": "fm-math-delim-pairing-shift",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "ok",
-   "observed": "ok",
-   "written": true
-  },
-  {
-   "class": "issue-2468",
-   "issue_id": 2468,
+   "class": "issue-2339",
+   "issue_id": 2339,
    "verdict": "fail",
-   "expected": "0",
-   "observed": "80",
+   "expected": "ok",
+   "observed": "pending: under 24 hours since qnfo-ai-search 2.5.0 first ran",
    "written": true
   },
   {
-   "class": "fm-paper-source-voice",
-   "issue_id": 2468,
+   "class": "fm-mail-draft-fabrication",
+   "issue_id": null,
    "verdict": "pass",
    "expected": "0",
    "observed": "0",
    "written": true
   },
   {
-   "class": "fm-paper-abstract-empty",
-   "issue_id": 2468,
+   "class": "issue-2165",
+   "issue_id": 2165,
    "verdict": "fail",
+   "expected": "ok",
+   "observed": "pending: fewer than 20 judged claims on answers written by 2.5.0 or later",
+   "written": true
+  },
+  {
+   "class": "fm-zaraz-autoinject-worker-html",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "issue-2473",
+   "issue_id": 2473,
+   "verdict": "fail",
+   "expected": "ok",
+   "observed": "missing-marker:qnfo-research-exec/worker.js",
+   "written": true
+  },
+  {
+   "class": "fm-outward-prose-no-lede",
+   "issue_id": null,
+   "verdict": "pass",
    "expected": "0",
-   "observed": "269",
+   "observed": "0",
+   "written": true
+  },
+  {
+   "class": "fm-unbounded-ready-queue",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "0",
+   "observed": "0",
+   "written": true
+  },
+  {
+   "class": "issue-2483",
+   "issue_id": 2483,
+   "verdict": "fail",
+   "expected": "ok",
+   "observed": "present-marker:scripts/ai-attribution-personal-companion-test.mjs",
    "written": true
   }
  ],
@@ -119,20 +103,21 @@
   "http",
   "runner-https"
  ],
+ "https": 2,
  "budget_exhausted": false,
  "runtime_verified_share_24h": 9.8,
  "host_census": {
   "skipped": "ran within 6h"
  },
  "migrations": {
-  "opted_in": 152,
+  "opted_in": 154,
   "unapplied": [],
   "applied_now": [],
   "failed": [],
   "metric": 0
  },
- "spent_ms": 10153,
- "head": "0adc22e0cef72b153dae6aee9fe4459900041446",
+ "spent_ms": 18615,
+ "head": "f5bba82abfabc40bfadc96bab4b32cdb15d93339",
  "job_status": "success",
- "ts": "2026-10-13T08:16:47Z"
+ "ts": "2026-10-13T08:31:35Z"
 }
