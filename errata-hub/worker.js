@@ -1,6 +1,17 @@
 import { Buffer as Buffer2 } from "node:buffer";
 import { Buffer as Buffer3 } from "node:buffer";
-var VERSION = "1.5.2-doi-scrub"; // 1.5.2 NOZ-DOI-1 (2026-10-11): no external DOI-registrar call, token, route or text: the publish member re-renders the paper and re-points D1, graph and R2 with doi/zenodo_doi/zenodo_url left NULL, respond resolves papers by slug, watch keys a paper by its slug, the internal sweep takes a slug; a DOI value of the dead registrar is treated as absent in every emitted text. 1.5.1 // 1.5.0 ERRATA-GROUND-1 (owner directive 2026-10-10): a correction states only what the errata email or the paper states; a name, year, figure, DOI or link in neither makes the draft high risk (never sent). 1.4.2 prompt-cache // 1.4.1 WORKERS-AI-ATTRIBUTION-2 (#1997): env.AI wrapped with __aiAttrEnv at the entry, so the members' glm-5.3-flash and gemma-4 calls are counted in ai_call_counters (worker errata-hub); 1.4.0 ERRATA-INTERNAL-SWEEP-1 (#1164, pillar: research): the :00 watch tick first moves open internal_errata rows that have no errata_queue row into errata_queue (email_id NULL, subject = the erratum id, status internal-open, at most 20 per tick, no model call), so a finding recorded straight into internal_errata (qnfo-ops err-20260926-001) reaches the queue; the queue insert is shared with POST /internal-errata and adds nothing when a row for the erratum exists; 1.3.1 ERRATA-JUDGE-1 (pillar: research): a correction the drafting model (zai glm-5.3-flash) rates low risk is read once by a small model from another family (google gemma-4) before it can stay low risk; no verdict or a failing verdict makes it high risk, which errata-publish never sends (fail closed; docs/ENSEMBLE-POLICY.md); 1.3.0 1.3.0 CRON-SINGLE-TRIGGER-1 (#1785): one hourly trigger runs watch, respond, publish in that order; 1.2.0 ERRATA-HUB-CRONS-UNDECLARED-1 (#1747): hourly crons declared, publish gated off, tick rows; 1.1.5 WORKER-CONTRACT (HUB-VERSIONING-1) + cfWorkerRead /ops/deploy guard
+// WORKERS-BP-DEBT-1 (#2432, pillar security): the reviser and errata request secrets are compared in constant time
+// (rxSecretEqual), not with === / !==, whose early exit leaks how many leading bytes of a guess match.
+function rxSecretEqual(given, expected) {
+  if (typeof given !== "string" || typeof expected !== "string" || !expected) return false;
+  const enc = new TextEncoder();
+  const a = enc.encode(given), b = enc.encode(expected);
+  if (a.length !== b.length) return false;
+  let d = 0;
+  for (let i = 0; i < a.length; i++) d |= a[i] ^ b[i];
+  return d === 0;
+}
+var VERSION = "1.5.3-secret-compare"; // 1.5.3 WORKERS-BP-DEBT-1 (#2432, pillar security): the request-secret checks compare in constant time (rxSecretEqual) instead of with === or !==. 1.5.2 NOZ-DOI-1 (2026-10-11): no external DOI-registrar call, token, route or text: the publish member re-renders the paper and re-points D1, graph and R2 with doi/zenodo_doi/zenodo_url left NULL, respond resolves papers by slug, watch keys a paper by its slug, the internal sweep takes a slug; a DOI value of the dead registrar is treated as absent in every emitted text. 1.5.1 // 1.5.0 ERRATA-GROUND-1 (owner directive 2026-10-10): a correction states only what the errata email or the paper states; a name, year, figure, DOI or link in neither makes the draft high risk (never sent). 1.4.2 prompt-cache // 1.4.1 WORKERS-AI-ATTRIBUTION-2 (#1997): env.AI wrapped with __aiAttrEnv at the entry, so the members' glm-5.3-flash and gemma-4 calls are counted in ai_call_counters (worker errata-hub); 1.4.0 ERRATA-INTERNAL-SWEEP-1 (#1164, pillar: research): the :00 watch tick first moves open internal_errata rows that have no errata_queue row into errata_queue (email_id NULL, subject = the erratum id, status internal-open, at most 20 per tick, no model call), so a finding recorded straight into internal_errata (qnfo-ops err-20260926-001) reaches the queue; the queue insert is shared with POST /internal-errata and adds nothing when a row for the erratum exists; 1.3.1 ERRATA-JUDGE-1 (pillar: research): a correction the drafting model (zai glm-5.3-flash) rates low risk is read once by a small model from another family (google gemma-4) before it can stay low risk; no verdict or a failing verdict makes it high risk, which errata-publish never sends (fail closed; docs/ENSEMBLE-POLICY.md); 1.3.0 1.3.0 CRON-SINGLE-TRIGGER-1 (#1785): one hourly trigger runs watch, respond, publish in that order; 1.2.0 ERRATA-HUB-CRONS-UNDECLARED-1 (#1747): hourly crons declared, publish gated off, tick rows; 1.1.5 WORKER-CONTRACT (HUB-VERSIONING-1) + cfWorkerRead /ops/deploy guard
 // MEMBER-VERSION-IDENTS-1 (2026-10-01): the three folded members reported their /health versions as string literals,
 // so opsDeploy refused every errata-hub deploy with FM7-HEALTH-VERSION-PARITY-1 (canonical-deploy run 36802041421:
 // 1.1.1 with the internal errata intake never went live, and errata-hub stayed NOT_DEPLOYED). Each member's version
@@ -36,7 +47,7 @@ function json(data, status) {
 __name(json, "json");
 function authorized(request, env) {
   if (!env.ERRATA_TOKEN) return false;
-  return (request.headers.get("X-Erratta-Token") || "") === env.ERRATA_TOKEN;
+  return rxSecretEqual(request.headers.get("X-Erratta-Token") || "", env.ERRATA_TOKEN);
 }
 __name(authorized, "authorized");
 async function classifyErrata(env, email) {
@@ -159,7 +170,7 @@ function json(data, status) {
 __name(json, "json");
 function authorized(request, env) {
   if (!env.ERRATA_TOKEN) return false;
-  return (request.headers.get("X-Erratta-Token") || "") === env.ERRATA_TOKEN;
+  return rxSecretEqual(request.headers.get("X-Erratta-Token") || "", env.ERRATA_TOKEN);
 }
 __name(authorized, "authorized");
 async function resolvePaper(env, doi) {
@@ -21297,7 +21308,7 @@ __name2(json, "json");
 __name22(json, "json");
 function authorized(request, env) {
   if (!env.ERRATA_TOKEN) return false;
-  return (request.headers.get("X-Erratta-Token") || "") === env.ERRATA_TOKEN;
+  return rxSecretEqual(request.headers.get("X-Erratta-Token") || "", env.ERRATA_TOKEN);
 }
 __name(authorized, "authorized");
 __name2(authorized, "authorized");
@@ -21701,7 +21712,7 @@ async function sweepInternalErrata(env) {
 // respond/publish crons (which select status='detected') never auto-act on it.
 async function internalErrataIntake(request, env) {
   const j = (d, st) => new Response(JSON.stringify(d), { status: st || 200, headers: { "content-type": "application/json" } });
-  if (!env.ERRATA_TOKEN || (request.headers.get("X-Erratta-Token") || "") !== env.ERRATA_TOKEN) return j({ error: "unauthorized" }, 401);
+  if (!env.ERRATA_TOKEN || !rxSecretEqual(request.headers.get("X-Erratta-Token") || "", env.ERRATA_TOKEN)) return j({ error: "unauthorized" }, 401);
   let b; try { b = await request.json(); } catch (e) { return j({ error: "invalid json" }, 400); }
   const source = b.source;
   if (source !== "internal_audit" && source !== "red_team") return j({ error: "source must be internal_audit|red_team" }, 400);
