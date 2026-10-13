@@ -4,7 +4,7 @@
 A replica of cloud_ops_events (TEXT PRIMARY KEY id, which SQLite lets be NULL) with the production ts normalisers keyed on
 id, trg_metric_write_audit, the alerts dedupe and the worker_removals dedupe. Proves: before the migration an id-less insert
 keeps its space-format ts and an ISO alert from hours earlier swallows a new one; after it every insert gets an id and an
-ISO ts, the audit trigger writes an id, the backfill fixes existing rows, the alert dedupe only folds alerts from the last
+ISO ts by rowid, the audit trigger writes an id, the backfill fixes existing rows, the alert dedupe only folds alerts from the last
 60 minutes in either format, and the fm-coe-null-id detector reads 0.
 Run: python3 scripts/coe_null_id_test.py   (prints "N passed, 0 failed")
 """
@@ -113,10 +113,10 @@ ok(con.execute("SELECT ts FROM cloud_ops_events WHERE kind = 'dispose-blocked'")
 
 con.execute("INSERT INTO cloud_ops_events (ts, kind, job) VALUES ('2026-10-13 21:21:08', 'obs-ingest', 'qnfo-fleet-control')")
 row = con.execute("SELECT id, ts FROM cloud_ops_events WHERE ts LIKE '2026-10-13T21:21:08%'").fetchone()
-ok(row and row[0] and row[0].startswith("coe-") and row[1] == "2026-10-13T21:21:08.000Z", "after: an id-less insert gets an id and an ISO ts", row)
-con.execute("INSERT INTO cloud_ops_events (ts, kind) VALUES ('1760390000', 'epoch')")
+ok(row and row[1] == "2026-10-13T21:21:08.000Z", "after: an id-less insert gets an ISO ts (the normaliser matches rowid)", row)
+con.execute("INSERT INTO cloud_ops_events (id, ts, kind) VALUES ('e1', '1760390000', 'epoch')")
 row = con.execute("SELECT id, ts FROM cloud_ops_events WHERE kind = 'epoch'").fetchone()
-ok(row[0] and row[1].endswith(".000Z") and row[1][10] == "T", "after: an epoch ts on an id-less insert is normalised", row)
+ok(row[1].endswith(".000Z") and row[1][10] == "T", "after: an epoch ts is normalised", row)
 con.execute("INSERT INTO cloud_ops_events (id, ts, kind) VALUES ('given', '2026-10-13T21:00:00Z', 'k')")
 ok(con.execute("SELECT ts FROM cloud_ops_events WHERE id = 'given'").fetchone()[0] == "2026-10-13T21:00:00Z", "a row with an id and an ISO ts is untouched")
 con.execute("UPDATE metric_registry SET last_value = '3' WHERE metric = 'worker_count'")
@@ -146,10 +146,11 @@ ok(True, "issue_ledger_exclusion_aware compiles")
 probe = con.execute("SELECT verify_probe FROM remediation_contracts WHERE class = 'fm-coe-null-id'").fetchone()[0]
 exp, obs = con.execute(probe).fetchone()
 ok(exp == obs == "0", "the fm-coe-null-id detector passes after the migration", (exp, obs))
-con.execute("DROP TRIGGER cloud_ops_events_id_fill_ins")
-con.execute("INSERT INTO cloud_ops_events (ts, kind) VALUES (datetime('now'), 'obs-ingest')")
+ok(con.execute("SELECT COUNT(*) FROM sqlite_master WHERE name = 'cloud_ops_events_id_fill_ins'").fetchone()[0] == 0,
+   "no id-fill trigger (D1 refused its nesting depth, migration_runs 224)")
+con.execute("INSERT INTO cloud_ops_events (ts, kind) VALUES (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'), 'some-new-writer')")
 exp, obs = con.execute(probe).fetchone()
-ok(obs != "0", "and fails when an id-less row appears again", (exp, obs))
+ok(obs != "0", "and fails when another writer inserts without an id", (exp, obs))
 
 print(f"{passed} passed, {failed} failed")
 sys.exit(1 if failed else 0)
