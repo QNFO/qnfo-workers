@@ -1,5 +1,5 @@
 {
-  "audited_at": "2026-10-13 11:29:03",
+  "audited_at": "2026-10-13 12:04:20",
   "d1_write_failures": [],
   "d1_writes_ok": 115,
   "guard": {
@@ -543,12 +543,12 @@
       },
       {
         "dir": "personal-companion",
-        "version": "1.19.6-factcheck-first-two",
+        "version": "1.20.0-systems-analysis",
         "worker": "personal-companion"
       },
       {
         "dir": "q08-signal-engine",
-        "version": "0.17.6",
+        "version": "0.18.1",
         "worker": "q08-signal-engine"
       },
       {
@@ -568,7 +568,7 @@
       },
       {
         "dir": "qnfo-cloud-ops",
-        "version": "1.26.2-crypto-ids",
+        "version": "1.26.3-review-skips-detectors",
         "worker": "qnfo-cloud-ops"
       },
       {
@@ -900,9 +900,9 @@
       "worker": "personal-api"
     },
     "personal-companion": {
-      "before": "1.19.6-factcheck-first-two",
+      "before": "1.20.0-systems-analysis",
       "http": 200,
-      "live": "1.19.6-factcheck-first-two",
+      "live": "1.20.0-systems-analysis",
       "match": 1,
       "note": "SYNC",
       "worker": "personal-companion"
@@ -944,9 +944,9 @@
       "worker": "personal-life-search"
     },
     "q08-signal-engine": {
-      "before": "0.17.6",
+      "before": "0.18.1",
       "http": 200,
-      "live": "0.17.6",
+      "live": "0.18.1",
       "match": 1,
       "note": "SYNC",
       "worker": "q08-signal-engine"
@@ -1129,9 +1129,9 @@
       "worker": "qnfo-citation-watch"
     },
     "qnfo-cloud-ops": {
-      "before": "1.26.2-crypto-ids",
+      "before": "1.26.3-review-skips-detectors",
       "http": 200,
-      "live": "1.26.2-crypto-ids",
+      "live": "1.26.3-review-skips-detectors",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-cloud-ops"
