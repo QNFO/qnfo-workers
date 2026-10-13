@@ -1,5 +1,5 @@
 {
-  "audited_at": "2026-10-13 08:48:07",
+  "audited_at": "2026-10-13 09:21:23",
   "d1_write_failures": [],
   "d1_writes_ok": 115,
   "guard": {
@@ -543,7 +543,7 @@
       },
       {
         "dir": "personal-companion",
-        "version": "1.19.3-full-sources",
+        "version": "1.19.4-prune-extend",
         "worker": "personal-companion"
       },
       {
@@ -648,7 +648,7 @@
       },
       {
         "dir": "qnfo-research-exec",
-        "version": "0.17.3-abstract-clean",
+        "version": "0.17.4-abstract-frontmatter",
         "worker": "qnfo-research-exec"
       },
       {
@@ -900,9 +900,9 @@
       "worker": "personal-api"
     },
     "personal-companion": {
-      "before": "1.19.3-full-sources",
+      "before": "1.19.4-prune-extend",
       "http": 200,
-      "live": "1.19.3-full-sources",
+      "live": "1.19.4-prune-extend",
       "match": 1,
       "note": "SYNC",
       "worker": "personal-companion"
@@ -1500,9 +1500,9 @@
       "worker": "qnfo-register-guard"
     },
     "qnfo-research-exec": {
-      "before": "0.17.3-abstract-clean",
+      "before": "0.17.4-abstract-frontmatter",
       "http": 200,
-      "live": "0.17.3-abstract-clean",
+      "live": "0.17.4-abstract-frontmatter",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-research-exec"
