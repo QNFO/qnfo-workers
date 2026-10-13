@@ -143,6 +143,27 @@ const notesOf = (extra) => ({ title: "Notes on the drift at the station", subtit
   ok(/LEDE \(inverted pyramid/.test(V.prompts.P_STYLE) && /Wikipedia article/.test(V.prompts.P_STYLE) && /arXiv paper/.test(V.prompts.P_STYLE), "the writer prompt asks for the lede and names the source kinds");
 }
 
+// ---- LEDE-SPLIT-1 (1.19.1, run 5342-5364): an over-long lede is split at a sentence boundary, nothing added or removed ------------------
+{
+  const s1 = "The Corlea Trackway is an Iron Age road of oak planks in a bog, described in a Wikipedia article. ";
+  const filler = "Its builders laid the planks across wet ground in one season and the road sank within a few years of its making. ";
+  const longLede = s1 + filler.repeat(6);
+  const piece = { title: "T", lede: longLede.trim(), body_md: "## One\n\nBody text here.", objection: "" };
+  const sp = V.splitLongLede(piece);
+  const wc = (t) => String(t).split(/\s+/).filter(Boolean).length;
+  ok(sp !== piece && wc(sp.lede) <= 100 && sp.lede.indexOf("The Corlea Trackway is an Iron Age road") === 0, "the lede keeps its opening sentences within 100 words", wc(sp.lede));
+  ok(sp.body_md.indexOf("## One") > 0 && (sp.lede + " " + sp.body_md.split("\n\n## One")[0]).replace(/\s+/g, " ").trim() === longLede.replace(/\s+/g, " ").trim(), "the rest becomes the first body paragraph; no word is added or lost");
+  ok(V.ledeProblems(sp, "Corlea Trackway").length === 0, "the split lede passes the lede check");
+  ok(V.splitLongLede(Object.assign({}, piece, { lede: s1 })) !== undefined && V.splitLongLede(Object.assign({}, piece, { lede: s1.trim() })).lede === s1.trim(), "a short lede is left alone");
+  const one = Object.assign({}, piece, { lede: "word ".repeat(150).trim() + "." });
+  ok(V.splitLongLede(one) === one, "a single over-long sentence is not split (the check still reports it)");
+  const dup = { title: "T", lede: longLede.trim(), body_md: "## One\n\n" + longLede.trim() + "\n\nMore.", objection: "" };
+  const sd = V.splitLongLede(dup);
+  ok(wc(sd.lede) <= 100 && sd.body_md === dup.body_md, "a lede read out of the body is shortened without duplicating the body text");
+  const loop = src.slice(src.indexOf("async function generate("), src.indexOf("var CRON_TABLE"));
+  ok(loop.indexOf("var split = splitLongLede(piece);") !== -1 && loop.indexOf("var split = splitLongLede(piece);") < loop.indexOf("var v = validatePiece(piece, form, ground, vopts);"), "generate splits the lede before validation");
+}
+
 // ---- source labels in the briefing and the ground text; "Wikipedia" is grounded ------------------------------------------------------
 {
   const anchors = [{ kind: "concept", ref: "https://en.wikipedia.org/wiki/Corlea_Trackway", title: "Corlea Trackway", text: "The Corlea Trackway is an Iron Age road." }, { kind: "paper", ref: "http://arxiv.org/abs/1", title: "A paper", text: "Abstract." }];
