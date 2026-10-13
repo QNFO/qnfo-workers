@@ -1,8 +1,16 @@
 {
-  "audited_at": "2026-10-13 19:50:31",
+  "audited_at": "2026-10-13 20:21:04",
   "d1_write_failures": [],
   "d1_writes_ok": 115,
   "guard": {
+    "_drift_confirm": {
+      "first_pass": [
+        "personal-companion",
+        "q08-signal-engine"
+      ],
+      "refreshed": true,
+      "second_pass": []
+    },
     "_guard_rc": 0,
     "ahead": [],
     "cf_script_list": true,
@@ -11,7 +19,13 @@
     "cron_only": [],
     "cron_only_count": 0,
     "drift": [],
-    "live_err": [],
+    "live_err": [
+      {
+        "dir": "qnfo-twin-maintain",
+        "err": "ERR:The read operation timed out",
+        "worker": "qnfo-twin-maintain"
+      }
+    ],
     "multi_version": [],
     "multi_version_count": 0,
     "name_resolution": true,
@@ -136,14 +150,13 @@
       "qnfo-signal-loop",
       "qnfo-skill-sync",
       "qnfo-thread-ingest",
-      "qnfo-twin-maintain",
       "qnfo-venue-radar",
       "research-daily-brief",
       "retired-deposit-stage",
       "skills-discovery",
       "vault-indexer"
     ],
-    "not_deployed_notdrift": 76,
+    "not_deployed_notdrift": 75,
     "not_deployed_workers": [
       {
         "dir": "agent-orchestrator",
@@ -496,11 +509,6 @@
         "worker": "qnfo-thread-ingest"
       },
       {
-        "dir": "qnfo-twin-maintain",
-        "marker": "FOLDED",
-        "worker": "qnfo-twin-maintain"
-      },
-      {
         "dir": "qnfo-venue-radar",
         "marker": "RETIRED",
         "worker": "qnfo-venue-radar"
@@ -543,12 +551,12 @@
       },
       {
         "dir": "personal-companion",
-        "version": "1.22.5-analysis-auto",
+        "version": "1.22.6-split-lede",
         "worker": "personal-companion"
       },
       {
         "dir": "q08-signal-engine",
-        "version": "0.24.1",
+        "version": "0.24.2",
         "worker": "q08-signal-engine"
       },
       {
@@ -573,7 +581,7 @@
       },
       {
         "dir": "qnfo-code-orchestrator",
-        "version": "0.15.0-edit-repair-hints",
+        "version": "0.15.1-ladder-order",
         "worker": "qnfo-code-orchestrator"
       },
       {
@@ -633,12 +641,12 @@
       },
       {
         "dir": "qnfo-observability",
-        "version": "1.4.4-error-ratio-census",
+        "version": "1.4.5-cron-heartbeat",
         "worker": "qnfo-observability"
       },
       {
         "dir": "qnfo-ops",
-        "version": "2.47.0-deploy-caller",
+        "version": "2.47.1-cron-heartbeat",
         "worker": "qnfo-ops"
       },
       {
@@ -900,9 +908,9 @@
       "worker": "personal-api"
     },
     "personal-companion": {
-      "before": "1.22.5-analysis-auto",
+      "before": "1.22.6-split-lede",
       "http": 200,
-      "live": "1.22.5-analysis-auto",
+      "live": "1.22.6-split-lede",
       "match": 1,
       "note": "SYNC",
       "worker": "personal-companion"
@@ -944,9 +952,9 @@
       "worker": "personal-life-search"
     },
     "q08-signal-engine": {
-      "before": "0.24.1",
+      "before": "0.24.2",
       "http": 200,
-      "live": "0.24.1",
+      "live": "0.24.2",
       "match": 1,
       "note": "SYNC",
       "worker": "q08-signal-engine"
@@ -1146,9 +1154,9 @@
       "worker": "qnfo-code-agent"
     },
     "qnfo-code-orchestrator": {
-      "before": "0.15.0-edit-repair-hints",
+      "before": "0.15.1-ladder-order",
       "http": 200,
-      "live": "0.15.0-edit-repair-hints",
+      "live": "0.15.1-ladder-order",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-code-orchestrator"
@@ -1404,17 +1412,17 @@
       "worker": "qnfo-memory-mcp-legacy-dup"
     },
     "qnfo-observability": {
-      "before": "1.4.4-error-ratio-census",
+      "before": "1.4.5-cron-heartbeat",
       "http": 200,
-      "live": "1.4.4-error-ratio-census",
+      "live": "1.4.5-cron-heartbeat",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-observability"
     },
     "qnfo-ops": {
-      "before": "2.47.0-deploy-caller",
+      "before": "2.47.1-cron-heartbeat",
       "http": 200,
-      "live": "2.47.0-deploy-caller",
+      "live": "2.47.1-cron-heartbeat",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-ops"
@@ -1596,11 +1604,10 @@
     },
     "qnfo-twin-maintain": {
       "before": null,
-      "http": 404,
+      "http": 0,
       "live": null,
       "match": 0,
-      "note": "NOT_DEPLOYED",
-      "retired": "FOLDED",
+      "note": "LIVE_ERR",
       "worker": "qnfo-twin-maintain"
     },
     "qnfo-venue-radar": {
