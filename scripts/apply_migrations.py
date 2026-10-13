@@ -449,6 +449,17 @@ def apply_file(path, text, acct, token, commit, emit=print):
     if done:
         emit(json.dumps({"file": path, "already_applied": True, "sha256": sha[:12]}))
         return 0
+    # D1-TRIGGER-DEPTH-RETRY-1 (2026-10-13): a file whose same content was already refused by the depth canary fails the same
+    # way again, and every re-run repeats its DROP and CREATE TRIGGER: the new trigger is live until the canary drops it, so
+    # writes through that table fail for those seconds, and an old trigger the file dropped first stays gone. migration_runs
+    # 225, 227 and 228 (one sha256, 21:56-22:02Z) were this: three short insert outages on cloud_ops_events. Such a file
+    # runs again only when its content changes (a new sha256).
+    depth = d1(acct, token, db_id, "SELECT id FROM migration_runs WHERE file = ?1 AND sha256 = ?2 AND status = 'error' "
+               "AND instr(COALESCE(error, ''), 'D1-TRIGGER-DEPTH-1') > 0 ORDER BY id DESC LIMIT 1", [path, sha])
+    if depth:
+        emit(json.dumps({"file": path, "ok": False, "refused": "D1-TRIGGER-DEPTH-RETRY-1: this content was refused by the depth "
+                         "canary in migration_runs " + str(depth[0].get("id")) + "; change the file to run it again", "sha256": sha[:12]}))
+        return 1
     def backup_missing():
         n = d1(acct, token, db_id, "SELECT COUNT(*) AS n FROM sqlite_master WHERE type = 'table' AND name = ?1", [info["backup"]])
         if not n or int(n[0].get("n") or 0) == 0:
