@@ -160,7 +160,10 @@ function fileIssue(env) {
 
 // ===== B. a task no model can do: three rounds, then ONE fleet issue, never an owner card =====
 {
-  const { env, calls } = envWith(new Array(20).fill(""));
+  // FAIL-SIGNATURE-STOP-1 (0.16.0): three failures of one kind in a row now end the task early (fail-signature-stop.test.mjs), so
+  // the rounds are driven by three different failures in turn: a SEARCH absent from the file, prose with no block, an empty reply.
+  const kinds = [block("this text is nowhere in the file", "x"), "I would rather explain the change than make it.", ""];
+  const { env, calls } = envWith(new Array(9).fill(0).map((_, i) => kinds[i % 3]));
   fileIssue(env);
   await tick(env);
   const id = env.AUDIT_DB._db.prepare("SELECT id FROM code_tasks").get().id;

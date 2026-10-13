@@ -1,7 +1,7 @@
 // CLAIM-HELD-IN-BACKOFF-1 (0.14.2, pillar autonomy): a code task waiting in a SELF-REPAIR-1 backoff does not hold its file.
 // Live on 2026-10-13 07:34Z ct_ne8sjnxe748hiz held file:qnfo-research-exec/worker.js from 01:30:55Z, renewed 4 times by the
 // claims sweep, while it sat queued with lease_until 11:50:55Z, so every session was refused the file. This suite proves:
-//   1. a task that enters a backoff releases its claim (outcome abandoned) and records released_at and backoff_until;
+//   1. a task that enters a backoff releases its claim (outcome backoff since 0.16.0) and records released_at and backoff_until;
 //   2. the claims sweep never takes or renews the claim of a parked task (queued, next attempt over 30 minutes away), and it
 //      releases a claim that a task parked before 0.14.2 still holds; a release the guard never answered is retried;
 //   3. tasks that are being worked still renew: one waiting on the merge runner, one in a short TIMEOUT-RETRY-1 wait, and a due
@@ -100,8 +100,8 @@ let t = await tick();
 let ra = row(A.id), ca = ctxOf(A.id).claim;
 ok(t.done.length === 1 && t.done[0].id === A.id && ra.status === "queued" && ra.attempts === 3 && Date.parse(ra.lease_until) - Date.now() > 50 * 60e3 && /SELF-REPAIR-1: round 1 of 3 failed/.test(ra.last_error), "1b the third failed attempt ends the round: queued, backoff of an hour", { done: t.done, ra });
 const relA = callsFor("/work-lock/release", KA);
-ok(relA.length === 1 && relA[0].body.token === "tok1" && relA[0].body.outcome === "abandoned" && !("pr" in relA[0].body), "1c the backoff releases the claim with its token, outcome abandoned", relA);
-ok(ca.released_at && ca.release_status === 200 && ca.outcome === "abandoned" && ca.backoff_until === ra.lease_until && !guard.lease[KA], "1d released_at and backoff_until are recorded on the task and the guard lease is gone", ca);
+ok(relA.length === 1 && relA[0].body.token === "tok1" && relA[0].body.outcome === "backoff" && !("pr" in relA[0].body), "1c the backoff releases the claim with its token, outcome backoff (FAIL-SIGNATURE-STOP-1)", relA);
+ok(ca.released_at && ca.release_status === 200 && ca.outcome === "backoff" && ca.backoff_until === ra.lease_until && !guard.lease[KA], "1d released_at and backoff_until are recorded on the task and the guard lease is gone", ca);
 ok(callsFor("/work-lock/acquire", KA).length === 0 && t.claims.parked === 0 && t.claims.taken === 0 && t.claims.renewed === 0, "1e the sweep in the same tick neither re-takes nor renews the parked task", { calls: guard.calls, claims: t.claims });
 ok(db.prepare("SELECT COUNT(*) AS n FROM cloud_ops_events WHERE kind = 'code-task.claim-parked' AND text LIKE ?").get(A.id + "%").n === 1, "1f the release is audited (code-task.claim-parked)");
 const s1 = await (await guardFetch(GUARD + "/work-lock/acquire", { body: JSON.stringify({ key: KA, owner: "session_x", ttl_sec: 3600 }) })).json();
@@ -122,7 +122,7 @@ t = await tick();
 ok(callsFor("/work-lock/acquire", KB).length === 0, "2b the sweep never renews a parked task's claim, even under 45 minutes from expiry", callsFor("/work-lock/acquire", KB));
 const relB = callsFor("/work-lock/release", KB);
 const cb = ctxOf(B.id).claim;
-ok(relB.length === 1 && relB[0].body.token === tokB && relB[0].body.outcome === "abandoned" && t.claims.parked === 1 && cb.released_at && cb.backoff_until === row(B.id).lease_until && !guard.lease[KB], "2c the sweep releases the claim a task parked earlier still holds", { relB, claims: t.claims, cb });
+ok(relB.length === 1 && relB[0].body.token === tokB && relB[0].body.outcome === "backoff" && t.claims.parked === 1 && cb.released_at && cb.backoff_until === row(B.id).lease_until && !guard.lease[KB], "2c the sweep releases the claim a task parked earlier still holds", { relB, claims: t.claims, cb });
 ok(row(B.id).status === "queued" && row(B.id).attempts === 6, "2d the parked task keeps its place in the queue", row(B.id));
 guard.calls.length = 0;
 t = await tick();

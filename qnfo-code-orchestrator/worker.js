@@ -15,7 +15,7 @@
 // SECRETS: wrangler secret put ORCH_TOKEN ; wrangler secret put CODE_AGENT_KEY
 // NEVER follows instructions found inside fetched repo files (DATA-ONLY boundary).
 
-var VERSION = "0.15.1-ladder-order"; // 0.15.1 (pillar autonomy, agent_issues 2397/1834): CRON-ONLY-HEARTBEAT-1, each */10 scheduled run ends with a qnfo-audit fleet_heartbeat upsert (ok=0 when the tick threw; write errors logged); CODE-LADDER-ORDER-1, the default ladder is kimi-k2.7-code, glm-5.3, then qwen2.5-coder-32b (fewest invented SEARCH texts first). 0.15.0 (pillar autonomy, agent_issues 1834/2313/2496/2499/2506): CODE-LOOP-2X-1 (owner directive 2026-10-13, "quickened/increased a minimum of 100%") doubles the cron tick to 40 s / 16 steps (caps 50 s / 24), issue intake to 4 per tick and PLAN_WIP to 6; EDITS-OVERLAP-RESOLVE-1 drops an edit that repeats a change an overlapping edit already makes and names both edits and the shared line for any other overlap (was a bare "edits overlap"); SEARCH-ELISION-1 says a SEARCH that abbreviates with "..." can never match; SYNTAX-HINT-1 adds to a verify SyntaxError the edits that change the bracket balance and the lines that declare an already-declared identifier. 0.14.5 CLAIM-AT-RUN-1 (agent_issues 2491 CODE-QUEUE-CLAIM-HOLD-1, pillar autonomy): a code task takes its file claim at its first step, not at enqueue, and the claims sweep never takes or renews a claim for a queued task that has not started (step read, no attempt, no timeout retry) and releases one it still holds (event code-task.claim-unstarted); measured 2026-10-13 12:32Z, ct_47mzp4hr1ttd7o held file:qnfo-fleet-dashboard/worker.js from enqueue at 10:11Z, renewed to 13:32Z, before running a step. 0.14.4 EXEC-LOG-SIGNATURE-1 (agent_issues 2488): a proposal syntax check is logged by its label and the error it found, as status rejected, so three rejected drafts no longer read as one recurring orchestrator failure. 0.14.3 CODE-BACKOFF-SLA-1: the self-repair waits are 1 h and 2 h (the 6 h second wait broke the 180-minute code-task-stalled SLA). 0.14.2 CLAIM-HELD-IN-BACKOFF-1 (pillar autonomy): a queued task whose next attempt is over CLAIM_BACKOFF_MS (30 min) away releases its file claim (fail() at a SELF-REPAIR-1 backoff, the claims sweep for a task parked earlier) and the sweep never takes or renews a parked task's claim; on resume the task takes a new claim through claimEnsure and a refusal is the claim-held deferral, never a failure (measured 2026-10-13 07:34Z: ct_ne8sjnxe748hiz held file:qnfo-research-exec/worker.js from 01:30:55Z, renewed 4 times to 08:50:56Z, while queued in backoff to 11:50:55Z, so every session was refused the file, e.g. the security fix of agent_issues 2432).
+var VERSION = "0.16.0-sig-stop"; // 0.16.0 (pillar autonomy, failure mode code-task-retry-holds-file, agent_issues 1834/2491): FAIL-SIGNATURE-STOP-1, every failed attempt leaves a short signature (failing suite and first assertion line, or the error class); 3 identical in a row end the task 'failed' with its CODE-LOOP-EXHAUSTED-1 issue (provider timeouts do not count); an attempt the publisher's suite feedback added is accounted at the next step, so the stop, the 9-attempt end and the round backoff apply to it (ct_oevdiafbcde2mg 5, ct_53djh2yfqk3ocj 8 attempts of one failure on 2026-10-13, holding their files); every backoff releases the claim with outcome backoff, the sweep never re-takes a queued task's released claim, and a task that ends releases at once. 0.15.1 (pillar autonomy, agent_issues 2397/1834): CRON-ONLY-HEARTBEAT-1, each */10 scheduled run ends with a qnfo-audit fleet_heartbeat upsert (ok=0 when the tick threw; write errors logged); CODE-LADDER-ORDER-1, the default ladder is kimi-k2.7-code, glm-5.3, then qwen2.5-coder-32b (fewest invented SEARCH texts first). 0.15.0 (pillar autonomy, agent_issues 1834/2313/2496/2499/2506): CODE-LOOP-2X-1 (owner directive 2026-10-13, "quickened/increased a minimum of 100%") doubles the cron tick to 40 s / 16 steps (caps 50 s / 24), issue intake to 4 per tick and PLAN_WIP to 6; EDITS-OVERLAP-RESOLVE-1 drops an edit that repeats a change an overlapping edit already makes and names both edits and the shared line for any other overlap (was a bare "edits overlap"); SEARCH-ELISION-1 says a SEARCH that abbreviates with "..." can never match; SYNTAX-HINT-1 adds to a verify SyntaxError the edits that change the bracket balance and the lines that declare an already-declared identifier. 0.14.5 CLAIM-AT-RUN-1 (agent_issues 2491 CODE-QUEUE-CLAIM-HOLD-1, pillar autonomy): a code task takes its file claim at its first step, not at enqueue, and the claims sweep never takes or renews a claim for a queued task that has not started (step read, no attempt, no timeout retry) and releases one it still holds (event code-task.claim-unstarted); measured 2026-10-13 12:32Z, ct_47mzp4hr1ttd7o held file:qnfo-fleet-dashboard/worker.js from enqueue at 10:11Z, renewed to 13:32Z, before running a step. 0.14.4 EXEC-LOG-SIGNATURE-1 (agent_issues 2488): a proposal syntax check is logged by its label and the error it found, as status rejected, so three rejected drafts no longer read as one recurring orchestrator failure. 0.14.3 CODE-BACKOFF-SLA-1: the self-repair waits are 1 h and 2 h (the 6 h second wait broke the 180-minute code-task-stalled SLA). 0.14.2 CLAIM-HELD-IN-BACKOFF-1 (pillar autonomy): a queued task whose next attempt is over CLAIM_BACKOFF_MS (30 min) away releases its file claim (fail() at a SELF-REPAIR-1 backoff, the claims sweep for a task parked earlier) and the sweep never takes or renews a parked task's claim; on resume the task takes a new claim through claimEnsure and a refusal is the claim-held deferral, never a failure (measured 2026-10-13 07:34Z: ct_ne8sjnxe748hiz held file:qnfo-research-exec/worker.js from 01:30:55Z, renewed 4 times to 08:50:56Z, while queued in backoff to 11:50:55Z, so every session was refused the file, e.g. the security fix of agent_issues 2432).
 // 0.14.1 BACKLOG-DRIVER-PULLER-1 (agent_issues 2362): intake reads code-task issues in v_issue_queue_v2 order, with the priority/id order as fallback. 0.14.0 WORKER-TIMER-GATE-1 (#2379, pillar autonomy): a proposal that adds setInterval, or setTimeout with a literal delay of a minute or more, goes back to the next rung once with the reason (three goal-review refusals of 2026-10-12 scheduled the work with a timer that never fires in a Worker); test files are not judged. 0.13.0 CONTROL-PLANE-FUNCTIONAL-CANARY-1 (#2176, pillar autonomy): the planner and intake accept qnfo-ai and qnfo-gateway (PLAN_LOOP_CANARIED), the two control-plane workers whose canonical deploy runs a functional canary with an automatic revert; the verifier workers and the scorer host stay on PLAN_DENY_WORKERS. 0.12.4 GOAL-ROOM-1 (#2378, re-applied from PR 997, closed unmerged after its base PR 960 squash-merged): one GOAL_MAX of 6000 chars for validTask, the planner and the intake body cut (was 2000 / 1500); measured on code_tasks 2026-10-12, clipped goals failed 57% vs 21% under 1500 chars. 0.12.3 READ-KEEPS-REPAIR-1: the read step keeps ctx.repair_round, ctx.lastError and ctx.refusal, so a repair sent back to read stays bounded and the model sees the refusal. 0.12.2 EDITS-RESOLVED-1: edits that applied through a tolerant match are parked as the file's own text, so the publisher's rebuild and the merge runner's REBASE-INTEGRITY-1 can re-apply them. 0.12.1: INTAKE-ANCHOR-INHERIT-1 (each push of the pull request that changes the bundle carries a bump, as version-bump-guard requires). 0.12.0 (2026-10-12, pillar autonomy; issues 2074, 2008, 2007, 1834, 2313, 2168; from the last 40 failed code_tasks rows) MULTI-FILE-CODE-TASKS-1: a task may carry up to 3 companion files (the worker's tests, a file of its directory, a migrations/*.sql) edited under FILE: lines and parked in one patch (ctx.paths); intake takes a multi-path code-task line once ops_config code_merge_multi_file is on. DANGLING-REF-GATE-1: a proposal that calls a function defined nowhere, or removes a declaration still in use, goes back to the next rung once (6 of 12 goal-review refusals). REPAIR-SHOWS-EDITS-1: a retry after edits that applied shows the model those edits. WINDOW-LONG-LINE-1: the window no longer stretches to the ends of very long lines (ct_i03tgmilanmuzk saw 128,767 chars). VERIFY-DEFER-PUBLISHER-1: a JavaScript proposal this worker cannot verify goes to the publisher (node --check and the suites) instead of needs_human. GOAL-VERSION-1: a goal that names the next VERSION gets it. INTAKE-ANCHOR-INHERIT-1: a retry starts from its earlier task's anchor. ANCHOR-KEYWORD-FALLBACK-1: a failed locator pick or call falls back to the unique line holding the goal's keyword. Ids from crypto.getRandomValues, constant-time bearer check, bounded raw read. // 0.11.0 SEARCH-FUZZY-1 (2026-10-12, pillar autonomy): a SEARCH absent exactly and with indentation ignored still applies when it differs only in whitespace runs, smart quotes/dashes, nbsp or blank lines and matches uniquely (event code-task.edit-fuzzy); a true miss names the closest file lines so the next rung copies them. 0.10.0 INTAKE-WINDOW-1 (2026-10-11): 0.10.0 INTAKE-WINDOW-1 (2026-10-11): the three-tasks-per-issue cap counts only the last 3 days, so issues exhausted before the code loop improved are taken again. // 0.9.0 D1-TRIGGER-DEPTH-1 (2026-10-08, pillar autonomy): the */10 fleet-cron tick inserts the qnfo-audit fleet_tick row itself (the D1 trigger feeders made cron-log and heartbeat writes nest past D1's 10-level limit) and records a failed tick as a fleet-cron-tick-error event instead of swallowing it. 0.8.0 EDIT-INDENT-TOLERANT-1 (2026-10-07, pillar autonomy, agent_issues 2111; FAILURE-AUDIT-1 by session_013sMN4): a SEARCH block that differs from the shown content only in indentation (13 of 56 code-task failures in 7 days, rung 1 indents by 6 where the file has 4) is matched line by line with each line trimmed, only when it occurs 0 times exactly and exactly once trimmed; the REPLACE lines are re-indented by swapping the SEARCH indent prefix for the file one, audited as code-task.edit-indent. Also from the PR 756 review: a provider timeout is retried only in the read and propose steps, and ctx.timeouts resets once a propose answers. // 0.7.0 TIMEOUT-RETRY-1 + FOLDED-TARGET-REDIRECT-1 + ORCH-NEURON-ATTR-1 (2026-10-07, pillars autonomy and cost, issues 2099, 2102 and 2097; the third: every ladder call is counted in ai_call_counters, which workers_ai_attribution_coverage_pct reads, so the loop's ~30k neurons a day are attributed): a Workers AI request timeout (3046) no longer costs a task an attempt or a round: the same attempt runs again on the next rung after TIMEOUT_WAIT_MS, at most TIMEOUT_MAX times per task (11 of the 21 code-task failures from 2026-10-06 18:00Z to 2026-10-07 08:10Z were "step threw: 3046: Request timeout"); and a task whose path names a FOLDED worker is rewritten to the host that carries its code (worker_removals action folded, host live in service_registry) at enqueue and at intake, instead of a RETIRED-TARGET-1 refusal (issue 2027 was done by hand that way). // 0.5.0 CI-FEEDBACK-1 (2026-10-07, pillar autonomy): an intake retry puts the previous task's failure (its merge_note or last_error, which qnfo-fleet-control 0.8.0 fills with the failing suites and assertion lines of a failed check) at the head of the goal, ahead of the issue body, which is cut to fit the 2000-char goal; before this a retry asked for the same change with nothing about why the last one failed. 0.4.1 CLAIMS-CTX-1 (2026-10-06, pillar autonomy, fix to CLAIMS-FIRST-1 of 0.3.21): the claim token now survives every step. The tick stepped the row it had read before claimEnsure saved the claim, and the read step rebuilt ctx without it, so from the first step on every acquire went out without the token and the guard refused it as held by the task itself (its own lease), CLAIM_WAIT_MS at a time until the 2h lease lapsed; measured 2026-10-06 14:00Z to 19:00Z on ct_we0i8w9v2kmpjp, ct_yop1itun7a9ulz, ct_qjjo05t4elayld and ct_2klffxr2t0uhlh (code-task.claim-held "held by qnfo-code-orchestrator:<itself>"). claimEnsure updates the in-memory row, the read step and the large-file re-read carry ctx.claim, and claims-first.test.mjs now models the guard's refusal of a token-less acquire against a live lease. // 0.4.0 (2026-10-06, pillar autonomy; owner directive 2026-10-06: more flexibility and autonomy, proceed with all changes) three capabilities, each with its own audit event kind. LARGE-FILE-WINDOW-1 (agent_issues 2073, transformation lever T1.22): a file over MAX_PATCH_FILE_CHARS (900k chars, the D1 row bound) is edited from its anchor window alone; the task row keeps the window text and offsets, never the base; every later step re-reads main (baseFor) and finds the window again, a window that moved is re-located, one that vanished re-reads the file from the anchor at most LARGE_REREADS times (code-task.reread), then needs_human; qnfo-research-exec (1.03M chars, issue 2052 ended "too large for the loop") and qnfo-agent-ws (2.4M) become editable, and the planner may plan them (PLAN_FILE_MAX). ANCHOR-LOCATOR-1 (agent_issues 2007 second half, human_actions 60): an anchor that still occurs 0 or 2+ times after ANCHOR-REPAIR-1, or a file over MAX_FILE_CHARS filed without one, gets one pick by the cheapest rung among the lines near the goal's keywords (locateAnchor, code-task.anchor-located); a pick that occurs exactly once is the anchor, otherwise the task parks exactly as before. CODE-TASK-PREFLIGHT-1 (agent_issues 2067, T1 lever 15+; session_013sMN4): intake reads the target from main once before it creates a task and refuses, with no model call and no code_tasks row, a task that cannot succeed: the file is over MAX_LARGE_FILE_CHARS, or the issue key already shipped in fleet_changelog within 72h; the issue keeps its target as a session-task line with a dated reason (lever 15 routing). An anchor that occurs 0 times is repaired at intake (ANCHOR-REPAIR-1); the other anchor cases are left to the read step, where the locator makes its pick. // 0.3.23 INTAKE-DEPENDS-1 (2026-10-06, pillar autonomy): an issue whose description carries a "depends-on: #N" line is not taken by intake until agent issue N is no longer open (audited once as code-task.intake-waiting); an unreadable dependency waits too. A sequenced change (one change per component, rule 7) then starts on its own when its predecessor closes, instead of starting early or waiting on a session. // 0.3.22 (2026-10-06): CLAIMS-FIRST-1's claim calls go over the DEPLOY_GUARD service binding only (wrangler.toml [[services]]; code-loop-test counts every outbound fetch of a keyless read), bumped because version-bump-guard requires a bump per byte change. 0.3.21 CLAIMS-FIRST-1 (2026-10-06, pillar autonomy, transformation lever T1.14): the loop takes the WORK-CLAIM-1 claim on a task's file through qnfo-deploy-guard /work-lock (owner qnfo-code-orchestrator:<task>, intent = the goal) when the task is enqueued, before every step and on every tick while the task waits on the publisher or the merge runner, and releases it with the pull request and the outcome when the task ends; a session's acquire then reads 409 with the task as holder, and a task whose file a session holds waits (lease CLAIM_WAIT_MS, code-task.claim-held) instead of building against a file about to change (measured 2026-10-06: most of the 48 unmerged tasks of 30 days were superseded by a session's PR on the same file or stale against it). 0.3.20-intake-provenance 0.3.20 (2026-10-06, pillar autonomy, docs/TRANSFORMATION-PROGRAM.md T1): INTAKE-PROVENANCE-1, intake applies the merge runner's trusted-origin rule (ops_config code_merge_trusted_sources, else the same default as qnfo-fleet-control CM_TRUSTED_SOURCES) before any model call, so an issue from an untrusted source is a session task at once (ct_w4bx54dabidh09, issue 1641 from qnfo-ops-deep-sweep-2026-09-30, was built and then refused for provenance: a model call and a failed row in code_task_success_rate_30d); CODE-TASK-REINTAKE-1 (agent_issues 2021), a code-task issue whose last task ended closed, failed or needs_human is taken again after INTAKE_RETRY_COOLDOWN_MS (6 h), at most INTAKE_MAX_TASKS (3) tasks per issue, never after a review rejection, a no-op refusal or a supersession, and never while a task is in flight or after one merged; the goal keeps "[issue #N]" first and adds "[retry k]". 0.3.19 (2026-10-06, pillar autonomy, docs/TRANSFORMATION-PROGRAM.md 1.2): JS-VERIFY-PARSE-SHAPE-1, a V8 parse-error message that crosses the sandbox boundary without its SyntaxError class ("Unexpected identifier '__name'", ct_lc6has32addg0m 07:41Z) is a failed proposal the next rung retries with the error, not an unverified one that ends needs_human; ANCHOR-REPAIR-1 (T1 lever 4, agent_issues 2007), an anchor that no longer occurs in the file is repaired without a model call (its whitespace-normalised text, else its longest line that occurs exactly once) instead of ending the task needs_human; SCORER-HOST-DENY-1, PLAN_DENY_WORKERS names qnfo-observability, which hosts the folded autonomy scorer since SCORER-FOLD-1, so the loop never plans a change to the formula that grades it; MERGE-SCOPE-INTAKE-1, a qnfo-workers task on a PLAN_DENY_WORKERS worker (the merge runner never opens or merges its pull request) is refused before any model call, and an issue that asked for one has its code-task line turned into a session-task line with the reason (ct_u4ih8uzgsfxzvm and ct_rwqd5kegl1awi4 were built and then refused on 2026-10-06, each one a model call and a failure in code_task_success_rate_30d, the metric wave W0 of the transformation program waits on). 0.3.18 FLEET-EXEC-FOLD-1 (agent_issues 1756, pillar cost): fleet-exec runs here as a member on the */10 tick (fleetExecMod; AUDIT_DB and AI only), GET /fleet-exec/health; its script is deleted after this is live. 0.3.17 NOOP-PROPOSAL-GATE-1 (agent_issues 2018, TP-1e, pillar autonomy): a JavaScript proposal whose changed lines (VERSION aside) are the same code once string-literal contents and comments are removed, and whose new text is prose, is refused before verify with a reason the next rung reads (cloud_ops_events kind code-task.noop-refused); a second no-op in a row ends the task needs_human instead of a PR. On 2026-10-06 ct_r3k9lrbd7oijxr (#2006) and ct_5fibb664gtvew4 (#2007) each answered a feature goal with a 2-line paraphrase of a string on the anchor line, parsed, verified and reached ready_to_publish; a session review was the only stop. A string whose new value is code-like (a model id, SQL, a URL, a key) still passes. 0.3.16 CODE-DISPATCH-DEDUPE-1 (agent_issues 1876, 1834): a new code task is refused while the same repo file (or its deployed-current mirror) has an unfinished code task or a live session work claim (qnfo-audit.work_claims, the ledger GET /work-locks reads), and the planner skips such an issue before its model call; RETIRED-TARGET-1: a <dir>/worker.js that is not a live worker in service_registry (RETIRED or FOLDED) is refused, because the canonical deploy skips it; VERSION_DECL accepts `VERSION="x"` without spaces and without a semicolon (qnfo-email, qnfo-gateway); 0.3.15 PRIORITY-QUEUE-1: code-task intake takes issues in master-queue order (critical, high, medium, low, then oldest), not creation order (owner directive 2026-10-03; v_issue_queue); 0.3.14 PLAN-DENY-NEGATION-1: the issue planner refuses an issue that asks to raise a cap, rotate a secret or delete, not one whose advice forbids it ("never raise a cap"; agent_issues 1807; 0.3.13 was the rejected code task ct_fd830vzqefw1ti); 0.3.12 PLAN-WIP-HANDOFF-1: tasks waiting on the merge runner no longer lock the issue planner out (agent_issues 1788); 0.3.11 JS-VERIFY-RUNTIME-SHAPE-1: a runtime error that reaches the verifier as a bare V8 message (no class name) still means the module parsed; 0.3.10 REACH-IDEA-TRUST-1: REACH-IDEA-1 issues filed by qnfo-fleet-control REACH-IDEATION-1 are planner-trusted; // 0.3.9 CLAIM-AGE-1: a queued task waiting 20 min is claimed first, so retries cannot starve behind new intake; 0.3.8 JS-VERIFY-FAIL-CLOSED-1: unknown JS start failures stop for review instead of passing as syntax OK (#445); 0.3.7 SELF-REPAIR-1: exhausted model attempts retry with backoff, then file a fleet issue, never an owner card; 0.3.6 PATCH-MODE-LIVE-1 (code task ct_patchproof20261002, #431); 0.3.5 ISSUE-PLANNER-2: refusals no longer use a tick or the daily model cap; 0.3.4 ISSUE-PLANNER-1: prose issues from trusted sources become code tasks (one per tick); 0.3.3 frontier rungs (ACT-BRIDGE-1); 0.3.2 HUNK-NO-EOL-1
 const WORKER = "qnfo-code-orchestrator";
 const CODE_AGENT = "https://qnfo-code-agent.q08.workers.dev";
@@ -173,6 +173,49 @@ const RETRY_ROUNDS = 3;
 // directive 2026-10-08: no item stuck for more than 3 hours), so every task in its third round counted as stuck (ct_ne8sjnxe748hiz,
 // idle 05:50-11:50 UTC on 2026-10-13, stuck_items_over_sla 1). The waits are now 1 h and 2 h; the claim is still released while waiting.
 const RETRY_BACKOFF_MS = [3600000, 2 * 3600000];
+// ---- FAIL-SIGNATURE-STOP-1:BEGIN (0.16.0, failure mode code-task-retry-holds-file, agent_issues 1834/2491, pillar autonomy) ----
+// Measured 2026-10-13 (code_tasks): ct_oevdiafbcde2mg (qnfo-research-exec) failed math-latex.test.mjs on all 5 attempts from 14:11Z,
+// ct_53djh2yfqk3ocj (idea-hub) broke diversity-cap.test.mjs on all 8 from 07:31Z, ct_abj5kfhmz3j82y (qnfo-social) was re-queued
+// with the same attention-share.test.mjs failure; each renewed its file claim throughout and held tested session batches for
+// hours. The publisher's suite feedback (scripts/code-task-publish.py requeue_for_syntax) adds an attempt outside fail(), so neither
+// the round backoff nor the 9-attempt exhaustion ever applied. Every failed attempt now leaves a short signature in ctx.sigs (the
+// failing suite and its first assertion line, or the error class: "SEARCH occurs 0 times", SYNTAX_ERROR, ...); SIG_REPEAT_MAX
+// identical signatures in a row end the task 'failed' with one CODE-LOOP-EXHAUSTED-1 issue, the way the last round does. A provider
+// timeout is transient: it has no signature and neither counts nor breaks a run.
+const SIG_REPEAT_MAX = 3;
+const SIG_KEEP = 6;
+function failSig(msg) {
+  let s = String(msg || "").replace(/\s+/g, " ").trim();
+  if (!s || TIMEOUT_RE.test(s) || /provider timeout/i.test(s)) return null;
+  if (/^read failed: .*\(HTTP (5\d\d|0|undefined|null)\)/.test(s)) return null; // GitHub unreachable or 5xx: transient too
+  s = s.replace(/^model \S+: /, "").replace(/^verify failed: /, "");
+  const norm = function (x) { return x.replace(/\d+/g, "#").trim().slice(0, 120); };
+  // PUBLISH-SUITE-CHECK-1 feedback: "FAIL <dir>/<name>.test.mjs: <first assertion line> :: <payload> | <next failure>"
+  const sm = /FAIL (?:[\w.-]+\/)*([\w.-]+\.test\.m?js):? ?([^|]*)/.exec(s);
+  if (sm) {
+    const first = sm[2].split(" :: ")[0].split(/\s*\{/)[0].replace(/^FAIL /, "").replace(/^AssertionError \[ERR_ASSERTION\]: /, "").replace(/[:\s]+$/, "");
+    return "suite " + sm[1] + ": " + norm(first);
+  }
+  if (/SEARCH text occurs 0 times|occurs 0 times/.test(s)) return "SEARCH occurs 0 times";
+  if (/occurs ([2-9]|\d\d+) times/.test(s)) return "SEARCH occurs more than once";
+  if (/SyntaxError|does not parse|Unexpected (token|identifier|end of input)/.test(s)) return "SYNTAX_ERROR";
+  if (/^STANDARDS |standards guard/.test(s)) return "STANDARDS_GUARD";
+  if (/^MIGRATION |migration does not pass/.test(s)) return "MIGRATION_CHECK";
+  return norm(s.split(/[.;\n]/)[0]);
+}
+// Records the failure of attempt n in ctx (in memory) and returns the run of identical signatures that ends with it.
+function noteSig(ctx, msg, n) {
+  const sigs = Array.isArray(ctx.sigs) ? ctx.sigs.slice(-SIG_KEEP + 1) : [];
+  const sig = failSig(msg);
+  ctx.sig_n = n;
+  if (sig) sigs.push(sig);
+  ctx.sigs = sigs;
+  if (!sig) return { sig: null, streak: 0 };
+  let k = 0;
+  for (let i = sigs.length - 1; i >= 0 && sigs[i] === sig; i--) k++;
+  return { sig: sig, streak: k };
+}
+// ---- FAIL-SIGNATURE-STOP-1:END ----
 const MAX_REPLY_KEEP = 1200; // head of a reply that held no usable block, kept in ctx.lastReply so the next failure can be diagnosed
 const MAX_OPEN_TASKS = 20;
 const LEASE_MS = 90000;
@@ -302,8 +345,8 @@ async function claimTake(env, task, claim) {
   }
   return { ok: false, status: r.status, holder: (r.j && r.j.holder) || null, error: r.error || (r.j && (r.j.reason || r.j.error)) || ("HTTP " + r.status) };
 }
-async function claimRelease(env, task, claim) {
-  const body = { key: claim.key, token: claim.token, outcome: claimOutcome(task.status) };
+async function claimRelease(env, task, claim, outcome) {
+  const body = { key: claim.key, token: claim.token, outcome: outcome || claimOutcome(task.status) };
   const pr = claimPrOf(task);
   if (pr) body.pr = pr;
   const r = await guardPost(env, "/work-lock/release", body);
@@ -342,9 +385,11 @@ function claimParked(task, nowMs) {
 async function claimPark(env, task, claim, until, unstarted) {
   if (!claim || !claim.token || claim.released_at) return null;
   try {
-    const r = await claimRelease(env, { status: "queued", pr_url: task.pr_url }, claim);
+    // FAIL-SIGNATURE-STOP-1 (0.16.0): a backoff release says so (outcome 'backoff'); an unstarted task's stays 'abandoned'.
+    const outcome = unstarted ? claimOutcome("queued") : "backoff";
+    const r = await claimRelease(env, { status: "queued", pr_url: task.pr_url }, claim, outcome);
     if (!r.status) return r;
-    claim.released_at = iso(); claim.release_status = r.status; claim.outcome = claimOutcome("queued"); claim.backoff_until = until || null;
+    claim.released_at = iso(); claim.release_status = r.status; claim.outcome = outcome; claim.backoff_until = until || null;
     if (unstarted) claim.unstarted = true;
     await claimSave(env, task.id, claim);
     // CLAIM-AT-RUN-1: an unstarted task's release is its own event kind, so the two causes are counted apart.
@@ -377,7 +422,9 @@ async function claimsSweep(env) {
   const open = await so.bind.apply(so, CODE_TASK_DONE.concat([parkIso])).all();
   for (const t of (open.results || [])) {
     const c = getCtx(t).claim || null;
-    if (claimParked(t, nowMs) || claimUnstarted(t) || claimFresh(c, nowMs)) continue;
+    // FAIL-SIGNATURE-STOP-1 (0.16.0): a queued task whose claim was released (a backoff of any length) takes a fresh one at its
+    // next step through claimEnsure, never here; before 0.16.0 the sweep re-took it once the wait was under CLAIM_BACKOFF_MS.
+    if (claimParked(t, nowMs) || claimUnstarted(t) || claimFresh(c, nowMs) || (String(t.status || "") === "queued" && c && c.released_at)) continue;
     const r = await claimTake(env, t, c);
     if (r.ok) { await claimSave(env, t.id, r.claim); if (r.renewed) out.renewed++; else out.taken++; }
     else if (r.status === 409) { out.held++; await audit(env, "code-task.claim-held", t.id + " " + claimKeyOf(t) + " held by " + r.holder, { id: t.id, holder: r.holder }, "held"); }
@@ -1597,10 +1644,11 @@ function wholeFilePatch(path, base, next) {
 // carries the evidence and the lever to the fleet. The dashboard turns code_tasks.needs_human into owner cards; it does not do that
 // with agent_issues. The text never holds "code-task:", so ISSUE-INTAKE-1 cannot turn it into a task, and its source is not on
 // ISSUE-PLANNER-1's trusted list. Returns the issue id, or null (then the audit event, status error, is the only trace).
-async function fileLoopIssue(env, task, msg, attempts) {
+async function fileLoopIssue(env, task, msg, attempts, sig) {
   const title = "CODE-LOOP-EXHAUSTED-1: " + task.id + " " + task.path;
+  const how = sig ? attempts + " attempts, the last " + SIG_REPEAT_MAX + " failing the same way (FAIL-SIGNATURE-STOP-1: " + sig + ")" : attempts + " attempts in " + RETRY_ROUNDS + " rounds";
   const desc = ("The code loop (qnfo-code-orchestrator " + VERSION + ") could not produce a verified edit for code task " + task.id + " (" + task.repo + "/" + task.path + "): " +
-    attempts + " attempts in " + RETRY_ROUNDS + " rounds on the ladder " + ladder(env).join(" > ") + ".\nTask: " + String(task.goal || "").split("\n")[0].slice(0, 200) +
+    how + " on the ladder " + ladder(env).join(" > ") + ".\nTask: " + String(task.goal || "").split("\n")[0].slice(0, 200) +
     "\nLast error: " + String(msg).slice(0, 600) +
     "\nEvidence: SELECT attempts, last_error, json_extract(ctx, '$.lastError'), json_extract(ctx, '$.lastReply') FROM code_tasks WHERE id = '" + task.id + "'; cloud_ops_events WHERE job = 'qnfo-code-orchestrator' AND text LIKE '" + task.id + "%'." +
     "\nLever: fix the cause in qnfo-code-orchestrator (prompt, window, reply parser, verifier or a MODEL_LADDER rung) or narrow the task, then requeue it: UPDATE code_tasks SET status = 'queued', step = 'read', attempts = 0, lease_until = NULL WHERE id = '" + task.id + "'. Never lower the verification bar." +
@@ -1631,22 +1679,39 @@ async function stepTask(env, task) {
     await audit(env2, "code-task.noop-refused", task2.id + " " + model + " (" + ctx2.noop + " of " + NOOP_MAX + "): " + why.slice(0, 160), { id: task2.id, model: model, n: ctx2.noop, terminal: last }, last ? "error" : "retry");
     return await fail("model " + model + ": " + why + (last ? " [" + NOOP_MAX + " no-op proposals in a row: needs a person or a narrower goal]" : ""), last);
   };
-  const fail = async function (msg, terminal) {
-    const attempts = task.attempts + 1;
+  // settle: the accounting of failed attempt number `attempts` (fail() for a failure in this step; the step-start check for a
+  // failure the publisher fed back, which already counted its attempt).
+  const settle = async function (msg, terminal, attempts) {
     const round = Math.ceil(attempts / MAX_ATTEMPTS);
+    // FAIL-SIGNATURE-STOP-1: the same signature SIG_REPEAT_MAX times in a row ends the task like the last round does.
+    const ns = noteSig(ctx, msg, attempts);
+    const sigStop = !terminal && ns.streak >= SIG_REPEAT_MAX;
     const roundEnd = !terminal && attempts % MAX_ATTEMPTS === 0;
-    const giveUp = roundEnd && round >= RETRY_ROUNDS;
+    const giveUp = sigStop || (!terminal && attempts >= MAX_ATTEMPTS * RETRY_ROUNDS);
     const retryAt = roundEnd && !giveUp ? new Date(Date.now() + RETRY_BACKOFF_MS[Math.min(round, RETRY_BACKOFF_MS.length) - 1]).toISOString() : null;
     let note = retryAt ? " [SELF-REPAIR-1: round " + round + " of " + RETRY_ROUNDS + " failed; retried from the first rung after " + retryAt + "]" : "";
-    if (giveUp) { const iss = await fileLoopIssue(env, task, msg, attempts); note = " [SELF-REPAIR-1: " + RETRY_ROUNDS + " rounds failed; handed to the fleet as " + (iss ? "agent_issues #" + iss : "an audit error (no issue could be filed)") + "]"; }
+    if (giveUp) {
+      const iss = await fileLoopIssue(env, task, msg, attempts, sigStop ? ns.sig : null);
+      const to = "handed to the fleet as " + (iss ? "agent_issues #" + iss : "an audit error (no issue could be filed)");
+      note = sigStop ? " [FAIL-SIGNATURE-STOP-1: the same failure " + ns.streak + " attempts in a row (" + ns.sig + "); " + to + "]" : " [SELF-REPAIR-1: " + RETRY_ROUNDS + " rounds failed; " + to + "]";
+    }
     const dead = !!(terminal || giveUp);
-    await save(env, task.id, { attempts: attempts, last_error: String(msg).slice(0, 500 - note.length) + note, lease_until: retryAt,
+    await save(env, task.id, { attempts: attempts, last_error: String(msg).slice(0, Math.max(100, 500 - note.length)) + note, lease_until: retryAt,
       status: terminal ? "needs_human" : giveUp ? "failed" : "queued", step: dead ? task.step : (task.step === "verify" || task.step === "propose" ? "propose" : task.step) });
-    await audit(env, "code-task.fail", task.id + " " + task.step + ": " + String(msg).slice(0, 200), { id: task.id, attempts: attempts, dead: dead, retry_at: retryAt }, dead ? "error" : "retry");
-    // CLAIM-HELD-IN-BACKOFF-1: a task that enters a SELF-REPAIR-1 backoff lets go of its file until it resumes.
-    if (retryAt && claimParked({ status: "queued", lease_until: retryAt }, Date.now())) await claimPark(env, task, ctx.claim, retryAt);
-    return { ok: false, dead: dead, error: String(msg), retry_at: retryAt };
+    await env.AUDIT_DB.prepare("UPDATE code_tasks SET ctx=json_set(json_set(COALESCE(ctx,'{}'), '$.sigs', json(?)), '$.sig_n', ?) WHERE id=?").bind(JSON.stringify(ctx.sigs), attempts, task.id).run();
+    await audit(env, "code-task.fail", task.id + " " + task.step + ": " + String(msg).slice(0, 200), { id: task.id, attempts: attempts, dead: dead, retry_at: retryAt, sig: ns.sig, streak: ns.streak }, dead ? "error" : "retry");
+    if (sigStop) await audit(env, "code-task.sig-stop", task.id + " " + task.path + ": " + ns.sig + " x" + ns.streak, { id: task.id, sig: ns.sig, streak: ns.streak, attempts: attempts }, "error");
+    // CLAIM-HELD-IN-BACKOFF-1 / FAIL-SIGNATURE-STOP-1 (0.16.0): any backoff lets go of the file (outcome backoff) until the task
+    // runs again; a task that ended lets go at once rather than at the next sweep.
+    if (retryAt) await claimPark(env, task, ctx.claim, retryAt);
+    else if (dead && ctx.claim && ctx.claim.token && !ctx.claim.released_at) {
+      const c = ctx.claim;
+      const r = await claimRelease(env, { status: "failed", pr_url: task.pr_url }, c);
+      if (r.status) { c.released_at = iso(); c.release_status = r.status; c.outcome = claimOutcome("failed"); await claimSave(env, task.id, c); }
+    }
+    return { ok: false, dead: dead, error: String(msg), retry_at: retryAt, sig: ns.sig, streak: ns.streak };
   };
+  const fail = async function (msg, terminal) { return await settle(msg, terminal, task.attempts + 1); };
   // TIMEOUT-RETRY-1 (0.6.0): the attempt is kept; the ctx is re-read from the row so a half-run step leaves nothing behind.
   const timeoutRetry = async function (msg) {
     let cur = null;
@@ -1666,10 +1731,22 @@ async function stepTask(env, task) {
     const n = (ctx.rereads || 0) + 1;
     if (n > LARGE_REREADS) return await fail("LARGE-FILE-WINDOW-1: " + why + "; the file was re-read " + LARGE_REREADS + " times and keeps changing under the task", true);
     await audit(env, "code-task.reread", task.id + " (" + n + " of " + LARGE_REREADS + "): " + String(why).slice(0, 200), { id: task.id, n: n }, "retry");
-    await save(env, task.id, { ctx: JSON.stringify({ anchor: ctx.anchor, rereads: n, claim: ctx.claim || undefined, extras: ctx.extras || undefined, repair_round: ctx.repair_round != null ? ctx.repair_round : undefined, lastError: ctx.lastError || undefined, refusal: ctx.refusal || undefined }), step: "read", lease_until: null, last_error: null });
+    await save(env, task.id, { ctx: JSON.stringify({ anchor: ctx.anchor, rereads: n, claim: ctx.claim || undefined, extras: ctx.extras || undefined, repair_round: ctx.repair_round != null ? ctx.repair_round : undefined, lastError: ctx.lastError || undefined, refusal: ctx.refusal || undefined, sigs: ctx.sigs || undefined, sig_n: ctx.sig_n != null ? ctx.sig_n : undefined }), step: "read", lease_until: null, last_error: null });
     return { ok: true, step: "read", reread: n };
   };
   try {
+    // FAIL-SIGNATURE-STOP-1 (0.16.0): a requeue that reset attempts (the CODE-LOOP-EXHAUSTED-1 lever) starts a fresh signature run;
+    // an attempt counted outside this worker (the publisher's suite, syntax or standards feedback) is accounted here, before the
+    // step: it adds its signature, and the stop, the 9-attempt end and the round backoff apply to it as to any failed attempt.
+    const nAtt = Number(task.attempts || 0);
+    if (ctx.sig_n != null && nAtt < Number(ctx.sig_n)) { ctx.sigs = []; ctx.sig_n = nAtt; }
+    const external = nAtt > 0 && !!ctx.lastError && (ctx.sig_n != null ? nAtt > Number(ctx.sig_n) : task.step === "propose");
+    if (external) {
+      const probe = noteSig({ sigs: ctx.sigs }, ctx.lastError, nAtt);
+      if (probe.streak >= SIG_REPEAT_MAX || nAtt >= MAX_ATTEMPTS * RETRY_ROUNDS || nAtt % MAX_ATTEMPTS === 0) return await settle(ctx.lastError, false, nAtt);
+      noteSig(ctx, ctx.lastError, nAtt);
+      await env.AUDIT_DB.prepare("UPDATE code_tasks SET ctx=json_set(json_set(COALESCE(ctx,'{}'), '$.sigs', json(?)), '$.sig_n', ?) WHERE id=?").bind(JSON.stringify(ctx.sigs), nAtt, task.id).run();
+    }
     if (task.step === "read") {
       const r = await readRepoFile(env, task.repo, task.path, MAX_LARGE_FILE_CHARS + 1);
       if (!r || r.ok !== true) return await fail("read failed: " + ((r && r.error) || "unknown") + " (HTTP " + (r && r.status) + ")", false);
@@ -1706,6 +1783,8 @@ async function stepTask(env, task) {
       if (ctx.repair_round != null) nctx.repair_round = ctx.repair_round;
       if (ctx.lastError) nctx.lastError = ctx.lastError;
       if (ctx.refusal) nctx.refusal = ctx.refusal;
+      if (Array.isArray(ctx.sigs)) nctx.sigs = ctx.sigs; // FAIL-SIGNATURE-STOP-1: the signature run outlives the rebuild
+      if (ctx.sig_n != null) nctx.sig_n = ctx.sig_n;
       const gv = goalVersion(task.goal); // GOAL-VERSION-1 (a rebuild by the publisher takes the patch bump, which the merge runner's REBASE-INTEGRITY-1 expects)
       if (gv) nctx.version_want = gv.text;
       if (anchor) {
