@@ -13,7 +13,7 @@ var __defProp2222 = Object.defineProperty;
 var __name2222 = /* @__PURE__ */ __name222((target, value) => __defProp2222(target, "name", { value, configurable: true }), "__name");
 var __defProp22222 = Object.defineProperty;
 var __name22222 = /* @__PURE__ */ __name2222((target, value) => __defProp22222(target, "name", { value, configurable: true }), "__name");
-var VERSION = "0.16.0-revise-retry"; /* 0.16.0 (agent_issues 2211, 2221, 2264, 2116; pillar research): REVISE-PATCH-RETRY-STRICT-1 a revise whose first answer proposed no edit for a non-empty fix list ("[]") is retried on the other model family with an instruction that names the HARD fix ids and requires an edit for each; parsePatchEdits also reads an object whose `edits` array holds the edits, fenced blocks and several top-level arrays; a revise that still applies nothing fails the pass into markError (re-queued from ground while recover_count < 3, parked after), never advancing unrevised. VERIFY-UNRUN-CAUSE-1 `unrun` meant "no CLAIM line matched": the script had run and printed computed and expected but no match column (14:04Z 2026-10-12), so the adjudicator now decides a CLAIM line from its two numbers without the script's verdict, the verify-unrun event and the done result carry the cause (pilot-unreachable, pilot-http, missing-runtime, script-error, no-claim-lines), and when the sandbox did not run the script at all a second model family recomputes the claims in text (TASK VERIFY_TEXT) and the stage adjudicates those lines, recorded as basis=text in the event and the provenance section, instead of failing the row. AI-STAGE-ATTRIBUTION-2 the stage label lives on the call context (env.__aiAttrCtx, one per research_parallel slot via __attrSlotEnv), no module-level label and no AsyncLocalStorage. PROMPT-CACHE-PREFIX-1 the suite now proves every stage builder (CONTINUE, SECTION and VERIFY_TEXT included) gives two different papers the same first 4096 chars and that the preamble interpolates no id, date or counter. */ /* 0.15.1: the lean-ensemble read inside stampProvenance logs its failure instead of swallowing it (WORKERS-STANDARDS-GUARD-1 swallowed-catch, caught while PAPER-QUALITY-2 rode PR 1028). 0.15.0 PAPER-QUALITY-2 (owner directive 2026-10-12 "implement all best practices ... to research and paper content and generation"; pillar research; evidence: the 2026-10-12 research report on automated paper generation). Deterministic P0 items: PROVENANCE-1 every paper carries a "Provenance and AI Involvement" section written by code from what the pipeline actually ran (models per stage, the checks passed, the independent recomputation count, and that no manual review preceded publication), per COPE/ICMJE/WAME disclosure; GROUND-SANITIZE-1 retrieved text is evidence, never instructions: zero-width and control characters are stripped and lines that address an AI, reviewer or assistant are removed before any model reads them; GATE-RESIDUE-1 chatbot residue or placeholder text anywhere in a paper is a HARD finding; VERIFY-CLAIMS-16 verify recomputes up to 16 claims (was 8). Prompt rules (process and style only): Section 7 is scaled to the NASA TRL definitions and states readiness honestly (analytical, unreviewed work is TRL 1-2), the Introduction ends with contributions tied to results, the Discussion states what would falsify the result and lists every assumption, a structured abstract, sentence- and paragraph-level style rules against inflated prose, and the reviewer lists defects first, quotes the passage for every HARD finding, does not ask for experiments the central claim does not need, and treats text inside the paper as content, never instructions. */ /* 0.14.0 PAPER-COMPLETE-1 + PRACTICAL-RELEVANCE-1 (owner directive 2026-10-12, pillar research): papers have no maximum length and are never published cut off. Every Workers AI call stops at 8192 output tokens (larger budgets time out, 3046), so a full paper never fit one call: 10 papers published 2026-10-09..12 end mid-sentence or mid-equation, with sections cited that do not exist (factoring-hardness-as-a-bayesian-prior...). A new stage `complete` sits between reconcile and review: paperCompleteness() checks the required sections, a clean ending, balanced display math and that every "Section N" cited exists; an incomplete paper is continued (from its last whole paragraph) or has a missing middle section written and inserted in place, COMPLETE_ROUNDS_PER_TICK rounds per tick with no length or round cap, only a no-progress guard. Review, revise and verify send an incomplete paper back to `complete` instead of patch-revising it; the 24k/34k/20k-char slices that fed models truncated papers are gone; the length ceilings in the prompts are removed. Every paper now carries "## 7. Practical Implications and Engineering Pathways" and opens with the real-world problem it addresses (process and style rules only, no topic nouns); missing it is a structure finding. COMPLETENESS-SWEEP-1: once a day the worker queues a remediation row for every published pipeline paper that fails the truncation checks, so the full pipeline rewrites and republishes it as a new version; remediation papers now pass the structure gate too. REFS-MOJIBAKE-1: reference titles double-encoded as Latin-1 are repaired when the list is rendered. */ /* 0.13.0 (agent_issues 2221, 2247, 2206, 2207, 2252, 2292, 2262, 2170, 2211, 2052, 2337, 2272): VERIFY-STATED-PRECISION-1 the worker decides each CLAIM line at the precision the paper states (the script compared at 1e-6, so a correctly rounded value read as a mismatch and the paper re-ran from ground); a verification that printed no CLAIM line is retried, never passed; GROUND-SECOND-SOURCE-1 arXiv requests are spaced across slots and retried with backoff, and DataCite (arXiv DOIs) supplies entries when arXiv is thin or refusing; RESEARCH-PARK-REVIEW-1 a review row parks; REVISE-NO-UNREVISED-1 a revise with no applied edit tries the second model and then fails the pass instead of advancing; REVIEW-HARD-GATE-1 HARD findings left at the cycle cap withhold the paper; gate-structure requires the closing sections; CITATION-UNVERIFIED-HOLD-1 an unconfirmed citation defers and then holds the publish (DataCite is the second arXiv lookup); AI-ROUTER-SECOND-PATH-DRILL-1 daily drill. */ /* 0.12.5 AI-STAGE-ATTRIBUTION-2 (agent_issues 2264): each research_parallel slot runs in its own AsyncLocalStorage store, so ai_call_counters stage labels belong to the slot that made the call. PROMPT-CACHE-AFFINITY-1 (agent_issues 2116, PROMPT-CACHE-PREFIX-4): aiText sends x-session-affinity keyed on the 4 KB after the shared preamble (the paper or writer input), so the stages of one paper share an instance and its preamble + paper prefix; ops_config research_affinity_scope = prefix restores the old one-key-per-model hash. */ /* 0.12.3 NOZ-DOI-1 (2026-10-11): the pipeline publishes in-house only and calls no external DOI registrar: the deposit, version-request, metadata-edit and related-link stages are gone, new and revised papers write doi, zenodo_doi and zenodo_url NULL, and the folded errata and reviser members carry the same change. */ /* 0.12.2 ENSEMBLE-PREFIX-STAGGER-1 (agent_issues 2116, PROMPT-CACHE-PREFIX-3): the second glm-5.3-flash writer leg starts research_prefix_stagger_ms (default 12 s) after the first, so it reads the shared preamble + grounding prompt from the prefix cache instead of prefilling it in parallel. */ /* 0.12.0 ACCURACY-GROUND-1 (owner directive 2026-10-10, pillar research): generated text is checked against the text it was given. The reviser audit prompt no longer lets a "low" edit assert content (bridge sentences, comparisons, definitions) and a deterministic guard demotes any low edit that adds a name, figure, year, link or new content words to high; the errata drafter writes a correction only from the errata email or the paper and a name, year, figure, DOI or link in neither makes the draft high risk (never sent); the writer, reconcile and review preambles require every statement about a cited work to be derivable from its supplied bibliography entry, and say so when the entry is thin. */ /* 0.11.2 PROMPT-CACHE-PREFIX-2 (agent_issues 2116): review, revise-patch, revise and verify prompts put the paper right after the shared preamble as a context block, before the task selector and per-call text, so consecutive stages on one paper share preamble + paper as a cached prefix. Models, max_tokens, parsers and gates unchanged. */ /* 0.11.1 LEAN-ENSEMBLE-1 (agent_issues 2118, 1795): while a fleet_budget ai_spend cap is breached the writer ensemble runs its two disjoint-family legs instead of three (the third was a second glm-5.3-flash leg); reconcile joins only drafts of the current grounding; ops_config research_lean_ensemble = off restores three legs. */ // /* 0.10.5 REVISE-PATCH-PARSE-1 (agent_issues 2211): the revise patch array is parsed tolerantly (LaTeX backslashes kept, code fences and bracketed prose before the array skipped, each edit object read on its own when the array does not parse), so a LaTeX-heavy or truncated answer no longer loses every edit; 14 of 335 calls in 7 days proposed 0 edits from long output. The four publish binds pass pub.doi and pub.record as || null, so a result shape missing a key can no longer throw D1_TYPE_ERROR (the 0.10.3 outage). */ /* 0.10.4 INHOUSE-PUBLISH-3: the in-house publish result carries conceptdoi and record as null, so publishStageV2 no longer binds undefined (D1_TYPE_ERROR every tick under 0.10.3). */ // 0.9.65 ERRATA-FOLD-1 (#1756, 2026-10-06, pillar cost): errata-hub runs here as a member (errataMod) at its own minutes on the */15 tick (:00 watch, :15 respond, :30 publish), awaited; GET /errata-hub/health; nodejs_compat, BROWSER and SEND_EMAIL move here with it. 0.9.64 REVISER-FOLD-1 (#1756, 2026-10-06, pillar cost): qnfo-paper-reviser runs here as a member (reviserMod) on the :30 tick of every fourth hour; GET /reviser/health; its private routes answer a service binding whose props name the member. 0.9.63 RELATED-LEGACY-FIELDS-1 (#1907, 2026-10-06): the related-link drain fills the legacy upload_type / publication_type from an InvenioRDM resource_type before the PUT (record 22025544 failed with "metadata.resource_type: Missing data for required field"); the error row is re-queued once this is live. // MATH-LATEX-2 (2026-10-05, #1891): MATH_RULE in the writer, reconcile and revise prompts; pseudoMathScan() turns plain-text math into a HARD review finding and a math-scan event at verify; ops_config research_math_gate=enforce makes it a pre-publish gate (revise once, then park). // WRITER-FLASH-1 (2026-10-05, #1795): the second ensemble writer leg and the revise-patch retry leave glm-5.3 (3,279 neurons per call) for glm-5.3-flash and gpt-oss-120b. // PRIOR-WORK-EMPTY-1 (2026-10-02): no empty "Prior Work" section; References matched at line start. // 0.9.54 RUN-INTERNAL-1 (#1783, ported from code task ct_zvckl6t5d4e1fd): POST /run?sync=1 and POST /run/drain-v2 refuse public hostnames (*.workers.dev, qnfo.org); the cron and service-binding callers (qnfo-research-supervisor RESEARCH_EXEC, the dashboard SVC binding) are unaffected; METADATA-VERIFY-ORDER-1 (2026-10-02, #1732): verifyMetadataBackfill writes issue_triage.close_evidence before it closes the issue (the close-evidence trigger aborted the old order, so the backfill could never close itself); 0.9.52 UTF8-DEPLOY-1 (2026-10-02): no code change; redeployed so the live copy is UTF-8 (the old deploy path double-encoded every non-ASCII character) /* 0.13.0 NOZ-DOI-1 (2026-10-11): history entries about the retired external deposit stages are in git. */
+var VERSION = "0.17.0-cite-fulltext"; /* 0.17.0 CITE-FULLTEXT-1 (owner directive 2026-10-13 "Papers shall cite full texts, not merely reference work summaries"; pillar research): stageGround reads every cited work's full text (arxiv.org/html, ar5iv as the second host, a QNFO paper's body) and puts excerpts of its own sections (results and conclusions first) into its Bibliography entry; a candidate without a readable full text is not cited, from a wider candidate pool (18); the writer, reconcile and review rules require each cited work to be discussed through a specific point of its full text and forbid "the summary supplied gives no further detail" and existence-or-framing citations; the final gate makes such a sentence a HARD finding (gate-fulltext-citation); the daily sweep queues a rewrite of every published pipeline paper that has one; the provenance section says the full text was read. */ /* 0.16.0 (agent_issues 2211, 2221, 2264, 2116; pillar research): REVISE-PATCH-RETRY-STRICT-1 a revise whose first answer proposed no edit for a non-empty fix list ("[]") is retried on the other model family with an instruction that names the HARD fix ids and requires an edit for each; parsePatchEdits also reads an object whose `edits` array holds the edits, fenced blocks and several top-level arrays; a revise that still applies nothing fails the pass into markError (re-queued from ground while recover_count < 3, parked after), never advancing unrevised. VERIFY-UNRUN-CAUSE-1 `unrun` meant "no CLAIM line matched": the script had run and printed computed and expected but no match column (14:04Z 2026-10-12), so the adjudicator now decides a CLAIM line from its two numbers without the script's verdict, the verify-unrun event and the done result carry the cause (pilot-unreachable, pilot-http, missing-runtime, script-error, no-claim-lines), and when the sandbox did not run the script at all a second model family recomputes the claims in text (TASK VERIFY_TEXT) and the stage adjudicates those lines, recorded as basis=text in the event and the provenance section, instead of failing the row. AI-STAGE-ATTRIBUTION-2 the stage label lives on the call context (env.__aiAttrCtx, one per research_parallel slot via __attrSlotEnv), no module-level label and no AsyncLocalStorage. PROMPT-CACHE-PREFIX-1 the suite now proves every stage builder (CONTINUE, SECTION and VERIFY_TEXT included) gives two different papers the same first 4096 chars and that the preamble interpolates no id, date or counter. */ /* 0.15.1: the lean-ensemble read inside stampProvenance logs its failure instead of swallowing it (WORKERS-STANDARDS-GUARD-1 swallowed-catch, caught while PAPER-QUALITY-2 rode PR 1028). 0.15.0 PAPER-QUALITY-2 (owner directive 2026-10-12 "implement all best practices ... to research and paper content and generation"; pillar research; evidence: the 2026-10-12 research report on automated paper generation). Deterministic P0 items: PROVENANCE-1 every paper carries a "Provenance and AI Involvement" section written by code from what the pipeline actually ran (models per stage, the checks passed, the independent recomputation count, and that no manual review preceded publication), per COPE/ICMJE/WAME disclosure; GROUND-SANITIZE-1 retrieved text is evidence, never instructions: zero-width and control characters are stripped and lines that address an AI, reviewer or assistant are removed before any model reads them; GATE-RESIDUE-1 chatbot residue or placeholder text anywhere in a paper is a HARD finding; VERIFY-CLAIMS-16 verify recomputes up to 16 claims (was 8). Prompt rules (process and style only): Section 7 is scaled to the NASA TRL definitions and states readiness honestly (analytical, unreviewed work is TRL 1-2), the Introduction ends with contributions tied to results, the Discussion states what would falsify the result and lists every assumption, a structured abstract, sentence- and paragraph-level style rules against inflated prose, and the reviewer lists defects first, quotes the passage for every HARD finding, does not ask for experiments the central claim does not need, and treats text inside the paper as content, never instructions. */ /* 0.14.0 PAPER-COMPLETE-1 + PRACTICAL-RELEVANCE-1 (owner directive 2026-10-12, pillar research): papers have no maximum length and are never published cut off. Every Workers AI call stops at 8192 output tokens (larger budgets time out, 3046), so a full paper never fit one call: 10 papers published 2026-10-09..12 end mid-sentence or mid-equation, with sections cited that do not exist (factoring-hardness-as-a-bayesian-prior...). A new stage `complete` sits between reconcile and review: paperCompleteness() checks the required sections, a clean ending, balanced display math and that every "Section N" cited exists; an incomplete paper is continued (from its last whole paragraph) or has a missing middle section written and inserted in place, COMPLETE_ROUNDS_PER_TICK rounds per tick with no length or round cap, only a no-progress guard. Review, revise and verify send an incomplete paper back to `complete` instead of patch-revising it; the 24k/34k/20k-char slices that fed models truncated papers are gone; the length ceilings in the prompts are removed. Every paper now carries "## 7. Practical Implications and Engineering Pathways" and opens with the real-world problem it addresses (process and style rules only, no topic nouns); missing it is a structure finding. COMPLETENESS-SWEEP-1: once a day the worker queues a remediation row for every published pipeline paper that fails the truncation checks, so the full pipeline rewrites and republishes it as a new version; remediation papers now pass the structure gate too. REFS-MOJIBAKE-1: reference titles double-encoded as Latin-1 are repaired when the list is rendered. */ /* 0.13.0 (agent_issues 2221, 2247, 2206, 2207, 2252, 2292, 2262, 2170, 2211, 2052, 2337, 2272): VERIFY-STATED-PRECISION-1 the worker decides each CLAIM line at the precision the paper states (the script compared at 1e-6, so a correctly rounded value read as a mismatch and the paper re-ran from ground); a verification that printed no CLAIM line is retried, never passed; GROUND-SECOND-SOURCE-1 arXiv requests are spaced across slots and retried with backoff, and DataCite (arXiv DOIs) supplies entries when arXiv is thin or refusing; RESEARCH-PARK-REVIEW-1 a review row parks; REVISE-NO-UNREVISED-1 a revise with no applied edit tries the second model and then fails the pass instead of advancing; REVIEW-HARD-GATE-1 HARD findings left at the cycle cap withhold the paper; gate-structure requires the closing sections; CITATION-UNVERIFIED-HOLD-1 an unconfirmed citation defers and then holds the publish (DataCite is the second arXiv lookup); AI-ROUTER-SECOND-PATH-DRILL-1 daily drill. */ /* 0.12.5 AI-STAGE-ATTRIBUTION-2 (agent_issues 2264): each research_parallel slot runs in its own AsyncLocalStorage store, so ai_call_counters stage labels belong to the slot that made the call. PROMPT-CACHE-AFFINITY-1 (agent_issues 2116, PROMPT-CACHE-PREFIX-4): aiText sends x-session-affinity keyed on the 4 KB after the shared preamble (the paper or writer input), so the stages of one paper share an instance and its preamble + paper prefix; ops_config research_affinity_scope = prefix restores the old one-key-per-model hash. */ /* 0.12.3 NOZ-DOI-1 (2026-10-11): the pipeline publishes in-house only and calls no external DOI registrar: the deposit, version-request, metadata-edit and related-link stages are gone, new and revised papers write doi, zenodo_doi and zenodo_url NULL, and the folded errata and reviser members carry the same change. */ /* 0.12.2 ENSEMBLE-PREFIX-STAGGER-1 (agent_issues 2116, PROMPT-CACHE-PREFIX-3): the second glm-5.3-flash writer leg starts research_prefix_stagger_ms (default 12 s) after the first, so it reads the shared preamble + grounding prompt from the prefix cache instead of prefilling it in parallel. */ /* 0.12.0 ACCURACY-GROUND-1 (owner directive 2026-10-10, pillar research): generated text is checked against the text it was given. The reviser audit prompt no longer lets a "low" edit assert content (bridge sentences, comparisons, definitions) and a deterministic guard demotes any low edit that adds a name, figure, year, link or new content words to high; the errata drafter writes a correction only from the errata email or the paper and a name, year, figure, DOI or link in neither makes the draft high risk (never sent); the writer, reconcile and review preambles require every statement about a cited work to be derivable from its supplied bibliography entry, and say so when the entry is thin. */ /* 0.11.2 PROMPT-CACHE-PREFIX-2 (agent_issues 2116): review, revise-patch, revise and verify prompts put the paper right after the shared preamble as a context block, before the task selector and per-call text, so consecutive stages on one paper share preamble + paper as a cached prefix. Models, max_tokens, parsers and gates unchanged. */ /* 0.11.1 LEAN-ENSEMBLE-1 (agent_issues 2118, 1795): while a fleet_budget ai_spend cap is breached the writer ensemble runs its two disjoint-family legs instead of three (the third was a second glm-5.3-flash leg); reconcile joins only drafts of the current grounding; ops_config research_lean_ensemble = off restores three legs. */ // /* 0.10.5 REVISE-PATCH-PARSE-1 (agent_issues 2211): the revise patch array is parsed tolerantly (LaTeX backslashes kept, code fences and bracketed prose before the array skipped, each edit object read on its own when the array does not parse), so a LaTeX-heavy or truncated answer no longer loses every edit; 14 of 335 calls in 7 days proposed 0 edits from long output. The four publish binds pass pub.doi and pub.record as || null, so a result shape missing a key can no longer throw D1_TYPE_ERROR (the 0.10.3 outage). */ /* 0.10.4 INHOUSE-PUBLISH-3: the in-house publish result carries conceptdoi and record as null, so publishStageV2 no longer binds undefined (D1_TYPE_ERROR every tick under 0.10.3). */ // 0.9.65 ERRATA-FOLD-1 (#1756, 2026-10-06, pillar cost): errata-hub runs here as a member (errataMod) at its own minutes on the */15 tick (:00 watch, :15 respond, :30 publish), awaited; GET /errata-hub/health; nodejs_compat, BROWSER and SEND_EMAIL move here with it. 0.9.64 REVISER-FOLD-1 (#1756, 2026-10-06, pillar cost): qnfo-paper-reviser runs here as a member (reviserMod) on the :30 tick of every fourth hour; GET /reviser/health; its private routes answer a service binding whose props name the member. 0.9.63 RELATED-LEGACY-FIELDS-1 (#1907, 2026-10-06): the related-link drain fills the legacy upload_type / publication_type from an InvenioRDM resource_type before the PUT (record 22025544 failed with "metadata.resource_type: Missing data for required field"); the error row is re-queued once this is live. // MATH-LATEX-2 (2026-10-05, #1891): MATH_RULE in the writer, reconcile and revise prompts; pseudoMathScan() turns plain-text math into a HARD review finding and a math-scan event at verify; ops_config research_math_gate=enforce makes it a pre-publish gate (revise once, then park). // WRITER-FLASH-1 (2026-10-05, #1795): the second ensemble writer leg and the revise-patch retry leave glm-5.3 (3,279 neurons per call) for glm-5.3-flash and gpt-oss-120b. // PRIOR-WORK-EMPTY-1 (2026-10-02): no empty "Prior Work" section; References matched at line start. // 0.9.54 RUN-INTERNAL-1 (#1783, ported from code task ct_zvckl6t5d4e1fd): POST /run?sync=1 and POST /run/drain-v2 refuse public hostnames (*.workers.dev, qnfo.org); the cron and service-binding callers (qnfo-research-supervisor RESEARCH_EXEC, the dashboard SVC binding) are unaffected; METADATA-VERIFY-ORDER-1 (2026-10-02, #1732): verifyMetadataBackfill writes issue_triage.close_evidence before it closes the issue (the close-evidence trigger aborted the old order, so the backfill could never close itself); 0.9.52 UTF8-DEPLOY-1 (2026-10-02): no code change; redeployed so the live copy is UTF-8 (the old deploy path double-encoded every non-ASCII character) /* 0.13.0 NOZ-DOI-1 (2026-10-11): history entries about the retired external deposit stages are in git. */
 // WORKERS-AI-ATTRIBUTION-1 (2026-10-01, #1681): per-worker Workers AI attribution. Returns a shallow env copy whose AI
 // binding records each .run() (calls, errors, ms, tokens, neurons) into qnfo-audit ai_call_counters (purpose 'binding').
 // Neurons = usage tokens x Cloudflare's published per-model rates (neurons per M tokens). Fail-soft; env is never mutated.
@@ -1678,7 +1678,7 @@ var RESEARCH_SHARED_PREAMBLE = [
   "- Length: no maximum. Write every required section in full, as long as its substance needs; at least 20000 characters. Never stop early, never compress a section into a summary of itself, and never end a sentence, equation or table unfinished: the paper ends only after its Conclusion and References.",
   "- Section 1 (Introduction) opens with the concrete real-world problem the work bears on: who faces it, what it costs or blocks today, and what decision, design or capability would change if the paper's result holds. Answer 'so what?' before stating the contributions. End the Introduction with a short contributions list; each item names a result the paper derives and the section where it is derived.",
   "- Abstract: 150-250 words in this order: context, the specific gap, the approach, the principal result with its numbers, and what it changes in practice.",
-  "- Section 2 MUST discuss at least 8 works from the provided Bibliography, cited as [1], [2], ... in the bibliography's exact numbering, each with one or two sentences of substantive context. Every statement about what a cited work did, found, argued or used must be derivable from that entry's own supplied text (its title and summary in the Bibliography) and nothing else: your memory of a work is not a source. When an entry's summary is thin, say in one sentence that the summary supplied gives no further detail, and relate the work to your argument only through what the summary states. Never a bare citation, and never a finding, method, number, date or name that the entry does not state.",
+  "- Section 2 MUST discuss at least 8 works from the provided Bibliography, cited as [1], [2], ... in the bibliography's exact numbering, each with one or two sentences of substantive context. Cite full texts, not summaries: every Bibliography entry carries excerpts of the work's own sections (its full text), and every statement about what a cited work did, found, argued or used must be derivable from that entry's own supplied text and nothing else: your memory of a work is not a source. For each cited work, state the specific method, result, number or argument its full-text excerpts give, and relate it to your argument. Never write that a summary, abstract or entry gives no detail, and never cite a work only for its existence or the framing of a research direction: cite a work for a specific point its full text makes, or do not cite it. Never a bare citation, and never a finding, method, number, date or name that the entry does not state.",
   "- Section 4 (Analysis) MUST show explicit derivations: state every input number with its source, show every arithmetic step. No 'it can be shown' hand-waving.",
   "- Section 5 (Results): report ONLY numbers you actually computed in Section 4, or clearly-labeled projections with stated assumptions and uncertainty bounds. NEVER invent data, simulation results, or empirical measurements.",
   "- Derive at least one concrete numerical result with full arithmetic.",
@@ -1697,7 +1697,7 @@ var RESEARCH_SHARED_PREAMBLE = [
   "2. For DIVERGENT claims: report the conflict explicitly in '## Appendix A. Divergence report' - state each side and the convention/assumption behind the disagreement. NEVER silently resolve a divergence; choose one convention for the main text and document that choice.",
   "3. Write the reconciled paper using the best-substantiated version of each convergent claim. Required headings in order: '# <Title>', '## Abstract', '## 1. Introduction', '## 2. Background and Related Work', '## 3. Methods', '## 4. Analysis', '## 5. Results', '## 6. Discussion', '## 7. Practical Implications and Engineering Pathways', '## 8. Conclusion', '## References', '## Appendix A. Divergence report', '## Appendix B. Claim attribution'.",
   "4. Length: no maximum. Carry every substantive section of the drafts through in full and complete any section a draft left unfinished; never end mid-sentence or mid-equation. Keep the Introduction's real-world problem statement and Section 7's practical pathway (who uses it, how it is built or adopted, what blocks it, the next concrete test), merging the drafts' versions under the same grounding rules.",
-  "5. Section 2 must discuss at least 8 bibliography works. Keep only statements about a work that its supplied entry supports; drop or reword any a draft added from memory, and where an entry is thin say so. References section lists ONLY bibliography works, in the bibliography's exact order and numbering. Never invent references.",
+  "5. Section 2 must discuss at least 8 bibliography works. Keep only statements about a work that its supplied entry supports (its title, abstract and full-text excerpts); drop or reword any a draft added from memory. Each cited work is discussed through a specific point from its full-text excerpts; delete any sentence that says a summary or abstract gives no detail or that cites a work only for its existence or framing, and replace it with what the excerpts state. References section lists ONLY bibliography works, in the bibliography's exact order and numbering. Never invent references.",
   "6. Quantitative claims: computed with shown arithmetic, or labeled projections with stated assumptions. No '[to verify]', no invented data.",
   "7. Appendix B: the claim table (C1..Cn, source drafts, agreement status).",
   "8. Output ONLY the paper markdown. No meta-commentary.",
@@ -1714,7 +1714,7 @@ var RESEARCH_SHARED_PREAMBLE = [
   "5. Prose gates: meta-commentary, reasoning preamble, 'Let me', '[to verify]' markers, placeholder text = HARD.",
   "6. Depth: superficial literature treatment, unexplained jargon, unstated limitations = SOFT.",
   "7. Divergence honesty: Appendix A present when drafts diverged = SOFT if missing.",
-  "8. Source support: any statement about what a cited work did, found or argued, or any claim about the outside world, that is not stated in that work's supplied Bibliography entry or the grounding input = HARD. Quote the unsupported sentence in claim.",
+  "8. Source support: any statement about what a cited work did, found or argued, or any claim about the outside world, that is not stated in that work's supplied Bibliography entry (including its full-text excerpts) or the grounding input = HARD. A sentence that says a source's summary or abstract gives no detail, or that cites a work only for its existence or framing instead of a specific point from its full text = HARD. Quote the sentence in claim.",
   "9. Practical relevance: an application, cost, market or performance figure in Section 7 that is neither derived in the paper nor labeled a projection with stated assumptions, or a readiness level above what the work supports (analytical and unreviewed: TRL 1-2), = HARD; a Section 7 that names no user, no build or adoption path, no blocker or no next concrete test, or an Introduction that never states the real-world problem = SOFT.",
   'verdict = "revise" iff hard is non-empty. Do not pad hard with soft issues.',
   "### TASK REVISE",
@@ -1988,7 +1988,7 @@ async function arxivGet(url, opts) {
     await arxivTurn(spacing);
     try {
       const r = await fetchFn(url, { headers: { "User-Agent": "QNFO-research-exec/0.13 (mailto:ops@qnfo.org)" } });
-      if (r.ok) return { ok: true, status: r.status, text: await readCapped(r), tries: i + 1 };
+      if (r.ok) return { ok: true, status: r.status, text: await readCapped(r, o.cap), tries: i + 1 };
       last = r.status;
       if (r.status !== 429 && r.status < 500) break;
       let ra = 0;
@@ -2068,6 +2068,191 @@ async function dataciteArxiv(terms, opts) {
   }
   return { ok: false, status: last, entries: [] };
 }
+// CITE-FULLTEXT-1 (0.17.0, owner directive 2026-10-13: "Papers shall cite full texts, not merely reference work summaries.
+// Never: 'The summary supplied gives no further detail on the paper's specific results, so we cite it only for the existence
+// and framing of this research direction.'"). Grounding gave the writers a cited work's title and its first 400 abstract
+// characters, and the writer rule told them to say so when that was thin, so published papers cited works for their existence
+// (physical-irrelevance-of-uncountability-computable-reals-suffice-for-continuum-ph, ref 6). Now every bibliography entry
+// carries excerpts of the work's own full text: arXiv's HTML rendering (arxiv.org/html/<id>, ar5iv.labs.arxiv.org as the
+// second host) or, for a QNFO paper, its body in living-paper. A candidate whose full text cannot be read is not cited; the
+// candidate pool is wider (GROUND_CANDIDATES) so the bibliography stays full. Result, conclusion and discussion sections are
+// excerpted first, then the introduction, then the rest, FULLTEXT_SECTION_CHARS per section up to FULLTEXT_EXCERPT_CHARS.
+var GROUND_CANDIDATES = 18;
+var GROUND_MAX_ARXIV = 11;
+var GROUND_MAX_REFS = 14;
+var FULLTEXT_EXCERPT_CHARS = 3600;
+var FULLTEXT_SECTION_CHARS = 1100;
+var FULLTEXT_MIN_CHARS = 1500;
+var FULLTEXT_BODY_CAP = 4e6;
+var FULLTEXT_SPACING_MS = 1e3;
+var FULLTEXT_SKIP_HEAD_RE = /^(?:[A-Z]?[\d.]*\s*)?(?:references|bibliography|acknowledge?ments?|funding|author contributions?|data availability|competing interests?|conflicts? of interest|provenance and ai involvement|appendix [ab]\.? (?:divergence report|claim attribution))\b/i;
+var FULLTEXT_FIRST_HEAD_RE = /result|conclu|discussion|summary|finding|main|theorem|outlook|evaluation|experiment/i;
+function htmlEntityDecode(s) {
+  var named = { amp: "&", lt: "<", gt: ">", quot: '"', apos: "'", nbsp: " ", ndash: "–", mdash: "—", hellip: "…", rsquo: "’", lsquo: "‘", ldquo: "“", rdquo: "”" };
+  return String(s || "").replace(/&(#x[0-9a-f]+|#\d+|[a-z]+);/gi, function(m, e) {
+    if (e[0] === "#") {
+      var cp = e[1] === "x" || e[1] === "X" ? parseInt(e.slice(2), 16) : parseInt(e.slice(1), 10);
+      try {
+        return Number.isFinite(cp) ? String.fromCodePoint(cp) : m;
+      } catch (err) {
+        return m;
+      }
+    }
+    return Object.prototype.hasOwnProperty.call(named, e.toLowerCase()) ? named[e.toLowerCase()] : m;
+  });
+}
+function stripTags(s) {
+  return htmlEntityDecode(String(s || "").replace(/<[^>]*>/g, " ")).replace(/\s+/g, " ").trim();
+}
+// arXiv's HTML (LaTeXML, also on ar5iv) -> [{head, text}] for the sections under h2..h4 headings. Text before the first heading
+// (title, authors, abstract) and the bibliography are left out: the abstract is already the entry's summary line.
+function fullTextSections(html) {
+  var h = String(html || "");
+  var bibAt = h.search(/<section[^>]*class="[^"]*ltx_bibliography/i);
+  if (bibAt > 0) h = h.slice(0, bibAt);
+  h = h.replace(/<(script|style|head|nav|footer|header|button|svg)\b[\s\S]*?<\/\1>/gi, " ");
+  h = h.replace(/<math\b[^>]*?alttext="([^"]*)"[\s\S]*?<\/math>/gi, function(m, a) {
+    return " $" + htmlEntityDecode(a).replace(/\s+/g, " ").trim() + "$ ";
+  });
+  h = h.replace(/<h([2-4])\b[^>]*>([\s\S]*?)<\/h\1>/gi, function(m, l, t) {
+    return "\n\u0001" + stripTags(t) + "\n";
+  });
+  h = h.replace(/<\/(?:p|div|li|tr|figcaption|table|blockquote)>|<br\s*\/?>/gi, "\n");
+  var text = htmlEntityDecode(h.replace(/<[^>]*>/g, " "));
+  return splitSections(text.split("\n").map(function(l) {
+    return l.replace(/[ \t\r\f\v]+/g, " ").trim();
+  }).filter(Boolean), function(l) {
+    return l[0] === "\u0001" ? l.slice(1).trim() : null;
+  });
+}
+// A QNFO paper's markdown body -> the same shape (## and ### headings).
+function mdSections(md) {
+  return splitSections(String(md || "").split("\n").map(function(l) {
+    return l.trim();
+  }).filter(Boolean), function(l) {
+    var m = l.match(/^#{2,4}\s+(.*)$/);
+    return m ? m[1].trim() : null;
+  });
+}
+function splitSections(lines, headOf) {
+  var out = [];
+  var cur = null;
+  lines.forEach(function(l) {
+    var head = headOf(l);
+    if (head !== null) {
+      cur = { head: head, text: "" };
+      out.push(cur);
+    } else if (cur) {
+      cur.text += (cur.text ? " " : "") + l;
+    }
+  });
+  return out.filter(function(s) {
+    return s.head && s.text.length >= 40 && !FULLTEXT_SKIP_HEAD_RE.test(s.head) && !/^abstract$/i.test(s.head);
+  });
+}
+function clipSentence(s, n) {
+  if (s.length <= n) return s;
+  var cut = s.slice(0, n);
+  var end = Math.max(cut.lastIndexOf(". "), cut.lastIndexOf(".$ "), cut.lastIndexOf("? "), cut.lastIndexOf("! "));
+  return (end > n * 0.4 ? cut.slice(0, end + 1) : cut.replace(/\s+\S*$/, "")) + " [...]";
+}
+function fullTextExcerpt(sections, cap) {
+  var max = cap || FULLTEXT_EXCERPT_CHARS;
+  var secs = (sections || []).map(function(s, i) {
+    return { head: s.head, text: s.text, i: i, rank: FULLTEXT_FIRST_HEAD_RE.test(s.head) ? 0 : i === 0 || /introduc|motivat|overview/i.test(s.head) ? 1 : 2 };
+  });
+  var picked = secs.slice().sort(function(a, b) {
+    return a.rank - b.rank || a.i - b.i;
+  });
+  var used = 0;
+  var chosen = [];
+  for (var k = 0; k < picked.length && used < max - 200; k++) {
+    var room = Math.min(FULLTEXT_SECTION_CHARS, max - used - picked[k].head.length - 6);
+    if (room < 200) break;
+    var t = clipSentence(picked[k].text, room);
+    chosen.push({ i: picked[k].i, line: "§ " + picked[k].head + ": " + t });
+    used += t.length + picked[k].head.length + 4;
+  }
+  return chosen.sort(function(a, b) {
+    return a.i - b.i;
+  }).map(function(c) {
+    return c.line;
+  }).join("\n  ");
+}
+// Reads one arXiv work's full text: arxiv.org/html first, ar5iv as the second host. transport is true when a host refused or
+// failed (429, 5xx, network) rather than answering that it has no HTML for the work.
+async function arxivFullText(aid, opts) {
+  var o = opts || {};
+  var id = String(aid || "").replace(/^arXiv:/i, "").trim();
+  var transport = false;
+  var hosts = ["https://arxiv.org/html/", "https://ar5iv.labs.arxiv.org/html/"];
+  for (var i = 0; i < hosts.length; i++) {
+    var url = hosts[i] + id;
+    var r = await arxivGet(url, { fetch: o.fetch, spacingMs: typeof o.spacingMs === "number" ? o.spacingMs : FULLTEXT_SPACING_MS, tries: 2, cap: FULLTEXT_BODY_CAP });
+    if (!r.ok) {
+      if (r.status === 429 || r.status >= 500 || r.status === -1) transport = true;
+      continue;
+    }
+    var secs = fullTextSections(r.text);
+    var chars = secs.reduce(function(a, s) {
+      return a + s.text.length;
+    }, 0);
+    if (chars >= FULLTEXT_MIN_CHARS) return { ok: true, url: url, sections: secs.length, chars: chars, excerpt: fullTextExcerpt(secs) };
+  }
+  return { ok: false, transport: transport };
+}
+// Gives each candidate its full-text excerpts and keeps, in order, those that have them (at most GROUND_MAX_ARXIV arXiv works
+// and GROUND_MAX_REFS in all), renumbered from 1. A QNFO entry's full text is its body (b.body).
+async function attachFullTexts(bib, opts) {
+  var o = opts || {};
+  var kept = [];
+  var stat = { candidates: bib.length, arxiv: 0, qnfo: 0, dropped: 0, transport: 0 };
+  for (var i = 0; i < bib.length && kept.length < GROUND_MAX_REFS; i++) {
+    var b = bib[i];
+    var isArxiv = /^arXiv:/i.test(b.id);
+    if (isArxiv && stat.arxiv >= GROUND_MAX_ARXIV) continue;
+    var ft = null;
+    if (isArxiv) {
+      var r = await arxivFullText(b.id, o);
+      if (r.ok) ft = { url: r.url, excerpt: r.excerpt };
+      else if (r.transport) stat.transport++;
+    } else if (b.body) {
+      var ex = fullTextExcerpt(mdSections(b.body));
+      if (ex.length >= 400) ft = { url: b.url || "living-paper", excerpt: ex };
+    }
+    if (!ft || !ft.excerpt) {
+      stat.dropped++;
+      continue;
+    }
+    if (isArxiv) stat.arxiv++;
+    else stat.qnfo++;
+    kept.push({ n: kept.length + 1, id: b.id, text: b.text + "\n  Full text (" + ft.url + "), excerpts of its own sections:\n  " + ft.excerpt });
+  }
+  return { bib: kept, stat: stat };
+}
+// The phrasing of a citation made from a summary alone. A HARD finding at the final gate, and a reason for the daily sweep to
+// rewrite a published paper.
+var SUMMARY_ONLY_PATTERNS = [
+  /\bsummary supplied\b/i,
+  /\b(?:supplied|provided|available|retrieved) (?:summary|abstract|bibliography entry)\b[^.]{0,60}\b(?:gives|provides|offers|contains|states|includes) no\b/i,
+  /\b(?:summary|abstract|bibliography entry|entry) (?:gives|provides|offers|contains|states|includes) no (?:further |additional |more )?(?:detail|details|information|specifics)\b/i,
+  /\b(?:summary|abstract) (?:does not|doesn't|did not) (?:specify|state|give|report|detail|describe|provide)\b/i,
+  /\bcite[sd]? (?:it|this|this work|them|these works?) only for\b/i,
+  /\bcit\w*\b[^.]{0,80}\b(?:only|merely|solely) for (?:its|their|the) (?:existence|framing)\b/i,
+  /\bexistence and framing\b/i
+];
+function summaryOnlyCitations(paper) {
+  var s = String(paper || "");
+  var hits = [];
+  SUMMARY_ONLY_PATTERNS.forEach(function(re) {
+    var m = re.exec(s);
+    if (m && hits.length < 5) {
+      var a = Math.max(0, s.lastIndexOf("\n", m.index) + 1, m.index - 160);
+      hits.push("«" + s.slice(a, m.index + m[0].length + 60).replace(/\s+/g, " ").trim() + "»");
+    }
+  });
+  return hits;
+}
 async function stageGround(env, row) {
   __attrStageSet(env, "ground");
   const idea = row.idea || row.summary || "";
@@ -2086,6 +2271,7 @@ async function stageGround(env, row) {
       const sumM = t.match(/<summary>([\s\S]*?)<\/summary>/);
       if (titleM && sumM) srcText = "TITLE: " + titleM[1].trim() + "\n\nABSTRACT: " + sumM[1].replace(/\s+/g, " ").trim();
     } catch (e) {
+      await logEvent(env, "ground-source", "row=" + rid + " arXiv:" + ax[1] + " metadata read failed: " + String(e && e.message || e).slice(0, 200), "warn");
     }
   }
   const q = idea.replace(/\b\d{4}\.\d{4,5}(v\d+)?\b/g, " ").replace(/\s+/g, " ").trim().slice(0, 150);
@@ -2114,7 +2300,7 @@ async function stageGround(env, row) {
   }
   const _queries = groundQueries(idea, parentTitle);
   let _arxivErr = 0;
-  for (let qi = 0; qi < _queries.length && bib.length < 11; qi++) {
+  for (let qi = 0; qi < _queries.length && bib.length < GROUND_CANDIDATES; qi++) {
     // arXiv API terms: at most one request every three seconds. At 1.2 s some passes came back thin (row 3b0e4cbd grounded
     // to 4 entries twice, then 14 on unchanged queries). arxivGet spaces the requests of every slot and retries a refusal.
     try {
@@ -2139,7 +2325,7 @@ async function stageGround(env, row) {
         const entry = "arXiv:" + aid + " | " + tiM[1].replace(/\s+/g, " ").trim() + "\n  " + (suM ? suM[1].replace(/\s+/g, " ").trim().slice(0, 400) : "");
         bib.push({ n: bib.length + 1, id: "arXiv:" + aid, text: entry });
         arxivHits += (arxivHits ? "\n" : "") + entry;
-        if (bib.length >= 11) break;
+        if (bib.length >= GROUND_CANDIDATES) break;
       }
     } catch (e) {
     }
@@ -2151,7 +2337,7 @@ async function stageGround(env, row) {
     const _dc = await dataciteArxiv(_terms);
     let _added = 0;
     for (const e of _dc.entries) {
-      if (bib.length >= 11) break;
+      if (bib.length >= GROUND_CANDIDATES) break;
       const _bare = String(e.aid).replace(/v\d+$/, "").toLowerCase();
       if (ax && _bare === String(ax[1]).toLowerCase()) continue;
       if (bib.some(function(b) {
@@ -2178,18 +2364,39 @@ async function stageGround(env, row) {
         if (slugs.length >= 4) break;
       }
       for (const sl of slugs) {
-        if (bib.length >= 14) break;
-        const pp = await env.LIVING_PAPER.prepare("SELECT title, doi, abstract FROM papers WHERE slug = ?1 AND status NOT IN ('duplicate','kg-backfill','quarantined') LIMIT 1").bind(sl).first().catch(function() {
+        if (bib.length >= GROUND_CANDIDATES + 3) break;
+        const pp = await env.LIVING_PAPER.prepare("SELECT title, doi, abstract, body_md FROM papers WHERE slug = ?1 AND status NOT IN ('duplicate','kg-backfill','quarantined') LIMIT 1").bind(sl).first().catch(function() {
           return null;
         });
         if (!pp || !pp.title) continue;
         const entry = "QNFO: " + String(pp.title).replace(/\s+/g, " ").trim() + (pp.doi && !/10\.5281\/|z[e]nodo/i.test(String(pp.doi)) ? " | DOI " + pp.doi : "") + "\n  " + String(pp.abstract || "").replace(/\s+/g, " ").trim().slice(0, 300);
-        bib.push({ n: bib.length + 1, id: pp.doi && !/10\.5281\/|z[e]nodo/i.test(String(pp.doi)) ? "doi:" + pp.doi : "qnfo:" + sl, text: entry });
+        bib.push({ n: bib.length + 1, id: pp.doi && !/10\.5281\/|z[e]nodo/i.test(String(pp.doi)) ? "doi:" + pp.doi : "qnfo:" + sl, text: entry, body: String(pp.body_md || ""), url: "https://papers.qnfo.org/papers/" + sl });
         corpus += (corpus ? "\n" : "") + entry;
       }
     }
   } catch (e) {
   }
+  // CITE-FULLTEXT-1: only works whose full text was read are cited. The source paper's full text joins its abstract.
+  if (srcText && ax) {
+    const _sft = await arxivFullText(ax[1]);
+    if (_sft.ok) srcText += "\n\nFULL TEXT (" + _sft.url + "), excerpts of its own sections:\n" + _sft.excerpt.replace(/\n  /g, "\n");
+  }
+  const _ft = await attachFullTexts(bib);
+  bib.length = 0;
+  _ft.bib.forEach(function(b) {
+    bib.push(b);
+  });
+  arxivHits = bib.filter(function(b) {
+    return /^arXiv:/i.test(b.id);
+  }).map(function(b) {
+    return b.text.split("\n")[0];
+  }).join("\n");
+  corpus = bib.filter(function(b) {
+    return !/^arXiv:/i.test(b.id);
+  }).map(function(b) {
+    return b.text.split("\n")[0];
+  }).join("\n");
+  await logEvent(env, "ground-fulltext", "row=" + rid + " candidates=" + _ft.stat.candidates + " kept_arxiv=" + _ft.stat.arxiv + " kept_qnfo=" + _ft.stat.qnfo + " dropped_no_fulltext=" + _ft.stat.dropped + " transport_errors=" + _ft.stat.transport, _ft.stat.transport ? "warn" : "ok");
   const bibBlock = bib.map(function(b) {
     return "[" + b.n + "] " + b.text;
   }).join("\n") || "(bibliography empty - writers must state this limitation)";
@@ -2201,7 +2408,7 @@ async function stageGround(env, row) {
     existing ? existing : "(none - new paper)",
     "## Source material (fetched from arXiv)",
     srcText || "(no arXiv source embedded in idea)",
-    "## Related literature (arXiv, real identifiers)",
+    "## Related literature (arXiv, real identifiers; full-text excerpts are in the Bibliography)",
     arxivHits || "(none retrieved)",
     "## QNFO corpus context (Vectorize)",
     corpus || "(none retrieved)",
@@ -2216,13 +2423,13 @@ async function stageGround(env, row) {
   // spends one recover exactly as the verify failure did, so parking is unchanged, but a thin pass costs HTTP calls only.
   if (bib.length < MIN_GROUND_REFS) {
     await logEvent(env, "ground-thin", "row=" + rid + " bibCount=" + bib.length + " < " + MIN_GROUND_REFS + " queries=" + _queries.length + " arxiv_http_errors=" + _arxivErr + " second_source=" + _second, "warn");
-    await markError(env, row, "ground: bibliography " + bib.length + " < " + MIN_GROUND_REFS + " entries (gate-refcount cannot pass); arxiv_http_errors=" + _arxivErr + "; second_source=" + _second);
+    await markError(env, row, "ground: bibliography " + bib.length + " < " + MIN_GROUND_REFS + " entries with full text (gate-refcount cannot pass); fulltext_dropped=" + _ft.stat.dropped + "; fulltext_transport_errors=" + _ft.stat.transport + "; arxiv_http_errors=" + _arxivErr + "; second_source=" + _second);
     // A thin result with every source answering is the literature being thin for this idea (the floor withholding the row);
     // a thin result with a refused source is a transport failure and stays an error event.
-    if (_arxivErr === 0 && _second !== "error") return { ok: false, stage: "ground", withheld: "thin-literature", bibCount: bib.length };
+    if (_arxivErr === 0 && _second !== "error" && _ft.stat.transport === 0) return { ok: false, stage: "ground", withheld: "thin-literature", bibCount: bib.length };
     return { ok: false, stage: "ground", bibCount: bib.length, arxivErrors: _arxivErr };
   }
-  await env.QNFO_AUDIT.prepare("UPDATE research_queue SET stage='ensemble', context=? WHERE id=?").bind(JSON.stringify({ pipeline: PIPELINE_VERSION, bibCount: bib.length, srcFetched: !!srcText }).slice(0, 6e3), row.id).run();
+  await env.QNFO_AUDIT.prepare("UPDATE research_queue SET stage='ensemble', context=? WHERE id=?").bind(JSON.stringify({ pipeline: PIPELINE_VERSION, bibCount: bib.length, fullTextCount: bib.length, srcFetched: !!srcText }).slice(0, 6e3), row.id).run();
   return { ok: true, stage: "ground->ensemble", bibCount: bib.length };
 }
 __name(stageGround, "stageGround");
@@ -2620,7 +2827,11 @@ async function completenessSweep(env) {
       if (!src) continue;
       out.scanned++;
       var pc = paperCompleteness(p.body_md, { legacy: true });
-      if (pc.complete) continue;
+      // CITE-FULLTEXT-1: a published paper that cites a work from its summary alone is rewritten too, on the same rate.
+      var so = summaryOnlyCitations(p.body_md);
+      if (pc.complete && !so.length) continue;
+      if (so.length) out.summaryOnly = (out.summaryOnly || 0) + 1;
+      var why = (pc.complete ? [] : ["incomplete: " + pc.reasons.join("; ")]).concat(so.length ? ["CITE-FULLTEXT-1 cites a work from its summary alone: " + so[0]] : []);
       out.truncated++;
       var open = await env.QNFO_AUDIT.prepare("SELECT id FROM research_queue WHERE paper_slug = ?1 AND source = 'remediation' AND status NOT IN ('published','wontfix') LIMIT 1").bind(p.slug).first();
       if (open || out.queued >= SWEEP_MAX_PER_RUN) {
@@ -2628,7 +2839,7 @@ async function completenessSweep(env) {
         continue;
       }
       var rid = "rem-" + crypto.randomUUID();
-      await env.QNFO_AUDIT.prepare("INSERT INTO research_queue (id, source, source_id, idea, summary, score, decision, status, paper_slug, created_at, stage, attempt, revise_count, recover_count) VALUES (?1, 'remediation', ?2, ?3, ?4, 0.95, 'ACCEPT', 'queued', ?5, ?6, 'ground', 0, 0, 0)").bind(rid, "completeness:" + src.id, String(src.idea || p.title || ""), ("COMPLETENESS-SWEEP-1: the published version is incomplete (" + pc.reasons.join("; ") + "); rewrite it whole under the current writer rules and republish as a new version.").slice(0, 1e3), p.slug, nowIso()).run();
+      await env.QNFO_AUDIT.prepare("INSERT INTO research_queue (id, source, source_id, idea, summary, score, decision, status, paper_slug, created_at, stage, attempt, revise_count, recover_count) VALUES (?1, 'remediation', ?2, ?3, ?4, 0.95, 'ACCEPT', 'queued', ?5, ?6, 'ground', 0, 0, 0)").bind(rid, "completeness:" + src.id, String(src.idea || p.title || ""), ("COMPLETENESS-SWEEP-1: the published version needs a rewrite (" + why.join("; ") + "); rewrite it whole under the current writer rules and republish as a new version.").slice(0, 1e3), p.slug, nowIso()).run();
       out.queued++;
       out.slugs.push(p.slug.slice(0, 60));
     }
@@ -2704,10 +2915,10 @@ function provenanceSection(info) {
     "",
     "- This paper was drafted, reconciled, reviewed, revised and checked by the QNFO automated research pipeline (qnfo-research-exec " + (o.version || VERSION) + "). Language models were tools in that process; they are not authors. The named author is accountable for the content.",
     "- Models: drafting by " + uniqueModels(o.writers || WRITER_MODELS).join(", ") + "; reconciliation, completion, review, revision and verification by " + uniqueModels(o.stageModels || MODELS).join(", ") + ", with the QNFO model router as a fallback.",
-    "- Sources: every reference is drawn from a bibliography retrieved from arXiv and the QNFO corpus before drafting; statements about a cited work are restricted to its retrieved title and abstract.",
+    "- Sources: every reference is drawn from a bibliography retrieved from arXiv and the QNFO corpus before drafting; every cited work's full text was retrieved (arXiv HTML, or the QNFO paper's body) and the writers were given excerpts of its own sections; statements about a cited work are restricted to its retrieved title, abstract and those excerpts.",
     "- Checks passed before publication: required sections present and finished, cross-references resolve, reference list rendered from the retrieved bibliography, no assistant residue or placeholders, adversarial model review with its blocking findings resolved, and a citation existence check at publication.",
     "- " + verifyLine,
-    "- Not checked: whether each cited source supports the sentence that cites it beyond its abstract; derivation steps other than the recomputed claims. This paper has not been peer reviewed, and this version was published by the pipeline without a prior manual review by the author.",
+    "- Not checked: whether each cited source supports the sentence that cites it beyond the retrieved full-text excerpts; derivation steps other than the recomputed claims. This paper has not been peer reviewed, and this version was published by the pipeline without a prior manual review by the author.",
     ""
   ].join("\n");
 }
@@ -3187,6 +3398,8 @@ function finalGates(paper, opts) {
   const refsPart = _refsParts.length > 1 ? _refsParts[_refsParts.length - 1].split(/^#{1,2}\s/m)[0] : "";
   const refCount = (refsPart.match(/^[ \t]*(?:[-*][ \t]*)?(?:\[\d+\]|\d+\.)[ \t]+\S/gm) || []).length;
   if (refCount < minRefs) fixes.push({ id: "gate-refcount", severity: "HARD", claim: "too few references", reason: "rendered references " + refCount + " < " + minRefs, fix: "List at least " + minRefs + " works from the provided bibliography in the References section, numbered [1]..[n], and cite each in the text with substantive context." });
+  const _sumOnly = summaryOnlyCitations(paper);
+  if (_sumOnly.length) fixes.push({ id: "gate-fulltext-citation", severity: "HARD", claim: "citation made from a summary, not the full text: " + _sumOnly.join(" | "), reason: "CITE-FULLTEXT-1: papers cite full texts, never a work's summary alone and never a work only for its existence or framing", fix: "Rewrite each quoted sentence to state the specific method, result or number the cited work's full-text excerpts in the Bibliography give; if they give nothing that bears on the sentence, remove that citation from the sentence." });
   const _res = chatbotResidue(paper);
   if (_res.length) fixes.push({ id: "gate-residue", severity: "HARD", claim: "assistant residue or placeholder text: " + _res.join(" | "), reason: "GATE-RESIDUE-1: conversational assistant text, placeholders or unfinished markers in a published paper", fix: "Delete each quoted fragment; where it stands in for content, write that content from what the paper already derives." });
   if (/(Let me|The user|I'll|I need to|Okay,|Alright,|Here's what)/i.test(String(paper).slice(0, 500))) fixes.push({ id: "gate-preamble", severity: "HARD", claim: "reasoning preamble", reason: "meta text at body start", fix: "Remove all thinking/planning text; output only the paper." });
@@ -26602,6 +26815,12 @@ export {
   insertSection,
   fixMojibake,
   groundQueries,
+  fullTextSections,
+  fullTextExcerpt,
+  mdSections,
+  arxivFullText,
+  attachFullTexts,
+  summaryOnlyCitations,
   markError,
   mathGate,
   parkPoisonRow,
