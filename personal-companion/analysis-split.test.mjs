@@ -49,6 +49,10 @@ ok(/^analysis marked \d+% after \d+ chars$/.test(V.analysisSplitInfo(marked)), "
 ok(V.analysisSplitInfo("# T\n\n" + report) === "analysis unmarked", "an unmarked draft is logged as unmarked");
 ok(/^analysis dropped: report \d+ chars < 600$/.test(V.analysisSplitInfo(early)) && /^analysis dropped: analysis \d+% > 60%$/.test(V.analysisSplitInfo(heavy)) && V.analysisSplitInfo(twice) === "analysis dropped: more than one line", "a dropped split names the rail", [V.analysisSplitInfo(early), V.analysisSplitInfo(heavy), V.analysisSplitInfo(twice)]);
 ok(/"stage", "critique \(" \+ analysisSplitInfo\(String\(piece\.body_md \|\| ""\)\) \+ "\)"/.test(src), "the critique stage row carries the split diagnosis");
+const gen = src.slice(src.indexOf("// FINAL-READ-1 (1.22.4"), src.indexOf("best = { piece: finalPiece, quality: q, words: v.words, vr: vr };"));
+ok(/if \(pieceText\(finalPiece\) !== pieceText\(piece\)\) \{/.test(gen) && /var qf = await critiquePiece\(env, finalPiece, form, ground\);/.test(gen), "FINAL-READ-1: a text changed after the critic's last read is read again");
+ok(/if \(!qf\) \{[\s\S]{0,200}continue;/.test(gen) && /if \(sfin\.missing \|\| sfin\.worst < floorForForm\) \{[\s\S]{0,500}continue;/.test(gen), "the final read fails closed: no reader or a score below the floor rejects the attempt");
+ok(/q = qf;/.test(gen) && gen.indexOf("q = qf;") < gen.length, "the stored scores are the final read's");
 const vmx = /var VERSION = "(\d+)\.(\d+)\.(\d+)/.exec(src);
 ok(vmx && (+vmx[1] > 1 || (+vmx[1] === 1 && +vmx[2] >= 22)), "VERSION is at least 1.22.0", vmx && vmx[0]);
 console.log(pass + " passed, " + fail + " failed");
