@@ -6,7 +6,7 @@ var __defProp2 = Object.defineProperty;
 var __name2 = /* @__PURE__ */ __name((target, value) => __defProp2(target, "name", { value, configurable: true }), "__name");
 var __defProp22 = Object.defineProperty;
 var __name22 = /* @__PURE__ */ __name2((target, value) => __defProp22(target, "name", { value, configurable: true }), "__name");
-var VERSION = "5.35.1-router-resolve"; // 5.35.1 SEMANTIC-CACHE-EXACT-1: the semantic cache, serving for the first time since the 5.35.0 declaration fix, answers only when the logged prompt equals this prompt character for character; liveness probes and cache: false skip it. // 5.35.0 CMD-AI-TIMEOUT-1 (#2316, 2026-10-12, pillar core): measured cause of the fleet command line timeouts: a reasoning model given a small max_tokens spends the whole allowance on reasoning (glm-5.3-flash, max_tokens 700: 19-49 s, empty content, finish=length), the direct DeepSeek key answers 402 and its fallback led to the same slow model, and an id missing from MODELS was served by that dead route without a word. Now: small answers ask verified models for low reasoning effort (4.9 s, content present), a model id resolves explicitly (exact, alias, Workers AI id, or the logged unknown-id default; _router.requested_model and model_resolution), an unfunded DeepSeek route is served by its Workers AI twin, small or timeout_ms requests run under a budget with one hedge leg and answer 504 router_timeout instead of canned text, and context fetches have timeouts. AI-ROUTER-SECOND-PATH-1 (#2179): /health second_path contract and the router-down drill. Channel diversity (#2146): declared vendor and lineage per model, GET/POST /v1/ensemble/policy, a non-diverse ensemble is refused with a structured reason and the reviewer is never the primary's lineage. Cost (#2011): x-session-affinity for prefix caching, cached tokens in the ledger, the semantic cache serves again (it threw on a variable read before its declaration) and only for the same prompt, character for character; liveness probes never read it. Ids come from crypto.getRandomValues. Tests: router-resolve.test.mjs. // 5.34.1 carries the 5.33.1 narrative-prompt-guard process anchors onto the rebased prompt (the previous push changed bytes without a bump). 5.34.0 re-applies 5.33.0 and 5.33.1 onto main 5.33.2-doi-scrub (the venue line names papers.qnfo.org; PR 870 had conflicts). 5.33.1 keeps the narrative-prompt-guard process anchors (ground in the corpus first, place the answer in context, make it falsifiable) in the prompt. 5.33.0 ACCURACY-GROUND-1 (2026-10-10, pillar core, owner directive: answers are 100% verifiable against supplied text, no example nouns in prompts, fail closed): the system prompt no longer mandates key facts or quantities, citations "when known" or computational verification from memory; its only sources are the retrieved context, web context, fleet context and the user messages. handleChat wraps handleChatCore: a non-tool answer (streams are buffered) loses every sentence carrying a DOI, link, arXiv id, author citation or figure that is not in the supplied text, says so at the foot, and opens with a no-source notice when nothing was retrieved for a question. The ensemble validator fails unsupported statements and the review pass can only remove. Tests: accuracy-ground.test.mjs. // 5.32.0 BUDGET-SOFT-ROUTE-1 (2026-10-06, pillar cost, owner directive): the spend governor never refuses a caller; at any cap every caller is routed to the cheap Workers AI model (glm-5.3-flash, one leg, no ensemble) instead of HTTP 429. Paid upstreams over cap still fall back to Workers AI. // 5.31.5 ENSEMBLE-VALIDATOR-BUDGET-1 (#1889, 2026-10-05): the ensemble validator keeps a 30% slice of the 120s budget (36s, floor 15s) instead of a flat 15s that timed out behind 55-60s Workers AI primaries (both first 5.31.4 ensemble-run rows: verdict skipped); validator and reviewer outcomes are stage rows and the ensemble-run row carries them. // 5.31.4 ENSEMBLE-FAMILY-DISJOINT-1 (#1889 ENSEMBLE-POLICY-1, 2026-10-05): ENSEMBLE_POOL holds at most one model per family (science drops deepseek-v4-pro, general drops glm-5.3 and keeps the small glm-5.3-flash) and the validator is never the primary's family (a deepseek primary is judged by glm-5.3-flash instead of deepseek-v4-flash); same call count, smaller models, meta.validator_switched records the switch. // 5.31.3 ENSEMBLE-RUN-LOG-1 (#1889, 2026-10-05): one cloud_ops_events row (kind ensemble-run) per ensemble call with the primary and validator models and families, the validator verdict, whether the reviewer ran and a short hash of the text, so same-family vs cross-family agreement can be measured before the pool is thinned (docs/ENSEMBLE-POLICY.md); no extra model call. // 5.31.2 DEEPSEEK-402-BREAKER-1 (#1939): a DeepSeek 402 (balance exhausted) opens a 60-min per-isolate breaker (owner 2026-10-05: no DeepSeek top-up) so callDeepSeek fails fast to the free fallback; 5.31.1 AIG-BINDING-1 (#1784): gateway log entries carry metadata {worker, purpose}; 5.31.0 AIG-BINDING-1: embedding calls go through the AI Gateway (cached 24h, plain-binding fallback); 5.30.1 FLEET-CTL-ROLLOUT-1: the fleet command-line link on the chat page
+var VERSION = "5.36.0-fleet-cap-steer"; // 5.36.0 FLEET-CAP-STEER-1 (AI-SPEND-1, agent_issues 1780, 2462, 2446, 2011, pillar cost): the router governs at the fleet's own caps, not only its own ledger. While fleet_budget ai_spend:workers-ai (the 7-day run rate x 30 that qnfo-fleet-control writes hourly) is over its cap, a router-served non-stream Workers AI call to glm-5.3 or deepseek-v4-pro is answered by the same-family cheaper model (glm-5.3-flash, deepseek-v4-flash; docs/ENSEMBLE-POLICY.md rule 7), with a per-request fallback to the requested model on an error or empty reply and an automatic revert for the rest of the UTC day when the cheaper model fails 20% of at least 10 steered calls (ai_call_counters purpose fleet-cap-steer). qnfo-ai-calibration and requests with pin_model: true are never steered; _router.fleet_cap_steer names each switch. The router's paid upstreams (direct DeepSeek key, gateway compat) are skipped to their Workers AI fallback while the fleet cap of that provider (or the unified total, for the gateway) is over, so router BYOK spend is governed by the fleet caps too. ops_config ai_fleet_cap_steer = off turns both off without a deploy. Tests: fleet-cap-steer.test.mjs. // 5.35.1 SEMANTIC-CACHE-EXACT-1: the semantic cache, serving for the first time since the 5.35.0 declaration fix, answers only when the logged prompt equals this prompt character for character; liveness probes and cache: false skip it. // 5.35.0 CMD-AI-TIMEOUT-1 (#2316, 2026-10-12, pillar core): measured cause of the fleet command line timeouts: a reasoning model given a small max_tokens spends the whole allowance on reasoning (glm-5.3-flash, max_tokens 700: 19-49 s, empty content, finish=length), the direct DeepSeek key answers 402 and its fallback led to the same slow model, and an id missing from MODELS was served by that dead route without a word. Now: small answers ask verified models for low reasoning effort (4.9 s, content present), a model id resolves explicitly (exact, alias, Workers AI id, or the logged unknown-id default; _router.requested_model and model_resolution), an unfunded DeepSeek route is served by its Workers AI twin, small or timeout_ms requests run under a budget with one hedge leg and answer 504 router_timeout instead of canned text, and context fetches have timeouts. AI-ROUTER-SECOND-PATH-1 (#2179): /health second_path contract and the router-down drill. Channel diversity (#2146): declared vendor and lineage per model, GET/POST /v1/ensemble/policy, a non-diverse ensemble is refused with a structured reason and the reviewer is never the primary's lineage. Cost (#2011): x-session-affinity for prefix caching, cached tokens in the ledger, the semantic cache serves again (it threw on a variable read before its declaration) and only for the same prompt, character for character; liveness probes never read it. Ids come from crypto.getRandomValues. Tests: router-resolve.test.mjs. // 5.34.1 carries the 5.33.1 narrative-prompt-guard process anchors onto the rebased prompt (the previous push changed bytes without a bump). 5.34.0 re-applies 5.33.0 and 5.33.1 onto main 5.33.2-doi-scrub (the venue line names papers.qnfo.org; PR 870 had conflicts). 5.33.1 keeps the narrative-prompt-guard process anchors (ground in the corpus first, place the answer in context, make it falsifiable) in the prompt. 5.33.0 ACCURACY-GROUND-1 (2026-10-10, pillar core, owner directive: answers are 100% verifiable against supplied text, no example nouns in prompts, fail closed): the system prompt no longer mandates key facts or quantities, citations "when known" or computational verification from memory; its only sources are the retrieved context, web context, fleet context and the user messages. handleChat wraps handleChatCore: a non-tool answer (streams are buffered) loses every sentence carrying a DOI, link, arXiv id, author citation or figure that is not in the supplied text, says so at the foot, and opens with a no-source notice when nothing was retrieved for a question. The ensemble validator fails unsupported statements and the review pass can only remove. Tests: accuracy-ground.test.mjs. // 5.32.0 BUDGET-SOFT-ROUTE-1 (2026-10-06, pillar cost, owner directive): the spend governor never refuses a caller; at any cap every caller is routed to the cheap Workers AI model (glm-5.3-flash, one leg, no ensemble) instead of HTTP 429. Paid upstreams over cap still fall back to Workers AI. // 5.31.5 ENSEMBLE-VALIDATOR-BUDGET-1 (#1889, 2026-10-05): the ensemble validator keeps a 30% slice of the 120s budget (36s, floor 15s) instead of a flat 15s that timed out behind 55-60s Workers AI primaries (both first 5.31.4 ensemble-run rows: verdict skipped); validator and reviewer outcomes are stage rows and the ensemble-run row carries them. // 5.31.4 ENSEMBLE-FAMILY-DISJOINT-1 (#1889 ENSEMBLE-POLICY-1, 2026-10-05): ENSEMBLE_POOL holds at most one model per family (science drops deepseek-v4-pro, general drops glm-5.3 and keeps the small glm-5.3-flash) and the validator is never the primary's family (a deepseek primary is judged by glm-5.3-flash instead of deepseek-v4-flash); same call count, smaller models, meta.validator_switched records the switch. // 5.31.3 ENSEMBLE-RUN-LOG-1 (#1889, 2026-10-05): one cloud_ops_events row (kind ensemble-run) per ensemble call with the primary and validator models and families, the validator verdict, whether the reviewer ran and a short hash of the text, so same-family vs cross-family agreement can be measured before the pool is thinned (docs/ENSEMBLE-POLICY.md); no extra model call. // 5.31.2 DEEPSEEK-402-BREAKER-1 (#1939): a DeepSeek 402 (balance exhausted) opens a 60-min per-isolate breaker (owner 2026-10-05: no DeepSeek top-up) so callDeepSeek fails fast to the free fallback; 5.31.1 AIG-BINDING-1 (#1784): gateway log entries carry metadata {worker, purpose}; 5.31.0 AIG-BINDING-1: embedding calls go through the AI Gateway (cached 24h, plain-binding fallback); 5.30.1 FLEET-CTL-ROLLOUT-1: the fleet command-line link on the chat page
 // WORKERS-AI-ATTRIBUTION-1 (2026-10-01, #1681): per-worker Workers AI attribution. Returns a shallow env copy whose AI
 // binding records each .run() (calls, errors, ms, tokens, neurons) into qnfo-audit ai_call_counters (purpose 'binding').
 // Neurons = usage tokens x Cloudflare's published per-model rates (neurons per M tokens). Fail-soft; env is never mutated.
@@ -320,6 +320,13 @@ async function spendGuardPaid(env, provider, model) {
   if (by[provider] >= caps[provider] || total >= caps.total) {
     spendRecord(env, provider, model, 0, 0, { refused: true });
     throw new Error("spend-governor: " + provider + " 30d spend " + by[provider].toFixed(2) + " (cap " + caps[provider] + "), total " + total.toFixed(2) + " (cap " + caps.total + "); paid upstream skipped");
+  }
+  // FLEET-CAP-STEER-1: the fleet's own caps (fleet_budget ai_spend:<provider>, 7-day run rate x 30) govern this router's
+  // direct-key (BYOK) and gateway calls too; the caller's Workers AI fallback answers instead.
+  var fleetHit = fleetPaidCapHit(await fleetSteerLoad(env), provider, model);
+  if (fleetHit) {
+    spendRecord(env, provider, model, 0, 0, { refused: true });
+    throw new Error("spend-governor: fleet " + fleetHit + "; paid upstream skipped");
   }
 }
 // Streams carry no usage unless asked: count delta text (content, reasoning, tool calls) and price it at end of stream.
@@ -1396,7 +1403,143 @@ function autoRoute(cls, prompt, health) {
 __name(autoRoute, "autoRoute");
 __name2(autoRoute, "autoRoute");
 __name22(autoRoute, "autoRoute");
+// ---- FLEET-CAP-STEER-BEGIN (5.36.0, AI-SPEND-1, agent_issues 1780/2462/2446/2011, pillar cost) ----
+// Measured 2026-10-13 (qnfo-audit ai_call_counters, ai_spend_ledger, cost_daily, 2026-10-06..12): Workers AI ran at a 7-day
+// run rate of $113/30d against the fleet cap of $95 (fleet_budget ai_spend:workers-ai), and no router decision read it: the
+// governor above compares only this router's own ledger ($9.63/30d) with its own caps, so it never engaged. Router-served
+// glm-5.3 (64,937 neurons in 7 days, 23 calls) and deepseek-v4-pro (13,900 outside calibration) stayed on the premium model.
+// Rule (docs/ENSEMBLE-POLICY.md rule 7, BUDGET-SOFT-ROUTE-1): while the fleet cap is breached, a premium Workers AI model with
+// a cheaper member of its own lineage is served by that member, so ensembles keep their layers and their families. The
+// requested model stays the per-request fallback (twin error or empty reply), and a twin that fails 20% of at least 10 steered
+// calls today is not steered again until the next UTC day (OWNER-STANDING-GRANT-1 cheaper-model pattern, as personal-api
+// TWIN-FLASH-1). Streams are not steered (an empty stream cannot be caught before the client reads it). The same state
+// governs the paid upstreams: spendGuardPaid skips a provider whose fleet cap is over, and every caller of a paid upstream
+// already falls back to Workers AI. ops_config ai_fleet_cap_steer = off turns both off within FLEET_STEER_TTL_MS, no deploy.
+var FLEET_STEER_TWINS = { "@cf/zai-org/glm-5.3": "@cf/zai-org/glm-5.3-flash", "@cf/deepseek-ai/deepseek-v4-pro-0813": "@cf/deepseek-ai/deepseek-v4-flash-0731" };
+var FLEET_STEER_EXEMPT = { "qnfo-ai-calibration": 1 };
+var FLEET_STEER_SWITCH = "ai_fleet_cap_steer";
+var FLEET_STEER_PURPOSE = "fleet-cap-steer";
+var FLEET_STEER_REVERT_MIN_CALLS = 10;
+var FLEET_STEER_REVERT_FAIL_SHARE = 0.2;
+var FLEET_STEER_TTL_MS = 3e5;
+var __fleetSteer = { at: 0, st: null };
+function fleetSteerDay() {
+  return new Date().toISOString().slice(0, 10);
+}
+// Pure: st = { off, caps: { "<provider>": { cap, current } }, fails: { "<twin>": { calls, errors } } }. Returns the switch
+// { from, to, reason } or null (serve the requested model).
+function fleetSteerDecide(st, modelId, caller, stream, pin) {
+  var to = FLEET_STEER_TWINS[String(modelId)];
+  if (!to || stream || pin || !st || st.off) return null;
+  if (FLEET_STEER_EXEMPT[String(caller || "")]) return null;
+  var c = st.caps && st.caps["workers-ai"];
+  if (!c || !(Number(c.cap) > 0) || !(Number(c.current) > Number(c.cap))) return null;
+  var f = st.fails && st.fails[to] || null;
+  if (f && Number(f.calls) >= FLEET_STEER_REVERT_MIN_CALLS && Number(f.errors) / Number(f.calls) >= FLEET_STEER_REVERT_FAIL_SHARE) return null;
+  return { from: String(modelId), to: to, reason: "fleet ai_spend:workers-ai run rate " + Number(c.current).toFixed(2) + " > cap " + Number(c.cap) };
+}
+// Pure: the fleet cap a paid upstream would run over, or "". provider is this router's ledger provider: "deepseek" (direct
+// key, BYOK) or "gateway" (compat; the model's prefix names the provider, and unified billing also meters ai_spend:total).
+function fleetPaidCapHit(st, provider, model) {
+  if (!st || st.off || !st.caps) return "";
+  var keys = provider === "gateway" ? [String(model || "").split("/")[0].toLowerCase(), "total"] : [String(provider || "").toLowerCase()];
+  for (var i = 0; i < keys.length; i++) {
+    var c = keys[i] ? st.caps[keys[i]] : null;
+    if (c && Number(c.cap) > 0 && Number(c.current) > Number(c.cap)) return "ai_spend:" + keys[i] + " run rate " + Number(c.current).toFixed(2) + " > cap " + Number(c.cap);
+  }
+  return "";
+}
+// Pure: did a non-stream Workers AI result carry an answer (text or tool calls)?
+function fleetSteerAnswered(res, depth) {
+  depth = depth || 0;
+  if (typeof res === "string") return res.replace(/<think>[\s\S]*?<\/think>/g, "").trim().length > 0;
+  if (!res || typeof res !== "object" || depth > 3) return false;
+  if (typeof res.response === "string" && res.response.replace(/<think>[\s\S]*?<\/think>/g, "").trim()) return true;
+  if (res.response && typeof res.response === "object") return true;
+  if (Array.isArray(res.tool_calls) && res.tool_calls.length) return true;
+  var ch = Array.isArray(res.choices) ? res.choices[0] : null, m = ch && ch.message;
+  if (m && typeof m.content === "string" && m.content.replace(/<think>[\s\S]*?<\/think>/g, "").trim()) return true;
+  if (m && Array.isArray(m.tool_calls) && m.tool_calls.length) return true;
+  if (ch && typeof ch.text === "string" && ch.text.trim()) return true;
+  if (res.result && typeof res.result === "object") return fleetSteerAnswered(res.result, depth + 1);
+  return false;
+}
+// The switch, the fleet caps and today's steer outcomes, read at most every FLEET_STEER_TTL_MS per isolate. A read failure
+// steers nothing (the requested model is served) and is logged.
+async function fleetSteerLoad(env) {
+  var now = Date.now(), day = fleetSteerDay();
+  if (__fleetSteer.st && __fleetSteer.st.day === day && now - __fleetSteer.at < FLEET_STEER_TTL_MS) return __fleetSteer.st;
+  var st = { day: day, off: false, caps: {}, fails: {}, err: null };
+  var db = env && env.QNFO_AUDIT;
+  if (!db) st.err = "no QNFO_AUDIT binding";
+  else {
+    try {
+      var sw = await db.prepare("SELECT value FROM ops_config WHERE key = ?1").bind(FLEET_STEER_SWITCH).first();
+      st.off = !!sw && String(sw.value == null ? "" : sw.value).trim().toLowerCase() === "off";
+      var fb = await db.prepare("SELECT node_class, cap, current FROM fleet_budget WHERE node_class LIKE 'ai_spend:%'").all();
+      (fb && fb.results || []).forEach(function (r) { st.caps[String(r.node_class).slice("ai_spend:".length)] = { cap: Number(r.cap), current: Number(r.current) }; });
+      var fr = await db.prepare("SELECT model, calls, errors FROM ai_call_counters WHERE day = ?1 AND worker = 'qnfo-ai' AND purpose = ?2").bind(day, FLEET_STEER_PURPOSE).all();
+      (fr && fr.results || []).forEach(function (r) { st.fails[String(r.model)] = { calls: Number(r.calls) || 0, errors: Number(r.errors) || 0 }; });
+    } catch (e) {
+      st.caps = {};
+      st.err = String(e && e.message || e).slice(0, 160);
+      console.error(JSON.stringify({ event: "fleet-cap-steer-load-failed", error: st.err, v: VERSION }));
+    }
+  }
+  __fleetSteer = { at: now, st: st };
+  return st;
+}
+// One outcome per steered call: calls + 1, errors + 1 on a failed twin. neurons stay 0 (the call itself is priced where it ran).
+function fleetSteerCount(env, twin, ok) {
+  var st = __fleetSteer.st;
+  if (st) {
+    var f = st.fails[twin] || (st.fails[twin] = { calls: 0, errors: 0 });
+    f.calls++;
+    if (!ok) f.errors++;
+  }
+  var db = env && env.QNFO_AUDIT;
+  if (!db) return;
+  var w = db.prepare("INSERT INTO ai_call_counters (day, worker, purpose, model, calls, errors) VALUES (?1, 'qnfo-ai', ?2, ?3, 1, ?4) ON CONFLICT(day, worker, purpose, model) DO UPDATE SET calls = calls + 1, errors = errors + excluded.errors")
+    .bind(fleetSteerDay(), FLEET_STEER_PURPOSE, String(twin), ok ? 0 : 1).run()
+    .catch(function (e) { console.error(JSON.stringify({ event: "fleet-cap-steer-count-failed", error: String(e && e.message || e).slice(0, 160) })); });
+  if (env.__spendCtx && typeof env.__spendCtx.waitUntil === "function") env.__spendCtx.waitUntil(w);
+}
+// runCore(modelId) runs one Workers AI call. With a switch: the twin first, the requested model when the twin throws or
+// answers empty; the twin's spend lands in the ledgers under its own id.
+async function fleetSteerRun(env, modelId, stream, runCore) {
+  var d = null;
+  if (FLEET_STEER_TWINS[String(modelId)] && !stream) {
+    try {
+      d = fleetSteerDecide(await fleetSteerLoad(env), modelId, env && env.__spendCaller, stream, !!(env && env.__pinModel));
+    } catch (e) {
+      console.error(JSON.stringify({ event: "fleet-cap-steer-decide-failed", error: String(e && e.message || e).slice(0, 160) }));
+      d = null;
+    }
+  }
+  if (!d) return runCore(modelId);
+  if (env && Array.isArray(env.__fleetSteers) && env.__fleetSteers.length < 8) env.__fleetSteers.push({ from: d.from, to: d.to, reason: d.reason });
+  var why = "";
+  try {
+    var res = await runCore(d.to);
+    if (fleetSteerAnswered(res)) {
+      fleetSteerCount(env, d.to, true);
+      return res;
+    }
+    why = "empty reply";
+  } catch (e) {
+    why = String(e && e.message || e).slice(0, 160);
+  }
+  fleetSteerCount(env, d.to, false);
+  console.warn(JSON.stringify({ event: "fleet-cap-steer-fallback", from: d.from, to: d.to, caller: String(env && env.__spendCaller || "public"), why: why }));
+  if (env && Array.isArray(env.__fleetSteers) && env.__fleetSteers.length < 8) env.__fleetSteers.push({ from: d.to, to: d.from, reason: "fallback: " + why });
+  return runCore(d.from);
+}
+// ---- FLEET-CAP-STEER-END ----
 async function runWorkersAI(env, modelId, messages, maxTokens, stream, opts = {}) {
+  // FLEET-CAP-STEER-1: every Workers AI call of this router (single turns, ensemble legs, fallbacks) passes the fleet cap.
+  return fleetSteerRun(env, modelId, !!stream, (m) => runWorkersAICore(env, m, messages, maxTokens, stream, opts));
+}
+async function runWorkersAICore(env, modelId, messages, maxTokens, stream, opts = {}) {
   const { temperature, top_p, tools, vision, tool_choice, reasoning_effort } = opts;
   modelId = await spendGovernWA(env, modelId);
   // REASONING-BUDGET-1: a small answer asks a verified model for low reasoning effort, so reasoning cannot eat max_tokens.
@@ -2490,6 +2633,8 @@ async function handleChatCore(env, body, authHeader, ctx, ua, acc) {
   // OK"); each probe carried the full research system prompt (about 2k tokens), the calendar block and, for question
   // probes, web/RAG context. Liveness probes get a one-line system prompt and no enrichment.
   const _leanProbe = env.__spendCaller === "qnfo-ai-calibration";
+  // FLEET-CAP-STEER-1: pin_model: true asks for the named model even while the fleet cap steers premium models.
+  if (body && (body.pin_model === true || body.pin_model === "true")) env = Object.assign({}, env, { __pinModel: true });
   let _govInfo = null;
   const clientToolChoice = tool_choice;
   const _firstUser = Array.isArray(rawMessages) ? rawMessages.find((m) => m && m.role === "user") : null;
@@ -2649,6 +2794,7 @@ async function handleChatCore(env, body, authHeader, ctx, ua, acc) {
     ...(_servedBy ? { served_by: _servedBy } : {}),
     ...(_hedgeInfo ? { hedge: _hedgeInfo } : {}),
     ...(_budgetInfo ? { budget_ms: _budgetInfo } : {}),
+    ...(Array.isArray(env.__fleetSteers) && env.__fleetSteers.length ? { fleet_cap_steer: env.__fleetSteers.slice(0, 8) } : {}),
     ...extra
   }), "mkRouter");
   const reqModel = body.model;
@@ -3774,7 +3920,8 @@ var worker_default = {
     env = __aiAttrEnv(env, "qnfo-ai", "AI", "QNFO_AUDIT");
     if (new URL(request.url).pathname === "/robots.txt") return new Response("User-agent: *\nDisallow: /\n", { headers: { "Content-Type": "text/plain; charset=utf-8", "Cache-Control": "public, max-age=86400" } }); // SEO-HYGIENE-1: a private tool / private reading surface, kept out of search engines
     // SPEND-GOVERNOR-1: request-scoped caller identity for the spend ledger (a fresh copy, so env is never mutated).
-    env = Object.assign({}, env, { __spendCaller: spendCallerOf(ctx, request.headers.get("User-Agent") || ""), __spendCtx: ctx });
+    // FLEET-CAP-STEER-1: __fleetSteers collects this request's model switches for _router.fleet_cap_steer.
+    env = Object.assign({}, env, { __spendCaller: spendCallerOf(ctx, request.headers.get("User-Agent") || ""), __spendCtx: ctx, __fleetSteers: [] });
     const url = new URL(request.url);
     const path = url.pathname;
     const method = request.method;
@@ -3815,7 +3962,9 @@ var worker_default = {
           router_30d_usd: __spendState.at ? Math.round(spendSum(spendBy(env)) * 1e4) / 1e4 : null,
           caps_usd: spendCaps(env),
           soft_fraction: spendSoft(env),
-          account_unified_30d_usd: __spendState.account && !__spendState.account.error ? Math.round((__spendState.account.gateway_usd + __spendState.account.workers_ai_usd + (Number(__spendState.by.deepseek) || 0)) * 100) / 100 : null
+          account_unified_30d_usd: __spendState.account && !__spendState.account.error ? Math.round((__spendState.account.gateway_usd + __spendState.account.workers_ai_usd + (Number(__spendState.by.deepseek) || 0)) * 100) / 100 : null,
+          // FLEET-CAP-STEER-1: this isolate's cached fleet-cap state (no D1 read on /health; null before the first routed call).
+          fleet_cap_steer: { twins: FLEET_STEER_TWINS, switch_key: FLEET_STEER_SWITCH, state: __fleetSteer.st ? { day: __fleetSteer.st.day, off: __fleetSteer.st.off, workers_ai: __fleetSteer.st.caps["workers-ai"] || null, steering: !__fleetSteer.st.off && !!fleetSteerDecide(__fleetSteer.st, "@cf/zai-org/glm-5.3", "public", false, false), today: __fleetSteer.st.fails, error: __fleetSteer.st.err } : null }
         }
       });
     }
