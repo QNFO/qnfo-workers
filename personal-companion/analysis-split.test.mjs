@@ -53,6 +53,22 @@ const gen = src.slice(src.indexOf("// FINAL-READ-1 (1.22.4"), src.indexOf("best 
 ok(/if \(pieceText\(finalPiece\) !== pieceText\(piece\)\) \{/.test(gen) && /var qf = await critiquePiece\(env, finalPiece, form, ground\);/.test(gen), "FINAL-READ-1: a text changed after the critic's last read is read again");
 ok(/if \(!qf\) \{[\s\S]{0,200}continue;/.test(gen) && /if \(sfin\.missing \|\| sfin\.worst < floorForForm\) \{[\s\S]{0,500}continue;/.test(gen), "the final read fails closed: no reader or a score below the floor rejects the attempt");
 ok(/q = qf;/.test(gen) && gen.indexOf("q = qf;") < gen.length, "the stored scores are the final read's");
+{
+  const lede = "Polish immigration to the coalfield is the subject. The source reports the arrival of miners in the 1920s and their recruitment by the mining companies of the region, with numbers that grew each year.";
+  const facts = ("The companies recruited workers in Westphalia and housed them in company towns near the pits, according to the source. ").repeat(3);
+  const reasoning = "The incentive is that a company which houses its workers also controls when they can leave, so the cost of a strike falls on the family as well as the miner.";
+  const unmarked = lede + "\n\n" + facts + "\n\n" + facts + "\n\n" + reasoning + "\n\n" + reasoning;
+  const am = V.autoMarkAnalysis(unmarked);
+  ok(am.indexOf(V.ANALYSIS_MARK) > 0 && am.indexOf(V.ANALYSIS_MARK) < am.indexOf("The incentive is") && V.analysisSplitOk(am), "ANALYSIS-AUTO-1: an unmarked draft gets the line before its first reasoning paragraph", am.slice(0, 80));
+  ok(V.autoMarkAnalysis(marked) === marked, "a draft the writer marked is left as it is");
+  const tooEarly = "Short lede because of reasons.\n\nThe incentive is everything.\n\nThe system rewards it.";
+  ok(V.autoMarkAnalysis(tooEarly) === tooEarly, "no line is placed where the guard rails would not hold");
+  ok(V.autoMarkAnalysis(lede + "\n\n" + facts + "\n\n" + facts) === lede + "\n\n" + facts + "\n\n" + facts, "a draft without reasoning language is left unmarked");
+  const p0 = { title: "T", body_md: unmarked };
+  ok(V.withAutoMark(p0) !== p0 && V.withAutoMark({ title: "T", body_md: lede }).body_md === lede, "withAutoMark returns a new piece only when it placed a line");
+  const gl = src.slice(src.indexOf("var split = splitLongLede(piece);"), src.indexOf("var v = validatePiece(piece, form, ground, vopts);"));
+  ok(/piece = withAutoMark\(piece\);/.test(gl) && /var rp = rev && rev\.piece \? withAutoMark\(splitLongLede\(rev\.piece\)\) : null;/.test(src), "fresh drafts and revisions are auto-marked before the gate");
+}
 const vmx = /var VERSION = "(\d+)\.(\d+)\.(\d+)/.exec(src);
 ok(vmx && (+vmx[1] > 1 || (+vmx[1] === 1 && +vmx[2] >= 22)), "VERSION is at least 1.22.0", vmx && vmx[0]);
 console.log(pass + " passed, " + fail + " failed");
