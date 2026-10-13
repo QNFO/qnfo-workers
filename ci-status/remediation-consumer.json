@@ -1,22 +1,22 @@
 {
  "ok": true,
  "marker": "REMEDIATION-CONSUMER-1",
- "verifier": "remediation-consumer@95514da5abbb",
- "due": 289,
- "pass": 133,
- "fail": 153,
+ "verifier": "remediation-consumer@2fc6b1b784ca",
+ "due": 299,
+ "pass": 140,
+ "fail": 156,
  "skipped": 3,
  "contracts": [
   {
-   "class": "issue-2218",
-   "issue_id": 2218,
-   "verdict": "fail",
-   "expected": "1",
-   "observed": "0",
+   "class": "plane-living-paper-fresh",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
    "written": true
   },
   {
-   "class": "fm-code-refusal-not-repaired",
+   "class": "fm-code-review-noise-defect",
    "issue_id": null,
    "verdict": "pass",
    "expected": "0",
@@ -24,7 +24,39 @@
    "written": true
   },
   {
-   "class": "fm-code-multi-file-refused",
+   "class": "fm-code-publish-waits-for-push",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "0",
+   "observed": "0",
+   "written": true
+  },
+  {
+   "class": "EVID-GATE-A2-PUBLISHV2",
+   "issue_id": null,
+   "verdict": "fail",
+   "expected": "assert-ok",
+   "observed": "pending: no publish-v2-metadata event since 2026-10-01 15:17",
+   "written": true
+  },
+  {
+   "class": "issue-2468",
+   "issue_id": 2468,
+   "verdict": "fail",
+   "expected": "ok",
+   "observed": "present-marker",
+   "written": true
+  },
+  {
+   "class": "issue-2309",
+   "issue_id": 2309,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "fm-code-refusal-not-repaired",
    "issue_id": null,
    "verdict": "pass",
    "expected": "0",
@@ -37,6 +69,22 @@
    "verdict": "pass",
    "expected": "1",
    "observed": "1",
+   "written": true
+  },
+  {
+   "class": "issue-2218",
+   "issue_id": 2218,
+   "verdict": "fail",
+   "expected": "1",
+   "observed": "0",
+   "written": true
+  },
+  {
+   "class": "fm-code-multi-file-refused",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "0",
+   "observed": "0",
    "written": true
   },
   {
@@ -64,6 +112,14 @@
    "written": true
   },
   {
+   "class": "issue-2454",
+   "issue_id": 2454,
+   "verdict": "vacuous-probe-result",
+   "expected": "closed",
+   "observed": null,
+   "reason": "probe returned no expected/observed pair"
+  },
+  {
    "class": "fm-lane-null-first-read-nudge",
    "issue_id": null,
    "verdict": "pass",
@@ -78,14 +134,6 @@
    "expected": "0",
    "observed": "0",
    "written": true
-  },
-  {
-   "class": "issue-2454",
-   "issue_id": 2454,
-   "verdict": "vacuous-probe-result",
-   "expected": "closed",
-   "observed": null,
-   "reason": "probe returned no expected/observed pair"
   },
   {
    "class": "issue-2455",
@@ -156,7 +204,7 @@
    "issue_id": 2111,
    "verdict": "fail",
    "expected": "ok",
-   "observed": "pending: 44 SEARCH-not-found failures in 7 days (target <= 3)",
+   "observed": "pending: 45 SEARCH-not-found failures in 7 days (target <= 3)",
    "written": true
   },
   {
@@ -165,22 +213,6 @@
    "verdict": "fail",
    "expected": "1",
    "observed": "0",
-   "written": true
-  },
-  {
-   "class": "belief-no-untested-control-on-critical-path",
-   "issue_id": null,
-   "verdict": "fail",
-   "expected": "1",
-   "observed": "0",
-   "written": true
-  },
-  {
-   "class": "fm-trigger-depth",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "1",
-   "observed": "1",
    "written": true
   },
   {
@@ -200,7 +232,15 @@
    "written": true
   },
   {
-   "class": "fm-stale-hold",
+   "class": "belief-no-untested-control-on-critical-path",
+   "issue_id": null,
+   "verdict": "fail",
+   "expected": "1",
+   "observed": "0",
+   "written": true
+  },
+  {
+   "class": "fm-trigger-depth",
    "issue_id": null,
    "verdict": "pass",
    "expected": "1",
@@ -209,6 +249,14 @@
   },
   {
    "class": "fm-owner-card-misroute",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "1",
+   "observed": "1",
+   "written": true
+  },
+  {
+   "class": "fm-stale-hold",
    "issue_id": null,
    "verdict": "pass",
    "expected": "1",
@@ -240,14 +288,6 @@
    "written": true
   },
   {
-   "class": "issue-2288",
-   "issue_id": 2288,
-   "verdict": "fail",
-   "expected": "1",
-   "observed": "0",
-   "written": true
-  },
-  {
    "class": "issue-1780",
    "issue_id": 1780,
    "verdict": "fail",
@@ -256,15 +296,15 @@
    "written": true
   },
   {
-   "class": "fm-issue-deletion",
-   "issue_id": null,
-   "verdict": "pass",
+   "class": "issue-2288",
+   "issue_id": 2288,
+   "verdict": "fail",
    "expected": "1",
-   "observed": "1",
+   "observed": "0",
    "written": true
   },
   {
-   "class": "fm-closure-without-disposition",
+   "class": "fm-issue-deletion",
    "issue_id": null,
    "verdict": "pass",
    "expected": "1",
@@ -285,6 +325,14 @@
    "verdict": "fail",
    "expected": "ok",
    "observed": "panel-votes-unmeasured",
+   "written": true
+  },
+  {
+   "class": "fm-closure-without-disposition",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "1",
+   "observed": "1",
    "written": true
   },
   {
@@ -344,14 +392,6 @@
    "written": true
   },
   {
-   "class": "issue-2256",
-   "issue_id": 2256,
-   "verdict": "fail",
-   "expected": "1",
-   "observed": "0",
-   "written": true
-  },
-  {
    "class": "issue-1798",
    "issue_id": 1798,
    "verdict": "fail",
@@ -360,59 +400,16 @@
    "written": true
   },
   {
+   "class": "issue-2256",
+   "issue_id": 2256,
+   "verdict": "fail",
+   "expected": "1",
+   "observed": "0",
+   "written": true
+  },
+  {
    "class": "issue-2226",
    "issue_id": 2226,
    "verdict": "fail",
    "expected": "1",
-   "observed": "0",
-   "written": true
-  },
-  {
-   "class": "issue-2264",
-   "issue_id": 2264,
-   "verdict": "fail",
-   "expected": "ok",
-   "observed": "mislabelled: binding:ground calls on the last complete day",
-   "written": true
-  },
-  {
-   "class": "issue-2284",
-   "issue_id": 2284,
-   "verdict": "fail",
-   "expected": "1",
-   "observed": "0",
-   "written": true
-  },
-  {
-   "class": "fm-code-task-dies-at-ci",
-   "issue_id": null,
-   "verdict": "fail",
-   "expected": "0",
-   "observed": "1",
-   "written": true
-  },
-  {
-   "class": "fm-observability-config-inert",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "0",
-   "observed": "0",
-   "written": true
-  },
-  {
-   "class": "issue-2340",
-   "issue_id": 2340,
-   "verdict": "fail",
-   "expected": "0",
-   "observed": "5",
-   "written": true
-  },
-  {
-   "class": "fm-workers-standards-debt-unmeasured",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "1",
-   "observed": "1",
-   "written": true
-  },
- 
+   "observed"
