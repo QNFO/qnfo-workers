@@ -1,4 +1,4 @@
-var VERSION="3.18.1-render-defects"; /* 3.18.1 RENDER-DEFECTS-2300 (2026-10-13, pillar reach, agent_issues 2300 2158 2357): PANDOC-FENCE-GLUE-1 reads a code fence glued to prose or to its last code line as a fence (ultrametric-intelligence printed its Python as prose and typeset its identifiers); MATH-RESIDUE-5 typesets a formula glued to a name by a product sign; RAIL-MATH-1 gives /api/paper-context title_tex and excerpt_tex (formulas kept as TeX, plain-text math typeset, currency escaped) and the Related and Versions panels paint them, since every residue the browser sample counted on chapter-1 and log20240505010101strangeloopbook on 2026-10-12 was panel text; a formula ending in an escaped brace is lifted as math; MathJax knows the Sha macro. 3.18.0 ACTIVITYPUB-KEY-1 (2026-10-12, pillar reach, #2249 #2413): the actor publishes publicKeyPem when AP_PUBLIC_KEY is set (cf-ops gen-activitypub-key); merged with main 3.17.1 (REACH-RENDER-1). */
+var VERSION="3.18.2-page-policy"; /* 3.18.2 PAGE-POLICY-1 (2026-10-13, pillar reach, agent_issues 2343 WEB-PERF-EDGE-1): every HTML response carries Referrer-Policy strict-origin-when-cross-origin (no-referrer when the query carries a token) and Permissions-Policy camera=(), microphone=(), geolocation=() from the worker (qnfo.org had neither; the subdomains had them only from a zone rule), and an HTML response without Cache-Control gets public, max-age=300, s-maxage=3600, stale-while-revalidate=86400 when it is a public GET 200, no-store otherwise; handlers that set their own are unchanged, JSON untouched. 3.18.1 RENDER-DEFECTS-2300 (2026-10-13, pillar reach, agent_issues 2300 2158 2357): PANDOC-FENCE-GLUE-1 reads a code fence glued to prose or to its last code line as a fence (ultrametric-intelligence printed its Python as prose and typeset its identifiers); MATH-RESIDUE-5 typesets a formula glued to a name by a product sign; RAIL-MATH-1 gives /api/paper-context title_tex and excerpt_tex (formulas kept as TeX, plain-text math typeset, currency escaped) and the Related and Versions panels paint them, since every residue the browser sample counted on chapter-1 and log20240505010101strangeloopbook on 2026-10-12 was panel text; a formula ending in an escaped brace is lifted as math; MathJax knows the Sha macro. 3.18.0 ACTIVITYPUB-KEY-1 (2026-10-12, pillar reach, #2249 #2413): the actor publishes publicKeyPem when AP_PUBLIC_KEY is set (cf-ops gen-activitypub-key); merged with main 3.17.1 (REACH-RENDER-1). */
 // UTM-CLICK-LEDGER-1 (3.10.0, 2026-10-06, transformation lever T7.9, pillar reach): a GET for an HTML page that carries
 // utm_source is counted into qnfo-graph utm_clicks (day, host, path, source, medium, campaign, bot/human, country; no cookie,
 // no IP), so a post or digest joins to the visits it caused; qnfo-fleet-dashboard reads it into reach_signals source utm.
@@ -4262,6 +4262,46 @@ async function utmRecord(env, row) {
   return true;
 }
 // ---- UTM-CLICK-LEDGER-1:END ----
+// ---- PAGE-POLICY-1:BEGIN ----
+// PAGE-POLICY-1 (3.18.2, 2026-10-13, pillar reach, agent_issues 2343 WEB-PERF-EDGE-1): a 2026-10-12 header audit found no
+// Referrer-Policy or Permissions-Policy on the gateway's pages. Re-measured 2026-10-13 (curl, 3 or more samples per URL):
+// papers, legal and archive.qnfo.org get both from a zone rule outside this repository, and qnfo.org itself gets neither.
+// Every HTML response the gateway serves now carries both from the worker, on every host, so they no longer depend on a
+// zone rule: Referrer-Policy strict-origin-when-cross-origin (no-referrer on a page whose query carries a token) and
+// Permissions-Policy camera=(), microphone=(), geolocation=(). No gateway page, the injected ctl.js or Zaraz uses those
+// APIs; the zone rule sends the same three directives, so the two never disagree. interest-cohort is left out because
+// browsers no longer recognise it and Chrome reports it in the console on every page. A header the handler set is kept.
+// An HTML response without Cache-Control gets one: public, max-age=300, s-maxage=3600, stale-while-revalidate=86400 for a
+// GET or HEAD 200 with no token in its query, no Set-Cookie and a path outside the API, audit, write, ActivityPub and
+// subscription routes; no-store otherwise. Every handler sets its own Cache-Control today, so this is the default for the
+// next page, not a change to current ones. JSON and other non-HTML responses pass through untouched.
+// page-policy.test.mjs locks it. Revert by deploying the previous version.
+var PP_REFERRER = "strict-origin-when-cross-origin";
+var PP_PERMISSIONS = "camera=(), microphone=(), geolocation=()";
+var PP_PUBLIC_CACHE = "public, max-age=300, s-maxage=3600, stale-while-revalidate=86400";
+var PP_TOKEN_QUERY = /(?:^|&)(?:t|token|key|code|sig|signature|auth|email)=/i;
+var PP_PRIVATE_PATH = /^\/(?:api\/|_audit\/|ap\/|\.well-known\/|query$|sync$|subscribe|unsubscribe|confirm)/;
+function withPagePolicy(res, request) {
+  try {
+    var ct = res && res.headers && res.headers.get("Content-Type") || "";
+    if (!res || !request || ct.toLowerCase().indexOf("text/html") !== 0) return res;
+    var u = new URL(request.url);
+    var token = PP_TOKEN_QUERY.test(u.search.slice(1));
+    var r = new Response(res.body, res);
+    if (!r.headers.has("Referrer-Policy")) r.headers.set("Referrer-Policy", token ? "no-referrer" : PP_REFERRER);
+    if (!r.headers.has("Permissions-Policy")) r.headers.set("Permissions-Policy", PP_PERMISSIONS);
+    if (!r.headers.has("Cache-Control")) {
+      var m = String(request.method || "GET").toUpperCase();
+      var p = u.pathname.replace(/\/+$/, "") || "/";
+      var pub = (m === "GET" || m === "HEAD") && r.status === 200 && !token && !r.headers.has("Set-Cookie") && !PP_PRIVATE_PATH.test(p);
+      r.headers.set("Cache-Control", pub ? PP_PUBLIC_CACHE : "no-store");
+    }
+    return r;
+  } catch (e) {
+    return res;
+  }
+}
+// ---- PAGE-POLICY-1:END ----
 var gateway_worker_default = {
   async fetch(request, env, ctx) {
     // HEAD too: some link-preview crawlers check the image with HEAD before fetching it (REACH-LAYER-1 3.8.7).
@@ -4269,7 +4309,8 @@ var gateway_worker_default = {
       var ogr = reachOgImage();
       return request.method === "HEAD" ? new Response(null, { status: 200, headers: ogr.headers }) : ogr;
     }
-    const served = await gateway_worker_default.serve(request, env, ctx);
+    // PAGE-POLICY-1 (3.18.2): policy headers and the Cache-Control default; the reach layer and fleet ctl below keep headers.
+    const served = withPagePolicy(await gateway_worker_default.serve(request, env, ctx), request);
     // UTM-CLICK-LEDGER-1: count a tagged page load after the answer is built; never delays or changes the response.
     const utmRow = utmClickRow(request, served);
     if (utmRow && ctx && typeof ctx.waitUntil === "function") ctx.waitUntil(utmRecord(env, utmRow).catch(function() {}));
