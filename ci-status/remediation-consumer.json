@@ -1,30 +1,62 @@
 {
  "ok": true,
  "marker": "REMEDIATION-CONSUMER-1",
- "verifier": "remediation-consumer@d2f553bad646",
- "due": 23,
- "pass": 22,
- "fail": 1,
+ "verifier": "remediation-consumer@636d66f2d51d",
+ "due": 8,
+ "pass": 5,
+ "fail": 3,
  "skipped": 0,
  "contracts": [
   {
-   "class": "fm-collector-without-credential",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "1",
-   "observed": "1",
-   "written": true
-  },
-  {
-   "class": "issue-2481",
-   "issue_id": 2481,
+   "class": "issue-2130",
+   "issue_id": 2130,
    "verdict": "fail",
    "expected": "ok",
-   "observed": "missing-marker:qnfo-social/worker.js",
+   "observed": "pending: host census: 59 hosts, 8 broken at 2026-10-13T03:40:49Z (cloud_ops_events host-census-2026-10-13)",
    "written": true
   },
   {
-   "class": "rt-page-qnfo-home",
+   "class": "issue-2272",
+   "issue_id": 2272,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "issue-2346",
+   "issue_id": 2346,
+   "verdict": "fail",
+   "expected": "ok",
+   "observed": "pending: the newest workers best-practice audit reads 5 fail and 534 advisory findings at 2026-10-13T07:21:30Z (target 0)",
+   "written": true
+  },
+  {
+   "class": "issue-2366",
+   "issue_id": 2366,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "issue-2409",
+   "issue_id": 2409,
+   "verdict": "fail",
+   "expected": "ok",
+   "observed": "missing-marker:idea-hub/worker.js",
+   "written": true
+  },
+  {
+   "class": "issue-2419",
+   "issue_id": 2419,
+   "verdict": "pass",
+   "expected": "8",
+   "observed": "8",
+   "written": true
+  },
+  {
+   "class": "fm-honeypot-named-for-autofill",
    "issue_id": null,
    "verdict": "pass",
    "expected": "ok",
@@ -32,159 +64,7 @@
    "written": true
   },
   {
-   "class": "rt-page-subscribe",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "ok",
-   "observed": "ok",
-   "written": true
-  },
-  {
-   "class": "rt-page-work-with-me",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "ok",
-   "observed": "ok",
-   "written": true
-  },
-  {
-   "class": "rt-page-qnfo-sitemap",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "ok",
-   "observed": "ok",
-   "written": true
-  },
-  {
-   "class": "rt-page-papers-index",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "ok",
-   "observed": "ok",
-   "written": true
-  },
-  {
-   "class": "rt-page-paper-scholar-tags",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "ok",
-   "observed": "ok",
-   "written": true
-  },
-  {
-   "class": "rt-page-papers-sitemap",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "ok",
-   "observed": "ok",
-   "written": true
-  },
-  {
-   "class": "rt-page-papers-feed",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "ok",
-   "observed": "ok",
-   "written": true
-  },
-  {
-   "class": "rt-page-render-health",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "ok",
-   "observed": "ok",
-   "written": true
-  },
-  {
-   "class": "rt-page-fleet-queue",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "ok",
-   "observed": "ok",
-   "written": true
-  },
-  {
-   "class": "rt-page-fleet-kpi",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "ok",
-   "observed": "ok",
-   "written": true
-  },
-  {
-   "class": "rt-page-fleet-api-kpi",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "ok",
-   "observed": "ok",
-   "written": true
-  },
-  {
-   "class": "rt-page-ask",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "ok",
-   "observed": "ok",
-   "written": true
-  },
-  {
-   "class": "rt-page-qwav-home",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "ok",
-   "observed": "ok",
-   "written": true
-  },
-  {
-   "class": "rt-page-fleet-changelog",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "ok",
-   "observed": "ok",
-   "written": true
-  },
-  {
-   "class": "rt-page-ask-robots",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "ok",
-   "observed": "ok",
-   "written": true
-  },
-  {
-   "class": "rt-page-reading-feed",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "ok",
-   "observed": "ok",
-   "written": true
-  },
-  {
-   "class": "rt-page-q08-feed",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "ok",
-   "observed": "ok",
-   "written": true
-  },
-  {
-   "class": "rt-page-ideas",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "ok",
-   "observed": "ok",
-   "written": true
-  },
-  {
-   "class": "rt-page-reading",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "ok",
-   "observed": "ok",
-   "written": true
-  },
-  {
-   "class": "rt-page-graph-api",
+   "class": "fm-math-delim-pairing-shift",
    "issue_id": null,
    "verdict": "pass",
    "expected": "ok",
@@ -215,21 +95,20 @@
   "http",
   "runner-https"
  ],
- "https": 21,
  "budget_exhausted": false,
- "runtime_verified_share_24h": 9.3,
+ "runtime_verified_share_24h": 9.4,
  "host_census": {
   "skipped": "ran within 6h"
  },
  "migrations": {
-  "opted_in": 146,
+  "opted_in": 147,
   "unapplied": [],
   "applied_now": [],
   "failed": [],
   "metric": 0
  },
- "spent_ms": 18886,
- "head": "d2f553bad64617aa7066d3e7e7f0748a6c50fc02",
+ "spent_ms": 10809,
+ "head": "636d66f2d51d9a8b8d5fa930e7289d9cdc489bd0",
  "job_status": "success",
- "ts": "2026-10-13T07:15:35Z"
+ "ts": "2026-10-13T07:29:30Z"
 }
