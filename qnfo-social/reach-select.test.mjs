@@ -70,7 +70,7 @@ const AI = { async run(model, input) {
   const c = input.messages[0].content;
   calls.push(c);
   if (/^Given a paper/.test(c)) return { response: checkerReply };
-  return { response: ["A hook about energy per answer.", "The claim in plain words.", "Why it matters.", "How to check it.", "By Rowan Brad Quni-Gudzinas: What do you think?"].join("\n") };
+  return { response: ["A paper by Rowan Brad Quni-Gudzinas on energy per answer.", "The claim in plain words.", "Why it matters.", "How to check it.", "By Rowan Brad Quni-Gudzinas: What do you think?"].join("\n") };
 } };
 let fetched = 0;
 globalThis.fetch = async () => { fetched++; return new Response("nope", { status: 404 }); };
