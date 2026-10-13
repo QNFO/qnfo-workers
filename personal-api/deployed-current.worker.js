@@ -106,7 +106,7 @@ function clampMaxTokens(requested, isReason) {
 __name(clampMaxTokens, "clampMaxTokens");
 __name2(clampMaxTokens, "clampMaxTokens");
 __name22(clampMaxTokens, "clampMaxTokens");
-var VERSION = "4.9.0-cron-heartbeat"; // 4.9.0 CRON-ONLY-HEARTBEAT-1 (agent_issues 2397): the scheduled run upserts its qnfo-audit fleet_heartbeat row when it finishes. // 4.8.6 CRYPTO-IDS-1: the 18 row ids and the feed fallback id come from crypto.getRandomValues (rhex), not Math.random; same id shapes. // 4.8.5 // 4.8.5-doi-scrub NOZ-DOI-1: the separation prompt names no external registry. 4.8.4 below.
+var VERSION = "4.9.1-log-catches"; // 4.9.0 CRON-ONLY-HEARTBEAT-1 (agent_issues 2397): the scheduled run upserts its qnfo-audit fleet_heartbeat row when it finishes. // 4.8.6 CRYPTO-IDS-1: the 18 row ids and the feed fallback id come from crypto.getRandomValues (rhex), not Math.random; same id shapes. // 4.8.5 // 4.8.5-doi-scrub NOZ-DOI-1: the separation prompt names no external registry. 4.8.4 below.
 // CRYPTO-IDS-1 (WORKERS-BEST-PRACTICES-1): row ids and nonces come from crypto.getRandomValues, never Math.random. rhex(n) returns n lowercase hex characters (same shape as the old Math.random().toString(16).slice(2, 2 + n)).
 function rhex(n) { var b = new Uint8Array(Math.ceil(n / 2)); crypto.getRandomValues(b); var h = ""; for (var i = 0; i < b.length; i++) h += (b[i] + 256).toString(16).slice(1); return h.slice(0, n); }
 // 4.8.4 NO-TOPIC-HARDCODE-1 (owner directive 2026-10-10): the twin, planner and predictor prompts no longer carry the owner's profile gates as hard-coded text; they apply only the gates found in the retrieved profile facets. //4.8.2 LEDGER-PAGE-1 (#1951): the Ledger sync drains calendar-api /feedback by after_id in pages of 500 (max 10 pages per run, id cursor feedback_after_id) so rows beyond the newest 500 are no longer skipped; AWAY-AMS-1 (#1883): inside an away window the brief keeps Google/ICS and manual calendar events whose location is in the Amsterdam area and hides only radar/twin suggestions and catalog rows. // 4.8.0 TWIN-FLASH-1 (owner directive 2026-10-05, #1818): twin primary model glm-5.3-flash (reasoning_effort low), deepseek-v4-pro per-request fallback, automatic revert when today's flash failure share >= 20% over >= 10 calls; 4.7.2 WORKERS-AI-ATTRIBUTION-1 for personal-api (#1833): every env.AI.run (embeddings, OCR/vision, chat, Durable Object chat) is counted in qnfo-audit.ai_call_counters (purpose binding: calls, tokens, neurons; counts only, no text) through the same __aiAttrEnv shim qnfo-research-exec uses; no new model call, no behaviour change. // 4.7.1 TOOL-TRACE-MEMORY-1 (#1805): internal tool-trace chat rows (model tool/mcp-tool) no longer reach thread memory or the cross-thread context.
@@ -242,13 +242,13 @@ async function loadPrimeContext(env, q, currentThread) {
     const _calEvents = [];
     const _awayW = await loadAwayWindows(env, today);
     let _evsApi = null;
-    try { _evsApi = await calList(env, today, tom, 10); } catch (e) {}
+    try { _evsApi = await calList(env, today, tom, 10); } catch (e) { console.error(JSON.stringify({ evt: "personal-api:loadPrimeContext:caught", error: String((e && e.message) || e) })); }
     if (_evsApi && _evsApi.ok && _evsApi.events) for (const e of awayFilter(_evsApi.events, _awayW, (x) => x.dtstart)) {
       const k = String(e.title || "").slice(0, 60) + "|" + String(e.dtstart || "").slice(0, 10);
       if (!_seenCal.has(k)) { _seenCal.add(k); _calEvents.push({ date: String(e.dtstart || "").slice(0, 10), title: e.title, loc: e.location, tag: e.domain || e.source || "" }); }
     }
     let _evsStore = null;
-    try { _evsStore = await env.PERSONAL.prepare("SELECT * FROM events WHERE start_date IN (?1,?2) ORDER BY start_date LIMIT 10").bind(today, tom).all(); } catch (e) {}
+    try { _evsStore = await env.PERSONAL.prepare("SELECT * FROM events WHERE start_date IN (?1,?2) ORDER BY start_date LIMIT 10").bind(today, tom).all(); } catch (e) { console.error(JSON.stringify({ evt: "personal-api:loadPrimeContext:caught", error: String((e && e.message) || e) })); }
     if (_evsStore && _evsStore.results) for (const e of awayFilter(_evsStore.results, _awayW, (x) => x.start_date)) {
       const k = String(e.title || "").slice(0, 60) + "|" + String(e.start_date || "").slice(0, 10);
       if (!_seenCal.has(k)) { _seenCal.add(k); _calEvents.push({ date: String(e.start_date || "").slice(0, 10), title: e.title, loc: e.venue, tag: "personal" }); }
@@ -553,7 +553,7 @@ __name(budgetSummary, "budgetSummary");
 async function eventRecGuard(env, nowMs) {
   var g = { exclude: [], inPersonMax: null, inPersonUsed: 0, budgetSpent: false, half: null };
   var rows = [];
-  try { rows = (await env.PERSONAL.prepare("SELECT facet, label, statement FROM profile WHERE facet IN ('dislikes','filters','standing-filters') AND confidence >= 0.7").all()).results || []; } catch (e) {}
+  try { rows = (await env.PERSONAL.prepare("SELECT facet, label, statement FROM profile WHERE facet IN ('dislikes','filters','standing-filters') AND confidence >= 0.7").all()).results || []; } catch (e) { console.error(JSON.stringify({ evt: "personal-api:eventRecGuard:caught", error: String((e && e.message) || e) })); }
   var stop = ["AI", "UI", "UX", "OK", "API", "PDF", "URL"];
   rows.forEach(function(r) {
     var txt = String(r.label || "") + " " + String(r.statement || "");
@@ -569,7 +569,7 @@ async function eventRecGuard(env, nowMs) {
       var ev = (await env.PERSONAL.prepare("SELECT venue, start_date FROM events WHERE start_date >= ?1 AND start_date < ?2 AND category IN ('conference','workshop','school','program')").bind(from, to).all()).results || [];
       var seen = {};
       ev.forEach(function(e) { var v = String(e.venue || ""); if (/online|virtual|remote|zoom|webinar/i.test(v)) return; var k = v.toLowerCase() + "|" + String(e.start_date || "").slice(0, 10); if (!seen[k]) { seen[k] = 1; g.inPersonUsed++; } });
-    } catch (e) {}
+    } catch (e) { console.error(JSON.stringify({ evt: "personal-api:eventRecGuard:caught", error: String((e && e.message) || e) })); }
     g.budgetSpent = g.inPersonUsed >= g.inPersonMax;
   }
   return g;
@@ -603,7 +603,7 @@ async function suggestEvents(env, args) {
     }
   }
   let upcoming = [];
-  try { const cl = await calList(env, isoDateNow(), isoDatePlus(30), 5); if (cl && cl.ok && cl.events) upcoming = cl.events.map(function(e) { return { title: e.title, dtstart: e.dtstart, venue: e.location, source: e.source, domain: e.domain }; }); } catch (e) {}
+  try { const cl = await calList(env, isoDateNow(), isoDatePlus(30), 5); if (cl && cl.ok && cl.events) upcoming = cl.events.map(function(e) { return { title: e.title, dtstart: e.dtstart, venue: e.location, source: e.source, domain: e.domain }; }); } catch (e) { console.error(JSON.stringify({ evt: "personal-api:suggestEvents:caught", error: String((e && e.message) || e) })); }
   return { ok: true, city, interests, suggestions, filtered, profile_guard: { excluded_topics: guard.exclude, in_person_budget: guard.inPersonMax, in_person_used: guard.inPersonUsed, half: guard.half, budget_spent: guard.budgetSpent }, upcoming_in_archive: upcoming };
 }
 __name(suggestEvents, "suggestEvents");
@@ -620,7 +620,7 @@ function extractJsonObject(text, key) {
       if (inStr) { if (esc) esc = false; else if (ch === "\\") esc = true; else if (ch === '"') inStr = false; continue; }
       if (ch === '"') inStr = true;
       else if (ch === "{") depth++;
-      else if (ch === "}") { depth--; if (depth === 0) { try { const o = JSON.parse(t.slice(i, j + 1)); if (o && typeof o === "object" && (!key || o[key] != null)) return o; } catch (e) {} break; } }
+      else if (ch === "}") { depth--; if (depth === 0) { try { const o = JSON.parse(t.slice(i, j + 1)); if (o && typeof o === "object" && (!key || o[key] != null)) return o; } catch (e) { console.error(JSON.stringify({ evt: "personal-api:extractJsonObject:caught", error: String((e && e.message) || e) })); } break; } }
     }
   }
   return null;
@@ -780,7 +780,7 @@ async function gAccess(env) {
   const t = await gToken(env, { client_id: env.GOOGLE_CLIENT_ID, client_secret: env.GOOGLE_CLIENT_SECRET, refresh_token: row.refresh_token, grant_type: "refresh_token" });
   if (!t.ok) {
     const err = "refresh failed HTTP " + t.status + " " + String(t.j.error || "") + " " + String(t.j.error_description || "");
-    await env.PERSONAL.prepare("UPDATE google_oauth SET last_error = ?1, updated_at = ?2 WHERE id = 'owner'").bind(err.slice(0, 300), new Date().toISOString()).run().catch(() => {});
+    await env.PERSONAL.prepare("UPDATE google_oauth SET last_error = ?1, updated_at = ?2 WHERE id = 'owner'").bind(err.slice(0, 300), new Date().toISOString()).run().catch((e) => { console.error(JSON.stringify({ evt: "personal-api:gAccess:caught", error: String((e && e.message) || e) })); });
     return { ok: false, error: "google-token: " + err.slice(0, 200) };
   }
   await env.PERSONAL.prepare("UPDATE google_oauth SET access_token = ?1, access_expires = ?2, last_error = NULL, updated_at = ?3 WHERE id = 'owner'").bind(t.j.access_token, Date.now() + Number(t.j.expires_in || 3600) * 1e3, new Date().toISOString()).run();
@@ -1416,7 +1416,7 @@ function parseToolCall(text) {
         return { name: an, args: a };
       }
     }
-  } catch (e) {}
+  } catch (e) { console.error(JSON.stringify({ evt: "personal-api:parseToolCall:caught", error: String((e && e.message) || e) })); }
   const open1 = "<|tool_call_begin|>";
   const close1 = "<|tool_call_end|>";
   const open2 = "<|tool_calls_section_begin|>";
@@ -1507,7 +1507,7 @@ function looksLikeToolText(t) {
   if (!x) return true;
   if (parseToolCall(x)) return true;
   if (/<\/?(tool_calls?|invoke|function_calls)\b/i.test(x)) return true;
-  if (x.charAt(0) === "{" && x.charAt(x.length - 1) === "}") { try { JSON.parse(x); return true; } catch (e) {} }
+  if (x.charAt(0) === "{" && x.charAt(x.length - 1) === "}") { try { JSON.parse(x); return true; } catch (e) { console.error(JSON.stringify({ evt: "personal-api:looksLikeToolText:caught", error: String((e && e.message) || e) })); } }
   return false;
 }
 __name(looksLikeToolText, "looksLikeToolText");
@@ -1584,11 +1584,11 @@ async function takeSignals(env, limit, mark) {
     const r = await env.PERSONAL.prepare("SELECT id, ts, kind, payload FROM proactive_signals WHERE shown = 0 AND ts >= ?1 ORDER BY ts DESC LIMIT ?2").bind(new Date(Date.now() - 3 * 864e5).toISOString(), limit).all();
     for (const s of r.results || []) {
       let p = {};
-      try { p = JSON.parse(s.payload || "{}"); } catch (e) {}
+      try { p = JSON.parse(s.payload || "{}"); } catch (e) { console.error(JSON.stringify({ evt: "personal-api:takeSignals:caught", error: String((e && e.message) || e) })); }
       out.push({ id: s.id, ts: s.ts, kind: s.kind, title: p.title || "", summary: p.summary ? String(p.summary).slice(0, 300) : "" });
     }
     if (mark && out.length) await env.PERSONAL.prepare("UPDATE proactive_signals SET shown = 1 WHERE id IN (" + out.map(() => "?").join(",") + ")").bind(...out.map((x) => x.id)).run();
-  } catch (e) {}
+  } catch (e) { console.error(JSON.stringify({ evt: "personal-api:takeSignals:caught", error: String((e && e.message) || e) })); }
   return out;
 }
 __name(takeSignals, "takeSignals");
@@ -1637,7 +1637,7 @@ async function buildBrief(env, withSummary) {
       else if (_d === tomorrow) brief.calendar.tomorrow.push(_ev);
       else brief.calendar.upcoming7.push(_ev);
     }
-  } catch (e) {}
+  } catch (e) { console.error(JSON.stringify({ evt: "personal-api:buildBrief:caught", error: String((e && e.message) || e) })); }
   if (withSummary) {
     brief.summary = await briefNarrative(env, brief);
     if (brief.summary === null) brief.summary_degraded = true;
@@ -1785,7 +1785,7 @@ async function ledgerSyncFeedback(env) {
     await put("last_run", JSON.stringify(Object.assign({ at: new Date().toISOString(), version: VERSION, cursor: maxTs }, stats)));
     return Object.assign({ ok: true }, stats);
   } catch (e) {
-    try { await put("last_run", JSON.stringify({ at: new Date().toISOString(), error: String(e && e.message || e).slice(0, 300), version: VERSION })); } catch (e2) {}
+    try { await put("last_run", JSON.stringify({ at: new Date().toISOString(), error: String(e && e.message || e).slice(0, 300), version: VERSION })); } catch (e2) { console.error(JSON.stringify({ evt: "personal-api:ledgerSyncFeedback:caught", error: String((e2 && e2.message) || e2) })); }
     return { ok: false, error: String(e && e.message || e) };
   }
 }
@@ -1816,7 +1816,7 @@ async function ledgerCounts(env) {
   try {
     const r = await env.PERSONAL.prepare("SELECT people_total, seen_twice FROM v_ledger_seen_twice").first();
     let sync = null;
-    try { const s = await env.PERSONAL.prepare("SELECT v FROM ledger_sync_state WHERE k = 'last_run'").first(); sync = s && s.v ? JSON.parse(s.v) : null; } catch (e) {}
+    try { const s = await env.PERSONAL.prepare("SELECT v FROM ledger_sync_state WHERE k = 'last_run'").first(); sync = s && s.v ? JSON.parse(s.v) : null; } catch (e) { console.error(JSON.stringify({ evt: "personal-api:ledgerCounts:caught", error: String((e && e.message) || e) })); }
     return { people: r ? r.people_total : null, seen_twice: r ? r.seen_twice : null, last_sync: sync };
   } catch (e) {
     return { people: null, seen_twice: null, error: "ledger unavailable" };
@@ -1835,7 +1835,7 @@ async function cronBuildBrief(env) {
     try {
       await env.PERSONAL.prepare("CREATE TABLE IF NOT EXISTS brief_cron_runs (ts TEXT PRIMARY KEY, brief_ok INTEGER, predictions INTEGER, predictions_reason TEXT, version TEXT)").run();
       await env.PERSONAL.prepare("INSERT OR REPLACE INTO brief_cron_runs (ts, brief_ok, predictions, predictions_reason, version) VALUES (?1, 1, ?2, ?3, ?4)").bind((/* @__PURE__ */ new Date()).toISOString(), pw && Array.isArray(pw.predictions) ? pw.predictions.length : 0, pw && pw.degraded ? String(pw.reason || "degraded").slice(0, 400) : null, VERSION).run();
-    } catch (e) {}
+    } catch (e) { console.error(JSON.stringify({ evt: "personal-api:cronBuildBrief:caught", error: String((e && e.message) || e) })); }
     console.log("personal-api cron brief built:", (b.calendar.today || []).length, "today events,", (b.open.tasks || []).length, "open tasks");
     return true;
   } catch (e) {
@@ -2490,11 +2490,11 @@ function md(s){
   return out.join('');
 }
 function restore(){try{var d=JSON.parse(localStorage.getItem('qnfo-chat')||'{}');$('#key').value=d.key||'';$('#thread').value=d.thread||'';savedModel=d.model||'';return d.msgs||[];}catch(e){return [];}}
-function save(msgs){try{localStorage.setItem('qnfo-chat',JSON.stringify({key:$('#key').value,thread:$('#thread').value,model:savedModel||$('#model').value,msgs:msgs.slice(-60)}));}catch(e){}}
+function save(msgs){try{localStorage.setItem('qnfo-chat',JSON.stringify({key:$('#key').value,thread:$('#thread').value,model:savedModel||$('#model').value,msgs:msgs.slice(-60)}));}catch (e) { console.error(JSON.stringify({ evt: "personal-api:save:caught", error: String((e && e.message) || e) })); }}
 var msgs=restore();
 function renderMsgs(){var el=$('#msgs');el.innerHTML='';for(var i=0;i<msgs.length;i++){var d=document.createElement('div');d.className='msg '+(msgs[i].role==='user'?'user':'assistant');d.innerHTML=md(msgs[i].content);el.appendChild(d);}el.scrollTop=1e9;}
 renderMsgs();
-function loadModels(){var key=$('#key').value.trim();var h={};if(key)h.Authorization='Bearer '+key;fetch('/v1/models',{headers:h}).then(function(r){return r.json();}).then(function(j){var sel=$('#model');sel.innerHTML='';var def='__DEFAULT_MODEL__';(j.data||[]).forEach(function(m){var o=document.createElement('option');o.value=m.id;o.textContent=m.id;if(m._router&&m._router.reasoning)o.textContent+=' (reasoning)';if(m.id===def||m.id===savedModel)o.selected=true;sel.appendChild(o);});if(!sel.value)sel.value=def;}).catch(function(){});}
+function loadModels(){var key=$('#key').value.trim();var h={};if(key)h.Authorization='Bearer '+key;fetch('/v1/models',{headers:h}).then(function(r){return r.json();}).then(function(j){var sel=$('#model');sel.innerHTML='';var def='__DEFAULT_MODEL__';(j.data||[]).forEach(function(m){var o=document.createElement('option');o.value=m.id;o.textContent=m.id;if(m._router&&m._router.reasoning)o.textContent+=' (reasoning)';if(m.id===def||m.id===savedModel)o.selected=true;sel.appendChild(o);});if(!sel.value)sel.value=def;}).catch(function (e) { console.error(JSON.stringify({ evt: "personal-api:loadModels:caught", error: String((e && e.message) || e) })); });}
 loadModels();
 function addMsg(role,html){var d=document.createElement('div');d.className='msg '+role;d.innerHTML=html;$('#msgs').appendChild(d);$('#msgs').scrollTop=1e9;return d;}
 $('#new').onclick=function(){msgs=[];renderMsgs();save(msgs);};
@@ -2519,7 +2519,7 @@ $('#send').onclick=async function(){
         for(var li=0;li<lines.length;li++){var t=lines[li].trim();
           if(t.indexOf('data:')!==0)continue;
           var data=t.slice(5).trim();if(data==='[DONE]')continue;
-          try{var p=JSON.parse(data);var d=(p.choices&&p.choices[0]&&p.choices[0].delta&&p.choices[0].delta.content)||'';if(d){acc+=d;el.textContent=acc;el.scrollTop=1e9;}}catch(e){}
+          try{var p=JSON.parse(data);var d=(p.choices&&p.choices[0]&&p.choices[0].delta&&p.choices[0].delta.content)||'';if(d){acc+=d;el.textContent=acc;el.scrollTop=1e9;}}catch (e) { console.error(JSON.stringify({ evt: "personal-api:addMsg:caught", error: String((e && e.message) || e) })); }
         }
       }
       msgs.push({role:'assistant',content:acc});renderMsgs();save(msgs);
@@ -2537,7 +2537,7 @@ $('#send').onclick=async function(){
 $('#inp').addEventListener('keydown',function(e){if(e.key==='Enter')$('#send').click();});
 $('#sendIntent').onclick=function(){var txt=$('#expr').value.trim();if(!txt)return;var key=$('#key').value.trim();if(!key){$('#intentResult').textContent='API key required';return;}var btn=$('#sendIntent');btn.disabled=true;$('#intentResult').textContent='Expressing...';fetch('/v1/express',{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+key},body:JSON.stringify({desire:txt,source:'pwa'})}).then(function(r){return r.json();}).then(function(j){if(j.error){$('#intentResult').textContent='ERROR: '+j.error;return;}$('#intentResult').textContent='[stored] '+(j.id||'')+(j.ts?' at '+j.ts.slice(0,16).replace('T',' '):'');$('#expr').value='';}).catch(function(e){$('#intentResult').textContent='ERROR: '+String(e.message||e);}).finally(function(){btn.disabled=false;});};
 $('#key').addEventListener('input',function(){save(msgs);loadModels();});
-if('serviceWorker' in navigator){navigator.serviceWorker.register('/sw.js').catch(function(){});}
+if('serviceWorker' in navigator){navigator.serviceWorker.register('/sw.js').catch(function (e) { console.error(JSON.stringify({ evt: "personal-api:addMsg:caught", error: String((e && e.message) || e) })); });}
 <\/script><a id="fleet-ctl" href="https://fleet.qnfo.org/cmd?from=https%3A%2F%2Fpersonal-api.q08.workers.dev%2F" rel="noopener noreferrer" title="Fleet command line for this page (owner controls need an email code)" aria-label="Fleet command line" style="position:fixed;right:10px;bottom:8px;z-index:2147483000;font:12px/1 system-ui,sans-serif;padding:5px 8px;border-radius:7px;color:#5b6472;background:rgba(127,127,127,.12);text-decoration:none;opacity:.45">&#8984; fleet</a><script>document.addEventListener("keydown",function(e){if(e.altKey&&e.shiftKey&&(e.key==="K"||e.key==="k"))location.href=document.getElementById("fleet-ctl").href;});<\/script></body></html>`;
 var TITLE = "Personal Twin - notes (personal-api)";
 var SHORT = "Personal Twin";
@@ -2651,15 +2651,15 @@ function __aiAttrEnv(env, worker, aiKey, dbKey) {
         try { res = await t.run(model, input, (function () { /* PROMPT-CACHE-1: same model + same first 4 KB of prompt -> same instance, so Workers AI prefix caching bills repeated context at the cached-input rate (glm-5.3-flash $0.03 vs $0.15 per M) */ try { if (opts && opts.extraHeaders && opts.extraHeaders["x-session-affinity"]) return opts; var m = input && input.messages, c = m && m.length ? m[0].content : (input && input.prompt); var s = typeof c === "string" ? c : JSON.stringify(c || ""); if (s.length < 1024) return opts; s = String(model) + "|" + s.slice(0, 4096); var h = 2166136261; for (var i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); } var o = Object.assign({}, opts || {}); o.extraHeaders = Object.assign({}, o.extraHeaders || {}, { "x-session-affinity": "pc-" + (h >>> 0).toString(36) }); return o; } catch (ePc) { return opts; } })()); return res; } catch (e) { ok = 0; throw e; }
         finally {
           try {
-            var u = res && typeof res === "object" && res.usage || {}; if (!/bge|embed|whisper|m2m100|resnet|flux|sdxl/i.test(String(model))) try { var cTok = Number(u.prompt_tokens_details && u.prompt_tokens_details.cached_tokens || u.cached_tokens || u.input_tokens_details && u.input_tokens_details.cached_tokens || 0) || 0; await db.prepare("INSERT INTO ai_cache_counters (day, worker, model, calls, cached_calls, in_tok, cached_tok) VALUES (?1,?2,?3,1,?4,?5,?6) ON CONFLICT(day, worker, model) DO UPDATE SET calls=calls+1, cached_calls=cached_calls+excluded.cached_calls, in_tok=in_tok+excluded.in_tok, cached_tok=cached_tok+excluded.cached_tok").bind(new Date().toISOString().slice(0, 10), worker, String(model).slice(0, 120), cTok > 0 ? 1 : 0, Number(u.prompt_tokens || u.input_tokens || 0) || 0, cTok).run(); } catch (eCc) {}
-            var chars = 0; try { chars = JSON.stringify(input && (input.messages || input.prompt || input.text) || input || "").length; } catch (e1) {}
+            var u = res && typeof res === "object" && res.usage || {}; if (!/bge|embed|whisper|m2m100|resnet|flux|sdxl/i.test(String(model))) try { var cTok = Number(u.prompt_tokens_details && u.prompt_tokens_details.cached_tokens || u.cached_tokens || u.input_tokens_details && u.input_tokens_details.cached_tokens || 0) || 0; await db.prepare("INSERT INTO ai_cache_counters (day, worker, model, calls, cached_calls, in_tok, cached_tok) VALUES (?1,?2,?3,1,?4,?5,?6) ON CONFLICT(day, worker, model) DO UPDATE SET calls=calls+1, cached_calls=cached_calls+excluded.cached_calls, in_tok=in_tok+excluded.in_tok, cached_tok=cached_tok+excluded.cached_tok").bind(new Date().toISOString().slice(0, 10), worker, String(model).slice(0, 120), cTok > 0 ? 1 : 0, Number(u.prompt_tokens || u.input_tokens || 0) || 0, cTok).run(); } catch (eCc) { console.error(JSON.stringify({ evt: "personal-api:__aiAttrEnv:caught", error: String((eCc && eCc.message) || eCc) })); }
+            var chars = 0; try { chars = JSON.stringify(input && (input.messages || input.prompt || input.text) || input || "").length; } catch (e1) { console.error(JSON.stringify({ evt: "personal-api:__aiAttrEnv:caught", error: String((e1 && e1.message) || e1) })); }
             var inTok = Number(u.prompt_tokens || u.input_tokens || 0) || Math.round(chars / 4);
             var outTok = Number(u.completion_tokens || u.output_tokens || 0);
             var r = __AI_ATTR_RATES[String(model)] || [0, 0];
             var neurons = (inTok * r[0] + outTok * r[1]) / 1e6;
             await db.prepare("INSERT INTO ai_call_counters (day, worker, purpose, model, calls, errors, in_chars, ms, in_tok, out_tok, neurons) VALUES (?1,?2,'binding',?3,1,?4,?5,?6,?7,?8,?9) ON CONFLICT(day, worker, purpose, model) DO UPDATE SET calls=calls+1, errors=errors+excluded.errors, in_chars=in_chars+excluded.in_chars, ms=ms+excluded.ms, in_tok=in_tok+excluded.in_tok, out_tok=out_tok+excluded.out_tok, neurons=neurons+excluded.neurons")
               .bind(new Date().toISOString().slice(0, 10), worker, String(model).slice(0, 120), ok ? 0 : 1, chars, Date.now() - t0, inTok, outTok, neurons).run();
-          } catch (e2) {}
+          } catch (e2) { console.error(JSON.stringify({ evt: "personal-api:__aiAttrEnv:caught", error: String((e2 && e2.message) || e2) })); }
         }
       };
     } });
@@ -2794,7 +2794,7 @@ var api_default = {
             lines.push("OVERDUE OPEN TASKS:");
             for (const t of od.results) lines.push("- due " + String(t.due).slice(0, 10) + " " + (t.title || ""));
           }
-        } catch (e2) {}
+        } catch (e2) { console.error(JSON.stringify({ evt: "personal-api:fetch:caught", error: String((e2 && e2.message) || e2) })); }
         if (lines.length) calContext = lines.join("\n\n");
       } catch (e) {
         calContext = null;
@@ -3388,7 +3388,7 @@ async function mcpOne(env, ctx, msg) {
     let res;
     try { res = await t.run(env, args); } catch (e) { res = { ok: false, error: String(e && e.message || e).slice(0, 300) }; }
     if (!res || typeof res !== "object") res = { ok: true, result: String(res || "") };
-    ctx.waitUntil(logChat(env, "mcp:" + name + " " + JSON.stringify(args).slice(0, 300), (res.ok === false ? "ERROR " + String(res.error || "") : "ok"), "mcp", "mcp", "mcp-tool").catch(() => {}));
+    ctx.waitUntil(logChat(env, "mcp:" + name + " " + JSON.stringify(args).slice(0, 300), (res.ok === false ? "ERROR " + String(res.error || "") : "ok"), "mcp", "mcp", "mcp-tool").catch((e) => { console.error(JSON.stringify({ evt: "personal-api:mcpOne:caught", error: String((e && e.message) || e) })); }));
     return ok({ content: [{ type: "text", text: JSON.stringify(res).slice(0, 1e5) }], structuredContent: res, isError: res.ok === false });
   }
   return err(-32601, "method not found: " + method.slice(0, 80));
@@ -3507,7 +3507,7 @@ async function handleOAuth(request, env, url) {
     const cid = String(P.client_id || ""), ru = String(P.redirect_uri || ""), state = String(P.state || "");
     const client = cid ? await env.PERSONAL.prepare("SELECT client_id, client_name, redirect_uris FROM oauth_clients WHERE client_id = ?1").bind(cid).first() : null;
     let uris = [];
-    try { uris = client ? JSON.parse(client.redirect_uris) : []; } catch (e) {}
+    try { uris = client ? JSON.parse(client.redirect_uris) : []; } catch (e) { console.error(JSON.stringify({ evt: "personal-api:handleOAuth:caught", error: String((e && e.message) || e) })); }
     if (!client || !ru || uris.indexOf(ru) < 0) return consentPage("<h1>Cannot continue</h1><p>Unknown client or redirect address. Nothing was shared.</p>", 400);
     const back = (q) => { const x = new URL(ru); for (const k in q) if (q[k] != null && q[k] !== "") x.searchParams.set(k, q[k]); return Response.redirect(x.toString(), 302); };
     if (String(P.response_type || "") !== "code") return back({ error: "unsupported_response_type", state });
@@ -3635,7 +3635,7 @@ async function msAccess(env, email) {
   const t = await msToken(env, { client_id: env.MS_CLIENT_ID, client_secret: env.MS_CLIENT_SECRET, grant_type: "refresh_token", refresh_token: row.refresh_token, scope: MS_SCOPES });
   if (!t.ok) {
     const err = "refresh failed HTTP " + t.status + " " + String(t.j.error || "") + " " + String(t.j.error_description || "").split("\n")[0];
-    await env.PERSONAL.prepare("UPDATE ms_oauth SET last_error = ?1, updated_at = ?2 WHERE email = ?3").bind(err.slice(0, 300), new Date().toISOString(), email).run().catch(() => {});
+    await env.PERSONAL.prepare("UPDATE ms_oauth SET last_error = ?1, updated_at = ?2 WHERE email = ?3").bind(err.slice(0, 300), new Date().toISOString(), email).run().catch((e) => { console.error(JSON.stringify({ evt: "personal-api:msAccess:caught", error: String((e && e.message) || e) })); });
     return { ok: false, error: "microsoft-token: " + err.slice(0, 200) };
   }
   await env.PERSONAL.prepare("UPDATE ms_oauth SET access_token = ?1, access_expires = ?2, refresh_token = COALESCE(?3, refresh_token), last_error = NULL, updated_at = ?4 WHERE email = ?5").bind(t.j.access_token, Date.now() + Number(t.j.expires_in || 3600) * 1e3, t.j.refresh_token || null, new Date().toISOString(), email).run();
@@ -3709,7 +3709,7 @@ async function msEmbedRows(env, rows) {
       const ups = [];
       for (let k = 0; k < part.length; k++) if (vecs[k]) ups.push({ id: "em:" + await sha16(part[k].message_id), values: vecs[k], metadata: { doc: "email", message_id: part[k].message_id, subject: part[k].subject.slice(0, 300), sender: part[k].sender.slice(0, 150), received_at: part[k].received_at, category: part[k].category, text: texts[k].slice(0, 800) } });
       if (ups.length) { await env.VZ.upsert(ups); n += ups.length; }
-    } catch (e) {}
+    } catch (e) { console.error(JSON.stringify({ evt: "personal-api:msEmbedRows:caught", error: String((e && e.message) || e) })); }
   }
   return n;
 }
@@ -3717,7 +3717,7 @@ async function msRecordRun(env, out) {
   try {
     await env.PERSONAL.prepare("INSERT INTO ms_sync_runs (ts, account, fetched, written, more, error) VALUES (?1,?2,?3,?4,?5,?6)").bind(new Date().toISOString(), out.account, out.fetched, out.written, out.more ? 1 : 0, out.error ? String(out.error).slice(0, 300) : null).run();
     await env.PERSONAL.prepare("DELETE FROM ms_sync_runs WHERE ts < ?1").bind(new Date(Date.now() - 30 * 864e5).toISOString()).run();
-  } catch (e) {}
+  } catch (e) { console.error(JSON.stringify({ evt: "personal-api:msRecordRun:caught", error: String((e && e.message) || e) })); }
 }
 async function msSyncAccount(env, email, opts) {
   opts = opts || {};
@@ -3962,7 +3962,7 @@ var PersonalTwinAgent = class {
           const _k = String(e.title || "").slice(0, 60).toLowerCase();
           if (!_have.has(_k)) { _have.add(_k); brief.events.push(String(e.title || "") + (e.venue ? " @ " + e.venue : "") + " on " + String(e.start_date || "").slice(0, 10)); }
         }
-      } catch (e) {}
+      } catch (e) { console.error(JSON.stringify({ evt: "personal-api:_buildBrief:caught", error: String((e && e.message) || e) })); }
       this._setState("morning_brief_" + today, brief);
       return brief;
     } catch (e) {
@@ -4078,8 +4078,8 @@ var PersonalTwinAgent = class {
     if (!this.env.AI) return { content: "AI binding not configured", model: "none" };
     const history = this._getMsgs(sid, 10);
     let _briefCtx = "";
-    try { const _t = new Date().toISOString().slice(0, 10); let _b = this._getState("morning_brief_" + _t); if (!_b) _b = await this._buildBrief(); if (_b) _briefCtx = String.fromCharCode(10) + String.fromCharCode(10) + "TODAY (" + _t + ") DATA ONLY - events: " + ((_b.events || []).join("; ") || "none") + ". open tasks: " + ((_b.tasks || []).join("; ") || "none") + "."; } catch (e) {}
-    try { const _pr = await this.env.PERSONAL.prepare("SELECT label, statement FROM profile WHERE facet IN ('identity','likes','filters') AND confidence >= 0.9 ORDER BY facet LIMIT 6").all(); if (_pr.results && _pr.results.length) _briefCtx += String.fromCharCode(10) + "PROFILE (DATA ONLY): " + _pr.results.map(function(r) { return (r.label || "fact") + ": " + String(r.statement || "").slice(0, 140); }).join(" | "); } catch (e) {}
+    try { const _t = new Date().toISOString().slice(0, 10); let _b = this._getState("morning_brief_" + _t); if (!_b) _b = await this._buildBrief(); if (_b) _briefCtx = String.fromCharCode(10) + String.fromCharCode(10) + "TODAY (" + _t + ") DATA ONLY - events: " + ((_b.events || []).join("; ") || "none") + ". open tasks: " + ((_b.tasks || []).join("; ") || "none") + "."; } catch (e) { console.error(JSON.stringify({ evt: "personal-api:_chatInner:caught", error: String((e && e.message) || e) })); }
+    try { const _pr = await this.env.PERSONAL.prepare("SELECT label, statement FROM profile WHERE facet IN ('identity','likes','filters') AND confidence >= 0.9 ORDER BY facet LIMIT 6").all(); if (_pr.results && _pr.results.length) _briefCtx += String.fromCharCode(10) + "PROFILE (DATA ONLY): " + _pr.results.map(function(r) { return (r.label || "fact") + ": " + String(r.statement || "").slice(0, 140); }).join(" | "); } catch (e) { console.error(JSON.stringify({ evt: "personal-api:_chatInner:caught", error: String((e && e.message) || e) })); }
     const messages = [{ role: "system", content: "You are Rowan's durable personal twin agent \u2014 stateful, context-aware, on Cloudflare Durable Objects. Persistent memory across sessions. Answer personal questions directly and concisely. PERSONAL-QNFO-SEPARATION-1: never reference research papers or QNFO research data." + _briefCtx }, ...history.slice(-8).map((m) => ({ role: m.role, content: m.content })), { role: "user", content: uc }];
     // TWIN-FLASH-1: the same model order as the chat route (owner-chosen primary, automatic revert), with fallback.
     const _env = __aiAttrEnv(this.env, "personal-api", "AI", "AUDIT");

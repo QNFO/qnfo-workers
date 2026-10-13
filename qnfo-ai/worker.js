@@ -6,7 +6,7 @@ var __defProp2 = Object.defineProperty;
 var __name2 = /* @__PURE__ */ __name((target, value) => __defProp2(target, "name", { value, configurable: true }), "__name");
 var __defProp22 = Object.defineProperty;
 var __name22 = /* @__PURE__ */ __name2((target, value) => __defProp22(target, "name", { value, configurable: true }), "__name");
-var VERSION = "5.36.1-kernel-reply"; // 5.36.1 KERNEL-REPLY-2 (2026-10-13, metric false_stops_7d): the default system prompt that chat clients (ChatBox, DeepChat) receive ends with the kernel reply rule: no closing question, offer or menu; an ambiguous request gets a stated assumption. 5.36.0 FLEET-CAP-STEER-1 (AI-SPEND-1, agent_issues 1780, 2462, 2446, 2011, pillar cost): the router governs at the fleet's own caps, not only its own ledger. While fleet_budget ai_spend:workers-ai (the 7-day run rate x 30 that qnfo-fleet-control writes hourly) is over its cap, a router-served non-stream Workers AI call to glm-5.3 or deepseek-v4-pro is answered by the same-family cheaper model (glm-5.3-flash, deepseek-v4-flash; docs/ENSEMBLE-POLICY.md rule 7), with a per-request fallback to the requested model on an error or empty reply and an automatic revert for the rest of the UTC day when the cheaper model fails 20% of at least 10 steered calls (ai_call_counters purpose fleet-cap-steer). qnfo-ai-calibration and requests with pin_model: true are never steered; _router.fleet_cap_steer names each switch. The router's paid upstreams (direct DeepSeek key, gateway compat) are skipped to their Workers AI fallback while the fleet cap of that provider (or the unified total, for the gateway) is over, so router BYOK spend is governed by the fleet caps too. ops_config ai_fleet_cap_steer = off turns both off without a deploy. Tests: fleet-cap-steer.test.mjs. // 5.35.1 SEMANTIC-CACHE-EXACT-1: the semantic cache, serving for the first time since the 5.35.0 declaration fix, answers only when the logged prompt equals this prompt character for character; liveness probes and cache: false skip it. // 5.35.0 CMD-AI-TIMEOUT-1 (#2316, 2026-10-12, pillar core): measured cause of the fleet command line timeouts: a reasoning model given a small max_tokens spends the whole allowance on reasoning (glm-5.3-flash, max_tokens 700: 19-49 s, empty content, finish=length), the direct DeepSeek key answers 402 and its fallback led to the same slow model, and an id missing from MODELS was served by that dead route without a word. Now: small answers ask verified models for low reasoning effort (4.9 s, content present), a model id resolves explicitly (exact, alias, Workers AI id, or the logged unknown-id default; _router.requested_model and model_resolution), an unfunded DeepSeek route is served by its Workers AI twin, small or timeout_ms requests run under a budget with one hedge leg and answer 504 router_timeout instead of canned text, and context fetches have timeouts. AI-ROUTER-SECOND-PATH-1 (#2179): /health second_path contract and the router-down drill. Channel diversity (#2146): declared vendor and lineage per model, GET/POST /v1/ensemble/policy, a non-diverse ensemble is refused with a structured reason and the reviewer is never the primary's lineage. Cost (#2011): x-session-affinity for prefix caching, cached tokens in the ledger, the semantic cache serves again (it threw on a variable read before its declaration) and only for the same prompt, character for character; liveness probes never read it. Ids come from crypto.getRandomValues. Tests: router-resolve.test.mjs. // 5.34.1 carries the 5.33.1 narrative-prompt-guard process anchors onto the rebased prompt (the previous push changed bytes without a bump). 5.34.0 re-applies 5.33.0 and 5.33.1 onto main 5.33.2-doi-scrub (the venue line names papers.qnfo.org; PR 870 had conflicts). 5.33.1 keeps the narrative-prompt-guard process anchors (ground in the corpus first, place the answer in context, make it falsifiable) in the prompt. 5.33.0 ACCURACY-GROUND-1 (2026-10-10, pillar core, owner directive: answers are 100% verifiable against supplied text, no example nouns in prompts, fail closed): the system prompt no longer mandates key facts or quantities, citations "when known" or computational verification from memory; its only sources are the retrieved context, web context, fleet context and the user messages. handleChat wraps handleChatCore: a non-tool answer (streams are buffered) loses every sentence carrying a DOI, link, arXiv id, author citation or figure that is not in the supplied text, says so at the foot, and opens with a no-source notice when nothing was retrieved for a question. The ensemble validator fails unsupported statements and the review pass can only remove. Tests: accuracy-ground.test.mjs. // 5.32.0 BUDGET-SOFT-ROUTE-1 (2026-10-06, pillar cost, owner directive): the spend governor never refuses a caller; at any cap every caller is routed to the cheap Workers AI model (glm-5.3-flash, one leg, no ensemble) instead of HTTP 429. Paid upstreams over cap still fall back to Workers AI. // 5.31.5 ENSEMBLE-VALIDATOR-BUDGET-1 (#1889, 2026-10-05): the ensemble validator keeps a 30% slice of the 120s budget (36s, floor 15s) instead of a flat 15s that timed out behind 55-60s Workers AI primaries (both first 5.31.4 ensemble-run rows: verdict skipped); validator and reviewer outcomes are stage rows and the ensemble-run row carries them. // 5.31.4 ENSEMBLE-FAMILY-DISJOINT-1 (#1889 ENSEMBLE-POLICY-1, 2026-10-05): ENSEMBLE_POOL holds at most one model per family (science drops deepseek-v4-pro, general drops glm-5.3 and keeps the small glm-5.3-flash) and the validator is never the primary's family (a deepseek primary is judged by glm-5.3-flash instead of deepseek-v4-flash); same call count, smaller models, meta.validator_switched records the switch. // 5.31.3 ENSEMBLE-RUN-LOG-1 (#1889, 2026-10-05): one cloud_ops_events row (kind ensemble-run) per ensemble call with the primary and validator models and families, the validator verdict, whether the reviewer ran and a short hash of the text, so same-family vs cross-family agreement can be measured before the pool is thinned (docs/ENSEMBLE-POLICY.md); no extra model call. // 5.31.2 DEEPSEEK-402-BREAKER-1 (#1939): a DeepSeek 402 (balance exhausted) opens a 60-min per-isolate breaker (owner 2026-10-05: no DeepSeek top-up) so callDeepSeek fails fast to the free fallback; 5.31.1 AIG-BINDING-1 (#1784): gateway log entries carry metadata {worker, purpose}; 5.31.0 AIG-BINDING-1: embedding calls go through the AI Gateway (cached 24h, plain-binding fallback); 5.30.1 FLEET-CTL-ROLLOUT-1: the fleet command-line link on the chat page
+var VERSION = "5.36.2-log-catches"; // 5.36.1 KERNEL-REPLY-2 (2026-10-13, metric false_stops_7d): the default system prompt that chat clients (ChatBox, DeepChat) receive ends with the kernel reply rule: no closing question, offer or menu; an ambiguous request gets a stated assumption. 5.36.0 FLEET-CAP-STEER-1 (AI-SPEND-1, agent_issues 1780, 2462, 2446, 2011, pillar cost): the router governs at the fleet's own caps, not only its own ledger. While fleet_budget ai_spend:workers-ai (the 7-day run rate x 30 that qnfo-fleet-control writes hourly) is over its cap, a router-served non-stream Workers AI call to glm-5.3 or deepseek-v4-pro is answered by the same-family cheaper model (glm-5.3-flash, deepseek-v4-flash; docs/ENSEMBLE-POLICY.md rule 7), with a per-request fallback to the requested model on an error or empty reply and an automatic revert for the rest of the UTC day when the cheaper model fails 20% of at least 10 steered calls (ai_call_counters purpose fleet-cap-steer). qnfo-ai-calibration and requests with pin_model: true are never steered; _router.fleet_cap_steer names each switch. The router's paid upstreams (direct DeepSeek key, gateway compat) are skipped to their Workers AI fallback while the fleet cap of that provider (or the unified total, for the gateway) is over, so router BYOK spend is governed by the fleet caps too. ops_config ai_fleet_cap_steer = off turns both off without a deploy. Tests: fleet-cap-steer.test.mjs. // 5.35.1 SEMANTIC-CACHE-EXACT-1: the semantic cache, serving for the first time since the 5.35.0 declaration fix, answers only when the logged prompt equals this prompt character for character; liveness probes and cache: false skip it. // 5.35.0 CMD-AI-TIMEOUT-1 (#2316, 2026-10-12, pillar core): measured cause of the fleet command line timeouts: a reasoning model given a small max_tokens spends the whole allowance on reasoning (glm-5.3-flash, max_tokens 700: 19-49 s, empty content, finish=length), the direct DeepSeek key answers 402 and its fallback led to the same slow model, and an id missing from MODELS was served by that dead route without a word. Now: small answers ask verified models for low reasoning effort (4.9 s, content present), a model id resolves explicitly (exact, alias, Workers AI id, or the logged unknown-id default; _router.requested_model and model_resolution), an unfunded DeepSeek route is served by its Workers AI twin, small or timeout_ms requests run under a budget with one hedge leg and answer 504 router_timeout instead of canned text, and context fetches have timeouts. AI-ROUTER-SECOND-PATH-1 (#2179): /health second_path contract and the router-down drill. Channel diversity (#2146): declared vendor and lineage per model, GET/POST /v1/ensemble/policy, a non-diverse ensemble is refused with a structured reason and the reviewer is never the primary's lineage. Cost (#2011): x-session-affinity for prefix caching, cached tokens in the ledger, the semantic cache serves again (it threw on a variable read before its declaration) and only for the same prompt, character for character; liveness probes never read it. Ids come from crypto.getRandomValues. Tests: router-resolve.test.mjs. // 5.34.1 carries the 5.33.1 narrative-prompt-guard process anchors onto the rebased prompt (the previous push changed bytes without a bump). 5.34.0 re-applies 5.33.0 and 5.33.1 onto main 5.33.2-doi-scrub (the venue line names papers.qnfo.org; PR 870 had conflicts). 5.33.1 keeps the narrative-prompt-guard process anchors (ground in the corpus first, place the answer in context, make it falsifiable) in the prompt. 5.33.0 ACCURACY-GROUND-1 (2026-10-10, pillar core, owner directive: answers are 100% verifiable against supplied text, no example nouns in prompts, fail closed): the system prompt no longer mandates key facts or quantities, citations "when known" or computational verification from memory; its only sources are the retrieved context, web context, fleet context and the user messages. handleChat wraps handleChatCore: a non-tool answer (streams are buffered) loses every sentence carrying a DOI, link, arXiv id, author citation or figure that is not in the supplied text, says so at the foot, and opens with a no-source notice when nothing was retrieved for a question. The ensemble validator fails unsupported statements and the review pass can only remove. Tests: accuracy-ground.test.mjs. // 5.32.0 BUDGET-SOFT-ROUTE-1 (2026-10-06, pillar cost, owner directive): the spend governor never refuses a caller; at any cap every caller is routed to the cheap Workers AI model (glm-5.3-flash, one leg, no ensemble) instead of HTTP 429. Paid upstreams over cap still fall back to Workers AI. // 5.31.5 ENSEMBLE-VALIDATOR-BUDGET-1 (#1889, 2026-10-05): the ensemble validator keeps a 30% slice of the 120s budget (36s, floor 15s) instead of a flat 15s that timed out behind 55-60s Workers AI primaries (both first 5.31.4 ensemble-run rows: verdict skipped); validator and reviewer outcomes are stage rows and the ensemble-run row carries them. // 5.31.4 ENSEMBLE-FAMILY-DISJOINT-1 (#1889 ENSEMBLE-POLICY-1, 2026-10-05): ENSEMBLE_POOL holds at most one model per family (science drops deepseek-v4-pro, general drops glm-5.3 and keeps the small glm-5.3-flash) and the validator is never the primary's family (a deepseek primary is judged by glm-5.3-flash instead of deepseek-v4-flash); same call count, smaller models, meta.validator_switched records the switch. // 5.31.3 ENSEMBLE-RUN-LOG-1 (#1889, 2026-10-05): one cloud_ops_events row (kind ensemble-run) per ensemble call with the primary and validator models and families, the validator verdict, whether the reviewer ran and a short hash of the text, so same-family vs cross-family agreement can be measured before the pool is thinned (docs/ENSEMBLE-POLICY.md); no extra model call. // 5.31.2 DEEPSEEK-402-BREAKER-1 (#1939): a DeepSeek 402 (balance exhausted) opens a 60-min per-isolate breaker (owner 2026-10-05: no DeepSeek top-up) so callDeepSeek fails fast to the free fallback; 5.31.1 AIG-BINDING-1 (#1784): gateway log entries carry metadata {worker, purpose}; 5.31.0 AIG-BINDING-1: embedding calls go through the AI Gateway (cached 24h, plain-binding fallback); 5.30.1 FLEET-CTL-ROLLOUT-1: the fleet command-line link on the chat page
 // WORKERS-AI-ATTRIBUTION-1 (2026-10-01, #1681): per-worker Workers AI attribution. Returns a shallow env copy whose AI
 // binding records each .run() (calls, errors, ms, tokens, neurons) into qnfo-audit ai_call_counters (purpose 'binding').
 // Neurons = usage tokens x Cloudflare's published per-model rates (neurons per M tokens). Fail-soft; env is never mutated.
@@ -23,15 +23,15 @@ function __aiAttrEnv(env, worker, aiKey, dbKey) {
         try { res = await t.run(model, input, (function () { /* PROMPT-CACHE-1: same model + same first 4 KB of prompt -> same instance, so Workers AI prefix caching bills repeated context at the cached-input rate (glm-5.3-flash $0.03 vs $0.15 per M) */ try { if (opts && opts.extraHeaders && opts.extraHeaders["x-session-affinity"]) return opts; var m = input && input.messages, c = m && m.length ? m[0].content : (input && input.prompt); var s = typeof c === "string" ? c : JSON.stringify(c || ""); if (s.length < 1024) return opts; s = String(model) + "|" + s.slice(0, 4096); var h = 2166136261; for (var i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); } var o = Object.assign({}, opts || {}); o.extraHeaders = Object.assign({}, o.extraHeaders || {}, { "x-session-affinity": "pc-" + (h >>> 0).toString(36) }); return o; } catch (ePc) { return opts; } })()); return res; } catch (e) { ok = 0; throw e; }
         finally {
           try {
-            var u = res && typeof res === "object" && res.usage || {}; if (!/bge|embed|whisper|m2m100|resnet|flux|sdxl/i.test(String(model))) try { var cTok = Number(u.prompt_tokens_details && u.prompt_tokens_details.cached_tokens || u.cached_tokens || u.input_tokens_details && u.input_tokens_details.cached_tokens || 0) || 0; await db.prepare("INSERT INTO ai_cache_counters (day, worker, model, calls, cached_calls, in_tok, cached_tok) VALUES (?1,?2,?3,1,?4,?5,?6) ON CONFLICT(day, worker, model) DO UPDATE SET calls=calls+1, cached_calls=cached_calls+excluded.cached_calls, in_tok=in_tok+excluded.in_tok, cached_tok=cached_tok+excluded.cached_tok").bind(new Date().toISOString().slice(0, 10), worker, String(model).slice(0, 120), cTok > 0 ? 1 : 0, Number(u.prompt_tokens || u.input_tokens || 0) || 0, cTok).run(); } catch (eCc) {}
-            var chars = 0; try { chars = JSON.stringify(input && (input.messages || input.prompt || input.text) || input || "").length; } catch (e1) {}
+            var u = res && typeof res === "object" && res.usage || {}; if (!/bge|embed|whisper|m2m100|resnet|flux|sdxl/i.test(String(model))) try { var cTok = Number(u.prompt_tokens_details && u.prompt_tokens_details.cached_tokens || u.cached_tokens || u.input_tokens_details && u.input_tokens_details.cached_tokens || 0) || 0; await db.prepare("INSERT INTO ai_cache_counters (day, worker, model, calls, cached_calls, in_tok, cached_tok) VALUES (?1,?2,?3,1,?4,?5,?6) ON CONFLICT(day, worker, model) DO UPDATE SET calls=calls+1, cached_calls=cached_calls+excluded.cached_calls, in_tok=in_tok+excluded.in_tok, cached_tok=cached_tok+excluded.cached_tok").bind(new Date().toISOString().slice(0, 10), worker, String(model).slice(0, 120), cTok > 0 ? 1 : 0, Number(u.prompt_tokens || u.input_tokens || 0) || 0, cTok).run(); } catch (eCc) { console.error(JSON.stringify({ evt: "ai:__aiAttrEnv:caught", error: String((eCc && eCc.message) || eCc) })); }
+            var chars = 0; try { chars = JSON.stringify(input && (input.messages || input.prompt || input.text) || input || "").length; } catch (e1) { console.error(JSON.stringify({ evt: "ai:__aiAttrEnv:caught", error: String((e1 && e1.message) || e1) })); }
             var inTok = Number(u.prompt_tokens || u.input_tokens || 0) || Math.round(chars / 4);
             var outTok = Number(u.completion_tokens || u.output_tokens || 0);
             var r = __AI_ATTR_RATES[String(model)] || [0, 0];
             var neurons = (inTok * r[0] + outTok * r[1]) / 1e6;
             await db.prepare("INSERT INTO ai_call_counters (day, worker, purpose, model, calls, errors, in_chars, ms, in_tok, out_tok, neurons) VALUES (?1,?2,'binding',?3,1,?4,?5,?6,?7,?8,?9) ON CONFLICT(day, worker, purpose, model) DO UPDATE SET calls=calls+1, errors=errors+excluded.errors, in_chars=in_chars+excluded.in_chars, ms=ms+excluded.ms, in_tok=in_tok+excluded.in_tok, out_tok=out_tok+excluded.out_tok, neurons=neurons+excluded.neurons")
               .bind(new Date().toISOString().slice(0, 10), worker, String(model).slice(0, 120), ok ? 0 : 1, chars, Date.now() - t0, inTok, outTok, neurons).run();
-          } catch (e2) {}
+          } catch (e2) { console.error(JSON.stringify({ evt: "ai:__aiAttrEnv:caught", error: String((e2 && e2.message) || e2) })); }
         }
       };
     } });
@@ -263,7 +263,7 @@ function spendRecord(env, provider, model, inTok, outTok, flags) {
         }
       }
     })();
-    var safe = p.catch(function () {});
+    var safe = p.catch(function (e) { console.error(JSON.stringify({ evt: "ai:spendRecord:caught", error: String((e && e.message) || e) })); });
     if (env.__spendCtx && typeof env.__spendCtx.waitUntil === "function") env.__spendCtx.waitUntil(safe);
   } catch (e) {
   }
@@ -2067,7 +2067,7 @@ async function qnfoAiFreeFallback(env, messages, maxTokens) {
       const _r = await withTimeout(aiRunAttr(env, "qnfo-ai", "chat-fallback", _cands[_i], _inF), 3e4, "free-fallback");
       const _t = _r && (_r.response != null ? _r.response : (_r.choices && _r.choices[0] && _r.choices[0].message && _r.choices[0].message.content)) || "";
       if (_t && String(_t).trim()) { console.log("QNFO_AI_FREE_FALLBACK " + _cands[_i]); return String(_t); }
-    } catch (e) { }
+    } catch (e) { console.error(JSON.stringify({ evt: "ai:qnfoAiFreeFallback:caught", error: String((e && e.message) || e) })); }
   }
   return null;
 }
@@ -2455,7 +2455,7 @@ async function mediaProcess(env, id) {
     });
     if (gw.ok) {
       const gj = await gw.json();
-      try { const mU = spendUsageOf(gj, 1e3, spendOutEstimate(gj)); spendRecord(env, "workers-ai", SPEND_CHEAP_WA, mU.in, mU.out); } catch (eSp) {}
+      try { const mU = spendUsageOf(gj, 1e3, spendOutEstimate(gj)); spendRecord(env, "workers-ai", SPEND_CHEAP_WA, mU.in, mU.out); } catch (eSp) { console.error(JSON.stringify({ evt: "ai:mediaProcess:caught", error: String((eSp && eSp.message) || eSp) })); }
       text = String(gj && gj.choices && gj.choices[0] && gj.choices[0].message && gj.choices[0].message.content || "").trim();
     }
   } catch (e) {
@@ -3046,8 +3046,8 @@ async function handleChatCore(env, body, authHeader, ctx, ua, acc) {
       }
       return json({ error: "no stream path for model" }, 400);
     } catch (e) {
-      try { if (env.QNFO_AUDIT || env.LOG_VZ) ctx.waitUntil(logQuery(env, Object.assign(mkLogRec(), { model: "router", streamed: 1, response: ("STREAM-CATCH-502: " + String(e && e.message || e)).slice(0, 400), latency_ms: Date.now() - t0 }))); } catch (_e) {}
-      try { const _ft = await qnfoAiFreeFallback(env, messages, max_tokens); if (_ft) { const _enc = new TextEncoder(); const _nl3 = String.fromCharCode(10, 10); const _st = new ReadableStream({ start: function(ctrl) { ctrl.enqueue(_enc.encode("data: " + JSON.stringify({ id: "chatcmpl-fb", object: "chat.completion.chunk", created: Math.floor(Date.now() / 1e3), model: routedModel, choices: [{ index: 0, delta: { role: "assistant", content: _ft }, finish_reason: null }] }) + _nl3)); ctrl.enqueue(_enc.encode("data: " + JSON.stringify({ id: "chatcmpl-fb-done", object: "chat.completion.chunk", created: Math.floor(Date.now() / 1e3), model: routedModel, choices: [{ index: 0, delta: {}, finish_reason: "stop" }] }) + _nl3)); ctrl.enqueue(_enc.encode("data: [DONE]" + _nl3)); ctrl.close(); } }); return streamWithLog(new Response(_st, { headers: { "Content-Type": "text/event-stream; charset=utf-8", "Access-Control-Allow-Origin": "*" } }), env, ctx, mkLogRec()); } } catch (_fbErr) {}
+      try { if (env.QNFO_AUDIT || env.LOG_VZ) ctx.waitUntil(logQuery(env, Object.assign(mkLogRec(), { model: "router", streamed: 1, response: ("STREAM-CATCH-502: " + String(e && e.message || e)).slice(0, 400), latency_ms: Date.now() - t0 }))); } catch (_e) { console.error(JSON.stringify({ evt: "ai:start:caught", error: String((_e && _e.message) || _e) })); }
+      try { const _ft = await qnfoAiFreeFallback(env, messages, max_tokens); if (_ft) { const _enc = new TextEncoder(); const _nl3 = String.fromCharCode(10, 10); const _st = new ReadableStream({ start: function(ctrl) { ctrl.enqueue(_enc.encode("data: " + JSON.stringify({ id: "chatcmpl-fb", object: "chat.completion.chunk", created: Math.floor(Date.now() / 1e3), model: routedModel, choices: [{ index: 0, delta: { role: "assistant", content: _ft }, finish_reason: null }] }) + _nl3)); ctrl.enqueue(_enc.encode("data: " + JSON.stringify({ id: "chatcmpl-fb-done", object: "chat.completion.chunk", created: Math.floor(Date.now() / 1e3), model: routedModel, choices: [{ index: 0, delta: {}, finish_reason: "stop" }] }) + _nl3)); ctrl.enqueue(_enc.encode("data: [DONE]" + _nl3)); ctrl.close(); } }); return streamWithLog(new Response(_st, { headers: { "Content-Type": "text/event-stream; charset=utf-8", "Access-Control-Allow-Origin": "*" } }), env, ctx, mkLogRec()); } } catch (_fbErr) { console.error(JSON.stringify({ evt: "ai:start:caught", error: String((_fbErr && _fbErr.message) || _fbErr) })); }
       return json({ error: "stream failed: " + e.message }, 502);
     }
   }
@@ -3157,8 +3157,8 @@ async function handleChatCore(env, body, authHeader, ctx, ua, acc) {
     if (env.QNFO_AUDIT || env.LOG_VZ) ctx.waitUntil(logQuery(env, logRec));
     return json(respBody);
   } catch (e) {
-    try { const _ft = await qnfoAiFreeFallback(env, messages, max_tokens); if (_ft) return json({ id: "chatcmpl-fb", object: "chat.completion", created: Math.floor(Date.now() / 1e3), model: routedModel, choices: [{ index: 0, message: { role: "assistant", content: _ft }, finish_reason: "stop" }], usage: {}, _router: mkRouter(routedModel, "free-fallback") }); } catch (_fbErr) {}
-    try { if (env.QNFO_AUDIT || env.LOG_VZ) ctx.waitUntil(logQuery(env, Object.assign(mkLogRec(), { streamed: 0, response: ("HANDLECHAT-CATCH-502: " + String(e && e.message || e)).slice(0, 400), latency_ms: Date.now() - t0 }))); } catch (_e) {}
+    try { const _ft = await qnfoAiFreeFallback(env, messages, max_tokens); if (_ft) return json({ id: "chatcmpl-fb", object: "chat.completion", created: Math.floor(Date.now() / 1e3), model: routedModel, choices: [{ index: 0, message: { role: "assistant", content: _ft }, finish_reason: "stop" }], usage: {}, _router: mkRouter(routedModel, "free-fallback") }); } catch (_fbErr) { console.error(JSON.stringify({ evt: "ai:start:caught", error: String((_fbErr && _fbErr.message) || _fbErr) })); }
+    try { if (env.QNFO_AUDIT || env.LOG_VZ) ctx.waitUntil(logQuery(env, Object.assign(mkLogRec(), { streamed: 0, response: ("HANDLECHAT-CATCH-502: " + String(e && e.message || e)).slice(0, 400), latency_ms: Date.now() - t0 }))); } catch (_e) { console.error(JSON.stringify({ evt: "ai:start:caught", error: String((_e && _e.message) || _e) })); }
     return json({ error: e.message }, 502);
   }
 }
@@ -3202,7 +3202,7 @@ async function semanticCacheLookup(env, q, model) {
         try {
           const row = await env.QNFO_AUDIT.prepare("SELECT prompt, response FROM ai_queries WHERE id = ?1 AND ts >= ?2").bind(m.id.slice(2), new Date(Date.now() - 30 * 864e5).toISOString()).first();
           if (row && row.response && String(row.response).length >= 40 && String(row.prompt || "").trim() === String(q || "").trim()) text = row.response;
-        } catch (e) { }
+        } catch (e) { console.error(JSON.stringify({ evt: "ai:semanticCacheLookup:caught", error: String((e && e.message) || e) })); }
         if (!text) continue;
         return { text: String(text).slice(0, 8000), score: m.score, model: md.model || null };
       }
@@ -3600,11 +3600,11 @@ $/,''))+'</pre>');}
   return out.join('');
 }
 function restore(){try{var d=JSON.parse(localStorage.getItem('qnfo-chat')||'{}');$('#key').value=d.key||'';$('#thread').value=d.thread||'';savedModel=d.model||'';return d.msgs||[];}catch(e){return [];}}
-function save(msgs){try{localStorage.setItem('qnfo-chat',JSON.stringify({key:$('#key').value,thread:$('#thread').value,model:savedModel||$('#model').value,msgs:msgs.slice(-60)}));}catch(e){}}
+function save(msgs){try{localStorage.setItem('qnfo-chat',JSON.stringify({key:$('#key').value,thread:$('#thread').value,model:savedModel||$('#model').value,msgs:msgs.slice(-60)}));}catch (e) { console.error(JSON.stringify({ evt: "ai:save:caught", error: String((e && e.message) || e) })); }}
 var msgs=restore();
 function renderMsgs(){var el=$('#msgs');el.innerHTML='';for(var i=0;i<msgs.length;i++){var d=document.createElement('div');d.className='msg '+(msgs[i].role==='user'?'user':'assistant');d.innerHTML=md(msgs[i].content);el.appendChild(d);}el.scrollTop=1e9;}
 renderMsgs();
-function loadModels(){var key=$('#key').value.trim();var h={};if(key)h.Authorization='Bearer '+key;fetch('/v1/models',{headers:h}).then(function(r){return r.json();}).then(function(j){var sel=$('#model');sel.innerHTML='';var def='__DEFAULT_MODEL__';(j.data||[]).forEach(function(m){var o=document.createElement('option');o.value=m.id;o.textContent=m.id;if(m._router&&m._router.reasoning)o.textContent+=' (reasoning)';if(m.id===def||m.id===savedModel)o.selected=true;sel.appendChild(o);});if(!sel.value)sel.value=def;}).catch(function(){});}
+function loadModels(){var key=$('#key').value.trim();var h={};if(key)h.Authorization='Bearer '+key;fetch('/v1/models',{headers:h}).then(function(r){return r.json();}).then(function(j){var sel=$('#model');sel.innerHTML='';var def='__DEFAULT_MODEL__';(j.data||[]).forEach(function(m){var o=document.createElement('option');o.value=m.id;o.textContent=m.id;if(m._router&&m._router.reasoning)o.textContent+=' (reasoning)';if(m.id===def||m.id===savedModel)o.selected=true;sel.appendChild(o);});if(!sel.value)sel.value=def;}).catch(function (e) { console.error(JSON.stringify({ evt: "ai:loadModels:caught", error: String((e && e.message) || e) })); });}
 loadModels();
 function addMsg(role,html){var d=document.createElement('div');d.className='msg '+role;d.innerHTML=html;$('#msgs').appendChild(d);$('#msgs').scrollTop=1e9;return d;}
 $('#new').onclick=function(){msgs=[];renderMsgs();save(msgs);};
@@ -3629,7 +3629,7 @@ $('#send').onclick=async function(){
         for(var li=0;li<lines.length;li++){var t=lines[li].trim();
           if(t.indexOf('data:')!==0)continue;
           var data=t.slice(5).trim();if(data==='[DONE]')continue;
-          try{var p=JSON.parse(data);var d=(p.choices&&p.choices[0]&&p.choices[0].delta&&p.choices[0].delta.content)||'';if(d){acc+=d;el.textContent=acc;el.scrollTop=1e9;}}catch(e){}
+          try{var p=JSON.parse(data);var d=(p.choices&&p.choices[0]&&p.choices[0].delta&&p.choices[0].delta.content)||'';if(d){acc+=d;el.textContent=acc;el.scrollTop=1e9;}}catch (e) { console.error(JSON.stringify({ evt: "ai:addMsg:caught", error: String((e && e.message) || e) })); }
         }
       }
       msgs.push({role:'assistant',content:acc});renderMsgs();save(msgs);
@@ -3647,7 +3647,7 @@ $('#send').onclick=async function(){
 $('#inp').addEventListener('keydown',function(e){if(e.key==='Enter')$('#send').click();});
 $('#sendIntent').onclick=function(){var txt=$('#expr').value.trim();if(!txt)return;var key=$('#key').value.trim();if(!key){$('#intentResult').textContent='API key required';return;}var btn=$('#sendIntent');btn.disabled=true;$('#intentResult').textContent='Expressing...';fetch('https://qnfo-intent-orchestrator.q08.workers.dev/intent?source=pwa&device=windows',{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+key},body:JSON.stringify({desire:txt,source:'pwa'})}).then(function(r){return r.json();}).then(function(j){if(j.error){$('#intentResult').textContent='ERROR: '+j.error;return;}$('#intentResult').textContent='['+j.type+' | '+j.domain+'] '+j.summary+(j.status==='done'?' - stored in Vectorize':' - queued'+(j.due?' (due '+j.due+')':''));$('#expr').value='';}).catch(function(e){$('#intentResult').textContent='ERROR: '+String(e.message||e);}).finally(function(){btn.disabled=false;});};
 $('#key').addEventListener('input',function(){save(msgs);loadModels();});
-if('serviceWorker' in navigator){navigator.serviceWorker.register('/sw.js').catch(function(){});}
+if('serviceWorker' in navigator){navigator.serviceWorker.register('/sw.js').catch(function (e) { console.error(JSON.stringify({ evt: "ai:addMsg:caught", error: String((e && e.message) || e) })); });}
 <\/script><script src="https://fleet.qnfo.org/ctl.js" defer><\/script></body></html>`;
 var TITLE = "QNFO Notes - research chat (qnfo-ai router)";
 var SHORT = "QNFO Notes";
@@ -3820,10 +3820,10 @@ function anthStreamFromOpenAI(upstream, model) {
             if (!line || line.indexOf("data:") !== 0) continue;
             var payload = line.slice(5).trim();
             if (payload === "[DONE]") continue;
-            try { handleChunk(controller, JSON.parse(payload)); } catch (e) {}
+            try { handleChunk(controller, JSON.parse(payload)); } catch (e) { console.error(JSON.stringify({ evt: "ai:handleChunk:caught", error: String((e && e.message) || e) })); }
           }
         }
-      } catch (e) {}
+      } catch (e) { console.error(JSON.stringify({ evt: "ai:handleChunk:caught", error: String((e && e.message) || e) })); }
       if (textOpen) emit(controller, "content_block_stop", { type: "content_block_stop", index: textIdx });
       for (var oi in toolBlocks) emit(controller, "content_block_stop", { type: "content_block_stop", index: toolBlocks[oi] });
       emit(controller, "message_delta", { type: "message_delta", delta: { stop_reason: stopReason, stop_sequence: null }, usage: { output_tokens: outTok } });
@@ -3852,7 +3852,7 @@ async function anthRelay(env, oai) {
   } catch (e) {
     var errMsg = "relay error: " + ((e && e.message) || e);
     var ft = null;
-    try { ft = await qnfoAiFreeFallback(env, oai.messages, Math.min(maxT, 8192)); } catch (e2) {}
+    try { ft = await qnfoAiFreeFallback(env, oai.messages, Math.min(maxT, 8192)); } catch (e2) { console.error(JSON.stringify({ evt: "ai:anthRelay:caught", error: String((e2 && e2.message) || e2) })); }
     if (oai.stream) {
       var enc = new TextEncoder();
       var nl = String.fromCharCode(10, 10);
@@ -4330,27 +4330,27 @@ async function aiRunAttr(env, worker, purpose, model, input, opts) {
     try {
       if (ok) {
         var sIn = 0;
-        try { sIn = Math.ceil(JSON.stringify(input && (input.messages || input.text || input.prompt) || "").length / 4); } catch (e4) {}
+        try { sIn = Math.ceil(JSON.stringify(input && (input.messages || input.text || input.prompt) || "").length / 4); } catch (e4) { console.error(JSON.stringify({ evt: "ai:aiRunAttr:caught", error: String((e4 && e4.message) || e4) })); }
         var sU = spendUsageOf(res, sIn, spendOutEstimate(res));
         spendRecord(env, "workers-ai", String(model), sU.in, sU.out, { cached: sU.cached });
       }
-    } catch (e5) {}
+    } catch (e5) { console.error(JSON.stringify({ evt: "ai:aiRunAttr:caught", error: String((e5 && e5.message) || e5) })); }
     try {
       var db = null;
       for (var bi = 0; bi < AI_ATTR_DB_BINDINGS.length && !db; bi++) db = env[AI_ATTR_DB_BINDINGS[bi]];
       if (db) {
-        var ic = 0; try { ic = JSON.stringify(input && input.messages || input || "").length; } catch (e2) {}
+        var ic = 0; try { ic = JSON.stringify(input && input.messages || input || "").length; } catch (e2) { console.error(JSON.stringify({ evt: "ai:aiRunAttr:caught", error: String((e2 && e2.message) || e2) })); }
         var day = new Date().toISOString().slice(0, 10);
         var ms = Date.now() - t0;
         var wr = (async function() {
           await db.prepare("CREATE TABLE IF NOT EXISTS ai_call_counters (day TEXT, worker TEXT, purpose TEXT, model TEXT, calls INTEGER DEFAULT 0, errors INTEGER DEFAULT 0, in_chars INTEGER DEFAULT 0, ms INTEGER DEFAULT 0, PRIMARY KEY (day, worker, purpose, model))").run();
           await db.prepare("INSERT INTO ai_call_counters (day, worker, purpose, model, calls, errors, in_chars, ms) VALUES (?1,?2,?3,?4,1,?5,?6,?7) ON CONFLICT(day, worker, purpose, model) DO UPDATE SET calls=calls+1, errors=errors+?5, in_chars=in_chars+?6, ms=ms+?7").bind(day, worker, purpose, String(model), ok ? 0 : 1, ic, ms).run();
         })();
-        var wrSafe = wr.catch(function() {});
+        var wrSafe = wr.catch(function (e) { console.error(JSON.stringify({ evt: "ai:aiRunAttr:caught", error: String((e && e.message) || e) })); });
         // The counter write is tied to the request's lifetime so it is not dropped when the response returns first.
         if (env.__spendCtx && typeof env.__spendCtx.waitUntil === "function") env.__spendCtx.waitUntil(wrSafe);
       }
-    } catch (e3) {}
+    } catch (e3) { console.error(JSON.stringify({ evt: "ai:aiRunAttr:caught", error: String((e3 && e3.message) || e3) })); }
   }
 }
 // end aiRunAttr

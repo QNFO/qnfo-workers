@@ -1080,7 +1080,7 @@ function secretEq(a, b) {
   return diff === 0;
 }
 __name(secretEq, "secretEq");
-var VERSION = "0.26.2-remediation-2x"; /* 0.26.2 REMEDIATION-2X-1 (2026-10-13, pillar autonomy; owner directive "All issue remediation and consumer runs shall be quickened/increased a minimum of 100% (2x). All issues shall be remediated/resolved/drained/deployed faster than they accumulate."): the 20-minute cron runs every 10 minutes; the remediation tick, code-loop PR opening, the stale-PR lane and the deploy-drift runner run every 10 minutes (were 20), the code-loop merge decisions run at minute 30 as well as on the hourly tick, and a probed contract is due again after half its earlier offset (hourly: 18 minutes, was 35). The other 20-minute steps keep their grid. */ /* 0.26.1 CI-FEEDBACK-ORDER-1 (2026-10-13, pillar autonomy): a refused code-loop pull request's CI excerpt lists the failing suites and assertions first; runtime-error lines that passing suites print fill only the lines left (ct_j25aciskebfq1f read personal-api log noise instead of its failing suite). */ /* 0.26.0 DEPLOY-DRIFT-CF-1 (2026-10-13, pillars core and autonomy): the 20-minute tick is the deploy's second runner on Cloudflare (spof_registry GitHub Actions): a canonical-path worker whose main VERSION has been ahead of live for 45 minutes, with no canonical-deploy run active, is deployed through qnfo-ops POST /ops/deploy on the new SVC_QNFO_OPS binding (props.caller), at most 2 a tick; control-plane workers are skipped; ops_config deploy_drift_cf = off stops it. */ /* 0.25.0 METRIC-REFRESHER-2 (2026-10-13, pillar autonomy): the 20-minute tick is a second path for the four metrics only D1 triggers on fleet_tick wrote (audits_stale and the three publish-freshness metrics): same SQL, writes when the trigger path is stale, shadows otherwise; a clean run moves the two spof_registry rows to spof_registry_resolved. */ /* 0.24.1 LARGE-FILE-READ-1 (2026-10-13, pillar autonomy): the merge runner (cmRead) and evReadFile read a file above 1 MB through the git blobs API; the contents API returns no content past 1 MB, so every code-loop task on qnfo-research-exec/worker.js was refused at merge. */ // 0.24.0 RESEARCH-BACKPRESSURE-1 (agent_issues 2193): the 20-minute tick keeps at most research_ready_cap rows (default 3) of research_queue in status queued, chosen by priority (remediation, owner-authored, score, age), and holds the rest in a visible deferred pool released as executor slots free; research_ready stamps when a row became ready so research_queued_180m measures the wait for an executor; ops_config research_backpressure = off releases the pool. // 0.23.0 REMEDIATION-TICK-SLOT-1 (agent_issues 2461, 2199): the remediation tick runs on the light 20-minute cron with a 25 s budget instead of inside the hourly fan-out, where about 25 parallel jobs starve its sequential D1 probes and the event ends 30 s after the handler returns (2026-10-13 04:00 and 05:00 UTC: 10 and 11 probes, against about 150 before, so 203 active contracts went overdue); a probed contract is due again 25 minutes before its cadence so an hourly contract is re-probed inside its 60-minute window. /* 0.22.1 MERGE-RUNNER-READS-HOLDS-1: evMergePr reads the PR's HOLD comments before every merge, so the code-task and evolve runners honour a review hold as the stale-PR lane does (PR 1061 was merged 34 minutes after a HOLD); a held PR answers 423 and stays open. */ /* 0.22.0 CHAOS-DRILL-1 (2026-10-12, agent_issues 2180, pillar autonomy; doctrine section 10): every 6 h the hourly tick re-tests each resolved single point of failure's alternate path from spof_alternate_probes (a D1 evidence probe; the qnfo-pdf relay batch and the qnfo-ai router-down drill are forced first), stamps alternate_tested_at on both registers on a pass, files one CHAOS-DRILL-FAILED-1 issue per failing component and closes it on the next pass; metric spof_alternates_untested_24h, event chaos-drill. pdfBacklogRelay takes a force flag for the drill. 0.21.0 OBSERVABILITY-DRIFT-WATCH-1 (2026-10-12, agent_issues 2394, pillar core): the observability reassert reads each worker's declared [observability] blocks from main and holds the live settings to them (declared keys over live), instead of forcing every worker to logs, traces and issues at rate 1, which overwrote a declared rate on the next tick (qnfo-ai traces 0.1 read live 1) and made the declared config inert; a worker that declares nothing keeps the fleet default. Each run writes metric observability_drift_unrepaired (workers still drifting after the patch) and a cloud_ops_events obs-drift-repair row naming the repaired workers and keys. 0.20.1 ADVISOR-BACKLOG-DEDUPE-1 (2026-10-12, #2159, pillar autonomy): the 20-minute advisor audit no longer files its OPEN-ISSUES-BACKLOG ticket (metric open_agent_issues, trigger 362, issue 1798 owns that signal; the ticket reopened itself through issue_refile_reopen after every supersede) and closes any open one through issue_triage.close_evidence as superseded. 0.20.0 STALE-PR-LANE-READS-HOLDS-1 (2026-10-12, #2389, pillar autonomy): before the lane merges a quiet green pull request it reads the newest issue comments and the head commit's date; a comment newer than the head that asks for changes (HOLD:, do not merge, changes requested, "before this merges") refuses the merge with "a review comment asks for changes" and keeps the PR open, until a later comment says resolved or hold released, a new head commit lands, or the hold is 24 h old (logged as expired); comments the lane wrote (STALE-PR-, CYCLE-TIME-) never count. CONTROL-PLANE-FUNCTIONAL-CANARY-1 (#2176): the code loop's deny list (CM_DENY) no longer carries qnfo-ai and qnfo-gateway, which canonical-deploy canaries with a functional request (scripts/canary_revert.py FUNCTIONAL) and reverts on its own; the lane's control-plane handling (CM_CONTROL_PLANE: canary + mirror pair) still covers them. 0.19.5 PDF-RELAY-CADENCE-1 (2026-10-12, #2410): the relay runs every 20-minute tick while the pdf cron is silent (quiet window 15 min, was 25), takes the 90 s budget and chains up to three batches a tick. 0.19.4 WORKERS-BP-DEBT-1 (#2429, #2395, pillar security): the advisor route compares ADVISOR_TOKEN with secretEq, and the four Math.random ids and the multipart boundary take crypto.getRandomValues (randHex); the standing fail-class findings for this worker read 0. 0.19.3 (0.19.2 merged with main 0.18.2; every pushed byte change takes a bump) UNIFIED-COST-BYOK-DEFAULT-1 (#2423, pillar cost): the BYOK default names deepseek, anthropic and openai, so unified_cost_usd_30d stops counting our own-key Anthropic and OpenAI gateway requests as gateway-billed. 0.19.1 (0.19.0 plus the relay error-recording fix caught by pdf-relay.test.mjs) PDF-BACKLOG-RELAY-1 (#2410, 2026-10-12, pillar reach): the twenty-minute tick relays qnfo-pdf POST /backlog/tick through the new SVC_QNFO_PDF service binding whenever no pdf-backlog event has landed for 25 minutes, because the ten-minute cron written for qnfo-pdf at 12:04Z never fired (zero scheduled invocations over four ticks while every other ten-minute worker fired); ledger cloud_ops_events kind pdf-backlog-relay. Also MVP-FOLD-LATEST-1 (#2259, 2026-10-12, pillar core): the charter MVP fold map takes the latest fold row per worker instead of requiring the latest row of any kind to be a fold; the D1 trigger worker_removals_from_live_audit appends OBSERVED-REMOVED when a folded script is deleted, which hid six folds (qnfo-paper-reviser -> qnfo-research-exec among them) and refiled CHARTER-MVP-DOWN-1 against a serving host; a later RESURRECTED/RESTORED/UNFOLDED/REDEPLOYED row still ends the fold. Merged on main 0.18.2 (PR 1000 and its CodeQL follow-up) on 2026-10-12 and numbered above it. Prior: 0.18.1 REGEX-ESCAPE-1 + MD-CELL-ESCAPE-1 (CodeQL js/incomplete-sanitization on four lines of this file): a name put into a RegExp is escaped whole, and a Markdown table cell (charter, portfolio) escapes a backslash before the pipe. 0.18.0 the merge side of the code loop (owner directive 2026-10-12; issue 2074): GOAL-REVIEW-2 (a goal-review refusal needs two reviewers of different model families; each defect quotes the changed line it is about and is screened against the diff and the file at the head; VERSION, comment and style remarks never refuse; the reviewer reads the whole goal, the diff with long lines shown around their change, and the names the file defines), REFUSAL-REASON-1 + REPAIR-AT-OPEN-1 (a refusal reaches the planner's repair round as ctx.refusal and ctx.lastError, at the open step too), PATCH-REBUILD-1 + MIRROR-FOLLOWS-SOURCE-1 (a change that no longer fits its base is rebuilt from its parked edits or re-proposed, never a dead end; a publish_failed conflict goes back to the orchestrator), MERGE-MULTI-FILE-1 (ctx.paths companions, new files, ctx.x[].edits; ops_config code_merge_multi_file), MERGEABILITY-REQUERY-1 + LANE-TICK-20-1 (the stale-PR lane pre-warms and re-reads a null mergeability before any update-branch, and runs every 20 minutes), PUBLISH-DISPATCH-1 (code-task-publish.yml is dispatched when a task has been ready_to_publish for 10 minutes; ops_config code_publish_dispatch_enabled). 0.17.0 MERGEABILITY-NUDGE-1 + MERGE-REFUSAL-LOG-1 (#2230): a green quiet session PR whose GitHub mergeability stays null (or whose branch is only behind main) gets PUT /pulls/{n}/update-branch pinned to its head and is kept, at most 3 times in 24h (ops_config stale_pr_nudge_enabled), and every non-merge is a branch_hygiene_log row merge-nudge or merge-refused (one per PR, head and reason). STALE-PR-CONFLICT-REPAIR-1 (#2304, carried from PR 910): a quiet PR that conflicts with main gets one deduped high-priority issue with the re-apply procedure (ops_config stale_pr_conflict_repair_enabled). SECRET-COMPARE-1: 32 token comparisons are constant-time; SECURE-ID-1: code task ids come from crypto.getRandomValues. Prior: 0.16.1 PERF-PIN-1 (#2177): ops_config perf_pin:<lever> takes one knob out of the performance loop's search space, so the loop can run again while the owner's q08_max_per_day stays untouched. 0.16.0 CODE-REPAIR-INTASK-1 (owner directive 2026-10-11, deploy success): a goal-review or required-check refusal of an open code-loop PR sends the task back to propose with the defects or failing suite as feedback, on a fresh branch, up to 2 rounds, instead of failing it.  0.13.1: the repair filing also writes cloud_ops_events kind stale-pr-check-repair (the issue-2122 contract proof). 0.13.0 STALE-PR-CHECK-REPAIR-1 (agent_issues 2122): a quiet session PR that is green on every required check but fails only a non-required check (CodeQL) is never merged; the branch sweeper now files one agent_issue per such PR with the failing runs' annotations and a code-task line naming the annotated file, so the finding is fixed instead of the PR being closed unmerged at 24h. */ /* 0.12.2 COST-RUN-RATE-2 (owner request 2026-10-09): fleet_budget ai_spend caps meter the 7-day run rate x 30 from v_cost_run_rate (the daily all-billing cost ledger) instead of a 30-day window; the 30-day figures remain the fallback. */ /* 0.12.1 DETECTOR-CADENCE-1: standing detectors (fm-*, belief-*) are exempt from REMEDIATION-HOLD-1, so failure-mode and belief audits run hourly instead of parking 24 h and closing after 7 days. */ /* 0.12.0 PORTFOLIO-CODE-PUBLISH-1 (#2062, card code-repos-create): the daily portfolio sync creates each staged research-code library's public repository with the fleet token and copies research-code/<name>/ into it (at most 3 per sync, existing files never replaced), then marks the row public. */ /* 0.11.7 CHARTER_VERSION 1.0.14 (DOCTRINE-1, charter section 8 rule 13); no behaviour change. */ /* 0.11.6 CHARTER_VERSION 1.0.13 (ANTIFRAGILE-1, charter section 8 rule 12); no behaviour change. */ /* 0.11.5 QUEUE-SLA-1 (2026-10-08, pillar autonomy, owner directive "No issue shall remain unprocessed/unremediated for greater than 3 hours"): the remediation tick evaluates up to 150 due contracts per run (was 15): 94 of 136 open issues had no probe verdict in 3 h because 15 per hourly tick could not cover them; migrations/2026-10-08-queue-sla.sql makes every open-issue contract due hourly. */ /* 0.11.4 AUTONOMY-FIRST-1 (2026-10-08, pillar autonomy): CHARTER_VERSION 1.0.12, charter section 8 rule 11 (autonomy first: the only owner interrupt is an action both irreversible and identity-bound; enforced on the owner queue by migrations/2026-10-08-autonomy-first.sql); no behaviour change in this worker. */ /* 0.11.3 PROMPT-CACHE-COUNT-4 (issue 2115, 2026-10-08, pillar cost): aiRunAttr also writes the ai_cache_counters row (qnfo-ops form) for text models, so fleet-control and qnfo-fleet-control calls count toward the cached-input share. */  /* 0.11.2 REBASE-INTEGRITY-1 (2026-10-07, pillar autonomy): cmIntegrity judges a branch code-task-publish rebuilt from ctx.edits on current main (REBASE-BEFORE-PUBLISH-1, ctx.rebased) by re-applying those edits at the merge base and bumping the VERSION as the publisher does, instead of the parked ctx.patch that was cut against the old base; its revert inverts the edits on today's main. The first rebuilt branch to pass REBASE-BRANCH-ACCEPT-1 (codeagent-3oa9p0pglnnj-r2, 17:20Z) was refused at this gate ("the verified patch does not apply to idea-hub/deployed-current.worker.js at the merge base 0ac2898"), so the no-model rebase path still produced no pull request. */ /* 0.11.1 OWNER-LOCAL-INGEST-1b (2026-10-07, pillar cost, agent_issues 2080): the gateway log ingest asks the API for paid non-Workers-AI rows after its cursor (filters cost gt 0, provider neq workers-ai, created_at gt cursor), oldest first, 20 pages a tick, so the cursor only ever advances over rows it ingested and a 7-day backfill completes over a few ticks; 0.11.0 read the newest 500 of all rows newest first (418,943 in the gateway, 69 of each 100 Workers AI), reached 7 hours back on its first tick, moved the cursor to the newest row and attributed none of the 4,991 untagged DeepSeek requests of the week (measured 2026-10-07T16:15Z, about $15). Cursor key owner_local_cursor_v2:<gateway>; the v1 key is removed; the event meta reports more and remaining. Also REBASE-BRANCH-ACCEPT-1 (pillar autonomy): cmOpenDecide and cmDecide accept a task's -r<n> rebuilt branch (cmTaskBranch), so a REBASE-REQUEUE-1 rebuild gets its pull request (codeagent-3oa9p0pglnnj-r2 was refused as "not a code-loop branch" at 15:20Z, the path's first live instance); and ISSUE-NOTE-NEWLINE-1: the merge runner's note on a source issue (and the evolve merge note) starts on its own line instead of " | " on the issue's last line, which was the code-anchor: line of 10 open ACT-BRIDGE-1 issues, so their retries ran anchor-less (migrations/2026-10-07-issue-note-newline.sql repairs the open rows). */ /* 0.11.0 OWNER-LOCAL-INGEST-1 (2026-10-07, pillar cost, agent_issues 2080): the hourly tick reads each AI Gateway's request log since a per-gateway cursor and attributes the paid cost: untagged requests (the owner's desktop clients) to ai_spend_owner_local, requests tagged by a fleet worker that keeps no ledger of its own to ai_spend_ledger under that worker; cost_attribution_gap_pct counts both (it read 98 with $21.77 of 7-day DeepSeek cost unattributed), the dashboard gets owner_local_cost_usd_30d. */ /* 0.10.0 SCOPE-SCRIPTS-1 (2026-10-07, pillar autonomy, issue 2101): the merge runner's scope gains kind "script": scripts/*.py and scripts/*.mjs that are not CI gates or guards, suites, deploy primitives or the loop's own runners (CM_SCRIPT_DENY), so a fleet script defect can be a code task instead of session work (issue 2025 sat with a session-task line for scripts/cf_ops_actions.py only because of the scope). A script merges on gate, mirror-guard and comparator (deploy-gate runs the script selftests) and is verified at merge; nothing deploys it. */ /* 0.9.1 GOAL-REVIEW-HARM-1 (2026-10-07, pillar autonomy): the goal reviewer also answers harm (true when any changed line is wrong: breaks or removes kept behaviour, adds code that can never run, miscounts, contradicts a stated rule, would throw), and harm refuses whatever the verdict. The first live review (ct_hdaim0vx7h7vvl, 08:40Z, gpt-oss-120b) answered partial while naming two errors, an unreachable else that still incremented diversity_held and owner rows not forced to ACCEPT, so the runner opened PR 765, which a session closed as superseded by PR 762. A cached review without harm decides as before. 0.9.0 0.9.0 GOAL-REVIEW-1 (2026-10-07, pillar autonomy, docs/ENSEMBLE-POLICY.md): before the merge runner opens or merges a code-loop pull request, one Workers AI model from a family other than the proposer's (CM_REVIEW_MODELS gpt-oss-120b, deepseek-v4-flash, llama-3.3-70b; ops_config code_goal_review_models) reads the goal and the head diff and answers implements, partial or no; "no" refuses the task with the defects it names, which reach the intake retry through CI-FEEDBACK-1. One call per head, cached in cloud_ops_events goal-review-<task>-<head>, metered as purpose goal-review; no AI binding or ops_config code_goal_review_enabled off skips it; three unreadable replies let the checks decide (recorded). Of the three tasks self-repair rescued on 2026-10-06/07, #2052's patch only passed [] to the removed deposit stage and #1815's wrote living-paper columns no migration creates and labelled a paper "proved" when its body said "proof"; no check could see either. Also 0.8.2 MERGE-VERIFY-ATTEMPTS-1 (2026-10-07, pillar autonomy): the merge runner's verify gate accepts a task that verified after SELF-REPAIR-1 retries (attempts below CM_TASK_MAX_ATTEMPTS 9, the orchestrator's MAX_ATTEMPTS * RETRY_ROUNDS, parity-tested) instead of attempts below 3; step done with no last_error stays the record of a passed verify, and the required checks still gate every merge. The old bound refused all three tasks self-repair rescued (ct_yop1itun7a9ulz #1815, ct_vdgdp57qdszmkb #2052, ct_i0b4q32jxbvia7 #2055), each a failure in code_task_success_rate_30d with a verified patch. 0.8.1 0.8.1 MVP-FOLD-NOTDEPLOYED-1 (2026-10-07, pillar core, agent_issues 2090-2094): a folded MVP component is judged by its fold host unless its own audit row still serves (SYNC, CRON_ONLY or http 200); 0.4.129 deferred to the host only while the old script was absent from the audit or RETIRED_PRESENT, so after cf-ops delete-worker its row read NOT_DEPLOYED (404) and calendar-api, fleet-exec, qnfo-autonomy-scorer, qnfo-paper-indexer and qnfo-paper-reviser filed CHARTER-MVP-DOWN-1 while every host was SYNC. 0.8.0 0.8.0 CI-FEEDBACK-1 (2026-10-07, pillar autonomy): when a required check fails on a code-loop pull request, the merge runner reads that job's log and records the failing suites and assertion lines (cmFailureLines, at most 10 lines) in the refusal, so the task's merge_note and its issue say what broke and the next intake retry carries it; before this the note said only "gate=failure" and every retry was blind (PR 750 broke qnfo-ipatent/mechanism.test.mjs, PR 752 changed a value quality.test.mjs:190 pins). merge_note and last_error keep 1200 characters (was 500). 0.7.1 (2026-10-06, pillar autonomy): CHARTER_VERSION 1.0.11 in parity with the charter, which adds decision rule 10 "decide, then record" (RULE-8-RETIRED-1, owner directive 2026-10-06: core prompt rule 8 is deleted); one comment no longer cites rule 8. 0.7.0 CONTROL-PLANE-SELF-MERGE-1 (2026-10-06, transformation lever T1.21, pillar autonomy; owner directive 2026-10-06: more flexibility and autonomy, decide for itself): the stale-PR lane merges a green, quiet session pull request that changes a control-plane worker (CM_DENY) when ops_config control_plane_self_merge is on, the worker has a /health canary (CP_CANARY_WORKERS) and the pull request carries worker.js with its mirror; canonical-deploy.yml canaries /health for the new VERSION and reverts the push on its own (scripts/canary_revert.py, CONTROL-PLANE-CANARY-1), which replaces CONTROL-PLANE-MANUAL-1 (decision (a), human_actions 21, migrations/2026-10-06-control-plane-self-merge.sql). Workflows under .github/ still never auto-merge; the code loop still neither plans nor merges control-plane workers. 0.6.2 CRAWL-VERIFIED-GOOGLEBOT-1 (2026-10-06, pillar reach): the crawl-health view counts only requests from Google's published Googlebot ranges (googlebot.json, fallback 66.249.64.0/19); spoofed Googlebot scans are reported, not counted; a robots.txt 404 is not a failure; sitemap failures only for CRAWL_SITEMAPS. 0.6.1 (2026-10-06, pillar cost): CHARTER_VERSION 1.0.10 in parity with the charter, which records BUDGET-SOFT-ROUTE-1 (owner directive: AI spend caps steer model choice and never stop work). 0.6.0 PROBE-TRANSPORTS-1 (2026-10-06, pillar autonomy; owner directive OWNER-NO-LOOSE-ENDS-1): remediation contracts can check public sources outside the fleet: transport external-https (GET or HEAD on an allowlist of GitHub, PyPI, DOI, OpenAlex, Crossref and DataCite, https only, no credentials, redirects observed not followed, status, header, body-contains or json check; expected from the probe, observed from the response; contracts on fleet hosts are left to the off-Cloudflare executor of agent_issues 2060, issue 1190) and d1-query@portfolio-state (the PORTFOLIO binding) join d1-query; verification rows record the transport. 0.5.0 DANGLING-BINDINGS-1 (2026-10-06, transformation lever T9.4, pillar core): the 03:00Z tick runs danglingBindingsCensus, every live script's settings (CF API workers/scripts/<name>/settings) against the account's D1, KV, R2, queue, Vectorize and script lists; dangling_bindings is the count (migrations/2026-10-06-dangling-bindings.sql: guard metric, trigger gt 0, contract) and cloud_ops_events dangling-bindings-<day> names script, binding, kind and target; unverifiable binding types and unreadable lists count as unchecked, never as dangling; the WATCHMAKER_OPS entry dangling-bindings-census is code task DANGLING-BINDINGS-WATCHMAKER-1 (agent_issues 2051). Also PORTFOLIO-ARCHIVE-1 (REPO-ARCHIVE-1, agent_issues 2045): pfHygieneApply executes explicit portfolio_actions archive-request rows (PATCH archived=true, reversible, at most PF_ARCHIVE_MAX per sync, never a delete; docs/PORTFOLIO.md rule 3), because a session's GitHub proxy refuses repository settings writes. 0.4.140 CRAWL-HEALTH-Q08-1: the Googlebot check also reads the q08.org zone and its sitemap; 0.4.139 ONE-WORKER-COUNT-1 + COST-ATTRIBUTION-GAP-1 + REBASE-REQUEUE-1 (2026-10-06, transformation levers T5.10, T4.7 and T1.3 half 2; pillars core, cost, autonomy): budgetAudit writes metric_registry.worker_count from the live scripts census it already writes to fleet_budget.workers and worker_count_disagreement (guard) from its comparison with service_registry state live (the names in cloud_ops_events worker-count-<day>; qnfo-lifecycle stops writing worker_count); refreshOwnedMetrics writes cost_attribution_gap_pct, the share of the paid AI Gateway list cost of the last 7 days that has no ai_spend_ledger row (per provider and the models with the largest cost in cloud_ops_events cost-attribution-<day>; 98.7% on 2026-10-06, most of it a Node client with no cf-aig-metadata); cmRequeueStale hands a stale task that parked its SEARCH/REPLACE edits back to code-task-publish (status ready_to_publish, branch <branch>-r2) for a rebuild on current main without a model call (REBASE-BEFORE-PUBLISH-1), once, before re-proposing; numbered above main's 0.4.138 (main took 0.4.135 to 0.4.138 while this change was open: PRs 699, 707, 709). 0.4.138 CRAWL-HEALTH-1: Googlebot sitemap and error view from the zone request log, self-filing and self-closing; 0.4.137 SEARCH-REFERRALS-1: search_referrals_30d and google_referrals_30d from Cloudflare RUM referrers each reach tick; 0.4.136 metric column fix; 0.4.135 GOOGLE-IDENTITY-DETECT-1: the reach tick resolves the owner Google card from public DNS; 0.4.134 W0-LEADING-EXIT-1 (2026-10-06, pillar autonomy, docs/TRANSFORMATION-PROGRAM.md 1.2 T1 lever 16): wave W0 exits on code_task_success_rate_engine, the success rate (merged over finished, the formula of code_task_success_rate_30d) of code tasks created after lever (1, 15) MERGE-SCOPE-INTAKE-1 landed, measured only once at least TP_ENGINE_MIN_FINISHED (8) have finished; the 42 closures of 2026-10-02..10-05 stay in the 30-day window until November whatever the engine does now, so W0 measured the past. code_task_success_rate_30d keeps its scoreboard row and its trigger. 0.4.133 SCORER-HOST-DENY-1 (2026-10-06, pillar autonomy, docs/TRANSFORMATION-PROGRAM.md 1.2 section 1.12): EVOLVE_DENY (so CM_DENY) and TP_CONTROL_PLANE name qnfo-observability. qnfo-autonomy-scorer was denied so that no loop merges a change to the formula that grades the fleet; SCORER-FOLD-1 (PR 668) moved that code into qnfo-observability, which the merge runner and the planner then accepted. A FOLDED worker's host now inherits its place, and fold-guard.test.mjs fails CI when a marker names a denied guest whose host is not denied, or when this list, the transformation loop's and the orchestrator's PLAN_DENY_WORKERS differ. 0.4.132 TRANSFORMATION-LOOP-1 (2026-10-06, owner directive 2026-10-06, pillar autonomy; 0.4.132 adds TP-1a TRUSTED-ORIGIN-PARITY-1 (agent_issues 2005: the CM_TRUSTED_SOURCES default carries every pair the orchestrator planner trusts plus the TP- origins, parity-tested in code-merge.test.mjs), the W1 exit counting needs-machine-probe contracts on open issues only (closed ones on their own scoreboard row, document 1.1 section 1.10), and TP-WAVE-EXIT-STALLED-1, filed when an unmet exit metric of the active wave reads the same value in metric_history 14 days apart): the engine docs/TRANSFORMATION-PROGRAM.md section 5 describes, on the hourly tick: transformation_levers (one row per lever, seeded by migrations/2026-10-06-transformation-loop.sql), wave state from the section 4 exit metrics, dispatch of the next eligible code lever as a code-task issue (session-task for refactor, retire, migration, platform and control-plane levers; TP_SESSION_MAX open at once), landing from merged code tasks and closed issues, 14-day stall detection (TP-LEVER-STALLED-1), session fallback (CODE-TASK-NEEDS-SESSION-1), the section 6 scoreboard in transformation_runs, metric transformation_levers_landed_14d, GET /transformation and POST /transformation/tick; no new cron, worker, binding or model call. 0.4.128 REMEDIATION-PENDING-PREFIX-1 (pillar autonomy): a probe observation that starts with 'pending' (the 'pending: <reason>' form six live contracts use) is a deferral like a bare 'pending': it neither breaks a hold, reopens a closed issue, counts toward max_attempts nor ends a pass streak; 0.4.130 PR-OPEN-ON-20MIN-TICK-1 (agent_issues 2017, TP-1b2, pillar autonomy): the 20-minute cron also runs codeMergeTick(env, { openOnly: true }), which only opens pull requests for branch_pushed code tasks (no advance, no merge decision, no reconciliation, no day heartbeat) and stands aside at minute 0 where the hourly tick runs; measured 2026-10-06, a pushed codeagent branch waited 40-50 min for its PR on every task (pr_opened_at always hh:00) and 5 h overnight because only the hourly tick opened them, while code-task-publish had pushed the branch within a minute. CHARTER-1.0.9: CHARTER_VERSION 1.0.9 for the charter's TRANSFORMATION-PROGRAM-1 input pointer (PR 664), charter-guard C5 parity, no behaviour change. 0.4.129 MVP-FOLD-AWARE-1 (pillar core, #1756): an MVP component recorded as folded into a host (worker_removals action folded, target host) serves when its host serves, so folding a core worker under the owner standing grant does not file CHARTER-MVP-DOWN-1; the note reads FOLDED:<host>/<host note>. 0.4.128 0.4.128 REMEDIATION-PENDING-PREFIX-1 (pillar autonomy): a probe observation that starts with 'pending' (the 'pending: <reason>' form six live contracts use) is a deferral like a bare 'pending': it neither breaks a hold, reopens a closed issue, counts toward max_attempts nor ends a pass streak; 0.4.127 0.4.127 ATTRIBUTION-COVERAGE-DTD-1 (agent_issues 1997, pillar cost): workers_ai_attribution_coverage_pct is the day-to-date ratio (attributed neurons today / GraphQL neurons since 00:00Z), capped at 100, and is left unchanged while today's GraphQL total is under 5000 neurons; the hourly delta (73.2 at 19:00Z on 2026-10-05 while day-to-date read 100) filed METRIC-FIX-RELAPSED-1 on one bursty hour. 0.4.126 CREDIBILITY-CITATION-DEDUPE-1 (agent_issues 1838, pillar reach): perfCredibility no longer counts external_mentions rows whose source is an OpenAlex/Crossref/DataCite/Semantic Scholar citation feed (qnfo-cloud-ops jobRadar files every OpenAlex citation there too) as a third-party mention; citations count once, through the selected-works growth term, and the detail reports citation_mentions_not_counted. 0.4.125 0.4.125 CHARTER-1.0.8 (owner standing decision 5, 2026-10-05, pillar autonomy): CHARTER_VERSION 1.0.8 for the owner's standing grant OWNER-STANDING-GRANT-1 (charter decision rule 9: retire low-value workers after a dependency check, delete unused databases after a verified backup, switch to cheaper models with fallback and automatic revert, no owner card); charter-guard C5 parity, no behaviour change. 0.4.124 0.4.124 DRIFT-CONFIRM-2 (agent_issues 1993, pillar core): drift_total's terms (ghost, unregistered, unversioned, repo_live) are computed by one pure function; a non-zero first read is re-read once after 20s and the smaller value is written (the 18:00:13Z read of 1 sampled the inputs while the deploy batch, the self-audit and the registry sync were writing them; PR 636 DRIFT-AUDIT-AFTER-DEPLOY-1 re-audits after each deploy, this change stops the sample from being written); a non-zero first read leaves a cloud_ops_events row (kind drift-total-detail) naming the workers behind each term. 0.4.123 REMEDIATION-HOLD-1 (agent_issues 1297, pillar autonomy): a remediation contract that passes no longer stops; it holds, read once a day, and closes only after a 7-day pass streak (RT_HOLD_D), so a closure that breaks again inside the window reopens through REMEDIATION-REOPEN-1 (the 2026-09-28 closures 1283, 1284 and 1287 passed once and broke within hours after their contracts had stopped); a relapse returns the contract to active. 0.4.122 is left to session_013sMN4pr2RGmHezM4Gm6fMk (#1838). 0.4.121 REMEDIATION-REOPEN-1 fix (agent_issues 1297): an observation of 'pending' (the deferral convention, written by this tick and by remediation-consumer) neither reopens a closed issue nor counts toward max_attempts; 0.4.119 would have reopened 1919 and 1920 on their third pending row. 0.4.120 Q08-SELF-TUNE-1 (agent_issues 1760, pillar reach): PERF_LEVERS gains q08-temperature (q08_gate_pass_rate_7d, ops_config q08_compose_temperature 0.4..0.8 step 0.1, direction -1, effect higher, eval 14 days, capped by the q08 review lock); a lever step is rounded to 4 decimals so a 0.1 step never writes 0.5500000000000000. 0.4.119 REMEDIATION-REOPEN-1 (agent_issues 1297, pillar autonomy): remediationContractsTick reads the issue status; a contract on a wontfix issue is marked superseded, and a contract whose probe fails max_attempts times after its issue was closed (or since its last pass) reopens that issue once, with the failure and the prior close_evidence in its description (59 contracts had failed hourly on closed issues with nothing acting on it; INTEGRITY-GUARDS-1: a failing probe on a closed issue is a closure that did not hold); verification rows are never deleted. 0.4.118 (2026-10-05, remediation B2): LAND-BUNDLE-GUARD-1 (issues 1976, 1979): landFix refuses to commit a deployed script that adds esbuild __name helper layers or keeps under half of main's comment lines (the 2026-10-04 qnfo-fleet-dashboard 1.21.4 landing replaced the hand-written source with a wrangler bundle) and files one LAND-BUNDLE-REFUSED-1 issue instead; REPO-LIVE-DRIFT-1 (issue 1879): drift_total adds the fleet self-audit's DRIFT and CONTENT_DRIFT rows (live version or script sha256 differs from main) and counts a missing or 26h-old audit as 1; CF-CHANGELOG-LEADS-1 (issue 1959): a launch of a proposed or not_considered catalog row writes a dated when_to_choose line (max 5 a day) and GET /cf-changelog lists cost, speed and consolidation leads; CLEF-CANDIDATE-1 re-landed (PR 586 closed unmerged): clef_candidate_calls_7d is written hourly; IMPROVEMENT-UNMEASURED-STAMP-1 (issue 1865): the improvement loop stamps last_refreshed with state UNMEASURED while its trend metrics have too little history. 0.4.117 merge lane (agent_issues 1965, 1960, 1975, 1877, 1928; pillar autonomy): STALE-PR-MERGE-FIRST-1, a session pull request quiet for 2h whose required checks are green and whose mergeable_state is clean is merged by the branch sweeper (squash, pinned to the tested head) instead of being closed unmerged at 24h (PR 586 was closed green); never a draft, a do-not-merge or WIP PR, a .github/ change, a fork or a codeagent-/evolve/ branch; kill switch ops_config stale_pr_merge_enabled. MERGE-RUNNER-REFUSAL-TAXONOMY-1: a merge-runner refusal ends the code task 'failed' and hands it to the fleet (a note on its source issue, or one CODE-MERGE-REFUSED-1 issue), not an owner card. NOCHECKS-CONFLICT-1: no checks on a conflicted PR is a stale base at once; MERGE-NOCHECKS-REOPEN-1: no checks on a clean PR after 3h closes and reopens it once with the fleet token before refusing. CODE-CLOSE-REASON-1: a PR closed outside the runner records who closed it (CYCLE-TIME-1 or someone else). MERGE-RUNNER-VERSION-FORM-1: `var VERSION="x"` without spaces or semicolon is bumpable and revertible. CRON-ONLY-VERIFY-1: a cron-only worker (worker_live_audit CRON_ONLY) is verified by its fleet_heartbeat VERSION, not reverted on http null (ct_02oohvsbf1gbji). 0.4.116 IDEA-BUILDABLE-TRUTH-1: an idea is buildable only when it carries an edit point; 0.4.115 0.4.115 CYCLE-TIME-1 (2026-10-04, issue 1961): branch sweeper graces shortened to 12h closed-PR / 24h orphan / 1 day needs_human, and a stale open pull request (head not a live code task, idle over BH_STALE_PR_H 24h) is archived, commented and closed each tick so the open-PR backlog turns over inside a day. 0.4.114 MERGE-RUNNER-UNSTICK-1 (qa 2026-10-04, agent_issues 1960 PR-LANE-ZERO-TOUCH-1): GitHub computes mergeability lazily and main moves every few minutes (ci(status) commits), so the merge runner's single read per hourly tick returned mergeable=null for a green pull request every time (PRs 564, 550, 551 sat published with all checks green while none merged); it now re-reads up to CM_MERGEABLE_READS times within a tick, and takes candidates round-robin by merge_checked_at so a stuck five no longer fills every tick. 0.4.113 BRANCH-HYGIENE-2: the branch sweeper keeps the branch of a code task the merge runner refused (needs_human) for 7 days after its last update, so the branch a person has to act on is not archived and deleted after the 48h grace; GET /branch-hygiene reports needs_human_days */
+var VERSION = "0.26.3-log-catches"; /* 0.26.2 REMEDIATION-2X-1 (2026-10-13, pillar autonomy; owner directive "All issue remediation and consumer runs shall be quickened/increased a minimum of 100% (2x). All issues shall be remediated/resolved/drained/deployed faster than they accumulate."): the 20-minute cron runs every 10 minutes; the remediation tick, code-loop PR opening, the stale-PR lane and the deploy-drift runner run every 10 minutes (were 20), the code-loop merge decisions run at minute 30 as well as on the hourly tick, and a probed contract is due again after half its earlier offset (hourly: 18 minutes, was 35). The other 20-minute steps keep their grid. */ /* 0.26.1 CI-FEEDBACK-ORDER-1 (2026-10-13, pillar autonomy): a refused code-loop pull request's CI excerpt lists the failing suites and assertions first; runtime-error lines that passing suites print fill only the lines left (ct_j25aciskebfq1f read personal-api log noise instead of its failing suite). */ /* 0.26.0 DEPLOY-DRIFT-CF-1 (2026-10-13, pillars core and autonomy): the 20-minute tick is the deploy's second runner on Cloudflare (spof_registry GitHub Actions): a canonical-path worker whose main VERSION has been ahead of live for 45 minutes, with no canonical-deploy run active, is deployed through qnfo-ops POST /ops/deploy on the new SVC_QNFO_OPS binding (props.caller), at most 2 a tick; control-plane workers are skipped; ops_config deploy_drift_cf = off stops it. */ /* 0.25.0 METRIC-REFRESHER-2 (2026-10-13, pillar autonomy): the 20-minute tick is a second path for the four metrics only D1 triggers on fleet_tick wrote (audits_stale and the three publish-freshness metrics): same SQL, writes when the trigger path is stale, shadows otherwise; a clean run moves the two spof_registry rows to spof_registry_resolved. */ /* 0.24.1 LARGE-FILE-READ-1 (2026-10-13, pillar autonomy): the merge runner (cmRead) and evReadFile read a file above 1 MB through the git blobs API; the contents API returns no content past 1 MB, so every code-loop task on qnfo-research-exec/worker.js was refused at merge. */ // 0.24.0 RESEARCH-BACKPRESSURE-1 (agent_issues 2193): the 20-minute tick keeps at most research_ready_cap rows (default 3) of research_queue in status queued, chosen by priority (remediation, owner-authored, score, age), and holds the rest in a visible deferred pool released as executor slots free; research_ready stamps when a row became ready so research_queued_180m measures the wait for an executor; ops_config research_backpressure = off releases the pool. // 0.23.0 REMEDIATION-TICK-SLOT-1 (agent_issues 2461, 2199): the remediation tick runs on the light 20-minute cron with a 25 s budget instead of inside the hourly fan-out, where about 25 parallel jobs starve its sequential D1 probes and the event ends 30 s after the handler returns (2026-10-13 04:00 and 05:00 UTC: 10 and 11 probes, against about 150 before, so 203 active contracts went overdue); a probed contract is due again 25 minutes before its cadence so an hourly contract is re-probed inside its 60-minute window. /* 0.22.1 MERGE-RUNNER-READS-HOLDS-1: evMergePr reads the PR's HOLD comments before every merge, so the code-task and evolve runners honour a review hold as the stale-PR lane does (PR 1061 was merged 34 minutes after a HOLD); a held PR answers 423 and stays open. */ /* 0.22.0 CHAOS-DRILL-1 (2026-10-12, agent_issues 2180, pillar autonomy; doctrine section 10): every 6 h the hourly tick re-tests each resolved single point of failure's alternate path from spof_alternate_probes (a D1 evidence probe; the qnfo-pdf relay batch and the qnfo-ai router-down drill are forced first), stamps alternate_tested_at on both registers on a pass, files one CHAOS-DRILL-FAILED-1 issue per failing component and closes it on the next pass; metric spof_alternates_untested_24h, event chaos-drill. pdfBacklogRelay takes a force flag for the drill. 0.21.0 OBSERVABILITY-DRIFT-WATCH-1 (2026-10-12, agent_issues 2394, pillar core): the observability reassert reads each worker's declared [observability] blocks from main and holds the live settings to them (declared keys over live), instead of forcing every worker to logs, traces and issues at rate 1, which overwrote a declared rate on the next tick (qnfo-ai traces 0.1 read live 1) and made the declared config inert; a worker that declares nothing keeps the fleet default. Each run writes metric observability_drift_unrepaired (workers still drifting after the patch) and a cloud_ops_events obs-drift-repair row naming the repaired workers and keys. 0.20.1 ADVISOR-BACKLOG-DEDUPE-1 (2026-10-12, #2159, pillar autonomy): the 20-minute advisor audit no longer files its OPEN-ISSUES-BACKLOG ticket (metric open_agent_issues, trigger 362, issue 1798 owns that signal; the ticket reopened itself through issue_refile_reopen after every supersede) and closes any open one through issue_triage.close_evidence as superseded. 0.20.0 STALE-PR-LANE-READS-HOLDS-1 (2026-10-12, #2389, pillar autonomy): before the lane merges a quiet green pull request it reads the newest issue comments and the head commit's date; a comment newer than the head that asks for changes (HOLD:, do not merge, changes requested, "before this merges") refuses the merge with "a review comment asks for changes" and keeps the PR open, until a later comment says resolved or hold released, a new head commit lands, or the hold is 24 h old (logged as expired); comments the lane wrote (STALE-PR-, CYCLE-TIME-) never count. CONTROL-PLANE-FUNCTIONAL-CANARY-1 (#2176): the code loop's deny list (CM_DENY) no longer carries qnfo-ai and qnfo-gateway, which canonical-deploy canaries with a functional request (scripts/canary_revert.py FUNCTIONAL) and reverts on its own; the lane's control-plane handling (CM_CONTROL_PLANE: canary + mirror pair) still covers them. 0.19.5 PDF-RELAY-CADENCE-1 (2026-10-12, #2410): the relay runs every 20-minute tick while the pdf cron is silent (quiet window 15 min, was 25), takes the 90 s budget and chains up to three batches a tick. 0.19.4 WORKERS-BP-DEBT-1 (#2429, #2395, pillar security): the advisor route compares ADVISOR_TOKEN with secretEq, and the four Math.random ids and the multipart boundary take crypto.getRandomValues (randHex); the standing fail-class findings for this worker read 0. 0.19.3 (0.19.2 merged with main 0.18.2; every pushed byte change takes a bump) UNIFIED-COST-BYOK-DEFAULT-1 (#2423, pillar cost): the BYOK default names deepseek, anthropic and openai, so unified_cost_usd_30d stops counting our own-key Anthropic and OpenAI gateway requests as gateway-billed. 0.19.1 (0.19.0 plus the relay error-recording fix caught by pdf-relay.test.mjs) PDF-BACKLOG-RELAY-1 (#2410, 2026-10-12, pillar reach): the twenty-minute tick relays qnfo-pdf POST /backlog/tick through the new SVC_QNFO_PDF service binding whenever no pdf-backlog event has landed for 25 minutes, because the ten-minute cron written for qnfo-pdf at 12:04Z never fired (zero scheduled invocations over four ticks while every other ten-minute worker fired); ledger cloud_ops_events kind pdf-backlog-relay. Also MVP-FOLD-LATEST-1 (#2259, 2026-10-12, pillar core): the charter MVP fold map takes the latest fold row per worker instead of requiring the latest row of any kind to be a fold; the D1 trigger worker_removals_from_live_audit appends OBSERVED-REMOVED when a folded script is deleted, which hid six folds (qnfo-paper-reviser -> qnfo-research-exec among them) and refiled CHARTER-MVP-DOWN-1 against a serving host; a later RESURRECTED/RESTORED/UNFOLDED/REDEPLOYED row still ends the fold. Merged on main 0.18.2 (PR 1000 and its CodeQL follow-up) on 2026-10-12 and numbered above it. Prior: 0.18.1 REGEX-ESCAPE-1 + MD-CELL-ESCAPE-1 (CodeQL js/incomplete-sanitization on four lines of this file): a name put into a RegExp is escaped whole, and a Markdown table cell (charter, portfolio) escapes a backslash before the pipe. 0.18.0 the merge side of the code loop (owner directive 2026-10-12; issue 2074): GOAL-REVIEW-2 (a goal-review refusal needs two reviewers of different model families; each defect quotes the changed line it is about and is screened against the diff and the file at the head; VERSION, comment and style remarks never refuse; the reviewer reads the whole goal, the diff with long lines shown around their change, and the names the file defines), REFUSAL-REASON-1 + REPAIR-AT-OPEN-1 (a refusal reaches the planner's repair round as ctx.refusal and ctx.lastError, at the open step too), PATCH-REBUILD-1 + MIRROR-FOLLOWS-SOURCE-1 (a change that no longer fits its base is rebuilt from its parked edits or re-proposed, never a dead end; a publish_failed conflict goes back to the orchestrator), MERGE-MULTI-FILE-1 (ctx.paths companions, new files, ctx.x[].edits; ops_config code_merge_multi_file), MERGEABILITY-REQUERY-1 + LANE-TICK-20-1 (the stale-PR lane pre-warms and re-reads a null mergeability before any update-branch, and runs every 20 minutes), PUBLISH-DISPATCH-1 (code-task-publish.yml is dispatched when a task has been ready_to_publish for 10 minutes; ops_config code_publish_dispatch_enabled). 0.17.0 MERGEABILITY-NUDGE-1 + MERGE-REFUSAL-LOG-1 (#2230): a green quiet session PR whose GitHub mergeability stays null (or whose branch is only behind main) gets PUT /pulls/{n}/update-branch pinned to its head and is kept, at most 3 times in 24h (ops_config stale_pr_nudge_enabled), and every non-merge is a branch_hygiene_log row merge-nudge or merge-refused (one per PR, head and reason). STALE-PR-CONFLICT-REPAIR-1 (#2304, carried from PR 910): a quiet PR that conflicts with main gets one deduped high-priority issue with the re-apply procedure (ops_config stale_pr_conflict_repair_enabled). SECRET-COMPARE-1: 32 token comparisons are constant-time; SECURE-ID-1: code task ids come from crypto.getRandomValues. Prior: 0.16.1 PERF-PIN-1 (#2177): ops_config perf_pin:<lever> takes one knob out of the performance loop's search space, so the loop can run again while the owner's q08_max_per_day stays untouched. 0.16.0 CODE-REPAIR-INTASK-1 (owner directive 2026-10-11, deploy success): a goal-review or required-check refusal of an open code-loop PR sends the task back to propose with the defects or failing suite as feedback, on a fresh branch, up to 2 rounds, instead of failing it.  0.13.1: the repair filing also writes cloud_ops_events kind stale-pr-check-repair (the issue-2122 contract proof). 0.13.0 STALE-PR-CHECK-REPAIR-1 (agent_issues 2122): a quiet session PR that is green on every required check but fails only a non-required check (CodeQL) is never merged; the branch sweeper now files one agent_issue per such PR with the failing runs' annotations and a code-task line naming the annotated file, so the finding is fixed instead of the PR being closed unmerged at 24h. */ /* 0.12.2 COST-RUN-RATE-2 (owner request 2026-10-09): fleet_budget ai_spend caps meter the 7-day run rate x 30 from v_cost_run_rate (the daily all-billing cost ledger) instead of a 30-day window; the 30-day figures remain the fallback. */ /* 0.12.1 DETECTOR-CADENCE-1: standing detectors (fm-*, belief-*) are exempt from REMEDIATION-HOLD-1, so failure-mode and belief audits run hourly instead of parking 24 h and closing after 7 days. */ /* 0.12.0 PORTFOLIO-CODE-PUBLISH-1 (#2062, card code-repos-create): the daily portfolio sync creates each staged research-code library's public repository with the fleet token and copies research-code/<name>/ into it (at most 3 per sync, existing files never replaced), then marks the row public. */ /* 0.11.7 CHARTER_VERSION 1.0.14 (DOCTRINE-1, charter section 8 rule 13); no behaviour change. */ /* 0.11.6 CHARTER_VERSION 1.0.13 (ANTIFRAGILE-1, charter section 8 rule 12); no behaviour change. */ /* 0.11.5 QUEUE-SLA-1 (2026-10-08, pillar autonomy, owner directive "No issue shall remain unprocessed/unremediated for greater than 3 hours"): the remediation tick evaluates up to 150 due contracts per run (was 15): 94 of 136 open issues had no probe verdict in 3 h because 15 per hourly tick could not cover them; migrations/2026-10-08-queue-sla.sql makes every open-issue contract due hourly. */ /* 0.11.4 AUTONOMY-FIRST-1 (2026-10-08, pillar autonomy): CHARTER_VERSION 1.0.12, charter section 8 rule 11 (autonomy first: the only owner interrupt is an action both irreversible and identity-bound; enforced on the owner queue by migrations/2026-10-08-autonomy-first.sql); no behaviour change in this worker. */ /* 0.11.3 PROMPT-CACHE-COUNT-4 (issue 2115, 2026-10-08, pillar cost): aiRunAttr also writes the ai_cache_counters row (qnfo-ops form) for text models, so fleet-control and qnfo-fleet-control calls count toward the cached-input share. */  /* 0.11.2 REBASE-INTEGRITY-1 (2026-10-07, pillar autonomy): cmIntegrity judges a branch code-task-publish rebuilt from ctx.edits on current main (REBASE-BEFORE-PUBLISH-1, ctx.rebased) by re-applying those edits at the merge base and bumping the VERSION as the publisher does, instead of the parked ctx.patch that was cut against the old base; its revert inverts the edits on today's main. The first rebuilt branch to pass REBASE-BRANCH-ACCEPT-1 (codeagent-3oa9p0pglnnj-r2, 17:20Z) was refused at this gate ("the verified patch does not apply to idea-hub/deployed-current.worker.js at the merge base 0ac2898"), so the no-model rebase path still produced no pull request. */ /* 0.11.1 OWNER-LOCAL-INGEST-1b (2026-10-07, pillar cost, agent_issues 2080): the gateway log ingest asks the API for paid non-Workers-AI rows after its cursor (filters cost gt 0, provider neq workers-ai, created_at gt cursor), oldest first, 20 pages a tick, so the cursor only ever advances over rows it ingested and a 7-day backfill completes over a few ticks; 0.11.0 read the newest 500 of all rows newest first (418,943 in the gateway, 69 of each 100 Workers AI), reached 7 hours back on its first tick, moved the cursor to the newest row and attributed none of the 4,991 untagged DeepSeek requests of the week (measured 2026-10-07T16:15Z, about $15). Cursor key owner_local_cursor_v2:<gateway>; the v1 key is removed; the event meta reports more and remaining. Also REBASE-BRANCH-ACCEPT-1 (pillar autonomy): cmOpenDecide and cmDecide accept a task's -r<n> rebuilt branch (cmTaskBranch), so a REBASE-REQUEUE-1 rebuild gets its pull request (codeagent-3oa9p0pglnnj-r2 was refused as "not a code-loop branch" at 15:20Z, the path's first live instance); and ISSUE-NOTE-NEWLINE-1: the merge runner's note on a source issue (and the evolve merge note) starts on its own line instead of " | " on the issue's last line, which was the code-anchor: line of 10 open ACT-BRIDGE-1 issues, so their retries ran anchor-less (migrations/2026-10-07-issue-note-newline.sql repairs the open rows). */ /* 0.11.0 OWNER-LOCAL-INGEST-1 (2026-10-07, pillar cost, agent_issues 2080): the hourly tick reads each AI Gateway's request log since a per-gateway cursor and attributes the paid cost: untagged requests (the owner's desktop clients) to ai_spend_owner_local, requests tagged by a fleet worker that keeps no ledger of its own to ai_spend_ledger under that worker; cost_attribution_gap_pct counts both (it read 98 with $21.77 of 7-day DeepSeek cost unattributed), the dashboard gets owner_local_cost_usd_30d. */ /* 0.10.0 SCOPE-SCRIPTS-1 (2026-10-07, pillar autonomy, issue 2101): the merge runner's scope gains kind "script": scripts/*.py and scripts/*.mjs that are not CI gates or guards, suites, deploy primitives or the loop's own runners (CM_SCRIPT_DENY), so a fleet script defect can be a code task instead of session work (issue 2025 sat with a session-task line for scripts/cf_ops_actions.py only because of the scope). A script merges on gate, mirror-guard and comparator (deploy-gate runs the script selftests) and is verified at merge; nothing deploys it. */ /* 0.9.1 GOAL-REVIEW-HARM-1 (2026-10-07, pillar autonomy): the goal reviewer also answers harm (true when any changed line is wrong: breaks or removes kept behaviour, adds code that can never run, miscounts, contradicts a stated rule, would throw), and harm refuses whatever the verdict. The first live review (ct_hdaim0vx7h7vvl, 08:40Z, gpt-oss-120b) answered partial while naming two errors, an unreachable else that still incremented diversity_held and owner rows not forced to ACCEPT, so the runner opened PR 765, which a session closed as superseded by PR 762. A cached review without harm decides as before. 0.9.0 0.9.0 GOAL-REVIEW-1 (2026-10-07, pillar autonomy, docs/ENSEMBLE-POLICY.md): before the merge runner opens or merges a code-loop pull request, one Workers AI model from a family other than the proposer's (CM_REVIEW_MODELS gpt-oss-120b, deepseek-v4-flash, llama-3.3-70b; ops_config code_goal_review_models) reads the goal and the head diff and answers implements, partial or no; "no" refuses the task with the defects it names, which reach the intake retry through CI-FEEDBACK-1. One call per head, cached in cloud_ops_events goal-review-<task>-<head>, metered as purpose goal-review; no AI binding or ops_config code_goal_review_enabled off skips it; three unreadable replies let the checks decide (recorded). Of the three tasks self-repair rescued on 2026-10-06/07, #2052's patch only passed [] to the removed deposit stage and #1815's wrote living-paper columns no migration creates and labelled a paper "proved" when its body said "proof"; no check could see either. Also 0.8.2 MERGE-VERIFY-ATTEMPTS-1 (2026-10-07, pillar autonomy): the merge runner's verify gate accepts a task that verified after SELF-REPAIR-1 retries (attempts below CM_TASK_MAX_ATTEMPTS 9, the orchestrator's MAX_ATTEMPTS * RETRY_ROUNDS, parity-tested) instead of attempts below 3; step done with no last_error stays the record of a passed verify, and the required checks still gate every merge. The old bound refused all three tasks self-repair rescued (ct_yop1itun7a9ulz #1815, ct_vdgdp57qdszmkb #2052, ct_i0b4q32jxbvia7 #2055), each a failure in code_task_success_rate_30d with a verified patch. 0.8.1 0.8.1 MVP-FOLD-NOTDEPLOYED-1 (2026-10-07, pillar core, agent_issues 2090-2094): a folded MVP component is judged by its fold host unless its own audit row still serves (SYNC, CRON_ONLY or http 200); 0.4.129 deferred to the host only while the old script was absent from the audit or RETIRED_PRESENT, so after cf-ops delete-worker its row read NOT_DEPLOYED (404) and calendar-api, fleet-exec, qnfo-autonomy-scorer, qnfo-paper-indexer and qnfo-paper-reviser filed CHARTER-MVP-DOWN-1 while every host was SYNC. 0.8.0 0.8.0 CI-FEEDBACK-1 (2026-10-07, pillar autonomy): when a required check fails on a code-loop pull request, the merge runner reads that job's log and records the failing suites and assertion lines (cmFailureLines, at most 10 lines) in the refusal, so the task's merge_note and its issue say what broke and the next intake retry carries it; before this the note said only "gate=failure" and every retry was blind (PR 750 broke qnfo-ipatent/mechanism.test.mjs, PR 752 changed a value quality.test.mjs:190 pins). merge_note and last_error keep 1200 characters (was 500). 0.7.1 (2026-10-06, pillar autonomy): CHARTER_VERSION 1.0.11 in parity with the charter, which adds decision rule 10 "decide, then record" (RULE-8-RETIRED-1, owner directive 2026-10-06: core prompt rule 8 is deleted); one comment no longer cites rule 8. 0.7.0 CONTROL-PLANE-SELF-MERGE-1 (2026-10-06, transformation lever T1.21, pillar autonomy; owner directive 2026-10-06: more flexibility and autonomy, decide for itself): the stale-PR lane merges a green, quiet session pull request that changes a control-plane worker (CM_DENY) when ops_config control_plane_self_merge is on, the worker has a /health canary (CP_CANARY_WORKERS) and the pull request carries worker.js with its mirror; canonical-deploy.yml canaries /health for the new VERSION and reverts the push on its own (scripts/canary_revert.py, CONTROL-PLANE-CANARY-1), which replaces CONTROL-PLANE-MANUAL-1 (decision (a), human_actions 21, migrations/2026-10-06-control-plane-self-merge.sql). Workflows under .github/ still never auto-merge; the code loop still neither plans nor merges control-plane workers. 0.6.2 CRAWL-VERIFIED-GOOGLEBOT-1 (2026-10-06, pillar reach): the crawl-health view counts only requests from Google's published Googlebot ranges (googlebot.json, fallback 66.249.64.0/19); spoofed Googlebot scans are reported, not counted; a robots.txt 404 is not a failure; sitemap failures only for CRAWL_SITEMAPS. 0.6.1 (2026-10-06, pillar cost): CHARTER_VERSION 1.0.10 in parity with the charter, which records BUDGET-SOFT-ROUTE-1 (owner directive: AI spend caps steer model choice and never stop work). 0.6.0 PROBE-TRANSPORTS-1 (2026-10-06, pillar autonomy; owner directive OWNER-NO-LOOSE-ENDS-1): remediation contracts can check public sources outside the fleet: transport external-https (GET or HEAD on an allowlist of GitHub, PyPI, DOI, OpenAlex, Crossref and DataCite, https only, no credentials, redirects observed not followed, status, header, body-contains or json check; expected from the probe, observed from the response; contracts on fleet hosts are left to the off-Cloudflare executor of agent_issues 2060, issue 1190) and d1-query@portfolio-state (the PORTFOLIO binding) join d1-query; verification rows record the transport. 0.5.0 DANGLING-BINDINGS-1 (2026-10-06, transformation lever T9.4, pillar core): the 03:00Z tick runs danglingBindingsCensus, every live script's settings (CF API workers/scripts/<name>/settings) against the account's D1, KV, R2, queue, Vectorize and script lists; dangling_bindings is the count (migrations/2026-10-06-dangling-bindings.sql: guard metric, trigger gt 0, contract) and cloud_ops_events dangling-bindings-<day> names script, binding, kind and target; unverifiable binding types and unreadable lists count as unchecked, never as dangling; the WATCHMAKER_OPS entry dangling-bindings-census is code task DANGLING-BINDINGS-WATCHMAKER-1 (agent_issues 2051). Also PORTFOLIO-ARCHIVE-1 (REPO-ARCHIVE-1, agent_issues 2045): pfHygieneApply executes explicit portfolio_actions archive-request rows (PATCH archived=true, reversible, at most PF_ARCHIVE_MAX per sync, never a delete; docs/PORTFOLIO.md rule 3), because a session's GitHub proxy refuses repository settings writes. 0.4.140 CRAWL-HEALTH-Q08-1: the Googlebot check also reads the q08.org zone and its sitemap; 0.4.139 ONE-WORKER-COUNT-1 + COST-ATTRIBUTION-GAP-1 + REBASE-REQUEUE-1 (2026-10-06, transformation levers T5.10, T4.7 and T1.3 half 2; pillars core, cost, autonomy): budgetAudit writes metric_registry.worker_count from the live scripts census it already writes to fleet_budget.workers and worker_count_disagreement (guard) from its comparison with service_registry state live (the names in cloud_ops_events worker-count-<day>; qnfo-lifecycle stops writing worker_count); refreshOwnedMetrics writes cost_attribution_gap_pct, the share of the paid AI Gateway list cost of the last 7 days that has no ai_spend_ledger row (per provider and the models with the largest cost in cloud_ops_events cost-attribution-<day>; 98.7% on 2026-10-06, most of it a Node client with no cf-aig-metadata); cmRequeueStale hands a stale task that parked its SEARCH/REPLACE edits back to code-task-publish (status ready_to_publish, branch <branch>-r2) for a rebuild on current main without a model call (REBASE-BEFORE-PUBLISH-1), once, before re-proposing; numbered above main's 0.4.138 (main took 0.4.135 to 0.4.138 while this change was open: PRs 699, 707, 709). 0.4.138 CRAWL-HEALTH-1: Googlebot sitemap and error view from the zone request log, self-filing and self-closing; 0.4.137 SEARCH-REFERRALS-1: search_referrals_30d and google_referrals_30d from Cloudflare RUM referrers each reach tick; 0.4.136 metric column fix; 0.4.135 GOOGLE-IDENTITY-DETECT-1: the reach tick resolves the owner Google card from public DNS; 0.4.134 W0-LEADING-EXIT-1 (2026-10-06, pillar autonomy, docs/TRANSFORMATION-PROGRAM.md 1.2 T1 lever 16): wave W0 exits on code_task_success_rate_engine, the success rate (merged over finished, the formula of code_task_success_rate_30d) of code tasks created after lever (1, 15) MERGE-SCOPE-INTAKE-1 landed, measured only once at least TP_ENGINE_MIN_FINISHED (8) have finished; the 42 closures of 2026-10-02..10-05 stay in the 30-day window until November whatever the engine does now, so W0 measured the past. code_task_success_rate_30d keeps its scoreboard row and its trigger. 0.4.133 SCORER-HOST-DENY-1 (2026-10-06, pillar autonomy, docs/TRANSFORMATION-PROGRAM.md 1.2 section 1.12): EVOLVE_DENY (so CM_DENY) and TP_CONTROL_PLANE name qnfo-observability. qnfo-autonomy-scorer was denied so that no loop merges a change to the formula that grades the fleet; SCORER-FOLD-1 (PR 668) moved that code into qnfo-observability, which the merge runner and the planner then accepted. A FOLDED worker's host now inherits its place, and fold-guard.test.mjs fails CI when a marker names a denied guest whose host is not denied, or when this list, the transformation loop's and the orchestrator's PLAN_DENY_WORKERS differ. 0.4.132 TRANSFORMATION-LOOP-1 (2026-10-06, owner directive 2026-10-06, pillar autonomy; 0.4.132 adds TP-1a TRUSTED-ORIGIN-PARITY-1 (agent_issues 2005: the CM_TRUSTED_SOURCES default carries every pair the orchestrator planner trusts plus the TP- origins, parity-tested in code-merge.test.mjs), the W1 exit counting needs-machine-probe contracts on open issues only (closed ones on their own scoreboard row, document 1.1 section 1.10), and TP-WAVE-EXIT-STALLED-1, filed when an unmet exit metric of the active wave reads the same value in metric_history 14 days apart): the engine docs/TRANSFORMATION-PROGRAM.md section 5 describes, on the hourly tick: transformation_levers (one row per lever, seeded by migrations/2026-10-06-transformation-loop.sql), wave state from the section 4 exit metrics, dispatch of the next eligible code lever as a code-task issue (session-task for refactor, retire, migration, platform and control-plane levers; TP_SESSION_MAX open at once), landing from merged code tasks and closed issues, 14-day stall detection (TP-LEVER-STALLED-1), session fallback (CODE-TASK-NEEDS-SESSION-1), the section 6 scoreboard in transformation_runs, metric transformation_levers_landed_14d, GET /transformation and POST /transformation/tick; no new cron, worker, binding or model call. 0.4.128 REMEDIATION-PENDING-PREFIX-1 (pillar autonomy): a probe observation that starts with 'pending' (the 'pending: <reason>' form six live contracts use) is a deferral like a bare 'pending': it neither breaks a hold, reopens a closed issue, counts toward max_attempts nor ends a pass streak; 0.4.130 PR-OPEN-ON-20MIN-TICK-1 (agent_issues 2017, TP-1b2, pillar autonomy): the 20-minute cron also runs codeMergeTick(env, { openOnly: true }), which only opens pull requests for branch_pushed code tasks (no advance, no merge decision, no reconciliation, no day heartbeat) and stands aside at minute 0 where the hourly tick runs; measured 2026-10-06, a pushed codeagent branch waited 40-50 min for its PR on every task (pr_opened_at always hh:00) and 5 h overnight because only the hourly tick opened them, while code-task-publish had pushed the branch within a minute. CHARTER-1.0.9: CHARTER_VERSION 1.0.9 for the charter's TRANSFORMATION-PROGRAM-1 input pointer (PR 664), charter-guard C5 parity, no behaviour change. 0.4.129 MVP-FOLD-AWARE-1 (pillar core, #1756): an MVP component recorded as folded into a host (worker_removals action folded, target host) serves when its host serves, so folding a core worker under the owner standing grant does not file CHARTER-MVP-DOWN-1; the note reads FOLDED:<host>/<host note>. 0.4.128 0.4.128 REMEDIATION-PENDING-PREFIX-1 (pillar autonomy): a probe observation that starts with 'pending' (the 'pending: <reason>' form six live contracts use) is a deferral like a bare 'pending': it neither breaks a hold, reopens a closed issue, counts toward max_attempts nor ends a pass streak; 0.4.127 0.4.127 ATTRIBUTION-COVERAGE-DTD-1 (agent_issues 1997, pillar cost): workers_ai_attribution_coverage_pct is the day-to-date ratio (attributed neurons today / GraphQL neurons since 00:00Z), capped at 100, and is left unchanged while today's GraphQL total is under 5000 neurons; the hourly delta (73.2 at 19:00Z on 2026-10-05 while day-to-date read 100) filed METRIC-FIX-RELAPSED-1 on one bursty hour. 0.4.126 CREDIBILITY-CITATION-DEDUPE-1 (agent_issues 1838, pillar reach): perfCredibility no longer counts external_mentions rows whose source is an OpenAlex/Crossref/DataCite/Semantic Scholar citation feed (qnfo-cloud-ops jobRadar files every OpenAlex citation there too) as a third-party mention; citations count once, through the selected-works growth term, and the detail reports citation_mentions_not_counted. 0.4.125 0.4.125 CHARTER-1.0.8 (owner standing decision 5, 2026-10-05, pillar autonomy): CHARTER_VERSION 1.0.8 for the owner's standing grant OWNER-STANDING-GRANT-1 (charter decision rule 9: retire low-value workers after a dependency check, delete unused databases after a verified backup, switch to cheaper models with fallback and automatic revert, no owner card); charter-guard C5 parity, no behaviour change. 0.4.124 0.4.124 DRIFT-CONFIRM-2 (agent_issues 1993, pillar core): drift_total's terms (ghost, unregistered, unversioned, repo_live) are computed by one pure function; a non-zero first read is re-read once after 20s and the smaller value is written (the 18:00:13Z read of 1 sampled the inputs while the deploy batch, the self-audit and the registry sync were writing them; PR 636 DRIFT-AUDIT-AFTER-DEPLOY-1 re-audits after each deploy, this change stops the sample from being written); a non-zero first read leaves a cloud_ops_events row (kind drift-total-detail) naming the workers behind each term. 0.4.123 REMEDIATION-HOLD-1 (agent_issues 1297, pillar autonomy): a remediation contract that passes no longer stops; it holds, read once a day, and closes only after a 7-day pass streak (RT_HOLD_D), so a closure that breaks again inside the window reopens through REMEDIATION-REOPEN-1 (the 2026-09-28 closures 1283, 1284 and 1287 passed once and broke within hours after their contracts had stopped); a relapse returns the contract to active. 0.4.122 is left to session_013sMN4pr2RGmHezM4Gm6fMk (#1838). 0.4.121 REMEDIATION-REOPEN-1 fix (agent_issues 1297): an observation of 'pending' (the deferral convention, written by this tick and by remediation-consumer) neither reopens a closed issue nor counts toward max_attempts; 0.4.119 would have reopened 1919 and 1920 on their third pending row. 0.4.120 Q08-SELF-TUNE-1 (agent_issues 1760, pillar reach): PERF_LEVERS gains q08-temperature (q08_gate_pass_rate_7d, ops_config q08_compose_temperature 0.4..0.8 step 0.1, direction -1, effect higher, eval 14 days, capped by the q08 review lock); a lever step is rounded to 4 decimals so a 0.1 step never writes 0.5500000000000000. 0.4.119 REMEDIATION-REOPEN-1 (agent_issues 1297, pillar autonomy): remediationContractsTick reads the issue status; a contract on a wontfix issue is marked superseded, and a contract whose probe fails max_attempts times after its issue was closed (or since its last pass) reopens that issue once, with the failure and the prior close_evidence in its description (59 contracts had failed hourly on closed issues with nothing acting on it; INTEGRITY-GUARDS-1: a failing probe on a closed issue is a closure that did not hold); verification rows are never deleted. 0.4.118 (2026-10-05, remediation B2): LAND-BUNDLE-GUARD-1 (issues 1976, 1979): landFix refuses to commit a deployed script that adds esbuild __name helper layers or keeps under half of main's comment lines (the 2026-10-04 qnfo-fleet-dashboard 1.21.4 landing replaced the hand-written source with a wrangler bundle) and files one LAND-BUNDLE-REFUSED-1 issue instead; REPO-LIVE-DRIFT-1 (issue 1879): drift_total adds the fleet self-audit's DRIFT and CONTENT_DRIFT rows (live version or script sha256 differs from main) and counts a missing or 26h-old audit as 1; CF-CHANGELOG-LEADS-1 (issue 1959): a launch of a proposed or not_considered catalog row writes a dated when_to_choose line (max 5 a day) and GET /cf-changelog lists cost, speed and consolidation leads; CLEF-CANDIDATE-1 re-landed (PR 586 closed unmerged): clef_candidate_calls_7d is written hourly; IMPROVEMENT-UNMEASURED-STAMP-1 (issue 1865): the improvement loop stamps last_refreshed with state UNMEASURED while its trend metrics have too little history. 0.4.117 merge lane (agent_issues 1965, 1960, 1975, 1877, 1928; pillar autonomy): STALE-PR-MERGE-FIRST-1, a session pull request quiet for 2h whose required checks are green and whose mergeable_state is clean is merged by the branch sweeper (squash, pinned to the tested head) instead of being closed unmerged at 24h (PR 586 was closed green); never a draft, a do-not-merge or WIP PR, a .github/ change, a fork or a codeagent-/evolve/ branch; kill switch ops_config stale_pr_merge_enabled. MERGE-RUNNER-REFUSAL-TAXONOMY-1: a merge-runner refusal ends the code task 'failed' and hands it to the fleet (a note on its source issue, or one CODE-MERGE-REFUSED-1 issue), not an owner card. NOCHECKS-CONFLICT-1: no checks on a conflicted PR is a stale base at once; MERGE-NOCHECKS-REOPEN-1: no checks on a clean PR after 3h closes and reopens it once with the fleet token before refusing. CODE-CLOSE-REASON-1: a PR closed outside the runner records who closed it (CYCLE-TIME-1 or someone else). MERGE-RUNNER-VERSION-FORM-1: `var VERSION="x"` without spaces or semicolon is bumpable and revertible. CRON-ONLY-VERIFY-1: a cron-only worker (worker_live_audit CRON_ONLY) is verified by its fleet_heartbeat VERSION, not reverted on http null (ct_02oohvsbf1gbji). 0.4.116 IDEA-BUILDABLE-TRUTH-1: an idea is buildable only when it carries an edit point; 0.4.115 0.4.115 CYCLE-TIME-1 (2026-10-04, issue 1961): branch sweeper graces shortened to 12h closed-PR / 24h orphan / 1 day needs_human, and a stale open pull request (head not a live code task, idle over BH_STALE_PR_H 24h) is archived, commented and closed each tick so the open-PR backlog turns over inside a day. 0.4.114 MERGE-RUNNER-UNSTICK-1 (qa 2026-10-04, agent_issues 1960 PR-LANE-ZERO-TOUCH-1): GitHub computes mergeability lazily and main moves every few minutes (ci(status) commits), so the merge runner's single read per hourly tick returned mergeable=null for a green pull request every time (PRs 564, 550, 551 sat published with all checks green while none merged); it now re-reads up to CM_MERGEABLE_READS times within a tick, and takes candidates round-robin by merge_checked_at so a stuck five no longer fills every tick. 0.4.113 BRANCH-HYGIENE-2: the branch sweeper keeps the branch of a code task the merge runner refused (needs_human) for 7 days after its last update, so the branch a person has to act on is not archived and deleted after the 48h grace; GET /branch-hygiene reports needs_human_days */
 // 0.4.112 CF-CHANGELOG-LOOP-1 (pillar autonomy, RM-CAPABILITY-PRODUCT-LOOP-1): once a day, inside the existing hourly tick (no new worker, cron or model call), the fleet reads Cloudflare's changelog feed, classifies each recent item against cloudflare_capability_catalog and the service registry, files at most 2 deduped issues a day for billing/deprecation changes to products the fleet uses, reopens catalog rows that were rejected when the product launches or goes GA (max 2 a day), adds not_considered rows for unknown products (max 5), and measures itself (cf_changelog_audit_age_h, cf_changelog_open_proposals_14d); GET /cf-changelog, POST /cf-changelog/run.
 // 0.4.111 PRIORITY-QUEUE-1b/1c (issues 1912, 1913; owner directive 2026-10-03): self-repair (evPropose) admits critical
 // issues and takes candidates in master-queue order (v_issue_queue: critical, high, medium, low, then oldest); the status
@@ -1863,7 +1863,7 @@ __name(landBundleRefusal, "landBundleRefusal");
 async function landBundleIssue(env, worker, depV, canV, why) {
   var title = "LAND-BUNDLE-REFUSED-1: " + worker + " deployed " + depV + " is ahead of main " + canV + " as a bundle";
   var desc = "Pillar core. qnfo-fleet-control scan() found " + worker + " live at " + depV + " while main carries " + canV + ", and LAND-BUNDLE-GUARD-1 refused to commit the deployed script to main: " + why + ". The live version came from outside the canonical path (merge to main). Land the change as source by PR (bump VERSION above " + depV + "), or redeploy main to restore " + canV + ". Definition of done: GET https://" + worker + ".q08.workers.dev/health version equals the VERSION in " + worker + "/worker.js on main and the latest fleet_deploys row for " + worker + " is a canonical deploy.";
-  try { await env.AUDIT.prepare("INSERT INTO agent_issues (title, description, source, category, priority, status, created_at, updated_at) SELECT ?1, ?2, 'qnfo-fleet-control', 'reliability', 'high', 'open', ?3, ?3 WHERE NOT EXISTS (SELECT 1 FROM agent_issues WHERE title = ?1 AND status = 'open')").bind(title, desc, Date.now()).run(); } catch (e) {}
+  try { await env.AUDIT.prepare("INSERT INTO agent_issues (title, description, source, category, priority, status, created_at, updated_at) SELECT ?1, ?2, 'qnfo-fleet-control', 'reliability', 'high', 'open', ?3, ?3 WHERE NOT EXISTS (SELECT 1 FROM agent_issues WHERE title = ?1 AND status = 'open')").bind(title, desc, Date.now()).run(); } catch (e) { console.error(JSON.stringify({ evt: "fleet-control:landBundleIssue:caught", error: String(e && e.message) })); }
 }
 __name(landBundleIssue, "landBundleIssue");
 // ---- LAND-BUNDLE-GUARD-1:END ----
@@ -1925,7 +1925,7 @@ async function landFix(env, worker, depCode, depV, canV, srcPath) {
         if (gI.status === 200) {
           var gjI = await gI.json().catch(function() { return null; });
           if (gjI && gjI.content) {
-            try { var dec = new TextDecoder().decode(Uint8Array.from(atob(gjI.content.replace(/\s+/g, "")), function(c) { return c.charCodeAt(0); })); if (dec === raw) same = true; if (pi === 0) repoSrc = dec; } catch (e) {}
+            try { var dec = new TextDecoder().decode(Uint8Array.from(atob(gjI.content.replace(/\s+/g, "")), function(c) { return c.charCodeAt(0); })); if (dec === raw) same = true; if (pi === 0) repoSrc = dec; } catch (e) { console.error(JSON.stringify({ evt: "fleet-control:landFix:caught", error: String(e && e.message) })); }
           }
         }
         if (same) landed.push(paths[pi] + ":no-op"); else toWrite.push(paths[pi]);
@@ -1966,7 +1966,7 @@ async function landFix(env, worker, depCode, depV, canV, srcPath) {
   // LAND-BUNDLE-REFUSED-1 issue instead of one failed row per hourly scan.
   if (!bundleWhy) try {
     await env.AUDIT.prepare("INSERT INTO self_heal_actions (kind, ref, action, ts, status, verified_at, claim, confidence) VALUES ('code-fix-land','" + worker + "',?1,datetime('now'),?2,?3,?4,?5)").bind(String(note).slice(0, 400), ok ? "verified" : "failed", ok ? new Date().toISOString() : null, "LAND-CODE-FIX-1: deployed-ahead " + depV + " > repo " + canV + " committed to main", ok ? "high" : "low").run();
-  } catch (e) {}
+  } catch (e) { console.error(JSON.stringify({ evt: "fleet-control:landFix:caught", error: String(e && e.message) })); }
   return { ok, status: ok ? 200 : 502, note, landed: landed.length, errors: errors.length };
 }
 __name(landFix, "landFix");
@@ -1998,7 +1998,7 @@ async function gitSelftest(env) {
   if (fileSha) putBody.sha = fileSha;
   var pu = await timedFetch("https://api.github.com/repos/QNFO/" + repo + "/contents/" + probe, { method: "PUT", headers: Object.assign({}, gh, { "Content-Type": "application/json" }), body: JSON.stringify(putBody) }, 12e3);
   var pj = null;
-  try { pj = await pu.json(); } catch (e) {}
+  try { pj = await pu.json(); } catch (e) { console.error(JSON.stringify({ evt: "fleet-control:gitSelftest:caught", error: String(e && e.message) })); }
   var ok = pu.status === 200 || pu.status === 201;
   return { ok, status: pu.status, branch: branch, commit: ok && pj && pj.commit ? pj.commit.sha : null, content_sha: ok && pj && pj.content ? pj.content.sha : null, note: ok ? "in-worker GitHub write path verified end-to-end" : String(pj && pj.message || "").slice(0, 160) };
 }
@@ -2716,7 +2716,7 @@ var worker_default = {
     }
     if (p === "/landfix" && request.method === "POST" && admin) {
       var lb = {};
-      try { lb = await request.json(); } catch (e) {}
+      try { lb = await request.json(); } catch (e) { console.error(JSON.stringify({ evt: "fleet-control:fetch:caught", error: String(e && e.message) })); }
       var wn = String(lb.worker || "");
       if (!wn) return json({ error: "worker required" }, 400);
       var cc = await canonical(env, wn);
@@ -2787,7 +2787,7 @@ __name(evGh, "evGh");
 async function evApi(env, method, path, body) {
   var r = await timedFetch("https://api.github.com/repos/" + EVOLVE_REPO + path, { method: method, headers: evGh(env), body: body ? JSON.stringify(body) : void 0 }, 15e3);
   var j = null;
-  try { j = await r.json(); } catch (e) {}
+  try { j = await r.json(); } catch (e) { console.error(JSON.stringify({ evt: "fleet-control:evApi:caught", error: String(e && e.message) })); }
   return { status: r.status, ok: r.status >= 200 && r.status < 300, j: j };
 }
 __name(evApi, "evApi");
@@ -2800,7 +2800,7 @@ async function evSchema(env) {
   await env.AUDIT.prepare("CREATE TABLE IF NOT EXISTS self_rewrite_state (id INTEGER PRIMARY KEY AUTOINCREMENT, worker TEXT, ts TEXT, action TEXT, status TEXT, detail TEXT)").run();
   var cols = ["deployed_at TEXT", "kind TEXT", "issue_id INTEGER", "pr_number INTEGER", "branch TEXT", "head_sha TEXT", "merged_sha TEXT", "version_from TEXT", "version_to TEXT", "path TEXT", "note TEXT", "updated_at TEXT", "parent_id INTEGER"];
   for (var i = 0; i < cols.length; i++) {
-    try { await env.AUDIT.prepare("ALTER TABLE evolve_candidates ADD COLUMN " + cols[i]).run(); } catch (e) {}
+    try { await env.AUDIT.prepare("ALTER TABLE evolve_candidates ADD COLUMN " + cols[i]).run(); } catch (e) { console.error(JSON.stringify({ evt: "fleet-control:evSchema:caught", error: String(e && e.message) })); }
   }
 }
 __name(evSchema, "evSchema");
@@ -2882,7 +2882,7 @@ function evEscapeControlsInStrings(s) {
 function evParseJson(t) {
   var o = evFirstObject(t);
   if (!o) return null;
-  try { return JSON.parse(o); } catch (e) {}
+  try { return JSON.parse(o); } catch (e) { console.error(JSON.stringify({ evt: "fleet-control:evParseJson:caught", error: String(e && e.message) })); }
   try { return JSON.parse(evEscapeControlsInStrings(o)); } catch (e2) { return null; }
 }
 // ---- EVOLVE-JSON-1:END
@@ -3026,7 +3026,7 @@ async function evPropose(env) {
 __name(evPropose, "evPropose");
 async function evRevert(env, c, why) {
   var p = null;
-  try { p = JSON.parse(c.proposal || "null"); } catch (e) {}
+  try { p = JSON.parse(c.proposal || "null"); } catch (e) { console.error(JSON.stringify({ evt: "fleet-control:evRevert:caught", error: String(e && e.message) })); }
   if (!p || !p.anchor) { await evSet(env, c.id, "revert-failed", "no stored edit: " + why); return; }
   var now = new Date().toISOString();
   var ins = await env.AUDIT.prepare("INSERT INTO evolve_candidates (worker, ts, status, kind, issue_id, path, parent_id, proposal, updated_at) VALUES (?1, ?2, 'proposing', 'revert', ?3, ?4, ?5, ?6, ?2)").bind(c.worker, now, c.issue_id, c.path, c.id, JSON.stringify({ anchor: p.replacement, replacement: p.anchor, rationale: "revert of candidate " + c.id + ": " + why })).run();
@@ -3035,7 +3035,7 @@ async function evRevert(env, c, why) {
   if (!land.ok) {
     await evSet(env, rid, "revert-failed", land.why);
     await evSet(env, c.id, "revert-failed", why + "; revert PR not opened: " + land.why);
-    try { await env.AUDIT.prepare("INSERT INTO agent_issues (title, description, source, category, priority, status, created_at, updated_at) VALUES (?1, ?2, 'qnfo-fleet-control', 'reliability', 'high', 'open', ?3, ?3)").bind("EVOLVE-REVERT-FAILED-1: " + c.worker + " candidate " + c.id + " needs a manual revert", "Evolve candidate " + c.id + " (PR " + c.pr_number + ", VERSION " + c.version_to + ") failed post-deploy verification (" + why + ") and the inverse-edit revert could not be opened: " + land.why, Date.now()).run(); } catch (e) {}
+    try { await env.AUDIT.prepare("INSERT INTO agent_issues (title, description, source, category, priority, status, created_at, updated_at) VALUES (?1, ?2, 'qnfo-fleet-control', 'reliability', 'high', 'open', ?3, ?3)").bind("EVOLVE-REVERT-FAILED-1: " + c.worker + " candidate " + c.id + " needs a manual revert", "Evolve candidate " + c.id + " (PR " + c.pr_number + ", VERSION " + c.version_to + ") failed post-deploy verification (" + why + ") and the inverse-edit revert could not be opened: " + land.why, Date.now()).run(); } catch (e) { console.error(JSON.stringify({ evt: "fleet-control:evRevert:caught", error: String(e && e.message) })); }
     return;
   }
   await evSet(env, rid, "pr-open", "PR " + land.pr, { pr_number: land.pr, branch: land.branch, head_sha: land.head, version_from: land.from, version_to: land.to });
@@ -3126,7 +3126,7 @@ async function evAdvance(env, c) {
     if (lc.state === "ok") {
       await evSet(env, c.id, c.kind === "revert" ? "reverted-verified" : "verified", "live " + la.live_version + " http 200");
       if (c.kind === "revert" && c.parent_id) await evSet(env, c.parent_id, "reverted", "revert candidate " + c.id + " verified live");
-      if (c.kind !== "revert" && c.issue_id) { try { await env.AUDIT.prepare("UPDATE agent_issues SET description = description || ?1, updated_at=?2 WHERE id=?3").bind("\n\nEVOLVE-PR-1: candidate " + c.id + " merged as PR " + c.pr_number + " and verified live as " + c.version_to + "; close against this issue's own DoD.", Date.now(), c.issue_id).run(); } catch (e) {} }
+      if (c.kind !== "revert" && c.issue_id) { try { await env.AUDIT.prepare("UPDATE agent_issues SET description = description || ?1, updated_at=?2 WHERE id=?3").bind("\n\nEVOLVE-PR-1: candidate " + c.id + " merged as PR " + c.pr_number + " and verified live as " + c.version_to + "; close against this issue's own DoD.", Date.now(), c.issue_id).run(); } catch (e) { console.error(JSON.stringify({ evt: "fleet-control:evAdvance:caught", error: String(e && e.message) })); } }
       return { cid: c.id, status: "verified" };
     }
     if (c.kind === "revert") { await evSet(env, c.id, "revert-failed", "revert live check failed: http " + la.http + " version " + la.live_version); return { cid: c.id, status: "revert-failed" }; }
@@ -3162,7 +3162,7 @@ async function evolveTickHeartbeat(env) {
       var now = new Date().toISOString();
       await env.AUDIT.prepare("INSERT INTO cloud_ops_events (id, ts, kind, text, job, status) VALUES (?1, ?2, 'evolve-tick', ?3, 'qnfo-fleet-control', 'ok') ON CONFLICT(id) DO UPDATE SET ts = excluded.ts, text = excluded.text, status = 'ok'")
         .bind("evolve-tick-" + now.slice(0, 10), now, JSON.stringify(r).slice(0, 300)).run();
-    } catch (e) {}
+    } catch (e) { console.error(JSON.stringify({ evt: "fleet-control:evolveTickHeartbeat:caught", error: String(e && e.message) })); }
   }
   return r;
 }
@@ -3651,7 +3651,7 @@ function cmReviewParse(text) {
   // the object around the first "verdict": its last "{" before it, then each "}" after it until one parses (a defect may quote code)
   var at = t.indexOf('"verdict"'), st = at < 0 ? -1 : t.lastIndexOf("{", at);
   for (var e = st < 0 ? -1 : t.indexOf("}", at), k = 0; e > 0 && k < 40 && !v; e = t.indexOf("}", e + 1), k++) {
-    try { var j = JSON.parse(t.slice(st, e + 1)); if (j && j.verdict) { v = j.verdict; harm = j.harm; defects = Array.isArray(j.defects) ? j.defects : []; } } catch (x) {}
+    try { var j = JSON.parse(t.slice(st, e + 1)); if (j && j.verdict) { v = j.verdict; harm = j.harm; defects = Array.isArray(j.defects) ? j.defects : []; } } catch (x) { console.error(JSON.stringify({ evt: "fleet-control:cmReviewParse:caught", error: String(x && x.message) })); }
   }
   if (!v) { var vm = /"verdict"\s*:\s*"(implements|partial|no)"/i.exec(t); if (vm) v = vm[1]; var hm = /"harm"\s*:\s*"?(true|false|yes|no)"?/i.exec(t); if (hm) harm = hm[1]; }
   v = String(v || "").trim().toLowerCase();
@@ -3961,7 +3961,7 @@ async function cmConfig(env) {
       if (r.key === "code_publish_dispatch_enabled" && r.value != null) cfg.publishDispatch = ["0", "off", "false", "no", "disabled"].indexOf(String(r.value).trim().toLowerCase()) < 0;
       if (r.key === "code_merge_max_merges_per_tick") { var mm = parseInt(r.value, 10); if (isFinite(mm)) cfg.maxMerges = Math.max(1, Math.min(5, mm)); }
     });
-  } catch (e) {}
+  } catch (e) { console.error(JSON.stringify({ evt: "fleet-control:cmConfig:caught", error: String(e && e.message) })); }
   return cfg;
 }
 __name(cmConfig, "cmConfig");
@@ -3971,7 +3971,7 @@ async function cmSchema(env) {
   if (!have.id) return false;
   for (var i = 0; i < CM_COLS.length; i++) {
     if (have[CM_COLS[i].split(" ")[0]]) continue;
-    try { await env.AUDIT.prepare("ALTER TABLE code_tasks ADD COLUMN " + CM_COLS[i]).run(); } catch (e) {}
+    try { await env.AUDIT.prepare("ALTER TABLE code_tasks ADD COLUMN " + CM_COLS[i]).run(); } catch (e) { console.error(JSON.stringify({ evt: "fleet-control:cmSchema:caught", error: String(e && e.message) })); }
   }
   return true;
 }
@@ -3993,19 +3993,19 @@ async function cmEvent(env, cx, action, t, text, status, meta) {
   try {
     await env.AUDIT.prepare("INSERT INTO cloud_ops_events (id, ts, kind, text, meta, job, status) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)")
       .bind("cm-" + (t ? t.id : "tick") + "-" + action + "-" + cx.now + "-" + crypto.randomUUID().slice(0, 4), cx.iso, "code-merge." + action, String(text || "").slice(0, 500), meta ? JSON.stringify(meta).slice(0, 1000) : null, CM_RUNNER, status || "ok").run();
-  } catch (e) {}
+  } catch (e) { console.error(JSON.stringify({ evt: "fleet-control:cmEvent:caught", error: String(e && e.message) })); }
 }
 __name(cmEvent, "cmEvent");
 async function cmHeartbeat(env, cx, status, summary) {
   // code-merge-first-ok: the first ok tick, written once and never updated (the day rows are upserted, so their ts moves).
   // The watchmaker counts a person's merge or close of a code-loop PR only after it.
   if (status === "ok") {
-    try { await env.AUDIT.prepare("INSERT OR IGNORE INTO cloud_ops_events (id, ts, kind, text, job, status) VALUES ('code-merge-first-ok', ?1, 'code-merge-first-ok', 'first ok tick of CODE-TASK-MERGE-RUNNER-1', ?2, 'ok')").bind(cx.iso, CM_RUNNER).run(); } catch (e) {}
+    try { await env.AUDIT.prepare("INSERT OR IGNORE INTO cloud_ops_events (id, ts, kind, text, job, status) VALUES ('code-merge-first-ok', ?1, 'code-merge-first-ok', 'first ok tick of CODE-TASK-MERGE-RUNNER-1', ?2, 'ok')").bind(cx.iso, CM_RUNNER).run(); } catch (e) { console.error(JSON.stringify({ evt: "fleet-control:cmHeartbeat:caught", error: String(e && e.message) })); }
   }
   try {
     await env.AUDIT.prepare("INSERT INTO cloud_ops_events (id, ts, kind, text, job, status) VALUES (?1, ?2, 'code-merge-tick', ?3, ?4, ?5) ON CONFLICT(id) DO UPDATE SET ts = excluded.ts, text = excluded.text, status = excluded.status")
       .bind("code-merge-tick-" + cx.iso.slice(0, 10), cx.iso, JSON.stringify(summary || {}).slice(0, 300), CM_RUNNER, status).run();
-  } catch (e) {}
+  } catch (e) { console.error(JSON.stringify({ evt: "fleet-control:cmHeartbeat:caught", error: String(e && e.message) })); }
 }
 __name(cmHeartbeat, "cmHeartbeat");
 async function cmIssueNote(env, t, text) {
@@ -4015,11 +4015,11 @@ async function cmIssueNote(env, t, text) {
   // line, which is its code-anchor: line on an ACT-BRIDGE-1 issue, so the anchor (at most 300 chars to the end of the line)
   // no longer parsed and every retry ran anchor-less: 10 open issues on 2026-10-07 (2072, 2085, 2104, 2113, ...), and
   // ct_flm56h1rt2nk7v's retry of #2072 was windowed at var SPEND_BASIS instead of CON_PROTECTED and failed twice.
-  try { await env.AUDIT.prepare("UPDATE agent_issues SET description = description || ?1, updated_at=?2 WHERE id=?3").bind("\n\nCODE-TASK-MERGE-RUNNER-1: " + text, Date.now(), iid).run(); } catch (e) {}
+  try { await env.AUDIT.prepare("UPDATE agent_issues SET description = description || ?1, updated_at=?2 WHERE id=?3").bind("\n\nCODE-TASK-MERGE-RUNNER-1: " + text, Date.now(), iid).run(); } catch (e) { console.error(JSON.stringify({ evt: "fleet-control:cmIssueNote:caught", error: String(e && e.message) })); }
 }
 __name(cmIssueNote, "cmIssueNote");
 async function cmFileIssue(env, title, desc) {
-  try { await env.AUDIT.prepare("INSERT INTO agent_issues (title, description, source, category, priority, status, created_at, updated_at) SELECT ?1, ?2, 'qnfo-fleet-control', 'reliability', 'high', 'open', ?3, ?3 WHERE NOT EXISTS (SELECT 1 FROM agent_issues WHERE title = ?1 AND status = 'open')").bind(title, desc, Date.now()).run(); } catch (e) {}
+  try { await env.AUDIT.prepare("INSERT INTO agent_issues (title, description, source, category, priority, status, created_at, updated_at) SELECT ?1, ?2, 'qnfo-fleet-control', 'reliability', 'high', 'open', ?3, ?3 WHERE NOT EXISTS (SELECT 1 FROM agent_issues WHERE title = ?1 AND status = 'open')").bind(title, desc, Date.now()).run(); } catch (e) { console.error(JSON.stringify({ evt: "fleet-control:cmFileIssue:caught", error: String(e && e.message) })); }
 }
 __name(cmFileIssue, "cmFileIssue");
 // A failed live check: open the inverse-patch PR as an evolve 'revert' candidate; evAdvance merges and verifies it.
@@ -4053,9 +4053,9 @@ async function cmLiveCheck(env, worker, versionTo, sinceIso, nowMs) {
   var lc = await evLiveCheck(env, worker, versionTo, sinceIso);
   if (lc.state !== "failed" || !lc.la || lc.la.http != null) return lc;
   var la = null, hb = null;
-  try { la = await env.AUDIT.prepare("SELECT note FROM worker_live_audit WHERE worker=?1").bind(worker).first(); } catch (e) {}
+  try { la = await env.AUDIT.prepare("SELECT note FROM worker_live_audit WHERE worker=?1").bind(worker).first(); } catch (e) { console.error(JSON.stringify({ evt: "fleet-control:cmLiveCheck:caught", error: String(e && e.message) })); }
   if (!la || String(la.note || "") !== "CRON_ONLY") return lc;
-  try { hb = await env.AUDIT.prepare("SELECT version, ts, ok FROM fleet_heartbeat WHERE worker=?1").bind(worker).first(); } catch (e) {}
+  try { hb = await env.AUDIT.prepare("SELECT version, ts, ok FROM fleet_heartbeat WHERE worker=?1").bind(worker).first(); } catch (e) { console.error(JSON.stringify({ evt: "fleet-control:cmLiveCheck:caught", error: String(e && e.message) })); }
   var since = Date.parse(sinceIso), hbMs = hb ? Date.parse(String(hb.ts || "").replace(" ", "T") + (/[zZ]$|[+-]\d\d:?\d\d$/.test(String(hb.ts || "")) ? "" : "Z")) : NaN;
   if (!hb || !(hbMs > since)) {
     if ((nowMs || Date.now()) - since > CM_DEPLOY_WAIT_H * 36e5) return { state: "unverifiable", la: { http: null, live_version: hb ? hb.version : null, via: "cron-only, no fleet_heartbeat after the deploy" } };
@@ -4164,7 +4164,7 @@ async function cmRequeueStale(env, cx, t, pr, num, why) {
   var n = await env.AUDIT.prepare("SELECT COUNT(*) AS n FROM code_tasks WHERE goal = ?1").bind(t.goal).first();
   if (n && Number(n.n) > CM_REQUEUE_MAX) return null;
   var anchor = null;
-  try { anchor = JSON.parse(t.ctx || "{}").anchor || null; } catch (e) {}
+  try { anchor = JSON.parse(t.ctx || "{}").anchor || null; } catch (e) { console.error(JSON.stringify({ evt: "fleet-control:cmRequeueStale:caught", error: String(e && e.message) })); }
   var id = cmTaskId();
   await env.AUDIT.prepare("INSERT INTO code_tasks (id, repo, path, goal, status, step, attempts, ctx, created_at, updated_at) VALUES (?1, ?2, ?3, ?4, 'queued', 'read', 0, ?5, ?6, ?6)")
     .bind(id, t.repo, path, t.goal, anchor ? JSON.stringify({ anchor: anchor }) : null, cx.iso).run();
@@ -4241,7 +4241,7 @@ async function cmFailureExcerpt(env, checks, failed) {
       if (!r.ok) continue;
       var txt = await r.text();
       byCheck[c.name] = cmFailureLines(txt.length > 3e6 ? txt.slice(0, 3e6) : txt);
-    } catch (e) {}
+    } catch (e) { console.error(JSON.stringify({ evt: "fleet-control:cmFailureExcerpt:caught", error: String(e && e.message) })); }
   }
   return cmFailureText(byCheck);
 }
@@ -4391,7 +4391,7 @@ __name(cmRefuseTask, "cmRefuseTask");
 // The closure reason is now recorded: CYCLE-TIME-1's own close (branch_hygiene_log) or a close outside the fleet.
 async function cmClosedWhy(env, num, pr, t) {
   var row = null;
-  try { row = await env.AUDIT.prepare("SELECT ts, why FROM branch_hygiene_log WHERE pr = ?1 AND action = 'close-stale-pr' AND ok = 1 AND dry = 0 ORDER BY id DESC LIMIT 1").bind(num).first(); } catch (e) {}
+  try { row = await env.AUDIT.prepare("SELECT ts, why FROM branch_hygiene_log WHERE pr = ?1 AND action = 'close-stale-pr' AND ok = 1 AND dry = 0 ORDER BY id DESC LIMIT 1").bind(num).first(); } catch (e) { console.error(JSON.stringify({ evt: "fleet-control:cmClosedWhy:caught", error: String(e && e.message) })); }
   var who = row ? "closed unmerged by the stale-PR closer (CYCLE-TIME-1, qnfo-fleet-control) at " + row.ts + ": " + String(row.why || "").slice(0, 200) : "pull request #" + num + " was closed unmerged outside the runner" + (pr && pr.closed_at ? " at " + pr.closed_at : "");
   return (who + (t && t.merge_note ? "; the runner's last note was: " + String(t.merge_note).slice(0, 160) : "")).slice(0, 500);
 }
@@ -4624,7 +4624,7 @@ async function cmGoalReview(env, cx, t, cfg, head, files) {
     try {
       await env.AUDIT.prepare("INSERT INTO cloud_ops_events (id, ts, kind, text, meta, job, status) VALUES (?1, ?2, 'code-merge.goal-review', ?3, ?4, ?5, ?6) ON CONFLICT(id) DO UPDATE SET ts=excluded.ts, text=excluded.text, meta=excluded.meta, status=excluded.status")
         .bind(id, cx.iso, (t.id + " " + String(head).slice(0, 7) + ": " + (dec.why || dec.note)).slice(0, 500), JSON.stringify(rv), CM_RUNNER, dec.refuse ? "refused" : dec.wait ? "retry" : dec.split ? "split" : "ok").run();
-    } catch (e) {}
+    } catch (e) { console.error(JSON.stringify({ evt: "fleet-control:cmGoalReview:caught", error: String(e && e.message) })); }
   }
   return dec;
 }
@@ -4662,7 +4662,7 @@ async function codeMergeTick(env, opts) {
   }
   var busy = {};
   (await all("SELECT path FROM code_tasks WHERE merged_by = ?1 AND merge_state IN ('deploying', 'deployed', 'reverting')", [CM_RUNNER])).forEach(function(r) { var s = cmScope(r.path); if (s.worker) busy[s.worker] = 1; });
-  try { (await all("SELECT worker FROM evolve_candidates WHERE status IN ('pr-open', 'merged', 'deployed')")).forEach(function(r) { busy[r.worker] = 1; }); } catch (e) {}
+  try { (await all("SELECT worker FROM evolve_candidates WHERE status IN ('pr-open', 'merged', 'deployed')")).forEach(function(r) { busy[r.worker] = 1; }); } catch (e) { console.error(JSON.stringify({ evt: "fleet-control:codeMergeTick:caught", error: String(e && e.message) })); }
   // Pushed branches first: open their PRs (CI then starts by itself; they are merge candidates from the next tick).
   var pushed = await all("SELECT * FROM code_tasks WHERE repo = 'qnfo-workers' AND status = 'branch_pushed' AND branch LIKE 'codeagent-%' ORDER BY COALESCE(merge_checked_at, '') ASC, updated_at ASC LIMIT ?1", [CM_MAX_CANDIDATES]);
   for (var o = 0; o < pushed.length; o++) out.opened.push(await cmOpenHandle(env, cx, pushed[o], cfg, out));
@@ -4836,7 +4836,7 @@ async function bhConfig(env) {
       // STALE-PR-LANE-READS-HOLDS-1 (0.20.0): off stops the comment read, never the other gates.
       if (r.key === "stale_pr_holds_enabled" && v) cfg.holds = ["0", "off", "false", "no", "disabled"].indexOf(v) < 0;
     });
-  } catch (e) {}
+  } catch (e) { console.error(JSON.stringify({ evt: "fleet-control:bhConfig:caught", error: String(e && e.message) })); }
   return cfg;
 }
 __name(bhConfig, "bhConfig");
@@ -4948,7 +4948,7 @@ async function bhFileRepair(env, pr, rep) {
     var r = await env.AUDIT.prepare("INSERT INTO agent_issues (title, description, source, category, priority, status, created_at, updated_at) SELECT ?1, ?2, 'qnfo-fleet-control', 'reliability', 'high', 'open', ?3, ?3 WHERE NOT EXISTS (SELECT 1 FROM agent_issues WHERE title = ?1 AND status = 'open')").bind(iss.title, iss.description, Date.now()).run();
     return { filed: !!(r && r.meta && r.meta.changes), title: iss.title };
   } catch (e) {
-    try { await env.AUDIT.prepare("INSERT INTO cloud_ops_events (id, ts, kind, text, job, status) VALUES (?1, ?2, 'check-repair-file-error', ?3, 'BRANCH-HYGIENE-1', 'error')").bind("check-repair-" + pr.number + "-" + Date.now(), new Date().toISOString(), String(e && e.message || e).slice(0, 300)).run(); } catch (e2) {}
+    try { await env.AUDIT.prepare("INSERT INTO cloud_ops_events (id, ts, kind, text, job, status) VALUES (?1, ?2, 'check-repair-file-error', ?3, 'BRANCH-HYGIENE-1', 'error')").bind("check-repair-" + pr.number + "-" + Date.now(), new Date().toISOString(), String(e && e.message || e).slice(0, 300)).run(); } catch (e2) { console.error(JSON.stringify({ evt: "fleet-control:bhFileRepair:caught", error: String(e2 && e2.message) })); }
     return { filed: false, error: String(e && e.message || e).slice(0, 200), title: iss.title };
   }
 }
@@ -5000,7 +5000,7 @@ async function bhLogNonMerge(env, iso, p, action, why) {
   try {
     if (action === "merge-nudge") await env.AUDIT.prepare("INSERT INTO branch_hygiene_log (ts, branch, sha, action, why, pr, archive_ref, ok, dry) VALUES (?1, ?2, ?3, 'merge-nudge', ?4, ?5, NULL, 1, 0)").bind(iso, p.head.ref, sha, w, p.number).run();
     else await env.AUDIT.prepare("INSERT INTO branch_hygiene_log (ts, branch, sha, action, why, pr, archive_ref, ok, dry) SELECT ?1, ?2, ?3, 'merge-refused', ?4, ?5, NULL, 1, 0 WHERE NOT EXISTS (SELECT 1 FROM branch_hygiene_log WHERE action = 'merge-refused' AND pr = ?5 AND COALESCE(sha, '') = COALESCE(?3, '') AND why = ?4)").bind(iso, p.head.ref, sha, w, p.number).run();
-  } catch (e) {}
+  } catch (e) { console.error(JSON.stringify({ evt: "fleet-control:bhLogNonMerge:caught", error: String(e && e.message) })); }
 }
 __name(bhLogNonMerge, "bhLogNonMerge");
 // STALE-PR-CONFLICT-REPAIR-1 (0.17.0, first written as 0.14.0 in PR 910, agent_issues 2304; pillar autonomy): STALE-PR-MERGE-FIRST-1
@@ -5043,7 +5043,7 @@ async function bhFileConflict(env, pr, cf) {
     var r = await env.AUDIT.prepare("INSERT INTO agent_issues (title, description, source, category, priority, status, created_at, updated_at) SELECT ?1, ?2, 'qnfo-fleet-control', 'reliability', 'high', 'open', ?3, ?3 WHERE NOT EXISTS (SELECT 1 FROM agent_issues WHERE title = ?1 AND status = 'open')").bind(iss.title, iss.description, Date.now()).run();
     return { filed: !!(r && r.meta && r.meta.changes), title: iss.title };
   } catch (e) {
-    try { await env.AUDIT.prepare("INSERT INTO cloud_ops_events (id, ts, kind, text, job, status) VALUES (?1, ?2, 'conflict-repair-file-error', ?3, 'BRANCH-HYGIENE-1', 'error')").bind("conflict-repair-" + pr.number + "-" + Date.now(), new Date().toISOString(), String(e && e.message || e).slice(0, 300)).run(); } catch (e2) {}
+    try { await env.AUDIT.prepare("INSERT INTO cloud_ops_events (id, ts, kind, text, job, status) VALUES (?1, ?2, 'conflict-repair-file-error', ?3, 'BRANCH-HYGIENE-1', 'error')").bind("conflict-repair-" + pr.number + "-" + Date.now(), new Date().toISOString(), String(e && e.message || e).slice(0, 300)).run(); } catch (e2) { console.error(JSON.stringify({ evt: "fleet-control:bhFileConflict:caught", error: String(e2 && e2.message) })); }
     return { filed: false, error: String(e && e.message || e).slice(0, 200), title: iss.title };
   }
 }
@@ -5125,7 +5125,7 @@ async function branchHygieneTick(env, opts) {
   if (lane && (!cfg.enabled || !cfg.mergeStale || dry)) return { ok: true, lane_only: true, idle: "merge lane off or dry run" };
   var beat = async function(status, summary) {
     if (lane) return;
-    try { await env.AUDIT.prepare("INSERT INTO cloud_ops_events (id, ts, kind, text, job, status) VALUES (?1, ?2, 'branch-hygiene-tick', ?3, 'BRANCH-HYGIENE-1', ?4) ON CONFLICT(id) DO UPDATE SET ts = excluded.ts, text = excluded.text, status = excluded.status").bind("branch-hygiene-tick-" + iso.slice(0, 10), iso, JSON.stringify(summary || {}).slice(0, 300), status).run(); } catch (e) {}
+    try { await env.AUDIT.prepare("INSERT INTO cloud_ops_events (id, ts, kind, text, job, status) VALUES (?1, ?2, 'branch-hygiene-tick', ?3, 'BRANCH-HYGIENE-1', ?4) ON CONFLICT(id) DO UPDATE SET ts = excluded.ts, text = excluded.text, status = excluded.status").bind("branch-hygiene-tick-" + iso.slice(0, 10), iso, JSON.stringify(summary || {}).slice(0, 300), status).run(); } catch (e) { console.error(JSON.stringify({ evt: "fleet-control:branchHygieneTick:caught", error: String(e && e.message) })); }
   };
   if (!cfg.enabled) { await beat("disabled", { disabled: cfg.raw }); return { ok: true, disabled: true, why: "ops_config branch_hygiene_enabled = " + cfg.raw }; }
   await bhSchema(env);
@@ -5147,7 +5147,7 @@ async function branchHygieneTick(env, opts) {
   // BRANCH-HYGIENE-2: a task the merge runner refused (needs_human) keeps its branch for BH_NEEDS_HUMAN_DAYS days, because the
   // branch is the only artifact a person has to act on; after that the archive ref is enough.
   var nhSince = new Date(nowMs - BH_NEEDS_HUMAN_DAYS * 864e5).toISOString();
-  try { ((await env.AUDIT.prepare("SELECT branch FROM code_tasks WHERE branch IS NOT NULL AND (status IN ('branch_pushed', 'published', 'pr_open') OR (status = 'needs_human' AND updated_at >= ?1))").bind(nhSince).all()).results || []).forEach(function(r) { live[r.branch] = 1; }); } catch (e) {}
+  try { ((await env.AUDIT.prepare("SELECT branch FROM code_tasks WHERE branch IS NOT NULL AND (status IN ('branch_pushed', 'published', 'pr_open') OR (status = 'needs_human' AND updated_at >= ?1))").bind(nhSince).all()).results || []).forEach(function(r) { live[r.branch] = 1; }); } catch (e) { console.error(JSON.stringify({ evt: "fleet-control:branchHygieneTick:caught", error: String(e && e.message) })); }
   var names = br.items.map(function(b) { return b.name; });
   out.branches = names.length;
   var actions = 0, compares = 0, remaining = names.length;
@@ -5180,7 +5180,7 @@ async function branchHygieneTick(env, opts) {
       var dl = await evApi(env, "DELETE", "/git/refs/heads/" + bhPath(b.name));
       if (!dl.ok && dl.status !== 404 && dl.status !== 422) { ok = false; out.errors.push(b.name + ": delete HTTP " + dl.status); }
     }
-    try { await env.AUDIT.prepare("INSERT INTO branch_hygiene_log (ts, branch, sha, action, why, pr, archive_ref, ok, dry) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)").bind(iso, b.name, b.commit.sha, d.action, d.why, d.pr || null, ref, ok ? 1 : 0, dry ? 1 : 0).run(); } catch (e) {}
+    try { await env.AUDIT.prepare("INSERT INTO branch_hygiene_log (ts, branch, sha, action, why, pr, archive_ref, ok, dry) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)").bind(iso, b.name, b.commit.sha, d.action, d.why, d.pr || null, ref, ok ? 1 : 0, dry ? 1 : 0).run(); } catch (e) { console.error(JSON.stringify({ evt: "fleet-control:branchHygieneTick:caught", error: String(e && e.message) })); }
     if (ok) { (d.action === "archive-delete" ? out.archived : out.deleted).push(b.name); if (!dry) remaining--; } else out.kept++;
   }
   out.remaining = remaining - 1;
@@ -5201,7 +5201,7 @@ async function branchHygieneTick(env, opts) {
   };
   if (cfg.mergeStale && !dry) {
     var warm = prs.items.filter(laneOk).slice(0, BH_MERGE_MAX);
-    try { await Promise.all(warm.map(function(q) { return evApi(env, "GET", "/pulls/" + q.number).catch(function() { return null; }); })); } catch (eW) {}
+    try { await Promise.all(warm.map(function(q) { return evApi(env, "GET", "/pulls/" + q.number).catch(function() { return null; }); })); } catch (eW) { console.error(JSON.stringify({ evt: "fleet-control:branchHygieneTick:caught", error: String(eW && eW.message) })); }
     out.prewarmed = warm.length;
   }
   for (var pi = 0; pi < prs.items.length && prClosed < BH_MAX_ACTIONS; pi++) {
@@ -5220,7 +5220,7 @@ async function branchHygieneTick(env, opts) {
       if (tm.merged) {
         await evApi(env, "DELETE", "/git/refs/heads/" + bhPath(p.head.ref));
         await evApi(env, "POST", "/issues/" + p.number + "/comments", { body: "STALE-PR-MERGE-FIRST-1 (qnfo-fleet-control): merged after " + BH_MERGE_IDLE_H + "h without activity because " + tm.why + ". The canonical deploy ships it from main." });
-        try { await env.AUDIT.prepare("INSERT INTO branch_hygiene_log (ts, branch, sha, action, why, pr, archive_ref, ok, dry) VALUES (?1, ?2, ?3, 'merge-stale-pr', ?4, ?5, NULL, 1, 0)").bind(iso, p.head.ref, tm.sha || p.head.sha || null, String(tm.why).slice(0, 500), p.number).run(); } catch (e) {}
+        try { await env.AUDIT.prepare("INSERT INTO branch_hygiene_log (ts, branch, sha, action, why, pr, archive_ref, ok, dry) VALUES (?1, ?2, ?3, 'merge-stale-pr', ?4, ?5, NULL, 1, 0)").bind(iso, p.head.ref, tm.sha || p.head.sha || null, String(tm.why).slice(0, 500), p.number).run(); } catch (e) { console.error(JSON.stringify({ evt: "fleet-control:branchHygieneTick:caught", error: String(e && e.message) })); }
         out.merged_prs.push(p.number);
         prClosed++;
         continue;
@@ -5235,17 +5235,17 @@ async function branchHygieneTick(env, opts) {
         var fc = await bhFileConflict(env, tm.pr, tm.conflict);
         (out.conflict_issues = out.conflict_issues || []).push({ pr: p.number, filed: fc.filed });
         if (fc.filed) {
-          try { await env.AUDIT.prepare("INSERT INTO branch_hygiene_log (ts, branch, sha, action, why, pr, archive_ref, ok, dry) VALUES (?1, ?2, ?3, 'conflict-repair-issue', ?4, ?5, NULL, 1, 0)").bind(iso, p.head.ref, p.head.sha || null, String(fc.title).slice(0, 500), p.number).run(); } catch (e) {}
-          try { await env.AUDIT.prepare("INSERT INTO cloud_ops_events (id, ts, kind, text, job, status) VALUES (?1, ?2, 'stale-pr-conflict-repair', ?3, 'BRANCH-HYGIENE-1', 'ok') ON CONFLICT(id) DO NOTHING").bind("stale-pr-conflict-repair-" + p.number + "-" + String(p.head.sha || "").slice(0, 12), iso, String(fc.title).slice(0, 300)).run(); } catch (e) {}
+          try { await env.AUDIT.prepare("INSERT INTO branch_hygiene_log (ts, branch, sha, action, why, pr, archive_ref, ok, dry) VALUES (?1, ?2, ?3, 'conflict-repair-issue', ?4, ?5, NULL, 1, 0)").bind(iso, p.head.ref, p.head.sha || null, String(fc.title).slice(0, 500), p.number).run(); } catch (e) { console.error(JSON.stringify({ evt: "fleet-control:branchHygieneTick:caught", error: String(e && e.message) })); }
+          try { await env.AUDIT.prepare("INSERT INTO cloud_ops_events (id, ts, kind, text, job, status) VALUES (?1, ?2, 'stale-pr-conflict-repair', ?3, 'BRANCH-HYGIENE-1', 'ok') ON CONFLICT(id) DO NOTHING").bind("stale-pr-conflict-repair-" + p.number + "-" + String(p.head.sha || "").slice(0, 12), iso, String(fc.title).slice(0, 300)).run(); } catch (e) { console.error(JSON.stringify({ evt: "fleet-control:branchHygieneTick:caught", error: String(e && e.message) })); }
         }
       }
       if (tm.repair && tm.pr) {
         var fr = await bhFileRepair(env, tm.pr, tm.repair);
         (out.repair_issues = out.repair_issues || []).push({ pr: p.number, filed: fr.filed });
         if (fr.filed) {
-          try { await env.AUDIT.prepare("INSERT INTO branch_hygiene_log (ts, branch, sha, action, why, pr, archive_ref, ok, dry) VALUES (?1, ?2, ?3, 'check-repair-issue', ?4, ?5, NULL, 1, 0)").bind(iso, p.head.ref, p.head.sha || null, String(fr.title).slice(0, 500), p.number).run(); } catch (e) {}
+          try { await env.AUDIT.prepare("INSERT INTO branch_hygiene_log (ts, branch, sha, action, why, pr, archive_ref, ok, dry) VALUES (?1, ?2, ?3, 'check-repair-issue', ?4, ?5, NULL, 1, 0)").bind(iso, p.head.ref, p.head.sha || null, String(fr.title).slice(0, 500), p.number).run(); } catch (e) { console.error(JSON.stringify({ evt: "fleet-control:branchHygieneTick:caught", error: String(e && e.message) })); }
           // The issue-2122 contract reads this event kind as proof the repair path ran live.
-          try { await env.AUDIT.prepare("INSERT INTO cloud_ops_events (id, ts, kind, text, job, status) VALUES (?1, ?2, 'stale-pr-check-repair', ?3, 'BRANCH-HYGIENE-1', 'ok') ON CONFLICT(id) DO NOTHING").bind("stale-pr-check-repair-" + p.number + "-" + String(p.head.sha || "").slice(0, 12), iso, String(fr.title).slice(0, 300)).run(); } catch (e) {}
+          try { await env.AUDIT.prepare("INSERT INTO cloud_ops_events (id, ts, kind, text, job, status) VALUES (?1, ?2, 'stale-pr-check-repair', ?3, 'BRANCH-HYGIENE-1', 'ok') ON CONFLICT(id) DO NOTHING").bind("stale-pr-check-repair-" + p.number + "-" + String(p.head.sha || "").slice(0, 12), iso, String(fr.title).slice(0, 300)).run(); } catch (e) { console.error(JSON.stringify({ evt: "fleet-control:branchHygieneTick:caught", error: String(e && e.message) })); }
         }
       }
     }
@@ -5261,7 +5261,7 @@ async function branchHygieneTick(env, opts) {
       var hcl = await evApi(env, "PATCH", "/pulls/" + p.number, { state: "closed" });
       if (!hcl.ok) { hok = false; out.errors.push("PR " + p.number + ": close HTTP " + hcl.status); }
     }
-    try { await env.AUDIT.prepare("INSERT INTO branch_hygiene_log (ts, branch, sha, action, why, pr, archive_ref, ok, dry) VALUES (?1, ?2, ?3, 'close-stale-pr', ?4, ?5, ?6, ?7, ?8)").bind(iso, p.head.ref, p.head.sha || null, ("open PR idle over " + BH_STALE_PR_H + "h with no live code task" + (notMerged ? "; not merged: " + notMerged : "")).slice(0, 500), p.number, href, hok ? 1 : 0, dry ? 1 : 0).run(); } catch (e) {}
+    try { await env.AUDIT.prepare("INSERT INTO branch_hygiene_log (ts, branch, sha, action, why, pr, archive_ref, ok, dry) VALUES (?1, ?2, ?3, 'close-stale-pr', ?4, ?5, ?6, ?7, ?8)").bind(iso, p.head.ref, p.head.sha || null, ("open PR idle over " + BH_STALE_PR_H + "h with no live code task" + (notMerged ? "; not merged: " + notMerged : "")).slice(0, 500), p.number, href, hok ? 1 : 0, dry ? 1 : 0).run(); } catch (e) { console.error(JSON.stringify({ evt: "fleet-control:branchHygieneTick:caught", error: String(e && e.message) })); }
     if (hok) { out.closed_prs.push(p.number); prClosed++; }
   }
   if (lane) return out;
@@ -5274,7 +5274,7 @@ async function branchHygieneTick(env, opts) {
     } else if (rp.ok && rp.j) out.setting = "delete_branch_on_merge already " + rp.j.delete_branch_on_merge;
   } catch (e) { out.setting = "setting check failed"; }
   if (!dry) {
-    try { await env.AUDIT.prepare("UPDATE metric_registry SET last_value = ?1, last_refreshed = ?2 WHERE metric = 'repo_branches_open'").bind(String(out.remaining), iso).run(); } catch (e) {}
+    try { await env.AUDIT.prepare("UPDATE metric_registry SET last_value = ?1, last_refreshed = ?2 WHERE metric = 'repo_branches_open'").bind(String(out.remaining), iso).run(); } catch (e) { console.error(JSON.stringify({ evt: "fleet-control:branchHygieneTick:caught", error: String(e && e.message) })); }
   }
   await beat(out.errors.length && !out.deleted.length && !out.archived.length ? "error" : "ok", { branches: out.branches, remaining: out.remaining, deleted: out.deleted.length, archived: out.archived.length, closed_prs: out.closed_prs.length, merged_prs: out.merged_prs.length, errors: out.errors.length, dry: dry });
   return out;
@@ -6264,7 +6264,7 @@ async function charterBreaches(env, ev) {
       await env.AUDIT.prepare("INSERT INTO agent_issues (title, description, source, category, priority, status, created_at, updated_at) VALUES (?1, ?2, 'charter-loop', 'reliability', ?3, 'open', ?4, ?4)")
         .bind(b.key, "AUTO-FILED by qnfo-fleet-control CHARTER-LOOP-1 (docs/QUNIVERSE-CHARTER.md, MVP section). " + b.text + " DoD: worker_live_audit note SYNC or CRON_ONLY on two consecutive daily ticks; the loop closes this issue itself with close_evidence.", b.severity, nowMs).run();
       filed++;
-    } catch (e) {}
+    } catch (e) { console.error(JSON.stringify({ evt: "fleet-control:charterBreaches:caught", error: String(e && e.message) })); }
   }
   var want = {};
   ev.breaches.forEach(function(b) { want[b.key] = true; });
@@ -6276,7 +6276,7 @@ async function charterBreaches(env, ev) {
         .bind(id, "CHARTER-LOOP-1 " + ev.ts + ": component serving again in worker_live_audit (live probe), charter snapshot mvp_up=" + ev.mvp_up + "/" + ev.mvp.length).run();
       await env.AUDIT.prepare("UPDATE agent_issues SET status='closed', updated_at=?2 WHERE id=?1").bind(id, nowMs).run();
       closed++;
-    } catch (e) {}
+    } catch (e) { console.error(JSON.stringify({ evt: "fleet-control:charterBreaches:caught", error: String(e && e.message) })); }
   }
   return { filed: filed, closed: closed };
 }
@@ -6339,7 +6339,7 @@ async function charterTick(env, force) {
     await env.AUDIT.prepare("INSERT INTO charter_snapshots (ts, charter_version, worker_version, health, mvp_up, breaches, state_json, rendered_sha, commit_sha, commit_note) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)")
       .bind(ev.ts, CHARTER_VERSION, VERSION, ev.health, ev.mvp_up, ev.breaches.length, JSON.stringify(ev).slice(0, 180000), sha, commit.sha || null, (commit.status + ": " + commit.note + "; mirror " + mirror.status).slice(0, 200)).run();
     await env.AUDIT.prepare("DELETE FROM charter_snapshots WHERE id NOT IN (SELECT id FROM charter_snapshots ORDER BY id DESC LIMIT 400)").run();
-  } catch (e) {}
+  } catch (e) { console.error(JSON.stringify({ evt: "fleet-control:charterTick:caught", error: String(e && e.message) })); }
   return { ok: true, ts: ev.ts, health: ev.health, mvp_up: ev.mvp_up + "/" + ev.mvp.length, breaches: ev.breaches.length, issues: br, commit: commit, mirror: mirror, rendered_sha: sha, ms: Date.now() - t0 };
 }
 async function charterLatest(env) {
@@ -6347,7 +6347,7 @@ async function charterLatest(env) {
   var row = await charterOne(env, "SELECT id, ts, charter_version, worker_version, health, mvp_up, breaches, state_json, rendered_sha, commit_sha, commit_note FROM charter_snapshots ORDER BY id DESC LIMIT 1");
   if (!row) return null;
   var state = null;
-  try { state = JSON.parse(row.state_json); } catch (e) {}
+  try { state = JSON.parse(row.state_json); } catch (e) { console.error(JSON.stringify({ evt: "fleet-control:charterLatest:caught", error: String(e && e.message) })); }
   return { id: row.id, ts: row.ts, charter_version: row.charter_version, worker_version: row.worker_version, health: row.health, mvp_up: row.mvp_up, breaches: row.breaches, rendered_sha: row.rendered_sha, commit_sha: row.commit_sha, commit_note: row.commit_note, state: state };
 }
 // ---- CHARTER-LOOP-1:END ----
@@ -6746,7 +6746,7 @@ async function portfolioSync(env, force) {
   pfBranchCache = {};
   var org = await pfFetchOrg(env);
   if (!org.ok) {
-    try { await env.AUDIT.prepare("INSERT INTO portfolio_sync_runs (ts, repos, hygiene, status, note, writes) VALUES (?1, ?2, NULL, 'fetch-failed', ?3, '[]')").bind(new Date().toISOString(), org.repos.length, org.note).run(); } catch (e) {}
+    try { await env.AUDIT.prepare("INSERT INTO portfolio_sync_runs (ts, repos, hygiene, status, note, writes) VALUES (?1, ?2, NULL, 'fetch-failed', ?3, '[]')").bind(new Date().toISOString(), org.repos.length, org.note).run(); } catch (e) { console.error(JSON.stringify({ evt: "fleet-control:portfolioSync:caught", error: String(e && e.message) })); }
     return { ok: false, status: "fetch-failed", note: org.note };
   }
   var wbs = await pfWbs(env);
@@ -6774,7 +6774,7 @@ async function portfolioSync(env, force) {
   var done = actions.filter(function(a) { return a.status === "committed"; }).length;
   actions = actions.filter(function(a) { return a.status !== "unchanged"; });
   ev.actions = actions;
-  try { await env.AUDIT.prepare("INSERT INTO portfolio_sync_runs (ts, repos, hygiene, status, note, writes) VALUES (?1, ?2, ?3, ?4, ?5, ?6)").bind(ev.ts, ev.total, ev.hygiene_score, status, "kernel " + VERSION + "; wbs:" + wbs.note + "; dormant " + ev.dormant.length + "; unlinked " + ev.unlinked_research.length + "; actions " + actions.length + " (" + done + " committed)", JSON.stringify(writes).slice(0, 1500)).run(); } catch (e) {}
+  try { await env.AUDIT.prepare("INSERT INTO portfolio_sync_runs (ts, repos, hygiene, status, note, writes) VALUES (?1, ?2, ?3, ?4, ?5, ?6)").bind(ev.ts, ev.total, ev.hygiene_score, status, "kernel " + VERSION + "; wbs:" + wbs.note + "; dormant " + ev.dormant.length + "; unlinked " + ev.unlinked_research.length + "; actions " + actions.length + " (" + done + " committed)", JSON.stringify(writes).slice(0, 1500)).run(); } catch (e) { console.error(JSON.stringify({ evt: "fleet-control:portfolioSync:caught", error: String(e && e.message) })); }
   return { ok: true, status: status, ts: ev.ts, repos: ev.total, tiers: ev.tiers, hygiene: ev.hygiene_score, wbs: wbs.note, writes: writes, actions: actions, ms: Date.now() - t0 };
 }
 // PARTIAL-RETRY-1: a run that left a surface unwritten (partial) is retried on the next hourly tick, not after 20h;
@@ -6982,7 +6982,7 @@ async function pfCodePublish(env) {
   }
   var ts = new Date().toISOString();
   for (var q = 0; q < out.length; q++) {
-    try { await env.AUDIT.prepare("INSERT INTO portfolio_actions (ts, repo, action, status, detail) VALUES (?1, ?2, ?3, ?4, ?5)").bind(ts, out[q].repo, out[q].action, out[q].status, String(out[q].note || "").slice(0, 400)).run(); } catch (e) {}
+    try { await env.AUDIT.prepare("INSERT INTO portfolio_actions (ts, repo, action, status, detail) VALUES (?1, ?2, ?3, ?4, ?5)").bind(ts, out[q].repo, out[q].action, out[q].status, String(out[q].note || "").slice(0, 400)).run(); } catch (e) { console.error(JSON.stringify({ evt: "fleet-control:pfCodePublish:caught", error: String(e && e.message) })); }
   }
   return out;
 }
@@ -7025,7 +7025,7 @@ async function pfHygieneApply(env, ev, wbsRows) {
     } catch (e) { res = { status: "write-failed", note: String(e && e.message || e).slice(0, 100) }; }
     out.push({ repo: a.repo, action: a.action, status: res.status, note: res.note || "" });
     if (res.status === "unchanged") continue;
-    try { await env.AUDIT.prepare("INSERT INTO portfolio_actions (ts, repo, action, status, detail) VALUES (?1, ?2, ?3, ?4, ?5)").bind(ev.ts, a.repo, a.action, res.status, String(res.note || "").slice(0, 300)).run(); } catch (e2) {}
+    try { await env.AUDIT.prepare("INSERT INTO portfolio_actions (ts, repo, action, status, detail) VALUES (?1, ?2, ?3, ?4, ?5)").bind(ev.ts, a.repo, a.action, res.status, String(res.note || "").slice(0, 300)).run(); } catch (e2) { console.error(JSON.stringify({ evt: "fleet-control:pfHygieneApply:caught", error: String(e2 && e2.message) })); }
   }
   // PORTFOLIO-ARCHIVE-1 (0.5.0, REPO-ARCHIVE-1 agent_issues 2045): an explicit archive request is executed here. A session
   // cannot archive a repository (its GitHub proxy refuses repository settings writes: HTTP 403 on 2026-10-06), so
@@ -7053,8 +7053,8 @@ async function pfHygieneApply(env, ev, wbsRows) {
       }
     } catch (e5) { resA = { status: "write-failed", note: String(e5 && e5.message || e5).slice(0, 100) }; }
     out.push({ repo: repoA, action: "archive", status: resA.status, note: resA.note || "" });
-    try { await env.AUDIT.prepare("INSERT INTO portfolio_actions (ts, repo, action, status, detail) VALUES (?1, ?2, ?3, ?4, ?5)").bind(ev.ts, repoA, "archive", resA.status, String(resA.note || "").slice(0, 300)).run(); } catch (e6) {}
-    try { await env.AUDIT.prepare("UPDATE portfolio_actions SET status = ?1, detail = COALESCE(detail, '') || ' | ' || ?2 WHERE id = ?3").bind(resA.status === "committed" || resA.status === "unchanged" ? "committed" : resA.status === "skipped" ? "skipped" : "failed", ev.ts + " " + resA.status + ": " + String(resA.note || "").slice(0, 120), q.id).run(); } catch (e7) {}
+    try { await env.AUDIT.prepare("INSERT INTO portfolio_actions (ts, repo, action, status, detail) VALUES (?1, ?2, ?3, ?4, ?5)").bind(ev.ts, repoA, "archive", resA.status, String(resA.note || "").slice(0, 300)).run(); } catch (e6) { console.error(JSON.stringify({ evt: "fleet-control:pfHygieneApply:caught", error: String(e6 && e6.message) })); }
+    try { await env.AUDIT.prepare("UPDATE portfolio_actions SET status = ?1, detail = COALESCE(detail, '') || ' | ' || ?2 WHERE id = ?3").bind(resA.status === "committed" || resA.status === "unchanged" ? "committed" : resA.status === "skipped" ? "skipped" : "failed", ev.ts + " " + resA.status + ": " + String(resA.note || "").slice(0, 120), q.id).run(); } catch (e7) { console.error(JSON.stringify({ evt: "fleet-control:pfHygieneApply:caught", error: String(e7 && e7.message) })); }
   }
   return out;
 }
@@ -7109,7 +7109,7 @@ async function loopWatchFacts(env) {
   await pfSchema(env);
   await env.AUDIT.prepare("CREATE TABLE IF NOT EXISTS loop_watch_state (key TEXT PRIMARY KEY, value TEXT)").run();
   var fs = await charterOne(env, "SELECT value FROM loop_watch_state WHERE key='first_seen'");
-  if (!fs) { var now = new Date().toISOString(); try { await env.AUDIT.prepare("INSERT OR IGNORE INTO loop_watch_state (key, value) VALUES ('first_seen', ?1)").bind(now).run(); } catch (e) {} f.first_seen = now; } else f.first_seen = fs.value;
+  if (!fs) { var now = new Date().toISOString(); try { await env.AUDIT.prepare("INSERT OR IGNORE INTO loop_watch_state (key, value) VALUES ('first_seen', ?1)").bind(now).run(); } catch (e) { console.error(JSON.stringify({ evt: "fleet-control:loopWatchFacts:caught", error: String(e && e.message) })); } f.first_seen = now; } else f.first_seen = fs.value;
   f.charter_last = await charterOne(env, "SELECT ts, commit_note FROM charter_snapshots ORDER BY id DESC LIMIT 1");
   f.charter_notes = (await charterRows(env, "SELECT commit_note FROM charter_snapshots ORDER BY id DESC LIMIT 3")).map(function(r) { return r.commit_note; });
   f.portfolio_last = await charterOne(env, "SELECT ts, status, note, writes FROM portfolio_sync_runs ORDER BY id DESC LIMIT 1");
@@ -7131,7 +7131,7 @@ async function loopWatch(env) {
       await env.AUDIT.prepare("INSERT INTO agent_issues (title, description, source, category, priority, status, created_at, updated_at) VALUES (?1, ?2, 'loop-watch', 'reliability', ?3, 'open', ?4, ?4)")
         .bind(k, "AUTO-FILED by qnfo-fleet-control LOOP-WATCH-1 (CLOUD-ONLY-VERIFICATION-1). " + want[k].text + " DoD: the loop's own ledger (charter_snapshots / portfolio_sync_runs) shows a fresh successful run; LOOP-WATCH-1 closes this issue itself with close_evidence on the next healthy hour.", want[k].severity, nowMs).run();
       filed++;
-    } catch (e) {}
+    } catch (e) { console.error(JSON.stringify({ evt: "fleet-control:loopWatch:caught", error: String(e && e.message) })); }
   }
   for (var t in openByTitle) {
     if (want[t]) continue;
@@ -7140,7 +7140,7 @@ async function loopWatch(env) {
         .bind(openByTitle[t], "LOOP-WATCH-1 " + nowIso + ": healthy; charter_last=" + (f.charter_last ? f.charter_last.ts : "none") + " portfolio_last_ok=" + (f.portfolio_last_ok ? f.portfolio_last_ok.ts : "none")).run();
       await env.AUDIT.prepare("UPDATE agent_issues SET status='closed', updated_at=?2 WHERE id=?1").bind(openByTitle[t], nowMs).run();
       closed++;
-    } catch (e) {}
+    } catch (e) { console.error(JSON.stringify({ evt: "fleet-control:loopWatch:caught", error: String(e && e.message) })); }
   }
   return { ok: true, ts: nowIso, healthy: findings.length === 0, findings: findings, filed: filed, closed: closed, charter_last: f.charter_last, portfolio_last: f.portfolio_last ? { ts: f.portfolio_last.ts, status: f.portfolio_last.status, note: f.portfolio_last.note } : null, first_seen: f.first_seen };
 }
@@ -7278,7 +7278,7 @@ function cfcNeedsRun(lastOk, nowMs) {
 async function cfcSchema(env) {
   await env.AUDIT.prepare("CREATE TABLE IF NOT EXISTS cf_changelog_items (guid TEXT PRIMARY KEY, seen_at TEXT, pub TEXT, title TEXT, link TEXT, products TEXT, klass TEXT, slug TEXT, action TEXT, issue_id INTEGER, prev_status TEXT)").run();
   await env.AUDIT.prepare("CREATE TABLE IF NOT EXISTS cf_changelog_runs (id INTEGER PRIMARY KEY AUTOINCREMENT, ts TEXT, status TEXT, items INTEGER, fresh INTEGER, deadlines INTEGER, new_rows INTEGER, reopened INTEGER, filed INTEGER, bytes INTEGER, note TEXT)").run();
-  try { await env.AUDIT.prepare("ALTER TABLE cf_changelog_items ADD COLUMN excerpt TEXT").run(); } catch (e) {} // CF-CHANGELOG-LEADS-1; fails once it exists
+  try { await env.AUDIT.prepare("ALTER TABLE cf_changelog_items ADD COLUMN excerpt TEXT").run(); } catch (e) { console.error(JSON.stringify({ evt: "fleet-control:cfcSchema:caught", error: String(e && e.message) })); } // CF-CHANGELOG-LEADS-1; fails once it exists
 }
 // Streams the feed and stops at the byte cap: the full file is ~8 MB (1,300 items, full HTML), newest first.
 async function cfcFetchFeed() {
@@ -7290,7 +7290,7 @@ async function cfcFetchFeed() {
     if (c.done) break;
     n += c.value.length;
     buf += dec.decode(c.value, { stream: true });
-    if (n >= CFC_MAX_BYTES) { try { await rd.cancel(); } catch (e) {} break; }
+    if (n >= CFC_MAX_BYTES) { try { await rd.cancel(); } catch (e) { console.error(JSON.stringify({ evt: "fleet-control:cfcFetchFeed:caught", error: String(e && e.message) })); } break; }
   }
   return { ok: true, xml: buf, bytes: n };
 }
@@ -7299,7 +7299,7 @@ async function cfcRun(env, force) {
   var nowMs = Date.now(), nowIso = new Date(nowMs).toISOString();
   var run = { ok: true, ts: nowIso, status: "ok", items: 0, fresh: 0, deadlines: 0, new_rows: 0, reopened: 0, filed: 0, bytes: 0, note: "" };
   var fin = async function() {
-    try { await env.AUDIT.prepare("INSERT INTO cf_changelog_runs (ts, status, items, fresh, deadlines, new_rows, reopened, filed, bytes, note) VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10)").bind(run.ts, run.status, run.items, run.fresh, run.deadlines, run.new_rows, run.reopened, run.filed, run.bytes, run.note.slice(0, 300)).run(); } catch (e) {}
+    try { await env.AUDIT.prepare("INSERT INTO cf_changelog_runs (ts, status, items, fresh, deadlines, new_rows, reopened, filed, bytes, note) VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10)").bind(run.ts, run.status, run.items, run.fresh, run.deadlines, run.new_rows, run.reopened, run.filed, run.bytes, run.note.slice(0, 300)).run(); } catch (e) { console.error(JSON.stringify({ evt: "fleet-control:cfcRun:caught", error: String(e && e.message) })); }
     await cfcMetrics(env);
     return run;
   };
@@ -7325,7 +7325,7 @@ async function cfcRun(env, force) {
   // items seen before the excerpt column existed get their text once, while they are still in the feed and recent
   for (var k2 = 0; k2 < items.length; k2++) {
     if (!known[items[k2].guid] || items[k2].pub_ms == null || nowMs - items[k2].pub_ms > CFC_LEAD_DAYS * 86400000) continue;
-    try { await env.AUDIT.prepare("UPDATE cf_changelog_items SET excerpt=?2 WHERE guid=?1 AND excerpt IS NULL").bind(items[k2].guid, items[k2].text.slice(0, 400)).run(); } catch (e) {}
+    try { await env.AUDIT.prepare("UPDATE cf_changelog_items SET excerpt=?2 WHERE guid=?1 AND excerpt IS NULL").bind(items[k2].guid, items[k2].text.slice(0, 400)).run(); } catch (e) { console.error(JSON.stringify({ evt: "fleet-control:cfcRun:caught", error: String(e && e.message) })); }
   }
   // soonest deadline first, so the cap keeps the most urgent ones
   classified.sort(function(a, b) { return (a.c.deadline_ms == null ? 9e15 : a.c.deadline_ms) - (b.c.deadline_ms == null ? 9e15 : b.c.deadline_ms); });
@@ -7364,7 +7364,7 @@ async function cfcRun(env, force) {
       } else if (c.klass === "reopen" || c.klass === "new_product" || c.klass === "row_update") action = "capped";
     } catch (e) { action = "error"; run.note += " " + String(e && e.message || e).slice(0, 80); }
     try { await env.AUDIT.prepare("INSERT OR IGNORE INTO cf_changelog_items (guid, seen_at, pub, title, link, products, klass, slug, action, issue_id, prev_status, excerpt) VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12)")
-      .bind(it.guid, nowIso, it.pub_ms == null ? null : new Date(it.pub_ms).toISOString(), it.title.slice(0, 300), it.link, it.products.join(", "), c.klass, slug, action, issueId, prev, it.text.slice(0, 400)).run(); } catch (e) {}
+      .bind(it.guid, nowIso, it.pub_ms == null ? null : new Date(it.pub_ms).toISOString(), it.title.slice(0, 300), it.link, it.products.join(", "), c.klass, slug, action, issueId, prev, it.text.slice(0, 400)).run(); } catch (e) { console.error(JSON.stringify({ evt: "fleet-control:cfcRun:caught", error: String(e && e.message) })); }
   }
   if (run.note.indexOf("error") >= 0 || /\berror\b/.test(run.note)) run.status = "partial";
   run.note = ((force ? "forced; " : "") + feed.bytes + " bytes, " + items.length + " items, " + fresh.length + " fresh. " + run.note).trim();
@@ -7379,7 +7379,7 @@ async function cfcMetrics(env) {
   try {
     await env.AUDIT.prepare("UPDATE metric_registry SET last_value=?1, last_refreshed=?2, state='MEASURED' WHERE metric='cf_changelog_audit_age_h'").bind(String(age), nowIso).run();
     await env.AUDIT.prepare("UPDATE metric_registry SET last_value=?1, last_refreshed=?2, state='MEASURED' WHERE metric='cf_changelog_open_proposals_14d'").bind(String(pend ? Number(pend.n || 0) : 0), nowIso).run();
-  } catch (e) {}
+  } catch (e) { console.error(JSON.stringify({ evt: "fleet-control:cfcMetrics:caught", error: String(e && e.message) })); }
   return { age_h: age, open_proposals_14d: pend ? Number(pend.n || 0) : 0 };
 }
 async function cfChangelogIfStale(env) {
@@ -7631,7 +7631,7 @@ async function ocLimitsReviewDaily(env, f, nowMs) {
       var r = await env.AUDIT.prepare("INSERT INTO goals (goal_key, statement, goal_type, parent_objective, alignment, source, score, priority, status, dod, owner, program_code, created_at, updated_at) VALUES (?1, ?2, 'objective-revision', ?3, ?4, 'limits-review', 0, 3, 'proposed', 'human ratification of proposed objective revision', 'human-ratify', 'QNFO.OPS', ?5, ?5) ON CONFLICT(goal_key) DO NOTHING")
         .bind(p.goal_key, p.statement, p.objective_key, p.alignment.slice(0, 1000), iso).run();
       if (r && r.meta && r.meta.changes) out.proposed.push(p.goal_key);
-    } catch (e) {}
+    } catch (e) { console.error(JSON.stringify({ evt: "fleet-control:ocLimitsReviewDaily:caught", error: String(e && e.message) })); }
   }
   return out;
 }
@@ -7649,7 +7649,7 @@ async function objectiveConstraintsTick(env) {
         await env.AUDIT.prepare("UPDATE metric_registry SET last_value=?1, last_refreshed=?2, state='MEASURED' WHERE metric=?3").bind(String(r.value), nowIso, c.metric).run();
         written.push(c.metric + "=" + r.value);
       }
-    } catch (e) {}
+    } catch (e) { console.error(JSON.stringify({ evt: "fleet-control:objectiveConstraintsTick:caught", error: String(e && e.message) })); }
   }
   var open = await charterRows(env, "SELECT id, title FROM agent_issues WHERE status='open' AND title LIKE '" + OC_ISSUE_PREFIX + "%'");
   var openByTitle = {};
@@ -7663,7 +7663,7 @@ async function objectiveConstraintsTick(env) {
       var ins = await env.AUDIT.prepare("INSERT INTO agent_issues (title, description, source, category, priority, status, created_at, updated_at) VALUES (?1, ?2, 'objective-constraints', 'governance', ?3, 'open', ?4, ?4)")
         .bind(b.key, "AUTO-FILED by qnfo-fleet-control OBJECTIVE-CONSTRAINTS-1. " + b.text + " DoD: " + b.metric + " back within target in metric_registry; OBJECTIVE-CONSTRAINTS-1 closes this issue itself with close_evidence on the first hourly tick that measures it within target.", b.severity, nowMs).run();
       if (!ins || !ins.meta || ins.meta.changes !== 0) filed++;
-    } catch (e) {}
+    } catch (e) { console.error(JSON.stringify({ evt: "fleet-control:objectiveConstraintsTick:caught", error: String(e && e.message) })); }
   }
   for (var j = 0; j < ev.constraints.length; j++) {
     var x = ev.constraints[j], t = OC_ISSUE_PREFIX + x.metric;
@@ -7673,7 +7673,7 @@ async function objectiveConstraintsTick(env) {
         .bind(openByTitle[t], "OBJECTIVE-CONSTRAINTS-1 " + nowIso + ": " + x.metric + "=" + x.value + " meets " + x.target + " (delegated-ratified goals.id=" + x.goal + "); " + JSON.stringify(x.detail).slice(0, 400)).run();
       await env.AUDIT.prepare("UPDATE agent_issues SET status='closed', updated_at=?2 WHERE id=?1 AND status='open'").bind(openByTitle[t], nowMs).run();
       closed++;
-    } catch (e) {}
+    } catch (e) { console.error(JSON.stringify({ evt: "fleet-control:objectiveConstraintsTick:caught", error: String(e && e.message) })); }
   }
   var review = null;
   try {
@@ -7685,7 +7685,7 @@ async function objectiveConstraintsTick(env) {
     await env.AUDIT.prepare("INSERT INTO objective_constraint_runs (ts, worker_version, healthy, measured, findings, filed, closed, review, state_json) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)")
       .bind(nowIso, VERSION, ev.healthy ? 1 : 0, ev.measured, ev.findings.length, filed, closed, review ? JSON.stringify(review).slice(0, 4000) : null, JSON.stringify(ev).slice(0, 60000)).run();
     await env.AUDIT.prepare("DELETE FROM objective_constraint_runs WHERE id NOT IN (SELECT id FROM objective_constraint_runs ORDER BY id DESC LIMIT 800)").run();
-  } catch (e) {}
+  } catch (e) { console.error(JSON.stringify({ evt: "fleet-control:objectiveConstraintsTick:caught", error: String(e && e.message) })); }
   return { ok: true, ts: nowIso, healthy: ev.healthy, measured: ev.measured, written: written, findings: ev.findings, filed: filed, closed: closed, review: review, constraints: ev.constraints };
 }
 // ---- OBJECTIVE-CONSTRAINTS-1:END ----
@@ -7781,7 +7781,7 @@ async function ilRefreshRunRate(env, nowIso) {
     await env.AUDIT.prepare("INSERT OR IGNORE INTO analytics_metric_triggers (metric_key, title, source_table, operator, threshold, priority, action, owner, queue_target, cooldown_hours, enabled, notes) VALUES (?1, ?2, 'registry', ?3, ?4, ?5, ?6, 'qnfo-fleet-control', 'agent_issues', 168, 1, 'seeded by FLEET-RUN-RATE-1')")
       .bind(m.metric, m.trigger.title, m.trigger.operator, m.trigger.threshold, m.trigger.priority, m.trigger.action).run();
     if (rr) await env.AUDIT.prepare("UPDATE metric_registry SET last_value = ?2, last_refreshed = ?3 WHERE metric = ?1").bind(m.metric, String(rr.usd_30d), nowIso).run();
-  } catch (e) {}
+  } catch (e) { console.error(JSON.stringify({ evt: "fleet-control:ilRefreshRunRate:caught", error: String(e && e.message) })); }
   return rr;
 }
 // Pure: one surface's JSON -> [{metric, value}] for the values that are finite numbers.
@@ -7810,10 +7810,10 @@ async function ilRefreshSurfaces(env, nowIso) {
       try {
         await env.AUDIT.prepare("INSERT OR IGNORE INTO metric_registry (metric, layer, kind, formula, source_of_truth, target, owner, disposition_actor, refresh_cadence, state) VALUES (?1, 'surface', 'lagging', ?2, ?3, 'maximize (trended by IMPROVEMENT-LOOP-1; pillar reach)', ?4, 'qnfo-fleet-control IMPROVEMENT-LOOP-1 files regressions', 'hourly', 'MEASURED')")
           .bind(m.metric, m.formula, sf.url, "qnfo-" + sf.name).run();
-      } catch (e) {}
+      } catch (e) { console.error(JSON.stringify({ evt: "fleet-control:ilRefreshSurfaces:caught", error: String(e && e.message) })); }
     }
     for (var k = 0; k < vals.length; k++) {
-      try { await env.AUDIT.prepare("UPDATE metric_registry SET last_value = ?2, last_refreshed = ?3 WHERE metric = ?1").bind(vals[k].metric, String(vals[k].value), nowIso).run(); written++; } catch (e) {}
+      try { await env.AUDIT.prepare("UPDATE metric_registry SET last_value = ?2, last_refreshed = ?3 WHERE metric = ?1").bind(vals[k].metric, String(vals[k].value), nowIso).run(); written++; } catch (e) { console.error(JSON.stringify({ evt: "fleet-control:ilRefreshSurfaces:caught", error: String(e && e.message) })); }
     }
   }
   return written;
@@ -7968,7 +7968,7 @@ async function improvementLoopTick(env) {
       await env.AUDIT.prepare("INSERT INTO metric_history (metric, day, value, meets, target, ts) VALUES (?1, ?2, ?3, ?4, ?5, ?6) ON CONFLICT(metric, day) DO UPDATE SET value = excluded.value, meets = excluded.meets, target = excluded.target, ts = excluded.ts")
         .bind(r.metric, day, v, meets === null ? null : (meets ? 1 : 0), String(r.target || "").slice(0, 200), nowIso).run();
       snap++;
-    } catch (e) {}
+    } catch (e) { console.error(JSON.stringify({ evt: "fleet-control:improvementLoopTick:caught", error: String(e && e.message) })); }
   }
   // 2. evaluate
   var f = await ilFacts(env);
@@ -7987,7 +7987,7 @@ async function improvementLoopTick(env) {
       else await env.AUDIT.prepare("UPDATE metric_registry SET last_value = NULL, last_refreshed = ?2, state = 'UNMEASURED' WHERE metric = ?1").bind(sm.metric, nowIso).run();
       if (sm.trigger) await env.AUDIT.prepare("INSERT OR IGNORE INTO analytics_metric_triggers (metric_key, title, source_table, operator, threshold, priority, action, owner, queue_target, cooldown_hours, enabled, notes) VALUES (?1, ?2, 'registry', ?3, ?4, ?5, ?6, 'qnfo-fleet-control', 'agent_issues', 168, 1, 'seeded by IMPROVEMENT-LOOP-1')")
         .bind(sm.metric, sm.trigger.title, sm.trigger.operator, sm.trigger.threshold, sm.trigger.priority, sm.trigger.action).run();
-    } catch (e) {}
+    } catch (e) { console.error(JSON.stringify({ evt: "fleet-control:improvementLoopTick:caught", error: String(e && e.message) })); }
   }
   // 4. file and close (deduped by title, capped per tick)
   var want = {}, toFile = {};
@@ -8004,7 +8004,7 @@ async function improvementLoopTick(env) {
       await env.AUDIT.prepare("INSERT INTO agent_issues (title, description, source, category, priority, status, created_at, updated_at) VALUES (?1, ?2, 'qnfo-fleet-control', 'optimization', ?3, 'open', ?4, ?4)")
         .bind(key, "AUTO-FILED by qnfo-fleet-control IMPROVEMENT-LOOP-1. " + toFile[key].text + " Evidence: GET https://qnfo-fleet-control.q08.workers.dev/improvement and metric_history. DoD: the metric's 7d trend is no longer declining (regression) or it is back inside its target (relapse); IMPROVEMENT-LOOP-1 closes this issue itself with close_evidence.", toFile[key].severity, nowMs).run();
       filed++;
-    } catch (e) {}
+    } catch (e) { console.error(JSON.stringify({ evt: "fleet-control:improvementLoopTick:caught", error: String(e && e.message) })); }
   }
   for (var tt in openByTitle) {
     if (want[tt]) continue;
@@ -8016,13 +8016,13 @@ async function improvementLoopTick(env) {
         .bind(openByTitle[tt], "IMPROVEMENT-LOOP-1 " + nowIso + ": " + (tr ? "7d mean " + tr.recent + " vs prior " + tr.prior + " (good-direction change " + tr.change + ", verdict " + tr.verdict + ")" : "metric back inside its target") + "; no longer a finding.").run();
       await env.AUDIT.prepare("UPDATE agent_issues SET status = 'closed', updated_at = ?2 WHERE id = ?1").bind(openByTitle[tt], nowMs).run();
       closed++;
-    } catch (e) {}
+    } catch (e) { console.error(JSON.stringify({ evt: "fleet-control:improvementLoopTick:caught", error: String(e && e.message) })); }
   }
   var state = { improvement_rate_7d: x.improvement_rate_7d, metric_regressions_7d: x.metric_regressions_7d, fix_hold_rate_30d: x.fix_hold_rate_30d, findings: x.findings.map(function(fd) { return fd.key; }), relapses: x.relapses.slice(0, 20) };
   try {
     await env.AUDIT.prepare("INSERT INTO improvement_loop_runs (ts, worker_version, snapshotted, evaluable, improved, flat, regressed, fixes_judged, fixes_held, findings, filed, closed, state_json) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)")
       .bind(nowIso, VERSION, snap, x.evaluable, x.improved, x.flat, x.regressed, x.fixes_judged, x.fixes_held, x.findings.length, filed, closed, JSON.stringify(state).slice(0, 8000)).run();
-  } catch (e) {}
+  } catch (e) { console.error(JSON.stringify({ evt: "fleet-control:improvementLoopTick:caught", error: String(e && e.message) })); }
   return { ok: true, ts: nowIso, surfaced: surfaced, run_rate: runRate, snapshotted: snap, evaluable: x.evaluable, improved: x.improved, flat: x.flat, regressed: x.regressed, improvement_rate_7d: x.improvement_rate_7d, fix_hold_rate_30d: x.fix_hold_rate_30d, findings: x.findings.length, filed: filed, closed: closed };
 }
 // ---- IMPROVEMENT-LOOP-1:END ----
@@ -8358,7 +8358,7 @@ async function googleIdentityDetect(env) {
     var recs = (j.Answer || []).map(function(a) { return String(a.data || "").replace(/^"|"$/g, ""); });
     var gsv = recs.filter(function(t) { return /^google-site-verification=/.test(t); });
     var verified = gsv.length > 0 ? 1 : 0;
-    try { await env.AUDIT.prepare("UPDATE metric_registry SET last_value = ?1, last_refreshed = ?2, state = 'MEASURED' WHERE metric = 'gsc_verified'").bind(verified, new Date().toISOString()).run(); } catch (e) {}
+    try { await env.AUDIT.prepare("UPDATE metric_registry SET last_value = ?1, last_refreshed = ?2, state = 'MEASURED' WHERE metric = 'gsc_verified'").bind(verified, new Date().toISOString()).run(); } catch (e) { console.error(JSON.stringify({ evt: "fleet-control:googleIdentityDetect:caught", error: String(e && e.message) })); }
     if (verified) {
       await env.AUDIT.prepare("UPDATE human_actions SET status = 'resolved', resolved_at = datetime('now'), updated_at = datetime('now'), resolution = ?1 WHERE slug = 'google-identity-one-sitting' AND status = 'open'")
         .bind("auto " + new Date().toISOString().slice(0, 10) + ": GOOGLE-IDENTITY-DETECT-1 found " + gsv[0].slice(0, 80) + " in public DNS for qnfo.org; the Search Console domain property is verified.").run();
@@ -8379,7 +8379,7 @@ async function reachIdeationTick(env, force) {
   }
   { var gid = await googleIdentityDetect(env); if (gid && !gid.ok) console.log("GOOGLE-IDENTITY-DETECT-1: " + JSON.stringify(gid));
     var srt = await searchReferralsTick(env); if (srt && srt.error) console.log("SEARCH-REFERRALS-1: " + srt.error);
-    var chk = await crawlHealthTick(env); if (chk && !chk.ok) { console.log("CRAWL-HEALTH-1: " + chk.error); try { await env.AUDIT.prepare("UPDATE metric_registry SET state = 'UNMEASURED', last_refreshed = ?1 WHERE metric = 'googlebot_sitemaps_ok'").bind(new Date().toISOString()).run(); } catch (eC) {} }
+    var chk = await crawlHealthTick(env); if (chk && !chk.ok) { console.log("CRAWL-HEALTH-1: " + chk.error); try { await env.AUDIT.prepare("UPDATE metric_registry SET state = 'UNMEASURED', last_refreshed = ?1 WHERE metric = 'googlebot_sitemaps_ok'").bind(new Date().toISOString()).run(); } catch (eC) { console.error(JSON.stringify({ evt: "fleet-control:reachIdeationTick:caught", error: String(eC && eC.message) })); } }
   }
   var nowMs = Date.now(), nowIso = new Date(nowMs).toISOString(), filed = 0, closed = 0, measured7d = 0;
   // Learn first: fill the 7-day value for ideas closed at least 7 days ago, then read the per-check efficacy.
@@ -8387,7 +8387,7 @@ async function reachIdeationTick(env, force) {
   for (var d = 0; d < due7.length; d++) {
     var v7 = await ideaMetricValue(env, due7[d].metric);
     if (v7 == null) continue;
-    try { await env.AUDIT.prepare("UPDATE reach_idea_outcomes SET value_7d = ?2, measured_7d_at = ?3 WHERE issue_id = ?1").bind(due7[d].issue_id, v7, nowIso).run(); measured7d++; } catch (e) {}
+    try { await env.AUDIT.prepare("UPDATE reach_idea_outcomes SET value_7d = ?2, measured_7d_at = ?3 WHERE issue_id = ?1").bind(due7[d].issue_id, v7, nowIso).run(); measured7d++; } catch (e) { console.error(JSON.stringify({ evt: "fleet-control:reachIdeationTick:caught", error: String(e && e.message) })); }
   }
   var efficacy = ideaEfficacy(await charterRows(env, "SELECT check_key, value_at_close, value_7d FROM reach_idea_outcomes WHERE value_7d IS NOT NULL"));
   // Discover: the busiest owned pages by RUM traffic, plus the pages of still-open ideas (so they can close).
@@ -8432,7 +8432,7 @@ async function reachIdeationTick(env, force) {
     try {
       await env.AUDIT.prepare("INSERT OR IGNORE INTO reach_idea_outcomes (issue_id, idea_key, check_key, surface, url, worker, metric, buildable, score, value_at_file, filed_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)")
         .bind(open[b].id, bf.key, bf.check, bf.surface, bf.url, bf.worker, bf.metric, bf.buildable ? 1 : 0, bf.score, await ideaMetricValue(env, bf.metric), nowIso).run();
-    } catch (e) {}
+    } catch (e) { console.error(JSON.stringify({ evt: "fleet-control:reachIdeationTick:caught", error: String(e && e.message) })); }
   }
   var picks = ideaSelect(findings, openByTitle, openBuildable, openGap);
   for (var k = 0; k < picks.length; k++) {
@@ -8444,7 +8444,7 @@ async function reachIdeationTick(env, force) {
       var iid = ins && ins.meta ? ins.meta.last_row_id : null;
       if (iid) await env.AUDIT.prepare("INSERT OR IGNORE INTO reach_idea_outcomes (issue_id, idea_key, check_key, surface, url, worker, metric, buildable, score, value_at_file, filed_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)")
         .bind(iid, f.key, f.check, f.surface, f.url, f.worker, f.metric, f.buildable ? 1 : 0, f.score, await ideaMetricValue(env, f.metric), nowIso).run();
-    } catch (e) {}
+    } catch (e) { console.error(JSON.stringify({ evt: "fleet-control:reachIdeationTick:caught", error: String(e && e.message) })); }
   }
   var probedKeys = {};
   probes.forEach(function(p) { if (p.status === 200) probedKeys[p.surface] = 1; });
@@ -8460,7 +8460,7 @@ async function reachIdeationTick(env, force) {
       closed++;
       var oc = await charterOne(env, "SELECT metric FROM reach_idea_outcomes WHERE issue_id = " + Number(openByTitle[t]));
       if (oc) await env.AUDIT.prepare("UPDATE reach_idea_outcomes SET closed_at = ?2, value_at_close = ?3 WHERE issue_id = ?1").bind(openByTitle[t], nowIso, await ideaMetricValue(env, oc.metric)).run();
-    } catch (e) {}
+    } catch (e) { console.error(JSON.stringify({ evt: "fleet-control:reachIdeationTick:caught", error: String(e && e.message) })); }
   }
   // reach_ideas_shipped_30d: ideas this loop closed with evidence in 30 days. Unmeasured ('n/a', the trigger cannot fire) until
   // the oldest outcome row is IDEA_SHIPPED_GRACE_DAYS old: an idea needs a code task, a PR, a merge and a deploy first.
@@ -8471,13 +8471,13 @@ async function reachIdeationTick(env, force) {
     var mature = first && first.f && Date.parse(first.f) <= nowMs - IDEA_SHIPPED_GRACE_DAYS * 864e5;
     shipped = mature && sc ? Number(sc.n) || 0 : null;
     await env.AUDIT.prepare("UPDATE metric_registry SET last_value = ?1, last_refreshed = ?2 WHERE metric = 'reach_ideas_shipped_30d'").bind(shipped == null ? "n/a" : String(shipped), nowIso).run();
-  } catch (e) {}
+  } catch (e) { console.error(JSON.stringify({ evt: "fleet-control:reachIdeationTick:caught", error: String(e && e.message) })); }
   var state = { findings: findings.map(function(f) { return { key: f.key, buildable: f.buildable, score: f.score }; }), probes: probes.map(function(p) { return { surface: p.surface, url: p.url, status: p.status, ms: p.ms }; }), content: content,
     discovered: extra.map(function(x) { return { key: x.key, url: x.url, worker: x.worker, pv_14d: x.pv_14d }; }), efficacy: efficacy, wip: { open_buildable: openBuildable, open_gap: openGap }, measured_7d: measured7d, shipped_30d: shipped };
   try {
     await env.AUDIT.prepare("INSERT INTO reach_idea_runs (ts, worker_version, probed, findings, filed, closed, state_json) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)")
       .bind(nowIso, VERSION, probes.length + content.length, findings.length, filed, closed, JSON.stringify(state).slice(0, 12000)).run();
-  } catch (e) {}
+  } catch (e) { console.error(JSON.stringify({ evt: "fleet-control:reachIdeationTick:caught", error: String(e && e.message) })); }
   return { ok: true, ts: nowIso, probed: probes.length + content.length, discovered: extra.length, findings: findings.length, filed: filed, closed: closed, wip: state.wip, efficacy: efficacy, shipped_30d: shipped,
     top: findings.slice(0, 8).map(function(f) { return f.key + " [" + f.score + "]" + (f.buildable ? "" : " (not auto-buildable)"); }) };
 }
@@ -8757,7 +8757,7 @@ async function transformationTick(env, opts) {
     var wsi = await tpFileIssue(env, "TP-WAVE-EXIT-STALLED-1: " + wsx.wave + " exit metric " + wsx.metric + " unchanged since " + wsx.since, "Charter pillar: autonomy. TRANSFORMATION-LOOP-1 (" + TP_DOC + " section 4): wave " + wsx.wave + " cannot exit while " + wsx.metric + " reads " + wsx.value + ", and metric_history shows the same value on " + wsx.since + " (" + TP_STALL_DAYS + " days with no movement). METRIC-CLOSED-LOOP-1: the levers aimed at this metric are replaced, not repeated: read GET https://qnfo-fleet-control.q08.workers.dev/transformation for the wave's levers and their status, split or re-anchor the ones that stalled, and record on this issue which lever now carries the metric. Closing this issue with that record lets the next tick re-plan; it is filed again only if the metric is still unmoved " + TP_STALL_DAYS + " days later.", "medium", nowMs);
     applied.wave_stalled++; if (wsi.id && !wsi.existed) applied.filed.push(wsi.id);
   }
-  var set = function(sql, binds) { var st = env.AUDIT.prepare(sql); return st.bind.apply(st, binds).run().catch(function() {}); };
+  var set = function(sql, binds) { var st = env.AUDIT.prepare(sql); return st.bind.apply(st, binds).run().catch(function (e) { console.error(JSON.stringify({ evt: "fleet-control:transformationTick:caught", error: String(e && e.message) })); }); };
   for (var a = 0; a < plan.landed.length; a++) { await set("UPDATE transformation_levers SET status = 'landed', landed_at = ?2, stalled_at = NULL, note = ?3, updated_at = ?2 WHERE id = ?1", [plan.landed[a].lever.id, nowIso, plan.landed[a].why]); applied.landed++; }
   for (var b = 0; b < plan.verified.length; b++) { await set("UPDATE transformation_levers SET status = 'verified', verified_at = ?2, landed_at = COALESCE(landed_at, ?2), stalled_at = NULL, note = ?3, updated_at = ?2 WHERE id = ?1", [plan.verified[b].lever.id, nowIso, plan.verified[b].why]); applied.verified++; }
   for (var c = 0; c < plan.fallback.length; c++) {
@@ -8795,18 +8795,18 @@ async function transformationTick(env, opts) {
   try {
     await env.AUDIT.prepare("INSERT OR IGNORE INTO metric_registry (metric, layer, kind, formula, source_of_truth, baseline, target, owner, disposition_actor, refresh_cadence, warning_band, kill_band, state, refresh_class) VALUES ('transformation_levers_landed_14d', 'system', 'leading', 'COUNT(transformation_levers WHERE landed_at or verified_at in the last 14 days): levers of docs/TRANSFORMATION-PROGRAM.md that reached main or closed with evidence (qnfo-fleet-control TRANSFORMATION-LOOP-1, hourly)', 'qnfo-audit.transformation_levers (GET https://qnfo-fleet-control.q08.workers.dev/transformation)', '0 (2026-10-06, before the loop)', '>= 2 every 14 days while any wave is open (the program moves); rising', 'qnfo-fleet-control', 'trigger lt 1 -> METRIC-TRIGGER issue (migrations/2026-10-06-transformation-loop.sql)', 'hourly', '< 2', '< 1', 'MEASURED', 'computed')").run();
     await env.AUDIT.prepare("UPDATE metric_registry SET last_value = ?1, last_refreshed = ?2, state = 'MEASURED' WHERE metric = 'transformation_levers_landed_14d'").bind(String(landed14n), nowIso).run();
-  } catch (e) {}
+  } catch (e) { console.error(JSON.stringify({ evt: "fleet-control:transformationTick:caught", error: String(e && e.message) })); }
   var scoreboard = tpScoreboard(values);
   var actions = { landed: plan.landed.map(function(x) { return tpKey(x.lever); }), verified: plan.verified.map(function(x) { return tpKey(x.lever); }), fallback: plan.fallback.map(function(x) { return tpKey(x.lever); }), dispatched: plan.dispatch.map(tpKey), session: plan.session.map(function(x) { return tpKey(x.lever); }), stalled: plan.stalled.map(tpKey), wave_stalled: waveStalls.map(function(x) { return x.wave + ":" + x.metric; }), filed: applied.filed };
   try {
     await env.AUDIT.prepare("INSERT INTO transformation_runs (ts, worker_version, wave, levers_json, scoreboard_json, actions_json) VALUES (?1, ?2, ?3, ?4, ?5, ?6)")
       .bind(nowIso, VERSION, wave.active_key, JSON.stringify({ counts: counts, landed_14d: landed14n, waves: wave.waves }), JSON.stringify(scoreboard), JSON.stringify(actions)).run();
     await env.AUDIT.prepare("DELETE FROM transformation_runs WHERE id NOT IN (SELECT id FROM transformation_runs ORDER BY id DESC LIMIT 500)").run();
-  } catch (e) {}
+  } catch (e) { console.error(JSON.stringify({ evt: "fleet-control:transformationTick:caught", error: String(e && e.message) })); }
   try {
     await env.AUDIT.prepare("INSERT OR REPLACE INTO cloud_ops_events (id, ts, kind, text, meta, job, status) VALUES (?1, ?2, 'transformation-tick', ?3, ?4, 'qnfo-fleet-control', 'ok')")
       .bind("transformation-tick-" + day, nowIso, ("transformation loop: wave " + wave.active_key + ", levers " + JSON.stringify(counts) + ", landed 14d " + landed14n + ", actions " + JSON.stringify({ d: applied.dispatched, s: applied.session, l: applied.landed, v: applied.verified, f: applied.fallback, st: applied.stalled, ws: applied.wave_stalled })).slice(0, 500), JSON.stringify({ last_ok: nowIso, version: VERSION, wave: wave.active_key, counts: counts, landed_14d: landed14n, actions: actions })).run();
-  } catch (e) {}
+  } catch (e) { console.error(JSON.stringify({ evt: "fleet-control:transformationTick:caught", error: String(e && e.message) })); }
   return { ok: true, ts: nowIso, wave: wave.active_key, waves: wave.waves, counts: counts, landed_14d: landed14n, applied: applied, actions: actions, scoreboard: scoreboard };
 }
 async function tpLatest(env) {
@@ -9194,7 +9194,7 @@ async function perfMetricsRefresh(env, nowMs) {
         .bind(m.metric, m.layer, m.kind, m.formula, m.sot, m.target, m.warning, m.kill).run();
       await env.AUDIT.prepare("UPDATE metric_registry SET last_value = ?1, last_refreshed = ?2, state = ?3 WHERE metric = ?4").bind(r.registry_value, nowIso, r.state, m.metric).run();
       written.push(m.metric + "=" + (r.value === null ? "unmeasured" : r.value));
-    } catch (e) {}
+    } catch (e) { console.error(JSON.stringify({ evt: "fleet-control:perfMetricsRefresh:caught", error: String(e && e.message) })); }
   }
   return { written: written, readings: rs };
 }
@@ -9208,7 +9208,7 @@ async function perfCas(env, key, expect, next, note) {
 }
 // Appends a line to the trigger's open METRIC-TRIGGER issue (description only; updated_at is untouched, so no recheck).
 async function perfNoteIssue(env, triggerId, text) {
-  try { await env.AUDIT.prepare("UPDATE agent_issues SET description = COALESCE(description, '') || ?1 WHERE status = 'open' AND title LIKE ?2").bind(" | " + text.slice(0, 600), "METRIC-TRIGGER-" + Number(triggerId) + "-%").run(); } catch (e) {}
+  try { await env.AUDIT.prepare("UPDATE agent_issues SET description = COALESCE(description, '') || ?1 WHERE status = 'open' AND title LIKE ?2").bind(" | " + text.slice(0, 600), "METRIC-TRIGGER-" + Number(triggerId) + "-%").run(); } catch (e) { console.error(JSON.stringify({ evt: "fleet-control:perfNoteIssue:caught", error: String(e && e.message) })); }
 }
 async function perfExperimentsApply(env, plan, nowMs) {
   var A = env.AUDIT, iso = new Date(nowMs).toISOString(), decided = [], started = [];
@@ -9230,7 +9230,7 @@ async function perfExperimentsApply(env, plan, nowMs) {
         decided.push(e.id + " " + outcome);
         await perfNoteIssue(env, e.trigger_id, "PERFORMANCE-LOOP-1 " + iso + ": experiment " + e.id + " (" + e.lever + " " + e.from_value + " -> " + e.to_value + ") " + outcome + ": " + note);
       }
-    } catch (err) {}
+    } catch (err) { console.error(JSON.stringify({ evt: "fleet-control:perfExperimentsApply:caught", error: String(err && err.message) })); }
   }
   for (var j = 0; j < plan.starts.length; j++) {
     var s = plan.starts[j];
@@ -9245,7 +9245,7 @@ async function perfExperimentsApply(env, plan, nowMs) {
       }
       started.push(s.lever + " " + s.from_value + "->" + s.to_value);
       await perfNoteIssue(env, s.trigger_id, "PERFORMANCE-LOOP-1 " + iso + ": experiment " + id + " started, " + s.lever + " (ops_config " + s.ops_config_key + ") " + s.from_value + " -> " + s.to_value + "; decided after " + s.eval_after.slice(0, 10) + " (kept if " + s.metric + " improves beyond noise, else reverted)");
-    } catch (err2) {}
+    } catch (err2) { console.error(JSON.stringify({ evt: "fleet-control:perfExperimentsApply:caught", error: String(err2 && err2.message) })); }
   }
   return { decided: decided, started: started };
 }
@@ -9278,12 +9278,12 @@ async function performanceLoopTick(env, opts) {
   var plan = perfExperimentPlan(f, nowMs);
   var res = await perfExperimentsApply(env, plan, nowMs);
   var after = (await perfOpsValues(env)) || f.ops;
-  for (var i = 0; i < PERF_LEVERS.length; i++) { try { await env.AUDIT.prepare("UPDATE perf_levers SET current = ?1, updated_at = ?2 WHERE key = ?3").bind(String(perfLeverValue(PERF_LEVERS[i], after)), nowIso, PERF_LEVERS[i].key).run(); } catch (e) {} }
+  for (var i = 0; i < PERF_LEVERS.length; i++) { try { await env.AUDIT.prepare("UPDATE perf_levers SET current = ?1, updated_at = ?2 WHERE key = ?3").bind(String(perfLeverValue(PERF_LEVERS[i], after)), nowIso, PERF_LEVERS[i].key).run(); } catch (e) { console.error(JSON.stringify({ evt: "fleet-control:performanceLoopTick:caught", error: String(e && e.message) })); } }
   var rn = await perfOne(env, "SELECT COUNT(*) AS n FROM perf_experiments WHERE decision = 'running'");
   var xs = { enabled: plan.enabled, decided: res.decided, started: res.started, skipped: plan.skipped, running: rn ? Number(rn.n) : null };
   await env.AUDIT.prepare("INSERT INTO perf_runs (ts, day, kind, worker_version, enabled, started, decided, running, note, state_json) VALUES (?1, ?2, 'experiments', ?3, ?4, ?5, ?6, ?7, ?8, ?9)")
     .bind(nowIso, day, VERSION, plan.enabled ? 1 : 0, res.started.length, res.decided.length, xs.running, ((plan.enabled ? "" : "kill switch on: no new experiments; ") + (res.decided.length ? "decided " + res.decided.join(", ") + "; " : "") + (res.started.length ? "started " + res.started.join(", ") : "nothing started")).slice(0, 500), JSON.stringify(xs).slice(0, 20000)).run();
-  try { await env.AUDIT.prepare("DELETE FROM perf_runs WHERE id NOT IN (SELECT id FROM perf_runs ORDER BY id DESC LIMIT 800)").run(); } catch (e) {}
+  try { await env.AUDIT.prepare("DELETE FROM perf_runs WHERE id NOT IN (SELECT id FROM perf_runs ORDER BY id DESC LIMIT 800)").run(); } catch (e) { console.error(JSON.stringify({ evt: "fleet-control:performanceLoopTick:caught", error: String(e && e.message) })); }
   out.experiments = xs;
   return out;
 }
@@ -9456,7 +9456,7 @@ var worker_default2 = {
       return json(await evaluateMetricTriggers(env));
     }
     if (p === "/evolve/status" && request.method === "GET") {
-      try { await evSchema(env); } catch (e) {}
+      try { await evSchema(env); } catch (e) { console.error(JSON.stringify({ evt: "fleet-control:fetch:caught", error: String(e && e.message) })); }
       var evr = await env.AUDIT.prepare("SELECT id, worker, kind, status, issue_id, pr_number, version_from, version_to, note, ts, updated_at FROM evolve_candidates WHERE kind IS NOT NULL ORDER BY id DESC LIMIT 20").all().catch(function() { return { results: [] }; });
       return json({ ok: true, version: VERSION, loop: "EVOLVE-PR-1", gap_hours: EVOLVE_GAP_H, required_checks: EVOLVE_REQUIRED, candidates: evr.results || [] });
     }
@@ -9470,7 +9470,7 @@ var worker_default2 = {
     // admin-gated like /evolve/tick, because it merges.
     if (p === "/code-merge/status" && request.method === "GET") {
       var cmc = await cmConfig(env);
-      try { await cmSchema(env); } catch (e) {}
+      try { await cmSchema(env); } catch (e) { console.error(JSON.stringify({ evt: "fleet-control:fetch:caught", error: String(e && e.message) })); }
       var cmr = await env.AUDIT.prepare("SELECT id, path, status, merge_state, merged_by, pr_url, pr_opened_by, green_since, nochecks_since, version_to, merge_note, last_error, updated_at FROM code_tasks ORDER BY updated_at DESC LIMIT 20").all().catch(function() { return { results: [] }; });
       var cmh = await env.AUDIT.prepare("SELECT id, ts, status, text FROM cloud_ops_events WHERE id >= 'code-merge-tick-' AND id < 'code-merge-tick.' ORDER BY ts DESC LIMIT 1").first().catch(function() { return null; });
       var cmf = await env.AUDIT.prepare("SELECT ts FROM cloud_ops_events WHERE id = 'code-merge-first-ok'").first().catch(function() { return null; });
@@ -9507,7 +9507,8 @@ var worker_default2 = {
     return deployDefault.fetch(request, env, ctx);
   },
   async scheduled(event, env, ctx) {
-    const cron = event.cron;
+    // CRON-DISPATCH-ELIMINATION-1 (2026-10-13): any cron that is not a known slow schedule is the fast slot (a live */20 after the */10 change fell through to the hourly fan-out, 19:46-21:50Z).
+    const cron = ["0 * * * *", "0 3 * * *", "0 4 1 * *", "30 3 * * 1"].indexOf(event.cron) < 0 ? "*/10 * * * *" : event.cron;
     if (cron === "*/10 * * * *") {
       // REMEDIATION-2X-1 (0.26.2, owner directive 2026-10-13: "All issue remediation and consumer runs shall be quickened/increased
       // a minimum of 100% (2x). All issues shall be remediated/resolved/drained/deployed faster than they accumulate."): this slot
@@ -9842,7 +9843,7 @@ async function remediationContractsTick(env, opts) {
     // REMEDIATION-REOPEN-1 (0.4.119, agent_issues 1297): a contract on a wontfix issue measures nothing anyone will act
     // on, so it is marked superseded (its verification rows stay).
     if (c.issue_status === "wontfix") {
-      try { await db.prepare("UPDATE remediation_contracts SET status = 'superseded', last_verdict = 'superseded:issue-wontfix', last_attempt_at = datetime('now') WHERE class = ?1").bind(c.class).run(); out.superseded++; } catch (e0) {}
+      try { await db.prepare("UPDATE remediation_contracts SET status = 'superseded', last_verdict = 'superseded:issue-wontfix', last_attempt_at = datetime('now') WHERE class = ?1").bind(c.class).run(); out.superseded++; } catch (e0) { console.error(JSON.stringify({ evt: "fleet-control:remediationContractsTick:caught", error: String(e0 && e0.message) })); }
       continue;
     }
     // PROBE-TRANSPORTS-1: an external-https contract on a fleet host belongs to remediation_consumer.py (off-Cloudflare).
@@ -9899,10 +9900,10 @@ async function remediationContractsTick(env, opts) {
       } else if (c.contract_status === "holding" && !(verdict === "fail" && !rtIsDeferral(os))) {
         cadH = Math.max(cadH, RT_HOLD_CADENCE_H); // not a relapse: keep the daily hold cadence
       }
-    } catch (eH) {}
+    } catch (eH) { console.error(JSON.stringify({ evt: "fleet-control:remediationContractsTick:caught", error: String(eH && eH.message) })); }
     try {
       await db.prepare("UPDATE remediation_contracts SET attempts = COALESCE(attempts,0) + 1, last_attempt_at = datetime('now'), last_verdict = ?1, next_due_at = datetime('now', ?2), status = COALESCE(?4, status) WHERE class = ?3").bind(verdict, rtNextDueOffset(cadH), c.class, nextStatus).run();
-    } catch (e2) {}
+    } catch (e2) { console.error(JSON.stringify({ evt: "fleet-control:remediationContractsTick:caught", error: String(e2 && e2.message) })); }
     // REMEDIATION-REOPEN-1: a failing probe on a closed or resolved issue is a closure that did not hold (the
     // INTEGRITY-GUARDS-1 reading). After max_attempts failures since the closure (or since its last pass), the issue is
     // reopened once, with the failure and the old close_evidence in its description; the contract keeps running and
@@ -9915,7 +9916,7 @@ async function remediationContractsTick(env, opts) {
           out.reopened.push(c.issue_id);
           await db.prepare("UPDATE remediation_contracts SET status = 'active' WHERE class = ?1 AND status = 'holding'").bind(c.class).run();
         }
-      } catch (e3) {}
+      } catch (e3) { console.error(JSON.stringify({ evt: "fleet-control:remediationContractsTick:caught", error: String(e3 && e3.message) })); }
     }
   }
   return out;
@@ -10141,7 +10142,7 @@ async function disposeRetired(env) {
         await env.AUDIT_DB.prepare("UPDATE service_registry SET state='deleted', updated_at=datetime('now') WHERE service = ?").bind(name).run();
         await env.AUDIT_DB.prepare("UPDATE reorg_work_queue SET state='EXECUTED' WHERE item LIKE 'delete-worker:" + name + "%' AND state='OPEN'").run();
         await env.AUDIT_DB.prepare("INSERT INTO cloud_ops_events (ts, kind, job, text) VALUES (datetime('now'), 'disposed-worker', 'qnfo-fleet-control', ?)").bind(name).run();
-        try { await env.AUDIT_DB.prepare("INSERT INTO worker_removals (worker, removed_at, action, rationale, evidence, source) VALUES (?1, datetime('now'), 'DISPOSED', 'worker_consolidation RETIRE + reorg_work_queue delete-worker item', ?2, 'qnfo-fleet-control disposeRetired')").bind(name, _usageProbe ? "0 requests/7d (cf-graphql " + _usageProbe.day + ")" : "0 invocations/24h (worker_invocations)").run(); } catch (eR) {}
+        try { await env.AUDIT_DB.prepare("INSERT INTO worker_removals (worker, removed_at, action, rationale, evidence, source) VALUES (?1, datetime('now'), 'DISPOSED', 'worker_consolidation RETIRE + reorg_work_queue delete-worker item', ?2, 'qnfo-fleet-control disposeRetired')").bind(name, _usageProbe ? "0 requests/7d (cf-graphql " + _usageProbe.day + ")" : "0 invocations/24h (worker_invocations)").run(); } catch (eR) { console.error(JSON.stringify({ evt: "fleet-control:disposeRetired:caught", error: String(eR && eR.message) })); }
       } else {
         var msg = j && j.errors && j.errors[0] && j.errors[0].message || "unknown";
         await env.AUDIT_DB.prepare("INSERT INTO cloud_ops_events (ts, kind, job, text) VALUES (datetime('now'), 'dispose-blocked', 'qnfo-fleet-control', ?)").bind(name + " :: " + String(msg).slice(0, 280)).run();
@@ -10176,7 +10177,7 @@ async function pollObservability(env) {
         await db.prepare("INSERT INTO fleet_issue_loop (fingerprint, category, sev, owner, title, first_seen, last_seen, occurrences, dispatch_state, last_action) VALUES (?,?,?,?,?,?,?,1,?,?) ON CONFLICT(fingerprint) DO UPDATE SET last_seen=excluded.last_seen, occurrences=fleet_issue_loop.occurrences+1, last_action=excluded.last_action")
           .bind(fp, "worker-observability", "warn", "fleet", String(it.title || it.service || "observability-issue").slice(0, 200), it.firstObserved || Date.now(), it.lastObserved || Date.now(), "dispatched", "obs-ingest").run();
         out.issuesIngested++;
-      } catch (e2) {}
+      } catch (e2) { console.error(JSON.stringify({ evt: "fleet-control:pollObservability:caught", error: String(e2 && e2.message) })); }
     }
     var now = Date.now();
     var from = now - 864e5;
@@ -10192,13 +10193,13 @@ async function pollObservability(env) {
     for (var k = 0; k < keys.length; k++) {
       try {
         await db.prepare("INSERT INTO analytics_dash_workers (worker, requests) VALUES (?,?) ON CONFLICT(worker) DO UPDATE SET requests=excluded.requests").bind(keys[k], per[keys[k]]).run();
-      } catch (e3) {}
+      } catch (e3) { console.error(JSON.stringify({ evt: "fleet-control:pollObservability:caught", error: String(e3 && e3.message) })); }
     }
     out.usageWorkers = keys.length;
     try {
       await db.prepare("INSERT INTO cloud_ops_events (ts, kind, job, text) VALUES (datetime('now'), 'obs-ingest', 'qnfo-fleet-control', ?)")
         .bind(JSON.stringify({ activeIssues: out.summary && out.summary.activeIssues, resolved: out.summary && out.summary.resolvedIssues, issuesIngested: out.issuesIngested, usageWorkers: out.usageWorkers })).run();
-    } catch (e4) {}
+    } catch (e4) { console.error(JSON.stringify({ evt: "fleet-control:pollObservability:caught", error: String(e4 && e4.message) })); }
     return out;
   } catch (e) {
     return { ok: false, error: String(e && e.message || e).slice(0, 300) };
@@ -10354,14 +10355,14 @@ async function refreshOwnedMetrics(env) {
       }
       var conf = driftConfirm(first, second);
       await put("drift_total", conf.value);
-      try { await db.prepare("UPDATE metric_registry SET formula=?1 WHERE metric='drift_total'").bind(DRIFT_TOTAL_FORMULA).run(); } catch (eF) {}
+      try { await db.prepare("UPDATE metric_registry SET formula=?1 WHERE metric='drift_total'").bind(DRIFT_TOTAL_FORMULA).run(); } catch (eF) { console.error(JSON.stringify({ evt: "fleet-control:put:caught", error: String(eF && eF.message) })); }
       out.drift = { ghost: conf.parts.ghost, unregistered: conf.parts.unregistered, unversioned: conf.parts.unversioned, repo_live: conf.parts.repo_live, confirm: { first: conf.first, second: conf.second, transient: conf.transient } };
       if (first.total > 0) {
         try {
           await db.prepare("INSERT INTO cloud_ops_events (id, ts, kind, text, meta, job, status) VALUES (?1, ?2, 'drift-total-detail', ?3, ?4, 'qnfo-fleet-control', ?5)").bind(
             "drift-" + Date.now().toString(36), nowIso, driftDetailText(conf),
             JSON.stringify({ first: first, second: second, value: conf.value, v: VERSION }).slice(0, 1800), conf.transient ? "transient" : "ok").run();
-        } catch (eD) {}
+        } catch (eD) { console.error(JSON.stringify({ evt: "fleet-control:put:caught", error: String(eD && eD.message) })); }
       }
     } else {
       out.skipped.drift_total = "CF workers/scripts list unreadable";
@@ -10431,7 +10432,7 @@ async function refreshOwnedMetrics(env) {
       var metaKv = [["ai_est_cost_30d", total.toFixed(2)], ["gateway_cost_usd_30d", gwOnly.toFixed(2)], ["unified_cost_usd_30d", byBill.unified.toFixed(2)], ["byok_cost_usd_30d", byBill.byok.toFixed(2)], ["last_refresh", nowIso]];
       if (waiNeurons != null) metaKv.push(["neurons_30d", String(waiNeurons)]);
       for (var mk = 0; mk < metaKv.length; mk++) {
-        await db.prepare("INSERT INTO analytics_dash_meta (key, value) VALUES (?1, ?2) ON CONFLICT(key) DO UPDATE SET value=excluded.value").bind(metaKv[mk][0], metaKv[mk][1]).run().catch(function () {});
+        await db.prepare("INSERT INTO analytics_dash_meta (key, value) VALUES (?1, ?2) ON CONFLICT(key) DO UPDATE SET value=excluded.value").bind(metaKv[mk][0], metaKv[mk][1]).run().catch(function (e) { console.error(JSON.stringify({ evt: "fleet-control:put:caught", error: String(e && e.message) })); });
       }
       // OWNER-LOCAL-INGEST-1 (0.11.0): the untagged gateway cost reaches a ledger before the gap is judged.
       try { out.ownerLocal = await ownerLocalIngest(env, db, acct, nowIso); out.written.push("owner_local_ingest=" + out.ownerLocal.taken); }
@@ -10521,7 +10522,7 @@ async function aiRunAttr(env, worker, purpose, model, input, opts) {
     try {
       var db = env.AUDIT_DB || env.AUDIT || env.DB_AUDIT;
       if (db) {
-        var ic = 0; try { ic = JSON.stringify(input && input.messages || input || "").length; } catch (e2) {}
+        var ic = 0; try { ic = JSON.stringify(input && input.messages || input || "").length; } catch (e2) { console.error(JSON.stringify({ evt: "fleet-control:aiRunAttr:caught", error: String(e2 && e2.message) })); }
         var day = new Date().toISOString().slice(0, 10);
         await db.prepare("CREATE TABLE IF NOT EXISTS ai_call_counters (day TEXT, worker TEXT, purpose TEXT, model TEXT, calls INTEGER DEFAULT 0, errors INTEGER DEFAULT 0, in_chars INTEGER DEFAULT 0, ms INTEGER DEFAULT 0, PRIMARY KEY (day, worker, purpose, model))").run();
         await db.prepare("INSERT INTO ai_call_counters (day, worker, purpose, model, calls, errors, in_chars, ms) VALUES (?1,?2,?3,?4,1,?5,?6,?7) ON CONFLICT(day, worker, purpose, model) DO UPDATE SET calls=calls+1, errors=errors+?5, in_chars=in_chars+?6, ms=ms+?7").bind(day, worker, purpose, String(model), ok ? 0 : 1, ic, Date.now() - t0).run();
@@ -10529,7 +10530,7 @@ async function aiRunAttr(env, worker, purpose, model, input, opts) {
         var ac = aiCacheRow(model, res);
         if (ac) await db.prepare("INSERT INTO ai_cache_counters (day, worker, model, calls, cached_calls, in_tok, cached_tok) VALUES (?1,?2,?3,1,?4,?5,?6) ON CONFLICT(day, worker, model) DO UPDATE SET calls=calls+1, cached_calls=cached_calls+excluded.cached_calls, in_tok=in_tok+excluded.in_tok, cached_tok=cached_tok+excluded.cached_tok").bind(day, worker, ac.model, ac.cached_calls, ac.in_tok, ac.cached_tok).run();
       }
-    } catch (e3) {}
+    } catch (e3) { console.error(JSON.stringify({ evt: "fleet-control:aiRunAttr:caught", error: String(e3 && e3.message) })); }
   }
 }
 __name(aiRunAttr, "aiRunAttr");
@@ -10616,7 +10617,7 @@ async function aiSpendCaps(db, byProv, total, byBill, env) {
     var c = caps[i], key = String(c.node_class).slice("ai_spend:".length);
     // ai_spend:total is the unified-billing spend (the cap meters unified only); all-provider list cost stays in cost_usd_30d.
     var cur = key === "total" ? (byBill ? byBill.unified : total) : (byProv[key] || 0);
-    await db.prepare("UPDATE fleet_budget SET current=?1, updated_at=?2 WHERE node_class=?3").bind(Number(cur.toFixed(2)), new Date().toISOString(), c.node_class).run().catch(function () {});
+    await db.prepare("UPDATE fleet_budget SET current=?1, updated_at=?2 WHERE node_class=?3").bind(Number(cur.toFixed(2)), new Date().toISOString(), c.node_class).run().catch(function (e) { console.error(JSON.stringify({ evt: "fleet-control:aiSpendCaps:caught", error: String(e && e.message) })); });
     if (c.cap != null && cur > Number(c.cap)) {
       // BUDGET-UNITS-1 (2026-10-01, #1699): these figures are gateway LIST-cost estimates across every provider (unified
       // billing + BYOK + Workers AI), measured against internal soft budgets. They are not billed amounts and not the
@@ -10625,7 +10626,7 @@ async function aiSpendCaps(db, byProv, total, byBill, env) {
       var msg = "AI-SPEND-CAP " + c.node_class + (c.node_class === "ai_spend:total" ? ": " + basis + " unified-billing cost $" : ": " + basis + " cost $") + cur.toFixed(2) + " > internal soft budget $" + Number(c.cap).toFixed(2) + " (target $" + c.target + "; all providers incl BYOK; not the billed amount and not the gateway monthly cap)";
       var dup = await db.prepare("SELECT id FROM alerts WHERE source='qnfo-fleet-control' AND message LIKE ?1 AND created_at > datetime('now','-1 day') LIMIT 1").bind("AI-SPEND-CAP " + c.node_class + ":%").first().catch(function () { return null; });
       if (!dup) {
-        await db.prepare("INSERT INTO alerts (source, level, message, digested) VALUES ('qnfo-fleet-control', 'warning', ?1, NULL)").bind(msg).run().catch(function () {});
+        await db.prepare("INSERT INTO alerts (source, level, message, digested) VALUES ('qnfo-fleet-control', 'warning', ?1, NULL)").bind(msg).run().catch(function (e) { console.error(JSON.stringify({ evt: "fleet-control:aiSpendCaps:caught", error: String(e && e.message) })); });
         raised.push(c.node_class);
       }
     }
@@ -10748,17 +10749,17 @@ async function ownerLocalIngest(env, db, acct, nowIso) {
         .bind(O.day, gw, O.provider, O.model, O.calls, O.in_tok, O.out_tok, Math.round(O.usd * 1e6) / 1e6).run();
     }
     if (agg.max > cursor) await db.prepare("INSERT INTO ops_config (key, value, note, updated_at) VALUES (?1, ?2, ?3, datetime('now')) ON CONFLICT(key) DO UPDATE SET value=excluded.value, note=excluded.note, updated_at=excluded.updated_at").bind(ck, agg.max, "OWNER-LOCAL-INGEST-1b: created_at of the newest gateway log ingested (paid non-Workers-AI rows, oldest first)").run();
-    await db.prepare("DELETE FROM ops_config WHERE key = ?1").bind(OL_CURSOR_KEY_V1 + gw).run().catch(function () {});
+    await db.prepare("DELETE FROM ops_config WHERE key = ?1").bind(OL_CURSOR_KEY_V1 + gw).run().catch(function (e) { console.error(JSON.stringify({ evt: "fleet-control:ownerLocalIngest:caught", error: String(e && e.message) })); });
     res.taken += agg.taken; res.owner_usd += agg.owner_usd; res.fleet_usd += agg.fleet_usd;
     res.by_gateway[gw] = { seen: agg.seen, taken: agg.taken, owner_usd: cgRound(agg.owner_usd), fleet_usd: cgRound(agg.fleet_usd), cursor: agg.max, more: more, remaining: total == null ? null : Math.max(0, total - agg.seen), skipped: agg.skipped };
   }
   var o30 = await db.prepare("SELECT COALESCE(SUM(usd), 0) AS usd, COALESCE(SUM(calls), 0) AS calls FROM ai_spend_owner_local WHERE day >= date('now','-30 days')").first().catch(function () { return null; });
   res.owner_usd_30d = o30 ? cgRound(o30.usd) : null;
-  if (o30) await db.prepare("INSERT INTO analytics_dash_meta (key, value) VALUES ('owner_local_cost_usd_30d', ?1) ON CONFLICT(key) DO UPDATE SET value=excluded.value").bind(Number(o30.usd).toFixed(2)).run().catch(function () {});
+  if (o30) await db.prepare("INSERT INTO analytics_dash_meta (key, value) VALUES ('owner_local_cost_usd_30d', ?1) ON CONFLICT(key) DO UPDATE SET value=excluded.value").bind(Number(o30.usd).toFixed(2)).run().catch(function (e) { console.error(JSON.stringify({ evt: "fleet-control:ownerLocalIngest:caught", error: String(e && e.message) })); });
   var day = String(nowIso).slice(0, 10);
   var text = "owner-local ingest: " + res.taken + " paid requests attributed this tick (owner-local $" + cgRound(res.owner_usd).toFixed(2) + ", fleet direct callers $" + cgRound(res.fleet_usd).toFixed(2) + ") across " + res.gateways + " gateways; owner-local 30d $" + (res.owner_usd_30d == null ? "?" : res.owner_usd_30d.toFixed(2));
   await db.prepare("INSERT INTO cloud_ops_events (id, ts, kind, text, meta, job, status) VALUES (?1, ?2, 'owner-local-ingest', ?3, ?4, 'qnfo-fleet-control', 'ok') ON CONFLICT(id) DO UPDATE SET ts=excluded.ts, text=excluded.text, meta=excluded.meta")
-    .bind("owner-local-ingest-" + day, nowIso, text.slice(0, 500), JSON.stringify({ by_gateway: res.by_gateway, owner_usd_30d: res.owner_usd_30d, v: VERSION }).slice(0, 1800)).run().catch(function () {});
+    .bind("owner-local-ingest-" + day, nowIso, text.slice(0, 500), JSON.stringify({ by_gateway: res.by_gateway, owner_usd_30d: res.owner_usd_30d, v: VERSION }).slice(0, 1800)).run().catch(function (e) { console.error(JSON.stringify({ evt: "fleet-control:ownerLocalIngest:caught", error: String(e && e.message) })); });
   return res;
 }
 // ---- OWNER-LOCAL-INGEST-1:END ----
@@ -10822,7 +10823,7 @@ async function evaluateMetricTriggers(env) {
       var openIds = (openRec.results || []).map(function (r) { return r.id; });
       if (!openIds.length) continue;
       if (!(streak && streak.t)) {
-        await db.prepare("INSERT INTO analytics_action_log (trigger_id, fired_at, metric_value, action, queue_target, status, notes) VALUES (?1, datetime('now'), ?2, 'recovery streak opened', 'agent_issues', 'recovering', ?3)").bind(t.id, v, "open issues " + openIds.join(",")).run().catch(function () {});
+        await db.prepare("INSERT INTO analytics_action_log (trigger_id, fired_at, metric_value, action, queue_target, status, notes) VALUES (?1, datetime('now'), ?2, 'recovery streak opened', 'agent_issues', 'recovering', ?3)").bind(t.id, v, "open issues " + openIds.join(",")).run().catch(function (e) { console.error(JSON.stringify({ evt: "fleet-control:evaluateMetricTriggers:caught", error: String(e && e.message) })); });
         continue;
       }
       if (!triggerRecoveryDue(streak.t, Date.now(), TRIGGER_RECOVERY_MIN)) continue;
@@ -10831,13 +10832,13 @@ async function evaluateMetricTriggers(env) {
         try {
           await db.prepare("INSERT INTO issue_triage (issue_id, rc, triage_state, owner, sla_due_at, close_evidence) VALUES (?1, 'TRIGGER-RECOVERY-1', 'closed', 'qnfo-fleet-control', datetime('now'), ?2) ON CONFLICT(issue_id) DO UPDATE SET close_evidence=excluded.close_evidence, triage_state='closed'").bind(openIds[oi], evid).run();
           await db.prepare("UPDATE agent_issues SET status='closed', updated_at=?2 WHERE id=?1 AND status='open'").bind(openIds[oi], Date.now()).run();
-        } catch (e) {}
+        } catch (e) { console.error(JSON.stringify({ evt: "fleet-control:evaluateMetricTriggers:caught", error: String(e && e.message) })); }
       }
-      await db.prepare("INSERT INTO analytics_action_log (trigger_id, fired_at, metric_value, action, queue_target, status, notes) VALUES (?1, datetime('now'), ?2, 'closed on recovery', 'agent_issues', 'recovered', ?3)").bind(t.id, v, "closed " + openIds.join(",")).run().catch(function () {});
+      await db.prepare("INSERT INTO analytics_action_log (trigger_id, fired_at, metric_value, action, queue_target, status, notes) VALUES (?1, datetime('now'), ?2, 'closed on recovery', 'agent_issues', 'recovered', ?3)").bind(t.id, v, "closed " + openIds.join(",")).run().catch(function (e) { console.error(JSON.stringify({ evt: "fleet-control:evaluateMetricTriggers:caught", error: String(e && e.message) })); });
       out.recovered = (out.recovered || []).concat([{ id: t.id, metric: t.metric_key, value: v, closed: openIds }]);
       continue;
     }
-    if (streak && streak.t) await db.prepare("INSERT INTO analytics_action_log (trigger_id, fired_at, metric_value, action, queue_target, status, notes) VALUES (?1, datetime('now'), ?2, 'breach again during recovery streak', ?3, 'relapsed', NULL)").bind(t.id, v, String(t.queue_target || "none")).run().catch(function () {});
+    if (streak && streak.t) await db.prepare("INSERT INTO analytics_action_log (trigger_id, fired_at, metric_value, action, queue_target, status, notes) VALUES (?1, datetime('now'), ?2, 'breach again during recovery streak', ?3, 'relapsed', NULL)").bind(t.id, v, String(t.queue_target || "none")).run().catch(function (e) { console.error(JSON.stringify({ evt: "fleet-control:evaluateMetricTriggers:caught", error: String(e && e.message) })); });
     var cd = Math.max(1, Number(t.cooldown_hours) || 24);
     var recent = await db.prepare("SELECT id FROM analytics_action_log WHERE trigger_id = ?1 AND fired_at > datetime('now', ?2) AND status <> 'dispatch-failed' LIMIT 1").bind(t.id, "-" + cd + " hours").first().catch(function () { return null; });
     if (recent) continue;
@@ -10859,7 +10860,7 @@ async function evaluateMetricTriggers(env) {
         note = "digest alert";
       }
     } catch (e) { status = "dispatch-failed"; note = String(e && e.message || e).slice(0, 200); }
-    await db.prepare("INSERT INTO analytics_action_log (trigger_id, fired_at, metric_value, action, queue_target, status, notes) VALUES (?1, datetime('now'), ?2, ?3, ?4, ?5, ?6)").bind(t.id, v, String(t.action || "").slice(0, 500), target, status, note).run().catch(function () {});
+    await db.prepare("INSERT INTO analytics_action_log (trigger_id, fired_at, metric_value, action, queue_target, status, notes) VALUES (?1, datetime('now'), ?2, ?3, ?4, ?5, ?6)").bind(t.id, v, String(t.action || "").slice(0, 500), target, status, note).run().catch(function (e) { console.error(JSON.stringify({ evt: "fleet-control:evaluateMetricTriggers:caught", error: String(e && e.message) })); });
     out.fired.push({ id: t.id, metric: t.metric_key, value: v, status: status });
   }
   return out;
@@ -10910,7 +10911,7 @@ async function publicationPreflight(env) {
       catch (e) { return { status: 0, ct: "", text: String(e && e.message || e).slice(0, 200) }; }
     };
     var h = await get(sf.health), l = await get(sf.listing), f = await get(sf.feed);
-    var hj = null; try { hj = JSON.parse(h.text); } catch (e) {}
+    var hj = null; try { hj = JSON.parse(h.text); } catch (e) { console.error(JSON.stringify({ evt: "fleet-control:publicationPreflight:caught", error: String(e && e.message) })); }
     var fallback = /QNFO\s+\u2014\s+Research Foundation|Latest papers/.test(h.text + l.text);
     checks.push({ check: "health served by " + sf.worker, ok: h.status === 200 && !!hj && hj.worker === sf.worker, detail: "http " + h.status + " worker=" + (hj && hj.worker) + " version=" + (hj && hj.version) });
     checks.push({ check: "listing is JSON, not fallback homepage", ok: l.status === 200 && /json/i.test(l.ct) && !fallback, detail: "http " + l.status + " ct=" + l.ct });
@@ -10919,7 +10920,7 @@ async function publicationPreflight(env) {
     if (!sok) out.ok = false;
     out.surfaces.push({ name: sf.name, ok: sok, checks: checks });
     if (!db) continue;
-    try { await db.prepare("INSERT INTO cloud_ops_events (id, ts, kind, text, meta, job, status) VALUES (?1, ?2, 'publication_preflight', ?3, ?4, 'qnfo-fleet-control', ?5)").bind("pp-" + Date.now().toString(36) + "-" + sf.name, new Date().toISOString(), sf.name + (sok ? " ok" : " FAIL"), JSON.stringify(checks).slice(0, 1500), sok ? "ok" : "error").run(); } catch (e) {}
+    try { await db.prepare("INSERT INTO cloud_ops_events (id, ts, kind, text, meta, job, status) VALUES (?1, ?2, 'publication_preflight', ?3, ?4, 'qnfo-fleet-control', ?5)").bind("pp-" + Date.now().toString(36) + "-" + sf.name, new Date().toISOString(), sf.name + (sok ? " ok" : " FAIL"), JSON.stringify(checks).slice(0, 1500), sok ? "ok" : "error").run(); } catch (e) { console.error(JSON.stringify({ evt: "fleet-control:publicationPreflight:caught", error: String(e && e.message) })); }
     var title = "PUBLICATION-PREFLIGHT-FAIL-" + sf.name.toUpperCase() + ": " + sf.name + " publication surface is not served by " + sf.worker;
     try {
       var open = await db.prepare("SELECT id FROM agent_issues WHERE title = ?1 AND status = 'open' LIMIT 1").bind(title).first();
@@ -10933,7 +10934,7 @@ async function publicationPreflight(env) {
         await db.prepare("INSERT INTO issue_triage (issue_id, rc, triage_state, owner, sla_due_at, close_evidence) VALUES (?1, 'PUBLICATION-PREFLIGHT-1', 'closed', 'qnfo-fleet-control', datetime('now'), ?2) ON CONFLICT(issue_id) DO UPDATE SET close_evidence=excluded.close_evidence, triage_state='closed'").bind(open.id, "PUBLICATION-PREFLIGHT-1 " + new Date().toISOString() + ": all checks pass: " + JSON.stringify(checks).slice(0, 600)).run();
         await db.prepare("UPDATE agent_issues SET status='closed', updated_at=?2 WHERE id=?1 AND status='open'").bind(open.id, Date.now()).run();
       }
-    } catch (e) {}
+    } catch (e) { console.error(JSON.stringify({ evt: "fleet-control:publicationPreflight:caught", error: String(e && e.message) })); }
   }
   return out;
 }
@@ -10989,9 +10990,9 @@ async function workerCensus(env) {
     try {
       await db.prepare("INSERT INTO fleet_worker_census (worker, req24, measured, last_seen, verdict, reason, ts) VALUES (?1, ?2, 1, ?3, ?4, ?5, ?6) ON CONFLICT(worker) DO UPDATE SET req24=excluded.req24, measured=1, last_seen=excluded.last_seen, verdict=excluded.verdict, reason=excluded.reason, ts=excluded.ts").bind(w, req[w] != null ? req[w] : null, nowIso, verdict, reasonFull.slice(0, 400), nowIso).run();
       await db.prepare("INSERT INTO worker_dod (worker, req24, measured, verdict, evidence, updated_at) VALUES (?5, ?2, 1, ?1, ?3, ?4) ON CONFLICT(worker) DO UPDATE SET verdict=excluded.verdict, req24=excluded.req24, measured=1, evidence=excluded.evidence, updated_at=excluded.updated_at").bind(verdict, req[w] != null ? req[w] : null, ("WORKER-CENSUS-DISCRIMINATING-1: " + reasonFull).slice(0, 400), nowIso, w).run();
-    } catch (e) {}
+    } catch (e) { console.error(JSON.stringify({ evt: "fleet-control:workerCensus:caught", error: String(e && e.message) })); }
   }
-  try { await db.prepare("DELETE FROM fleet_worker_census WHERE worker NOT IN (SELECT worker FROM worker_output_contracts WHERE COALESCE(state,'ACTIVE') = 'ACTIVE') AND worker NOT IN (SELECT name FROM worker_schedules)").run(); } catch (e) {}
+  try { await db.prepare("DELETE FROM fleet_worker_census WHERE worker NOT IN (SELECT worker FROM worker_output_contracts WHERE COALESCE(state,'ACTIVE') = 'ACTIVE') AND worker NOT IN (SELECT name FROM worker_schedules)").run(); } catch (e) { console.error(JSON.stringify({ evt: "fleet-control:workerCensus:caught", error: String(e && e.message) })); }
   return out;
 }
 __name(workerCensus, "workerCensus");
@@ -11001,7 +11002,7 @@ async function workerCensusIfStale(env) {
   var db = env.AUDIT_DB || env.AUDIT || env.DB_AUDIT;
   if (!db) return { ran: false, error: "no AUDIT binding" };
   var r = null;
-  try { r = await db.prepare("SELECT MAX(ts) AS newest FROM fleet_worker_census").first(); } catch (e) {}
+  try { r = await db.prepare("SELECT MAX(ts) AS newest FROM fleet_worker_census").first(); } catch (e) { console.error(JSON.stringify({ evt: "fleet-control:workerCensusIfStale:caught", error: String(e && e.message) })); }
   var newest = r && r.newest ? Date.parse(r.newest) : 0;
   if (newest && Date.now() - newest < 23 * 36e5) return { ran: false, newest: r.newest };
   return Object.assign({ ran: true }, await workerCensus(env));
@@ -11266,7 +11267,7 @@ async function reassertObservability(env) {
           if (ns.script && ns.class) doMap[ns.script] = { clazz: ns.class, storage: ns.use_sqlite ? "sqlite" : "legacy-kv" };
         }
       }
-    } catch (e1) {}
+    } catch (e1) { console.error(JSON.stringify({ evt: "fleet-control:reassertObservability:caught", error: String(e1 && e1.message) })); }
     var wr = await fetch(base + "/workers/scripts?per_page=100", { headers: H, signal: AbortSignal.timeout(8e3) });
     var wj = await wr.json().catch(function() { return null; });
     var workers = wj && wj.success && wj.result ? wj.result : [];
@@ -11311,12 +11312,12 @@ async function reassertObservability(env) {
              the guard counts it as logged, and never treats it as the worker's last CODE deploy. */
           try {
             await env.AUDIT_DB.prepare("INSERT INTO fleet_deploys (worker, actor, session_id, from_sha, to_sha, source_path, ok, note, ts) VALUES (?1,?2,NULL,NULL,NULL,NULL,1,?3,?4)").bind(name, "qnfo-fleet-control/obs-reassert", "SETTINGS-ONLY: observability reassert (logs+traces+issues) by qnfo-fleet-control/" + VERSION, (/* @__PURE__ */ new Date()).toISOString()).run();
-          } catch (e4) {}
+          } catch (e4) { console.error(JSON.stringify({ evt: "fleet-control:reassertObservability:caught", error: String(e4 && e4.message) })); }
         }
-      } catch (e2) {}
+      } catch (e2) { console.error(JSON.stringify({ evt: "fleet-control:reassertObservability:caught", error: String(e2 && e2.message) })); }
       if (decl.declared && patchedNames.indexOf(name) < 0) unrepaired.push(name);
     }
-    if (patched > 0) { try { await env.AUDIT_DB.prepare("INSERT INTO cloud_ops_events (ts, kind, job, text) VALUES (datetime('now'), 'obs-reassert', 'qnfo-fleet-control', ?)").bind("patched=" + patched + " skipped=" + skipped + " workers=" + patchedNames.join(",")).run(); } catch (e3) {} }
+    if (patched > 0) { try { await env.AUDIT_DB.prepare("INSERT INTO cloud_ops_events (ts, kind, job, text) VALUES (datetime('now'), 'obs-reassert', 'qnfo-fleet-control', ?)").bind("patched=" + patched + " skipped=" + skipped + " workers=" + patchedNames.join(",")).run(); } catch (e3) { console.error(JSON.stringify({ evt: "fleet-control:reassertObservability:caught", error: String(e3 && e3.message) })); } }
     await obsWriteMetric(env, unrepaired, drift, checked);
     return { ok: true, patched: patched, skipped: skipped, workers: patchedNames, checked: checked, drift: drift, unrepaired: unrepaired };
   } catch (e) {
