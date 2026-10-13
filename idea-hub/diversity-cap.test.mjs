@@ -1,12 +1,15 @@
 // IDEA-DIVERSITY-CAP-1 (idea-hub 1.5.8, #1947, trigger 1238 idea_topic_concentration_30d) offline suite. Runs the worker's
 // own triageProposals in a vm against an in-memory SQLite D1 and a counting Workers AI stub, and the metric's own
-// classifier (qnfo-cloud-ops IDEA_TOPIC_CLUSTERS + ideaTopicConcentration, sliced from that file) on the same rows.
-// Proves: the cluster table is identical to the metric's; a generated ACCEPT whose cluster would exceed half of the 30-day
+// classifier (qnfo-cloud-ops TOPIC-CLUSTERS-DERIVED-1 shared block + ideaTopicConcentration, sliced from that file) on the
+// same rows. TOPIC-CLUSTERS-DERIVED-1 (idea-hub 1.10.0, agent_issues 2281): the clusters are data, so this suite supplies
+// them as a fixture through the ops_config idea_topic_clusters cache the workers read.
+// Proves: the shared derivation block is identical in both workers and neither holds a fixed topic table; a generated ACCEPT whose cluster would exceed half of the 30-day
 // accepts waits as deferred_diversity with its score kept, is not queued for research and is not counted by the metric;
 // owner and intake:* rows are never held; other clusters still pass; below DIVERSITY_MIN_N nothing is held; held rows are
 // released best score first, with no model call, only when the share allows (an ai_spend cap no longer matters, 1.6.0), with the hold
 // note stripped; a held row that left the 30-day window becomes a terminal HOLD and is never released; the run publishes
-// the held count and the share, and that share equals the metric's reading of the same rows.
+// the held count and the share, and that share equals the metric's reading of the same rows; a missing cache is re-derived
+// from the accepted ideas and written back; with no derived clusters nothing is held.
 // Run: node --no-warnings idea-hub/diversity-cap.test.mjs   -> prints "N passed, 0 failed"
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
@@ -17,28 +20,34 @@ const here = dirname(fileURLToPath(import.meta.url));
 let pass = 0, fail = 0;
 const ok = (c, m, d) => { if (c) pass++; else { fail++; console.log("FAIL " + m + (d === undefined ? "" : " :: " + JSON.stringify(d))); } };
 
-// 1. Parity with the metric's classifier (qnfo-cloud-ops jobIdeaTopicMetric).
+// 1. Parity with the metric's classifier (qnfo-cloud-ops jobIdeaTopicMetric): one shared derivation block, no fixed table.
 const hubSrc = readFileSync(join(here, "worker.js"), "utf8");
 const opsSrc = readFileSync(join(here, "..", "qnfo-cloud-ops", "worker.js"), "utf8");
-const table = (src) => { const a = src.indexOf("var IDEA_TOPIC_CLUSTERS = ["), b = src.indexOf("\n];", a); return a < 0 || b < a ? null : src.slice(a, b + 3).replace(/\s+/g, " "); };
-ok(table(hubSrc) !== null && table(hubSrc) === table(opsSrc), "IDEA_TOPIC_CLUSTERS in idea-hub is identical to qnfo-cloud-ops (the metric's classifier)", [table(hubSrc), table(opsSrc)]);
-const oa = opsSrc.indexOf("var IDEA_TOPIC_CLUSTERS = ["), ob = opsSrc.indexOf("async function jobIdeaTopicMetric", oa);
+const BEGIN = "// TOPIC-CLUSTERS-DERIVED-1 BEGIN shared block.", END = "// TOPIC-CLUSTERS-DERIVED-1 END shared block.";
+const block = (src) => { const a = src.indexOf(BEGIN), b = src.indexOf(END, a); return a < 0 || b < a || src.indexOf(BEGIN, a + 1) >= 0 ? null : src.slice(a, b + END.length); };
+ok(block(hubSrc) !== null && block(hubSrc) === block(opsSrc), "the TOPIC-CLUSTERS-DERIVED-1 shared block in idea-hub is identical to qnfo-cloud-ops (the metric's classifier)", [String(block(hubSrc)).length, String(block(opsSrc)).length]);
+ok(!hubSrc.includes("var IDEA_TOPIC_CLUSTERS = [") && !opsSrc.includes("var IDEA_TOPIC_CLUSTERS = ["), "neither worker holds the fixed IDEA_TOPIC_CLUSTERS table (agent_issues 2281 code probe)");
+const oa = opsSrc.indexOf(BEGIN), ob = opsSrc.indexOf("async function jobIdeaTopicMetric", oa);
 const metric = {};
 vm.runInNewContext(opsSrc.slice(oa, ob) + "\nm.ideaTopicConcentration = ideaTopicConcentration;", { m: metric, __name: () => {} });
 ok(typeof metric.ideaTopicConcentration === "function", "the metric's ideaTopicConcentration loads from qnfo-cloud-ops");
+// The clusters as data (what the derivation caches in ops_config idea_topic_clusters); terms are topicTerms output.
+const CLUSTERS = [{ label: "quantum", terms: ["quantum", "qubit"] }, { label: "ultrametric", terms: ["ultrametric", "adic", "bruhat", "adelic", "archimedean"] }, { label: "energy", terms: ["landauer", "entropy"] }];
 
 // 2. Harness.
 const src = hubSrc.replace(/export default\s*\{/, "var __default = {");
 const sb = { console: { log: () => {} }, Date, JSON, Math, Number, String, RegExp, Set, Map, Array, Object, Promise, URL, Response, Request, Headers, TextEncoder, crypto, fetch: async () => { throw new Error("no network"); } };
 vm.createContext(sb);
-vm.runInContext(src + "\n__x = { triageProposals, ideaTopicCluster, DIVERSITY_MAX_SHARE, DIVERSITY_MIN_N };", sb);
+vm.runInContext(src + "\n__x = { triageProposals, proposalCluster, diversityBlocks, loadTopicClusters, TOPIC_CACHE_KEY, DIVERSITY_MAX_SHARE, DIVERSITY_MIN_N };", sb);
 const api = sb.__x;
 const db = new DatabaseSync(":memory:");
 db.exec(`CREATE TABLE idea_proposals (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT, idea TEXT NOT NULL, contact TEXT, status TEXT DEFAULT 'new', ip_hash TEXT, created_at TEXT, decision TEXT, score REAL, rationale TEXT, triaged_at TEXT);
 CREATE TABLE fleet_budget (node_class TEXT PRIMARY KEY, cap REAL, target REAL, current REAL, unit TEXT, updated_at TEXT);
 CREATE TABLE cloud_ops_events (id TEXT PRIMARY KEY, ts TEXT, kind TEXT, text TEXT, meta TEXT, job TEXT, status TEXT);
 CREATE TABLE fleet_heartbeat (worker TEXT PRIMARY KEY, version TEXT, ts TEXT, ok INTEGER);
-CREATE TABLE research_queue (id TEXT PRIMARY KEY, source TEXT, source_id TEXT, idea TEXT, summary TEXT, score REAL, decision TEXT, status TEXT, created_at TEXT, UNIQUE(source, source_id));`);
+CREATE TABLE research_queue (id TEXT PRIMARY KEY, source TEXT, source_id TEXT, idea TEXT, summary TEXT, score REAL, decision TEXT, status TEXT, created_at TEXT, UNIQUE(source, source_id));
+CREATE TABLE ops_config (key TEXT PRIMARY KEY, value TEXT, note TEXT, updated_at TEXT);`);
+db.prepare("INSERT INTO ops_config (key, value) VALUES (?, ?)").run(api.TOPIC_CACHE_KEY, JSON.stringify({ version: 1, derived_at: new Date().toISOString(), docs: 0, clusters: CLUSTERS }));
 const d1 = { prepare(sql) { let a = []; const q = sql.replace(/\?(\d+)/g, "?"); const st = { bind(...x) { a = x; return st; }, async all() { return { results: db.prepare(q).all(...a) }; }, async first() { return db.prepare(q).get(...a) ?? null; }, async run() { const r = db.prepare(q).run(...a); return { meta: { changes: Number(r.changes) } }; } }; return st; } };
 const calls = [];
 let card = { novelty: 0.9, technical_merit: 0.9, impact_potential: 0.8, exposure_potential: 0.8, feasibility: 0.9, risk: 0.1, rationale: "solid", hook: "h" };
@@ -50,7 +59,7 @@ const add = (name, idea, at, contact) => Number(db.prepare("INSERT INTO idea_pro
 const accepted = (name, idea, at) => db.prepare("INSERT INTO idea_proposals (name, idea, contact, status, created_at, decision, score, rationale, triaged_at) VALUES (?, ?, '', 'triaged_accepted', ?, 'ACCEPT', 0.8, 'seed', ?)").run(name, idea, at, at);
 const row = (id) => db.prepare("SELECT * FROM idea_proposals WHERE id = ?").get(id);
 const queued = (id) => db.prepare("SELECT COUNT(*) n FROM research_queue WHERE source = 'proposal' AND source_id = ?").get(String(id)).n;
-const metricNow = () => metric.ideaTopicConcentration(db.prepare("SELECT name, idea, rationale FROM idea_proposals WHERE decision = 'ACCEPT' AND replace(substr(created_at, 1, 19), 'T', ' ') >= datetime('now', '-30 day')").all());
+const metricNow = () => metric.ideaTopicConcentration(db.prepare("SELECT name, idea, rationale FROM idea_proposals WHERE decision = 'ACCEPT' AND replace(substr(created_at, 1, 19), 'T', ' ') >= datetime('now', '-30 day')").all(), CLUSTERS);
 
 // 3. Below DIVERSITY_MIN_N accepts nothing is held, even a lopsided mix.
 for (let i = 0; i < 5; i++) accepted("auto-scan", "Surface code decoder variant " + i + " for quantum memories", ago(3));
@@ -125,6 +134,20 @@ ok(r.status === "triaged_hold" && r.decision === "HOLD" && /^\[diversity hold ex
 const ev = JSON.parse(db.prepare("SELECT meta FROM cloud_ops_events WHERE id = 'idea-triage-budget'").get().meta);
 ok(ev.diversity_held_total === 0 && ev.diversity && typeof ev.diversity.share === "number" && "diversity_released_run" in ev, "the run publishes held count and share in cloud_ops_events idea-triage-budget", ev);
 ok(db.prepare("SELECT COUNT(*) n FROM idea_proposals WHERE status = 'deferred_diversity'").get().n === 0, "no row is left in deferred_diversity");
+
+// 10. Clusters are data: the run read the cache; a missing cache is re-derived from the accepted ideas and written back.
+ok(out.diversity.topics && out.diversity.topics.source === "cache" && out.diversity.clusters.join(",") === "quantum,ultrametric,energy", "triage read the cached clusters", out.diversity);
+db.prepare("DELETE FROM ops_config").run();
+out = await api.triageProposals(env);
+const cacheRow = db.prepare("SELECT value FROM ops_config WHERE key = ?").get(api.TOPIC_CACHE_KEY);
+const rederived = cacheRow && JSON.parse(cacheRow.value);
+ok(out.diversity.topics.source === "derived" && rederived && rederived.docs > 0 && Array.isArray(rederived.clusters) && rederived.clusters.length > 0 && out.diversity.clusters.join(",") === rederived.clusters.map((c) => c.label).join(","), "with no cache, triage derives the clusters from the accepted ideas and writes the cache", { topics: out.diversity.topics, clusters: rederived && rederived.clusters });
+ok(rederived.clusters.every((c) => c.terms.length >= 2 && c.terms[0] === c.label), "each derived cluster is labelled by its seed and has a co-occurring term", rederived.clusters);
+
+// 11. No derived clusters (no accepted ideas): every text is other and nothing is held.
+ok(api.proposalCluster("Concatenated quantum codes", []) === "other", "no clusters: other");
+ok(api.diversityBlocks({ n: 50, by: { other: 50 }, clusters: [] }, "other") === false, "no clusters: the cap holds nothing, even at a 100% share");
+ok(api.diversityBlocks({ n: 50, by: { quantum: 50 }, clusters: CLUSTERS }, "quantum") === true, "with clusters the cap still holds");
 
 console.log(pass + " passed, " + fail + " failed");
 process.exit(fail ? 1 : 0);

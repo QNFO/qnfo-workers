@@ -101,7 +101,7 @@ label = L(["none", "partial", "none"]);
 id = add("auto-scan", "Graph colouring bounds for sparse expanders");
 ({ r } = await run(id));
 ok(r.status === "triaged_accepted" && /^\[novelty 3 neighbours none\/partial\/substantial\/duplicate 2\/1\/0\/0; payoff 4\] solid$/.test(r.rationale), "a clean screen accepts with a numbers-only tag", r.rationale);
-ok(api.proposalCluster(r.name, r.idea, r.rationale) === api.proposalCluster(r.name, r.idea, "solid"), "the tag does not move the topic cluster the diversity cap and metric read");
+ok(api.proposalCluster(r.idea, [{ label: "tag-words", terms: ["novelty", "neighbour", "partial", "payoff"] }]) === "other", "the topic cluster reads the idea text only (idea-hub 1.10.0), so the tag cannot move the cluster the diversity cap and metric read");
 
 // 5. Owner rows are never screened.
 label = L(["duplicate"]);
