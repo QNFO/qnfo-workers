@@ -135,7 +135,7 @@ const get = (path) => w.fetch(new Request("https://q08.org" + path, { headers: {
 globalThis.fetch = origFetch;
 // ---- Q08-PRUNE-1: delete the sentences the reviewers quote ----------------------------------------------------------------------
 {
-  const essay = "# A rule that checks itself\n\nThe committee reviewed the draft. It found 3 gaps in the register. Many programs assume the register is complete.\n\nThe fix is to add a second reader. A second reader catches what the first misses.\n\nworth your time: yes - names the mechanism";
+  const essay = "# A rule that checks itself\n\nA city committee published its review of the public register this week, and the review explains why the register keeps missing entries.\n\nThe committee reviewed the draft. It found 3 gaps in the register. Many programs assume the register is complete.\n\nThe fix is to add a second reader. A second reader catches what the first misses.\n\nworth your time: yes - names the mechanism";
   const r = V.pruneUnsupported(essay, ["unsupported claim: Many programs assume the register is complete. -- not in source", "figure not in the source: 3"]);
   check("prune removes the quoted sentence and the sentence with the ungrounded figure", r.removed.length === 2 && !/Many programs/.test(r.text) && !/3 gaps/.test(r.text), r);
   check("prune keeps the title, the other sentences and the verdict line", /^# A rule that checks itself/.test(r.text) && /second reader catches/.test(r.text) && /worth your time: yes/.test(r.text), r.text);
@@ -297,7 +297,7 @@ globalThis.fetch = origFetch;
 }
 // Q08-PRUNE-FUZZY-1 (0.14.10, run 353)
 {
-  const txt = "# A title that names the mechanism\n\nThe lab measured expression in every tissue. The article already holds a publishable connection between the genotype, the expression data and the phenotype it reports. Nobody had asked for the third table.\n\nworth your time: yes - x";
+  const txt = "# A title that names the mechanism\n\nA city committee published its review of the public register this week, and the review explains why the register keeps missing entries.\n\nThe lab measured expression in every tissue. The article already holds a publishable connection between the genotype, the expression data and the phenotype it reports. Nobody had asked for the third table.\n\nworth your time: yes - x";
   const pr = V.pruneUnsupported(txt, ["unsupported claim: the article already contains a publishable link between genotype, expression, and phenotype -- not in source"]);
   check("a paraphrased item removes the closest sentence", pr.removed.length === 1 && /publishable connection/.test(pr.removed[0]) && /measured expression/.test(pr.text) && /third table/.test(pr.text), pr);
   const pr2 = V.pruneUnsupported(txt, ["unsupported claim: the regulator fined the company twice for missing filings -- not in source"]);
@@ -349,11 +349,22 @@ globalThis.fetch = origFetch;
 }
 // Q08-PRUNE-VERDICT-1 (0.17.6, run 369)
 {
-  const txt = "# A title\n\nThe lab measured expression in every tissue. The article already holds a publishable connection between the genotype and the phenotype.\nworth your time: yes - names the mechanism";
+  const txt = "# A title\n\nA city committee published its review of the public register this week, and the review explains why the register keeps missing entries.\n\nThe lab measured expression in every tissue. The article already holds a publishable connection between the genotype and the phenotype.\nworth your time: yes - names the mechanism";
   const pr = V.pruneUnsupported(txt, ["unsupported claim: The article already holds a publishable connection between the genotype and the phenotype -- not in source"]);
   check("a verdict line in the last paragraph survives the prune unchanged", pr.removed.length === 1 && /\n\nworth your time: yes - names the mechanism$/.test(pr.text) && /measured expression/.test(pr.text), pr);
   const pr2 = V.pruneUnsupported(txt, ["unsupported claim: names the mechanism and nothing else at all -- x"]);
   check("a needle that would hit the verdict line removes nothing from it", /worth your time: yes - names the mechanism$/.test(pr2.text), pr2);
+}
+// Q08-LEDE-PRUNE-1 (0.18.1): the prune never cuts the lede
+{
+  const essay = "# Thieves sell modified hardware wallets\n\nCrypto thieves are selling modified Ledger Nano X wallets with a hidden eSIM, a security firm reported. The modem sends the seed phrase to the attackers.\n\nUsers therefore trust that a purchased device keeps their assets offline.\n\nworth your time: yes - x";
+  const r = V.pruneUnsupported(essay, ["unsupported claim: a security firm reported -- not in source"]);
+  check("a flagged sentence in the lede is not cut and is reported", r.ledeHit === true && r.removed.length === 0 && /^# Thieves sell modified hardware wallets\n\nCrypto thieves/.test(r.text), r);
+  const r2 = V.pruneUnsupported(essay, ["unsupported claim: Users therefore trust that a purchased device keeps their assets offline -- not in source"]);
+  check("a flagged sentence after the lede is still cut", r2.ledeHit === false && r2.removed.length === 1 && /Crypto thieves/.test(r2.text), r2);
+  const src = (await import("node:fs")).readFileSync(new URL("./worker.js", import.meta.url), "utf8");
+  check("a lede hit sends the draft to the model revision", /if \(pr\.ledeHit\) \{ trail\.push\("r" \+ \(round \+ 1\) \+ " prune blocked: a flagged claim is in the lede"\)/.test(src));
+  check("every pruned draft is re-checked with ledeProblems", /prunedGateProblems\(pr\.text, a\.banned\)\.concat\(ledeProblems\(pr\.text, a\.src\)\)/.test(src));
 }
 console.log("verify.test.mjs: " + passes + " passed, " + fails + " failed");
 process.exit(fails ? 1 : 0);
