@@ -36,6 +36,15 @@ check("FACT items whose reason calls them analysis or interpretation are reasoni
 check("a figure and a named outlet stay FACTs even with an 'analysis' reason", sp.facts.length === 2, sp);
 const src = (await import("node:fs")).readFileSync(new URL("./worker.js", import.meta.url), "utf8");
 check("the fact-check reads the larger ground", /String\(ground\)\.slice\(0, FACTCHECK_GROUND_MAX\)/.test(src) && /var FACTCHECK_GROUND_MAX = 24000/.test(src));
-check("generate passes the pack to the writer and to the fact-check ground", /var background = await backgroundPack\(story\);/.test(src) && /article, background, \(ownerNotes/.test(src));
+check("generate passes the pack to the writer and to the fact-check ground", /var background = await backgroundPack\(story\);/.test(src) && /labelledGround\(story, friction, article, background, ownerNotes\)/.test(src));
+// Q08-SOURCE-GROUND-1 (0.19.1, run 377)
+{
+  const G = mod.__ground;
+  const g = G.labelledGround({ source: "hn", title: "Apple HomeView", url: "https://www.apple.com/homeview/" }, { core_concept: "Apple HomeView", friction_point: "The design is nice and the price is very aggressive." }, "HomeView is a home hub.", "Wikipedia, 'Apple Inc.': ...", []);
+  check("the ground names the source, its site and the discussion", /SOURCE: an article at apple\.com, discussed on Hacker News\. Title: Apple HomeView\. Link: https:\/\/www\.apple\.com\/homeview\/ \(site: apple\.com\)/.test(g) && /Hacker News discussion comments on it: The design is nice/.test(g) && /Linked article text: HomeView/.test(g) && /Background reference text:/.test(g), g);
+  const gh = G.labelledGround({ source: "github", title: "storytold/cadcraft", url: "https://github.com/storytold/cadcraft" }, { friction_point: "A CAD tool." }, "", "", []);
+  check("a repository source is labelled as such", /a GitHub repository \(storytold\/cadcraft\)/.test(gh) && /Repository description and README excerpt: A CAD tool\./.test(gh), gh);
+  check("generate builds the essay ground with labelledGround", /var essayGround = labelledGround\(story, friction, article, background, ownerNotes\);/.test((await import("node:fs")).readFileSync(new URL("./worker.js", import.meta.url), "utf8")));
+}
 console.log("context.test.mjs: " + passes + " passed, " + fails + " failed");
 process.exit(fails ? 1 : 0);
