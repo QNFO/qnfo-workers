@@ -69,8 +69,21 @@ let aiCalls = 0;
 const env = { ORCH_TOKEN: "t0ken", AUDIT_DB: makeD1(), PR_PUBLISH_MODE: "pull", AI: { run: async () => { aiCalls++; return { response: "" }; } }, DEPLOY_GUARD: { fetch: guardFetch } };
 const hdr = { authorization: "Bearer t0ken", "content-type": "application/json" };
 const tick = async (o) => (await worker.fetch(new Request("https://x/v1/tick", { method: "POST", headers: hdr, body: JSON.stringify(Object.assign({ maxSteps: 1, budgetMs: 25000, plan: false, intake: false }, o || {})) }), env)).json();
-const addTask = async (p, goal) => (await worker.fetch(new Request("https://x/v1/tasks", { method: "POST", headers: hdr, body: JSON.stringify({ repo: "qnfo-workers", path: p, goal }) }), env)).json();
 const db = env.AUDIT_DB._db;
+// CLAIM-AT-RUN-1 (0.14.5): enqueue takes no claim. These fixtures stand for tasks that already started and hold their file, so
+// the claim is taken here the way claimEnsure takes it at the first step (owner qnfo-code-orchestrator:<task>, ttl 7200).
+let enqueueAcquires = 0;
+const startClaim = async (id, p) => {
+  const r = await (await guardFetch(GUARD + "/work-lock/acquire", { body: JSON.stringify({ key: "file:" + p, owner: "qnfo-code-orchestrator:" + id, ttl_sec: 7200 }) })).json();
+  db.prepare("UPDATE code_tasks SET ctx = json_set(COALESCE(ctx, '{}'), '$.claim', json(?)) WHERE id = ?").run(JSON.stringify({ key: "file:" + p, token: r.token, expires_at: r.expires_at, since: new Date().toISOString(), renewals: 0 }), id);
+};
+const addTask = async (p, goal) => {
+  const n0 = guard.calls.length;
+  const r = await (await worker.fetch(new Request("https://x/v1/tasks", { method: "POST", headers: hdr, body: JSON.stringify({ repo: "qnfo-workers", path: p, goal }) }), env)).json();
+  enqueueAcquires += guard.calls.length - n0;
+  if (r.ok) await startClaim(r.id, p);
+  return r;
+};
 const row = (id) => db.prepare("SELECT * FROM code_tasks WHERE id = ?").get(id);
 const ctxOf = (id) => JSON.parse(row(id).ctx || "{}");
 const callsFor = (p, key) => guard.calls.filter((x) => x.path === p && x.body.key === key);
@@ -80,7 +93,7 @@ const setClaim = (id, patch) => db.prepare("UPDATE code_tasks SET ctx = json_set
 // 1. a task that enters a SELF-REPAIR-1 backoff releases its claim
 const KA = "file:fx-a/worker.js";
 const A = await addTask("fx-a/worker.js", "claim-backoff fixture A: a task that fails its round");
-ok(A.ok && ctxOf(A.id).claim && ctxOf(A.id).claim.token === "tok1" && guard.lease[KA], "1a enqueue takes the claim", ctxOf(A.id));
+ok(A.ok && enqueueAcquires === 0 && ctxOf(A.id).claim && ctxOf(A.id).claim.token === "tok1" && guard.lease[KA], "1a the started task holds its claim (enqueue itself sent no acquire)", ctxOf(A.id));
 db.prepare("UPDATE code_tasks SET attempts = 2 WHERE id = ?").run(A.id);
 guard.calls.length = 0;
 let t = await tick();
