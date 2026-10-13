@@ -1,5 +1,5 @@
 {
-  "audited_at": "2026-10-13 07:15:24",
+  "audited_at": "2026-10-13 07:44:34",
   "d1_write_failures": [],
   "d1_writes_ok": 115,
   "guard": {
@@ -543,12 +543,12 @@
       },
       {
         "dir": "personal-companion",
-        "version": "1.19.0-stall-digest",
+        "version": "1.19.2-ground-matcher",
         "worker": "personal-companion"
       },
       {
         "dir": "q08-signal-engine",
-        "version": "0.17.5",
+        "version": "0.17.6",
         "worker": "q08-signal-engine"
       },
       {
@@ -573,7 +573,7 @@
       },
       {
         "dir": "qnfo-code-orchestrator",
-        "version": "0.14.0-worker-timer-gate",
+        "version": "0.14.1-queue-v2",
         "worker": "qnfo-code-orchestrator"
       },
       {
@@ -598,7 +598,7 @@
       },
       {
         "dir": "qnfo-fleet-dashboard",
-        "version": "1.34.0-mail-draft",
+        "version": "1.35.0-mail-draft-complete",
         "worker": "qnfo-fleet-dashboard"
       },
       {
@@ -638,7 +638,7 @@
       },
       {
         "dir": "qnfo-ops",
-        "version": "2.45.1-kernel-reply",
+        "version": "2.46.0-compat-verify-runner",
         "worker": "qnfo-ops"
       },
       {
@@ -900,9 +900,9 @@
       "worker": "personal-api"
     },
     "personal-companion": {
-      "before": "1.19.0-stall-digest",
+      "before": "1.19.2-ground-matcher",
       "http": 200,
-      "live": "1.19.0-stall-digest",
+      "live": "1.19.2-ground-matcher",
       "match": 1,
       "note": "SYNC",
       "worker": "personal-companion"
@@ -944,9 +944,9 @@
       "worker": "personal-life-search"
     },
     "q08-signal-engine": {
-      "before": "0.17.5",
+      "before": "0.17.6",
       "http": 200,
-      "live": "0.17.5",
+      "live": "0.17.6",
       "match": 1,
       "note": "SYNC",
       "worker": "q08-signal-engine"
@@ -1146,9 +1146,9 @@
       "worker": "qnfo-code-agent"
     },
     "qnfo-code-orchestrator": {
-      "before": "0.14.0-worker-timer-gate",
+      "before": "0.14.1-queue-v2",
       "http": 200,
-      "live": "0.14.0-worker-timer-gate",
+      "live": "0.14.1-queue-v2",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-code-orchestrator"
@@ -1276,9 +1276,9 @@
       "worker": "qnfo-fleet-control"
     },
     "qnfo-fleet-dashboard": {
-      "before": "1.34.0-mail-draft",
+      "before": "1.35.0-mail-draft-complete",
       "http": 200,
-      "live": "1.34.0-mail-draft",
+      "live": "1.35.0-mail-draft-complete",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-fleet-dashboard"
@@ -1412,9 +1412,9 @@
       "worker": "qnfo-observability"
     },
     "qnfo-ops": {
-      "before": "2.45.1-kernel-reply",
+      "before": "2.46.0-compat-verify-runner",
       "http": 200,
-      "live": "2.45.1-kernel-reply",
+      "live": "2.46.0-compat-verify-runner",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-ops"
