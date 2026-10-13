@@ -1,18 +1,194 @@
 {
  "ok": true,
  "marker": "REMEDIATION-CONSUMER-1",
- "verifier": "remediation-consumer@b52b707167f5",
- "due": 1,
- "pass": 0,
+ "verifier": "remediation-consumer@d2f553bad646",
+ "due": 23,
+ "pass": 22,
  "fail": 1,
  "skipped": 0,
  "contracts": [
   {
-   "class": "issue-2480",
-   "issue_id": 2480,
+   "class": "fm-collector-without-credential",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "1",
+   "observed": "1",
+   "written": true
+  },
+  {
+   "class": "issue-2481",
+   "issue_id": 2481,
    "verdict": "fail",
    "expected": "ok",
-   "observed": "pending: filed by qnfo-fleet-control, which owns it for 48h",
+   "observed": "missing-marker:qnfo-social/worker.js",
+   "written": true
+  },
+  {
+   "class": "rt-page-qnfo-home",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "rt-page-subscribe",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "rt-page-work-with-me",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "rt-page-qnfo-sitemap",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "rt-page-papers-index",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "rt-page-paper-scholar-tags",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "rt-page-papers-sitemap",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "rt-page-papers-feed",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "rt-page-render-health",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "rt-page-fleet-queue",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "rt-page-fleet-kpi",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "rt-page-fleet-api-kpi",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "rt-page-ask",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "rt-page-qwav-home",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "rt-page-fleet-changelog",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "rt-page-ask-robots",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "rt-page-reading-feed",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "rt-page-q08-feed",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "rt-page-ideas",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "rt-page-reading",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "rt-page-graph-api",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
    "written": true
   }
  ],
@@ -39,20 +215,21 @@
   "http",
   "runner-https"
  ],
+ "https": 21,
  "budget_exhausted": false,
- "runtime_verified_share_24h": 9.1,
+ "runtime_verified_share_24h": 9.3,
  "host_census": {
   "skipped": "ran within 6h"
  },
  "migrations": {
-  "opted_in": 143,
+  "opted_in": 146,
   "unapplied": [],
   "applied_now": [],
   "failed": [],
   "metric": 0
  },
- "spent_ms": 8701,
- "head": "b52b707167f5c6ab9edae8be17db38aaa16ed1b4",
+ "spent_ms": 18886,
+ "head": "d2f553bad64617aa7066d3e7e7f0748a6c50fc02",
  "job_status": "success",
- "ts": "2026-10-13T07:04:53Z"
+ "ts": "2026-10-13T07:15:35Z"
 }
