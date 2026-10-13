@@ -237,22 +237,44 @@ NODE24_MIN_MAJOR = {
     "peter-evans/create-pull-request": 8,
     "cloudflare/wrangler-action": 4,
 }
-USES_MAJOR_RE = re.compile(r"^([\w.-]+/[\w.-]+)@v(\d+)\b")
+#   * ACTIONS-PIN-1 (2026-10-13): every action is pinned to a full commit SHA with a "# vN" comment naming its major
+#     (`actions/checkout@<40 hex> # v6`). A tag can be moved to new code; a SHA cannot. .github/dependabot.yml moves the
+#     SHA and the comment together, and the Node 20 check above reads the major from the comment. Local actions
+#     (`./path`) and docker:// references are exempt.
+USES_LINE_RE = re.compile(r"^\s*-?\s*uses:\s*['\"]?([^\s'\"#]+)['\"]?[ \t]*(?:#[ \t]*v(\d+)\b)?", re.M)
+SHA_RE = re.compile(r"^[0-9a-f]{40}$")
 
 
-def hardening_violations(doc: dict) -> list[str]:
+def _action_repo(ref: str) -> str:
+    """owner/repo of an action reference (github/codeql-action/init -> github/codeql-action)."""
+    return "/".join(ref.split("/")[:2])
+
+
+def hardening_violations(doc: dict, text: str = "") -> list[str]:
     out: list[str] = []
     if "permissions" not in doc:
         out.append("no top-level `permissions:` block (declare the least the token needs, e.g. contents: read)")
+    # Each `uses:` line in file order, with the major its comment names (None without one). Steps are matched to lines one
+    # occurrence at a time, so the same SHA written once with and once without a comment is judged per line.
+    lines = [(m.group(1), int(m.group(2)) if m.group(2) else None) for m in USES_LINE_RE.finditer(text)]
     for name, job in (doc.get("jobs") or {}).items():
         if not isinstance(job, dict):
             continue
         if "uses" not in job and "timeout-minutes" not in job:
             out.append(f"job `{name}` has no timeout-minutes (default 360)")
         for step in job.get("steps") or []:
-            m = USES_MAJOR_RE.match(str((step or {}).get("uses") or "")) if isinstance(step, dict) else None
-            if m and m.group(1) in NODE24_MIN_MAJOR and int(m.group(2)) < NODE24_MIN_MAJOR[m.group(1)]:
-                out.append(f"job `{name}` uses {m.group(0)} (Node 20; use @v{NODE24_MIN_MAJOR[m.group(1)]} or later)")
+            uses = str((step or {}).get("uses") or "") if isinstance(step, dict) else ""
+            if not uses or uses.startswith("./") or uses.startswith("docker://"):
+                continue
+            ref, _, at = uses.partition("@")
+            idx = next((i for i, (u, _) in enumerate(lines) if u == uses), None)
+            major = lines.pop(idx)[1] if idx is not None else None
+            if not SHA_RE.match(at) or major is None:
+                out.append(f"job `{name}` uses {uses} unpinned (ACTIONS-PIN-1: pin a 40-hex commit SHA with a `# vN` comment)")
+                continue
+            repo = _action_repo(ref)
+            if repo in NODE24_MIN_MAJOR and major < NODE24_MIN_MAJOR[repo]:
+                out.append(f"job `{name}` uses {repo} v{major} (Node 20; use v{NODE24_MIN_MAJOR[repo]} or later)")
     return out
 
 
@@ -335,7 +357,9 @@ def main() -> int:
                 continue
             notes.append("ci-status staged")
 
-        hard = hardening_violations(doc)
+        with open(p, encoding="utf-8") as fh:
+            raw = fh.read()
+        hard = hardening_violations(doc, raw)
         if hard:
             for h in hard:
                 bad.append(f"{p}: GHA-HARDENING-1 -- {h}")
