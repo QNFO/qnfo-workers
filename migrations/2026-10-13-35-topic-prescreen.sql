@@ -1,8 +1,31 @@
 -- APPLY-BY: ci
 -- DB: qnfo-audit
--- Rollback: DELETE FROM decision_log WHERE instr(action, 'COMPANION-TOPIC-PRESCREEN-20261013:') = 1 OR instr(action, 'CP-EARLY-MERGE-1153:') = 1
+-- Rollback: DELETE FROM decision_log WHERE instr(action, 'COMPANION-TOPIC-PRESCREEN-20261013:') = 1 OR instr(action, 'CP-EARLY-MERGE-1153:') = 1 OR instr(action, 'PROPOSAL-HEADROOM-1:') = 1; DELETE FROM remediation_contracts WHERE class = 'fm-producer-batch-overshoots-backpressure'; DELETE FROM failure_modes WHERE fm_key = 'producer-batch-overshoots-backpressure' (the issue-2489 probe keeps its new text; its birth probe is in remediation_verifications history)
 -- Decisions for personal-companion 1.21.6 (TOPIC-PRESCREEN-1, LEDE-PRUNE-EXTEND-1) and for merging control-plane PR 1153 ahead of the
--- stale-PR lane (pillars personal and autonomy; DOCTRINE-1 decision_log with predictions).
+-- stale-PR lane (pillars personal and autonomy; DOCTRINE-1 decision_log with predictions), and idea-hub 1.8.6 PROPOSAL-HEADROOM-1 for the owner
+-- task agent_issues 2489 ("Idea intake -> triage stuck with backpressure: 35 waiting (new <= 30)"): the failure mode, its d1-query detector,
+-- the issue's closing probe (the chain's own limit) and the decision.
+INSERT OR IGNORE INTO failure_modes (fm_key, failure_mode, root_cause, remediation, detector, probe_class, first_seen, issue_id, trigger_condition, symptom, blast_radius) VALUES
+ ('producer-batch-overshoots-backpressure', 'the idea triage queue sits above its integration-chain limit (new <= 30) although every producer obeys backpressure',
+  'each idea-hub batch producer checked only that the queue was at or under PROPOSAL_BACKPRESSURE (30) and then added a whole batch (re-entry up to 6 questions, ask gaps up to ASK_GAP_BATCH, notebook up to OWNER_CORPUS_BATCH), while triage takes 5 a cycle; auto-reentry and owner-corpus added about 6 an hour on 2026-10-13',
+  'PROPOSAL-HEADROOM-1 (idea-hub 1.8.6): the batch producers fill the queue only up to PROPOSAL_FILL_TO (25), counting what the same cycle added; a signal is consumed whole or left new',
+  'idea_proposals new and deferred_budget at or under 30', 'fm-producer-batch-overshoots-backpressure', '2026-10-13', 2489,
+  'producers adding more per cycle than triage takes', 'owner task op-mv6meusn21b1: Idea intake -> triage 35 waiting (new <= 30)', 'the idea intake chain and the owner''s notebook intake');
+INSERT OR IGNORE INTO remediation_contracts (class, issue_id, precondition, action, verify_probe, verify_transport, max_attempts, escalate_to, expected_cadence_h, status, module, budget_ms, max_items, requires_container, next_due_at) VALUES
+ ('fm-producer-batch-overshoots-backpressure', NULL, 'PROPOSAL-HEADROOM-1', 'failure-mode detector',
+  'SELECT ''0'' AS expected, CASE WHEN (SELECT COUNT(*) FROM idea_proposals WHERE status IN (''new'', ''deferred_budget'')) <= 30 THEN ''0'' ELSE CAST((SELECT COUNT(*) FROM idea_proposals WHERE status IN (''new'', ''deferred_budget'')) AS TEXT) END AS observed',
+  'd1-query', 3, 'qnfo-fleet-control', 1, 'active', 'failure-mode', 45000, 5, 0, datetime('now'));
+UPDATE remediation_contracts SET verify_transport = 'd1-query',
+  verify_probe = 'SELECT ''0'' AS expected, CASE WHEN (SELECT COUNT(*) FROM idea_proposals WHERE status IN (''new'', ''deferred_budget'')) <= 30 THEN ''0'' ELSE CAST((SELECT COUNT(*) FROM idea_proposals WHERE status IN (''new'', ''deferred_budget'')) AS TEXT) END AS observed'
+WHERE class = 'issue-2489';
+INSERT INTO decision_log (actor, assumption, action, evidence, outcome, blast_radius, rollback_path, capability_gain, predicted_outcome, reach_gain, surfaces_tested)
+SELECT 'session_01Kddqwk5gQT5qSSHVKjT2EA', 'backpressure that checks a threshold and then adds a whole batch overshoots the threshold by the batch; producers must fill to a level, not past it',
+  'PROPOSAL-HEADROOM-1: idea-hub 1.8.6 batch producers (re-entry, ask gaps, owner notebook) fill the triage queue only up to 25; triage speed is unchanged, because accepted ideas already wait in research_queue deferred (173 against a target of 60)',
+  'idea_proposals new 31 at 15:30 UTC, oldest 09:01; producers since 2026-10-12 15:00: auto-reentry 84, owner-corpus 59; idea-triage-budget 14:36 UTC: 5 triaged; research_deferred_pool 173',
+  'merged through the canonical path', 'the idea intake producers', 'revert of idea-hub 1.8.6',
+  'the intake chain stays inside its limit without dropping an idea', 'idea_proposals new + deferred_budget reads 30 or less at every hourly read from the second ideation cycle after the deploy for 24 h, and agent_issues 2489 closes on its probe', 'none',
+  'd1:idea_proposals, cloud_ops_events idea-triage-budget, research_queue; code:idea-hub runConsume, runAskGap, runOwnerCorpus, ideationCycle'
+WHERE NOT EXISTS (SELECT 1 FROM decision_log WHERE instr(action, 'PROPOSAL-HEADROOM-1:') = 1);
 INSERT INTO decision_log (actor, assumption, action, evidence, outcome, blast_radius, rollback_path, capability_gain, predicted_outcome, reach_gain, surfaces_tested)
 SELECT 'session_01Kddqwk5gQT5qSSHVKjT2EA', 'a systems analysis can only be grounded on a subject whose source names parties making choices; the topic picker must see enough candidates to find one, and a draft the fact-check has already cleaned is worth repairing',
   'COMPANION-TOPIC-PRESCREEN-20261013: personal-companion 1.21.6 TOPIC-PRESCREEN-1 (intros of 20 random articles screened in one request, best-fitting read in full first) and LEDE-PRUNE-EXTEND-1 (a fact-pruned draft blocked only by length and/or a lede without the subject is extended and given a subject-naming lede)',
