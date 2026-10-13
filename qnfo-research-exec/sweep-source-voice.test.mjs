@@ -29,6 +29,7 @@ const ins = lp.prepare("INSERT INTO papers VALUES (?,?,?,?, 'published')");
 ins.run("meta-paper", "Meta", null, META);
 ins.run("clean-paper", "Clean", "A stored abstract that is long enough to keep as it is.", CLEAN);
 ins.run("hand-written", "Hand", null, META);
+ins.run("raw-prefix", "Raw", "A Paper ## Abstract **Author:** Rowan Brad Quni-Gudzinas We derive a bound", META);
 const audit = new DatabaseSync(":memory:");
 audit.exec(`CREATE TABLE research_queue (id TEXT PRIMARY KEY, source TEXT, source_id TEXT, idea TEXT, summary TEXT, score REAL, decision TEXT, status TEXT, paper_slug TEXT, created_at TEXT, stage TEXT, attempt INTEGER, revise_count INTEGER, recover_count INTEGER);
 CREATE TABLE cloud_ops_events (id TEXT, ts TEXT, kind TEXT, text TEXT, meta TEXT, job TEXT, status TEXT);
@@ -36,7 +37,7 @@ INSERT INTO research_queue (id, source, idea, status, paper_slug, created_at) VA
 const env = { LIVING_PAPER: d1(lp), QNFO_AUDIT: d1(audit) };
 
 const out = await completenessSweep(env);
-assert.equal(out.rules, "complete+cite-fulltext-3");
+assert.match(out.rules, /cite-fulltext-3/);
 assert.equal(out.queued, 1, "only the pipeline paper with input commentary is queued");
 assert.deepEqual(out.slugs, ["meta-paper"]);
 const rem = audit.prepare("SELECT * FROM research_queue WHERE source = 'remediation'").get();
@@ -47,7 +48,11 @@ const ab = (slug) => lp.prepare("SELECT abstract FROM papers WHERE slug = ?").ge
 assert.match(ab("meta-paper"), /^We derive a bound of 3 on the carry depth\./, "a NULL abstract is filled from the body's Abstract section");
 assert.match(ab("hand-written"), /^We derive a bound of 3/, "a hand-written paper's abstract is filled too");
 assert.equal(ab("clean-paper"), "A stored abstract that is long enough to keep as it is.", "a stored abstract is never replaced");
-assert.equal(out.abstractsFilled, 2); assert.deepEqual(out.abstractSlugs.sort(), ["hand-written", "meta-paper"]);
+assert.match(ab("raw-prefix"), /^We derive a bound of 3/, "ABSTRACT-CLEAN-1: a raw-prefix abstract is repaired");
+const bak = lp.prepare("SELECT slug, old_abstract, new_abstract FROM abstract_repair_bak").all();
+assert.equal(bak.length, 1, "only the replaced (non-empty) abstract is backed up");
+assert.equal(bak[0].slug, "raw-prefix"); assert.match(bak[0].old_abstract, /\*\*Author:\*\*/);
+assert.equal(out.abstractsFilled, 3); assert.deepEqual(out.abstractSlugs.sort(), ["hand-written", "meta-paper", "raw-prefix"]);
 const again = await completenessSweep(env);
 assert.equal(again.queued, 0, "an open remediation row is not queued twice"); assert.equal(again.abstractsFilled, 0, "a filled abstract is not rewritten");
 

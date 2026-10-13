@@ -1,0 +1,41 @@
+// ABSTRACT-CLEAN-1 offline suite (qnfo-research-exec 0.17.1, agent_issues 2485). Fixtures are the openings of five published
+// living-paper bodies (2026-10-13) whose stored abstract was a raw body prefix. Proves bodySummary returns their first prose,
+// with no heading, metadata, link, subtitle or front matter, and that abstractNeedsRepair tells a raw prefix from an abstract.
+// Run: node qnfo-research-exec/abstract-clean.test.mjs
+import { bodySummary, abstractNeedsRepair, corpusSummary } from "./worker.js";
+let pass = 0, fail = 0;
+const ok = (c, m, x) => { if (c) pass++; else { fail++; console.log("FAIL " + m + (x !== undefined ? " :: " + JSON.stringify(x).slice(0, 300) : "")); } };
+const F = {
+  info: "***[A New Way of\nSeeing](_New%20Way%20of%20Seeing.md)***\n\n## Chapter 9: Information\nRe-Founded\n\n*From Autaxic Distinctions and Relational Processing to Emergent\nSignificance*\n\n### Beyond\nShannon and Subjectivity–The Quest for an Ontologically Grounded Theory\nof Information\n\n#### The\nAmbiguity of “Information”: A Concept at the Crossroads\n\nThe concept of “information” permeates contemporary discourse, from\nphysics and biology to computer science and philosophy, yet it remains\nremarkably elusive and multifaceted. Dominant conceptions often address\ndistinct aspects without necessarily forming a unified ontological\npicture. **Shannon information**, for instance,\nfoundational to communication theory, brilliantly quantifies uncertainty\nreduction.\n",
+  gauss: "## Mathematical\nStructures Underlying Physical Laws and Statistical Phenomena\n\n### The\nGaussian Archetype as Fundamental Structure of Physical Reality\n\n**Author:** Rowan Brad Quni-Gudzinas\n**Affiliation:** QNFO **Contact:**\nrowan.quni@qnfo.org **ORCID:** 0009-0002-4317-5604\n**ISNI:** 0000 0005 2645 6062 **DOI**:\nhttps://papers.qnfo.org/papers/mathematical-structures/ **Publication Date:** 2025-09-24\n**Version**: 1.0\n\nThis work addresses the foundational schism in modern physics, which\narises from the perceived incompatibility between classical continuous,\ndeterministic reality and quantum discrete, probabilistic phenomena. The\nPost-Quantum Synthesis (PQS) framework resolves this by asserting that\nthe universe is fundamentally continuous, local, and deterministic.\n",
+  ontology: "# Formal\nOntology of Distinction and Invariance\n\n## A\nSyntactic Token Calculus as the Foundation of Reality\n\n**Author:** Rowan Brad Quni-Gudzinas\n**Contact:** [rowan.quni@outlook.com](mailto:rowan.quni@outlook.com)\n**ORCID:** [0009-0002-4317-5604](http://orcid.org/0009-0002-4317-5604)\n**Date:** 2026-04-11 **Version:** 1.1\n\n**Abstract**: This document presents the complete,\nself-compliant synthesis of the Ontic Relational Patternism framework.\nStarting from a single primitive syntactic token—the\n**mark**—and three context-closed reduction rules (Calling,\nCrossing, Void), we derive a purely relational universe where the\n**cross-ratio** is the sole invariant.\n\nThe web of these invariants partitions into nested equivalence\nclasses, creating an **ultrametric clustering** analogous\nto a Bruhat–Tits tree.\n",
+  stc: "# Syntactic Token Calculus\n\n## Module 9:\nObserver Theory: Monna Projection & Entropy\n\n**Author:** Rowan Brad Quni-Gudzinas\n\n**Contact:** [rowan.quni@outlook.com](mailto:rowan.quni@outlook.com)\n\n**ORCID:** [0009-0002-4317-5604](http://orcid.org/0009-0002-4317-5604)\n\n**Date:** 2026-04-13 **Version:** 1.6\n\n## Objective\n\nFormalize the observer as a self-enclosing boundary that applies a\nfinite-resolution truncation to the infinite syntactic web. Model\nthermodynamics, the arrow of time, and quantum decoherence as epistemic\nartifacts of lossy boundary projection.\n",
+  geo: "# Geometric Physics\n\n**Mathematical Frameworks for Physical Description**\n\n## 1. Introduction\n\nMathematics serves as the fundamental language through which the\nintricate laws and diverse phenomena of the physical universe are\narticulated, modeled, and predicted. The selection of mathematical tools\nis not a trivial matter; it profoundly shapes our comprehension of\nreality.\n",
+  yaml: "---\ntitle: \"A Paper\"\nauthor: \"R\"\n---\n\n## Abstract\n\nWe prove that every computable real has a computable modulus of convergence and give the bound in closed form for the dyadic case.\n\n## 1. Introduction\n\nIntro."
+};
+const S = Object.fromEntries(Object.entries(F).map(([k, v]) => [k, bodySummary(v, 1200)]));
+const clean = (t) => !/#|\*\*|\]\(|Author:|ORCID|Contact:|^---|title:/.test(t);
+for (const [k, t] of Object.entries(S)) ok(clean(t) && t.length >= 80, k + ": summary is clean prose", t);
+ok(S.info.startsWith("The concept of “information” permeates"), "a link line, chapter heading, italic subtitle and subheadings are skipped", S.info);
+ok(S.info.includes("Shannon information, for instance"), "bold emphasis inside prose is unwrapped", S.info);
+ok(S.gauss.startsWith("This work addresses the foundational schism"), "a wrapped heading and a metadata block are skipped", S.gauss);
+ok(S.ontology.startsWith("This document presents the complete, self-compliant synthesis"), "an inline **Abstract**: label starts the summary", S.ontology);
+ok(S.stc.startsWith("Formalize the observer as a self-enclosing boundary"), "the first prose paragraph after metadata", S.stc);
+ok(S.geo.startsWith("Mathematics serves as the fundamental language"), "a bold subtitle and '## 1. Introduction' are skipped (the 0.17.0 backfill kept the heading)", S.geo);
+ok(S.yaml.startsWith("We prove that every computable real"), "YAML front matter is skipped and the Abstract section used", S.yaml);
+// abstractNeedsRepair
+for (const raw of ["Ontology of Distinction and Invariance ## A Syntactic Token Calculus as the Foundation of Reality **Author:** Rowan Brad Quni-Gudzinas", "## Module 9: Observer Theory: Monna Projection & Entropy **Author:** Rowan", "***[A New Way of Seeing](_New%20Way%20of%20Seeing.md)*** ## Chapter 9", "## 1. Introduction Mathematics serves as the fundamental language through which", "", null, "short"])
+  ok(abstractNeedsRepair(raw) === true, "needs repair: " + String(raw).slice(0, 40));
+for (const good of ["Zitterbewegung (ZBW) — the trembling motion of a Dirac wave packet at angular frequency $\\omega = 2mc^{2}/\\hbar$ — is conventionally treated as an interference artifact.", "Current joules-per-compute (JPCUB) benchmarks normalize energy consumption per physical gate, conflating logical operations with error-correction overhead. #1 priority is clear."])
+  ok(abstractNeedsRepair(good) === false, "a prose abstract stays: " + good.slice(0, 40));
+ok(corpusSummary("## Module 9: Observer Theory **Author:** R", F.stc).startsWith("Formalize the observer"), "corpusSummary replaces a raw-prefix abstract with the body's prose");
+ok(corpusSummary("A stored prose abstract that is long enough to be kept as it is.", F.stc) === "A stored prose abstract that is long enough to be kept as it is.", "corpusSummary keeps a prose abstract");
+// CodeQL alerts 404/405 (PR 1116): the link-only check must stay linear on adversarial input.
+{
+  const evil = "[]()" + "*[]()".repeat(30000) + "!\n\nA prose paragraph long enough to count as the summary of this body, with plenty of letters in it.";
+  const t0 = Date.now(); const out = bodySummary(evil, 1200);
+  ok(Date.now() - t0 < 2000, "bodySummary is linear on a link-repetition string", Date.now() - t0);
+  ok(out.startsWith("A prose paragraph"), "and still finds the prose", out.slice(0, 60));
+}
+console.log(pass + " passed, " + fail + " failed");
+process.exit(fail ? 1 : 0);
