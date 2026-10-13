@@ -1,5 +1,5 @@
 {
-  "audited_at": "2026-10-13 21:56:35",
+  "audited_at": "2026-10-13 22:26:30",
   "d1_write_failures": [],
   "d1_writes_ok": 115,
   "guard": {
@@ -533,27 +533,27 @@
     "sync_workers": [
       {
         "dir": "idea-hub",
-        "version": "1.9.0-novelty-screen",
+        "version": "1.10.0-topic-clusters-derived",
         "worker": "idea-hub"
       },
       {
         "dir": "personal-api",
-        "version": "4.9.0-cron-heartbeat",
+        "version": "4.9.1-log-catches",
         "worker": "personal-api"
       },
       {
         "dir": "personal-companion",
-        "version": "1.23.0-reframe-repair",
+        "version": "1.23.1-analysis-remark",
         "worker": "personal-companion"
       },
       {
         "dir": "q08-signal-engine",
-        "version": "0.25.0",
+        "version": "0.25.1-log-catches",
         "worker": "q08-signal-engine"
       },
       {
         "dir": "qnfo-ai",
-        "version": "5.36.1-kernel-reply",
+        "version": "5.36.2-log-catches",
         "worker": "qnfo-ai"
       },
       {
@@ -568,7 +568,7 @@
       },
       {
         "dir": "qnfo-cloud-ops",
-        "version": "1.27.1-probe-cadence-30m",
+        "version": "1.28.0-topic-clusters-derived",
         "worker": "qnfo-cloud-ops"
       },
       {
@@ -583,17 +583,17 @@
       },
       {
         "dir": "qnfo-deploy-guard",
-        "version": "1.3.25-second-path-canonical",
+        "version": "1.3.26-log-catches",
         "worker": "qnfo-deploy-guard"
       },
       {
         "dir": "qnfo-email",
-        "version": "2.9.0-email-tick",
+        "version": "2.9.1-log-catches",
         "worker": "qnfo-email"
       },
       {
         "dir": "qnfo-fleet-control",
-        "version": "0.26.2-remediation-2x",
+        "version": "0.26.3-log-catches",
         "worker": "qnfo-fleet-control"
       },
       {
@@ -638,7 +638,7 @@
       },
       {
         "dir": "qnfo-ops",
-        "version": "2.47.1-cron-heartbeat",
+        "version": "2.47.2-log-catches",
         "worker": "qnfo-ops"
       },
       {
@@ -653,7 +653,7 @@
       },
       {
         "dir": "qnfo-social",
-        "version": "0.14.0-utm-credit",
+        "version": "0.14.1-log-catches",
         "worker": "qnfo-social"
       },
       {
@@ -779,9 +779,9 @@
       "worker": "funding"
     },
     "idea-hub": {
-      "before": "1.9.0-novelty-screen",
+      "before": "1.10.0-topic-clusters-derived",
       "http": 200,
-      "live": "1.9.0-novelty-screen",
+      "live": "1.10.0-topic-clusters-derived",
       "match": 1,
       "note": "SYNC",
       "worker": "idea-hub"
@@ -892,17 +892,17 @@
       "worker": "papers"
     },
     "personal-api": {
-      "before": "4.9.0-cron-heartbeat",
+      "before": "4.9.1-log-catches",
       "http": 200,
-      "live": "4.9.0-cron-heartbeat",
+      "live": "4.9.1-log-catches",
       "match": 1,
       "note": "SYNC",
       "worker": "personal-api"
     },
     "personal-companion": {
-      "before": "1.23.0-reframe-repair",
+      "before": "1.23.1-analysis-remark",
       "http": 200,
-      "live": "1.23.0-reframe-repair",
+      "live": "1.23.1-analysis-remark",
       "match": 1,
       "note": "SYNC",
       "worker": "personal-companion"
@@ -944,9 +944,9 @@
       "worker": "personal-life-search"
     },
     "q08-signal-engine": {
-      "before": "0.25.0",
+      "before": "0.25.1-log-catches",
       "http": 200,
-      "live": "0.25.0",
+      "live": "0.25.1-log-catches",
       "match": 1,
       "note": "SYNC",
       "worker": "q08-signal-engine"
@@ -979,9 +979,9 @@
       "worker": "qnfo-agent-ws"
     },
     "qnfo-ai": {
-      "before": "5.36.1-kernel-reply",
+      "before": "5.36.2-log-catches",
       "http": 200,
-      "live": "5.36.1-kernel-reply",
+      "live": "5.36.2-log-catches",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-ai"
@@ -1129,9 +1129,9 @@
       "worker": "qnfo-citation-watch"
     },
     "qnfo-cloud-ops": {
-      "before": "1.27.1-probe-cadence-30m",
+      "before": "1.28.0-topic-clusters-derived",
       "http": 200,
-      "live": "1.27.1-probe-cadence-30m",
+      "live": "1.28.0-topic-clusters-derived",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-cloud-ops"
@@ -1171,17 +1171,17 @@
       "worker": "qnfo-ddocs-indexer"
     },
     "qnfo-deploy-guard": {
-      "before": "1.3.25-second-path-canonical",
+      "before": "1.3.26-log-catches",
       "http": 200,
-      "live": "1.3.25-second-path-canonical",
+      "live": "1.3.26-log-catches",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-deploy-guard"
     },
     "qnfo-email": {
-      "before": "2.9.0-email-tick",
+      "before": "2.9.1-log-catches",
       "http": 200,
-      "live": "2.9.0-email-tick",
+      "live": "2.9.1-log-catches",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-email"
@@ -1268,9 +1268,9 @@
       "worker": "qnfo-fleet-calibrator"
     },
     "qnfo-fleet-control": {
-      "before": "0.26.2-remediation-2x",
+      "before": "0.26.3-log-catches",
       "http": 200,
-      "live": "0.26.2-remediation-2x",
+      "live": "0.26.3-log-catches",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-fleet-control"
@@ -1412,9 +1412,9 @@
       "worker": "qnfo-observability"
     },
     "qnfo-ops": {
-      "before": "2.47.1-cron-heartbeat",
+      "before": "2.47.2-log-catches",
       "http": 200,
-      "live": "2.47.1-cron-heartbeat",
+      "live": "2.47.2-log-catches",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-ops"
@@ -1562,9 +1562,9 @@
       "worker": "qnfo-skills-discovery"
     },
     "qnfo-social": {
-      "before": "0.14.0-utm-credit",
+      "before": "0.14.1-log-catches",
       "http": 200,
-      "live": "0.14.0-utm-credit",
+      "live": "0.14.1-log-catches",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-social"
