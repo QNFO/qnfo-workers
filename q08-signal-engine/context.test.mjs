@@ -35,7 +35,7 @@ const sp = V.splitFactItems([
 check("FACT items whose reason calls them analysis or interpretation are reasoning", sp.inferences.length === 2, sp);
 check("a figure and a named outlet stay FACTs even with an 'analysis' reason", sp.facts.length === 2, sp);
 const src = (await import("node:fs")).readFileSync(new URL("./worker.js", import.meta.url), "utf8");
-check("the fact-check reads the larger ground", /String\(ground\)\.slice\(0, FACTCHECK_GROUND_MAX\)/.test(src) && /var FACTCHECK_GROUND_MAX = 24000/.test(src));
+check("the fact-check reads the larger ground", /String\(ground\)\.slice\(0, FACTCHECK_GROUND_MAX\)/.test(src) && Number((src.match(/var FACTCHECK_GROUND_MAX = (\d+)/) || [])[1]) >= 24000);
 check("generate passes the pack to the writer and to the fact-check ground", /var background = await backgroundPack\(story\);/.test(src) && /labelledGround\(story, friction, article, background, ownerNotes\)/.test(src));
 // Q08-SOURCE-GROUND-1 (0.19.1, run 377)
 {
@@ -57,5 +57,9 @@ check("generate passes the pack to the writer and to the fact-check ground", /va
   const o3 = O.orderCandidates([{ source: "github", id: "g" }, { source: "github", id: "h" }], "github").map((x) => x.id);
   check("with only repositories, they are still used", JSON.stringify(o3) === JSON.stringify(["g", "h"]), o3);
 }
+// Q08-TECH-SYSTEMS-1 (0.23.0): the analysis is a technical system breakdown, and the readers judge it as one
+check("the directive asks for components, data flow, the design decision and the trade-off", /Name the components involved/.test(L.Q08_DIRECTIVE) && /how data, requests or control move between them/.test(L.Q08_DIRECTIVE) && /design decision, default, constraint or assumption/.test(L.Q08_DIRECTIVE) && /trade-off/.test(L.Q08_DIRECTIVE));
+check("the directive no longer says 'no required arc' beside the required structure", !/No required arc/.test(L.Q08_DIRECTIVE));
+check("readers judge how the technology works", /how the technology involved works/.test(L.READER_PROMPT));
 console.log("context.test.mjs: " + passes + " passed, " + fails + " failed");
 process.exit(fails ? 1 : 0);
