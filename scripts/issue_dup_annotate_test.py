@@ -120,10 +120,21 @@ con.execute("INSERT INTO agent_issues (title, source) VALUES ('NEW-ISSUE-1', 'y'
 ok(con.execute("SELECT COUNT(*) FROM agent_issues WHERE title = 'NEW-ISSUE-1' AND status = 'open'").fetchone()[0] == 1,
    "a recently closed title is still reopened by issue_refile_reopen")
 
+FIX = os.path.join(HERE, "..", "migrations", "2026-10-13-fm-issue-dup-abort-probe.sql")
+opted, problems, _ = M.plan(FIX, open(FIX, encoding="utf-8").read())
+ok(opted and not problems, "the probe fix passes apply_migrations --check", problems)
+apply(con, FIX)
+
+# FM-PROBE-ISO-COMPARE-1: migration_runs.applied_at is ISO ('...T...Z'), as apply_migrations.py writes it. A failure earlier
+# the same day but more than 24 h ago must not count; the first probe compared it as text and counted it.
 probe = con.execute("SELECT verify_probe FROM remediation_contracts WHERE class = 'fm-issue-dup-abort'").fetchone()[0]
+err = "UNIQUE constraint failed: index ''idx_agent_issues_open_title_ci''"
+con.execute("INSERT INTO migration_runs (file, status, error, applied_at) VALUES ('old', 'error', '" + err + "', "
+            "strftime('%Y-%m-%dT%H:%M:%SZ', 'now', '-30 hours'))")
 exp, obs = con.execute(probe).fetchone()
-ok(exp == obs == "1", "the fm-issue-dup-abort detector passes on the replica", (exp, obs))
-con.execute("INSERT INTO migration_runs (file, status, error, applied_at) VALUES ('x', 'error', 'UNIQUE constraint failed: index ''idx_agent_issues_open_title_ci''', datetime('now'))")
+ok(exp == obs == "1", "the fm-issue-dup-abort detector passes with only an ISO-stamped failure older than 24 h", (exp, obs))
+con.execute("INSERT INTO migration_runs (file, status, error, applied_at) VALUES ('new', 'error', '" + err + "', "
+            "strftime('%Y-%m-%dT%H:%M:%SZ', 'now', '-1 hours'))")
 exp, obs = con.execute(probe).fetchone()
 ok(exp == "1" and obs == "0", "and fails on a fresh migration failure on the open-title index", (exp, obs))
 
