@@ -110,6 +110,7 @@ def _local_https():
         return None
     srv = http.server.ThreadingHTTPServer(("127.0.0.1", 0), _H)
     sctx = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+    sctx.minimum_version = ssl.TLSVersion.TLSv1_2
     sctx.load_cert_chain(crt, key)
     srv.socket = sctx.wrap_socket(srv.socket, server_side=True)
     threading.Thread(target=srv.serve_forever, daemon=True).start()

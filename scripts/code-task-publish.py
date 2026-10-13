@@ -335,6 +335,33 @@ def suite_check(repo_dir, files, base):
     return suite_feedback(new)
 
 
+# PUBLISH-STANDARDS-CHECK-1 (2026-10-13, failure mode code-task-dies-at-ci). ct_j25aciskebfq1f (qnfo-fleet-dashboard, GA4-READ-1)
+# passed the parse, migration and suite checks here and died at CI on "WORKERS-STANDARDS-GUARD-1: 1 violation(s) added by this
+# change: ... [swallowed-catch]": the publisher ran every check deploy-gate runs except the standards guard. It now runs
+# scripts/workers_standards_guard.py against the base on the patched tree, and a violation the change added sends the task back
+# to propose with the guard's lines, never to a pull request. The guard reports only lines this change added, so a violation
+# already on the base is never blamed on it. A missing guard (an old checkout) skips the check and leaves it to CI.
+STANDARDS_FEEDBACK_LINES = 6
+
+
+def standards_check(repo_dir, files, base):
+    """None when the standards guard finds no violation added by the patched worker files; else the feedback for the model."""
+    if not any(re.fullmatch(r"[^/]+/(worker\.js|wrangler\.(toml|jsonc))", f) for f in files):
+        return None
+    guard = os.path.join(repo_dir, "scripts", "workers_standards_guard.py")
+    if not os.path.isfile(guard):
+        return None
+    try:
+        r = subprocess.run([sys.executable, guard, "origin/" + base], cwd=repo_dir, capture_output=True, text=True, timeout=120)
+    except subprocess.TimeoutExpired:
+        return None
+    out = (r.stdout or "") + (r.stderr or "")
+    if "violation(s) added by this change" not in out:
+        return None
+    lines = [ln.strip() for ln in out.splitlines() if re.match(r"^\s+\S+:\d+ \[", ln)]
+    return ("STANDARDS " + " ; ".join(lines[:STANDARDS_FEEDBACK_LINES]))[:900]
+
+
 # MULTI-FILE-CODE-TASKS-1 (2026-10-12, agent_issues 2074): a task may carry companion files beside its own path. The
 # orchestrator lists the ones its patch changes in ctx.paths; the rule it applied is repeated here, so a row written by
 # anything else cannot widen what a code-loop branch touches: a companion is a migrations/<name>.sql or a file in the task
@@ -412,6 +439,7 @@ def requeue_for_syntax(store, tid, err):
     """Send a task whose patch does not parse back to the orchestrator's propose step with the parser's message."""
     lang = "the migration does not pass the CI header check (scripts/apply_migrations.py --check): " if err.startswith("MIGRATION ") else \
         "the worker's suites fail after applying the edits and pass on main without them (PUBLISH-SUITE-CHECK-1); keep the change and fix what these tests assert: " if err.startswith("FAIL ") else \
+        "the Workers standards guard refuses lines the edits added (PUBLISH-STANDARDS-CHECK-1); keep the change and fix each one (a swallowed catch logs with console.error(JSON.stringify({...})), never an empty body): " if err.startswith("STANDARDS ") else \
         "Python does not parse after applying the edits (compile, PUBLISH-PY-CHECK-1): " if "SyntaxError" in err and ".py:" in err else \
         "JavaScript does not parse after applying the edits (node --check, PUBLISH-JS-CHECK-1): "
     msg = (lang + err)[:1200]
@@ -616,7 +644,8 @@ def publish_one(task, repo_dir, base, pr, delegate=False):
         if ctx.get("verify_deferred") and any(f.endswith((".js", ".mjs")) for f in files) and not shutil.which("node"):
             git(repo_dir, "reset", "-q", "--hard")
             return "publish_failed", None, "the orchestrator deferred this task's JavaScript verify to the publisher, and node is not installed here", None
-        bad = js_syntax_errors(repo_dir, sorted(files)) or migration_errors(repo_dir, sorted(files)) or suite_check(repo_dir, sorted(files), base)
+        bad = js_syntax_errors(repo_dir, sorted(files)) or migration_errors(repo_dir, sorted(files)) or suite_check(repo_dir, sorted(files), base) \
+            or standards_check(repo_dir, sorted(files), base)
         if bad:
             git(repo_dir, "reset", "-q", "--hard")
             git(repo_dir, "clean", "-qfd")
@@ -1114,6 +1143,27 @@ def selftest():
         check("suite check: shared paths are left to CI", suite_check(sroot, ["scripts/x.py"], "main") is None)
     else:
         print("SKIP suite check selftest: node 22+ not installed")
+
+    # 7b2. PUBLISH-STANDARDS-CHECK-1: a swallowed catch the edit adds comes back as feedback; an untouched worker passes
+    groot = tempfile.mkdtemp(prefix="ctp-std-")
+    _sh(groot, "git", "init", "-q", "-b", "main")
+    os.makedirs(os.path.join(groot, "w"))
+    os.makedirs(os.path.join(groot, "scripts"))
+    here = os.path.dirname(os.path.abspath(__file__))
+    for f in ("workers_standards_guard.py", "workers-standards-allowlist.txt"):
+        if os.path.isfile(os.path.join(here, f)):
+            shutil.copyfile(os.path.join(here, f), os.path.join(groot, "scripts", f))
+    with open(os.path.join(groot, "w/worker.js"), "w") as fh:
+        fh.write("export default { async fetch() { return new Response('ok'); } };\n")
+    _sh(groot, "git", "add", "-A")
+    _sh(groot, "git", "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "-m", "init")
+    _sh(groot, "git", "update-ref", "refs/remotes/origin/main", "HEAD")
+    check("standards check: an unchanged worker passes", standards_check(groot, ["w/worker.js"], "main") is None)
+    with open(os.path.join(groot, "w/worker.js"), "w") as fh:
+        fh.write("export default { async fetch() { try { await fetch('https://x'); } catch (e) {} return new Response('ok'); } };\n")
+    fb = standards_check(groot, ["w/worker.js"], "main")
+    check("standards check: a swallowed catch the edit adds is fed back with the guard's line", fb is not None and fb.startswith("STANDARDS ") and "swallowed-catch" in fb, fb)
+    check("standards check: a task with no worker or wrangler file is left to CI", standards_check(groot, ["scripts/x.py"], "main") is None)
 
     # 7c. a rebuild takes the patch bump even when the goal named a VERSION (the merge runner rebuilds with the same rule)
     check("bump_version takes no wanted version: the rebuild is the patch bump the merge runner expects",
