@@ -176,6 +176,11 @@ because each one was broken at least once; the linked issue holds the evidence.
   by age, not by count. The D1 trigger `queue_sla_tick_10m` runs the fixes every 10 minutes off the fleet cron heartbeat
   and logs each to `queue_sla_actions`; `ops_config queue_sla_autofix = off` stops the fixes, not the measurement.
   Metrics `stuck_items_over_sla` (target 0) and `issues_unprobed_60m` (target <= 10) file their own issues.
+- Owner directive 2026-10-13 (ISSUE-SLA-2H-1): open issues for definition-of-done success criteria 0 with every fleet system
+  green; every open issue resolved, deployed and closed within 24 hours, and server-side within 2 hours of opening, at a minimum
+  of 1.5x accumulation. Measured as `open_agent_issues` (target 0), `issues_open_over_24h` (0), `issue_drain_ratio_24h` (>= 1.5)
+  and `issue_auto_close_2h_share_24h` (1.0), each with its trigger (migrations/2026-10-13-issue-sla-2h.sql). A finding that is not
+  a defect (a roadmap item, a report) belongs in `goals` or `objective_space` with the successor id, never closed as wontfix.
 - Every open issue's remediation contract is due hourly (trigger `remediation_contracts_cadence_1h_ai`). A new queue, status
   or loop that can hold items adds its `queue_sla` row and its `v_stuck_summary` column, with an automatic fix and its revert,
   in the PR that creates it. A chain or guard that checks only a count is incomplete: add the age of the oldest item.
