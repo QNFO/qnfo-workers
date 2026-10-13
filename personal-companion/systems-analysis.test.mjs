@@ -99,7 +99,8 @@ ok(/never state an inferred arrangement, funding, motive or behaviour as a repor
   const w2 = V.critiqueWorst({ specificity: 8, argument: 3, voice: 8, grounding: 9 }, "essay");
   ok(w2.missing === true && w2.worst === 0, "a missing gating score fails closed", w2);
   const loop = src.slice(src.indexOf("async function generate("), src.indexOf("var CRON_TABLE"));
-  const a = loop.indexOf("if (worst < floorForForm && worstName === \"grounding\") {"), b = loop.indexOf("var crit2 = await critiquePiece(env, cpr.piece, form, ground);"), c = loop.indexOf("if (worst < floorForForm) {"), d = loop.indexOf("await logRun(env, form, model, topic.id, \"stage\", \"fact-check\"");
+  const a = loop.indexOf("for (var cround = 1; cround <= CRITIC_PRUNE_ROUNDS && worst < floorForForm && worstName === \"grounding\"; cround++) {"), b = loop.indexOf("var crit2 = await critiquePiece(env, cpr.piece, form, ground);"), c = loop.indexOf("if (worst < floorForForm) {"), d = loop.indexOf("await logRun(env, form, model, topic.id, \"stage\", \"fact-check\"");
+  ok(V.CRITIC_PRUNE_ROUNDS === 3, "CRITIC-PRUNE-2: up to three critic prune rounds");
   ok(a > 0 && b > a && c > b && d > c, "the critic prune runs before the rejection and before the fact-check", { a, b, c, d });
 }
 console.log(pass + " passed, " + fail + " failed");
