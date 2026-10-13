@@ -20,6 +20,8 @@ ok(/introducing no name, date, number, event or quotation the source material do
 ok(/^systems: /m.test(P.P_CRITIQUE) && /A retelling scores at most 3/.test(P.P_CRITIQUE) && /"systems":n/.test(P.P_CRITIQUE), "the critic scores systems and returns it");
 ok(/var dims = form === "notes" \? \["specificity", "argument", "voice", "systems"\] : \["specificity", "argument", "objection", "voice", "systems"\];/.test(src), "the systems score gates every form");
 ok(/NOT violations: analysis and interpretation the writer frames as such/.test(P.FACTCHECK_PROMPT), "the fact-check prompt treats framed analysis as not a violation");
+ok(/Reasoning the writer frames as reasoning .* is not a grounding failure: judge it under argument and systems/.test(P.P_CRITIQUE) && /reports as fact something the source does not state .* counts as such a claim/.test(P.P_CRITIQUE), "CRITIC-REASONING-1: framed reasoning is not a grounding failure, an unsourced reported fact still is (run 5421)");
+ok(/never state an inferred arrangement, funding, motive or behaviour as a reported fact/.test(P.P_STYLE), "CRITIC-REASONING-1: the writer frames every unsourced analysis sentence as reasoning");
 {
   const sp = V.splitFactItems([
     "FACT: recognizing this bias is the first step in an audit of his later histories -- analytical claims not stated in source",
