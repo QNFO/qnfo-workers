@@ -1,7 +1,10 @@
-// SIGNAL-INTAKE-QEC-1 + IDEA-TOPIC-METRIC-1 (1.19.1, #1947) offline suite for qnfo-cloud-ops.
-// Proves: the research-scan query admits QEC only with an energy angle and keeps every other term; the daily companion
-// recomputes metric_registry idea_topic_concentration_30d from ACCEPTed idea_proposals in the last 30 days, with the
-// "quantum" cluster checked first (a quantum-thermodynamics item stays quantum), and writes only that registry row.
+// IDEA-TOPIC-METRIC-1 (1.19.1, #1947) + TOPIC-CLUSTERS-DERIVED-1 (1.28.0, ACCURACY-FLEET-2a, agent_issues 2281) offline suite.
+// Proves: the topic clusters are derived from the data (no fixed table: the worker source holds no IDEA_TOPIC_CLUSTERS), by a
+// deterministic rule (same result in any row order; producer boilerplate dropped; terms grouped by co-occurrence; a seed
+// nothing joins is dropped); a text goes to the first cluster that shares a term with it; no data gives no clusters and no
+// value; the daily companion re-derives the clusters, caches them in ops_config idea_topic_clusters and recomputes
+// metric_registry idea_topic_concentration_30d from ACCEPTed idea_proposals of the last 30 days over the idea text; a cache
+// write failure is reported (status error with its reason), never swallowed, and the metric is still written.
 // Run: node qnfo-cloud-ops/idea-topic.test.mjs   -> prints "N passed, 0 failed" (Node 22: node:sqlite)
 import { DatabaseSync } from "node:sqlite";
 import { readFileSync } from "node:fs";
@@ -10,56 +13,118 @@ const IMPORT = 'import { connect } from "cloudflare:sockets";';
 const src = readFileSync(new URL("./worker.js", import.meta.url), "utf8");
 if (!src.includes(IMPORT)) throw new Error("worker.js import line changed: update the loader in this test");
 const patched = src.replace(IMPORT, "var connect = function () { throw new Error('sockets are stubbed in this test'); };") +
-  "\nexport { ideaTopicCluster as __cluster, ideaTopicConcentration as __conc, jobIdeaTopicMetric as __job, CRON_COMPANIONS as __comp, JOBS as __jobs, AMS_SCHEDULE as __sched };\n";
+  "\nexport { topicCluster as __cluster, topicTerms as __terms, deriveTopicClusters as __derive, loadTopicClusters as __load, ideaTopicConcentration as __conc, jobIdeaTopicMetric as __job, CRON_COMPANIONS as __comp, JOBS as __jobs, AMS_SCHEDULE as __sched, TOPIC_CACHE_KEY as __key };\n";
 const mod = await import("data:text/javascript;base64," + Buffer.from(patched).toString("base64"));
 
 let pass = 0, fail = 0;
-const ok = (c, m, x) => { if (c) pass++; else { fail++; console.log("FAIL " + m + (x !== undefined ? " -- " + JSON.stringify(x).slice(0, 300) : "")); } };
+const ok = (c, m, x) => { if (c) pass++; else { fail++; console.log("FAIL " + m + (x !== undefined ? " -- " + JSON.stringify(x).slice(0, 400) : "")); } };
 
+// 1. No fixed topic table remains (the issue's code probe).
+ok(!src.includes("var IDEA_TOPIC_CLUSTERS = ["), "worker.js holds no IDEA_TOPIC_CLUSTERS table");
 
-// 2. Classifier: quantum first, then ultrametric, energy, ai-epistemics, other.
-ok(mod.__cluster("Low-Overhead Quantum Error Correction with Boundary-Connected Planar Modules") === "quantum", "QEC paper is quantum");
-ok(mod.__cluster("A quantum thermal machine surpassing the classical thermodynamic limit") === "quantum", "quantum thermodynamics stays quantum (no re-labelling)");
-ok(mod.__cluster("p-adic spectral zeta functions via the inverse Stieltjes transform") === "ultrametric", "p-adic is ultrametric");
-ok(mod.__cluster("Landauer cost of erasure in classical CMOS") === "energy", "classical energy paper is energy");
-ok(mod.__cluster("Ignorance audits for LLM-assisted science") === "ai-epistemics", "epistemics paper is ai-epistemics");
-ok(mod.__cluster("Urban mobility and bus timetables") === "other", "anything else is other");
-const c = mod.__conc([{ name: "auto-scan", idea: "Quantum codes" }, { name: "auto-scan", idea: "p-adic heat" }, { name: "x", idea: "plain", rationale: "about qubits" }, { name: "x", idea: "LLM audit" }]);
-ok(c.accepted_30d === 4 && c.top === "quantum" && c.share === 0.5 && c.by_cluster.quantum === 2, "share is the largest cluster over all accepted items; rationale counts", c);
-ok(mod.__conc([]).share === null, "no accepted items gives no value");
+// 2. Terms: function words dropped, plurals folded, numbers dropped, accents folded.
+ok(JSON.stringify(mod.__terms("The Glaciers of the moraines, 2024 Théories and theories")) === JSON.stringify(["glacier", "moraine", "theory"]), "terms: lower-case, stopwords and numbers out, plurals folded, accents folded, unique", mod.__terms("The Glaciers of the moraines, 2024 Théories and theories"));
 
-// 3. The job: reads only ACCEPT rows in 30 days (both created_at formats), writes only the registry row.
+// 3. Derivation from a fixture: a producer's boilerplate is dropped, co-occurring terms group, the order of rows does not matter.
+const rows = [];
+for (let i = 0; i < 5; i++) rows.push({ name: "auto-feed", idea: "Harvested from the feed: glacier moraine sediment layer " + i });
+for (let i = 0; i < 5; i++) rows.push({ name: "auto-feed", idea: "Harvested from the feed: lattice braid anyon exchange " + i });
+for (let i = 0; i < 4; i++) rows.push({ name: "owner-corpus", idea: "Lattice braid defects and their exchange rules, note " + i });
+rows.push({ name: "owner", idea: "Seasonal ledger of household chores" });
+rows.push({ name: "owner", idea: "Household ledger reconciliation" });
+rows.push({ name: "owner", idea: "Ledger for the household garden" });
+const d = mod.__derive(rows);
+ok(d.docs === rows.length, "every row is a document", d.docs);
+ok(d.template_terms.includes("harvested") && d.template_terms.includes("feed") && !d.template_terms.includes("glacier"), "a term in 90% of one producer's 10+ texts is boilerplate and dropped; a term in half of them is not", d.template_terms);
+const labels = d.clusters.map((c) => c.label);
+ok(labels[0] === "braid" && d.clusters[0].terms.includes("lattice") && d.clusters[0].terms.includes("exchange") && d.clusters[0].terms.includes("anyon"), "the most frequent terms seed the first cluster (ties alphabetical) and co-occurring terms join it", d.clusters);
+ok(labels.includes("glacier") && d.clusters.find((c) => c.label === "glacier").terms.includes("moraine"), "a second co-occurrence group is its own cluster", d.clusters);
+ok(labels.includes("household") && d.clusters.find((c) => c.label === "household").terms.includes("ledger"), "the owner's own small group is a cluster too", d.clusters);
+ok(!labels.includes("harvested") && !labels.includes("feed"), "boilerplate never labels a cluster", labels);
+ok(JSON.stringify(mod.__derive(rows.slice().reverse())) === JSON.stringify(d), "the derivation does not depend on row order");
+const lone = mod.__derive([{ name: "a", idea: "solitary walrus" }, { name: "b", idea: "solitary heron" }, { name: "c", idea: "solitary bison" }]);
+ok(lone.clusters.length === 0, "a frequent term nothing co-occurs with (a generic word) seeds no cluster", lone.clusters);
+ok(mod.__derive([]).clusters.length === 0 && mod.__derive(null).clusters.length === 0, "no data: no clusters (no fallback topic list)");
+
+// 4. Classifier over the derived clusters: first cluster sharing a term, else other.
+ok(mod.__cluster("Braid group actions on glacier flow", d.clusters) === "braid", "first cluster wins when a text shares terms with two");
+ok(mod.__cluster("Moraine dating", d.clusters) === "glacier", "a joined term places a text in its cluster");
+ok(mod.__cluster("Urban mobility and bus timetables", d.clusters) === "other", "anything else is other");
+ok(mod.__cluster("Braid", []) === "other", "no clusters: other");
+
+// 5. Concentration: largest cluster share over the idea text; no clusters gives no value.
+const c = mod.__conc([{ idea: "lattice braid" }, { idea: "glacier" }, { idea: "anyon exchange", rationale: "glacier glacier" }, { idea: "bus" }], d.clusters);
+ok(c.accepted_30d === 4 && c.top === "braid" && c.share === 0.5 && c.by_cluster.braid === 2 && c.by_cluster.other === 1, "share is the largest cluster over all accepted items; only the idea text counts", c);
+ok(mod.__conc([], d.clusters).share === null && mod.__conc([{ idea: "braid" }], []).share === null, "no rows or no clusters gives no value");
+
+// 6. The job: re-derives (even over a fresh cache), caches in ops_config, reads only ACCEPT rows in 30 days, writes the registry row.
 function stmtOn(dbx, sql) {
   let args = [];
+  const q = sql.replace(/\?(\d+)/g, "?");
   const self = {
     bind(...a) { args = a; return self; },
-    async all() { return { results: dbx.prepare(sql).all(...args) }; },
-    async first() { return dbx.prepare(sql).get(...args) || null; },
-    async run() { const r = dbx.prepare(sql).run(...args); return { success: true, meta: { changes: Number(r.changes) } }; }
+    async all() { return { results: dbx.prepare(q).all(...args) }; },
+    async first() { return dbx.prepare(q).get(...args) || null; },
+    async run() { const r = dbx.prepare(q).run(...args); return { success: true, meta: { changes: Number(r.changes) } }; }
   };
   return self;
 }
 const db = new DatabaseSync(":memory:");
 db.exec(`CREATE TABLE idea_proposals (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT, idea TEXT NOT NULL, contact TEXT, status TEXT DEFAULT 'new', ip_hash TEXT, created_at TEXT DEFAULT (datetime('now')), decision TEXT, score REAL, rationale TEXT, triaged_at TEXT);
   CREATE TABLE metric_registry (metric TEXT PRIMARY KEY, layer TEXT, kind TEXT, last_value TEXT, last_refreshed TEXT, state TEXT);
+  CREATE TABLE ops_config (key TEXT PRIMARY KEY, value TEXT, note TEXT, updated_at TEXT DEFAULT (datetime('now')));
   INSERT INTO metric_registry (metric, layer, kind, last_value, last_refreshed) VALUES ('idea_topic_concentration_30d', 'fleet', 'guard', '0.588', '2026-10-04T09:14:00Z'), ('other_metric', 'fleet', 'x', '7', 'then');`);
 const ins = db.prepare("INSERT INTO idea_proposals (name, idea, decision, rationale, created_at) VALUES (?, ?, ?, ?, ?)");
-const iso = (d) => new Date(Date.now() - d * 864e5).toISOString();
-const sq = (d) => new Date(Date.now() - d * 864e5).toISOString().slice(0, 19).replace("T", " ");
-ins.run("auto-scan", "Quantum LDPC decoders", "ACCEPT", "qec", iso(1));
-ins.run("auto-scan", "Thermodynamics of continuous quantum error correction", "ACCEPT", "", sq(2));
-ins.run("owner", "Ultrametric distance on tensor products", "ACCEPT", "", iso(3));
-ins.run("owner", "Energy per correct answer for CMOS accelerators", "ACCEPT", "", sq(4));
-ins.run("auto-scan", "Quantum memory under correlated noise", "HOLD", "", iso(1));
-ins.run("auto-scan", "Old quantum paper", "ACCEPT", "", iso(40));
+const iso = (dd) => new Date(Date.now() - dd * 864e5).toISOString();
+const sq = (dd) => new Date(Date.now() - dd * 864e5).toISOString().slice(0, 19).replace("T", " ");
+for (let i = 0; i < 3; i++) ins.run("owner-corpus", "Lattice braid exchange note " + i, "ACCEPT", "", iso(1 + i));
+ins.run("auto-scan", "Glacier moraine dating", "ACCEPT", "", sq(2));
+ins.run("auto-scan", "Glacier moraine flow", "ACCEPT", "", sq(3));
+ins.run("auto-scan", "Glacier moraine survey", "ACCEPT", "braid braid", iso(4));
+ins.run("auto-scan", "Lattice braid under noise", "HOLD", "", iso(1));
+ins.run("auto-scan", "Lattice braid old idea", "ACCEPT", "", iso(40));
+ins.run("auto-scan", "Lattice braid very old idea", "ACCEPT", "", iso(120));
+db.prepare("INSERT INTO ops_config (key, value) VALUES (?, ?)").run(mod.__key, JSON.stringify({ derived_at: new Date().toISOString(), clusters: [{ label: "stale", terms: ["glacier"] }] }));
 const env = { AUDIT: { prepare: (sql) => stmtOn(db, sql) } };
 const r = await mod.__job(env);
 const row = db.prepare("SELECT last_value, last_refreshed FROM metric_registry WHERE metric='idea_topic_concentration_30d'").get();
-ok(r.status === "ok" && r.notes.accepted_30d === 4 && r.notes.top === "quantum" && r.notes.share === 0.5, "job counts 4 accepted in 30 days (HOLD and 40-day-old excluded), quantum 2/4", r.notes);
+ok(r.status === "ok" && r.notes.accepted_30d === 6 && r.notes.share === 0.5 && r.notes.derived_docs === 7, "job derives over 90 days (7 accepts: HOLD and 120-day-old excluded) and counts 6 accepts in 30 days at share 0.5", r.notes);
+ok(!r.notes.clusters.includes("stale") && r.notes.clusters.length >= 2, "the daily job re-derives even when the cache is fresh", r.notes.clusters);
+ok(r.notes.by_cluster.glacier === 3, "the rationale does not move a row (glacier rows whose rationale says braid stay glacier)", r.notes.by_cluster);
+const cached = JSON.parse(db.prepare("SELECT value FROM ops_config WHERE key = ?").get(mod.__key).value);
+ok(cached.docs === 7 && JSON.stringify(cached.clusters) === JSON.stringify(r.notes.cluster_terms) && typeof cached.derived_at === "string", "the derived clusters are cached in ops_config for idea-hub", cached);
 ok(row.last_value === "0.5" && row.last_refreshed !== "2026-10-04T09:14:00Z", "registry row updated", row);
 ok(db.prepare("SELECT last_value FROM metric_registry WHERE metric='other_metric'").get().last_value === "7", "no other registry row touched");
 
-// 4. Wiring: a companion of an existing daily slot, no new schedule entry.
+// 7. loadTopicClusters: a fresh cache is served; a stale or broken one is re-derived.
+const fresh = await mod.__load(env.AUDIT, false);
+ok(fresh.source === "cache" && JSON.stringify(fresh.clusters) === JSON.stringify(cached.clusters), "a fresh cache is read, not re-derived", fresh.source);
+db.prepare("UPDATE ops_config SET value = ? WHERE key = ?").run(JSON.stringify({ derived_at: iso(5), clusters: [] }), mod.__key);
+ok((await mod.__load(env.AUDIT, false)).source === "derived", "a cache older than 72 h is re-derived");
+db.prepare("UPDATE ops_config SET value = 'not json' WHERE key = ?").run(mod.__key);
+const broken = await mod.__load(env.AUDIT, false);
+ok(broken.source === "derived" && /^read: /.test(broken.cache_error || "") && broken.clusters.length >= 2, "an unreadable cache is reported and re-derived", broken);
+
+// 8. A cache write failure is reported, never swallowed; the metric is still written.
+const db2 = new DatabaseSync(":memory:");
+db2.exec(`CREATE TABLE idea_proposals (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT, idea TEXT NOT NULL, decision TEXT, rationale TEXT, created_at TEXT);
+  CREATE TABLE metric_registry (metric TEXT PRIMARY KEY, last_value TEXT, last_refreshed TEXT);
+  INSERT INTO metric_registry VALUES ('idea_topic_concentration_30d', '0.9', 'then');`);
+const ins2 = db2.prepare("INSERT INTO idea_proposals (name, idea, decision, created_at) VALUES (?, ?, 'ACCEPT', ?)");
+for (let i = 0; i < 3; i++) ins2.run("owner", "Lattice braid exchange " + i, iso(1));
+const r2 = await mod.__job({ AUDIT: { prepare: (sql) => stmtOn(db2, sql) } });
+ok(r2.status === "error" && /ops_config idea_topic_clusters cache write: /.test(r2.reason || "") && db2.prepare("SELECT last_value FROM metric_registry").get().last_value === "1", "no ops_config table: status error with the reason, metric still written", r2);
+
+// 9. No accepted ideas: no clusters, no value, registry untouched.
+const db3 = new DatabaseSync(":memory:");
+db3.exec(`CREATE TABLE idea_proposals (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT, idea TEXT NOT NULL, decision TEXT, rationale TEXT, created_at TEXT);
+  CREATE TABLE metric_registry (metric TEXT PRIMARY KEY, last_value TEXT, last_refreshed TEXT);
+  CREATE TABLE ops_config (key TEXT PRIMARY KEY, value TEXT, note TEXT, updated_at TEXT);
+  INSERT INTO metric_registry VALUES ('idea_topic_concentration_30d', '0.9', 'then');`);
+const r3 = await mod.__job({ AUDIT: { prepare: (sql) => stmtOn(db3, sql) } });
+ok(r3.status === "ok" && /no derived topic clusters/.test(r3.notes.skipped || "") && db3.prepare("SELECT last_value FROM metric_registry").get().last_value === "0.9", "no accepted ideas: skipped, registry untouched", r3);
+
+// 10. Wiring: a companion of an existing daily slot, no new schedule entry.
 ok(typeof mod.__jobs["idea-topic-metric"] === "function", "job is in the dispatch map");
 ok((mod.__comp["quality-score"] || []).includes("idea-topic-metric") && mod.__sched["quality-score"].days === "*", "rides the every-day quality-score slot");
 ok(!("idea-topic-metric" in mod.__sched), "no new schedule slot (no new cron)");

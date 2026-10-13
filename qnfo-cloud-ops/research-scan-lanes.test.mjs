@@ -9,7 +9,7 @@ const IMPORT = 'import { connect } from "cloudflare:sockets";';
 const src = readFileSync(new URL("./worker.js", import.meta.url), "utf8");
 if (!src.includes(IMPORT)) throw new Error("worker.js import line changed: update the loader in this test");
 const patched = src.replace(IMPORT, "var connect = function () { throw new Error('sockets are stubbed in this test'); };") +
-  "\nexport { RESEARCH_SCAN_QUOTAS as __Q, ownerSeedGroups as __groups, researchScanLanesFrom as __lanes, researchScanLoadLanes as __load, researchScanProposals as __props, ideaTopicCluster as __cluster };\n";
+  "\nexport { RESEARCH_SCAN_QUOTAS as __Q, ownerSeedGroups as __groups, researchScanLanesFrom as __lanes, researchScanLoadLanes as __load, researchScanProposals as __props, topicCluster as __cluster };\n";
 const mod = await import("data:text/javascript;base64," + Buffer.from(patched).toString("base64"));
 
 let pass = 0, fail = 0;
@@ -60,9 +60,8 @@ ok(p.length === 4, "2 + 2 + 0 proposals when the third lane failed", p.map((h) =
 ok(p.filter((h) => h.lane === L[0].lane).length === 2 && p.filter((h) => h.lane === L[1].lane).length === 2, "per-lane quotas");
 ok(mod.__props([], L).length === 0 && mod.__props(null, L).length === 0 && mod.__props(hits, null).length === 0, "empty input");
 
-// The metric classifier is unchanged.
-ok(mod.__cluster("Agentic collapse in LLM agents") === "ai-epistemics", "classifier unchanged: ai-epistemics");
-ok(mod.__cluster("Quantum error correction thresholds") === "quantum", "classifier unchanged: quantum first");
+// The metric classifier (TOPIC-CLUSTERS-DERIVED-1, 1.28.0) holds no topic: with no derived clusters every text is "other".
+ok(mod.__cluster("Agentic collapse in LLM agents", []) === "other" && mod.__cluster("Quantum error correction thresholds", null) === "other", "no derived clusters: every text is other");
 
 console.log(pass + " passed, " + fail + " failed");
 if (fail) process.exit(1);

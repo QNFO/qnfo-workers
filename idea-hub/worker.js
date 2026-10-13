@@ -89,7 +89,7 @@
 // Carries forward v1.0.5-boundary-match-20260926 (fix #1168 FEED-GATE-SUBSTRING-COLLISION-1:
 //   single alphanumeric denylist tokens are matched with word boundaries
 //   (?<![a-z0-9])token(?![a-z0-9]); phrases keep substring matching).
-var VERSION = "1.9.0-novelty-screen"; // 1.9.0 IDEA-NOVELTY-1 (agent_issues 2409): triage screens each generated ACCEPT against its nearest QNFO-corpus and arXiv neighbours (overlap labelled by a model of another family; duplicate, substantial overlap with no stated delta, or a low practical payoff outside the foundational quota hold it). HUB-CACHE-VERSION-2 (agent_issues 2484): the cached ideas.qnfo.org pages carry the VERSION that built them, and a copy from another version is rebuilt while the request waits up to 2.5 s. 1.8.6 PROPOSAL-HEADROOM-1 (agent_issues 2489): the batch producers fill the triage queue only up to 25, so it stays under the chain limit of 30; nothing is dropped. 1.8.5 ZARAZ-MANUAL-LOAD-1 (#2345): pages load /cdn-cgi/zaraz/i.js themselves because Zaraz auto-inject does not touch Worker-served HTML. 1.8.4 ZARAZ-GA4-1: inline gtag.js removed (Zaraz serves GA4, one count per page view). 1.8.3 1.8.3 NOZ-DOI-1 (2026-10-11): the home page links no DOI of the dead registrar; re-entry keys a paper by its DOI when it has one and by its slug otherwise (papers written from now on carry no DOI), and REENTRY_OWNER_TYPES names the owner identifier types without the registrar. 1.8.2 // 1.8.2 NO-TOPIC-HARDCODE-1 (owner directive 2026-10-10): the think-loop fallback seed names no topic (it lists the loop's own recent questions from self_questions) and the scorecard prompt names no field. 1.8.1 OWNER-CORPUS-RATE-1 (#2185): a full research_queue slows the owner-corpus leg to 2 notes per cycle instead of pausing it. // 1.8.0 HOLD-RELEASE-REENTRY-1 (#2174): re-entry signals from non-owner papers are admitted at REENTRY_NONOWNER_PER_DAY (2) per UTC day instead of expired; the rest wait as new; owner-paper re-entries unlimited. // 1.7.6 CORPUS-REASONING-1 (#2185): owner-corpus extraction passes reasoning_effort low so dense notes no longer return an empty reply. // 1.7.3 OWNER-SIGNAL-INTAKE-2b: a pipeline paper whose research row came from an owner proposal counts as an owner paper for re-entry. // 1.7.2 REASONING-BUDGET-1 + OWNER-SIGNAL-INTAKE-2 + PROMPT-CACHE-COUNT-2 (2026-10-07, pillars research and cost): glm-5.3-flash is a reasoning model and spent all 700 scoring tokens thinking (finish length, empty content; measured 2026-10-07 11:40Z: 1,538 completion tokens needed), so triage scoring failed on rows 828/831 every hour; scoring and notebook extraction now get REASONING_MAX_TOKENS 2000. A failed notebook extraction is retried (3 tries, a day apart) instead of being lost; dated pre-fleet notes are read first; re-entry consumes only signals of the owner's own papers and drops sentences that merely mention an open question; aiRunAttr keeps ai_call_counters and adds ai_cache_counters plus the PROMPT-CACHE-1 session-affinity header (issue 2113, replacing code task ct_yghmskhqci2vv1, which dropped the call counters). // 1.7.0 OWNER-SIGNAL-INTAKE-1 (#1947 #2103 #2104, pillar research, owner directive 2026-10-07 "an integrated platform where all information is shared and leveraged across the fleet. No siloes!"): owner-authored proposals are ACCEPTed (scored for the record, never held by the model), ask-gap rows skip the chat-question filter, a new owner-corpus feeder distils research ideas from the owner's Obsidian notebook (notes_intake + R2 obsidian-vault) into the one intake, re-entry reads only the owner's own papers (slug/doi/internal types), and the think loop is seeded from the owner's accepted ideas instead of fixed quantum themes. Supersedes code task ct_hdaim0vx7h7vvl (1.6.2-codeagent). // 1.6.1 RULE-8-RETIRED-1 (2026-10-06, pillar cost): the /health limitation no longer says triage makes no model call while an ai_spend cap is breached; it scores on one cheap model since 1.6.0. // 1.6.0 BUDGET-SOFT-ROUTE-1 (2026-10-06, pillar cost, owner directive): an ai_spend cap no longer defers triage; proposals are scored by one cheap model while a cap is breached, deferred_budget rows are released every run, and diversity-held rows are released regardless of the caps. // 1.5.8 IDEA-DIVERSITY-CAP-1 (#1947, pillar research): triage holds a generated ACCEPT as deferred_diversity while its topic cluster would exceed half of the 30-day accepts (classifier identical to qnfo-cloud-ops IDEA_TOPIC_CLUSTERS), releases held rows best score first with no model call; 1.5.7 REACH-IDEA-1 (#2001, pillar reach): the home page carries a subscribe box (email input) posting to /api/subscribe, which forwards to the qnfo-subscribers double opt-in with source ideas.qnfo.org; 1.5.6 reentry-drain; 1.5.5 triage-budget; 1.5.4 (2026-10-05, #1919 #1920 + slow build): QNFO pages carry the 1200x630 share card and an iPatent link; ideasCached serves a stale copy at once and rebuilds in the background (an uncached build took ~12 s)
+var VERSION = "1.10.0-topic-clusters-derived"; // 1.10.0 TOPIC-CLUSTERS-DERIVED-1 (ACCURACY-FLEET-2a, agent_issues 2281, owner directive 2026-10-10 no topic or noun hard-coded): the diversity cap reads topic clusters derived from the ACCEPTed idea_proposals of the last 90 days (top content words by document frequency, producer boilerplate dropped, grouped by co-occurrence, cached in ops_config idea_topic_clusters, re-derived when older than 72 h) instead of the fixed IDEA_TOPIC_CLUSTERS table; a proposal is placed by its idea text; no data gives no clusters and no hold. Shared block identical to qnfo-cloud-ops 1.28.0. 1.9.0 IDEA-NOVELTY-1 (agent_issues 2409): triage screens each generated ACCEPT against its nearest QNFO-corpus and arXiv neighbours (overlap labelled by a model of another family; duplicate, substantial overlap with no stated delta, or a low practical payoff outside the foundational quota hold it). HUB-CACHE-VERSION-2 (agent_issues 2484): the cached ideas.qnfo.org pages carry the VERSION that built them, and a copy from another version is rebuilt while the request waits up to 2.5 s. 1.8.6 PROPOSAL-HEADROOM-1 (agent_issues 2489): the batch producers fill the triage queue only up to 25, so it stays under the chain limit of 30; nothing is dropped. 1.8.5 ZARAZ-MANUAL-LOAD-1 (#2345): pages load /cdn-cgi/zaraz/i.js themselves because Zaraz auto-inject does not touch Worker-served HTML. 1.8.4 ZARAZ-GA4-1: inline gtag.js removed (Zaraz serves GA4, one count per page view). 1.8.3 1.8.3 NOZ-DOI-1 (2026-10-11): the home page links no DOI of the dead registrar; re-entry keys a paper by its DOI when it has one and by its slug otherwise (papers written from now on carry no DOI), and REENTRY_OWNER_TYPES names the owner identifier types without the registrar. 1.8.2 // 1.8.2 NO-TOPIC-HARDCODE-1 (owner directive 2026-10-10): the think-loop fallback seed names no topic (it lists the loop's own recent questions from self_questions) and the scorecard prompt names no field. 1.8.1 OWNER-CORPUS-RATE-1 (#2185): a full research_queue slows the owner-corpus leg to 2 notes per cycle instead of pausing it. // 1.8.0 HOLD-RELEASE-REENTRY-1 (#2174): re-entry signals from non-owner papers are admitted at REENTRY_NONOWNER_PER_DAY (2) per UTC day instead of expired; the rest wait as new; owner-paper re-entries unlimited. // 1.7.6 CORPUS-REASONING-1 (#2185): owner-corpus extraction passes reasoning_effort low so dense notes no longer return an empty reply. // 1.7.3 OWNER-SIGNAL-INTAKE-2b: a pipeline paper whose research row came from an owner proposal counts as an owner paper for re-entry. // 1.7.2 REASONING-BUDGET-1 + OWNER-SIGNAL-INTAKE-2 + PROMPT-CACHE-COUNT-2 (2026-10-07, pillars research and cost): glm-5.3-flash is a reasoning model and spent all 700 scoring tokens thinking (finish length, empty content; measured 2026-10-07 11:40Z: 1,538 completion tokens needed), so triage scoring failed on rows 828/831 every hour; scoring and notebook extraction now get REASONING_MAX_TOKENS 2000. A failed notebook extraction is retried (3 tries, a day apart) instead of being lost; dated pre-fleet notes are read first; re-entry consumes only signals of the owner's own papers and drops sentences that merely mention an open question; aiRunAttr keeps ai_call_counters and adds ai_cache_counters plus the PROMPT-CACHE-1 session-affinity header (issue 2113, replacing code task ct_yghmskhqci2vv1, which dropped the call counters). // 1.7.0 OWNER-SIGNAL-INTAKE-1 (#1947 #2103 #2104, pillar research, owner directive 2026-10-07 "an integrated platform where all information is shared and leveraged across the fleet. No siloes!"): owner-authored proposals are ACCEPTed (scored for the record, never held by the model), ask-gap rows skip the chat-question filter, a new owner-corpus feeder distils research ideas from the owner's Obsidian notebook (notes_intake + R2 obsidian-vault) into the one intake, re-entry reads only the owner's own papers (slug/doi/internal types), and the think loop is seeded from the owner's accepted ideas instead of fixed quantum themes. Supersedes code task ct_hdaim0vx7h7vvl (1.6.2-codeagent). // 1.6.1 RULE-8-RETIRED-1 (2026-10-06, pillar cost): the /health limitation no longer says triage makes no model call while an ai_spend cap is breached; it scores on one cheap model since 1.6.0. // 1.6.0 BUDGET-SOFT-ROUTE-1 (2026-10-06, pillar cost, owner directive): an ai_spend cap no longer defers triage; proposals are scored by one cheap model while a cap is breached, deferred_budget rows are released every run, and diversity-held rows are released regardless of the caps. // 1.5.8 IDEA-DIVERSITY-CAP-1 (#1947, pillar research): triage holds a generated ACCEPT as deferred_diversity while its topic cluster would exceed half of the 30-day accepts (classifier identical to qnfo-cloud-ops IDEA_TOPIC_CLUSTERS), releases held rows best score first with no model call; 1.5.7 REACH-IDEA-1 (#2001, pillar reach): the home page carries a subscribe box (email input) posting to /api/subscribe, which forwards to the qnfo-subscribers double opt-in with source ideas.qnfo.org; 1.5.6 reentry-drain; 1.5.5 triage-budget; 1.5.4 (2026-10-05, #1919 #1920 + slow build): QNFO pages carry the 1200x630 share card and an iPatent link; ideasCached serves a stale copy at once and rebuilds in the background (an uncached build took ~12 s)
 // ---- QDS-SHELL:BEGIN (generated from qnfo-gateway QDS-1; links https://qnfo.org/qds.css and qds.js) ----
 var QDS_OWNER_ORCID = "0009-0002-4317-5604";
 // The QNFO design system (QDS). Tokens, type and components live in ONE stylesheet served from here at
@@ -488,32 +488,131 @@ var NOISE_RE = [/^call (the )?[a-z_]+( tool)?(\s|$)/i, /(email_check|express_int
 function isNoise(t) { t = String(t || ""); return NOISE_RE.some(function (re) { return re.test(t); }); }
 function isQuestion(t) { t = String(t || "").trim(); return t.length < 160 && /\?\s*$/.test(t) && /^(what|who|where|when|why|how|is|are|do|does|did|can|could|should|would|will|has|have|quick|one line|one sentence|in one sentence|probe)/i.test(t); }
 // IDEA-DIVERSITY-CAP-1 (1.5.8, #1947, pillar research). metric_registry idea_topic_concentration_30d (trigger 1238: > 0.50)
-// is the share of ACCEPTed idea_proposals in the last 30 days that fall in the largest keyword cluster, recomputed daily
+// is the share of ACCEPTed idea_proposals in the last 30 days that fall in the largest topic cluster (derived from data since 1.10.0), recomputed daily
 // by qnfo-cloud-ops jobIdeaTopicMetric. It read 0.596 (31 of 52 "quantum") on 2026-10-06, and with no new accepts the
 // window alone would raise it (0.794 by 10-15, 1.0 by 11-02: the older accepts are the diverse ones). After a scoring
-// model answers ACCEPT for a generated proposal, triage classifies it with the same clusters over the same text (name,
-// idea, rationale) and, while (cluster + 1) / (n + 1) > DIVERSITY_MAX_SHARE with n >= DIVERSITY_MIN_N accepts in the
+// model answers ACCEPT for a generated proposal, triage classifies it with the same clusters over the same text (the idea
+// text; name and rationale before 1.10.0) and, while (cluster + 1) / (n + 1) > DIVERSITY_MAX_SHARE with n >= DIVERSITY_MIN_N accepts in the
 // window, holds it as status 'deferred_diversity' (decision DEFER-DIVERSITY, score kept, never sent to research_queue
 // and not counted by the metric). Held rows are released best score first, with no model call, when the share allows
 // (1.6.0 BUDGET-SOFT-ROUTE-1: an ai_spend cap no longer holds a release back). A held row whose created_at leaves the
 // 30-day window becomes a terminal HOLD instead, so a release can never land outside the window the metric reads.
 // Owner-authored rows (name owner-* or rowan-*, contact 'owner') and intake:<family> rows (radar-hub
-// SIGNAL-INTAKE-SOURCES-1) are never held; they still count in the mix. The cluster table must stay identical to
-// qnfo-cloud-ops IDEA_TOPIC_CLUSTERS; idea-hub/diversity-cap.test.mjs fails when they differ.
-var IDEA_TOPIC_CLUSTERS = [
-  ["quantum", /quantum|qubit|error[- ]correct|qec/i],
-  ["ultrametric", /ultrametric|p-adic|padic|bruhat|adelic|non-archimedean|\bzbw\b/i],
-  ["energy", /energy|thermodynam|landauer|joule|entropy/i],
-  ["ai-epistemics", /\bllms?\b|language model|\bagents?\b|epistem|ignorance|\bai\b|machine learning/i]
-];
+// SIGNAL-INTAKE-SOURCES-1) are never held; they still count in the mix. Since 1.10.0 (TOPIC-CLUSTERS-DERIVED-1) the clusters
+// are derived from the accepted ideas by the shared block below, the same text qnfo-cloud-ops uses for the metric.
+// TOPIC-CLUSTERS-DERIVED-1 BEGIN shared block. The text from this line to the END line is identical in idea-hub/worker.js and
+// qnfo-cloud-ops/worker.js; idea-hub/diversity-cap.test.mjs fails when the two copies differ.
+// ACCURACY-FLEET-2a (agent_issues 2281; owner directive 2026-10-10: no topic or noun may be hard-coded in instructions) retires
+// the fixed four-cluster keyword table IDEA_TOPIC_CLUSTERS. The topic clusters are derived from data: the ACCEPTed
+// idea_proposals of the last TOPIC_DERIVE_DAYS days (the owner's own ideas, the owner-corpus notes and the accepted generated
+// proposals), over the idea text only, by a deterministic rule:
+//   1. terms: lower-cased, accents removed, split on anything but a-z and 0-9; words of 4+ characters that do not start with a
+//      digit and are not in TOPIC_STOPWORDS (English function words and research-process words; it names no subject); plurals
+//      folded (ies -> y, a final s after a letter other than s or u dropped).
+//   2. template terms: a term in at least TOPIC_TEMPLATE_SHARE of one producer's texts (producer = idea_proposals.name with at
+//      least TOPIC_TEMPLATE_MIN_DOCS texts) is that producer's boilerplate and is dropped.
+//   3. candidates: the TOPIC_CANDIDATES terms with the highest document frequency (at least TOPIC_MIN_DF), ties alphabetical.
+//   4. grouping: in that order a term joins the cluster whose seed it co-occurs with most (earliest seed on a tie) when at least
+//      TOPIC_JOIN of its texts carry that seed (up to TOPIC_CLUSTER_TERMS terms a cluster); otherwise it seeds a new cluster
+//      (at most 3 x TOPIC_CLUSTER_MAX seeds).
+//   5. a seed no other term joined is a generic word, not a topic, and is dropped; the first TOPIC_CLUSTER_MAX remaining
+//      clusters in seed-frequency order are kept, each labelled by its seed.
+// A text belongs to the first cluster (largest seed first, as the old table checked its largest cluster first) that shares a
+// term with it, else to "other". No data gives no clusters: every text is "other", the diversity cap holds nothing and the
+// metric is not written; there is no fallback topic list. The derivation is cached in ops_config idea_topic_clusters:
+// qnfo-cloud-ops re-derives it every day (idea-topic-metric) and either worker re-derives it when the cache is missing,
+// unreadable or older than TOPIC_CACHE_MAX_AGE_H hours.
+var TOPIC_DERIVE_DAYS = 90, TOPIC_MIN_DF = 3, TOPIC_CANDIDATES = 60, TOPIC_JOIN = 0.5, TOPIC_CLUSTER_MAX = 6, TOPIC_CLUSTER_TERMS = 8;
+var TOPIC_TEMPLATE_MIN_DOCS = 10, TOPIC_TEMPLATE_SHARE = 0.9, TOPIC_CACHE_KEY = "idea_topic_clusters", TOPIC_CACHE_MAX_AGE_H = 72;
+var TOPIC_DERIVE_SQL = "SELECT name, idea FROM idea_proposals WHERE decision = 'ACCEPT' AND replace(substr(created_at, 1, 19), 'T', ' ') >= datetime('now', '-" + TOPIC_DERIVE_DAYS + " day') ORDER BY id";
+var TOPIC_STOPWORDS = new Set(("about above across after again against also among because been before being between both cannot could does doing during each either every from further gives given have having here however into itself just keep known like made make many more most much must need neither often only other over said same should since some such than that their them then there these they this those through thus under until upon using very want were what when where whether which while whose will with within without would your " +
+  "idea ideas research question questions paper papers study studies analysis approach method methods result results claim claims note notes proposal proposals show shows shown based work works novel first second third " +
+  "author authors conjecture conjectures hypothesis hypotheses propose proposes proposed rather single standard yield yields test tests testable explore investigate framework").split(" "));
+function topicTerms(text) {
+  var out = [], seen = Object.create(null);
+  var words = String(text || "").toLowerCase().normalize("NFKD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]+/g, " ").split(" ");
+  for (var i = 0; i < words.length; i++) {
+    var w = words[i];
+    if (w.length < 4 || /^[0-9]/.test(w) || TOPIC_STOPWORDS.has(w)) continue;
+    if (/ies$/.test(w)) w = w.slice(0, -3) + "y";
+    else if (w.length > 4 && /[^su]s$/.test(w)) w = w.slice(0, -1);
+    if (TOPIC_STOPWORDS.has(w) || seen[w]) continue;
+    seen[w] = 1;
+    out.push(w);
+  }
+  return out;
+}
+// Pure: rows [{ name, idea }] -> { clusters: [{ label, terms }], docs, template_terms }.
+function deriveTopicClusters(rows) {
+  var docs = (rows || []).map(function (r) { return { src: String(r && r.name || ""), terms: topicTerms(r && r.idea) }; });
+  var bySrc = Object.create(null);
+  docs.forEach(function (d) { (bySrc[d.src] = bySrc[d.src] || []).push(d.terms); });
+  var template = [];
+  Object.keys(bySrc).sort().forEach(function (s) {
+    var ds = bySrc[s];
+    if (ds.length < TOPIC_TEMPLATE_MIN_DOCS) return;
+    var c = Object.create(null);
+    ds.forEach(function (t) { t.forEach(function (w) { c[w] = (c[w] || 0) + 1; }); });
+    Object.keys(c).sort().forEach(function (w) { if (c[w] >= TOPIC_TEMPLATE_SHARE * ds.length && template.indexOf(w) < 0) template.push(w); });
+  });
+  var docsOf = Object.create(null);
+  docs.forEach(function (d, i) { d.terms.forEach(function (w) { if (template.indexOf(w) < 0) (docsOf[w] = docsOf[w] || []).push(i); }); });
+  var cands = Object.keys(docsOf).filter(function (w) { return docsOf[w].length >= TOPIC_MIN_DF; })
+    .sort(function (a, b) { return docsOf[b].length - docsOf[a].length || (a < b ? -1 : a > b ? 1 : 0); }).slice(0, TOPIC_CANDIDATES);
+  var seeds = [];
+  cands.forEach(function (t) {
+    var best = null, bs = 0;
+    seeds.forEach(function (c) {
+      var n = 0;
+      docsOf[t].forEach(function (i) { if (c.docs.has(i)) n++; });
+      if (n / docsOf[t].length > bs) { bs = n / docsOf[t].length; best = c; }
+    });
+    if (best && bs >= TOPIC_JOIN) { if (best.terms.length < TOPIC_CLUSTER_TERMS) best.terms.push(t); }
+    else if (seeds.length < 3 * TOPIC_CLUSTER_MAX) seeds.push({ label: t, terms: [t], docs: new Set(docsOf[t]) });
+  });
+  var clusters = seeds.filter(function (c) { return c.terms.length >= 2; }).slice(0, TOPIC_CLUSTER_MAX).map(function (c) { return { label: c.label, terms: c.terms }; });
+  return { clusters: clusters, docs: docs.length, template_terms: template };
+}
+// Pure: a text and the derived clusters -> the label of the first cluster sharing a term with it, else "other".
+function topicCluster(text, clusters) {
+  var terms = topicTerms(text);
+  for (var i = 0; i < (clusters || []).length; i++) {
+    for (var j = 0; j < clusters[i].terms.length; j++) if (terms.indexOf(clusters[i].terms[j]) >= 0) return clusters[i].label;
+  }
+  return "other";
+}
+// db: a qnfo-audit D1 binding. force: re-derive even when the cache is fresh. Returns { clusters, derived_at, docs, source,
+// cache_error }. An unreadable or unwritable cache is reported in cache_error (the derivation still answers); a failed read
+// of idea_proposals throws to the caller.
+async function loadTopicClusters(db, force) {
+  var cacheError = null;
+  if (!force) {
+    try {
+      var row = await db.prepare("SELECT value FROM ops_config WHERE key = ?1").bind(TOPIC_CACHE_KEY).first();
+      var v = row && row.value ? JSON.parse(row.value) : null;
+      var age = v && v.derived_at ? (Date.now() - Date.parse(v.derived_at)) / 3600e3 : Infinity;
+      if (v && Array.isArray(v.clusters) && age >= 0 && age <= TOPIC_CACHE_MAX_AGE_H) return Object.assign(v, { source: "cache", cache_error: null });
+    } catch (e) {
+      cacheError = "read: " + String(e && e.message || e).slice(0, 120);
+    }
+  }
+  var rows = (await db.prepare(TOPIC_DERIVE_SQL).all()).results || [];
+  var d = deriveTopicClusters(rows);
+  var rec = { version: 1, derived_at: new Date().toISOString(), window_days: TOPIC_DERIVE_DAYS, docs: d.docs, clusters: d.clusters, template_terms: d.template_terms };
+  try {
+    await db.prepare("INSERT INTO ops_config (key, value, note, updated_at) VALUES (?1, ?2, ?3, datetime('now')) ON CONFLICT(key) DO UPDATE SET value = excluded.value, note = excluded.note, updated_at = excluded.updated_at")
+      .bind(TOPIC_CACHE_KEY, JSON.stringify(rec), "TOPIC-CLUSTERS-DERIVED-1 (agent_issues 2281): topic clusters derived from ACCEPTed idea_proposals; re-derived daily by qnfo-cloud-ops idea-topic-metric").run();
+  } catch (e) {
+    cacheError = (cacheError ? cacheError + "; " : "") + "write: " + String(e && e.message || e).slice(0, 120);
+  }
+  return Object.assign(rec, { source: "derived", cache_error: cacheError });
+}
+// TOPIC-CLUSTERS-DERIVED-1 END shared block.
 var DIVERSITY_MAX_SHARE = 0.5, DIVERSITY_MIN_N = 10, DIVERSITY_RELEASE_SCAN = 50;
 var DIVERSITY_WINDOW_SQL = "replace(substr(created_at, 1, 19), 'T', ' ') >= datetime('now', '-30 day')";
 var DIVERSITY_NOTE_RE = /^\[diversity hold [^\]]*\] ?/;
-function ideaTopicCluster(text) {
-  for (var i = 0; i < IDEA_TOPIC_CLUSTERS.length; i++) if (IDEA_TOPIC_CLUSTERS[i][1].test(String(text || ""))) return IDEA_TOPIC_CLUSTERS[i][0];
-  return "other";
-}
-function proposalCluster(name, idea, rationale) { return ideaTopicCluster([name, idea, rationale].filter(Boolean).join(" ")); }
+// The idea text alone places a proposal (1.10.0: name and model rationale no longer count, so a scoring note cannot move it).
+function proposalCluster(idea, clusters) { return topicCluster(idea, clusters); }
 function diversityExempt(row) {
   var name = String(row && row.name || "");
   return /owner|rowan/i.test(name) || /^intake:/i.test(name) || String(row && row.contact || "") === "owner" || proposalKind(row) !== "generated";
@@ -540,19 +639,22 @@ function ownerDecision(kind, s) {
   return r;
 }
 async function acceptedMix(env) {
-  var rs = (await env.QNFO_AUDIT.prepare("SELECT name, idea, rationale FROM idea_proposals WHERE decision = 'ACCEPT' AND " + DIVERSITY_WINDOW_SQL).all()).results || [];
-  var mix = { n: rs.length, by: {}, foundational: 0 };
-  rs.forEach(function (r) { var k = proposalCluster(r.name, r.idea, r.rationale); mix.by[k] = (mix.by[k] || 0) + 1; if (/foundational-quota/.test(String(r.rationale || ""))) mix.foundational++; });
+  var topics = await loadTopicClusters(env.QNFO_AUDIT, false);
+  var rs = (await env.QNFO_AUDIT.prepare("SELECT idea, rationale FROM idea_proposals WHERE decision = 'ACCEPT' AND " + DIVERSITY_WINDOW_SQL).all()).results || [];
+  var mix = { n: rs.length, by: Object.create(null), foundational: 0, clusters: topics.clusters || [], topics: { source: topics.source, derived_at: topics.derived_at, docs: topics.docs, cache_error: topics.cache_error || null } };
+  rs.forEach(function (r) { var k = proposalCluster(r.idea, mix.clusters); mix.by[k] = (mix.by[k] || 0) + 1; if (/foundational-quota/.test(String(r.rationale || ""))) mix.foundational++; });
   return mix;
 }
 // True when one more accept in `cluster` would put that cluster above the cap (only once DIVERSITY_MIN_N accepts exist).
+// With no derived clusters (no accepted ideas to derive them from) nothing is held: every text is "other".
 function diversityBlocks(mix, cluster) {
+  if (!mix.clusters || !mix.clusters.length) return false;
   return mix.n >= DIVERSITY_MIN_N && ((mix.by[cluster] || 0) + 1) / (mix.n + 1) > DIVERSITY_MAX_SHARE;
 }
 function mixShare(mix) {
   var top = null;
   Object.keys(mix.by).forEach(function (k) { if (top === null || mix.by[k] > mix.by[top]) top = k; });
-  return { n: mix.n, top: top, share: mix.n ? Math.round(1000 * mix.by[top] / mix.n) / 1000 : null, by_cluster: mix.by };
+  return { n: mix.n, top: top, share: mix.n ? Math.round(1000 * mix.by[top] / mix.n) / 1000 : null, by_cluster: Object.assign({}, mix.by), clusters: (mix.clusters || []).map(function (c) { return c.label; }), topics: mix.topics || null };
 }
 async function enqueueAccepted(env, id, idea, score, now) {
   await env.QNFO_AUDIT.prepare("INSERT OR IGNORE INTO research_queue (id, source, source_id, idea, summary, score, decision, status, created_at) VALUES (?1,'proposal',?2,?3,'',?4,?5,'queued',?6)").bind(crypto.randomUUID(), String(id), String(idea || "").slice(0, 3000), score, "ACCEPT", now).run();
@@ -566,7 +668,7 @@ async function diversityRelease(env, mix, breached, out) {
   out.diversity_expired = Number(ex && ex.meta && ex.meta.changes) || 0;
   var held = (await env.QNFO_AUDIT.prepare("SELECT id, name, idea, rationale, score FROM idea_proposals WHERE status = 'deferred_diversity' AND " + DIVERSITY_WINDOW_SQL + " ORDER BY score DESC, created_at ASC LIMIT ?1").bind(DIVERSITY_RELEASE_SCAN).all()).results || [];
   for (var i = 0; i < held.length && out.diversity_released < TRIAGE_BATCH; i++) {
-    var h = held[i], rationale = String(h.rationale || "").replace(DIVERSITY_NOTE_RE, ""), k = proposalCluster(h.name, h.idea, rationale);
+    var h = held[i], rationale = String(h.rationale || "").replace(DIVERSITY_NOTE_RE, ""), k = proposalCluster(h.idea, mix.clusters);
     if (diversityBlocks(mix, k)) continue;
     var up = await env.QNFO_AUDIT.prepare("UPDATE idea_proposals SET decision = 'ACCEPT', status = 'triaged_accepted', rationale = ?1, triaged_at = ?2 WHERE id = ?3 AND status = 'deferred_diversity'").bind(rationale, now, h.id).run();
     if (!(Number(up && up.meta && up.meta.changes) > 0)) continue;
@@ -633,7 +735,7 @@ async function triageProposals(env) {
           else if (nv.foundational_quota) { fq = true; out.novelty.foundational_quota++; }
         }
       }
-      var cluster = s.decision === "ACCEPT" ? proposalCluster(row.name, row.idea, s.rationale) : null;
+      var cluster = s.decision === "ACCEPT" ? proposalCluster(row.idea, mix ? mix.clusters : []) : null;
       if (cluster && mix && !diversityExempt(row) && diversityBlocks(mix, cluster)) {
         var pct = Math.round(100 * ((mix.by[cluster] || 0) + 1) / (mix.n + 1));
         await env.QNFO_AUDIT.prepare("UPDATE idea_proposals SET decision='DEFER-DIVERSITY', score=?, rationale=?, triaged_at=?, status='deferred_diversity' WHERE id=?").bind(s.score, "[diversity hold " + now.slice(0, 16) + "Z: " + cluster + " would be " + pct + "% of 30-day accepts, cap " + Math.round(100 * DIVERSITY_MAX_SHARE) + "%] " + (s.rationale || ""), now, row.id).run();
