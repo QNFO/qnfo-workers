@@ -82,7 +82,7 @@ ok(!r.piece && /^editor unavailable/.test(r.why) && /503/.test(r.why), "an unava
 const gen = src.slice(src.indexOf("var floorForForm = form === \"notes\" ? ACCEPT_FLOOR_NOTES : ACCEPT_FLOOR_ESSAY;"), src.indexOf("// the fact-check: two reviewers from other model families"));
 const iR = gen.indexOf("var rf = await reframePiece(env, piece, ground, q.why, q.invented);"), iP = gen.indexOf("for (var cround = 1; cround <= CRITIC_PRUNE_ROUNDS");
 ok(iR > 0 && iP > iR, "the edit runs before the critic prune");
-ok(/if \(worst < floorForForm && \(worstName === "grounding" \|\| worstName === "argument"\) && Date\.now\(\) - t0 < REFRAME_START_BEFORE_MS\)/.test(gen), "only a grounding or argument rejection with time left starts the edit");
+ok(/if \(worst < floorForForm && \(worstName === "grounding" \|\| worstName === "argument" \|\| worstName === "systems" \|\| criticQuotes\(q\.why, pieceText\(piece\), q\.invented\)\.length > 0\) && Date\.now\(\) - t0 < REFRAME_START_BEFORE_MS\)/.test(gen), "a grounding, argument or systems rejection, or any rejection quoting invented text, with time left starts the edit (REFRAME-TRIGGER-2)");
 ok(/var rfv = rf\.piece \? validatePiece\(rf\.piece, form, ground, repairOpts\) : null;/.test(gen), "the edit is validated like any repaired draft (names, years, figures, floors, lede)");
 ok(/var critR = await critiquePiece\(env, rf\.piece, form, ground\);/.test(gen), "the critic reads the edited draft");
 ok(/if \(scR && !scR\.missing && \(scR\.worst >= floorForForm \|\| \(scR\.worstName === "grounding" && scR\.worst >= worst\)\)\) \{ piece = rf\.piece; v = rfv; q = critR;/.test(gen), "the edit is kept only when the critic passes it or grounding is still its weakest score and no lower, so a failing edit never skips the prune");
