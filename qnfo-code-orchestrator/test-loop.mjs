@@ -119,7 +119,8 @@ const call = async (env, method, p, body) => { const r = await worker.fetch(auth
 {
   const calls = installCodeAgent({ "qnfo-workers/scripts/z.py": "x = 1\n" });
   const bad = fileBlock("def (:\n");
-  const { env } = envWith([bad, bad, bad, bad]);
+  // FAIL-SIGNATURE-STOP-1 (0.16.0): three identical failures end the task, so the round mixes two kinds of failure.
+  const { env } = envWith([bad, "I would rather describe the change.", bad, bad]);
   const enq = await call(env, "POST", "/v1/tasks", { repo: "qnfo-workers", path: "scripts/z.py", goal: "g" });
   await call(env, "POST", "/v1/tick", { maxSteps: 12 });
   const got = await call(env, "GET", "/v1/tasks/" + enq.body.id);
@@ -145,7 +146,7 @@ const call = async (env, method, p, body) => { const r = await worker.fetch(auth
   const enq = await call(env, "POST", "/v1/tasks", { repo: "qnfo-workers", path: "docs/a.md", goal: "tidy" });
   await call(env, "POST", "/v1/tick", { maxSteps: 12 });
   const got = await call(env, "GET", "/v1/tasks/" + enq.body.id);
-  check("truncated markdown rewrite is rejected, the round ends in a backoff (not needs_human)", got.body.task.status === "queued" && got.body.task.attempts === 3 && /size changed/.test(got.body.task.last_error), got.body.task);
+  check("truncated markdown rewrite is rejected three times the same way: failed by FAIL-SIGNATURE-STOP-1 (not needs_human)", got.body.task.status === "failed" && got.body.task.attempts === 3 && /size changed/.test(got.body.task.last_error) && /FAIL-SIGNATURE-STOP-1/.test(got.body.task.last_error), got.body.task);
 }
 
 // ===== 6. no-op proposal is terminal (not a PR) =====
@@ -250,7 +251,7 @@ function fakeLoader(spinMs) {
   const enq = await call(env, "POST", "/v1/tasks", { repo: "qnfo-workers", path: "a/w.js", goal: "g" });
   await call(env, "POST", "/v1/tick", { maxSteps: 12 });
   const got = await call(env, "GET", "/v1/tasks/" + enq.body.id);
-  check("JS syntax error (real workerd message) blocks the PR and carries line:col", got.body.task.status === "queued" && got.body.task.attempts === 3 && /SyntaxError.*m\.js:1:52/.test(got.body.task.last_error) && calls.edit.length === 0, got.body.task.last_error);
+  check("JS syntax error (real workerd message) blocks the PR and carries line:col", got.body.task.status === "failed" && got.body.task.attempts === 3 && /SyntaxError.*m\.js:1:52/.test(got.body.task.last_error) && /FAIL-SIGNATURE-STOP-1: .*SYNTAX_ERROR/.test(got.body.task.last_error) && calls.edit.length === 0, got.body.task.last_error);
 }
 {
   const calls = installCodeAgent({ "qnfo-workers/a/i.mjs": "export default {}\n" });
