@@ -15,11 +15,13 @@ const ok = (c, m, x) => { if (c) pass++; else { fail++; console.log("FAIL " + m 
 // the prompt
 const P = V.P_REFRAME;
 ok(typeof P === "string" && P.length > 400, "the editor prompt exists");
-ok(/rewritten in place as reasoning/.test(P) && /'A plausible reading is that'/.test(P), "reasoning stated as fact is rewritten in place as marked reasoning");
+ok(/rewritten in place as an argument from a reported fact/.test(P) && /'Because \.\.\., \.\.\. has a reason to \.\.\.'/.test(P), "reasoning stated as fact is rewritten in place as an argument from a reported fact");
+ok(/Change only the sentences listed under FLAGGED and the claims the READER'S OBJECTION describes\. Every other sentence stays word for word\./.test(P), "only the flagged sentences change (1.23.1: an edit that reworded the whole piece read voice=1)");
+ok(/never open two sentences the same way, and never put more than one hedge in a paragraph/.test(P) && !/A plausible reading is that/.test(P), "the editor varies its wording and is not handed one phrase to repeat");
 ok(/reports an event, action, statement, payment, meeting, document, rule or arrangement that the SOURCE MATERIAL does not contain is deleted/.test(P), "an invented event is deleted, not reframed");
 ok(/Add nothing: no name, date, number, quotation, event, example or source/.test(P), "the editor adds nothing");
 ok(/keep that line where it is; if it has none, add none/.test(P), "the analysis line stays where the writer put it");
-ok(/stays word for word/.test(P), "reporting sentences are kept word for word");
+ok(/a string of hedges is worse than the original/.test(P), "the editor keeps the force of the argument");
 
 // the editor's models and sampling
 ok(Array.isArray(V.CF_FALLBACK.editor) && /gpt-oss/.test(V.CF_FALLBACK.editor[0]), "the editor is the writer's family first", V.CF_FALLBACK.editor);
@@ -83,9 +85,26 @@ ok(iR > 0 && iP > iR, "the edit runs before the critic prune");
 ok(/if \(worst < floorForForm && \(worstName === "grounding" \|\| worstName === "argument"\) && Date\.now\(\) - t0 < REFRAME_START_BEFORE_MS\)/.test(gen), "only a grounding or argument rejection with time left starts the edit");
 ok(/var rfv = rf\.piece \? validatePiece\(rf\.piece, form, ground, repairOpts\) : null;/.test(gen), "the edit is validated like any repaired draft (names, years, figures, floors, lede)");
 ok(/var critR = await critiquePiece\(env, rf\.piece, form, ground\);/.test(gen), "the critic reads the edited draft");
-ok(/if \(scR && !scR\.missing && scR\.worst >= worst\) \{ piece = rf\.piece; v = rfv; q = critR;/.test(gen), "the edit is kept only when the critic reads it no worse");
+ok(/if \(scR && !scR\.missing && \(scR\.worst >= floorForForm \|\| \(scR\.worstName === "grounding" && scR\.worst >= worst\)\)\) \{ piece = rf\.piece; v = rfv; q = critR;/.test(gen), "the edit is kept only when the critic passes it or grounding is still its weakest score and no lower, so a failing edit never skips the prune");
 ok(/"reframe: " \+ rf\.why/.test(gen) && /"reframe kept the draft: "/.test(gen), "both outcomes are logged");
 ok(V.REFRAME_START_BEFORE_MS < 6e5 && V.REFRAME_BAND[0] === 0.85 && V.REFRAME_BAND[1] === 1.15, "the edit starts inside the run budget and the band is 85-115%");
+// ANALYSIS-REMARK-1: a line placed where the rails fail is moved by the auto-mark rule
+const facts = "The club was founded in Araraquara in 1950 and plays in the Campeonato Paulista. It reached the final of the state cup. ".repeat(4).trim();
+const reasoning = "The incentive for a regional club is that a cup run pays more than a league place, because the gate money comes at once. ";
+const early = { title: "T", lede: "Ferroviaria is a football club in Araraquara, according to the Wikipedia article on it.", body_md: "<!-- analysis -->\n\n" + facts + "\n\n" + facts + "\n\n" + reasoning.repeat(3).trim() + "\n\n" + reasoning.repeat(2).trim() };
+ok(!V.analysisSplitOk(V.splitText(early)), "the fixture marks its analysis where the rails fail");
+const moved = V.withAutoMark(early);
+ok(V.analysisSplitOk(V.splitText(moved)) && moved.body_md.indexOf("<!-- analysis -->") > moved.body_md.indexOf(facts), "the line is moved to the first reasoning paragraph where the rails hold", V.analysisSplitInfo(V.splitText(moved)));
+ok(moved.body_md.split("<!-- analysis -->").length === 2, "one line remains");
+const noPlace = { title: "T", lede: early.lede, body_md: "<!-- analysis -->\n\n" + reasoning.repeat(6).trim() };
+ok(V.withAutoMark(noPlace).body_md.indexOf("<!-- analysis -->") < 0, "where no paragraph holds the rails the draft goes unmarked (the full rule)");
+const good = { title: "T", lede: early.lede, body_md: facts + "\n\n" + facts + "\n\n<!-- analysis -->\n\n" + reasoning.repeat(3).trim() };
+ok(V.analysisSplitOk(V.splitText(good)) && V.withAutoMark(good) === good, "a line that holds the rails is left where the writer put it");
+// CRITIC-TODAY-1: the critic and the fact-check reviewers know today's date
+ok(V.todayLine(Date.UTC(2026, 9, 13)) .indexOf("TODAY: 2026-10-13.") === 0 && /not invented because it is recent/.test(V.todayLine()), "the date line names today and says a recent date is not invented");
+const cpSrc = src.slice(src.indexOf("async function critiquePiece(env, piece, form, ground) {"), src.indexOf("__name(critiquePiece"));
+ok(/var user = todayLine\(\) \+ NL \+ NL \+ "SOURCE MATERIAL:"/.test(cpSrc), "the critic reads today's date before the source material");
+ok(/var body = FACTCHECK_PROMPT \+ "\\n\\n" \+ todayLine\(\) \+ "\\n\\n--- SOURCE MATERIAL ---\\n"/.test(src), "the fact-check reviewers read today's date");
 const ver = (src.match(/var VERSION = "(\d+)\.(\d+)\.(\d+)/) || []).slice(1).map(Number);
 ok(ver.length === 3 && (ver[0] > 1 || (ver[0] === 1 && ver[1] >= 23)), "VERSION is at least 1.23.0", ver);
 console.log(pass + " passed, " + fail + " failed");
