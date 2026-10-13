@@ -88,5 +88,20 @@ check("the directive asks for the marker", /Begin the systems analysis with a li
   const fa = A.concreteAnalysisItems({ ok: false, unavailable: false, unsupported: ["'Adopting the platform requires learning a new workflow.' -- not in source"], inferences: [], judges: [] });
   check("a check that listed only abstract reasoning passes", fa.ok === true && fa.unsupported.length === 0 && fa.droppedAbstract === 1, fa);
 }
+// ---- Q08-PARAPHRASE-ITEMS-1 (0.24.1, run 387) ---------------------------------------------------------------------------------
+{
+  const A = (await import("./worker.js")).__analysis;
+  const fc = { ok: false, unavailable: false, inferences: [], judges: [], unsupported: [
+    "Next-generation applications need both high data rate and low latency -- not explicitly stated in source",
+    "Current transport protocols fall short -- phrasing not in source",
+    "TCP Cubic, chasing maximum throughput, filled buffers and suffered the latency penalty -- not explicitly stated in source",
+    "the base station cut latency 72x -- figure not in source" ] };
+  const r = A.paraphraseItemsDropped(fc);
+  check("conceded paraphrases without concrete content are dropped", r.droppedParaphrase === 2 && r.unsupported.length === 2, r);
+  check("a named thing still counts even with a paraphrase reason", r.unsupported.some((u) => /TCP Cubic/.test(u)));
+  check("a figure with a plain 'not in source' reason still counts", r.unsupported.some((u) => /72x/.test(u)) && r.ok === false);
+  const onlyPara = A.paraphraseItemsDropped({ ok: false, unavailable: false, unsupported: ["Current transport protocols fall short -- wording not in source"] });
+  check("a check failed only on a conceded paraphrase passes", onlyPara.ok === true && onlyPara.unsupported.length === 0);
+}
 console.log("analysis.test.mjs: " + passes + " passed, " + fails + " failed");
 process.exit(fails ? 1 : 0);
