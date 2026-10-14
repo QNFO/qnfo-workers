@@ -9,6 +9,6 @@
   "error": null,
   "zone_id": "331e4363fd05e8e4fc123ea7d2775411",
   "route_id": "19ab6769115a4f609558686b2b3ed16b",
-  "worker_version": "2.6.0-cron-heartbeat",
-  "ts": "2026-10-13T22:37:10Z"
+  "worker_version": "2.6.1-codeagent",
+  "ts": "2026-10-14T03:08:04Z"
 }
