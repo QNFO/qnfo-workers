@@ -43,6 +43,10 @@ ok(/var objection = findObjection\(md\);/.test(src), "composePiece reads the obj
 ok(/body_md: ledeObj\.rest, objection: findObjection\(md\) \};/.test(src), "the reframe parse reads the objection with findObjection");
 ok(/problems\.push\("objection too thin"\)/.test(src), "the objection-too-thin rail still exists");
 
+// 8. LIKE-PATTERN-50-1: the duplicate-opening key stays under D1's 50-byte LIKE pattern limit
+const km = src.match(/var openKey = [^\n]*\.slice\(0, (\d+)\);/);
+ok(km && Number(km[1]) + 1 <= 50, "the duplicate-opening LIKE pattern (key plus %) is at most 50 bytes", km && km[1]);
+
 const ver = (src.match(/var VERSION = "(\d+)\.(\d+)\.(\d+)/) || []).slice(1).map(Number);
 ok(ver.length === 3 && (ver[0] > 1 || (ver[0] === 1 && (ver[1] > 25 || (ver[1] === 25 && ver[2] >= 3)))), "VERSION is at least 1.25.3", ver);
 console.log(pass + " passed, " + fail + " failed");
