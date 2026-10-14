@@ -1,218 +1,18 @@
 {
  "ok": true,
  "marker": "REMEDIATION-CONSUMER-1",
- "verifier": "remediation-consumer@02b363e6ae6d",
- "due": 429,
+ "verifier": "remediation-consumer@2b96559b9722",
+ "due": 430,
  "pass": 285,
- "fail": 139,
- "skipped": 5,
+ "fail": 141,
+ "skipped": 4,
  "contracts": [
-  {
-   "class": "EVID-GATE-A2-PUBLISHV2",
-   "issue_id": null,
-   "verdict": "fail",
-   "expected": "assert-ok",
-   "observed": "pending: no publish-v2-metadata event since 2026-10-01 15:17",
-   "written": true
-  },
-  {
-   "class": "fm-silent-refile-drop",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "1",
-   "observed": "1",
-   "written": true
-  },
-  {
-   "class": "fm-stuck-view-sla-drift",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "1",
-   "observed": "1",
-   "written": true
-  },
-  {
-   "class": "fm-unprobed-issues",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "1",
-   "observed": "1",
-   "written": true
-  },
-  {
-   "class": "fm-single-heartbeat",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "1",
-   "observed": "1",
-   "written": true
-  },
-  {
-   "class": "fm-view-alias-capture",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "1",
-   "observed": "1",
-   "written": true
-  },
-  {
-   "class": "fm-producer-lateness-in-hours",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "0",
-   "observed": "0",
-   "written": true
-  },
-  {
-   "class": "issue-2591",
-   "issue_id": 2591,
-   "verdict": "fail",
-   "expected": "1",
-   "observed": "0",
-   "written": true
-  },
-  {
-   "class": "issue-2568",
-   "issue_id": 2568,
-   "verdict": "fail",
-   "expected": "1",
-   "observed": "0",
-   "written": true
-  },
-  {
-   "class": "fm-host-census-stale",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "1",
-   "observed": "1",
-   "written": true
-  },
-  {
-   "class": "fm-response-clock-over-120m",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "0",
-   "observed": "0",
-   "written": true
-  },
-  {
-   "class": "fm-observability-escalation-drop",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "1",
-   "observed": "1",
-   "written": true
-  },
-  {
-   "class": "fm-social-channel-drain-silent",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "1",
-   "observed": "1",
-   "written": true
-  },
-  {
-   "class": "fm-d1-like-pattern-length",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "0",
-   "observed": "0",
-   "written": true
-  },
-  {
-   "class": "fm-mail-draft-fabrication",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "0",
-   "observed": "0",
-   "written": true
-  },
-  {
-   "class": "fm-probe-review-refuses-detector",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "0",
-   "observed": "0",
-   "written": true
-  },
-  {
-   "class": "issue-2496",
-   "issue_id": 2496,
-   "verdict": "fail",
-   "expected": "ok",
-   "observed": "pending: filed by qnfo-code-orchestrator, which owns it for 48h",
-   "written": true
-  },
-  {
-   "class": "fm-code-task-claim-held-unstarted",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "0",
-   "observed": "0",
-   "written": true
-  },
-  {
-   "class": "fm-internal-errata-dead-end",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "0",
-   "observed": "0",
-   "written": true
-  },
-  {
-   "class": "fm-tick-reopen-dup-title",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "0",
-   "observed": "0",
-   "written": true
-  },
-  {
-   "class": "fm-code-task-retry-holds-file",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "0",
-   "observed": "0",
-   "written": true
-  },
-  {
-   "class": "fm-code-refusal-not-repaired",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "0",
-   "observed": "0",
-   "written": true
-  },
-  {
-   "class": "issue-2372",
-   "issue_id": 2372,
-   "verdict": "pass",
-   "expected": "ok",
-   "observed": "ok",
-   "written": true
-  },
-  {
-   "class": "issue-2599",
-   "issue_id": 2599,
-   "verdict": "vacuous-probe-result",
-   "expected": "closed",
-   "observed": null,
-   "reason": "probe returned no expected/observed pair"
-  },
   {
    "class": "issue-1978",
    "issue_id": 1978,
    "verdict": "fail",
    "expected": "1",
    "observed": "0",
-   "written": true
-  },
-  {
-   "class": "issue-2007",
-   "issue_id": 2007,
-   "verdict": "fail",
-   "expected": "ok",
-   "observed": "pending: no anchor repair yet and the 14-day window after the 0.3.19 deploy is still open",
    "written": true
   },
   {
@@ -240,27 +40,19 @@
    "written": true
   },
   {
-   "class": "issue-2116",
-   "issue_id": 2116,
-   "verdict": "fail",
-   "expected": "1",
-   "observed": "0",
-   "written": true
-  },
-  {
-   "class": "fm-dissemination-queue-over-cadence",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "0",
-   "observed": "0",
-   "written": true
-  },
-  {
    "class": "issue-2089",
    "issue_id": 2089,
    "verdict": "fail",
    "expected": "ok",
    "observed": "the improvement loop still finds this in its latest run (IMPROVEMENT-LOOP-1 closes it when the finding clears)",
+   "written": true
+  },
+  {
+   "class": "issue-2116",
+   "issue_id": 2116,
+   "verdict": "fail",
+   "expected": "1",
+   "observed": "0",
    "written": true
   },
   {
@@ -280,19 +72,11 @@
    "written": true
   },
   {
-   "class": "issue-2262",
-   "issue_id": 2262,
-   "verdict": "fail",
-   "expected": "ok",
-   "observed": "pending: the row has not yet been re-run by qnfo-research-exec 0.13.0 (PR 990 re-arms it at merge)",
-   "written": true
-  },
-  {
-   "class": "issue-2576",
-   "issue_id": 2576,
-   "verdict": "fail",
-   "expected": "ok",
-   "observed": "pending: filed by qnfo-fleet-control, which owns it for 48h",
+   "class": "fm-dissemination-queue-over-cadence",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "0",
+   "observed": "0",
    "written": true
   },
   {
@@ -308,6 +92,22 @@
    "issue_id": 2187,
    "verdict": "probe-not-machine-executable",
    "reason": "url-not-allowlisted"
+  },
+  {
+   "class": "issue-2262",
+   "issue_id": 2262,
+   "verdict": "fail",
+   "expected": "ok",
+   "observed": "pending: the row has not yet been re-run by qnfo-research-exec 0.13.0 (PR 990 re-arms it at merge)",
+   "written": true
+  },
+  {
+   "class": "issue-2576",
+   "issue_id": 2576,
+   "verdict": "fail",
+   "expected": "ok",
+   "observed": "pending: filed by qnfo-fleet-control, which owns it for 48h",
+   "written": true
   },
   {
    "class": "issue-2252",
@@ -342,22 +142,6 @@
    "written": true
   },
   {
-   "class": "issue-2597",
-   "issue_id": 2597,
-   "verdict": "fail",
-   "expected": "1",
-   "observed": "0",
-   "written": true
-  },
-  {
-   "class": "issue-2604",
-   "issue_id": 2604,
-   "verdict": "fail",
-   "expected": "1",
-   "observed": "recovering",
-   "written": true
-  },
-  {
    "class": "fm-unknown-model-id-silent-default",
    "issue_id": null,
    "verdict": "pass",
@@ -386,4 +170,210 @@
    "issue_id": 2370,
    "verdict": "fail",
    "expected": "parked+queue-moving",
-   "observe
+   "observed": "pending",
+   "written": true
+  },
+  {
+   "class": "issue-2597",
+   "issue_id": 2597,
+   "verdict": "fail",
+   "expected": "1",
+   "observed": "0",
+   "written": true
+  },
+  {
+   "class": "issue-2604",
+   "issue_id": 2604,
+   "verdict": "pass",
+   "expected": "1",
+   "observed": "1",
+   "written": true
+  },
+  {
+   "class": "issue-2380",
+   "issue_id": 2380,
+   "verdict": "fail",
+   "expected": "1",
+   "observed": "0",
+   "written": true
+  },
+  {
+   "class": "issue-2381",
+   "issue_id": 2381,
+   "verdict": "fail",
+   "expected": "ok",
+   "observed": "pending: 3 learner rows since 2026-10-12, none credited for a post the learner did not choose (qnfo-social learnerRecordPost backfill, code-task on the issue)",
+   "written": true
+  },
+  {
+   "class": "fm-compat-date-inert",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "1",
+   "observed": "1",
+   "written": true
+  },
+  {
+   "class": "fm-mvp-fold-hidden-by-later-row",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "0",
+   "observed": "0",
+   "written": true
+  },
+  {
+   "class": "issue-2373",
+   "issue_id": 2373,
+   "verdict": "fail",
+   "expected": "10",
+   "observed": "0",
+   "written": true
+  },
+  {
+   "class": "issue-2379",
+   "issue_id": 2379,
+   "verdict": "fail",
+   "expected": "1",
+   "observed": "0",
+   "written": true
+  },
+  {
+   "class": "fm-sla-shorter-than-consumer-cycle",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "1",
+   "observed": "1",
+   "written": true
+  },
+  {
+   "class": "fm-subscribe-send-failure-silent",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "0",
+   "observed": "0",
+   "written": true
+  },
+  {
+   "class": "issue-2453",
+   "issue_id": 2453,
+   "verdict": "probe-not-machine-executable",
+   "reason": "url-not-allowlisted"
+  },
+  {
+   "class": "issue-2061",
+   "issue_id": 2061,
+   "verdict": "fail",
+   "expected": "ok",
+   "observed": "pending: remediation row wontfix/parked",
+   "written": true
+  },
+  {
+   "class": "fm-lane-null-first-read-nudge",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "0",
+   "observed": "0",
+   "written": true
+  },
+  {
+   "class": "issue-2461",
+   "issue_id": 2461,
+   "verdict": "fail",
+   "expected": "ok",
+   "observed": "the improvement loop still finds this in its latest run (IMPROVEMENT-LOOP-1 closes it when the finding clears)",
+   "written": true
+  },
+  {
+   "class": "issue-2463",
+   "issue_id": 2463,
+   "verdict": "fail",
+   "expected": "ok",
+   "observed": "pending: filed by qnfo-code-orchestrator, which owns it for 48h",
+   "written": true
+  },
+  {
+   "class": "issue-1899",
+   "issue_id": 1899,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "issue-2409",
+   "issue_id": 2409,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "fm-code-merge-race-moved-head",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "1",
+   "observed": "1",
+   "written": true
+  },
+  {
+   "class": "issue-2466",
+   "issue_id": 2466,
+   "verdict": "fail",
+   "expected": "ok",
+   "observed": "the improvement loop still finds this in its latest run (IMPROVEMENT-LOOP-1 closes it when the finding clears)",
+   "written": true
+  },
+  {
+   "class": "fm-sla-grace-equals-target",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "issue-2072",
+   "issue_id": 2072,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "issue-2272",
+   "issue_id": 2272,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "fm-subscribe-confirm-mail-unbounded",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "0",
+   "observed": "0",
+   "written": true
+  },
+  {
+   "class": "fm-ratio-over-failure-only-table",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "fm-collector-without-credential",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "1",
+   "observed": "1",
+   "written": true
+  },
+  {
+   "class": "fm-judge-context-narrower-than-writer",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "0",
+   "obs
