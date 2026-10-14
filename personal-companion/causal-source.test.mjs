@@ -37,7 +37,13 @@ const noEnd = "a".repeat(50) + ". " + "b".repeat(500);
 ok(V.cutAtSentence(noEnd, 400) === noEnd.slice(0, 400), "when the last sentence end would keep less than 60% of the share, the share is kept as it was");
 ok(V.cutAtSentence('He said "it is over." Then he left the room for good and never came back to it again.', 30) === 'He said "it is over."', "a closing quote after the full stop stays with its sentence");
 const fit = V.fitAnchors([{ kind: "concept", ref: "r", title: "T", text: sents.repeat(400) }, { kind: "concept", ref: "r2", title: "U", text: sents.repeat(400) }, { kind: "concept", ref: "r3", title: "W", text: sents.repeat(400) }]);
-ok(fit.every((a) => /[.!?]$/.test(a.text) && a.text.length <= 6000), "every fitted source ends on a sentence and stays inside its share", fit.map((a) => a.text.length));
+// PRIMARY-SHARE-1 (1.25.5): the primary keeps 55% of GROUND_MAX (9900 of 18000) and the two others share the rest (4050 each)
+ok(fit.every((a, i) => /[.!?]$/.test(a.text) && a.text.length <= (i === 0 ? 9900 : 4050)), "every fitted source ends on a sentence and stays inside its share", fit.map((a) => a.text.length));
+ok(fit[0].text.length > 2 * fit[1].text.length && fit.reduce((n, a) => n + a.text.length, 0) <= 18000, "the subject keeps the larger share and the total stays inside the budget", fit.map((a) => a.text.length));
+const fit5 = V.fitAnchors([0, 1, 2, 3, 4].map((i) => ({ kind: "concept", ref: "r" + i, title: "T" + i, text: sents.repeat(400) })));
+ok(fit5[0].text.length > 9000 && fit5.slice(1).every((a) => a.text.length <= 2025), "with five anchors the subject keeps about 9900 characters, not 3600", fit5.map((a) => a.text.length));
+const fit1 = V.fitAnchors([{ kind: "concept", ref: "r", title: "T", text: sents.repeat(400) }]);
+ok(fit1[0].text.length <= 18000 && fit1[0].text.length > 17000, "a single anchor keeps the whole budget");
 
 // WORKERS-BP-LOGGING-personal-companion-1
 const swallowed = /\.catch\s*\(\s*(?:function\s*\([^)]*\)\s*\{\s*\}|\([^)]*\)\s*=>\s*\{\s*\}|[A-Za-z_$][\w$]*\s*=>\s*\{\s*\})\s*\)|\bcatch\s*(?:\([^)]*\))?\s*\{\s*\}/g;
