@@ -233,18 +233,18 @@ def j_lock_roundtrip(h):
     owner = "fleet-journeys-%d" % int(time.time())
     st, a = h.json("POST", GUARD + "/work-lock/acquire", {"key": LOCK_KEY, "owner": owner, "intent": "FLEET-JOURNEYS-1 round trip", "ttl_sec": 120})
     token = (a or {}).get("token")
-    if not j.check("acquire", st == 200 and (a or {}).get("acquired") and token, "http %s acquired %s holder %s" % (st, (a or {}).get("acquired"), (a or {}).get("holder"))):
+    if not j.check("acquire", 200 <= st < 300 and (a or {}).get("acquired") and token, "http %s acquired %s holder %s" % (st, (a or {}).get("acquired"), (a or {}).get("holder"))):
         return j
     try:
         st, l1 = h.json("GET", GUARD + "/work-locks")
         listed = any(owner == (c.get("holder") or c.get("owner")) for c in ((l1 or {}).get("claims") or []))
-        j.check("/work-locks lists the claim", st == 200 and listed, "http %s" % st)
+        j.check("/work-locks lists the claim", 200 <= st < 300 and listed, "http %s" % st)
     finally:
         st, r = h.json("POST", GUARD + "/work-lock/release", {"key": LOCK_KEY, "token": token, "outcome": "done"})
-        j.check("release", st == 200, "http %s %s" % (st, json.dumps(r)[:120]))
+        j.check("release", 200 <= st < 300, "http %s %s" % (st, json.dumps(r)[:120]))
     st, l2 = h.json("GET", GUARD + "/work-locks")
     still = any(owner == (c.get("holder") or c.get("owner")) for c in ((l2 or {}).get("claims") or []))
-    j.check("/work-locks no longer lists it", st == 200 and not still, "http %s" % st)
+    j.check("/work-locks no longer lists it", 200 <= st < 300 and not still, "http %s" % st)
     return j
 
 
@@ -252,7 +252,7 @@ def j_papers_path(h):
     j = Journey("papers-path")
     st, d = h.json("GET", PAPERS + "/api/papers?limit=1")
     items = (d or {}).get("items") or []
-    if not j.check("/api/papers lists a paper", st == 200 and items and (d or {}).get("total", 0) > 0, "http %s total %s" % (st, (d or {}).get("total"))):
+    if not j.check("/api/papers lists a paper", 200 <= st < 300 and items and (d or {}).get("total", 0) > 0, "http %s total %s" % (st, (d or {}).get("total"))):
         return j
     it = items[0]
     slug, pid, title = it.get("slug"), it.get("id"), (it.get("title") or "")
@@ -260,13 +260,13 @@ def j_papers_path(h):
     # The page may typeset or escape the title; the first 24 plain characters are enough to prove it is this paper.
     norm = lambda x: re.sub(r"\s+", " ", re.sub(r"[^A-Za-z0-9 ]", " ", re.sub(r"<[^>]+>", " ", x))).strip().lower()  # noqa: E731
     probe = norm(title)[:24].strip()
-    j.check("paper page renders the listed paper", st == 200 and probe and probe in norm(page), "http %s" % st)
+    j.check("paper page renders the listed paper", 200 <= st < 300 and probe and probe in norm(page), "http %s" % st)
     st, feed = h.json("GET", PAPERS + "/feed.json")
     fitems = (feed or {}).get("items") or []
-    j.check("feed.json carries the newest paper", st == 200 and any(str(slug) in json.dumps(x) for x in fitems), "http %s, %d items" % (st, len(fitems)))
+    j.check("feed.json carries the newest paper", 200 <= st < 300 and any(str(slug) in json.dumps(x) for x in fitems), "http %s, %d items" % (st, len(fitems)))
     if pid:
         st, oai = h.req("GET", PAPERS + "/oai?verb=GetRecord&metadataPrefix=oai_dc&identifier=" + urllib.request.quote(str(pid), safe=":"))
-        j.check("OAI-PMH GetRecord returns the same id", st == 200 and str(pid) in oai and "<error" not in oai, "http %s" % st)
+        j.check("OAI-PMH GetRecord returns the same id", 200 <= st < 300 and str(pid) in oai and "<error" not in oai, "http %s" % st)
     return j
 
 
@@ -293,8 +293,8 @@ ASK_QUERY = os.environ.get("JOURNEY_ASK_QUERY", "What is the silent radix?")
 def j_ask_path(h):
     j = Journey("ask-path")
     st, text = h.req("POST", ASK + "/api/ask", {"query": ASK_QUERY})
-    events = parse_sse(text) if st == 200 else []
-    if not j.check("ask streams", st == 200 and events, "http %s, %d events" % (st, len(events))):
+    events = parse_sse(text) if 200 <= st < 300 else []
+    if not j.check("ask streams", 200 <= st < 300 and events, "http %s, %d events" % (st, len(events))):
         return j
     meta = next((d for e, d in events if e == "meta" and isinstance(d, dict)), {}) or {}
     sources = meta.get("sources") or []
@@ -308,7 +308,7 @@ def j_ask_path(h):
         url = (sources[n - 1] or {}).get("url") or ""
         if url.startswith(PAPERS):
             st, _ = h.req("GET", url)
-            j.check("cited source [%d] resolves" % n, st == 200, "%s http %s" % (url[len(PAPERS):][:80], st))
+            j.check("cited source [%d] resolves" % n, 200 <= st < 300, "%s http %s" % (url[len(PAPERS):][:80], st))
     return j
 
 

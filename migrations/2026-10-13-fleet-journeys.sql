@@ -18,6 +18,7 @@
 -- First runs 2026-10-13 23:40Z-01:00Z: 28 of 28 workers answered /health 200 while three cross-worker defects stood: 9 registry versions
 -- wrong (qnfo-ops sweep regex), 11 workers invisible to qnfo-ops /fleet (cf-1042 with a binding to each unused), and 228 error events a day
 -- from qnfo-ops /registry/register (an ALTER that always fails, logged as an error). qnfo-ops 2.48.1 fixes all three.
+-- spof-review: journey_tick_age_refresh rides fleet_tick, which two producers write (cron:qnfo-code-orchestrator, cron:qnfo-fleet-dashboard); the journeys themselves have a second runner outside the account (scripts/fleet_journeys.py, runner gha), and a stale refresh is caught by metric_staleness_breach_rec.
 -- APPLY-BY: ci
 -- DB: qnfo-audit
 -- Rollback: DROP VIEW IF EXISTS v_journey_state; DROP TABLE IF EXISTS journey_runs; DELETE FROM analytics_metric_triggers WHERE metric_key = 'journey_tick_age_min'; DELETE FROM remediation_contracts WHERE class IN ('fm-registry-version-sweep-regex', 'fm-fleet-census-blind', 'fm-ops-schema-alter-noise', 'fm-cf-issues-unconsumed', 'fm-outreach-chain-enum', 'fm-synthetic-ask-pollution'); DELETE FROM failure_modes WHERE fm_key IN ('registry-version-sweep-regex', 'fleet-census-blind', 'ops-schema-alter-noise', 'cf-issues-unconsumed', 'outreach-chain-enum', 'synthetic-ask-pollution'); DELETE FROM metric_registry WHERE metric IN ('fleet_journeys_failing', 'journey_tick_age_min'); DELETE FROM capability_ledger WHERE capability = 'run end-to-end multi-worker journeys and self-file each failing one'
