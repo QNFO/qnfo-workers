@@ -113,7 +113,7 @@ const good = { title: "T", lede: early.lede, body_md: facts + "\n\n" + facts + "
 ok(V.analysisSplitOk(V.splitText(good)) && V.withAutoMark(good) === good, "a line that holds the rails is left where the writer put it");
 // CRITIC-TODAY-1: the critic and the fact-check reviewers know today's date
 ok(V.todayLine(Date.UTC(2026, 9, 13)) .indexOf("TODAY: 2026-10-13.") === 0 && /not invented because it is recent/.test(V.todayLine()), "the date line names today and says a recent date is not invented");
-const cpSrc = src.slice(src.indexOf("async function critiquePiece(env, piece, form, ground) {"), src.indexOf("__name(critiquePiece"));
+const cpSrc = src.slice(src.indexOf("async function critiquePiece(env, piece, form, ground"), src.indexOf("__name(critiquePiece"));
 ok(/var user = todayLine\(\) \+ NL \+ NL \+ "SOURCE MATERIAL:"/.test(cpSrc), "the critic reads today's date before the source material");
 ok(/var body = FACTCHECK_PROMPT \+ "\\n\\n" \+ todayLine\(\) \+ "\\n\\n--- SOURCE MATERIAL ---\\n"/.test(src), "the fact-check reviewers read today's date");
 const ver = (src.match(/var VERSION = "(\d+)\.(\d+)\.(\d+)/) || []).slice(1).map(Number);
