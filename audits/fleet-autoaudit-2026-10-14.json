@@ -1,5 +1,5 @@
 {
-  "audited_at": "2026-10-14 03:08:23",
+  "audited_at": "2026-10-14 03:36:32",
   "d1_write_failures": [],
   "d1_writes_ok": 115,
   "guard": {
@@ -533,7 +533,7 @@
     "sync_workers": [
       {
         "dir": "idea-hub",
-        "version": "1.10.0-topic-clusters-derived",
+        "version": "1.10.1-bp-logging",
         "worker": "idea-hub"
       },
       {
@@ -543,7 +543,7 @@
       },
       {
         "dir": "personal-companion",
-        "version": "1.24.0-causal-source",
+        "version": "1.25.2-heartbeat",
         "worker": "personal-companion"
       },
       {
@@ -779,9 +779,9 @@
       "worker": "funding"
     },
     "idea-hub": {
-      "before": "1.10.0-topic-clusters-derived",
+      "before": "1.10.1-bp-logging",
       "http": 200,
-      "live": "1.10.0-topic-clusters-derived",
+      "live": "1.10.1-bp-logging",
       "match": 1,
       "note": "SYNC",
       "worker": "idea-hub"
@@ -900,9 +900,9 @@
       "worker": "personal-api"
     },
     "personal-companion": {
-      "before": "1.24.0-causal-source",
+      "before": "1.25.2-heartbeat",
       "http": 200,
-      "live": "1.24.0-causal-source",
+      "live": "1.25.2-heartbeat",
       "match": 1,
       "note": "SYNC",
       "worker": "personal-companion"
