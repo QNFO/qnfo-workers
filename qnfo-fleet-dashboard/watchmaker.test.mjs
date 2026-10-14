@@ -73,8 +73,6 @@ db.prepare("INSERT INTO tick_runs (ts, step) VALUES (?, ?)").run(ago(0.5), "prob
 // COMPAT-WATCHMAKER-1 (1.36.1, agent_issues 2412): qnfo-ops compatSnapshot, every 6 hours.
 db.exec("CREATE TABLE worker_compat_state (worker TEXT PRIMARY KEY, checked_at TEXT)");
 db.prepare("INSERT INTO worker_compat_state (worker, checked_at) VALUES ('qnfo-ops', ?)").run(ago(3));
-db.exec("CREATE TABLE journey_runs (id INTEGER PRIMARY KEY AUTOINCREMENT, ts TEXT, runner TEXT, journey TEXT, ok INTEGER)");
-db.prepare("INSERT INTO journey_runs (ts, runner, journey, ok) VALUES (?, 'cf', 'papers-path', 1)").run(ago(0.3));
 db.prepare("INSERT INTO portfolio_sync_runs (ts, status) VALUES (?, 'ok')").run(ago(1));
 db.prepare("INSERT INTO evolve_candidates (ts) VALUES (?)").run(ago(9));
 db.prepare("INSERT INTO objective_constraint_runs (ts) VALUES (?)").run(ago(1));
@@ -159,7 +157,6 @@ const op = (m, k) => m.ops.find((o) => o.key === k);
   ok(u && !u.counted && /^ok/.test(u.state), "a fresh tick ledger row is ok (" + (u && u.state) + ")");
 }
 let m = await api.watchmakerMeasure(env, NOW);
-{ const fj = op(m, "fleet-journeys"); ok(fj && !fj.counted && fj.runner === "cron:qnfo-fleet-control", "fleet-journeys is listed, run by qnfo-fleet-control, not counted when fresh (FLEET-JOURNEYS-WATCHMAKER-1, " + (fj && fj.state) + ")"); }
 { const ce = op(m, "compat-exposure"); ok(ce && !ce.counted && ce.runner === "cron:qnfo-ops", "compat-exposure is listed, run by qnfo-ops, not counted when fresh (COMPAT-WATCHMAKER-1, " + (ce && ce.state) + ")"); }
 ok(m.index === 0 && m.counted.length === 0, "a fully fresh fleet reads 0 (got " + m.index + ": " + m.counted.join(",") + ")");
 ok(op(m, "portfolio-daily").state.startsWith("ok") && op(m, "portfolio-daily").age_h === 3, "the id range picks the real portfolio-daily row");

@@ -20,7 +20,7 @@
 -- from qnfo-ops /registry/register (an ALTER that always fails, logged as an error). qnfo-ops 2.48.1 fixes all three.
 -- APPLY-BY: ci
 -- DB: qnfo-audit
--- Rollback: DROP VIEW IF EXISTS v_journey_state; DROP TABLE IF EXISTS journey_runs; DELETE FROM analytics_metric_triggers WHERE metric_key = 'journey_tick_age_min'; DELETE FROM remediation_contracts WHERE class IN ('fm-registry-version-sweep-regex', 'fm-fleet-census-blind', 'fm-ops-schema-alter-noise'); DELETE FROM failure_modes WHERE fm_key IN ('registry-version-sweep-regex', 'fleet-census-blind', 'ops-schema-alter-noise'); DELETE FROM metric_registry WHERE metric IN ('fleet_journeys_failing', 'journey_tick_age_min'); DELETE FROM capability_ledger WHERE capability = 'run end-to-end multi-worker journeys and self-file each failing one'
+-- Rollback: DROP VIEW IF EXISTS v_journey_state; DROP TABLE IF EXISTS journey_runs; DELETE FROM analytics_metric_triggers WHERE metric_key = 'journey_tick_age_min'; DELETE FROM remediation_contracts WHERE class IN ('fm-registry-version-sweep-regex', 'fm-fleet-census-blind', 'fm-ops-schema-alter-noise', 'fm-cf-issues-unconsumed', 'fm-outreach-chain-enum', 'fm-synthetic-ask-pollution'); DELETE FROM failure_modes WHERE fm_key IN ('registry-version-sweep-regex', 'fleet-census-blind', 'ops-schema-alter-noise', 'cf-issues-unconsumed', 'outreach-chain-enum', 'synthetic-ask-pollution'); DELETE FROM metric_registry WHERE metric IN ('fleet_journeys_failing', 'journey_tick_age_min'); DELETE FROM capability_ledger WHERE capability = 'run end-to-end multi-worker journeys and self-file each failing one'
 -- BACKUP: journey_runs
 
 CREATE TABLE IF NOT EXISTS journey_runs (
@@ -83,10 +83,25 @@ INSERT OR IGNORE INTO failure_modes (fm_key, failure_mode, root_cause, remediati
   'fm-fleet-census-blind: the newest binding-census run of each runner passed', 'fm-fleet-census-blind', '2026-10-13',
   '11 of 28 rows healthy:null, error cf-1042-no-published-route', 'the census and every consumer of /fleet cannot tell a down worker from a blind probe'),
  ('ops-schema-alter-noise', 'qnfo-ops logs an error on every /registry/register call',
-  'ensureSchema runs ALTER TABLE ... ADD COLUMN upstream_model on every call and logs the expected "duplicate column" answer with console.error; ERROR-DETAIL-CAPTURE-1 captures each as an error event (228 a day, 92% of qnfo-ops error events)',
-  'qnfo-ops 2.48.1 SCHEMA-ALTER-QUIET-1: the duplicate-column answer is not logged',
-  'fm-ops-schema-alter-noise: no worker_logs row in the last 2 h carries the duplicate-column message', 'fm-ops-schema-alter-noise', '2026-10-13',
-  'traffic-health reads qnfo-ops above a 5% error rate, top route /registry/register', 'real errors in qnfo-ops are buried under noise and its error rate reads high');
+  'ensureSchema runs ALTER TABLE ... ADD COLUMN upstream_model on every call and logs the expected "duplicate column" answer with console.error; ERROR-DETAIL-CAPTURE-1 captures each as an error event (228 a day, 92% of qnfo-ops error events). The same pattern ran in qnfo-fleet-control (evolve and code-task columns, about 15 lines each hourly tick) and qnfo-social (three columns), and Cloudflare Observability grouped each column as its own issue',
+  'qnfo-ops 2.48.1 SCHEMA-ALTER-QUIET-1, qnfo-fleet-control 0.27.0 and qnfo-social 0.14.3 LOG-NOISE-1: the duplicate-column answer is not logged',
+  'fm-ops-schema-alter-noise: no worker_logs row of any worker in the last 2 h carries the duplicate-column message', 'fm-ops-schema-alter-noise', '2026-10-13',
+  'traffic-health reads qnfo-ops above a 5% error rate, top route /registry/register', 'real errors in qnfo-ops are buried under noise and its error rate reads high'),
+ ('cf-issues-unconsumed', 'Cloudflare Workers Observability Issues are ingested but nothing acts on them',
+  'qnfo-fleet-control pollObservability inserted each Cloudflare issue group with INSERT OR IGNORE in state new: the payload (lastObserved, count, status) froze at first sight, resolved groups were never marked, and no loop read the rows (96 rows in state new on 2026-10-14, 0 resolved)',
+  'qnfo-fleet-control 0.27.0 CF-ISSUES-LOOP-1: the payload is refreshed on every poll, active rows are tracked and groups that left the active list are resolved; FLEET-JOURNEYS-2 traffic-health fails on any error group seen in 6 h (scanner probes aside) and on any 5xx group the telemetry query misses',
+  'fm-cf-issues-unconsumed: no worker-observability row of fleet_issue_dispatch sits in state new', 'fm-cf-issues-unconsumed', '2026-10-14',
+  'fleet_issue_dispatch category worker-observability: every row state new, dashboard "observability issue(s) observed in the last 3h" with no consumer', 'recurring failures Cloudflare already grouped go unremediated'),
+ ('outreach-chain-enum', 'the outreach integration chain reads empty-match while candidates wait',
+  'qnfo-observability watched outreach_queue status pending, needs-email and queued; radar-hub writes needs-contact and qnfo-cloud-ops jobOutreach drains it, so 12 waiting rows were invisible and the dashboard showed DEGRADED (0 of 116 rows matched)',
+  'qnfo-observability 1.4.6 OUTREACH-CHAIN-ENUM-2: the chain counts needs-contact',
+  'fm-outreach-chain-enum: every outreach_queue row in a waiting status is one the chain counts', 'fm-outreach-chain-enum', '2026-10-14',
+  'integration chain Outreach queue -> send drain: empty-match', 'a stuck outreach queue would read as healthy, and the dashboard reads DEGRADED for a queue that is fine'),
+ ('synthetic-ask-pollution', 'end-to-end journey questions would count in the ask metrics',
+  'qnfo-ai-search logs every question to ask_events and its metrics, judge and golden-set loop read them; it answers about 11 real questions a day, so a scheduled journey question would dominate its quality and latency metrics',
+  'qnfo-ai-search 2.6.2 SYNTHETIC-TAG-1: a request with x-qnfo-synthetic: 1 is logged as limited synthetic and every reader excludes it; both journey runners send the header',
+  'fm-synthetic-ask-pollution: no ask_events row of the last 7 days that a metric counts (limited IS NULL) carries the journey question', 'fm-synthetic-ask-pollution', '2026-10-14',
+  'ask_events rows with the query of the ask journey and limited NULL', 'the ask loop tunes and reports on synthetic traffic');
 
 INSERT OR IGNORE INTO remediation_contracts (class, issue_id, precondition, action, verify_probe, verify_transport, max_attempts, escalate_to, expected_cadence_h, status) VALUES
  ('fm-registry-version-sweep-regex', NULL, 'FAILURE-MODE-DETECTOR-OWN-1', 'failure-mode detector',
@@ -96,7 +111,16 @@ INSERT OR IGNORE INTO remediation_contracts (class, issue_id, precondition, acti
   'SELECT ''0'' AS expected, CAST((SELECT COUNT(*) FROM v_journey_state WHERE journey = ''binding-census'' AND ok = 0 AND age_min <= 120) + (SELECT CASE WHEN EXISTS (SELECT 1 FROM v_journey_state WHERE journey = ''binding-census'' AND age_min <= 120) THEN 0 ELSE 1 END) AS TEXT) AS observed',
   'd1-query', 3, 'qnfo-fleet-control', 1, 'active'),
  ('fm-ops-schema-alter-noise', NULL, 'FAILURE-MODE-DETECTOR-OWN-1', 'failure-mode detector',
-  'SELECT ''0'' AS expected, CAST((SELECT COUNT(*) FROM worker_logs WHERE script_name = ''qnfo-ops'' AND ts_ms > (CAST(strftime(''%s'', ''now'') AS INTEGER) - 7200) * 1000 AND exceptions_json LIKE ''%duplicate column%'') AS TEXT) AS observed',
+  'SELECT ''0'' AS expected, CAST((SELECT COUNT(*) FROM worker_logs WHERE ts_ms > (CAST(strftime(''%s'', ''now'') AS INTEGER) - 7200) * 1000 AND exceptions_json LIKE ''%duplicate column%'') AS TEXT) AS observed',
+  'd1-query', 3, 'qnfo-fleet-control', 1, 'active'),
+ ('fm-cf-issues-unconsumed', NULL, 'FAILURE-MODE-DETECTOR-OWN-1', 'failure-mode detector',
+  'SELECT ''0'' AS expected, CAST((SELECT COUNT(*) FROM fleet_issue_dispatch WHERE category = ''worker-observability'' AND state = ''new'') AS TEXT) AS observed',
+  'd1-query', 3, 'qnfo-fleet-control', 1, 'active'),
+ ('fm-outreach-chain-enum', NULL, 'FAILURE-MODE-DETECTOR-OWN-1', 'failure-mode detector',
+  'SELECT ''0'' AS expected, CAST((SELECT COUNT(*) FROM outreach_queue WHERE status NOT IN (''pending'', ''needs-email'', ''needs-contact'', ''queued'', ''sent'') AND status NOT LIKE ''skipped%'' AND status NOT LIKE ''held%'' AND status NOT LIKE ''failed%'' AND status NOT LIKE ''bounced%'' AND status NOT LIKE ''replied%'' AND status NOT LIKE ''suppressed%'') AS TEXT) AS observed',
+  'd1-query', 3, 'qnfo-fleet-control', 1, 'active'),
+ ('fm-synthetic-ask-pollution', NULL, 'FAILURE-MODE-DETECTOR-OWN-1', 'failure-mode detector',
+  'SELECT ''0'' AS expected, CAST((SELECT COUNT(*) FROM ask_events WHERE ts > strftime(''%Y-%m-%dT%H:%M:%SZ'', ''now'', ''-7 days'') AND limited IS NULL AND query = ''What is the silent radix?'' AND ts > ''2026-10-15'') AS TEXT) AS observed',
   'd1-query', 3, 'qnfo-fleet-control', 1, 'active');
 
 INSERT OR IGNORE INTO capability_ledger (capability, provenance, prerequisites, reliability, acquired_at, last_exercised_at, evidence) VALUES

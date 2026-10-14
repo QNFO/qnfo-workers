@@ -163,7 +163,16 @@ ok(r.failing.indexOf("traffic-health") < 0, "errors older than the 6 h window no
   await M.journeyTick(mkEnv(d, NOW), { now: NOW });
   f = JSON.parse(q(d, "SELECT failed_json f FROM journey_runs WHERE journey = 'traffic-health'")[0].f);
   ok(f.some((x) => /telemetry sees every 5xx group/.test(x.step) && /qnfo-ai/.test(x.detail)), "a 5xx group Cloudflare reports but telemetry missed fails as blind", f);
-  globalThis.__tel = []; }
+  globalThis.__tel = [];
+  // CF-ISSUES-LOOP-1: an active Cloudflare error group seen in 6 h fails traffic-health; a scanner probe group and a stale group do not.
+  d = mkDb();
+  const ins2 = d.raw.prepare("INSERT INTO fleet_issue_dispatch VALUES (?, 'worker-observability', ?)");
+  ins2.run("cf-obs-a", JSON.stringify({ service: "qnfo-fleet-control", title: "Unexpected end of JSON input", status: "active", lastObserved: NOW - 900e3 }));
+  ins2.run("cf-obs-b", JSON.stringify({ service: "qnfo-gateway", title: "Potential vulnerability scan · wordpress · low risk", status: "active", lastObserved: NOW - 900e3 }));
+  ins2.run("cf-obs-c", JSON.stringify({ service: "qnfo-ai", title: "Old failure", status: "active", lastObserved: NOW - 8 * 3600e3 }));
+  await M.journeyTick(mkEnv(d, NOW), { now: NOW });
+  f = JSON.parse(q(d, "SELECT failed_json f FROM journey_runs WHERE journey = 'traffic-health'")[0].f);
+  ok(f.length === 1 && /Cloudflare Observability error group/.test(f[0].step) && /qnfo-fleet-control: Unexpected end/.test(f[0].detail) && !/wordpress|Old failure/.test(f[0].detail), "a recurring Cloudflare error group fails traffic-health; scanner probes and stale groups do not", f); }
 
 // 5b. Negative control: a gateway that answers 200 for a paper that cannot exist fails open; its hops never earn a code task.
 { const d = mkDb(); const rr = await M.journeyTick(mkEnv(d, NOW, { failopen: true }), { now: NOW });

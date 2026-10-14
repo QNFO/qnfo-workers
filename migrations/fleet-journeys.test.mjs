@@ -16,6 +16,9 @@ CREATE TABLE remediation_contracts (id INTEGER PRIMARY KEY AUTOINCREMENT, class 
 CREATE TABLE capability_ledger (capability TEXT PRIMARY KEY, provenance TEXT NOT NULL, prerequisites TEXT, reliability TEXT, acquired_at TEXT NOT NULL, last_exercised_at TEXT, evidence TEXT NOT NULL);
 CREATE TABLE fleet_tick (id INTEGER PRIMARY KEY AUTOINCREMENT, source TEXT, ts TEXT DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')));
 CREATE TABLE worker_logs (id INTEGER PRIMARY KEY AUTOINCREMENT, ts_ms INTEGER, script_name TEXT, exceptions_json TEXT);
+CREATE TABLE fleet_issue_dispatch (fingerprint TEXT PRIMARY KEY, category TEXT, state TEXT);
+CREATE TABLE outreach_queue (id TEXT PRIMARY KEY, status TEXT);
+CREATE TABLE ask_events (id TEXT PRIMARY KEY, ts TEXT, query TEXT, limited TEXT);
 CREATE TABLE decision_log (id INTEGER PRIMARY KEY AUTOINCREMENT, actor TEXT, assumption TEXT, action TEXT, evidence TEXT, outcome TEXT, blast_radius TEXT, rollback_path TEXT, capability_gain TEXT, predicted_outcome TEXT, reach_gain TEXT, surfaces_tested TEXT);`);
 db.exec(sql);
 const q = (s, ...a) => db.prepare(s).all(...a);
@@ -26,7 +29,7 @@ const m = q("SELECT metric, refresh_class FROM metric_registry ORDER BY metric")
 ok(m.length === 2 && m[0].metric === "fleet_journeys_failing" && m[1].metric === "journey_tick_age_min", "both metrics registered", m);
 const t = q("SELECT metric_key, operator, threshold FROM analytics_metric_triggers");
 ok(t.length === 1 && t[0].metric_key === "journey_tick_age_min" && t[0].operator === "gt" && t[0].threshold === 60, "only the tick age has a trigger (fleet_journeys_failing self-files)", t);
-ok(q("SELECT COUNT(*) n FROM failure_modes")[0].n === 3 && q("SELECT COUNT(*) n FROM capability_ledger")[0].n === 1, "three failure modes, one capability");
+ok(q("SELECT COUNT(*) n FROM failure_modes")[0].n === 6 && q("SELECT COUNT(*) n FROM capability_ledger")[0].n === 1, "six failure modes, one capability");
 
 // The heartbeat does not invent an age before the server-side tick has ever run.
 db.prepare("INSERT INTO fleet_tick (source) VALUES ('test')").run();
@@ -52,7 +55,20 @@ ok(probe("fm-ops-schema-alter-noise").observed === "1", "a fresh duplicate-colum
 db.prepare("UPDATE worker_logs SET ts_ms = ?").run(Date.now() - 3 * 3600e3);
 ok(probe("fm-ops-schema-alter-noise").observed === "0", "older than 2 h: green");
 
+db.prepare("INSERT INTO worker_logs (ts_ms, script_name, exceptions_json) VALUES (?, 'qnfo-social', ?)").run(Date.now() - 600e3, '[{"message":"D1_ERROR: duplicate column name: channel"}]');
+ok(probe("fm-ops-schema-alter-noise").observed === "1", "the noise detector covers every worker, not only qnfo-ops");
+db.exec("DELETE FROM worker_logs");
+db.prepare("INSERT INTO fleet_issue_dispatch VALUES ('cf-obs-1', 'worker-observability', 'new')").run();
+ok(probe("fm-cf-issues-unconsumed").observed === "1", "a Cloudflare issue row stuck in new keeps the detector red");
+db.exec("UPDATE fleet_issue_dispatch SET state = 'tracked'");
+ok(probe("fm-cf-issues-unconsumed").observed === "0", "tracked rows: green");
+db.prepare("INSERT INTO outreach_queue VALUES ('o1', 'needs-contact'), ('o2', 'skipped-no-email'), ('o3', 'held-segment-stopped')").run();
+ok(probe("fm-outreach-chain-enum").observed === "0", "known outreach statuses: green");
+db.prepare("INSERT INTO outreach_queue VALUES ('o4', 'awaiting-review')").run();
+ok(probe("fm-outreach-chain-enum").observed === "1", "a new waiting status the chain does not count turns it red");
+db.prepare("INSERT INTO ask_events VALUES ('a1', strftime('%Y-%m-%dT%H:%M:%SZ', 'now'), 'What is the silent radix?', 'synthetic')").run();
+ok(probe("fm-synthetic-ask-pollution").observed === "0", "a tagged journey question is not pollution");
 db.exec(sql);
-ok(q("SELECT COUNT(*) n FROM decision_log")[0].n === 1 && q("SELECT COUNT(*) n FROM remediation_contracts")[0].n === 3 && q("SELECT COUNT(*) n FROM analytics_metric_triggers")[0].n === 1 && q("SELECT COUNT(*) n FROM journey_runs")[0].n === 5, "idempotent");
+ok(q("SELECT COUNT(*) n FROM decision_log")[0].n === 1 && q("SELECT COUNT(*) n FROM remediation_contracts")[0].n === 6 && q("SELECT COUNT(*) n FROM analytics_metric_triggers")[0].n === 1 && q("SELECT COUNT(*) n FROM journey_runs")[0].n === 5, "idempotent");
 console.log(`fleet-journeys: ${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

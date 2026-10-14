@@ -29,7 +29,7 @@ const state = { calls: [], blobStatus: 200 };
 async function timedFetch(url) {
   const p = String(url).replace("https://api.github.com/repos/QNFO/qnfo-workers", "");
   state.calls.push(p);
-  const resp = (status, j) => ({ status, async json() { return j; } });
+  const resp = (status, j) => ({ status, async json() { return j; }, async text() { return j === undefined || j === null ? "" : JSON.stringify(j); } });
   let m;
   if ((m = /^\/contents\/(.+)\?ref=(.+)$/.exec(p))) {
     const path = m[1].split("/").map(decodeURIComponent).join("/");

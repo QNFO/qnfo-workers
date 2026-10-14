@@ -61,7 +61,7 @@ let gh;
 function freshGh() {
   gh = { calls: [], pulls: {}, files: {}, checks: {}, statuses: {}, contents: {}, mergeBase: {}, branches: { main: "main1" }, compareFiles: {}, merges: [], comments: [], commits: [], refs: [], blobs: [], newPulls: [], down: false, mergeStatus: null, seq: 0 };
 }
-function resp(status, j) { return { status, async json() { return j; } }; }
+function resp(status, j) { return { status, async json() { return j; }, async text() { return j === undefined || j === null ? "" : JSON.stringify(j); } }; }
 function ghRoute(method, path, body) {
   gh.calls.push(method + " " + path);
   if (gh.down) return resp(503, { message: "down" });
