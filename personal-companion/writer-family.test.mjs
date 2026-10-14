@@ -51,6 +51,33 @@ const cw = src.slice(src.indexOf("async function callWorkersAI("), src.indexOf("
 ok(/if \(role !== "critic"\) authorFamilies\[familyOf\(m\)\] = 1;/.test(cw), "a writer or editor answer records its family; a critic answer does not");
 ok(/schema ok, writer order " \+ await loadWriterOrder\(env\)/.test(src), "each run reads the switch and logs the writer order");
 
+
+// EVENT-POOL-1: historical events feed the topic pool
+const feed = { events: [
+  { text: "Norman conquest", year: 1066, pages: [{ normalizedtitle: "Battle of Hastings", description: "Battle in 1066" }, { normalizedtitle: "1066" }] },
+  { text: "a year first", year: 1929, pages: [{ normalizedtitle: "1929" }, { normalizedtitle: "October 24" }, { normalizedtitle: "Wall Street Crash of 1929", description: "Stock market crash" }] },
+  { text: "a country first", year: 2020, pages: [{ normalizedtitle: "United States", description: "Country primarily in North America" }, { normalizedtitle: "Taliban", description: "Afghan Islamist militant organization" }, { normalizedtitle: "United States-Taliban deal", description: "Afghanistan peace agreement signed in Doha" }] },
+  { text: "a person first", year: 2004, pages: [{ normalizedtitle: "Jean-Bertrand Aristide", description: "President of Haiti" }, { title: "2004_Haitian_coup", description: "" }] },
+  { text: "described by year", year: 1996, pages: [{ normalizedtitle: "Faucett Peru Flight 251", description: "1996 aviation accident" }] },
+  { text: "a list", year: 1990, pages: [{ normalizedtitle: "List of strikes", description: "Wikimedia list article" }] },
+  { text: "no event page", year: 2008, pages: [{ normalizedtitle: "Angelina Jolie", description: "American actress (born 1975)" }, { normalizedtitle: "North Korea", description: "Country in East Asia" }] },
+  { text: "a duplicate", year: 1066, pages: [{ normalizedtitle: "Battle of Hastings", description: "Battle in 1066" }] },
+  { text: "no pages", year: 2000 }
+] };
+const evs = V.eventTitles(feed);
+ok(JSON.stringify(evs) === JSON.stringify(["Battle of Hastings", "Wall Street Crash of 1929", "United States-Taliban deal", "2004 Haitian coup", "Faucett Peru Flight 251"]), "each event gives its first page that is an event: no year, date, list, country, person or duplicate", evs);
+ok(V.eventTitles(null).length === 0 && V.eventTitles({}).length === 0, "an empty or failed feed gives no titles");
+const d1 = V.eventDay(0), d2 = V.eventDay(365), d3 = V.eventDay(59);
+ok(d1.join("/") === "01/01" && d2.join("/") === "12/31" && d3.join("/") === "02/29", "the seed picks a day of a leap year, 29 February included", [d1, d2, d3]);
+const realFetch = globalThis.fetch; const urls = [];
+globalThis.fetch = async (u) => { urls.push(String(u)); return new Response(JSON.stringify(feed), { status: 200, headers: { "content-type": "application/json" } }); };
+const got = await V.fetchEventTitles(59, 2);
+globalThis.fetch = realFetch;
+ok(urls.length === 1 && /\/api\/rest_v1\/feed\/onthisday\/events\/02\/29$/.test(urls[0]) && got.length === 2 && got.every((t) => evs.indexOf(t) >= 0), "one request to the onthisday feed of the seeded day, n titles from it", { urls, got });
+const wa = src.slice(src.indexOf("async function wikiAnchors(used, cooled, seed) {"), src.indexOf("async function paperAnchors("));
+ok(/events = await fetchEventTitles\(seed, EVENT_POOL\)/.test(wa) && /fetchRandomTitles\(TOPIC_POOL - events\.length\)/.test(wa) && V.EVENT_POOL === 10, "half the pool of 20 is events, the rest random");
+ok(/catch \(eE\) \{ diagNote\("wikipedia onthisday: "/.test(wa), "a failed events feed is logged and the pool falls back to random titles");
+
 const ver = (src.match(/var VERSION = "(\d+)\.(\d+)\.(\d+)/) || []).slice(1).map(Number);
 ok(ver.length === 3 && (ver[0] > 1 || (ver[0] === 1 && ver[1] >= 25)), "VERSION is at least 1.25.0", ver);
 console.log(pass + " passed, " + fail + " failed");

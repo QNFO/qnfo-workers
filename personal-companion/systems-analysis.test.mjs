@@ -149,7 +149,7 @@ ok(/never state an inferred arrangement, funding, motive or behaviour as a repor
   globalThis.fetch = saved;
   ok(got["palazzolo v. Rhode Island"] === "The court ruled." && got["Old Name"] === "A policy." && got.Missing === undefined, "intros map back to the requested titles through normalisation and redirects", got);
   const w = src.slice(src.indexOf("async function wikiAnchors(used, cooled, seed) {"), src.indexOf("async function paperAnchors("));
-  ok(/var pool = await fetchRandomTitles\(TOPIC_POOL\);/.test(w) && /intros = await fetchWikiIntros\(fresh\);/.test(w) && /var titles = scored\.map\(function \(x\) \{ return x\.t; \}\);/.test(w), "wikiAnchors screens the pool and reads candidates in screened order");
+  ok(/var random = await fetchRandomTitles\(TOPIC_POOL - events\.length\);/.test(w) && /var pool = events\.concat\(random\.filter/.test(w) && /intros = await fetchWikiIntros\(fresh\);/.test(w) && /var titles = scored\.map\(function \(x\) \{ return x\.t; \}\);/.test(w), "wikiAnchors screens the pool and reads candidates in screened order");
   ok(/try \{ intros = await fetchWikiIntros\(fresh\); \} catch \(eI\)/.test(w), "a failed intro request leaves the old order and is noted");
 }
 // ---- STARVED-RETRY-HOURLY-1 (1.21.7): one retry per hourly tick ----------------------------------------------------------------------
