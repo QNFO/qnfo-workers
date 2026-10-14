@@ -20,12 +20,12 @@ const msgs = [{ role: "user", content: "hi" }];
   const env = { DEEPSEEK_API_KEY: "k", AI: { run: async (m) => { aiCalls.push(m); return { response: PROSE }; } } };
   const r1 = await callModel(env, msgs, 4000, 1000, "deepseek-reasoner", "essay");
   ok(r1 && r1.text === PROSE, "402 falls through to Workers AI text");
-  ok(r1.model === "@cf/openai/gpt-oss-120b", "essay fallback starts at gpt-oss-120b (fast), got " + r1.model);
+  ok(r1.model === "@cf/deepseek-ai/deepseek-v4-pro-0813", "essay fallback starts at deepseek-v4-pro (WRITER-FAMILY-1), got " + r1.model);
   const r2 = await callModel(env, msgs, 900, 1000, "deepseek-chat", "critic");
   ok(fetches === 1, "breaker: one paid 402 only, got " + fetches);
   ok(r2.model === "@cf/moonshotai/kimi-k2.6", "critic uses a different model than the essay writer, got " + r2.model);
   const r3 = await callModel(env, msgs, 900, 1000, "deepseek-chat", "writer");
-  ok(r3.model === "@cf/openai/gpt-oss-120b", "notes writer fallback is gpt-oss-120b, got " + r3.model);
+  ok(r3.model === "@cf/deepseek-ai/deepseek-v4-pro-0813", "notes writer fallback is deepseek-v4-pro (WRITER-FAMILY-1), got " + r3.model);
 }
 // (2) DeepSeek healthy -> DeepSeek used, no Workers AI call
 {
@@ -40,7 +40,7 @@ const msgs = [{ role: "user", content: "hi" }];
   const { callModel } = await load();
   globalThis.fetch = async () => new Response("down", { status: 503 });
   const seen = [];
-  const env = { DEEPSEEK_API_KEY: "k", AI: { run: async (m) => { seen.push(m); if (m.includes("gpt-oss")) throw new Error("timeout"); if (m.includes("kimi")) return { choices: [{ message: { content: "", reasoning_content: "r".repeat(500) } }] }; return { choices: [{ message: { content: PROSE } }] }; } } };
+  const env = { DEEPSEEK_API_KEY: "k", AI: { run: async (m) => { seen.push(m); if (m.includes("gpt-oss") || m.includes("deepseek-v4")) throw new Error("timeout"); if (m.includes("kimi")) return { choices: [{ message: { content: "", reasoning_content: "r".repeat(500) } }] }; return { choices: [{ message: { content: PROSE } }] }; } } };
   const r = await callModel(env, msgs, 4000, 1000, "deepseek-reasoner", "essay");
   ok(r.model === "@cf/zai-org/glm-5.3" && r.text === PROSE, "skips a throwing and a reasoning-only model, got " + r.model);
   const env2 = { DEEPSEEK_API_KEY: "k", AI: { run: async () => { throw new Error("boom"); } } };
