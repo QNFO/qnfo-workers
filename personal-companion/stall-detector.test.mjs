@@ -1,6 +1,6 @@
 // personal-companion 1.13.0 COMPANION-PUBLISH-STALL-AUTO-1 suite (charter pillar: core).
 // Failure mode proven: 48h with no piece and nothing outside the worker noticed. Now the hourly tick writes the metric,
-// files one issue on a real stall (12h + last 2 generation runs failed), never twice, and closes it when a piece lands.
+// files one issue on a real stall (120 minutes since 1.25.5, 12h before + last 2 generation runs failed), never twice, and closes it when a piece lands.
 // Run: node personal-companion/stall-detector.test.mjs   -> prints "N passed, 0 failed"
 import { DatabaseSync } from "node:sqlite";
 import { readFileSync } from "node:fs";
@@ -53,9 +53,16 @@ const NOW = Date.parse("2026-10-07T08:00:00Z");
 // fresh piece: no issue, metric under threshold
 {
   const T = setup();
+  T.p.exec("INSERT INTO companion_pieces (slug, created_at) VALUES ('x', '2026-10-07T07:00:00Z')");
+  const r = await companionStallDetector(T.env, NOW);
+  ok(r.hours === 1 && r.closed === 0, "fresh piece: " + JSON.stringify(r));
+}
+// SLA-120M-COMPANION-1 (1.25.5): the stall SLA is 120 minutes, so a 3 h old piece is past it (no issue without two failed runs)
+{
+  const T = setup();
   T.p.exec("INSERT INTO companion_pieces (slug, created_at) VALUES ('x', '2026-10-07T05:00:00Z')");
   const r = await companionStallDetector(T.env, NOW);
-  ok(r.hours === 3 && r.closed === 0, "fresh piece: " + JSON.stringify(r));
+  ok(r.hours === 3 && r.closed === undefined && r.stalled === false, "a 3 h old piece is past the 120-minute SLA and is judged on the last runs: " + JSON.stringify(r));
 }
 // PUBLISH-STALL-DIGEST-1 (1.19.0): the open issue is rewritten every stalled tick (hours, 24 h stage digest, newest rejections),
 // turns critical after 24 h, and a second issue is never inserted (agent_issues 2222 kept "13h" for 73 h with no stage breakdown)
