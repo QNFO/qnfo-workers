@@ -1,5 +1,5 @@
 {
-  "audited_at": "2026-10-14 05:04:13",
+  "audited_at": "2026-10-14 05:35:56",
   "d1_write_failures": [],
   "d1_writes_ok": 115,
   "guard": {
@@ -543,7 +543,7 @@
       },
       {
         "dir": "personal-companion",
-        "version": "1.25.4-like-50",
+        "version": "1.25.5-sla-primary",
         "worker": "personal-companion"
       },
       {
@@ -593,7 +593,7 @@
       },
       {
         "dir": "qnfo-fleet-control",
-        "version": "0.30.0-sla-10m",
+        "version": "0.31.0-defect-only",
         "worker": "qnfo-fleet-control"
       },
       {
@@ -638,7 +638,7 @@
       },
       {
         "dir": "qnfo-ops",
-        "version": "2.48.1-census-bindings",
+        "version": "2.48.2-alter-probe",
         "worker": "qnfo-ops"
       },
       {
@@ -900,9 +900,9 @@
       "worker": "personal-api"
     },
     "personal-companion": {
-      "before": "1.25.4-like-50",
+      "before": "1.25.5-sla-primary",
       "http": 200,
-      "live": "1.25.4-like-50",
+      "live": "1.25.5-sla-primary",
       "match": 1,
       "note": "SYNC",
       "worker": "personal-companion"
@@ -1268,9 +1268,9 @@
       "worker": "qnfo-fleet-calibrator"
     },
     "qnfo-fleet-control": {
-      "before": "0.30.0-sla-10m",
+      "before": "0.31.0-defect-only",
       "http": 200,
-      "live": "0.30.0-sla-10m",
+      "live": "0.31.0-defect-only",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-fleet-control"
@@ -1412,9 +1412,9 @@
       "worker": "qnfo-observability"
     },
     "qnfo-ops": {
-      "before": "2.48.1-census-bindings",
+      "before": "2.48.2-alter-probe",
       "http": 200,
-      "live": "2.48.1-census-bindings",
+      "live": "2.48.2-alter-probe",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-ops"
