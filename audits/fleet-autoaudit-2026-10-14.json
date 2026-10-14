@@ -1,5 +1,5 @@
 {
-  "audited_at": "2026-10-14 06:27:32",
+  "audited_at": "2026-10-14 06:59:33",
   "d1_write_failures": [],
   "d1_writes_ok": 115,
   "guard": {
@@ -653,7 +653,7 @@
       },
       {
         "dir": "qnfo-social",
-        "version": "0.14.3-schema-quiet",
+        "version": "0.15.0-accelerate",
         "worker": "qnfo-social"
       },
       {
@@ -1562,9 +1562,9 @@
       "worker": "qnfo-skills-discovery"
     },
     "qnfo-social": {
-      "before": "0.14.3-schema-quiet",
+      "before": "0.15.0-accelerate",
       "http": 200,
-      "live": "0.14.3-schema-quiet",
+      "live": "0.15.0-accelerate",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-social"
