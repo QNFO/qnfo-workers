@@ -172,15 +172,22 @@ because each one was broken at least once; the linked issue holds the evidence.
   token" is wrong until a run with the repository token has been refused and its error recorded.
 
 ## Stuck items and SLAs (QUEUE-SLA-1)
-- Owner directive 2026-10-08: no item or queue is stuck for more than one run or cycle; no issue stays unprocessed or
-  unremediated for more than 3 hours; every SLA is in minutes or hours, never days.
+- Owner directive 2026-10-08: no item or queue is stuck for more than one run or cycle. Owner directive 2026-10-14, verbatim: "All
+  SLAs systemwide across the fleet shall be measured in 10-minute intervals/resolution, never hours or days. No SLA shall ever
+  exceed 120 minutes and action shall commence immediately >120 minutes to audit and remediate all such failure modes and their
+  root causes." Every SLA is measured at 10-minute resolution and none exceeds 120 minutes; action starts at the first tick past
+  120 minutes (SLA-120M-1: queue_sla, the stuck views, sla_registry, breach actions on the 10-minute tick, metric
+  `sla_breaches_over_120m`; SLA-120M-2: issue age `issues_open_over_120m` and escalation every 120 minutes, content stages,
+  repair-time triggers at 2 h). A freshness check on a loop slower than 120 minutes allows its cadence plus at most 120 minutes,
+  so a missed run is acted on within 120 minutes of its due time. A new SLA, threshold or budget states minutes, never hours or days.
 - `queue_sla` lists each known stuck type with its cycle, SLA (minutes) and automatic fix; `v_stuck_summary` measures them
   by age, not by count. The D1 trigger `queue_sla_tick_10m` runs the fixes every 10 minutes off the fleet cron heartbeat
   and logs each to `queue_sla_actions`; `ops_config queue_sla_autofix = off` stops the fixes, not the measurement.
   Metrics `stuck_items_over_sla` (target 0) and `issues_unprobed_60m` (target <= 10) file their own issues.
 - Owner directive 2026-10-13 (ISSUE-SLA-2H-1): open issues for definition-of-done success criteria 0 with every fleet system
-  green; every open issue resolved, deployed and closed within 24 hours, and server-side within 2 hours of opening, at a minimum
-  of 1.5x accumulation. Measured as `open_agent_issues` (target 0), `issues_open_over_24h` (0), `issue_drain_ratio_24h` (>= 1.5)
+  green; every open issue resolved, deployed and closed within 120 minutes of opening (SLA-120M-2; was 24 hours), server-side, at a
+  minimum of 1.5x accumulation. Measured as `open_agent_issues` (target 0), `issues_open_over_120m` (0; `issues_open_over_24h` is
+  kept for history without a trigger), `issue_drain_ratio_24h` (>= 1.5)
   and `issue_auto_close_2h_share_24h` (1.0), each with its trigger (migrations/2026-10-13-issue-sla-2h.sql). A finding that is not
   a defect (a roadmap item, a report) belongs in `goals` or `objective_space` with the successor id, never closed as wontfix.
 - Every open issue's remediation contract is due hourly (trigger `remediation_contracts_cadence_1h_ai`). A new queue, status
