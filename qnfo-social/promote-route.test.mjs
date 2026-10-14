@@ -14,7 +14,7 @@ CREATE TABLE social_media_posts (id TEXT PRIMARY KEY, platform TEXT NOT NULL, po
 CREATE TABLE ops_config (key TEXT PRIMARY KEY, value TEXT, note TEXT, updated_at TEXT);
 CREATE TABLE pipeline_flags (key TEXT PRIMARY KEY, value TEXT, updated_at TEXT);
 CREATE TABLE reach_signals (date TEXT, source TEXT, channel TEXT, entity_type TEXT, entity_id TEXT, metric TEXT, value REAL, quality TEXT);
-CREATE TABLE dissemination_tracker (id TEXT PRIMARY KEY, paper_slug TEXT, paper_doi TEXT, paper_title TEXT, pages_url TEXT, channel TEXT, action TEXT, post_id TEXT, posted_at TEXT, created_at TEXT DEFAULT (datetime('now')));
+CREATE TABLE dissemination_tracker (id TEXT PRIMARY KEY, paper_slug TEXT, paper_doi TEXT, paper_title TEXT, pages_url TEXT, channel TEXT, action TEXT, post_id TEXT, posted_at TEXT, created_at TEXT DEFAULT (datetime('now')), mode TEXT);
 INSERT INTO social_threads (slug, title, posts, status, flags, notes, posted_at) VALUES
   ('old-thread', 'Old', '["Old https://papers.qnfo.org/papers/old-thread/"]', 'posted', NULL, NULL, datetime('now','-2 days'));
 INSERT INTO dissemination_tracker (id, paper_slug, paper_doi, paper_title, pages_url, channel, action, created_at) VALUES

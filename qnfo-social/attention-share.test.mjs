@@ -17,7 +17,7 @@ db.exec(`CREATE TABLE social_threads (id INTEGER PRIMARY KEY AUTOINCREMENT, slug
 CREATE TABLE social_media_posts (id TEXT PRIMARY KEY, platform TEXT NOT NULL, post_id TEXT, url TEXT, content_preview TEXT, published_at TEXT, buffer_id TEXT, project_id TEXT, paper_doi TEXT, status TEXT, engagement_metrics TEXT, created_at TEXT DEFAULT (datetime('now')), _version INTEGER);
 CREATE TABLE pipeline_flags (key TEXT PRIMARY KEY, value TEXT, updated_at TEXT);
 CREATE TABLE ops_config (key TEXT PRIMARY KEY, value TEXT, note TEXT, updated_at TEXT);
-CREATE TABLE dissemination_tracker (id TEXT PRIMARY KEY, paper_slug TEXT, paper_doi TEXT, paper_title TEXT, pages_url TEXT, channel TEXT, action TEXT, post_id TEXT, posted_at TEXT);
+CREATE TABLE dissemination_tracker (id TEXT PRIMARY KEY, paper_slug TEXT, paper_doi TEXT, paper_title TEXT, pages_url TEXT, channel TEXT, action TEXT, post_id TEXT, posted_at TEXT, mode TEXT);
 CREATE TABLE cloud_ops_events (id TEXT PRIMARY KEY, ts TEXT, kind TEXT, text TEXT, meta TEXT, job TEXT, status TEXT);
 CREATE TABLE alerts (id INTEGER PRIMARY KEY AUTOINCREMENT, ts TEXT, source TEXT, level TEXT, message TEXT);
 CREATE TABLE reach_signals (date TEXT NOT NULL, source TEXT NOT NULL, channel TEXT NOT NULL, entity_type TEXT NOT NULL, entity_id TEXT NOT NULL, metric TEXT NOT NULL, value REAL, quality TEXT, collected_at TEXT DEFAULT (datetime('now')), PRIMARY KEY (date, source, channel, entity_type, entity_id, metric));
@@ -163,10 +163,10 @@ ok(xRow && xRow.reward_detail && (/"channel":"x"/.test(xRow.reward_detail) || /"
 const post = await mod.learnerPosterior(env);
 ok(post.channel && post.channel.x.n === 1 && post.channel.bluesky.n === 1 && post.channel.linkedin.n === 0 && post.channel.x.a > 1.8, "the posterior carries a channel dimension credited per channel: " + JSON.stringify(post.channel));
 const ord = await mod.learnerChannelOrder(env, () => 0.5);
-ok(ord.via === "learner" && ord.order.length === 4 && ord.order.slice().sort().join() === "linkedin,mastodon,substack,twitter" && typeof ord.draws.twitter === "number", "the channel order is a permutation of the drain channels with one draw each: " + JSON.stringify(ord));
+ok(ord.via === "learner" && ord.order.length === 3 && ord.order.slice().sort().join() === "linkedin,mastodon,twitter" && typeof ord.draws.twitter === "number", "the channel order is a permutation of the drain channels with one draw each: " + JSON.stringify(ord));
 db.prepare("INSERT OR REPLACE INTO ops_config (key, value) VALUES ('social_learner_enabled', '0')").run();
 const ordOff = await mod.learnerChannelOrder(env);
-ok(ordOff.via === "learner-off" && ordOff.order.join() === "linkedin,mastodon,twitter,substack", "with the learner off the drain keeps its fixed order");
+ok(ordOff.via === "learner-off" && ordOff.order.join() === "linkedin,mastodon,twitter", "with the learner off the drain keeps its fixed order");
 db.prepare("DELETE FROM ops_config WHERE key = 'social_learner_enabled'").run();
 
 console.log(`${pass} passed, ${fail} failed`);

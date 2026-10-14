@@ -15,9 +15,9 @@ ok(mod.shareCap(14, 0) === 1 && mod.shareCap(14, 0, null) === 1 && mod.shareCap(
 ok(mod.shareCap(14, 0, 2) === 14 && mod.shareCap(14, 0, -1) === 1, "a floor above 1 is 1, below 0 is 0");
 
 // defaults
-ok(mod.weeklyCap({}) === 14 && mod.weeklyCap({ SOCIAL_WEEKLY_CAP: "3" }) === 3, "Bluesky defaults to 14 a week; the env var still overrides");
+ok(mod.weeklyCap({}) === 21 && mod.weeklyCap({ SOCIAL_WEEKLY_CAP: "3" }) === 3, "Bluesky defaults to 21 a week (PAPER-ROLLUP-1); the env var still overrides");
 ok(mod.CHANNEL_WEEKLY_CAP.linkedin === 7 && mod.CHANNEL_WEEKLY_CAP.mastodon === 14 && mod.CHANNEL_WEEKLY_CAP.twitter === 14 && mod.CHANNEL_WEEKLY_CAP.substack === 14, "Buffer defaults 7/14/14/14", mod.CHANNEL_WEEKLY_CAP);
-ok(mod.CHANNEL_ORDER.indexOf("substack") >= 0 && mod.CHANNEL_PLATFORM.substack === "buffer-substack", "Substack is a drain channel with its own ledger platform");
+ok(mod.CHANNEL_ORDER.indexOf("substack") < 0 && mod.CHANNEL_PLATFORM.substack === "buffer-substack", "Substack takes roll-ups only (PAPER-ROLLUP-1); its ledger platform stays");
 
 // Substack channel lookup and text
 const chans = [{ id: "a", service: "linkedin" }, { id: "b", service: "substack_notes", isDisconnected: false }, { id: "c", service: "twitter", isDisconnected: true }];
@@ -49,7 +49,7 @@ db.exec(`CREATE TABLE social_threads (id INTEGER PRIMARY KEY AUTOINCREMENT, slug
 CREATE TABLE social_media_posts (id TEXT PRIMARY KEY, platform TEXT NOT NULL, post_id TEXT, url TEXT, content_preview TEXT, published_at TEXT, buffer_id TEXT, project_id TEXT, paper_doi TEXT, status TEXT DEFAULT 'published', engagement_metrics TEXT, created_at TEXT, _version INTEGER DEFAULT 1);
 CREATE TABLE pipeline_flags (key TEXT PRIMARY KEY, value TEXT, updated_at TEXT);
 CREATE TABLE ops_config (key TEXT PRIMARY KEY, value TEXT, updated_at TEXT);
-CREATE TABLE dissemination_tracker (id TEXT PRIMARY KEY, paper_slug TEXT, paper_title TEXT, paper_doi TEXT, pages_url TEXT, channel TEXT, action TEXT, post_id TEXT, posted_at TEXT, created_at TEXT, updated_at TEXT, post_text_snippet TEXT);
+CREATE TABLE dissemination_tracker (id TEXT PRIMARY KEY, paper_slug TEXT, paper_title TEXT, paper_doi TEXT, pages_url TEXT, channel TEXT, action TEXT, post_id TEXT, posted_at TEXT, created_at TEXT, updated_at TEXT, post_text_snippet TEXT, mode TEXT);
 CREATE TABLE social_engagements (platform TEXT, post_id TEXT, metric TEXT, value REAL, note TEXT, collected_at TEXT, PRIMARY KEY (platform, post_id, metric, collected_at));
 CREATE TABLE alerts (id INTEGER PRIMARY KEY AUTOINCREMENT, ts TEXT, source TEXT, level TEXT, message TEXT);
 INSERT INTO social_threads (slug, title, posts, status, flags) VALUES ('jps', 'Joules per solution', '["Energy per useful answer, one number. https://papers.qnfo.org/papers/jps/"]', 'queued', 'selected');`);
@@ -79,10 +79,10 @@ globalThis.fetch = async (u, init) => {
 const env = { DB: D1, BUFFER_TOKEN: "b", MASTODON_TOKEN: "m" };
 const out = await mod.drainChannels(env, {});
 ok(/^posted:ok:jps:1133$/.test(out.channels.mastodon || ""), "Mastodon posted direct", out.channels);
-ok(/^posted:ok:jps:bS1$/.test(out.channels.substack || ""), "Substack posted through Buffer", out.channels);
-ok(gql.filter((q) => q.indexOf("createPost") >= 0 && q.indexOf("chM") >= 0).length === 0 && gql.some((q) => q.indexOf("createPost") >= 0 && q.indexOf("chS") >= 0 && q.indexOf("utm_source=substack") >= 0), "no Buffer post on the Mastodon channel; the Substack post is tagged utm_source=substack");
+ok(!out.channels.substack, "the single-post drain leaves Substack to the roll-up", out.channels);
+ok(gql.filter((q) => q.indexOf("createPost") >= 0).length === 0, "no Buffer post at all: Mastodon went direct and Substack is roll-up only");
 const led = db.prepare("SELECT platform, buffer_id, url, engagement_metrics FROM social_media_posts ORDER BY platform").all();
-ok(led.length === 2 && led[0].platform === "buffer-mastodon" && led[0].url === "https://mstdn.science/@QNFO/1133" && /mastodon-direct/.test(led[0].engagement_metrics) && led[1].platform === "buffer-substack", "ledger rows: Mastodon with its status link and transport, Substack", led);
+ok(led.length === 1 && led[0].platform === "buffer-mastodon" && led[0].url === "https://mstdn.science/@QNFO/1133" && /mastodon-direct/.test(led[0].engagement_metrics), "ledger row: Mastodon with its status link and transport", led);
 const st = await mod.mastodonDirectStats(env);
 const eng = db.prepare("SELECT metric, value FROM social_engagements WHERE platform = 'buffer' AND post_id = '1133' ORDER BY metric").all();
 ok(st.posts === 1 && eng.length === 3 && eng.find((x) => x.metric === "favourites").value === 4, "07:00 reads the direct post's public counts", { st, eng });
@@ -95,7 +95,7 @@ ok(/^posted:ok:/.test(out2.channels.mastodon || "") && gql.some((q) => q.indexOf
 // Bluesky spacing
 db.exec("INSERT INTO social_threads (slug, title, posts, status, posted_at) VALUES ('old', 't', '[]', 'posted', datetime('now', '-3 hours'))");
 let sp = await mod.blueskySpacing(env, 14, Date.now());
-ok(sp.wait === true && /Z$/.test(sp.next), "a post 3 h ago holds the next at cap 14 (gap 11 h)", sp);
+ok(sp.wait === true && /Z$/.test(sp.next), "a post 3 h ago holds the next at cap 14 (gap 11 h; blueskySpacing takes the cap it is given)", sp);
 db.exec("UPDATE social_threads SET posted_at = datetime('now', '-12 hours') WHERE slug = 'old'");
 sp = await mod.blueskySpacing(env, 14, Date.now());
 ok(sp.wait === false, "12 h later the next may go", sp);

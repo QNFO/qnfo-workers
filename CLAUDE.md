@@ -193,6 +193,12 @@ because each one was broken at least once; the linked issue holds the evidence.
 - Every open issue's remediation contract is due hourly (trigger `remediation_contracts_cadence_1h_ai`). A new queue, status
   or loop that can hold items adds its `queue_sla` row and its `v_stuck_summary` column, with an automatic fix and its revert,
   in the PR that creates it. A chain or guard that checks only a count is incomplete: add the age of the oldest item.
+- Outreach runs at full cadence (owner directives 2026-10-14, OUTREACH-ACCELERATE-1 and PAPER-ROLLUP-1): Bluesky 21 posts a week, LinkedIn 7
+  (Buffer queue or drafts, ToS 3.1), Mastodon 14 (direct API, MASTODON_TOKEN; Buffer only as fallback), X 14; Substack Notes in Buffer
+  carry roll-ups. Every published paper is disseminated: an hourly Substack roll-up lists every queued paper and a Bluesky thread
+  carries the announced ones (qnfo-social drainRollup), so a dissemination queue is cleared by carrying more items per post, never by
+  suppressing rows for volume. `papers_queued_over_120m` (target 0) and `v_channel_impact_7d` (posts and human clicks per channel)
+  measure it; the attention share steers between half the cap and the cap (`pipeline_flags.social_share_floor`).
 
 ## Anti-fragile by default (ANTIFRAGILE-1, charter rule 12)
 - Owner directive 2026-10-08: no holds, filters or blocks without live evidence; red-team every blocker; redundant paths,
