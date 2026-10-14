@@ -1,5 +1,5 @@
 {
-  "audited_at": "2026-10-14 11:54:54",
+  "audited_at": "2026-10-14 12:25:25",
   "d1_write_failures": [],
   "d1_writes_ok": 115,
   "guard": {
@@ -543,12 +543,12 @@
       },
       {
         "dir": "personal-companion",
-        "version": "1.26.4-critic-list-16",
+        "version": "1.27.0-gate-separation",
         "worker": "personal-companion"
       },
       {
         "dir": "q08-signal-engine",
-        "version": "0.26.1-title-trail",
+        "version": "0.27.0-lede-provenance",
         "worker": "q08-signal-engine"
       },
       {
@@ -593,12 +593,12 @@
       },
       {
         "dir": "qnfo-fleet-control",
-        "version": "0.31.2-sla-120m",
+        "version": "0.32.0-gh-app",
         "worker": "qnfo-fleet-control"
       },
       {
         "dir": "qnfo-fleet-dashboard",
-        "version": "1.37.6-schema-probe",
+        "version": "1.37.7-codeagent",
         "worker": "qnfo-fleet-dashboard"
       },
       {
@@ -653,7 +653,7 @@
       },
       {
         "dir": "qnfo-social",
-        "version": "0.15.0-accelerate",
+        "version": "0.16.0-rollup",
         "worker": "qnfo-social"
       },
       {
@@ -900,9 +900,9 @@
       "worker": "personal-api"
     },
     "personal-companion": {
-      "before": "1.26.4-critic-list-16",
+      "before": "1.27.0-gate-separation",
       "http": 200,
-      "live": "1.26.4-critic-list-16",
+      "live": "1.27.0-gate-separation",
       "match": 1,
       "note": "SYNC",
       "worker": "personal-companion"
@@ -944,9 +944,9 @@
       "worker": "personal-life-search"
     },
     "q08-signal-engine": {
-      "before": "0.26.1-title-trail",
+      "before": "0.27.0-lede-provenance",
       "http": 200,
-      "live": "0.26.1-title-trail",
+      "live": "0.27.0-lede-provenance",
       "match": 1,
       "note": "SYNC",
       "worker": "q08-signal-engine"
@@ -1268,17 +1268,17 @@
       "worker": "qnfo-fleet-calibrator"
     },
     "qnfo-fleet-control": {
-      "before": "0.31.2-sla-120m",
+      "before": "0.32.0-gh-app",
       "http": 200,
-      "live": "0.31.2-sla-120m",
+      "live": "0.32.0-gh-app",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-fleet-control"
     },
     "qnfo-fleet-dashboard": {
-      "before": "1.37.6-schema-probe",
+      "before": "1.37.7-codeagent",
       "http": 200,
-      "live": "1.37.6-schema-probe",
+      "live": "1.37.7-codeagent",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-fleet-dashboard"
@@ -1562,9 +1562,9 @@
       "worker": "qnfo-skills-discovery"
     },
     "qnfo-social": {
-      "before": "0.15.0-accelerate",
+      "before": "0.16.0-rollup",
       "http": 200,
-      "live": "0.15.0-accelerate",
+      "live": "0.16.0-rollup",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-social"
