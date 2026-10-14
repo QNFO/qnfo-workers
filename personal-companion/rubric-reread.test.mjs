@@ -44,11 +44,15 @@ ok(sink.length === 2 && sink[0].model === sink[1].model, "the re-read asks the s
 const gen = src.slice(src.indexOf("async function generate("), src.indexOf("__name(generate"));
 const iRR = gen.indexOf("rubricRereadNote(rq)"), iP = gen.indexOf("for (var cround = 1; cround <= CRITIC_PRUNE_ROUNDS");
 ok(iRR > 0 && iP > iRR, "the re-read runs before the critic prune deletes the analysis", [iRR, iP]);
-ok(/worstName === "grounding" && analysisSplitOk\(splitText\(piece\)\)/.test(gen) && /if \(quotesAllInAnalysis\(piece, rq\)\)/.test(gen), "only a grounding rejection of a marked draft whose quotes all lie in the analysis is re-read");
+ok(/var rrNote = !rq\.length \? rubricNoQuoteNote\(\) : analysisSplitOk\(splitText\(piece\)\) && quotesAllInAnalysis\(piece, rq\) \? rubricRereadNote\(rq\) : "";/.test(gen), "a grounding rejection is re-read only when it quotes nothing the piece contains, or only the marked analysis");
+// RUBRIC-NO-QUOTE-1 (1.26.1)
+const nq = V.rubricNoQuoteNote();
+ok(/quoted no passage of the piece as invented/.test(nq) && /a source detail the piece leaves out is not a grounding failure/.test(nq) && /score grounding 0 only if you can quote one/.test(nq), "the no-quote note states the rule: only a quotable invented claim scores grounding 0", nq);
+ok((gen.match(/rubricNoQuoteNote\(\)/g) || []).length === 2, "the no-quote re-read runs at the critique and at the final read");
 ok(/rubricRereadNote\(rqf\)/.test(gen) && /final rubric re-read: /.test(gen), "the final read gets the same one re-read");
 ok((gen.match(/rubricRereadNote\(/g) || []).length === 2, "one re-read per reading, never a loop");
 
 const ver = (src.match(/var VERSION = "(\d+)\.(\d+)\.(\d+)/) || []).slice(1).map(Number);
-ok(ver.length === 3 && (ver[0] > 1 || (ver[0] === 1 && ver[1] >= 26)), "VERSION is at least 1.26.0", ver);
+ok(ver.length === 3 && (ver[0] > 1 || (ver[0] === 1 && (ver[1] > 26 || (ver[1] === 26 && ver[2] >= 1)))), "VERSION is at least 1.26.1", ver);
 console.log(pass + " passed, " + fail + " failed");
 if (fail) process.exit(1);
