@@ -134,9 +134,10 @@ for (const [k, j] of [["release", "lock-roundtrip"], ["blind", "binding-census"]
 // 5. Real traffic over 6 h: qnfo-ops 250 server errors over ~1166 requests (a quarter of 4664) fails, names the route and carries a
 // code task on the route's handler in qnfo-ops; idea-hub's 115 client cancellations do not count.
 db = mkDb();
-// worker_logs hold real timestamps and traffic-health reads them against the wall clock (the tick's now only places slots), so
-// these rows are planted relative to the real clock; with the fixed NOW they fell out of the 6 h window after 06:20Z (#1262).
-const WALL = Date.now();
+// JOURNEY-TEST-TICK-CLOCK-1: since qnfo-fleet-control 0.31.1 (JRN-CLOCK-1, PR 1263) traffic-health reads its 6 h window from the tick's
+// now, so the rows are planted relative to the fixed NOW again and the case no longer depends on the hour the suite runs. PR 1264 had
+// planted them on the wall clock while the worker still read it; with both merged the "older than 6 h" case failed.
+const WALL = NOW;
 const ins = db.raw.prepare("INSERT INTO worker_logs (ts_ms, script_name, event_type, outcome, url, status, exceptions_json) VALUES (?, ?, 'fetch', ?, ?, NULL, ?)");
 for (let i = 0; i < 250; i++) ins.run(WALL - 3600e3, "qnfo-ops", "exception", "https://qnfo-ops.internal/registry/register", '[{"message":"D1_ERROR: duplicate column name"}]');
 for (let i = 0; i < 115; i++) ins.run(WALL - 3600e3, "idea-hub", "canceled", "https://ideas.qnfo.org/api/sessions", "[]");
