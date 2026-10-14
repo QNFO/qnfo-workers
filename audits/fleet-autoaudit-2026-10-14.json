@@ -1,5 +1,5 @@
 {
-  "audited_at": "2026-10-14 09:04:39",
+  "audited_at": "2026-10-14 10:36:48",
   "d1_write_failures": [],
   "d1_writes_ok": 115,
   "guard": {
@@ -543,7 +543,7 @@
       },
       {
         "dir": "personal-companion",
-        "version": "1.26.2-fulltext-budget",
+        "version": "1.26.3-starved-retry-sla",
         "worker": "personal-companion"
       },
       {
@@ -900,9 +900,9 @@
       "worker": "personal-api"
     },
     "personal-companion": {
-      "before": "1.26.2-fulltext-budget",
+      "before": "1.26.3-starved-retry-sla",
       "http": 200,
-      "live": "1.26.2-fulltext-budget",
+      "live": "1.26.3-starved-retry-sla",
       "match": 1,
       "note": "SYNC",
       "worker": "personal-companion"
