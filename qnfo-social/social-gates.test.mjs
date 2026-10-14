@@ -99,7 +99,7 @@ function baseState(over) {
   assert.equal(g.allowed, 0); assert.equal(st.boundEpoch, '0'); ok('no epoch flag: the rolling 7 days count (96 posts hold)');
   const st2 = baseState({ posted7: 96, epochCounts: true, epoch: '2026-10-01 21:30:00' });
   g = await mod.socialGate(mkEnv(st2).env, 't');
-  assert.equal(st2.boundEpoch, '2026-10-01 21:30:00'); assert.equal(g.allowed, 1); assert.equal(g.remaining, 14); ok('epoch flag: posts before the reset no longer count; cap is the 14 default, one post a run (OUTREACH-ACCELERATE-1, BSKY-SPACING-1)');
+  assert.equal(st2.boundEpoch, '2026-10-01 21:30:00'); assert.equal(g.allowed, 1); assert.equal(g.remaining, 21); ok('epoch flag: posts before the reset no longer count; cap is the 21 default, one post a run (PAPER-ROLLUP-1, BSKY-SPACING-1)');
   const st3 = baseState({ posted7: 96, epochCounts: true, epoch: 'not-a-date' });
   g = await mod.socialGate(mkEnv(st3).env, 't');
   assert.equal(st3.boundEpoch, '0'); ok('malformed epoch is ignored');
@@ -166,7 +166,7 @@ function baseState(over) {
 {
   const calls = [];
   globalThis.fetch = mkFetch(calls);
-  const st = baseState({ posted7: 14 });
+  const st = baseState({ posted7: 21 });
   const { env } = mkEnv(st);
   const res = await W.fetch(new Request('https://x/post', { method: 'POST', headers: { Authorization: 'Bearer tok' }, body: JSON.stringify({ text: 'hi' }) }), env);
   assert.equal(res.status, 429);

@@ -17,7 +17,7 @@ const db = new DatabaseSync(":memory:");
 db.exec(`CREATE TABLE social_threads (id INTEGER PRIMARY KEY AUTOINCREMENT, slug TEXT UNIQUE, title TEXT, posts TEXT, status TEXT DEFAULT 'queued', posted_at TEXT, created_at TEXT DEFAULT (datetime('now')), retry_count INTEGER DEFAULT 0, error TEXT, doi TEXT, abstract TEXT, flags TEXT, notes TEXT, updated_at TEXT, post_uri TEXT);
 CREATE TABLE social_media_posts (id TEXT PRIMARY KEY, platform TEXT NOT NULL, post_id TEXT, url TEXT, content_preview TEXT, published_at TEXT, buffer_id TEXT, project_id TEXT, paper_doi TEXT, status TEXT DEFAULT 'published', engagement_metrics TEXT, created_at TEXT DEFAULT (datetime('now')), _version INTEGER DEFAULT 1);
 CREATE TABLE pipeline_flags (key TEXT PRIMARY KEY, value TEXT, updated_at TEXT);
-CREATE TABLE dissemination_tracker (id TEXT PRIMARY KEY, paper_slug TEXT, channel TEXT, action TEXT, post_id TEXT, posted_at TEXT);
+CREATE TABLE dissemination_tracker (id TEXT PRIMARY KEY, paper_slug TEXT, channel TEXT, action TEXT, post_id TEXT, posted_at TEXT, mode TEXT);
 CREATE TABLE cloud_ops_events (id TEXT PRIMARY KEY, ts TEXT, kind TEXT, text TEXT, meta TEXT, job TEXT, status TEXT);
 CREATE TABLE alerts (id INTEGER PRIMARY KEY AUTOINCREMENT, ts TEXT, source TEXT, level TEXT, message TEXT);
 INSERT INTO social_threads (id, slug, title, posts, status, flags, notes) VALUES

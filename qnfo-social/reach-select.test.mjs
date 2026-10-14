@@ -60,7 +60,7 @@ function mkdb() {
   db.exec(`CREATE TABLE social_threads (id INTEGER PRIMARY KEY AUTOINCREMENT, slug TEXT UNIQUE, title TEXT, posts TEXT, status TEXT DEFAULT 'queued', posted_at TEXT, created_at TEXT DEFAULT (datetime('now')), doi TEXT, abstract TEXT, flags TEXT, notes TEXT, error TEXT, updated_at TEXT);
   CREATE TABLE alerts (id INTEGER PRIMARY KEY AUTOINCREMENT, source TEXT, level TEXT, message TEXT);
   CREATE TABLE scan_state (key TEXT PRIMARY KEY, value TEXT);
-  CREATE TABLE dissemination_tracker (id INTEGER PRIMARY KEY AUTOINCREMENT, paper_doi TEXT, action TEXT, channel TEXT, posted_at TEXT, created_at TEXT);`);
+  CREATE TABLE dissemination_tracker (id INTEGER PRIMARY KEY AUTOINCREMENT, paper_doi TEXT, action TEXT, channel TEXT, posted_at TEXT, created_at TEXT, mode TEXT);`);
   const D1 = { prepare(sql) { let a = []; const st = { bind(...x) { a = x; return st; }, async all() { return { results: db.prepare(sql).all(...a) }; }, async first() { return db.prepare(sql).get(...a) || null; }, async run() { const r = db.prepare(sql).run(...a); return { success: true, meta: { changes: Number(r.changes) } }; } }; return st; } };
   return { db, D1 };
 }

@@ -15,7 +15,7 @@
 // Vars (optional): SOCIAL_WEEKLY_CAP. D1: DB (qnfo-audit.social_threads, dissemination_tracker, pipeline_flags; 0.7.28 also
 // social_learner_posts, ops_config social_learner_enabled / social_learner_pending, metric_registry). AI: env.AI.
 
-var VERSION = "0.15.0-accelerate"; // 0.15.0 OUTREACH-ACCELERATE-1 (2026-10-14, pillar reach; owner directive "Accelerate all social media and all external outreach, communication, and promotion. All available channels shall be fully utilized as appropriate and effective, including email, Buffer, Mastodon, Bluesky, Substack, and all other channels."): Bluesky defaults to 14 posts a week (2 a day) and the Buffer channels to LinkedIn 7 (queue or drafts, ToS 3.1 unchanged), Mastodon 14, X 14 and Substack Notes 14 (clamp 0..21); the attention share now steers between a floor and the cap (pipeline_flags social_share_floor, default 0.5) instead of cutting a channel to one post a week on a thin sample; Bluesky posts are spaced (at most one per 2-hourly run, at least 7 days / cap minus 1 h apart) so the higher cap never bursts; SUBSTACK-CHANNEL-1: a Substack channel connected in Buffer (Notes; API supported on the free plan) is drained and cross-posted like LinkedIn (whole thread, subscribe line, utm_source substack); MASTODON-DIRECT-1: with MASTODON_TOKEN set, Mastodon posts go straight to the instance API (MASTODON_HOST, default mstdn.science) instead of Buffer, which frees a Buffer channel slot, and their counts are read from the public status API at 07:00. // 0.14.3 LOG-NOISE-1 (2026-10-14, pillar core, found by FLEET-JOURNEYS-2 and the Cloudflare Observability Issues ingest): the three ensure*Schema ALTERs no longer log their expected "duplicate column" answer as an error.
+var VERSION = "0.16.0-rollup"; // 0.16.0 PAPER-ROLLUP-1 (2026-10-14, pillar reach; owner directive "substack swapped for mastodon on buffer. update expectations and post/outreach schedule accordingly and implement full-throated/full-throttle publication and dissemination pipelines....clear out backlogs and queues now and forever...100% server-side and 100% automatically"): every published paper is disseminated, none is suppressed for volume. drainRollup runs every hourly tick (cron 30 * * * *, was every 2 h): a Substack Note lists every queued paper (up to ROLLUP_SUBSTACK_MAX, oldest first, each link probed and tagged utm_source=substack with the paper as campaign) and marks it posted (mode rollup); a Bluesky thread then carries up to ROLLUP_BSKY_MAX of those papers, one post each, inside the Bluesky gate (default 21 a week, spaced), each paper recording its own post id so RETRACT-DEAD-LINKS-1 still works. The single-paper Buffer drain reads posted and queued papers of 30 days, so LinkedIn, Mastodon (direct) and X keep taking the newest paper they have not carried; Substack takes roll-ups only. The gate counts a roll-up thread as one post. retractDeadLinks re-checks at most RETRACT_MAX posts of 30 days a run. // 0.15.0 0.15.0 OUTREACH-ACCELERATE-1 (2026-10-14, pillar reach; owner directive "Accelerate all social media and all external outreach, communication, and promotion. All available channels shall be fully utilized as appropriate and effective, including email, Buffer, Mastodon, Bluesky, Substack, and all other channels."): Bluesky defaults to 14 posts a week (2 a day) and the Buffer channels to LinkedIn 7 (queue or drafts, ToS 3.1 unchanged), Mastodon 14, X 14 and Substack Notes 14 (clamp 0..21); the attention share now steers between a floor and the cap (pipeline_flags social_share_floor, default 0.5) instead of cutting a channel to one post a week on a thin sample; Bluesky posts are spaced (at most one per 2-hourly run, at least 7 days / cap minus 1 h apart) so the higher cap never bursts; SUBSTACK-CHANNEL-1: a Substack channel connected in Buffer (Notes; API supported on the free plan) is drained and cross-posted like LinkedIn (whole thread, subscribe line, utm_source substack); MASTODON-DIRECT-1: with MASTODON_TOKEN set, Mastodon posts go straight to the instance API (MASTODON_HOST, default mstdn.science) instead of Buffer, which frees a Buffer channel slot, and their counts are read from the public status API at 07:00. // 0.14.3 LOG-NOISE-1 (2026-10-14, pillar core, found by FLEET-JOURNEYS-2 and the Cloudflare Observability Issues ingest): the three ensure*Schema ALTERs no longer log their expected "duplicate column" answer as an error.
 // // 0.14.0 (2026-10-13, pillar reach): SOCIAL-CHECK-FAIL-CLOSED-1 (issue 2501): the checker reply parser skips stray arrays such as "[1]", reads issue lists keyed issue, problem, claim or text, and returns null (thread held as draft) when no valid issue array is present. MASTODON-PUBLIC-STATS-1 (issues 2481, 2374): the 07:00 Buffer statistics run reads favourites, reblogs and replies of up to 30 sent Mastodon posts from the public status API when Buffer returns no metrics (platform buffer rows, post_id = the Buffer id). LEARNER-COVERAGE-1 (issue 2381): every drained post is recorded for the learner (chosen_by backfill when no learner decision; the 24h spacing applies to learner-chosen posts only). UTM-CREDIT-1 (issue 2036): a post without an engagement snapshot is credited on its utm clicks, and no-data rows of the last 14 days are re-read for them. CRON-ONLY-HEARTBEAT-1 (issue 2397): every scheduled run ends with a fleet_heartbeat upsert (ok=0 when it threw). // 0.13.1 also LEDE-SOCIAL-1 (2026-10-13, from the fleet lede audit of session_01BCBpN3cZdS57dweqCs9rwt): post 1 of a composed thread is the lede (what the paper is, by whom, its main finding), and checkThread holds a thread whose post 1 neither names the author nor shares a significant title word (threadLedeIssues) for the repair pass. 0.13.1 SOURCE-VOICE-SOCIAL-1 (agent_issues 2472, pillar reach): POST /compose stores the abstract it grounded the thread on, so reachRepairDrafts and recheckDrafts no longer skip its held drafts (179 of 182 social_threads rows had no abstract on 2026-10-13). // 0.13.0 (2026-10-12, pillar reach) BUFFER-POST-STATS-1 (issue 2374): the 07:00 engagement run also reads Buffer with this worker's own token: per connected channel the sent posts of the last 30 days with their statistics and public link; one social_engagements row per post and metric (platform buffer, post_id = the Buffer post id), the link into social_media_posts.url, an auth_status row every run, and per network buffer_channel rows that say how many sent posts carried statistics and how many carried none (never zeros in place of a missing statistic). Bounded: 6 channels, 3 pages of 30 posts each, 10 s per call, 512 KB per body. // 0.12.0-whole-sentences // 0.12.0 (2026-10-12, pillar reach) SOCIAL-POST-TRUNCATION-2 (issue 1902): a post too long for its channel is never cut mid-sentence: Bluesky continues it as replies split at sentence boundaries (splitForThread; the link and its card stay on the root), the Buffer channels and the LinkedIn text keep whole sentences and drop trailing ones (fitWhole); the ellipsis cut is the last resort for a single sentence longer than the limit. REACH-SIGNALS-1 (issue 2225): the 07:00 engagement run stores each reply by another account (social_replies: hashed author, delay from the post in minutes, text length, word count; never the text) from the public getPostThread endpoint; no reply is posted. SUBSCRIBE-LINE-ACCURATE-1 (issue 1753): the LinkedIn subscribe line said monthly while the list is a weekly digest and linked the page top; it now states the cadence the list has and links the form. Ledger ids come from crypto.randomUUID. // 0.11.1-doi-scrub // 0.11.1 NOZ-DOI-1 (owner decision 2026-10-10, pillar reach): the dead-registry paper scan, the selected-works refill and every 10.5281 identifier are removed; the 06:00 run only sweeps and repairs drafts, contentGate refuses (and the drain suppresses) any post carrying a dead-registry identifier or link, and prompts and the checker link only to a URL or a third-party DOI. // 0.11.0 SOCIAL-GROUND-1 (owner directive 2026-10-10, pillar reach): checkThread first runs a mechanical check that every capitalised name, year and figure in a thread occurs in the title, author or abstract it was written from (an invented one is an issue, no model can override it); composePrompt and the checker prompt state that the model's own knowledge is not a source and name no example topics; the checker stays fail-closed (unavailable = draft). // 0.10.0-open-q08 0.10.0 Q08-OPEN-1 (owner directive 2026-10-09, pillar reach): q08.org links and q08 rows are no longer refused or skipped, the REACH-SELECT title hold is dropped in the channel drain, an attention share of 0 keeps one slot instead of holding a channel or Bluesky, the Bluesky weekly cap defaults to 7 and the Buffer channel caps to LinkedIn 5 (drafts only), Mastodon 10, X 10 (ceiling 14); the mojibake guard, the pause flag and the LinkedIn draft rule stay.  // 0.9.2 // 0.9.2 PROMOTE-ROUTE-2: a channel whose last post was a curated thread gets the newest unposted paper next. // 0.9.1 PROMPT-CACHE-COUNT-3b (issue 2114, 2026-10-08, pillar cost): the 0.8.3 ai_cache_counters write named columns the table does not have (purpose, cached), so every insert failed silently; it now writes the fleet schema (day, worker, model, calls, cached_calls, in_tok, cached_tok).  // 0.9.0 PROMOTE-ROUTE-1 (2026-10-07, pillar reach, owner directive "no siloes"): the channel drain takes queued research papers from dissemination_tracker (newest first, after curated queued threads, before recycled posted threads), so a published paper reaches LinkedIn, Mastodon and X while Bluesky is at attention share 0. // 0.8.2 UTM-VISITS-1 (2026-10-06, pillar reach, transformation lever T7.9 half 2): learnerVisits reads the gateway's tagged loads first (reach_signals source utm, metric clicks_human, campaign = the paper slug, channel = the utm_source of the post's channel; UTM-CLICK-LEDGER-1, qnfo-gateway 3.10.0 + qnfo-fleet-dashboard 1.26.0, PR 688): a direct count of the visits a post caused beats the bot-filtered RUM lift, which stays the fallback when the window carries no tagged row. 0.8.1 LEARNER-CHANNEL-ARM-1 was
 // 0.8.1 (2026-10-06, LEARNER-CHANNEL-ARM-1, transformation lever T7.13, pillar reach; owner directive "execute the suggestions"): the
 // distribution learner gains a channel arm (bluesky, linkedin, mastodon, x): Buffer channel posts become learner rows credited
@@ -997,7 +997,7 @@ var CHANNEL_PLATFORM = { linkedin: 'buffer-linkedin', mastodon: 'buffer-mastodon
 var CHANNEL_MAX_CHARS = { linkedin: 1300, mastodon: 280, twitter: 280, substack: 1300 };
 var CHANNEL_LONG = { linkedin: 1, substack: 1 };
 var CHANNEL_REPEAT_DAYS = 30;
-var CHANNEL_ORDER = ['linkedin', 'mastodon', 'twitter', 'substack'];
+var CHANNEL_ORDER = ['linkedin', 'mastodon', 'twitter'];   // PAPER-ROLLUP-1: Substack takes roll-ups (drainRollup), not single posts
 // The Buffer channel for a service; Buffer may name Substack 'substack' or a variant, so it matches by substring.
 function findChannel(channels, svc) {
   return (channels || []).find(function(c) { return c && !c.isDisconnected && (c.service === svc || (svc === 'substack' && /substack/i.test(String(c.service || '')))); }) || null;
@@ -1215,7 +1215,8 @@ async function pickChannelRow(env, channel, epoch) {
 var PAPER_PROMOTE_DAYS = 30;
 async function pickPaperRow(env, channel) {
   let rows = [];
-  try { rows = (await env.DB.prepare("SELECT id, paper_slug, paper_title, paper_doi, pages_url FROM dissemination_tracker WHERE action='queued' AND channel='bluesky' AND paper_slug IS NOT NULL AND paper_slug <> '' AND created_at >= datetime('now', ?1) ORDER BY created_at DESC LIMIT 20").bind('-' + PAPER_PROMOTE_DAYS + ' days').all()).results || []; } catch (e) { return null; }
+  // PAPER-ROLLUP-1: a paper the roll-up already announced (action posted) is still news on the channels that have not carried it.
+  try { rows = (await env.DB.prepare("SELECT id, paper_slug, paper_title, paper_doi, pages_url FROM dissemination_tracker WHERE (action = 'queued' OR (action = 'posted' AND COALESCE(mode, '') LIKE 'rollup%')) AND channel='bluesky' AND paper_slug IS NOT NULL AND paper_slug <> '' AND created_at >= datetime('now', ?1) ORDER BY created_at DESC LIMIT 20").bind('-' + PAPER_PROMOTE_DAYS + ' days').all()).results || []; } catch (e) { return null; }
   for (const d of rows) {
     const slug = String(d.paper_slug);
     if (/^q08-/.test(slug)) continue;
@@ -1385,10 +1386,11 @@ async function ensureSocialSchema(env) {
 function weeklyCap(env) {
   const v = env && env.SOCIAL_WEEKLY_CAP;
   const n = parseInt(String(v === undefined || v === null ? '' : v), 10);
-  return Number.isFinite(n) && n >= 0 ? n : 14; // OUTREACH-ACCELERATE-1: 14 a week by default (Q08-OPEN-1 had 7, before that 2)
+  return Number.isFinite(n) && n >= 0 ? n : 21; // PAPER-ROLLUP-1: 21 a week (3 a day; a roll-up thread counts once); OUTREACH-ACCELERATE-1 had 14, Q08-OPEN-1 7
 }
 async function socialGate(env, who) {
   await ensureSocialSchema(env);
+  await ensureChannelSchema(env);   // PAPER-ROLLUP-1: the count reads social_media_posts (bluesky-rollup)
   // ATTENTION-SHARE-1 (0.8.0): the attention share scales the Bluesky cap, never above it; share 0 holds every post.
   const shares = await attentionShares(env);
   const cap = shareCap(weeklyCap(env), shares.bluesky, shares.floor);
@@ -1404,7 +1406,7 @@ async function socialGate(env, who) {
     // than the reset; the cap itself is unchanged. Delete the flag to count the plain rolling 7 days again.
     let epoch = '0';
     try { const ef = await env.DB.prepare("SELECT value FROM pipeline_flags WHERE key='social_cap_epoch'").first(); if (ef && /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(String(ef.value || '').trim())) epoch = String(ef.value).trim(); } catch (e) { console.error(JSON.stringify({ evt: "social:socialGate:caught", error: String((e && e.message) || e) })); }
-    const c = await env.DB.prepare("SELECT (SELECT COUNT(*) FROM social_threads WHERE status='posted' AND posted_at >= MAX(datetime('now','-7 days'), ?1)) + (SELECT COUNT(*) FROM dissemination_tracker WHERE action='posted' AND channel='bluesky' AND posted_at >= MAX(datetime('now','-7 days'), ?1)) AS n").bind(epoch).first();
+    const c = await env.DB.prepare("SELECT (SELECT COUNT(*) FROM social_threads WHERE status='posted' AND posted_at >= MAX(datetime('now','-7 days'), ?1)) + (SELECT COUNT(*) FROM dissemination_tracker WHERE action='posted' AND channel='bluesky' AND COALESCE(mode, '') NOT LIKE 'rollup%' AND posted_at >= MAX(datetime('now','-7 days'), ?1)) + (SELECT COUNT(*) FROM social_media_posts WHERE platform='bluesky-rollup' AND published_at >= MAX(datetime('now','-7 days'), ?1)) AS n").bind(epoch).first();
     const n = Number((c && c.n) || 0);
     console.log('SOCIAL-CADENCE-CAP-1 ' + who + ': bluesky posts_7d=' + n + ' cap=' + cap + (n >= cap ? ' -> holding queued rows' : ''));
     if (n >= cap) return { allowed: 0, reason: 'weekly-cap', posted_7d: n, cap: cap };
@@ -1421,7 +1423,7 @@ async function socialGate(env, who) {
 var BSKY_PER_RUN = 1;
 async function blueskySpacing(env, cap, nowMs) {
   try {
-    const r = await env.DB.prepare("SELECT MAX(t) AS last FROM (SELECT MAX(posted_at) AS t FROM social_threads WHERE status='posted' UNION ALL SELECT MAX(posted_at) FROM dissemination_tracker WHERE action='posted' AND channel='bluesky')").first();
+    const r = await env.DB.prepare("SELECT MAX(t) AS last FROM (SELECT MAX(posted_at) AS t FROM social_threads WHERE status='posted' UNION ALL SELECT MAX(posted_at) FROM dissemination_tracker WHERE action='posted' AND channel='bluesky' AND COALESCE(mode, '') NOT LIKE 'rollup%' UNION ALL SELECT MAX(published_at) FROM social_media_posts WHERE platform='bluesky-rollup')").first();
     const last = r && r.last ? String(r.last) : '';
     const t = last ? Date.parse(last.replace(' ', 'T') + (/Z$|[+-]\d\d:\d\d$/.test(last) ? '' : 'Z')) : NaN;
     if (!Number.isFinite(t) || !(cap > 0)) return { wait: false };
@@ -1893,6 +1895,116 @@ async function httpStatus(url) {
     return 0;
   }
 }
+// ---------- PAPER-ROLLUP-1 (0.16.0) ----------
+// The research pipeline publishes about 17 papers a day; no single-post cadence carries that, and SLA-DRAIN-1 suppressed every
+// queued paper but the newest. A roll-up carries many papers in one post: a Substack Note (10,000 characters) every hourly tick
+// lists every queued paper, and a Bluesky thread (one paper per post, inside the Bluesky gate) carries up to ROLLUP_BSKY_MAX of
+// the announced papers. A paper whose link is gone (404/410) is suppressed as drainDissemination does; any other probe failure
+// waits for the next run. Substack missing or Buffer failing leaves the rows queued, so the Bluesky roll-up takes them directly.
+var ROLLUP_SUBSTACK_MAX = 60, ROLLUP_BSKY_MAX = 15, ROLLUP_SUBSTACK_GAP_MS = 50 * 6e4, RETRACT_MAX = 60, ROLLUP_DAYS = 30;
+function rollupLine(i, title, link) { return (i + 1) + '. ' + String(title || '').replace(/\s+/g, ' ').trim() + ' — ' + link; }
+// Pure: the Substack Note for a list of {title, link} (links already tagged). Whole lines only, inside max characters.
+function rollupNoteText(items, max) {
+  max = max || 9500;
+  const head = items.length === 1 ? 'New open-access paper from QNFO:' : 'New open-access papers from QNFO (' + items.length + '):';
+  let body = head, used = 0;
+  for (let i = 0; i < items.length; i++) {
+    const line = rollupLine(i, items[i].title, items[i].link);
+    if ((body + '\n\n' + line + '\n\n' + SUBSCRIBE_LINE).length > max) break;
+    body += '\n\n' + line; used++;
+  }
+  return { text: body + '\n\n' + SUBSCRIBE_LINE, used: used };
+}
+async function rollupCandidates(env, where, limit) {
+  return (await env.DB.prepare("SELECT id, paper_slug, paper_title, pages_url, action, mode FROM dissemination_tracker WHERE channel = 'bluesky' AND " + where + " AND paper_slug IS NOT NULL AND paper_slug <> '' AND paper_slug NOT LIKE 'q08-%' AND created_at >= datetime('now', ?1) ORDER BY created_at ASC LIMIT " + Number(limit)).bind('-' + ROLLUP_DAYS + ' days').all()).results || [];
+}
+// Probe and gate each candidate; returns the live ones as {row, title, link}. Gone links and gated text are suppressed.
+async function rollupLive(env, rows) {
+  const out = [];
+  for (const row of rows) {
+    const link = row.pages_url || ('https://papers.qnfo.org/papers/' + String(row.paper_slug) + '/');
+    const title = repairMojibake(String(row.paper_title || row.paper_slug));
+    const cg = contentGate([title + ' — ' + link]);
+    if (!cg.ok) { await env.DB.prepare("UPDATE dissemination_tracker SET action = ?, post_text_snippet = ?, updated_at = datetime('now') WHERE id = ?").bind((cg.reason === 'q08-link' || cg.reason === 'dead-doi') ? 'suppressed' : 'held', 'CONTENT-GATE: ' + cg.reason + ' - not posted (PAPER-ROLLUP-1)', row.id).run(); continue; }
+    const p = await probeLink(link, String(row.paper_slug || '').slice(0, 40));
+    if (p.verdict === 'gone') { await env.DB.prepare("UPDATE dissemination_tracker SET action = 'suppressed', post_text_snippet = ?, updated_at = datetime('now') WHERE id = ?").bind('SUPPRESSED: target paper gone (404/410): ' + link, row.id).run(); continue; }
+    if (p.verdict !== 'live') continue;
+    out.push({ row: row, title: title, link: link });
+  }
+  return out;
+}
+async function drainRollup(env, opts) {
+  opts = opts || {};
+  const nowMs = opts.nowMs || Date.now();
+  const out = { substack: null, bluesky: null };
+  try {
+    const f = await env.DB.prepare("SELECT value FROM pipeline_flags WHERE key='social_paused'").first();
+    if (f && String(f.value).trim() === '1') return { skipped: 'paused' };
+  } catch (e) { return { skipped: 'gate-error' }; }
+  // 1. Substack: every queued paper, oldest first.
+  try { out.substack = await rollupSubstack(env, nowMs); } catch (e) { out.substack = { error: String(e && e.message || e).slice(0, 160) }; }
+  // 2. Bluesky: the announced papers it has not carried (and queued ones when Substack could not take them).
+  try { out.bluesky = await rollupBluesky(env, nowMs); } catch (e) { out.bluesky = { error: String(e && e.message || e).slice(0, 160) }; }
+  return out;
+}
+async function rollupSubstack(env, nowMs) {
+  if (!env.BUFFER_TOKEN) return { skipped: 'no BUFFER_TOKEN' };
+  const w = await channelWindow(env, 'substack', '0');
+  if (w.lastMs != null && nowMs - w.lastMs < ROLLUP_SUBSTACK_GAP_MS) return { held: 'spacing' };
+  const rows = await rollupCandidates(env, "action = 'queued'", ROLLUP_SUBSTACK_MAX);
+  if (!rows.length) return { held: 'no-content' };
+  const bc = await bufferChannels(env);
+  if (bc.error) return { error: 'buffer: ' + bc.error };
+  const ch = findChannel(bc.channels, 'substack');
+  if (!ch) return { held: 'no-channel' };
+  const live = await rollupLive(env, rows);
+  if (!live.length) return { held: 'no-live-links', candidates: rows.length };
+  const items = live.map(function(x) { return { title: x.title, link: utmTag(x.link, 'substack', String(x.row.paper_slug)) }; });
+  const note = rollupNoteText(items, 9500);
+  const res = await bufferCreate(env, ch, 'substack', note.text, 'publish');
+  if (!res.post_id || res.status === 'error') return { error: String(res.error || res.status).slice(0, 120), papers: note.used };
+  const carried = live.slice(0, note.used);
+  const st = carried.map(function(x) { return env.DB.prepare("UPDATE dissemination_tracker SET action = 'posted', mode = 'rollup', posted_at = datetime('now'), post_url = ?1, post_id = NULL, updated_at = datetime('now') WHERE id = ?2 AND action = 'queued'").bind('buffer-substack:' + res.post_id, x.row.id); });
+  if (st.length) await env.DB.batch(st);
+  await recordChannelPost(env, 'substack', 'rollup-' + new Date(nowMs).toISOString().slice(0, 16), res, note.text, 'rollup:' + carried.length);
+  return { posted: res.post_id, papers: carried.length };
+}
+async function rollupBluesky(env, nowMs) {
+  const gate = await socialGate(env, 'rollup');
+  if (!gate.allowed) return { held: gate.reason || 'weekly-cap', next: gate.next || null };
+  // Announced by the Substack roll-up and not yet on Bluesky; queued rows too when Substack did not take them this run.
+  let rows = await rollupCandidates(env, "action = 'posted' AND mode = 'rollup' AND post_id IS NULL", ROLLUP_BSKY_MAX);
+  if (rows.length < ROLLUP_BSKY_MAX) rows = rows.concat(await rollupCandidates(env, "action = 'queued'", ROLLUP_BSKY_MAX - rows.length));
+  if (!rows.length) return { held: 'no-content' };
+  const live = await rollupLive(env, rows);
+  if (!live.length) return { held: 'no-live-links', candidates: rows.length };
+  const s = await session(env);
+  const handle = String((s && s.handle) || env.BSKY_HANDLE || '');
+  let root = null, parent = null, rootUri = null, done = 0, err = null;
+  for (let i = 0; i < live.length; i++) {
+    const x = live[i];
+    try {
+    const head = i === 0 ? (live.length === 1 ? 'New open-access paper: ' : 'New open-access papers (' + live.length + '), one per post. 1/ ') : (i + 1) + '/ ';
+    const r = await postText(s, head + x.title + ' — ' + x.link, i ? { root: root, parent: parent } : undefined, { embed: i === 0 ? { title: x.title, desc: 'QNFO research — open access' } : undefined, campaign: String(x.row.paper_slug) });
+    if (i === 0) { root = { uri: r.uri, cid: r.cid }; rootUri = r.uri; }
+    parent = { uri: r.uri, cid: r.cid };
+    const rkey = String(r.uri || '').split('/').pop();
+    await env.DB.prepare("UPDATE dissemination_tracker SET action = 'posted', mode = 'rollup:bluesky', posted_at = COALESCE(posted_at, datetime('now')), post_id = ?1, post_url = ?2, post_text_snippet = COALESCE(?3, post_text_snippet), updated_at = datetime('now') WHERE id = ?4")
+      .bind(r.uri, handle && rkey ? 'https://bsky.app/profile/' + handle + '/post/' + rkey : r.uri, typeof r.stored_text === 'string' ? r.stored_text : null, x.row.id).run();
+    done++;
+    } catch (e) { err = String(e && e.message || e).slice(0, 120); break; }   // the rest wait for the next roll-up
+  }
+  if (!done) return { error: err || 'nothing posted' };
+  await ensureChannelSchema(env);
+  await env.DB.prepare("INSERT INTO social_media_posts (id, platform, post_id, url, content_preview, published_at, buffer_id, project_id, status, engagement_metrics) VALUES (?1, 'bluesky-rollup', ?2, NULL, ?3, datetime('now'), NULL, ?4, 'published', ?5)")
+    .bind('bsky-rollup-' + Date.now().toString(36) + crypto.randomUUID().replace(/-/g, '').slice(0, 6), rootUri, ('roll-up of ' + done + ' papers').slice(0, 200), 'rollup-' + new Date(nowMs).toISOString().slice(0, 16), JSON.stringify({ via: 'rollup', papers: done })).run();
+  return err ? { posted: rootUri, papers: done, error: err } : { posted: rootUri, papers: done };
+}
+function rollupRunStatus(r) {
+  if (!r) return 'error';
+  if (r.skipped) return r.skipped === 'gate-error' ? 'error' : 'skipped';
+  return [r.substack, r.bluesky].some(function(x) { return x && x.error; }) ? 'degraded' : 'ok';
+}
 async function drainDissemination(env, opts) {
   opts = opts || {};
   await env.DB.prepare("UPDATE dissemination_tracker SET action='failed', updated_at=datetime('now') WHERE action='posting' AND updated_at < datetime('now','-1 hour')").run();
@@ -1965,7 +2077,8 @@ async function drainDissemination(env, opts) {
 // an out-of-band sweep, leaving a stale live post. Re-verify every posted paper link each cron and
 // retract (delete the Bluesky post + flag) so the account can never carry a dead link.
 async function retractDeadLinks(env) {
-  const rows = await env.DB.prepare("SELECT id, post_id, pages_url FROM dissemination_tracker WHERE action='posted' AND channel='bluesky' AND post_id IS NOT NULL AND pages_url IS NOT NULL").all();
+  // PAPER-ROLLUP-1: at most RETRACT_MAX Bluesky posts of 30 days a run (the least recently checked first), so the hourly tick stays bounded.
+  const rows = await env.DB.prepare("SELECT id, post_id, pages_url FROM dissemination_tracker WHERE action='posted' AND channel='bluesky' AND post_id LIKE 'at://%' AND pages_url IS NOT NULL AND posted_at >= datetime('now', '-30 days') ORDER BY updated_at ASC LIMIT " + RETRACT_MAX).all();
   let retracted = 0, misrouted = 0;
   for (const row of (rows.results || [])) {
     const p = await probeLink(row.pages_url);
@@ -2914,6 +3027,10 @@ async function socialScheduled(event, env) {
     let ch;
     try { ch = await drainChannels(env); } catch (e) { ch = { error: String(e && e.message || e).slice(0, 200) }; }
     await recordSocialRun(env, 'channels', channelsRunStatus(ch), ch);
+    // PAPER-ROLLUP-1: every queued paper reaches Substack this hour, and the Bluesky thread carries the announced ones.
+    let ru;
+    try { ru = await drainRollup(env); } catch (e) { ru = { error: String(e && e.message || e).slice(0, 200) }; }
+    await recordSocialRun(env, 'rollup', rollupRunStatus(ru), ru);
     await retractDeadLinks(env);
     await restoreMisdeleted(env);
 }
@@ -3144,7 +3261,7 @@ async function aiRunAttr(env, worker, purpose, model, input, opts) {
   }
 }
 // end aiRunAttr
-export { mastodonCreate, mastodonDirectStats, channelCreate, findChannel, blueskySpacing, CHANNEL_ORDER, collectBufferStats, bufferStatsPlan, bufferRefusedFields, bufferStatsQuery, bufferGqlBounded, BUFFER_STATS_PER_CHANNEL, BUFFER_STATS_CHANNELS, readTextCapped, probeLink, proseUnits, splitForThread, fitWhole, threadPlan, postThread, pickBufferText, collectReplies, replyRowsOf, replyWordCount, threadGroundingIssues, groundingProblems, composePrompt, repairPrompt, buildFacets, truncateSafe, applyLink, findDoi, byteLen, extractUrls, utmHost, sentPostsJson, utmTag, utmTagText,fitKeepUrls, tagAndFit, tagFacets, postText, postUriValue, weeklyCap, socialGate, drainQueue, drainDissemination, repairMojibake, contentGate, markPosted, routeGate, collectEngagement, blueskyUriOf, bufferPost, syncProfile, PROFILE_DESCRIPTION, bufferChannelAudit, linkedinMode, recordSocialRun, profileRunStatus, drainRunStatus, engagementRunStatus, autoScan,
+export { drainRollup, rollupNoteText, rollupSubstack, rollupBluesky, rollupRunStatus, ROLLUP_SUBSTACK_MAX, ROLLUP_BSKY_MAX, mastodonCreate, mastodonDirectStats, channelCreate, findChannel, blueskySpacing, CHANNEL_ORDER, collectBufferStats, bufferStatsPlan, bufferRefusedFields, bufferStatsQuery, bufferGqlBounded, BUFFER_STATS_PER_CHANNEL, BUFFER_STATS_CHANNELS, readTextCapped, probeLink, proseUnits, splitForThread, fitWhole, threadPlan, postThread, pickBufferText, collectReplies, replyRowsOf, replyWordCount, threadGroundingIssues, groundingProblems, composePrompt, repairPrompt, buildFacets, truncateSafe, applyLink, findDoi, byteLen, extractUrls, utmHost, sentPostsJson, utmTag, utmTagText,fitKeepUrls, tagAndFit, tagFacets, postText, postUriValue, weeklyCap, socialGate, drainQueue, drainDissemination, repairMojibake, contentGate, markPosted, routeGate, collectEngagement, blueskyUriOf, bufferPost, syncProfile, PROFILE_DESCRIPTION, bufferChannelAudit, linkedinMode, recordSocialRun, profileRunStatus, drainRunStatus, engagementRunStatus, autoScan,
   drainChannels, channelsRunStatus, channelText, channelCaps, channelWindow, channelCarried, pickChannelRow, CHANNEL_WEEKLY_CAP, CHANNEL_PLATFORM, CHANNEL_MAX_CHARS, CHANNEL_REPEAT_DAYS, SUBSCRIBE_LINE,
   learnerClassify, learnerIsQuestion, learnerTopicOf, learnerSlotOf, learnerBeta, learnerPrior, learnerPosterior, learnerChoose, learnerPBest,
   learnerEnabled, learnerPick, learnerEngagementOf, learnerVisits, learnerRewardOf, learnerWeeklyUpdate, learnerWeeklyTick, learnerCreditPending, learnerDailyCredit, attentionShares, shareCap, attentionOrder, learnerChannelOrder, learnerChannelEngagement, LEARNER_CHANNELS, LEARNER_CHANNEL_OF,
