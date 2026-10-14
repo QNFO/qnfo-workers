@@ -78,6 +78,10 @@ const wa = src.slice(src.indexOf("async function wikiAnchors(used, cooled, seed)
 ok(/events = await fetchEventTitles\(seed, EVENT_POOL\)/.test(wa) && /fetchRandomTitles\(TOPIC_POOL - events\.length\)/.test(wa) && V.EVENT_POOL === 10, "half the pool of 20 is events, the rest random");
 ok(/catch \(eE\) \{ diagNote\("wikipedia onthisday: "/.test(wa), "a failed events feed is logged and the pool falls back to random titles");
 
+// CRON-ONLY-HEARTBEAT-1: the hourly tick ends with a fleet_heartbeat row, ok=0 when the tick threw, and the write never throws
+const sch = src.slice(src.indexOf("  async scheduled(event, env, ctx) {"), src.indexOf("  async scheduled(event, env, ctx) {") + 9000);
+ok(/var hbOk = 1;/.test(sch) && /\} catch \(e\) \{ hbOk = 0; logCaught\("scheduled", e\); \}/.test(sch), "the tick records whether it threw");
+ok(/INSERT INTO fleet_heartbeat \(worker, version, ts, ok\)[\s\S]{0,200}\.bind\("personal-companion", VERSION, new Date\(\)\.toISOString\(\), hbOk\)/.test(sch) && /catch \(eHb\) \{ logCaught\("scheduled:heartbeat", eHb\); \}/.test(sch), "it writes its heartbeat row and a failed write is logged, not thrown");
 const ver = (src.match(/var VERSION = "(\d+)\.(\d+)\.(\d+)/) || []).slice(1).map(Number);
 ok(ver.length === 3 && (ver[0] > 1 || (ver[0] === 1 && ver[1] >= 25)), "VERSION is at least 1.25.0", ver);
 console.log(pass + " passed, " + fail + " failed");
