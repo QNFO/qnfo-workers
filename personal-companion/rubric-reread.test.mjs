@@ -44,7 +44,7 @@ ok(sink.length === 2 && sink[0].model === sink[1].model, "the re-read asks the s
 const gen = src.slice(src.indexOf("async function generate("), src.indexOf("__name(generate"));
 const iRR = gen.indexOf("rubricRereadNote(rq)"), iP = gen.indexOf("for (var cround = 1; cround <= CRITIC_PRUNE_ROUNDS");
 ok(iRR > 0 && iP > iRR, "the re-read runs before the critic prune deletes the analysis", [iRR, iP]);
-ok(/var rrNote = !rq\.length \? rubricNoQuoteNote\(\) : analysisSplitOk\(splitText\(piece\)\) && quotesAllInAnalysis\(piece, rq\) \? rubricRereadNote\(rq\) : "";/.test(gen), "a grounding rejection is re-read only when it quotes nothing the piece contains, or only the marked analysis");
+ok(/var rrNote = !rq\.length \? rubricNoQuoteNote\(\) : analysisSplitOk\(splitText\(piece\)\) && quotesAllInAnalysis\(piece, rq\) \? rubricRereadNote\(rq\) : rqSrc \? sourcedRereadNote\(rqSrc\) : "";/.test(gen), "a grounding rejection is re-read only when it quotes nothing the piece contains, only the marked analysis, or only passages the source states (CRITIC-QUOTE-SOURCED-1, 1.26.2)");
 // RUBRIC-NO-QUOTE-1 (1.26.1)
 const nq = V.rubricNoQuoteNote();
 ok(/quoted no passage of the piece as invented/.test(nq) && /a source detail the piece leaves out is not a grounding failure/.test(nq) && /score grounding 0 only if you can quote one/.test(nq), "the no-quote note states the rule: only a quotable invented claim scores grounding 0", nq);
