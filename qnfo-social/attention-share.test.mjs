@@ -163,10 +163,10 @@ ok(xRow && xRow.reward_detail && (/"channel":"x"/.test(xRow.reward_detail) || /"
 const post = await mod.learnerPosterior(env);
 ok(post.channel && post.channel.x.n === 1 && post.channel.bluesky.n === 1 && post.channel.linkedin.n === 0 && post.channel.x.a > 1.8, "the posterior carries a channel dimension credited per channel: " + JSON.stringify(post.channel));
 const ord = await mod.learnerChannelOrder(env, () => 0.5);
-ok(ord.via === "learner" && ord.order.length === 3 && ord.order.slice().sort().join() === "linkedin,mastodon,twitter" && typeof ord.draws.twitter === "number", "the channel order is a permutation of the drain channels with one draw each: " + JSON.stringify(ord));
+ok(ord.via === "learner" && ord.order.length === 4 && ord.order.slice().sort().join() === "linkedin,mastodon,substack,twitter" && typeof ord.draws.twitter === "number", "the channel order is a permutation of the drain channels with one draw each: " + JSON.stringify(ord));
 db.prepare("INSERT OR REPLACE INTO ops_config (key, value) VALUES ('social_learner_enabled', '0')").run();
 const ordOff = await mod.learnerChannelOrder(env);
-ok(ordOff.via === "learner-off" && ordOff.order.join() === "linkedin,mastodon,twitter", "with the learner off the drain keeps its fixed order");
+ok(ordOff.via === "learner-off" && ordOff.order.join() === "linkedin,mastodon,twitter,substack", "with the learner off the drain keeps its fixed order");
 db.prepare("DELETE FROM ops_config WHERE key = 'social_learner_enabled'").run();
 
 console.log(`${pass} passed, ${fail} failed`);
