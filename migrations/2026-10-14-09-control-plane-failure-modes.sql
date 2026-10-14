@@ -1,0 +1,31 @@
+-- APPLY-BY: ci
+-- DB: qnfo-audit
+-- Rollback: DELETE FROM remediation_contracts WHERE class IN ('fm-improvement-files-in-target-decline', 'fm-drift-heal-races-canonical-deploy'); DELETE FROM failure_modes WHERE fm_key IN ('improvement-files-in-target-decline', 'drift-heal-races-canonical-deploy'); UPDATE failure_modes SET remediation = 'qnfo-ops 2.48.1 SCHEMA-ALTER-QUIET-1, qnfo-fleet-control 0.27.0 and qnfo-social 0.14.3 LOG-NOISE-1: the duplicate-column answer is not logged' WHERE fm_key = 'ops-schema-alter-noise'; DELETE FROM decision_log WHERE instr(action, 'CONTROL-PLANE-20261014-B:') = 1
+-- 2026-10-14 (pillars autonomy and core; agent_issues 2391, 2547, 2551, 2223, 2322, 2327, 2328, 2466, 2545, 2562). The control-plane pull request
+-- with qnfo-fleet-control 0.31.0 (IL-DEFECT-ONLY-1, DRIFT-HEAL-GRACE-1, SCHEMA-ALTER-PROBE-1) and qnfo-ops 2.48.2 (SCHEMA-ALTER-PROBE-1).
+-- Two new failure modes with code-read detectors; ops-schema-alter-noise gets the remediation that stops the exceptions (its detector
+-- already counts them in worker_logs). Data only: no trigger is created or dropped.
+INSERT OR IGNORE INTO failure_modes (fm_key, failure_mode, root_cause, remediation, detector, probe_class, first_seen, issue_id, trigger_condition, symptom, blast_radius) VALUES
+ ('improvement-files-in-target-decline', 'IMPROVEMENT-LOOP-1 filed a METRIC-REGRESSION-1 issue for a metric that was still inside its target, and a relapse issue beside the open trigger issue of the same metric',
+  'every 7-day decline was filed as a defect whether or not the metric was off target, and the covered_by mark of an open trigger issue only annotated the finding instead of stopping the filing',
+  'IL-DEFECT-ONLY-1 (qnfo-fleet-control 0.31.0): a regression is filed only when its metric is off target now; an in-target decline is an early warning kept in the run state and GET /improvement; the loop closes an open regression or relapse issue whose metric is back inside its target and supersedes one an open trigger issue covers',
+  'qnfo-fleet-control/worker.js on main files a regression finding only when it is off target', 'fm-improvement-files-in-target-decline', '2026-10-14', 2551,
+  'a metric that declines over 7 days while inside its target, or one that already has an open trigger issue', 'agent_issues 2322, 2327, 2328, 2466, 2545 (in-target regressions) and 2551 beside 2193, 2223 beside 2284', 'open_agent_issues and every metric the improvement loop reads'),
+ ('drift-heal-races-canonical-deploy', 'the drift scan redeployed a worker main was ahead of while the canonical deploy of the same push was still running, and the two raced for the deploy-guard lock',
+  'scan(env, heal) redeployed every canonical-ahead worker on the first scan after a merge; a canonical deploy takes minutes, so the 10-minute scan often caught the worker mid-deploy',
+  'DRIFT-HEAL-GRACE-1 (qnfo-fleet-control 0.31.0): a worker is redeployed only after main has been ahead of it for 20 minutes, measured from its first canonical-ahead report; an unreadable clock lets the heal run',
+  'qnfo-fleet-control/worker.js on main holds the heal for DRIFT_HEAL_GRACE_MIN', 'fm-drift-heal-races-canonical-deploy', '2026-10-14', 2391,
+  'a merge to main that changes a worker, followed by a drift scan within minutes', 'qnfo-cloud-ops 2026-10-14 03:01:31 and 00:01: drift redeploy and canonical deploy of one push contended for the lock (2391, 2547)', 'every canonical deploy');
+INSERT OR IGNORE INTO remediation_contracts (class, issue_id, precondition, action, verify_probe, verify_transport, max_attempts, escalate_to, expected_cadence_h, status, module, budget_ms, max_items, requires_container, next_due_at) VALUES
+ ('fm-improvement-files-in-target-decline', NULL, 'IL-DEFECT-ONLY-1', 'failure-mode detector', '{"paths": ["qnfo-fleet-control/worker.js"], "contains": "covered_by: covered[r.metric] || null, file: !!offTarget,"}', 'code-read', 3, 'qnfo-fleet-control', 1, 'active', 'failure-mode', 45000, 5, 0, datetime('now')),
+ ('fm-drift-heal-races-canonical-deploy', NULL, 'DRIFT-HEAL-GRACE-1', 'failure-mode detector', '{"paths": ["qnfo-fleet-control/worker.js"], "contains": "var DRIFT_HEAL_GRACE_MIN = 20;"}', 'code-read', 3, 'qnfo-fleet-control', 1, 'active', 'failure-mode', 45000, 5, 0, datetime('now'));
+UPDATE failure_modes SET remediation = 'SCHEMA-ALTER-PROBE-1 (qnfo-ops 2.48.2, qnfo-fleet-control 0.31.0): ensureSchema, evSchema and cfcSchema read their columns first and run an ALTER only for a missing one, because Workers telemetry records a failed D1 statement as an exception even when the code catches it; 2.48.1 SCHEMA-ALTER-QUIET-1 had stopped only the log line (221 exceptions in two hours remained on 2026-10-14)'
+WHERE fm_key = 'ops-schema-alter-noise';
+INSERT INTO decision_log (actor, assumption, action, evidence, outcome, blast_radius, rollback_path, capability_gain, predicted_outcome, reach_gain, surfaces_tested)
+SELECT 'session_01Kddqwk5gQT5qSSHVKjT2EA', 'an issue is a defect: a metric inside its target is not one, a second issue for a covered metric is a duplicate, a heal that races the deploy it would repeat is noise, and a caught D1 error is still an exception in telemetry',
+  'CONTROL-PLANE-20261014-B: qnfo-fleet-control 0.31.0 (IL-DEFECT-ONLY-1, DRIFT-HEAL-GRACE-1, SCHEMA-ALTER-PROBE-1) and qnfo-ops 2.48.2 (SCHEMA-ALTER-PROBE-1) through the stale-PR lane',
+  'agent_issues 2322, 2327, 2328, 2466, 2545 in target; 2551/2193 and 2223/2284 side by side; drift races 2026-10-14 00:01 and 03:01; worker_logs 2026-10-14 02:21-03:41 UTC: 221 qnfo-ops and 14 qnfo-fleet-control duplicate-column exceptions',
+  'merged through the stale-PR lane', 'qnfo-fleet-control improvement loop and drift scan; qnfo-ops ensureSchema', 'the canary revert, or the revert of the pull request',
+  'the improvement loop files only defects and the fleet stops logging its own schema checks as errors',
+  'fm-ops-schema-alter-noise observes 0 within 2 hours of the deploy', 'none', 'd1:qnfo-audit worker_logs, agent_issues, improvement_loop_runs, fleet_drift_report; code:qnfo-fleet-control improvementEvaluate, scan, evSchema, cfcSchema; qnfo-ops ensureSchema'
+WHERE NOT EXISTS (SELECT 1 FROM decision_log WHERE instr(action, 'CONTROL-PLANE-20261014-B:') = 1);

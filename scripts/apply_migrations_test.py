@@ -205,6 +205,24 @@ INSERT OR REPLACE INTO ops_config (key, value) VALUES ('after_deep', '1');
 rc = M.apply_file("migrations/deep.sql", deep, "a", "t", "c7", emit)
 ok(rc == 1 and "D1-TRIGGER-DEPTH-1" in out[-1] and not db.execute("SELECT 1 FROM sqlite_master WHERE name = 'hb_feed'").fetchone()
    and not db.execute("SELECT 1 FROM ops_config WHERE key = 'after_deep'").fetchone(), "a trigger that makes a write too deep is dropped at once and the file stops", out[-1])
+# MIGRATION-STALE-SHA-1: a content that failed is not replayed once a newer content of the file applied ok (a late run on an older commit).
+STALE_BAD = """-- APPLY-BY: ci
+-- DB: qnfo-audit
+-- Rollback: DELETE FROM ops_config WHERE key = 'stale'
+INSERT INTO no_such_table_stale (x) VALUES (1);
+"""
+STALE_GOOD = STALE_BAD.replace("INSERT INTO no_such_table_stale (x) VALUES (1);", "INSERT OR REPLACE INTO ops_config (key, value) VALUES ('stale', 'fixed');")
+ok(M.apply_file("migrations/stale.sql", STALE_BAD, "a", "t", "old", emit) == 1, "the first content of the file fails")
+ok(M.apply_file("migrations/stale.sql", STALE_GOOD, "a", "t", "new", emit) == 0, "its repair applies ok")
+n_err = db.execute("SELECT COUNT(*) FROM migration_runs WHERE file = 'migrations/stale.sql' AND status = 'error'").fetchone()[0]
+n_iss = db.execute("SELECT COUNT(*) FROM agent_issues WHERE title LIKE '%stale.sql%' AND status = 'open'").fetchone()[0]
+rc = M.apply_file("migrations/stale.sql", STALE_BAD, "a", "t", "old", emit)
+ok(rc == 0 and '"superseded": true' in out[-1] and "MIGRATION-STALE-SHA-1" in out[-1], "a late run on the older commit skips the failed content as superseded", out[-1])
+ok(db.execute("SELECT COUNT(*) FROM migration_runs WHERE file = 'migrations/stale.sql' AND status = 'error'").fetchone()[0] == n_err, "the replay writes no error row")
+ok(db.execute("SELECT COUNT(*) FROM agent_issues WHERE title LIKE '%stale.sql%' AND status = 'open'").fetchone()[0] == n_iss, "the replay files or reopens no issue")
+NEVER_FAILED = STALE_GOOD.replace("'fixed'", "'third'")
+ok(M.apply_file("migrations/stale.sql", NEVER_FAILED, "a", "t", "newer", emit) == 0 and '"ok": true' in out[-1], "a content that never failed still runs", out[-1])
+
 # D1-TRIGGER-DEPTH-RETRY-1: the same content is not re-run (each re-run re-creates the trigger and fails writes until the canary drops it).
 n_retry = len(calls)
 rc = M.apply_file("migrations/deep.sql", deep, "a", "t", "c7b", emit)

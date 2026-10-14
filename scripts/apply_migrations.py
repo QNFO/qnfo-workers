@@ -455,6 +455,19 @@ def apply_file(path, text, acct, token, commit, emit=print):
     if done:
         emit(json.dumps({"file": path, "already_applied": True, "sha256": sha[:12]}))
         return 0
+    # MIGRATION-STALE-SHA-1 (2026-10-14, agent_issues 2556): a run on an older commit replays the content that commit holds. When that
+    # content already failed and a newer content of the same file has since applied ok, the replay can only fail again and file a
+    # MIGRATION-APPLY-FAILED-1 issue for a file that main holds applied: migration_runs 248 (commit 03b9dcd, 03:54:20Z) replayed the
+    # fleet-journeys content refused as run 244 after run 246 had applied its repair, and the issue was reopened. Such a content is
+    # skipped as superseded, with no error row and no issue; a content that never failed, or one with no newer ok row, runs as before.
+    stale = d1(acct, token, db_id, "SELECT e.id AS err_id, o.id AS ok_id, o.sha256 AS ok_sha FROM migration_runs e JOIN migration_runs o "
+               "ON o.file = e.file AND o.status = 'ok' AND o.sha256 <> e.sha256 AND o.id > e.id "
+               "WHERE e.file = ?1 AND e.sha256 = ?2 AND e.status = 'error' ORDER BY o.id DESC LIMIT 1", [path, sha])
+    if stale:
+        emit(json.dumps({"file": path, "superseded": True, "sha256": sha[:12], "note": "MIGRATION-STALE-SHA-1: this content failed as "
+                         "migration_runs " + str(stale[0].get("err_id")) + " and a newer content (sha256 " + str(stale[0].get("ok_sha") or "")[:12]
+                         + ") applied ok as migration_runs " + str(stale[0].get("ok_id")) + "; a run on an older commit does not replay it"}))
+        return 0
     # D1-TRIGGER-DEPTH-RETRY-1 (2026-10-13): a file whose same content was already refused by the depth canary fails the same
     # way again, and every re-run repeats its DROP and CREATE TRIGGER: the new trigger is live until the canary drops it, so
     # writes through that table fail for those seconds, and an old trigger the file dropped first stays gone. migration_runs
