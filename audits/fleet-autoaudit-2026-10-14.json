@@ -1,5 +1,5 @@
 {
-  "audited_at": "2026-10-14 05:35:56",
+  "audited_at": "2026-10-14 06:27:32",
   "d1_write_failures": [],
   "d1_writes_ok": 115,
   "guard": {
@@ -543,7 +543,7 @@
       },
       {
         "dir": "personal-companion",
-        "version": "1.25.5-sla-primary",
+        "version": "1.26.0-rubric-reread",
         "worker": "personal-companion"
       },
       {
@@ -900,9 +900,9 @@
       "worker": "personal-api"
     },
     "personal-companion": {
-      "before": "1.25.5-sla-primary",
+      "before": "1.26.0-rubric-reread",
       "http": 200,
-      "live": "1.25.5-sla-primary",
+      "live": "1.26.0-rubric-reread",
       "match": 1,
       "note": "SYNC",
       "worker": "personal-companion"
