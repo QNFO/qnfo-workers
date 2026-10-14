@@ -7,7 +7,7 @@
 // do not; the daily run writes one row and the metric once per day, never before 07:00Z;
 // GET /api/watchmaker serves it.
 // INBOUND-SLA-1: the inbound SLA step counts when its runner is stalled, disabled or not yet run after its first due date,
-// or when a human inbound message is older than 72h with no fleet action (a decision row or sent_at is one).
+// or when a human inbound message is older than 120 min with no fleet action (a decision row or sent_at is one; SLA-120M).
 // REACH-LOOPS-WATCH-1: the delegated identity and reach loops read their run records (social ledgers by meta.last_ok,
 // stale job-market handoffs count, an error run proves nothing, a weekend is not a weekday job's stall).
 // WORK-WITH-ME-METRIC-1: the work-with-me contacts op reads its own reach_signals rows (stalled after 48h, never ran).
@@ -93,7 +93,7 @@ db.prepare("INSERT INTO remediation_verifications (verifier, verified_at) VALUES
 db.prepare("INSERT INTO remediation_verifications (verifier, verified_at) VALUES ('session-x', ?)").run(sp(0.1));
 db.prepare("INSERT INTO scheduler_state (key, value, updated_at) VALUES ('probe_cadence', '{}', ?)").run(sp(0.5));
 db.prepare("INSERT INTO cf_changelog_runs (ts, status, items) VALUES (?, 'ok', 60)").run(ago(4));   // CF-CHANGELOG-WATCH-1
-db.prepare("INSERT INTO intents (id, status, type, created_at) VALUES ('i1', 'pending', 'research', ?)").run(ago(10));
+db.prepare("INSERT INTO intents (id, status, type, created_at) VALUES ('i1', 'pending', 'research', ?)").run(ago(1));
 // errata-hub hourly ticks (#1747): the watchmaker reads $.last_ok, which a failed tick carries forward.
 db.prepare("INSERT INTO errata_watch (key, value) VALUES ('tick:errata-watch', ?)").run(JSON.stringify({ ts: ago(0.5), ok: true, last_ok: ago(0.5) }));
 db.prepare("INSERT INTO errata_watch (key, value) VALUES ('tick:errata-respond', ?)").run(JSON.stringify({ ts: ago(0.2), ok: false, last_ok: ago(1.2) }));
@@ -224,14 +224,14 @@ db.exec("DELETE FROM cloud_ops_events WHERE id = 'code-merge-tick-2026-09-29'");
 db.prepare("INSERT INTO cloud_ops_events (id, ts, status) VALUES ('code-merge-first-ok', ?, 'ok')").run(ago(5 * 24));
 db.prepare("UPDATE code_tasks SET status = 'merged', updated_at = ? WHERE id = 'cm1'").run(ago(31 * 24));
 ok(!(await cm()).counted, "a person merge older than 30 days no longer counts");
-db.prepare("INSERT INTO code_tasks (id, status, updated_at, green_since) VALUES ('cm2', 'published', ?, ?)").run(ago(8), ago(5));
-ok(!(await cm()).counted, "a PR green for 5h is still the runner's to merge");
-db.prepare("UPDATE code_tasks SET green_since = ? WHERE id = 'cm2'").run(ago(7));
+db.prepare("INSERT INTO code_tasks (id, status, updated_at, green_since) VALUES ('cm2', 'published', ?, ?)").run(ago(1.5), ago(1.5));
+ok(!(await cm()).counted, "a PR green for 90 min is still the runner's to merge");
+db.prepare("UPDATE code_tasks SET green_since = ? WHERE id = 'cm2'").run(ago(2.5));
 c = await cm();
-ok(c.counted && /\(stuck_prs 1/.test(c.state), "a PR green for more than 6h and unmerged counts as stuck", c.state);
-db.prepare("UPDATE code_tasks SET green_since = NULL, updated_at = ? WHERE id = 'cm2'").run(ago(49));
-ok((await cm()).counted, "a PR waiting more than 48h (checks never green) counts as stuck");
-db.prepare("UPDATE code_tasks SET status = 'pr_open', updated_at = ? WHERE id = 'cm2'").run(ago(2));
+ok(c.counted && /\(stuck_prs 1/.test(c.state), "a PR green for more than 120 min and unmerged counts as stuck", c.state);
+db.prepare("UPDATE code_tasks SET green_since = NULL, updated_at = ? WHERE id = 'cm2'").run(ago(3));
+ok((await cm()).counted, "a PR waiting more than 120 min (checks never green) counts as stuck");
+db.prepare("UPDATE code_tasks SET status = 'pr_open', updated_at = ? WHERE id = 'cm2'").run(ago(1));
 ok(!(await cm()).counted, "a fresh pr_open row (code-agent path) is the runner's to merge");
 db.prepare("INSERT INTO code_tasks (id, status, updated_at) VALUES ('cm3', 'needs_human', ?)").run(ago(40 * 24));
 c = await cm();
@@ -310,12 +310,12 @@ m = await api.watchmakerMeasure(env, Date.parse("2026-10-06T13:00:00Z"));
 ok(op(m, "performance-experiments").counted && op(m, "performance-experiments").state === "never ran", "after its first due date a never-run evaluator counts");
 db.prepare("INSERT INTO perf_runs (ts, day, kind) VALUES (?, '2026-10-05', 'experiments')").run(ago(23));
 
-db.prepare("INSERT INTO intents (id, status, type, created_at) VALUES ('t1', 'pending', 'task', ?)").run(ago(5));
+db.prepare("INSERT INTO intents (id, status, type, created_at) VALUES ('t1', 'pending', 'task', ?)").run(ago(1));
 m = await api.watchmakerMeasure(env, NOW);
 ok(!op(m, "task-intent-intake").counted, "a fresh task intent is not yet counted");
 db.prepare("INSERT INTO intents (id, status, type, created_at) VALUES ('t2', 'pending', 'task', ?)").run(ago(100));
 m = await api.watchmakerMeasure(env, NOW);
-ok(op(m, "task-intent-intake").counted && /^1 pending task intents older than 48h with no consumer/.test(op(m, "task-intent-intake").state) && m.index === 1, "task intents nobody reads count once 48h old");
+ok(op(m, "task-intent-intake").counted && /^1 pending task intents older than 120 min with no consumer/.test(op(m, "task-intent-intake").state) && m.index === 1, "task intents nobody reads count once 120 min old");
 db.exec("DELETE FROM intents WHERE id IN ('t1', 't2')");
 
 // GRANT-FOLLOWUP-1: only a run that read both mailboxes clears the op; a 'degraded' run (no GMAIL_PASS) does not.
@@ -421,11 +421,11 @@ ok(m.index === 0, "the fixture is fresh again before the stall checks (" + m.cou
 const sla = async () => op(await api.watchmakerMeasure(env, NOW), "inbound-sla");
 let sl = await sla();
 ok(!sl.counted && sl.runner === "cron:qnfo-email-orchestrator" && /^ok, last run 0.2h ago$/.test(sl.state), "a fresh inbound-SLA runner with nothing waiting is not counted", sl.state);
-db.prepare("INSERT INTO email_reply_queue (email_id, sender, received_at, decision, skip_reason) VALUES (1, 'a@x.example', ?, 'escalate', 'awaiting authored draft')").run(ago(71));
-ok(!(await sla()).counted, "a human message 71h old is still inside the SLA");
-db.prepare("UPDATE email_reply_queue SET received_at = ? WHERE id = 1").run(ago(73));
+db.prepare("INSERT INTO email_reply_queue (email_id, sender, received_at, decision, skip_reason) VALUES (1, 'a@x.example', ?, 'escalate', 'awaiting authored draft')").run(ago(1.8));
+ok(!(await sla()).counted, "a human message 110 min old is still inside the SLA");
+db.prepare("UPDATE email_reply_queue SET received_at = ? WHERE id = 1").run(ago(2.2));
 sl = await sla();
-ok(sl.counted && /^1 human inbound messages older than 72h with no fleet action$/.test(sl.state), "a human message older than 72h with no fleet action counts", sl.state);
+ok(sl.counted && /^1 human inbound messages older than 120 min with no fleet action$/.test(sl.state), "a human message older than 120 min with no fleet action counts", sl.state);
 m = await api.watchmakerMeasure(env, NOW);
 ok(m.index === 1 && m.counted[0] === "inbound-sla", "and it is the only counted op");
 db.prepare("INSERT INTO cloud_ops_events (id, ts, kind, meta, status) VALUES ('inbound-sla-q-1', ?, 'inbound-sla-decision', '{}', 'held')").run(ago(1));
@@ -486,7 +486,7 @@ db.exec("DROP TABLE evolve_candidates");
 m = await api.watchmakerMeasure(env, NOW);
 ok(op(m, "portfolio-daily").counted && /stalled: last run 60h ago, cadence 24h/.test(op(m, "portfolio-daily").state), "a runner silent for over twice its cadence counts as stalled");
 ok(op(m, "charter-loop").counted && op(m, "charter-loop").state === "never ran", "a runner past its first due date that never ran counts");
-ok(op(m, "research-intent-triage").counted && /^1 pending research intents older than 48h/.test(op(m, "research-intent-triage").state), "a research backlog older than 48h counts");
+ok(op(m, "research-intent-triage").counted && /^1 pending research intents older than 120 min/.test(op(m, "research-intent-triage").state), "a research backlog older than 120 min counts");
 ok(op(m, "code-task-merge").counted && /^1 code-loop PRs or tasks that needed a person \(stuck_prs 1\)$/.test(op(m, "code-task-merge").state), "a code-loop PR the runner left waiting for 49h counts");
 ok(op(m, "fleet-defects").counted && /^unmeasured/.test(op(m, "fleet-defects").state), "an unreadable ledger counts as unmeasured");
 ok(m.index === 5 && m.counted.join(",") === "charter-loop,fleet-defects,portfolio-daily,research-intent-triage,code-task-merge".split(",").sort((x, y) => m.counted.indexOf(x) - m.counted.indexOf(y)).join(","), "the index is the number of counted operations (" + m.index + ")");
