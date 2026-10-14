@@ -180,8 +180,9 @@ ok(/never state an inferred arrangement, funding, motive or behaviour as a repor
   const q = V.criticQuotes("The piece invents a contractual term.", text, inv);
   ok(q.length === 2 && q[0].indexOf("The concession obliged") === 0 && q[1] === "The fare structure became market oriented in 1995", "the listed quotations the piece contains are taken, trimmed of quote marks; others are dropped", q);
   ok(V.criticQuotes("It invents 'the line carried oil and minerals' here.", text, []).length === 1, "a quotation in the reason still counts when the list is empty");
-  const many = Array.from({ length: 12 }, (_, i) => "unique claim number " + i + " stands here");
-  ok(V.criticQuotes("", many.join(". ") + ".", many).length === V.CRITIC_INVENTED_MAX && V.CRITIC_INVENTED_MAX === 8, "at most 8 quotations are taken");
+  const many = Array.from({ length: 24 }, (_, i) => "unique claim number " + i + " stands here");
+  ok(V.criticQuotes("", many.join(". ") + ".", many).length === V.CRITIC_INVENTED_MAX && V.CRITIC_INVENTED_MAX === 16, "at most 16 quotations are taken (CRITIC-LIST-16-1, 1.26.4)");
+  ok(/\(at most 16; an empty list when there is none\)/.test(P.P_CRITIQUE) && /\], 1600, CRITIQUE_TIMEOUT_MS, CRITIC_MODEL, "critic"\)/.test(src), "the critic is told the same cap and has the reply budget for it");
   ok(/invented: every concrete claim you found that the source material does not support/.test(P.P_CRITIQUE) && /"invented":\["exact quotation", \.\.\.\]/.test(P.P_CRITIQUE), "the critic is asked for the list");
   ok(/var cq = criticQuotes\(q\.why, pieceText\(piece\), q\.invented\);/.test(src), "the critic prune uses the list");
 }
