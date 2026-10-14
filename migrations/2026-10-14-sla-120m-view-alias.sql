@@ -1,5 +1,6 @@
 -- APPLY-BY: ci
 -- DB: qnfo-audit
+-- BACKUP: bak_20261014_sla_view_alias
 -- Rollback: recreate v_sla_over_120m from migrations/2026-10-14-sla-120m.sql (its total reads wrong; prefer leaving this file applied)
 --
 -- SLA-120M-VIEW-ALIAS-1 (follow-up to SLA-120M-1, PR 1247; charter pillar autonomy). v_sla_over_120m joined v_stuck_summary AS s and
@@ -8,6 +9,9 @@
 -- read 454 while its columns summed to 117 (read 2026-10-14 04:12Z: 104 open issues over 120 minutes, 12 outreach rows waiting, 1
 -- code task queued for 840 minutes). The same sum with aliases no inner query uses reads 117. Every alias here is unique (vsla_*).
 -- spof-review: one view is replaced; no trigger, cron or credential
+
+CREATE TABLE IF NOT EXISTS bak_20261014_sla_view_alias AS
+  SELECT name, sql, strftime('%Y-%m-%dT%H:%M:%SZ', 'now') AS saved_at FROM sqlite_master WHERE type = 'view' AND name = 'v_sla_over_120m';
 
 DROP VIEW IF EXISTS v_sla_over_120m;
 CREATE VIEW v_sla_over_120m AS
