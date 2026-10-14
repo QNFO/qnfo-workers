@@ -14,7 +14,7 @@ import { DatabaseSync } from "node:sqlite";
 const here = dirname(fileURLToPath(import.meta.url));
 const src = readFileSync(join(here, "worker.js"), "utf8").replace(/export default\s*\{/, "var __default = {");
 const logs = [];
-const sb = { console: { log: (m) => logs.push(String(m)) }, Date, JSON, Math, Number, String, RegExp, Set, Map, Array, Object, Promise, URL, Response, Request, Headers, TextEncoder, crypto, fetch: async () => { throw new Error("no network"); } };
+const sb = { console: { log: (m) => logs.push(String(m)), error: () => {} }, Date, JSON, Math, Number, String, RegExp, Set, Map, Array, Object, Promise, URL, Response, Request, Headers, TextEncoder, crypto, fetch: async () => { throw new Error("no network"); } };
 vm.createContext(sb);
 vm.runInContext(src + "\n__x = { triageProposals, runConsume, ownerOk, aiBudgetBreach, TRIAGE_BATCH, PROPOSAL_BACKPRESSURE };", sb);
 const api = sb.__x;
