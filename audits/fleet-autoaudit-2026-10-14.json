@@ -1,5 +1,5 @@
 {
-  "audited_at": "2026-10-14 06:59:33",
+  "audited_at": "2026-10-14 07:28:16",
   "d1_write_failures": [],
   "d1_writes_ok": 115,
   "guard": {
@@ -533,7 +533,7 @@
     "sync_workers": [
       {
         "dir": "idea-hub",
-        "version": "1.10.1-bp-logging",
+        "version": "1.10.2-triage-10",
         "worker": "idea-hub"
       },
       {
@@ -593,12 +593,12 @@
       },
       {
         "dir": "qnfo-fleet-control",
-        "version": "0.31.0-defect-only",
+        "version": "0.31.1-ask-timeout",
         "worker": "qnfo-fleet-control"
       },
       {
         "dir": "qnfo-fleet-dashboard",
-        "version": "1.37.3-sla-120m",
+        "version": "1.37.5-bp-logging",
         "worker": "qnfo-fleet-dashboard"
       },
       {
@@ -648,7 +648,7 @@
       },
       {
         "dir": "qnfo-research-exec",
-        "version": "0.18.0-fail-closed",
+        "version": "0.18.1-parallel-8",
         "worker": "qnfo-research-exec"
       },
       {
@@ -779,9 +779,9 @@
       "worker": "funding"
     },
     "idea-hub": {
-      "before": "1.10.1-bp-logging",
+      "before": "1.10.2-triage-10",
       "http": 200,
-      "live": "1.10.1-bp-logging",
+      "live": "1.10.2-triage-10",
       "match": 1,
       "note": "SYNC",
       "worker": "idea-hub"
@@ -1268,17 +1268,17 @@
       "worker": "qnfo-fleet-calibrator"
     },
     "qnfo-fleet-control": {
-      "before": "0.31.0-defect-only",
+      "before": "0.31.1-ask-timeout",
       "http": 200,
-      "live": "0.31.0-defect-only",
+      "live": "0.31.1-ask-timeout",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-fleet-control"
     },
     "qnfo-fleet-dashboard": {
-      "before": "1.37.3-sla-120m",
+      "before": "1.37.5-bp-logging",
       "http": 200,
-      "live": "1.37.3-sla-120m",
+      "live": "1.37.5-bp-logging",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-fleet-dashboard"
@@ -1500,9 +1500,9 @@
       "worker": "qnfo-register-guard"
     },
     "qnfo-research-exec": {
-      "before": "0.18.0-fail-closed",
+      "before": "0.18.1-parallel-8",
       "http": 200,
-      "live": "0.18.0-fail-closed",
+      "live": "0.18.1-parallel-8",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-research-exec"
