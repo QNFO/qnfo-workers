@@ -39,7 +39,9 @@ name: deploy-pages-qnfo-publications
 #        - provenance present          : 'count basis (#1111)'
 #        - #1111 invariant respected   : NO '<n> QNFO papers' drifting literal
 #        - corruption markers absent   : '658+', '2,500+', trailing grid-template-column
-#   B. Post-deploy live verification against https://archive.qnfo.org/ using the
+#   B. Post-deploy live verification against https://qnfo-publications.pages.dev/ (the Pages project this job deploys;
+#      archive.qnfo.org has been served by qnfo-gateway through a zone route since ARCHIVE-ON-GATEWAY-1, 2026-10-02, so the
+#      custom host never shows this build and Gate B failed on every run from 2026-10-13; GitHub issue 1241), using the
 #      same provenance marker, which only exists in the corrected bytes.
 #   C. If the staged file is missing or implausibly small -> exit 1.
 
@@ -148,7 +150,7 @@ jobs:
           set -euo pipefail
           sleep 20
           for i in 1 2 3 4 5; do
-            code=$(curl -sS --max-time 25 -o /tmp/live.html -w '%{http_code}' https://archive.qnfo.org/ || echo 000)
+            code=$(curl -sS --max-time 25 -o /tmp/live.html -w '%{http_code}' https://qnfo-publications.pages.dev/ || echo 000)
             echo "attempt $i http=$code bytes=$(wc -c < /tmp/live.html 2>/dev/null || echo 0)"
             if [ "$code" = "200" ] && grep -q 'count basis (#1111)' /tmp/live.html; then
               grep -q '<style>' /tmp/live.html || { echo "::error::live style tag still malformed"; exit 1; }
@@ -157,7 +159,7 @@ jobs:
                 echo "::error::live still publishes a drifting paper-count literal (violates #1111)"
                 exit 1
               fi
-              echo "VERIFY_OK archive.qnfo.org now serves the corrected page"
+              echo "VERIFY_OK qnfo-publications.pages.dev serves the corrected page"
               exit 0
             fi
             sleep 15
