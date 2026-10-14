@@ -13,7 +13,7 @@ import vm from "node:vm";
 import { DatabaseSync } from "node:sqlite";
 const here = dirname(fileURLToPath(import.meta.url));
 const src = readFileSync(join(here, "worker.js"), "utf8").replace(/export default\s*\{/, "var __default = {");
-const sb = { console: { log() {} }, Date, JSON, Math, Number, String, RegExp, Set, Map, Array, Object, Promise, URL, Response, Request, Headers, TextEncoder, crypto, fetch: async () => { throw new Error("no network"); } };
+const sb = { console: { log() {}, error() {} }, Date, JSON, Math, Number, String, RegExp, Set, Map, Array, Object, Promise, URL, Response, Request, Headers, TextEncoder, crypto, fetch: async () => { throw new Error("no network"); } };
 vm.createContext(sb);
 vm.runInContext(src + "\n__x = { ownerPipelineDois, triageProposals, runOwnerCorpus, runReentry, runConsume, thinkSeed, proposalKind, realQuestion, ownerPaper, aiRunAttr, promptCacheOpts, OWNER_CORPUS_SCORE_MIN, OWNER_CORPUS_RQ_CAP, OWNER_CORPUS_BATCH, REASONING_MAX_TOKENS, OWNER_CORPUS_FLEET_ERA };", sb);
 const api = sb.__x;

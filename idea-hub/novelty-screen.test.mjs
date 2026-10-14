@@ -22,7 +22,7 @@ const fetches = [];
 let arxivUp = true;
 const atom = '<feed><entry><id>http://arxiv.org/abs/2401.00001v1</id><title>Prior work on decoder thresholds</title><summary>We bound decoder thresholds.</summary></entry>' +
   '<entry><id>http://arxiv.org/abs/2402.00002v2</id><title>Second neighbour</title><summary>Related idea.</summary></entry></feed>';
-const sb = { console: { log() {} }, Date, JSON, Math, Number, String, RegExp, Set, Map, Array, Object, Promise, URL, Response, Request, Headers, TextEncoder, crypto,
+const sb = { console: { log() {}, error() {} }, Date, JSON, Math, Number, String, RegExp, Set, Map, Array, Object, Promise, URL, Response, Request, Headers, TextEncoder, crypto,
   fetch: async (u) => { fetches.push(String(u)); if (!arxivUp) throw new Error("arXiv down"); return new Response(atom, { status: 200 }); } };
 vm.createContext(sb);
 vm.runInContext(src + "\n__x = { triageProposals, proposalCluster, noveltyTerms, T_MODELS, T_CHAIN, NOVELTY_MODELS, NOVELTY_FOUNDATIONAL_QUOTA };", sb);

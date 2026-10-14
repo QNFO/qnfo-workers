@@ -36,7 +36,7 @@ const CLUSTERS = [{ label: "quantum", terms: ["quantum", "qubit"] }, { label: "u
 
 // 2. Harness.
 const src = hubSrc.replace(/export default\s*\{/, "var __default = {");
-const sb = { console: { log: () => {} }, Date, JSON, Math, Number, String, RegExp, Set, Map, Array, Object, Promise, URL, Response, Request, Headers, TextEncoder, crypto, fetch: async () => { throw new Error("no network"); } };
+const sb = { console: { log: () => {}, error: () => {} }, Date, JSON, Math, Number, String, RegExp, Set, Map, Array, Object, Promise, URL, Response, Request, Headers, TextEncoder, crypto, fetch: async () => { throw new Error("no network"); } };
 vm.createContext(sb);
 vm.runInContext(src + "\n__x = { triageProposals, proposalCluster, diversityBlocks, loadTopicClusters, TOPIC_CACHE_KEY, DIVERSITY_MAX_SHARE, DIVERSITY_MIN_N };", sb);
 const api = sb.__x;
