@@ -1,8 +1,15 @@
 {
-  "audited_at": "2026-10-14 03:36:32",
+  "audited_at": "2026-10-14 04:06:47",
   "d1_write_failures": [],
   "d1_writes_ok": 115,
   "guard": {
+    "_drift_confirm": {
+      "first_pass": [
+        "qnfo-ai-search"
+      ],
+      "refreshed": true,
+      "second_pass": []
+    },
     "_guard_rc": 0,
     "ahead": [],
     "cf_script_list": true,
@@ -563,7 +570,7 @@
       },
       {
         "dir": "qnfo-ai-search",
-        "version": "2.6.1-codeagent",
+        "version": "2.6.3-bp-logging",
         "worker": "qnfo-ai-search"
       },
       {
@@ -593,12 +600,12 @@
       },
       {
         "dir": "qnfo-fleet-control",
-        "version": "0.26.5-holding-open-rearm",
+        "version": "0.30.0-sla-10m",
         "worker": "qnfo-fleet-control"
       },
       {
         "dir": "qnfo-fleet-dashboard",
-        "version": "1.36.1-compat-watch",
+        "version": "1.37.0-content-pipeline",
         "worker": "qnfo-fleet-dashboard"
       },
       {
@@ -633,12 +640,12 @@
       },
       {
         "dir": "qnfo-observability",
-        "version": "1.4.5-cron-heartbeat",
+        "version": "1.4.6-outreach-enum",
         "worker": "qnfo-observability"
       },
       {
         "dir": "qnfo-ops",
-        "version": "2.48.0-placement-apply",
+        "version": "2.48.1-census-bindings",
         "worker": "qnfo-ops"
       },
       {
@@ -653,7 +660,7 @@
       },
       {
         "dir": "qnfo-social",
-        "version": "0.14.2-codeagent",
+        "version": "0.14.3-schema-quiet",
         "worker": "qnfo-social"
       },
       {
@@ -995,9 +1002,9 @@
       "worker": "qnfo-ai-calibration"
     },
     "qnfo-ai-search": {
-      "before": "2.6.1-codeagent",
+      "before": "2.6.3-bp-logging",
       "http": 200,
-      "live": "2.6.1-codeagent",
+      "live": "2.6.3-bp-logging",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-ai-search"
@@ -1268,17 +1275,17 @@
       "worker": "qnfo-fleet-calibrator"
     },
     "qnfo-fleet-control": {
-      "before": "0.26.5-holding-open-rearm",
+      "before": "0.30.0-sla-10m",
       "http": 200,
-      "live": "0.26.5-holding-open-rearm",
+      "live": "0.30.0-sla-10m",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-fleet-control"
     },
     "qnfo-fleet-dashboard": {
-      "before": "1.36.1-compat-watch",
+      "before": "1.37.0-content-pipeline",
       "http": 200,
-      "live": "1.36.1-compat-watch",
+      "live": "1.37.0-content-pipeline",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-fleet-dashboard"
@@ -1404,17 +1411,17 @@
       "worker": "qnfo-memory-mcp-legacy-dup"
     },
     "qnfo-observability": {
-      "before": "1.4.5-cron-heartbeat",
+      "before": "1.4.6-outreach-enum",
       "http": 200,
-      "live": "1.4.5-cron-heartbeat",
+      "live": "1.4.6-outreach-enum",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-observability"
     },
     "qnfo-ops": {
-      "before": "2.48.0-placement-apply",
+      "before": "2.48.1-census-bindings",
       "http": 200,
-      "live": "2.48.0-placement-apply",
+      "live": "2.48.1-census-bindings",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-ops"
@@ -1562,9 +1569,9 @@
       "worker": "qnfo-skills-discovery"
     },
     "qnfo-social": {
-      "before": "0.14.2-codeagent",
+      "before": "0.14.3-schema-quiet",
       "http": 200,
-      "live": "0.14.2-codeagent",
+      "live": "0.14.3-schema-quiet",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-social"
