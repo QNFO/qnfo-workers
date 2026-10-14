@@ -134,15 +134,18 @@ for (const [k, j] of [["release", "lock-roundtrip"], ["blind", "binding-census"]
 // 5. Real traffic over 6 h: qnfo-ops 250 server errors over ~1166 requests (a quarter of 4664) fails, names the route and carries a
 // code task on the route's handler in qnfo-ops; idea-hub's 115 client cancellations do not count.
 db = mkDb();
+// worker_logs hold real timestamps and traffic-health reads them against the wall clock (the tick's now only places slots), so
+// these rows are planted relative to the real clock; with the fixed NOW they fell out of the 6 h window after 06:20Z (#1262).
+const WALL = Date.now();
 const ins = db.raw.prepare("INSERT INTO worker_logs (ts_ms, script_name, event_type, outcome, url, status, exceptions_json) VALUES (?, ?, 'fetch', ?, ?, NULL, ?)");
-for (let i = 0; i < 250; i++) ins.run(NOW - 3600e3, "qnfo-ops", "exception", "https://qnfo-ops.internal/registry/register", '[{"message":"D1_ERROR: duplicate column name"}]');
-for (let i = 0; i < 115; i++) ins.run(NOW - 3600e3, "idea-hub", "canceled", "https://ideas.qnfo.org/api/sessions", "[]");
+for (let i = 0; i < 250; i++) ins.run(WALL - 3600e3, "qnfo-ops", "exception", "https://qnfo-ops.internal/registry/register", '[{"message":"D1_ERROR: duplicate column name"}]');
+for (let i = 0; i < 115; i++) ins.run(WALL - 3600e3, "idea-hub", "canceled", "https://ideas.qnfo.org/api/sessions", "[]");
 r = await M.journeyTick(mkEnv(db, NOW), { now: NOW });
 const th = JSON.parse(q(db, "SELECT failed_json f FROM journey_runs WHERE journey = 'traffic-health'")[0].f);
 ok(r.failing.indexOf("traffic-health") >= 0 && th.length === 1 && th[0].step.startsWith("qnfo-ops") && /registry\/register/.test(th[0].detail) && /21\.4%/.test(th[0].detail), "traffic-health fails qnfo-ops with its top route; cancellations ignored", th);
 { const d = q(db, "SELECT description FROM agent_issues WHERE title LIKE 'FLEET-JOURNEY-FAILED-1: traffic-health %'")[0].description;
   ok(/code-task: repo=qnfo-workers path=qnfo-ops\/worker\.js\ncode-anchor: .*"\/registry\/register"/.test(d), "the traffic issue's code task points at the failing route's handler", d.slice(-220)); }
-db.raw.exec("UPDATE worker_logs SET ts_ms = " + (NOW - 7 * 3600e3));
+db.raw.exec("UPDATE worker_logs SET ts_ms = " + (WALL - 7 * 3600e3));
 r = await M.journeyTick(mkEnv(db, NOW + 60e3), { now: NOW + 60e3 });
 ok(r.failing.indexOf("traffic-health") < 0, "errors older than the 6 h window no longer fail traffic-health", r);
 
