@@ -60,6 +60,7 @@ x = I.improvementEvaluate({ registry: [reg("pageviews_30d", "maximize")], histor
 eq(x.regressed, 1, "maximize metric down 40% is regressed");
 eq(x.findings[0] && x.findings[0].key, "METRIC-REGRESSION-1: pageviews_30d", "regression finding key");
 eq(x.findings[0] && x.findings[0].severity, "medium", "no target: medium");
+eq(x.findings[0] && x.findings[0].file, false, "IL-DEFECT-ONLY-1: a decline with no target is an early warning, not filed");
 eq(x.metric_regressions_7d, 1, "regression count");
 
 // a cost metric that went DOWN 30% improved; one that went up 10% is flat (under the 15% bar)
@@ -74,6 +75,12 @@ const offMeets = Array.from({ length: 14 }, () => 0);
 x = I.improvementEvaluate({ registry: [reg("cost_usd_30d", "<= 200")], history: hist("cost_usd_30d", step(600, 450), offMeets), open_titles: ["METRIC-TRIGGER-9-COST-USD-30D: Cost gap"], trigger_metric: { "9": "cost_usd_30d" } }, NOW);
 eq(x.findings[0] && x.findings[0].severity, "high", "worsening and off target: high");
 eq(x.findings[0] && x.findings[0].covered_by, "METRIC-TRIGGER-9-COST-USD-30D: Cost gap", "covered by the open trigger issue");
+eq(x.findings[0] && x.findings[0].file, true, "an off-target regression is fileable");
+// IL-DEFECT-ONLY-1: a decline that is still inside its target is an early warning
+const inMeets = Array.from({ length: 14 }, () => 1);
+x = I.improvementEvaluate({ registry: [reg("issue_mttr_h_30d", "<= 48")], history: hist("issue_mttr_h_30d", step(12.6, 8), inMeets) }, NOW);
+eq(x.regressed, 1, "an in-target metric that worsened 57% is still counted as regressed");
+eq(x.findings[0] && x.findings[0].file, false, "but it is not filed: inside its target");
 
 // hysteresis: an open regression stays open at -10%, closes at -5%
 const openReg = ["METRIC-REGRESSION-1: referral_30d"];
@@ -109,6 +116,7 @@ eq(x.relapses[0] && x.relapses[0].issue_id, 1753, "relapse names the closed issu
 const rel = x.findings.find((fd) => fd.key === "METRIC-FIX-RELAPSED-1: subscribers_growth_monthly");
 eq(!!rel, true, "relapse finding while still off target");
 eq(rel && rel.text.includes("#1753"), true, "relapse text names the issue whose fix did not hold");
+eq(rel && rel.file, true, "a relapse that is still off target is fileable");
 
 // a relapse that has recovered since is counted but not filed
 x = I.improvementEvaluate({
@@ -158,7 +166,7 @@ CREATE TABLE issue_triage (issue_id INTEGER PRIMARY KEY, rc TEXT NOT NULL, triag
 CREATE TRIGGER issue_close_evidence_required BEFORE UPDATE OF status ON agent_issues WHEN NEW.status IN ('closed','resolved','wontfix') AND OLD.status NOT IN ('closed','resolved','wontfix') AND NOT EXISTS (SELECT 1 FROM issue_triage t WHERE t.issue_id = NEW.id AND t.close_evidence IS NOT NULL AND TRIM(t.close_evidence) <> '') BEGIN SELECT RAISE(ABORT,'close-without-evidence'); END;
 `);
   const insReg = db.prepare("INSERT INTO metric_registry (metric, layer, kind, source_of_truth, target, disposition_actor, refresh_cadence, last_value, state) VALUES (?, 'fleet', 'leading', 's', ?, 'a', 'hourly', ?, ?)");
-  insReg.run("pageviews_30d", "maximize (feeds impressions_growth_30d)", "5960", "MEASURED");
+  insReg.run("pageviews_30d", ">= 5000 (test target)", "5960", "MEASURED");
   insReg.run("cost_usd_30d", "<= 200 (A9 ceiling)", "450.56", "MEASURED");
   insReg.run("impressions_growth_30d", "RETIRED", "27", "RETIRED");
   insReg.run("notes", "maximize", "n/a", "MEASURED");
@@ -183,7 +191,7 @@ CREATE TRIGGER issue_close_evidence_required BEFORE UPDATE OF status ON agent_is
   eq(t.evaluable, 0, "tick 1: one day of history is unmeasured");
   eq(t.filed, 0, "tick 1 files nothing");
   eq(one("SELECT meets FROM metric_history WHERE metric='cost_usd_30d'").meets, 0, "cost 450 > 200 recorded as off target");
-  eq(one("SELECT meets FROM metric_history WHERE metric='pageviews_30d'").meets, null, "maximize has no meets");
+  eq(one("SELECT meets FROM metric_history WHERE metric='pageviews_30d'").meets, 1, "pageviews 5960 >= 5000 recorded as inside target");
   eq(one("SELECT COUNT(*) n FROM metric_registry WHERE metric IN ('improvement_rate_7d','metric_regressions_7d','fix_hold_rate_30d')").n, 3, "self metrics registered past the integrity triggers");
   eq(one("SELECT COUNT(*) n FROM analytics_metric_triggers WHERE notes='seeded by IMPROVEMENT-LOOP-1'").n, 2, "self triggers seeded");
   t = await I.improvementLoopTick(env);
@@ -192,7 +200,7 @@ CREATE TRIGGER issue_close_evidence_required BEFORE UPDATE OF status ON agent_is
 
   // backfill 13 earlier days: pageviews fell 40% week on week, cost fell 30%
   const ins = db.prepare("INSERT OR REPLACE INTO metric_history (metric, day, value, meets, target, ts) VALUES (?, ?, ?, ?, '', '')");
-  for (let k = 1; k <= 13; k++) { ins.run("pageviews_30d", dd(k), k < 7 ? 3600 : 6000, null); ins.run("cost_usd_30d", dd(k), k < 7 ? 315 : 450, 0); }
+  for (let k = 1; k <= 13; k++) { ins.run("pageviews_30d", dd(k), k < 7 ? 3600 : 6000, k < 7 ? 0 : 1); ins.run("cost_usd_30d", dd(k), k < 7 ? 315 : 450, 0); }
   db.prepare("UPDATE metric_registry SET last_value='3600' WHERE metric='pageviews_30d'").run();
   db.prepare("UPDATE metric_registry SET last_value='315' WHERE metric='cost_usd_30d'").run();
   t = await I.improvementLoopTick(env);
@@ -205,13 +213,37 @@ CREATE TRIGGER issue_close_evidence_required BEFORE UPDATE OF status ON agent_is
   t = await I.improvementLoopTick(env);
   eq(t.filed, 0, "dedupe: no second regression issue");
   // recovery: pageviews back to the prior level
-  for (let k = 0; k < 7; k++) ins.run("pageviews_30d", dd(k), 6000, null);
+  for (let k = 0; k < 7; k++) ins.run("pageviews_30d", dd(k), 6000, 1);
   db.prepare("UPDATE metric_registry SET last_value='6000' WHERE metric='pageviews_30d'").run();
   t = await I.improvementLoopTick(env);
   eq(t.closed, 1, "recovered regression closed");
   eq(one("SELECT status FROM agent_issues WHERE title='METRIC-REGRESSION-1: pageviews_30d'").status, "closed", "closed with evidence past the close-evidence trigger");
   eq(/IMPROVEMENT-LOOP-1/.test(one("SELECT close_evidence e FROM issue_triage").e), true, "close evidence names the loop");
   eq(one("SELECT COUNT(*) n FROM improvement_loop_runs").n, 5, "one ledger row per tick");
+
+  // IL-DEFECT-ONLY-1: an open regression issue whose metric declined but is inside its target closes as an early warning
+  insReg.run("issue_mttr_h_30d", "<= 48", "12.6", "MEASURED");
+  for (let k = 1; k <= 13; k++) ins.run("issue_mttr_h_30d", dd(k), k < 7 ? 12.6 : 8, 1);
+  db.prepare("INSERT INTO agent_issues (title, status, created_at, updated_at) VALUES ('METRIC-REGRESSION-1: issue_mttr_h_30d', 'open', 0, 0)").run();
+  t = await I.improvementLoopTick(env);
+  eq(one("SELECT status FROM agent_issues WHERE title='METRIC-REGRESSION-1: issue_mttr_h_30d'").status, "closed", "an in-target regression issue closes");
+  eq(/inside its target, so the decline is an early warning/.test(one("SELECT close_evidence e FROM issue_triage WHERE issue_id = (SELECT id FROM agent_issues WHERE title='METRIC-REGRESSION-1: issue_mttr_h_30d')").e), true, "its evidence says why");
+  eq(t.filed, 0, "and nothing new is filed for it");
+
+  // IL-DEFECT-ONLY-1: an open relapse issue whose metric an open trigger issue carries closes as superseded by that issue
+  insReg.run("stuck_items_over_sla", "0", "2", "MEASURED");
+  db.prepare("INSERT INTO analytics_metric_triggers (metric_key, title) VALUES ('stuck_items_over_sla', 'Queue SLA breach')").run();
+  const trigId = one("SELECT id FROM analytics_metric_triggers WHERE metric_key='stuck_items_over_sla'").id;
+  for (let k = 1; k <= 13; k++) ins.run("stuck_items_over_sla", dd(k), 2, k < 9 ? 0 : 1);
+  db.prepare("INSERT INTO agent_issues (title, status, created_at, updated_at) VALUES (?, 'closed', 0, ?)").run("METRIC-TRIGGER-" + trigId + "-STUCK-ITEMS-OVER-SLA: old", (realNow - 10 * 864e5));
+  db.prepare("INSERT INTO issue_triage (issue_id, rc, owner, sla_due_at, close_evidence) VALUES ((SELECT id FROM agent_issues WHERE title LIKE 'METRIC-TRIGGER-%-STUCK-ITEMS-OVER-SLA: old'), 'x', 'o', 'now', 'recovered')").run();
+  db.prepare("INSERT INTO agent_issues (title, status, created_at, updated_at) VALUES (?, 'open', 0, 0)").run("METRIC-TRIGGER-" + trigId + "-STUCK-ITEMS-OVER-SLA: Queue SLA breach");
+  db.prepare("INSERT INTO agent_issues (title, status, created_at, updated_at) VALUES ('METRIC-FIX-RELAPSED-1: stuck_items_over_sla', 'open', 0, 0)").run();
+  t = await I.improvementLoopTick(env);
+  const trigIssue = one("SELECT id FROM agent_issues WHERE status='open' AND title LIKE 'METRIC-TRIGGER-%-STUCK-ITEMS-OVER-SLA: Queue SLA breach'");
+  eq(one("SELECT status FROM agent_issues WHERE title='METRIC-FIX-RELAPSED-1: stuck_items_over_sla'").status, "closed", "a relapse an open trigger issue carries closes");
+  eq(one("SELECT close_evidence e FROM issue_triage WHERE issue_id = (SELECT id FROM agent_issues WHERE title='METRIC-FIX-RELAPSED-1: stuck_items_over_sla')").e.indexOf("superseded by " + (trigIssue && trigIssue.id)) === 0, true, "as superseded by the trigger issue");
+  eq(one("SELECT COUNT(*) n FROM agent_issues WHERE status='open' AND title='METRIC-FIX-RELAPSED-1: stuck_items_over_sla'").n, 0, "and it is not refiled while the trigger issue is open");
 }
 
 console.log(`${passed} passed, ${failed} failed`);
