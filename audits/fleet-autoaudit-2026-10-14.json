@@ -1,5 +1,5 @@
 {
-  "audited_at": "2026-10-14 08:01:52",
+  "audited_at": "2026-10-14 09:04:39",
   "d1_write_failures": [],
   "d1_writes_ok": 115,
   "guard": {
@@ -543,7 +543,7 @@
       },
       {
         "dir": "personal-companion",
-        "version": "1.26.1-no-quote-reread",
+        "version": "1.26.2-fulltext-budget",
         "worker": "personal-companion"
       },
       {
@@ -568,12 +568,12 @@
       },
       {
         "dir": "qnfo-cloud-ops",
-        "version": "1.29.1-outreach-lookup",
+        "version": "1.30.0-gh-token-watch",
         "worker": "qnfo-cloud-ops"
       },
       {
         "dir": "qnfo-code-orchestrator",
-        "version": "0.16.1-bp-logging",
+        "version": "0.16.2-sla-120m",
         "worker": "qnfo-code-orchestrator"
       },
       {
@@ -593,12 +593,12 @@
       },
       {
         "dir": "qnfo-fleet-control",
-        "version": "0.31.1-ask-timeout",
+        "version": "0.31.2-sla-120m",
         "worker": "qnfo-fleet-control"
       },
       {
         "dir": "qnfo-fleet-dashboard",
-        "version": "1.37.5-bp-logging",
+        "version": "1.37.6-schema-probe",
         "worker": "qnfo-fleet-dashboard"
       },
       {
@@ -623,7 +623,7 @@
       },
       {
         "dir": "qnfo-lifecycle",
-        "version": "1.11.3-bp-logging",
+        "version": "1.11.4-sla-120m",
         "worker": "qnfo-lifecycle"
       },
       {
@@ -900,9 +900,9 @@
       "worker": "personal-api"
     },
     "personal-companion": {
-      "before": "1.26.1-no-quote-reread",
+      "before": "1.26.2-fulltext-budget",
       "http": 200,
-      "live": "1.26.1-no-quote-reread",
+      "live": "1.26.2-fulltext-budget",
       "match": 1,
       "note": "SYNC",
       "worker": "personal-companion"
@@ -1129,9 +1129,9 @@
       "worker": "qnfo-citation-watch"
     },
     "qnfo-cloud-ops": {
-      "before": "1.29.1-outreach-lookup",
+      "before": "1.30.0-gh-token-watch",
       "http": 200,
-      "live": "1.29.1-outreach-lookup",
+      "live": "1.30.0-gh-token-watch",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-cloud-ops"
@@ -1146,9 +1146,9 @@
       "worker": "qnfo-code-agent"
     },
     "qnfo-code-orchestrator": {
-      "before": "0.16.1-bp-logging",
+      "before": "0.16.2-sla-120m",
       "http": 200,
-      "live": "0.16.1-bp-logging",
+      "live": "0.16.2-sla-120m",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-code-orchestrator"
@@ -1268,17 +1268,17 @@
       "worker": "qnfo-fleet-calibrator"
     },
     "qnfo-fleet-control": {
-      "before": "0.31.1-ask-timeout",
+      "before": "0.31.2-sla-120m",
       "http": 200,
-      "live": "0.31.1-ask-timeout",
+      "live": "0.31.2-sla-120m",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-fleet-control"
     },
     "qnfo-fleet-dashboard": {
-      "before": "1.37.5-bp-logging",
+      "before": "1.37.6-schema-probe",
       "http": 200,
-      "live": "1.37.5-bp-logging",
+      "live": "1.37.6-schema-probe",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-fleet-dashboard"
@@ -1379,9 +1379,9 @@
       "worker": "qnfo-kaizen"
     },
     "qnfo-lifecycle": {
-      "before": "1.11.3-bp-logging",
+      "before": "1.11.4-sla-120m",
       "http": 200,
-      "live": "1.11.3-bp-logging",
+      "live": "1.11.4-sla-120m",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-lifecycle"
