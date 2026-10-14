@@ -66,9 +66,23 @@ env = fakeEnv({ [N]: [labelDraft, "# Unused title"] });
 r = await T.compose(env, "PROMPT", [], [N]);
 ok(env.calls.length === 1 && r.model === N && /A Baseline Assessment/.test(r.text), "compose without titleRepair makes no title call (the caller carries the title)", env.calls.length);
 
+
+// Q08-TITLE-REPAIR-2 (0.26.1): tolerant parse and a trail note for every attempt
+ok(T.titleLineOf("Here is a title for the essay:\n\nThree replicas made every write slower") === "# Three replicas made every write slower", "a title after a preamble line is read");
+ok(T.titleLineOf("**Title:** Three replicas made every write slower") === "# Three replicas made every write slower", "a Title: label is read");
+ok(T.titleLineOf("```\n# Three replicas made every write slower\n```") === "# Three replicas made every write slower", "a fenced # line is read");
+ok(T.titleLineOf("<think>pondering</think>\nThree replicas made every write slower") === "# Three replicas made every write slower", "a think block is ignored");
+env = fakeEnv({ [N]: [labelDraft, "Option A\nOption B\nOption C"], [G]: ["# Three replicas made every write slower\n\n" + body + verdict] });
+r = await T.compose(env, "PROMPT", [], [N, G], undefined, { titleRepair: true });
+ok(r.model === G && r.trail.some((t) => /^title repair: no title line in the reply: Option A/.test((t.problems || [])[0] || "")), "a reply with no title line leaves a trail note and the next writer is asked", r.trail);
+const errs2 = []; const oe2 = console.error; console.error = (x) => errs2.push(String(x));
+env = fakeEnv({ [N]: [labelDraft, new Error("The operation was aborted due to timeout")], [G]: ["# Three replicas made every write slower\n\n" + body + verdict] });
+r = await T.compose(env, "PROMPT", [], [N, G], undefined, { titleRepair: true });
+console.error = oe2;
+ok(r.trail.some((t) => /^title repair failed: The operation was aborted due to timeout/.test((t.problems || [])[0] || "")), "a failed title call leaves a trail note with its error", r.trail);
 const src = (await import("node:fs")).readFileSync(new URL("./worker.js", import.meta.url), "utf8");
 const ver = (src.match(/var VERSION = "(\d+)\.(\d+)\.(\d+)/) || []).slice(1).map(Number);
 ok((src.match(/TITLE_REPAIR_ON\)/g) || []).length === 4, "the writer, its retry and the forecast writer and retry ask for the repair, nothing else");
-ok(ver.length === 3 && (ver[0] > 0 || ver[1] >= 26), "VERSION is at least 0.26.0", ver);
+ok(ver.length === 3 && (ver[0] > 0 || ver[1] > 26 || (ver[1] === 26 && ver[2] >= 1)), "VERSION is at least 0.26.1", ver);
 console.log(pass + " passed, " + fail + " failed");
 if (fail) process.exit(1);
