@@ -1323,7 +1323,7 @@ async function ensureSocialSchema(env) {
   SOCIAL_SCHEMA_DONE = true;
   try { await env.DB.prepare("CREATE TABLE IF NOT EXISTS pipeline_flags (key TEXT PRIMARY KEY, value TEXT, updated_at TEXT)").run(); } catch (e) { console.error(JSON.stringify({ evt: "social:ensureSocialSchema:caught", error: String((e && e.message) || e) })); }
   // POST-ID-UTM-1 (#1712): nullable post_uri; fails with 'duplicate column' once it exists, which is fine.
-  try { await env.DB.prepare("ALTER TABLE social_threads ADD COLUMN post_uri TEXT").run(); } catch (e) { console.error(JSON.stringify({ evt: "social:ensureSocialSchema:caught", error: String((e && e.message) || e) })); }
+  try { await env.DB.prepare("ALTER TABLE social_threads ADD COLUMN post_uri TEXT").run(); } catch (e) { if (!/duplicate column/i.test(String((e && e.message) || e))) console.error(JSON.stringify({ evt: "social:ensureSocialSchema:caught", error: String((e && e.message) || e) })); }
 }
 function weeklyCap(env) {
   const v = env && env.SOCIAL_WEEKLY_CAP;
@@ -2248,8 +2248,8 @@ async function ensureLearnerSchema(env) {
   await env.DB.prepare("CREATE TABLE IF NOT EXISTS social_learner_posts (post_key TEXT PRIMARY KEY, slug TEXT, bsky_uri TEXT, link_slug TEXT, topic TEXT, format TEXT, slot TEXT, n_posts INTEGER, posted_at TEXT, chosen_by TEXT, decision TEXT, status TEXT, engagement REAL, visits REAL, reward REAL, reward_detail TEXT, credited_at TEXT, created_at TEXT)").run();
   // LEARNER-CHANNEL-ARM-1: the channel and the Buffer post id ('duplicate column' once they exist, which is fine); rows
   // written before 0.8.1 are Bluesky rows.
-  try { await env.DB.prepare("ALTER TABLE social_learner_posts ADD COLUMN channel TEXT").run(); } catch (e) { console.error(JSON.stringify({ evt: "social:ensureLearnerSchema:caught", error: String((e && e.message) || e) })); }
-  try { await env.DB.prepare("ALTER TABLE social_learner_posts ADD COLUMN buffer_id TEXT").run(); } catch (e) { console.error(JSON.stringify({ evt: "social:ensureLearnerSchema:caught", error: String((e && e.message) || e) })); }
+  try { await env.DB.prepare("ALTER TABLE social_learner_posts ADD COLUMN channel TEXT").run(); } catch (e) { if (!/duplicate column/i.test(String((e && e.message) || e))) console.error(JSON.stringify({ evt: "social:ensureLearnerSchema:caught", error: String((e && e.message) || e) })); }
+  try { await env.DB.prepare("ALTER TABLE social_learner_posts ADD COLUMN buffer_id TEXT").run(); } catch (e) { if (!/duplicate column/i.test(String((e && e.message) || e))) console.error(JSON.stringify({ evt: "social:ensureLearnerSchema:caught", error: String((e && e.message) || e) })); }
   try { await env.DB.prepare("UPDATE social_learner_posts SET channel = 'bluesky' WHERE channel IS NULL AND bsky_uri IS NOT NULL").run(); } catch (e) { console.error(JSON.stringify({ evt: "social:ensureLearnerSchema:caught", error: String((e && e.message) || e) })); }
   if (env.DB && typeof env.DB === 'object') LEARNER_SCHEMA_DBS.add(env.DB);
 }

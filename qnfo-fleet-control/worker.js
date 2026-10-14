@@ -2787,7 +2787,9 @@ __name(evGh, "evGh");
 async function evApi(env, method, path, body) {
   var r = await timedFetch("https://api.github.com/repos/" + EVOLVE_REPO + path, { method: method, headers: evGh(env), body: body ? JSON.stringify(body) : void 0 }, 15e3);
   var j = null;
-  try { j = await r.json(); } catch (e) { console.error(JSON.stringify({ evt: "fleet-control:evApi:caught", error: String(e && e.message) })); }
+  // LOG-NOISE-1 (0.27.0): GitHub answers 204 with no body to merges and ref deletes; only a non-empty body that fails to parse is an error.
+  var raw = await r.text().catch(function() { return ""; });
+  if (raw) { try { j = JSON.parse(raw); } catch (e) { console.error(JSON.stringify({ evt: "fleet-control:evApi:caught", status: r.status, error: String(e && e.message) })); } }
   return { status: r.status, ok: r.status >= 200 && r.status < 300, j: j };
 }
 __name(evApi, "evApi");
@@ -2800,7 +2802,7 @@ async function evSchema(env) {
   await env.AUDIT.prepare("CREATE TABLE IF NOT EXISTS self_rewrite_state (id INTEGER PRIMARY KEY AUTOINCREMENT, worker TEXT, ts TEXT, action TEXT, status TEXT, detail TEXT)").run();
   var cols = ["deployed_at TEXT", "kind TEXT", "issue_id INTEGER", "pr_number INTEGER", "branch TEXT", "head_sha TEXT", "merged_sha TEXT", "version_from TEXT", "version_to TEXT", "path TEXT", "note TEXT", "updated_at TEXT", "parent_id INTEGER"];
   for (var i = 0; i < cols.length; i++) {
-    try { await env.AUDIT.prepare("ALTER TABLE evolve_candidates ADD COLUMN " + cols[i]).run(); } catch (e) { console.error(JSON.stringify({ evt: "fleet-control:evSchema:caught", error: String(e && e.message) })); }
+    try { await env.AUDIT.prepare("ALTER TABLE evolve_candidates ADD COLUMN " + cols[i]).run(); } catch (e) { if (!/duplicate column/i.test(String((e && e.message) || e))) console.error(JSON.stringify({ evt: "fleet-control:evSchema:caught", error: String(e && e.message) })); }
   }
 }
 __name(evSchema, "evSchema");
@@ -3651,11 +3653,11 @@ function cmReviewParse(text) {
   // the object around the first "verdict": its last "{" before it, then each "}" after it until one parses (a defect may quote code)
   var at = t.indexOf('"verdict"'), st = at < 0 ? -1 : t.lastIndexOf("{", at);
   for (var e = st < 0 ? -1 : t.indexOf("}", at), k = 0; e > 0 && k < 40 && !v; e = t.indexOf("}", e + 1), k++) {
-    try { var j = JSON.parse(t.slice(st, e + 1)); if (j && j.verdict) { v = j.verdict; harm = j.harm; defects = Array.isArray(j.defects) ? j.defects : []; } } catch (x) { console.error(JSON.stringify({ evt: "fleet-control:cmReviewParse:caught", error: String(x && x.message) })); }
+    try { var j = JSON.parse(t.slice(st, e + 1)); if (j && j.verdict) { v = j.verdict; harm = j.harm; defects = Array.isArray(j.defects) ? j.defects : []; } } catch (x) { /* LOG-NOISE-1: a trial parse at each "}" fails by design until one closes the object */ }
   }
   if (!v) { var vm = /"verdict"\s*:\s*"(implements|partial|no)"/i.exec(t); if (vm) v = vm[1]; var hm = /"harm"\s*:\s*"?(true|false|yes|no)"?/i.exec(t); if (hm) harm = hm[1]; }
   v = String(v || "").trim().toLowerCase();
-  if (["implements", "partial", "no"].indexOf(v) < 0) return { verdict: null, harm: false, defects: [], cites: [] };
+  if (["implements", "partial", "no"].indexOf(v) < 0) { console.error(JSON.stringify({ evt: "fleet-control:cmReviewParse:no-verdict", chars: t.length })); return { verdict: null, harm: false, defects: [], cites: [] }; }
   // A defect is { line, why } (GOAL-REVIEW-2) or, from an older reply, a plain sentence.
   var cites = defects.map(function(x) {
     var o = x && typeof x === "object" ? x : { why: x };
@@ -3971,7 +3973,7 @@ async function cmSchema(env) {
   if (!have.id) return false;
   for (var i = 0; i < CM_COLS.length; i++) {
     if (have[CM_COLS[i].split(" ")[0]]) continue;
-    try { await env.AUDIT.prepare("ALTER TABLE code_tasks ADD COLUMN " + CM_COLS[i]).run(); } catch (e) { console.error(JSON.stringify({ evt: "fleet-control:cmSchema:caught", error: String(e && e.message) })); }
+    try { await env.AUDIT.prepare("ALTER TABLE code_tasks ADD COLUMN " + CM_COLS[i]).run(); } catch (e) { if (!/duplicate column/i.test(String((e && e.message) || e))) console.error(JSON.stringify({ evt: "fleet-control:cmSchema:caught", error: String(e && e.message) })); }
   }
   return true;
 }
@@ -7298,7 +7300,7 @@ function cfcNeedsRun(lastOk, nowMs) {
 async function cfcSchema(env) {
   await env.AUDIT.prepare("CREATE TABLE IF NOT EXISTS cf_changelog_items (guid TEXT PRIMARY KEY, seen_at TEXT, pub TEXT, title TEXT, link TEXT, products TEXT, klass TEXT, slug TEXT, action TEXT, issue_id INTEGER, prev_status TEXT)").run();
   await env.AUDIT.prepare("CREATE TABLE IF NOT EXISTS cf_changelog_runs (id INTEGER PRIMARY KEY AUTOINCREMENT, ts TEXT, status TEXT, items INTEGER, fresh INTEGER, deadlines INTEGER, new_rows INTEGER, reopened INTEGER, filed INTEGER, bytes INTEGER, note TEXT)").run();
-  try { await env.AUDIT.prepare("ALTER TABLE cf_changelog_items ADD COLUMN excerpt TEXT").run(); } catch (e) { console.error(JSON.stringify({ evt: "fleet-control:cfcSchema:caught", error: String(e && e.message) })); } // CF-CHANGELOG-LEADS-1; fails once it exists
+  try { await env.AUDIT.prepare("ALTER TABLE cf_changelog_items ADD COLUMN excerpt TEXT").run(); } catch (e) { if (!/duplicate column/i.test(String((e && e.message) || e))) console.error(JSON.stringify({ evt: "fleet-control:cfcSchema:caught", error: String(e && e.message) })); } // CF-CHANGELOG-LEADS-1; fails once it exists
 }
 // Streams the feed and stops at the byte cap: the full file is ~8 MB (1,300 items, full HTML), newest first.
 async function cfcFetchFeed() {
@@ -9341,7 +9343,9 @@ var JRN_TIMEOUT_MS = 12e3;
 var JRN_TARGET = { SVC_QNFO_GATEWAY: "qnfo-gateway", SVC_QNFO_AI_SEARCH: "qnfo-ai-search", SVC_DEPLOY_GUARD: "qnfo-deploy-guard", SVC_QNFO_DASH: "qnfo-fleet-dashboard", SVC_QNFO_OPS: "qnfo-ops", SVC_QNFO_AI: "qnfo-ai", SVC_QNFO_PDF: "qnfo-pdf" };
 // Freshness budgets (minutes): about two cycles of the loop each one watches.
 var JRN_FRESH = { "dashboard last_sync": 45, "dashboard last_execute": 45, "dashboard state generated_at": 45, "ai-search loop runs[0]": 150, "gateway render last_checked": 1560 };
-var JRN_TRAFFIC_MIN_ERRORS = 20;
+var JRN_TRAFFIC_MIN_ERRORS = 10;
+// TRAFFIC-WINDOW-6H-1: errors are read over 6 h (a fix clears within hours, not a day) against a quarter of the 24 h request count.
+var JRN_TRAFFIC_WINDOW_MS = 6 * 36e5;
 var JRN_TRAFFIC_MAX_RATE = 0.05;
 var JRN_ASK_EVERY_H = 6;
 var JRN_ASK_QUERY = "What is the silent radix?";
@@ -9367,7 +9371,7 @@ async function jrnCall(env, j, binding, url, init) {
   if (!svc || !svc.fetch) { hop.error = "binding missing"; j.path.push(hop); return out; }
   var ac = new AbortController(), tm = setTimeout(function() { ac.abort(); }, JRN_TIMEOUT_MS);
   try {
-    var hdr = Object.assign({ "User-Agent": JRN_UA, "Accept": "application/json, text/event-stream, text/html;q=0.8" }, (init && init.headers) || {});
+    var hdr = Object.assign({ "User-Agent": JRN_UA, "Accept": "application/json, text/event-stream, text/html;q=0.8", "x-qnfo-synthetic": "1" }, (init && init.headers) || {});
     var r = await svc.fetch(url, Object.assign({}, init || {}, { headers: hdr, signal: ac.signal }));
     out.status = r.status;
     out.text = (await r.text()).slice(0, 4e5);
@@ -9512,25 +9516,83 @@ async function jAskPath(env) {
   }
   return j;
 }
+// NEGATIVE-CONTROL-1 (0.27.0): a deliberate failure every tick. A path that cannot exist must answer 404 through the gateway and an
+// invalid claim key must be refused by deploy-guard; if either "passes", a route or a guard fails open and every journey pass above is
+// suspect. This is the fault-injection check on the checkers themselves.
+async function jNegativeControl(env) {
+  var j = jrnNew("negative-control");
+  var nf = await jrnCall(env, j, "SVC_QNFO_GATEWAY", "https://papers.qnfo.org/papers/zz-journey-negative-control-" + Date.now().toString(36));
+  jrnCheck(j, "an unknown paper answers 404", nf.status === 404, "http " + nf.status);
+  var bad = await jrnCall(env, j, "SVC_DEPLOY_GUARD", "https://qnfo-deploy-guard.internal/work-lock/acquire", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ key: "not-a-claim-key", owner: "fleet-control-journeys", ttl_sec: 30 }) });
+  jrnCheck(j, "an invalid claim key is refused", bad.status === 400 && !(bad.json && bad.json.acquired), "http " + bad.status);
+  // The hops answered errors on purpose: they are not failures to fix.
+  j.path.forEach(function(h) { h.expected_error = true; });
+  return j;
+}
+// SERVER-5XX-1 (0.27.0): handled 5xx answers are invocations with outcome ok, so the error capture never sees them (qnfo-ops answered
+// 331 HTTP 502s in a day that no ledger held). The Workers telemetry API is asked for every event with a response status >= 500 in the
+// window; the answer is checked two ways: every returned event must be a 5xx (the filter applied), and a worker that Cloudflare's own
+// Observability Issues show with a 5xx group in the window must appear (the query is not blind).
+var JRN_5XX_MIN = 10;
+var JRN_5XX_MAX_RATE = 0.02;
+async function jrnTelemetry5xx(env, from, to) {
+  if (!env.CF_API_TOKEN) return { error: "CF_API_TOKEN missing" };
+  var acct = env.CF_ACCOUNT_ID || "edb167b78c9fb901ea5bca3ce58ccc4b";
+  try {
+    var r = await timedFetch("https://api.cloudflare.com/client/v4/accounts/" + acct + "/workers/observability/telemetry/query", {
+      method: "POST", headers: { "Authorization": "Bearer " + env.CF_API_TOKEN, "Content-Type": "application/json", "User-Agent": JRN_UA },
+      body: JSON.stringify({ queryId: "fleet-journeys-5xx", view: "events", limit: 1000, timeframe: { from: from, to: to },
+        parameters: { datasets: ["cloudflare-workers"], filterCombination: "and", filters: [{ key: "$workers.event.response.status", operation: "gte", type: "number", value: 500 }] } })
+    }, 15e3);
+    var j = await r.json().catch(function() { return null; });
+    if (!r.ok || !j || j.success === false) { var er = j && j.errors && j.errors[0]; return { error: "http " + r.status + " " + String(er && (er.message || er.code) || "").slice(0, 120) }; }
+    var res = j.result || {}, evs = res.events && (Array.isArray(res.events) ? res.events : res.events.events) || [];
+    return { events: evs.map(function(ev) {
+      var w = ev && ev.$workers || {}, m = ev && ev.$metadata || {}, e2 = w.event || {}, rq = e2.request || {}, rs = e2.response || {}, path = "";
+      try { path = new URL(rq.url || m.url || "").pathname; } catch (x) { path = ""; }
+      return { script: String(w.scriptName || m.service || ""), status: Number(rs.status) || 0, path: path };
+    }) };
+  } catch (e) { return { error: String(e && e.message || e).slice(0, 120) }; }
+}
 // Real traffic: each worker's captured error events in 24 h (worker_logs; ERROR-DETAIL-CAPTURE-1 keeps at most 200 per capture window,
 // so this is a floor; canceled and responseStreamDisconnected are the client hanging up, not a fault) against its 24 h request count (analytics_dash_workers, pollObservability). The top failing route is named.
 async function jTrafficHealth(env, db) {
   var j = jrnNew("traffic-health");
   var errs, reqs = {};
   try {
-    errs = (await db.prepare("SELECT script_name AS w, COUNT(*) AS n FROM worker_logs WHERE ts_ms > ?1 AND COALESCE(outcome, '') NOT IN ('ok', 'canceled', 'responseStreamDisconnected') GROUP BY script_name").bind(Date.now() - 864e5).all()).results || [];
+    errs = (await db.prepare("SELECT script_name AS w, COUNT(*) AS n FROM worker_logs WHERE ts_ms > ?1 AND COALESCE(outcome, '') NOT IN ('ok', 'canceled', 'responseStreamDisconnected') GROUP BY script_name").bind(Date.now() - JRN_TRAFFIC_WINDOW_MS).all()).results || [];
     ((await db.prepare("SELECT worker, requests FROM analytics_dash_workers").all()).results || []).forEach(function(x) { reqs[x.worker] = Number(x.requests) || 0; });
   } catch (e) { jrnCheck(j, "traffic ledgers readable", false, String(e && e.message || e).slice(0, 120)); return j; }
   jrnCheck(j, "request counts present", Object.keys(reqs).length > 0, Object.keys(reqs).length + " workers");
   for (var i = 0; i < errs.length; i++) {
-    var w = errs[i].w, n = Number(errs[i].n) || 0, q = reqs[w] || 0;
+    var w = errs[i].w, n = Number(errs[i].n) || 0, q = Math.round((reqs[w] || 0) * JRN_TRAFFIC_WINDOW_MS / 864e5);
     if (n < JRN_TRAFFIC_MIN_ERRORS) continue;
     var rate = q > 0 ? n / q : 1;
     var top = null;
-    try { top = await db.prepare("SELECT COALESCE(url, event_type) AS route, outcome, status, substr(COALESCE(exceptions_json, ''), 1, 140) AS exc, COUNT(*) AS n FROM worker_logs WHERE script_name = ?1 AND ts_ms > ?2 AND COALESCE(outcome, '') NOT IN ('ok', 'canceled', 'responseStreamDisconnected') GROUP BY 1, 2, 3 ORDER BY n DESC LIMIT 1").bind(w, Date.now() - 864e5).first(); } catch (e) { top = null; }
+    try { top = await db.prepare("SELECT COALESCE(url, event_type) AS route, outcome, status, substr(COALESCE(exceptions_json, ''), 1, 140) AS exc, COUNT(*) AS n FROM worker_logs WHERE script_name = ?1 AND ts_ms > ?2 AND COALESCE(outcome, '') NOT IN ('ok', 'canceled', 'responseStreamDisconnected') GROUP BY 1, 2, 3 ORDER BY n DESC LIMIT 1").bind(w, Date.now() - JRN_TRAFFIC_WINDOW_MS).first(); } catch (e) { top = null; }
+    if (rate > JRN_TRAFFIC_MAX_RATE && top && !j.route && /^https?:\/\//.test(String(top.route || ""))) { try { j.route = { worker: w, path: new URL(top.route).pathname }; } catch (e) { j.route = null; } }
     jrnCheck(j, w + " real-traffic error rate <= " + (JRN_TRAFFIC_MAX_RATE * 100) + "%", rate <= JRN_TRAFFIC_MAX_RATE,
-      n + " errors / " + q + " requests (" + (rate * 100).toFixed(1) + "%)" + (top ? "; top: " + top.route + " " + top.outcome + " " + (top.status || "") + " x" + top.n + " " + top.exc : ""));
+      n + " errors / ~" + q + " requests in 6 h (" + (rate * 100).toFixed(1) + "%)" + (top ? "; top: " + top.route + " " + top.outcome + " " + (top.status || "") + " x" + top.n + " " + top.exc : ""));
   }
+  // Handled 5xx answers (SERVER-5XX-1).
+  var now5 = Date.now(), t5 = await jrnTelemetry5xx(env, now5 - JRN_TRAFFIC_WINDOW_MS, now5);
+  if (!jrnCheck(j, "telemetry 5xx query answered", !t5.error, t5.error || ((t5.events || []).length + " events"))) return j;
+  var non5 = t5.events.filter(function(e) { return e.status < 500; }).length;
+  jrnCheck(j, "telemetry 5xx filter applied", non5 === 0, non5 + " of " + t5.events.length + " returned events below 500");
+  var by = {};
+  t5.events.forEach(function(e) { if (!e.script || e.status < 500) return; var b = by[e.script] || (by[e.script] = { n: 0, routes: {} }); b.n++; var k = (e.path || "?") + " " + e.status; b.routes[k] = (b.routes[k] || 0) + 1; });
+  try {
+    var grp = (await db.prepare("SELECT json_extract(payload, '$.service') AS svc, json_extract(payload, '$.title') AS title, json_extract(payload, '$.lastObserved') AS lo FROM fleet_issue_dispatch WHERE category = 'worker-observability' AND json_extract(payload, '$.title') LIKE 'HttpServerError%' AND json_extract(payload, '$.lastObserved') > ?1").bind(now5 - JRN_TRAFFIC_WINDOW_MS).all()).results || [];
+    var blind = grp.filter(function(g) { return g.svc && !by[g.svc]; }).map(function(g) { return g.svc + " (" + g.title + ")"; });
+    jrnCheck(j, "telemetry sees every 5xx group Cloudflare Issues reports in 6 h", !blind.length, blind.join("; "));
+  } catch (e) { /* the Issues ledger is optional evidence */ }
+  Object.keys(by).forEach(function(w) {
+    var b = by[w], q = Math.round((reqs[w] || 0) * JRN_TRAFFIC_WINDOW_MS / 864e5), rate = q > 0 ? b.n / q : 1;
+    if (b.n < JRN_5XX_MIN) return;
+    var top = Object.keys(b.routes).sort(function(x, y) { return b.routes[y] - b.routes[x]; })[0] || "";
+    if (rate > JRN_5XX_MAX_RATE && !j.route && top.indexOf("/") === 0) j.route = { worker: w, path: top.split(" ")[0] };
+    jrnCheck(j, w + " 5xx answers <= " + (JRN_5XX_MAX_RATE * 100) + "% of requests", rate <= JRN_5XX_MAX_RATE, b.n + " 5xx / ~" + q + " requests in 6 h (" + (rate * 100).toFixed(1) + "%); top: " + top + " x" + b.routes[top]);
+  });
   return j;
 }
 async function jrnRecord(env, db, results, now) {
@@ -9552,6 +9614,47 @@ async function jrnRecord(env, db, results, now) {
   } catch (e) { console.error(JSON.stringify({ evt: "fleet-control:journeys:metric", error: String(e && e.message || e).slice(0, 160) })); }
   return failing;
 }
+// JOURNEY-CODE-TASK-1 (0.27.0): a failing hop or real-traffic route becomes a doer for the code loop (ACT-BRIDGE-1). The target worker's
+// source on main is read and the route's handler line is located: the first line that compares the path (=== "<path>"), or else names it
+// as a string, trimmed to text that occurs exactly once in the file. A longer path is cut back segment by segment ("/papers/x" -> "/papers/").
+// Only an HTTP error answer (>= 400) earns a code task; a timeout, a stale loop or wrong data is a fleet condition, not a line of code.
+var JRN_SRC_CACHE = {};
+async function jrnSource(worker) {
+  if (!/^[a-z0-9-]{2,60}$/.test(worker)) return null;
+  if (worker in JRN_SRC_CACHE) return JRN_SRC_CACHE[worker];
+  var txt = null;
+  try {
+    var r = await timedFetch("https://raw.githubusercontent.com/QNFO/qnfo-workers/main/" + worker + "/worker.js?cb=" + Math.floor(Date.now() / 6e5), { headers: { "User-Agent": JRN_UA } }, 1e4);
+    if (r.ok) txt = (await r.text()).slice(0, 4e6);
+  } catch (e) { txt = null; }
+  JRN_SRC_CACHE[worker] = txt;
+  return txt;
+}
+function jrnCount(hay, needle) { var n = 0, i = -1; while ((i = hay.indexOf(needle, i + 1)) >= 0) { n++; if (n > 1) break; } return n; }
+function jrnAnchor(src, path) {
+  if (!src || !path) return null;
+  var segs = String(path).replace(/\?.*$/, "").split("/").filter(Boolean), cands = [];
+  for (var k = segs.length; k >= 1; k--) { var base = "/" + segs.slice(0, k).join("/"); if (k < segs.length) cands.push(base + "/"); cands.push(base); }
+  for (var c = 0; c < cands.length; c++) {
+    var lit = '"' + cands[c] + '"', hits = [], i = -1;
+    while ((i = src.indexOf(lit, i + 1)) >= 0 && hits.length < 50) hits.push(i);
+    hits.sort(function(x, y) { var cx = src.slice(Math.max(0, x - 5), x).indexOf("=== ") >= 0 ? 0 : 1, cy = src.slice(Math.max(0, y - 5), y).indexOf("=== ") >= 0 ? 0 : 1; return cx - cy || x - y; });
+    for (var h = 0; h < hits.length; h++) {
+      var at = hits[h], ls = src.lastIndexOf("\n", at) + 1, le = src.indexOf("\n", at); if (le < 0) le = src.length;
+      var line = src.slice(ls, le).trim(), off = line.indexOf(lit);
+      var piece = line.slice(Math.max(0, off - 60), Math.min(line.length, off + lit.length + 60)).trim();
+      if (piece && jrnCount(src, piece) === 1) return piece;
+      if (line.length <= 400 && jrnCount(src, line) === 1) return line;
+    }
+    if (hits.length) return null; // the route exists but has no unique line: no anchor beats a wrong one
+  }
+  return null;
+}
+async function jrnCodeTask(worker, path) {
+  var src = await jrnSource(worker);
+  var anc = jrnAnchor(src, path);
+  return anc ? "code-task: repo=qnfo-workers path=" + worker + "/worker.js\ncode-anchor: " + anc : null;
+}
 // One open issue per failing journey, shared with the runner's (same title prefix). It closes when this run passes and the other
 // runner's newest run of the journey in the last 2 h did not fail.
 async function jrnIssue(db, j, ok, failed, at, now) {
@@ -9568,11 +9671,15 @@ async function jrnIssue(db, j, ok, failed, at, now) {
     return;
   }
   var owners = [];
-  j.path.forEach(function(h) { if ((h.status === 0 || h.status >= 400) && owners.indexOf(h.to) < 0) owners.push(h.to); });
+  j.path.forEach(function(h) { if ((h.status === 0 || h.status >= 400) && !h.expected_error && owners.indexOf(h.to) < 0) owners.push(h.to); });
   var title = JRN_PREFIX + ": " + j.name + " (" + failed.length + " of " + j.steps.length + " steps failing)";
   var desc = "Filed by qnfo-fleet-control " + VERSION + " FLEET-JOURNEYS-2 at " + at + ". The " + j.name + " journey drives a real multi-worker process through service bindings and checks the effect at its far end. Failing steps: " +
     failed.map(function(s) { return s.step + " (" + s.detail + ")"; }).join("; ").slice(0, 1500) + ". Path taken: " + j.path.map(function(h) { return h.via + "->" + h.to + " " + h.path + " " + h.status + " " + h.ms + "ms" + (h.error ? " " + h.error : ""); }).join(" > ").slice(0, 1200) +
     ". Hops that answered an error: " + (owners.join(", ") || "none (the effect, not a hop, is wrong)") + ". Every run is in qnfo-audit journey_runs; GET https://qnfo-fleet-control.q08.workers.dev/journeys shows the latest. This issue closes itself the first run the journey passes every step. Pillar core.";
+  var ct = null, errHop = j.path.filter(function(h) { return h.status >= 400 && !h.shared && !h.expected_error; })[0];
+  if (errHop) ct = await jrnCodeTask(errHop.to, "/" + String(errHop.path).split("/").slice(1).join("/")).catch(function() { return null; });
+  if (!ct && j.route) ct = await jrnCodeTask(j.route.worker, j.route.path).catch(function() { return null; });
+  if (ct) desc += "\nFix: the hop or route named above answered an error; find the cause in the handler at the anchor, fix it, and keep the response contract the journey checks.\n" + ct;
   if (open.length) { await db.prepare("UPDATE agent_issues SET title = ?1, description = ?2, updated_at = ?3 WHERE id = ?4").bind(title, desc, now, open[0].id).run(); return; }
   await db.prepare("INSERT INTO agent_issues (title, description, source, category, priority, status, created_at, updated_at) SELECT ?1, ?2, 'fleet-journeys', 'reliability', 'high', 'open', ?3, ?3 WHERE NOT EXISTS (SELECT 1 FROM agent_issues WHERE status = 'open' AND title LIKE ?4)").bind(title, desc, now, like).run();
 }
@@ -9582,7 +9689,7 @@ async function journeyTick(env, opts) {
   try { var off = await db.prepare("SELECT value FROM ops_config WHERE key = 'fleet_journeys'").first(); if (off && /^(off|0|false|no|disabled)$/i.test(String(off.value))) return { ran: false, reason: "ops_config fleet_journeys = off" }; } catch (e) { /* absent table or row: on */ }
   var now = (opts && opts.now) || Date.now(), hour = new Date(now).getUTCHours(), minute = new Date(now).getUTCMinutes();
   var timed = function(p) { var t0 = Date.now(); return p.then(function(r) { (Array.isArray(r) ? r : [r]).forEach(function(x) { x.ms = Date.now() - t0; }); return r; }); };
-  var jobs = [timed(jPapersPath(env)), timed(jLockRoundtrip(env)), timed(jCensusAndRegistry(env, db)), timed(jLoopHeartbeats(env, now)), timed(jAiRouter(env)), timed(jTrafficHealth(env, db))];
+  var jobs = [timed(jPapersPath(env)), timed(jLockRoundtrip(env)), timed(jCensusAndRegistry(env, db)), timed(jLoopHeartbeats(env, now)), timed(jAiRouter(env)), timed(jTrafficHealth(env, db)), timed(jNegativeControl(env))];
   if ((opts && opts.ask) || (hour % JRN_ASK_EVERY_H === 0 && minute < 20)) jobs.push(timed(jAskPath(env)));
   var settled = await Promise.allSettled(jobs), results = [];
   settled.forEach(function(s, i) {
@@ -9604,7 +9711,7 @@ async function journeysStatus(env) {
   var parse = function(s, fb) { try { return JSON.parse(s); } catch (e) { return fb; } };
   var latest = rows.map(function(r) {
     var path = parse(r.path_json, []);
-    path.forEach(function(h) { if (h.shared) return; var k = (r.runner === "cf" ? "qnfo-fleet-control" : "github-runner") + " -> " + h.to; var e = edges[k] || (edges[k] = { from: k.split(" -> ")[0], to: h.to, calls: 0, errors: 0, max_ms: 0 }); e.calls++; if (!h.status || h.status >= 400) e.errors++; if (h.ms > e.max_ms) e.max_ms = h.ms; });
+    path.forEach(function(h) { if (h.shared) return; var k = (r.runner === "cf" ? "qnfo-fleet-control" : "github-runner") + " -> " + h.to; var e = edges[k] || (edges[k] = { from: k.split(" -> ")[0], to: h.to, calls: 0, errors: 0, max_ms: 0 }); e.calls++; if ((!h.status || h.status >= 400) && !h.expected_error) e.errors++; if (h.ms > e.max_ms) e.max_ms = h.ms; });
     return { journey: r.journey, runner: r.runner, ts: r.ts, ok: !!r.ok, steps: r.steps, failed: parse(r.failed_json, []), ms: r.ms, path: path, healed: parse(r.healed_json, null), version: r.version };
   });
   return { ok: true, worker_version: VERSION, loop: "FLEET-JOURNEYS-2", every_min: 20, failing: latest.filter(function(x) { return !x.ok; }).map(function(x) { return x.journey + "@" + x.runner; }), journeys: latest, graph: Object.keys(edges).map(function(k) { return edges[k]; }), healed_24h: heals, kill_switch: "ops_config fleet_journeys = off" };

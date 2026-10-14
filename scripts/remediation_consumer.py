@@ -675,6 +675,14 @@ def _selftest():
     if not hc.get("ok"):
         print(json.dumps({"ok": False, "case": "host-census", "detail": hc}))
         return 1
+    try:
+        import fleet_journeys
+        fj = fleet_journeys.selftest()
+    except Exception as e:  # noqa: BLE001
+        fj = {"selftest": "fail", "error": str(e)[:200]}
+    if fj.get("selftest") != "ok":
+        print(json.dumps({"ok": False, "case": "fleet-journeys", "detail": fj}))
+        return 1
     # MIGRATION-UNAPPLIED-1: the pure comparison and the sweep with a fake applier
     import tempfile
     mroot = tempfile.mkdtemp(prefix="rc-mig-")
@@ -1065,6 +1073,15 @@ def main():
         out["host_census"] = host_census.run(d1, lambda path: _req("GET", CF_API + path), VERIFIER)
     except Exception as e:  # noqa: BLE001
         out["host_census_error"] = str(e)[:200]
+
+    # FLEET-JOURNEYS-1 (2026-10-13): the end-to-end journeys from outside the account (runner gha, public hostnames), the second path
+    # to qnfo-fleet-control's server-side journeyTick; at most every 50 minutes, self-filing and self-closing (scripts/fleet_journeys.py).
+    # Called here, not as a workflow step, so the change needs no workflow edit. A failure never stops the contract run.
+    try:
+        import fleet_journeys
+        out["fleet_journeys"] = fleet_journeys.run(d1, VERIFIER)
+    except Exception as e:  # noqa: BLE001
+        out["fleet_journeys_error"] = str(e)[:200]
 
     # MIGRATION-UNAPPLIED-1: merged migrations the push-triggered runner never ran are applied here, within the hour.
     migrations_sweep(out)

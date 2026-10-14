@@ -99,7 +99,8 @@ class Http:
             return e.code, e.read(64 * 1024).decode("utf-8", "replace")
 
     def req(self, method, url, data=None):
-        headers = {"User-Agent": UA, "Accept": "application/json, text/event-stream, text/html;q=0.8"}
+        # SYNTHETIC-TAG-1: workers that keep analytics (qnfo-ai-search 2.6.1) leave a journey request out of their metrics.
+        headers = {"User-Agent": UA, "Accept": "application/json, text/event-stream, text/html;q=0.8", "x-qnfo-synthetic": "1"}
         body = None
         if data is not None:
             body = json.dumps(data).encode("utf-8")
