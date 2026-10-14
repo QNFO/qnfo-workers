@@ -1,5 +1,5 @@
 {
-  "audited_at": "2026-10-14 04:35:21",
+  "audited_at": "2026-10-14 05:04:13",
   "d1_write_failures": [],
   "d1_writes_ok": 115,
   "guard": {
@@ -543,12 +543,12 @@
       },
       {
         "dir": "personal-companion",
-        "version": "1.25.2-heartbeat",
+        "version": "1.25.4-like-50",
         "worker": "personal-companion"
       },
       {
         "dir": "q08-signal-engine",
-        "version": "0.25.1-log-catches",
+        "version": "0.26.0-title-repair",
         "worker": "q08-signal-engine"
       },
       {
@@ -573,7 +573,7 @@
       },
       {
         "dir": "qnfo-code-orchestrator",
-        "version": "0.16.0-sig-stop",
+        "version": "0.16.1-bp-logging",
         "worker": "qnfo-code-orchestrator"
       },
       {
@@ -633,7 +633,7 @@
       },
       {
         "dir": "qnfo-observability",
-        "version": "1.4.6-outreach-enum",
+        "version": "1.4.7-bp-logging",
         "worker": "qnfo-observability"
       },
       {
@@ -900,9 +900,9 @@
       "worker": "personal-api"
     },
     "personal-companion": {
-      "before": "1.25.2-heartbeat",
+      "before": "1.25.4-like-50",
       "http": 200,
-      "live": "1.25.2-heartbeat",
+      "live": "1.25.4-like-50",
       "match": 1,
       "note": "SYNC",
       "worker": "personal-companion"
@@ -944,9 +944,9 @@
       "worker": "personal-life-search"
     },
     "q08-signal-engine": {
-      "before": "0.25.1-log-catches",
+      "before": "0.26.0-title-repair",
       "http": 200,
-      "live": "0.25.1-log-catches",
+      "live": "0.26.0-title-repair",
       "match": 1,
       "note": "SYNC",
       "worker": "q08-signal-engine"
@@ -1146,9 +1146,9 @@
       "worker": "qnfo-code-agent"
     },
     "qnfo-code-orchestrator": {
-      "before": "0.16.0-sig-stop",
+      "before": "0.16.1-bp-logging",
       "http": 200,
-      "live": "0.16.0-sig-stop",
+      "live": "0.16.1-bp-logging",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-code-orchestrator"
@@ -1404,9 +1404,9 @@
       "worker": "qnfo-memory-mcp-legacy-dup"
     },
     "qnfo-observability": {
-      "before": "1.4.6-outreach-enum",
+      "before": "1.4.7-bp-logging",
       "http": 200,
-      "live": "1.4.6-outreach-enum",
+      "live": "1.4.7-bp-logging",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-observability"
