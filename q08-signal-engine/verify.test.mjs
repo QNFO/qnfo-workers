@@ -363,7 +363,11 @@ globalThis.fetch = origFetch;
 {
   const essay = "# Thieves sell modified hardware wallets\n\nCrypto thieves are selling modified Ledger Nano X wallets with a hidden eSIM, a security firm reported. The modem sends the seed phrase to the attackers.\n\nUsers therefore trust that a purchased device keeps their assets offline.\n\nworth your time: yes - x";
   const r = V.pruneUnsupported(essay, ["unsupported claim: a security firm reported -- not in source"]);
-  check("a flagged sentence in the lede is not cut and is reported", r.ledeHit === true && r.removed.length === 0 && /^# Thieves sell modified hardware wallets\n\nCrypto thieves/.test(r.text), r);
+  // Q08-LEDE-PRUNE-2 (0.27.0): a flagged lede sentence is cut when another lede sentence remains (the caller's ledeProblems re-check guards the opening)
+  check("a flagged lede sentence is cut when another lede sentence remains", r.ledeHit === false && r.removed.length === 1 && /^# Thieves sell modified hardware wallets\n\nThe modem sends the seed phrase/.test(r.text), r);
+  const one = "# Thieves sell modified hardware wallets\n\nCrypto thieves are selling modified Ledger Nano X wallets with a hidden eSIM, a security firm reported.\n\nUsers therefore trust that a purchased device keeps their assets offline.\n\nworth your time: yes - x";
+  const r1 = V.pruneUnsupported(one, ["unsupported claim: a security firm reported -- not in source"]);
+  check("a lede whose every sentence is flagged is left whole and reported (Q08-LEDE-PRUNE-1)", r1.ledeHit === true && r1.removed.length === 0 && /^# Thieves sell modified hardware wallets\n\nCrypto thieves/.test(r1.text), r1);
   const r2 = V.pruneUnsupported(essay, ["unsupported claim: Users therefore trust that a purchased device keeps their assets offline -- not in source"]);
   check("a flagged sentence after the lede is still cut", r2.ledeHit === false && r2.removed.length === 1 && /Crypto thieves/.test(r2.text), r2);
   const src = (await import("node:fs")).readFileSync(new URL("./worker.js", import.meta.url), "utf8");
