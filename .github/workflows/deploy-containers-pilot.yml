@@ -64,6 +64,8 @@ jobs:
     env:
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
       CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      GUARD: https://qnfo-deploy-guard.q08.workers.dev
+      GUARD_UA: "QNFO-fleet-ci/1.0 (+https://qnfo.org; deploy-containers-pilot)"
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
@@ -112,6 +114,28 @@ jobs:
           npx --yes wrangler@4 deploy --keep-vars 2>&1 | tee /tmp/wrangler_nomig.log
         env:
           WRANGLER_SEND_METRICS: "false"
+
+      # CONTAINER-DEPLOY-LEDGER-1 (2026-10-14, agent_issues 2368 and 2369): qnfo-deploy-guard decides whether a worker mutation was
+      # logged by looking for a fleet_deploys row at or after the worker's modified_on (minus 3 minutes). This workflow wrote none, so
+      # every wrangler deploy here (2026-10-14 03:08:13Z, when the actions bump touched this file) was filed as an unlogged mutation
+      # and an uncoordinated deploy. The row is written right after the wrangler attempts, through the guard's own /ledger route
+      # (as deploy-code-orchestrator.yml does). A logged mutation is never "uncoordinated" to the guard, so no lock is taken here:
+      # the /content fallback below takes the guard lock and writes its own row (RESTORE-LEDGER-1), and a held lock would refuse it.
+      - name: Record the wrangler deploy in the guard ledger fleet_deploys
+        if: ${{ always() && github.event.inputs.verify_only != 'true' && steps.wrangler.outcome != 'skipped' }}
+        env:
+          WR: ${{ steps.wrangler.outcome }}
+          NM: ${{ steps.nomig.outcome }}
+        run: |
+          set -uo pipefail
+          ok=false
+          if [ "$WR" = "success" ] || [ "$NM" = "success" ]; then ok=true; fi
+          to="$(grep -m1 -oE '^var VERSION = "[^"]+"' qnfo-containers-pilot/worker.js | sed -E 's/.*"([^"]+)"/\1/')"
+          body="$(jq -cn --arg w "qnfo-containers-pilot" --arg to "$to" --argjson ok "$ok" --arg note "wrangler deploy (deploy-containers-pilot.yml run $GITHUB_RUN_ID sha ${GITHUB_SHA::12}): wrangler=$WR nomig=$NM" \
+            '{worker:$w,actor:"deploy-containers-pilot.yml",from:"",to:$to,source_path:"qnfo-containers-pilot/worker.js",ok:$ok,note:$note}')"
+          res="$(curl -s --max-time 30 -A "$GUARD_UA" -H "Content-Type: application/json" -X POST "$GUARD/ledger" --data "$body")"
+          echo "ledger response: $res"
+          if [ "$(echo "$res" | jq -r '.logged // false' 2>/dev/null)" != "true" ]; then echo "::error::fleet_deploys ledger row not written"; exit 1; fi
 
       # PILOT-DEPLOY-FAIL-OPEN-1 (2026-10-01): run 36793748019 (merge 5593747) reported SUCCESS while both wrangler
       # attempts failed with [container_class_not_durable_object] / [provisioned_class_missing_from_config] (code
