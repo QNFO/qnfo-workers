@@ -1,5 +1,5 @@
 {
-  "audited_at": "2026-10-14 02:39:32",
+  "audited_at": "2026-10-14 03:08:23",
   "d1_write_failures": [],
   "d1_writes_ok": 115,
   "guard": {
@@ -568,7 +568,7 @@
       },
       {
         "dir": "qnfo-cloud-ops",
-        "version": "1.28.1-codeagent",
+        "version": "1.28.2-bp-logging",
         "worker": "qnfo-cloud-ops"
       },
       {
@@ -603,12 +603,12 @@
       },
       {
         "dir": "qnfo-gateway",
-        "version": "3.18.4-cron-heartbeat",
+        "version": "3.18.5-bp-logging",
         "worker": "qnfo-gateway"
       },
       {
         "dir": "qnfo-infra",
-        "version": "1.5.0-cron-heartbeat",
+        "version": "1.5.1-bp-logging",
         "worker": "qnfo-infra"
       },
       {
@@ -618,12 +618,12 @@
       },
       {
         "dir": "qnfo-ipatent",
-        "version": "3.17.1-ipatent-marquee",
+        "version": "3.17.2-bp-logging",
         "worker": "qnfo-ipatent"
       },
       {
         "dir": "qnfo-lifecycle",
-        "version": "1.11.1-noz-scrub",
+        "version": "1.11.3-bp-logging",
         "worker": "qnfo-lifecycle"
       },
       {
@@ -658,7 +658,7 @@
       },
       {
         "dir": "qnfo-subscribers",
-        "version": "1.3.0-cron-heartbeat",
+        "version": "1.3.1-bp-logging",
         "worker": "qnfo-subscribers"
       },
       {
@@ -668,7 +668,7 @@
       },
       {
         "dir": "radar-hub",
-        "version": "1.4.2-families-window",
+        "version": "1.4.3-bp-logging",
         "worker": "radar-hub"
       }
     ]
@@ -1129,9 +1129,9 @@
       "worker": "qnfo-citation-watch"
     },
     "qnfo-cloud-ops": {
-      "before": "1.28.1-codeagent",
+      "before": "1.28.2-bp-logging",
       "http": 200,
-      "live": "1.28.1-codeagent",
+      "live": "1.28.2-bp-logging",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-cloud-ops"
@@ -1302,9 +1302,9 @@
       "worker": "qnfo-fleet-feed"
     },
     "qnfo-gateway": {
-      "before": "3.18.4-cron-heartbeat",
+      "before": "3.18.5-bp-logging",
       "http": 200,
-      "live": "3.18.4-cron-heartbeat",
+      "live": "3.18.5-bp-logging",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-gateway"
@@ -1346,9 +1346,9 @@
       "worker": "qnfo-impact"
     },
     "qnfo-infra": {
-      "before": "1.5.0-cron-heartbeat",
+      "before": "1.5.1-bp-logging",
       "http": 200,
-      "live": "1.5.0-cron-heartbeat",
+      "live": "1.5.1-bp-logging",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-infra"
@@ -1362,9 +1362,9 @@
       "worker": "qnfo-intent-orchestrator"
     },
     "qnfo-ipatent": {
-      "before": "3.17.1-ipatent-marquee",
+      "before": "3.17.2-bp-logging",
       "http": 200,
-      "live": "3.17.1-ipatent-marquee",
+      "live": "3.17.2-bp-logging",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-ipatent"
@@ -1379,9 +1379,9 @@
       "worker": "qnfo-kaizen"
     },
     "qnfo-lifecycle": {
-      "before": "1.11.1-noz-scrub",
+      "before": "1.11.3-bp-logging",
       "http": 200,
-      "live": "1.11.1-noz-scrub",
+      "live": "1.11.3-bp-logging",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-lifecycle"
@@ -1570,9 +1570,9 @@
       "worker": "qnfo-social"
     },
     "qnfo-subscribers": {
-      "before": "1.3.0-cron-heartbeat",
+      "before": "1.3.1-bp-logging",
       "http": 200,
-      "live": "1.3.0-cron-heartbeat",
+      "live": "1.3.1-bp-logging",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-subscribers"
@@ -1621,9 +1621,9 @@
       "worker": "qnfo-web-unified"
     },
     "radar-hub": {
-      "before": "1.4.2-families-window",
+      "before": "1.4.3-bp-logging",
       "http": 200,
-      "live": "1.4.2-families-window",
+      "live": "1.4.3-bp-logging",
       "match": 1,
       "note": "SYNC",
       "worker": "radar-hub"
