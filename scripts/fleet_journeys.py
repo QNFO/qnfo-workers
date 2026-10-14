@@ -67,11 +67,12 @@ ASK = "https://ask.qwav.tech"
 AI = "https://qnfo-ai.q08.workers.dev"
 LOCK_KEY = "file:journeys/fleet-journeys.probe"
 
-# Freshness budgets in minutes: each is about two cycles of the loop it watches, so one late tick is not a failure.
+# Freshness budgets in minutes: at most the loop's cadence plus 120 minutes (SLA-120M-2, owner directive 2026-10-14: no SLA exceeds
+# 120 minutes), so a missed run is detected within 120 minutes of its due time.
 FRESH = {
     "fleet-control portfolio_last": 150,   # hourly
     "fleet-control charter_last": 26 * 60,  # daily
-    "fleet-control chaos last_drill": 13 * 60,  # every 6 h
+    "fleet-control chaos last_drill": 480,  # every 6 h: cadence + 120 min (SLA-120M-2, no SLA past 120 min after due)
     "dashboard last_sync": 45,             # 15 min
     "dashboard last_execute": 45,          # 15 min
     "dashboard state generated_at": 45,    # 15 min
