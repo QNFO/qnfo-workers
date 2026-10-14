@@ -73,6 +73,9 @@ db.prepare("INSERT INTO tick_runs (ts, step) VALUES (?, ?)").run(ago(0.5), "prob
 // COMPAT-WATCHMAKER-1 (1.36.1, agent_issues 2412): qnfo-ops compatSnapshot, every 6 hours.
 db.exec("CREATE TABLE worker_compat_state (worker TEXT PRIMARY KEY, checked_at TEXT)");
 db.prepare("INSERT INTO worker_compat_state (worker, checked_at) VALUES ('qnfo-ops', ?)").run(ago(3));
+// FLEET-JOURNEYS-WATCHMAKER-1 (1.37.4, agent_issues 2554): the qnfo-fleet-control journey tick, every 20 minutes.
+db.exec("CREATE TABLE journey_runs (id INTEGER PRIMARY KEY AUTOINCREMENT, ts TEXT, runner TEXT)");
+db.prepare("INSERT INTO journey_runs (ts, runner) VALUES (?, 'cf')").run(ago(0.3));
 db.prepare("INSERT INTO portfolio_sync_runs (ts, status) VALUES (?, 'ok')").run(ago(1));
 db.prepare("INSERT INTO evolve_candidates (ts) VALUES (?)").run(ago(9));
 db.prepare("INSERT INTO objective_constraint_runs (ts) VALUES (?)").run(ago(1));
