@@ -122,6 +122,29 @@ service = "qnfo-ops"
 environment = "production"
 props = { caller = "qnfo-fleet-control" }
 
+# FLEET-JOURNEYS-2 (0.27.0): the end-to-end journeys cross these bindings (papers.qnfo.org through qnfo-gateway, ask.qwav.tech through
+# qnfo-ai-search, the work-lock round trip through qnfo-deploy-guard, fleet.qnfo.org loop state through qnfo-fleet-dashboard). Public
+# reads only, plus a 120-second work claim on file:journeys/fleet-journeys.probe that the journey releases.
+[[services]]
+binding = "SVC_QNFO_GATEWAY"
+service = "qnfo-gateway"
+environment = "production"
+
+[[services]]
+binding = "SVC_QNFO_AI_SEARCH"
+service = "qnfo-ai-search"
+environment = "production"
+
+[[services]]
+binding = "SVC_DEPLOY_GUARD"
+service = "qnfo-deploy-guard"
+environment = "production"
+
+[[services]]
+binding = "SVC_QNFO_DASH"
+service = "qnfo-fleet-dashboard"
+environment = "production"
+
 # FleetAdvisor Durable Object (advisor + calibration subsystem; stateless -- uses no
 # state.storage). LIVE namespace: qnfo-fleet-control_FleetAdvisor (class FleetAdvisor,
 # script qnfo-fleet-control). This binding is what made the toml binding-INCOMPLETE before
