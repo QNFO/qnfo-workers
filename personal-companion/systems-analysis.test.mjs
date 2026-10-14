@@ -154,9 +154,9 @@ ok(/never state an inferred arrangement, funding, motive or behaviour as a repor
 }
 // ---- STARVED-RETRY-HOURLY-1 (1.21.7): one retry per hourly tick ----------------------------------------------------------------------
 {
-  ok(V.STARVED_RETRY_MAX_24H === 24, "the starved retry may run every hourly tick (24 failed runs a day)");
+  ok(V.STARVED_RETRY_QUIET_MS === 10 * 60000, "STARVED-RETRY-SLA-1 (1.26.3): only a run in progress (rows in the last 10 minutes) holds the hourly retry back");
   const sr = src.slice(src.indexOf("async function starvedRetryDue(env) {"), src.indexOf("async function steward(env) {"));
-  ok(/return !!f && f\.n < STARVED_RETRY_MAX_24H;/.test(sr) && !/f\.n < 16/.test(sr), "the daily bar reads the constant, not 16");
+  ok(!/STARVED_RETRY_MAX_24H|STARVED_RETRY_MIN_MS|f\.n < 16/.test(sr) && /run_at > \?"\)\.bind\(new Date\(Date\.now\(\) - STARVED_RETRY_QUIET_MS\)/.test(sr), "no daily failure cap and no fixed bar: the retry waits only for a run in progress");
 }
 // ---- WRITER-FIT-1 (1.22.1): the fallback writer is asked for the length its floor needs, at a lower temperature -------------------------
 {

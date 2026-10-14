@@ -313,7 +313,14 @@ const count = (p, t) => p.prepare("SELECT COUNT(*) n FROM " + t).get().n;
   p.prepare("INSERT INTO companion_runs (run_at, form, model, topic, status, detail, ms) VALUES (?, 'notes', 'm', 't', 'failed', 'no piece survived the gate', 1)").run(at(49.8));
   ok(await V.starvedRetryDue({ PERSONAL: wrap(p) }) === true, "a failed run 49.8 minutes old (the 2026-10-13 10:01 tick) is retried");
   p.prepare("INSERT INTO companion_runs (run_at, form, model, topic, status, detail, ms) VALUES (?, 'notes', 'm', 't', 'failed', 'no piece survived the gate', 1)").run(at(35));
-  ok(await V.starvedRetryDue({ PERSONAL: wrap(p) }) === false, "a failed run 35 minutes old is not retried yet (40-minute bar)");
+  ok(await V.starvedRetryDue({ PERSONAL: wrap(p) }) === true, "STARVED-RETRY-SLA-1 (1.26.3): a failed run 35 minutes old is retried (no 40-minute bar; the 08:34 run of 2026-10-14 skipped the 09:00 tick)");
+  for (let i = 0; i < 26; i++) p.prepare("INSERT INTO companion_runs (run_at, form, model, topic, status, detail, ms) VALUES (?, 'essay', 'm', 't', 'failed', 'no piece survived the gate', 1)").run(at(60 * 23 - i * 50));
+  ok(await V.starvedRetryDue({ PERSONAL: wrap(p) }) === true, "26 failed runs in 24 h still retry at the next hourly tick (the 24-failure cap skipped 10:00 UTC on 2026-10-14)");
+  p.prepare("INSERT INTO companion_runs (run_at, form, model, topic, status, detail, ms) VALUES (?, 'essay', 'm', 't', 'stage', 'critic prune r1', 1)").run(at(3));
+  ok(await V.starvedRetryDue({ PERSONAL: wrap(p) }) === false, "a run in progress (a stage row 3 minutes ago) holds the retry back");
+  p.prepare("INSERT INTO companion_runs (run_at, form, model, topic, status, detail, ms) VALUES (?, 'essay', 'm', 't', 'ok', 'published', 1)").run(at(120));
+  p.prepare("DELETE FROM companion_runs WHERE status = 'stage'").run();
+  ok(await V.starvedRetryDue({ PERSONAL: wrap(p) }) === false, "a published piece (the newest run is ok) ends the starved retry");
 }
 console.log(pass + " passed, " + fail + " failed");
 if (fail) process.exit(1);
