@@ -1,8 +1,15 @@
 {
-  "audited_at": "2026-10-14 13:26:21",
+  "audited_at": "2026-10-14 14:03:32",
   "d1_write_failures": [],
   "d1_writes_ok": 115,
   "guard": {
+    "_drift_confirm": {
+      "first_pass": [
+        "qnfo-fleet-dashboard"
+      ],
+      "refreshed": true,
+      "second_pass": []
+    },
     "_guard_rc": 0,
     "ahead": [],
     "cf_script_list": true,
@@ -548,7 +555,7 @@
       },
       {
         "dir": "q08-signal-engine",
-        "version": "0.28.0-pipeline-mirror",
+        "version": "0.28.1-prune-extend",
         "worker": "q08-signal-engine"
       },
       {
@@ -598,7 +605,7 @@
       },
       {
         "dir": "qnfo-fleet-dashboard",
-        "version": "1.37.7-codeagent",
+        "version": "1.37.8-codeagent",
         "worker": "qnfo-fleet-dashboard"
       },
       {
@@ -944,9 +951,9 @@
       "worker": "personal-life-search"
     },
     "q08-signal-engine": {
-      "before": "0.28.0-pipeline-mirror",
+      "before": "0.28.1-prune-extend",
       "http": 200,
-      "live": "0.28.0-pipeline-mirror",
+      "live": "0.28.1-prune-extend",
       "match": 1,
       "note": "SYNC",
       "worker": "q08-signal-engine"
@@ -1276,9 +1283,9 @@
       "worker": "qnfo-fleet-control"
     },
     "qnfo-fleet-dashboard": {
-      "before": "1.37.7-codeagent",
+      "before": "1.37.8-codeagent",
       "http": 200,
-      "live": "1.37.7-codeagent",
+      "live": "1.37.8-codeagent",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-fleet-dashboard"
