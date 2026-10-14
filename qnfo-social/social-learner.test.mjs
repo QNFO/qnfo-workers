@@ -229,9 +229,9 @@ ok(q.posted === 1 && roots() === 1 && postedRows.length === 1 && postedRows[0].i
 const lrow = one("SELECT * FROM social_learner_posts WHERE post_key = ?", "thread:" + dec.id);
 ok(lrow && lrow.chosen_by === "learner" && lrow.status === "pending" && lrow.slot === dec.slot && lrow.topic === dec.topic && JSON.parse(lrow.decision).samples && lrow.bsky_uri === "at://did:plc:me/app.bsky.feed.post/r1", "the post is filed pending with its decision and Bluesky uri");
 d = await mod.drainDissemination(env, { nowMs: AT });
-ok(d.posted === 0 && d.learner.held === "spacing" && roots() === 1, "the cap had room for two, the tick posted one: learner posts are 24h apart");
+ok(!d.posted && ((d.learner && d.learner.held === "spacing") || d.skipped === "spacing") && roots() === 1, "the cap had room for two, the tick posted one: learner posts are 24h apart");
 q = await mod.drainQueue(env, { nowMs: AT + 22 * 36e5 });
-ok(q.posted === 0 && q.learner.held === "spacing" && roots() === 1, "22h later still nothing: the spacing holds");
+ok(!q.posted && ((q.learner && q.learner.held === "spacing") || q.skipped === "spacing") && roots() === 1, "22h later still nothing: the spacing holds");
 ok(all("SELECT status FROM social_threads WHERE id IN (?, ?)", ids.ultra, ids.q08).every((r) => r.status === "queued") && one("SELECT action FROM dissemination_tracker WHERE id = 'res-b'").action === "queued", "rows the learner did not choose stay queued, untouched");
 
 // A simulated week of ticks: never more than the weekly cap, every learner post inside its decided slot.

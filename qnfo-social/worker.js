@@ -11,11 +11,11 @@
 //   (SOCIAL_WEEKLY_CAP, default 2) and the pipeline_flags.social_paused kill switch on both drains.
 // v0.7.35 SOCIAL-POST-TRUNCATION-1 (#1902, pillar: reach): postText fits the UNTAGGED text and puts the UTM only in each link
 //   facet uri (tagFacets), so tracking costs no visible characters and the prose is never cut for it; stored_text keeps the tagged form.
-// Secrets: BSKY_HANDLE, BSKY_APP_PASS, SOCIAL_TOKEN, GATEWAY_SOCIAL_TOKEN, BUFFER_TOKEN, OPS_KEY.
+// Secrets: BSKY_HANDLE, BSKY_APP_PASS, SOCIAL_TOKEN, GATEWAY_SOCIAL_TOKEN, BUFFER_TOKEN, OPS_KEY, MASTODON_TOKEN (optional, MASTODON-DIRECT-1; var MASTODON_HOST).
 // Vars (optional): SOCIAL_WEEKLY_CAP. D1: DB (qnfo-audit.social_threads, dissemination_tracker, pipeline_flags; 0.7.28 also
 // social_learner_posts, ops_config social_learner_enabled / social_learner_pending, metric_registry). AI: env.AI.
 
-var VERSION = "0.14.3-schema-quiet"; // 0.14.3 LOG-NOISE-1 (2026-10-14, pillar core, found by FLEET-JOURNEYS-2 and the Cloudflare Observability Issues ingest): the three ensure*Schema ALTERs no longer log their expected "duplicate column" answer as an error.
+var VERSION = "0.15.0-accelerate"; // 0.15.0 OUTREACH-ACCELERATE-1 (2026-10-14, pillar reach; owner directive "Accelerate all social media and all external outreach, communication, and promotion. All available channels shall be fully utilized as appropriate and effective, including email, Buffer, Mastodon, Bluesky, Substack, and all other channels."): Bluesky defaults to 14 posts a week (2 a day) and the Buffer channels to LinkedIn 7 (queue or drafts, ToS 3.1 unchanged), Mastodon 14, X 14 and Substack Notes 14 (clamp 0..21); the attention share now steers between a floor and the cap (pipeline_flags social_share_floor, default 0.5) instead of cutting a channel to one post a week on a thin sample; Bluesky posts are spaced (at most one per 2-hourly run, at least 7 days / cap minus 1 h apart) so the higher cap never bursts; SUBSTACK-CHANNEL-1: a Substack channel connected in Buffer (Notes; API supported on the free plan) is drained and cross-posted like LinkedIn (whole thread, subscribe line, utm_source substack); MASTODON-DIRECT-1: with MASTODON_TOKEN set, Mastodon posts go straight to the instance API (MASTODON_HOST, default mstdn.science) instead of Buffer, which frees a Buffer channel slot, and their counts are read from the public status API at 07:00. // 0.14.3 LOG-NOISE-1 (2026-10-14, pillar core, found by FLEET-JOURNEYS-2 and the Cloudflare Observability Issues ingest): the three ensure*Schema ALTERs no longer log their expected "duplicate column" answer as an error.
 // // 0.14.0 (2026-10-13, pillar reach): SOCIAL-CHECK-FAIL-CLOSED-1 (issue 2501): the checker reply parser skips stray arrays such as "[1]", reads issue lists keyed issue, problem, claim or text, and returns null (thread held as draft) when no valid issue array is present. MASTODON-PUBLIC-STATS-1 (issues 2481, 2374): the 07:00 Buffer statistics run reads favourites, reblogs and replies of up to 30 sent Mastodon posts from the public status API when Buffer returns no metrics (platform buffer rows, post_id = the Buffer id). LEARNER-COVERAGE-1 (issue 2381): every drained post is recorded for the learner (chosen_by backfill when no learner decision; the 24h spacing applies to learner-chosen posts only). UTM-CREDIT-1 (issue 2036): a post without an engagement snapshot is credited on its utm clicks, and no-data rows of the last 14 days are re-read for them. CRON-ONLY-HEARTBEAT-1 (issue 2397): every scheduled run ends with a fleet_heartbeat upsert (ok=0 when it threw). // 0.13.1 also LEDE-SOCIAL-1 (2026-10-13, from the fleet lede audit of session_01BCBpN3cZdS57dweqCs9rwt): post 1 of a composed thread is the lede (what the paper is, by whom, its main finding), and checkThread holds a thread whose post 1 neither names the author nor shares a significant title word (threadLedeIssues) for the repair pass. 0.13.1 SOURCE-VOICE-SOCIAL-1 (agent_issues 2472, pillar reach): POST /compose stores the abstract it grounded the thread on, so reachRepairDrafts and recheckDrafts no longer skip its held drafts (179 of 182 social_threads rows had no abstract on 2026-10-13). // 0.13.0 (2026-10-12, pillar reach) BUFFER-POST-STATS-1 (issue 2374): the 07:00 engagement run also reads Buffer with this worker's own token: per connected channel the sent posts of the last 30 days with their statistics and public link; one social_engagements row per post and metric (platform buffer, post_id = the Buffer post id), the link into social_media_posts.url, an auth_status row every run, and per network buffer_channel rows that say how many sent posts carried statistics and how many carried none (never zeros in place of a missing statistic). Bounded: 6 channels, 3 pages of 30 posts each, 10 s per call, 512 KB per body. // 0.12.0-whole-sentences // 0.12.0 (2026-10-12, pillar reach) SOCIAL-POST-TRUNCATION-2 (issue 1902): a post too long for its channel is never cut mid-sentence: Bluesky continues it as replies split at sentence boundaries (splitForThread; the link and its card stay on the root), the Buffer channels and the LinkedIn text keep whole sentences and drop trailing ones (fitWhole); the ellipsis cut is the last resort for a single sentence longer than the limit. REACH-SIGNALS-1 (issue 2225): the 07:00 engagement run stores each reply by another account (social_replies: hashed author, delay from the post in minutes, text length, word count; never the text) from the public getPostThread endpoint; no reply is posted. SUBSCRIBE-LINE-ACCURATE-1 (issue 1753): the LinkedIn subscribe line said monthly while the list is a weekly digest and linked the page top; it now states the cadence the list has and links the form. Ledger ids come from crypto.randomUUID. // 0.11.1-doi-scrub // 0.11.1 NOZ-DOI-1 (owner decision 2026-10-10, pillar reach): the dead-registry paper scan, the selected-works refill and every 10.5281 identifier are removed; the 06:00 run only sweeps and repairs drafts, contentGate refuses (and the drain suppresses) any post carrying a dead-registry identifier or link, and prompts and the checker link only to a URL or a third-party DOI. // 0.11.0 SOCIAL-GROUND-1 (owner directive 2026-10-10, pillar reach): checkThread first runs a mechanical check that every capitalised name, year and figure in a thread occurs in the title, author or abstract it was written from (an invented one is an issue, no model can override it); composePrompt and the checker prompt state that the model's own knowledge is not a source and name no example topics; the checker stays fail-closed (unavailable = draft). // 0.10.0-open-q08 0.10.0 Q08-OPEN-1 (owner directive 2026-10-09, pillar reach): q08.org links and q08 rows are no longer refused or skipped, the REACH-SELECT title hold is dropped in the channel drain, an attention share of 0 keeps one slot instead of holding a channel or Bluesky, the Bluesky weekly cap defaults to 7 and the Buffer channel caps to LinkedIn 5 (drafts only), Mastodon 10, X 10 (ceiling 14); the mojibake guard, the pause flag and the LinkedIn draft rule stay.  // 0.9.2 // 0.9.2 PROMOTE-ROUTE-2: a channel whose last post was a curated thread gets the newest unposted paper next. // 0.9.1 PROMPT-CACHE-COUNT-3b (issue 2114, 2026-10-08, pillar cost): the 0.8.3 ai_cache_counters write named columns the table does not have (purpose, cached), so every insert failed silently; it now writes the fleet schema (day, worker, model, calls, cached_calls, in_tok, cached_tok).  // 0.9.0 PROMOTE-ROUTE-1 (2026-10-07, pillar reach, owner directive "no siloes"): the channel drain takes queued research papers from dissemination_tracker (newest first, after curated queued threads, before recycled posted threads), so a published paper reaches LinkedIn, Mastodon and X while Bluesky is at attention share 0. // 0.8.2 UTM-VISITS-1 (2026-10-06, pillar reach, transformation lever T7.9 half 2): learnerVisits reads the gateway's tagged loads first (reach_signals source utm, metric clicks_human, campaign = the paper slug, channel = the utm_source of the post's channel; UTM-CLICK-LEDGER-1, qnfo-gateway 3.10.0 + qnfo-fleet-dashboard 1.26.0, PR 688): a direct count of the visits a post caused beats the bot-filtered RUM lift, which stays the fallback when the window carries no tagged row. 0.8.1 LEARNER-CHANNEL-ARM-1 was
 // 0.8.1 (2026-10-06, LEARNER-CHANNEL-ARM-1, transformation lever T7.13, pillar reach; owner directive "execute the suggestions"): the
 // distribution learner gains a channel arm (bluesky, linkedin, mastodon, x): Buffer channel posts become learner rows credited
@@ -167,7 +167,7 @@ function utmHost(host) {
   const h = String(host || '').toLowerCase();
   return h === 'qnfo.org' || /^[a-z0-9-]+(\.[a-z0-9-]+)*\.qnfo\.org$/.test(h);
 }
-var BUFFER_UTM_SOURCE = { mastodon: 'mastodon', linkedin: 'linkedin', twitter: 'x', threads: 'threads' };
+var BUFFER_UTM_SOURCE = { mastodon: 'mastodon', linkedin: 'linkedin', twitter: 'x', threads: 'threads', substack: 'substack' };
 function utmTag(url, source, campaign) {
   const u = String(url || '');
   const hm = u.match(/^https?:\/\/([^\/?#:]+)/i);
@@ -954,14 +954,14 @@ async function bufferPost(env, text, campaign) {
     if (bc.error) return { error: bc.error };
     const channels = bc.channels;
     const liMode = await linkedinMode(env);
-    for (const svc of ["mastodon", "linkedin", "twitter"]) {
-      const ch = channels.find((c) => c.service === svc && !c.isDisconnected);
+    for (const svc of ["mastodon", "linkedin", "twitter", "substack"]) {
+      const ch = svc === "mastodon" && mastodonDirect(env) ? MASTODON_DIRECT_CH : findChannel(channels, svc);
       if (!ch) { results.push({ platform: svc, status: "no-channel" }); continue; }
       // DAILY-DISTRIBUTION-1: a channel that already carried this slug (its own daily drain, or an earlier cross-post) in the
       // last CHANNEL_REPEAT_DAYS is skipped, so the Bluesky cross-post never duplicates a channel post.
       if (campaign && await channelCarried(env, svc, campaign)) { results.push({ platform: svc, status: "skipped", reason: "carried-" + CHANNEL_REPEAT_DAYS + "d" }); continue; }
       const svcText = utmTagText(text, BUFFER_UTM_SOURCE[svc] || svc, campaign);
-      const res = await bufferCreate(env, ch, svc, svcText, liMode);
+      const res = await channelCreate(env, ch, svc, svcText, liMode);
       results.push(res);
       if (res.post_id && res.status !== "error") await recordChannelPost(env, svc, campaign, res, svcText, "cross-post");
     }
@@ -989,11 +989,61 @@ async function bufferPost(env, text, campaign) {
 // everything; a posted row's status is never changed here. Ledger: social_media_posts (platform buffer-<channel>,
 // project_id = slug, buffer_id, published_at; the table distribution_posts_30d already counts) and one cloud_ops_events
 // row per day (social-channels-<day>), which the watchmaker reads.
-var CHANNEL_WEEKLY_CAP = { linkedin: 5, mastodon: 10, twitter: 10 };
-var CHANNEL_PLATFORM = { linkedin: 'buffer-linkedin', mastodon: 'buffer-mastodon', twitter: 'buffer-x' };
-var CHANNEL_MAX_CHARS = { linkedin: 1300, mastodon: 280, twitter: 280 };
+// OUTREACH-ACCELERATE-1 (0.15.0): 7 / 14 / 14 / 14 a week (was 5 / 10 / 10); pipeline_flags.social_channel_caps overrides (0..21).
+var CHANNEL_WEEKLY_CAP = { linkedin: 7, mastodon: 14, twitter: 14, substack: 14 };
+var CHANNEL_CAP_MAX = 21;
+var CHANNEL_PLATFORM = { linkedin: 'buffer-linkedin', mastodon: 'buffer-mastodon', twitter: 'buffer-x', substack: 'buffer-substack' };
+// SUBSTACK-CHANNEL-1: a Note holds 10,000 characters; it gets the LinkedIn-length whole thread.
+var CHANNEL_MAX_CHARS = { linkedin: 1300, mastodon: 280, twitter: 280, substack: 1300 };
+var CHANNEL_LONG = { linkedin: 1, substack: 1 };
 var CHANNEL_REPEAT_DAYS = 30;
-var CHANNEL_ORDER = ['linkedin', 'mastodon', 'twitter'];
+var CHANNEL_ORDER = ['linkedin', 'mastodon', 'twitter', 'substack'];
+// The Buffer channel for a service; Buffer may name Substack 'substack' or a variant, so it matches by substring.
+function findChannel(channels, svc) {
+  return (channels || []).find(function(c) { return c && !c.isDisconnected && (c.service === svc || (svc === 'substack' && /substack/i.test(String(c.service || '')))); }) || null;
+}
+// ---------- MASTODON-DIRECT-1 (0.15.0) ----------
+// Mastodon has an open API, so it needs no Buffer slot: with the MASTODON_TOKEN secret (an application token with write:statuses
+// on the QNFO account) the mastodon channel posts to https://<MASTODON_HOST>/api/v1/statuses directly. Without it, Buffer as before.
+// The ledger row keeps platform buffer-mastodon (cadence window, learner and scorecard read it), buffer_id = the status id and url =
+// the public status link, so the 07:00 run reads its counts from the public status API (mastodonDirectStats).
+var MASTODON_DIRECT_CH = { id: 'mastodon-direct', service: 'mastodon' };
+function mastodonDirect(env) { return !!(env && env.MASTODON_TOKEN); }
+function mastodonHost(env) { const h = String((env && env.MASTODON_HOST) || 'mstdn.science').trim().toLowerCase(); return /^[a-z0-9][a-z0-9.-]{0,251}[a-z0-9]$/.test(h) ? h : 'mstdn.science'; }
+async function mastodonCreate(env, svcText) {
+  try {
+    const body = new URLSearchParams({ status: String(svcText || ''), visibility: 'public', language: 'en' });
+    const r = await fetch('https://' + mastodonHost(env) + '/api/v1/statuses', { method: 'POST', headers: { 'Authorization': 'Bearer ' + env.MASTODON_TOKEN, 'Content-Type': 'application/x-www-form-urlencoded', 'Idempotency-Key': await sha256Hex(String(svcText || '')), 'User-Agent': 'qnfo-social/' + VERSION }, body: body.toString(), signal: AbortSignal.timeout(15000) });
+    const t = await readTextCapped(r, 65536);
+    if (r.status < 200 || r.status >= 300) return { platform: 'mastodon', status: 'error', error: 'mastodon ' + r.status + ' ' + t.slice(0, 80) };
+    const j = JSON.parse(t);
+    if (!j || !j.id) return { platform: 'mastodon', status: 'error', error: 'mastodon: no status id' };
+    return { platform: 'mastodon', status: 'ok', post_id: String(j.id), url: j.url ? String(j.url) : null, text: svcText, via: 'mastodon-direct' };
+  } catch (e) { return { platform: 'mastodon', status: 'error', error: 'mastodon: ' + String(e && e.message || e).slice(0, 100) }; }
+}
+async function sha256Hex(s) {
+  const d = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(s));
+  return Array.from(new Uint8Array(d)).map(function(b) { return b.toString(16).padStart(2, '0'); }).join('').slice(0, 40);
+}
+// One post on one channel: Mastodon direct when the channel is the direct one, otherwise Buffer.
+async function channelCreate(env, ch, svc, svcText, liMode) {
+  if (ch && ch.id === MASTODON_DIRECT_CH.id) return mastodonCreate(env, svcText);
+  return bufferCreate(env, ch, svc, svcText, liMode);
+}
+// The 07:00 counts for direct Mastodon posts of the last BUFFER_STATS_DAYS days (social_engagements platform buffer, post_id =
+// the status id, as the Buffer-read rows are keyed), from the same public status reader.
+async function mastodonDirectStats(env, nowMs) {
+  const now = nowMs || Date.now();
+  let rows = [];
+  try { rows = (await env.DB.prepare("SELECT buffer_id, url, published_at FROM social_media_posts WHERE platform = 'buffer-mastodon' AND engagement_metrics LIKE '%mastodon-direct%' AND url IS NOT NULL AND published_at >= datetime('now', ?1) ORDER BY published_at DESC LIMIT 60").bind('-' + BUFFER_STATS_DAYS + ' days').all()).results || []; } catch (e) { return { error: String(e && e.message || e).slice(0, 120) }; }
+  if (!rows.length) return { posts: 0 };
+  const nodes = rows.map(function(r) { return { id: String(r.buffer_id), status: 'sent', metrics: [], externalLink: r.url, sentAt: String(r.published_at || '').replace(' ', 'T') + 'Z' }; });
+  const mp = await mastodonPublicStats(nodes, now);
+  const day = new Date(now).toISOString().slice(0, 10);
+  const st = mp.rows.map(function(x) { return env.DB.prepare("INSERT INTO social_engagements (platform, post_id, metric, value, note, collected_at) VALUES ('buffer',?1,?2,?3,'mastodon public api (direct)',?4) ON CONFLICT(platform, post_id, metric, collected_at) DO UPDATE SET value=excluded.value, note=excluded.note").bind(x.post_id, x.metric, x.value, day); });
+  for (let i = 0; i < st.length; i += 50) await env.DB.batch(st.slice(i, i + 50));
+  return { posts: rows.length, rows: mp.rows.length, requests: mp.requests, errors: mp.errors };
+}
 // SUBSCRIBE-LINE-ACCURATE-1 (0.12.0, issue 1753): the list is a weekly digest of new papers (qnfo-subscribers); the line
 // says so and links the form itself, not the top of the page.
 var SUBSCRIBE_LINE = 'New papers by email, one short weekly digest: https://qnfo.org/#subscribe';
@@ -1002,7 +1052,7 @@ async function channelCaps(env) {
   try {
     const f = await env.DB.prepare("SELECT value FROM pipeline_flags WHERE key='social_channel_caps'").first();
     const o = f && f.value ? JSON.parse(String(f.value)) : null;
-    if (o && typeof o === 'object') for (const k of CHANNEL_ORDER) { const n = parseInt(String(o[k]), 10); if (Number.isFinite(n)) caps[k] = Math.max(0, Math.min(14, n)); }
+    if (o && typeof o === 'object') for (const k of CHANNEL_ORDER) { const n = parseInt(String(o[k]), 10); if (Number.isFinite(n)) caps[k] = Math.max(0, Math.min(CHANNEL_CAP_MAX, n)); }
   } catch (e) { console.error(JSON.stringify({ evt: "social:channelCaps:caught", error: String((e && e.message) || e) })); }
   return caps;
 }
@@ -1015,7 +1065,9 @@ async function channelCaps(env) {
 // row older than 3 days (the scorecard stopped) reads as 1 for every channel, so a dead loop can never silence a channel.
 var ATTENTION_SHARE_STALE_MS = 3 * 864e5;
 async function attentionShares(env) {
-  const out = { bluesky: 1, linkedin: 1, mastodon: 1, twitter: 1, day: null, source: 'default' };
+  const out = { bluesky: 1, linkedin: 1, mastodon: 1, twitter: 1, substack: 1, day: null, source: 'default', floor: SHARE_FLOOR_DEFAULT };
+  // OUTREACH-ACCELERATE-1: the floor a share cannot push a cap below (pipeline_flags.social_share_floor, 0..1).
+  try { const fl = await env.DB.prepare("SELECT value FROM pipeline_flags WHERE key='social_share_floor'").first(); const v = fl ? Number(String(fl.value).trim()) : NaN; if (fl && Number.isFinite(v)) out.floor = Math.max(0, Math.min(1, v)); } catch (e) { console.error(JSON.stringify({ evt: "social:shareFloor:caught", error: String((e && e.message) || e) })); }
   try {
     const r = await env.DB.prepare("SELECT value, updated_at FROM ops_config WHERE key='attention_channel_share'").first();
     const o = r && r.value ? JSON.parse(String(r.value)) : null;
@@ -1030,10 +1082,14 @@ async function attentionShares(env) {
   return out;
 }
 // Pure: the effective weekly cap. A positive share keeps at least one slot (a re-test needs one post), share 0 is 0.
-function shareCap(cap, share) {
+// OUTREACH-ACCELERATE-1 (0.15.0): with a floor f the share steers between f x cap and the cap (f + (1 - f) x share), so a
+// channel judged on a thin sample keeps enough posts to be measured; no floor argument keeps the plain scaling.
+var SHARE_FLOOR_DEFAULT = 0.5;
+function shareCap(cap, share, floor) {
   const c = Number(cap) || 0, s = Number.isFinite(Number(share)) ? Math.max(0, Math.min(1, Number(share))) : 1;
   if (c <= 0) return 0; // Q08-OPEN-1: an attention share of 0 no longer holds a channel; it keeps one slot
-  return Math.max(1, Math.floor(c * s));
+  const f = Number.isFinite(Number(floor)) && floor !== null && floor !== undefined ? Math.max(0, Math.min(1, Number(floor))) : 0;
+  return Math.max(1, Math.floor(c * (f + (1 - f) * s)));
 }
 // Pure-ish: posted rows go noticed-first (the paper's bot-filtered external loads over 28 days plus the Bluesky engagement
 // of the thread's own post, from reach_signals); queued selected rows keep their place ahead. A failed read keeps the
@@ -1090,8 +1146,8 @@ async function recordChannelPost(env, channel, slug, res, text, via) {
   await ensureChannelSchema(env);
   const id = 'ch-' + (BUFFER_UTM_SOURCE[channel] || channel) + '-' + Date.now().toString(36) + crypto.randomUUID().replace(/-/g, '').slice(0, 6);
   try {
-    await env.DB.prepare("INSERT INTO social_media_posts (id, platform, post_id, url, content_preview, published_at, buffer_id, project_id, status, engagement_metrics) VALUES (?1,?2,?3,NULL,?4,datetime('now'),?3,?5,'published',?6)")
-      .bind(id, CHANNEL_PLATFORM[channel], String(res.post_id), String(text || '').slice(0, 200), slug ? String(slug) : null, JSON.stringify({ via: via, buffer_status: res.status })).run();
+    await env.DB.prepare("INSERT INTO social_media_posts (id, platform, post_id, url, content_preview, published_at, buffer_id, project_id, status, engagement_metrics) VALUES (?1,?2,?3,?7,?4,datetime('now'),?3,?5,'published',?6)")
+      .bind(id, CHANNEL_PLATFORM[channel], String(res.post_id), String(text || '').slice(0, 200), slug ? String(slug) : null, JSON.stringify(res.via ? { via: via, transport: res.via, status: res.status } : { via: via, buffer_status: res.status }), res.url || null).run();
   } catch (e) { console.log('DAILY-DISTRIBUTION-1 ledger write failed for ' + channel + ' ' + slug + ': ' + String(e && e.message || e).slice(0, 120)); }
   return id;
 }
@@ -1099,7 +1155,7 @@ async function recordChannelPost(env, channel, slug, res, text, via) {
 // same 280-character pick the Bluesky cross-post uses. Pure; tagging happens at send time (utmTagText per channel).
 function channelText(channel, posts, link, title) {
   const max = CHANNEL_MAX_CHARS[channel] || 280;
-  if (channel !== 'linkedin') return pickBufferText(posts, link, title, max);
+  if (!CHANNEL_LONG[channel]) return pickBufferText(posts, link, title, max);
   const list = (posts || []).map(function(p) { return typeof p === 'string' ? p : String((p && p.text) || ''); }).map(function(t) { return t.trim(); }).filter(Boolean);
   let body = list.join('\n\n');
   if (link && body.indexOf(link) < 0) body = applyLink(body, link, max - 60);
@@ -1189,7 +1245,7 @@ async function drainChannels(env, opts) {
   let bc = null, liMode = null;
   for (const channel of co.order) {
     // ATTENTION-SHARE-1: the owner's cap times the channel's attention share (never above the cap).
-    const cap = shareCap(caps[channel], shares[channel]);
+    const cap = shareCap(caps[channel], shares[channel], shares.floor);
     if (!cap) { out.channels[channel] = caps[channel] && shares[channel] === 0 ? 'held:attention-stop' : 'held:cap-0'; continue; }
     let w;
     try { w = await channelWindow(env, channel, epoch); } catch (e) { out.channels[channel] = 'held:gate-error'; continue; }
@@ -1223,10 +1279,10 @@ async function drainChannels(env, opts) {
       if (bc.error) { out.channels[channel] = 'error:' + bc.error; out.error = bc.error; break; }
       liMode = await linkedinMode(env);
     }
-    const ch = (bc.channels || []).find(function(c) { return c.service === channel && !c.isDisconnected; });
+    const ch = channel === 'mastodon' && mastodonDirect(env) ? MASTODON_DIRECT_CH : findChannel(bc.channels, channel);
     if (!ch) { out.channels[channel] = 'held:no-channel'; continue; }
     const text = utmTagText(channelText(channel, cg.texts, link, row.title), BUFFER_UTM_SOURCE[channel] || channel, String(row.slug));
-    const res = await bufferCreate(env, ch, channel, text, liMode);
+    const res = await channelCreate(env, ch, channel, text, liMode);
     if (res.post_id && res.status !== 'error') {
       await recordChannelPost(env, channel, row.slug, res, text, 'channel-drain');
       out.posted++;
@@ -1329,13 +1385,13 @@ async function ensureSocialSchema(env) {
 function weeklyCap(env) {
   const v = env && env.SOCIAL_WEEKLY_CAP;
   const n = parseInt(String(v === undefined || v === null ? '' : v), 10);
-  return Number.isFinite(n) && n >= 0 ? n : 7; // Q08-OPEN-1: 7 a week by default (was 2)
+  return Number.isFinite(n) && n >= 0 ? n : 14; // OUTREACH-ACCELERATE-1: 14 a week by default (Q08-OPEN-1 had 7, before that 2)
 }
 async function socialGate(env, who) {
   await ensureSocialSchema(env);
   // ATTENTION-SHARE-1 (0.8.0): the attention share scales the Bluesky cap, never above it; share 0 holds every post.
   const shares = await attentionShares(env);
-  const cap = shareCap(weeklyCap(env), shares.bluesky);
+  const cap = shareCap(weeklyCap(env), shares.bluesky, shares.floor);
   try {
     const f = await env.DB.prepare("SELECT value FROM pipeline_flags WHERE key='social_paused'").first();
     if (f && String(f.value).trim() === '1') {
@@ -1351,11 +1407,27 @@ async function socialGate(env, who) {
     const c = await env.DB.prepare("SELECT (SELECT COUNT(*) FROM social_threads WHERE status='posted' AND posted_at >= MAX(datetime('now','-7 days'), ?1)) + (SELECT COUNT(*) FROM dissemination_tracker WHERE action='posted' AND channel='bluesky' AND posted_at >= MAX(datetime('now','-7 days'), ?1)) AS n").bind(epoch).first();
     const n = Number((c && c.n) || 0);
     console.log('SOCIAL-CADENCE-CAP-1 ' + who + ': bluesky posts_7d=' + n + ' cap=' + cap + (n >= cap ? ' -> holding queued rows' : ''));
-    return { allowed: Math.max(0, cap - n), reason: n >= cap ? 'weekly-cap' : null, posted_7d: n, cap: cap };
+    if (n >= cap) return { allowed: 0, reason: 'weekly-cap', posted_7d: n, cap: cap };
+    // BSKY-SPACING-1 (0.15.0): at most BSKY_PER_RUN posts a run and at least 7 days / cap minus 1 h after the last Bluesky post,
+    // so the 2-hourly drains spread the week's posts over the days instead of spending them in one run.
+    const sp = await blueskySpacing(env, cap, Date.now());
+    if (sp.wait) { console.log('BSKY-SPACING-1 ' + who + ': last post ' + sp.last + ', next at ' + sp.next); return { allowed: 0, reason: 'spacing', posted_7d: n, cap: cap, next: sp.next }; }
+    return { allowed: Math.min(BSKY_PER_RUN, cap - n), reason: null, posted_7d: n, cap: cap, remaining: cap - n };
   } catch (e) {
     console.log('SOCIAL-CADENCE-CAP-1 ' + who + ': gate read failed, posting nothing this run: ' + String(e).slice(0, 120));
     return { allowed: 0, reason: 'gate-error', cap: cap };
   }
+}
+var BSKY_PER_RUN = 1;
+async function blueskySpacing(env, cap, nowMs) {
+  try {
+    const r = await env.DB.prepare("SELECT MAX(t) AS last FROM (SELECT MAX(posted_at) AS t FROM social_threads WHERE status='posted' UNION ALL SELECT MAX(posted_at) FROM dissemination_tracker WHERE action='posted' AND channel='bluesky')").first();
+    const last = r && r.last ? String(r.last) : '';
+    const t = last ? Date.parse(last.replace(' ', 'T') + (/Z$|[+-]\d\d:\d\d$/.test(last) ? '' : 'Z')) : NaN;
+    if (!Number.isFinite(t) || !(cap > 0)) return { wait: false };
+    const gap = Math.max(0, Math.floor(7 * 864e5 / cap) - 36e5);
+    return nowMs - t < gap ? { wait: true, last: last, next: new Date(t + gap).toISOString().slice(0, 16) + 'Z' } : { wait: false, last: last };
+  } catch (e) { return { wait: false }; }
 }
 async function recordPostUri(env, id, value) {
   if (!value) return;
@@ -2133,7 +2205,7 @@ var LEARNER_TOPICS = ['energy', 'epistemics', 'operations'];
 // the order of one Beta draw each (learnerChannelOrder), so the attention loop's shift of posts to the Buffer channels is
 // an experiment the learner credits, not a pause. Bluesky rows carry channel 'bluesky'.
 var LEARNER_CHANNELS = ['bluesky', 'linkedin', 'mastodon', 'x'];
-var LEARNER_CHANNEL_OF = { 'buffer-linkedin': 'linkedin', 'buffer-mastodon': 'mastodon', 'buffer-x': 'x', 'buffer-twitter': 'x', linkedin: 'linkedin', mastodon: 'mastodon', twitter: 'x', x: 'x', bluesky: 'bluesky' };
+var LEARNER_CHANNEL_OF = { 'buffer-linkedin': 'linkedin', 'buffer-mastodon': 'mastodon', 'buffer-x': 'x', 'buffer-twitter': 'x', 'buffer-substack': 'substack', linkedin: 'linkedin', mastodon: 'mastodon', twitter: 'x', x: 'x', bluesky: 'bluesky', substack: 'substack' };
 var LEARNER_CHANNEL_GRACE_MS = 24 * 36e5;
 var LEARNER_BUFFER_ENGAGEMENT = ['reactions', 'comments', 'reposts', 'shares', 'clicks', 'quotes'];
 var LEARNER_FORMATS = ['single', 'thread', 'question'];
@@ -2814,6 +2886,8 @@ async function socialScheduled(event, env) {
       // switched off), then the learner's weekly update (Mondays, or catch-up), which records its own ledger row.
       // BUFFER-POST-STATS-1 (0.13.0): the Buffer per-post statistics, with this worker's own token. Isolated from the Bluesky counts.
       try { eo.buffer = await collectBufferStats(env); } catch (e) { eo.buffer = { error: String(e && e.message || e).slice(0, 200) }; }
+      // MASTODON-DIRECT-1: counts for the posts that bypassed Buffer.
+      try { eo.mastodon_direct = await mastodonDirectStats(env); } catch (e) { eo.mastodon_direct = { error: String(e && e.message || e).slice(0, 200) }; }
       try { eo.rate_30d = await learnerEngagementRate(env); } catch (e) { eo.rate_30d = { error: String(e && e.message || e).slice(0, 160) }; }
       await recordSocialRun(env, 'engagement', engagementRunStatus(eo), eo);
       // ATTENTION-LOOP-1 (0.8.0): credit closed windows every day, then the weekly allocation when due.
@@ -3070,7 +3144,7 @@ async function aiRunAttr(env, worker, purpose, model, input, opts) {
   }
 }
 // end aiRunAttr
-export { collectBufferStats, bufferStatsPlan, bufferRefusedFields, bufferStatsQuery, bufferGqlBounded, BUFFER_STATS_PER_CHANNEL, BUFFER_STATS_CHANNELS, readTextCapped, probeLink, proseUnits, splitForThread, fitWhole, threadPlan, postThread, pickBufferText, collectReplies, replyRowsOf, replyWordCount, threadGroundingIssues, groundingProblems, composePrompt, repairPrompt, buildFacets, truncateSafe, applyLink, findDoi, byteLen, extractUrls, utmHost, sentPostsJson, utmTag, utmTagText,fitKeepUrls, tagAndFit, tagFacets, postText, postUriValue, weeklyCap, socialGate, drainQueue, drainDissemination, repairMojibake, contentGate, markPosted, routeGate, collectEngagement, blueskyUriOf, bufferPost, syncProfile, PROFILE_DESCRIPTION, bufferChannelAudit, linkedinMode, recordSocialRun, profileRunStatus, drainRunStatus, engagementRunStatus, autoScan,
+export { mastodonCreate, mastodonDirectStats, channelCreate, findChannel, blueskySpacing, CHANNEL_ORDER, collectBufferStats, bufferStatsPlan, bufferRefusedFields, bufferStatsQuery, bufferGqlBounded, BUFFER_STATS_PER_CHANNEL, BUFFER_STATS_CHANNELS, readTextCapped, probeLink, proseUnits, splitForThread, fitWhole, threadPlan, postThread, pickBufferText, collectReplies, replyRowsOf, replyWordCount, threadGroundingIssues, groundingProblems, composePrompt, repairPrompt, buildFacets, truncateSafe, applyLink, findDoi, byteLen, extractUrls, utmHost, sentPostsJson, utmTag, utmTagText,fitKeepUrls, tagAndFit, tagFacets, postText, postUriValue, weeklyCap, socialGate, drainQueue, drainDissemination, repairMojibake, contentGate, markPosted, routeGate, collectEngagement, blueskyUriOf, bufferPost, syncProfile, PROFILE_DESCRIPTION, bufferChannelAudit, linkedinMode, recordSocialRun, profileRunStatus, drainRunStatus, engagementRunStatus, autoScan,
   drainChannels, channelsRunStatus, channelText, channelCaps, channelWindow, channelCarried, pickChannelRow, CHANNEL_WEEKLY_CAP, CHANNEL_PLATFORM, CHANNEL_MAX_CHARS, CHANNEL_REPEAT_DAYS, SUBSCRIBE_LINE,
   learnerClassify, learnerIsQuestion, learnerTopicOf, learnerSlotOf, learnerBeta, learnerPrior, learnerPosterior, learnerChoose, learnerPBest,
   learnerEnabled, learnerPick, learnerEngagementOf, learnerVisits, learnerRewardOf, learnerWeeklyUpdate, learnerWeeklyTick, learnerCreditPending, learnerDailyCredit, attentionShares, shareCap, attentionOrder, learnerChannelOrder, learnerChannelEngagement, LEARNER_CHANNELS, LEARNER_CHANNEL_OF,
