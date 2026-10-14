@@ -95,6 +95,17 @@ only. The daily reach ingest writes one `cf-rum-human` row per host (`entity_typ
 `visits`). Suite: `node --no-warnings qnfo-fleet-dashboard/kpi.test.mjs`. Chart colours are a validated pair per theme
 (light `#008A7B` / `#B5562A`, dark `#2AA595` / `#D06C3E`); the page has no script and every chart has a table.
 
+## Content tab (CONTENT-PIPELINE-1, v1.37.0, pillars research and reach)
+`GET /content` (page) and `GET /api/content` (JSON, `content-pipeline/v1`) are open to everyone and follow the Metrics tab's
+rules (60 s cache, sources named, `null` = not measured). They show every content item on one production line: the stage
+board (in flight, past SLA, oldest, state breakdown, enforcing worker), a property x stage matrix, flow balance (accepted into
+research vs published per day, wait by Little's law), the oldest items in flight, the gate and SLA catalogue, release-gate
+verdicts on papers.qnfo.org (`living-paper.papers`), q08.org signal-to-piece gates (`q08-signal`) and the latest transitions.
+Sources: `qnfo-audit.content_stages`, `v_content_pipeline`, `v_content_stage_summary`, `content_stage_events`
+(migrations/2026-10-14-03-content-pipeline.sql). reading.q08.org is on the personal plane and is not read. The cron writes
+metric `papers_live_failing_release_gate` hourly (`contentGateMetric`). Method: docs/CONTENT-PIPELINE.md. Suite:
+`node --no-warnings qnfo-fleet-dashboard/content-pipeline.test.mjs`.
+
 ## Work-with-me contacts (WORK-WITH-ME-METRIC-1, v1.17.2, pillar reach)
 - qnfo.org/work-with-me (qnfo-gateway WORK-WITH-ME-1) offers five ways to work with the owner; each button mails
   rowan.quni@qnfo.org with a subject that starts `[work-with-me:<offer>]` (`jpcub`, `agent-review`, `talk`, `research`, `role`,
