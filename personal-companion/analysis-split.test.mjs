@@ -31,7 +31,7 @@ ok(/Text after a line <!-- analysis --> is the writer's marked analysis: there, 
 ok(/If the DRAFT contains a line <!-- analysis -->/.test(P.FACTCHECK_PROMPT) && /never violations in that section/.test(P.FACTCHECK_PROMPT) && /The text before the line is checked by every rule below/.test(P.FACTCHECK_PROMPT), "the fact-check prompt carries the same split");
 const vp = src.slice(src.indexOf("async function verifyPiece(env, text, ground, writerModel, seedText, opts) {"), src.indexOf("// Everything a reader is shown"));
 ok(/var det = groundingProblems\(stripAnalysisMark\(text\), ground, opts\);/.test(vp) && /var fc = await factCheck\(env, reviewText\(text\), ground, writerModel, seedText\);/.test(vp), "names, years and figures are checked on the whole text; the reviewers read the review text");
-const cp = src.slice(src.indexOf("async function critiquePiece(env, piece, form, ground) {"), src.indexOf("__name(critiquePiece"));
+const cp = src.slice(src.indexOf("async function critiquePiece(env, piece, form, ground"), src.indexOf("__name(critiquePiece"));
 ok(/"LEDE: " \+ stripAnalysisMark\(piece\.lede \|\| ""\)/.test(cp), "the critic reads the lede without the line");
 // persistPiece stores, indexes and files the piece without the line
 const binds = [], puts = [];
