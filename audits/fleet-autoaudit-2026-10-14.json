@@ -1,15 +1,8 @@
 {
-  "audited_at": "2026-10-14 04:06:47",
+  "audited_at": "2026-10-14 04:35:21",
   "d1_write_failures": [],
   "d1_writes_ok": 115,
   "guard": {
-    "_drift_confirm": {
-      "first_pass": [
-        "qnfo-ai-search"
-      ],
-      "refreshed": true,
-      "second_pass": []
-    },
     "_guard_rc": 0,
     "ahead": [],
     "cf_script_list": true,
@@ -575,7 +568,7 @@
       },
       {
         "dir": "qnfo-cloud-ops",
-        "version": "1.28.2-bp-logging",
+        "version": "1.29.1-outreach-lookup",
         "worker": "qnfo-cloud-ops"
       },
       {
@@ -595,7 +588,7 @@
       },
       {
         "dir": "qnfo-email",
-        "version": "2.9.1-log-catches",
+        "version": "2.9.2-stall-sla",
         "worker": "qnfo-email"
       },
       {
@@ -605,7 +598,7 @@
       },
       {
         "dir": "qnfo-fleet-dashboard",
-        "version": "1.37.0-content-pipeline",
+        "version": "1.37.3-sla-120m",
         "worker": "qnfo-fleet-dashboard"
       },
       {
@@ -1136,9 +1129,9 @@
       "worker": "qnfo-citation-watch"
     },
     "qnfo-cloud-ops": {
-      "before": "1.28.2-bp-logging",
+      "before": "1.29.1-outreach-lookup",
       "http": 200,
-      "live": "1.28.2-bp-logging",
+      "live": "1.29.1-outreach-lookup",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-cloud-ops"
@@ -1186,9 +1179,9 @@
       "worker": "qnfo-deploy-guard"
     },
     "qnfo-email": {
-      "before": "2.9.1-log-catches",
+      "before": "2.9.2-stall-sla",
       "http": 200,
-      "live": "2.9.1-log-catches",
+      "live": "2.9.2-stall-sla",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-email"
@@ -1283,9 +1276,9 @@
       "worker": "qnfo-fleet-control"
     },
     "qnfo-fleet-dashboard": {
-      "before": "1.37.0-content-pipeline",
+      "before": "1.37.3-sla-120m",
       "http": 200,
-      "live": "1.37.0-content-pipeline",
+      "live": "1.37.3-sla-120m",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-fleet-dashboard"
