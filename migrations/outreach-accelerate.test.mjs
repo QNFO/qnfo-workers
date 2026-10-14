@@ -47,5 +47,11 @@ db.exec("INSERT INTO social_media_posts VALUES ('e', 'buffer-linkedin', 'publish
 ok(v("social_channels_silent_7d") === "0", "a LinkedIn post clears the silent channel on the next tick");
 db.exec(sql);
 ok(q("SELECT COUNT(*) n FROM analytics_metric_triggers")[0].n === 4 && q("SELECT COUNT(*) n FROM decision_log")[0].n === 1 && q("SELECT COUNT(*) n FROM metric_registry")[0].n === 5 && q("SELECT COUNT(*) n FROM human_actions")[0].n === 2, "idempotent");
+// OUTREACH-CLICKS-SCOPE-1: site and referral tags (q08, qnfo.org, chatgpt.com) are not outreach.
+db.exec(readFileSync(new URL("./2026-10-14-outreach-clicks-scope.sql", import.meta.url), "utf8"));
+const before = v("outreach_human_clicks_7d");
+db.exec("INSERT INTO reach_signals VALUES (date('now'), 'utm', 'q08', 'paper', 'p', 'clicks_human', 40), (date('now'), 'utm', 'bluesky', 'paper', 'p', 'clicks_human', 3); INSERT INTO fleet_tick (source) VALUES ('cron')");
+ok(before === "6" && v("outreach_human_clicks_7d") === "9", "only outreach channels count: q08 40 ignored, Bluesky 3 added", [before, v("outreach_human_clicks_7d")]);
+ok(q("SELECT COUNT(*) n FROM bak_20261014_outreach_clicks_scope")[0].n === 1, "the old trigger is kept in the backup");
 console.log(`outreach-accelerate migration: ${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);
