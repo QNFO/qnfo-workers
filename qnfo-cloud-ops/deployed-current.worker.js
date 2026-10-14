@@ -2164,8 +2164,8 @@ async function jobOutreachLookup(env) {
       console.error(JSON.stringify({ worker: WORKER_NAME, where: "jobOutreachLookup", id: r.id, error: String(e && e.message || e) }));
     }
   }
+  // runScheduledJob writes this run's job-run row (jr-outreach-lookup-<id>) with the status and notes below.
   const status = out.errors.length && !out.found && !out.retry && !out.terminal ? "error" : out.errors.length ? "partial" : "ok";
-  await recordEvent(env, "job-run", "jr-outreach-lookup-" + Date.now().toString(36), "outreach-lookup run: " + JSON.stringify(out), { job: "outreach-lookup", status });
   return { status, notes: out };
 }
 __name(jobOutreachLookup, "jobOutreachLookup");

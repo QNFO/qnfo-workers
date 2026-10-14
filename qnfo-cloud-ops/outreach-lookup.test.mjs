@@ -49,7 +49,7 @@ ok(row("miss1").status === "needs-email" && row("miss1").attempts === 1 && /atte
 ok(row("miss3").status === "skipped-no-email" && row("miss3").attempts === 3 && /terminal/.test(row("miss3").error), "the third failed lookup is terminal, as in jobOutreach");
 ok(row("hasmail").status === "needs-email" && row("pending").status === "pending" && !fetched.some((u) => /2410\.0000[45]/.test(u)), "rows with an address or another status are not looked up");
 ok(sends.length === 0, "the lookup never sends");
-ok(audit.prepare("SELECT COUNT(*) n FROM cloud_ops_events WHERE kind = 'job-run' AND job = 'outreach-lookup'").get().n === 1, "every run writes its job-run row");
+ok(audit.prepare("SELECT COUNT(*) n FROM cloud_ops_events").get().n === 0 && /"jr-" \+ job \+ "-"/.test(src), "the job writes no event of its own; runScheduledJob writes its jr-outreach-lookup-<id> row");
 const S = mod.__sched["outreach-lookup"];
 ok(S && S.days === "*" && S.times.length === 12, "scheduled 12 times a day, every day");
 const mins = S.times.map((t) => Number(t.slice(0, 2)) * 60 + Number(t.slice(3)));

@@ -4684,10 +4684,10 @@ var WATCHMAKER_OPS = [
   // posteriors, stop rule, outreach_reply_rate_30d and warm_conversations_30d) heartbeats ol-tick-<day>; 'degraded' (a
   // metric row refused, ops_config unreadable) still ran. The allocation step runs inside each weekday outreach run and
   // logs ol-alloc-<day>-*: an outreach run in the last 48h that sent or tried to (job-run not 'gated') with no
-  // allocation row that day counts as stuck. The learner's own job-run ids (jr-outreach-learner-*) are not outreach runs.
+  // allocation row that day counts as stuck. The learner's own job-run ids (jr-outreach-learner-*) and the lookup's (jr-outreach-lookup-*, OUTREACH-LOOKUP-120M-1) are not outreach runs.
   { key: "outreach-learner", what: "Cold-email learner: reply outcome per send, Beta posterior per segment, the under-1%-after-50-sends stop rule, outreach_reply_rate_30d and warm_conversations_30d daily; Thompson allocation of the shared cap in every weekday outreach run (OUTREACH-LEARNER-1, qnfo-cloud-ops 05:15Z)", runner: "cron:qnfo-cloud-ops", cadence_h: 24, first_due: "2026-10-06T12:00:00Z",
     sql: "SELECT MAX(ts) AS last FROM cloud_ops_events WHERE id >= 'ol-tick-' AND id < 'ol-tick.' AND status IN ('ok', 'degraded')",
-    stuck_sql: "SELECT COUNT(*) AS stuck FROM cloud_ops_events j WHERE j.id >= 'jr-outreach-' AND j.id < 'jr-outreach.' AND j.id NOT LIKE 'jr-outreach-learner-%' AND j.ts >= ?1 AND COALESCE(j.status, '') NOT IN ('gated', '') AND NOT EXISTS (SELECT 1 FROM cloud_ops_events a WHERE a.id >= 'ol-alloc-' || substr(j.ts, 1, 10) AND a.id < 'ol-alloc-' || substr(j.ts, 1, 10) || '.')",
+    stuck_sql: "SELECT COUNT(*) AS stuck FROM cloud_ops_events j WHERE j.id >= 'jr-outreach-' AND j.id < 'jr-outreach.' AND j.id NOT LIKE 'jr-outreach-learner-%' AND j.id NOT LIKE 'jr-outreach-lookup-%' AND j.ts >= ?1 AND COALESCE(j.status, '') NOT IN ('gated', '') AND NOT EXISTS (SELECT 1 FROM cloud_ops_events a WHERE a.id >= 'ol-alloc-' || substr(j.ts, 1, 10) AND a.id < 'ol-alloc-' || substr(j.ts, 1, 10) || '.')",
     stuck_note: "outreach runs in 48h with no logged learner allocation" },
   // IDEA-TOPIC-METRIC-1 (qnfo-cloud-ops 1.19.1, #1947): a daily companion of the 06:20 Amsterdam quality-score slot
   // recomputes idea_topic_concentration_30d; each run writes a job-run row jr-idea-topic-metric-<id> with its status.
