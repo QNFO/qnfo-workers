@@ -6,7 +6,7 @@
  * wholeFilePatch (sliced from qnfo-code-orchestrator/worker.js), so the parser and applier are tested against the real
  * producer. Proves: the open decision (a pushed branch becomes a PR opened with the fleet token only after the verify,
  * scope, provenance and integrity gates; an existing PR is adopted), the merge decision (every refusal and wait case, the
- * 3h refusal when no required check starts, and the one green path), the merge with merged_by, post-merge deploy and live
+ * 120-minute refusal when no required check starts (SLA-120M-7; it was 3h), and the one green path), the merge with merged_by, post-merge deploy and live
  * verification, the inverse-patch revert through an evolve candidate, the kill switch, the first-ok marker, provenance,
  * reconciliation of person merges and opens, one merge per tick, and that evAdvance still merges, deploys and verifies
  * its own candidates after the shared-helper refactor.
@@ -248,15 +248,16 @@ ok(act(task(), g({ checks: green("h1", ["gate", "mirror-guard", "comparator"]).c
 ok(act(task(), g({ pr: prJson({ mergeable_state: "behind" }) })).action === "merge", "a branch behind main is mergeable (no up-to-date rule on main)");
 const noChecks = g({ checks: [{ id: 9, name: "CodeQL", status: "completed", conclusion: "success" }], integrity: undefined });
 let nc = act(task(), noChecks);
-ok(nc.action === "wait" && nc.mark && nc.mark.nochecks_sha === "h1" && nc.mark.nochecks_since === new Date(NOW).toISOString(), "no required check on a new head: wait and start the 3h clock (no empty commit, no integrity fetch)", nc);
-ok(act(task({ nochecks_sha: "h1", nochecks_since: ago(2) }), noChecks).action === "wait" && !act(task({ nochecks_sha: "h1", nochecks_since: ago(2) }), noChecks).mark, "inside 3h: keep waiting, the clock is not reset");
+ok(nc.action === "wait" && nc.mark && nc.mark.nochecks_sha === "h1" && nc.mark.nochecks_since === new Date(NOW).toISOString(), "no required check on a new head: wait and start the 120-minute clock (no empty commit, no integrity fetch)", nc);
+ok(act(task({ nochecks_sha: "h1", nochecks_since: ago(1.5) }), noChecks).action === "wait" && !act(task({ nochecks_sha: "h1", nochecks_since: ago(1.5) }), noChecks).mark, "inside 120 minutes: keep waiting, the clock is not reset");
+ok(act(task({ nochecks_sha: "h1", nochecks_since: ago(2.2) }), noChecks).action === "reopen", "SLA-120M-7: past 120 minutes (not 3 h) the runner acts", act(task({ nochecks_sha: "h1", nochecks_since: ago(2.2) }), noChecks));
 nc = act(task({ nochecks_sha: "h1", nochecks_since: ago(4) }), noChecks);
-ok(nc.action === "reopen" && /within 3h/.test(nc.why) && nc.mark.nochecks_sha === "h1+reopened" && nc.mark.nochecks_since === new Date(NOW).toISOString(), "MERGE-NOCHECKS-REOPEN-1: no required check 3h after the runner first saw the head: close and reopen once with the fleet token (no model call)", nc);
+ok(nc.action === "reopen" && /within 120 minutes/.test(nc.why) && nc.mark.nochecks_sha === "h1+reopened" && nc.mark.nochecks_since === new Date(NOW).toISOString(), "MERGE-NOCHECKS-REOPEN-1: no required check 120 minutes after the runner first saw the head: close and reopen once with the fleet token (no model call)", nc);
 ok(act(task({ nochecks_sha: "h1+reopened", nochecks_since: ago(1) }), noChecks).action === "wait", "after the reopen the clock runs again");
 nc = act(task({ nochecks_sha: "h1+reopened", nochecks_since: ago(4) }), noChecks);
-ok(nc.action === "refuse" && /nor within 3h after the runner closed and reopened/.test(nc.why), "still no check 3h after the reopen: refuse, naming both waits", nc);
+ok(nc.action === "refuse" && /nor within 120 minutes after the runner closed and reopened/.test(nc.why), "still no check 120 minutes after the reopen: refuse, naming both waits", nc);
 nc = act(task({ nochecks_sha: "h1", nochecks_since: ago(1) }), g({ checks: [{ id: 9, name: "CodeQL", status: "completed", conclusion: "success" }], integrity: undefined, pr: prJson({ mergeable: false, mergeable_state: "dirty" }) }));
-ok(nc.action === "refuse" && nc.stale_check === true && /conflicts with main/.test(nc.why), "NOCHECKS-CONFLICT-1: no checks on a dirty PR is a stale base at once (PR 597), not a 3h wait", nc);
+ok(nc.action === "refuse" && nc.stale_check === true && /conflicts with main/.test(nc.why), "NOCHECKS-CONFLICT-1: no checks on a dirty PR is a stale base at once (PR 597), not a 120-minute wait", nc);
 ok(act(task({ nochecks_sha: "h0", nochecks_since: ago(4) }), noChecks).mark.nochecks_sha === "h1", "a new head restarts the clock");
 const merged = act(task(), g({ pr: prJson({ merged: true, state: "closed", merged_by: { login: "rwnq8" } }) }));
 ok(merged.action === "reconcile" && merged.status === "merged" && merged.by === "gh:rwnq8", "a PR a person merged is reconciled with who merged it");
@@ -426,7 +427,7 @@ ok(one("SELECT merge_state FROM code_tasks WHERE id = ?", T2).merge_state === "r
 // deploy never happened
 db.prepare("UPDATE code_tasks SET merge_state = 'deploying', merged_at = ?, version_to = '9.9.9-never' WHERE id = ?").run(ago(4), T2);
 await W.codeMergeTick(env, { now: NOW });
-ok(one("SELECT merge_state FROM code_tasks WHERE id = ?", T2).merge_state === "deploy-missing", "no fleet_deploys row 3h after the merge: deploy-missing (as evolve)");
+ok(one("SELECT merge_state FROM code_tasks WHERE id = ?", T2).merge_state === "deploy-missing", "no fleet_deploys row 120 minutes after the merge: deploy-missing (as evolve)");
 
 // ================================================================ 6. refusals, provenance, kill switch, person merges, budget
 freshDb(); freshGh();
@@ -533,7 +534,7 @@ db.exec("UPDATE evolve_candidates SET status = 'verified'");
 r = J(await W.codeMergeTick(env, { now: NOW }));
 ok(r.decided[0].action === "merge-failed" && gh.calls.includes("PUT /pulls/401/update-branch") && one("SELECT status FROM code_tasks WHERE id = ?", ID).status === "published" && r.heartbeat === "ok", "a 405 merge asks GitHub to update the branch (evolve's path) and keeps the task waiting");
 
-// a legacy PR opened with the Actions GITHUB_TOKEN: its checks never start, so after 3h it is refused (no empty commit)
+// a legacy PR opened with the Actions GITHUB_TOKEN: its checks never start, so after 120 minutes (SLA-120M-7; it was 3h) it is refused (no empty commit)
 freshDb(); freshGh();
 seedTask({ goal: "direct task" });
 seedWorkerPr(401, BRANCH, "h1");
@@ -545,7 +546,7 @@ ok(r.decided[0].action === "reopen" && row.status === "published" && row.nocheck
 ok(one("SELECT COUNT(*) n FROM cloud_ops_events WHERE kind = 'code-merge.reopened'").n === 1, "the reopen writes one cloud_ops_events row");
 r = J(await W.codeMergeTick(env, { now: NOW + 7 * 36e5 }));
 row = one("SELECT * FROM code_tasks WHERE id = ?", ID);
-ok(r.decided[0].action === "refuse" && row.status === "failed" && /nor within 3h after the runner closed and reopened/.test(row.last_error), "still no check 3.5h after the reopen: refused with the reason and handed to the fleet", row);
+ok(r.decided[0].action === "refuse" && row.status === "failed" && /nor within 120 minutes after the runner closed and reopened/.test(row.last_error), "still no check 3.5h after the reopen: refused with the reason and handed to the fleet", row);
 ok(gh.comments.length === 1 && /did not merge/.test(gh.comments[0].body) && one("SELECT COUNT(*) n FROM agent_issues WHERE title LIKE 'CODE-MERGE-REFUSED-1: code task ct_abcdefghijklmn%' AND status = 'open'").n === 1, "a direct task's refusal files one CODE-MERGE-REFUSED-1 fleet issue and explains it on the PR");
 await W.codeMergeTick(env, { now: NOW + 8 * 36e5 });
 ok(one("SELECT COUNT(*) n FROM agent_issues WHERE title LIKE 'CODE-MERGE-REFUSED-1:%'").n === 1, "the fleet issue is not filed twice");

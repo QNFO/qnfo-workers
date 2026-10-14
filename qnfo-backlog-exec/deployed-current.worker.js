@@ -2,7 +2,7 @@ var __defProp = Object.defineProperty;
 var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
 
 // worker.js
-var VERSION = "2.0.8-bp-logging"; // 2.0.8 WORKERS-BP-LOGGING-qnfo-lifecycle-1 (2026-10-14, agent_issues 2536): the swallowed catches log as a structured console.error; host parity with qnfo-lifecycle 1.11.3. 2.0.7: BACKLOG-LATEST-PASS-1.
+var VERSION = "2.0.9-sla-120m"; // 2.0.9 SLA-120M-7 (2026-10-14): the advisor-noise sweep closes a snapshot after 120 minutes, not 3 h, and logs its caught error; host parity with qnfo-lifecycle 1.11.4. // 2.0.8 WORKERS-BP-LOGGING-qnfo-lifecycle-1 (2026-10-14, agent_issues 2536): the swallowed catches log as a structured console.error; host parity with qnfo-lifecycle 1.11.3. 2.0.7: BACKLOG-LATEST-PASS-1.
 // PRIORITY-QUEUE-1 (2026-10-03, owner directive): the sweep ranks critical first. The old CASE ranked high, medium, else,
 // so critical issues sorted with low. Within a priority the least recently touched row still goes first (rotation).
 var WORKER = "qnfo-backlog-exec";
@@ -261,6 +261,9 @@ async function probeHealth(name) {
   return { ok: false, host: null, status: 0, transport: "worker-same-zone" };
 }
 __name(probeHealth, "probeHealth");
+// SLA-120M-7 (1.11.4): an OPEN-ISSUES advisor snapshot is superseded and closed after 120 minutes, not 3 h (owner directive 2026-10-14:
+// no SLA exceeds 120 minutes).
+var ADVISOR_NOISE_MAX_MIN = 120;
 async function sweepAdvisorNoise(env) {
   let closed = 0;
   const now = nowEpoch();
@@ -269,13 +272,14 @@ async function sweepAdvisorNoise(env) {
     const rows = noise.results || [];
     for (const r of rows) {
       const ageMs = createdAgeMs(r.created_at, now);
-      if (ageMs > 3 * 3600 * 1e3) {
+      if (ageMs > ADVISOR_NOISE_MAX_MIN * 6e4) {
         await closeIssue(env, r.id, now);
         closed++;
-        await recordEvent(env, "job-run", "backlog-exec closed advisor-noise snapshot " + r.id + " (" + String(r.title || "").slice(0, 40) + "): superseded, age>3h", { id: r.id, action: "closed", reason: "advisor-noise sweep v1.2.6" }, WORKER, "ok");
+        await recordEvent(env, "job-run", "backlog-exec closed advisor-noise snapshot " + r.id + " (" + String(r.title || "").slice(0, 40) + "): superseded, age>" + ADVISOR_NOISE_MAX_MIN + "min", { id: r.id, action: "closed", reason: "advisor-noise sweep v1.2.6" }, WORKER, "ok");
       }
     }
   } catch (e) {
+    console.error(JSON.stringify({ worker: "qnfo-lifecycle", where: "sweepAdvisorNoise", error: String(e && e.message || e) }));
   }
   return closed;
 }
