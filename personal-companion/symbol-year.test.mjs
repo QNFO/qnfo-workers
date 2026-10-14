@@ -26,6 +26,12 @@ ok(p.length === 1 && /figure not in the source: 71/.test(p[0]), "a bare 71 that 
 p = gp("The poll tax was abolished in 1784-85.");
 ok(p.length === 1 && /85/.test(p[0]), "a range end missing from the source is flagged", p);
 
+// CENTURY-ORDINAL-1 (1.23.4)
+p = gp("The palace changed hands in the early 21st-century and again in the mid\u201120th\u2011century.");
+ok(p.length === 0, "a century ordinal is no figure", p);
+p = gp("The palace had 21 rooms.");
+ok(p.length === 1 && /figure not in the source: 21/.test(p[0]), "a plain 21 is still a figure", p);
+
 // SYMBOL-REPAIR-1
 const grounded = [
   "Herz Cerfbeer of Medelsheim was a French Jewish philanthropist.",
