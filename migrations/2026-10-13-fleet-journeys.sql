@@ -22,7 +22,6 @@
 -- APPLY-BY: ci
 -- DB: qnfo-audit
 -- Rollback: DROP VIEW IF EXISTS v_journey_state; DROP TABLE IF EXISTS journey_runs; DELETE FROM analytics_metric_triggers WHERE metric_key = 'journey_tick_age_min'; DELETE FROM remediation_contracts WHERE class IN ('fm-registry-version-sweep-regex', 'fm-fleet-census-blind', 'fm-ops-schema-alter-noise', 'fm-cf-issues-unconsumed', 'fm-outreach-chain-enum', 'fm-synthetic-ask-pollution'); DELETE FROM failure_modes WHERE fm_key IN ('registry-version-sweep-regex', 'fleet-census-blind', 'ops-schema-alter-noise', 'cf-issues-unconsumed', 'outreach-chain-enum', 'synthetic-ask-pollution'); DELETE FROM metric_registry WHERE metric IN ('fleet_journeys_failing', 'journey_tick_age_min'); DELETE FROM capability_ledger WHERE capability = 'run end-to-end multi-worker journeys and self-file each failing one'
--- BACKUP: journey_runs
 
 CREATE TABLE IF NOT EXISTS journey_runs (
   id INTEGER PRIMARY KEY AUTOINCREMENT,

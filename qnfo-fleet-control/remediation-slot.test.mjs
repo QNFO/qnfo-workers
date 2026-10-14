@@ -27,7 +27,7 @@ check(/if \(cron === "\*\/10 \* \* \* \*"\)/.test(twenty), "the slot is the 10-m
 // CRON-DISPATCH-ELIMINATION-1: a cron that is not a declared slow schedule (a stale */20 trigger) maps to the fast slot
 check(/const cron = \["0 \* \* \* \*", "0 3 \* \* \*", "0 4 1 \* \*", "30 3 \* \* 1"\]\.indexOf\(event\.cron\) < 0 \? "\*\/10 \* \* \* \*" : event\.cron;/.test(sched), "an undeclared cron is the fast slot");
 check(/\n\s+ctx\.waitUntil\(remediationContractsTick\(env, \{ budgetMs: 25000 \}\)/.test(twenty), "the remediation tick runs in every 10-minute slot (not behind onTwentyGrid)");
-check(/\n\s+ctx\.waitUntil\(codeMergeTick\(env, mergeSlot \? \{\} : \{ openOnly: true \}\)/.test(twenty) && /var mergeSlot = slotMin >= 30 && slotMin < 40;/.test(twenty), "code-loop merges run at minute 30 as well as on the hourly tick");
+check(/\n\s+ctx\.waitUntil\(codeMergeTick\(env, mergeSlot \? \{\} : \{ openOnly: true \}\)/.test(twenty) && /var mergeSlot = true;/.test(twenty), "code-loop merges run on every 10-minute tick (PR-LANE-FAST-1; minute 30 and hourly before)");
 check(/\n\s+ctx\.waitUntil\(branchHygieneTick\(env, \{ laneOnly: true \}\)/.test(twenty), "the stale-PR lane runs in every 10-minute slot");
 const hourly = sched.slice(sched.indexOf('if (cron === "0 4 1 * *" || cron === "30 3 * * 1")'), sched.indexOf("return deployDefault.scheduled(event, env, ctx);"));
 check(/remediationContractsTick\(env, \{ budgetMs: 25000 \}\)/.test(twenty), "the 10-minute cron runs the remediation tick with a 25 s budget");
