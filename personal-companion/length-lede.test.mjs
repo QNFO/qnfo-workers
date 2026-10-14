@@ -44,7 +44,7 @@ ok(V.pieceWords({ lede: words(100, "lede"), body_md: words(3150) }) === 3250, "a
 // the extend feedback reads the same number the validator wrote
 const fb = V.expandFeedback(["notes length " + nbWords], "notes", piece(lede));
 ok(typeof fb === "string" && fb.indexOf(nbWords + " words against a floor of " + floor) >= 0, "the extend path quotes the measured length", fb && fb.slice(0, 120));
-ok(/LENGTH-LEDE-1/.test(src.slice(0, 2000)), "the VERSION comment names the change");
+ok(/LENGTH-LEDE-1/.test(src.split("\n").find((l) => l.startsWith("var VERSION")) || ""), "the VERSION comment names the change");
 const ver = (src.match(/var VERSION = "(\d+)\.(\d+)\.(\d+)/) || []).slice(1).map(Number);
 ok(ver.length === 3 && (ver[0] > 1 || (ver[0] === 1 && (ver[1] > 22 || (ver[1] === 22 && ver[2] >= 7)))), "VERSION is at least 1.22.7", ver);
 console.log(pass + " passed, " + fail + " failed");
