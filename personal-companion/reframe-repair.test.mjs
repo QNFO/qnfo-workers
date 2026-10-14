@@ -24,11 +24,11 @@ ok(/keep that line where it is; if it has none, add none/.test(P), "the analysis
 ok(/a string of hedges is worse than the original/.test(P), "the editor keeps the force of the argument");
 
 // the editor's models and sampling
-ok(Array.isArray(V.CF_FALLBACK.editor) && /gpt-oss/.test(V.CF_FALLBACK.editor[0]), "the editor is the writer's family first", V.CF_FALLBACK.editor);
+ok(Array.isArray(V.CF_FALLBACK.editor) && V.CF_FALLBACK.editor[0] === V.CF_FALLBACK.essay[0] && V.CF_FALLBACK_GPT_OSS.editor[0] === V.CF_FALLBACK_GPT_OSS.essay[0], "the editor is the writer's family first, in either writer order", V.CF_FALLBACK.editor);
 ok(V.CF_FALLBACK.editor.every((m) => !/kimi/.test(m)), "the editor never uses the critic's first family (moonshot)");
 const cw = src.slice(src.indexOf("async function callWorkersAI("), src.indexOf("async function callModel("));
 ok(/temperature: role === "critic" \|\| role === "editor" \? CRITIC_TEMPERATURE : WRITER_TEMPERATURE_FB/.test(cw), "the editor samples at the judge's temperature");
-ok(/role === "critic" \|\| role === "editor" \? factCheckExtra\(m\) : \{\}/.test(cw), "the editor takes the measured reasoning switch");
+ok(/var quiet = role === "critic" \|\| role === "editor" \|\| \/kimi\|deepseek\/i\.test\(m\);/.test(cw) && /quiet \? factCheckExtra\(m\) : \{\}/.test(cw), "the editor takes the measured reasoning switch");
 
 // parseDraftMd
 const pd = V.parseDraftMd("```markdown\n# A title\n\nThe lede names Pamela Gorman.\n\n## One\n\nBody text.\n```", "fallback");
@@ -55,8 +55,8 @@ ok(r.piece && r.piece.body_md.indexOf(event) < 0, "the invented event is gone");
 ok(r.piece && r.piece.lede === lede && r.piece.title === piece.title && r.piece.objection === piece.objection, "title, lede and objection are kept");
 ok(r.piece && /<!-- analysis -->/.test(r.piece.body_md), "the analysis line is kept");
 ok(/ -> /.test(r.why) && /2 flagged/.test(r.why), "the note gives the lengths and the flagged count", r.why);
-ok(calls.length === 1 && /gpt-oss/.test(calls[0].model), "one editor call, writer family first", calls.map((c) => c.model));
-ok(calls[0].input.temperature === V.CRITIC_TEMPERATURE && calls[0].input.reasoning && calls[0].input.reasoning.effort === "low", "the call samples at the judge's temperature with low reasoning", calls[0].input.temperature);
+ok(calls.length === 1 && calls[0].model === V.WRITER_LEAD, "one editor call, writer family first (deepseek-v4-pro since WRITER-FAMILY-1)", calls.map((c) => c.model));
+ok(calls[0].input.temperature === V.CRITIC_TEMPERATURE && calls[0].input.chat_template_kwargs && calls[0].input.chat_template_kwargs.thinking === false, "the call samples at the judge's temperature with reasoning off", calls[0].input.temperature);
 const um = calls[0].input.messages[1].content;
 ok(/^SOURCE MATERIAL:/.test(um) && um.indexOf(ground.slice(0, 60)) > 0, "the editor reads the source material");
 ok(um.indexOf("- " + motive.replace(/\.$/, "")) >= 0 && um.indexOf("- " + event.replace(/\.$/, "")) >= 0, "the critic's quotations are listed as FLAGGED", um.slice(um.indexOf("FLAGGED"), um.indexOf("FLAGGED") + 300));

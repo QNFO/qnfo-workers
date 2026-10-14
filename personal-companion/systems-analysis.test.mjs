@@ -49,7 +49,7 @@ ok(/never state an inferred arrangement, funding, motive or behaviour as a repor
   const seen2 = [];
   const env2 = { AI: { run: async (m, input) => { seen2.push({ m, input }); return { response: "y".repeat(400) }; } } };
   await mod.callModel(env2, [{ role: "user", content: "x" }], 4000, 30000, "deepseek-chat", "writer");
-  ok(seen2.length === 1 && !seen2[0].input.chat_template_kwargs && !seen2[0].input.reasoning, "a writer call carries no reasoning switch", seen2.map((x) => x.m));
+  ok(seen2.length === 1 && /deepseek-v4-pro/.test(seen2[0].m) && seen2[0].input.chat_template_kwargs && seen2[0].input.chat_template_kwargs.thinking === false && !seen2[0].input.reasoning, "the writer (deepseek-v4-pro, WRITER-FAMILY-1) runs with its reasoning off", seen2.map((x) => [x.m, x.input.chat_template_kwargs]));
   const src2 = src.slice(src.indexOf("var CF_FALLBACK = {"), src.indexOf("var FB_MIN_TOKENS"));
   ok(/critic: \["@cf\/moonshotai\/kimi-k2\.6", "@cf\/deepseek-ai\/deepseek-v4-pro-0813", "@cf\/openai\/gpt-oss-120b", "@cf\/zai-org\/glm-5\.3"\]/.test(src2), "deepseek-v4-pro is second in the critic chain, glm last");
 }
