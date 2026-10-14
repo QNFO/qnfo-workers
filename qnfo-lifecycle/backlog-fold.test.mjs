@@ -18,7 +18,7 @@ const ok = (c, m, x) => { if (c) pass++; else { fail++; console.log("FAIL " + m 
 {
   const missing = guest.split("\n").filter((l) => l.trim() && !src.includes(l.trim()));
   ok(missing.every((l) => /^var VERSION = |^export \{|^  worker_default as default$|^\/\/# sourceMappingURL/.test(l)) && missing.some((l) => l.startsWith("var VERSION = ")), "every backlog-exec line is in the host except its VERSION line and its export", missing.map((l) => l.slice(0, 60)));
-  ok(versionAtLeast(mod.__hv, "1.8.0") && mod.__mv === "2.0.6-folded" && (src.match(/var VERSION = "/g) || []).length === 1, "host 1.8.0+, member 2.0.6-folded, one quoted VERSION constant", [mod.__hv, mod.__mv]);
+  ok(versionAtLeast(mod.__hv, "1.8.0") && mod.__mv === "2.0.7-folded" && (src.match(/var VERSION = "/g) || []).length === 1, "host 1.8.0+, member 2.0.7-folded, one quoted VERSION constant", [mod.__hv, mod.__mv]);
 }
 
 {
@@ -51,7 +51,7 @@ globalThis.fetch = async () => new Response("{}", { status: 200 });
   const pub = "https://qnfo-lifecycle.q08.workers.dev";
   const h = await mod.default.fetch(new Request(pub + "/backlog/health"), { QNFO_AUDIT: mkDb() }, {});
   const hj = await h.json();
-  ok(h.status === 200 && hj.worker === "qnfo-backlog-exec" && hj.version === "2.0.6-folded", "GET /backlog/health answers as the member", hj);
+  ok(h.status === 200 && hj.worker === "qnfo-backlog-exec" && hj.version === "2.0.7-folded", "GET /backlog/health answers as the member", hj);
   const props = { caller: "qnfo-ops", member: "qnfo-backlog-exec" };
   const viaBinding = await mod.default.fetch(new Request("https://backlog.internal/health"), { QNFO_AUDIT: mkDb() }, { props });
   ok((await viaBinding.json()).worker === "qnfo-backlog-exec", "the qnfo-ops BACKLOG binding (member props) reaches the member's /health");
