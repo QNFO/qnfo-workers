@@ -1,8 +1,15 @@
 {
-  "audited_at": "2026-10-14 00:04:24",
+  "audited_at": "2026-10-14 01:04:43",
   "d1_write_failures": [],
   "d1_writes_ok": 115,
   "guard": {
+    "_drift_confirm": {
+      "first_pass": [
+        "qnfo-social"
+      ],
+      "refreshed": true,
+      "second_pass": []
+    },
     "_guard_rc": 0,
     "ahead": [],
     "cf_script_list": true,
@@ -543,7 +550,7 @@
       },
       {
         "dir": "personal-companion",
-        "version": "1.23.3-symbol-year",
+        "version": "1.23.4-reframe-remark",
         "worker": "personal-companion"
       },
       {
@@ -563,7 +570,7 @@
       },
       {
         "dir": "qnfo-ai-search",
-        "version": "2.6.0-cron-heartbeat",
+        "version": "2.6.1-codeagent",
         "worker": "qnfo-ai-search"
       },
       {
@@ -653,7 +660,7 @@
       },
       {
         "dir": "qnfo-social",
-        "version": "0.14.1-log-catches",
+        "version": "0.14.2-codeagent",
         "worker": "qnfo-social"
       },
       {
@@ -668,7 +675,7 @@
       },
       {
         "dir": "radar-hub",
-        "version": "1.4.1-cron-heartbeat",
+        "version": "1.4.2-families-window",
         "worker": "radar-hub"
       }
     ]
@@ -900,9 +907,9 @@
       "worker": "personal-api"
     },
     "personal-companion": {
-      "before": "1.23.3-symbol-year",
+      "before": "1.23.4-reframe-remark",
       "http": 200,
-      "live": "1.23.3-symbol-year",
+      "live": "1.23.4-reframe-remark",
       "match": 1,
       "note": "SYNC",
       "worker": "personal-companion"
@@ -995,9 +1002,9 @@
       "worker": "qnfo-ai-calibration"
     },
     "qnfo-ai-search": {
-      "before": "2.6.0-cron-heartbeat",
+      "before": "2.6.1-codeagent",
       "http": 200,
-      "live": "2.6.0-cron-heartbeat",
+      "live": "2.6.1-codeagent",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-ai-search"
@@ -1562,9 +1569,9 @@
       "worker": "qnfo-skills-discovery"
     },
     "qnfo-social": {
-      "before": "0.14.1-log-catches",
+      "before": "0.14.2-codeagent",
       "http": 200,
-      "live": "0.14.1-log-catches",
+      "live": "0.14.2-codeagent",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-social"
@@ -1621,9 +1628,9 @@
       "worker": "qnfo-web-unified"
     },
     "radar-hub": {
-      "before": "1.4.1-cron-heartbeat",
+      "before": "1.4.2-families-window",
       "http": 200,
-      "live": "1.4.1-cron-heartbeat",
+      "live": "1.4.2-families-window",
       "match": 1,
       "note": "SYNC",
       "worker": "radar-hub"
