@@ -13,7 +13,13 @@ const ok = (c, m, x) => { if (c) pass++; else { fail++; console.log("FAIL " + m 
 {
   const lines = guest.split("\n");
   const body = lines.slice(lines.findIndex((l) => l.startsWith('var VERSION = "')), lines.length).filter((l) => l.trim() && l.trim() !== "export default {");
-  const missing = body.filter((l) => !src.includes(l.trim()));
+  // WORKERS-BP-LOGGING-qnfo-observability-1 (agent_issues 2537): the host logs the two alert-write failures the guest swallows;
+  // such a guest line counts as carried when the host holds it unchanged up to its empty catch, which the host fills with a log.
+  const EMPTY = "catch (e2) {}";
+  const logged = (l) => { const t = l.trim(), i = t.indexOf(EMPTY); return i > 0 && t.endsWith(EMPTY) && src.includes(t.slice(0, i) + 'catch (e2) { console.error(JSON.stringify({ worker: "qnfo-observability"'); };
+  const relogged = body.filter((l) => !src.includes(l.trim()) && logged(l));
+  const missing = body.filter((l) => !src.includes(l.trim()) && !logged(l));
+  ok(relogged.length === 2 && relogged.every((l) => l.includes("INSERT INTO alerts")), "the guest's two empty alert-write catches log in the host, the rest of each line unchanged (WORKERS-BP-LOGGING)", relogged.map((l) => l.slice(0, 60)));
   ok(missing.length === 2 && missing.some((l) => l.startsWith("var VERSION = ")) && missing.some((l) => /try \{ return json\(await run\(env, false, wi\.weights\)\); \}/.test(l)), "every scorer line is in the host except its VERSION line, the export keyword and the /preview catch (FOLD-HYGIENE-1)", missing.map((l) => l.slice(0, 60)));
   // Minimums, not exact pins (CLAUDE.md: an exact VERSION pin breaks on the next bump).
   const verAtLeast = (v, min) => { const a = String(v).split("-")[0].split(".").map(Number), b = min.split(".").map(Number); for (let i = 0; i < 3; i++) { if ((a[i] || 0) !== b[i]) return (a[i] || 0) > b[i]; } return true; };
