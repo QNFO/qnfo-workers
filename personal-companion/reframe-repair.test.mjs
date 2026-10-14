@@ -69,7 +69,18 @@ ok(!r.piece && /^edit length \d+ of \d+ words$/.test(r.why), "an edit that cuts 
 r = await V.reframePiece(mkEnv("# " + piece.title + "\n\n" + lede + "\n\n" + editedBody + " " + sec1 + " " + sec1, []), piece, ground, "x", [motive]);
 ok(!r.piece && /^edit length/.test(r.why), "an edit that grows the draft beyond the band is refused", r.why);
 r = await V.reframePiece(mkEnv("# " + piece.title + "\n\n" + lede + "\n\n" + editedBody.replace("<!-- analysis -->\n\n", ""), []), piece, ground, "x", [motive]);
-ok(!r.piece && r.why === "edit dropped the analysis line", "an edit that drops the analysis line is refused", r.why);
+ok(!r.piece && r.why === "edit dropped the analysis line and no paragraph holds the rails", "an edit that drops the analysis line is refused when no paragraph can take it again", r.why);
+// REFRAME-REMARK-1: a dropped line is placed again where the rails hold
+{
+  const factsR = "The club was founded in Araraquara in 1950 and plays in the Campeonato Paulista. It reached the final of the state cup. ".repeat(4).trim();
+  const reasonR = "The incentive for a regional club is that a cup run pays more than a league place, because the gate money comes at once. ";
+  const ledeR = "Ferroviaria is a football club in Araraquara, according to the Wikipedia article on it.";
+  const bodyR = "## One\n\n" + factsR + "\n\n" + factsR + "\n\n<!-- analysis -->\n\n## Two\n\n" + reasonR.repeat(3).trim();
+  const pR = { title: "Ferroviaria", subtitle: "", lede: ledeR, body_md: bodyR, objection: "x" };
+  const editedR = "# Ferroviaria\n\n" + ledeR + "\n\n" + bodyR.replace("<!-- analysis -->\n\n", "").replace("The incentive for a regional club", "Because the gate money comes at once, the incentive for a regional club");
+  const rr = await V.reframePiece(mkEnv(editedR, []), pR, "Araraquara Campeonato Paulista 1950", "x", ["The incentive for a regional club is that a cup run pays more than a league place"]);
+  ok(rr.piece && V.analysisSplitOk(V.splitText(rr.piece)) && /analysis line placed again/.test(rr.why), "an edit that dropped the line gets it placed again where the rails hold (REFRAME-REMARK-1)", rr.why);
+}
 r = await V.reframePiece(mkEnv("# " + piece.title + "\n\n" + lede + "\n\n" + editedBody.replace("## The system\n\n", ""), []), piece, ground, "x", [motive]);
 ok(!r.piece && /^edit changed the headings/.test(r.why), "an edit that changes the headings is refused", r.why);
 const unmarked = Object.assign({}, piece, { body_md: body.replace("<!-- analysis -->\n\n", "") });
@@ -82,7 +93,7 @@ ok(!r.piece && /^editor unavailable/.test(r.why) && /503/.test(r.why), "an unava
 const gen = src.slice(src.indexOf("var floorForForm = form === \"notes\" ? ACCEPT_FLOOR_NOTES : ACCEPT_FLOOR_ESSAY;"), src.indexOf("// the fact-check: two reviewers from other model families"));
 const iR = gen.indexOf("var rf = await reframePiece(env, piece, ground, q.why, q.invented);"), iP = gen.indexOf("for (var cround = 1; cround <= CRITIC_PRUNE_ROUNDS");
 ok(iR > 0 && iP > iR, "the edit runs before the critic prune");
-ok(/if \(worst < floorForForm && \(worstName === "grounding" \|\| worstName === "argument"\) && Date\.now\(\) - t0 < REFRAME_START_BEFORE_MS\)/.test(gen), "only a grounding or argument rejection with time left starts the edit");
+ok(/if \(worst < floorForForm && \(worstName === "grounding" \|\| worstName === "argument" \|\| worstName === "systems" \|\| criticQuotes\(q\.why, pieceText\(piece\), q\.invented\)\.length > 0\) && Date\.now\(\) - t0 < REFRAME_START_BEFORE_MS\)/.test(gen), "a grounding, argument or systems rejection, or any rejection quoting invented text, with time left starts the edit (REFRAME-TRIGGER-2)");
 ok(/var rfv = rf\.piece \? validatePiece\(rf\.piece, form, ground, repairOpts\) : null;/.test(gen), "the edit is validated like any repaired draft (names, years, figures, floors, lede)");
 ok(/var critR = await critiquePiece\(env, rf\.piece, form, ground\);/.test(gen), "the critic reads the edited draft");
 ok(/if \(scR && !scR\.missing && \(scR\.worst >= floorForForm \|\| \(scR\.worstName === "grounding" && scR\.worst >= worst\)\)\) \{ piece = rf\.piece; v = rfv; q = critR;/.test(gen), "the edit is kept only when the critic passes it or grounding is still its weakest score and no lower, so a failing edit never skips the prune");

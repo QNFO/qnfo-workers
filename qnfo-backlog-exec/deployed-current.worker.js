@@ -2,11 +2,12 @@ var __defProp = Object.defineProperty;
 var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
 
 // worker.js
-var VERSION = "2.0.6-doi-scrub";
+var VERSION = "2.0.7-latest-pass";
 // PRIORITY-QUEUE-1 (2026-10-03, owner directive): the sweep ranks critical first. The old CASE ranked high, medium, else,
 // so critical issues sorted with low. Within a priority the least recently touched row still goes first (rotation).
 var WORKER = "qnfo-backlog-exec";
 var MAX_ROW = 40;
+var LATEST_PASS_MAX_H = 3;
 var PROBE_TIMEOUT = 8e3;
 async function json(data, status) {
   return new Response(JSON.stringify(data), { status: status || 200, headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" } });
@@ -513,18 +514,25 @@ async function run(env) {
     // could never close. The "defect absence" predicate is a fresh
     // remediation_verifications row with pass=1: a re-probe that verified the
     // fix. Close those here (RE-FALSIFICATION-CLOSED-GATE-1).
+    // BACKLOG-LATEST-PASS-1 (2.0.7, 2026-10-14; agent_issues 2222 closed at 02:01 UTC while its latest verification, 01:44, failed
+    // "pending: companion_hours_since_last_piece reads 93.1"): the predicate took ANY pass in 7 days, so a pass from 2026-10-09 closed a
+    // defect that was still live (also 2086, 2050, 1947 in the week to 2026-10-14). It now reads only the issue's LATEST verification,
+    // which must pass and be at most LATEST_PASS_MAX_H old (INTEGRITY-GUARDS-1: a fix whose latest verification fails does not count);
+    // the close evidence names that row.
     {
       let vr = null;
       try {
         vr = await env.AUDIT.prepare(
-          "SELECT probe_url, transport, observed FROM remediation_verifications WHERE issue_id=?1 AND pass=1 AND verified_at >= datetime('now','-7 days') ORDER BY id DESC LIMIT 1"
+          "SELECT id, probe_url, transport, observed, pass, verified_at FROM remediation_verifications WHERE issue_id=?1 ORDER BY id DESC LIMIT 1"
         ).bind(row.id).first();
-      } catch (e) {}
-      if (vr) {
-        await closeIssue(env, row.id, now);
+      } catch (e) { console.error(JSON.stringify({ worker: WORKER, where: "run:latest-pass", error: String(e && e.message || e).slice(0, 300) })); }
+      const vrMs = vr ? Date.parse(String(vr.verified_at || "").replace(" ", "T") + (/[zZ]$/.test(String(vr.verified_at || "")) ? "" : "Z")) : NaN;
+      if (vr && Number(vr.pass) === 1 && Number.isFinite(vrMs) && now - vrMs <= LATEST_PASS_MAX_H * 36e5) {
+        const evidence = "BACKLOG-LATEST-PASS-1 latest verification #" + vr.id + " pass at " + vr.verified_at + " via " + (vr.transport || "?") + ": " + String(vr.observed || "").slice(0, 160);
+        await closeIssue(env, row.id, now, null, evidence);
         closed++;
-        detail.push({ id: row.id, action: "closed", note: "verified-remediation closure (re-probe pass): " + (vr.probe_url || "probe") + " via " + (vr.transport || "?") });
-        await recordEvent(env, "job-run", "backlog-exec closed issue " + row.id + " (verified remediation pass=1)", { id: row.id, action: "closed", reason: "verified-remediation-closure v1.8.0", probe: vr.probe_url, transport: vr.transport }, WORKER, "ok");
+        detail.push({ id: row.id, action: "closed", note: evidence.slice(0, 300) });
+        await recordEvent(env, "job-run", "backlog-exec closed issue " + row.id + " (latest verification passed)", { id: row.id, action: "closed", reason: "BACKLOG-LATEST-PASS-1", verification: vr.id, probe: vr.probe_url, transport: vr.transport }, WORKER, "ok");
         continue;
       }
     }

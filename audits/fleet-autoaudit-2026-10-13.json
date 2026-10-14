@@ -1,5 +1,5 @@
 {
-  "audited_at": "2026-10-13 22:26:30",
+  "audited_at": "2026-10-13 23:13:51",
   "d1_write_failures": [],
   "d1_writes_ok": 115,
   "guard": {
@@ -543,7 +543,7 @@
       },
       {
         "dir": "personal-companion",
-        "version": "1.23.1-analysis-remark",
+        "version": "1.23.3-symbol-year",
         "worker": "personal-companion"
       },
       {
@@ -593,7 +593,7 @@
       },
       {
         "dir": "qnfo-fleet-control",
-        "version": "0.26.3-log-catches",
+        "version": "0.26.5-holding-open-rearm",
         "worker": "qnfo-fleet-control"
       },
       {
@@ -638,7 +638,7 @@
       },
       {
         "dir": "qnfo-ops",
-        "version": "2.47.2-log-catches",
+        "version": "2.48.0-placement-apply",
         "worker": "qnfo-ops"
       },
       {
@@ -900,9 +900,9 @@
       "worker": "personal-api"
     },
     "personal-companion": {
-      "before": "1.23.1-analysis-remark",
+      "before": "1.23.3-symbol-year",
       "http": 200,
-      "live": "1.23.1-analysis-remark",
+      "live": "1.23.3-symbol-year",
       "match": 1,
       "note": "SYNC",
       "worker": "personal-companion"
@@ -1268,9 +1268,9 @@
       "worker": "qnfo-fleet-calibrator"
     },
     "qnfo-fleet-control": {
-      "before": "0.26.3-log-catches",
+      "before": "0.26.5-holding-open-rearm",
       "http": 200,
-      "live": "0.26.3-log-catches",
+      "live": "0.26.5-holding-open-rearm",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-fleet-control"
@@ -1412,9 +1412,9 @@
       "worker": "qnfo-observability"
     },
     "qnfo-ops": {
-      "before": "2.47.2-log-catches",
+      "before": "2.48.0-placement-apply",
       "http": 200,
-      "live": "2.47.2-log-catches",
+      "live": "2.48.0-placement-apply",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-ops"

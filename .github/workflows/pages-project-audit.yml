@@ -20,7 +20,11 @@ on:
         description: "Pages project name"
         required: true
         default: "qnfo-publications"
+  # PAGES-AUDIT-MAIN-ONLY-1 (2026-10-14, issue 2550): only pushes to main run the inventory. A push to any other branch
+  # (Dependabot's actions bumps touch this file) gets no repository secrets, so the audit failed "no CF token" and kept
+  # those pull requests red. The inventory describes the live project, which only main changes.
   push:
+    branches: [main]
     paths:
       - ".github/workflows/pages-project-audit.yml"
       - "scripts/pages_project_audit.py"
