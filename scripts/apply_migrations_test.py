@@ -272,6 +272,14 @@ _, pr, inf = M.plan("migrations/pair-late.sql", pair.replace("DROP TRIGGER IF EX
 ok(not inf.get("creates_backup"), "a backup made after the DROP does not count", inf)
 _, pr, inf = M.plan("migrations/pair-empty.sql", pair.replace("INSERT INTO bak_pair (name, sql) SELECT name, sql FROM sqlite_master WHERE type = 'trigger';\n", ""))
 ok(not inf.get("creates_backup"), "an empty CREATE TABLE without the INSERT ... SELECT does not count", inf)
+ok(any("BACKUP-SELF-EMPTY-1" in p for p in pr), "--check refuses a BACKUP the file only creates empty (it fails on main otherwise)", pr)
+# BACKUP-SELF-EMPTY-1 (2026-10-14, migration_runs 244): a new ledger named as its own BACKUP, with nothing deleted, is refused at --check.
+_, pr, inf = M.plan("migrations/self-empty.sql", "-- APPLY-BY: ci\n-- DB: qnfo-audit\n-- BACKUP: new_ledger\n-- Rollback: DROP TABLE IF EXISTS new_ledger\n"
+                    "CREATE TABLE IF NOT EXISTS new_ledger (id INTEGER PRIMARY KEY, ts TEXT);\n")
+ok(any("BACKUP-SELF-EMPTY-1" in p for p in pr), "a file naming the table it creates as BACKUP is refused", pr)
+_, pr, inf = M.plan("migrations/no-backup.sql", "-- APPLY-BY: ci\n-- DB: qnfo-audit\n-- Rollback: DROP TABLE IF EXISTS new_ledger\n"
+                    "CREATE TABLE IF NOT EXISTS new_ledger (id INTEGER PRIMARY KEY, ts TEXT);\n")
+ok(not pr, "the same file without the BACKUP line passes (it deletes nothing)", pr)
 
 print(f"{passed} passed, {failed} failed")
 sys.exit(1 if failed else 0)

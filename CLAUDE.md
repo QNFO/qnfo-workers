@@ -104,9 +104,11 @@ because each one was broken at least once; the linked issue holds the evidence.
   the head commit asks for changes, until a later comment says `resolved` or `hold released`, a new push lands, or 24 h pass.
   GitHub's request-changes review is not available to the account that authored the PR, so the comment is the review channel.
 - Messages from other sessions reach you only between turns. Read your session's notifications before you merge, and
-  leave a green control-plane pull request you authored to the stale-PR lane (CONTROL-PLANE-SELF-MERGE-1, about 2h
-  quiet) unless a live defect needs it sooner: lever T1.23 counts only lane merges (FAILURE-AUDIT-1, 2026-10-07: three
-  control-plane PRs were merged by their author within minutes while a request to leave them to the lane sat unread).
+  leave a green control-plane pull request you authored to the stale-PR lane (CONTROL-PLANE-SELF-MERGE-1, about 20 minutes
+  quiet since PR-LANE-FAST-1: ops_config stale_pr_merge_idle_min, floor 10) unless a live defect or the owner needs it sooner:
+  lever T1.23 counts only lane merges (FAILURE-AUDIT-1, 2026-10-07: three control-plane PRs were merged by their author within
+  minutes while a request to leave them to the lane sat unread). Owner directive 2026-10-14: "The system shall process PRs more
+  rapidly and push to production." (qnfo-fleet-control 0.29.0: the code loop decides merges every 10 minutes too).
 
 ## Internal calls to qnfo-ai (#1703)
 - Internal workers authenticate to qnfo-ai by service-binding props, not by a copy of the router key. Add

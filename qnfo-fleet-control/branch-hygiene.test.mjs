@@ -232,7 +232,7 @@ const scenario = () => ({
   const prs = {
     31: prj(31, "clef-candidate-1", "a31"),                                   // green, clean, 3h quiet: merged
     32: prj(32, "claude/red-gate", "a32", { updated_at: hAgo(30) }),            // gate failed, 30h: closed with the reason
-    33: prj(33, "claude/fresh", "a33", { updated_at: hAgo(1) }),               // 1h quiet: left alone
+    33: prj(33, "claude/fresh", "a33", { updated_at: hAgo(0.1) }),             // 6 min quiet: inside the 20-min lane window (PR-LANE-FAST-1), left alone
     34: prj(34, "claude/wf", "a34"),                                            // changes a workflow: not merged
     35: prj(35, "claude/hold", "a35", { title: "WIP: do not merge yet" }),      // asks not to be merged
     36: prj(36, "claude/dirty", "a36", { mergeable: false, mergeable_state: "dirty", updated_at: hAgo(30) }), // conflict, 30h: closed

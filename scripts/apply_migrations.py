@@ -370,6 +370,12 @@ def plan(path, text):
         mk_fill = re.compile(r"^\s*INSERT\s+(?:OR\s+\w+\s+)?INTO\s+\"?" + re.escape(backup) + r"\"?[\s(].*\bSELECT\b", re.I | re.S)
         head = [body(s) for s in stmts[:first]]
         creates = creates or (any(mk_ddl.match(h) for h in head) and any(mk_fill.match(h) for h in head))
+        # BACKUP-SELF-EMPTY-1 (2026-10-14, migration_runs 244): a BACKUP that names a table this same file creates empty passed
+        # --check and then failed on main, because the runner wants the backup to exist and hold rows before it runs the file. A
+        # new table backs nothing up: drop the BACKUP line when the file deletes nothing, or fill the table from the rows first.
+        if not creates and any(mk_ddl.match(body(s2)) for s2 in stmts):
+            problems.append("BACKUP " + backup + " is a table this file creates empty; the runner requires it to exist and hold rows "
+                            "(BACKUP-SELF-EMPTY-1): remove the BACKUP line if nothing is deleted, or create it AS SELECT from the rows")
     return True, problems, {"db": db, "statements": len(stmts), "destructive": len(destructive), "backup": backup, "creates_backup": creates}
 
 
