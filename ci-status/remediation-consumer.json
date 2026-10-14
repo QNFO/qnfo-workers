@@ -1,18 +1,98 @@
 {
  "ok": true,
  "marker": "REMEDIATION-CONSUMER-1",
- "verifier": "remediation-consumer@1921b920104e",
- "due": 413,
- "pass": 284,
- "fail": 124,
+ "verifier": "remediation-consumer@487c168a6646",
+ "due": 443,
+ "pass": 298,
+ "fail": 140,
  "skipped": 5,
  "contracts": [
   {
-   "class": "plane-living-paper-fresh",
+   "class": "issue-2309",
+   "issue_id": 2309,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "issue-2303",
+   "issue_id": 2303,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "issue-2310",
+   "issue_id": 2310,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "issue-2109",
+   "issue_id": 2109,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "fm-code-publish-waits-for-push",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "0",
+   "observed": "0",
+   "written": true
+  },
+  {
+   "class": "fm-migration-run-cancelled",
    "issue_id": null,
    "verdict": "pass",
    "expected": "ok",
    "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "issue-1875",
+   "issue_id": 1875,
+   "verdict": "fail",
+   "expected": "1",
+   "observed": "0",
+   "written": true
+  },
+  {
+   "class": "issue-2111",
+   "issue_id": 2111,
+   "verdict": "fail",
+   "expected": "ok",
+   "observed": "pending: 50 SEARCH-not-found failures in 7 days (target <= 3)",
+   "written": true
+  },
+  {
+   "class": "issue-2342",
+   "issue_id": 2342,
+   "verdict": "fail",
+   "expected": "0",
+   "observed": "21",
+   "written": true
+  },
+  {
+   "class": "fm-probe-awaits-missing-heartbeat",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "0",
+   "observed": "0",
+   "written": true
+  },
+  {
+   "class": "issue-2157",
+   "issue_id": 2157,
+   "verdict": "fail",
+   "expected": "ok",
+   "observed": "the improvement loop still finds this in its latest run (IMPROVEMENT-LOOP-1 closes it when the finding clears)",
    "written": true
   },
   {
@@ -28,15 +108,7 @@
    "issue_id": null,
    "verdict": "fail",
    "expected": "0",
-   "observed": "1",
-   "written": true
-  },
-  {
-   "class": "issue-2157",
-   "issue_id": 2157,
-   "verdict": "fail",
-   "expected": "ok",
-   "observed": "the improvement loop still finds this in its latest run (IMPROVEMENT-LOOP-1 closes it when the finding clears)",
+   "observed": "2",
    "written": true
   },
   {
@@ -82,9 +154,9 @@
   {
    "class": "belief-research-drains-in-3h",
    "issue_id": null,
-   "verdict": "fail",
+   "verdict": "pass",
    "expected": "1",
-   "observed": "0",
+   "observed": "1",
    "written": true
   },
   {
@@ -104,26 +176,10 @@
    "written": true
   },
   {
-   "class": "fm-hourly-fanout-double",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "0",
-   "observed": "0",
-   "written": true
-  },
-  {
    "class": "issue-2546",
    "issue_id": 2546,
    "verdict": "fail",
    "expected": "1",
-   "observed": "0",
-   "written": true
-  },
-  {
-   "class": "fm-ops-schema-alter-noise",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "0",
    "observed": "0",
    "written": true
   },
@@ -144,15 +200,7 @@
    "written": true
   },
   {
-   "class": "fm-autoclose-flap",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "2",
-   "observed": "2",
-   "written": true
-  },
-  {
-   "class": "fm-registry-version-sweep-regex",
+   "class": "fm-hourly-fanout-double",
    "issue_id": null,
    "verdict": "pass",
    "expected": "0",
@@ -160,15 +208,7 @@
    "written": true
   },
   {
-   "class": "fm-register-row-reescalated",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "0",
-   "observed": "0",
-   "written": true
-  },
-  {
-   "class": "fm-fleet-census-blind",
+   "class": "fm-ops-schema-alter-noise",
    "issue_id": null,
    "verdict": "pass",
    "expected": "0",
@@ -184,7 +224,47 @@
    "written": true
   },
   {
+   "class": "fm-autoclose-flap",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "2",
+   "observed": "2",
+   "written": true
+  },
+  {
+   "class": "fm-fleet-census-blind",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "0",
+   "observed": "0",
+   "written": true
+  },
+  {
    "class": "fm-cf-issues-unconsumed",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "0",
+   "observed": "0",
+   "written": true
+  },
+  {
+   "class": "fm-owner-card-misroute",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "1",
+   "observed": "1",
+   "written": true
+  },
+  {
+   "class": "fm-register-row-reescalated",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "0",
+   "observed": "0",
+   "written": true
+  },
+  {
+   "class": "fm-registry-version-sweep-regex",
    "issue_id": null,
    "verdict": "pass",
    "expected": "0",
@@ -200,14 +280,6 @@
    "written": true
   },
   {
-   "class": "fm-owner-card-misroute",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "1",
-   "observed": "1",
-   "written": true
-  },
-  {
    "class": "fm-selfheal-executed-unverified",
    "issue_id": null,
    "verdict": "pass",
@@ -216,11 +288,27 @@
    "written": true
   },
   {
+   "class": "issue-2573",
+   "issue_id": 2573,
+   "verdict": "fail",
+   "expected": "ok",
+   "observed": "pending: filed by radar-hub, which owns it for 48h",
+   "written": true
+  },
+  {
    "class": "belief-no-spof-on-critical-path",
    "issue_id": null,
    "verdict": "fail",
    "expected": "1",
    "observed": "0",
+   "written": true
+  },
+  {
+   "class": "fm-secret-in-config",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "1",
+   "observed": "1",
    "written": true
   },
   {
@@ -240,35 +328,11 @@
    "written": true
   },
   {
-   "class": "issue-2573",
-   "issue_id": 2573,
-   "verdict": "fail",
-   "expected": "ok",
-   "observed": "pending: filed by radar-hub, which owns it for 48h",
-   "written": true
-  },
-  {
-   "class": "fm-secret-in-config",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "1",
-   "observed": "1",
-   "written": true
-  },
-  {
    "class": "fm-closure-without-disposition",
    "issue_id": null,
    "verdict": "pass",
    "expected": "1",
    "observed": "1",
-   "written": true
-  },
-  {
-   "class": "fm-iso-text-compare",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "0",
-   "observed": "0",
    "written": true
   },
   {
@@ -288,14 +352,6 @@
    "written": true
   },
   {
-   "class": "issue-2515",
-   "issue_id": 2515,
-   "verdict": "fail",
-   "expected": "ok",
-   "observed": "pending: filed by qnfo-research-exec, which owns it for 48h",
-   "written": true
-  },
-  {
    "class": "issue-2517",
    "issue_id": 2517,
    "verdict": "fail",
@@ -309,6 +365,22 @@
    "verdict": "pass",
    "expected": "0",
    "observed": "0",
+   "written": true
+  },
+  {
+   "class": "fm-iso-text-compare",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "0",
+   "observed": "0",
+   "written": true
+  },
+  {
+   "class": "issue-2515",
+   "issue_id": 2515,
+   "verdict": "fail",
+   "expected": "ok",
+   "observed": "pending: filed by qnfo-research-exec, which owns it for 48h",
    "written": true
   },
   {
@@ -328,74 +400,6 @@
    "written": true
   },
   {
-   "class": "issue-2599",
-   "issue_id": 2599,
-   "verdict": "vacuous-probe-result",
-   "expected": "closed",
-   "observed": null,
-   "reason": "probe returned no expected/observed pair"
-  },
-  {
-   "class": "fm-dissemination-queue-over-cadence",
-   "issue_id": null,
-   "verdict": "fail",
-   "expected": "0",
-   "observed": "45",
-   "written": true
-  },
-  {
-   "class": "issue-1978",
-   "issue_id": 1978,
-   "verdict": "fail",
-   "expected": "1",
-   "observed": "0",
-   "written": true
-  },
-  {
    "class": "issue-2007",
    "issue_id": 2007,
    "verdict": "fail",
-   "expected": "ok",
-   "observed": "pending: no anchor repair yet and the 14-day window after the 0.3.19 deploy is still open",
-   "written": true
-  },
-  {
-   "class": "issue-2022",
-   "issue_id": 2022,
-   "verdict": "fail",
-   "expected": "1",
-   "observed": "0",
-   "written": true
-  },
-  {
-   "class": "issue-2116",
-   "issue_id": 2116,
-   "verdict": "fail",
-   "expected": "1",
-   "observed": "0",
-   "written": true
-  },
-  {
-   "class": "issue-2167",
-   "issue_id": 2167,
-   "verdict": "fail",
-   "expected": "1",
-   "observed": "0",
-   "written": true
-  },
-  {
-   "class": "fm-report-card-missed-week",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "1",
-   "observed": "1",
-   "written": true
-  },
-  {
-   "class": "issue-2597",
-   "issue_id": 2597,
-   "verdict": "fail",
-   "expected": "1",
-   "observed": "0",
-   "written": true
-  }
