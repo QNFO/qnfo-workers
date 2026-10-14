@@ -2,7 +2,7 @@ var __defProp = Object.defineProperty;
 var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
 
 // worker.js
-var VERSION = "1.3.0-cron-heartbeat"; // 1.3.0 (2026-10-13, pillar autonomy, issue 2397) CRON-ONLY-HEARTBEAT-1: the weekly cron upserts qnfo-audit.fleet_heartbeat after the digest run.
+var VERSION = "1.3.1-bp-logging"; // 1.3.1 WORKERS-BP-LOGGING-qnfo-subscribers-1 (2026-10-14, agent_issues 2539, child of 2342, pillar autonomy): the swallowed catch in handleSubscribe logs as a structured console.error (worker, where, error); control flow unchanged. // 1.3.0 (2026-10-13, pillar autonomy, issue 2397) CRON-ONLY-HEARTBEAT-1: the weekly cron upserts qnfo-audit.fleet_heartbeat after the digest run.
 // 1.2.0 (2026-10-12, pillar reach, issue 1753) SUBSCRIBE-FUNNEL-1: every step of the sign-up
 // funnel is counted in qnfo-audit.subscribe_funnel (day, stage, source, n; a counter, never an address): box and page views,
 // submits by outcome (accepted, honeypot, invalid, rate-limited, suppressed, repeat), confirmation mails sent or failed,
@@ -321,7 +321,7 @@ async function handleSubscribe(request, env) {
       await funnel(env, "submit_suppressed", src);
       return reply({ ok: true, pending: false, confirmation_sent: false, suppressed: true });
     }
-  } catch (e) {}
+  } catch (e) { console.error(JSON.stringify({ worker: "qnfo-subscribers", where: "handleSubscribe", error: String(e && e.message || e) })); }
   // SUBSCRIBE-CLIENT-IP-1: the gateway forwards the visitor identity as X-Forwarded-For / X-Client-UA;
   // read those first so worker-to-worker subrequests don't rate-limit the whole site as one visitor.
   const ip = request.headers.get("X-Forwarded-For") || request.headers.get("CF-Connecting-IP") || "";

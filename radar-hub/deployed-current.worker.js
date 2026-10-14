@@ -5,7 +5,7 @@ import { WorkflowEntrypoint } from "cloudflare:workers";
 // 1.1.3 (2026-10-02, pillar: reach): JOB-MARKET-INLINE-1 (the weekly job-market scan runs from the cron and records a
 // handoffs row with a claim_sheet), MENTION-RADAR-LEDGER-1 (one cloud_ops_events row per mention-radar run day),
 // EVENTS-RADAR-CF-DOW-1 (events cron moved from Sunday to Monday, the day its weekly sources are read).
-var VERSION = "1.4.2-families-window"; // 1.4.2 FAMILIES-WINDOW-CLOCK-1: signal_source_families_7d counts its 7 days from the run clock, not the database clock.
+var VERSION = "1.4.3-bp-logging"; // 1.4.3 WORKERS-BP-LOGGING-radar-hub-1 (2026-10-14, agent_issues 2540, child of 2342, pillar autonomy): the 13 swallowed catches log as a structured console.error (worker, where, error); control flow unchanged. // 1.4.2 FAMILIES-WINDOW-CLOCK-1: signal_source_families_7d counts its 7 days from the run clock, not the database clock.
 function rhex(n) { var b = new Uint8Array(Math.ceil(n / 2)); crypto.getRandomValues(b); return Array.prototype.map.call(b, function (x) { return ("0" + x.toString(16)).slice(-2); }).join("").slice(0, n); } // 1.3.5 CRYPTO-IDS-1: outreach_queue ids draw from crypto.getRandomValues. // 1.3.4-doi-scrub NOZ-DOI-1 (2026-10-10): the weekly attribution-audit job and its cron branch are gone; the citation watch tracks no static DOIs; the mention radar tracks only non-retired DOIs. // // 1.3.3 NO-TOPIC-HARDCODE-1 (owner directive 2026-10-10): the arXiv radar builds its query, keyword list and classes from the owner's accepted ideas in idea_proposals instead of fixed tables; with none on file it skips. // 1.3.2 RADAR-VENUE-SILENT-1 (2026-10-06, pillar: personal): a per-venue consecutive-zero counter kept as one row in the existing personal_radar table; a normally productive venue (>= 2 productive days) with zero usable candidates for 3 consecutive days files ONE agent_issues row "RADAR-VENUE-SILENT-1: <venue>" (source radar-hub, personal, low, epoch-ms), a failed fetch is a gap not a zero, a same-day re-run does not double count, and the run report names silent venues. 1.3.1 (2026-10-06): the intake run result never echoes exception text (CodeQL js/stack-trace-exposure on PR 662); details go to the worker log. 1.3.0 SIGNAL-INTAKE-SOURCES-1 (2026-10-06, agent_issues 1947, pillar: research): a D1-driven interdisciplinary feed intake (radar_sources kind 'signal': arXiv beyond quant-ph, journals, science news, community feeds) scored by lexicon with no model call into idea_proposals (name intake:<family>), bounded per run and per family, deduped by URL in signal_intake_seen, in the 08:30Z slot (no new cron); metric signal_source_families_7d; GET /intake, POST /intake/run; the events radar skips kind 'signal' rows. 1.2.4 RADAR-TASTE-SHRINK-1 + RADAR-TITLE-NOISE-2 (pillar: personal): taste prior shrunk by n/(n+3) with a 0.6 floor under 5 feedback rows and a half-the-day safety valve; Stedelijk date-range, Iamsterdam navigation and Eventbrite chrome titles dropped or cleaned. 1.2.3 RADAR-TITLE-NOISE-1 (pillar: personal): clean readable calendar titles for personal radar rows, dedupe key unchanged. 1.2.2 RADAR-TASTE-LEARN-1 (pillar: personal): the personal radar learns per-venue and per-domain taste from calendar_feedback. 1.2.1 AWAY-GATE-1 (pillar: personal): the personal radar skips Amsterdam events while a lodging row places the owner elsewhere. 1.2.0 CRON-SINGLE-TRIGGER-1 (#1785): one hourly trigger, CRON_TABLE in code
 var eventsMod = (function(){
 var __defProp = Object.defineProperty;
@@ -334,7 +334,7 @@ async function run(env) {
     // SIGNAL-INTAKE-SOURCES-1: kind 'signal' rows are feeds for the intake module, not venue pages to scan for events.
     const rs = await env.RADAR_DB.prepare("SELECT name, url, kind, cadence, category FROM radar_sources WHERE enabled=1 AND COALESCE(kind,'') <> 'signal' AND (cadence='daily' OR (cadence='weekly' AND CAST(strftime('%w','now') AS INTEGER)=1)) ORDER BY cadence DESC").all();
     if (rs.results && rs.results.length) SOURCES = rs.results.map((r) => ({ name: r.name, url: r.url, kind: r.kind || "event", domains: [r.category || "X"], delivery: "hybrid", cost: 0 }));
-  } catch (e) {}
+  } catch (e) { console.error(JSON.stringify({ worker: "radar-hub", where: "eventsMod.run", error: String(e && e.message || e) })); }
   const results = await Promise.allSettled(SOURCES.map((s) => scanVenue(s)));
   const rawEvents = [];
   const venueErrors = [];
@@ -510,7 +510,7 @@ async function run(env) {
   if (!groups.length) {
     out.skipped = "no-owner-ideas";
     // Log the skipped run so the fleet can tell a quiet radar from a dormant one.
-    try { if (env.AUDIT) await env.AUDIT.prepare("INSERT INTO research_scan_log (id, ts, job, payload) VALUES (?1, ?2, 'arxiv-radar', ?3)").bind("arxiv-" + Date.now().toString(36), new Date().toISOString(), JSON.stringify({ v: VERSION, skipped: out.skipped })).run(); } catch (e) {}
+    try { if (env.AUDIT) await env.AUDIT.prepare("INSERT INTO research_scan_log (id, ts, job, payload) VALUES (?1, ?2, 'arxiv-radar', ?3)").bind("arxiv-" + Date.now().toString(36), new Date().toISOString(), JSON.stringify({ v: VERSION, skipped: out.skipped })).run(); } catch (e) { console.error(JSON.stringify({ worker: "radar-hub", where: "arxivMod.run", error: String(e && e.message || e) })); }
     return out;
   }
   const STRONG = [];
@@ -567,7 +567,7 @@ async function run(env) {
   const body = "# arXiv Radar " + ymd + "\n\nWidened scan: " + hits.length + " hits, " + candidates.length + " candidates (" + out.core + " core)\n" + lines.join("\n") + "\n";
   try {
     if (env.VAULT) { await env.VAULT.put(key, body, { httpMetadata: { contentType: "text/markdown" } }); out.noteKey = key; }
-  } catch (e) {}
+  } catch (e) { console.error(JSON.stringify({ worker: "radar-hub", where: "arxivMod.run", error: String(e && e.message || e) })); }
   if (env.AUDIT) {
     for (const c of candidates.slice(0, 8)) {
       try {
@@ -575,7 +575,7 @@ async function run(env) {
         if (dup) { out.dupes++; continue; }
         await env.AUDIT.prepare("INSERT INTO outreach_queue (id, paper_id, author, email, reason, status, created_at) VALUES (?1,?2,?3,NULL,?4,'needs-contact', datetime('now'))").bind("aq-" + Date.now().toString(36) + rhex(4), c.id.slice(0, 40), "", "arxiv-radar widened: " + c.title.slice(0, 120)).run();
         out.enqueued++;
-      } catch (e) {}
+      } catch (e) { console.error(JSON.stringify({ worker: "radar-hub", where: "arxivMod.run", error: String(e && e.message || e) })); }
     }
     // Run ledger in the existing research_scan_log (job arxiv-radar): the radar logged only to the console, so the
     // fleet could not tell a quiet day from a dormant radar (the backlog called it dormant for 20-27 days).
@@ -631,7 +631,7 @@ async function writeNote(env, name, body) {
   const key = t.dir + "/_" + name + "-" + t.ymd + ".md";
   try {
     if (env.VAULT) { await env.VAULT.put(key, body, { httpMetadata: { contentType: "text/markdown" } }); return key; }
-  } catch (e) {}
+  } catch (e) { console.error(JSON.stringify({ worker: "radar-hub", where: "researchMod.writeNote", error: String(e && e.message || e) })); }
   return null;
 }
 async function jobPhilpapers(env) {
@@ -708,7 +708,7 @@ async function run(env) {
           lines.push("    - " + ((cit && cit.title) || "untitled") + " | " + ((cit && cit.publication_date) || ""));
         }
       }
-    } catch (e) {}
+    } catch (e) { console.error(JSON.stringify({ worker: "radar-hub", where: "citationMod.run", error: String(e && e.message || e) })); }
   }
   const d = new Date();
   const pad = (n) => String(n).padStart(2, "0");
@@ -718,7 +718,7 @@ async function run(env) {
   let wrote = false;
   try {
     if (env.VAULT) { await env.VAULT.put(key, body, { httpMetadata: { contentType: "text/markdown" } }); wrote = true; }
-  } catch (e) {}
+  } catch (e) { console.error(JSON.stringify({ worker: "radar-hub", where: "citationMod.run", error: String(e && e.message || e) })); }
   return { status: "ok", total, noteKey: key, lines: lines.length, wrote };
 }
 
@@ -1653,7 +1653,7 @@ async function run(env) {
   if (writeFailures > 0 && gated.length > 0 && gated.filter((g) => g.cleared).length > 0) {
     try {
       await env.RADAR_DB.prepare("INSERT INTO self_heal_actions (kind, ref, action, ts, status) VALUES (?,?,?,datetime('now'),'detected')").bind("calendar-write-path-broken", "radar-hub/personal/" + scannedAt.slice(0, 10), "personal radar: cleared>0 but 0 posted (write/auth failure) - verify CAL_TOKEN matches calendar-api").run();
-    } catch (e) {}
+    } catch (e) { console.error(JSON.stringify({ worker: "radar-hub", where: "perMod.run", error: String(e && e.message || e) })); }
   }
   const venueSilent = await updateVenueCounters(env, gated, venueErrors, scannedAt.slice(0, 10));
   const stats = { venueSilent: venueSilent.silent, inWindow: uniq.length, discarded, okVenues: SOURCES.length - venueErrors.length, totalVenues: SOURCES.length, venueErrors, horizonISO: horizon };
@@ -1759,7 +1759,7 @@ var mentionMod = (function(){
     try {
       var r = await env.AUDIT.prepare("SELECT DISTINCT lower(doi) AS doi FROM citation_stats WHERE doi IS NOT NULL AND lower(doi) NOT LIKE '10.5281/%' LIMIT 400").all();
       for (var x of (r.results || [])) if (x.doi && !/^10\.5281\//.test(normDoi(x.doi))) set.add(normDoi(x.doi));
-    } catch (e) {}
+    } catch (e) { console.error(JSON.stringify({ worker: "radar-hub", where: "mentionMod.ownerDois", error: String(e && e.message || e) })); }
     return Array.from(set);
   }
 
@@ -1885,7 +1885,7 @@ var mentionMod = (function(){
         try {
           var r = await db.prepare("INSERT OR IGNORE INTO external_mentions (ts, source, title, url, author, score, created, first_seen) SELECT ?, ?, ?, ?, ?, ?, ?, ? WHERE NOT EXISTS (SELECT 1 FROM external_mentions WHERE url = ?)").bind(iso, mm.source, mm.title, mm.url, mm.author, mm.score, mm.created, iso, mm.url).run();
           if (r && r.meta && r.meta.changes) added += r.meta.changes;
-        } catch (e) {}
+        } catch (e) { console.error(JSON.stringify({ worker: "radar-hub", where: "mentionMod.run", error: String(e && e.message || e) })); }
       }
       written[ch.channel] = added;
       try {
@@ -2062,7 +2062,7 @@ var intakeMod = (function(){
         if (rows[i].key === "signal_intake_max_per_run") { var n = parseInt(String(rows[i].value), 10); if (isFinite(n) && n >= 0 && n <= 40) max = n; }
         if (rows[i].key === "signal_intake_enabled" && String(rows[i].value).trim() === "0") enabled = false;
       }
-    } catch (e) {}
+    } catch (e) { console.error(JSON.stringify({ worker: "radar-hub", where: "intakeMod.readConfig", error: String(e && e.message || e) })); }
     return { max: max, enabled: enabled };
   }
   async function fetchSource(f, src) {
@@ -2146,7 +2146,7 @@ var intakeMod = (function(){
     // Every other fresh candidate is recorded as seen-but-not-taken, so the next run does not re-score it.
     for (var q = 0; q < fresh.length; q++) {
       if (pickedUrls[fresh[q].link]) continue;
-      try { await db.prepare("INSERT OR IGNORE INTO signal_intake_seen (url, family, source, title, score, accepted, seen_at) VALUES (?1,?2,?3,?4,?5,0,?6)").bind(fresh[q].link, fresh[q].family, fresh[q].source, fresh[q].title.slice(0, 240), fresh[q].score, iso).run(); } catch (e) {}
+      try { await db.prepare("INSERT OR IGNORE INTO signal_intake_seen (url, family, source, title, score, accepted, seen_at) VALUES (?1,?2,?3,?4,?5,0,?6)").bind(fresh[q].link, fresh[q].family, fresh[q].source, fresh[q].title.slice(0, 240), fresh[q].score, iso).run(); } catch (e) { console.error(JSON.stringify({ worker: "radar-hub", where: "intakeMod.run", error: String(e && e.message || e) })); }
     }
     var errs = Object.keys(out.sources).filter(function(k) { return out.sources[k].indexOf("error:") === 0; }).length;
     if (!out.fetched) out.status = "error"; else if (errs) out.status = "degraded";
@@ -2174,7 +2174,7 @@ var intakeMod = (function(){
     var row = await db.prepare("SELECT ts, status, meta FROM cloud_ops_events WHERE id >= 'signal-intake-' AND id < 'signal-intake.' ORDER BY ts DESC LIMIT 1").first().catch(function() { return null; });
     var srcs = (await db.prepare("SELECT name, url, category, enabled FROM radar_sources WHERE kind='signal' ORDER BY category, name").all().catch(function() { return { results: [] }; })).results || [];
     var fam = await db.prepare("SELECT COUNT(DISTINCT family) AS n FROM signal_intake_seen WHERE accepted=1 AND seen_at >= datetime('now','-7 days')").first().catch(function() { return null; });
-    var meta = null; try { meta = row && row.meta ? JSON.parse(row.meta) : null; } catch (e) {}
+    var meta = null; try { meta = row && row.meta ? JSON.parse(row.meta) : null; } catch (e) { console.error(JSON.stringify({ worker: "radar-hub", where: "intakeMod.last", error: String(e && e.message || e) })); }
     return { last_run: row ? { ts: row.ts, status: row.status, meta: meta } : null, families_7d: Number(fam && fam.n) || 0, sources: srcs };
   }
   async function fetchHandler(request, env) {

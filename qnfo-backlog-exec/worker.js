@@ -2,7 +2,7 @@ var __defProp = Object.defineProperty;
 var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
 
 // worker.js
-var VERSION = "2.0.7-latest-pass";
+var VERSION = "2.0.8-bp-logging"; // 2.0.8 WORKERS-BP-LOGGING-qnfo-lifecycle-1 (2026-10-14, agent_issues 2536): the swallowed catches log as a structured console.error; host parity with qnfo-lifecycle 1.11.3. 2.0.7: BACKLOG-LATEST-PASS-1.
 // PRIORITY-QUEUE-1 (2026-10-03, owner directive): the sweep ranks critical first. The old CASE ranked high, medium, else,
 // so critical issues sorted with low. Within a priority the least recently touched row still goes first (rotation).
 var WORKER = "qnfo-backlog-exec";
@@ -152,7 +152,7 @@ async function recheckRecentCloses(env) {
         await recordEvent(env, "job-run", "backlog-exec REOPENED issue " + r.issue_id + " (" + tgt + "): fresh probe regression " + last.ts, { id: r.issue_id, target: tgt, action: "reopened" }, WORKER, "ok");
       }
     }
-  } catch (e) {}
+  } catch (e) { console.error(JSON.stringify({ worker: "qnfo-lifecycle", where: "backlogMod.recheckRecentCloses", error: String(e && e.message || e) })); }
   return reopened;
 }
 async function reconcileDodMirrors(env) {
@@ -162,7 +162,7 @@ async function reconcileDodMirrors(env) {
     dodClosed = r1 && r1.meta ? Number(r1.meta.changes || 0) : 0;
     const r2 = await env.AUDIT.prepare("UPDATE task_dod_register SET owner='agent', evidence_pointer = COALESCE(evidence_pointer,'') || ' | re-owned (backlog-exec v1.6.3): prior owner was not a live service', updated_at=datetime('now') WHERE status='open' AND owner NOT IN (SELECT service FROM service_registry WHERE state='live') AND owner <> 'agent'").run();
     reowned = r2 && r2.meta ? Number(r2.meta.changes || 0) : 0;
-  } catch (e) {}
+  } catch (e) { console.error(JSON.stringify({ worker: "qnfo-lifecycle", where: "backlogMod.reconcileDodMirrors", error: String(e && e.message || e) })); }
   return { dodClosed, reowned };
 }
 // REGISTER-INVENTORY-COMPLETE-1 (2026-09-28): the fleet-failures inventory spans SIX
@@ -180,13 +180,13 @@ async function reconcileRegisters(env) {
       "UPDATE fleet_issue_dispatch SET state='closed' WHERE state='queued' AND COALESCE(exec_state,'') IN (" + DISPATCH_TERMINAL + ")"
     ).run();
     out.dispatchClosed = r1 && r1.meta ? Number(r1.meta.changes || 0) : 0;
-  } catch (e) {}
+  } catch (e) { console.error(JSON.stringify({ worker: "qnfo-lifecycle", where: "backlogMod.reconcileRegisters", error: String(e && e.message || e) })); }
   try {
     const r2 = await env.AUDIT.prepare(
       "UPDATE task_dod_register SET status='closed', evidence_pointer=COALESCE(evidence_pointer,'') || ' | auto-closed (backlog-exec v1.9.0 register reconcile)', updated_at=datetime('now') WHERE status NOT IN (" + DOD_TERMINAL + ") AND status <> 'in_progress' AND source_table='agent_issues' AND EXISTS (SELECT 1 FROM agent_issues a WHERE CAST(a.id AS TEXT)=task_dod_register.source_row_id AND a.status IN ('closed','resolved','wontfix','done','cancelled'))"
     ).run();
     out.dodClosed = r2 && r2.meta ? Number(r2.meta.changes || 0) : 0;
-  } catch (e) {}
+  } catch (e) { console.error(JSON.stringify({ worker: "qnfo-lifecycle", where: "backlogMod.reconcileRegisters", error: String(e && e.message || e) })); }
   return out;
 }
 // REGISTER-INVENTORY-COMPLETE-2 (2026-09-28): the fleet-failures dashboard surfaces

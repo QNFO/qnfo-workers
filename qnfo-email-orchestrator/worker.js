@@ -2,7 +2,7 @@ var __defProp = Object.defineProperty;
 var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
 
 // worker.js
-var VERSION = "0.5.8-crypto-ids"; // 0.5.8 WORKERS-BP-DEBT-2 (2026-10-12): the inbound-sla failure id takes rndB36 (crypto.getRandomValues) instead of Math.random; host parity with qnfo-cloud-ops 1.26.2. 0.5.7-solicit-journal; // 0.5.7 MAIL-ASK-1 (2026-10-12): SLA_SOLICIT_RX matches journal call-for-paper mail and reads 1200 body characters (source of the member folded into qnfo-cloud-ops 1.26.1); merged on top of 0.5.6 DRAFT-GROUNDING-1, both behaviours kept. // 0.5.6 DRAFT-GROUNDING-1 (agent_issues 2282, 2272): the triage prompt names no example subject and escalates anything needing expertise, judgement, a decision, an opinion or a commitment; ungroundedTerms() escalates a draft with a name, number or date absent from the inbound email; stripSignoff() cuts a model-written closing; SLA-GRACE-1 (agent_issues 2204): grace 12 h, was 24 h, the same number as the metric target. 0.5.3 0.5.3 CLEARED-SEND-RETRY-1: a cleared reply whose send fails keeps its auto-send marker and is retried up to 3 times (row 56 dead-ended on a 401 on 2026-10-05); the EMAIL binding declares props.caller so qnfo-email 2.5.1+ authenticates this worker without a key copy (#1923 class, CLAUDE.md #1703); 0.5.2 SLA-SES-ENVELOPE-1 (#1957): an Amazon SES message-id envelope (010101a1...-000000@sesmail.<domain>) is a transactional or bulk sender, so INBOUND-SLA-1 closes it as automated instead of holding it as an unknown person (iPostal1 mailbox notices reached the owner queue as "mail:ipostal1.com"; the owner closed the card, note 38). // 0.5.1: a failed send records a unique failure row (same-millisecond failures left a stale claim that read as an acknowledgement) /* 0.5.0 INBOUND-SLA-1 (2026-10-02, pillar: reach): no human inbound message waits more than 72h without a fleet action; category->action map, decision log, kill switch ops_config inbound_sla_enabled, metrics inbound_first_response_h_median_30d + inbound_unactioned_72h. 0.4.3 CAPABILITY-SELF-REPORT-1 */
+var VERSION = "0.5.9-bp-logging"; // 0.5.9 WORKERS-BP-LOGGING-qnfo-cloud-ops-1 (2026-10-14, agent_issues 2530): the swallowed catches log as a structured console.error; host parity with qnfo-cloud-ops 1.28.2 (member 0.5.8-folded). // 0.5.8 WORKERS-BP-DEBT-2 (2026-10-12): the inbound-sla failure id takes rndB36 (crypto.getRandomValues) instead of Math.random; host parity with qnfo-cloud-ops 1.26.2. 0.5.7-solicit-journal; // 0.5.7 MAIL-ASK-1 (2026-10-12): SLA_SOLICIT_RX matches journal call-for-paper mail and reads 1200 body characters (source of the member folded into qnfo-cloud-ops 1.26.1); merged on top of 0.5.6 DRAFT-GROUNDING-1, both behaviours kept. // 0.5.6 DRAFT-GROUNDING-1 (agent_issues 2282, 2272): the triage prompt names no example subject and escalates anything needing expertise, judgement, a decision, an opinion or a commitment; ungroundedTerms() escalates a draft with a name, number or date absent from the inbound email; stripSignoff() cuts a model-written closing; SLA-GRACE-1 (agent_issues 2204): grace 12 h, was 24 h, the same number as the metric target. 0.5.3 0.5.3 CLEARED-SEND-RETRY-1: a cleared reply whose send fails keeps its auto-send marker and is retried up to 3 times (row 56 dead-ended on a 401 on 2026-10-05); the EMAIL binding declares props.caller so qnfo-email 2.5.1+ authenticates this worker without a key copy (#1923 class, CLAUDE.md #1703); 0.5.2 SLA-SES-ENVELOPE-1 (#1957): an Amazon SES message-id envelope (010101a1...-000000@sesmail.<domain>) is a transactional or bulk sender, so INBOUND-SLA-1 closes it as automated instead of holding it as an unknown person (iPostal1 mailbox notices reached the owner queue as "mail:ipostal1.com"; the owner closed the card, note 38). // 0.5.1: a failed send records a unique failure row (same-millisecond failures left a stale claim that read as an acknowledgement) /* 0.5.0 INBOUND-SLA-1 (2026-10-02, pillar: reach): no human inbound message waits more than 72h without a fleet action; category->action map, decision log, kill switch ops_config inbound_sla_enabled, metrics inbound_first_response_h_median_30d + inbound_unactioned_72h. 0.4.3 CAPABILITY-SELF-REPORT-1 */
 var CLEARED_SEND_MAX_TRIES = 3;
 var CAPS = ["reply-drafts", "cadence-log", "email-filters", "inbound-sla"];
 var LIMS = ["cron-only: no public route; the reply-draft pass runs on its */15 and 3-hourly crons, INBOUND-SLA-1 on */15, its metrics on the 3-hourly cron", "never sends outreach or follow-ups; replies only to inbound mail, through qnfo-email /send", "INBOUND-SLA-1 mails nobody outside the research-outreach campaign and never a funder or hiring manager (docs/STRATEGY.md section 5): those messages are held and recorded for the weekly identity review", "publishes this capability row from the cron"];
@@ -167,7 +167,7 @@ function slaDecodePart(body, cte) {
       return slaUtf8(atob(b.slice(0, b.length - b.length % 4)));
     }
     if (cte.indexOf("quoted-printable") >= 0) return slaUtf8(String(body).replace(/=\r?\n/g, "").replace(/=([0-9A-Fa-f]{2})/g, function(_, h) { return String.fromCharCode(parseInt(h, 16)); }));
-  } catch (e) {}
+  } catch (e) { console.error(JSON.stringify({ worker: "qnfo-cloud-ops", where: "emailOrchMod.slaDecodePart", error: String(e && e.message || e) })); }
   return String(body || "");
 }
 // The plain text of a stored body. Before the MIME parser fix of 2026-09-21 qnfo-email stored some bodies as raw MIME
@@ -211,7 +211,7 @@ function slaNewText(text) {
 }
 function slaHeaders(json) {
   var h = {};
-  try { var o = JSON.parse(json || "{}") || {}; for (var k in o) h[String(k).toLowerCase()] = String(o[k] == null ? "" : o[k]); } catch (e) {}
+  try { var o = JSON.parse(json || "{}") || {}; for (var k in o) h[String(k).toLowerCase()] = String(o[k] == null ? "" : o[k]); } catch (e) { console.error(JSON.stringify({ worker: "qnfo-cloud-ops", where: "emailOrchMod.slaHeaders", error: String(e && e.message || e) })); }
   return h;
 }
 function slaFunder(dom) {
@@ -322,8 +322,8 @@ async function slaFacts(env, row, nowMs) {
     answered = !!o;
   }
   var ledger = null, contact = null, suppressed = false;
-  try { ledger = await slaFirst(env.AUDIT_DB, "SELECT COALESCE(suppress, 0) AS suppress, COALESCE(reply_count, 0) AS reply_count FROM contact_ledger WHERE lower(email) = ?1", [sender]); } catch (e) {}
-  try { if (env.OUTREACH_DB) contact = await slaFirst(env.OUTREACH_DB, "SELECT COALESCE(suppress, 0) AS suppress FROM contacts WHERE lower(email) = ?1", [sender]); } catch (e) {}
+  try { ledger = await slaFirst(env.AUDIT_DB, "SELECT COALESCE(suppress, 0) AS suppress, COALESCE(reply_count, 0) AS reply_count FROM contact_ledger WHERE lower(email) = ?1", [sender]); } catch (e) { console.error(JSON.stringify({ worker: "qnfo-cloud-ops", where: "emailOrchMod.slaFacts", error: String(e && e.message || e) })); }
+  try { if (env.OUTREACH_DB) contact = await slaFirst(env.OUTREACH_DB, "SELECT COALESCE(suppress, 0) AS suppress FROM contacts WHERE lower(email) = ?1", [sender]); } catch (e) { console.error(JSON.stringify({ worker: "qnfo-cloud-ops", where: "emailOrchMod.slaFacts", error: String(e && e.message || e) })); }
   try { suppressed = !!(await slaFirst(env.AUDIT_DB, "SELECT 1 AS s FROM email_suppression WHERE lower(email) = ?1", [sender])); } catch (e) { suppressed = true; }
   if (ledger && Number(ledger.suppress) === 1 || contact && Number(contact.suppress) === 1) suppressed = true;
   return {
@@ -384,10 +384,10 @@ async function slaSendOnce(env, row, f, kind, body) {
     try {
       await slaRun(env.AUDIT_DB, "UPDATE cloud_ops_events SET id = ?1, status = 'failed', text = ?2 WHERE id = ?3", [fid, ftext, claim]);
     } catch (e) {
-      try { await slaRun(env.AUDIT_DB, "DELETE FROM cloud_ops_events WHERE id = ?1 AND status = 'sending'", [claim]); } catch (e2) {}
-      try { await slaRun(env.AUDIT_DB, "INSERT OR IGNORE INTO cloud_ops_events (id, ts, kind, text, meta, job, status) VALUES (?1, ?2, 'inbound-sla-send', ?3, ?4, 'qnfo-email-orchestrator', 'failed')", [fid + "-r", new Date().toISOString(), ftext, meta]); } catch (e3) {}
+      try { await slaRun(env.AUDIT_DB, "DELETE FROM cloud_ops_events WHERE id = ?1 AND status = 'sending'", [claim]); } catch (e2) { console.error(JSON.stringify({ worker: "qnfo-cloud-ops", where: "slaSendOnce.fail", error: String(e2 && e2.message || e2) })); }
+      try { await slaRun(env.AUDIT_DB, "INSERT OR IGNORE INTO cloud_ops_events (id, ts, kind, text, meta, job, status) VALUES (?1, ?2, 'inbound-sla-send', ?3, ?4, 'qnfo-email-orchestrator', 'failed')", [fid + "-r", new Date().toISOString(), ftext, meta]); } catch (e3) { console.error(JSON.stringify({ worker: "qnfo-cloud-ops", where: "slaSendOnce.fail", error: String(e3 && e3.message || e3) })); }
     }
-    try { await slaRun(env.AUDIT_DB, "UPDATE email_reply_queue SET draft_text = NULL WHERE id = ?1 AND sent_at IS NULL", [row.qid]); } catch (e) {}
+    try { await slaRun(env.AUDIT_DB, "UPDATE email_reply_queue SET draft_text = NULL WHERE id = ?1 AND sent_at IS NULL", [row.qid]); } catch (e) { console.error(JSON.stringify({ worker: "qnfo-cloud-ops", where: "slaSendOnce.fail", error: String(e && e.message || e) })); }
     return { sent: false, error: why };
   };
   try {
@@ -399,7 +399,7 @@ async function slaSendOnce(env, row, f, kind, body) {
   } catch (e) { return await fail("send threw: " + String(e && e.message || e).slice(0, 120)); }
   if (!resp || !resp.ok) {
     var j = null;
-    try { j = await resp.json(); } catch (e) {}
+    try { j = await resp.json(); } catch (e) { console.error(JSON.stringify({ worker: "qnfo-cloud-ops", where: "emailOrchMod.slaSendOnce", error: String(e && e.message || e) })); }
     return await fail("send HTTP " + (resp ? resp.status : "none") + (j && j.error ? " " + String(j.error).slice(0, 80) : ""));
   }
   await slaRun(env.AUDIT_DB, "UPDATE cloud_ops_events SET status = 'sent', ts = ?1 WHERE id = ?2", [new Date().toISOString(), claim]);
@@ -462,9 +462,9 @@ async function slaLedger(env, nowMs, status, summary) {
   var day = new Date(nowMs).toISOString().slice(0, 10);
   var id = "inbound-sla-run-" + day;
   var prev = null;
-  try { prev = await slaFirst(env.AUDIT_DB, "SELECT meta FROM cloud_ops_events WHERE id = ?1", [id]); } catch (e) {}
+  try { prev = await slaFirst(env.AUDIT_DB, "SELECT meta FROM cloud_ops_events WHERE id = ?1", [id]); } catch (e) { console.error(JSON.stringify({ worker: "qnfo-cloud-ops", where: "emailOrchMod.slaLedger", error: String(e && e.message || e) })); }
   var pm = {};
-  try { pm = prev && JSON.parse(prev.meta || "{}") || {}; } catch (e) {}
+  try { pm = prev && JSON.parse(prev.meta || "{}") || {}; } catch (e) { console.error(JSON.stringify({ worker: "qnfo-cloud-ops", where: "emailOrchMod.slaLedger", error: String(e && e.message || e) })); }
   var meta = { last_ok: status === "ok" ? new Date(nowMs).toISOString() : pm.last_ok || null, runs: (Number(pm.runs) || 0) + 1, last: summary, version: VERSION };
   await slaRun(env.AUDIT_DB, "INSERT INTO cloud_ops_events (id, ts, kind, text, meta, job, status) VALUES (?1, ?2, 'inbound-sla-run', ?3, ?4, 'qnfo-email-orchestrator', ?5) ON CONFLICT(id) DO UPDATE SET ts = excluded.ts, text = excluded.text, meta = excluded.meta, status = excluded.status", [id, new Date(nowMs).toISOString(), ("INBOUND-SLA-1 " + status + ": " + JSON.stringify(summary.counts || {})).slice(0, 300), JSON.stringify(meta), status]);
 }
@@ -508,7 +508,7 @@ async function inboundSlaStep(env, opts) {
     await slaLedger(env, nowMs, "ok", { scanned: out.scanned, counts: out.counts, sends_enabled: sw.sends });
   } catch (e) {
     out.error = String(e && e.message || e).slice(0, 200);
-    try { await slaLedger(env, nowMs, "error", { error: out.error, counts: out.counts }); } catch (e2) {}
+    try { await slaLedger(env, nowMs, "error", { error: out.error, counts: out.counts }); } catch (e2) { console.error(JSON.stringify({ worker: "qnfo-cloud-ops", where: "emailOrchMod.inboundSlaStep", error: String(e2 && e2.message || e2) })); }
   }
   return out;
 }
@@ -691,11 +691,11 @@ var worker_default = {
       if (dry) return { qid: qid, action: "would-send", draft: cls.draft };
       var resp = await env.EMAIL.fetch("https://email/send", { method: "POST", headers: { "Content-Type": "application/json", "Authorization": "Bearer " + (env.EMAIL_API_KEY || "") }, body: JSON.stringify({ to: row.sender, from: "qnfo@qnfo.org", subject: "Re: " + (row.subject || "(no subject)"), body: cls.draft, reply_to_id: row.email_id }) });
       if (resp && resp.ok) { await this.setDecision(env, qid, "sent", null, cls.draft); return { qid: qid, action: "sent" }; }
-      var rj = null; try { rj = await resp.json(); } catch (e) {}
+      var rj = null; try { rj = await resp.json(); } catch (e) { console.error(JSON.stringify({ worker: "qnfo-cloud-ops", where: "emailOrchMod.draftOne", error: String(e && e.message || e) })); }
       await this.setDecision(env, qid, "escalate", "send-failed:" + (resp ? resp.status : "no-resp") + ":" + (rj && rj.error || ""));
       return { qid: qid, action: "escalate", reason: "send-failed" };
     } catch (e) {
-      try { await this.setDecision(env, qid, "escalate", "error:" + e.message); } catch (e2) {}
+      try { await this.setDecision(env, qid, "escalate", "error:" + e.message); } catch (e2) { console.error(JSON.stringify({ worker: "qnfo-cloud-ops", where: "emailOrchMod.draftOne", error: String(e2 && e2.message || e2) })); }
       return { qid: qid, action: "escalate", reason: "error:" + e.message };
     }
   },

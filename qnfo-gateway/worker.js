@@ -1,4 +1,4 @@
-var VERSION="3.18.4-cron-heartbeat"; /* 3.18.4 FLEET-HARDENING-2 (2026-10-13, agent_issues 2397, pillar autonomy): the daily cron ends with a qnfo-audit fleet_heartbeat upsert through a new AUDIT binding (ok=0 when the IndexNow step threw, which was swallowed before and is now logged). */ /* 3.18.3 HUB-CACHE-VERSION-1 (2026-10-13, pillar reach, failure mode zaraz-autoinject-worker-html): the qnfo.org hub copy in each colo's cache now carries the VERSION that built it, and a copy built by another version is rebuilt while the request waits up to 2.5 s instead of being served stale; the runner probe of 07:39 UTC read a pre-3.16.1 copy without /cdn-cgi/zaraz/i.js while every fresh render carried it. */ /* 3.18.2 PAGE-POLICY-1 (2026-10-13, pillar reach, agent_issues 2343 WEB-PERF-EDGE-1): every HTML response carries Referrer-Policy strict-origin-when-cross-origin (no-referrer when the query carries a token) and Permissions-Policy camera=(), microphone=(), geolocation=() from the worker (qnfo.org had neither; the subdomains had them only from a zone rule), and an HTML response without Cache-Control gets public, max-age=300, s-maxage=3600, stale-while-revalidate=86400 when it is a public GET 200, no-store otherwise; handlers that set their own are unchanged, JSON untouched. 3.18.1 RENDER-DEFECTS-2300 (2026-10-13, pillar reach, agent_issues 2300 2158 2357): PANDOC-FENCE-GLUE-1 reads a code fence glued to prose or to its last code line as a fence (ultrametric-intelligence printed its Python as prose and typeset its identifiers); MATH-RESIDUE-5 typesets a formula glued to a name by a product sign; RAIL-MATH-1 gives /api/paper-context title_tex and excerpt_tex (formulas kept as TeX, plain-text math typeset, currency escaped) and the Related and Versions panels paint them, since every residue the browser sample counted on chapter-1 and log20240505010101strangeloopbook on 2026-10-12 was panel text; a formula ending in an escaped brace is lifted as math; MathJax knows the Sha macro. 3.18.0 ACTIVITYPUB-KEY-1 (2026-10-12, pillar reach, #2249 #2413): the actor publishes publicKeyPem when AP_PUBLIC_KEY is set (cf-ops gen-activitypub-key); merged with main 3.17.1 (REACH-RENDER-1). */
+var VERSION="3.18.5-bp-logging"; /* 3.18.5 WORKERS-BP-LOGGING-qnfo-gateway-1 (2026-10-14, agent_issues 2533, child of 2342, pillar autonomy): the 6 server-side swallowed catches log (2 browser-script hits marked standards-ok or allowlisted) as a structured console.error (worker, where, error); control flow unchanged. */ /* 3.18.4 FLEET-HARDENING-2 (2026-10-13, agent_issues 2397, pillar autonomy): the daily cron ends with a qnfo-audit fleet_heartbeat upsert through a new AUDIT binding (ok=0 when the IndexNow step threw, which was swallowed before and is now logged). */ /* 3.18.3 HUB-CACHE-VERSION-1 (2026-10-13, pillar reach, failure mode zaraz-autoinject-worker-html): the qnfo.org hub copy in each colo's cache now carries the VERSION that built it, and a copy built by another version is rebuilt while the request waits up to 2.5 s instead of being served stale; the runner probe of 07:39 UTC read a pre-3.16.1 copy without /cdn-cgi/zaraz/i.js while every fresh render carried it. */ /* 3.18.2 PAGE-POLICY-1 (2026-10-13, pillar reach, agent_issues 2343 WEB-PERF-EDGE-1): every HTML response carries Referrer-Policy strict-origin-when-cross-origin (no-referrer when the query carries a token) and Permissions-Policy camera=(), microphone=(), geolocation=() from the worker (qnfo.org had neither; the subdomains had them only from a zone rule), and an HTML response without Cache-Control gets public, max-age=300, s-maxage=3600, stale-while-revalidate=86400 when it is a public GET 200, no-store otherwise; handlers that set their own are unchanged, JSON untouched. 3.18.1 RENDER-DEFECTS-2300 (2026-10-13, pillar reach, agent_issues 2300 2158 2357): PANDOC-FENCE-GLUE-1 reads a code fence glued to prose or to its last code line as a fence (ultrametric-intelligence printed its Python as prose and typeset its identifiers); MATH-RESIDUE-5 typesets a formula glued to a name by a product sign; RAIL-MATH-1 gives /api/paper-context title_tex and excerpt_tex (formulas kept as TeX, plain-text math typeset, currency escaped) and the Related and Versions panels paint them, since every residue the browser sample counted on chapter-1 and log20240505010101strangeloopbook on 2026-10-12 was panel text; a formula ending in an escaped brace is lifted as math; MathJax knows the Sha macro. 3.18.0 ACTIVITYPUB-KEY-1 (2026-10-12, pillar reach, #2249 #2413): the actor publishes publicKeyPem when AP_PUBLIC_KEY is set (cf-ops gen-activitypub-key); merged with main 3.17.1 (REACH-RENDER-1). */
 // UTM-CLICK-LEDGER-1 (3.10.0, 2026-10-06, transformation lever T7.9, pillar reach): a GET for an HTML page that carries
 // utm_source is counted into qnfo-graph utm_clicks (day, host, path, source, medium, campaign, bot/human, country; no cookie,
 // no IP), so a post or digest joins to the visits it caused; qnfo-fleet-dashboard reads it into reach_signals source utm.
@@ -1964,7 +1964,7 @@ async function handlePapers(request, env) {
     for (const p of all) { p._cat = detectCategory(p.title, p.abstract); facets[p._cat] = (facets[p._cat] || 0) + 1; }
     const latest = all.length ? all[0].created_at : null;
     let allTotal = all.length;
-    if (search) { try { const c = await env.LIVING_PAPER.prepare("SELECT COUNT(*) AS n FROM papers WHERE slug IS NOT NULL AND status IN ('published','distributed','external_preprint')").first(); allTotal = c ? c.n : allTotal; } catch (e) {} }
+    if (search) { try { const c = await env.LIVING_PAPER.prepare("SELECT COUNT(*) AS n FROM papers WHERE slug IS NOT NULL AND status IN ('published','distributed','external_preprint')").first(); allTotal = c ? c.n : allTotal; } catch (e) { console.error(JSON.stringify({ worker: "qnfo-gateway", where: "handlePapers", error: String(e && e.message || e) })); } }
     const months = [];
     { const now = new Date(); for (let k = 11; k >= 0; k--) { const d = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - k, 1)); const key = d.toISOString().slice(0, 7); months.push({ key, label: ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"][d.getUTCMonth()] + " '" + String(d.getUTCFullYear()).slice(2), n: 0 }); }
       const idx = {}; months.forEach((m, i) => { idx[m.key] = i; }); for (const p of all) { const k = String(p.created_at || "").slice(0, 7); if (idx[k] != null) months[idx[k]].n++; } }
@@ -2126,7 +2126,7 @@ async function hubBuildAndStore(env, cache) {
   hd.set("X-Hub-Built", String(Date.now()));
   hd.set("X-Hub-Version", VERSION);
   hd.set("Cache-Control", "public, max-age=86400");
-  try { await cache.put(new Request(HUB_CACHE_KEY), new Response(html, { status: 200, headers: hd })); } catch (e) {}
+  try { await cache.put(new Request(HUB_CACHE_KEY), new Response(html, { status: 200, headers: hd })); } catch (e) { console.error(JSON.stringify({ worker: "qnfo-gateway", where: "hubBuildAndStore", error: String(e && e.message || e) })); }
   return new Response(html, { status: 200, headers: res.headers });
 }
 function hubIsGood(res) {
@@ -2453,7 +2453,7 @@ async function indexNowLog(env, host, results) {
     const urls = (results || []).reduce(function(a, r) { return a + (r.chunk || 0); }, 0);
     const acc = (results || []).filter(function(r) { return r.status && r.status < 400; }).reduce(function(a, r) { return a + (r.chunk || 0); }, 0);
     await env.LIVING_PAPER.prepare("INSERT INTO indexnow_log (host, urls, accepted, detail) VALUES (?1, ?2, ?3, ?4)").bind(host, urls, acc, JSON.stringify(results || []).slice(0, 1000)).run();
-  } catch (e) {}
+  } catch (e) { console.error(JSON.stringify({ worker: "qnfo-gateway", where: "indexNowLog", error: String(e && e.message || e) })); }
 }
 async function handleIndexNow(env, full) {
   const urls = await collectPaperUrls(env, full ? null : 7);
@@ -3712,7 +3712,7 @@ async function handleArchive(env) {
     const r = await env.LIVING_PAPER.prepare("SELECT slug, title, abstract, created_at, doi FROM papers WHERE status IN ('published','distributed','external_preprint') ORDER BY created_at DESC").all();
     rows = r.results || [];
     latest = rows.slice(0, 5);
-  } catch (e) {}
+  } catch (e) { console.error(JSON.stringify({ worker: "qnfo-gateway", where: "handleArchive", error: String(e && e.message || e) })); }
   const counts = {};
   rows.forEach(function(p) { const c = detectCategory(p.title, p.abstract); counts[c] = (counts[c] || 0) + 1; });
   const fields = [
@@ -3876,7 +3876,7 @@ function withFleetCtl(res) {
 var LP_ASK = "https://ask.qwav.tech";
 var LP_PUBLIC = "('published','distributed','external_preprint')";
 var LP_FONTS = '<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Familjen+Grotesk:wght@400;500;600&family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;0,6..72,600;1,6..72,400&display=swap">';
-var LP_THEME_BOOT = "<script>(function(){try{var t=localStorage.getItem('qnfo-theme');if(t==='dark'||t==='light')document.documentElement.setAttribute('data-theme',t)}catch(e){}})()<\/script>";
+var LP_THEME_BOOT = "<script>(function(){try{var t=localStorage.getItem('qnfo-theme');if(t==='dark'||t==='light')document.documentElement.setAttribute('data-theme',t)}catch(e){}})()<\/script>"; // standards-ok: the empty catch is browser-side script inside a string literal, not a server catch
 var LP_GA = '<script src="/cdn-cgi/zaraz/i.js"><\/script>' /* ZARAZ-MANUAL-LOAD-1 (3.16.1): Cloudflare Zaraz serves GA4 G-LV7RHRVW6R (ZARAZ-GA4-1), but its auto-inject never reaches HTML a Worker serves on a route (qnfo.org measured 2026-10-12: autoInjectScript on, no script on any page), so the page loads the zone's Zaraz loader itself; /cdn-cgi/* is answered by the edge before any route. An inline gtag.js as well would count every page view twice. */;
 // RAIL-MATH-1 (3.18.1): \Sha (the Tate-Shafarevich group, printed as the Cyrillic letter) is not a MathJax macro; the 27
 // formulas of a-universal-adelic-normalization-principle that use it showed MathJax errors, and its abstract in a rail would.
@@ -4143,7 +4143,7 @@ async function handlePaperContext(env, slug) {
   const cseen = new Set();
   const concepts = (graphRows.results || []).map(function(r) {
     let props = {};
-    try { props = JSON.parse(r.properties || "{}") || {}; } catch (e) {}
+    try { props = JSON.parse(r.properties || "{}") || {}; } catch (e) { console.error(JSON.stringify({ worker: "qnfo-gateway", where: "handlePaperContext", error: String(e && e.message || e) })); }
     const name = String(r.label === "ResearchQuestion" ? props.question || r.name : r.name || "").replace(/^RQ-[\w-]+\s*:\s*/i, "").replace(/^"|"$/g, "").trim();
     return { id: r.id, name, label: r.label, status: props.status || null };
   }).filter(function(c) {
@@ -4338,7 +4338,7 @@ var gateway_worker_default = {
     const served = withPagePolicy(await gateway_worker_default.serve(request, env, ctx), request);
     // UTM-CLICK-LEDGER-1: count a tagged page load after the answer is built; never delays or changes the response.
     const utmRow = utmClickRow(request, served);
-    if (utmRow && ctx && typeof ctx.waitUntil === "function") ctx.waitUntil(utmRecord(env, utmRow).catch(function() {}));
+    if (utmRow && ctx && typeof ctx.waitUntil === "function") ctx.waitUntil(utmRecord(env, utmRow).catch(function(e) { console.error(JSON.stringify({ worker: "qnfo-gateway", where: "fetch", error: String(e && e.message || e) })); }));
     return withFleetCtl(await withReachLayer(served, request));
   },
   async serve(request, env, ctx) {

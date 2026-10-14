@@ -12,3 +12,8 @@
 # reviewed exception is one record for the gate and the whole-tree audit.
 #
 # No exceptions on 2026-10-12: main and every open pull request pass without one.
+#
+# 2026-10-14 (WORKERS-BP-LOGGING-1 children #2533, #2535): three swallowed-catch hits are browser-side script inside a server template
+# literal, where a `// standards-ok:` comment would ship in the page. The server-side catches in both workers now log.
+qnfo-gateway/worker.js swallowed-catch try { window.dispatchEvent(new CustomEvent("qnfo-theme", { detail: next })); } catch (e) {} # reviewed 2026-10-14 (WORKERS-BP-LOGGING-qnfo-gateway-1): browser theme toggle inside the QDS_JS template literal; a browser console.error never reaches Workers Logs
+qnfo-ipatent/worker.js swallowed-catch }).catch(function(){}); # reviewed 2026-10-14 (WORKERS-BP-LOGGING-qnfo-ipatent-1): the example-chip and grounding fetches of the browser-side guided-flow script inside the page template literal; the server code has no line of this form
