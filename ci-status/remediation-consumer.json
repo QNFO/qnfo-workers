@@ -1,242 +1,42 @@
 {
  "ok": true,
  "marker": "REMEDIATION-CONSUMER-1",
- "verifier": "remediation-consumer@b330716baf26",
- "due": 357,
- "pass": 236,
- "fail": 102,
+ "verifier": "remediation-consumer@e9e6da0b8539",
+ "due": 431,
+ "pass": 273,
+ "fail": 139,
  "skipped": 19,
  "contracts": [
   {
-   "class": "issue-2643",
-   "issue_id": 2643,
-   "verdict": "vacuous-probe-result",
-   "expected": "closed",
-   "observed": null,
-   "reason": "probe returned no expected/observed pair"
-  },
-  {
-   "class": "issue-2645",
-   "issue_id": 2645,
-   "verdict": "vacuous-probe-result",
-   "expected": "closed",
-   "observed": null,
-   "reason": "probe returned no expected/observed pair"
-  },
-  {
-   "class": "issue-2008",
-   "issue_id": 2008,
-   "verdict": "fail",
-   "expected": "ok",
-   "observed": "pending: measuring 14 days from 2026-10-13",
-   "written": true
-  },
-  {
-   "class": "issue-2070",
-   "issue_id": 2070,
-   "verdict": "fail",
-   "expected": "ok",
-   "observed": "pending: 151 open issues, ceiling 50 (autonomy_scores issue_flow)",
-   "written": true
-  },
-  {
-   "class": "fm-superseded-closure-reopened",
-   "issue_id": null,
+   "class": "issue-2109",
+   "issue_id": 2109,
    "verdict": "pass",
-   "expected": "0",
-   "observed": "0",
-   "written": true
-  },
-  {
-   "class": "issue-2342",
-   "issue_id": 2342,
-   "verdict": "fail",
-   "expected": "0",
-   "observed": "21",
-   "written": true
-  },
-  {
-   "class": "issue-2013",
-   "issue_id": 2013,
-   "verdict": "fail",
    "expected": "ok",
-   "observed": "pending: 4 open security findings under the TP-5a grading (ids 2133,2507,2508,2633)",
+   "observed": "ok",
    "written": true
   },
   {
-   "class": "issue-2292",
-   "issue_id": 2292,
-   "verdict": "fail",
+   "class": "issue-2303",
+   "issue_id": 2303,
+   "verdict": "pass",
    "expected": "ok",
-   "observed": "pending: the row has not yet been re-run by qnfo-research-exec 0.13.0 (PR 990 re-arms it at merge)",
+   "observed": "ok",
    "written": true
   },
   {
-   "class": "fm-closure-relapse-unreopened",
-   "issue_id": null,
-   "verdict": "fail",
-   "expected": "0",
-   "observed": "1",
-   "written": true
-  },
-  {
-   "class": "issue-1796",
-   "issue_id": 1796,
-   "verdict": "fail",
-   "expected": "0",
-   "observed": "2",
-   "written": true
-  },
-  {
-   "class": "issue-2116",
-   "issue_id": 2116,
-   "verdict": "fail",
-   "expected": "1",
-   "observed": "0",
-   "written": true
-  },
-  {
-   "class": "fm-stuck-view-sla-drift",
-   "issue_id": null,
+   "class": "issue-2310",
+   "issue_id": 2310,
    "verdict": "pass",
-   "expected": "1",
-   "observed": "1",
-   "written": true
-  },
-  {
-   "class": "issue-2493",
-   "issue_id": 2493,
-   "verdict": "fail",
    "expected": "ok",
-   "observed": "pending: re-armed 2026-10-13 (REARM-TRUNCATED-REWRITES-1, PR 1176), closes when the complete rewrite republishes",
+   "observed": "ok",
    "written": true
   },
   {
-   "class": "fm-producer-batch-overshoots-backpressure",
-   "issue_id": null,
+   "class": "issue-2309",
+   "issue_id": 2309,
    "verdict": "pass",
-   "expected": "0",
-   "observed": "0",
-   "written": true
-  },
-  {
-   "class": "fm-metric-close-flap",
-   "issue_id": null,
-   "verdict": "fail",
-   "expected": "0",
-   "observed": "2",
-   "written": true
-  },
-  {
-   "class": "fm-autoclose-flap",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "2",
-   "observed": "2",
-   "written": true
-  },
-  {
-   "class": "issue-2622",
-   "issue_id": 2622,
-   "verdict": "fail",
    "expected": "ok",
-   "observed": "pending: filed by qnfo-code-orchestrator, which owns it for 48h",
-   "written": true
-  },
-  {
-   "class": "issue-2644",
-   "issue_id": 2644,
-   "verdict": "fail",
-   "expected": "1",
-   "observed": "0",
-   "written": true
-  },
-  {
-   "class": "close-predicate-monotone",
-   "issue_id": 1297,
-   "verdict": "fail",
-   "expected": "guarded",
-   "observed": "unguarded",
-   "written": true
-  },
-  {
-   "class": "issue-2133",
-   "issue_id": 2133,
-   "verdict": "fail",
-   "expected": "ok",
-   "observed": "watchmaker_index reads 2",
-   "written": true
-  },
-  {
-   "class": "issue-2262",
-   "issue_id": 2262,
-   "verdict": "fail",
-   "expected": "ok",
-   "observed": "pending: the row has not yet been re-run by qnfo-research-exec 0.13.0 (PR 990 re-arms it at merge)",
-   "written": true
-  },
-  {
-   "class": "fm-removal-unprobeable",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "1",
-   "observed": "1",
-   "written": true
-  },
-  {
-   "class": "fm-code-refusal-not-repaired",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "0",
-   "observed": "0",
-   "written": true
-  },
-  {
-   "class": "issue-2592",
-   "issue_id": 2592,
-   "verdict": "vacuous-probe-result",
-   "expected": "closed",
-   "observed": null,
-   "reason": "probe returned no expected/observed pair"
-  },
-  {
-   "class": "issue-1798",
-   "issue_id": 1798,
-   "verdict": "fail",
-   "expected": "0",
-   "observed": "1",
-   "written": true
-  },
-  {
-   "class": "belief-issues-probed-hourly",
-   "issue_id": null,
-   "verdict": "fail",
-   "expected": "1",
-   "observed": "0",
-   "written": true
-  },
-  {
-   "class": "fm-register-row-reescalated",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "0",
-   "observed": "0",
-   "written": true
-  },
-  {
-   "class": "fm-probe-reset-on-description-append",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "2",
-   "observed": "2",
-   "written": true
-  },
-  {
-   "class": "research-terminal-a2033fc2",
-   "issue_id": 2358,
-   "verdict": "fail",
-   "expected": "parked+queue-moving",
-   "observed": "pending",
+   "observed": "ok",
    "written": true
   },
   {
@@ -272,7 +72,7 @@
    "written": true
   },
   {
-   "class": "belief-research-publishes-without-zenodo",
+   "class": "fm-pdf-backlog-stalled",
    "issue_id": null,
    "verdict": "pass",
    "expected": "1",
@@ -280,7 +80,15 @@
    "written": true
   },
   {
-   "class": "fm-pdf-backlog-stalled",
+   "class": "issue-2446",
+   "issue_id": 2446,
+   "verdict": "fail",
+   "expected": "ok",
+   "observed": "pending: unmanaged_direct_spend_share reads 0.578 (target <= 0.5, lever: throttle BYOK callers through the qnfo-ai spend governor)",
+   "written": true
+  },
+  {
+   "class": "belief-research-publishes-without-zenodo",
    "issue_id": null,
    "verdict": "pass",
    "expected": "1",
@@ -296,14 +104,6 @@
    "written": true
   },
   {
-   "class": "fm-code-patch-stale-dead-end",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "0",
-   "observed": "0",
-   "written": true
-  },
-  {
    "class": "fm-binding-props-lost-on-dash-secret",
    "issue_id": null,
    "verdict": "pass",
@@ -312,11 +112,11 @@
    "written": true
   },
   {
-   "class": "issue-2446",
-   "issue_id": 2446,
-   "verdict": "fail",
-   "expected": "ok",
-   "observed": "pending: unmanaged_direct_spend_share reads 0.5781 (target <= 0.5, lever: throttle BYOK callers through the qnfo-ai spend governor)",
+   "class": "fm-code-patch-stale-dead-end",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "0",
+   "observed": "0",
    "written": true
   },
   {
@@ -325,6 +125,22 @@
    "verdict": "fail",
    "expected": "1",
    "observed": "0",
+   "written": true
+  },
+  {
+   "class": "issue-2487",
+   "issue_id": 2487,
+   "verdict": "fail",
+   "expected": "1",
+   "observed": "0",
+   "written": true
+  },
+  {
+   "class": "issue-2007",
+   "issue_id": 2007,
+   "verdict": "fail",
+   "expected": "ok",
+   "observed": "pending: no anchor repair yet and the 14-day window after the 0.3.19 deploy is still open",
    "written": true
   },
   {
@@ -344,22 +160,6 @@
    "written": true
   },
   {
-   "class": "fm-exact-version-probe",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "0",
-   "observed": "0",
-   "written": true
-  },
-  {
-   "class": "issue-2007",
-   "issue_id": 2007,
-   "verdict": "fail",
-   "expected": "ok",
-   "observed": "pending: no anchor repair yet and the 14-day window after the 0.3.19 deploy is still open",
-   "written": true
-  },
-  {
    "class": "fm-migration-run-cancelled",
    "issue_id": null,
    "verdict": "pass",
@@ -368,4 +168,203 @@
    "written": true
   },
   {
-   "c
+   "class": "fm-exact-version-probe",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "0",
+   "observed": "0",
+   "written": true
+  },
+  {
+   "class": "fm-github-token-lapse",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "1",
+   "observed": "1",
+   "written": true
+  },
+  {
+   "class": "issue-2590",
+   "issue_id": 2590,
+   "verdict": "fail",
+   "expected": "ok",
+   "observed": "pending: filed by qnfo-code-orchestrator, which owns it for 48h",
+   "written": true
+  },
+  {
+   "class": "issue-2599",
+   "issue_id": 2599,
+   "verdict": "vacuous-probe-result",
+   "expected": "closed",
+   "observed": null,
+   "reason": "probe returned no expected/observed pair"
+  },
+  {
+   "class": "fm-probe-review-refuses-detector",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "0",
+   "observed": "0",
+   "written": true
+  },
+  {
+   "class": "fm-response-clock-over-120m",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "0",
+   "observed": "0",
+   "written": true
+  },
+  {
+   "class": "issue-2603",
+   "issue_id": 2603,
+   "verdict": "fail",
+   "expected": "1",
+   "observed": "0",
+   "written": true
+  },
+  {
+   "class": "issue-2068",
+   "issue_id": 2068,
+   "verdict": "fail",
+   "expected": "ok",
+   "observed": "pending: 1 job rows since the issue was filed (needs 3)",
+   "written": true
+  },
+  {
+   "class": "issue-2101",
+   "issue_id": 2101,
+   "verdict": "fail",
+   "expected": "ok",
+   "observed": "pending: no scripts/* code task merged yet (4 such tasks exist)",
+   "written": true
+  },
+  {
+   "class": "issue-2606",
+   "issue_id": 2606,
+   "verdict": "fail",
+   "expected": "ok",
+   "observed": "pending: filed by q08-signal-engine, which owns it for 48h",
+   "written": true
+  },
+  {
+   "class": "issue-2111",
+   "issue_id": 2111,
+   "verdict": "fail",
+   "expected": "ok",
+   "observed": "pending: 49 SEARCH-not-found failures in 7 days (target <= 3)",
+   "written": true
+  },
+  {
+   "class": "belief-nothing-stuck",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "1",
+   "observed": "1",
+   "written": true
+  },
+  {
+   "class": "fm-owner-card-misroute",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "1",
+   "observed": "1",
+   "written": true
+  },
+  {
+   "class": "belief-owner-queue-identity-only",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "1",
+   "observed": "1",
+   "written": true
+  },
+  {
+   "class": "issue-2573",
+   "issue_id": 2573,
+   "verdict": "fail",
+   "expected": "ok",
+   "observed": "pending: filed by radar-hub, which owns it for 48h",
+   "written": true
+  },
+  {
+   "class": "issue-2612",
+   "issue_id": 2612,
+   "verdict": "fail",
+   "expected": "ok",
+   "observed": "pending: filed by qnfo-code-orchestrator, which owns it for 48h",
+   "written": true
+  },
+  {
+   "class": "issue-2613",
+   "issue_id": 2613,
+   "verdict": "fail",
+   "expected": "1",
+   "observed": "0",
+   "written": true
+  },
+  {
+   "class": "issue-2616",
+   "issue_id": 2616,
+   "verdict": "fail",
+   "expected": "ok",
+   "observed": "pending: filed by qnfo-fleet-control, which owns it for 48h",
+   "written": true
+  },
+  {
+   "class": "issue-2637",
+   "issue_id": 2637,
+   "verdict": "vacuous-probe-result",
+   "expected": "closed",
+   "observed": null,
+   "reason": "probe returned no expected/observed pair"
+  },
+  {
+   "class": "issue-2638",
+   "issue_id": 2638,
+   "verdict": "vacuous-probe-result",
+   "expected": "closed",
+   "observed": null,
+   "reason": "probe returned no expected/observed pair"
+  },
+  {
+   "class": "issue-2639",
+   "issue_id": 2639,
+   "verdict": "vacuous-probe-result",
+   "expected": "closed",
+   "observed": null,
+   "reason": "probe returned no expected/observed pair"
+  },
+  {
+   "class": "issue-2642",
+   "issue_id": 2642,
+   "verdict": "vacuous-probe-result",
+   "expected": "closed",
+   "observed": null,
+   "reason": "probe returned no expected/observed pair"
+  },
+  {
+   "class": "issue-2157",
+   "issue_id": 2157,
+   "verdict": "fail",
+   "expected": "ok",
+   "observed": "the improvement loop still finds this in its latest run (IMPROVEMENT-LOOP-1 closes it when the finding clears)",
+   "written": true
+  },
+  {
+   "class": "issue-1200",
+   "issue_id": 1200,
+   "verdict": "fail",
+   "expected": "converging",
+   "observed": "opened 53 > closed 25",
+   "written": true
+  },
+  {
+   "class": "fm-producer-lateness-in-hours",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "0",
+   "observed": "0",
+   "written": true
+  },
+  {
