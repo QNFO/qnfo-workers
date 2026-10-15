@@ -1,292 +1,12 @@
 {
  "ok": true,
  "marker": "REMEDIATION-CONSUMER-1",
- "verifier": "remediation-consumer@a4b6aa9995f8",
- "due": 464,
- "pass": 287,
- "fail": 155,
- "skipped": 22,
+ "verifier": "remediation-consumer@4128a851e06d",
+ "due": 454,
+ "pass": 285,
+ "fail": 152,
+ "skipped": 17,
  "contracts": [
-  {
-   "class": "issue-1903",
-   "issue_id": 1903,
-   "verdict": "pass",
-   "expected": "ok",
-   "observed": "ok",
-   "written": true
-  },
-  {
-   "class": "issue-2049",
-   "issue_id": 2049,
-   "verdict": "pass",
-   "expected": "ok",
-   "observed": "ok",
-   "written": true
-  },
-  {
-   "class": "issue-2076",
-   "issue_id": 2076,
-   "verdict": "pass",
-   "expected": "ok",
-   "observed": "ok",
-   "written": true
-  },
-  {
-   "class": "issue-2131",
-   "issue_id": 2131,
-   "verdict": "pass",
-   "expected": "ok",
-   "observed": "ok",
-   "written": true
-  },
-  {
-   "class": "issue-2146",
-   "issue_id": 2146,
-   "verdict": "pass",
-   "expected": "ok",
-   "observed": "ok",
-   "written": true
-  },
-  {
-   "class": "fm-standing-report-issue",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "1",
-   "observed": "1",
-   "written": true
-  },
-  {
-   "class": "issue-2659",
-   "issue_id": 2659,
-   "verdict": "vacuous-probe-result",
-   "expected": "closed",
-   "observed": null,
-   "reason": "probe returned no expected/observed pair"
-  },
-  {
-   "class": "issue-2661",
-   "issue_id": 2661,
-   "verdict": "vacuous-probe-result",
-   "expected": "closed",
-   "observed": null,
-   "reason": "probe returned no expected/observed pair"
-  },
-  {
-   "class": "issue-2568",
-   "issue_id": 2568,
-   "verdict": "fail",
-   "expected": "1",
-   "observed": "0",
-   "written": true
-  },
-  {
-   "class": "issue-2570",
-   "issue_id": 2570,
-   "verdict": "fail",
-   "expected": "1",
-   "observed": "0",
-   "written": true
-  },
-  {
-   "class": "issue-2609",
-   "issue_id": 2609,
-   "verdict": "fail",
-   "expected": "ok",
-   "observed": "pending: filed by qnfo-code-orchestrator, which owns it for 48h",
-   "written": true
-  },
-  {
-   "class": "issue-2662",
-   "issue_id": 2662,
-   "verdict": "vacuous-probe-result",
-   "expected": "closed",
-   "observed": null,
-   "reason": "probe returned no expected/observed pair"
-  },
-  {
-   "class": "issue-2663",
-   "issue_id": 2663,
-   "verdict": "vacuous-probe-result",
-   "expected": "closed",
-   "observed": null,
-   "reason": "probe returned no expected/observed pair"
-  },
-  {
-   "class": "issue-1780",
-   "issue_id": 1780,
-   "verdict": "fail",
-   "expected": "1",
-   "observed": "0",
-   "written": true
-  },
-  {
-   "class": "issue-2101",
-   "issue_id": 2101,
-   "verdict": "fail",
-   "expected": "ok",
-   "observed": "pending: no scripts/* code task merged yet (4 such tasks exist)",
-   "written": true
-  },
-  {
-   "class": "issue-2111",
-   "issue_id": 2111,
-   "verdict": "fail",
-   "expected": "ok",
-   "observed": "pending: 50 SEARCH-not-found failures in 7 days (target <= 3)",
-   "written": true
-  },
-  {
-   "class": "belief-nothing-stuck",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "1",
-   "observed": "1",
-   "written": true
-  },
-  {
-   "class": "issue-2192",
-   "issue_id": 2192,
-   "verdict": "fail",
-   "expected": "ok",
-   "observed": "pending: 4 metrics older than twice their refresh cadence or never refreshed, the rule qnfo-lifecycle files this issue on (invest_decision_level, human_actions_open, human_wait_oldest_days, human_wait_oldest_min)",
-   "written": true
-  },
-  {
-   "class": "fm-publish-stall-filed-not-fixed",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "0",
-   "observed": "0",
-   "written": true
-  },
-  {
-   "class": "issue-2603",
-   "issue_id": 2603,
-   "verdict": "fail",
-   "expected": "1",
-   "observed": "0",
-   "written": true
-  },
-  {
-   "class": "fm-response-clock-over-120m",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "0",
-   "observed": "0",
-   "written": true
-  },
-  {
-   "class": "issue-2606",
-   "issue_id": 2606,
-   "verdict": "fail",
-   "expected": "ok",
-   "observed": "pending: filed by q08-signal-engine, which owns it for 48h",
-   "written": true
-  },
-  {
-   "class": "issue-2613",
-   "issue_id": 2613,
-   "verdict": "fail",
-   "expected": "1",
-   "observed": "0",
-   "written": true
-  },
-  {
-   "class": "issue-2616",
-   "issue_id": 2616,
-   "verdict": "fail",
-   "expected": "ok",
-   "observed": "pending: filed by qnfo-fleet-control, which owns it for 48h",
-   "written": true
-  },
-  {
-   "class": "issue-2068",
-   "issue_id": 2068,
-   "verdict": "fail",
-   "expected": "ok",
-   "observed": "pending: 1 job rows since the issue was filed (needs 3)",
-   "written": true
-  },
-  {
-   "class": "belief-owner-queue-identity-only",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "1",
-   "observed": "1",
-   "written": true
-  },
-  {
-   "class": "issue-2637",
-   "issue_id": 2637,
-   "verdict": "vacuous-probe-result",
-   "expected": "closed",
-   "observed": null,
-   "reason": "probe returned no expected/observed pair"
-  },
-  {
-   "class": "issue-2626",
-   "issue_id": 2626,
-   "verdict": "vacuous-probe-result",
-   "expected": "closed",
-   "observed": null,
-   "reason": "probe returned no expected/observed pair"
-  },
-  {
-   "class": "issue-2638",
-   "issue_id": 2638,
-   "verdict": "vacuous-probe-result",
-   "expected": "closed",
-   "observed": null,
-   "reason": "probe returned no expected/observed pair"
-  },
-  {
-   "class": "issue-2639",
-   "issue_id": 2639,
-   "verdict": "vacuous-probe-result",
-   "expected": "closed",
-   "observed": null,
-   "reason": "probe returned no expected/observed pair"
-  },
-  {
-   "class": "fm-owner-card-misroute",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "1",
-   "observed": "1",
-   "written": true
-  },
-  {
-   "class": "issue-2573",
-   "issue_id": 2573,
-   "verdict": "fail",
-   "expected": "ok",
-   "observed": "pending: filed by radar-hub, which owns it for 48h",
-   "written": true
-  },
-  {
-   "class": "issue-2612",
-   "issue_id": 2612,
-   "verdict": "fail",
-   "expected": "ok",
-   "observed": "pending: filed by qnfo-code-orchestrator, which owns it for 48h",
-   "written": true
-  },
-  {
-   "class": "issue-2642",
-   "issue_id": 2642,
-   "verdict": "vacuous-probe-result",
-   "expected": "closed",
-   "observed": null,
-   "reason": "probe returned no expected/observed pair"
-  },
-  {
-   "class": "issue-2157",
-   "issue_id": 2157,
-   "verdict": "fail",
-   "expected": "ok",
-   "observed": "the improvement loop still finds this in its latest run (IMPROVEMENT-LOOP-1 closes it when the finding clears)",
-   "written": true
-  },
   {
    "class": "issue-2187",
    "issue_id": 2187,
@@ -294,52 +14,10 @@
    "reason": "url-not-allowlisted"
   },
   {
-   "class": "fm-code-review-dead-end-at-open",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "0",
-   "observed": "0",
-   "written": true
-  },
-  {
-   "class": "issue-1875",
-   "issue_id": 1875,
-   "verdict": "fail",
-   "expected": "1",
-   "observed": "0",
-   "written": true
-  },
-  {
-   "class": "issue-1200",
-   "issue_id": 1200,
-   "verdict": "fail",
-   "expected": "converging",
-   "observed": "opened 57 > closed 20",
-   "written": true
-  },
-  {
-   "class": "fm-producer-lateness-in-hours",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "0",
-   "observed": "0",
-   "written": true
-  },
-  {
-   "class": "issue-2604",
-   "issue_id": 2604,
-   "verdict": "fail",
-   "expected": "1",
-   "observed": "0",
-   "written": true
-  },
-  {
-   "class": "issue-1838",
-   "issue_id": 1838,
-   "verdict": "fail",
-   "expected": "0",
-   "observed": "missing",
-   "written": true
+   "class": "issue-2453",
+   "issue_id": 2453,
+   "verdict": "probe-not-machine-executable",
+   "reason": "url-not-allowlisted"
   },
   {
    "class": "issue-1987",
@@ -347,6 +25,22 @@
    "verdict": "fail",
    "expected": "posting",
    "observed": "pending",
+   "written": true
+  },
+  {
+   "class": "belief-no-spof-on-critical-path",
+   "issue_id": null,
+   "verdict": "fail",
+   "expected": "1",
+   "observed": "0",
+   "written": true
+  },
+  {
+   "class": "fm-trigger-depth",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "1",
+   "observed": "1",
    "written": true
   },
   {
@@ -358,15 +52,369 @@
    "written": true
   },
   {
-   "class": "issue-2453",
-   "issue_id": 2453,
-   "verdict": "probe-not-machine-executable",
-   "reason": "url-not-allowlisted"
-  },
-  {
-   "class": "issue-1872",
-   "issue_id": 1872,
+   "class": "issue-2604",
+   "issue_id": 2604,
    "verdict": "fail",
    "expected": "1",
    "observed": "0",
-   
+   "written": true
+  },
+  {
+   "class": "issue-2072",
+   "issue_id": 2072,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "issue-2456",
+   "issue_id": 2456,
+   "verdict": "fail",
+   "expected": "1",
+   "observed": "0",
+   "written": true
+  },
+  {
+   "class": "issue-1899",
+   "issue_id": 1899,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "issue-2366",
+   "issue_id": 2366,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "issue-2646",
+   "issue_id": 2646,
+   "verdict": "fail",
+   "expected": "ok",
+   "observed": "pending: filed by qnfo-code-orchestrator, which owns it for 48h",
+   "written": true
+  },
+  {
+   "class": "issue-2171",
+   "issue_id": 2171,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "issue-2467",
+   "issue_id": 2467,
+   "verdict": "fail",
+   "expected": "1",
+   "observed": "0",
+   "written": true
+  },
+  {
+   "class": "issue-2122",
+   "issue_id": 2122,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "fm-unknown-model-id-silent-default",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "fm-dissemination-queue-over-cadence",
+   "issue_id": null,
+   "verdict": "fail",
+   "expected": "0",
+   "observed": "10",
+   "written": true
+  },
+  {
+   "class": "issue-2275",
+   "issue_id": 2275,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "rt-fleet-dashboard",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "issue-2102",
+   "issue_id": 2102,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "issue-2271",
+   "issue_id": 2271,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "issue-1297",
+   "issue_id": 1297,
+   "verdict": "pass",
+   "expected": "guarded",
+   "observed": "guarded",
+   "written": true
+  },
+  {
+   "class": "issue-2597",
+   "issue_id": 2597,
+   "verdict": "fail",
+   "expected": "1",
+   "observed": "0",
+   "written": true
+  },
+  {
+   "class": "issue-2629",
+   "issue_id": 2629,
+   "verdict": "fail",
+   "expected": "ok",
+   "observed": "pending: filed by qnfo-code-orchestrator, which owns it for 48h",
+   "written": true
+  },
+  {
+   "class": "issue-2281",
+   "issue_id": 2281,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "issue-2462",
+   "issue_id": 2462,
+   "verdict": "fail",
+   "expected": "1",
+   "observed": "0",
+   "written": true
+  },
+  {
+   "class": "issue-2272",
+   "issue_id": 2272,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "issue-2657",
+   "issue_id": 2657,
+   "verdict": "vacuous-probe-result",
+   "expected": "closed",
+   "observed": null,
+   "reason": "probe returned no expected/observed pair"
+  },
+  {
+   "class": "issue-2343",
+   "issue_id": 2343,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "issue-2602",
+   "issue_id": 2602,
+   "verdict": "fail",
+   "expected": "ok",
+   "observed": "pending: filed by qnfo-research-exec, which owns it for 48h",
+   "written": true
+  },
+  {
+   "class": "issue-2282",
+   "issue_id": 2282,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "issue-2302",
+   "issue_id": 2302,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "issue-2350",
+   "issue_id": 2350,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "fm-code-window-long-line",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "0",
+   "observed": "0",
+   "written": true
+  },
+  {
+   "class": "issue-2517",
+   "issue_id": 2517,
+   "verdict": "fail",
+   "expected": "ok",
+   "observed": "pending: filed by qnfo-research-exec, which owns it for 48h",
+   "written": true
+  },
+  {
+   "class": "issue-2352",
+   "issue_id": 2352,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "issue-2396",
+   "issue_id": 2396,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "issue-2409",
+   "issue_id": 2409,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "issue-2617",
+   "issue_id": 2617,
+   "verdict": "fail",
+   "expected": "ok",
+   "observed": "pending: filed by qnfo-fleet-control, which owns it for 48h",
+   "written": true
+  },
+  {
+   "class": "fm-honeypot-named-for-autofill",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "issue-2473",
+   "issue_id": 2473,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "issue-2483",
+   "issue_id": 2483,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "issue-2362",
+   "issue_id": 2362,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "issue-2398",
+   "issue_id": 2398,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "issue-2667",
+   "issue_id": 2667,
+   "verdict": "vacuous-probe-result",
+   "expected": "closed",
+   "observed": null,
+   "reason": "probe returned no expected/observed pair"
+  },
+  {
+   "class": "rt-gateway",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "issue-2349",
+   "issue_id": 2349,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "issue-2355",
+   "issue_id": 2355,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "issue-2389",
+   "issue_id": 2389,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "issue-2404",
+   "issue_id": 2404,
+   "verdict": "fail",
+   "expected": "ok",
+   "observed": "missing-marker:qnfo-research-exec/worker.js",
+   "written": true
+  },
+  {
+   "class": "fm-write-200-only",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "fm-code-read-stale-checkout",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "writt
