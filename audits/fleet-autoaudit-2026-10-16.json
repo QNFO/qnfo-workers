@@ -1,0 +1,1676 @@
+{
+  "audited_at": "2026-10-16 00:45:46",
+  "d1_write_failures": [],
+  "d1_writes_ok": 115,
+  "guard": {
+    "_guard_rc": 0,
+    "ahead": [],
+    "cf_script_list": true,
+    "content_checked": true,
+    "content_drift": [],
+    "cron_only": [],
+    "cron_only_count": 0,
+    "drift": [],
+    "live_err": [],
+    "multi_version": [],
+    "multi_version_count": 0,
+    "name_resolution": true,
+    "no_health_route": [],
+    "no_live_version": [],
+    "no_repo_version": [],
+    "not_a_worker": [
+      {
+        "dir": "archive",
+        "worker": "archive"
+      },
+      {
+        "dir": "audits",
+        "worker": "audits"
+      },
+      {
+        "dir": "ci-status",
+        "worker": "ci-status"
+      },
+      {
+        "dir": "docs",
+        "worker": "docs"
+      },
+      {
+        "dir": "funding",
+        "worker": "funding"
+      },
+      {
+        "dir": "machine-readability",
+        "worker": "machine-readability"
+      },
+      {
+        "dir": "migrations",
+        "worker": "migrations"
+      },
+      {
+        "dir": "papers",
+        "worker": "papers"
+      },
+      {
+        "dir": "qnfo-web-unified",
+        "worker": "qnfo-web-unified"
+      },
+      {
+        "dir": "research-code",
+        "worker": "research-code"
+      },
+      {
+        "dir": "scripts",
+        "worker": "scripts"
+      }
+    ],
+    "not_a_worker_count": 11,
+    "not_deployed_dirs": [
+      "agent-orchestrator",
+      "ai-health-prober",
+      "audit-hub",
+      "calendar-api",
+      "companion-hub",
+      "errata-hub",
+      "errata-orchestrator",
+      "events-radar",
+      "fleet-exec",
+      "jnl-pipeline",
+      "jnl-referee",
+      "jnl-reviser",
+      "jnl-watch",
+      "memory-mcp",
+      "notes-intake",
+      "obsidian-writer",
+      "ops-gateway",
+      "osf-integrity-check",
+      "paper-hub",
+      "personal-events-radar",
+      "personal-life-indexer",
+      "personal-life-maintain",
+      "personal-life-search",
+      "qnfo-agent-orchestrator",
+      "qnfo-agent-ws",
+      "qnfo-analytics",
+      "qnfo-archive",
+      "qnfo-artifact-agent",
+      "qnfo-artifacts",
+      "qnfo-arxiv-radar",
+      "qnfo-auditor",
+      "qnfo-autonomy-scorer",
+      "qnfo-autopilot",
+      "qnfo-backlog-exec",
+      "qnfo-blank-audit",
+      "qnfo-calendar-intake",
+      "qnfo-chameleon",
+      "qnfo-chat-canary",
+      "qnfo-citation-watch",
+      "qnfo-code-agent",
+      "qnfo-ddocs-indexer",
+      "qnfo-email-orchestrator",
+      "qnfo-errata-publish",
+      "qnfo-errata-respond",
+      "qnfo-errata-watch",
+      "qnfo-error-selfheal",
+      "qnfo-events",
+      "qnfo-fleet-advisor",
+      "qnfo-fleet-calibrator",
+      "qnfo-fleet-deploy",
+      "qnfo-fleet-feed",
+      "qnfo-idea-factory",
+      "qnfo-idea-miner",
+      "qnfo-idea-triage",
+      "qnfo-impact",
+      "qnfo-kaizen",
+      "qnfo-outreach",
+      "qnfo-paper-explainer",
+      "qnfo-paper-indexer",
+      "qnfo-paper-reviser",
+      "qnfo-pipeline-ops",
+      "qnfo-proof",
+      "qnfo-qwav",
+      "qnfo-register-guard",
+      "qnfo-research-radar",
+      "qnfo-research-supervisor",
+      "qnfo-scorecard",
+      "qnfo-signal-loop",
+      "qnfo-skill-sync",
+      "qnfo-thread-ingest",
+      "qnfo-twin-maintain",
+      "qnfo-venue-radar",
+      "research-daily-brief",
+      "retired-deposit-stage",
+      "skills-discovery",
+      "vault-indexer"
+    ],
+    "not_deployed_notdrift": 76,
+    "not_deployed_workers": [
+      {
+        "dir": "agent-orchestrator",
+        "marker": "RETIRED",
+        "worker": "qnfo-agent-orchestrator-legacy-dup"
+      },
+      {
+        "dir": "ai-health-prober",
+        "marker": "FOLDED",
+        "worker": "ai-health-prober"
+      },
+      {
+        "dir": "audit-hub",
+        "marker": "RETIRED",
+        "worker": "audit-hub"
+      },
+      {
+        "dir": "calendar-api",
+        "marker": "FOLDED",
+        "worker": "calendar-api"
+      },
+      {
+        "dir": "companion-hub",
+        "marker": "FOLDED",
+        "worker": "companion-hub"
+      },
+      {
+        "dir": "errata-hub",
+        "marker": "FOLDED",
+        "worker": "errata-hub"
+      },
+      {
+        "dir": "errata-orchestrator",
+        "marker": "RETIRED",
+        "worker": "qnfo-errata-orchestrator"
+      },
+      {
+        "dir": "events-radar",
+        "marker": "FOLDED",
+        "worker": "events-radar"
+      },
+      {
+        "dir": "fleet-exec",
+        "marker": "FOLDED",
+        "worker": "fleet-exec"
+      },
+      {
+        "dir": "jnl-pipeline",
+        "marker": "RETIRED",
+        "worker": "jnl-pipeline"
+      },
+      {
+        "dir": "jnl-referee",
+        "marker": "RETIRED",
+        "worker": "jnl-referee"
+      },
+      {
+        "dir": "jnl-reviser",
+        "marker": "RETIRED",
+        "worker": "jnl-reviser"
+      },
+      {
+        "dir": "jnl-watch",
+        "marker": "RETIRED",
+        "worker": "jnl-watch"
+      },
+      {
+        "dir": "memory-mcp",
+        "marker": "RETIRED",
+        "worker": "qnfo-memory-mcp-legacy-dup"
+      },
+      {
+        "dir": "notes-intake",
+        "marker": "FOLDED",
+        "worker": "notes-intake"
+      },
+      {
+        "dir": "obsidian-writer",
+        "marker": "RETIRED",
+        "worker": "obsidian-writer"
+      },
+      {
+        "dir": "ops-gateway",
+        "marker": "RETIRED",
+        "worker": "ops-gateway"
+      },
+      {
+        "dir": "osf-integrity-check",
+        "marker": "RETIRED",
+        "worker": "osf-integrity-check"
+      },
+      {
+        "dir": "paper-hub",
+        "marker": "RETIRED",
+        "worker": "paper-hub"
+      },
+      {
+        "dir": "personal-events-radar",
+        "marker": "FOLDED",
+        "worker": "personal-events-radar"
+      },
+      {
+        "dir": "personal-life-indexer",
+        "marker": "RETIRED",
+        "worker": "personal-life-indexer"
+      },
+      {
+        "dir": "personal-life-maintain",
+        "marker": "RETIRED",
+        "worker": "personal-life-maintain"
+      },
+      {
+        "dir": "personal-life-search",
+        "marker": "RETIRED",
+        "worker": "personal-life-search"
+      },
+      {
+        "dir": "qnfo-agent-orchestrator",
+        "marker": "RETIRED",
+        "worker": "qnfo-agent-orchestrator"
+      },
+      {
+        "dir": "qnfo-agent-ws",
+        "marker": "RETIRED",
+        "worker": "qnfo-agent-ws"
+      },
+      {
+        "dir": "qnfo-analytics",
+        "marker": "RETIRED",
+        "worker": "qnfo-analytics"
+      },
+      {
+        "dir": "qnfo-archive",
+        "marker": "RETIRED",
+        "worker": "qnfo-archive"
+      },
+      {
+        "dir": "qnfo-artifact-agent",
+        "marker": "RETIRED",
+        "worker": "qnfo-artifact-agent"
+      },
+      {
+        "dir": "qnfo-artifacts",
+        "marker": "RETIRED",
+        "worker": "qnfo-artifacts"
+      },
+      {
+        "dir": "qnfo-arxiv-radar",
+        "marker": "FOLDED",
+        "worker": "qnfo-arxiv-radar"
+      },
+      {
+        "dir": "qnfo-auditor",
+        "marker": "RETIRED",
+        "worker": "qnfo-auditor"
+      },
+      {
+        "dir": "qnfo-autonomy-scorer",
+        "marker": "FOLDED",
+        "worker": "qnfo-autonomy-scorer"
+      },
+      {
+        "dir": "qnfo-autopilot",
+        "marker": "FOLDED",
+        "worker": "qnfo-autopilot"
+      },
+      {
+        "dir": "qnfo-backlog-exec",
+        "marker": "FOLDED",
+        "worker": "qnfo-backlog-exec"
+      },
+      {
+        "dir": "qnfo-blank-audit",
+        "marker": "RETIRED",
+        "worker": "qnfo-blank-audit"
+      },
+      {
+        "dir": "qnfo-calendar-intake",
+        "marker": "RETIRED",
+        "worker": "qnfo-calendar-intake"
+      },
+      {
+        "dir": "qnfo-chameleon",
+        "marker": "RETIRED",
+        "worker": "qnfo-chameleon"
+      },
+      {
+        "dir": "qnfo-chat-canary",
+        "marker": "RETIRED",
+        "worker": "qnfo-chat-canary"
+      },
+      {
+        "dir": "qnfo-citation-watch",
+        "marker": "FOLDED",
+        "worker": "qnfo-citation-watch"
+      },
+      {
+        "dir": "qnfo-code-agent",
+        "marker": "RETIRED",
+        "worker": "qnfo-code-agent"
+      },
+      {
+        "dir": "qnfo-ddocs-indexer",
+        "marker": "RETIRED",
+        "worker": "qnfo-ddocs-indexer"
+      },
+      {
+        "dir": "qnfo-email-orchestrator",
+        "marker": "FOLDED",
+        "worker": "qnfo-email-orchestrator"
+      },
+      {
+        "dir": "qnfo-errata-publish",
+        "marker": "FOLDED",
+        "worker": "qnfo-errata-publish"
+      },
+      {
+        "dir": "qnfo-errata-respond",
+        "marker": "FOLDED",
+        "worker": "qnfo-errata-respond"
+      },
+      {
+        "dir": "qnfo-errata-watch",
+        "marker": "FOLDED",
+        "worker": "qnfo-errata-watch"
+      },
+      {
+        "dir": "qnfo-error-selfheal",
+        "marker": "RETIRED",
+        "worker": "qnfo-error-selfheal"
+      },
+      {
+        "dir": "qnfo-events",
+        "marker": "RETIRED",
+        "worker": "qnfo-events"
+      },
+      {
+        "dir": "qnfo-fleet-advisor",
+        "marker": "FOLDED",
+        "worker": "qnfo-fleet-advisor"
+      },
+      {
+        "dir": "qnfo-fleet-calibrator",
+        "marker": "FOLDED",
+        "worker": "qnfo-fleet-calibrator"
+      },
+      {
+        "dir": "qnfo-fleet-deploy",
+        "marker": "RETIRED",
+        "worker": "qnfo-fleet-deploy"
+      },
+      {
+        "dir": "qnfo-fleet-feed",
+        "marker": "RETIRED",
+        "worker": "qnfo-fleet-feed"
+      },
+      {
+        "dir": "qnfo-idea-factory",
+        "marker": "RETIRED",
+        "worker": "qnfo-idea-factory"
+      },
+      {
+        "dir": "qnfo-idea-miner",
+        "marker": "RETIRED",
+        "worker": "qnfo-idea-miner"
+      },
+      {
+        "dir": "qnfo-idea-triage",
+        "marker": "FOLDED",
+        "worker": "qnfo-idea-triage"
+      },
+      {
+        "dir": "qnfo-impact",
+        "marker": "RETIRED",
+        "worker": "qnfo-impact"
+      },
+      {
+        "dir": "qnfo-kaizen",
+        "marker": "RETIRED",
+        "worker": "qnfo-kaizen"
+      },
+      {
+        "dir": "qnfo-outreach",
+        "marker": "RETIRED",
+        "worker": "qnfo-outreach"
+      },
+      {
+        "dir": "qnfo-paper-explainer",
+        "marker": "RETIRED",
+        "worker": "qnfo-paper-explainer"
+      },
+      {
+        "dir": "qnfo-paper-indexer",
+        "marker": "FOLDED",
+        "worker": "qnfo-paper-indexer"
+      },
+      {
+        "dir": "qnfo-paper-reviser",
+        "marker": "FOLDED",
+        "worker": "qnfo-paper-reviser"
+      },
+      {
+        "dir": "qnfo-pipeline-ops",
+        "marker": "RETIRED",
+        "worker": "qnfo-pipeline-ops"
+      },
+      {
+        "dir": "qnfo-proof",
+        "marker": "RETIRED",
+        "worker": "qnfo-proof"
+      },
+      {
+        "dir": "qnfo-qwav",
+        "marker": "RETIRED",
+        "worker": "qnfo-qwav"
+      },
+      {
+        "dir": "qnfo-register-guard",
+        "marker": "FOLDED",
+        "worker": "qnfo-register-guard"
+      },
+      {
+        "dir": "qnfo-research-radar",
+        "marker": "FOLDED",
+        "worker": "qnfo-research-radar"
+      },
+      {
+        "dir": "qnfo-research-supervisor",
+        "marker": "RETIRED",
+        "worker": "qnfo-research-supervisor"
+      },
+      {
+        "dir": "qnfo-scorecard",
+        "marker": "RETIRED",
+        "worker": "qnfo-scorecard"
+      },
+      {
+        "dir": "qnfo-signal-loop",
+        "marker": "RETIRED",
+        "worker": "qnfo-signal-loop"
+      },
+      {
+        "dir": "qnfo-skill-sync",
+        "marker": "RETIRED",
+        "worker": "qnfo-skill-sync"
+      },
+      {
+        "dir": "qnfo-thread-ingest",
+        "marker": "RETIRED",
+        "worker": "qnfo-thread-ingest"
+      },
+      {
+        "dir": "qnfo-twin-maintain",
+        "marker": "FOLDED",
+        "worker": "qnfo-twin-maintain"
+      },
+      {
+        "dir": "qnfo-venue-radar",
+        "marker": "RETIRED",
+        "worker": "qnfo-venue-radar"
+      },
+      {
+        "dir": "research-daily-brief",
+        "marker": "RETIRED",
+        "worker": "research-daily-brief"
+      },
+      {
+        "dir": "retired-deposit-stage",
+        "marker": "RETIRED",
+        "worker": "retired-deposit-stage"
+      },
+      {
+        "dir": "skills-discovery",
+        "marker": "RETIRED",
+        "worker": "qnfo-skills-discovery"
+      },
+      {
+        "dir": "vault-indexer",
+        "marker": "FOLDED",
+        "worker": "vault-indexer"
+      }
+    ],
+    "retired_present": [],
+    "retired_present_count": 0,
+    "scope": "all",
+    "sync": 28,
+    "sync_workers": [
+      {
+        "dir": "idea-hub",
+        "version": "1.10.2-triage-10",
+        "worker": "idea-hub"
+      },
+      {
+        "dir": "personal-api",
+        "version": "4.9.1-log-catches",
+        "worker": "personal-api"
+      },
+      {
+        "dir": "personal-companion",
+        "version": "1.28.1-heading-label",
+        "worker": "personal-companion"
+      },
+      {
+        "dir": "q08-signal-engine",
+        "version": "0.28.1-prune-extend",
+        "worker": "q08-signal-engine"
+      },
+      {
+        "dir": "qnfo-ai",
+        "version": "5.36.2-log-catches",
+        "worker": "qnfo-ai"
+      },
+      {
+        "dir": "qnfo-ai-calibration",
+        "version": "1.5.1-task-truth-nohedge",
+        "worker": "qnfo-ai-calibration"
+      },
+      {
+        "dir": "qnfo-ai-search",
+        "version": "2.6.3-bp-logging",
+        "worker": "qnfo-ai-search"
+      },
+      {
+        "dir": "qnfo-cloud-ops",
+        "version": "1.30.0-gh-token-watch",
+        "worker": "qnfo-cloud-ops"
+      },
+      {
+        "dir": "qnfo-code-orchestrator",
+        "version": "0.16.2-sla-120m",
+        "worker": "qnfo-code-orchestrator"
+      },
+      {
+        "dir": "qnfo-containers-pilot",
+        "version": "1.0.11-command-exit-honest",
+        "worker": "qnfo-containers-pilot"
+      },
+      {
+        "dir": "qnfo-deploy-guard",
+        "version": "1.3.26-log-catches",
+        "worker": "qnfo-deploy-guard"
+      },
+      {
+        "dir": "qnfo-email",
+        "version": "2.9.2-stall-sla",
+        "worker": "qnfo-email"
+      },
+      {
+        "dir": "qnfo-fleet-control",
+        "version": "0.32.0-gh-app",
+        "worker": "qnfo-fleet-control"
+      },
+      {
+        "dir": "qnfo-fleet-dashboard",
+        "version": "1.37.9-codeagent",
+        "worker": "qnfo-fleet-dashboard"
+      },
+      {
+        "dir": "qnfo-gateway",
+        "version": "3.18.5-bp-logging",
+        "worker": "qnfo-gateway"
+      },
+      {
+        "dir": "qnfo-infra",
+        "version": "1.5.1-bp-logging",
+        "worker": "qnfo-infra"
+      },
+      {
+        "dir": "qnfo-intent-orchestrator",
+        "version": "1.5.0-cron-heartbeat",
+        "worker": "qnfo-intent-orchestrator"
+      },
+      {
+        "dir": "qnfo-ipatent",
+        "version": "3.17.2-bp-logging",
+        "worker": "qnfo-ipatent"
+      },
+      {
+        "dir": "qnfo-lifecycle",
+        "version": "1.11.4-sla-120m",
+        "worker": "qnfo-lifecycle"
+      },
+      {
+        "dir": "qnfo-memory-mcp",
+        "version": "2.0.6-doi-scrub",
+        "worker": "qnfo-memory-mcp"
+      },
+      {
+        "dir": "qnfo-observability",
+        "version": "1.4.7-bp-logging",
+        "worker": "qnfo-observability"
+      },
+      {
+        "dir": "qnfo-ops",
+        "version": "2.48.2-alter-probe",
+        "worker": "qnfo-ops"
+      },
+      {
+        "dir": "qnfo-pdf",
+        "version": "1.4.0-cron-heartbeat",
+        "worker": "qnfo-pdf"
+      },
+      {
+        "dir": "qnfo-research-exec",
+        "version": "0.18.5-codeagent",
+        "worker": "qnfo-research-exec"
+      },
+      {
+        "dir": "qnfo-social",
+        "version": "0.16.0-rollup",
+        "worker": "qnfo-social"
+      },
+      {
+        "dir": "qnfo-subscribers",
+        "version": "1.3.1-bp-logging",
+        "worker": "qnfo-subscribers"
+      },
+      {
+        "dir": "qnfo-tools-mcp",
+        "version": "1.2.1-personal-search-repoint",
+        "worker": "qnfo-tools-mcp"
+      },
+      {
+        "dir": "radar-hub",
+        "version": "1.4.3-bp-logging",
+        "worker": "radar-hub"
+      }
+    ]
+  },
+  "purge_error": null,
+  "rows": {
+    "ai-health-prober": {
+      "before": null,
+      "http": 404,
+      "live": null,
+      "match": 0,
+      "note": "NOT_DEPLOYED",
+      "retired": "FOLDED",
+      "worker": "ai-health-prober"
+    },
+    "archive": {
+      "before": null,
+      "http": 404,
+      "live": null,
+      "match": 0,
+      "note": "NOT_A_WORKER",
+      "worker": "archive"
+    },
+    "audit-hub": {
+      "before": null,
+      "http": 404,
+      "live": null,
+      "match": 0,
+      "note": "NOT_DEPLOYED",
+      "retired": "RETIRED",
+      "worker": "audit-hub"
+    },
+    "audits": {
+      "before": null,
+      "http": 404,
+      "live": null,
+      "match": 0,
+      "note": "NOT_A_WORKER",
+      "worker": "audits"
+    },
+    "calendar-api": {
+      "before": null,
+      "http": 404,
+      "live": null,
+      "match": 0,
+      "note": "NOT_DEPLOYED",
+      "retired": "FOLDED",
+      "worker": "calendar-api"
+    },
+    "ci-status": {
+      "before": null,
+      "http": 404,
+      "live": null,
+      "match": 0,
+      "note": "NOT_A_WORKER",
+      "worker": "ci-status"
+    },
+    "companion-hub": {
+      "before": null,
+      "http": 404,
+      "live": null,
+      "match": 0,
+      "note": "NOT_DEPLOYED",
+      "retired": "FOLDED",
+      "worker": "companion-hub"
+    },
+    "docs": {
+      "before": null,
+      "http": 404,
+      "live": null,
+      "match": 0,
+      "note": "NOT_A_WORKER",
+      "worker": "docs"
+    },
+    "errata-hub": {
+      "before": null,
+      "http": 404,
+      "live": null,
+      "match": 0,
+      "note": "NOT_DEPLOYED",
+      "retired": "FOLDED",
+      "worker": "errata-hub"
+    },
+    "events-radar": {
+      "before": null,
+      "http": 404,
+      "live": null,
+      "match": 0,
+      "note": "NOT_DEPLOYED",
+      "retired": "FOLDED",
+      "worker": "events-radar"
+    },
+    "fleet-exec": {
+      "before": null,
+      "http": 404,
+      "live": null,
+      "match": 0,
+      "note": "NOT_DEPLOYED",
+      "retired": "FOLDED",
+      "worker": "fleet-exec"
+    },
+    "funding": {
+      "before": null,
+      "http": 404,
+      "live": null,
+      "match": 0,
+      "note": "NOT_A_WORKER",
+      "worker": "funding"
+    },
+    "idea-hub": {
+      "before": "1.10.2-triage-10",
+      "http": 200,
+      "live": "1.10.2-triage-10",
+      "match": 1,
+      "note": "SYNC",
+      "worker": "idea-hub"
+    },
+    "jnl-pipeline": {
+      "before": null,
+      "http": 404,
+      "live": null,
+      "match": 0,
+      "note": "NOT_DEPLOYED",
+      "retired": "RETIRED",
+      "worker": "jnl-pipeline"
+    },
+    "jnl-referee": {
+      "before": null,
+      "http": 404,
+      "live": null,
+      "match": 0,
+      "note": "NOT_DEPLOYED",
+      "retired": "RETIRED",
+      "worker": "jnl-referee"
+    },
+    "jnl-reviser": {
+      "before": null,
+      "http": 404,
+      "live": null,
+      "match": 0,
+      "note": "NOT_DEPLOYED",
+      "retired": "RETIRED",
+      "worker": "jnl-reviser"
+    },
+    "jnl-watch": {
+      "before": null,
+      "http": 404,
+      "live": null,
+      "match": 0,
+      "note": "NOT_DEPLOYED",
+      "retired": "RETIRED",
+      "worker": "jnl-watch"
+    },
+    "machine-readability": {
+      "before": null,
+      "http": 404,
+      "live": null,
+      "match": 0,
+      "note": "NOT_A_WORKER",
+      "worker": "machine-readability"
+    },
+    "migrations": {
+      "before": null,
+      "http": 404,
+      "live": null,
+      "match": 0,
+      "note": "NOT_A_WORKER",
+      "worker": "migrations"
+    },
+    "notes-intake": {
+      "before": null,
+      "http": 404,
+      "live": null,
+      "match": 0,
+      "note": "NOT_DEPLOYED",
+      "retired": "FOLDED",
+      "worker": "notes-intake"
+    },
+    "obsidian-writer": {
+      "before": null,
+      "http": 404,
+      "live": null,
+      "match": 0,
+      "note": "NOT_DEPLOYED",
+      "retired": "RETIRED",
+      "worker": "obsidian-writer"
+    },
+    "ops-gateway": {
+      "before": null,
+      "http": 404,
+      "live": null,
+      "match": 0,
+      "note": "NOT_DEPLOYED",
+      "retired": "RETIRED",
+      "worker": "ops-gateway"
+    },
+    "osf-integrity-check": {
+      "before": null,
+      "http": 404,
+      "live": null,
+      "match": 0,
+      "note": "NOT_DEPLOYED",
+      "retired": "RETIRED",
+      "worker": "osf-integrity-check"
+    },
+    "paper-hub": {
+      "before": null,
+      "http": 404,
+      "live": null,
+      "match": 0,
+      "note": "NOT_DEPLOYED",
+      "retired": "RETIRED",
+      "worker": "paper-hub"
+    },
+    "papers": {
+      "before": null,
+      "http": 404,
+      "live": null,
+      "match": 0,
+      "note": "NOT_A_WORKER",
+      "worker": "papers"
+    },
+    "personal-api": {
+      "before": "4.9.1-log-catches",
+      "http": 200,
+      "live": "4.9.1-log-catches",
+      "match": 1,
+      "note": "SYNC",
+      "worker": "personal-api"
+    },
+    "personal-companion": {
+      "before": "1.28.1-heading-label",
+      "http": 200,
+      "live": "1.28.1-heading-label",
+      "match": 1,
+      "note": "SYNC",
+      "worker": "personal-companion"
+    },
+    "personal-events-radar": {
+      "before": null,
+      "http": 404,
+      "live": null,
+      "match": 0,
+      "note": "NOT_DEPLOYED",
+      "retired": "FOLDED",
+      "worker": "personal-events-radar"
+    },
+    "personal-life-indexer": {
+      "before": null,
+      "http": 404,
+      "live": null,
+      "match": 0,
+      "note": "NOT_DEPLOYED",
+      "retired": "RETIRED",
+      "worker": "personal-life-indexer"
+    },
+    "personal-life-maintain": {
+      "before": null,
+      "http": 404,
+      "live": null,
+      "match": 0,
+      "note": "NOT_DEPLOYED",
+      "retired": "RETIRED",
+      "worker": "personal-life-maintain"
+    },
+    "personal-life-search": {
+      "before": null,
+      "http": 404,
+      "live": null,
+      "match": 0,
+      "note": "NOT_DEPLOYED",
+      "retired": "RETIRED",
+      "worker": "personal-life-search"
+    },
+    "q08-signal-engine": {
+      "before": "0.28.1-prune-extend",
+      "http": 200,
+      "live": "0.28.1-prune-extend",
+      "match": 1,
+      "note": "SYNC",
+      "worker": "q08-signal-engine"
+    },
+    "qnfo-agent-orchestrator": {
+      "before": null,
+      "http": 404,
+      "live": null,
+      "match": 0,
+      "note": "NOT_DEPLOYED",
+      "retired": "RETIRED",
+      "worker": "qnfo-agent-orchestrator"
+    },
+    "qnfo-agent-orchestrator-legacy-dup": {
+      "before": null,
+      "http": 404,
+      "live": null,
+      "match": 0,
+      "note": "NOT_DEPLOYED",
+      "retired": "RETIRED",
+      "worker": "qnfo-agent-orchestrator-legacy-dup"
+    },
+    "qnfo-agent-ws": {
+      "before": null,
+      "http": 404,
+      "live": null,
+      "match": 0,
+      "note": "NOT_DEPLOYED",
+      "retired": "RETIRED",
+      "worker": "qnfo-agent-ws"
+    },
+    "qnfo-ai": {
+      "before": "5.36.2-log-catches",
+      "http": 200,
+      "live": "5.36.2-log-catches",
+      "match": 1,
+      "note": "SYNC",
+      "worker": "qnfo-ai"
+    },
+    "qnfo-ai-calibration": {
+      "before": "1.5.1-task-truth-nohedge",
+      "http": 200,
+      "live": "1.5.1-task-truth-nohedge",
+      "match": 1,
+      "note": "SYNC",
+      "worker": "qnfo-ai-calibration"
+    },
+    "qnfo-ai-search": {
+      "before": "2.6.3-bp-logging",
+      "http": 200,
+      "live": "2.6.3-bp-logging",
+      "match": 1,
+      "note": "SYNC",
+      "worker": "qnfo-ai-search"
+    },
+    "qnfo-analytics": {
+      "before": null,
+      "http": 404,
+      "live": null,
+      "match": 0,
+      "note": "NOT_DEPLOYED",
+      "retired": "RETIRED",
+      "worker": "qnfo-analytics"
+    },
+    "qnfo-archive": {
+      "before": null,
+      "http": 404,
+      "live": null,
+      "match": 0,
+      "note": "NOT_DEPLOYED",
+      "retired": "RETIRED",
+      "worker": "qnfo-archive"
+    },
+    "qnfo-artifact-agent": {
+      "before": null,
+      "http": 404,
+      "live": null,
+      "match": 0,
+      "note": "NOT_DEPLOYED",
+      "retired": "RETIRED",
+      "worker": "qnfo-artifact-agent"
+    },
+    "qnfo-artifacts": {
+      "before": null,
+      "http": 404,
+      "live": null,
+      "match": 0,
+      "note": "NOT_DEPLOYED",
+      "retired": "RETIRED",
+      "worker": "qnfo-artifacts"
+    },
+    "qnfo-arxiv-radar": {
+      "before": null,
+      "http": 404,
+      "live": null,
+      "match": 0,
+      "note": "NOT_DEPLOYED",
+      "retired": "FOLDED",
+      "worker": "qnfo-arxiv-radar"
+    },
+    "qnfo-auditor": {
+      "before": null,
+      "http": 404,
+      "live": null,
+      "match": 0,
+      "note": "NOT_DEPLOYED",
+      "retired": "RETIRED",
+      "worker": "qnfo-auditor"
+    },
+    "qnfo-autonomy-scorer": {
+      "before": null,
+      "http": 404,
+      "live": null,
+      "match": 0,
+      "note": "NOT_DEPLOYED",
+      "retired": "FOLDED",
+      "worker": "qnfo-autonomy-scorer"
+    },
+    "qnfo-autopilot": {
+      "before": null,
+      "http": 404,
+      "live": null,
+      "match": 0,
+      "note": "NOT_DEPLOYED",
+      "retired": "FOLDED",
+      "worker": "qnfo-autopilot"
+    },
+    "qnfo-backlog-exec": {
+      "before": null,
+      "http": 404,
+      "live": null,
+      "match": 0,
+      "note": "NOT_DEPLOYED",
+      "retired": "FOLDED",
+      "worker": "qnfo-backlog-exec"
+    },
+    "qnfo-blank-audit": {
+      "before": null,
+      "http": 404,
+      "live": null,
+      "match": 0,
+      "note": "NOT_DEPLOYED",
+      "retired": "RETIRED",
+      "worker": "qnfo-blank-audit"
+    },
+    "qnfo-calendar-intake": {
+      "before": null,
+      "http": 404,
+      "live": null,
+      "match": 0,
+      "note": "NOT_DEPLOYED",
+      "retired": "RETIRED",
+      "worker": "qnfo-calendar-intake"
+    },
+    "qnfo-chameleon": {
+      "before": null,
+      "http": 404,
+      "live": null,
+      "match": 0,
+      "note": "NOT_DEPLOYED",
+      "retired": "RETIRED",
+      "worker": "qnfo-chameleon"
+    },
+    "qnfo-chat-canary": {
+      "before": null,
+      "http": 404,
+      "live": null,
+      "match": 0,
+      "note": "NOT_DEPLOYED",
+      "retired": "RETIRED",
+      "worker": "qnfo-chat-canary"
+    },
+    "qnfo-citation-watch": {
+      "before": null,
+      "http": 404,
+      "live": null,
+      "match": 0,
+      "note": "NOT_DEPLOYED",
+      "retired": "FOLDED",
+      "worker": "qnfo-citation-watch"
+    },
+    "qnfo-cloud-ops": {
+      "before": "1.30.0-gh-token-watch",
+      "http": 200,
+      "live": "1.30.0-gh-token-watch",
+      "match": 1,
+      "note": "SYNC",
+      "worker": "qnfo-cloud-ops"
+    },
+    "qnfo-code-agent": {
+      "before": null,
+      "http": 404,
+      "live": null,
+      "match": 0,
+      "note": "NOT_DEPLOYED",
+      "retired": "RETIRED",
+      "worker": "qnfo-code-agent"
+    },
+    "qnfo-code-orchestrator": {
+      "before": "0.16.2-sla-120m",
+      "http": 200,
+      "live": "0.16.2-sla-120m",
+      "match": 1,
+      "note": "SYNC",
+      "worker": "qnfo-code-orchestrator"
+    },
+    "qnfo-containers-pilot": {
+      "before": "1.0.11-command-exit-honest",
+      "http": 200,
+      "live": "1.0.11-command-exit-honest",
+      "match": 1,
+      "note": "SYNC",
+      "worker": "qnfo-containers-pilot"
+    },
+    "qnfo-ddocs-indexer": {
+      "before": null,
+      "http": 404,
+      "live": null,
+      "match": 0,
+      "note": "NOT_DEPLOYED",
+      "retired": "RETIRED",
+      "worker": "qnfo-ddocs-indexer"
+    },
+    "qnfo-deploy-guard": {
+      "before": "1.3.26-log-catches",
+      "http": 200,
+      "live": "1.3.26-log-catches",
+      "match": 1,
+      "note": "SYNC",
+      "worker": "qnfo-deploy-guard"
+    },
+    "qnfo-email": {
+      "before": "2.9.2-stall-sla",
+      "http": 200,
+      "live": "2.9.2-stall-sla",
+      "match": 1,
+      "note": "SYNC",
+      "worker": "qnfo-email"
+    },
+    "qnfo-email-orchestrator": {
+      "before": null,
+      "http": 404,
+      "live": null,
+      "match": 0,
+      "note": "NOT_DEPLOYED",
+      "retired": "FOLDED",
+      "worker": "qnfo-email-orchestrator"
+    },
+    "qnfo-errata-orchestrator": {
+      "before": null,
+      "http": 404,
+      "live": null,
+      "match": 0,
+      "note": "NOT_DEPLOYED",
+      "retired": "RETIRED",
+      "worker": "qnfo-errata-orchestrator"
+    },
+    "qnfo-errata-publish": {
+      "before": null,
+      "http": 404,
+      "live": null,
+      "match": 0,
+      "note": "NOT_DEPLOYED",
+      "retired": "FOLDED",
+      "worker": "qnfo-errata-publish"
+    },
+    "qnfo-errata-respond": {
+      "before": null,
+      "http": 404,
+      "live": null,
+      "match": 0,
+      "note": "NOT_DEPLOYED",
+      "retired": "FOLDED",
+      "worker": "qnfo-errata-respond"
+    },
+    "qnfo-errata-watch": {
+      "before": null,
+      "http": 404,
+      "live": null,
+      "match": 0,
+      "note": "NOT_DEPLOYED",
+      "retired": "FOLDED",
+      "worker": "qnfo-errata-watch"
+    },
+    "qnfo-error-selfheal": {
+      "before": null,
+      "http": 404,
+      "live": null,
+      "match": 0,
+      "note": "NOT_DEPLOYED",
+      "retired": "RETIRED",
+      "worker": "qnfo-error-selfheal"
+    },
+    "qnfo-events": {
+      "before": null,
+      "http": 404,
+      "live": null,
+      "match": 0,
+      "note": "NOT_DEPLOYED",
+      "retired": "RETIRED",
+      "worker": "qnfo-events"
+    },
+    "qnfo-fleet-advisor": {
+      "before": null,
+      "http": 404,
+      "live": null,
+      "match": 0,
+      "note": "NOT_DEPLOYED",
+      "retired": "FOLDED",
+      "worker": "qnfo-fleet-advisor"
+    },
+    "qnfo-fleet-calibrator": {
+      "before": null,
+      "http": 404,
+      "live": null,
+      "match": 0,
+      "note": "NOT_DEPLOYED",
+      "retired": "FOLDED",
+      "worker": "qnfo-fleet-calibrator"
+    },
+    "qnfo-fleet-control": {
+      "before": "0.32.0-gh-app",
+      "http": 200,
+      "live": "0.32.0-gh-app",
+      "match": 1,
+      "note": "SYNC",
+      "worker": "qnfo-fleet-control"
+    },
+    "qnfo-fleet-dashboard": {
+      "before": "1.37.9-codeagent",
+      "http": 200,
+      "live": "1.37.9-codeagent",
+      "match": 1,
+      "note": "SYNC",
+      "worker": "qnfo-fleet-dashboard"
+    },
+    "qnfo-fleet-deploy": {
+      "before": null,
+      "http": 404,
+      "live": null,
+      "match": 0,
+      "note": "NOT_DEPLOYED",
+      "retired": "RETIRED",
+      "worker": "qnfo-fleet-deploy"
+    },
+    "qnfo-fleet-feed": {
+      "before": null,
+      "http": 404,
+      "live": null,
+      "match": 0,
+      "note": "NOT_DEPLOYED",
+      "retired": "RETIRED",
+      "worker": "qnfo-fleet-feed"
+    },
+    "qnfo-gateway": {
+      "before": "3.18.5-bp-logging",
+      "http": 200,
+      "live": "3.18.5-bp-logging",
+      "match": 1,
+      "note": "SYNC",
+      "worker": "qnfo-gateway"
+    },
+    "qnfo-idea-factory": {
+      "before": null,
+      "http": 404,
+      "live": null,
+      "match": 0,
+      "note": "NOT_DEPLOYED",
+      "retired": "RETIRED",
+      "worker": "qnfo-idea-factory"
+    },
+    "qnfo-idea-miner": {
+      "before": null,
+      "http": 404,
+      "live": null,
+      "match": 0,
+      "note": "NOT_DEPLOYED",
+      "retired": "RETIRED",
+      "worker": "qnfo-idea-miner"
+    },
+    "qnfo-idea-triage": {
+      "before": null,
+      "http": 404,
+      "live": null,
+      "match": 0,
+      "note": "NOT_DEPLOYED",
+      "retired": "FOLDED",
+      "worker": "qnfo-idea-triage"
+    },
+    "qnfo-impact": {
+      "before": null,
+      "http": 404,
+      "live": null,
+      "match": 0,
+      "note": "NOT_DEPLOYED",
+      "retired": "RETIRED",
+      "worker": "qnfo-impact"
+    },
+    "qnfo-infra": {
+      "before": "1.5.1-bp-logging",
+      "http": 200,
+      "live": "1.5.1-bp-logging",
+      "match": 1,
+      "note": "SYNC",
+      "worker": "qnfo-infra"
+    },
+    "qnfo-intent-orchestrator": {
+      "before": "1.5.0-cron-heartbeat",
+      "http": 200,
+      "live": "1.5.0-cron-heartbeat",
+      "match": 1,
+      "note": "SYNC",
+      "worker": "qnfo-intent-orchestrator"
+    },
+    "qnfo-ipatent": {
+      "before": "3.17.2-bp-logging",
+      "http": 200,
+      "live": "3.17.2-bp-logging",
+      "match": 1,
+      "note": "SYNC",
+      "worker": "qnfo-ipatent"
+    },
+    "qnfo-kaizen": {
+      "before": null,
+      "http": 404,
+      "live": null,
+      "match": 0,
+      "note": "NOT_DEPLOYED",
+      "retired": "RETIRED",
+      "worker": "qnfo-kaizen"
+    },
+    "qnfo-lifecycle": {
+      "before": "1.11.4-sla-120m",
+      "http": 200,
+      "live": "1.11.4-sla-120m",
+      "match": 1,
+      "note": "SYNC",
+      "worker": "qnfo-lifecycle"
+    },
+    "qnfo-memory-mcp": {
+      "before": "2.0.6-doi-scrub",
+      "http": 200,
+      "live": "2.0.6-doi-scrub",
+      "match": 1,
+      "note": "SYNC",
+      "worker": "qnfo-memory-mcp"
+    },
+    "qnfo-memory-mcp-legacy-dup": {
+      "before": null,
+      "http": 404,
+      "live": null,
+      "match": 0,
+      "note": "NOT_DEPLOYED",
+      "retired": "RETIRED",
+      "worker": "qnfo-memory-mcp-legacy-dup"
+    },
+    "qnfo-observability": {
+      "before": "1.4.7-bp-logging",
+      "http": 200,
+      "live": "1.4.7-bp-logging",
+      "match": 1,
+      "note": "SYNC",
+      "worker": "qnfo-observability"
+    },
+    "qnfo-ops": {
+      "before": "2.48.2-alter-probe",
+      "http": 200,
+      "live": "2.48.2-alter-probe",
+      "match": 1,
+      "note": "SYNC",
+      "worker": "qnfo-ops"
+    },
+    "qnfo-outreach": {
+      "before": null,
+      "http": 404,
+      "live": null,
+      "match": 0,
+      "note": "NOT_DEPLOYED",
+      "retired": "RETIRED",
+      "worker": "qnfo-outreach"
+    },
+    "qnfo-paper-explainer": {
+      "before": null,
+      "http": 404,
+      "live": null,
+      "match": 0,
+      "note": "NOT_DEPLOYED",
+      "retired": "RETIRED",
+      "worker": "qnfo-paper-explainer"
+    },
+    "qnfo-paper-indexer": {
+      "before": null,
+      "http": 404,
+      "live": null,
+      "match": 0,
+      "note": "NOT_DEPLOYED",
+      "retired": "FOLDED",
+      "worker": "qnfo-paper-indexer"
+    },
+    "qnfo-paper-reviser": {
+      "before": null,
+      "http": 404,
+      "live": null,
+      "match": 0,
+      "note": "NOT_DEPLOYED",
+      "retired": "FOLDED",
+      "worker": "qnfo-paper-reviser"
+    },
+    "qnfo-pdf": {
+      "before": "1.4.0-cron-heartbeat",
+      "http": 200,
+      "live": "1.4.0-cron-heartbeat",
+      "match": 1,
+      "note": "SYNC",
+      "worker": "qnfo-pdf"
+    },
+    "qnfo-pipeline-ops": {
+      "before": null,
+      "http": 404,
+      "live": null,
+      "match": 0,
+      "note": "NOT_DEPLOYED",
+      "retired": "RETIRED",
+      "worker": "qnfo-pipeline-ops"
+    },
+    "qnfo-proof": {
+      "before": null,
+      "http": 404,
+      "live": null,
+      "match": 0,
+      "note": "NOT_DEPLOYED",
+      "retired": "RETIRED",
+      "worker": "qnfo-proof"
+    },
+    "qnfo-qwav": {
+      "before": null,
+      "http": 404,
+      "live": null,
+      "match": 0,
+      "note": "NOT_DEPLOYED",
+      "retired": "RETIRED",
+      "worker": "qnfo-qwav"
+    },
+    "qnfo-register-guard": {
+      "before": null,
+      "http": 404,
+      "live": null,
+      "match": 0,
+      "note": "NOT_DEPLOYED",
+      "retired": "FOLDED",
+      "worker": "qnfo-register-guard"
+    },
+    "qnfo-research-exec": {
+      "before": "0.18.5-codeagent",
+      "http": 200,
+      "live": "0.18.5-codeagent",
+      "match": 1,
+      "note": "SYNC",
+      "worker": "qnfo-research-exec"
+    },
+    "qnfo-research-radar": {
+      "before": null,
+      "http": 404,
+      "live": null,
+      "match": 0,
+      "note": "NOT_DEPLOYED",
+      "retired": "FOLDED",
+      "worker": "qnfo-research-radar"
+    },
+    "qnfo-research-supervisor": {
+      "before": null,
+      "http": 404,
+      "live": null,
+      "match": 0,
+      "note": "NOT_DEPLOYED",
+      "retired": "RETIRED",
+      "worker": "qnfo-research-supervisor"
+    },
+    "qnfo-scorecard": {
+      "before": null,
+      "http": 404,
+      "live": null,
+      "match": 0,
+      "note": "NOT_DEPLOYED",
+      "retired": "RETIRED",
+      "worker": "qnfo-scorecard"
+    },
+    "qnfo-signal-loop": {
+      "before": null,
+      "http": 404,
+      "live": null,
+      "match": 0,
+      "note": "NOT_DEPLOYED",
+      "retired": "RETIRED",
+      "worker": "qnfo-signal-loop"
+    },
+    "qnfo-skill-sync": {
+      "before": null,
+      "http": 404,
+      "live": null,
+      "match": 0,
+      "note": "NOT_DEPLOYED",
+      "retired": "RETIRED",
+      "worker": "qnfo-skill-sync"
+    },
+    "qnfo-skills-discovery": {
+      "before": null,
+      "http": 404,
+      "live": null,
+      "match": 0,
+      "note": "NOT_DEPLOYED",
+      "retired": "RETIRED",
+      "worker": "qnfo-skills-discovery"
+    },
+    "qnfo-social": {
+      "before": "0.16.0-rollup",
+      "http": 200,
+      "live": "0.16.0-rollup",
+      "match": 1,
+      "note": "SYNC",
+      "worker": "qnfo-social"
+    },
+    "qnfo-subscribers": {
+      "before": "1.3.1-bp-logging",
+      "http": 200,
+      "live": "1.3.1-bp-logging",
+      "match": 1,
+      "note": "SYNC",
+      "worker": "qnfo-subscribers"
+    },
+    "qnfo-thread-ingest": {
+      "before": null,
+      "http": 404,
+      "live": null,
+      "match": 0,
+      "note": "NOT_DEPLOYED",
+      "retired": "RETIRED",
+      "worker": "qnfo-thread-ingest"
+    },
+    "qnfo-tools-mcp": {
+      "before": "1.2.1-personal-search-repoint",
+      "http": 200,
+      "live": "1.2.1-personal-search-repoint",
+      "match": 1,
+      "note": "SYNC",
+      "worker": "qnfo-tools-mcp"
+    },
+    "qnfo-twin-maintain": {
+      "before": null,
+      "http": 404,
+      "live": null,
+      "match": 0,
+      "note": "NOT_DEPLOYED",
+      "retired": "FOLDED",
+      "worker": "qnfo-twin-maintain"
+    },
+    "qnfo-venue-radar": {
+      "before": null,
+      "http": 404,
+      "live": null,
+      "match": 0,
+      "note": "NOT_DEPLOYED",
+      "retired": "RETIRED",
+      "worker": "qnfo-venue-radar"
+    },
+    "qnfo-web-unified": {
+      "before": null,
+      "http": 404,
+      "live": null,
+      "match": 0,
+      "note": "NOT_A_WORKER",
+      "worker": "qnfo-web-unified"
+    },
+    "radar-hub": {
+      "before": "1.4.3-bp-logging",
+      "http": 200,
+      "live": "1.4.3-bp-logging",
+      "match": 1,
+      "note": "SYNC",
+      "worker": "radar-hub"
+    },
+    "research-code": {
+      "before": null,
+      "http": 404,
+      "live": null,
+      "match": 0,
+      "note": "NOT_A_WORKER",
+      "worker": "research-code"
+    },
+    "research-daily-brief": {
+      "before": null,
+      "http": 404,
+      "live": null,
+      "match": 0,
+      "note": "NOT_DEPLOYED",
+      "retired": "RETIRED",
+      "worker": "research-daily-brief"
+    },
+    "retired-deposit-stage": {
+      "before": null,
+      "http": 404,
+      "live": null,
+      "match": 0,
+      "note": "NOT_DEPLOYED",
+      "retired": "RETIRED",
+      "worker": "retired-deposit-stage"
+    },
+    "scripts": {
+      "before": null,
+      "http": 404,
+      "live": null,
+      "match": 0,
+      "note": "NOT_A_WORKER",
+      "worker": "scripts"
+    },
+    "vault-indexer": {
+      "before": null,
+      "http": 404,
+      "live": null,
+      "match": 0,
+      "note": "NOT_DEPLOYED",
+      "retired": "FOLDED",
+      "worker": "vault-indexer"
+    }
+  },
+  "stale_rows_purged": 0
+}
