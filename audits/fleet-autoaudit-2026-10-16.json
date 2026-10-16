@@ -1,5 +1,5 @@
 {
-  "audited_at": "2026-10-16 02:03:54",
+  "audited_at": "2026-10-16 16:54:13",
   "d1_write_failures": [],
   "d1_writes_ok": 115,
   "guard": {
@@ -648,7 +648,7 @@
       },
       {
         "dir": "qnfo-research-exec",
-        "version": "0.18.5-codeagent",
+        "version": "0.18.6-codeagent",
         "worker": "qnfo-research-exec"
       },
       {
@@ -1500,9 +1500,9 @@
       "worker": "qnfo-register-guard"
     },
     "qnfo-research-exec": {
-      "before": "0.18.5-codeagent",
+      "before": "0.18.6-codeagent",
       "http": 200,
-      "live": "0.18.5-codeagent",
+      "live": "0.18.6-codeagent",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-research-exec"
