@@ -1,23 +1,23 @@
 {
  "ok": true,
  "marker": "REMEDIATION-CONSUMER-1",
- "verifier": "remediation-consumer@c843581a0781",
- "due": 255,
- "pass": 202,
- "fail": 45,
+ "verifier": "remediation-consumer@0a3457732393",
+ "due": 243,
+ "pass": 198,
+ "fail": 37,
  "skipped": 8,
  "contracts": [
   {
-   "class": "issue-2248",
-   "issue_id": 2248,
+   "class": "issue-2230",
+   "issue_id": 2230,
    "verdict": "pass",
    "expected": "ok",
    "observed": "ok",
    "written": true
   },
   {
-   "class": "issue-1899",
-   "issue_id": 1899,
+   "class": "issue-2072",
+   "issue_id": 2072,
    "verdict": "pass",
    "expected": "ok",
    "observed": "ok",
@@ -60,8 +60,8 @@
    "reason": "url-not-allowlisted"
   },
   {
-   "class": "issue-2072",
-   "issue_id": 2072,
+   "class": "issue-1899",
+   "issue_id": 1899,
    "verdict": "pass",
    "expected": "ok",
    "observed": "ok",
@@ -188,6 +188,22 @@
    "written": true
   },
   {
+   "class": "issue-2396",
+   "issue_id": 2396,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "issue-2362",
+   "issue_id": 2362,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
    "class": "issue-2371",
    "issue_id": 2371,
    "verdict": "pass",
@@ -196,8 +212,8 @@
    "written": true
   },
   {
-   "class": "issue-2396",
-   "issue_id": 2396,
+   "class": "issue-2389",
+   "issue_id": 2389,
    "verdict": "pass",
    "expected": "ok",
    "observed": "ok",
@@ -217,22 +233,6 @@
    "verdict": "fail",
    "expected": "ok",
    "observed": "missing-marker:qnfo-research-exec/worker.js",
-   "written": true
-  },
-  {
-   "class": "issue-2362",
-   "issue_id": 2362,
-   "verdict": "pass",
-   "expected": "ok",
-   "observed": "ok",
-   "written": true
-  },
-  {
-   "class": "issue-2389",
-   "issue_id": 2389,
-   "verdict": "pass",
-   "expected": "ok",
-   "observed": "ok",
    "written": true
   },
   {
@@ -324,7 +324,23 @@
    "written": true
   },
   {
-   "class": "fm-honeypot-named-for-autofill",
+   "class": "issue-2473",
+   "issue_id": 2473,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "issue-2483",
+   "issue_id": 2483,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "fm-code-read-stale-checkout",
    "issue_id": null,
    "verdict": "pass",
    "expected": "ok",
@@ -348,6 +364,14 @@
    "written": true
   },
   {
+   "class": "fm-honeypot-named-for-autofill",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
    "class": "fm-math-delim-pairing-shift",
    "issue_id": null,
    "verdict": "pass",
@@ -356,39 +380,7 @@
    "written": true
   },
   {
-   "class": "issue-2473",
-   "issue_id": 2473,
-   "verdict": "pass",
-   "expected": "ok",
-   "observed": "ok",
-   "written": true
-  },
-  {
-   "class": "issue-2483",
-   "issue_id": 2483,
-   "verdict": "pass",
-   "expected": "ok",
-   "observed": "ok",
-   "written": true
-  },
-  {
    "class": "fm-factcheck-waits-for-slowest",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "ok",
-   "observed": "ok",
-   "written": true
-  },
-  {
-   "class": "fm-code-read-stale-checkout",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "ok",
-   "observed": "ok",
-   "written": true
-  },
-  {
-   "class": "fm-write-200-only",
    "issue_id": null,
    "verdict": "pass",
    "expected": "ok",
@@ -412,6 +404,14 @@
    "written": true
   },
   {
+   "class": "fm-write-200-only",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
    "class": "fm-watchdog-action-blind",
    "issue_id": null,
    "verdict": "pass",
@@ -420,7 +420,7 @@
    "written": true
   },
   {
-   "class": "rt-ipatent",
+   "class": "fm-patch-calls-undefined-helper",
    "issue_id": null,
    "verdict": "pass",
    "expected": "ok",
@@ -428,5 +428,4 @@
    "written": true
   },
   {
-   "class": "fm-patch-calls-undefined-helper",
-   "issue_id": 
+   "class": "fm-companion-context-invente
