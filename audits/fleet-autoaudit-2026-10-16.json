@@ -1,5 +1,5 @@
 {
-  "audited_at": "2026-10-16 00:45:46",
+  "audited_at": "2026-10-16 02:03:54",
   "d1_write_failures": [],
   "d1_writes_ok": 115,
   "guard": {
@@ -533,7 +533,7 @@
     "sync_workers": [
       {
         "dir": "idea-hub",
-        "version": "1.10.2-triage-10",
+        "version": "1.10.3-codeagent",
         "worker": "idea-hub"
       },
       {
@@ -779,9 +779,9 @@
       "worker": "funding"
     },
     "idea-hub": {
-      "before": "1.10.2-triage-10",
+      "before": "1.10.3-codeagent",
       "http": 200,
-      "live": "1.10.2-triage-10",
+      "live": "1.10.3-codeagent",
       "match": 1,
       "note": "SYNC",
       "worker": "idea-hub"
