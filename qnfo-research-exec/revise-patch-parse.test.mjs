@@ -8,7 +8,7 @@ import { fileURLToPath } from "node:url";
 const here = dirname(fileURLToPath(import.meta.url));
 const src = readFileSync(join(here, "worker.js"), "utf8");
 const grab = (sig) => { const start = src.indexOf(sig); const end = src.indexOf("\n}\n", start); if (start < 0 || end < 0) throw new Error("not found " + sig); return src.slice(start, end + 2); };
-const api = new Function(grab("function repairJsonBackslashes(") + "\n" + grab("function topLevelJsonValues(") + "\n" + grab("function parsePatchEdits(") + "\n" + grab("function patchNewIdentifiers(") + "\n" + grab("function applyRevisePatch(") + "\nreturn { parsePatchEdits, applyRevisePatch };")();
+const api = new Function(grab("function repairJsonBackslashes(") + "\n" + grab("function topLevelJsonValues(") + "\n" + grab("function patchFlexTokens(") + "\n" + grab("function findFlexible(") + "\n" + grab("function parsePatchEdits(") + "\n" + grab("function patchNewIdentifiers(") + "\n" + grab("function applyRevisePatch(") + "\nreturn { parsePatchEdits, applyRevisePatch }; ")();
 let pass = 0, fail = 0;
 const ok = (c, m, d) => { if (c) pass++; else { fail++; console.log("FAIL " + m + (d === undefined ? "" : " :: " + JSON.stringify(d))); } };
 const P = (s) => api.parsePatchEdits(s);
