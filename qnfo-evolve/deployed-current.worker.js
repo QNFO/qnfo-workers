@@ -35,7 +35,7 @@
  *   GET /report  the last 20 filings and the last run (public read)
  *   POST /tick   same work as the cron; needs x-loop-token when LOOP_TOKEN is configured
  */
-var VERSION = "0.2.0-evolve";
+var VERSION = "0.2.1-evolve";
 var WORKER = "qnfo-evolve";
 var SOURCE = "qnfo-evolve|EVOLVE-1";
 var MAX_OPEN = 5;
@@ -317,7 +317,7 @@ async function recoverWip(env, out) {
     var bakKey = "code_tasks--bak-" + t.id + "-" + out.ts.slice(0, 10).replace(/-/g, "");
     await env.AUDIT.prepare(
       "INSERT OR REPLACE INTO ops_config (key, value, note, updated_at) VALUES (?, ?, ?, datetime('now'))"
-    ).bind(bakKey, JSON.stringify(t).slice(0, 60000),
+    ).bind(bakKey, JSON.stringify(t).slice(0, 900000),
       "EVOLVE-1 WIP-RECOVERY-1 backup before parking " + t.id + "; restore: UPDATE code_tasks SET status='queued', updated_at=strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id='" + t.id + "'").run();
     await env.AUDIT.prepare(
       "UPDATE code_tasks SET status = 'failed', updated_at = ?, "
