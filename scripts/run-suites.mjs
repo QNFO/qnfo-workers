@@ -15,6 +15,7 @@ import { readdirSync, existsSync, readFileSync, statSync, mkdtempSync, copyFileS
 import { tmpdir } from "node:os";
 import { spawn } from "node:child_process";
 import { join } from "node:path";
+import { pathToFileURL } from "node:url";
 
 export const CONTROL_PLANE = ["qnfo-fleet-control", "qnfo-ops", "qnfo-deploy-guard", "qnfo-containers-pilot", "qnfo-gateway", "qnfo-ai", "qnfo-autonomy-scorer", "qnfo-observability", "qnfo-code-orchestrator", "qnfo-code-agent"];
 export const SHARED = ["scripts", ".github", "migrations"];
@@ -119,4 +120,10 @@ async function main() {
   process.exit(failed.length ? 1 : 0);
 }
 
-if (import.meta.url === "file://" + process.argv[1]) main();
+// ENTRY-POINT-1 (2026-10-17): `import.meta.url === "file://" + process.argv[1]` is POSIX-only. On Windows
+// process.argv[1] is "C:\\...\\run-suites.mjs", so the comparison never matched: the runner printed nothing and
+// exited 0, i.e. it reported a pass without running a single suite. pathToFileURL normalises both sides.
+function isEntry() {
+  try { return import.meta.url === pathToFileURL(process.argv[1]).href; } catch { return false; }
+}
+if (isEntry()) main();

@@ -10,6 +10,7 @@
 
 import fs from "node:fs";
 import path from "node:path";
+import { pathToFileURL } from "node:url";
 
 const REPO = process.env.QNFO_WORKERS || "C:/Users/LENOVO/Documents/GitHub/qnfo-workers";
 const ACCT = process.env.CF_ACCOUNT_ID || "edb167b78c9fb901ea5bca3ce58ccc4b";
@@ -28,6 +29,50 @@ const BANNED = [
   { label: "glm-5.2", re: /glm-5\.2(?![\d.])[\w.-]*/i },
 ];
 
+// MODEL-FLOOR-1 precision (2026-10-17): a model name in a TRAILING comment is documentation, not a selection.
+// The old scan tested the whole line, so `var VERSION = "1.5.5"; // ... probes llama ...` and every
+// `/* 1.5.1 ... llama ... */` note was reported as a code-level violation (ai-health-prober:6,
+// qnfo-ai-calibration:6/857, qnfo-intent-orchestrator:8). Strip the trailing line comment first, honouring
+// quotes so a `//` inside a string is not mistaken for one.
+function codePart(line) {
+  let out = "";
+  let q = null;
+  for (let i = 0; i < line.length; i++) {
+    const ch = line[i];
+    if (q) {
+      out += ch;
+      if (ch === "\\") { out += line[i + 1] || ""; i++; } else if (ch === q) q = null;
+      continue;
+    }
+    if (ch === '"' || ch === "'" || ch === "`") { q = ch; out += ch; continue; }
+    if (ch === "/" && line[i + 1] === "/") break;                       // line comment to EOL
+    if (ch === "/" && line[i + 1] === "*") {                            // inline block comment
+      const end = line.indexOf("*/", i + 2);
+      if (end < 0) break;
+      i = end + 1;
+      out += " ";
+      continue;
+    }
+    out += ch;
+  }
+  return out;
+}
+
+// A price/attribution/cap table names a model to PRICE or DESCRIBE it, not to call it: `var __AI_ATTR_RATES = {
+// "@cf/...": [in, out] }`, `var REASONING_TOKENS = {...}`, `COST_TIER_PRICES`, and a bare `"<model id>": <value>`
+// row. 18 of the 65 findings on 2026-10-17 were these rows. A list of ids to call (`PANEL_POOL`, `models: [...]`,
+// `HEDGE_ORDER`) is NOT exempt: its key is not a model id, so it still has to name frontier models only.
+const TABLE_VAR_RE = /(?:^|[\s({,])(?:(?:var|let|const)\s+)?[A-Za-z_$][\w$]*(?:RATES|PRICES|TOKENS|CAPS|ALIASES|VENDOR|CATALOG|META|COSTS|TIERS)\s*=/;
+const MODEL_KEY_ROW_RE = /^\s*["']?[@a-z0-9][\w.@/\/-]*["']?\s*:\s*[\[{"'\d]/;
+const MODEL_IDLIKE_RE = /^(?:@cf\/|llama|qwen|gemma|glm|kimi|deepseek|gpt-oss|mistral|qwq|nemotron|bge)/i;
+function isDeclRow(code) {
+  if (TABLE_VAR_RE.test(code)) return true;
+  const m = MODEL_KEY_ROW_RE.exec(code);
+  if (!m) return false;
+  const key = m[0].replace(/[\s:"']/g, "");
+  return MODEL_IDLIKE_RE.test(key);
+}
+
 function scan(text) {
   const lines = String(text).split(/\r?\n/);
   const out = [];
@@ -39,10 +84,12 @@ function scan(text) {
     else if (inBanList > 0 && /\]/.test(line)) inBanList = Math.max(0, inBanList - 1);
     const isComment = t.startsWith("//") || t.startsWith("*") || t.startsWith("/*");
     const isOk = line.indexOf("MODEL-FLOOR-OK") >= 0;
-    const isBanCtx = inBanList > 0 || /\b(BANNED|DENY|BLOCK|FORBID)[\w_]*\b/i.test(line);
+    const code = isComment ? "" : codePart(line);
+    if (!code) continue;
+    const isBanCtx = inBanList > 0 || /\b(BANNED|DENY|BLOCK|FORBID)[\w_]*\b/i.test(line) || isDeclRow(code);
     for (const b of BANNED) {
-      if (b.re.test(line)) {
-        const kind = isComment ? "comment" : (isOk || isBanCtx) ? "banlist" : "VIOLATION";
+      if (b.re.test(code)) {
+        const kind = (isOk || isBanCtx) ? "banlist" : "VIOLATION";
         out.push({ line: i + 1, label: b.label, kind, text: t.slice(0, 110) });
         break;
       }
@@ -50,6 +97,8 @@ function scan(text) {
   }
   return out;
 }
+
+export { BANNED, scan };
 
 function scanRepo() {
   const res = [];
@@ -89,24 +138,36 @@ async function scanLive() {
   return res;
 }
 
-const wantLive = process.argv.includes("--live");
-const wantJson = process.argv.includes("--json");
-const repo = scanRepo();
-const live = wantLive ? await scanLive() : [];
-
-if (wantJson) {
-  console.log(JSON.stringify({ repo, live }, null, 1));
-} else {
-  const show = (title, rows) => {
-    console.log("== " + title + " (" + rows.length + " workers with code-level violations)");
-    for (const r of rows) {
-      console.log("  " + r.name);
-      for (const h of r.hits.slice(0, 6)) console.log("      L" + h.line + " [" + h.label + "] " + h.text);
-    }
-  };
-  show("REPO SOURCES", repo);
-  if (wantLive) show("LIVE BUNDLES", live);
+// ENTRY-POINT-1 (2026-10-17): run the scan only when this file IS the process entry point, and compare paths
+// portably. `import.meta.url === "file://" + process.argv[1]` (the pattern run-suites.mjs had) never matches on
+// Windows, so the script printed nothing and exited 0 - a silent pass. pathToFileURL normalises both sides.
+// The module also exports scan/BANNED so an audit script can reuse the exact rules instead of a copy.
+function isEntry() {
+  try { return import.meta.url === pathToFileURL(process.argv[1]).href; } catch { return false; }
 }
 
-const total = repo.length + live.length;
-process.exit(total > 0 ? 1 : 0);
+async function main() {
+  const wantLive = process.argv.includes("--live");
+  const wantJson = process.argv.includes("--json");
+  const repo = scanRepo();
+  const live = wantLive ? await scanLive() : [];
+
+  if (wantJson) {
+    console.log(JSON.stringify({ repo, live }, null, 1));
+  } else {
+    const show = (title, rows) => {
+      console.log("== " + title + " (" + rows.length + " workers with code-level violations)");
+      for (const r of rows) {
+        console.log("  " + r.name);
+        for (const h of r.hits.slice(0, 6)) console.log("      L" + h.line + " [" + h.label + "] " + h.text);
+      }
+    };
+    show("REPO SOURCES", repo);
+    if (wantLive) show("LIVE BUNDLES", live);
+  }
+
+  const total = repo.length + live.length;
+  process.exit(total > 0 ? 1 : 0);
+}
+
+if (isEntry()) await main();
