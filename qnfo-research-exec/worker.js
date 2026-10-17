@@ -3584,8 +3584,13 @@ async function stageReview(env, row) {
     if (_tr && String(_tr.value || "").trim().toLowerCase() === "off") _triageOff = true;
   } catch (e) {
   }
-  const _tri = _triageOff ? { block: hardRaw, soft: [], demoted: [] } : await triageHardFindings(env, row, paper, hardRaw, cycle);
-  const hard = _tri.block;
+  // REVIEW-CONVERGE-SENTINEL-1 (2026-10-17): a parse failure or a plain-text-math finding is not reviewer drift. Neither
+  // quotes paper text, so triageHardFindings demoted them and an unreadable review advanced the paper to verify instead of
+  // being run again. Sentinels bypass triage; real findings keep the drift demotion.
+  const _sentinel = hardRaw.filter(function(f) { return f && (f.id === "review-parse" || f.id === "gate-math-latex"); });
+  const _triable = hardRaw.filter(function(f) { return _sentinel.indexOf(f) < 0; });
+  const _tri = _triageOff ? { block: _triable, soft: [], demoted: [] } : await triageHardFindings(env, row, paper, _triable, cycle);
+  const hard = _tri.block.concat(_sentinel);
   if (_tri.demoted.length) {
     await logEvent(env, "review-triage", "row=" + row.id + " cycle=" + cycle + " block=" + hard.length + " demoted=" + _tri.demoted.length + " " + _tri.demoted.slice(0, 8).join(","), "ok");
     findings.soft = (findings.soft || []).concat(_tri.soft);

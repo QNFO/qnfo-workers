@@ -28,11 +28,17 @@ function d1(db) {
   return {
     prepare(sql) {
       let args = [];
+      // node:sqlite refuses positional ?N binding ("column index out of range"); map ?N to named $pN.
+      const q = /\?\d/.test(sql) ? sql.replace(/\?(\d+)/g, (m, n) => "$p" + n) : sql;
+      const call = (m) => {
+        const st = db.prepare(q);
+        return q === sql ? st[m](...args) : st[m](Object.fromEntries(args.map((v, i) => ["p" + (i + 1), v])));
+      };
       const self = {
         bind(...x) { args = x.map((v) => (v === undefined ? null : v)); return self; },
-        async all() { return { results: db.prepare(sql).all(...args) }; },
-        async first() { return db.prepare(sql).get(...args) || null; },
-        async run() { const r = db.prepare(sql).run(...args); return { success: true, meta: { changes: Number(r.changes), last_row_id: Number(r.lastInsertRowid) } }; }
+        async all() { return { results: call("all") }; },
+        async first() { return call("get") || null; },
+        async run() { const r = call("run"); return { success: true, meta: { changes: Number(r.changes), last_row_id: Number(r.lastInsertRowid) } }; }
       };
       return self;
     }
@@ -70,7 +76,8 @@ ok(versionAtLeast((src.match(/var VERSION = "([^"]+)"/) || [])[1] || "0", "0.18.
   const mk = (extract) => {
     const store = { "pipeline/x1/reconciled.md": PAPER, "pipeline/x1/grounding.md": "" };
     const db = capDb();
-    const env = { QNFO_AUDIT: db, MIRROR: { async get(k) { const v = store[k]; return v == null ? null : { text: async () => v }; }, async put(k, v) { store[k] = v; } },
+    db.exec("CREATE TABLE IF NOT EXISTS ops_config (key TEXT PRIMARY KEY, value TEXT); INSERT OR REPLACE INTO ops_config VALUES ('research_recover_max','3'),('park_rearm','off');");
+const env = { QNFO_AUDIT: db, MIRROR: { async get(k) { const v = store[k]; return v == null ? null : { text: async () => v }; }, async put(k, v) { store[k] = v; } },
       AI: { async run(model, input) { const c = input.messages[0].content; return { response: c.includes("=== TASK: VERIFY_EXTRACT ===") ? extract : "" }; } } };
     return { env, db, store };
   };
@@ -188,8 +195,8 @@ CREATE TABLE email_suppression (email TEXT PRIMARY KEY, reason TEXT, source TEXT
   papers.prepare("INSERT INTO papers (slug, title, version, body_md) VALUES ('true-paper', 'True Paper', '1.0.0', 'The value is stated as measured in section 2.'), ('false-paper', 'False Paper', '1.0.0', 'Smith (2020) defines the term.'), ('render-paper', 'Render Paper', '1.0.0', 'x')").run();
   const OLD = "2026-10-01 00:00:00";
   const addQ = (id, sender, doi, claim, created) => {
-    audit.prepare("INSERT INTO internal_errata (id, target_kind, target_ref, detected_at, detected_by, claim_text, status) VALUES (?1, 'paper', ?2, ?3, ?4, ?5, 'open')").run(id, doi || "none", OLD, sender, claim);
-    audit.prepare("INSERT INTO errata_queue (email_id, source, sender, subject, paper_doi, claim, confidence, status, created_at) VALUES (NULL, 'internal_audit', ?1, ?2, ?3, ?4, 1.0, 'internal-open', ?5)").run(sender, id, doi, claim, created || OLD);
+    audit.prepare("INSERT INTO internal_errata (id, target_kind, target_ref, detected_at, detected_by, claim_text, status) VALUES (?, 'paper', ?, ?, ?, ?, 'open')").run(id, doi || "none", OLD, sender, claim);
+    audit.prepare("INSERT INTO errata_queue (email_id, source, sender, subject, paper_doi, claim, confidence, status, created_at) VALUES (NULL, 'internal_audit', ?, ?, ?, ?, 1.0, 'internal-open', ?)").run(sender, id, doi, claim, created || OLD);
   };
   addQ("rev-true", "qnfo-paper-reviser/1.3.2-folded", "true-paper", '[quantitative-justification] stated as measured with no measurement. At: "The value is stated as measured"');
   addQ("ops-false", "qnfo-ops", "false-paper", "the paper misattributes the definition to Jones");

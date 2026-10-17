@@ -69,10 +69,16 @@ const lp = new DatabaseSync(":memory:");
 lp.exec("CREATE TABLE papers (identifier TEXT, slug TEXT, title TEXT, abstract TEXT, body_md TEXT, status TEXT, doi TEXT);");
 const d1 = (db) => ({ prepare(sql) {
   let args = [];
+  // node:sqlite refuses positional ?N binding ("column index out of range"); map ?N to named $pN.
+  const q = /\?\d/.test(sql) ? sql.replace(/\?(\d+)/g, (m, n) => "$p" + n) : sql;
+  const call = (m) => {
+    const st = db.prepare(q);
+    return q === sql ? st[m](...args) : st[m](Object.fromEntries(args.map((v, i) => ["p" + (i + 1), v])));
+  };
   const o = { bind(...a) { args = a; return o; },
-    async run() { const r = db.prepare(sql).run(...args); return { meta: { changes: Number(r.changes) } }; },
-    async first() { return db.prepare(sql).get(...args) || null; },
-    async all() { return { results: db.prepare(sql).all(...args) }; } };
+    async run() { const r = call("run"); return { meta: { changes: Number(r.changes) } }; },
+    async first() { return call("get") || null; },
+    async all() { return { results: call("all") }; } };
   return o;
 } });
 const r2 = new Map();
@@ -147,11 +153,14 @@ audit.prepare("INSERT INTO ops_config (key, value) VALUES ('research_max_review_
 put("r-cap");
 res = await stageReview(env, row("r-cap", "review", { cycles: 2 }));
 // RERUN-ROUTE-1 (0.18.0, agent_issues 2473): the withheld paper re-enters once at revise with its findings, not at ground.
-ok(res.ok === false && res.withheld === "review-hard" && res.hardLeft === 2 && get("r-cap").status === "researching" && get("r-cap").stage === "revise" && /^RERUN-ROUTE-1 revise-once: review: 2 HARD findings unresolved after 2 revise cycles \(H1,H2\)/.test(get("r-cap").error), "at the cap a paper with HARD findings is withheld, not sent to verify", get("r-cap"));
+// REVIEW-CONVERGE-1 (0.18.14): at the cap a generic HARD finding (H1/H2) that quotes no paper text is reviewer drift and
+// is demoted, so the paper advances instead of being withheld forever. The parse-failure sentinel is what still stops a
+// paper now: see the r-parse case below, which withholds after two re-parses.
+ok(res.ok === true && res.stage === "review->verify" && (res.hardLeft || 0) === 0 && get("r-cap").stage === "verify", "at the cap a generic HARD finding is demoted as drift and the paper advances (REVIEW-CONVERGE-1)", res);
 audit.prepare("INSERT INTO ops_config (key, value) VALUES ('research_review_gate', 'measure')").run();
 put("r-measure");
 res = await stageReview(env, row("r-measure", "review", { cycles: 2 }));
-ok(res.stage === "review->verify" && res.hardLeft === 2 && get("r-measure").stage === "verify", "research_review_gate = measure restores the advance without a deploy", res);
+ok(res.stage === "review->verify" && (res.hardLeft || 0) === 0 && get("r-measure").stage === "verify", "research_review_gate = measure still advances without a deploy", res);
 audit.prepare("DELETE FROM ops_config WHERE key = 'research_review_gate'").run();
 ai.answer = (task) => task === "REVIEW" ? "not json at all" : "";
 put("r-parse");
