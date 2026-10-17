@@ -35,7 +35,7 @@
  *   GET /report  the last 20 filings and the last run (public read)
  *   POST /tick   same work as the cron; needs x-loop-token when LOOP_TOKEN is configured
  */
-var VERSION = "0.2.1-evolve";
+var VERSION = "0.2.2-evolve";
 var WORKER = "qnfo-evolve";
 var SOURCE = "qnfo-evolve|EVOLVE-1";
 var MAX_OPEN = 5;
@@ -54,7 +54,7 @@ var MAX_NEW_PER_TICK = 2;
  * tick, and it only acts while the queue is actually blocked. Restore is one statement:
  *   UPDATE code_tasks SET status='queued' WHERE id=(the id in the backup key).
  * The parked issue is not lost: the planner takes an issue again inside its 3-day window. */
-var WIP_CEILING = 6;
+var WIP_CEILING_DEFAULT = 12;
 var WIP_ATTEMPTS = 6;
 var WIP_STALE_MIN = 10;
 var WIP_PARK_PER_TICK = 2;
@@ -299,12 +299,25 @@ async function closeResolved(env, filings) {
 /* The drain path described at WIP_CEILING. Returns the ids it parked. */
 async function recoverWip(env, out) {
   var parked = [];
+  /* The ceiling belongs to qnfo-code-orchestrator, not to this worker, and it moved from 6 to 12 on
+   * 2026-10-17 (0.18.2 LANES-8-1). A hardcoded copy would have parked tasks the loop still wanted --
+   * so it is read from ops_config every tick, and the default only covers a missing row. */
+  var ceiling = WIP_CEILING_DEFAULT;
+  try {
+    var c = await env.AUDIT.prepare(
+      "SELECT value FROM ops_config WHERE key = 'evolve_wip_ceiling'"
+    ).all();
+    var cv = ((c && c.results) || [])[0];
+    if (cv && Number(cv.value) > 0) ceiling = Number(cv.value);
+  } catch (e) { /* fall back to the default */ }
+  out.wip_ceiling = ceiling;
+
   var w = await env.AUDIT.prepare(
     "SELECT COUNT(*) AS n FROM code_tasks WHERE status = 'queued'"
   ).all();
   var wip = ((w && w.results) || [{}])[0].n || 0;
   out.wip = wip;
-  if (wip < WIP_CEILING) return parked;
+  if (wip < ceiling) return parked;
 
   var r = await env.AUDIT.prepare(
     "SELECT * FROM code_tasks WHERE status = 'queued' AND attempts >= ? "
@@ -323,7 +336,7 @@ async function recoverWip(env, out) {
       "UPDATE code_tasks SET status = 'failed', updated_at = ?, "
       + "last_error = COALESCE(last_error, '') || ? WHERE id = ? AND status = 'queued'"
     ).bind(out.ts, " | EVOLVE-1 WIP-RECOVERY-1: " + t.attempts + " attempts and no movement while WIP was "
-      + wip + " >= " + WIP_CEILING + "; parked to free a planning slot (backup: ops_config " + bakKey + ")", t.id).run();
+      + wip + " >= " + ceiling + "; parked to free a planning slot (backup: ops_config " + bakKey + ")", t.id).run();
     parked.push(t.id + ":" + t.attempts);
   }
   return parked;
@@ -340,7 +353,7 @@ async function ledger(env, out) {
 }
 
 async function runTick(env) {
-  var out = { ts: iso(), scanned: 0, filed: 0, closed: 0, skipped: [], filed_keys: [], blocked: [], wip: 0, parked: [] };
+  var out = { ts: iso(), scanned: 0, filed: 0, closed: 0, skipped: [], filed_keys: [], blocked: [], wip: 0, wip_ceiling: 0, parked: [] };
   if (!env.AUDIT) { out.skipped.push("no AUDIT binding"); return out; }
 
   var targets = {};
