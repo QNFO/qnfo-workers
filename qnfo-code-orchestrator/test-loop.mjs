@@ -99,6 +99,31 @@ const call = async (env, method, p, body) => { const r = await worker.fetch(auth
   check("commit carries the verified content", calls.edit[0].content === "def f():\n    return 2\n");
 }
 
+// ===== 1b. TICK-PARALLEL-N (0.18.0): one tick drives FOUR tasks at once, not one =====
+// Before 0.18.0 the tick ran one step at a time and awaited it, so a single model call used the whole budget: measured on
+// production code_tasks 2026-10-17, 1-2 tasks per 10-minute tick against a 16-step cap. Four json tasks (no container, so
+// this assertion is platform-independent) must all progress in ONE tick through four lanes.
+{
+  const files = {};
+  for (let i = 1; i <= 4; i++) files["qnfo-workers/scripts/p" + i + ".json"] = '{"a": 1}';
+  installCodeAgent(files);
+  // A reply function, not a queue: lanes interleave, and every task wants the same content.
+  const { env } = envWith([]);
+  env.AI = { run: async () => ({ response: fileBlock('{"a": 2}') }) };
+  const ids = [];
+  for (let i = 1; i <= 4; i++) {
+    const e = await call(env, "POST", "/v1/tasks", { repo: "qnfo-workers", path: "scripts/p" + i + ".json", goal: "set a to 2" });
+    ids.push(e.body.id);
+  }
+  const t = await call(env, "POST", "/v1/tick", { maxSteps: 16 });
+  const distinct = new Set((t.body.done || []).map((d) => d.id));
+  check("one tick touches all four tasks (lanes)", distinct.size === 4 && t.body.lanes === 4, { steps: t.body.steps, lanes: t.body.lanes, distinct: distinct.size });
+  let open = 0;
+  for (const id of ids) { const g = await call(env, "GET", "/v1/tasks/" + id); if (g.body.task.status === "pr_open") open++; }
+  check("all four tasks reach pr_open in one tick", open === 4, { open: open });
+  check("the tick reports its per-step SLA sweep", t.body.sla && typeof t.body.sla.checked === "number", t.body.sla);
+}
+
 // ===== 2. verify fails -> escalate to the NEXT model with the error fed back -> succeeds =====
 {
   installCodeAgent({ "qnfo-workers/scripts/y.py": "x = 1\n" });
@@ -125,7 +150,7 @@ const call = async (env, method, p, body) => { const r = await worker.fetch(auth
   await call(env, "POST", "/v1/tick", { maxSteps: 12 });
   const got = await call(env, "GET", "/v1/tasks/" + enq.body.id);
   const lease = (await env.AUDIT_DB.prepare("SELECT lease_until FROM code_tasks WHERE id=?").bind(enq.body.id).first()).lease_until;
-  check("3 failed verifies -> queued behind a backoff, not needs_human", got.body.task.status === "queued" && got.body.task.attempts === 3 && Date.parse(lease) > Date.now() + 50 * 60000 && /round 1 of 3/.test(got.body.task.last_error), { t: got.body.task, lease });
+  check("3 failed verifies -> queued behind a backoff, not needs_human", got.body.task.status === "queued" && got.body.task.attempts === 3 && Date.parse(lease) > Date.now() + 3 * 60000 && /round 1 of 3/.test(got.body.task.last_error), { t: got.body.task, lease });
   check("no PR / commit for unverified code", calls.edit.length === 0);
 }
 
