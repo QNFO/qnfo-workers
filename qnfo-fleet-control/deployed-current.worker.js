@@ -1080,7 +1080,9 @@ function secretEq(a, b) {
   return diff === 0;
 }
 __name(secretEq, "secretEq");
-var VERSION = "0.34.1-open-twin"; /* 0.34.1 REOPEN-HITS-OPEN-TWIN-1 (2026-10-17, pillar autonomy; fleet-wide audit): agent_issues has UNIQUE indexes on title
+var VERSION = "0.34.2-pass-400"; /* 0.34.2 REMEDIATION-PASS-400-1 (2026-10-17, fleet-wide audit): the remediation pass reads 400 due contracts instead of 150.
+   569 active contracts at the ~18-minute re-probe cadence demand ~1,900 probes an hour; 150 per 10-minute tick supplied 900 and left 304
+   due at once, so verdicts aged and closed issues looked unprobed. The 25 s budgetMs is unchanged and remains the real guard. */ /* 0.34.1 REOPEN-HITS-OPEN-TWIN-1 (2026-10-17, pillar autonomy; fleet-wide audit): agent_issues has UNIQUE indexes on title
    WHERE status = 'open', so a closed issue whose title is already open cannot be reopened: the UPDATE throws, the caller's catch
    swallows it, and the contract retries for ever. 8 of the 11 contracts that MEASURED-PENDING-1 made eligible have such a twin, so
    rtSupersedeIfOpenTwin marks the closed contract 'superseded:open-twin <id>' instead (the defect is already tracked by the open
@@ -10488,7 +10490,11 @@ async function remediationContractsTick(env, opts) {
   // REMEDIATION-TICK-SLOT-1 (0.23.0): stop starting new probes once the budget is spent; the rest stay due for the next slot.
   var t0 = Date.now(), budgetMs = opts && Number(opts.budgetMs) > 0 ? Number(opts.budgetMs) : 0;
   var out = { ok: true, due: 0, pass: 0, fail: 0, skipped: 0, superseded: 0, reopened: [], holding: 0, held: 0, budget_left: 0 };
-  var rs = await db.prepare("SELECT c.class, c.issue_id, c.verify_probe, c.verify_transport, c.expected_cadence_h, c.max_attempts, c.status AS contract_status, a.status AS issue_status, a.updated_at AS issue_updated_at FROM remediation_contracts c LEFT JOIN agent_issues a ON a.id = c.issue_id WHERE c.status IN ('active', 'holding') AND c.verify_transport IN ('d1-query', 'd1-query@portfolio-state', 'external-https') AND (c.next_due_at IS NULL OR datetime(c.next_due_at) <= datetime('now')) ORDER BY COALESCE(c.next_due_at, c.ts) LIMIT 150").all().catch(function () { return { results: [] }; });
+  // REMEDIATION-PASS-400-1 (0.34.2, 2026-10-17, fleet-wide audit): 569 active contracts at the ~18-minute re-probe
+  // cadence demand roughly 1,900 probes an hour; a 150-row pass capped supply at 900 and left 304 contracts due at once
+  // (416 earlier the same day), so verdicts aged and issues looked unprobed. The 25 s budgetMs handed in by the cron is
+  // still the real guard, so a larger pass costs nothing when the clock runs out: it stops where it always did.
+  var rs = await db.prepare("SELECT c.class, c.issue_id, c.verify_probe, c.verify_transport, c.expected_cadence_h, c.max_attempts, c.status AS contract_status, a.status AS issue_status, a.updated_at AS issue_updated_at FROM remediation_contracts c LEFT JOIN agent_issues a ON a.id = c.issue_id WHERE c.status IN ('active', 'holding') AND c.verify_transport IN ('d1-query', 'd1-query@portfolio-state', 'external-https') AND (c.next_due_at IS NULL OR datetime(c.next_due_at) <= datetime('now')) ORDER BY COALESCE(c.next_due_at, c.ts) LIMIT 400").all().catch(function () { return { results: [] }; });
   var rows = rs.results || [];
   out.due = rows.length;
   for (var i = 0; i < rows.length; i++) {
