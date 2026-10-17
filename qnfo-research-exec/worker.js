@@ -1627,26 +1627,37 @@ async function aiRunOpts(env, model, prompt) {
 }
 async function aiText(env, model, prompt, maxTokens, effort) {
   const cappedTokens = Math.min(maxTokens, AI_TEXT_MAX_OUT[model] || 8192);
-  try {
-    const _opts = { messages: [{ role: "user", content: prompt }], max_tokens: cappedTokens, temperature: 0.3 };
-    if (/^@cf\/zai-org\/glm-/.test(model)) _opts.reasoning_effort = effort || 'low';
-    const _runOpts = await aiRunOpts(env, model, prompt);
+  const _opts = { messages: [{ role: "user", content: prompt }], max_tokens: cappedTokens, temperature: 0.3 };
+  if (/^@cf\/zai-org\/glm-/.test(model)) _opts.reasoning_effort = effort || 'low';
+  let _runOpts;
+  try { _runOpts = await aiRunOpts(env, model, prompt); } catch (e) { _runOpts = undefined; }
+  // AI-BACKOFF-1 (2026-10-17): a 3021 (per-minute rate limit) or 3046 (timeout) from glm-5.3 is transient, not a
+  // model failure. Back off with jitter and retry a bounded number of times instead of failing the stage and
+  // re-running the whole prompt at full cost. Measured 2026-10-17: ~112 such failures per 6h at research_parallel=24.
+  for (var _aiAttempt = 0; ; _aiAttempt++) {
     let r;
     try {
       r = await env.AI.run(model, _opts, _runOpts);
     } catch (e0) {
-      if (!_opts.reasoning_effort || /3046|timeout/i.test(String(e0 && e0.message || e0))) throw e0;
-      await logEvent(env, "ai-warn", "aiText model=" + model + " rejected reasoning_effort, retrying without: " + String(e0 && e0.message || e0).slice(0, 160));
-      delete _opts.reasoning_effort;
-      r = await env.AI.run(model, _opts, _runOpts);
+      const emsg = String(e0 && e0.message || e0);
+      if ((/3021|rate limit/i.test(emsg) || /3046|timeout/i.test(emsg)) && _aiAttempt < 3) {
+        const wait = (600 << _aiAttempt) + Math.floor(Math.random() * 800);
+        await logEvent(env, "ai-warn", "aiText model=" + model + " transient (" + emsg.slice(0, 50) + "), backing off " + wait + "ms (attempt " + (_aiAttempt + 1) + "/3)");
+        await new Promise(function(res) { setTimeout(res, wait); });
+        continue;
+      }
+      if (_opts.reasoning_effort && !/3046|timeout|3021|rate limit/i.test(emsg)) {
+        await logEvent(env, "ai-warn", "aiText model=" + model + " rejected reasoning_effort, retrying without: " + emsg.slice(0, 160));
+        delete _opts.reasoning_effort;
+        continue;
+      }
+      await logEvent(env, "ai-error", "aiText model=" + model + " threw: " + emsg.slice(0, 200));
+      return "";
     }
     if (typeof r === "string") return r;
     if (r && typeof r.response === "string" && r.response) return r.response;
     if (r && r.choices && r.choices[0] && r.choices[0].message) return String(r.choices[0].message.content || "");
     await logEvent(env, "ai-warn", "aiText model=" + model + " returned unexpected shape: " + JSON.stringify(r).slice(0, 200));
-    return "";
-  } catch (e) {
-    await logEvent(env, "ai-error", "aiText model=" + model + " threw: " + String(e && e.message || e).slice(0, 200));
     return "";
   }
 }
@@ -3264,7 +3275,7 @@ async function completenessSweep(env) {
       var rid = "rem-" + crypto.randomUUID();
       var ins;
       try {
-        ins = await env.QNFO_AUDIT.prepare("INSERT INTO research_queue (id, source, source_id, idea, summary, score, decision, status, paper_slug, created_at, stage, attempt, revise_count, recover_count) VALUES (?1, 'remediation', ?2, ?3, ?4, 0.95, 'ACCEPT', 'queued', ?5, ?6, 'ground', 0, 0, 0)").bind(rid, sid, String(src.idea || p.title || ""), ("COMPLETENESS-SWEEP-1: the published version needs a rewrite (" + why.join("; ") + "); rewrite it whole under the current writer rules and republish as a new version.").slice(0, 1e3), p.slug, nowIso()).run();
+        ins = await env.QNFO_AUDIT.prepare("INSERT OR IGNORE INTO research_queue (id, source, source_id, idea, summary, score, decision, status, paper_slug, created_at, stage, attempt, revise_count, recover_count) VALUES (?1, 'remediation', ?2, ?3, ?4, 0.95, 'ACCEPT', 'queued', ?5, ?6, 'ground', 0, 0, 0)").bind(rid, sid, String(src.idea || p.title || ""), ("COMPLETENESS-SWEEP-1: the published version needs a rewrite (" + why.join("; ") + "); rewrite it whole under the current writer rules and republish as a new version.").slice(0, 1e3), p.slug, nowIso()).run();
       } catch (e) {
         out.skipped++;
         out.insertErrors = (out.insertErrors || 0) + 1;
@@ -3273,6 +3284,12 @@ async function completenessSweep(env) {
         } catch (e2) {
           console.error(JSON.stringify({ stage: "completenessSweep", slug: p.slug, rid: rid, source_id: sid, insertError: String(e && e.message || e), logError: String(e2 && e2.message || e2), note: "logEvent failed after queue insert failure" }));
         }
+        continue;
+      }
+      // SWEEP-DUP-1: (source, source_id) is UNIQUE, so a duplicate insert is ignored rather than throwing a
+      // D1 UNIQUE-constraint error; count the ignored row as skipped, not queued.
+      if (!ins || !ins.meta || !ins.meta.changes) {
+        out.skipped++;
         continue;
       }
       out.queued++;
