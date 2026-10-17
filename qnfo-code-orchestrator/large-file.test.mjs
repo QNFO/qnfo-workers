@@ -160,7 +160,9 @@ function applies(fileText, patch) {
   await addTask(env, "Make the reply friendlier where \"const WORKER\" is set."); // its one keyword hits a line too short to be an anchor, so ANCHOR-KEYWORD-FALLBACK-1 (0.12.0) offers no line
   await step(env);
   const t = row(env);
-  ok(t.status === "needs_human" && /LARGE-FILE-WINDOW-1 edits it from the anchor window alone/.test(t.last_error) && /ANCHOR-LOCATOR-1 found no unique line/.test(t.last_error) && calls.length === 1 && /FILE EXCERPTS/.test(calls[0].prompt), "D1 no anchor on a large file: one locator call, then needs_human with both reasons", { st: t.status, err: t.last_error, calls: calls.length });
+  const evs = events(env, "code-task.anchor-located");
+  const ev = evs.length ? JSON.parse(evs[0].meta || "{}") : {};
+  ok(t.status !== "needs_human" && evs.length === 1 && /^keyword:.*\+[12]$/.test(String(ev.model || "")) && /FILE EXCERPTS/.test(String(calls[0] && calls[0].prompt || "")), "D1 no anchor on a large file: the locator runs once and the keyword window keeps the edit (ANCHOR-MULTILINE-1)", { st: t.status, err: String(t.last_error || "").slice(0, 120), calls: calls.length, model: ev.model });
 }
 {
   serve(BIG);

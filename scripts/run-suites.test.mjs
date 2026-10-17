@@ -1,6 +1,6 @@
 // SUITE-RUNNER-1 offline suite (scripts/run-suites.mjs). Proves: discovery finds every <dir>/*.test.mjs including this one;
-// a changed worker selects exactly its own suites; a control-plane worker or a shared path (scripts, .github, migrations)
-// selects every suite; no change selects none; and CONTROL_PLANE equals qnfo-fleet-control's TP_CONTROL_PLANE, so the
+// a changed worker selects exactly its own suites; a shared path (scripts, .github, migrations) selects every suite (a
+// control-plane worker selects its own on a PR, PRS-SCOPE-1); no change selects none; and CONTROL_PLANE equals qnfo-fleet-control's TP_CONTROL_PLANE, so the
 // full-set rule follows the control plane the transformation loop and the merge runner use.
 // Run: node --no-warnings scripts/run-suites.test.mjs   -> prints "N passed, 0 failed"
 import { readFileSync } from "node:fs";
@@ -22,7 +22,7 @@ s = select(all, ["radar-hub", "idea-hub", ""]);
 ok(s.suites.some((x) => x.startsWith("idea-hub/")) && s.suites.some((x) => x.startsWith("radar-hub/")) && s.suites.every((x) => /^(idea|radar)-hub\//.test(x) || ALWAYS.includes(x)), "two changed workers run both sets, the repository guards and nothing else");
 for (const d of ["qnfo-fleet-control", "qnfo-gateway", "qnfo-code-orchestrator"]) {
   s = select(all, ["radar-hub", d]);
-  ok(s.suites.length === all.length && /full set/.test(s.reason), "a control-plane change (" + d + ") runs every suite", s.reason);
+  ok(!/full set/.test(s.reason) && s.suites.some((x) => x.startsWith(d + "/")) && s.suites.every((x) => x.startsWith(d + "/") || x.startsWith("radar-hub/") || ALWAYS.includes(x)), "a control-plane change (" + d + ") runs its own suites on a PR; the full set stays on main's push (PRS-SCOPE-1)", s.reason);
 }
 for (const d of SHARED) {
   s = select(all, [d]);

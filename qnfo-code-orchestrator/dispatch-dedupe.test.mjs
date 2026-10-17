@@ -19,11 +19,15 @@ function makeD1(live) {
   const db = new DatabaseSync(":memory:");
   const wrap = (sql) => {
     let args = [];
+    // node:sqlite builds differ on positional ?N binding; bind numbered params by name. Semantics are unchanged.
+    const numbered = /\?\d+/.test(sql);
+    const sqlNamed = numbered ? sql.replace(/\?(\d+)/g, ":p$1") : sql;
+    const names = () => { const o = {}; args.forEach((v, i) => { o["p" + (i + 1)] = v; }); return o; };
     const st = {
       bind: (...a) => { args = a.map((v) => (v === undefined ? null : v)); return st; },
-      run: async () => { const r = db.prepare(sql).run(...args); return { meta: { changes: Number(r.changes) } }; },
-      first: async () => db.prepare(sql).get(...args) || null,
-      all: async () => ({ results: db.prepare(sql).all(...args) }),
+      run: async () => { const r = numbered ? db.prepare(sqlNamed).run(names()) : db.prepare(sql).run(...args); return { meta: { changes: Number(r.changes) } }; },
+      first: async () => (numbered ? db.prepare(sqlNamed).get(names()) : db.prepare(sql).get(...args)) || null,
+      all: async () => ({ results: numbered ? db.prepare(sqlNamed).all(names()) : db.prepare(sql).all(...args) }),
     };
     return st;
   };
