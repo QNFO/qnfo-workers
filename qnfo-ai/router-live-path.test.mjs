@@ -82,14 +82,14 @@ ok(r.status === 200 && r.j.model === "kimi-k2.6" && r.j._router.model_resolution
 
 // 5 a silent primary is overtaken by the hedge inside the caller's budget.
 reset();
-aiPlan = { "@cf/zai-org/glm-5.3-flash": { ms: 5000, text: "late" }, "@cf/moonshotai/kimi-k2.6": { ms: 5, text: "hedged answer OK" } };
+aiPlan = { "@cf/zai-org/glm-5.3-flash": { ms: 5000, text: "late" }, "@cf/deepseek-ai/deepseek-v4-flash-0731": { ms: 5, text: "hedged answer OK" }, "deepseek-v4-flash-wa": { ms: 5, text: "hedged answer OK" } };
 let t = Date.now();
 r = await chat({ model: "glm-5.3-flash", messages: msgs, max_tokens: 200, timeout_ms: 4500 });
-ok(r.status === 200 && r.j.choices[0].message.content.indexOf("hedged answer") >= 0 && r.j._router.hedge.fired === true && r.j._router.served_by === "kimi-k2.6" && Date.now() - t < 4000, "the hedge answers when the primary is silent", { ms: Date.now() - t, rt: r.j && r.j._router });
+ok(r.status === 200 && r.j.choices[0].message.content.indexOf("hedged answer") >= 0 && r.j._router.hedge.fired === true && r.j._router.served_by === "deepseek-v4-flash-wa" && Date.now() - t < 4000, "the hedge answers when the primary is silent", { ms: Date.now() - t, rt: r.j && r.j._router });
 
 // 6 nothing answers: 504 router_timeout with the legs, never canned text.
 reset();
-aiPlan = { "@cf/zai-org/glm-5.3-flash": { ms: 9000, text: "late" }, "@cf/moonshotai/kimi-k2.6": { ms: 9000, text: "late" } };
+aiPlan = { "@cf/zai-org/glm-5.3-flash": { ms: 9000, text: "late" }, "@cf/deepseek-ai/deepseek-v4-flash-0731": { ms: 9000, text: "late" }, "deepseek-v4-flash-wa": { ms: 9000, text: "late" } };
 t = Date.now();
 r = await chat({ model: "glm-5.3-flash", messages: msgs, max_tokens: 200, timeout_ms: 3000 });
 ok(r.status === 504 && r.j.error.type === "router_timeout" && r.j.error.legs.length === 2 && Date.now() - t < 4500, "an exhausted budget answers 504 router_timeout", { ms: Date.now() - t, j: r.j });

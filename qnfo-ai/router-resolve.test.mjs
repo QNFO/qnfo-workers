@@ -70,8 +70,8 @@ ok(X.turnBudgetMs({ max_tokens: 16000 }, {}) === 0, "a long generation has no bu
 ok(X.turnBudgetMs({ max_tokens: 16000, timeout_ms: 20000 }, {}) === 20000, "timeout_ms is the caller's budget");
 ok(X.turnBudgetMs({ timeout_ms: 5 }, {}) === 3e3 && X.turnBudgetMs({ timeout_ms: 9e9 }, {}) === 12e4, "timeout_ms is clamped to 3 s - 120 s");
 ok(X.turnBudgetMs({ max_tokens: 700 }, { stream: true }) === 0 && X.turnBudgetMs({ max_tokens: 700 }, { tools: true }) === 0, "streams and tool requests are not budgeted by default");
-ok(X.pickHedge("glm-5.3-flash", X.MODELS["glm-5.3-flash"], { estIn: 4000, maxOut: 700 }) === "kimi-k2.6", "the hedge for glm-5.3-flash is the fast tier");
-ok(X.pickHedge("kimi-k2.6", X.MODELS["kimi-k2.6"], { estIn: 4000, maxOut: 700 }) === "glm-5.3-flash", "the hedge is never the primary");
+ok(X.pickHedge("glm-5.3-flash", X.MODELS["glm-5.3-flash"], { estIn: 4000, maxOut: 700 }) === "deepseek-v4-flash-wa", "the hedge for glm-5.3-flash is a healthy model of another family (HEDGE-HEALTH-1)");
+ok(X.pickHedge("deepseek-v4-flash-wa", X.MODELS["deepseek-v4-flash-wa"], { estIn: 4000, maxOut: 700 }) === "glm-5.3-flash", "the hedge is never the primary");
 ok(X.pickHedge("gpt-oss-120b", X.MODELS["gpt-oss-120b"], { estIn: 30000, maxOut: 700 }) === "glm-5.3-flash", "a prompt beyond the llama context hedges on a model that fits");
 ok(X.pickHedge("gpt-oss-120b", X.MODELS["gpt-oss-120b"], { estIn: 100, maxOut: 700, hasImage: true }) === "glm-5.3-flash", "an image request hedges on a vision model");
 const run = (o) => X.runTurnBudgeted({}, X.MODELS[o.primaryKey], [], 700, null, 0.6, 0.9, null, o);

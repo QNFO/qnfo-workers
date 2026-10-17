@@ -16,10 +16,16 @@ on:
   push:
     branches: [main]
     paths:
+      - "*/worker.js"
+      - "*/deployed-current.worker.js"
       - "scripts/model-floor-guard.mjs"
       - ".github/workflows/model-floor-guard.yml"
+  # FLOOR-WATCH-1 (2026-10-17): the scan used to run only when its own two files changed or weekly, so a
+  # worker that reintroduced a sub-frontier model was invisible for up to seven days. Every worker change
+  # now scans the repo sources at once; the live-bundle sweep stays daily + weekly + manual.
   schedule:
     - cron: "17 5 * * 1"
+    - cron: "17 5 * * *"
   workflow_dispatch:
 
 permissions:
@@ -45,7 +51,9 @@ jobs:
           CF_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: |
           set +e
-          node scripts/model-floor-guard.mjs --live > floor-report.txt 2>&1
+          LIVE=""
+          if [ "${{ github.event_name }}" != "push" ]; then LIVE="--live"; fi
+          node scripts/model-floor-guard.mjs $LIVE > floor-report.txt 2>&1
           rc=$?
           { echo '### model-floor-guard'; echo "exit code: $rc"; echo '```'; head -c 60000 floor-report.txt; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
           head -40 floor-report.txt
