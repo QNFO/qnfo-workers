@@ -28,7 +28,7 @@ ok(!__trusted("qnfo-ops-deep-sweep-2026-09-30", "EXTERNAL-MENTION-MONITOR-EMPTY-
 const H = 3600e3, now = Date.parse("2026-10-06T12:00:00Z"), at = (h) => new Date(now - h * H).toISOString();
 ok(__decide([], now).take === true, "no prior task: taken");
 ok(__decide([{ id: "a", status: "closed", last_error: "stale base: main moved", updated_at: at(7) }], now).take === true, "closed on a stale base 7 h ago: retried");
-ok(__decide([{ id: "a", status: "closed", last_error: "stale base", updated_at: at(1) }], now).why === "cooldown", "inside the 120-minute cooldown: not yet");
+ok(__decide([{ id: "a", status: "closed", last_error: "stale base", updated_at: at(0.25) }], now).why === "cooldown", "inside the 30-minute cooldown (SLA-COMPRESS-1): not yet");
 ok(__decide([{ id: "a", status: "closed", last_error: "stale base", updated_at: at(2.5) }], now).take === true, "SLA-120M-7: 150 minutes after the task ended it is taken again (was 6 h)");
 ok(__decide([{ id: "a", status: "queued", updated_at: at(9) }], now).why === "in flight", "a task in flight: not taken");
 ok(/merged/.test(__decide([{ id: "a", status: "merged", updated_at: at(9) }], now).why), "a merged task: not taken again");

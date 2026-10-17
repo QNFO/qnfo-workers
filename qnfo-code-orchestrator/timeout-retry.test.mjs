@@ -76,7 +76,7 @@ ok(atLeast(h.version, "0.6.0") && h.capabilities.indexOf("timeout-retry") >= 0, 
   const wait = Date.parse(r.lease_until || "") - t0;
   ok(t.done && t.done.length === 1 && t.done[0].ok === false && t.done[0].timeout === true && t.done[0].retry_at && /3046/.test(t.done[0].error), "the tick reports the timeout with its retry time, not a failure", t.done);
   ok(r.status === "queued" && r.step === "propose" && r.attempts === 0 && ctxOf(r).timeouts === 1, "first timeout: attempts 0, ctx.timeouts 1, still queued at propose", { status: r.status, step: r.step, attempts: r.attempts, ctx: ctxOf(r) });
-  ok(wait > 9.5 * 60 * 1000 && wait < 10.5 * 60 * 1000, "the task is parked for about 10 minutes (lease_until)", { wait });
+  ok(wait > 1.9 * 60 * 1000 && wait < 2.1 * 60 * 1000, "the task is parked for about 2 minutes (lease_until)", { wait });
   ok(ctxOf(r).base === SRC && "sha" in ctxOf(r), "the read step's ctx (base, sha) survives the timeout", { keys: Object.keys(ctxOf(r)), base: ctxOf(r).base });
   const ev = events(env, "code-task.timeout");
   ok(ev.length === 1 && ev[0].status === "retry" && /\(1 of 6\)/.test(ev[0].text) && /3046/.test(ev[0].text), "one code-task.timeout event, status retry, naming 1 of 6", ev);

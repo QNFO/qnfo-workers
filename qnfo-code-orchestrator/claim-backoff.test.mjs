@@ -98,7 +98,7 @@ db.prepare("UPDATE code_tasks SET attempts = 2 WHERE id = ?").run(A.id);
 guard.calls.length = 0;
 let t = await tick();
 let ra = row(A.id), ca = ctxOf(A.id).claim;
-ok(t.done.length === 1 && t.done[0].id === A.id && ra.status === "queued" && ra.attempts === 3 && Date.parse(ra.lease_until) - Date.now() > 50 * 60e3 && /SELF-REPAIR-1: round 1 of 3 failed/.test(ra.last_error), "1b the third failed attempt ends the round: queued, backoff of an hour", { done: t.done, ra });
+ok(t.done.length === 1 && t.done[0].id === A.id && ra.status === "queued" && ra.attempts === 3 && Date.parse(ra.lease_until) - Date.now() > 3 * 60e3 && /SELF-REPAIR-1: round 1 of 3 failed/.test(ra.last_error), "1b the third failed attempt ends the round: queued, 5-minute backoff", { done: t.done, ra });
 const relA = callsFor("/work-lock/release", KA);
 ok(relA.length === 1 && relA[0].body.token === "tok1" && relA[0].body.outcome === "backoff" && !("pr" in relA[0].body), "1c the backoff releases the claim with its token, outcome backoff (FAIL-SIGNATURE-STOP-1)", relA);
 ok(ca.released_at && ca.release_status === 200 && ca.outcome === "backoff" && ca.backoff_until === ra.lease_until && !guard.lease[KA], "1d released_at and backoff_until are recorded on the task and the guard lease is gone", ca);
@@ -134,7 +134,7 @@ const D = await addTask("fx-d/worker.js", "claim-backoff fixture D: a short time
 const E = await addTask("fx-e/worker.js", "claim-backoff fixture E: due now");
 const tokC = ctxOf(C.id).claim.token, tokD = ctxOf(D.id).claim.token, tokE = ctxOf(E.id).claim.token;
 db.prepare("UPDATE code_tasks SET status = 'pr_open', step = 'done', pr_url = 'https://github.com/QNFO/qnfo-workers/pull/901' WHERE id = ?").run(C.id);
-db.prepare("UPDATE code_tasks SET step = 'propose', lease_until = ? WHERE id = ?").run(inMin(10), D.id);
+db.prepare("UPDATE code_tasks SET step = 'propose', lease_until = ? WHERE id = ?").run(inMin(1), D.id);
 for (const id of [C.id, D.id, E.id]) setClaim(id, { expires_at: inMin(10) });
 guard.calls.length = 0;
 t = await tick();
@@ -156,7 +156,7 @@ ra = row(A.id);
 const acA = callsFor("/work-lock/acquire", KA);
 ok(t.done.length === 1 && t.done[0].id === A.id && t.done[0].deferred === true && /held by session_y/.test(t.done[0].error) && aiCalls === 0, "4b the resumed task is deferred while the session holds the file", t.done);
 ok(acA.length >= 1 && !acA[0].body.token, "4c the resume asks for a new claim (the released token is never sent)", acA);
-ok(ra.status === "queued" && ra.attempts === 3 && Date.parse(ra.lease_until) - Date.now() > 15 * 60e3 && Date.parse(ra.lease_until) - Date.now() < 30 * 60e3, "4d the task stays queued with its attempts and waits CLAIM_WAIT_MS", ra);
+ok(ra.status === "queued" && ra.attempts === 3 && Date.parse(ra.lease_until) - Date.now() > 1 * 60e3 && Date.parse(ra.lease_until) - Date.now() < 3 * 60e3, "4d the task stays queued with its attempts and waits CLAIM_WAIT_MS", ra);
 await guardFetch(GUARD + "/work-lock/release", { body: JSON.stringify({ key: KA, token: sy.token }) });
 db.prepare("UPDATE code_tasks SET lease_until = ? WHERE id = ?").run(inMin(-1), A.id);
 const t0 = new Date(Date.now() - 1000).toISOString();
@@ -174,7 +174,7 @@ db.prepare("UPDATE code_tasks SET status = 'closed' WHERE id = ?").run(A.id); aw
 db.prepare("UPDATE code_tasks SET attempts = 2 WHERE id = ?").run(F.id);
 guard.down = true;
 t = await tick();
-ok(row(F.id).status === "queued" && Date.parse(row(F.id).lease_until) - Date.now() > 50 * 60e3 && !ctxOf(F.id).claim.released_at, "5a guard unreachable at the round end: the backoff holds, the claim is not marked released", { r: row(F.id), c: ctxOf(F.id).claim });
+ok(row(F.id).status === "queued" && Date.parse(row(F.id).lease_until) - Date.now() > 3 * 60e3 && !ctxOf(F.id).claim.released_at, "5a guard unreachable at the round end: the backoff holds, the claim is not marked released", { r: row(F.id), c: ctxOf(F.id).claim });
 guard.down = false; guard.calls.length = 0;
 t = await tick();
 const relF = callsFor("/work-lock/release", KF);
@@ -182,7 +182,7 @@ ok(relF.length === 1 && relF[0].body.token === tokF && t.claims.parked === 1 && 
 
 // 6. /health names the behaviour; the version is a minimum, never an exact string
 const h = await (await worker.fetch(new Request("https://x/health"), env)).json();
-ok(atLeast(h.version, "0.14.2") && (h.limitations || []).some((l) => /CLAIM-HELD-IN-BACKOFF-1/.test(l) && /30 minutes/.test(l)), "6 health names CLAIM-HELD-IN-BACKOFF-1 and the version is 0.14.2+", { v: h.version });
+ok(atLeast(h.version, "0.14.2") && (h.limitations || []).some((l) => /CLAIM-HELD-IN-BACKOFF-1/.test(l) && /4 minutes/.test(l)), "6 health names CLAIM-HELD-IN-BACKOFF-1 and the version is 0.14.2+", { v: h.version });
 
 console.log(`claim-backoff: ${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

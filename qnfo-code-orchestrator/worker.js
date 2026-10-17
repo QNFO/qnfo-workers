@@ -387,7 +387,10 @@ async function claimEnsure(env, task) {
 // this version), and on resume claimEnsure takes a new claim through the usual acquire; a refusal there is the existing
 // claim-held deferral (queued, CLAIM_WAIT_MS), never a failure. Shorter waits (a TIMEOUT-RETRY-1 rung, 10 min; a claim-held
 // deferral, 20 min) keep the claim: they are inside one attempt and under CLAIM_RENEW_BEFORE_MS.
-const CLAIM_BACKOFF_MS = 5 * 60 * 1000; // SLA-COMPRESS-1 (0.18.0): was 30 min; it only has to outlast one claim sweep
+// SLA-COMPRESS-1 (0.18.0): was 30 min. The park threshold must sit ABOVE every wait that is still the task's own work
+// (TIMEOUT_WAIT_MS 2 min keeps its attempt and its claim; CLAIM_WAIT_MS 2 min is a deferral, not a release) and BELOW
+// RETRY_BACKOFF_MS[0] (5 min: a round that failed does release the file, CLAIM-HELD-IN-BACKOFF-1).
+const CLAIM_BACKOFF_MS = 4 * 60 * 1000;
 function claimParked(task, nowMs) {
   return String(task.status || "") === "queued" && !!task.lease_until && Date.parse(task.lease_until) - nowMs > CLAIM_BACKOFF_MS;
 }
@@ -660,7 +663,7 @@ async function enqueue(env, b) {
 // 2026-10-02, ct_qldqse7ngltdth: queued from 07:40 to past 08:00 while four newer tasks ran). A task that keeps failing
 // still gets at most one attempt per CLAIM_WAIT_MS while others wait, and SELF-REPAIR-1's lease backoff still applies.
 // Claim with a lease: a crashed isolate's lease simply expires and the task is picked up again.
-const CLAIM_WAIT_MS = 4 * 60 * 1000; // SLA-COMPRESS-1 (0.18.0): was 20 min; a claim-held deferral is one lane's wait, not the task's SLA
+const CLAIM_WAIT_MS = 2 * 60 * 1000; // SLA-COMPRESS-1 (0.18.0): was 20 min; a claim-held deferral is one lane's wait, not the task's SLA
 async function claim(env) {
   const now = iso();
   const until = new Date(Date.now() + LEASE_MS).toISOString();

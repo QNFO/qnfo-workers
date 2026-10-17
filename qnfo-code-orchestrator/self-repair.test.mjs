@@ -131,7 +131,7 @@ function fileIssue(env) {
   // 3. a failed round waits; it is not an owner card
   const r1 = row(env, id);
   const c1 = JSON.parse(r1.ctx);
-  ok(r1.status === "queued" && r1.attempts === 3 && Date.parse(r1.lease_until) > Date.now() + 55 * 60000, "A3 after 3 failed attempts the task waits about an hour (queued, lease_until), it is not needs_human", { st: r1.status, a: r1.attempts, lease: r1.lease_until });
+  ok(r1.status === "queued" && r1.attempts === 3 && Date.parse(r1.lease_until) > Date.now() + 3 * 60000, "A3 after 3 failed attempts the task waits 5 minutes (queued, lease_until), it is not needs_human", { st: r1.status, a: r1.attempts, lease: r1.lease_until });
   ok(/<think> reasoning/.test(r1.last_error) && /round 1 of 3 failed/.test(r1.last_error), "A3 last_error says why (reasoning cut off) and which round failed", r1.last_error);
   ok(typeof c1.lastReply === "string" && c1.lastReply.indexOf("<think>") === 0 && /<think> reasoning/.test(c1.lastError), "A3 the reply that held no block is kept in ctx.lastReply for diagnosis", c1.lastReply && c1.lastReply.slice(0, 80));
   ok(ownerCards(env).length === 0, "A3 no owner card: the dashboard's code-task query returns nothing", ownerCards(env));
@@ -170,7 +170,7 @@ function fileIssue(env) {
   const lease1 = row(env, id).lease_until;
   expire(env, id); await tick(env);
   const r2 = row(env, id);
-  ok(r2.status === "queued" && r2.attempts === 6 && Date.parse(r2.lease_until) > Date.now() + 1.5 * 3600e3 && Date.parse(r2.lease_until) <= Date.now() + 2 * 3600e3 + 60e3 && /round 2 of 3/.test(r2.last_error), "B1 round 2 failed: the second backoff is about 2 hours (CODE-BACKOFF-SLA-1: inside the 180-minute stuck SLA)", { st: r2.status, a: r2.attempts, lease: r2.lease_until });
+  ok(r2.status === "queued" && r2.attempts === 6 && Date.parse(r2.lease_until) > Date.now() + 13 * 60000 && Date.parse(r2.lease_until) <= Date.now() + 15 * 60000 + 60e3 && /round 2 of 3/.test(r2.last_error), "B1 round 2 failed: the second backoff is 15 minutes (SLA-COMPRESS-1: inside every step SLA)", { st: r2.status, a: r2.attempts, lease: r2.lease_until });
   ok(Date.parse(lease1) < Date.parse(r2.lease_until), "B1 the backoff grows between rounds");
   expire(env, id); await tick(env);
   const r3 = row(env, id);
@@ -207,7 +207,7 @@ function fileIssue(env) {
 {
   const { env } = envWith([]);
   const h = await (await worker.fetch(new Request("https://x/health"), env)).json();
-  ok(atLeast(h.version, "0.3.0") && /^\d+\.\d+\.\d+-/.test(h.version) && h.capabilities.includes("self-repair") && h.limitations.some((l) => /SELF-REPAIR-1/.test(l) && /1h, then 2h/.test(l) && /3 rounds/.test(l)), "D1 /health names the self-repair capability and its limits", { v: h.version, l: h.limitations.filter((l) => /SELF-REPAIR/.test(l)) });
+  ok(atLeast(h.version, "0.3.0") && /^\d+\.\d+\.\d+-/.test(h.version) && h.capabilities.includes("self-repair") && h.limitations.some((l) => /SELF-REPAIR-1/.test(l) && /5m, then 15m/.test(l) && /3 rounds/.test(l)), "D1 /health names the self-repair capability and its limits", { v: h.version, l: h.limitations.filter((l) => /SELF-REPAIR/.test(l)) });
 }
 
 console.log("self-repair: " + pass + " passed, " + fail + " failed");
