@@ -42,7 +42,7 @@ once("degrade gated by the set", /var recurring = !GW_NO_DEGRADE_CLASSES\[clsLab
 // refusal that says nothing about the model.
 const notIn = src.match(/error_class NOT IN \(([^)]*)\)/g) || [];
 ok("both 24h reads ignore unfunded and rate-capacity", notIn.length === 2 && notIn.every((s) => /'rate-capacity'/.test(s) && /'unfunded'/.test(s)), notIn);
-ok("a budget refusal is ignored by the 24h reads that charge spend", notIn.some((s) => /'spend-limited'/.test(s)), notIn);
+ok("every 24h read ignores a budget refusal", notIn.every((s) => /'spend-limited'/.test(s)), notIn);
 ok("no read still treats only rate-capacity as transient", !/error_class != 'rate-capacity'/.test(src));
 ok("the class is decided in one place", (src.match(/clsLabel = gwErrorClass\(b\.status, /g) || []).length === 2 && !/else if \(\/capacity temporarily\|rate limit\/i\.test\(rh\)\) clsLabel/.test(src));
 // The version history keeps the change (a later version bump must not fail this suite).
