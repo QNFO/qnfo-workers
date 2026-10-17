@@ -121,7 +121,7 @@ function fileIssue(env) {
   // 1. window, not the file
   ok(cx.mode === "patch" && cx.anchor === ANCHOR && cx.win.we - cx.win.ws < 26000 && cx.mirror === "q08-signal-engine/deployed-current.worker.js", "A1 patch mode: an anchor-centred window of the 93 KB file and the mirror recorded", { mode: cx.mode, win: cx.win, mirror: cx.mirror });
   ok(calls.length === 3 && calls.every((c) => c.prompt.length < 30000 && c.prompt.includes(S1) && c.prompt.includes("Only part of the file")), "A1 every rung saw the window (under 30,000 chars), never the whole file", calls.map((c) => c.prompt.length));
-  ok(calls.map((c) => c.model).join() === LADDER.join(), "A1 round 1 climbed the default ladder: kimi-k2.7-code, then glm-5.3, then qwen2.5-coder (CODE-LADDER-ORDER-1)", calls.map((c) => c.model));
+  ok(calls.map((c) => c.model).join() === LADDER.join(), "A1 round 1 climbed the default ladder: kimi-k2.7-code, then glm-5.3, then deepseek-v4-flash (CODE-LADDER-ORDER-1)", calls.map((c) => c.model));
 
   // 2. feedback that names the places, and a classified, kept no-block reply
   const fb = calls[1].prompt.slice(calls[1].prompt.indexOf("Your previous attempt FAILED"));

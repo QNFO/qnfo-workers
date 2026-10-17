@@ -117,17 +117,17 @@ ok(/var retryPrompt = retryPromptFor\(prompt, piece\.text, gateResult\.problems\
 // ---- FACTCHECK-DEGRADE-1: every non-writer family is tried, cheaper sibling first, before a draft fails as unavailable ------------
 {
   const fam = mod.__quality.familyOf;
-  ok(F.FACTCHECK_POOL.length === 8 && F.MODEL_FAMILY["@cf/openai/gpt-oss-20b"] === "openai" && new Set(F.FACTCHECK_POOL.map(fam)).size === 7, "the pool holds eight models over seven families");
+  ok(F.FACTCHECK_POOL.length === 8 && F.MODEL_FAMILY["@cf/openai/gpt-oss-20b"] === "openai" && new Set(F.FACTCHECK_POOL.map(fam)).size === 6, "the pool holds eight models over six families (google and meta left with MODEL-FLOOR-1)");
   const o1 = F.factCheckOrder([fam("@cf/openai/gpt-oss-120b")]);
-  ok(o1.length === 6 && !o1.some((m) => /gpt-oss/.test(m)) && o1.slice(0, 5).join() === F.FACTCHECK_POOL.slice(0, 5).join() && /nemotron/.test(o1[5]), "a gpt-oss writer: the five proven families in order, then nemotron, never openai", o1);
+  ok(o1.length === 6 && !o1.some((m) => /gpt-oss/.test(m)) && o1.slice(0, 4).join() === F.FACTCHECK_POOL.slice(0, 4).join() && /nemotron/.test(o1[4]) && /deepseek-v4-pro/.test(o1[5]), "a gpt-oss writer: the four non-writer families in pool order, then nemotron, never openai", o1);
   const o2 = F.factCheckOrder([fam("@cf/nvidia/nemotron-3-120b-a12b")]);
-  ok(o2.length === 7 && o2[5] === "@cf/openai/gpt-oss-20b" && o2[6] === "@cf/openai/gpt-oss-120b", "a nemotron writer: the cheaper gpt-oss sibling is tried before the larger one", o2);
+  ok(o2.length === 7 && o2.indexOf("@cf/openai/gpt-oss-20b") < o2.indexOf("@cf/openai/gpt-oss-120b") && o2.indexOf("@cf/openai/gpt-oss-20b") > 0, "a nemotron writer: the cheaper gpt-oss sibling is tried before the larger one", o2);
   let calls = [];
-  const envFive = { AI: { run: async (model, input) => { calls.push(model); if (/llama|qwen|gemma|glm|deepseek/.test(model)) throw new Error("timeout"); return { response: '{"unsupported":[],"verdict":"pass"}' }; } } };
+  const envFive = { AI: { run: async (model, input) => { calls.push(model); if (/llama|qwen|gemma|glm|deepseek|kimi/.test(model)) throw new Error("timeout"); return { response: '{"unsupported":[],"verdict":"pass"}' }; } } };
   const fc = await V.factCheck(envFive, "# T\n\nSome essay text that is long enough.", "Some source text.", "@cf/zzz/writer", "s");
-  ok(fc.unavailable === false && fc.ok === true && fc.judges.length === 2 && new Set(fc.judges.map((j) => j.family)).size === 2 && calls.length === 7, "the five proven families down: the two writer families still give two verdicts", { calls, judges: fc.judges.map((j) => j.model) });
+  ok(fc.unavailable === false && fc.ok === true && fc.judges.length === 2 && new Set(fc.judges.map((j) => j.family)).size === 2 && calls.length === 6, "the five proven families down: the two writer families still give two verdicts", { calls, judges: fc.judges.map((j) => j.model) });
   calls = [];
-  const envSib = { AI: { run: async (model) => { calls.push(model); if (/llama|qwen|gemma|glm|deepseek|gpt-oss-20b/.test(model)) throw new Error("timeout"); return { response: '{"unsupported":[],"verdict":"pass"}' }; } } };
+  const envSib = { AI: { run: async (model) => { calls.push(model); if (/llama|qwen|gemma|glm|deepseek|kimi|gpt-oss-20b/.test(model)) throw new Error("timeout"); return { response: '{"unsupported":[],"verdict":"pass"}' }; } } };
   const fc2 = await V.factCheck(envSib, "# T\n\nSome essay text.", "Some source text.", "@cf/zzz/writer", "s");
   ok(fc2.ok === true && fc2.judges.length === 2 && calls.length === 8 && fc2.judges.map((j) => j.model).join() === "@cf/nvidia/nemotron-3-120b-a12b,@cf/openai/gpt-oss-120b", "the cheaper sibling down: its larger sibling stands in for the family, two verdicts after all eight calls", { calls, judges: fc2.judges.map((j) => j.model) });
   calls = [];
@@ -135,13 +135,13 @@ ok(/var retryPrompt = retryPromptFor\(prompt, piece\.text, gateResult\.problems\
   const fcAll = await V.factCheck(envAll, "# T\n\nSome essay text.", "Some source text.", "@cf/zzz/writer", "s");
   ok(fcAll.unavailable === true && calls.length === 8 && /8 reviewers tried/.test(fcAll.reason) && /fewer than two fact-check verdicts from other model families/.test(fcAll.reason), "every family down: honestly unavailable, with every reviewer tried in the reason", { calls: calls.length, reason: fcAll.reason });
   calls = [];
-  const envWriter = { AI: { run: async (model) => { calls.push(model); if (/llama|qwen|gemma|glm|deepseek/.test(model)) throw new Error("timeout"); return { response: '{"unsupported":[],"verdict":"pass"}' }; } } };
+  const envWriter = { AI: { run: async (model) => { calls.push(model); if (/llama|qwen|gemma|glm|deepseek|kimi/.test(model)) throw new Error("timeout"); return { response: '{"unsupported":[],"verdict":"pass"}' }; } } };
   const fc3 = await V.factCheck(envWriter, "# T\n\nSome essay text.", "Some source text.", "@cf/openai/gpt-oss-120b", "s");
   ok(fc3.unavailable === true && !calls.some((m) => /gpt-oss/.test(m)) && calls.length === 6, "the writer's own family is never a reviewer, so a gpt-oss draft with five families down is unavailable", calls);
   calls = [];
   const envOne = { AI: { run: async (model) => { calls.push(model); if (/qwen/.test(model)) throw new Error("timeout"); return { response: '{"unsupported":[],"verdict":"pass"}' }; } } };
   const fc4 = await V.factCheck(envOne, "# T\n\nSome essay text.", "Some source text.", "@cf/openai/gpt-oss-120b", "s");
-  ok(fc4.ok && fc4.judges.length === 2 && calls.join() === ["@cf/meta/llama-3.3-70b-instruct-fp8-fast", "@cf/qwen/qwen3-30b-a3b-fp8", "@cf/google/gemma-4-26b-a4b-it"].join(), "one family fails: the next family is tried, two verdicts, three calls", calls);
+  ok(fc4.ok && fc4.judges.length === 2 && calls.join() === ["@cf/zai-org/glm-5.3-flash", "@cf/deepseek-ai/deepseek-v4-flash-0731"].join(), "one family fails: the next family gives the second verdict, two calls", calls);
 }
 ok(/^var VERSION = "0\.13\./m.test(src) || /^var VERSION = "0\.(1[4-9]|[2-9][0-9])\./m.test(src), "VERSION is at least 0.13");
 ok(typeof mod.default.fetch === "function", "worker module loads");

@@ -220,7 +220,7 @@ env.QNFO_AI = { async fetch(url, init) { drillBody = JSON.parse(init.body); retu
 ai.answer = () => "OK";
 ok(await routerDrillDue(env) === true, "the drill is due when no router-second-path event exists today");
 let dr = await routerSecondPathDrill(env);
-ok(dr.router503 && dr.direct && dr.recorded && drillBody.drill === "router-down" && drillBody.max_tokens === 16 && ai.calls[ai.calls.length - 1].model === "@cf/meta/llama-3.3-70b-instruct-fp8-fast", "503 from the router and a direct answer record the tested alternate", dr);
+ok(dr.router503 && dr.direct && dr.recorded && drillBody.drill === "router-down" && drillBody.max_tokens === 16 && ai.calls[ai.calls.length - 1].model === "@cf/zai-org/glm-5.3-flash", "503 from the router and a direct answer record the tested alternate", dr);
 ok(/^\d{4}-\d\d-\d\dT/.test(audit.prepare("SELECT alternate_tested_at t FROM spof_registry WHERE component = 'qnfo-ai router'").get().t) && events("router-second-path")[0].status === "ok", "spof_registry carries the test time and the event is ok");
 ok(await routerDrillDue(env) === false, "once a UTC day");
 audit.prepare("UPDATE spof_registry SET alternate_tested_at = NULL").run();
