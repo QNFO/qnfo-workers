@@ -132,7 +132,17 @@ export async function context(env, nowIso, c) {
     hour: WB.localHourFloat(now, tz),
     ctx: idx,
     drift: WB.drift(idx),
-    checked_in: check.mood !== undefined || check.energy !== undefined
+    checked_in: check.mood !== undefined || check.energy !== undefined,
+    // SCALE-ANCHORED-1: the same instrument the check-in page shows, machine-readable, so no reader
+    // has to guess what 1 and 5 mean or which direction is good. Thresholds are drift()'s own.
+    scale: {
+      mood: { question: "how you feel right now", 1: "rough", 2: "low", 3: "okay", 4: "good", 5: "great" },
+      energy: { question: "how much you have in the tank", 1: "empty", 2: "thin", 3: "steady", 4: "strong", 5: "full" },
+      direction: "5 is best; 1-2 low, 3 neutral, 4-5 high",
+      not_a_grade: true,
+      used_for: "low values drop the ask ladder to presence; nothing is scored and there is no target",
+      thresholds: { mood_today_strong_low: 1, mood_avg7_strong_low: 2.5, mood_drop_2d_points: 0.75 }
+    }
   };
 }
 
@@ -187,7 +197,7 @@ export function nudgeMail(n, c, tok) {
   if (n.kind === "checkin") {
     return {
       subject: "morning - two taps",
-      body: ["How's it landing today?", "", "Mood, then energy. Two taps, nothing to type:", "", BASE + "/wb/checkin" + (tok ? "?t=" + encodeURIComponent(tok) : "")].join("\n")
+      body: ["How's it landing today?", "", "Mood (how you feel) then energy (what you have in the tank). Two taps, 1 low to 5 high, nothing to type:", "", BASE + "/wb/checkin" + (tok ? "?t=" + encodeURIComponent(tok) : "")].join("\n")
     };
   }
   return {
@@ -214,7 +224,7 @@ export async function briefCheckinLines(env, nowIso) {
   ).bind(day).first();
   if (seen) return [];
   const t = env.WELLBEING_TOKEN ? "?t=" + encodeURIComponent(env.WELLBEING_TOKEN) : "";
-  return ["", "How's it landing? Two taps, nothing to type:", BASE + "/wb/checkin" + t];
+  return ["", "How's it landing? Two taps: mood and energy, 1 low to 5 high, nothing to type:", BASE + "/wb/checkin" + t];
 }
 
 export async function noteCheckinInBrief(env, nowIso) {
@@ -356,7 +366,8 @@ function page(title, body) {
     `<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">` +
     `<title>${esc(title)}</title>` +
     `<style>body{font:17px/1.5 system-ui,-apple-system,Segoe UI,sans-serif;max-width:34rem;margin:3rem auto;padding:0 1.2rem;color:#1b1b1b}` +
-    `a.b{display:inline-block;min-width:3.2rem;text-align:center;padding:.7rem 0;margin:.2rem;border:1px solid #bbb;border-radius:.6rem;text-decoration:none;color:#111}` +
+      `a.b{display:inline-block;min-width:3.9rem;text-align:center;padding:.6rem 0;margin:.2rem;border:1px solid #bbb;border-radius:.6rem;text-decoration:none;color:#111}` +
+      `a.b small{display:block;font-size:.68rem;line-height:1.1;opacity:.75}` +
     `a.b.sel{background:#111;color:#fff;border-color:#111}a.q{color:#666}textarea{width:100%;min-height:6rem;font:inherit;padding:.6rem;border:1px solid #bbb;border-radius:.6rem}` +
     `input{width:calc(100% - 1.4rem);font:inherit;padding:.6rem;border:1px solid #bbb;border-radius:.6rem;margin:.2rem 0}` +
     `h1{font-size:1.15rem;font-weight:600}</style></head><body>` + String(body || "") + `</body>`,
@@ -397,11 +408,18 @@ export async function handleWellbeing(request, env, deps = {}) {
       .bind(WB.dayKey(new Date().toISOString(), c.tz)).all();
     const row = (st.results || [])[0] || {};
     const link = (k, v) => "/wb/checkin?" + k + "=" + v + (t ? "&t=" + encodeURIComponent(t) : "");
-    const btns = (k, cur) => [1, 2, 3, 4, 5].map((v) => `<a class="b${cur === v ? " sel" : ""}" href="${link(k, v)}">${v}</a>`).join("");
+    // SCALE-ANCHORED-1: a bare 1-5 row is not an instrument. Every rung carries the word it means,
+    // the page states the direction and the bands, and it says the number is not a grade.
+    const MOOD_WORDS = ["rough", "low", "okay", "good", "great"];
+    const ENERGY_WORDS = ["empty", "thin", "steady", "strong", "full"];
+    const btns = (k, cur, words) => [1, 2, 3, 4, 5].map((v) => `<a class="b${cur === v ? " sel" : ""}" href="${link(k, v)}">${v}<small>${words[v - 1]}</small></a>`).join("");
     const done = row.mood !== undefined || row.energy !== undefined;
     return page("check-in",
-      `<h1>Today</h1><p class="q">mood</p><div>${btns("mood", row.mood)}</div>` +
-      `<p class="q">energy</p><div>${btns("energy", row.energy)}</div>` +
+      `<h1>Today</h1>` +
+      `<p><b>Mood</b> is how you feel right now. <b>Energy</b> is how much you have in the tank. Both 1 to 5, where 5 is best.</p>` +
+      `<p class="q">mood - how you feel right now</p><div>${btns("mood", row.mood, MOOD_WORDS)}</div>` +
+      `<p class="q">energy - what you have in the tank</p><div>${btns("energy", row.energy, ENERGY_WORDS)}</div>` +
+      `<p class="q">1-2 is low, 3 is neutral, 4-5 is high. It is not a grade and there is no target: a low day means fewer asks and more presence, nothing else.</p>` +
       (done ? `<form method="post"><p class="q">anything you want to leave here</p><textarea name="note" autofocus></textarea><p><button class="b" type="submit">save</button></p></form>` : "")
     );
   }

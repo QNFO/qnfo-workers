@@ -367,7 +367,7 @@ console.log("\n[http]");
   const req = (u, init) => new Request("https://reading.q08.org" + u, init);
   const res = await handleWellbeing(req("/wb/checkin?t=t0k"), env, {});
   const body = await res.text();
-  ok("check-in page renders its body", body.includes("<body>") && body.includes(">mood<") && body.includes(">energy<"), body.slice(-160));
+  ok("check-in page renders its body", body.includes("<body>") && body.includes(">mood - how you feel right now<") && body.includes(">energy - what you have in the tank<"), body.slice(-160));
   ok("check-in page renders all five values", [1, 2, 3, 4, 5].every((v) => body.includes("mood=" + v)), body.slice(-200));
   ok("check-in page carries the token forward", body.includes("t=t0k"));
   const unauth = await handleWellbeing(req("/wb/checkin"), env, {});
