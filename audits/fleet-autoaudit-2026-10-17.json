@@ -1,18 +1,8 @@
 {
-  "audited_at": "2026-10-17 15:10:14",
+  "audited_at": "2026-10-17 15:39:46",
   "d1_write_failures": [],
   "d1_writes_ok": 118,
   "guard": {
-    "_drift_confirm": {
-      "first_pass": [
-        "q08-signal-engine",
-        "qnfo-code-orchestrator"
-      ],
-      "refreshed": true,
-      "second_pass": [
-        "qnfo-code-orchestrator"
-      ]
-    },
     "_guard_rc": 0,
     "ahead": [],
     "cf_script_list": true,
@@ -20,26 +10,10 @@
     "content_drift": [],
     "cron_only": [],
     "cron_only_count": 0,
-    "drift": [
-      {
-        "dir": "qnfo-code-orchestrator",
-        "live": "0.16.3-claim-ceiling",
-        "repo": "0.16.5-suite-scope",
-        "worker": "qnfo-code-orchestrator"
-      }
-    ],
+    "drift": [],
     "live_err": [],
-    "multi_version": [
-      {
-        "artifact": "/home/runner/work/qnfo-workers/qnfo-workers/qnfo-code-orchestrator/deployed-current.worker.js",
-        "declarations": "0.16.5-suite-scope,fleet-executor/0.3.2",
-        "dir": "qnfo-code-orchestrator",
-        "live": "0.16.3-claim-ceiling",
-        "repo": "0.16.5-suite-scope",
-        "worker": "qnfo-code-orchestrator"
-      }
-    ],
-    "multi_version_count": 1,
+    "multi_version": [],
+    "multi_version_count": 0,
     "name_resolution": true,
     "no_health_route": [],
     "no_live_version": [],
@@ -563,7 +537,7 @@
     "retired_present": [],
     "retired_present_count": 0,
     "scope": "all",
-    "sync": 28,
+    "sync": 29,
     "sync_workers": [
       {
         "dir": "idea-hub",
@@ -582,7 +556,7 @@
       },
       {
         "dir": "q08-signal-engine",
-        "version": "0.28.4-outbound-timeout",
+        "version": "0.28.5-signal-retry",
         "worker": "q08-signal-engine"
       },
       {
@@ -606,6 +580,11 @@
         "worker": "qnfo-cloud-ops"
       },
       {
+        "dir": "qnfo-code-orchestrator",
+        "version": "0.16.5-suite-scope",
+        "worker": "qnfo-code-orchestrator"
+      },
+      {
         "dir": "qnfo-containers-pilot",
         "version": "1.0.11-command-exit-honest",
         "worker": "qnfo-containers-pilot"
@@ -622,7 +601,7 @@
       },
       {
         "dir": "qnfo-fleet-control",
-        "version": "0.34.1-open-twin",
+        "version": "0.33.3-tick-visibility",
         "worker": "qnfo-fleet-control"
       },
       {
@@ -637,7 +616,7 @@
       },
       {
         "dir": "qnfo-github-steward",
-        "version": "0.1.1-github-steward",
+        "version": "0.1.2-steward-bp",
         "worker": "qnfo-github-steward"
       },
       {
@@ -682,7 +661,7 @@
       },
       {
         "dir": "qnfo-research-exec",
-        "version": "0.18.19-revise-flex",
+        "version": "0.18.22-cite-backfill",
         "worker": "qnfo-research-exec"
       },
       {
@@ -994,9 +973,9 @@
       "worker": "personal-life-search"
     },
     "q08-signal-engine": {
-      "before": "0.28.4-outbound-timeout",
+      "before": "0.28.5-signal-retry",
       "http": 200,
-      "live": "0.28.4-outbound-timeout",
+      "live": "0.28.5-signal-retry",
       "match": 1,
       "note": "SYNC",
       "worker": "q08-signal-engine"
@@ -1198,9 +1177,9 @@
     "qnfo-code-orchestrator": {
       "before": "0.16.5-suite-scope",
       "http": 200,
-      "live": "0.16.3-claim-ceiling",
-      "match": 0,
-      "note": "DRIFT",
+      "live": "0.16.5-suite-scope",
+      "match": 1,
+      "note": "SYNC",
       "worker": "qnfo-code-orchestrator"
     },
     "qnfo-containers-pilot": {
@@ -1318,9 +1297,9 @@
       "worker": "qnfo-fleet-calibrator"
     },
     "qnfo-fleet-control": {
-      "before": "0.34.1-open-twin",
+      "before": "0.33.3-tick-visibility",
       "http": 200,
-      "live": "0.34.1-open-twin",
+      "live": "0.33.3-tick-visibility",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-fleet-control"
@@ -1360,9 +1339,9 @@
       "worker": "qnfo-gateway"
     },
     "qnfo-github-steward": {
-      "before": "0.1.1-github-steward",
+      "before": "0.1.2-steward-bp",
       "http": 200,
-      "live": "0.1.1-github-steward",
+      "live": "0.1.2-steward-bp",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-github-steward"
@@ -1558,9 +1537,9 @@
       "worker": "qnfo-register-guard"
     },
     "qnfo-research-exec": {
-      "before": "0.18.19-revise-flex",
+      "before": "0.18.22-cite-backfill",
       "http": 200,
-      "live": "0.18.19-revise-flex",
+      "live": "0.18.22-cite-backfill",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-research-exec"
