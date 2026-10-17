@@ -1,8 +1,18 @@
 {
-  "audited_at": "2026-10-17 18:50:37",
+  "audited_at": "2026-10-17 19:38:41",
   "d1_write_failures": [],
   "d1_writes_ok": 119,
   "guard": {
+    "_drift_confirm": {
+      "first_pass": [
+        "personal-companion",
+        "qnfo-fleet-control"
+      ],
+      "refreshed": true,
+      "second_pass": [
+        "personal-companion"
+      ]
+    },
     "_guard_rc": 0,
     "ahead": [],
     "cf_script_list": true,
@@ -617,7 +627,7 @@
       },
       {
         "dir": "qnfo-fleet-control",
-        "version": "0.33.7-sla-paths-readers",
+        "version": "0.33.8-probe-error-visible",
         "worker": "qnfo-fleet-control"
       },
       {
@@ -1321,9 +1331,9 @@
       "worker": "qnfo-fleet-calibrator"
     },
     "qnfo-fleet-control": {
-      "before": "0.33.7-sla-paths-readers",
+      "before": "0.33.8-probe-error-visible",
       "http": 200,
-      "live": "0.33.7-sla-paths-readers",
+      "live": "0.33.8-probe-error-visible",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-fleet-control"
