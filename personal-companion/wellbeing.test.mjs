@@ -10,7 +10,7 @@ import {
   drift, planNext, retiredKinds, expireStale, closeNudge, crisisBlock, crisisSignal,
   DEFAULT_CONFIG, LADDER, whatHelped, unansweredStreak, tzOffsetMinutes
 } from "./wellbeing.js";
-import { handleWellbeing, wellbeingTick, vaultNoteDays } from "./wellbeing-wire.js";
+import { handleWellbeing, wellbeingTick, vaultNoteDays, ensureWellbeing, briefCheckinLines, noteCheckinInBrief, cfg } from "./wellbeing-wire.js";
 
 let pass = 0, fail = 0;
 const ok = (name, cond, extra) => {
@@ -189,6 +189,64 @@ ok("mirrors are counted once", vd.total === 3, vd);
 ok("machine notes are not daily notes", vd.total === 3 && !String(vd.latest).includes("arxiv"));
 ok("the latest note is found", vd.latest === "2026-10-17" && vd.latestSize === 343, vd);
 ok("a week of notes is counted", vd.days7 === 2, vd);
+
+// One morning mail: the check-in rides in the brief, and the standalone path must not repeat it.
+console.log("\n[morning mail]");
+{
+  const m = (() => {
+    const d = new DatabaseSync(":memory:");
+    d.exec("CREATE TABLE journal (ts TEXT)");
+    d.exec("CREATE TABLE activity (date TEXT)");
+    d.exec("CREATE TABLE chat (role TEXT, ts TEXT)");
+    d.exec("CREATE TABLE notes (kind TEXT, ts TEXT)");
+    d.exec("CREATE TABLE files (path TEXT, size INTEGER, modified TEXT)");
+    return { db: d, env: { PERSONAL: d1(d), WELLBEING_TOKEN: "t0k" } };
+  })();
+  await ensureWellbeing(m.env.PERSONAL);
+  const l1 = await briefCheckinLines(m.env, "2026-10-17T06:00:00Z");
+  ok("the brief carries a check-in link", l1.length > 0 && l1.join("\n").includes("/wb/checkin?t=t0k"), l1);
+  ok("noted as sent inside the brief", (await noteCheckinInBrief(m.env, "2026-10-17T06:00:00Z")) === true);
+  ok("the brief does not repeat it", (await briefCheckinLines(m.env, "2026-10-17T06:05:00Z")).length === 0);
+  ok("a second note is refused, not duplicated", (await noteCheckinInBrief(m.env, "2026-10-17T06:10:00Z")) === false);
+  ok("the next day it returns", (await briefCheckinLines(m.env, "2026-10-18T06:00:00Z")).length > 0);
+}
+
+// The two values the machine cannot infer, set from a phone form.
+console.log("\n[settings]");
+{
+  const s = (() => {
+    const d = new DatabaseSync(":memory:");
+    d.exec("CREATE TABLE journal (ts TEXT)");
+    d.exec("CREATE TABLE activity (date TEXT)");
+    d.exec("CREATE TABLE chat (role TEXT, ts TEXT)");
+    d.exec("CREATE TABLE notes (kind TEXT, ts TEXT)");
+    d.exec("CREATE TABLE files (path TEXT, size INTEGER, modified TEXT)");
+    return { db: d, env: { PERSONAL: d1(d), WELLBEING_TOKEN: "t0k" } };
+  })();
+  await ensureWellbeing(s.env.PERSONAL);
+  const form = new Request("https://reading.q08.org/wb/settings?t=t0k", {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({ contact_candidates: "Ana, Joost", backstop_name: "Ana", backstop_contact: "+31 6 0000 0000", quiet_start: "23", quiet_end: "7" }).toString()
+  });
+  const res = await handleWellbeing(form, s.env, {});
+  ok("settings save is accepted", res.status === 200, res.status);
+  const conf = await cfg(s.env);
+  ok("names are stored as a list", Array.isArray(conf.contact_candidates) && conf.contact_candidates.length === 2, conf.contact_candidates);
+  ok("the backstop is stored", conf.backstop_name === "Ana" && conf.backstop_contact.startsWith("+31"));
+  ok("quiet hours are stored as numbers", conf.quiet_start === 23 && conf.quiet_end === 7, [conf.quiet_start, conf.quiet_end]);
+  const saved = planNext({
+    nowIso: "2026-10-17T14:00:00Z", ctx: {}, cfg: conf,
+    recent: [
+      { kind: "micro", state: "done", ts: "2026-10-15T10:00:00Z", day: "2026-10-15", ladder_step: 1, sent_at: "2026-10-15T10:00:00Z" },
+      { kind: "body", state: "done", ts: "2026-10-15T18:00:00Z", day: "2026-10-15", ladder_step: 2, sent_at: "2026-10-15T18:00:00Z" }
+    ]
+  });
+  ok("a saved name reaches the plan", saved.kind === "contact" && saved.ask.includes("Ana"), saved);
+  const page1 = await handleWellbeing(new Request("https://reading.q08.org/wb/settings?t=t0k"), s.env, {});
+  const html = await page1.text();
+  ok("settings page shows what is saved", html.includes("Ana") && html.includes("<form"), html.slice(0, 80));
+}
 
 console.log("\n[planner: ladder]");
 const first = planNext({ nowIso: "2026-10-17T14:00:00Z", ctx: {} });

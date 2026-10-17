@@ -4173,6 +4173,9 @@ async function sendMorningBrief(env, nowMs) {
         }
       }
     } catch (eQ) { logCaught("sendMorningBrief", eQ); }
+    // WELLBEING-LOOP-1 / ONE-MORNING-MAIL-1: the check-in rides in this mail instead of arriving as
+    // a second one fifteen minutes later. Guarded: a wellbeing failure must never stop the brief.
+    try { var _wbL = await WBW.briefCheckinLines(env); if (_wbL && _wbL.length) { for (var _wl = 0; _wl < _wbL.length; _wl++) L.push(_wbL[_wl]); } } catch (eWbL) { logCaught("sendMorningBrief", eWbL); }
     var body = L.join(NL);
     // MORNING-BRIEF-CLAIM-1: claim the day before sending so two overlapping ticks cannot both mail it; a failed send
     // releases the claim so the next hourly tick retries.
@@ -4189,6 +4192,8 @@ async function sendMorningBrief(env, nowMs) {
       for (var mt = 0; mt < 2; mt++) {
         try { await env.PERSONAL.prepare("UPDATE companion_morning_brief SET sent = 1 WHERE date = ?").bind(day).run(); break; } catch (eMk) { console.error("morning-brief sent mark:", String(eMk && eMk.message || eMk)); }
       }
+      // The check-in line went out in this mail, so record it: the standalone 07:45 path must not repeat it.
+      try { await WBW.noteCheckinInBrief(env); } catch (eWbN) { logCaught("sendMorningBrief", eWbN); }
     }
     return r;
   } catch (e) {

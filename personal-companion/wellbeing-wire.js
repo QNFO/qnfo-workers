@@ -203,6 +203,36 @@ export function nudgeMail(n, c, tok) {
   };
 }
 
+// ONE-MORNING-MAIL-1: the morning brief and the standalone check-in both fire on the 06:00Z tick,
+// which put two messages in the owner's inbox 15 minutes apart. The check-in now rides inside the
+// brief when the brief goes out; the standalone path remains as the fallback for days with no brief.
+export async function briefCheckinLines(env, nowIso) {
+  const c = await cfg(env);
+  const day = WB.dayKey(nowIso || new Date().toISOString(), c.tz);
+  const seen = await env.PERSONAL.prepare(
+    "SELECT 1 AS x FROM companion_nudges WHERE day = ? AND kind = 'checkin' LIMIT 1"
+  ).bind(day).first();
+  if (seen) return [];
+  const t = env.WELLBEING_TOKEN ? "?t=" + encodeURIComponent(env.WELLBEING_TOKEN) : "";
+  return ["", "How's it landing? Two taps, nothing to type:", BASE + "/wb/checkin" + t];
+}
+
+export async function noteCheckinInBrief(env, nowIso) {
+  const c = await cfg(env);
+  const now = nowIso || new Date().toISOString();
+  const day = WB.dayKey(now, c.tz);
+  try {
+    await env.PERSONAL.prepare(
+      `INSERT INTO companion_nudges (ts, day, kind, ladder_step, ask, minutes, expected, due_at, state, sent_at, reason)
+       VALUES (?, ?, 'checkin', 0, 'How''s it landing today?', 0, 'log:checkin', ?, 'sent', ?, 'morning-brief')`
+    ).bind(now, day, new Date(Date.parse(now) + 6 * 3600e3).toISOString(), now).run();
+    return true;
+  } catch (e) {
+    if (String(e && e.message || e).includes("NUDGE-DUP-1")) return false;
+    throw e;
+  }
+}
+
 // ---------------------------------------------------------------- the tick
 
 // Called hourly. Idempotent by construction: one row per kind per day, a min gap, a daily cap.
@@ -328,6 +358,7 @@ function page(title, body) {
     `<style>body{font:17px/1.5 system-ui,-apple-system,Segoe UI,sans-serif;max-width:34rem;margin:3rem auto;padding:0 1.2rem;color:#1b1b1b}` +
     `a.b{display:inline-block;min-width:3.2rem;text-align:center;padding:.7rem 0;margin:.2rem;border:1px solid #bbb;border-radius:.6rem;text-decoration:none;color:#111}` +
     `a.b.sel{background:#111;color:#fff;border-color:#111}a.q{color:#666}textarea{width:100%;min-height:6rem;font:inherit;padding:.6rem;border:1px solid #bbb;border-radius:.6rem}` +
+    `input{width:calc(100% - 1.4rem);font:inherit;padding:.6rem;border:1px solid #bbb;border-radius:.6rem;margin:.2rem 0}` +
     `h1{font-size:1.15rem;font-weight:600}</style></head><body>` + String(body || "") + `</body>`,
     { headers: { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store" } }
   );
@@ -390,8 +421,69 @@ export async function handleWellbeing(request, env, deps = {}) {
   // Ops path: prove the loop now instead of waiting for the hour. Token-gated like every other
   // wellbeing route. force=1 bypasses quiet hours and the daily cap, never the ladder or retirement.
   if (p === "/wb/tick") {
+    // kind=checkin proves the check-in path now instead of waiting for 07:45.
+    if (u.searchParams.get("kind") === "checkin") {
+      const c0 = await cfg(env);
+      const nowC = new Date().toISOString();
+      const dayC = WB.dayKey(nowC, c0.tz);
+      const rowC = await insertNudge(env, {
+        day: dayC, kind: "checkin", step: 0, ask: "How's it landing today?", minutes: 0,
+        expected: "log:checkin", due_at: new Date(Date.parse(nowC) + 6 * 3600e3).toISOString(), reason: "ops-force"
+      });
+      if (!rowC) return new Response(JSON.stringify({ ok: false, skipped: "already-sent-today" }, null, 2), { headers: { "Content-Type": "application/json" } });
+      const mailC = nudgeMail(rowC, c0, env.WELLBEING_TOKEN);
+      const sentC = deps.send ? await deps.send(env, OWNER, mailC.subject, mailC.body) : null;
+      await markSent(env, rowC.id, sentC, nowC);
+      return new Response(JSON.stringify({ ok: !!(sentC && sentC.ok !== false), id: rowC.id, subject: mailC.subject }, null, 2), { headers: { "Content-Type": "application/json; charset=utf-8" } });
+    }
     const out = await wellbeingTick(env, { send: deps.send, force: u.searchParams.get("force") === "1" });
     return new Response(JSON.stringify(out, null, 2), { headers: { "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store" } });
+  }
+
+  // The owner fills the two things the machine cannot infer. Token-gated like everything else.
+  if (p === "/wb/settings") {
+    if (request.method === "POST") {
+      let fd = null;
+      try { fd = await request.formData(); } catch { /* not a form */ }
+      if (fd) {
+        const cand = fd.get("contact_candidates");
+        if (cand !== null) {
+          const list = String(cand).split(",").map((s) => s.trim()).filter(Boolean);
+          await setCfg(env, "contact_candidates", list);
+        }
+        for (const k of ["backstop_name", "backstop_contact", "presence_line"]) {
+          const v = fd.get(k);
+          if (v !== null) await setCfg(env, k, String(v).trim());
+        }
+        for (const k of ["quiet_start", "quiet_end"]) {
+          const v = fd.get(k);
+          if (v !== null && String(v).trim() !== "" && !Number.isNaN(Number(v))) await setCfg(env, k, Number(v));
+        }
+      }
+      return page("saved", "<h1>Saved.</h1><p>It will use this from the next tick.</p><p><a class='q' href='/wb/settings?t=" + esc(t) + "'>back</a></p>");
+    }
+    const v = (x, d = "") => esc(x === undefined || x === null ? d : x);
+    const cands = Array.isArray(c.crisis_lines) ? c.crisis_lines : [];
+    return page("settings",
+      "<h1>What only you can tell it</h1>" +
+      "<form method='post'>" +
+      "<p class='q'>people it may name on the contact rung (comma separated)</p>" +
+      "<input name='contact_candidates' value='" + v((c.contact_candidates || []).join(", ")) + "'>" +
+      "<p class='q'>backstop name - the person it names if you say something that scares it</p>" +
+      "<input name='backstop_name' value='" + v(c.backstop_name) + "'>" +
+      "<p class='q'>how to reach them</p>" +
+      "<input name='backstop_contact' value='" + v(c.backstop_contact) + "'>" +
+      "<p class='q'>quiet from / until (local hour, 22 and 7.5 by default)</p>" +
+      "<input name='quiet_start' value='" + v(c.quiet_start) + "' style='width:5rem'> " +
+      "<input name='quiet_end' value='" + v(c.quiet_end) + "' style='width:5rem'>" +
+      "<p class='q'>what it says when it only wants to be present</p>" +
+      "<input name='presence_line' value='" + v(c.presence_line) + "'>" +
+      "<p><button class='b' type='submit'>save</button></p>" +
+      "</form>" +
+      "<p class='q' style='margin-top:2rem'>crisis lines on file: " +
+      esc(cands.map((l) => (l && l.label ? l.label + " " + (l.number || "") : (l && l.number) || "")).join(" · ") || "none") +
+      "</p>"
+    );
   }
 
   if (p === "/api/wellbeing") {
