@@ -92,6 +92,16 @@ const G = load();
   // KG-FK-1: the citing node must exist before its edges, and graph failures must be counted, not swallowed.
   ok(/INSERT OR IGNORE INTO nodes[\s\S]{0,200}"paper:" \+ row\.slug/.test(src), "the CITING node is created before its edges (edges.source_id has a foreign key)");
   ok(/out\.kgErr = \(out\.kgErr \|\| 0\) \+ 1/.test(src), "graph write failures are counted into the event, not swallowed");
+  // CORPUS-LEVERAGE-SELECT-1: the signal now drives selection, bounded and reversible.
+  ok(/async function extensionCandidateSweep\(env\)/.test(src), "the terminal-paper signal is acted on");
+  ok(/research_extension_per_day/.test(src) && /EXTENSION_PER_DAY_MAX = 10/.test(src), "the rate is configurable and clamped (0 stops it)");
+  ok(/INSERT OR IGNORE INTO research_queue[\s\S]{0,160}source_id, idea/.test(src) || /INSERT OR IGNORE INTO research_queue \(id, source, source_id, idea/.test(src), "proposals are deduped by (source, source_id)");
+  ok(/extend:" \+ c\.slug/.test(src), "one proposal per paper, ever");
+  ok(/status IN \('queued','researching'\)/.test(src) && /queue full/.test(src), "nothing is enqueued into a full ready queue");
+  ok(/inbound = 0 AND age_days >= \?1/.test(src), "only terminal papers are proposed for extension");
+  ok(/await extensionCandidateSweep\(env\)/.test(src), "the sweep runs from the tick");
+  // The idea text must demand a falsifiable prediction rather than a restatement.
+  ok(/falsifiable prediction/.test(src) && /Do not restate the original result/.test(src), "the proposal asks for a prospective, falsifiable test");
   ok(/await citeBackfillSweep\(env\)/.test(src), "the sweep runs from the tick");
   ok(/"cites:" \+ row.slug \+ ":" \+ hit.slug/.test(src), "backfilled edges use the same namespaced id as the forward path");
 }
