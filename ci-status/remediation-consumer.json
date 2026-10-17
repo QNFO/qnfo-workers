@@ -1,8 +1,158 @@
 {
- "ok": false,
- "error": "no parseable consumer output: Extra data: line 2 column 1 (char 405)",
+ "ok": true,
  "marker": "REMEDIATION-CONSUMER-1",
- "head": "63d5dea1696b4129c772e22ef70d6c14b9e9c44a",
+ "verifier": "remediation-consumer@b45d01c743c9",
+ "due": 13,
+ "pass": 11,
+ "fail": 0,
+ "skipped": 2,
+ "contracts": [
+  {
+   "class": "issue-2453",
+   "issue_id": 2453,
+   "verdict": "probe-not-machine-executable",
+   "reason": "url-not-allowlisted"
+  },
+  {
+   "class": "issue-2187",
+   "issue_id": 2187,
+   "verdict": "probe-not-machine-executable",
+   "reason": "url-not-allowlisted"
+  },
+  {
+   "class": "rt-gateway",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "issue-1899",
+   "issue_id": 1899,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "issue-2122",
+   "issue_id": 2122,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "issue-2072",
+   "issue_id": 2072,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "rt-ai-router",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "issue-2102",
+   "issue_id": 2102,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "issue-2272",
+   "issue_id": 2272,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "rt-fleet-dashboard",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "issue-2271",
+   "issue_id": 2271,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "issue-2275",
+   "issue_id": 2275,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "issue-2281",
+   "issue_id": 2281,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  }
+ ],
+ "trusted_transports": [
+  "binding-http",
+  "cf-api",
+  "code-read",
+  "container",
+  "curl",
+  "d1-query",
+  "d1-query@ipatent-db",
+  "d1-query@living-paper",
+  "d1-query@personal-life",
+  "d1-query@portfolio-state",
+  "d1-query@q08-signal",
+  "d1-query@qnfo-cms",
+  "d1-query@qnfo-graph",
+  "dns",
+  "edge-ext",
+  "external",
+  "external-curl",
+  "external-http",
+  "external-https",
+  "http",
+  "runner-https"
+ ],
+ "https": 3,
+ "budget_exhausted": false,
+ "runtime_verified_share_24h": 9.2,
+ "host_census": {
+  "updated": 2683,
+  "hosts": 59,
+  "broken": 2,
+  "owner_bound": 6,
+  "recovered": 0
+ },
+ "fleet_journeys": {
+  "skipped": "ran within 50 min"
+ },
+ "migrations": {
+  "opted_in": 235,
+  "unapplied": [],
+  "applied_now": [],
+  "failed": [],
+  "metric": 0
+ },
+ "spent_ms": 41755,
+ "head": "b45d01c743c9b471ca1e5ecf9130dd7aeb76f603",
  "job_status": "success",
- "ts": "2026-10-17T20:20:35Z"
+ "ts": "2026-10-17T20:45:29Z"
 }
