@@ -26,7 +26,7 @@ const ok = (c, m, d) => {
  * `export default {` is rewritten to a local binding so the same file that ships to Cloudflare is the
  * file under test. */
 const body = src.replace(/^export default /m, "var __default = ");
-const mod = new Function("console", body + "\n;return { isSinglePath, gapKey, buildIssue, pickNew, isDenied, DENY_WORKERS, VERSION, SOURCE, MAX_OPEN, MAX_NEW_PER_TICK, handlers: __default };")
+const mod = new Function("console", body + "\n;return { isSinglePath, gapKey, buildIssue, pickNew, isDenied, DENY_WORKERS, VERSION, SOURCE, MAX_OPEN, MAX_NEW_PER_TICK, WIP_CEILING, WIP_ATTEMPTS, WIP_STALE_MIN, handlers: __default };")
   ({ log() {} });
 
 ok(/^\d+\.\d+\.\d+/.test(mod.VERSION), "VERSION is semver-shaped", mod.VERSION);
@@ -124,6 +124,17 @@ ok(/issue_triage/.test(src), "the close path writes issue_triage");
 ok(/close_evidence/.test(src), "the close path supplies close_evidence");
 ok(src.indexOf("close_evidence") < src.indexOf("close_channel = 'evolve-auto'"),
   "evidence is written before the status changes (issue_close_evidence_required)");
+
+/* 8. WIP-RECOVERY-1 must mirror the orchestrator's ceiling and stay timid. */
+ok(mod.WIP_CEILING === 6, "recovery uses the orchestrator's PLAN_WIP value", mod.WIP_CEILING);
+ok(mod.WIP_ATTEMPTS === 6, "a task is only parked after 6 attempts", mod.WIP_ATTEMPTS);
+ok(mod.WIP_STALE_MIN === 10, "a task is not parked while it may be mid-attempt", mod.WIP_STALE_MIN);
+ok(/if \(wip < WIP_CEILING\) return parked/.test(src), "recovery is inert while the queue is not blocked");
+ok(/INSERT OR REPLACE INTO ops_config/.test(src), "the row is backed up before it is parked");
+ok(src.indexOf("INSERT OR REPLACE INTO ops_config") < src.indexOf("SET status = 'failed'"),
+  "the backup is written before the status changes");
+ok(/WHERE id = \? AND status = 'queued'/.test(src), "the park cannot clobber a task another actor moved");
+ok(/attempts >= \?/.test(src), "the attempt floor is a bound parameter, not a string");
 
 console.log(`${pass} passed, ${fail} failed`);
 if (fail) process.exit(1);
