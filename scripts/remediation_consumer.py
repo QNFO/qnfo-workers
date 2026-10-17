@@ -127,8 +127,18 @@ def _req(method, url, body=None):
     req.add_header("Authorization", "Bearer " + TOKEN)
     req.add_header("Content-Type", "application/json")
     req.add_header("User-Agent", "qnfo-remediation-consumer/1")
-    with urllib.request.urlopen(req, timeout=45) as r:
-        return json.loads(r.read().decode("utf-8"))
+    try:
+        with urllib.request.urlopen(req, timeout=45) as r:
+            return json.loads(r.read().decode("utf-8"))
+    except urllib.error.HTTPError as e:
+        # CONSUMER-ERROR-BODY-1 (2026-10-17): D1 answers a refused statement with HTTP 400 and the real SQLite message
+        # in the body. urllib raised with the body unread, so every failing contract reported "HTTP Error 400: Bad
+        # Request" and nothing could be attributed (529 contracts at probe-error). Surface the body.
+        try:
+            detail = e.read().decode("utf-8", "replace")[:600]
+        except Exception:  # noqa: BLE001 - the status still carries the failure
+            detail = ""
+        raise RuntimeError("HTTP %s from %s: %s" % (e.code, url, detail or e.reason)) from None
 
 
 def resolve_db_id():
@@ -943,6 +953,21 @@ def consume_one(c, trusted):
         rec["reason"] = str(e)[:300]
         local["skipped"] += 1
         log("contract %s error: %s" % (cls, e))
+        # CONSUMER-ERROR-BODY-1 (2026-10-17): the run log is ephemeral and the fleet reads D1, so the same message also
+        # lands in cloud_ops_events, deduped per (class, message) for an hour. 529 contracts sat at probe-error with
+        # nothing to attribute it to; an unreadable failure is a blind spot, not a verdict.
+        try:
+            detail = "class=%s transport=%s error=%s" % (cls, c.get("verify_transport"), str(e)[:300])
+            d1(
+                "INSERT INTO cloud_ops_events (id, ts, kind, text, job, status) "
+                "SELECT ?, strftime('%Y-%m-%dT%H:%M:%fZ','now'), 'remediation.probe-error', ?, "
+                "'remediation-consumer', 'error' "
+                "WHERE NOT EXISTS (SELECT 1 FROM cloud_ops_events WHERE kind = 'remediation.probe-error' "
+                "AND text = ? AND ts > strftime('%Y-%m-%dT%H:%M:%fZ','now','-60 minutes'))",
+                ["pe-c-%s-%d" % (cls, int(time.time())), detail, detail],
+            )
+        except Exception:  # noqa: BLE001 - the ledger write never changes the verdict
+            pass
     if cadence is None:
         cadence = c.get("expected_cadence_h") or 1
     try:
