@@ -25,6 +25,23 @@ var WRITER_URL = "https://api.deepseek.com/chat/completions";
 var ACCEPT_FLOOR_NOTES = 4;
 var ACCEPT_FLOOR_ESSAY = 5;
 var MAX_PIECES_PER_DAY = 5;
+// PUBLISH-QUOTAS-1 (owner directive 2026-10-17: "PUBLISH STREAMS SHALL HAVE SEPARATE QUOTAS FOR EACH PROPERTY, DO NOT
+// COMMINGLE STREAMS"). reading.q08.org reads its own number from ops_config publish_quotas instead of holding a
+// private constant that only a deploy could change; MAX_PIECES_PER_DAY stays as the fallback when the row is absent.
+// q08.org and papers.qnfo.org read the same object under their own keys, so no property can spend another's budget.
+var QUOTA_PROPERTY = "reading.q08.org";
+var QUOTAS_KEY = "publish_quotas";
+async function readingQuota(env) {
+  try {
+    var r = await env.AUDIT.prepare("SELECT value FROM ops_config WHERE key = ?1").bind(QUOTAS_KEY).first();
+    var raw = r && r.value ? JSON.parse(String(r.value)) : null;
+    var v = raw && Object.prototype.hasOwnProperty.call(raw, QUOTA_PROPERTY) ? Number(raw[QUOTA_PROPERTY]) : NaN;
+    if (Number.isFinite(v) && v >= 0 && v <= 500) return Math.floor(v);
+  } catch (e) {
+    console.error(JSON.stringify({ worker: "personal-companion", event: "publish-quota-read", error: String(e && e.message || e).slice(0, 160) }));
+  }
+  return MAX_PIECES_PER_DAY;
+}
 var GEN_HOURS_UTC = [4, 8, 12, 16, 20];
 var BANNED_MODELS = ["llama", "mistral", "gemma-7b", "gemma-4-26b", "qwen3-30b", "qwen2.5", "r1-distill", "qwq-", "-8b", "-11b", "-7b", "-flash", "-fp8-fast", "-lora", "-mini", "-small"];
 function modelAllowed(m) {
@@ -3583,7 +3600,7 @@ var worker_default = {
             "SELECT COUNT(*) n FROM companion_pieces WHERE day = ?"
           ).bind(day).all();
           var todayN = ((dayCount.results || [])[0] || {}).n || 0;
-          if (todayN < MAX_PIECES_PER_DAY) {
+          if (todayN < await readingQuota(env)) {
             var form = RHYTHM[amsWeekday(nowUtc)];
             var out = await generate(env, form, {});
             if (out && out.ok) {

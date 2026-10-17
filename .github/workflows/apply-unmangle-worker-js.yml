@@ -83,13 +83,21 @@ jobs:
         run: |
           set -euo pipefail
           fail=0
+          # SYNTAX-GATE-MIRROR-SCOPE-1 (2026-10-17): the canonical deploy reads
+          # <dir>/deployed-current.worker.js, NOT <dir>/worker.js, so a mirror that does
+          # not parse ships broken code even when the source is clean. Measured: commit
+          # 1459b1ff put a stray "===" line at qnfo-research-exec/worker.js:28, the bot
+          # copied it into the mirror, and because this gate scanned only worker.js the
+          # mirror kept the defect while canonical-deploy failed every push with
+          # CF 10021 "Uncaught SyntaxError: Unexpected token '==='". Both file names
+          # are parsed now.
           while IFS= read -r f; do
             cp "$f" /tmp/check.mjs
             if ! node --check /tmp/check.mjs 2>/tmp/err; then
               echo "::error file=$f::syntax error: $(head -1 /tmp/err)"
               fail=1
             fi
-          done < <(find . -name worker.js -not -path "./.git/*")
+          done < <(find . \( -name worker.js -o -name deployed-current.worker.js \) -not -path "./.git/*")
           if [ "$fail" -ne 0 ]; then
             echo "SYNTAX GATE FAILED"
             exit 1

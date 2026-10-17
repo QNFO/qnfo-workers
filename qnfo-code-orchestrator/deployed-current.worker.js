@@ -517,6 +517,7 @@ async function pathNoProgress(env, t) {
   if (changed) await audit(env, "code-task.no-progress", why, { task: t.id, path: t.path, stale_min: Math.round(staleMin), attempts: Number(t.attempts || 0), last_sig: sigs[sigs.length - 1] || null }, "ok");
   return changed;
 }
+var CLAIM_TTL_MAX_MS = 90 * 60 * 1e3;
 async function pathBusy(env, repo, path) {
   const ps = taskPaths(path);
   try {
@@ -527,8 +528,35 @@ async function pathBusy(env, repo, path) {
   } catch (e) { /* no code_tasks columns yet: nothing in flight */ }
   if (repo !== "qnfo-workers") return null;
   try {
-    const c = await env.AUDIT_DB.prepare("SELECT holder, intent, expires_at FROM work_claims WHERE released_at IS NULL AND expires_at > strftime('%Y-%m-%dT%H:%M:%SZ','now') AND path IN (?1, ?2) ORDER BY claimed_at LIMIT 1").bind(ps[0], ps[1]).first();
-    if (c) return "session " + c.holder + " holds the work claim on " + path + " until " + c.expires_at + " (" + String(c.intent || "").slice(0, 120) + ")";
+    const c = await env.AUDIT_DB.prepare("SELECT holder, intent, expires_at, issue_id, claimed_at, pr FROM work_claims WHERE released_at IS NULL AND expires_at > strftime('%Y-%m-%dT%H:%M:%SZ','now') AND path IN (?1, ?2) ORDER BY claimed_at LIMIT 1").bind(ps[0], ps[1]).first();
+    if (c) {
+      // PATH-CLAIM-CEILING-1 (agent_issues 2726): a claim is not a lock without a liveness
+      // check. One claim held qnfo-research-exec/worker.js for its full 2-hour TTL while
+      // targeting an issue that had already been fixed, and every other task on that file
+      // was refused behind it (566 intake refusals in 24h). Two moot cases are released
+      // here, once, with an audit row, instead of being refused:
+      //   (a) the claim targets an issue that is no longer open;
+      //   (b) the claim is older than CLAIM_TTL_MAX_MS and owns no pull request.
+      let stale = null;
+      if (c.issue_id) {
+        try {
+          const iss = await env.AUDIT_DB.prepare("SELECT status FROM agent_issues WHERE id = ?1").bind(c.issue_id).first();
+          if (iss && String(iss.status || "") !== "open") stale = "issue-" + String(iss.status);
+        } catch (e) { /* no issue ledger row: fall through to the age check */ }
+      }
+      if (!stale && !c.pr) {
+        const age = Date.now() - Date.parse(String(c.claimed_at || ""));
+        if (isFinite(age) && age > CLAIM_TTL_MAX_MS) stale = "age-" + Math.round(age / 60000) + "m-no-pr";
+      }
+      if (stale) {
+        try {
+          await env.AUDIT_DB.prepare("UPDATE work_claims SET released_at = strftime('%Y-%m-%dT%H:%M:%SZ','now'), outcome = ?1 WHERE released_at IS NULL AND path IN (?2, ?3) AND holder = ?4").bind("released-stale:" + stale, ps[0], ps[1], c.holder).run();
+          await env.AUDIT_DB.prepare("INSERT INTO cloud_ops_events (id, ts, kind, text, meta, job, status) VALUES (?1, ?2, 'claim-ceiling', ?3, '{}', 'qnfo-code-orchestrator', 'warn')").bind("cc-" + Date.now().toString(36) + "-" + crypto.randomUUID().slice(0, 8), new Date().toISOString(), "released stale claim on " + path + " (" + stale + ", holder " + String(c.holder) + ")").run();
+        } catch (e) { /* the release is best-effort; a failure must not stop intake */ }
+        return null;
+      }
+      return "session " + c.holder + " holds the work claim on " + path + " until " + c.expires_at + " (" + String(c.intent || "").slice(0, 120) + ")";
+    }
   } catch (e) { /* no work_claims ledger: the code-task check above is the whole guard */ }
   return null;
 }
@@ -1361,6 +1389,17 @@ async function locateAnchor(env, task, base, badAnchor, n) {
           if (fl[i].indexOf(kws[k]) < 0) continue;
           const c = fl[i].replace(/\s+$/, "");
           if (c.trim().length >= ANCHOR_REPAIR_MIN && c.length <= MAX_ANCHOR_CHARS && countOf(base, c) === 1) return { anchor: c, model: "keyword:" + kws[k].slice(0, 40) };
+          // ANCHOR-MULTILINE-1 (2026-10-17): a keyword line that occurs 2+ times was a dead end, and the task was
+          // then rerouted to agent_issues with "file larger than 60000 chars needs an anchor". Two or three
+          // consecutive lines starting at that line are almost always unique in a worker-sized file, and patch mode
+          // only needs a verbatim window, so widening the window keeps the edit in the loop instead of the backlog.
+          for (let extra = 1; extra <= 2; extra++) {
+            if (i + extra >= fl.length) break;
+            const parts = [];
+            for (let j = 0; j <= extra; j++) parts.push(fl[i + j].replace(/\s+$/, ""));
+            const m = parts.join("\n");
+            if (m.trim().length >= ANCHOR_REPAIR_MIN && m.length <= MAX_ANCHOR_CHARS && countOf(base, m) === 1) return { anchor: m, model: "keyword:" + kws[k].slice(0, 40) + "+" + extra };
+          }
         }
       }
     }
