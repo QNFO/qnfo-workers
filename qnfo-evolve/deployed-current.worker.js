@@ -35,11 +35,23 @@
  *   GET /report  the last 20 filings and the last run (public read)
  *   POST /tick   same work as the cron; needs x-loop-token when LOOP_TOKEN is configured
  */
-var VERSION = "0.1.0-evolve";
+var VERSION = "0.1.1-evolve";
 var WORKER = "qnfo-evolve";
 var SOURCE = "qnfo-evolve|EVOLVE-1";
 var MAX_OPEN = 5;
 var MAX_NEW_PER_TICK = 2;
+
+/* Mirrors PLAN_DENY_WORKERS in qnfo-code-orchestrator 0.17.2 (PLAN_CONTROL_PLANE minus
+ * PLAN_LOOP_CANARIED). Filing against one of these is self-defeating: the planner refuses the issue
+ * with "the issue names no worker the code loop may change", which is the exact refusal class EVOLVE-1
+ * exists to remove. Measured on the first tick (2026-10-17T17:02Z): the code-task-stalled gap resolved
+ * to qnfo-code-orchestrator and would have been refused on the next plan pass. Such a gap is counted and
+ * reported instead -- the ceiling is real and it should be visible, not silently filed and dropped.
+ * Keep this list in step with the orchestrator; the offline suite pins the two known canaried workers. */
+var DENY_WORKERS = [
+  "qnfo-fleet-control", "qnfo-ops", "qnfo-deploy-guard", "qnfo-containers-pilot",
+  "qnfo-autonomy-scorer", "qnfo-observability", "qnfo-code-orchestrator", "qnfo-code-agent"
+];
 
 function json(obj, status) {
   return new Response(JSON.stringify(obj, null, 2), {
@@ -81,9 +93,11 @@ function isSinglePath(pathsJson) {
 /* The issue the code loop can actually farm. Every refusal class measured on 2026-10-17 is answered
  * here: a live worker is named, the file is named, and the definition of done is a query, not prose. */
 function buildIssue(kind, row, worker, file) {
+  var stepLabel = String(row.step || row.component || "");
+  if (stepLabel.length > 80) stepLabel = stepLabel.slice(0, 77) + "...";
   var subject = kind === "single-path"
-    ? row.process + " / " + row.step + " has fewer than two live paths"
-    : row.component + " has no tested alternate path";
+    ? row.process + " / " + stepLabel + " has fewer than two live paths"
+    : stepLabel + " has no tested alternate path";
   var probe = row.probe;
   var lines = [
     "EVOLVE-1 structural gap filed from the fleet's own registers, not from a metric breach.",
@@ -120,6 +134,8 @@ function buildIssue(kind, row, worker, file) {
     priority: kind === "single-path" ? "high" : "medium"
   };
 }
+
+function isDenied(worker) { return DENY_WORKERS.indexOf(worker) >= 0; }
 
 /* Deterministic selection: dedupe against open filings, keep the register's own order, and never
  * exceed the budget. Pure, so the offline suite can pin it. */
@@ -249,12 +265,13 @@ async function ledger(env, out) {
     await env.AUDIT.prepare(
       "INSERT INTO evolve_runs (ts, scanned, filed, closed, skipped, detail) VALUES (?, ?, ?, ?, ?, ?)"
     ).bind(out.ts, out.scanned, out.filed, out.closed,
-      JSON.stringify(out.skipped).slice(0, 2000), JSON.stringify(out.filed_keys)).run();
+      JSON.stringify(out.skipped).slice(0, 2000),
+      JSON.stringify({ filed: out.filed_keys, blocked_control_plane: out.blocked }).slice(0, 2000)).run();
   } catch (e) { /* the ledger must never fail the tick */ }
 }
 
 async function runTick(env) {
-  var out = { ts: iso(), scanned: 0, filed: 0, closed: 0, skipped: [], filed_keys: [] };
+  var out = { ts: iso(), scanned: 0, filed: 0, closed: 0, skipped: [], filed_keys: [], blocked: [] };
   if (!env.AUDIT) { out.skipped.push("no AUDIT binding"); return out; }
 
   var targets = {};
@@ -267,12 +284,19 @@ async function runTick(env) {
   catch (e) { out.skipped.push("spof: " + errText(e)); }
   out.scanned = cands.length;
 
+  /* Split before planning: a gap whose owner the loop may not change is reported, never filed. */
+  var usable = [];
+  for (var c = 0; c < cands.length; c++) {
+    if (isDenied(cands[c].worker)) out.blocked.push(cands[c].worker + ":" + (cands[c].process || cands[c].step || ""));
+    else usable.push(cands[c]);
+  }
+
   var filings = [];
   try { filings = await openFilings(env); } catch (e) { out.skipped.push("filings: " + errText(e)); }
 
   var keys = [];
   for (var i = 0; i < filings.length; i++) keys.push(filings[i].key);
-  var plan = pickNew(cands, keys, MAX_OPEN - filings.length, MAX_NEW_PER_TICK);
+  var plan = pickNew(usable, keys, MAX_OPEN - filings.length, MAX_NEW_PER_TICK);
   for (var j = 0; j < plan.length; j++) {
     try {
       var id = await fileIssue(env, plan[j]);
