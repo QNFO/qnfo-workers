@@ -10,7 +10,7 @@ import {
   drift, planNext, retiredKinds, expireStale, closeNudge, crisisBlock, crisisSignal,
   DEFAULT_CONFIG, LADDER, whatHelped, unansweredStreak, tzOffsetMinutes
 } from "./wellbeing.js";
-import { handleWellbeing, wellbeingTick } from "./wellbeing-wire.js";
+import { handleWellbeing, wellbeingTick, vaultNoteDays } from "./wellbeing-wire.js";
 
 let pass = 0, fail = 0;
 const ok = (name, cond, extra) => {
@@ -153,6 +153,43 @@ ok("but only one", planNext({ nowIso: "2026-10-17T16:00:00Z", ctx: { drift_level
 ]}).skip === "daily-cap");
 ok("an ordinary day is unchanged", planNext({ nowIso: "2026-10-17T14:00:00Z", ctx: { drift_level: "ok" } }).kind === "micro");
 
+// The contact rung names a person when the owner has given names. "Message one person" is a
+// category; "message Ana" is an errand.
+console.log("\n[contact rung]");
+const atContact = (recent, cfg) => planNext({
+  nowIso: "2026-10-17T14:00:00Z", ctx: {}, cfg, recent: recent || []
+});
+const named = atContact([{ kind: "micro", state: "done", ts: "2026-10-16T10:00:00Z", day: "2026-10-16", ladder_step: 1, sent_at: "2026-10-16T10:00:00Z" },
+  { kind: "body", state: "done", ts: "2026-10-16T18:00:00Z", day: "2026-10-16", ladder_step: 2, sent_at: "2026-10-16T18:00:00Z" }],
+  { ...DEFAULT_CONFIG, contact_candidates: ["Ana", "Joost"] });
+ok("the contact rung names a real person", named.kind === "contact" && named.ask.includes("Ana"), named);
+const named2 = atContact([
+  { kind: "micro", state: "done", ts: "2026-10-15T10:00:00Z", day: "2026-10-15", ladder_step: 1, sent_at: "2026-10-15T10:00:00Z" },
+  { kind: "body", state: "done", ts: "2026-10-15T18:00:00Z", day: "2026-10-15", ladder_step: 2, sent_at: "2026-10-15T18:00:00Z" },
+  { kind: "contact", state: "done", ask: "Message Ana. One line is enough - even 'thinking of you'.", ts: "2026-10-16T09:00:00Z", day: "2026-10-16", ladder_step: 3, sent_at: "2026-10-16T09:00:00Z" },
+  // care expired, so the ladder drops back to contact - that is when rotation matters
+  { kind: "care", state: "expired", ts: "2026-10-16T20:00:00Z", day: "2026-10-16", ladder_step: 4, sent_at: "2026-10-16T20:00:00Z" }
+], { ...DEFAULT_CONFIG, contact_candidates: ["Ana", "Joost"] });
+ok("it rotates to the next name", named2.kind === "contact" && named2.ask.includes("Joost"), named2);
+const nameless = atContact([{ kind: "micro", state: "done", ts: "2026-10-16T10:00:00Z", day: "2026-10-16", ladder_step: 1, sent_at: "2026-10-16T10:00:00Z" },
+  { kind: "body", state: "done", ts: "2026-10-16T18:00:00Z", day: "2026-10-16", ladder_step: 2, sent_at: "2026-10-16T18:00:00Z" }]);
+ok("with no names it stays a category", nameless.kind === "contact" && /one person/i.test(nameless.ask), nameless);
+
+// The vault's daily notes are the only self-authored record of a day. Mirrors must not double-count.
+console.log("\n[daily notes]");
+const vrows = [
+  { path: "obsidian/notes/v1/2026/10/17/_17.md", size: 343 },
+  { path: "obsidian-cloud/notes/v1/2026/10/17/_17.md", size: 343 },
+  { path: "obsidian/notes/v1/2026/10/16/_16.md", size: 3803 },
+  { path: "obsidian/notes/v1/2026/10/2026-10-17/_arxiv-radar-2026-10-17.md", size: 2712 },
+  { path: "obsidian/notes/v1/2026/10/09/_09.md", size: 22338 }
+];
+const vd = vaultNoteDays(vrows, "2026-10-17");
+ok("mirrors are counted once", vd.total === 3, vd);
+ok("machine notes are not daily notes", vd.total === 3 && !String(vd.latest).includes("arxiv"));
+ok("the latest note is found", vd.latest === "2026-10-17" && vd.latestSize === 343, vd);
+ok("a week of notes is counted", vd.days7 === 2, vd);
+
 console.log("\n[planner: ladder]");
 const first = planNext({ nowIso: "2026-10-17T14:00:00Z", ctx: {} });
 ok("cold start asks the smallest thing", first.ladder_step === 1 && first.kind === "micro", first);
@@ -256,8 +293,7 @@ ok("configured line is printed", filled.text.includes("113"));
 ok("escalation declares its SLA", filled.sla_seconds === 60);
 ok("escalation has three paths", filled.paths.length === 3);
 
-console.log("\n[what helped]");
-const helped = await whatHelped(loop, 60);
+console.log("\n[what helped]");const helped = await whatHelped(loop, 60);
 ok("whatHelped returns an array", Array.isArray(helped), helped);
 
 // The page shell once rendered without its body in production: the doctype and style were served

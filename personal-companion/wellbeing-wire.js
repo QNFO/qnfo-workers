@@ -89,6 +89,11 @@ export async function context(env, nowIso, c) {
   // whole client's history disappears from the baseline.
   const nightRows = await many("SELECT ts FROM chat WHERE LOWER(role) = 'user' AND ts >= ? LIMIT 2000", iso(14));
 
+  const vrows = await many(
+    "SELECT path, size FROM files WHERE path LIKE 'obsidian/notes/v1/%' AND path GLOB '*/_[0-9][0-9].md' ORDER BY modified DESC LIMIT 400"
+  );
+  const vault = vaultNoteDays(vrows, day);
+
   const check = await one("SELECT mood, energy, sleep_hours FROM wellbeing_checkins WHERE day = ? ORDER BY ts DESC", day);
   const avg = await one(
     "SELECT ROUND(AVG(mood),2) a7 FROM wellbeing_checkins WHERE mood IS NOT NULL AND day >= ?", WB.dayKey(iso(7), tz)
@@ -107,6 +112,9 @@ export async function context(env, nowIso, c) {
   const answers = await WB.unansweredStreak(env.PERSONAL);
   const idx = {
     days_since_note: lastNote.t ? days(nowMs - Date.parse(lastNote.t)) : 999,
+    days_since_daily_note: vault.latest ? days(nowMs - Date.parse(vault.latest + "T12:00:00Z")) : 999,
+    daily_note_days_7d: vault.days7,
+    daily_note_last_size: vault.latestSize,
     days_since_activity: lastAct.d ? days(nowMs - Date.parse(lastAct.d + "T12:00:00Z")) : 999,
     night_share: nightRows.length ? night / nightRows.length : 0,
     volume_ratio: vol.m ? (Number(vol.w) / 1) / (Number(vol.m) / 4) : null,
@@ -143,6 +151,24 @@ export async function loopRows(env) {
 }
 
 // ---------------------------------------------------------------- delivery
+
+// The owner's own daily notes live in the vault as notes/v1/YYYY/MM/DD/_DD.md. The same note is
+// mirrored under several prefixes, so dedupe by the date in the path, not by row.
+export function vaultNoteDays(rows, today) {
+  const days = new Set();
+  let latest = null, latestSize = 0;
+  for (const r of rows || []) {
+    const m = String(r.path || "").match(/\/(\d{4})\/(\d{2})\/(\d{2})\/_\d\d\.md$/);
+    if (!m) continue;
+    const d = m[1] + "-" + m[2] + "-" + m[3];
+    days.add(d);
+    if (!latest || d > latest) { latest = d; latestSize = Number(r.size || 0); }
+  }
+  const ref = Date.parse(today + "T12:00:00Z");
+  let days7 = 0;
+  for (const d of days) if (Date.parse(d + "T12:00:00Z") >= ref - 7 * 864e5) days7 += 1;
+  return { days7, latest, latestSize, total: days.size };
+}
 
 function token(env, u) {
   const expected = env.WELLBEING_TOKEN;

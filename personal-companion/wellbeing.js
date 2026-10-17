@@ -44,6 +44,9 @@ export const DEFAULT_CONFIG = {
   backstop_name: "",
   backstop_contact: "",
   crisis_lines: [],
+  // Names the contact rung may use. Empty means the generic "message one person" line; a name is
+  // far more likely to be acted on than a category, so fill this the moment the owner names anyone.
+  contact_candidates: [],
   presence_line: "I'm here. Nothing needed from you right now.",
   // Candidate asks per rung. Replace with the owner's own list; these are placeholders that pass tests.
   candidates: {
@@ -257,7 +260,12 @@ export function inQuiet(hourFloat, quietStart, quietEnd) {
 export function drift(ctx = {}) {
   const strong = [];
   const weak = [];
-  if ((ctx.days_since_note ?? 0) > 3) weak.push({ k: "note", why: "no note for " + Math.round(ctx.days_since_note) + "d" });
+  // The vault's own daily note ("_17.md") is a better writing signal than the `notes` table, which
+  // is mostly ingested mail and events. Prefer it when it is present.
+  const noteGap = (ctx.days_since_daily_note !== undefined && ctx.days_since_daily_note !== null)
+    ? ctx.days_since_daily_note
+    : ctx.days_since_note;
+  if ((noteGap ?? 0) > 3) weak.push({ k: "note", why: "no daily note for " + Math.round(noteGap) + "d" });
   if ((ctx.night_share ?? 0) > 0.25) weak.push({ k: "night", why: "night share " + Math.round(ctx.night_share * 100) + "%" });
   if (ctx.volume_ratio !== undefined && ctx.volume_ratio !== null && ctx.volume_ratio < 0.5) {
     weak.push({ k: "volume", why: "volume " + Math.round(ctx.volume_ratio * 100) + "% of baseline" });
@@ -397,6 +405,28 @@ export function planNext({ nowIso, ctx = {}, cfg = DEFAULT_CONFIG, recent = [], 
     const alt = LADDER.filter((r) => !retired.has(r.kind) && hour >= (r.minHour ?? 0) && r.step <= capStep);
     if (!alt.length) return { skip: "all-kinds-retired" };
     rung = alt[0];
+  }
+
+  // The contact rung names a person when it has one. "Message one person" is a category; "message
+  // Ana" is an errand, and errands get done. Rotation is by least-recently-used, so nobody loops.
+  if (rung.kind === "contact") {
+    const names = (cfg.contact_candidates || []).filter((n) => n && String(n).trim());
+    if (names.length) {
+      const lastNamed = (n) => {
+        const hit = recent.filter((r) => String(r.ask || "").includes(String(n))).map((r) => String(r.ts)).sort().pop();
+        return hit || "";
+      };
+      const pick = names.slice().sort((a, b) => lastNamed(a).localeCompare(lastNamed(b)) || String(a).localeCompare(String(b)))[0];
+      return {
+        kind: "contact",
+        ladder_step: rung.step,
+        minutes: rung.minutes,
+        ask: "Message " + pick + ". One line is enough - even 'thinking of you'.",
+        expected: "log:contact",
+        due_at: new Date(nowMs + rung.slaMinutes * 60000).toISOString(),
+        reason: "step=3 named=" + pick
+      };
+    }
   }
 
   // Do not repeat the same kind inside 48h unless there is nothing else.

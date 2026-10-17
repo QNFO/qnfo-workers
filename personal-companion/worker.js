@@ -2125,7 +2125,11 @@ async function sendMail(env, piece, slug, day) {
   if (!(await pieceVerified(env, slug))) return { ok: false, error: "piece not verified, nothing mailed (fail closed)" };
   var subject = piece.title + " (" + formLabel(piece.form || "essay") + ")";
   var body = (/^\s*#/.test(String(piece.body_md || "")) ? "" : piece.lede ? piece.lede + NL + NL : "") + String(piece.body_md).slice(0, 2e4) + NL + NL + "Read online: " + String(piece.link || "");
-  return await sendOne(env, "rwnquni@outlook.com", subject, body);
+  // MAIL-SUPPRESSION-1 (2026-10-17): rwnquni@outlook.com is listed in BOTH email_suppression and
+  // contact_ledger, so sendOne() returned {suppressed:true} and every owner reading was dropped
+  // silently while the send was logged as fine. Owner mail goes through the owner-notice path,
+  // which bypasses suppression by design and still honours calendar_meta owner_notice_enabled.
+  return await sendOwnerNotice(env, subject, body);
 }
 __name(sendMail, "sendMail");
 __name2(sendMail, "sendMail");
