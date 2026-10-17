@@ -6,7 +6,7 @@ import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import vm from "node:vm";
-import { webcrypto } from "node:crypto";
+import { webcrypto, generateKeyPairSync, createVerify } from "node:crypto";
 import { versionAtLeast } from "../scripts/version-at-least.mjs";
 const here = dirname(fileURLToPath(import.meta.url));
 const src = readFileSync(join(here, "worker.js"), "utf8");
@@ -32,9 +32,18 @@ check(cl.iss === "123456" && cl.iat === now - 60 && cl.exp === now + 540, "claim
 const ok = await webcrypto.subtle.verify("RSASSA-PKCS1-v1_5", kp.publicKey, Buffer.from(s.replace(/-/g, "+").replace(/_/g, "/"), "base64"), new TextEncoder().encode(h + "." + c));
 check(ok, "the signature verifies with the public key");
 check(!/[+/=]/.test(jwt), "the token is base64url without padding");
-let err = "";
-try { await ghAppJwt("1", "-----BEGIN RSA PRIVATE KEY-----\nAAAA\n-----END RSA PRIVATE KEY-----", now); } catch (e) { err = String(e.message); }
-check(/PKCS#1/.test(err) && /pkcs8/.test(err), "a PKCS#1 key is refused with the conversion named", err);
+// GH-APP-PKCS1-1: the key GitHub actually issues is PKCS#1. It is converted to PKCS#8 and signs a valid JWT.
+const kp1 = generateKeyPairSync("rsa", { modulusLength: 2048 });
+const pkcs1Pem = kp1.privateKey.export({ type: "pkcs1", format: "pem" });
+check(/BEGIN RSA PRIVATE KEY/.test(pkcs1Pem), "the fixture really is a PKCS#1 key");
+const jwt1 = await ghAppJwt("654321", pkcs1Pem, now);
+const [h1, c1, s1] = jwt1.split(".");
+const v1 = createVerify("RSA-SHA256");
+v1.update(h1 + "." + c1);
+v1.end();
+check(v1.verify(kp1.publicKey, Buffer.from(s1.replace(/-/g, "+").replace(/_/g, "/"), "base64")),
+  "a PKCS#1 key is converted to PKCS#8 and its JWT verifies (GH-APP-PKCS1-1)");
+check(dec(c1).iss === "654321", "the PKCS#1-path JWT names the App id", dec(c1));
 check(ghAppIsGithub("https://api.github.com/repos/QNFO/x") && ghAppIsGithub("https://raw.githubusercontent.com/QNFO/x/main/a") && !ghAppIsGithub("https://qnfo-ops.q08.workers.dev/health"), "GitHub API and raw hosts are recognised, fleet hosts are not");
 check(ghAppIsGithub({ url: "https://api.github.com/user" }), "a Request object is recognised by its url");
 check([401, 403, 404].every((x) => GH_APP_FALLBACK_STATUS.includes(x)), "401, 403 and 404 fall back to the personal token");

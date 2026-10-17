@@ -1,35 +1,17 @@
 name = "idea-hub"
 main = "worker.js"
-# COMPAT-ADVANCE-WAVE-1 (2026-10-12, metric workers_compat_date_behind, qnfo-ops COMPAT-DATE-DECLARED-APPLY-1): the date moves
-# to 2026-10-10 on the next canonical deploy. Reviewed against qnfo-ops COMPAT_FLIPS between the old date and this one:
-# 2026-08-04 nodejs_compat default on (this worker reads no timer id as a number, has no typeof process/Buffer branch and
-# imports no node: module), 2026-10-01 Durable Object eviction (no Durable Object here). /ops/deploy keeps the date only
-# when /health answers with the deployed VERSION and otherwise restores the previous date (deployment_history compat-restore).
-# compat-advance: reviewed 2026-10-12
+account_id = "edb167b78c9fb901ea5bca3ce58ccc4b"
 compatibility_date = "2026-10-10"
-# REACH-IDEA-1 (#2001): /api/subscribe forwards to qnfo-subscribers.q08.workers.dev; without this flag a request served on
-# idea-hub.q08.workers.dev would reach the same-zone worker as Cloudflare error 1042 (404).
 compatibility_flags = ["global_fetch_strictly_public"]
 workers_dev = true
 
-# Bindings verified from live CF API 2026-09-13 (BINDING-PRESERVATION-1)
+# Bindings mirror the live worker (verified 2026-10-17 via /script-settings).
+# v1.10.6-admission-cap deployed 2026-10-17 (version 7b2fe7bd-5eca-48b7-971b-d0619a2657c3).
 
 [observability]
 enabled = true
 head_sampling_rate = 1
 
-# WORKERS-STANDARDS-1 (owner standards 2026-10-12): logs and traces declared. Workers docs: `enabled` alone turns on logs only;
-# traces need [observability.traces]. Sampled at the default rate of 1.
-[observability.logs]
-enabled = true
-invocation_logs = true
-
-[observability.traces]
-enabled = true
-
-# AGENT_ORCH (qnfo-agent-orchestrator) removed 2026-10-06: worker retired (ORCH-RETIRE-1, #1756); worker.js never read it.
-
-head_sampling_rate = 0.05 # TRACES-SAMPLING-BEFORE-BILLING-1: stored traces bill from 2026-12-01
 [ai]
 binding = "AI"
 
@@ -43,21 +25,13 @@ binding = "QNFO_AUDIT"
 database_name = "qnfo-audit"
 database_id = "35e2e573-92f3-46ac-83c6-22f6429fc5e5"
 
-# Secrets (set via wrangler secret put):
-# SYNC_TOKEN
-
-# PAPER_VZ -> qwav-research-v2 (768-dim, bge-base-en-v1.5) — Ask QNFO RAG (replaces retired qnfo-qwav)
 [[vectorize]]
 binding = "PAPER_VZ"
 index_name = "qwav-research-v2"
 
-
-# IDEA-TRIAGE-CONSUMER-ABSENT-1 (issue 1689): hourly proposal triage (ported from retired qnfo-idea-triage).
-[triggers]
-crons = ["23 * * * *"]
-
-# OWNER-SIGNAL-INTAKE-1 (1.7.0, #2104, pillar research): the owner-corpus feeder reads note bodies from the owner's
-# Obsidian vault (same bucket calendar-api binds as VAULT; notes_intake indexes it). Read-only use.
 [[r2_buckets]]
 binding = "VAULT"
 bucket_name = "obsidian-vault"
+
+[triggers]
+crons = ["23 * * * *"]
