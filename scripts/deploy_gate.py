@@ -84,6 +84,11 @@ def cron_rate_gate(wdir):
     if not crons:
         print("PASS cron-rate gate (no cron triggers declared)")
         return True
+    worker = os.path.basename(os.path.abspath(wdir))
+    lim = _crg.limits_for(worker)
+    if worker in getattr(_crg, "OWNER_OVERRIDES", {}):
+        print("NOTE cron-rate gate: owner override for %s (limits=%s: %s)"
+              % (worker, lim, _crg.OWNER_OVERRIDES[worker].get("owner_directive")))
     bad = []
     for cron in crons:
         try:
@@ -91,14 +96,14 @@ def cron_rate_gate(wdir):
         except Exception as exc:
             bad.append((cron, "PARSE:%s" % exc))
             continue
-        reason = _crg.violates(stats)
+        reason = _crg.violates(stats, lim)
         if reason:
             bad.append((cron, "%s (max_fires_24h=%s, min_gap=%s min)"
                         % (reason, stats["max_fires_24h"], stats["min_gap_minutes"])))
     if bad:
         print("FAIL CRON-RATE-CEILING-1:", bad)
         print("  rule: <=%d fires/24h AND >=%d-minute spacing (owner directive 2026-09-23)"
-              % (_crg.MAX_FIRES_24H, _crg.MIN_GAP_MINUTES))
+              % (lim[0], lim[1]))
         return False
     print("PASS cron-rate gate (%d cron expression(s))" % len(crons))
     return True

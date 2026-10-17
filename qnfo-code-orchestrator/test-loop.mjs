@@ -117,7 +117,7 @@ const call = async (env, method, p, body) => { const r = await worker.fetch(auth
   }
   const t = await call(env, "POST", "/v1/tick", { maxSteps: 16 });
   const distinct = new Set((t.body.done || []).map((d) => d.id));
-  check("one tick touches all four tasks (lanes)", distinct.size === 4 && t.body.lanes === 4, { steps: t.body.steps, lanes: t.body.lanes, distinct: distinct.size });
+  check("one tick touches all four tasks (lanes)", distinct.size === 4 && t.body.lanes === 8, { steps: t.body.steps, lanes: t.body.lanes, distinct: distinct.size });
   let open = 0;
   for (const id of ids) { const g = await call(env, "GET", "/v1/tasks/" + id); if (g.body.task.status === "pr_open") open++; }
   check("all four tasks reach pr_open in one tick", open === 4, { open: open });
@@ -208,8 +208,9 @@ const call = async (env, method, p, body) => { const r = await worker.fetch(auth
   installCodeAgent({});
   const { env } = envWith([]);
   let last;
-  for (let i = 0; i < 21; i++) last = await call(env, "POST", "/v1/tasks", { repo: "qnfo-workers", path: "a" + i + ".py", goal: "g" });
-  check("21st queued task -> 429", last.status === 429, last.body);
+  // LANES-8-1 (0.18.2): the queue cap follows MAX_OPEN_TASKS, raised 20 -> 48 with the lanes.
+  for (let i = 0; i < 49; i++) last = await call(env, "POST", "/v1/tasks", { repo: "qnfo-workers", path: "a" + i + ".py", goal: "g" });
+  check("49th queued task -> 429 (MAX_OPEN_TASKS 48)", last.status === 429, last.body);
 }
 
 // ===== 9. resumable: a crashed isolate's lease expires, FIFO order kept =====
