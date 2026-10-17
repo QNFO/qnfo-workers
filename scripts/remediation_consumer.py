@@ -380,12 +380,23 @@ def run_https_probe(probe):
     return judge_https(probe, status, int((time.time() - t0) * 1000), body, location)
 
 
+# MEASURED-PENDING-1 (2026-10-17): 'pending: <number> ... <target>' is the probe corpus's failure branch (257 contracts wrote
+# such rows), not a deferral. This mirrors RT_FAILURE_OBS_SQL in qnfo-fleet-control so the CI consumer and the worker cannot
+# disagree about whether a contract failed. Used by both the pass streak and the reopen counter below.
+RT_FAILURE_OBS_SQL = (
+    "(COALESCE(observed, '') <> '' AND (lower(trim(observed)) NOT LIKE 'pending%' OR (observed GLOB '*[0-9]*' AND "
+    "(observed LIKE '%ceiling%' OR lower(observed) LIKE '%target%' OR lower(observed) LIKE '%threshold%' OR "
+    "lower(observed) LIKE '%limit%' OR lower(observed) LIKE '%fewer than%' OR lower(observed) LIKE '%more than%' OR "
+    "observed LIKE '% <= %' OR observed LIKE '% >= %' OR observed LIKE '% < %' OR observed LIKE '% > %'))))"
+)
+
+
 def rt_pass_streak_days(cls):
-    """Days since the first pass after the last real failure (pending/empty are deferrals). Mirrors fleet-control."""
+    """Days since the first pass after the last real failure (a pending that measures nothing is a deferral). Mirrors fleet-control."""
     rows = d1(
         "SELECT MIN(verified_at) AS t FROM remediation_verifications WHERE class = ?1 AND pass = 1 AND verified_at > "
         "COALESCE((SELECT MAX(verified_at) FROM remediation_verifications WHERE class = ?1 AND pass = 0 "
-        "AND COALESCE(observed, '') <> '' AND lower(trim(observed)) NOT LIKE 'pending%'), '1970-01-01')",
+        "AND " + RT_FAILURE_OBS_SQL + "), '1970-01-01')",
         [cls])
     t = rows[0].get("t") if rows else None
     if not t:
@@ -399,9 +410,12 @@ def rt_pass_streak_days(cls):
 
 
 def fails_since_last_pass(cls):
+    """Failures since the last pass. A pending that measures nothing is a deferral here too, so the CI consumer and the
+    worker count the same rows (MEASURED-PENDING-1); before this the two paths disagreed about the same observation."""
     rows = d1(
         "SELECT COUNT(*) AS n FROM remediation_verifications WHERE class = ?1 AND pass = 0 AND verified_at > "
-        "COALESCE((SELECT MAX(verified_at) FROM remediation_verifications WHERE class = ?1 AND pass = 1), '1970-01-01')",
+        "COALESCE((SELECT MAX(verified_at) FROM remediation_verifications WHERE class = ?1 AND pass = 1), '1970-01-01') "
+        "AND " + RT_FAILURE_OBS_SQL,
         [cls])
     return int(rows[0].get("n") or 0) if rows else 0
 
