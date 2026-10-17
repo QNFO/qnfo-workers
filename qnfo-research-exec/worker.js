@@ -33,7 +33,7 @@ var __name22222 = /* @__PURE__ */ __name2222((target, value) => __defProp22222(t
 // an empty catch. CITE-CONSISTENCY-1 asks the reviewer to compare the draft against cited QNFO work.
 // REVIEW-TRIAGE-CAP-1 is a defect fix: drift demotion at the cycle cap silently turned a blocking finding into a pass, so
 // REVIEW-HARD-GATE-1 withheld nothing there (reviewer findings 2 -> 0 at the cap; an unparseable review advanced to verify).
-var VERSION = "0.18.30-ai-backoff-sweep-dup-1"; /* 0.18.29 VERIFY-CYCLE-CAP-1 (2026-10-17, owner directive "REMEDIATE ALL ISSUES AND FAILURE MODES"): the verify->revise edge reset the review cycle counter to 0 (context={cycles:0,verifyPass:1}) while EVERY other edge preserves it (3716, 3735, 3753) and the review stage is the one that increments it. That single reset made MAX_REVIEW_CYCLES (6) unreachable, so an item that fails verify re-enters revise, resets to cycle 0, and loops until recover_count runs out — measured 2026-10-17: review-unresolved events exist ONLY at cycle 2 (193) and 3 (165), never 4; 96 rerun-route and 278 revise-patch events against ~100 rows; and stage='publish' is EMPTY, which is why 151 complete events produced 0 publications and why the publish quota (24) guarded an empty queue. The edge now preserves the count, so the existing six-cycle cap can terminate an item visibly instead of cycling forever. The gate itself (gates2) is unchanged: this does not let a failing draft through, it lets a draft that cannot pass STOP. */ // 0.18.28-codeagent
+var VERSION = "0.18.31-verify-autocorrect-1"; /* 0.18.31 VERIFY-AUTOCORRECT-1 (2026-10-18): papers fail verify with REAL arithmetic errors (the reconcile/ensemble writer computes a number that does not match its own stated inputs) and the revise loop cannot reliably fix a bare number, so such papers cycle until park. Verify already holds both values — independently computed `computed` and the paper's stated `expected` — so stageVerify now corrects the number deterministically (autoCorrectNumeric) instead of sending it back through a model. Fail-closed: only a stated value found exactly once (verbatim or as an unambiguous bare mantissa in LaTeX/\\times 10^N) is corrected; anything ambiguous is skipped and falls through to revise. Every correction is logged as verify-autocorrect and appended to verification.md. */ /* 0.18.29 VERIFY-CYCLE-CAP-1 (2026-10-17, owner directive "REMEDIATE ALL ISSUES AND FAILURE MODES"): the verify->revise edge reset the review cycle counter to 0 (context={cycles:0,verifyPass:1}) while EVERY other edge preserves it (3716, 3735, 3753) and the review stage is the one that increments it. That single reset made MAX_REVIEW_CYCLES (6) unreachable, so an item that fails verify re-enters revise, resets to cycle 0, and loops until recover_count runs out — measured 2026-10-17: review-unresolved events exist ONLY at cycle 2 (193) and 3 (165), never 4; 96 rerun-route and 278 revise-patch events against ~100 rows; and stage='publish' is EMPTY, which is why 151 complete events produced 0 publications and why the publish quota (24) guarded an empty queue. The edge now preserves the count, so the existing six-cycle cap can terminate an item visibly instead of cycling forever. The gate itself (gates2) is unchanged: this does not let a failing draft through, it lets a draft that cannot pass STOP. */ // 0.18.28-codeagent
 // WORKERS-AI-ATTRIBUTION-1 (2026-10-01, #1681): per-worker Workers AI attribution. Returns a shallow env copy whose AI
 // binding records each .run() (calls, errors, ms, tokens, neurons) into qnfo-audit ai_call_counters (purpose 'binding').
 // Neurons = usage tokens x Cloudflare's published per-model rates (neurons per M tokens). Fail-soft; env is never mutated.
@@ -4057,6 +4057,52 @@ function adjudicationMd(adj) {
     return "| " + r.id + " | " + r.computed + " | " + r.expected + " | " + (r.script === null ? "-" : r.script ? "yes" : "no") + " | " + (!r.decided ? "undecided" : r.match ? "match" : "MISMATCH") + " | " + r.basis + " |";
   }).join("\n") + "\n\nMismatches: " + adj.mismatches + " of " + adj.rows.length + (adj.undecided ? " (" + adj.undecided + " undecided)" : "") + ".\n";
 }
+// VERIFY-AUTOCORRECT-1 (2026-10-18): papers fail verify with REAL arithmetic errors (the writer computes a number
+// that does not match its own stated inputs), and the revise loop cannot reliably fix a bare number, so such papers
+// cycle until park. Verify already holds both values — the independently computed `computed` and the paper's stated
+// `expected` — so the worker corrects the number deterministically instead of sending it back through a model.
+// Fail-closed: a correction is applied only when the stated value is found exactly once, either as the verbatim
+// string (plain scientific notation) or as an unambiguous bare mantissa (LaTeX/\times 10^N notation, with the
+// exponent required to match the computed value's). Anything ambiguous is skipped and left to the existing revise
+// path. Every correction is logged as a verify-autocorrect event and appended to verification.md for audit.
+function autoCorrectNumeric(paper, adj, claims) {
+  const out = { changed: false, paper: String(paper || ""), applied: [], skipped: [] };
+  if (!adj || !Array.isArray(adj.rows)) return out;
+  const splitNum = function(s) {
+    const m = /^([+-]?)(\d+)(?:\.(\d*))?(?:[eE]([+-]?\d+))?$/.exec(String(s == null ? "" : s).trim());
+    if (!m) return null;
+    const ip = m[2] || "0", fp = m[3] || "";
+    return { mant: (fp ? ip + "." + fp : ip), exp: m[4] || "0" };
+  };
+  for (const r of adj.rows) {
+    if (!r || !r.decided || r.match) continue;
+    const c = numLit(r.computed), e = numLit(r.expected);
+    if (!c || !e) { out.skipped.push({ id: r.id, reason: "non-numeric value" }); continue; }
+    const verbatim = String(r.expected);
+    if (verbatim && out.paper.indexOf(verbatim) >= 0) {
+      if (out.paper.indexOf(verbatim, out.paper.indexOf(verbatim) + 1) >= 0) {
+        out.skipped.push({ id: r.id, reason: "stated value appears multiple times" });
+        continue;
+      }
+      out.paper = out.paper.replace(verbatim, String(r.computed));
+      out.applied.push({ id: r.id, from: verbatim, to: String(r.computed) });
+      continue;
+    }
+    const es = splitNum(r.expected), cs = splitNum(r.computed);
+    if (!es || !cs) { out.skipped.push({ id: r.id, reason: "unparseable notation" }); continue; }
+    if (es.exp !== cs.exp) { out.skipped.push({ id: r.id, reason: "exponent differs (" + es.exp + " vs " + cs.exp + ")" }); continue; }
+    if (es.mant.length < 3) { out.skipped.push({ id: r.id, reason: "mantissa too short to anchor" }); continue; }
+    const idx = out.paper.indexOf(es.mant);
+    if (idx < 0 || out.paper.indexOf(es.mant, idx + 1) >= 0) { out.skipped.push({ id: r.id, reason: "stated mantissa not unique" }); continue; }
+    const before = idx > 0 ? out.paper[idx - 1] : "";
+    const after = idx + es.mant.length < out.paper.length ? out.paper[idx + es.mant.length] : "";
+    if (/[\d.]/.test(before) || /[\d.]/.test(after)) { out.skipped.push({ id: r.id, reason: "mantissa inside a larger number" }); continue; }
+    out.paper = out.paper.slice(0, idx) + cs.mant + out.paper.slice(idx + es.mant.length);
+    out.applied.push({ id: r.id, from: es.mant, to: cs.mant });
+  }
+  out.changed = out.applied.length > 0;
+  return out;
+}
 // VERIFY-UNRUN-CAUSE-1 (0.16.0, agent_issues 2221): why an execution output has no decidable CLAIM line. `runtime` is true
 // when the sandbox never ran the script (the pilot was unreachable or refused, the interpreter or a module is missing): the
 // paper is not at fault and the stage degrades to the text-level recomputation. A script that ran and crashed, or ran and
@@ -4312,12 +4358,29 @@ async function stageVerify(env, row) {
   }
   const verifMd = "# Verification report\n\n## Extracted claims\n" + JSON.stringify(claims, null, 2) + "\n\n## Script\n```python\n" + code + "\n```\n\n## Execution output\n```\n" + out + "\n```\n\n" + (textOut ? "## Text-level recomputation\n```\n" + textOut.slice(0, 2e4) + "\n```\n\n" : "") + adjudicationMd(adj);
   await r2Put(env, String(row.id) + "/verification.md", verifMd);
-  const mismatch = adj.mismatches > 0;
+  let mismatch = adj.mismatches > 0;
   await logEvent(env, "verify-adjudication", "row=" + row.id + " basis=" + adj.basis + " claims=" + adj.rows.length + " mismatches=" + adj.mismatches + " undecided=" + adj.undecided + " script_no=" + adj.rows.filter(function(r) {
     return r.script === false;
   }).length, mismatch ? "warn" : "ok");
-  const gates = finalGates(paper, gateOpts);
-  const _pm = await mathGate(env, row, paper, gates);
+  let gates = finalGates(paper, gateOpts);
+  let _pm = await mathGate(env, row, paper, gates);
+  // VERIFY-AUTOCORRECT-1: apply deterministic numeric corrections before deciding the row's fate (see helper above).
+  if (mismatch) {
+    const ac = autoCorrectNumeric(paper, adj, claims);
+    if (ac.changed) {
+      paper = ac.paper;
+      await r2Put(env, String(row.id) + "/reconciled.md", paper);
+      for (const a of ac.applied) await logEvent(env, "verify-autocorrect", "row=" + row.id + " claim=" + a.id + " from=" + a.from + " to=" + a.to, "ok");
+      for (const s of ac.skipped) await logEvent(env, "verify-autocorrect-skip", "row=" + row.id + " claim=" + s.id + " reason=" + s.reason, "warn");
+      const _ids = new Set(ac.applied.map(function(a) { return String(a.id).toLowerCase(); }));
+      for (const r of adj.rows) if (_ids.has(String(r.id).toLowerCase())) { r.match = true; r.decided = true; }
+      adj.mismatches = adj.rows.filter(function(r) { return r.decided && !r.match; }).length;
+      mismatch = adj.mismatches > 0;
+      await r2Put(env, String(row.id) + "/verification.md", verifMd + "\n\n## Auto-corrections\n\nThe worker corrected these independently-verified values in place of the paper's stated values (deterministic, no model edit):\n\n| claim | stated | corrected |\n|---|---|---|\n" + ac.applied.map(function(a) { return "| " + a.id + " | " + a.from + " | " + a.to + " |"; }).join("\n") + (ac.skipped.length ? "\n\nSkipped (left for revise): " + ac.skipped.map(function(s) { return s.id + " (" + s.reason + ")"; }).join("; ") : "") + "\n");
+      gates = finalGates(paper, gateOpts);
+      _pm = await mathGate(env, row, paper, gates);
+    }
+  }
   if (ctx.verifyPass && mathOnlyFailure(gates, mismatch)) {
     await parkMathRow(env, row, _pm);
     return { ok: false, stage: "verify", gate: gates.reason, parked: true };
@@ -28238,6 +28301,7 @@ export {
   parsePatchEdits,
   adjudicateVerification,
   adjudicationMd,
+  autoCorrectNumeric,
   verifyUnrunCause,
   numLit,
   statedLiterals,
