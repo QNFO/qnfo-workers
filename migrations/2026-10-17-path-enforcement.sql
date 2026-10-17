@@ -1,6 +1,16 @@
 -- PATH-ENFORCEMENT-1 (2026-10-17, owner directive: "ALL STEPS, ALL PROCESSES SHALL HAVE SLA AND MULTIPLE
 -- EXECUTION/REMEDIATION/WORKAROUND PATHS TO SUCCESSFUL DEFINITION OF DONE")
 --
+-- APPLY-BY: ci
+-- DB: qnfo-audit
+-- Rollback: DROP VIEW v_path_coverage_gaps; DROP VIEW v_path_coverage_violations; DROP VIEW v_sla_compliance;
+--           DROP VIEW v_process_contract_dod_worklist; -- the four pre-existing views (v_process_contract_gaps and
+--           friends) are untouched.
+--
+-- NOTE 2026-10-17: the first version of this file shipped without the APPLY-BY header, so the runner ignored it and the
+-- views existed only because a session had applied three of them by hand. That is exactly the hand-applied drift
+-- MIGRATION-RUNNER-1 exists to prevent; the header is the fix.
+--
 -- SLA-AND-PATHS-1 (migrations/2026-10-17-process-contracts.sql) made every process declare an SLA, a DoD and at least
 -- two paths, and covered the scheduled workers. What it could not see, measured live on 2026-10-17:
 --
@@ -21,6 +31,7 @@
 -- 1. Every declared path, joined to whether the fleet has evidence it works.
 --    A control's alternate is the fleet's existing record of a second route; alternate_tested_at is the only evidence
 --    the route was ever taken. Untested is reported as a defect, never as pass.
+  -- BACKUP: process_contracts
 DROP VIEW IF EXISTS v_path_coverage_gaps;
 CREATE VIEW v_path_coverage_gaps AS
 SELECT
@@ -50,6 +61,7 @@ SELECT
   NULL AS alternate_tested_at
 FROM process_contracts;
 
+  -- BACKUP: process_contracts
 DROP VIEW IF EXISTS v_path_coverage_violations;
 CREATE VIEW v_path_coverage_violations AS
 SELECT source, process, path_kind, path_state, alternate, alternate_tested_at
@@ -62,6 +74,7 @@ WHERE path_state <> 'ok';
 --    completion (how long the acting stage held it). state grades the STEP against sla_min, which is what a process
 --    contract can control; queue_state grades the end-to-end wait against the same number so backpressure is visible
 --    instead of hidden inside an average.
+  -- BACKUP: process_contracts
 DROP VIEW IF EXISTS v_sla_compliance;
 CREATE VIEW v_sla_compliance AS
 SELECT
@@ -91,6 +104,7 @@ FROM code_tasks
 WHERE merged_at IS NOT NULL AND created_at IS NOT NULL AND merged_at > datetime('now', '-7 days');
 
 -- 3. Processes whose DoD is still intent rather than a checkable state.
+  -- BACKUP: process_contracts
 DROP VIEW IF EXISTS v_process_contract_dod_worklist;
 CREATE VIEW v_process_contract_dod_worklist AS
 SELECT process, owner, sla_min, substr(definition_of_done, 1, 160) AS dod_prefix
