@@ -8,6 +8,8 @@ const sql = readFileSync(new URL("./2026-10-17-evolve-organ.sql", import.meta.ur
 const db = new DatabaseSync(":memory:");
 db.exec(`CREATE TABLE process_contracts (process TEXT PRIMARY KEY, owner TEXT, sla_min INTEGER,
   definition_of_done TEXT, paths_json TEXT);
+  CREATE TABLE spof_registry (component TEXT PRIMARY KEY, critical_path TEXT NOT NULL, alternate_path TEXT,
+  alternate_tested_at TEXT, evidence TEXT NOT NULL, issue_id INTEGER, reviewed_at TEXT);
   INSERT INTO process_contracts VALUES ('research-ground','qnfo-research-exec',120,'x','["a","b"]');
   INSERT INTO process_contracts VALUES ('deploy','qnfo-cloud-ops',120,'x','["a","b"]');`);
 
