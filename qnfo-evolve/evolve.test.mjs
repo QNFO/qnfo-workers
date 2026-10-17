@@ -26,7 +26,7 @@ const ok = (c, m, d) => {
  * `export default {` is rewritten to a local binding so the same file that ships to Cloudflare is the
  * file under test. */
 const body = src.replace(/^export default /m, "var __default = ");
-const mod = new Function("console", body + "\n;return { isSinglePath, gapKey, buildIssue, pickNew, VERSION, SOURCE, MAX_OPEN, MAX_NEW_PER_TICK, handlers: __default };")
+const mod = new Function("console", body + "\n;return { isSinglePath, gapKey, buildIssue, pickNew, isDenied, DENY_WORKERS, VERSION, SOURCE, MAX_OPEN, MAX_NEW_PER_TICK, handlers: __default };")
   ({ log() {} });
 
 ok(/^\d+\.\d+\.\d+/.test(mod.VERSION), "VERSION is semver-shaped", mod.VERSION);
@@ -99,6 +99,25 @@ ok(minGap >= 10, "cron spacing is at least 10 minutes", minGap);
 /* The charter pillar comment charter-guard.py reads must be present and be a real pillar key. */
 ok(/# charter-pillar: autonomy/.test(toml), "wrangler.toml declares a charter pillar");
 ok(/binding = "AUDIT"/.test(toml), "the AUDIT binding is declared");
+
+/* 5. the deny list mirrors PLAN_DENY_WORKERS, so EVOLVE-1 cannot file work the loop must refuse. */
+ok(mod.isDenied("qnfo-code-orchestrator") === true, "the code loop itself is denied");
+ok(mod.isDenied("qnfo-fleet-control") === true, "fleet-control is denied");
+ok(mod.isDenied("qnfo-research-exec") === false, "research-exec is farmable");
+ok(mod.isDenied("qnfo-gateway") === false, "qnfo-gateway is canaried, so it is farmable");
+ok(mod.isDenied("qnfo-ai") === false, "qnfo-ai is canaried, so it is farmable");
+ok(mod.DENY_WORKERS.indexOf("qnfo-ai") < 0 && mod.DENY_WORKERS.indexOf("qnfo-gateway") < 0,
+  "the canaried pair is absent from the deny list");
+
+/* 6. a register step carries bracketed history up to 300 chars; the title must stay readable. */
+const longStep = mod.buildIssue("single-path", {
+  process: "queue:code-task-stalled",
+  step: "unfinished code task not updated for 180 min [SLA-120M-1 2026-10-14: SLA 180 -> 120 min, measured every 10 min; owner directive: no SLA exceeds 120 minutes]",
+  probe: "SELECT 1"
+}, "qnfo-social", "qnfo-social/worker.js");
+ok(longStep.title.length <= 150, "the title is bounded for a long register step", longStep.title.length);
+ok(longStep.title.includes("queue:code-task-stalled"), "the bounded title still names the process");
+ok(longStep.description.includes("SLA 180 -> 120 min"), "the full step survives in the body");
 
 console.log(`${pass} passed, ${fail} failed`);
 if (fail) process.exit(1);
