@@ -1,5 +1,5 @@
 {
-  "audited_at": "2026-10-17 14:09:48",
+  "audited_at": "2026-10-17 14:40:28",
   "d1_write_failures": [],
   "d1_writes_ok": 115,
   "guard": {
@@ -533,7 +533,7 @@
     "sync_workers": [
       {
         "dir": "idea-hub",
-        "version": "1.10.5-codeagent",
+        "version": "1.10.7-cron-budget",
         "worker": "idea-hub"
       },
       {
@@ -548,7 +548,7 @@
       },
       {
         "dir": "q08-signal-engine",
-        "version": "0.28.1-prune-extend",
+        "version": "0.28.2-forecast-repair",
         "worker": "q08-signal-engine"
       },
       {
@@ -593,12 +593,12 @@
       },
       {
         "dir": "qnfo-fleet-control",
-        "version": "0.32.0-gh-app",
+        "version": "0.33.0-gh-app-pkcs1",
         "worker": "qnfo-fleet-control"
       },
       {
         "dir": "qnfo-fleet-dashboard",
-        "version": "1.38.0-areas",
+        "version": "1.38.3-provider-agnostic-card",
         "worker": "qnfo-fleet-dashboard"
       },
       {
@@ -648,12 +648,12 @@
       },
       {
         "dir": "qnfo-research-exec",
-        "version": "0.18.6-codeagent",
+        "version": "0.18.12-recover-budget",
         "worker": "qnfo-research-exec"
       },
       {
         "dir": "qnfo-social",
-        "version": "0.16.0-rollup",
+        "version": "0.16.2-slot-reach",
         "worker": "qnfo-social"
       },
       {
@@ -779,9 +779,9 @@
       "worker": "funding"
     },
     "idea-hub": {
-      "before": "1.10.5-codeagent",
+      "before": "1.10.7-cron-budget",
       "http": 200,
-      "live": "1.10.5-codeagent",
+      "live": "1.10.7-cron-budget",
       "match": 1,
       "note": "SYNC",
       "worker": "idea-hub"
@@ -944,9 +944,9 @@
       "worker": "personal-life-search"
     },
     "q08-signal-engine": {
-      "before": "0.28.1-prune-extend",
+      "before": "0.28.2-forecast-repair",
       "http": 200,
-      "live": "0.28.1-prune-extend",
+      "live": "0.28.2-forecast-repair",
       "match": 1,
       "note": "SYNC",
       "worker": "q08-signal-engine"
@@ -1268,17 +1268,17 @@
       "worker": "qnfo-fleet-calibrator"
     },
     "qnfo-fleet-control": {
-      "before": "0.32.0-gh-app",
+      "before": "0.33.0-gh-app-pkcs1",
       "http": 200,
-      "live": "0.32.0-gh-app",
+      "live": "0.33.0-gh-app-pkcs1",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-fleet-control"
     },
     "qnfo-fleet-dashboard": {
-      "before": "1.38.0-areas",
+      "before": "1.38.3-provider-agnostic-card",
       "http": 200,
-      "live": "1.38.0-areas",
+      "live": "1.38.3-provider-agnostic-card",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-fleet-dashboard"
@@ -1500,9 +1500,9 @@
       "worker": "qnfo-register-guard"
     },
     "qnfo-research-exec": {
-      "before": "0.18.6-codeagent",
+      "before": "0.18.12-recover-budget",
       "http": 200,
-      "live": "0.18.6-codeagent",
+      "live": "0.18.12-recover-budget",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-research-exec"
@@ -1562,9 +1562,9 @@
       "worker": "qnfo-skills-discovery"
     },
     "qnfo-social": {
-      "before": "0.16.0-rollup",
+      "before": "0.16.2-slot-reach",
       "http": 200,
-      "live": "0.16.0-rollup",
+      "live": "0.16.2-slot-reach",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-social"
