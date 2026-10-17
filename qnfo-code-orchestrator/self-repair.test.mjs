@@ -95,7 +95,7 @@ const dash = fs.readFileSync(path.join(here, "..", "qnfo-fleet-dashboard", "work
 const dm = /read\("code-tasks"[\s\S]{0,200}?d1all\(env\.AUDIT, "([^"]+)"/.exec(dash);
 ok(!!dm && /FROM code_tasks/.test(dm[1]), "the dashboard's code-task owner-card query was found in qnfo-fleet-dashboard/worker.js", dm && dm[1]);
 const ownerCards = (env) => (dm ? env.AUDIT_DB._db.prepare(dm[1]).all() : [{ missing: true }]);
-const LADDER = ["@cf/moonshotai/kimi-k2.7-code", "@cf/zai-org/glm-5.3", "@cf/deepseek-ai/deepseek-v4-flash-0731"]; // CODE-LADDER-ORDER-1 (third rung now deepseek-v4-flash per DEFAULT_LADDER)
+const LADDER = ["@cf/moonshotai/kimi-k2.7-code", "@cf/zai-org/glm-5.3", "@cf/deepseek-ai/deepseek-v4-flash-0731"]; // CODE-LADDER-ORDER-1 (third rung moved off qwen2.5-coder-32b, MODEL-FLOOR-1)
 
 // Issue #1763 as it reached the loop: an opted-in issue with a code-task and a code-anchor line (ISSUE-INTAKE-1).
 const GOAL_TEXT = "Part of #1758. Inside feedbackScan only, in BOTH SQL subqueries that read q08_feedback f, add the condition AND f.created_at >= '2026-10-03T00:00:00Z' directly after f.slug = p.slug. Change nothing else.";

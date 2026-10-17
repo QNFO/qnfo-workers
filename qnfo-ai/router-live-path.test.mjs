@@ -77,19 +77,19 @@ ok(r.status === 200 && c && c.input.reasoning_effort === undefined && r.j._route
 
 // 4 a Workers AI id resolves by name.
 reset();
-r = await chat({ model: "@cf/meta/llama-3.3-70b-instruct-fp8-fast", messages: msgs, max_tokens: 64 });
-ok(r.status === 200 && r.j.model === "llama-3.3-70b-instruct-fp8-fast" && r.j._router.model_resolution === "workers-ai-id", "a Workers AI id resolves to its key and says how", r.j && r.j._router);
+r = await chat({ model: "@cf/moonshotai/kimi-k2.6", messages: msgs, max_tokens: 64 });
+ok(r.status === 200 && r.j.model === "kimi-k2.6" && r.j._router.model_resolution === "workers-ai-id", "a Workers AI id resolves to its key and says how", r.j && r.j._router);
 
 // 5 a silent primary is overtaken by the hedge inside the caller's budget.
 reset();
-aiPlan = { "@cf/zai-org/glm-5.3-flash": { ms: 5000, text: "late" }, "@cf/meta/llama-3.3-70b-instruct-fp8-fast": { ms: 5, text: "hedged answer OK" } };
+aiPlan = { "@cf/zai-org/glm-5.3-flash": { ms: 5000, text: "late" }, "@cf/moonshotai/kimi-k2.6": { ms: 5, text: "hedged answer OK" } };
 let t = Date.now();
 r = await chat({ model: "glm-5.3-flash", messages: msgs, max_tokens: 200, timeout_ms: 4500 });
-ok(r.status === 200 && r.j.choices[0].message.content.indexOf("hedged answer") >= 0 && r.j._router.hedge.fired === true && r.j._router.served_by === "llama-3.3-70b-instruct-fp8-fast" && Date.now() - t < 4000, "the hedge answers when the primary is silent", { ms: Date.now() - t, rt: r.j && r.j._router });
+ok(r.status === 200 && r.j.choices[0].message.content.indexOf("hedged answer") >= 0 && r.j._router.hedge.fired === true && r.j._router.served_by === "kimi-k2.6" && Date.now() - t < 4000, "the hedge answers when the primary is silent", { ms: Date.now() - t, rt: r.j && r.j._router });
 
 // 6 nothing answers: 504 router_timeout with the legs, never canned text.
 reset();
-aiPlan = { "@cf/zai-org/glm-5.3-flash": { ms: 9000, text: "late" }, "@cf/meta/llama-3.3-70b-instruct-fp8-fast": { ms: 9000, text: "late" } };
+aiPlan = { "@cf/zai-org/glm-5.3-flash": { ms: 9000, text: "late" }, "@cf/moonshotai/kimi-k2.6": { ms: 9000, text: "late" } };
 t = Date.now();
 r = await chat({ model: "glm-5.3-flash", messages: msgs, max_tokens: 200, timeout_ms: 3000 });
 ok(r.status === 504 && r.j.error.type === "router_timeout" && r.j.error.legs.length === 2 && Date.now() - t < 4500, "an exhausted budget answers 504 router_timeout", { ms: Date.now() - t, j: r.j });
@@ -119,7 +119,7 @@ ok(r.status === 422 && r.j.error.type === "channel_diversity_refused", "POST /v1
 r = await get("/v1/ensemble/policy", { method: "POST", body: JSON.stringify({ models: ["kimi-k2.6", "gpt-oss-120b", "glm-5.3-flash"] }) });
 ok(r.status === 200 && r.j.ok === true && r.j.verdict.max_overlap === 0, "POST /v1/ensemble/policy passes three lineages");
 r = await get("/v1/models", { headers: { Authorization: "Bearer test-key" } });
-ok(r.status === 200 && r.j.data.some((m) => m.id === "llama-3.3-70b-instruct-fp8-fast") && r.j.data.length >= 11, "the keyed roster lists the fast llama");
+ok(r.status === 200 && r.j.data.some((m) => m.id === "kimi-k2.6") && r.j.data.length >= 10, "the keyed roster lists the fast tier");
 r = await get("/v1/models", { headers: { Authorization: "Bearer nope" } });
 ok(r.status === 200 && r.j.data.length === 1 && r.j.data[0].id === "qnfo", "a wrong key still gets the single public model");
 

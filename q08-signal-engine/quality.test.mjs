@@ -70,8 +70,8 @@ for (let sd = 0; sd < 12; sd++) {
   assert.ok(!pn.some((m) => q.familyOf(m) === "nvidia"));
 }
 assert.notDeepEqual(q.pickPanel([], 2, 0), q.pickPanel([], 2, 1), "the start rotates with the seed");
-const ex = q.pickPanel(["google", "zai", "alibaba", "deepseek"], 2, 0);
-assert.deepEqual(ex.map(q.familyOf), ["meta"], "excluded families are skipped and a short pool returns fewer judges");
+const ex = q.pickPanel(["zai", "alibaba", "deepseek"], 2, 0);
+assert.deepEqual(ex.map(q.familyOf), ["moonshot"], "excluded families are skipped and a short pool returns fewer judges");
 assert.deepEqual(q.pickPanel(PF, 2, 0), [], "nothing left means no panel");
 
 // 9. aggregation: mean >= 4 and a strict majority would read; a missing judge is ignored; none means null (fail open)

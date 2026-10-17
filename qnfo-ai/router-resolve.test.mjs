@@ -23,7 +23,7 @@ ok(ver && (Number(ver[1]) > 5 || Number(ver[1]) === 5 && Number(ver[2]) >= 35), 
 
 // ---- explicit model resolution ----
 ok(X.resolveModel("glm-5.3-flash").how === "exact", "a MODELS key resolves exactly");
-ok(X.resolveModel("llama-3.3-70b-instruct-fp8-fast").id === "llama-3.3-70b-instruct-fp8-fast" && X.resolveModel("llama-3.3-70b-instruct-fp8-fast").how === "exact", "the fast llama id is routable by name");
+ok(X.resolveModel("kimi-k2.6").id === "kimi-k2.6" && X.resolveModel("kimi-k2.6").how === "exact", "the fast tier id is routable by name");
 const rwa = X.resolveModel("@cf/zai-org/glm-5.3-flash");
 ok(rwa.id === "glm-5.3-flash" && rwa.how === "workers-ai-id", "a Workers AI id resolves to its MODELS key", rwa);
 ok(X.resolveModel("workers-ai/@cf/openai/gpt-oss-120b").id === "gpt-oss-120b", "a workers-ai/ prefixed id resolves");
@@ -70,26 +70,26 @@ ok(X.turnBudgetMs({ max_tokens: 16000 }, {}) === 0, "a long generation has no bu
 ok(X.turnBudgetMs({ max_tokens: 16000, timeout_ms: 20000 }, {}) === 20000, "timeout_ms is the caller's budget");
 ok(X.turnBudgetMs({ timeout_ms: 5 }, {}) === 3e3 && X.turnBudgetMs({ timeout_ms: 9e9 }, {}) === 12e4, "timeout_ms is clamped to 3 s - 120 s");
 ok(X.turnBudgetMs({ max_tokens: 700 }, { stream: true }) === 0 && X.turnBudgetMs({ max_tokens: 700 }, { tools: true }) === 0, "streams and tool requests are not budgeted by default");
-ok(X.pickHedge("glm-5.3-flash", X.MODELS["glm-5.3-flash"], { estIn: 4000, maxOut: 700 }) === "llama-3.3-70b-instruct-fp8-fast", "the hedge for glm-5.3-flash is the fast llama");
-ok(X.pickHedge("llama-3.3-70b-instruct-fp8-fast", X.MODELS["llama-3.3-70b-instruct-fp8-fast"], { estIn: 4000, maxOut: 700 }) === "glm-5.3-flash", "the hedge is never the primary");
+ok(X.pickHedge("glm-5.3-flash", X.MODELS["glm-5.3-flash"], { estIn: 4000, maxOut: 700 }) === "kimi-k2.6", "the hedge for glm-5.3-flash is the fast tier");
+ok(X.pickHedge("kimi-k2.6", X.MODELS["kimi-k2.6"], { estIn: 4000, maxOut: 700 }) === "glm-5.3-flash", "the hedge is never the primary");
 ok(X.pickHedge("gpt-oss-120b", X.MODELS["gpt-oss-120b"], { estIn: 30000, maxOut: 700 }) === "glm-5.3-flash", "a prompt beyond the llama context hedges on a model that fits");
 ok(X.pickHedge("gpt-oss-120b", X.MODELS["gpt-oss-120b"], { estIn: 100, maxOut: 700, hasImage: true }) === "glm-5.3-flash", "an image request hedges on a vision model");
 const run = (o) => X.runTurnBudgeted({}, X.MODELS[o.primaryKey], [], 700, null, 0.6, 0.9, null, o);
 {
-  sb.__turns = { "@cf/zai-org/glm-5.3-flash": { ms: 400, content: "slow" }, "@cf/meta/llama-3.3-70b-instruct-fp8-fast": { ms: 20, content: "fast" } };
-  const r = await run({ budgetMs: 2000, hedgeMs: 50, primaryKey: "glm-5.3-flash", hedgeKey: "llama-3.3-70b-instruct-fp8-fast" });
-  ok(r.turn && r.turn.content === "fast" && r.hedged && r.winner === "llama-3.3-70b-instruct-fp8-fast", "a silent primary is overtaken by the hedge", r);
+  sb.__turns = { "@cf/zai-org/glm-5.3-flash": { ms: 400, content: "slow" }, "@cf/moonshotai/kimi-k2.6": { ms: 20, content: "fast" } };
+  const r = await run({ budgetMs: 2000, hedgeMs: 50, primaryKey: "glm-5.3-flash", hedgeKey: "kimi-k2.6" });
+  ok(r.turn && r.turn.content === "fast" && r.hedged && r.winner === "kimi-k2.6", "a silent primary is overtaken by the hedge", r);
   sb.__turns = { "@cf/zai-org/glm-5.3-flash": { ms: 10, content: "quick" } };
-  const q = await run({ budgetMs: 2000, hedgeMs: 200, primaryKey: "glm-5.3-flash", hedgeKey: "llama-3.3-70b-instruct-fp8-fast" });
+  const q = await run({ budgetMs: 2000, hedgeMs: 200, primaryKey: "glm-5.3-flash", hedgeKey: "kimi-k2.6" });
   ok(q.turn.content === "quick" && !q.hedged && q.legs.length === 1, "a quick primary answers alone: no second call", q);
-  sb.__turns = { "@cf/zai-org/glm-5.3-flash": { ms: 10, content: "" }, "@cf/meta/llama-3.3-70b-instruct-fp8-fast": { ms: 10, content: "hedge" } };
-  const e = await run({ budgetMs: 2000, hedgeMs: 1500, primaryKey: "glm-5.3-flash", hedgeKey: "llama-3.3-70b-instruct-fp8-fast" });
+  sb.__turns = { "@cf/zai-org/glm-5.3-flash": { ms: 10, content: "" }, "@cf/moonshotai/kimi-k2.6": { ms: 10, content: "hedge" } };
+  const e = await run({ budgetMs: 2000, hedgeMs: 1500, primaryKey: "glm-5.3-flash", hedgeKey: "kimi-k2.6" });
   ok(e.turn.content === "hedge" && e.legs[0].err === "empty" && e.legs[1].ms < 500, "an empty primary starts the hedge at once", e);
-  sb.__turns = { "@cf/zai-org/glm-5.3-flash": { ms: 10, throws: "deepseek 402" }, "@cf/meta/llama-3.3-70b-instruct-fp8-fast": { ms: 10, throws: "boom" } };
-  const f = await run({ budgetMs: 2000, hedgeMs: 1500, primaryKey: "glm-5.3-flash", hedgeKey: "llama-3.3-70b-instruct-fp8-fast" });
+  sb.__turns = { "@cf/zai-org/glm-5.3-flash": { ms: 10, throws: "deepseek 402" }, "@cf/moonshotai/kimi-k2.6": { ms: 10, throws: "boom" } };
+  const f = await run({ budgetMs: 2000, hedgeMs: 1500, primaryKey: "glm-5.3-flash", hedgeKey: "kimi-k2.6" });
   ok(f.turn === null && f.reason === "all-legs-failed" && f.legs.length === 2 && f.legs[1].err === "boom", "two failed legs resolve with no turn and both errors", f);
-  sb.__turns = { "@cf/zai-org/glm-5.3-flash": { ms: 500, content: "late" }, "@cf/meta/llama-3.3-70b-instruct-fp8-fast": { ms: 500, content: "late" } };
-  const d = await run({ budgetMs: 120, hedgeMs: 30, primaryKey: "glm-5.3-flash", hedgeKey: "llama-3.3-70b-instruct-fp8-fast" });
+  sb.__turns = { "@cf/zai-org/glm-5.3-flash": { ms: 500, content: "late" }, "@cf/moonshotai/kimi-k2.6": { ms: 500, content: "late" } };
+  const d = await run({ budgetMs: 120, hedgeMs: 30, primaryKey: "glm-5.3-flash", hedgeKey: "kimi-k2.6" });
   ok(d.turn === null && d.reason === "deadline" && d.legs.every((l) => l.err === "unfinished"), "the deadline resolves with no turn", d);
   sb.__turns = { "@cf/zai-org/glm-5.3-flash": { ms: 10, content: "" } };
   const n = await run({ budgetMs: 500, hedgeMs: 100, primaryKey: "glm-5.3-flash", hedgeKey: null });
