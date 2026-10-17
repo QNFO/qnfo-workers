@@ -2125,7 +2125,11 @@ async function sendMail(env, piece, slug, day) {
   if (!(await pieceVerified(env, slug))) return { ok: false, error: "piece not verified, nothing mailed (fail closed)" };
   var subject = piece.title + " (" + formLabel(piece.form || "essay") + ")";
   var body = (/^\s*#/.test(String(piece.body_md || "")) ? "" : piece.lede ? piece.lede + NL + NL : "") + String(piece.body_md).slice(0, 2e4) + NL + NL + "Read online: " + String(piece.link || "");
-  return await sendOne(env, "rwnquni@outlook.com", subject, body);
+  // MAIL-SUPPRESSION-1 (2026-10-17): rwnquni@outlook.com is listed in BOTH email_suppression and
+  // contact_ledger, so sendOne() returned {suppressed:true} and every owner reading was dropped
+  // silently while the send was logged as fine. Owner mail goes through the owner-notice path,
+  // which bypasses suppression by design and still honours calendar_meta owner_notice_enabled.
+  return await sendOwnerNotice(env, subject, body);
 }
 __name(sendMail, "sendMail");
 __name2(sendMail, "sendMail");
@@ -4169,6 +4173,9 @@ async function sendMorningBrief(env, nowMs) {
         }
       }
     } catch (eQ) { logCaught("sendMorningBrief", eQ); }
+    // WELLBEING-LOOP-1 / ONE-MORNING-MAIL-1: the check-in rides in this mail instead of arriving as
+    // a second one fifteen minutes later. Guarded: a wellbeing failure must never stop the brief.
+    try { var _wbL = await WBW.briefCheckinLines(env); if (_wbL && _wbL.length) { for (var _wl = 0; _wl < _wbL.length; _wl++) L.push(_wbL[_wl]); } } catch (eWbL) { logCaught("sendMorningBrief", eWbL); }
     var body = L.join(NL);
     // MORNING-BRIEF-CLAIM-1: claim the day before sending so two overlapping ticks cannot both mail it; a failed send
     // releases the claim so the next hourly tick retries.
@@ -4185,6 +4192,8 @@ async function sendMorningBrief(env, nowMs) {
       for (var mt = 0; mt < 2; mt++) {
         try { await env.PERSONAL.prepare("UPDATE companion_morning_brief SET sent = 1 WHERE date = ?").bind(day).run(); break; } catch (eMk) { console.error("morning-brief sent mark:", String(eMk && eMk.message || eMk)); }
       }
+      // The check-in line went out in this mail, so record it: the standalone 07:45 path must not repeat it.
+      try { await WBW.noteCheckinInBrief(env); } catch (eWbN) { logCaught("sendMorningBrief", eWbN); }
     }
     return r;
   } catch (e) {
