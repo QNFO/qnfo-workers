@@ -73,12 +73,15 @@ answer is worse than no hedge.
 
 ### 1.6 Verified state at closeout
 
-- `deploy-gate`: success on `dda98a8e`, `30c8136a`, `e470ffad`, `6fb1403d`. **It is RED right now** on
-  `3dfab564` (this docs commit) — not because of the docs: `bb562f9e` (code-orchestrator 0.18.0
-  SLA-PATHS-ACCEL-1) left 9 claim suites failing, and the fix (`41011786`, on branch
-  `chatbox/sla-paths-accel`, HEAD `1da1d11c`) is another session's in-flight work, not on main. I did
-  not merge someone else's half-finished branch into main to make my own closeout look green. Recorded
-  as **agent_issues 2836** with the failing assertions and three paths.
+- `deploy-gate`: **success on `73575974`** (this closeout commit): `SUITE-RUNNER-1: 433 passed, 0 failed`.
+  Green before it on `dda98a8e`, `30c8136a`, `e470ffad`, `6fb1403d`.
+- One red happened mid-closeout and is worth recording because of how it ended: `bb562f9e`
+  (code-orchestrator 0.18.0 SLA-PATHS-ACCEL-1) left 9 claim suites failing on main. I filed it as
+  **agent_issues 2836** with the failing assertions and three paths instead of merging another
+  session's in-flight branch to make my own closeout look green. `aa5c27f2` (PATH-ENFORCEMENT-1
+  opt-in) landed the fix **five minutes later**; the gate then passed `claim-at-run`, `claim-backoff`
+  and `claims-first`. 2836 is closed with that evidence (`close_channel=verified-fixed`), not on anyone's
+  word. This is the handoff model working: file with evidence, let the fleet fix, verify, close.
 - `model-floor-guard`: success on every push since `FLOOR-WATCH-1`; a manual `--live` dispatch after
   the deploy was **success** (repo + live clean)
 - live bundles: 12 standalone hosts inspected individually, **0 model choices** for banned ids; 5 folded
@@ -114,7 +117,7 @@ answer is worse than no hedge.
 | 2831 | **FOLDED-AND-RETIRED-MODEL-COVERAGE-1** — 8 of the 20 are not standalone scripts | the floor scan reports per deployed artifact and names the folded members in each host; RETIRED dirs cannot be edited unnoticed |
 | 2832 | **WINDOWS-SUITE-PARITY-1** — 124 suites red locally, 0 in CI | `run-suites.mjs --all` on Windows yields 0, so a local red means red |
 | 2833 | **MODEL-POLICY-SINGLE-SOURCE-1** — the allowed set is copied into workers, pools and 8 suites | one model table consumed by workers and guard; suites assert properties, not ids |
-| 2836 | **MAIN-RED-CLAIM-SUITES-1** — main is red at closeout on `bb562f9e`; a fix exists on `chatbox/sla-paths-accel` and is not merged | deploy-gate success on a main commit containing the orchestrator fix, `claim-at-run` 12/12 and the other eight claim suites green |
+| 2836 | **MAIN-RED-CLAIM-SUITES-1** — `bb562f9e` left 9 orchestrator claim suites red | **closed, verified-fixed**: gate `39052330354` on `73575974`, 433 passed / 0 failed, after `aa5c27f2` |
 
 Each carries 2–3 independent paths, per `docs/SLA-AND-PATHS-1.md`.
 
