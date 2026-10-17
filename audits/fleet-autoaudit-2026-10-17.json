@@ -1,15 +1,8 @@
 {
-  "audited_at": "2026-10-17 17:10:08",
+  "audited_at": "2026-10-17 17:40:23",
   "d1_write_failures": [],
   "d1_writes_ok": 119,
   "guard": {
-    "_drift_confirm": {
-      "first_pass": [
-        "qnfo-evolve"
-      ],
-      "refreshed": true,
-      "second_pass": []
-    },
     "_guard_rc": 0,
     "ahead": [],
     "cf_script_list": true,
@@ -608,7 +601,7 @@
       },
       {
         "dir": "qnfo-evolve",
-        "version": "0.1.1-evolve",
+        "version": "0.2.1-evolve",
         "worker": "qnfo-evolve"
       },
       {
@@ -1291,9 +1284,9 @@
       "worker": "qnfo-events"
     },
     "qnfo-evolve": {
-      "before": "0.1.1-evolve",
+      "before": "0.2.1-evolve",
       "http": 200,
-      "live": "0.1.1-evolve",
+      "live": "0.2.1-evolve",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-evolve"
