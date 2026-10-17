@@ -497,8 +497,12 @@ async function pathNoProgress(env, t) {
   const maxMin = await pathHoldMaxMin(env);
   const tctx = getCtx(t);
   const sigs = Array.isArray(tctx.sigs) ? tctx.sigs : [];
-  if (Number(t.attempts || 0) < PATH_HOLD_MIN_FAILS || !sigs.length || !tctx.last_new_sig_at) return false;
-  const at = Date.parse(String(tctx.last_new_sig_at));
+  if (Number(t.attempts || 0) < PATH_HOLD_MIN_FAILS || !sigs.length) return false;
+  // A task recorded before this release has no ctx.last_new_sig_at: measure it from created_at, which is a lower bound on
+  // when its last NEW failure could have been (the task predates the clock; the hold began then). Every failure after this
+  // release stamps the clock in noteSig, so the fallback ages out of use.
+  const anchor = tctx.last_new_sig_at ? String(tctx.last_new_sig_at) : String(t.created_at || "");
+  const at = Date.parse(anchor);
   if (!isFinite(at)) return false;
   const staleMin = (Date.now() - at) / 60000;
   if (staleMin <= maxMin) return false;

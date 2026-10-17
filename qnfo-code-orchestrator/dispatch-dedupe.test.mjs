@@ -193,6 +193,14 @@ const claim = (env, p, f) => env.AUDIT_DB._db.prepare("INSERT INTO work_claims (
   const f = await enq(e4, "qnfo-social/worker.js");
   e4.AUDIT_DB._db.prepare("UPDATE code_tasks SET attempts = 6, ctx = ? WHERE id = ?").run(sigsJson(["A", "A", "A"], 200), f.id);
   ok(!(await enq(e4, "qnfo-social/worker.js")).ok, "7i ops_config path_hold_max_min 600 keeps a 200-minute no-progress task");
+  const { env: e5 } = envWith([]);
+  const j = await enq(e5, "q08-signal-engine/worker.js");
+  e5.AUDIT_DB._db.prepare("UPDATE code_tasks SET created_at = ?, attempts = 3, ctx = ? WHERE id = ?").run(new Date(Date.now() - 300 * 60000).toISOString(), JSON.stringify({ sigs: ["A", "B", "A"] }), j.id);
+  ok((await enq(e5, "q08-signal-engine/worker.js")).ok, "7j a task recorded before the progress clock (no last_new_sig_at) is measured from created_at and cut when it is old");
+  const { env: e6 } = envWith([]);
+  const k = await enq(e6, "qnfo-email/worker.js");
+  e6.AUDIT_DB._db.prepare("UPDATE code_tasks SET created_at = ?, attempts = 3, ctx = ? WHERE id = ?").run(new Date(Date.now() - 20 * 60000).toISOString(), JSON.stringify({ sigs: ["A", "B", "A"] }), k.id);
+  ok(!(await enq(e6, "qnfo-email/worker.js")).ok, "7k a recent task without a stamp keeps the file");
 }
 console.log("dispatch-dedupe: " + pass + " passed, " + fail + " failed");
 process.exit(fail ? 1 : 0);
