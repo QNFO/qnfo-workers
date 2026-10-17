@@ -183,19 +183,57 @@ var MAX_PER_DAY = 10;
 // under 50 human page views a week; delete the row or raise it to undo. The cron still fires every 2 hours; a run past
 // the cap returns before any scrape or AI call.
 var CAP_KEY = "q08_max_per_day";
+// PUBLISH-QUOTAS-1 (owner directive 2026-10-17: "PUBLISH STREAMS SHALL HAVE SEPARATE QUOTAS FOR EACH PROPERTY, DO NOT
+// COMMINGLE STREAMS"). This engine owns exactly one property. Its daily quota now comes from ops_config
+// publish_quotas, a JSON object keyed by property, so every property's number lives in one auditable place and no
+// property can spend another's. q08_max_per_day stays as the q08.org fallback for the Q08-CADENCE-CAP-1 knob. The
+// day count below is scoped to this property, never to the whole table (before this, one property-blind count gated
+// every piece in published_pieces, so q08.org and reading.q08.org shared one budget).
+var PROPERTY = "q08.org";
+var QUOTAS_KEY = "publish_quotas";
+var QUOTA_MAX = 500;
+function parseQuota(v, fallback) {
+  var s = v == null ? "" : String(v).trim();
+  if (!/^\d{1,3}$/.test(s)) return fallback;
+  return Math.min(Number(s), QUOTA_MAX);
+}
 function parseDailyCap(v) {
   var s = v == null ? "" : String(v).trim();
   if (!/^\d{1,3}$/.test(s)) return MAX_PER_DAY;
   return Math.min(Number(s), MAX_PER_DAY);
 }
-async function dailyCap(env) {
-  if (!env || !env.AUDIT) return MAX_PER_DAY;
+async function propertyQuota(env, fallback) {
+  if (!env || !env.AUDIT) return fallback;
   try {
-    var r = await env.AUDIT.prepare("SELECT value FROM ops_config WHERE key = ?1").bind(CAP_KEY).first();
-    return parseDailyCap(r && r.value);
+    var r = await env.AUDIT.prepare("SELECT value FROM ops_config WHERE key = ?1").bind(QUOTAS_KEY).first();
+    var raw = r && r.value ? JSON.parse(String(r.value)) : null;
+    if (raw && Object.prototype.hasOwnProperty.call(raw, PROPERTY)) return parseQuota(raw[PROPERTY], fallback);
   } catch (e) {
-    return MAX_PER_DAY;
+    console.error(JSON.stringify({ worker: "q08-signal-engine", event: "publish-quota-read", error: String(e && e.message || e).slice(0, 160) }));
   }
+  return fallback;
+}
+async function ensurePropertyColumn(env) {
+  try {
+    var cols = await env.DB.prepare("PRAGMA table_info(published_pieces)").all();
+    var list = (cols && cols.results) || [];
+    for (var i = 0; i < list.length; i++) if (String(list[i].name) === "property") return;
+    await env.DB.prepare("ALTER TABLE published_pieces ADD COLUMN property TEXT").run();
+  } catch (e) {
+    console.error(JSON.stringify({ worker: "q08-signal-engine", event: "property-column", error: String(e && e.message || e).slice(0, 160) }));
+  }
+}
+async function dailyCap(env) {
+  var legacy = MAX_PER_DAY;
+  if (env && env.AUDIT) {
+    try {
+      var r = await env.AUDIT.prepare("SELECT value FROM ops_config WHERE key = ?1").bind(CAP_KEY).first();
+      legacy = parseDailyCap(r && r.value);
+    } catch (e) {
+      legacy = MAX_PER_DAY;
+    }
+  }
+  return await propertyQuota(env, legacy);
 }
 var HN_SEARCH = "https://hn.algolia.com/api/v1/search?tags=front_page&hitsPerPage=50";
 var HN_ITEMS  = "https://hn.algolia.com/api/v1/items/";
@@ -1178,11 +1216,11 @@ async function persistPiece(env, piece, signal, story, model) {
   ).run();
   // Persist piece
   await env.DB.prepare(
-    "INSERT INTO published_pieces (id, signal_id, slug, title, body_md, core_concept, signal_source, published_at, sources_json) VALUES (?,?,?,?,?,?,?,?,?)"
+    "INSERT INTO published_pieces (id, signal_id, slug, title, body_md, core_concept, signal_source, published_at, sources_json, property) VALUES (?,?,?,?,?,?,?,?,?,?)"
   ).bind(
     pieceId, "sig-" + salt, slug, title, body,
     signal.core_concept, (story.source || "hn") + ":" + story.id, nowIso(),
-    JSON.stringify(buildSources(story))
+    JSON.stringify(buildSources(story)), PROPERTY
   ).run();
   // Q08-FORECAST-1: a forecast piece also gets its q08_forecasts record (the claim, probability, horizon and resolution
   // condition the judges later settle). Its skeleton stays out of the essay prompt pool, which feeds essay few-shots only.
@@ -1578,10 +1616,11 @@ async function generate(env) {
     return { ok: false, reason: reason };
   }
   if (!(await ensureAccuracySchema(env))) return await quit("skipped", "accuracy schema unavailable (publishing fails closed)");
-  // Daily cap check
+  // Daily cap check (PUBLISH-QUOTAS-1: scoped to this property only)
+  await ensurePropertyColumn(env);
   var dayCount = await env.DB.prepare(
-    "SELECT COUNT(*) n FROM published_pieces WHERE published_at >= ?1"
-  ).bind(utcDay() + "T00:00:00.000Z").first();
+    "SELECT COUNT(*) n FROM published_pieces WHERE published_at >= ?1 AND COALESCE(property, ?2) = ?2"
+  ).bind(utcDay() + "T00:00:00.000Z", PROPERTY).first();
   var todayN = (dayCount && dayCount.n) || 0;
   var cap = await dailyCap(env);
   if (todayN >= cap) {
