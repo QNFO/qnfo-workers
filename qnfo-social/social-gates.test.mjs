@@ -84,6 +84,13 @@ function baseState(over) {
     },
     run() { return { success: true }; },
     all(sql) {
+      // SOCIAL-PAUSE-RESUME-1: the worker reads both pause keys in one IN (...) query through .all().
+      if (sql.includes("pipeline_flags WHERE key IN ('social_paused','social_paused_until')")) {
+        const rows = [];
+        if (s.paused) rows.push({ key: 'social_paused', value: '1' });
+        if (s.pausedUntil) rows.push({ key: 'social_paused_until', value: s.pausedUntil });
+        return rows;
+      }
       if (sql.includes('SELECT post_uri FROM social_threads')) return [{ post_uri: '{"bluesky":"at://did:plc:me/app.bsky.feed.post/a1","linkedin":"buffer-draft:9"}' }, { post_uri: 'buffer:7' }];
       if (sql.includes('SELECT post_id FROM dissemination_tracker')) return [{ post_id: 'at://did:plc:me/app.bsky.feed.post/d1' }, { post_id: 'at://did:plc:me/app.bsky.feed.post/a1' }];
       return [];
@@ -161,6 +168,29 @@ function baseState(over) {
   }
   assert.equal(calls.length, 0);
   ok('pause flag: drainQueue skips, /post /thread /cross return 423, no network');
+}
+// ---------- SOCIAL-PAUSE-RESUME-1: the pause is bounded by social_paused_until ----------
+{
+  const calls = [];
+  globalThis.fetch = mkFetch(calls);
+  const future = new Date(Date.now() + 3600 * 1000).toISOString();
+  const st = baseState({ paused: true, pausedUntil: future, queued: [{ id: 10, slug: 's2', title: 't', posts: '["hello https://papers.qnfo.org/papers/s/"]' }] });
+  const { env } = mkEnv(st);
+  const r = await mod.drainQueue(env);
+  assert.equal(r.skipped, 'paused');
+  ok('SOCIAL-PAUSE-RESUME-1: an unexpired social_paused_until still holds the drain');
+}
+{
+  const calls = [];
+  globalThis.fetch = mkFetch(calls);
+  const past = new Date(Date.now() - 3600 * 1000).toISOString();
+  const st = baseState({ paused: true, pausedUntil: past, queued: [] });
+  const { env, log } = mkEnv(st);
+  const r = await mod.drainQueue(env);
+  assert.notEqual(r.skipped, 'paused');
+  const cleared = log.some(l => l.sql.includes("UPDATE pipeline_flags SET value='0'") && l.sql.includes("key='social_paused'"));
+  assert.ok(cleared, 'an expired pause is cleared back to 0');
+  ok('SOCIAL-PAUSE-RESUME-1: an expired social_paused_until is cleared and does not hold');
 }
 // ---------- weekly cap honoured by routes; allowed /post records a row with post_uri ----------
 {
