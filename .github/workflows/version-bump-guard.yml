@@ -134,6 +134,20 @@ jobs:
       - name: Version bump guard
         run: |
           set -euo pipefail
-          python3 scripts/version-bump-guard.py \
-            "${{ steps.range.outputs.before }}" \
-            "${{ steps.range.outputs.after }}"
+          # VERSION-BUMP-USEREF-SCOPE-1 (2026-10-17): on a push to a NON-default branch this run cannot
+          # block anything -- there is no merge gate there, and the branch is usually still mid-edit, so
+          # the violation it reports is normally fixed by a later commit on the same branch. Measured
+          # 2026-10-17: these runs were the second-largest ci_activity source, all on chatbox/* and
+          # session/* branches. The guard stays FATAL on:
+          #   * push to main (the deploy ledger's source of truth)
+          #   * every pull_request (the real pre-merge gate)
+          #   * workflow_dispatch (on-demand audit)
+          if ! python3 scripts/version-bump-guard.py \
+                 "${{ steps.range.outputs.before }}" \
+                 "${{ steps.range.outputs.after }}"; then
+            if [ "${{ github.event_name }}" = "push" ] && [ "${{ github.ref }}" != "refs/heads/main" ]; then
+              echo "::warning title=version-bump-guard::VERSION bump violation on a non-default branch; advisory only. A pull_request run enforces this before merge."
+              exit 0
+            fi
+            exit 1
+          fi
