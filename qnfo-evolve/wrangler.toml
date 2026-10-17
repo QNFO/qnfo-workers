@@ -1,0 +1,43 @@
+name = "qnfo-evolve"
+main = "worker.js"
+compatibility_date = "2026-10-10"
+workers_dev = true
+# charter-pillar: autonomy (EVOLVE-1)
+#
+# WHY THE PILLAR IS autonomy: this worker exists so that a registered gap becomes named work and a
+# closed gap is closed by the machine, not by the owner noticing. It is the "human as override,
+# never dependency" pillar applied to the improvement loop itself.
+#
+# NO BINDINGS BEYOND D1, AND NO SECRET, ON PURPOSE. It reads the fleet's registers and writes
+# agent_issues rows it owns. A worker that cannot deploy, cannot edit code and holds no credential
+# cannot damage the fleet when it is wrong -- the worst it can do is file a bad issue, which the
+# merge gate then refuses.
+#
+# traces are declared explicitly: the top-level [observability] switch enables logs only, and a
+# worker that ships with no traces cannot be diagnosed after the fact.
+
+[observability]
+enabled = true
+
+[observability.logs]
+enabled = true
+head_sampling_rate = 1
+
+[observability.traces]
+enabled = true
+head_sampling_rate = 0.1
+
+# limits-not-declared: bound the CPU so a pathological register cannot run to the wall clock.
+[limits]
+cpu_ms = 30000
+
+# Quarter-hourly at minute 2, off the fleet's 10-minute control tick (minute 0) and off the
+# code-orchestrator's plan tick. CRON_RATE_GUARD-1 requires at least 10 minutes between fires;
+# 15 satisfies it with margin.
+[triggers]
+crons = ["2,17,32,47 * * * *"]
+
+[[d1_databases]]
+binding = "AUDIT"
+database_name = "qnfo-audit"
+database_id = "35e2e573-92f3-46ac-83c6-22f6429fc5e5"
