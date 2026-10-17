@@ -1,0 +1,45 @@
+name: model-floor-guard
+
+# MODEL-FLOOR-1 enforcement, moved off the owner's laptop (2026-10-17 local de-bloat).
+# Scans repo worker sources and live deployed bundles for banned sub-frontier models.
+# Exit 1 means at least one worker still carries a banned model at code level. The job is
+# deliberately NOT ratcheted or continue-on-error: a red run is the true signal until the
+# violating workers are fixed. The report is written to the job summary.
+#
+# Weekly cadence plus manual dispatch only (CRON-MANDATE-1: far below 144/day).
+# The script is a copy of qnfo-ops/scripts/model-floor-guard.mjs; keep the two in step.
+# Step names are colon-free (WORKFLOW-YAML-LINT-1).
+
+on:
+  schedule:
+    - cron: "17 5 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: model-floor-guard
+  cancel-in-progress: false
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "20"
+      - name: Scan repo sources and live bundles
+        env:
+          QNFO_WORKERS: ${{ github.workspace }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CF_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          set +e
+          node scripts/model-floor-guard.mjs --live > floor-report.txt 2>&1
+          rc=$?
+          { echo '### model-floor-guard'; echo "exit code: $rc"; echo '```'; head -c 60000 floor-report.txt; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+          head -40 floor-report.txt
+          exit $rc
