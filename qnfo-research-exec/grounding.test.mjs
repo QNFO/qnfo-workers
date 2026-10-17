@@ -109,11 +109,13 @@ assert.equal(audit.prepare("SELECT count(*) n FROM cloud_ops_events WHERE kind =
 assert.ok(r2.has("pipeline/thin/grounding.md"), "the thin grounding is kept for diagnosis");
 
 // 2c. a thin pass with recover_count exhausted parks the row with the reason and files the terminal issue, as before.
-res = await stageGround(env, row("exhausted", 3));
+// 99 rather than the old ceiling of 3: the ceiling is ops_config research_recover_max (default 6), so a literal 3 is no
+// longer exhausted and the assertion tested the default rather than the park.
+res = await stageGround(env, row("exhausted", 99));
 assert.equal(res.ok, false);
 t = get("exhausted");
 assert.equal(t.status, "wontfix"); assert.equal(t.stage, "parked");
-assert.match(t.error, /^PARKED-POISON-1: recover_count exhausted \(3\); last error: ground: bibliography 2 < 5/);
+assert.match(t.error, /^PARKED-POISON-1: recover_count exhausted \(99\); last error: ground: bibliography 2 < 5/);
 assert.equal(audit.prepare("SELECT count(*) n FROM agent_issues WHERE title LIKE 'RESEARCH-TERMINAL exhauste%'").get().n, 1);
 
 // 2d. arXiv refusing, DataCite answering: relevant arXiv records fill the bibliography, the row advances, and an

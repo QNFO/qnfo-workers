@@ -24,7 +24,16 @@ var __defProp2222 = Object.defineProperty;
 var __name2222 = /* @__PURE__ */ __name222((target, value) => __defProp2222(target, "name", { value, configurable: true }), "__name");
 var __defProp22222 = Object.defineProperty;
 var __name22222 = /* @__PURE__ */ __name2222((target, value) => __defProp22222(target, "name", { value, configurable: true }), "__name");
-var VERSION = "0.18.19-revise-flex";
+// 0.18.20-cite-graph (2026-10-17, pillar research): the fleet could not learn from its own papers because nothing
+// recorded what a paper cites. CITE-GRAPH-1 writes the grounding bibliography to R2 beside the prose and, at publish,
+// fills living-paper citations + paper_citations (empty until now: 0 rows), so "what did this cite" and "who cites this"
+// are answerable. CITE-PROV-1 puts the canonical papers.qnfo.org URL in every own-corpus reference (they were bare titles,
+// which is why inbound citation could not be counted). GROUND-WIDTH-1 raises the own-corpus search width from a hard 4 to
+// ops_config research_ground_corpus_k (default 4, clamp 0..12). GROUND-VISIBLE-1 logs hits/kept/failure per run instead of
+// an empty catch. CITE-CONSISTENCY-1 asks the reviewer to compare the draft against cited QNFO work.
+// REVIEW-TRIAGE-CAP-1 is a defect fix: drift demotion at the cycle cap silently turned a blocking finding into a pass, so
+// REVIEW-HARD-GATE-1 withheld nothing there (reviewer findings 2 -> 0 at the cap; an unparseable review advanced to verify).
+var VERSION = "0.18.20-cite-graph";
 // WORKERS-AI-ATTRIBUTION-1 (2026-10-01, #1681): per-worker Workers AI attribution. Returns a shallow env copy whose AI
 // binding records each .run() (calls, errors, ms, tokens, neurons) into qnfo-audit ai_call_counters (purpose 'binding').
 // Neurons = usage tokens x Cloudflare's published per-model rates (neurons per M tokens). Fail-soft; env is never mutated.
@@ -2028,7 +2037,7 @@ function patchNewIdentifiers(text, baseLower) {
 // same >=20 character floor and the same identifier grounding check, so no edit can be applied to an ambiguous site.
 function patchFlexTokens(s) {
   return String(s).split(/\s+/).filter(Boolean).map(function(t) {
-    return t.replace(/[.*+?^${}()|[\]\\]/g, "\\function applyRevisePatch(paper, raw) {").replace(/['\u2018\u2019]/g, "['\u2018\u2019]").replace(/["\u201c\u201d]/g, '["\u201c\u201d]').replace(/-/g, "[-\u2013\u2014]");
+    return t.replace(/[.*+?^${}()|[\]\\]/g, "\\$&").replace(/['\u2018\u2019]/g, "['\u2018\u2019]").replace(/["\u201c\u201d]/g, '["\u201c\u201d]').replace(/-/g, "[-\u2013\u2014]");
   });
 }
 __name(patchFlexTokens, "patchFlexTokens");
@@ -2564,6 +2573,40 @@ function summaryOnlyCitations(paper) {
   });
   return hits;
 }
+// CITE-GRAPH-1 + GROUND-WIDTH-1 helpers (pure; asserted by citation-graph.test.mjs).
+// Width: how many of the fleet's own papers the corpus search may keep. ops_config research_ground_corpus_k, default 4
+// (the old hard cap), clamped 0..12 so a typo cannot empty the corpus or flood the grounding block.
+function corpusWidth(v) {
+  const n = parseInt(String(v == null ? "" : v).trim(), 10);
+  return Number.isFinite(n) ? Math.max(0, Math.min(12, n)) : 4;
+}
+// Rows for the citation graph, derived from the grounding bibliography. The bibliography object is the only place the
+// pipeline knows what a paper cites; before this it was rendered into prose and dropped, so citations and
+// citation_edges stayed empty and no citation could be counted or followed.
+function citationRowsFromBib(bib) {
+  const out = [];
+  for (const b of Array.isArray(bib) ? bib : []) {
+    const id = String(b && b.id || "");
+    const isArxiv = /^arXiv:/i.test(id);
+    const label = String(b && b.text || "").split("\n")[0];
+    const textUrl = (label.match(/https?:\/\/\S+/) || [""])[0];
+    const url = String(b && b.url || (isArxiv ? "https://arxiv.org/abs/" + id.replace(/^arXiv:/i, "") : textUrl));
+    const slug = b && b.slug ? String(b.slug) : (/papers\.qnfo\.org\/papers\//.test(url) ? url.split("/papers/").pop().split(/[?#]/)[0] : "");
+    const title = b && b.title
+      ? String(b.title)
+      : label.replace(/^arXiv:[^\s|]*\s*\|\s*/i, "").replace(/^QNFO:\s*/i, "").replace(/\s*\|\s*DOI\s+10\.[^\s|]+/i, "").replace(/\s*\|\s*https?:\/\/\S+.*$/, "").trim();
+    out.push({
+      n: Number(b && b.n) || out.length + 1,
+      kind: slug ? "qnfo" : isArxiv ? "arxiv" : "other",
+      id: id,
+      slug: slug,
+      title: title,
+      url: url,
+      doi: /^doi:/i.test(id) ? id.replace(/^doi:/i, "") : ""
+    });
+  }
+  return out;
+}
 async function stageGround(env, row) {
   __attrStageSet(env, "ground");
   const idea = row.idea || row.summary || "";
@@ -2663,16 +2706,31 @@ async function stageGround(env, row) {
     _second = _dc.ok ? "ok" : "error";
     await logEvent(env, "ground-second-source", "row=" + rid + " source=datacite status=" + _dc.status + " returned=" + _dc.entries.length + " added=" + _added + " bibCount=" + bib.length + " arxiv_http_errors=" + _arxivErr, _dc.ok ? "ok" : "warn");
   }
+  // GROUND-WIDTH-1 + GROUND-VISIBLE-1 (2026-10-17): the corpus search kept at most 4 of the fleet's own papers and every
+  // failure ended in an empty catch, so a paper could be grounded on none of its own corpus with nothing recorded: 196 of
+  // 329 runs sat exactly at the cap, and two papers written the same day (attractor-calculus, oscillator-as-element) cite
+  // zero QNFO works while their neighbours absorbed four. Width is now ops_config research_ground_corpus_k (default 4,
+  // clamp 0..12) and each run logs hits, kept slugs and the reason it kept nothing.
+  let _corpusK = 4;
+  try {
+    const _ck = await env.QNFO_AUDIT.prepare("SELECT value FROM ops_config WHERE key = 'research_ground_corpus_k'").first();
+    if (_ck) _corpusK = corpusWidth(_ck.value);
+  } catch (e) {
+  }
   let corpus = "";
+  let _corpusHits = 0;
+  let _corpusErr = "";
+  const _absorbed = [];
   try {
     const r = await routerFetch(env, ROUTER.replace("/v1/chat/completions", "") + "/v1/search?q=" + encodeURIComponent((parentTitle + " " + q).trim().slice(0, 200)) + "&k=8", { headers: routerHeaders(env, false) });
     if (r.ok) {
       const j = await r.json();
+      _corpusHits = Array.isArray(j.results) ? j.results.length : 0;
       const slugs = [];
       for (const x of j.results || []) {
         const sl = x && x.index === "PAPER_VZ" && x.metadata && x.metadata.slug ? String(x.metadata.slug) : "";
         if (sl && slugs.indexOf(sl) < 0) slugs.push(sl);
-        if (slugs.length >= 4) break;
+        if (slugs.length >= _corpusK) break;
       }
       for (const sl of slugs) {
         if (bib.length >= GROUND_CANDIDATES + 3) break;
@@ -2680,11 +2738,23 @@ async function stageGround(env, row) {
           return null;
         });
         if (!pp || !pp.title) continue;
-        const entry = "QNFO: " + String(pp.title).replace(/\s+/g, " ").trim() + (pp.doi && !/10\.5281\/|z[e]nodo/i.test(String(pp.doi)) ? " | DOI " + pp.doi : "") + "\n  " + corpusSummary(pp.abstract, pp.body_md).slice(0, 400);
-        bib.push({ n: bib.length + 1, id: pp.doi && !/10\.5281\/|z[e]nodo/i.test(String(pp.doi)) ? "doi:" + pp.doi : "qnfo:" + sl, text: entry, body: String(pp.body_md || ""), url: "https://papers.qnfo.org/papers/" + sl });
+        // CITE-PROV-1: an own-corpus reference carries its canonical URL, so the rendered reference list is machine-readable.
+        // Before this, References read "[9] QNFO: Head Over Hands" with no link and no slug, which is why inbound citation
+        // could not be counted for any paper.
+        const _curl = "https://papers.qnfo.org/papers/" + sl;
+        const entry = "QNFO: " + String(pp.title).replace(/\s+/g, " ").trim() + (pp.doi && !/10\.5281\/|z[e]nodo/i.test(String(pp.doi)) ? " | DOI " + pp.doi : "") + " | " + _curl + "\n  " + corpusSummary(pp.abstract, pp.body_md).slice(0, 400);
+        bib.push({ n: bib.length + 1, id: pp.doi && !/10\.5281\/|z[e]nodo/i.test(String(pp.doi)) ? "doi:" + pp.doi : "qnfo:" + sl, text: entry, body: String(pp.body_md || ""), url: _curl, slug: sl, title: String(pp.title) });
         corpus += (corpus ? "\n" : "") + entry;
+        _absorbed.push(sl);
       }
+    } else {
+      _corpusErr = "http " + r.status;
     }
+  } catch (e) {
+    _corpusErr = String(e && e.message || e).slice(0, 120);
+  }
+  try {
+    await logEvent(env, "ground-corpus", "row=" + rid + " k=" + _corpusK + " hits=" + _corpusHits + " kept=" + _absorbed.length + " slugs=" + _absorbed.join(",") + (_corpusErr ? " error=" + _corpusErr : ""), _corpusErr || (!_absorbed.length && _corpusK > 0) ? "warn" : "ok");
   } catch (e) {
   }
   // CITE-FULLTEXT-1: only works whose full text was read are cited. The source paper's full text joins its abstract.
@@ -2727,6 +2797,18 @@ async function stageGround(env, row) {
     bibBlock
   ].join("\n\n");
   await r2Put(env, rid + "/grounding.md", sanitizeRetrieved(grounding));
+  // CITE-GRAPH-1: write the bibliography as data beside the prose. publishStageV2 pairs it with the slug and fills
+  // living-paper citations + paper_citations, which makes "what did this paper cite" and "who cites this paper"
+  // answerable for the first time.
+  try {
+    const _crefs = citationRowsFromBib(bib);
+    await r2Put(env, rid + "/citations.json", JSON.stringify({ pipeline: PIPELINE_VERSION, row: rid, refs: _crefs }));
+    const _ownRefs = _crefs.filter(function(r) {
+      return r.kind === "qnfo";
+    }).length;
+    await logEvent(env, "cite-graph-ground", "row=" + rid + " refs=" + _crefs.length + " qnfo=" + _ownRefs, "ok");
+  } catch (e) {
+  }
   // GROUND-THIN-FAILFAST-1 (2026-10-02, agent_issues 1751): verify renders References only from bibliography entries the
   // body cites, so a paper grounded on fewer than MIN_GROUND_REFS entries can never pass gate-refcount (refCount <= bibCount
   // < floor), and with 0 entries the writer's own unverifiable list is what gets counted. Row 196536e3 (bibCount 2) still ran
@@ -3555,6 +3637,14 @@ async function triageHardFindings(env, row, paper, hard, cycle) {
   const block = [];
   const soft = [];
   const demoted = [];
+  // REVIEW-TRIAGE-CAP-1 (2026-10-17): drift demotion is a below-the-cap device. A finding demoted here is only deferred:
+  // another revise cycle re-surfaces it and it blocks then. At the cycle cap there is no next cycle, so demoting by drift
+  // silently converted a blocking finding into a pass: REVIEW-HARD-GATE-1 never saw it, and a paper whose reviewer still
+  // listed HARD findings advanced to verify and published (the cap case: hardLeft 2 became hardLeft 0). At or past the
+  // cap every HARD finding that is not non-mechanical blocks, so the gate withholds and the recover loop re-drafts.
+  // ops_config research_review_gate = measure remains the reversible lever.
+  const _cap = await maxReviewCycles(env);
+  const atCap = Number(cycle) >= _cap;
   for (let i = 0; i < hard.length; i++) {
     const f = hard[i];
     if (reviewNonMechanical(f)) {
@@ -3564,7 +3654,9 @@ async function triageHardFindings(env, row, paper, hard, cycle) {
     }
     const persistent = prev.indexOf(sigs[i]) >= 0;
     const present = reviewStillPresent(f, paper);
-    if (cycle === 0 || persistent || present) {
+    // The unparseable-review sentinel is never drift: its own re-run path (review->review) lives past this loop.
+    const parseSentinel = String(f && f.id || "") === "review-parse";
+    if (cycle === 0 || persistent || present || atCap || parseSentinel) {
       block.push(f);
     } else {
       soft.push(f);
@@ -3597,7 +3689,10 @@ async function stageReview(env, row) {
     return { ok: true, stage: "review->complete", incomplete: _pcR.reasons };
   }
   const bib = (grounding.split("## Bibliography")[1] || "").slice(0, 8e3);
-  const revRaw = await gwCall(env, stageContextPrompt("REVIEW", "PAPER", paper, "BIBLIOGRAPHY (numbered; the paper may cite only these):\n" + bib), 12e3);
+  // CITE-CONSISTENCY-1 (2026-10-17): no review ever compared the draft against the fleet's own cited papers, so a paper
+  // that silently inverted a claim of a work it cites passed every gate. One added instruction; the finding rides the
+  // existing HARD/SOFT pipeline, no new stage, cron or model call.
+  const revRaw = await gwCall(env, stageContextPrompt("REVIEW", "PAPER", paper, "BIBLIOGRAPHY (numbered; the paper may cite only these):\n" + bib + "\n\nCITATION CONSISTENCY (required check): entries marked 'QNFO:' are works published by this same pipeline. For each one the paper cites, state whether the paper's use agrees with what that work says. If the paper contradicts, silently inverts, or overstates a claim of a cited QNFO work, raise a HARD finding that names the work and the claim."), 12e3);
   let findings = { verdict: "revise", hard: [{ id: "review-parse", severity: "HARD", claim: "review output", reason: "unparseable review output", fix: "re-run review" }], soft: [] };
   try {
     const m = String(revRaw).match(/\{[\s\S]*\}/);
@@ -4668,6 +4763,48 @@ async function citationGateStepWithSupportCheck(env, row, bodyMd) {
   if (res.retry) return { proceed: false, retry: true, unverified: true, note: summary };
   return { proceed: false, retry: false, note: summary };
 }
+// CITE-GRAPH-1: pair the grounding bibliography with the published slug. Idempotent: paper_citations is replaced per
+// (citing_slug, ref_no), and the per-paper rows in living-paper citations are replaced whole, so a re-publish cannot
+// double the graph. Fail-soft and logged by the caller; a citation write never blocks a publish.
+async function persistCitations(env, row, slug) {
+  const out = { ok: false, refs: 0, qnfo: 0 };
+  try {
+    const raw = await r2Get(env, String(row.id) + "/citations.json");
+    if (!raw) return Object.assign(out, { skipped: "no citations.json" });
+    const doc = JSON.parse(raw);
+    const refs = Array.isArray(doc && doc.refs) ? doc.refs : [];
+    if (!refs.length) return Object.assign(out, { skipped: "empty bibliography" });
+    const pap = await env.LIVING_PAPER.prepare("SELECT identifier FROM papers WHERE slug=?1").bind(slug).first();
+    const ident = pap && pap.identifier ? String(pap.identifier) : "";
+    await env.LIVING_PAPER.prepare("CREATE TABLE IF NOT EXISTS paper_citations (citing_slug TEXT NOT NULL, citing_identifier TEXT, cited_slug TEXT, cited_identifier TEXT, cited_kind TEXT, cited_id TEXT, cited_title TEXT, cited_url TEXT, ref_no INTEGER NOT NULL, created_at TEXT, PRIMARY KEY (citing_slug, ref_no))").run();
+    let qnfo = 0;
+    for (const r of refs) {
+      const cs = String(r.slug || "");
+      let ci = "";
+      if (cs) {
+        try {
+          const t = await env.LIVING_PAPER.prepare("SELECT identifier FROM papers WHERE slug=?1").bind(cs).first();
+          ci = t && t.identifier ? String(t.identifier) : "";
+        } catch (e) {
+        }
+        if (cs !== slug) qnfo++;
+      }
+      await env.LIVING_PAPER.prepare("INSERT OR REPLACE INTO paper_citations (citing_slug, citing_identifier, cited_slug, cited_identifier, cited_kind, cited_id, cited_title, cited_url, ref_no, created_at) VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10)").bind(slug, ident || null, cs || null, ci || null, String(r.kind || ""), String(r.id || ""), String(r.title || "").slice(0, 500), String(r.url || ""), Number(r.n) || 0, nowIso()).run();
+    }
+    if (ident) {
+      try {
+        await env.LIVING_PAPER.prepare("DELETE FROM citations WHERE paper_id=?1").bind(ident).run();
+        for (const r of refs) {
+          await env.LIVING_PAPER.prepare("INSERT INTO citations (paper_id, citation_key, title, doi, url) VALUES (?1,?2,?3,?4,?5)").bind(ident, "ref" + (Number(r.n) || 0), String(r.title || "").slice(0, 300), String(r.doi || "") || null, String(r.url || "").slice(0, 300) || null).run();
+        }
+      } catch (e) {
+      }
+    }
+    return { ok: true, refs: refs.length, qnfo: qnfo };
+  } catch (e) {
+    return Object.assign(out, { error: String(e && e.message || e).slice(0, 160) });
+  }
+}
 async function publishStageV2(env, row) {
   const prep = await ensurePaperRow(env, row);
   // PUBLISH-QUOTAS-1 (owner directive 2026-10-17: "PUBLISH STREAMS SHALL HAVE SEPARATE QUOTAS FOR EACH PROPERTY, DO
@@ -4727,6 +4864,11 @@ async function publishStageV2(env, row) {
       await env.QNFO_AUDIT.prepare("INSERT INTO agent_issues (title, description, source, category, priority, status, created_at, updated_at) SELECT ?1, ?2, 'qnfo-research-exec', 'remediation', 'high', 'open', ?3, ?3 WHERE NOT EXISTS (SELECT 1 FROM agent_issues WHERE title = ?1 AND status = 'open')").bind("CITATION-HELD: research_queue " + String(row.id).slice(0, 8) + " (paper " + slug + ")", "CITATION-EXISTENCE-GATE-1 held the publish of research_queue row " + row.id + " before the publish: " + String(cg.note).slice(0, 600) + ". Doer: qnfo-research-exec revise path or a session: correct the citation in LIVING_PAPER.papers body_md (slug " + slug + ") using the arXiv API (export.arxiv.org) or doi.org to find the real source, then set research_queue.status back to 'review' (stage publish). Closing probe: the row is no longer held. Pillar research.", nowMs).run();
     } catch (e) {}
     return { ok: false, stage: "publish", held: true };
+  }
+  try {
+    const _cit = await persistCitations(env, row, slug);
+    await logEvent(env, "cite-graph", "row=" + String(row.id).slice(0, 8) + " slug=" + slug + " refs=" + (_cit.refs || 0) + " qnfo=" + (_cit.qnfo || 0) + (_cit.skipped ? " skipped=" + _cit.skipped : "") + (_cit.error ? " error=" + _cit.error : ""), _cit.error ? "warn" : "ok");
+  } catch (e) {
   }
   const artifacts = await collectArtifacts(env, String(row.id));
   const extras = artifacts.map(function(a) {
@@ -27848,6 +27990,9 @@ export {
   parkPoisonRow,
   pseudoMathScan,
   citationGateStep,
+  corpusWidth,
+  citationRowsFromBib,
+  persistCitations,
   RESEARCH_SHARED_PREAMBLE,
   stagePrompt,
   stageContextPrompt,
