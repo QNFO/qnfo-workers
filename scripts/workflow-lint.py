@@ -97,6 +97,48 @@ COMMITS_SRC_RE = re.compile(
     r"git add[^\n]*(?:worker\.js|deployed-current\.worker\.js|qnfo-[a-z-]+/)|git add -A(?![^\n]*ci-status)"
 )
 PUSHES_MAIN_RE = re.compile(r"git push[^\n]*(?:HEAD:main|origin main)")
+# WORKFLOW-HEADER-1 (2026-10-17): `.github/workflows/model-floor-guard.yml` was committed to main
+# with two shell/paths artifact lines above `name:`. PyYAML ACCEPTS that: `C:\Users\...yml:` parses as a
+# mapping key named `C`, and the duplicate key is silently overwritten (YAML does not forbid duplicates).
+# GitHub's parser rejects duplicate keys, so it registered no workflow at all: every push to the file's
+# triggers produced a run with ZERO jobs named after the file path, `gh workflow list` did not show it, and
+# the MODEL-FLOOR-1 scan was dark for every run in that window. Same class as the reason this linter
+# exists, one level lower: the file must also *look like* a workflow, not merely parse as YAML.
+WORKFLOW_TOP_KEYS = {
+    "name", "run-name", "on", "true", "permissions", "env", "defaults", "concurrency", "jobs",
+}
+TOP_KEY_RE = re.compile(r"^([A-Za-z_][A-Za-z0-9_-]*):")
+
+
+def header_violations(raw: str) -> list[str]:
+    """Duplicate or unknown top-level keys, and unindented lines that are not `key:` at all."""
+    out: list[str] = []
+    seen: dict[str, int] = {}
+    for n, line in enumerate(raw.splitlines(), 1):
+        if not line.strip() or line.lstrip().startswith("#") or line.strip() in ("---", "..."):
+            continue
+        if line[0] in " \t":  # inside a block: not a top-level key
+            continue
+        m = TOP_KEY_RE.match(line)
+        if not m:
+            out.append(
+                f"line {n} is not a top-level `key:` line: {line.strip()[:80]!r} -- GitHub rejects the "
+                "whole file, registers no workflow and creates runs with zero jobs"
+            )
+            continue
+        k = m.group(1)
+        if k in seen:
+            out.append(
+                f"duplicate top-level key `{k}` (line {n}, first at line {seen[k]}) -- PyYAML silently keeps "
+                "the last, GitHub rejects the file: registers no workflow and creates runs with zero jobs"
+            )
+        else:
+            seen[k] = n
+        if k not in WORKFLOW_TOP_KEYS:
+            out.append(f"unknown top-level key `{k}` at line {n} (allowed: {', '.join(sorted(WORKFLOW_TOP_KEYS))})")
+    return out
+
+
 VALIDATES_RE = re.compile(
     r"node --check|node -c|esbuild|wrangler[^\n]*--dry-run|cf-import-guard|d1guard-battery"
 )
@@ -320,6 +362,15 @@ def main() -> int:
         if not isinstance(doc, dict):
             bad.append(f"{p}: top level is not a mapping")
             print(f"BROKEN {p}: top level is not a mapping")
+            continue
+
+        with open(p, encoding="utf-8") as fh:
+            header = fh.read()
+        hbad = header_violations(header)
+        if hbad:
+            for h in hbad:
+                bad.append(f"{p}: WORKFLOW-HEADER-1 -- {h}")
+            print(f"BROKEN {p}: WORKFLOW-HEADER-1 ({len(hbad)} finding(s))")
             continue
 
         jobs = doc.get("jobs")
