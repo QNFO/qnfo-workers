@@ -509,24 +509,107 @@ export async function whatHelped(db, days = 60) {
 
 // ---------------------------------------------------------------- escalation (fixed text only)
 
+// The six steps of a safety plan (Stanley & Brown): warning signs, internal coping, people and
+// places that distract, people to ask for help, professionals and agencies, making the environment
+// safer. The first four were missing entirely; this is the whole instrument, in the owner's words.
+// A step with nothing in it is reported as empty, never filled in for him.
+export function safetyPlanBlock(plan = {}, cfg = DEFAULT_CONFIG) {
+  const p = plan && typeof plan === "object" ? plan : {};
+  const list = (x) => (Array.isArray(x) ? x.filter((v) => v && String(v).trim()) : []);
+  const lines = [];
+  const missing = [];
+  const push = (label, items) => {
+    const name = String(label).replace(/:$/, "");
+    if (!items.length) { missing.push(name); return; }
+    lines.push(label);
+    for (const it of items) lines.push("  - " + String(it));
+  };
+  push("What it looks like when it starts:", list(p.warning_signs));
+  push("What has worked before, on your own:", list(p.coping));
+  push("Where to go, or who to be near:", list(p.distraction));
+  const people = list(p.people);
+  const personal = [];
+  if (people.length) {
+    lines.push("People you can tell:");
+    for (const who of people) {
+      const name = typeof who === "string" ? who : (who && who.name) || "";
+      const how = typeof who === "string" ? "" : (who && who.contact) || "";
+      if (name) lines.push("  - " + name + (how ? " (" + how + ")" : ""));
+    }
+  } else if (cfg && (cfg.backstop_name || cfg.backstop_contact)) {
+    lines.push("People you can tell:");
+    lines.push("  - " + (cfg.backstop_name || "your person") + (cfg.backstop_contact ? " (" + cfg.backstop_contact + ")" : ""));
+  } else {
+    missing.push("People you can tell");
+  }
+  const lines_ = Array.isArray(cfg.crisis_lines) ? cfg.crisis_lines : [];
+  if (lines_.length) {
+    lines.push("Services:");
+    for (const l of lines_) lines.push("  - " + (l && l.label ? l.label : "") + (l && l.number ? " " + l.number : "") + (l && l.url ? " " + l.url : ""));
+  } else {
+    missing.push("Services");
+  }
+  push("Making the flat safer for tonight:", list(p.environment));
+  return { lines, missing, complete: missing.length === 0 };
+}
+
 // SLA: 60 seconds, three independent paths. No model call anywhere in this path.
-export function crisisBlock(cfg = DEFAULT_CONFIG) {
+export function crisisBlock(cfg = DEFAULT_CONFIG, plan = null) {
   const lines = Array.isArray(cfg.crisis_lines) ? cfg.crisis_lines : [];
   const has = (s) => s && String(s).trim().length > 0;
-  return {
-    sla_seconds: 60,
-    paths: ["chat", "email", "dashboard-card"],
-    text: [
-      "I'm not going to argue with you about this, and I'm not qualified to.",
-      has(cfg.backstop_name) || has(cfg.backstop_contact)
-        ? "Tell " + (cfg.backstop_name || "your person") + " you're not okay. Right now, one line."
-        : "Tell one real person you're not okay. Right now, one line. (No backstop is configured yet - add one.)",
-      lines.length
-        ? "If it gets worse, call: " + lines.map((l) => (l && l.label ? l.label + " " + l.number : l.number || l)).join(" · ")
-        : "If it gets worse, use your local emergency number. (No crisis lines configured yet.)",
-      "Nothing here needs to be solved tonight."
-    ].join("\n")
-  };
+  const sp = safetyPlanBlock(plan || {}, cfg);
+  const out = ["I'm not going to argue with you about this, and I'm not qualified to."];
+  if (sp.lines.length) {
+    out.push("");
+    out.push("You wrote this down when you were okay. Start with the first line that fits:");
+    out.push(...sp.lines);
+  }
+  out.push("");
+  out.push(has(cfg.backstop_name) || has(cfg.backstop_contact)
+    ? "Tell " + (cfg.backstop_name || "your person") + " you're not okay. Right now, one line."
+    : "Tell one real person you're not okay. Right now, one line. (No backstop is configured yet - add one.)");
+  out.push(lines.length
+    ? "If it gets worse, call: " + lines.map((l) => (l && l.label ? l.label + " " + l.number : l.number || l)).join(" · ")
+    : "If it gets worse, use your local emergency number. (No crisis lines configured yet.)");
+  out.push("Nothing here needs to be solved tonight.");
+  return { sla_seconds: 60, paths: ["chat", "email", "dashboard-card"], text: out.join("\n"), plan_missing: sp.missing, plan_complete: sp.complete };
+}
+
+// The weekly review reports what happened, in the owner's interest and not as a scorecard.
+// It never counts what he missed: a review that totals failures is the same guilt machine the
+// expiry rule exists to prevent. `done` is what he completed; nothing else is listed.
+export function weeklyReviewText({ week, checkins = [], done = [], helped = [], retired = [] } = {}) {
+  const L = [];
+  L.push("Week of " + week + ".");
+  const moods = checkins.map((c) => (c && c.mood)).filter((v) => v !== null && v !== undefined);
+  if (checkins.length) {
+    L.push("");
+    L.push("You checked in " + checkins.length + (checkins.length === 1 ? " day." : " days."));
+    if (moods.length) {
+      const avg = moods.reduce((a, b) => a + Number(b), 0) / moods.length;
+      L.push("Mood averaged " + (Math.round(avg * 10) / 10) + ".");
+    }
+  }
+  if (done.length) {
+    L.push("");
+    L.push("What you did:");
+    for (const d of done) L.push("- " + String(d.ask || "").replace(/\.$/, "") + (d.day ? " (" + d.day + ")" : ""));
+  }
+  if (helped.length) {
+    L.push("");
+    L.push("Days after those, mood averaged:");
+    for (const h of helped) {
+      if (h.mood_after === null || h.mood_after === undefined) continue;
+      L.push("- " + h.kind + ": " + h.mood_after + (h.mood_other !== null && h.mood_other !== undefined ? " (other days " + h.mood_other + ")" : ""));
+    }
+  }
+  if (retired.length) {
+    L.push("");
+    L.push("It stopped asking about " + retired.join(", ") + ". It never landed, and repeating it was not helping.");
+  }
+  L.push("");
+  L.push("Nothing needed here.");
+  return L.join("\n");
 }
 
 // Stems, not phrases. A phrase list misses every inflection ("hurt myself" does not match

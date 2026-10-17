@@ -255,6 +255,8 @@ export async function wellbeingTick(env, deps = {}) {
   const out = { now, expired: await WB.expireStale(env.PERSONAL, now) };
   const pack = await context(env, now, c);
   out.drift = pack.drift;
+  // Sunday evening review, independent of the ask ladder; silent without enough data.
+  try { out.review = await weeklyReview(env, { send, nowIso: now, force: !!deps.forceReview }); } catch (eRv) { out.review = { error: String(eRv && eRv.message || eRv) }; }
 
   // 1. The morning check-in. Its own schedule, not the reading brief's: 07:45 local, once a day.
   if (pack.hour >= 7.75 && pack.hour < 12) {
@@ -345,7 +347,7 @@ async function markSent(env, id, sent, nowIso) {
 
 export async function escalate(env, deps, { text, source }) {
   const c = await cfg(env);
-  const block = WB.crisisBlock(c);
+  const block = WB.crisisBlock(c, c.safety_plan || null);
   const sig = WB.crisisSignal(text);
   if (sig.level < 2) return { level: sig.level, sent: false };
   const body = block.text + "\n\n" + BASE + "/wb/checkin" + (env.WELLBEING_TOKEN ? "?t=" + encodeURIComponent(env.WELLBEING_TOKEN) : "");
@@ -357,6 +359,84 @@ export async function escalate(env, deps, { text, source }) {
     ).bind(new Date().toISOString(), WB.dayKey(new Date().toISOString(), c.tz), "escalation", new Date(Date.now() + 864e5).toISOString(), new Date().toISOString(), "signal:" + sig.match + " source:" + source).run();
   } catch { /* the mail is what matters; the ledger row is best effort */ }
   return { level: 2, match: sig.match, sent: !!(sent && sent.ok !== false), block };
+}
+
+// ---------------------------------------------------------------- weekly review
+
+function localWeekday(nowIso, tz) {
+  const t = new Date(new Date(nowIso).getTime() + WB.tzOffsetMinutes(tz, new Date(nowIso).getTime()) * 60000);
+  return t.getUTCDay();   // 0 = Sunday
+}
+
+function addDays(day, n) {
+  return new Date(Date.parse(day + "T12:00:00Z") + n * 864e5).toISOString().slice(0, 10);
+}
+
+function mondayOf(day) {
+  const dow = (new Date(day + "T12:00:00Z").getUTCDay() + 6) % 7;   // 0 = Monday
+  return addDays(day, -dow);
+}
+
+// Everything the review may report, each figure computed from rows and nothing inferred.
+// A correlation is only reported when there are at least two observations behind it.
+export async function weeklyData(env, nowIso, c) {
+  const conf = c || (await cfg(env));
+  const now = nowIso || new Date().toISOString();
+  const today = WB.dayKey(now, conf.tz);
+  const week = mondayOf(today);
+  const win = addDays(today, -27);
+  const many = async (sql, ...b) => {
+    try { return ((await env.PERSONAL.prepare(sql).bind(...b).all()).results) || []; } catch { return []; }
+  };
+  const checks = await many("SELECT day, mood, energy FROM wellbeing_checkins WHERE day >= ? AND mood IS NOT NULL ORDER BY day", win);
+  const dones = await many("SELECT day, kind, ask FROM companion_nudges WHERE state = 'done' AND day >= ? AND kind IN ('micro','body','contact','care') ORDER BY day", win);
+
+  const after = {};
+  for (const d of dones) { const nd = addDays(d.day, 1); (after[d.kind] = after[d.kind] || new Set()).add(nd); }
+  const allAfter = new Set();
+  for (const k of Object.keys(after)) for (const v of after[k]) allAfter.add(v);
+  const avg = (arr) => (arr.length ? Math.round((arr.reduce((a, b) => a + Number(b), 0) / arr.length) * 10) / 10 : null);
+  const helped = [];
+  for (const kind of Object.keys(after)) {
+    const a = checks.filter((r) => after[kind].has(r.day)).map((r) => r.mood);
+    if (a.length < 2) continue;                       // one good day is not a finding
+    const others = checks.filter((r) => !allAfter.has(r.day)).map((r) => r.mood);
+    helped.push({ kind, mood_after: avg(a), mood_other: avg(others) });
+  }
+
+  return {
+    week, today,
+    checks: checks.filter((r) => r.day >= week),
+    done: dones.filter((r) => r.day >= week),
+    helped,
+    retired: [...WB.retiredKinds(await loopRows(env), conf)]
+  };
+}
+
+// Sunday evening. Silent unless there is enough of his own data to say something true.
+export async function weeklyReview(env, deps = {}) {
+  const c = await cfg(env);
+  const now = deps.nowIso || new Date().toISOString();
+  const today = WB.dayKey(now, c.tz);
+  if (!deps.force && (localWeekday(now, c.tz) !== 0 || WB.localHourFloat(now, c.tz) < 18)) {
+    return { skipped: "not-sunday-evening" };
+  }
+  const week = mondayOf(today);
+  const seen = await recentNudges(env, 30);
+  if (seen.some((r) => r.kind === "review" && r.day === week)) return { skipped: "already-reviewed" };
+
+  const data = await weeklyData(env, now, c);
+  if (!deps.force && data.checks.length < 3 && data.done.length < 2) {
+    return { skipped: "not-enough-data", checks: data.checks.length, done: data.done.length };
+  }
+  const text = WB.weeklyReviewText({ week, checkins: data.checks, done: data.done, helped: data.helped, retired: data.retired });
+  if (!deps.send) return { planned: true, text };
+
+  const row = await insertNudge(env, { day: week, kind: "review", step: 0, ask: "weekly review", minutes: 0, expected: null, due_at: null, reason: "weekly-review" });
+  if (!row) return { skipped: "insert-failed" };
+  const sent = await deps.send(env, OWNER, "the week - " + week, text);
+  await markSent(env, row.id, sent, now);
+  return { ok: !!(sent && sent.ok !== false), id: row.id, done: data.done.length, checks: data.checks.length };
 }
 
 // ---------------------------------------------------------------- http
@@ -440,6 +520,10 @@ export async function handleWellbeing(request, env, deps = {}) {
   // wellbeing route. force=1 bypasses quiet hours and the daily cap, never the ladder or retirement.
   if (p === "/wb/tick") {
     // kind=checkin proves the check-in path now instead of waiting for 07:45.
+    if (u.searchParams.get("kind") === "review") {
+      const rv = await weeklyReview(env, { send: deps.send, force: true });
+      return new Response(JSON.stringify(rv, null, 2), { headers: { "Content-Type": "application/json; charset=utf-8" } });
+    }
     if (u.searchParams.get("kind") === "checkin") {
       const c0 = await cfg(env);
       const nowC = new Date().toISOString();
@@ -456,6 +540,51 @@ export async function handleWellbeing(request, env, deps = {}) {
     }
     const out = await wellbeingTick(env, { send: deps.send, force: u.searchParams.get("force") === "1" });
     return new Response(JSON.stringify(out, null, 2), { headers: { "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store" } });
+  }
+
+  // The six-step safety plan (Stanley & Brown), in his own words, written when it is not an
+  // emergency. The escalation block is the only reader.
+  if (p === "/wb/plan") {
+    const plan = (c.safety_plan && typeof c.safety_plan === "object") ? c.safety_plan : {};
+    if (request.method === "POST") {
+      let fd = null;
+      try { fd = await request.formData(); } catch { /* not a form */ }
+      if (fd) {
+        const linesOf = (k) => String(fd.get(k) || "").split("\n").map((s) => s.trim()).filter(Boolean);
+        const people = linesOf("people").map((line) => {
+          const parts = line.split("|").map((s) => s.trim());
+          return parts[1] ? { name: parts[0], contact: parts[1] } : { name: parts[0] };
+        }).filter((x) => x.name);
+        await setCfg(env, "safety_plan", {
+          warning_signs: linesOf("warning_signs"),
+          coping: linesOf("coping"),
+          distraction: linesOf("distraction"),
+          people,
+          environment: linesOf("environment"),
+          updated_at: new Date().toISOString()
+        });
+      }
+      return page("saved", "<h1>Saved.</h1><p>It will use this if you ever need it.</p><p><a class='q' href='/wb/plan?t=" + esc(t) + "'>back</a></p>");
+    }
+    const ta = (k, label, hint, val) =>
+      "<p class='q'>" + label + (hint ? " <span style='opacity:.7'>" + hint + "</span>" : "") + "</p>" +
+      "<textarea name='" + k + "'>" + esc((val || []).join("\n")) + "</textarea>";
+    const sp = WB.safetyPlanBlock(plan, c);
+    return page("safety plan",
+      "<h1>Your safety plan</h1>" +
+      "<p class='q'>One item per line, in your own words. Written now, while it is not an emergency. It is read only by the escalation message.</p>" +
+      "<form method='post'>" +
+      ta("warning_signs", "1. What it looks like when it starts", "your earliest signs", plan.warning_signs) +
+      ta("coping", "2. What has worked before, on your own", "no one else needed", plan.coping) +
+      ta("distraction", "3. Where to go, or who to be near", "places that ask nothing of you", plan.distraction) +
+      ta("people", "4. People you can tell", "Name | phone or email", (plan.people || []).map((x) => (typeof x === "string" ? x : (x.contact ? x.name + " | " + x.contact : x.name)))) +
+      "<p class='q'>5. Services: " + esc((c.crisis_lines || []).map((l) => (l.label || "") + " " + (l.number || "")).join(" · ") || "none on file") + "</p>" +
+      ta("environment", "6. Making the flat safer for tonight", "", plan.environment) +
+      "<p><button class='b' type='submit'>save</button></p></form>" +
+      (sp.missing.length
+        ? "<p class='q'>Still empty: " + esc(sp.missing.join(", ")) + "</p>"
+        : "<p class='q'>All six steps have something in them.</p>")
+    );
   }
 
   // The owner fills the two things the machine cannot infer. Token-gated like everything else.
@@ -517,6 +646,7 @@ export async function handleWellbeing(request, env, deps = {}) {
       day: pack.day, hour: pack.hour, checked_in: pack.checked_in,
       context: pack.ctx, drift: pack.drift,
       config_gaps: gaps,
+      plan_missing: WB.safetyPlanBlock(c.safety_plan || {}, c).missing,
       coverage: (cov.results || [])[0] || null,
       loop: await loopRows(env),
       trend: trend.results || [],
