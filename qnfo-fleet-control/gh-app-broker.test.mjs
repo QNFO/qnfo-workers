@@ -32,9 +32,21 @@ check(cl.iss === "123456" && cl.iat === now - 60 && cl.exp === now + 540, "claim
 const ok = await webcrypto.subtle.verify("RSASSA-PKCS1-v1_5", kp.publicKey, Buffer.from(s.replace(/-/g, "+").replace(/_/g, "/"), "base64"), new TextEncoder().encode(h + "." + c));
 check(ok, "the signature verifies with the public key");
 check(!/[+/=]/.test(jwt), "the token is base64url without padding");
+// GH-APP-PKCS1-1: a PKCS#1 key (what GitHub issues) is accepted and signs a token the public key verifies.
+const { generateKeyPairSync } = await import("node:crypto");
+const k1 = generateKeyPairSync("rsa", { modulusLength: 2048 });
+const pem1 = k1.privateKey.export({ type: "pkcs1", format: "pem" });
+check(/BEGIN RSA PRIVATE KEY/.test(pem1), "the generated test key is PKCS#1");
 let err = "";
-try { await ghAppJwt("1", "-----BEGIN RSA PRIVATE KEY-----\nAAAA\n-----END RSA PRIVATE KEY-----", now); } catch (e) { err = String(e.message); }
-check(/PKCS#1/.test(err) && /pkcs8/.test(err), "a PKCS#1 key is refused with the conversion named", err);
+let jwt1 = "";
+try { jwt1 = await ghAppJwt("1", pem1, now); } catch (e) { err = String(e.message); }
+check(err === "" && jwt1.split(".").length === 3, "a PKCS#1 key is accepted and yields a JWT", err);
+const [h1, c1, s1] = jwt1.split(".");
+const ok1 = jwt1 ? await webcrypto.subtle.verify("RSASSA-PKCS1-v1_5", await webcrypto.subtle.importKey("spki", k1.publicKey.export({ type: "spki", format: "der" }), { name: "RSASSA-PKCS1-v1_5", hash: "SHA-256" }, false, ["verify"]), Buffer.from(s1.replace(/-/g, "+").replace(/_/g, "/"), "base64"), new TextEncoder().encode(h1 + "." + c1)) : false;
+check(ok1, "the PKCS#1 signature verifies with the public key");
+const k4 = generateKeyPairSync("rsa", { modulusLength: 4096 });
+let jwt4 = ""; try { jwt4 = await ghAppJwt("1", k4.privateKey.export({ type: "pkcs1", format: "pem" }), now); } catch (e) { err = String(e.message); }
+check(jwt4.split(".").length === 3, "a 4096-bit PKCS#1 key (3-byte DER length) is accepted too", err);
 check(ghAppIsGithub("https://api.github.com/repos/QNFO/x") && ghAppIsGithub("https://raw.githubusercontent.com/QNFO/x/main/a") && !ghAppIsGithub("https://qnfo-ops.q08.workers.dev/health"), "GitHub API and raw hosts are recognised, fleet hosts are not");
 check(ghAppIsGithub({ url: "https://api.github.com/user" }), "a Request object is recognised by its url");
 check([401, 403, 404].every((x) => GH_APP_FALLBACK_STATUS.includes(x)), "401, 403 and 404 fall back to the personal token");
@@ -50,6 +62,6 @@ check(/globalThis\.fetch = async function ghAppFetch/.test(src), "the per-reques
 const st = src.slice(src.indexOf("function ghAppStatus()"), src.indexOf("function ghAppStatus()") + 400);
 check(!/ghAppCache\.token\b/.test(st), "GET /gh-app never reports token text");
 const v = (/var VERSION = "([^"]+)"/.exec(src) || [])[1];
-check(versionAtLeast(v, "0.32.0"), "VERSION is at least 0.32.0", v);
+check(versionAtLeast(v, "0.32.1"), "VERSION is at least 0.32.1", v);
 console.log(fails ? fails + " failed" : "all passed");
 if (fails) process.exit(1);
