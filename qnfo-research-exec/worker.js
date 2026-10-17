@@ -33,7 +33,7 @@ var __name22222 = /* @__PURE__ */ __name2222((target, value) => __defProp22222(t
 // an empty catch. CITE-CONSISTENCY-1 asks the reviewer to compare the draft against cited QNFO work.
 // REVIEW-TRIAGE-CAP-1 is a defect fix: drift demotion at the cycle cap silently turned a blocking finding into a pass, so
 // REVIEW-HARD-GATE-1 withheld nothing there (reviewer findings 2 -> 0 at the cap; an unparseable review advanced to verify).
-var VERSION = "0.18.27-extension-visible";
+var VERSION = "0.18.28-codeagent";
 // WORKERS-AI-ATTRIBUTION-1 (2026-10-01, #1681): per-worker Workers AI attribution. Returns a shallow env copy whose AI
 // binding records each .run() (calls, errors, ms, tokens, neurons) into qnfo-audit ai_call_counters (purpose 'binding').
 // Neurons = usage tokens x Cloudflare's published per-model rates (neurons per M tokens). Fail-soft; env is never mutated.
@@ -3250,41 +3250,29 @@ async function completenessSweep(env) {
       if (so.length) out.summaryOnly = (out.summaryOnly || 0) + 1;
       var why = (pc.complete ? [] : ["incomplete: " + pc.reasons.join("; ")]).concat(so.length ? ["CITE-FULLTEXT-1 cites a work from its summary alone: " + so[0]] : []);
       out.truncated++;
-      var open = await env.QNFO_AUDIT.prepare("SELECT id FROM research_queue WHERE paper_slug = ?1 AND source = 'remediation' AND status NOT IN ('published','wontfix') LIMIT 1").bind(p.slug).first();
+      var open = await env.QNFO_AUDIT.prepare("SELECT id FROM research_queue WHERE source = 'remediation' AND (paper_slug = ?1 OR source_id = ?2) LIMIT 1").bind(p.slug, "completeness:" + src.id).first();
       if (open || out.queued >= SWEEP_MAX_PER_RUN) {
         out.skipped++;
         continue;
       }
-      // SWEEP-DUP-1: (source, source_id) is UNIQUE. A remediation row that already CLOSED
-      // (published/wontfix) still owns its source_id, so a blind INSERT threw
-      // "UNIQUE constraint failed" on every */15 tick and aborted the whole scan mid-page
-      // (99 occurrences; papers after the failing slug were never reached). Reuse the id
-      // when it is free, suffix it when a closed row holds it, and never let one bad row
-      // stop the sweep from reaching the pages after it.
-      var sidBase = "completeness:" + src.id;
-      var sid = sidBase;
-      var held = null;
-      try {
-        held = await env.QNFO_AUDIT.prepare("SELECT id, status FROM research_queue WHERE source = 'remediation' AND source_id = ?1 ORDER BY created_at DESC LIMIT 1").bind(sidBase).first();
-      } catch (e) { held = null; }
-      if (held && String(held.status || "") !== "published") { out.skipped++; continue; }
-      if (held) sid = sidBase + ":r" + Date.now().toString(36);
+      // SWEEP-DUP-1: (source, source_id) is UNIQUE. A closed remediation row still owns
+      // source_id "completeness:" + src.id, so a parked paper is not re-queued by the sweep;
+      // any remediation row for this source, whatever its status, blocks a new one. A
+      // remaining constraint violation is logged with the slug/rid/source_id, counts
+      // skipped, and continues the scan instead of aborting it.
+      var sid = "completeness:" + src.id;
       var rid = "rem-" + crypto.randomUUID();
       var ins;
       try {
-        // SWEEP-IDEMPOTENT-1 (2026-10-17): the insert was blind, so any (source, source_id) collision threw
-        // and aborted the whole scan mid-page. A collision is not an error here - it means the row already
-        // exists - so the statement is IGNORE and a zero change count is a skip, never an exception.
-        ins = await env.QNFO_AUDIT.prepare("INSERT OR IGNORE INTO research_queue (id, source, source_id, idea, summary, score, decision, status, paper_slug, created_at, stage, attempt, revise_count, recover_count) VALUES (?1, 'remediation', ?2, ?3, ?4, 0.95, 'ACCEPT', 'queued', ?5, ?6, 'ground', 0, 0, 0)").bind(rid, sid, String(src.idea || p.title || ""), ("COMPLETENESS-SWEEP-1: the published version needs a rewrite (" + why.join("; ") + "); rewrite it whole under the current writer rules and republish as a new version.").slice(0, 1e3), p.slug, nowIso()).run();
+        ins = await env.QNFO_AUDIT.prepare("INSERT INTO research_queue (id, source, source_id, idea, summary, score, decision, status, paper_slug, created_at, stage, attempt, revise_count, recover_count) VALUES (?1, 'remediation', ?2, ?3, ?4, 0.95, 'ACCEPT', 'queued', ?5, ?6, 'ground', 0, 0, 0)").bind(rid, sid, String(src.idea || p.title || ""), ("COMPLETENESS-SWEEP-1: the published version needs a rewrite (" + why.join("; ") + "); rewrite it whole under the current writer rules and republish as a new version.").slice(0, 1e3), p.slug, nowIso()).run();
       } catch (e) {
         out.skipped++;
         out.insertErrors = (out.insertErrors || 0) + 1;
-        try { await logEvent(env, "sweep-insert", "queue insert failed for " + p.slug + ": " + String(e && e.message || e).slice(0, 160), "warn"); } catch (e2) {}
-        continue;
-      }
-      if (!ins || !ins.meta || !ins.meta.changes) {
-        out.skipped++;
-        out.duplicate = (out.duplicate || 0) + 1;
+        try {
+          await logEvent(env, "completenessSweep", "queue insert failed for " + p.slug + ", rid=" + rid + ", source_id=" + sid + ": " + String(e && e.message || e).slice(0, 160), "warn");
+        } catch (e2) {
+          console.error(JSON.stringify({ stage: "completenessSweep", slug: p.slug, rid: rid, source_id: sid, insertError: String(e && e.message || e), logError: String(e2 && e2.message || e2), note: "logEvent failed after queue insert failure" }));
+        }
         continue;
       }
       out.queued++;
