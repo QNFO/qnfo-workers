@@ -154,7 +154,9 @@ const REAL = [
   await addTask(env, NOKW_GOAL, DUP_LINE); // its one keyword hits a line too short to be an anchor: ANCHOR-KEYWORD-FALLBACK-1 has no line to offer
   await tick(env);
   const t = row(env);
-  ok(t.status === "needs_human" && /anchor occurs 2 times in the file/.test(t.last_error) && /ANCHOR-LOCATOR-1 found no unique line near the goal either/.test(t.last_error) && calls.length === 1 && events(env, "code-task.anchor-located").length === 0, "D1 a useless pick parks the task needs_human with the old reason plus the locator's, one model call", { st: t.status, err: t.last_error, calls: calls.length });
+  const evs = events(env, "code-task.anchor-located");
+  const evMeta = evs.length ? JSON.parse(evs[0].meta || "{}") : {};
+  ok(t.status !== "needs_human" && evs.length === 1 && /^keyword:.*\+[12]$/.test(String(evMeta.model || "")) && calls.length > 1, "D1 a useless pick is rescued by widening the keyword line to a unique window (ANCHOR-MULTILINE-1)", { st: t.status, err: String(t.last_error || "").slice(0, 120), calls: calls.length, model: evMeta.model });
 }
 {
   serve(MID);
@@ -162,7 +164,9 @@ const REAL = [
   await addTask(env, NOKW_GOAL);
   await tick(env);
   const t = row(env);
-  ok(t.status === "needs_human" && /needs an anchor/.test(t.last_error) && /ANCHOR-LOCATOR-1/.test(t.last_error) && calls.length === 1, "D2 a pick that occurs twice is refused like any anchor", { st: t.status, err: t.last_error });
+  const evs2 = events(env, "code-task.anchor-located");
+  const ev2 = evs2.length ? JSON.parse(evs2[0].meta || "{}") : {};
+  ok(t.status !== "needs_human" && evs2.length === 1 && /^keyword:.*\+[12]$/.test(String(ev2.model || "")), "D2 a pick that occurs twice is refused like any anchor, and the keyword window keeps the edit", { st: t.status, err: String(t.last_error || "").slice(0, 120), model: ev2.model });
 }
 
 // ===== E. a small file without an anchor: whole-file mode, no locator call =====

@@ -23,6 +23,7 @@ function makeD1(live) {
     const numbered = /\?\d+/.test(sql);
     const sqlNamed = numbered ? sql.replace(/\?(\d+)/g, ":p$1") : sql;
     let args = [];
+
     const names = () => { const o = {}; args.forEach((v, i) => { o["p" + (i + 1)] = v; }); return o; };
     const st = {
       bind: (...a) => { args = a.map((v) => (v === undefined ? null : v)); return st; },

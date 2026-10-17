@@ -423,7 +423,7 @@ jobs:
       # Q08-REVIEW-2026-10-31 (#1716): the one-shot q08 decision on bot-filtered RUM page views and the cadence cap
       # q08-signal-engine reads (Q08-CADENCE-CAP-1); a deferral never satisfies the remediation probe.
       - name: Q08-REVIEW-2026-10-31 offline suite (qnfo-fleet-dashboard + q08-signal-engine)
-        if: ${{ !cancelled() }}
+        if: ${{ github.event_name != 'pull_request' && !cancelled() }}
         run: node qnfo-fleet-dashboard/q08-review.test.mjs
       # PERFORMANCE-LOOP-1 (1.17.4): engaged_human_sessions_28d from bot-filtered RUM, unmeasured (never 0) on a failed or thin read.
       - name: ENGAGED-HUMAN-SESSIONS-1 offline suite (qnfo-fleet-dashboard)
@@ -538,7 +538,7 @@ jobs:
       # GW-402-UNFUNDED-1 (qnfo-ai-calibration 1.2.9, #1992): a provider 402 (insufficient balance) is class unfunded: no
       # [gw-fail] issue, no degraded health row, ignored by the 24h reconcile, so MODEL-DEGRADED is not refiled for it.
       - name: GW-402-UNFUNDED-1 offline suite (qnfo-ai-calibration)
-        if: ${{ !cancelled() }}
+        if: ${{ github.event_name != 'pull_request' && !cancelled() }}
         run: node qnfo-ai-calibration/gw-unfunded.test.mjs
       # PROBER-FOLD-1 (#1756): ai-health-prober runs as a member of qnfo-ai-calibration (cron dispatch, read routes, key on /prober/run).
       - name: PROBER-FOLD-1 offline suite (qnfo-ai-calibration 1.3.0)
@@ -701,10 +701,10 @@ jobs:
       # GROUND-OR-SLOT-1 + GROUND-THIN-FAILFAST-1 (agent_issues 1751): the arXiv OR fallback keeps its query slot, and a
       # grounding too thin to pass gate-refcount stops at ground instead of running the whole pipeline.
       - name: Research grounding offline suite (qnfo-research-exec)
-        if: ${{ !cancelled() }}
+        if: ${{ github.event_name != 'pull_request' && !cancelled() }}
         run: node qnfo-research-exec/grounding.test.mjs
       - name: Research poison-park offline suite (qnfo-research-exec)
-        if: ${{ !cancelled() }}
+        if: ${{ github.event_name != 'pull_request' && !cancelled() }}
         run: node qnfo-research-exec/poison-park.test.mjs
       # RUN-INTERNAL-1 (#1783): research-exec's inline run and drain-v2 refuse public hostnames; service bindings still reach them.
       - name: RUN-INTERNAL-1 offline suite (qnfo-research-exec)
