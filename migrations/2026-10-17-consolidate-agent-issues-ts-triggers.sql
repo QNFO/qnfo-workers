@@ -36,7 +36,7 @@ DROP TRIGGER IF EXISTS agent_issues_updated_at_norm_secs_ins;
 DROP TRIGGER IF EXISTS agent_issues_updated_at_norm_upd;
 DROP TRIGGER IF EXISTS agent_issues_updated_at_norm_secs_upd;
 
-CREATE TRIGGER agent_issues_ts_norm_ins AFTER INSERT ON agent_issues
+CREATE TRIGGER IF NOT EXISTS agent_issues_ts_norm_ins AFTER INSERT ON agent_issues
 WHEN NEW.created_at IS NULL OR typeof(NEW.created_at)='text'
   OR (typeof(NEW.created_at)='integer' AND NEW.created_at > 0 AND NEW.created_at < 100000000000)
   OR NEW.updated_at IS NULL OR typeof(NEW.updated_at)='text'
@@ -56,7 +56,7 @@ BEGIN
   WHERE id = NEW.id;
 END;
 
-CREATE TRIGGER agent_issues_ts_norm_upd AFTER UPDATE OF created_at, updated_at ON agent_issues
+CREATE TRIGGER IF NOT EXISTS agent_issues_ts_norm_upd AFTER UPDATE OF created_at, updated_at ON agent_issues
 WHEN NEW.created_at IS NULL OR typeof(NEW.created_at)='text'
   OR (typeof(NEW.created_at)='integer' AND NEW.created_at > 0 AND NEW.created_at < 100000000000)
   OR NEW.updated_at IS NULL OR typeof(NEW.updated_at)='text'
