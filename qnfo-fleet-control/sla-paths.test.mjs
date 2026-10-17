@@ -21,8 +21,8 @@ if (a < 0 || b < a) throw new Error("remediation block not found in worker.js");
 let fails = 0, n = 0;
 const check = (c, m, x) => { n++; if (!c) { fails++; console.log("FAIL " + m + (x !== undefined ? " -- " + JSON.stringify(x) : "")); } };
 
-const v = /var VERSION = "0\.(\d+)\.(\d+)-sla-paths[^"]*";/.exec(src);
-check(!!v && +v[1] === 33 && +v[2] >= 7, "VERSION carries the SLA-PATHS-1 delta (0.33.7-sla-paths-readers or later)", v && v[0]);
+const v = /var VERSION = "0\.(\d+)\.(\d+)-/.exec(src);
+check(!!v && +v[1] === 33 && +v[2] >= 8, "VERSION carries the SLA-PATHS-1 delta (0.33.8-probe-error-visible or later)", v && v[0]);
 
 // node:sqlite on Node 22.16 refuses positional binding to ?N placeholders ("column index out of range"), so the
 // shim rewrites ?N to :pN and binds by name, the same workaround the other remediation shims use.
@@ -51,6 +51,7 @@ const SCHEMA = `CREATE TABLE remediation_contracts (class TEXT PRIMARY KEY, issu
   CREATE VIEW v_remediation_evidence_all AS SELECT id, issue_id, class, probe_url, transport, expected, observed, pass, verified_at, verifier, 'verifications' AS src FROM remediation_verifications UNION ALL SELECT id, issue_id, class, probe_url, transport, expected, observed, pass, verified_at, verifier, 'evidence' AS src FROM remediation_evidence;
   CREATE TABLE agent_issues (id INTEGER PRIMARY KEY, title TEXT, description TEXT, source TEXT, category TEXT, priority TEXT, status TEXT, close_channel TEXT, created_at INTEGER, updated_at INTEGER);
   CREATE TABLE path_liveness (path TEXT PRIMARY KEY, checked_at TEXT, checked_by TEXT, detail TEXT);
+  CREATE TABLE cloud_ops_events (id TEXT PRIMARY KEY, ts TEXT, kind TEXT, text TEXT, job TEXT, status TEXT);
   CREATE TABLE issue_triage (issue_id INTEGER PRIMARY KEY, rc TEXT, triage_state TEXT, owner TEXT, sla_due_at TEXT, close_evidence TEXT, reopened_count INTEGER NOT NULL DEFAULT 0);`;
 
 // The production refusal, reproduced: any INSERT into the primary table aborts at prepare time.
@@ -132,7 +133,22 @@ const W = vm.runInContext(src.slice(a, b) + "\n;({ remediationContractsTick, ver
   check(db.prepare("SELECT COUNT(*) n FROM path_liveness").get().n === 2, "both paths hold a heartbeat");
 }
 
-// 5. the CI consumer carries the same second path (static: it is the other writer of the same evidence)
+// 5. the probe-error catch is no longer silent: the exception is attributable
+{
+  const db = mk(false);
+  db.prepare("INSERT INTO remediation_contracts (class, issue_id, verify_probe, verify_transport, expected_cadence_h, max_attempts, status) VALUES (?,?,?,?,1,3,'active')")
+    .run("c-badprobe", null, "SELECT missing_column FROM agent_issues", "d1-query");
+  const errors = []; const realErr = console.error;
+  console.error = (m) => errors.push(String(m));
+  const out = await W.remediationContractsTick({ AUDIT_DB: wrap(db) });
+  console.error = realErr;
+  const ev = db.prepare("SELECT kind, text, status FROM cloud_ops_events WHERE kind = 'remediation.probe-error'").all();
+  check(out.skipped >= 1, "a probe that cannot execute is skipped, never counted as a pass", out);
+  check(ev.length === 1 && /c-badprobe/.test(ev[0].text) && ev[0].status === "error", "the swallowed exception is now recorded with its class and message", ev);
+  check(errors.some((e) => /probe-error/.test(e) && /c-badprobe/.test(e)), "the same failure is logged, so Workers Logs can attribute it too", errors);
+}
+
+// 6. the CI consumer carries the same second path (static: it is the other writer of the same evidence)
 {
   const py = readFileSync(new URL("../scripts/remediation_consumer.py", import.meta.url), "utf8");
   check(/def record_verification\(/.test(py), "the consumer has a fallback writer");
@@ -141,7 +157,7 @@ const W = vm.runInContext(src.slice(a, b) + "\n;({ remediationContractsTick, ver
   check(!/INSERT INTO remediation_verifications[\s\S]{0,400}\n\s+\)\s*\n/.test(py.replace(/def record_verification\([\s\S]*?\n\ndef d1_plane/, "")), "no bare insert into the primary table survives outside the fallback helper");
 }
 
-// 6. no reader in the worker still counts the primary table alone
+// 7. no reader in the worker still counts the primary table alone
 {
   const block = src.slice(a, b);
   const bare = block.split("\n").filter((l) => /FROM remediation_verifications WHERE/.test(l));
