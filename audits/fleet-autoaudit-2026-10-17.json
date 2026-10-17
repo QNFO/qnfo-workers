@@ -1,5 +1,5 @@
 {
-  "audited_at": "2026-10-17 17:40:23",
+  "audited_at": "2026-10-17 18:09:41",
   "d1_write_failures": [],
   "d1_writes_ok": 119,
   "guard": {
@@ -10,10 +10,26 @@
     "content_drift": [],
     "cron_only": [],
     "cron_only_count": 0,
-    "drift": [],
+    "drift": [
+      {
+        "dir": "personal-companion",
+        "live": "1.29.0-wellbeing-loop",
+        "repo": "1.30.0-checkin-anchored",
+        "worker": "personal-companion"
+      }
+    ],
     "live_err": [],
-    "multi_version": [],
-    "multi_version_count": 0,
+    "multi_version": [
+      {
+        "artifact": "/home/runner/work/qnfo-workers/qnfo-workers/personal-companion/deployed-current.worker.js",
+        "declarations": "0.1.21-folded,1.30.0-checkin-anchored",
+        "dir": "personal-companion",
+        "live": "1.29.0-wellbeing-loop",
+        "repo": "1.30.0-checkin-anchored",
+        "worker": "personal-companion"
+      }
+    ],
+    "multi_version_count": 1,
     "name_resolution": true,
     "no_health_route": [],
     "no_live_version": [],
@@ -537,7 +553,7 @@
     "retired_present": [],
     "retired_present_count": 0,
     "scope": "all",
-    "sync": 30,
+    "sync": 29,
     "sync_workers": [
       {
         "dir": "idea-hub",
@@ -550,13 +566,8 @@
         "worker": "personal-api"
       },
       {
-        "dir": "personal-companion",
-        "version": "1.29.0-wellbeing-loop",
-        "worker": "personal-companion"
-      },
-      {
         "dir": "q08-signal-engine",
-        "version": "0.28.9-model-floor-2",
+        "version": "0.28.10-codeagent",
         "worker": "q08-signal-engine"
       },
       {
@@ -581,7 +592,7 @@
       },
       {
         "dir": "qnfo-code-orchestrator",
-        "version": "0.18.1-claim-threshold-1",
+        "version": "0.18.3-plan-reserve-1",
         "worker": "qnfo-code-orchestrator"
       },
       {
@@ -601,12 +612,12 @@
       },
       {
         "dir": "qnfo-evolve",
-        "version": "0.2.1-evolve",
+        "version": "0.2.2-evolve",
         "worker": "qnfo-evolve"
       },
       {
         "dir": "qnfo-fleet-control",
-        "version": "0.33.6-evidence-fallback",
+        "version": "0.33.7-sla-paths-readers",
         "worker": "qnfo-fleet-control"
       },
       {
@@ -934,11 +945,11 @@
       "worker": "personal-api"
     },
     "personal-companion": {
-      "before": "1.29.0-wellbeing-loop",
+      "before": "1.30.0-checkin-anchored",
       "http": 200,
       "live": "1.29.0-wellbeing-loop",
-      "match": 1,
-      "note": "SYNC",
+      "match": 0,
+      "note": "DRIFT",
       "worker": "personal-companion"
     },
     "personal-events-radar": {
@@ -978,9 +989,9 @@
       "worker": "personal-life-search"
     },
     "q08-signal-engine": {
-      "before": "0.28.9-model-floor-2",
+      "before": "0.28.10-codeagent",
       "http": 200,
-      "live": "0.28.9-model-floor-2",
+      "live": "0.28.10-codeagent",
       "match": 1,
       "note": "SYNC",
       "worker": "q08-signal-engine"
@@ -1180,9 +1191,9 @@
       "worker": "qnfo-code-agent"
     },
     "qnfo-code-orchestrator": {
-      "before": "0.18.1-claim-threshold-1",
+      "before": "0.18.3-plan-reserve-1",
       "http": 200,
-      "live": "0.18.1-claim-threshold-1",
+      "live": "0.18.3-plan-reserve-1",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-code-orchestrator"
@@ -1284,9 +1295,9 @@
       "worker": "qnfo-events"
     },
     "qnfo-evolve": {
-      "before": "0.2.1-evolve",
+      "before": "0.2.2-evolve",
       "http": 200,
-      "live": "0.2.1-evolve",
+      "live": "0.2.2-evolve",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-evolve"
@@ -1310,9 +1321,9 @@
       "worker": "qnfo-fleet-calibrator"
     },
     "qnfo-fleet-control": {
-      "before": "0.33.6-evidence-fallback",
+      "before": "0.33.7-sla-paths-readers",
       "http": 200,
-      "live": "0.33.6-evidence-fallback",
+      "live": "0.33.7-sla-paths-readers",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-fleet-control"
