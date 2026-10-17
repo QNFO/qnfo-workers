@@ -9,18 +9,18 @@
 //   INDEXNOW_KEY (IndexNow submission key).
 // Crons: "0 * * * *" triage; "*/10 * * * *" stage machine (sync + claim).
 
-var VERSION = "1.4.1-doi-scrub";
+var VERSION = "1.4.2-model-floor-1";
 const MODELS = {
   a: "@cf/zai-org/glm-5.3-flash",
   b: "@cf/deepseek-ai/deepseek-v4-flash-0731",
-  tiebreak: "@cf/qwen/qwen3-30b-a3b-fp8",
+  tiebreak: "@cf/qwen/qwen3.8-27b",
 };
 const MODEL_CHAIN = [
   "@cf/zai-org/glm-5.3-flash",
   "@cf/zai-org/glm-5.3",
   "@cf/deepseek-ai/deepseek-v4-flash-0731",
-  "@cf/qwen/qwen3-30b-a3b-fp8",
-  "@cf/zai-org/glm-5.2",
+  "@cf/qwen/qwen3.8-27b",
+  "@cf/zai-org/glm-5.3",
 ];
 const ACCEPT_MIN = 0.7;
 const FEAS_MIN = 0.5;

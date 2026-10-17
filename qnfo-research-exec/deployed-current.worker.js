@@ -33,7 +33,7 @@ var __name22222 = /* @__PURE__ */ __name2222((target, value) => __defProp22222(t
 // an empty catch. CITE-CONSISTENCY-1 asks the reviewer to compare the draft against cited QNFO work.
 // REVIEW-TRIAGE-CAP-1 is a defect fix: drift demotion at the cycle cap silently turned a blocking finding into a pass, so
 // REVIEW-HARD-GATE-1 withheld nothing there (reviewer findings 2 -> 0 at the cap; an unparseable review advanced to verify).
-var VERSION = "0.18.24-cite-backfill-fk";
+var VERSION = "0.18.25-model-floor-1";
 // WORKERS-AI-ATTRIBUTION-1 (2026-10-01, #1681): per-worker Workers AI attribution. Returns a shallow env copy whose AI
 // binding records each .run() (calls, errors, ms, tokens, neurons) into qnfo-audit ai_call_counters (purpose 'binding').
 // Neurons = usage tokens x Cloudflare's published per-model rates (neurons per M tokens). Fail-soft; env is never mutated.
@@ -183,7 +183,7 @@ var GATEWAY_MODEL = "qnfo";
 // to when qnfo-ai fails was never exercised on purpose. Once a UTC day the cron asks the router for its drill answer (a
 // chat body with drill "router-down" answers 503 and makes no model call, qnfo-ai 5.35.0) and then answers the same
 // message through this worker's own AI binding; when both hold, spof_registry records the time the alternate was tested.
-var ROUTER_DRILL_MODEL = "@cf/meta/llama-3.3-70b-instruct-fp8-fast";
+var ROUTER_DRILL_MODEL = "@cf/zai-org/glm-5.3-flash";
 async function routerSecondPathDrill(env) {
   const messages = [{ role: "user", content: "Reply with exactly: OK" }];
   const out = { router_status: 0, router503: false, direct: false, recorded: false };
@@ -6176,7 +6176,7 @@ __name(resolvePaper, "resolvePaper");
 // "low" (the only value errata-publish sends), a small model from a different family (google, not zai) answers two questions about
 // it. Unlike a q08 essay this fails CLOSED: no verdict, an unparseable verdict or a "no" makes the action high risk, so it is kept as a
 // proposal for the owner. The non-model layers stay first: a verbatim anchor, the surgical-edit rules, and the publish gate flag.
-var ERRATA_JUDGE_MODEL = "@cf/google/gemma-4-26b-a4b-it";
+var ERRATA_JUDGE_MODEL = "@cf/zai-org/glm-5.3";
 function parseJudgeVerdict(text) {
   var t = String(text || "").replace(/<think>[\s\S]*?<\/think>/gi, "");
   var a = t.indexOf("{"), b = t.lastIndexOf("}");
