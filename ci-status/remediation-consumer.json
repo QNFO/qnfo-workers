@@ -1,26 +1,18 @@
 {
  "ok": true,
  "marker": "REMEDIATION-CONSUMER-1",
- "verifier": "remediation-consumer@4d2e28ba0738",
- "due": 597,
+ "verifier": "remediation-consumer@a3a4ef3febca",
+ "due": 604,
  "pass": 0,
  "fail": 0,
- "skipped": 597,
+ "skipped": 604,
  "contracts": [
   {
-   "class": "issue-2842",
-   "issue_id": 2842,
+   "class": "issue-2570",
+   "issue_id": 2570,
    "verdict": "probe-error",
    "expected": "1",
    "observed": "0",
-   "reason": "HTTP Error 400: Bad Request"
-  },
-  {
-   "class": "issue-2843",
-   "issue_id": 2843,
-   "verdict": "probe-error",
-   "expected": "ok",
-   "observed": "pending: filed by qnfo-fleet-control, which owns it for 48h",
    "reason": "HTTP Error 400: Bad Request"
   },
   {
@@ -32,12 +24,42 @@
    "reason": "HTTP Error 400: Bad Request"
   },
   {
+   "class": "issue-2007",
+   "issue_id": 2007,
+   "verdict": "probe-error",
+   "expected": "ok",
+   "observed": "pending: no anchor repair yet and the 14-day window after the 0.3.19 deploy is still open",
+   "reason": "HTTP Error 400: Bad Request"
+  },
+  {
    "class": "issue-2180",
    "issue_id": 2180,
    "verdict": "probe-error",
    "expected": "ok",
    "observed": "spof_alternates_untested_24h reads 1 refreshed 2026-10-17T14:00:33.565Z",
    "reason": "HTTP Error 400: Bad Request"
+  },
+  {
+   "class": "issue-2842",
+   "issue_id": 2842,
+   "verdict": "probe-error",
+   "expected": "1",
+   "observed": "0",
+   "reason": "HTTP Error 400: Bad Request"
+  },
+  {
+   "class": "issue-2008",
+   "issue_id": 2008,
+   "verdict": "probe-error",
+   "expected": "ok",
+   "observed": "pending: measuring 14 days from 2026-10-13",
+   "reason": "HTTP Error 400: Bad Request"
+  },
+  {
+   "class": "issue-2187",
+   "issue_id": 2187,
+   "verdict": "probe-not-machine-executable",
+   "reason": "url-not-allowlisted"
   },
   {
    "class": "issue-2562",
@@ -56,43 +78,11 @@
    "reason": "HTTP Error 400: Bad Request"
   },
   {
-   "class": "issue-2007",
-   "issue_id": 2007,
+   "class": "issue-2843",
+   "issue_id": 2843,
    "verdict": "probe-error",
    "expected": "ok",
-   "observed": "pending: no anchor repair yet and the 14-day window after the 0.3.19 deploy is still open",
-   "reason": "HTTP Error 400: Bad Request"
-  },
-  {
-   "class": "issue-2570",
-   "issue_id": 2570,
-   "verdict": "probe-error",
-   "expected": "1",
-   "observed": "0",
-   "reason": "HTTP Error 400: Bad Request"
-  },
-  {
-   "class": "issue-2008",
-   "issue_id": 2008,
-   "verdict": "probe-error",
-   "expected": "ok",
-   "observed": "pending: measuring 14 days from 2026-10-13",
-   "reason": "HTTP Error 400: Bad Request"
-  },
-  {
-   "class": "issue-2617",
-   "issue_id": 2617,
-   "verdict": "probe-error",
-   "expected": "ok",
-   "observed": "stale: the filing loop qnfo-fleet-control did not close it within 48h",
-   "reason": "HTTP Error 400: Bad Request"
-  },
-  {
-   "class": "fm-silent-refile-drop",
-   "issue_id": null,
-   "verdict": "probe-error",
-   "expected": "1",
-   "observed": "1",
+   "observed": "pending: filed by qnfo-fleet-control, which owns it for 48h",
    "reason": "HTTP Error 400: Bad Request"
   },
   {
@@ -104,16 +94,18 @@
    "reason": "HTTP Error 400: Bad Request"
   },
   {
-   "class": "issue-2187",
-   "issue_id": 2187,
-   "verdict": "probe-not-machine-executable",
-   "reason": "url-not-allowlisted"
-  },
-  {
    "class": "issue-2453",
    "issue_id": 2453,
    "verdict": "probe-not-machine-executable",
    "reason": "url-not-allowlisted"
+  },
+  {
+   "class": "issue-2617",
+   "issue_id": 2617,
+   "verdict": "probe-error",
+   "expected": "ok",
+   "observed": "stale: the filing loop qnfo-fleet-control did not close it within 48h",
+   "reason": "HTTP Error 400: Bad Request"
   },
   {
    "class": "issue-1899",
@@ -148,16 +140,24 @@
    "reason": "HTTP Error 400: Bad Request"
   },
   {
-   "class": "issue-2445",
-   "issue_id": 2445,
+   "class": "fm-silent-refile-drop",
+   "issue_id": null,
+   "verdict": "probe-error",
+   "expected": "1",
+   "observed": "1",
+   "reason": "HTTP Error 400: Bad Request"
+  },
+  {
+   "class": "issue-2275",
+   "issue_id": 2275,
    "verdict": "probe-error",
    "expected": "ok",
    "observed": "ok",
    "reason": "HTTP Error 400: Bad Request"
   },
   {
-   "class": "issue-2275",
-   "issue_id": 2275,
+   "class": "issue-2445",
+   "issue_id": 2445,
    "verdict": "probe-error",
    "expected": "ok",
    "observed": "ok",
@@ -188,24 +188,8 @@
    "reason": "HTTP Error 400: Bad Request"
   },
   {
-   "class": "issue-2274",
-   "issue_id": 2274,
-   "verdict": "probe-error",
-   "expected": "ok",
-   "observed": "ok",
-   "reason": "HTTP Error 400: Bad Request"
-  },
-  {
-   "class": "issue-2281",
-   "issue_id": 2281,
-   "verdict": "probe-error",
-   "expected": "ok",
-   "observed": "ok",
-   "reason": "HTTP Error 400: Bad Request"
-  },
-  {
-   "class": "issue-2301",
-   "issue_id": 2301,
+   "class": "issue-2272",
+   "issue_id": 2272,
    "verdict": "probe-error",
    "expected": "ok",
    "observed": "ok",
@@ -220,16 +204,16 @@
    "reason": "HTTP Error 400: Bad Request"
   },
   {
-   "class": "issue-2272",
-   "issue_id": 2272,
+   "class": "issue-2274",
+   "issue_id": 2274,
    "verdict": "probe-error",
    "expected": "ok",
    "observed": "ok",
    "reason": "HTTP Error 400: Bad Request"
   },
   {
-   "class": "issue-2282",
-   "issue_id": 2282,
+   "class": "issue-2301",
+   "issue_id": 2301,
    "verdict": "probe-error",
    "expected": "ok",
    "observed": "ok",
@@ -244,8 +228,32 @@
    "reason": "HTTP Error 400: Bad Request"
   },
   {
+   "class": "issue-2281",
+   "issue_id": 2281,
+   "verdict": "probe-error",
+   "expected": "ok",
+   "observed": "ok",
+   "reason": "HTTP Error 400: Bad Request"
+  },
+  {
    "class": "issue-2302",
    "issue_id": 2302,
+   "verdict": "probe-error",
+   "expected": "ok",
+   "observed": "ok",
+   "reason": "HTTP Error 400: Bad Request"
+  },
+  {
+   "class": "rt-fleet-dashboard",
+   "issue_id": null,
+   "verdict": "probe-error",
+   "expected": "ok",
+   "observed": "ok",
+   "reason": "HTTP Error 400: Bad Request"
+  },
+  {
+   "class": "issue-2282",
+   "issue_id": 2282,
    "verdict": "probe-error",
    "expected": "ok",
    "observed": "ok",
@@ -268,16 +276,16 @@
    "reason": "HTTP Error 400: Bad Request"
   },
   {
-   "class": "rt-fleet-dashboard",
-   "issue_id": null,
+   "class": "issue-2362",
+   "issue_id": 2362,
    "verdict": "probe-error",
    "expected": "ok",
    "observed": "ok",
    "reason": "HTTP Error 400: Bad Request"
   },
   {
-   "class": "issue-2362",
-   "issue_id": 2362,
+   "class": "issue-2343",
+   "issue_id": 2343,
    "verdict": "probe-error",
    "expected": "ok",
    "observed": "ok",
@@ -300,8 +308,8 @@
    "reason": "HTTP Error 400: Bad Request"
   },
   {
-   "class": "issue-2343",
-   "issue_id": 2343,
+   "class": "issue-2371",
+   "issue_id": 2371,
    "verdict": "probe-error",
    "expected": "ok",
    "observed": "ok",
@@ -316,8 +324,8 @@
    "reason": "HTTP Error 400: Bad Request"
   },
   {
-   "class": "issue-2371",
-   "issue_id": 2371,
+   "class": "issue-2408",
+   "issue_id": 2408,
    "verdict": "probe-error",
    "expected": "ok",
    "observed": "ok",
@@ -344,12 +352,4 @@
    "issue_id": 2402,
    "verdict": "probe-error",
    "expected": "ok",
-   "observed": "missing-marker:qnfo-research-exec/worker.js",
-   "reason": "HTTP Error 400: Bad Request"
-  },
-  {
-   "class": "issue-2403",
-   "issue_id": 2403,
-   "verdict": "probe-error",
-   "expected": "ok",
-   "observ
+   "observed": "missing-marker:qnfo-research-exec/w
