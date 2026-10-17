@@ -24,7 +24,7 @@ var __defProp2222 = Object.defineProperty;
 var __name2222 = /* @__PURE__ */ __name222((target, value) => __defProp2222(target, "name", { value, configurable: true }), "__name");
 var __defProp22222 = Object.defineProperty;
 var __name22222 = /* @__PURE__ */ __name2222((target, value) => __defProp22222(target, "name", { value, configurable: true }), "__name");
-var VERSION = "0.18.17-sweep-idempotent-quotas";
+var VERSION = "0.18.18-parkrearm-all";
 // WORKERS-AI-ATTRIBUTION-1 (2026-10-01, #1681): per-worker Workers AI attribution. Returns a shallow env copy whose AI
 // binding records each .run() (calls, errors, ms, tokens, neurons) into qnfo-audit ai_call_counters (purpose 'binding').
 // Neurons = usage tokens x Cloudflare's published per-model rates (neurons per M tokens). Fail-soft; env is never mutated.
@@ -1535,7 +1535,7 @@ async function parkRearmTick(env) {
     var flag = await env.QNFO_AUDIT.prepare("SELECT value FROM ops_config WHERE key = 'park_rearm'").first();
     if (flag && String(flag.value || "").trim().toLowerCase() === "off") return out;
     out.enabled = true;
-    var cand = await env.QNFO_AUDIT.prepare("SELECT id, context, error FROM research_queue WHERE status = 'wontfix' AND stage = 'parked' AND error LIKE 'REVIEW-UNRESOLVED-PARK-1%' ORDER BY created_at ASC LIMIT 5").all();
+    var cand = await env.QNFO_AUDIT.prepare("SELECT id, context, error FROM research_queue WHERE status = 'wontfix' AND stage = 'parked' AND (error LIKE 'REVIEW-UNRESOLVED-PARK-1%' OR error LIKE 'PARKED-POISON-1%last error: review%' OR error LIKE 'PARKED-POISON-1%last error: complete%' OR error LIKE 'PARKED-POISON-1%last error: reconcile%') ORDER BY created_at ASC LIMIT 5").all();
     var list = (cand && cand.results) || [];
     for (var i = 0; i < list.length; i++) {
       var row = list[i];
