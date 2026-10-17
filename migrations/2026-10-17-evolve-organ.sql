@@ -1,3 +1,7 @@
+-- APPLY-BY: ci
+-- DB: qnfo-audit
+-- Rollback: DROP TABLE evolve_filings; DROP TABLE evolve_runs; DROP TABLE evolve_targets; DELETE FROM spof_registry WHERE component = 'qnfo-evolve cron'; (the worker also becomes unreferenced if qnfo-evolve is deleted from deploy-targets.txt)
+--
 -- EVOLVE-1 (2026-10-17): the organ that turns the fleet's own structural gap registers into named
 -- work, and closes it when the gap is gone.
 --
