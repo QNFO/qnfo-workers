@@ -127,7 +127,7 @@ ok(versionAtLeast((src.match(/var VERSION = "([^"]+)"/) || [])[1] || "0", "0.18.
   ok(u.length === 1 && /status='queued', stage='ground'/.test(u[0].sql) && u[0].args[0] === "verify: unresolved after revision - gates=gate-refs" && events(db, "rerun-route").some((e) => /route=ground/.test(e)), "a verify failure keeps the re-run from ground and logs it", u.map((s) => s.sql));
 
   db = capDb();
-  await markError({ QNFO_AUDIT: db }, { id: "r3", recover_count: 3 }, "review: 1 HARD");
+  await markError({ QNFO_AUDIT: db }, { id: "r3", recover_count: 99 }, "review: 1 HARD");
   ok(updates(db).some((s) => /stage='parked'/.test(s.sql) && /PARKED-POISON-1/.test(s.args[0])), "an exhausted recover_count still parks as PARKED-POISON-1");
 }
 

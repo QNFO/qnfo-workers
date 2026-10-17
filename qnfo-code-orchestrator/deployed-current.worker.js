@@ -1896,6 +1896,26 @@ async function stepTask(env, task) {
       return { ok: true, step: "propose" };
     }
     if (task.step === "propose") {
+      // SUITE-SCOPE-1 (2026-10-17): the publisher refuses a patch whose worker suites fail and tells the model to
+      // "keep the change and fix what these tests assert" - but the task was scoped to one file, so the retry could
+      // not touch the test. Eight of the last 26 failures died that way and every one of them was ctx.paths-less. The
+      // failing test named in the publisher's message is added once as a companion, which the existing MULTI-FILE
+      // machinery already allows (same top directory, .mjs, at most MAX_EXTRAS), and the task re-enters read so the
+      // companion is loaded before the next propose. Widened once only: a second suite failure is a real failure.
+      if (ctx.lastError) {
+        const _sm = /FAIL ([A-Za-z0-9._\/-]+\.test\.mjs)/.exec(String(ctx.lastError));
+        if (_sm) {
+          const _tp = _sm[1];
+          const _have = Array.isArray(ctx.x) && ctx.x.some(function(x) { return x && x.path === _tp; });
+          const _cur = Array.isArray(ctx.extras) ? ctx.extras.slice() : [];
+          if (!_have && _cur.length < MAX_EXTRAS && !extraWhy(task.path, _tp)) {
+            ctx.extras = _cur.concat([{ path: _tp }]);
+            await save(env, task.id, { ctx: JSON.stringify(ctx) });
+            await audit(env, "code-task.suite-scope", task.id + ": " + _tp + " added as a companion because its suite pins the behaviour the goal changes");
+            return { ok: true, step: "read" };
+          }
+        }
+      }
       const l = ladder(env);
       // Each round climbs the ladder from its first rung (SELF-REPAIR-1); the old clamp ran the last rung for every later attempt.
       let model = l[Math.min((task.attempts + (ctx.timeouts || 0)) % MAX_ATTEMPTS, l.length - 1)]; // TIMEOUT-RETRY-1: a timed-out rung moves on

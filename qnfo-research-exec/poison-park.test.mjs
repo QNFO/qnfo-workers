@@ -4,10 +4,15 @@ import assert from "node:assert/strict";
 import { markError, reclaimStaleResearching } from "./worker.js";
 
 const db = new DatabaseSync(":memory:");
-db.exec(`CREATE TABLE research_queue (id TEXT PRIMARY KEY, status TEXT DEFAULT 'queued', stage TEXT, claimed_at TEXT, attempt INTEGER DEFAULT 0, error TEXT, recover_count INTEGER DEFAULT 0, terminal_rearms INTEGER DEFAULT 0);
+db.exec(`CREATE TABLE research_queue (id TEXT PRIMARY KEY, status TEXT DEFAULT 'queued', stage TEXT, claimed_at TEXT, attempt INTEGER DEFAULT 0, error TEXT, recover_count INTEGER DEFAULT 0, terminal_rearms INTEGER DEFAULT 0, context TEXT);
+CREATE TABLE ops_config (key TEXT PRIMARY KEY, value TEXT);
 CREATE TABLE cloud_ops_events (id TEXT, ts TEXT, kind TEXT, text TEXT, meta TEXT, job TEXT, status TEXT);
 CREATE TABLE agent_issues (id INTEGER PRIMARY KEY, title TEXT, description TEXT, source TEXT, category TEXT, priority TEXT, status TEXT, created_at INTEGER, updated_at INTEGER);
 CREATE TABLE remediation_contracts (class TEXT PRIMARY KEY, issue_id INTEGER, precondition TEXT NOT NULL, action TEXT NOT NULL, verify_probe TEXT NOT NULL, verify_transport TEXT NOT NULL, max_attempts INTEGER NOT NULL DEFAULT 3, escalate_to TEXT NOT NULL, expected_cadence_h INTEGER, status TEXT DEFAULT 'active', ts TEXT DEFAULT (datetime('now')), next_due_at TEXT);`);
+// This suite's recover_count values (3) assert exhaustion, and the worker's default ceiling is now RECOVER_MAX = 6
+// (ops_config research_recover_max, raised from 3 on 2026-10-17). Pin the ceiling the assertions were written against
+// instead of moving every row, so the test keeps testing parking rather than the default.
+db.prepare("INSERT INTO ops_config (key, value) VALUES ('research_recover_max','3')").run();
 function stmt(sql) {
   let args = [];
   const o = { bind(...a) { args = a; return o; },

@@ -1,9 +1,13 @@
 name = "qnfo-github-steward"
 main = "worker.js"
 compatibility_date = "2026-10-10"
-compatibility_flags = ["nodejs_compat"]
 workers_dev = true
 # charter-pillar: autonomy (GITHUB-STEWARD-1)
+#
+# WORKERS-BP-DEBT-1 (agent_issues 2757): compatibility_flags = ["nodejs_compat"] was removed -- the
+# guard classifies it redundant here because this worker imports no Node built-in. traces are
+# declared explicitly: the top-level [observability] switch enables logs only, so without this block
+# the worker shipped with no traces at all while the fleet's standard is logs at 100%, traces sampled.
 
 [observability]
 enabled = true
@@ -11,6 +15,14 @@ enabled = true
 [observability.logs]
 enabled = true
 head_sampling_rate = 1
+
+[observability.traces]
+enabled = true
+head_sampling_rate = 0.1
+
+# limits-not-declared: bound the CPU so a pathological reconcile cannot run to the wall clock.
+[limits]
+cpu_ms = 30000
 
 # Six-hourly: drift is corrected on a schedule the estate can rely on, not when someone notices.
 # Minute 17 keeps it off the fleet's 10-minute control tick.
