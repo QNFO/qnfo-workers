@@ -17,7 +17,7 @@ const src = readFileSync(join(here, "worker.js"), "utf8");
 const a = src.indexOf("/* AREAS-1:BEGIN"), b = src.indexOf("/* AREAS-1:END */");
 ok(a > 0 && b > a, "AREAS-1 block markers present");
 const cx = vm.createContext({ console, Date, JSON, Math, Number, String, Object, RegExp, isFinite, Promise });
-vm.runInContext(src.slice(a, b) + "\nglobalThis.X = { areaOf, prioNum, gapOf, trendOf, bottleneckOf, buildAreas, fmtNum, shortTitle, sparkSvg, areaTilesHtml, areaSectionsHtml, flowHtml, focusOf, leverKind, leverLine, focusRowsHtml, controlsHtml, areaDetailHtml };", cx);
+vm.runInContext(src.slice(a, b) + "\nglobalThis.X = { areaOf, prioNum, gapOf, trendOf, bottleneckOf, buildAreas, fmtNum, shortTitle, sparkSvg, areaTilesHtml, areaSectionsHtml, flowHtml, focusOf, leverKind, leverLine, clipWords, focusRowsHtml, controlsHtml, areaDetailHtml };", cx);
 vm.runInContext("async function d1all(db, sql, params) { let ps = db.prepare(sql); if (params && params.length) ps = ps.bind.apply(ps, params); const r = await ps.all(); return r.results || []; }; globalThis.areasModel = areasModel;", cx);
 const X = cx.X;
 // A
@@ -131,6 +131,10 @@ ok(X.leverKind("code-task: repo=qnfo-workers path=x") === "code", "a code-task l
 ok(X.leverKind("Top up the Cloudflare credit") === "owner", "a top-up is an owner decision");
 ok(X.leverKind("Read ai_call_counters") === "fleet", "a read is a fleet lever");
 ok(X.leverLine("Pillar cost. Read ai_call_counters for 7 days. Then more.") === "Read ai_call_counters for 7 days.", "the pillar label and later sentences are dropped: " + X.leverLine("Pillar cost. Read ai_call_counters for 7 days. Then more."));
+ok(X.clipWords("aaaa bbbb cccc", 8) === "aaaa...", "a clip never ends inside a word: " + X.clipWords("aaaa bbbb cccc", 8));
+ok(X.clipWords("short lever", 40) === "short lever", "a short lever is not clipped");
+const longL = X.leverLine("Pillar cost. Read ai_call_counters for the last seven days grouped by worker and model; the top neuron consumer is the lever (2026-10-02: qnfo-research-exec at max reasoning effort). Prefer a cheaper model.");
+ok(longL.length <= 163 && /\.\.\.$/.test(longL) && / [A-Za-z0-9-]+\.\.\.$/.test(longL), "a long lever ends on a whole word: " + longL);
 const fx = X.focusRowsHtml(m2, esc);
 ok((fx.match(/class="fx-r /g) || []).length === 5, "five constraint rows, one per area");
 ok(/href="\/area\/reliability"/.test(fx) && /root cause/.test(fx), "each row links to its own page and names its root");
