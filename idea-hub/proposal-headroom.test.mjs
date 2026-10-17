@@ -18,6 +18,21 @@ const db = new DatabaseSync(":memory:");
 db.exec(`CREATE TABLE ask_events (id TEXT PRIMARY KEY, ts TEXT, qhash TEXT, query TEXT, cached INTEGER DEFAULT 0, uncovered INTEGER, error TEXT);
 CREATE TABLE idea_proposals (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT, idea TEXT NOT NULL, contact TEXT, status TEXT DEFAULT 'new', ip_hash TEXT, created_at TEXT, decision TEXT, score REAL, rationale TEXT, triaged_at TEXT);`);
 const d1 = { prepare(sql) { let a = []; const q = sql.replace(/\?(\d+)/g, "?"); const st = { bind(...x) { a = x; return st; }, async all() { return { results: db.prepare(q).all(...a) }; }, async first() { return db.prepare(q).get(...a) || null; }, async run() { const r = db.prepare(q).run(...a); return { meta: { changes: Number(r.changes), last_row_id: Number(r.lastInsertRowid) } }; } }; return st; } };
+// The function body, brace-matched, for source assertions that must not depend on how many lines a stage grows to.
+// The fixed 900-char slice this replaced stopped covering triageProposals once CRON-BUDGET-1 (2026-10-17) added the
+// wall-clock budget to ideationCycle, so the ordering assertion read indexOf(...) === -1 and failed on a correct cycle.
+// A nested block that closes on its own line would break indexOf("\n}\n") the same way, so count braces instead.
+function fnBody(src, name) {
+  const start = src.indexOf("async function " + name + "(");
+  if (start < 0) return "";
+  let depth = 0;
+  for (let j = src.indexOf("{", start); j < src.length; j++) {
+    const ch = src[j];
+    if (ch === "{") depth++;
+    else if (ch === "}" && --depth === 0) return src.slice(start, j + 1);
+  }
+  return src.slice(start);
+}
 const env = { QNFO_AUDIT: d1 };
 let pass = 0, fail = 0;
 const ok = (c, m, d) => { if (c) pass++; else { fail++; console.log("FAIL " + m + (d === undefined ? "" : " :: " + JSON.stringify(d))); } };
@@ -44,9 +59,8 @@ ok(/var room = pending \? PROPOSAL_FILL_TO - Number\(pending\.n\) : null;/.test(
 ok(/if \(room !== null && qs\.length > room - out\.proposals\) \{ out\.room_left = room - out\.proposals; break; \}/.test(cons) && cons.indexOf("qs.length > room - out.proposals") < cons.indexOf("INSERT INTO idea_proposals"), "a re-entry signal is consumed whole or left new, checked before any insert");
 const corp = raw.slice(raw.indexOf("async function runOwnerCorpus(env) {"), raw.indexOf("async function runOwnerCorpus(env) {") + 3000);
 ok(/var room = await proposalRoom\(env\);/.test(corp) && /if \(room < batch\) \{ batch = room; out\.capped = "room " \+ room; \}/.test(corp) && corp.indexOf("var room = await proposalRoom(env);") < corp.indexOf("FROM notes_intake"), "the notebook batch is capped by the room before notes are read");
-const cycStart = raw.indexOf("async function ideationCycle(env) {");
-// CRON-BUDGET-1 (1.10.7) made ideationCycle longer than the old fixed 900-char slice; read to its closing brace.
-const cyc = raw.slice(cycStart, raw.indexOf("\n}\n", cycStart) + 2);
+const cyc = fnBody(raw, "ideationCycle");
+ok(cyc.length > 400 && cyc.indexOf("runAskGap(env)") > 0 && cyc.indexOf("runOwnerCorpus(env)") > 0 && cyc.indexOf("triageProposals(env)") > 0, "the cycle body was read whole (every stage inside ideationCycle)", { len: cyc.length });
 ok(cyc.indexOf("runConsume(env)") < cyc.indexOf("runOwnerCorpus(env)") && cyc.indexOf("runOwnerCorpus(env)") < cyc.indexOf("triageProposals(env)"), "the notebook reads the room after re-entry and ask gaps, before triage");
 const vm2 = /var VERSION = "(\d+)\.(\d+)\.(\d+)/.exec(raw);
 ok(vm2 && (+vm2[1] > 1 || (+vm2[1] === 1 && (+vm2[2] > 8 || (+vm2[2] === 8 && +vm2[3] >= 6)))), "VERSION is at least 1.8.6", vm2 && vm2[0]);

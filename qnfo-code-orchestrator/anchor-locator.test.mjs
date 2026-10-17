@@ -61,6 +61,14 @@ const mk = (filler) => [
 ].join("\n");
 const MID = mk(FILLER), SMALL = mk("");
 ok(MID.length > 60000 && MID.length < 900000 && SMALL.length < 12000, "fixture: 60k < mid < 900k, small under 12k", { mid: MID.length, small: SMALL.length });
+// ANCHOR-MULTILINE-1 (0.16.4, 2026-10-17) rebuilds an anchor from 2-3 consecutive lines, so in MID the keyword line
+// always yields a unique window. MID_PARK repeats the keyword line AND the two lines that follow it, which is the one
+// shape the wider window cannot repair: every 1..3-line window at the keyword occurs twice. Case D uses it so the
+// parking path still has a suite, and case D3 keeps the rescue itself pinned; without both, a locator that always
+// returned something would park nothing and the loop would retry a task forever instead of filing it.
+const PARK_HEAD = ['const WORKER = "fx";', "function filler0() { return 0; }", "function filler1() { return 1; }"].join("\n");
+const MID_PARK = MID.replace(FILLER, FILLER + "\n" + PARK_HEAD);
+ok(MID_PARK !== MID && MID_PARK.split(PARK_HEAD.split("\n")[0]).length - 1 === 2, "fixture: the keyword line occurs twice in the parking file", null);
 const FILES = {};
 const serve = (text) => { FILES["fx-worker/worker.js"] = text; FILES["fx-worker/deployed-current.worker.js"] = text; };
 globalThis.fetch = async (u) => {
@@ -147,26 +155,39 @@ const REAL = [
   ok(t.status === "ready_to_publish" && cx.anchor === AUDIT_LINE && calls.length === 1, "D0b a locator call that throws no longer parks the task: the keyword line is the anchor", { st: t.status, anchor: cx.anchor, err: t.last_error });
 }
 
-// ===== D. a pick that is not a unique line of the file: the task parks with both reasons =====
+// ===== D. a pick that is not a unique line of the file, and no window to widen: the task parks with both reasons =====
 {
-  serve(MID);
+  serve(MID_PARK);
   const { env, calls } = envWith(["  nothing like this line exists in the file();"]);
-  await addTask(env, NOKW_GOAL, DUP_LINE); // its one keyword hits a line too short to be an anchor: ANCHOR-KEYWORD-FALLBACK-1 has no line to offer
+  await addTask(env, NOKW_GOAL, DUP_LINE); // its keyword line repeats with the two lines after it, so neither the keyword fallback nor ANCHOR-MULTILINE-1 has a unique line to offer
   await tick(env);
   const t = row(env);
-  const evs = events(env, "code-task.anchor-located");
-  const evMeta = evs.length ? JSON.parse(evs[0].meta || "{}") : {};
-  ok(t.status !== "needs_human" && evs.length === 1 && /^keyword:.*\+[12]$/.test(String(evMeta.model || "")) && calls.length > 1, "D1 a useless pick is rescued by widening the keyword line to a unique window (ANCHOR-MULTILINE-1)", { st: t.status, err: String(t.last_error || "").slice(0, 120), calls: calls.length, model: evMeta.model });
+  ok(t.status === "needs_human" && /anchor occurs 2 times in the file/.test(t.last_error) && /ANCHOR-LOCATOR-1 found no unique line near the goal either/.test(t.last_error) && calls.length === 1 && events(env, "code-task.anchor-located").length === 0, "D1 a useless pick with no unique window parks the task needs_human with the old reason plus the locator's, one model call", { st: t.status, err: t.last_error, calls: calls.length });
 }
 {
-  serve(MID);
+  serve(MID_PARK);
   const { env, calls } = envWith([DUP_LINE]);
   await addTask(env, NOKW_GOAL);
   await tick(env);
   const t = row(env);
-  const evs2 = events(env, "code-task.anchor-located");
-  const ev2 = evs2.length ? JSON.parse(evs2[0].meta || "{}") : {};
-  ok(t.status !== "needs_human" && evs2.length === 1 && /^keyword:.*\+[12]$/.test(String(ev2.model || "")), "D2 a pick that occurs twice is refused like any anchor, and the keyword window keeps the edit", { st: t.status, err: String(t.last_error || "").slice(0, 120), model: ev2.model });
+  ok(t.status === "needs_human" && /needs an anchor/.test(t.last_error) && /ANCHOR-LOCATOR-1/.test(t.last_error) && calls.length === 1, "D2 a pick that occurs twice is refused like any anchor, and with no unique window the task still parks", { st: t.status, err: t.last_error });
+}
+
+// ===== D3. ANCHOR-MULTILINE-1 (0.16.4): the rescue D1/D2 no longer reach, kept pinned on its own =====
+// The line `const WORKER = "fx";` is in the file twice, so the single-line fallback cannot use it. The two lines after
+// the first occurrence are unique, so the loop widens the window instead of parking with "file larger than 60000
+// chars needs an anchor" (four of the fortnight's failed code tasks ended that way).
+{
+  const MID_ML = MID + '\nconst WORKER = "fx";';
+  serve(MID_ML);
+  const WIN = ['const WORKER = "fx";', "function filler0() { return 0; }"].join("\n");
+  // one reply only: the locator's useless pick. The assertion is about the anchor chosen with no second locator call.
+  const { env, calls } = envWith(["  nothing like this line exists in the file();"]);
+  await addTask(env, NOKW_GOAL);
+  await tick(env);
+  const t = row(env), cx = JSON.parse(t.ctx), evs = events(env, "code-task.anchor-located");
+  const ev = evs.length ? JSON.parse(evs[0].meta || "{}") : {};
+  ok(cx.anchor === WIN && evs.length === 1 && ev.model === "keyword:const WORKER+1" && t.status !== "needs_human", "D3 a keyword line that occurs twice anchors through the unique 2-line window instead of parking", { st: t.status, anchor: cx.anchor, model: ev.model, calls: calls.length });
 }
 
 // ===== E. a small file without an anchor: whole-file mode, no locator call =====

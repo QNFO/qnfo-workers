@@ -62,6 +62,12 @@ const BIG = [
   "",
 ].join("\n");
 const SMALL = BIG.replace(FILLER + "\n", "");
+// ANCHOR-MULTILINE-1 (0.16.4, 2026-10-17) rebuilds an anchor from 2-3 consecutive lines, so a large file whose keyword
+// line precedes unique text always anchors. BIG_PARK repeats the keyword line AND the two lines after it, the one shape
+// the wider window cannot repair, so case D still proves the parking path instead of quietly turning into a patch.
+const PARK_HEAD = ['const WORKER = "fx";', "function filler0() { return 0; }", "function filler1() { return 1; }"].join("\n");
+const BIG_PARK = BIG.replace(FILLER, FILLER + "\n" + PARK_HEAD);
+ok(BIG_PARK.length > BIG.length && BIG_PARK.split(PARK_HEAD.split("\n")[0]).length - 1 === 2, "fixture: the parking file carries the keyword line twice", { big: BIG_PARK.length });
 ok(BIG.length > 1100000 && SMALL.length < 12000, "fixture: the large file is over 1.1M chars, the small one under 12k", { big: BIG.length, small: SMALL.length });
 const FILES = {};
 const serve = (text) => { FILES["fx-worker/worker.js"] = text; FILES["fx-worker/deployed-current.worker.js"] = text; };
@@ -155,14 +161,12 @@ function applies(fileText, patch) {
 
 // ===== D. a large file with no anchor: one locator pick (ANCHOR-LOCATOR-1); when it finds nothing the task parks with both reasons =====
 {
-  serve(BIG);
+  serve(BIG_PARK);
   const { env, calls } = envWith(["  nothing like this line exists in the file();"]);
-  await addTask(env, "Make the reply friendlier where \"const WORKER\" is set."); // its one keyword hits a line too short to be an anchor, so ANCHOR-KEYWORD-FALLBACK-1 (0.12.0) offers no line
+  await addTask(env, "Make the reply friendlier where \"const WORKER\" is set."); // its keyword line repeats with the two lines after it, so neither ANCHOR-KEYWORD-FALLBACK-1 nor ANCHOR-MULTILINE-1 has a unique line to offer
   await step(env);
   const t = row(env);
-  const evs = events(env, "code-task.anchor-located");
-  const ev = evs.length ? JSON.parse(evs[0].meta || "{}") : {};
-  ok(t.status !== "needs_human" && evs.length === 1 && /^keyword:.*\+[12]$/.test(String(ev.model || "")) && /FILE EXCERPTS/.test(String(calls[0] && calls[0].prompt || "")), "D1 no anchor on a large file: the locator runs once and the keyword window keeps the edit (ANCHOR-MULTILINE-1)", { st: t.status, err: String(t.last_error || "").slice(0, 120), calls: calls.length, model: ev.model });
+  ok(t.status === "needs_human" && /LARGE-FILE-WINDOW-1 edits it from the anchor window alone/.test(t.last_error) && /ANCHOR-LOCATOR-1 found no unique line/.test(t.last_error) && calls.length === 1 && /FILE EXCERPTS/.test(String(calls[0] && calls[0].prompt || "")), "D1 no anchor on a large file with no unique window: one locator call, then needs_human with both reasons", { st: t.status, err: String(t.last_error || "").slice(0, 160), calls: calls.length });
 }
 {
   serve(BIG);
