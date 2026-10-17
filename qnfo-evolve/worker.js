@@ -35,11 +35,29 @@
  *   GET /report  the last 20 filings and the last run (public read)
  *   POST /tick   same work as the cron; needs x-loop-token when LOOP_TOKEN is configured
  */
-var VERSION = "0.1.2-evolve";
+var VERSION = "0.2.0-evolve";
 var WORKER = "qnfo-evolve";
 var SOURCE = "qnfo-evolve|EVOLVE-1";
 var MAX_OPEN = 5;
 var MAX_NEW_PER_TICK = 2;
+
+/* WIP-RECOVERY-1. qnfo-code-orchestrator refuses to plan while PLAN_WIP (6) unfinished code
+ * tasks exist. Measured 2026-10-17: 7 tasks queued, the planner had not planned since 15:21Z, and the
+ * queue could only drain by a task SUCCEEDING -- which the builder was failing to do at roughly 3:2.
+ * That is a closed loop with one exit, and the owner doctrine (SLA-AND-PATHS-1: every step needs two
+ * independent paths to a successful definition of done) says a step with one exit is a defect.
+ *
+ * So this is the second path: a task that has burned WIP_ATTEMPTS attempts and has not moved for
+ * WIP_STALE_MIN minutes is parked as 'failed' with its full row backed up to ops_config, which frees
+ * a planning slot. It is deliberately timid -- it never touches a task with fewer than 6 attempts, it
+ * never touches one that moved in the last 10 minutes (it may be mid-attempt), it acts at most twice a
+ * tick, and it only acts while the queue is actually blocked. Restore is one statement:
+ *   UPDATE code_tasks SET status='queued' WHERE id=(the id in the backup key).
+ * The parked issue is not lost: the planner takes an issue again inside its 3-day window. */
+var WIP_CEILING = 6;
+var WIP_ATTEMPTS = 6;
+var WIP_STALE_MIN = 10;
+var WIP_PARK_PER_TICK = 2;
 
 /* Mirrors PLAN_DENY_WORKERS in qnfo-code-orchestrator 0.17.2 (PLAN_CONTROL_PLANE minus
  * PLAN_LOOP_CANARIED). Filing against one of these is self-defeating: the planner refuses the issue
@@ -278,18 +296,51 @@ async function closeResolved(env, filings) {
   return closed;
 }
 
+/* The drain path described at WIP_CEILING. Returns the ids it parked. */
+async function recoverWip(env, out) {
+  var parked = [];
+  var w = await env.AUDIT.prepare(
+    "SELECT COUNT(*) AS n FROM code_tasks WHERE status = 'queued'"
+  ).all();
+  var wip = ((w && w.results) || [{}])[0].n || 0;
+  out.wip = wip;
+  if (wip < WIP_CEILING) return parked;
+
+  var r = await env.AUDIT.prepare(
+    "SELECT * FROM code_tasks WHERE status = 'queued' AND attempts >= ? "
+    + "AND (julianday('now') - julianday(updated_at)) * 1440 >= ? "
+    + "ORDER BY attempts DESC, updated_at ASC LIMIT ?"
+  ).bind(WIP_ATTEMPTS, WIP_STALE_MIN, WIP_PARK_PER_TICK).all();
+  var rows = (r && r.results) || [];
+  for (var i = 0; i < rows.length; i++) {
+    var t = rows[i];
+    var bakKey = "code_tasks--bak-" + t.id + "-" + out.ts.slice(0, 10).replace(/-/g, "");
+    await env.AUDIT.prepare(
+      "INSERT OR REPLACE INTO ops_config (key, value, note, updated_at) VALUES (?, ?, ?, datetime('now'))"
+    ).bind(bakKey, JSON.stringify(t).slice(0, 60000),
+      "EVOLVE-1 WIP-RECOVERY-1 backup before parking " + t.id + "; restore: UPDATE code_tasks SET status='queued', updated_at=strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id='" + t.id + "'").run();
+    await env.AUDIT.prepare(
+      "UPDATE code_tasks SET status = 'failed', updated_at = ?, "
+      + "last_error = COALESCE(last_error, '') || ? WHERE id = ? AND status = 'queued'"
+    ).bind(out.ts, " | EVOLVE-1 WIP-RECOVERY-1: " + t.attempts + " attempts and no movement while WIP was "
+      + wip + " >= " + WIP_CEILING + "; parked to free a planning slot (backup: ops_config " + bakKey + ")", t.id).run();
+    parked.push(t.id + ":" + t.attempts);
+  }
+  return parked;
+}
+
 async function ledger(env, out) {
   try {
     await env.AUDIT.prepare(
       "INSERT INTO evolve_runs (ts, scanned, filed, closed, skipped, detail) VALUES (?, ?, ?, ?, ?, ?)"
     ).bind(out.ts, out.scanned, out.filed, out.closed,
       JSON.stringify(out.skipped).slice(0, 2000),
-      JSON.stringify({ filed: out.filed_keys, blocked_control_plane: out.blocked }).slice(0, 2000)).run();
+      JSON.stringify({ filed: out.filed_keys, blocked_control_plane: out.blocked, wip: out.wip, parked_wip: out.parked }).slice(0, 2000)).run();
   } catch (e) { /* the ledger must never fail the tick */ }
 }
 
 async function runTick(env) {
-  var out = { ts: iso(), scanned: 0, filed: 0, closed: 0, skipped: [], filed_keys: [], blocked: [] };
+  var out = { ts: iso(), scanned: 0, filed: 0, closed: 0, skipped: [], filed_keys: [], blocked: [], wip: 0, parked: [] };
   if (!env.AUDIT) { out.skipped.push("no AUDIT binding"); return out; }
 
   var targets = {};
@@ -327,6 +378,10 @@ async function runTick(env) {
 
   try { out.closed = await closeResolved(env, filings); }
   catch (e) { out.skipped.push("close: " + errText(e)); }
+
+  /* The drain path runs last: intake first, so a tick never parks work it could have replaced. */
+  try { out.parked = await recoverWip(env, out); }
+  catch (e) { out.skipped.push("wip-recovery: " + errText(e)); }
 
   await ledger(env, out);
   return out;
