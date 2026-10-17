@@ -28,7 +28,7 @@ eq("unknown 400 stays other", api.gwErrorClass(400, "something else"), "other");
 eq("no status, no head", api.gwErrorClass(0, ""), "other");
 
 // 2 which classes are not evidence against the model
-eq("no-degrade set", Object.keys(api.GW_NO_DEGRADE_CLASSES).sort(), ["rate-capacity", "unfunded"]);
+eq("no-degrade set", Object.keys(api.GW_NO_DEGRADE_CLASSES).sort(), ["rate-capacity", "spend-limited", "unfunded"]);
 ok("other degrades", !api.GW_NO_DEGRADE_CLASSES["other"]);
 ok("upstream degrades", !api.GW_NO_DEGRADE_CLASSES["upstream"]);
 
@@ -36,7 +36,8 @@ ok("upstream degrades", !api.GW_NO_DEGRADE_CLASSES["upstream"]);
 const once = (l, re) => { const n = (src.match(re) || []).length; if (n !== 1) fail.push(l + ": " + n + " occurrences, want 1"); };
 once("issue filing gated by the set", /if \(!dispo && !GW_NO_DEGRADE_CLASSES\[clsLabel\] && \(b\.count >= 2 \|\| prevCount > 0\)\)/);
 once("degrade gated by the set", /var recurring = !GW_NO_DEGRADE_CLASSES\[clsLabel\] && \(b\.count >= 2 \|\| prevCount > 0\);/);
-eq("both 24h reads ignore unfunded", (src.match(/error_class NOT IN \('rate-capacity','unfunded'\)/g) || []).length, 2);
+eq("both 24h reads ignore unfunded", (src.match(/error_class NOT IN \('[^)]*'unfunded'[^)]*\)/g) || []).length, 2);
+ok("both 24h reads ignore spend-limited", (src.match(/error_class NOT IN \('[^)]*'spend-limited'[^)]*\)/g) || []).length === 2);
 ok("no read still treats only rate-capacity as transient", !/error_class != 'rate-capacity'/.test(src));
 ok("the class is decided in one place", (src.match(/clsLabel = gwErrorClass\(b\.status, /g) || []).length === 2 && !/else if \(\/capacity temporarily\|rate limit\/i\.test\(rh\)\) clsLabel/.test(src));
 // The version history keeps the change (a later version bump must not fail this suite).
