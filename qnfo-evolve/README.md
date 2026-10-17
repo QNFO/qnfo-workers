@@ -40,6 +40,24 @@ in the loop.
 - Never floods. The per-tick and open-filing caps exist because the loop plans a handful of tasks a
   day, not a hundred.
 
+## WIP-RECOVERY-1 (0.2.0): the second exit from a blocked planner
+
+`qnfo-code-orchestrator` refuses to plan while `PLAN_WIP` (6) unfinished tasks exist. Measured
+2026-10-17: 7 tasks queued, planner idle since 15:21Z, and the queue could only drain by a task
+**succeeding** — which the builder was failing to do. One exit from a step is a doctrine defect, so
+this worker supplies the other one:
+
+- a task with **≥6 attempts** that has not moved for **≥10 minutes**, while the queue is blocked, is
+  parked as `failed` with its full row backed up to `ops_config`;
+- at most **2 per tick**, never while the queue is below the ceiling, never on a task that moved
+  recently (it may be mid-attempt), and the update carries `WHERE status = 'queued'` so it cannot
+  clobber a task another actor moved;
+- restore is one statement, named in the backup note:
+  `UPDATE code_tasks SET status='queued' WHERE id='<id>'`.
+
+Nothing is deleted, and the issue behind a parked task is re-plannable inside the planner's 3-day
+window.
+
 ## Surfaces
 
 | Route | Auth | Purpose |
