@@ -33,7 +33,7 @@ var __name22222 = /* @__PURE__ */ __name2222((target, value) => __defProp22222(t
 // an empty catch. CITE-CONSISTENCY-1 asks the reviewer to compare the draft against cited QNFO work.
 // REVIEW-TRIAGE-CAP-1 is a defect fix: drift demotion at the cycle cap silently turned a blocking finding into a pass, so
 // REVIEW-HARD-GATE-1 withheld nothing there (reviewer findings 2 -> 0 at the cap; an unparseable review advanced to verify).
-var VERSION = "0.18.22-cite-backfill";
+var VERSION = "0.18.23-cite-backfill-order";
 // WORKERS-AI-ATTRIBUTION-1 (2026-10-01, #1681): per-worker Workers AI attribution. Returns a shallow env copy whose AI
 // binding records each .run() (calls, errors, ms, tokens, neurons) into qnfo-audit ai_call_counters (purpose 'binding').
 // Neurons = usage tokens x Cloudflare's published per-model rates (neurons per M tokens). Fail-soft; env is never mutated.
@@ -4818,7 +4818,10 @@ async function citeBackfillSweep(env) {
   try {
     await env.LIVING_PAPER.prepare("CREATE TABLE IF NOT EXISTS cite_backfill_state (slug TEXT PRIMARY KEY, refs INTEGER, matched INTEGER, ts TEXT)").run();
     await env.LIVING_PAPER.prepare("CREATE TABLE IF NOT EXISTS paper_citations (citing_slug TEXT NOT NULL, citing_identifier TEXT, cited_slug TEXT, cited_identifier TEXT, cited_kind TEXT, cited_id TEXT, cited_title TEXT, cited_url TEXT, ref_no INTEGER NOT NULL, created_at TEXT, PRIMARY KEY (citing_slug, ref_no))").run();
-    const batch = await env.LIVING_PAPER.prepare("SELECT p.slug, p.identifier, p.title, substr(p.body_md, instr(lower(p.body_md), '## references')) AS refs FROM papers p WHERE p.status = 'published' AND instr(lower(p.body_md), '## references') > 0 AND NOT EXISTS (SELECT 1 FROM cite_backfill_state s WHERE s.slug = p.slug) LIMIT ?1").bind(CITE_BACKFILL_BATCH).all();
+    // Ordering matters: unordered, the batch walked the July corpus first, which has almost no internal citations (1 in
+    // 341), so early ticks scanned 40 papers and matched 0. Papers that actually carry a QNFO: reference go first, then
+    // newest, so the reconstruction converges in a few ticks instead of walking the whole corpus to reach October.
+    const batch = await env.LIVING_PAPER.prepare("SELECT p.slug, p.identifier, p.title, substr(p.body_md, instr(lower(p.body_md), '## references')) AS refs FROM papers p WHERE p.status = 'published' AND instr(lower(p.body_md), '## references') > 0 AND NOT EXISTS (SELECT 1 FROM cite_backfill_state s WHERE s.slug = p.slug) ORDER BY (instr(lower(p.body_md), 'qnfo:') > 0) DESC, p.created_at DESC LIMIT ?1").bind(CITE_BACKFILL_BATCH).all();
     const rows = (batch && batch.results) || [];
     if (!rows.length) return Object.assign(out, { complete: 1 });
     const all = await env.LIVING_PAPER.prepare("SELECT slug, identifier, title FROM papers WHERE status = 'published' AND title IS NOT NULL").all();
