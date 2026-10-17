@@ -11,9 +11,10 @@
 --
 -- APPLY-BY: ci
 -- DB: qnfo-audit
--- BACKUP: path_liveness
 -- Rollback: DROP VIEW IF EXISTS v_path_health; DROP TABLE IF EXISTS path_liveness;
 --           DELETE FROM process_contracts WHERE process = 'remediation:evidence-persistence';
+-- No BACKUP line: this file deletes no rows (it drops only the v_path_health view and creates path_liveness empty), and
+-- BACKUP-SELF-EMPTY-1 rightly refuses a snapshot of a table the same file creates.
 
 CREATE TABLE IF NOT EXISTS path_liveness (
   path TEXT PRIMARY KEY,
@@ -23,9 +24,10 @@ CREATE TABLE IF NOT EXISTS path_liveness (
 );
 
 -- One row, four columns: A and B last-ok stamps and their live flags. Written as scalar subqueries on purpose - a
--- compound SELECT here tripped "too many terms in compound SELECT" on this D1 instance.
-DROP VIEW IF EXISTS v_path_health;
-CREATE VIEW v_path_health AS
+-- compound SELECT here tripped "too many terms in compound SELECT" on this D1 instance. IF NOT EXISTS, not
+-- DROP + CREATE: a DROP here would make the file destructive, and BACKUP-SELF-EMPTY-1 rightly refuses to snapshot a
+-- table the same file creates. A later definition goes in a later migration.
+CREATE VIEW IF NOT EXISTS v_path_health AS
 SELECT
   (SELECT checked_at FROM path_liveness WHERE path = 'remediation:evidence:A') AS a_last_ok,
   (SELECT COUNT(*) FROM path_liveness WHERE path = 'remediation:evidence:A' AND checked_at > datetime('now','-6 hours')) AS a_live,
