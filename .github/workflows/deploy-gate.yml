@@ -432,6 +432,10 @@ jobs:
       # OWNER-SURFACE-HONESTY-1 + OBJECTIVE-AUTHORITY-TRUTH-1 (1.17.8): an inbox card only for mail that owes a reply (rules
       # in parity with qnfo-email-orchestrator INBOUND-SLA-1), data answers that need no model, plain answers on a model
       # failure, mail facts in the Ask context (public vs owner fields), and the credential behind every ratification.
+      # AREAS-1 (1.38.0): the functional-area model, trend and bottleneck rules, and the rendered area tiles, breach rows and pipelines.
+      - name: AREAS-1 offline suite (qnfo-fleet-dashboard)
+        if: ${{ !cancelled() }}
+        run: node qnfo-fleet-dashboard/areas.test.mjs
       - name: OWNER-SURFACE-HONESTY-1 offline suite (qnfo-fleet-dashboard)
         if: ${{ !cancelled() }}
         run: node qnfo-fleet-dashboard/owner-surface.test.mjs
