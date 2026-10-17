@@ -319,6 +319,36 @@ export function planNext({ nowIso, ctx = {}, cfg = DEFAULT_CONFIG, recent = [], 
 
   const retired = retiredKinds(loopRows, cfg);
 
+  // SHAKY-NO-ASK-1: the worst failure mode is a well-formed task on the day the right move was
+  // to ask nothing. When drift says shaky and there is no check-in yet, the only message is the
+  // check-in itself (or presence, if one already went out). No ladder, no ask, no obligation.
+  const shaky = ctx.drift_level === "shaky";
+  if (shaky) {
+    const checkedIn = ctx.checked_in === true ||
+      (ctx.mood_today !== null && ctx.mood_today !== undefined) ||
+      (ctx.energy_today !== null && ctx.energy_today !== undefined);
+    if (!checkedIn) {
+      if (recent.some((r) => r.day === today && r.kind === "checkin")) {
+        if (recent.some((r) => r.day === today && r.kind === "presence")) return { skip: "shaky-already-touched" };
+        return {
+          kind: "presence", ladder_step: 0, minutes: 0,
+          ask: cfg.presence_line, expected: null,
+          due_at: new Date(nowMs + 6 * 3600e3).toISOString(),
+          reason: "shaky-presence"
+        };
+      }
+      return {
+        kind: "checkin", ladder_step: 0, minutes: 0,
+        ask: "How's it landing today?", expected: "log:checkin",
+        due_at: new Date(nowMs + 6 * 3600e3).toISOString(),
+        reason: "shaky-no-checkin"
+      };
+    }
+  }
+
+  // A shaky day that has been logged still gets almost nothing: one ask, not three.
+  if (shaky) cfg = { ...cfg, max_per_day: Math.min(cfg.max_per_day ?? 3, 1) };
+
   // Rule 4: three unanswered -> presence only, once, then silence.
   if ((ctx.unanswered_streak ?? 0) >= (cfg.max_unanswered ?? 3)) {
     const already = recent.some((r) => r.day === today && r.kind === "presence");

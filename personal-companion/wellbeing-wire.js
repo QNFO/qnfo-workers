@@ -213,7 +213,9 @@ export async function wellbeingTick(env, deps = {}) {
     ? { ...c, quiet_start: 0, quiet_end: 0, max_per_day: 99, min_gap_min: 0 }
     : c;
   const plan = WB.planNext({
-    nowIso: now, ctx: pack.ctx, cfg: planCfg,
+    nowIso: now,
+    ctx: { ...pack.ctx, drift_level: pack.drift.level, checked_in: pack.checked_in },
+    cfg: planCfg,
     recent: await recentNudges(env, 40), loopRows: await loopRows(env)
   });
   if (plan.skip) { out.skipped = plan.skip; return out; }

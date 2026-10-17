@@ -134,6 +134,25 @@ ok("silent when every rung is retired", planNext({
   loopRows: LADDER.map((r) => ({ kind: r.kind, fired: 10, done_rate: 0 }))
 }).skip === "all-kinds-retired");
 
+// SHAKY-NO-ASK-1: a well-formed task on the wrong day is the failure mode that matters most.
+console.log("\n[shaky days]");
+const shaky1 = planNext({ nowIso: "2026-10-17T14:00:00Z", ctx: { drift_level: "shaky" } });
+ok("shaky with no check-in asks for nothing", shaky1.kind === "checkin" && shaky1.minutes === 0 && shaky1.ladder_step === 0, shaky1);
+const shaky2 = planNext({ nowIso: "2026-10-17T16:00:00Z", ctx: { drift_level: "shaky" }, recent: [
+  { kind: "checkin", state: "sent", ts: "2026-10-17T09:00:00Z", day: "2026-10-17", ladder_step: 0, sent_at: "2026-10-17T09:00:00Z" }
+]});
+ok("then presence, still no ask", shaky2.kind === "presence" && shaky2.expected === null, shaky2);
+ok("then silence for the day", planNext({ nowIso: "2026-10-17T18:00:00Z", ctx: { drift_level: "shaky" }, recent: [
+  { kind: "checkin", state: "sent", ts: "2026-10-17T09:00:00Z", day: "2026-10-17", ladder_step: 0, sent_at: "2026-10-17T09:00:00Z" },
+  { kind: "presence", state: "sent", ts: "2026-10-17T16:00:00Z", day: "2026-10-17", ladder_step: 0, sent_at: "2026-10-17T16:00:00Z" }
+]}).skip === "shaky-already-touched");
+const shaky3 = planNext({ nowIso: "2026-10-17T14:00:00Z", ctx: { drift_level: "shaky", checked_in: true } });
+ok("a logged shaky day allows one small ask", shaky3.kind === "micro" && shaky3.ladder_step === 1, shaky3);
+ok("but only one", planNext({ nowIso: "2026-10-17T16:00:00Z", ctx: { drift_level: "shaky", checked_in: true }, recent: [
+  { kind: "micro", state: "done", ts: "2026-10-17T12:00:00Z", day: "2026-10-17", ladder_step: 1, sent_at: "2026-10-17T12:00:00Z" }
+]}).skip === "daily-cap");
+ok("an ordinary day is unchanged", planNext({ nowIso: "2026-10-17T14:00:00Z", ctx: { drift_level: "ok" } }).kind === "micro");
+
 console.log("\n[planner: ladder]");
 const first = planNext({ nowIso: "2026-10-17T14:00:00Z", ctx: {} });
 ok("cold start asks the smallest thing", first.ladder_step === 1 && first.kind === "micro", first);
