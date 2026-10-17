@@ -143,6 +143,7 @@ ai.answer = (task) => task === "REVIEW" ? reviewJson(["H1", "H2"]) : "";
 put("r-low");
 res = await stageReview(env, row("r-low", "review", { cycles: 0 }));
 ok(res.stage === "review->revise" && get("r-low").stage === "revise", "below the cycle cap HARD findings go to revise, as before", res);
+audit.prepare("INSERT INTO ops_config (key, value) VALUES ('research_max_review_cycles', '2')").run();
 put("r-cap");
 res = await stageReview(env, row("r-cap", "review", { cycles: 2 }));
 // RERUN-ROUTE-1 (0.18.0, agent_issues 2473): the withheld paper re-enters once at revise with its findings, not at ground.
@@ -159,6 +160,7 @@ ok(res.stage === "review->review" && res.reparse === 1 && get("r-parse").stage =
 audit.prepare("UPDATE research_queue SET context = ? WHERE id = 'r-parse'").run(JSON.stringify({ cycles: 2, reparse: 2 }));
 res = await stageReview(env, get("r-parse"));
 ok(res.ok === false && res.withheld === "review-hard", "a review that stays unreadable withholds the paper", res);
+audit.prepare("DELETE FROM ops_config WHERE key = 'research_max_review_cycles'").run();
 ai.answer = (task) => task === "REVIEW" ? reviewJson([]) : "";
 put("r-pass");
 res = await stageReview(env, row("r-pass", "review", { cycles: 2 }));
