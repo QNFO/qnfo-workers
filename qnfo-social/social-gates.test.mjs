@@ -84,6 +84,12 @@ function baseState(over) {
     },
     run() { return { success: true }; },
     all(sql) {
+      if (sql.includes("key IN ('social_paused','social_paused_until')")) {
+        const rows = [];
+        if (s.paused) rows.push({ key: 'social_paused', value: '1' });
+        if (s.pausedUntil) rows.push({ key: 'social_paused_until', value: s.pausedUntil });
+        return rows;
+      }
       if (sql.includes('SELECT post_uri FROM social_threads')) return [{ post_uri: '{"bluesky":"at://did:plc:me/app.bsky.feed.post/a1","linkedin":"buffer-draft:9"}' }, { post_uri: 'buffer:7' }];
       if (sql.includes('SELECT post_id FROM dissemination_tracker')) return [{ post_id: 'at://did:plc:me/app.bsky.feed.post/d1' }, { post_id: 'at://did:plc:me/app.bsky.feed.post/a1' }];
       return [];
