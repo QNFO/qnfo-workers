@@ -138,9 +138,9 @@ const WIP = Number((/^const PLAN_WIP = (\d+);/m.exec(fs.readFileSync(new URL("./
   ok(!r.planned && /merge backlog/.test(r.why), "7a3 twelve tasks waiting on the merge runner pause planning", r);
   d.exec("DELETE FROM code_tasks");
   const today = new Date().toISOString();
-  for (let i = 0; i < 8; i++) d.prepare("INSERT INTO issue_plans (issue_id, planned_at, outcome, model) VALUES (?, ?, 'not-code', 'm')").run(9000 + i, today);
+  for (let i = 0; i < 24; i++) d.prepare("INSERT INTO issue_plans (issue_id, planned_at, outcome, model) VALUES (?, ?, 'not-code', 'm')").run(9000 + i, today);
   r = await plan(env);
-  ok(!r.planned && /daily cap/.test(r.why) && prompts.length === 0, "7b at most 8 plans a day", r);
+  ok(!r.planned && /daily cap/.test(r.why) && prompts.length === 0, "7b at most 24 plans a day (PLAN-DAILY-24-1)", r);
 }
 // 7c. refusals cost no model call: several are decided in one tick, they do not use the daily cap, and the tick still plans
 {
