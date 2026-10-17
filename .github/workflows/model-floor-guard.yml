@@ -1,4 +1,5 @@
 C:\Users\LENOVO\AppData\Local\Temp\model-floor-guard.yml:
+C:\Users\LENOVO\AppData\Local\Temp\model-floor-guard.yml:
 name: model-floor-guard
 
 # MODEL-FLOOR-1 enforcement, moved off the owner's laptop (2026-10-17 local de-bloat).
@@ -7,7 +8,9 @@ name: model-floor-guard
 # deliberately NOT ratcheted or continue-on-error: a red run is the true signal until the
 # violating workers are fixed. The report is written to the job summary.
 #
-# Weekly cadence plus manual dispatch only (CRON-MANDATE-1: far below 144/day).
+# Triggers: push to main on these two paths (primary), weekly cron, manual dispatch
+# (CRON-MANDATE-1: far below 144/day). Push is primary because the repo's schedule event
+# has been unreliable (SCHEDULE-EVENT-NEVER-FIRES-1 in guard-timebudget.yml).
 # The script is a copy of qnfo-ops/scripts/model-floor-guard.mjs; keep the two in step.
 # Step names are colon-free (WORKFLOW-YAML-LINT-1).
 
@@ -49,4 +52,5 @@ jobs:
           { echo '### model-floor-guard'; echo "exit code: $rc"; echo '```'; head -c 60000 floor-report.txt; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
           head -40 floor-report.txt
           exit $rc
+
 
