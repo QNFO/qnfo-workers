@@ -18,8 +18,8 @@
 //   DAILY-CAP-1       max 1 thread/day (DAILY_CAP).
 //   KILL-SWITCH-1     paper_explain_state.enabled=0 halts posting (still logs dry runs).
 
-var VERSION = "0.3.1-doi-scrub";
-const MODEL = "@cf/meta/llama-3.3-70b-instruct-fp8-fast"; // non-reasoning, fp8-fast (24k ctx), fast + cheap
+var VERSION = "0.3.2-model-floor-1";
+const MODEL = "@cf/moonshotai/kimi-k2.6"; // MODEL-FLOOR-1: non-thinking via reasoning_effort "none"
 const BSKY = "https://bsky.social/xrpc";
 const UA = "Mozilla/5.0 (qnfo-paper-explainer)";
 const ARXIV_CATS = "(cat:cs.AI OR cat:cs.LG OR cat:cs.CL OR cat:cs.CV OR cat:cs.CY OR cat:cs.HC OR cat:physics.pop-ph OR cat:q-bio.NC OR cat:econ.GN OR cat:stat.ML)";
@@ -222,11 +222,11 @@ async function selectAndExplain(env, papers) {
 }
 function validSel(p) { return !!(p && p.arxiv_id && Array.isArray(p.posts) && p.posts.length >= 3); }
 async function runExplain(env, prompt) {
-  const ai = await env.AI.run(MODEL, { messages: [{ role: "user", content: prompt }], max_tokens: 2500 });
+  const ai = await env.AI.run(MODEL, { messages: [{ role: "user", content: prompt }], max_tokens: 2500, reasoning_effort: "none" });
   const raw = extractText(ai);
   const parsed = parseJSON(raw);
   if (!validSel(parsed)) {
-    const retry = await env.AI.run(MODEL, { messages: [{ role: "user", content: "Your previous reply was not valid JSON with arxiv_id and a 4-post array. Reply with ONLY the JSON object, nothing else." + NL + prompt }], max_tokens: 2500 });
+    const retry = await env.AI.run(MODEL, { messages: [{ role: "user", content: "Your previous reply was not valid JSON with arxiv_id and a 4-post array. Reply with ONLY the JSON object, nothing else." + NL + prompt }], max_tokens: 2500, reasoning_effort: "none" });
     const raw2 = extractText(retry);
     const parsed2 = parseJSON(raw2);
     if (validSel(parsed2)) return { parsed: parsed2, raw: raw2 };
@@ -318,8 +318,8 @@ function explanationText(sel, posts, bufferText) {
 function groundText(paper) { return [paper.title, (paper.authors || []).join(", "), String(paper.abstract || "").slice(0, ABSTRACT_MAX)].join(NL); }
 
 const REVIEWERS = [
-  "@cf/google/gemma-4-26b-a4b-it",
-  "@cf/qwen/qwen3-30b-a3b-fp8",
+  "@cf/zai-org/glm-5.3",
+  "@cf/qwen/qwen3.8-27b",
   "@cf/zai-org/glm-5.3-flash",
   "@cf/deepseek-ai/deepseek-v4-flash-0731"
 ]; // none is from the writer's family (Meta Llama, MODEL)
@@ -571,7 +571,7 @@ export default {
         return new Response(JSON.stringify({ ok: true, enabled: v }), { headers: { "Content-Type": "application/json", ...CORS } });
       }
       if (p === "/probe" && m === "GET") {
-        const ai = await env.AI.run(MODEL, { messages: [{ role: "user", content: "Reply with exactly: OK" }], max_tokens: 30 });
+        const ai = await env.AI.run(MODEL, { messages: [{ role: "user", content: "Reply with exactly: OK" }], max_tokens: 30, reasoning_effort: "none" });
         return new Response(JSON.stringify({ model: MODEL, keys: ai ? Object.keys(ai) : null, response_field: ai && ai.response, result_field: ai && ai.result ? (typeof ai.result === "string" ? ai.result : Object.keys(ai.result)) : null, extracted: extractText(ai) }), { headers: { "Content-Type": "application/json", ...CORS } });
       }
       return new Response("not found", { status: 404, headers: CORS });

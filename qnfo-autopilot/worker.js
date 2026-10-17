@@ -2,7 +2,7 @@ var __defProp = Object.defineProperty;
 var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
 
 // worker.js
-var VERSION = "0.3.5-invest-gate";
+var VERSION = "0.3.6-model-floor-1";
 var NAME = "qnfo-autopilot";
 var DASH = "https://fleet.qnfo.org/api/state";
 var UA = "qnfo-autopilot/" + VERSION;
@@ -140,7 +140,7 @@ async function publishReport(env) {
 __name(publishReport, "publishReport");
 var CF_API = "https://api.cloudflare.com/client/v4/accounts/edb167b78c9fb901ea5bca3ce58ccc4b";
 var EVOLVE_MODEL = "@cf/moonshotai/kimi-k2.6";
-var THINK_MODEL = "@cf/meta/llama-3.3-70b-instruct-fp8-fast";
+var THINK_MODEL = "@cf/zai-org/glm-5.3";
 var COVERAGE = [
   "paper-hub",
   "jnl-pipeline",

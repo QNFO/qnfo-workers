@@ -5,8 +5,8 @@
 // POSTCONDITION: jnl_reviews/jnl_decisions/jnl_review_log rows reflect the review outcome.
 
 var okDoi = (v) => (v && !/10\.5281\/|z[e]nodo/i.test(String(v)) ? v : null);
-var VERSION = "0.9.3-doi-scrub"; // 0.9.2 JNL-GROUND-1 (owner directive 2026-10-10): reviewer prompt forbids external citations/facts; score_novelty is neutral (5) unless related work is supplied in the input
-var MODELS_DEFAULT = "@cf/openai/gpt-oss-120b,@cf/meta/llama-4-scout-17b-16e-instruct"; // 2026-09-08 model audit: gpt-oss-120b (128k ctx, reasoning, $0.75/M out) primary; llama-4-scout stays as long-ctx fc fallback
+var VERSION = "0.9.4-model-floor-1"; // 0.9.2 JNL-GROUND-1 (owner directive 2026-10-10): reviewer prompt forbids external citations/facts; score_novelty is neutral (5) unless related work is supplied in the input
+var MODELS_DEFAULT = "@cf/openai/gpt-oss-120b,@cf/zai-org/glm-5.3"; // 2026-09-08 model audit: gpt-oss-120b (128k ctx, reasoning, $0.75/M out) primary; llama-4-scout stays as long-ctx fc fallback
 var UA = "jnl-referee/0.1.0 (QNFO AI-referee overlay; open-science)";
 var FETCH_TIMEOUT_MS = 20000;
 var TEXT_CAP = 18000;
