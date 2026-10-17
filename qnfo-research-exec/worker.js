@@ -24,7 +24,7 @@ var __defProp2222 = Object.defineProperty;
 var __name2222 = /* @__PURE__ */ __name222((target, value) => __defProp2222(target, "name", { value, configurable: true }), "__name");
 var __defProp22222 = Object.defineProperty;
 var __name22222 = /* @__PURE__ */ __name2222((target, value) => __defProp22222(target, "name", { value, configurable: true }), "__name");
-var VERSION = "0.18.19-revise-flex";
+var VERSION = "0.18.20-flex-escape"; // 0.18.20 FLEX-ESCAPE-1 (2026-10-17): patchFlexTokens escaped each regex-special character with the literal text "function applyRevisePatch(paper, raw) {" instead of a backslash, so REVISE-PATCH-FLEX-1's regex was garbage and the whitespace-flexible match could never fire; restore "\$&" so the fallback actually matches.
 // WORKERS-AI-ATTRIBUTION-1 (2026-10-01, #1681): per-worker Workers AI attribution. Returns a shallow env copy whose AI
 // binding records each .run() (calls, errors, ms, tokens, neurons) into qnfo-audit ai_call_counters (purpose 'binding').
 // Neurons = usage tokens x Cloudflare's published per-model rates (neurons per M tokens). Fail-soft; env is never mutated.
@@ -2028,7 +2028,7 @@ function patchNewIdentifiers(text, baseLower) {
 // same >=20 character floor and the same identifier grounding check, so no edit can be applied to an ambiguous site.
 function patchFlexTokens(s) {
   return String(s).split(/\s+/).filter(Boolean).map(function(t) {
-    return t.replace(/[.*+?^${}()|[\]\\]/g, "\\function applyRevisePatch(paper, raw) {").replace(/['\u2018\u2019]/g, "['\u2018\u2019]").replace(/["\u201c\u201d]/g, '["\u201c\u201d]').replace(/-/g, "[-\u2013\u2014]");
+    return t.replace(/[.*+?^${}()|[\]\\]/g, "\\$&").replace(/['\u2018\u2019]/g, "['\u2018\u2019]").replace(/["\u201c\u201d]/g, '["\u201c\u201d]').replace(/-/g, "[-\u2013\u2014]");
   });
 }
 __name(patchFlexTokens, "patchFlexTokens");
