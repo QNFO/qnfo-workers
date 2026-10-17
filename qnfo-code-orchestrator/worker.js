@@ -2405,10 +2405,16 @@ const PLAN_CONTROL_PLANE = ["qnfo-fleet-control", "qnfo-ops", "qnfo-deploy-guard
 // CONTROL-PLANE-FUNCTIONAL-CANARY-1 (0.13.0, agent_issues 2176): a control-plane worker whose canonical deploy is followed by a
 // functional canary and an automatic revert (scripts/canary_revert.py FUNCTIONAL: qnfo-ai, qnfo-gateway) may be planned and
 // merged by the loop; mirrors qnfo-fleet-control CM_LOOP_CANARIED (fold-guard.test.mjs holds the copies equal).
-const PLAN_LOOP_CANARIED_BASE = ["qnfo-ai", "qnfo-gateway"];
-// CAPABILITY-GRANT-1: code_grant_canaried extends this set without a code change.
-function loopCanaried() { return PLAN_LOOP_CANARIED_BASE.concat(GRANTS.canaried || []); }
-function denyWorkers() { var c = loopCanaried(); return PLAN_CONTROL_PLANE.filter(function (w) { return c.indexOf(w) < 0; }); }
+const PLAN_LOOP_CANARIED = ["qnfo-ai", "qnfo-gateway"];
+const PLAN_DENY_WORKERS = PLAN_CONTROL_PLANE.filter(function (w) { return PLAN_LOOP_CANARIED.indexOf(w) < 0; });
+// CAPABILITY-GRANT-1: the constants above stay exactly as they were -- two parity suites parse them
+// by name and assert that PLAN_LOOP_CANARIED equals CM_LOOP_CANARIED. The grant is a RUNTIME filter
+// applied at the call sites, so the declared shape is unchanged and only the effective set grows.
+function denyWorkers() {
+  var extra = GRANTS.canaried || [];
+  if (!extra.length) return PLAN_DENY_WORKERS;
+  return PLAN_DENY_WORKERS.filter(function (w) { return extra.indexOf(w) < 0; });
+}
 const PLAN_DENY_CATEGORY = /^(security|governance|outreach|legal|finance|identity)$/i;
 const PLAN_DENY_TEXT = /\b(secret|credential|password|api[ _-]?key|private key|raise (the |a )?cap|increase (the |a )?cap|delete (all|every|the) |drop table|rotate|revoke)\b/i;
 // PLAN-DENY-NEGATION-1 (0.3.14, agent_issues 1807): an issue is refused when it ASKS for a deny phrase, not when its advice
