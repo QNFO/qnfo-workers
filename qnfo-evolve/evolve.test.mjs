@@ -22,16 +22,21 @@ const ok = (c, m, d) => {
   else { fail++; console.log("FAIL " + m + (d === undefined ? "" : " :: " + JSON.stringify(d))); }
 };
 
-/* Load without a bundler: the module has no imports, so the source can be evaluated as one body. */
-const mod = new Function("addEventListener", "console", src + "\n;return { isSinglePath, gapKey, buildIssue, pickNew, VERSION, SOURCE, MAX_OPEN, MAX_NEW_PER_TICK };")
-  (() => {}, { log() {} });
+/* Load without a bundler: the module has no imports, so the source can be evaluated as one body.
+ * `export default {` is rewritten to a local binding so the same file that ships to Cloudflare is the
+ * file under test. */
+const body = src.replace(/^export default /m, "var __default = ");
+const mod = new Function("console", body + "\n;return { isSinglePath, gapKey, buildIssue, pickNew, VERSION, SOURCE, MAX_OPEN, MAX_NEW_PER_TICK, handlers: __default };")
+  ({ log() {} });
 
 ok(/^\d+\.\d+\.\d+/.test(mod.VERSION), "VERSION is semver-shaped", mod.VERSION);
 ok(mod.SOURCE === "qnfo-evolve|EVOLVE-1", "source carries the loop identity", mod.SOURCE);
 
-/* Raw-PUT safety: the deployed artefact is this file, so it must not depend on a bundler. */
+/* Raw-PUT safety: the deployed artefact is this file, so it must be a self-contained ES module. */
 ok(!/^\s*import\s/m.test(src), "worker.js has no top-level import");
-ok(!/^\s*export\s/m.test(src), "worker.js has no top-level export");
+ok(/^export default \{/m.test(src), "worker.js exports the default handler set");
+ok(typeof mod.handlers.fetch === "function", "default export has a fetch handler");
+ok(typeof mod.handlers.scheduled === "function", "default export has a scheduled handler");
 
 /* 1. single-path detection, including the fleet's own "none automatic" wording. */
 ok(mod.isSinglePath('["a","b"]') === false, "two paths is not single-path");
