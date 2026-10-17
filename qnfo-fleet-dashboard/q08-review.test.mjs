@@ -89,7 +89,7 @@ const K = api.K;
 
 // The reader in q08-signal-engine (Q08-CADENCE-CAP-1), loaded from its own source.
 const qx = vm.createContext({ Number, String, Math });
-vm.runInContext([varSrc(q08src, "MAX_PER_DAY"), varSrc(q08src, "CAP_KEY"), fnSrc(q08src, "parseDailyCap"), fnSrc(q08src, "dailyCap"),
+vm.runInContext([varSrc(q08src, "MAX_PER_DAY"), varSrc(q08src, "CAP_KEY"), varSrc(q08src, "PROPERTY"), varSrc(q08src, "QUOTAS_KEY"), fnSrc(q08src, "parseDailyCap"), fnSrc(q08src, "parseQuota"), fnSrc(q08src, "propertyQuota"), fnSrc(q08src, "dailyCap"),
   "this.__q = { parseDailyCap, dailyCap, CAP_KEY, MAX_PER_DAY };"].join("\n"), qx);
 const q08 = qx.__q;
 
