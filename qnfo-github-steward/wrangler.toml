@@ -1,0 +1,23 @@
+name = "qnfo-github-steward"
+main = "worker.js"
+compatibility_date = "2026-10-10"
+compatibility_flags = ["nodejs_compat"]
+workers_dev = true
+# charter-pillar: autonomy (GITHUB-STEWARD-1)
+
+[observability]
+enabled = true
+
+[observability.logs]
+enabled = true
+head_sampling_rate = 1
+
+# Six-hourly: drift is corrected on a schedule the estate can rely on, not when someone notices.
+# Minute 17 keeps it off the fleet's 10-minute control tick.
+[triggers]
+crons = ["17 */6 * * *"]
+
+[[d1_databases]]
+binding = "AUDIT"
+database_name = "qnfo-audit"
+database_id = "35e2e573-92f3-46ac-83c6-22f6429fc5e5"
