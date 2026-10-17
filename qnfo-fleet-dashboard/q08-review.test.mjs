@@ -39,11 +39,18 @@ function mkDb() {
   let failBatch = false;
   const stmtOn = (sql) => {
     let args = [];
+    // node:sqlite refuses positional ?N binding ("column index out of range") and the review's ops_config upsert is
+    // written with ?1/?2/?3, so the whole batch threw and the decision was never written. Map ?N to named $pN.
+    const q = /\?\d/.test(sql) ? sql.replace(/\?(\d+)/g, (m, n) => "$p" + n) : sql;
+    const call = (m) => {
+      const st = db.prepare(q);
+      return q === sql ? st[m](...args) : st[m](Object.fromEntries(args.map((v, i) => ["p" + (i + 1), v])));
+    };
     const self = {
       bind(...x) { args = x.map((v) => (v === undefined ? null : v)); return self; },
-      async all() { return { results: db.prepare(sql).all(...args) }; },
-      async first() { return db.prepare(sql).get(...args) || null; },
-      async run() { const r = db.prepare(sql).run(...args); return { success: true, meta: { changes: Number(r.changes) } }; }
+      async all() { return { results: call("all") }; },
+      async first() { return call("get") || null; },
+      async run() { const r = call("run"); return { success: true, meta: { changes: Number(r.changes) } }; }
     };
     return self;
   };
@@ -89,7 +96,7 @@ const K = api.K;
 
 // The reader in q08-signal-engine (Q08-CADENCE-CAP-1), loaded from its own source.
 const qx = vm.createContext({ Number, String, Math });
-vm.runInContext([varSrc(q08src, "MAX_PER_DAY"), varSrc(q08src, "CAP_KEY"), fnSrc(q08src, "parseDailyCap"), fnSrc(q08src, "dailyCap"),
+vm.runInContext([varSrc(q08src, "MAX_PER_DAY"), varSrc(q08src, "CAP_KEY"), fnSrc(q08src, "parseDailyCap"), fnSrc(q08src, "propertyQuota"), fnSrc(q08src, "dailyCap"),
   "this.__q = { parseDailyCap, dailyCap, CAP_KEY, MAX_PER_DAY };"].join("\n"), qx);
 const q08 = qx.__q;
 
@@ -169,15 +176,21 @@ ok(await q08.dailyCap({}) === 10 && await q08.dailyCap({ AUDIT: { prepare() { th
   ok(st.decision && st.decision.decision === "cut-cadence" && st.last_attempt && st.last_attempt.status === "ok" && st.cap === null, "the status read shows the decision and the last attempt");
 
   // the watchmaker stuck query (WATCHMAKER_OPS q08-review) is 0 once decided
-  const sq = /key: "q08-review"[^\n]*stuck_sql: "([^"]+)"/.exec(src)[1];
-  ok(db.prepare(sq).get(new Date(Date.parse("2026-11-05T00:00:00Z") - 48 * 36e5).toISOString()).stuck === 0, "watchmaker: a decided review is not counted");
+  const sqRaw = /key: "q08-review"[^\n]*stuck_sql: "([^"]+)"/.exec(src)[1];
+  // node:sqlite refuses positional ?N binding; the stuck query uses ?1.
+  const sqNamed = /\?\d/.test(sqRaw);
+  const sq = sqNamed ? sqRaw.replace(/\?(\d+)/g, (m, n) => "$p" + n) : sqRaw;
+  const sqArg = new Date(Date.parse("2026-11-05T00:00:00Z") - 48 * 36e5).toISOString();
+  ok(db.prepare(sq).get(sqNamed ? { p1: sqArg } : sqArg).stuck === 0, "watchmaker: a decided review is not counted");
 }
 {
   // keep path, an existing lower cap, empty RUM, a down network, a failed write
   const { db, AUDIT, setFailBatch } = mkDb();
   const env = { AUDIT, CF_TOKEN: "t" };
-  const sq = /key: "q08-review"[^\n]*stuck_sql: "([^"]+)"/.exec(src)[1];
-  const stuckAt = (iso) => db.prepare(sq).get(new Date(Date.parse(iso) - 48 * 36e5).toISOString()).stuck;
+  const sqRaw2 = /key: "q08-review"[^\n]*stuck_sql: "([^"]+)"/.exec(src)[1];
+  const sqNamed = /\?\d/.test(sqRaw2);
+  const sq = sqNamed ? sqRaw2.replace(/\?(\d+)/g, (m, n) => "$p" + n) : sqRaw2;
+  const stuckAt = (iso) => { const a = new Date(Date.parse(iso) - 48 * 36e5).toISOString(); return db.prepare(sq).get(sqNamed ? { p1: a } : a).stuck; };
   ok(stuckAt("2026-10-31T12:00:00Z") === 0 && stuckAt("2026-11-02T00:00:01Z") === 1, "watchmaker: a review 48h past due with no decision counts, not before");
 
   gqlMode = "ok"; humanGroups = []; allGroups = [];
