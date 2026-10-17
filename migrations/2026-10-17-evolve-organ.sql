@@ -88,3 +88,17 @@ INSERT OR IGNORE INTO evolve_targets (kind, key, worker, file, note) VALUES
    'EVOLVE-1 seed: ALTERNATE-NEVER-TESTED for CI, canonical deploy, the migration runner'),
   ('component', 'GitHub token (worker secrets)', 'qnfo-fleet-control', 'qnfo-fleet-control/worker.js',
    'EVOLVE-1 seed: ALTERNATE-NEVER-TESTED for every Cloudflare -> GitHub write');
+
+-- SPOF-REVIEW-GATE-1 asks the author of a new cron dependency to name its second path. EVOLVE-1's
+-- second path is POST /tick: the tick files nothing twice because every filing key is a deterministic
+-- hash of the gap, so a missed cron fire costs a delay, never a lost gap. Recorded here so the claim
+-- is reviewable and carries a date, rather than living only in a pull request comment.
+INSERT OR IGNORE INTO spof_registry (component, critical_path, alternate_path, evidence) VALUES
+  ('qnfo-evolve cron',
+   'EVOLVE-1 gap intake: register row -> named issue -> verified closure',
+   'POST /tick with x-loop-token runs the identical path on demand; filing keys are deterministic '
+     || 'hash(kind, process, step), so a missed fire costs a delay and cannot duplicate or lose a gap; '
+     || 'evolve_runs records every tick, so an absent run is itself observable',
+   'EVOLVE-1 (2026-10-17): pickNew dedupes against evolve_filings.state=open by key; the same gap '
+     || 're-derived on the next tick produces the same key and is skipped. Second path is exercised '
+     || 'by the offline suite (pickNew + gapKey stability) and by GET /report after each tick.');
