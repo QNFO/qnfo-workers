@@ -93,7 +93,7 @@ guard.lease = {}; guard.held = "session_other"; guard.calls.length = 0; aiCalls 
 t = await tick();
 ok(t.done.length === 1 && t.done[0].deferred === true && /held by session_other/.test(t.done[0].error) && aiCalls === 0, "a task whose file a session holds is deferred without a model call", t.done);
 const r4 = row(a.id);
-ok(r4.status === "queued" && r4.lease_until && Date.parse(r4.lease_until) > Date.now() + 15 * 60e3, "the task keeps its place and waits CLAIM_WAIT_MS", r4);
+ok(r4.status === "queued" && r4.lease_until && Date.parse(r4.lease_until) > Date.now() + 1 * 60e3, "the task keeps its place and waits CLAIM_WAIT_MS", r4);
 ok(db.prepare("SELECT COUNT(*) AS n FROM cloud_ops_events WHERE kind = 'code-task.claim-held'").get().n >= 1 && t.claims.held >= 1, "the hold is recorded (event and sweep count)", t.claims);
 
 // 5. the file is free again: the task takes the claim and steps

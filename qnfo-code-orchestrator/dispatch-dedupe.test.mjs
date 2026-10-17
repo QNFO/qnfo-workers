@@ -172,8 +172,8 @@ const claim = (env, p, f) => env.AUDIT_DB._db.prepare("INSERT INTO work_claims (
   ok(a.ok, "7a the first task is queued", a);
   d.prepare("UPDATE code_tasks SET attempts = 1, ctx = ?, last_error = 'standards guard' WHERE id = ?").run(sigsJson(["suite a.test.mjs: boom"], 400), a.id);
   ok(!(await enq(env, "q08-signal-engine/worker.js")).ok, "7b one failed attempt keeps the file (no judgement on a first attempt)");
-  d.prepare("UPDATE code_tasks SET attempts = 3, ctx = ?, last_error = 'standards guard' WHERE id = ?").run(sigsJson(["A", "B", "A"], 60), a.id);
-  ok(!(await enq(env, "q08-signal-engine/worker.js")).ok, "7c a repeat inside the window keeps the file");
+  d.prepare("UPDATE code_tasks SET attempts = 3, ctx = ?, last_error = 'standards guard' WHERE id = ?").run(sigsJson(["A", "B", "A"], 20), a.id);
+  ok(!(await enq(env, "q08-signal-engine/worker.js")).ok, "7c a repeat inside the 45-minute window keeps the file");
   d.prepare("UPDATE code_tasks SET attempts = 6, ctx = ?, last_error = 'standards guard' WHERE id = ?").run(sigsJson(["A", "B", "A", "B", "A", "B"], 200), a.id);
   const e = await enq(env, "q08-signal-engine/worker.js");
   ok(e.ok && e.http === 202, "7d no new failure signature for 200 min frees the file and the next issue is queued", e);

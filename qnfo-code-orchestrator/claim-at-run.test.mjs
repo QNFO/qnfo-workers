@@ -91,7 +91,7 @@ const A = await addTask("fx-a/worker.js", "claim-at-run fixture A: queued, not s
 ok(A.ok && callsFor("/work-lock/acquire", KA).length === 0 && !ctxOf(A.id).claim && !guard.lease[KA], "1 enqueue sends no acquire and records no claim", { calls: guard.calls, ctx: ctxOf(A.id) });
 
 // 2. the sweep never claims an unstarted task (not due: a 15-minute claim-held deferral)
-db.prepare("UPDATE code_tasks SET lease_until = ? WHERE id = ?").run(inMin(15), A.id);
+db.prepare("UPDATE code_tasks SET lease_until = ? WHERE id = ?").run(inMin(3), A.id);
 guard.calls.length = 0;
 let t = await tick();
 ok(t.steps === 0 && guard.calls.length === 0 && t.claims.taken === 0 && t.claims.renewed === 0, "2 the sweep sends no guard call for a queued task that has not started", { t, calls: guard.calls });
@@ -121,7 +121,7 @@ const acA = callsFor("/work-lock/acquire", KA);
 ca = ctxOf(A.id).claim;
 ok(t.done.length === 1 && t.done[0].id === A.id && !t.done[0].deferred && acA.length === 1 && !acA[0].body.token && acA[0].body.owner === "qnfo-code-orchestrator:" + A.id && ca.token && ca.token !== tokA && !ca.released_at && guard.lease[KA], "4a the task takes a new claim at its first step and steps", { done: t.done, acA, ca });
 ok(row(A.id).attempts === 1 && t.claims.unstarted === 0 && callsFor("/work-lock/release", KA).length === 0, "4b after its step the task has started and the sweep keeps its claim", { r: row(A.id), claims: t.claims });
-db.prepare("UPDATE code_tasks SET lease_until = ? WHERE id = ?").run(inMin(15), A.id);
+db.prepare("UPDATE code_tasks SET lease_until = ? WHERE id = ?").run(inMin(3), A.id);
 setClaim(A.id, { expires_at: inMin(10) });
 guard.calls.length = 0;
 t = await tick();
@@ -132,7 +132,7 @@ ok(renA.length === 1 && renA[0].body.token === ca.token && t.claims.renewed === 
 const KB = "file:fx-b/worker.js";
 const B = await addTask("fx-b/worker.js", "claim-at-run fixture B: read step timed out once");
 const tokB = await startClaim(B.id, "fx-b/worker.js");
-db.prepare("UPDATE code_tasks SET lease_until = ?, ctx = json_set(ctx, '$.timeouts', 1) WHERE id = ?").run(inMin(10), B.id);
+db.prepare("UPDATE code_tasks SET lease_until = ?, ctx = json_set(ctx, '$.timeouts', 1) WHERE id = ?").run(inMin(1), B.id);
 setClaim(B.id, { expires_at: inMin(10) });
 guard.calls.length = 0;
 t = await tick();
