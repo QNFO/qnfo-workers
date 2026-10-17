@@ -33,20 +33,32 @@ const hourly = sched.slice(sched.indexOf('if (cron === "0 4 1 * *" || cron === "
 check(/remediationContractsTick\(env, \{ budgetMs: 25000 \}\)/.test(twenty), "the 10-minute cron runs the remediation tick with a 25 s budget");
 check(!/remediationContractsTick\(env/.test(hourly), "the hourly fan-out no longer runs the remediation tick");
 
+const toNamed = (sql, args) => {
+  const obj = {};
+  let hit = false;
+  const s = sql.replace(/\?(\d+)/g, (m, d) => { hit = true; obj["p" + d] = args[Number(d) - 1]; return ":p" + d; });
+  return hit ? [s, obj] : [sql, args];
+};
 const wrap = (db, delayMs) => {
   const pause = () => new Promise((r) => setTimeout(r, delayMs || 0));
-  const stmt = (sql, args) => ({
-    bind: (...x) => stmt(sql, x),
-    run: async () => { const r = db.prepare(sql).run(...args); return { meta: { changes: r.changes } }; },
-    first: async () => { if (delayMs && /expected/.test(sql)) await pause(); return db.prepare(sql).get(...args) || null; },
-    all: async () => ({ results: db.prepare(sql).all(...args) })
-  });
+  const stmt = (sql, args) => {
+    const [q, named] = toNamed(sql, args);
+    return {
+      bind: (...x) => stmt(sql, x),
+      run: async () => { const r = db.prepare(q).run(...(Array.isArray(named) ? named : [named])); return { meta: { changes: r.changes, last_row_id: Number(r.lastInsertRowid) } }; },
+      first: async () => { if (delayMs && /expected/.test(sql)) await pause(); return db.prepare(q).get(...(Array.isArray(named) ? named : [named])) || null; },
+      all: async () => ({ results: db.prepare(q).all(...(Array.isArray(named) ? named : [named])) })
+    };
+  };
   return { prepare: (sql) => stmt(sql, []) };
 };
 const mk = () => {
   const db = new DatabaseSync(":memory:");
   db.exec(`CREATE TABLE remediation_contracts (class TEXT PRIMARY KEY, issue_id INTEGER, precondition TEXT, action TEXT, verify_probe TEXT, verify_transport TEXT, max_attempts INTEGER DEFAULT 3, escalate_to TEXT, expected_cadence_h INTEGER, status TEXT DEFAULT 'active', ts TEXT DEFAULT (datetime('now')), last_attempt_at TEXT, last_verdict TEXT, next_due_at TEXT, attempts INTEGER DEFAULT 0);
     CREATE TABLE remediation_verifications (id INTEGER PRIMARY KEY AUTOINCREMENT, issue_id INTEGER, class TEXT, probe_url TEXT, transport TEXT NOT NULL, expected TEXT, observed TEXT, pass INTEGER NOT NULL, verified_at TEXT DEFAULT (datetime('now')), verifier TEXT);
+    CREATE TABLE remediation_evidence (id INTEGER PRIMARY KEY AUTOINCREMENT, issue_id INTEGER, class TEXT, probe_url TEXT, transport TEXT NOT NULL, expected TEXT, observed TEXT, pass INTEGER NOT NULL, verified_at TEXT DEFAULT (datetime('now')), verifier TEXT, path TEXT DEFAULT 'B:evidence-table');
+    CREATE VIEW v_remediation_evidence_all AS SELECT id, issue_id, class, probe_url, transport, expected, observed, pass, verified_at, verifier, 'verifications' AS src FROM remediation_verifications UNION ALL SELECT id, issue_id, class, probe_url, transport, expected, observed, pass, verified_at, verifier, 'evidence' AS src FROM remediation_evidence;
+    CREATE TABLE path_liveness (path TEXT PRIMARY KEY, checked_at TEXT, checked_by TEXT, detail TEXT);
     CREATE TABLE agent_issues (id INTEGER PRIMARY KEY, title TEXT, description TEXT, status TEXT, close_channel TEXT, updated_at INTEGER);
     CREATE TABLE issue_triage (issue_id INTEGER PRIMARY KEY, rc TEXT, triage_state TEXT, owner TEXT, sla_due_at TEXT, close_evidence TEXT, reopened_count INTEGER NOT NULL DEFAULT 0);`);
   return db;
