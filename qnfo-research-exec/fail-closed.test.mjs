@@ -47,7 +47,7 @@ function d1(db) {
 // A capturing D1 for the pipeline stages (first() and all() read nothing).
 function capDb() {
   const sqls = [];
-  return { sqls, prepare(sql) { let args = []; const q = { bind(...x) { args = x; return q; }, async run() { sqls.push({ sql, args }); return { meta: { changes: 1 } }; }, async first() { return null; }, async all() { return { results: [] }; } }; return q; } };
+  return { sqls, prepare(sql) { let args = []; const q = { bind(...x) { args = x; return q; }, async run() { sqls.push({ sql, args }); return { meta: { changes: 1 } }; }, async first() { if (/research_recover_max/.test(sql)) return { value: "3" }; if (/park_rearm/.test(sql)) return { value: "off" }; return null; }, async all() { return { results: [] }; } }; return q; } };
 }
 const events = (db, kind) => db.sqls.filter((s) => /INSERT INTO cloud_ops_events/.test(s.sql) && s.args[2] === kind).map((s) => s.args[3]);
 const updates = (db) => db.sqls.filter((s) => /UPDATE research_queue/.test(s.sql));
@@ -76,7 +76,6 @@ ok(versionAtLeast((src.match(/var VERSION = "([^"]+)"/) || [])[1] || "0", "0.18.
   const mk = (extract) => {
     const store = { "pipeline/x1/reconciled.md": PAPER, "pipeline/x1/grounding.md": "" };
     const db = capDb();
-    db.exec("CREATE TABLE IF NOT EXISTS ops_config (key TEXT PRIMARY KEY, value TEXT); INSERT OR REPLACE INTO ops_config VALUES ('research_recover_max','3'),('park_rearm','off');");
 const env = { QNFO_AUDIT: db, MIRROR: { async get(k) { const v = store[k]; return v == null ? null : { text: async () => v }; }, async put(k, v) { store[k] = v; } },
       AI: { async run(model, input) { const c = input.messages[0].content; return { response: c.includes("=== TASK: VERIFY_EXTRACT ===") ? extract : "" }; } } };
     return { env, db, store };

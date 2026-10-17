@@ -5,10 +5,27 @@
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+// REVIEW-PATCH-PARSE-IMPORT-1: both helpers are exported, so use the module instead of slicing worker.js text. The bundle
+// format (inner blocks, __name(...) markers, long chained replaces) makes any text slicer fragile, and 0.18.19 broke it.
+import { parsePatchEdits, applyRevisePatch } from "./worker.js";
 const here = dirname(fileURLToPath(import.meta.url));
 const src = readFileSync(join(here, "worker.js"), "utf8");
-const grab = (sig) => { const start = src.indexOf(sig); const end = src.indexOf("\n}\n", start); if (start < 0 || end < 0) throw new Error("not found " + sig); return src.slice(start, end + 2); };
-const api = new Function(grab("function repairJsonBackslashes(") + "\n" + grab("function topLevelJsonValues(") + "\n" + grab("function parsePatchEdits(") + "\n" + grab("function patchNewIdentifiers(") + "\n" + grab("function applyRevisePatch(") + "\nreturn { parsePatchEdits, applyRevisePatch };")();
+const grab = (sig) => {
+  const start = src.indexOf(sig);
+  if (start < 0) throw new Error("not found " + sig);
+  // Bundle output has __name(...) markers and inner blocks, so the old "first \n}\n" boundary cut a function in half.
+  // Walk braces instead, skipping string literals.
+  let i = src.indexOf("{", start), depth = 0, str = null;
+  for (; i < src.length; i++) {
+    const c = src[i];
+    if (str) { if (c === "\\") { i++; continue; } if (c === str) str = null; continue; }
+    if (c === '"' || c === "'" || c === "`") { str = c; continue; }
+    if (c === "{") depth++;
+    else if (c === "}") { depth--; if (depth === 0) return src.slice(start, i + 1); }
+  }
+  throw new Error("unbalanced " + sig);
+};
+const api = { parsePatchEdits, applyRevisePatch };
 let pass = 0, fail = 0;
 const ok = (c, m, d) => { if (c) pass++; else { fail++; console.log("FAIL " + m + (d === undefined ? "" : " :: " + JSON.stringify(d))); } };
 const P = (s) => api.parsePatchEdits(s);
