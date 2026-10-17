@@ -70,3 +70,89 @@ Cause: the tick ran one step at a time and awaited it, so a single `propose` mod
 - PRs merged: #1371, #1374, #1378, #1382, #1384. #1366 closed as superseded.
 - Tests: 23 of 27 orchestrator suites clean locally; the 4 failures are byte-identical on `origin/main` under Windows.
 - Spend today: $1.198 for the code loop.
+
+---
+
+# Part 2 — the research pipeline (same day, second half)
+
+Owner directives after the code loop: "FLOW BALANCE IS OUT OF BALANCE", "INCREASE THROUGHPUT!",
+"RESOLVE ALL WAITING AND PARKED ITEMS IN LINE", "RESOLVE FLEET BOTTLENECKS, FAILURES, ERRORS, AND
+ROOT CAUSES". All figures below are from `research_queue` and `cloud_ops_events` unless marked.
+
+## 2.1 The imbalance, measured
+
+| day | arrivals | published |
+| --- | --- | --- |
+| 10-11 | 24 | 31 |
+| 10-12 | 38 | 22 |
+| 10-13 | 124 | 10 |
+| 10-15 | 162 | 14 |
+| 10-16 | 134 | 5 |
+| 10-17 | 108 | 8 |
+
+7 days: **673 arrivals / 100 published** (6.7:1), net +82/day, W = 640 in flight, so **wait = L/λ ≈ 45 days**.
+Throughput *fell* as the queue grew (31 → 8): congestion, not a steady imbalance.
+
+## 2.2 What was changed, live
+
+| lever | was | now | why |
+| --- | --- | --- | --- |
+| `ops_config.research_parallel` | 12 | **24** | 189 items at `ground`, 157 at `revise`, 12 slots; ceiling is 48 |
+| `ops_config.research_recover_max` | 6 | **3** | owner's value; parks after 3 re-runs via `REVIEW-UNRESOLVED-PARK-1` |
+| `research_queue` reconcile | — | **144 rows closed** | rows whose paper was already published; in-flight 640 → 568, published 198 → 270 |
+
+`research_ready_cap` (120) was examined and **left alone**: `qnfo-fleet-control` caps `status='queued'` at
+~3 h of throughput, so raising it only relabels `deferred` rows.
+
+## 2.3 The exit, instrumented
+
+- `review-unresolved` events exist only at **cycle 2 (193) and cycle 3 (165)**. No event ever reaches
+  cycle 4 although `MAX_REVIEW_CYCLES` is 6 — each pass stops at cycle 3 and the re-arm resets the
+  counter.
+- Hard-finding counts per event: **1–24**, peaks at 4–5–6. The findings differ between passes; they
+  never clear. So the gate is **not too strict** — the drafts are stably unusable.
+- Re-arms **mostly succeed**: `prior=review, recover_count=1` = 167, `recover_count=2` = **13**. The
+  retry is productive; `recover_max=3` is a backstop almost nothing will hit.
+- Re-arms already **keep the draft** (resume at `revise`, not `ground`), so there is no re-grounding cost
+  to reclaim.
+
+## 2.4 THE ROOT CAUSE (open, and it outranks everything above)
+
+```
+last 24h, every publish path in the fleet:
+  qnfo-research-exec   complete 151 | reconcile-degrade 62 | publish/pub-gate/release 0
+  qnfo-cloud-ops       publish/pub-gate/release 0
+```
+
+**Nothing in the fleet publishes anything.** The publish stage does not run — it is not throttled, not
+capped, not starved of slots. That is why every capacity increase (8 lanes, `*/2`, 24 slots, 3 re-runs)
+moved no paper. `reconcile-degrade` is a red herring: its cause is
+`reconcile output short (9905 < 10000 chars after retry); reconciled from best leg (len=22371)` — a model
+output landing ~95 chars under the floor, then a fallback to a **longer, better** leg, after which the
+item still reaches `complete`.
+
+**Next action is one query, not a redesign:** what condition gates `stage='publish'` and why no row
+reaches it.
+
+## 2.5 Deliberately NOT shipped
+
+Each is a change inside `qnfo-research-exec` (28,241 lines, four folded members), none is the publish
+fix, and shipping any of them untested at session end risks a new failure class:
+
+1. *Skip the discard-retry* — the premise was wrong: the retry can yield a ≥10k reconciled output that
+   replaces the leg, so skipping it is **not** quality-neutral.
+2. *`RUN_LOOP_BUDGET_MS` 4 → 6 min* — the code's own comment: `4 min + p99 stage 10.5 min ≈ the 15-min
+   wall`. Needs a per-stage timeout first.
+3. *`*/15` → `*/5`* — `event.cron !== TICK_CRON` plus a `CRON_TABLE` minute-window map shared with
+   `paper-reviser` (every 4th hour at `:30`) and three errata jobs. Refactor, not config.
+4. *Re-arm only on improvement* — touches the park path just capped at 3.
+
+## 2.6 Fleet health at closeout
+
+- `fleet_heartbeat`: **0 workers in `ok=0`**.
+- Code-loop failures 24h: 13, dominated by *no SEARCH/REPLACE block* (5).
+- qwen2.5-coder rows are **stale** (created before the model floor deploy); live ladder is
+  kimi-k2.7-code → glm-5.3 → deepseek-v4-flash.
+- `issue_triage`: 2732 of 2779 past SLA (98%) — untouched.
+- Papers: **0 of 598** published carry a `doi`; 47 do exist on `research_queue` rows.
+- Open agent_issues: **204** (rose from 188 during the session).
