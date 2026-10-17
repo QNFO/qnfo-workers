@@ -11,3 +11,6 @@
 #
 # fleet-exec removed 2026-10-06: folded into qnfo-code-orchestrator (FLEET-EXEC-FOLD-1, #1756).
 qnfo-social qnfo-social/worker.js
+# EVOLVE-1 (2026-10-17): the organ that turns the fleet's own gap registers into named work.
+# Listed here because a worker absent from this manifest gets its wrangler.toml crons applied as INERT.
+qnfo-evolve qnfo-evolve/worker.js
