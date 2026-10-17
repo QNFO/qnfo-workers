@@ -17,7 +17,7 @@ const src = readFileSync(join(here, "worker.js"), "utf8");
 const a = src.indexOf("/* AREAS-1:BEGIN"), b = src.indexOf("/* AREAS-1:END */");
 ok(a > 0 && b > a, "AREAS-1 block markers present");
 const cx = vm.createContext({ console, Date, JSON, Math, Number, String, Object, RegExp, isFinite, Promise });
-vm.runInContext(src.slice(a, b) + "\nglobalThis.X = { areaOf, prioNum, gapOf, trendOf, bottleneckOf, buildAreas, fmtNum, shortTitle, sparkSvg, areaTilesHtml, areaSectionsHtml, flowHtml };", cx);
+vm.runInContext(src.slice(a, b) + "\nglobalThis.X = { areaOf, prioNum, gapOf, trendOf, bottleneckOf, buildAreas, fmtNum, shortTitle, sparkSvg, areaTilesHtml, areaSectionsHtml, flowHtml, focusOf, leverKind, leverLine, focusRowsHtml, controlsHtml, areaDetailHtml };", cx);
 vm.runInContext("async function d1all(db, sql, params) { let ps = db.prepare(sql); if (params && params.length) ps = ps.bind.apply(ps, params); const r = await ps.all(); return r.results || []; }; globalThis.areasModel = areasModel;", cx);
 const X = cx.X;
 // A
@@ -113,5 +113,36 @@ ok(am.blind.length === 0, "nothing blind when every source reads");
 vm.runInContext("AREAS_CACHE = { at: 0, v: null };", cx);
 const bm = await cx.areasModel({ AUDIT: mk2({ broken: true }) }, null);
 ok(bm.blind.includes("code tasks") && !bm.flows.some((f) => f.id === "code"), "an unreadable source is named and its flow omitted, not shown as zero: " + bm.blind);
+// AREAS-2 (1.39.0): one constraint per area, with its lever, its lever type, its remedy history, and its cause list.
+const rows2 = [
+  { metric_key: "guard_rcs", title: "a guard failed", operator: "gt", threshold: 0, owner: "fc", priority: 7, val: 2, lever: "Pillar security. A guard failed closed. Read the guard output.", tries: 3 },
+  { metric_key: "runtime_verified_share_24h", title: "verification monoculture", operator: "lt", threshold: 10, owner: "ops", priority: 7, val: 9.5, lever: "Pillar autonomy. Either the runner stopped or runtime contracts dried up." },
+  { metric_key: "remedy_efficacy_30d", title: "remedies do not move metrics", operator: "lt", threshold: 0.5, owner: "fc", priority: 8, val: 0.37, tries: 2 },
+  { metric_key: "fix_hold_rate_30d", title: "fixes relapse", operator: "lt", threshold: 0.8, owner: "fc", priority: 8, val: 0.49 }
+];
+const m2 = X.buildAreas(rows2, {}, [], null);
+const rel2 = m2.areas.find((x) => x.id === "reliability");
+ok(rel2.focus.key === "runtime_verified_share_24h" && rel2.focus.root === true, "the known root is promoted over the higher-scoring guard breach: " + rel2.focus.key);
+ok(rel2.focus.explains.some((x) => x.key === "remedy_efficacy_30d" && x.area === "autonomy"), "the root names the breaches it is believed to cause, with their area");
+ok(rel2.all.length === 2 && rel2.top.length === 2, "the area detail list holds every breach, the summary still holds three");
+ok(m2.areas.find((x) => x.id === "autonomy").focus.key === "remedy_efficacy_30d", "autonomy promotes remedy efficacy over the higher-scoring relapse rate");
+ok(X.buildAreas([{ metric_key: "guard_rcs", title: "g", operator: "gt", threshold: 0, owner: "o", priority: 7, val: 1 }], {}, [], null).areas.find((x) => x.id === "reliability").focus.root === false, "an absent root falls back to the score winner, never to nothing");
+ok(X.leverKind("code-task: repo=qnfo-workers path=x") === "code", "a code-task line is a code lever");
+ok(X.leverKind("Top up the Cloudflare credit") === "owner", "a top-up is an owner decision");
+ok(X.leverKind("Read ai_call_counters") === "fleet", "a read is a fleet lever");
+ok(X.leverLine("Pillar cost. Read ai_call_counters for 7 days. Then more.") === "Read ai_call_counters for 7 days.", "the pillar label and later sentences are dropped: " + X.leverLine("Pillar cost. Read ai_call_counters for 7 days. Then more."));
+const fx = X.focusRowsHtml(m2, esc);
+ok((fx.match(/class="fx-r /g) || []).length === 5, "five constraint rows, one per area");
+ok(/href="\/area\/reliability"/.test(fx) && /root cause/.test(fx), "each row links to its own page and names its root");
+ok(!/data-fleet-fill|Diagnose/.test(fx), "no per-row model call on the front page");
+ok(/2 attempts in 30d, still in breach/.test(fx), "the remedy history is on the constraint row");
+ok(/no attempt in 30d/.test(fx), "a constraint with no remedy attempt says so instead of implying one was tried");
+const det = X.areaDetailHtml(rel2, m2, esc);
+ok(/id="guard_rcs"/.test(det) && /id="runtime_verified_share_24h"/.test(det), "the area page lists every breach with an anchor");
+ok(/Lever \(fleet\)/.test(det), "the area page shows the lever and its type");
+const ctl = X.controlsHtml({ controls: [{ key: "social_paused", label: "Social distribution", on: true, state: "paused, no resume time set", since: "2026-10-17 04:00" }] }, esc);
+ok(/paused/.test(ctl) && /class="bad"/.test(ctl) && /info social_paused/.test(ctl), "a paused pipeline is visible with its state");
+ok(X.controlsHtml({ controls: null }, esc) === "", "no control table renders nothing rather than a false all-clear");
+ok(!/undefined|NaN|\[object/.test(fx + det + ctl), "no undefined, NaN or object leaks in the constraint tier");
 console.log(pass + " passed, " + fail + " failed");
 process.exit(fail ? 1 : 0);
