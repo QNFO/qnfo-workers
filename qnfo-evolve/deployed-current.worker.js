@@ -319,25 +319,25 @@ function tickAllowed(env, req) {
   return sameSecret(req.headers.get("x-loop-token"), env.LOOP_TOKEN);
 }
 
-async function handleFetch(event) {
-  var req = event.request;
+async function handleFetch(request, env) {
+  var req = request;
   var url = new URL(req.url);
   var path = url.pathname;
   try {
     if (path === "/health") {
       var last = null;
       try {
-        var lr = await event.env.AUDIT.prepare(
+        var lr = await env.AUDIT.prepare(
           "SELECT ts, scanned, filed, closed FROM evolve_runs ORDER BY id DESC LIMIT 1"
         ).all();
         last = ((lr && lr.results) || [])[0] || null;
       } catch (e) { last = { error: errText(e) }; }
       return json({ ok: true, worker: WORKER, version: VERSION, last_run: last });
     }
-    if (path === "/report") return json(await report(event.env));
+    if (path === "/report") return json(await report(env));
     if (path === "/tick" && req.method === "POST") {
-      if (!tickAllowed(event.env, req)) return json({ error: "forbidden" }, 403);
-      return json(await runTick(event.env));
+      if (!tickAllowed(env, req)) return json({ error: "forbidden" }, 403);
+      return json(await runTick(env));
     }
     return json({ worker: WORKER, version: VERSION, endpoints: ["/health", "/report", "POST /tick"] });
   } catch (e) {
@@ -345,18 +345,21 @@ async function handleFetch(event) {
   }
 }
 
-/* Service-worker syntax: the runtime ignores a returned promise, so the handler must hand its work
- * to the event explicitly or the request/scheduled event is torn down mid-flight. */
-addEventListener("fetch", function (event) {
-  event.respondWith(handleFetch(event));
-});
-
-addEventListener("scheduled", function (event) {
-  event.waitUntil(
-    runTick(event.env)
+/* ES MODULE FORMAT, NOT SERVICE-WORKER SYNTAX -- and this is not a style choice.
+ * Creating this worker with a D1 binding through the canonical path is refused as
+ * "Binding 'AUDIT' of type 'd1' requires a Worker written in ES module format" (CF 100329), and a
+ * service-worker script uploaded on the module path fails as "no registered event handlers" (10068).
+ * The fix is the export default below. There is still no import: the canonical deployer PUTs this
+ * file verbatim, so a bare specifier would ship unresolved. */
+export default {
+  fetch: function (request, env) {
+    return handleFetch(request, env);
+  },
+  scheduled: function (event, env) {
+    return runTick(env)
       .then(function (out) { console.log("EVOLVE-1 tick " + JSON.stringify(out)); })
       .catch(function (e) {
         console.error(JSON.stringify({ worker: WORKER, event: "tick-failed", error: errText(e) }));
-      })
-  );
-});
+      });
+  }
+};
