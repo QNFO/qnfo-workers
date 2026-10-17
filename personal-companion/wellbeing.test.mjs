@@ -8,9 +8,10 @@ import { DatabaseSync } from "node:sqlite";
 import {
   DDL, ensureWellbeingSchema, recordCheckin, dayKey, localHourFloat, inQuiet,
   drift, planNext, retiredKinds, expireStale, closeNudge, crisisBlock, crisisSignal,
-  DEFAULT_CONFIG, LADDER, whatHelped, unansweredStreak, tzOffsetMinutes
+  DEFAULT_CONFIG, LADDER, whatHelped, unansweredStreak, tzOffsetMinutes,
+  safetyPlanBlock, weeklyReviewText
 } from "./wellbeing.js";
-import { handleWellbeing, wellbeingTick, vaultNoteDays, ensureWellbeing, briefCheckinLines, noteCheckinInBrief, cfg } from "./wellbeing-wire.js";
+import { handleWellbeing, wellbeingTick, vaultNoteDays, ensureWellbeing, briefCheckinLines, noteCheckinInBrief, cfg, weeklyReview } from "./wellbeing-wire.js";
 
 let pass = 0, fail = 0;
 const ok = (name, cond, extra) => {
@@ -246,6 +247,46 @@ console.log("\n[settings]");
   const page1 = await handleWellbeing(new Request("https://reading.q08.org/wb/settings?t=t0k"), s.env, {});
   const html = await page1.text();
   ok("settings page shows what is saved", html.includes("Ana") && html.includes("<form"), html.slice(0, 80));
+
+// The review speaks only on Sunday evening, and only with enough of his own data behind it.
+console.log("\n[weekly review send]");
+{
+  const mk = () => {
+    const d = new DatabaseSync(":memory:");
+    d.exec("CREATE TABLE journal (ts TEXT)");
+    d.exec("CREATE TABLE activity (date TEXT)");
+    d.exec("CREATE TABLE chat (role TEXT, ts TEXT)");
+    d.exec("CREATE TABLE notes (kind TEXT, ts TEXT)");
+    d.exec("CREATE TABLE files (path TEXT, size INTEGER, modified TEXT)");
+    return { db: d, env: { PERSONAL: d1(d), WELLBEING_TOKEN: "t0k" } };
+  };
+  const calls = [];
+  const send = async (e, to, s, b) => { calls.push({ s, b }); return { ok: true }; };
+
+  const r1 = mk();
+  await ensureWellbeing(r1.env.PERSONAL);
+  ok("silent on a Sunday morning", (await weeklyReview(r1.env, { send, nowIso: "2026-10-18T08:00:00Z" })).skipped === "not-sunday-evening");
+  ok("silent on a Saturday", (await weeklyReview(r1.env, { send, nowIso: "2026-10-17T16:30:00Z" })).skipped === "not-sunday-evening");
+  const thin = await weeklyReview(r1.env, { send, nowIso: "2026-10-18T16:30:00Z" });
+  ok("silent without enough data", thin.skipped === "not-enough-data", thin);
+  ok("nothing is sent while silent", calls.length === 0);
+
+  const r2 = mk();
+  await ensureWellbeing(r2.env.PERSONAL);
+  for (const d of ["2026-10-15", "2026-10-16", "2026-10-17"]) {
+    await r2.db.prepare("INSERT INTO wellbeing_checkins (ts, day, mood, source) VALUES (?, ?, ?, 'web')")
+      .run(d + "T10:00:00Z", d, 3);
+  }
+  await r2.db.prepare("INSERT INTO companion_nudges (ts, day, kind, ask, state, sent_at, closed_at, ladder_step) VALUES (?, ?, ?, ?, 'done', ?, ?, 1)")
+    .run("2026-10-16T10:00:00Z", "2026-10-16", "micro", "Drink a glass of water.", "2026-10-16T10:00:00Z", "2026-10-16T10:05:00Z");
+  const out = await weeklyReview(r2.env, { send, nowIso: "2026-10-18T16:30:00Z" });
+  ok("it sends on Sunday evening with data", out.ok === true, out);
+  ok("exactly one mail leaves", calls.length === 1, calls.length);
+  ok("the subject is the week", /^the week - 2026-10-12$/.test(calls[0].s), calls[0].s);
+  ok("it reports the week from his rows", calls[0].b.includes("checked in 3 days") && calls[0].b.includes("Drink a glass of water"), calls[0].b);
+  ok("it does not repeat within the week", (await weeklyReview(r2.env, { send, nowIso: "2026-10-18T19:30:00Z" })).skipped === "already-reviewed");
+  ok("force does not double-send the same week", (await weeklyReview(r2.env, { send, force: true, nowIso: "2026-10-18T21:00:00Z" })).skipped === "already-reviewed");
+}
 }
 
 console.log("\n[planner: ladder]");
@@ -350,6 +391,46 @@ ok("configured backstop is named", filled.text.includes("Sam"));
 ok("configured line is printed", filled.text.includes("113"));
 ok("escalation declares its SLA", filled.sla_seconds === 60);
 ok("escalation has three paths", filled.paths.length === 3);
+
+// The six steps of a safety plan, in his words. Empty steps are admitted, never invented.
+console.log("\n[safety plan]");
+const bare = safetyPlanBlock({}, DEFAULT_CONFIG);
+ok("an empty plan names every missing step", bare.missing.length === 6, bare.missing);
+ok("an empty plan asserts nothing", bare.lines.length === 0, bare.lines);
+const full = safetyPlanBlock({
+  warning_signs: ["stopped answering people", "everything feels pointless"],
+  coping: ["walk to the canal", "cold shower"],
+  distraction: ["the cafe on the corner"],
+  people: [{ name: "Ana", contact: "+31 6 0000" }],
+  environment: ["give the pills to Ana"]
+}, { ...DEFAULT_CONFIG, crisis_lines: [{ label: "113", number: "113" }] });
+ok("a filled plan is complete", full.complete === true, full.missing);
+ok("his own words come back verbatim", full.lines.join("\n").includes("walk to the canal") && full.lines.join("\n").includes("Ana (+31 6 0000)"));
+ok("the order is warning signs first, environment last",
+  full.lines[0].startsWith("What it looks like") && full.lines[full.lines.length - 2].startsWith("Making the flat"), full.lines);
+const crisisWithPlan = crisisBlock({ ...DEFAULT_CONFIG, crisis_lines: [{ label: "113", number: "113" }], backstop_name: "Ana" }, { coping: ["walk"] });
+ok("the crisis text carries the plan", crisisWithPlan.text.includes("walk") && crisisWithPlan.text.includes("You wrote this down"));
+ok("it still names the person and the service", crisisWithPlan.text.includes("Ana") && crisisWithPlan.text.includes("113"));
+ok("a plan-less crisis still confesses", crisisBlock({}).text.includes("No backstop is configured yet"));
+ok("and still invents no number", !/\d{3}[- ]\d{3,}/.test(crisisBlock({}).text));
+
+// The weekly review reports what happened; it never totals what he missed.
+console.log("\n[weekly review text]");
+const review = weeklyReviewText({
+  week: "2026-10-12",
+  checkins: [{ day: "2026-10-15", mood: 3 }, { day: "2026-10-16", mood: 2 }, { day: "2026-10-17", mood: 4 }],
+  done: [{ ask: "Drink a glass of water.", day: "2026-10-16" }, { ask: "Message Ana. One line is enough.", day: "2026-10-17" }],
+  helped: [{ kind: "body", mood_after: 3.5, mood_other: 2.8 }],
+  retired: ["care"]
+});
+ok("the review counts check-ins", review.includes("You checked in 3 days"), review);
+ok("it reports the mood average", review.includes("Mood averaged 3"), review);
+ok("it lists what was done", review.includes("Drink a glass of water") && review.includes("Message Ana"));
+ok("it reports what helped", review.includes("body: 3.5") && review.includes("other days 2.8"));
+ok("a retired ask is explained kindly", /stopped asking about care/.test(review) && /not helping/.test(review));
+ok("it never totals misses", !/\bmissed\b|\bfailed\b|\bonly\b|0 of/i.test(review), review);
+const emptyReview = weeklyReviewText({ week: "2026-10-12" });
+ok("an empty week says almost nothing", emptyReview.trim() === "Week of 2026-10-12.\n\nNothing needed here.", JSON.stringify(emptyReview));
 
 console.log("\n[what helped]");const helped = await whatHelped(loop, 60);
 ok("whatHelped returns an array", Array.isArray(helped), helped);
