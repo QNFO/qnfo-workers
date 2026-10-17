@@ -89,6 +89,9 @@ const G = load();
   ok(/NOT EXISTS \(SELECT 1 FROM cite_backfill_state s WHERE s.slug = p.slug\)/.test(src), "a scanned paper is never re-scanned");
   ok(/var CITE_BACKFILL_BATCH = \d+;/.test(src), "the batch is bounded per tick");
   ok(/ORDER BY \(instr\(lower\(p\.body_md\), 'qnfo:'\) > 0\) DESC, p\.created_at DESC/.test(src), "the batch reaches citing papers first, newest first (unordered it walked the July corpus and matched 0)");
+  // KG-FK-1: the citing node must exist before its edges, and graph failures must be counted, not swallowed.
+  ok(/INSERT OR IGNORE INTO nodes[\s\S]{0,200}"paper:" \+ row\.slug/.test(src), "the CITING node is created before its edges (edges.source_id has a foreign key)");
+  ok(/out\.kgErr = \(out\.kgErr \|\| 0\) \+ 1/.test(src), "graph write failures are counted into the event, not swallowed");
   ok(/await citeBackfillSweep\(env\)/.test(src), "the sweep runs from the tick");
   ok(/"cites:" \+ row.slug \+ ":" \+ hit.slug/.test(src), "backfilled edges use the same namespaced id as the forward path");
 }

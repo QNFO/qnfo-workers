@@ -33,7 +33,7 @@ var __name22222 = /* @__PURE__ */ __name2222((target, value) => __defProp22222(t
 // an empty catch. CITE-CONSISTENCY-1 asks the reviewer to compare the draft against cited QNFO work.
 // REVIEW-TRIAGE-CAP-1 is a defect fix: drift demotion at the cycle cap silently turned a blocking finding into a pass, so
 // REVIEW-HARD-GATE-1 withheld nothing there (reviewer findings 2 -> 0 at the cap; an unparseable review advanced to verify).
-var VERSION = "0.18.23-cite-backfill-order";
+var VERSION = "0.18.24-cite-backfill-fk";
 // WORKERS-AI-ATTRIBUTION-1 (2026-10-01, #1681): per-worker Workers AI attribution. Returns a shallow env copy whose AI
 // binding records each .run() (calls, errors, ms, tokens, neurons) into qnfo-audit ai_call_counters (purpose 'binding').
 // Neurons = usage tokens x Cloudflare's published per-model rates (neurons per M tokens). Fail-soft; env is never mutated.
@@ -4835,6 +4835,17 @@ async function citeBackfillSweep(env) {
       out.scanned++;
       const refs = parseQnfoRefs(row.refs);
       out.refs += refs.length;
+      // KG-FK-1: edges.source_id references nodes(id), so the CITING node must exist before its edges are written. The
+      // first version created only the cited node, so every edge from a paper that had no node yet was rejected by the
+      // foreign key and the throw was swallowed by the catch below: 123 matched citations produced 7 edges. Create the
+      // citing node first, as the forward path does, and count graph failures instead of hiding them.
+      if (env.GRAPH_DB) {
+        try {
+          await env.GRAPH_DB.prepare("INSERT OR IGNORE INTO nodes (id, label, name, properties, created_at, updated_at) VALUES (?1, 'Paper', ?2, ?3, ?4, ?4)").bind("paper:" + row.slug, String(row.title || row.slug).slice(0, 300), JSON.stringify({ slug: row.slug, url: "https://papers.qnfo.org/papers/" + row.slug }), _ts).run();
+        } catch (eSrcNode) {
+          out.kgErr = (out.kgErr || 0) + 1;
+        }
+      }
       let matched = 0;
       for (const r of refs) {
         const hit = byTitle.get(normTitle(r.title));
@@ -4854,6 +4865,7 @@ async function citeBackfillSweep(env) {
             await env.GRAPH_DB.prepare("INSERT OR IGNORE INTO edges (id, source_id, target_id, relationship_type, properties, created_at) VALUES (?1, ?2, ?3, 'CITES', ?4, ?5)").bind("cites:" + row.slug + ":" + hit.slug, "paper:" + row.slug, "paper:" + hit.slug, JSON.stringify({ ref: r.ref_no, kind: "qnfo", source: "cite-backfill" }), _ts).run();
             out.edges++;
           } catch (eEdge) {
+            out.kgErr = (out.kgErr || 0) + 1;
           }
         }
       }
