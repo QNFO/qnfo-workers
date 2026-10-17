@@ -21,5 +21,5 @@ const before = seen.length;
 const r2 = await run("?x=1"); await r2.text();
 assert.equal(seen.length, before, "healthy models are not re-probed inside the interval");
 const unique = new Set(seen).size;
-assert.ok(unique >= 13, "13 unique ids probed (" + unique + ")");
+assert.ok(unique >= 10, "10 unique ids probed, three entries retired with MODEL-FLOOR-1 (" + unique + ")");
 console.log("models.test.mjs ok");
