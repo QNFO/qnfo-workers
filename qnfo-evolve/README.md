@@ -62,5 +62,9 @@ in the loop.
 node qnfo-evolve/evolve.test.mjs   # 30 assertions, no network, no D1
 ```
 
-The suite loads `worker.js` as one script with only `addEventListener` stubbed, because
-`canonical-deploy` PUTs `worker.js` verbatim — an `import` would ship as an unresolved specifier.
+The suite loads `worker.js` as one self-contained ES module (only `export default` is rewritten to a
+local binding), because `canonical-deploy` PUTs `worker.js` verbatim — an `import` would ship as an
+unresolved specifier. It must be a **module** worker, not service-worker syntax: creating a worker
+with a D1 binding through the canonical path is refused as `100329` ("Binding 'AUDIT' of type 'd1'
+requires a Worker written in ES module format"), and a service-worker script uploaded on the module
+path fails as `10068` ("no registered event handlers").
