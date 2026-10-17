@@ -196,6 +196,34 @@ def _list_dbs():
     return r.get("result") or []
 
 
+# SLA-PATHS-1 (2026-10-17, owner directive): evidence persistence carries more than one path. INSERT INTO
+# remediation_verifications is refused at prepare time with 7500 "triggers nested too deep" whenever the
+# agent_issues trigger chain deepens (verified 2026-10-17T16:12Z; issue 2817), and this consumer then wrote nothing
+# at all: a green run reported verdicts that no reader could see. Path B is remediation_evidence, the trigger-free
+# sink unioned by v_remediation_evidence_all. The primary error travels with the row, so a reader never has to guess
+# which path produced it.
+def record_verification(issue_id, cls, probe_url, transport, expected, observed, passed):
+    """Write the verdict to path A; on refusal write the identical row to path B and return (path, primary_error)."""
+    try:
+        d1(
+            "INSERT INTO remediation_verifications "
+            "(issue_id, class, probe_url, transport, expected, observed, pass, verifier) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+            [issue_id, cls, probe_url, transport, expected, observed, passed, VERIFIER],
+        )
+        return "A:verifications", None
+    except RuntimeError as e_a:
+        primary = str(e_a)
+        d1(
+            "INSERT INTO remediation_evidence "
+            "(issue_id, class, probe_url, transport, expected, observed, pass, verifier, path) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            [issue_id, cls, probe_url, transport, expected, observed, passed, VERIFIER, "B:consumer"],
+        )
+        print(json.dumps({"evt": "remediation-consumer:evidence-fallback", "class": cls,
+                          "transport": transport, "primary_error": primary}))
+        return "B:evidence-table", primary
+
 def d1_plane(transport, sql):
     pid, why = plane_db_id(transport)
     if not pid:
@@ -383,8 +411,8 @@ def run_https_probe(probe):
 def rt_pass_streak_days(cls):
     """Days since the first pass after the last real failure (pending/empty are deferrals). Mirrors fleet-control."""
     rows = d1(
-        "SELECT MIN(verified_at) AS t FROM remediation_verifications WHERE class = ?1 AND pass = 1 AND verified_at > "
-        "COALESCE((SELECT MAX(verified_at) FROM remediation_verifications WHERE class = ?1 AND pass = 0 "
+        "SELECT MIN(verified_at) AS t FROM v_remediation_evidence_all WHERE class = ?1 AND pass = 1 AND verified_at > "
+        "COALESCE((SELECT MAX(verified_at) FROM v_remediation_evidence_all WHERE class = ?1 AND pass = 0 "
         "AND COALESCE(observed, '') <> '' AND lower(trim(observed)) NOT LIKE 'pending%'), '1970-01-01')",
         [cls])
     t = rows[0].get("t") if rows else None
@@ -400,8 +428,8 @@ def rt_pass_streak_days(cls):
 
 def fails_since_last_pass(cls):
     rows = d1(
-        "SELECT COUNT(*) AS n FROM remediation_verifications WHERE class = ?1 AND pass = 0 AND verified_at > "
-        "COALESCE((SELECT MAX(verified_at) FROM remediation_verifications WHERE class = ?1 AND pass = 1), '1970-01-01')",
+        "SELECT COUNT(*) AS n FROM v_remediation_evidence_all WHERE class = ?1 AND pass = 0 AND verified_at > "
+        "COALESCE((SELECT MAX(verified_at) FROM v_remediation_evidence_all WHERE class = ?1 AND pass = 1), '1970-01-01')",
         [cls])
     return int(rows[0].get("n") or 0) if rows else 0
 
@@ -735,12 +763,7 @@ def consume_https(c, rec, out, trusted):
     obs = run_https_probe(probe)
     passed, verdict = classify("ok", obs)
     rec.update({"expected": "ok", "observed": obs, "verdict": verdict})
-    d1(
-        "INSERT INTO remediation_verifications "
-        "(issue_id, class, probe_url, transport, expected, observed, pass, verifier) "
-        "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-        [c.get("issue_id"), c.get("class"), probe["url"], HTTPS_TRANSPORT, "ok", obs, passed, VERIFIER],
-    )
+    record_verification(c.get("issue_id"), c.get("class"), probe["url"], HTTPS_TRANSPORT, "ok", obs, passed)
     rec["written"] = True
     out["pass" if passed == 1 else "fail"] += 1
     out["https"] = out.get("https", 0) + 1
@@ -846,12 +869,7 @@ def consume_code(c, rec, out, trusted):
         out["skipped"] += 1
         return
     rec.update({"expected": "ok", "observed": obs, "verdict": verdict})
-    d1(
-        "INSERT INTO remediation_verifications "
-        "(issue_id, class, probe_url, transport, expected, observed, pass, verifier) "
-        "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-        [c.get("issue_id"), c.get("class"), "code:" + ",".join(probe["paths"])[:200], CODE_TRANSPORT, "ok", obs, passed, VERIFIER],
-    )
+    record_verification(c.get("issue_id"), c.get("class"), "code:" + ",".join(probe["paths"])[:200], CODE_TRANSPORT, "ok", obs, passed)
     rec["written"] = True
     out["pass" if passed == 1 else "fail"] += 1
 
@@ -889,14 +907,8 @@ def consume_d1(c, rec, out, trusted):
         rec["verdict"] = "untrusted-transport"
         rec["reason"] = "%r not trusted" % transport
     else:
-        d1(
-            "INSERT INTO remediation_verifications "
-            "(issue_id, class, probe_url, transport, expected, observed, pass, verifier) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-            [c.get("issue_id"), cls,
-             "d1:remediation_contracts/" + str(cls),
-             transport, str(exp).strip(), str(obs).strip(), passed, VERIFIER],
-        )
+        record_verification(c.get("issue_id"), cls, "d1:remediation_contracts/" + str(cls),
+                            transport, str(exp).strip(), str(obs).strip(), passed)
         rec["written"] = True
         if passed == 1:
             out["pass"] += 1

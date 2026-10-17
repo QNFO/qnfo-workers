@@ -33,14 +33,22 @@ const hourly = sched.slice(sched.indexOf('if (cron === "0 4 1 * *" || cron === "
 check(/remediationContractsTick\(env, \{ budgetMs: 25000 \}\)/.test(twenty), "the 10-minute cron runs the remediation tick with a 25 s budget");
 check(!/remediationContractsTick\(env/.test(hourly), "the hourly fan-out no longer runs the remediation tick");
 
+const toNamed = (sql, args) => {
+  const obj = {};
+  const s = sql.replace(/\?(\d+)/g, (m, d) => { obj["p" + d] = args[Number(d) - 1]; return ":p" + d; });
+  return [s, obj];
+};
 const wrap = (db, delayMs) => {
   const pause = () => new Promise((r) => setTimeout(r, delayMs || 0));
-  const stmt = (sql, args) => ({
-    bind: (...x) => stmt(sql, x),
-    run: async () => { const r = db.prepare(sql).run(...args); return { meta: { changes: r.changes } }; },
-    first: async () => { if (delayMs && /expected/.test(sql)) await pause(); return db.prepare(sql).get(...args) || null; },
-    all: async () => ({ results: db.prepare(sql).all(...args) })
-  });
+  const stmt = (sql, args) => {
+    const [q, named] = toNamed(sql, args);
+    return {
+      bind: (...x) => stmt(sql, x),
+      run: async () => { const r = db.prepare(q).run(named); return { meta: { changes: r.changes, last_row_id: Number(r.lastInsertRowid) } }; },
+      first: async () => { if (delayMs && /expected/.test(sql)) await pause(); return db.prepare(q).get(named) || null; },
+      all: async () => ({ results: db.prepare(q).all(named) })
+    };
+  };
   return { prepare: (sql) => stmt(sql, []) };
 };
 const mk = () => {

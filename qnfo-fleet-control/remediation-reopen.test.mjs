@@ -14,6 +14,11 @@ if (a < 0 || b < a) throw new Error("REMEDIATION-REOPEN-1 block not found in wor
 let fails = 0;
 const check = (c, m) => { if (!c) { fails++; console.log("FAIL " + m); } };
 
+const toNamed = (sql, args) => {
+  const obj = {};
+  const s = sql.replace(/\?(\d+)/g, (m, d) => { obj["p" + d] = args[Number(d) - 1]; return ":p" + d; });
+  return [s, obj];
+};
 function makeDb() {
   const db = new DatabaseSync(":memory:");
   db.exec(`CREATE TABLE remediation_contracts (class TEXT PRIMARY KEY, issue_id INTEGER, precondition TEXT, action TEXT, verify_probe TEXT, verify_transport TEXT, max_attempts INTEGER DEFAULT 3, escalate_to TEXT, expected_cadence_h INTEGER, status TEXT DEFAULT 'active', ts TEXT DEFAULT (datetime('now')), last_attempt_at TEXT, last_verdict TEXT, next_due_at TEXT, attempts INTEGER DEFAULT 0);
@@ -22,12 +27,15 @@ function makeDb() {
     CREATE TABLE issue_triage (issue_id INTEGER PRIMARY KEY, rc TEXT, triage_state TEXT, owner TEXT, sla_due_at TEXT, close_evidence TEXT, reopened_count INTEGER NOT NULL DEFAULT 0);
     CREATE TABLE probe_src (k TEXT PRIMARY KEY, v TEXT);
     CREATE TRIGGER remediation_verification_autoclose_ins AFTER INSERT ON remediation_verifications WHEN NEW.pass = 1 BEGIN INSERT INTO issue_triage (issue_id, rc, triage_state, owner, sla_due_at, close_evidence) SELECT NEW.issue_id, 'verified-remediation', 'closed', 'fleet-autoremediation', datetime('now','+7 days'), 'remediation_verifications#' || NEW.id || ' pass=1 class=' || COALESCE(NEW.class,'') WHERE EXISTS (SELECT 1 FROM agent_issues WHERE id = NEW.issue_id AND status = 'open') ON CONFLICT(issue_id) DO UPDATE SET close_evidence = excluded.close_evidence WHERE COALESCE(issue_triage.close_evidence,'') = ''; UPDATE agent_issues SET status='closed', close_channel='auto:verified-remediation-trigger', updated_at = CAST(strftime('%s','now') AS INTEGER)*1000 WHERE id = NEW.issue_id AND status = 'open'; END;`);
-  const stmt = (sql, args) => ({
-    bind: (...x) => stmt(sql, x),
-    run: async () => { const r = db.prepare(sql).run(...args); return { meta: { changes: r.changes } }; },
-    first: async () => db.prepare(sql).get(...args) || null,
-    all: async () => ({ results: db.prepare(sql).all(...args) })
-  });
+  const stmt = (sql, args) => {
+    const [q, named] = toNamed(sql, args);
+    return {
+      bind: (...x) => stmt(sql, x),
+      run: async () => { const r = db.prepare(q).run(named); return { meta: { changes: r.changes, last_row_id: Number(r.lastInsertRowid) } }; },
+      first: async () => db.prepare(q).get(named) || null,
+      all: async () => ({ results: db.prepare(q).all(named) })
+    };
+  };
   return { db, env: { AUDIT: { prepare: (sql) => stmt(sql, []) } } };
 }
 const ctx = vm.createContext({ VERSION: "test", __name: (f) => f, Date, Math, Number, String, JSON, Object, console });

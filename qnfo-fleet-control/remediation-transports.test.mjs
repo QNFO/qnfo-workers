@@ -15,13 +15,21 @@ if (a < 0 || b < a) throw new Error("remediation block not found in worker.js");
 let fails = 0, n = 0;
 const check = (c, m) => { n++; if (!c) { fails++; console.log("FAIL " + m); } };
 
+const toNamed = (sql, args) => {
+  const obj = {};
+  const s = sql.replace(/\?(\d+)/g, (m, d) => { obj["p" + d] = args[Number(d) - 1]; return ":p" + d; });
+  return [s, obj];
+};
 const wrap = (db) => {
-  const stmt = (sql, args) => ({
-    bind: (...x) => stmt(sql, x),
-    run: async () => { const r = db.prepare(sql).run(...args); return { meta: { changes: r.changes } }; },
-    first: async () => db.prepare(sql).get(...args) || null,
-    all: async () => ({ results: db.prepare(sql).all(...args) })
-  });
+  const stmt = (sql, args) => {
+    const [q, named] = toNamed(sql, args);
+    return {
+      bind: (...x) => stmt(sql, x),
+      run: async () => { const r = db.prepare(q).run(named); return { meta: { changes: r.changes, last_row_id: Number(r.lastInsertRowid) } }; },
+      first: async () => db.prepare(q).get(named) || null,
+      all: async () => ({ results: db.prepare(q).all(named) })
+    };
+  };
   return { prepare: (sql) => stmt(sql, []) };
 };
 const db = new DatabaseSync(":memory:");
