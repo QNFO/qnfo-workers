@@ -33,7 +33,7 @@ var __name22222 = /* @__PURE__ */ __name2222((target, value) => __defProp22222(t
 // an empty catch. CITE-CONSISTENCY-1 asks the reviewer to compare the draft against cited QNFO work.
 // REVIEW-TRIAGE-CAP-1 is a defect fix: drift demotion at the cycle cap silently turned a blocking finding into a pass, so
 // REVIEW-HARD-GATE-1 withheld nothing there (reviewer findings 2 -> 0 at the cap; an unparseable review advanced to verify).
-var VERSION = "0.18.26-corpus-leverage";
+var VERSION = "0.18.27-extension-visible";
 // WORKERS-AI-ATTRIBUTION-1 (2026-10-01, #1681): per-worker Workers AI attribution. Returns a shallow env copy whose AI
 // binding records each .run() (calls, errors, ms, tokens, neurons) into qnfo-audit ai_call_counters (purpose 'binding').
 // Neurons = usage tokens x Cloudflare's published per-model rates (neurons per M tokens). Fail-soft; env is never mutated.
@@ -4913,7 +4913,16 @@ async function extensionCandidateSweep(env) {
     } catch (e) {
     }
     const live = await env.QNFO_AUDIT.prepare("SELECT COUNT(*) n FROM research_queue WHERE status IN ('queued','researching')").first();
-    if ((Number(live && live.n) || 0) >= cap) return Object.assign(out, { skipped: "queue full" });
+    // A skipped sweep used to be silent, which made the feature look deployed-but-dead: with the ready queue at 161 and
+    // research_ready_cap 120 this returned early every tick and nothing said so. The skip is now reported once an hour.
+    if ((Number(live && live.n) || 0) >= cap) {
+      out.skipped = "queue full (" + (Number(live && live.n) || 0) + "/" + cap + ")";
+      try {
+        if (new Date().getUTCMinutes() < 20) await logEvent(env, "extension-skipped", out.skipped, "warn");
+      } catch (e) {
+      }
+      return out;
+    }
     const want = perDay - done;
     const cands = await env.LIVING_PAPER.prepare("SELECT slug, age_days, inbound FROM v_paper_influence WHERE status = 'published' AND inbound = 0 AND age_days >= ?1 ORDER BY age_days DESC LIMIT ?2").bind(CORPUS_TERMINAL_GRACE_DAYS, want).all();
     const rows = (cands && cands.results) || [];
