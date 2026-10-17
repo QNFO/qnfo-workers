@@ -1080,7 +1080,11 @@ function secretEq(a, b) {
   return diff === 0;
 }
 __name(secretEq, "secretEq");
-var VERSION = "0.34.0-measured-pending"; /* 0.34.0 MEASURED-PENDING-1 (2026-10-17, pillar autonomy; fleet-wide audit): a probe observation of the form
+var VERSION = "0.34.1-open-twin"; /* 0.34.1 REOPEN-HITS-OPEN-TWIN-1 (2026-10-17, pillar autonomy; fleet-wide audit): agent_issues has UNIQUE indexes on title
+   WHERE status = 'open', so a closed issue whose title is already open cannot be reopened: the UPDATE throws, the caller's catch
+   swallows it, and the contract retries for ever. 8 of the 11 contracts that MEASURED-PENDING-1 made eligible have such a twin, so
+   rtSupersedeIfOpenTwin marks the closed contract 'superseded:open-twin <id>' instead (the defect is already tracked by the open
+   issue). This is not a reopen, so it does not consume the per-tick reopen budget. */ /* 0.34.0 MEASURED-PENDING-1 (2026-10-17, pillar autonomy; fleet-wide audit): a probe observation of the form
    "pending: <number> ... <target>" is the corpus's failure branch (257 contracts, 14,885 rows in 7 days), but REMEDIATION-PENDING-PREFIX-1
    read every leading 'pending' as a deferral, so a probe that measured a breach could never fail: 26 closed issues with a live defect
    never reopened, and the hold logic never saw their failures. A pending observation is now a deferral only when it carries no
@@ -10589,9 +10593,13 @@ async function remediationContractsTick(env, opts) {
     // 'pending' and 'pending: <reason>' are the deferral convention (a probe that cannot judge yet), not a relapse, so they
     // neither reopen nor count (REMEDIATION-PENDING-PREFIX-1, 0.4.128).
     if (verdict === "fail" && !rtIsDeferral(os) && (c.issue_status === "closed" || c.issue_status === "resolved")) {
-      // MEASURED-PENDING-1: the classifier fix makes ~26 false closes eligible at once. Cap the burst per tick so the
-      // code loop is not handed 26 tasks in one pass (AI credit is the binding constraint); the rest follow next tick.
-      if (out.reopened.length >= RT_REOPEN_MAX_PER_TICK) {
+      if (await rtSupersedeIfOpenTwin(db, c)) {
+        // REOPEN-HITS-OPEN-TWIN-1: an open issue already tracks this defect; reopening the closed twin would violate the
+        // unique open-title index and the reopen would be lost. Counted separately from superseded (that counter is wontfix).
+        out.superseded_open_twin = (out.superseded_open_twin || 0) + 1;
+      } else if (out.reopened.length >= RT_REOPEN_MAX_PER_TICK) {
+        // MEASURED-PENDING-1: the classifier fix makes ~11 false closes eligible at once. Cap the burst per tick so the
+        // code loop is not handed 11 tasks in one pass (AI credit is the binding constraint); the rest follow next tick.
         out.reopen_deferred = (out.reopen_deferred || 0) + 1;
       } else {
         try {
@@ -10663,6 +10671,28 @@ async function rtPassStreakDays(db, cls) {
   var t = String(r.t), ms = Date.parse(t.indexOf("T") >= 0 ? t : t.replace(" ", "T") + "Z");
   return isNaN(ms) ? 0 : (Date.now() - ms) / 864e5;
 }
+// REOPEN-HITS-OPEN-TWIN-1 (0.34.1, 2026-10-17): agent_issues carries UNIQUE indexes on title WHERE status='open', so
+// reopening a closed issue whose title is already open throws "UNIQUE constraint failed", the caller's catch swallows it,
+// and the contract retries for ever. 8 of the 11 contracts that became eligible under MEASURED-PENDING-1 have such a twin
+// (2129->2670, 2194/2522->2644, 2244->2665, 2256->2684, 2549->2670, 2580->2686, 2047->2577). The defect is already tracked
+// by the open twin, so the closed contract is superseded by it rather than reopened into a constraint violation. This is
+// not a reopen, so it does not consume RT_REOPEN_MAX_PER_TICK.
+async function rtSupersedeIfOpenTwin(db, c) {
+  var twin = null;
+  try {
+    twin = await db.prepare("SELECT id FROM agent_issues WHERE status = 'open' AND lower(trim(title)) = lower(trim((SELECT title FROM agent_issues WHERE id = ?1))) LIMIT 1").bind(c.issue_id).first();
+  } catch (eT) {
+    return false;
+  }
+  if (!twin || twin.id == null || Number(twin.id) === Number(c.issue_id)) return false;
+  try {
+    await db.prepare("UPDATE remediation_contracts SET status = 'superseded', last_verdict = ?2, last_attempt_at = datetime('now') WHERE class = ?1").bind(c.class, "superseded:open-twin " + twin.id).run();
+  } catch (eS) {
+    return false;
+  }
+  return true;
+}
+__name(rtSupersedeIfOpenTwin, "rtSupersedeIfOpenTwin");
 async function rtReopenOnRelapse(db, c, es, os) {
   var closedMs = Number(c.issue_updated_at) || 0;
   var since = closedMs > 0 ? new Date(closedMs).toISOString().replace("T", " ").slice(0, 19) : "1970-01-01 00:00:00";
