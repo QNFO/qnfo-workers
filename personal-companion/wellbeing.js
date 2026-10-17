@@ -248,30 +248,41 @@ export function inQuiet(hourFloat, quietStart, quietEnd) {
 }
 
 // Drift is measured against the owner's own baseline and against the observable record,
-// not against a questionnaire. Two independent signals make it drift, not one bad day.
+// not against a questionnaire.
+//
+// Weak vs strong (fixed 2026-10-17 after the first live read): `activity` is 50 days stale by
+// design and `chat` volume moves when he changes client, so those two can never declare drift on
+// their own - a false "you are withdrawing" is worse than a missed week. Text signals (a note gap,
+// a night shift) and self-report are what carry the judgement.
 export function drift(ctx = {}) {
-  const reasons = [];
-  if ((ctx.days_since_note ?? 0) > 3) reasons.push("no note for " + ctx.days_since_note + "d");
-  if ((ctx.night_share ?? 0) > 0.25) reasons.push("night share " + Math.round(ctx.night_share * 100) + "%");
+  const strong = [];
+  const weak = [];
+  if ((ctx.days_since_note ?? 0) > 3) weak.push({ k: "note", why: "no note for " + Math.round(ctx.days_since_note) + "d" });
+  if ((ctx.night_share ?? 0) > 0.25) weak.push({ k: "night", why: "night share " + Math.round(ctx.night_share * 100) + "%" });
   if (ctx.volume_ratio !== undefined && ctx.volume_ratio !== null && ctx.volume_ratio < 0.5) {
-    reasons.push("volume " + Math.round(ctx.volume_ratio * 100) + "% of baseline");
+    weak.push({ k: "volume", why: "volume " + Math.round(ctx.volume_ratio * 100) + "% of baseline" });
   }
-  if ((ctx.days_since_activity ?? 0) > 10) reasons.push("no logged activity for " + ctx.days_since_activity + "d");
-
-  let level = "ok";
-  if (reasons.length >= 2) level = "drift";
-  if (reasons.length === 1) level = "watch";
+  if ((ctx.days_since_activity ?? 0) > 10) weak.push({ k: "activity", why: "no logged activity for " + Math.round(ctx.days_since_activity) + "d" });
 
   const moodToday = ctx.mood_today;
   const moodAvg = ctx.mood_avg7;
-  const shaky =
-    moodToday === 1 ||
-    (moodToday !== null && moodToday !== undefined && moodToday <= 2 && moodAvg !== null && moodAvg !== undefined && moodAvg <= 2.5) ||
-    (ctx.unanswered_streak ?? 0) >= 3 ||
-    (ctx.mood_drop_2d ?? false);
+  if (moodToday === 1) strong.push({ k: "mood", why: "mood 1 today" });
+  else if (moodToday !== null && moodToday !== undefined && moodToday <= 2 &&
+           moodAvg !== null && moodAvg !== undefined && moodAvg <= 2.5) {
+    strong.push({ k: "mood", why: "mood " + moodToday + " on a " + moodAvg + " week" });
+  }
+  if ((ctx.unanswered_streak ?? 0) >= 3) strong.push({ k: "unanswered", why: ctx.unanswered_streak + " unanswered asks" });
+  if (ctx.mood_drop_2d) strong.push({ k: "mood-drop", why: "mood fell sharply in 2 days" });
 
-  if (shaky) level = "shaky";
-  return { level, reasons };
+  const reasons = strong.concat(weak).map((r) => r.why);
+  const textSignal = weak.some((w) => w.k === "note" || w.k === "night");
+
+  let level = "ok";
+  if (strong.length) level = "shaky";
+  else if (weak.length >= 2 && textSignal) level = "drift";
+  else if (weak.length) level = "watch";
+
+  return { level, reasons, strong: strong.map((s) => s.k), weak: weak.map((w) => w.k) };
 }
 
 function lastDone(recent, kind) {
@@ -406,8 +417,11 @@ export async function closeNudge(db, id, { state, response, outcome, nowIso } = 
 }
 
 export async function unansweredStreak(db) {
+  // Only asks count. A morning check-in or a presence line sitting in 'sent' is not an ignored ask,
+  // and counting it would push the companion into presence mode after three ordinary mornings.
+  const kinds = LADDER.map((r) => "'" + r.kind + "'").join(",");
   const r = await db.prepare(
-    "SELECT state FROM companion_nudges WHERE state IN ('sent','shown','done','declined','expired') ORDER BY ts DESC LIMIT 10"
+    "SELECT state FROM companion_nudges WHERE kind IN (" + kinds + ") AND state IN ('sent','shown','done','declined','expired') ORDER BY ts DESC LIMIT 10"
   ).all();
   let n = 0;
   for (const row of r.results || []) {

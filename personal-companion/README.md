@@ -162,3 +162,33 @@ See `FINDING-2026-09-13-deploy-source-mismatch.md` and `audits/2026-09-13-CORREC
 >
 > See `FINDING-2026-09-13-deploy-source-mismatch.md`. **Obtain and commit the v1.1.0 source
 > before any deploy.**
+
+## Inbound loop (WELLBEING-LOOP-1, 1.29.0)
+
+Before 1.29.0 the companion could write to the owner and list his bookings; it could not tell how he
+was, and nothing it suggested ever closed (`proactive_signals`: 30 rows, 9 shown, **0 acted**;
+`journal` 0, `habits` 0, `activity` 3 with the last row on 2026-08-28). This is the other half.
+
+- Schema and rules: `wellbeing.js`. Wiring, routes and delivery: `wellbeing-wire.js`.
+  Tests: `node --experimental-sqlite personal-companion/wellbeing.test.mjs` (97 assertions).
+- Tables `wellbeing_checkins`, `companion_nudges`, `wellbeing_config`; views `v_nudge_loop`,
+  `v_wellbeing_trend`, `v_wellbeing_coverage`. All created idempotently on first use, so no
+  migration step is needed.
+- **Daily check-in**: two taps (mood, then energy) at 07:45 Amsterdam, once a day, optional note.
+- **One ask at a time**, four rungs (micro 2 min / body 15 / contact 10 / care 30), each with an
+  SLA and a `due_at`. A missed ask expires and is never re-sent; the next ask drops a rung. A
+  completed ask escalates one rung.
+- Mood <= 2 caps the ladder at body (no task-shaped asks on a bad day). Three unanswered asks
+  switch to presence-only for the rest of the day: one message, no ask.
+- Any ask with 6+ sends and ~0 completions is retired automatically. This is what makes the loop
+  self-correcting instead of a nag.
+- Routes, all requiring `?t=WELLBEING_TOKEN`: `/wb/checkin`, `/wb/done?id=`, `/wb/no?id=`,
+  `/wb/tick?force=1` (ops: prove the loop now), `/api/wellbeing` (read model, coverage, drift).
+- Mail goes through `sendOwnerNotice`, **not** `sendOne`: `rwnquni@outlook.com` is in both
+  `email_suppression` and `contact_ledger`, so `sendOne` drops every owner message silently.
+  Owner notices still honour `calendar_meta owner_notice_enabled`.
+- Escalation text is a fixed template filled from `wellbeing_config.crisis_lines` and is never
+  model-generated. `backstop_contact` is deliberately **unset**, so the level-2 text says so
+  instead of inventing a person or a number.
+- Known limitation: `activity` is stale by design and `chat` volume moves with the client in use,
+  so `drift()` scores both as weak; text signals and self-report carry the judgement.

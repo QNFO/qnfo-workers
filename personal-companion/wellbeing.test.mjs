@@ -10,6 +10,7 @@ import {
   drift, planNext, retiredKinds, expireStale, closeNudge, crisisBlock, crisisSignal,
   DEFAULT_CONFIG, LADDER, whatHelped, unansweredStreak, tzOffsetMinutes
 } from "./wellbeing.js";
+import { handleWellbeing, wellbeingTick } from "./wellbeing-wire.js";
 
 let pass = 0, fail = 0;
 const ok = (name, cond, extra) => {
@@ -32,8 +33,9 @@ function d1(db) {
       let args = [];
       const api = {
         bind(...a) { args = a; return api; },
-        async run() { const r = db.prepare(sql).run(...args); return { success: true, meta: { changes: r.changes } }; },
-        async all() { return { results: db.prepare(sql).all(...args) }; }
+        async run() { const r = db.prepare(sql).run(...args); return { success: true, meta: { changes: r.changes, last_row_id: Number(r.lastInsertRowid) } }; },
+        async all() { return { results: db.prepare(sql).all(...args) }; },
+        async first() { return db.prepare(sql).get(...args) ?? null; }
       };
       return api;
     }
@@ -102,6 +104,14 @@ ok("mood 1 is shaky", drift({ mood_today: 1 }).level === "shaky");
 ok("mood 2 on a low week is shaky", drift({ mood_today: 2, mood_avg7: 2.2 }).level === "shaky");
 ok("mood 2 off a good week is not shaky", drift({ mood_today: 2, mood_avg7: 3.8 }).level !== "shaky");
 ok("clean signals are ok", drift({ days_since_note: 1, night_share: 0.05, volume_ratio: 1.1, days_since_activity: 2, mood_today: 4 }).level === "ok");
+// The two legacy tables cannot declare drift on their own: `activity` is stale by design and
+// `chat` volume moves when the owner changes client. A false "you are withdrawing" costs more.
+ok("volume + activity alone is watch, not drift",
+  drift({ volume_ratio: 0.06, days_since_activity: 50 }).level === "watch",
+  drift({ volume_ratio: 0.06, days_since_activity: 50 }));
+ok("text signal + artifact is drift",
+  drift({ days_since_note: 17, volume_ratio: 0.06, days_since_activity: 50 }).level === "drift");
+ok("strong reasons are labelled", drift({ mood_today: 1, days_since_note: 9 }).strong.includes("mood"));
 
 console.log("\n[planner: cadence]");
 ok("silent at 03:00", planNext({ nowIso: "2026-10-18T01:00:00Z", ctx: {} }).skip === "quiet-hours");
@@ -113,6 +123,12 @@ ok("silent at daily cap", planNext({ nowIso: "2026-10-17T14:00:00Z", ctx: {}, re
 ok("silent inside min gap", planNext({ nowIso: "2026-10-17T14:00:00Z", ctx: {}, recent: [
   { kind: "micro", state: "sent", ts: "2026-10-17T13:40:00Z", day: "2026-10-17", ladder_step: 1, sent_at: "2026-10-17T13:40:00Z" }
 ]}).skip === "min-gap");
+// The morning check-in and a presence line are messages, not asks: they must not eat the budget.
+const notCap = planNext({ nowIso: "2026-10-17T14:00:00Z", ctx: {}, recent: [
+  { kind: "checkin", state: "sent", ts: "2026-10-17T09:00:00Z", day: "2026-10-17", ladder_step: 0, sent_at: "2026-10-17T09:00:00Z" },
+  { kind: "presence", state: "sent", ts: "2026-10-17T11:00:00Z", day: "2026-10-17", ladder_step: 0, sent_at: "2026-10-17T11:00:00Z" }
+]});
+ok("check-in does not consume the daily cap", notCap.skip === undefined && notCap.kind === "micro", notCap);
 ok("silent when every rung is retired", planNext({
   nowIso: "2026-10-17T14:00:00Z", ctx: {},
   loopRows: LADDER.map((r) => ({ kind: r.kind, fired: 10, done_rate: 0 }))
@@ -191,6 +207,13 @@ ok("coverage view is one row", cov.results.length === 1, cov.results.length);
 ok("coverage reports a stale journal", cov.results[0].journal_last === null);
 const streak = await unansweredStreak(loop);
 ok("unanswered streak counts open asks", streak >= 0);
+for (let i = 1; i <= 3; i++) {
+  // one check-in per day is enforced by NUDGE-DUP-1, so spread them across days.
+  const d = new Date(Date.parse(nowIso) - i * 864e5).toISOString();
+  await loop.prepare("INSERT INTO companion_nudges (ts,day,kind,ask,state,sent_at) VALUES (?,?,?,?,?,?)")
+    .bind(d, dayKey(d), "checkin", "how's it landing", "sent", d).run();
+}
+ok("morning check-ins are not ignored asks", (await unansweredStreak(loop)) === 0, await unansweredStreak(loop));
 try { await closeNudge(loop, 1, { state: "fired" }); fail++; console.log("  FAIL closeNudge accepts anything"); }
 catch (e) { if (String(e.message).includes("NUDGE-STATE-1")) { pass++; console.log("  ok   closeNudge rejects unknown states"); } else throw e; }
 
@@ -217,6 +240,74 @@ ok("escalation has three paths", filled.paths.length === 3);
 console.log("\n[what helped]");
 const helped = await whatHelped(loop, 60);
 ok("whatHelped returns an array", Array.isArray(helped), helped);
+
+// The page shell once rendered without its body in production: the doctype and style were served
+// and every button was missing. Assert on delivered HTML, not on the helper's inputs.
+console.log("\n[http]");
+{
+  const hdb = new DatabaseSync(":memory:");
+  hdb.exec("CREATE TABLE journal (ts TEXT)");
+  hdb.exec("CREATE TABLE activity (date TEXT)");
+  hdb.exec("CREATE TABLE chat (role TEXT, ts TEXT)");
+  hdb.exec("CREATE TABLE notes (kind TEXT, ts TEXT)");
+  const env = { PERSONAL: d1(hdb), WELLBEING_TOKEN: "t0k" };
+  const req = (u, init) => new Request("https://reading.q08.org" + u, init);
+  const res = await handleWellbeing(req("/wb/checkin?t=t0k"), env, {});
+  const body = await res.text();
+  ok("check-in page renders its body", body.includes("<body>") && body.includes(">mood<") && body.includes(">energy<"), body.slice(-160));
+  ok("check-in page renders all five values", [1, 2, 3, 4, 5].every((v) => body.includes("mood=" + v)), body.slice(-200));
+  ok("check-in page carries the token forward", body.includes("t=t0k"));
+  const unauth = await handleWellbeing(req("/wb/checkin"), env, {});
+  ok("missing token is 401", unauth.status === 401, unauth.status);
+  const scored = await handleWellbeing(req("/wb/checkin?mood=4&energy=3&t=t0k"), env, {});
+  ok("a tap records and re-renders", scored.status === 200 && (await scored.text()).includes("b sel"));
+  const bad = await handleWellbeing(req("/wb/done?t=t0k"), env, {});
+  ok("done without an id is 400", bad.status === 400, bad.status);
+  const notMine = await handleWellbeing(req("/health"), env, {});
+  ok("other routes are untouched", notMine === null);
+  const tick = await handleWellbeing(req("/wb/tick?force=1&t=t0k"), env, {});
+  const tjson = JSON.parse(await tick.text());
+  ok("forced tick plans without a mailer", !!(tjson.planned || tjson.skipped) && !tjson.sent, Object.keys(tjson));
+  ok("a planned tick writes no nudge row", hdb.prepare("SELECT COUNT(*) c FROM companion_nudges").get().c === 0);
+  // Delivery bookkeeping: every branch must write the row it claims to write.
+  // Each branch gets a fresh DB so the one-open-ask-per-day rule cannot confuse the assertion.
+  const mkEnv = () => {
+    const d = new DatabaseSync(":memory:");
+    d.exec("CREATE TABLE journal (ts TEXT)");
+    d.exec("CREATE TABLE activity (date TEXT)");
+    d.exec("CREATE TABLE chat (role TEXT, ts TEXT)");
+    d.exec("CREATE TABLE notes (kind TEXT, ts TEXT)");
+    return { db: d, env: { PERSONAL: d1(d), WELLBEING_TOKEN: "t0k" } };
+  };
+  const nowIso2 = new Date().toISOString();
+
+  const a = mkEnv();
+  const delivered = [];
+  const realSend = async (e, to, subject, body) => { delivered.push({ to, subject, body }); return { ok: true, via: "test" }; };
+  const t2json = await wellbeingTick(a.env, { send: realSend, nowIso: nowIso2, force: true });
+  ok("a real sender delivers the ask", t2json.sent && t2json.sent.ok === true, t2json.sent);
+  ok("the mail goes to the owner", delivered.length === 1 && delivered[0].to === "rwnquni@outlook.com", delivered[0] && delivered[0].to);
+  const row2 = a.db.prepare("SELECT state, sent_at, outcome FROM companion_nudges ORDER BY id DESC LIMIT 1").get();
+  ok("delivered row is marked sent with a timestamp", row2.state === "sent" && !!row2.sent_at, row2);
+  ok("the mail carries both answers", /\/wb\/done\?id=/.test(delivered[0].body) && /\/wb\/no\?id=/.test(delivered[0].body));
+
+  const b = mkEnv();
+  await wellbeingTick(b.env, { send: async () => ({ ok: false, disabled: true }), nowIso: nowIso2, force: true });
+  const row3 = b.db.prepare("SELECT state, outcome FROM companion_nudges ORDER BY id DESC LIMIT 1").get();
+  ok("an owner off-switch closes the row, not retries it", row3.state === "expired" && row3.outcome.includes("owner_notices_disabled"), row3);
+
+  const c2 = mkEnv();
+  await wellbeingTick(c2.env, { send: async () => ({ ok: false, suppressed: true }), nowIso: nowIso2, force: true });
+  const row4 = c2.db.prepare("SELECT state, outcome FROM companion_nudges ORDER BY id DESC LIMIT 1").get();
+  ok("a suppressed send stays queued with a reason", row4.state === "queued" && row4.outcome.includes("suppressed"), row4);
+  const crisis = await handleWellbeing(req("/wb/checkin?note=" + encodeURIComponent("I want to die") + "&t=t0k"), env, {});
+  const cbody = await crisis.text();
+  ok("a crisis note answers with the fixed block", cbody.includes("not alone") || cbody.includes("You said something"), cbody.slice(0, 120));
+  const api = await handleWellbeing(req("/api/wellbeing?t=t0k"), env, {});
+  const json = JSON.parse(await api.text());
+  ok("api reports the seeded crisis lines", Array.isArray(json.config_gaps) && !json.config_gaps.includes("crisis_lines"), json.config_gaps);
+  ok("api still flags the missing backstop", json.config_gaps.includes("backstop_contact"), json.config_gaps);
+}
 
 console.log("\n" + (fail === 0 ? "PASS" : "FAIL") + "  " + pass + " passed, " + fail + " failed");
 process.exit(fail === 0 ? 0 : 1);
