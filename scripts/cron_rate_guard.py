@@ -64,7 +64,7 @@ MIN_GAP_MINUTES = 10
 OWNER_OVERRIDES = {
     "qnfo-code-orchestrator": {
         "min_gap_minutes": 1,
-        "max_fires_24h": 1470,   # every minute = 1440; headroom for the circular window
+        "max_fires_24h": 730,   # */2 = 720 fires/day, plus headroom for the circular window
         "owner_directive": "2026-10-17: MORE PARALLEL WORKERS, FASTER TICKS, MORE THROUGHPUT/OUTPUT/RESOLVED",
     },
 }
