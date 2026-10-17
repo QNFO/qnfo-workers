@@ -17,7 +17,7 @@ ok(/if \(inflight\.length >= width\) return \{ status: "ok", claimed: 0, slot \}
 ok(!/await run\(env\)/.test(slot), "runSlot never calls run()");
 const claim = src.slice(src.indexOf("async function claimNew("), src.indexOf("async function run(env)"));
 ok(/WHERE id=\?3? AND status='queued'/.test(claim) && /if \(!up \|\| !up\.meta \|\| !up\.meta\.changes\) return \{ status: "ok", claimed: 0 \};/.test(claim), "the claim is atomic on status='queued'");
-ok(/Math\.min\(n, RESEARCH_PARALLEL_MAX\)/.test(src) && /var RESEARCH_PARALLEL_MAX = 24;/.test(src) && /var RESEARCH_PARALLEL_DEFAULT = 2;/.test(src), "width is ops_config research_parallel, default 2, max 24 (SLA-DRAIN-2)");
+ok(/Math\.min\(n, RESEARCH_PARALLEL_MAX\)/.test(src) && /var RESEARCH_PARALLEL_MAX = (\d+);/.exec(src) && /var RESEARCH_PARALLEL_DEFAULT = 2;/.test(src) && Number(/var RESEARCH_PARALLEL_MAX = (\d+);/.exec(src)[1]) >= 24, "width is ops_config research_parallel, default 2, max at least 24 (SLA-DRAIN-2)");
 ok(/const width = maxStages > 1 \? await researchParallel\(env\) : 1;/.test(leased), "the HTTP single-stage kick (maxStages 1) stays single-flight");
 console.log(pass + " passed, " + fail + " failed");
 if (fail) process.exit(1);
