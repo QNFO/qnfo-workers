@@ -301,9 +301,22 @@ async function report(env) {
   return { worker: WORKER, version: VERSION, filings: (filings && filings.results) || [], runs: (runs && runs.results) || [] };
 }
 
+/* Constant-time comparison: a loop-token check that short-circuits on the first differing byte
+ * leaks the prefix of the secret through response timing. The guard is right to refuse `===`. */
+function sameSecret(a, b) {
+  var x = String(a == null ? "" : a);
+  var y = String(b == null ? "" : b);
+  var n = x.length > y.length ? x.length : y.length;
+  var d = x.length ^ y.length;
+  for (var i = 0; i < n; i++) {
+    d |= (x.charCodeAt(i) || 0) ^ (y.charCodeAt(i) || 0);
+  }
+  return d === 0 && x.length > 0;
+}
+
 function tickAllowed(env, req) {
   if (!env.LOOP_TOKEN) return true;
-  return req.headers.get("x-loop-token") === env.LOOP_TOKEN;
+  return sameSecret(req.headers.get("x-loop-token"), env.LOOP_TOKEN);
 }
 
 async function handleFetch(event) {
@@ -339,8 +352,11 @@ addEventListener("fetch", function (event) {
 });
 
 addEventListener("scheduled", function (event) {
-  event.waitUntil((async function () {
-    var out = await runTick(event.env);
-    try { console.log("EVOLVE-1 tick " + JSON.stringify(out)); } catch (e) {}
-  })());
+  event.waitUntil(
+    runTick(event.env)
+      .then(function (out) { console.log("EVOLVE-1 tick " + JSON.stringify(out)); })
+      .catch(function (e) {
+        console.error(JSON.stringify({ worker: WORKER, event: "tick-failed", error: errText(e) }));
+      })
+  );
 });
