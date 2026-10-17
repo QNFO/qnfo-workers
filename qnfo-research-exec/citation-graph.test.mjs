@@ -72,6 +72,17 @@ const G = load();
   ok(/ground-corpus/.test(src) && /_corpusErr/.test(src), "a corpus search that keeps nothing is logged, not swallowed");
   ok(/research_ground_corpus_k/.test(src), "the corpus width is configurable without a deploy");
   ok(!/slugs\.length >= 4\) break;/.test(src), "the old hard cap of 4 is gone");
+  // KG-INGEST-1: the graph gets a node and CITES edges on publish, not only an update-if-exists.
+  ok(/INSERT OR IGNORE INTO nodes \(id, label, name, properties, created_at, updated_at\)/.test(src), "publish creates the Paper node idempotently");
+  ok(/INSERT OR IGNORE INTO edges \(id, source_id, target_id, relationship_type, properties, created_at\)/.test(src) && /'CITES'/.test(src), "publish writes one CITES edge per cited own-corpus work");
+  ok(/"cites:" \+ slug \+ ":" \+ cs/.test(src), "the edge id is namespaced by citing and cited slug (idempotent, no collision)");
+  ok(/"paper:" \+ slug/.test(src) && /"paper:" \+ cs/.test(src), "KG node ids use the existing paper:<slug> convention (1,021 such nodes)");
+  ok(/if \(env\.GRAPH_DB\)/.test(src), "the KG write is guarded by the binding, so a missing binding cannot break a publish");
+  // CORPUS-LEVERAGE-1: the signal exists and is durable.
+  ok(/CREATE VIEW IF NOT EXISTS v_paper_influence/.test(src), "inbound citation is exposed as a view");
+  ok(/CREATE TABLE IF NOT EXISTS corpus_leverage/.test(src), "the signal is snapshotted daily");
+  ok(/var CORPUS_TERMINAL_GRACE_DAYS = 14;/.test(src), "a terminal paper has a named grace window");
+  ok(/await refreshPaperInfluence\(env\)/.test(src), "publish refreshes the signal");
 }
 
 console.log(pass + " passed, " + fail + " failed");

@@ -33,7 +33,7 @@ var __name22222 = /* @__PURE__ */ __name2222((target, value) => __defProp22222(t
 // an empty catch. CITE-CONSISTENCY-1 asks the reviewer to compare the draft against cited QNFO work.
 // REVIEW-TRIAGE-CAP-1 is a defect fix: drift demotion at the cycle cap silently turned a blocking finding into a pass, so
 // REVIEW-HARD-GATE-1 withheld nothing there (reviewer findings 2 -> 0 at the cap; an unparseable review advanced to verify).
-var VERSION = "0.18.20-cite-graph";
+var VERSION = "0.18.21-kg-cites";
 // WORKERS-AI-ATTRIBUTION-1 (2026-10-01, #1681): per-worker Workers AI attribution. Returns a shallow env copy whose AI
 // binding records each .run() (calls, errors, ms, tokens, neurons) into qnfo-audit ai_call_counters (purpose 'binding').
 // Neurons = usage tokens x Cloudflare's published per-model rates (neurons per M tokens). Fail-soft; env is never mutated.
@@ -3622,7 +3622,7 @@ function reviewNonMechanical(f) {
   return /\b(add|adding|collect|obtain|perform|run|conduct|carry out|repeat|gather)\b[^.;]{0,60}\b(experiment|experiments|dataset|datasets|measurements|simulations)\b|\b(further|additional|more|new)\s+(experiment|experiments|dataset|datasets|measurements|simulations)\b|\bexpand\b[^.;]{0,30}\bscope\b|\bbroaden\b|\bmore (work|research) is (needed|required)\b|\b(would|could|should)\b[^.;]{0,20}\b(require|need)\b[^.;]{0,40}\b(experiment|data|dataset)\b/i.test(t);
 }
 __name(reviewNonMechanical, "reviewNonMechanical");
-async function triageHardFindings(env, row, paper, hard, cycle) {
+async function triageHardFindings(env, row, paper, hard, cycle, cap) {
   let prev = [];
   try {
     const pj = JSON.parse(await r2Get(env, String(row.id) + "/hard-sigs.json") || "[]");
@@ -3642,9 +3642,9 @@ async function triageHardFindings(env, row, paper, hard, cycle) {
   // silently converted a blocking finding into a pass: REVIEW-HARD-GATE-1 never saw it, and a paper whose reviewer still
   // listed HARD findings advanced to verify and published (the cap case: hardLeft 2 became hardLeft 0). At or past the
   // cap every HARD finding that is not non-mechanical blocks, so the gate withholds and the recover loop re-drafts.
-  // ops_config research_review_gate = measure remains the reversible lever.
-  const _cap = await maxReviewCycles(env);
-  const atCap = Number(cycle) >= _cap;
+  // ops_config research_review_gate = measure remains the reversible lever. The cap is passed in by the caller (stageReview
+  // already reads it) so this function stays pure and the offline suite can exercise it without the config reader.
+  const atCap = Number.isFinite(cap) && Number(cycle) >= cap;
   for (let i = 0; i < hard.length; i++) {
     const f = hard[i];
     if (reviewNonMechanical(f)) {
@@ -3712,7 +3712,8 @@ async function stageReview(env, row) {
     if (_tr && String(_tr.value || "").trim().toLowerCase() === "off") _triageOff = true;
   } catch (e) {
   }
-  const _tri = _triageOff ? { block: hardRaw, soft: [], demoted: [] } : await triageHardFindings(env, row, paper, hardRaw, cycle);
+  const _cycleCap = await maxReviewCycles(env);
+  const _tri = _triageOff ? { block: hardRaw, soft: [], demoted: [] } : await triageHardFindings(env, row, paper, hardRaw, cycle, _cycleCap);
   const hard = _tri.block;
   if (_tri.demoted.length) {
     await logEvent(env, "review-triage", "row=" + row.id + " cycle=" + cycle + " block=" + hard.length + " demoted=" + _tri.demoted.length + " " + _tri.demoted.slice(0, 8).join(","), "ok");
@@ -3722,7 +3723,6 @@ async function stageReview(env, row) {
   // review -> revise cycles (bounded by MAX_REVIEW_CYCLES) and the patch reviser converts the listed expressions to LaTeX.
   const _pm = pseudoMathScan(paper);
   if (_pm.count > PSEUDO_MATH_MAX) hard.push(mathLatexFix(_pm));
-  const _cycleCap = await maxReviewCycles(env);
   if (hard.length && cycle < _cycleCap) {
     await r2Put(env, String(row.id) + "/fixes.json", JSON.stringify(hard));
     await env.QNFO_AUDIT.prepare("UPDATE research_queue SET stage='revise', context=? WHERE id=?").bind(JSON.stringify({ cycles: cycle, hardCount: hard.length, verifyPass: ctx.verifyPass || 0 }).slice(0, 6e3), row.id).run();
@@ -4766,6 +4766,27 @@ async function citationGateStepWithSupportCheck(env, row, bodyMd) {
 // CITE-GRAPH-1: pair the grounding bibliography with the published slug. Idempotent: paper_citations is replaced per
 // (citing_slug, ref_no), and the per-paper rows in living-paper citations are replaced whole, so a re-publish cannot
 // double the graph. Fail-soft and logged by the caller; a citation write never blocks a publish.
+// CORPUS-LEVERAGE-1 (2026-10-17): the fleet can now see which of its published papers are cited by later papers and
+// which are terminal (published, no inbound citation, older than the grace window). Ideas are still chosen without that
+// signal: 448 published papers carry no own-corpus reference at all and nothing distinguishes them from live ones. This
+// computes the signal durably (a view over paper_citations plus a daily snapshot) so idea selection can rank extend-and-
+// replicate work above another standalone paper. Reading the signal is a policy decision and is not wired here.
+var CORPUS_TERMINAL_GRACE_DAYS = 14;
+async function refreshPaperInfluence(env) {
+  const out = { published: 0, cited: 0, terminal: 0 };
+  try {
+    await env.LIVING_PAPER.prepare("CREATE VIEW IF NOT EXISTS v_paper_influence AS SELECT p.slug AS slug, p.status AS status, substr(p.created_at, 1, 10) AS published_day, (SELECT COUNT(*) FROM paper_citations c WHERE c.cited_slug = p.slug AND c.citing_slug <> p.slug) AS inbound, CAST(julianday('now') - julianday(COALESCE(p.created_at, '2026-01-01')) AS INTEGER) AS age_days FROM papers p").run();
+    await env.LIVING_PAPER.prepare("CREATE TABLE IF NOT EXISTS corpus_leverage (day TEXT PRIMARY KEY, published INTEGER, cited INTEGER, terminal INTEGER, computed_at TEXT)").run();
+    const r = await env.LIVING_PAPER.prepare("SELECT COUNT(*) n, SUM(CASE WHEN inbound > 0 THEN 1 ELSE 0 END) cited, SUM(CASE WHEN inbound = 0 AND age_days >= ?1 THEN 1 ELSE 0 END) terminal FROM v_paper_influence WHERE status = 'published'").bind(CORPUS_TERMINAL_GRACE_DAYS).first();
+    out.published = Number(r && r.n) || 0;
+    out.cited = Number(r && r.cited) || 0;
+    out.terminal = Number(r && r.terminal) || 0;
+    await env.LIVING_PAPER.prepare("INSERT OR REPLACE INTO corpus_leverage (day, published, cited, terminal, computed_at) VALUES (?1, ?2, ?3, ?4, ?5)").bind(nowIso().slice(0, 10), out.published, out.cited, out.terminal, nowIso()).run();
+  } catch (e) {
+    out.error = String(e && e.message || e).slice(0, 160);
+  }
+  return out;
+}
 async function persistCitations(env, row, slug) {
   const out = { ok: false, refs: 0, qnfo: 0 };
   try {
@@ -4774,10 +4795,16 @@ async function persistCitations(env, row, slug) {
     const doc = JSON.parse(raw);
     const refs = Array.isArray(doc && doc.refs) ? doc.refs : [];
     if (!refs.length) return Object.assign(out, { skipped: "empty bibliography" });
-    const pap = await env.LIVING_PAPER.prepare("SELECT identifier FROM papers WHERE slug=?1").bind(slug).first();
+    const pap = await env.LIVING_PAPER.prepare("SELECT identifier, title FROM papers WHERE slug=?1").bind(slug).first();
     const ident = pap && pap.identifier ? String(pap.identifier) : "";
+    const paperTitle = pap && pap.title ? String(pap.title) : String(row.idea || slug);
     await env.LIVING_PAPER.prepare("CREATE TABLE IF NOT EXISTS paper_citations (citing_slug TEXT NOT NULL, citing_identifier TEXT, cited_slug TEXT, cited_identifier TEXT, cited_kind TEXT, cited_id TEXT, cited_title TEXT, cited_url TEXT, ref_no INTEGER NOT NULL, created_at TEXT, PRIMARY KEY (citing_slug, ref_no))").run();
     let qnfo = 0;
+    // KG-INGEST-1 (2026-10-17): nothing ever created a Paper node. The only KG write in this worker was an UPDATE of
+    // "paper:<slug>" if it already existed, so the graph's newest Paper node was 2026-09-27 while papers published daily,
+    // and CITES/BUILDS_ON edges could only come from hand seeding. Create the node idempotently on publish and write one
+    // CITES edge per cited own-corpus work, so the citation graph reaches the KG within one publish.
+    let _kg = 0;
     for (const r of refs) {
       const cs = String(r.slug || "");
       let ci = "";
@@ -4791,6 +4818,23 @@ async function persistCitations(env, row, slug) {
       }
       await env.LIVING_PAPER.prepare("INSERT OR REPLACE INTO paper_citations (citing_slug, citing_identifier, cited_slug, cited_identifier, cited_kind, cited_id, cited_title, cited_url, ref_no, created_at) VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10)").bind(slug, ident || null, cs || null, ci || null, String(r.kind || ""), String(r.id || ""), String(r.title || "").slice(0, 500), String(r.url || ""), Number(r.n) || 0, nowIso()).run();
     }
+    if (env.GRAPH_DB) {
+      try {
+        const _ts = nowIso();
+        await env.GRAPH_DB.prepare("INSERT OR IGNORE INTO nodes (id, label, name, properties, created_at, updated_at) VALUES (?1, 'Paper', ?2, ?3, ?4, ?4)").bind("paper:" + slug, paperTitle.slice(0, 300), JSON.stringify({ slug: slug, url: "https://papers.qnfo.org/papers/" + slug, source: "qnfo-research-exec" }), _ts).run();
+        for (const r of refs) {
+          const cs = String(r.slug || "");
+          if (!cs || cs === slug) continue;
+          try {
+            await env.GRAPH_DB.prepare("INSERT OR IGNORE INTO nodes (id, label, name, properties, created_at, updated_at) VALUES (?1, 'Paper', ?2, ?3, ?4, ?4)").bind("paper:" + cs, String(r.title || cs).slice(0, 300), JSON.stringify({ slug: cs, url: String(r.url || "") }), _ts).run();
+            await env.GRAPH_DB.prepare("INSERT OR IGNORE INTO edges (id, source_id, target_id, relationship_type, properties, created_at) VALUES (?1, ?2, ?3, 'CITES', ?4, ?5)").bind("cites:" + slug + ":" + cs, "paper:" + slug, "paper:" + cs, JSON.stringify({ ref: Number(r.n) || 0, kind: "qnfo", source: "qnfo-research-exec" }), _ts).run();
+            _kg++;
+          } catch (eEdge) {
+          }
+        }
+      } catch (eKg) {
+      }
+    }
     if (ident) {
       try {
         await env.LIVING_PAPER.prepare("DELETE FROM citations WHERE paper_id=?1").bind(ident).run();
@@ -4800,7 +4844,8 @@ async function persistCitations(env, row, slug) {
       } catch (e) {
       }
     }
-    return { ok: true, refs: refs.length, qnfo: qnfo };
+    const _lev = await refreshPaperInfluence(env);
+    return { ok: true, refs: refs.length, qnfo: qnfo, kg: _kg, published: _lev.published, cited: _lev.cited, terminal: _lev.terminal };
   } catch (e) {
     return Object.assign(out, { error: String(e && e.message || e).slice(0, 160) });
   }
@@ -4867,7 +4912,7 @@ async function publishStageV2(env, row) {
   }
   try {
     const _cit = await persistCitations(env, row, slug);
-    await logEvent(env, "cite-graph", "row=" + String(row.id).slice(0, 8) + " slug=" + slug + " refs=" + (_cit.refs || 0) + " qnfo=" + (_cit.qnfo || 0) + (_cit.skipped ? " skipped=" + _cit.skipped : "") + (_cit.error ? " error=" + _cit.error : ""), _cit.error ? "warn" : "ok");
+    await logEvent(env, "cite-graph", "row=" + String(row.id).slice(0, 8) + " slug=" + slug + " refs=" + (_cit.refs || 0) + " qnfo=" + (_cit.qnfo || 0) + " kg_edges=" + (_cit.kg || 0) + " terminal=" + (_cit.terminal || 0) + (_cit.skipped ? " skipped=" + _cit.skipped : "") + (_cit.error ? " error=" + _cit.error : ""), _cit.error ? "warn" : "ok");
   } catch (e) {
   }
   const artifacts = await collectArtifacts(env, String(row.id));
@@ -27993,6 +28038,7 @@ export {
   corpusWidth,
   citationRowsFromBib,
   persistCitations,
+  refreshPaperInfluence,
   RESEARCH_SHARED_PREAMBLE,
   stagePrompt,
   stageContextPrompt,
