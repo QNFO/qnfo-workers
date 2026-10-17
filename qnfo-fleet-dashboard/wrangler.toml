@@ -11,6 +11,12 @@ main = "worker.js"
 compatibility_date = "2026-10-10"
 workers_dev = true
 
+# OWNER-VOICE-CAP-PARITY-1 (2026-10-17, agent_issues 2729): qnfo-social posts q08.org links by design since Q08-OPEN-1
+# (owner directive 2026-10-09, "remove all filters and blocks"), and the guard flags that link unless SOCIAL_ALLOW_Q08
+# is "1". Without this var the 05:00Z run re-paused every social channel the day after any post carried a q08 link.
+[vars]
+SOCIAL_ALLOW_Q08 = "1"
+
 # qnfo-fleet-dashboard v1.8.0 - ONE human page (what needs the owner, money, clock). Machine state stays under /api/*.
 # Purpose: at-a-glance view of every scheduled worker (crons + next UTC runs), 24h invocation/error analytics
 # (CF GraphQL), D1 pipeline audits (qnfo-audit/outreach/living-paper), endpoint probes, and device-bound tasks.
