@@ -1,302 +1,78 @@
 {
  "ok": true,
  "marker": "REMEDIATION-CONSUMER-1",
- "verifier": "remediation-consumer@529296e87da1",
- "due": 77,
+ "verifier": "remediation-consumer@4ef9cba48885",
+ "due": 70,
  "pass": 0,
  "fail": 0,
- "skipped": 77,
+ "skipped": 70,
  "contracts": [
   {
-   "class": "issue-2757",
-   "issue_id": 2757,
-   "verdict": "probe-error",
-   "expected": "0",
-   "observed": "2",
-   "reason": "HTTP Error 400: Bad Request"
-  },
-  {
-   "class": "issue-2758",
-   "issue_id": 2758,
-   "verdict": "probe-error",
-   "expected": "1",
-   "observed": "0",
-   "reason": "HTTP Error 400: Bad Request"
-  },
-  {
-   "class": "issue-2759",
-   "issue_id": 2759,
+   "class": "issue-2739",
+   "issue_id": 2739,
    "verdict": "vacuous-probe-result",
    "expected": "closed",
    "observed": null,
    "reason": "probe returned no expected/observed pair"
   },
   {
-   "class": "issue-2760",
-   "issue_id": 2760,
+   "class": "issue-2740",
+   "issue_id": 2740,
    "verdict": "vacuous-probe-result",
    "expected": "closed",
    "observed": null,
    "reason": "probe returned no expected/observed pair"
   },
   {
-   "class": "issue-2761",
-   "issue_id": 2761,
-   "verdict": "vacuous-probe-result",
-   "expected": "closed",
-   "observed": null,
-   "reason": "probe returned no expected/observed pair"
-  },
-  {
-   "class": "issue-2762",
-   "issue_id": 2762,
-   "verdict": "vacuous-probe-result",
-   "expected": "closed",
-   "observed": null,
-   "reason": "probe returned no expected/observed pair"
-  },
-  {
-   "class": "issue-2763",
-   "issue_id": 2763,
-   "verdict": "vacuous-probe-result",
-   "expected": "closed",
-   "observed": null,
-   "reason": "probe returned no expected/observed pair"
-  },
-  {
-   "class": "issue-2764",
-   "issue_id": 2764,
-   "verdict": "vacuous-probe-result",
-   "expected": "closed",
-   "observed": null,
-   "reason": "probe returned no expected/observed pair"
-  },
-  {
-   "class": "issue-2765",
-   "issue_id": 2765,
-   "verdict": "vacuous-probe-result",
-   "expected": "closed",
-   "observed": null,
-   "reason": "probe returned no expected/observed pair"
-  },
-  {
-   "class": "issue-2766",
-   "issue_id": 2766,
-   "verdict": "vacuous-probe-result",
-   "expected": "closed",
-   "observed": null,
-   "reason": "probe returned no expected/observed pair"
-  },
-  {
-   "class": "issue-2767",
-   "issue_id": 2767,
-   "verdict": "vacuous-probe-result",
-   "expected": "closed",
-   "observed": null,
-   "reason": "probe returned no expected/observed pair"
-  },
-  {
-   "class": "issue-2768",
-   "issue_id": 2768,
-   "verdict": "vacuous-probe-result",
-   "expected": "closed",
-   "observed": null,
-   "reason": "probe returned no expected/observed pair"
-  },
-  {
-   "class": "issue-2769",
-   "issue_id": 2769,
-   "verdict": "vacuous-probe-result",
-   "expected": "closed",
-   "observed": null,
-   "reason": "probe returned no expected/observed pair"
-  },
-  {
-   "class": "issue-2770",
-   "issue_id": 2770,
-   "verdict": "vacuous-probe-result",
-   "expected": "closed",
-   "observed": null,
-   "reason": "probe returned no expected/observed pair"
-  },
-  {
-   "class": "issue-2771",
-   "issue_id": 2771,
-   "verdict": "vacuous-probe-result",
-   "expected": "closed",
-   "observed": null,
-   "reason": "probe returned no expected/observed pair"
-  },
-  {
-   "class": "issue-2772",
-   "issue_id": 2772,
-   "verdict": "vacuous-probe-result",
-   "expected": "closed",
-   "observed": null,
-   "reason": "probe returned no expected/observed pair"
-  },
-  {
-   "class": "issue-2773",
-   "issue_id": 2773,
-   "verdict": "vacuous-probe-result",
-   "expected": "closed",
-   "observed": null,
-   "reason": "probe returned no expected/observed pair"
-  },
-  {
-   "class": "issue-2774",
-   "issue_id": 2774,
-   "verdict": "vacuous-probe-result",
-   "expected": "closed",
-   "observed": null,
-   "reason": "probe returned no expected/observed pair"
-  },
-  {
-   "class": "issue-2775",
-   "issue_id": 2775,
-   "verdict": "vacuous-probe-result",
-   "expected": "closed",
-   "observed": null,
-   "reason": "probe returned no expected/observed pair"
-  },
-  {
-   "class": "fm-code-publish-waits-for-push",
-   "issue_id": null,
-   "verdict": "probe-error",
-   "expected": "0",
-   "observed": "0",
-   "reason": "HTTP Error 400: Bad Request"
-  },
-  {
-   "class": "fm-metric-close-flap",
-   "issue_id": null,
-   "verdict": "probe-error",
-   "expected": "0",
-   "observed": "4",
-   "reason": "HTTP Error 400: Bad Request"
-  },
-  {
-   "class": "fm-issue-dup-abort",
-   "issue_id": null,
-   "verdict": "probe-error",
-   "expected": "1",
-   "observed": "1",
-   "reason": "HTTP Error 400: Bad Request"
-  },
-  {
-   "class": "issue-1753",
-   "issue_id": 1753,
-   "verdict": "probe-error",
-   "expected": "1",
-   "observed": "0",
-   "reason": "HTTP Error 400: Bad Request"
-  },
-  {
-   "class": "issue-1834",
-   "issue_id": 1834,
-   "verdict": "probe-error",
-   "expected": "0",
-   "observed": "1",
-   "reason": "HTTP Error 400: Bad Request"
-  },
-  {
-   "class": "fm-hourly-fanout-double",
-   "issue_id": null,
-   "verdict": "probe-error",
-   "expected": "0",
-   "observed": "0",
-   "reason": "HTTP Error 400: Bad Request"
-  },
-  {
-   "class": "fm-view-alias-capture",
-   "issue_id": null,
-   "verdict": "probe-error",
-   "expected": "1",
-   "observed": "1",
-   "reason": "HTTP Error 400: Bad Request"
-  },
-  {
-   "class": "issue-2644",
-   "issue_id": 2644,
-   "verdict": "probe-error",
-   "expected": "1",
-   "observed": "0",
-   "reason": "HTTP Error 400: Bad Request"
-  },
-  {
-   "class": "issue-2645",
-   "issue_id": 2645,
+   "class": "issue-2747",
+   "issue_id": 2747,
    "verdict": "probe-error",
    "expected": "closed",
    "observed": "closed",
    "reason": "HTTP Error 400: Bad Request"
   },
   {
-   "class": "fm-cron-string-dispatch-drift",
-   "issue_id": null,
-   "verdict": "probe-error",
-   "expected": "1",
-   "observed": "1",
-   "reason": "HTTP Error 400: Bad Request"
+   "class": "issue-2748",
+   "issue_id": 2748,
+   "verdict": "vacuous-probe-result",
+   "expected": "closed",
+   "observed": null,
+   "reason": "probe returned no expected/observed pair"
   },
   {
-   "class": "fm-sla-over-120m-outside-queue-sla",
-   "issue_id": null,
-   "verdict": "probe-error",
-   "expected": "0",
-   "observed": "0",
-   "reason": "HTTP Error 400: Bad Request"
-  },
-  {
-   "class": "issue-2649",
-   "issue_id": 2649,
-   "verdict": "probe-error",
-   "expected": "ok",
-   "observed": "ok",
-   "reason": "HTTP Error 400: Bad Request"
-  },
-  {
-   "class": "issue-2708",
-   "issue_id": 2708,
+   "class": "issue-2749",
+   "issue_id": 2749,
    "verdict": "probe-error",
    "expected": "closed",
    "observed": "closed",
    "reason": "HTTP Error 400: Bad Request"
   },
   {
-   "class": "issue-2566",
-   "issue_id": 2566,
+   "class": "issue-2750",
+   "issue_id": 2750,
+   "verdict": "vacuous-probe-result",
+   "expected": "closed",
+   "observed": null,
+   "reason": "probe returned no expected/observed pair"
+  },
+  {
+   "class": "fm-unprobed-issues",
+   "issue_id": null,
    "verdict": "probe-error",
    "expected": "1",
    "observed": "0",
    "reason": "HTTP Error 400: Bad Request"
   },
   {
-   "class": "issue-2591",
-   "issue_id": 2591,
+   "class": "issue-2756",
+   "issue_id": 2756,
    "verdict": "probe-error",
-   "expected": "1",
-   "observed": "0",
+   "expected": "0",
+   "observed": "1",
    "reason": "HTTP Error 400: Bad Request"
   },
   {
-   "class": "issue-2606",
-   "issue_id": 2606,
-   "verdict": "probe-error",
-   "expected": "ok",
-   "observed": "stale: the filing loop q08-signal-engine did not close it within 48h",
-   "reason": "HTTP Error 400: Bad Request"
-  },
-  {
-   "class": "issue-2615",
-   "issue_id": 2615,
-   "verdict": "probe-error",
-   "expected": "ok",
-   "observed": "ok",
-   "reason": "HTTP Error 400: Bad Request"
-  },
-  {
-   "class": "belief-nothing-stuck",
+   "class": "fm-issue-deletion",
    "issue_id": null,
    "verdict": "probe-error",
    "expected": "1",
@@ -304,15 +80,103 @@
    "reason": "HTTP Error 400: Bad Request"
   },
   {
-   "class": "research-terminal-a2033fc2",
-   "issue_id": 2358,
+   "class": "issue-2382",
+   "issue_id": 2382,
    "verdict": "probe-error",
-   "expected": "parked+queue-moving",
-   "observed": "pending",
+   "expected": "ok",
+   "observed": "pending: no Google Analytics report mail has reached the fleet inbox yet (IDENTITY-BOUND owner step: schedule the GA4 report email or grant a service account Viewer)",
    "reason": "HTTP Error 400: Bad Request"
   },
   {
-   "class": "fm-contract-cadence-drift",
+   "class": "issue-2456",
+   "issue_id": 2456,
+   "verdict": "probe-error",
+   "expected": "1",
+   "observed": "0",
+   "reason": "HTTP Error 400: Bad Request"
+  },
+  {
+   "class": "fm-companion-draft-cache-replay",
+   "issue_id": null,
+   "verdict": "probe-error",
+   "expected": "1",
+   "observed": "0",
+   "reason": "HTTP Error 400: Bad Request"
+  },
+  {
+   "class": "issue-2605",
+   "issue_id": 2605,
+   "verdict": "vacuous-probe-result",
+   "expected": "closed",
+   "observed": null,
+   "reason": "probe returned no expected/observed pair"
+  },
+  {
+   "class": "issue-2742",
+   "issue_id": 2742,
+   "verdict": "probe-error",
+   "expected": "closed",
+   "observed": "closed",
+   "reason": "HTTP Error 400: Bad Request"
+  },
+  {
+   "class": "issue-2743",
+   "issue_id": 2743,
+   "verdict": "probe-error",
+   "expected": "closed",
+   "observed": "closed",
+   "reason": "HTTP Error 400: Bad Request"
+  },
+  {
+   "class": "issue-2613",
+   "issue_id": 2613,
+   "verdict": "probe-error",
+   "expected": "1",
+   "observed": "0",
+   "reason": "HTTP Error 400: Bad Request"
+  },
+  {
+   "class": "issue-2744",
+   "issue_id": 2744,
+   "verdict": "probe-error",
+   "expected": "closed",
+   "observed": "closed",
+   "reason": "HTTP Error 400: Bad Request"
+  },
+  {
+   "class": "issue-2745",
+   "issue_id": 2745,
+   "verdict": "probe-error",
+   "expected": "closed",
+   "observed": "closed",
+   "reason": "HTTP Error 400: Bad Request"
+  },
+  {
+   "class": "issue-2657",
+   "issue_id": 2657,
+   "verdict": "probe-error",
+   "expected": "closed",
+   "observed": "closed",
+   "reason": "HTTP Error 400: Bad Request"
+  },
+  {
+   "class": "fm-report-card-missed-week",
+   "issue_id": null,
+   "verdict": "probe-error",
+   "expected": "1",
+   "observed": "1",
+   "reason": "HTTP Error 400: Bad Request"
+  },
+  {
+   "class": "issue-2498",
+   "issue_id": 2498,
+   "verdict": "probe-error",
+   "expected": "ok",
+   "observed": "pending: re-armed 2026-10-13 (REARM-TRUNCATED-REWRITES-1, PR 1176), closes when the complete rewrite republishes",
+   "reason": "HTTP Error 400: Bad Request"
+  },
+  {
+   "class": "fm-probe-source-moved",
    "issue_id": null,
    "verdict": "probe-error",
    "expected": "0",
@@ -320,25 +184,160 @@
    "reason": "HTTP Error 400: Bad Request"
   },
   {
-   "class": "fm-pr-null-mergeable-silent-skip",
+   "class": "issue-2683",
+   "issue_id": 2683,
+   "verdict": "vacuous-probe-result",
+   "expected": "closed",
+   "observed": null,
+   "reason": "probe returned no expected/observed pair"
+  },
+  {
+   "class": "fm-two-closers-disagree",
    "issue_id": null,
    "verdict": "probe-error",
-   "expected": "1",
+   "expected": "0",
    "observed": "1",
    "reason": "HTTP Error 400: Bad Request"
   },
   {
-   "class": "issue-2397",
-   "issue_id": 2397,
+   "class": "issue-2538",
+   "issue_id": 2538,
+   "verdict": "probe-error",
+   "expected": "0",
+   "observed": "22",
+   "reason": "HTTP Error 400: Bad Request"
+  },
+  {
+   "class": "issue-2636",
+   "issue_id": 2636,
+   "verdict": "probe-error",
+   "expected": "ok",
+   "observed": "ok",
+   "reason": "HTTP Error 400: Bad Request"
+  },
+  {
+   "class": "issue-2652",
+   "issue_id": 2652,
+   "verdict": "probe-error",
+   "expected": "ok",
+   "observed": "ok",
+   "reason": "HTTP Error 400: Bad Request"
+  },
+  {
+   "class": "issue-1796",
+   "issue_id": 1796,
    "verdict": "probe-error",
    "expected": "0",
    "observed": "3",
    "reason": "HTTP Error 400: Bad Request"
   },
   {
-   "class": "fm-grounding-single-source-refused",
+   "class": "issue-1798",
+   "issue_id": 1798,
+   "verdict": "probe-error",
+   "expected": "0",
+   "observed": "1",
+   "reason": "HTTP Error 400: Bad Request"
+  },
+  {
+   "class": "issue-1838",
+   "issue_id": 1838,
+   "verdict": "probe-error",
+   "expected": "0",
+   "observed": "missing",
+   "reason": "HTTP Error 400: Bad Request"
+  },
+  {
+   "class": "fm-synthetic-ask-pollution",
    "issue_id": null,
+   "verdict": "probe-error",
+   "expected": "0",
+   "observed": "0",
+   "reason": "HTTP Error 400: Bad Request"
+  },
+  {
+   "class": "issue-2562",
+   "issue_id": 2562,
+   "verdict": "probe-error",
+   "expected": "ok",
+   "observed": "traffic-health failing or not run in 120 min",
+   "reason": "HTTP Error 400: Bad Request"
+  },
+  {
+   "class": "issue-2568",
+   "issue_id": 2568,
+   "verdict": "probe-error",
+   "expected": "1",
+   "observed": "0",
+   "reason": "HTTP Error 400: Bad Request"
+  },
+  {
+   "class": "issue-2570",
+   "issue_id": 2570,
+   "verdict": "probe-error",
+   "expected": "1",
+   "observed": "0",
+   "reason": "HTTP Error 400: Bad Request"
+  },
+  {
+   "class": "issue-2603",
+   "issue_id": 2603,
    "verdict": "probe-error",
    "expected": "1",
    "observed": "1",
-   "reason": "HTTP Error 400: Bad Requ
+   "reason": "HTTP Error 400: Bad Request"
+  },
+  {
+   "class": "issue-1872",
+   "issue_id": 1872,
+   "verdict": "probe-error",
+   "expected": "1",
+   "observed": "0",
+   "reason": "HTTP Error 400: Bad Request"
+  },
+  {
+   "class": "issue-1875",
+   "issue_id": 1875,
+   "verdict": "probe-error",
+   "expected": "1",
+   "observed": "0",
+   "reason": "HTTP Error 400: Bad Request"
+  },
+  {
+   "class": "issue-2617",
+   "issue_id": 2617,
+   "verdict": "probe-error",
+   "expected": "ok",
+   "observed": "stale: the filing loop qnfo-fleet-control did not close it within 48h",
+   "reason": "HTTP Error 400: Bad Request"
+  },
+  {
+   "class": "issue-2180",
+   "issue_id": 2180,
+   "verdict": "probe-error",
+   "expected": "ok",
+   "observed": "spof_alternates_untested_24h reads 1 refreshed 2026-10-17T14:00:33.565Z",
+   "reason": "HTTP Error 400: Bad Request"
+  },
+  {
+   "class": "issue-2604",
+   "issue_id": 2604,
+   "verdict": "probe-error",
+   "expected": "1",
+   "observed": "recovering",
+   "reason": "HTTP Error 400: Bad Request"
+  },
+  {
+   "class": "issue-2637",
+   "issue_id": 2637,
+   "verdict": "probe-error",
+   "expected": "closed",
+   "observed": "closed",
+   "reason": "HTTP Error 400: Bad Request"
+  },
+  {
+   "class": "issue-2638",
+   "issue_id": 2638,
+   "verdict": "probe-error",
+   "expected": "closed",
+   "observed": "
