@@ -155,5 +155,34 @@ const claim = (env, p, f) => env.AUDIT_DB._db.prepare("INSERT INTO work_claims (
   const two = 'var VERSION = "1.0.0";\nvar VERSION = "1.0.0";\nq();\n';
   ok(ctx.bumpVersion(two, two.replace("q()", "r()")) === two.replace("q()", "r()"), "6d two declarations: left alone (ambiguous)");
 }
+// 7. PATH-CLAIM-CEILING-1 (0.17.0, agent_issues 2726): a task that has held its file past the ceiling after 2+ failed attempts is set
+// failed and the file is freed; a task inside the window, or on its first attempt, keeps the file.
+{
+  const { env } = envWith([]);
+  const a = await enq(env, "q08-signal-engine/worker.js");
+  ok(a.ok, "7a the first task is queued", a);
+  const old = new Date(Date.now() - 200 * 60000).toISOString();
+  env.AUDIT_DB._db.prepare("UPDATE code_tasks SET created_at = ?, attempts = 1 WHERE id = ?").run(old, a.id);
+  const b = await enq(env, "q08-signal-engine/worker.js");
+  ok(!b.ok && b.http === 409, "7b one failed attempt keeps the file even past the ceiling", b);
+  env.AUDIT_DB._db.prepare("UPDATE code_tasks SET created_at = ?, attempts = 2 WHERE id = ?").run(new Date(Date.now() - 60 * 60000).toISOString(), a.id);
+  const c = await enq(env, "q08-signal-engine/worker.js");
+  ok(!c.ok && c.http === 409, "7c two failed attempts inside the ceiling keep the file", c);
+  env.AUDIT_DB._db.prepare("UPDATE code_tasks SET created_at = ?, attempts = 6, last_error = 'standards guard' WHERE id = ?").run(old, a.id);
+  const d = await enq(env, "q08-signal-engine/worker.js");
+  ok(d.ok && d.http === 202, "7d past the ceiling with 6 failed attempts the file is freed and a new task is queued", d);
+  const held = env.AUDIT_DB._db.prepare("SELECT status, last_error FROM code_tasks WHERE id = ?").get(a.id);
+  ok(held && held.status === "failed" && /PATH-CLAIM-CEILING-1/.test(held.last_error) && /standards guard/.test(held.last_error), "7e the old task is failed with the ceiling reason and keeps its last error", held);
+  const ev = env.AUDIT_DB._db.prepare("SELECT COUNT(*) n FROM cloud_ops_events WHERE kind = 'code-task.path-ceiling'").get();
+  ok(ev.n === 1, "7f one path-ceiling event is written", ev);
+  const g = await enq(env, "qnfo-email/worker.js");
+  env.AUDIT_DB._db.prepare("UPDATE code_tasks SET created_at = ?, attempts = 6 WHERE id = ?").run(String(Date.now() - 200 * 60000), g.id);
+  ok((await enq(env, "qnfo-email/worker.js")).ok, "7g an epoch-millisecond created_at is read too");
+  const e2 = envWith([]).env;
+  e2.AUDIT_DB._db.exec("CREATE TABLE ops_config (key TEXT PRIMARY KEY, value TEXT); INSERT INTO ops_config VALUES ('path_hold_max_min', '600')");
+  const f = await enq(e2, "qnfo-social/worker.js");
+  e2.AUDIT_DB._db.prepare("UPDATE code_tasks SET created_at = ?, attempts = 6 WHERE id = ?").run(old, f.id);
+  ok(!(await enq(e2, "qnfo-social/worker.js")).ok, "7h ops_config path_hold_max_min 600 keeps a 200-minute task");
+}
 console.log("dispatch-dedupe: " + pass + " passed, " + fail + " failed");
 process.exit(fail ? 1 : 0);
