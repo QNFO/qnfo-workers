@@ -4682,20 +4682,32 @@ function resumeStage(row) {
   return row && row.paper_slug && RESUMABLE_STAGES.indexOf(String(row.stage || "")) !== -1 ? String(row.stage) : "ground";
 }
 // RESEARCH-THROUGHPUT-1: the claim half of run(), so a free slot claims a new row and never re-advances an in-flight one.
+// CLAIM-ATOMIC-1 (2026-10-17, owner directive "accelerate publish capacity a minimum of 2x"): every slot ran the
+// same ORDER BY ... LIMIT 1 select and then updated that one id, so every slot in a round raced for the same top
+// row. One claim won and the rest returned claimed:0. Measured 19 claims in 6 hours across 24 ticks with 45 rows
+// queued, which is why width (24, then 48) never appeared as concurrency and only 6-14 papers published a day.
+// The claim is now ONE statement that removes the row it updates, so N slots admit N distinct rows. The stage CASE
+// reproduces resumeStage() in SQL (RESUME-STAGE-1) so a re-armed row still enters at revise rather than ground.
 async function claimNew(env) {
-  let row;
+  let row = null;
+  try {
+    row = await env.QNFO_AUDIT.prepare("UPDATE research_queue SET status='researching', stage = CASE WHEN paper_slug IS NOT NULL AND stage IN ('complete','review','revise','verify') THEN stage ELSE 'ground' END, claimed_at=?1, attempt=attempt+1 WHERE id = (SELECT id FROM research_queue WHERE status='queued' ORDER BY CASE WHEN created_at < strftime('%Y-%m-%dT%H:%M:%SZ','now','-72 hours') THEN 0 ELSE 1 END, CASE WHEN created_at < strftime('%Y-%m-%dT%H:%M:%SZ','now','-72 hours') THEN created_at END ASC, score DESC LIMIT 1) AND status='queued' RETURNING *").bind(nowIso()).first();
+  } catch (eClaim) {
+    // A dialect without UPDATE ... RETURNING keeps the old two-step claim rather than stopping the pipeline.
+    await logEvent(env, "claim-atomic-fallback", String(eClaim && eClaim.message || eClaim).slice(0, 200), "warn");
     row = await env.QNFO_AUDIT.prepare("SELECT * FROM research_queue WHERE status='queued' ORDER BY CASE WHEN created_at < strftime('%Y-%m-%dT%H:%M:%SZ','now','-72 hours') THEN 0 ELSE 1 END, CASE WHEN created_at < strftime('%Y-%m-%dT%H:%M:%SZ','now','-72 hours') THEN created_at END ASC, score DESC LIMIT 1").first();
-    if (!row) {
-      return { status: "ok", claimed: 0 };
-    }
-    const resume = resumeStage(row);
-    const up = await env.QNFO_AUDIT.prepare("UPDATE research_queue SET status='researching', stage=?1, claimed_at=?2, attempt=attempt+1 WHERE id=?3 AND status='queued'").bind(resume, nowIso(), row.id).run();
+    if (!row) return { status: "ok", claimed: 0 };
+    const resumeLegacy = resumeStage(row);
+    const up = await env.QNFO_AUDIT.prepare("UPDATE research_queue SET status='researching', stage=?1, claimed_at=?2, attempt=attempt+1 WHERE id=?3 AND status='queued'").bind(resumeLegacy, nowIso(), row.id).run();
     if (!up || !up.meta || !up.meta.changes) return { status: "ok", claimed: 0 };
-    await logEvent(env, "claim", "claimed " + row.source_id + " (pipeline " + PIPELINE_VERSION + ") at stage " + resume);
-    row.stage = resume;
-    const r = await stageFn(resume)(env, row);
-    await logEvent(env, "done", JSON.stringify(r).slice(0, 600), doneStatus(r));
-    return { status: r.ok ? "ok" : "error", res: r };
+    row.stage = resumeLegacy;
+  }
+  if (!row) return { status: "ok", claimed: 0 };
+  const resume = String(row.stage || "ground");
+  await logEvent(env, "claim", "claimed " + row.source_id + " (pipeline " + PIPELINE_VERSION + ") at stage " + resume);
+  const r = await stageFn(resume)(env, row);
+  await logEvent(env, "done", JSON.stringify(r).slice(0, 600), doneStatus(r));
+  return { status: r.ok ? "ok" : "error", res: r };
 }
 async function run(env) {
   try {
