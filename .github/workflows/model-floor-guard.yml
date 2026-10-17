@@ -1,3 +1,4 @@
+C:\Users\LENOVO\AppData\Local\Temp\model-floor-guard.yml:
 name: model-floor-guard
 
 # MODEL-FLOOR-1 enforcement, moved off the owner's laptop (2026-10-17 local de-bloat).
@@ -11,6 +12,11 @@ name: model-floor-guard
 # Step names are colon-free (WORKFLOW-YAML-LINT-1).
 
 on:
+  push:
+    branches: [main]
+    paths:
+      - "scripts/model-floor-guard.mjs"
+      - ".github/workflows/model-floor-guard.yml"
   schedule:
     - cron: "17 5 * * 1"
   workflow_dispatch:
@@ -27,8 +33,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
         with:
           node-version: "20"
       - name: Scan repo sources and live bundles
@@ -43,3 +49,4 @@ jobs:
           { echo '### model-floor-guard'; echo "exit code: $rc"; echo '```'; head -c 60000 floor-report.txt; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
           head -40 floor-report.txt
           exit $rc
+
