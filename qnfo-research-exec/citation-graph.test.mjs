@@ -88,6 +88,7 @@ const G = load();
   ok(/CREATE TABLE IF NOT EXISTS cite_backfill_state/.test(src), "each slug is scanned once, including papers that cite nothing");
   ok(/NOT EXISTS \(SELECT 1 FROM cite_backfill_state s WHERE s.slug = p.slug\)/.test(src), "a scanned paper is never re-scanned");
   ok(/var CITE_BACKFILL_BATCH = \d+;/.test(src), "the batch is bounded per tick");
+  ok(/ORDER BY \(instr\(lower\(p\.body_md\), 'qnfo:'\) > 0\) DESC, p\.created_at DESC/.test(src), "the batch reaches citing papers first, newest first (unordered it walked the July corpus and matched 0)");
   ok(/await citeBackfillSweep\(env\)/.test(src), "the sweep runs from the tick");
   ok(/"cites:" \+ row.slug \+ ":" \+ hit.slug/.test(src), "backfilled edges use the same namespaced id as the forward path");
 }
