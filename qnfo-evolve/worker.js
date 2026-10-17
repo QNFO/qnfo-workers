@@ -35,7 +35,7 @@
  *   GET /report  the last 20 filings and the last run (public read)
  *   POST /tick   same work as the cron; needs x-loop-token when LOOP_TOKEN is configured
  */
-var VERSION = "0.1.1-evolve";
+var VERSION = "0.1.2-evolve";
 var WORKER = "qnfo-evolve";
 var SOURCE = "qnfo-evolve|EVOLVE-1";
 var MAX_OPEN = 5;
@@ -234,7 +234,12 @@ async function fileIssue(env, d) {
 }
 
 /* The closure half. A filing stops being work the moment its probe returns nothing, and this worker
- * closes it with evidence instead of waiting for a session to notice. */
+ * closes it with evidence instead of waiting for a session to notice.
+ *
+ * ORDER MATTERS: agent_issues carries a BEFORE UPDATE trigger `issue_close_evidence_required` that
+ * ABORTS with 'close-without-evidence' unless issue_triage.close_evidence is already populated for
+ * the issue. Writing the status first fails the whole tick, silently, with the gap still open --
+ * measured 2026-10-17 when a manual retraction was refused. So the evidence row is written first. */
 async function closeResolved(env, filings) {
   var closed = 0;
   for (var i = 0; i < filings.length; i++) {
@@ -248,13 +253,26 @@ async function closeResolved(env, filings) {
       continue;
     }
     if (n !== 0) continue;
+    var evidence = "EVOLVE-1 " + iso() + ": probe returned 0 rows for " + (f.process || f.key)
+      + "; the register no longer reports this gap.";
+    try {
+      await env.AUDIT.prepare(
+        "INSERT INTO issue_triage (issue_id, rc, triage_state, owner, sla_due_at, close_evidence) "
+        + "VALUES (?, 'EVOLVE-1', 'triaged', ?, datetime('now'), ?) "
+        + "ON CONFLICT(issue_id) DO UPDATE SET close_evidence = excluded.close_evidence"
+      ).bind(f.issue_id, f.worker, evidence).run();
+    } catch (e) {
+      await env.AUDIT.prepare(
+        "UPDATE issue_triage SET close_evidence = ? WHERE issue_id = ?"
+      ).bind(evidence, f.issue_id).run();
+    }
     await env.AUDIT.prepare(
-      "UPDATE agent_issues SET status = 'closed', close_channel = 'evolve-auto', updated_at = ?, "
-      + "description = description || ? WHERE id = ? AND status = 'open'"
-    ).bind(Date.now(), "\n\nEVOLVE-1 closure " + iso() + ": probe returned 0 rows; the gap is gone.", f.issue_id).run();
+      "UPDATE agent_issues SET status = 'closed', close_channel = 'evolve-auto', updated_at = ? "
+      + "WHERE id = ? AND status = 'open'"
+    ).bind(Date.now(), f.issue_id).run();
     await env.AUDIT.prepare(
-      "UPDATE evolve_filings SET state = 'closed', closed_at = ? WHERE key = ?"
-    ).bind(iso(), f.key).run();
+      "UPDATE evolve_filings SET state = 'closed', closed_at = ?, evidence = ? WHERE key = ?"
+    ).bind(iso(), evidence, f.key).run();
     closed++;
   }
   return closed;
