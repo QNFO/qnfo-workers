@@ -33,7 +33,7 @@ var __name22222 = /* @__PURE__ */ __name2222((target, value) => __defProp22222(t
 // an empty catch. CITE-CONSISTENCY-1 asks the reviewer to compare the draft against cited QNFO work.
 // REVIEW-TRIAGE-CAP-1 is a defect fix: drift demotion at the cycle cap silently turned a blocking finding into a pass, so
 // REVIEW-HARD-GATE-1 withheld nothing there (reviewer findings 2 -> 0 at the cap; an unparseable review advanced to verify).
-var VERSION = "0.18.21-kg-cites";
+var VERSION = "0.18.22-cite-backfill";
 // WORKERS-AI-ATTRIBUTION-1 (2026-10-01, #1681): per-worker Workers AI attribution. Returns a shallow env copy whose AI
 // binding records each .run() (calls, errors, ms, tokens, neurons) into qnfo-audit ai_call_counters (purpose 'binding').
 // Neurons = usage tokens x Cloudflare's published per-model rates (neurons per M tokens). Fail-soft; env is never mutated.
@@ -4784,6 +4784,84 @@ async function refreshPaperInfluence(env) {
     await env.LIVING_PAPER.prepare("INSERT OR REPLACE INTO corpus_leverage (day, published, cited, terminal, computed_at) VALUES (?1, ?2, ?3, ?4, ?5)").bind(nowIso().slice(0, 10), out.published, out.cited, out.terminal, nowIso()).run();
   } catch (e) {
     out.error = String(e && e.message || e).slice(0, 160);
+  }
+  return out;
+}
+// CITE-BACKFILL-1 (2026-10-17): the forward path only learns from papers published after CITE-GRAPH-1. The historical
+// corpus already cites itself — 150 of 598 published papers carry "QNFO: <title>" reference lines — but those lines name a
+// title and nothing else, so neither the citation graph nor the KG could see them. This reconstructs the graph from the
+// stored bodies by matching the reference title to a published slug, in bounded batches per tick, with a state row per
+// slug so a paper is scanned once and a paper that cites nothing is not re-scanned forever.
+var CITE_BACKFILL_BATCH = 40;
+// Titles are compared on letters and digits only: the rendered references differ in punctuation, unicode dashes and
+// casing from the stored title, and an exact string compare would match almost nothing.
+function normTitle(s) {
+  return String(s || "").toLowerCase().normalize("NFKD").replace(/[^a-z0-9]+/g, " ").trim();
+}
+// The own-corpus reference lines of a paper body: "[9] QNFO: Head Over Hands | https://..." -> { ref_no, title }.
+function parseQnfoRefs(md) {
+  const out = [];
+  const text = String(md || "");
+  const i = text.toLowerCase().indexOf("## references");
+  if (i < 0) return out;
+  const re = /^\s*\[(\d+)\]\s*QNFO:\s*([^\n|]+)/gm;
+  let m;
+  const block = text.slice(i);
+  while ((m = re.exec(block))) {
+    const title = m[2].replace(/\s+/g, " ").trim();
+    if (title) out.push({ ref_no: Number(m[1]), title: title });
+  }
+  return out;
+}
+async function citeBackfillSweep(env) {
+  const out = { scanned: 0, refs: 0, matched: 0, edges: 0, unmatched: 0 };
+  try {
+    await env.LIVING_PAPER.prepare("CREATE TABLE IF NOT EXISTS cite_backfill_state (slug TEXT PRIMARY KEY, refs INTEGER, matched INTEGER, ts TEXT)").run();
+    await env.LIVING_PAPER.prepare("CREATE TABLE IF NOT EXISTS paper_citations (citing_slug TEXT NOT NULL, citing_identifier TEXT, cited_slug TEXT, cited_identifier TEXT, cited_kind TEXT, cited_id TEXT, cited_title TEXT, cited_url TEXT, ref_no INTEGER NOT NULL, created_at TEXT, PRIMARY KEY (citing_slug, ref_no))").run();
+    const batch = await env.LIVING_PAPER.prepare("SELECT p.slug, p.identifier, p.title, substr(p.body_md, instr(lower(p.body_md), '## references')) AS refs FROM papers p WHERE p.status = 'published' AND instr(lower(p.body_md), '## references') > 0 AND NOT EXISTS (SELECT 1 FROM cite_backfill_state s WHERE s.slug = p.slug) LIMIT ?1").bind(CITE_BACKFILL_BATCH).all();
+    const rows = (batch && batch.results) || [];
+    if (!rows.length) return Object.assign(out, { complete: 1 });
+    const all = await env.LIVING_PAPER.prepare("SELECT slug, identifier, title FROM papers WHERE status = 'published' AND title IS NOT NULL").all();
+    const byTitle = new Map();
+    for (const p of (all && all.results) || []) {
+      const k = normTitle(p.title);
+      if (k && !byTitle.has(k)) byTitle.set(k, p);
+    }
+    const _ts = nowIso();
+    for (const row of rows) {
+      out.scanned++;
+      const refs = parseQnfoRefs(row.refs);
+      out.refs += refs.length;
+      let matched = 0;
+      for (const r of refs) {
+        const hit = byTitle.get(normTitle(r.title));
+        if (!hit || hit.slug === row.slug) {
+          if (!hit) out.unmatched++;
+          continue;
+        }
+        matched++;
+        out.matched++;
+        try {
+          await env.LIVING_PAPER.prepare("INSERT OR REPLACE INTO paper_citations (citing_slug, citing_identifier, cited_slug, cited_identifier, cited_kind, cited_id, cited_title, cited_url, ref_no, created_at) VALUES (?1,?2,?3,?4,'qnfo',?5,?6,?7,?8,?9)").bind(row.slug, String(row.identifier || ""), hit.slug, String(hit.identifier || ""), "qnfo:" + hit.slug, String(hit.title).slice(0, 500), "https://papers.qnfo.org/papers/" + hit.slug, r.ref_no, _ts).run();
+        } catch (eIns) {
+        }
+        if (env.GRAPH_DB) {
+          try {
+            await env.GRAPH_DB.prepare("INSERT OR IGNORE INTO nodes (id, label, name, properties, created_at, updated_at) VALUES (?1, 'Paper', ?2, ?3, ?4, ?4)").bind("paper:" + hit.slug, String(hit.title).slice(0, 300), JSON.stringify({ slug: hit.slug, url: "https://papers.qnfo.org/papers/" + hit.slug }), _ts).run();
+            await env.GRAPH_DB.prepare("INSERT OR IGNORE INTO edges (id, source_id, target_id, relationship_type, properties, created_at) VALUES (?1, ?2, ?3, 'CITES', ?4, ?5)").bind("cites:" + row.slug + ":" + hit.slug, "paper:" + row.slug, "paper:" + hit.slug, JSON.stringify({ ref: r.ref_no, kind: "qnfo", source: "cite-backfill" }), _ts).run();
+            out.edges++;
+          } catch (eEdge) {
+          }
+        }
+      }
+      try {
+        await env.LIVING_PAPER.prepare("INSERT OR REPLACE INTO cite_backfill_state (slug, refs, matched, ts) VALUES (?1, ?2, ?3, ?4)").bind(row.slug, refs.length, matched, _ts).run();
+      } catch (eSt) {
+      }
+    }
+    await refreshPaperInfluence(env);
+  } catch (e) {
+    out.error = String(e && e.message || e).slice(0, 200);
   }
   return out;
 }
@@ -27932,6 +28010,14 @@ var worker_default = {
         await logEvent(env, "error", "drainV2 threw: " + String(e && e.message || e).slice(0, 200), "error");
       }
       if (env.RESEARCH_HALT === "1") return;
+      // CITE-BACKFILL-1: bounded per tick, its own state rows, and its own failure log so a bad batch cannot stop the
+      // completeness sweep or the queue.
+      try {
+        const _bf = await citeBackfillSweep(env);
+        if (!_bf.complete) await logEvent(env, "cite-backfill", JSON.stringify(_bf).slice(0, 500), _bf.error ? "warn" : "ok");
+      } catch (eBf) {
+        await logEvent(env, "cite-backfill", "threw: " + String(eBf && eBf.message || eBf).slice(0, 200), "warn");
+      }
       try {
         if (await completenessSweepDue(env, Number(event && event.scheduledTime) || Date.now())) {
           const sw = await completenessSweep(env);
@@ -28039,6 +28125,9 @@ export {
   citationRowsFromBib,
   persistCitations,
   refreshPaperInfluence,
+  citeBackfillSweep,
+  parseQnfoRefs,
+  normTitle,
   RESEARCH_SHARED_PREAMBLE,
   stagePrompt,
   stageContextPrompt,
