@@ -43,11 +43,17 @@ CREATE TABLE worker_live_audit (worker TEXT PRIMARY KEY, http INTEGER, live_vers
 }
 function stmtOn(sql) {
   let args = [];
+  // node:sqlite refuses positional ?N binding ("column index out of range"); map ?N to named $pN.
+  const q = /\?\d/.test(sql) ? sql.replace(/\?(\d+)/g, (m, n) => "$p" + n) : sql;
+  const call = (m) => {
+    const st = db.prepare(q);
+    return q === sql ? st[m](...args) : st[m](Object.fromEntries(args.map((v, i) => ["p" + (i + 1), v])));
+  };
   const self = {
     bind(...x) { args = x.map((v) => (v === undefined ? null : v)); return self; },
-    async all() { return { results: db.prepare(sql).all(...args) }; },
-    async first() { return db.prepare(sql).get(...args) || null; },
-    async run() { const r = db.prepare(sql).run(...args); return { success: true, meta: { changes: Number(r.changes), last_row_id: Number(r.lastInsertRowid) } }; }
+    async all() { return { results: call("all") }; },
+    async first() { return call("get") || null; },
+    async run() { const r = call("run"); return { success: true, meta: { changes: Number(r.changes), last_row_id: Number(r.lastInsertRowid) } }; }
   };
   return self;
 }

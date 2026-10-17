@@ -3560,7 +3560,7 @@ __name(cmIntegrityGate, "cmIntegrityGate");
 // the head diff and answers implements, partial or no, and whether any changed line is wrong (harm); "no", or harm under any
 // verdict (0.9.1), refuses the task with its defects, which reach the retry through CI-FEEDBACK-1. One call per head, cached; no AI binding or ops_config code_goal_review_enabled off skips it; three
 // unreadable replies let the checks decide alone (recorded). The diff and the goal are data to the reviewer.
-var CM_REVIEW_MODELS = ["@cf/openai/gpt-oss-120b", "@cf/deepseek-ai/deepseek-v4-flash-0731"];
+var CM_REVIEW_MODELS = ["@cf/openai/gpt-oss-120b", "@cf/deepseek-ai/deepseek-v4-flash-0731", "@cf/meta/llama-3.3-70b-instruct-fp8-fast"];
 // GOAL-REVIEW-2 (0.18.0, owner directive 2026-10-12 "Audit and remediate all failure modes and root causes ... a reviewer
 // model rejecting the change"). Measured on the 13 goal-review refusals of the 7 days to 2026-10-12 (cloud_ops_events
 // code-merge.goal-review, code_tasks.ctx.patch): 12 were right about the diff (a helper called and defined nowhere, a
