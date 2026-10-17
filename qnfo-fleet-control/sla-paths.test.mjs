@@ -48,7 +48,8 @@ const SCHEMA = `CREATE TABLE remediation_contracts (class TEXT PRIMARY KEY, issu
   CREATE TABLE remediation_verifications (id INTEGER PRIMARY KEY AUTOINCREMENT, issue_id INTEGER, class TEXT, probe_url TEXT, transport TEXT NOT NULL, expected TEXT, observed TEXT, pass INTEGER NOT NULL, verified_at TEXT DEFAULT (datetime('now')), verifier TEXT);
   CREATE TABLE remediation_evidence (id INTEGER PRIMARY KEY AUTOINCREMENT, issue_id INTEGER, class TEXT, probe_url TEXT, transport TEXT NOT NULL, expected TEXT, observed TEXT, pass INTEGER NOT NULL, verified_at TEXT DEFAULT (datetime('now')), verifier TEXT, path TEXT DEFAULT 'B:evidence-table');
   CREATE VIEW v_remediation_evidence_all AS SELECT id, issue_id, class, probe_url, transport, expected, observed, pass, verified_at, verifier, 'verifications' AS src FROM remediation_verifications UNION ALL SELECT id, issue_id, class, probe_url, transport, expected, observed, pass, verified_at, verifier, 'evidence' AS src FROM remediation_evidence;
-  CREATE TABLE agent_issues (id INTEGER PRIMARY KEY, title TEXT, description TEXT, status TEXT, close_channel TEXT, updated_at INTEGER);
+  CREATE TABLE agent_issues (id INTEGER PRIMARY KEY, title TEXT, description TEXT, source TEXT, category TEXT, priority TEXT, status TEXT, close_channel TEXT, created_at INTEGER, updated_at INTEGER);
+  CREATE TABLE path_liveness (path TEXT PRIMARY KEY, checked_at TEXT, checked_by TEXT, detail TEXT);
   CREATE TABLE issue_triage (issue_id INTEGER PRIMARY KEY, rc TEXT, triage_state TEXT, owner TEXT, sla_due_at TEXT, close_evidence TEXT, reopened_count INTEGER NOT NULL DEFAULT 0);`;
 
 // The production refusal, reproduced: any INSERT into the primary table aborts at prepare time.
@@ -82,6 +83,9 @@ const W = vm.runInContext(src.slice(a, b) + "\n;({ remediationContractsTick, rtR
   check(db.prepare("SELECT last_verdict FROM remediation_contracts WHERE class='c-refused'").get().last_verdict === "pass", "the verdict survives the refusal (last_verdict=pass)");
   check(out.pass === 1 && out.fail === 0, "the tick reports the pass it recorded", out);
   check(errors.some((e) => /evidence-fallback/.test(e) && /nested too deep/.test(e)), "the primary error is logged with the fallback row (attributable, not swallowed)", errors);
+  check(out.evidence_paths_live === 1, "the path-count check sees one live path, not two on paper", out);
+  const sp = db.prepare("SELECT COUNT(*) n FROM agent_issues WHERE title LIKE 'SINGLE-PATH-1:%' AND status = 'open'").get();
+  check(sp.n === 1, "a single live path files SINGLE-PATH-1 (an incident, not a review item)", sp);
 }
 
 // 2. readers see path B: a pass streak written only on path B still drives the hold decision
@@ -120,6 +124,11 @@ const W = vm.runInContext(src.slice(a, b) + "\n;({ remediationContractsTick, rtR
   check(db.prepare("SELECT COUNT(*) n FROM remediation_evidence").get().n === 0, "nothing is written to path B while path A works");
   check(db.prepare("SELECT COUNT(*) n FROM remediation_verifications WHERE class='c-healthy'").get().n === 2, "the verification row lands on path A", out);
   check(!out.closed_by_code, "the degraded closure does not run when path A carried the row", out);
+  check(out.evidence_paths_live === 2, "two live paths when the primary works and the fallback is drilled", out);
+  check(out.path_b_drilled === 1, "the fallback is drilled so its availability is proven, not assumed", out);
+  check(db.prepare("SELECT COUNT(*) n FROM remediation_evidence").get().n === 0, "the drill row removes itself (no evidence pollution)");
+  check(db.prepare("SELECT COUNT(*) n FROM agent_issues WHERE title LIKE 'SINGLE-PATH-1:%'").get().n === 0, "no single-path incident while both paths are live");
+  check(db.prepare("SELECT COUNT(*) n FROM path_liveness").get().n === 2, "both paths hold a heartbeat");
 }
 
 // 5. the CI consumer carries the same second path (static: it is the other writer of the same evidence)

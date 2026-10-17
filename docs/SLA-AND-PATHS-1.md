@@ -49,23 +49,42 @@ DELETE FROM remediation_evidence WHERE class = 'zz-path-b-test';
 Verified 2026-10-17: create, index and view applied; the insert above returned `changes = 1` while the identical
 insert into `remediation_verifications` returned `7500: triggers nested too deep`.
 
-**Still required to make path B load-bearing:** the worker tick and the CI consumer must write to
-`remediation_evidence` when the primary insert throws (already wrapped in `0.33.3` — extend the catch to fall
-through to path B), and step 3's code path must read `v_remediation_evidence_all` instead of the base table.
-Until that ships, path B is a sink with no writer, which does not meet the rule.
+**Shipped (qnfo-fleet-control 0.33.4-sla-paths + `scripts/remediation_consumer.py`, 2026-10-17):** path B is a
+writer, not a sink.
+
+| Requirement | Where it now lives |
+|---|---|
+| Path A tried first | `rtRecordVerification()` — the only place the worker writes evidence |
+| Fall through to B on refusal | the helper's catch: identical row into `remediation_evidence` with `path='B:tick'`, primary error logged as `remediationTick:evidence-fallback` |
+| Same for the CI consumer | `record_verification()` in `scripts/remediation_consumer.py`, `path='B:consumer'` |
+| Readers see either path | `rtPassStreakDays`, `rtReopenOnRelapse` and the consumer's hold/reopen reads all read `v_remediation_evidence_all` |
+| Step 3 also has a second path | `rtCloseOnVerifiedEvidence()` — when the row went to B, a 7-day pass streak closes the issue in code with `close_evidence` naming the evidence row (the trigger only ever watched A) |
+| Regression guard | `qnfo-fleet-control/sla-paths.test.mjs` — 28 checks: refusal reproduced with the production message, fallback row intact, verdict survives, readers count B, degraded close sets evidence, healthy A writes nothing to B, consumer carries the same path |
+
+Measured at 2026-10-17T16:12Z, immediately before the patch: `INSERT INTO remediation_evidence` returned
+`changes=1`; the identical insert into `remediation_verifications` returned
+`400 7500 triggers nested too deep`, with `issue_id NULL` and `pass=0` — so the refusal is a property of the
+trigger graph, not of the row, and no writer could have succeeded.
 
 ## 3. Path-count check (the meta-requirement)
 
 A process with two paths on paper and one in practice is worse than one path, because it is believed safe.
 The check is a metric, not a review:
 
-```sql
--- live healthy paths for evidence persistence; below 2 is an incident
--- A counts only if an insert into remediation_verifications succeeds inside the last hour
--- B counts only if remediation_evidence has a writer (row newer than 1 h with path LIKE 'B:%')
-```
+Counting rows is the wrong instrument. A fallback is never used while the primary works, so "a B row in the last
+hour" reports the fallback dead by construction — the same decorative-green failure the directive exists to stop.
+Liveness is **availability**:
 
-File as `SINGLE-PATH-1` when the count is below two, with the step name in the title.
+- each path stamps a heartbeat in `path_liveness` when it carries a row;
+- path B is drilled once a day (`zz-path-drill` row written and deleted) so its availability is proven rather than
+  assumed;
+- A is live within 6 h, B within 30 h (a daily drill plus slack);
+- `v_path_health` exposes `a_last_ok`, `a_live`, `b_last_ok`, `b_live` in one row.
+
+The tick reads it, reports `evidence_paths_live` in every result, and files `SINGLE-PATH-1: evidence persistence has
+fewer than two live paths` (deduped on the open title) when the count is below two — with the two counts and both
+remediation routes in the body. Measured in `sla-paths.test.mjs`: refused A + writing B reports 1 and files the
+incident; healthy A + drilled B reports 2 and files nothing.
 
 ## 4. Existing steps that do not meet the rule
 
@@ -73,7 +92,7 @@ Found during the 2026-10-17 audit and not yet remediated:
 
 | Step | Missing |
 |---|---|
-| Evidence persistence | path A only (this file) |
+| Evidence persistence | **closed 2026-10-17** — A + B writers, union readers, code-side closure, drill (this file, `0.33.4`) |
 | `code-read` contract verification | one runner (`remediation-consumer.yml`), cancelled by concurrency; no B and no C |
 | Fleet deploy | `canonical-deploy` only; a raw `PUT /content` skips the lock, the ledger and the schedules (documented in the workflow header) |
 | Owner queue delivery | one channel (dashboard card); no email fallback when the dashboard is down |

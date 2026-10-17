@@ -10525,14 +10525,14 @@ async function remediationContractsTick(env, opts) {
           verdict = "vacuous-probe-result";
           out.skipped++;
           try {
-            await rtRecordVerification(db, { issue_id: c.issue_id, cls: c.class, probe_url: probeUrl, transport: transport, expected: "", observed: "(no expected value)", pass: 0, verifier: "vacuous-probe@" + VERSION });
+            await rtRecordVerification(db, { issue_id: c.issue_id, cls: c.class, probe_url: probeUrl, transport: transport, expected: "", observed: "(no expected value)", pass: 0, verifier: "vacuous-probe@" + VERSION  }, out);
           } catch (eV) {}
         } else if (!os) {
           // TICK-ERROR-VISIBILITY-1 (0.33.3, 2026-10-17): this insert used to run bare, so any refusal became
           // "probe-error" and the verdict was lost. The measured-pending burst (62 of 70 contracts at 15:18Z) could not
           // be attributed because the real message was swallowed. A write failure is now logged and still yields a verdict.
           try {
-            await rtRecordVerification(db, { issue_id: c.issue_id, cls: c.class, probe_url: probeUrl, transport: transport, expected: es, observed: "(null)", pass: 0, verifier: "qnfo-fleet-control/remediation-tick@" + VERSION });
+            await rtRecordVerification(db, { issue_id: c.issue_id, cls: c.class, probe_url: probeUrl, transport: transport, expected: es, observed: "(null)", pass: 0, verifier: "qnfo-fleet-control/remediation-tick@" + VERSION  }, out);
           } catch (eN) {
             console.error(JSON.stringify({ evt: "fleet-control:remediationTick:null-observed-insert", class: c.class, transport, error: String(eN && eN.message) }));
           }
@@ -10541,7 +10541,7 @@ async function remediationContractsTick(env, opts) {
         } else {
           var passed = es === os ? 1 : 0;
           try {
-            evRec = await rtRecordVerification(db, { issue_id: c.issue_id, cls: c.class, probe_url: probeUrl, transport: transport, expected: es, observed: os, pass: passed, verifier: "qnfo-fleet-control/remediation-tick@" + VERSION });
+            evRec = await rtRecordVerification(db, { issue_id: c.issue_id, cls: c.class, probe_url: probeUrl, transport: transport, expected: es, observed: os, pass: passed, verifier: "qnfo-fleet-control/remediation-tick@" + VERSION  }, out);
           } catch (eP) {
             console.error(JSON.stringify({ evt: "fleet-control:remediationTick:verification-insert", class: c.class, transport, error: String(eP && eP.message) }));
           }
@@ -10602,6 +10602,41 @@ async function remediationContractsTick(env, opts) {
       } catch (e3) { console.error(JSON.stringify({ evt: "fleet-control:remediationContractsTick:caught", error: String(e3 && e3.message) })); }
     }
   }
+  // SLA-PATHS-1 (0.33.4, owner directive 2026-10-17): the path-count check. A process with two paths on paper and one in
+  // practice is worse than one path, because it is believed safe: on 2026-10-17 the registry read 12 processes and 0
+  // violations while evidence persistence had exactly one live path and that path was refused. Liveness is AVAILABILITY,
+  // not recent use - a fallback is never used while the primary works, so counting rows would report it dead by
+  // construction. Each path gets a heartbeat when it carries a row, and path B is drilled once a day (a synthetic row
+  // written and removed) so its availability is proven rather than assumed. Fewer than two live paths files SINGLE-PATH-1.
+  try {
+    var hbB = await db.prepare("SELECT COUNT(*) AS n FROM path_liveness WHERE path = 'remediation:evidence:B' AND checked_at > datetime('now','-30 hours')").first();
+    var bFresh = !!(hbB && Number(hbB.n) > 0);
+    if (!out.path_b_writes && !bFresh) {
+      try {
+        await db.prepare("INSERT INTO remediation_evidence (issue_id, class, probe_url, transport, expected, observed, pass, verifier, path) VALUES (NULL, 'zz-path-drill', 'drill:path-b', 'd1-query', 'ok', 'ok', 0, 'path-drill', 'B:drill')").run();
+        await db.prepare("DELETE FROM remediation_evidence WHERE class = 'zz-path-drill'").run();
+        out.path_b_drilled = 1;
+      } catch (eD) { console.error(JSON.stringify({ evt: "fleet-control:remediationTick:path-b-drill", error: String(eD && eD.message) })); }
+    }
+    var stamp = async function (p, detail) {
+      try {
+        await db.prepare("INSERT INTO path_liveness (path, checked_at, checked_by, detail) VALUES (?1, datetime('now'), ?2, ?3) ON CONFLICT(path) DO UPDATE SET checked_at = datetime('now'), checked_by = excluded.checked_by, detail = excluded.detail").bind(p, "qnfo-fleet-control/" + VERSION, detail).run();
+      } catch (eS) { console.error(JSON.stringify({ evt: "fleet-control:remediationTick:liveness-stamp", path: p, error: String(eS && eS.message) })); }
+    };
+    if (out.path_a_writes) await stamp("remediation:evidence:A", "a verification row landed on the primary table this tick");
+    if (out.path_b_writes) await stamp("remediation:evidence:B", "a verification row landed on the fallback table this tick");
+    else if (out.path_b_drilled) await stamp("remediation:evidence:B", "daily drill: a synthetic row was written and removed");
+    var lv = await db.prepare("SELECT (SELECT COUNT(*) FROM path_liveness WHERE path = 'remediation:evidence:A' AND checked_at > datetime('now','-6 hours')) AS a, (SELECT COUNT(*) FROM path_liveness WHERE path = 'remediation:evidence:B' AND checked_at > datetime('now','-30 hours')) AS b").first();
+    var la = lv ? Number(lv.a) || 0 : 0, lb = lv ? Number(lv.b) || 0 : 0, live = (la > 0 ? 1 : 0) + (lb > 0 ? 1 : 0);
+    out.evidence_paths_live = live;
+    if (live < 2) {
+      console.error(JSON.stringify({ evt: "fleet-control:remediationTick:single-path", live: live, a: la, b: lb }));
+      var msg = "Evidence persistence has " + live + " of 2 live paths (path A remediation_verifications heartbeat: " + (la ? "live" : "stale") + "; path B remediation_evidence: " + (lb ? "live" : "stale") + "). Path A is refused at prepare time with 7500 triggers nested too deep while the agent_issues trigger chain is deep (issue 2817); path B is written by this tick and the CI consumer and every hold/close reader reads v_remediation_evidence_all. Under SLA-PATHS-1 a single live path is an incident, not a review item: restore path A, or accept in writing that closure now depends on the code path.";
+      try {
+        await db.prepare("INSERT INTO agent_issues (title, description, source, category, priority, status, created_at, updated_at) SELECT ?1, ?2, 'qnfo-fleet-control', 'reliability', 'high', 'open', ?3, ?3 WHERE NOT EXISTS (SELECT 1 FROM agent_issues WHERE lower(trim(title)) = lower(trim(?1)) AND status = 'open')").bind("SINGLE-PATH-1: evidence persistence has fewer than two live paths", msg, Date.now()).run();
+      } catch (eFI) { console.error(JSON.stringify({ evt: "fleet-control:remediationTick:single-path-file", error: String(eFI && eFI.message) })); }
+    }
+  } catch (ePH) { console.error(JSON.stringify({ evt: "fleet-control:remediationTick:path-health", error: String(ePH && ePH.message) })); }
   return out;
 }
 var RT_HOLD_D = 7, RT_HOLD_CADENCE_H = 24;
@@ -10654,17 +10689,19 @@ async function rtPassStreakDays(db, cls) {
 // real writer rather than a sink with no writer: every insert tries A, and on refusal records the identical row on B
 // with the primary error logged. Readers below read v_remediation_evidence_all, the union, so a row written on B is
 // indistinguishable from one written on A to everything that decides.
-async function rtRecordVerification(db, row) {
+async function rtRecordVerification(db, row, out) {
   var cols = "(issue_id, class, probe_url, transport, expected, observed, pass, verifier)";
   var args = [row.issue_id == null ? null : row.issue_id, row.cls, row.probe_url, row.transport, row.expected, row.observed, row.pass, row.verifier];
   try {
     await db.prepare("INSERT INTO remediation_verifications " + cols + " VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)").bind(...args).run();
+    if (out) out.path_a_writes = (out.path_a_writes || 0) + 1;
     return { path: "A:verifications", id: null };
   } catch (eA) {
     var msg = String(eA && eA.message || eA);
     try {
       var r = await db.prepare("INSERT INTO remediation_evidence " + cols.slice(0, -1) + ", path) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, 'B:tick')").bind(...args).run();
       console.error(JSON.stringify({ evt: "fleet-control:remediationTick:evidence-fallback", class: row.cls, transport: row.transport, pass: row.pass, primary_error: msg }));
+      if (out) out.path_b_writes = (out.path_b_writes || 0) + 1;
       return { path: "B:evidence-table", id: r && r.meta ? r.meta.last_row_id : null, primary_error: msg };
     } catch (eB) {
       console.error(JSON.stringify({ evt: "fleet-control:remediationTick:no-path", class: row.cls, primary_error: msg, fallback_error: String(eB && eB.message || eB) }));
