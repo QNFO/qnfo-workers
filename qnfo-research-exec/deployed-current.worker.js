@@ -24,7 +24,7 @@ var __defProp2222 = Object.defineProperty;
 var __name2222 = /* @__PURE__ */ __name222((target, value) => __defProp2222(target, "name", { value, configurable: true }), "__name");
 var __defProp22222 = Object.defineProperty;
 var __name22222 = /* @__PURE__ */ __name2222((target, value) => __defProp22222(target, "name", { value, configurable: true }), "__name");
-var VERSION = "0.18.17-sweep-idempotent";
+var VERSION = "0.18.17-sweep-idempotent-quotas";
 // WORKERS-AI-ATTRIBUTION-1 (2026-10-01, #1681): per-worker Workers AI attribution. Returns a shallow env copy whose AI
 // binding records each .run() (calls, errors, ms, tokens, neurons) into qnfo-audit ai_call_counters (purpose 'binding').
 // Neurons = usage tokens x Cloudflare's published per-model rates (neurons per M tokens). Fail-soft; env is never mutated.
@@ -4637,6 +4637,23 @@ async function citationGateStepWithSupportCheck(env, row, bodyMd) {
 }
 async function publishStageV2(env, row) {
   const prep = await ensurePaperRow(env, row);
+  // PUBLISH-QUOTAS-1 (owner directive 2026-10-17: "PUBLISH STREAMS SHALL HAVE SEPARATE QUOTAS FOR EACH PROPERTY, DO
+  // NOT COMMINGLE STREAMS"). papers.qnfo.org keeps its own daily quota in ops_config publish_quotas under its own key,
+  // so this stream can neither be throttled by nor throttle q08.org and reading.q08.org (which read the same object
+  // under their own keys). A row over quota is deferred, not failed: it returns to publish on the next tick without
+  // spending a recover attempt or a model call.
+  try {
+    const _qn = await env.QNFO_AUDIT.prepare("SELECT value FROM ops_config WHERE key = 'publish_quotas'").first();
+    const _qm = _qn && _qn.value ? JSON.parse(String(_qn.value)) : null;
+    const _qv = _qm && Object.prototype.hasOwnProperty.call(_qm, "papers.qnfo.org") ? Number(_qm["papers.qnfo.org"]) : NaN;
+    if (Number.isFinite(_qv) && _qv >= 0) {
+      const _qd = await env.QNFO_AUDIT.prepare("SELECT COUNT(*) n FROM research_queue WHERE published_at >= ?1").bind(new Date().toISOString().slice(0, 10)).first();
+      const _done = (_qd && _qd.n) || 0;
+      if (_done >= _qv) return { ok: true, stage: "publish", deferred: "papers.qnfo.org daily quota reached (" + _done + "/" + _qv + ")" };
+    }
+  } catch (eQ) {
+    console.error(JSON.stringify({ worker: "qnfo-research-exec", event: "publish-quota", error: String(eQ && eQ.message || eQ).slice(0, 160) }));
+  }
   if (!prep.paper) {
     await markError(env, row, "publish prep: " + prep.error);
     return { ok: false, stage: "publish" };
