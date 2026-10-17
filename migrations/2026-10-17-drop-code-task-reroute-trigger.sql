@@ -1,0 +1,11 @@
+-- CODE-TASK-STATUS-UNWEDGE-1 (2026-10-17, fleet-wide audit; owner directive: always decide, implement, deploy).
+--
+-- The 2026-10-13 reroute trigger inserts into agent_issues from its body. After today's growth of the agent_issues
+-- trigger graph, D1 rejects ANY `UPDATE OF status` on code_tasks at prepare time with "triggers nested too deep" -
+-- even for a statement that matches no rows. That wedged the code loop for hours: settle, claim and the
+-- NO-PROGRESS-CEILING-1 cut all failed, and pathBusy's catch read the failure as "file free", so the stuck task's
+-- file appeared available while the task could neither progress nor be cut.
+--
+-- The worker's handoff() already files the same issue directly (INSERT INTO agent_issues ... in code), so the trigger
+-- is redundant. Migrations are append-only: this file is the durable fix.
+DROP TRIGGER IF EXISTS code_tasks_needs_human_reroute_au;
