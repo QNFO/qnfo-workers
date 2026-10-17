@@ -20,6 +20,12 @@ permissions:
   contents: write
   pull-requests: write
 
+# WORKFLOW-CONCURRENCY-1 (2026-10-17): a second run of the same workflow on the
+# same branch supersedes the first instead of paying for both. Previously absent.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
   autosync:
     runs-on: ubuntu-latest
