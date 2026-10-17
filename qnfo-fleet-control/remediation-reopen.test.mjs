@@ -137,5 +137,18 @@ db.prepare("UPDATE remediation_verifications SET verified_at = ? WHERE class = '
 db.exec("UPDATE probe_src SET v = 'ok' WHERE k = 'p10'");
 out = await tick();
 check(st("c10").status === "closed", "a pass streak broken only by 'pending: <reason>' reads still closes the contract after 7 days (got " + st("c10").status + ")");
+// 0.34.0 MEASURED-PENDING-1: 'pending: <number> ... <target>' is the corpus's failure branch, not a deferral. 257 contracts
+// wrote 14,885 such rows in 7 days; treating them as deferrals made a measured breach unfailable and left 26 closed issues
+// with a live defect closed for ever. A pending read that carries a number AND a threshold word now counts as a failure.
+db.exec(`INSERT INTO agent_issues VALUES (11, 'closed, measured pending', 'desc11', 'closed', NULL, ${closedLongAgo}), (12, 'closed, pending window only', 'desc12', 'closed', NULL, ${closedLongAgo});
+  INSERT INTO issue_triage (issue_id, rc, triage_state, owner, sla_due_at, close_evidence) VALUES (11, 'x', 'closed', 'o', 'n', 'ev11'), (12, 'x', 'closed', 'o', 'n', 'ev12');
+  INSERT INTO probe_src VALUES ('p11', 'pending: 9 failures in 7 days (target <= 3)'), ('p12', 'pending: measuring 14 days from 2026-10-13');`);
+add("c11", 11, "p11", 3); add("c12", 12, "p12", 3);
+for (let i = 0; i < 3; i++) await tick();
+check(db.prepare("SELECT status FROM agent_issues WHERE id=11").get().status === "open", "a measured 'pending: <n> ... target' failure reopens the closed issue after max_attempts");
+check(db.prepare("SELECT status FROM agent_issues WHERE id=12").get().status === "closed", "a 'pending' that measures nothing yet stays a deferral and reopens nothing");
+const v11 = db.prepare("SELECT observed FROM remediation_verifications WHERE class='c11' ORDER BY id DESC LIMIT 1").get();
+check(v11 && /pending: 9 failures/.test(v11.observed), "the measured pending observation is recorded verbatim, not rewritten");
+
 console.log(fails + " failure(s)");
 process.exit(fails ? 1 : 0);

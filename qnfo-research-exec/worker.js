@@ -24,7 +24,7 @@ var __defProp2222 = Object.defineProperty;
 var __name2222 = /* @__PURE__ */ __name222((target, value) => __defProp2222(target, "name", { value, configurable: true }), "__name");
 var __defProp22222 = Object.defineProperty;
 var __name22222 = /* @__PURE__ */ __name2222((target, value) => __defProp22222(target, "name", { value, configurable: true }), "__name");
-var VERSION = "0.18.17-sweep-idempotent";
+var VERSION = "0.18.20-review-sentinel";
 // WORKERS-AI-ATTRIBUTION-1 (2026-10-01, #1681): per-worker Workers AI attribution. Returns a shallow env copy whose AI
 // binding records each .run() (calls, errors, ms, tokens, neurons) into qnfo-audit ai_call_counters (purpose 'binding').
 // Neurons = usage tokens x Cloudflare's published per-model rates (neurons per M tokens). Fail-soft; env is never mutated.
@@ -2020,23 +2020,56 @@ function patchNewIdentifiers(text, baseLower) {
     return String(baseLower || "").indexOf(u.replace(/[.,;:]+$/, "").toLowerCase()) < 0;
   });
 }
+// REVISE-PATCH-FLEX-1 (2026-10-17): the patch reviser used a byte-exact indexOf for the find text, so an edit the
+// model had correctly quoted was dropped whenever the paper wrapped the line, used a typographic quote or dash, or
+// differed in whitespace. Measured 2026-10-17: revise-patch events proposed=20 applied=8 and proposed=5 applied=0,
+// 40 revise-noop withholds in 24h; each noop re-enters the recover loop and can end in PARKED-POISON-1. The matcher
+// now falls back to a whitespace- and punctuation-flexible match that must still be UNIQUE in the paper, with the
+// same >=20 character floor and the same identifier grounding check, so no edit can be applied to an ambiguous site.
+function patchFlexTokens(s) {
+  return String(s).split(/\s+/).filter(Boolean).map(function(t) {
+    return t.replace(/[.*+?^${}()|[\]\\]/g, "\\function applyRevisePatch(paper, raw) {").replace(/['\u2018\u2019]/g, "['\u2018\u2019]").replace(/["\u201c\u201d]/g, '["\u201c\u201d]').replace(/-/g, "[-\u2013\u2014]");
+  });
+}
+__name(patchFlexTokens, "patchFlexTokens");
+function findFlexible(text, needle) {
+  const direct = text.indexOf(needle);
+  if (direct >= 0) {
+    if (text.indexOf(needle, direct + 1) >= 0) return null;
+    return { i: direct, len: needle.length, flex: 0 };
+  }
+  const tokens = patchFlexTokens(needle);
+  if (tokens.length < 3) return null;
+  const re = new RegExp(tokens.join("\\s+"), "g");
+  const hits = [];
+  let m;
+  while ((m = re.exec(text)) !== null) {
+    hits.push({ i: m.index, len: m[0].length, flex: 1 });
+    if (hits.length > 1) return null;
+    re.lastIndex = m.index + 1;
+  }
+  return hits[0] || null;
+}
+__name(findFlexible, "findFlexible");
 function applyRevisePatch(paper, raw) {
   let edits = parsePatchEdits(raw);
   if (!Array.isArray(edits)) edits = [];
   let out = String(paper || "");
   const base = out.toLowerCase();
-  let applied = 0, ungrounded = 0;
+  let applied = 0, ungrounded = 0, flex = 0;
   for (const e of edits.slice(0, 8)) {
     if (!e || typeof e.find !== "string" || typeof e.replace !== "string" || e.find.length < 20) continue;
-    const i = out.indexOf(e.find);
-    if (i < 0 || out.indexOf(e.find, i + 1) >= 0) continue;
+    const hit = findFlexible(out, e.find);
+    if (!hit) continue;
+    const i = hit.i;
+    if (hit.flex) flex++;
     // REVISE-PATCH-GROUND-1 (agent_issues 2272): a replace text that carries a link, DOI or arXiv id the paper does not
     // already contain is a citation written from the model's memory; that edit is skipped (counted in `ungrounded`).
     if (patchNewIdentifiers(e.replace, base).length) { ungrounded++; continue; }
-    out = out.slice(0, i) + e.replace + out.slice(i + e.find.length);
+    out = out.slice(0, i) + e.replace + out.slice(i + hit.len);
     applied++;
   }
-  return { text: out, applied, proposed: edits.length, ungrounded };
+  return { text: out, applied, proposed: edits.length, ungrounded, flex };
 }
 var VERIFY_EXTRACT_PROMPT = stagePrompt("VERIFY_EXTRACT", "PAPER:\n");
 var VERIFY_GEN_PROMPT = stagePrompt("VERIFY_GEN", "CLAIMS (JSON):\n");
@@ -3703,7 +3736,7 @@ async function stageRevise(env, row) {
       }
       _pmodel = MODELS[2];
     }
-    await logEvent(env, "revise-patch", "row=" + row.id + " proposed=" + _p.proposed + " applied=" + _p.applied + " raw_chars=" + String(_praw || "").length + " out_chars=" + _p.text.length + (_p.ungrounded ? " ungrounded=" + _p.ungrounded : ""), _p.applied ? "ok" : "warn");
+    await logEvent(env, "revise-patch", "row=" + row.id + " proposed=" + _p.proposed + " applied=" + _p.applied + " raw_chars=" + String(_praw || "").length + " out_chars=" + _p.text.length + (_p.ungrounded ? " ungrounded=" + _p.ungrounded : "") + (_p.flex ? " flex=" + _p.flex : ""), _p.applied ? "ok" : "warn");
     if (_p.applied > 0 && _p.text.length >= 1e4) {
       await r2Put(env, String(row.id) + "/reconciled.md", _p.text);
       const _c2 = (ctx.cycles || 0) + 1;
@@ -4642,6 +4675,23 @@ async function citationGateStepWithSupportCheck(env, row, bodyMd) {
 }
 async function publishStageV2(env, row) {
   const prep = await ensurePaperRow(env, row);
+  // PUBLISH-QUOTAS-1 (owner directive 2026-10-17: "PUBLISH STREAMS SHALL HAVE SEPARATE QUOTAS FOR EACH PROPERTY, DO
+  // NOT COMMINGLE STREAMS"). papers.qnfo.org keeps its own daily quota in ops_config publish_quotas under its own key,
+  // so this stream can neither be throttled by nor throttle q08.org and reading.q08.org (which read the same object
+  // under their own keys). A row over quota is deferred, not failed: it returns to publish on the next tick without
+  // spending a recover attempt or a model call.
+  try {
+    const _qn = await env.QNFO_AUDIT.prepare("SELECT value FROM ops_config WHERE key = 'publish_quotas'").first();
+    const _qm = _qn && _qn.value ? JSON.parse(String(_qn.value)) : null;
+    const _qv = _qm && Object.prototype.hasOwnProperty.call(_qm, "papers.qnfo.org") ? Number(_qm["papers.qnfo.org"]) : NaN;
+    if (Number.isFinite(_qv) && _qv >= 0) {
+      const _qd = await env.QNFO_AUDIT.prepare("SELECT COUNT(*) n FROM research_queue WHERE published_at >= ?1").bind(new Date().toISOString().slice(0, 10)).first();
+      const _done = (_qd && _qd.n) || 0;
+      if (_done >= _qv) return { ok: true, stage: "publish", deferred: "papers.qnfo.org daily quota reached (" + _done + "/" + _qv + ")" };
+    }
+  } catch (eQ) {
+    console.error(JSON.stringify({ worker: "qnfo-research-exec", event: "publish-quota", error: String(eQ && eQ.message || eQ).slice(0, 160) }));
+  }
   if (!prep.paper) {
     await markError(env, row, "publish prep: " + prep.error);
     return { ok: false, stage: "publish" };
