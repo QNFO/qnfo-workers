@@ -7,9 +7,10 @@
 // verdict still fails, every reviewer failing still fails closed).
 // Run: node personal-companion/factcheck-race.test.mjs   -> prints "N passed, 0 failed"
 import { readFileSync } from "node:fs";
+import { importWorker } from "./_harness-import-worker.mjs";
 const IMPORT = 'import { WorkflowEntrypoint } from "cloudflare:workers";';
 const src = readFileSync(new URL("./worker.js", import.meta.url), "utf8");
-const mod = await import("data:text/javascript;base64," + Buffer.from(src.replace(IMPORT, "var WorkflowEntrypoint = class {};") + "\n//" + Math.random()).toString("base64"));
+const mod = await importWorker(() => (src.replace(IMPORT, "var WorkflowEntrypoint = class {};") + "\n//" + Math.random()), new URL("./", import.meta.url));
 const V = mod.__verify;
 let pass = 0, fail = 0;
 const ok = (c, m, x) => { if (c) pass++; else { fail++; console.log("FAIL " + m + (x !== undefined ? " -- " + JSON.stringify(x).slice(0, 600) : "")); } };

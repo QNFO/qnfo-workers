@@ -7,9 +7,10 @@
 // Run: node personal-companion/verify.test.mjs   -> prints "N passed, 0 failed"
 import { DatabaseSync } from "node:sqlite";
 import { readFileSync } from "node:fs";
+import { importWorker } from "./_harness-import-worker.mjs";
 const IMPORT = 'import { WorkflowEntrypoint } from "cloudflare:workers";';
 const src = readFileSync(new URL("./worker.js", import.meta.url), "utf8");
-const mod = await import("data:text/javascript;base64," + Buffer.from(src.replace(IMPORT, "var WorkflowEntrypoint = class {};") + "\n//" + Math.random()).toString("base64"));
+const mod = await importWorker(() => (src.replace(IMPORT, "var WorkflowEntrypoint = class {};") + "\n//" + Math.random()), new URL("./", import.meta.url));
 const V = mod.__verify, W = mod.default;
 let pass = 0, fail = 0;
 const ok = (c, m, x) => { if (c) pass++; else { fail++; console.log("FAIL " + m + (x !== undefined ? " -- " + JSON.stringify(x).slice(0, 400) : "")); } };

@@ -5,9 +5,10 @@
 // no empty catch handler is left (the fleet audit's own pattern) and a caught error is logged as one JSON line.
 // Run: node personal-companion/causal-source.test.mjs   -> prints "N passed, 0 failed"
 import { readFileSync } from "node:fs";
+import { importWorker } from "./_harness-import-worker.mjs";
 const IMPORT = 'import { WorkflowEntrypoint } from "cloudflare:workers";';
 const src = readFileSync(new URL("./worker.js", import.meta.url), "utf8");
-const mod = await import("data:text/javascript;base64," + Buffer.from(src.replace(IMPORT, "var WorkflowEntrypoint = class {};") + "\n//" + Math.random()).toString("base64"));
+const mod = await importWorker(() => (src.replace(IMPORT, "var WorkflowEntrypoint = class {};") + "\n//" + Math.random()), new URL("./", import.meta.url));
 const V = mod.__verify;
 const GMAX = V.GROUND_MAX, PRIM = Math.floor(V.GROUND_MAX * V.PRIMARY_SHARE); // FULLTEXT-BUDGET-1 (1.26.2)
 let pass = 0, fail = 0;

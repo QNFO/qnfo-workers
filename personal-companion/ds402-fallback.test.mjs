@@ -4,9 +4,10 @@
 // writer and critic land on different models, and a total failure reports every model's error.
 // Run: node personal-companion/ds402-fallback.test.mjs   -> prints "N passed, 0 failed"
 import { readFileSync } from "node:fs";
+import { importWorker } from "./_harness-import-worker.mjs";
 const IMPORT = 'import { WorkflowEntrypoint } from "cloudflare:workers";';
 const src = readFileSync(new URL("./worker.js", import.meta.url), "utf8");
-const load = async () => import("data:text/javascript;base64," + Buffer.from(src.replace(IMPORT, "var WorkflowEntrypoint = class {};") + "\n//" + Math.random()).toString("base64"));
+const load = async () => importWorker(() => (src.replace(IMPORT, "var WorkflowEntrypoint = class {};") + "\n//" + Math.random()), new URL("./", import.meta.url));
 let pass = 0, fail = 0;
 const ok = (c, m) => { if (c) pass++; else { fail++; console.log("FAIL " + m); } };
 const PROSE = "x".repeat(400);
