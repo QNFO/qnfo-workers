@@ -28,11 +28,15 @@ function d1(db) {
   return {
     prepare(sql) {
       let args = [];
+      // node:sqlite builds differ on positional ?N binding; bind numbered params by name. Semantics are unchanged.
+      const numbered = /\?\d+/.test(sql);
+      const sqlNamed = numbered ? sql.replace(/\?(\d+)/g, ":p$1") : sql;
+      const names = () => { const o = {}; args.forEach((v, i) => { o["p" + (i + 1)] = v; }); return o; };
       const self = {
         bind(...x) { args = x.map((v) => (v === undefined ? null : v)); return self; },
-        async all() { return { results: db.prepare(sql).all(...args) }; },
-        async first() { return db.prepare(sql).get(...args) || null; },
-        async run() { const r = db.prepare(sql).run(...args); return { success: true, meta: { changes: Number(r.changes), last_row_id: Number(r.lastInsertRowid) } }; }
+        async all() { return { results: numbered ? db.prepare(sqlNamed).all(names()) : db.prepare(sql).all(...args) }; },
+        async first() { return (numbered ? db.prepare(sqlNamed).get(names()) : db.prepare(sql).get(...args)) || null; },
+        async run() { const r = numbered ? db.prepare(sqlNamed).run(names()) : db.prepare(sql).run(...args); return { success: true, meta: { changes: Number(r.changes), last_row_id: Number(r.lastInsertRowid) } }; }
       };
       return self;
     }
@@ -41,7 +45,7 @@ function d1(db) {
 // A capturing D1 for the pipeline stages (first() and all() read nothing).
 function capDb() {
   const sqls = [];
-  return { sqls, prepare(sql) { let args = []; const q = { bind(...x) { args = x; return q; }, async run() { sqls.push({ sql, args }); return { meta: { changes: 1 } }; }, async first() { return null; }, async all() { return { results: [] }; } }; return q; } };
+  return { sqls, prepare(sql) { let args = []; const q = { bind(...x) { args = x; return q; }, async run() { sqls.push({ sql, args }); return { meta: { changes: 1 } }; }, async first() { return /FROM ops_config WHERE key = 'research_recover_max'/.test(sql) ? { value: "3" } : null; }, async all() { return { results: [] }; } }; return q; } };
 }
 const events = (db, kind) => db.sqls.filter((s) => /INSERT INTO cloud_ops_events/.test(s.sql) && s.args[2] === kind).map((s) => s.args[3]);
 const updates = (db) => db.sqls.filter((s) => /UPDATE research_queue/.test(s.sql));
@@ -188,8 +192,8 @@ CREATE TABLE email_suppression (email TEXT PRIMARY KEY, reason TEXT, source TEXT
   papers.prepare("INSERT INTO papers (slug, title, version, body_md) VALUES ('true-paper', 'True Paper', '1.0.0', 'The value is stated as measured in section 2.'), ('false-paper', 'False Paper', '1.0.0', 'Smith (2020) defines the term.'), ('render-paper', 'Render Paper', '1.0.0', 'x')").run();
   const OLD = "2026-10-01 00:00:00";
   const addQ = (id, sender, doi, claim, created) => {
-    audit.prepare("INSERT INTO internal_errata (id, target_kind, target_ref, detected_at, detected_by, claim_text, status) VALUES (?1, 'paper', ?2, ?3, ?4, ?5, 'open')").run(id, doi || "none", OLD, sender, claim);
-    audit.prepare("INSERT INTO errata_queue (email_id, source, sender, subject, paper_doi, claim, confidence, status, created_at) VALUES (NULL, 'internal_audit', ?1, ?2, ?3, ?4, 1.0, 'internal-open', ?5)").run(sender, id, doi, claim, created || OLD);
+    audit.prepare("INSERT INTO internal_errata (id, target_kind, target_ref, detected_at, detected_by, claim_text, status) VALUES (?, 'paper', ?, ?, ?, ?, 'open')").run(id, doi || "none", OLD, sender, claim);
+    audit.prepare("INSERT INTO errata_queue (email_id, source, sender, subject, paper_doi, claim, confidence, status, created_at) VALUES (NULL, 'internal_audit', ?, ?, ?, ?, 1.0, 'internal-open', ?)").run(sender, id, doi, claim, created || OLD);
   };
   addQ("rev-true", "qnfo-paper-reviser/1.3.2-folded", "true-paper", '[quantitative-justification] stated as measured with no measurement. At: "The value is stated as measured"');
   addQ("ops-false", "qnfo-ops", "false-paper", "the paper misattributes the definition to Jones");

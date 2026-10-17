@@ -28,7 +28,9 @@ assert.deepEqual(groundQueries("what is the", ""), []);
 const audit = new DatabaseSync(":memory:");
 audit.exec(`CREATE TABLE research_queue (id TEXT PRIMARY KEY, source TEXT, source_id TEXT, idea TEXT, summary TEXT, status TEXT DEFAULT 'queued', stage TEXT, claimed_at TEXT, attempt INTEGER DEFAULT 0, context TEXT, error TEXT, recover_count INTEGER DEFAULT 0, terminal_rearms INTEGER DEFAULT 0);
 CREATE TABLE cloud_ops_events (id TEXT, ts TEXT, kind TEXT, text TEXT, meta TEXT, job TEXT, status TEXT);
-CREATE TABLE agent_issues (id INTEGER PRIMARY KEY, title TEXT, description TEXT, source TEXT, category TEXT, priority TEXT, status TEXT, created_at INTEGER, updated_at INTEGER);`);
+CREATE TABLE agent_issues (id INTEGER PRIMARY KEY, title TEXT, description TEXT, source TEXT, category TEXT, priority TEXT, status TEXT, created_at INTEGER, updated_at INTEGER);
+CREATE TABLE ops_config (key TEXT PRIMARY KEY, value TEXT);
+INSERT INTO ops_config VALUES ('research_recover_max', '3');`);
 const lp = new DatabaseSync(":memory:");
 // CITE-FULLTEXT-1: a corpus paper is cited from its body, an arXiv work from its HTML full text.
 const BODY = "# T\n\n## 1. Introduction\n\n" + "The weight sequence fixes the carry rule of the numeration system. ".repeat(12) + "\n\n## 5. Results\n\n" + "Addition runs in quadratic time for every linear weight sequence. ".repeat(12) + "\n\n## References\n\n[1] x";
@@ -37,10 +39,14 @@ INSERT INTO papers VALUES ('nonlinear-tree-based-numeration-systems-a-consolidat
   ('corpus-a', 'Corpus paper A', '10.9999/test.1', 'a', 'published', '${BODY}'), ('corpus-b', 'Corpus paper B', '10.9999/test.2', 'b', 'published', '${BODY}');`);
 const d1 = (db) => ({ prepare(sql) {
   let args = [];
+  // node:sqlite builds differ on positional ?N binding; bind numbered params by name. Semantics are unchanged.
+  const numbered = /\?\d+/.test(sql);
+  const sqlNamed = numbered ? sql.replace(/\?(\d+)/g, ":p$1") : sql;
+  const names = () => { const o = {}; args.forEach((v, i) => { o["p" + (i + 1)] = v; }); return o; };
   const o = { bind(...a) { args = a; return o; },
-    async run() { const r = db.prepare(sql).run(...args); return { meta: { changes: Number(r.changes) } }; },
-    async first() { return db.prepare(sql).get(...args) || null; },
-    async all() { return { results: db.prepare(sql).all(...args) }; } };
+    async run() { const r = numbered ? db.prepare(sqlNamed).run(names()) : db.prepare(sql).run(...args); return { meta: { changes: Number(r.changes) } }; },
+    async first() { return (numbered ? db.prepare(sqlNamed).get(names()) : db.prepare(sql).get(...args)) || null; },
+    async all() { return { results: numbered ? db.prepare(sqlNamed).all(names()) : db.prepare(sql).all(...args) }; } };
   return o;
 } });
 const r2 = new Map();

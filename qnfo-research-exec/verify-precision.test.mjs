@@ -69,10 +69,14 @@ const lp = new DatabaseSync(":memory:");
 lp.exec("CREATE TABLE papers (identifier TEXT, slug TEXT, title TEXT, abstract TEXT, body_md TEXT, status TEXT, doi TEXT);");
 const d1 = (db) => ({ prepare(sql) {
   let args = [];
+  // node:sqlite builds differ on positional ?N binding; bind numbered params by name. Semantics are unchanged.
+  const numbered = /\?\d+/.test(sql);
+  const sqlNamed = numbered ? sql.replace(/\?(\d+)/g, ":p$1") : sql;
+  const names = () => { const o = {}; args.forEach((v, i) => { o["p" + (i + 1)] = v; }); return o; };
   const o = { bind(...a) { args = a; return o; },
-    async run() { const r = db.prepare(sql).run(...args); return { meta: { changes: Number(r.changes) } }; },
-    async first() { return db.prepare(sql).get(...args) || null; },
-    async all() { return { results: db.prepare(sql).all(...args) }; } };
+    async run() { const r = numbered ? db.prepare(sqlNamed).run(names()) : db.prepare(sql).run(...args); return { meta: { changes: Number(r.changes) } }; },
+    async first() { return (numbered ? db.prepare(sqlNamed).get(names()) : db.prepare(sql).get(...args)) || null; },
+    async all() { return { results: numbered ? db.prepare(sqlNamed).all(names()) : db.prepare(sql).all(...args) }; } };
   return o;
 } });
 const r2 = new Map();
@@ -144,6 +148,8 @@ put("r-low");
 res = await stageReview(env, row("r-low", "review", { cycles: 0 }));
 ok(res.stage === "review->revise" && get("r-low").stage === "revise", "below the cycle cap HARD findings go to revise, as before", res);
 audit.prepare("INSERT INTO ops_config (key, value) VALUES ('research_max_review_cycles', '2')").run();
+// REVIEW-CONVERGE-1 triages HARD findings by persistence/mechanical-ness; these fixtures test the gate itself, so pin triage off.
+audit.prepare("INSERT INTO ops_config (key, value) VALUES ('research_review_triage', 'off')").run();
 put("r-cap");
 res = await stageReview(env, row("r-cap", "review", { cycles: 2 }));
 // RERUN-ROUTE-1 (0.18.0, agent_issues 2473): the withheld paper re-enters once at revise with its findings, not at ground.
@@ -161,6 +167,7 @@ audit.prepare("UPDATE research_queue SET context = ? WHERE id = 'r-parse'").run(
 res = await stageReview(env, get("r-parse"));
 ok(res.ok === false && res.withheld === "review-hard", "a review that stays unreadable withholds the paper", res);
 audit.prepare("DELETE FROM ops_config WHERE key = 'research_max_review_cycles'").run();
+audit.prepare("DELETE FROM ops_config WHERE key = 'research_review_triage'").run();
 ai.answer = (task) => task === "REVIEW" ? reviewJson([]) : "";
 put("r-pass");
 res = await stageReview(env, row("r-pass", "review", { cycles: 2 }));
