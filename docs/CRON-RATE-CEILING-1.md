@@ -121,3 +121,26 @@ branch and is a dead trigger (48 wasted invocations/day) — a separate finding.
   carrying the offending cron.
 
 Exit codes: `0` compliant, `1` violation(s), `2` usage error.
+
+## 7. OWNER OVERRIDE (2026-10-17) — `qnfo-code-orchestrator` only
+
+The ceiling is enforced by us, so the owner can lift it. On 2026-10-17 the owner issued, in two
+messages: **"MAKE TICKS FASTER"** and **"MORE PARALLEL WORKERS, FASTER TICKS, MORE
+THROUGHPUT/OUTPUT/RESOLVED"**, after being shown (a) this ceiling, (b) that the code loop touched
+1-2 tasks per 10-minute tick, and (c) that 144 fires/day was the binding constraint on it.
+
+| worker | cron | fires/24h | old limit | new limit |
+| --- | --- | --- | --- | --- |
+| `qnfo-code-orchestrator` | `* * * * *` | 1440 | 144 / 10 min | **1470 / 1 min** |
+
+Mechanics: `OWNER_OVERRIDES` in `scripts/cron_rate_guard.py`, keyed by worker name, with the
+owner's words and date recorded in the entry; `limits_for(worker)` feeds both `audit_repo` and
+`deploy_gate.cron_rate_gate`. The report prints an `OVERRIDE` line and the gate prints a `NOTE`, so
+the exception is visible in every CI run rather than silent. Deleting the entry restores the
+default ceiling; **no other worker is exempt**, and the aggregate-gap warning still applies to the
+overridden worker.
+
+Why it is safe to spend a minute's granularity on this worker: its per-fire SQL is one claim, one
+step and one save per lane; and it carries its own spend stop (`SPEND-CAP-1`, `ai_call_counters`,
+`ops_config code_loop_daily_calls`), which a cron expression cannot override. The generic risk this
+ceiling exists for — unmetered multiplication of invocations — is metered here.

@@ -117,7 +117,7 @@ const call = async (env, method, p, body) => { const r = await worker.fetch(auth
   }
   const t = await call(env, "POST", "/v1/tick", { maxSteps: 16 });
   const distinct = new Set((t.body.done || []).map((d) => d.id));
-  check("one tick touches all four tasks (lanes)", distinct.size === 4 && t.body.lanes === 4, { steps: t.body.steps, lanes: t.body.lanes, distinct: distinct.size });
+  check("one tick touches all four tasks (lanes)", distinct.size === 4 && t.body.lanes === 8, { steps: t.body.steps, lanes: t.body.lanes, distinct: distinct.size });
   let open = 0;
   for (const id of ids) { const g = await call(env, "GET", "/v1/tasks/" + id); if (g.body.task.status === "pr_open") open++; }
   check("all four tasks reach pr_open in one tick", open === 4, { open: open });

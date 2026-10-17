@@ -49,6 +49,31 @@ DAYS = 365
 START = _dt.datetime(2026, 1, 1, tzinfo=_dt.timezone.utc)
 MAX_FIRES_24H = 144
 MIN_GAP_MINUTES = 10
+
+# ---- OWNER OVERRIDES (2026-10-17) -----------------------------------------------------------------
+# The owner re-issued the directive twice on 2026-10-17 -- "MAKE TICKS FASTER" and then "MORE PARALLEL
+# WORKERS, FASTER TICKS, MORE THROUGHPUT/OUTPUT/RESOLVED" -- after being shown this ceiling, the 1-2
+# tasks-per-tick measurement and the fact that 144 fires/day was the binding constraint. A ceiling the
+# owner cannot lift is not a ceiling, it is a wall, so the exception is explicit, per worker, dated and
+# bounded: anything not named here still meets 144/24h and 10-minute spacing, and an entry is removed
+# by deleting it. Each entry states WHO asked, WHEN, and WHY.
+#
+# qnfo-code-orchestrator is the code loop: it turns agent_issues rows into verified patches. Its SQL is
+# small (one claim, one step, one save per lane) and its spend is metered separately by the worker's own
+# daily model-call cap, so a one-minute trigger does not multiply unbounded cost.
+OWNER_OVERRIDES = {
+    "qnfo-code-orchestrator": {
+        "min_gap_minutes": 1,
+        "max_fires_24h": 1470,   # every minute = 1440; headroom for the circular window
+        "owner_directive": "2026-10-17: MORE PARALLEL WORKERS, FASTER TICKS, MORE THROUGHPUT/OUTPUT/RESOLVED",
+    },
+}
+
+
+def limits_for(worker):
+    """(max_fires_24h, min_gap_minutes) for a worker, honouring a named owner override."""
+    o = OWNER_OVERRIDES.get(worker) or {}
+    return (int(o.get("max_fires_24h", MAX_FIRES_24H)), int(o.get("min_gap_minutes", MIN_GAP_MINUTES)))
 CF_API = "https://api.cloudflare.com/client/v4"
 
 CRONS_RE = re.compile(r"(?m)^\s*crons\s*=\s*\[(.*?)\]", re.S)
@@ -140,13 +165,18 @@ def cron_stats(fires, days=DAYS):
     }
 
 
-def violates(stats):
-    """True when a single cron expression breaks either clause of the ceiling."""
-    if stats.get("max_fires_24h", 0) > MAX_FIRES_24H:
-        return "MAX_FIRES_24H>%d" % MAX_FIRES_24H
+def violates(stats, limits=None):
+    """True when a single cron expression breaks either clause of the ceiling.
+
+    `limits` is (max_fires_24h, min_gap_minutes); omit it for the default ceiling. Pass
+    `limits_for(worker)` to honour a named OWNER_OVERRIDES entry.
+    """
+    max_fires, min_gap_min = limits or (MAX_FIRES_24H, MIN_GAP_MINUTES)
+    if stats.get("max_fires_24h", 0) > max_fires:
+        return "MAX_FIRES_24H>%d" % max_fires
     gap = stats.get("min_gap_minutes")
-    if gap is not None and gap < MIN_GAP_MINUTES:
-        return "GAP<%dmin" % MIN_GAP_MINUTES
+    if gap is not None and gap < min_gap_min:
+        return "GAP<%dmin" % min_gap_min
     return None
 
 
@@ -176,6 +206,10 @@ def audit_repo(root, strict_worker=False):
         if not crons:
             continue
         report["workers"] += 1
+        lim = limits_for(name)
+        if name in OWNER_OVERRIDES:
+            report.setdefault("overrides", []).append({"worker": name, "limits": lim,
+                                                       "owner_directive": OWNER_OVERRIDES[name]["owner_directive"]})
         combined = []
         for cron in crons:
             report["expressions"] += 1
@@ -186,16 +220,16 @@ def audit_repo(root, strict_worker=False):
                     {"worker": name, "cron": cron, "reason": "PARSE:%s" % exc})
                 continue
             combined.extend(cron_fires(cron))
-            reason = violates(stats)
+            reason = violates(stats, lim)
             if reason:
                 report["violations"].append(
                     dict({"worker": name, "cron": cron, "reason": reason}, **stats))
         if len(crons) > 1 and combined:
             agg = cron_stats(sorted(combined))
             gap = agg.get("min_gap_minutes")
-            if gap is not None and gap < MIN_GAP_MINUTES:
+            if gap is not None and gap < lim[1]:
                 rec = {"worker": name, "crons": crons, "aggregate": agg,
-                       "reason": "AGGREGATE_GAP<%dmin" % MIN_GAP_MINUTES}
+                       "reason": "AGGREGATE_GAP<%dmin" % lim[1]}
                 if strict_worker:
                     report["violations"].append(rec)
                 else:
@@ -238,6 +272,7 @@ def audit_live():
             continue
         report["workers"] += 1
         combined = []
+        lim = limits_for(name)
         for cron in crons:
             report["expressions"] += 1
             try:
@@ -247,17 +282,17 @@ def audit_live():
                     {"worker": name, "cron": cron, "reason": "PARSE:%s" % exc})
                 continue
             combined.extend(cron_fires(cron))
-            reason = violates(stats)
+            reason = violates(stats, lim)
             if reason:
                 report["violations"].append(
                     dict({"worker": name, "cron": cron, "reason": reason}, **stats))
         if len(crons) > 1 and combined:
             agg = cron_stats(sorted(combined))
             gap = agg.get("min_gap_minutes")
-            if gap is not None and gap < MIN_GAP_MINUTES:
+            if gap is not None and gap < lim[1]:
                 report["warnings"].append(
                     {"worker": name, "crons": crons, "aggregate": agg,
-                     "reason": "AGGREGATE_GAP<%dmin" % MIN_GAP_MINUTES})
+                     "reason": "AGGREGATE_GAP<%dmin" % lim[1]})
     return report
 
 
@@ -266,6 +301,9 @@ def render(report, source):
              % (MAX_FIRES_24H, MIN_GAP_MINUTES, source),
              "audited %d workers / %d cron expressions"
              % (report["workers"], report["expressions"])]
+    for o in report.get("overrides") or []:
+        lines.append("  OVERRIDE  %s  limits=%s  %s"
+                     % (o.get("worker"), o.get("limits"), o.get("owner_directive")))
     for v in report["violations"]:
         lines.append("  VIOLATION %s  cron=%s  %s" % (v.get("worker"), v.get("cron"),
                                                      v.get("reason")))
