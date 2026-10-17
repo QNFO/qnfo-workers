@@ -22,7 +22,7 @@
  *   * archived repositories are read-only and are skipped, not reported as drift;
  *   * GET /report and GET /health are public reads; POST /tick needs STEWARD_KEY.
  */
-var VERSION = "0.1.1-github-steward";
+var VERSION = "0.1.2-steward-bp";
 
 var ORG = "QNFO";
 var USER = "rwnq8";
@@ -270,6 +270,22 @@ async function lastRun(env) {
   } catch (e) { return { error: String(e && e.message || e) }; }
 }
 
+/* WORKERS-BP-DEBT-1 (agent_issues 2757): the guard refuses a string comparison of a secret, because
+ * `!==` short-circuits on the first differing byte and leaks the shared prefix length. Compare
+ * fixed-length SHA-256 digests with an accumulate-XOR loop instead. Both sides are hashed, so the
+ * comparison is constant-time with respect to the secret's content and its length. */
+async function stewardKeyOk(env, provided) {
+  if (!env.STEWARD_KEY || !provided) return false;
+  var enc = new TextEncoder();
+  var pair = await Promise.all([
+    crypto.subtle.digest("SHA-256", enc.encode(String(provided))),
+    crypto.subtle.digest("SHA-256", enc.encode(String(env.STEWARD_KEY)))
+  ]);
+  var a = new Uint8Array(pair[0]), b = new Uint8Array(pair[1]), d = 0;
+  for (var i = 0; i < a.length; i++) d |= a[i] ^ b[i];
+  return d === 0;
+}
+
 function json(o, status) {
   return new Response(JSON.stringify(o, null, 1), {
     status: status || 200,
@@ -298,7 +314,7 @@ export default {
 
     if (p === "/tick") {
       var key = request.headers.get("x-steward-key") || "";
-      if (!env.STEWARD_KEY || key !== env.STEWARD_KEY) {
+      if (!(await stewardKeyOk(env, key))) {
         return json({ ok: false, error: "POST /tick needs x-steward-key" }, 401);
       }
       var opts = { workflows: url.searchParams.get("workflows") === "1" };
