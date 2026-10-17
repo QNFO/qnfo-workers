@@ -199,7 +199,13 @@ db = mkDb();
 const env7 = mkEnv(db, NOW); delete env7.SVC_DEPLOY_GUARD;
 r = await M.journeyTick(env7, { now: NOW });
 ok(r.failing.indexOf("lock-roundtrip") >= 0 && /binding missing/.test(q(db, "SELECT path_json p FROM journey_runs WHERE journey = 'lock-roundtrip'")[0].p), "a missing binding fails its journey and says so");
-const st = await M.journeysStatus(env7);
+// JOURNEYS-TEST-CLOCK-1: journeysStatus reads rows newer than Date.now() - 24 h, but this suite plants its rows at NOW (2026-10-14), so on the
+// wall clock every row aged out on 2026-10-15T01:20Z and the assertion below failed on main and on every pull request. The clock is held at
+// the suite's own NOW for this one call and restored in finally, so the 24 h window means what it meant when the suite was written.
+const realNow = Date.now;
+Date.now = () => NOW;
+let st;
+try { st = await M.journeysStatus(env7); } finally { Date.now = realNow; }
 ok(st.ok && st.journeys.length === 8 && st.graph.some((e) => e.from === "qnfo-fleet-control" && e.to === "qnfo-gateway" && e.calls === 6 && e.errors === 0) && st.graph.some((e) => e.to === "qnfo-ops" && e.calls === 1), "GET /journeys returns the newest runs and the hop graph", st.graph);
 ok(M.jrnAgeMin("2026-10-14 01:10:00", NOW) === 10 && M.jrnAgeMin(null, NOW) === null, "age parses the D1 datetime form");
 
