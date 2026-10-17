@@ -33,7 +33,7 @@ var __name22222 = /* @__PURE__ */ __name2222((target, value) => __defProp22222(t
 // an empty catch. CITE-CONSISTENCY-1 asks the reviewer to compare the draft against cited QNFO work.
 // REVIEW-TRIAGE-CAP-1 is a defect fix: drift demotion at the cycle cap silently turned a blocking finding into a pass, so
 // REVIEW-HARD-GATE-1 withheld nothing there (reviewer findings 2 -> 0 at the cap; an unparseable review advanced to verify).
-var VERSION = "0.18.25-model-floor-1";
+var VERSION = "0.18.26-corpus-leverage";
 // WORKERS-AI-ATTRIBUTION-1 (2026-10-01, #1681): per-worker Workers AI attribution. Returns a shallow env copy whose AI
 // binding records each .run() (calls, errors, ms, tokens, neurons) into qnfo-audit ai_call_counters (purpose 'binding').
 // Neurons = usage tokens x Cloudflare's published per-model rates (neurons per M tokens). Fail-soft; env is never mutated.
@@ -4875,6 +4875,58 @@ async function citeBackfillSweep(env) {
       }
     }
     await refreshPaperInfluence(env);
+  } catch (e) {
+    out.error = String(e && e.message || e).slice(0, 200);
+  }
+  return out;
+}
+// CORPUS-LEVERAGE-SELECT-1 (2026-10-17, owner directive: the system shall always decide, implement and deploy
+// systemwide): item 5 of the learning audit. The fleet knows which papers are terminal (no later paper cites them after
+// the grace window) and, until now, nothing acted on it: 448 published papers with no own-corpus reference were
+// indistinguishable from live ones, so the pipeline kept spending its quota on new standalone papers. This turns the
+// signal into bounded work: at most research_extension_per_day (default 2, 0 stops it, clamp 0..10) extension rows a day,
+// only when the ready queue has room, deduped by (source, source_id) so a paper is proposed once ever.
+var EXTENSION_PER_DAY_DEFAULT = 2, EXTENSION_PER_DAY_MAX = 10, EXTENSION_READY_CAP_DEFAULT = 120;
+function extensionIdea(title, ageDays) {
+  return "Extend and stress-test the published result \"" + String(title || "a prior paper") + "\" (published " + Number(ageDays || 0) + " days ago and not cited by any later paper in this corpus). State one falsifiable prediction the earlier paper did not test, derive its quantitative consequence with explicit arithmetic, and either confirm it against a public dataset or report the refuting measurement. Do not restate the original result.";
+}
+async function extensionCandidateSweep(env) {
+  const out = { queued: 0, consider: 0 };
+  try {
+    let perDay = EXTENSION_PER_DAY_DEFAULT;
+    try {
+      const c = await env.QNFO_AUDIT.prepare("SELECT value FROM ops_config WHERE key = 'research_extension_per_day'").first();
+      const n = c && c.value != null ? parseInt(String(c.value), 10) : NaN;
+      if (Number.isFinite(n)) perDay = Math.max(0, Math.min(EXTENSION_PER_DAY_MAX, n));
+    } catch (e) {
+    }
+    if (!perDay) return Object.assign(out, { skipped: "disabled" });
+    const day = nowIso().slice(0, 10);
+    const q = await env.QNFO_AUDIT.prepare("SELECT COUNT(*) n FROM research_queue WHERE source = 'extension' AND created_at >= ?1").bind(day).first();
+    const done = Number(q && q.n) || 0;
+    if (done >= perDay) return Object.assign(out, { skipped: "daily cap " + done + "/" + perDay });
+    let cap = EXTENSION_READY_CAP_DEFAULT;
+    try {
+      const rc = await env.QNFO_AUDIT.prepare("SELECT value FROM ops_config WHERE key = 'research_ready_cap'").first();
+      const rn = rc && rc.value != null ? parseInt(String(rc.value), 10) : NaN;
+      if (Number.isFinite(rn) && rn > 0) cap = rn;
+    } catch (e) {
+    }
+    const live = await env.QNFO_AUDIT.prepare("SELECT COUNT(*) n FROM research_queue WHERE status IN ('queued','researching')").first();
+    if ((Number(live && live.n) || 0) >= cap) return Object.assign(out, { skipped: "queue full" });
+    const want = perDay - done;
+    const cands = await env.LIVING_PAPER.prepare("SELECT slug, age_days, inbound FROM v_paper_influence WHERE status = 'published' AND inbound = 0 AND age_days >= ?1 ORDER BY age_days DESC LIMIT ?2").bind(CORPUS_TERMINAL_GRACE_DAYS, want).all();
+    const rows = (cands && cands.results) || [];
+    out.consider = rows.length;
+    for (const c of rows) {
+      const t = await env.LIVING_PAPER.prepare("SELECT title FROM papers WHERE slug = ?1").bind(c.slug).first();
+      const title = t && t.title ? String(t.title) : String(c.slug);
+      try {
+        const r = await env.QNFO_AUDIT.prepare("INSERT OR IGNORE INTO research_queue (id, source, source_id, idea, status, stage, attempt, recover_count, created_at) VALUES (?1, 'extension', ?2, ?3, 'queued', 'ground', 0, 0, ?4)").bind("ext-" + crypto.randomUUID(), "extend:" + c.slug, extensionIdea(title, c.age_days), nowIso()).run();
+        if (r && r.meta && r.meta.changes) out.queued++;
+      } catch (eIns) {
+      }
+    }
   } catch (e) {
     out.error = String(e && e.message || e).slice(0, 200);
   }
@@ -28024,6 +28076,12 @@ var worker_default = {
       } catch (e) {
         await logEvent(env, "error", "drainV2 threw: " + String(e && e.message || e).slice(0, 200), "error");
       }
+      try {
+        const _ext = await extensionCandidateSweep(env);
+        if (_ext.queued || _ext.error) await logEvent(env, "extension-enqueue", JSON.stringify(_ext).slice(0, 400), _ext.error ? "warn" : "ok");
+      } catch (eExt) {
+        await logEvent(env, "extension-enqueue", "threw: " + String(eExt && eExt.message || eExt).slice(0, 200), "warn");
+      }
       if (env.RESEARCH_HALT === "1") return;
       // CITE-BACKFILL-1: bounded per tick, its own state rows, and its own failure log so a bad batch cannot stop the
       // completeness sweep or the queue.
@@ -28141,6 +28199,8 @@ export {
   persistCitations,
   refreshPaperInfluence,
   citeBackfillSweep,
+  extensionCandidateSweep,
+  extensionIdea,
   parseQnfoRefs,
   normTitle,
   RESEARCH_SHARED_PREAMBLE,
