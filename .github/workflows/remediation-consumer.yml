@@ -114,6 +114,16 @@ jobs:
         run: |
           python3 scripts/blocker_redteam_runner.py --selftest && python3 scripts/blocker_redteam_runner.py
 
+      # TRIGGER-DEPTH-SWEEP-1 (owner directive 2026-10-17 "ALL SWEEPS SHALL BE SCHEDULED FOR PERIODIC FAILURE-MODE/ROOT-CAUSE
+      # AUTOMATIC AUDITS AND REMEDIATION"): sweeps every qnfo-audit table with the zero-row INSERT/UPDATE/DELETE probes and,
+      # when a write is refused with "triggers nested too deep", writes a failing verification row and files a deduped issue.
+      # Proactive: catches a re-wedged trigger graph before the self-heal loop dies, unlike the lagging fm-trigger-depth
+      # recency check. Never fails the job.
+      - name: Sweep for D1 trigger-depth failures
+        continue-on-error: true
+        run: |
+          python3 scripts/trigger_depth_sweep.py --selftest && python3 scripts/trigger_depth_sweep.py
+
       # CLAIM-REAPER-1 (owner request 2026-10-09, scheduled audits that remediate): releases work claims whose PR merged or
       # closed 30+ minutes ago, in work_claims and deploy_locks, so a session that stopped without releasing does not block
       # the file for the rest of its TTL. Reads PR state with this run's token; never fails the job.
