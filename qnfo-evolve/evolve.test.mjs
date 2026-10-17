@@ -119,5 +119,11 @@ ok(longStep.title.length <= 150, "the title is bounded for a long register step"
 ok(longStep.title.includes("queue:code-task-stalled"), "the bounded title still names the process");
 ok(longStep.description.includes("SLA 180 -> 120 min"), "the full step survives in the body");
 
+/* 7. the close path must satisfy the fleet's close-evidence trigger before it changes status. */
+ok(/issue_triage/.test(src), "the close path writes issue_triage");
+ok(/close_evidence/.test(src), "the close path supplies close_evidence");
+ok(src.indexOf("close_evidence") < src.indexOf("close_channel = 'evolve-auto'"),
+  "evidence is written before the status changes (issue_close_evidence_required)");
+
 console.log(`${pass} passed, ${fail} failed`);
 if (fail) process.exit(1);
