@@ -18,12 +18,17 @@ const ok = (c, m, x) => { if (c) pass++; else { fail++; console.log("FAIL " + m 
 function makeD1(live) {
   const db = new DatabaseSync(":memory:");
   const wrap = (sql) => {
+    // node:sqlite on some Node versions refuses positional binding to ?N placeholders ("column index out of range").
+    // Bind them by name instead: ?2 -> :p2 with { p2: second arg }. Semantics are unchanged (the worker binds in index order).
+    const numbered = /\?\d+/.test(sql);
+    const sqlNamed = numbered ? sql.replace(/\?(\d+)/g, ":p$1") : sql;
     let args = [];
+    const names = () => { const o = {}; args.forEach((v, i) => { o["p" + (i + 1)] = v; }); return o; };
     const st = {
       bind: (...a) => { args = a.map((v) => (v === undefined ? null : v)); return st; },
-      run: async () => { const r = db.prepare(sql).run(...args); return { meta: { changes: Number(r.changes) } }; },
-      first: async () => db.prepare(sql).get(...args) || null,
-      all: async () => ({ results: db.prepare(sql).all(...args) }),
+      run: async () => { const r = numbered ? db.prepare(sqlNamed).run(names()) : db.prepare(sql).run(...args); return { meta: { changes: Number(r.changes) } }; },
+      first: async () => (numbered ? db.prepare(sqlNamed).get(names()) : db.prepare(sql).get(...args)) || null,
+      all: async () => ({ results: numbered ? db.prepare(sqlNamed).all(names()) : db.prepare(sql).all(...args) }),
     };
     return st;
   };
@@ -155,34 +160,39 @@ const claim = (env, p, f) => env.AUDIT_DB._db.prepare("INSERT INTO work_claims (
   const two = 'var VERSION = "1.0.0";\nvar VERSION = "1.0.0";\nq();\n';
   ok(ctx.bumpVersion(two, two.replace("q()", "r()")) === two.replace("q()", "r()"), "6d two declarations: left alone (ambiguous)");
 }
-// 7. PATH-CLAIM-CEILING-1 (0.17.0, agent_issues 2726): a task that has held its file past the ceiling after 2+ failed attempts is set
-// failed and the file is freed; a task inside the window, or on its first attempt, keeps the file.
+// 7. NO-PROGRESS-CEILING-1 (0.17.0, agent_issues 2726): a task that stops producing NEW failure signatures is set failed and the
+// file freed after the window; a task that is old but keeps failing in new ways (progress) keeps the file; a task inside the
+// window, on its first attempt, or with no signature yet keeps it.
 {
   const { env } = envWith([]);
+  const d = env.AUDIT_DB._db;
+  const sigsJson = (s, mins) => JSON.stringify({ sigs: s, last_new_sig_at: new Date(Date.now() - mins * 60000).toISOString() });
   const a = await enq(env, "q08-signal-engine/worker.js");
   ok(a.ok, "7a the first task is queued", a);
-  const old = new Date(Date.now() - 200 * 60000).toISOString();
-  env.AUDIT_DB._db.prepare("UPDATE code_tasks SET created_at = ?, attempts = 1 WHERE id = ?").run(old, a.id);
-  const b = await enq(env, "q08-signal-engine/worker.js");
-  ok(!b.ok && b.http === 409, "7b one failed attempt keeps the file even past the ceiling", b);
-  env.AUDIT_DB._db.prepare("UPDATE code_tasks SET created_at = ?, attempts = 2 WHERE id = ?").run(new Date(Date.now() - 60 * 60000).toISOString(), a.id);
-  const c = await enq(env, "q08-signal-engine/worker.js");
-  ok(!c.ok && c.http === 409, "7c two failed attempts inside the ceiling keep the file", c);
-  env.AUDIT_DB._db.prepare("UPDATE code_tasks SET created_at = ?, attempts = 6, last_error = 'standards guard' WHERE id = ?").run(old, a.id);
-  const d = await enq(env, "q08-signal-engine/worker.js");
-  ok(d.ok && d.http === 202, "7d past the ceiling with 6 failed attempts the file is freed and a new task is queued", d);
-  const held = env.AUDIT_DB._db.prepare("SELECT status, last_error FROM code_tasks WHERE id = ?").get(a.id);
-  ok(held && held.status === "failed" && /PATH-CLAIM-CEILING-1/.test(held.last_error) && /standards guard/.test(held.last_error), "7e the old task is failed with the ceiling reason and keeps its last error", held);
-  const ev = env.AUDIT_DB._db.prepare("SELECT COUNT(*) n FROM cloud_ops_events WHERE kind = 'code-task.path-ceiling'").get();
-  ok(ev.n === 1, "7f one path-ceiling event is written", ev);
-  const g = await enq(env, "qnfo-email/worker.js");
-  env.AUDIT_DB._db.prepare("UPDATE code_tasks SET created_at = ?, attempts = 6 WHERE id = ?").run(String(Date.now() - 200 * 60000), g.id);
-  ok((await enq(env, "qnfo-email/worker.js")).ok, "7g an epoch-millisecond created_at is read too");
-  const e2 = envWith([]).env;
-  e2.AUDIT_DB._db.exec("CREATE TABLE ops_config (key TEXT PRIMARY KEY, value TEXT); INSERT INTO ops_config VALUES ('path_hold_max_min', '600')");
-  const f = await enq(e2, "qnfo-social/worker.js");
-  e2.AUDIT_DB._db.prepare("UPDATE code_tasks SET created_at = ?, attempts = 6 WHERE id = ?").run(old, f.id);
-  ok(!(await enq(e2, "qnfo-social/worker.js")).ok, "7h ops_config path_hold_max_min 600 keeps a 200-minute task");
+  d.prepare("UPDATE code_tasks SET attempts = 1, ctx = ?, last_error = 'standards guard' WHERE id = ?").run(sigsJson(["suite a.test.mjs: boom"], 400), a.id);
+  ok(!(await enq(env, "q08-signal-engine/worker.js")).ok, "7b one failed attempt keeps the file (no judgement on a first attempt)");
+  d.prepare("UPDATE code_tasks SET attempts = 3, ctx = ?, last_error = 'standards guard' WHERE id = ?").run(sigsJson(["A", "B", "A"], 60), a.id);
+  ok(!(await enq(env, "q08-signal-engine/worker.js")).ok, "7c a repeat inside the window keeps the file");
+  d.prepare("UPDATE code_tasks SET attempts = 6, ctx = ?, last_error = 'standards guard' WHERE id = ?").run(sigsJson(["A", "B", "A", "B", "A", "B"], 200), a.id);
+  const e = await enq(env, "q08-signal-engine/worker.js");
+  ok(e.ok && e.http === 202, "7d no new failure signature for 200 min frees the file and the next issue is queued", e);
+  const held = d.prepare("SELECT status, last_error FROM code_tasks WHERE id = ?").get(a.id);
+  ok(held && held.status === "failed" && /NO-PROGRESS-CEILING-1/.test(held.last_error) && /standards guard/.test(held.last_error), "7e the stuck task is failed with the no-progress reason and keeps its last error", held);
+  const ev = d.prepare("SELECT COUNT(*) n FROM cloud_ops_events WHERE kind = 'code-task.no-progress'").get();
+  ok(ev.n === 1, "7f one no-progress event is written", ev);
+  const { env: e2 } = envWith([]);
+  const g = await enq(e2, "qnfo-email/worker.js");
+  e2.AUDIT_DB._db.prepare("UPDATE code_tasks SET created_at = ?, attempts = 6, ctx = ? WHERE id = ?").run(new Date(Date.now() - 360 * 60000).toISOString(), sigsJson(["A", "B", "C", "D", "E", "F"], 2), g.id);
+  ok(!(await enq(e2, "qnfo-email/worker.js")).ok, "7g an old task that is still finding new failures (progress) keeps the file");
+  const { env: e3 } = envWith([]);
+  const h = await enq(e3, "q08-signal-engine/worker.js");
+  e3.AUDIT_DB._db.prepare("UPDATE code_tasks SET created_at = ?, attempts = 6 WHERE id = ?").run(new Date(Date.now() - 400 * 60000).toISOString(), h.id);
+  ok(!(await enq(e3, "q08-signal-engine/worker.js")).ok, "7h a task with no recorded failure signature keeps the file");
+  const e4 = envWith([]).env;
+  e4.AUDIT_DB._db.exec("CREATE TABLE ops_config (key TEXT PRIMARY KEY, value TEXT); INSERT INTO ops_config VALUES ('path_hold_max_min', '600')");
+  const f = await enq(e4, "qnfo-social/worker.js");
+  e4.AUDIT_DB._db.prepare("UPDATE code_tasks SET attempts = 6, ctx = ? WHERE id = ?").run(sigsJson(["A", "A", "A"], 200), f.id);
+  ok(!(await enq(e4, "qnfo-social/worker.js")).ok, "7i ops_config path_hold_max_min 600 keeps a 200-minute no-progress task");
 }
 console.log("dispatch-dedupe: " + pass + " passed, " + fail + " failed");
 process.exit(fail ? 1 : 0);
