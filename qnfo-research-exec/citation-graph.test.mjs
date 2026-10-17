@@ -83,6 +83,44 @@ const G = load();
   ok(/CREATE TABLE IF NOT EXISTS corpus_leverage/.test(src), "the signal is snapshotted daily");
   ok(/var CORPUS_TERMINAL_GRACE_DAYS = 14;/.test(src), "a terminal paper has a named grace window");
   ok(/await refreshPaperInfluence\(env\)/.test(src), "publish refreshes the signal");
+  // CITE-BACKFILL-1: the historical corpus becomes learnable.
+  ok(/async function citeBackfillSweep\(env\)/.test(src), "a backfill sweep exists");
+  ok(/CREATE TABLE IF NOT EXISTS cite_backfill_state/.test(src), "each slug is scanned once, including papers that cite nothing");
+  ok(/NOT EXISTS \(SELECT 1 FROM cite_backfill_state s WHERE s.slug = p.slug\)/.test(src), "a scanned paper is never re-scanned");
+  ok(/var CITE_BACKFILL_BATCH = \d+;/.test(src), "the batch is bounded per tick");
+  ok(/await citeBackfillSweep\(env\)/.test(src), "the sweep runs from the tick");
+  ok(/"cites:" \+ row.slug \+ ":" \+ hit.slug/.test(src), "backfilled edges use the same namespaced id as the forward path");
+}
+
+// 5. backfill parsing and title matching
+{
+  const a = src.indexOf("var CITE_BACKFILL_BATCH");
+  const b = src.indexOf("async function citeBackfillSweep");
+  if (a < 0 || b < a) throw new Error("CITE-BACKFILL-1 helpers not found");
+  const ctx = vm.createContext({ String, Object, Array, Number, JSON, Math });
+  const B = vm.runInContext("(function(){\n" + src.slice(a, b) + "\nreturn { normTitle, parseQnfoRefs };})()", ctx);
+  const body = [
+    "# A Paper",
+    "",
+    "Body cites [9] in prose and [3].",
+    "",
+    "## References",
+    "",
+    "[1] Something External. arXiv:2608.00249. https://arxiv.org/abs/2608.00249",
+    "[9] QNFO: Head Over Hands | https://papers.qnfo.org/papers/head-over-hands",
+    "[10] QNFO: The Purpose Principle: Grounding Research in Reality, Utility, and Premise-Depth | https://papers.qnfo.org/papers/purpose",
+    "[11] QNFO: Trailing Pipes | DOI 10.1234/x | https://papers.qnfo.org/papers/t",
+    "[12] A normal external reference."
+  ].join("\n");
+  const refs = B.parseQnfoRefs(body);
+  ok(refs.length === 3, "only QNFO reference lines are picked up, not external ones", refs);
+  ok(refs[0].ref_no === 9 && refs[0].title === "Head Over Hands", "the reference number and title are read off the line", refs[0]);
+  ok(refs[1].title.indexOf("DOI") < 0 && refs[1].title.indexOf("http") < 0, "the title stops before the DOI or URL", refs[1].title);
+  ok(refs[2].title === "Trailing Pipes", "a DOI between title and URL is not swallowed into the title", refs[2].title);
+  ok(B.parseQnfoRefs("no references here").length === 0, "a body with no reference section yields nothing");
+  ok(B.parseQnfoRefs("## References\n[1] QNFO: \n").length === 0, "an empty QNFO label is skipped");
+  ok(B.normTitle("The Purpose Principle: Grounding Research in Reality, Utility, and Premise-Depth") === B.normTitle("the purpose principle grounding research in reality utility and premise depth"), "titles match across punctuation and case", B.normTitle("The Purpose Principle: x"));
+  ok(B.normTitle("A B") !== B.normTitle("A-B-C"), "normalisation does not collapse different word sequences", [B.normTitle("A B"), B.normTitle("A-B-C")]);
 }
 
 console.log(pass + " passed, " + fail + " failed");
