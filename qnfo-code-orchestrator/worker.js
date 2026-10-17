@@ -2570,7 +2570,7 @@ async function planIssues(env, opts) {
 // this worker from ai_call_counters; at the cap the lanes idle until UTC midnight, with ONE event an hour. An unreadable
 // meter never blocks the loop (fail-open): a metering gap is not a reason to stop working.
 async function loopLock(env, ms) {
-  const holder = WORKER + ":" + Date.now() + ":" + Math.random().toString(36).slice(2, 8);
+  const holder = WORKER + ":" + crypto.randomUUID();
   const exp = new Date(Date.now() + ms).toISOString();
   try {
     const r = await env.AUDIT_DB.prepare("INSERT INTO loop_lock (k, holder, expires_at) VALUES ('tick', ?, ?) ON CONFLICT(k) DO UPDATE SET holder=excluded.holder, expires_at=excluded.expires_at WHERE loop_lock.expires_at < ?").bind(holder, exp, iso()).run();
