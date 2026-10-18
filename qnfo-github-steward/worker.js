@@ -359,13 +359,45 @@ async function issueSync(env, result) {
   }
 }
 
+/* ISSUE-SYNC-REVERSE-1 (owner directive 2026-10-18): reflect closed GitHub issues back into
+ * internal tracking. A fleet_issue_dispatch row that carries a gh_number but is still 'tracked'
+ * is checked against its GitHub issue; a closed issue marks the internal row 'done'. Idempotent,
+ * read-mostly, and fail-safe (an API error leaves the row tracked for the next run). */
+async function issueSyncReverse(env, result) {
+  if (!env.AUDIT) return;
+  try {
+    var rows = await env.AUDIT.prepare(
+      "SELECT fingerprint, gh_number FROM fleet_issue_dispatch WHERE state = 'tracked' AND gh_number IS NOT NULL AND gh_number != '' LIMIT 50"
+    ).all();
+    var list = rows.results || [];
+    var closed = 0, stillOpen = 0, errored = 0;
+    for (var i = 0; i < list.length; i++) {
+      var row = list[i];
+      var g = await gh(env, "GET", "/repos/" + ORG + "/qnfo-workers/issues/" + row.gh_number);
+      if (g.status === 200 && g.body && g.body.state === "closed") {
+        await env.AUDIT.prepare(
+          "UPDATE fleet_issue_dispatch SET state = 'done', exec_state = 'closed', exec_ts = ? WHERE fingerprint = ?"
+        ).bind(new Date().toISOString(), row.fingerprint).run();
+        closed++;
+      } else if (g.status === 200) {
+        stillOpen++;
+      } else {
+        errored++;
+      }
+    }
+    result.issue_sync_reverse = { closed: closed, still_open: stillOpen, errored: errored, checked: list.length };
+  } catch (e) {
+    result.errors.push({ scope: "issue-sync-reverse", why: String(e && e.message || e).slice(0, 160) });
+  }
+}
+
 async function runReconcile(env, opts) {
   var started = Date.now();
   var result = {
     version: VERSION, started_at: new Date(started).toISOString(),
     org_ok: false, org_fixed: [], repos_checked: 0, repos_fixed: 0,
     repos_protected: 0, workflows: 0,
-    drift: [], workflow_issues: [], limitations: [], errors: [], issue_sync: null
+    drift: [], workflow_issues: [], limitations: [], errors: [], issue_sync: null, issue_sync_reverse: null
   };
 
   await reconcileOrg(env, result);
@@ -398,6 +430,7 @@ async function runReconcile(env, opts) {
     try { await triageNotifications(env, result); } catch (eN) { result.errors.push({ scope: "notifications", why: String(eN && eN.message || eN).slice(0, 140) }); }
   }
   await issueSync(env, result);
+  await issueSyncReverse(env, result);
   result.duration_ms = Date.now() - started;
   result.finished_at = new Date().toISOString();
   return result;
