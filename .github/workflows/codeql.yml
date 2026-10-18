@@ -96,6 +96,14 @@ jobs:
               - ci-status
               - audits
               - archive
+              # CODEQL-SCOPE-1 (2026-10-18): frozen pre-release snapshots (worker-<ver>.js, never deployed), the generated
+              # deployed-current mirror (byte-identical to worker.js, which is scanned) and offline test fixtures doubled
+              # or tripled every finding: 100 open alerts, most of them copies. Deployed source keeps full coverage.
+              - "**/worker-[0-9]*.js"
+              - "**/deployed-current.worker.js"
+              - "**/*.test.mjs"
+              - "**/*.test.py"
+              - "qnfo-fleet-advisor"
       - name: Perform CodeQL analysis
         uses: github/codeql-action/analyze@24c54180a607b1449ed407dd24f251e4e9147c8d # v4
         with:

@@ -10183,7 +10183,10 @@ function lockedHtml() {
 var PORTFOLIO_AFTER_UTC_HOUR = 5;
 var PORTFOLIO_MAX_ATTEMPTS = 3;
 var PORTFOLIO_RUNNING_STALE_MS = 10 * 60 * 1e3;
-var PORTFOLIO_BSKY_ACTOR = "qnfo.bsky.social";
+// BSKY-DOMAIN-HANDLE-1 (1.40.2, 2026-10-18): the account moved to the domain handle qnfo.org; reads use the DID (stable
+// across handle changes) and the feed filter accepts either handle so pre-switch posts still count.
+var PORTFOLIO_BSKY_ACTOR = "did:plc:vad2yeqflg5uznmp557zge5c";
+var PORTFOLIO_BSKY_HANDLES = { "qnfo.org": 1, "qnfo.bsky.social": 1 };
 var PORTFOLIO_BSKY_API = "https://public.api.bsky.app/xrpc/";
 var PORTFOLIO_OUTREACH_DAILY_MAX = 8;
 // Posts before this instant predate the q08 queue gate (q08-signal-engine 0.7.36) and the qnfo-social weekly cap; they
@@ -10243,7 +10246,8 @@ function portfolioCheckBluesky(feed, nowMs, cap, sinceMs, allowQ08) {
     if (!item || item.reason) continue;
     const post = item.post || {};
     const handle = post.author && post.author.handle;
-    if (handle && String(handle).toLowerCase() !== PORTFOLIO_BSKY_ACTOR) continue;
+    const _did = post.author && post.author.did;
+    if (handle && !PORTFOLIO_BSKY_HANDLES[String(handle).toLowerCase()] && _did !== PORTFOLIO_BSKY_ACTOR) continue;
     const rec = post.record || {};
     const t = Date.parse(rec.createdAt || post.indexedAt || "");
     if (!Number.isFinite(t)) continue;
@@ -10923,7 +10927,7 @@ async function jobIdentityWeekly(env) {
   if (!md) gaps.push("owner_docs 'identity' missing");
   const canon = idwCanonical(md);
   const [bsky, ghUser, ghOrg, orcid, masto] = await Promise.all([
-    idwJson("https://public.api.bsky.app/xrpc/app.bsky.actor.getProfile?actor=qnfo.bsky.social"),
+    idwJson("https://public.api.bsky.app/xrpc/app.bsky.actor.getProfile?actor=did:plc:vad2yeqflg5uznmp557zge5c"),
     idwJson("https://api.github.com/users/rwnq8", idwGh(env)),
     idwJson("https://api.github.com/orgs/QNFO", idwGh(env)),
     idwJson("https://pub.orcid.org/v3.0/" + IDW_ORCID + "/person"),
@@ -10934,7 +10938,7 @@ async function jobIdentityWeekly(env) {
   if (bsky.body) {
     metrics.bluesky_followers = bsky.body.followersCount ?? null;
     metrics.bluesky_posts = bsky.body.postsCount ?? null;
-    profiles.push(idwProfileCheck("bluesky qnfo.bsky.social", { name: bsky.body.displayName, bio: bsky.body.description }, canon.short_bio));
+    profiles.push(idwProfileCheck("bluesky qnfo.org", { name: bsky.body.displayName, bio: bsky.body.description }, canon.short_bio));
   } else gaps.push("bluesky: " + bsky.error);
   if (ghUser.body) profiles.push(idwProfileCheck("github rwnq8", { name: ghUser.body.name, bio: ghUser.body.bio }, canon.gh_user_bio));
   else gaps.push("github user: " + ghUser.error);

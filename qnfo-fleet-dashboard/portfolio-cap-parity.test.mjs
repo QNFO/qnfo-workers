@@ -39,7 +39,7 @@ const slice = (name, end) => {
   return dash.slice(a, b);
 };
 const fns = new Function(
-  'var PORTFOLIO_BSKY_ACTOR = "qnfo.bsky.social"; var DAY_MS = 86400000;\n' +
+  'var PORTFOLIO_BSKY_ACTOR = "did:plc:vad2yeqflg5uznmp557zge5c"; var PORTFOLIO_BSKY_HANDLES = { "qnfo.org": 1, "qnfo.bsky.social": 1 }; var DAY_MS = 86400000;\n' +
   slice("portfolioMojibake(", "function portfolioCheckBluesky(") +
   slice("portfolioCheckBluesky(", "async function portfolioFetchJson(") +
   "\nreturn { portfolioWeeklyCap, portfolioCheckBluesky };"
