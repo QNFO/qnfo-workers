@@ -90,7 +90,7 @@ def d1(acct, token, db, sql, params=None):
 
 def q(acct, token, db, sql, params=None):
     st, j = d1(acct, token, db, sql, params)
-    if st != 200 or not j.get("success"):
+    if not (200 <= st < 300) or not j.get("success"):
         return None, j.get("errors") or j
     res = j.get("result") or []
     return (res[0].get("results") if res else []), None
@@ -98,7 +98,7 @@ def q(acct, token, db, sql, params=None):
 
 def ensure_index(acct, token):
     st, j = http(CF + "/accounts/" + acct + "/vectorize/v2/indexes/" + INDEX, token)
-    if st == 200:
+    if 200 <= st < 300:
         cfg = (j.get("result") or {}).get("config") or {}
         return {"exists": True, "dimensions": cfg.get("dimensions"), "metric": cfg.get("metric")}
     st, j = http(CF + "/accounts/" + acct + "/vectorize/v2/indexes", token, "POST",
@@ -235,7 +235,7 @@ def index_repo(ctx, row, budget):
         for i in range(0, len(vecs), 100):
             st, j = http(CF + "/accounts/" + acct + "/vectorize/v2/indexes/" + INDEX + "/upsert",
                          token, "POST", {"vectors": vecs[i:i + 100]}, timeout=150)
-            if st != 200:
+            if not (200 <= st < 300):
                 stats["errors"].append({"path": path, "why": "upsert_%s" % st,
                                         "detail": json.dumps(j.get("errors") or j)[:120]})
                 break

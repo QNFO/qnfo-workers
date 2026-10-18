@@ -91,7 +91,7 @@ def d1(ctx, sql, params=None):
         body["params"] = params
     st, j = _call(CF + "/accounts/" + ctx.account + "/d1/database/" + D1_ID + "/query",
                   ctx.cf_token, "POST", body)
-    if st != 200 or not j.get("success"):
+    if not (200 <= st < 300) or not j.get("success"):
         return None, j.get("errors") or j
     res = j.get("result") or []
     return (res[0].get("results") if res else []), None
