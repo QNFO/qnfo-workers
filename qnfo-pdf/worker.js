@@ -14616,10 +14616,45 @@ var katex = {
 };
 
 // renderer.js
+// renderer.js — Professional print typesetter for QNFO scientific papers.
+//
+// TYPESET-PRO-1 (2026-10-18). Before this version a paper PDF carried only a title, a bare author
+// string and a stray "References" heading with nothing under it: the citation markers `[@key]`
+// were printed as raw keys, the BibTeX that ships beside every paper in R2 (`references.bib`) was
+// never read, and the affiliation / ORCID / identifier / licence metadata that the corpus does
+// carry was dropped. This renderer fixes the whole block:
+//
+//   * title block: kind + date + version, title, subtitle, authors with affiliation superscripts,
+//     affiliations, ORCID iD and contact, DOI / identifier, licence, then abstract, keywords,
+//     subjects and a ready-to-copy "cite as" line;
+//   * bibliography: a BibTeX parser, `[@key]` / `[@key; @key2]` -> numbered citations in order of
+//     first appearance, and a hanging-indent reference list with the full entry (authors, title,
+//     venue, volume, number, pages, year, DOI/URL). An unresolvable key is printed as the key
+//     itself — never invented, never silently dropped;
+//   * journal-grade print CSS: A4 geometry, booktabs tables, hyphenation, widow/orphan control,
+//     keep-with-next headings, centred display math, figure captions.
+//
+// The renderer never invents metadata: a field that is absent in the frontmatter, the in-body
+// byline block or the D1 row is left out rather than guessed.
+
+export const RENDERER_VERSION = "2.0.0-typeset-pro-1";
+
+/* ------------------------------------------------------------------ */
+/* escaping                                                            */
+/* ------------------------------------------------------------------ */
+
 function esc(s) {
-  return String(s == null ? "" : s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+  return String(s == null ? "" : s)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
 }
-__name(esc, "esc");
+
+/* ------------------------------------------------------------------ */
+/* frontmatter                                                         */
+/* ------------------------------------------------------------------ */
+
 function parseFrontmatter(md) {
   const meta = {};
   let body = String(md == null ? "" : md).replace(/^\uFEFF/, "");
@@ -14627,97 +14662,490 @@ function parseFrontmatter(md) {
   if (m) {
     body = body.slice(m[0].length);
     const lines = m[1].split(/\r?\n/);
-    let i2 = 0;
-    while (i2 < lines.length) {
-      const line = lines[i2];
-      if (!line.trim()) {
-        i2++;
-        continue;
-      }
+    let i = 0;
+    while (i < lines.length) {
+      const line = lines[i];
+      if (!line.trim()) { i++; continue; }
       const kv = line.match(/^([A-Za-z_][A-Za-z0-9_-]*):\s*(.*)$/);
-      if (!kv) {
-        i2++;
-        continue;
-      }
+      if (!kv) { i++; continue; }
       const key = kv[1], rest = kv[2];
       const isBlock = rest === "|" || rest === "|-" || rest === ">" || rest === ">-";
       if (isBlock || rest === "") {
         const vals = [];
-        let j = i2 + 1;
+        let j = i + 1;
         while (j < lines.length && (lines[j].trim() === "" || /^\s{1,}\S/.test(lines[j]))) {
           if (lines[j].trim() !== "") vals.push(lines[j].replace(/^\s{2,}/, "").replace(/^-\s+/, ""));
           j++;
         }
-        i2 = j;
+        i = j;
         const joined = vals.join("\n").trim();
-        if (key === "keywords" || key === "tags" || key === "domains") {
-          meta[key] = vals.map(function(v) {
-            return v.trim();
-          }).filter(Boolean);
+        if (key === "keywords" || key === "tags" || key === "domains" || key === "categories" || key === "authors") {
+          meta[key] = vals.map(function (v) { return v.trim(); }).filter(Boolean);
         } else {
           meta[key] = joined;
         }
         continue;
       }
       meta[key] = rest.replace(/^"(.*)"$/, "$1").replace(/^'(.*)'$/, "$1").trim();
-      i2++;
+      i++;
     }
   }
-  return { meta, body };
+  return { meta: meta, body: body };
 }
-__name(parseFrontmatter, "parseFrontmatter");
-function extractSpecials(src) {
-  const stash2 = [];
-  let t = String(src == null ? "" : src);
-  function push(kind, content) {
-    stash2.push({ kind, content });
-    return "\0" + kind + (stash2.length - 1) + "\0";
+
+/* ------------------------------------------------------------------ */
+/* LaTeX -> Unicode (bibliography and frontmatter fields)              */
+/* ------------------------------------------------------------------ */
+
+const COMBINING = {
+  '"': "\u0308", "'": "\u0301", "`": "\u0300", "^": "\u0302", "~": "\u0303",
+  "=": "\u0304", ".": "\u0307", "u": "\u0306", "v": "\u030C", "H": "\u030B",
+  "c": "\u0327", "k": "\u0328", "r": "\u030A", "b": "\u0331", "d": "\u0323"
+};
+
+const SPECIAL_LETTERS = {
+  ss: "\u00df", ae: "\u00e6", AE: "\u00c6", oe: "\u0153", OE: "\u0152",
+  o: "\u00f8", O: "\u00d8", aa: "\u00e5", AA: "\u00c5", l: "\u0142", L: "\u0141",
+  i: "\u0131", j: "\u0237", S: "\u00a7", P: "\u00b6"
+};
+
+// decodeLatex turns a BibTeX/LaTeX field into plain text, keeping `$...$` math intact so the
+// caller can typeset it. Accents are applied as combining marks and then NFC-normalised, so
+// `{\"U}ber` becomes `Über` and `f{\"u}r` becomes `für` — no mojibake, no transliteration.
+function decodeLatex(s) {
+  let t = String(s == null ? "" : s);
+  const maths = [];
+  t = t.replace(/\$([^$]*)\$/g, function (_, g) {
+    maths.push(g);
+    return "\u0001" + (maths.length - 1) + "\u0001";
+  });
+  t = t.replace(/\\textendash\b/g, "\u2013").replace(/\\textemdash\b/g, "\u2014");
+  t = t.replace(/---/g, "\u2014").replace(/--/g, "\u2013");
+  t = t.replace(/\\(["'`^~=.])\s*\{?([A-Za-z])\}?/g, function (_, acc, ch) {
+    return ch + (COMBINING[acc] || "");
+  });
+  t = t.replace(/\\([uvHckrb])\s*\{([A-Za-z])\}/g, function (_, acc, ch) {
+    return ch + (COMBINING[acc] || "");
+  });
+  t = t.replace(/\\(ss|ae|AE|oe|OE|aa|AA|o|O|l|L|i|j)\b\s*/g, function (_, name) {
+    return SPECIAL_LETTERS[name] || name;
+  });
+  t = t.replace(/\\(ldots|dots|cdots|textellipsis)\b/g, "\u2026");
+  t = t.replace(/\\(times)\b/g, "\u00d7");
+  t = t.replace(/\\(mid)\b/g, "|");
+  t = t.replace(/\\(_[{}])/g, "_");
+  t = t.replace(/\\([&%$#_{}])/g, "$1");
+  t = t.replace(/[{}]/g, "");
+  t = t.replace(/~/g, "\u00a0");
+  try { t = t.normalize("NFC"); } catch (e) { /* older engines: leave as combining marks */ }
+  t = t.replace(/\u0001(\d+)\u0001/g, function (_, i) {
+    return "$" + maths[parseInt(i, 10)] + "$";
+  });
+  return t;
+}
+
+/* ------------------------------------------------------------------ */
+/* BibTeX                                                             */
+/* ------------------------------------------------------------------ */
+
+// parseBibTeX returns a Map key -> { type, fields }. It walks the source rather than using a
+// regex per field so that nested braces, quoted values and math inside a title all survive.
+function parseBibTeX(src) {
+  const out = new Map();
+  const s = String(src == null ? "" : src);
+  const n = s.length;
+  let i = 0;
+  while (i < n) {
+    const at = s.indexOf("@", i);
+    if (at < 0) break;
+    const head = /^@([A-Za-z]+)\s*([{(])/.exec(s.slice(at, at + 40));
+    if (!head) { i = at + 1; continue; }
+    const type = head[1].toLowerCase();
+    const open = head[2];
+    const close = open === "{" ? "}" : ")";
+    let j = at + head[0].length;
+    let key = "";
+    while (j < n && s[j] !== "," && s[j] !== close) { key += s[j]; j++; }
+    key = key.trim();
+    if (s[j] === ",") j++;
+    const fields = {};
+    let depth = 0;
+    while (j < n) {
+      while (j < n && /[\s,]/.test(s[j])) j++;
+      if (j >= n) break;
+      if (depth === 0 && s[j] === close) { j++; break; }
+      let name = "";
+      while (j < n && /[A-Za-z0-9_-]/.test(s[j])) { name += s[j]; j++; }
+      while (j < n && /\s/.test(s[j])) j++;
+      if (s[j] !== "=") {
+        while (j < n && s[j] !== ",") j++;
+        j++;
+        continue;
+      }
+      j++;
+      while (j < n && /\s/.test(s[j])) j++;
+      let val = "";
+      if (s[j] === "{") {
+        depth = 1; j++;
+        while (j < n && depth > 0) {
+          if (s[j] === "{") depth++;
+          else if (s[j] === "}") { depth--; if (depth === 0) { j++; break; } }
+          val += s[j]; j++;
+        }
+      } else if (s[j] === '"') {
+        j++;
+        let q = 0;
+        while (j < n) {
+          if (s[j] === '"' && q === 0) { j++; break; }
+          if (s[j] === "{") q++;
+          if (s[j] === "}") q--;
+          val += s[j]; j++;
+        }
+      } else {
+        while (j < n && s[j] !== "," && s[j] !== close && !/\s/.test(s[j])) { val += s[j]; j++; }
+      }
+      if (name) fields[name.toLowerCase()] = val;
+    }
+    if (key) out.set(key, { type: type, fields: fields });
+    i = Math.max(j, at + 1);
   }
-  __name(push, "push");
-  t = t.replace(/\x60\x60\x60([^\n]*)\n([\s\S]*?)\x60\x60\x60/g, function(_, lang, code) {
-    return push("C", { lang: lang.trim(), code: code.replace(/\n$/, "") });
-  });
-  t = t.replace(/\$\$([\s\S]*?)\$\$/g, function(_, c) {
-    return push("D", c.trim());
-  });
-  t = t.replace(/\\\[([\s\S]*?)\\\]/g, function(_, c) {
-    return push("D", c.trim());
-  });
-  t = t.replace(/\$([^\$\n]+?)\$/g, function(_, c) {
-    return push("I", c.trim());
-  });
-  t = t.replace(/\\\(([\s\S]*?)\\\)/g, function(_, c) {
-    return push("I", c.trim());
-  });
-  return { text: t, stash: stash2 };
+  return out;
 }
-__name(extractSpecials, "extractSpecials");
+
+function bibNames(raw) {
+  const parts = String(raw == null ? "" : raw).split(/\s+and\s+/i).map(function (x) { return x.trim(); }).filter(Boolean);
+  const names = [];
+  for (let k = 0; k < parts.length; k++) {
+    const p0 = parts[k];
+    if (/^others$/i.test(p0)) { names.push({ etal: true }); continue; }
+    const p = decodeLatex(p0).replace(/\s+/g, " ").trim();
+    let family = "", given = "";
+    if (p.indexOf(",") >= 0) {
+      const chunks = p.split(",");
+      family = (chunks[0] || "").trim();
+      given = chunks.slice(1).join(",").trim();
+    } else {
+      const toks = p.split(" ");
+      family = toks.pop();
+      given = toks.join(" ");
+    }
+    names.push({ family: family, given: given });
+  }
+  return names;
+}
+
+function initialsOf(given) {
+  return String(given || "")
+    .split(/[\s.]+/)
+    .filter(Boolean)
+    .map(function (t) {
+      return /^[A-Z]{2,}$/.test(t) ? t : t.charAt(0).toUpperCase() + ".";
+    })
+    .join(" ");
+}
+
+// formatNames renders an author field in the numeric-style "A. B. Family, C. D. Other" form.
+function formatNames(raw) {
+  const ns = bibNames(raw);
+  if (!ns.length) return "";
+  let etal = false;
+  const real = [];
+  for (let i = 0; i < ns.length; i++) {
+    if (ns[i].etal) etal = true;
+    else real.push(ns[i]);
+  }
+  const rendered = real.map(function (nm) {
+    const ini = initialsOf(nm.given);
+    return (ini ? ini + " " : "") + nm.family;
+  }).join(", ");
+  return rendered + (etal ? ", et al." : "");
+}
+
+/* ------------------------------------------------------------------ */
+/* math + field helpers                                                */
+/* ------------------------------------------------------------------ */
+
 function safeKatex(tex, displayMode) {
   try {
-    return katex.renderToString(tex, { displayMode, throwOnError: false, strict: false, output: "html" });
+    return katex.renderToString(String(tex), {
+      displayMode: !!displayMode,
+      throwOnError: false,
+      strict: false,
+      output: "html"
+    });
   } catch (err) {
     return '<span class="katex-error">' + esc(tex) + "</span>";
   }
 }
-__name(safeKatex, "safeKatex");
-function restoreSpecials(text2, stash2) {
-  return text2.replace(/\x00([CDI])(\d+)\x00/g, function(_, kind, idx) {
-    const e = stash2[parseInt(idx, 10)];
+
+// fieldHtml decodes a BibTeX field, escapes it, and typesets any `$...$` math it contains.
+function fieldHtml(value) {
+  const decoded = decodeLatex(value);
+  const parts = decoded.split(/(\$[^$]*\$)/g);
+  return parts.map(function (p) {
+    if (p.length > 2 && p.charAt(0) === "$" && p.charAt(p.length - 1) === "$") {
+      return '<span class="math-inline">' + safeKatex(p.slice(1, -1), false) + "</span>";
+    }
+    return esc(p);
+  }).join("");
+}
+
+function plainOf(value) {
+  return decodeLatex(value).replace(/\$([^$]*)\$/g, "$1").replace(/\s+/g, " ").trim();
+}
+
+function trimDot(s) {
+  return String(s || "").replace(/\s+$/, "");
+}
+
+function doiFromFields(f) {
+  const direct = String(f.doi || f.DOI || "").trim();
+  if (/^10\.\d{4,9}\//.test(direct)) return direct;
+  const hay = [f.howpublished, f.note, f.url, f.journal, f.publisher].filter(Boolean).join(" ");
+  const m = /(10\.\d{4,9}\/[^\s,;)}]+)/.exec(hay);
+  if (m) return m[1].replace(/[.,;]$/, "");
+  return "";
+}
+
+function arxivFromFields(f) {
+  const hay = [f.howpublished, f.eprint, f.journal, f.note].filter(Boolean).join(" ");
+  const m = /arxiv[:\s]*([0-9]{4}\.[0-9]{4,5}(?:v[0-9]+)?)/i.exec(hay);
+  if (m) return m[1];
+  if (String(f.eprinttype || "").toLowerCase() === "arxiv" && f.eprint) return plainOf(f.eprint);
+  return "";
+}
+
+/* ------------------------------------------------------------------ */
+/* reference entries                                                   */
+/* ------------------------------------------------------------------ */
+
+// formatBibEntry returns the HTML body of one reference (without its number) and a plain-text
+// form used for the "cite as" line. Only fields present in the entry are printed.
+function formatBibEntry(entry) {
+  const f = (entry && entry.fields) || {};
+  const type = (entry && entry.type) || "misc";
+  const author = formatNames(f.author || f.editor || "");
+  const editor = !f.author && f.editor ? formatNames(f.editor) : "";
+  const title = f.title ? fieldHtml(f.title) : "";
+  const year = String(f.year || f.date || "").replace(/[^0-9]/g, "").slice(0, 4);
+  const doi = doiFromFields(f);
+  const arxiv = arxivFromFields(f);
+  const url = String(f.url || "").trim();
+  const bits = [];
+
+  if (author) bits.push('<span class="ref-authors">' + author + "</span>.");
+
+  function titlePart(italic) {
+    if (!title) return "";
+    const t = trimDot(title);
+    const punct = /[.?!]$/.test(t) ? "" : ".";
+    return italic ? "<em>" + t + "</em>" + punct : "\u201c" + t + punct + "\u201d";
+  }
+
+  const isBook = type === "book" || type === "booklet" || type === "manual" || type === "proceedings";
+  const isThesis = type === "phdthesis" || type === "mastersthesis";
+
+  if (isBook) {
+    const path = [];
+    if (title) path.push(titlePart(true));
+    const pub = [f.address ? plainOf(f.address) : "", f.publisher ? plainOf(f.publisher) : ""].filter(Boolean).join(": ");
+    if (pub) path.push(esc(pub) + (year ? ", " + year : ""));
+    else if (year) path.push(year);
+    if (editor) path.push("ed. " + editor);
+    bits.push(path.filter(Boolean).join(" "));
+  } else if (type === "article") {
+    const seg = [titlePart(false)];
+    const venue = f.journal ? plainOf(f.journal) : "";
+    const vol = f.volume ? plainOf(f.volume) : "";
+    const num = f.number || f.issue ? plainOf(f.number || f.issue) : "";
+    const pages = f.pages ? plainOf(f.pages).replace(/--/g, "\u2013") : "";
+    const tail = [];
+    if (venue) tail.push("<em>" + esc(venue) + "</em>");
+    if (vol) tail.push("vol. " + esc(vol));
+    if (num) tail.push("no. " + esc(num));
+    if (pages) tail.push("pp. " + esc(pages));
+    if (year) tail.push(esc(year));
+    seg.push(tail.join(", ") + (tail.length ? "." : ""));
+    bits.push(seg.filter(Boolean).join(" "));
+  } else if (isThesis) {
+    const seg = [titlePart(true)];
+    const kind = type === "phdthesis" ? "PhD thesis" : "Master's thesis";
+    const school = f.school ? plainOf(f.school) : "";
+    seg.push(esc(kind) + (school ? ", " + esc(school) : "") + (year ? ", " + esc(year) : "") + ".");
+    bits.push(seg.filter(Boolean).join(" "));
+  } else if (type === "techreport" || type === "report") {
+    const seg = [titlePart(true)];
+    const parts = [];
+    if (f.number) parts.push("Technical Report " + plainOf(f.number));
+    if (f.institution) parts.push(plainOf(f.institution));
+    if (year) parts.push(year);
+    if (parts.length) seg.push(esc(parts.join(", ")) + ".");
+    bits.push(seg.filter(Boolean).join(" "));
+  } else if (type === "inproceedings" || type === "conference" || type === "incollection" || type === "inbook") {
+    const seg = [titlePart(false)];
+    const booktitle = f.booktitle ? plainOf(f.booktitle) : "";
+    const pages = f.pages ? plainOf(f.pages).replace(/--/g, "\u2013") : "";
+    const inBits = [];
+    if (booktitle) inBits.push("In <em>" + esc(booktitle) + "</em>");
+    if (editor) inBits.push("ed. " + editor);
+    if (pages) inBits.push("pp. " + esc(pages));
+    if (year) inBits.push(esc(year));
+    if (inBits.length) seg.push(inBits.join(", ") + ".");
+    if (f.publisher) seg.push(esc(plainOf(f.publisher)) + ".");
+    bits.push(seg.filter(Boolean).join(" "));
+  } else {
+    // misc / online / unpublished / preprint / software / dataset
+    const seg = [titlePart(false)];
+    const howRaw = f.howpublished ? plainOf(f.howpublished) : "";
+    // a howpublished that is only an identifier (arXiv:…, Zenodo 10.5281/…) is a link, not a venue:
+    // name the repository instead of printing a bare number
+    const isId = /(10\.\d{4,9}\/|arxiv[:\s]*\d{4}\.)/i.test(howRaw);
+    let venue = isId ? "" : howRaw;
+    if (!venue) {
+      if (/arxiv[:\s]*\d{4}\./i.test(howRaw)) venue = "arXiv preprint";
+      else if (/zenodo/i.test(howRaw)) venue = "Zenodo";
+      else if (f.publisher) venue = plainOf(f.publisher);
+      else if (f.institution) venue = plainOf(f.institution);
+    }
+    const tail = [];
+    if (venue) tail.push(esc(venue));
+    else if (f.journal) tail.push("<em>" + esc(plainOf(f.journal)) + "</em>");
+    if (!venue && f.institution) tail.push(esc(plainOf(f.institution)));
+    if (year) tail.push(esc(year));
+    if (tail.length) seg.push(tail.join(", ") + ".");
+    bits.push(seg.filter(Boolean).join(" "));
+  }
+
+  const links = [];
+  if (doi) links.push('doi:<a href="https://doi.org/' + esc(doi) + '">' + esc(doi) + "</a>");
+  if (arxiv) links.push('arXiv:<a href="https://arxiv.org/abs/' + esc(arxiv) + '">' + esc(arxiv) + "</a>");
+  if (url && !/^https?:\/\/(dx\.)?doi\.org/.test(url)) links.push('<a href="' + esc(url) + '">' + esc(url.replace(/^https?:\/\//, "")) + "</a>");
+
+  let bodyText = bits.filter(Boolean).join(" ").replace(/\s+/g, " ").replace(/ \./g, ".").trim();
+  if (bodyText && !/\.$/.test(bodyText)) bodyText += ".";
+  const html = bodyText + (links.length ? ' <span class="ref-links">' + links.join(" \u00b7 ") + "</span>" : "");
+  const plainParts = [];
+  if (author) plainParts.push(author + ".");
+  if (title) plainParts.push(plainOf(f.title) + ".");
+  if (f.journal) plainParts.push(plainOf(f.journal) + ".");
+  if (year) plainParts.push(year + ".");
+  if (doi) plainParts.push("doi:" + doi);
+  return { html: html, plain: plainParts.join(" ") };
+}
+
+/* ------------------------------------------------------------------ */
+/* citations                                                           */
+/* ------------------------------------------------------------------ */
+
+const CITE_RE = /\[@([^\]\n]+)\]/g;
+
+function stripFences(s) {
+  return String(s || "").replace(/```[\s\S]*?```/g, " ");
+}
+
+// scanCitations returns the citation keys in order of first appearance, which is the numbering
+// numeric style requires.
+function scanCitations(body) {
+  const ordered = [];
+  const seen = new Set();
+  const src = stripFences(body);
+  CITE_RE.lastIndex = 0;
+  let m;
+  while ((m = CITE_RE.exec(src))) {
+    const groups = m[1].split(";");
+    for (let i = 0; i < groups.length; i++) {
+      const g = groups[i].trim();
+      // the outer capture already excludes the leading "@", so accept either form
+      const km = /^@?([^\s,\]}]+)/.exec(g);
+      if (!km) continue;
+      const key = km[1];
+      if (!seen.has(key)) { seen.add(key); ordered.push(key); }
+    }
+  }
+  return ordered;
+}
+
+function collapseNumbers(nums) {
+  const sorted = nums.slice().sort(function (a, b) { return a - b; });
+  const segs = [];
+  let i = 0;
+  while (i < sorted.length) {
+    let j = i;
+    while (j + 1 < sorted.length && sorted[j + 1] === sorted[j] + 1) j++;
+    if (j - i >= 2) segs.push(sorted[i] + "\u2013" + sorted[j]);
+    else for (let k = i; k <= j; k++) segs.push(String(sorted[k]));
+    i = j + 1;
+  }
+  return segs.join(", ");
+}
+
+// citeHtml renders one `[@a; @b]` group. ctx carries the key -> number map; a key with no entry in
+// the bibliography is printed as itself and counted, so a missing reference is visible rather than
+// invented or dropped.
+function citeHtml(inner, ctx) {
+  const groups = String(inner || "").split(";").map(function (s) { return s.trim(); }).filter(Boolean);
+  const nums = [];
+  const missing = [];
+  let locator = "";
+  for (let i = 0; i < groups.length; i++) {
+    const km = /^@([^\s,\]}]+)(.*)$/.exec(groups[i]);
+    if (!km) continue;
+    const key = km[1];
+    const rest = (km[2] || "").trim();
+    if (rest) locator = rest.replace(/^,\s*/, "");
+    const num = ctx ? ctx.numbering.get(key) : 0;
+    if (num) nums.push(num);
+    else { missing.push(key); if (ctx) ctx.missing.add(key); }
+  }
+  if (!nums.length && !missing.length) return "";
+  const parts = [];
+  if (nums.length) parts.push(collapseNumbers(nums));
+  for (let i = 0; i < missing.length; i++) parts.push(missing[i]);
+  let text = parts.join(", ");
+  if (locator) text += ", " + locator;
+  if (nums.length) {
+    return '<a class="cite" href="#ref-' + Math.min.apply(null, nums) + '">[' + esc(text) + "]</a>";
+  }
+  return '<span class="cite cite-missing" title="no bibliography entry for this key">[' + esc(text) + "]</span>";
+}
+
+/* ------------------------------------------------------------------ */
+/* markdown                                                            */
+/* ------------------------------------------------------------------ */
+
+function extractSpecials(src) {
+  const stash = [];
+  let t = String(src == null ? "" : src);
+  function push(kind, content) {
+    stash.push({ kind: kind, content: content });
+    return "\x00" + kind + (stash.length - 1) + "\x00";
+  }
+  t = t.replace(/\x60\x60\x60([^\n]*)\n([\s\S]*?)\x60\x60\x60/g, function (_, lang, code) {
+    return push("C", { lang: lang.trim(), code: code.replace(/\n$/, "") });
+  });
+  t = t.replace(/\$\$([\s\S]*?)\$\$/g, function (_, c) { return push("D", c.trim()); });
+  t = t.replace(/\\\[([\s\S]*?)\\\]/g, function (_, c) { return push("D", c.trim()); });
+  t = t.replace(/\$([^\$\n]+?)\$/g, function (_, c) { return push("I", c.trim()); });
+  t = t.replace(/\\\(([\s\S]*?)\\\)/g, function (_, c) { return push("I", c.trim()); });
+  return { text: t, stash: stash };
+}
+
+function restoreSpecials(text, stash) {
+  return text.replace(/\x00([CDI])(\d+)\x00/g, function (_, kind, idx) {
+    const e = stash[parseInt(idx, 10)];
     if (!e) return "";
     if (kind === "C") return "<pre" + (e.lang ? ' class="lang-' + esc(e.lang) + '"' : "") + "><code>" + esc(e.code) + "</code></pre>";
     if (kind === "D") return '<div class="math-display">' + safeKatex(e.content, true) + "</div>";
     return '<span class="math-inline">' + safeKatex(e.content, false) + "</span>";
   });
 }
-__name(restoreSpecials, "restoreSpecials");
+
 function isTableSep(line) {
   const cells = splitRow(line);
   if (!cells.length) return false;
-  return cells.every(function(c) {
-    return /^:?-{3,}:?$/.test(c.trim());
-  });
+  return cells.every(function (c) { return /^:?-{3,}:?$/.test(c.trim()); });
 }
-__name(isTableSep, "isTableSep");
+
 function splitRow(line) {
   let s = String(line).replace(/\r$/, "").trim();
   if (s.startsWith("|")) s = s.slice(1);
@@ -14726,65 +15154,54 @@ function splitRow(line) {
   let cur = "";
   for (let j = 0; j < s.length; j++) {
     const c = s[j];
-    if (c === "\\" && j + 1 < s.length && s[j + 1] === "|") {
-      cur += "|";
-      j++;
-    } else if (c === "|") {
-      cells.push(cur.trim());
-      cur = "";
-    } else cur += c;
+    if (c === "\\" && j + 1 < s.length && s[j + 1] === "|") { cur += "|"; j++; }
+    else if (c === "|") { cells.push(cur.trim()); cur = ""; }
+    else cur += c;
   }
   cells.push(cur.trim());
   return cells;
 }
-__name(splitRow, "splitRow");
+
 function parseAlign(sepLine) {
-  return splitRow(sepLine).map(function(c) {
+  return splitRow(sepLine).map(function (c) {
     const l = c.startsWith(":"), r = c.endsWith(":");
-    return l && r ? "center" : r ? "right" : "left";
+    return (l && r) ? "center" : (r ? "right" : "left");
   });
 }
-__name(parseAlign, "parseAlign");
-function renderInlinePlain(t) {
+
+function renderInlinePlain(t, ctx) {
   let s = String(t == null ? "" : t);
   const escTokens = [];
-  s = s.replace(/\\\\([\\\x60*_{}\[\]()#+.\-!|>~])/g, function(m, ch2) {
-    escTokens.push(ch2);
-    return "\0E" + (escTokens.length - 1) + "\0";
+  s = s.replace(/\\\\([\\\x60*_{}\[\]()#+.\-!|>~])/g, function (m, ch) {
+    escTokens.push(ch);
+    return "\x00E" + (escTokens.length - 1) + "\x00";
   });
-  s = s.replace(/!\[([^\]]*)\]\(([^)\s]+)\)/g, function(_, alt, url) {
-    return '<img src="' + esc(url) + '" alt="' + esc(alt) + '">';
+  s = s.replace(/!\[([^\]]*)\]\(([^)\s]+)\)/g, function (_, alt, url) {
+    return '<figure><img src="' + esc(url) + '" alt="' + esc(alt) + '">' +
+      (alt ? "<figcaption>" + renderInlinePlain(alt, ctx) + "</figcaption>" : "") + "</figure>";
   });
-  s = s.replace(/\[([^\]]+)\]\(([^)\s]+)\)/g, function(_, text2, url) {
-    return '<a href="' + esc(url) + '">' + text2 + "</a>";
+  s = s.replace(/\[([^\]]+)\]\(([^)\s]+)\)/g, function (_, text, url) {
+    return '<a href="' + esc(url) + '">' + text + "</a>";
   });
-  s = s.replace(/\x60([^\x60\n]+)\x60/g, function(_, code) {
-    return "<code>" + esc(code) + "</code>";
-  });
-  s = s.replace(/\[\s*@([^\]]+?)\s*\]/g, function(_, keys) {
-    const ks = keys.split(/[;,\s]+/).map(function(k) {
-      return k.replace(/^@/, "");
-    }).filter(Boolean);
-    return '<span class="cite">[' + esc(ks.join(", ")) + "]</span>";
-  });
+  s = s.replace(/\x60([^\x60\n]+)\x60/g, function (_, code) { return "<code>" + esc(code) + "</code>"; });
+  s = s.replace(/\[\s*(@[^\]\n]+?)\s*\]/g, function (_, inner) { return citeHtml(inner, ctx); });
   s = s.replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>");
   s = s.replace(/__([^_]+)__/g, "<strong>$1</strong>");
   s = s.replace(/(^|[^*])\*([^*\n]+)\*(?!\*)/g, "$1<em>$2</em>");
   s = s.replace(/(^|[^_])_([^_\n]+)_(?!_)/g, "$1<em>$2</em>");
   s = s.replace(/~~([^~]+)~~/g, "<del>$1</del>");
-  s = s.replace(/\x00E(\d+)\x00/g, function(_, i2) {
-    return esc(escTokens[parseInt(i2, 10)] || "");
-  });
+  s = s.replace(/\x00E(\d+)\x00/g, function (_, i) { return esc(escTokens[parseInt(i, 10)] || ""); });
   return s;
 }
-__name(renderInlinePlain, "renderInlinePlain");
-function renderInline(raw) {
+
+function renderInline(raw, ctx) {
   const e = extractSpecials(raw);
-  return restoreSpecials(renderInlinePlain(e.text), e.stash);
+  return restoreSpecials(renderInlinePlain(e.text, ctx), e.stash);
 }
-__name(renderInline, "renderInline");
-function renderMarkdown(body) {
+
+function renderMarkdown(body, ctx) {
   const e = extractSpecials(body);
+  // Recover blank-line-collapsed markdown (producer stripped newline-newline -> space).
   e.text = e.text.replace(/([^\n])[ \t]+(\|[^\n]*\|)[ \t]*(?=\n([ \t]*\|?[\s:|-]+\|?[ \t]*\n))/g, (mm, pre, hdr, sep) => {
     const nh = hdr.split("|").filter((x) => x.trim() !== "").length;
     const ns = (sep.match(/-+/g) || []).length;
@@ -14794,20 +15211,13 @@ function renderMarkdown(body) {
   e.text = e.text.replace(/([^\n])[ \t]+(---)[ \t]*(?=\n)/g, "$1\n$2\n");
   e.text = e.text.replace(/([^\n])[ \t]+(#{1,6}[ \t])/g, "$1\n$2");
   const lines = e.text.split("\n");
-  let o = "", i2 = 0;
-  while (i2 < lines.length) {
-    const line = lines[i2], t = line.trim();
-    if (!t) {
-      i2++;
-      continue;
-    }
-    if (/^\x00[CD]\d+\x00$/.test(t)) {
-      o += t;
-      i2++;
-      continue;
-    }
+  let o = "", i = 0;
+  while (i < lines.length) {
+    const line = lines[i], t = line.trim();
+    if (!t) { i++; continue; }
+    if (/^\x00[CD]\d+\x00$/.test(t)) { o += t; i++; continue; }
     if (t.indexOf("|") >= 0) {
-      let si = i2 + 1;
+      let si = i + 1;
       while (si < lines.length && !lines[si].trim()) si++;
       if (si < lines.length && isTableSep(lines[si])) {
         const header = splitRow(line);
@@ -14817,10 +15227,7 @@ function renderMarkdown(body) {
         let tailProse = "";
         let j = si + 1;
         while (j < lines.length) {
-          if (!lines[j].trim()) {
-            j++;
-            continue;
-          }
+          if (!lines[j].trim()) { j++; continue; }
           if (lines[j].trim().indexOf("|") < 0) break;
           let cells = splitRow(lines[j]);
           if (sepCount > 0 && cells.length > sepCount) {
@@ -14829,10 +15236,7 @@ function renderMarkdown(body) {
             for (let k = 0; k < segs.length; k++) {
               if (segs[k].trim() !== "") {
                 used++;
-                if (used === sepCount) {
-                  cutIdx = k;
-                  break;
-                }
+                if (used === sepCount) { cutIdx = k; break; }
               }
             }
             cells = segs.slice(0, cutIdx + 1).map((x) => x.trim()).filter((x) => x !== "");
@@ -14844,149 +15248,536 @@ function renderMarkdown(body) {
           rows.push(cells);
           j++;
         }
-        i2 = j;
-        const ncol = Math.max(header.length, aligns.length, rows.length ? Math.max.apply(null, rows.map(function(r) {
-          return r.length;
-        })) : 0);
+        i = j;
+        const ncol = Math.max(header.length, aligns.length, rows.length ? Math.max.apply(null, rows.map(function (r) { return r.length; })) : 0);
         o += "<table><thead><tr>";
         for (let c = 0; c < ncol; c++) {
           const al = aligns[c] || "left";
-          o += '<th style="text-align:' + al + '">' + renderInlinePlain(header[c] || "") + "</th>";
+          o += '<th style="text-align:' + al + '">' + renderInlinePlain(header[c] || "", ctx) + "</th>";
         }
         o += "</tr></thead><tbody>";
         for (const row of rows) {
           o += "<tr>";
           for (let c = 0; c < ncol; c++) {
             const al = aligns[c] || "left";
-            o += '<td style="text-align:' + al + '">' + renderInlinePlain(row[c] || "") + "</td>";
+            o += '<td style="text-align:' + al + '">' + renderInlinePlain(row[c] || "", ctx) + "</td>";
           }
           o += "</tr>";
         }
         o += "</tbody></table>";
-        if (tailProse) o += "<p>" + renderInlinePlain(tailProse) + "</p>";
+        if (tailProse) o += "<p>" + renderInlinePlain(tailProse, ctx) + "</p>";
         continue;
       }
     }
     const hm = t.match(/^(#{1,6})\s+(.+)$/);
     if (hm) {
-      o += "<h" + hm[1].length + ">" + renderInlinePlain(hm[2]) + "</h" + hm[1].length + ">";
-      i2++;
+      o += "<h" + hm[1].length + ">" + renderInlinePlain(hm[2], ctx) + "</h" + hm[1].length + ">";
+      i++;
       continue;
     }
-    if (/^(-{3,}|\*{3,}|_{3,})$/.test(t)) {
-      o += "<hr>";
-      i2++;
-      continue;
-    }
+    if (/^(-{3,}|\*{3,}|_{3,})$/.test(t)) { o += "<hr>"; i++; continue; }
     if (t.charAt(0) === ">") {
       o += "<blockquote>";
-      while (i2 < lines.length && lines[i2].trim().charAt(0) === ">") {
-        o += "<p>" + renderInlinePlain(lines[i2].trim().replace(/^>\s?/, "")) + "</p>";
-        i2++;
+      while (i < lines.length && lines[i].trim().charAt(0) === ">") {
+        o += "<p>" + renderInlinePlain(lines[i].trim().replace(/^>\s?/, ""), ctx) + "</p>";
+        i++;
       }
       o += "</blockquote>";
       continue;
     }
     if (/^[-*+]\s+/.test(t)) {
       o += "<ul>";
-      while (i2 < lines.length && /^[-*+]\s+/.test(lines[i2].trim())) {
-        o += "<li>" + renderInlinePlain(lines[i2].trim().replace(/^[-*+]\s+/, "")) + "</li>";
-        i2++;
+      while (i < lines.length && /^[-*+]\s+/.test(lines[i].trim())) {
+        o += "<li>" + renderInlinePlain(lines[i].trim().replace(/^[-*+]\s+/, ""), ctx) + "</li>";
+        i++;
       }
       o += "</ul>";
       continue;
     }
     if (/^\d+\.\s+/.test(t)) {
       o += "<ol>";
-      while (i2 < lines.length && /^\d+\.\s+/.test(lines[i2].trim())) {
-        o += "<li>" + renderInlinePlain(lines[i2].trim().replace(/^\d+\.\s+/, "")) + "</li>";
-        i2++;
+      while (i < lines.length && /^\d+\.\s+/.test(lines[i].trim())) {
+        o += "<li>" + renderInlinePlain(lines[i].trim().replace(/^\d+\.\s+/, ""), ctx) + "</li>";
+        i++;
       }
       o += "</ol>";
       continue;
     }
     const buf = [];
-    while (i2 < lines.length && lines[i2].trim()) {
-      const lt = lines[i2].trim();
+    while (i < lines.length && lines[i].trim()) {
+      const lt = lines[i].trim();
       if (/^(#{1,6}\s|>|[-*+]\s|\d+\.\s)/.test(lt)) break;
       if (/^(-{3,}|\*{3,}|_{3,})$/.test(lt)) break;
-      if (lt.indexOf("|") >= 0 && i2 + 1 < lines.length && isTableSep(lines[i2 + 1])) break;
+      if (lt.indexOf("|") >= 0 && i + 1 < lines.length && isTableSep(lines[i + 1])) break;
       buf.push(lt);
-      i2++;
+      i++;
     }
-    if (buf.length) o += "<p>" + buf.map(renderInlinePlain).join(" ") + "</p>";
+    if (buf.length) o += "<p>" + buf.map(function (x) { return renderInlinePlain(x, ctx); }).join(" ") + "</p>";
   }
   return restoreSpecials(o, e.stash);
 }
-__name(renderMarkdown, "renderMarkdown");
+
+/* ------------------------------------------------------------------ */
+/* metadata assembly                                                   */
+/* ------------------------------------------------------------------ */
+
+// The corpus stores a byline block at the top of some bodies — "Author: … / Affiliation: … /
+// Email: … / ORCID: … / ISNI: … / Version: … / Date: …". It is metadata, not prose: lift it into
+// the title block and remove it from the body so it stops printing as a paragraph.
+const BYLINE_KEYS = ["author", "authors", "affiliation", "affiliations", "email", "e-mail", "orcid", "isni", "version", "date", "doi", "url", "keywords", "license"];
+
+function extractBylineBlock(body) {
+  const lines = String(body || "").split(/\r?\n/);
+  // the byline can sit under one or more headings ("## <title>" then "Author: …"), so leading
+  // headings and blank lines are skipped before the block is looked for
+  let i = 0;
+  let headingsSkipped = 0;
+  while (i < lines.length) {
+    const t = lines[i].trim();
+    if (!t) { i++; continue; }
+    if (/^#{1,6}\s/.test(t) && headingsSkipped < 3) { headingsSkipped++; i++; continue; }
+    break;
+  }
+  const start = i;
+  const fields = {};
+  let consumed = 0;
+  while (i < lines.length) {
+    const line = lines[i].trim();
+    if (!line) break;
+    const kv = /^([A-Za-z][A-Za-z .-]{1,18}):\s*(.+)$/.exec(line);
+    const bareUrl = /^(https?:\/\/\S+)$/.exec(line);
+    if (kv) {
+      const key = kv[1].toLowerCase().replace(/\s+/g, "-");
+      if (BYLINE_KEYS.indexOf(key) < 0) break;
+      if (!fields[key]) fields[key] = kv[2].trim().replace(/\s{2,}$/, "");
+      i++;
+      consumed++;
+      continue;
+    }
+    if (bareUrl) { if (!fields.url) fields.url = bareUrl[1]; i++; consumed++; continue; }
+    break;
+  }
+  if (consumed < 2) return { fields: {}, body: body };
+  const kept = lines.slice(0, start).concat(lines.slice(i));
+  while (kept.length && !kept[0].trim()) kept.shift();
+  return { fields: fields, body: kept.join("\n") };
+}
+
+function toList(v) {
+  if (v == null) return [];
+  if (Array.isArray(v)) return v.map(function (x) { return String(x).trim(); }).filter(Boolean);
+  const s = String(v).trim();
+  if (!s) return [];
+  if (s.charAt(0) === "[") {
+    try {
+      const j = JSON.parse(s);
+      if (Array.isArray(j)) return j.map(function (x) { return String(x).trim(); }).filter(Boolean);
+    } catch (e) { /* not JSON */ }
+  }
+  return s.split(/[;|]\s*/).map(function (x) { return x.trim(); }).filter(Boolean);
+}
+
+function pick() {
+  for (let i = 0; i < arguments.length; i++) {
+    const v = arguments[i];
+    if (v != null && String(v).trim() !== "") return String(v).trim();
+  }
+  return "";
+}
+
+function monthYear(published) {
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(published || "").trim());
+  if (!m) return String(published || "").trim();
+  const months = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+  const mi = parseInt(m[2], 10) - 1;
+  return (months[mi] || m[2]) + " " + parseInt(m[3], 10) + ", " + m[1];
+}
+
+// buildMeta merges three sources in order of authority: the D1 row (opts.meta, authoritative for
+// the record), the frontmatter, then the in-body byline block. Nothing is synthesised.
+function buildMeta(fm, byline, opts) {
+  const D = (opts && opts.meta) || {};
+  const authors = toList(D.authors).length ? toList(D.authors)
+    : toList(fm.authors).length ? toList(fm.authors)
+      : toList(pick(fm.author, byline.author, byline.authors));
+  const affiliations = toList(D.affiliations).length ? toList(D.affiliations)
+    : toList(fm.affiliations).length ? toList(fm.affiliations)
+      : toList(pick(fm.affiliation, byline.affiliation, byline.affiliations));
+  const keywords = toList(D.keywords).length ? toList(D.keywords) : toList(fm.keywords);
+  const subjects = toList(D.categories).length ? toList(D.categories) : toList(fm.categories);
+  const doi = pick(D.doi, D.zenodo_doi, D.identifier, fm.doi, byline.doi);
+  const dateRaw = pick(D.published, fm.date, byline.date);
+  return {
+    slug: pick(D.slug, fm.slug, opts && opts.slug),
+    title: pick(D.title, fm.title, opts && opts.title) || "Untitled",
+    subtitle: pick(D.subtitle, fm.subtitle, byline.subtitle),
+    authors: authors,
+    affiliations: affiliations,
+    orcid: pick(fm.ORCID, fm.orcid, byline.orcid, D.orcid, opts && opts.orcid),
+    isni: pick(fm.ISNI, fm.isni, byline.isni, D.isni),
+    email: pick(fm.email, byline.email, D.email),
+    date: dateRaw,
+    dateDisplay: monthYear(dateRaw),
+    version: pick(D.version, fm.version, byline.version),
+    doi: doi,
+    license: pick(D.license, fm.license, byline.license),
+    paperType: pick(D.paper_type, fm.paper_type, fm.type),
+    journal: pick(D.journal, fm.journal),
+    pages: pick(D.pages, fm.pages),
+    keywords: keywords,
+    subjects: subjects,
+    abstract: pick(D.abstract, fm.abstract),
+    url: pick(D.url, fm.url, byline.url),
+    bibSource: pick(D.bib, D.bibtex, opts && opts.bibtex)
+  };
+}
+
+function cleanDoi(raw) {
+  const s = String(raw || "").trim();
+  if (!s) return "";
+  if (/^10\.\d{4,9}\//.test(s)) return s;
+  const m = /(10\.\d{4,9}\/[^\s,;]+)/.exec(s);
+  return m ? m[1] : "";
+}
+
+/* ------------------------------------------------------------------ */
+/* front matter                                                        */
+/* ------------------------------------------------------------------ */
+
+function buildFront(meta, ctx) {
+  const kindLine = [meta.paperType ? esc(meta.paperType.charAt(0).toUpperCase() + meta.paperType.slice(1)) : "",
+    meta.dateDisplay ? esc(meta.dateDisplay) : "",
+    meta.version ? "v" + esc(meta.version) : ""].filter(Boolean).join(" \u00b7 ");
+
+  const authorBits = [];
+  for (let i = 0; i < meta.authors.length; i++) {
+    const name = esc(meta.authors[i]);
+    const sup = meta.affiliations.length > 1 ? "<sup>" + (i + 1) + "</sup>" : "";
+    authorBits.push('<span class="author">' + name + sup + "</span>");
+  }
+
+  const affilBits = [];
+  if (meta.affiliations.length) {
+    for (let i = 0; i < meta.affiliations.length; i++) {
+      const sup = meta.affiliations.length > 1 ? "<sup>" + (i + 1) + "</sup>" : "";
+      affilBits.push('<span class="affiliation">' + sup + esc(meta.affiliations[i]) + "</span>");
+    }
+  }
+
+  const ids = [];
+  if (meta.orcid) {
+    ids.push('<a class="orcid" href="https://orcid.org/' + esc(meta.orcid) + '">ORCID ' + esc(meta.orcid) + "</a>");
+  }
+  if (meta.isni) ids.push("ISNI " + esc(meta.isni));
+  if (meta.email) ids.push('<a href="mailto:' + esc(meta.email) + '">' + esc(meta.email) + "</a>");
+  const doi = cleanDoi(meta.doi);
+  if (doi) ids.push('DOI <a href="https://doi.org/' + esc(doi) + '">' + esc(doi) + "</a>");
+  if (meta.license) ids.push(esc(meta.license));
+
+  const kw = meta.keywords.length ? '<div class="kwline"><span class="kwlabel">Keywords</span> ' + esc(meta.keywords.join(" \u00b7 ")) + "</div>" : "";
+  const subj = meta.subjects.length ? '<div class="kwline"><span class="kwlabel">Subjects</span> ' + esc(meta.subjects.join(" \u00b7 ")) + "</div>" : "";
+
+  let citeAs = "";
+  const year = (meta.date || "").slice(0, 4);
+  if (meta.authors.length && meta.title) {
+    const firstAuthor = meta.authors[0];
+    const surname = /,/.test(firstAuthor) ? firstAuthor.split(",")[0].trim() : firstAuthor.trim().split(" ").pop();
+    const given = /,/.test(firstAuthor) ? firstAuthor.split(",").slice(1).join(",").trim() : firstAuthor.trim().split(" ").slice(0, -1).join(" ");
+    const firstIni = initialsOf(given);
+    const lead = [surname + (firstIni ? ", " + firstIni : "") + (meta.authors.length > 2 ? ", et al." : "")].join("");
+    const tail = ["(" + (year || "n.d.") + ").", meta.title + ".", "QNFO Preprint" + (meta.version ? " v" + meta.version : "") + ".", doi ? "doi:" + doi : ""]
+      .filter(Boolean).join(" ");
+    citeAs = '<div class="citeas"><span class="kwlabel">Cite as</span> ' + esc(lead + " " + tail) + "</div>";
+  }
+
+  const abstractBlock = meta.abstract
+    ? '<section class="abstract"><h2 class="abstract-h">Abstract</h2><p>' + renderInline(meta.abstract, ctx) + "</p></section>"
+    : "";
+
+  const html =
+    '<header class="paper-head">' +
+    (kindLine ? '<div class="paper-kind">' + kindLine + "</div>" : "") +
+    '<h1 class="paper-title">' + esc(meta.title) + "</h1>" +
+    (meta.subtitle ? '<div class="paper-subtitle">' + esc(meta.subtitle) + "</div>" : "") +
+    (authorBits.length ? '<div class="paper-authors">' + authorBits.join('<span class="authsep">,</span> ') + "</div>" : "") +
+    (affilBits.length ? '<div class="paper-affils">' + affilBits.join("") + "</div>" : "") +
+    (ids.length ? '<div class="paper-ids">' + ids.join('<span class="idsep">\u00b7</span>') + "</div>" : "") +
+    abstractBlock +
+    (kw || subj ? '<div class="paper-kw">' + kw + subj + "</div>" : "") +
+    (citeAs || "") +
+    '<hr class="head-rule">' +
+    "</header>";
+
+  return {
+    html: html,
+    kindLine: kindLine,
+    authorsText: meta.authors.join("; "),
+    idsText: [meta.orcid ? "ORCID " + meta.orcid : "", doi ? "DOI " + doi : "", meta.license].filter(Boolean).join(" \u00b7 ")
+  };
+}
+
+/* ------------------------------------------------------------------ */
+/* reference list                                                      */
+/* ------------------------------------------------------------------ */
+
+function buildReferences(ctx, bib) {
+  if (!bib || !bib.size) return { html: "", count: 0, missing: Array.from(ctx ? ctx.missing : []) };
+  const items = [];
+  if (ctx && ctx.ordered.length) {
+    for (let i = 0; i < ctx.ordered.length; i++) {
+      const key = ctx.ordered[i];
+      const entry = bib.get(key);
+      if (!entry) continue;
+      items.push({ num: ctx.numbering.get(key), key: key, html: formatBibEntry(entry).html });
+    }
+  }
+  if (!items.length) {
+    // No in-text citations but a bibliography ships with the paper: list it alphabetically, which is
+    // how such a paper is normally read.
+    const keys = Array.from(bib.keys()).sort(function (a, b) {
+      const fa = formatNames((bib.get(a).fields || {}).author || "");
+      const fb = formatNames((bib.get(b).fields || {}).author || "");
+      return fa.localeCompare(fb) || a.localeCompare(b);
+    });
+    for (let i = 0; i < keys.length; i++) {
+      items.push({ num: i + 1, key: keys[i], html: formatBibEntry(bib.get(keys[i])).html });
+    }
+  }
+  if (!items.length) return { html: "", count: 0, missing: [] };
+  let out = '<section class="refs"><h2 class="refs-h">References</h2><ol class="refs-list" start="1">';
+  for (let i = 0; i < items.length; i++) {
+    out += '<li class="ref" id="ref-' + items[i].num + '"><span class="ref-num">[' + items[i].num + ']</span> ' + items[i].html + "</li>";
+  }
+  out += "</ol></section>";
+  return { html: out, count: items.length, missing: Array.from(ctx ? ctx.missing : []) };
+}
+
+// stripTrailingReferencesHeading removes an empty "References"/"Bibliography" heading that the
+// producer left at the end of the body. A heading followed by real entries is kept as written.
+function stripTrailingReferencesHeading(body) {
+  const s = String(body || "");
+  const re = /(^|\n)(#{1,3})\s*(References|Bibliography|Works Cited)\s*$/i;
+  const m = re.exec(s);
+  if (m && !s.slice(m.index + m[0].length).trim()) {
+    return s.slice(0, m.index).replace(/\s+$/, "");
+  }
+  return s;
+}
+
+function dropDuplicateTitle(body, title) {
+  const s = String(body || "");
+  const m = /^(#{1,2})\s+(.+?)\s*$/m.exec(s);
+  if (!m) return s;
+  const norm = function (x) {
+    return String(x).toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+  };
+  if (norm(m[2]) === norm(title)) {
+    return s.slice(0, m.index) + s.slice(m.index + m[0].length).replace(/^\s*\n/, "");
+  }
+  return s;
+}
+
+/* ------------------------------------------------------------------ */
+/* public entry points                                                 */
+/* ------------------------------------------------------------------ */
+
 function renderPaperHTML(md, opts) {
   opts = opts || {};
   const pm = parseFrontmatter(md);
-  const meta = pm.meta;
-  const title = meta.title || opts.title || "Untitled";
-  const author = meta.author || opts.author || "";
-  const orcid = meta.ORCID || meta.orcid || opts.orcid || "";
-  const affiliation = meta.affiliation || opts.affiliation || "";
-  const date = meta.date || opts.date || "";
-  const version2 = meta.version || opts.version || "";
-  const rawDoi = String(meta.doi || meta.DOI || opts.doi || "");
-  const doi = /10\.5281\/|zenodo/i.test(rawDoi) ? "" : rawDoi;
-  const abstract = meta.abstract || opts.abstract || "";
-  const keywords = Array.isArray(meta.keywords) ? meta.keywords : meta.keywords ? [meta.keywords] : [];
-  const license = meta.license || opts.license || "";
-  const bodyHtml = renderMarkdown(pm.body);
-  const metaLine = [affiliation, date, version2 ? "v" + version2 : "", doi ? "DOI: " + doi : ""].filter(Boolean).join(" \xB7 ");
-  const front = '<header class="fm"><h1>' + esc(title) + "</h1>" + (author ? '<div class="fm-author">' + esc(author) + (orcid ? ' <a class="orcid" href="https://orcid.org/' + esc(orcid) + '">ORCID ' + esc(orcid) + "</a>" : "") + "</div>" : "") + (metaLine ? '<div class="fm-meta">' + esc(metaLine) + "</div>" : "") + (abstract ? '<div class="fm-abstract"><strong>Abstract.</strong> ' + renderInline(abstract) + "</div>" : "") + (keywords.length ? '<div class="fm-keywords"><strong>Keywords.</strong> ' + esc(keywords.join(", ")) + "</div>" : "") + "</header>";
-  return { title, author, date, version: version2, doi, license, bodyHtml, front, abstract, keywords };
+  const lifted = extractBylineBlock(pm.body);
+  const meta = buildMeta(pm.meta, lifted.fields, opts);
+
+  const bib = parseBibTeX(meta.bibSource || "");
+  const ctx = { ordered: [], numbering: new Map(), missing: new Set() };
+  if (bib.size) {
+    ctx.ordered = scanCitations(lifted.body + "\n" + (meta.abstract || ""));
+    let n = 0;
+    for (let i = 0; i < ctx.ordered.length; i++) {
+      const key = ctx.ordered[i];
+      if (bib.has(key)) { n++; ctx.numbering.set(key, n); }
+    }
+  }
+
+  let body = lifted.body;
+  body = dropDuplicateTitle(body, meta.title);
+  // an empty "References" heading with nothing under it is a defect either way: drop it, and let
+  // the generated list take its place when a bibliography exists
+  body = stripTrailingReferencesHeading(body);
+
+  // render first: the citation pass records unresolved keys on ctx, and the reference list reports them
+  const bodyHtml = renderMarkdown(body, ctx);
+  const refs = buildReferences(ctx, bib);
+  const front = buildFront(meta, ctx);
+
+  return {
+    title: meta.title,
+    author: meta.authors.join("; "),
+    authors: meta.authors,
+    affiliations: meta.affiliations,
+    date: meta.date,
+    version: meta.version,
+    doi: cleanDoi(meta.doi),
+    license: meta.license,
+    abstract: meta.abstract,
+    keywords: meta.keywords,
+    bodyHtml: bodyHtml,
+    refsHtml: refs.html,
+    front: front.html,
+    kindLine: front.kindLine,
+    idsText: front.idsText,
+    stats: {
+      citations: ctx.numbering.size,
+      references: refs.count,
+      unresolved: refs.missing,
+      bibEntries: bib.size
+    }
+  };
 }
-__name(renderPaperHTML, "renderPaperHTML");
-var PRINT_CSS = [
-  "@page { size: A4; }",
-  "html,body { margin:0; padding:0; }",
-  "body { font-family:'STIX Two Text',Cambria,Georgia,'Times New Roman',serif; font-size:10.5pt; line-height:1.55; color:#111; text-align:justify; hyphens:auto; -webkit-hyphens:auto; overflow-wrap:break-word; }",
-  ".fm { margin:0 0 16pt 0; }",
-  ".fm h1 { font-size:17pt; font-weight:700; line-height:1.25; margin:0 0 6pt 0; text-align:left; hyphens:none; }",
-  ".fm-author { font-size:11.5pt; margin:0 0 2pt 0; }",
-  ".fm-author .orcid { font-size:8.5pt; color:#24315e; text-decoration:none; margin-left:5pt; }",
-  ".fm-meta { font-size:9pt; color:#444; margin:0 0 8pt 0; }",
-  ".fm-abstract { font-size:9.5pt; margin:8pt 0; padding:8pt 11pt; background:#f7f6f2; border-left:2pt solid #24315e; }",
-  ".fm-keywords { font-size:9pt; color:#333; margin:0 0 4pt 0; }",
-  "h1 { font-size:14pt; margin:16pt 0 6pt 0; }",
-  "h2 { font-size:12.5pt; margin:14pt 0 6pt 0; border-bottom:0.6pt solid #bbb; padding-bottom:3pt; }",
-  "h3 { font-size:11pt; margin:12pt 0 5pt 0; }",
-  "h4 { font-size:10.5pt; font-style:italic; margin:10pt 0 4pt 0; }",
-  "h1,h2,h3,h4 { page-break-after:avoid; }",
-  "p { margin:0 0 6pt 0; orphans:3; widows:3; }",
-  "ul,ol { margin:0 0 6pt 0; padding-left:20pt; }",
-  "li { margin:0 0 2pt 0; }",
-  "blockquote { margin:8pt 0; padding:4pt 12pt; border-left:2pt solid #999; color:#333; }",
-  "hr { border:none; border-top:0.6pt solid #999; margin:12pt 0; }",
-  "table { width:100%; border-collapse:collapse; margin:8pt 0 10pt 0; font-size:8.8pt; line-height:1.4; }",
-  "thead { display:table-header-group; }",
-  "th { font-weight:700; text-align:left; border-top:1.2pt solid #000; border-bottom:0.6pt solid #000; padding:3pt 5pt; }",
-  "td { border-bottom:0.4pt solid #ccc; padding:2.5pt 5pt; vertical-align:top; }",
-  "tbody tr:last-child td { border-bottom:1.2pt solid #000; }",
-  "tr { page-break-inside:avoid; }",
-  ".math-display { text-align:center; margin:10pt 0; page-break-inside:avoid; }",
-  ".math-inline { white-space:nowrap; }",
-  "mjx-container[display='true'] { margin:4pt 0 !important; }",
-  "pre { font-family:Consolas,'Courier New',monospace; font-size:8pt; line-height:1.4; background:#f5f5f3; border:0.5pt solid #ddd; padding:6pt 8pt; margin:8pt 0; white-space:pre-wrap; word-wrap:break-word; }",
-  "code { font-family:Consolas,'Courier New',monospace; font-size:0.88em; }",
-  ".cite { color:#24315e; font-size:0.9em; }",
-  "a { color:#24315e; text-decoration:none; }"
-].join("\n");
+
+const PRINT_CSS = `
+@page { size: A4; margin: 21mm 19mm 22mm 19mm; }
+@page :first { margin-top: 18mm; }
+html, body { margin: 0; padding: 0; }
+body {
+  font-family: "Source Serif Pro", "Charter", "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, "Times New Roman", serif;
+  font-size: 10.2pt; line-height: 1.52; color: #14171c;
+  text-align: justify; hyphens: auto; -webkit-hyphens: auto;
+  overflow-wrap: break-word; font-kerning: normal;
+  font-variant-numeric: proportional-nums;
+}
+
+/* ---- title block ---- */
+.paper-head { margin: 0 0 14pt 0; }
+.paper-kind { font-size: 7.9pt; letter-spacing: .13em; text-transform: uppercase; color: #6b7280; text-align: center; margin: 0 0 9pt 0; }
+h1.paper-title { font-size: 18.5pt; font-weight: 600; line-height: 1.24; text-align: center; margin: 0 0 5pt 0; hyphens: none; letter-spacing: -0.005em; }
+.paper-subtitle { text-align: center; font-size: 12pt; font-style: italic; color: #3d4450; margin: 0 0 9pt 0; }
+.paper-authors { text-align: center; font-size: 11.4pt; line-height: 1.5; margin: 11pt 0 3pt 0; hyphens: none; }
+.paper-authors .authsep { color: #9aa1ab; }
+.paper-authors sup { font-size: 7pt; vertical-align: super; color: #4b5563; }
+.paper-affils { text-align: center; font-size: 8.7pt; line-height: 1.45; color: #4b5563; margin: 4pt 0 0 0; }
+.paper-affils .affiliation { display: inline-block; margin: 0 6pt; }
+.paper-affils sup { font-size: 6.6pt; }
+.paper-ids { text-align: center; font-size: 8.2pt; color: #5b626b; margin: 7pt 0 0 0; }
+.paper-ids a, .paper-kw a { color: #1f3a68; text-decoration: none; }
+.paper-ids .idsep { margin: 0 4pt; color: #b3b9c2; }
+
+.abstract { margin: 15pt 26pt 9pt 26pt; }
+.abstract-h { font-size: 8.6pt; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; color: #1f3a68; text-align: center; margin: 0 0 5pt 0; border: 0; padding: 0; }
+.abstract p { font-size: 9.5pt; line-height: 1.5; margin: 0; text-align: justify; }
+
+.paper-kw { font-size: 8.4pt; color: #3d4450; margin: 8pt 26pt 2pt 26pt; text-align: left; }
+.kwline { margin: 0 0 2.5pt 0; }
+.kwlabel { font-weight: 700; letter-spacing: .06em; text-transform: uppercase; font-size: 7.4pt; color: #6b7280; margin-right: 1pt; }
+.citeas { font-size: 8.2pt; color: #3d4450; margin: 7pt 26pt 0 26pt; text-align: left; }
+.head-rule { border: none; border-top: .6pt solid #cfd4db; margin: 13pt 0 0 0; }
+
+/* ---- body ---- */
+h1, h2, h3, h4, h5 { font-weight: 600; page-break-after: avoid; break-after: avoid; hyphens: none; }
+h1 { font-size: 13.6pt; margin: 18pt 0 6pt 0; }
+h2 { font-size: 12pt; margin: 15pt 0 5pt 0; }
+h3 { font-size: 10.6pt; margin: 12pt 0 4pt 0; font-style: italic; font-weight: 600; }
+h4 { font-size: 10.2pt; margin: 10pt 0 3pt 0; }
+p { margin: 0 0 6.5pt 0; orphans: 3; widows: 3; }
+p + p { margin-top: 0; }
+ul, ol { margin: 0 0 7pt 0; padding-left: 17pt; }
+li { margin: 0 0 2.5pt 0; }
+li > p { margin: 0 0 3pt 0; }
+blockquote { margin: 9pt 18pt; padding: 2pt 0 2pt 11pt; border-left: 1.6pt solid #c7ccd4; color: #333a44; font-size: 9.6pt; }
+hr { border: none; border-top: .6pt solid #d6d9de; margin: 13pt 0; }
+
+/* ---- tables (booktabs) ---- */
+table { width: 100%; border-collapse: collapse; margin: 10pt 0 11pt 0; font-size: 8.6pt; line-height: 1.36; page-break-inside: avoid; }
+caption { caption-side: top; text-align: left; font-size: 8.4pt; color: #3d4450; padding: 0 0 4pt 0; }
+thead { display: table-header-group; }
+th { font-weight: 700; text-align: left; vertical-align: bottom; border-top: 1.1pt solid #14171c; border-bottom: .55pt solid #14171c; padding: 3.5pt 5pt; }
+td { border: none; padding: 2.6pt 5pt; vertical-align: top; }
+tbody tr:last-child td { border-bottom: 1.1pt solid #14171c; }
+tbody tr + tr td { border-top: .3pt solid #e4e7eb; }
+thead th + th, tbody td + td { padding-left: 6pt; }
+
+/* ---- figures ---- */
+figure { margin: 12pt 0; text-align: center; page-break-inside: avoid; }
+figure img { max-width: 100%; height: auto; }
+figcaption { font-size: 8.5pt; line-height: 1.4; color: #3d4450; margin-top: 5pt; text-align: left; }
+
+/* ---- math ---- */
+.math-display { text-align: center; margin: 11pt 0; page-break-inside: avoid; }
+.math-inline { white-space: nowrap; }
+.katex { font-size: 1.03em; }
+.katex-display { margin: 0 !important; }
+mjx-container[display='true'] { margin: 4pt 0 !important; }
+
+/* ---- code ---- */
+pre { font-family: "JetBrains Mono", Consolas, "Courier New", monospace; font-size: 7.9pt; line-height: 1.42; background: #f7f7f5; border: .4pt solid #e2e4e8; border-left: 1.6pt solid #c7ccd4; padding: 6pt 8pt; margin: 9pt 0; white-space: pre-wrap; word-wrap: break-word; page-break-inside: avoid; }
+code { font-family: "JetBrains Mono", Consolas, "Courier New", monospace; font-size: .9em; }
+pre code { font-size: 1em; }
+
+/* ---- citations + references ---- */
+.cite { color: #1f3a68; text-decoration: none; font-variant-numeric: lining-nums; }
+.cite-missing { color: #8a6d1f; border-bottom: .4pt dotted #8a6d1f; }
+a { color: #1f3a68; text-decoration: none; }
+.refs { margin-top: 16pt; }
+.refs-h { font-size: 12pt; font-weight: 600; margin: 0 0 6pt 0; }
+ol.refs-list { list-style: none; margin: 0; padding: 0; counter-reset: none; }
+li.ref { font-size: 8.7pt; line-height: 1.42; margin: 0 0 4.2pt 0; padding-left: 2.4em; text-indent: -2.4em; text-align: left; page-break-inside: avoid; }
+li.ref .ref-num { color: #14171c; font-variant-numeric: lining-nums; }
+li.ref em { font-style: italic; }
+li.ref .ref-links { color: #5b626b; font-size: .95em; word-break: break-all; }
+li.ref a { border-bottom: .3pt solid #d6d9de; }
+`;
+
 function renderFullHTML(md, opts) {
   const r = renderPaperHTML(md, opts);
-  return '<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><title>' + esc(r.title) + '</title><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.21/dist/katex.min.css"><style>' + PRINT_CSS + "</style></head><body>" + r.front + r.bodyHtml + "</body></html>";
+  if (opts && opts.stats && typeof opts.stats === "object") Object.assign(opts.stats, r.stats);
+  const doi = cleanDoi(r.doi);
+  // the description tag carries plain prose: citation markers and emphasis are markup, not text
+  const description = String(r.abstract || "")
+    .replace(/\[@[^\]]+\]/g, "")
+    .replace(/[*_`]/g, "")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, 380);
+  const metas = [
+    '<meta charset="UTF-8">',
+    '<meta name="viewport" content="width=device-width, initial-scale=1">',
+    '<title>' + esc(r.title) + (r.author ? " \u2014 " + esc(r.author) : "") + "</title>",
+    '<meta name="author" content="' + esc(r.author) + '">',
+    r.abstract ? '<meta name="description" content="' + esc(description) + '">' : "",
+    r.keywords && r.keywords.length ? '<meta name="keywords" content="' + esc(r.keywords.join(", ")) + '">' : "",
+    r.date ? '<meta name="dcterms.created" content="' + esc(r.date) + '">' : "",
+    doi ? '<meta name="citation_doi" content="' + esc(doi) + '">' : "",
+    '<meta name="citation_title" content="' + esc(r.title) + '">',
+    r.authors.map(function (a) { return '<meta name="citation_author" content="' + esc(a) + '">'; }).join(""),
+    r.date ? '<meta name="citation_publication_date" content="' + esc(r.date) + '">' : "",
+    '<meta name="citation_publisher" content="QNFO">'
+  ].filter(Boolean).join("");
+  return '<!DOCTYPE html><html lang="en"><head>' + metas +
+    '<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.21/dist/katex.min.css">' +
+    "<style>" + PRINT_CSS + "</style></head><body>" +
+    r.front + r.bodyHtml + r.refsHtml + "</body></html>";
 }
-__name(renderFullHTML, "renderFullHTML");
+
+// buildPrintTemplates returns the running head and the page footer. Kept here (not in worker.js)
+// so the typeset test can assert them without a browser.
+function buildPrintTemplates(meta) {
+  meta = meta || {};
+  const title = String(meta.title || "").replace(/\s+/g, " ").trim();
+  const shortTitle = title.length > 72 ? title.slice(0, 69).replace(/[\s,;:.]+$/, "") + "\u2026" : title;
+  const authors = String(meta.authors || "").trim();
+  const doi = cleanDoi(meta.doi);
+  const right = authors.length > 52 ? authors.slice(0, 49) + "\u2026" : authors;
+  const head = '<div style="font-family:Georgia,serif;font-size:7.6pt;color:#6b7280;width:100%;padding:0 19mm 3px 19mm;border-bottom:.4px solid #dfe2e7;box-sizing:border-box;display:flex;justify-content:space-between;align-items:baseline;">' +
+    "<span>" + esc(shortTitle) + "</span><span style=\"text-align:right;\">" + esc(right) + "</span></div>";
+  const left = doi ? ("doi:" + doi) : (meta.license ? String(meta.license) : "");
+  const foot = '<div style="font-family:Georgia,serif;font-size:7.6pt;color:#6b7280;width:100%;padding:3px 19mm 0 19mm;box-sizing:border-box;display:flex;justify-content:space-between;align-items:baseline;">' +
+    "<span>" + esc(left) + "</span>" +
+    '<span><span class="pageNumber"></span> / <span class="totalPages"></span></span>' +
+    "<span>" + esc(meta.license && doi ? String(meta.license) : "QNFO") + "</span></div>";
+  return { headerTemplate: head, footerTemplate: foot };
+}
 
 // worker.js
-var VERSION = "1.4.0-cron-heartbeat"; /* 1.4.0 CRON-ONLY-HEARTBEAT-1 (agent_issues 2397, pillar autonomy): scheduled() upserts a qnfo-audit fleet_heartbeat row (worker qnfo-pdf) after the backlog run, ok 1 when it did not throw, so the fleet can tell when the cron stops. 1.3.1 (1.3.0 plus a changelog wording fix; version-bump-guard counts every byte) PDF-BACKLOG-RELAY-1 (2026-10-12, #2410): POST /backlog/tick runs one SCHOLAR-PDF-ALL-1 batch for service-binding callers and the run event names its source (cron or relay); qnfo-fleet-control 0.19.1 relays the tick every 20 minutes while no pdf-backlog event has landed for 25 minutes, because the ten-minute cron written at 12:04Z never fired. 1.2.0 1.2.0 SCHOLAR-PDF-ALL-1 (2026-10-12, agent_issues 2410, pillar reach): a cron every 10 minutes renders the PDF of every published, distributed or external_preprint paper that has none (472 of 567 on 2026-10-12) and re-renders a paper whose body changed after its stored PDF, PDF_BACKLOG_BATCH (6) per tick, newest first; writes papers.pdf_path so papers.qnfo.org emits citation_pdf_url (Google Scholar indexes a PDF only through that tag); a paper whose render failed 3 times in 24 h is skipped for the day; metric scholar_pdf_backlog and cloud_ops_events job qnfo-pdf (AUDIT binding) record each run. */ // 1.1.0 MATH-BROWSER-1 (#1890, re-applied from closed PR #555): internal GET /math-check/<slug>. 1.0.2 UTF8-DEPLOY-1 (2026-10-02): redeployed so the live copy is UTF-8
-function escHtml(s) {
-  return String(s == null ? "" : s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
-}
-__name(escHtml, "escHtml");
+var VERSION = "1.5.0-professional-typesetting-1"; /* 1.5.0 TYPESET-PRO-1 (2026-10-18, owner directive "paper PDF needs better, professional typesetting and formatting that include full bibliographic information and author/affiliation"): the renderer (renderer.js 2.0.0) now typesets a real title block (kind · date · version, title, subtitle, authors with affiliation superscripts, affiliations, ORCID/ISNI/email, DOI, licence, abstract, keywords, subjects, "cite as"), resolves Pandoc citations `[@key]` against the paper's own BibTeX (references.bib beside the markdown in R2) into numbered citations and a hanging-indent reference list, and prints a running head plus page x / y. This build files the metadata the corpus already had and the renderer never received: every D1 row now feeds authors, DOI/identifier, licence, keywords, subjects, version, date, type, journal and pages into the render (PDF-META-PLUMB-1), and stash() stamps each stored PDF with the renderer that produced it so the backlog loop can re-render the older ones (RENDERER-STAMP-1). 1.4.0 CRON-ONLY-HEARTBEAT-1 (agent_issues 2397, pillar autonomy): scheduled() upserts a qnfo-audit fleet_heartbeat row (worker qnfo-pdf) after the backlog run, ok 1 when it did not throw, so the fleet can tell when the cron stops. 1.3.1 (1.3.0 plus a changelog wording fix; version-bump-guard counts every byte) PDF-BACKLOG-RELAY-1 (2026-10-12, #2410): POST /backlog/tick runs one SCHOLAR-PDF-ALL-1 batch for service-binding callers and the run event names its source (cron or relay); qnfo-fleet-control 0.19.1 relays the tick every 20 minutes while no pdf-backlog event has landed for 25 minutes, because the ten-minute cron written at 12:04Z never fired. 1.2.0 SCHOLAR-PDF-ALL-1 (2026-10-12, agent_issues 2410, pillar reach): a cron every 10 minutes renders the PDF of every published, distributed or external_preprint paper that has none and re-renders a paper whose body changed after its stored PDF, PDF_BACKLOG_BATCH (6) per tick, newest first; writes papers.pdf_path so papers.qnfo.org emits citation_pdf_url. */ // 1.1.0 MATH-BROWSER-1 (#1890): internal GET /math-check/<slug>. 1.0.2 UTF8-DEPLOY-1 (2026-10-02)
 function pdfHeaders(slug) {
   return {
     "Content-Type": "application/pdf",
@@ -14995,23 +15786,25 @@ function pdfHeaders(slug) {
   };
 }
 __name(pdfHeaders, "pdfHeaders");
-function buildPdfOptions(shortTitle) {
-  const headerTemplate = '<div style="font-size:8px;color:#777;width:100%;text-align:center;padding:0 1.5cm;border-bottom:0.5px solid #e0e0e0;padding-bottom:3px;white-space:nowrap;overflow:hidden;font-family:Georgia,serif;">' + escHtml(shortTitle) + "</div>";
-  const footerTemplate = '<div style="font-size:8px;color:#777;width:100%;text-align:center;padding:0 1.5cm;font-family:Georgia,serif;"><span class="pageNumber"></span> / <span class="totalPages"></span></div>';
+function buildPdfOptions(meta) {
+  // TYPESET-PRO-1: the running head and the page footer are real templates now (displayHeaderFooter
+  // was false, so the old templates never reached the PDF). Geometry lives in PRINT_CSS @page, so
+  // preferCSSPageSize keeps the CSS margins authoritative; the margin object is the fallback.
+  const tpl = buildPrintTemplates(meta || {});
   return {
     format: "a4",
     printBackground: true,
-    displayHeaderFooter: false,
-    headerTemplate,
-    footerTemplate,
-    margin: { top: "1.7cm", bottom: "1.7cm", left: "1.9cm", right: "1.9cm" },
-    preferCSSPageSize: false,
+    displayHeaderFooter: true,
+    headerTemplate: tpl.headerTemplate,
+    footerTemplate: tpl.footerTemplate,
+    margin: { top: "21mm", bottom: "22mm", left: "19mm", right: "19mm" },
+    preferCSSPageSize: true,
     tagged: true
   };
 }
 __name(buildPdfOptions, "buildPdfOptions");
-async function renderPdf(env, html, shortTitle) {
-  const pdfOptions = buildPdfOptions(shortTitle);
+async function renderPdf(env, html, shortTitle, meta) {
+  const pdfOptions = buildPdfOptions(meta && typeof meta === "object" ? meta : { title: shortTitle });
   const r = await env.BROWSER.quickAction("pdf", { html, pdfOptions });
   return await toBytes(r);
 }
@@ -15031,11 +15824,23 @@ async function toBytes(r) {
   throw new Error("Unexpected Browser Run response type");
 }
 __name(toBytes, "toBytes");
-async function stash(env, slug, bytes) {
+async function stash(env, slug, bytes, meta) {
+  // RENDERER-STAMP-1: the object carries the renderer that produced it, so the backlog loop can tell
+  // an old-stamp PDF from a current one without re-reading the body.
   try {
     if (!env.RELEASES) return null;
     const r2Key = "pdf/" + slug + ".pdf";
-    await env.RELEASES.put(r2Key, bytes, { httpMetadata: { contentType: "application/pdf" } });
+    const customMetadata = {
+      renderer: RENDERER_VERSION,
+      refs: String((meta && meta.references) || 0),
+      citations: String((meta && meta.citations) || 0),
+      unresolved: String(((meta && meta.unresolved) || []).length)
+    };
+    try {
+      await env.RELEASES.put(r2Key, bytes, { httpMetadata: { contentType: "application/pdf" }, customMetadata });
+    } catch (e) {
+      await env.RELEASES.put(r2Key, bytes, { httpMetadata: { contentType: "application/pdf" } });
+    }
     return r2Key;
   } catch (e) {
     return null;
@@ -15053,22 +15858,99 @@ function mathReport(html) {
   return { typeset, errors, raw_dollar: rawDollar, pseudo_residual: pseudo, pass: errors === 0 && rawDollar === 0 && pseudo < 3 };
 }
 __name(mathReport, "mathReport");
-// SCHOLAR-PDF-ALL-1 begin (1.2.0, agent_issues 2410). The block between the begin and end markers is read by pdf-backlog.test.mjs
-// as plain source, so it uses only its own helpers, `env` and the `deps` it is handed (renderFullHTML, renderPdf, stash).
+// SCHOLAR-PDF-ALL-1 begin (1.2.0, agent_issues 2410; 1.5.0 TYPESET-PRO-1). The block between the begin and end markers is read by
+// pdf-backlog.test.mjs as plain source, so it uses only its own helpers, `env` and the `deps` it is handed (renderFullHTML, renderPdf,
+// stash, loadBib). No bundle-level name is referenced from inside: everything the block needs arrives through deps or opts.
 var PDF_PUBLIC_STATUSES = "('published','distributed','external_preprint')";
 var SCHOLAR_PDF_MAX_BYTES = 5 * 1024 * 1024;
 var PDF_FAIL_SKIP_AFTER = 3;
+// PDF-META-PLUMB-1: the bibliographic record the page already holds. "\"references\"" is a SQLite reserved word and must stay quoted
+// (D1-QUOTED-RESERVED-COLS-1).
+var PDF_META_COLUMNS = "slug, title, subtitle, body_md, authors, abstract, doi, zenodo_doi, identifier, license, keywords, version, published, paper_type, journal, pages, categories, domains, r2_path, updated_at, \"references\" AS bib";
 function pdfBacklogBatch(env) {
   var n = parseInt(env && env.PDF_BACKLOG_BATCH, 10);
   return n > 0 && n <= 20 ? n : 6;
 }
-function pdfNeedsRefresh(updatedAt, uploaded) {
+function pdfList(v) {
+  if (v == null) return [];
+  if (Array.isArray(v)) return v;
+  var s = String(v).trim();
+  if (!s) return [];
+  if (s.charAt(0) === "[") { try { var j = JSON.parse(s); if (Array.isArray(j)) return j; } catch (e) { } }
+  return s.split(/[;|]\s*/).filter(function (x) { return x.trim(); });
+}
+// buildPaperMeta maps a living-paper row to the renderer's metadata contract. Nothing is invented: a
+// column that is empty stays empty and the renderer omits the field.
+function buildPaperMeta(row) {
+  row = row || {};
+  var doiRaw = String(row.doi || "").trim();
+  var zen = String(row.zenodo_doi || "").trim();
+  var ident = String(row.identifier || "").trim();
+  var doi = /^10\./.test(doiRaw) ? doiRaw : (/^10\./.test(zen) ? zen : (/^10\./.test(ident) ? ident : ""));
+  return {
+    slug: row.slug || "",
+    title: row.title || "",
+    subtitle: row.subtitle || "",
+    authors: pdfList(row.authors),
+    doi: doi,
+    license: row.license || "",
+    keywords: pdfList(row.keywords),
+    categories: pdfList(row.categories),
+    domains: pdfList(row.domains),
+    version: row.version || "",
+    published: row.published || "",
+    paperType: row.paper_type || "",
+    journal: row.journal || "",
+    pages: row.pages || "",
+    abstract: row.abstract || "",
+    url: row.slug ? "https://papers.qnfo.org/papers/" + row.slug : "",
+    r2Path: row.r2_path || "",
+    bib: row.bib || ""
+  };
+}
+// bibKeys: the paper's reference list ships beside its markdown in qnfo-releases. r2_path is either a
+// directory ("2026/08/<slug>/") or a file ("releases/2026/01/<slug>.md").
+function bibKeys(row) {
+  // accepts both the D1 column name and the renderer-metadata spelling
+  var p = String((row && (row.r2_path || row.r2Path)) || "").replace(/^\/+/, "");
+  var keys = [];
+  if (!p) return keys;
+  if (/\.md$/i.test(p)) {
+    var dir = p.replace(/[^\/]*$/, "");
+    keys.push(dir + "references.bib", dir + String(row.slug || "") + ".bib");
+  } else {
+    var base = p.charAt(p.length - 1) === "/" ? p : p + "/";
+    keys.push(base + "references.bib", base + String(row.slug || "") + ".bib");
+  }
+  return keys;
+}
+async function loadBib(env, meta) {
+  // TYPESET-PRO-1: the bibliography source for one paper — references.bib in R2, else the papers."references" column.
+  if (meta && meta.bib) return String(meta.bib);
+  if (!env || !env.RELEASES || !meta) return "";
+  var keys = bibKeys(meta);
+  for (var i = 0; i < keys.length; i++) {
+    try {
+      var o = await env.RELEASES.get(keys[i]);
+      if (o) {
+        var t = await o.text();
+        if (t && t.length > 10) return t;
+      }
+    } catch (e) { }
+  }
+  return "";
+}
+function pdfNeedsRefresh(updatedAt, uploaded, rendererVersion) {
   // living-paper stores "YYYY-MM-DD HH:MM:SS" (UTC); R2 head gives a Date. A missing object or a body changed after the upload needs a render.
   if (!uploaded) return true;
   var u = new Date(String(updatedAt || "").replace(" ", "T") + (/[zZ]|[+-]\d\d:\d\d$/.test(String(updatedAt || "")) ? "" : "Z")).getTime();
   var up = uploaded instanceof Date ? uploaded.getTime() : new Date(uploaded).getTime();
   if (!isFinite(u) || !isFinite(up)) return false;
-  return u > up + 1e3;
+  if (u > up + 1e3) return true;
+  // RENDERER-STAMP-1 (1.5.0): an object stamped by an older renderer is re-rendered too, so a typesetting
+  // change reaches the back catalogue instead of only newly published papers.
+  if (rendererVersion && uploaded.stamp && uploaded.stamp !== rendererVersion) return true;
+  return false;
 }
 async function recordPdfEvent(env, kind, text, meta, status) {
   if (!env.AUDIT) return false;
@@ -15094,11 +15976,48 @@ async function pdfFailedSlugs(env) {
     return {};
   }
 }
-async function pdfBacklogRows(env, batch, skip) {
-  // (a) papers with no PDF, newest first (the newest pages are the ones Scholar is crawling now); (b) papers changed in the last two days
-  // whose stored PDF predates the change. The total is the metric.
+async function staleStamps(env, limit, rendererVersion) {
+  // RENDERER-STAMP-1: which stored PDFs carry an older renderer stamp. R2 list exposes customMetadata; when it
+  // does not, fall back to head() over a bounded window. Returning [] (never throwing) keeps a metadata change
+  // from stopping the loop.
+  var out = [];
+  if (!env || !env.RELEASES || !env.RELEASES.list || !rendererVersion) return out;
+  var seenMeta = false;
+  var cursor = null;
+  try {
+    for (var page = 0; page < 4 && out.length < limit; page++) {
+      var res = await env.RELEASES.list({ prefix: "pdf/", limit: 1000, cursor: cursor || undefined, include: ["customMetadata"] });
+      var objs = (res && res.objects) || [];
+      for (var i = 0; i < objs.length && out.length < limit; i++) {
+        var o = objs[i];
+        var md = (o && o.customMetadata) || null;
+        if (md && Object.keys(md).length) seenMeta = true;
+        var stamp = md && md.renderer;
+        if (stamp !== rendererVersion) out.push({ key: o.key, slug: String(o.key).replace(/^pdf\//, "").replace(/\.pdf$/, ""), uploaded: o.uploaded });
+      }
+      if (!res || !res.truncated) break;
+      cursor = res.cursor;
+    }
+  } catch (e) {
+    out = [];
+  }
+  if (!out.length || seenMeta) return out;
+  // metadata did not come back through list(): confirm with head() before trusting the verdict
+  var confirmed = [];
+  for (var k = 0; k < out.length && confirmed.length < limit; k++) {
+    try {
+      var h = await env.RELEASES.head(out[k].key);
+      var md2 = (h && h.customMetadata) || {};
+      if (md2.renderer !== rendererVersion) confirmed.push(out[k]);
+    } catch (e2) { }
+  }
+  return confirmed;
+}
+async function pdfBacklogRows(env, batch, skip, opts) {
+  // (a) papers with no PDF, newest first (the newest pages are the ones Scholar is crawling now); (b) stored PDFs that are stale:
+  // older renderer stamp (RENDERER-STAMP-1) or a body changed after the upload. The total is the metric.
   var total = await env.LIVING.prepare("SELECT COUNT(*) AS n FROM papers WHERE status IN " + PDF_PUBLIC_STATUSES + " AND body_md IS NOT NULL AND length(body_md) > 200 AND (pdf_path IS NULL OR pdf_path = '')").first();
-  var rows = await env.LIVING.prepare("SELECT slug, title, body_md, updated_at FROM papers WHERE status IN " + PDF_PUBLIC_STATUSES + " AND body_md IS NOT NULL AND length(body_md) > 200 AND (pdf_path IS NULL OR pdf_path = '') ORDER BY created_at DESC LIMIT ?1").bind(batch + Object.keys(skip).length).all();
+  var rows = await env.LIVING.prepare("SELECT " + PDF_META_COLUMNS + " FROM papers WHERE status IN " + PDF_PUBLIC_STATUSES + " AND body_md IS NOT NULL AND length(body_md) > 200 AND (pdf_path IS NULL OR pdf_path = '') ORDER BY created_at DESC LIMIT ?1").bind(batch + Object.keys(skip).length).all();
   var backlog = [];
   for (var i = 0; i < ((rows && rows.results) || []).length && backlog.length < batch; i++) {
     var p = rows.results[i];
@@ -15106,36 +16025,56 @@ async function pdfBacklogRows(env, batch, skip) {
     backlog.push(p);
   }
   var refresh = [];
+  var rendererVersion = opts && opts.rendererVersion;
   if (backlog.length < batch && env.RELEASES) {
-    var rec = await env.LIVING.prepare("SELECT slug, title, body_md, updated_at, pdf_path FROM papers WHERE status IN " + PDF_PUBLIC_STATUSES + " AND pdf_path IS NOT NULL AND pdf_path <> '' AND updated_at > strftime('%Y-%m-%d %H:%M:%S','now','-2 days') ORDER BY updated_at DESC LIMIT 20").all();
-    for (var j = 0; j < ((rec && rec.results) || []).length && backlog.length + refresh.length < batch; j++) {
-      var q = rec.results[j];
-      if ((skip[q.slug] || 0) >= PDF_FAIL_SKIP_AFTER) continue;
-      var h = null;
-      try { h = await env.RELEASES.head(String(q.pdf_path)); } catch (e) { h = null; }
-      if (pdfNeedsRefresh(q.updated_at, h && h.uploaded)) refresh.push(q);
+    if (rendererVersion) {
+      var stale = await staleStamps(env, Math.max(1, batch - backlog.length), rendererVersion);
+      var slugs = [];
+      for (var s = 0; s < stale.length; s++) if (stale[s].slug && (skip[stale[s].slug] || 0) < PDF_FAIL_SKIP_AFTER) slugs.push(stale[s].slug);
+      if (slugs.length) {
+        var q = "SELECT " + PDF_META_COLUMNS + ", pdf_path FROM papers WHERE status IN " + PDF_PUBLIC_STATUSES + " AND slug IN (" + slugs.map(function (_, n) { return "?" + (n + 1); }).join(",") + ") ORDER BY updated_at DESC";
+        var stmt = env.LIVING.prepare(q);
+        var recS = await stmt.bind.apply(stmt, slugs).all();
+        for (var a = 0; a < ((recS && recS.results) || []).length && backlog.length + refresh.length < batch; a++) refresh.push(recS.results[a]);
+      }
+    } else {
+      var rec = await env.LIVING.prepare("SELECT " + PDF_META_COLUMNS + ", pdf_path FROM papers WHERE status IN " + PDF_PUBLIC_STATUSES + " AND pdf_path IS NOT NULL AND pdf_path <> '' AND updated_at > strftime('%Y-%m-%d %H:%M:%S','now','-2 days') ORDER BY updated_at DESC LIMIT 20").all();
+      for (var j = 0; j < ((rec && rec.results) || []).length && backlog.length + refresh.length < batch; j++) {
+        var qq = rec.results[j];
+        if ((skip[qq.slug] || 0) >= PDF_FAIL_SKIP_AFTER) continue;
+        var h = null;
+        try { h = await env.RELEASES.head(String(qq.pdf_path)); } catch (e) { h = null; }
+        var up = h && h.uploaded ? { date: h.uploaded, stamp: (h.customMetadata && h.customMetadata.renderer) || "" } : null;
+        if (pdfNeedsRefresh(qq.updated_at, up && up.date, rendererVersion)) refresh.push(qq);
+      }
     }
   }
   return { backlog, refresh, backlogTotal: Number(total && total.n || 0) };
 }
 async function renderPdfBacklog(env, deps, opts) {
   var started = Date.now();
-  var out = { ok: true, rendered: 0, failed: 0, refreshed: 0, oversize: 0, backlog_before: null, backlog_after: null, slugs: [], errors: [] };
+  var out = { ok: true, rendered: 0, failed: 0, refreshed: 0, oversize: 0, backlog_before: null, backlog_after: null, slugs: [], errors: [], refs: 0, unresolved: 0 };
   if (!env.LIVING || !env.BROWSER) { out.ok = false; out.errors.push("LIVING or BROWSER binding missing"); return out; }
   var batch = (opts && opts.batch) || pdfBacklogBatch(env);
   var skip = await pdfFailedSlugs(env);
-  var plan = await pdfBacklogRows(env, batch, skip);
+  var plan = await pdfBacklogRows(env, batch, skip, opts || {});
   out.backlog_before = plan.backlogTotal;
   var items = plan.backlog.map(function (p) { return { p, refresh: false }; }).concat(plan.refresh.map(function (p) { return { p, refresh: true }; }));
   for (var i = 0; i < items.length; i++) {
     var p = items[i].p;
     if (Date.now() - started > ((opts && opts.budgetMs) || 6e5)) { out.errors.push("time budget reached before " + p.slug); break; }
     try {
-      var html = deps.renderFullHTML(p.body_md, { title: p.title });
-      var bytes = await deps.renderPdf(env, html, String(p.title || p.slug || "").slice(0, 90));
+      var meta = buildPaperMeta(p);
+      var bib = deps.loadBib ? await deps.loadBib(env, meta) : "";
+      var stats = {};
+      var html = deps.renderFullHTML(p.body_md, { title: p.title, meta: meta, bibtex: bib, stats: stats });
+      // the third argument stays the short title (pdf-backlog.test.mjs keys on it); the metadata rides fourth
+      var bytes = await deps.renderPdf(env, html, String(p.title || p.slug || "").slice(0, 90), meta);
       var size = bytes && bytes.byteLength != null ? bytes.byteLength : (bytes && bytes.length) || 0;
       if (!size) throw new Error("empty PDF");
-      var r2Key = await deps.stash(env, p.slug, bytes);
+      out.refs += (stats && stats.references) || 0;
+      out.unresolved += ((stats && stats.unresolved) || []).length;
+      var r2Key = await deps.stash(env, p.slug, bytes, stats);
       if (!r2Key) throw new Error("R2 put failed");
       await env.LIVING.prepare("UPDATE papers SET pdf_path = ?1 WHERE slug = ?2").bind(r2Key, p.slug).run();
       out.rendered++;
@@ -15158,7 +16097,7 @@ async function renderPdfBacklog(env, deps, opts) {
     } catch (e) {
       out.errors.push("metric write: " + String(e && e.message || e).slice(0, 120));
     }
-    await recordPdfEvent(env, "pdf-backlog", ((opts && opts.source) || "cron") + ": rendered " + out.rendered + " (refreshed " + out.refreshed + "), failed " + out.failed + ", backlog " + out.backlog_before + " -> " + out.backlog_after, { source: (opts && opts.source) || "cron", rendered: out.rendered, refreshed: out.refreshed, failed: out.failed, oversize: out.oversize, backlog_after: out.backlog_after, ms: out.ms, slugs: out.slugs.slice(0, 20) }, out.failed && !out.rendered ? "error" : "ok");
+    await recordPdfEvent(env, "pdf-backlog", ((opts && opts.source) || "cron") + ": rendered " + out.rendered + " (refreshed " + out.refreshed + "), failed " + out.failed + ", backlog " + out.backlog_before + " -> " + out.backlog_after, { source: (opts && opts.source) || "cron", rendered: out.rendered, refreshed: out.refreshed, failed: out.failed, oversize: out.oversize, backlog_after: out.backlog_after, ms: out.ms, refs: out.refs, unresolved: out.unresolved, renderer: (opts && opts.rendererVersion) || "", slugs: out.slugs.slice(0, 20) }, out.failed && !out.rendered ? "error" : "ok");
   }
   return out;
 }
@@ -15176,7 +16115,7 @@ var worker_default = {
     // SCHOLAR-PDF-ALL-1: one cron, one job; the batch size and the 10-minute cadence keep each tick well inside the cron CPU and wall limits.
     var hbOk = 0;
     try {
-      var out = await renderPdfBacklog(env, { renderFullHTML, renderPdf, stash }, {});
+      var out = await renderPdfBacklog(env, { renderFullHTML, renderPdf, stash, loadBib }, { rendererVersion: RENDERER_VERSION });
       console.log(JSON.stringify(Object.assign({ evt: "pdf-backlog", cron: controller && controller.cron, version: VERSION }, out)));
       hbOk = 1;
     } finally {
@@ -15191,8 +16130,9 @@ var worker_default = {
         ok: true,
         worker: "qnfo-pdf",
         version: VERSION,
-        capabilities: ["markdown-to-pdf", "markdown-to-html", "corpus-paper-render", "math-browser-check", "scholar-pdf-backlog", "backlog-tick-relay"],
-        limitations: ["POST /backlog/tick (one SCHOLAR-PDF-ALL-1 batch on demand, PDF-BACKLOG-RELAY-1) answers only service-binding callers; qnfo-fleet-control relays it every 20 minutes while the cron is silent", "POST /pdf and /html (arbitrary Markdown) answer only service-binding callers; public callers get 403", "GET /pdf/<slug> and /html/<slug> render corpus papers only", "each render opens a Cloudflare Browser Rendering session", "GET /math-check/<slug> (MathJax typeset report of the live page) answers only service-binding callers; qnfo-gateway samples 5 papers a day", "the */10 cron renders PDF_BACKLOG_BATCH (6) missing or stale paper PDFs per tick (SCHOLAR-PDF-ALL-1); a paper that failed 3 times in 24 h waits a day"],
+        renderer: RENDERER_VERSION,
+        capabilities: ["markdown-to-pdf", "markdown-to-html", "corpus-paper-render", "math-browser-check", "scholar-pdf-backlog", "backlog-tick-relay", "professional-typesetting", "bibliography-resolution"],
+        limitations: ["POST /backlog/tick (one SCHOLAR-PDF-ALL-1 batch on demand, PDF-BACKLOG-RELAY-1) answers only service-binding callers; qnfo-fleet-control relays it every 20 minutes while the cron is silent", "POST /pdf and /html (arbitrary Markdown) answer only service-binding callers; public callers get 403", "GET /pdf/<slug> and /html/<slug> render corpus papers only", "each render opens a Cloudflare Browser Rendering session", "GET /math-check/<slug> (MathJax typeset report of the live page) answers only service-binding callers; qnfo-gateway samples 5 papers a day", "the */10 cron renders PDF_BACKLOG_BATCH (6) missing or stale paper PDFs per tick (SCHOLAR-PDF-ALL-1); a paper that failed 3 times in 24 h waits a day", "citations resolve only against the paper's own references.bib in R2; a key with no entry prints as the key itself and is never invented"],
         browser: !!env.BROWSER,
         living: !!env.LIVING,
         releases: !!env.RELEASES,
@@ -15202,7 +16142,7 @@ var worker_default = {
     }
     if (path2 === "/" || path2 === "/index.html") {
       return new Response(
-        "<html><body style='font-family:Georgia,serif;padding:2rem'><h1>qnfo-pdf</h1><p>Cloud-native PDF renderer for QNFO papers.</p><ul><li><code>GET /pdf/:slug</code> \u2014 render paper PDF</li><li><code>GET /html/:slug</code> \u2014 render paper HTML</li><li><code>POST /pdf</code> \u2014 render PDF from <code>body_md</code></li><li><code>POST /html</code> \u2014 render HTML from <code>body_md</code></li></ul><p>v" + VERSION + "</p></body></html>",
+        "<html><body style='font-family:Georgia,serif;padding:2rem'><h1>qnfo-pdf</h1><p>Cloud-native PDF typesetter for QNFO papers.</p><ul><li><code>GET /pdf/:slug</code> \u2014 render paper PDF</li><li><code>GET /html/:slug</code> \u2014 render paper HTML</li><li><code>POST /pdf</code> \u2014 render PDF from <code>body_md</code></li><li><code>POST /html</code> \u2014 render HTML from <code>body_md</code></li></ul><p>v" + VERSION + " (renderer " + RENDERER_VERSION + ")</p></body></html>",
         { headers: { "Content-Type": "text/html; charset=utf-8" } }
       );
     }
@@ -15212,9 +16152,9 @@ var worker_default = {
       const slug = decodeURIComponent(m[2]);
       if (!env.LIVING) return Response.json({ ok: false, error: "LIVING binding missing" }, { status: 500 });
       try {
-        const paper = await env.LIVING.prepare("SELECT slug, title, body_md FROM papers WHERE slug = ?").bind(slug).first();
+        const paper = await env.LIVING.prepare("SELECT " + PDF_META_COLUMNS + " FROM papers WHERE slug = ?").bind(slug).first();
         if (!paper || !paper.body_md) return new Response("Paper not found or has no body_md", { status: 404 });
-        return await respond(env, format, slug, paper.title, paper.body_md);
+        return await respond(env, format, paper);
       } catch (e) {
         return Response.json({ ok: false, error: String(e && e.message || e) }, { status: 500 });
       }
@@ -15234,15 +16174,12 @@ var worker_default = {
       }
     }
     if (path2 === "/backlog/tick" && request.method === "POST") {
-      // PDF-BACKLOG-RELAY-1 (1.3.0, 2026-10-12): the second path to the SCHOLAR-PDF-ALL-1 tick. The */10 cron written at 12:04Z
-      // never invoked scheduled() (four ticks, zero scheduled events in the account telemetry while every other */10 worker fired),
-      // so qnfo-fleet-control's 20-minute cron relays the tick through its service binding whenever no pdf-backlog event landed in
-      // the last 25 minutes. Internal only, the PDF-RENDER-INTERNAL-1 test: a service-binding request carries https://qnfo-pdf/..., a
-      // hostname a public request cannot carry. The relay keeps a short budget so the caller's waitUntil finishes inside its tick.
+      // PDF-BACKLOG-RELAY-1 (1.3.0, 2026-10-12): the second path to the SCHOLAR-PDF-ALL-1 tick. Internal only, the
+      // PDF-RENDER-INTERNAL-1 test: a service-binding request carries https://qnfo-pdf/..., a hostname a public request cannot carry.
       if (/\.workers\.dev$|(^|\.)qnfo\.org$/i.test(url.hostname)) return Response.json({ ok: false, error: "forbidden: POST /backlog/tick is internal only (PDF-BACKLOG-RELAY-1)" }, { status: 403 });
       var relayBudget = Math.min(90000, Math.max(10000, Number(url.searchParams.get("budget_ms")) || 60000));
-      var relayOut = await renderPdfBacklog(env, { renderFullHTML, renderPdf, stash }, { source: "relay", budgetMs: relayBudget });
-      return Response.json(Object.assign({ version: VERSION, source: "relay" }, relayOut));
+      var relayOut = await renderPdfBacklog(env, { renderFullHTML, renderPdf, stash, loadBib }, { source: "relay", budgetMs: relayBudget, rendererVersion: RENDERER_VERSION });
+      return Response.json(Object.assign({ version: VERSION, renderer: RENDERER_VERSION, source: "relay" }, relayOut));
     }
     if (path2 === "/pdf" || path2 === "/html") {
       // PDF-RENDER-INTERNAL-1 (2026-10-01, #1735 sweep): rendering an arbitrary posted body opens a Browser Rendering session
@@ -15252,15 +16189,25 @@ var worker_default = {
       const format = path2.slice(1);
       try {
         const bodyText = await request.text();
-        let md = bodyText, title = "paper", slug = "paper";
+        let md = bodyText, row = { slug: "paper", title: "paper" };
         try {
           const j = JSON.parse(bodyText);
           if (j && j.body_md) md = j.body_md;
-          if (j && j.title) title = j.title;
-          if (j && j.slug) slug = j.slug;
+          if (j && j.title) row.title = j.title;
+          if (j && j.slug) row.slug = j.slug;
+          if (j && (j.meta || j.authors || j.doi)) {
+            const src = j.meta || j;
+            row = Object.assign(row, {
+              authors: src.authors, doi: src.doi, zenodo_doi: src.zenodo_doi, identifier: src.identifier,
+              license: src.license, keywords: src.keywords, categories: src.categories, version: src.version,
+              published: src.published, paper_type: src.paper_type, subtitle: src.subtitle, journal: src.journal,
+              pages: src.pages, abstract: src.abstract, r2_path: src.r2_path, bib: j.bibtex || src.bib
+            });
+          }
         } catch (_) {
         }
-        return await respond(env, format, slug, title, md);
+        row.body_md = md;
+        return await respond(env, format, row);
       } catch (e) {
         return Response.json({ ok: false, error: String(e && e.message || e) }, { status: 500 });
       }
@@ -15268,21 +16215,24 @@ var worker_default = {
     return new Response("Not found", { status: 404 });
   }
 };
-async function respond(env, format, slug, title, md) {
-  const html = renderFullHTML(md, { title });
+async function respond(env, format, row) {
+  const meta = buildPaperMeta(row);
+  const bib = await loadBib(env, meta);
+  const stats = {};
+  const html = renderFullHTML(row.body_md, { title: row.title, meta: meta, bibtex: bib, stats: stats });
   if (format === "html") {
     return new Response(html, { headers: { "Content-Type": "text/html; charset=utf-8" } });
   }
-  const shortTitle = String(title || slug || "").slice(0, 90);
-  const bytes = await renderPdf(env, html, shortTitle);
-  const r2Key = await stash(env, slug, bytes);
+  const shortTitle = String(row.title || row.slug || "").slice(0, 90);
+  const bytes = await renderPdf(env, html, shortTitle, meta);
+  const r2Key = await stash(env, row.slug, bytes, stats);
   if (r2Key && env.LIVING) {
     try {
-      await env.LIVING.prepare("UPDATE papers SET pdf_path = ? WHERE slug = ?").bind(r2Key, slug).run();
+      await env.LIVING.prepare("UPDATE papers SET pdf_path = ? WHERE slug = ?").bind(r2Key, row.slug).run();
     } catch (_) {
     }
   }
-  return new Response(bytes, { headers: pdfHeaders(slug) });
+  return new Response(bytes, { headers: pdfHeaders(row.slug) });
 }
 __name(respond, "respond");
 export {
