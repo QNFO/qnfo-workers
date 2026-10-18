@@ -118,16 +118,34 @@ def main():
         # NOT `push --mirror`: mirror prunes refs the remote does not have, and measured 2026-10-18
         # that destroyed the replica's `main` for qnfo/ostrowski-dimensionless-reformulation (whose
         # GitHub default branch is `feature/ostrowski-...`), leaving the repo with an EMPTY HEAD and
-        # every default-branch reader broken. Push every branch and tag, deleting nothing.
-        r = subprocess.run(["git", "-C", clone, "push", "--quiet", art_url, "--all"],
-                           capture_output=True, text=True, timeout=900, env=env)
-        if r.returncode != 0:
-            print(json.dumps({"ok": False, "step": "push", "detail": scrub(r.stderr, gh, cf, tok)[-400:]}))
-            return 3
-        r = subprocess.run(["git", "-C", clone, "push", "--quiet", art_url, "--tags"],
-                           capture_output=True, text=True, timeout=900, env=env)
-        if r.returncode != 0:
-            print(json.dumps({"ok": False, "step": "push_tags", "detail": scrub(r.stderr, gh, cf, tok)[-300:]}))
+        # every default-branch reader broken.
+        # NOT `push --all` in one pack either: measured on qnfo/qnfo-skills, the combined pack is
+        # rejected by the remote with `HTTP 500 ... unexpected disconnect while reading sideband
+        # packet`, while pushing the same ref on its own succeeds in seconds. One ref per push.
+        def refs(pattern):
+            return [x for x in subprocess.run(
+                ["git", "-C", clone, "for-each-ref", "--format=%(refname)", pattern],
+                capture_output=True, text=True, env=env).stdout.splitlines() if x]
+
+        branch_refs = refs("refs/heads")
+        pushed_refs, failed_refs = [], []
+        # Default branch first: it is the one every other tool reads.
+        ordered = [r for r in branch_refs if r in ("refs/heads/" + args.branch, "refs/heads/main")]
+        ordered += [r for r in branch_refs if r not in ordered]
+        for ref in ordered:
+            r = subprocess.run(["git", "-C", clone, "push", "--quiet", art_url,
+                                ref + ":" + ref], capture_output=True, text=True, timeout=900, env=env)
+            (pushed_refs if r.returncode == 0 else failed_refs).append(
+                ref if r.returncode == 0 else ref + " :: " + scrub(r.stderr, gh, cf, tok).strip()[-120:])
+        tag_refs = refs("refs/tags")
+        for i in range(0, len(tag_refs), 50):
+            batch = tag_refs[i:i + 50]
+            r = subprocess.run(["git", "-C", clone, "push", "--quiet", art_url] + batch,
+                               capture_output=True, text=True, timeout=900, env=env)
+            if r.returncode != 0:
+                failed_refs.append("tags_batch_%d :: %s" % (i // 50, scrub(r.stderr, gh, cf, tok).strip()[-120:]))
+        if not pushed_refs:
+            print(json.dumps({"ok": False, "step": "push", "detail": failed_refs[:3]}))
             return 3
 
         # The Artifacts repo's default branch is fixed at create time and cannot be changed by API.
@@ -151,7 +169,9 @@ def main():
         pushed_ref = head
         print(json.dumps({"ok": True, "namespace": args.namespace, "repo": args.repo,
                           "github": args.owner + "/" + gh_repo, "head": pushed_ref,
-                          "pushed": "all-refs", "default_branch_ensured": ensured}))
+                          "pushed": "per-ref", "refs_pushed": len(pushed_refs),
+                          "refs_failed": failed_refs[:5],
+                          "default_branch_ensured": ensured}))
         return 0
     finally:
         if not args.keep:

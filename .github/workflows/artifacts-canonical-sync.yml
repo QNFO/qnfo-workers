@@ -53,7 +53,10 @@ concurrency:
 jobs:
   sync:
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    # Measured 2026-10-18: a full reconcile with repairs of two large repos took 1000s, and the
+    # per-ref push strategy adds one round trip per branch. 25 minutes would have cut a legitimate
+    # repair short; waived repos are now skipped so the normal run is far shorter.
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:

@@ -312,7 +312,10 @@ def main():
 
     in_sync = [r for r in rows if r["in_sync"]]
     drifted = [r for r in rows if not r["in_sync"]]
-    errored = [r for r in rows if r["error"]]
+    # A waived repo is excluded from repair AND from the error count: its reason is recorded, so
+    # counting it as a failure means the meter can never reach zero. Measured 2026-10-18: the
+    # waived 76MB repo alone consumed a 900s clone timeout, 90% of a 1000s run.
+    errored = [r for r in rows if r["error"] and not r.get("waived")]
 
     repaired, repair_attempts = [], 0
     if args.repair:
@@ -324,7 +327,8 @@ def main():
         # mirror push fixes it; a `github_*` error means GitHub itself is unreadable and no amount
         # of pushing helps.
         candidates = [r for r in drifted
-                      if not r["error"] or str(r["error"]).startswith("artifacts_")]
+                      if not r.get("waived")
+                      and (not r["error"] or str(r["error"]).startswith("artifacts_"))]
         candidates.sort(key=lambda r: r["github_committed_at"] or "")
         for r in reversed(candidates):
             if args.limit and repair_attempts >= args.limit:
