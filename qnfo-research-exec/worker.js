@@ -33,7 +33,7 @@ var __name22222 = /* @__PURE__ */ __name2222((target, value) => __defProp22222(t
 // an empty catch. CITE-CONSISTENCY-1 asks the reviewer to compare the draft against cited QNFO work.
 // REVIEW-TRIAGE-CAP-1 is a defect fix: drift demotion at the cycle cap silently turned a blocking finding into a pass, so
 // REVIEW-HARD-GATE-1 withheld nothing there (reviewer findings 2 -> 0 at the cap; an unparseable review advanced to verify).
-var VERSION = "0.18.32-ai-rate-fallback-1"; /* 0.18.32 AI-RATE-FALLBACK-1 (2026-10-18): a 3021/3040/3046 on the primary model after backoff takes one call on another family (glm<->gpt-oss-120b) instead of failing the stage; 3040 no longer misread as a reasoning_effort rejection. */ /* 0.18.31 VERIFY-AUTOCORRECT-1 (2026-10-18): papers fail verify with REAL arithmetic errors (the reconcile/ensemble writer computes a number that does not match its own stated inputs) and the revise loop cannot reliably fix a bare number, so such papers cycle until park. Verify already holds both values — independently computed `computed` and the paper's stated `expected` — so stageVerify now corrects the number deterministically (autoCorrectNumeric) instead of sending it back through a model. Fail-closed: only a stated value found exactly once (verbatim or as an unambiguous bare mantissa in LaTeX/\\times 10^N) is corrected; anything ambiguous is skipped and falls through to revise. Every correction is logged as verify-autocorrect and appended to verification.md. */ /* 0.18.29 VERIFY-CYCLE-CAP-1 (2026-10-17, owner directive "REMEDIATE ALL ISSUES AND FAILURE MODES"): the verify->revise edge reset the review cycle counter to 0 (context={cycles:0,verifyPass:1}) while EVERY other edge preserves it (3716, 3735, 3753) and the review stage is the one that increments it. That single reset made MAX_REVIEW_CYCLES (6) unreachable, so an item that fails verify re-enters revise, resets to cycle 0, and loops until recover_count runs out — measured 2026-10-17: review-unresolved events exist ONLY at cycle 2 (193) and 3 (165), never 4; 96 rerun-route and 278 revise-patch events against ~100 rows; and stage='publish' is EMPTY, which is why 151 complete events produced 0 publications and why the publish quota (24) guarded an empty queue. The edge now preserves the count, so the existing six-cycle cap can terminate an item visibly instead of cycling forever. The gate itself (gates2) is unchanged: this does not let a failing draft through, it lets a draft that cannot pass STOP. */ // 0.18.28-codeagent
+var VERSION = "0.18.33-patch-flex-overflow-1"; /* 0.18.33 PATCH-FLEX-REGEX-OVERFLOW-1 (2026-10-18, agent_issues 2886): findFlexible caps the flexible matcher at 400 tokens and fails closed on any regex error, so a whole-section find text no longer throws "Invalid regular expression: Stack overflow" out of the slot. */ /* 0.18.32 AI-RATE-FALLBACK-1 (2026-10-18): a 3021/3040/3046 on the primary model after backoff takes one call on another family (glm<->gpt-oss-120b) instead of failing the stage; 3040 no longer misread as a reasoning_effort rejection. */ /* 0.18.31 VERIFY-AUTOCORRECT-1 (2026-10-18): papers fail verify with REAL arithmetic errors (the reconcile/ensemble writer computes a number that does not match its own stated inputs) and the revise loop cannot reliably fix a bare number, so such papers cycle until park. Verify already holds both values — independently computed `computed` and the paper's stated `expected` — so stageVerify now corrects the number deterministically (autoCorrectNumeric) instead of sending it back through a model. Fail-closed: only a stated value found exactly once (verbatim or as an unambiguous bare mantissa in LaTeX/\\times 10^N) is corrected; anything ambiguous is skipped and falls through to revise. Every correction is logged as verify-autocorrect and appended to verification.md. */ /* 0.18.29 VERIFY-CYCLE-CAP-1 (2026-10-17, owner directive "REMEDIATE ALL ISSUES AND FAILURE MODES"): the verify->revise edge reset the review cycle counter to 0 (context={cycles:0,verifyPass:1}) while EVERY other edge preserves it (3716, 3735, 3753) and the review stage is the one that increments it. That single reset made MAX_REVIEW_CYCLES (6) unreachable, so an item that fails verify re-enters revise, resets to cycle 0, and loops until recover_count runs out — measured 2026-10-17: review-unresolved events exist ONLY at cycle 2 (193) and 3 (165), never 4; 96 rerun-route and 278 revise-patch events against ~100 rows; and stage='publish' is EMPTY, which is why 151 complete events produced 0 publications and why the publish quota (24) guarded an empty queue. The edge now preserves the count, so the existing six-cycle cap can terminate an item visibly instead of cycling forever. The gate itself (gates2) is unchanged: this does not let a failing draft through, it lets a draft that cannot pass STOP. */ // 0.18.28-codeagent
 // WORKERS-AI-ATTRIBUTION-1 (2026-10-01, #1681): per-worker Workers AI attribution. Returns a shallow env copy whose AI
 // binding records each .run() (calls, errors, ms, tokens, neurons) into qnfo-audit ai_call_counters (purpose 'binding').
 // Neurons = usage tokens x Cloudflare's published per-model rates (neurons per M tokens). Fail-soft; env is never mutated.
@@ -2065,6 +2065,10 @@ function patchFlexTokens(s) {
   });
 }
 __name(patchFlexTokens, "patchFlexTokens");
+// PATCH-FLEX-REGEX-OVERFLOW-1 (0.18.33, agent_issues 2886): a whole-section find text (thousands of tokens) overflows the
+// V8 regex engine ("Invalid regular expression ... Stack overflow", thrown at compile or exec); the throw escaped
+// applyRevisePatch and killed the slot 3x/24h. Over 400 tokens the flexible match is skipped, and any regex error
+// fails closed (no edit), the same outcome as an ambiguous match.
 function findFlexible(text, needle) {
   const direct = text.indexOf(needle);
   if (direct >= 0) {
@@ -2072,14 +2076,18 @@ function findFlexible(text, needle) {
     return { i: direct, len: needle.length, flex: 0 };
   }
   const tokens = patchFlexTokens(needle);
-  if (tokens.length < 3) return null;
-  const re = new RegExp(tokens.join("\\s+"), "g");
+  if (tokens.length < 3 || tokens.length > 400) return null; // FLEX_MAX_TOKENS = 400 (inline: tests extract this function alone)
   const hits = [];
-  let m;
-  while ((m = re.exec(text)) !== null) {
-    hits.push({ i: m.index, len: m[0].length, flex: 1 });
-    if (hits.length > 1) return null;
-    re.lastIndex = m.index + 1;
+  try {
+    const re = new RegExp(tokens.join("\\s+"), "g");
+    let m;
+    while ((m = re.exec(text)) !== null) {
+      hits.push({ i: m.index, len: m[0].length, flex: 1 });
+      if (hits.length > 1) return null;
+      re.lastIndex = m.index + 1;
+    }
+  } catch (eRe) {
+    return null;
   }
   return hits[0] || null;
 }
