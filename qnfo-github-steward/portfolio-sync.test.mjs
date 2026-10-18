@@ -66,7 +66,7 @@ globalThis.fetch = async (url, init) => {
   if (m === "GET" && u.pathname === R + "/labels") return reply(200, page > 1 ? [] : gLabels);
   if (m === "POST" && u.pathname === R + "/labels") { gLabels.push({ name: body.name }); return reply(201, body); }
   if (m === "GET" && u.pathname === R + "/milestones") { if (failMs) return reply(502, {}); return reply(200, page > 1 ? [] : gMs); }
-  if (m === "POST" && u.pathname === R + "/milestones") { const x = { number: msNext++, title: body.title, state: "open" }; gMs.push(x); return reply(201, x); }
+  if (m === "POST" && u.pathname === R + "/milestones") { const x = { number: msNext++, title: body.title, description: body.description, state: "open" }; gMs.push(x); return reply(201, x); }
   let mm = /^\/repos\/QNFO\/qnfo-workers\/milestones\/(\d+)$/.exec(u.pathname);
   if (mm && m === "PATCH") { const x = gMs.find((y) => y.number === Number(mm[1])); Object.assign(x, body); return reply(200, x); }
   if (m === "GET" && u.pathname === R + "/issues") {
@@ -115,6 +115,7 @@ assert.equal(rmIssues.length, 2, "open roadmap items (RM-X + metric objective) m
 assert.ok(rmIssues.find((x) => /RM-X/.test(x.title)).milestone, "roadmap item lands in its worker's project milestone");
 assert.ok(gMs.find((m) => /^QNFO\.RSCH\.APH/.test(m.title)) === undefined, "archived project gets no milestone");
 
+assert.ok(!/does personal-api/.test(gMs.find((m) => /^W\.personal-api/.test(m.title)).description), "personal milestones carry no description");
 // Idempotent.
 calls = [];
 await tick();

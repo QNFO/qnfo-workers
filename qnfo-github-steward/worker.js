@@ -841,7 +841,7 @@ async function psMilestones(env, out, projects) {
     if (p.status === "active") {
       if (!m) {
         if (done >= PS_MS_PER_TICK) continue;
-        var c = await gh(env, "POST", PS_REPO + "/milestones", { title: psMsTitle(p), description: (p.program_code + " | " + tsRedact(p.description || "")).slice(0, 700) });
+        var c = await gh(env, "POST", PS_REPO + "/milestones", { title: psMsTitle(p), description: p.program_code === "QNFO.PERSONAL" ? "QNFO.PERSONAL | details kept in qnfo-audit" : (p.program_code + " | " + tsRedact(p.description || "")).slice(0, 700) });
         if (c.status !== 201 || !c.body) { out.errors.push({ scope: "portfolio-milestone " + p.project_code, status: c.status, why: String(c.text).slice(0, 100) }); if (c.status === 403 || c.status === 429) break; continue; }
         m = c.body; byCode[p.project_code] = m; out.milestones_created++; done++;
       } else if (m.state !== "open") {
