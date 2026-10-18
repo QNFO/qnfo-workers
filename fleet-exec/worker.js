@@ -4,7 +4,7 @@ var execMod = (function(){
 // v0.3.0: every /run completion emits a kind=event envelope validated BEFORE canonical-store write
 // (blocking reject on invalid, QNFO.CODEPARSE.SCOPE.v1 server_enforcement); /run responses are wrapped
 // in the universal envelope (kind=message). Mini-validator mirrors schemas/envelope.json + event.json.
-const VERSION = "fleet-executor/0.3.3"; // TEMPO-5M-1 (2026-10-18): the owner set the heartbeat/tick ceiling at 5 minutes; the trigger moved */10 -> */5, dispatch logic unchanged (each fleet_crons row still fires on its own cron_expr, so this changes latency, not job frequency).
+const VERSION = "fleet-executor/0.3.3";
 
 function json(obj, status) {
   return new Response(JSON.stringify(obj), { status: status || 200, headers: { "content-type": "application/json" } });
