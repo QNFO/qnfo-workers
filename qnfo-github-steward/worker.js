@@ -22,7 +22,7 @@
  *   * archived repositories are read-only and are skipped, not reported as drift;
  *   * GET /report and GET /health are public reads; POST /tick needs STEWARD_KEY.
  */
-var VERSION = "0.4.2-tracker-sync-1"; // 0.4.2 TRACKER-SYNC-1: the recent-PR window is a deliberate partial read (every post-backfill tick refused it); 0.4.1 org projects declared on (the portfolio board needs them); 0.4.0 PORTFOLIO-SYNC-1: projects derived from the census, metric breaches as roadmap objectives, programs/projects/issues/roadmap mirrored to GitHub labels, milestones, issues and a Projects board every 10 minutes; 0.3.1 a task is matched to its PR by number too (pr-without-task false positive on PR 381); 0.3.0 TRACKER-SYNC-1: agent_issues <-> GitHub issues and code_tasks <-> PRs every 10 minutes (0.2.2 ISSUE-SYNC-1)
+var VERSION = "0.4.3-tracker-sync-1"; // 0.4.3 TRACKER-SYNC-1: stale pr-without-task rows are cleared every tick; a merge fix reads merged_by from the single PR; 0.4.2 TRACKER-SYNC-1: the recent-PR window is a deliberate partial read (every post-backfill tick refused it); 0.4.1 org projects declared on (the portfolio board needs them); 0.4.0 PORTFOLIO-SYNC-1: projects derived from the census, metric breaches as roadmap objectives, programs/projects/issues/roadmap mirrored to GitHub labels, milestones, issues and a Projects board every 10 minutes; 0.3.1 a task is matched to its PR by number too (pr-without-task false positive on PR 381); 0.3.0 TRACKER-SYNC-1: agent_issues <-> GitHub issues and code_tasks <-> PRs every 10 minutes (0.2.2 ISSUE-SYNC-1)
 
 var ORG = "QNFO";
 var USER = "rwnq8";
@@ -590,6 +590,8 @@ async function tsCodeTasks(env, out) {
     var prState = !p ? "never-opened" : (p.merged_at ? "merged" : p.state);
     var drift = null, status = t.status;
     if (prState === "merged" && t.status !== "merged") {
+      /* The list endpoint carries no merged_by; read the one PR so the ledger names who merged it. */
+      if (!p.merged_by) { var one = await gh(env, "GET", TS_REPO + "/pulls/" + p.number); if (one.status >= 200 && one.status < 300 && one.body) p = one.body; }
       var note = "TRACKER-SYNC-1: PR #" + p.number + " merged on GitHub at " + p.merged_at + "; code_tasks said '" + t.status + "'";
       var u = await env.AUDIT.prepare(
         "UPDATE code_tasks SET status = 'merged', merged_at = ?, merged_sha = COALESCE(merged_sha, ?), merged_by = COALESCE(merged_by, ?), merge_note = ? || CASE WHEN merge_note IS NULL THEN '' ELSE ' | was: ' || substr(merge_note, 1, 400) END, updated_at = ? WHERE id = ? AND status <> 'merged'"
@@ -620,6 +622,11 @@ async function tsCodeTasks(env, out) {
       "INSERT INTO code_task_pr_links (task_id, pr_number, pr_state, merged_at, head_sha, task_status, drift, synced_at) VALUES (?, ?, ?, ?, ?, NULL, ?, ?) ON CONFLICT(task_id) DO UPDATE SET pr_state = excluded.pr_state, merged_at = excluded.merged_at, drift = excluded.drift, synced_at = excluded.synced_at"
     ).bind("pr:" + p.number, p.number, p.merged_at ? "merged" : p.state, p.merged_at || null, p.head ? p.head.sha : null, recent ? "pr-without-task" : null, now));
   });
+  /* A pr-without-task row is only revisited while its PR is in the recent window, so clear what is no longer true: a PR a
+   * task now points at, or one merged more than 30 days ago. Without this a fixed false positive stays drift for good. */
+  stmts.push(env.AUDIT.prepare(
+    "UPDATE code_task_pr_links SET drift = NULL, synced_at = ? WHERE task_id LIKE 'pr:%' AND drift IS NOT NULL AND (pr_number IN (SELECT pr_number FROM code_task_pr_links WHERE task_id NOT LIKE 'pr:%' AND pr_number IS NOT NULL) OR (merged_at IS NOT NULL AND merged_at < ?))"
+  ).bind(now, new Date(cutoff).toISOString()));
   for (var s = 0; s < stmts.length; s += 50) await env.AUDIT.batch(stmts.slice(s, s + 50));
   if (!backfilled) await tsState(env, "pr_backfill_done", now);
 }
