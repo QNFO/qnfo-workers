@@ -550,6 +550,30 @@ async function health(env) {
   });
 }
 __name(health, "health");
+/* SUBSCRIBE-UTM-METRIC-1 (owner directive 2026-10-18, pillar reach): aggregate confirmed
+ * subscribers by utm_campaign/utm_source into reach_signals so reach metrics can attribute
+ * subscriber growth to the tagged link that drove it (closes UTM-CLICK-LEDGER-1 -> subscriber).
+ * Idempotent: the previous snapshot is deleted then re-inserted. */
+async function writeSubscriberAttribution(env) {
+  try {
+    if (!env.AUDIT) return;
+    await env.AUDIT.prepare("DELETE FROM reach_signals WHERE source = 'subscriber-attribution'").run();
+    const rows = await env.AUDIT.prepare(
+      "SELECT COALESCE(utm_campaign,'') AS camp, COALESCE(utm_source,'') AS src, COUNT(*) AS n FROM subscribers WHERE (confirmed_at IS NOT NULL OR status='subscribed') AND (utm_campaign != '' OR utm_source != '') GROUP BY utm_campaign, utm_source"
+    ).all();
+    const list = rows.results || [];
+    for (let i = 0; i < list.length; i++) {
+      const r = list[i];
+      const id = String(r.camp || r.src || "untagged").slice(0, 80);
+      await env.AUDIT.prepare(
+        "INSERT INTO reach_signals (date, source, channel, entity_type, entity_id, metric, value, quality, collected_at) VALUES (date('now'), 'subscriber-attribution', 'email', 'campaign', ?1, 'subscribers_confirmed_attributed', ?2, 'derived', datetime('now'))"
+      ).bind(id, Number(r.n) || 0).run();
+    }
+  } catch (e) {
+    console.error(JSON.stringify({ worker: "qnfo-subscribers", where: "writeSubscriberAttribution", error: String(e && e.message || e).slice(0, 200) }));
+  }
+}
+
 var worker_default = {
   async fetch(request, env, ctx) {
     const u = new URL(request.url);
@@ -582,31 +606,7 @@ var worker_default = {
     }
     return json({ error: "not found", path: p }, 404);
   },
-  /* SUBSCRIBE-UTM-METRIC-1 (owner directive 2026-10-18, pillar reach): aggregate confirmed
- * subscribers by utm_campaign/utm_source into reach_signals so reach metrics can attribute
- * subscriber growth to the tagged link that drove it (closes UTM-CLICK-LEDGER-1 -> subscriber).
- * Idempotent: the previous snapshot is deleted then re-inserted. */
-async function writeSubscriberAttribution(env) {
-  try {
-    if (!env.AUDIT) return;
-    await env.AUDIT.prepare("DELETE FROM reach_signals WHERE source = 'subscriber-attribution'").run();
-    const rows = await env.AUDIT.prepare(
-      "SELECT COALESCE(utm_campaign,'') AS camp, COALESCE(utm_source,'') AS src, COUNT(*) AS n FROM subscribers WHERE (confirmed_at IS NOT NULL OR status='subscribed') AND (utm_campaign != '' OR utm_source != '') GROUP BY utm_campaign, utm_source"
-    ).all();
-    const list = rows.results || [];
-    for (let i = 0; i < list.length; i++) {
-      const r = list[i];
-      const id = String(r.camp || r.src || "untagged").slice(0, 80);
-      await env.AUDIT.prepare(
-        "INSERT INTO reach_signals (date, source, channel, entity_type, entity_id, metric, value, quality, collected_at) VALUES (date('now'), 'subscriber-attribution', 'email', 'campaign', ?1, 'subscribers_confirmed_attributed', ?2, 'derived', datetime('now'))"
-      ).bind(id, Number(r.n) || 0).run();
-    }
-  } catch (e) {
-    console.error(JSON.stringify({ worker: "qnfo-subscribers", where: "writeSubscriberAttribution", error: String(e && e.message || e).slice(0, 200) }));
-  }
-}
-
-async scheduled(event, env, ctx) {
+  async scheduled(event, env, ctx) {
     // CRON-ONLY-HEARTBEAT-1 (agent_issues 2397): the heartbeat row is written after the digest run, so it means "the scheduled run finished".
     ctx.waitUntil((async () => {
       let ok = 1;
