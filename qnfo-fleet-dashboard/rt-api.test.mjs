@@ -7,6 +7,8 @@
 // conditional; (G) /health advertises the new capabilities.
 // Run: node qnfo-fleet-dashboard/rt-api.test.mjs   -> prints "N passed, 0 failed"
 import { DatabaseSync } from "node:sqlite";
+import { readFileSync } from "node:fs";
+import vm from "node:vm";
 import { dirname, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
@@ -260,6 +262,25 @@ const etagOf = (r) => r.headers.get("ETag");
     const row = rows.find((e) => e.path === p);
     ok(!!row && /ETag/.test(row.cache), "I6 the index promises ETag for " + p);
   }
+}
+
+// J. the clock list is the contract: a clock field never moves the revision, a content field always does.
+// This is the assertion that would have caught /api/kpi: its body carries as_of and activity_as_of, which are built from
+// Date.now() on every build, so two isolates (or one cache expiry) could never agree on a revision. The route suite could
+// not see it, because kpiData hands back an isolate-cached object and both calls in one process saw the same as_of.
+{
+  const src2 = readFileSync(join(here, "worker.js"), "utf8");
+  const a2 = src2.indexOf("function rtHash(");
+  const b2 = src2.indexOf("function areasApiRow");
+  ok(a2 > 0 && b2 > a2, "J1 the digest block is sliceable");
+  const cx2 = vm.createContext({ console, JSON, Math, Object, String, Array, Number, Response, Headers, __name: (f) => f, __name2: (f) => f, __name22: (f) => f, __name222: (f) => f, __name2222: (f) => f });
+  vm.runInContext(src2.slice(a2, b2) + "\nglobalThis.rtDigest = rtDigest; globalThis.RT_CLOCK = RT_CLOCK;", cx2);
+  const d = cx2.rtDigest;
+  ok(d({ x: 1, as_of: "2026-01-01T00:00:00Z" }) === d({ x: 1, as_of: "2026-10-18T11:00:00Z" }), "J2 as_of does not move the revision");
+  ok(d({ x: 1, activity_as_of: "a" }) === d({ x: 1, activity_as_of: "b" }), "J3 activity_as_of does not move the revision");
+  ok(d({ x: 1, generated_at: "a", age: 1 }) === d({ x: 1, generated_at: "b", age: 99 }), "J4 the clock fields do not move the revision");
+  ok(d({ x: 1 }) !== d({ x: 2 }), "J5 a content field does move the revision");
+  ok(d({ items: [{ key: "a", age: 1 }] }) === d({ items: [{ key: "a", age: 500 }] }), "J6 a clock field nested in an array is ignored too");
 }
 
 console.log(pass + " passed, " + fail + " failed");
