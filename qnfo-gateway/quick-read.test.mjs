@@ -94,7 +94,7 @@ const Q = "What did the controller measure about the energy cost of one solution
   ok(anchors.every((a) => ids.indexOf(a) >= 0), "every evidence anchor is an id the paper page publishes", anchors);
   ok(r.j.answers[0].section === ids[0] && r.j.considerations[0].section === "limitations", "evidence is filed under the section it was taken from", anchors);
   ok(/1.7 joules per solution/.test(r.j.answers[0].quote) && /42 trials/.test(r.j.answers[0].quote), "the quote shown is the paper's sentence", r.j.answers[0]);
-  ok(lastModel === "@cf/moonshotai/kimi-k2.6" && /PASSAGES:/.test(lastUser) && /word for word/.test(lastUser === lastUser ? (src.slice(src.indexOf("function qrSystemPrompt"), src.indexOf("function qrParse"))) : ""), "the model is the ask-grade one and the prompt demands verbatim evidence");
+  ok(lastModel === "@cf/openai/gpt-oss-120b" && /PASSAGES:/.test(lastUser) && /reasoning_effort: "low"/.test(src.slice(src.indexOf("async function qrModel"), src.indexOf("async function qrBuild"))) && /word for word/.test(src.slice(src.indexOf("function qrSystemPrompt"), src.indexOf("function qrParse"))), "QUICK-READ-3: the measured model is used with its working reasoning effort, and the prompt demands verbatim evidence");
 }
 
 // ---- 2. the invariant: unquotable statements are dropped and counted, never shown
