@@ -1,4 +1,4 @@
-var VERSION="3.18.7-model-floor-1";; /* 3.18.5 WORKERS-BP-LOGGING-qnfo-gateway-1 (2026-10-14, agent_issues 2533, child of 2342, pillar autonomy): the 6 server-side swallowed catches log (2 browser-script hits marked standards-ok or allowlisted) as a structured console.error (worker, where, error); control flow unchanged. */ /* 3.18.4 FLEET-HARDENING-2 (2026-10-13, agent_issues 2397, pillar autonomy): the daily cron ends with a qnfo-audit fleet_heartbeat upsert through a new AUDIT binding (ok=0 when the IndexNow step threw, which was swallowed before and is now logged). */ /* 3.18.3 HUB-CACHE-VERSION-1 (2026-10-13, pillar reach, failure mode zaraz-autoinject-worker-html): the qnfo.org hub copy in each colo's cache now carries the VERSION that built it, and a copy built by another version is rebuilt while the request waits up to 2.5 s instead of being served stale; the runner probe of 07:39 UTC read a pre-3.16.1 copy without /cdn-cgi/zaraz/i.js while every fresh render carried it. */ /* 3.18.2 PAGE-POLICY-1 (2026-10-13, pillar reach, agent_issues 2343 WEB-PERF-EDGE-1): every HTML response carries Referrer-Policy strict-origin-when-cross-origin (no-referrer when the query carries a token) and Permissions-Policy camera=(), microphone=(), geolocation=() from the worker (qnfo.org had neither; the subdomains had them only from a zone rule), and an HTML response without Cache-Control gets public, max-age=300, s-maxage=3600, stale-while-revalidate=86400 when it is a public GET 200, no-store otherwise; handlers that set their own are unchanged, JSON untouched. 3.18.1 RENDER-DEFECTS-2300 (2026-10-13, pillar reach, agent_issues 2300 2158 2357): PANDOC-FENCE-GLUE-1 reads a code fence glued to prose or to its last code line as a fence (ultrametric-intelligence printed its Python as prose and typeset its identifiers); MATH-RESIDUE-5 typesets a formula glued to a name by a product sign; RAIL-MATH-1 gives /api/paper-context title_tex and excerpt_tex (formulas kept as TeX, plain-text math typeset, currency escaped) and the Related and Versions panels paint them, since every residue the browser sample counted on chapter-1 and log20240505010101strangeloopbook on 2026-10-12 was panel text; a formula ending in an escaped brace is lifted as math; MathJax knows the Sha macro. 3.18.0 ACTIVITYPUB-KEY-1 (2026-10-12, pillar reach, #2249 #2413): the actor publishes publicKeyPem when AP_PUBLIC_KEY is set (cf-ops gen-activitypub-key); merged with main 3.17.1 (REACH-RENDER-1). */
+var VERSION="3.18.8-subscribe-utm-1";; /* 3.18.5 WORKERS-BP-LOGGING-qnfo-gateway-1 (2026-10-14, agent_issues 2533, child of 2342, pillar autonomy): the 6 server-side swallowed catches log (2 browser-script hits marked standards-ok or allowlisted) as a structured console.error (worker, where, error); control flow unchanged. */ /* 3.18.4 FLEET-HARDENING-2 (2026-10-13, agent_issues 2397, pillar autonomy): the daily cron ends with a qnfo-audit fleet_heartbeat upsert through a new AUDIT binding (ok=0 when the IndexNow step threw, which was swallowed before and is now logged). */ /* 3.18.3 HUB-CACHE-VERSION-1 (2026-10-13, pillar reach, failure mode zaraz-autoinject-worker-html): the qnfo.org hub copy in each colo's cache now carries the VERSION that built it, and a copy built by another version is rebuilt while the request waits up to 2.5 s instead of being served stale; the runner probe of 07:39 UTC read a pre-3.16.1 copy without /cdn-cgi/zaraz/i.js while every fresh render carried it. */ /* 3.18.2 PAGE-POLICY-1 (2026-10-13, pillar reach, agent_issues 2343 WEB-PERF-EDGE-1): every HTML response carries Referrer-Policy strict-origin-when-cross-origin (no-referrer when the query carries a token) and Permissions-Policy camera=(), microphone=(), geolocation=() from the worker (qnfo.org had neither; the subdomains had them only from a zone rule), and an HTML response without Cache-Control gets public, max-age=300, s-maxage=3600, stale-while-revalidate=86400 when it is a public GET 200, no-store otherwise; handlers that set their own are unchanged, JSON untouched. 3.18.1 RENDER-DEFECTS-2300 (2026-10-13, pillar reach, agent_issues 2300 2158 2357): PANDOC-FENCE-GLUE-1 reads a code fence glued to prose or to its last code line as a fence (ultrametric-intelligence printed its Python as prose and typeset its identifiers); MATH-RESIDUE-5 typesets a formula glued to a name by a product sign; RAIL-MATH-1 gives /api/paper-context title_tex and excerpt_tex (formulas kept as TeX, plain-text math typeset, currency escaped) and the Related and Versions panels paint them, since every residue the browser sample counted on chapter-1 and log20240505010101strangeloopbook on 2026-10-12 was panel text; a formula ending in an escaped brace is lifted as math; MathJax knows the Sha macro. 3.18.0 ACTIVITYPUB-KEY-1 (2026-10-12, pillar reach, #2249 #2413): the actor publishes publicKeyPem when AP_PUBLIC_KEY is set (cf-ops gen-activitypub-key); merged with main 3.17.1 (REACH-RENDER-1). */
 // UTM-CLICK-LEDGER-1 (3.10.0, 2026-10-06, transformation lever T7.9, pillar reach): a GET for an HTML page that carries
 // utm_source is counted into qnfo-graph utm_clicks (day, host, path, source, medium, campaign, bot/human, country; no cookie,
 // no IP), so a post or digest joins to the visits it caused; qnfo-fleet-dashboard reads it into reach_signals source utm.
@@ -3470,6 +3470,20 @@ function subscribeSource(request, payload) {
   }
   return (form + (page ? "|" + page : "") + (camp ? "|" + camp : "")).slice(0, 80);
 }
+/* SUBSCRIBE-UTM-ATTRIBUTION-1 (companion to qnfo-subscribers 1.3.2): forward the referrer's
+ * utm_source and utm_campaign as separate structured fields, so the subscribers row can record
+ * which tagged link drove the sign-up (the combined source string keeps its old form). */
+function referrerUtm(request) {
+  try {
+    const ref = new URL(request.headers.get("Referer") || "");
+    return {
+      utm_source: String(ref.searchParams.get("utm_source") || "").replace(/[^A-Za-z0-9._-]/g, "").slice(0, 40),
+      utm_campaign: String(ref.searchParams.get("utm_campaign") || "").replace(/[^A-Za-z0-9._-]/g, "").slice(0, 40)
+    };
+  } catch (e) {
+    return { utm_source: "", utm_campaign: "" };
+  }
+}
 async function handleSubscribeProxy(request, env) {
   let payload = {};
   try {
@@ -3486,6 +3500,7 @@ async function handleSubscribeProxy(request, env) {
     ctrl.abort();
   }, 9e3);
   try {
+    const rU = referrerUtm(request);
     const r = await fetch(SUBSCRIBERS_ENDPOINT + "/subscribe", {
       method: "POST",
       headers: {
@@ -3494,7 +3509,7 @@ async function handleSubscribeProxy(request, env) {
         "X-Forwarded-For": request.headers.get("CF-Connecting-IP") || "",
         "X-Client-UA": String(request.headers.get("User-Agent") || "").slice(0, 300)
       },
-      body: JSON.stringify({ email, hp: String(payload && payload.hp || ""), source: subscribeSource(request, payload) }),
+      body: JSON.stringify({ email, hp: String(payload && payload.hp || ""), source: subscribeSource(request, payload), utm_source: rU.utm_source, utm_campaign: rU.utm_campaign }),
       signal: ctrl.signal
     });
     const data = await r.json().catch(function() {
