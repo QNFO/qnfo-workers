@@ -1,8 +1,21 @@
 {
-  "audited_at": "2026-10-18 11:56:19",
+  "audited_at": "2026-10-18 12:25:55",
   "d1_write_failures": [],
-  "d1_writes_ok": 119,
+  "d1_writes_ok": 120,
   "guard": {
+    "_drift_confirm": {
+      "first_pass": [
+        "personal-companion",
+        "qnfo-artifacts",
+        "qnfo-evolve",
+        "qnfo-gateway"
+      ],
+      "refreshed": true,
+      "second_pass": [
+        "personal-companion",
+        "qnfo-artifacts"
+      ]
+    },
     "_guard_rc": 0,
     "ahead": [],
     "cf_script_list": true,
@@ -16,6 +29,12 @@
         "live": "1.30.1-single-module",
         "repo": "1.30.0-checkin-anchored",
         "worker": "personal-companion"
+      },
+      {
+        "dir": "qnfo-artifacts",
+        "live": "1.2.0",
+        "repo": "1.0.0",
+        "worker": "qnfo-artifacts"
       }
     ],
     "live_err": [],
@@ -109,7 +128,6 @@
       "qnfo-analytics",
       "qnfo-archive",
       "qnfo-artifact-agent",
-      "qnfo-artifacts",
       "qnfo-arxiv-radar",
       "qnfo-auditor",
       "qnfo-autonomy-scorer",
@@ -158,7 +176,7 @@
       "skills-discovery",
       "vault-indexer"
     ],
-    "not_deployed_notdrift": 76,
+    "not_deployed_notdrift": 75,
     "not_deployed_workers": [
       {
         "dir": "agent-orchestrator",
@@ -299,11 +317,6 @@
         "dir": "qnfo-artifact-agent",
         "marker": "RETIRED",
         "worker": "qnfo-artifact-agent"
-      },
-      {
-        "dir": "qnfo-artifacts",
-        "marker": "RETIRED",
-        "worker": "qnfo-artifacts"
       },
       {
         "dir": "qnfo-arxiv-radar",
@@ -541,10 +554,16 @@
         "worker": "vault-indexer"
       }
     ],
-    "retired_present": [],
-    "retired_present_count": 0,
+    "retired_present": [
+      {
+        "dir": "qnfo-artifacts",
+        "marker": "RETIRED",
+        "worker": "qnfo-artifacts"
+      }
+    ],
+    "retired_present_count": 1,
     "scope": "all",
-    "sync": 29,
+    "sync": 30,
     "sync_workers": [
       {
         "dir": "idea-hub",
@@ -583,7 +602,7 @@
       },
       {
         "dir": "qnfo-code-orchestrator",
-        "version": "0.18.11-ladder-dead-rung-1",
+        "version": "0.18.12-merge-scope-scripts",
         "worker": "qnfo-code-orchestrator"
       },
       {
@@ -598,27 +617,27 @@
       },
       {
         "dir": "qnfo-email",
-        "version": "2.9.4-codeagent",
+        "version": "2.9.5-splice-repair",
         "worker": "qnfo-email"
       },
       {
         "dir": "qnfo-evolve",
-        "version": "0.2.2-evolve",
+        "version": "0.2.3-evolve-compat-1",
         "worker": "qnfo-evolve"
       },
       {
         "dir": "qnfo-fleet-control",
-        "version": "0.33.10-cf-obs-sweep-1",
+        "version": "0.33.12-carried-by-twin-1",
         "worker": "qnfo-fleet-control"
       },
       {
         "dir": "qnfo-fleet-dashboard",
-        "version": "1.43.0-compact-reads",
+        "version": "1.43.2-all-reads",
         "worker": "qnfo-fleet-dashboard"
       },
       {
         "dir": "qnfo-gateway",
-        "version": "3.19.0-audience-categories-1",
+        "version": "3.22.0-filing-2",
         "worker": "qnfo-gateway"
       },
       {
@@ -650,6 +669,11 @@
         "dir": "qnfo-memory-mcp",
         "version": "2.0.6-doi-scrub",
         "worker": "qnfo-memory-mcp"
+      },
+      {
+        "dir": "qnfo-model-eval",
+        "version": "1.4.0-canary-glossary",
+        "worker": "qnfo-model-eval"
       },
       {
         "dir": "qnfo-observability",
@@ -1066,12 +1090,11 @@
       "worker": "qnfo-artifact-agent"
     },
     "qnfo-artifacts": {
-      "before": null,
-      "http": 404,
-      "live": null,
+      "before": "1.0.0",
+      "http": 200,
+      "live": "1.2.0",
       "match": 0,
-      "note": "NOT_DEPLOYED",
-      "retired": "RETIRED",
+      "note": "DRIFT+RETIRED_PRESENT",
       "worker": "qnfo-artifacts"
     },
     "qnfo-arxiv-radar": {
@@ -1182,9 +1205,9 @@
       "worker": "qnfo-code-agent"
     },
     "qnfo-code-orchestrator": {
-      "before": "0.18.11-ladder-dead-rung-1",
+      "before": "0.18.12-merge-scope-scripts",
       "http": 200,
-      "live": "0.18.11-ladder-dead-rung-1",
+      "live": "0.18.12-merge-scope-scripts",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-code-orchestrator"
@@ -1215,9 +1238,9 @@
       "worker": "qnfo-deploy-guard"
     },
     "qnfo-email": {
-      "before": "2.9.4-codeagent",
+      "before": "2.9.5-splice-repair",
       "http": 200,
-      "live": "2.9.4-codeagent",
+      "live": "2.9.5-splice-repair",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-email"
@@ -1286,9 +1309,9 @@
       "worker": "qnfo-events"
     },
     "qnfo-evolve": {
-      "before": "0.2.2-evolve",
+      "before": "0.2.3-evolve-compat-1",
       "http": 200,
-      "live": "0.2.2-evolve",
+      "live": "0.2.3-evolve-compat-1",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-evolve"
@@ -1312,17 +1335,17 @@
       "worker": "qnfo-fleet-calibrator"
     },
     "qnfo-fleet-control": {
-      "before": "0.33.10-cf-obs-sweep-1",
+      "before": "0.33.12-carried-by-twin-1",
       "http": 200,
-      "live": "0.33.10-cf-obs-sweep-1",
+      "live": "0.33.12-carried-by-twin-1",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-fleet-control"
     },
     "qnfo-fleet-dashboard": {
-      "before": "1.43.0-compact-reads",
+      "before": "1.43.2-all-reads",
       "http": 200,
-      "live": "1.43.0-compact-reads",
+      "live": "1.43.2-all-reads",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-fleet-dashboard"
@@ -1346,9 +1369,9 @@
       "worker": "qnfo-fleet-feed"
     },
     "qnfo-gateway": {
-      "before": "3.19.0-audience-categories-1",
+      "before": "3.22.0-filing-2",
       "http": 200,
-      "live": "3.19.0-audience-categories-1",
+      "live": "3.22.0-filing-2",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-gateway"
@@ -1454,6 +1477,14 @@
       "note": "NOT_DEPLOYED",
       "retired": "RETIRED",
       "worker": "qnfo-memory-mcp-legacy-dup"
+    },
+    "qnfo-model-eval": {
+      "before": "1.4.0-canary-glossary",
+      "http": 200,
+      "live": "1.4.0-canary-glossary",
+      "match": 1,
+      "note": "SYNC",
+      "worker": "qnfo-model-eval"
     },
     "qnfo-observability": {
       "before": "1.5.0-wae-fleet",
