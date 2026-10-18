@@ -5,6 +5,7 @@
 -- Rollback: DROP the idx_* indexes named below (each is additive, no data change) and re-create autonomy_selfheal_tick from
 --           migrations/2026-10-14-sla-120m-6-doer-120m.sql.
 -- BACKUP: bak_20261018_autonomy_selfheal_tick
+-- spof-review: rewrite of an existing fleet_tick trigger (same inputs/outputs, no new dependency); the remediation tick in qnfo-fleet-control and scripts/metric refresh are the second path for these metrics.
 -- Measured on qnfo-audit (D1 GraphQL d1QueriesAdaptiveGroups, 24 h to 2026-10-18T08:40Z, ranked by rows read):
 --   1. INSERT INTO fleet_tick (cron:qnfo-fleet-dashboard / cron:qnfo-code-orchestrator): 287 M rows read in 474 inserts,
 --      ~1.08 M rows read and ~0.9 s per insert. Profiled trigger by trigger: autonomy_selfheal_tick = 1.0 M of it

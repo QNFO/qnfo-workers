@@ -1,6 +1,7 @@
 -- RETENTION-PRUNE-1 (2026-10-18, owner directive "AUDIT BOTTLENECKS AND INEFFICIENCIES SYSTEMWIDE ... PERMANENTLY").
 -- APPLY-BY: ci
 -- DB: qnfo-audit
+-- spof-review: non-critical housekeeping; if it stops only storage/scan growth returns (pre-2026-10-18 state). Second path: the same bounded DELETE by hand or ops_config retention_prune=off; D1 size growth makes a stop visible.
 -- Rollback: DROP TRIGGER IF EXISTS retention_prune_tick;  (or set ops_config retention_prune = 'off' to pause without a deploy)
 -- Measured 2026-10-18: qnfo-audit 492 MB; nothing anywhere deletes from cloud_ops_events (132 K rows, 35 MB, 66 K of them
 -- ops_ai_tool telemetry older than 14 days) or fleet_probe_log (117 K rows, 8.3 K/day). Every view and trigger that reads them
