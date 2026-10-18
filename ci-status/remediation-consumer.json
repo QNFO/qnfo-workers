@@ -1,22 +1,22 @@
 {
  "ok": true,
  "marker": "REMEDIATION-CONSUMER-1",
- "verifier": "remediation-consumer@3d9f33ea970c",
- "due": 531,
- "pass": 289,
- "fail": 171,
- "skipped": 71,
+ "verifier": "remediation-consumer@96da7e291fa5",
+ "due": 560,
+ "pass": 302,
+ "fail": 185,
+ "skipped": 73,
  "contracts": [
   {
-   "class": "issue-2559",
-   "issue_id": 2559,
+   "class": "issue-2119",
+   "issue_id": 2119,
    "verdict": "pass",
    "expected": "ok",
    "observed": "ok",
    "written": true
   },
   {
-   "class": "rt-page-subscribe",
+   "class": "plane-living-paper-fresh",
    "issue_id": null,
    "verdict": "pass",
    "expected": "ok",
@@ -32,7 +32,31 @@
    "written": true
   },
   {
+   "class": "issue-2559",
+   "issue_id": 2559,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "issue-2565",
+   "issue_id": 2565,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
    "class": "fm-companion-objection-heading-only",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "rt-page-subscribe",
    "issue_id": null,
    "verdict": "pass",
    "expected": "ok",
@@ -64,8 +88,8 @@
    "written": true
   },
   {
-   "class": "issue-2565",
-   "issue_id": 2565,
+   "class": "issue-2586",
+   "issue_id": 2586,
    "verdict": "pass",
    "expected": "ok",
    "observed": "ok",
@@ -82,14 +106,6 @@
   {
    "class": "issue-2585",
    "issue_id": 2585,
-   "verdict": "pass",
-   "expected": "ok",
-   "observed": "ok",
-   "written": true
-  },
-  {
-   "class": "issue-2586",
-   "issue_id": 2586,
    "verdict": "pass",
    "expected": "ok",
    "observed": "ok",
@@ -136,19 +152,19 @@
    "written": true
   },
   {
-   "class": "fm-companion-starved-retry-capped",
-   "issue_id": null,
-   "verdict": "fail",
-   "expected": "ok",
-   "observed": "missing-marker:personal-companion/worker.js",
-   "written": true
-  },
-  {
    "class": "fm-reintake-cooldown-over-120m",
    "issue_id": null,
    "verdict": "fail",
    "expected": "ok",
    "observed": "missing-marker:qnfo-code-orchestrator/worker.js",
+   "written": true
+  },
+  {
+   "class": "fm-companion-starved-retry-capped",
+   "issue_id": null,
+   "verdict": "fail",
+   "expected": "ok",
+   "observed": "missing-marker:personal-companion/worker.js",
    "written": true
   },
   {
@@ -168,6 +184,14 @@
    "written": true
   },
   {
+   "class": "fm-companion-redundant-grounding-gate",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
    "class": "fm-q08-lede-provenance-unprunable",
    "issue_id": null,
    "verdict": "pass",
@@ -177,14 +201,6 @@
   },
   {
    "class": "fm-companion-splitter-legal-abbrev",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "ok",
-   "observed": "ok",
-   "written": true
-  },
-  {
-   "class": "fm-companion-redundant-grounding-gate",
    "issue_id": null,
    "verdict": "pass",
    "expected": "ok",
@@ -208,11 +224,19 @@
    "written": true
   },
   {
-   "class": "TWIN-VISION-TOOLLEAK-1",
-   "issue_id": 1805,
+   "class": "TWIN-MCP-OAUTH-1",
+   "issue_id": 1817,
+   "verdict": "fail",
+   "expected": "connected",
+   "observed": "pending: no access token in personal-life oauth_tokens yet",
+   "written": true
+  },
+  {
+   "class": "issue-1962",
+   "issue_id": 1962,
    "verdict": "pass",
-   "expected": "fixed",
-   "observed": "fixed",
+   "expected": "fresh",
+   "observed": "fresh",
    "written": true
   },
   {
@@ -232,27 +256,19 @@
    "written": true
   },
   {
-   "class": "TWIN-MCP-OAUTH-1",
-   "issue_id": 1817,
-   "verdict": "fail",
-   "expected": "connected",
-   "observed": "pending: no access token in personal-life oauth_tokens yet",
-   "written": true
-  },
-  {
-   "class": "issue-1962",
-   "issue_id": 1962,
-   "verdict": "pass",
-   "expected": "fresh",
-   "observed": "fresh",
-   "written": true
-  },
-  {
    "class": "issue-1983",
    "issue_id": 1983,
    "verdict": "pass",
    "expected": "retired",
    "observed": "retired",
+   "written": true
+  },
+  {
+   "class": "TWIN-VISION-TOOLLEAK-1",
+   "issue_id": 1805,
+   "verdict": "pass",
+   "expected": "fixed",
+   "observed": "fixed",
    "written": true
   },
   {
@@ -272,23 +288,7 @@
    "written": true
   },
   {
-   "class": "fm-ipatent-automated-drafts-counted",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "ok",
-   "observed": "ok",
-   "written": true
-  },
-  {
    "class": "rt-idea-hub",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "ok",
-   "observed": "ok",
-   "written": true
-  },
-  {
-   "class": "rt-q08",
    "issue_id": null,
    "verdict": "pass",
    "expected": "ok",
@@ -312,6 +312,14 @@
    "written": true
   },
   {
+   "class": "rt-q08",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
    "class": "issue-2278",
    "issue_id": 2278,
    "verdict": "pass",
@@ -320,15 +328,7 @@
    "written": true
   },
   {
-   "class": "issue-2448",
-   "issue_id": 2448,
-   "verdict": "pass",
-   "expected": "0",
-   "observed": "0",
-   "written": true
-  },
-  {
-   "class": "rt-live-personal-companion",
+   "class": "fm-ipatent-automated-drafts-counted",
    "issue_id": null,
    "verdict": "pass",
    "expected": "ok",
@@ -336,8 +336,8 @@
    "written": true
   },
   {
-   "class": "fm-paper-abstract-empty",
-   "issue_id": 2468,
+   "class": "issue-2448",
+   "issue_id": 2448,
    "verdict": "pass",
    "expected": "0",
    "observed": "0",
@@ -360,6 +360,14 @@
    "written": true
   },
   {
+   "class": "rt-live-personal-companion",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
    "class": "issue-2468",
    "issue_id": 2468,
    "verdict": "fail",
@@ -376,14 +384,6 @@
    "written": true
   },
   {
-   "class": "fm-paper-source-voice",
-   "issue_id": 2468,
-   "verdict": "pass",
-   "expected": "0",
-   "observed": "0",
-   "written": true
-  },
-  {
    "class": "rt-page-ideas",
    "issue_id": null,
    "verdict": "pass",
@@ -392,22 +392,22 @@
    "written": true
   },
   {
+   "class": "fm-paper-source-voice",
+   "issue_id": 2468,
+   "verdict": "pass",
+   "expected": "0",
+   "observed": "0",
+   "written": true
+  },
+  {
+   "class": "fm-paper-abstract-empty",
+   "issue_id": 2468,
+   "verdict": "pass",
+   "expected": "0",
+   "observed": "0",
+   "written": true
+  },
+  {
    "class": "rt-live-qnfo-observability",
    "issue_id": null,
-   "verdict": "pass",
-   "expected": "ok",
-   "observed": "ok",
-   "written": true
-  },
-  {
-   "class": "rt-page-fleet-kpi",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "ok",
-   "observed": "ok",
-   "written": true
-  },
-  {
-   "class": "rt-page-fleet-api-kpi",
-   "issue_id": null,
-   "verd
+   "verdict"
