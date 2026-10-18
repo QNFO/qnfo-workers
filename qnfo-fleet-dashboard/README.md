@@ -73,6 +73,43 @@ File or clear an action from any worker/session (header `x-loop-token`, secret `
 
 `GET /api/human` returns the same view as JSON (`fleet-human/v1`).
 
+## Feeds by functional area (AREA-FEEDS-1, 1.44.0)
+Owner directive 2026-10-18: *refactor the fleet dashboard and API feeds by functional area; feeds shall always be updated
+automatically from live data and real time.* The read surface is therefore organised by the same five functional areas the
+page uses for breaching metrics, plus `platform` for the reads that describe the API and the fleet state itself.
+
+`GET /api` (`fleet-api-index/v2`) returns `areas` and `by_area` beside `endpoints`: every row now names its `area`, whether
+it is computed at request time (`source: live`), from the rebuilt fleet state (`snapshot`) or both (`mixed`), and the
+worst case lag a client must assume (`lag_s`). Nothing has to be inferred from prose.
+
+`GET /api/area/<id>` (`fleet-area-feed/v1`) is one area as its own feed: star metric and trend, breaches ranked, the named
+constraint, the area's pipelines and the reads that belong to it with their lag. It reads the same model as `/api/areas`,
+so the two can never disagree about a breach, and it revalidates like every other read (`ETag`, `If-None-Match`,
+`?since=<revision>`; `?full=1` adds every breach row and the whole lever text). An unknown area is a 404 listing the ids.
+
+| area | own feed | other reads | source |
+| --- | --- | --- | --- |
+| `cost` | `/api/area/cost` | (none: the metric triggers are the whole area) | live |
+| `research` | `/api/area/research` | `/api/generators`, `/api/content`, `/api/q08-review` | live |
+| `reach` | `/api/area/reach` | `/api/reach`, `/api/attention`, `/api/ga4` | live |
+| `autonomy` | `/api/area/autonomy` | `/api/human`, `/api/actions`, `/api/loop`, `/api/changes`, `/api/watchmaker`, `/api/owner/*` | live + snapshot |
+| `reliability` | `/api/area/reliability` | `/api/integration` | live + snapshot |
+| `platform` | `/api/area/platform` | `/api`, `/api/live`, `/api/areas`, `/api/state`, `/api/decision`, `/api/kpi`, `/api/changelog`, `/api/cmd` | live + snapshot |
+
+Live means: `v_metric_trigger_state` and `metric_history` (and the area's queues) are read from D1 at request time, cached
+at most 60 s per isolate, and the body says `live: true`, `max_lag_s: 60` and which tables it read (`computed_from`). A
+snapshot-backed read (`/api/state`, `/api/actions`, `/api/integration`, `/api/decision`, `/api/live`) serves
+`fleet_dashboard_state`; any of them now schedules a rebuild in the background once the record is older than 60 s
+(`freshState`), which `/api/actions` and `/api/integration` previously did not do at all, so a poller could keep receiving
+a fifteen-minute-old answer. The index row states the source and the lag; `/health` says the same in prose.
+
+The page renders every functional area as a section, including a clean one (marked `clear`, with its feed link); it used to
+skip areas with nothing in breach, which organised the page by exception rather than by area.
+
+`GET /api/ga4` was answering **500** live ("GA4 property ID not set"): an older handler for the same path stood in front of
+the GA4-DATA-API-1 ledger read and called two retired helpers. Both the shadow handler and the orphaned helpers are gone, so
+the route answers the ingest ledger and revalidates (`rt-api.test.mjs` K17/K18 pin it).
+
 ## Machine endpoints (unchanged; consumed by qnfo-fleet-control and qnfo-autopilot)
 `/api/state`, `/api/actions`, `/api/loop`, `/api/loop/sync`, `/api/loop/execute`, `/api/integration`, `/api/refresh`, `/health`, plus `/api/reach` and `POST /api/reach/ingest` (REACH-SIGNALS-INGEST-1, STRATEGY-1; the daily ingest still runs in the cron). The HTML reach scorecard that briefly lived on `/roi` is folded into the one page as a reach line in the business case; the full 7d/28d data stays at `/api/reach`. `GET /api/q08-review` shows the Q08-REVIEW-2026-10-31 decision (agent_issues 1716, 1.16.0): from the first */15 tick at or after 2026-10-31T00:00Z the cron measures bot-filtered RUM page views (`bot: 0`) on q08.org and www.q08.org for 2026-10-24..30 through the reach ingest's GraphQL path, writes `ops_config.q08_review_2026_10_31` only on a real decision (keep, or cut-cadence under 50 a week, which also sets `ops_config.q08_max_per_day` to 2 in the same batch), records a failed or empty read as `deferred` in `cloud_ops_events` id `q08-review-2026-10-31` and retries hourly, and never runs again once decided. `POST /api/q08-review?to=<day>` (x-loop-token) runs the same measurement for any past 7-day window and writes nothing. Every response carries `X-Robots-Tag: noindex` (DASHBOARD-NOINDEX-1).
 
