@@ -36,6 +36,14 @@ CREATE INDEX IF NOT EXISTS idx_rv_action_ref ON remediation_verifications(action
 CREATE INDEX IF NOT EXISTS idx_rv_verifier_ts ON remediation_verifications(verifier, verified_at);
 CREATE INDEX IF NOT EXISTS idx_work_claims_path_open ON work_claims(path, released_at, expires_at);
 CREATE INDEX IF NOT EXISTS idx_work_claims_open ON work_claims(released_at, expires_at);
+-- Second pass (2026-10-18 09:4xZ, same probes, values unchanged): v_trust runtime share 151 K -> 36 K; reach_signals
+-- work-with-me MAX(collected_at) 323 -> 1; notes_intake area list 6.6 K -> 2; research_queue 72 h join 1.9 K -> 1.3 K.
+CREATE INDEX IF NOT EXISTS idx_rv_verified_norm ON remediation_verifications(replace(substr(verified_at, 1, 19), 'T', ' '));
+CREATE INDEX IF NOT EXISTS idx_rq_created_norm ON research_queue(replace(substr(created_at, 1, 19), 'T', ' '));
+CREATE INDEX IF NOT EXISTS idx_rq_created ON research_queue(created_at);
+CREATE INDEX IF NOT EXISTS idx_worker_logs_ingested ON worker_logs(ingested_at);
+CREATE INDEX IF NOT EXISTS idx_rs_source_collected ON reach_signals(source, collected_at);
+CREATE INDEX IF NOT EXISTS idx_notes_intake_type_status ON notes_intake(type, status);
 
 CREATE TABLE IF NOT EXISTS bak_20261018_autonomy_selfheal_tick AS SELECT name, sql FROM sqlite_master WHERE type = 'trigger' AND name = 'autonomy_selfheal_tick';
 DROP TRIGGER IF EXISTS autonomy_selfheal_tick;
