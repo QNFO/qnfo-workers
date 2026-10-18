@@ -109,8 +109,12 @@ therefore carries `data: {age_min, metrics}`, the age of the oldest metric it re
 is a clock field for the digest, so it never moves the revision while `metrics` and the values do). A stale number cannot
 hide behind a live-looking answer.
 
-The page renders every functional area as a section, including a clean one (marked `clear`, with its feed link); it used to
-skip areas with nothing in breach, which organised the page by exception rather than by area.
+The page's area renderer (`focusRowsHtml`, which `humanHtml` calls) already listed all five areas. Each row now ends with a
+link to that area's machine feed (`feed: /api/area/<id>`), including the rows that read `all clear`, so the page and the API
+describe the same boundary. (`areaSectionsHtml` is dead code and is not the page; it was left alone rather than rewired.)
+
+In `by_area`, `all_members_live` is about the area's member reads (false when one is snapshot-backed); the area feed
+itself is always `live: true` with `max_lag_s: 60`. The two flags deliberately do not share a name.
 
 `GET /api/ga4` was answering **500** live ("GA4 property ID not set"): an older handler for the same path stood in front of
 the GA4-DATA-API-1 ledger read and called two retired helpers. Both the shadow handler and the orphaned helpers are gone, so
