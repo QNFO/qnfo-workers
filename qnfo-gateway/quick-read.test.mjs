@@ -31,6 +31,19 @@ const BODY = [
 
 const SLUG = "energy-floor-of-the-controller";
 const papers = { [SLUG]: { slug: SLUG, title: "Energy Floor Of The Controller", body_md: BODY, abstract: "", created_at: "2026-10-01", version: "2.0.0" } };
+// QUICK-READ-6 fixtures: a paper whose closest section by meaning is too short to be a passage, and one with no usable
+// section at all. The first must still read the next-best sections; the second must never claim it read anything.
+const SHORTY = "shorty-paper";
+papers[SHORTY] = { slug: SHORTY, title: "Shorty Paper", abstract: "", created_at: "2026-10-01", version: "1.0.0", body_md: [
+  "## Abstract", "", "The controller ran 42 trials on the cryostat and measured 1.7 joules per solution under load, which is the main result of this paper.", "",
+  "## Whisper", "", "We do not measure the cost of state preparation.", "",
+  "## Method", "", "We measure the cost of every run with a calibrated joule counter and we derive the bound from the entropy of the schedule."
+].join("\n") };
+const ALLSHORT = "allshort-paper";
+papers[ALLSHORT] = { slug: ALLSHORT, title: "All Short Paper", abstract: "", created_at: "2026-10-01", version: "1.0.0", body_md: [
+  "## Abstract", "", "We do not measure the cost of state preparation.", "",
+  "## Notes", "", "Holds only for schedules."
+].join("\n") };
 
 let aiCalls = 0, aiOut = "", lastModel = null, lastUser = null, embedDown = false;
 // The AI stub serves both models: bge-* gets embeddings (a fixed vector per known phrase, so cosine decides the section),
@@ -87,6 +100,12 @@ const qrGet = async (env, q, extra) => {
   let body = "";
   const ct = r.headers.get("Content-Type") || "";
   if (ct.indexOf("application/json") === 0) { try { body = await r.json(); } catch (e) { body = null; } } else body = await r.text();
+  return { s: r.status, j: body };
+};
+const qrGetSlug = async (env, slug, q, extra) => {
+  const r = await call(env, "https://papers.qnfo.org/api/quickread/" + slug + "?q=" + encodeURIComponent(q) + (extra || ""));
+  let body = null;
+  if ((r.headers.get("Content-Type") || "").indexOf("application/json") === 0) { try { body = await r.json(); } catch (e) { body = null; } } else body = await r.text();
   return { s: r.status, j: body };
 };
 const postPage = async (env, q) => {
@@ -302,6 +321,20 @@ const Q = "What did the controller measure about the energy cost of one solution
   const op = doc.paths["/api/quickread/{slug}"].get;
   ok(op && /q/.test(JSON.stringify(op.parameters)) && op.responses && op.responses["200"], "the entry documents q, format, fresh and the 200 shape", op && Object.keys(op.responses));
   ok(/related/.test(op.description), "the entry explains the related and none coverage states", op.description.slice(0, 80));
+}
+
+// ---- 16. QUICK-READ-6: a claim needs a passage behind it
+{
+  const env = mkEnv();
+  embedDown = false;
+  aiOut = JSON.stringify({ overview: "Measured.", answers: [], approach: [], considerations: [] });
+  const short = await qrGetSlug(env, SHORTY, "How do migratory birds navigate by magnetoreception?");
+  ok(short.j.coverage === "related" && short.j.passages > 0 && short.j.chars > 0, "a short closest section is skipped, the next usable sections are read", { coverage: short.j.coverage, passages: short.j.passages, chars: short.j.chars });
+  ok((short.j.answers || []).concat(short.j.approach || []).every((x) => (x.quote || "").length > 40), "no passage shorter than the floor is quoted", short.j.answers);
+  const none = await qrGetSlug(env, ALLSHORT, "How do migratory birds navigate by magnetoreception?");
+  ok(none.j.coverage === "none" && none.j.passages === 0, "when no section has usable text the verdict is none, never related over an empty page", { coverage: none.j.coverage, passages: none.j.passages });
+  const src2 = src.slice(src.indexOf("QUICK-READ-1:BEGIN"), src.indexOf("QUICK-READ-1:END"));
+  ok(/function qrPick\(ranked, semantic\)/.test(src2) && /pick = qrPick\(ranked, true\)/.test(src2), "the selector takes the mode and the semantic branch passes it");
 }
 
 console.log(pass + " passed, " + fail + " failed");
