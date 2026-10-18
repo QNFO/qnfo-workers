@@ -60,7 +60,37 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  # CONSUMER-CI-LOOP-1 (agent_issues 2860, 2026-10-18): measured over the last 100 runs, 76 were cancelled while pending and
+  # the 23 that ran took 10-16 min each, started back to back by workflow_run off every push to main (including the
+  # consumer's own ci-status [skip ci] commits). A workflow_run-triggered run now proceeds only when the triggering commit
+  # is not a [skip ci] status commit AND no consumer run started in the last 20 minutes. push, schedule, workflow_dispatch
+  # and repository_dispatch (the qnfo-cloud-ops 60-minute PROBE-CADENCE-1 tick) always run.
+  cadence-gate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    outputs:
+      run: ${{ steps.g.outputs.run }}
+    steps:
+      - id: g
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EVENT: ${{ github.event_name }}
+          HEAD_MSG: ${{ github.event.workflow_run.head_commit.message }}
+        run: |
+          set -uo pipefail
+          if [ "$EVENT" != "workflow_run" ]; then echo "run=true" >> "$GITHUB_OUTPUT"; exit 0; fi
+          case "$HEAD_MSG" in *"[skip ci]"*) echo "skip: triggering commit is [skip ci]"; echo "run=false" >> "$GITHUB_OUTPUT"; exit 0;; esac
+          last=$(gh api "repos/${{ github.repository }}/actions/workflows/remediation-consumer.yml/runs?per_page=20" \
+            -q '[.workflow_runs[] | select(.id != ${{ github.run_id }}) | select(.status == "in_progress" or .conclusion == "success") | .run_started_at] | max // ""' 2>/dev/null || echo "")
+          if [ -n "$last" ]; then
+            age=$(( $(date -u +%s) - $(date -u -d "$last" +%s) ))
+            if [ "$age" -lt 1200 ]; then echo "skip: last consumer run started ${age}s ago (< 1200 s)"; echo "run=false" >> "$GITHUB_OUTPUT"; exit 0; fi
+          fi
+          echo "run=true" >> "$GITHUB_OUTPUT"
+
   consume:
+    needs: cadence-gate
+    if: needs.cadence-gate.outputs.run == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     env:
