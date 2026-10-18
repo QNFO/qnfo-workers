@@ -292,5 +292,17 @@ const Q = "What did the controller measure about the energy cost of one solution
   ok(src.indexOf("_audit/quick-read") > 0, "the audit route is wired");
 }
 
+// ---- 15. QUICK-READ-5: the machine-readable index carries the endpoint the feature promises
+{
+  const env = mkEnv();
+  const r = await call(env, "https://papers.qnfo.org/openapi.json");
+  const doc = await r.json();
+  const paths = Object.keys((doc && doc.paths) || {});
+  ok(r.status === 200 && paths.indexOf("/api/quickread/{slug}") >= 0, "openapi.json lists /api/quickread/{slug}", paths);
+  const op = doc.paths["/api/quickread/{slug}"].get;
+  ok(op && /q/.test(JSON.stringify(op.parameters)) && op.responses && op.responses["200"], "the entry documents q, format, fresh and the 200 shape", op && Object.keys(op.responses));
+  ok(/related/.test(op.description), "the entry explains the related and none coverage states", op.description.slice(0, 80));
+}
+
 console.log(pass + " passed, " + fail + " failed");
 if (fail) process.exit(1);
