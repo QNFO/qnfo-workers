@@ -826,6 +826,12 @@ jobs:
           if [ "$EVENT" = "pull_request" ]; then BASE="origin/$BASE_REF"; else BASE="HEAD^"; fi
           files=$(git diff --name-only --diff-filter=AM "$BASE" HEAD -- 'migrations/*.sql' 2>/dev/null || true)
           if [ -n "$files" ]; then python3 scripts/apply_migrations.py --check $files; else echo "no migration changed"; fi
+      # BREACH-TICKET-COVERAGE-1 (2026-10-18): v_breaches_without_ticket is the second path for "a live breach must
+      # have an open ticket". If its predicate is wrong the alarm reads 0 while a gap exists, so the cases that must and
+      # must not alarm are asserted on synthetic rows, with the view SQL read out of the migration itself.
+      - name: BREACH-TICKET-COVERAGE-1 offline suite (v_breaches_without_ticket)
+        if: ${{ !cancelled() }}
+        run: python3 scripts/breach_ticket_coverage_test.py
       # ISSUE-DUP-ABORT-1 (2026-10-13): a duplicate open title filed by a trigger no longer aborts the write that fired it.
       - name: ISSUE-DUP-ABORT-1 offline replay (migrations/2026-10-13-issue-dup-annotate.sql)
         if: ${{ !cancelled() }}
