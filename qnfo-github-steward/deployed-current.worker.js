@@ -22,7 +22,7 @@
  *   * archived repositories are read-only and are skipped, not reported as drift;
  *   * GET /report and GET /health are public reads; POST /tick needs STEWARD_KEY.
  */
-var VERSION = "0.4.1-portfolio-sync-2"; // 0.4.1 org projects declared on (the portfolio board needs them); 0.4.0 PORTFOLIO-SYNC-1: projects derived from the census, metric breaches as roadmap objectives, programs/projects/issues/roadmap mirrored to GitHub labels, milestones, issues and a Projects board every 10 minutes; 0.3.1 a task is matched to its PR by number too (pr-without-task false positive on PR 381); 0.3.0 TRACKER-SYNC-1: agent_issues <-> GitHub issues and code_tasks <-> PRs every 10 minutes (0.2.2 ISSUE-SYNC-1)
+var VERSION = "0.4.2-tracker-sync-1"; // 0.4.2 TRACKER-SYNC-1: the recent-PR window is a deliberate partial read (every post-backfill tick refused it); 0.4.1 org projects declared on (the portfolio board needs them); 0.4.0 PORTFOLIO-SYNC-1: projects derived from the census, metric breaches as roadmap objectives, programs/projects/issues/roadmap mirrored to GitHub labels, milestones, issues and a Projects board every 10 minutes; 0.3.1 a task is matched to its PR by number too (pr-without-task false positive on PR 381); 0.3.0 TRACKER-SYNC-1: agent_issues <-> GitHub issues and code_tasks <-> PRs every 10 minutes (0.2.2 ISSUE-SYNC-1)
 
 var ORG = "QNFO";
 var USER = "rwnq8";
@@ -457,8 +457,9 @@ function tsBody(row) {
   return b.join("\n");
 }
 
-/* Every page, or null: a partial list must never be read as "these issues are closed". */
-async function tsListAll(env, path, maxPages) {
+/* Every page, or null: a partial list must never be read as "these issues are closed". windowOk: the caller asked for the
+ * newest maxPages pages only (pull requests sorted by updated), so hitting the page cap is the window, not a failure. */
+async function tsListAll(env, path, maxPages, windowOk) {
   var out = [];
   for (var page = 1; page <= maxPages; page++) {
     var r = await gh(env, "GET", path + (path.indexOf("?") >= 0 ? "&" : "?") + "per_page=100&page=" + page);
@@ -466,7 +467,7 @@ async function tsListAll(env, path, maxPages) {
     out = out.concat(r.body);
     if (r.body.length < 100) return out;
   }
-  return null;
+  return windowOk ? out : null;
 }
 
 async function tsState(env, k, v) {
@@ -562,7 +563,7 @@ function tsPrNum(url) {
 async function tsCodeTasks(env, out) {
   var now = new Date().toISOString();
   var backfilled = await tsState(env, "pr_backfill_done");
-  var prs = await tsListAll(env, TS_REPO + "/pulls?state=all&sort=updated&direction=desc", backfilled ? 2 : 30);
+  var prs = await tsListAll(env, TS_REPO + "/pulls?state=all&sort=updated&direction=desc", backfilled ? 2 : 30, !!backfilled);
   if (!prs) { out.errors.push({ scope: "tracker-prs", why: "could not list pull requests; no code task change this tick" }); return; }
   var byNum = {}, byHead = {};
   prs.forEach(function (p) { byNum[p.number] = p; if (p.head && p.head.ref) byHead[p.head.ref] = p; });
