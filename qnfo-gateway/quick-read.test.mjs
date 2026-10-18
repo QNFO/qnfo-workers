@@ -31,6 +31,16 @@ const BODY = [
 
 const SLUG = "energy-floor-of-the-controller";
 const papers = { [SLUG]: { slug: SLUG, title: "Energy Floor Of The Controller", body_md: BODY, abstract: "", created_at: "2026-10-01", version: "2.0.0" } };
+// QUICK-READ-DIGEST-1 fixture: the corpus shape that broke the first live map. A body whose title is its own "#"
+// heading makes every real section an h3 after the renderer shifts one level down, so a map built from h2 alone listed
+// the title and nothing else.
+const CHAPTERED = "chaptered-work";
+papers[CHAPTERED] = { slug: CHAPTERED, title: "A Chaptered Work", abstract: "", created_at: "2026-10-01", version: "1.0.0", body_md: [
+  "# A Chaptered Work", "",
+  "## Abstract", "", "We report the whole result of the chaptered work in this paper here.", "",
+  "## Method", "", "We measure the cost of every run with a calibrated joule counter.", "",
+  "## Limits", "", "The measurement holds only for schedules that fit inside the controller window."
+].join("\n") };
 // QUICK-READ-6 fixtures: a paper whose closest section by meaning is too short to be a passage, and one with no usable
 // section at all. The first must still read the next-best sections; the second must never claim it read anything.
 const SHORTY = "shorty-paper";
@@ -46,8 +56,7 @@ papers[ALLSHORT] = { slug: ALLSHORT, title: "All Short Paper", abstract: "", cre
 ].join("\n") };
 // QUICK-READ-DIGEST-1 fixture: a paper that states its claim in a line of its own, so the digest has a claim section AND
 // a number of its own to report (the first fixture's only figure sits in its abstract, which the digest shows once).
-const CLAIMED = "claimed-paper";
-papers[CLAIMED] = { slug: CLAIMED, title: "A Claimed Result", abstract: "", created_at: "2026-10-01", version: "1.0.0", body_md: [
+const CLAIMED = "claimed-paper";papers[CLAIMED] = { slug: CLAIMED, title: "A Claimed Result", abstract: "", created_at: "2026-10-01", version: "1.0.0", body_md: [
   "---", "title: A Claimed Result", "---", "",
   "## Abstract", "", "We compare a controller against the reference design and report how long a logical qubit survives under load.", "",
   "## Claim", "", "**Claim.** The controller keeps a logical qubit alive four times longer than the reference design at the same power.", "",
@@ -399,6 +408,8 @@ const Q = "What did the controller measure about the energy cost of one solution
   ok(j.falsifiers.length === 0, "a paper that states no falsification criterion gets none invented", j.falsifiers);
   const fh = await (await call(env, "https://papers.qnfo.org/api/quickread/" + SLUG + "?format=html")).text();
   ok(/no explicit falsification criterion/i.test(fh), "the section says so in words instead of being left empty", fh.slice(0, 160));
+  const ch = await (await call(env, "https://papers.qnfo.org/api/quickread/" + CHAPTERED)).json();
+  ok(ch.map.length >= 3 && ch.map.every((m) => m.title !== "A Chaptered Work"), "a body whose title is its own heading still maps its real sections, and not the title", ch.map);
   const doc = await (await call(env, "https://papers.qnfo.org/openapi.json")).json();
   const op = doc.paths["/api/quickread/{slug}"].get;
   const qp = (op.parameters || []).filter((p) => p.name === "q")[0];
