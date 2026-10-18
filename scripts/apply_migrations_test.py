@@ -370,5 +370,38 @@ _, pr, inf = M.plan("migrations/no-backup.sql", "-- APPLY-BY: ci\n-- DB: qnfo-au
                     "CREATE TABLE IF NOT EXISTS new_ledger (id INTEGER PRIMARY KEY, ts TEXT);\n")
 ok(not pr, "the same file without the BACKUP line passes (it deletes nothing)", pr)
 
+# STEP-SCHEMA-LINT-1 (2026-10-18, fleet_runs 10278): a fleet_tasks workflow step without "type" passed --check and then
+# aborted its run with "unsupported step type: undefined". The shape below is the one that reached production.
+def steps_task(doc, extra_header=""):
+    return (en_hdr + extra_header + "INSERT OR REPLACE INTO fleet_tasks (id, type, definition) VALUES "
+            "('t', 'workflow', '" + doc.replace("'", "''") + "');\n")
+
+
+_, pr, _ = M.plan("migrations/steps-nokind.sql", steps_task('{"steps":[{"name":"a","db":"AUDIT","sql":"SELECT 1"}]}'))
+ok(any("STEP-SCHEMA-LINT-1" in p and "undefined" in p for p in pr), "a step without type is refused, naming the runtime error", pr)
+_, pr, _ = M.plan("migrations/steps-emptykind.sql", steps_task('{"steps":[{"type":"","db":"AUDIT","sql":"SELECT 1"}]}'))
+ok(any("STEP-SCHEMA-LINT-1" in p for p in pr), "an empty type is refused", pr)
+_, pr, _ = M.plan("migrations/steps-ok.sql", steps_task('{"steps":[{"type":"sql","name":"a","db":"AUDIT","sql":"SELECT 1"}]}'))
+ok(not [p for p in pr if "STEP-SCHEMA-LINT-1" in p], "a well-formed sql step passes", pr)
+_, pr, _ = M.plan("migrations/steps-noname.sql", steps_task('{"steps":[{"type":"sql","db":"AUDIT","sql":"SELECT 1"}]}'))
+ok(not [p for p in pr if "STEP-SCHEMA-LINT-1" in p], "a step without name passes (151 of 184 live steps carry none)", pr)
+_, pr, _ = M.plan("migrations/steps-nodb.sql", steps_task('{"steps":[{"type":"sql","name":"a","sql":"SELECT 1"}]}'))
+ok(any('has no "db"' in p for p in pr), "a sql step without db is refused", pr)
+_, pr, _ = M.plan("migrations/steps-nosql.sql", steps_task('{"steps":[{"type":"sql","name":"a","db":"AUDIT"}]}'))
+ok(any('has no "sql"' in p for p in pr), "a sql step without sql is refused", pr)
+_, pr, _ = M.plan("migrations/steps-http-ok.sql", steps_task('{"steps":[{"type":"http","url":"https://fleet.qnfo.org/api/decision?refresh=1","method":"GET"}]}'))
+ok(not [p for p in pr if "STEP-SCHEMA-LINT-1" in p], "the live http step shape passes", pr)
+_, pr, _ = M.plan("migrations/steps-http-nourl.sql", steps_task('{"steps":[{"type":"http","name":"h","method":"GET"}]}'))
+ok(any('has no "url"' in p for p in pr), "an http step without url is refused", pr)
+_, pr, _ = M.plan("migrations/steps-probe.sql", steps_task('{"steps":[{"type":"probe","url":"x"}]}'))
+ok(any("not a type the runner executes" in p for p in pr), "an unknown type is refused", pr)
+_, pr, _ = M.plan("migrations/steps-probe-hdr.sql",
+                  steps_task('{"steps":[{"type":"probe","url":"x"}]}', extra_header="-- STEP-TYPES: sql,http,probe\n"))
+ok(not [p for p in pr if "STEP-SCHEMA-LINT-1" in p], "a '-- STEP-TYPES:' header line admits a type the runner gained", pr)
+_, pr, _ = M.plan("migrations/steps-quotes.sql",
+                  steps_task('{"steps":[{"type":"sql","name":"a","db":"AUDIT","sql":"UPDATE t SET s=\'open\' WHERE 1"}]}'))
+ok(not [p for p in pr if "STEP-SCHEMA-LINT-1" in p], "quotes doubled inside the step's sql do not break the literal scan", pr)
+ok(M.step_violations("INSERT INTO t (x) VALUES ('plain text, no steps here')") == [], "a literal that is not a steps array makes no claim")
+
 print(f"{passed} passed, {failed} failed")
 sys.exit(1 if failed else 0)
