@@ -710,6 +710,10 @@ jobs:
       - name: Research poison-park offline suite (qnfo-research-exec)
         if: ${{ github.event_name != 'pull_request' && !cancelled() }}
         run: node qnfo-research-exec/poison-park.test.mjs
+      # TICK-10M-1 + RECLAIM-KEEP-STAGE-1 + IDEA-TO-PUBLISH-METRIC-1 (0.18.38, owner directive 2026-10-18: idea to publication < 100 h).
+      - name: Research tick-10m offline suite (qnfo-research-exec)
+        if: ${{ !cancelled() }}
+        run: node --no-warnings qnfo-research-exec/tick-10m.test.mjs
       # RUN-INTERNAL-1 (#1783): research-exec's inline run and drain-v2 refuse public hostnames; service bindings still reach them.
       - name: RUN-INTERNAL-1 offline suite (qnfo-research-exec)
         if: ${{ !cancelled() }}

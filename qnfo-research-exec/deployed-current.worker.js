@@ -33,7 +33,7 @@ var __name22222 = /* @__PURE__ */ __name2222((target, value) => __defProp22222(t
 // an empty catch. CITE-CONSISTENCY-1 asks the reviewer to compare the draft against cited QNFO work.
 // REVIEW-TRIAGE-CAP-1 is a defect fix: drift demotion at the cycle cap silently turned a blocking finding into a pass, so
 // REVIEW-HARD-GATE-1 withheld nothing there (reviewer findings 2 -> 0 at the cap; an unparseable review advanced to verify).
-var VERSION = "0.18.37-errata-highrisk-route-1"; /* 0.18.37 ERRATA-HIGHRISK-ROUTE-1 folded (errata member 1.6.2): a high-risk errata correction draft older than 6 h becomes a remediation research row instead of waiting audited forever; internal_errata closes with its queue row. */ /* 0.18.36 CLAIM-HEARTBEAT-1 + RESUME-DRAFT-1 + REVIEW-SECOND-MODEL-1 (2026-10-18): a stage returning ok refreshes claimed_at so the stale-claim reclaimer stops re-grounding papers still advancing (550 releases/24h, 302 ground claims of 72 rows); a resumable stage is kept when its draft exists in R2 (70 revise rows were re-drafted from ground); the review second path names its model (not kimi-k2.6 after #1429). */ /* 0.18.35 CLAIM-HEARTBEAT-1 (2026-10-18): a stage that returns ok refreshes claimed_at, so the 120-min stale-claim reclaimer no longer re-grounds papers that are still advancing (550 releases/24h, 302 ground claims of 72 rows). */ /* 0.18.34 REVIEW-EMPTY-SECOND-PATH-1 (2026-10-18): an unreadable review takes a second model family in the same tick and, still unreadable, re-runs review directly instead of sending the review-parse placeholder through two no-op patch calls (237 of 264 revise-noop events, 329 hard=1 cycles in 3 days). */ /* 0.18.33 PATCH-FLEX-REGEX-OVERFLOW-1 (2026-10-18, agent_issues 2886): findFlexible caps the flexible matcher at 400 tokens and fails closed on any regex error, so a whole-section find text no longer throws "Invalid regular expression: Stack overflow" out of the slot. */ /* 0.18.32 AI-RATE-FALLBACK-1 (2026-10-18): a 3021/3040/3046 on the primary model after backoff takes one call on another family (glm<->gpt-oss-120b) instead of failing the stage; 3040 no longer misread as a reasoning_effort rejection. */ /* 0.18.31 VERIFY-AUTOCORRECT-1 (2026-10-18): papers fail verify with REAL arithmetic errors (the reconcile/ensemble writer computes a number that does not match its own stated inputs) and the revise loop cannot reliably fix a bare number, so such papers cycle until park. Verify already holds both values — independently computed `computed` and the paper's stated `expected` — so stageVerify now corrects the number deterministically (autoCorrectNumeric) instead of sending it back through a model. Fail-closed: only a stated value found exactly once (verbatim or as an unambiguous bare mantissa in LaTeX/\\times 10^N) is corrected; anything ambiguous is skipped and falls through to revise. Every correction is logged as verify-autocorrect and appended to verification.md. */ /* 0.18.29 VERIFY-CYCLE-CAP-1 (2026-10-17, owner directive "REMEDIATE ALL ISSUES AND FAILURE MODES"): the verify->revise edge reset the review cycle counter to 0 (context={cycles:0,verifyPass:1}) while EVERY other edge preserves it (3716, 3735, 3753) and the review stage is the one that increments it. That single reset made MAX_REVIEW_CYCLES (6) unreachable, so an item that fails verify re-enters revise, resets to cycle 0, and loops until recover_count runs out — measured 2026-10-17: review-unresolved events exist ONLY at cycle 2 (193) and 3 (165), never 4; 96 rerun-route and 278 revise-patch events against ~100 rows; and stage='publish' is EMPTY, which is why 151 complete events produced 0 publications and why the publish quota (24) guarded an empty queue. The edge now preserves the count, so the existing six-cycle cap can terminate an item visibly instead of cycling forever. The gate itself (gates2) is unchanged: this does not let a failing draft through, it lets a draft that cannot pass STOP. */ // 0.18.28-codeagent
+var VERSION = "0.18.38-tick-10m-1"; /* 0.18.38 TICK-10M-1 + RECLAIM-KEEP-STAGE-1 + IDEA-TO-PUBLISH-METRIC-1 (2026-10-18, owner directive: idea to publication under 100 hours; pillar research): (a) the cron runs every 10 minutes (was 15; 144/day = CRON-MANDATE-1 ceiling, same schedule count); member windows are 10 minutes wide so each errata/reviser job still runs exactly once per slot; the 03:00 sweep window is 10 minutes; (b) a stale reclaim keeps a resumable stage (complete/review/revise/verify), and RESUME-DRAFT-1 at claim falls back to ground when reconciled.md is missing, so a stalled draft is not re-drafted from scratch; (c) idea_to_publish_h_p50_7d (median hours idea_proposals.created_at -> published_at, 7 days) is written to metric_registry on the :00 tick. */ /* 0.18.37 ERRATA-HIGHRISK-ROUTE-1 folded (errata member 1.6.2): a high-risk errata correction draft older than 6 h becomes a remediation research row instead of waiting audited forever; internal_errata closes with its queue row. */ /* 0.18.36 CLAIM-HEARTBEAT-1 + RESUME-DRAFT-1 + REVIEW-SECOND-MODEL-1 (2026-10-18): a stage returning ok refreshes claimed_at so the stale-claim reclaimer stops re-grounding papers still advancing (550 releases/24h, 302 ground claims of 72 rows); a resumable stage is kept when its draft exists in R2 (70 revise rows were re-drafted from ground); the review second path names its model (not kimi-k2.6 after #1429). */ /* 0.18.35 CLAIM-HEARTBEAT-1 (2026-10-18): a stage that returns ok refreshes claimed_at, so the 120-min stale-claim reclaimer no longer re-grounds papers that are still advancing (550 releases/24h, 302 ground claims of 72 rows). */ /* 0.18.34 REVIEW-EMPTY-SECOND-PATH-1 (2026-10-18): an unreadable review takes a second model family in the same tick and, still unreadable, re-runs review directly instead of sending the review-parse placeholder through two no-op patch calls (237 of 264 revise-noop events, 329 hard=1 cycles in 3 days). */ /* 0.18.33 PATCH-FLEX-REGEX-OVERFLOW-1 (2026-10-18, agent_issues 2886): findFlexible caps the flexible matcher at 400 tokens and fails closed on any regex error, so a whole-section find text no longer throws "Invalid regular expression: Stack overflow" out of the slot. */ /* 0.18.32 AI-RATE-FALLBACK-1 (2026-10-18): a 3021/3040/3046 on the primary model after backoff takes one call on another family (glm<->gpt-oss-120b) instead of failing the stage; 3040 no longer misread as a reasoning_effort rejection. */ /* 0.18.31 VERIFY-AUTOCORRECT-1 (2026-10-18): papers fail verify with REAL arithmetic errors (the reconcile/ensemble writer computes a number that does not match its own stated inputs) and the revise loop cannot reliably fix a bare number, so such papers cycle until park. Verify already holds both values — independently computed `computed` and the paper's stated `expected` — so stageVerify now corrects the number deterministically (autoCorrectNumeric) instead of sending it back through a model. Fail-closed: only a stated value found exactly once (verbatim or as an unambiguous bare mantissa in LaTeX/\\times 10^N) is corrected; anything ambiguous is skipped and falls through to revise. Every correction is logged as verify-autocorrect and appended to verification.md. */ /* 0.18.29 VERIFY-CYCLE-CAP-1 (2026-10-17, owner directive "REMEDIATE ALL ISSUES AND FAILURE MODES"): the verify->revise edge reset the review cycle counter to 0 (context={cycles:0,verifyPass:1}) while EVERY other edge preserves it (3716, 3735, 3753) and the review stage is the one that increments it. That single reset made MAX_REVIEW_CYCLES (6) unreachable, so an item that fails verify re-enters revise, resets to cycle 0, and loops until recover_count runs out — measured 2026-10-17: review-unresolved events exist ONLY at cycle 2 (193) and 3 (165), never 4; 96 rerun-route and 278 revise-patch events against ~100 rows; and stage='publish' is EMPTY, which is why 151 complete events produced 0 publications and why the publish quota (24) guarded an empty queue. The edge now preserves the count, so the existing six-cycle cap can terminate an item visibly instead of cycling forever. The gate itself (gates2) is unchanged: this does not let a failing draft through, it lets a draft that cannot pass STOP. */ // 0.18.28-codeagent
 // WORKERS-AI-ATTRIBUTION-1 (2026-10-01, #1681): per-worker Workers AI attribution. Returns a shallow env copy whose AI
 // binding records each .run() (calls, errors, ms, tokens, neurons) into qnfo-audit ai_call_counters (purpose 'binding').
 // Neurons = usage tokens x Cloudflare's published per-model rates (neurons per M tokens). Fail-soft; env is never mutated.
@@ -386,7 +386,7 @@ async function reclaimStaleResearching(env) {
   var staleRearm = "status='researching' AND claimed_at IS NOT NULL AND claimed_at < strftime('%Y-%m-%dT%H:%M:%SZ','now','-" + RESEARCH_FAILED_REARM_MIN + " minutes')";
   var _rmax = Number(await recoverMax(env));
 var parked = await env.QNFO_AUDIT.prepare("UPDATE research_queue SET status='wontfix', stage='parked', claimed_at=NULL, error='PARKED-POISON-1: stale researching claim with recover_count exhausted (' || recover_count || '); not re-armed' WHERE " + staleClaim + " AND recover_count >= " + _rmax).run();
-  var req = await env.QNFO_AUDIT.prepare("UPDATE research_queue SET status='queued', stage='ground', claimed_at=NULL, attempt=0, recover_count=recover_count+1 WHERE " + staleRearm + " AND recover_count < " + _rmax).run();
+  var req = await env.QNFO_AUDIT.prepare("UPDATE research_queue SET status='queued', stage=CASE WHEN stage IN ('complete','review','revise','verify') THEN stage ELSE 'ground' END, claimed_at=NULL, attempt=0, recover_count=recover_count+1 WHERE " + staleRearm + " AND recover_count < " + _rmax).run();
   return { parked: (parked.meta && parked.meta.changes) || 0, requeued: (req.meta && req.meta.changes) || 0 };
 }
 // RERUN-ROUTE-1 (0.18.0, agent_issues 2473, pillar cost): markError sent every failing row back to stage ground, so a paper
@@ -3232,7 +3232,7 @@ var SWEEP_RULES = "complete+cite-fulltext-3+abstract-clean-2";
 // Due on the 03:00 UTC tick, and on any tick when no sweep has run for 26 h (the first tick after a deploy, or a missed day).
 async function completenessSweepDue(env, ms) {
   var d = new Date(ms);
-  if (d.getUTCHours() === 3 && d.getUTCMinutes() < 15) return true;
+  if (d.getUTCHours() === 3 && d.getUTCMinutes() < 10) return true;
   try {
     var last = await env.QNFO_AUDIT.prepare("SELECT ts FROM cloud_ops_events WHERE job = ? AND kind = 'completeness-sweep' AND ts > ? AND instr(text, ?) > 0 LIMIT 1").bind(WORKER, new Date(ms - 26 * 3600 * 1e3).toISOString(), '"rules":"' + SWEEP_RULES + '"').first();
     return !last;
@@ -5318,6 +5318,16 @@ function doneStatus(r) {
 // reclaimStaleResearching re-queued it at stage ground, discarding the draft. Measured 2026-10-17/18: 550 rows released
 // in 24 h; 302 ground claims of only 72 distinct rows (one row grounded 7 times); ~1.5k content items past SLA. A stage
 // that returns now refreshes the claim, so only a row whose stage stopped returning (a real stall) is reclaimed.
+// IDEA-TO-PUBLISH-METRIC-1 (0.18.38): median hours from idea_proposals.created_at (research_queue.created_at for other
+// sources) to research_queue.published_at over rows published in the last 7 days; owner target < 100 h. :00 tick.
+async function ideaToPublishMetric(env) {
+  const rows = (await env.QNFO_AUDIT.prepare("SELECT (julianday(q.published_at) - julianday(COALESCE(i.created_at, q.created_at))) * 24 AS h FROM research_queue q LEFT JOIN idea_proposals i ON q.source = 'proposal' AND CAST(i.id AS TEXT) = q.source_id WHERE q.status = 'published' AND q.published_at >= strftime('%Y-%m-%dT%H:%M:%SZ','now','-7 days') ORDER BY h").all()).results || [];
+  const hs = rows.map(function(r) { return Number(r.h); }).filter(function(x) { return Number.isFinite(x); });
+  if (!hs.length) return { n: 0 };
+  const p50 = Math.round(hs[Math.floor((hs.length - 1) / 2)] * 10) / 10;
+  await env.QNFO_AUDIT.prepare("UPDATE metric_registry SET last_value=?1, last_refreshed=?2, state='MEASURED' WHERE metric='idea_to_publish_h_p50_7d'").bind(String(p50), nowIso()).run();
+  return { n: hs.length, p50, under100: hs.filter(function(x) { return x < 100; }).length };
+}
 async function claimHeartbeat(env, row) {
   try {
     if (row && row.id) await env.QNFO_AUDIT.prepare("UPDATE research_queue SET claimed_at=?1 WHERE id=?2 AND status='researching'").bind(nowIso(), row.id).run();
@@ -6185,7 +6195,7 @@ function reviserEnv(raw, token) {
   if (token) e.REVISER_TOKEN = token;
   return __aiAttrEnv(e, REVISER_MEMBER, "AI", "QNFO_AUDIT");
 }
-function reviserDue(ms) { var d = new Date(ms); return d.getUTCHours() % 4 === 0 && d.getUTCMinutes() >= 30 && d.getUTCMinutes() < 45; }
+function reviserDue(ms) { var d = new Date(ms); return d.getUTCHours() % 4 === 0 && d.getUTCMinutes() >= 30 && d.getUTCMinutes() < 40; }
 function reviserMemberCall(ctx) { var p = ctx && ctx.props; return !!(p && p.member === REVISER_MEMBER && /^qnfo-[a-z0-9-]{1,60}$/.test(String(p.caller || ""))); }
 // ---- REVISER-FOLD-1:END ----
 // ---- ERRATA-FOLD-1:BEGIN (0.9.65, #1756) ----
@@ -28214,7 +28224,8 @@ function errataEnv(raw, token) {
   return e;
 }
 // The member job due on a */15 tick: the entry of its own table whose minute starts the tick's quarter hour.
-function errataJobAt(ms) { var m = new Date(ms).getUTCMinutes(); return m < 15 ? "0 * * * *" : m < 30 ? "15 * * * *" : m < 45 ? "30 * * * *" : null; }
+// TICK-10M-1 (0.18.38): each job owns the first 10 minutes of its old quarter hour, so a */10 or */15 tick runs it once.
+function errataJobAt(ms) { var m = new Date(ms).getUTCMinutes(); return m < 10 ? "0 * * * *" : m >= 15 && m < 25 ? "15 * * * *" : m >= 30 && m < 40 ? "30 * * * *" : null; }
 function errataMemberCall(ctx) { var p = ctx && ctx.props; return !!(p && p.member === ERRATA_MEMBER && /^qnfo-[a-z0-9-]{1,60}$/.test(String(p.caller || ""))); }
 async function runErrataMember(event, raw) {
   var at = Number(event && event.scheduledTime) || Date.now(), job = errataJobAt(at);
@@ -28291,6 +28302,13 @@ var worker_default = {
       try {
         var _sMin = new Date(Number(event && event.scheduledTime) || Date.now()).getUTCMinutes();
         const _rearm = _sMin === 0 ? await parkRearmTick(env) : { rearmed: 0 };
+        if (_sMin === 0) {
+          try {
+            await logEvent(env, "idea-to-publish", JSON.stringify(await ideaToPublishMetric(env)), "ok");
+          } catch (eItp) {
+            await logEvent(env, "idea-to-publish", "threw: " + String(eItp && eItp.message || eItp).slice(0, 200), "warn");
+          }
+        }
         if (_rearm.rearmed) await logEvent(env, "park-rearm-tick", JSON.stringify(_rearm), "ok");
       } catch (eRep) {
         await logEvent(env, "error", "parkRearmTick threw: " + String(eRep && eRep.message || eRep).slice(0, 200), "error");
@@ -28322,7 +28340,7 @@ var worker_default = {
     if (new URL(request.url).pathname === "/reviser/health" && request.method === "GET") return reviserMod.fetch(new Request(new URL("/health", request.url)), reviserEnv(env), ctx);
     env = __aiAttrEnv(env, "qnfo-research-exec", "AI", "QNFO_AUDIT");
     const url = new URL(request.url);
-    if (url.pathname === "/health") return json({ ok: true, worker: WORKER, version: VERSION, capabilities: ["research-pipeline", "arxiv-grounding", "ensemble-drafting", "review", "python-verification", "inhouse-publish"], limitations: ["stages run only on the */15 cron under a single-flight lease (research_parallel rows at once, stages back to back within the tick budget)", "papers cite only the grounding bibliography (arXiv API, DataCite arXiv records, QNFO corpus)", "a quantitative claim is checked at the precision the paper states", "quantitative verification needs the qnfo-containers-pilot binding", "a new paper must reach 20000 chars to publish"] });
+    if (url.pathname === "/health") return json({ ok: true, worker: WORKER, version: VERSION, capabilities: ["research-pipeline", "arxiv-grounding", "ensemble-drafting", "review", "python-verification", "inhouse-publish"], limitations: ["stages run only on the */10 cron under a single-flight lease (research_parallel rows at once, stages back to back within the tick budget)", "papers cite only the grounding bibliography (arXiv API, DataCite arXiv records, QNFO corpus)", "a quantitative claim is checked at the precision the paper states", "quantitative verification needs the qnfo-containers-pilot binding", "a new paper must reach 20000 chars to publish"] });
     if (url.pathname === "/run" && request.method === "POST") {
       if (url.searchParams.get("sync") !== "1") {
         await logEvent(env, "kick", "HTTP /run kick accepted; drained by the cron under the single-flight lease", "ok");
