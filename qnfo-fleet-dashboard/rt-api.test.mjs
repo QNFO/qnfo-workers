@@ -241,7 +241,7 @@ const etagOf = (r) => r.headers.get("ETag");
 // I. every open read answers the same contract, not just the three that carried the example
 {
   const { env } = mk();
-  const probes = ["/api/state", "/api/actions", "/api/integration", "/api/watchmaker", "/api/generators", "/api/reach", "/api/attention", "/api/kpi", "/api/content", "/api/ga4", "/api/q08-review", "/api/decision"];
+  const probes = ["/api/state", "/api/actions", "/api/loop", "/api/integration", "/api/changes", "/api/watchmaker", "/api/generators", "/api/reach", "/api/attention", "/api/kpi", "/api/content", "/api/ga4", "/api/q08-review", "/api/decision"];
   let live = 0, rev = 0;
   for (const p of probes) {
     const a = await call(env, p);
@@ -254,7 +254,7 @@ const etagOf = (r) => r.headers.get("ETag");
     const b = await call(env, p, { "If-None-Match": tag });
     if (b.status === 304) rev++; else ok(false, "I3 " + p + " did not revalidate (" + b.status + ")");
   }
-  ok(live >= 9, "I4 at least nine extended reads answer 200 here (" + live + "/" + probes.length + ")");
+  ok(live >= 11, "I4 at least eleven extended reads answer 200 here (" + live + "/" + probes.length + ")");
   ok(rev === live, "I5 every one of them revalidates (" + rev + "/" + live + ")");
   const ix = await (await call(env, "/api")).json();
   const rows = ix.endpoints || [];
@@ -281,6 +281,8 @@ const etagOf = (r) => r.headers.get("ETag");
   ok(d({ x: 1, generated_at: "a", age: 1 }) === d({ x: 1, generated_at: "b", age: 99 }), "J4 the clock fields do not move the revision");
   ok(d({ x: 1 }) !== d({ x: 2 }), "J5 a content field does move the revision");
   ok(d({ items: [{ key: "a", age: 1 }] }) === d({ items: [{ key: "a", age: 500 }] }), "J6 a clock field nested in an array is ignored too");
+  ok(d({ since: "a", deploys: 1 }) === d({ since: "b", deploys: 1 }), "J7 the echoed window start is a clock field");
+  ok(d({ since: "a", deploys: 1 }) !== d({ since: "a", deploys: 2 }), "J8 ...and a change inside that window still moves the revision");
 }
 
 console.log(pass + " passed, " + fail + " failed");
