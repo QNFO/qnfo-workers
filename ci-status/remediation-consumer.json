@@ -1,177 +1,414 @@
 {
  "ok": true,
  "marker": "REMEDIATION-CONSUMER-1",
- "verifier": "remediation-consumer@5360106abed6",
- "due": 9,
- "pass": 6,
- "fail": 3,
- "skipped": 0,
+ "verifier": "remediation-consumer@c21568c34ff2",
+ "due": 595,
+ "pass": 325,
+ "fail": 194,
+ "skipped": 76,
  "contracts": [
   {
-   "class": "fm-capability-snapshot-retired-row",
+   "class": "rt-page-subscribe",
    "issue_id": null,
    "verdict": "pass",
-   "expected": "0",
-   "observed": "0",
+   "expected": "ok",
+   "observed": "ok",
    "written": true
   },
   {
-   "class": "issue-2380",
-   "issue_id": 2380,
-   "verdict": "fail",
-   "expected": "1",
-   "observed": "0",
-   "written": true
-  },
-  {
-   "class": "issue-2167",
-   "issue_id": 2167,
-   "verdict": "fail",
-   "expected": "1",
-   "observed": "0",
-   "written": true
-  },
-  {
-   "class": "fm-migration-literal-outside-check-enum",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "0",
-   "observed": "0",
-   "written": true
-  },
-  {
-   "class": "fm-two-closers-disagree",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "0",
-   "observed": "0",
-   "written": true
-  },
-  {
-   "class": "fm-probe-vacuous-open-fail",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "0",
-   "observed": "0",
-   "written": true
-  },
-  {
-   "class": "issue-2418",
-   "issue_id": 2418,
+   "class": "issue-2559",
+   "issue_id": 2559,
    "verdict": "pass",
    "expected": "ok",
    "observed": "ok",
    "written": true
   },
   {
-   "class": "EVID-GATE-A2-PUBLISHV2",
-   "issue_id": null,
-   "verdict": "fail",
-   "expected": "assert-ok",
-   "observed": "pending: no publish-v2-metadata event since 2026-10-01 15:17",
+   "class": "issue-2565",
+   "issue_id": 2565,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
    "written": true
   },
   {
-   "class": "plane-living-paper-fresh",
+   "class": "fm-companion-objection-heading-only",
    "issue_id": null,
    "verdict": "pass",
    "expected": "ok",
    "observed": "ok",
    "written": true
-  }
- ],
- "trusted_transports": [
-  "binding-http",
-  "cf-api",
-  "code-read",
-  "container",
-  "curl",
-  "d1-query",
-  "d1-query@ipatent-db",
-  "d1-query@living-paper",
-  "d1-query@personal-life",
-  "d1-query@portfolio-state",
-  "d1-query@q08-signal",
-  "d1-query@qnfo-cms",
-  "d1-query@qnfo-graph",
-  "dns",
-  "edge-ext",
-  "external",
-  "external-curl",
-  "external-http",
-  "external-https",
-  "http",
-  "runner-https"
- ],
- "https": 1,
- "budget_exhausted": false,
- "runtime_verified_share_24h": 9.2,
- "host_census": {
-  "skipped": "ran within 6h"
- },
- "fleet_journeys": {
-  "at": "2026-10-18T00:26:46Z",
-  "journeys": 6,
-  "failing": [
-   "binding-census",
-   "loop-heartbeats"
-  ],
-  "issues": {
-   "binding-census": "updated 2755",
-   "loop-heartbeats": "updated 2679"
   },
-  "results": [
-   {
-    "journey": "deploy-coherence",
-    "ok": true,
-    "ms": 8502,
-    "failed": []
-   },
-   {
-    "journey": "binding-census",
-    "ok": false,
-    "ms": 3142,
-    "failed": [
-     "census sees every worker (blind <= 0)"
-    ]
-   },
-   {
-    "journey": "lock-roundtrip",
-    "ok": true,
-    "ms": 1701,
-    "failed": []
-   },
-   {
-    "journey": "papers-path",
-    "ok": true,
-    "ms": 943,
-    "failed": []
-   },
-   {
-    "journey": "loop-heartbeats",
-    "ok": false,
-    "ms": 5044,
-    "failed": [
-     "dashboard state: no error-level issues"
-    ]
-   },
-   {
-    "journey": "ai-router",
-    "ok": true,
-    "ms": 358,
-    "failed": []
-   }
-  ]
- },
- "migrations": {
-  "opted_in": 236,
-  "unapplied": [],
-  "applied_now": [],
-  "failed": [],
-  "metric": 0
- },
- "spent_ms": 45222,
- "head": "5360106abed642f90c611a6632b4c5c9abf64795",
- "job_status": "success",
- "ts": "2026-10-18T00:29:55Z"
-}
+  {
+   "class": "fm-q08-title-only-writer-fallthrough",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "issue-2558",
+   "issue_id": 2558,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "fm-improvement-files-in-target-decline",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "issue-2583",
+   "issue_id": 2583,
+   "verdict": "fail",
+   "expected": "ok",
+   "observed": "missing-marker:qnfo-cloud-ops/worker.js",
+   "written": true
+  },
+  {
+   "class": "issue-2584",
+   "issue_id": 2584,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "issue-2586",
+   "issue_id": 2586,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "issue-2585",
+   "issue_id": 2585,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "issue-2587",
+   "issue_id": 2587,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "fm-companion-critic-sourced-false-grounding",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "fm-control-loop-wait-over-120m",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "fm-companion-source-shorter-than-essay",
+   "issue_id": null,
+   "verdict": "fail",
+   "expected": "ok",
+   "observed": "missing-marker:personal-companion/worker.js",
+   "written": true
+  },
+  {
+   "class": "fm-companion-initialism-sentence-split",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "fm-reintake-cooldown-over-120m",
+   "issue_id": null,
+   "verdict": "fail",
+   "expected": "ok",
+   "observed": "missing-marker:qnfo-code-orchestrator/worker.js",
+   "written": true
+  },
+  {
+   "class": "fm-companion-starved-retry-capped",
+   "issue_id": null,
+   "verdict": "fail",
+   "expected": "ok",
+   "observed": "missing-marker:personal-companion/worker.js",
+   "written": true
+  },
+  {
+   "class": "fm-companion-critic-list-capped",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "issue-2598",
+   "issue_id": 2598,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "fm-companion-redundant-grounding-gate",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "fm-q08-lede-provenance-unprunable",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "fm-q08-prune-short-revise-unpruned",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "TWIN-VISION-TOOLLEAK-1",
+   "issue_id": 1805,
+   "verdict": "pass",
+   "expected": "fixed",
+   "observed": "fixed",
+   "written": true
+  },
+  {
+   "class": "issue-1962",
+   "issue_id": 1962,
+   "verdict": "pass",
+   "expected": "fresh",
+   "observed": "fresh",
+   "written": true
+  },
+  {
+   "class": "fm-companion-heading-unprunable",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "TWIN-MCP-OAUTH-1",
+   "issue_id": 1817,
+   "verdict": "fail",
+   "expected": "connected",
+   "observed": "pending: no access token in personal-life oauth_tokens yet",
+   "written": true
+  },
+  {
+   "class": "issue-1981",
+   "issue_id": 1981,
+   "verdict": "pass",
+   "expected": "retired",
+   "observed": "retired",
+   "written": true
+  },
+  {
+   "class": "issue-1982",
+   "issue_id": 1982,
+   "verdict": "pass",
+   "expected": "retired",
+   "observed": "retired",
+   "written": true
+  },
+  {
+   "class": "issue-1881",
+   "issue_id": 1881,
+   "verdict": "fail",
+   "expected": "ingested",
+   "observed": "pending",
+   "written": true
+  },
+  {
+   "class": "issue-2042",
+   "issue_id": 2042,
+   "verdict": "pass",
+   "expected": "live",
+   "observed": "live",
+   "written": true
+  },
+  {
+   "class": "rt-idea-hub",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "fm-companion-splitter-legal-abbrev",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "issue-1983",
+   "issue_id": 1983,
+   "verdict": "pass",
+   "expected": "retired",
+   "observed": "retired",
+   "written": true
+  },
+  {
+   "class": "issue-2278",
+   "issue_id": 2278,
+   "verdict": "pass",
+   "expected": "0",
+   "observed": "0",
+   "written": true
+  },
+  {
+   "class": "fm-q08-prune-floor-revision-loop",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "1",
+   "observed": "1",
+   "written": true
+  },
+  {
+   "class": "issue-2105",
+   "issue_id": 2105,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "fm-ipatent-automated-drafts-counted",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "fm-paper-published-truncated",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "0",
+   "observed": "0",
+   "written": true
+  },
+  {
+   "class": "rt-q08",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "issue-2273",
+   "issue_id": 2273,
+   "verdict": "pass",
+   "expected": "0",
+   "observed": "0",
+   "written": true
+  },
+  {
+   "class": "issue-2448",
+   "issue_id": 2448,
+   "verdict": "pass",
+   "expected": "0",
+   "observed": "0",
+   "written": true
+  },
+  {
+   "class": "rt-live-personal-companion",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "issue-2468",
+   "issue_id": 2468,
+   "verdict": "fail",
+   "expected": "0",
+   "observed": "64",
+   "written": true
+  },
+  {
+   "class": "fm-outward-prose-no-lede",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "0",
+   "observed": "0",
+   "written": true
+  },
+  {
+   "class": "rt-page-ideas",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "rt-page-fleet-kpi",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "fm-paper-source-voice",
+   "issue_id": 2468,
+   "verdict": "pass",
+   "expected": "0",
+   "observed": "0",
+   "written": true
+  },
+  {
+   "class": "fm-paper-abstract-empty",
+   "issue_id": 2468,
+   "verdict": "pass",
+   "expected": "0",
+   "observed": "0",
+   "written": true
+  },
+  {
+   "class": "rt-page-fleet-api-kpi",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "issue-2485",
+   "issue_id": 2485,
+   "verdict": "pass",
+  
