@@ -1,5 +1,5 @@
 {
-  "audited_at": "2026-10-18 10:09:59",
+  "audited_at": "2026-10-18 10:43:39",
   "d1_write_failures": [],
   "d1_writes_ok": 119,
   "guard": {
@@ -578,7 +578,7 @@
       },
       {
         "dir": "qnfo-cloud-ops",
-        "version": "1.30.2-codeagent",
+        "version": "1.30.3-codeagent",
         "worker": "qnfo-cloud-ops"
       },
       {
@@ -613,17 +613,17 @@
       },
       {
         "dir": "qnfo-fleet-dashboard",
-        "version": "1.40.3-bsky-domain-handle-1",
+        "version": "1.41.0-ga4-data-api",
         "worker": "qnfo-fleet-dashboard"
       },
       {
         "dir": "qnfo-gateway",
-        "version": "3.18.10-identity-wellknown-1",
+        "version": "3.18.11-codeagent",
         "worker": "qnfo-gateway"
       },
       {
         "dir": "qnfo-github-steward",
-        "version": "0.3.1-tracker-sync-1",
+        "version": "0.4.2-tracker-sync-1",
         "worker": "qnfo-github-steward"
       },
       {
@@ -673,7 +673,7 @@
       },
       {
         "dir": "qnfo-social",
-        "version": "0.16.5-thread-close-1",
+        "version": "0.16.6-bsky-session-reuse-1",
         "worker": "qnfo-social"
       },
       {
@@ -1165,9 +1165,9 @@
       "worker": "qnfo-citation-watch"
     },
     "qnfo-cloud-ops": {
-      "before": "1.30.2-codeagent",
+      "before": "1.30.3-codeagent",
       "http": 200,
-      "live": "1.30.2-codeagent",
+      "live": "1.30.3-codeagent",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-cloud-ops"
@@ -1320,9 +1320,9 @@
       "worker": "qnfo-fleet-control"
     },
     "qnfo-fleet-dashboard": {
-      "before": "1.40.3-bsky-domain-handle-1",
+      "before": "1.41.0-ga4-data-api",
       "http": 200,
-      "live": "1.40.3-bsky-domain-handle-1",
+      "live": "1.41.0-ga4-data-api",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-fleet-dashboard"
@@ -1346,17 +1346,17 @@
       "worker": "qnfo-fleet-feed"
     },
     "qnfo-gateway": {
-      "before": "3.18.10-identity-wellknown-1",
+      "before": "3.18.11-codeagent",
       "http": 200,
-      "live": "3.18.10-identity-wellknown-1",
+      "live": "3.18.11-codeagent",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-gateway"
     },
     "qnfo-github-steward": {
-      "before": "0.3.1-tracker-sync-1",
+      "before": "0.4.2-tracker-sync-1",
       "http": 200,
-      "live": "0.3.1-tracker-sync-1",
+      "live": "0.4.2-tracker-sync-1",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-github-steward"
@@ -1614,9 +1614,9 @@
       "worker": "qnfo-skills-discovery"
     },
     "qnfo-social": {
-      "before": "0.16.5-thread-close-1",
+      "before": "0.16.6-bsky-session-reuse-1",
       "http": 200,
-      "live": "0.16.5-thread-close-1",
+      "live": "0.16.6-bsky-session-reuse-1",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-social"
