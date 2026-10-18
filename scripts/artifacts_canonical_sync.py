@@ -99,7 +99,7 @@ def d1(ctx, sql, params=None):
 
 def load_ledger(ctx, namespaces):
     rows, err = d1(ctx, "SELECT id, owner, name, artifacts_name, namespace, github_url, default_branch, "
-                        "archived, status FROM artifact_repos ORDER BY namespace, name")
+                        "archived, status, waived_reason FROM artifact_repos ORDER BY namespace, name")
     if err:
         die("cannot read artifact_repos: " + json.dumps(err)[:300])
     return [r for r in rows if r["namespace"] in namespaces]
@@ -189,6 +189,7 @@ def probe(ctx, row):
     return {
         "id": row["id"], "namespace": ns, "name": name, "branch": branch,
         "owner": owner, "repo": repo, "archived": 1 if archived else 0,
+        "waived": row.get("waived_reason"),
         "artifacts_sha": (a or {}).get("sha"), "github_sha": (g or {}).get("sha"),
         "artifacts_committed_at": _iso((a or {}).get("committed_at")),
         "github_committed_at": _iso((g or {}).get("committed_at")),
@@ -342,7 +343,11 @@ def main():
                 if again["in_sync"]:
                     repaired.append(r)
 
-    remaining = [r for r in drifted if r not in repaired]
+    # A waived repo is not convergable and not silently green either: it is reported separately
+    # with the reason recorded in artifact_repos.waived_reason (rwnq8/Friend: one 76MB blob against
+    # Artifacts' 32MB per-blob hard limit, so no honest mirror can contain it).
+    remaining = [r for r in drifted if r not in repaired and not r.get("waived")]
+    waived = [r for r in drifted if r.get("waived") and r not in repaired]
 
     for r in rows:
         pass
@@ -354,7 +359,9 @@ def main():
 
     summary = {
         "repos": len(rows), "in_sync": len(in_sync), "drifted": len(remaining),
-        "errors": len(errored), "repaired": len(repaired),
+        "errors": len(errored), "repaired": len(repaired), "waived": len(waived),
+        "waived_detail": [{"repo": r["namespace"] + "/" + r["name"], "reason": r["waived"]}
+                          for r in waived],
         "namespaces": namespaces,
         "drifted_sample": [{"repo": r["namespace"] + "/" + r["name"],
                             "github": (r["github_sha"] or "")[:10],

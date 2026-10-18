@@ -63,8 +63,38 @@ jobs:
         with:
           python-version: "3.11"
 
+      # mirror-sync fires on every push to main (~50/hour measured 2026-10-18), and this workflow is
+      # chained to it. Without a throttle that is a clone+push per push -- cost with no benefit,
+      # since a replica that is 90 minutes behind is still a faithful replica. Skipping is recorded,
+      # never silent.
+      - name: Throttle (skip if a run finished in the last 90 minutes)
+        id: gate
+        env:
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: |
+          python - <<'PY' >> "$GITHUB_OUTPUT"
+import json, os, urllib.request
+acct = os.environ["CLOUDFLARE_ACCOUNT_ID"]; tok = os.environ["CLOUDFLARE_API_TOKEN"]
+sql = ("SELECT COUNT(*) AS recent FROM artifact_sync_runs "
+       "WHERE started_at > datetime('now','-90 minutes')")
+req = urllib.request.Request(
+    f"https://api.cloudflare.com/client/v4/accounts/{acct}/d1/database/35e2e573-92f3-46ac-83c6-22f6429fc5e5/query",
+    data=json.dumps({"sql": sql}).encode(), method="POST",
+    headers={"Authorization": "Bearer " + tok, "Content-Type": "application/json"})
+try:
+    with urllib.request.urlopen(req, timeout=30) as r:
+        recent = json.load(r)["result"][0]["results"][0]["recent"]
+    print("run=" + ("true" if recent == 0 else "false"))
+    print(f"note=recent_runs_{recent}")
+except Exception as e:
+    print("run=true")   # fail-open on the gate only; the sync itself still fails closed
+    print("note=gate_error_" + str(e)[:40].replace(" ", "_"))
+PY
+
       - name: Reconcile GitHub HEAD against Artifacts HEAD
         id: reconcile
+        if: steps.gate.outputs.run != 'false'
         env:
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
@@ -79,7 +109,7 @@ jobs:
         continue-on-error: true
 
       - name: Index repository content into D1 + Vectorize + graph
-        if: always()
+        if: always() && steps.gate.outputs.run != 'false'
         env:
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}

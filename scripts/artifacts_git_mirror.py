@@ -115,18 +115,43 @@ def main():
             r = subprocess.run(["git", "-C", clone, "symbolic-ref", "HEAD",
                                 "refs/heads/" + args.branch], capture_output=True, text=True, env=env)
 
-        r = subprocess.run(["git", "-C", clone, "push", "--mirror", "--quiet", art_url],
+        # NOT `push --mirror`: mirror prunes refs the remote does not have, and measured 2026-10-18
+        # that destroyed the replica's `main` for qnfo/ostrowski-dimensionless-reformulation (whose
+        # GitHub default branch is `feature/ostrowski-...`), leaving the repo with an EMPTY HEAD and
+        # every default-branch reader broken. Push every branch and tag, deleting nothing.
+        r = subprocess.run(["git", "-C", clone, "push", "--quiet", art_url, "--all"],
                            capture_output=True, text=True, timeout=900, env=env)
         if r.returncode != 0:
             print(json.dumps({"ok": False, "step": "push", "detail": scrub(r.stderr, gh, cf, tok)[-400:]}))
             return 3
+        r = subprocess.run(["git", "-C", clone, "push", "--quiet", art_url, "--tags"],
+                           capture_output=True, text=True, timeout=900, env=env)
+        if r.returncode != 0:
+            print(json.dumps({"ok": False, "step": "push_tags", "detail": scrub(r.stderr, gh, cf, tok)[-300:]}))
+            return 3
+
+        # The Artifacts repo's default branch is fixed at create time and cannot be changed by API.
+        # If GitHub has no branch by that name, HEAD stays empty; point it at GitHub's default head
+        # so the replica is readable by the default-branch path every fleet reader uses.
+        ensured = None
+        st, j = http(CF + "/accounts/" + acct + "/artifacts/namespaces/" + args.namespace +
+                     "/repos/" + args.repo, cf)
+        default_branch = ((j.get("result") or {}).get("default_branch") or "main") if st == 200 else "main"
+        remote_refs = subprocess.run(["git", "-C", clone, "ls-remote", "--heads", art_url],
+                                     capture_output=True, text=True, timeout=300, env=env).stdout
+        if ("refs/heads/" + default_branch) not in remote_refs:
+            r = subprocess.run(["git", "-C", clone, "push", "--quiet", art_url,
+                                "HEAD:refs/heads/" + default_branch],
+                               capture_output=True, text=True, timeout=600, env=env)
+            if r.returncode == 0:
+                ensured = default_branch
 
         head = subprocess.run(["git", "-C", clone, "rev-parse", "HEAD"],
                               capture_output=True, text=True, env=env).stdout.strip()
         pushed_ref = head
         print(json.dumps({"ok": True, "namespace": args.namespace, "repo": args.repo,
                           "github": args.owner + "/" + gh_repo, "head": pushed_ref,
-                          "pushed": "mirror"}))
+                          "pushed": "all-refs", "default_branch_ensured": ensured}))
         return 0
     finally:
         if not args.keep:

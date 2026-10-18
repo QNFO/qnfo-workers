@@ -9,6 +9,10 @@
 --
 -- Idempotent: CREATE IF NOT EXISTS + additive ALTERs guarded by the applier.
 
+-- A replica that CANNOT be converged is recorded, never silently green: rwnq8/Friend holds one
+-- 76MB blob against Artifacts' 32MB per-blob hard limit. reconciled, reported separately.
+ALTER TABLE artifact_repos ADD COLUMN waived_reason TEXT;
+
 CREATE TABLE IF NOT EXISTS artifact_sync_state (
   repo_id               TEXT PRIMARY KEY,          -- artifact_repos.id
   namespace             TEXT NOT NULL,
@@ -23,7 +27,8 @@ CREATE TABLE IF NOT EXISTS artifact_sync_state (
   last_error            TEXT,
   drift_since           TEXT,
   repair_count          INTEGER NOT NULL DEFAULT 0,
-  last_repaired         TEXT
+  last_repaired         TEXT,
+  waived_reason         TEXT
 );
 
 CREATE INDEX IF NOT EXISTS idx_artifact_sync_drift
