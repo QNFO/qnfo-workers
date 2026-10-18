@@ -1,0 +1,28 @@
+-- RED-GATE-1 (owner directive 2026-10-18: "the fleet shall never stop or terminate with any outstanding
+-- breaches, failures, errors, issues or red items").  DB: qnfo-audit
+--
+-- What existed: red_snapshots already counts red every ~6 minutes (open issues, breach/condition/artifact
+-- contracts, failed and queued code tasks), never-stall requeues stale leases and files a critical when
+-- dispatch stalls, and red-drain drives remediation contracts. What did not exist is a STATE: nothing could
+-- stop the fleet from declaring "clear" while red_total was in the hundreds, and nothing made total idleness
+-- a red item itself.
+--
+-- These objects are what the live fleet uses. They are created here so a restored or fresh database can
+-- reproduce the gate; the fleet_task definition below is byte-for-byte the one running in production.
+CREATE TABLE IF NOT EXISTS red_gate_state (k TEXT PRIMARY KEY, v INTEGER NOT NULL, ts TEXT);
+
+-- Views: reading agent_issues from inside an INSERT into agent_issues recurses through its triggers
+-- ("triggers nested too deep"), so the guard reads views, which fire no triggers.
+CREATE VIEW IF NOT EXISTS v_open_issue_titles AS SELECT title FROM agent_issues WHERE status='open';
+CREATE VIEW IF NOT EXISTS v_recent_open_issues AS SELECT id FROM agent_issues
+  WHERE status='open' AND updated_at > CAST(strftime('%s','now','-2 hours') AS INTEGER)*1000;
+
+-- NOTE on units: agent_issues.created_at/updated_at are MILLISECONDS. Comparisons written in seconds are
+-- silently always-false; every threshold here multiplies by 1000 deliberately.
+INSERT INTO fleet_tasks (id, name, type, definition, timeout_ms, retries, version, enabled, updated_at)
+VALUES ('red-gate','Red gate: publish working/clear from red_snapshots, escalate stalled reds, make idleness a red item','workflow','{"steps":[{"type":"sql","db":"AUDIT","name":"publish-state","sql":"INSERT INTO cloud_ops_events (id, ts, kind, text, meta, job, status)\nSELECT ''red-gate-''||strftime(''%Y-%m-%dT%H'', ''now''), strftime(''%Y-%m-%dT%H:%M:%SZ'',''now''), ''red-gate'',\n  ''RED-GATE-1: state=''||CASE WHEN COALESCE((SELECT red_total FROM red_snapshots ORDER BY id DESC LIMIT 1),0)>0 THEN ''working'' ELSE ''clear'' END||\n  '' | red_total=''||COALESCE((SELECT red_total FROM red_snapshots ORDER BY id DESC LIMIT 1),-1)||\n  '' | open_issues=''||COALESCE((SELECT open_issues FROM red_snapshots ORDER BY id DESC LIMIT 1),-1)||\n  '' | the fleet does not stop while this reads working'',\n  NULL, ''red-gate'', ''ok''\nON CONFLICT(id) DO UPDATE SET ts=excluded.ts, text=excluded.text, status=excluded.status"},{"type":"sql","db":"AUDIT","name":"escalate-stalled-reds","sql":"UPDATE agent_issues SET priority=''critical'', updated_at=CAST(strftime(''%s'',''now'') AS INTEGER),\n  description=description||char(10)||''RED-GATE-1: escalated to critical - open red with no update for 48h and no code task referencing it.''\nWHERE rowid IN (\n  SELECT a.rowid FROM agent_issues a\n  WHERE a.status=''open'' AND a.priority IN (''critical'',''high'')\n    AND a.updated_at < CAST(strftime(''%s'',''now'',''-48 hours'') AS INTEGER)*1000\n    AND NOT EXISTS (SELECT 1 FROM code_tasks c WHERE c.status NOT IN (''merged'',''closed'',''failed'',''superseded'')\n      AND (c.goal LIKE ''%''||a.id||''%'' OR COALESCE(c.ctx,'''') LIKE ''%''||a.id||''%''))\n  ORDER BY a.priority, a.updated_at LIMIT 20)"},{"type":"sql","db":"AUDIT","name":"compute-idle","sql":"INSERT OR REPLACE INTO red_gate_state (k, v, ts)\nSELECT ''idle'',\n  CASE WHEN COALESCE((SELECT red_total FROM red_snapshots ORDER BY id DESC LIMIT 1),0) > 0\n        AND NOT EXISTS (SELECT 1 FROM code_tasks WHERE status=''queued'')\n        AND NOT EXISTS (SELECT 1 FROM v_recent_open_issues)\n       THEN 1 ELSE 0 END,\n  datetime(''now'')"},{"type":"sql","db":"AUDIT","name":"keep-going-when-idle-and-red","sql":"INSERT INTO agent_issues (title, description, source, category, priority, status, created_at, updated_at)\nSELECT ''RED-GATE-1: fleet idle while red'',\n  ''red_total=''||COALESCE((SELECT red_total FROM red_snapshots ORDER BY id DESC LIMIT 1),0)||'' but nothing is moving: no code task queued and no open issue updated in 2h. ''||\n  ''The directive is that the fleet never stops with outstanding reds; this issue exists so that idleness is itself a red item.'',\n  ''red-gate'', ''automation'', ''critical'', ''open'',\n  CAST(strftime(''%s'',''now'') AS INTEGER), CAST(strftime(''%s'',''now'') AS INTEGER)\nFROM red_gate_state s\nWHERE s.k=''idle'' AND s.v=1\n  AND NOT EXISTS (SELECT 1 FROM v_open_issue_titles WHERE title=''RED-GATE-1: fleet idle while red'')"},{"type":"sql","db":"AUDIT","name":"triage-red-gate-issues","sql":"INSERT OR IGNORE INTO issue_triage (issue_id, rc, triage_state, owner, sla_due_at, triaged_at)\nSELECT a.id, ''RED-GATE-1'', ''triaged'', ''qnfo-ops'', datetime(''now'',''+240 minutes''), datetime(''now'')\nFROM agent_issues a\nWHERE a.status=''open'' AND a.priority=''critical''\n  AND NOT EXISTS (SELECT 1 FROM issue_triage t WHERE t.issue_id=a.id)"},{"type":"sql","db":"AUDIT","name":"prune","sql":"DELETE FROM cloud_ops_events WHERE kind=''red-gate'' AND ts < datetime(''now'',''-30 days'')"}]}',30000,1,5,1,datetime('now'))
+ON CONFLICT(id) DO UPDATE SET definition=excluded.definition, name=excluded.name, version=excluded.version, enabled=1, updated_at=datetime('now');
+
+INSERT INTO fleet_crons (name, cron_expr, task_id, enabled)
+VALUES ('red-gate-hourly','45 * * * *','red-gate',1)
+ON CONFLICT(name) DO UPDATE SET cron_expr=excluded.cron_expr, task_id=excluded.task_id, enabled=1, updated_at=datetime('now');
