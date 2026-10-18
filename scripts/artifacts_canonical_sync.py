@@ -319,8 +319,11 @@ def main():
         # GitHub received a real commit today (2026-10-18T11:28, "license: QNFO Unified License
         # Agreement v2.1"), so skipping them would have left 20 replicas permanently stale while
         # their GitHub copies moved. Repair follows HEAD, not the archived flag.
+        # An `artifacts_*` error means the REPLICA is the problem (missing ref, missing repo) and a
+        # mirror push fixes it; a `github_*` error means GitHub itself is unreadable and no amount
+        # of pushing helps.
         candidates = [r for r in drifted
-                      if (not r["error"] or r["error"] == "artifacts_repo_missing")]
+                      if not r["error"] or str(r["error"]).startswith("artifacts_")]
         candidates.sort(key=lambda r: r["github_committed_at"] or "")
         for r in reversed(candidates):
             if args.limit and repair_attempts >= args.limit:
