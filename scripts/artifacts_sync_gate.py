@@ -10,6 +10,10 @@ CONTRACT
   Prints `run=<true|false>` and `note=<reason>` for $GITHUB_OUTPUT.
   Fails OPEN on a read error: a broken gate must not stop the sync that repairs drift. The sync
   itself still fails closed.
+
+  SYNC_FORCE=1 bypasses the window. Without it, verifying a fix means waiting out the throttle --
+  measured 2026-10-18, a run dispatched to prove a repair path was skipped because test runs had
+  filled the window, which leaves the operator with no way to test what they just merged.
 """
 
 import json
@@ -22,6 +26,10 @@ WINDOW_MIN = int(os.environ.get("SYNC_THROTTLE_MINUTES", "90"))
 
 
 def main():
+    if str(os.environ.get("SYNC_FORCE", "")).lower() in ("1", "true", "yes"):
+        print("run=true")
+        print("note=forced_by_caller")
+        return 0
     acct = os.environ.get("CLOUDFLARE_ACCOUNT_ID") or os.environ.get("CF_ACCOUNT_ID")
     tok = os.environ.get("CLOUDFLARE_API_TOKEN") or os.environ.get("CF_API_TOKEN")
     if not (acct and tok):

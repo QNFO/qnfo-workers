@@ -44,6 +44,9 @@ on:
       max_repos:
         description: "Repos to index per run"
         default: "6"
+      force:
+        description: "Bypass the 90-minute throttle (use to verify a fix now)"
+        default: "false"
 
 permissions:
   contents: read
@@ -74,6 +77,7 @@ jobs:
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           SYNC_THROTTLE_MINUTES: "90"
+          SYNC_FORCE: ${{ github.event.inputs.force }}
         run: python scripts/artifacts_sync_gate.py >> "$GITHUB_OUTPUT"
 
       - name: Reconcile GitHub HEAD against Artifacts HEAD
