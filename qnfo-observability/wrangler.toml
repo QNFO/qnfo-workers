@@ -44,3 +44,9 @@ bucket_name = "qnfo-audit"
 
 [triggers]
 crons = ["17 * * * *"]
+
+# Workers Analytics Engine — fleet metrics write binding (WAE-FLEET-1, 2026-10-18).
+# writeDataPoint() is fire-and-forget; the qnfo_fleet dataset is created on first write.
+[[analytics_engine_datasets]]
+binding = "FLEET_ANALYTICS"
+dataset = "qnfo_fleet"
