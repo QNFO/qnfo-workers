@@ -22,7 +22,7 @@
  *   * archived repositories are read-only and are skipped, not reported as drift;
  *   * GET /report and GET /health are public reads; POST /tick needs STEWARD_KEY.
  */
-var VERSION = "0.1.2-steward-bp";
+var VERSION = "0.2.0-notify-triage"; // 0.2.0 NOTIFY-TRIAGE-1: resolved GitHub notifications are marked done every run
 
 var ORG = "QNFO";
 var USER = "rwnq8";
@@ -203,6 +203,107 @@ async function auditWorkflows(env, repo, result) {
   }
 }
 
+
+/* NOTIFY-TRIAGE-1 (2026-10-18): the owner's GitHub inbox held 113 unread threads, 111 of them
+ * "workflow run failed" CheckSuite notices that GitHub never retracts once the failure is fixed.
+ * Each run reads the unread threads and marks a thread DONE only when its cause is PROVABLY
+ * resolved: a newer completed run of the same workflow on the same branch succeeded, the branch's
+ * pull request is closed or merged, the branch no longer exists, or the issue / PR subject is
+ * closed. Anything unproven stays unread, so the inbox shows only live failures. Never touches
+ * code, runs or issues; DELETE /notifications/threads/{id} only marks the thread done. */
+var NOTIFY_STALE_DAYS = 14;
+async function triageNotifications(env, result) {
+  var t = { seen: 0, done: 0, kept: [], errors: 0, reasons: {} };
+  result.notifications = t;
+  // the notifications API caps per_page at 50, so paginate() (which stops below 100) would read one page only
+  var list = [];
+  for (var pg = 1; pg <= 20; pg++) {
+    var rp = await gh(env, "GET", "/notifications?all=false&per_page=50&page=" + pg);
+    if (rp.status !== 200 || !Array.isArray(rp.body)) { if (rp.status !== 200) result.errors.push({ scope: "notifications", why: "list " + rp.status }); break; }
+    list = list.concat(rp.body);
+    if (rp.body.length < 50) break;
+  }
+  t.seen = list.length;
+  var runCache = {}, prCache = {}, branchCache = {};
+  var wfCache = {};
+  // per-workflow query: a branch-wide "newest 100 runs" window drops a quiet workflow on a busy branch
+  async function latestRun(repo, wf, branch) {
+    if (!wfCache[repo]) {
+      var w = await gh(env, "GET", "/repos/" + repo + "/actions/workflows?per_page=100");
+      wfCache[repo] = (w.status === 200 && w.body && w.body.workflows) || [];
+    }
+    var ids = wfCache[repo].filter(function (x) { return x.name === wf; }).map(function (x) { return x.id; });
+    var best = null;
+    for (var j = 0; j < ids.length; j++) {
+      var k = repo + "|" + ids[j] + "|" + branch;
+      if (runCache[k] === undefined) {
+        var r = await gh(env, "GET", "/repos/" + repo + "/actions/workflows/" + ids[j] + "/runs?status=completed&per_page=1&branch=" + encodeURIComponent(branch));
+        runCache[k] = (r.status === 200 && r.body && r.body.workflow_runs && r.body.workflow_runs[0]) || null;
+      }
+      var cand = runCache[k];
+      if (cand && (!best || Date.parse(cand.created_at) > Date.parse(best.created_at))) best = cand;
+    }
+    return best;
+  }
+  async function branchPr(repo, branch) {
+    var k = repo + "|" + branch;
+    if (prCache[k] === undefined) {
+      var owner = repo.split("/")[0];
+      var r = await gh(env, "GET", "/repos/" + repo + "/pulls?state=all&per_page=5&head=" + encodeURIComponent(owner + ":" + branch));
+      prCache[k] = (r.status === 200 && Array.isArray(r.body) && r.body[0]) || null;
+    }
+    return prCache[k];
+  }
+  async function branchGone(repo, branch) {
+    var k = repo + "|" + branch;
+    if (branchCache[k] === undefined) {
+      var r = await gh(env, "GET", "/repos/" + repo + "/branches/" + encodeURIComponent(branch));
+      branchCache[k] = r.status === 404;
+    }
+    return branchCache[k];
+  }
+  for (var i = 0; i < list.length; i++) {
+    var n = list[i], why = null;
+    try {
+      var repo = n.repository && n.repository.full_name;
+      var title = (n.subject && n.subject.title) || "";
+      var type = n.subject && n.subject.type;
+      if (type === "CheckSuite") {
+        var m = title.match(/^(.+) workflow run (?:failed|cancelled|timed out)(?: for (.+) branch)?$/);
+        if (m) {
+          var wf = m[1], br = m[2] || (n.repository && n.repository.default_branch) || "main";
+          var run = await latestRun(repo, wf, br);
+          if (run && run.conclusion === "success" && Date.parse(run.created_at) <= Date.now()) why = "rerun-green";
+          if (!why && br !== "main" && br !== "master") {
+            var pr = await branchPr(repo, br);
+            if (pr && pr.state === "closed") why = pr.merged_at ? "pr-merged" : "pr-closed";
+            else if (!pr && await branchGone(repo, br)) why = "branch-deleted";
+          }
+        }
+      } else if ((type === "Issue" || type === "PullRequest") && n.subject.url) {
+        var s = await gh(env, "GET", n.subject.url.replace(API, ""));
+        if (s.status === 200 && s.body && s.body.state === "closed") why = "subject-closed";
+        else if (s.status === 404 || s.status === 410) why = "subject-gone";
+      } else if (type === "Release" || type === "Discussion" || type === "Commit") {
+        why = "informational";
+      }
+      if (!why && Date.parse(n.updated_at) < Date.now() - NOTIFY_STALE_DAYS * 864e5 && type === "CheckSuite") why = "stale";
+      if (why) {
+        var d = await gh(env, "DELETE", "/notifications/threads/" + n.id);
+        if (d.status === 204 || d.status === 205 || d.status === 200) { t.done++; t.reasons[why] = (t.reasons[why] || 0) + 1; }
+        else { t.errors++; if (t.errors === 1) result.errors.push({ scope: "notifications", why: "mark-done " + d.status + " " + String(d.text).slice(0, 100) }); }
+      } else {
+        t.kept.push({ id: n.id, repo: repo, type: type, title: title.slice(0, 120), updated_at: n.updated_at });
+      }
+    } catch (e) {
+      t.errors++;
+      result.errors.push({ scope: "notification " + n.id, why: String(e && e.message || e).slice(0, 140) });
+    }
+  }
+  return t;
+}
+// end NOTIFY-TRIAGE-1
+
 async function runReconcile(env, opts) {
   var started = Date.now();
   var result = {
@@ -238,6 +339,9 @@ async function runReconcile(env, opts) {
     }
   }
 
+  if (!opts || opts.notifications !== false) {
+    try { await triageNotifications(env, result); } catch (eN) { result.errors.push({ scope: "notifications", why: String(eN && eN.message || eN).slice(0, 140) }); }
+  }
   result.duration_ms = Date.now() - started;
   result.finished_at = new Date().toISOString();
   return result;
@@ -317,7 +421,7 @@ export default {
       if (!(await stewardKeyOk(env, key))) {
         return json({ ok: false, error: "POST /tick needs x-steward-key" }, 401);
       }
-      var opts = { workflows: url.searchParams.get("workflows") === "1" };
+      var opts = { workflows: url.searchParams.get("workflows") === "1", notifications: url.searchParams.get("notifications") !== "0" };
       var res = await runReconcile(env, opts);
       await record(env, res);
       return json({ ok: true, result: res });
