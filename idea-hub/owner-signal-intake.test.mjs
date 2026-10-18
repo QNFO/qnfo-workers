@@ -191,7 +191,7 @@ lp2.prepare("INSERT INTO papers (doi, slug, identifier_type) VALUES (NULL, 'slug
 ok(await api.ownerPaper(e3, "slug-only-paper") && !(await api.ownerPaper(e3, "other-slug")), "a DOI-less pipeline paper from an owner proposal is the owner's, keyed by its slug");
 
 const ih = readFileSync(join(here, "worker.js"), "utf8");
-ok(/r\.corpus = await runOwnerCorpus\(env\)/.test(ih), "the hourly ideation cycle runs the corpus feeder");
+ok(/r\.corpus = await runOwnerCorpus\(env, WALL_DEADLINE\)/.test(ih), "the hourly ideation cycle runs the corpus feeder");
 ok(/binding = "VAULT"[\s\S]*bucket_name = "obsidian-vault"/.test(readFileSync(join(here, "wrangler.toml"), "utf8")), "wrangler.toml binds the obsidian-vault bucket as VAULT");
 console.log(pass + " passed, " + fail + " failed");
 process.exit(fail ? 1 : 0);
