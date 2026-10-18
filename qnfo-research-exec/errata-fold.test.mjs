@@ -25,8 +25,11 @@ const ok = (c, m, x) => { if (c) pass++; else { fail++; console.log("FAIL " + m 
 
 {
   const at = (m) => Date.UTC(2026, 9, 6, 9, m, 4);
-  ok(mod.__job(at(0)) === "0 * * * *" && mod.__job(at(14)) === "0 * * * *" && mod.__job(at(15)) === "15 * * * *" && mod.__job(at(30)) === "30 * * * *" && mod.__job(at(44)) === "30 * * * *" && mod.__job(at(45)) === null,
-    "the */15 tick maps to the member's own minutes: :00 watch, :15 respond, :30 publish, nothing at :45");
+  // TICK-10M-1 (0.18.38): each job owns the first 10 minutes of its quarter hour, so a */10 or */15 tick runs it once.
+  ok(mod.__job(at(0)) === "0 * * * *" && mod.__job(at(9)) === "0 * * * *" && mod.__job(at(10)) === null && mod.__job(at(15)) === "15 * * * *" && mod.__job(at(20)) === "15 * * * *" && mod.__job(at(30)) === "30 * * * *" && mod.__job(at(40)) === null && mod.__job(at(45)) === null && mod.__job(at(50)) === null,
+    "the tick maps to the member's own minutes: :00 watch, :15/:20 respond, :30 publish, nothing at :10, :40, :45, :50");
+  for (const step of [10, 15]) { const seen = {}; for (let m = 0; m < 60; m += step) { const j = mod.__job(at(m)); if (j) seen[j] = (seen[j] || 0) + 1; }
+    ok(seen["0 * * * *"] === 1 && seen["15 * * * *"] === 1 && seen["30 * * * *"] === 1, "every member job runs exactly once an hour on a */" + step + " tick", seen); }
 }
 
 const db = (tag) => { const s = { bind: () => s, run: async () => ({ success: true, meta: {} }), first: async () => null, all: async () => ({ results: [] }) }; return { tag, prepare: () => s }; };

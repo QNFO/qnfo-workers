@@ -26,8 +26,8 @@ const ok = (c, m, x) => { if (c) pass++; else { fail++; console.log("FAIL " + m 
   const at = (h, m) => Date.UTC(2026, 9, 6, h, m, 5);
   ok(mod.__due(at(0, 30)) && mod.__due(at(4, 30)) && mod.__due(at(20, 30)), "due at :30 of hours 0, 4, 20");
   ok(!mod.__due(at(0, 15)) && !mod.__due(at(0, 45)) && !mod.__due(at(1, 30)) && !mod.__due(at(5, 30)), "not due at :15, :45 or other hours");
-  let n = 0; for (let h = 0; h < 24; h++) for (let m = 0; m < 60; m += 15) if (mod.__due(at(h, m))) n++;
-  ok(n === 6, "six runs a day on the */15 tick, as the old 37 */4", n);
+  for (const step of [10, 15]) { let n = 0; for (let h = 0; h < 24; h++) for (let m = 0; m < 60; m += step) if (mod.__due(at(h, m))) n++;
+    ok(n === 6, "six runs a day on a */" + step + " tick, as the old 37 */4 (TICK-10M-1)", n); }
 }
 
 function mkDb(tag) {

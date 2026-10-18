@@ -88,7 +88,7 @@ props = { caller = "qnfo-research-exec" }
 # The single-flight lease (RESEARCH-SINGLE-FLIGHT-1) serialises runs, so a 15-min cadence is safe: an overrunning
 # stage just makes the next tick log lease-busy.
 [triggers]
-crons = ["*/15 * * * *"]
+crons = ["*/10 * * * *"] # TICK-10M-1 (0.18.38, owner directive 2026-10-18: idea to publication < 100 h): was */15; 144/day = CRON-MANDATE-1 ceiling
 
 [observability]
 enabled = true
