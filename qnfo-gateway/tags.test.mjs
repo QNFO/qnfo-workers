@@ -95,6 +95,7 @@ ok(/tag-more|All 5 tags/.test(html), "index links to the full catalogue");
 ok(/class="pc-tag"/.test(html), "paper cards carry tag chips");
 ok(/title="Codes, fault tolerance, logical qubits/.test(html), "tag chip carries its definition");
 const tagged = (await get(env, "https://papers.qnfo.org/papers?tag=error-correction")).text;
+ok(/<span id="ix-head">Error correction papers</.test(tagged), "heading names the active tag rather than saying All papers");
 ok(/Error correction\.<\/b>/.test(tagged) || /Codes, fault tolerance/.test(tagged), "active tag explains itself on the page");
 
 // 3. /papers/tags is a catalogue, not a paper
