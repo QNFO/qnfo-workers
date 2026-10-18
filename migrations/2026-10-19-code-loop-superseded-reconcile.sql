@@ -19,6 +19,15 @@
 --     issue still has work in it; PR-CLOSE-WITHOUT-MERGE-1 (issue 99901) owns that case. Issue 2876 is left open.
 --   * nothing is deleted and no trigger is created, so D1's trigger-depth budget is unchanged.
 --
+-- WHY type = 'workflow' AND NOT 'sql' (WORKFLOW-TYPE-1, learned the hard way on 2026-10-19)
+-- The first version of this row was inserted with type='sql'. fleet_runs shows what that does: the dispatcher hands the
+-- step object itself to D1, which answers
+--   D1_ERROR: Malformed input: {"params":[]}, should be {sql: string, params?: any[]} or an array of such
+-- four runs in a row (13:56, 14:02, 14:11, 14:21), every one failed, and nothing in the task's own output said so - the
+-- "success" read was an issue that had been closed by running the statement by hand. A fleet task whose steps are a
+-- steps[] array is type='workflow' (compare code-loop-terminal-reconcile, portfolio-self-manage, red-drain); any other
+-- type is not dispatched as a workflow at all.
+--
 -- SAFETY
 --   Idempotent: INSERT OR IGNORE on fleet_tasks/fleet_crons, and the reconciliation itself is an upsert into
 --   issue_triage guarded on a.status='open'. Re-applying changes nothing.
@@ -36,7 +45,7 @@ INSERT OR IGNORE INTO fleet_tasks (id, name, type, definition, timeout_ms, retri
 VALUES (
   'code-loop-superseded-reconcile',
   'Code loop terminal reconcile: a code task that reached superseded resolves its CODE-LOOP-EXHAUSTED-1 issue',
-  'sql',
+  'workflow',
   '{"steps":[{"type":"sql","db":"AUDIT","sql":"INSERT INTO issue_triage (issue_id, rc, triage_state, owner, sla_due_at, close_evidence) SELECT a.id, ''code-loop-superseded-reconcile'', ''resolved'', ''qnfo-code-orchestrator'', datetime(''now'',''+1 day''), ''Disposition: code task '' || t.id || '' reached superseded, which is in the orchestrator done set. code_tasks.status=superseded. Auto-closed by CODE-LOOP-SUPERSEDED-RECONCILE-1.'' FROM agent_issues a JOIN code_tasks t ON instr(a.title, t.id) > 0 WHERE a.status = ''open'' AND a.title LIKE ''CODE-LOOP-EXHAUSTED-1: ct_%'' AND t.status = ''superseded'' ON CONFLICT(issue_id) DO UPDATE SET triage_state=''resolved'', close_evidence=excluded.close_evidence"}]}',
   60000, 0, 1, 1, strftime('%Y-%m-%dT%H:%M:%SZ','now')
 );
