@@ -3945,7 +3945,7 @@ __name2(handleUnsubscribeProxy, "handleUnsubscribeProxy");
 // ARCHIVE-ON-GATEWAY-1 (2026-10-02, fixes ARCHIVE-PAGES-UNDEPLOYABLE-1 / agent_issues 1393): archive.qnfo.org was a Pages
 // project no workflow could deploy, so it served corrupted CSS and stale counts. The gateway serves it from live data;
 // a zone route sends archive.qnfo.org/* here (scripts/attach-surface-routes.py).
-// PAPER-TAGS-1: /papers/tags is the tag catalogue — every tag, grouped by what kind of question it answers
+// PAPER-TAGS-1: /papers/tags is the tag catalogue - every tag, grouped by what kind of question it answers
 // (method / topic / use), with how many papers carry it and one line on what it means. This is the page a
 // prospective reader or a programme manager can scan to find the use-case axis ("what could I do with this?").
 async function handleTags(request, env) {
@@ -3974,7 +3974,7 @@ async function handleTags(request, env) {
         + g.tags.map(function(t) { return '<a class="q-chip tag" data-tag="' + escAttr(t.tag) + '" href="/papers?tag=' + encodeURIComponent(t.tag) + '" title="' + escAttr(t.description) + '">' + esc(t.label) + " <b>" + t.n + "</b></a>"; }).join("")
         + "</div></div>";
     }).join("") + "</div></section></main>";
-  return new Response(qdsPage({ title: "Tags — QNFO Papers", description: "Every tag in the QNFO papers library, grouped by method, topic and use, with the papers that carry it.", canonical: "https://papers.qnfo.org/papers/tags", active: "papers" }, body), { headers: { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "public, max-age=600" } });
+  return new Response(qdsPage({ title: "Tags - QNFO Papers", description: "Every tag in the QNFO papers library, grouped by method, topic and use, with the papers that carry it.", canonical: "https://papers.qnfo.org/papers/tags", active: "papers" }, body), { headers: { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "public, max-age=600" } });
 }
 async function handleArchive(env) {
   let rows = [], latest = [];
@@ -4331,7 +4331,7 @@ function lpIndexHTML(papers, total, offset, hasMore, activeCategory, searchQuery
   }
   const tagRow = topTags.length
     ? '<div class="ix-chips tagrow" role="group" aria-label="Interdisciplinary tags">' + topTags.map(tagChip).join("")
-      + '<a class="tag-more" href="/papers/tags">All ' + (extra.tagTotal || Object.keys(tagCounts).length) + " tags →</a></div>"
+      + '<a class="tag-more" href="/papers/tags">All ' + (extra.tagTotal || Object.keys(tagCounts).length) + " tags &rarr;</a></div>"
     : "";
   const tagNote = activeTag && tagReg[activeTag]
     ? '<p class="ix-hint" style="margin:0 0 10px"><b>' + esc(tagReg[activeTag].label || activeTag) + ".</b> " + esc(tagReg[activeTag].description || "") + " Tagged papers: " + (tagCounts[activeTag] || 0) + ".</p>"
