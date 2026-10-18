@@ -1,26 +1,26 @@
 {
  "ok": true,
  "marker": "REMEDIATION-CONSUMER-1",
- "verifier": "remediation-consumer@4a6769ff5842",
- "due": 22,
+ "verifier": "remediation-consumer@f4ea10513733",
+ "due": 14,
  "pass": 5,
- "fail": 17,
- "skipped": 0,
+ "fail": 8,
+ "skipped": 1,
  "contracts": [
-  {
-   "class": "issue-2404",
-   "issue_id": 2404,
-   "verdict": "pass",
-   "expected": "ok",
-   "observed": "ok",
-   "written": true
-  },
   {
    "class": "issue-2403",
    "issue_id": 2403,
    "verdict": "fail",
    "expected": "ok",
    "observed": "missing-marker:qnfo-research-exec/worker.js",
+   "written": true
+  },
+  {
+   "class": "issue-2404",
+   "issue_id": 2404,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
    "written": true
   },
   {
@@ -72,19 +72,19 @@
    "written": true
   },
   {
-   "class": "issue-2521-outreach",
-   "issue_id": 2521,
-   "verdict": "fail",
-   "expected": "ok",
-   "observed": "missing-marker:qnfo-cloud-ops/worker.js",
-   "written": true
-  },
-  {
    "class": "issue-2521",
    "issue_id": 2521,
    "verdict": "pass",
    "expected": "ok",
    "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "issue-2521-outreach",
+   "issue_id": 2521,
+   "verdict": "fail",
+   "expected": "ok",
+   "observed": "missing-marker:qnfo-cloud-ops/worker.js",
    "written": true
   },
   {
@@ -112,76 +112,10 @@
    "written": true
   },
   {
-   "class": "issue-99996",
-   "issue_id": 99996,
-   "verdict": "fail",
-   "expected": "ok",
-   "observed": "pending: filed by qnfo-research-exec, which owns it for 48h",
-   "written": true
-  },
-  {
-   "class": "issue-99992",
-   "issue_id": 99992,
-   "verdict": "fail",
-   "expected": "ok",
-   "observed": "pending: filed by qnfo-research-exec, which owns it for 48h",
-   "written": true
-  },
-  {
-   "class": "issue-99967",
-   "issue_id": 99967,
-   "verdict": "fail",
-   "expected": "ok",
-   "observed": "pending: filed by qnfo-research-exec, which owns it for 48h",
-   "written": true
-  },
-  {
-   "class": "issue-99993",
-   "issue_id": 99993,
-   "verdict": "fail",
-   "expected": "ok",
-   "observed": "pending: filed by qnfo-research-exec, which owns it for 48h",
-   "written": true
-  },
-  {
-   "class": "issue-99987",
-   "issue_id": 99987,
-   "verdict": "fail",
-   "expected": "ok",
-   "observed": "pending: filed by qnfo-research-exec, which owns it for 48h",
-   "written": true
-  },
-  {
-   "class": "issue-99988",
-   "issue_id": 99988,
-   "verdict": "fail",
-   "expected": "ok",
-   "observed": "pending: filed by qnfo-research-exec, which owns it for 48h",
-   "written": true
-  },
-  {
-   "class": "issue-99997",
-   "issue_id": 99997,
-   "verdict": "fail",
-   "expected": "ok",
-   "observed": "pending: filed by qnfo-research-exec, which owns it for 48h",
-   "written": true
-  },
-  {
-   "class": "issue-99973",
-   "issue_id": 99973,
-   "verdict": "fail",
-   "expected": "ok",
-   "observed": "pending: filed by qnfo-research-exec, which owns it for 48h",
-   "written": true
-  },
-  {
-   "class": "issue-99974",
-   "issue_id": 99974,
-   "verdict": "fail",
-   "expected": "ok",
-   "observed": "pending: filed by qnfo-research-exec, which owns it for 48h",
-   "written": true
+   "class": "fm-pdf-typeset-bibliography-dropped",
+   "issue_id": 100001,
+   "verdict": "probe-not-machine-executable",
+   "reason": "not-a-select"
   }
  ],
  "trusted_transports": [
@@ -208,12 +142,12 @@
   "runner-https"
  ],
  "budget_exhausted": false,
- "runtime_verified_share_24h": 9.6,
+ "runtime_verified_share_24h": 9.5,
  "host_census": {
   "skipped": "ran within 6h"
  },
  "fleet_journeys": {
-  "at": "2026-10-18T20:55:07Z",
+  "at": "2026-10-18T22:18:58Z",
   "journeys": 6,
   "failing": [
    "binding-census",
@@ -227,13 +161,13 @@
    {
     "journey": "deploy-coherence",
     "ok": true,
-    "ms": 9009,
+    "ms": 8443,
     "failed": []
    },
    {
     "journey": "binding-census",
     "ok": false,
-    "ms": 3527,
+    "ms": 3265,
     "failed": [
      "census sees every worker (blind <= 0)"
     ]
@@ -241,19 +175,19 @@
    {
     "journey": "lock-roundtrip",
     "ok": true,
-    "ms": 1959,
+    "ms": 1784,
     "failed": []
    },
    {
     "journey": "papers-path",
     "ok": true,
-    "ms": 1265,
+    "ms": 1109,
     "failed": []
    },
    {
     "journey": "loop-heartbeats",
     "ok": false,
-    "ms": 5597,
+    "ms": 6723,
     "failed": [
      "dashboard state: no error-level issues"
     ]
@@ -261,13 +195,13 @@
    {
     "journey": "ai-router",
     "ok": true,
-    "ms": 349,
+    "ms": 315,
     "failed": []
    }
   ]
  },
  "migrations": {
-  "opted_in": 264,
+  "opted_in": 266,
   "unapplied": [
    "migrations/2026-10-18-issue-sla-window-retry.sql"
   ],
@@ -277,8 +211,8 @@
   ],
   "metric": 1
  },
- "spent_ms": 52729,
- "head": "4a6769ff584241a9c543957376c4137ee6671351",
+ "spent_ms": 52192,
+ "head": "f4ea10513733dd175441afa5581847f150a9d75f",
  "job_status": "success",
- "ts": "2026-10-18T20:59:26Z"
+ "ts": "2026-10-18T22:23:49Z"
 }
