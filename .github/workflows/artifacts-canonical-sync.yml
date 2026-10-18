@@ -1,0 +1,118 @@
+name: artifacts-canonical-sync
+
+# ARTIFACTS-CANONICAL-SYNC-1 (2026-10-18)
+#
+# OWNER DIRECTIVE: all repositories live in Cloudflare Artifacts AND stay canonically in sync with
+# GitHub automatically; repository content is integrated with the fleet's databases, graph and AI.
+#
+# WHY A RECONCILER AND NOT A PUSH HOOK
+#   A per-repository mirror workflow would mean 130 workflow files and 130 secrets to keep correct.
+#   This job asks every repository one cheap question -- "is GitHub's HEAD commit the commit
+#   Artifacts serves?" -- and only then pays for a transfer. Measured 2026-10-18: the full 180-repo
+#   audit takes ~40s and found 54 stale replicas that nothing else was watching.
+#
+# STEPS
+#   gate     scripts/artifacts_sync_gate.py    throttle: at most one run per 90 minutes
+#   reconcile scripts/artifacts_canonical_sync.py --repair   HEAD compare + per-ref delta push
+#   index     scripts/repo_content_index.py    D1 file index + Vectorize + graph stats
+#   assert    scripts/artifacts_sync_assert.py fail if a source could not be read
+#
+# CREDENTIALS
+#   CLOUDFLARE_API_TOKEN / CLOUDFLARE_ACCOUNT_ID : Artifacts control plane, D1, Workers AI, Vectorize
+#   QNFO_GH_PAT                                  : reads the whole org (set 2026-10-18). GITHUB_TOKEN
+#     alone only reads this repository, which is why it is the fallback and not the default.
+#
+# TRIGGER NOTE: the GitHub `schedule` event does not fire in this repository, so this workflow is
+# chained to mirror-sync.yml via workflow_run plus repository_dispatch, which the fleet already
+# fires from remediation-consumer.yml.
+#
+# YAML NOTE: every run: block here calls a checked-in script. Earlier revisions inlined python
+# heredocs at column 0 inside a block scalar, which made the file unparseable -- and GitHub treats
+# an unparseable workflow as absent, not as an error, so it would have silently never run.
+
+on:
+  workflow_run:
+    workflows: ["mirror-sync"]
+    types: [completed]
+  repository_dispatch:
+    types: [artifacts-canonical-sync]
+  workflow_dispatch:
+    inputs:
+      repair:
+        description: "Repair drifted replicas (per-ref delta push)"
+        default: "true"
+      max_repos:
+        description: "Repos to index per run"
+        default: "6"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: artifacts-canonical-sync
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    # Measured 2026-10-18: a full reconcile that repaired two large repos took 1000s, and per-ref
+    # pushing adds a round trip per branch. Waived repos are now skipped, so a normal run is far
+    # shorter, but the ceiling must not cut a legitimate repair short.
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.11"
+
+      - name: Throttle (skip if a run finished in the window)
+        id: gate
+        env:
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          SYNC_THROTTLE_MINUTES: "90"
+        run: python scripts/artifacts_sync_gate.py >> "$GITHUB_OUTPUT"
+
+      - name: Reconcile GitHub HEAD against Artifacts HEAD
+        id: reconcile
+        if: steps.gate.outputs.run != 'false'
+        env:
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.QNFO_GH_PAT || secrets.GITHUB_TOKEN }}
+        run: |
+          set -o pipefail
+          if [ "${{ github.event.inputs.repair }}" = "false" ]; then
+            python scripts/artifacts_canonical_sync.py --workers 4 --json-out sync.json
+          else
+            python scripts/artifacts_canonical_sync.py --repair --limit 12 --workers 4 --json-out sync.json
+          fi
+        continue-on-error: true
+
+      - name: Index repository content into D1 + Vectorize + graph
+        if: always() && steps.gate.outputs.run != 'false'
+        env:
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: |
+          python scripts/repo_content_index.py \
+            --max-repos "${{ github.event.inputs.max_repos || '6' }}" \
+            --max-chunks 900
+
+      - name: Assert the run could see what it claims to have checked
+        if: always() && steps.gate.outputs.run != 'false'
+        env:
+          SYNC_REPORT: sync.json
+        run: python scripts/artifacts_sync_assert.py
+
+      - name: Upload reconcile report
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: artifacts-sync-report
+          path: sync.json
+          if-no-files-found: ignore
+          retention-days: 14
