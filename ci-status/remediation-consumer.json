@@ -1,22 +1,54 @@
 {
  "ok": true,
  "marker": "REMEDIATION-CONSUMER-1",
- "verifier": "remediation-consumer@f2178b549880",
- "due": 555,
- "pass": 305,
- "fail": 170,
+ "verifier": "remediation-consumer@e6069469e17b",
+ "due": 556,
+ "pass": 292,
+ "fail": 184,
  "skipped": 80,
  "contracts": [
   {
-   "class": "issue-2559",
-   "issue_id": 2559,
+   "class": "issue-2310",
+   "issue_id": 2310,
    "verdict": "pass",
    "expected": "ok",
    "observed": "ok",
    "written": true
   },
   {
-   "class": "fm-companion-objection-heading-only",
+   "class": "issue-2309",
+   "issue_id": 2309,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "issue-2248",
+   "issue_id": 2248,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "issue-2230",
+   "issue_id": 2230,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "issue-2565",
+   "issue_id": 2565,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "fm-improvement-files-in-target-decline",
    "issue_id": null,
    "verdict": "pass",
    "expected": "ok",
@@ -40,8 +72,16 @@
    "written": true
   },
   {
-   "class": "issue-2565",
-   "issue_id": 2565,
+   "class": "issue-2559",
+   "issue_id": 2559,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "fm-companion-objection-heading-only",
+   "issue_id": null,
    "verdict": "pass",
    "expected": "ok",
    "observed": "ok",
@@ -61,14 +101,6 @@
    "verdict": "fail",
    "expected": "ok",
    "observed": "missing-marker:qnfo-cloud-ops/worker.js",
-   "written": true
-  },
-  {
-   "class": "fm-improvement-files-in-target-decline",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "ok",
-   "observed": "ok",
    "written": true
   },
   {
@@ -96,14 +128,6 @@
    "written": true
   },
   {
-   "class": "fm-companion-initialism-sentence-split",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "ok",
-   "observed": "ok",
-   "written": true
-  },
-  {
    "class": "issue-2585",
    "issue_id": 2585,
    "verdict": "pass",
@@ -113,6 +137,14 @@
   },
   {
    "class": "fm-companion-source-shorter-than-essay",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "fm-companion-initialism-sentence-split",
    "issue_id": null,
    "verdict": "pass",
    "expected": "ok",
@@ -272,14 +304,6 @@
    "written": true
   },
   {
-   "class": "rt-page-ideas",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "ok",
-   "observed": "ok",
-   "written": true
-  },
-  {
    "class": "rt-idea-hub",
    "issue_id": null,
    "verdict": "pass",
@@ -296,8 +320,22 @@
    "written": true
   },
   {
+   "class": "issue-2187",
+   "issue_id": 2187,
+   "verdict": "probe-not-machine-executable",
+   "reason": "url-not-allowlisted"
+  },
+  {
    "class": "issue-2105",
    "issue_id": 2105,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "rt-page-ideas",
+   "issue_id": null,
    "verdict": "pass",
    "expected": "ok",
    "observed": "ok",
@@ -320,23 +358,17 @@
    "written": true
   },
   {
-   "class": "issue-2187",
-   "issue_id": 2187,
-   "verdict": "probe-not-machine-executable",
-   "reason": "url-not-allowlisted"
-  },
-  {
    "class": "issue-2453",
    "issue_id": 2453,
    "verdict": "probe-not-machine-executable",
    "reason": "url-not-allowlisted"
   },
   {
-   "class": "fm-ipatent-automated-drafts-counted",
+   "class": "fm-q08-prune-floor-revision-loop",
    "issue_id": null,
-   "verdict": "pass",
-   "expected": "ok",
-   "observed": "ok",
+   "verdict": "fail",
+   "expected": "1",
+   "observed": "0",
    "written": true
   },
   {
@@ -350,9 +382,9 @@
   {
    "class": "issue-2448",
    "issue_id": 2448,
-   "verdict": "pass",
+   "verdict": "fail",
    "expected": "0",
-   "observed": "0",
+   "observed": "2",
    "written": true
   },
   {
@@ -372,22 +404,6 @@
    "written": true
   },
   {
-   "class": "fm-outward-prose-no-lede",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "0",
-   "observed": "0",
-   "written": true
-  },
-  {
-   "class": "fm-q08-prune-floor-revision-loop",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "1",
-   "observed": "1",
-   "written": true
-  },
-  {
    "class": "rt-page-q08-feed",
    "issue_id": null,
    "verdict": "pass",
@@ -396,20 +412,6 @@
    "written": true
   },
   {
-   "class": "fm-paper-source-voice",
-   "issue_id": 2468,
-   "verdict": "pass",
-   "expected": "0",
-   "observed": "0",
-   "written": true
-  },
-  {
-   "class": "rt-page-fleet-kpi",
+   "class": "fm-ipatent-automated-drafts-counted",
    "issue_id": null,
-   "verdict": "pass",
-   "expected": "ok",
-   "observed": "ok",
-   "written": true
-  },
-  {
-   "class": "rt-page-fleet-api-kpi
+   "verdict": "
