@@ -34,7 +34,7 @@ const ok = (c, m, d) => {
  * file under test. */
 const body = src.replace(/^export default /m, "var __default = ");
 const mod = new Function("console", body +
-  "\n;return { decideVerdict, gradeChat, gradeClef, clefPick, isHarnessError, VERSION, BATTERY_VERSION, QUALITY_BAND, COST_WIN_RATIO, handlers: __default };")
+  "\n;return { decideVerdict, gradeChat, gradeClef, clefPick, isHarnessError, canaryGate, VERSION, BATTERY_VERSION, QUALITY_BAND, COST_WIN_RATIO, handlers: __default };")
   ({ log() {} });
 
 const dv = (x) => mod.decideVerdict(x);
@@ -148,6 +148,27 @@ ok(/traces\]\s*\n\s*enabled\s*=\s*true/.test(toml), "wrangler enables traces");
 ok(/max_models_per_run/.test(src), "worker reads max_models_per_run from config");
 ok(!/Math\.min\(4,/.test(src), "worker no longer clamps the cap to 4");
 ok(/Math\.min\(12,/.test(src), "worker clamps the cap to 12");
+
+/* ---- 8. the canary gates the promotion -------------------------------- */
+{
+  const cg = mod.canaryGate;
+  ok(cg(0.9, 0.85).ready === true, "agreement 0.9 clears the bar");
+  const low = cg(0.33, 0.4);
+  ok(low.ready === false, "agreement 0.33 blocks the promotion", low);
+  ok(/does not reproduce the fleet's own labels/.test(low.reason), "block reason is explicit", low.reason);
+  ok(cg(null, null).ready === false, "no canary evidence cannot pass the gate");
+  ok(cg(0.7, 0.7).ready === true, "exactly at the bar passes");
+}
+/* Label coverage: a category the model cannot name measures the harness, not the model. */
+ok(/GROUP BY 1 ORDER BY n DESC LIMIT 40/.test(src), "canary offers every category (29 live), not the top 8");
+ok(/categories_offered/.test(src), "canary records how many labels were offered");
+ok(/cat_agreement/.test(src), "canary records category agreement separately from priority");
+ok(typeof mod.canaryGate === "function", "canaryGate is exported for test");
+
+/* Only one decision model may hold a promotion at a time. */
+ok(/reconcileDecisionPromotions/.test(src), "non-winner decision promotions are reconciled");
+ok(/DELETE FROM model_ladder_models WHERE id=\?1 AND notes LIKE 'auto-eval promote%'/.test(src),
+  "a withdrawn promotion deletes only the auto-eval ladder row");
 
 console.log(`\n${pass} passed, ${fail} failed`);
 if (fail) process.exit(1);
