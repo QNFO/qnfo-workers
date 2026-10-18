@@ -251,6 +251,46 @@ test("an unresolved key with no bibliography at all prints plainly instead of as
   assert.match(r.bodyHtml, /class="cite">\[Arute2019\]</);
 });
 
+test("an unkeyed reference list is still typeset as a bibliography", () => {
+  const body = [
+    "---",
+    'title: "Unkeyed"',
+    "---",
+    "",
+    "A body paragraph with no citation markers at all, followed by the paper's own list.",
+    "",
+    "## References",
+    "",
+    "1. Ostrowski, A. (1918). Über einige Lösungen der Funktionalgleichung. *Acta Math*. 41:271-284.",
+    "2. Robinson, A. (1966). *Non-standard Analysis*. North-Holland.",
+    "3. Conway, J.H. (1976). *On Numbers and Games*. Academic Press."
+  ].join("\n");
+  const r = renderPaperHTML(body, {});
+  assert.equal(r.stats.references, 3, "the list is recognised without keys");
+  assert.match(r.refsHtml, /<h2 class="refs-h">References<\/h2>/);
+  assert.match(r.refsHtml, /Acta Math/);
+  assert.equal((r.bodyHtml.match(/>References</g) || []).length, 0, "not printed twice");
+});
+
+test("a numbered list that only follows a References heading is not turned into a bibliography", () => {
+  const body = [
+    "---",
+    'title: "Checklist"',
+    "---",
+    "",
+    "Some prose.",
+    "",
+    "## References",
+    "",
+    "1. Run the separator sweep.",
+    "2. Re-check the figure captions.",
+    "3. File the follow-up."
+  ].join("\n");
+  const r = renderPaperHTML(body, {});
+  assert.equal(r.stats.references, 0, "no year and no DOI: not a bibliography");
+  assert.match(r.bodyHtml, /Run the separator sweep/, "the text is still on the page");
+});
+
 test("a body H1 that repeats the title is dropped (title appears once)", () => {
   const r = render();
   assert.equal((r.front.match(/class="paper-title"/g) || []).length, 1, "one title heading");

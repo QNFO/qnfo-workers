@@ -20,7 +20,7 @@
 // byline block or the D1 row is left out rather than guessed.
 import katex from "katex";
 
-export const RENDERER_VERSION = "2.1.0-typeset-pro-2";
+export const RENDERER_VERSION = "2.2.0-typeset-pro-3";
 
 /* ------------------------------------------------------------------ */
 /* escaping                                                            */
@@ -943,6 +943,10 @@ function parseBodyReferences(body) {
   }
   if (cur) entries.push(cur);
   if (entries.length < 2) return null;
+  // An unkeyed list cannot be matched to in-text citation keys, but it is still a bibliography and is
+  // typeset as one. Guard against a stray "References" mention in mid-prose: an unkeyed section must be
+  // the closing section (no heading after it). A keyed list is its own evidence and needs no such guard.
+  const hasLaterHeading = /(^|\n)#{1,3}[ \t]+\S/.test(s.slice(head.index + head[0].length));
 
   let auto = 0;
   for (let i = 0; i < entries.length; i++) {
@@ -962,7 +966,18 @@ function parseBodyReferences(body) {
       if (e.text) keyed++;
     }
   }
-  if (keyed < 2) return null;
+  if (keyed < 2 && hasLaterHeading) return null;
+  if (keyed === 0) {
+    // without keys, demand the shape of a bibliography: at least three entries and a majority carrying
+    // a publication year (or a DOI), so a checklist that happens to follow a "References" heading is
+    // not reformatted into one
+    if (entries.length < 3) return null;
+    let dated = 0;
+    for (let i = 0; i < entries.length; i++) {
+      if (/(?:1[6-9]|20)\d{2}/.test(entries[i].text) || /10\.\d{4,9}\//.test(entries[i].text)) dated++;
+    }
+    if (dated / entries.length < 0.6) return null;
+  }
 
   // remove the section from the body, keeping anything after it (a colophon, a changelog)
   const rest = lines.slice(consumed + 1).join("\n");

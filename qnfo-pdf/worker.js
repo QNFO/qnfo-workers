@@ -14637,7 +14637,7 @@ var katex = {
 // The renderer never invents metadata: a field that is absent in the frontmatter, the in-body
 // byline block or the D1 row is left out rather than guessed.
 
-const RENDERER_VERSION = "2.1.0-typeset-pro-2";
+const RENDERER_VERSION = "2.2.0-typeset-pro-3";
 
 /* ------------------------------------------------------------------ */
 /* escaping                                                            */
@@ -15560,6 +15560,10 @@ function parseBodyReferences(body) {
   }
   if (cur) entries.push(cur);
   if (entries.length < 2) return null;
+  // An unkeyed list cannot be matched to in-text citation keys, but it is still a bibliography and is
+  // typeset as one. Guard against a stray "References" mention in mid-prose: an unkeyed section must be
+  // the closing section (no heading after it). A keyed list is its own evidence and needs no such guard.
+  const hasLaterHeading = /(^|\n)#{1,3}[ \t]+\S/.test(s.slice(head.index + head[0].length));
 
   let auto = 0;
   for (let i = 0; i < entries.length; i++) {
@@ -15579,7 +15583,18 @@ function parseBodyReferences(body) {
       if (e.text) keyed++;
     }
   }
-  if (keyed < 2) return null;
+  if (keyed < 2 && hasLaterHeading) return null;
+  if (keyed === 0) {
+    // without keys, demand the shape of a bibliography: at least three entries and a majority carrying
+    // a publication year (or a DOI), so a checklist that happens to follow a "References" heading is
+    // not reformatted into one
+    if (entries.length < 3) return null;
+    let dated = 0;
+    for (let i = 0; i < entries.length; i++) {
+      if (/(?:1[6-9]|20)\d{2}/.test(entries[i].text) || /10\.\d{4,9}\//.test(entries[i].text)) dated++;
+    }
+    if (dated / entries.length < 0.6) return null;
+  }
 
   // remove the section from the body, keeping anything after it (a colophon, a changelog)
   const rest = lines.slice(consumed + 1).join("\n");
@@ -15879,7 +15894,7 @@ function buildPrintTemplates(meta) {
 }
 
 // worker.js
-var VERSION = "1.5.1-typeset-biblio-2"; /* 1.5.1 TYPESET-PRO-2 (2026-10-18, red-team of 1.5.0): (a) a citation wrapped across a source line break printed as raw text — paragraphs were inline-rendered line by line and then joined, so any marker split over two lines never matched; the buffer is now joined before the inline pass, and the citation scanner spans newlines. (b) Most papers ship no references.bib: their bibliography is the numbered list in their own body, whose entries end in the pandoc key that cites them ("1. Ostrowski, A. (1918). … [@Ostrowski1918]"). parseBodyReferences() now lifts that list, maps key -> entry number, strips the key annotation and prints the entries the author wrote, so those papers resolve instead of showing raw keys. (c) A key with no entry used to be marked as an error even in papers that carry no bibliography at all; it now prints plainly there and stays marked only where a bibliography exists and the key is genuinely missing. 1.5.0 TYPESET-PRO-1 (2026-10-18, owner directive "paper PDF needs better, professional typesetting and formatting that include full bibliographic information and author/affiliation"): title block with authors/affiliations/identifiers, BibTeX resolution from R2, numbered citations, hanging-indent reference list, live running head and page numbers. */
+var VERSION = "1.5.2-typeset-biblio-3"; /* 1.5.2 TYPESET-PRO-3 (2026-10-18, red-team round 2): 511 of 624 public records carry their bibliography as a numbered list in their own body WITHOUT citation keys, so 1.5.1 left it in body prose; parseBodyReferences() now typesets an unkeyed list too, guarded by "closing section + three entries + a majority carrying a year or DOI". Ships scripts/pdf_corpus_audit.mjs, the executable guard named in failure_modes.pdf-typeset-bibliography-dropped. 1.5.1 TYPESET-PRO-2: a citation wrapped across a source line break printed as raw text; most papers bibliographies are the numbered list in their own body; an unmatched key was flagged even where no bibliography exists. 1.5.0 TYPESET-PRO-1 (owner directive professional typesetting with full bibliographic information and author/affiliation): title block with authors/affiliations/identifiers, BibTeX resolution from R2, numbered citations, hanging-indent reference list, live running head and page numbers. */
 function pdfHeaders(slug) {
   return {
     "Content-Type": "application/pdf",
