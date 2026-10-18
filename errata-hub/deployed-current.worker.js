@@ -11,7 +11,7 @@ function rxSecretEqual(given, expected) {
   for (let i = 0; i < a.length; i++) d |= a[i] ^ b[i];
   return d === 0;
 }
-var VERSION = "1.6.1-model-floor-1"; // 1.6.0 ERRATA-INTERNAL-CONFIRM-1 (agent_issues 2494, pillar research): the :00 watch tick confirms or rejects internal-open errata older than 30 minutes with one model of another family than the finding's (a RENDER-HEALTH measurement needs none), so a confirmed erratum reaches errata-respond as detected; AI-TOKEN-BUDGET-RESEARCH-EXEC-1 (agent_issues 2399): the classify and draft env.AI.run calls carry max_tokens 4096. Folded into qnfo-research-exec 0.18.0 as ERRATA_VERSION 1.6.0-folded. 1.5.3 WORKERS-BP-DEBT-1 (#2432, pillar security): the request-secret checks compare in constant time (rxSecretEqual) instead of with === or !==. 1.5.2 NOZ-DOI-1 (2026-10-11): no external DOI-registrar call, token, route or text: the publish member re-renders the paper and re-points D1, graph and R2 with doi/zenodo_doi/zenodo_url left NULL, respond resolves papers by slug, watch keys a paper by its slug, the internal sweep takes a slug; a DOI value of the dead registrar is treated as absent in every emitted text. 1.5.1 // 1.5.0 ERRATA-GROUND-1 (owner directive 2026-10-10): a correction states only what the errata email or the paper states; a name, year, figure, DOI or link in neither makes the draft high risk (never sent). 1.4.2 prompt-cache // 1.4.1 WORKERS-AI-ATTRIBUTION-2 (#1997): env.AI wrapped with __aiAttrEnv at the entry, so the members' glm-5.3-flash and gemma-4 calls are counted in ai_call_counters (worker errata-hub); 1.4.0 ERRATA-INTERNAL-SWEEP-1 (#1164, pillar: research): the :00 watch tick first moves open internal_errata rows that have no errata_queue row into errata_queue (email_id NULL, subject = the erratum id, status internal-open, at most 20 per tick, no model call), so a finding recorded straight into internal_errata (qnfo-ops err-20260926-001) reaches the queue; the queue insert is shared with POST /internal-errata and adds nothing when a row for the erratum exists; 1.3.1 ERRATA-JUDGE-1 (pillar: research): a correction the drafting model (zai glm-5.3-flash) rates low risk is read once by a small model from another family (google gemma-4) before it can stay low risk; no verdict or a failing verdict makes it high risk, which errata-publish never sends (fail closed; docs/ENSEMBLE-POLICY.md); 1.3.0 1.3.0 CRON-SINGLE-TRIGGER-1 (#1785): one hourly trigger runs watch, respond, publish in that order; 1.2.0 ERRATA-HUB-CRONS-UNDECLARED-1 (#1747): hourly crons declared, publish gated off, tick rows; 1.1.5 WORKER-CONTRACT (HUB-VERSIONING-1) + cfWorkerRead /ops/deploy guard
+var VERSION = "1.6.2-highrisk-route-1"; // 1.6.2 ERRATA-HIGHRISK-ROUTE-1 (2026-10-18): a high-risk correction draft older than 6 h is handed to qnfo-research-exec as a remediation row instead of waiting audited forever; internal_errata rows close when their queue row is terminal; 1.6.0 ERRATA-INTERNAL-CONFIRM-1 (agent_issues 2494, pillar research): the :00 watch tick confirms or rejects internal-open errata older than 30 minutes with one model of another family than the finding's (a RENDER-HEALTH measurement needs none), so a confirmed erratum reaches errata-respond as detected; AI-TOKEN-BUDGET-RESEARCH-EXEC-1 (agent_issues 2399): the classify and draft env.AI.run calls carry max_tokens 4096. Folded into qnfo-research-exec 0.18.0 as ERRATA_VERSION 1.6.0-folded. 1.5.3 WORKERS-BP-DEBT-1 (#2432, pillar security): the request-secret checks compare in constant time (rxSecretEqual) instead of with === or !==. 1.5.2 NOZ-DOI-1 (2026-10-11): no external DOI-registrar call, token, route or text: the publish member re-renders the paper and re-points D1, graph and R2 with doi/zenodo_doi/zenodo_url left NULL, respond resolves papers by slug, watch keys a paper by its slug, the internal sweep takes a slug; a DOI value of the dead registrar is treated as absent in every emitted text. 1.5.1 // 1.5.0 ERRATA-GROUND-1 (owner directive 2026-10-10): a correction states only what the errata email or the paper states; a name, year, figure, DOI or link in neither makes the draft high risk (never sent). 1.4.2 prompt-cache // 1.4.1 WORKERS-AI-ATTRIBUTION-2 (#1997): env.AI wrapped with __aiAttrEnv at the entry, so the members' glm-5.3-flash and gemma-4 calls are counted in ai_call_counters (worker errata-hub); 1.4.0 ERRATA-INTERNAL-SWEEP-1 (#1164, pillar: research): the :00 watch tick first moves open internal_errata rows that have no errata_queue row into errata_queue (email_id NULL, subject = the erratum id, status internal-open, at most 20 per tick, no model call), so a finding recorded straight into internal_errata (qnfo-ops err-20260926-001) reaches the queue; the queue insert is shared with POST /internal-errata and adds nothing when a row for the erratum exists; 1.3.1 ERRATA-JUDGE-1 (pillar: research): a correction the drafting model (zai glm-5.3-flash) rates low risk is read once by a small model from another family (google gemma-4) before it can stay low risk; no verdict or a failing verdict makes it high risk, which errata-publish never sends (fail closed; docs/ENSEMBLE-POLICY.md); 1.3.0 1.3.0 CRON-SINGLE-TRIGGER-1 (#1785): one hourly trigger runs watch, respond, publish in that order; 1.2.0 ERRATA-HUB-CRONS-UNDECLARED-1 (#1747): hourly crons declared, publish gated off, tick rows; 1.1.5 WORKER-CONTRACT (HUB-VERSIONING-1) + cfWorkerRead /ops/deploy guard
 // MEMBER-VERSION-IDENTS-1 (2026-10-01): the three folded members reported their /health versions as string literals,
 // so opsDeploy refused every errata-hub deploy with FM7-HEALTH-VERSION-PARITY-1 (canonical-deploy run 36802041421:
 // 1.1.1 with the internal errata intake never went live, and errata-hub stayed NOT_DEPLOYED). Each member's version
@@ -21566,9 +21566,38 @@ async function publishGate(env) {
   }
 }
 __name(publishGate, "publishGate");
+// ERRATA-HIGHRISK-ROUTE-1 (1.6.2, 2026-10-18): errata-publish sends only risk='low' drafts (fail closed), and nothing else
+// selected a high-risk draft, so a confirmed erratum whose correction was high risk sat 'audited' forever (queue row 7,
+// render-scale-invariant-physics-math-1: 151 plain-text expressions, a 747k-char body, audited 2026-10-13, 4.5 days past
+// the correction SLA). A high-risk draft older than 6 h is now handed to the research pipeline as a remediation row
+// (the paper is revised and re-reviewed there, under every gate) and the erratum leaves the correction stage with that
+// route recorded; the internal_errata row follows the queue row. One INSERT OR IGNORE per erratum, no model call.
+async function routeHighRiskErrata(env) {
+  const out = { routed: 0, synced: 0 };
+  try {
+    const rows = (await env.WATCH_DB.prepare("SELECT a.id, a.queue_id, a.slug, q.subject, q.claim FROM errata_actions a JOIN errata_queue q ON q.id = a.queue_id WHERE a.status = 'drafted' AND a.risk = 'high' AND q.status = 'audited' AND a.created_at < datetime('now','-6 hours') ORDER BY a.id ASC LIMIT 5").all()).results || [];
+    for (const r of rows) {
+      const now = new Date().toISOString();
+      const idea = ("Correct the published paper '" + String(r.slug || "") + "' for erratum " + String(r.subject || r.queue_id) + ": " + String(r.claim || "")).slice(0, 2000);
+      await env.AUDIT_DB.prepare("INSERT OR IGNORE INTO research_queue (id, source, source_id, idea, summary, score, decision, status, paper_slug, created_at, stage, attempt, revise_count, recover_count) VALUES (?1, 'remediation', ?2, ?3, '', 0.95, 'ACCEPT', 'queued', ?4, ?5, 'ground', 0, 0, 0)")
+        .bind("rem-" + crypto.randomUUID(), "errata:" + String(r.queue_id), idea, r.slug || null, now).run();
+      await env.WATCH_DB.prepare("UPDATE errata_actions SET status = 'routed', updated_at = datetime('now') WHERE id = ?1 AND status = 'drafted'").bind(r.id).run();
+      await env.WATCH_DB.prepare("UPDATE errata_queue SET status = 'implemented', updated_at = datetime('now') WHERE id = ?1 AND status = 'audited'").bind(r.queue_id).run();
+      out.routed++;
+    }
+    // A queue row that reached a terminal state carries its internal_errata row with it (no-paper, implemented, published).
+    const sync = await env.WATCH_DB.prepare("UPDATE internal_errata SET status = 'closed', remediation = substr(COALESCE(remediation, '') || ?1 || (SELECT q.status FROM errata_queue q WHERE q.subject = internal_errata.id ORDER BY q.id DESC LIMIT 1), 1, 4000), updated_at = ?2 WHERE status = 'open' AND EXISTS (SELECT 1 FROM errata_queue q WHERE q.subject = internal_errata.id AND q.status IN ('no-paper', 'implemented', 'published', 'resolved', 'closed'))")
+      .bind("\nERRATA-HIGHRISK-ROUTE-1 " + new Date().toISOString() + ": queue row terminal: ", new Date().toISOString()).run();
+    out.synced = Number(sync && sync.meta && sync.meta.changes) || 0;
+  } catch (e) {
+    console.error(JSON.stringify({ worker: "errata-hub", where: "routeHighRiskErrata", error: String(e && e.message || e).slice(0, 300) }));
+  }
+  return out;
+}
 async function runPublish(env, mode) {
   const gate = await publishGate(env);
   const dry = mode === "dry" || !gate.enabled;
+  if (!dry) await routeHighRiskErrata(env);
   if (!dry) {
     const stuck = await env.WATCH_DB.prepare(
       "SELECT id, paper_doi, slug FROM errata_actions WHERE status='publishing' AND updated_at < datetime('now','-60 minutes') ORDER BY id ASC LIMIT 5"
