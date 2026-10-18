@@ -321,6 +321,9 @@ const etagOf = (r) => r.headers.get("ETag");
     ok(Array.isArray(j.feeds) && j.feeds.length > 0 && j.feeds.every((f) => typeof f.lag_s === "number"), "K10 area " + id + " lists its member reads with their lag");
     ok(Array.isArray(j.computed_from) && j.computed_from.length > 0, "K11 area " + id + " names what it reads");
     ok(j.data && "age_min" in j.data && typeof j.data.metrics === "number", "K11b area " + id + " states the age of the metrics it reports");
+    // a source that could not be read is named, never rendered as zero (AREAS-1); the list must be the same one /api/areas sends
+    ok(Array.isArray(j.blind) && j.blind.length === (areas.blind || []).length, "K11c area " + id + " carries the same blind list as /api/areas (" + j.blind.length + ")");
+    ok(j.degraded === (j.blind.length > 0), "K11d area " + id + " says it is degraded when it is blind");
     const tag = etagOf(r);
     ok(!!tag && (await call(env, "/api/area/" + id, { "If-None-Match": tag })).status === 304, "K12 area " + id + " revalidates to 304");
     ok((await (await call(env, "/api/area/" + id + "?since=" + j.revision)).json()).not_modified === true, "K13 ?since=<revision> works on area " + id);
