@@ -42,7 +42,7 @@ globalThis.fetch = async (url, init) => {
   if (/\/comments$/.test(u.pathname)) return reply(201, { id: 1 });
   if (m === "GET" && u.pathname === "/repos/QNFO/qnfo-workers/pulls") return reply(200, page > 1 ? [] : gPulls);
   mm = /^\/repos\/QNFO\/qnfo-workers\/pulls\/(\d+)$/.exec(u.pathname);
-  if (mm) { const p = gPulls.find((x) => x.number === Number(mm[1])); return p ? reply(200, p) : reply(404, {}); }
+  if (mm) { const p = gPulls.find((x) => x.number === Number(mm[1])); return p ? reply(200, p.merged_at ? { ...p, merged_by: { login: "rwnq8" } } : p) : reply(404, {}); }
   return reply(404, { message: "unmocked " + m + " " + u.pathname });
 };
 const env = { AUDIT, GITHUB_TOKEN: "t", STEWARD_KEY: "k" };
@@ -58,7 +58,7 @@ db.prepare("INSERT INTO code_tasks (id, status, branch, pr_url) VALUES ('ct_b', 
 db.prepare("INSERT INTO code_tasks (id, status, branch, pr_url) VALUES ('ct_c', 'closed', 'codeagent-c', 'https://github.com/QNFO/qnfo-workers/compare/main...codeagent-c?expand=1')").run();
 db.prepare("INSERT INTO code_tasks (id, status, branch, pr_url) VALUES ('ct_d', 'merged', NULL, 'https://github.com/QNFO/qnfo-workers/pull/381')").run();
 gPulls = [
-  { number: 812, state: "closed", merged_at: "2026-10-08T18:09:05Z", merge_commit_sha: "cced805", merged_by: { login: "rwnq8" }, head: { ref: "codeagent-a", sha: "s1" } },
+  { number: 812, state: "closed", merged_at: "2026-10-08T18:09:05Z", merge_commit_sha: "cced805", head: { ref: "codeagent-a", sha: "s1" } },
   { number: 813, state: "closed", merged_at: null, head: { ref: "codeagent-b", sha: "s2" } },
   { number: 381, state: "closed", merged_at: "2026-10-01T21:37:29Z", head: { ref: "codeagent-readme", sha: "s4" } },
   { number: 900, state: "open", merged_at: null, head: { ref: "codeagent-orphan", sha: "s3" }, updated_at: new Date().toISOString() }
@@ -135,6 +135,11 @@ globalThis.fetch = async (url, init) => {
 const r6 = await tick();
 assert.ok(!r6.errors.some((e) => e.scope === "tracker-prs"), "a full 2-page recent window is not a failed read");
 globalThis.fetch = pullsHandler;
+
+// A stale pr-without-task row (written by an older version) is cleared once a task points at that PR.
+db.prepare("INSERT OR REPLACE INTO code_task_pr_links (task_id, pr_number, pr_state, drift) VALUES ('pr:381', 381, 'merged', 'pr-without-task')").run();
+await tick();
+assert.equal(db.prepare("SELECT drift FROM code_task_pr_links WHERE task_id='pr:381'").get().drift, null, "a stale pr-without-task row is cleared");
 
 // The scheduled handler routes the 10-minute cron to the tracker only.
 calls = [];
