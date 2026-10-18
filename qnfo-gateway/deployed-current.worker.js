@@ -4294,6 +4294,10 @@ function lpIndexHTML(papers, total, offset, hasMore, activeCategory, searchQuery
     return "/papers" + (p.length ? "?" + p.join("&") : "");
   };
   const facetSum = LP_CAT_ORDER.reduce(function(a, c) { return a + (facets[c] || 0); }, 0);
+  // Declared before the heading, which names the active tag: a const declared further down would be in its
+  // temporal dead zone here and throw on every tag-filtered page.
+  const tagReg = extra.tagRegistry || {}, tagCounts = extra.tagCounts || {};
+  const activeTag = extra.activeTag || null;
   // PAPER-AUDIENCE-CATEGORIES-1: every chip names its reader in the title attribute, so the shelf can be
   // judged before it is clicked; the retired slugs no longer appear, and nothing is bucketed as "Other".
   const chips = ['<a class="q-chip' + (!activeCategory ? " on" : "") + '" data-cat="all" href="' + qs("all") + '">All <b>' + facetSum + "</b></a>"].concat(LP_CAT_ORDER.map(function(c) {
@@ -4303,19 +4307,17 @@ function lpIndexHTML(papers, total, offset, hasMore, activeCategory, searchQuery
     const n = facets[c] || 0;
     return n ? '<span style="flex:' + n + ";--c:var(" + LP_CAT_VAR[c] + ')" title="' + escAttr((CATEGORY_LABELS[c] || c) + ": " + n + " (" + (CATEGORY_AUDIENCE[c] || "") + ")") + '"></span>' : "";
   }).join("") + "</div>" : "";
-  const heading = searchQuery ? "Results for \u201c" + esc(searchQuery) + "\u201d" : activeCategory ? esc(CATEGORY_LABELS[activeCategory] || activeCategory) + " papers" : "All papers";
+  const heading = searchQuery ? "Results for \u201c" + esc(searchQuery) + "\u201d" : activeCategory ? esc(CATEGORY_LABELS[activeCategory] || activeCategory) + " papers" : (extra.activeTag && tagReg[extra.activeTag] ? esc(tagReg[extra.activeTag].label || extra.activeTag) + " papers" : "All papers");
   // On a category page the shelf explains itself: who it is for and what it holds.
   const activeNote = activeCategory && !searchQuery && CATEGORY_AUDIENCE[activeCategory]
     ? '<p class="ix-hint" style="margin:0 0 10px"><b>' + esc(CATEGORY_AUDIENCE[activeCategory]) + ".</b> " + esc(CATEGORY_BLURB[activeCategory] || "") + "</p>"
     : "";
   // PAPER-TAGS-1: a tag row under the shelves. Tags are multi-label and compose with the shelf filter, so a
   // reader can cross two of them ("error-correction" inside "energy") instead of being forced onto one shelf.
-  const tagReg = extra.tagRegistry || {}, tagCounts = extra.tagCounts || {};
   const topTags = Object.keys(tagCounts)
     .filter(function(t) { return tagReg[t]; })
     .sort(function(a, b) { return (tagCounts[b] - tagCounts[a]) || String(tagReg[a].label || a).localeCompare(String(tagReg[b].label || b)); })
     .slice(0, 14);
-  const activeTag = extra.activeTag || null;
   const tagChip = function(t) {
     const r = tagReg[t] || {};
     const on = activeTag === t ? " on" : "";
@@ -4337,7 +4339,10 @@ function lpIndexHTML(papers, total, offset, hasMore, activeCategory, searchQuery
     ? '<p class="ix-hint" style="margin:0 0 10px"><b>' + esc(tagReg[activeTag].label || activeTag) + ".</b> " + esc(tagReg[activeTag].description || "") + " Tagged papers: " + (tagCounts[activeTag] || 0) + ".</p>"
     : "";
   const latest = extra.latest ? lpDate(extra.latest) : "";
-  const title = searchQuery ? 'Search: "' + esc(searchQuery) + '" \u2014 QNFO Papers' : activeCategory ? (CATEGORY_LABELS[activeCategory] || activeCategory) + " Papers \u2014 QNFO" : "QNFO Papers \u2014 open research you can read, cite and question";
+  // A filtered page must say so in its heading and title: "All papers" under a tag filter is wrong, and it is what
+  // a search engine would index.
+  const activeTagLabel = activeTag && tagReg[activeTag] ? (tagReg[activeTag].label || activeTag) : "";
+  const title = searchQuery ? 'Search: "' + esc(searchQuery) + '" \u2014 QNFO Papers' : activeCategory ? (CATEGORY_LABELS[activeCategory] || activeCategory) + (activeTagLabel ? " \u00b7 " + activeTagLabel : "") + " Papers \u2014 QNFO" : activeTagLabel ? activeTagLabel + " \u2014 tagged papers \u2014 QNFO" : "QNFO Papers \u2014 open research you can read, cite and question";
   const head = "<title>" + title + '</title><meta name="description" content="' + escAttr(all + " open-access papers from the QNFO research program, filed on nine shelves by the reader each is written for: energy per answer, error correction, physics, numbers and p-adics, logic and formalism, AI and knowledge, autonomous systems, assessments and cross-cutting essays. All free to read.") + '"><link rel="canonical" href="https://papers.qnfo.org/papers"><link rel="alternate" type="application/rss+xml" title="QNFO Papers RSS" href="/rss.xml"><meta property="og:title" content="QNFO Papers"><meta property="og:type" content="website"><meta property="og:url" content="https://papers.qnfo.org/papers"><meta property="og:description" content="' + escAttr(all + " open research papers from the QNFO program.") + '">';
   const body = '<main id="main"><section class="wrap ix-hero"><div class="ix-intro"><p class="q-eyebrow">Open research library</p><h1>Papers you can read, cite and question</h1><p class="lede">' + all + ' papers from the QNFO program, filed on nine shelves by the reader each one is written for: energy per answer, error correction, physics, numbers and p-adics, logic and formalism, AI and knowledge, autonomous systems, assessments, and cross-cutting essays.' + "" + ' Every page renders its mathematics and can be questioned in place. <a href="/reading">How a living paper works</a>.</p><form class="ix-search" method="get" action="/papers" role="search"><svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="9" cy="9" r="6" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M14 14l4 4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg><label class="sr" for="ix-q">Search papers</label><input id="ix-q" type="search" name="search" value="' + (searchQuery ? escAttr(searchQuery) : "") + '" placeholder="Search titles and abstracts" autocomplete="off">' + (activeCategory ? '<input type="hidden" name="category" value="' + escAttr(activeCategory) + '">' : "") + '<kbd>/</kbd></form><p class="ix-hint">Looking for an answer rather than a paper? <a href="' + LP_ASK + '">Ask the whole corpus</a>: answers cite the papers they come from.</p></div><aside class="ix-stats q-card" aria-label="Library at a glance"><div class="ix-n"><b>' + all + "</b><span>papers" + (latest ? "<br>newest " + esc(latest) : "") + "</span></div>" + lpHistogram(extra.months) + '<p class="ix-cap">Published per month</p>' + bar + '<ul class="ix-legend">' + LP_CAT_ORDER.map(function(c) {
     return '<li title="' + escAttr(CATEGORY_AUDIENCE[c] || "") + '"><i class="dot" style="--c:var(' + LP_CAT_VAR[c] + ')"></i>' + esc(CATEGORY_LABELS[c] || c) + " <b>" + (facets[c] || 0) + "</b></li>";
