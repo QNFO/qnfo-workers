@@ -631,7 +631,8 @@ ok(sc.rr.decided[0].action === "rebase-requeued" && sc.old.status === "ready_to_
 const rc = JSON.parse(sc.old.ctx);
 ok(rc.rebase_round === 1 && rc.edits.length === 1 && rc.edits[0].replace === "  return 3;" && rc.patch === PATCH && rc.base === BASE && /required check/.test(rc.rebase_why) && rc.rebase_from_pr === 401, "the edits, base and patch stay on the task; the rebase round, the reason and the closed PR are recorded", rc);
 ok(/REBASE-REQUEUE-1/.test(sc.old.merge_note) && sc.old.merge_note.includes(BRANCH + "-r2"), "the merge note names the rebuilt branch", sc.old.merge_note);
-ok(gh.calls.includes("PATCH /pulls/401") && gh.comments.some((c) => c.pr === 401 && /REBASE-REQUEUE-1/.test(c.body) && c.body.includes(BRANCH + "-r2")) && gh.merges.length === 0, "the stale PR is closed with a comment naming the rebuilt branch; nothing is merged");
+ok(!gh.calls.includes("PATCH /pulls/401") && gh.comments.some((c) => c.pr === 401 && /REBASE-REQUEUE-1/.test(c.body) && c.body.includes(BRANCH + "-r2")) && gh.merges.length === 0, "NO-UNTRACKED-CLOSE-1: the stale PR is left OPEN with a comment naming the rebuilt branch (the successor PR does not exist yet); nothing is merged");
+ok(JSON.parse(sc.old.ctx).superseded_pr === 401, "NO-UNTRACKED-CLOSE-1: the parked PR number is recorded in ctx.superseded_pr so cmCloseSuperseded can close it once a successor exists", sc.old.ctx);
 ok(one("SELECT COUNT(*) n FROM cloud_ops_events WHERE kind = 'code-merge.rebase-requeued'").n === 1 && one("SELECT COUNT(*) n FROM cloud_ops_events WHERE kind = 'code-merge.requeued'").n === 0, "one rebase-requeued event, no re-proposal event");
 sc = await staleCase(MOVED, 0, true, { edits: EDITS });
 ok(sc.rr.decided[0].action === "rebase-requeued" && sc.old.status === "ready_to_publish", "a conflicting PR on a moved file is rebuilt the same way", sc.rr.decided);
