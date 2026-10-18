@@ -1,5 +1,5 @@
 {
-  "audited_at": "2026-10-18 08:40:51",
+  "audited_at": "2026-10-18 09:12:05",
   "d1_write_failures": [],
   "d1_writes_ok": 119,
   "guard": {
@@ -583,7 +583,7 @@
       },
       {
         "dir": "qnfo-code-orchestrator",
-        "version": "0.18.8-propose-timeout-1",
+        "version": "0.18.11-ladder-dead-rung-1",
         "worker": "qnfo-code-orchestrator"
       },
       {
@@ -618,12 +618,12 @@
       },
       {
         "dir": "qnfo-gateway",
-        "version": "3.18.7-model-floor-1",
+        "version": "3.18.8-subscribe-utm-1",
         "worker": "qnfo-gateway"
       },
       {
         "dir": "qnfo-github-steward",
-        "version": "0.2.1-notify-verdict",
+        "version": "0.2.2-issue-sync-1",
         "worker": "qnfo-github-steward"
       },
       {
@@ -668,17 +668,17 @@
       },
       {
         "dir": "qnfo-research-exec",
-        "version": "0.18.34-review-empty-second-path-1",
+        "version": "0.18.35-codeagent",
         "worker": "qnfo-research-exec"
       },
       {
         "dir": "qnfo-social",
-        "version": "0.16.3-model-floor-1",
+        "version": "0.16.4-social-hashtag-1",
         "worker": "qnfo-social"
       },
       {
         "dir": "qnfo-subscribers",
-        "version": "1.3.1-bp-logging",
+        "version": "1.3.3-utm-metric-1",
         "worker": "qnfo-subscribers"
       },
       {
@@ -1182,9 +1182,9 @@
       "worker": "qnfo-code-agent"
     },
     "qnfo-code-orchestrator": {
-      "before": "0.18.8-propose-timeout-1",
+      "before": "0.18.11-ladder-dead-rung-1",
       "http": 200,
-      "live": "0.18.8-propose-timeout-1",
+      "live": "0.18.11-ladder-dead-rung-1",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-code-orchestrator"
@@ -1346,17 +1346,17 @@
       "worker": "qnfo-fleet-feed"
     },
     "qnfo-gateway": {
-      "before": "3.18.7-model-floor-1",
+      "before": "3.18.8-subscribe-utm-1",
       "http": 200,
-      "live": "3.18.7-model-floor-1",
+      "live": "3.18.8-subscribe-utm-1",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-gateway"
     },
     "qnfo-github-steward": {
-      "before": "0.2.1-notify-verdict",
+      "before": "0.2.2-issue-sync-1",
       "http": 200,
-      "live": "0.2.1-notify-verdict",
+      "live": "0.2.2-issue-sync-1",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-github-steward"
@@ -1552,9 +1552,9 @@
       "worker": "qnfo-register-guard"
     },
     "qnfo-research-exec": {
-      "before": "0.18.34-review-empty-second-path-1",
+      "before": "0.18.35-codeagent",
       "http": 200,
-      "live": "0.18.34-review-empty-second-path-1",
+      "live": "0.18.35-codeagent",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-research-exec"
@@ -1614,17 +1614,17 @@
       "worker": "qnfo-skills-discovery"
     },
     "qnfo-social": {
-      "before": "0.16.3-model-floor-1",
+      "before": "0.16.4-social-hashtag-1",
       "http": 200,
-      "live": "0.16.3-model-floor-1",
+      "live": "0.16.4-social-hashtag-1",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-social"
     },
     "qnfo-subscribers": {
-      "before": "1.3.1-bp-logging",
+      "before": "1.3.3-utm-metric-1",
       "http": 200,
-      "live": "1.3.1-bp-logging",
+      "live": "1.3.3-utm-metric-1",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-subscribers"
