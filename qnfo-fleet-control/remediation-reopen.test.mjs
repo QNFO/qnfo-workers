@@ -149,5 +149,22 @@ db.prepare("UPDATE remediation_verifications SET verified_at = ? WHERE class = '
 db.exec("UPDATE probe_src SET v = 'ok' WHERE k = 'p10'");
 out = await tick();
 check(st("c10").status === "closed", "a pass streak broken only by 'pending: <reason>' reads still closes the contract after 7 days (got " + st("c10").status + ")");
+// 0.33.12 CARRIED-BY-TWIN-1: a contract on a CLOSED issue whose title has an OPEN twin carrying its own live contract can
+// never reopen - both REMEDIATION-REOPEN-2 (D1 trigger) and rtReopenOnRelapse refuse while a twin is open (agent_issues
+// 2902) - so it probed a dead issue for ever (issue-2194 wrote 196 rows that way). It is superseded instead, and the twin's
+// contract keeps verifying the predicate: one predicate, one contract.
+db.exec(`INSERT INTO agent_issues VALUES (11, 'same predicate, closed', 'desc11', 'closed', NULL, ${closedLongAgo}), (12, 'same predicate, closed', 'desc12', 'open', NULL, ${closedLongAgo});
+  INSERT INTO probe_src VALUES ('p11', 'broken'), ('p12', 'broken');`);
+add("c11", 11, "p11", 3); add("c12", 12, "p12", 3);
+out = await tick();
+const c11 = db.prepare("SELECT status, last_verdict FROM remediation_contracts WHERE class='c11'").get();
+check(c11.status === "superseded" && c11.last_verdict === "superseded:carried-by-twin", "a closed issue's contract is superseded when an open twin carries its own live contract (got " + JSON.stringify(c11) + ")");
+check(db.prepare("SELECT COUNT(*) n FROM remediation_verifications WHERE class='c11'").get().n === 0, "the carried contract's probe is not run");
+check(db.prepare("SELECT status FROM remediation_contracts WHERE class='c12'").get().status === "active", "the twin's own contract keeps running");
+check(db.prepare("SELECT status FROM agent_issues WHERE id=11").get().status === "closed", "the closed issue is still not reopened");
+check(typeof out.carried_by_twin === "number" && out.carried_by_twin >= 1, "the tick reports the carried contracts (got " + out.carried_by_twin + ")");
+await tick();
+check(db.prepare("SELECT COUNT(*) n FROM remediation_verifications WHERE class='c11'").get().n === 0, "the superseded contract is never probed again");
+
 console.log(fails + " failure(s)");
 process.exit(fails ? 1 : 0);
