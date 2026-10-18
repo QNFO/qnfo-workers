@@ -1,0 +1,44 @@
+name: steward-test
+
+# PORTFOLIO-SYNC-1 / TRACKER-SYNC-1: qnfo-github-steward keeps D1 (agent_issues, code_tasks, projects, roadmap_implementation)
+# and GitHub (issues, PRs, labels, milestones, Projects board) in sync every 10 minutes. Its two offline suites replay real
+# SQL (node:sqlite, the migrations themselves) against a scripted GitHub; they gate every PR/push that touches the worker.
+
+on:
+  pull_request:
+    paths:
+      - "qnfo-github-steward/**"
+      - "migrations/2026-10-18-tracker-sync.sql"
+      - "migrations/2026-10-18-portfolio-sync.sql"
+      - ".github/workflows/steward-test.yml"
+  push:
+    branches: [main]
+    paths:
+      - "qnfo-github-steward/**"
+      - "migrations/2026-10-18-tracker-sync.sql"
+      - "migrations/2026-10-18-portfolio-sync.sql"
+      - ".github/workflows/steward-test.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event_name == 'pull_request' && github.event.pull_request.number || github.sha }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "24"
+      - name: syntax
+        run: node --check qnfo-github-steward/worker.js
+      - name: tracker-sync suite
+        run: node --no-warnings qnfo-github-steward/tracker-sync.test.mjs
+      - name: portfolio-sync suite
+        run: node --no-warnings qnfo-github-steward/portfolio-sync.test.mjs

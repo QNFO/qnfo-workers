@@ -22,7 +22,7 @@
  *   * archived repositories are read-only and are skipped, not reported as drift;
  *   * GET /report and GET /health are public reads; POST /tick needs STEWARD_KEY.
  */
-var VERSION = "0.3.1-tracker-sync-1"; // 0.3.1 a task is matched to its PR by number too (pr-without-task false positive on PR 381); 0.3.0 TRACKER-SYNC-1: agent_issues <-> GitHub issues and code_tasks <-> PRs every 10 minutes (0.2.2 ISSUE-SYNC-1)
+var VERSION = "0.4.0-portfolio-sync-1"; // 0.4.0 PORTFOLIO-SYNC-1: projects derived from the census, metric breaches as roadmap objectives, programs/projects/issues/roadmap mirrored to GitHub labels, milestones, issues and a Projects board every 10 minutes; 0.3.1 a task is matched to its PR by number too (pr-without-task false positive on PR 381); 0.3.0 TRACKER-SYNC-1: agent_issues <-> GitHub issues and code_tasks <-> PRs every 10 minutes (0.2.2 ISSUE-SYNC-1)
 
 var ORG = "QNFO";
 var USER = "rwnq8";
@@ -654,6 +654,425 @@ async function trackerSync(env) {
 }
 // end TRACKER-SYNC-1
 
+/* PORTFOLIO-SYNC-1 (owner directive 2026-10-18, verbatim: "THE SYSTEM SHALL AUTOMATICALLY POPULATE AND MAINTAIN ITS OWN FLEET
+ * ROADMAP AND BACKLOG, AS WELL AS ISSUES/TASKS FOR ALL FIXES/REMEDIATION AND PLANNED ENHANCEMENTS/UPGRADES, WHICH SHALL BE
+ * CANONICAL ACROSS THE FLEET AND ALWAYS IN-SYNC WITH GITHUB ASSETS AND ISSUE/PROJECT TRACKING. THE SYSTEM SHALL MANAGE ITS OWN
+ * PORTFOLIO, ITS OWN PROGRAMS, AND ITS OWN PROJECTS AUTOMATICALLY.")
+ *
+ * Measured before (2026-10-18 ~10:00Z): projects hand-written (21 rows, 0 of 30 live workers covered, 7 on 404 repos);
+ * roadmap_implementation 141 rows / 117 open / 0 on GitHub; 0 milestones; 0 org Projects; 20 metrics in breach with no
+ * roadmap objective.
+ *
+ * One 10-minute tick (after TRACKER-SYNC-1, same cron), each step bounded, idempotent and isolated:
+ *   1 DERIVE      projects from service_registry (live worker -> W.<worker>) and portfolio_repos (active public non-fork repo
+ *                 -> R.<repo>); a derived project whose source vanished is retired. Refused on a degenerate source (<10 rows,
+ *                 DEGENERATE-DETECTION-SOURCE-1). Only source='derived' rows are ever retired.
+ *   2 OBJECTIVES  every metric in breach (v_metric_trigger_state hit=1) is roadmap objective RM-METRIC-<key>; verified with the
+ *                 measured value when the breach clears, reopened on re-breach.
+ *   3 PLACE       every open mirrored issue -> project / program / kind (fix, enhancement, research, owner).
+ *   4 GITHUB      programs + kinds -> labels; projects -> milestones (closed on retire); issues -> milestone + labels, compared
+ *                 with GitHub's live state; roadmap items -> issues labelled roadmap, closed with evidence when D1 verifies,
+ *                 reopened when closed by hand (D1 authoritative).
+ *   5 BOARD       best effort: org Projects v2 board "QNFO Fleet Portfolio" carrying every mirrored item.
+ *   6 MEASURE     v_portfolio_drift -> metric portfolio_drift (target 0). */
+var PS_REPO = "/repos/" + ORG + "/qnfo-workers";
+var PS_BOARD = "QNFO Fleet Portfolio";
+var PS_MS_PER_TICK = 15, PS_ISSUE_PER_TICK = 40, PS_RM_CREATE_PER_TICK = 15, PS_RM_STATE_PER_TICK = 20, PS_BOARD_PER_TICK = 30;
+var PS_RM_DONE = { verified: 1, "enforced-verified": 1, "violated-remediated": 1, retired: 1 };
+var PS_PROGRAMS = {
+  "QNFO.RSCH": { label: "program:research", color: "1d76db", desc: "Research & Publications" },
+  "QNFO.INFRA": { label: "program:infra", color: "5319e7", desc: "Cloudflare Infrastructure" },
+  "QNFO.OPS": { label: "program:ops", color: "0e8a16", desc: "Operations & Governance" },
+  "QNFO.REACH": { label: "program:reach", color: "fbca04", desc: "Reach & Distribution" },
+  "QNFO.PERSONAL": { label: "program:personal", color: "c5def5", desc: "Personal Twin (names only)" }
+};
+var PS_KINDS = {
+  fix: { color: "d73a4a", desc: "Fix / remediation" },
+  enhancement: { color: "a2eeef", desc: "Planned enhancement / upgrade" },
+  research: { color: "bfdadc", desc: "Research work" },
+  owner: { color: "e99695", desc: "Owner request" }
+};
+
+function psProgramForWorker(w) {
+  w = String(w || "");
+  if (/^personal/.test(w)) return "QNFO.PERSONAL";
+  if (/research|pdf|paper|radar|ai-search|ipatent|arxiv|citation|errata/.test(w)) return "QNFO.RSCH";
+  if (/social|subscriber|signal|idea|outreach|cloud-ops|email/.test(w)) return "QNFO.REACH";
+  if (/fleet|steward|evolve|lifecycle|deploy-guard|observability|orchestrator|calibration|kaizen|backlog|qnfo-ops|audit/.test(w)) return "QNFO.OPS";
+  return "QNFO.INFRA";
+}
+function psProgramForRepo(r) {
+  if (r.pillar === "personal" || r.tier === "client-config") return "QNFO.PERSONAL";
+  if (r.tier === "research" || r.pillar === "research") return "QNFO.RSCH";
+  if (r.tier === "demo" || r.pillar === "reach") return "QNFO.REACH";
+  if (r.tier === "governance" || r.pillar === "autonomy") return "QNFO.OPS";
+  return "QNFO.INFRA";
+}
+function psKind(category, source) {
+  var c = String(category || "").toLowerCase();
+  if (/owner/.test(c) || /owner-request/.test(String(source || ""))) return "owner";
+  if (/research/.test(c)) return "research";
+  if (/bug|defect|reliab|remediat|self-heal|security|integrity|quality|incident/.test(c)) return "fix";
+  return "enhancement";
+}
+function psMsTitle(p) { return (p.project_code + " · " + tsRedact(p.name || "")).slice(0, 120); }
+function psNow() { return new Date().toISOString().replace("T", " ").slice(0, 19); }
+
+async function psDerive(env, out) {
+  var now = psNow();
+  var workers = ((await env.AUDIT.prepare("SELECT service, purpose FROM service_registry WHERE kind = 'worker' AND state = 'live'").all()).results) || [];
+  var repos = ((await env.AUDIT.prepare("SELECT name, tier, pillar, description, visibility, archived, fork FROM portfolio_repos WHERE seen = 1").all()).results) || [];
+  if (workers.length < 10 || repos.length < 10) {
+    out.errors.push({ scope: "portfolio-derive", why: "degenerate source (workers " + workers.length + ", repos " + repos.length + "); no project created or retired this tick" });
+    return;
+  }
+  var want = {};
+  workers.forEach(function (w) {
+    want["W." + w.service] = { program: psProgramForWorker(w.service), name: w.service, desc: tsRedact(w.purpose || "worker " + w.service).slice(0, 400), owner: w.service };
+  });
+  repos.forEach(function (r) {
+    if (Number(r.archived) || Number(r.fork) || String(r.visibility) !== "public" || r.name === "qnfo-workers") return;
+    var prog = psProgramForRepo(r);
+    if (prog === "QNFO.PERSONAL") return;
+    want["R." + r.name] = { program: prog, name: r.name, desc: tsRedact(r.description || "repository " + r.name).slice(0, 400), owner: null, repo: ORG + "/" + r.name };
+  });
+  var have = {};
+  (((await env.AUDIT.prepare("SELECT project_code, program_code, status, source FROM projects").all()).results) || []).forEach(function (p) { have[p.project_code] = p; });
+  var stmts = [];
+  Object.keys(want).forEach(function (code) {
+    var w = want[code], h = have[code];
+    if (!h) {
+      stmts.push(env.AUDIT.prepare("INSERT INTO projects (project_code, program_code, name, description, status, github_repo, source, owner_service, created_at, updated_at) VALUES (?, ?, ?, ?, 'active', ?, 'derived', ?, ?, ?)")
+        .bind(code, w.program, w.name, w.desc, w.repo || ORG + "/qnfo-workers", w.owner, now, now));
+      out.projects_created++;
+    } else if (h.source === "derived" && (h.status !== "active" || h.program_code !== w.program)) {
+      stmts.push(env.AUDIT.prepare("UPDATE projects SET status = 'active', program_code = ?, completed_at = NULL, updated_at = ? WHERE project_code = ?").bind(w.program, now, code));
+      out.projects_reactivated++;
+    }
+  });
+  Object.keys(have).forEach(function (code) {
+    var h = have[code];
+    if (h.source === "derived" && h.status === "active" && !want[code]) {
+      stmts.push(env.AUDIT.prepare("UPDATE projects SET status = 'retired', completed_at = ?, updated_at = ? WHERE project_code = ?").bind(now, now, code));
+      out.projects_retired++;
+    }
+  });
+  for (var i = 0; i < stmts.length; i += 50) await env.AUDIT.batch(stmts.slice(i, i + 50));
+}
+
+async function psObjectives(env, out) {
+  var rows = ((await env.AUDIT.prepare("SELECT metric_key, title, owner, operator, threshold, val, hit FROM v_metric_trigger_state WHERE val IS NOT NULL").all()).results) || [];
+  if (!rows.length) { out.errors.push({ scope: "portfolio-objectives", why: "v_metric_trigger_state returned no measured rows; objectives untouched" }); return; }
+  var have = {};
+  (((await env.AUDIT.prepare("SELECT id, item, status FROM roadmap_implementation WHERE source = 'metric-breach'").all()).results) || []).forEach(function (r) { have[r.item] = r; });
+  var now = psNow(), stmts = [];
+  rows.forEach(function (m) {
+    var item = "RM-METRIC-" + m.metric_key, h = have[item];
+    var ev = "measured " + m.val + " (" + m.operator + " " + m.threshold + ") at " + now + "Z from v_metric_trigger_state";
+    if (Number(m.hit) === 1) {
+      if (!h) {
+        stmts.push(env.AUDIT.prepare("INSERT INTO roadmap_implementation (item, source, title, artifact_type, artifact_ref, status, evidence) VALUES (?, 'metric-breach', ?, 'objective', ?, 'open', ?)")
+          .bind(item, String(m.title || m.metric_key).slice(0, 300), m.owner || null, "breach: " + ev));
+        out.objectives_opened++;
+      } else if (PS_RM_DONE[h.status]) {
+        stmts.push(env.AUDIT.prepare("UPDATE roadmap_implementation SET status = 'open', evidence = ?, verified_at = NULL WHERE id = ?").bind("re-breach: " + ev, h.id));
+        out.objectives_reopened++;
+      }
+    } else if (h && !PS_RM_DONE[h.status]) {
+      stmts.push(env.AUDIT.prepare("UPDATE roadmap_implementation SET status = 'verified', evidence = ?, verified_at = ? WHERE id = ?").bind("cleared: " + ev, now, h.id));
+      out.objectives_verified++;
+    }
+  });
+  for (var i = 0; i < stmts.length; i += 50) await env.AUDIT.batch(stmts.slice(i, i + 50));
+}
+
+async function psPlace(env, out, projects) {
+  var active = {};
+  projects.forEach(function (p) { if (p.status === "active") active[p.project_code] = p; });
+  var rows = ((await env.AUDIT.prepare(
+    "SELECT a.id, a.category, a.source, t.owner, m.project_code AS cur_p, m.kind AS cur_k FROM agent_issues a JOIN gh_issue_links l ON l.issue_id = a.id LEFT JOIN issue_triage t ON t.issue_id = a.id LEFT JOIN issue_project_map m ON m.issue_id = a.id WHERE a.status = 'open'"
+  ).all()).results) || [];
+  var fallback = active["W.qnfo-fleet-control"] ? "W.qnfo-fleet-control" : Object.keys(active)[0];
+  var now = new Date().toISOString(), stmts = [];
+  rows.forEach(function (r) {
+    var code = null;
+    [r.owner, r.source].forEach(function (cand) {
+      if (code || !cand) return;
+      var s = String(cand).split(/[:|\s]/)[0];
+      if (active["W." + s]) code = "W." + s;
+    });
+    code = code || fallback;
+    if (!code) return;
+    var kind = psKind(r.category, r.source);
+    if (r.cur_p !== code || r.cur_k !== kind) {
+      stmts.push(env.AUDIT.prepare("INSERT INTO issue_project_map (issue_id, project_code, program_code, kind, updated_at) VALUES (?, ?, ?, ?, ?) ON CONFLICT(issue_id) DO UPDATE SET project_code = excluded.project_code, program_code = excluded.program_code, kind = excluded.kind, updated_at = excluded.updated_at")
+        .bind(r.id, code, active[code].program_code, kind, now));
+      out.issues_placed++;
+    }
+  });
+  for (var i = 0; i < stmts.length; i += 50) await env.AUDIT.batch(stmts.slice(i, i + 50));
+}
+
+async function psLabels(env, out) {
+  var have = await tsListAll(env, PS_REPO + "/labels", 5);
+  if (!have) { out.errors.push({ scope: "portfolio-labels", why: "could not list labels" }); return false; }
+  var names = {};
+  have.forEach(function (l) { names[l.name] = 1; });
+  var need = [{ name: "roadmap", color: "0052cc", description: "Fleet roadmap item (roadmap_implementation)" }];
+  Object.keys(PS_PROGRAMS).forEach(function (k) { need.push({ name: PS_PROGRAMS[k].label, color: PS_PROGRAMS[k].color, description: k + " " + PS_PROGRAMS[k].desc }); });
+  Object.keys(PS_KINDS).forEach(function (k) { need.push({ name: "kind:" + k, color: PS_KINDS[k].color, description: PS_KINDS[k].desc }); });
+  for (var i = 0; i < need.length; i++) {
+    if (names[need[i].name]) continue;
+    var r = await gh(env, "POST", PS_REPO + "/labels", need[i]);
+    if (r.status === 201) out.labels_created++;
+    else { out.errors.push({ scope: "portfolio-label " + need[i].name, status: r.status, why: String(r.text).slice(0, 100) }); return false; }
+  }
+  return true;
+}
+
+async function psMilestones(env, out, projects) {
+  var list = await tsListAll(env, PS_REPO + "/milestones?state=all", 10);
+  if (!list) { out.errors.push({ scope: "portfolio-milestones", why: "could not list milestones; no milestone change this tick" }); return null; }
+  var byCode = {};
+  list.forEach(function (m) { var k = String(m.title || "").split(" · ")[0]; if (k) byCode[k] = m; });
+  var done = 0, stmts = [], now = psNow();
+  for (var i = 0; i < projects.length; i++) {
+    var p = projects[i], m = byCode[p.project_code];
+    if (p.status === "active") {
+      if (!m) {
+        if (done >= PS_MS_PER_TICK) continue;
+        var c = await gh(env, "POST", PS_REPO + "/milestones", { title: psMsTitle(p), description: (p.program_code + " | " + tsRedact(p.description || "")).slice(0, 700) });
+        if (c.status !== 201 || !c.body) { out.errors.push({ scope: "portfolio-milestone " + p.project_code, status: c.status, why: String(c.text).slice(0, 100) }); if (c.status === 403 || c.status === 429) break; continue; }
+        m = c.body; byCode[p.project_code] = m; out.milestones_created++; done++;
+      } else if (m.state !== "open") {
+        if (done >= PS_MS_PER_TICK) continue;
+        var o = await gh(env, "PATCH", PS_REPO + "/milestones/" + m.number, { state: "open" });
+        if (o.status === 200) { m.state = "open"; out.milestones_reopened++; done++; }
+      }
+      if (p.gh_milestone !== m.number) stmts.push(env.AUDIT.prepare("UPDATE projects SET gh_milestone = ?, updated_at = ? WHERE project_code = ?").bind(m.number, now, p.project_code));
+      p.gh_milestone = m.number;
+    } else {
+      if (m && m.state === "open" && done < PS_MS_PER_TICK) {
+        var x = await gh(env, "PATCH", PS_REPO + "/milestones/" + m.number, { state: "closed" });
+        if (x.status === 200) { m.state = "closed"; out.milestones_closed++; done++; }
+      }
+      if (m && p.gh_milestone !== m.number) stmts.push(env.AUDIT.prepare("UPDATE projects SET gh_milestone = ? WHERE project_code = ?").bind(m.number, p.project_code));
+    }
+  }
+  for (var j = 0; j < stmts.length; j += 50) await env.AUDIT.batch(stmts.slice(j, j + 50));
+  return byCode;
+}
+
+function psManaged(n) { return n === "fleet-issue" || n === "roadmap" || /^program:|^kind:/.test(n); }
+function psLabelNames(g) { return (g.labels || []).map(function (l) { return typeof l === "string" ? l : l.name; }); }
+function psLabelSet(program, kind, extra) {
+  var s = extra.slice();
+  if (PS_PROGRAMS[program]) s.push(PS_PROGRAMS[program].label);
+  if (PS_KINDS[kind]) s.push("kind:" + kind);
+  return s.sort();
+}
+function psSameLabels(g, want) { return JSON.stringify(psLabelNames(g).filter(psManaged).sort()) === JSON.stringify(want); }
+function psKeepLabels(g, want) { return psLabelNames(g).filter(function (n) { return !psManaged(n); }).concat(want); }
+
+async function psIssues(env, out, projects, openFleet) {
+  var byCode = {}, gByNum = {};
+  projects.forEach(function (p) { byCode[p.project_code] = p; });
+  openFleet.forEach(function (g) { gByNum[g.number] = g; });
+  var rows = ((await env.AUDIT.prepare("SELECT m.issue_id, m.project_code, m.program_code, m.kind, m.synced_milestone, m.gh_node, l.gh_number FROM issue_project_map m JOIN gh_issue_links l ON l.issue_id = m.issue_id JOIN agent_issues a ON a.id = m.issue_id WHERE a.status = 'open'").all()).results) || [];
+  var done = 0, stmts = [], now = new Date().toISOString();
+  for (var i = 0; i < rows.length; i++) {
+    var r = rows[i], g = gByNum[r.gh_number], p = byCode[r.project_code];
+    if (!g || !p || !p.gh_milestone) continue;
+    var want = psLabelSet(r.program_code, r.kind, ["fleet-issue"]);
+    if (g.milestone && g.milestone.number === p.gh_milestone && psSameLabels(g, want)) {
+      if (r.synced_milestone !== p.gh_milestone || !r.gh_node) stmts.push(env.AUDIT.prepare("UPDATE issue_project_map SET synced_milestone = ?, synced_labels = ?, gh_node = ?, synced_at = ? WHERE issue_id = ?").bind(p.gh_milestone, want.join(","), g.node_id || null, now, r.issue_id));
+      continue;
+    }
+    if (done >= PS_ISSUE_PER_TICK) continue;
+    var u = await gh(env, "PATCH", PS_REPO + "/issues/" + r.gh_number, { milestone: p.gh_milestone, labels: psKeepLabels(g, want) });
+    if (u.status === 200) {
+      done++; out.issues_synced++;
+      stmts.push(env.AUDIT.prepare("UPDATE issue_project_map SET synced_milestone = ?, synced_labels = ?, gh_node = ?, synced_at = ? WHERE issue_id = ?").bind(p.gh_milestone, want.join(","), g.node_id || null, now, r.issue_id));
+    } else {
+      out.errors.push({ scope: "portfolio-issue " + r.issue_id, status: u.status, why: String(u.text).slice(0, 100) });
+      if (u.status === 403 || u.status === 429) break;
+    }
+  }
+  for (var j = 0; j < stmts.length; j += 50) await env.AUDIT.batch(stmts.slice(j, j + 50));
+}
+
+function psRmProject(r, byCode) {
+  var ref = String(r.artifact_ref || "") + " " + String(r.title || "");
+  var re = /\b((?:qnfo|personal|q08|idea|radar)-[a-z0-9-]+)\b/g, m;
+  while ((m = re.exec(ref))) { var p = byCode["W." + m[1]]; if (p && p.status === "active") return p; }
+  var f = byCode["W.qnfo-fleet-control"];
+  return f && f.status === "active" ? f : null;
+}
+
+async function psRoadmap(env, out, projects) {
+  var byCode = {};
+  projects.forEach(function (p) { byCode[p.project_code] = p; });
+  var open = await tsListAll(env, PS_REPO + "/issues?state=open&labels=roadmap", 10);
+  if (!open) { out.errors.push({ scope: "portfolio-roadmap", why: "could not list open roadmap issues; no roadmap change this tick" }); return null; }
+  var openNums = {}, byId = {};
+  open.forEach(function (g) { if (g.pull_request) return; openNums[g.number] = g; var m = /^\[RM-(\d+)\]/.exec(g.title || ""); if (m) byId[m[1]] = g.number; });
+  var links = ((await env.AUDIT.prepare("SELECT g.roadmap_id, g.gh_number, g.gh_state, g.gh_node, r.status, r.evidence, r.item FROM roadmap_gh_links g JOIN roadmap_implementation r ON r.id = g.roadmap_id").all()).results) || [];
+  var mism = links.filter(function (l) { return (!PS_RM_DONE[l.status]) !== !!openNums[l.gh_number]; });
+  if (links.length >= 10 && mism.length > links.length / 2) {
+    out.errors.push({ scope: "portfolio-roadmap", why: mism.length + " of " + links.length + " roadmap links disagree; refusing a mass state flip" });
+    mism = [];
+  }
+  var now = new Date().toISOString(), fixed = 0, mismIds = {};
+  mism.forEach(function (l) { mismIds[l.roadmap_id] = 1; });
+  for (var i = 0; i < mism.length && fixed < PS_RM_STATE_PER_TICK; i++) {
+    var l = mism[i], r;
+    if (!PS_RM_DONE[l.status]) {
+      r = await gh(env, "PATCH", PS_REPO + "/issues/" + l.gh_number, { state: "open" });
+      if (r.status === 200) { await gh(env, "POST", PS_REPO + "/issues/" + l.gh_number + "/comments", { body: "Reopened by PORTFOLIO-SYNC-1: roadmap item " + tsRedact(l.item) + " is '" + l.status + "' in qnfo-audit.roadmap_implementation, which is authoritative." }); out.roadmap_reopened++; }
+    } else {
+      await gh(env, "POST", PS_REPO + "/issues/" + l.gh_number + "/comments", { body: "Verified in qnfo-audit (roadmap " + tsRedact(l.item) + ": status **" + l.status + "**). Evidence:\n\n" + tsFence(l.evidence || "(none recorded)", 3000) });
+      r = await gh(env, "PATCH", PS_REPO + "/issues/" + l.gh_number, { state: "closed", state_reason: l.status === "retired" ? "not_planned" : "completed" });
+      if (r.status === 200) out.roadmap_closed++;
+    }
+    if (r && r.status === 200) { fixed++; await env.AUDIT.prepare("UPDATE roadmap_gh_links SET gh_state = ?, d1_status = ?, synced_at = ? WHERE roadmap_id = ?").bind(PS_RM_DONE[l.status] ? "closed" : "open", l.status, now, l.roadmap_id).run(); }
+    else out.errors.push({ scope: "portfolio-roadmap-state " + l.roadmap_id, status: r && r.status, why: String(r && r.text || "").slice(0, 100) });
+  }
+  var stmts = [];
+  links.forEach(function (x) {
+    var g = openNums[x.gh_number], st = g ? "open" : "closed";
+    if (!mismIds[x.roadmap_id] && (x.gh_state !== st || (g && !x.gh_node))) stmts.push(env.AUDIT.prepare("UPDATE roadmap_gh_links SET gh_state = ?, d1_status = ?, gh_node = COALESCE(gh_node, ?), synced_at = ? WHERE roadmap_id = ?").bind(st, x.status, g ? g.node_id : null, now, x.roadmap_id));
+  });
+  for (var s = 0; s < stmts.length; s += 50) await env.AUDIT.batch(stmts.slice(s, s + 50));
+
+  /* Place open roadmap issues: an item mirrored before its project's milestone existed (milestones are capped per tick) is
+   * moved into the milestone and given its labels once the milestone exists. Compared with GitHub's live state. */
+  var place = ((await env.AUDIT.prepare("SELECT g.roadmap_id, g.gh_number, g.project_code, r.source, r.title, r.artifact_ref FROM roadmap_gh_links g JOIN roadmap_implementation r ON r.id = g.roadmap_id WHERE r.status NOT IN ('verified','enforced-verified','violated-remediated','retired')").all()).results) || [];
+  var placed = 0, pst = [];
+  for (var q = 0; q < place.length && placed < PS_ISSUE_PER_TICK; q++) {
+    var x2 = place[q], g2 = openNums[x2.gh_number], p2 = psRmProject(x2, byCode);
+    if (!g2 || !p2 || !p2.gh_milestone) continue;
+    var want2 = psLabelSet(p2.program_code, x2.source === "metric-breach" ? "fix" : "enhancement", ["roadmap"]);
+    if (g2.milestone && g2.milestone.number === p2.gh_milestone && psSameLabels(g2, want2)) {
+      if (x2.project_code !== p2.project_code) pst.push(env.AUDIT.prepare("UPDATE roadmap_gh_links SET project_code = ? WHERE roadmap_id = ?").bind(p2.project_code, x2.roadmap_id));
+      continue;
+    }
+    var u2 = await gh(env, "PATCH", PS_REPO + "/issues/" + x2.gh_number, { milestone: p2.gh_milestone, labels: psKeepLabels(g2, want2) });
+    if (u2.status === 200) { placed++; out.roadmap_placed = (out.roadmap_placed || 0) + 1; pst.push(env.AUDIT.prepare("UPDATE roadmap_gh_links SET project_code = ?, synced_at = ? WHERE roadmap_id = ?").bind(p2.project_code, now, x2.roadmap_id)); }
+    else { out.errors.push({ scope: "portfolio-roadmap-place " + x2.roadmap_id, status: u2.status, why: String(u2.text).slice(0, 100) }); if (u2.status === 403 || u2.status === 429) break; }
+  }
+  if (pst.length) await env.AUDIT.batch(pst);
+
+  var todo = ((await env.AUDIT.prepare("SELECT r.id, r.item, r.source, r.title, r.artifact_type, r.artifact_ref, r.status, r.evidence FROM roadmap_implementation r LEFT JOIN roadmap_gh_links g ON g.roadmap_id = r.id WHERE g.roadmap_id IS NULL AND r.status NOT IN ('verified','enforced-verified','violated-remediated','retired') ORDER BY r.id LIMIT ?").bind(PS_RM_CREATE_PER_TICK).all()).results) || [];
+  for (var j = 0; j < todo.length; j++) {
+    var row = todo[j], p = psRmProject(row, byCode), num = byId[String(row.id)], node = num && openNums[num] ? openNums[num].node_id : null;
+    if (!num) {
+      var body = [
+        "Mirrored from qnfo-audit.roadmap_implementation id **" + row.id + "** (PORTFOLIO-SYNC-1). D1 is authoritative: this closes",
+        "when the item is verified there, with its evidence, and a hand close here is reopened.", "",
+        "| field | value |", "|:--|:--|",
+        "| item | " + tsRedact(row.item).replace(/\|/g, "/") + " |",
+        "| status | " + String(row.status) + " |",
+        "| source | " + tsRedact(row.source || "").replace(/\|/g, "/").slice(0, 160) + " |",
+        "| artifact | " + tsRedact((row.artifact_type || "") + " " + (row.artifact_ref || "")).replace(/\|/g, "/").slice(0, 200) + " |",
+        "| project | " + (p ? p.project_code : "") + " |", "",
+        tsFence(row.evidence || "(no evidence yet)", 3000)
+      ].join("\n");
+      var payload = { title: ("[RM-" + row.id + "] " + tsRedact(row.item) + ": " + tsRedact(row.title || "")).replace(/@/g, "@\u200b").slice(0, 240), body: body, labels: psLabelSet(p ? p.program_code : "QNFO.OPS", row.source === "metric-breach" ? "fix" : "enhancement", ["roadmap"]) };
+      if (p && p.gh_milestone) payload.milestone = p.gh_milestone;
+      var c = await gh(env, "POST", PS_REPO + "/issues", payload);
+      if (c.status !== 201 || !c.body) { out.errors.push({ scope: "portfolio-roadmap-mirror " + row.id, status: c.status, why: String(c.text).slice(0, 100) }); if (c.status === 403 || c.status === 429) break; continue; }
+      num = c.body.number; node = c.body.node_id; out.roadmap_mirrored++;
+    } else out.roadmap_relinked++;
+    await env.AUDIT.prepare("INSERT OR REPLACE INTO roadmap_gh_links (roadmap_id, gh_number, gh_state, d1_status, project_code, gh_node, synced_at) VALUES (?, ?, 'open', ?, ?, ?, ?)").bind(row.id, num, row.status, p ? p.project_code : null, node, now).run();
+  }
+  return open;
+}
+
+async function psGql(env, query, variables) {
+  var r = await fetch(API + "/graphql", { method: "POST", headers: { Authorization: "Bearer " + env.GITHUB_TOKEN, "User-Agent": "qnfo-github-steward/" + VERSION, "Content-Type": "application/json" }, body: JSON.stringify({ query: query, variables: variables || {} }) });
+  var j = null; try { j = await r.json(); } catch (e) { j = null; }
+  if (!r.ok || !j || j.errors) throw new Error("graphql " + r.status + " " + JSON.stringify(j && j.errors || "").slice(0, 160));
+  return j.data;
+}
+
+/* Best effort: a failure is a recorded limitation, never a failed tick; milestones + labels are the primary view (two paths). */
+async function psBoard(env, out) {
+  try {
+    var pid = await tsState(env, "portfolio_board_id");
+    if (!pid) {
+      var d = await psGql(env, "query($l:String!){organization(login:$l){id projectsV2(first:50){nodes{id title}}}}", { l: ORG });
+      var found = (d.organization.projectsV2.nodes || []).filter(function (n) { return n.title === PS_BOARD; })[0];
+      if (!found) {
+        var c = await psGql(env, "mutation($o:ID!,$t:String!){createProjectV2(input:{ownerId:$o,title:$t}){projectV2{id}}}", { o: d.organization.id, t: PS_BOARD });
+        pid = c.createProjectV2.projectV2.id; out.board_created = true;
+      } else pid = found.id;
+      await tsState(env, "portfolio_board_id", pid);
+    }
+    var items = ((await env.AUDIT.prepare("SELECT 'i' AS t, issue_id AS k, gh_node FROM issue_project_map WHERE gh_node IS NOT NULL AND gh_item IS NULL UNION ALL SELECT 'r', roadmap_id, gh_node FROM roadmap_gh_links WHERE gh_node IS NOT NULL AND gh_item IS NULL AND gh_state = 'open' LIMIT ?").bind(PS_BOARD_PER_TICK).all()).results) || [];
+    var st = [];
+    for (var i = 0; i < items.length; i++) {
+      var a = await psGql(env, "mutation($p:ID!,$c:ID!){addProjectV2ItemById(input:{projectId:$p,contentId:$c}){item{id}}}", { p: pid, c: items[i].gh_node });
+      var iid = a.addProjectV2ItemById.item.id;
+      st.push(items[i].t === "i" ? env.AUDIT.prepare("UPDATE issue_project_map SET gh_item = ? WHERE issue_id = ?").bind(iid, items[i].k) : env.AUDIT.prepare("UPDATE roadmap_gh_links SET gh_item = ? WHERE roadmap_id = ?").bind(iid, items[i].k));
+      out.board_items_added++;
+    }
+    if (st.length) await env.AUDIT.batch(st);
+  } catch (e) {
+    out.limitations.push("projects-v2 board: " + String(e && e.message || e).slice(0, 160));
+  }
+}
+
+async function portfolioSync(env) {
+  var started = Date.now();
+  var out = { version: VERSION, started_at: new Date(started).toISOString(), projects_created: 0, projects_reactivated: 0, projects_retired: 0, objectives_opened: 0, objectives_reopened: 0, objectives_verified: 0, issues_placed: 0, labels_created: 0, milestones_created: 0, milestones_reopened: 0, milestones_closed: 0, issues_synced: 0, roadmap_mirrored: 0, roadmap_relinked: 0, roadmap_closed: 0, roadmap_reopened: 0, board_items_added: 0, errors: [], limitations: [] };
+  if (!env.AUDIT || !env.GITHUB_TOKEN) { out.errors.push({ scope: "portfolio", why: "AUDIT binding or GITHUB_TOKEN missing" }); return out; }
+  var step = async function (name, fn) { try { return await fn(); } catch (e) { out.errors.push({ scope: "portfolio-" + name, why: String(e && e.message || e).slice(0, 160) }); return null; } };
+  await step("derive", function () { return psDerive(env, out); });
+  await step("objectives", function () { return psObjectives(env, out); });
+  var projects = (await step("projects", async function () { return ((await env.AUDIT.prepare("SELECT project_code, program_code, name, description, status, gh_milestone FROM projects ORDER BY project_code").all()).results) || []; })) || [];
+  await step("place", function () { return psPlace(env, out, projects); });
+  var labelsOk = await step("labels", function () { return psLabels(env, out); });
+  var ms = labelsOk ? await step("milestones", function () { return psMilestones(env, out, projects); }) : null;
+  if (ms) {
+    var openFleet = await step("list", function () { return tsListAll(env, PS_REPO + "/issues?state=open&labels=fleet-issue", 15); });
+    if (openFleet) await step("issues", function () { return psIssues(env, out, projects, openFleet); });
+    else out.errors.push({ scope: "portfolio-issues", why: "could not list open fleet-issue issues; no issue placement this tick" });
+    await step("roadmap", function () { return psRoadmap(env, out, projects); });
+  }
+  await psBoard(env, out);
+  await step("measure", async function () {
+    var d = ((await env.AUDIT.prepare("SELECT kind, count(*) AS n FROM v_portfolio_drift GROUP BY kind").all()).results) || [];
+    var total = 0; out.drift = {};
+    d.forEach(function (r) { out.drift[r.kind] = r.n; total += r.n; });
+    out.drift.total = total;
+    await env.AUDIT.prepare("UPDATE metric_registry SET last_value = ?, last_refreshed = ?, state = 'MEASURED' WHERE metric = 'portfolio_drift'").bind(String(total), new Date().toISOString()).run();
+  });
+  out.duration_ms = Date.now() - started;
+  try { await tsState(env, "portfolio_last_run", JSON.stringify(out).slice(0, 20000)); } catch (e) { out.errors.push({ scope: "portfolio-record", why: String(e && e.message || e).slice(0, 120) }); }
+  return out;
+}
+
+/* GET /roadmap: portfolio -> programs -> projects (open work by kind, open roadmap items, milestone link). Personal projects
+ * are counted, never itemised (PERSONAL-QNFO-SEPARATION-1). */
+async function portfolioTree(env) {
+  var progs = ((await env.AUDIT.prepare("SELECT program_code, name FROM programs ORDER BY program_code").all()).results) || [];
+  var projs = ((await env.AUDIT.prepare("SELECT project_code, program_code, name, source, gh_milestone FROM projects WHERE status = 'active' ORDER BY project_code").all()).results) || [];
+  var kinds = ((await env.AUDIT.prepare("SELECT m.project_code, m.kind, count(*) AS n FROM issue_project_map m JOIN agent_issues a ON a.id = m.issue_id AND a.status = 'open' GROUP BY m.project_code, m.kind").all()).results) || [];
+  var rms = ((await env.AUDIT.prepare("SELECT g.project_code, count(*) AS n FROM roadmap_gh_links g JOIN roadmap_implementation r ON r.id = g.roadmap_id WHERE r.status NOT IN ('verified','enforced-verified','violated-remediated','retired') GROUP BY g.project_code").all()).results) || [];
+  var kBy = {}, rBy = {};
+  kinds.forEach(function (k) { (kBy[k.project_code] = kBy[k.project_code] || {})[k.kind] = k.n; });
+  rms.forEach(function (r) { rBy[r.project_code] = r.n; });
+  var tree = { portfolio: "QNFO", repo: ORG + "/qnfo-workers", programs: [] };
+  progs.forEach(function (g) {
+    var ps = projs.filter(function (p) { return p.program_code === g.program_code; });
+    var node = { program: g.program_code, name: g.name, label: PS_PROGRAMS[g.program_code] ? PS_PROGRAMS[g.program_code].label : null, projects: ps.length };
+    if (g.program_code !== "QNFO.PERSONAL") node.items = ps.map(function (p) { return { project: p.project_code, name: p.name, source: p.source, milestone: p.gh_milestone ? "https://github.com/" + ORG + "/qnfo-workers/milestone/" + p.gh_milestone : null, open: kBy[p.project_code] || {}, roadmap_open: rBy[p.project_code] || 0 }; });
+    tree.programs.push(node);
+  });
+  return tree;
+}
+// end PORTFOLIO-SYNC-1
+
 async function runReconcile(env, opts) {
   var started = Date.now();
   var result = {
@@ -780,6 +1199,23 @@ export default {
       return json({ ok: true, result: await trackerSync(env) });
     }
 
+    if (p === "/portfolio" && request.method === "GET") {
+      var plast = null;
+      try { plast = JSON.parse(await tsState(env, "portfolio_last_run") || "null"); } catch (e) { plast = { error: String(e && e.message || e) }; }
+      return json({ version: VERSION, cron: TS_CRON, last_run: plast });
+    }
+
+    if (p === "/roadmap" && request.method === "GET") {
+      try { return json(await portfolioTree(env)); } catch (e) { return json({ error: String(e && e.message || e).slice(0, 200) }, 500); }
+    }
+
+    if (p === "/portfolio/tick" && request.method === "POST") {
+      if (!(await stewardKeyOk(env, request.headers.get("x-steward-key") || ""))) {
+        return json({ ok: false, error: "POST /portfolio/tick needs x-steward-key" }, 401);
+      }
+      return json({ ok: true, result: await portfolioSync(env) });
+    }
+
     if (p === "/tick") {
       var key = request.headers.get("x-steward-key") || "";
       if (!(await stewardKeyOk(env, key))) {
@@ -791,13 +1227,16 @@ export default {
       return json({ ok: true, result: res });
     }
 
-    return json({ error: "not found", routes: ["GET /health", "GET /report", "POST /tick", "GET /tracker", "POST /tracker/tick"] }, 404);
+    return json({ error: "not found", routes: ["GET /health", "GET /report", "POST /tick", "GET /tracker", "POST /tracker/tick", "GET /portfolio", "GET /roadmap", "POST /portfolio/tick"] }, 404);
   },
 
   async scheduled(event, env, ctx) {
     if (event && event.cron === TS_CRON) {
       var ts = await trackerSync(env);
       console.log(JSON.stringify({ worker: "qnfo-github-steward", version: VERSION, cron: event.cron, tracker: { mirrored: ts.mirrored, relinked: ts.relinked, closed: ts.closed, reopened: ts.reopened, tasks_fixed: ts.tasks_fixed.length, drift: ts.drift, errors: ts.errors.length } }));
+      /* PORTFOLIO-SYNC-1 runs after the tracker so it places the issues this tick just mirrored. */
+      var ps = await portfolioSync(env);
+      console.log(JSON.stringify({ worker: "qnfo-github-steward", version: VERSION, cron: event.cron, portfolio: { projects_created: ps.projects_created, projects_retired: ps.projects_retired, objectives_opened: ps.objectives_opened, objectives_verified: ps.objectives_verified, milestones_created: ps.milestones_created, issues_synced: ps.issues_synced, roadmap_mirrored: ps.roadmap_mirrored, roadmap_closed: ps.roadmap_closed, drift: ps.drift, errors: ps.errors.length, limitations: ps.limitations.length } }));
       return;
     }
     var res = await runReconcile(env, { workflows: false });

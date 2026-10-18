@@ -92,3 +92,22 @@ A failed or partial GitHub read changes nothing, and more than half the links di
   does not have and cannot be granted through the API. This worker therefore holds the fleet's
   personal token for administration work only; content and workflow operations elsewhere in the
   fleet use the App installation token (`github_app_token_ok=1` since 2026-10-17).
+
+
+## Portfolio, programs, projects and roadmap (PORTFOLIO-SYNC-1, 0.4.0)
+
+Runs on the same 10-minute tick, right after TRACKER-SYNC-1. D1 `qnfo-audit` is authoritative; GitHub is the mirror.
+
+| D1 (source of truth) | GitHub (QNFO/qnfo-workers) | Rule |
+|:--|:--|:--|
+| `programs` | labels `program:research|infra|ops|reach|personal` | fixed map, created if missing |
+| `projects` (`source='derived'`) | milestone `<project_code> · <name>` | one per live worker (`W.<worker>`, from `service_registry`) and per active public non-fork repo (`R.<repo>`, from `portfolio_repos`); retired with its source, milestone closed |
+| `issue_project_map` | issue milestone + `kind:fix|enhancement|research|owner` | every open mirrored `agent_issues` row is placed by triage owner, then source |
+| `roadmap_implementation` | issues labelled `roadmap`, `[RM-<id>]` | open items mirrored; closed with evidence when D1 verifies; a hand close is reopened |
+| `v_metric_trigger_state` hit=1 | roadmap objective `RM-METRIC-<metric>` | opened on breach, verified with the measured value when it clears |
+| (all of the above) | org Projects v2 board "QNFO Fleet Portfolio" | best effort; failure is a recorded limitation |
+
+Graded by `v_portfolio_drift` -> metric `portfolio_drift` (target 0, trigger -> agent_issues).
+Routes: `GET /roadmap` (public tree; personal projects counted, never itemised), `GET /portfolio` (last tick),
+`POST /portfolio/tick` (x-steward-key). Safety: per-tick caps, a degenerate census (<10 rows) never retires a project,
+a failed or anomalous GitHub list changes nothing, legacy hand-written projects are never auto-retired.
