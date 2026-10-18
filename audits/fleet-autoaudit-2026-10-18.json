@@ -1,5 +1,5 @@
 {
-  "audited_at": "2026-10-18 18:14:12",
+  "audited_at": "2026-10-18 19:14:24",
   "d1_write_failures": [],
   "d1_writes_ok": 120,
   "guard": {
@@ -618,7 +618,7 @@
       },
       {
         "dir": "qnfo-fleet-dashboard",
-        "version": "1.43.4-codeagent",
+        "version": "1.43.5-codeagent",
         "worker": "qnfo-fleet-dashboard"
       },
       {
@@ -1329,9 +1329,9 @@
       "worker": "qnfo-fleet-control"
     },
     "qnfo-fleet-dashboard": {
-      "before": "1.43.4-codeagent",
+      "before": "1.43.5-codeagent",
       "http": 200,
-      "live": "1.43.4-codeagent",
+      "live": "1.43.5-codeagent",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-fleet-dashboard"
