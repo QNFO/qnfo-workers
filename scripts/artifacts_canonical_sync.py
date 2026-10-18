@@ -362,7 +362,9 @@ def main():
                 "WHERE repo_id = ?", [r["id"]])
 
     summary = {
-        "repos": len(rows), "in_sync": len(in_sync), "drifted": len(remaining),
+        "repos": len(rows), "in_sync": len(in_sync) + len(repaired),
+        "in_sync_before_repair": len(in_sync),
+        "drifted": len(remaining),
         "errors": len(errored), "repaired": len(repaired), "waived": len(waived),
         "waived_detail": [{"repo": r["namespace"] + "/" + r["name"], "reason": r["waived"]}
                           for r in waived],
