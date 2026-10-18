@@ -25,9 +25,10 @@ head_sampling_rate = 0.1
 cpu_ms = 30000
 
 # Six-hourly: drift is corrected on a schedule the estate can rely on, not when someone notices.
-# Minute 17 keeps it off the fleet's 10-minute control tick.
+# Minute 17 keeps it off the fleet's 10-minute control tick. TRACKER-SYNC-1 runs at minute 3 of every 10
+# (agent_issues <-> GitHub issues, code_tasks <-> pull requests), also off the control tick.
 [triggers]
-crons = ["17 */6 * * *"]
+crons = ["17 */6 * * *", "3,13,23,33,43,53 * * * *"]
 
 [[d1_databases]]
 binding = "AUDIT"
