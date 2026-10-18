@@ -286,6 +286,13 @@ jobs:
       - name: Paper renderer suite (qnfo-gateway)
         if: ${{ !cancelled() }}
         run: node qnfo-gateway/render.test.mjs
+      # QUICK-READ-1 (pillar reach): one paper presented as it answers one question. Proves the invariant that a
+      # statement is shown only with a verbatim sentence of the paper behind it, that an untouched question spends no
+      # model call, that a failed model falls back to a quoted extractive read, and that the anchors are the ids the
+      # paper page publishes.
+      - name: QUICK-READ-1 offline suite (qnfo-gateway)
+        if: ${{ !cancelled() }}
+        run: node --no-warnings qnfo-gateway/quick-read.test.mjs
       # REACH-LAYER-1 (pillar reach): every qnfo.org / papers.qnfo.org HTML page carries a share image, canonical, JSON-LD
       # with the owner's ORCID, the author credit, Work with me, the iPatent link and a subscribe box (or the declared
       # no-form link on work-with-me), and passes the REACH-IDEATION checks copied from qnfo-fleet-control.
