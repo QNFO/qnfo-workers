@@ -29,6 +29,8 @@ const BODY = [
   "We do not measure the cost of state preparation, which limits the claim to the compiled part of the pipeline."
 ].join("\n");
 
+// QUICK-READ-DIGEST-3 fixture: a top-level heading with no prose of its own, its text in the h3 under it. The map
+// must carry the section's length, not "0 words".
 const SLUG = "energy-floor-of-the-controller";
 const papers = { [SLUG]: { slug: SLUG, title: "Energy Floor Of The Controller", body_md: BODY, abstract: "", created_at: "2026-10-01", version: "2.0.0" } };
 // QUICK-READ-DIGEST-1 fixture: the corpus shape that broke the first live map. A body whose title is its own "#"
@@ -40,6 +42,15 @@ papers[CHAPTERED] = { slug: CHAPTERED, title: "A Chaptered Work", abstract: "", 
   "## Abstract", "", "We report the whole result of the chaptered work in this paper here.", "",
   "## Method", "", "We measure the cost of every run with a calibrated joule counter.", "",
   "## Limits", "", "The measurement holds only for schedules that fit inside the controller window."
+].join("\n") };
+// QUICK-READ-DIGEST-3 fixture: a top-level heading with no prose of its own, its text in the h3 under it. The map
+// must carry the section's length, not "0 words".
+const NESTED = "nested-work";
+papers[NESTED] = { slug: NESTED, title: "Nested Work", abstract: "", created_at: "2026-10-01", version: "1.0.0", body_md: [
+  "## Part One", "",
+  "### Detail", "", "We measure the cost of every run with a calibrated joule counter and compare it with the bound.", "",
+  "## Part Two", "", "We report the second part of the work here in one sentence that stands on its own.", "",
+  "## Part Three", "", "We report the third part of the work here in one sentence that stands on its own too."
 ].join("\n") };
 // QUICK-READ-6 fixtures: a paper whose closest section by meaning is too short to be a passage, and one with no usable
 // section at all. The first must still read the next-best sections; the second must never claim it read anything.
@@ -408,6 +419,9 @@ const Q = "What did the controller measure about the energy cost of one solution
   ok(j.falsifiers.length === 0, "a paper that states no falsification criterion gets none invented", j.falsifiers);
   const fh = await (await call(env, "https://papers.qnfo.org/api/quickread/" + SLUG + "?format=html")).text();
   ok(/no explicit falsification criterion/i.test(fh), "the section says so in words instead of being left empty", fh.slice(0, 160));
+  const ns = await (await call(env, "https://papers.qnfo.org/api/quickread/" + NESTED)).json();
+  ok(ns.map.length === 3 && ns.map.every((m) => m.words > 0), "a heading whose prose lives in its subsections carries their words, never 0", ns.map);
+  ok(ns.map[0].title === "Part One" && ns.map[0].words > 10, "the parent section's length is its own text plus what is under it", ns.map[0]);
   const ch = await (await call(env, "https://papers.qnfo.org/api/quickread/" + CHAPTERED)).json();
   ok(ch.map.length >= 3 && ch.map.every((m) => m.title !== "A Chaptered Work"), "a body whose title is its own heading still maps its real sections, and not the title", ch.map);
   const doc = await (await call(env, "https://papers.qnfo.org/openapi.json")).json();
