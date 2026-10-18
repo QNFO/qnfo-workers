@@ -208,3 +208,38 @@ construction: `CREATE VIEW IF NOT EXISTS`, and an `UPDATE` whose `WHERE` require
    feed.
 3. **Quick Read items 1–3** (`QR_SEM_MIN` per shelf, numbered passages, pre-warm) — one lever at a time, measured.
 4. **Loop quality** behind `code_tasks_failed` (goal review, post-edit suite) — the largest single red input.
+
+---
+
+## 6. Red drain, round 2 (owner directive: never stop with red)
+
+State when this round started (2026-10-19 14:0xZ): **245 open issues, 26 breach contracts, 96 failed code tasks,
+27 queued, 52 metric triggers hit**. What was done, and what it moved:
+
+| action | measurement |
+|---|---|
+| 18 code tasks were blocked by `read failed: repo name refused for raw read` — a bug fixed upstream in 0.18.13 (`REPO-SLUG-NORMALIZE-1`), with the stale rows left in `failed` | **requeued** with the lever the orchestrator itself documents (`status='queued', step='read', attempts=0, lease_until=NULL`); all 18 resumed within 3 minutes (step read/propose) |
+| their 18 `CODE-LOOP-EXHAUSTED-1` issues said the loop gave up while the work was running again | `issue_triage.remediation` records the requeue on each; they stay open, because the work is open |
+| the terminal reconciler only resolved issues whose task reached `merged`, though the orchestrator's done set is `merged`/`closed`/`superseded` | **new** `code-loop-superseded-reconcile` task + 10-minute cron (`2026-10-19-code-loop-superseded-reconcile.sql`); issue **2871 closed** on its first run, issue **2876 correctly left open** (its PR closed unmerged — that is PR-CLOSE-WITHOUT-MERGE-1's case, not a completion) |
+| `failed` code tasks | **96 → 78** (the 18 moved back into `queued`, running) |
+
+**Why this does not go to zero this hour, measured rather than asserted:**
+
+* **The queue is file-bound.** 45 tasks are queued and **28 of them sit on three files** — `qnfo-fleet-dashboard/worker.js`
+  (10), `qnfo-social/worker.js` (9), `qnfo-research-exec/worker.js` (9). The loop runs one change per file at a time, so
+  the drain rate is one task per file per pass, not one task per tick. Requeueing more work onto those files would add
+  queue, not throughput — this is HANDOFF-2026-10-18 §4.6, now measured.
+* **The remaining failure clusters are quality, not plumbing.** After the requeue the largest groups are goal-review
+  rejections (13), "worker suites fail after the edit" (8), and `SEARCH text occurs 0 times` (8). The last group is all
+  `qwen2.5-coder-32b`, a rung that is no longer in the ladder (live: kimi-k2.7-code, glm-5.3, gpt-oss-120b), so those
+  rows are debris from a retired model rather than a live defect.
+* **The metric triggers are largely true state, not defects.** `fix_hold_rate_30d` 0.42 vs target 0.8,
+  `remedy_efficacy_30d` 0.26, `fleet_ai_run_rate_30d_usd` 281 vs 95, `issue_mttr_h_30d` 12.8 — these fall when the
+  fleet's fixes land, not when a session edits a threshold. Lowering one would be the defect.
+* **`issues_without_next_action` = 128** is the largest single register item; it is drained by writing next actions
+  onto issues, which is the planner's job at one per tick.
+
+The honest reading of red_total is the trend in `red_snapshots`, not a single hour: 281 → 312 → 343 as the fleet's own
+loops filed faster than the drain. This round removed a real blocker from the drain (18 tasks) and a structural gap in
+the reconciler (superseded tasks never closed their issues); it did not, and cannot honestly claim to, reach zero.
+
