@@ -44,6 +44,9 @@ CREATE INDEX IF NOT EXISTS idx_rq_created ON research_queue(created_at);
 CREATE INDEX IF NOT EXISTS idx_worker_logs_ingested ON worker_logs(ingested_at);
 CREATE INDEX IF NOT EXISTS idx_rs_source_collected ON reach_signals(source, collected_at);
 CREATE INDEX IF NOT EXISTS idx_notes_intake_type_status ON notes_intake(type, status);
+-- container freshness probe (qnfo-containers-pilot, ~50 calls/h at 131 K rows each): partial index on the LIKE predicate;
+-- 5 231 -> 5 rows for LIMIT 5, results identical to a NOT INDEXED scan for LIMIT 5 and LIMIT 500.
+CREATE INDEX IF NOT EXISTS idx_coe_container_ts ON cloud_ops_events(ts) WHERE kind LIKE 'container.%';
 
 CREATE TABLE IF NOT EXISTS bak_20261018_autonomy_selfheal_tick AS SELECT name, sql FROM sqlite_master WHERE type = 'trigger' AND name = 'autonomy_selfheal_tick';
 DROP TRIGGER IF EXISTS autonomy_selfheal_tick;
