@@ -32,10 +32,10 @@ const R = new Function(
   "katex",
   region +
     "\nreturn { RENDERER_VERSION, parseBibTeX, decodeLatex, formatNames, formatBibEntry, scanCitations," +
-    " buildPrintTemplates, buildMeta, extractBylineBlock, renderPaperHTML, renderFullHTML };"
+    " parseBodyReferences, buildPrintTemplates, buildMeta, extractBylineBlock, renderPaperHTML, renderFullHTML };"
 )(katexStub);
 
-const { RENDERER_VERSION, parseBibTeX, decodeLatex, formatNames, scanCitations, buildPrintTemplates, extractBylineBlock, renderPaperHTML, renderFullHTML } = R;
+const { RENDERER_VERSION, parseBibTeX, decodeLatex, formatNames, scanCitations, parseBodyReferences, buildPrintTemplates, extractBylineBlock, renderPaperHTML, renderFullHTML } = R;
 
 const BIB = [
   "@article{ostrowski1916,",
@@ -183,12 +183,72 @@ test("an empty trailing References heading is replaced by the generated list, ne
   assert.ok(!/>References</.test(bare.bodyHtml), "no empty References heading without a bibliography");
 });
 
-test("a citation key with no bibliography entry is printed as the key and counted, never invented", () => {
+test("an unknown key is flagged when a bibliography exists, and counted either way", () => {
   const md = MD.replace("## References", "Uncited claim [@ghost2020].\n\n## References");
-  const r = render(md, META, "");
+  // with a bibliography present an unmatched key is a real defect and is marked
+  const withBib = render(md, META, BIB);
+  assert.ok(withBib.stats.unresolved.indexOf("ghost2020") >= 0);
+  assert.match(withBib.bodyHtml, /cite-missing[^>]*>\[ghost2020\]</);
+  // with no bibliography at all there is nothing to be missing: the key prints plainly, still counted
+  const without = render(md, META, "");
+  assert.equal(without.stats.references, 0);
+  assert.ok(without.stats.unresolved.indexOf("ghost2020") >= 0);
+  assert.match(without.bodyHtml, /class="cite">\[ghost2020\]</);
+});
+
+test("a citation wrapped across a source line break still becomes a number, not literal text", () => {
+  const md = MD.replace(
+    "and the reals follow from it [@conway1976; @tateadelic].",
+    "and the reals follow from it [@conway1976;\n@tateadelic]."
+  );
+  const r = render(md);
+  assert.ok(!/\[@/.test(r.bodyHtml), "a wrapped marker must not survive as raw text");
+  assert.match(r.bodyHtml, /href="#ref-2">\[2, 3\]</);
+  assert.equal(r.stats.references, 3);
+});
+
+test("a paper whose bibliography lives in its own numbered list is resolved, and the key annotation is stripped", () => {
+  const body = [
+    "---",
+    'title: "Adelic Synthesis"',
+    "---",
+    "",
+    "Kauffman built the invariant [@Kauffman1991] on Spencer-Brown's calculus [@SpencerBrown1969], with Kitaev's anyons [@Kitaev2003].",
+    "",
+    "## References",
+    "",
+    "1. Kauffman, L.H. (1991). *Knots and Physics*. World Scientific. [@Kauffman1991]",
+    "2. Spencer-Brown, G. (1969). *Laws of Form*. Allen & Unwin. [@SpencerBrown1969]",
+    "3. Kitaev, A.Y. (2003). Fault-tolerant quantum computation by anyons. *Annals of Physics*. [@Kitaev2003]",
+    "",
+    "---",
+    "",
+    "*Colophon that must survive.*"
+  ].join("\n");
+  const parsed = parseBodyReferences(body);
+  assert.ok(parsed, "the numbered list is recognised");
+  assert.equal(parsed.entries.length, 3);
+  assert.equal(parsed.entries[0].key, "Kauffman1991");
+  assert.ok(!/\[@/.test(parsed.entries[0].text), "the key annotation is removed from the entry text");
+
+  const r = renderPaperHTML(body, {});
+  assert.equal(r.stats.references, 3);
+  assert.equal(r.stats.unresolved.length, 0);
+  assert.match(r.bodyHtml, /href="#ref-1">\[1\]</);
+  assert.match(r.bodyHtml, /href="#ref-3">\[3\]</);
+  assert.match(r.refsHtml, /Knots and Physics/);
+  assert.ok(!/\[@/.test(r.refsHtml), "no key annotation is printed in the reference list");
+  assert.match(r.bodyHtml, /Colophon that must survive/, "content after the reference list is kept");
+  assert.equal((r.bodyHtml.match(/>References</g) || []).length, 0, "the list is not printed twice");
+});
+
+test("an unresolved key with no bibliography at all prints plainly instead of as an error", () => {
+  const body = ["---", 'title: "No List"', "---", "", "A claim [@Arute2019] with no reference list anywhere."].join("\n");
+  const r = renderPaperHTML(body, {});
   assert.equal(r.stats.references, 0);
-  assert.ok(r.stats.unresolved.indexOf("ghost2020") >= 0);
-  assert.match(r.bodyHtml, /cite-missing[^>]*>\[ghost2020\]</);
+  assert.ok(r.stats.unresolved.indexOf("Arute2019") >= 0, "the unresolved key is still counted");
+  assert.ok(!/cite-missing/.test(r.bodyHtml), "nothing is flagged as missing when the paper carries no bibliography");
+  assert.match(r.bodyHtml, /class="cite">\[Arute2019\]</);
 });
 
 test("a body H1 that repeats the title is dropped (title appears once)", () => {
