@@ -1,8 +1,18 @@
 {
-  "audited_at": "2026-10-18 19:14:24",
+  "audited_at": "2026-10-18 20:11:20",
   "d1_write_failures": [],
   "d1_writes_ok": 120,
   "guard": {
+    "_drift_confirm": {
+      "first_pass": [
+        "personal-companion",
+        "qnfo-fleet-dashboard"
+      ],
+      "refreshed": true,
+      "second_pass": [
+        "personal-companion"
+      ]
+    },
     "_guard_rc": 0,
     "ahead": [],
     "cf_script_list": true,
@@ -618,7 +628,7 @@
       },
       {
         "dir": "qnfo-fleet-dashboard",
-        "version": "1.43.5-codeagent",
+        "version": "1.44.0-area-feeds",
         "worker": "qnfo-fleet-dashboard"
       },
       {
@@ -1329,9 +1339,9 @@
       "worker": "qnfo-fleet-control"
     },
     "qnfo-fleet-dashboard": {
-      "before": "1.43.5-codeagent",
+      "before": "1.44.0-area-feeds",
       "http": 200,
-      "live": "1.43.5-codeagent",
+      "live": "1.44.0-area-feeds",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-fleet-dashboard"
