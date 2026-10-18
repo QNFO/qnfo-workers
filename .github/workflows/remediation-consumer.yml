@@ -131,6 +131,15 @@ jobs:
         run: |
           python3 scripts/se_mentions_runner.py --selftest && python3 scripts/se_mentions_runner.py
 
+      # CF-OBS-BRIDGE-1 (owner directive 2026-10-18 "INTEGRATE CLOUDFLARE OBSERVABILITY ISSUES INTO UNIFIED TRACKING, AUDITING, AND
+      # REMEDIATION"): every live Cloudflare Workers Observability issue group becomes one tracked agent_issues row with a code-task
+      # line and a quiet-for-6h probe; a group whose issue closed by verification is marked resolved in Cloudflare. Depth 0
+      # (runner). Never fails the job.
+      - name: Bridge Cloudflare Observability issues into the tracker
+        continue-on-error: true
+        run: |
+          python3 scripts/cf_obs_issue_bridge.py --selftest && python3 scripts/cf_obs_issue_bridge.py
+
       # LOOP-BREAKER-1 and DOCTRINE-AUDIT-1 (agent_issues 2183, 2181): files repeated-failure and weekly doctrine-audit issues
       # at depth 0 (a fleet_tick trigger would nest the issue triggers past D1's limit). Deterministic; never fails the job.
       - name: File loop-breaker and doctrine-audit issues
