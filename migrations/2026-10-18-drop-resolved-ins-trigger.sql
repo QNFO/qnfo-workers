@@ -1,0 +1,40 @@
+-- AGENT-ISSUES-UNWRITABLE-1 (2026-10-18, pillar autonomy): drop the trigger that closed the cycle
+--
+-- SYMPTOM (measured live, 2026-10-18T12:45:40Z onward)
+--   Every INSERT INTO agent_issues failed with D1 error 7500 "triggers nested too deep" - INSERT ... VALUES,
+--   INSERT ... SELECT, and even INSERT ... SELECT ... WHERE 1=0. The refusal was static (no rows involved), so no
+--   worker in the fleet could file an issue. The last row written before it started was id 3005 (12:45:40Z).
+--
+-- CAUSE
+--   agent_issues -> agent_issues_autotriage2_ins -> (INSERT) issue_triage -> triage_close_sync_resolved_ins ->
+--   (UPDATE) agent_issues. That is a cycle through a second table, and the reachable trigger graph on agent_issues
+--   (22 triggers at the time) was one level deeper than the D1 limit allows. Inserts into issue_triage and
+--   remediation_contracts succeeded on their own, which is what proved the edge rather than the tables.
+--
+-- FIX
+--   Drop triage_close_sync_resolved_ins. triage_close_sync_resolved_upd stays: it is the path every real state
+--   transition takes (a triage row moving to resolved/resolved-refuted). Only the rare "insert a triage row that is
+--   already resolved" case loses its automatic issue close, and the next UPDATE of that row closes it.
+--   Verified: a real insert then succeeded (issue 3008) and the portfolio-lifecycle cron completed all 14 steps
+--   (fleet_runs 10036, status ok, 3.8s).
+--
+-- NOT THE CAUSE (dropped during diagnosis, all restored to their original SQL)
+--   sla_120_guard_contract_ins, sla_120_guard_contract_upd, agent_issues_birth_contract_ins,
+--   triage_close_sync_issue_ins.
+--
+-- Verify after apply:
+--   SELECT name FROM sqlite_master WHERE type='trigger' AND name='triage_close_sync_resolved_ins';   -- no row
+--   SELECT COUNT(*) FROM sqlite_master WHERE type='trigger' AND tbl_name='agent_issues';             -- 22 or fewer
+--   INSERT INTO agent_issues (title, description, source, category, priority, status)
+--     VALUES ('probe','probe','probe','observability','low','open');                                 -- succeeds
+--
+-- APPLY-BY: ci
+-- DB: qnfo-audit
+-- BACKUP: issue_triage
+-- Rollback: CREATE TRIGGER triage_close_sync_resolved_ins AFTER INSERT ON issue_triage WHEN NEW.triage_state IN
+--   ('resolved','resolved-refuted') BEGIN UPDATE agent_issues SET status='closed',
+--   close_channel='auto:triage-resolved-sync', updated_at=CAST(strftime('%s','now') AS INTEGER)*1000
+--   WHERE id = NEW.issue_id AND status='open'; END   (this restores the outage; only do it together with a
+--   reduction elsewhere in the agent_issues trigger graph)
+
+DROP TRIGGER IF EXISTS triage_close_sync_resolved_ins;
