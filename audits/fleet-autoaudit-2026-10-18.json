@@ -1,5 +1,5 @@
 {
-  "audited_at": "2026-10-18 14:01:20",
+  "audited_at": "2026-10-18 14:32:29",
   "d1_write_failures": [],
   "d1_writes_ok": 120,
   "guard": {
@@ -548,7 +548,7 @@
     "sync_workers": [
       {
         "dir": "idea-hub",
-        "version": "1.10.10-wall-deadline",
+        "version": "1.10.11-codeagent",
         "worker": "idea-hub"
       },
       {
@@ -558,7 +558,7 @@
       },
       {
         "dir": "q08-signal-engine",
-        "version": "0.28.11-yield-order",
+        "version": "0.28.12-codeagent",
         "worker": "q08-signal-engine"
       },
       {
@@ -623,12 +623,12 @@
       },
       {
         "dir": "qnfo-gateway",
-        "version": "3.23.2-quick-read-6",
+        "version": "3.23.3-codeagent",
         "worker": "qnfo-gateway"
       },
       {
         "dir": "qnfo-github-steward",
-        "version": "0.4.5-dispatch-liveness",
+        "version": "0.4.6-portfolio-heartbeat",
         "worker": "qnfo-github-steward"
       },
       {
@@ -678,7 +678,7 @@
       },
       {
         "dir": "qnfo-research-exec",
-        "version": "0.18.41-codeagent",
+        "version": "0.18.42-codeagent",
         "worker": "qnfo-research-exec"
       },
       {
@@ -809,9 +809,9 @@
       "worker": "funding"
     },
     "idea-hub": {
-      "before": "1.10.10-wall-deadline",
+      "before": "1.10.11-codeagent",
       "http": 200,
-      "live": "1.10.10-wall-deadline",
+      "live": "1.10.11-codeagent",
       "match": 1,
       "note": "SYNC",
       "worker": "idea-hub"
@@ -990,9 +990,9 @@
       "worker": "personal-life-search"
     },
     "q08-signal-engine": {
-      "before": "0.28.11-yield-order",
+      "before": "0.28.12-codeagent",
       "http": 200,
-      "live": "0.28.11-yield-order",
+      "live": "0.28.12-codeagent",
       "match": 1,
       "note": "SYNC",
       "worker": "q08-signal-engine"
@@ -1355,17 +1355,17 @@
       "worker": "qnfo-fleet-feed"
     },
     "qnfo-gateway": {
-      "before": "3.23.2-quick-read-6",
+      "before": "3.23.3-codeagent",
       "http": 200,
-      "live": "3.23.2-quick-read-6",
+      "live": "3.23.3-codeagent",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-gateway"
     },
     "qnfo-github-steward": {
-      "before": "0.4.5-dispatch-liveness",
+      "before": "0.4.6-portfolio-heartbeat",
       "http": 200,
-      "live": "0.4.5-dispatch-liveness",
+      "live": "0.4.6-portfolio-heartbeat",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-github-steward"
@@ -1569,9 +1569,9 @@
       "worker": "qnfo-register-guard"
     },
     "qnfo-research-exec": {
-      "before": "0.18.41-codeagent",
+      "before": "0.18.42-codeagent",
       "http": 200,
-      "live": "0.18.41-codeagent",
+      "live": "0.18.42-codeagent",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-research-exec"
