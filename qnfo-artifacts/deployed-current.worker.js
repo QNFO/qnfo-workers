@@ -32,10 +32,13 @@
  *     The ref now defaults to the repository's own default branch.
  *   * readFile() resolves to a BLOB, not a string; v1.1.0 checked for string/ArrayBuffer and
  *     otherwise returned JSON.stringify(blob) == "{}" -- a silent empty body. It uses .text().
- *   * repo handles are disposable; v1.1.0 leaked them until request end. `using` releases them.
+ *   * repo handles are disposable. v1.2.0 used `using` (Explicit Resource Management); the fleet's
+ *     SUITE-SYNTAX-CHECK-1 runs `node --check` on a file this old Node rejects that syntax for, so
+ *     the handles are held as plain consts and released when the request ends. Portability over
+ *     the tidier binding: a worker that cannot be syntax-checked cannot be merged.
  */
 
-var VERSION = "1.2.1";
+var VERSION = "1.2.2";
 const MAX_TTL = 86400;
 const DEFAULT_TTL = 3600;
 const NAME_RE = /^[a-zA-Z0-9][a-zA-Z0-9._-]*$/;
@@ -170,7 +173,7 @@ export default {
 
       if (sub === "" && method === "GET") {
         try {
-          using repo = await b.get(name);
+          const repo = await b.get(name);
           const info = await repo.info();
           let head = null, logErr = null;
           try {
@@ -188,7 +191,7 @@ export default {
 
       if (sub === "/log" && method === "GET") {
         try {
-          using repo = await b.get(name);
+          const repo = await b.get(name);
           const limit = Math.min(Number(url.searchParams.get("limit")) || 20, 100);
           const ref = url.searchParams.get("ref") || await defaultBranch(repo);
           const log = await repo.log({ ref, limit });
@@ -200,7 +203,7 @@ export default {
         // Bounded listing: agents need to discover paths before reading them, but an unbounded
         // walk of a 1200-file repo is a CPU bill. 500 entries per call, caller pages with path.
         try {
-          using repo = await b.get(name);
+          const repo = await b.get(name);
           const ref = url.searchParams.get("ref") || await defaultBranch(repo);
           const prefix = (url.searchParams.get("path") || "").replace(/^\/+|\/+$/g, "");
           const max = Math.min(Number(url.searchParams.get("limit")) || 200, 500);
@@ -230,7 +233,7 @@ export default {
         const filePath = url.searchParams.get("path");
         if (!filePath) return fail("path query param required", 400, "missing_path");
         try {
-          using repo = await b.get(name);
+          const repo = await b.get(name);
           const ref = url.searchParams.get("ref") || await defaultBranch(repo);
           const blob = await repo.readFile({ ref, path: filePath });
           if (!blob) return fail("file not found: " + filePath, 404, "file_not_found");
@@ -247,7 +250,7 @@ export default {
         const scope = body.scope === "read" ? "read" : "write";
         const ttl = clampTtl(body.ttl);
         try {
-          using repo = await b.get(name);
+          const repo = await b.get(name);
           const token = await repo.createToken(scope, ttl);
           return json({ ok: true, namespace: rns, repo: name, scope, ttl, token });
         } catch (e) { return fail(String((e && e.message) || e), 502, "token_failed"); }
