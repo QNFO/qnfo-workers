@@ -55,9 +55,8 @@ permissions:
   contents: write
   pull-requests: read  # CLAIM-REAPER-1 reads PR state
 
-concurrency:
-  group: remediation-consumer
-  cancel-in-progress: false
+# CONSUMER-CI-LOOP-2 (2026-10-18): concurrency sits on the consume job, not the workflow, so the 2-minute cadence-gate runs
+# at once for every trigger and a skipped trigger finishes as skipped instead of queueing and being cancelled.
 
 jobs:
   # CONSUMER-CI-LOOP-1 (agent_issues 2860, 2026-10-18): measured over the last 100 runs, 76 were cancelled while pending and
@@ -91,6 +90,9 @@ jobs:
   consume:
     needs: cadence-gate
     if: needs.cadence-gate.outputs.run == 'true'
+    concurrency:
+      group: remediation-consumer
+      cancel-in-progress: false
     runs-on: ubuntu-latest
     timeout-minutes: 15
     env:
