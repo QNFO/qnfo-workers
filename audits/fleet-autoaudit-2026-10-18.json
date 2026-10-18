@@ -1,8 +1,18 @@
 {
-  "audited_at": "2026-10-18 14:32:29",
+  "audited_at": "2026-10-18 15:03:32",
   "d1_write_failures": [],
   "d1_writes_ok": 120,
   "guard": {
+    "_drift_confirm": {
+      "first_pass": [
+        "personal-companion",
+        "qnfo-gateway"
+      ],
+      "refreshed": true,
+      "second_pass": [
+        "personal-companion"
+      ]
+    },
     "_guard_rc": 0,
     "ahead": [],
     "cf_script_list": true,
@@ -563,7 +573,7 @@
       },
       {
         "dir": "qnfo-ai",
-        "version": "5.36.5-hedge-healthy",
+        "version": "5.36.6-codeagent",
         "worker": "qnfo-ai"
       },
       {
@@ -603,7 +613,7 @@
       },
       {
         "dir": "qnfo-email",
-        "version": "2.9.5-splice-repair",
+        "version": "2.9.6-codeagent",
         "worker": "qnfo-email"
       },
       {
@@ -613,7 +623,7 @@
       },
       {
         "dir": "qnfo-fleet-control",
-        "version": "0.33.15-tempo-5m-1",
+        "version": "0.33.16-metric-trigger-twin-1",
         "worker": "qnfo-fleet-control"
       },
       {
@@ -623,12 +633,12 @@
       },
       {
         "dir": "qnfo-gateway",
-        "version": "3.23.3-codeagent",
+        "version": "3.24.1-quick-read-digest-2",
         "worker": "qnfo-gateway"
       },
       {
         "dir": "qnfo-github-steward",
-        "version": "0.4.6-portfolio-heartbeat",
+        "version": "0.4.7-codeagent",
         "worker": "qnfo-github-steward"
       },
       {
@@ -1025,9 +1035,9 @@
       "worker": "qnfo-agent-ws"
     },
     "qnfo-ai": {
-      "before": "5.36.5-hedge-healthy",
+      "before": "5.36.6-codeagent",
       "http": 200,
-      "live": "5.36.5-hedge-healthy",
+      "live": "5.36.6-codeagent",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-ai"
@@ -1224,9 +1234,9 @@
       "worker": "qnfo-deploy-guard"
     },
     "qnfo-email": {
-      "before": "2.9.5-splice-repair",
+      "before": "2.9.6-codeagent",
       "http": 200,
-      "live": "2.9.5-splice-repair",
+      "live": "2.9.6-codeagent",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-email"
@@ -1321,9 +1331,9 @@
       "worker": "qnfo-fleet-calibrator"
     },
     "qnfo-fleet-control": {
-      "before": "0.33.15-tempo-5m-1",
+      "before": "0.33.16-metric-trigger-twin-1",
       "http": 200,
-      "live": "0.33.15-tempo-5m-1",
+      "live": "0.33.16-metric-trigger-twin-1",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-fleet-control"
@@ -1355,17 +1365,17 @@
       "worker": "qnfo-fleet-feed"
     },
     "qnfo-gateway": {
-      "before": "3.23.3-codeagent",
+      "before": "3.24.1-quick-read-digest-2",
       "http": 200,
-      "live": "3.23.3-codeagent",
+      "live": "3.24.1-quick-read-digest-2",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-gateway"
     },
     "qnfo-github-steward": {
-      "before": "0.4.6-portfolio-heartbeat",
+      "before": "0.4.7-codeagent",
       "http": 200,
-      "live": "0.4.6-portfolio-heartbeat",
+      "live": "0.4.7-codeagent",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-github-steward"
