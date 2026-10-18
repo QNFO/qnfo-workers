@@ -146,9 +146,12 @@ const etagOf = (r) => r.headers.get("ETag");
   ok(!!ftag, "C5 the live fragment carries an ETag");
   const f2 = await call(env, "/?frag=1", { "If-None-Match": ftag });
   ok(f2.status === 304 && (await f2.text()) === "", "C6 the fragment revalidates to 304 (the poll keeps its DOM)");
+  const f3 = await call(env, "/?frag=1&rev=" + encodeURIComponent(ftag));
+  ok(f3.status === 204 && (await f3.text()) === "", "C7 ?rev=<revision> answers 204 with no body");
+  ok(f3.headers.get("X-Content-Revision") === ftag, "C8 the revision travels in a header the edge keeps");
   const page = await (await call(env, "/")).text();
-  ok(page.includes("If-None-Match"), "C7 the page's poll is conditional");
-  ok(page.includes("r.status===304"), "C8 the poll handles 304 without re-rendering");
+  ok(page.includes("If-None-Match") && page.includes("&rev="), "C9 the poll is conditional on both the header and the param");
+  ok(page.includes("r.status===304||r.status===204"), "C10 the poll treats 304 and 204 the same (no re-render)");
 }
 
 // D. a real change moves the revision
@@ -184,7 +187,7 @@ const etagOf = (r) => r.headers.get("ETag");
   const { env } = mk();
   const j = await (await call(env, "/health")).json();
   ok(["api-index", "live-snapshot", "conditional-reads"].every((c) => j.capabilities.includes(c)), "F1 capabilities name the new surface");
-  ok(j.version.startsWith("1.42.0"), "F2 the worker reports 1.42.0 (" + j.version + ")");
+  ok(j.version.startsWith("1.42"), "F2 the worker reports 1.42.x (" + j.version + ")");
 }
 
 // G. the index's auth claims hold (the table is a contract, not documentation)
