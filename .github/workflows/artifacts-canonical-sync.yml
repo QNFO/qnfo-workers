@@ -106,6 +106,19 @@ jobs:
             --max-repos "${{ github.event.inputs.max_repos || '6' }}" \
             --max-chunks 900
 
+      - name: Reconcile the deployment ledger against Cloudflare
+        if: always() && steps.gate.outputs.run != 'false'
+        env:
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: |
+          # DEPLOY-LEDGER-WRANGLER-ESCAPE-1: `wrangler deploy` appends nothing to
+          # deployment_history, which is the only source the portfolio can read for
+          # "is this project deployed/upgraded?". Measured 2026-10-18: even qnfo-gateway,
+          # which has a writer, was one deployment behind Cloudflare's own record.
+          python scripts/deployment_ledger_reconcile.py --limit 40
+        continue-on-error: true
+
       - name: Assert the run could see what it claims to have checked
         if: always() && steps.gate.outputs.run != 'false'
         env:
