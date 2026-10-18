@@ -35,9 +35,10 @@ Three defects sat under that:
 | grouping as data (`area`, `source`, `lag_s` on every `API_INDEX` row), `/api` -> `fleet-api-index/v2` with `areas` + `by_area`, `GET /api/area/<id>` (`fleet-area-feed/v1`), ga4 shadow + dead helpers removed, `freshState`, `/health` limits rewritten, page links each area row to its feed | #2523 | 1.44.0-area-feeds |
 | corrections found by verifying 1.44.0 live: the page claim was wrong (`focusRowsHtml`, not the dead `areaSectionsHtml`); `by_area[].live` renamed `all_members_live` so it stops sharing a name with the feed's own `live` | #2532 | 1.44.1-area-feeds-2 |
 | red-team: a malformed percent escape in the id answered 500 `URI malformed` where every other read answers 404; the decode is guarded | #2535 | 1.44.2-area-feeds-3 |
+| closeout review: the area feed omitted `blind`, so an unreadable source would have rendered as `breaches: 0, status: ok` — a false green; it now carries `blind` + `degraded` | #2539 | 1.44.3-area-feeds-4 |
 
 `deployment_history`: 1.44.0 at 20:10:41Z, 1.44.1 at 20:20:12Z, 1.44.2 at 20:30:21Z, all `qnfo-ops:cf_worker_deploy`,
-status `success`.
+status `success`; 1.44.3 follows the same path.
 
 **Measured live on 1.44.2:**
 
@@ -64,6 +65,9 @@ ASCII-only, `node --check` clean. Deploy gate green on all three PRs.
   means "computed at request time". Renamed `all_members_live`.
 - **A 500 I introduced.** `decodeURIComponent` on the raw id segment; malformed input became an error in the fleet's own
   error accounting. Guarded.
+- **A false green I left open.** The area feed did not carry `blind`, so a table that failed to read would have answered
+  `breaches: 0, status: ok`. Latent (live `blind` was empty), closed in 1.44.3 rather than left as a trap for the next
+  table rename.
 
 ## 4. Verified and deliberately NOT changed
 
@@ -102,7 +106,8 @@ ASCII-only, `node --check` clean. Deploy gate green on all three PRs.
   `source`, `lag_s`). A new read must name its area on the `API_INDEX` row; `rt-api.test.mjs` K3/K4 fail the build otherwise.
 - **Adding a read?** Give it an `area`; if it is computed from D1 at request time say `source: "live"`; if it reads
   `fleet_dashboard_state` say `snapshot` **and use `freshState`**, not `loadState`, or it will repeat the
-  never-refreshing defect.
+  never-refreshing defect. A read that renders an aggregate must carry `blind` (and `degraded`) from its model, or a
+  failed source becomes a zero.
 - **Work-claim contention:** `file:qnfo-fleet-dashboard/worker.js` is held by `qnfo-code-orchestrator:ct_im2936`
   (SEARCH-CONSOLE-INGEST-1) — since 19:37Z, renewed, refusing acquisition. This session worked on branches without the claim;
   the next session should acquire it or expect the orchestrator's edits to move under it.
