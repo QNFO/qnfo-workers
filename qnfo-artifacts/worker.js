@@ -35,7 +35,7 @@
  *   * repo handles are disposable; v1.1.0 leaked them until request end. `using` releases them.
  */
 
-const VERSION = "1.2.0";
+var VERSION = "1.2.1";
 const MAX_TTL = 86400;
 const DEFAULT_TTL = 3600;
 const NAME_RE = /^[a-zA-Z0-9][a-zA-Z0-9._-]*$/;
