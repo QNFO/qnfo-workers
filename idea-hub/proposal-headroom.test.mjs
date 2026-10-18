@@ -57,11 +57,11 @@ ok(r.inserted === Math.min(5, ASK_GAP_BATCH, 4), "after triage frees 5, the gaps
 const cons = raw.slice(raw.indexOf("async function runConsume(env) {"), raw.indexOf("// OWNER-SIGNAL-INTAKE-1 (1.7.0): the think loop"));
 ok(/var room = pending \? PROPOSAL_FILL_TO - Number\(pending\.n\) : null;/.test(cons) && /if \(room !== null && room <= 0\) \{ out\.paused = true; out\.room = room; return out; \}/.test(cons), "re-entry pauses when the queue is at PROPOSAL_FILL_TO");
 ok(/if \(room !== null && qs\.length > room - out\.proposals\) \{ out\.room_left = room - out\.proposals; break; \}/.test(cons) && cons.indexOf("qs.length > room - out.proposals") < cons.indexOf("INSERT INTO idea_proposals"), "a re-entry signal is consumed whole or left new, checked before any insert");
-const corp = raw.slice(raw.indexOf("async function runOwnerCorpus(env) {"), raw.indexOf("async function runOwnerCorpus(env) {") + 3000);
+const corp = raw.slice(raw.indexOf("async function runOwnerCorpus(env, deadline) {"), raw.indexOf("async function runOwnerCorpus(env, deadline) {") + 3000);
 ok(/var room = await proposalRoom\(env\);/.test(corp) && /if \(room < batch\) \{ batch = room; out\.capped = "room " \+ room; \}/.test(corp) && corp.indexOf("var room = await proposalRoom(env);") < corp.indexOf("FROM notes_intake"), "the notebook batch is capped by the room before notes are read");
 const cyc = fnBody(raw, "ideationCycle");
-ok(cyc.length > 400 && cyc.indexOf("runAskGap(env)") > 0 && cyc.indexOf("runOwnerCorpus(env)") > 0 && cyc.indexOf("triageProposals(env)") > 0, "the cycle body was read whole (every stage inside ideationCycle)", { len: cyc.length });
-ok(cyc.indexOf("runConsume(env)") < cyc.indexOf("runOwnerCorpus(env)") && cyc.indexOf("runOwnerCorpus(env)") < cyc.indexOf("triageProposals(env)"), "the notebook reads the room after re-entry and ask gaps, before triage");
+ok(cyc.length > 400 && cyc.indexOf("runAskGap(env)") > 0 && cyc.indexOf("runOwnerCorpus(env, WALL_DEADLINE)") > 0 && cyc.indexOf("triageProposals(env, WALL_DEADLINE)") > 0, "the cycle body was read whole (every stage inside ideationCycle)", { len: cyc.length });
+ok(cyc.indexOf("runConsume(env)") < cyc.indexOf("runOwnerCorpus(env, WALL_DEADLINE)") && cyc.indexOf("runOwnerCorpus(env, WALL_DEADLINE)") < cyc.indexOf("triageProposals(env, WALL_DEADLINE)"), "the notebook reads the room after re-entry and ask gaps, before triage");
 const vm2 = /var VERSION = "(\d+)\.(\d+)\.(\d+)/.exec(raw);
 ok(vm2 && (+vm2[1] > 1 || (+vm2[1] === 1 && (+vm2[2] > 8 || (+vm2[2] === 8 && +vm2[3] >= 6)))), "VERSION is at least 1.8.6", vm2 && vm2[0]);
 console.log(pass + " passed, " + fail + " failed");
