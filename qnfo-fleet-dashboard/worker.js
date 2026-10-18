@@ -5062,14 +5062,23 @@ var WATCHMAKER_OPS = [
   // CF-CHANGELOG-WATCH-1 (agent_issues 1958): qnfo-fleet-control 0.4.112 CF-CHANGELOG-LOOP-1 reads Cloudflare's changelog once a
   // day inside its hourly tick and writes one cf_changelog_runs row per run.
   { key: "cf-changelog", what: "Reading Cloudflare's changelog and acting on it: billing and deprecation issues, reopened catalog rows, new catalog rows (CF-CHANGELOG-LOOP-1, qnfo-fleet-control, daily in the hourly tick)", runner: "cron:qnfo-fleet-control", cadence_h: 24, sql: "SELECT MAX(ts) AS last FROM cf_changelog_runs WHERE status IN ('ok','partial')", why_sql: "SELECT status FROM cf_changelog_runs ORDER BY id DESC LIMIT 1" },
+  // BY-PERSON-ATTRIBUTION-ONLY-1 (2026-10-18, pillar autonomy): the note-substring test regressed. Measured on the live rows:
+  // "waiting on checks; missing gate, mirror-guard, comparator, guard" and "verified, in scope, trusted and intact on de8fbc7;
+  // PR opened by qnfo-fleet-control" are RUNNER closures that were counted as a person because the note happened to contain
+  // 'session' or 'by pr'. WATCHMAKER-BY-PERSON-PRECISION-1 (agent_issues 1726) fixed this same class on 2026-10-06 (23 of 53
+  // rows were runner closures); it came back. by_person is now ATTRIBUTION ONLY: status='merged' with a non-empty merged_by that
+  // is not the runner. A row with no attribution is NOT quietly called a person: it is its own column, by_person_unknown, which
+  // is information the fleet needs rather than a breach. Closed tasks no longer count at all; needs_person already covers the
+  // runner refusing one, and a closed task landed no change.
   { key: "code-task-merge", what: "Opening and merging code-loop PRs (CODE-TASK-MERGE-RUNNER-1, qnfo-fleet-control hourly)", runner: "cron:qnfo-fleet-control", cadence_h: 1,
     sql: "SELECT MAX(ts) AS last FROM cloud_ops_events WHERE id >= 'code-merge-tick-' AND id < 'code-merge-tick.' AND status = 'ok'",
     why_sql: "SELECT status FROM cloud_ops_events WHERE id >= 'code-merge-tick-' AND id < 'code-merge-tick.' ORDER BY ts DESC LIMIT 1",
     stuck_min: [120, 43200, 120],
-    stuck_sql: "SELECT stuck_prs + needs_person + by_person + revert_failed AS stuck, stuck_prs, needs_person, by_person, revert_failed, by_runner FROM (SELECT " +
+    stuck_sql: "SELECT stuck_prs + needs_person + by_person + revert_failed AS stuck, stuck_prs, needs_person, by_person, by_person_unknown, revert_failed, by_runner FROM (SELECT " +
       "COALESCE(SUM(CASE WHEN status IN ('published', 'pr_open') AND ((green_since IS NOT NULL AND green_since < ?1) OR updated_at < ?3) THEN 1 ELSE 0 END), 0) AS stuck_prs, " +
       "COALESCE(SUM(CASE WHEN status = 'needs_human' OR (status = 'branch_pushed' AND updated_at < ?1) THEN 1 ELSE 0 END), 0) AS needs_person, " +
-      "COALESCE(SUM(CASE WHEN (status = 'merged' OR (status = 'closed' AND (instr(lower(COALESCE(merge_note, '') || ' ' || COALESCE(last_error, '')), 'session') > 0 OR instr(lower(COALESCE(merge_note, '') || ' ' || COALESCE(last_error, '')), 'by pr ') > 0 OR instr(lower(COALESCE(merge_note, '') || ' ' || COALESCE(last_error, '')), 'into pr ') > 0 OR instr(lower(COALESCE(merge_note, '') || ' ' || COALESCE(last_error, '')), 'on main') > 0))) AND COALESCE(merged_at, updated_at) > ?2 AND COALESCE(merged_at, updated_at) > f.first_ok AND COALESCE(merged_by, '') <> 'qnfo-fleet-control' THEN 1 ELSE 0 END), 0) AS by_person, " +
+      "COALESCE(SUM(CASE WHEN status = 'merged' AND COALESCE(merged_at, updated_at) > ?2 AND COALESCE(merged_at, updated_at) > f.first_ok AND TRIM(COALESCE(merged_by, '')) <> '' AND merged_by <> 'qnfo-fleet-control' THEN 1 ELSE 0 END), 0) AS by_person, " +
+      "COALESCE(SUM(CASE WHEN status = 'merged' AND COALESCE(merged_at, updated_at) > ?2 AND TRIM(COALESCE(merged_by, '')) = '' THEN 1 ELSE 0 END), 0) AS by_person_unknown, " +
       "COALESCE(SUM(CASE WHEN merge_state = 'revert-failed' AND updated_at > ?2 THEN 1 ELSE 0 END), 0) AS revert_failed, " +
       "COALESCE(SUM(CASE WHEN status = 'merged' AND merged_by = 'qnfo-fleet-control' AND updated_at > ?2 THEN 1 ELSE 0 END), 0) AS by_runner FROM code_tasks, " +
       "(SELECT MIN(ts) AS first_ok FROM cloud_ops_events WHERE status = 'ok' AND (id = 'code-merge-first-ok' OR (id >= 'code-merge-tick-' AND id < 'code-merge-tick.'))) f)",
