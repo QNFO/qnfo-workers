@@ -50,7 +50,15 @@ papers[NESTED] = { slug: NESTED, title: "Nested Work", abstract: "", created_at:
   "## Part One", "",
   "### Detail", "", "We measure the cost of every run with a calibrated joule counter and compare it with the bound.", "",
   "## Part Two", "", "We report the second part of the work here in one sentence that stands on its own.", "",
-  "## Part Three", "", "We report the third part of the work here in one sentence that stands on its own too."
+  "## Part Three", "", "We report the third part of the work here in one sentence that stands on its own too.", "",
+  "## References", "", "[1] A reference that belongs to somebody else and is not a place to read this argument."
+].join("\n") };
+// A dotted slug is a real slug in this library ("x3.3-bosonic-codes-native-encoding"); the API guard must accept it.
+const DOTTED = "x9.9-dotted-paper";
+papers[DOTTED] = { slug: DOTTED, title: "Dotted Paper", abstract: "", created_at: "2026-10-01", version: "1.0.0", body_md: [
+  "## Abstract", "", "We report one result for the dotted paper in this sentence and no more.", "",
+  "## Method", "", "We measure the cost of every run with a calibrated joule counter at 4.2 millikelvin.", "",
+  "## Limits", "", "The measurement holds only for schedules that fit inside the controller window."
 ].join("\n") };
 // QUICK-READ-6 fixtures: a paper whose closest section by meaning is too short to be a passage, and one with no usable
 // section at all. The first must still read the next-best sections; the second must never claim it read anything.
@@ -422,6 +430,9 @@ const Q = "What did the controller measure about the energy cost of one solution
   const ns = await (await call(env, "https://papers.qnfo.org/api/quickread/" + NESTED)).json();
   ok(ns.map.length === 3 && ns.map.every((m) => m.words > 0), "a heading whose prose lives in its subsections carries their words, never 0", ns.map);
   ok(ns.map[0].title === "Part One" && ns.map[0].words > 10, "the parent section's length is its own text plus what is under it", ns.map[0]);
+  ok(!ns.map.some((m) => /^references/i.test(m.title)), "a reference list is not a place to read the argument, so the map leaves it out", ns.map.map((m) => m.title));
+  const dt = await (await call(env, "https://papers.qnfo.org/api/quickread/" + DOTTED)).json();
+  ok(dt.kind === "digest" && dt.slug === DOTTED, "a dotted slug is served, not answered bad_slug", dt.error || dt.kind);
   const ch = await (await call(env, "https://papers.qnfo.org/api/quickread/" + CHAPTERED)).json();
   ok(ch.map.length >= 3 && ch.map.every((m) => m.title !== "A Chaptered Work"), "a body whose title is its own heading still maps its real sections, and not the title", ch.map);
   const doc = await (await call(env, "https://papers.qnfo.org/openapi.json")).json();
