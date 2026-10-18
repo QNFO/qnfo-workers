@@ -85,7 +85,7 @@ const etagOf = (r) => r.headers.get("ETag");
   const { env } = mk();
   const r = await call(env, "/api");
   const j = await r.json();
-  ok(r.status === 200 && j.schema_version === "fleet-api-index/v1", "A1 GET /api serves the index");
+  ok(r.status === 200 && j.schema_version === "fleet-api-index/v2", "A1 GET /api serves the index (v2: reads grouped by functional area)");
   ok(Array.isArray(j.endpoints) && j.endpoints.length >= 20, "A2 the index lists the read surface (" + (j.endpoints || []).length + " rows)");
   ok(j.endpoints.every((e) => e.path && e.method && e.auth && e.schema_version && e.cache && e.freshness && e.what), "A3 every row states path, method, auth, schema, cache and freshness");
   for (const p of ["/api/live", "/api/human", "/api/areas", "/api/decision", "/api/state", "/health"]) {
@@ -189,7 +189,9 @@ const etagOf = (r) => r.headers.get("ETag");
   const { env } = mk();
   const j = await (await call(env, "/health")).json();
   ok(["api-index", "live-snapshot", "conditional-reads"].every((c) => j.capabilities.includes(c)), "F1 capabilities name the new surface");
-  ok(j.version.startsWith("1.43"), "F2 the worker reports 1.43.x (" + j.version + ")");
+  // A minimum, never an exact string: an exact pin fails for good on the next bump (VERSION-MINOR-CAPABILITY-1).
+  const ver = String(j.version || "").split(".").map((x) => Number(x));
+  ok(ver[0] === 1 && ver[1] >= 44, "F2 the worker reports at least 1.44 (" + j.version + ")");
 }
 
 // G. the index's auth claims hold (the table is a contract, not documentation)
@@ -283,6 +285,57 @@ const etagOf = (r) => r.headers.get("ETag");
   ok(d({ items: [{ key: "a", age: 1 }] }) === d({ items: [{ key: "a", age: 500 }] }), "J6 a clock field nested in an array is ignored too");
   ok(d({ since: "a", deploys: 1 }) === d({ since: "b", deploys: 1 }), "J7 the echoed window start is a clock field");
   ok(d({ since: "a", deploys: 1 }) !== d({ since: "a", deploys: 2 }), "J8 ...and a change inside that window still moves the revision");
+}
+
+// K. AREA-FEEDS-1: every read belongs to exactly one functional area, and each area answers as its own live feed.
+// The directive is "refactor the API feeds by functional area, and feeds are always updated from live data": so the
+// grouping must be DATA (one area per row, one source and lag per row), each area must have a feed, and that feed must
+// agree with /api/areas and revalidate. K17 is the regression for the live 500: an older handler for GET /api/ga4 stood
+// in front of the GA4-DATA-API-1 ledger read and called retired helpers, so the route errored while the newer code below
+// it was unreachable.
+{
+  const { env } = mk();
+  const ix = await (await call(env, "/api")).json();
+  const ids = ["cost", "research", "reach", "autonomy", "reliability", "platform"];
+  ok(Array.isArray(ix.by_area) && ix.by_area.length === ids.length, "K1 /api groups the reads into the six areas (" + (ix.by_area || []).length + ")");
+  ok(Array.isArray(ix.areas) && ix.areas.length === ids.length && ix.by_area.every((a) => ids.includes(a.id)), "K2 the grouping names only known areas");
+  const reads = ix.endpoints.filter((e) => /GET/.test(e.method));
+  ok(reads.every((e) => ids.includes(e.area)), "K3 every read names a known functional area");
+  ok(reads.every((e) => typeof e.lag_s === "number" && ["live", "snapshot", "mixed"].includes(e.source)), "K4 every read declares source and lag_s");
+  ok(ix.by_area.every((a) => a.feeds.length > 0 && a.feed_count === a.feeds.length), "K5 no area is empty in the grouping");
+  for (const a of ix.by_area) {
+    // the area's own feed is a member of its grouping by construction; the rest must be exactly the rows that name it
+    const fromRows = reads.filter((e) => e.area === a.id).map((e) => e.path).sort();
+    const grouped = a.feeds.filter((p) => p !== a.path).sort();
+    ok(JSON.stringify(fromRows) === JSON.stringify(grouped), "K6 " + a.id + " grouping matches its rows (" + fromRows.length + ")");
+    ok(a.feeds.includes(a.path), "K6b " + a.id + " lists its own feed");
+  }
+  const areas = await (await call(env, "/api/areas")).json();
+  for (const id of ids) {
+    const r = await call(env, "/api/area/" + id);
+    const j = await r.clone().json();
+    ok(r.status === 200 && j.schema_version === "fleet-area-feed/v1" && j.area.id === id, "K7 /api/area/" + id + " answers as its own feed");
+    const row = (areas.areas || []).find((x) => x.id === id);
+    ok(j.breaches.total === (row ? row.count : 0), "K8 /api/area/" + id + " breach count agrees with /api/areas (" + j.breaches.total + ")");
+    ok(j.live === true && typeof j.max_lag_s === "number" && j.max_lag_s <= 60, "K9 area " + id + " states it is live and bounds its lag");
+    ok(Array.isArray(j.feeds) && j.feeds.length > 0 && j.feeds.every((f) => typeof f.lag_s === "number"), "K10 area " + id + " lists its member reads with their lag");
+    ok(Array.isArray(j.computed_from) && j.computed_from.length > 0, "K11 area " + id + " names what it reads");
+    ok(j.data && "age_min" in j.data && typeof j.data.metrics === "number", "K11b area " + id + " states the age of the metrics it reports");
+    const tag = etagOf(r);
+    ok(!!tag && (await call(env, "/api/area/" + id, { "If-None-Match": tag })).status === 304, "K12 area " + id + " revalidates to 304");
+    ok((await (await call(env, "/api/area/" + id + "?since=" + j.revision)).json()).not_modified === true, "K13 ?since=<revision> works on area " + id);
+  }
+  ok((await call(env, "/api/area/nope")).status === 404, "K14 an unknown area is a 404, not an empty 200");
+  const comp = await (await call(env, "/api/area/autonomy")).json();
+  ok((comp.breaches.top || []).every((x) => !("fullLever" in x)), "K15 the compact area feed carries no fullLever");
+  const fullA = await (await call(env, "/api/area/autonomy?full=1")).json();
+  ok(Array.isArray(fullA.breaches.all), "K16 ?full=1 restores every breach row");
+  const g = await call(env, "/api/ga4");
+  ok(g.status === 200 && (await g.clone().json()).runs !== void 0, "K17 /api/ga4 answers from the ingest ledger (no shadowed 500)");
+  const gt = etagOf(g);
+  ok(!!gt && (await call(env, "/api/ga4", { "If-None-Match": gt })).status === 304, "K18 /api/ga4 revalidates");
+  const h = await (await call(env, "/health")).json();
+  ok(["feeds-by-area", "area-feed"].every((c) => h.capabilities.includes(c)), "K19 /health advertises the area feeds");
 }
 
 console.log(pass + " passed, " + fail + " failed");

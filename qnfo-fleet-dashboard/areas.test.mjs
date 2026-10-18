@@ -65,6 +65,13 @@ ok(/worsening 14d/.test(tiles) || /improving 14d/.test(tiles), "tile carries a t
 ok((secs.match(/data-fleet-fill/g) || []).length >= 4 && /Diagnose/.test(secs), "rows carry a Diagnose control that fills the command line");
 ok(/4 more in breach/.test(secs), "overflow is a count, not a list");
 ok(!/data-fleet-cmd/.test(secs), "no control runs a command without the owner pressing Enter");
+// AREA-FEEDS-1: the page is organised by functional area, so a clean area is a section too, and every section names its
+// machine feed. Before this, an area with nothing in breach rendered as nothing at all.
+const clearM = X.buildAreas([], {}, [], null);
+const clear = X.areaSectionsHtml(clearM, esc);
+ok((clear.match(/No metric in this area is in breach/g) || []).length === 5, "every functional area renders, clear ones included");
+ok(/\/api\/area\/cost/.test(clear) && /\/api\/area\/autonomy/.test(clear), "each area section names its machine feed");
+ok(!/undefined|NaN|\[object/.test(clear), "a clear area render leaks nothing");
 ok(/bottleneck: deferred/.test(flow) && /423 items waiting here/.test(flow), "flow names its bottleneck and why");
 const ageFlow = X.flowHtml({ flows: [{ id: 'i', name: 'Open issues by age', stages: [st('<1d', 4, 'info'), st('7d+', 38, 'stale')], bottleneck: null }] }, esc);
 ok(/tag u/.test(ageFlow) && /38/.test(ageFlow) && !/flowing/.test(ageFlow), 'an aging pipeline with no bottleneck still flags its stale stage');
