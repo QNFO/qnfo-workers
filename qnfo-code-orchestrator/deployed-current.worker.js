@@ -1604,7 +1604,7 @@ async function ai(env, model, messages) {
   const ms = Date.now() - t0;
   if (!text.trim()) {
     // EMPTY-REPLY-DIAG-1: record why a rung answered nothing (finish_reason "length" = reasoning ate the budget).
-    try { const c0 = out && out.choices && out.choices[0]; console.error(JSON.stringify({ worker: "qnfo-code-orchestrator", where: "ai-empty", model: String(model), finish: c0 && c0.finish_reason || null, reasoning_chars: String(c0 && c0.message && (c0.message.reasoning_content || c0.message.reasoning) || "").length, max_tokens: REASONING_OUT[model] || 8192 })); } catch (eD) {}
+    try { const c0 = out && out.choices && out.choices[0]; console.error(JSON.stringify({ worker: "qnfo-code-orchestrator", where: "ai-empty", model: String(model), finish: c0 && c0.finish_reason || null, reasoning_chars: String(c0 && c0.message && (c0.message.reasoning_content || c0.message.reasoning) || "").length, max_tokens: REASONING_OUT[model] || 8192 })); } catch (eD) { console.error(JSON.stringify({ worker: "qnfo-code-orchestrator", where: "ai-empty-diag", error: String(eD && eD.message || eD).slice(0, 200) })); }
   }
   let inTok = 0, outTok = 0, neurons = 0;
   try {
