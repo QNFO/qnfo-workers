@@ -4,7 +4,7 @@
 import { readFileSync, writeFileSync, mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { versionAtLeast } from "../scripts/version-at-least.mjs";
@@ -12,7 +12,7 @@ import { versionAtLeast } from "../scripts/version-at-least.mjs";
 const src = readFileSync(join(dirname(fileURLToPath(import.meta.url)), "worker.js"), "utf8");
 const tmp = join(mkdtempSync(join(tmpdir(), "qnfo-pdf-hb-")), "worker.mjs");
 writeFileSync(tmp, src);
-const worker = (await import(tmp)).default;
+const worker = (await import(pathToFileURL(tmp).href)).default;
 const VERSION = /var VERSION = "([^"]*)"/.exec(src)[1];
 
 function audit(failWrite) {

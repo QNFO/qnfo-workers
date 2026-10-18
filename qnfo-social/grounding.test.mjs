@@ -5,10 +5,11 @@
 import { readFileSync, writeFileSync, mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { pathToFileURL } from "node:url";
 const src = readFileSync(new URL("./worker.js", import.meta.url), "utf8");
 const dir = mkdtempSync(join(tmpdir(), "gr-"));
 writeFileSync(join(dir, "w.mjs"), src + "\nexport { checkThread };\n");
-const W = await import(join(dir, "w.mjs"));
+const W = await import(pathToFileURL(join(dir, "w.mjs")).href);
 let fails = 0, passes = 0;
 const ok = (c, m, x) => { if (c) passes++; else { fails++; console.log("FAIL " + m + (x !== undefined ? " :: " + JSON.stringify(x).slice(0, 300) : "")); } };
 
