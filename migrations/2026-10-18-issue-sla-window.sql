@@ -58,11 +58,19 @@ END;
 -- The second path: a standing detector (class prefix 'belief-' makes it a detector, so DETECTOR-CADENCE-1
 -- keeps it running for ever and it never closes). Expected '1' = no new issue has a deadline at or before its
 -- own creation. issue_id is NULL because this audits a rule, not one issue.
+--
+-- escalate_to is NOT NULL on this table. The first version of this INSERT omitted it, so INSERT OR IGNORE
+-- swallowed the row without an error and the migration looked applied while the second path did not exist.
+-- Caught by reading the row back rather than trusting the statement's success flag.
+--
+-- created_at <= now excludes future-dated rows: issue 2967 carries created_at 14:00Z with an SLA of 12:09Z,
+-- a defect of its own (an issue that does not exist yet) and not a zero-window issue. The guard keeps this
+-- detector focused on the rule it asserts.
 INSERT OR IGNORE INTO remediation_contracts
-  (class, issue_id, precondition, action, verify_probe, verify_transport, max_attempts, expected_cadence_h, status)
+  (class, issue_id, precondition, action, verify_probe, verify_transport, max_attempts, escalate_to, expected_cadence_h, status)
 VALUES
   ('belief-no-zero-sla-window', NULL,
    'ISSUE-SLA-WINDOW-1: an issue must not be due at the moment it is filed',
    'agent_issues_autotriage2_ins sets sla_due_at = now + 120 minutes (ISSUE-SLA-2H-1); this detector proves the rule held for every issue created after the migration',
-   'SELECT ''1'' AS expected, CASE WHEN (SELECT COUNT(*) FROM agent_issues a JOIN issue_triage t ON t.issue_id = a.id WHERE a.status = ''open'' AND a.created_at > 1792327500000 AND datetime(t.sla_due_at) <= datetime(a.created_at/1000,''unixepoch'')) = 0 THEN ''1'' ELSE ''0'' END AS observed',
-   'd1-query', 3, 1, 'active');
+   'SELECT ''1'' AS expected, CASE WHEN (SELECT COUNT(*) FROM agent_issues a JOIN issue_triage t ON t.issue_id = a.id WHERE a.status = ''open'' AND a.created_at > 1792327500000 AND a.created_at <= CAST(strftime(''%s'',''now'') AS INTEGER)*1000 AND datetime(t.sla_due_at) <= datetime(a.created_at/1000,''unixepoch'')) = 0 THEN ''1'' ELSE ''0'' END AS observed',
+   'd1-query', 3, 'qnfo-ops', 1, 'active');
