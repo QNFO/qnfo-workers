@@ -3,6 +3,7 @@
 // worker (#2137, #2116, #1815). Use versionAtLeast from scripts/version-at-least.mjs instead.
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { versionAtLeast } from "./version-at-least.mjs";
 
 let pass = 0, fail = 0;
@@ -14,7 +15,9 @@ ok(versionAtLeast("1.3.1-x", "1.3.1"), "equal core counts");
 ok(!versionAtLeast("0.9.63", "0.9.64"), "0.9.63 is below 0.9.64");
 ok(!versionAtLeast("garbage", "0.0.1"), "unparseable is false");
 
-const root = new URL("..", import.meta.url).pathname;
+// WINDOWS-SUITE-PARITY-1: new URL(...).pathname yields "/C:/..." on Windows, so readdirSync threw
+// ENOENT 'C:\C:\...' and this guard failed on the owner's box while passing on the ubuntu runner.
+const root = fileURLToPath(new URL("..", import.meta.url));
 const suites = [];
 (function walk(dir, depth) {
   for (const n of readdirSync(dir)) {

@@ -5,6 +5,7 @@
 // directory so a pattern that crashes on real source fails here.
 // Run: node scripts/compat-risk-scan.test.mjs   -> prints "N passed, 0 failed"
 import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import { scan, stripComments, blankStrings, timerRisks, tomlFacts, liveWorkerDirs } from "./compat-risk-scan.mjs";
 let pass = 0, fail = 0;
 const ok = (c, m, x) => { if (c) pass++; else { fail++; console.log("FAIL " + m + (x !== undefined ? " :: " + JSON.stringify(x).slice(0, 400) : "")); } };
@@ -68,7 +69,8 @@ ok(stripComments('fetch("x://a/c") // tail') === 'fetch("x://a/c")        ', "th
 ok(blankStrings('a("x-y", `p-q`, `${k - 1}`)') === 'a("", "", `${k - 1}`)', "strings are emptied, an interpolating template kept", blankStrings('a("x-y", `p-q`, `${k - 1}`)'));
 
 // every live worker directory scans without error
-const dirs = liveWorkerDirs(new URL("../", import.meta.url).pathname);
+// WINDOWS-SUITE-PARITY-1: .pathname gives "/C:/..." on Windows; fileURLToPath gives "C:\...".
+const dirs = liveWorkerDirs(fileURLToPath(new URL("../", import.meta.url)));
 ok(dirs.length >= 20, "live worker directories found", dirs.length);
 let scanned = 0;
 for (const d of dirs) {
