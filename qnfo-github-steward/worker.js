@@ -22,7 +22,7 @@
  *   * archived repositories are read-only and are skipped, not reported as drift;
  *   * GET /report and GET /health are public reads; POST /tick needs STEWARD_KEY.
  */
-var VERSION = "0.4.4-notify-attempt-1"; // 0.4.4 NOTIFY-ATTEMPT-TITLE-1 (2026-10-18): a re-run notification title ("workflow run, Attempt #2 failed") is parsed like the first attempt, so its resolved thread is cleared (three were kept at 10:52Z). // 0.4.3 TRACKER-SYNC-1: stale pr-without-task rows are cleared every tick; a merge fix reads merged_by from the single PR; 0.4.2 TRACKER-SYNC-1: the recent-PR window is a deliberate partial read (every post-backfill tick refused it); 0.4.1 org projects declared on (the portfolio board needs them); 0.4.0 PORTFOLIO-SYNC-1: projects derived from the census, metric breaches as roadmap objectives, programs/projects/issues/roadmap mirrored to GitHub labels, milestones, issues and a Projects board every 10 minutes; 0.3.1 a task is matched to its PR by number too (pr-without-task false positive on PR 381); 0.3.0 TRACKER-SYNC-1: agent_issues <-> GitHub issues and code_tasks <-> PRs every 10 minutes (0.2.2 ISSUE-SYNC-1)
+var VERSION = "0.4.5-dispatch-liveness"; // 0.4.5 DISPATCH-LIVENESS-1 (2026-10-18): this worker, on its own 10-minute cron and outside the qnfo-code-orchestrator process, reads the freshest fleet_crons.last_fired and files liveness:dispatcher-stalled when the per-minute dispatcher has been quiet for over 20 minutes -- the one stall no watchdog inside that failure domain can report, because NEVER-STALL-1 is itself a fleet_cron dispatched by the tick it would be reporting on. // 0.4.4 NOTIFY-ATTEMPT-TITLE-1 (2026-10-18): a re-run notification title ("workflow run, Attempt #2 failed") is parsed like the first attempt, so its resolved thread is cleared (three were kept at 10:52Z). // 0.4.3 TRACKER-SYNC-1: stale pr-without-task rows are cleared every tick; a merge fix reads merged_by from the single PR; 0.4.2 TRACKER-SYNC-1: the recent-PR window is a deliberate partial read (every post-backfill tick refused it); 0.4.1 org projects declared on (the portfolio board needs them); 0.4.0 PORTFOLIO-SYNC-1: projects derived from the census, metric breaches as roadmap objectives, programs/projects/issues/roadmap mirrored to GitHub labels, milestones, issues and a Projects board every 10 minutes; 0.3.1 a task is matched to its PR by number too (pr-without-task false positive on PR 381); 0.3.0 TRACKER-SYNC-1: agent_issues <-> GitHub issues and code_tasks <-> PRs every 10 minutes (0.2.2 ISSUE-SYNC-1)
 
 var ORG = "QNFO";
 var USER = "rwnq8";
@@ -632,6 +632,56 @@ async function tsCodeTasks(env, out) {
   if (!backfilled) await tsState(env, "pr_backfill_done", now);
 }
 
+/* DISPATCH-LIVENESS-1 (owner directive 2026-10-18, verbatim: "THE SYSTEM SHALL NEVER STOP OR
+ * TERMINATE WITH ANY OUTSTANDING BREACHES ... THE SYSTEM SHALL ALWAYS KEEP GOING").
+ *
+ * Every fleet_cron is dispatched by the per-minute tick inside qnfo-code-orchestrator. If that worker
+ * dies, its dispatcher dies with it -- and NEVER-STALL-1, the task that would report a stall, is itself a
+ * fleet_cron dispatched by that same tick. Nothing inside the failure domain can notice the failure.
+ *
+ * This worker is a different process on its own 10-minute Cloudflare cron. It reads the freshest
+ * last_fired across every enabled fleet_cron: while the dispatcher lives that advances at least every 10
+ * minutes, and when it stops the number freezes. A dispatcher quiet for over 20 minutes files
+ * liveness:dispatcher-stalled here, and ISSUE-SYNC-1 mirrors it to GitHub on the same tick.
+ *
+ * Idempotent: one row per condition, created once. A queued alarm that recovers before it was mirrored is
+ * cancelled rather than filed; a tracked one is left to the normal close path so it never drifts. */
+var DL_FP = "liveness:dispatcher-stalled";
+var DL_IDLE_LIMIT_MIN = 20;
+async function dispatchLiveness(env, result) {
+  if (!env.AUDIT) return;
+  try {
+    var row = await env.AUDIT.prepare(
+      "SELECT MAX(last_fired) AS newest FROM fleet_crons WHERE enabled = 1 AND last_fired IS NOT NULL"
+    ).first();
+    var newest = row && row.newest ? Date.parse(row.newest) : 0;
+    var idleMin = newest ? Math.round((Date.now() - newest) / 60000) : 9999;
+    var now = new Date().toISOString();
+    if (idleMin > DL_IDLE_LIMIT_MIN) {
+      var payload = JSON.stringify({
+        service: "qnfo-code-orchestrator",
+        title: "fleet cron dispatch has been quiet for " + idleMin + " minutes",
+        detail: "The freshest fleet_crons.last_fired is " + (newest ? row.newest : "absent") +
+          ". The per-minute tick in qnfo-code-orchestrator dispatches every fleet cron, including NEVER-STALL-1, so a stall here means no scheduled task is running and the watchdog cannot report it. Check /health on qnfo-code-orchestrator, its cron triggers, and the loop_lock row.",
+        idle_min: idleMin,
+        limit_min: DL_IDLE_LIMIT_MIN
+      });
+      await env.AUDIT.prepare(
+        "INSERT OR IGNORE INTO fleet_issue_dispatch (fingerprint, category, sev, owner, action, payload, state, created_at) VALUES (?, 'liveness', 'critical', 'qnfo-code-orchestrator', 'investigate-dispatch', ?, 'queued', ?)"
+      ).bind(DL_FP, payload, now).run();
+      result.dispatch_liveness = { idle_min: idleMin, limit_min: DL_IDLE_LIMIT_MIN, stalled: true };
+      return;
+    }
+    // Healthy: cancel an alarm that was raised but never mirrored, so a transient blip leaves no issue behind.
+    await env.AUDIT.prepare(
+      "UPDATE fleet_issue_dispatch SET state = 'done', exec_state = 'recovered', exec_ts = ? WHERE fingerprint = ? AND state = 'queued' AND (gh_number IS NULL OR gh_number = '')"
+    ).bind(now, DL_FP).run();
+    result.dispatch_liveness = { idle_min: idleMin, limit_min: DL_IDLE_LIMIT_MIN, stalled: false };
+  } catch (e) {
+    result.errors.push({ scope: "dispatch-liveness", why: String(e && e.message || e).slice(0, 160) });
+  }
+}
+
 async function trackerSync(env) {
   var started = Date.now();
   var out = { version: VERSION, started_at: new Date(started).toISOString(), mirrored: 0, relinked: 0, closed: 0, reopened: 0, tasks_fixed: [], task_drift: 0, errors: [] };
@@ -639,9 +689,11 @@ async function trackerSync(env) {
   try { await tsIssues(env, out); } catch (e) { out.errors.push({ scope: "tracker-issues", why: String(e && e.message || e).slice(0, 160) }); }
   try { await tsCodeTasks(env, out); } catch (e) { out.errors.push({ scope: "tracker-prs", why: String(e && e.message || e).slice(0, 160) }); }
   /* The fleet_issue_dispatch mirror (ISSUE-SYNC-1) rides the same 10-minute grid instead of the 6-hourly reconcile. */
-  var legacy = { errors: [], issue_sync: null, issue_sync_reverse: null };
+  var legacy = { errors: [], issue_sync: null, issue_sync_reverse: null, dispatch_liveness: null };
+  await dispatchLiveness(env, legacy);
   await issueSync(env, legacy);
   await issueSyncReverse(env, legacy);
+  out.dispatch_liveness = legacy.dispatch_liveness;
   out.dispatch_sync = legacy.issue_sync;
   out.dispatch_sync_reverse = legacy.issue_sync_reverse;
   out.errors = out.errors.concat(legacy.errors);
