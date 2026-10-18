@@ -837,6 +837,7 @@ function composePrompt(doi, title, abstract) {
     "Each post under 280 characters. No exclamation marks. No marketing hype. No invented numbers.",
     "Never call the paper new, first, novel or recent: the abstract is the only source.",
     "Links must be full URLs (https://...). Never write a bare DOI.",
+    "Hashtags: end post 5 with 2-3 short field hashtags (for example #quantumcomputing, #physics, #ai). Each hashtag must name the paper's field in the abstract's own terms; never invent a term or use a trending tag.",
     "Output ONLY the 5 posts, one per line, no numbering, no markdown.",
     "Paper link: " + (paperLink(doi) || "(none provided)"),
     "Title: " + title,
