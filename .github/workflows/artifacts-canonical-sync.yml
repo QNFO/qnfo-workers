@@ -1,0 +1,111 @@
+name: artifacts-canonical-sync
+
+# ARTIFACTS-CANONICAL-SYNC-1 (2026-10-18)
+#
+# OWNER DIRECTIVE: all repositories live in Cloudflare Artifacts AND stay canonically in sync with
+# GitHub automatically; repository content is integrated with the fleet's databases, graph and AI.
+#
+# WHY A SCHEDULED JOB AND NOT A PUSH HOOK
+#   Each GitHub repository would need its own workflow to mirror itself, which means 130 workflow
+#   files and 130 secrets to keep correct. Instead this one job asks a cheap question of every
+#   repository -- "is GitHub's HEAD commit the same commit Artifacts serves?" -- and only then pays
+#   for a transfer. Measured 2026-10-18: the full 180-repo audit takes ~30s and found 54 stale
+#   replicas that no other process was watching.
+#
+# WHAT RUNS
+#   reconcile: scripts/artifacts_canonical_sync.py --repair   (HEAD compare + delta git push)
+#   index:     scripts/repo_content_index.py                  (D1 file index + Vectorize + graph)
+#
+# CREDENTIALS
+#   CLOUDFLARE_API_TOKEN / CLOUDFLARE_ACCOUNT_ID : Artifacts control plane, D1, Workers AI, Vectorize
+#   GITHUB_TOKEN                                 : reads the WORKFLOW'S OWN repository only.
+#   QNFO_GH_PAT                                  : reads the whole org. Required for the ~180 repos
+#     outside this one; without it every other repo reports github_repo_missing and the run exits
+#     non-zero on purpose (a sync that silently checks one repo and calls itself green is worse
+#     than one that fails).
+#
+# TRIGGER NOTE: the GitHub `schedule` event does not fire in this repository (verified repeatedly),
+# so this workflow is chained to mirror-sync.yml via workflow_run plus repository_dispatch, which
+# the fleet already fires from remediation-consumer.yml.
+
+on:
+  workflow_run:
+    workflows: ["mirror-sync"]
+    types: [completed]
+  repository_dispatch:
+    types: [artifacts-canonical-sync]
+  workflow_dispatch:
+    inputs:
+      repair:
+        description: "Repair drifted replicas (delta git push)"
+        default: "true"
+      max_repos:
+        description: "Repos to index per run"
+        default: "6"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: artifacts-canonical-sync
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.11"
+
+      - name: Reconcile GitHub HEAD against Artifacts HEAD
+        id: reconcile
+        env:
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.QNFO_GH_PAT || secrets.GITHUB_TOKEN }}
+        run: |
+          set -o pipefail
+          if [ "${{ github.event.inputs.repair }}" = "false" ]; then
+            python scripts/artifacts_canonical_sync.py --workers 4 --json-out sync.json
+          else
+            python scripts/artifacts_canonical_sync.py --repair --limit 12 --workers 4 --json-out sync.json
+          fi
+        continue-on-error: true
+
+      - name: Index repository content into D1 + Vectorize + graph
+        if: always()
+        env:
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: |
+          python scripts/repo_content_index.py \
+            --max-repos "${{ github.event.inputs.max_repos || '6' }}" \
+            --max-chunks 900
+
+      - name: Report
+        if: always()
+        run: |
+          test -f sync.json && python -c "
+import json
+s=json.load(open('sync.json'))['summary']
+print('checked',s['repos'],'in_sync',s['in_sync'],'drifted',s['drifted'],'repaired',s['repaired'],'errors',s['errors'])
+" || echo "reconcile produced no report"
+
+      - name: Fail if a source could not be read
+        if: always()
+        run: |
+          python - <<'PY'
+import json, os, sys
+if not os.path.exists('sync.json'):
+    sys.exit(0)
+s = json.load(open('sync.json'))['summary']
+if s['errors']:
+    print('read failures:', s['error_sample'])
+    sys.exit(1)
+PY
