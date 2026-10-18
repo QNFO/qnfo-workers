@@ -19,7 +19,7 @@ on:
   # GATE-NIGHTLY-FULL-1 (2026-10-17): a PR validates only its changed directories (PRS-SCOPE-1), so
   # without this the full 429-suite sweep ran only on a push to main - i.e. after the merge. Nightly.
   schedule:
-    - cron: "43 4 * * *"
+    - cron: "43 */2 * * *"
   workflow_dispatch:
 
 # GATE-RUN-ALL-1 (2026-10-06): every check step runs even after an earlier one failed (if: !cancelled()), so one broken

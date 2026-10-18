@@ -43,7 +43,7 @@ on:
   schedule:
     # daily, offset from deploy-drift (06:17) and mirror-sync. DECLARATION ONLY --
     # schedule events do not fire on this repository (SCHEDULE-EVENT-NEVER-FIRES-1).
-    - cron: "41 5 * * *"
+    - cron: "41 */2 * * *"
   workflow_dispatch:
 
 concurrency:

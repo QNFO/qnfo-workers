@@ -44,7 +44,7 @@ head_sampling_rate = 0.1
 
 [triggers]
 # REMEDIATION-2X-1 (0.26.2, owner directive 2026-10-13): the 20-minute slot runs every 10 minutes (CRON-RATE-CEILING-1 floor).
-crons = ["*/10 * * * *", "0 3 * * *", "0 4 1 * *", "30 3 * * 1", "0 * * * *"]
+crons = ["*/5 * * * *", "0 3 * * *", "0 4 1 * *", "30 3 * * 1", "0 * * * *"]
 
 [ai]
 binding = "AI"

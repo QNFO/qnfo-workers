@@ -37,7 +37,7 @@ on:
     workflows: ["apply-pending-patches", "fleet-autodeploy", "mirror-sync"]
     types: [completed]
   schedule:
-    - cron: '41 */3 * * *'
+    - cron: '41 */2 * * *'
   workflow_dispatch:
 
 permissions:

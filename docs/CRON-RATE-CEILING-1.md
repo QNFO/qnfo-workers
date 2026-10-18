@@ -144,3 +144,13 @@ Why it is safe to spend a minute's granularity on this worker: its per-fire SQL 
 step and one save per lane; and it carries its own spend stop (`SPEND-CAP-1`, `ai_call_counters`,
 `ops_config code_loop_daily_calls`), which a cron expression cannot override. The generic risk this
 ceiling exists for — unmetered multiplication of invocations — is metered here.
+
+## 8. OWNER DIRECTIVE 2026-10-18 - TEMPO-120M-5M-1 (heartbeat at 5 minutes)
+
+The owner superseded the 10-minute floor **for the heartbeat only**:
+
+> NO TIME-RELATED METRIC OR SCHEDULE SHALL EVER EXCEED 120 MINUTES, AND HEARTBEAT/TICK TIME/TEMPO SHALL INCREASE TO A MAXIMUM OF ONCE EVERY 5 MINUTES.
+
+- Heartbeat workers (`fleet-exec`, `qnfo-fleet-control`, `qnfo-code-orchestrator`) now carry 5-minute (or faster) triggers; an OWNER_OVERRIDES entry per worker records the words and the date, and `slow_reason`/`heartbeat_reason` in `scripts/cron_rate_guard.py` FAIL a heartbeat worker with no 5-minute trigger.
+- Producers keep the 10-minute ceiling (144/24h) and gain a 120-minute floor: a producer cron above 120 minutes is printed as a `TEMPO` line on every run (`--tempo-strict` makes it fail).
+- Full policy, migration list and the two documented GitHub exceptions: `docs/TEMPO-POLICY-120M-5M-1.md`.
