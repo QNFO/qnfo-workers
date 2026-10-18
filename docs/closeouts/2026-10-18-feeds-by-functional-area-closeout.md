@@ -36,9 +36,10 @@ Three defects sat under that:
 | corrections found by verifying 1.44.0 live: the page claim was wrong (`focusRowsHtml`, not the dead `areaSectionsHtml`); `by_area[].live` renamed `all_members_live` so it stops sharing a name with the feed's own `live` | #2532 | 1.44.1-area-feeds-2 |
 | red-team: a malformed percent escape in the id answered 500 `URI malformed` where every other read answers 404; the decode is guarded | #2535 | 1.44.2-area-feeds-3 |
 | closeout review: the area feed omitted `blind`, so an unreadable source would have rendered as `breaches: 0, status: ok` — a false green; it now carries `blind` + `degraded` | #2539 | 1.44.3-area-feeds-4 |
+| deployment test: `/api` was the one read with an ETag and no body `revision` and no `?since=`, so it could not do what its own note tells every client to rely on; it now goes through `rtRead` like the rest | #2540 | 1.44.4-area-feeds-5 |
 
-`deployment_history`: 1.44.0 at 20:10:41Z, 1.44.1 at 20:20:12Z, 1.44.2 at 20:30:21Z, all `qnfo-ops:cf_worker_deploy`,
-status `success`; 1.44.3 follows the same path.
+`deployment_history`: 1.44.0 at 20:10:41Z, 1.44.1 at 20:20:12Z, 1.44.2 at 20:30:21Z, 1.44.3 at 20:40:18Z, 1.44.4 at
+20:48:42Z — all `qnfo-ops:cf_worker_deploy`, status `success`.
 
 **Measured live on 1.44.2:**
 
@@ -100,7 +101,36 @@ ASCII-only, `node --check` clean. Deploy gate green on every PR.
    - #2923 INTEG-GA4-READ-1, #2936 SEARCH-CONSOLE-INGEST-1 — untouched.
    - #2864, #2851 CODE-LOOP-EXHAUSTED-1 for this same file — untouched, and the orchestrator still holds the work claim.
 
-## 6. Handoff
+## 6. Deployment and functionality verification (1.44.4, 2026-10-18 ~20:50Z)
+
+Asked for by the owner ("TEST/VERIFY UPDATED WORKER DEPLOYMENT AND FUNCTIONALITY"). Everything below was measured, not
+inferred.
+
+**Platform state** (Cloudflare API): script settings carry **26 bindings** — 6 D1 (`AUDIT`, `GRAPH`, `IDENTITY`, `LIVING`,
+`OUTREACH`, `Q08`), `FLEET_CFG` KV, `AI`, `SEND_EMAIL`, 8 service bindings, 7 secrets, 2 plain-text vars — none lost by the
+five deploys. Cron trigger `*/15 * * * *` intact. `compatibility_date` 2026-10-10. Observability: logs on (100%), traces on
+(1% sampling). Deployment list shows each upload as source `api`, strategy `percentage`, 100% — newest
+`20:40:17.832Z`, and the ledger row `20:48:42.166Z` for 1.44.4.
+
+**Catalogued reads:** all 19 concrete GET reads in `GET /api` answered **200 with an ETag, a body `revision` equal to
+`X-Revision`, and 304 on `If-None-Match`** — 0 failures, including `/api` itself after 1.44.4.
+
+**Area feeds:** all six answered 200, `live: true`, `max_lag_s: 60`, breach totals equal to `/api/areas` (5, 6, 0, 32, 11,
+0), `blind: []`, `degraded: false`, `data.age_min` 49 / 990 / 19 / 829 / 50 / null, and 304 on their own ETag.
+
+**Access control unchanged:** `/api/owner/prompts` 403 without a session, `POST /api/cmd` 400 without `x-fleet-ui`,
+`GET /api/cmd` 200 (open read by design), `/api/owner/respond` 403 on GET.
+
+**Page:** 200, 57 457 B, 5 area rows each linking `/api/area/<id>`; the poll contract holds — `?rev=<X-Content-Revision>`
+answers **204**, `If-None-Match` answers **304**.
+
+**No errors from this change** (independent of the worker's own accounting): Cloudflare GraphQL
+`workersInvocationsAdaptive` for `qnfo-fleet-dashboard` — 313 requests / **0 errors** / 587 subrequests, CPU p50 9.7 ms
+p99 252 ms over 20:05–20:48Z, and 10 requests / 0 errors / CPU p50 4.6 ms since the 1.44.4 deploy. The two workers the
+dashboard does flag (`qnfo-research-exec` 20 internalError, `q08-signal-engine` 7) last errored at 19:00Z, before the first
+deploy of this thread.
+
+## 7. Handoff
 
 - **Read the boundary from the API, not from code:** `GET /api` is the contract (`areas`, `by_area`, and per row `area`,
   `source`, `lag_s`). A new read must name its area on the `API_INDEX` row; `rt-api.test.mjs` K3/K4 fail the build otherwise.
