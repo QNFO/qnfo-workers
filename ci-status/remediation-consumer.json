@@ -1,8 +1,225 @@
 {
- "ok": false,
- "error": "no parseable consumer output: Extra data: line 2 column 1 (char 447)",
+ "ok": true,
  "marker": "REMEDIATION-CONSUMER-1",
- "head": "22f125b6520886408344af6bd388f0f2c239608c",
+ "verifier": "remediation-consumer@7e05582a01d1",
+ "due": 21,
+ "pass": 5,
+ "fail": 16,
+ "skipped": 0,
+ "contracts": [
+  {
+   "class": "issue-2521-radar",
+   "issue_id": 2521,
+   "verdict": "fail",
+   "expected": "ok",
+   "observed": "present-marker:radar-hub/worker.js",
+   "written": true
+  },
+  {
+   "class": "issue-2521-intent",
+   "issue_id": 2521,
+   "verdict": "fail",
+   "expected": "ok",
+   "observed": "present-marker:qnfo-intent-orchestrator/worker.js",
+   "written": true
+  },
+  {
+   "class": "issue-2521-outreach",
+   "issue_id": 2521,
+   "verdict": "fail",
+   "expected": "ok",
+   "observed": "missing-marker:qnfo-cloud-ops/worker.js",
+   "written": true
+  },
+  {
+   "class": "issue-2583",
+   "issue_id": 2583,
+   "verdict": "fail",
+   "expected": "ok",
+   "observed": "missing-marker:qnfo-cloud-ops/worker.js",
+   "written": true
+  },
+  {
+   "class": "issue-2402",
+   "issue_id": 2402,
+   "verdict": "fail",
+   "expected": "ok",
+   "observed": "missing-marker:qnfo-research-exec/worker.js",
+   "written": true
+  },
+  {
+   "class": "issue-2403",
+   "issue_id": 2403,
+   "verdict": "fail",
+   "expected": "ok",
+   "observed": "missing-marker:qnfo-research-exec/worker.js",
+   "written": true
+  },
+  {
+   "class": "issue-2404",
+   "issue_id": 2404,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "issue-2405",
+   "issue_id": 2405,
+   "verdict": "fail",
+   "expected": "ok",
+   "observed": "missing-marker:qnfo-research-exec/worker.js",
+   "written": true
+  },
+  {
+   "class": "issue-2521",
+   "issue_id": 2521,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "issue-99912",
+   "issue_id": 99912,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "issue-2407",
+   "issue_id": 2407,
+   "verdict": "fail",
+   "expected": "ok",
+   "observed": "missing-marker:qnfo-research-exec/worker.js",
+   "written": true
+  },
+  {
+   "class": "fm-paper-source-voice",
+   "issue_id": 2468,
+   "verdict": "pass",
+   "expected": "0",
+   "observed": "0",
+   "written": true
+  },
+  {
+   "class": "fm-paper-abstract-empty",
+   "issue_id": 2468,
+   "verdict": "pass",
+   "expected": "0",
+   "observed": "0",
+   "written": true
+  },
+  {
+   "class": "issue-2342",
+   "issue_id": 2342,
+   "verdict": "fail",
+   "expected": "0",
+   "observed": "23",
+   "written": true
+  },
+  {
+   "class": "issue-2725",
+   "issue_id": 2725,
+   "verdict": "fail",
+   "expected": "0",
+   "observed": "17",
+   "written": true
+  },
+  {
+   "class": "issue-2444",
+   "issue_id": 2444,
+   "verdict": "fail",
+   "expected": "ok",
+   "observed": "a cold non-solicitation sender was skipped after 2.7.0",
+   "written": true
+  },
+  {
+   "class": "issue-2909",
+   "issue_id": 2909,
+   "verdict": "fail",
+   "expected": "1",
+   "observed": "0",
+   "written": true
+  },
+  {
+   "class": "issue-2036",
+   "issue_id": 2036,
+   "verdict": "fail",
+   "expected": "1",
+   "observed": "0",
+   "written": true
+  },
+  {
+   "class": "issue-2381",
+   "issue_id": 2381,
+   "verdict": "fail",
+   "expected": "ok",
+   "observed": "pending: 89 learner rows since 2026-10-12, none credited for a post the learner did not choose (qnfo-social learnerRecordPost backfill, code-task on the issue)",
+   "written": true
+  },
+  {
+   "class": "issue-2943",
+   "issue_id": 2943,
+   "verdict": "fail",
+   "expected": "1",
+   "observed": "0",
+   "written": true
+  },
+  {
+   "class": "issue-99968",
+   "issue_id": 99968,
+   "verdict": "fail",
+   "expected": "ok",
+   "observed": "pending: filed by qnfo-research-exec, which owns it for 48h",
+   "written": true
+  }
+ ],
+ "trusted_transports": [
+  "binding-http",
+  "cf-api",
+  "code-read",
+  "container",
+  "curl",
+  "d1-query",
+  "d1-query@ipatent-db",
+  "d1-query@living-paper",
+  "d1-query@personal-life",
+  "d1-query@portfolio-state",
+  "d1-query@q08-signal",
+  "d1-query@qnfo-cms",
+  "d1-query@qnfo-graph",
+  "dns",
+  "edge-ext",
+  "external",
+  "external-curl",
+  "external-http",
+  "external-https",
+  "http",
+  "runner-https"
+ ],
+ "budget_exhausted": false,
+ "runtime_verified_share_24h": 10,
+ "host_census": {
+  "skipped": "ran within 6h"
+ },
+ "fleet_journeys": {
+  "skipped": "ran within 50 min"
+ },
+ "migrations": {
+  "opted_in": 264,
+  "unapplied": [
+   "migrations/2026-10-18-issue-sla-window-retry.sql"
+  ],
+  "applied_now": [],
+  "failed": [
+   "migrations/2026-10-18-issue-sla-window-retry.sql"
+  ],
+  "metric": 1
+ },
+ "spent_ms": 20994,
+ "head": "7e05582a01d1273bdbcb86958c948b68e16af685",
  "job_status": "cancelled",
- "ts": "2026-10-18T17:26:20Z"
+ "ts": "2026-10-18T18:06:14Z"
 }
