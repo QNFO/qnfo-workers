@@ -22,7 +22,7 @@
  *   * archived repositories are read-only and are skipped, not reported as drift;
  *   * GET /report and GET /health are public reads; POST /tick needs STEWARD_KEY.
  */
-var VERSION = "0.3.0-tracker-sync-1"; // 0.3.0 TRACKER-SYNC-1: agent_issues <-> GitHub issues and code_tasks <-> PRs every 10 minutes (0.2.2 ISSUE-SYNC-1)
+var VERSION = "0.3.1-tracker-sync-1"; // 0.3.1 a task is matched to its PR by number too (pr-without-task false positive on PR 381); 0.3.0 TRACKER-SYNC-1: agent_issues <-> GitHub issues and code_tasks <-> PRs every 10 minutes (0.2.2 ISSUE-SYNC-1)
 
 var ORG = "QNFO";
 var USER = "rwnq8";
@@ -571,11 +571,12 @@ async function tsCodeTasks(env, out) {
   (((await env.AUDIT.prepare("SELECT task_id, pr_state, drift FROM code_task_pr_links WHERE task_id LIKE 'pr:%'").all()).results) || []).forEach(function (k) { known[k.task_id] = k; });
   /* Write a link only when it changed: an unchanged row rewritten every 10 minutes is write volume nothing reads. */
   var same = function (a, b) { return String(a == null ? "" : a) === String(b == null ? "" : b); };
-  var branches = {}, stmts = [];
+  var branches = {}, taskPrs = {}, stmts = [];
   for (var i = 0; i < tasks.length; i++) {
     var t = tasks[i];
     if (t.branch) branches[t.branch] = 1;
     var n = tsPrNum(t.pr_url) || t.known_pr || null;
+    if (n) taskPrs[n] = 1;
     var p = (n && byNum[n]) || (t.branch && byHead[t.branch]) || null;
     if (!p) {
       /* Not in the recent window. Settled links (terminal PR, same task status) need no read; anything else gets one. */
@@ -606,7 +607,7 @@ async function tsCodeTasks(env, out) {
   var cutoff = Date.now() - 30 * 86400000;
   Object.keys(byHead).forEach(function (h) {
     var p = byHead[h];
-    if (h.indexOf("codeagent-") !== 0 || branches[h]) return;
+    if (h.indexOf("codeagent-") !== 0 || branches[h] || taskPrs[p.number]) return;
     var recent = p.state === "open" || Date.parse(p.merged_at || p.closed_at || p.updated_at || 0) >= cutoff;
     if (recent) out.task_drift++;
     var k = known["pr:" + p.number], st = p.merged_at ? "merged" : p.state, dr = recent ? "pr-without-task" : null;
