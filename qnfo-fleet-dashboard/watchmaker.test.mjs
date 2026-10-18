@@ -56,6 +56,7 @@ const ago = (h) => new Date(NOW - h * 36e5).toISOString();
 db.prepare("INSERT INTO cloud_ops_events (id, ts, status) VALUES ('portfolio-daily-2026-10-06', ?, 'ok')").run(ago(3));
 db.prepare("INSERT INTO cloud_ops_events (id, ts, status) VALUES ('portfolio-dailyx', ?, 'ok')").run(ago(1));   // outside the id range
 db.prepare("INSERT INTO cloud_ops_events (id, ts, status) VALUES ('reach-ingest-2026-10-06', ?, 'ok')").run(ago(6));
+db.prepare("INSERT INTO cloud_ops_events (id, ts, kind, status) VALUES ('ga4-ingest-2026-10-06', ?, 'ga4-ingest', 'error')").run(ago(6));
 db.prepare("INSERT INTO cloud_ops_events (id, ts, status) VALUES ('jo-qnfo-backlog-exec-abc', ?, 'ok')").run(ago(7));
 db.prepare("INSERT INTO cloud_ops_events (id, ts, status) VALUES ('jr-grant-followup-ok1', ?, 'ok')").run(ago(4));
 db.prepare("INSERT INTO cloud_ops_events (id, ts, status) VALUES ('code-merge-tick-2026-10-06', ?, 'ok')").run(ago(0.5));
