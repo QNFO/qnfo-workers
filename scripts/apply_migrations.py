@@ -428,7 +428,21 @@ def depth_canary(acct, token, db_id, table):
             continue
         name = tables[t]
         cols = [c["name"] for c in d1(acct, token, db_id, "SELECT name FROM pragma_table_info(?1)", [name])]
-        probes = ['INSERT INTO "%s" SELECT * FROM "%s" WHERE 0' % (name, name), 'DELETE FROM "%s" WHERE 0' % name]
+        probes = []
+        if cols:
+            # TRIGGER-DEPTH-PROBE-STAR-1 (2026-10-18, migration_runs 292): the INSERT probe used to be
+            # `INSERT INTO "t" SELECT * FROM "t" WHERE 0`, and on a table whose own triggers write back to it D1 refuses
+            # that form with 7500 "triggers nested too deep" AT COMPILE TIME no matter what the trigger under test
+            # contains. Measured on qnfo-audit.agent_issues (23 triggers, several of which update agent_issues): the star
+            # form is refused with the ORIGINAL datetime('now') trigger in place, while the same statement with an
+            # explicit column list compiles and writes 0 rows. So the star form is a false positive by construction, and
+            # a false positive here is not harmless: the caller drops the trigger it just created, which on 2026-10-18
+            # 12:45:31Z left production with no agent_issues_autotriage2_ins. The explicit list asks the same question -
+            # "does a zero-row INSERT through every trigger upstream of this table still compile?" - without the star
+            # expansion, because D1 still compiles the INSERT and its whole trigger chain.
+            cl = ", ".join('"%s"' % c for c in cols)
+            probes.append('INSERT INTO "%s" (%s) SELECT %s FROM "%s" WHERE 0' % (name, cl, cl, name))
+        probes.append('DELETE FROM "%s" WHERE 0' % name)
         if cols:
             probes.append('UPDATE "%s" SET %s WHERE 0' % (name, ", ".join('"%s" = "%s"' % (c, c) for c in cols)))
         for q in probes:
@@ -494,12 +508,26 @@ def apply_file(path, text, acct, token, commit, emit=print):
             return record_failure(path, sha, commit, info, acct, token, db_id, why, emit)
         checked = True
     done_n = 0
+    # D1-TRIGGER-DEPTH-RESTORE-1 (2026-10-18, migration_runs 292): snapshot every trigger definition BEFORE the file runs, so
+    # a refused canary can put the table back the way it was. A per-statement read is not enough: a file that does
+    # DROP TRIGGER then CREATE TRIGGER has already removed the standing definition by the time the CREATE is checked, and
+    # the old runner then dropped the new one too, leaving the table silently without the trigger the migration was only
+    # trying to adjust.
+    trigger_snapshot = {}
+    try:
+        for r in d1(acct, token, db_id, "SELECT name, sql FROM sqlite_master WHERE type = 'trigger'"):
+            trigger_snapshot[(r.get("name") or "").lower()] = r.get("sql")
+    except Exception:  # noqa: BLE001
+        trigger_snapshot = {}
     for s in statements(text):
         if not checked and DESTRUCTIVE.match(body(s)):
             why = backup_missing()
             if why:
                 return record_failure(path, sha, commit, info, acct, token, db_id, why + " (checked before statement " + str(done_n + 1) + ")", emit, done_n)
             checked = True
+        # D1-TRIGGER-DEPTH-RESTORE-1: the definition this statement may replace, captured before the file ran.
+        tm = TRIGGER_ON.match(body(s))
+        prior = trigger_snapshot.get(tm.group(1).lower()) if tm else None
         try:
             d1(acct, token, db_id, body(s))
             done_n += 1
@@ -517,8 +545,15 @@ def apply_file(path, text, acct, token, commit, emit=print):
                     d1(acct, token, db_id, 'DROP TRIGGER IF EXISTS "%s"' % tm.group(1))
                 except Exception:  # noqa: BLE001
                     pass
+                restored = ""
+                if prior:
+                    try:
+                        d1(acct, token, db_id, prior)
+                        restored = " The definition this file replaced was restored, so the table is as it was."
+                    except Exception as e:  # noqa: BLE001
+                        restored = " RESTORE FAILED, the table is without this trigger: " + str(e)[:120]
                 return record_failure(path, sha, commit, info, acct, token, db_id, "statement " + str(done_n) + " (trigger " + tm.group(1) +
-                                      "): D1-TRIGGER-DEPTH-1, a write now nests deeper than D1's limit, so the trigger was dropped at once: " + refused, emit, done_n)
+                                      "): D1-TRIGGER-DEPTH-1, a write now nests deeper than D1's limit, so the trigger was dropped at once: " + refused + restored, emit, done_n)
     d1(acct, token, db_id, "INSERT INTO migration_runs (file, sha256, commit_sha, db, status, statements, applied_by) VALUES (?1, ?2, ?3, ?4, 'ok', ?5, 'ci:apply-migrations')",
        [path, sha, commit or "", info["db"], str(done_n)])
     resolve_failure(path, sha, acct, token, db_id, done_n)

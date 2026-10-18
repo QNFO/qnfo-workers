@@ -236,6 +236,48 @@ C.call = real_call
 shallow = deep.replace("migrations/deep", "x")
 rc = M.apply_file("migrations/shallow.sql", shallow, "a", "t", "c8", emit)
 ok(rc == 0 and db.execute("SELECT 1 FROM sqlite_master WHERE name = 'hb_feed'").fetchone(), "a trigger within the limit stays", out[-1])
+
+# D1-TRIGGER-DEPTH-PROBE-STAR-1 (2026-10-18, migration_runs 292): the canary must never ask with
+# `INSERT INTO t SELECT * FROM t WHERE 0`. On a table whose own triggers write back to it, D1 refuses that form at
+# COMPILE time whatever the trigger under test contains (measured on qnfo-audit.agent_issues with the ORIGINAL trigger in
+# place), so the canary would report a depth fault that does not exist - and the caller then drops a working trigger,
+# which is how production lost agent_issues_autotriage2_ins. The explicit-column form asks the same question.
+n_star = len(calls)
+ok(M.depth_canary("a", "t", "db", "ticks") is None, "a shallow table passes the canary")
+star_probes = [q for q in calls[n_star:] if q.lstrip().upper().startswith("INSERT") and "SELECT *" in q]
+ok(not star_probes, "the canary probes the insert with an explicit column list, never a star select", star_probes)
+insert_probes = [q for q in calls[n_star:] if q.lstrip().upper().startswith("INSERT")]
+ok(any('"ticks"' in q and '"s"' in q for q in insert_probes),
+   "and it still compiles a zero-row insert through the table", insert_probes)
+
+# D1-TRIGGER-DEPTH-RESTORE-1: when the canary does refuse, the definition the file replaced comes back, so the table is
+# not left without the trigger the migration was only trying to adjust.
+db.execute("CREATE TABLE hb2 (w TEXT)")
+db.commit()
+db.execute("CREATE TRIGGER hb_prior AFTER INSERT ON hb2 BEGIN INSERT INTO ticks (s) VALUES (NEW.w); END")
+db.commit()
+
+
+def deep2_call(method, path, token, body=None, timeout=60):
+    if " WHERE 0" in body["sql"] and '"hb2"' in body["sql"]:
+        return 400, {"success": False, "errors": [{"code": 7500, "message": "triggers nested too deep: SQLITE_ERROR"}]}
+    return real_call(method, path, token, body, timeout)
+
+
+C.call = deep2_call
+replace_prior = """-- replace a standing trigger
+-- APPLY-BY: ci
+-- DB: qnfo-audit
+-- BACKUP: ops_config
+-- Rollback: DROP TRIGGER IF EXISTS hb_prior
+DROP TRIGGER IF EXISTS hb_prior;
+CREATE TRIGGER hb_prior AFTER INSERT ON hb2 BEGIN INSERT INTO ticks (s) VALUES ('x'); END;
+"""
+rc = M.apply_file("migrations/prior.sql", replace_prior, "a", "t", "c9", emit)
+row = db.execute("SELECT sql FROM sqlite_master WHERE name = 'hb_prior'").fetchone()
+ok(rc == 1 and "D1-TRIGGER-DEPTH-1" in out[-1] and row is not None and "NEW.w" in row[0] and "restored" in out[-1],
+   "a refused replacement puts the standing trigger back", (out[-1], row))
+C.call = real_call
 addcol = """-- add column twice
 -- APPLY-BY: ci
 -- DB: qnfo-audit
