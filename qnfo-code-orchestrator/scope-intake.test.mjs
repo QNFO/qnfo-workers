@@ -30,6 +30,15 @@ ok(__scope("qnfo-workers", "qnfo-infra/worker.js") === null, "an ordinary worker
 ok(__scope("qnfo-workers", "qnfo-infra/deployed-current.worker.js") === null, "its mirror path is in scope too");
 ok(__scope("qnfo-workers", "docs/STRATEGY.md") === null && __scope("qnfo-workers", "qnfo-infra/README.md") === null, "docs and READMEs are in scope");
 ok(__scope("qnfo-workers", "scripts/x.py") === null, "other paths are left to the runner as before (the loop suite's scripts/*.py vehicle)");
+// MERGE-SCOPE-SCRIPTS-1 (0.18.12): a script the merge runner's CM_SCRIPT_DENY never auto-merges is a session
+// task here, so the loop does not spend model calls on a change it can never ship. Agent 2026-10-18:
+// ct_xo808yx0h3ieeh burned 8 attempts on scripts/remediation_consumer.py and then failed at the runner.
+for (const p of ["scripts/remediation_consumer.py", "scripts/run-suites.mjs", "scripts/code-task-publish.py", "scripts/cron_rate_guard.py"]) {
+  ok(/CM_SCRIPT_DENY|auto-merge scope/.test(String(__scope("qnfo-workers", p))), p + " is a session task (CM_SCRIPT_DENY)");
+}
+for (const p of ["scripts/fleet_report.py", "scripts/worker_readme.py"]) {
+  ok(__scope("qnfo-workers", p) === null, p + " is still in the loop's scope");
+}
 ok(__scope("other-repo", "qnfo-ops/worker.js") === null, "other repositories are not judged by the qnfo-workers merge runner");
 ok(__deny.includes("qnfo-observability"), "PLAN_DENY_WORKERS carries the scorer's host");
 
