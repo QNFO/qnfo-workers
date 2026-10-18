@@ -85,7 +85,8 @@ worst case lag a client must assume (`lag_s`). Nothing has to be inferred from p
 `GET /api/area/<id>` (`fleet-area-feed/v1`) is one area as its own feed: star metric and trend, breaches ranked, the named
 constraint, the area's pipelines and the reads that belong to it with their lag. It reads the same model as `/api/areas`,
 so the two can never disagree about a breach, and it revalidates like every other read (`ETag`, `If-None-Match`,
-`?since=<revision>`; `?full=1` adds every breach row and the whole lever text). An unknown area is a 404 listing the ids.
+`?since=<revision>`; `?full=1` adds every breach row and the whole lever text). An unknown area is a 404 listing the ids, and
+so is a malformed percent escape in the id (1.44.2: it answered 500 `URI malformed` until the decode was guarded).
 
 | area | own feed | other reads | source |
 | --- | --- | --- | --- |
