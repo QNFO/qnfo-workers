@@ -1,8 +1,17 @@
 {
-  "audited_at": "2026-10-18 10:43:39",
+  "audited_at": "2026-10-18 11:24:02",
   "d1_write_failures": [],
   "d1_writes_ok": 119,
   "guard": {
+    "_drift_confirm": {
+      "first_pass": [
+        "personal-companion"
+      ],
+      "refreshed": true,
+      "second_pass": [
+        "personal-companion"
+      ]
+    },
     "_guard_rc": 0,
     "ahead": [],
     "cf_script_list": true,
@@ -598,7 +607,7 @@
       },
       {
         "dir": "qnfo-email",
-        "version": "2.9.3-codeagent",
+        "version": "2.9.4-codeagent",
         "worker": "qnfo-email"
       },
       {
@@ -623,7 +632,7 @@
       },
       {
         "dir": "qnfo-github-steward",
-        "version": "0.4.2-tracker-sync-1",
+        "version": "0.4.4-notify-attempt-1",
         "worker": "qnfo-github-steward"
       },
       {
@@ -668,7 +677,7 @@
       },
       {
         "dir": "qnfo-research-exec",
-        "version": "0.18.38-tick-10m-1",
+        "version": "0.18.39-codeagent",
         "worker": "qnfo-research-exec"
       },
       {
@@ -1215,9 +1224,9 @@
       "worker": "qnfo-deploy-guard"
     },
     "qnfo-email": {
-      "before": "2.9.3-codeagent",
+      "before": "2.9.4-codeagent",
       "http": 200,
-      "live": "2.9.3-codeagent",
+      "live": "2.9.4-codeagent",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-email"
@@ -1354,9 +1363,9 @@
       "worker": "qnfo-gateway"
     },
     "qnfo-github-steward": {
-      "before": "0.4.2-tracker-sync-1",
+      "before": "0.4.4-notify-attempt-1",
       "http": 200,
-      "live": "0.4.2-tracker-sync-1",
+      "live": "0.4.4-notify-attempt-1",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-github-steward"
@@ -1552,9 +1561,9 @@
       "worker": "qnfo-register-guard"
     },
     "qnfo-research-exec": {
-      "before": "0.18.38-tick-10m-1",
+      "before": "0.18.39-codeagent",
       "http": 200,
-      "live": "0.18.38-tick-10m-1",
+      "live": "0.18.39-codeagent",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-research-exec"
