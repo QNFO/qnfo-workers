@@ -80,7 +80,9 @@ page uses for breaching metrics, plus `platform` for the reads that describe the
 
 `GET /api` (`fleet-api-index/v2`) returns `areas` and `by_area` beside `endpoints`: every row now names its `area`, whether
 it is computed at request time (`source: live`), from the rebuilt fleet state (`snapshot`) or both (`mixed`), and the
-worst case lag a client must assume (`lag_s`). Nothing has to be inferred from prose.
+worst case lag a client must assume (`lag_s`). Nothing has to be inferred from prose. The index revalidates like every
+other read — body `revision`, `?since=<revision>`, `If-None-Match` — so a client that cannot send a header can still
+dedupe it (1.44.4, where it had an ETag and no `?since=` of its own).
 
 `GET /api/area/<id>` (`fleet-area-feed/v1`) is one area as its own feed: star metric and trend, breaches ranked, the named
 constraint, the area's pipelines and the reads that belong to it with their lag. It reads the same model as `/api/areas`,
