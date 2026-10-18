@@ -63,7 +63,10 @@ const db = env.AUDIT_DB._db;
 const first = await tick({});
 ok(first && first.ok === true, "a first tick runs (the schema exists after it)", first && first.error);
 
-// 2. seed: a finished task holding a claim, and a poison row whose ctx is prose
+// 2. seed: a finished task holding a claim, and a poison row whose ctx is prose.
+// The write guard shipped later (CTX-JSON-1, 0.18.19) refuses exactly this row, so the two triggers are dropped first:
+// the row being simulated is one written BEFORE that guard existed, which is the case the reader must survive.
+db.exec("DROP TRIGGER IF EXISTS code_tasks_ctx_json_ins; DROP TRIGGER IF EXISTS code_tasks_ctx_json_upd;");
 const HOLD = "ct_hold_superseded_1", POISON = "ct_poison_1";
 db.prepare("UPDATE code_tasks SET ctx = ? WHERE id = ?").run(
   JSON.stringify({ claim: { key: "file:fx-res/fx/worker.js", token: "holdtok", expires_at: new Date(Date.now() + 3600e3).toISOString(), released_at: null } }), HOLD);
