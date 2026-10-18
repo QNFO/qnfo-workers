@@ -136,14 +136,10 @@ for (const p of targets) {
   ok(bad === null, "scan: no adjacent duplicated run in comments of " + rel, bad || undefined);
 }
 
-// ---- 5. the two worker copies must stay identical where both exist ------------
-for (const p of targets.filter((x) => x.endsWith("/worker.js"))) {
-  const deployed = p.replace(/worker\.js$/, "deployed-current.worker.js");
-  let a, b;
-  try { a = readFileSync(p, "utf8"); b = readFileSync(deployed, "utf8"); } catch { continue; }
-  const rel = p.slice(root.length).replace(/^\//, "");
-  ok(a === b, "mirror: worker.js and deployed-current.worker.js are byte-identical in " + rel);
-}
+// ---- 5. worker mirrors are NOT checked here ------------------------------------
+// An earlier draft also asserted worker.js === deployed-current.worker.js. That is the job of the
+// existing `mirror-guard` CI job, and two workers (personal-companion, qnfo-fleet-calibrator)
+// already carry a deliberate divergence this guard would have failed on. One guard, one job.
 
 console.log(`corruption-guard: ${pass} passed, ${fail} failed`);
 process.exit(fail === 0 ? 0 : 1);
