@@ -14,7 +14,12 @@ const fetchesWorkersDev = /\.q08\.workers\.dev/.test(src) && /await fetch\(/.tes
 const flags = (toml.match(/^\s*compatibility_flags\s*=\s*\[([^\]]*)\]/m) || [, ""])[1];
 ok(fetchesWorkersDev, "worker.js still fetches a *.q08.workers.dev URL (otherwise this suite is moot)");
 ok(/"global_fetch_strictly_public"/.test(flags), "wrangler.toml compatibility_flags carries global_fetch_strictly_public");
-ok(/"https:\/\/qnfo-gateway\.q08\.workers\.dev\/health"/.test(src) && !/qnfo-archive\.q08\.workers\.dev/.test(src), "runPing targets the workers.dev URL that returned 1042 (qnfo-gateway; qnfo-archive left it when it was retired, ARCHIVE-RETIRE-1)");
+// LIFECYCLE-PING-404-1 (qnfo-lifecycle 1.11.5, agent_issues 2903): runPing used to hit the raw qnfo-gateway.q08.workers.dev
+// hostname, but qnfo-gateway serves /health only on its canonical hosts (qnfo.org / www.qnfo.org / graph-api.qnfo.org), so the
+// raw workers.dev host fell through to 404 (150 PING FAIL rows, Observability groups 01d821db, 24f75eba). runPing now targets
+// the canonical public /health. The global_fetch_strictly_public flag remains load-bearing for runSync (asserted below), which
+// still fetches a workers.dev hostname.
+ok(/"https:\/\/qnfo\.org\/health"/.test(src) && !/qnfo-archive\.q08\.workers\.dev/.test(src), "runPing targets the canonical qnfo.org/health (not the raw workers.dev host that 404s; qnfo-archive left it when it was retired, ARCHIVE-RETIRE-1; LIFECYCLE-PING-404-1)");
 ok(/r\.base_url \|\| \("https:\/\/" \+ r\.service \+ "\.q08\.workers\.dev"\)/.test(src), "runSync falls back to the workers.dev hostname");
 
 console.log(pass + " passed, " + fail + " failed");
