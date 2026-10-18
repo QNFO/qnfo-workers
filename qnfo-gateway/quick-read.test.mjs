@@ -44,6 +44,16 @@ papers[ALLSHORT] = { slug: ALLSHORT, title: "All Short Paper", abstract: "", cre
   "## Abstract", "", "We do not measure the cost of state preparation.", "",
   "## Notes", "", "Holds only for schedules."
 ].join("\n") };
+// QUICK-READ-DIGEST-1 fixture: a paper that states its claim in a line of its own, so the digest has a claim section AND
+// a number of its own to report (the first fixture's only figure sits in its abstract, which the digest shows once).
+const CLAIMED = "claimed-paper";
+papers[CLAIMED] = { slug: CLAIMED, title: "A Claimed Result", abstract: "", created_at: "2026-10-01", version: "1.0.0", body_md: [
+  "---", "title: A Claimed Result", "---", "",
+  "## Abstract", "", "We compare a controller against the reference design and report how long a logical qubit survives under load.", "",
+  "## Claim", "", "**Claim.** The controller keeps a logical qubit alive four times longer than the reference design at the same power.", "",
+  "## Method", "", "We measure the survival of the logical qubit with a randomized benchmark at 4.2 millikelvin for 310 runs.", "",
+  "## Limitations", "", "The result holds only for the surface-code patch and we do not test other codes."
+].join("\n") };
 
 let aiCalls = 0, aiOut = "", lastModel = null, lastUser = null, embedDown = false;
 // The AI stub serves both models: bge-* gets embeddings (a fixed vector per known phrase, so cosine decides the section),
@@ -230,7 +240,8 @@ const Q = "What did the controller measure about the energy cost of one solution
   const env = mkEnv();
   const idx = await call(env, "https://papers.qnfo.org/papers?search=energy");
   const ih = await idx.text();
-  ok(/\/papers\/[a-z0-9-]+\/quickread"/.test(ih) && /data-qr-q="energy"/.test(ih), "a search result offers Quick read for the typed question", ih.length);
+  ok(/\/papers\/[a-z0-9-]+\/quickread"/.test(ih) && !/data-qr-q=/.test(ih), "QUICK-READ-DIGEST-1: a search result's Quick read is the digest, and carries no question", ih.length);
+  ok(/data-ask-q="What does/.test(ih), "the question door beside it is still Ask about it, which carries the question", (ih.match(/data-ask-q="[^"]{0,60}/) || [])[0]);
   ok(!/\/quickread\?q=/.test(ih), "the row's href carries no ?q= (ASK-CLIENT-GONE-CRAWL-1: a crawler must not walk into a model call)", (ih.match(/\/quickread[^"']*/) || [])[0]);
   const page = await call(env, "https://papers.qnfo.org/papers/" + SLUG);
   const ph = await page.text();
@@ -335,6 +346,72 @@ const Q = "What did the controller measure about the energy cost of one solution
   ok(none.j.coverage === "none" && none.j.passages === 0, "when no section has usable text the verdict is none, never related over an empty page", { coverage: none.j.coverage, passages: none.j.passages });
   const src2 = src.slice(src.indexOf("QUICK-READ-1:BEGIN"), src.indexOf("QUICK-READ-1:END"));
   ok(/function qrPick\(ranked, semantic\)/.test(src2) && /pick = qrPick\(ranked, true\)/.test(src2), "the selector takes the mode and the semantic branch passes it");
+}
+
+// ---- 17. QUICK-READ-DIGEST-1: nothing to type, nothing invented, no spend
+{
+  const env = mkEnv();
+  aiCalls = 0;
+  const r = await call(env, "https://papers.qnfo.org/papers/" + SLUG + "/quickread");
+  const h = await r.text();
+  ok(r.status === 200 && aiCalls === 0, "the digest page answers with no model call", { s: r.status, aiCalls });
+  ok(!/id="qr-q"/.test(h) && !/name="q"/.test(h), "the digest page asks nothing: it carries no question box", (h.match(/<input[^>]*name="q"[^>]*>/) || [])[0]);
+  ok(/The controller ran 42 trials on the cryostat and measured 1.7 joules per solution under load/.test(h), "the abstract, verbatim, opens the page", h.length);
+  ok(/What it claims/.test(h) === false, "a paper with no claim line does not get a claim section repeating its abstract", h.length);
+  ok(/Numbers it reports/.test(h) && /How it is done/.test(h) && /What would falsify it/.test(h) && /Where to read/.test(h), "the page carries the digest sections");
+  ok(/its opening sentence is the claim/.test(h) && /1\.7 joules per solution/.test(h), "the abstract is shown once, named as the claim, with its figure", h.length);
+  ok(/Nothing to type/.test(h) && /Ask this paper/.test(h) && /\?ask=1/.test(h), "the page says what it is, and links the question door instead of embedding one");
+  const page = await call(env, "https://papers.qnfo.org/papers/" + SLUG);
+  const ph = await page.text();
+  const ids = [...ph.matchAll(/<h[234] id="([^"]+)"/g)].map((m) => m[1]);
+  const anchors = [...h.matchAll(/href="\/papers\/energy-floor-of-the-controller#([^"]+)"/g)].map((m) => m[1]);
+  ok(anchors.length >= 3 && anchors.every((a) => ids.indexOf(a) >= 0), "every digest anchor is a section id the paper page publishes", anchors);
+}
+
+// ---- 18. the digest is a different page from the question view, on the same address
+{
+  const env = mkEnv();
+  aiOut = JSON.stringify({ overview: "Measured.", answers: [], approach: [], considerations: [] });
+  const digest = await call(env, "https://papers.qnfo.org/papers/" + SLUG + "/quickread");
+  const dh = await digest.text();
+  const question = await call(env, "https://papers.qnfo.org/papers/" + SLUG + "/quickread?q=" + encodeURIComponent(Q));
+  const qh = await question.text();
+  ok(/id="qr-q"/.test(qh) && !/id="qr-q"/.test(dh), "?q= is the question view, the bare URL is the digest: one address, two different pages");
+  ok(dh !== qh && /<h2>Answers<\/h2>/.test(await (await postPage(env, Q)).h), "the question view still renders Answers on the server");
+}
+
+// ---- 19. the digest is an API too, and it says where it has nothing to quote
+{
+  const env = mkEnv();
+  aiCalls = 0;
+  const r = await call(env, "https://papers.qnfo.org/api/quickread/" + SLUG);
+  const j = await r.json();
+  ok(r.status === 200 && j.kind === "digest" && aiCalls === 0, "the API returns the digest when no question is given, spending nothing", { s: r.status, kind: j.kind, aiCalls });
+  ok(Array.isArray(j.numbers) && j.numbers.length === 0 && j.numbers_above >= 1, "a figure already shown in the abstract is not repeated below it", { numbers: j.numbers, above: j.numbers_above });
+  ok(j.claim === "" && j.claim_source === "abstract" && /main result of this paper/.test(j.abstract[0]), "the abstract's opening sentence is the claim, and is not served twice", { claim: j.claim, abs: j.abstract[0] });
+  const cl = await (await call(env, "https://papers.qnfo.org/api/quickread/" + CLAIMED)).json();
+  ok(cl.claim_source === "paper" && /four times longer than the reference design/.test(cl.claim), "a paper that states its claim in a line of its own gets that line", cl.claim);
+  ok(cl.numbers.some((x) => /4\.2 millikelvin/.test(x.quote)) && cl.numbers[0].section, "the figures of the body are quoted with their section", cl.numbers);
+  const clh = await (await call(env, "https://papers.qnfo.org/papers/" + CLAIMED + "/quickread")).text();
+  ok(/<h2>What it claims<\/h2>/.test(clh) && /four times longer/.test(clh), "the claim section is rendered where the paper states one");
+  ok(j.map.length >= 3 && j.map.every((s) => s.words > 0 && s.minutes >= 1), "the reading map carries a length for every section", j.map);
+  ok(j.limits.length >= 1 && j.limits.some((x) => /do not measure the cost of state preparation/.test(x.quote)), "where the claim stops is quoted from the paper", j.limits);
+  ok(j.falsifiers.length === 0, "a paper that states no falsification criterion gets none invented", j.falsifiers);
+  const fh = await (await call(env, "https://papers.qnfo.org/api/quickread/" + SLUG + "?format=html")).text();
+  ok(/no explicit falsification criterion/i.test(fh), "the section says so in words instead of being left empty", fh.slice(0, 160));
+  const doc = await (await call(env, "https://papers.qnfo.org/openapi.json")).json();
+  const op = doc.paths["/api/quickread/{slug}"].get;
+  const qp = (op.parameters || []).filter((p) => p.name === "q")[0];
+  ok(qp && qp.required === false && /digest/.test(qp.description), "openapi says the question is optional and describes the digest", qp);
+}
+
+// ---- 20. the source holds the two doors apart
+{
+  const block = src.slice(src.indexOf("QUICK-READ-DIGEST-1:BEGIN"), src.indexOf("QUICK-READ-DIGEST-1:END"));
+  ok(/function qrDigest/.test(block) && /function lpQuickReadDigestHTML/.test(block) && /function qdFragment/.test(block), "the digest lives in its own block");
+  ok(!/env\.AI/.test(block), "the digest block makes no model call at all");
+  ok(/location\.search\.indexOf\('ask=1'\)/.test(src), "the paper page opens the Ask rail from ?ask=1, so the digest can link to a question instead of embedding one");
+  ok(/title="The paper in about a minute/.test(src), "the paper page's Quick read button says what the page now does");
 }
 
 console.log(pass + " passed, " + fail + " failed");
