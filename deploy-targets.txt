@@ -14,3 +14,8 @@ qnfo-social qnfo-social/worker.js
 # EVOLVE-1 (2026-10-17): the organ that turns the fleet's own gap registers into named work.
 # Listed here because a worker absent from this manifest gets its wrangler.toml crons applied as INERT.
 qnfo-evolve qnfo-evolve/worker.js
+# CF-MODEL-EVAL-1 (2026-10-18): the loop that evaluates new Workers AI models and carries a
+# winner into production. It shipped from a raw PUT first and had no tracked source at all --
+# a deployed worker nobody could redeploy. Listed here so its 6-hourly [triggers] crons are
+# applied by the canonical sequence instead of landing INERT.
+qnfo-model-eval qnfo-model-eval/worker.js

@@ -1,0 +1,46 @@
+name = "qnfo-model-eval"
+main = "worker.js"
+compatibility_date = "2026-10-10"
+workers_dev = true
+# charter-pillar: autonomy (CF-MODEL-EVAL-1)
+#
+# WHY THE PILLAR IS autonomy: the fleet's model choice must not depend on the owner
+# noticing that Cloudflare shipped a model. This worker discovers the live catalog,
+# benchmarks new models against the incumbents, and carries a winner onto the ladder
+# and the roadmap without a human in the loop.
+#
+# BINDINGS: D1 + AI only. It can read the fleet's registers and spend Workers AI
+# neurons; it cannot deploy, cannot edit code, and holds no credential. The worst it
+# can do when wrong is file a bad promotion issue, which the merge gate refuses.
+#
+# CADENCE (REGULAR, not once-a-day): every 6 hours at minute 17. The per-run model
+# cap comes from cf_model_eval_config.max_models_per_run so throughput is tunable
+# without a deploy, and a wall-clock deadline inside runLoop stops a run cleanly.
+# CRON_RATE_GUARD-1: one fire per 6h, far under the guard's limit.
+#
+# traces are declared explicitly: the top-level [observability] switch enables logs
+# only, and a worker that ships with no traces cannot be diagnosed after the fact.
+
+[observability]
+enabled = true
+
+[observability.logs]
+enabled = true
+head_sampling_rate = 1
+
+[observability.traces]
+enabled = true
+head_sampling_rate = 0.1
+
+# limits-not-declared: an evaluation loop bounded by wall clock, not by CPU -- but a
+# pathological model reply must not run to the platform wall.
+[limits]
+cpu_ms = 30000
+
+[triggers]
+crons = ["17 */6 * * *"]
+
+[[d1_databases]]
+binding = "AUDIT"
+database_name = "qnfo-audit"
+database_id = "35e2e573-92f3-46ac-83c6-22f6429fc5e5"
