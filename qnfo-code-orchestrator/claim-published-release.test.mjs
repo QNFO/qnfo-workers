@@ -16,11 +16,16 @@ function makeD1() {
   const db = new DatabaseSync(":memory:");
   const wrap = (sql) => {
     let args = [];
+    // CLAIMS-BIND-COUNT-1: production D1 answers "Wrong number of parameter bindings for SQL query." when the marker
+    // count and the bound values disagree; node:sqlite silently binds the gap as NULL. That divergence let 0.18.20 ship
+    // a sweep whose release loop was dead in production while every suite passed, so the stub now refuses it the same
+    // way the live database does.
+    const markers = (sql.match(/\?/g) || []).length;
     const st = {
       bind: (...a) => { args = a.map((v) => (v === undefined ? null : v)); return st; },
-      run: async () => { const r = db.prepare(sql).run(...args); return { meta: { changes: Number(r.changes) } }; },
-      first: async () => db.prepare(sql).get(...args) || null,
-      all: async () => ({ results: db.prepare(sql).all(...args) }),
+      run: async () => { if (args.length !== markers) throw new Error("Wrong number of parameter bindings for SQL query."); const r = db.prepare(sql).run(...args); return { meta: { changes: Number(r.changes) } }; },
+      first: async () => { if (args.length !== markers) throw new Error("Wrong number of parameter bindings for SQL query."); return db.prepare(sql).get(...args) || null; },
+      all: async () => { if (args.length !== markers) throw new Error("Wrong number of parameter bindings for SQL query."); return { results: db.prepare(sql).all(...args) }; },
     };
     return st;
   };
@@ -71,11 +76,21 @@ db.prepare("INSERT INTO code_tasks (id, repo, path, goal, status, step, attempts
     "codex/x", "https://github.com/QNFO/qnfo-workers/pull/1", now, now);
 guard.lease[KEY] = { token: TOKEN, owner: "qnfo-code-orchestrator:ct_pub_1" };
 
+// a second finished task in a state that was ALREADY in CODE_TASK_DONE: this one is handled by the `stale` loop, which
+// is the loop whose bind count drifted from its markers in 0.18.20 and died in production.
+const KEY2 = "file:fxmrg/fxmrg/worker.js", TOKEN2 = "mrgttok";
+db.prepare("INSERT INTO code_tasks (id, repo, path, goal, status, step, attempts, ctx, branch, pr_url, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)")
+  .run("ct_mrg_1", "qnfo-workers", "fxmrg/fxmrg/worker.js", "g", "merged", "done", 2,
+    JSON.stringify({ claim: { key: KEY2, token: TOKEN2, expires_at: new Date(Date.now() + 3600e3).toISOString(), released_at: null } }),
+    "codex/y", "https://github.com/QNFO/qnfo-workers/pull/2", now, now);
+guard.lease[KEY2] = { token: TOKEN2, owner: "qnfo-code-orchestrator:ct_mrg_1" };
+
 const res = await tick();
+ok(guard.released.some((x) => x === KEY2 + ":" + TOKEN2), "the stale loop releases a merged task's claim (the loop 0.18.20 broke)", guard.released);
 ok(guard.released.some((x) => x === KEY + ":" + TOKEN), "the sweep releases a published task's claim", guard.released);
 const claim = JSON.parse(db.prepare("SELECT ctx FROM code_tasks WHERE id = ?").get("ct_pub_1").ctx).claim;
 ok(!!claim.released_at, "the published row is stamped released", claim);
-ok(res.claims && res.claims.released >= 1 && !res.claims.error, "the sweep reports the release with no error", res.claims);
+ok(res.claims && res.claims.released >= 2 && !res.claims.error, "the sweep reports both releases with no error", res.claims);
 
 guard.acquires.length = 0;
 await tick();
