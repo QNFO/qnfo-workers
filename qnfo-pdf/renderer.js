@@ -20,7 +20,7 @@
 // byline block or the D1 row is left out rather than guessed.
 import katex from "katex";
 
-export const RENDERER_VERSION = "2.0.0-typeset-pro-1";
+export const RENDERER_VERSION = "2.1.0-typeset-pro-2";
 
 /* ------------------------------------------------------------------ */
 /* escaping                                                            */
@@ -420,7 +420,7 @@ function formatBibEntry(entry) {
 /* citations                                                           */
 /* ------------------------------------------------------------------ */
 
-const CITE_RE = /\[@([^\]\n]+)\]/g;
+const CITE_RE = /\[@([^\]\[]+)\]/g;
 
 function stripFences(s) {
   return String(s || "").replace(/```[\s\S]*?```/g, " ");
@@ -476,7 +476,8 @@ function citeHtml(inner, ctx) {
     const key = km[1];
     const rest = (km[2] || "").trim();
     if (rest) locator = rest.replace(/^,\s*/, "");
-    const num = ctx ? ctx.numbering.get(key) : 0;
+    // keys are matched case-insensitively: a body may cite @Arute2019 where the entry says arute2019
+    const num = ctx ? (ctx.numbering.get(String(key).toLowerCase()) || ctx.numbering.get(key)) : 0;
     if (num) nums.push(num);
     else { missing.push(key); if (ctx) ctx.missing.add(key); }
   }
@@ -489,7 +490,12 @@ function citeHtml(inner, ctx) {
   if (nums.length) {
     return '<a class="cite" href="#ref-' + Math.min.apply(null, nums) + '">[' + esc(text) + "]</a>";
   }
-  return '<span class="cite cite-missing" title="no bibliography entry for this key">[' + esc(text) + "]</span>";
+  // With no bibliography in the document there is nothing missing to flag — print the author-year key
+  // plainly. When a bibliography does exist, an unmatched key is a real defect and stays marked.
+  if (ctx && ctx.hasBib) {
+    return '<span class="cite cite-missing" title="no bibliography entry for this key">[' + esc(text) + "]</span>";
+  }
+  return '<span class="cite">[' + esc(text) + "]</span>";
 }
 
 /* ------------------------------------------------------------------ */
@@ -695,7 +701,7 @@ function renderMarkdown(body, ctx) {
       buf.push(lt);
       i++;
     }
-    if (buf.length) o += "<p>" + buf.map(function (x) { return renderInlinePlain(x, ctx); }).join(" ") + "</p>";
+    if (buf.length) o += "<p>" + renderInlinePlain(buf.join(" "), ctx) + "</p>";
   }
   return restoreSpecials(o, e.stash);
 }
@@ -903,6 +909,80 @@ function buildFront(meta, ctx) {
 /* reference list                                                      */
 /* ------------------------------------------------------------------ */
 
+// parseBodyReferences lifts the bibliography a paper carries in its own prose: many records end with
+// "## References" and a numbered APA list whose entries end in the pandoc key that cites them, e.g.
+// "1. Ostrowski, A. (1918). Über … *Acta Math*. [@Ostrowski1918]". Those papers ship no references.bib,
+// so before this the keys printed as raw text and every citation read as unresolved.
+// It returns the entries, the body with that section removed, and where the section stopped.
+function parseBodyReferences(body) {
+  const s = String(body || "");
+  const head = /(^|\n)#{1,3}[ \t]*(References|Bibliography|Works Cited|Literature Cited)[ \t]*$/im.exec(s);
+  if (!head) return null;
+  const lines = s.slice(head.index + head[0].length).split(/\r?\n/);
+  const entries = [];
+  let cur = null;
+  let consumed = 0;
+  let stopped = false;
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i].trim();
+    if (!line) {
+      if (cur) { entries.push(cur); cur = null; }
+      continue;
+    }
+    if (/^(-{3,}|\*{3,}|_{3,})$/.test(line) || /^#{1,6}\s/.test(line)) { stopped = true; break; }
+    const m = /^(?:\[(\d+)\]|(\d+)[.)]|[-*\u2022])\s+(.*)$/.exec(line);
+    if (m) {
+      if (cur) entries.push(cur);
+      cur = { num: m[1] ? parseInt(m[1], 10) : (m[2] ? parseInt(m[2], 10) : 0), text: m[3] };
+    } else if (cur) {
+      cur.text += " " + line;
+    } else {
+      cur = { num: 0, text: line };
+    }
+    consumed = i;
+  }
+  if (cur) entries.push(cur);
+  if (entries.length < 2) return null;
+
+  let auto = 0;
+  for (let i = 0; i < entries.length; i++) {
+    if (!entries[i].num) entries[i].num = auto + 1;
+    auto = Math.max(auto, entries[i].num);
+  }
+  // the key annotation is usually the last token of the entry; strip it from the printed line
+  let keyed = 0;
+  for (let i = 0; i < entries.length; i++) {
+    const e = entries[i];
+    const tail = /\[@([^\]]+)\]\s*$/.exec(e.text);
+    let km = tail;
+    if (!km) km = /\[@([^\]]+)\]/.exec(e.text);
+    if (km) {
+      e.key = km[1].trim().replace(/^@/, "");
+      e.text = (e.text.slice(0, km.index) + e.text.slice(km.index + km[0].length)).replace(/\s+/g, " ").trim();
+      if (e.text) keyed++;
+    }
+  }
+  if (keyed < 2) return null;
+
+  // remove the section from the body, keeping anything after it (a colophon, a changelog)
+  const rest = lines.slice(consumed + 1).join("\n");
+  const bodyWithout = s.slice(0, head.index) + (stopped ? "\n" + rest : "");
+  return { entries: entries, bodyWithout: bodyWithout };
+}
+
+// buildParsedRefs renders a body-carried bibliography. The entries keep the author's own wording — this
+// reproduces the record, it does not rewrite it.
+function buildParsedRefs(ctx, parsed) {
+  if (!parsed || !parsed.entries.length) return { html: "", count: 0, missing: [] };
+  let out = '<section class="refs"><h2 class="refs-h">References</h2><ol class="refs-list" start="1">';
+  for (let i = 0; i < parsed.entries.length; i++) {
+    const e = parsed.entries[i];
+    out += '<li class="ref" id="ref-' + e.num + '"><span class="ref-num">[' + e.num + "]</span> " + renderInline(e.text, ctx) + "</li>";
+  }
+  out += "</ol></section>";
+  return { html: out, count: parsed.entries.length, missing: Array.from(ctx ? ctx.missing : []) };
+}
+
 function buildReferences(ctx, bib) {
   if (!bib || !bib.size) return { html: "", count: 0, missing: Array.from(ctx ? ctx.missing : []) };
   const items = [];
@@ -911,8 +991,7 @@ function buildReferences(ctx, bib) {
       const key = ctx.ordered[i];
       const entry = bib.get(key);
       if (!entry) continue;
-      items.push({ num: ctx.numbering.get(key), key: key, html: formatBibEntry(entry).html });
-    }
+      items.push({ num: ctx.numbering.get(String(key).toLowerCase()) || ctx.numbering.get(key), key: key, html: formatBibEntry(entry).html });    }
   }
   if (!items.length) {
     // No in-text citations but a bibliography ships with the paper: list it alphabetically, which is
@@ -971,25 +1050,48 @@ function renderPaperHTML(md, opts) {
   const meta = buildMeta(pm.meta, lifted.fields, opts);
 
   const bib = parseBibTeX(meta.bibSource || "");
-  const ctx = { ordered: [], numbering: new Map(), missing: new Set() };
-  if (bib.size) {
-    ctx.ordered = scanCitations(lifted.body + "\n" + (meta.abstract || ""));
-    let n = 0;
-    for (let i = 0; i < ctx.ordered.length; i++) {
-      const key = ctx.ordered[i];
-      if (bib.has(key)) { n++; ctx.numbering.set(key, n); }
-    }
-  }
+  const ctx = { ordered: [], numbering: new Map(), missing: new Set(), hasBib: false };
 
   let body = lifted.body;
   body = dropDuplicateTitle(body, meta.title);
+
+  // Bibliography source, in order of authority: the paper's BibTeX (references.bib in R2), then the
+  // numbered list the paper carries in its own text, then nothing.
+  let parsedRefs = null;
+  if (bib.size) {
+    const lower = new Map();
+    bib.forEach(function (v, k) { lower.set(String(k).toLowerCase(), k); });
+    ctx.ordered = scanCitations(body + "\n" + (meta.abstract || ""));
+    let n = 0;
+    for (let i = 0; i < ctx.ordered.length; i++) {
+      const key = ctx.ordered[i];
+      const real = bib.has(key) ? key : lower.get(String(key).toLowerCase());
+      if (real) {
+        n++;
+        ctx.numbering.set(String(key).toLowerCase(), n);
+        if (real !== key) ctx.numbering.set(real, n);
+      }
+    }
+    ctx.hasBib = n > 0;
+  } else {
+    parsedRefs = parseBodyReferences(body);
+    if (parsedRefs) {
+      for (let i = 0; i < parsedRefs.entries.length; i++) {
+        const e = parsedRefs.entries[i];
+        if (e.key) ctx.numbering.set(String(e.key).toLowerCase(), e.num);
+      }
+      ctx.hasBib = ctx.numbering.size > 0;
+      body = parsedRefs.bodyWithout;
+    }
+  }
+
   // an empty "References" heading with nothing under it is a defect either way: drop it, and let
   // the generated list take its place when a bibliography exists
   body = stripTrailingReferencesHeading(body);
 
   // render first: the citation pass records unresolved keys on ctx, and the reference list reports them
   const bodyHtml = renderMarkdown(body, ctx);
-  const refs = buildReferences(ctx, bib);
+  const refs = bib.size ? buildReferences(ctx, bib) : (parsedRefs ? buildParsedRefs(ctx, parsedRefs) : buildReferences(ctx, bib));
   const front = buildFront(meta, ctx);
 
   return {
@@ -1167,6 +1269,7 @@ export {
   formatNames,
   formatBibEntry,
   scanCitations,
+  parseBodyReferences,
   buildReferences,
   buildMeta,
   buildFront,
