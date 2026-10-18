@@ -54,6 +54,13 @@ DESTRUCTIVE = re.compile(r"^\s*(DELETE\s+FROM|DROP\s+(TABLE|INDEX|VIEW|TRIGGER))
 APPEND_ONLY = ("decision_log", "issue_lifecycle")
 APPEND_ONLY_WRITE = re.compile(r"^\s*(?:UPDATE(?:\s+OR\s+\w+)?|DELETE\s+FROM|(?:INSERT\s+OR\s+REPLACE|REPLACE)\s+INTO)\s+\"?("
                                + "|".join(APPEND_ONLY) + r")\"?\b", re.I)
+# STEP-SCHEMA-LINT-1 (2026-10-18, fleet_runs 10278 at 16:18:57Z): a fleet_tasks workflow step without "type" passed
+# --check and then aborted its run at execution time with "unsupported step type: undefined" (every step after it never
+# ran). Measured in qnfo-audit on 2026-10-18: 184 steps across 39 fleet_tasks rows of type 'workflow' -- 'sql' 183 (38
+# tasks), 'http' 1. Every live step carries a type; 151 of 184 carry no "name" and ran fine, so name stays optional; no
+# sql step lacks db/sql and the one http step carries url. A file may name a type the runner gained with a
+# "-- STEP-TYPES: sql,http,<new>" header line, so a new capability is a one-line header and not a red PR.
+STEP_TYPES = ("sql", "http")
 LEDGER_DDL = ("CREATE TABLE IF NOT EXISTS migration_runs (id INTEGER PRIMARY KEY AUTOINCREMENT, file TEXT NOT NULL, "
               "sha256 TEXT NOT NULL, commit_sha TEXT, db TEXT, status TEXT NOT NULL, statements INTEGER, error TEXT, "
               "applied_by TEXT, applied_at TEXT DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now')))")
@@ -310,6 +317,73 @@ def enum_violations(sql):
     return out
 
 
+def _literals(sql):
+    """Every single-quoted literal in a statement, decoded (SQL '' is an escaped quote), skipping -- comments."""
+    out, i, n = [], 0, len(sql)
+    while i < n:
+        if sql[i] == "-" and sql.startswith("--", i):
+            j = sql.find("\n", i)
+            i = n if j < 0 else j + 1
+            continue
+        if sql[i] != "'":
+            i += 1
+            continue
+        j, buf = i + 1, []
+        while j < n:
+            if sql[j] == "'":
+                if j + 1 < n and sql[j + 1] == "'":
+                    buf.append("'")
+                    j += 2
+                    continue
+                break
+            buf.append(sql[j])
+            j += 1
+        out.append("".join(buf))
+        i = j + 1
+    return out
+
+
+def step_violations(sql, allowed=None):
+    """A problem per fleet_tasks workflow step the runner would refuse at execution time (STEP-SCHEMA-LINT-1)."""
+    allowed = [t.strip().lower() for t in (allowed or STEP_TYPES) if t and t.strip()]
+    problems = []
+    for lit in _literals(sql):
+        if '"steps"' not in lit:
+            continue
+        try:
+            doc = json.loads(lit)
+        except ValueError:
+            continue  # a fragment this lint cannot read: make no claim about it
+        steps = doc.get("steps") if isinstance(doc, dict) else None
+        if not isinstance(steps, list):
+            continue
+        for n, step in enumerate(steps, 1):
+            if not isinstance(step, dict):
+                problems.append("step " + str(n) + " is not a JSON object")
+                continue
+            kind = step.get("type")
+            label = "step " + str(n) + " (" + str(step.get("name") or "unnamed") + ")"
+            if not isinstance(kind, str) or not kind.strip():
+                problems.append("step " + str(n) + " has no \"type\": the runner aborts the whole run with "
+                                "'unsupported step type: undefined'")
+                continue
+            if kind.strip().lower() not in allowed:
+                problems.append(label + " type '" + kind + "' is not a type the runner executes ("
+                                + ", ".join(allowed) + "); add it to a '-- STEP-TYPES:' header line if the runner "
+                                "gained it")
+                continue
+            if kind.strip().lower() == "sql":
+                for key in ("db", "sql"):
+                    v = step.get(key)
+                    if not isinstance(v, str) or not v.strip():
+                        problems.append(label + " has no \"" + key + "\" (a sql step needs both db and sql)")
+            else:
+                v = step.get("url")
+                if not isinstance(v, str) or not v.strip():
+                    problems.append(label + " has no \"url\" (an http step needs one)")
+    return problems
+
+
 def plan(path, text):
     """Validate one file. Returns (opted_in, problems, info)."""
     lines = header(text)
@@ -351,6 +425,10 @@ def plan(path, text):
         if m:
             problems.append(m.group(1).lower() + " is append-only (its D1 trigger aborts UPDATE, DELETE and REPLACE); "
                             "INSERT a new row instead (APPEND-ONLY-LINT-1)")
+    step_types = header_value(lines, "STEP-TYPES")
+    for s in stmts:
+        for bad in step_violations(body(s), step_types.split(",") if step_types else None):
+            problems.append(bad + " (STEP-SCHEMA-LINT-1)")
     destructive = [s for s in stmts if DESTRUCTIVE.match(body(s))]
     backup = header_value(lines, "BACKUP")
     if destructive and not backup:

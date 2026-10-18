@@ -29,7 +29,10 @@
 --
 -- BOUNDED: step 1 takes at most 20 rows per tick, so a mass close cannot cause a mass reopen in one second.
 --
--- APPLY-BY: ci
+-- SUPERSEDED: apply 2026-10-18-breach-ticket-reopen-2.sql instead (fleet_tasks 'breach-ticket-reopen' version 2, live
+--             since 16:24Z). This v1 file's steps carry no "type", which aborts a run with "unsupported step type:
+--             undefined" (fleet_runs 10278, 16:18:57Z), so it is deliberately NOT opted in to APPLY-BY. Fixing the steps
+--             in place would change this file's sha256, and the runner would then re-apply v1 over the live v2 definition.
 -- DB: qnfo-audit
 -- Rollback: DELETE FROM fleet_tasks WHERE id='breach-ticket-reopen'; DELETE FROM fleet_crons WHERE name='breach-ticket-reopen-30m';
 

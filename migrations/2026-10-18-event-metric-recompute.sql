@@ -15,7 +15,10 @@
 -- Scope: process_path_gaps only. watchmaker_index and public_hosts_broken are NOT included - their writers are still
 -- unlocated, and a recompute would be me guessing what they should contain.
 
--- APPLY-BY: ci
+-- SUPERSEDED: 2026-10-18-metric-cadence-floor-2.sql rewrote fleet_tasks 'event-metric-recompute' to version 2 (applied
+--             19:52:13Z); that file is the live definition now. This v1 file's steps carry no "type", which aborts a run
+--             with "unsupported step type: undefined", so it is deliberately NOT opted in to APPLY-BY. Fixing the steps
+--             in place would change this file's sha256, and the runner would then re-apply v1 over the live v2 definition.
 -- DB: qnfo-audit
 -- Rollback: DELETE FROM fleet_crons WHERE name = 'event-metric-recompute-daily'; DELETE FROM fleet_tasks WHERE id = 'event-metric-recompute'; UPDATE metric_registry SET refresh_cadence = '2h' WHERE metric = 'process_path_gaps';
 
