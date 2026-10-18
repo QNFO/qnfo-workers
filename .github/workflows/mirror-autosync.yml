@@ -13,7 +13,7 @@ name: mirror-autosync
 # unattended cp would have reverted a live fix. Auto-propose; merge deliberately.
 on:
   schedule:
-    - cron: "23 */6 * * *"
+    - cron: "23 */2 * * *"
   workflow_dispatch:
 
 permissions:

@@ -1,6 +1,16 @@
 #!/usr/bin/env python3
 """cron_rate_guard.py - CRON-RATE-CEILING-1 enforcement.
 
+OWNER DIRECTIVE (2026-10-18) - TEMPO-120M-5M-1
+  "No time-related metric or schedule shall ever exceed 120 minutes, and heartbeat/tick
+   time/tempo shall increase to a maximum of once every 5 minutes."
+  Two readings, both enforced here:
+    * HEARTBEAT workers (fleet-exec dispatch tick, qnfo-fleet-control fast lane,
+      qnfo-code-orchestrator) must fire at least every 5 minutes -- a slower trigger fails.
+    * every other declared cron must fire at least every 120 minutes. Producers that are
+      still on a daily/weekly period are listed as TEMPO entries (visible in every run) and
+      are being migrated in tracked work; they are not silently ignored.
+
 OWNER DIRECTIVE (2026-09-23)
   No Cloudflare quniverse worker cron shall execute more than once every 10 minutes,
   and not more than 144 times in any 24-hour period.
@@ -49,6 +59,10 @@ DAYS = 365
 START = _dt.datetime(2026, 1, 1, tzinfo=_dt.timezone.utc)
 MAX_FIRES_24H = 144
 MIN_GAP_MINUTES = 10
+# TEMPO-120M-5M-1: the slow side of the same policy.
+PRODUCER_MAX_GAP_MINUTES = 120
+HEARTBEAT_MAX_GAP_MINUTES = 5
+HEARTBEAT_WORKERS = ("fleet-exec", "qnfo-fleet-control", "qnfo-code-orchestrator")
 
 # ---- OWNER OVERRIDES (2026-10-17) -----------------------------------------------------------------
 # The owner re-issued the directive twice on 2026-10-17 -- "MAKE TICKS FASTER" and then "MORE PARALLEL
@@ -61,7 +75,21 @@ MIN_GAP_MINUTES = 10
 # qnfo-code-orchestrator is the code loop: it turns agent_issues rows into verified patches. Its SQL is
 # small (one claim, one step, one save per lane) and its spend is metered separately by the worker's own
 # daily model-call cap, so a one-minute trigger does not multiply unbounded cost.
+# TEMPO-120M-5M-1 (2026-10-18): the heartbeat/tick ceiling is 5 minutes, so the two workers that
+# ARE the tick carry a 5-minute exception to the 10-minute ceiling. Both are metered: fleet-exec
+# runs one claim + one step per due fleet_crons row; fleet-control's fast lane is grid-gated
+# (20-minute steps stay on a true 20-minute grid). Removing an entry restores the 10-minute ceiling.
 OWNER_OVERRIDES = {
+    "fleet-exec": {
+        "min_gap_minutes": 5,
+        "max_fires_24h": 300,   # */5 = 288 fires/day, plus headroom for the circular window
+        "owner_directive": "2026-10-18: heartbeat/tick tempo shall not exceed 5 minutes",
+    },
+    "qnfo-fleet-control": {
+        "min_gap_minutes": 5,
+        "max_fires_24h": 300,
+        "owner_directive": "2026-10-18: heartbeat/tick tempo shall not exceed 5 minutes",
+    },
     "qnfo-code-orchestrator": {
         "min_gap_minutes": 1,
         "max_fires_24h": 730,   # */2 = 720 fires/day, plus headroom for the circular window
@@ -158,11 +186,40 @@ def cron_stats(fires, days=DAYS):
         if right - left > max24:
             max24 = right - left
     min_gap = min(circ[i] - circ[i - 1] for i in range(1, len(circ)))
+    # TEMPO-120M-5M-1: the largest spacing between consecutive fires, circular (no wrap artefact).
+    max_gap = max(circ[i] - circ[i - 1] for i in range(1, len(circ)))
     return {
         "fires_per_day": round(len(fires) / float(days), 4),
         "max_fires_24h": max24,
         "min_gap_minutes": min_gap,
+        "max_gap_minutes": max_gap,
     }
+
+
+def slow_reason(worker, stats):
+    """TEMPO-120M-5M-1: why a PRODUCER cron is too slow, or None.
+
+    Every declared cron is a producer of its own work and must fire at least every 120 minutes.
+    The 5-minute rule is a WORKER-level rule (heartbeat_reason): a heartbeat worker must carry
+    at least one trigger at 5-minute tempo; its other triggers keep their own period.
+    """
+    gap = stats.get("max_gap_minutes")
+    if gap is None:
+        return None
+    if gap > PRODUCER_MAX_GAP_MINUTES:
+        return "MAX_GAP>%dmin" % PRODUCER_MAX_GAP_MINUTES
+    return None
+
+
+def heartbeat_reason(worker, gaps):
+    """TEMPO-120M-5M-1: why a heartbeat worker has no 5-minute tick, or None."""
+    if worker not in HEARTBEAT_WORKERS:
+        return None
+    fast = [g for g in gaps if g is not None]
+    if fast and min(fast) <= HEARTBEAT_MAX_GAP_MINUTES:
+        return None
+    return "NO_TICK<=%dmin (fastest fire every %s min)" % (
+        HEARTBEAT_MAX_GAP_MINUTES, min(fast) if fast else "never")
 
 
 def violates(stats, limits=None):
@@ -194,7 +251,7 @@ def toml_crons(path):
 
 
 def audit_repo(root, strict_worker=False):
-    report = {"violations": [], "warnings": [], "workers": 0, "expressions": 0}
+    report = {"violations": [], "warnings": [], "tempo": [], "workers": 0, "expressions": 0}
     for name in sorted(os.listdir(root)):
         wdir = os.path.join(root, name)
         if name.startswith(".") or not os.path.isdir(wdir):
@@ -211,6 +268,7 @@ def audit_repo(root, strict_worker=False):
             report.setdefault("overrides", []).append({"worker": name, "limits": lim,
                                                        "owner_directive": OWNER_OVERRIDES[name]["owner_directive"]})
         combined = []
+        gaps_seen = []
         for cron in crons:
             report["expressions"] += 1
             try:
@@ -224,6 +282,16 @@ def audit_repo(root, strict_worker=False):
             if reason:
                 report["violations"].append(
                     dict({"worker": name, "cron": cron, "reason": reason}, **stats))
+            slow = slow_reason(name, stats)
+            if slow:
+                # TEMPO-120M-5M-1: a producer above 120 minutes is a migration item: listed in
+                # every run (visible, never silent) and failing under --tempo-strict.
+                report.setdefault("tempo", []).append(
+                    dict({"worker": name, "cron": cron, "reason": slow}, **stats))
+            gaps_seen.append(stats.get("max_gap_minutes"))
+        hb = heartbeat_reason(name, gaps_seen)
+        if hb:
+            report["violations"].append({"worker": name, "crons": crons, "reason": hb})
         if len(crons) > 1 and combined:
             agg = cron_stats(sorted(combined))
             gap = agg.get("min_gap_minutes")
@@ -253,7 +321,7 @@ def audit_live():
     listing = _cf_get("/accounts/%s/workers/scripts" % account, token)
     if not listing.get("success"):
         raise SystemExit("CF list failed: %s" % listing.get("errors"))
-    report = {"violations": [], "warnings": [], "workers": 0, "expressions": 0}
+    report = {"violations": [], "warnings": [], "tempo": [], "workers": 0, "expressions": 0}
     for script in listing.get("result") or []:
         name = script.get("id")
         try:
@@ -272,6 +340,7 @@ def audit_live():
             continue
         report["workers"] += 1
         combined = []
+        gaps_seen = []
         lim = limits_for(name)
         for cron in crons:
             report["expressions"] += 1
@@ -286,6 +355,16 @@ def audit_live():
             if reason:
                 report["violations"].append(
                     dict({"worker": name, "cron": cron, "reason": reason}, **stats))
+            slow = slow_reason(name, stats)
+            if slow:
+                # TEMPO-120M-5M-1: a producer above 120 minutes is a migration item: listed in
+                # every run (visible, never silent) and failing under --tempo-strict.
+                report.setdefault("tempo", []).append(
+                    dict({"worker": name, "cron": cron, "reason": slow}, **stats))
+            gaps_seen.append(stats.get("max_gap_minutes"))
+        hb = heartbeat_reason(name, gaps_seen)
+        if hb:
+            report["violations"].append({"worker": name, "crons": crons, "reason": hb})
         if len(crons) > 1 and combined:
             agg = cron_stats(sorted(combined))
             gap = agg.get("min_gap_minutes")
@@ -310,6 +389,9 @@ def render(report, source):
     for w in report["warnings"]:
         lines.append("  WARN      %s  crons=%s  %s" % (w.get("worker"), w.get("crons"),
                                                       w.get("reason")))
+    for t in report.get("tempo") or []:
+        lines.append("  TEMPO     %s  cron=%s  %s (max_gap=%s min) -- tracked migration"
+                     % (t.get("worker"), t.get("cron"), t.get("reason"), t.get("max_gap_minutes")))
     if not report["violations"]:
         lines.append("  OK - no cron exceeds the ceiling")
     return "\n".join(lines)

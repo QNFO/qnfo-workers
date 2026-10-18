@@ -45,7 +45,7 @@ on:
       - "scripts/restore_container_config.py"
       - "scripts/raw_put.py"
   schedule:
-    - cron: "17 */6 * * *"
+    - cron: "17 */2 * * *"
   workflow_dispatch:
 
 permissions:

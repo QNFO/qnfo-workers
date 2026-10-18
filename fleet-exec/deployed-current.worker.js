@@ -4,7 +4,7 @@ var execMod = (function(){
 // v0.3.0: every /run completion emits a kind=event envelope validated BEFORE canonical-store write
 // (blocking reject on invalid, QNFO.CODEPARSE.SCOPE.v1 server_enforcement); /run responses are wrapped
 // in the universal envelope (kind=message). Mini-validator mirrors schemas/envelope.json + event.json.
-const VERSION = "fleet-executor/0.3.2";
+const VERSION = "fleet-executor/0.3.3";
 
 function json(obj, status) {
   return new Response(JSON.stringify(obj), { status: status || 200, headers: { "content-type": "application/json" } });
@@ -183,7 +183,7 @@ return execDefault;
 
 // fleet-scheduler v0.1.0 - dynamic cron dispatcher
 // Per-minute tick reads fleet_crons from qnfo-audit D1, dispatches due jobs to fleet-executor.
-var VERSION = "1.0.3-capability-contract";
+var VERSION = "1.0.4-capability-contract";
 
 function json(obj, status) {
   return new Response(JSON.stringify(obj), { status: status || 200, headers: { "content-type": "application/json" } });
@@ -262,7 +262,7 @@ var schedDefault = {
   },
   async fetch(request, env) {
     const url = new URL(request.url);
-    if (url.pathname === "/health") return json({ ok: true, worker: "fleet-exec", version: VERSION, capabilities: ["cron-dispatch", "fleet-task-execution"], limitations: ["no HTTP trigger: the */10 cron dispatches due fleet_crons jobs; the anonymous /tick route was removed (#1672)", "runs only fleet_tasks rows with enabled = 1"] });
+    if (url.pathname === "/health") return json({ ok: true, worker: "fleet-exec", version: VERSION, capabilities: ["cron-dispatch", "fleet-task-execution"], limitations: ["no HTTP trigger: the */5 cron dispatches due fleet_crons jobs; the anonymous /tick route was removed (#1672)", "runs only fleet_tasks rows with enabled = 1"] });
     // FLEET-EXEC-TICK-UNAUTH-1 (issue #1672): the unauthenticated POST /tick route was
     // removed. It had zero callers in the repo, and fleet-exec declares no secrets, so it
     // could not be gated fail-closed without provisioning one. Cron dispatch is unaffected:
