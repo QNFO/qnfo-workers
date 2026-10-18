@@ -1,16 +1,24 @@
 {
-  "audited_at": "2026-10-18 20:11:20",
+  "audited_at": "2026-10-18 20:40:25",
   "d1_write_failures": [],
   "d1_writes_ok": 120,
   "guard": {
+    "_deploy_settle": {
+      "settled": [
+        "qnfo-fleet-dashboard"
+      ],
+      "waited_for": [
+        "qnfo-fleet-dashboard"
+      ]
+    },
     "_drift_confirm": {
       "first_pass": [
-        "personal-companion",
-        "qnfo-fleet-dashboard"
+        "personal-companion"
       ],
       "refreshed": true,
       "second_pass": [
-        "personal-companion"
+        "personal-companion",
+        "qnfo-fleet-dashboard"
       ]
     },
     "_guard_rc": 0,
@@ -554,7 +562,7 @@
     ],
     "retired_present_count": 1,
     "scope": "all",
-    "sync": 31,
+    "sync": 30,
     "sync_workers": [
       {
         "dir": "idea-hub",
@@ -598,7 +606,7 @@
       },
       {
         "dir": "qnfo-code-orchestrator",
-        "version": "0.18.15-tempo-5m-1",
+        "version": "0.18.16-model-attribution-1",
         "worker": "qnfo-code-orchestrator"
       },
       {
@@ -625,11 +633,6 @@
         "dir": "qnfo-fleet-control",
         "version": "0.33.17-metric-trigger-twin-2",
         "worker": "qnfo-fleet-control"
-      },
-      {
-        "dir": "qnfo-fleet-dashboard",
-        "version": "1.44.0-area-feeds",
-        "worker": "qnfo-fleet-dashboard"
       },
       {
         "dir": "qnfo-gateway",
@@ -683,7 +686,7 @@
       },
       {
         "dir": "qnfo-pdf",
-        "version": "1.4.0-cron-heartbeat",
+        "version": "1.5.0-professional-typesetting-1",
         "worker": "qnfo-pdf"
       },
       {
@@ -710,6 +713,10 @@
         "dir": "radar-hub",
         "version": "1.4.3-bp-logging",
         "worker": "radar-hub"
+      },
+      {
+        "version": "1.44.3-area-feeds-4",
+        "worker": "qnfo-fleet-dashboard"
       }
     ]
   },
@@ -1201,9 +1208,9 @@
       "worker": "qnfo-code-agent"
     },
     "qnfo-code-orchestrator": {
-      "before": "0.18.15-tempo-5m-1",
+      "before": "0.18.16-model-attribution-1",
       "http": 200,
-      "live": "0.18.15-tempo-5m-1",
+      "live": "0.18.16-model-attribution-1",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-code-orchestrator"
@@ -1339,9 +1346,9 @@
       "worker": "qnfo-fleet-control"
     },
     "qnfo-fleet-dashboard": {
-      "before": "1.44.0-area-feeds",
+      "before": "1.44.3-area-feeds-4",
       "http": 200,
-      "live": "1.44.0-area-feeds",
+      "live": "1.44.3-area-feeds-4",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-fleet-dashboard"
@@ -1535,9 +1542,9 @@
       "worker": "qnfo-paper-reviser"
     },
     "qnfo-pdf": {
-      "before": "1.4.0-cron-heartbeat",
+      "before": "1.5.0-professional-typesetting-1",
       "http": 200,
-      "live": "1.4.0-cron-heartbeat",
+      "live": "1.5.0-professional-typesetting-1",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-pdf"
