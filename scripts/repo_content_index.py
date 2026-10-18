@@ -158,7 +158,7 @@ def chunk(text):
 def embed(acct, token, texts):
     st, j = http(CF + "/accounts/" + acct + "/ai/run/" + EMBED_MODEL, token, "POST",
                  {"text": texts}, timeout=120)
-    if st != 200:
+    if not (200 <= st < 300):
         return None, json.dumps(j.get("errors") or j)[:200]
     data = ((j.get("result") or {}).get("data") or [])
     if len(data) != len(texts):
