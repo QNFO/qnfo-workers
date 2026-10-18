@@ -278,6 +278,35 @@ row = db.execute("SELECT sql FROM sqlite_master WHERE name = 'hb_prior'").fetcho
 ok(rc == 1 and "D1-TRIGGER-DEPTH-1" in out[-1] and row is not None and "NEW.w" in row[0] and "restored" in out[-1],
    "a refused replacement puts the standing trigger back", (out[-1], row))
 C.call = real_call
+
+# TRIGGER-DEPTH-INSERT-ADVISORY-1: a refused INSERT probe does not veto the file on its own. On qnfo-audit.agent_issues
+# every `INSERT ... SELECT` zero-row probe is refused whatever the trigger contains (measured 13:14Z), while UPDATE and
+# DELETE compile, so an INSERT-only refusal is a property of the statement shape, not of the trigger - and acting on it
+# deleted a working trigger twice. UPDATE/DELETE still decide.
+db.execute("CREATE TABLE hb3 (w TEXT)")
+db.commit()
+
+
+def ins_only_call(method, path, token, body=None, timeout=60):
+    s = body["sql"]
+    if s.lstrip().upper().startswith("INSERT") and '"hb3"' in s and " WHERE 0" in s:
+        return 400, {"success": False, "errors": [{"code": 7500, "message": "triggers nested too deep: SQLITE_ERROR"}]}
+    return real_call(method, path, token, body, timeout)
+
+
+C.call = ins_only_call
+ins_file = """-- insert-only refusal
+-- APPLY-BY: ci
+-- DB: qnfo-audit
+-- Rollback: DROP TRIGGER IF EXISTS hb_ins
+CREATE TRIGGER hb_ins AFTER INSERT ON hb3 BEGIN INSERT INTO ticks (s) VALUES (NEW.w); END;
+"""
+rc = M.apply_file("migrations/ins.sql", ins_file, "a", "t", "c10", emit)
+ok(rc == 0 and '"advisory"' in out[-1] and db.execute("SELECT 1 FROM sqlite_master WHERE name = 'hb_ins'").fetchone() is not None,
+   "a refused INSERT probe is an advisory, not a veto: the file applies and the trigger stays", out[-1])
+ok(db.execute("SELECT status FROM migration_runs WHERE file = 'migrations/ins.sql'").fetchone() == ("ok",),
+   "and the run is recorded ok", db.execute("SELECT status FROM migration_runs WHERE file = 'migrations/ins.sql'").fetchone())
+C.call = real_call
 addcol = """-- add column twice
 -- APPLY-BY: ci
 -- DB: qnfo-audit
