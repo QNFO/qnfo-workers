@@ -1,5 +1,20 @@
 name = "qnfo-evolve"
 main = "worker.js"
+# COMPAT-ADVANCE-WAVE-2 (2026-10-18, portfolio UPG-qnfo-evolve): the date moves from the LIVE
+# 2026-08-01 to 2026-10-10 on the next canonical deploy. Measured 2026-10-18T06:31Z:
+# worker_compat_state held live_date=2026-08-01, toml_date=2026-10-10, days_behind=78, and the
+# file carried no review line, which is why the fleet kept flagging it. Reviewed against
+# qnfo-ops COMPAT_FLIPS for the two flips in that window:
+#   2026-08-04 nodejs_compat default on (needs: any). This worker imports no node: module, has no
+#     Buffer, holds no timer handle (no setTimeout/setInterval) and never reads the Node process
+#     global -- the 15 "process" occurrences in worker.js are the v_process_path_gaps D1 COLUMN
+#     (row.process), not process.env. The added globals and Timeout objects are therefore never
+#     touched. The only binding is D1 AUDIT, read through env.AUDIT.
+#   2026-10-01 durable-object I/O eviction (needs: durable_object). This worker declares no
+#     Durable Object, so the flip cannot reach it.
+# Post-deploy check: /health must answer ok with VERSION 0.2.3, and the next cron tick must
+# record a sweep in evolve_filings/cloud_ops_events.
+# compat-advance: reviewed 2026-10-18
 compatibility_date = "2026-10-10"
 workers_dev = true
 # charter-pillar: autonomy (EVOLVE-1)
