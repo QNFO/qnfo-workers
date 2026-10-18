@@ -33,7 +33,7 @@ var __name22222 = /* @__PURE__ */ __name2222((target, value) => __defProp22222(t
 // an empty catch. CITE-CONSISTENCY-1 asks the reviewer to compare the draft against cited QNFO work.
 // REVIEW-TRIAGE-CAP-1 is a defect fix: drift demotion at the cycle cap silently turned a blocking finding into a pass, so
 // REVIEW-HARD-GATE-1 withheld nothing there (reviewer findings 2 -> 0 at the cap; an unparseable review advanced to verify).
-var VERSION = "0.18.33-patch-flex-overflow-1"; /* 0.18.33 PATCH-FLEX-REGEX-OVERFLOW-1 (2026-10-18, agent_issues 2886): findFlexible caps the flexible matcher at 400 tokens and fails closed on any regex error, so a whole-section find text no longer throws "Invalid regular expression: Stack overflow" out of the slot. */ /* 0.18.32 AI-RATE-FALLBACK-1 (2026-10-18): a 3021/3040/3046 on the primary model after backoff takes one call on another family (glm<->gpt-oss-120b) instead of failing the stage; 3040 no longer misread as a reasoning_effort rejection. */ /* 0.18.31 VERIFY-AUTOCORRECT-1 (2026-10-18): papers fail verify with REAL arithmetic errors (the reconcile/ensemble writer computes a number that does not match its own stated inputs) and the revise loop cannot reliably fix a bare number, so such papers cycle until park. Verify already holds both values — independently computed `computed` and the paper's stated `expected` — so stageVerify now corrects the number deterministically (autoCorrectNumeric) instead of sending it back through a model. Fail-closed: only a stated value found exactly once (verbatim or as an unambiguous bare mantissa in LaTeX/\\times 10^N) is corrected; anything ambiguous is skipped and falls through to revise. Every correction is logged as verify-autocorrect and appended to verification.md. */ /* 0.18.29 VERIFY-CYCLE-CAP-1 (2026-10-17, owner directive "REMEDIATE ALL ISSUES AND FAILURE MODES"): the verify->revise edge reset the review cycle counter to 0 (context={cycles:0,verifyPass:1}) while EVERY other edge preserves it (3716, 3735, 3753) and the review stage is the one that increments it. That single reset made MAX_REVIEW_CYCLES (6) unreachable, so an item that fails verify re-enters revise, resets to cycle 0, and loops until recover_count runs out — measured 2026-10-17: review-unresolved events exist ONLY at cycle 2 (193) and 3 (165), never 4; 96 rerun-route and 278 revise-patch events against ~100 rows; and stage='publish' is EMPTY, which is why 151 complete events produced 0 publications and why the publish quota (24) guarded an empty queue. The edge now preserves the count, so the existing six-cycle cap can terminate an item visibly instead of cycling forever. The gate itself (gates2) is unchanged: this does not let a failing draft through, it lets a draft that cannot pass STOP. */ // 0.18.28-codeagent
+var VERSION = "0.18.34-review-empty-second-path-1"; /* 0.18.34 REVIEW-EMPTY-SECOND-PATH-1 (2026-10-18): an unreadable review takes a second model family in the same tick and, still unreadable, re-runs review directly instead of sending the review-parse placeholder through two no-op patch calls (237 of 264 revise-noop events, 329 hard=1 cycles in 3 days). */ /* 0.18.33 PATCH-FLEX-REGEX-OVERFLOW-1 (2026-10-18, agent_issues 2886): findFlexible caps the flexible matcher at 400 tokens and fails closed on any regex error, so a whole-section find text no longer throws "Invalid regular expression: Stack overflow" out of the slot. */ /* 0.18.32 AI-RATE-FALLBACK-1 (2026-10-18): a 3021/3040/3046 on the primary model after backoff takes one call on another family (glm<->gpt-oss-120b) instead of failing the stage; 3040 no longer misread as a reasoning_effort rejection. */ /* 0.18.31 VERIFY-AUTOCORRECT-1 (2026-10-18): papers fail verify with REAL arithmetic errors (the reconcile/ensemble writer computes a number that does not match its own stated inputs) and the revise loop cannot reliably fix a bare number, so such papers cycle until park. Verify already holds both values — independently computed `computed` and the paper's stated `expected` — so stageVerify now corrects the number deterministically (autoCorrectNumeric) instead of sending it back through a model. Fail-closed: only a stated value found exactly once (verbatim or as an unambiguous bare mantissa in LaTeX/\\times 10^N) is corrected; anything ambiguous is skipped and falls through to revise. Every correction is logged as verify-autocorrect and appended to verification.md. */ /* 0.18.29 VERIFY-CYCLE-CAP-1 (2026-10-17, owner directive "REMEDIATE ALL ISSUES AND FAILURE MODES"): the verify->revise edge reset the review cycle counter to 0 (context={cycles:0,verifyPass:1}) while EVERY other edge preserves it (3716, 3735, 3753) and the review stage is the one that increments it. That single reset made MAX_REVIEW_CYCLES (6) unreachable, so an item that fails verify re-enters revise, resets to cycle 0, and loops until recover_count runs out — measured 2026-10-17: review-unresolved events exist ONLY at cycle 2 (193) and 3 (165), never 4; 96 rerun-route and 278 revise-patch events against ~100 rows; and stage='publish' is EMPTY, which is why 151 complete events produced 0 publications and why the publish quota (24) guarded an empty queue. The edge now preserves the count, so the existing six-cycle cap can terminate an item visibly instead of cycling forever. The gate itself (gates2) is unchanged: this does not let a failing draft through, it lets a draft that cannot pass STOP. */ // 0.18.28-codeagent
 // WORKERS-AI-ATTRIBUTION-1 (2026-10-01, #1681): per-worker Workers AI attribution. Returns a shallow env copy whose AI
 // binding records each .run() (calls, errors, ms, tokens, neurons) into qnfo-audit ai_call_counters (purpose 'binding').
 // Neurons = usage tokens x Cloudflare's published per-model rates (neurons per M tokens). Fail-soft; env is never mutated.
@@ -3720,10 +3720,27 @@ async function stageReview(env, row) {
   // existing HARD/SOFT pipeline, no new stage, cron or model call.
   const revRaw = await gwCall(env, stageContextPrompt("REVIEW", "PAPER", paper, "BIBLIOGRAPHY (numbered; the paper may cite only these):\n" + bib + "\n\nCITATION CONSISTENCY (required check): entries marked 'QNFO:' are works published by this same pipeline. For each one the paper cites, state whether the paper's use agrees with what that work says. If the paper contradicts, silently inverts, or overstates a claim of a cited QNFO work, raise a HARD finding that names the work and the claim."), 12e3);
   let findings = { verdict: "revise", hard: [{ id: "review-parse", severity: "HARD", claim: "review output", reason: "unparseable review output", fix: "re-run review" }], soft: [] };
+  let _revParsed = false;
   try {
     const m = String(revRaw).match(/\{[\s\S]*\}/);
-    if (m) findings = JSON.parse(m[0]);
+    if (m) { findings = JSON.parse(m[0]); _revParsed = true; }
   } catch (e) {
+  }
+  // REVIEW-EMPTY-SECOND-PATH-1 (0.18.34, 2026-10-18): an empty or unparseable review (glm rate limit, or reasoning that
+  // consumed the token budget) became the review-parse placeholder, which was routed to REVISE as a HARD fix: two patch
+  // model calls that cannot edit anything ("re-run review"), a revise-noop, then review again. Measured 2026-10-15..18:
+  // 237 of 264 revise-noop events were this placeholder and 329 review->revise steps carried hard=1. The review now
+  // takes a second path on another model family in the same tick (SLA-AND-PATHS-1), and a still-unreadable review
+  // re-runs review directly (bounded by ctx.reparse) instead of passing through revise.
+  if (!_revParsed) {
+    const _revStage = stageContextPrompt("REVIEW", "PAPER", paper, "BIBLIOGRAPHY (numbered; the paper may cite only these):\n" + bib);
+    const _rev2 = await aiText(env, MODELS[2], _revStage, 8192, "low");
+    await logEvent(env, "review-second-path", "row=" + row.id + " first=" + String(revRaw || "").length + " chars second=" + String(_rev2 || "").length + " chars model=" + MODELS[2], "warn");
+    try {
+      const m2 = String(_rev2 || "").match(/\{[\s\S]*\}/);
+      if (m2) { findings = JSON.parse(m2[0]); _revParsed = true; }
+    } catch (e) {
+    }
   }
   if (!Array.isArray(findings.hard)) findings.hard = [];
   if (!Array.isArray(findings.soft)) findings.soft = [];
@@ -3749,6 +3766,12 @@ async function stageReview(env, row) {
   // review -> revise cycles (bounded by MAX_REVIEW_CYCLES) and the patch reviser converts the listed expressions to LaTeX.
   const _pm = pseudoMathScan(paper);
   if (_pm.count > PSEUDO_MATH_MAX) hard.push(mathLatexFix(_pm));
+  if (!_revParsed && hard.length && hard.every(function(f) { return f && f.id === "review-parse"; })) {
+    if ((ctx.reparse || 0) < 2) {
+      await env.QNFO_AUDIT.prepare("UPDATE research_queue SET stage='review', context=? WHERE id=?").bind(JSON.stringify(Object.assign({}, ctx, { cycles: cycle, reparse: (ctx.reparse || 0) + 1 })).slice(0, 6e3), row.id).run();
+      return { ok: true, stage: "review->review", reparse: (ctx.reparse || 0) + 1, cycle };
+    }
+  }
   if (hard.length && cycle < _cycleCap) {
     await r2Put(env, String(row.id) + "/fixes.json", JSON.stringify(hard));
     await env.QNFO_AUDIT.prepare("UPDATE research_queue SET stage='revise', context=? WHERE id=?").bind(JSON.stringify({ cycles: cycle, hardCount: hard.length, verifyPass: ctx.verifyPass || 0 }).slice(0, 6e3), row.id).run();
