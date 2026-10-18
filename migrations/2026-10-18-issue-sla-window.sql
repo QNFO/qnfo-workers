@@ -17,6 +17,14 @@
 --
 -- Revert: recreate the trigger with datetime('now') in place of datetime('now', '+120 minutes').
 --
+-- SECOND PATH (SPOF-REVIEW-GATE-1, owner doctrine: every step needs more than one way to a correct
+-- outcome). The trigger sets the deadline once, at insert; it cannot notice if a later writer, a manual
+-- insert or a dropped trigger reintroduces a zero window. The standing detector below re-probes the rule
+-- every hour and is reported the same way every other broken invariant is (remediation-tick verdict + the
+-- v_verification_verdict_split / detector-breach path), so a regression is visible without anyone running a
+-- query. It is scoped to issues created after 2026-10-18T12:45Z on purpose: the 161 legacy rows described
+-- above are evidence and must not turn the detector red for 161 reasons forever.
+--
 -- Verify after apply:
 --   SELECT sql FROM sqlite_master WHERE name='agent_issues_autotriage2_ins';              -- contains '+120 minutes'
 --   -- and, for issues filed after the apply, the window is real:
@@ -46,3 +54,15 @@ BEGIN
                                        instr(substr(NEW.description, instr(NEW.description, 'code-task: repo=qnfo-workers path=') + 34), '/') - 1))
           ) AS owner) o;
 END;
+
+-- The second path: a standing detector (class prefix 'belief-' makes it a detector, so DETECTOR-CADENCE-1
+-- keeps it running for ever and it never closes). Expected '1' = no new issue has a deadline at or before its
+-- own creation. issue_id is NULL because this audits a rule, not one issue.
+INSERT OR IGNORE INTO remediation_contracts
+  (class, issue_id, precondition, action, verify_probe, verify_transport, max_attempts, expected_cadence_h, status)
+VALUES
+  ('belief-no-zero-sla-window', NULL,
+   'ISSUE-SLA-WINDOW-1: an issue must not be due at the moment it is filed',
+   'agent_issues_autotriage2_ins sets sla_due_at = now + 120 minutes (ISSUE-SLA-2H-1); this detector proves the rule held for every issue created after the migration',
+   'SELECT ''1'' AS expected, CASE WHEN (SELECT COUNT(*) FROM agent_issues a JOIN issue_triage t ON t.issue_id = a.id WHERE a.status = ''open'' AND a.created_at > 1792327500000 AND datetime(t.sla_due_at) <= datetime(a.created_at/1000,''unixepoch'')) = 0 THEN ''1'' ELSE ''0'' END AS observed',
+   'd1-query', 3, 1, 'active');
