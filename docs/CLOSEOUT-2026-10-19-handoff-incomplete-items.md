@@ -243,3 +243,28 @@ The honest reading of red_total is the trend in `red_snapshots`, not a single ho
 loops filed faster than the drain. This round removed a real blocker from the drain (18 tasks) and a structural gap in
 the reconciler (superseded tasks never closed their issues); it did not, and cannot honestly claim to, reach zero.
 
+---
+
+## 7. Red drain, round 3: the deadlock generator, and 3011 closed
+
+The data fix in §2 retired the 68 deadlocked contracts but left the thing that creates them. It is not a worker: it is
+the D1 trigger **`contract_probe_templates_v3_generic`**, which born every issue with no machine-executable remedy a
+contract whose probe reads that issue's own status and set it `active`. The trigger's own `action` text already said it
+"measures nothing while the issue is open" — the status disagreed with the text, and that disagreement was the deadlock.
+
+Changed (by hand; recorded verbatim in `migrations/2026-10-19-close-probe-generator.sql`, which is `APPLY-BY: manual`
+so the applier skips it — a DROP/CREATE trigger on this table is exactly what deleted a working trigger in
+migration_runs 292):
+
+| read | before | after |
+|---|---|---|
+| closure-observing contracts in `active`/`holding` | 68 | **0** |
+| a contract created through the v3 path | `active`, blocks every close | `superseded`, verdict `superseded:closure-observing-probe-at-birth` |
+| probes that read `agent_issues` and stay active | — | 42, all the **v2d-loop** template: `pending…` while the issue is open (a deferral), `stale…` after 48h (a real fail with a real meaning) — not circular |
+
+Verified by a live test insert on issue 3011: the contract came back `status=superseded`, `module=probe-template-v3-generic`
+(test row deleted immediately). With both ends fixed, **issue 3011 closed**, and 3004 and 2871 are closed with it.
+
+Remaining red at this point, and why each one is not a one-hour fix: 245 open issues (the loops file ~2/minute, so the
+register grows while it drains), 32 breach contracts (each is a live failed check on a specific open issue), 78 failed
+code tasks (model quality; the plumbing defects in that set are fixed), 42 queued (file-bound, see §6).
