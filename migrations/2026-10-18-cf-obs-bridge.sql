@@ -1,0 +1,21 @@
+-- CF-OBS-BRIDGE-1 (2026-10-18, owner directive "INTEGRATE CLOUDFLARE OBSERVABILITY ISSUES INTO UNIFIED TRACKING, AUDITING, AND
+-- REMEDIATION. THE SYSTEM SHALL AUTOMATICALLY SWEEP FOR ALL KNOWN ISSUES AND RESOLVE AUTOMATICALLY").
+-- APPLY-BY: ci
+-- DB: qnfo-audit
+-- Rollback: DELETE FROM remediation_contracts WHERE class IN ('fm-cf-obs-untracked', 'fm-cf-obs-bridge-stale');
+--           DELETE FROM failure_modes WHERE fm_key IN ('cf-obs-untracked', 'cf-obs-bridge-stale');
+-- spof-review: detectors only (no new trigger). Their second path is qnfo-fleet-control pollObservability (*/10, mirrors every
+-- group into fleet_issue_dispatch and auto-resolves noise/quiet groups, CF-OBS-SWEEP-1) and the FLEET-JOURNEYS-2 traffic-health
+-- journey; scripts/cf_obs_issue_bridge.py (remediation-consumer step) is the filer these detectors audit.
+-- Two standing failure-mode detectors audit the bridge:
+--   fm-cf-obs-untracked     a Cloudflare group seen in the last 6 h (fleet_issue_dispatch, refreshed every 10 min) that is not
+--                           external scan noise and has no open CF-OBS-ISSUE-1 issue carrying its id, for over 2 h.
+--   fm-cf-obs-bridge-stale  the bridge has not written a cf-obs-bridge run row in 3 h (consumer cadence is <= 60 min).
+
+INSERT OR IGNORE INTO failure_modes (fm_key, failure_mode, root_cause, remediation, detector, probe_class, first_seen, trigger_condition, symptom, blast_radius) VALUES
+ ('cf-obs-untracked', 'a live Cloudflare Workers Observability issue group has no tracked agent_issues row', 'pollObservability mirrored groups into fleet_issue_dispatch but nothing filed a probed, closable issue for them (29 groups active, 3824 occurrences on 2026-10-18)', 'scripts/cf_obs_issue_bridge.py files one CF-OBS-ISSUE-1 issue per live group with a code-task line and a quiet-for-6h probe, and resolves the Cloudflare group once the issue closes by verification', 'remediation_contracts fm-cf-obs-untracked (d1-query, hourly)', 'fm-cf-obs-untracked', '2026-10-18', 'a worker starts failing in production', 'errors visible on the Cloudflare Issues page while the fleet tracker shows nothing', 'any worker'),
+ ('cf-obs-bridge-stale', 'the Cloudflare Observability bridge stopped running', 'remediation-consumer not running or the bridge step failing', 'the consumer cadence (push, schedule, workflow_run, repository_dispatch from qnfo-cloud-ops PROBE-CADENCE-1) re-runs it; the detector files when it is silent 3 h', 'remediation_contracts fm-cf-obs-bridge-stale (d1-query, hourly)', 'fm-cf-obs-bridge-stale', '2026-10-18', 'consumer workflow broken', 'new Cloudflare issue groups stop becoming tracked issues', 'observability integration');
+
+INSERT OR IGNORE INTO remediation_contracts (class, issue_id, precondition, action, verify_probe, verify_transport, max_attempts, escalate_to, expected_cadence_h, status, module) VALUES
+ ('fm-cf-obs-untracked', NULL, 'a live Cloudflare issue group without a tracked issue', 'scripts/cf_obs_issue_bridge.py files it on the next consumer run', 'SELECT ''0'' AS expected, CAST((SELECT COUNT(*) FROM fleet_issue_dispatch d WHERE d.category = ''worker-observability'' AND d.state <> ''resolved'' AND json_valid(d.payload) AND CAST(json_extract(d.payload, ''$.lastObserved'') AS INTEGER) > (CAST(strftime(''%s'', ''now'') AS INTEGER) - 21600) * 1000 AND CAST(json_extract(d.payload, ''$.firstObserved'') AS INTEGER) < (CAST(strftime(''%s'', ''now'') AS INTEGER) - 7200) * 1000 AND instr(lower(COALESCE(json_extract(d.payload, ''$.title''), '''')), ''potential vulnerability scan'') = 0 AND NOT EXISTS (SELECT 1 FROM agent_issues a WHERE a.status = ''open'' AND a.source = ''cf-obs-bridge'' AND instr(a.description, ''cf-obs-id: '' || json_extract(d.payload, ''$.id'')) > 0)) AS TEXT) AS observed', 'd1-query', 3, 'qnfo-fleet-control', 1, 'active', 'failure-mode'),
+ ('fm-cf-obs-bridge-stale', NULL, 'the bridge step stopped running', 'remediation-consumer re-runs it', 'SELECT ''fresh'' AS expected, CASE WHEN EXISTS (SELECT 1 FROM cloud_ops_events WHERE kind = ''cf-obs-bridge'' AND ts > strftime(''%Y-%m-%dT%H:%M:%SZ'', ''now'', ''-3 hours'')) THEN ''fresh'' ELSE ''stale'' END AS observed', 'd1-query', 3, 'qnfo-fleet-control', 1, 'active', 'failure-mode');
