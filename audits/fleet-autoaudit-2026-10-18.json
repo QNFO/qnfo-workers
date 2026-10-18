@@ -1,14 +1,12 @@
 {
-  "audited_at": "2026-10-18 12:25:55",
+  "audited_at": "2026-10-18 12:57:26",
   "d1_write_failures": [],
   "d1_writes_ok": 120,
   "guard": {
     "_drift_confirm": {
       "first_pass": [
         "personal-companion",
-        "qnfo-artifacts",
-        "qnfo-evolve",
-        "qnfo-gateway"
+        "qnfo-artifacts"
       ],
       "refreshed": true,
       "second_pass": [
@@ -602,7 +600,7 @@
       },
       {
         "dir": "qnfo-code-orchestrator",
-        "version": "0.18.12-merge-scope-scripts",
+        "version": "0.18.13-repo-slug-normalize-1",
         "worker": "qnfo-code-orchestrator"
       },
       {
@@ -637,12 +635,12 @@
       },
       {
         "dir": "qnfo-gateway",
-        "version": "3.22.0-filing-2",
+        "version": "3.22.2-quick-read-3",
         "worker": "qnfo-gateway"
       },
       {
         "dir": "qnfo-github-steward",
-        "version": "0.4.4-notify-attempt-1",
+        "version": "0.4.5-dispatch-liveness",
         "worker": "qnfo-github-steward"
       },
       {
@@ -692,7 +690,7 @@
       },
       {
         "dir": "qnfo-research-exec",
-        "version": "0.18.39-codeagent",
+        "version": "0.18.40-reconcile-cycle-preserve-1",
         "worker": "qnfo-research-exec"
       },
       {
@@ -1205,9 +1203,9 @@
       "worker": "qnfo-code-agent"
     },
     "qnfo-code-orchestrator": {
-      "before": "0.18.12-merge-scope-scripts",
+      "before": "0.18.13-repo-slug-normalize-1",
       "http": 200,
-      "live": "0.18.12-merge-scope-scripts",
+      "live": "0.18.13-repo-slug-normalize-1",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-code-orchestrator"
@@ -1369,17 +1367,17 @@
       "worker": "qnfo-fleet-feed"
     },
     "qnfo-gateway": {
-      "before": "3.22.0-filing-2",
+      "before": "3.22.2-quick-read-3",
       "http": 200,
-      "live": "3.22.0-filing-2",
+      "live": "3.22.2-quick-read-3",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-gateway"
     },
     "qnfo-github-steward": {
-      "before": "0.4.4-notify-attempt-1",
+      "before": "0.4.5-dispatch-liveness",
       "http": 200,
-      "live": "0.4.4-notify-attempt-1",
+      "live": "0.4.5-dispatch-liveness",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-github-steward"
@@ -1583,9 +1581,9 @@
       "worker": "qnfo-register-guard"
     },
     "qnfo-research-exec": {
-      "before": "0.18.39-codeagent",
+      "before": "0.18.40-reconcile-cycle-preserve-1",
       "http": 200,
-      "live": "0.18.39-codeagent",
+      "live": "0.18.40-reconcile-cycle-preserve-1",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-research-exec"
