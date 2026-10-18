@@ -1,5 +1,5 @@
 {
-  "audited_at": "2026-10-18 09:41:32",
+  "audited_at": "2026-10-18 10:09:59",
   "d1_write_failures": [],
   "d1_writes_ok": 119,
   "guard": {
@@ -548,7 +548,7 @@
     "sync_workers": [
       {
         "dir": "idea-hub",
-        "version": "1.10.9-model-floor-2",
+        "version": "1.10.10-wall-deadline",
         "worker": "idea-hub"
       },
       {
@@ -578,7 +578,7 @@
       },
       {
         "dir": "qnfo-cloud-ops",
-        "version": "1.30.1-model-floor-1",
+        "version": "1.30.2-codeagent",
         "worker": "qnfo-cloud-ops"
       },
       {
@@ -598,7 +598,7 @@
       },
       {
         "dir": "qnfo-email",
-        "version": "2.9.2-stall-sla",
+        "version": "2.9.3-codeagent",
         "worker": "qnfo-email"
       },
       {
@@ -608,22 +608,22 @@
       },
       {
         "dir": "qnfo-fleet-control",
-        "version": "0.33.9-pool-bound-1",
+        "version": "0.33.10-cf-obs-sweep-1",
         "worker": "qnfo-fleet-control"
       },
       {
         "dir": "qnfo-fleet-dashboard",
-        "version": "1.40.1-workers-bp-logging",
+        "version": "1.40.3-bsky-domain-handle-1",
         "worker": "qnfo-fleet-dashboard"
       },
       {
         "dir": "qnfo-gateway",
-        "version": "3.18.8-subscribe-utm-1",
+        "version": "3.18.10-identity-wellknown-1",
         "worker": "qnfo-gateway"
       },
       {
         "dir": "qnfo-github-steward",
-        "version": "0.3.0-tracker-sync-1",
+        "version": "0.3.1-tracker-sync-1",
         "worker": "qnfo-github-steward"
       },
       {
@@ -643,7 +643,7 @@
       },
       {
         "dir": "qnfo-lifecycle",
-        "version": "1.11.4-sla-120m",
+        "version": "1.11.5-ping-404",
         "worker": "qnfo-lifecycle"
       },
       {
@@ -653,7 +653,7 @@
       },
       {
         "dir": "qnfo-observability",
-        "version": "1.4.7-bp-logging",
+        "version": "1.5.0-wae-fleet",
         "worker": "qnfo-observability"
       },
       {
@@ -799,9 +799,9 @@
       "worker": "funding"
     },
     "idea-hub": {
-      "before": "1.10.9-model-floor-2",
+      "before": "1.10.10-wall-deadline",
       "http": 200,
-      "live": "1.10.9-model-floor-2",
+      "live": "1.10.10-wall-deadline",
       "match": 1,
       "note": "SYNC",
       "worker": "idea-hub"
@@ -1165,9 +1165,9 @@
       "worker": "qnfo-citation-watch"
     },
     "qnfo-cloud-ops": {
-      "before": "1.30.1-model-floor-1",
+      "before": "1.30.2-codeagent",
       "http": 200,
-      "live": "1.30.1-model-floor-1",
+      "live": "1.30.2-codeagent",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-cloud-ops"
@@ -1215,9 +1215,9 @@
       "worker": "qnfo-deploy-guard"
     },
     "qnfo-email": {
-      "before": "2.9.2-stall-sla",
+      "before": "2.9.3-codeagent",
       "http": 200,
-      "live": "2.9.2-stall-sla",
+      "live": "2.9.3-codeagent",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-email"
@@ -1312,17 +1312,17 @@
       "worker": "qnfo-fleet-calibrator"
     },
     "qnfo-fleet-control": {
-      "before": "0.33.9-pool-bound-1",
+      "before": "0.33.10-cf-obs-sweep-1",
       "http": 200,
-      "live": "0.33.9-pool-bound-1",
+      "live": "0.33.10-cf-obs-sweep-1",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-fleet-control"
     },
     "qnfo-fleet-dashboard": {
-      "before": "1.40.1-workers-bp-logging",
+      "before": "1.40.3-bsky-domain-handle-1",
       "http": 200,
-      "live": "1.40.1-workers-bp-logging",
+      "live": "1.40.3-bsky-domain-handle-1",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-fleet-dashboard"
@@ -1346,17 +1346,17 @@
       "worker": "qnfo-fleet-feed"
     },
     "qnfo-gateway": {
-      "before": "3.18.8-subscribe-utm-1",
+      "before": "3.18.10-identity-wellknown-1",
       "http": 200,
-      "live": "3.18.8-subscribe-utm-1",
+      "live": "3.18.10-identity-wellknown-1",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-gateway"
     },
     "qnfo-github-steward": {
-      "before": "0.3.0-tracker-sync-1",
+      "before": "0.3.1-tracker-sync-1",
       "http": 200,
-      "live": "0.3.0-tracker-sync-1",
+      "live": "0.3.1-tracker-sync-1",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-github-steward"
@@ -1431,9 +1431,9 @@
       "worker": "qnfo-kaizen"
     },
     "qnfo-lifecycle": {
-      "before": "1.11.4-sla-120m",
+      "before": "1.11.5-ping-404",
       "http": 200,
-      "live": "1.11.4-sla-120m",
+      "live": "1.11.5-ping-404",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-lifecycle"
@@ -1456,9 +1456,9 @@
       "worker": "qnfo-memory-mcp-legacy-dup"
     },
     "qnfo-observability": {
-      "before": "1.4.7-bp-logging",
+      "before": "1.5.0-wae-fleet",
       "http": 200,
-      "live": "1.4.7-bp-logging",
+      "live": "1.5.0-wae-fleet",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-observability"
