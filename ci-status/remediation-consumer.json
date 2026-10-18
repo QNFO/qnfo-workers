@@ -1,34 +1,18 @@
 {
  "ok": true,
  "marker": "REMEDIATION-CONSUMER-1",
- "verifier": "remediation-consumer@d1aa52ed8072",
- "due": 3,
- "pass": 3,
- "fail": 0,
+ "verifier": "remediation-consumer@9020b6472c50",
+ "due": 1,
+ "pass": 0,
+ "fail": 1,
  "skipped": 0,
  "contracts": [
   {
-   "class": "issue-2372",
-   "issue_id": 2372,
-   "verdict": "pass",
+   "class": "issue-2897",
+   "issue_id": 2897,
+   "verdict": "fail",
    "expected": "ok",
-   "observed": "ok",
-   "written": true
-  },
-  {
-   "class": "issue-2554",
-   "issue_id": 2554,
-   "verdict": "pass",
-   "expected": "ok",
-   "observed": "ok",
-   "written": true
-  },
-  {
-   "class": "issue-2249",
-   "issue_id": 2249,
-   "verdict": "pass",
-   "expected": "ok",
-   "observed": "ok",
+   "observed": "pending: filed by qnfo-ops, which owns it for 48h",
    "written": true
   }
  ],
@@ -55,7 +39,6 @@
   "http",
   "runner-https"
  ],
- "https": 3,
  "budget_exhausted": false,
  "runtime_verified_share_24h": 9.8,
  "host_census": {
@@ -71,8 +54,8 @@
   "failed": [],
   "metric": 0
  },
- "spent_ms": 11143,
- "head": "d1aa52ed8072ba9aef1996920e8cf34cc266825c",
+ "spent_ms": 10188,
+ "head": "9020b6472c50c7504c81a07c58dc599708cdb88a",
  "job_status": "success",
- "ts": "2026-10-18T08:18:10Z"
+ "ts": "2026-10-18T08:40:48Z"
 }
