@@ -1,4 +1,4 @@
-var VERSION="3.18.9-codeagent";; /* 3.18.5 WORKERS-BP-LOGGING-qnfo-gateway-1 (2026-10-14, agent_issues 2533, child of 2342, pillar autonomy): the 6 server-side swallowed catches log (2 browser-script hits marked standards-ok or allowlisted) as a structured console.error (worker, where, error); control flow unchanged. */ /* 3.18.4 FLEET-HARDENING-2 (2026-10-13, agent_issues 2397, pillar autonomy): the daily cron ends with a qnfo-audit fleet_heartbeat upsert through a new AUDIT binding (ok=0 when the IndexNow step threw, which was swallowed before and is now logged). */ /* 3.18.3 HUB-CACHE-VERSION-1 (2026-10-13, pillar reach, failure mode zaraz-autoinject-worker-html): the qnfo.org hub copy in each colo's cache now carries the VERSION that built it, and a copy built by another version is rebuilt while the request waits up to 2.5 s instead of being served stale; the runner probe of 07:39 UTC read a pre-3.16.1 copy without /cdn-cgi/zaraz/i.js while every fresh render carried it. */ /* 3.18.2 PAGE-POLICY-1 (2026-10-13, pillar reach, agent_issues 2343 WEB-PERF-EDGE-1): every HTML response carries Referrer-Policy strict-origin-when-cross-origin (no-referrer when the query carries a token) and Permissions-Policy camera=(), microphone=(), geolocation=() from the worker (qnfo.org had neither; the subdomains had them only from a zone rule), and an HTML response without Cache-Control gets public, max-age=300, s-maxage=3600, stale-while-revalidate=86400 when it is a public GET 200, no-store otherwise; handlers that set their own are unchanged, JSON untouched. 3.18.1 RENDER-DEFECTS-2300 (2026-10-13, pillar reach, agent_issues 2300 2158 2357): PANDOC-FENCE-GLUE-1 reads a code fence glued to prose or to its last code line as a fence (ultrametric-intelligence printed its Python as prose and typeset its identifiers); MATH-RESIDUE-5 typesets a formula glued to a name by a product sign; RAIL-MATH-1 gives /api/paper-context title_tex and excerpt_tex (formulas kept as TeX, plain-text math typeset, currency escaped) and the Related and Versions panels paint them, since every residue the browser sample counted on chapter-1 and log20240505010101strangeloopbook on 2026-10-12 was panel text; a formula ending in an escaped brace is lifted as math; MathJax knows the Sha macro. 3.18.0 ACTIVITYPUB-KEY-1 (2026-10-12, pillar reach, #2249 #2413): the actor publishes publicKeyPem when AP_PUBLIC_KEY is set (cf-ops gen-activitypub-key); merged with main 3.17.1 (REACH-RENDER-1). */
+var VERSION="3.18.10-identity-wellknown-1";; /* 3.18.10 IDENTITY-WELLKNOWN-1 (2026-10-18): /.well-known/security.txt (RFC 9116) on every gateway host, /.well-known/atproto-did on qnfo.org for the Bluesky domain handle, rel="me" to the Mastodon profile in every page head. */ /* 3.18.5 WORKERS-BP-LOGGING-qnfo-gateway-1 (2026-10-14, agent_issues 2533, child of 2342, pillar autonomy): the 6 server-side swallowed catches log (2 browser-script hits marked standards-ok or allowlisted) as a structured console.error (worker, where, error); control flow unchanged. */ /* 3.18.4 FLEET-HARDENING-2 (2026-10-13, agent_issues 2397, pillar autonomy): the daily cron ends with a qnfo-audit fleet_heartbeat upsert through a new AUDIT binding (ok=0 when the IndexNow step threw, which was swallowed before and is now logged). */ /* 3.18.3 HUB-CACHE-VERSION-1 (2026-10-13, pillar reach, failure mode zaraz-autoinject-worker-html): the qnfo.org hub copy in each colo's cache now carries the VERSION that built it, and a copy built by another version is rebuilt while the request waits up to 2.5 s instead of being served stale; the runner probe of 07:39 UTC read a pre-3.16.1 copy without /cdn-cgi/zaraz/i.js while every fresh render carried it. */ /* 3.18.2 PAGE-POLICY-1 (2026-10-13, pillar reach, agent_issues 2343 WEB-PERF-EDGE-1): every HTML response carries Referrer-Policy strict-origin-when-cross-origin (no-referrer when the query carries a token) and Permissions-Policy camera=(), microphone=(), geolocation=() from the worker (qnfo.org had neither; the subdomains had them only from a zone rule), and an HTML response without Cache-Control gets public, max-age=300, s-maxage=3600, stale-while-revalidate=86400 when it is a public GET 200, no-store otherwise; handlers that set their own are unchanged, JSON untouched. 3.18.1 RENDER-DEFECTS-2300 (2026-10-13, pillar reach, agent_issues 2300 2158 2357): PANDOC-FENCE-GLUE-1 reads a code fence glued to prose or to its last code line as a fence (ultrametric-intelligence printed its Python as prose and typeset its identifiers); MATH-RESIDUE-5 typesets a formula glued to a name by a product sign; RAIL-MATH-1 gives /api/paper-context title_tex and excerpt_tex (formulas kept as TeX, plain-text math typeset, currency escaped) and the Related and Versions panels paint them, since every residue the browser sample counted on chapter-1 and log20240505010101strangeloopbook on 2026-10-12 was panel text; a formula ending in an escaped brace is lifted as math; MathJax knows the Sha macro. 3.18.0 ACTIVITYPUB-KEY-1 (2026-10-12, pillar reach, #2249 #2413): the actor publishes publicKeyPem when AP_PUBLIC_KEY is set (cf-ops gen-activitypub-key); merged with main 3.17.1 (REACH-RENDER-1). */
 // UTM-CLICK-LEDGER-1 (3.10.0, 2026-10-06, transformation lever T7.9, pillar reach): a GET for an HTML page that carries
 // utm_source is counted into qnfo-graph utm_clicks (day, host, path, source, medium, campaign, bot/human, country; no cookie,
 // no IP), so a post or digest joins to the visits it caused; qnfo-fleet-dashboard reads it into reach_signals source utm.
@@ -507,8 +507,22 @@ function qdsHead(o) {
     '<meta name="theme-color" content="#F5F7FB" media="(prefers-color-scheme: light)"><meta name="theme-color" content="#121731" media="(prefers-color-scheme: dark)">' +
     '<link rel="icon" type="image/svg+xml" href="' + QDS_FAVICON[brand === "qwav" ? "qwav" : "qnfo"] + '">' +
     (o.rss ? '<link rel="alternate" type="application/rss+xml" title="QNFO Papers" href="https://papers.qnfo.org/rss.xml">' : "") +
+    '<link rel="me" href="' + MASTODON_PROFILE + '">' +
     QDS_FONTS + '<link rel="stylesheet" href="' + QDS_ORIGIN + "/qds.css?v=" + QDS_VERSION + '"><script src="' + QDS_ORIGIN + "/qds.js?v=" + QDS_VERSION + '" defer><\/script>' +
     (o.jsonld || "") + (o.math ? QDS_MATHJAX : "") + (o.extra || "") + QDS_GA + "</head>";
+}
+var ATPROTO_DID = "did:plc:vad2yeqflg5uznmp557zge5c";
+var MASTODON_PROFILE = "https://mstdn.science/@QNFO";
+function wellKnownAnswer(u) {
+  if (u.pathname === "/.well-known/atproto-did" && (u.hostname === "qnfo.org" || u.hostname === "www.qnfo.org")) {
+    return new Response(ATPROTO_DID, { headers: { "Content-Type": "text/plain; charset=utf-8", "Cache-Control": "public, max-age=3600" } });
+  }
+  if (u.pathname === "/.well-known/security.txt" || u.pathname === "/security.txt") {
+    const exp = new Date(Date.now() + 180 * 864e5).toISOString().slice(0, 10) + "T00:00:00Z";
+    const body = ["Contact: mailto:qnfo@qnfo.org", "Expires: " + exp, "Preferred-Languages: en", "Canonical: https://" + u.hostname + "/.well-known/security.txt", "Policy: https://legal.qnfo.org/", ""].join(String.fromCharCode(10));
+    return new Response(body, { headers: { "Content-Type": "text/plain; charset=utf-8", "Cache-Control": "public, max-age=86400" } });
+  }
+  return null;
 }
 function qdsHeader(brand, active) {
   const nav = brand === "qwav" ? QDS_NAV_QWAV : QDS_NAV_QNFO;
@@ -4357,6 +4371,13 @@ function withPagePolicy(res, request) {
 // ---- PAGE-POLICY-1:END ----
 var gateway_worker_default = {
   async fetch(request, env, ctx) {
+    // IDENTITY-WELLKNOWN-1 (3.18.9, 2026-10-18): RFC 9116 security.txt on every gateway host, and the AT Protocol handle
+    // proof on qnfo.org so the Bluesky account (did:plc:vad2yeqflg5uznmp557zge5c) can carry the domain handle qnfo.org
+    // instead of qnfo.bsky.social. Static answers, no binding, answered before the page router.
+    if (request.method === "GET" || request.method === "HEAD") {
+      const wk = wellKnownAnswer(new URL(request.url));
+      if (wk) return request.method === "HEAD" ? new Response(null, { status: 200, headers: wk.headers }) : wk;
+    }
     // HEAD too: some link-preview crawlers check the image with HEAD before fetching it (REACH-LAYER-1 3.8.7).
     if ((request.method === "GET" || request.method === "HEAD") && new URL(request.url).pathname === "/og.jpg" && RL_HOSTS[new URL(request.url).hostname]) {
       var ogr = reachOgImage();
