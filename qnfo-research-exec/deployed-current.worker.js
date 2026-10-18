@@ -33,7 +33,7 @@ var __name22222 = /* @__PURE__ */ __name2222((target, value) => __defProp22222(t
 // an empty catch. CITE-CONSISTENCY-1 asks the reviewer to compare the draft against cited QNFO work.
 // REVIEW-TRIAGE-CAP-1 is a defect fix: drift demotion at the cycle cap silently turned a blocking finding into a pass, so
 // REVIEW-HARD-GATE-1 withheld nothing there (reviewer findings 2 -> 0 at the cap; an unparseable review advanced to verify).
-var VERSION = "0.18.31-verify-autocorrect-1"; /* 0.18.31 VERIFY-AUTOCORRECT-1 (2026-10-18): papers fail verify with REAL arithmetic errors (the reconcile/ensemble writer computes a number that does not match its own stated inputs) and the revise loop cannot reliably fix a bare number, so such papers cycle until park. Verify already holds both values — independently computed `computed` and the paper's stated `expected` — so stageVerify now corrects the number deterministically (autoCorrectNumeric) instead of sending it back through a model. Fail-closed: only a stated value found exactly once (verbatim or as an unambiguous bare mantissa in LaTeX/\\times 10^N) is corrected; anything ambiguous is skipped and falls through to revise. Every correction is logged as verify-autocorrect and appended to verification.md. */ /* 0.18.29 VERIFY-CYCLE-CAP-1 (2026-10-17, owner directive "REMEDIATE ALL ISSUES AND FAILURE MODES"): the verify->revise edge reset the review cycle counter to 0 (context={cycles:0,verifyPass:1}) while EVERY other edge preserves it (3716, 3735, 3753) and the review stage is the one that increments it. That single reset made MAX_REVIEW_CYCLES (6) unreachable, so an item that fails verify re-enters revise, resets to cycle 0, and loops until recover_count runs out — measured 2026-10-17: review-unresolved events exist ONLY at cycle 2 (193) and 3 (165), never 4; 96 rerun-route and 278 revise-patch events against ~100 rows; and stage='publish' is EMPTY, which is why 151 complete events produced 0 publications and why the publish quota (24) guarded an empty queue. The edge now preserves the count, so the existing six-cycle cap can terminate an item visibly instead of cycling forever. The gate itself (gates2) is unchanged: this does not let a failing draft through, it lets a draft that cannot pass STOP. */ // 0.18.28-codeagent
+var VERSION = "0.18.32-ai-rate-fallback-1"; /* 0.18.32 AI-RATE-FALLBACK-1 (2026-10-18): a 3021/3040/3046 on the primary model after backoff takes one call on another family (glm<->gpt-oss-120b) instead of failing the stage; 3040 no longer misread as a reasoning_effort rejection. */ /* 0.18.31 VERIFY-AUTOCORRECT-1 (2026-10-18): papers fail verify with REAL arithmetic errors (the reconcile/ensemble writer computes a number that does not match its own stated inputs) and the revise loop cannot reliably fix a bare number, so such papers cycle until park. Verify already holds both values — independently computed `computed` and the paper's stated `expected` — so stageVerify now corrects the number deterministically (autoCorrectNumeric) instead of sending it back through a model. Fail-closed: only a stated value found exactly once (verbatim or as an unambiguous bare mantissa in LaTeX/\\times 10^N) is corrected; anything ambiguous is skipped and falls through to revise. Every correction is logged as verify-autocorrect and appended to verification.md. */ /* 0.18.29 VERIFY-CYCLE-CAP-1 (2026-10-17, owner directive "REMEDIATE ALL ISSUES AND FAILURE MODES"): the verify->revise edge reset the review cycle counter to 0 (context={cycles:0,verifyPass:1}) while EVERY other edge preserves it (3716, 3735, 3753) and the review stage is the one that increments it. That single reset made MAX_REVIEW_CYCLES (6) unreachable, so an item that fails verify re-enters revise, resets to cycle 0, and loops until recover_count runs out — measured 2026-10-17: review-unresolved events exist ONLY at cycle 2 (193) and 3 (165), never 4; 96 rerun-route and 278 revise-patch events against ~100 rows; and stage='publish' is EMPTY, which is why 151 complete events produced 0 publications and why the publish quota (24) guarded an empty queue. The edge now preserves the count, so the existing six-cycle cap can terminate an item visibly instead of cycling forever. The gate itself (gates2) is unchanged: this does not let a failing draft through, it lets a draft that cannot pass STOP. */ // 0.18.28-codeagent
 // WORKERS-AI-ATTRIBUTION-1 (2026-10-01, #1681): per-worker Workers AI attribution. Returns a shallow env copy whose AI
 // binding records each .run() (calls, errors, ms, tokens, neurons) into qnfo-audit ai_call_counters (purpose 'binding').
 // Neurons = usage tokens x Cloudflare's published per-model rates (neurons per M tokens). Fail-soft; env is never mutated.
@@ -1625,7 +1625,15 @@ async function aiRunOpts(env, model, prompt) {
     return undefined;
   }
 }
+// AI-RATE-FALLBACK-1 (0.18.32, 2026-10-18): 3021/3040/3046 after the bounded backoff returned "" and failed the stage,
+// so the whole prompt re-ran next tick. Measured 2026-10-18 06:00-08:00Z: 1645 backoff-exhausted warnings and 424
+// hard 3021 errors on glm-5.3-flash (54-86% error share per stage) while gpt-oss-120b ran 451 calls with 0 errors.
+// A transient limit on the primary now takes one second path on another model family before giving up
+// (SLA-AND-PATHS-1); 3040 "capacity exceeded" is transient, not a reasoning_effort rejection.
+var AI_RATE_FALLBACK = { "@cf/zai-org/glm-5.3-flash": "@cf/openai/gpt-oss-120b", "@cf/zai-org/glm-5.3": "@cf/openai/gpt-oss-120b", "@cf/openai/gpt-oss-120b": "@cf/zai-org/glm-5.3-flash" };
+var AI_TRANSIENT_RE = /3021|3040|3046|rate limit|capacity temporarily|timeout/i;
 async function aiText(env, model, prompt, maxTokens, effort) {
+  const _isFallback = arguments.length > 5 && arguments[5] === true;
   const cappedTokens = Math.min(maxTokens, AI_TEXT_MAX_OUT[model] || 8192);
   const _opts = { messages: [{ role: "user", content: prompt }], max_tokens: cappedTokens, temperature: 0.3 };
   if (/^@cf\/zai-org\/glm-/.test(model)) _opts.reasoning_effort = effort || 'low';
@@ -1640,16 +1648,21 @@ async function aiText(env, model, prompt, maxTokens, effort) {
       r = await env.AI.run(model, _opts, _runOpts);
     } catch (e0) {
       const emsg = String(e0 && e0.message || e0);
-      if ((/3021|rate limit/i.test(emsg) || /3046|timeout/i.test(emsg)) && _aiAttempt < 3) {
+      if (AI_TRANSIENT_RE.test(emsg) && _aiAttempt < 3) {
         const wait = (600 << _aiAttempt) + Math.floor(Math.random() * 800);
         await logEvent(env, "ai-warn", "aiText model=" + model + " transient (" + emsg.slice(0, 50) + "), backing off " + wait + "ms (attempt " + (_aiAttempt + 1) + "/3)");
         await new Promise(function(res) { setTimeout(res, wait); });
         continue;
       }
-      if (_opts.reasoning_effort && !/3046|timeout|3021|rate limit/i.test(emsg)) {
+      if (_opts.reasoning_effort && !AI_TRANSIENT_RE.test(emsg)) {
         await logEvent(env, "ai-warn", "aiText model=" + model + " rejected reasoning_effort, retrying without: " + emsg.slice(0, 160));
         delete _opts.reasoning_effort;
         continue;
+      }
+      const _fb = AI_RATE_FALLBACK[model];
+      if (!_isFallback && _fb && AI_TRANSIENT_RE.test(emsg)) {
+        await logEvent(env, "ai-warn", "aiText model=" + model + " exhausted (" + emsg.slice(0, 50) + "), fallback " + _fb);
+        return aiText(env, _fb, prompt, maxTokens, effort, true);
       }
       await logEvent(env, "ai-error", "aiText model=" + model + " threw: " + emsg.slice(0, 200));
       return "";
