@@ -473,7 +473,8 @@ console.log("\n[http]");
     d.exec("CREATE TABLE notes (kind TEXT, ts TEXT)");
     return { db: d, env: { PERSONAL: d1(d), WELLBEING_TOKEN: "t0k" } };
   };
-  const nowIso2 = new Date().toISOString();
+  // CLOCK-PIN-1: a fixed Wednesday 14:00Z (16:00 Amsterdam) - outside the 07:45-12:00 local check-in window and not Sunday evening, so exactly one ask mail is expected; the wall clock made this suite fail every morning.
+  const nowIso2 = "2026-10-14T14:00:00.000Z";
 
   const a = mkEnv();
   const delivered = [];
