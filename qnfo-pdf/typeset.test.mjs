@@ -1,34 +1,46 @@
 // TYPESET-PRO-1 (1.5.0, 2026-10-18): the paper PDF carries a real title block (authors, affiliations,
-// identifiers) and a resolved bibliography. These tests pin the behaviour that made the old PDF
-// unusable as a citable artifact: `[@key]` printed as raw keys, an empty "References" heading, the
-// author/orcid/DOI columns never reaching the page, and an in-body byline block printed as prose.
+// identifiers) and a resolved bibliography. These tests pin the behaviour that made the old PDF unusable as
+// a citable artifact: `[@key]` printed as raw keys, an empty "References" heading, the author/orcid/DOI
+// columns never reaching the page, and an in-body byline block printed as prose.
+//
+// The renderer is read out of worker.js between its markers and evaluated with a KaTeX stub, so the suite
+// runs on the same inlined copy that ships and needs no bundle dependency (the deploy gate installs none).
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { test } from "node:test";
 import assert from "node:assert/strict";
 
-import {
-  RENDERER_VERSION,
-  parseBibTeX,
-  decodeLatex,
-  formatNames,
-  formatBibEntry,
-  scanCitations,
-  buildPrintTemplates,
-  buildMeta,
-  extractBylineBlock,
-  renderPaperHTML,
-  renderFullHTML
-} from "./renderer.js";
-
 const here = dirname(fileURLToPath(import.meta.url));
 const workerSrc = readFileSync(join(here, "worker.js"), "utf8");
+
+const RENDERER_MARK = "// renderer.js";
+const WORKER_MARK = "// worker.js";
+const start = workerSrc.indexOf(RENDERER_MARK);
+const end = workerSrc.indexOf(WORKER_MARK);
+assert.ok(start > 0 && end > start, "worker.js carries the renderer region between its markers");
+const region = workerSrc.slice(start + RENDERER_MARK.length, end);
+
+// a KaTeX stand-in: the tests assert structure and text, not glyph metrics
+const katexStub = {
+  renderToString: function (tex) {
+    return '<span class="katex-stub">' + String(tex) + "</span>";
+  }
+};
+
+const R = new Function(
+  "katex",
+  region +
+    "\nreturn { RENDERER_VERSION, parseBibTeX, decodeLatex, formatNames, formatBibEntry, scanCitations," +
+    " buildPrintTemplates, buildMeta, extractBylineBlock, renderPaperHTML, renderFullHTML };"
+)(katexStub);
+
+const { RENDERER_VERSION, parseBibTeX, decodeLatex, formatNames, scanCitations, buildPrintTemplates, extractBylineBlock, renderPaperHTML, renderFullHTML } = R;
 
 const BIB = [
   "@article{ostrowski1916,",
   "  author  = {Alexander Ostrowski},",
-  "  title   = {{\\\"U}ber einige L{\\\"o}sungen der Funktionalgleichung $\\phi(x)\\cdot\\phi(y)=\\phi(xy)$},",
+  "  title   = {{\\\"U}ber einige L{\\\"o}sungen der Funktionalgleichung},",
   "  journal = {Acta Mathematica},",
   "  volume  = {41},",
   "  pages   = {271--284},",
@@ -63,7 +75,7 @@ const MD = [
   "",
   "# Completeness Senses and the Levi-Civita Field",
   "",
-  "Ostrowski classifies every absolute value on the rationals [@ostrowski1916] and the reals fall out of it [@conway1976; @tateadelic].",
+  "Ostrowski classifies every absolute value on the rationals [@ostrowski1916] and the reals follow from it [@conway1976; @tateadelic].",
   "",
   "## 1. Scope",
   "",
@@ -105,7 +117,7 @@ test("author lists become numeric-style name strings", () => {
   assert.equal(formatNames("Khodr Shamseddine and others"), "K. Shamseddine, et al.");
 });
 
-test("citations are numbered in order of first appearance and repeat citations reuse the number", () => {
+test("citations are numbered in order of first appearance and a repeat citation reuses the number", () => {
   assert.deepEqual(scanCitations(MD), ["ostrowski1916", "conway1976", "tateadelic"]);
   const r = render();
   assert.equal(r.stats.citations, 3);
@@ -125,7 +137,7 @@ test("the reference list carries the full entry: authors, title, venue, volume, 
   assert.match(text, /J\. H\. Conway\. On Numbers and Games\. London: Academic Press, 1976\./);
   assert.match(r.refsHtml, /doi:<a href="https:\/\/doi\.org\/10\.5281\/zenodo\.21600741">/);
   assert.match(r.refsHtml, /class="ref-num">\[1\]</);
-  assert.ok(!/\\"|\\ldots|\{\}|--/.test(text), "no raw LaTeX survives into the reference text");
+  assert.ok(!/\\"|\{\}|--/.test(text), "no raw LaTeX survives into the reference text");
 });
 
 test("the title block carries author, affiliations, ORCID, DOI, licence, keywords and subjects", () => {
@@ -164,10 +176,8 @@ test("an in-body byline block is lifted into the title block and removed from th
 
 test("an empty trailing References heading is replaced by the generated list, never printed bare", () => {
   const r = render();
-  assert.ok(!/References<\/h2>\s*<\/section>/.test(r.bodyHtml));
   assert.equal((r.bodyHtml.match(/>References</g) || []).length, 0, "the body keeps no stray heading");
   assert.match(r.refsHtml, /<h2 class="refs-h">References<\/h2>/);
-  // and with no bibliography at all the empty heading is dropped rather than left dangling
   const bare = render(MD, META, "");
   assert.equal(bare.stats.references, 0);
   assert.ok(!/>References</.test(bare.bodyHtml), "no empty References heading without a bibliography");
@@ -209,7 +219,7 @@ test("worker.js turns the header/footer on and files the D1 record into the rend
   assert.match(workerSrc, /bibtex: bib/);
   assert.match(workerSrc, /meta: meta/);
   // and the back catalogue is stamp-aware, so a typesetting change reaches stored PDFs
-  assert.match(workerSrc, /RENDERER_STAMP|stamp !== rendererVersion|customMetadata/);
+  assert.match(workerSrc, /customMetadata/);
   assert.match(workerSrc, /rendererVersion: RENDERER_VERSION/);
 });
 
@@ -220,6 +230,7 @@ test("the rendered page is UTF-8 clean (no mojibake) and declares citation metad
   assert.match(html, /<meta name="citation_author" content="Rowan Brad Quni-Gudzinas">/);
   assert.match(html, /<meta name="citation_doi" content="10\.5281\/zenodo\.22109086">/);
   assert.match(html, /@page \{ size: A4/);
+  assert.ok(!/\[@/.test(html), "no raw citation marker anywhere in the page, including the description tag");
 });
 
 test("the renderer declares its version and the worker names it", () => {

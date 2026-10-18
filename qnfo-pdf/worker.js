@@ -14637,7 +14637,7 @@ var katex = {
 // The renderer never invents metadata: a field that is absent in the frontmatter, the in-body
 // byline block or the D1 row is left out rather than guessed.
 
-export const RENDERER_VERSION = "2.0.0-typeset-pro-1";
+const RENDERER_VERSION = "2.0.0-typeset-pro-1";
 
 /* ------------------------------------------------------------------ */
 /* escaping                                                            */
@@ -15876,7 +15876,14 @@ function pdfList(v) {
   if (Array.isArray(v)) return v;
   var s = String(v).trim();
   if (!s) return [];
-  if (s.charAt(0) === "[") { try { var j = JSON.parse(s); if (Array.isArray(j)) return j; } catch (e) { } }
+  if (s.charAt(0) === "[") {
+    try {
+      var j = JSON.parse(s);
+      if (Array.isArray(j)) return j;
+    } catch (e) {
+      console.warn(JSON.stringify({ evt: "pdf-meta-not-json", value: s.slice(0, 120) }));
+    }
+  }
   return s.split(/[;|]\s*/).filter(function (x) { return x.trim(); });
 }
 // buildPaperMeta maps a living-paper row to the renderer's metadata contract. Nothing is invented: a
@@ -15936,7 +15943,9 @@ async function loadBib(env, meta) {
         var t = await o.text();
         if (t && t.length > 10) return t;
       }
-    } catch (e) { }
+    } catch (e) {
+      console.error(JSON.stringify({ evt: "pdf-bib-read-failed", key: keys[i], error: String(e && e.message || e).slice(0, 200) }));
+    }
   }
   return "";
 }
@@ -15999,6 +16008,7 @@ async function staleStamps(env, limit, rendererVersion) {
       cursor = res.cursor;
     }
   } catch (e) {
+    console.error(JSON.stringify({ evt: "pdf-stamp-list-failed", error: String(e && e.message || e).slice(0, 200) }));
     out = [];
   }
   if (!out.length || seenMeta) return out;
@@ -16009,7 +16019,9 @@ async function staleStamps(env, limit, rendererVersion) {
       var h = await env.RELEASES.head(out[k].key);
       var md2 = (h && h.customMetadata) || {};
       if (md2.renderer !== rendererVersion) confirmed.push(out[k]);
-    } catch (e2) { }
+    } catch (e2) {
+      console.error(JSON.stringify({ evt: "pdf-stamp-head-failed", key: out[k].key, error: String(e2 && e2.message || e2).slice(0, 200) }));
+    }
   }
   return confirmed;
 }

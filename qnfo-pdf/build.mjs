@@ -24,6 +24,9 @@ function rendererSource() {
   // the bundle already holds the KaTeX module, and there is nothing to re-export from inside it
   src = src.replace(/^import\s+katex[^\n]*\n/m, "");
   src = src.replace(/\nexport\s*\{[\s\S]*?\};\s*$/, "\n");
+  // `export const RENDERER_VERSION = …` would be legal in the ESM bundle but unparseable for the suite,
+  // which evaluates this region with new Function(); drop the keyword so the copy is plain script code
+  src = src.replace(/^export\s+(const|let|var|function|class)\s/gm, "$1 ");
   return src.replace(/^\s+/, "").replace(/\s+$/, "");
 }
 
