@@ -114,7 +114,7 @@ const FLEET = [
   "research-daily-brief"
 ];
 
-var VERSION = "1.4.7-bp-logging"; // 1.4.7 WORKERS-BP-LOGGING-qnfo-observability-1 (2026-10-14, agent_issues 2537, child of 2342, pillar autonomy): the 9 lines scripts/fleet_best_practices_audit.py counted as swallowed-catch (liveFleet, six reads and writes in assessIntegration, the scorer member's two alert writes) log a structured console.error (worker, where, error), so the failure reaches Workers Logs; control flow unchanged (no rethrow, a handler that was empty still returns undefined). // 1.4.6 OUTREACH-CHAIN-ENUM-2 (2026-10-14, pillar core): the outreach chain counts needs-contact, the status radar-hub writes and qnfo-cloud-ops drains (the dashboard showed it empty-match, DEGRADED). // 1.4.5 CRON-ONLY-HEARTBEAT-1 (2026-10-13, agent_issues 2397, pillar autonomy): each hourly scheduled run ends with a qnfo-audit fleet_heartbeat upsert (ok=0 when the run threw); write errors are logged. 1.4.4 WORKER-LOGS-SAMPLED-ERROR-VISIBILITY-1 (2026-10-12, agent_issues 1223, pillar autonomy): the digest's error ratio divides captured failures by the script's requests in the worker_usage_daily census (worker_logs holds failures only, so its self-ratio alerted "100%" hourly for idea-hub, qnfo-ai-search and qnfo-gateway); client disconnects are not failures; the digest and /fleet/summary state the log contract. // 1.4.3 NO-SILENT-DROP-1 (2026-10-08, pillar autonomy; owner directive "The system shall never silently drop issues"): evReview escalates an issue_ledger incident unless an OPEN agent_issue has its title; before this, any issue with the title in any status (a closed one included) swallowed every recurrence. // 1.4.0 WATCHMAKER-INVERTED-MEASURED-1 (agent_issues 2027) + SAI-KAIZEN-GRADIENT-1 (agent_issues 2054), pillar autonomy: the scorer member writes watchmaker_inverted as a MEASURED dimension, 5 x (1 - counted/ops) from the latest watchmaker_runs row (was a hand score of 4.8 from 2026-09-24, past due), and computeSai's kaizen term is 1 / (1 + step x open issues), keeping a gradient at every backlog size, in parity with qnfo-fleet-dashboard. 1.3.2 FOLD-HYGIENE-1 (#1756): the public /scorer/preview logs a failure and answers "preview failed" instead of the exception text (CodeQL js/stack-trace-exposure, PR 668). 1.3.1 SCORER-FOLD-1 (#1756): qnfo-autonomy-scorer runs here as a member (05:17 UTC daily, awaited; /scorer/* read routes). 1.2.16 FIX-ALERTS-DIGEST-CONSUMER: mark digest anomaly alerts consumed
+var VERSION = "1.5.0-wae-fleet"; // 1.4.7 WORKERS-BP-LOGGING-qnfo-observability-1 (2026-10-14, agent_issues 2537, child of 2342, pillar autonomy): the 9 lines scripts/fleet_best_practices_audit.py counted as swallowed-catch (liveFleet, six reads and writes in assessIntegration, the scorer member's two alert writes) log a structured console.error (worker, where, error), so the failure reaches Workers Logs; control flow unchanged (no rethrow, a handler that was empty still returns undefined). // 1.4.6 OUTREACH-CHAIN-ENUM-2 (2026-10-14, pillar core): the outreach chain counts needs-contact, the status radar-hub writes and qnfo-cloud-ops drains (the dashboard showed it empty-match, DEGRADED). // 1.4.5 CRON-ONLY-HEARTBEAT-1 (2026-10-13, agent_issues 2397, pillar autonomy): each hourly scheduled run ends with a qnfo-audit fleet_heartbeat upsert (ok=0 when the run threw); write errors are logged. 1.4.4 WORKER-LOGS-SAMPLED-ERROR-VISIBILITY-1 (2026-10-12, agent_issues 1223, pillar autonomy): the digest's error ratio divides captured failures by the script's requests in the worker_usage_daily census (worker_logs holds failures only, so its self-ratio alerted "100%" hourly for idea-hub, qnfo-ai-search and qnfo-gateway); client disconnects are not failures; the digest and /fleet/summary state the log contract. // 1.4.3 NO-SILENT-DROP-1 (2026-10-08, pillar autonomy; owner directive "The system shall never silently drop issues"): evReview escalates an issue_ledger incident unless an OPEN agent_issue has its title; before this, any issue with the title in any status (a closed one included) swallowed every recurrence. // 1.4.0 WATCHMAKER-INVERTED-MEASURED-1 (agent_issues 2027) + SAI-KAIZEN-GRADIENT-1 (agent_issues 2054), pillar autonomy: the scorer member writes watchmaker_inverted as a MEASURED dimension, 5 x (1 - counted/ops) from the latest watchmaker_runs row (was a hand score of 4.8 from 2026-09-24, past due), and computeSai's kaizen term is 1 / (1 + step x open issues), keeping a gradient at every backlog size, in parity with qnfo-fleet-dashboard. 1.3.2 FOLD-HYGIENE-1 (#1756): the public /scorer/preview logs a failure and answers "preview failed" instead of the exception text (CodeQL js/stack-trace-exposure, PR 668). 1.3.1 SCORER-FOLD-1 (#1756): qnfo-autonomy-scorer runs here as a member (05:17 UTC daily, awaited; /scorer/* read routes). 1.2.16 FIX-ALERTS-DIGEST-CONSUMER: mark digest anomaly alerts consumed
 const NAME = 'qnfo-observability';
 const KNOWN = new Set(FLEET);
 // FLEET-SIZE-LIVE-1 (2026-09-23): derive the fleet set from the LIVE service_registry (census
@@ -133,6 +133,12 @@ const INGEST_CAP_FILES = 300;   // max R2 files processed per run (CPU bound)
 const RETENTION_DAYS = 30;      // worker_logs retention window
 const EMPTY_MATCH_MIN_TOTAL = 20; // rows in the medium before an empty match is suspicious
 const UA = 'qnfo-observability/' + VERSION;
+// WAE-FLEET-1 (2026-10-18): Workers Analytics Engine write layer. Dataset qnfo_fleet via binding FLEET_ANALYTICS.
+// fire-and-forget (never awaited), guarded against a missing binding, never throws — WAE must not fail a request.
+function writeFleet(env, blobs, doubles, index) {
+  try { if (env.FLEET_ANALYTICS) env.FLEET_ANALYTICS.writeDataPoint({ blobs: blobs, doubles: doubles, indexes: [String(index || NAME).slice(0, 96)] }); }
+  catch (e) { /* best-effort: swallow */ }
+}
 
 function json(data, status = 200) { return new Response(JSON.stringify(data), { status, headers: { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store', 'access-control-allow-origin': '*' } }); }
 function nowIso() { return new Date().toISOString(); }
@@ -295,6 +301,8 @@ async function digest(env, ingestResult) {
   };
   for (const r of rows) {
     const bad = Number(r.bad) || 0, c = census.by[r.script_name];
+    // WAE-FLEET-1: fleet-wide per-worker aggregate (events, errors, canceled) from the Logpush census.
+    writeFleet(env, [r.script_name, 'digest-24h', bad > 0 ? 'error' : 'ok'], [Number(r.n) || 0, bad, Number(r.canceled) || 0], r.script_name);
     // A script whose rows are all captured failures has no denominator of its own.
     const selfRated = (Number(r.captured) || 0) < r.n;
     const denom = c && c.requests > 0 ? Math.max(c.requests, r.n) : (selfRated ? r.n : 0);
@@ -1083,6 +1091,8 @@ export default {
   async fetch(req, env, ctx) {
     const url = new URL(req.url);
     const p = url.pathname.replace(/\/+$/, '') || '/';
+    // WAE-FLEET-1: per-request data point (this worker's own traffic).
+    writeFleet(env, [NAME, p || '/', req.method || 'GET'], [1], NAME);
     // SCORER-FOLD-1: the folded scorer's read-only routes (it answers 405 to anything but GET).
     if (p === '/scorer' || p.indexOf('/scorer/') === 0) {
       const su = new URL(req.url);
