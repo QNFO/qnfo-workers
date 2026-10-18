@@ -22,7 +22,7 @@
  *   * archived repositories are read-only and are skipped, not reported as drift;
  *   * GET /report and GET /health are public reads; POST /tick needs STEWARD_KEY.
  */
-var VERSION = "0.2.2-issue-sync-1"; // 0.2.2 ISSUE-SYNC-1: mirror internal tracking to GitHub (forward) + reflect closed back (reverse)
+var VERSION = "0.3.0-tracker-sync-1"; // 0.3.0 TRACKER-SYNC-1: agent_issues <-> GitHub issues and code_tasks <-> PRs every 10 minutes (0.2.2 ISSUE-SYNC-1)
 
 var ORG = "QNFO";
 var USER = "rwnq8";
@@ -391,6 +391,268 @@ async function issueSyncReverse(env, result) {
   }
 }
 
+
+/* TRACKER-SYNC-1 (owner directive 2026-10-18, verbatim: "qnfo-audit.code_tasks AND GITHUB ISSUES/PRS NEED TO BE
+ * COORDINATED AND IN-SYNC AT ALL TIMES TO AVOID PHANTOM ISSUES AND INCORRECT METRICS").
+ *
+ * Measured before this change (2026-10-18 ~09:05Z): 228 open agent_issues, 0 of them on GitHub; code task ct_m3uh71laryg91d
+ * 'failed' while its PR 812 had MERGED; 7 codeagent-* PRs with no code_tasks row. Runs every 10 minutes (SLA grid).
+ *
+ * Authority, so the two sides can never flap:
+ *   issue state -> D1 agent_issues (it carries the close-evidence gate). Open in D1 = open on GitHub. A GitHub issue closed
+ *                  by hand while D1 is open is reopened with a comment; D1 is never closed without evidence from here.
+ *   merge state -> GitHub. A PR that merged marks its code task merged (merged_by github:<login>). Every other disagreement
+ *                  is written to code_task_pr_links.drift and surfaces in v_tracker_drift / metric tracker_drift.
+ * Public repository: bodies are fenced (no mention or reference expansion), tokens and e-mail addresses are redacted, and
+ * personal or security issues are mirrored by number only. Scope (owner choice 2026-10-18): open issues only. */
+var TS_REPO = "/repos/" + ORG + "/qnfo-workers";
+var TS_LABEL = "fleet-issue";
+var TS_CRON = "3,13,23,33,43,53 * * * *";
+var TS_CREATE_PER_TICK = 20;
+var TS_STATE_FIX_PER_TICK = 20;
+var TS_PRIVATE_CATEGORIES = { personal: 1, security: 1 };
+
+function tsRedact(s) {
+  return String(s == null ? "" : s)
+    .replace(/(gh[pousr]_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,}|sk-[A-Za-z0-9_\-]{16,}|xox[abpr]-[A-Za-z0-9\-]{10,})/g, "[redacted-token]")
+    .replace(/(Bearer|Basic)\s+[A-Za-z0-9._~+\/=\-]{12,}/gi, "$1 [redacted]")
+    .replace(/([?&](?:key|token|secret|sig|signature|password|api_key|apikey)=)[^&\s"']+/gi, "$1[redacted]")
+    .replace(/[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}/g, "[email]")
+    .replace(/\b[a-f0-9]{40,}\b/gi, "[redacted-hex]");
+}
+
+/* A fenced block: GitHub expands no mention, reference or HTML inside it. */
+function tsFence(s, max) {
+  var t = tsRedact(s).replace(/```/g, "'''");
+  if (t.length > max) t = t.slice(0, max) + "\n... (truncated; full text in qnfo-audit)";
+  return "```text\n" + t + "\n```";
+}
+
+function tsIsPrivate(row) {
+  return !!TS_PRIVATE_CATEGORIES[String(row.category || "").toLowerCase()] || /personal/i.test(String(row.source || ""));
+}
+
+function tsTitle(row) {
+  if (tsIsPrivate(row)) return "[#" + row.id + "] " + String(row.category || "private") + " issue (details kept in qnfo-audit)";
+  return ("[#" + row.id + "] " + tsRedact(row.title || "(untitled)").replace(/@/g, "@\u200b")).slice(0, 240);
+}
+
+function tsBody(row) {
+  var b = [
+    "Mirrored from `qnfo-audit.agent_issues` id **" + row.id + "** (TRACKER-SYNC-1). D1 is authoritative for this issue's state:",
+    "it closes here when it closes there with evidence, and a hand close here is reopened.",
+    "",
+    "| field | value |", "|:--|:--|",
+    "| priority | " + String(row.priority || "") + " |",
+    "| category | " + String(row.category || "") + " |",
+    "| source | " + tsRedact(row.source || "").replace(/\|/g, "/").slice(0, 120) + " |",
+    "| opened | " + (row.created_at ? new Date(Number(row.created_at)).toISOString() : "") + " |",
+    ""
+  ];
+  if (tsIsPrivate(row)) b.push("Details are not mirrored: personal and security issues stay in qnfo-audit.");
+  else b.push(tsFence(row.description || "", 6000));
+  return b.join("\n");
+}
+
+/* Every page, or null: a partial list must never be read as "these issues are closed". */
+async function tsListAll(env, path, maxPages) {
+  var out = [];
+  for (var page = 1; page <= maxPages; page++) {
+    var r = await gh(env, "GET", path + (path.indexOf("?") >= 0 ? "&" : "?") + "per_page=100&page=" + page);
+    if (r.status !== 200 || !Array.isArray(r.body)) return null;
+    out = out.concat(r.body);
+    if (r.body.length < 100) return out;
+  }
+  return null;
+}
+
+async function tsState(env, k, v) {
+  if (v === undefined) {
+    var r = await env.AUDIT.prepare("SELECT v FROM tracker_sync_state WHERE k = ?").bind(k).first();
+    return r ? r.v : null;
+  }
+  await env.AUDIT.prepare("INSERT INTO tracker_sync_state (k, v, updated_at) VALUES (?, ?, ?) ON CONFLICT(k) DO UPDATE SET v = excluded.v, updated_at = excluded.updated_at")
+    .bind(k, String(v), new Date().toISOString()).run();
+}
+
+async function tsIssues(env, out) {
+  var now = new Date().toISOString();
+  var open = await tsListAll(env, TS_REPO + "/issues?state=open&labels=" + TS_LABEL, 15);
+  if (!open) { out.errors.push({ scope: "tracker-issues", why: "could not list open " + TS_LABEL + " issues; no state change this tick" }); return; }
+  var openNums = {}, byId = {};
+  open.forEach(function (g) {
+    if (g.pull_request) return;
+    openNums[g.number] = 1;
+    var m = /^\[#(\d+)\]/.exec(g.title || "");
+    if (m) byId[m[1]] = g.number;
+  });
+
+  var links = (await env.AUDIT.prepare(
+    "SELECT l.issue_id, l.gh_number, l.gh_state, a.status, a.close_channel, t.close_evidence FROM gh_issue_links l LEFT JOIN agent_issues a ON a.id = l.issue_id LEFT JOIN issue_triage t ON t.issue_id = l.issue_id"
+  ).all()).results || [];
+  var mism = links.filter(function (l) { return (l.status === "open") !== !!openNums[l.gh_number]; });
+  var mismIds = {};
+  /* A label rename or an API anomaly would make every link look closed: refuse a mass flip instead of acting on it. */
+  if (links.length >= 10 && mism.length > links.length / 2) {
+    out.errors.push({ scope: "tracker-issues", why: mism.length + " of " + links.length + " links disagree; refusing a mass state flip" });
+    mism = [];
+  }
+  mism.forEach(function (l) { mismIds[l.issue_id] = 1; });
+  var fixed = 0;
+  for (var i = 0; i < mism.length && fixed < TS_STATE_FIX_PER_TICK; i++) {
+    var l = mism[i], r;
+    if (l.status === "open") {
+      r = await gh(env, "PATCH", TS_REPO + "/issues/" + l.gh_number, { state: "open" });
+      if (r.status === 200) {
+        await gh(env, "POST", TS_REPO + "/issues/" + l.gh_number + "/comments", { body: "Reopened by TRACKER-SYNC-1: agent_issues " + l.issue_id + " is still open in qnfo-audit, which is authoritative. It closes here when it is closed there with close evidence." });
+        out.reopened++;
+      }
+    } else {
+      await gh(env, "POST", TS_REPO + "/issues/" + l.gh_number + "/comments", { body: "Closed in qnfo-audit (agent_issues " + l.issue_id + ": status **" + String(l.status || "missing") + "**, channel " + String(l.close_channel || "none recorded") + "). Close evidence:\n\n" + tsFence(l.close_evidence || "(none recorded)", 3000) });
+      r = await gh(env, "PATCH", TS_REPO + "/issues/" + l.gh_number, { state: "closed", state_reason: l.status === "wontfix" ? "not_planned" : "completed" });
+      if (r.status === 200) out.closed++;
+    }
+    if (r && r.status === 200) {
+      fixed++;
+      await env.AUDIT.prepare("UPDATE gh_issue_links SET gh_state = ?, d1_status = ?, synced_at = ? WHERE issue_id = ?")
+        .bind(l.status === "open" ? "open" : "closed", l.status || "missing", now, l.issue_id).run();
+    } else {
+      out.errors.push({ scope: "tracker-issue " + l.issue_id, status: r && r.status, why: String(r && r.text || "").slice(0, 120) });
+    }
+  }
+  /* Record GitHub's state for links that agree, so v_tracker_drift reads the truth and not the last write. */
+  var stmts = [];
+  links.forEach(function (x) {
+    var st = openNums[x.gh_number] ? "open" : "closed";
+    if (!mismIds[x.issue_id] && (x.gh_state !== st)) stmts.push(env.AUDIT.prepare("UPDATE gh_issue_links SET gh_state = ?, d1_status = ?, synced_at = ? WHERE issue_id = ?").bind(st, x.status || "missing", now, x.issue_id));
+  });
+  if (stmts.length) await env.AUDIT.batch(stmts);
+
+  /* Mirror open issues that have no GitHub issue yet, oldest first. A "[#id]" title already on GitHub is linked, not re-filed. */
+  var todo = ((await env.AUDIT.prepare(
+    "SELECT a.id, a.title, a.description, a.source, a.category, a.priority, a.created_at FROM agent_issues a LEFT JOIN gh_issue_links l ON l.issue_id = a.id WHERE a.status = 'open' AND l.issue_id IS NULL ORDER BY a.id LIMIT ?"
+  ).bind(TS_CREATE_PER_TICK).all()).results) || [];
+  for (var j = 0; j < todo.length; j++) {
+    var row = todo[j];
+    var num = byId[String(row.id)];
+    if (num) {
+      out.relinked++;
+    } else {
+      var c = await gh(env, "POST", TS_REPO + "/issues", { title: tsTitle(row), body: tsBody(row), labels: [TS_LABEL] });
+      if (c.status !== 201 || !c.body || !c.body.number) {
+        out.errors.push({ scope: "tracker-mirror " + row.id, status: c.status, why: String(c.text).slice(0, 120) });
+        if (c.status === 403 || c.status === 429) break; /* rate limited: the rest waits for the next tick */
+        continue;
+      }
+      num = c.body.number;
+      out.mirrored++;
+    }
+    await env.AUDIT.prepare("INSERT OR REPLACE INTO gh_issue_links (issue_id, gh_number, gh_state, d1_status, synced_at) VALUES (?, ?, 'open', 'open', ?)").bind(row.id, num, now).run();
+  }
+}
+
+function tsPrNum(url) {
+  var m = /\/pull\/(\d+)/.exec(String(url || ""));
+  return m ? Number(m[1]) : null;
+}
+
+async function tsCodeTasks(env, out) {
+  var now = new Date().toISOString();
+  var backfilled = await tsState(env, "pr_backfill_done");
+  var prs = await tsListAll(env, TS_REPO + "/pulls?state=all&sort=updated&direction=desc", backfilled ? 2 : 30);
+  if (!prs) { out.errors.push({ scope: "tracker-prs", why: "could not list pull requests; no code task change this tick" }); return; }
+  var byNum = {}, byHead = {};
+  prs.forEach(function (p) { byNum[p.number] = p; if (p.head && p.head.ref) byHead[p.head.ref] = p; });
+
+  var tasks = ((await env.AUDIT.prepare(
+    "SELECT t.id, t.status, t.branch, t.pr_url, k.pr_number AS known_pr, k.pr_state AS known_state, k.task_status AS known_status, k.drift AS known_drift FROM code_tasks t LEFT JOIN code_task_pr_links k ON k.task_id = t.id"
+  ).all()).results) || [];
+  var known = {};
+  (((await env.AUDIT.prepare("SELECT task_id, pr_state, drift FROM code_task_pr_links WHERE task_id LIKE 'pr:%'").all()).results) || []).forEach(function (k) { known[k.task_id] = k; });
+  /* Write a link only when it changed: an unchanged row rewritten every 10 minutes is write volume nothing reads. */
+  var same = function (a, b) { return String(a == null ? "" : a) === String(b == null ? "" : b); };
+  var branches = {}, stmts = [];
+  for (var i = 0; i < tasks.length; i++) {
+    var t = tasks[i];
+    if (t.branch) branches[t.branch] = 1;
+    var n = tsPrNum(t.pr_url) || t.known_pr || null;
+    var p = (n && byNum[n]) || (t.branch && byHead[t.branch]) || null;
+    if (!p) {
+      /* Not in the recent window. Settled links (terminal PR, same task status) need no read; anything else gets one. */
+      if (backfilled && t.known_status === t.status && (t.known_state === "merged" || t.known_state === "closed" || (!n && t.known_state === "never-opened"))) continue;
+      if (n) { var g = await gh(env, "GET", TS_REPO + "/pulls/" + n); if (g.status === 200) p = g.body; else continue; }
+    }
+    var prState = !p ? "never-opened" : (p.merged_at ? "merged" : p.state);
+    var drift = null, status = t.status;
+    if (prState === "merged" && t.status !== "merged") {
+      var note = "TRACKER-SYNC-1: PR #" + p.number + " merged on GitHub at " + p.merged_at + "; code_tasks said '" + t.status + "'";
+      var u = await env.AUDIT.prepare(
+        "UPDATE code_tasks SET status = 'merged', merged_at = ?, merged_sha = COALESCE(merged_sha, ?), merged_by = COALESCE(merged_by, ?), merge_note = ? || CASE WHEN merge_note IS NULL THEN '' ELSE ' | was: ' || substr(merge_note, 1, 400) END, updated_at = ? WHERE id = ? AND status <> 'merged'"
+      ).bind(p.merged_at, p.merge_commit_sha || null, "github:" + String(p.merged_by && p.merged_by.login || "unknown"), note, now, t.id).run();
+      if (u && u.meta && u.meta.changes) { out.tasks_fixed.push(t.id + " #" + p.number + " " + t.status + "->merged"); status = "merged"; }
+      else drift = "pr-merged-task-" + t.status;
+    } else if (t.status === "merged" && prState !== "merged") {
+      drift = "task-merged-pr-" + prState;
+    } else if (prState === "open" && ["closed", "failed", "publish_failed"].indexOf(t.status) >= 0) {
+      drift = "pr-open-task-" + t.status;
+    }
+    if (drift) out.task_drift++;
+    if (same(t.known_pr, p ? p.number : null) && same(t.known_state, prState) && same(t.known_status, status) && same(t.known_drift, drift)) continue;
+    stmts.push(env.AUDIT.prepare(
+      "INSERT INTO code_task_pr_links (task_id, pr_number, pr_state, merged_at, head_sha, task_status, drift, synced_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(task_id) DO UPDATE SET pr_number = excluded.pr_number, pr_state = excluded.pr_state, merged_at = excluded.merged_at, head_sha = excluded.head_sha, task_status = excluded.task_status, drift = excluded.drift, synced_at = excluded.synced_at"
+    ).bind(t.id, p ? p.number : null, prState, p ? (p.merged_at || null) : null, p && p.head ? p.head.sha : null, status, drift, now));
+  }
+  /* A code-loop PR the ledger does not know is work the metrics never count: drift while open or within 30 days. */
+  var cutoff = Date.now() - 30 * 86400000;
+  Object.keys(byHead).forEach(function (h) {
+    var p = byHead[h];
+    if (h.indexOf("codeagent-") !== 0 || branches[h]) return;
+    var recent = p.state === "open" || Date.parse(p.merged_at || p.closed_at || p.updated_at || 0) >= cutoff;
+    if (recent) out.task_drift++;
+    var k = known["pr:" + p.number], st = p.merged_at ? "merged" : p.state, dr = recent ? "pr-without-task" : null;
+    if (k && same(k.pr_state, st) && same(k.drift, dr)) return;
+    stmts.push(env.AUDIT.prepare(
+      "INSERT INTO code_task_pr_links (task_id, pr_number, pr_state, merged_at, head_sha, task_status, drift, synced_at) VALUES (?, ?, ?, ?, ?, NULL, ?, ?) ON CONFLICT(task_id) DO UPDATE SET pr_state = excluded.pr_state, merged_at = excluded.merged_at, drift = excluded.drift, synced_at = excluded.synced_at"
+    ).bind("pr:" + p.number, p.number, p.merged_at ? "merged" : p.state, p.merged_at || null, p.head ? p.head.sha : null, recent ? "pr-without-task" : null, now));
+  });
+  for (var s = 0; s < stmts.length; s += 50) await env.AUDIT.batch(stmts.slice(s, s + 50));
+  if (!backfilled) await tsState(env, "pr_backfill_done", now);
+}
+
+async function trackerSync(env) {
+  var started = Date.now();
+  var out = { version: VERSION, started_at: new Date(started).toISOString(), mirrored: 0, relinked: 0, closed: 0, reopened: 0, tasks_fixed: [], task_drift: 0, errors: [] };
+  if (!env.AUDIT || !env.GITHUB_TOKEN) { out.errors.push({ scope: "tracker", why: "AUDIT binding or GITHUB_TOKEN missing" }); return out; }
+  try { await tsIssues(env, out); } catch (e) { out.errors.push({ scope: "tracker-issues", why: String(e && e.message || e).slice(0, 160) }); }
+  try { await tsCodeTasks(env, out); } catch (e) { out.errors.push({ scope: "tracker-prs", why: String(e && e.message || e).slice(0, 160) }); }
+  /* The fleet_issue_dispatch mirror (ISSUE-SYNC-1) rides the same 10-minute grid instead of the 6-hourly reconcile. */
+  var legacy = { errors: [], issue_sync: null, issue_sync_reverse: null };
+  await issueSync(env, legacy);
+  await issueSyncReverse(env, legacy);
+  out.dispatch_sync = legacy.issue_sync;
+  out.dispatch_sync_reverse = legacy.issue_sync_reverse;
+  out.errors = out.errors.concat(legacy.errors);
+  try {
+    var d = ((await env.AUDIT.prepare("SELECT kind, count(*) AS n FROM v_tracker_drift GROUP BY kind").all()).results) || [];
+    var issue = 0, task = 0, unmirrored = 0;
+    d.forEach(function (r) { if (r.kind === "code-task-pr") task += r.n; else issue += r.n; if (r.kind === "issue-unmirrored") unmirrored += r.n; });
+    out.drift = { issue: issue, code_task: task, unmirrored: unmirrored };
+    var at = new Date().toISOString();
+    var put = function (m, v) { return env.AUDIT.prepare("UPDATE metric_registry SET last_value = ?, last_refreshed = ?, state = 'MEASURED' WHERE metric = ?").bind(String(v), at, m); };
+    var w = [put("tracker_issue_drift", issue), put("tracker_code_task_drift", task)];
+    /* tracker_drift is graded (it can file an issue) only after the first full open-issue backfill, so the backfill is not
+     * reported as a breach of itself; until then it stays PENDING while its parts are measured. */
+    var full = await tsState(env, "issue_backfill_done");
+    if (!full && unmirrored === 0) { full = at; await tsState(env, "issue_backfill_done", at); }
+    if (full) w.push(put("tracker_drift", issue + task));
+    await env.AUDIT.batch(w);
+  } catch (e) { out.errors.push({ scope: "tracker-metrics", why: String(e && e.message || e).slice(0, 160) }); }
+  out.duration_ms = Date.now() - started;
+  try { await tsState(env, "last_run", JSON.stringify(out).slice(0, 20000)); } catch (e) { out.errors.push({ scope: "tracker-record", why: String(e && e.message || e).slice(0, 120) }); }
+  return out;
+}
+// end TRACKER-SYNC-1
+
 async function runReconcile(env, opts) {
   var started = Date.now();
   var result = {
@@ -429,8 +691,7 @@ async function runReconcile(env, opts) {
   if (!opts || opts.notifications !== false) {
     try { await triageNotifications(env, result); } catch (eN) { result.errors.push({ scope: "notifications", why: String(eN && eN.message || eN).slice(0, 140) }); }
   }
-  await issueSync(env, result);
-  await issueSyncReverse(env, result);
+  /* ISSUE-SYNC-1 moved to the 10-minute tracker tick (TRACKER-SYNC-1). */
   result.duration_ms = Date.now() - started;
   result.finished_at = new Date().toISOString();
   return result;
@@ -505,6 +766,19 @@ export default {
       return json({ version: VERSION, last_run: await lastRun(env) });
     }
 
+    if (p === "/tracker" && request.method === "GET") {
+      var last = null;
+      try { last = JSON.parse(await tsState(env, "last_run") || "null"); } catch (e) { last = { error: String(e && e.message || e) }; }
+      return json({ version: VERSION, cron: TS_CRON, last_run: last });
+    }
+
+    if (p === "/tracker/tick" && request.method === "POST") {
+      if (!(await stewardKeyOk(env, request.headers.get("x-steward-key") || ""))) {
+        return json({ ok: false, error: "POST /tracker/tick needs x-steward-key" }, 401);
+      }
+      return json({ ok: true, result: await trackerSync(env) });
+    }
+
     if (p === "/tick") {
       var key = request.headers.get("x-steward-key") || "";
       if (!(await stewardKeyOk(env, key))) {
@@ -516,10 +790,15 @@ export default {
       return json({ ok: true, result: res });
     }
 
-    return json({ error: "not found", routes: ["GET /health", "GET /report", "POST /tick"] }, 404);
+    return json({ error: "not found", routes: ["GET /health", "GET /report", "POST /tick", "GET /tracker", "POST /tracker/tick"] }, 404);
   },
 
   async scheduled(event, env, ctx) {
+    if (event && event.cron === TS_CRON) {
+      var ts = await trackerSync(env);
+      console.log(JSON.stringify({ worker: "qnfo-github-steward", version: VERSION, cron: event.cron, tracker: { mirrored: ts.mirrored, relinked: ts.relinked, closed: ts.closed, reopened: ts.reopened, tasks_fixed: ts.tasks_fixed.length, drift: ts.drift, errors: ts.errors.length } }));
+      return;
+    }
     var res = await runReconcile(env, { workflows: false });
     await record(env, res);
     console.log(JSON.stringify({

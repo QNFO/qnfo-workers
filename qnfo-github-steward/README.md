@@ -61,6 +61,25 @@ Run 2 converging to zero is the proof the loop is idempotent rather than reporti
 flags, so every repository read as drifted; `0.1.1` compares against the single-repository
 endpoint.)
 
+## TRACKER-SYNC-1 — D1 and GitHub in step every 10 minutes (0.3.0)
+
+Owner directive 2026-10-18: `qnfo-audit.code_tasks` and GitHub issues/PRs stay in sync at all times, so no metric
+counts a phantom. Cron `3,13,23,33,43,53 * * * *` (off the control tick).
+
+| Pair | Authority | What the tick does |
+|:--|:--|:--|
+| `agent_issues` ↔ GitHub issues (label `fleet-issue`, title `[#id] …`) | D1 (close-evidence gate) | files every open issue (20/tick), closes the GitHub issue when D1 closes it (posting the close evidence), reopens a GitHub issue closed by hand while D1 is open |
+| `code_tasks` ↔ pull requests | GitHub | marks a task `merged` when its PR merged; records every other disagreement and every `codeagent-*` PR without a task row as drift |
+| `fleet_issue_dispatch` ↔ GitHub issues (ISSUE-SYNC-1) | — | moved from the 6-hourly reconcile onto this tick |
+
+Links live in `gh_issue_links` and `code_task_pr_links` (not new `agent_issues` columns: `agent_issues_tombstone` copies
+it with `SELECT *`). `v_tracker_drift` lists what is still out of step; metric `tracker_drift` (target 0, trigger at > 0)
+is graded once the open-issue backfill has finished. Scope (owner choice): open issues only; closed history stays in D1.
+Public repository: descriptions are fenced, tokens and e-mail addresses redacted, personal and security issues mirrored by number only.
+A failed or partial GitHub read changes nothing, and more than half the links disagreeing at once is refused as an anomaly.
+
+`GET /tracker` shows the last tick; `POST /tracker/tick` (`x-steward-key`) runs one now.
+
 ## Known limits — recorded, not hidden
 
 * **12 limitations are permanent on this plan.** Branch protection and auto-merge require
