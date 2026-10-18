@@ -119,6 +119,23 @@ assert.ok(r5.errors.some((e) => e.scope === "tracker-issues"));
 assert.equal(JSON.stringify(gIssues), before, "no issue state changes on a failed read");
 listFails = false;
 
+// After the backfill only the newest 2 PR pages are read. A repository with more than 200 PRs fills both, and that window
+// is valid (live 2026-10-18 10:03Z: every post-backfill tick refused it as a partial list).
+const filler = Array.from({ length: 250 }, (_, i) => ({ number: 2000 + i, state: "closed", merged_at: null, head: { ref: "human-" + i, sha: "f" + i }, updated_at: new Date().toISOString() }));
+const allPulls = gPulls.concat(filler);
+const pullsHandler = globalThis.fetch;
+globalThis.fetch = async (url, init) => {
+  const u = new URL(url);
+  if (((init && init.method) || "GET") === "GET" && u.pathname === "/repos/QNFO/qnfo-workers/pulls") {
+    const page = Number(u.searchParams.get("page") || 1);
+    return new Response(JSON.stringify(allPulls.slice((page - 1) * 100, page * 100)), { status: 200 });
+  }
+  return pullsHandler(url, init);
+};
+const r6 = await tick();
+assert.ok(!r6.errors.some((e) => e.scope === "tracker-prs"), "a full 2-page recent window is not a failed read");
+globalThis.fetch = pullsHandler;
+
 // The scheduled handler routes the 10-minute cron to the tracker only.
 calls = [];
 await w.scheduled({ cron: "3,13,23,33,43,53 * * * *" }, env, { waitUntil() {} });
