@@ -1,4 +1,4 @@
-var VERSION="3.20.0-paper-tags-1";; /* 3.20.0 PAPER-TAGS-1 (2026-10-18, owner directive, pillar reach): a shelf is exclusive and answers "where does this live"; it cannot show that a QEC paper is also a Bruhat-Tits paper, or that a number-theory result helps choose a hardware platform. Tags are the second, multi-label layer over the nine shelves: method (what the paper works with), topic (what it is about), use (what a reader could do with it). 1,400 curated assignments over 606 papers, 41 controlled tags, in living-paper D1 (paper_tag + tag_registry), so a wrong tag is a DELETE. The index gains a tag row that composes with the shelf filter and search (?tag= + ?category=), paper cards show up to two tags, the paper page shows its full tag set, and /papers/tags is the catalogue grouped by kind with counts and definitions. Tag and shelf reads are per-isolate cached and degrade to shelves alone when the tables are absent. *//* 3.18.12 ULA-V21-FOOTERS-1 (2026-10-18): QNFO-ULA v2.1 is live; the QWAV footer, papers footer, archive lede/description and ulaLatest fallback license labels changed v2.0 -> v2.1. */ /* 3.19.0 PAPER-AUDIENCE-CATEGORIES-1 (2026-10-18, owner directive, pillar reach): the papers library filed every paper into five keyword buckets and "Other" held 161 of 606 public papers (26%), the largest shelf on the site. Nine audience shelves replace them (energy per answer, error correction, physics, numbers & p-adics, logic & formalism, AI & knowledge, autonomous systems, assessments, cross-cutting essays), each named for the reader who looks for it; every paper's shelf is curated data in living-paper D1 (table paper_category), read first by the index, the archive, the paper page and the related panel, with the keyword classifier kept only as the fallback for a paper published before the daily filing job has seen it. ?category= other, number-theory and computer-science are aliased, so old links still land. */ /* 3.18.10 IDENTITY-WELLKNOWN-1 (2026-10-18): /.well-known/security.txt (RFC 9116) on every gateway host, /.well-known/atproto-did on qnfo.org for the Bluesky domain handle, rel="me" to the Mastodon profile in every page head. */ /* 3.18.5 WORKERS-BP-LOGGING-qnfo-gateway-1 (2026-10-14, agent_issues 2533, child of 2342, pillar autonomy): the 6 server-side swallowed catches log (2 browser-script hits marked standards-ok or allowlisted) as a structured console.error (worker, where, error); control flow unchanged. */ /* 3.18.4 FLEET-HARDENING-2 (2026-10-13, agent_issues 2397, pillar autonomy): the daily cron ends with a qnfo-audit fleet_heartbeat upsert through a new AUDIT binding (ok=0 when the IndexNow step threw, which was swallowed before and is now logged). */ /* 3.18.3 HUB-CACHE-VERSION-1 (2026-10-13, pillar reach, failure mode zaraz-autoinject-worker-html): the qnfo.org hub copy in each colo's cache now carries the VERSION that built it, and a copy built by another version is rebuilt while the request waits up to 2.5 s instead of being served stale; the runner probe of 07:39 UTC read a pre-3.16.1 copy without /cdn-cgi/zaraz/i.js while every fresh render carried it. */ /* 3.18.2 PAGE-POLICY-1 (2026-10-13, pillar reach, agent_issues 2343 WEB-PERF-EDGE-1): every HTML response carries Referrer-Policy strict-origin-when-cross-origin (no-referrer when the query carries a token) and Permissions-Policy camera=(), microphone=(), geolocation=() from the worker (qnfo.org had neither; the subdomains had them only from a zone rule), and an HTML response without Cache-Control gets public, max-age=300, s-maxage=3600, stale-while-revalidate=86400 when it is a public GET 200, no-store otherwise; handlers that set their own are unchanged, JSON untouched. 3.18.1 RENDER-DEFECTS-2300 (2026-10-13, pillar reach, agent_issues 2300 2158 2357): PANDOC-FENCE-GLUE-1 reads a code fence glued to prose or to its last code line as a fence (ultrametric-intelligence printed its Python as prose and typeset its identifiers); MATH-RESIDUE-5 typesets a formula glued to a name by a product sign; RAIL-MATH-1 gives /api/paper-context title_tex and excerpt_tex (formulas kept as TeX, plain-text math typeset, currency escaped) and the Related and Versions panels paint them, since every residue the browser sample counted on chapter-1 and log20240505010101strangeloopbook on 2026-10-12 was panel text; a formula ending in an escaped brace is lifted as math; MathJax knows the Sha macro. 3.18.0 ACTIVITYPUB-KEY-1 (2026-10-12, pillar reach, #2249 #2413): the actor publishes publicKeyPem when AP_PUBLIC_KEY is set (cf-ops gen-activitypub-key); merged with main 3.17.1 (REACH-RENDER-1). */
+var VERSION="3.21.0-quick-read-1";; /* 3.21.0 QUICK-READ-1 (2026-10-19, owner directive, pillar reach): Google Scholar's Quick Read (2026-08-25) shows one paper as it answers ONE question: overview, then Answers (each point with its supporting detail behind Show details), Approach and Considerations. This is that idea over the living-paper corpus, plus the one thing a corpus of full texts can do that a search index cannot  -  every line of the answer quotes a sentence of the paper, and a statement whose evidence is not found in the text is dropped and counted rather than shown. /papers/<slug>/quickread is the page (question form; POST renders server-side, no JavaScript needed), /api/quickread/<slug>?q= is the JSON, and living-paper.quick_read caches each (paper, question) pair for 45 days. Three paths to an answer: the cache under 300ms, one model call over the passages the question touches, and a deterministic extractive read of the paper's own sentences when the model fails or returns nothing quotable  -  so the page always answers and names which path ran. A question the paper never uses the words of is answered before any model call: coverage none, no spend. */ /* 3.18.12 ULA-V21-FOOTERS-1 (2026-10-18): QNFO-ULA v2.1 is live; the QWAV footer, papers footer, archive lede/description and ulaLatest fallback license labels changed v2.0 -> v2.1. */ /* 3.19.0 PAPER-AUDIENCE-CATEGORIES-1 (2026-10-18, owner directive, pillar reach): the papers library filed every paper into five keyword buckets and "Other" held 161 of 606 public papers (26%), the largest shelf on the site. Nine audience shelves replace them (energy per answer, error correction, physics, numbers & p-adics, logic & formalism, AI & knowledge, autonomous systems, assessments, cross-cutting essays), each named for the reader who looks for it; every paper's shelf is curated data in living-paper D1 (table paper_category), read first by the index, the archive, the paper page and the related panel, with the keyword classifier kept only as the fallback for a paper published before the daily filing job has seen it. ?category= other, number-theory and computer-science are aliased, so old links still land. */ /* 3.18.10 IDENTITY-WELLKNOWN-1 (2026-10-18): /.well-known/security.txt (RFC 9116) on every gateway host, /.well-known/atproto-did on qnfo.org for the Bluesky domain handle, rel="me" to the Mastodon profile in every page head. */ /* 3.18.5 WORKERS-BP-LOGGING-qnfo-gateway-1 (2026-10-14, agent_issues 2533, child of 2342, pillar autonomy): the 6 server-side swallowed catches log (2 browser-script hits marked standards-ok or allowlisted) as a structured console.error (worker, where, error); control flow unchanged. */ /* 3.18.4 FLEET-HARDENING-2 (2026-10-13, agent_issues 2397, pillar autonomy): the daily cron ends with a qnfo-audit fleet_heartbeat upsert through a new AUDIT binding (ok=0 when the IndexNow step threw, which was swallowed before and is now logged). */ /* 3.18.3 HUB-CACHE-VERSION-1 (2026-10-13, pillar reach, failure mode zaraz-autoinject-worker-html): the qnfo.org hub copy in each colo's cache now carries the VERSION that built it, and a copy built by another version is rebuilt while the request waits up to 2.5 s instead of being served stale; the runner probe of 07:39 UTC read a pre-3.16.1 copy without /cdn-cgi/zaraz/i.js while every fresh render carried it. */ /* 3.18.2 PAGE-POLICY-1 (2026-10-13, pillar reach, agent_issues 2343 WEB-PERF-EDGE-1): every HTML response carries Referrer-Policy strict-origin-when-cross-origin (no-referrer when the query carries a token) and Permissions-Policy camera=(), microphone=(), geolocation=() from the worker (qnfo.org had neither; the subdomains had them only from a zone rule), and an HTML response without Cache-Control gets public, max-age=300, s-maxage=3600, stale-while-revalidate=86400 when it is a public GET 200, no-store otherwise; handlers that set their own are unchanged, JSON untouched. 3.18.1 RENDER-DEFECTS-2300 (2026-10-13, pillar reach, agent_issues 2300 2158 2357): PANDOC-FENCE-GLUE-1 reads a code fence glued to prose or to its last code line as a fence (ultrametric-intelligence printed its Python as prose and typeset its identifiers); MATH-RESIDUE-5 typesets a formula glued to a name by a product sign; RAIL-MATH-1 gives /api/paper-context title_tex and excerpt_tex (formulas kept as TeX, plain-text math typeset, currency escaped) and the Related and Versions panels paint them, since every residue the browser sample counted on chapter-1 and log20240505010101strangeloopbook on 2026-10-12 was panel text; a formula ending in an escaped brace is lifted as math; MathJax knows the Sha macro. 3.18.0 ACTIVITYPUB-KEY-1 (2026-10-12, pillar reach, #2249 #2413): the actor publishes publicKeyPem when AP_PUBLIC_KEY is set (cf-ops gen-activitypub-key); merged with main 3.17.1 (REACH-RENDER-1). */ /* 3.20.0 PAPER-TAGS-1 (2026-10-18, owner directive, pillar reach): a shelf is exclusive and answers "where does this live"; it cannot show that a QEC paper is also a Bruhat-Tits paper, or that a number-theory result helps choose a hardware platform. Tags are the second, multi-label layer over the nine shelves: method (what the paper works with), topic (what it is about), use (what a reader could do with it). 1,400 curated assignments over 606 papers, 41 controlled tags, in living-paper D1 (paper_tag + tag_registry), so a wrong tag is a DELETE. The index gains a tag row that composes with the shelf filter and search (?tag= + ?category=), paper cards show up to two tags, the paper page shows its full tag set, and /papers/tags is the catalogue grouped by kind with counts and definitions. Tag and shelf reads are per-isolate cached and degrade to shelves alone when the tables are absent. *//* 3.18.12 ULA-V21-FOOTERS-1 (2026-10-18): QNFO-ULA v2.1 is live; the QWAV footer, papers footer, archive lede/description and ulaLatest fallback license labels changed v2.0 -> v2.1. */ /* 3.19.0 PAPER-AUDIENCE-CATEGORIES-1 (2026-10-18, owner directive, pillar reach): the papers library filed every paper into five keyword buckets and "Other" held 161 of 606 public papers (26%), the largest shelf on the site. Nine audience shelves replace them (energy per answer, error correction, physics, numbers & p-adics, logic & formalism, AI & knowledge, autonomous systems, assessments, cross-cutting essays), each named for the reader who looks for it; every paper's shelf is curated data in living-paper D1 (table paper_category), read first by the index, the archive, the paper page and the related panel, with the keyword classifier kept only as the fallback for a paper published before the daily filing job has seen it. ?category= other, number-theory and computer-science are aliased, so old links still land. */ /* 3.18.10 IDENTITY-WELLKNOWN-1 (2026-10-18): /.well-known/security.txt (RFC 9116) on every gateway host, /.well-known/atproto-did on qnfo.org for the Bluesky domain handle, rel="me" to the Mastodon profile in every page head. */ /* 3.18.5 WORKERS-BP-LOGGING-qnfo-gateway-1 (2026-10-14, agent_issues 2533, child of 2342, pillar autonomy): the 6 server-side swallowed catches log (2 browser-script hits marked standards-ok or allowlisted) as a structured console.error (worker, where, error); control flow unchanged. */ /* 3.18.4 FLEET-HARDENING-2 (2026-10-13, agent_issues 2397, pillar autonomy): the daily cron ends with a qnfo-audit fleet_heartbeat upsert through a new AUDIT binding (ok=0 when the IndexNow step threw, which was swallowed before and is now logged). */ /* 3.18.3 HUB-CACHE-VERSION-1 (2026-10-13, pillar reach, failure mode zaraz-autoinject-worker-html): the qnfo.org hub copy in each colo's cache now carries the VERSION that built it, and a copy built by another version is rebuilt while the request waits up to 2.5 s instead of being served stale; the runner probe of 07:39 UTC read a pre-3.16.1 copy without /cdn-cgi/zaraz/i.js while every fresh render carried it. */ /* 3.18.2 PAGE-POLICY-1 (2026-10-13, pillar reach, agent_issues 2343 WEB-PERF-EDGE-1): every HTML response carries Referrer-Policy strict-origin-when-cross-origin (no-referrer when the query carries a token) and Permissions-Policy camera=(), microphone=(), geolocation=() from the worker (qnfo.org had neither; the subdomains had them only from a zone rule), and an HTML response without Cache-Control gets public, max-age=300, s-maxage=3600, stale-while-revalidate=86400 when it is a public GET 200, no-store otherwise; handlers that set their own are unchanged, JSON untouched. 3.18.1 RENDER-DEFECTS-2300 (2026-10-13, pillar reach, agent_issues 2300 2158 2357): PANDOC-FENCE-GLUE-1 reads a code fence glued to prose or to its last code line as a fence (ultrametric-intelligence printed its Python as prose and typeset its identifiers); MATH-RESIDUE-5 typesets a formula glued to a name by a product sign; RAIL-MATH-1 gives /api/paper-context title_tex and excerpt_tex (formulas kept as TeX, plain-text math typeset, currency escaped) and the Related and Versions panels paint them, since every residue the browser sample counted on chapter-1 and log20240505010101strangeloopbook on 2026-10-12 was panel text; a formula ending in an escaped brace is lifted as math; MathJax knows the Sha macro. 3.18.0 ACTIVITYPUB-KEY-1 (2026-10-12, pillar reach, #2249 #2413): the actor publishes publicKeyPem when AP_PUBLIC_KEY is set (cf-ops gen-activitypub-key); merged with main 3.17.1 (REACH-RENDER-1). */
 // UTM-CLICK-LEDGER-1 (3.10.0, 2026-10-06, transformation lever T7.9, pillar reach): a GET for an HTML page that carries
 // utm_source is counted into qnfo-graph utm_clicks (day, host, path, source, medium, campaign, bot/human, country; no cookie,
 // no IP), so a post or digest joins to the visits it caused; qnfo-fleet-dashboard reads it into reach_signals source utm.
@@ -2839,7 +2839,7 @@ __name222222222(handleSitemap, "handleSitemap");
 __name2222222222(handleSitemap, "handleSitemap");
 function handlePapersRobots() {
   return new Response(
-    "User-agent: *\nAllow: /\nSitemap: https://papers.qnfo.org/sitemap.xml\n",
+    "User-agent: *\nAllow: /\nDisallow: /*quickread\nSitemap: https://papers.qnfo.org/sitemap.xml\n",
     { headers: { "Content-Type": "text/plain; charset=utf-8", "Cache-Control": "public, max-age=86400" } }
   );
 }
@@ -3140,7 +3140,7 @@ var OPENAPI_DOC = {
   } }
 };
 function health() {
-  return json({ status: "ok", worker: "qnfo-gateway", version: VERSION, capabilities: ["papers-site", "paper-pages", "living-paper-reader", "paper-context-api", "graph-api", "ask-a-paper", "legal-pages", "activitypub-read", "subscribe-page", "work-with-me-page"], limitations: ["paper pages ask through ask.qwav.tech /api/ask (qnfo-ai-search 2.1+, the paper pinned as source [1], capped per address); without JavaScript the page is the full static paper", "GET /api/paper-context/<slug> matches qnfo-graph nodes on title terms (two terms, or one of 6+ letters), so a paper outside the graph shows an empty Context tab; versions are papers whose normalized titles match", "qnfo.org/work-with-me has no form: each offer is a mailto to rowan.quni@qnfo.org whose subject starts with [work-with-me:<offer>], counted by qnfo-fleet-dashboard", "Ask-a-paper (POST /api/ask) uses one model (kimi-k2.6 with reasoning off) with a 1200-token cap and only the first 6000 characters of the named paper", "Ask-a-paper allows 10 questions per address per hour and 300 per day in total, questions up to 1000 characters; duplicate, kg-backfill and quarantined papers are excluded", "graph-api reads are public; /query and /sync need the sync token"] });
+  return json({ status: "ok", worker: "qnfo-gateway", version: VERSION, capabilities: ["papers-site", "paper-pages", "living-paper-reader", "paper-context-api", "graph-api", "ask-a-paper", "quick-read", "legal-pages", "activitypub-read", "subscribe-page", "work-with-me-page"], limitations: ["paper pages ask through ask.qwav.tech /api/ask (qnfo-ai-search 2.1+, the paper pinned as source [1], capped per address); without JavaScript the page is the full static paper", "GET /api/paper-context/<slug> matches qnfo-graph nodes on title terms (two terms, or one of 6+ letters), so a paper outside the graph shows an empty Context tab; versions are papers whose normalized titles match", "qnfo.org/work-with-me has no form: each offer is a mailto to rowan.quni@qnfo.org whose subject starts with [work-with-me:<offer>], counted by qnfo-fleet-dashboard", "Ask-a-paper (POST /api/ask) uses one model (kimi-k2.6 with reasoning off) with a 1200-token cap and only the first 6000 characters of the named paper", "Ask-a-paper allows 10 questions per address per hour and 300 per day in total, questions up to 1000 characters; duplicate, kg-backfill and quarantined papers are excluded", "graph-api reads are public; /query and /sync need the sync token"] });
 }
 __name(health, "health");
 __name2(health, "health");
@@ -4253,7 +4253,10 @@ function lpTexText(src, n) {
   return t + (cut ? "\u2026" : "");
 }
 // ---------------------------------------------------------------- index
-function lpPaperRow(p) {
+// QUICK-READ-1: on a search result the row offers the question the reader typed, the way Scholar attaches Quick Read
+// to a result that discusses the question. The question rides in data-qr-q and reaches the href only on pointer/focus
+// (ASK-CLIENT-GONE-CRAWL-1), and the page it lands on makes no model call until a browser asks.
+function lpPaperRow(p, searchQ) {
   const cat = paperShelf(p);
   const cl = CATEGORY_LABELS[cat] || CATEGORY_LABELS.synthesis;
   // PAPER-TAGS-1: the card carries up to two tags beside the shelf, so the interdisciplinary link is visible from
@@ -4268,7 +4271,7 @@ function lpPaperRow(p) {
   // touches or focuses the link.
   const askQ = "What does \u201c" + displayTitle(p.title).slice(0, 140) + "\u201d show, and what would falsify it?";
   const ver = p.version && !/^1(\.0)*$/.test(String(p.version)) ? '<span class="pc-v">v' + esc(String(p.version).replace(/^v/i, "")) + "</span>" : "";
-  return '<li class="pc" data-cat="' + cat + '"><div class="pc-meta"><span class="pc-cat" style="--c:var(' + (LP_CAT_VAR[cat] || "--muted") + ')">' + esc(cl) + '</span><time datetime="' + escAttr(String(p.created_at || "").slice(0, 10)) + '">' + esc(lpDate(p.created_at)) + "</time>" + ver + '</div><h3 class="pc-t"><a href="' + href + '">' + titleHTML(p.title) + '</a></h3><p class="pc-a">' + absHTML(p.abstract, 300) + '</p><div class="pc-x"><a href="' + href + '">Read</a><a href="' + LP_ASK + '/" rel="nofollow" data-ask-q="' + escAttr(askQ) + '">Ask about it</a>' + tg + "</div></li>";
+  return '<li class="pc" data-cat="' + cat + '"><div class="pc-meta"><span class="pc-cat" style="--c:var(' + (LP_CAT_VAR[cat] || "--muted") + ')">' + esc(cl) + '</span><time datetime="' + escAttr(String(p.created_at || "").slice(0, 10)) + '">' + esc(lpDate(p.created_at)) + "</time>" + ver + '</div><h3 class="pc-t"><a href="' + href + '">' + titleHTML(p.title) + '</a></h3><p class="pc-a">' + absHTML(p.abstract, 300) + '</p><div class="pc-x"><a href="' + href + '">Read</a>' + (searchQ ? '<a href="' + href + '/quickread" rel="nofollow" data-qr-q="' + escAttr(String(searchQ).slice(0, QR_QUESTION_MAX)) + '" title="How this paper answers your question">Quick read</a>' : "") + '<a href="' + LP_ASK + '/" rel="nofollow" data-ask-q="' + escAttr(askQ) + '">Ask about it</a>' + tg + "</div></li>";
 }
 function lpHistogram(months) {
   if (!months || !months.length) return "";
@@ -4341,7 +4344,7 @@ function lpIndexHTML(papers, total, offset, hasMore, activeCategory, searchQuery
   const head = "<title>" + title + '</title><meta name="description" content="' + escAttr(all + " open-access papers from the QNFO research program, filed on nine shelves by the reader each is written for: energy per answer, error correction, physics, numbers and p-adics, logic and formalism, AI and knowledge, autonomous systems, assessments and cross-cutting essays. All free to read.") + '"><link rel="canonical" href="https://papers.qnfo.org/papers"><link rel="alternate" type="application/rss+xml" title="QNFO Papers RSS" href="/rss.xml"><meta property="og:title" content="QNFO Papers"><meta property="og:type" content="website"><meta property="og:url" content="https://papers.qnfo.org/papers"><meta property="og:description" content="' + escAttr(all + " open research papers from the QNFO program.") + '">';
   const body = '<main id="main"><section class="wrap ix-hero"><div class="ix-intro"><p class="q-eyebrow">Open research library</p><h1>Papers you can read, cite and question</h1><p class="lede">' + all + ' papers from the QNFO program, filed on nine shelves by the reader each one is written for: energy per answer, error correction, physics, numbers and p-adics, logic and formalism, AI and knowledge, autonomous systems, assessments, and cross-cutting essays.' + "" + ' Every page renders its mathematics and can be questioned in place. <a href="/reading">How a living paper works</a>.</p><form class="ix-search" method="get" action="/papers" role="search"><svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="9" cy="9" r="6" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M14 14l4 4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg><label class="sr" for="ix-q">Search papers</label><input id="ix-q" type="search" name="search" value="' + (searchQuery ? escAttr(searchQuery) : "") + '" placeholder="Search titles and abstracts" autocomplete="off">' + (activeCategory ? '<input type="hidden" name="category" value="' + escAttr(activeCategory) + '">' : "") + '<kbd>/</kbd></form><p class="ix-hint">Looking for an answer rather than a paper? <a href="' + LP_ASK + '">Ask the whole corpus</a>: answers cite the papers they come from.</p></div><aside class="ix-stats q-card" aria-label="Library at a glance"><div class="ix-n"><b>' + all + "</b><span>papers" + (latest ? "<br>newest " + esc(latest) : "") + "</span></div>" + lpHistogram(extra.months) + '<p class="ix-cap">Published per month</p>' + bar + '<ul class="ix-legend">' + LP_CAT_ORDER.map(function(c) {
     return '<li title="' + escAttr(CATEGORY_AUDIENCE[c] || "") + '"><i class="dot" style="--c:var(' + LP_CAT_VAR[c] + ')"></i>' + esc(CATEGORY_LABELS[c] || c) + " <b>" + (facets[c] || 0) + "</b></li>";
-  }).join("") + '</ul></aside></section><section class="ix-controls"><div class="wrap"><div class="ix-chips" id="ix-chips" role="group" aria-label="Topic">' + chips + '</div><label class="ix-sort"><span>Sort</span><select id="ix-sort" aria-label="Sort papers"><option value="new"' + (sort === "new" ? " selected" : "") + '>Newest</option><option value="old"' + (sort === "old" ? " selected" : "") + '>Oldest</option><option value="title"' + (sort === "title" ? " selected" : "") + '>Title A\u2013Z</option></select></label></div>' + tagRow + '</section><section class="wrap ix-list"><h2 class="ix-h"><span id="ix-head">' + heading + '</span> <span class="ix-count" id="paper-count">' + total + " paper" + (total === 1 ? "" : "s") + '</span></h2>' + activeNote + tagNote + '<ol class="plist paper-list" id="plist" data-offset="' + (offset + papers.length) + '" data-more="' + (hasMore ? "1" : "0") + '">' + (papers.length ? papers.map(lpPaperRow).join("") : '<li class="empty">No paper matches. <a href="' + LP_ASK + '/" rel="nofollow" data-ask-q="' + escAttr(searchQuery || "") + '">Ask the corpus instead</a>.</li>') + '</ol><div class="ix-more" id="ix-more">' + (hasMore ? '<button class="q-btn" id="load-more" type="button">Load more papers</button>' : "") + "</div>" + lpSubscribe("papers") + "</section></main>";
+  }).join("") + '</ul></aside></section><section class="ix-controls"><div class="wrap"><div class="ix-chips" id="ix-chips" role="group" aria-label="Topic">' + chips + '</div><label class="ix-sort"><span>Sort</span><select id="ix-sort" aria-label="Sort papers"><option value="new"' + (sort === "new" ? " selected" : "") + '>Newest</option><option value="old"' + (sort === "old" ? " selected" : "") + '>Oldest</option><option value="title"' + (sort === "title" ? " selected" : "") + '>Title A\u2013Z</option></select></label></div>' + tagRow + '</section><section class="wrap ix-list"><h2 class="ix-h"><span id="ix-head">' + heading + '</span> <span class="ix-count" id="paper-count">' + total + " paper" + (total === 1 ? "" : "s") + '</span></h2>' + activeNote + tagNote + '<ol class="plist paper-list" id="plist" data-offset="' + (offset + papers.length) + '" data-more="' + (hasMore ? "1" : "0") + '">' + (papers.length ? papers.map(function(p) { return lpPaperRow(p, searchQuery); }).join("") : '<li class="empty">No paper matches. <a href="' + LP_ASK + '/" rel="nofollow" data-ask-q="' + escAttr(searchQuery || "") + '">Ask the corpus instead</a>.</li>') + '</ol><div class="ix-more" id="ix-more">' + (hasMore ? '<button class="q-btn" id="load-more" type="button">Load more papers</button>' : "") + "</div>" + lpSubscribe("papers") + "</section></main>";
   return lpDoc({ head, body, math: true, nav: "papers", cls: "ix", js: LP_INDEX_JS });
 }
 function lpSubscribe(source) {
@@ -4386,6 +4389,7 @@ function lpIcon(n) {
     ask: '<path d="M4 5.5A2.5 2.5 0 0 1 6.5 3h7A2.5 2.5 0 0 1 16 5.5v5a2.5 2.5 0 0 1-2.5 2.5H9l-3.5 3v-3A2.5 2.5 0 0 1 4 10.5z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/>',
     cite: '<path d="M5 6h4v4H6.5c0 1.6.6 2.6 2 3M11 6h4v4h-2.5c0 1.6.6 2.6 2 3" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>',
     pdf: '<path d="M6 3h6l3 3v11H6z M12 3v3h3 M8.5 10.5v4 M10 12.5l-1.5 2-1.5-2" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" stroke-linecap="round"/>',
+    qr: '<path d="M3.5 4.5h5v5h-5z M11.5 4.5h5v5h-5z M3.5 11.5h5v5h-5z M14 11.5h.01M11 14h5M14 11.5v5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" stroke-linecap="round"/>',
     share: '<path d="M10 3v10M6.5 6.5L10 3l3.5 3.5M5 11v5h10v-5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>',
     doi: '<circle cx="10" cy="10" r="6.5" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M10 6.5v7M6.5 10h7" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>'
   };
@@ -4426,7 +4430,7 @@ function lpPaperHTML(paper) {
   }).join(", ");
   const toc = lpTocHTML(st.toc);
   const sugg = ["What is the main result, in plain terms?", "What would falsify this?", "Which assumptions does it rest on?", "How does it connect to other QNFO work?"];
-  const body = '<div class="rp" id="rp" aria-hidden="true"><span></span></div><main id="main" class="wrap pp"><nav class="crumbs" aria-label="Breadcrumb"><a href="/papers">Papers</a><span aria-hidden="true">/</span><a href="/papers?category=' + cat + '" title="' + escAttr(CATEGORY_AUDIENCE[cat] || "") + '">' + esc(CATEGORY_LABELS[cat] || CATEGORY_LABELS.synthesis) + '</a></nav><header class="ph"><h1>' + titleHTML(paper.title) + '</h1><p class="by">' + byline + '</p><div class="ph-meta"><span class="q-tag live" title="This paper is versioned: new versions keep the same address here"><i></i>Living paper \u00b7 v' + esc(ver) + "</span>" + (dateStr ? '<span>Published <time datetime="' + escAttr(dateStr) + '">' + esc(lpDate(dateStr)) + "</time></span>" : "") + (secondaries.length ? '<span class="pc-meta">Filed under ' + secondaries.map(function(c) { return '<a href="/papers?category=' + c + '" style="color:var(--teal)">' + esc(CATEGORY_LABELS[c]) + "</a>"; }).join(", ") + "</span>" : "") + tagMeta + "<span>" + minutes + " min read \u00b7 " + words.toLocaleString("en-US") + " words</span>" + '</div><div class="ph-act no-print"><button class="q-btn teal" type="button" data-go="ask">' + lpIcon("ask") + 'Ask this paper</button><button class="q-btn" type="button" id="b-cite">' + lpIcon("cite") + "Cite</button>" + (paper._pdf ? '<a class="q-btn" href="' + escAttr(url) + '.pdf">' + lpIcon("pdf") + "PDF</a>" : "") + '<button class="q-btn" type="button" id="b-share">' + lpIcon("share") + "Share</button></div></header>" + '<div class="pp-grid"><aside class="toc no-print" aria-label="Contents">' + (toc ? '<details class="toc-d" open><summary>Contents</summary>' + toc + "</details>" : "") + '</aside><article class="prose rendered-md" id="doc">' + st.html + '</article><aside class="rail no-print" id="rail" aria-label="Living paper"><div class="rail-in"><div class="tabs" role="tablist"><button role="tab" aria-selected="true" aria-controls="t-ask" id="tb-ask" data-tab="ask">Ask</button><button role="tab" aria-selected="false" aria-controls="t-ctx" id="tb-ctx" data-tab="ctx">Context</button><button role="tab" aria-selected="false" aria-controls="t-ver" id="tb-ver" data-tab="ver">Versions</button><button role="tab" aria-selected="false" aria-controls="t-rel" id="tb-rel" data-tab="rel">Related</button></div>' + '<section class="tp" id="t-ask" role="tabpanel" aria-labelledby="tb-ask"><form id="ask-f" autocomplete="off"><label class="sr" for="ask-q">Ask a question about this paper</label><textarea id="ask-q" rows="2" maxlength="1000" placeholder="Ask anything about this paper"></textarea><button class="q-btn pri" type="submit" id="ask-go">Ask</button></form><div class="sugg" id="ask-sugg">' + sugg.map(function(s) {
+  const body = '<div class="rp" id="rp" aria-hidden="true"><span></span></div><main id="main" class="wrap pp"><nav class="crumbs" aria-label="Breadcrumb"><a href="/papers">Papers</a><span aria-hidden="true">/</span><a href="/papers?category=' + cat + '" title="' + escAttr(CATEGORY_AUDIENCE[cat] || "") + '">' + esc(CATEGORY_LABELS[cat] || CATEGORY_LABELS.synthesis) + '</a></nav><header class="ph"><h1>' + titleHTML(paper.title) + '</h1><p class="by">' + byline + '</p><div class="ph-meta"><span class="q-tag live" title="This paper is versioned: new versions keep the same address here"><i></i>Living paper \u00b7 v' + esc(ver) + "</span>" + (dateStr ? '<span>Published <time datetime="' + escAttr(dateStr) + '">' + esc(lpDate(dateStr)) + "</time></span>" : "") + (secondaries.length ? '<span class="pc-meta">Filed under ' + secondaries.map(function(c) { return '<a href="/papers?category=' + c + '" style="color:var(--teal)">' + esc(CATEGORY_LABELS[c]) + "</a>"; }).join(", ") + "</span>" : "") + tagMeta + "<span>" + minutes + " min read \u00b7 " + words.toLocaleString("en-US") + " words</span>" + '</div><div class="ph-act no-print"><button class="q-btn teal" type="button" data-go="ask">' + lpIcon("ask") + 'Ask this paper</button><a class="q-btn" href="/papers/' + escAttr(paper.slug) + '/quickread" rel="nofollow" title="Ask one question and see how this paper answers it">' + lpIcon("qr") + 'Quick read</a><button class="q-btn" type="button" id="b-cite">' + lpIcon("cite") + "Cite</button>" + (paper._pdf ? '<a class="q-btn" href="' + escAttr(url) + '.pdf">' + lpIcon("pdf") + "PDF</a>" : "") + '<button class="q-btn" type="button" id="b-share">' + lpIcon("share") + "Share</button></div></header>" + '<div class="pp-grid"><aside class="toc no-print" aria-label="Contents">' + (toc ? '<details class="toc-d" open><summary>Contents</summary>' + toc + "</details>" : "") + '</aside><article class="prose rendered-md" id="doc">' + st.html + '</article><aside class="rail no-print" id="rail" aria-label="Living paper"><div class="rail-in"><div class="tabs" role="tablist"><button role="tab" aria-selected="true" aria-controls="t-ask" id="tb-ask" data-tab="ask">Ask</button><button role="tab" aria-selected="false" aria-controls="t-ctx" id="tb-ctx" data-tab="ctx">Context</button><button role="tab" aria-selected="false" aria-controls="t-ver" id="tb-ver" data-tab="ver">Versions</button><button role="tab" aria-selected="false" aria-controls="t-rel" id="tb-rel" data-tab="rel">Related</button></div>' + '<section class="tp" id="t-ask" role="tabpanel" aria-labelledby="tb-ask"><form id="ask-f" autocomplete="off"><label class="sr" for="ask-q">Ask a question about this paper</label><textarea id="ask-q" rows="2" maxlength="1000" placeholder="Ask anything about this paper"></textarea><button class="q-btn pri" type="submit" id="ask-go">Ask</button></form><div class="sugg" id="ask-sugg">' + sugg.map(function(s) {
     return '<button type="button" class="q-chip">' + esc(s) + "</button>";
   }).join("") + '</div><div id="ask-out" aria-live="polite"></div><p class="fine">Answers are written from this paper first and other QNFO papers second, with numbered citations. Select any passage in the text to ask about it.</p></section><section class="tp" id="t-ctx" role="tabpanel" aria-labelledby="tb-ctx" hidden><div class="ld"><span class="q-skel"></span><span class="q-skel" style="width:70%"></span></div></section><section class="tp" id="t-ver" role="tabpanel" aria-labelledby="tb-ver" hidden><div class="ld"><span class="q-skel"></span></div></section><section class="tp" id="t-rel" role="tabpanel" aria-labelledby="tb-rel" hidden><div class="ld"><span class="q-skel"></span><span class="q-skel" style="width:80%"></span></div></section></div></aside></div>' + lpSubscribe("papers") + '</main><button class="fab no-print" type="button" data-go="ask" aria-label="Ask this paper">' + lpIcon("ask") + '<span>Ask</span></button><div class="selpop no-print" id="selpop" role="toolbar" aria-label="Selection" hidden><button type="button" data-sel="ask">' + lpIcon("ask") + 'Ask about this</button><button type="button" data-sel="quote">' + lpIcon("cite") + 'Copy quote</button></div><div class="refpop" id="refpop" role="tooltip" hidden></div><dialog id="cite-d" class="q-card"><form method="dialog"><h2>Cite this paper</h2><div class="cite-tabs" role="tablist"><button type="button" class="q-chip on" data-fmt="apa">APA</button><button type="button" class="q-chip" data-fmt="bibtex">BibTeX</button><button type="button" class="q-chip" data-fmt="plain">Plain</button></div><pre id="cite-t" tabindex="0"></pre><div class="cite-a"><button type="button" class="q-btn pri" id="cite-copy">Copy</button><button class="q-btn" value="close">Close</button></div></form></dialog><script type="application/json" id="lp-data">' + JSON.stringify(data).replace(/</g, "\\u003c") + "<\/script>";
   return lpDoc({ head, body, math: true, nav: "papers", cls: "paper", js: LP_PAPER_JS });
@@ -4490,9 +4494,518 @@ async function handlePaperContext(env, slug) {
   }).sort(function(a, b) { return b._s - a._s || rank[a.label] - rank[b.label]; }).slice(0, 14).map(function(c) { delete c._s; return c; });
   return out({ slug, terms, graph_terms: gTerms, versions, related, concepts, generated_at: new Date().toISOString() });
 }
-var LP_COMMON_JS = "(function(){\n  var root = document.documentElement;\n  var askArm = function(e){ var a = e.target && e.target.closest ? e.target.closest('a[data-ask-q]') : null; if (a && a.href.indexOf('?q=') < 0) a.href = a.href.split('?')[0].split('#')[0] + '?q=' + (a.getAttribute('data-ask-enc') ? a.getAttribute('data-ask-q') || '' : encodeURIComponent(a.getAttribute('data-ask-q') || '')); };\n  ['pointerdown','touchstart','keydown','focusin'].forEach(function(ev){ document.addEventListener(ev, askArm, true); });\n  window.qToast = function(msg){ var t = document.getElementById('q-toast'); if(!t) return; t.textContent = msg; t.classList.add('on'); clearTimeout(t._h); t._h = setTimeout(function(){ t.classList.remove('on'); }, 2200); };\n  var tb = document.getElementById('q-theme');\n  if (tb) tb.addEventListener('click', function(){\n    var cur = root.getAttribute('data-theme') || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');\n    var next = cur === 'dark' ? 'light' : 'dark';\n    root.setAttribute('data-theme', next);\n    try { localStorage.setItem('qnfo-theme', next); } catch(e) {}\n  });\n  var top = document.getElementById('q-top');\n  if (top) { var onS = function(){ top.classList.toggle('scrolled', scrollY > 4); }; addEventListener('scroll', onS, {passive:true}); onS(); }\n  window.qCopy = function(text, msg){\n    var done = function(){ qToast(msg || 'Copied'); };\n    if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(text).then(done, function(){ fallback(); });\n    else fallback();\n    function fallback(){ var ta = document.createElement('textarea'); ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0'; document.body.appendChild(ta); ta.select(); try { document.execCommand('copy'); done(); } catch(e) {} document.body.removeChild(ta); }\n  };\n  var f = document.getElementById('ld-sub-form');\n  if (f) { try { var vu = '/api/funnel/view?source=' + encodeURIComponent(f.getAttribute('data-source') || 'papers'); if (navigator.sendBeacon) navigator.sendBeacon(vu); else fetch(vu, {method:'POST', keepalive:true}).catch(function(){}); } catch(e) {} }\n  if (f) f.addEventListener('submit', function(e){\n    e.preventDefault();\n    var msg = document.getElementById('ld-msg'), btn = document.getElementById('ld-btn');\n    var email = (document.getElementById('ld-email').value || '').trim(), hp = (document.getElementById('ld-hp') || {}).value || '';\n    if (!email || email.indexOf('@') < 1) { msg.textContent = 'Please enter a valid email address.'; return; }\n    btn.disabled = true; msg.textContent = 'Subscribing\u2026';\n    fetch('/api/subscribe', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({email: email, hp: hp, source: f.getAttribute('data-source') || 'papers'})})\n      .then(function(r){ return r.json().catch(function(){ return {}; }); })\n      .then(function(j){ if (j && j.ok) { msg.textContent = 'Thanks. Check your inbox to confirm the subscription.'; f.reset(); } else { msg.textContent = (j && j.error) || 'Something went wrong. Please try again.'; } })\n      .catch(function(){ msg.textContent = 'Network error. Please try again.'; })\n      .then(function(){ btn.disabled = false; });\n  });\n})();\n"; // standards-ok: browser-side script in a string literal (LP_COMMON_JS); its catches guard the visitor page, not the Worker
+var LP_COMMON_JS = "(function(){\n  var root = document.documentElement;\n  var askArm = function(e){ var a = e.target && e.target.closest ? e.target.closest('a[data-ask-q]') : null; if (a && a.href.indexOf('?q=') < 0) a.href = a.href.split('?')[0].split('#')[0] + '?q=' + (a.getAttribute('data-ask-enc') ? a.getAttribute('data-ask-q') || '' : encodeURIComponent(a.getAttribute('data-ask-q') || '')); };\n  var qrArm = function(e){ var a = e.target && e.target.closest ? e.target.closest('a[data-qr-q]') : null; if (a && a.href.indexOf('?q=') < 0) a.href = a.href.split('?')[0].split('#')[0] + '?q=' + encodeURIComponent(a.getAttribute('data-qr-q') || ''); };\n  ['pointerdown','touchstart','keydown','focusin'].forEach(function(ev){ document.addEventListener(ev, askArm, true); document.addEventListener(ev, qrArm, true); });\n  window.qToast = function(msg){ var t = document.getElementById('q-toast'); if(!t) return; t.textContent = msg; t.classList.add('on'); clearTimeout(t._h); t._h = setTimeout(function(){ t.classList.remove('on'); }, 2200); };\n  var tb = document.getElementById('q-theme');\n  if (tb) tb.addEventListener('click', function(){\n    var cur = root.getAttribute('data-theme') || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');\n    var next = cur === 'dark' ? 'light' : 'dark';\n    root.setAttribute('data-theme', next);\n    try { localStorage.setItem('qnfo-theme', next); } catch(e) {}\n  });\n  var top = document.getElementById('q-top');\n  if (top) { var onS = function(){ top.classList.toggle('scrolled', scrollY > 4); }; addEventListener('scroll', onS, {passive:true}); onS(); }\n  window.qCopy = function(text, msg){\n    var done = function(){ qToast(msg || 'Copied'); };\n    if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(text).then(done, function(){ fallback(); });\n    else fallback();\n    function fallback(){ var ta = document.createElement('textarea'); ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0'; document.body.appendChild(ta); ta.select(); try { document.execCommand('copy'); done(); } catch(e) {} document.body.removeChild(ta); }\n  };\n  var f = document.getElementById('ld-sub-form');\n  if (f) { try { var vu = '/api/funnel/view?source=' + encodeURIComponent(f.getAttribute('data-source') || 'papers'); if (navigator.sendBeacon) navigator.sendBeacon(vu); else fetch(vu, {method:'POST', keepalive:true}).catch(function(){}); } catch(e) {} }\n  if (f) f.addEventListener('submit', function(e){\n    e.preventDefault();\n    var msg = document.getElementById('ld-msg'), btn = document.getElementById('ld-btn');\n    var email = (document.getElementById('ld-email').value || '').trim(), hp = (document.getElementById('ld-hp') || {}).value || '';\n    if (!email || email.indexOf('@') < 1) { msg.textContent = 'Please enter a valid email address.'; return; }\n    btn.disabled = true; msg.textContent = 'Subscribing\u2026';\n    fetch('/api/subscribe', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({email: email, hp: hp, source: f.getAttribute('data-source') || 'papers'})})\n      .then(function(r){ return r.json().catch(function(){ return {}; }); })\n      .then(function(j){ if (j && j.ok) { msg.textContent = 'Thanks. Check your inbox to confirm the subscription.'; f.reset(); } else { msg.textContent = (j && j.error) || 'Something went wrong. Please try again.'; } })\n      .catch(function(){ msg.textContent = 'Network error. Please try again.'; })\n      .then(function(){ btn.disabled = false; });\n  });\n})();\n"; // standards-ok: browser-side script in a string literal (LP_COMMON_JS); its catches guard the visitor page, not the Worker
 var LP_INDEX_JS = "(function(){\n  var list = document.getElementById('plist'), q = document.getElementById('ix-q'), chips = document.getElementById('ix-chips'), sortSel = document.getElementById('ix-sort');\n  var count = document.getElementById('paper-count'), head = document.getElementById('ix-head'), more = document.getElementById('ix-more');\n  if (!list) return;\n  var params = new URLSearchParams(location.search);\n  var state = { search: params.get('search') || '', category: params.get('category') || '', sort: params.get('sort') || 'new', offset: Number(list.getAttribute('data-offset')) || 0, more: list.getAttribute('data-more') === '1', busy: false, seq: 0 };\n  var LABELS = {}; [].forEach.call(chips.querySelectorAll('[data-cat]'), function(a){ LABELS[a.getAttribute('data-cat')] = a.firstChild && a.textContent.replace(/\\s*\\d+\\s*$/, '').trim(); });\n  function qs(extra){\n    var p = new URLSearchParams();\n    if (state.search) p.set('search', state.search);\n    if (state.category) p.set('category', state.category);\n    if (state.sort !== 'new') p.set('sort', state.sort);\n    if (extra) Object.keys(extra).forEach(function(k){ p.set(k, extra[k]); });\n    return p.toString();\n  }\n  function headText(){ return state.search ? 'Results for \u201c' + state.search + '\u201d' : state.category ? (LABELS[state.category] || state.category) + ' papers' : 'All papers'; }\n  function setMore(){\n    more.innerHTML = state.more ? '<button class=\"q-btn\" id=\"load-more\" type=\"button\">Load more papers</button>' : '';\n    var b = document.getElementById('load-more'); if (b) b.addEventListener('click', loadMore);\n    if (io && b) io.observe(b);\n  }\n  function paintChips(f){\n    [].forEach.call(chips.querySelectorAll('[data-cat]'), function(a){\n      var c = a.getAttribute('data-cat');\n      a.classList.toggle('on', (c === 'all' && !state.category) || c === state.category);\n      if (f) { var n = c === 'all' ? Object.keys(f).reduce(function(s,k){ return s + f[k]; }, 0) : (f[c] || 0); var b = a.querySelector('b'); if (b) b.textContent = n; }\n    });\n  }\n  function reload(push){\n    var my = ++state.seq;\n    list.classList.add('busy');\n    fetch('/papers?' + qs({format:'json', limit:50, offset:0})).then(function(r){ return r.json(); }).then(function(d){\n      if (my !== state.seq) return;\n      list.innerHTML = d.rows && d.rows.length ? d.rows.join('') : '<li class=\"empty\">No paper matches. <a href=\"https://ask.qwav.tech/\" rel=\"nofollow\" data-ask-enc=\"1\" data-ask-q=\"' + encodeURIComponent(state.search) + '\">Ask the corpus instead</a>.</li>';\n      state.offset = (d.rows || []).length; state.more = !!d.hasMore;\n      count.textContent = d.total + (d.total === 1 ? ' paper' : ' papers');\n      head.textContent = headText();\n      paintChips(d.facets); setMore(); typeset();\n      if (push !== false) history.replaceState(null, '', '/papers' + (qs() ? '?' + qs() : ''));\n    }).catch(function(){}).then(function(){ if (my === state.seq) list.classList.remove('busy'); });\n  }\n  function loadMore(){\n    if (state.busy || !state.more) return;\n    state.busy = true; var b = document.getElementById('load-more'); if (b) { b.disabled = true; b.textContent = 'Loading\u2026'; }\n    fetch('/papers?' + qs({format:'json', limit:50, offset: state.offset})).then(function(r){ return r.json(); }).then(function(d){\n      if (d.rows && d.rows.length) list.insertAdjacentHTML('beforeend', d.rows.join(''));\n      state.offset += (d.rows || []).length; state.more = !!d.hasMore; setMore(); typeset();\n    }).catch(function(){ if (b) { b.disabled = false; b.textContent = 'Load more papers'; } }).then(function(){ state.busy = false; });\n  }\n  function typeset(){ if (window.MathJax && MathJax.typesetPromise) MathJax.typesetPromise([list]).catch(function(){}); }\n  var io = 'IntersectionObserver' in window ? new IntersectionObserver(function(es){ es.forEach(function(e){ if (e.isIntersecting) loadMore(); }); }, {rootMargin: '600px'}) : null;\n  setMore();\n  var t;\n  if (q) {\n    q.addEventListener('input', function(){ clearTimeout(t); t = setTimeout(function(){ var v = q.value.trim(); if (v === state.search) return; state.search = v; reload(); }, 220); });\n    q.form.addEventListener('submit', function(e){ e.preventDefault(); clearTimeout(t); state.search = q.value.trim(); reload(); });\n  }\n  chips.addEventListener('click', function(e){\n    var a = e.target.closest('[data-cat]'); if (!a) return; e.preventDefault();\n    var c = a.getAttribute('data-cat'); state.category = c === 'all' ? '' : c; reload();\n  });\n  if (sortSel) sortSel.addEventListener('change', function(){ state.sort = sortSel.value; reload(); });\n  document.addEventListener('keydown', function(e){\n    if (e.key === '/' && q && document.activeElement !== q && !/INPUT|TEXTAREA|SELECT/.test((document.activeElement || {}).tagName)) { e.preventDefault(); q.focus(); q.select(); }\n    if (e.key === 'Escape' && document.activeElement === q && q.value) { q.value = ''; state.search = ''; reload(); }\n  });\n})();\n"; // standards-ok: browser-side script in a string literal (LP_INDEX_JS); its catches guard the visitor page, not the Worker
 var LP_PAPER_JS = "(function(){\n  var D = {}; try { D = JSON.parse(document.getElementById('lp-data').textContent); } catch(e) {}\n  var doc = document.getElementById('doc'), rail = document.getElementById('rail');\n  if (!doc) return;\n  function $(id){ return document.getElementById(id); }\n  function esc(s){ return String(s == null ? '' : s).replace(/[&<>\"']/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;',\"'\":'&#39;'}[c]; }); }\n  function typeset(el){ if (window.MathJax && MathJax.typesetPromise) MathJax.typesetPromise(el ? [el] : undefined).catch(function(){}); }\n  function tx(s){ return esc(s).replace(/\\\\\\$/g, function(){ return '<span class=\"usd\">$</span>'; }); }\n\n  // ---- reading progress + contents scroll-spy\n  var bar = document.querySelector('#rp span');\n  function prog(){ var r = doc.getBoundingClientRect(), h = r.height - innerHeight * 0.6; var p = h > 0 ? Math.min(1, Math.max(0, -r.top / h)) : 0; if (bar) bar.style.width = (p * 100).toFixed(1) + '%'; }\n  addEventListener('scroll', prog, {passive:true}); addEventListener('resize', prog); prog();\n  var links = {}; [].forEach.call(document.querySelectorAll('.toc-l a'), function(a){ links[a.getAttribute('href').slice(1)] = a; });\n  var heads = [].slice.call(doc.querySelectorAll('h2[id],h3[id]')).filter(function(h){ return links[h.id]; });\n  if (heads.length && 'IntersectionObserver' in window) {\n    var vis = {};\n    var spy = new IntersectionObserver(function(es){\n      es.forEach(function(e){ vis[e.target.id] = e.isIntersecting; });\n      var cur = null;\n      for (var i = 0; i < heads.length; i++) { if (heads[i].getBoundingClientRect().top < innerHeight * 0.35) cur = heads[i].id; }\n      Object.keys(links).forEach(function(k){ links[k].classList.toggle('on', k === cur); });\n      if (cur && links[cur] && links[cur].scrollIntoView && document.querySelector('.toc').scrollHeight > document.querySelector('.toc').clientHeight) { var tc = document.querySelector('.toc'), lr = links[cur].getBoundingClientRect(), tr = tc.getBoundingClientRect(); if (lr.top < tr.top || lr.bottom > tr.bottom) tc.scrollTop += lr.top - tr.top - tr.height / 3; }\n    }, {rootMargin: '0px 0px -60% 0px'});\n    heads.forEach(function(h){ spy.observe(h); });\n  }\n  if (innerWidth < 1080) { var td = document.querySelector('.toc-d'); if (td) td.open = false; }\n  doc.addEventListener('click', function(e){ var a = e.target.closest('.hx'); if (!a) return; e.preventDefault(); history.replaceState(null, '', a.getAttribute('href')); qCopy(location.href, 'Link to this section copied'); });\n\n  // ---- references: [n] previews and jumps\n  var refs = {}, refHead = [].slice.call(doc.querySelectorAll('h2,h3')).filter(function(h){ return /^(#\\s*)?(\\d+\\.?\\s*)?(references|bibliography|works cited)/i.test(h.textContent.trim()); })[0];\n  if (refHead) {\n    var n = refHead.nextElementSibling, k = 0;\n    while (n && !/^H[12]$/.test(n.tagName)) {\n      var items = n.tagName === 'OL' || n.tagName === 'UL' ? [].slice.call(n.children) : [n];\n      items.forEach(function(it){\n        var t = it.textContent.replace(/\\s+/g, ' ').trim(); if (!t) return;\n        // One paragraph often carries several entries: \"[1] A ... [2] B ...\"\n        var parts = t.split(/(?:^|\\s)(?=\\[\\d{1,3}\\]\\s)/).filter(Boolean);\n        if (parts.length > 1 || /^\\[\\d{1,3}\\]\\s/.test(t)) {\n          parts.forEach(function(pt){ var m = /^\\[(\\d{1,3})\\]\\s*/.exec(pt.trim()); if (m) refs[Number(m[1])] = pt.trim().slice(m[0].length); });\n          var m0 = /^\\[(\\d{1,3})\\]/.exec(t); if (m0 && !it.id) it.id = 'ref-' + m0[1];\n        } else if (n.tagName === 'OL') { refs[++k] = t; if (!it.id) it.id = 'ref-' + k; }\n      });\n      n = n.nextElementSibling;\n    }\n  }\n  if (Object.keys(refs).length) {\n    var walker = document.createTreeWalker(doc, NodeFilter.SHOW_TEXT, { acceptNode: function(node){\n      if (!/\\[\\d/.test(node.nodeValue) || /[$\\\\]/.test(node.nodeValue)) return NodeFilter.FILTER_REJECT;\n      var p = node.parentNode; if (!p || p.closest('pre,code,mjx-container,a,.refs-skip') || (refHead && refHead.compareDocumentPosition(p) & Node.DOCUMENT_POSITION_FOLLOWING)) return NodeFilter.FILTER_REJECT;\n      return NodeFilter.FILTER_ACCEPT; } });\n    var hits = []; while (walker.nextNode()) hits.push(walker.currentNode);\n    hits.forEach(function(node){\n      var html = esc(node.nodeValue).replace(/(^|[^\\[\\],\\d\\w])\\[(\\d{1,3}(?:\\s*[,\u2013-]\\s*\\d{1,3})*)\\](?![\\[\\w(])/g, function(m, pre, inner){\n        var nums = inner.split(/\\s*[,\u2013-]\\s*/).map(Number);\n        if (nums.some(function(x){ return !x || !refs[x]; })) return m;\n        return pre + '[' + inner.split(/\\s*,\\s*/).map(function(part){ var first = Number(part.split(/\\s*[\u2013-]\\s*/)[0]); return '<a class=\"cite-n\" href=\"#ref-' + first + '\" data-ref=\"' + first + '\">' + esc(part) + '</a>'; }).join(', ') + ']';\n      });\n      if (html === esc(node.nodeValue)) return;\n      var span = document.createElement('span'); span.innerHTML = html; node.parentNode.replaceChild(span, node);\n    });\n    var pop = $('refpop'), hideT;\n    function showRef(a){ clearTimeout(hideT); var n = a.getAttribute('data-ref'); pop.innerHTML = '<b>[' + esc(n) + ']</b> ' + esc(refs[n]).slice(0, 600); pop.hidden = false; var r = a.getBoundingClientRect(); var x = Math.min(scrollX + r.left, scrollX + innerWidth - pop.offsetWidth - 12); pop.style.left = Math.max(8, x) + 'px'; pop.style.top = (scrollY + r.bottom + 8) + 'px'; }\n    doc.addEventListener('mouseover', function(e){ var a = e.target.closest('.cite-n'); if (a) showRef(a); });\n    doc.addEventListener('focusin', function(e){ var a = e.target.closest('.cite-n'); if (a) showRef(a); });\n    doc.addEventListener('mouseout', function(e){ if (e.target.closest('.cite-n')) hideT = setTimeout(function(){ pop.hidden = true; }, 150); });\n    doc.addEventListener('focusout', function(){ pop.hidden = true; });\n  }\n\n  // ---- tabs and the living rail\n  var tabs = [].slice.call(document.querySelectorAll('.tabs [role=tab]'));\n  function openTab(name){\n    tabs.forEach(function(t){ var on = t.getAttribute('data-tab') === name; t.setAttribute('aria-selected', on ? 'true' : 'false'); t.tabIndex = on ? 0 : -1; $('t-' + t.getAttribute('data-tab')).hidden = !on; });\n    if (name !== 'ask') loadContext();\n  }\n  tabs.forEach(function(t, i){\n    t.addEventListener('click', function(){ openTab(t.getAttribute('data-tab')); });\n    t.addEventListener('keydown', function(e){ var d = e.key === 'ArrowRight' ? 1 : e.key === 'ArrowLeft' ? -1 : 0; if (!d) return; var n = tabs[(i + d + tabs.length) % tabs.length]; n.focus(); n.click(); });\n  });\n  var ctx = null, ctxP = null;\n  function loadContext(){\n    if (ctxP) return ctxP;\n    ctxP = fetch('/api/paper-context/' + encodeURIComponent(D.slug)).then(function(r){ return r.json(); }).then(function(d){ ctx = d; paintContext(d); return d; }).catch(function(){\n      ['ctx','ver','rel'].forEach(function(k){ $('t-' + k).innerHTML = '<p class=\"none\">Could not load this right now.</p>'; }); ctxP = null;\n    });\n    return ctxP;\n  }\n  var COL = { Concept: '--teal', ResearchQuestion: '--rust', Finding: '--violet', Theorem: '--amber' };\n  var LBL = { Concept: 'Concepts', ResearchQuestion: 'Open questions', Finding: 'Findings', Theorem: 'Theorems' };\n  function paintContext(d){\n    var c = d.concepts || [];\n    var html = '';\n    if (c.length) {\n      if (c.length >= 3) html += miniGraph(c);\n      ['Concept','ResearchQuestion','Finding','Theorem'].forEach(function(lb){\n        var xs = c.filter(function(x){ return x.label === lb; }); if (!xs.length) return;\n        html += '<div class=\"ctx-g\"><h3>' + LBL[lb] + '</h3><div class=\"ctx-l' + (lb === 'ResearchQuestion' ? ' q' : '') + '\">' + xs.map(function(x){ return '<button type=\"button\" data-ask=\"' + esc(lb === 'ResearchQuestion' ? 'Does this paper bear on the open question: ' + x.name : 'How does this paper use or relate to ' + x.name + '?') + '\" style=\"--c:var(' + COL[lb] + ')\"><i></i>' + esc(x.name) + '</button>'; }).join('') + '</div></div>';\n      });\n      html += '<p class=\"fine\">From the QNFO knowledge graph, matched on this paper\u2019s key terms. Pick one to ask how it connects.</p>';\n    } else html = '<p class=\"none\">No knowledge-graph nodes match this paper yet.</p>';\n    $('t-ctx').innerHTML = html;\n    var v = d.versions || [];\n    var vh = v.length ? '<ul class=\"vl\">' + v.map(function(x){ return '<li class=\"' + (x.current ? 'cur' : '') + '\"><span class=\"v\">' + esc(x.version ? 'v' + x.version : '\u2013') + '</span>' + (x.current ? '<span>This version</span>' : '<a href=\"/papers/' + esc(x.slug) + '\">' + tx(x.title_tex || x.title) + '</a>') + '<small>' + esc(x.date) + (x.doi ? ' \u00b7 doi:' + esc(x.doi) : '') + '</small></li>'; }).join('') + '</ul>' : '';\n    vh += '<p class=\"fine\">' + (v.length > 1 ? v.length + ' versions of this work are on papers.qnfo.org. ' : 'This is the only version on papers.qnfo.org. ') + (D.doi ? 'DOI: <a href=\"https://doi.org/' + esc(D.doi) + '\">' + esc(D.doi) + '</a>.' : '') + '</p>';\n    $('t-ver').innerHTML = vh;\n    var r = d.related || [];\n    $('t-rel').innerHTML = r.length ? '<ul class=\"rl\">' + r.map(function(x){ return '<li><a href=\"/papers/' + esc(x.slug) + '\">' + tx(x.title_tex || x.title) + '</a><p>' + tx(x.excerpt_tex || x.excerpt) + '</p><small>' + esc(x.cat) + ' \u00b7 ' + esc(x.date) + '</small></li>'; }).join('') + '</ul>' : '<p class=\"none\">No closely related papers found.</p>';\n    typeset($('rail'));\n  }\n  function miniGraph(c){\n    var W = 320, H = 190, cx = W / 2, cy = H / 2, xs = c.slice(0, 10);\n    var out = '<svg class=\"mini\" viewBox=\"0 0 ' + W + ' ' + H + '\" role=\"img\" aria-label=\"This paper and the knowledge-graph nodes it touches\">';\n    var pts = xs.map(function(x, i){ var a = -Math.PI / 2 + i * 2 * Math.PI / xs.length, rx = x.label === 'Concept' ? 118 : 96, ry = x.label === 'Concept' ? 70 : 58; return { x: cx + rx * Math.cos(a), y: cy + ry * Math.sin(a), n: x }; });\n    pts.forEach(function(p){ out += '<line x1=\"' + cx + '\" y1=\"' + cy + '\" x2=\"' + p.x.toFixed(1) + '\" y2=\"' + p.y.toFixed(1) + '\"/>'; });\n    out += '<circle cx=\"' + cx + '\" cy=\"' + cy + '\" r=\"9\" fill=\"var(--ink)\"/>';\n    pts.forEach(function(p, i){ var nm = p.n.name.length > 22 ? p.n.name.slice(0, 21) + '...' : p.n.name; var right = p.x >= cx; out += '<g class=\"c\" data-i=\"' + i + '\"><title>' + esc(p.n.label + ': ' + p.n.name) + '</title><circle cx=\"' + p.x.toFixed(1) + '\" cy=\"' + p.y.toFixed(1) + '\" r=\"6\" fill=\"var(' + COL[p.n.label] + ')\"/><text x=\"' + (p.x + (right ? 9 : -9)).toFixed(1) + '\" y=\"' + (p.y + 3).toFixed(1) + '\" text-anchor=\"' + (right ? 'start' : 'end') + '\">' + esc(nm) + '</text></g>'; });\n    return out + '</svg>';\n  }\n  rail.addEventListener('click', function(e){\n    var b = e.target.closest('[data-ask]'); if (b) { openTab('ask'); ask(b.getAttribute('data-ask')); return; }\n    var g = e.target.closest('g.c'); if (g && ctx) { var x = ctx.concepts[Number(g.getAttribute('data-i'))]; if (x) { openTab('ask'); ask('How does this paper use or relate to ' + x.name + '?'); } }\n  });\n  if ('requestIdleCallback' in window) requestIdleCallback(function(){ loadContext(); }, {timeout: 4000}); else setTimeout(loadContext, 2500);\n\n  // ---- Ask this paper (ask.qwav.tech, paper pinned as source [1])\n  var form = $('ask-f'), qa = $('ask-q'), out = $('ask-out'), hist = [];\n  function md(s){\n    var lines = String(s).replace(/\\r/g, '').split('\\n'), o = [], list = null, para = [];\n    function inl(t){ return esc(t).replace(/\\*\\*([^*]+)\\*\\*/g, '<strong>$1</strong>').replace(/(^|[^*\\w])\\*([^*\\n]+)\\*(?!\\w)/g, '$1<em>$2</em>').replace(/`([^`]+)`/g, '<code>$1</code>').replace(/\\[(\\d{1,2}(?:\\s*[,\u2013-]\\s*\\d{1,2})*)\\]/g, function(m, x){ return x.split(/\\s*,\\s*/).map(function(n){ return '<a class=\"c\" href=\"#\" data-src=\"' + parseInt(n, 10) + '\">' + n + '</a>'; }).join(''); }); }\n    function flush(){ if (para.length) { o.push('<p>' + inl(para.join(' ')) + '</p>'); para = []; } }\n    function endList(){ if (list) { o.push('</' + list + '>'); list = null; } }\n    lines.forEach(function(l){\n      var h = /^#{1,4}\\s+(.+)/.exec(l), ul = /^\\s*[-*]\\s+(.+)/.exec(l), ol = /^\\s*\\d+[.)]\\s+(.+)/.exec(l);\n      if (h) { flush(); endList(); o.push('<h4>' + inl(h[1]) + '</h4>'); }\n      else if (ul || ol) { flush(); var t = ul ? 'ul' : 'ol'; if (list !== t) { endList(); o.push('<' + t + '>'); list = t; } o.push('<li>' + inl((ul || ol)[1]) + '</li>'); }\n      else if (!l.trim()) { flush(); endList(); }\n      else { endList(); para.push(l.trim()); }\n    });\n    flush(); endList(); return o.join('');\n  }\n  function ask(text){\n    text = String(text || '').trim(); if (text.length < 3) return;\n    $('ask-sugg').hidden = true;\n    var turn = document.createElement('div'); turn.className = 'turn';\n    turn.innerHTML = '<p class=\"q\">' + esc(text) + '</p><div class=\"st\"><span class=\"q-spin\"></span><span>Reading the paper</span></div><div class=\"ans\"></div>';\n    out.insertBefore(turn, out.firstChild);\n    var st = turn.querySelector('.st span:last-child'), ans = turn.querySelector('.ans'), raw = '', sources = [], doneD = null;\n    qa.value = ''; $('ask-go').disabled = true;\n    if (innerWidth < 860) turn.scrollIntoView({behavior:'smooth', block:'start'}); else $('t-ask').scrollTop = 0;\n    fetch(D.ask + '/api/ask', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({query: text, paper: D.slug, history: hist.slice(-2)})}).then(function(r){\n      if (!r.ok || !r.body) return r.json().then(function(j){ throw new Error(j.error || ('HTTP ' + r.status)); });\n      var rd = r.body.getReader(), dec = new TextDecoder(), buf = '';\n      function pump(){ return rd.read().then(function(x){\n        if (x.done) return;\n        buf += dec.decode(x.value, {stream:true});\n        var parts = buf.split('\\n\\n'); buf = parts.pop();\n        parts.forEach(function(b){\n          var ev = (/^event: (.+)$/m.exec(b) || [])[1], dl = (/^data: (.+)$/m.exec(b) || [])[1]; if (!ev || !dl) return;\n          var d; try { d = JSON.parse(dl); } catch(e) { return; }\n          if (ev === 'status') st.textContent = d.stage === 'writing' ? 'Writing from ' + sources.length + ' sources' : d.stage === 'thinking' ? 'Reasoning over ' + sources.length + ' sources' : 'Reading the paper';\n          else if (ev === 'meta') sources = d.sources || [];\n          else if (ev === 'token') { raw += d.t; var vis = raw.split(/\\n?\\s*\\**FOLLOWUPS:?/i)[0]; ans.innerHTML = md(vis); ans.lastElementChild && ans.lastElementChild.classList.add('cur'); }\n          else if (ev === 'done') doneD = d;\n          else if (ev === 'error') { ans.insertAdjacentHTML('beforeend', '<p class=\"err\">' + esc(d.error) + '</p>'); }\n        });\n        return pump();\n      }); }\n      return pump();\n    }).catch(function(e){ ans.insertAdjacentHTML('beforeend', '<p class=\"err\">' + esc(e && e.message ? 'The answer could not be fetched (' + e.message + ').' : 'The answer could not be fetched.') + '</p>'); }).then(function(){\n      var body = raw.split(/\\n?\\s*\\**FOLLOWUPS:?/i)[0].trim();\n      ans.innerHTML = md(body) + (ans.querySelector('.err') ? ans.querySelector('.err').outerHTML : '');\n      turn.querySelector('.st').remove();\n      if (sources.length) ans.insertAdjacentHTML('beforeend', '<ol class=\"srcs\">' + sources.map(function(s){ var here = s.slug === D.slug; return '<li id=\"as-' + s.n + '\"><span class=\"n\">' + s.n + '</span><span>' + (here ? '<a href=\"#main\">' + esc(s.title) + '</a><span class=\"here\">this paper</span>' : '<a href=\"' + esc(s.url || ('/papers/' + s.slug)) + '\">' + esc(s.title) + '</a>') + '</span></li>'; }).join('') + '</ol>');\n      if (doneD && doneD.followups && doneD.followups.length) ans.insertAdjacentHTML('beforeend', '<div class=\"fu\">' + doneD.followups.map(function(f){ return '<button type=\"button\" data-ask=\"' + esc(f) + '\">' + esc(f) + '</button>'; }).join('') + '</div>');\n      if (doneD && doneD.id) { ans.insertAdjacentHTML('beforeend', '<div class=\"fb\">Useful? <button type=\"button\" data-h=\"1\">Yes</button><button type=\"button\" data-h=\"0\">No</button></div>'); var fb = ans.querySelector('.fb'); fb.addEventListener('click', function(e){ var b = e.target.closest('button'); if (!b) return; fetch(D.ask + '/api/feedback', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({id: doneD.id, helpful: Number(b.getAttribute('data-h'))})}).then(function(r){ fb.textContent = r.ok ? 'Thanks, recorded.' : 'Could not record that.'; }, function(){ fb.textContent = 'Could not record that.'; }); }); }\n      if (body) hist.push({q: text, a: body.slice(0, 1500)});\n      $('ask-go').disabled = false; typeset(ans);\n    });\n  }\n  out.addEventListener('click', function(e){\n    var c = e.target.closest('a.c'); if (c) { e.preventDefault(); var li = c.closest('.ans').querySelector('#as-' + c.getAttribute('data-src')); if (li) { li.scrollIntoView({block:'nearest', behavior:'smooth'}); li.style.background = 'var(--amber-wash)'; setTimeout(function(){ li.style.background = ''; }, 1200); } }\n  });\n  form.addEventListener('submit', function(e){ e.preventDefault(); ask(qa.value); });\n  qa.addEventListener('keydown', function(e){ if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); ask(qa.value); } });\n  $('ask-sugg').addEventListener('click', function(e){ var b = e.target.closest('button'); if (b) ask(b.textContent); });\n  [].forEach.call(document.querySelectorAll('[data-go=ask]'), function(b){ b.addEventListener('click', function(){ openTab('ask'); if (innerWidth < 860) rail.scrollIntoView({behavior:'smooth'}); setTimeout(function(){ qa.focus({preventScroll: innerWidth >= 860}); }, innerWidth < 860 ? 450 : 0); }); });\n\n  // ---- select a passage: ask about it, or copy it as a quote with its citation\n  var sp = $('selpop'), selText = '';\n  function citeLine(){ return D.authors.join(', ') + ' (' + String(D.date).slice(0, 4) + '). ' + D.title + '.' + (D.doi ? ' https://doi.org/' + D.doi : ' ' + D.url); }\n  document.addEventListener('mouseup', function(e){\n    if (sp.contains(e.target)) return;\n    setTimeout(function(){\n      var s = getSelection(), t = s && String(s).trim();\n      if (!t || t.length < 12 || t.length > 900 || !s.rangeCount || !doc.contains(s.getRangeAt(0).commonAncestorContainer)) { sp.hidden = true; return; }\n      selText = t.replace(/\\s+/g, ' ');\n      var r = s.getRangeAt(0).getBoundingClientRect();\n      sp.hidden = false;\n      sp.style.left = Math.max(8, Math.min(scrollX + r.left + r.width / 2 - sp.offsetWidth / 2, scrollX + innerWidth - sp.offsetWidth - 8)) + 'px';\n      sp.style.top = (scrollY + r.top - sp.offsetHeight - 10) + 'px';\n    }, 10);\n  });\n  document.addEventListener('scroll', function(){ if (!sp.hidden && !getSelection().toString()) sp.hidden = true; }, {passive:true});\n  sp.addEventListener('click', function(e){\n    var b = e.target.closest('button'); if (!b) return;\n    if (b.getAttribute('data-sel') === 'ask') { openTab('ask'); ask('Explain this passage and how it fits the paper: \u201c' + selText.slice(0, 600) + '\u201d'); if (innerWidth < 860) rail.scrollIntoView({behavior:'smooth'}); }\n    else qCopy('\u201c' + selText + '\u201d \u2014 ' + citeLine(), 'Quote copied with its citation');\n    sp.hidden = true; getSelection().removeAllRanges();\n  });\n\n  // ---- cite and share\n  var dlg = $('cite-d'), fmt = 'apa';\n  function citeText(f){\n    var y = String(D.date).slice(0, 4) || 'n.d.', a = D.authors;\n    var apaA = a.map(function(n){ var p = n.trim().split(/\\s+/); var last = p.pop(); return last + ', ' + p.map(function(x){ return x.charAt(0) + '.'; }).join(' '); }).join(', ');\n    if (f === 'bibtex') { var key = (a[0] || 'qnfo').split(/\\s+/).pop().toLowerCase().replace(/[^a-z]/g, '') + y + (D.title.toLowerCase().match(/[a-z]{4,}/) || ['paper'])[0]; return '@misc{' + key + ',\\n  title     = {' + D.title + '},\\n  author    = {' + a.map(function(n){ var p = n.trim().split(/\\s+/); var last = p.pop(); return last + ', ' + p.join(' '); }).join(' and ') + '},\\n  year      = {' + y + '},\\n  version   = {' + D.version + '},\\n  publisher = {QNFO},\\n' + (D.doi ? '  doi       = {' + D.doi + '},\\n' : '') + '  url       = {' + (D.doi ? 'https://doi.org/' + D.doi : D.url) + '}\\n}'; }\n    if (f === 'plain') return citeLine();\n    return apaA + ' (' + y + '). ' + D.title + ' (Version ' + D.version + '). QNFO.' + (D.doi ? ' https://doi.org/' + D.doi : ' ' + D.url);\n  }\n  function paintCite(){ $('cite-t').textContent = citeText(fmt); [].forEach.call(dlg.querySelectorAll('[data-fmt]'), function(b){ b.classList.toggle('on', b.getAttribute('data-fmt') === fmt); }); }\n  $('b-cite').addEventListener('click', function(){ paintCite(); if (dlg.showModal) dlg.showModal(); else qCopy(citeText('apa'), 'Citation copied'); });\n  dlg.addEventListener('click', function(e){ var b = e.target.closest('[data-fmt]'); if (b) { fmt = b.getAttribute('data-fmt'); paintCite(); } if (e.target === dlg) dlg.close(); });\n  $('cite-copy').addEventListener('click', function(){ qCopy(citeText(fmt), 'Citation copied'); });\n  $('b-share').addEventListener('click', function(){ if (navigator.share) navigator.share({title: D.title, url: D.url}).catch(function(){}); else qCopy(D.url, 'Link copied'); });\n  if (location.hash) { var t = document.getElementById(decodeURIComponent(location.hash.slice(1))); if (t) setTimeout(function(){ t.scrollIntoView(); }, 300); }\n})();\n"; // standards-ok: browser-side script in a string literal (LP_PAPER_JS); its catches guard the visitor page, not the Worker
+// ---- QUICK-READ-1:BEGIN (3.20.0, 2026-10-19, owner directive, pillar reach) ----
+// Google Scholar shipped "Quick Read" on 2026-08-25 (scholar.googleblog.com): a result that discusses your question
+// offers one click that shows the paper as it answers THAT question  -  an overview, then Answers (each point with its
+// supporting detail behind "Show details"), Approach (the methods that bear on your question) and Considerations (the
+// caveats to weigh when reading the result). This is the same idea over the living-paper corpus, with the one thing a
+// corpus of full texts can add and a search index cannot: every statement on the page quotes a sentence of the paper,
+// and a statement whose evidence is not found in the text is dropped and counted instead of shown.
+//
+//   GET  /papers/<slug>/quickread           the question form; no model call
+//   GET  /papers/<slug>/quickread?q=...     same page; the browser asks for the answer (crawlers get the shell)
+//   POST /papers/<slug>/quickread  (q)      server-rendered answer, no JavaScript needed
+//   GET  /api/quickread/<slug>?q=...        JSON; &format=html returns the same markup the page paints
+//
+// SLA and the paths to an answer, in order (owner directive: no single-path process):
+//   1. a row in living-paper.quick_read for (paper, question)  -  target under 300 ms, no model call;
+//   2. one model call over the passages of this paper that the question touches  -  target under 8 s;
+//   3. a deterministic extractive read from the same retrieval when the model fails, times out (QR_TIMEOUT_MS) or
+//      returns nothing quotable  -  target under 1 s. The page therefore always answers, and names which path ran.
+// A question the paper does not touch at all is answered before any model call: coverage "none", no spend.
+var QR_QUESTION_MAX = 400;
+var QR_MAX_SECTIONS = 9;
+var QR_MAX_CHARS = 11000;
+var QR_MODEL = "@cf/moonshotai/kimi-k2.6";
+var QR_TIMEOUT_MS = 20000;
+var QR_PER_IP_HOUR = 20;
+var QR_PER_DAY = 400;
+var QR_TTL_DAYS = 45;
+var QR_CAVEAT_TITLE = /(limitation|caveat|discussion|conclusion|future|open (question|problem)|threat to validity|critique)/i;
+var QR_CAVEAT_RE = /\b(limitation|caveat|assum\w*|however|only (?:if|when)|fails?|cannot|does not|do not|not (?:yet|known|established)|beyond (?:the )?scope|future work|open (?:question|problem)|uncertain\w*|approximat\w*|restricted to|we leave|remains? (?:open|unclear))\b/i;
+var QR_METHOD_RE = /\b(we (?:derive|compute|measure|calculate|simulate|prove|construct|use|apply|estimate|benchmark|compare|fit|test)|method|approach|procedure|algorithm|protocol|we define|by definition|formally|bound|theorem|lemma|proof|experiment)\b/i;
+// HTML to text, and the comparison form used for evidence matching: lowercase letters and digits only, single spaced.
+// The comparison form drops TeX punctuation so a model quoting "the Z_2 invariant" matches a paper that writes
+// "$Z_2$", and an em dash matches a hyphen; nothing about word order is lost.
+function qrText(h) {
+  return String(h || "")
+    .replace(/<(script|style)[\s\S]*?<\/\1>/gi, " ")
+    .replace(/<[^>]+>/g, " ")
+    .replace(/&nbsp;/g, " ").replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, '"').replace(/&#39;/g, "'")
+    .replace(/\s+/g, " ").trim();
+}
+function qrNorm(s) {
+  return String(s || "").toLowerCase().replace(/[^a-z0-9]+/g, " ").replace(/\s+/g, " ").trim();
+}
+// The paper's own sections, carrying the same ids the paper page gives them (lpStructure), so an evidence link lands
+// on the exact section the sentence was taken from.
+function qrSections(md) {
+  var html = renderMarkdown(String(md || ""));
+  if (/<h1>/.test(html)) html = html.replace(/<(\/?)h([1-5])>/g, function(m, sl, n) { return "<" + sl + "h" + (Number(n) + 1) + ">"; });
+  var re = /<h([234])>([\s\S]*?)<\/h\1>/g, marks = [], m;
+  while ((m = re.exec(html))) marks.push({ lv: Number(m[1]), inner: m[2], start: m.index, end: re.lastIndex });
+  var used = new Set(), out = [];
+  for (var i = 0; i < marks.length; i++) {
+    var text = qrText(html.slice(marks[i].end, i + 1 < marks.length ? marks[i + 1].start : html.length));
+    out.push({ id: lpSlug(marks[i].inner, used), lv: marks[i].lv, title: qrText(marks[i].inner), text: text });
+  }
+  return out;
+}
+// Sentences long enough to stand as evidence on their own, and short enough to stay one claim.
+function qrSentences(text) {
+  var out = [];
+  String(text || "").replace(/\s+/g, " ").split(/(?<=[.!?\u3002])\s+(?=["(\u201cA-Z0-9])/).forEach(function(s) {
+    s = s.trim();
+    if (s.length >= 45 && s.length <= 700) out.push(s);
+  });
+  return out;
+}
+// Every sentence of the paper, keyed by comparison form: evidence is only ever accepted when it matches one of these.
+function qrIndex(md) {
+  var sections = qrSections(md), byNorm = new Map(), list = [], chars = 0;
+  sections.forEach(function(sec) {
+    chars += sec.text.length;
+    qrSentences(sec.text).forEach(function(raw) {
+      var n = qrNorm(raw);
+      if (n.length < 30 || byNorm.has(n)) return;
+      byNorm.set(n, { raw: raw, sid: sec.id });
+      list.push({ n: n, raw: raw, sid: sec.id });
+    });
+  });
+  return { sections: sections, byNorm: byNorm, list: list, chars: chars };
+}
+function qrTerms(q) {
+  var out = [], seen = new Set();
+  (String(q || "").toLowerCase().match(/[a-z][a-z0-9]{3,}/g) || []).forEach(function(w) {
+    if (LP_STOP.has(w)) return;
+    var s = lpStem(w);
+    if (LP_STOP.has(s) || seen.has(s)) return;
+    seen.add(s);
+    out.push(s);
+  });
+  return out.slice(0, 12);
+}
+function qrCount(hay, w) {
+  var n = 0, i = -1;
+  while ((i = hay.indexOf(" " + w, i + 1)) >= 0) n++;
+  return n;
+}
+function qrSentScore(sent, terms) {
+  var h = " " + qrNorm(sent) + " ", n = 0;
+  terms.forEach(function(w) { if (h.indexOf(" " + w) >= 0) n++; });
+  return n;
+}
+function qrRank(sections, terms) {
+  return sections.map(function(sec) {
+    var h = " " + qrNorm(sec.title) + " " + qrNorm(sec.text) + " ";
+    var score = 0, hit = 0;
+    terms.forEach(function(w) {
+      var n = qrCount(h, w);
+      if (n) { hit++; score += Math.min(5, n) * (1 + Math.min(1.5, w.length / 8)); }
+    });
+    if (sec.lv === 2) score *= 1.05;
+    return { sec: sec, score: score, hit: hit };
+  }).sort(function(a, b) { return b.score - a.score; });
+}
+// The passages handed to the model: the sections the question touches, plus one caveat section even when it does not
+// mention the question, because Considerations is about the boundaries of the result rather than its words.
+function qrPick(ranked) {
+  var picked = [], chars = 0, seen = new Set(), caved = 0;
+  for (var i = 0; i < ranked.length && picked.length < QR_MAX_SECTIONS; i++) {
+    var r = ranked[i];
+    if (!r.hit || !r.sec.text || r.sec.text.length < 80) continue;
+    if (picked.length && chars + r.sec.text.length > QR_MAX_CHARS) continue;
+    seen.add(r.sec.id); picked.push(r.sec); chars += r.sec.text.length;
+  }
+  for (var j = 0; j < ranked.length && picked.length < QR_MAX_SECTIONS + 1 && !caved; j++) {
+    var s = ranked[j].sec;
+    if (seen.has(s.id) || !QR_CAVEAT_TITLE.test(s.title)) continue;
+    if (s.text.length < 120 || chars + s.text.length > QR_MAX_CHARS + 2500) continue;
+    seen.add(s.id); picked.push(s); chars += s.text.length; caved = 1;
+  }
+  return { sections: picked, chars: chars };
+}
+// answered: the question's words run through the paper and at least one passage carries them;
+// partial:  some of the question's words appear, none of the passages answers it directly;
+// none:     the paper never uses these words  -  no model call is made and the page says so.
+function qrCoverage(sections, terms, picked) {
+  if (!terms.length) return "partial";
+  var all = " " + qrNorm(sections.map(function(s) { return s.text; }).join(" ")) + " ";
+  var hits = terms.filter(function(w) { return qrCount(all, w) > 0; }).length;
+  if (!hits) return "none";
+  if (!picked.length) return "partial";
+  return hits >= Math.max(1, Math.ceil(terms.length * 0.4)) ? "answered" : "partial";
+}
+function qrSystemPrompt(title) {
+  return 'You present ONE paper as it answers ONE research question. The only source is the PASSAGES in the user message, all taken from the paper titled "' + title + '". '
+    + "Reply with this JSON object and nothing else: "
+    + '{"overview":"one or two sentences on what this paper says about the question","answers":[{"point":"what the paper establishes about the question","evidence":"sentence(s) copied word for word from the PASSAGES","section":"the heading the evidence sits under"}],'
+    + '"approach":[{"point":"a method or technique in the paper that bears on the question","evidence":"sentence(s) copied word for word from the PASSAGES","section":"heading"}],'
+    + '"considerations":[{"point":"a caveat to keep in mind when weighing the result","evidence":"sentence(s) copied word for word from the PASSAGES","section":"heading"}]} '
+    + "Rules: (1) evidence is copied word for word from ONE passage, 1 to 3 consecutive sentences, with no quotation marks added and no number, name or mark of your own. "
+    + "(2) 1 to 4 answers, 1 to 3 approach items, 0 to 3 considerations; fewer is better than an item you cannot quote. "
+    + "(3) When the passages do not answer the question, return an empty answers array and say in overview which part of the question the paper does not cover. "
+    + "(4) Your memory is not a source. No text outside the JSON object.";
+}
+function qrParse(raw) {
+  var s = String(raw || "").replace(/<think>[\s\S]*?<\/think>/g, "").trim();
+  s = s.replace(/^```(?:json)?/i, "").replace(/```$/, "").trim();
+  var i = s.indexOf("{"), j = s.lastIndexOf("}");
+  if (i < 0 || j <= i) return null;
+  var o = null;
+  try { o = JSON.parse(s.slice(i, j + 1)); } catch (e) { return null; }
+  if (!o || typeof o !== "object" || Array.isArray(o)) return null;
+  var items = function(a, max) {
+    if (!Array.isArray(a)) return [];
+    return a.filter(function(x) {
+      return x && typeof x === "object" && typeof x.point === "string" && typeof x.evidence === "string" && x.point.trim() && x.evidence.trim();
+    }).slice(0, max);
+  };
+  return {
+    overview: typeof o.overview === "string" ? o.overview.trim() : "",
+    answers: items(o.answers, 4),
+    approach: items(o.approach, 3),
+    considerations: items(o.considerations, 3)
+  };
+}
+// Evidence is accepted only where the paper's own sentences match it: each evidence sentence must equal a sentence of
+// the paper in comparison form, and the matched sentences must cover at least half of what the model quoted. The quote
+// shown is the paper's text, never the model's.
+function qrMatchEvidence(evidence, idx) {
+  var sents = qrSentences(evidence);
+  if (!sents.length) sents = String(evidence || "").split(/\n+/).map(function(x) { return x.trim(); }).filter(Boolean);
+  var keep = [], sec = null, got = 0, total = 0;
+  sents.forEach(function(s) {
+    var n = qrNorm(s);
+    total += n.length;
+    var hit = n.length >= 20 ? idx.byNorm.get(n) : null;
+    if (hit) { keep.push(hit.raw); if (!sec) sec = hit.sid; got += n.length; }
+  });
+  if (!keep.length || got < Math.max(40, total * 0.5)) return null;
+  return { quote: keep.join(" "), section: sec, exact: keep.length === sents.length };
+}
+function qrVerifyItems(items, idx, paperText, cap, titleOf) {
+  var out = [], dropped = 0;
+  (items || []).forEach(function(it) {
+    var m = qrMatchEvidence(it.evidence, idx);
+    if (!m) { dropped++; return; }
+    // The point's own prose may not carry a DOI, link, author citation or figure the paper does not contain
+    // (the ASK-GROUND-1 standard); a point that loses every sentence to that test is dropped, not softened. The
+    // removal note askGroundAnswer appends is not answer text, so it never counts as a surviving point.
+    var point = askGroundAnswer(String(it.point || ""), paperText).text
+      .split("\n").filter(function(l) { return !/^\s*_\d+ statement/.test(l); })
+      .join(" ").replace(/\s+/g, " ").trim();
+    if (!point || /^_?\d+ statement/.test(point)) { dropped++; return; }
+    out.push({ point: point, quote: m.quote, section: m.section || "", section_title: titleOf[m.section] || "", exact: m.exact });
+  });
+  return { items: out.slice(0, cap), dropped: dropped };
+}
+// The third path: no model. The paper's own best sentences for the question, its method sentences and its caveat
+// sentences, quoted as they are. Every item is verbatim by construction, so nothing here can be invented.
+function qrExtractive(ranked, terms, idx) {
+  var out = { answers: [], approach: [], considerations: [] };
+  var titleOf = {}, used = new Set();
+  idx.sections.forEach(function(s) { titleOf[s.id] = s.title; });
+  // One sentence is used once: the same line cannot stand as an Answer and an Approach at the same time.
+  var push = function(bucket, x, cap) {
+    if (bucket.length >= cap || used.has(x.raw)) return;
+    used.add(x.raw);
+    bucket.push({ point: x.raw, quote: x.raw, section: x.sid, section_title: titleOf[x.sid] || "", exact: true, extractive: true });
+  };
+  var pool = [], methods = [], cav = [];
+  ranked.slice(0, 7).forEach(function(r) {
+    if (!r.hit) return;
+    qrSentences(r.sec.text).forEach(function(raw) {
+      var s = qrSentScore(raw, terms);
+      if (s) pool.push({ raw: raw, sid: r.sec.id, s: s + Math.min(2, r.score / 12) });
+      if (QR_METHOD_RE.test(raw)) methods.push({ raw: raw, sid: r.sec.id, s: s });
+    });
+  });
+  ranked.forEach(function(r) {
+    var titled = QR_CAVEAT_TITLE.test(r.sec.title);
+    qrSentences(r.sec.text).forEach(function(raw) {
+      if (!QR_CAVEAT_RE.test(raw)) return;
+      cav.push({ raw: raw, sid: r.sec.id, s: (titled ? 3 : 1) + qrSentScore(raw, terms) });
+    });
+  });
+  var byScore = function(a, b) { return b.s - a.s || a.raw.length - b.raw.length; };
+  pool.sort(byScore); methods.sort(byScore); cav.sort(byScore);
+  pool.slice(0, 3).forEach(function(x) { push(out.answers, x, 3); });
+  methods.slice(0, 3).forEach(function(x) { push(out.approach, x, 3); });
+  cav.slice(0, 3).forEach(function(x) { push(out.considerations, x, 3); });
+  return out;
+}
+async function qrModel(env, title, question, sections) {
+  if (!env.AI || !sections.length) return null;
+  var passages = sections.map(function(s) { return "### " + s.title + "\n" + s.text; }).join("\n\n");
+  var run = env.AI.run(QR_MODEL, {
+    messages: [
+      { role: "system", content: qrSystemPrompt(title) },
+      { role: "user", content: "QUESTION: " + question + "\n\nPASSAGES:\n" + passages }
+    ],
+    max_tokens: 1600,
+    temperature: 0.1,
+    reasoning_effort: "none"
+  }).then(function(result) {
+    return qrParse(String(result && (result.response || (result.choices && result.choices[0] && result.choices[0].message && result.choices[0].message.content)) || ""));
+  }).catch(function(e) {
+    console.error(JSON.stringify({ worker: "qnfo-gateway", where: "qrModel", error: String(e && e.message || e).slice(0, 200) }));
+    return null;
+  });
+  // The deadline is cleared when the model answers first, so no timer outlives the request.
+  var timer = null;
+  var out = await Promise.race([run, new Promise(function(r) { timer = setTimeout(function() { r(null); }, QR_TIMEOUT_MS); })]);
+  if (timer) clearTimeout(timer);
+  return out;
+}
+async function qrBuild(env, paper, question) {
+  var body = fixMojibake(String(stripFrontmatter(paper.body_md || "") || paper.abstract || ""));
+  body = retiredLines(body);
+  var idx = qrIndex(body);
+  var terms = qrTerms(question);
+  var ranked = qrRank(idx.sections, terms);
+  var pick = qrPick(ranked);
+  var out = {
+    coverage: qrCoverage(idx.sections, terms, pick.sections),
+    terms: terms,
+    passages: pick.sections.length,
+    chars: pick.chars,
+    sections_total: idx.sections.length,
+    answers: [], approach: [], considerations: [],
+    dropped: 0, filled: "", method: "none", overview: ""
+  };
+  if (out.coverage === "none") {
+    out.closest = ranked.slice(0, 3).map(function(r) { return r.sec.title; }).filter(Boolean);
+    return out;
+  }
+  var titleOf = {};
+  idx.sections.forEach(function(s) { titleOf[s.id] = s.title; });
+  var ex = qrExtractive(ranked, terms, idx);
+  var model = await qrModel(env, displayTitle(paper.title), question, pick.sections);
+  var fromModel = 0;
+  if (model) {
+    var a = qrVerifyItems(model.answers, idx, body, 4, titleOf);
+    var b = qrVerifyItems(model.approach, idx, body, 3, titleOf);
+    var c = qrVerifyItems(model.considerations, idx, body, 3, titleOf);
+    out.answers = a.items; out.approach = b.items; out.considerations = c.items;
+    out.dropped = a.dropped + b.dropped + c.dropped;
+    fromModel = a.items.length + b.items.length + c.items.length;
+    out.overview = askGroundAnswer(String(model.overview || ""), body).text.replace(/\s+/g, " ").trim();
+  }
+  if (!out.answers.length && ex.answers.length) { out.answers = ex.answers; out.filled = "answers"; }
+  if (!out.approach.length && ex.approach.length) { out.approach = ex.approach; out.filled = out.filled ? out.filled + "+approach" : "approach"; }
+  if (!out.considerations.length && ex.considerations.length) { out.considerations = ex.considerations; out.filled = out.filled ? out.filled + "+considerations" : "considerations"; }
+  out.method = fromModel ? (out.filled ? "model+extractive" : "model") : "extractive";
+  if (!out.overview) {
+    out.overview = out.answers.length
+      ? out.answers.length + (out.answers.length === 1 ? " passage" : " passages") + " of the paper bear on this question; each is quoted from the text."
+      : "The paper uses these words but states no sentence that answers the question.";
+  }
+  return out;
+}
+var qrReady = false;
+async function qrTable(env) {
+  if (qrReady) return;
+  await env.LIVING_PAPER.prepare("CREATE TABLE IF NOT EXISTS quick_read (slug TEXT NOT NULL, q_hash TEXT NOT NULL, question TEXT NOT NULL, payload TEXT NOT NULL, method TEXT, coverage TEXT, dropped INTEGER NOT NULL DEFAULT 0, chars INTEGER NOT NULL DEFAULT 0, model TEXT, hits INTEGER NOT NULL DEFAULT 0, created_at TEXT NOT NULL, last_viewed TEXT, PRIMARY KEY (slug, q_hash))").run();
+  qrReady = true;
+}
+async function qrQid(slug, question) {
+  var d = await crypto.subtle.digest("SHA-256", new TextEncoder().encode("quickread:" + slug + ":" + qrNorm(question)));
+  return Array.from(new Uint8Array(d).slice(0, 10)).map(function(b) { return b.toString(16).padStart(2, "0"); }).join("");
+}
+async function qrCacheGet(env, slug, qid) {
+  try {
+    await qrTable(env);
+    var r = await env.LIVING_PAPER.prepare("SELECT payload FROM quick_read WHERE slug = ?1 AND q_hash = ?2 LIMIT 1").bind(slug, qid).first();
+    if (!r || !r.payload) return null;
+    var p = JSON.parse(r.payload);
+    return p && typeof p === "object" ? p : null;
+  } catch (e) {
+    return null; // standards-ok: a cache read failure falls through to generation; the write path logs
+  }
+}
+async function qrCacheTouch(env, slug, qid) {
+  try {
+    await env.LIVING_PAPER.prepare("UPDATE quick_read SET hits = hits + 1, last_viewed = ?3 WHERE slug = ?1 AND q_hash = ?2").bind(slug, qid, new Date().toISOString()).run();
+  } catch (e) {
+    // standards-ok: a hit counter is not worth a log line per request
+  }
+}
+async function qrCachePut(env, slug, qid, question, payload) {
+  try {
+    await qrTable(env);
+    await env.LIVING_PAPER.prepare("INSERT INTO quick_read (slug,q_hash,question,payload,method,coverage,dropped,chars,model,created_at) VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10) ON CONFLICT(slug,q_hash) DO UPDATE SET payload=excluded.payload, method=excluded.method, coverage=excluded.coverage, dropped=excluded.dropped, chars=excluded.chars, model=excluded.model")
+      .bind(slug, qid, String(question).slice(0, QR_QUESTION_MAX), JSON.stringify(payload), payload.method || "", payload.coverage || "", payload.dropped || 0, payload.chars || 0, payload.method === "extractive" ? "" : QR_MODEL, new Date().toISOString()).run();
+  } catch (e) {
+    console.error(JSON.stringify({ worker: "qnfo-gateway", where: "qrCachePut", error: String(e && e.message || e).slice(0, 200) }));
+  }
+}
+async function qrRateCheck(request, env) {
+  if (!env.DB) return null;
+  try {
+    var now = new Date().toISOString();
+    var ip = request.headers.get("cf-connecting-ip") || "unknown";
+    var dg = await crypto.subtle.digest("SHA-256", new TextEncoder().encode("qr-rate:" + (env.SYNC_TOKEN || "") + ":" + ip));
+    var h = Array.from(new Uint8Array(dg).slice(0, 8)).map(function(b) { return b.toString(16).padStart(2, "0"); }).join("");
+    if (await askRateHit(env, "qr-ip:" + h + ":" + now.slice(0, 13)) > QR_PER_IP_HOUR) return json({ error: "rate_limited", message: "Too many quick reads from this address; try again next hour." }, 429);
+    if (await askRateHit(env, "qr-day:" + now.slice(0, 10)) > QR_PER_DAY) return json({ error: "rate_limited", message: "The daily quick-read budget is spent; try again tomorrow (UTC)." }, 429);
+  } catch (e) {
+    // standards-ok: a counter failure lets the read through (the same choice askRateCheck makes); QR_PER_DAY bounds the spend
+  }
+  return null;
+}
+async function qrPrune(env) {
+  if (!env.LIVING_PAPER) return;
+  try {
+    await qrTable(env);
+    var cut = new Date(Date.now() - QR_TTL_DAYS * 864e5).toISOString();
+    await env.LIVING_PAPER.prepare("DELETE FROM quick_read WHERE created_at < ?1").bind(cut).run();
+    await env.LIVING_PAPER.prepare("DELETE FROM quick_read WHERE rowid IN (SELECT rowid FROM quick_read ORDER BY hits ASC, created_at ASC LIMIT -1 OFFSET 4000)").run();
+  } catch (e) {
+    console.log("QUICK-READ-1 prune failed: " + String(e && e.message || e).slice(0, 200));
+  }
+}
+// The answered payload as markup. Both the page and the JSON endpoint (format=html) use this one renderer, so the
+// server-rendered answer and the JavaScript-painted answer cannot drift.
+function qrFragment(d, paper) {
+  var href = "/papers/" + escAttr(paper.slug);
+  var item = function(it) {
+    var anchor = href + (it.section ? "#" + escAttr(it.section) : "");
+    var same = qrNorm(it.quote) === qrNorm(it.point);
+    var src = it.section_title ? '<span class="qr-where">' + esc(it.section_title) + "</span>" : "";
+    var body = same
+      ? '<p class="qr-src">' + src + '<a href="' + anchor + '">Quoted from the paper</a></p>'
+      : '<details class="qr-det"><summary>Show details</summary><blockquote class="qr-q">' + esc(it.quote) + "</blockquote>" + src + '<a class="qr-a" href="' + anchor + '">Read it in the paper</a></details>';
+    return '<li class="qr-i"><p class="qr-p">' + esc(it.point) + "</p>" + body + "</li>";
+  };
+  var section = function(label, list, note) {
+    if (!list.length) return '<section class="qr-sec"><h2>' + esc(label) + '</h2><p class="qr-empty">None stated in the paper for this question.</p></section>';
+    return '<section class="qr-sec"><h2>' + esc(label) + "</h2>" + (note ? '<p class="qr-note">' + esc(note) + "</p>" : "") + '<ol class="qr-list">' + list.map(item).join("") + "</ol></section>";
+  };
+  if (d.coverage === "none") {
+    var near = (d.closest || []).length ? " What it does cover: " + (d.closest || []).map(function(t) { return "\u201c" + t + "\u201d"; }).join(", ") + "." : "";
+    return '<div class="qr-void q-card"><h2>This paper does not answer this question</h2><p>None of its ' + (d.sections_total || 0) + " sections uses the words of your question" + (d.terms && d.terms.length ? " (" + d.terms.slice(0, 6).map(function(t) { return esc(t); }).join(", ") + ")" : "") + "." + near + ' Nothing was generated from outside the text.</p><p class="qr-hint"><a href="' + href + '">Read the paper</a> or <a href="' + LP_ASK + '/" rel="nofollow" data-ask-q="' + escAttr(d.question || "") + '">ask the whole corpus</a>.</p></div>';
+  }
+  var disc = [];
+  disc.push(d.method === "model" ? "Written from the passages above and checked against the text" : d.method === "model+extractive" ? "Partly written, partly quoted (a section the model left empty is served by the paper\u2019s own sentences)" : "Read, not written: every line below is a sentence of the paper");
+  disc.push((d.passages || 0) + " of " + (d.sections_total || 0) + " sections read, " + Number(d.chars || 0).toLocaleString("en-US") + " characters");
+  if (d.dropped) disc.push(d.dropped + " statement" + (d.dropped === 1 ? "" : "s") + " dropped: evidence not found in the text");
+  if (d.cached) disc.push("cached");
+  return '<div class="qr-head"><p class="qr-overview">' + esc(d.overview || "") + "</p></div>"
+    + section("Answers", d.answers || [], "What the paper says about your question, in its own sentences.")
+    + section("Approach", d.approach || [], "The methods and techniques that bear on your question.")
+    + section("Considerations", d.considerations || [], "Caveats to weigh when you use these results.")
+    + '<p class="qr-disc">' + disc.map(function(x) { return esc(x); }).join(" \u00b7 ") + ".</p>";
+}
+var QR_CSS = ".qr .ph h1{font-size:clamp(26px,3.2vw,40px)}.qr-form{margin:18px 0 8px;max-width:720px}.qr-form label{display:block;font:500 13px/1 var(--sans);color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px}.qr-row{display:flex;gap:10px;align-items:stretch}.qr-row input{flex:1;min-width:0;background:var(--surface);border:1.5px solid var(--rule);border-radius:var(--r);padding:13px 14px;font:400 17px/1.3 var(--serif);color:var(--ink);outline:none}.qr-row input:focus{border-color:var(--teal);box-shadow:0 0 0 4px var(--teal-wash)}.qr-row .q-btn{white-space:nowrap}.qr-hint{font-size:13.5px;color:var(--muted);margin:8px 0 0}#qr-out{margin:26px 0 40px;max-width:820px}.qr-head{background:var(--surface);border:1px solid var(--rule);border-left:3px solid var(--teal);border-radius:var(--r);padding:18px 20px;margin-bottom:26px}.qr-overview{font:400 20px/1.5 var(--serif);margin:0}.qr-sec{margin:0 0 30px}.qr-sec h2{font:500 13px/1 var(--sans);text-transform:uppercase;letter-spacing:.08em;color:var(--teal);margin:0 0 6px}.qr-note{font-size:13.5px;color:var(--muted);margin:0 0 12px}.qr-list{margin:0;padding-left:22px}.qr-i{margin:0 0 16px;padding-left:2px}.qr-p{margin:0 0 6px;font:400 18px/1.55 var(--serif)}.qr-det summary{cursor:pointer;font:500 13.5px/1 var(--sans);color:var(--teal);margin:2px 0 8px}.qr-q{margin:6px 0 8px;padding:10px 14px;border-left:2px solid var(--rule);background:var(--wash);font:400 15.5px/1.6 var(--serif);color:var(--ink);border-radius:0 var(--r-sm) var(--r-sm) 0}.qr-src{margin:0;font-size:13px;color:var(--muted)}.qr-src a,.qr-a{color:var(--teal);font-weight:500;font-size:13.5px}.qr-where{display:block;font-size:12.5px;color:var(--muted);margin:0 0 2px}.qr-disc{font-size:12.5px;color:var(--muted);border-top:1px solid var(--rule);padding-top:10px}.qr-void{padding:20px 22px}.qr-void h2{font:500 20px/1.3 var(--serif);margin:0 0 10px}.qr-err{color:var(--red)}@media(max-width:640px){.qr-row{flex-direction:column}}";
+var LP_QR_JS = [
+  "(function(){",
+  "  var out = document.getElementById('qr-out'), d = document.getElementById('qr-data'), f = document.getElementById('qr-form');",
+  "  if (!out || !d) return;",
+  "  var D = {}; try { D = JSON.parse(d.textContent); } catch(e) { return; }",
+  "  function skel(){ out.innerHTML = '<div class=\"ld\"><span class=\"q-skel\"></span><span class=\"q-skel\" style=\"width:70%\"></span><span class=\"q-skel\" style=\"width:45%\"></span></div>'; }",
+  "  function typeset(){ if (window.MathJax && MathJax.typesetPromise) MathJax.typesetPromise([out]).catch(function(){}); }", // standards-ok: browser-side script inside a string literal, not a server catch (typeset failure is cosmetic)
+  "  function load(q){",
+  "    skel();",
+  "    fetch('/api/quickread/' + encodeURIComponent(D.slug) + '?q=' + encodeURIComponent(q) + '&format=html')",
+  "      .then(function(r){ if (!r.ok) throw new Error('HTTP ' + r.status); return r.text(); })",
+  "      .then(function(h){ out.innerHTML = h; typeset(); })",
+  "      .catch(function(){ out.innerHTML = '<p class=\"qr-err\">The quick read did not load. The paper itself is at <a href=\"/papers/' + D.slug + '\">/papers/' + D.slug + '</a>.</p>'; });",
+  "  }",
+  "  if (f && f.addEventListener) f.addEventListener('submit', function(e){",
+  "    var el = document.getElementById('qr-q'), q = el && el.value ? el.value.trim() : '';",
+  "    if (!q) return;",
+  "    e.preventDefault();",
+  "    try { history.replaceState(null, '', '?q=' + encodeURIComponent(q)); } catch(x) {}", // standards-ok: browser-side script inside a string literal, not a server catch (history is a nicety)
+  "    load(q);",
+  "  });",
+  "  if (D.q && !D.rendered) load(D.q);",
+  "})();"
+].join("\n");
+function lpQuickReadHTML(paper, question, fragment) {
+  var t = displayTitle(paper.title) || "Untitled";
+  var href = "/papers/" + escAttr(paper.slug);
+  var q = String(question || "").slice(0, QR_QUESTION_MAX);
+  var cat = paperShelf(paper);
+  var data = { slug: paper.slug, q: q, rendered: !!fragment };
+  var head = "<title>Quick read: " + esc(t) + " \u2014 QNFO Papers</title>"
+    + '<meta name="description" content="' + escAttr("How this paper answers one question, quoted from its own text: answers, approach and considerations.") + '">'
+    + '<meta name="robots" content="noindex,follow">'
+    + '<link rel="canonical" href="https://papers.qnfo.org' + href + '">'
+    + "<style>" + QR_CSS + "</style>";
+  var body = '<main id="main" class="wrap pp qr"><nav class="crumbs" aria-label="Breadcrumb"><a href="/papers">Papers</a><span aria-hidden="true">/</span><a href="/papers?category=' + cat + '" title="' + escAttr(CATEGORY_AUDIENCE[cat] || "") + '">' + esc(CATEGORY_LABELS[cat] || CATEGORY_LABELS.synthesis) + "</a><span aria-hidden=\"true\">/</span><a href=\"" + href + "\">" + esc(t) + "</a></nav>"
+    + '<header class="ph"><p class="q-eyebrow">Quick read</p><h1>' + titleHTML(paper.title) + "</h1>"
+    + '<form class="qr-form" id="qr-form" method="post" action="' + href + '/quickread"><label for="qr-q">Your question</label><div class="qr-row"><input id="qr-q" name="q" type="search" value="' + escAttr(q) + '" placeholder="What does this paper say about ..." maxlength="' + QR_QUESTION_MAX + '" autocomplete="off" required><button class="q-btn pri" type="submit">Quick read</button></div><p class="qr-hint">The paper is read for this question only. Every line of the answer quotes the paper; nothing is added from elsewhere.</p></form></header>'
+    + '<div id="qr-out">' + (fragment || '<div class="ld"><span class="q-skel"></span><span class="q-skel" style="width:70%"></span><span class="q-skel" style="width:45%"></span></div>') + "</div>"
+    + '<noscript><p class="qr-err">Without JavaScript the answer is rendered when you submit the question above.</p></noscript>'
+    + "<p class=\"fine no-print\"><a href=\"" + href + "\">Read the whole paper</a> \u00b7 <a href=\"" + LP_ASK + "/\" rel=\"nofollow\" data-ask-q=\"" + escAttr(q) + "\">Ask the corpus</a></p>"
+    + '<script type="application/json" id="qr-data">' + JSON.stringify(data).replace(/</g, "\\u003c") + "<\/script>";
+  return lpDoc({ head, body, math: true, nav: "papers", cls: "paper", js: LP_QR_JS });
+}
+async function handleQuickReadJson(request, env, slug, u) {
+  var H = { "Content-Type": "application/json; charset=utf-8", "Cache-Control": "public, max-age=300", "Access-Control-Allow-Origin": "*" };
+  var out = function(o, s) { return new Response(JSON.stringify(o), { status: s || 200, headers: H }); };
+  if (!/^[a-z0-9][a-z0-9-]{1,180}$/.test(String(slug || ""))) return out({ error: "bad_slug" }, 400);
+  var q = String(u.searchParams.get("q") || "").replace(/\s+/g, " ").trim();
+  if (!q) return out({ error: "missing_question", message: "Give the question: /api/quickread/<slug>?q=..." }, 400);
+  if (q.length > QR_QUESTION_MAX) return out({ error: "question_too_long", max: QR_QUESTION_MAX }, 413);
+  var paper = await env.LIVING_PAPER.prepare("SELECT slug,title,abstract,body_md,created_at,version FROM papers WHERE slug = ? AND status IN " + LP_PUBLIC + " LIMIT 1").bind(slug).first();
+  if (!paper) return out({ error: "not_found", message: "No published paper has that slug." }, 404);
+  var qid = await qrQid(slug, q);
+  var payload = u.searchParams.get("fresh") ? null : await qrCacheGet(env, slug, qid);
+  if (payload) {
+    payload.cached = true;
+    await qrCacheTouch(env, slug, qid);
+  } else {
+    var limited = await qrRateCheck(request, env);
+    if (limited) return limited;
+    payload = await qrBuild(env, paper, q);
+    payload.cached = false;
+    await qrCachePut(env, slug, qid, q, payload);
+  }
+  payload.slug = slug;
+  payload.title = displayTitle(paper.title);
+  payload.question = q;
+  payload.generated_at = payload.generated_at || new Date().toISOString();
+  if (u.searchParams.get("format") === "html") {
+    return new Response(qrFragment(payload, paper), { status: 200, headers: { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "public, max-age=300", "Access-Control-Allow-Origin": "*" } });
+  }
+  return out(payload, 200);
+}
+async function handleQuickReadPage(request, env, slug, u, method) {
+  var paper = await env.LIVING_PAPER.prepare("SELECT slug,title,abstract,body_md,created_at,version FROM papers WHERE slug = ? AND status IN " + LP_PUBLIC + " LIMIT 1").bind(slug).first();
+  if (!paper) return notFoundPage(request, env, "papers.qnfo.org", "/papers/" + slug, slug);
+  withShelf(paper, await shelfMap(env));
+  var HTML = { "Content-Type": "text/html; charset=utf-8" };
+  if (method === "POST") {
+    var form = await request.formData().catch(function() { return null; });
+    var q = String((form && form.get && form.get("q")) || "").replace(/\s+/g, " ").trim().slice(0, QR_QUESTION_MAX);
+    if (!q) return new Response(lpQuickReadHTML(paper, "", ""), { status: 200, headers: Object.assign({ "Cache-Control": "no-store" }, HTML) });
+    var limited = await qrRateCheck(request, env);
+    if (limited) {
+      var j = await limited.json().catch(function() { return {}; });
+      return new Response(lpQuickReadHTML(paper, q, '<p class="qr-err">' + esc(j.message || "Too many quick reads from this address; try again later.") + "</p>"), { status: 429, headers: Object.assign({ "Cache-Control": "no-store" }, HTML) });
+    }
+    var qid = await qrQid(paper.slug, q);
+    var payload = await qrCacheGet(env, paper.slug, qid);
+    if (!payload) {
+      payload = await qrBuild(env, paper, q);
+      await qrCachePut(env, paper.slug, qid, q, payload);
+    } else {
+      payload.cached = true;
+      await qrCacheTouch(env, paper.slug, qid);
+    }
+    payload.question = q;
+    return new Response(lpQuickReadHTML(paper, q, qrFragment(payload, paper)), { status: 200, headers: Object.assign({ "Cache-Control": "no-store" }, HTML) });
+  }
+  // GET: the shell only. No model call, so a crawler following a ?q= link costs nothing; the browser asks for the
+  // answer at /api/quickread and a submission without JavaScript gets it server-rendered.
+  return new Response(lpQuickReadHTML(paper, String(u.searchParams.get("q") || ""), ""), { status: 200, headers: Object.assign({ "Cache-Control": "public, max-age=300" }, HTML) });
+}
+// ---- QUICK-READ-1:END ----
 // ---- LIVING-PAPERS-1:END ----
 // ---- REACH-LAYER-1:BEGIN (3.8.6, 2026-10-02, owner directive "FIX AUTOMATICALLY"; pillar reach) ----
 // REACH-IDEATION-1 found 12 reach gaps on gateway pages (no share image on the qnfo.org home, no contact or iPatent link on
@@ -4729,6 +5242,7 @@ var gateway_worker_default = {
         if (od) return od;
       }
       if (p === "/api/ask" && method === "POST") return handleAskAI(request, env);
+      if (p.indexOf("/api/quickread/") === 0 && method === "GET") return handleQuickReadJson(request, env, decodeURIComponent(p.slice(15)), u).catch(function (e) { console.error(JSON.stringify({ worker: "qnfo-gateway", where: "handleQuickReadJson", error: String(e && e.message || e).slice(0, 200) })); return json({ error: "quick read unavailable" }, 503); });
       if (p === "/.well-known/webfinger" || p.indexOf("/ap/") === 0) return handleActivityPub(request, env, p, u);
       if (p === "/api/subscribe" && method === "POST") return handleSubscribeProxy(request, env);
       if (p === "/api/funnel/view" && method === "POST") return handleFunnelView(request, env, ctx);
@@ -4744,6 +5258,7 @@ var gateway_worker_default = {
       if (p.startsWith("/api/paper-context/") && method === "GET") return handlePaperContext(env, decodeURIComponent(p.slice(19))).catch(function (e) { console.error(JSON.stringify({ worker: "qnfo-gateway", where: "handlePaperContext", error: String(e && e.message || e).slice(0, 200) })); return json({ error: "paper context unavailable" }, 503); });
       if (p === "/api/render-health" && method === "GET") return handleRenderHealth(env);
       if (p === "/_audit/blank-papers") return handleBlankPapers(env);
+      if (p.indexOf("/papers/") === 0 && p.slice(-10) === "/quickread" && p.split("/").length === 4) return handleQuickReadPage(request, env, p.split("/")[2], u, method).catch(function (e) { console.error(JSON.stringify({ worker: "qnfo-gateway", where: "handleQuickReadPage", error: String(e && e.message || e).slice(0, 200) })); return new Response("Quick read unavailable", { status: 503, headers: { "Content-Type": "text/plain; charset=utf-8" } }); });
       if (p.startsWith("/papers/") && p.split("/").length >= 3) return handlePaperDetail(request, env, p);
       if (p === "/ipatent" || p === "/ipatent/") return new Response(null, { status: 301, headers: { Location: "https://ipatent.qnfo.org/" } });
       if (p === "/reading" || p === "/reading/") return renderReadingHTML();
@@ -4775,6 +5290,7 @@ var gateway_worker_default = {
       if (p === "/health") return health();
       if (p === "/legal" || p === "/license") return handleLegal(p, env);
       if (p === "/api/ask" && method === "POST") return handleAskAI(request, env);
+      if (p.indexOf("/api/quickread/") === 0 && method === "GET") return handleQuickReadJson(request, env, decodeURIComponent(p.slice(15)), u).catch(function (e) { console.error(JSON.stringify({ worker: "qnfo-gateway", where: "handleQuickReadJson", error: String(e && e.message || e).slice(0, 200) })); return json({ error: "quick read unavailable" }, 503); });
       if (p === "/api/subscribe" && method === "POST") return handleSubscribeProxy(request, env);
       if (p === "/api/funnel/view" && method === "POST") return handleFunnelView(request, env, ctx);
       if (p === "/subscribe") return handleSubscribePage(request, env);
@@ -4783,6 +5299,7 @@ var gateway_worker_default = {
       if (p.startsWith("/api/paper-context/") && method === "GET") return handlePaperContext(env, decodeURIComponent(p.slice(19))).catch(function (e) { console.error(JSON.stringify({ worker: "qnfo-gateway", where: "handlePaperContext", error: String(e && e.message || e).slice(0, 200) })); return json({ error: "paper context unavailable" }, 503); });
       if (p === "/api/render-health" && method === "GET") return handleRenderHealth(env);
       if (p === "/_audit/blank-papers") return handleBlankPapers(env);
+      if (p.indexOf("/papers/") === 0 && p.slice(-10) === "/quickread" && p.split("/").length === 4) return handleQuickReadPage(request, env, p.split("/")[2], u, method).catch(function (e) { console.error(JSON.stringify({ worker: "qnfo-gateway", where: "handleQuickReadPage", error: String(e && e.message || e).slice(0, 200) })); return new Response("Quick read unavailable", { status: 503, headers: { "Content-Type": "text/plain; charset=utf-8" } }); });
       if (p.startsWith("/papers/") && p.split("/").length >= 3) return handlePaperDetail(request, env, p);
       if (p === "/papers" || p.startsWith("/papers?")) return handlePapers(request, env);
       if (p === "/sitemap.xml") return handleSitemap(env, host);
@@ -4809,9 +5326,11 @@ var gateway_worker_default = {
     if (p === "/health") return health();
     if (p === "/legal" || p === "/license") return handleLegal(p, env);
     if (p === "/api/ask" && method === "POST") return handleAskAI(request, env);
+      if (p.indexOf("/api/quickread/") === 0 && method === "GET") return handleQuickReadJson(request, env, decodeURIComponent(p.slice(15)), u).catch(function (e) { console.error(JSON.stringify({ worker: "qnfo-gateway", where: "handleQuickReadJson", error: String(e && e.message || e).slice(0, 200) })); return json({ error: "quick read unavailable" }, 503); });
     if (p.startsWith("/api/paper-context/") && method === "GET") return handlePaperContext(env, decodeURIComponent(p.slice(19))).catch(function (e) { console.error(JSON.stringify({ worker: "qnfo-gateway", where: "handlePaperContext", error: String(e && e.message || e).slice(0, 200) })); return json({ error: "paper context unavailable" }, 503); });
     if (p === "/_audit/blank-papers") return handleBlankPapers(env);
-    if (p.startsWith("/papers/") && p.split("/").length >= 3) return handlePaperDetail(request, env, p);
+    if (p.indexOf("/papers/") === 0 && p.slice(-10) === "/quickread" && p.split("/").length === 4) return handleQuickReadPage(request, env, p.split("/")[2], u, method).catch(function (e) { console.error(JSON.stringify({ worker: "qnfo-gateway", where: "handleQuickReadPage", error: String(e && e.message || e).slice(0, 200) })); return new Response("Quick read unavailable", { status: 503, headers: { "Content-Type": "text/plain; charset=utf-8" } }); });
+      if (p.startsWith("/papers/") && p.split("/").length >= 3) return handlePaperDetail(request, env, p);
     if (p.startsWith("/papers") || p === "/") return handlePapers(request, env);
     if (p === "/sitemap.xml") return handleSitemap(env, host);
     if (p === "/robots.txt") return handlePapersRobots();
@@ -4843,6 +5362,13 @@ var gateway_worker_default = {
       cronOk = false;
     }
     await askRatePrune(env);
+    // QUICK-READ-1: cached answers age out after QR_TTL_DAYS and the table is capped (qrPrune); a failure is logged
+    // there and never fails the run.
+    try {
+      await qrPrune(env);
+    } catch (e) {
+      console.log("QUICK-READ-1 prune failed: " + String(e && e.message || e).slice(0, 200));
+    }
     try {
       await renderHealthSweep(env);
     } catch (e) {
