@@ -95,6 +95,11 @@ const etagOf = (r) => r.headers.get("ETag");
   ok(!!tag, "A5 the index carries an ETag");
   const r304 = await call(env, "/api", { "If-None-Match": tag });
   ok(r304.status === 304 && (await r304.text()) === "", "A6 the index revalidates to 304 with no body");
+  // AREA-FEEDS-5: the index is a read like every other one - it says so in the body and honours ?since= (found by the
+  // deployment test of 1.44.3, where /api was the only read with an ETag and no revision)
+  const ixBody = await (await call(env, "/api")).json();
+  ok(typeof ixBody.revision === "string" && ixBody.revision.length >= 4, "A6b the index body carries its revision");
+  ok((await (await call(env, "/api?since=" + ixBody.revision)).json()).not_modified === true, "A6c ?since=<revision> works on the index");
   // every indexed read that this suite can drive answers 200: the table is not fiction
   let live = 0;
   for (const path of ["/api/live", "/api/human", "/api/areas", "/api/decision", "/api/state", "/api/actions", "/api/loop", "/health", "/api"]) {
