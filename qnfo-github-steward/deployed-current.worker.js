@@ -22,7 +22,7 @@
  *   * archived repositories are read-only and are skipped, not reported as drift;
  *   * GET /report and GET /health are public reads; POST /tick needs STEWARD_KEY.
  */
-var VERSION = "0.2.0-notify-triage"; // 0.2.0 NOTIFY-TRIAGE-1: resolved GitHub notifications are marked done every run
+var VERSION = "0.2.1-notify-verdict"; // 0.2.1 NOTIFY-VERDICT-1: a cancelled/skipped newest run no longer hides the newest real verdict // 0.2.0 NOTIFY-TRIAGE-1: resolved GitHub notifications are marked done every run
 
 var ORG = "QNFO";
 var USER = "rwnq8";
@@ -237,8 +237,10 @@ async function triageNotifications(env, result) {
     for (var j = 0; j < ids.length; j++) {
       var k = repo + "|" + ids[j] + "|" + branch;
       if (runCache[k] === undefined) {
-        var r = await gh(env, "GET", "/repos/" + repo + "/actions/workflows/" + ids[j] + "/runs?status=completed&per_page=1&branch=" + encodeURIComponent(branch));
-        runCache[k] = (r.status === 200 && r.body && r.body.workflow_runs && r.body.workflow_runs[0]) || null;
+        // a cancelled or skipped run (concurrency superseded) says nothing; the verdict is the newest success/failure
+        var r = await gh(env, "GET", "/repos/" + repo + "/actions/workflows/" + ids[j] + "/runs?status=completed&per_page=10&branch=" + encodeURIComponent(branch));
+        var wr = (r.status === 200 && r.body && r.body.workflow_runs) || [];
+        runCache[k] = wr.filter(function (x) { return x.conclusion === "success" || x.conclusion === "failure" || x.conclusion === "timed_out"; })[0] || null;
       }
       var cand = runCache[k];
       if (cand && (!best || Date.parse(cand.created_at) > Date.parse(best.created_at))) best = cand;
