@@ -1,19 +1,38 @@
 name = "qnfo-artifacts"
 main = "worker.js"
-compatibility_date = "2026-09-01"
+compatibility_date = "2026-10-10"
 workers_dev = true
+# charter-pillar: autonomy (ARTIFACTS-MIGRATION-ALL-1 / ARTIFACTS-CANONICAL-SYNC-1)
+#
+# One control plane over BOTH Artifacts namespaces. The binding fixes the namespace at bind time,
+# which is why two bindings are required: the QNFO org estate lives in `qnfo`, the personal estate
+# in `rwnq8`, and there is no cross-namespace handle.
 
-# Cloudflare Artifacts (closed beta; access granted on account quniverse).
-# The namespace is fixed at bind time -- the worker never takes a namespace parameter.
-# SECRET/ARTIFACTS-REMEDIATE-1 2026-09-22 (R1): `artifacts` is NOT expressible in
-# wrangler.toml - verified: both `[[artifacts]]` and `[artifacts]` are rejected by
-# `wrangler deploy --dry-run` (config parse ERROR). The block below is therefore
-# DELIBERATELY left in an unsupported form so a wrangler deploy FAILS CLOSED rather
-# than silently dropping the ARTIFACTS binding and breaking the worker. The operative
-# deploy path for this worker is scripts/raw_put.py (binding-preserving /content PUT).
+[observability]
+enabled = true
+
+[observability.logs]
+enabled = true
+head_sampling_rate = 1
+
+[observability.traces]
+enabled = true
+head_sampling_rate = 0.1
+
+# Bound the CPU: a /tree walk on a 1200-file repository is the expensive route, and it is capped
+# in code (500 entries) as well as here.
+[limits]
+cpu_ms = 30000
+
 [[artifacts]]
 binding = "ARTIFACTS"
 namespace = "qnfo"
 
-[vars]
-ARTIFACTS_NAMESPACE = "qnfo"
+[[artifacts]]
+binding = "ARTIFACTS_RWNQ8"
+namespace = "rwnq8"
+
+[[d1_databases]]
+binding = "AUDIT"
+database_name = "qnfo-audit"
+database_id = "35e2e573-92f3-46ac-83c6-22f6429fc5e5"

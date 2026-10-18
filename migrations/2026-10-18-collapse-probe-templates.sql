@@ -1,4 +1,4 @@
-﻿-- TRIGGER-GRAPH-HEADROOM-1 (2026-10-18, pillar autonomy): four probe-template generations become one
+-- TRIGGER-GRAPH-HEADROOM-1 (2026-10-18, pillar autonomy): four probe-template generations become one
 --
 -- WHY
 --   remediation_contracts carried SIX probe-template triggers from successive design generations, and every
@@ -47,6 +47,8 @@ DROP TRIGGER IF EXISTS contract_probe_templates_v2_loop;
 DROP TRIGGER IF EXISTS contract_probe_templates_v2b_loop;
 DROP TRIGGER IF EXISTS contract_probe_templates_v2c_loop;
 DROP TRIGGER IF EXISTS contract_probe_templates_v2d_unmapped_loop;
+
+DROP TRIGGER IF EXISTS contract_probe_templates_loop_merged;
 
 CREATE TRIGGER contract_probe_templates_loop_merged AFTER INSERT ON remediation_contracts
 WHEN NEW.status = 'needs-machine-probe' AND NEW.issue_id IS NOT NULL

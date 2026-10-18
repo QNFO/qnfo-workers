@@ -419,8 +419,23 @@ def trigger_upstream(trigger_rows, table):
     return seen
 
 
-def depth_canary(acct, token, db_id, table):
-    """None when every zero-row write upstream of `table` still compiles, else the refused statement and error."""
+def depth_canary(acct, token, db_id, table, advisory=None):
+    """None when every zero-row UPDATE/DELETE upstream of `table` still compiles, else the refused statement and error.
+
+    TRIGGER-DEPTH-INSERT-ADVISORY-1 (2026-10-18, migration_runs 292/296): an INSERT-shaped zero-row probe is still run,
+    because it is the strongest signal, but its refusal no longer vetoes the change on its own. Measured on
+    qnfo-audit.agent_issues (13:14Z): every `INSERT ... SELECT` form is refused with 7500 "triggers nested too deep" -
+    with a star select, with an explicit column list, and with a literal source that reads nothing - while
+    `DELETE ... WHERE 0` and `UPDATE ... SET c = c WHERE 0` compile, and real single-row INSERTs succeed (the fleet filed
+    agent_issues 99905/99906 at 13:10Z). A statement shape D1 refuses whatever the trigger contains cannot answer "did
+    this trigger break inserts?", and acting on it deleted a working trigger twice (migration_runs 292 left production
+    without agent_issues_autotriage2_ins; 296 was saved only by the restore snapshot). So a refused INSERT probe is
+    reported through `advisory` and the UPDATE/DELETE probes decide.
+
+    The cost is stated plainly: UPDATE/DELETE traverse the trigger graph but not the insert path, so a purely insert-path
+    depth regression no longer stops an apply. It surfaces through real traffic instead, which the fleet generates
+    continuously. That is the trade this makes.
+    """
     trig = d1(acct, token, db_id, "SELECT name, tbl_name, sql FROM sqlite_master WHERE type = 'trigger'")
     tables = {r["name"].lower(): r["name"] for r in d1(acct, token, db_id, "SELECT name FROM sqlite_master WHERE type = 'table'")}
     for t in sorted(trigger_upstream(trig, table)):
@@ -428,29 +443,24 @@ def depth_canary(acct, token, db_id, table):
             continue
         name = tables[t]
         cols = [c["name"] for c in d1(acct, token, db_id, "SELECT name FROM pragma_table_info(?1)", [name])]
-        probes = []
+        deciding = ['DELETE FROM "%s" WHERE 0' % name]
         if cols:
-            # TRIGGER-DEPTH-PROBE-STAR-1 (2026-10-18, migration_runs 292): the INSERT probe used to be
-            # `INSERT INTO "t" SELECT * FROM "t" WHERE 0`, and on a table whose own triggers write back to it D1 refuses
-            # that form with 7500 "triggers nested too deep" AT COMPILE TIME no matter what the trigger under test
-            # contains. Measured on qnfo-audit.agent_issues (23 triggers, several of which update agent_issues): the star
-            # form is refused with the ORIGINAL datetime('now') trigger in place, while the same statement with an
-            # explicit column list compiles and writes 0 rows. So the star form is a false positive by construction, and
-            # a false positive here is not harmless: the caller drops the trigger it just created, which on 2026-10-18
-            # 12:45:31Z left production with no agent_issues_autotriage2_ins. The explicit list asks the same question -
-            # "does a zero-row INSERT through every trigger upstream of this table still compile?" - without the star
-            # expansion, because D1 still compiles the INSERT and its whole trigger chain.
-            cl = ", ".join('"%s"' % c for c in cols)
-            probes.append('INSERT INTO "%s" (%s) SELECT %s FROM "%s" WHERE 0' % (name, cl, cl, name))
-        probes.append('DELETE FROM "%s" WHERE 0' % name)
-        if cols:
-            probes.append('UPDATE "%s" SET %s WHERE 0' % (name, ", ".join('"%s" = "%s"' % (c, c) for c in cols)))
-        for q in probes:
+            deciding.append('UPDATE "%s" SET %s WHERE 0' % (name, ", ".join('"%s" = "%s"' % (c, c) for c in cols)))
+        for q in deciding:
             try:
                 d1(acct, token, db_id, q)
             except Exception as e:  # noqa: BLE001
                 if "nested too deep" in str(e) or "too many levels of trigger" in str(e):
                     return q[:120] + " -> " + str(e)[:200]
+        if cols:
+            ins = 'INSERT INTO "%s" (%s) SELECT %s FROM "%s" WHERE 0' % (
+                name, ", ".join('"%s"' % c for c in cols), ", ".join('"%s"' % c for c in cols), name)
+            try:
+                d1(acct, token, db_id, ins)
+            except Exception as e:  # noqa: BLE001
+                msg = str(e)
+                if ("nested too deep" in msg or "too many levels of trigger" in msg) and advisory is not None:
+                    advisory.append(ins[:120] + " -> " + msg[:120])
     return None
 
 
@@ -514,6 +524,7 @@ def apply_file(path, text, acct, token, commit, emit=print):
     # the old runner then dropped the new one too, leaving the table silently without the trigger the migration was only
     # trying to adjust.
     trigger_snapshot = {}
+    advisories = []
     try:
         for r in d1(acct, token, db_id, "SELECT name, sql FROM sqlite_master WHERE type = 'trigger'"):
             trigger_snapshot[(r.get("name") or "").lower()] = r.get("sql")
@@ -539,7 +550,7 @@ def apply_file(path, text, acct, token, commit, emit=print):
             return record_failure(path, sha, commit, info, acct, token, db_id, "statement " + str(done_n + 1) + ": " + str(e)[:400], emit, done_n)
         tm = TRIGGER_ON.match(body(s))
         if tm:
-            refused = depth_canary(acct, token, db_id, tm.group(2))
+            refused = depth_canary(acct, token, db_id, tm.group(2), advisories)
             if refused:
                 try:
                     d1(acct, token, db_id, 'DROP TRIGGER IF EXISTS "%s"' % tm.group(1))
@@ -557,7 +568,14 @@ def apply_file(path, text, acct, token, commit, emit=print):
     d1(acct, token, db_id, "INSERT INTO migration_runs (file, sha256, commit_sha, db, status, statements, applied_by) VALUES (?1, ?2, ?3, ?4, 'ok', ?5, 'ci:apply-migrations')",
        [path, sha, commit or "", info["db"], str(done_n)])
     resolve_failure(path, sha, acct, token, db_id, done_n)
-    emit(json.dumps({"file": path, "ok": True, "statements": done_n, "sha256": sha[:12]}))
+    applied = {"file": path, "ok": True, "statements": done_n, "sha256": sha[:12]}
+    if advisories:
+        # TRIGGER-DEPTH-INSERT-ADVISORY-1: the change applied, but a zero-row INSERT probe upstream of a trigger it creates
+        # was refused. That shape is refused on agent_issues whatever the trigger contains, so it is reported here rather
+        # than vetoing the file. A run carrying this key means the table's insert path is at or past D1's compile limit and
+        # is worth reading even though the migration succeeded.
+        applied["advisory"] = advisories
+    emit(json.dumps(applied))
     return 0
 
 
