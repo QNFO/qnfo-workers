@@ -2,7 +2,7 @@ var __defProp = Object.defineProperty;
 var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
 
 // worker.js
-var VERSION = "1.3.2-utm-attribution-1"; // 1.3.1 WORKERS-BP-LOGGING-qnfo-subscribers-1 (2026-10-14, agent_issues 2539, child of 2342, pillar autonomy): the swallowed catch in handleSubscribe logs as a structured console.error (worker, where, error); control flow unchanged. // 1.3.0 (2026-10-13, pillar autonomy, issue 2397) CRON-ONLY-HEARTBEAT-1: the weekly cron upserts qnfo-audit.fleet_heartbeat after the digest run.
+var VERSION = "1.3.3-utm-metric-1"; // 1.3.1 WORKERS-BP-LOGGING-qnfo-subscribers-1 (2026-10-14, agent_issues 2539, child of 2342, pillar autonomy): the swallowed catch in handleSubscribe logs as a structured console.error (worker, where, error); control flow unchanged. // 1.3.0 (2026-10-13, pillar autonomy, issue 2397) CRON-ONLY-HEARTBEAT-1: the weekly cron upserts qnfo-audit.fleet_heartbeat after the digest run.
 // 1.2.0 (2026-10-12, pillar reach, issue 1753) SUBSCRIBE-FUNNEL-1: every step of the sign-up
 // funnel is counted in qnfo-audit.subscribe_funnel (day, stage, source, n; a counter, never an address): box and page views,
 // submits by outcome (accepted, honeypot, invalid, rate-limited, suppressed, repeat), confirmation mails sent or failed,
@@ -582,7 +582,31 @@ var worker_default = {
     }
     return json({ error: "not found", path: p }, 404);
   },
-  async scheduled(event, env, ctx) {
+  /* SUBSCRIBE-UTM-METRIC-1 (owner directive 2026-10-18, pillar reach): aggregate confirmed
+ * subscribers by utm_campaign/utm_source into reach_signals so reach metrics can attribute
+ * subscriber growth to the tagged link that drove it (closes UTM-CLICK-LEDGER-1 -> subscriber).
+ * Idempotent: the previous snapshot is deleted then re-inserted. */
+async function writeSubscriberAttribution(env) {
+  try {
+    if (!env.AUDIT) return;
+    await env.AUDIT.prepare("DELETE FROM reach_signals WHERE source = 'subscriber-attribution'").run();
+    const rows = await env.AUDIT.prepare(
+      "SELECT COALESCE(utm_campaign,'') AS camp, COALESCE(utm_source,'') AS src, COUNT(*) AS n FROM subscribers WHERE (confirmed_at IS NOT NULL OR status='subscribed') AND (utm_campaign != '' OR utm_source != '') GROUP BY utm_campaign, utm_source"
+    ).all();
+    const list = rows.results || [];
+    for (let i = 0; i < list.length; i++) {
+      const r = list[i];
+      const id = String(r.camp || r.src || "untagged").slice(0, 80);
+      await env.AUDIT.prepare(
+        "INSERT INTO reach_signals (date, source, channel, entity_type, entity_id, metric, value, quality, collected_at) VALUES (date('now'), 'subscriber-attribution', 'email', 'campaign', ?1, 'subscribers_confirmed_attributed', ?2, 'derived', datetime('now'))"
+      ).bind(id, Number(r.n) || 0).run();
+    }
+  } catch (e) {
+    console.error(JSON.stringify({ worker: "qnfo-subscribers", where: "writeSubscriberAttribution", error: String(e && e.message || e).slice(0, 200) }));
+  }
+}
+
+async scheduled(event, env, ctx) {
     // CRON-ONLY-HEARTBEAT-1 (agent_issues 2397): the heartbeat row is written after the digest run, so it means "the scheduled run finished".
     ctx.waitUntil((async () => {
       let ok = 1;
@@ -592,6 +616,11 @@ var worker_default = {
       } catch (e) {
         ok = 0;
         console.error(JSON.stringify({ event: "scheduled_digest_failed", error: String(e && e.message || e).slice(0, 200) }));
+      }
+      try {
+        await writeSubscriberAttribution(env);
+      } catch (e) {
+        console.error(JSON.stringify({ event: "subscriber_attribution_failed", error: String(e && e.message || e).slice(0, 200) }));
       }
       try {
         await env.AUDIT.prepare("INSERT INTO fleet_heartbeat (worker, version, ts, ok) VALUES (?1, ?2, ?3, ?4) ON CONFLICT(worker) DO UPDATE SET version=excluded.version, ts=excluded.ts, ok=excluded.ok").bind("qnfo-subscribers", VERSION, (/* @__PURE__ */ new Date()).toISOString(), ok).run();
