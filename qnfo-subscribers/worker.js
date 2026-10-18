@@ -2,7 +2,7 @@ var __defProp = Object.defineProperty;
 var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
 
 // worker.js
-var VERSION = "1.3.1-bp-logging"; // 1.3.1 WORKERS-BP-LOGGING-qnfo-subscribers-1 (2026-10-14, agent_issues 2539, child of 2342, pillar autonomy): the swallowed catch in handleSubscribe logs as a structured console.error (worker, where, error); control flow unchanged. // 1.3.0 (2026-10-13, pillar autonomy, issue 2397) CRON-ONLY-HEARTBEAT-1: the weekly cron upserts qnfo-audit.fleet_heartbeat after the digest run.
+var VERSION = "1.3.2-utm-attribution-1"; // 1.3.1 WORKERS-BP-LOGGING-qnfo-subscribers-1 (2026-10-14, agent_issues 2539, child of 2342, pillar autonomy): the swallowed catch in handleSubscribe logs as a structured console.error (worker, where, error); control flow unchanged. // 1.3.0 (2026-10-13, pillar autonomy, issue 2397) CRON-ONLY-HEARTBEAT-1: the weekly cron upserts qnfo-audit.fleet_heartbeat after the digest run.
 // 1.2.0 (2026-10-12, pillar reach, issue 1753) SUBSCRIBE-FUNNEL-1: every step of the sign-up
 // funnel is counted in qnfo-audit.subscribe_funnel (day, stage, source, n; a counter, never an address): box and page views,
 // submits by outcome (accepted, honeypot, invalid, rate-limited, suppressed, repeat), confirmation mails sent or failed,
@@ -283,6 +283,20 @@ function digestText(papers, token) {
   return lines.join("\n");
 }
 __name(digestText, "digestText");
+/* SUBSCRIBE-UTM-ATTRIBUTION-1: ensure the utm_source/utm_campaign columns exist (lazy ALTER, safe
+ * when the migration already ran) so the sign-up can record which tagged link drove it. */
+var SUB_UTM_READY = new WeakSet();
+async function ensureSubscriberUtm(env) {
+  try {
+    if (!env.AUDIT || SUB_UTM_READY.has(env.AUDIT)) return;
+    await env.AUDIT.prepare("ALTER TABLE subscribers ADD COLUMN utm_source TEXT NOT NULL DEFAULT ''").run();
+    await env.AUDIT.prepare("ALTER TABLE subscribers ADD COLUMN utm_campaign TEXT NOT NULL DEFAULT ''").run();
+  } catch (e) {
+    /* columns already exist (migration applied first) -- continue */
+  }
+  SUB_UTM_READY.add(env.AUDIT);
+}
+
 async function handleSubscribe(request, env) {
   let body = {};
   // A plain form post (the /subscribe page, no script) is answered with a page; a JSON post (the site's boxes) with JSON.
@@ -291,12 +305,14 @@ async function handleSubscribe(request, env) {
   try {
     if (isForm) {
       const f = await request.formData();
-      body = { email: f.get("email"), hp: f.get("hp"), website: f.get("website"), source: f.get("source") };
+      body = { email: f.get("email"), hp: f.get("hp"), website: f.get("website"), source: f.get("source"), utm_source: f.get("utm_source"), utm_campaign: f.get("utm_campaign") };
     } else body = await request.json();
   } catch (e) {
     body = {};
   }
   const src = String(body && body.source || "qnfo.org").slice(0, 80);
+  const utmSource = String(body && body.utm_source || "").slice(0, 80);
+  const utmCampaign = String(body && body.utm_campaign || "").slice(0, 120);
   const reply = function(data, status) {
     if (!isForm) return json(data, status);
     if (data.ok) return html("<h1>Check your inbox</h1><p>" + (data.pending === false ? "This address is already subscribed. The next digest will reach you by email." : "A confirmation link is on its way. Your subscription starts when you open it and press the button. If nothing arrives within a few minutes, look in the spam folder.") + "</p>", status);
@@ -343,9 +359,10 @@ async function handleSubscribe(request, env) {
     ).bind(email).first();
     let token = existing && existing.unsub_token ? existing.unsub_token : "";
     if (!token) token = crypto.randomUUID().replace(/-/g, "");
+    await ensureSubscriberUtm(env);
     await env.AUDIT.prepare(
-      "INSERT INTO subscribers (email, status, source, unsub_token, ip_hash, user_agent, created_at) VALUES (?1, 'pending', ?2, ?3, ?4, ?5, datetime('now')) ON CONFLICT(email) DO UPDATE SET status = CASE WHEN subscribers.status = 'subscribed' THEN 'subscribed' ELSE 'pending' END, updated_at = datetime('now'), source = excluded.source"
-    ).bind(email, source, token, ipHash, ua).run();
+      "INSERT INTO subscribers (email, status, source, utm_source, utm_campaign, unsub_token, ip_hash, user_agent, created_at) VALUES (?1, 'pending', ?2, ?3, ?4, ?5, ?6, ?7, datetime('now')) ON CONFLICT(email) DO UPDATE SET status = CASE WHEN subscribers.status = 'subscribed' THEN 'subscribed' ELSE 'pending' END, updated_at = datetime('now'), source = excluded.source, utm_source = excluded.utm_source, utm_campaign = excluded.utm_campaign"
+    ).bind(email, source, utmSource, utmCampaign, token, ipHash, ua).run();
     const alreadyConfirmed = !!(existing && existing.status === "subscribed");
     if (alreadyConfirmed) {
       await funnel(env, "submit_already_confirmed", src);
