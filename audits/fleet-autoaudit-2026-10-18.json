@@ -1,5 +1,5 @@
 {
-  "audited_at": "2026-10-18 21:10:23",
+  "audited_at": "2026-10-18 22:19:12",
   "d1_write_failures": [],
   "d1_writes_ok": 120,
   "guard": {
@@ -588,7 +588,7 @@
       },
       {
         "dir": "qnfo-code-orchestrator",
-        "version": "0.18.18-ctx-json-guard-1",
+        "version": "0.18.21-claims-bind-and-visibility-1",
         "worker": "qnfo-code-orchestrator"
       },
       {
@@ -618,7 +618,7 @@
       },
       {
         "dir": "qnfo-fleet-dashboard",
-        "version": "1.44.4-area-feeds-5",
+        "version": "1.44.5-codeagent",
         "worker": "qnfo-fleet-dashboard"
       },
       {
@@ -683,7 +683,7 @@
       },
       {
         "dir": "qnfo-social",
-        "version": "0.16.6-bsky-session-reuse-1",
+        "version": "0.16.7-codeagent",
         "worker": "qnfo-social"
       },
       {
@@ -1191,9 +1191,9 @@
       "worker": "qnfo-code-agent"
     },
     "qnfo-code-orchestrator": {
-      "before": "0.18.18-ctx-json-guard-1",
+      "before": "0.18.21-claims-bind-and-visibility-1",
       "http": 200,
-      "live": "0.18.18-ctx-json-guard-1",
+      "live": "0.18.21-claims-bind-and-visibility-1",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-code-orchestrator"
@@ -1329,9 +1329,9 @@
       "worker": "qnfo-fleet-control"
     },
     "qnfo-fleet-dashboard": {
-      "before": "1.44.4-area-feeds-5",
+      "before": "1.44.5-codeagent",
       "http": 200,
-      "live": "1.44.4-area-feeds-5",
+      "live": "1.44.5-codeagent",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-fleet-dashboard"
@@ -1631,9 +1631,9 @@
       "worker": "qnfo-skills-discovery"
     },
     "qnfo-social": {
-      "before": "0.16.6-bsky-session-reuse-1",
+      "before": "0.16.7-codeagent",
       "http": 200,
-      "live": "0.16.6-bsky-session-reuse-1",
+      "live": "0.16.7-codeagent",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-social"
