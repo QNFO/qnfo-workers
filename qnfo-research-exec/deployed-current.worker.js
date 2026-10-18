@@ -33,7 +33,7 @@ var __name22222 = /* @__PURE__ */ __name2222((target, value) => __defProp22222(t
 // an empty catch. CITE-CONSISTENCY-1 asks the reviewer to compare the draft against cited QNFO work.
 // REVIEW-TRIAGE-CAP-1 is a defect fix: drift demotion at the cycle cap silently turned a blocking finding into a pass, so
 // REVIEW-HARD-GATE-1 withheld nothing there (reviewer findings 2 -> 0 at the cap; an unparseable review advanced to verify).
-var VERSION = "0.18.35-codeagent"; /* 0.18.34 REVIEW-EMPTY-SECOND-PATH-1 (2026-10-18): an unreadable review takes a second model family in the same tick and, still unreadable, re-runs review directly instead of sending the review-parse placeholder through two no-op patch calls (237 of 264 revise-noop events, 329 hard=1 cycles in 3 days). */ /* 0.18.33 PATCH-FLEX-REGEX-OVERFLOW-1 (2026-10-18, agent_issues 2886): findFlexible caps the flexible matcher at 400 tokens and fails closed on any regex error, so a whole-section find text no longer throws "Invalid regular expression: Stack overflow" out of the slot. */ /* 0.18.32 AI-RATE-FALLBACK-1 (2026-10-18): a 3021/3040/3046 on the primary model after backoff takes one call on another family (glm<->gpt-oss-120b) instead of failing the stage; 3040 no longer misread as a reasoning_effort rejection. */ /* 0.18.31 VERIFY-AUTOCORRECT-1 (2026-10-18): papers fail verify with REAL arithmetic errors (the reconcile/ensemble writer computes a number that does not match its own stated inputs) and the revise loop cannot reliably fix a bare number, so such papers cycle until park. Verify already holds both values — independently computed `computed` and the paper's stated `expected` — so stageVerify now corrects the number deterministically (autoCorrectNumeric) instead of sending it back through a model. Fail-closed: only a stated value found exactly once (verbatim or as an unambiguous bare mantissa in LaTeX/\\times 10^N) is corrected; anything ambiguous is skipped and falls through to revise. Every correction is logged as verify-autocorrect and appended to verification.md. */ /* 0.18.29 VERIFY-CYCLE-CAP-1 (2026-10-17, owner directive "REMEDIATE ALL ISSUES AND FAILURE MODES"): the verify->revise edge reset the review cycle counter to 0 (context={cycles:0,verifyPass:1}) while EVERY other edge preserves it (3716, 3735, 3753) and the review stage is the one that increments it. That single reset made MAX_REVIEW_CYCLES (6) unreachable, so an item that fails verify re-enters revise, resets to cycle 0, and loops until recover_count runs out — measured 2026-10-17: review-unresolved events exist ONLY at cycle 2 (193) and 3 (165), never 4; 96 rerun-route and 278 revise-patch events against ~100 rows; and stage='publish' is EMPTY, which is why 151 complete events produced 0 publications and why the publish quota (24) guarded an empty queue. The edge now preserves the count, so the existing six-cycle cap can terminate an item visibly instead of cycling forever. The gate itself (gates2) is unchanged: this does not let a failing draft through, it lets a draft that cannot pass STOP. */ // 0.18.28-codeagent
+var VERSION = "0.18.36-claim-heartbeat-1"; /* 0.18.36 CLAIM-HEARTBEAT-1 + RESUME-DRAFT-1 + REVIEW-SECOND-MODEL-1 (2026-10-18): a stage returning ok refreshes claimed_at so the stale-claim reclaimer stops re-grounding papers still advancing (550 releases/24h, 302 ground claims of 72 rows); a resumable stage is kept when its draft exists in R2 (70 revise rows were re-drafted from ground); the review second path names its model (not kimi-k2.6 after #1429). */ /* 0.18.35 CLAIM-HEARTBEAT-1 (2026-10-18): a stage that returns ok refreshes claimed_at, so the 120-min stale-claim reclaimer no longer re-grounds papers that are still advancing (550 releases/24h, 302 ground claims of 72 rows). */ /* 0.18.34 REVIEW-EMPTY-SECOND-PATH-1 (2026-10-18): an unreadable review takes a second model family in the same tick and, still unreadable, re-runs review directly instead of sending the review-parse placeholder through two no-op patch calls (237 of 264 revise-noop events, 329 hard=1 cycles in 3 days). */ /* 0.18.33 PATCH-FLEX-REGEX-OVERFLOW-1 (2026-10-18, agent_issues 2886): findFlexible caps the flexible matcher at 400 tokens and fails closed on any regex error, so a whole-section find text no longer throws "Invalid regular expression: Stack overflow" out of the slot. */ /* 0.18.32 AI-RATE-FALLBACK-1 (2026-10-18): a 3021/3040/3046 on the primary model after backoff takes one call on another family (glm<->gpt-oss-120b) instead of failing the stage; 3040 no longer misread as a reasoning_effort rejection. */ /* 0.18.31 VERIFY-AUTOCORRECT-1 (2026-10-18): papers fail verify with REAL arithmetic errors (the reconcile/ensemble writer computes a number that does not match its own stated inputs) and the revise loop cannot reliably fix a bare number, so such papers cycle until park. Verify already holds both values — independently computed `computed` and the paper's stated `expected` — so stageVerify now corrects the number deterministically (autoCorrectNumeric) instead of sending it back through a model. Fail-closed: only a stated value found exactly once (verbatim or as an unambiguous bare mantissa in LaTeX/\\times 10^N) is corrected; anything ambiguous is skipped and falls through to revise. Every correction is logged as verify-autocorrect and appended to verification.md. */ /* 0.18.29 VERIFY-CYCLE-CAP-1 (2026-10-17, owner directive "REMEDIATE ALL ISSUES AND FAILURE MODES"): the verify->revise edge reset the review cycle counter to 0 (context={cycles:0,verifyPass:1}) while EVERY other edge preserves it (3716, 3735, 3753) and the review stage is the one that increments it. That single reset made MAX_REVIEW_CYCLES (6) unreachable, so an item that fails verify re-enters revise, resets to cycle 0, and loops until recover_count runs out — measured 2026-10-17: review-unresolved events exist ONLY at cycle 2 (193) and 3 (165), never 4; 96 rerun-route and 278 revise-patch events against ~100 rows; and stage='publish' is EMPTY, which is why 151 complete events produced 0 publications and why the publish quota (24) guarded an empty queue. The edge now preserves the count, so the existing six-cycle cap can terminate an item visibly instead of cycling forever. The gate itself (gates2) is unchanged: this does not let a failing draft through, it lets a draft that cannot pass STOP. */ // 0.18.28-codeagent
 // WORKERS-AI-ATTRIBUTION-1 (2026-10-01, #1681): per-worker Workers AI attribution. Returns a shallow env copy whose AI
 // binding records each .run() (calls, errors, ms, tokens, neurons) into qnfo-audit ai_call_counters (purpose 'binding').
 // Neurons = usage tokens x Cloudflare's published per-model rates (neurons per M tokens). Fail-soft; env is never mutated.
@@ -3734,8 +3734,12 @@ async function stageReview(env, row) {
   // re-runs review directly (bounded by ctx.reparse) instead of passing through revise.
   if (!_revParsed) {
     const _revStage = stageContextPrompt("REVIEW", "PAPER", paper, "BIBLIOGRAPHY (numbered; the paper may cite only these):\n" + bib);
-    const _rev2 = await aiText(env, MODELS[2], _revStage, 8192, "low");
-    await logEvent(env, "review-second-path", "row=" + row.id + " first=" + String(revRaw || "").length + " chars second=" + String(_rev2 || "").length + " chars model=" + MODELS[2], "warn");
+    // REVIEW-SECOND-MODEL-1 (0.18.36): MODELS was reordered by MODEL-LADDER-REBALANCE-1 (#1429), which made MODELS[2]
+    // kimi-k2.6 (28 of 29 calls rate-limited on qnfo-ai, 2026-10-18). The second review path names its model: another
+    // family than the first review's Workers AI model, never kimi.
+    const _revM2 = MODELS[0] === "@cf/openai/gpt-oss-120b" ? "@cf/zai-org/glm-5.3-flash" : "@cf/openai/gpt-oss-120b";
+    const _rev2 = await aiText(env, _revM2, _revStage, 8192, "low");
+    await logEvent(env, "review-second-path", "row=" + row.id + " first=" + String(revRaw || "").length + " chars second=" + String(_rev2 || "").length + " chars model=" + _revM2, "warn");
     try {
       const m2 = String(_rev2 || "").match(/\{[\s\S]*\}/);
       if (m2) { findings = JSON.parse(m2[0]); _revParsed = true; }
@@ -5309,6 +5313,18 @@ async function researchParallel(env) {
 function doneStatus(r) {
   return r && r.ok ? "ok" : r && r.withheld ? "warn" : "error";
 }
+// CLAIM-HEARTBEAT-1 (0.18.35, 2026-10-18): claimed_at was written only at claim, so a paper still advancing through its
+// ~10 stages (ground .. verify, one stage per 15-min tick, ~2.5 h) aged past RESEARCH_CLAIM_STALE_MIN (120 min) and
+// reclaimStaleResearching re-queued it at stage ground, discarding the draft. Measured 2026-10-17/18: 550 rows released
+// in 24 h; 302 ground claims of only 72 distinct rows (one row grounded 7 times); ~1.5k content items past SLA. A stage
+// that returns now refreshes the claim, so only a row whose stage stopped returning (a real stall) is reclaimed.
+async function claimHeartbeat(env, row) {
+  try {
+    if (row && row.id) await env.QNFO_AUDIT.prepare("UPDATE research_queue SET claimed_at=?1 WHERE id=?2 AND status='researching'").bind(nowIso(), row.id).run();
+  } catch (eHb) {
+    console.error(JSON.stringify({ worker: "qnfo-research-exec", where: "claim-heartbeat", error: String(eHb && eHb.message || eHb).slice(0, 200) }));
+  }
+}
 async function runSlot(env, slot, width, inflight) {
   try {
     const row = inflight[slot];
@@ -5321,6 +5337,7 @@ async function runSlot(env, slot, width, inflight) {
     if (row) {
       const fn = { ground: stageGround, ensemble: stageEnsemble, reconcile: stageReconcile, complete: stageComplete, review: stageReview, revise: stageRevise, verify: stageVerify }[row.stage];
       const r2 = await fn(env, row);
+      if (r2 && r2.ok) await claimHeartbeat(env, row);
       if (r2 && r2.deferred) return { status: "ok", claimed: 0, deferred: true, res: r2, slot };
       await logEvent(env, "done", JSON.stringify(r2).slice(0, 600), doneStatus(r2));
       return { status: r2.ok ? "ok" : "error", res: r2, slot };
@@ -5354,7 +5371,7 @@ function resumeStage(row) {
 async function claimNew(env) {
   let row = null;
   try {
-    row = await env.QNFO_AUDIT.prepare("UPDATE research_queue SET status='researching', stage = CASE WHEN paper_slug IS NOT NULL AND stage IN ('complete','review','revise','verify') THEN stage ELSE 'ground' END, claimed_at=?1, attempt=attempt+1 WHERE id = (SELECT id FROM research_queue WHERE status='queued' ORDER BY CASE WHEN created_at < strftime('%Y-%m-%dT%H:%M:%SZ','now','-72 hours') THEN 0 ELSE 1 END, CASE WHEN created_at < strftime('%Y-%m-%dT%H:%M:%SZ','now','-72 hours') THEN created_at END ASC, score DESC LIMIT 1) AND status='queued' RETURNING *").bind(nowIso()).first();
+    row = await env.QNFO_AUDIT.prepare("UPDATE research_queue SET status='researching', stage = CASE WHEN stage IN ('complete','review','revise','verify') THEN stage ELSE 'ground' END, claimed_at=?1, attempt=attempt+1 WHERE id = (SELECT id FROM research_queue WHERE status='queued' ORDER BY CASE WHEN created_at < strftime('%Y-%m-%dT%H:%M:%SZ','now','-72 hours') THEN 0 ELSE 1 END, CASE WHEN created_at < strftime('%Y-%m-%dT%H:%M:%SZ','now','-72 hours') THEN created_at END ASC, score DESC LIMIT 1) AND status='queued' RETURNING *").bind(nowIso()).first();
   } catch (eClaim) {
     // A dialect without UPDATE ... RETURNING keeps the old two-step claim rather than stopping the pipeline.
     await logEvent(env, "claim-atomic-fallback", String(eClaim && eClaim.message || eClaim).slice(0, 200), "warn");
@@ -5366,9 +5383,21 @@ async function claimNew(env) {
     row.stage = resumeLegacy;
   }
   if (!row) return { status: "ok", claimed: 0 };
+  // RESUME-DRAFT-1 (0.18.35): paper_slug is written only at publish, so the RESUME-STAGE-1 condition (slug present) never
+  // held for an unpublished draft: 70 rows re-armed at stage revise (PARK-REARM-1) were claimed at ground and re-drafted
+  // from scratch. A resumable stage is now kept when the draft it needs (reconciled.md) exists in R2; otherwise ground.
+  if (RESUMABLE_STAGES.indexOf(String(row.stage || "")) !== -1) {
+    let _hasDraft = false;
+    try { _hasDraft = !!(await env.MIRROR.head("pipeline/" + String(row.id) + "/reconciled.md")); } catch (eHd) { console.error(JSON.stringify({ worker: "qnfo-research-exec", where: "resume-draft", error: String(eHd && eHd.message || eHd).slice(0, 200) })); }
+    if (!_hasDraft) {
+      await env.QNFO_AUDIT.prepare("UPDATE research_queue SET stage='ground' WHERE id=?1").bind(row.id).run();
+      row.stage = "ground";
+    }
+  }
   const resume = String(row.stage || "ground");
   await logEvent(env, "claim", "claimed " + row.source_id + " (pipeline " + PIPELINE_VERSION + ") at stage " + resume);
   const r = await stageFn(resume)(env, row);
+  if (r && r.ok) await claimHeartbeat(env, row);
   await logEvent(env, "done", JSON.stringify(r).slice(0, 600), doneStatus(r));
   return { status: r.ok ? "ok" : "error", res: r };
 }
