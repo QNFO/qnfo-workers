@@ -187,7 +187,7 @@ const etagOf = (r) => r.headers.get("ETag");
   const { env } = mk();
   const j = await (await call(env, "/health")).json();
   ok(["api-index", "live-snapshot", "conditional-reads"].every((c) => j.capabilities.includes(c)), "F1 capabilities name the new surface");
-  ok(j.version.startsWith("1.42"), "F2 the worker reports 1.42.x (" + j.version + ")");
+  ok(j.version.startsWith("1.43"), "F2 the worker reports 1.43.x (" + j.version + ")");
 }
 
 // G. the index's auth claims hold (the table is a contract, not documentation)
@@ -199,6 +199,67 @@ const etagOf = (r) => r.headers.get("ETag");
   ok(p.status === 400, "G2 /api/cmd refuses a write without x-fleet-ui (" + p.status + ")");
   const h = await call(env, "/health");
   ok(h.status === 200 && h.headers.get("Cache-Control") === "no-store", "G3 /health stays open and uncached");
+}
+
+// H. compaction, paging and the digest contract (COMPACT-READS-1)
+{
+  const { env, db } = mk();
+  const areas = await (await call(env, "/api/areas")).json();
+  ok(areas.schema_version === "fleet-areas/v3", "H1 areas schema is v3 (" + areas.schema_version + ")");
+  const rowsA = (areas.areas || []).flatMap((a) => [].concat(a.top || [], a.all || []));
+  ok(rowsA.length > 0 && rowsA.every((r) => !("fullLever" in r)), "H2 the compact body carries no fullLever (" + rowsA.length + " rows)");
+  ok(rowsA.some((r) => typeof r.lever === "string" && r.lever.length > 0), "H3 the clipped lever stays");
+  const full = await (await call(env, "/api/areas?full=1")).json();
+  const rowsF = (full.areas || []).flatMap((a) => [].concat(a.top || [], a.all || []));
+  ok(rowsF.some((r) => typeof r.fullLever === "string" && r.fullLever.length > 0), "H4 ?full=1 restores the full lever text");
+  ok(typeof areas.revision === "string" && areas.revision.length >= 4, "H5 the compact body carries its revision");
+  const aSince = await (await call(env, "/api/areas?since=" + areas.revision)).json();
+  ok(aSince.not_modified === true, "H6 ?since=<revision> works on /api/areas");
+  const h = await (await call(env, "/api/human")).json();
+  const hSince = await (await call(env, "/api/human?since=" + h.revision)).json();
+  ok(hSince.not_modified === true, "H7 ?since=<revision> works on /api/human");
+  // the changelog: one page by default, whole history on request, revalidating
+  await call(env, "/api/changelog");
+  for (let i = 0; i < 25; i++) {
+    db.prepare("INSERT INTO fleet_changelog (worker, version, level, released_at, prev_version, title, summary, marker, pr, sha, pillar, public_hosts, enriched_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)").run("w" + i, "1.0." + i, "patch", new Date(Date.now() - i * 36e5).toISOString(), null, "title " + i, "summary " + i, null, null, null, "autonomy", null, null);
+  }
+  const c1 = await (await call(env, "/api/changelog")).json();
+  ok(c1.schema_version === "changelog/v2" && c1.page && c1.page.limit === 20, "H8 changelog is v2 and pages at 20");
+  ok(c1.page.total >= 25 && c1.releases.length === 20 && c1.page.has_more === true, "H9 a page is 20 of " + c1.page.total + ", has_more true");
+  const cAll = await (await call(env, "/api/changelog?limit=all")).json();
+  ok(cAll.releases.length === cAll.page.total && cAll.page.limit === cAll.page.total, "H10 ?limit=all returns the whole history (" + cAll.page.total + ")");
+  const cTag = etagOf(await call(env, "/api/changelog"));
+  ok(!!cTag, "H11 the changelog revalidates");
+  ok((await call(env, "/api/changelog", { "If-None-Match": cTag })).status === 304, "H12 unchanged changelog answers 304");
+  db.prepare("UPDATE fleet_changelog SET title='renamed' WHERE version='1.0.3'").run();
+  const moved = await call(env, "/api/changelog", { "If-None-Match": cTag });
+  ok(moved.status === 200 && etagOf(moved) !== cTag, "H13 a NON-clock field change moves the ETag (no over-stripping)");
+}
+
+// I. every open read answers the same contract, not just the three that carried the example
+{
+  const { env } = mk();
+  const probes = ["/api/state", "/api/actions", "/api/integration", "/api/watchmaker", "/api/generators", "/api/reach", "/api/attention", "/api/kpi", "/api/content", "/api/ga4", "/api/q08-review", "/api/decision"];
+  let live = 0, rev = 0;
+  for (const p of probes) {
+    const a = await call(env, p);
+    if (a.status !== 200) { console.log("  (skip " + p + ": " + a.status + " in this harness)"); continue; }
+    live++;
+    const tag = etagOf(a);
+    if (!tag) { ok(false, "I1 missing ETag on " + p); continue; }
+    const body = await a.clone().json();
+    if (!body.revision) ok(false, "I2 missing body revision on " + p);
+    const b = await call(env, p, { "If-None-Match": tag });
+    if (b.status === 304) rev++; else ok(false, "I3 " + p + " did not revalidate (" + b.status + ")");
+  }
+  ok(live >= 9, "I4 at least nine extended reads answer 200 here (" + live + "/" + probes.length + ")");
+  ok(rev === live, "I5 every one of them revalidates (" + rev + "/" + live + ")");
+  const ix = await (await call(env, "/api")).json();
+  const rows = ix.endpoints || [];
+  for (const p of ["/api/state", "/api/actions", "/api/kpi", "/api/content", "/api/decision", "/api/reach", "/api/changelog", "/api/areas", "/api/human", "/api/live"]) {
+    const row = rows.find((e) => e.path === p);
+    ok(!!row && /ETag/.test(row.cache), "I6 the index promises ETag for " + p);
+  }
 }
 
 console.log(pass + " passed, " + fail + " failed");
