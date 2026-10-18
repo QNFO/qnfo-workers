@@ -2,7 +2,7 @@
 // Worker Contract v1: VERSION constant + GET /health
 // Data: https://ops.qnfo.org/fleet (modified_on per worker) + https://ops.qnfo.org/cost (spend)
 // NOTE: source of truth is this file; GET /workers/scripts/<name> TRUNCATES large bodies - never patch from a GET.
-var VERSION = "1.3.26-log-catches";
+var VERSION = "1.3.27-superseded-is-done"; /* CLAIM-TERMINAL-RELEASE-1 (2026-10-18): CODE_TASK_DONE now includes superseded, so the guard stops counting a superseded task as live work on its file. */
 var WORKER = "qnfo-deploy-guard";
 var LOCK_PREFIX = "deploylock:";
 var DENY_PREFIX = "deploydeny:";
@@ -463,7 +463,7 @@ var WORK_KEY_ERROR = "key must be issue:<agent_issues id> or file:<repo-relative
 //  * an acquire writes the work_claims row (path, intent, holder, issue_id, pr, expires_at); a renewal extends it; a
 //    release sets released_at, pr and outcome. GET /work-locks lists the ledger rows and code-loop tasks too.
 // Both tables are optional: when one is absent the claim degrades to the WORK-CLAIM-1 lease alone.
-var CODE_TASK_DONE = ["merged", "closed", "publish_failed", "needs_human", "failed", "reverted"];
+var CODE_TASK_DONE = ["merged", "closed", "superseded", "publish_failed", "needs_human", "failed", "reverted"]; // CLAIM-TERMINAL-RELEASE-1 (0.18.14): superseded is done
 function holderId(s) { var m = /session_[A-Za-z0-9]+/.exec(String(s || "")); return m ? m[0] : String(s || "").trim().toLowerCase(); }
 function isoS(ms) { return new Date(ms).toISOString().replace(/\.\d{3}Z$/, "Z"); }
 function claimTarget(wk) { return wk.indexOf("file:") === 0 ? { path: wk.slice(5), issue: null } : { path: wk, issue: Number(wk.slice(6)) }; }
