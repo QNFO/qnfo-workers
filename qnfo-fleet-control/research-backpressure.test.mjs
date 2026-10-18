@@ -44,7 +44,7 @@ const wrap = (db) => {
   return { prepare: (sql) => stmt(sql, []) };
 };
 const db = new DatabaseSync(":memory:");
-db.exec(`CREATE TABLE research_queue (id TEXT PRIMARY KEY, source TEXT, source_id TEXT, idea TEXT, score REAL, status TEXT, created_at TEXT, error TEXT, published_at TEXT);
+db.exec(`CREATE TABLE research_queue (id TEXT PRIMARY KEY, source TEXT, source_id TEXT, idea TEXT, score REAL, status TEXT, created_at TEXT, error TEXT, published_at TEXT, stage TEXT);
   CREATE TABLE idea_proposals (id INTEGER PRIMARY KEY, name TEXT, contact TEXT);
   CREATE TABLE ops_config (key TEXT PRIMARY KEY, value TEXT);
   CREATE TABLE metric_registry (metric TEXT PRIMARY KEY, last_value TEXT, last_refreshed TEXT, state TEXT);
@@ -95,5 +95,34 @@ db.exec("INSERT INTO ops_config VALUES ('research_backpressure', 'off')");
 out = await W.researchBackpressureTick(env);
 check(!out.on && out.deferred_pool === 0 && out.released === 3, "off releases the whole pool", out);
 
+
+// POOL-BOUND-1 (0.33.9): an unbounded deferred pool is capped at research_deferred_max; lowest-priority overflow is parked
+// with a revert line and re-armed when the pool falls below half the bound. Owner and remediation rows are never parked.
+{
+  const pdb = new DatabaseSync(":memory:");
+  pdb.exec(`CREATE TABLE research_queue (id TEXT PRIMARY KEY, source TEXT, source_id TEXT, idea TEXT, score REAL, status TEXT, created_at TEXT, error TEXT, published_at TEXT, stage TEXT);
+    CREATE TABLE idea_proposals (id INTEGER PRIMARY KEY, name TEXT, contact TEXT);
+    CREATE TABLE ops_config (key TEXT PRIMARY KEY, value TEXT);
+    CREATE TABLE metric_registry (metric TEXT PRIMARY KEY, last_value TEXT, last_refreshed TEXT, state TEXT);
+    CREATE TABLE cloud_ops_events (id TEXT PRIMARY KEY, ts TEXT, kind TEXT, text TEXT, meta TEXT, job TEXT, status TEXT);
+    INSERT INTO ops_config VALUES ('research_ready_cap', '2'), ('research_deferred_max', '4');
+    INSERT INTO idea_proposals VALUES (100, 'rowan-chat', 'owner');`);
+  const pi = pdb.prepare("INSERT INTO research_queue (id, source, source_id, score, status, created_at) VALUES (?, ?, ?, ?, ?, ?)");
+  for (let k = 0; k < 10; k++) pi.run("p" + k, "proposal", "x" + k, 10 - k, k < 2 ? "queued" : "deferred", "2026-10-1" + (k % 9) + "T00:00:00Z");
+  pi.run("own", "proposal", "100", 0, "deferred", "2026-10-01T00:00:00Z");
+  pi.run("rem", "remediation", "r9", 0, "deferred", "2026-10-01T00:00:00Z");
+  const penv = { AUDIT: wrap(pdb) };
+  const cnt = (w) => pdb.prepare("SELECT COUNT(*) AS n FROM research_queue WHERE " + w).get().n;
+  let po = await W.researchBackpressureTick(penv);
+  check(po.ok && po.pool_max === 4 && cnt("status = 'deferred'") === 4, "POOL-BOUND-1: the pool is cut to research_deferred_max", po);
+  check(po.pool_parked === 6 && cnt("status = 'wontfix' AND stage = 'parked' AND error LIKE 'POOL-BOUND-1%Revert:%'") === 6, "POOL-BOUND-1: overflow is parked with a revert line", po);
+  check(pdb.prepare("SELECT status FROM research_queue WHERE id = 'own'").get().status === "deferred" && pdb.prepare("SELECT status FROM research_queue WHERE id = 'rem'").get().status === "deferred", "POOL-BOUND-1: owner and remediation rows are never parked");
+  pdb.exec("UPDATE research_queue SET status = 'published' WHERE status IN ('deferred', 'queued')");
+  po = await W.researchBackpressureTick(penv);
+  check(po.pool_rearmed === 2 && cnt("status = 'deferred' AND error LIKE 'POOL-BOUND-1%re-armed%'") === 2, "POOL-BOUND-1: below half the bound, parked rows are re-armed by priority", po);
+  pdb.exec("UPDATE ops_config SET value = '0' WHERE key = 'research_deferred_max'");
+  po = await W.researchBackpressureTick(penv);
+  check(po.pool_parked === 0 && po.pool_rearmed === 0, "POOL-BOUND-1: research_deferred_max 0 turns the bound off", po);
+}
 console.log(n + " checks, " + fails + " failure(s)");
 if (fails) process.exit(1);
