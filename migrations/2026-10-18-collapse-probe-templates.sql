@@ -1,4 +1,4 @@
--- TRIGGER-GRAPH-HEADROOM-1 (2026-10-18, pillar autonomy): four probe-template generations become one
+﻿-- TRIGGER-GRAPH-HEADROOM-1 (2026-10-18, pillar autonomy): four probe-template generations become one
 --
 -- WHY
 --   remediation_contracts carried SIX probe-template triggers from successive design generations, and every
@@ -31,6 +31,10 @@
 --   SELECT COUNT(*) FROM sqlite_master WHERE type='trigger' AND tbl_name='remediation_contracts';   -- 11
 --   INSERT INTO agent_issues (title, description, source, category, priority, status)
 --     VALUES ('probe','probe','probe','observability','low','open');                                -- succeeds
+--
+-- spof-review: the remediation tick is the second path - it reads verify_probe from the contract row whatever wrote it,
+--   so a template trigger that fails to fire only leaves the caller-supplied probe in place and no decision depends
+--   on the trigger alone.
 --
 -- APPLY-BY: ci
 -- DB: qnfo-audit
