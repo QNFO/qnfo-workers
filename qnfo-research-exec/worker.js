@@ -33,7 +33,7 @@ var __name22222 = /* @__PURE__ */ __name2222((target, value) => __defProp22222(t
 // an empty catch. CITE-CONSISTENCY-1 asks the reviewer to compare the draft against cited QNFO work.
 // REVIEW-TRIAGE-CAP-1 is a defect fix: drift demotion at the cycle cap silently turned a blocking finding into a pass, so
 // REVIEW-HARD-GATE-1 withheld nothing there (reviewer findings 2 -> 0 at the cap; an unparseable review advanced to verify).
-var VERSION = "0.18.39-codeagent"; /* 0.18.38 TICK-10M-1 + RECLAIM-KEEP-STAGE-1 + IDEA-TO-PUBLISH-METRIC-1 (2026-10-18, owner directive: idea to publication under 100 hours; pillar research): (a) the cron runs every 10 minutes (was 15; 144/day = CRON-MANDATE-1 ceiling, same schedule count); member windows are 10 minutes wide so each errata/reviser job still runs exactly once per slot; the 03:00 sweep window is 10 minutes; (b) a stale reclaim keeps a resumable stage (complete/review/revise/verify), and RESUME-DRAFT-1 at claim falls back to ground when reconciled.md is missing, so a stalled draft is not re-drafted from scratch; (c) idea_to_publish_h_p50_7d (median hours idea_proposals.created_at -> published_at, 7 days) is written to metric_registry on the :00 tick. */ /* 0.18.37 ERRATA-HIGHRISK-ROUTE-1 folded (errata member 1.6.2): a high-risk errata correction draft older than 6 h becomes a remediation research row instead of waiting audited forever; internal_errata closes with its queue row. */ /* 0.18.36 CLAIM-HEARTBEAT-1 + RESUME-DRAFT-1 + REVIEW-SECOND-MODEL-1 (2026-10-18): a stage returning ok refreshes claimed_at so the stale-claim reclaimer stops re-grounding papers still advancing (550 releases/24h, 302 ground claims of 72 rows); a resumable stage is kept when its draft exists in R2 (70 revise rows were re-drafted from ground); the review second path names its model (not kimi-k2.6 after #1429). */ /* 0.18.35 CLAIM-HEARTBEAT-1 (2026-10-18): a stage that returns ok refreshes claimed_at, so the 120-min stale-claim reclaimer no longer re-grounds papers that are still advancing (550 releases/24h, 302 ground claims of 72 rows). */ /* 0.18.34 REVIEW-EMPTY-SECOND-PATH-1 (2026-10-18): an unreadable review takes a second model family in the same tick and, still unreadable, re-runs review directly instead of sending the review-parse placeholder through two no-op patch calls (237 of 264 revise-noop events, 329 hard=1 cycles in 3 days). */ /* 0.18.33 PATCH-FLEX-REGEX-OVERFLOW-1 (2026-10-18, agent_issues 2886): findFlexible caps the flexible matcher at 400 tokens and fails closed on any regex error, so a whole-section find text no longer throws "Invalid regular expression: Stack overflow" out of the slot. */ /* 0.18.32 AI-RATE-FALLBACK-1 (2026-10-18): a 3021/3040/3046 on the primary model after backoff takes one call on another family (glm<->gpt-oss-120b) instead of failing the stage; 3040 no longer misread as a reasoning_effort rejection. */ /* 0.18.31 VERIFY-AUTOCORRECT-1 (2026-10-18): papers fail verify with REAL arithmetic errors (the reconcile/ensemble writer computes a number that does not match its own stated inputs) and the revise loop cannot reliably fix a bare number, so such papers cycle until park. Verify already holds both values — independently computed `computed` and the paper's stated `expected` — so stageVerify now corrects the number deterministically (autoCorrectNumeric) instead of sending it back through a model. Fail-closed: only a stated value found exactly once (verbatim or as an unambiguous bare mantissa in LaTeX/\\times 10^N) is corrected; anything ambiguous is skipped and falls through to revise. Every correction is logged as verify-autocorrect and appended to verification.md. */ /* 0.18.29 VERIFY-CYCLE-CAP-1 (2026-10-17, owner directive "REMEDIATE ALL ISSUES AND FAILURE MODES"): the verify->revise edge reset the review cycle counter to 0 (context={cycles:0,verifyPass:1}) while EVERY other edge preserves it (3716, 3735, 3753) and the review stage is the one that increments it. That single reset made MAX_REVIEW_CYCLES (6) unreachable, so an item that fails verify re-enters revise, resets to cycle 0, and loops until recover_count runs out — measured 2026-10-17: review-unresolved events exist ONLY at cycle 2 (193) and 3 (165), never 4; 96 rerun-route and 278 revise-patch events against ~100 rows; and stage='publish' is EMPTY, which is why 151 complete events produced 0 publications and why the publish quota (24) guarded an empty queue. The edge now preserves the count, so the existing six-cycle cap can terminate an item visibly instead of cycling forever. The gate itself (gates2) is unchanged: this does not let a failing draft through, it lets a draft that cannot pass STOP. */ // 0.18.28-codeagent
+var VERSION = "0.18.40-codeagent"; /* 0.18.38 TICK-10M-1 + RECLAIM-KEEP-STAGE-1 + IDEA-TO-PUBLISH-METRIC-1 (2026-10-18, owner directive: idea to publication under 100 hours; pillar research): (a) the cron runs every 10 minutes (was 15; 144/day = CRON-MANDATE-1 ceiling, same schedule count); member windows are 10 minutes wide so each errata/reviser job still runs exactly once per slot; the 03:00 sweep window is 10 minutes; (b) a stale reclaim keeps a resumable stage (complete/review/revise/verify), and RESUME-DRAFT-1 at claim falls back to ground when reconciled.md is missing, so a stalled draft is not re-drafted from scratch; (c) idea_to_publish_h_p50_7d (median hours idea_proposals.created_at -> published_at, 7 days) is written to metric_registry on the :00 tick. */ /* 0.18.37 ERRATA-HIGHRISK-ROUTE-1 folded (errata member 1.6.2): a high-risk errata correction draft older than 6 h becomes a remediation research row instead of waiting audited forever; internal_errata closes with its queue row. */ /* 0.18.36 CLAIM-HEARTBEAT-1 + RESUME-DRAFT-1 + REVIEW-SECOND-MODEL-1 (2026-10-18): a stage returning ok refreshes claimed_at so the stale-claim reclaimer stops re-grounding papers still advancing (550 releases/24h, 302 ground claims of 72 rows); a resumable stage is kept when its draft exists in R2 (70 revise rows were re-drafted from ground); the review second path names its model (not kimi-k2.6 after #1429). */ /* 0.18.35 CLAIM-HEARTBEAT-1 (2026-10-18): a stage that returns ok refreshes claimed_at, so the 120-min stale-claim reclaimer no longer re-grounds papers that are still advancing (550 releases/24h, 302 ground claims of 72 rows). */ /* 0.18.34 REVIEW-EMPTY-SECOND-PATH-1 (2026-10-18): an unreadable review takes a second model family in the same tick and, still unreadable, re-runs review directly instead of sending the review-parse placeholder through two no-op patch calls (237 of 264 revise-noop events, 329 hard=1 cycles in 3 days). */ /* 0.18.33 PATCH-FLEX-REGEX-OVERFLOW-1 (2026-10-18, agent_issues 2886): findFlexible caps the flexible matcher at 400 tokens and fails closed on any regex error, so a whole-section find text no longer throws "Invalid regular expression: Stack overflow" out of the slot. */ /* 0.18.32 AI-RATE-FALLBACK-1 (2026-10-18): a 3021/3040/3046 on the primary model after backoff takes one call on another family (glm<->gpt-oss-120b) instead of failing the stage; 3040 no longer misread as a reasoning_effort rejection. */ /* 0.18.31 VERIFY-AUTOCORRECT-1 (2026-10-18): papers fail verify with REAL arithmetic errors (the reconcile/ensemble writer computes a number that does not match its own stated inputs) and the revise loop cannot reliably fix a bare number, so such papers cycle until park. Verify already holds both values — independently computed `computed` and the paper's stated `expected` — so stageVerify now corrects the number deterministically (autoCorrectNumeric) instead of sending it back through a model. Fail-closed: only a stated value found exactly once (verbatim or as an unambiguous bare mantissa in LaTeX/\\times 10^N) is corrected; anything ambiguous is skipped and falls through to revise. Every correction is logged as verify-autocorrect and appended to verification.md. */ /* 0.18.29 VERIFY-CYCLE-CAP-1 (2026-10-17, owner directive "REMEDIATE ALL ISSUES AND FAILURE MODES"): the verify->revise edge reset the review cycle counter to 0 (context={cycles:0,verifyPass:1}) while EVERY other edge preserves it (3716, 3735, 3753) and the review stage is the one that increments it. That single reset made MAX_REVIEW_CYCLES (6) unreachable, so an item that fails verify re-enters revise, resets to cycle 0, and loops until recover_count runs out — measured 2026-10-17: review-unresolved events exist ONLY at cycle 2 (193) and 3 (165), never 4; 96 rerun-route and 278 revise-patch events against ~100 rows; and stage='publish' is EMPTY, which is why 151 complete events produced 0 publications and why the publish quota (24) guarded an empty queue. The edge now preserves the count, so the existing six-cycle cap can terminate an item visibly instead of cycling forever. The gate itself (gates2) is unchanged: this does not let a failing draft through, it lets a draft that cannot pass STOP. */ // 0.18.28-codeagent
 // WORKERS-AI-ATTRIBUTION-1 (2026-10-01, #1681): per-worker Workers AI attribution. Returns a shallow env copy whose AI
 // binding records each .run() (calls, errors, ms, tokens, neurons) into qnfo-audit ai_call_counters (purpose 'binding').
 // Neurons = usage tokens x Cloudflare's published per-model rates (neurons per M tokens). Fail-soft; env is never mutated.
@@ -3568,7 +3568,7 @@ if (!contract.complete) {
   // LEAN-ENSEMBLE-1: a lean run writes two drafts, so a draft-2 left by an earlier attempt on another grounding must not
   // join. A draft joins only when its grounding fingerprint (draft-N.fp) matches draft-0's; a draft with no sidecar is kept.
   const fp0 = String(await r2Get(env, String(row.id) + "/draft-0.fp") || "").trim();
-  for (let i = 0; i < 3; i++) {
+  for (let i = 0; i < 4; i++) {
     const d = await r2Get(env, String(row.id) + "/draft-" + i + ".md");
     if (!d) continue;
     const fpi = String(await r2Get(env, String(row.id) + "/draft-" + i + ".fp") || "").trim();
@@ -3677,6 +3677,14 @@ function reviewNonMechanical(f) {
   return /\b(add|adding|collect|obtain|perform|run|conduct|carry out|repeat|gather)\b[^.;]{0,60}\b(experiment|experiments|dataset|datasets|measurements|simulations)\b|\b(further|additional|more|new)\s+(experiment|experiments|dataset|datasets|measurements|simulations)\b|\bexpand\b[^.;]{0,30}\bscope\b|\bbroaden\b|\bmore (work|research) is (needed|required)\b|\b(would|could|should)\b[^.;]{0,20}\b(require|need)\b[^.;]{0,40}\b(experiment|data|dataset)\b/i.test(t);
 }
 __name(reviewNonMechanical, "reviewNonMechanical");
+function tagFindings(findings, family) {
+  if (Array.isArray(findings.hard)) {
+    findings.hard.forEach(f => { if (f) f.family = family; });
+  }
+  if (Array.isArray(findings.soft)) {
+    findings.soft.forEach(f => { if (f) f.family = family; });
+  }
+}
 async function triageHardFindings(env, row, paper, hard, cycle, cap) {
   let prev = [];
   try {
@@ -3748,11 +3756,12 @@ async function stageReview(env, row) {
   // that silently inverted a claim of a work it cites passed every gate. One added instruction; the finding rides the
   // existing HARD/SOFT pipeline, no new stage, cron or model call.
   const revRaw = await gwCall(env, stageContextPrompt("REVIEW", "PAPER", paper, "BIBLIOGRAPHY (numbered; the paper may cite only these):\n" + bib + "\n\nCITATION CONSISTENCY (required check): entries marked 'QNFO:' are works published by this same pipeline. For each one the paper cites, state whether the paper's use agrees with what that work says. If the paper contradicts, silently inverts, or overstates a claim of a cited QNFO work, raise a HARD finding that names the work and the claim."), 12e3);
+const reviewerFamily0 = MODELS[0]; // record family of first reviewer
   let findings = { verdict: "revise", hard: [{ id: "review-parse", severity: "HARD", claim: "review output", reason: "unparseable review output", fix: "re-run review" }], soft: [] };
   let _revParsed = false;
   try {
     const m = String(revRaw).match(/\{[\s\S]*\}/);
-    if (m) { findings = JSON.parse(m[0]); _revParsed = true; }
+    if (m) { findings = JSON.parse(m[0]); _revParsed = true; tagFindings(findings, reviewerFamily0); }
   } catch (e) {
   }
   // REVIEW-EMPTY-SECOND-PATH-1 (0.18.34, 2026-10-18): an empty or unparseable review (glm rate limit, or reasoning that
@@ -3763,15 +3772,28 @@ async function stageReview(env, row) {
   // re-runs review directly (bounded by ctx.reparse) instead of passing through revise.
   if (!_revParsed) {
     const _revStage = stageContextPrompt("REVIEW", "PAPER", paper, "BIBLIOGRAPHY (numbered; the paper may cite only these):\n" + bib);
-    // REVIEW-SECOND-MODEL-1 (0.18.36): MODELS was reordered by MODEL-LADDER-REBALANCE-1 (#1429), which made MODELS[2]
-    // kimi-k2.6 (28 of 29 calls rate-limited on qnfo-ai, 2026-10-18). The second review path names its model: another
-    // family than the first review's Workers AI model, never kimi.
     const _revM2 = MODELS[0] === "@cf/openai/gpt-oss-120b" ? "@cf/zai-org/glm-5.3-flash" : "@cf/openai/gpt-oss-120b";
     const _rev2 = await aiText(env, _revM2, _revStage, 8192, "low");
     await logEvent(env, "review-second-path", "row=" + row.id + " first=" + String(revRaw || "").length + " chars second=" + String(_rev2 || "").length + " chars model=" + _revM2, "warn");
     try {
       const m2 = String(_rev2 || "").match(/\{[\s\S]*\}/);
-      if (m2) { findings = JSON.parse(m2[0]); _revParsed = true; }
+      if (m2) { findings = JSON.parse(m2[0]); _revParsed = true; tagFindings(findings, _revM2); }
+    } catch (e) {
+    }
+    // THIRD reviewer, distinct family from the first two
+    const _revM3 = (_revM2 !== MODELS[1] && MODELS[1] !== reviewerFamily0) ? MODELS[1] : MODELS[2];
+    const _rev3 = await aiText(env, _revM3, _revStage, 8192, "low");
+    await logEvent(env, "review-third-path", "row=" + row.id + " third=" + String(_rev3 || "").length + " chars model=" + _revM3, "warn");
+    try {
+      const m3 = String(_rev3 || "").match(/\{[\s\S]*\}/);
+      if (m3) {
+        const findings3 = JSON.parse(m3[0]);
+        tagFindings(findings3, _revM3);
+        // merge findings
+        if (Array.isArray(findings3.hard)) findings.hard = findings.hard.concat(findings3.hard);
+        if (Array.isArray(findings3.soft)) findings.soft = findings.soft.concat(findings3.soft);
+        _revParsed = true;
+      }
     } catch (e) {
     }
   }
