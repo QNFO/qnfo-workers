@@ -1,4 +1,4 @@
-var VERSION="3.22.2-quick-read-3";; /* 3.22.2 QUICK-READ-3 (2026-10-19, measured against the Workers AI run API): the quick read's first live reads took 12-16 s. On the same 2k-token prompt kimi-k2.6 answered the JSON in 9.7 s and gpt-oss-120b in 5.2 s with reasoning_effort "low" (14.0 s with the default; Harmony rejects "none" outright), so the quick read now asks gpt-oss-120b at effort low, the token ceiling stays 900 and the 15 s deadline stays with the extractive read behind it. QUICK-READ-2 (3.22.1), measured on the live corpus): QUICK-READ-1 shipped 3.21.0 and the first live reads took 12-16 s, one of them crossing the 20 s deadline, because the model was asked for up to ten items whose evidence could run to three sentences each. The model now returns ONE sentence of evidence per item, at most 3 answers and 2 of the other two, at 900 output tokens, and the deadline is 15 s with the deterministic extractive read behind it: the same page in roughly half the generation time, with the same guarantee that every line quotes the paper. /* 3.22.0 FILING-2 (2026-10-18, owner directive "fix all automatically", pillar autonomy): the daily pass now files BOTH layers. A newly published paper gets its shelf and its tags in the same run, so the tag vocabulary cannot thin out as the corpus grows; the tag prompt is built from tag_registry, so adding or retiring a tag is one D1 row and no deploy. The same pass sweeps orphan paper_tag rows. The index renders the whole vocabulary (up to 64 chips) instead of the top 14. */ /* 3.21.0-quick-read-1 /* 3.21.0 QUICK-READ-1 (2026-10-19, owner directive, pillar reach): Google Scholar's Quick Read (2026-08-25) shows one paper as it answers ONE question: overview, then Answers (each point with its supporting detail behind Show details), Approach and Considerations. This is that idea over the living-paper corpus, plus the one thing a corpus of full texts can do that a search index cannot  -  every line of the answer quotes a sentence of the paper, and a statement whose evidence is not found in the text is dropped and counted rather than shown. /papers/<slug>/quickread is the page (question form; POST renders server-side, no JavaScript needed), /api/quickread/<slug>?q= is the JSON, and living-paper.quick_read caches each (paper, question) pair for 45 days. Three paths to an answer: the cache under 300ms, one model call over the passages the question touches, and a deterministic extractive read of the paper's own sentences when the model fails or returns nothing quotable  -  so the page always answers and names which path ran. A question the paper never uses the words of is answered before any model call: coverage none, no spend. */ /* 3.18.12 ULA-V21-FOOTERS-1 (2026-10-18): QNFO-ULA v2.1 is live; the QWAV footer, papers footer, archive lede/description and ulaLatest fallback license labels changed v2.0 -> v2.1. */ /* 3.19.0 PAPER-AUDIENCE-CATEGORIES-1 (2026-10-18, owner directive, pillar reach): the papers library filed every paper into five keyword buckets and "Other" held 161 of 606 public papers (26%), the largest shelf on the site. Nine audience shelves replace them (energy per answer, error correction, physics, numbers & p-adics, logic & formalism, AI & knowledge, autonomous systems, assessments, cross-cutting essays), each named for the reader who looks for it; every paper's shelf is curated data in living-paper D1 (table paper_category), read first by the index, the archive, the paper page and the related panel, with the keyword classifier kept only as the fallback for a paper published before the daily filing job has seen it. ?category= other, number-theory and computer-science are aliased, so old links still land. */ /* 3.18.10 IDENTITY-WELLKNOWN-1 (2026-10-18): /.well-known/security.txt (RFC 9116) on every gateway host, /.well-known/atproto-did on qnfo.org for the Bluesky domain handle, rel="me" to the Mastodon profile in every page head. */ /* 3.18.5 WORKERS-BP-LOGGING-qnfo-gateway-1 (2026-10-14, agent_issues 2533, child of 2342, pillar autonomy): the 6 server-side swallowed catches log (2 browser-script hits marked standards-ok or allowlisted) as a structured console.error (worker, where, error); control flow unchanged. */ /* 3.18.4 FLEET-HARDENING-2 (2026-10-13, agent_issues 2397, pillar autonomy): the daily cron ends with a qnfo-audit fleet_heartbeat upsert through a new AUDIT binding (ok=0 when the IndexNow step threw, which was swallowed before and is now logged). */ /* 3.18.3 HUB-CACHE-VERSION-1 (2026-10-13, pillar reach, failure mode zaraz-autoinject-worker-html): the qnfo.org hub copy in each colo's cache now carries the VERSION that built it, and a copy built by another version is rebuilt while the request waits up to 2.5 s instead of being served stale; the runner probe of 07:39 UTC read a pre-3.16.1 copy without /cdn-cgi/zaraz/i.js while every fresh render carried it. */ /* 3.18.2 PAGE-POLICY-1 (2026-10-13, pillar reach, agent_issues 2343 WEB-PERF-EDGE-1): every HTML response carries Referrer-Policy strict-origin-when-cross-origin (no-referrer when the query carries a token) and Permissions-Policy camera=(), microphone=(), geolocation=() from the worker (qnfo.org had neither; the subdomains had them only from a zone rule), and an HTML response without Cache-Control gets public, max-age=300, s-maxage=3600, stale-while-revalidate=86400 when it is a public GET 200, no-store otherwise; handlers that set their own are unchanged, JSON untouched. 3.18.1 RENDER-DEFECTS-2300 (2026-10-13, pillar reach, agent_issues 2300 2158 2357): PANDOC-FENCE-GLUE-1 reads a code fence glued to prose or to its last code line as a fence (ultrametric-intelligence printed its Python as prose and typeset its identifiers); MATH-RESIDUE-5 typesets a formula glued to a name by a product sign; RAIL-MATH-1 gives /api/paper-context title_tex and excerpt_tex (formulas kept as TeX, plain-text math typeset, currency escaped) and the Related and Versions panels paint them, since every residue the browser sample counted on chapter-1 and log20240505010101strangeloopbook on 2026-10-12 was panel text; a formula ending in an escaped brace is lifted as math; MathJax knows the Sha macro. 3.18.0 ACTIVITYPUB-KEY-1 (2026-10-12, pillar reach, #2249 #2413): the actor publishes publicKeyPem when AP_PUBLIC_KEY is set (cf-ops gen-activitypub-key); merged with main 3.17.1 (REACH-RENDER-1). */ /* 3.20.0 PAPER-TAGS-1 (2026-10-18, owner directive, pillar reach): a shelf is exclusive and answers "where does this live"; it cannot show that a QEC paper is also a Bruhat-Tits paper, or that a number-theory result helps choose a hardware platform. Tags are the second, multi-label layer over the nine shelves: method (what the paper works with), topic (what it is about), use (what a reader could do with it). 1,400 curated assignments over 606 papers, 41 controlled tags, in living-paper D1 (paper_tag + tag_registry), so a wrong tag is a DELETE. The index gains a tag row that composes with the shelf filter and search (?tag= + ?category=), paper cards show up to two tags, the paper page shows its full tag set, and /papers/tags is the catalogue grouped by kind with counts and definitions. Tag and shelf reads are per-isolate cached and degrade to shelves alone when the tables are absent. *//* 3.18.12 ULA-V21-FOOTERS-1 (2026-10-18): QNFO-ULA v2.1 is live; the QWAV footer, papers footer, archive lede/description and ulaLatest fallback license labels changed v2.0 -> v2.1. */ /* 3.19.0 PAPER-AUDIENCE-CATEGORIES-1 (2026-10-18, owner directive, pillar reach): the papers library filed every paper into five keyword buckets and "Other" held 161 of 606 public papers (26%), the largest shelf on the site. Nine audience shelves replace them (energy per answer, error correction, physics, numbers & p-adics, logic & formalism, AI & knowledge, autonomous systems, assessments, cross-cutting essays), each named for the reader who looks for it; every paper's shelf is curated data in living-paper D1 (table paper_category), read first by the index, the archive, the paper page and the related panel, with the keyword classifier kept only as the fallback for a paper published before the daily filing job has seen it. ?category= other, number-theory and computer-science are aliased, so old links still land. */ /* 3.18.10 IDENTITY-WELLKNOWN-1 (2026-10-18): /.well-known/security.txt (RFC 9116) on every gateway host, /.well-known/atproto-did on qnfo.org for the Bluesky domain handle, rel="me" to the Mastodon profile in every page head. */ /* 3.18.5 WORKERS-BP-LOGGING-qnfo-gateway-1 (2026-10-14, agent_issues 2533, child of 2342, pillar autonomy): the 6 server-side swallowed catches log (2 browser-script hits marked standards-ok or allowlisted) as a structured console.error (worker, where, error); control flow unchanged. */ /* 3.18.4 FLEET-HARDENING-2 (2026-10-13, agent_issues 2397, pillar autonomy): the daily cron ends with a qnfo-audit fleet_heartbeat upsert through a new AUDIT binding (ok=0 when the IndexNow step threw, which was swallowed before and is now logged). */ /* 3.18.3 HUB-CACHE-VERSION-1 (2026-10-13, pillar reach, failure mode zaraz-autoinject-worker-html): the qnfo.org hub copy in each colo's cache now carries the VERSION that built it, and a copy built by another version is rebuilt while the request waits up to 2.5 s instead of being served stale; the runner probe of 07:39 UTC read a pre-3.16.1 copy without /cdn-cgi/zaraz/i.js while every fresh render carried it. */ /* 3.18.2 PAGE-POLICY-1 (2026-10-13, pillar reach, agent_issues 2343 WEB-PERF-EDGE-1): every HTML response carries Referrer-Policy strict-origin-when-cross-origin (no-referrer when the query carries a token) and Permissions-Policy camera=(), microphone=(), geolocation=() from the worker (qnfo.org had neither; the subdomains had them only from a zone rule), and an HTML response without Cache-Control gets public, max-age=300, s-maxage=3600, stale-while-revalidate=86400 when it is a public GET 200, no-store otherwise; handlers that set their own are unchanged, JSON untouched. 3.18.1 RENDER-DEFECTS-2300 (2026-10-13, pillar reach, agent_issues 2300 2158 2357): PANDOC-FENCE-GLUE-1 reads a code fence glued to prose or to its last code line as a fence (ultrametric-intelligence printed its Python as prose and typeset its identifiers); MATH-RESIDUE-5 typesets a formula glued to a name by a product sign; RAIL-MATH-1 gives /api/paper-context title_tex and excerpt_tex (formulas kept as TeX, plain-text math typeset, currency escaped) and the Related and Versions panels paint them, since every residue the browser sample counted on chapter-1 and log20240505010101strangeloopbook on 2026-10-12 was panel text; a formula ending in an escaped brace is lifted as math; MathJax knows the Sha macro. 3.18.0 ACTIVITYPUB-KEY-1 (2026-10-12, pillar reach, #2249 #2413): the actor publishes publicKeyPem when AP_PUBLIC_KEY is set (cf-ops gen-activitypub-key); merged with main 3.17.1 (REACH-RENDER-1). */
+var VERSION="3.23.0-quick-read-4";; /* 3.23.0 QUICK-READ-4 (2026-10-19, the two gaps the first live reads exposed): (a) the cache key was (paper, question) and a corrected paper kept serving its old quick read for up to 45 days, so the key now carries the paper's revision (pipeline version, version, updated_at, body length); (b) the ranking was exact-vocabulary, so a question phrased in other words was answered "this paper does not answer this question" - true of the words, false of the meaning - and the question and the sections are now embedded (bge-small, one batched call, vectors cached per revision in living-paper.quick_read_vec) before that verdict, with the closest sections labelled "related" on the page. Also: GET /_audit/quick-read reports which of the three paths answered and fails its invariant on an unreadable payload; /reading, llms.txt, openapi and /health carry the feature. QUICK-READ-3 (3.22.2): the quick read's first live reads took 12-16 s. On the same 2k-token prompt kimi-k2.6 answered the JSON in 9.7 s and gpt-oss-120b in 5.2 s with reasoning_effort "low" (14.0 s with the default; Harmony rejects "none" outright), so the quick read now asks gpt-oss-120b at effort low, the token ceiling stays 900 and the 15 s deadline stays with the extractive read behind it. QUICK-READ-2 (3.22.1), measured on the live corpus): QUICK-READ-1 shipped 3.21.0 and the first live reads took 12-16 s, one of them crossing the 20 s deadline, because the model was asked for up to ten items whose evidence could run to three sentences each. The model now returns ONE sentence of evidence per item, at most 3 answers and 2 of the other two, at 900 output tokens, and the deadline is 15 s with the deterministic extractive read behind it: the same page in roughly half the generation time, with the same guarantee that every line quotes the paper. /* 3.22.0 FILING-2 (2026-10-18, owner directive "fix all automatically", pillar autonomy): the daily pass now files BOTH layers. A newly published paper gets its shelf and its tags in the same run, so the tag vocabulary cannot thin out as the corpus grows; the tag prompt is built from tag_registry, so adding or retiring a tag is one D1 row and no deploy. The same pass sweeps orphan paper_tag rows. The index renders the whole vocabulary (up to 64 chips) instead of the top 14. */ /* 3.21.0-quick-read-1 /* 3.21.0 QUICK-READ-1 (2026-10-19, owner directive, pillar reach): Google Scholar's Quick Read (2026-08-25) shows one paper as it answers ONE question: overview, then Answers (each point with its supporting detail behind Show details), Approach and Considerations. This is that idea over the living-paper corpus, plus the one thing a corpus of full texts can do that a search index cannot  -  every line of the answer quotes a sentence of the paper, and a statement whose evidence is not found in the text is dropped and counted rather than shown. /papers/<slug>/quickread is the page (question form; POST renders server-side, no JavaScript needed), /api/quickread/<slug>?q= is the JSON, and living-paper.quick_read caches each (paper, question) pair for 45 days. Three paths to an answer: the cache under 300ms, one model call over the passages the question touches, and a deterministic extractive read of the paper's own sentences when the model fails or returns nothing quotable  -  so the page always answers and names which path ran. A question the paper never uses the words of is answered before any model call: coverage none, no spend. */ /* 3.18.12 ULA-V21-FOOTERS-1 (2026-10-18): QNFO-ULA v2.1 is live; the QWAV footer, papers footer, archive lede/description and ulaLatest fallback license labels changed v2.0 -> v2.1. */ /* 3.19.0 PAPER-AUDIENCE-CATEGORIES-1 (2026-10-18, owner directive, pillar reach): the papers library filed every paper into five keyword buckets and "Other" held 161 of 606 public papers (26%), the largest shelf on the site. Nine audience shelves replace them (energy per answer, error correction, physics, numbers & p-adics, logic & formalism, AI & knowledge, autonomous systems, assessments, cross-cutting essays), each named for the reader who looks for it; every paper's shelf is curated data in living-paper D1 (table paper_category), read first by the index, the archive, the paper page and the related panel, with the keyword classifier kept only as the fallback for a paper published before the daily filing job has seen it. ?category= other, number-theory and computer-science are aliased, so old links still land. */ /* 3.18.10 IDENTITY-WELLKNOWN-1 (2026-10-18): /.well-known/security.txt (RFC 9116) on every gateway host, /.well-known/atproto-did on qnfo.org for the Bluesky domain handle, rel="me" to the Mastodon profile in every page head. */ /* 3.18.5 WORKERS-BP-LOGGING-qnfo-gateway-1 (2026-10-14, agent_issues 2533, child of 2342, pillar autonomy): the 6 server-side swallowed catches log (2 browser-script hits marked standards-ok or allowlisted) as a structured console.error (worker, where, error); control flow unchanged. */ /* 3.18.4 FLEET-HARDENING-2 (2026-10-13, agent_issues 2397, pillar autonomy): the daily cron ends with a qnfo-audit fleet_heartbeat upsert through a new AUDIT binding (ok=0 when the IndexNow step threw, which was swallowed before and is now logged). */ /* 3.18.3 HUB-CACHE-VERSION-1 (2026-10-13, pillar reach, failure mode zaraz-autoinject-worker-html): the qnfo.org hub copy in each colo's cache now carries the VERSION that built it, and a copy built by another version is rebuilt while the request waits up to 2.5 s instead of being served stale; the runner probe of 07:39 UTC read a pre-3.16.1 copy without /cdn-cgi/zaraz/i.js while every fresh render carried it. */ /* 3.18.2 PAGE-POLICY-1 (2026-10-13, pillar reach, agent_issues 2343 WEB-PERF-EDGE-1): every HTML response carries Referrer-Policy strict-origin-when-cross-origin (no-referrer when the query carries a token) and Permissions-Policy camera=(), microphone=(), geolocation=() from the worker (qnfo.org had neither; the subdomains had them only from a zone rule), and an HTML response without Cache-Control gets public, max-age=300, s-maxage=3600, stale-while-revalidate=86400 when it is a public GET 200, no-store otherwise; handlers that set their own are unchanged, JSON untouched. 3.18.1 RENDER-DEFECTS-2300 (2026-10-13, pillar reach, agent_issues 2300 2158 2357): PANDOC-FENCE-GLUE-1 reads a code fence glued to prose or to its last code line as a fence (ultrametric-intelligence printed its Python as prose and typeset its identifiers); MATH-RESIDUE-5 typesets a formula glued to a name by a product sign; RAIL-MATH-1 gives /api/paper-context title_tex and excerpt_tex (formulas kept as TeX, plain-text math typeset, currency escaped) and the Related and Versions panels paint them, since every residue the browser sample counted on chapter-1 and log20240505010101strangeloopbook on 2026-10-12 was panel text; a formula ending in an escaped brace is lifted as math; MathJax knows the Sha macro. 3.18.0 ACTIVITYPUB-KEY-1 (2026-10-12, pillar reach, #2249 #2413): the actor publishes publicKeyPem when AP_PUBLIC_KEY is set (cf-ops gen-activitypub-key); merged with main 3.17.1 (REACH-RENDER-1). */ /* 3.20.0 PAPER-TAGS-1 (2026-10-18, owner directive, pillar reach): a shelf is exclusive and answers "where does this live"; it cannot show that a QEC paper is also a Bruhat-Tits paper, or that a number-theory result helps choose a hardware platform. Tags are the second, multi-label layer over the nine shelves: method (what the paper works with), topic (what it is about), use (what a reader could do with it). 1,400 curated assignments over 606 papers, 41 controlled tags, in living-paper D1 (paper_tag + tag_registry), so a wrong tag is a DELETE. The index gains a tag row that composes with the shelf filter and search (?tag= + ?category=), paper cards show up to two tags, the paper page shows its full tag set, and /papers/tags is the catalogue grouped by kind with counts and definitions. Tag and shelf reads are per-isolate cached and degrade to shelves alone when the tables are absent. *//* 3.18.12 ULA-V21-FOOTERS-1 (2026-10-18): QNFO-ULA v2.1 is live; the QWAV footer, papers footer, archive lede/description and ulaLatest fallback license labels changed v2.0 -> v2.1. */ /* 3.19.0 PAPER-AUDIENCE-CATEGORIES-1 (2026-10-18, owner directive, pillar reach): the papers library filed every paper into five keyword buckets and "Other" held 161 of 606 public papers (26%), the largest shelf on the site. Nine audience shelves replace them (energy per answer, error correction, physics, numbers & p-adics, logic & formalism, AI & knowledge, autonomous systems, assessments, cross-cutting essays), each named for the reader who looks for it; every paper's shelf is curated data in living-paper D1 (table paper_category), read first by the index, the archive, the paper page and the related panel, with the keyword classifier kept only as the fallback for a paper published before the daily filing job has seen it. ?category= other, number-theory and computer-science are aliased, so old links still land. */ /* 3.18.10 IDENTITY-WELLKNOWN-1 (2026-10-18): /.well-known/security.txt (RFC 9116) on every gateway host, /.well-known/atproto-did on qnfo.org for the Bluesky domain handle, rel="me" to the Mastodon profile in every page head. */ /* 3.18.5 WORKERS-BP-LOGGING-qnfo-gateway-1 (2026-10-14, agent_issues 2533, child of 2342, pillar autonomy): the 6 server-side swallowed catches log (2 browser-script hits marked standards-ok or allowlisted) as a structured console.error (worker, where, error); control flow unchanged. */ /* 3.18.4 FLEET-HARDENING-2 (2026-10-13, agent_issues 2397, pillar autonomy): the daily cron ends with a qnfo-audit fleet_heartbeat upsert through a new AUDIT binding (ok=0 when the IndexNow step threw, which was swallowed before and is now logged). */ /* 3.18.3 HUB-CACHE-VERSION-1 (2026-10-13, pillar reach, failure mode zaraz-autoinject-worker-html): the qnfo.org hub copy in each colo's cache now carries the VERSION that built it, and a copy built by another version is rebuilt while the request waits up to 2.5 s instead of being served stale; the runner probe of 07:39 UTC read a pre-3.16.1 copy without /cdn-cgi/zaraz/i.js while every fresh render carried it. */ /* 3.18.2 PAGE-POLICY-1 (2026-10-13, pillar reach, agent_issues 2343 WEB-PERF-EDGE-1): every HTML response carries Referrer-Policy strict-origin-when-cross-origin (no-referrer when the query carries a token) and Permissions-Policy camera=(), microphone=(), geolocation=() from the worker (qnfo.org had neither; the subdomains had them only from a zone rule), and an HTML response without Cache-Control gets public, max-age=300, s-maxage=3600, stale-while-revalidate=86400 when it is a public GET 200, no-store otherwise; handlers that set their own are unchanged, JSON untouched. 3.18.1 RENDER-DEFECTS-2300 (2026-10-13, pillar reach, agent_issues 2300 2158 2357): PANDOC-FENCE-GLUE-1 reads a code fence glued to prose or to its last code line as a fence (ultrametric-intelligence printed its Python as prose and typeset its identifiers); MATH-RESIDUE-5 typesets a formula glued to a name by a product sign; RAIL-MATH-1 gives /api/paper-context title_tex and excerpt_tex (formulas kept as TeX, plain-text math typeset, currency escaped) and the Related and Versions panels paint them, since every residue the browser sample counted on chapter-1 and log20240505010101strangeloopbook on 2026-10-12 was panel text; a formula ending in an escaped brace is lifted as math; MathJax knows the Sha macro. 3.18.0 ACTIVITYPUB-KEY-1 (2026-10-12, pillar reach, #2249 #2413): the actor publishes publicKeyPem when AP_PUBLIC_KEY is set (cf-ops gen-activitypub-key); merged with main 3.17.1 (REACH-RENDER-1). */
 // UTM-CLICK-LEDGER-1 (3.10.0, 2026-10-06, transformation lever T7.9, pillar reach): a GET for an HTML page that carries
 // utm_source is counted into qnfo-graph utm_clicks (day, host, path, source, medium, campaign, bot/human, country; no cookie,
 // no IP), so a post or digest joins to the visits it caused; qnfo-fleet-dashboard reads it into reach_signals source utm.
@@ -2934,7 +2934,7 @@ async function handleLlmsTxt(env) {
     const res = await env.LIVING_PAPER.prepare("SELECT slug,title,doi,abstract,created_at FROM papers WHERE slug IS NOT NULL AND status IN ('published','distributed','external_preprint') ORDER BY created_at DESC LIMIT 200").all();
     const base = "https://papers.qnfo.org";
     let body = "# QNFO Papers\n\n> Open-science research across p-adic mathematics, ultrametric geometry, topological quantum computation.\n\n## Site\n\n- [About QNFO](https://qnfo.org/about)\n- [Work with me: assessments, reviews, talks, collaboration and roles](https://qnfo.org/work-with-me)\n\n## Papers\n\n";
-    body += "\n## Open data\n\n- [OAI-PMH 2.0](" + base + "/oai?verb=Identify)\n- [JSON API](" + base + "/api/papers)\n- [OpenAPI](" + base + "/openapi.json)\n- [JSON Feed](" + base + "/feed.json)\n\n## Papers\n\n";
+    body += "\n## Open data\n\n- [OAI-PMH 2.0](" + base + "/oai?verb=Identify)\n- [JSON API](" + base + "/api/papers)\n- [OpenAPI](" + base + "/openapi.json)\n- [Quick read](https://papers.qnfo.org/papers/<slug>/quickread?q=<question>) and [Quick read API](" + base + "/api/quickread/<slug>?q=<question>) - how one paper answers one question, quoted from its own text\n- [JSON Feed](" + base + "/feed.json)\n\n## Papers\n\n";
     body += res.results.map((p) => "- [" + displayTitle(p.title) + "](" + base + "/papers/" + encodeURIComponent(p.slug) + ")" + (lpDoi(p.doi) ? " (DOI: " + lpDoi(p.doi) + ")" : "")).join("\n");
     return new Response(body, { headers: { "Content-Type": "text/plain; charset=utf-8", "Cache-Control": "public, max-age=3600" } });
   } catch (e) {
@@ -3215,7 +3215,7 @@ var OPENAPI_DOC = {
   } }
 };
 function health() {
-  return json({ status: "ok", worker: "qnfo-gateway", version: VERSION, capabilities: ["papers-site", "paper-pages", "living-paper-reader", "paper-context-api", "graph-api", "ask-a-paper", "quick-read", "legal-pages", "activitypub-read", "subscribe-page", "work-with-me-page"], limitations: ["paper pages ask through ask.qwav.tech /api/ask (qnfo-ai-search 2.1+, the paper pinned as source [1], capped per address); without JavaScript the page is the full static paper", "GET /api/paper-context/<slug> matches qnfo-graph nodes on title terms (two terms, or one of 6+ letters), so a paper outside the graph shows an empty Context tab; versions are papers whose normalized titles match", "qnfo.org/work-with-me has no form: each offer is a mailto to rowan.quni@qnfo.org whose subject starts with [work-with-me:<offer>], counted by qnfo-fleet-dashboard", "Ask-a-paper (POST /api/ask) uses one model (kimi-k2.6 with reasoning off) with a 1200-token cap and only the first 6000 characters of the named paper", "Ask-a-paper allows 10 questions per address per hour and 300 per day in total, questions up to 1000 characters; duplicate, kg-backfill and quarantined papers are excluded", "graph-api reads are public; /query and /sync need the sync token"] });
+  return json({ status: "ok", worker: "qnfo-gateway", version: VERSION, capabilities: ["papers-site", "paper-pages", "living-paper-reader", "paper-context-api", "graph-api", "ask-a-paper", "quick-read", "legal-pages", "activitypub-read", "subscribe-page", "work-with-me-page"], limitations: ["paper pages ask through ask.qwav.tech /api/ask (qnfo-ai-search 2.1+, the paper pinned as source [1], capped per address); without JavaScript the page is the full static paper", "GET /api/paper-context/<slug> matches qnfo-graph nodes on title terms (two terms, or one of 6+ letters), so a paper outside the graph shows an empty Context tab; versions are papers whose normalized titles match", "qnfo.org/work-with-me has no form: each offer is a mailto to rowan.quni@qnfo.org whose subject starts with [work-with-me:<offer>], counted by qnfo-fleet-dashboard", "Quick read (/api/quickread/<slug>) answers one question from one paper: three paths (cache, one model call, a deterministic read of the paper itself), every shown line quoted from the text and unquotable statements dropped and counted; a question whose words the paper never uses is read semantically only when the closest section clears a cosine floor, and otherwise the page says the paper does not answer it", "Ask-a-paper (POST /api/ask) uses one model (kimi-k2.6 with reasoning off) with a 1200-token cap and only the first 6000 characters of the named paper", "Ask-a-paper allows 10 questions per address per hour and 300 per day in total, questions up to 1000 characters; duplicate, kg-backfill and quarantined papers are excluded", "graph-api reads are public; /query and /sync need the sync token"] });
 }
 __name(health, "health");
 __name2(health, "health");
@@ -4164,6 +4164,7 @@ function renderReadingHTML() {
     feat("See the whole paper at once", "A contents rail follows you down the page and a progress bar shows how far you are. Every section has a link you can share.") +
     feat("Mathematics, tables and code, rendered", "Formulas are typeset, tables are tables, and code keeps its lines. Nothing is a picture of text.") +
     feat("References without the scroll", "Hover or focus a citation such as [12] to read the reference in place, then carry on reading.") +
+      feat("Quick read", "Ask one question and the paper answers it in its own sentences: an overview, then answers, approach and considerations, each line quoted from the text with a link to the section it came from. Anything the paper does not support is dropped, not shown. <a href=\"/papers/" + READING_SAMPLE + "/quickread\" style=\"color:var(--teal)\">Try it on the sample</a>.") +
     feat("Ask the paper", "Ask in plain language. The answer is written from the paper, which is always source [1], and every claim points to the passage or paper it came from.") +
     feat("Select, ask, quote", "Select a passage to ask about exactly that passage, or copy it as a quote that carries its citation.") +
     feat("Context, versions and related work", "The concepts the paper touches in the QNFO knowledge graph, every version of the work, and its nearest neighbours in the library.") +
@@ -4605,6 +4606,18 @@ var QR_MAX_CHARS = 11000;
 // the generation time.
 var QR_MAX_ANSWER_ITEMS = 3;
 var QR_MAX_OTHER_ITEMS = 2;
+// QUICK-READ-4 (semantic fallback + revision-aware cache). Two gaps the first live reads exposed:
+//   (a) the lexical ranking is exact-vocabulary, so a question phrased in other words was answered "this paper does
+//       not answer this question" - true of the words, false of the meaning. Before that verdict the question and the
+//       paper's sections are embedded (bge-small, 384 dims, one batched call) and the closest sections are read and
+//       labelled "related"; section vectors are cached in D1 per revision, so the cost is paid once per paper.
+//   (b) the cache key was (slug, question), so a corrected paper kept serving the old quick read for up to 45 days.
+//       The key now carries the paper's revision (pipeline version, version, updated_at, body length).
+var QR_SEM_MODEL = "@cf/baai/bge-small-en-v1.5";
+var QR_SEM_MIN = 0.55;      // cosine below this is noise for bge-small on a paper section
+var QR_SEM_SECTIONS = 5;
+var QR_VEC_CHARS = 1200;    // each section is embedded from its first 1200 characters
+var QR_CACHE_VERSION = "qr2"; // folded into the cache key: a pipeline change retires the rows it wrote
 // QUICK-READ-3 (measured against the Workers AI run API on the same 2k-token prompt): kimi-k2.6 answered the same JSON
 // in 9.7 s, gpt-oss-120b in 5.2 s with reasoning_effort "low" (and 14.0 s with the default). Harmony rejects
 // reasoning_effort "none" outright, so the effort is named explicitly. Whatever the model does, an unusable reply falls
@@ -4851,6 +4864,72 @@ async function qrModel(env, title, question, sections) {
   if (timer) clearTimeout(timer);
   return out;
 }
+async function qrEmbed(env, texts) {
+  if (!env.AI || !Array.isArray(texts) || !texts.length) return null;
+  try {
+    var r = await env.AI.run(QR_SEM_MODEL, { text: texts });
+    var d = r && r.data;
+    if (!Array.isArray(d) || d.length !== texts.length) return null;
+    for (var i = 0; i < d.length; i++) if (!Array.isArray(d[i]) || !d[i].length) return null;
+    return d;
+  } catch (e) {
+    console.error(JSON.stringify({ worker: "qnfo-gateway", where: "qrEmbed", error: String(e && e.message || e).slice(0, 200) }));
+    return null;
+  }
+}
+function qrCos(a, b) {
+  var n = 0, da = 0, db = 0, i = 0, len = Math.min(a.length, b.length);
+  for (; i < len; i++) { n += a[i] * b[i]; da += a[i] * a[i]; db += b[i] * b[i]; }
+  return da && db ? n / Math.sqrt(da * db) : 0;
+}
+async function qrVecTable(env) {
+  await env.LIVING_PAPER.prepare("CREATE TABLE IF NOT EXISTS quick_read_vec (slug TEXT NOT NULL, rev TEXT NOT NULL, sec_id TEXT NOT NULL, vec TEXT NOT NULL, created_at TEXT NOT NULL, PRIMARY KEY (slug, rev, sec_id))").run();
+}
+async function qrVecLoad(env, slug, rev) {
+  try {
+    await qrVecTable(env);
+    var r = await env.LIVING_PAPER.prepare("SELECT sec_id, vec FROM quick_read_vec WHERE slug = ?1 AND rev = ?2").bind(slug, rev).all();
+    var out = {};
+    ((r && r.results) || []).forEach(function(row) {
+      try { out[row.sec_id] = JSON.parse(row.vec); } catch (e) { /* standards-ok: a damaged row is recomputed below */ }
+    });
+    return Object.keys(out).length ? out : null;
+  } catch (e) {
+    return null; // standards-ok: a cache miss recomputes the vectors; the write path logs
+  }
+}
+async function qrVecStore(env, slug, rev, map) {
+  try {
+    await qrVecTable(env);
+    var now = new Date().toISOString();
+    var st = env.LIVING_PAPER.prepare("INSERT INTO quick_read_vec (slug,rev,sec_id,vec,created_at) VALUES (?1,?2,?3,?4,?5) ON CONFLICT(slug,rev,sec_id) DO UPDATE SET vec=excluded.vec");
+    await Promise.all(Object.keys(map).map(function(id) { return st.bind(slug, rev, id, JSON.stringify(map[id]), now).run(); }));
+  } catch (e) {
+    console.error(JSON.stringify({ worker: "qnfo-gateway", where: "qrVecStore", error: String(e && e.message || e).slice(0, 200) }));
+  }
+}
+// Cosine ranking of the paper's sections against the question, shaped like qrRank so the read below is unchanged.
+// Returns null when nothing is close enough, and then the honest "does not answer" verdict stands.
+async function qrSemantic(env, paper, sections, question) {
+  if (!env.AI || !sections.length) return null;
+  var rev = qrRev(paper);
+  var vecs = await qrVecLoad(env, paper.slug, rev);
+  var need = !vecs || sections.some(function(sec) { return !vecs[sec.id]; });
+  if (need) {
+    var computed = await qrEmbed(env, sections.map(function(sec) { return String(sec.title + ". " + sec.text).slice(0, QR_VEC_CHARS); }));
+    if (!computed) return null;
+    vecs = {};
+    sections.forEach(function(sec, i) { vecs[sec.id] = computed[i]; });
+    await qrVecStore(env, paper.slug, rev, vecs);
+  }
+  var qv = await qrEmbed(env, [String(question).slice(0, QR_QUESTION_MAX)]);
+  if (!qv || !qv[0]) return null;
+  var ranked = sections.map(function(sec) {
+    var c = vecs[sec.id] ? qrCos(qv[0], vecs[sec.id]) : 0;
+    return { sec: sec, score: c, hit: c >= QR_SEM_MIN ? 1 : 0, cos: c };
+  }).sort(function(a, b) { return b.score - a.score; });
+  return ranked.length && ranked[0].cos >= QR_SEM_MIN ? ranked.filter(function(r) { return r.hit; }).slice(0, QR_SEM_SECTIONS).concat(ranked.filter(function(r) { return !r.hit; })).slice(0, QR_SEM_SECTIONS) : null;
+}
 async function qrBuild(env, paper, question) {
   var body = fixMojibake(String(stripFrontmatter(paper.body_md || "") || paper.abstract || ""));
   body = retiredLines(body);
@@ -4868,8 +4947,20 @@ async function qrBuild(env, paper, question) {
     dropped: 0, filled: "", method: "none", overview: ""
   };
   if (out.coverage === "none") {
+    // The question's words are absent. Ask what the sections MEAN before saying the paper does not answer:
+    // a verdict about vocabulary is not a verdict about content.
+    var sem = await qrSemantic(env, paper, idx.sections, question);
+    if (!sem) {
+      out.closest = ranked.slice(0, 3).map(function(r) { return r.sec.title; }).filter(Boolean);
+      return out;
+    }
+    ranked = sem;
+    pick = qrPick(ranked);
+    out.coverage = "related";
+    out.retrieval = "semantic";
+    out.passages = pick.sections.length;
+    out.chars = pick.chars;
     out.closest = ranked.slice(0, 3).map(function(r) { return r.sec.title; }).filter(Boolean);
-    return out;
   }
   var titleOf = {};
   idx.sections.forEach(function(s) { titleOf[s.id] = s.title; });
@@ -4902,8 +4993,13 @@ async function qrTable(env) {
   await env.LIVING_PAPER.prepare("CREATE TABLE IF NOT EXISTS quick_read (slug TEXT NOT NULL, q_hash TEXT NOT NULL, question TEXT NOT NULL, payload TEXT NOT NULL, method TEXT, coverage TEXT, dropped INTEGER NOT NULL DEFAULT 0, chars INTEGER NOT NULL DEFAULT 0, model TEXT, hits INTEGER NOT NULL DEFAULT 0, created_at TEXT NOT NULL, last_viewed TEXT, PRIMARY KEY (slug, q_hash))").run();
   qrReady = true;
 }
-async function qrQid(slug, question) {
-  var d = await crypto.subtle.digest("SHA-256", new TextEncoder().encode("quickread:" + slug + ":" + qrNorm(question)));
+// The paper's revision: what makes a cached answer stale. A new version, an edit (updated_at) or a different body
+// length is a different paper, so it gets a different key and a different vector set.
+function qrRev(paper) {
+  return QR_CACHE_VERSION + "|" + String((paper && paper.version) || "") + "|" + String((paper && paper.updated_at) || "") + "|" + String(((paper && paper.body_md) || "").length);
+}
+async function qrQid(slug, question, paper) {
+  var d = await crypto.subtle.digest("SHA-256", new TextEncoder().encode("quickread:" + slug + ":" + qrRev(paper) + ":" + qrNorm(question)));
   return Array.from(new Uint8Array(d).slice(0, 10)).map(function(b) { return b.toString(16).padStart(2, "0"); }).join("");
 }
 async function qrCacheGet(env, slug, qid) {
@@ -4979,12 +5075,16 @@ function qrFragment(d, paper) {
     var near = (d.closest || []).length ? " What it does cover: " + (d.closest || []).map(function(t) { return "\u201c" + t + "\u201d"; }).join(", ") + "." : "";
     return '<div class="qr-void q-card"><h2>This paper does not answer this question</h2><p>None of its ' + (d.sections_total || 0) + " sections uses the words of your question" + (d.terms && d.terms.length ? " (" + d.terms.slice(0, 6).map(function(t) { return esc(t); }).join(", ") + ")" : "") + "." + near + ' Nothing was generated from outside the text.</p><p class="qr-hint"><a href="' + href + '">Read the paper</a> or <a href="' + LP_ASK + '/" rel="nofollow" data-ask-q="' + escAttr(d.question || "") + '">ask the whole corpus</a>.</p></div>';
   }
+  var lead = d.coverage === "related"
+    ? '<p class="qr-rel">None of the paper\u2019s sections uses the words of your question. These are the sections closest to it by meaning, read the same way: every line below still quotes the paper.</p>'
+    : "";
   var disc = [];
   disc.push(d.method === "model" ? "Written from the passages above and checked against the text" : d.method === "model+extractive" ? "Partly written, partly quoted (a section the model left empty is served by the paper\u2019s own sentences)" : "Read, not written: every line below is a sentence of the paper");
   disc.push((d.passages || 0) + " of " + (d.sections_total || 0) + " sections read, " + Number(d.chars || 0).toLocaleString("en-US") + " characters");
   if (d.dropped) disc.push(d.dropped + " statement" + (d.dropped === 1 ? "" : "s") + " dropped: evidence not found in the text");
+  if (d.retrieval === "semantic") disc.push("sections chosen by meaning, not by the question's words");
   if (d.cached) disc.push("cached");
-  return '<div class="qr-head"><p class="qr-overview">' + esc(d.overview || "") + "</p></div>"
+  return lead + '<div class="qr-head"><p class="qr-overview">' + esc(d.overview || "") + "</p></div>"
     + section("Answers", d.answers || [], "What the paper says about your question, in its own sentences.")
     + section("Approach", d.approach || [], "The methods and techniques that bear on your question.")
     + section("Considerations", d.considerations || [], "Caveats to weigh when you use these results.")
@@ -5042,9 +5142,9 @@ async function handleQuickReadJson(request, env, slug, u) {
   var q = String(u.searchParams.get("q") || "").replace(/\s+/g, " ").trim();
   if (!q) return out({ error: "missing_question", message: "Give the question: /api/quickread/<slug>?q=..." }, 400);
   if (q.length > QR_QUESTION_MAX) return out({ error: "question_too_long", max: QR_QUESTION_MAX }, 413);
-  var paper = await env.LIVING_PAPER.prepare("SELECT slug,title,abstract,body_md,created_at,version FROM papers WHERE slug = ? AND status IN " + LP_PUBLIC + " LIMIT 1").bind(slug).first();
+  var paper = await env.LIVING_PAPER.prepare("SELECT slug,title,abstract,body_md,created_at,version,updated_at FROM papers WHERE slug = ? AND status IN " + LP_PUBLIC + " LIMIT 1").bind(slug).first();
   if (!paper) return out({ error: "not_found", message: "No published paper has that slug." }, 404);
-  var qid = await qrQid(slug, q);
+  var qid = await qrQid(slug, q, paper);
   var payload = u.searchParams.get("fresh") ? null : await qrCacheGet(env, slug, qid);
   if (payload) {
     payload.cached = true;
@@ -5065,8 +5165,42 @@ async function handleQuickReadJson(request, env, slug, u) {
   }
   return out(payload, 200);
 }
+// QUICK-READ-AUDIT-1: the SLA has to be measurable, not claimed. This walks the cached rows and reports what the
+// three paths actually did: how often the cache answered, how often the model's reply was unusable (so the paper's
+// own sentences answered), how often a question turned out to be unrelated vocabulary and was read semantically,
+// and whether any stored payload is unreadable. ok is false only on a real defect (an unparseable payload), because
+// an extractive answer is a designed path and not a failure.
+async function handleQuickReadAudit(env) {
+  try {
+    var agg = await env.LIVING_PAPER.prepare("SELECT COUNT(*) AS rows, SUM(CASE WHEN coverage='answered' THEN 1 ELSE 0 END) AS answered, SUM(CASE WHEN coverage='partial' THEN 1 ELSE 0 END) AS partial, SUM(CASE WHEN coverage='related' THEN 1 ELSE 0 END) AS related, SUM(CASE WHEN coverage='none' THEN 1 ELSE 0 END) AS uncovered, SUM(CASE WHEN method='extractive' AND coverage <> 'none' THEN 1 ELSE 0 END) AS from_paper_only, SUM(CASE WHEN method LIKE 'model%' THEN 1 ELSE 0 END) AS with_model, SUM(dropped) AS dropped, SUM(hits) AS served_from_cache, MAX(created_at) AS newest, MIN(created_at) AS oldest FROM quick_read").first();
+    var broken = await env.LIVING_PAPER.prepare("SELECT COUNT(*) AS n FROM quick_read WHERE payload IS NULL OR payload = '' OR substr(payload,1,1) != '{'").first();
+    var vec = await env.LIVING_PAPER.prepare("SELECT COUNT(DISTINCT slug) AS papers, COUNT(*) AS vectors FROM quick_read_vec").first().catch(function() { return null; });
+    var out = {
+      ok: !(broken && broken.n),
+      invariant: "QUICK-READ-AUDIT-1: every stored quick read is a readable payload and every shown line quotes the paper",
+      reads: (agg && agg.rows) || 0,
+      answered: (agg && agg.answered) || 0,
+      partial: (agg && agg.partial) || 0,
+      related: (agg && agg.related) || 0,
+      uncovered: (agg && agg.uncovered) || 0,
+      written_or_partly_written: (agg && agg.with_model) || 0,
+      answered_from_the_paper_only: (agg && agg.from_paper_only) || 0,
+      statements_dropped: (agg && agg.dropped) || 0,
+      served_from_cache: (agg && agg.served_from_cache) || 0,
+      unreadable_payloads: (broken && broken.n) || 0,
+      papers_with_vectors: (vec && vec.papers) || 0,
+      vectors: (vec && vec.vectors) || 0,
+      oldest: (agg && agg.oldest) || null,
+      newest: (agg && agg.newest) || null,
+      note: "answered_from_the_paper_only is a designed path (extractive read), not a failure; unreadable_payloads is the only failed invariant."
+    };
+    return json(out);
+  } catch (e) {
+    return json({ ok: false, error: e.message }, 500);
+  }
+}
 async function handleQuickReadPage(request, env, slug, u, method) {
-  var paper = await env.LIVING_PAPER.prepare("SELECT slug,title,abstract,body_md,created_at,version FROM papers WHERE slug = ? AND status IN " + LP_PUBLIC + " LIMIT 1").bind(slug).first();
+  var paper = await env.LIVING_PAPER.prepare("SELECT slug,title,abstract,body_md,created_at,version,updated_at FROM papers WHERE slug = ? AND status IN " + LP_PUBLIC + " LIMIT 1").bind(slug).first();
   if (!paper) return notFoundPage(request, env, "papers.qnfo.org", "/papers/" + slug, slug);
   withShelf(paper, await shelfMap(env));
   var HTML = { "Content-Type": "text/html; charset=utf-8" };
@@ -5079,7 +5213,7 @@ async function handleQuickReadPage(request, env, slug, u, method) {
       var j = await limited.json().catch(function() { return {}; });
       return new Response(lpQuickReadHTML(paper, q, '<p class="qr-err">' + esc(j.message || "Too many quick reads from this address; try again later.") + "</p>"), { status: 429, headers: Object.assign({ "Cache-Control": "no-store" }, HTML) });
     }
-    var qid = await qrQid(paper.slug, q);
+    var qid = await qrQid(paper.slug, q, paper);
     var payload = await qrCacheGet(env, paper.slug, qid);
     if (!payload) {
       payload = await qrBuild(env, paper, q);
@@ -5348,6 +5482,7 @@ var gateway_worker_default = {
       if (p.startsWith("/api/paper-context/") && method === "GET") return handlePaperContext(env, decodeURIComponent(p.slice(19))).catch(function (e) { console.error(JSON.stringify({ worker: "qnfo-gateway", where: "handlePaperContext", error: String(e && e.message || e).slice(0, 200) })); return json({ error: "paper context unavailable" }, 503); });
       if (p === "/api/render-health" && method === "GET") return handleRenderHealth(env);
       if (p === "/_audit/blank-papers") return handleBlankPapers(env);
+      if (p === "/_audit/quick-read" && method === "GET") return handleQuickReadAudit(env);
       if (p.indexOf("/papers/") === 0 && p.slice(-10) === "/quickread" && p.split("/").length === 4) return handleQuickReadPage(request, env, p.split("/")[2], u, method).catch(function (e) { console.error(JSON.stringify({ worker: "qnfo-gateway", where: "handleQuickReadPage", error: String(e && e.message || e).slice(0, 200) })); return new Response("Quick read unavailable", { status: 503, headers: { "Content-Type": "text/plain; charset=utf-8" } }); });
       if (p.startsWith("/papers/") && p.split("/").length >= 3) return handlePaperDetail(request, env, p);
       if (p === "/ipatent" || p === "/ipatent/") return new Response(null, { status: 301, headers: { Location: "https://ipatent.qnfo.org/" } });
@@ -5389,6 +5524,7 @@ var gateway_worker_default = {
       if (p.startsWith("/api/paper-context/") && method === "GET") return handlePaperContext(env, decodeURIComponent(p.slice(19))).catch(function (e) { console.error(JSON.stringify({ worker: "qnfo-gateway", where: "handlePaperContext", error: String(e && e.message || e).slice(0, 200) })); return json({ error: "paper context unavailable" }, 503); });
       if (p === "/api/render-health" && method === "GET") return handleRenderHealth(env);
       if (p === "/_audit/blank-papers") return handleBlankPapers(env);
+      if (p === "/_audit/quick-read" && method === "GET") return handleQuickReadAudit(env);
       if (p.indexOf("/papers/") === 0 && p.slice(-10) === "/quickread" && p.split("/").length === 4) return handleQuickReadPage(request, env, p.split("/")[2], u, method).catch(function (e) { console.error(JSON.stringify({ worker: "qnfo-gateway", where: "handleQuickReadPage", error: String(e && e.message || e).slice(0, 200) })); return new Response("Quick read unavailable", { status: 503, headers: { "Content-Type": "text/plain; charset=utf-8" } }); });
       if (p.startsWith("/papers/") && p.split("/").length >= 3) return handlePaperDetail(request, env, p);
       if (p === "/papers" || p.startsWith("/papers?")) return handlePapers(request, env);
@@ -5419,6 +5555,7 @@ var gateway_worker_default = {
       if (p.indexOf("/api/quickread/") === 0 && method === "GET") return handleQuickReadJson(request, env, decodeURIComponent(p.slice(15)), u).catch(function (e) { console.error(JSON.stringify({ worker: "qnfo-gateway", where: "handleQuickReadJson", error: String(e && e.message || e).slice(0, 200) })); return json({ error: "quick read unavailable" }, 503); });
     if (p.startsWith("/api/paper-context/") && method === "GET") return handlePaperContext(env, decodeURIComponent(p.slice(19))).catch(function (e) { console.error(JSON.stringify({ worker: "qnfo-gateway", where: "handlePaperContext", error: String(e && e.message || e).slice(0, 200) })); return json({ error: "paper context unavailable" }, 503); });
     if (p === "/_audit/blank-papers") return handleBlankPapers(env);
+      if (p === "/_audit/quick-read" && method === "GET") return handleQuickReadAudit(env);
     if (p.indexOf("/papers/") === 0 && p.slice(-10) === "/quickread" && p.split("/").length === 4) return handleQuickReadPage(request, env, p.split("/")[2], u, method).catch(function (e) { console.error(JSON.stringify({ worker: "qnfo-gateway", where: "handleQuickReadPage", error: String(e && e.message || e).slice(0, 200) })); return new Response("Quick read unavailable", { status: 503, headers: { "Content-Type": "text/plain; charset=utf-8" } }); });
       if (p.startsWith("/papers/") && p.split("/").length >= 3) return handlePaperDetail(request, env, p);
     if (p.startsWith("/papers") || p === "/") return handlePapers(request, env);
