@@ -1,18 +1,18 @@
 {
  "ok": true,
  "marker": "REMEDIATION-CONSUMER-1",
- "verifier": "remediation-consumer@9020b6472c50",
+ "verifier": "remediation-consumer@cd969b881c76",
  "due": 1,
- "pass": 0,
- "fail": 1,
+ "pass": 1,
+ "fail": 0,
  "skipped": 0,
  "contracts": [
   {
-   "class": "issue-2897",
-   "issue_id": 2897,
-   "verdict": "fail",
+   "class": "issue-2171",
+   "issue_id": 2171,
+   "verdict": "pass",
    "expected": "ok",
-   "observed": "pending: filed by qnfo-ops, which owns it for 48h",
+   "observed": "ok",
    "written": true
   }
  ],
@@ -39,13 +39,66 @@
   "http",
   "runner-https"
  ],
+ "https": 1,
  "budget_exhausted": false,
- "runtime_verified_share_24h": 9.8,
+ "runtime_verified_share_24h": 10.1,
  "host_census": {
   "skipped": "ran within 6h"
  },
  "fleet_journeys": {
-  "skipped": "ran within 50 min"
+  "at": "2026-10-18T09:01:53Z",
+  "journeys": 6,
+  "failing": [
+   "binding-census",
+   "loop-heartbeats"
+  ],
+  "issues": {
+   "binding-census": "updated 2755",
+   "loop-heartbeats": "updated 2679"
+  },
+  "results": [
+   {
+    "journey": "deploy-coherence",
+    "ok": true,
+    "ms": 10981,
+    "failed": []
+   },
+   {
+    "journey": "binding-census",
+    "ok": false,
+    "ms": 4631,
+    "failed": [
+     "census sees every worker (blind <= 0)"
+    ]
+   },
+   {
+    "journey": "lock-roundtrip",
+    "ok": true,
+    "ms": 2461,
+    "failed": []
+   },
+   {
+    "journey": "papers-path",
+    "ok": true,
+    "ms": 1314,
+    "failed": []
+   },
+   {
+    "journey": "loop-heartbeats",
+    "ok": false,
+    "ms": 8284,
+    "failed": [
+     "fresh: dashboard last_sync",
+     "dashboard state: no error-level issues"
+    ]
+   },
+   {
+    "journey": "ai-router",
+    "ok": true,
+    "ms": 387,
+    "failed": []
+   }
+  ]
  },
  "migrations": {
   "opted_in": 236,
@@ -54,8 +107,8 @@
   "failed": [],
   "metric": 0
  },
- "spent_ms": 10188,
- "head": "9020b6472c50c7504c81a07c58dc599708cdb88a",
+ "spent_ms": 57858,
+ "head": "cd969b881c76820a1b7fde486c1260597c9f6280",
  "job_status": "success",
- "ts": "2026-10-18T08:40:48Z"
+ "ts": "2026-10-18T09:05:22Z"
 }
