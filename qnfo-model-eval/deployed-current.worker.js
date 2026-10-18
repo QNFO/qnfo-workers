@@ -50,7 +50,7 @@
 // VERSION-BUMP-GUARD-1 requires the literal `var VERSION = "..."` form: this constant is
 // what fleet-autoaudit's strict numeric-ahead deploy check and deploy-drift's string
 // compare both read. `const` here would make the bundle invisible to deploy-drift.
-var VERSION = "1.3.0-canary-gate";
+var VERSION = "1.4.0-canary-glossary";
 const BATTERY_VERSION = "cfmb-2";
 const DOCS_INDEX = "https://developers.cloudflare.com/workers-ai/models/index.md";
 const docsModel = (slug) => `https://developers.cloudflare.com/workers-ai/models/${slug}/index.md`;
@@ -572,8 +572,25 @@ async function clefCanary(env, modelId, limit = 12) {
     "SELECT category, COUNT(*) n FROM agent_issues WHERE category IS NOT NULL AND status='open' GROUP BY 1 ORDER BY n DESC LIMIT 40"
   ).all()).results || [];
   if (cats.length < 2) return { ok: false, error: "not enough labelled categories" };
+  // FAIR-LABEL-1 (1.4.0): a criteria description of "reliability" tells the model
+  // nothing about what QNFO means by it. The taxonomy is proprietary ('autonomy' vs
+  // 'self-heal' vs 'continuous-improvement' are not guessable), so the definition is
+  // read from agent_issue_category_glossary and only falls back to the bare label.
+  await db.prepare(
+    "CREATE TABLE IF NOT EXISTS agent_issue_category_glossary (category TEXT PRIMARY KEY, definition TEXT NOT NULL, updated_at TEXT DEFAULT (datetime('now')))"
+  ).run();
+  const gloss = new Map();
+  try {
+    const g = await db.prepare("SELECT category, definition FROM agent_issue_category_glossary").all();
+    for (const r of (g.results || [])) gloss.set(String(r.category), String(r.definition));
+  } catch (_) { /* glossary is an improvement, not a precondition */ }
   const criteria = {};
-  for (const c of cats) criteria[slugLabel(c.category)] = String(c.category);
+  let described = 0;
+  for (const c of cats) {
+    const def = gloss.get(String(c.category));
+    if (def) described++;
+    criteria[slugLabel(c.category)] = def || String(c.category);
+  }
   const priCriteria = { low: "Routine, no user impact", medium: "Should be handled this week", high: "Blocks work or users now", critical: "Production is broken or data is at risk" };
   const questions = {
     category: { type: "choice", instructions: "Which part of the fleet does this issue concern?", criteria },
@@ -622,7 +639,7 @@ async function clefCanary(env, modelId, limit = 12) {
     JSON.stringify({ categories_offered: Object.keys(criteria).length, cat_agree: catAgree, pri_agree: priAgree, cat_agreement: catAgreement, sample: pairs.slice(0, 12), input_tokens: ton }).slice(0, 3000)).run();
   return {
     ok: true, model_id: modelId, n, agree, agreement, cat_agreement: catAgreement,
-    categories_offered: Object.keys(criteria).length,
+    categories_offered: Object.keys(criteria).length, categories_described: described,
     mean_latency_ms: Math.round(lat / Math.max(1, n)), pairs: pairs.slice(0, 6),
   };
 }
