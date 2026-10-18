@@ -962,7 +962,9 @@ async function psRoadmap(env, out, projects) {
   }
   if (pst.length) await env.AUDIT.batch(pst);
 
-  var todo = ((await env.AUDIT.prepare("SELECT r.id, r.item, r.source, r.title, r.artifact_type, r.artifact_ref, r.status, r.evidence FROM roadmap_implementation r LEFT JOIN roadmap_gh_links g ON g.roadmap_id = r.id WHERE g.roadmap_id IS NULL AND r.status NOT IN ('verified','enforced-verified','violated-remediated','retired') ORDER BY r.id LIMIT ?").bind(PS_RM_CREATE_PER_TICK).all()).results) || [];
+  /* Rows copied from agent_issues (source 'agent_issues') are already on GitHub as their [#id] issue (TRACKER-SYNC-1); mirroring
+   * them again would track one defect twice, so they are never filed here. */
+  var todo = ((await env.AUDIT.prepare("SELECT r.id, r.item, r.source, r.title, r.artifact_type, r.artifact_ref, r.status, r.evidence FROM roadmap_implementation r LEFT JOIN roadmap_gh_links g ON g.roadmap_id = r.id WHERE g.roadmap_id IS NULL AND r.status NOT IN ('verified','enforced-verified','violated-remediated','retired') AND r.source <> 'agent_issues' ORDER BY r.id LIMIT ?").bind(PS_RM_CREATE_PER_TICK).all()).results) || [];
   for (var j = 0; j < todo.length; j++) {
     var row = todo[j], p = psRmProject(row, byCode), num = byId[String(row.id)], node = num && openNums[num] ? openNums[num].node_id : null;
     if (!num) {

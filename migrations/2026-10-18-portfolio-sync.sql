@@ -13,6 +13,8 @@
 --     named a GitHub repo that returns 404 (QNFO/qnfo-rsch x3, extended-cosmology, cfpe-*, qnfo-100yr-forecast) and
 --     QNFO.RSCH.APH was 'active' on an archived repo.
 --   * roadmap_implementation 141 rows, 117 not verified, 0 on GitHub. GitHub QNFO/qnfo-workers: 0 milestones, org 0 Projects v2.
+--   * 240 roadmap rows were bulk-loaded at 10:04Z (agent_issues 85, failure_modes 94, goals 61); the 85 agent_issues copies are
+--     already GitHub issues via TRACKER-SYNC-1 and are excluded here so no defect is tracked twice.
 --   * 20 metrics in breach (v_metric_trigger_state hit=1) with no roadmap objective.
 -- After: qnfo-github-steward (0.4.0) derives projects from service_registry + portfolio_repos, maps every open issue to a
 -- project/program/kind, writes metric breaches as roadmap objectives, and mirrors programs (labels), projects (milestones),
@@ -70,7 +72,7 @@ CREATE VIEW IF NOT EXISTS v_portfolio_drift_work AS
 
 CREATE VIEW IF NOT EXISTS v_portfolio_drift_roadmap AS
   SELECT 'roadmap-unmirrored' AS kind, CAST(r.id AS TEXT) AS ref, r.item AS detail FROM roadmap_implementation r LEFT JOIN roadmap_gh_links g ON g.roadmap_id = r.id
-   WHERE g.roadmap_id IS NULL AND r.status NOT IN ('verified','enforced-verified','violated-remediated','retired')
+   WHERE g.roadmap_id IS NULL AND r.status NOT IN ('verified','enforced-verified','violated-remediated','retired') AND r.source <> 'agent_issues'
   UNION ALL
   SELECT 'roadmap-state', CAST(r.id AS TEXT), 'D1 ' || r.status || ' vs GitHub #' || g.gh_number || ' ' || COALESCE(g.gh_state, '?')
     FROM roadmap_implementation r JOIN roadmap_gh_links g ON g.roadmap_id = r.id

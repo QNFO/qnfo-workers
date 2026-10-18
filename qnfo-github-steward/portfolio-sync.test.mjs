@@ -50,6 +50,7 @@ for (const [id, num] of [[201, 6001], [202, 6002], [203, 6003]]) { db.prepare("I
 db.prepare("INSERT INTO trig VALUES ('open_agent_issues','too many issues','qnfo-fleet-control','gt',0,227,1)").run();
 db.prepare("INSERT INTO trig VALUES ('drift_total','drift','qnfo-fleet-control','gt',0,0,0)").run();
 db.prepare("INSERT INTO roadmap_implementation (item, source, title, artifact_type, artifact_ref, status) VALUES ('RM-X','charter','build x','worker','qnfo-research-exec 1.0','not-built')").run();
+db.prepare("INSERT INTO roadmap_implementation (item, source, title, artifact_type, artifact_ref, status) VALUES ('AI-201','agent_issues','copy of issue 201','core','201','open')").run();
 db.prepare("INSERT INTO roadmap_implementation (item, source, title, artifact_type, artifact_ref, status, evidence) VALUES ('RM-DONE','charter','done','worker','qnfo-ops','verified','ok')").run();
 
 const prep = (sql) => { let a = []; const st = { bind: (...x) => { a = x.map((v) => (v === undefined ? null : v)); return st; }, run: async () => { const r = db.prepare(sql).run(...a); return { meta: { changes: Number(r.changes) } }; }, first: async () => db.prepare(sql).get(...a) || null, all: async () => ({ results: db.prepare(sql).all(...a) }) }; return st; };
@@ -111,7 +112,8 @@ assert.equal(db.prepare("SELECT last_value FROM metric_registry WHERE metric='po
 const i202 = gIssues.find((x) => x.number === 6002);
 assert.ok(i202.milestone && i202.labels.some((l) => l.name === "program:reach") && i202.labels.some((l) => l.name === "bug"), "milestone + managed labels set, unmanaged labels kept");
 const rmIssues = gIssues.filter((x) => x.labels.some((l) => l.name === "roadmap"));
-assert.equal(rmIssues.length, 2, "open roadmap items (RM-X + metric objective) mirrored; verified item is not");
+assert.equal(rmIssues.length, 2, "open roadmap items (RM-X + metric objective) mirrored; verified item and agent_issues copy are not");
+assert.ok(!gIssues.some((i) => /AI-201/.test(i.title)), "an agent_issues copy is never filed twice");
 assert.ok(rmIssues.find((x) => /RM-X/.test(x.title)).milestone, "roadmap item lands in its worker's project milestone");
 assert.ok(gMs.find((m) => /^QNFO\.RSCH\.APH/.test(m.title)) === undefined, "archived project gets no milestone");
 
