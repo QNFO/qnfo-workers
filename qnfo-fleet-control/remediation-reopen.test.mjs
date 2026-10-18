@@ -90,7 +90,7 @@ out = await tick();
 check(!out.reopened.includes(5) && db.prepare("SELECT status FROM agent_issues WHERE id=5").get().status === "closed", "the first real failure after five pending rows does not reopen (pending rows are not counted)");
 await tick(); out = await tick();
 check(out.reopened.includes(5) && db.prepare("SELECT status FROM agent_issues WHERE id=5").get().status === "open", "the third real failure reopens issue 5");
-check(db.prepare("SELECT COUNT(*) n FROM remediation_verifications WHERE class='c5'").get().n === 8, "pending observations are still recorded as rows");
+check(db.prepare("SELECT COUNT(*) n FROM remediation_verifications WHERE class='c5'").get().n === 4, "a deferral writes no verification row: the four 'pending' ticks left no row, so only the consumer's own pending row and the three real verdicts are recorded (got " + db.prepare("SELECT COUNT(*) n FROM remediation_verifications WHERE class='c5'").get().n + ")");
 
 // 0.4.123 REMEDIATION-HOLD-1: a pass holds the contract for 7 days at a daily cadence; a relapse inside the hold reopens the
 // issue and returns the contract to active; a 7-day pass streak closes it; a 'pending' read while holding keeps it holding.
@@ -124,7 +124,7 @@ for (let i = 0; i < 4; i++) await tick();
 const due8 = (Date.parse(st("c8").next_due_at.replace(" ", "T") + "Z") - Date.now()) / 3600e3;
 check(st("c8").status === "holding" && db.prepare("SELECT status FROM agent_issues WHERE id=8").get().status === "closed" && due8 > 23, "'pending' inside the hold keeps holding at 24h and reopens nothing");
 const vr = db.prepare("SELECT COUNT(*) n FROM remediation_verifications WHERE class IN ('c6','c7','c8')").get().n, at = db.prepare("SELECT SUM(attempts) n FROM remediation_contracts WHERE class IN ('c6','c7','c8')").get().n;
-check(vr === at && vr > 12, "every held read writes its verification row (rows " + vr + ", attempts " + at + ")");
+check(at - vr === 4 && vr > 12, "a held read that yields a verdict writes its row; the four 'pending' reads of c8 advance attempts with no row (rows " + vr + ", attempts " + at + ")");
 // 0.4.128 REMEDIATION-PENDING-PREFIX-1: 'pending: <reason>' is a deferral like a bare 'pending'. A closed issue whose probe reads
 // it four times is not reopened, the reads do not count toward max_attempts, a held contract stays holding at 24h, and a
 // pass streak survives them.
