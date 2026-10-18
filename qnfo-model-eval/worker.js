@@ -50,7 +50,7 @@
 // VERSION-BUMP-GUARD-1 requires the literal `var VERSION = "..."` form: this constant is
 // what fleet-autoaudit's strict numeric-ahead deploy check and deploy-drift's string
 // compare both read. `const` here would make the bundle invisible to deploy-drift.
-var VERSION = "1.2.0-model-eval-auto-promote";
+var VERSION = "1.3.0-canary-gate";
 const BATTERY_VERSION = "cfmb-2";
 const DOCS_INDEX = "https://developers.cloudflare.com/workers-ai/models/index.md";
 const docsModel = (slug) => `https://developers.cloudflare.com/workers-ai/models/${slug}/index.md`;
@@ -529,11 +529,34 @@ async function decide(env, e, control) {
   return { ...d, status, controlScore: cScore };
 }
 
-// CANARY: a decision model is not "in production use" because it scored 1.0 on four
+// CANARY: a decision model is not "in production use" because it scored 1.0 on eight
 // easy probes. Run the winner over real open agent_issues rows that already carry a
 // category and priority, and measure agreement with the fleet's own labels.
+//
+// LABEL COVERAGE (1.3.0): the first version offered clef only the 8 most common
+// categories while agent_issues holds 29, so a sampled row labelled 'autonomy' was
+// unanswerable -- that measures the harness, not the model. Every category is now
+// offered (slugged), and category and priority agreement are recorded separately,
+// because they are different capabilities.
 function slugLabel(s) {
   return String(s == null ? "" : s).toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_|_$/g, "").slice(0, 24);
+}
+
+// A decision model may only carry a promotion if real labelled work agrees with it.
+// The battery saturates (all three clef models score 1.0), so the canary is the only
+// evidence that separates "answers the probes" from "is right about the fleet".
+const CANARY_BAR = 0.7;
+function canaryGate(agreement, catAgreement) {
+  if (agreement == null) return { ready: false, reason: "no canary evidence yet" };
+  const a = Number(agreement);
+  if (a >= CANARY_BAR) {
+    return { ready: true, reason: `real-data agreement ${a} >= ${CANARY_BAR}` };
+  }
+  const cat = catAgreement == null ? "n/a" : Number(catAgreement);
+  return {
+    ready: false,
+    reason: `real-data agreement ${a} < ${CANARY_BAR} (category ${cat}) -- the model answers the battery but does not reproduce the fleet's own labels`,
+  };
 }
 
 async function clefCanary(env, modelId, limit = 12) {
@@ -544,8 +567,9 @@ async function clefCanary(env, modelId, limit = 12) {
        model_id TEXT, battery_version TEXT, n INTEGER, agree INTEGER, agreement REAL,
        mean_latency_ms INTEGER, detail TEXT)`
   ).run();
+  // every category, not the top 8: an option the model cannot name is a harness bug
   const cats = (await db.prepare(
-    "SELECT category, COUNT(*) n FROM agent_issues WHERE category IS NOT NULL AND status='open' GROUP BY 1 ORDER BY n DESC LIMIT 8"
+    "SELECT category, COUNT(*) n FROM agent_issues WHERE category IS NOT NULL AND status='open' GROUP BY 1 ORDER BY n DESC LIMIT 40"
   ).all()).results || [];
   if (cats.length < 2) return { ok: false, error: "not enough labelled categories" };
   const criteria = {};
@@ -563,7 +587,7 @@ async function clefCanary(env, modelId, limit = 12) {
   ).bind(limit).all()).results || [];
   if (!rows.length) return { ok: false, error: "no open labelled issues" };
 
-  let agree = 0, lat = 0, n = 0, ton = 0;
+  let catAgree = 0, priAgree = 0, lat = 0, ton = 0;
   const pairs = [];
   for (const r of rows) {
     const s = Date.now();
@@ -578,9 +602,8 @@ async function clefCanary(env, modelId, limit = 12) {
       const gotPri = clefPick(a, "priority").label || null;
       const catOk = gotCat != null && norm(gotCat) === norm(slugLabel(r.cat));
       const priOk = gotPri != null && norm(gotPri) === norm(r.pri);
-      if (catOk) agree++;
-      if (priOk) agree++;
-      n += 2;
+      if (catOk) catAgree++;
+      if (priOk) priAgree++;
       if (out && out.usage) ton += Number(out.usage.input_tokens || 0);
       pairs.push({ id: r.id, want: `${r.cat}/${r.pri}`, got: `${gotCat}/${gotPri}`, catOk, priOk });
     } catch (e) {
@@ -588,13 +611,20 @@ async function clefCanary(env, modelId, limit = 12) {
     }
     lat += Date.now() - s;
   }
-  const agreement = n ? Number((agree / n).toFixed(4)) : 0;
+  const n = rows.length;
+  const agree = catAgree + priAgree;
+  const agreement = n ? Number((agree / (2 * n)).toFixed(4)) : 0;
+  const catAgreement = n ? Number((catAgree / n).toFixed(4)) : 0;
   await db.prepare(
     `INSERT INTO cf_model_canary (model_id, battery_version, n, agree, agreement, mean_latency_ms, detail)
      VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)`
-  ).bind(modelId, BATTERY_VERSION, n, agree, agreement, Math.round(lat / Math.max(1, rows.length)),
-    JSON.stringify({ sample: pairs.slice(0, 12), input_tokens: ton }).slice(0, 3000)).run();
-  return { ok: true, model_id: modelId, n, agree, agreement, mean_latency_ms: Math.round(lat / Math.max(1, rows.length)), pairs: pairs.slice(0, 6) };
+  ).bind(modelId, BATTERY_VERSION, n, agree, agreement, Math.round(lat / Math.max(1, n)),
+    JSON.stringify({ categories_offered: Object.keys(criteria).length, cat_agree: catAgree, pri_agree: priAgree, cat_agreement: catAgreement, sample: pairs.slice(0, 12), input_tokens: ton }).slice(0, 3000)).run();
+  return {
+    ok: true, model_id: modelId, n, agree, agreement, cat_agreement: catAgreement,
+    categories_offered: Object.keys(criteria).length,
+    mean_latency_ms: Math.round(lat / Math.max(1, n)), pairs: pairs.slice(0, 6),
+  };
 }
 
 // Pick the decision-model winner: highest score, cheapest to break a tie.
@@ -624,6 +654,36 @@ async function selectClefWinner(env) {
       "low");
   }
   return { ...best, previous: prev || null, changed };
+}
+
+// Only one decision model may hold a promotion at a time. The battery saturates, so
+// without this every clef variant promotes itself in the same sweep and the backlog
+// fills with three mutually superseding ladder rows.
+async function reconcileDecisionPromotions(env, winnerId) {
+  const db = env.AUDIT;
+  const others = await db.prepare(
+    "SELECT model_id FROM cf_model_catalog WHERE modality='clef' AND status='recommended' AND model_id<>?1"
+  ).bind(winnerId).all();
+  for (const r of (others.results || [])) {
+    await db.prepare("UPDATE cf_model_catalog SET status='passed', notes=?2 WHERE model_id=?1")
+      .bind(r.model_id, "superseded by decision-battery winner " + winnerId).run();
+    await db.prepare("DELETE FROM model_ladder_models WHERE id=?1 AND notes LIKE 'auto-eval promote%'").bind(r.model_id).run();
+    await db.prepare("DELETE FROM roadmap_implementation WHERE item=?1 AND source='cf-model-eval'").bind("MODEL-" + r.model_id).run();
+  }
+  return (others.results || []).length;
+}
+
+// A failed canary withdraws the promotion instead of leaving a recommendation nobody
+// should act on. The ladder row goes, the catalog drops to candidate, and the roadmap
+// item keeps the reason so the next reader sees why it is not live.
+async function blockDecisionPromotion(env, modelId, reason) {
+  const db = env.AUDIT;
+  await db.prepare(
+    "UPDATE cf_model_catalog SET status='candidate', notes=?2 WHERE model_id=?1 AND status<>'in_production'"
+  ).bind(modelId, "canary gate: " + reason).run();
+  await db.prepare("DELETE FROM model_ladder_models WHERE id=?1 AND notes LIKE 'auto-eval promote%'").bind(modelId).run();
+  await db.prepare("UPDATE roadmap_implementation SET evidence=?2 WHERE item=?1")
+    .bind("MODEL-" + modelId, ("BLOCKED: " + reason).slice(0, 500)).run();
 }
 
 async function recordEval(env, e, role) {
@@ -718,9 +778,18 @@ async function runLoop(env, trigger, opts) {
   let winner = null;
   try { winner = await selectClefWinner(env); } catch (e) { summary.errors.push("winner: " + String(e.message || e)); }
   summary.clef_winner = winner;
-  if (winner && winner.model_id && String(await cfg(env, "canary_enabled", "0")) === "1") {
-    try { summary.canary = await clefCanary(env, winner.model_id); }
-    catch (e) { summary.errors.push("canary: " + String(e.message || e)); }
+  if (winner && winner.model_id) {
+    try { summary.superseded = await reconcileDecisionPromotions(env, winner.model_id); }
+    catch (e) { summary.errors.push("reconcile: " + String(e.message || e)); }
+    if (String(await cfg(env, "canary_enabled", "0")) === "1") {
+      try {
+        summary.canary = await clefCanary(env, winner.model_id);
+        const gate = canaryGate(summary.canary && summary.canary.ok ? summary.canary.agreement : null,
+          summary.canary ? summary.canary.cat_agreement : null);
+        summary.canary_gate = gate;
+        if (!gate.ready) await blockDecisionPromotion(env, winner.model_id, gate.reason);
+      } catch (e) { summary.errors.push("canary: " + String(e.message || e)); }
+    }
   }
 
   // safety net: candidates sitting unevaluated too long
