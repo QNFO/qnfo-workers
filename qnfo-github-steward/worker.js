@@ -22,7 +22,7 @@
  *   * archived repositories are read-only and are skipped, not reported as drift;
  *   * GET /report and GET /health are public reads; POST /tick needs STEWARD_KEY.
  */
-var VERSION = "0.2.1-notify-verdict"; // 0.2.1 NOTIFY-VERDICT-1: a cancelled/skipped newest run no longer hides the newest real verdict // 0.2.0 NOTIFY-TRIAGE-1: resolved GitHub notifications are marked done every run
+var VERSION = "0.2.2-issue-sync-1"; // 0.2.2 ISSUE-SYNC-1: mirror internal tracking to GitHub (forward) + reflect closed back (reverse)
 
 var ORG = "QNFO";
 var USER = "rwnq8";
@@ -203,7 +203,6 @@ async function auditWorkflows(env, repo, result) {
   }
 }
 
-
 /* NOTIFY-TRIAGE-1 (2026-10-18): the owner's GitHub inbox held 113 unread threads, 111 of them
  * "workflow run failed" CheckSuite notices that GitHub never retracts once the failure is fixed.
  * Each run reads the unread threads and marks a thread DONE only when its cause is PROVABLY
@@ -305,6 +304,92 @@ async function triageNotifications(env, result) {
   return t;
 }
 // end NOTIFY-TRIAGE-1
+/* ISSUE-SYNC-1 (owner directive 2026-10-18): keep internal issue tracking and GitHub issues in
+ * sync at all times. fleet_issue_dispatch rows that are queued or tracked and still carry no
+ * gh_number are the internal backlog; each is mirrored to a GitHub issue on QNFO/qnfo-workers and
+ * the number is written back. Idempotent (a row with gh_number is skipped) and fail-safe (a create
+ * error is recorded and the row stays queued for the next run, never retried as drift). */
+async function issueSync(env, result) {
+  if (!env.AUDIT) return;
+  try {
+    var rows = await env.AUDIT.prepare(
+      "SELECT fingerprint, category, sev, owner, payload, gh_number FROM fleet_issue_dispatch WHERE state IN ('queued','tracked') AND (gh_number IS NULL OR gh_number = '') LIMIT 20"
+    ).all();
+    var list = rows.results || [];
+    var created = 0, failed = 0;
+    for (var i = 0; i < list.length; i++) {
+      var row = list[i];
+      var title = "";
+      try {
+        var p = JSON.parse(row.payload || "{}");
+        var svc = p.service || row.owner || "fleet";
+        var t = typeof p.title === "string" ? p.title : "";
+        title = ("[fleet] " + svc + " · " + (row.category || "issue") + (t ? ": " + t : "")).slice(0, 240);
+      } catch (e) {
+        title = ("[fleet] " + (row.owner || "fleet") + " · " + (row.category || "issue")).slice(0, 240);
+      }
+      var body = [
+        "Mirrored from internal issue tracking (`qnfo-audit.fleet_issue_dispatch`).",
+        "",
+        "- fingerprint: `" + row.fingerprint + "`",
+        "- category: `" + (row.category || "") + "`",
+        "- severity: `" + (row.sev || "") + "`",
+        "- owner: `" + (row.owner || "") + "`",
+        "",
+        "```",
+        String(row.payload || "").slice(0, 2800),
+        "```",
+        "",
+        "Filed automatically by qnfo-github-steward (ISSUE-SYNC-1)."
+      ].join("\n");
+      var c = await gh(env, "POST", "/repos/" + ORG + "/qnfo-workers/issues", { title: title, body: body });
+      if (c.status === 201 && c.body && c.body.number) {
+        await env.AUDIT.prepare(
+          "UPDATE fleet_issue_dispatch SET gh_number = ?, state = 'tracked', exec_state = 'created', exec_ts = ? WHERE fingerprint = ?"
+        ).bind(String(c.body.number), new Date().toISOString(), row.fingerprint).run();
+        created++;
+      } else {
+        failed++;
+        result.errors.push({ scope: "issue-sync:" + row.fingerprint, status: c.status, why: String(c.text).slice(0, 120) });
+      }
+    }
+    result.issue_sync = { mirrored: created, failed: failed, backlog_seen: list.length };
+  } catch (e) {
+    result.errors.push({ scope: "issue-sync", why: String(e && e.message || e).slice(0, 160) });
+  }
+}
+
+/* ISSUE-SYNC-REVERSE-1 (owner directive 2026-10-18): reflect closed GitHub issues back into
+ * internal tracking. A fleet_issue_dispatch row that carries a gh_number but is still 'tracked'
+ * is checked against its GitHub issue; a closed issue marks the internal row 'done'. Idempotent,
+ * read-mostly, and fail-safe (an API error leaves the row tracked for the next run). */
+async function issueSyncReverse(env, result) {
+  if (!env.AUDIT) return;
+  try {
+    var rows = await env.AUDIT.prepare(
+      "SELECT fingerprint, gh_number FROM fleet_issue_dispatch WHERE state = 'tracked' AND gh_number IS NOT NULL AND gh_number != '' LIMIT 50"
+    ).all();
+    var list = rows.results || [];
+    var closed = 0, stillOpen = 0, errored = 0;
+    for (var i = 0; i < list.length; i++) {
+      var row = list[i];
+      var g = await gh(env, "GET", "/repos/" + ORG + "/qnfo-workers/issues/" + row.gh_number);
+      if (g.status === 200 && g.body && g.body.state === "closed") {
+        await env.AUDIT.prepare(
+          "UPDATE fleet_issue_dispatch SET state = 'done', exec_state = 'closed', exec_ts = ? WHERE fingerprint = ?"
+        ).bind(new Date().toISOString(), row.fingerprint).run();
+        closed++;
+      } else if (g.status === 200) {
+        stillOpen++;
+      } else {
+        errored++;
+      }
+    }
+    result.issue_sync_reverse = { closed: closed, still_open: stillOpen, errored: errored, checked: list.length };
+  } catch (e) {
+    result.errors.push({ scope: "issue-sync-reverse", why: String(e && e.message || e).slice(0, 160) });
+  }
+}
 
 async function runReconcile(env, opts) {
   var started = Date.now();
@@ -312,7 +397,7 @@ async function runReconcile(env, opts) {
     version: VERSION, started_at: new Date(started).toISOString(),
     org_ok: false, org_fixed: [], repos_checked: 0, repos_fixed: 0,
     repos_protected: 0, workflows: 0,
-    drift: [], workflow_issues: [], limitations: [], errors: []
+    drift: [], workflow_issues: [], limitations: [], errors: [], issue_sync: null, issue_sync_reverse: null
   };
 
   await reconcileOrg(env, result);
@@ -344,6 +429,8 @@ async function runReconcile(env, opts) {
   if (!opts || opts.notifications !== false) {
     try { await triageNotifications(env, result); } catch (eN) { result.errors.push({ scope: "notifications", why: String(eN && eN.message || eN).slice(0, 140) }); }
   }
+  await issueSync(env, result);
+  await issueSyncReverse(env, result);
   result.duration_ms = Date.now() - started;
   result.finished_at = new Date().toISOString();
   return result;
