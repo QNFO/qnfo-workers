@@ -1,5 +1,5 @@
 {
-  "audited_at": "2026-10-18 09:12:05",
+  "audited_at": "2026-10-18 09:41:32",
   "d1_write_failures": [],
   "d1_writes_ok": 119,
   "guard": {
@@ -608,7 +608,7 @@
       },
       {
         "dir": "qnfo-fleet-control",
-        "version": "0.33.8-probe-error-visible",
+        "version": "0.33.9-pool-bound-1",
         "worker": "qnfo-fleet-control"
       },
       {
@@ -623,7 +623,7 @@
       },
       {
         "dir": "qnfo-github-steward",
-        "version": "0.2.2-issue-sync-1",
+        "version": "0.3.0-tracker-sync-1",
         "worker": "qnfo-github-steward"
       },
       {
@@ -668,12 +668,12 @@
       },
       {
         "dir": "qnfo-research-exec",
-        "version": "0.18.35-codeagent",
+        "version": "0.18.38-tick-10m-1",
         "worker": "qnfo-research-exec"
       },
       {
         "dir": "qnfo-social",
-        "version": "0.16.4-social-hashtag-1",
+        "version": "0.16.5-thread-close-1",
         "worker": "qnfo-social"
       },
       {
@@ -1312,9 +1312,9 @@
       "worker": "qnfo-fleet-calibrator"
     },
     "qnfo-fleet-control": {
-      "before": "0.33.8-probe-error-visible",
+      "before": "0.33.9-pool-bound-1",
       "http": 200,
-      "live": "0.33.8-probe-error-visible",
+      "live": "0.33.9-pool-bound-1",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-fleet-control"
@@ -1354,9 +1354,9 @@
       "worker": "qnfo-gateway"
     },
     "qnfo-github-steward": {
-      "before": "0.2.2-issue-sync-1",
+      "before": "0.3.0-tracker-sync-1",
       "http": 200,
-      "live": "0.2.2-issue-sync-1",
+      "live": "0.3.0-tracker-sync-1",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-github-steward"
@@ -1552,9 +1552,9 @@
       "worker": "qnfo-register-guard"
     },
     "qnfo-research-exec": {
-      "before": "0.18.35-codeagent",
+      "before": "0.18.38-tick-10m-1",
       "http": 200,
-      "live": "0.18.35-codeagent",
+      "live": "0.18.38-tick-10m-1",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-research-exec"
@@ -1614,9 +1614,9 @@
       "worker": "qnfo-skills-discovery"
     },
     "qnfo-social": {
-      "before": "0.16.4-social-hashtag-1",
+      "before": "0.16.5-thread-close-1",
       "http": 200,
-      "live": "0.16.4-social-hashtag-1",
+      "live": "0.16.5-thread-close-1",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-social"
