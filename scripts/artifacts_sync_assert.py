@@ -26,17 +26,20 @@ def main():
     except Exception as e:
         print("unreadable report: %s" % e)
         return 1
-    print("checked=%(repos)s in_sync=%(in_sync)s drifted=%(drifted)s repaired=%(repaired)s "
-          "errors=%(errors)s waived=%(waived)s" % {
+    print("checked=%(repos)s in_sync=%(in_sync)s (before repair %(pre)s) drifted=%(drifted)s "
+          "repaired=%(repaired)s errors=%(errors)s waived=%(waived)s" % {
               "repos": summary.get("repos"), "in_sync": summary.get("in_sync"),
+              "pre": summary.get("in_sync_before_repair", summary.get("in_sync")),
               "drifted": summary.get("drifted"), "repaired": summary.get("repaired"),
               "errors": summary.get("errors"), "waived": summary.get("waived")})
     errors = summary.get("errors") or 0
     if errors:
         print("read failures: %s" % json.dumps(summary.get("error_sample"))[:400])
         return 1
-    # Every repo is accounted for: converged, still drifting (recorded), or waived (recorded).
-    accounted = (summary.get("in_sync") or 0) + (summary.get("drifted") or 0) + (summary.get("waived") or 0)
+    # `in_sync` is post-repair; on a run that repaired nothing it equals the pre-repair count, so
+    # the same formula covers both. Repaired repos are NOT also in `in_sync_before_repair`.
+    accounted = ((summary.get("in_sync") or 0) + (summary.get("drifted") or 0)
+                 + (summary.get("waived") or 0))
     if accounted != (summary.get("repos") or 0):
         print("ACCOUNTING GAP: %d of %d repos classified" % (accounted, summary.get("repos")))
         return 1
