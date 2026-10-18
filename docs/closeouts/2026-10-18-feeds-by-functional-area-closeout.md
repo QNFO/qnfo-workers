@@ -53,8 +53,8 @@ status `success`; 1.44.3 follows the same path.
 | revision while `data.age_min` moved 22 -> 23 over 65 s | n/a | **identical** (`82c6f742`) — the nested clock field is excluded, proven by measurement |
 | page | area rows, no feed link | 5 area rows, each ending `feed: /api/area/<id>` |
 
-Tests: `rt-api.test.mjs` **80 -> 153 assertions**, `areas.test.mjs` **63 -> 67**, both 0 failed. Mirror byte-identical,
-ASCII-only, `node --check` clean. Deploy gate green on all three PRs.
+Tests: `rt-api.test.mjs` **80 -> 165 assertions**, `areas.test.mjs` **63 -> 67**, both 0 failed. Mirror byte-identical,
+ASCII-only, `node --check` clean. Deploy gate green on every PR.
 
 ## 3. Corrections (things I got wrong and fixed)
 
