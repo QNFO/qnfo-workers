@@ -320,6 +320,7 @@ const etagOf = (r) => r.headers.get("ETag");
     ok(j.live === true && typeof j.max_lag_s === "number" && j.max_lag_s <= 60, "K9 area " + id + " states it is live and bounds its lag");
     ok(Array.isArray(j.feeds) && j.feeds.length > 0 && j.feeds.every((f) => typeof f.lag_s === "number"), "K10 area " + id + " lists its member reads with their lag");
     ok(Array.isArray(j.computed_from) && j.computed_from.length > 0, "K11 area " + id + " names what it reads");
+    ok(j.data && "age_min" in j.data && typeof j.data.metrics === "number", "K11b area " + id + " states the age of the metrics it reports");
     const tag = etagOf(r);
     ok(!!tag && (await call(env, "/api/area/" + id, { "If-None-Match": tag })).status === 304, "K12 area " + id + " revalidates to 304");
     ok((await (await call(env, "/api/area/" + id + "?since=" + j.revision)).json()).not_modified === true, "K13 ?since=<revision> works on area " + id);

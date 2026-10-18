@@ -103,6 +103,12 @@ snapshot-backed read (`/api/state`, `/api/actions`, `/api/integration`, `/api/de
 (`freshState`), which `/api/actions` and `/api/integration` previously did not do at all, so a poller could keep receiving
 a fifteen-minute-old answer. The index row states the source and the lag; `/health` says the same in prose.
 
+"Live" is measured, not asserted: the metrics themselves are refreshed by other workers, and on 2026-10-18 the registry
+ranged from minutes to 18 hours old (196 of 227 under an hour, 14 between one and six, 17 over six). Every area feed
+therefore carries `data: {age_min, metrics}`, the age of the oldest metric it reports, measured at request time (`age_min`
+is a clock field for the digest, so it never moves the revision while `metrics` and the values do). A stale number cannot
+hide behind a live-looking answer.
+
 The page renders every functional area as a section, including a clean one (marked `clear`, with its feed link); it used to
 skip areas with nothing in breach, which organised the page by exception rather than by area.
 
