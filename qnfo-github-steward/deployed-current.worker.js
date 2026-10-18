@@ -503,16 +503,16 @@ async function tsIssues(env, out) {
     var l = mism[i], r;
     if (l.status === "open") {
       r = await gh(env, "PATCH", TS_REPO + "/issues/" + l.gh_number, { state: "open" });
-      if (r.status === 200) {
+      if (r.status >= 200 && r.status < 300) {
         await gh(env, "POST", TS_REPO + "/issues/" + l.gh_number + "/comments", { body: "Reopened by TRACKER-SYNC-1: agent_issues " + l.issue_id + " is still open in qnfo-audit, which is authoritative. It closes here when it is closed there with close evidence." });
         out.reopened++;
       }
     } else {
       await gh(env, "POST", TS_REPO + "/issues/" + l.gh_number + "/comments", { body: "Closed in qnfo-audit (agent_issues " + l.issue_id + ": status **" + String(l.status || "missing") + "**, channel " + String(l.close_channel || "none recorded") + "). Close evidence:\n\n" + tsFence(l.close_evidence || "(none recorded)", 3000) });
       r = await gh(env, "PATCH", TS_REPO + "/issues/" + l.gh_number, { state: "closed", state_reason: l.status === "wontfix" ? "not_planned" : "completed" });
-      if (r.status === 200) out.closed++;
+      if (r.status >= 200 && r.status < 300) out.closed++;
     }
-    if (r && r.status === 200) {
+    if (r && r.status >= 200 && r.status < 300) {
       fixed++;
       await env.AUDIT.prepare("UPDATE gh_issue_links SET gh_state = ?, d1_status = ?, synced_at = ? WHERE issue_id = ?")
         .bind(l.status === "open" ? "open" : "closed", l.status || "missing", now, l.issue_id).run();
