@@ -25,7 +25,7 @@ read, with the query or endpoint that produced it.
 | PR | change | ledger evidence |
 |---|---|---|
 | #2276 | handoff items + R2→Basin Catalog coverage + `GUARD-RANGE-FIRSTPUSH-1` + fleet-tasks exporter | — |
-| #2300 | `CODE-LOOP-SUPERSEDED-RECONCILE-1` (new task + 10-min cron) | cron fired 14:01 and 14:10 |
+| #2300 | `CODE-LOOP-SUPERSEDED-RECONCILE-1` (new task + 10-min cron) | cron fired 13:56, 14:02, 14:11, 14:21 — **all four failed**; see §2a |
 | #2319 | `CLOSE-PROBE-CIRCULAR-GENERATOR-1` (trigger born superseded) | applied by hand; recorded verbatim, `APPLY-BY: manual` |
 | — | `2026-10-19-verification-verdict-contract-state.sql` | `migration_runs` **303** ok 13:51:24Z |
 | — | `2026-10-19-close-probe-circularity.sql` | `migration_runs` **302** ok 13:51:16Z |
@@ -41,6 +41,35 @@ Two deadlocks died today, and both were **instrumentation**, not missing work:
    `contract_probe_templates_v3_generic`, whose own `action` text said the template "measures nothing while the issue is
    open" while its status was `active`. Now born `superseded`; 68 standing deadlocks retired; a live test insert came
    back `superseded` (test row deleted). Issue 3004 closed through the path they had blocked.
+
+---
+
+### 2a. A correction this closeout owes you
+
+The first version of this handoff said issue 2871 "closed on the reconciler's first run". That was wrong.
+
+* `fleet_tasks` row was inserted with **`type='sql'`**. The dispatcher only parses a `steps[]` array for
+  `type='workflow'`; for anything else it hands the step object straight to D1, which answers
+  `D1_ERROR: Malformed input: {"params":[]}`, and the task fails before running a single statement.
+* `fleet_runs` proves it: four runs (13:56, 14:02, 14:11, 14:21), **four failures**, no statement executed.
+* 2871 was closed because the same SQL was run **by hand** while testing. The task itself has never succeeded.
+
+Fixed at 14:31Z (`type='workflow'`, matching `code-loop-terminal-reconcile`, `portfolio-self-manage`, `red-drain`), the
+migration now carries the lesson in its header, and the fix is verified the way the previous claim should have been —
+the next run reads:
+
+```
+started 2026-10-18 14:31:27  status ok  result {"type":"workflow","steps_run":1,...}
+```
+
+The general lesson is worth more than the fix: **a cron firing is not a task running, and a closed issue is not proof the
+automation closed it.** Read `fleet_runs.status` for the claim.
+
+A second false alarm, recorded so the next session does not repeat it: while waiting for that run I twice concluded the
+dispatcher had stalled. Both reads were wrong — first a `Get-Date ... Z` that prints local time with a literal `Z`
+(it was 14:27Z, not 16:27Z), then a `fleet_runs` gap that was simply a gap between batches (`loop_lock` was renewing,
+and the holder rotated `e6d57a8c → f37c50bd` while 17 runs landed in 15 minutes). Timestamps here need `julianday()` and
+an explicit UTC label; a quiet window under ~15 minutes is not evidence of a stall.
 
 ---
 
