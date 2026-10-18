@@ -5,28 +5,30 @@ name: artifacts-canonical-sync
 # OWNER DIRECTIVE: all repositories live in Cloudflare Artifacts AND stay canonically in sync with
 # GitHub automatically; repository content is integrated with the fleet's databases, graph and AI.
 #
-# WHY A SCHEDULED JOB AND NOT A PUSH HOOK
-#   Each GitHub repository would need its own workflow to mirror itself, which means 130 workflow
-#   files and 130 secrets to keep correct. Instead this one job asks a cheap question of every
-#   repository -- "is GitHub's HEAD commit the same commit Artifacts serves?" -- and only then pays
-#   for a transfer. Measured 2026-10-18: the full 180-repo audit takes ~30s and found 54 stale
-#   replicas that no other process was watching.
+# WHY A RECONCILER AND NOT A PUSH HOOK
+#   A per-repository mirror workflow would mean 130 workflow files and 130 secrets to keep correct.
+#   This job asks every repository one cheap question -- "is GitHub's HEAD commit the commit
+#   Artifacts serves?" -- and only then pays for a transfer. Measured 2026-10-18: the full 180-repo
+#   audit takes ~40s and found 54 stale replicas that nothing else was watching.
 #
-# WHAT RUNS
-#   reconcile: scripts/artifacts_canonical_sync.py --repair   (HEAD compare + delta git push)
-#   index:     scripts/repo_content_index.py                  (D1 file index + Vectorize + graph)
+# STEPS
+#   gate     scripts/artifacts_sync_gate.py    throttle: at most one run per 90 minutes
+#   reconcile scripts/artifacts_canonical_sync.py --repair   HEAD compare + per-ref delta push
+#   index     scripts/repo_content_index.py    D1 file index + Vectorize + graph stats
+#   assert    scripts/artifacts_sync_assert.py fail if a source could not be read
 #
 # CREDENTIALS
 #   CLOUDFLARE_API_TOKEN / CLOUDFLARE_ACCOUNT_ID : Artifacts control plane, D1, Workers AI, Vectorize
-#   GITHUB_TOKEN                                 : reads the WORKFLOW'S OWN repository only.
-#   QNFO_GH_PAT                                  : reads the whole org. Required for the ~180 repos
-#     outside this one; without it every other repo reports github_repo_missing and the run exits
-#     non-zero on purpose (a sync that silently checks one repo and calls itself green is worse
-#     than one that fails).
+#   QNFO_GH_PAT                                  : reads the whole org (set 2026-10-18). GITHUB_TOKEN
+#     alone only reads this repository, which is why it is the fallback and not the default.
 #
-# TRIGGER NOTE: the GitHub `schedule` event does not fire in this repository (verified repeatedly),
-# so this workflow is chained to mirror-sync.yml via workflow_run plus repository_dispatch, which
-# the fleet already fires from remediation-consumer.yml.
+# TRIGGER NOTE: the GitHub `schedule` event does not fire in this repository, so this workflow is
+# chained to mirror-sync.yml via workflow_run plus repository_dispatch, which the fleet already
+# fires from remediation-consumer.yml.
+#
+# YAML NOTE: every run: block here calls a checked-in script. Earlier revisions inlined python
+# heredocs at column 0 inside a block scalar, which made the file unparseable -- and GitHub treats
+# an unparseable workflow as absent, not as an error, so it would have silently never run.
 
 on:
   workflow_run:
@@ -37,7 +39,7 @@ on:
   workflow_dispatch:
     inputs:
       repair:
-        description: "Repair drifted replicas (delta git push)"
+        description: "Repair drifted replicas (per-ref delta push)"
         default: "true"
       max_repos:
         description: "Repos to index per run"
@@ -53,9 +55,9 @@ concurrency:
 jobs:
   sync:
     runs-on: ubuntu-latest
-    # Measured 2026-10-18: a full reconcile with repairs of two large repos took 1000s, and the
-    # per-ref push strategy adds one round trip per branch. 25 minutes would have cut a legitimate
-    # repair short; waived repos are now skipped so the normal run is far shorter.
+    # Measured 2026-10-18: a full reconcile that repaired two large repos took 1000s, and per-ref
+    # pushing adds a round trip per branch. Waived repos are now skipped, so a normal run is far
+    # shorter, but the ceiling must not cut a legitimate repair short.
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -66,34 +68,13 @@ jobs:
         with:
           python-version: "3.11"
 
-      # mirror-sync fires on every push to main (~50/hour measured 2026-10-18), and this workflow is
-      # chained to it. Without a throttle that is a clone+push per push -- cost with no benefit,
-      # since a replica that is 90 minutes behind is still a faithful replica. Skipping is recorded,
-      # never silent.
-      - name: Throttle (skip if a run finished in the last 90 minutes)
+      - name: Throttle (skip if a run finished in the window)
         id: gate
         env:
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-        run: |
-          python - <<'PY' >> "$GITHUB_OUTPUT"
-import json, os, urllib.request
-acct = os.environ["CLOUDFLARE_ACCOUNT_ID"]; tok = os.environ["CLOUDFLARE_API_TOKEN"]
-sql = ("SELECT COUNT(*) AS recent FROM artifact_sync_runs "
-       "WHERE started_at > datetime('now','-90 minutes')")
-req = urllib.request.Request(
-    f"https://api.cloudflare.com/client/v4/accounts/{acct}/d1/database/35e2e573-92f3-46ac-83c6-22f6429fc5e5/query",
-    data=json.dumps({"sql": sql}).encode(), method="POST",
-    headers={"Authorization": "Bearer " + tok, "Content-Type": "application/json"})
-try:
-    with urllib.request.urlopen(req, timeout=30) as r:
-        recent = json.load(r)["result"][0]["results"][0]["recent"]
-    print("run=" + ("true" if recent == 0 else "false"))
-    print(f"note=recent_runs_{recent}")
-except Exception as e:
-    print("run=true")   # fail-open on the gate only; the sync itself still fails closed
-    print("note=gate_error_" + str(e)[:40].replace(" ", "_"))
-PY
+          SYNC_THROTTLE_MINUTES: "90"
+        run: python scripts/artifacts_sync_gate.py >> "$GITHUB_OUTPUT"
 
       - name: Reconcile GitHub HEAD against Artifacts HEAD
         id: reconcile
@@ -121,24 +102,17 @@ PY
             --max-repos "${{ github.event.inputs.max_repos || '6' }}" \
             --max-chunks 900
 
-      - name: Report
-        if: always()
-        run: |
-          test -f sync.json && python -c "
-import json
-s=json.load(open('sync.json'))['summary']
-print('checked',s['repos'],'in_sync',s['in_sync'],'drifted',s['drifted'],'repaired',s['repaired'],'errors',s['errors'])
-" || echo "reconcile produced no report"
+      - name: Assert the run could see what it claims to have checked
+        if: always() && steps.gate.outputs.run != 'false'
+        env:
+          SYNC_REPORT: sync.json
+        run: python scripts/artifacts_sync_assert.py
 
-      - name: Fail if a source could not be read
+      - name: Upload reconcile report
         if: always()
-        run: |
-          python - <<'PY'
-import json, os, sys
-if not os.path.exists('sync.json'):
-    sys.exit(0)
-s = json.load(open('sync.json'))['summary']
-if s['errors']:
-    print('read failures:', s['error_sample'])
-    sys.exit(1)
-PY
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: artifacts-sync-report
+          path: sync.json
+          if-no-files-found: ignore
+          retention-days: 14
