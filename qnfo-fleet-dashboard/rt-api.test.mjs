@@ -326,6 +326,10 @@ const etagOf = (r) => r.headers.get("ETag");
     ok((await (await call(env, "/api/area/" + id + "?since=" + j.revision)).json()).not_modified === true, "K13 ?since=<revision> works on area " + id);
   }
   ok((await call(env, "/api/area/nope")).status === 404, "K14 an unknown area is a 404, not an empty 200");
+  // A malformed percent sequence must be a 404 like any unknown route, not a 500: decodeURIComponent throws, and every
+  // other read in this worker compares the raw path. Measured live on 1.44.1 and fixed in 1.44.2.
+  ok((await call(env, "/api/area/%E0%A4%A")).status === 404, "K14b a malformed escape is a 404, not a 500");
+  ok((await call(env, "/api/area/cost/")).status === 200, "K14c a trailing slash still resolves");
   const comp = await (await call(env, "/api/area/autonomy")).json();
   ok((comp.breaches.top || []).every((x) => !("fullLever" in x)), "K15 the compact area feed carries no fullLever");
   const fullA = await (await call(env, "/api/area/autonomy?full=1")).json();
