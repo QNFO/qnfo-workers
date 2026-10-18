@@ -32,8 +32,30 @@ const BODY = [
 const SLUG = "energy-floor-of-the-controller";
 const papers = { [SLUG]: { slug: SLUG, title: "Energy Floor Of The Controller", body_md: BODY, abstract: "", created_at: "2026-10-01", version: "2.0.0" } };
 
-let aiCalls = 0, aiOut = "", lastModel = null, lastUser = null;
-const AI = { run: async (model, input) => { aiCalls++; lastModel = model; lastUser = (input.messages && input.messages[1] && input.messages[1].content) || ""; return { response: typeof aiOut === "function" ? aiOut() : aiOut }; } };
+let aiCalls = 0, aiOut = "", lastModel = null, lastUser = null, embedDown = false;
+// The AI stub serves both models: bge-* gets embeddings (a fixed vector per known phrase, so cosine decides the section),
+// everything else gets the canned completion. A question about birds and a limitations section about schedules share no
+// words, which is exactly what the semantic fallback exists for.
+// The AI stub serves both models: bge-* gets embeddings, everything else the canned completion. The stub tells the two
+// apart by shape: one text is a question, several texts are the paper's sections (qrSemantic does exactly that), so an
+// unrelated question scores 0 against every section while the bird question scores ~1 against the limitations section.
+const embVec = (t, isQuestion) => {
+  const s = String(t).toLowerCase();
+  if (/migratory|navigate|magnetoreception/.test(s)) return [1, 0, 0, 0];
+  if (/holds only for schedules|do not measure the cost of state preparation/.test(s)) return [0.95, 0.05, 0, 0];
+  if (/landauer|energy floor|joule counter/.test(s)) return [0.2, 0.95, 0, 0];
+  return isQuestion ? [0, 0, 0, 1] : [0, 0, 1, 0];
+};
+const AI = { run: async (model, input) => {
+  if (model.indexOf("bge") >= 0) {
+    if (embedDown) throw new Error("embedding model unavailable");
+    const texts = Array.isArray(input.text) ? input.text : [input.text];
+    const single = texts.length === 1; // one text is the question; the paper's sections come as one batch
+    return { data: texts.map((t) => embVec(t, single)) };
+  }
+  aiCalls++; lastModel = model; lastUser = (input.messages && input.messages[1] && input.messages[1].content) || "";
+  return { response: typeof aiOut === "function" ? aiOut() : aiOut };
+} };
 
 function mkEnv() {
   const qr = new Map();
@@ -137,12 +159,12 @@ const Q = "What did the controller measure about the energy cost of one solution
 {
   const env = mkEnv();
   aiCalls = 0;
-  const r = await qrGet(env, "How do migratory birds navigate by magnetoreception?");
-  ok(r.s === 200 && r.j.coverage === "none", "coverage none for an unrelated question", r.j.coverage);
+  const r = await qrGet(env, "How is sourdough fermentation affected by altitude?");
+  ok(r.s === 200 && r.j.coverage === "none", "coverage none: no shared words and no semantic match", r.j.coverage);
   ok(aiCalls === 0, "no model call is spent on a question the paper does not touch", aiCalls);
   ok(r.j.answers.length === 0 && r.j.approach.length === 0 && r.j.considerations.length === 0, "nothing is invented for an untouched question", r.j);
   ok((r.j.closest || []).length > 0 && r.j.sections_total >= 4, "the page can name what the paper does cover", r.j.closest);
-  const f = await qrGet(env, "How do migratory birds navigate by magnetoreception?", "&format=html");
+  const f = await qrGet(env, "How is sourdough fermentation affected by altitude?", "&format=html");
   ok(typeof f.j === "string" && /does not answer this question/.test(f.j) && /Nothing was generated from outside the text/.test(f.j), "the rendered page says the paper does not answer, and says nothing was invented", String(f.j).slice(0, 300));
 }
 
@@ -206,6 +228,68 @@ const Q = "What did the controller measure about the energy cost of one solution
   ok(/QR_TIMEOUT_MS/.test(block) && /clearTimeout\(timer\)/.test(block), "the model call has a deadline that is cleared when it answers");
   ok(/qrNorm\(/.test(block) && /byNorm/.test(block), "evidence is matched in comparison form against the paper's own sentences");
   ok(/noindex/.test(block) && /rendered: !!fragment/.test(block), "the page is noindex and knows whether it was server-rendered");
+}
+
+// ---- 10. QUICK-READ-4: the cache key follows the paper's revision, so a correction retires the old answer
+{
+  const env = mkEnv();
+  aiCalls = 0;
+  aiOut = JSON.stringify({ overview: "Measured.", answers: [{ point: "It measured 1.7 joules per solution.", evidence: "The controller ran 42 trials on the cryostat and measured 1.7 joules per solution under load, which is the main result of this paper." }], approach: [], considerations: [] });
+  const first = await qrGet(env, Q + " revision");
+  const again = await qrGet(env, Q + " revision");
+  papers[SLUG].version = "2.0.1";
+  const revised = await qrGet(env, Q + " revision");
+  ok(first.j.cached === false && again.j.cached === true, "the same paper and question is cached", { a: first.j.cached, b: again.j.cached });
+  ok(revised.j.cached === false && aiCalls === 2, "a new paper version is a new key, so the correction is read again", { cached: revised.j.cached, aiCalls });
+  papers[SLUG].version = "2.0.0";
+}
+
+// ---- 11. QUICK-READ-4: a question in other words is read semantically instead of being refused
+{
+  const env = mkEnv();
+  aiCalls = 0;
+  embedDown = false;
+  aiOut = JSON.stringify({ overview: "Measured.", answers: [], approach: [], considerations: [] });
+  const q = "How do migratory birds navigate by magnetoreception?";
+  const r = await qrGet(env, q + " semantic");
+  ok(r.s === 200 && r.j.coverage === "related" && r.j.retrieval === "semantic", "no shared words but a close section: coverage related, retrieval semantic", { coverage: r.j.coverage, retrieval: r.j.retrieval });
+  ok(r.j.passages > 0 && (r.j.answers.length + r.j.approach.length + r.j.considerations.length) > 0, "the semantically closest sections are actually read", { passages: r.j.passages });
+  const secs = r.j.answers.concat(r.j.approach, r.j.considerations).map((x) => x.section_title);
+  ok(secs.indexOf("Limitations") >= 0, "the closest section by meaning is the one read", secs);
+  const quotes = r.j.answers.concat(r.j.approach, r.j.considerations).map((x) => x.quote).join(" ");
+  ok(/1.7 joules|holds only for schedules|do not measure/.test(quotes), "the quote is still the paper's text", quotes.slice(0, 120));
+  const f = await qrGet(env, q + " semantic", "&format=html");
+  ok(typeof f.j === "string" && /closest to it by meaning/.test(f.j), "the page says the words are absent and the closest sections were read");
+}
+
+// ---- 12. QUICK-READ-4: when embeddings are unavailable the honest verdict stands (no invention)
+{
+  const env = mkEnv();
+  aiCalls = 0;
+  embedDown = true;
+  const r = await qrGet(env, "How do migratory birds navigate by magnetoreception? offline");
+  ok(r.j.coverage === "none" && aiCalls === 0, "no embeddings and no shared words: coverage none, no model call", { coverage: r.j.coverage, aiCalls });
+  embedDown = false;
+}
+
+// ---- 13. QUICK-READ-4: the audit endpoint reports the paths instead of claiming them
+{
+  const env = mkEnv();
+  const r = await call(env, "https://papers.qnfo.org/_audit/quick-read");
+  const j = await r.json();
+  ok(r.status === 200 && j.ok === true && typeof j.invariant === "string", "the audit endpoint answers with its invariant", j);
+  ["reads", "answered", "partial", "related", "uncovered", "written_or_partly_written", "answered_from_the_paper_only", "statements_dropped", "served_from_cache", "unreadable_payloads"].forEach((k) => {
+    ok(j[k] !== undefined, "audit reports " + k, j[k]);
+  });
+}
+
+// ---- 14. the source carries what the page promises
+{
+  const block = src.slice(src.indexOf("QUICK-READ-1:BEGIN"), src.indexOf("QUICK-READ-1:END"));
+  ok(/QR_SEM_MODEL/.test(block) && /qrSemantic/.test(block) && /quick_read_vec/.test(block), "QUICK-READ-4: semantic fallback and its vector cache exist in the block");
+  ok(/QR_CACHE_VERSION/.test(block) && /function qrRev/.test(block) && /updated_at/.test(block), "QUICK-READ-4: the cache key carries the paper's revision");
+  ok(/handleQuickReadAudit/.test(block), "QUICK-READ-4: the audit handler lives with the feature");
+  ok(src.indexOf("_audit/quick-read") > 0, "the audit route is wired");
 }
 
 console.log(pass + " passed, " + fail + " failed");
