@@ -22,7 +22,7 @@
  *   * archived repositories are read-only and are skipped, not reported as drift;
  *   * GET /report and GET /health are public reads; POST /tick needs STEWARD_KEY.
  */
-var VERSION = "0.4.0-portfolio-sync-1"; // 0.4.0 PORTFOLIO-SYNC-1: projects derived from the census, metric breaches as roadmap objectives, programs/projects/issues/roadmap mirrored to GitHub labels, milestones, issues and a Projects board every 10 minutes; 0.3.1 a task is matched to its PR by number too (pr-without-task false positive on PR 381); 0.3.0 TRACKER-SYNC-1: agent_issues <-> GitHub issues and code_tasks <-> PRs every 10 minutes (0.2.2 ISSUE-SYNC-1)
+var VERSION = "0.4.1-portfolio-sync-2"; // 0.4.1 org projects declared on (the portfolio board needs them); 0.4.0 PORTFOLIO-SYNC-1: projects derived from the census, metric breaches as roadmap objectives, programs/projects/issues/roadmap mirrored to GitHub labels, milestones, issues and a Projects board every 10 minutes; 0.3.1 a task is matched to its PR by number too (pr-without-task false positive on PR 381); 0.3.0 TRACKER-SYNC-1: agent_issues <-> GitHub issues and code_tasks <-> PRs every 10 minutes (0.2.2 ISSUE-SYNC-1)
 
 var ORG = "QNFO";
 var USER = "rwnq8";
@@ -31,7 +31,10 @@ var API = "https://api.github.com";
 /* Declared end state. Everything here is reversible; nothing here deletes anything. */
 var DESIRED_ORG = {
   default_repository_permission: "read",
-  members_can_create_public_repositories: false
+  members_can_create_public_repositories: false,
+  /* PORTFOLIO-SYNC-1: the org Projects (v2) board "QNFO Fleet Portfolio" needs organization projects enabled; with it off,
+   * createProjectV2 fails with a bare "Something went wrong" (measured 2026-10-18 10:11Z and 10:15Z). */
+  has_organization_projects: true
 };
 var DESIRED_REPO = {
   delete_branch_on_merge: true,
