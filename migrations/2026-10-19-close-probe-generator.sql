@@ -1,0 +1,63 @@
+-- CLOSE-PROBE-CIRCULAR-GENERATOR-1 (2026-10-19). Second half of issue 3011.
+--
+-- THIS FILE IS NOT APPLIED BY CI ON PURPOSE (APPLY-BY: manual, so scripts/apply_migrations.py skips it).
+-- Reason: it DROPs and CREATEs a trigger on remediation_contracts. The applier verifies a new trigger by compiling
+-- zero-row UPDATE/DELETE writes on every table whose trigger chain reaches remediation_contracts, and this table both
+-- self-updates and sits under deep chains; a refused probe makes the runner DROP the trigger it just created. That is
+-- exactly how migration_runs 292 left production without agent_issues_autotriage2_ins (see
+-- 2026-10-18-issue-sla-invariant-guard.sql: "Adding DROP/CREATE TRIGGER to this file again would repeat that outage").
+-- So the definition below was applied by hand on 2026-10-19, verified live, and is recorded here so main carries what
+-- production runs. Applying it again is safe: the DROP is IF EXISTS and the CREATE is complete.
+--
+-- WHY
+-- `contract_probe_templates_v3_generic` born every issue with no machine-executable remedy a contract whose probe was
+--     SELECT 'closed' AS expected,
+--            (SELECT CASE WHEN status IN ('closed','resolved') THEN 'closed' ELSE NULL END
+--               FROM agent_issues WHERE id = <N>) AS observed
+-- and set it `active`. That probe can only pass AFTER the issue closes, and issue_close_evidence_required
+-- (CLOSE-BINDS-TO-PROBE-1) refuses a close while the issue's contract is failing. Measured before this change: 68
+-- contracts, 59 on open issues, none of which could ever close by any evidence (issue 3011; reproduced on 3004:
+-- "close-while-contract-fails: SQLITE_CONSTRAINT").
+--
+-- WHAT CHANGED
+-- The same template is born `superseded`, with a verdict that names the rule, so it records the shape without ever
+-- blocking a close. The template's own action text already said it "measures nothing while the issue is open"; this
+-- makes the status agree with the text. A doer that knows the defect still replaces the probe with one that measures it.
+--
+-- MEASURED AFTER (qnfo-audit, 2026-10-19 14:1xZ)
+--   closure-observing contracts in active/holding: 0   (was 68)
+--   live test insert on issue 3011 -> status=superseded, module=probe-template-v3-generic   (test row deleted)
+--   issues 3004 and 3011 closed through the path this template had blocked
+--   the 42 remaining probes that read agent_issues are the v2d-loop template (expected 'ok', 'pending…' while open,
+--   'stale…' after 48h): a deferral, not a block
+--
+-- Rollback: restore the previous body from the backup taken before the change —
+--   SELECT sql FROM bak_20261019_probe_template_v3;   (the CREATE TRIGGER text, 2026-10-19 14:05Z)
+--   DROP TRIGGER IF EXISTS contract_probe_templates_v3_generic; then run that SQL.
+--
+-- Verify after apply:
+--   SELECT substr(sql, 1, 120) FROM sqlite_master WHERE name = 'contract_probe_templates_v3_generic';
+--   SELECT count(*) FROM remediation_contracts
+--    WHERE instr(COALESCE(verify_probe,''),'''closed'' AS expected') > 0 AND status IN ('active','holding');  -- 0
+
+-- Live definition, applied 2026-10-19 (verbatim apart from this header):
+--
+--   CREATE TRIGGER contract_probe_templates_v3_generic AFTER INSERT ON remediation_contracts
+--   WHEN NEW.status = 'needs-machine-probe' AND NEW.issue_id IS NOT NULL
+--     AND NOT EXISTS (SELECT 1 FROM agent_issues a WHERE a.id = NEW.issue_id AND a.title LIKE 'METRIC-TRIGGER-%')
+--     AND NOT EXISTS (SELECT 1 FROM agent_issues a JOIN service_registry s ON s.service = a.source AND s.state = 'live'
+--                      WHERE a.id = NEW.issue_id)
+--   BEGIN
+--     UPDATE remediation_contracts
+--     SET status = 'superseded', verify_transport = 'd1-query', module = 'probe-template-v3-generic', attempts = 0,
+--         last_verdict = 'superseded:closure-observing-probe-at-birth (CLOSE-PROBE-CIRCULAR-1: this template observes the
+--   guarded issue status, which issue_close_evidence_required only lets change after a close that the same probe blocks; a
+--   doer that knows the defect replaces it with a probe that measures it)',
+--         next_due_at = NULL,
+--         precondition = 'no earlier birth template matched this issue (ORPHAN-GUARD-BIRTH-1)',
+--         action = 'VACUOUS-PROBE-V3-1: this contract measures nothing while the issue is open, so it is born superseded and
+--   never blocks the close. A doer that knows the defect replaces this probe with one that measures it.',
+--         verify_probe = 'SELECT ''closed'' AS expected, (SELECT CASE WHEN status IN (''closed'', ''resolved'') THEN ''closed''
+--   ELSE NULL END FROM agent_issues WHERE id = ' || NEW.issue_id || ') AS observed'
+--     WHERE class = NEW.class AND status = 'needs-machine-probe';
+--   END
