@@ -268,5 +268,3 @@ Verified by a live test insert on issue 3011: the contract came back `status=sup
 Remaining red at this point, and why each one is not a one-hour fix: 245 open issues (the loops file ~2/minute, so the
 register grows while it drains), 32 breach contracts (each is a live failed check on a specific open issue), 78 failed
 code tasks (model quality; the plumbing defects in that set are fixed), 42 queued (file-bound, see §6).
-
-
