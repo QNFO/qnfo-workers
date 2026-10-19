@@ -61,7 +61,11 @@ function mkEnv(o) {
         if (/SELECT consecutive_failures FROM ai_model_health/.test(q)) return a[0] in prevCf ? { consecutive_failures: prevCf[a[0]] } : null;
         return null;
       },
-      async all() { sql.push({ q, a }); return { results: [] }; }
+      async all() {
+        sql.push({ q, a });
+        if (/SELECT model_id, status, last_probe_ts FROM ai_model_health/.test(q) && o.prior) return { results: o.prior };
+        return { results: [] };
+      }
     };
     return s;
   };
@@ -195,9 +199,49 @@ const routerBudgets = (t) => t.router.filter((c) => c.body && c.body.max_tokens 
   ok(w.length === 1 && w[0].status === "ok", "budget_probe = off: the sweep writes the ping-only verdict", w);
 }
 
+// 4b. BUDGET-PROBE-REFRESH-1: an ok row last probed before the budget probe existed is due now, once
+{
+  const SINCE = Date.UTC(2026, 9, 19, 12, 20, 0);
+  const realNow = Date.now;
+  Date.now = () => SINCE + 2 * 36e5; // two hours after the 1.6.0 deploy
+  try {
+    const prior = [
+      { model_id: "glm-5.3-flash", status: "ok", last_probe_ts: SINCE - 30 * 6e4 },      // 2.5 h old, probed before the deploy: due
+      { model_id: "qwen3.8-27b", status: "ok", last_probe_ts: SINCE - 3 * 36e5 },        // 5 h old, probed before the deploy: due
+      { model_id: "gpt-oss-120b", status: "ok", last_probe_ts: SINCE + 36e5 },           // 1 h old, probed after the deploy: current
+      { model_id: "kimi-k2.6", status: "ok", last_probe_ts: SINCE + 36e5 },
+      { model_id: "kimi-k2.7-code", status: "ok", last_probe_ts: SINCE + 36e5 },
+      { model_id: "glm-5.3", status: "ok", last_probe_ts: SINCE + 36e5 },
+      { model_id: "nemotron-3-120b-a12b", status: "ok", last_probe_ts: SINCE + 36e5 },
+      { model_id: "deepseek-v4-pro", status: "ok", last_probe_ts: SINCE + 36e5 },
+      { model_id: "deepseek-v4-pro-wa", status: "ok", last_probe_ts: SINCE + 36e5 },
+      { model_id: "deepseek-v4-flash-wa", status: "ok", last_probe_ts: SINCE + 36e5 },
+      { model_id: "bge-base-en-v1.5", status: "ok", last_probe_ts: SINCE + 36e5 },
+    ];
+    const t = mkEnv({ prior, budget: { "@cf/zai-org/glm-5.3-flash": emptyLength } });
+    const r = await api.worker_default.fetch(req("/prober/run"), t.env, { waitUntil() {} });
+    const j = await r.json();
+    const probed = Array.from(new Set(t.ai.map((c) => c.model))).sort();
+    ok(r.status === 200 && probed.join() === ["@cf/qwen/qwen3.8-27b", "@cf/zai-org/glm-5.3-flash"].join(), "only the two ok rows probed before the 1.6.0 deploy are due; current ones are skipped", probed);
+    ok(proberStatus(t, "glm-5.3-flash") === "degraded", "and the stale ok row gets the budget-shaped verdict (empty under the budget: degraded)", proberStatus(t, "glm-5.3-flash"));
+    ok(proberStatus(t, "qwen3.8-27b") === "ok", "a row that answers within the budget stays ok", proberStatus(t, "qwen3.8-27b"));
+    // once probed after the deploy, the 9-hour interval applies again
+    const prior2 = prior.map((x) => ({ model_id: x.model_id, status: "ok", last_probe_ts: SINCE + 3 * 6e4 * 10 }));
+    const t2 = mkEnv({ prior: prior2 });
+    await api.worker_default.fetch(req("/prober/run"), t2.env, { waitUntil() {} });
+    ok(t2.ai.length === 0, "rows probed after the deploy are skipped again until their 9 hours lapse", t2.ai.map((c) => c.model));
+    // a degraded row is never skipped, and a row with no probe time is probed
+    const t3 = mkEnv({ prior: [{ model_id: "glm-5.3-flash", status: "degraded", last_probe_ts: SINCE + 36e5 }, { model_id: "gpt-oss-120b", status: "ok", last_probe_ts: null }] });
+    await api.worker_default.fetch(req("/prober/run"), t3.env, { waitUntil() {} });
+    const p3 = new Set(t3.ai.map((c) => c.model));
+    ok(p3.has("@cf/zai-org/glm-5.3-flash") && p3.has("@cf/openai/gpt-oss-120b"), "a degraded row and a never-probed row are still probed every run", [...p3]);
+    void j;
+  } finally { Date.now = realNow; }
+}
+
 // 5. versions and mirror
-ok(versionAtLeast(api.VERSION, "1.6.0"), "qnfo-ai-calibration is at least 1.6.0 (new capability: what ok means)", api.VERSION);
-ok(versionAtLeast(api.PROBER_VERSION, "2.3.16"), "the member PROBER_VERSION is at least 2.3.16", api.PROBER_VERSION);
+ok(versionAtLeast(api.VERSION, "1.6.1"), "qnfo-ai-calibration is at least 1.6.1 (1.6.0 new capability: what ok means; 1.6.1 refreshes rows probed before it)", api.VERSION);
+ok(versionAtLeast(api.PROBER_VERSION, "2.3.17"), "the member PROBER_VERSION is at least 2.3.17", api.PROBER_VERSION);
 ok(src === mirror, "deployed-current.worker.js is identical to worker.js");
 ok(!/\*\//.test(src.split("\n")[5].replace(/\/\*[\s\S]*?\*\//g, "")), "the VERSION note closes every block comment it opens");
 
