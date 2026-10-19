@@ -142,6 +142,54 @@ ok(db.execute("SELECT status, statements FROM migration_runs WHERE file = 'migra
 M.apply_file("migrations/fail.sql", failing, "a", "t", "c6", emit)
 ok(db.execute("SELECT COUNT(*) FROM agent_issues WHERE title = 'MIGRATION-APPLY-FAILED-1: fail.sql' AND status = 'open'").fetchone()[0] == 1, "one open MIGRATION-APPLY-FAILED-1 issue, not one per run")
 
+# 6b. MIGRATION-CONCURRENT-APPLY-1: a statement that fails because another runner is applying the same file is not a failure.
+real_sleep, real_wait, real_poll = M._sleep, M.CONCURRENT_WAIT_S, M.CONCURRENT_POLL_S
+M.CONCURRENT_WAIT_S, M.CONCURRENT_POLL_S = 3, 0
+CONC = """-- concurrent
+-- APPLY-BY: ci
+-- DB: qnfo-audit
+-- Rollback: DROP TABLE IF EXISTS conc_t
+CREATE TABLE conc_t (x);
+CREATE TABLE conc_u (y);
+"""
+db.execute("CREATE TABLE conc_t (x)")  # the other runner got there first with statement 1 ...
+conc_sha = __import__("hashlib").sha256(CONC.encode()).hexdigest()
+polls = {"n": 0}
+
+
+def other_runner_finishes(s):
+    polls["n"] += 1
+    if polls["n"] == 2:  # ... and records its ok row while this runner waits
+        db.execute("INSERT INTO migration_runs (file, sha256, commit_sha, db, status, statements, applied_by) VALUES ('migrations/conc.sql', ?, 'cX', 'qnfo-audit', 'ok', '2', 'ci:apply-migrations')", (conc_sha,))
+        db.commit()
+M._sleep = other_runner_finishes
+errs0 = db.execute("SELECT COUNT(*) FROM migration_runs WHERE status = 'error'").fetchone()[0]
+rc = M.apply_file("migrations/conc.sql", CONC, "a", "t", "cY", emit)
+last = json.loads(out[-1])
+ok(rc == 0 and last.get("already_applied") and last.get("concurrent"), "a statement that meets an object the other runner created, while that runner records the same content ok, is a success", out[-1])
+ok(db.execute("SELECT COUNT(*) FROM migration_runs WHERE status = 'error'").fetchone()[0] == errs0, "no error row is recorded for the concurrent loser")
+ok(db.execute("SELECT COUNT(*) FROM agent_issues WHERE title = 'MIGRATION-APPLY-FAILED-1: conc.sql'").fetchone()[0] == 0, "no MIGRATION-APPLY-FAILED-1 issue is filed for it")
+ok(polls["n"] == 2, "it polled the ledger until the other runner's ok row appeared, and no longer", polls)
+
+# the same error with no other runner finishing is a real failure, recorded exactly as before (after the bounded wait)
+db.execute("CREATE TABLE conc2_t (x)")
+CONC2 = CONC.replace("conc_t", "conc2_t").replace("conc_u", "conc2_u").replace("-- concurrent", "-- concurrent two")
+M._sleep = lambda s: None  # nobody else is applying this file: the wait runs out
+M.CONCURRENT_WAIT_S = 0.05
+rc = M.apply_file("migrations/conc2.sql", CONC2, "a", "t", "cZ", emit)
+ok(rc == 1 and json.loads(out[-1]).get("applied_before_failure") == 0, "an already-exists failure with no other runner is still recorded as a failure", out[-1])
+ok(db.execute("SELECT status FROM migration_runs WHERE file = 'migrations/conc2.sql'").fetchone() == ("error",), "its error row is recorded")
+ok(db.execute("SELECT COUNT(*) FROM agent_issues WHERE title = 'MIGRATION-APPLY-FAILED-1: conc2.sql' AND status = 'open'").fetchone()[0] == 1, "and its MIGRATION-APPLY-FAILED-1 issue is filed")
+
+# an error of another class is not waited for at all
+M.CONCURRENT_WAIT_S = 3
+polls3 = {"n": 0}
+M._sleep = lambda s: polls3.__setitem__("n", polls3["n"] + 1)
+OTHER = CONC.replace("CREATE TABLE conc_t (x);", "INSERT INTO no_such_table_2 VALUES (1);").replace("conc_t", "conc3_t").replace("conc_u", "conc3_u").replace("-- concurrent", "-- concurrent three")
+rc = M.apply_file("migrations/conc3.sql", OTHER, "a", "t", "cW", emit)
+ok(rc == 1 and polls3["n"] == 0, "a failure that is not an already-exists error is recorded at once, without a wait", polls3)
+M._sleep, M.CONCURRENT_WAIT_S, M.CONCURRENT_POLL_S = real_sleep, real_wait, real_poll
+
 # 7. --check never calls D1 and skips every existing migration (they were applied by hand).
 n1 = len(calls)
 # 5c. D1 caps a LIKE/GLOB pattern at 50 bytes (MIGRATION-APPLY-FAILED-1, issue 2046): --check rejects longer ones.
