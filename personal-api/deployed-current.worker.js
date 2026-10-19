@@ -106,7 +106,7 @@ function clampMaxTokens(requested, isReason) {
 __name(clampMaxTokens, "clampMaxTokens");
 __name2(clampMaxTokens, "clampMaxTokens");
 __name22(clampMaxTokens, "clampMaxTokens");
-var VERSION = "4.17.0-offline"; // 4.17.0 COMPANION-OFFLINE-1 (2026-10-19, agent_issues 100201, pillar personal): the companion app opens without a signal and loses nothing made offline: the service worker keeps the page shell (HTML, manifest, icon; no personal data) and serves it when the network is down; a capture, mood tap or journal line made offline waits in IndexedDB on the phone with the time it was made, is sent when the connection returns (online, app in front, after Today loads) and is stored at that time, never twice, and the queue is cleared at sign-out; Today shows an offline view with the mood card and the line saved on this phone, and API reads are never cached. // 4.16.0 COMPANION-NOTIFY-ANSWER-1 (2026-10-19, agent_issues 100198, pillar personal): the Did it and Not today buttons on a companion notification record the answer from the service worker (POST /companion/api/nudge under the sign-in cookie with X-Companion: 1) and show a short confirmation instead of opening the app, falling back to opening the app when signed out or offline; a check-in notification opens on the mood picker (/companion#mood). // 4.15.0 COMPANION-WEEK-1 (2026-10-19, agent_issues 100197, pillar personal, owner ask: "WHAT ELSE IS IN BACKLOG/ROADMAP THAT CAN BE IMPLEMENTED?"): with companion e-mail off the Sunday review reached no one; the companion now builds "Your week" from its own record (mood days against the week before, best day, what was done and what felt good, actions done, one idea from what helped; never what was missed), shows it on Today from Sunday 18:00 through Monday with a hide button, sends one quiet "Your week" push on Sunday evening under quiet hours, the cap and the pause, and shows the last week on the Data tab (GET /companion/api/week, POST /companion/api/week/seen). // 4.14.0 COMPANION-LOGIN-1 + COMPANION-DOMAIN-1 + COMPANION-EMAIL-OPT-IN-1 + COMPANION-STALE-1 (2026-10-19, owner: "stop asking me for keys ... one-time email passwords are fine"; "for personal shit, use q08.org"; "the emails are stale"; pillar personal): /companion signs in with a 6-digit code mailed to the owner (SEND_EMAIL, one fixed address, rate-limited) and the device stays signed in for 180 days by an HttpOnly cookie (cmp_sessions, hashes only; cookie writes also need X-Companion: 1); the bearer key still works for tools and MCP; me.q08.org/ opens the companion; Data tab sets companion e-mail off (default), daily or all and signs out; reminders more than 3 days past their date are no longer the one thing or a nudge, and Today counts them once. // 4.13.1 COMPANION-CONTEXT-QUERY-URL-1 (issue 100041, privacy): GET /companion/api/context?q= put the owner's words in a logged URL; the route is now POST with q in the JSON body, and a GET answers 405 without reading the query. // 4.12.0 RED-TEAM-1: the companion red-teamed (risk words with curly apostrophes, more phrasings and Dutch; care and presence never retire; risk follow-up with the crisis lines on Today for a day; quiet hours on mirrored pushes; pause shared with the e-mail ladder; captured text treated as data in the chat prompt; Talk conversations in export and delete; warm fallback when the model is down; lock-screen setting; tick heartbeat on Today). // 4.11.0 COMPANION-BEST-PRACTICE-1: evidence-based companion (behavioral activation ratings and an activity bank, a Stanley-Brown safety plan in crisis replies, two-weekly WHO-5 with a gentle GP suggestion, pause, weekly retry of retired nudges, connection nudge, discreet lock-screen care pushes, 30-day voice-note retention). // 4.10.0 COMPANION-1: /companion (capture text, voice and photos; GTD next actions; mood with context; FSRS flashcards; journal; privacy export and delete), Web Push nudges from the companion Durable Object on a 15-minute alarm sharing the wellbeing ladder's budget, cmp_* tools in chat and MCP, /v1/audio/transcriptions. // 4.9.1-log-catches 4.9.0 CRON-ONLY-HEARTBEAT-1 (agent_issues 2397): the scheduled run upserts its qnfo-audit fleet_heartbeat row when it finishes. // 4.8.6 CRYPTO-IDS-1: the 18 row ids and the feed fallback id come from crypto.getRandomValues (rhex), not Math.random; same id shapes. // 4.8.5 // 4.8.5-doi-scrub NOZ-DOI-1: the separation prompt names no external registry. 4.8.4 below. // 4.13.0 CRON-GRID-1 (owner directive 2026-10-19, pillar personal): the trigger is hourly at :05; the daily 05:05 run (mail sync, ledger sync, companion re-arm, brief) runs on the grid fire of its slot, never retried (it sends the brief), and every fire is a cron_fire_log row CRON-WATCH-1 reads. // 4.12.0 RED-TEAM-1: the companion red-teamed (risk words with curly apostrophes, more phrasings and Dutch; care and presence never retire; risk follow-up with the crisis lines on Today for a day; quiet hours on mirrored pushes; pause shared with the e-mail ladder; captured text treated as data in the chat prompt; Talk conversations in export and delete; warm fallback when the model is down; lock-screen setting; tick heartbeat on Today). // 4.11.0 COMPANION-BEST-PRACTICE-1: evidence-based companion (behavioral activation ratings and an activity bank, a Stanley-Brown safety plan in crisis replies, two-weekly WHO-5 with a gentle GP suggestion, pause, weekly retry of retired nudges, connection nudge, discreet lock-screen care pushes, 30-day voice-note retention). // 4.10.0 COMPANION-1: /companion (capture text, voice and photos; GTD next actions; mood with context; FSRS flashcards; journal; privacy export and delete), Web Push nudges from the companion Durable Object on a 15-minute alarm sharing the wellbeing ladder's budget, cmp_* tools in chat and MCP, /v1/audio/transcriptions. // 4.9.1-log-catches 4.9.0 CRON-ONLY-HEARTBEAT-1 (agent_issues 2397): the scheduled run upserts its qnfo-audit fleet_heartbeat row when it finishes. // 4.8.6 CRYPTO-IDS-1: the 18 row ids and the feed fallback id come from crypto.getRandomValues (rhex), not Math.random; same id shapes. // 4.8.5 // 4.8.5-doi-scrub NOZ-DOI-1: the separation prompt names no external registry. 4.8.4 below.
+var VERSION = "4.18.0-travel-tz"; // 4.18.0 COMPANION-TRAVEL-TZ-1 (2026-10-19, agent_issues 100199, pillar personal): while a lodging row in personal-life.events covers now (the stay's own nights plus the check-out morning, in the stay's zone), the companion's day follows the traveller: quiet hours (22:00-07:30), the morning and evening check-in windows, the day keys of moods, journal lines, activities, WHO-5 and nudges, the sleep proxy and the Sunday look-back run in that place's time zone (a fixed country and city table; an unknown place or a stay at home keeps the configured zone), and Today says Times follow you: <place>. // 4.17.0 COMPANION-OFFLINE-1 (2026-10-19, agent_issues 100201, pillar personal): the companion app opens without a signal and loses nothing made offline: the service worker keeps the page shell (HTML, manifest, icon; no personal data) and serves it when the network is down; a capture, mood tap or journal line made offline waits in IndexedDB on the phone with the time it was made, is sent when the connection returns (online, app in front, after Today loads) and is stored at that time, never twice, and the queue is cleared at sign-out; Today shows an offline view with the mood card and the line saved on this phone, and API reads are never cached. // 4.16.0 COMPANION-NOTIFY-ANSWER-1 (2026-10-19, agent_issues 100198, pillar personal): the Did it and Not today buttons on a companion notification record the answer from the service worker (POST /companion/api/nudge under the sign-in cookie with X-Companion: 1) and show a short confirmation instead of opening the app, falling back to opening the app when signed out or offline; a check-in notification opens on the mood picker (/companion#mood). // 4.15.0 COMPANION-WEEK-1 (2026-10-19, agent_issues 100197, pillar personal, owner ask: "WHAT ELSE IS IN BACKLOG/ROADMAP THAT CAN BE IMPLEMENTED?"): with companion e-mail off the Sunday review reached no one; the companion now builds "Your week" from its own record (mood days against the week before, best day, what was done and what felt good, actions done, one idea from what helped; never what was missed), shows it on Today from Sunday 18:00 through Monday with a hide button, sends one quiet "Your week" push on Sunday evening under quiet hours, the cap and the pause, and shows the last week on the Data tab (GET /companion/api/week, POST /companion/api/week/seen). // 4.14.0 COMPANION-LOGIN-1 + COMPANION-DOMAIN-1 + COMPANION-EMAIL-OPT-IN-1 + COMPANION-STALE-1 (2026-10-19, owner: "stop asking me for keys ... one-time email passwords are fine"; "for personal shit, use q08.org"; "the emails are stale"; pillar personal): /companion signs in with a 6-digit code mailed to the owner (SEND_EMAIL, one fixed address, rate-limited) and the device stays signed in for 180 days by an HttpOnly cookie (cmp_sessions, hashes only; cookie writes also need X-Companion: 1); the bearer key still works for tools and MCP; me.q08.org/ opens the companion; Data tab sets companion e-mail off (default), daily or all and signs out; reminders more than 3 days past their date are no longer the one thing or a nudge, and Today counts them once. // 4.13.1 COMPANION-CONTEXT-QUERY-URL-1 (issue 100041, privacy): GET /companion/api/context?q= put the owner's words in a logged URL; the route is now POST with q in the JSON body, and a GET answers 405 without reading the query. // 4.12.0 RED-TEAM-1: the companion red-teamed (risk words with curly apostrophes, more phrasings and Dutch; care and presence never retire; risk follow-up with the crisis lines on Today for a day; quiet hours on mirrored pushes; pause shared with the e-mail ladder; captured text treated as data in the chat prompt; Talk conversations in export and delete; warm fallback when the model is down; lock-screen setting; tick heartbeat on Today). // 4.11.0 COMPANION-BEST-PRACTICE-1: evidence-based companion (behavioral activation ratings and an activity bank, a Stanley-Brown safety plan in crisis replies, two-weekly WHO-5 with a gentle GP suggestion, pause, weekly retry of retired nudges, connection nudge, discreet lock-screen care pushes, 30-day voice-note retention). // 4.10.0 COMPANION-1: /companion (capture text, voice and photos; GTD next actions; mood with context; FSRS flashcards; journal; privacy export and delete), Web Push nudges from the companion Durable Object on a 15-minute alarm sharing the wellbeing ladder's budget, cmp_* tools in chat and MCP, /v1/audio/transcriptions. // 4.9.1-log-catches 4.9.0 CRON-ONLY-HEARTBEAT-1 (agent_issues 2397): the scheduled run upserts its qnfo-audit fleet_heartbeat row when it finishes. // 4.8.6 CRYPTO-IDS-1: the 18 row ids and the feed fallback id come from crypto.getRandomValues (rhex), not Math.random; same id shapes. // 4.8.5 // 4.8.5-doi-scrub NOZ-DOI-1: the separation prompt names no external registry. 4.8.4 below. // 4.13.0 CRON-GRID-1 (owner directive 2026-10-19, pillar personal): the trigger is hourly at :05; the daily 05:05 run (mail sync, ledger sync, companion re-arm, brief) runs on the grid fire of its slot, never retried (it sends the brief), and every fire is a cron_fire_log row CRON-WATCH-1 reads. // 4.12.0 RED-TEAM-1: the companion red-teamed (risk words with curly apostrophes, more phrasings and Dutch; care and presence never retire; risk follow-up with the crisis lines on Today for a day; quiet hours on mirrored pushes; pause shared with the e-mail ladder; captured text treated as data in the chat prompt; Talk conversations in export and delete; warm fallback when the model is down; lock-screen setting; tick heartbeat on Today). // 4.11.0 COMPANION-BEST-PRACTICE-1: evidence-based companion (behavioral activation ratings and an activity bank, a Stanley-Brown safety plan in crisis replies, two-weekly WHO-5 with a gentle GP suggestion, pause, weekly retry of retired nudges, connection nudge, discreet lock-screen care pushes, 30-day voice-note retention). // 4.10.0 COMPANION-1: /companion (capture text, voice and photos; GTD next actions; mood with context; FSRS flashcards; journal; privacy export and delete), Web Push nudges from the companion Durable Object on a 15-minute alarm sharing the wellbeing ladder's budget, cmp_* tools in chat and MCP, /v1/audio/transcriptions. // 4.9.1-log-catches 4.9.0 CRON-ONLY-HEARTBEAT-1 (agent_issues 2397): the scheduled run upserts its qnfo-audit fleet_heartbeat row when it finishes. // 4.8.6 CRYPTO-IDS-1: the 18 row ids and the feed fallback id come from crypto.getRandomValues (rhex), not Math.random; same id shapes. // 4.8.5 // 4.8.5-doi-scrub NOZ-DOI-1: the separation prompt names no external registry. 4.8.4 below.
 // CRYPTO-IDS-1 (WORKERS-BEST-PRACTICES-1): row ids and nonces come from crypto.getRandomValues, never Math.random. rhex(n) returns n lowercase hex characters (same shape as the old Math.random().toString(16).slice(2, 2 + n)).
 function rhex(n) { var b = new Uint8Array(Math.ceil(n / 2)); crypto.getRandomValues(b); var h = ""; for (var i = 0; i < b.length; i++) h += (b[i] + 256).toString(16).slice(1); return h.slice(0, n); }
 // 4.8.4 NO-TOPIC-HARDCODE-1 (owner directive 2026-10-10): the twin, planner and predictor prompts no longer carry the owner's profile gates as hard-coded text; they apply only the gates found in the retrieved profile facets. //4.8.2 LEDGER-PAGE-1 (#1951): the Ledger sync drains calendar-api /feedback by after_id in pages of 500 (max 10 pages per run, id cursor feedback_after_id) so rows beyond the newest 500 are no longer skipped; AWAY-AMS-1 (#1883): inside an away window the brief keeps Google/ICS and manual calendar events whose location is in the Amsterdam area and hides only radar/twin suggestions and catalog rows. // 4.8.0 TWIN-FLASH-1 (owner directive 2026-10-05, #1818): twin primary model glm-5.3-flash (reasoning_effort low), deepseek-v4-pro per-request fallback, automatic revert when today's flash failure share >= 20% over >= 10 calls; 4.7.2 WORKERS-AI-ATTRIBUTION-1 for personal-api (#1833): every env.AI.run (embeddings, OCR/vision, chat, Durable Object chat) is counted in qnfo-audit.ai_call_counters (purpose binding: calls, tokens, neurons; counts only, no text) through the same __aiAttrEnv shim qnfo-research-exec uses; no new model call, no behaviour change. // 4.7.1 TOOL-TRACE-MEMORY-1 (#1805): internal tool-trace chat rows (model tool/mcp-tool) no longer reach thread memory or the cross-thread context.
@@ -1384,8 +1384,11 @@ var CMP = (() => {
 //  21. The service worker keeps the page shell (HTML, manifest, icon: no personal data) and serves it when the network is
 //      down. A capture, mood tap or journal line made offline waits in IndexedDB on the phone with the time it was made,
 //      is sent when the connection returns, and is removed at sign-out. Nothing else is cached; API reads never are.
+// COMPANION-TRAVEL-TZ-1 (2026-10-19): abroad, the companion's day follows the traveller.
+//  22. While a lodging row in personal-life.events covers now, quiet hours, check-in windows, day keys and the Sunday look-back run
+//      in that place's time zone (a fixed table; an unknown place keeps home time), and Today says "Times follow you: <place>".
 
-const COMPANION_VERSION = "1.6.0";
+const COMPANION_VERSION = "1.7.0";
 const TZ = "Europe/Amsterdam";
 const CONTEXTS = [
   { name: "@home", hint: "chores, cooking, things in the flat" },
@@ -1807,7 +1810,7 @@ async function logActivity(env, a) {
   if (!title && nudgeId) { const r = await one(env.PERSONAL, "SELECT ask, context_json FROM companion_nudges WHERE id = ?", nudgeId); if (r) { title = s(r.ask, 200); try { const c = JSON.parse(r.context_json || "{}"); activityId = activityId || c.activity_id || null; } catch (e) { /* plain ask */ } } }
   if (!title) return { ok: false, error: "title, activity_id, action_id or nudge_id required" };
   if (!category && activityId) { const r = await one(env.PERSONAL, "SELECT category FROM cmp_activities WHERE id = ?", activityId); if (r) category = r.category; }
-  const now = nowIso(), day = dayKey(now), id = rid("bal");
+  const now = nowIso(), day = await localDay(env, now), id = rid("bal");
   const mood = await one(env.PERSONAL, "SELECT score FROM cmp_mood WHERE day = ? ORDER BY ts DESC LIMIT 1", day).catch(() => null);
   await env.PERSONAL.prepare("INSERT INTO cmp_activity_log (id, ts, day, activity_id, action_id, nudge_id, title, category, pleasure, mastery, mood_before, note) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)")
     .bind(id, now, day, activityId, actionId, nudgeId, title, category, pleasure, mastery, mood ? Number(mood.score) : null, s(a && a.note, 500) || null).run();
@@ -1867,7 +1870,7 @@ async function recordWho5(env, items) {
   const sc = who5Score(items);
   if (!sc) return { ok: false, error: "five answers from 0 to 5 required" };
   const now = nowIso(), id = rid("who5");
-  await env.PERSONAL.prepare("INSERT INTO cmp_measures (id, ts, day, instrument, items_json, raw, score) VALUES (?, ?, ?, 'who5', ?, ?, ?)").bind(id, now, dayKey(now), JSON.stringify(items.map(Number)), sc.raw, sc.score).run();
+  await env.PERSONAL.prepare("INSERT INTO cmp_measures (id, ts, day, instrument, items_json, raw, score) VALUES (?, ?, ?, 'who5', ?, ?, ?)").bind(id, now, await localDay(env, now), JSON.stringify(items.map(Number)), sc.raw, sc.score).run();
   await closeOpen(env, ["cmp-measure"], "done", "who5 " + sc.score);
   const st = await who5Status(env);
   return { ok: true, id, raw: sc.raw, score: sc.score, read: st.read, reply: "Thank you. Your score is " + sc.score + " out of 100." + (st.read.hint ? " " + st.read.hint : "") };
@@ -2168,13 +2171,14 @@ async function moodByDay(env, from, to) {
 async function weekLookback(env, atIso, week) {
   const cfg = await loadCfg(env);
   const now = atIso || nowIso();
-  const lp = localParts(now, cfg.tz);
+  const tz = (await effectiveTz(env, now, cfg)).tz;
+  const lp = localParts(now, tz);
   const wk = /^\d{4}-\d{2}-\d{2}$/.test(String(week || "")) ? mondayOf(week) : weekWindow(lp) || addDays(mondayOf(lp.day), -7);
   const end = addDays(wk, 7);
   const [moodDays, prevDays, activities, done, helps, bank] = await Promise.all([
     moodByDay(env, wk, end), moodByDay(env, addDays(wk, -7), wk),
     all(env.PERSONAL, "SELECT title, category, activity_id, pleasure, mastery FROM cmp_activity_log WHERE day >= ? AND day < ? ORDER BY ts", wk, end).catch(() => []),
-    one(env.PERSONAL, "SELECT COUNT(*) AS n FROM tasks WHERE status = 'done' AND done_at >= ? AND done_at < ?", dayStartIso(wk, cfg.tz), dayStartIso(end, cfg.tz)).catch(() => null),
+    one(env.PERSONAL, "SELECT COUNT(*) AS n FROM tasks WHERE status = 'done' AND done_at >= ? AND done_at < ?", dayStartIso(wk, tz), dayStartIso(end, tz)).catch(() => null),
     whatHelps(env, 90).catch(() => null), activityBank(env)
   ]);
   const doneThisWeek = activities.map((a) => String(a.title || "").toLowerCase());
@@ -2371,6 +2375,123 @@ function dayStartIso(day, tz) {
   const guess = new Date(day + "T00:00:00Z").getTime();
   return new Date(guess - tzOffsetMinutes(tz || TZ, guess) * 60000).toISOString();
 }
+// ---------------------------------------------------------------- time zone while travelling (COMPANION-TRAVEL-TZ-1, rule 22)
+// The configured tz is home. personal-companion's itinerary ingest (ITINERARY-INGEST-1) keeps the owner's stays in
+// personal-life.events (category lodging, ISO dates, check-in start_date, check-out end_date, a city and a two-letter country).
+// While a stay in another zone covers now, quiet hours, check-in windows, day keys and the Sunday look-back follow that place.
+// The zone comes from a fixed table (no lookup service): a country with one zone, or a known city where a country has several;
+// an unknown place leaves home time in force rather than guessing. Nothing is stored: it is read from the stay each time.
+const COUNTRY_TZ = {
+  AD: "Europe/Andorra", AE: "Asia/Dubai", AF: "Asia/Kabul", AL: "Europe/Tirane", AM: "Asia/Yerevan", AR: "America/Argentina/Buenos_Aires",
+  AT: "Europe/Vienna", AZ: "Asia/Baku", BA: "Europe/Sarajevo", BD: "Asia/Dhaka", BE: "Europe/Brussels", BG: "Europe/Sofia", BH: "Asia/Bahrain",
+  BO: "America/La_Paz", BR: "America/Sao_Paulo", BT: "Asia/Thimphu", BY: "Europe/Minsk", CH: "Europe/Zurich", CL: "America/Santiago",
+  CN: "Asia/Shanghai", CO: "America/Bogota", CR: "America/Costa_Rica", CU: "America/Havana", CV: "Atlantic/Cape_Verde", CY: "Asia/Nicosia",
+  CZ: "Europe/Prague", DE: "Europe/Berlin", DK: "Europe/Copenhagen", DO: "America/Santo_Domingo", DZ: "Africa/Algiers", EC: "America/Guayaquil",
+  EE: "Europe/Tallinn", EG: "Africa/Cairo", ES: "Europe/Madrid", ET: "Africa/Addis_Ababa", FI: "Europe/Helsinki", FJ: "Pacific/Fiji",
+  FR: "Europe/Paris", GB: "Europe/London", GE: "Asia/Tbilisi", GH: "Africa/Accra", GI: "Europe/Gibraltar", GR: "Europe/Athens",
+  GT: "America/Guatemala", HK: "Asia/Hong_Kong", HN: "America/Tegucigalpa", HR: "Europe/Zagreb", HU: "Europe/Budapest", IE: "Europe/Dublin",
+  IL: "Asia/Jerusalem", IN: "Asia/Kolkata", IQ: "Asia/Baghdad", IR: "Asia/Tehran", IS: "Atlantic/Reykjavik", IT: "Europe/Rome",
+  JM: "America/Jamaica", JO: "Asia/Amman", JP: "Asia/Tokyo", KE: "Africa/Nairobi", KG: "Asia/Bishkek", KH: "Asia/Phnom_Penh", KR: "Asia/Seoul",
+  KW: "Asia/Kuwait", KZ: "Asia/Almaty", LA: "Asia/Vientiane", LB: "Asia/Beirut", LI: "Europe/Vaduz", LK: "Asia/Colombo", LT: "Europe/Vilnius",
+  LU: "Europe/Luxembourg", LV: "Europe/Riga", MA: "Africa/Casablanca", MC: "Europe/Monaco", MD: "Europe/Chisinau", ME: "Europe/Podgorica",
+  MG: "Indian/Antananarivo", MK: "Europe/Skopje", MM: "Asia/Yangon", MN: "Asia/Ulaanbaatar", MO: "Asia/Macau", MT: "Europe/Malta",
+  MU: "Indian/Mauritius", MV: "Indian/Maldives", MX: "America/Mexico_City", MY: "Asia/Kuala_Lumpur", MZ: "Africa/Maputo", NA: "Africa/Windhoek",
+  NG: "Africa/Lagos", NI: "America/Managua", NL: "Europe/Amsterdam", NO: "Europe/Oslo", NP: "Asia/Kathmandu", NZ: "Pacific/Auckland",
+  OM: "Asia/Muscat", PA: "America/Panama", PE: "America/Lima", PH: "Asia/Manila", PK: "Asia/Karachi", PL: "Europe/Warsaw", PR: "America/Puerto_Rico",
+  PT: "Europe/Lisbon", PY: "America/Asuncion", QA: "Asia/Qatar", RO: "Europe/Bucharest", RS: "Europe/Belgrade", RW: "Africa/Kigali",
+  SA: "Asia/Riyadh", SE: "Europe/Stockholm", SG: "Asia/Singapore", SI: "Europe/Ljubljana", SK: "Europe/Bratislava", SM: "Europe/San_Marino",
+  SN: "Africa/Dakar", SV: "America/El_Salvador", TH: "Asia/Bangkok", TJ: "Asia/Dushanbe", TN: "Africa/Tunis", TR: "Europe/Istanbul",
+  TW: "Asia/Taipei", TZ: "Africa/Dar_es_Salaam", UA: "Europe/Kyiv", UG: "Africa/Kampala", UY: "America/Montevideo", UZ: "Asia/Tashkent",
+  VE: "America/Caracas", VN: "Asia/Ho_Chi_Minh", XK: "Europe/Belgrade", ZA: "Africa/Johannesburg", ZM: "Africa/Lusaka", ZW: "Africa/Harare"
+};
+// Countries that span several zones: a stay there needs a known city, otherwise home time stays.
+const CITY_TZ = {
+  "new york": "America/New_York", boston: "America/New_York", washington: "America/New_York", philadelphia: "America/New_York", miami: "America/New_York",
+  atlanta: "America/New_York", orlando: "America/New_York", detroit: "America/Detroit", chicago: "America/Chicago", houston: "America/Chicago",
+  dallas: "America/Chicago", austin: "America/Chicago", "new orleans": "America/Chicago", minneapolis: "America/Chicago", nashville: "America/Chicago",
+  denver: "America/Denver", "salt lake city": "America/Denver", phoenix: "America/Phoenix", "los angeles": "America/Los_Angeles",
+  "san francisco": "America/Los_Angeles", "san diego": "America/Los_Angeles", "san jose": "America/Los_Angeles", seattle: "America/Los_Angeles",
+  portland: "America/Los_Angeles", "las vegas": "America/Los_Angeles", honolulu: "Pacific/Honolulu", anchorage: "America/Anchorage",
+  toronto: "America/Toronto", ottawa: "America/Toronto", montreal: "America/Toronto", quebec: "America/Toronto", vancouver: "America/Vancouver",
+  calgary: "America/Edmonton", edmonton: "America/Edmonton", winnipeg: "America/Winnipeg", halifax: "America/Halifax", "st. john's": "America/St_Johns",
+  sydney: "Australia/Sydney", melbourne: "Australia/Melbourne", canberra: "Australia/Sydney", hobart: "Australia/Hobart", brisbane: "Australia/Brisbane",
+  cairns: "Australia/Brisbane", perth: "Australia/Perth", adelaide: "Australia/Adelaide", darwin: "Australia/Darwin",
+  moscow: "Europe/Moscow", "saint petersburg": "Europe/Moscow", "st petersburg": "Europe/Moscow", kaliningrad: "Europe/Kaliningrad",
+  ekaterinburg: "Asia/Yekaterinburg", novosibirsk: "Asia/Novosibirsk", irkutsk: "Asia/Irkutsk", vladivostok: "Asia/Vladivostok",
+  jakarta: "Asia/Jakarta", bandung: "Asia/Jakarta", yogyakarta: "Asia/Jakarta", surabaya: "Asia/Jakarta", bali: "Asia/Makassar", denpasar: "Asia/Makassar",
+  ubud: "Asia/Makassar", canggu: "Asia/Makassar", kuta: "Asia/Makassar", seminyak: "Asia/Makassar", lombok: "Asia/Makassar", makassar: "Asia/Makassar",
+  jayapura: "Asia/Jayapura", manaus: "America/Manaus", cancun: "America/Cancun", tijuana: "America/Tijuana",
+  "las palmas": "Atlantic/Canary", "santa cruz de tenerife": "Atlantic/Canary", tenerife: "Atlantic/Canary", lanzarote: "Atlantic/Canary", "ponta delgada": "Atlantic/Azores",
+  funchal: "Atlantic/Madeira"
+};
+const MULTI_TZ_COUNTRIES = ["US", "CA", "AU", "RU", "ID"];
+const COUNTRY_NAMES = {
+  netherlands: "NL", holland: "NL", germany: "DE", france: "FR", spain: "ES", italy: "IT", portugal: "PT", "united kingdom": "GB", uk: "GB", england: "GB",
+  scotland: "GB", wales: "GB", ireland: "IE", belgium: "BE", austria: "AT", switzerland: "CH", poland: "PL", czechia: "CZ", "czech republic": "CZ",
+  hungary: "HU", greece: "GR", turkey: "TR", turkiye: "TR", nepal: "NP", india: "IN", thailand: "TH", vietnam: "VN", japan: "JP", china: "CN",
+  "south korea": "KR", korea: "KR", indonesia: "ID", malaysia: "MY", singapore: "SG", philippines: "PH", "sri lanka": "LK", morocco: "MA", egypt: "EG",
+  "south africa": "ZA", kenya: "KE", tanzania: "TZ", "united states": "US", usa: "US", "united states of america": "US", canada: "CA", mexico: "MX",
+  brazil: "BR", argentina: "AR", colombia: "CO", peru: "PE", chile: "CL", australia: "AU", "new zealand": "NZ", norway: "NO", sweden: "SE",
+  denmark: "DK", finland: "FI", iceland: "IS", croatia: "HR", slovenia: "SI", serbia: "RS", romania: "RO", bulgaria: "BG", ukraine: "UA",
+  georgia: "GE", armenia: "AM", uae: "AE", "united arab emirates": "AE", israel: "IL", jordan: "JO", cambodia: "KH", laos: "LA", myanmar: "MM",
+  bhutan: "BT", bangladesh: "BD", pakistan: "PK", uzbekistan: "UZ", kazakhstan: "KZ", mongolia: "MN", taiwan: "TW", "hong kong": "HK", estonia: "EE",
+  latvia: "LV", lithuania: "LT", luxembourg: "LU", malta: "MT", cyprus: "CY", albania: "AL", montenegro: "ME", bosnia: "BA", "north macedonia": "MK",
+  russia: "RU"
+};
+const plainPlace = (v) => String(v === null || v === undefined ? "" : v).normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().split(",")[0].replace(/\s+/g, " ").trim();
+function countryCode(v) {
+  const t = String(v === null || v === undefined ? "" : v).trim();
+  if (/^[A-Za-z]{2}$/.test(t)) return t.toUpperCase();
+  return COUNTRY_NAMES[plainPlace(t)] || null;
+}
+// The IANA zone for a stay's city and country, or null when it cannot be told.
+function placeTz(city, country) {
+  const c = plainPlace(city);
+  if (c && CITY_TZ[c]) return CITY_TZ[c];
+  const cc = countryCode(country);
+  if (!cc || MULTI_TZ_COUNTRIES.includes(cc)) return null;
+  return COUNTRY_TZ[cc] || null;
+}
+const placeLabel = (city, country) => {
+  const c = String(city || "").trim();
+  if (c) return c.split(/\s+/).map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(" ").slice(0, 60);
+  return (countryCode(country) || String(country || "").trim() || "away").slice(0, 60);
+};
+// Pure. rows: lodging rows {city, country, start_date, end_date}. A stay covers the local day when check-in is on or before it
+// and check-out is after it (the nights), and also the check-out morning (before 12:00), judged in the stay's own zone so
+// a night in Bangkok is not cut at Amsterdam midnight. The latest check-in wins where stays meet.
+function stayAt(rows, atIso) {
+  let best = null;
+  for (const r of rows || []) {
+    const st = String(r.start_date || "").slice(0, 10), en = String(r.end_date || "").slice(0, 10);
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(st) || !/^\d{4}-\d{2}-\d{2}$/.test(en) || en <= st) continue;
+    const tz = placeTz(r.city, r.country);
+    if (!tz) continue;
+    const lp = localParts(atIso, tz);
+    const covers = (st <= lp.day && lp.day < en) || (lp.day === en && lp.hour < 12);
+    if (!covers) continue;
+    if (!best || st > best.start || (st === best.start && en > best.end)) best = { tz, start: st, end: en, city: r.city || "", country: r.country || "", place: placeLabel(r.city, r.country) };
+  }
+  return best;
+}
+// The zone to run the companion's day in: the stay's, or home. away is null at home and carries the place when abroad.
+async function effectiveTz(env, atIso, cfg) {
+  const home = (cfg && cfg.tz) || TZ;
+  try {
+    const d = new Date(atIso).getTime();
+    const from = new Date(d - 2 * 864e5).toISOString().slice(0, 10), to = new Date(d + 2 * 864e5).toISOString().slice(0, 10);
+    const rows = await all(env.PERSONAL, "SELECT city, country, start_date, end_date FROM events WHERE category = 'lodging' AND end_date >= ? AND start_date <= ? ORDER BY start_date", from, to);
+    const stay = stayAt(rows, atIso);
+    if (stay && stay.tz !== home) return { tz: stay.tz, home, away: { place: stay.place, tz: stay.tz, until: stay.end } };
+  } catch (e) { /* no events table or a read error: home time, the safe default */ }
+  return { tz: home, home, away: null };
+}
+// The day key in force right now (the stay's local day abroad), for every write that is filed by day.
+async function localDay(env, atIso) {
+  const cfg = await loadCfg(env);
+  return dayKey(atIso, (await effectiveTz(env, atIso, cfg)).tz);
+}
+
 // The longest quiet stretch overnight, read from when he wrote anything. A proxy, labelled as one.
 function sleepFromTimestamps(isos, day, tz) {
   const start = new Date(dayStartIso(day, tz)).getTime() - 6 * 3600e3;   // 18:00 the evening before
@@ -2437,8 +2558,11 @@ async function unansweredStreak(env) {
 async function gatherState(env, at) {
   const now = at || nowIso();
   const cfg = await loadCfg(env);
-  const lp = localParts(now, cfg.tz);
-  const start = dayStartIso(lp.day, cfg.tz);
+  // COMPANION-TRAVEL-TZ-1: the day, the hour and the quiet hours are the traveller's own while a stay in another zone covers now.
+  const eff = await effectiveTz(env, now, cfg);
+  const tz = eff.tz;
+  const lp = localParts(now, tz);
+  const start = dayStartIso(lp.day, tz);
   const db = env.PERSONAL;
   const [todays, recent, streak, retired, mood, journal, lastUser, done, next, due, subs, recentTexts, answerRows] = await Promise.all([
     all(db, "SELECT * FROM companion_nudges WHERE day = ? ORDER BY id", lp.day).catch(() => []),
@@ -2472,7 +2596,8 @@ async function gatherState(env, at) {
     checkinSentToday: todays.some((r) => r.kind === "checkin"), journalToday: !!(journal && journal.n > 0),
     lastUserIso: lastUser.sort().pop() || null, actionsDoneToday: done ? Number(done.n) : 0, nextActions: next,
     dueCards: due ? Number(due.n) : 0, pushReady: !!(subs && subs.n > 0), crisisLevel24h,
-    receptive: receptiveHours(answerRows.map((r) => r.ts ? Math.floor(localParts(r.ts, cfg.tz).hour) : NaN))
+    receptive: receptiveHours(answerRows.map((r) => r.ts ? Math.floor(localParts(r.ts, tz).hour) : NaN)),
+    tz, away: eff.away
   };
 }
 async function recentUserTexts(env, sinceIso) {
@@ -2509,16 +2634,17 @@ async function recall(env, deps, q, k) {
 // ---------------------------------------------------------------- writes
 
 async function closeOpen(env, kinds, state, response) {
-  const day = dayKey(nowIso());
+  const day = await localDay(env, nowIso());
   await env.PERSONAL.prepare("UPDATE companion_nudges SET state = ?, closed_at = ?, response = COALESCE(?, response) WHERE day = ? AND state IN ('sent','shown') AND kind IN (" + kinds.map(() => "?").join(",") + ")")
     .bind(state, nowIso(), response || null, day, ...kinds).run();
 }
 async function contextSnapshot(env, deps, at) {
   const now = at || nowIso();
-  const lp = localParts(now);
+  const tz = (await effectiveTz(env, now, await loadCfg(env))).tz;
+  const lp = localParts(now, tz);
   const snap = { local_time: String(Math.floor(lp.hour)).padStart(2, "0") + ":" + String(Math.round((lp.hour % 1) * 60) % 60).padStart(2, "0"), weekday: ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"][lp.dow] };
-  try { snap.sleep = await sleepWindow(env, lp.day); } catch (e) { snap.sleep = null; }
-  try { const d = await one(env.PERSONAL, "SELECT COUNT(*) AS n FROM tasks WHERE status = 'done' AND done_at >= ?", dayStartIso(lp.day)); snap.actions_done_today = d ? Number(d.n) : 0; } catch (e) { /* absent */ }
+  try { snap.sleep = await sleepWindow(env, lp.day, tz); } catch (e) { snap.sleep = null; }
+  try { const d = await one(env.PERSONAL, "SELECT COUNT(*) AS n FROM tasks WHERE status = 'done' AND done_at >= ?", dayStartIso(lp.day, tz)); snap.actions_done_today = d ? Number(d.n) : 0; } catch (e) { /* absent */ }
   try { const r = await all(env.PERSONAL, "SELECT title FROM tasks WHERE status = 'done' AND done_at >= ? ORDER BY done_at DESC LIMIT 3", new Date(Date.parse(now) - 864e5).toISOString()); snap.recent_done = r.map((x) => x.title); } catch (e) { /* absent */ }
   if (deps && deps.weather) {
     try { const w = await deps.weather(env); if (w && w.ok) snap.weather = { where: w.location, now: typeof w.weather === "string" ? w.weather.slice(0, 160) : w.weather && (w.weather.summary || w.weather.current || JSON.stringify(w.weather).slice(0, 160)) }; } catch (e) { /* offline */ }
@@ -2534,7 +2660,7 @@ async function recordMood(env, deps, a) {
   const stamp = clientStamp(a.at);
   const now = stamp || nowIso();
   if (stamp) { const dup = await one(env.PERSONAL, "SELECT id, day, score FROM cmp_mood WHERE ts = ?", now).catch(() => null); if (dup) return { ok: true, duplicate: true, id: dup.id, day: dup.day, score: Number(dup.score), reply: "Already saved." }; }
-  const day = dayKey(now);
+  const day = await localDay(env, now);
   const late = !!stamp && Date.now() - Date.parse(now) > 36e5;
   const ctx = await contextSnapshot(env, late ? null : deps, now);
   const id = rid("mood");
@@ -2544,7 +2670,7 @@ async function recordMood(env, deps, a) {
   await env.PERSONAL.prepare(`INSERT INTO wellbeing_checkins (ts, day, mood, energy, note, source, raw_json) VALUES (?, ?, ?, ?, ?, 'companion', ?)
      ON CONFLICT(day, source) DO UPDATE SET ts = excluded.ts, mood = excluded.mood, energy = COALESCE(excluded.energy, energy), note = COALESCE(excluded.note, note), raw_json = excluded.raw_json`)
     .bind(now, day, score, energy, note, JSON.stringify({ tags, cmp_mood_id: id })).run();
-  if (day === dayKey(nowIso())) await closeOpen(env, ["checkin", "cmp-checkin"], "done", "mood " + score);
+  if (day === await localDay(env, nowIso())) await closeOpen(env, ["checkin", "cmp-checkin"], "done", "mood " + score);
   if (note) await remember(env, deps, id, "mood", "Mood " + score + "/5" + (tags ? " (" + tags + ")" : "") + ": " + note);
   const sig = crisisSignal(note);
   return { ok: true, id, day, score, energy, tags, context: ctx, crisis: sig.level >= 2 ? crisisText(await loadCfg(env)) : null, reply: moodReply(score, sig.level) };
@@ -2588,8 +2714,8 @@ async function addJournal(env, deps, a) {
   const stamp = clientStamp(a.at);
   const now = stamp || nowIso(), id = rid("jrn");
   if (stamp) { const dup = await one(env.PERSONAL, "SELECT id FROM journal WHERE ts = ? AND content = ?", now, content).catch(() => null); if (dup) return { ok: true, duplicate: true, id: dup.id, crisis: null }; }
-  await env.PERSONAL.prepare("INSERT INTO journal (id, ts, date, content, mood, tags, source) VALUES (?,?,?,?,?,?, 'companion')").bind(id, now, dayKey(now), content, s(a.mood, 20), s(a.tags, 200)).run();
-  if (dayKey(now) === dayKey(nowIso())) await closeOpen(env, ["cmp-reflect"], "done", "journal");
+  await env.PERSONAL.prepare("INSERT INTO journal (id, ts, date, content, mood, tags, source) VALUES (?,?,?,?,?,?, 'companion')").bind(id, now, await localDay(env, now), content, s(a.mood, 20), s(a.tags, 200)).run();
+  if ((await localDay(env, now)) === (await localDay(env, nowIso()))) await closeOpen(env, ["cmp-reflect"], "done", "journal");
   await remember(env, deps, id, "journal", content);
   const sig = crisisSignal(content);
   return { ok: true, id, crisis: sig.level >= 2 ? crisisText(await loadCfg(env)) : null };
@@ -2701,7 +2827,7 @@ async function processItem(env, deps, row) {
   } else if (c.type === "reference") {
     await env.PERSONAL.prepare("INSERT INTO notes (id, ts, kind, content, source) VALUES (?, ?, 'reference', ?, 'companion')").bind("ref-" + row.id, nowIso(), text).run();
   } else if (c.type === "journal") {
-    await env.PERSONAL.prepare("INSERT INTO journal (id, ts, date, content, mood, tags, source) VALUES (?,?,?,?, '', 'inbox', 'companion')").bind("jrn-" + row.id, nowIso(), dayKey(nowIso()), text).run();
+    await env.PERSONAL.prepare("INSERT INTO journal (id, ts, date, content, mood, tags, source) VALUES (?,?,?,?, '', 'inbox', 'companion')").bind("jrn-" + row.id, nowIso(), await localDay(env, nowIso()), text).run();
     await closeOpen(env, ["cmp-reflect"], "done", "journal via inbox");
   } else if (c.type === "card") {
     const k = await addCard(env, { front: c.front || c.title, back: c.back || text, source_id: row.id });
@@ -2742,10 +2868,11 @@ async function companionTick(env, deps, opts) {
   const cfg0 = await loadCfg(env);
   // Once a day, before dawn: raw voice notes past their retention go (rule 15).
   const lh = localParts(now, cfg0.tz).hour;
+  const lhHere = localParts(now, (await effectiveTz(env, now, cfg0)).tz).hour;
   if (o.prune || (lh >= 4 && lh < 4.25)) { try { out.pruned = await pruneMedia(env, cfg0.media_retention_days, now); } catch (e) { out.pruned = { error: String(e && e.message || e).slice(0, 160) }; } }
   // 1. The e-mail ladder's fresh asks also reach the phone, once each (not while he has paused reach-outs).
   // RED-TEAM-1: and never inside quiet hours; a ladder row sent at night waits, and the 45-minute window drops it.
-  if (deps.keys && deps.pushed && !isPaused(cfg0, Date.parse(now)) && !inQuiet(lh, Number(cfg0.quiet_start), Number(cfg0.quiet_end))) {
+  if (deps.keys && deps.pushed && !isPaused(cfg0, Date.parse(now)) && !inQuiet(lhHere, Number(cfg0.quiet_start), Number(cfg0.quiet_end))) {
     const fresh = await all(env.PERSONAL, "SELECT * FROM companion_nudges WHERE kind IN (" + LADDER_KINDS.map(() => "?").join(",") + ") AND state = 'sent' AND sent_at >= ? ORDER BY id LIMIT 3", ...LADDER_KINDS, new Date(Date.parse(now) - 45 * 60000).toISOString()).catch(() => []);
     out.mirrored = 0;
     for (const r of fresh) {
@@ -2786,7 +2913,7 @@ async function today(env, deps) {
   const greet = st.hour < 5 ? "Still up" : st.hour < 12 ? "Morning" : st.hour < 18 ? "Afternoon" : "Evening";
   const [open, sleep, inbox, lastJournal, projects] = await Promise.all([
     all(db, "SELECT id, kind, ask, sent_at, due_at FROM companion_nudges WHERE day = ? AND state IN ('sent','shown') AND kind NOT IN ('crisis') ORDER BY id DESC", st.day),
-    sleepWindow(env, st.day).catch(() => null),
+    sleepWindow(env, st.day, st.tz).catch(() => null),
     one(db, "SELECT COUNT(*) AS n FROM cmp_inbox WHERE status = 'unprocessed'"),
     one(db, "SELECT date, substr(content, 1, 140) AS line FROM journal ORDER BY ts DESC LIMIT 1").catch(() => null),
     all(db, "SELECT id, name FROM cmp_projects WHERE status = 'active' ORDER BY ts DESC LIMIT 8")
@@ -2798,7 +2925,7 @@ async function today(env, deps) {
   const wk = weekWindow({ day: st.day, hour: st.hour, dow: st.dow });
   if (wk && st.cfg.week_seen !== wk) { try { const w = await weekLookback(env, st.nowIso, wk); if (w.enough) week = { week: w.week, title: w.title, lines: w.lines }; } catch (e) { week = null; } }
   return {
-    day: st.day, greeting: greet, hour: Math.round(st.hour * 100) / 100, mood: st.mood, sleep, weather, week,
+    day: st.day, greeting: greet, hour: Math.round(st.hour * 100) / 100, mood: st.mood, sleep, weather, week, travel: st.away,
     low_day: (st.mood.today !== null && st.mood.today <= 2) || st.crisisLevel24h >= 1,
     one_thing: suggestion, next_actions: st.nextActions.slice(0, 12), actions_done_today: st.actionsDoneToday,
     due_cards: st.dueCards, open_nudges: open, inbox_unprocessed: inbox ? Number(inbox.n) : 0, last_journal: lastJournal,
@@ -2975,7 +3102,7 @@ async function noteRiskInChat(env, q) {
   const sig = crisisSignal(q);
   if (sig.level < 2) return null;
   try {
-    await env.PERSONAL.prepare("INSERT INTO companion_nudges (ts, day, kind, ladder_step, ask, minutes, state, sent_at, reason) VALUES (?, ?, 'crisis', 0, 'escalation (chat)', 0, 'sent', ?, ?)").bind(nowIso(), dayKey(nowIso()), nowIso(), "signal:" + sig.match + " source:chat").run();
+    await env.PERSONAL.prepare("INSERT INTO companion_nudges (ts, day, kind, ladder_step, ask, minutes, state, sent_at, reason) VALUES (?, ?, 'crisis', 0, 'escalation (chat)', 0, 'sent', ?, ?)").bind(nowIso(), await localDay(env, nowIso()), nowIso(), "signal:" + sig.match + " source:chat").run();
   } catch (e) { /* the reply carries the lines; the ledger row is best effort */ }
   return sig;
 }
@@ -3374,6 +3501,7 @@ function moodCard(t){var m=el('div',{cls:'card',id:'mood-card'});m.appendChild(e
  var note=el('input',{placeholder:'a word or a line (optional)',style:'margin-top:8px'});m.appendChild(note);var out=el('div');
  m.appendChild(el('div',{cls:'row',style:'margin-top:8px'},[el('button',{cls:'p',text:'Log',onclick:function(){if(!pick.mood){say(out,'Pick a number first.');return}api('/companion/api/mood',{json:{score:pick.mood,energy:pick.energy,tags:Object.keys(pick.tags).filter(function(k){return pick.tags[k]}),note:note.value}}).then(function(r){out.innerHTML='';say(out,r.reply||r.error);if(r.crisis)say(out,r.crisis,true);if(!r.queued)setTimeout(load,1800)})}})]));m.appendChild(out);return m}
 function renderToday(t){$('login').classList.add('hide');var v=$('v-today');v.innerHTML='';v.appendChild(el('h1',{text:t.greeting+', Rowan.'}));
+ if(t.travel)v.appendChild(el('div',{cls:'mute',text:'Times follow you: '+t.travel.place+' ('+t.travel.tz.replace('_',' ')+'). Quiet hours and check-ins run on local time.',style:'margin:-6px 0 12px'}));
  if(t.stale_reminders)v.appendChild(el('div',{cls:'card'},[el('div',{text:t.stale_reminders+(t.stale_reminders===1?' old reminder is':' old reminders are')+' past '+(t.stale_reminders===1?'its':'their')+' date. I stopped bringing '+(t.stale_reminders===1?'it':'them')+' up.'}),el('div',{cls:'row',style:'margin-top:8px'},[el('button',{text:'Tidy them on Do',onclick:function(){go('do')}})])]));
  if(t.crisis_lines)v.appendChild(el('div',{cls:'warn',style:'margin:0 0 12px'},[t.crisis_lines]));
  if(t.paused_until)v.appendChild(el('div',{cls:'card'},[el('div',{text:'Reach-outs are paused until '+t.paused_until.slice(0,16).replace('T',' ')+' UTC. Everything here still works.'}),el('div',{cls:'row',style:'margin-top:8px'},[el('button',{text:'Resume now',onclick:function(){pause(0)}})])]));
@@ -3463,7 +3591,7 @@ window.addEventListener('online',flushQueue);document.addEventListener('visibili
 flushQueue();showPending();
 </script></body></html>`;
 
-return Object.freeze({ COMPANION_VERSION, TZ, CONTEXTS, ENERGY, NUDGE_KINDS, LADDER_KINDS, DDL, TASK_COLUMNS, ensureSchema, nowIso, FRESH_DUE_SQL, rid, esc, tzOffsetMinutes, localParts, dayKey, OFFLINE_MAX_AGE_MS, clientStamp, inQuiet, FSRS_W, RETENTION, MAX_INTERVAL_DAYS, retrievability, intervalDays, fsrsSchedule, CLARIFY_SYSTEM, contextFor, heuristicClarify, parseClarify, crisisSignal, FALLBACK_CRISIS_LINES, crisisText, SAFETY_PLAN_FIELDS, normalizeSafetyPlan, saveSafetyPlan, ACTIVITY_CATEGORIES, SEED_ACTIVITIES, helpScores, pickActivity, logActivity, whatHelps, activityBank, addActivity, WHO5_ITEMS, WHO5_SCALE, who5Score, who5Read, recordWho5, who5Status, setPause, fallbackReply, EMAIL_MODES, saveSettings, LOGIN_TO, SESSION_COOKIE, SESSION_MS, maskedLoginTo, sessionFor, sendLoginCode, verifyLoginCode, isPaused, NEVER_RETIRE, retiredFrom, DISCREET_KINDS, discreetPayload, pruneMedia, TEXTS, pickLru, energyFor, chooseAction, receptiveHours, addDays, mondayOf, weekWindow, weekText, weekLookback, weekSeen, planNudge, b64u, unb64u, makeVapidKeys, vapidAuthHeader, encryptPayload, sendPush, pushAll, loadCfg, dayStartIso, sleepFromTimestamps, sleepWindow, moodStats, retiredKinds, daysSinceSocial, unansweredStreak, gatherState, remember, recall, contextSnapshot, recordMood, moodReply, addAction, upsertProject, actionDone, addJournal, addCard, reviewCard, answerNudge, MAX_CAPTURE_BYTES, transcribe, capture, clarify, processItem, processInbox, pushPayloadFor, companionTick, today, dashboard, PRIVACY_TABLES, privacy, exportAll, deleteData, PERSONA, untrusted, chatContext, noteRiskInChat, companionTools, TOOL_APPENDIX_LINE, TICK_MS, doKeys, doEnsure, doTick, doAlarm, doFetch, handleTranscription, handleCompanion, MANIFEST, ICON_SVG, SW_JS, OFFLINE_JS, PAGE_HTML });
+return Object.freeze({ COMPANION_VERSION, TZ, CONTEXTS, ENERGY, NUDGE_KINDS, LADDER_KINDS, DDL, TASK_COLUMNS, ensureSchema, nowIso, FRESH_DUE_SQL, rid, esc, tzOffsetMinutes, localParts, dayKey, OFFLINE_MAX_AGE_MS, clientStamp, inQuiet, FSRS_W, RETENTION, MAX_INTERVAL_DAYS, retrievability, intervalDays, fsrsSchedule, CLARIFY_SYSTEM, contextFor, heuristicClarify, parseClarify, crisisSignal, FALLBACK_CRISIS_LINES, crisisText, SAFETY_PLAN_FIELDS, normalizeSafetyPlan, saveSafetyPlan, ACTIVITY_CATEGORIES, SEED_ACTIVITIES, helpScores, pickActivity, logActivity, whatHelps, activityBank, addActivity, WHO5_ITEMS, WHO5_SCALE, who5Score, who5Read, recordWho5, who5Status, setPause, fallbackReply, EMAIL_MODES, saveSettings, LOGIN_TO, SESSION_COOKIE, SESSION_MS, maskedLoginTo, sessionFor, sendLoginCode, verifyLoginCode, isPaused, NEVER_RETIRE, retiredFrom, DISCREET_KINDS, discreetPayload, pruneMedia, TEXTS, pickLru, energyFor, chooseAction, receptiveHours, addDays, mondayOf, weekWindow, weekText, weekLookback, weekSeen, planNudge, b64u, unb64u, makeVapidKeys, vapidAuthHeader, encryptPayload, sendPush, pushAll, loadCfg, dayStartIso, COUNTRY_TZ, CITY_TZ, MULTI_TZ_COUNTRIES, countryCode, placeTz, stayAt, effectiveTz, localDay, sleepFromTimestamps, sleepWindow, moodStats, retiredKinds, daysSinceSocial, unansweredStreak, gatherState, remember, recall, contextSnapshot, recordMood, moodReply, addAction, upsertProject, actionDone, addJournal, addCard, reviewCard, answerNudge, MAX_CAPTURE_BYTES, transcribe, capture, clarify, processItem, processInbox, pushPayloadFor, companionTick, today, dashboard, PRIVACY_TABLES, privacy, exportAll, deleteData, PERSONA, untrusted, chatContext, noteRiskInChat, companionTools, TOOL_APPENDIX_LINE, TICK_MS, doKeys, doEnsure, doTick, doAlarm, doFetch, handleTranscription, handleCompanion, MANIFEST, ICON_SVG, SW_JS, OFFLINE_JS, PAGE_HTML });
 })();
 // COMPANION-INLINE-END
 var CMP_DEPS = {
