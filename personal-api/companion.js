@@ -43,8 +43,11 @@
 // COMPANION-WEEK-1 (2026-10-19): companion e-mail is off by default, so the Sunday review lives in the app.
 //  19. "Your week" on Today from Sunday 18:00 to the end of Monday, one quiet push on Sunday evening under rules 1, 2
 //      and 11, and the last week on the Data tab. It says what happened and what helped, never what was missed.
+// COMPANION-NOTIFY-ANSWER-1 (2026-10-19): low effort keeps people using it, so a notification is answerable without the app.
+//  20. "Did it" and "Not today" answer from the service worker under the sign-in cookie and confirm briefly; a check-in
+//      notification opens on the mood picker. Signed out or offline, the app opens on the answer as before.
 
-export const COMPANION_VERSION = "1.4.0";
+export const COMPANION_VERSION = "1.5.0";
 export const TZ = "Europe/Amsterdam";
 export const CONTEXTS = [
   { name: "@home", hint: "chores, cooking, things in the flat" },
@@ -1369,7 +1372,7 @@ export function pushPayloadFor(row) {
   return {
     title: row.kind === "cmp-care" || row.kind === "presence" || row.kind === "cmp-presence" ? "Here with you" : row.kind === "checkin" || row.kind === "cmp-checkin" ? "How's it landing?" : row.kind === "cmp-reflect" ? "Before the day closes" : row.kind === "cmp-measure" ? "Two-weekly check" : row.kind === "cmp-connect" ? "Someone to hear from" : row.kind === "cmp-week" ? "Your week" : "One small thing",
     body: String(row.ask || "").slice(0, 300), tag: "cmp-" + row.id, id: row.id, kind: row.kind,
-    url: row.kind === "cmp-week" ? "/companion#week" : "/companion#n=" + row.id, ask
+    url: row.kind === "cmp-week" ? "/companion#week" : row.kind === "checkin" || row.kind === "cmp-checkin" ? "/companion#mood" : "/companion#n=" + row.id, ask
   };
 }
 // deps.pushed: { has(id), add(id) } so a ladder row is pushed once. deps.keys: VAPID keys. deps.fetch: optional.
@@ -1846,19 +1849,36 @@ export const SW_JS = `self.addEventListener('install', e => self.skipWaiting());
 self.addEventListener('activate', e => e.waitUntil(self.clients.claim()));
 self.addEventListener('push', e => {
   let d = {}; try { d = e.data ? e.data.json() : {}; } catch (x) { d = { body: e.data ? e.data.text() : '' }; }
-  const opts = { body: d.body || '', tag: d.tag || 'companion', icon: '/companion/icon.svg', badge: '/companion/icon.svg', data: { url: d.url || '/companion', id: d.id || null }, renotify: false };
+  const opts = { body: d.body || '', tag: d.tag || 'companion', icon: '/companion/icon.svg', badge: '/companion/icon.svg', data: { url: d.url || '/companion', id: d.id || null, tag: d.tag || 'companion' }, renotify: false };
   if (d.ask && d.id) opts.actions = [{ action: 'done', title: 'Did it' }, { action: 'no', title: 'Not today' }];
   e.waitUntil(self.registration.showNotification(d.title || 'Companion', opts));
 });
+function openApp(url) {
+  return self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then(list => {
+    for (const c of list) { if (c.url.includes('/companion')) { c.navigate(url); return c.focus(); } }
+    return self.clients.openWindow(url);
+  });
+}
+// COMPANION-NOTIFY-ANSWER-1: "Did it" and "Not today" answer from the notification itself, under the sign-in cookie, and a
+// short confirmation replaces it. Not signed in on this device (or offline): the app opens on the answer, as before.
+function answerFromNotification(d, action) {
+  const tag = d.tag || 'companion';
+  return fetch('/companion/api/nudge', { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json', 'X-Companion': '1' }, body: JSON.stringify({ id: Number(d.id), state: action === 'done' ? 'done' : 'declined' }) })
+    .then(r => r.ok ? r.json() : null)
+    .then(j => {
+      if (!j) throw new Error('not signed in');
+      return self.registration.showNotification('Companion', { body: j.reply || 'Noted.', tag: tag, icon: '/companion/icon.svg', badge: '/companion/icon.svg', silent: true, data: { url: '/companion', id: null, tag: tag } })
+        .then(() => new Promise(r => setTimeout(r, 4000)))
+        .then(() => self.registration.getNotifications({ tag: tag }))
+        .then(list => list.forEach(n => n.close()));
+    })
+    .catch(() => openApp('/companion#n=' + d.id + '&a=' + action));
+}
 self.addEventListener('notificationclick', e => {
   e.notification.close();
   const d = e.notification.data || {};
-  let url = d.url || '/companion';
-  if (d.id && (e.action === 'done' || e.action === 'no')) url = '/companion#n=' + d.id + '&a=' + e.action;
-  e.waitUntil(self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then(list => {
-    for (const c of list) { if (c.url.includes('/companion')) { c.navigate(url); return c.focus(); } }
-    return self.clients.openWindow(url);
-  }));
+  if (d.id && (e.action === 'done' || e.action === 'no')) { e.waitUntil(answerFromNotification(d, e.action)); return; }
+  e.waitUntil(openApp(d.url || '/companion'));
 });`;
 
 // The phone page. Plain HTML, no external script: it holds the personal API key in localStorage, so nothing else loads.
@@ -1935,7 +1955,7 @@ function renderToday(t){$('login').classList.add('hide');var v=$('v-today');v.in
  if(t.support_hint)v.appendChild(el('div',{cls:'card'},[el('div',{text:t.support_hint})]));
  if(t.who5_due){var wc=el('div',{cls:'card'},[el('h2',{text:'Two-weekly check'}),el('div',{cls:'mute',text:'Five questions about the last two weeks (WHO-5). About a minute, whenever you like.'})]);wc.appendChild(el('div',{cls:'row',style:'margin-top:8px'},[el('button',{cls:'p',text:'Start',onclick:function(){who5Form(wc)}})]));v.appendChild(wc)}
  (t.open_nudges||[]).forEach(function(n){if(n.kind==='cmp-week')return;var c=el('div',{cls:'card'},[el('div',{text:n.ask})]);if(['checkin','cmp-checkin','presence','cmp-presence','cmp-measure'].indexOf(n.kind)<0){c.appendChild(el('div',{cls:'row',style:'margin-top:8px'},[el('button',{cls:'p',text:'Did it',onclick:function(){answer(n.id,'done',c,['cmp-next','cmp-anchor','cmp-connect','micro','body','contact'].indexOf(n.kind)>=0?{nudge_id:n.id}:null)}}),el('button',{text:'Not today',onclick:function(){answer(n.id,'declined',c)}})]))}v.appendChild(c)});
- var m=el('div',{cls:'card'});m.appendChild(el('h2',{text:t.mood&&t.mood.today?'Mood today: '+t.mood.today+'/5 (log again any time)':'How are you?'}));
+ var m=el('div',{cls:'card',id:'mood-card'});m.appendChild(el('h2',{text:t.mood&&t.mood.today?'Mood today: '+t.mood.today+'/5 (log again any time)':'How are you?'}));
  pick={mood:null,energy:null,tags:{}};m.appendChild(scale('mood',MOOD));m.appendChild(el('div',{cls:'mute',text:'energy',style:'margin:8px 0 4px'}));m.appendChild(scale('energy',EN));
  var tg=el('div',{cls:'row',style:'margin-top:8px'});TAGS.forEach(function(x){var b=el('button',{cls:'chip',text:x,onclick:function(){pick.tags[x]=!pick.tags[x];b.classList.toggle('sel',!!pick.tags[x])}});tg.appendChild(b)});m.appendChild(tg);
  var note=el('input',{placeholder:'a word or a line (optional)',style:'margin-top:8px'});m.appendChild(note);var out=el('div');
@@ -2011,7 +2031,7 @@ function enablePush(){if(!('serviceWorker' in navigator)||!('PushManager' in win
 var views={today:load,capture:inbox,talk:drawChat,do:loadDo,learn:loadLearn,journal:loadJournal,data:loadData};
 function go(v){Array.prototype.forEach.call(document.querySelectorAll('.v'),function(s){s.classList.add('hide')});$('v-'+v).classList.remove('hide');Array.prototype.forEach.call(document.querySelectorAll('nav button'),function(b){b.classList.toggle('on',b.getAttribute('data-v')===v)});views[v]()}
 Array.prototype.forEach.call(document.querySelectorAll('nav button'),function(b){b.onclick=function(){go(b.getAttribute('data-v'))}});
-function fromHash(){var h=location.hash.slice(1);if(!h)return;var q={};h.split('&').forEach(function(x){var p=x.split('=');q[p[0]]=decodeURIComponent(p[1]||'')});history.replaceState(null,'','/companion');if(q.week!==undefined){go('today');setTimeout(function(){var w=$('week');if(w)w.scrollIntoView()},800);return}if(q.n&&(q.a==='done'||q.a==='no'))api('/companion/api/nudge',{json:{id:Number(q.n),state:q.a==='done'?'done':'declined'}}).then(load)}
+function fromHash(){var h=location.hash.slice(1);if(!h)return;var q={};h.split('&').forEach(function(x){var p=x.split('=');q[p[0]]=decodeURIComponent(p[1]||'')});history.replaceState(null,'','/companion');if(q.week!==undefined){go('today');setTimeout(function(){var w=$('week');if(w)w.scrollIntoView()},800);return}if(q.mood!==undefined){go('today');setTimeout(function(){var m=$('mood-card');if(m)m.scrollIntoView()},800);return}if(q.n&&(q.a==='done'||q.a==='no'))api('/companion/api/nudge',{json:{id:Number(q.n),state:q.a==='done'?'done':'declined'}}).then(load)}
 if('serviceWorker' in navigator)navigator.serviceWorker.register('/companion/sw.js',{scope:'/companion'}).catch(warn);
 fromHash();go('today')
 window.addEventListener('hashchange',fromHash);
