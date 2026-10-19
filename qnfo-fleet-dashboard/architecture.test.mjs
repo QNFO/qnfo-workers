@@ -1,0 +1,194 @@
+// ARCH-SELF-MODEL-1 (1.48.0) offline suite: the fleet answers "what are you" from its own records.
+// Proves: (A) the model is wired: the block, the platform area page, the feed index row, the health capability; (B) built from a code+live
+// graph, a service registry, heartbeats and a cron table it names each worker with its layer, version, schedules, databases, service
+// dependencies in both directions and the tables its code reads and writes, and it assigns a worker no layer names to "unclassified"
+// instead of guessing; (C) the lookups: a worker, a table by suffix, an ambiguous name (candidates, no detail), an unknown name (no
+// match, no detail), the blast radius (transitive dependents, tables others read), a search; (D) the page renders every section, escapes
+// what is typed into it and lights the Platform area; (E) honesty: with the graph unbound the model still answers from the registry and
+// names what it could not read (never an empty list passed off as a fact), and a retired worker is not listed; (F) no secret name or
+// value leaves the feed; (G) the model is kept for its TTL per env.
+// Run: node qnfo-fleet-dashboard/architecture.test.mjs   -> prints "N passed, 0 failed"
+import { DatabaseSync } from "node:sqlite";
+import { readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath, pathToFileURL } from "node:url";
+
+const here = dirname(fileURLToPath(import.meta.url));
+const worker = (await import(pathToFileURL(join(here, "worker.js")).href)).default;
+globalThis.fetch = async () => ({ ok: false, status: 503, json: async () => ({}), text: async () => "" });
+const src = readFileSync(join(here, "worker.js"), "utf8");
+
+let pass = 0, fail = 0;
+const ok = (c, m, x) => { if (c) pass++; else { fail++; console.log("FAIL " + m + (x !== undefined ? " :: " + String(typeof x === "string" ? x : JSON.stringify(x)).slice(0, 500) : "")); } };
+
+function shim(db, counter) {
+  return {
+    prepare(sql) {
+      if (counter) counter.n++;
+      const st = db.prepare(sql);
+      let args = [];
+      return { bind(...a) { args = a; return this; }, async all() { return { results: st.all(...args) }; }, async first() { return st.get(...args) || null; }, async run() { st.run(...args); return {}; } };
+    }
+  };
+}
+const NOW = new Date().toISOString();
+function graphDb() {
+  const g = new DatabaseSync(":memory:");
+  g.exec(`CREATE TABLE fg_node (id TEXT, scope TEXT, kind TEXT, name TEXT, worker TEXT, path TEXT, line INTEGER, attrs TEXT, source TEXT, h TEXT, updated_at TEXT);
+  CREATE TABLE fg_edge (src TEXT, rel TEXT, dst TEXT, scope TEXT, confidence TEXT, source TEXT, path TEXT, attrs TEXT, h TEXT, updated_at TEXT);
+  CREATE TABLE fg_finding (id TEXT, kind TEXT, subject TEXT, severity TEXT, detail TEXT, h TEXT, first_seen TEXT, last_seen TEXT);
+  CREATE TABLE fg_state (scope TEXT, sha TEXT, built_at TEXT, nodes INTEGER, edges INTEGER, written INTEGER, deleted INTEGER, ms INTEGER, status TEXT, detail TEXT, version TEXT);`);
+  const node = (id, scope, kind, name, worker, attrs) => g.prepare("INSERT INTO fg_node (id, scope, kind, name, worker, attrs) VALUES (?,?,?,?,?,?)").run(id, scope, kind, name, worker, JSON.stringify(attrs || {}));
+  const edge = (src, rel, dst, scope) => g.prepare("INSERT INTO fg_edge (src, rel, dst, scope) VALUES (?,?,?,?)").run(src, rel, dst, scope || "code");
+  for (const w of ["qnfo-fleet-control", "qnfo-ops", "qnfo-gateway", "mystery-worker"]) {
+    node("worker:" + w, "code", "worker", w, w, { version: "1.0.0" });
+    node("worker:" + w, "live", "worker", w, w, { live: true, modified_on: "2026-10-19T07:00:00Z", handlers: ["fetch", "scheduled"] });
+  }
+  // fleet-control binds the audit database and the ops service, has a cron, reads and writes tables
+  node("binding:qnfo-fleet-control.AUDIT", "code", "binding", "AUDIT", "qnfo-fleet-control", { type: "d1" });
+  edge("worker:qnfo-fleet-control", "has_binding", "binding:qnfo-fleet-control.AUDIT");
+  edge("binding:qnfo-fleet-control.AUDIT", "binds", "d1:qnfo-audit");
+  edge("worker:qnfo-fleet-control", "has_binding", "binding:qnfo-fleet-control.SVC_OPS");
+  edge("binding:qnfo-fleet-control.SVC_OPS", "binds", "worker:qnfo-ops");
+  edge("worker:qnfo-fleet-control", "has_binding", "binding:qnfo-fleet-control.SECRET_X", "live");
+  edge("worker:qnfo-fleet-control", "has_secret", "secret:qnfo-fleet-control.SUPER_SECRET_KEY", "live");
+  edge("worker:qnfo-fleet-control", "has_cron", "cron:qnfo-fleet-control@*/5 * * * *", "live");
+  edge("worker:qnfo-ops", "has_binding", "binding:qnfo-ops.AUDIT");
+  edge("binding:qnfo-ops.AUDIT", "binds", "d1:qnfo-audit");
+  edge("worker:qnfo-gateway", "has_binding", "binding:qnfo-gateway.SVC_OPS");
+  edge("binding:qnfo-gateway.SVC_OPS", "binds", "worker:qnfo-ops");
+  edge("worker:qnfo-gateway", "serves", "route:papers.qnfo.org/*", "live");
+  for (const [w, fn, rel, t] of [["qnfo-fleet-control", "tick", "reads", "qnfo-audit.agent_issues"], ["qnfo-fleet-control", "tick", "writes", "qnfo-audit.code_tasks"], ["qnfo-ops", "deploy", "writes", "qnfo-audit.deployment_history"], ["qnfo-ops", "deploy", "reads", "qnfo-audit.code_tasks"], ["qnfo-gateway", "page", "reads", "living-paper.papers"]]) {
+    node("fn:" + w + "#" + fn, "code", "function", fn, w, {});
+    edge("fn:" + w + "#" + fn, rel, "d1t:" + t);
+  }
+  g.prepare("INSERT INTO fg_finding (id, kind, subject, severity, detail) VALUES ('f1','env-undeclared','qnfo-gateway.SOME_VAR','warn','read but not declared'), ('f2','resource-orphan','d1:personal-prefs','info','bound to no worker')").run();
+  g.prepare("INSERT INTO fg_state (scope, sha, built_at, nodes, edges, status) VALUES ('code','abc1234',?,10,12,'ok'), ('live','abc1234',?,5,6,'ok')").run(NOW, NOW);
+  return g;
+}
+function auditDb() {
+  const a = new DatabaseSync(":memory:");
+  a.exec(`CREATE TABLE service_registry (service TEXT, kind TEXT, version TEXT, base_url TEXT, purpose TEXT, capabilities TEXT, routes TEXT, tools TEXT, models TEXT, deps TEXT, updated_at TEXT, state TEXT);
+  CREATE TABLE fleet_heartbeat (worker TEXT PRIMARY KEY, version TEXT, ts TEXT, ok INTEGER);
+  CREATE TABLE fleet_crons (id INTEGER, name TEXT, cron_expr TEXT, task_id TEXT, enabled INTEGER, timezone TEXT, last_fired TEXT, next_fire TEXT, updated_at TEXT);
+  CREATE TABLE agent_issues (id INTEGER); CREATE TABLE code_tasks (id TEXT);`);
+  a.prepare("INSERT INTO service_registry (service, kind, version, purpose, state) VALUES ('qnfo-fleet-control','worker','0.34.0','merged fleet control','live'), ('qnfo-ops','worker','2.49.0','ops endpoint','live'), ('qnfo-gateway','worker','3.26.5','landing and papers','live'), ('old-folded','member','1.0.0','gone','retired')").run();
+  a.prepare("INSERT INTO fleet_heartbeat VALUES ('qnfo-fleet-control','0.34.0',?,1), ('qnfo-ops','2.49.0',?,0)").run(NOW, NOW);
+  a.prepare("INSERT INTO fleet_crons (id, name, cron_expr, enabled, last_fired) VALUES (1,'fleet-exec dispatch','*/5 * * * *',1,?)").run(NOW);
+  a.prepare("INSERT INTO agent_issues VALUES (1),(2),(3)").run();
+  return a;
+}
+const get = async (env, path) => {
+  const r = await worker.fetch(new Request("https://fleet.qnfo.org" + path), env, { waitUntil() {} });
+  const t = await r.text();
+  let j = null;
+  try { j = JSON.parse(t); } catch (e) { j = null; }
+  return { s: r.status, t, j, h: r.headers };
+};
+const mkEnv = (opts) => { const c = { n: 0 }; const env = { AUDIT: shim(auditDb(), c), GRAPH: opts && opts.noGraph ? undefined : shim(graphDb(), c) }; env.__count = c; return env; };
+
+// (A) wiring
+ok(/ARCH-SELF-MODEL:BEGIN/.test(src) && /ARCH-SELF-MODEL:END/.test(src), "the architecture block is delimited");
+ok(/\{ key: "architecture", label: "Architecture", href: "\/architecture", feed: "\/api\/architecture" \}/.test(src), "the platform area lists the Architecture page and its feed");
+ok(/\{ path: "\/api\/architecture", area: "platform"/.test(src), "the feed index has a row for /api/architecture");
+ok(/\/\/ ==== AREA-MAP platform: architecture self-model/.test(src), "the block carries its AREA-MAP banner");
+let envA = mkEnv();
+let h = await get(envA, "/health");
+ok(h.s === 200 && h.j && h.j.capabilities.indexOf("architecture") >= 0, "/health names the architecture capability", h.j && h.j.capabilities);
+
+// (B) the model
+let r = await get(envA, "/api/architecture");
+ok(r.s === 200 && r.j && r.j.schema_version === "fleet-architecture/v1", "GET /api/architecture answers fleet-architecture/v1", r.s);
+const M = r.j || {};
+const names = (M.workers || []).map((w) => w.name);
+ok(names.join(",") === "mystery-worker,qnfo-fleet-control,qnfo-gateway,qnfo-ops", "every live or registered worker is listed, sorted, the retired one is not", names);
+const W = (n) => (M.workers || []).find((w) => w.name === n) || {};
+ok(W("qnfo-fleet-control").layer === "control" && W("qnfo-gateway").layer === "publish", "layers come from the table", [W("qnfo-fleet-control").layer, W("qnfo-gateway").layer]);
+ok(W("mystery-worker").layer === "unclassified" && (M.layers || []).some((l) => l.id === "unclassified" && l.workers.indexOf("mystery-worker") >= 0), "a worker no layer names is unclassified, and the layer list says so");
+ok(M.summary && M.summary.unclassified === 1 && M.summary.workers === 4, "the summary counts workers and unclassified", M.summary);
+ok(JSON.stringify(W("qnfo-fleet-control").depends_on) === '["qnfo-ops"]' && JSON.stringify(W("qnfo-ops").depended_on_by) === '["qnfo-fleet-control","qnfo-gateway"]', "service dependencies are recorded in both directions", [W("qnfo-fleet-control").depends_on, W("qnfo-ops").depended_on_by]);
+ok(JSON.stringify(W("qnfo-fleet-control").crons) === '["*/5 * * * *"]' && JSON.stringify(W("qnfo-gateway").routes) === '["papers.qnfo.org/*"]', "schedules and routes come from the live graph");
+ok(JSON.stringify(W("qnfo-fleet-control").d1) === '["qnfo-audit"]', "a worker names the databases it is bound to");
+ok(W("qnfo-fleet-control").reads === 1 && W("qnfo-fleet-control").writes === 1, "the default view counts the tables a worker reads and writes", [W("qnfo-fleet-control").reads, W("qnfo-fleet-control").writes]);
+ok(W("qnfo-ops").beat && W("qnfo-ops").beat.ok === false && W("qnfo-fleet-control").beat.ok === true && typeof W("qnfo-ops").beat.age_min === "number", "the last tick and whether it was ok are carried", W("qnfo-ops").beat);
+ok(W("qnfo-fleet-control").purpose === "merged fleet control", "the purpose comes from the service registry");
+ok(M.data && M.data.d1[0].name === "qnfo-audit" && M.data.d1[0].bound_by.join(",") === "qnfo-fleet-control,qnfo-ops" && M.data.d1[0].tables_seen === 3, "databases list who binds them and how many tables code touches", M.data && M.data.d1);
+ok(M.tables === undefined, "the table index is left out of the default view");
+ok(M.loops && M.loops[0].name === "fleet-exec dispatch" && M.loops[0].enabled === true, "the fleet-exec loops are listed from fleet_crons", M.loops);
+ok(M.change_path.length === 8 && M.change_path[0].name === "Claim" && M.change_path[5].name === "Canary", "the change path has its eight steps in order");
+ok(M.authority.some((a) => a.rule === "Interrupt gate") && M.authority.some((a) => a.rule === "Secrets"), "the lanes of authority are listed");
+ok(M.registries.find((x) => x.table === "agent_issues").rows === 3 && M.registries.find((x) => x.table === "failure_modes").rows === null, "registries carry their row count, or null where the table could not be read");
+ok(M.graph.code && M.graph.code.sha === "abc1234" && M.graph.code.age_min <= 1, "the graph's own freshness is carried", M.graph);
+ok(M.findings.total === 2 && M.findings.counts["env-undeclared/warn"] === 1, "the graph findings are carried with counts", M.findings);
+ok(M.self && M.self.blind.length === 0 && M.self.sources.some((s) => s.name === "graph edges" && s.status === "read") && M.self.limits.length >= 3, "self names the sources it read and what it cannot see", M.self && M.self.blind);
+r = await get(envA, "/api/architecture?full=1");
+ok(r.j && r.j.tables && r.j.tables["qnfo-audit.code_tasks"].readers[0] === "qnfo-ops" && r.j.tables["qnfo-audit.code_tasks"].writers[0] === "qnfo-fleet-control", "?full=1 adds the table index with readers and writers");
+ok(r.j && Array.isArray(r.j.workers.find((w) => w.name === "qnfo-ops").reads), "?full=1 lists the tables a worker reads, not just a count");
+
+// (C) lookups
+r = await get(envA, "/api/architecture/worker/qnfo-fleet-control");
+ok(r.s === 200 && r.j.matches.length === 1 && r.j.detail.name === "qnfo-fleet-control" && r.j.detail.reads[0] === "qnfo-audit.agent_issues", "a worker by exact name", r.j);
+r = await get(envA, "/api/architecture/worker/qnfo-");
+ok(r.j.matches.length === 3 && r.j.detail === null, "an ambiguous name lists its candidates and no detail", r.j.matches);
+r = await get(envA, "/api/architecture/worker/does-not-exist");
+ok(r.s === 200 && r.j.matches.length === 0 && r.j.detail === null, "an unknown name is no match, not an invented worker", r.j);
+r = await get(envA, "/api/architecture/table/code_tasks");
+ok(r.j.matches[0] === "qnfo-audit.code_tasks" && r.j.detail.readers.join() === "qnfo-ops" && r.j.detail.writers.join() === "qnfo-fleet-control", "a table by its bare name resolves by suffix with readers and writers", r.j);
+r = await get(envA, "/api/architecture/table/qnfo-audit.agent_issues");
+ok(r.j.detail && r.j.detail.readers.join() === "qnfo-fleet-control" && r.j.detail.writers.length === 0, "a table by db.table");
+r = await get(envA, "/api/architecture/impact/qnfo-ops");
+ok(r.j.detail && r.j.detail.all_dependents.join() === "qnfo-fleet-control,qnfo-gateway" && r.j.detail.shared_tables.some((s) => s.table === "qnfo-audit.deployment_history") === false, "blast radius: dependents (and no shared table it writes that nobody else reads)", r.j.detail);
+ok(r.j.detail.shared_tables.length === 0, "an unread table is not reported as shared");
+r = await get(envA, "/api/architecture/impact/qnfo-fleet-control");
+ok(r.j.detail.shared_tables.length === 1 && r.j.detail.shared_tables[0].table === "qnfo-audit.code_tasks" && r.j.detail.shared_tables[0].read_by.join() === "qnfo-ops", "blast radius lists the tables it writes that others read", r.j.detail);
+r = await get(envA, "/api/architecture?q=gateway");
+ok(r.j.workers.join() === "qnfo-gateway", "?q= searches workers by name or purpose", r.j);
+r = await get(envA, "/api/architecture?q=papers");
+ok(r.j.workers.join() === "qnfo-gateway" && r.j.tables.join() === "living-paper.papers", "?q= searches purposes and tables", r.j);
+r = await get(envA, "/api/architecture/nothing/here");
+ok(r.s === 404 && r.j && r.j.try.length === 5, "an unknown architecture path is a 404 that names the five routes", r.s);
+
+// (D) the page
+r = await get(envA, "/architecture");
+ok(r.s === 200 && /text\/html/.test(r.h.get("content-type")), "GET /architecture answers HTML", r.s);
+for (const id of ["layers", "workers", "data", "loops", "path", "authority", "registries", "findings", "self"]) ok(r.t.indexOf('id="' + id + '"') >= 0, "the page has the " + id + " section");
+ok(/How this page knows/.test(r.t) && /What it cannot see/.test(r.t), "the page says how it knows and what it cannot see");
+ok(/qnfo-fleet-control/.test(r.t) && /href="\/architecture\?worker=qnfo-ops"/.test(r.t), "workers link to their detail");
+ok(/aria-current="page"/.test(r.t) && /class="q-sub"/.test(r.t) && /Architecture<\/a>/.test(r.t), "the Platform area is lit and its sub-bar lists Architecture");
+r = await get(envA, "/architecture?worker=qnfo-ops");
+ok(/Worker: qnfo-ops/.test(r.t) && /ops endpoint/.test(r.t) && /Blast radius/.test(r.t), "?worker= shows the worker's detail");
+r = await get(envA, "/architecture?impact=qnfo-ops");
+ok(/Blast radius: qnfo-ops/.test(r.t) && /qnfo-gateway/.test(r.t), "?impact= shows the blast radius");
+r = await get(envA, "/architecture?table=code_tasks");
+ok(/Table: code_tasks/.test(r.t) && /qnfo-fleet-control/.test(r.t), "?table= shows readers and writers");
+r = await get(envA, "/architecture?q=%3Cscript%3Ealert(1)%3C%2Fscript%3E");
+ok(r.s === 200 && r.t.indexOf("<script>alert(1)</script>") < 0 && /&lt;script&gt;alert\(1\)&lt;\/script&gt;/.test(r.t), "what is typed into the search is escaped");
+r = await get(envA, "/area/platform");
+ok(r.s === 200 && /href="\/architecture"/.test(r.t), "the Platform area page links the Architecture page");
+
+// (E) honesty
+const envB = mkEnv({ noGraph: true });
+r = await get(envB, "/api/architecture");
+ok(r.s === 200 && r.j.self.blind.indexOf("graph edges") >= 0 && r.j.self.blind.indexOf("graph workers") >= 0, "with the graph unbound the model names what it could not read", r.j && r.j.self);
+ok(r.j.workers.map((w) => w.name).join() === "qnfo-fleet-control,qnfo-gateway,qnfo-ops", "it still lists the registered workers (the retired one stays out)", r.j.workers.map((w) => w.name));
+ok(r.j.workers.every((w) => w.in_live === false && w.crons.length === 0), "and claims no schedule or deployment it could not read", r.j.workers[0]);
+r = await get(envB, "/architecture");
+ok(/Could not read: /.test(r.t) && /missing, not empty/.test(r.t), "the page says the missing parts are missing, not empty");
+
+// (F) no secret name or value
+const full = await get(mkEnv(), "/api/architecture?full=1");
+ok(!/SUPER_SECRET_KEY|SECRET_X/.test(full.t), "no secret name leaves the feed");
+
+// (G) kept per env
+const envC = mkEnv();
+await get(envC, "/api/architecture");
+const n1 = envC.__count.n;
+await get(envC, "/api/architecture/worker/qnfo-ops");
+await get(envC, "/architecture");
+ok(envC.__count.n === n1 && n1 > 5, "the model is read once and kept for its TTL", [n1, envC.__count.n]);
+const envD = mkEnv();
+await get(envD, "/api/architecture");
+ok(envD.__count.n > 5, "a different env reads its own");
+
+console.log(pass + " passed, " + fail + " failed");
+if (fail) process.exit(1);
