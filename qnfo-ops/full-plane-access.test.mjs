@@ -29,7 +29,8 @@ ok(/2\. Tools:[^\n]*github_projects_list[^\n]*fleet_graph[^\n]*dashboard_feed[^\
 ok(/github_issue_comment: "completed"/.test(src), "the comment write is in the audit trail");
 const pub = grab("var OPS_PUBLIC_TOOLS = OPS_TOOLS.filter", "}).concat([");
 ok(!/github_issue|github_projects|fleet_graph|dashboard_feed|cf_docs/.test(pub), "public mode keeps its three tools (OPS-PUBLIC-READ-1)");
-ok(/var VERSION = "2\.50\.0/.test(src), "VERSION is 2.50.0");
+{ const m = /var VERSION = "(\d+)\.(\d+)\.(\d+)/.exec(src); ok(m && Number(m[1]) * 1e6 + Number(m[2]) * 1e3 + Number(m[3]) >= 2050000, "VERSION is at least 2.50.0 (MODEL-FLOOR-REPAIR-1: a suite that pins the exact version breaks on the next bump)"); }
+ok(!/model such as llama/i.test(src.split("\n").filter((l) => l.includes('name: "cf_docs"')).join("\n")), "the cf_docs description names no banned model (MODEL-FLOOR-REPAIR-1)");
 
 (async () => {
   // Issues list: PRs dropped, labels flattened, query built.
