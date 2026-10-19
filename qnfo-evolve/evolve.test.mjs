@@ -26,7 +26,7 @@ const ok = (c, m, d) => {
  * `export default {` is rewritten to a local binding so the same file that ships to Cloudflare is the
  * file under test. */
 const body = src.replace(/^export default /m, "var __default = ");
-const mod = new Function("console", body + "\n;return { isSinglePath, gapKey, buildIssue, pickNew, isDenied, DENY_WORKERS, VERSION, SOURCE, MAX_OPEN, MAX_NEW_PER_TICK, WIP_CEILING_DEFAULT, WIP_ATTEMPTS, WIP_STALE_MIN, handlers: __default };")
+const mod = new Function("console", body + "\n;return { isSinglePath, gapKey, buildIssue, pickNew, isDenied, DENY_WORKERS, VERSION, SOURCE, MAX_OPEN, MAX_NEW_PER_TICK, WIP_CEILING_DEFAULT, WIP_ATTEMPTS, WIP_STALE_MIN, WIP_PARK_PER_TICK, CAPABILITIES, LIMITATIONS, handlers: __default };")
   ({ log() {} });
 
 ok(/^\d+\.\d+\.\d+/.test(mod.VERSION), "VERSION is semver-shaped", mod.VERSION);
@@ -136,6 +136,20 @@ ok(src.indexOf("INSERT OR REPLACE INTO ops_config") < src.indexOf("SET status = 
   "the backup is written before the status changes");
 ok(/WHERE id = \? AND status = 'queued'/.test(src), "the park cannot clobber a task another actor moved");
 ok(/attempts >= \?/.test(src), "the attempt floor is a bound parameter, not a string");
+
+/* 9. HEALTH-CONTRACT-1 (agent_issues 2852, capability_contract_conformance): /health declares non-empty capabilities[] and
+ * limitations[]. qnfo-deploy-guard snapshots exactly those two keys from every live /health and a worker with either one
+ * empty counts against the fleet's conformance, so the suite reads them through the real fetch handler. */
+const healthEnv = { AUDIT: { prepare: function () { return { all: function () { return Promise.resolve({ results: [{ ts: "2026-10-19T00:00:00Z", scanned: 1, filed: 0, closed: 0 }] }); } }; } } };
+const hres = await mod.handlers.fetch(new Request("https://qnfo-evolve.example/health"), healthEnv);
+const health = await hres.json();
+ok(hres.status === 200 && health.ok === true && health.version === mod.VERSION, "/health answers ok with the version", health);
+ok(Array.isArray(health.capabilities) && health.capabilities.length >= 5 && health.capabilities.every((c) => typeof c === "string" && c.length > 10), "/health declares at least five non-empty capabilities", health.capabilities);
+ok(Array.isArray(health.limitations) && health.limitations.length >= 5 && health.limitations.every((c) => typeof c === "string" && c.length > 10), "/health declares at least five non-empty limitations", health.limitations);
+ok(health.limitations.some((l) => l.includes("at most " + mod.MAX_NEW_PER_TICK + " issues per tick") && l.includes(mod.MAX_OPEN + " open filings")), "the filing limit on /health is built from the constants the tick uses");
+ok(health.limitations.some((l) => l.includes(mod.WIP_ATTEMPTS + " attempts") && l.includes(mod.WIP_STALE_MIN + " minutes") && l.includes("at most " + mod.WIP_PARK_PER_TICK + " times")), "the wip-recovery limit on /health is built from the constants the recovery uses");
+ok(health.limitations.some((l) => /never edits code/.test(l)) && health.capabilities.some((c) => /^auto-close/.test(c)), "the contract states what the worker refuses to do and what it closes itself");
+ok(health.last_run && health.last_run.scanned === 1, "the last run is still reported next to the contract", health.last_run);
 
 console.log(`${pass} passed, ${fail} failed`);
 if (fail) process.exit(1);
