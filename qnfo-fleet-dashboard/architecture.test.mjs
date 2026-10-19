@@ -1,4 +1,4 @@
-// ARCH-SELF-MODEL-1 (1.47.0) offline suite: the fleet answers "what are you" from its own records.
+// ARCH-SELF-MODEL-1 (1.48.0) offline suite: the fleet answers "what are you" from its own records.
 // Proves: (A) the model is wired: the block, the platform area page, the feed index row, the health capability; (B) built from a code+live
 // graph, a service registry, heartbeats and a cron table it names each worker with its layer, version, schedules, databases, service
 // dependencies in both directions and the tables its code reads and writes, and it assigns a worker no layer names to "unclassified"

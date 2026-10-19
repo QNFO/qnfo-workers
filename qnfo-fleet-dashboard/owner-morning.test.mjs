@@ -1,6 +1,6 @@
 // OWNER-MORNING-1 (1.19.0): the owner's 60-second morning check. Drives the real worker for /api/changes against an
 // in-memory SQLite D1 and checks the pure runway helper and the page wiring:
-//   R. credit runway = balance / (30-day spend / 30), shown on the KPI and as a card under 7 days;
+//   R. credit runway = balance / (30-day spend / 30), shown on the KPI only; a runway projection is never a card;
 //   C. /api/changes lists deploys by worker, issues closed/opened, code-loop merges and new owner cards since a time,
 //      clamped to 7 days, with titles cut to 90 characters;
 //   H. the health pill is not green when the verdict is not OK; pageviews exclude the dashboard host and bots;
@@ -32,8 +32,8 @@ ok(runway({ balance: 17.04, spend30: 224.55, credit_burn7: 7 }) === 17, "R9 $1/d
 ok(runway({ balance: 17.02, spend30: 224.55, credit_burn7: 133.86, credit_burn24: 2.76 }) === 6, "R11 the last 24 h rate wins when read and non-zero ($2.76/day: 6 days, not 0)");
 ok(runway({ balance: 17.02, credit_burn7: 133.86, credit_burn24: 0 }) === 0, "R12 a zero 24 h read falls back to the 7-day average");
 ok(/provider \} \} \} \} \}'\);/.test(src) && /!== "workers-ai"\) t \+=/.test(src), "R10 the burn counts third-party providers only (Workers AI is billed to the account)");
-ok(/runway != null && runway < CREDIT_RUNWAY_WARN_DAYS\) items\.unshift\(\{ key: "credit-runway"/.test(src) && /CREDIT_RUNWAY_WARN_DAYS = 7;/.test(src), "R5 a runway under 7 days becomes a queue card");
-ok(/sev: runway < 3 \? "urgent" : "normal"/.test(src), "R6 under 3 days it is urgent");
+ok(/CREDIT-HALT-ONLY-1/.test(src) && /if \(creditHalt\) items\.unshift\(creditHalt\)/.test(src), "R5 only a credit halt becomes a queue card: a runway projection never does");
+ok(!/key: "credit-runway"/.test(src) && /if \(n < 1\) return null;/.test(src) && /if \(bal != null && bal > 0\) return null;/.test(src), "R6 no runway card exists and a positive balance never cards");
 
 // C. /api/changes on an in-memory audit DB
 const db = new DatabaseSync(":memory:");

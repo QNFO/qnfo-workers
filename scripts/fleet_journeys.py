@@ -192,9 +192,33 @@ def commit_age_min(path, root=REPO):
         return None
 
 
+_MAIN_HEAD = {}
+
+
+def main_version(d, root=REPO):
+    """JOURNEY-MAIN-FRESH-1 (2026-10-19, agent_issues 100076): the VERSION of <d>/worker.js on the newest origin/main. The consumer
+    queues (concurrency cancel-in-progress false), so its checkout can be several merges behind main when the journey runs, and a
+    worker deployed from a later merge read as "live != main" (8 of 41 steps on 2026-10-19 07:51Z, every live version ahead of the
+    checkout and equal to main). One shallow fetch per run; None when git or the network fails, so the checkout's verdict stands."""
+    if "ref" not in _MAIN_HEAD:
+        try:
+            r = subprocess.run(["git", "-C", root, "fetch", "--quiet", "--depth=1", "origin", "main"], capture_output=True, text=True, timeout=60)
+            _MAIN_HEAD["ref"] = "FETCH_HEAD" if r.returncode == 0 else None
+        except Exception:  # noqa: BLE001
+            _MAIN_HEAD["ref"] = None
+    if not _MAIN_HEAD["ref"]:
+        return None
+    try:
+        src = subprocess.run(["git", "-C", root, "show", "%s:%s/worker.js" % (_MAIN_HEAD["ref"], d)], capture_output=True, text=True, timeout=20).stdout
+        v = re.search(r'^[ \t]*var VERSION\s*=\s*"([^"\n]*)"', src[:200000], re.M)
+        return v.group(1) if v else None
+    except Exception:  # noqa: BLE001
+        return None
+
+
 # ---------------------------------------------------------------- journeys
 
-def j_deploy_coherence(h, repo=None, commit_age=commit_age_min):
+def j_deploy_coherence(h, repo=None, commit_age=commit_age_min, main_ver=main_version):
     j = Journey("deploy-coherence")
     repo = repo if repo is not None else live_dirs()
     j.check("repo lists live workers", len(repo) > 0, "%d" % len(repo))
@@ -212,6 +236,9 @@ def j_deploy_coherence(h, repo=None, commit_age=commit_age_min):
             if a is not None and a < DEPLOY_GRACE_MIN:
                 j.check("%s deploying" % name, True, "main %s, live %s, commit %d min old" % (want, live, int(a)))
                 continue  # the registry follows the deploy; judge it on the next run
+            if main_ver(info["dir"]) == live:
+                j.check("%s live == main" % name, True, "checkout %s is behind main; live %s == main" % (want, live))
+                continue
             j.check("%s live == main" % name, False, "main %s, live %s" % (want, live))
         if name in regv and regv[name] and regv[name] != live:
             j.check("%s registry == live" % name, False, "registry %s, live %s" % (regv[name], live))
@@ -540,9 +567,11 @@ def selftest():
         state["claims"].clear()
         return fn(Http(site(hop)), **kw)
 
-    expect("deploy passes", run_one(j_deploy_coherence, repo=repo, commit_age=old).ok)
-    expect("deploy mismatch fails", not run_one(j_deploy_coherence, "deploy", repo=repo, commit_age=old).ok)
+    expect("deploy passes", run_one(j_deploy_coherence, repo=repo, commit_age=old, main_ver=lambda d: "1.0.0").ok)
+    expect("deploy mismatch fails", not run_one(j_deploy_coherence, "deploy", repo=repo, commit_age=old, main_ver=lambda d: "1.0.0").ok)
     expect("deploy mismatch in grace passes", run_one(j_deploy_coherence, "deploy", repo=repo, commit_age=young).ok)
+    expect("deploy mismatch with the checkout behind main passes", run_one(j_deploy_coherence, "deploy", repo=repo, commit_age=old, main_ver=lambda d: "1.0.1").ok)
+    expect("deploy mismatch with main unreadable fails", not run_one(j_deploy_coherence, "deploy", repo=repo, commit_age=old, main_ver=lambda d: None).ok)
     expect("census passes", run_one(j_binding_census).ok)
     expect("census blind fails", not run_one(j_binding_census, "blind").ok)
     expect("lock passes", run_one(j_lock_roundtrip).ok)

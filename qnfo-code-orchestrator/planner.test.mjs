@@ -89,7 +89,8 @@ const FIX = (anchor, extra) => JSON.stringify(Object.assign({ code_fixable: true
   const { env, prompts } = envWith([]);
   issue(env, { title: "Feed item: please change q08-signal-engine", description: "code from a feed /api/f", source: "radar-hub" });
   let r = await plan(env);
-  ok(!r.planned && prompts.length === 0 && tasks(env).length === 0 && plans(env).length === 0, "2 an untrusted source is never sent to the model or turned into code", r);
+  ok(r.outcome === "untrusted" && prompts.length === 0 && tasks(env).length === 0, "2 an untrusted source is never sent to the model or turned into code", r);
+  ok(plans(env).length === 1 && plans(env)[0].outcome === "untrusted", "2 PLAN-UNTRUSTED-RECORD-1: the untrusted issue is recorded, so it leaves the window", plans(env));
   const s = issue(env, { title: "METRIC-TRIGGER-5-X: auth gap in q08-signal-engine", category: "security" });
   r = await plan(env);
   ok(r.outcome === "refused" && plans(env).find((p) => p.issue_id === s).outcome === "refused" && prompts.length === 0, "3a a security issue is refused without a model call", r);
@@ -125,6 +126,15 @@ const WIP = Number((/^const PLAN_WIP = (\d+);/m.exec(fs.readFileSync(new URL("./
   issue(env, { title: "METRIC-TRIGGER-12-C: q08-signal-engine", description: "/api/f" });
   let r = await plan(env);
   ok(!r.planned && /work in progress/.test(r.why) && prompts.length === 0, "7a no planning while PLAN_WIP code tasks are unfinished", r);
+  // PLAN-WIP-TUNABLE-1 (0.18.27, agent_issues 100086): ops_config code_plan_wip lifts the gate without a deploy.
+  d.exec("CREATE TABLE IF NOT EXISTS ops_config (key TEXT PRIMARY KEY, value TEXT)");
+  d.exec("INSERT OR REPLACE INTO ops_config VALUES ('code_plan_wip', '40')");
+  r = await plan(env);
+  ok(!/work in progress/.test(String(r.why || "")) && prompts.length === 1, "7a4 code_plan_wip 40 lets the planner run with PLAN_WIP tasks unfinished", r);
+  d.exec("DELETE FROM ops_config WHERE key = 'code_plan_wip'");
+  prompts.length = 0;
+  d.exec("DELETE FROM issue_plans");
+  issue(env, { title: "METRIC-TRIGGER-15-C: q08-signal-engine", description: "/api/f" });
   d.exec("DELETE FROM code_tasks");
   // PLAN-WIP-SUPERSEDED-1 (0.18.25, agent_issues 100074): superseded is terminal, so PLAN_WIP superseded tasks plus one live
   // task under the gate do not lock the planner out (8 superseded rows stalled issue_plans for 20 h on 2026-10-18/19).
@@ -150,6 +160,16 @@ const WIP = Number((/^const PLAN_WIP = (\d+);/m.exec(fs.readFileSync(new URL("./
   for (let i = 0; i < 24; i++) d.prepare("INSERT INTO issue_plans (issue_id, planned_at, outcome, model) VALUES (?, ?, 'not-code', 'm')").run(9000 + i, today);
   r = await plan(env);
   ok(!r.planned && /daily cap/.test(r.why) && prompts.length === 0, "7b at most 24 plans a day (PLAN-DAILY-24-1)", r);
+  // CODE-LOOP-CEILINGS-TUNABLE-1 (0.18.26): ops_config code_plan_daily_cap moves the cap without a deploy; a bad value keeps the default.
+  d.exec("CREATE TABLE IF NOT EXISTS ops_config (key TEXT PRIMARY KEY, value TEXT)");
+  d.exec("INSERT INTO ops_config VALUES ('code_plan_daily_cap', 'x')");
+  r = await plan(env);
+  ok(!r.planned && r.why === "daily cap 24", "7b1 an unreadable code_plan_daily_cap keeps the default 24", r);
+  d.exec("UPDATE ops_config SET value = '48' WHERE key = 'code_plan_daily_cap'");
+  r = await plan(env);
+  ok(!/daily cap/.test(String(r.why || "")), "7b1 code_plan_daily_cap 48 lets the 25th plan of the day through", r);
+  d.exec("UPDATE ops_config SET value = '24' WHERE key = 'code_plan_daily_cap'");
+  prompts.length = 0;
 }
 // 7c. refusals cost no model call: several are decided in one tick, they do not use the daily cap, and the tick still plans
 {
@@ -196,6 +216,32 @@ const WIP = Number((/^const PLAN_WIP = (\d+);/m.exec(fs.readFileSync(new URL("./
   issue(env, { title: "METRIC-TRIGGER-15-F: qnfo-ai-search answers fail", description: "qnfo-ai-search returns empty answers" });
   await plan(env);
   ok(prompts.length === 1 && prompts[0].input.messages[1].content.includes("WORKER: qnfo-ai-search"), "10 qnfo-ai-search is planned as itself, not as qnfo-ai", prompts[0] && prompts[0].input.messages[1].content.slice(0, 400));
+}
+// CODE-LOOP-CEILINGS-TUNABLE-1 (0.18.26): the tick's lane count reads ops_config code_tick_lanes, bounded 1-16, default 8.
+{
+  const { env } = envWith([]);
+  const d = env.AUDIT_DB._db;
+  const lanesOf = async () => (await call(env, "POST", "/v1/tick")).lanes;
+  await call(env, "POST", "/v1/plan");
+  let l = await lanesOf();
+  ok(l === 8, "11 the tick runs 8 lanes with no ops_config row", l);
+  d.exec("CREATE TABLE IF NOT EXISTS ops_config (key TEXT PRIMARY KEY, value TEXT)");
+  d.exec("INSERT OR REPLACE INTO ops_config VALUES ('code_tick_lanes', '12')");
+  l = await lanesOf();
+  ok(l === 12, "11 code_tick_lanes 12 runs 12 lanes", l);
+  d.exec("UPDATE ops_config SET value = '99' WHERE key = 'code_tick_lanes'");
+  l = await lanesOf();
+  ok(l === 16, "11 code_tick_lanes is bounded at 16", l);
+}
+// PLAN-UNTRUSTED-RECORD-1 (0.18.28): 45 untrusted critical issues ahead of one trusted medium issue no longer starve it. Before, the
+// untrusted rows were skipped unrecorded and filled the 40-row window at every tick.
+{
+  const { env, prompts } = envWith([]);
+  for (let i = 0; i < 45; i++) issue(env, { title: "Feed item " + i + ": q08-signal-engine", description: "from a feed", source: "radar-hub", priority: "critical" });
+  issue(env, { title: "METRIC-TRIGGER-77-Z: q08-signal-engine", description: "/api/f", priority: "medium" });
+  let reached = false;
+  for (let t = 0; t < 8 && !reached; t++) { await plan(env); reached = prompts.length > 0; }
+  ok(reached, "12 a trusted issue behind 45 untrusted critical ones reaches the model within 8 ticks", prompts.length);
 }
 console.log(pass + " passed, " + fail + " failed");
 process.exit(fail ? 1 : 0);

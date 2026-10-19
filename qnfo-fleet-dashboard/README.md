@@ -210,7 +210,7 @@ only. The daily reach ingest writes one `cf-rum-human` row per host (`entity_typ
 `visits`). Suite: `node --no-warnings qnfo-fleet-dashboard/kpi.test.mjs`. Chart colours are a validated pair per theme
 (light `#008A7B` / `#B5562A`, dark `#2AA595` / `#D06C3E`); the page has no script and every chart has a table.
 
-## Architecture self-model (ARCH-SELF-MODEL-1, v1.47.0, pillar autonomy)
+## Architecture self-model (ARCH-SELF-MODEL-1, v1.48.0, pillar autonomy)
 The fleet's model of itself, computed at request time and kept 5 minutes per isolate; open and read-only (OPEN-ACCESS-1), names and counts only.
 Page `/architecture` (Platform area, sub-bar "Architecture"); JSON `GET /api/architecture` (`?full=1` adds the table index and per-worker table lists,
 `?q=<text>` searches workers and tables), `/api/architecture/worker/<name>`, `/api/architecture/table/<name>` (bare name, suffix or `db.table`) and
