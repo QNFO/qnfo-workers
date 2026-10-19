@@ -106,7 +106,7 @@ function clampMaxTokens(requested, isReason) {
 __name(clampMaxTokens, "clampMaxTokens");
 __name2(clampMaxTokens, "clampMaxTokens");
 __name22(clampMaxTokens, "clampMaxTokens");
-var VERSION = "4.14.0-companion-signin"; // 4.14.0 COMPANION-LOGIN-1 + COMPANION-DOMAIN-1 + COMPANION-EMAIL-OPT-IN-1 + COMPANION-STALE-1 (2026-10-19, owner: "stop asking me for keys ... one-time email passwords are fine"; "for personal shit, use q08.org"; "the emails are stale"; pillar personal): /companion signs in with a 6-digit code mailed to the owner (SEND_EMAIL, one fixed address, rate-limited) and the device stays signed in for 180 days by an HttpOnly cookie (cmp_sessions, hashes only; cookie writes also need X-Companion: 1); the bearer key still works for tools and MCP; me.q08.org/ opens the companion; Data tab sets companion e-mail off (default), daily or all and signs out; reminders more than 3 days past their date are no longer the one thing or a nudge, and Today counts them once. // 4.13.1 COMPANION-CONTEXT-QUERY-URL-1 (issue 100041, privacy): GET /companion/api/context?q= put the owner's words in a logged URL; the route is now POST with q in the JSON body, and a GET answers 405 without reading the query. // 4.12.0 RED-TEAM-1: the companion red-teamed (risk words with curly apostrophes, more phrasings and Dutch; care and presence never retire; risk follow-up with the crisis lines on Today for a day; quiet hours on mirrored pushes; pause shared with the e-mail ladder; captured text treated as data in the chat prompt; Talk conversations in export and delete; warm fallback when the model is down; lock-screen setting; tick heartbeat on Today). // 4.11.0 COMPANION-BEST-PRACTICE-1: evidence-based companion (behavioral activation ratings and an activity bank, a Stanley-Brown safety plan in crisis replies, two-weekly WHO-5 with a gentle GP suggestion, pause, weekly retry of retired nudges, connection nudge, discreet lock-screen care pushes, 30-day voice-note retention). // 4.10.0 COMPANION-1: /companion (capture text, voice and photos; GTD next actions; mood with context; FSRS flashcards; journal; privacy export and delete), Web Push nudges from the companion Durable Object on a 15-minute alarm sharing the wellbeing ladder's budget, cmp_* tools in chat and MCP, /v1/audio/transcriptions. // 4.9.1-log-catches 4.9.0 CRON-ONLY-HEARTBEAT-1 (agent_issues 2397): the scheduled run upserts its qnfo-audit fleet_heartbeat row when it finishes. // 4.8.6 CRYPTO-IDS-1: the 18 row ids and the feed fallback id come from crypto.getRandomValues (rhex), not Math.random; same id shapes. // 4.8.5 // 4.8.5-doi-scrub NOZ-DOI-1: the separation prompt names no external registry. 4.8.4 below. // 4.13.0 CRON-GRID-1 (owner directive 2026-10-19, pillar personal): the trigger is hourly at :05; the daily 05:05 run (mail sync, ledger sync, companion re-arm, brief) runs on the grid fire of its slot, never retried (it sends the brief), and every fire is a cron_fire_log row CRON-WATCH-1 reads. // 4.12.0 RED-TEAM-1: the companion red-teamed (risk words with curly apostrophes, more phrasings and Dutch; care and presence never retire; risk follow-up with the crisis lines on Today for a day; quiet hours on mirrored pushes; pause shared with the e-mail ladder; captured text treated as data in the chat prompt; Talk conversations in export and delete; warm fallback when the model is down; lock-screen setting; tick heartbeat on Today). // 4.11.0 COMPANION-BEST-PRACTICE-1: evidence-based companion (behavioral activation ratings and an activity bank, a Stanley-Brown safety plan in crisis replies, two-weekly WHO-5 with a gentle GP suggestion, pause, weekly retry of retired nudges, connection nudge, discreet lock-screen care pushes, 30-day voice-note retention). // 4.10.0 COMPANION-1: /companion (capture text, voice and photos; GTD next actions; mood with context; FSRS flashcards; journal; privacy export and delete), Web Push nudges from the companion Durable Object on a 15-minute alarm sharing the wellbeing ladder's budget, cmp_* tools in chat and MCP, /v1/audio/transcriptions. // 4.9.1-log-catches 4.9.0 CRON-ONLY-HEARTBEAT-1 (agent_issues 2397): the scheduled run upserts its qnfo-audit fleet_heartbeat row when it finishes. // 4.8.6 CRYPTO-IDS-1: the 18 row ids and the feed fallback id come from crypto.getRandomValues (rhex), not Math.random; same id shapes. // 4.8.5 // 4.8.5-doi-scrub NOZ-DOI-1: the separation prompt names no external registry. 4.8.4 below.
+var VERSION = "4.15.0-companion-week"; // 4.15.0 COMPANION-WEEK-1 (2026-10-19, agent_issues 100197, pillar personal, owner ask: "WHAT ELSE IS IN BACKLOG/ROADMAP THAT CAN BE IMPLEMENTED?"): with companion e-mail off the Sunday review reached no one; the companion now builds "Your week" from its own record (mood days against the week before, best day, what was done and what felt good, actions done, one idea from what helped; never what was missed), shows it on Today from Sunday 18:00 through Monday with a hide button, sends one quiet "Your week" push on Sunday evening under quiet hours, the cap and the pause, and shows the last week on the Data tab (GET /companion/api/week, POST /companion/api/week/seen). // 4.14.0 COMPANION-LOGIN-1 + COMPANION-DOMAIN-1 + COMPANION-EMAIL-OPT-IN-1 + COMPANION-STALE-1 (2026-10-19, owner: "stop asking me for keys ... one-time email passwords are fine"; "for personal shit, use q08.org"; "the emails are stale"; pillar personal): /companion signs in with a 6-digit code mailed to the owner (SEND_EMAIL, one fixed address, rate-limited) and the device stays signed in for 180 days by an HttpOnly cookie (cmp_sessions, hashes only; cookie writes also need X-Companion: 1); the bearer key still works for tools and MCP; me.q08.org/ opens the companion; Data tab sets companion e-mail off (default), daily or all and signs out; reminders more than 3 days past their date are no longer the one thing or a nudge, and Today counts them once. // 4.13.1 COMPANION-CONTEXT-QUERY-URL-1 (issue 100041, privacy): GET /companion/api/context?q= put the owner's words in a logged URL; the route is now POST with q in the JSON body, and a GET answers 405 without reading the query. // 4.12.0 RED-TEAM-1: the companion red-teamed (risk words with curly apostrophes, more phrasings and Dutch; care and presence never retire; risk follow-up with the crisis lines on Today for a day; quiet hours on mirrored pushes; pause shared with the e-mail ladder; captured text treated as data in the chat prompt; Talk conversations in export and delete; warm fallback when the model is down; lock-screen setting; tick heartbeat on Today). // 4.11.0 COMPANION-BEST-PRACTICE-1: evidence-based companion (behavioral activation ratings and an activity bank, a Stanley-Brown safety plan in crisis replies, two-weekly WHO-5 with a gentle GP suggestion, pause, weekly retry of retired nudges, connection nudge, discreet lock-screen care pushes, 30-day voice-note retention). // 4.10.0 COMPANION-1: /companion (capture text, voice and photos; GTD next actions; mood with context; FSRS flashcards; journal; privacy export and delete), Web Push nudges from the companion Durable Object on a 15-minute alarm sharing the wellbeing ladder's budget, cmp_* tools in chat and MCP, /v1/audio/transcriptions. // 4.9.1-log-catches 4.9.0 CRON-ONLY-HEARTBEAT-1 (agent_issues 2397): the scheduled run upserts its qnfo-audit fleet_heartbeat row when it finishes. // 4.8.6 CRYPTO-IDS-1: the 18 row ids and the feed fallback id come from crypto.getRandomValues (rhex), not Math.random; same id shapes. // 4.8.5 // 4.8.5-doi-scrub NOZ-DOI-1: the separation prompt names no external registry. 4.8.4 below. // 4.13.0 CRON-GRID-1 (owner directive 2026-10-19, pillar personal): the trigger is hourly at :05; the daily 05:05 run (mail sync, ledger sync, companion re-arm, brief) runs on the grid fire of its slot, never retried (it sends the brief), and every fire is a cron_fire_log row CRON-WATCH-1 reads. // 4.12.0 RED-TEAM-1: the companion red-teamed (risk words with curly apostrophes, more phrasings and Dutch; care and presence never retire; risk follow-up with the crisis lines on Today for a day; quiet hours on mirrored pushes; pause shared with the e-mail ladder; captured text treated as data in the chat prompt; Talk conversations in export and delete; warm fallback when the model is down; lock-screen setting; tick heartbeat on Today). // 4.11.0 COMPANION-BEST-PRACTICE-1: evidence-based companion (behavioral activation ratings and an activity bank, a Stanley-Brown safety plan in crisis replies, two-weekly WHO-5 with a gentle GP suggestion, pause, weekly retry of retired nudges, connection nudge, discreet lock-screen care pushes, 30-day voice-note retention). // 4.10.0 COMPANION-1: /companion (capture text, voice and photos; GTD next actions; mood with context; FSRS flashcards; journal; privacy export and delete), Web Push nudges from the companion Durable Object on a 15-minute alarm sharing the wellbeing ladder's budget, cmp_* tools in chat and MCP, /v1/audio/transcriptions. // 4.9.1-log-catches 4.9.0 CRON-ONLY-HEARTBEAT-1 (agent_issues 2397): the scheduled run upserts its qnfo-audit fleet_heartbeat row when it finishes. // 4.8.6 CRYPTO-IDS-1: the 18 row ids and the feed fallback id come from crypto.getRandomValues (rhex), not Math.random; same id shapes. // 4.8.5 // 4.8.5-doi-scrub NOZ-DOI-1: the separation prompt names no external registry. 4.8.4 below.
 // CRYPTO-IDS-1 (WORKERS-BEST-PRACTICES-1): row ids and nonces come from crypto.getRandomValues, never Math.random. rhex(n) returns n lowercase hex characters (same shape as the old Math.random().toString(16).slice(2, 2 + n)).
 function rhex(n) { var b = new Uint8Array(Math.ceil(n / 2)); crypto.getRandomValues(b); var h = ""; for (var i = 0; i < b.length; i++) h += (b[i] + 256).toString(16).slice(1); return h.slice(0, n); }
 // 4.8.4 NO-TOPIC-HARDCODE-1 (owner directive 2026-10-10): the twin, planner and predictor prompts no longer carry the owner's profile gates as hard-coded text; they apply only the gates found in the retrieved profile facets. //4.8.2 LEDGER-PAGE-1 (#1951): the Ledger sync drains calendar-api /feedback by after_id in pages of 500 (max 10 pages per run, id cursor feedback_after_id) so rows beyond the newest 500 are no longer skipped; AWAY-AMS-1 (#1883): inside an away window the brief keeps Google/ICS and manual calendar events whose location is in the Amsterdam area and hides only radar/twin suggestions and catalog rows. // 4.8.0 TWIN-FLASH-1 (owner directive 2026-10-05, #1818): twin primary model glm-5.3-flash (reasoning_effort low), deepseek-v4-pro per-request fallback, automatic revert when today's flash failure share >= 20% over >= 10 calls; 4.7.2 WORKERS-AI-ATTRIBUTION-1 for personal-api (#1833): every env.AI.run (embeddings, OCR/vision, chat, Durable Object chat) is counted in qnfo-audit.ai_call_counters (purpose binding: calls, tokens, neurons; counts only, no text) through the same __aiAttrEnv shim qnfo-research-exec uses; no new model call, no behaviour change. // 4.7.1 TOOL-TRACE-MEMORY-1 (#1805): internal tool-trace chat rows (model tool/mcp-tool) no longer reach thread memory or the cross-thread context.
@@ -1373,8 +1373,12 @@ var CMP = (() => {
 //  16. Risk words are read with curly apostrophes, more English phrasings and Dutch; care and presence never retire.
 //  17. Quiet hours and pause bind every sender: mirrored ladder pushes and the e-mail ladder itself.
 //  18. Captured text is data in the chat prompt (untrusted()); export and delete cover Talk conversations.
+//
+// COMPANION-WEEK-1 (2026-10-19): companion e-mail is off by default, so the Sunday review lives in the app.
+//  19. "Your week" on Today from Sunday 18:00 to the end of Monday, one quiet push on Sunday evening under rules 1, 2
+//      and 11, and the last week on the Data tab. It says what happened and what helped, never what was missed.
 
-const COMPANION_VERSION = "1.3.0";
+const COMPANION_VERSION = "1.4.0";
 const TZ = "Europe/Amsterdam";
 const CONTEXTS = [
   { name: "@home", hint: "chores, cooking, things in the flat" },
@@ -1385,7 +1389,7 @@ const CONTEXTS = [
   { name: "@anywhere", hint: "thinking, reading, small things" }
 ];
 const ENERGY = ["low", "medium", "high"];
-const NUDGE_KINDS = ["cmp-checkin", "cmp-care", "cmp-reflect", "cmp-next", "cmp-review", "cmp-anchor", "cmp-presence", "cmp-measure", "cmp-connect"];
+const NUDGE_KINDS = ["cmp-checkin", "cmp-care", "cmp-reflect", "cmp-next", "cmp-review", "cmp-anchor", "cmp-presence", "cmp-measure", "cmp-connect", "cmp-week"];
 // The e-mail ladder's asks are pushed to the phone too, so the two senders read as one companion.
 const LADDER_KINDS = ["checkin", "micro", "body", "contact", "care", "presence"];
 
@@ -2020,6 +2024,7 @@ async function pruneMedia(env, days, atIso) {
 // ---------------------------------------------------------------- what to say (fixed, his own words reused)
 
 const TEXTS = {
+  week: ["Your week is ready: a short look back, and one idea for the week ahead. Nothing to do."],
   checkin: ["How's it landing today? Two taps: mood, then energy.", "Morning. How are you, 1 to 5? Nothing else needed.", "Quick one: how's today feeling so far?"],
   care: [
     "Today looks heavy. You don't have to do anything with it. What would make the next hour 5% easier?",
@@ -2086,6 +2091,94 @@ function receptiveHours(hours) {
 // st: { nowIso, hour, cfg, todays[], recent[], unansweredStreak, retired:Set, mood:{today,energy_today,avg7,avg2},
 //       checkinSentToday, journalToday, lastUserIso, actionsDoneToday, nextActions[], dueCards, crisisLevel24h,
 //       receptive:Set|null, pushReady }
+// ---------------------------------------------------------------- your week (COMPANION-WEEK-1, rule 19)
+// personal-companion's Sunday review is mailed only when e-mail is on; with it off (the default since
+// COMPANION-EMAIL-OPT-IN-1) the row is marked sent "via app" and nothing showed it. The look-back is built here from the
+// companion's own record. Like the e-mailed review it reports what happened and never totals what was missed.
+function addDays(day, n) { const d = new Date(day + "T12:00:00Z"); d.setUTCDate(d.getUTCDate() + n); return d.toISOString().slice(0, 10); }
+function mondayOf(day) { const d = new Date(day + "T12:00:00Z"); return addDays(day, -((d.getUTCDay() + 6) % 7)); }
+// The week Today looks back on: the current one from Sunday 18:00, the one just ended all Monday, otherwise none.
+function weekWindow(lp) {
+  if (lp.dow === 0 && lp.hour >= 18) return mondayOf(lp.day);
+  if (lp.dow === 1) return addDays(lp.day, -7);
+  return null;
+}
+const WEEKDAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+const r1 = (x) => Math.round(x * 10) / 10;
+// Pure: the card's words from the week's numbers. enough is false on a thin week, and then nothing reaches out.
+function weekText(d) {
+  const moodDays = (d && d.moodDays || []).filter((x) => x && Number.isFinite(Number(x.m)));
+  const acts = (d && d.activities) || [];
+  const done = Number(d && d.actionsDone) || 0;
+  const enough = moodDays.length >= 2 || acts.length >= 1 || done >= 1;
+  const lines = [];
+  if (!enough) {
+    lines.push("A quiet week on here, and that's fine. A mood tap now and then is enough for me to show you a pattern next Sunday.");
+    return { week: d && d.week, title: "Your week", enough, lines, idea: null };
+  }
+  if (moodDays.length) {
+    const avg = r1(moodDays.reduce((a, x) => a + Number(x.m), 0) / moodDays.length);
+    let l = "You checked in on " + moodDays.length + (moodDays.length === 1 ? " day" : " days") + ". Mood averaged " + avg + " out of 5";
+    const prev = d.prevAvg === null || d.prevAvg === undefined ? null : r1(Number(d.prevAvg));
+    if (prev !== null && Number.isFinite(prev)) l += avg - prev >= 0.3 ? ", a little higher than the week before (" + prev + ")." : prev - avg >= 0.3 ? ", a bit lower than the week before (" + prev + "). That's information, not a grade." : ", about the same as the week before.";
+    else l += ".";
+    lines.push(l);
+    if (moodDays.length >= 3) {
+      const best = moodDays.slice().sort((a, b) => Number(b.m) - Number(a.m) || String(a.day).localeCompare(String(b.day)))[0];
+      lines.push("Your best day was " + WEEKDAYS[new Date(best.day + "T12:00:00Z").getUTCDay()] + ".");
+    }
+  }
+  if (acts.length) {
+    const titles = [...new Set(acts.map((a) => String(a.title || "").trim()).filter(Boolean))];
+    lines.push("You did: " + titles.slice(0, 5).join("; ") + (titles.length > 5 ? "; and " + (titles.length - 5) + " more" : "") + ".");
+    const rated = acts.map((a) => ({ title: a.title, v: [a.pleasure, a.mastery].map(Number).filter((x) => x >= 1 && x <= 5) })).filter((a) => a.v.length).map((a) => ({ title: a.title, m: a.v.reduce((x, y) => x + y, 0) / a.v.length })).sort((a, b) => b.m - a.m);
+    if (rated.length && rated[0].m >= 4) lines.push(String(rated[0].title).trim() + " felt good (" + r1(rated[0].m) + " out of 5).");
+  }
+  if (done) lines.push(done + (done === 1 ? " thing" : " things") + " off your list.");
+  const idea = d.idea && d.idea.title ? { title: String(d.idea.title), minutes: Number(d.idea.minutes) || 10 } : null;
+  if (idea) lines.push("For the week ahead, if you want one thing: " + idea.title + " (" + idea.minutes + " min).");
+  lines.push("Nothing needed here.");
+  return { week: d.week, title: "Your week", enough, lines, idea };
+}
+async function moodByDay(env, from, to) {
+  const out = {};
+  const add = (rows) => { for (const r of rows || []) { if (r.m === null || r.m === undefined) continue; out[r.day] = out[r.day] || []; out[r.day].push(Number(r.m)); } };
+  add(await all(env.PERSONAL, "SELECT day, AVG(score) AS m FROM cmp_mood WHERE day >= ? AND day < ? GROUP BY day", from, to).catch(() => []));
+  add(await all(env.PERSONAL, "SELECT day, AVG(mood) AS m FROM wellbeing_checkins WHERE mood IS NOT NULL AND day >= ? AND day < ? GROUP BY day", from, to).catch(() => []));
+  return Object.keys(out).sort().map((day) => ({ day, m: r1(out[day].reduce((a, b) => a + b, 0) / out[day].length) }));
+}
+// The week to show (`week`, a Monday) or, by default, the one Today would show, else the last finished week.
+async function weekLookback(env, atIso, week) {
+  const cfg = await loadCfg(env);
+  const now = atIso || nowIso();
+  const lp = localParts(now, cfg.tz);
+  const wk = /^\d{4}-\d{2}-\d{2}$/.test(String(week || "")) ? mondayOf(week) : weekWindow(lp) || addDays(mondayOf(lp.day), -7);
+  const end = addDays(wk, 7);
+  const [moodDays, prevDays, activities, done, helps, bank] = await Promise.all([
+    moodByDay(env, wk, end), moodByDay(env, addDays(wk, -7), wk),
+    all(env.PERSONAL, "SELECT title, category, activity_id, pleasure, mastery FROM cmp_activity_log WHERE day >= ? AND day < ? ORDER BY ts", wk, end).catch(() => []),
+    one(env.PERSONAL, "SELECT COUNT(*) AS n FROM tasks WHERE status = 'done' AND done_at >= ? AND done_at < ?", dayStartIso(wk, cfg.tz), dayStartIso(end, cfg.tz)).catch(() => null),
+    whatHelps(env, 90).catch(() => null), activityBank(env)
+  ]);
+  const doneThisWeek = activities.map((a) => String(a.title || "").toLowerCase());
+  // One idea: what he rated as helping and did not get to this week, else a pick from the bank by the same scores.
+  const helped = ((helps && helps.activities) || []).find((a) => a.n >= 2 && a.score >= 3.75 && !doneThisWeek.includes(String(a.title || "").toLowerCase()));
+  const fromBank = helped ? (bank || []).find((b) => b.id === helped.key) : null;
+  const idea = helped ? { title: (fromBank || helped).title, minutes: fromBank ? fromBank.minutes : 15 } : pickActivity(bank, helps, "medium", doneThisWeek);
+  const prevAvg = prevDays.length >= 2 ? prevDays.reduce((a, x) => a + x.m, 0) / prevDays.length : null;
+  const out = weekText({ week: wk, moodDays, prevAvg, activities, actionsDone: done ? Number(done.n) : 0, idea });
+  return Object.assign({ ok: true }, out, { mood_days: moodDays, seen: cfg.week_seen === wk });
+}
+// Read on Today: hides the card for this week and counts the Sunday push as landed.
+async function weekSeen(env, week) {
+  const wk = /^\d{4}-\d{2}-\d{2}$/.test(String(week || "")) ? mondayOf(week) : null;
+  if (!wk) return { ok: false, error: "week (a date) required" };
+  const now = nowIso();
+  await env.PERSONAL.prepare("INSERT INTO wellbeing_config (key, value, updated_at) VALUES ('week_seen', ?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at").bind(JSON.stringify(wk), now).run();
+  await env.PERSONAL.prepare("UPDATE companion_nudges SET state = 'done', closed_at = ? WHERE kind = 'cmp-week' AND state IN ('sent','shown') AND day >= ?").bind(now, wk).run();
+  return { ok: true, week: wk, reply: "See you next Sunday." };
+}
+
 function planNudge(st) {
   const cfg = Object.assign({ quiet_start: 22, quiet_end: 7.5, max_per_day: 3, min_gap_min: 150, max_unanswered: 3 }, st.cfg || {});
   const h = st.hour;
@@ -2126,6 +2219,10 @@ function planNudge(st) {
     const helpedTitle = helped ? ((st.activityBank || []).find((b) => b.id === helped.key) || helped).title : "";
     const pool = helped ? TEXTS.care.concat(["Last time, " + helpedTitle + " helped a little. Only if it feels right; resting is fine too."]) : TEXTS.care;
     return mk("cmp-care", pickLru(pool, recentAsks), 2, 360, "low-day mood=" + mood.today + " avg2=" + mood.avg2 + " avg7=" + mood.avg7);
+  }
+  // Rule 19: one Sunday-evening push when the week has something to show (gatherState sets weekReady).
+  if (st.weekReady && h >= 18 && h < 21.5 && !kindsToday.has("cmp-week") && !retired.has("cmp-week")) {
+    return mk("cmp-week", TEXTS.week[0], 2, 30 * 60, "week-lookback " + st.weekReady);
   }
   if (h >= 19.5 && h < 21.75 && !st.journalToday && !kindsToday.has("cmp-reflect") && !retired.has("cmp-reflect")) {
     return mk("cmp-reflect", pickLru(TEXTS.reflect, recentAsks), 3, 240, "evening-no-journal");
@@ -2341,12 +2438,20 @@ async function gatherState(env, at) {
   ]);
   let crisisLevel24h = 0;
   for (const t of recentTexts) crisisLevel24h = Math.max(crisisLevel24h, crisisSignal(t).level);
+  // Rule 19: only on Sunday evening, and only once a week, is the look-back built for the planner.
+  let weekReady = null;
+  if (lp.dow === 0 && lp.hour >= 18 && lp.hour < 21.5) {
+    const wk = mondayOf(lp.day);
+    if (!recent.some((r) => r.kind === "cmp-week" && String(r.day) >= wk) && cfg.week_seen !== wk) {
+      try { if ((await weekLookback(env, now, wk)).enough) weekReady = wk; } catch (e) { weekReady = null; }
+    }
+  }
   const [bank, helps, who5, social] = await Promise.all([
     activityBank(env), whatHelps(env, 90).catch(() => null), who5Status(env, cfg, now).catch(() => ({ due: false })), daysSinceSocial(env, now).catch(() => null)
   ]);
   return {
     activityBank: bank, helps, who5Due: !!who5.due, who5: who5.read || null, daysSinceSocial: social, paused: isPaused(cfg, Date.parse(now)),
-    nowIso: now, day: lp.day, hour: lp.hour, cfg, todays, recent, unansweredStreak: streak, retired, mood,
+    nowIso: now, day: lp.day, hour: lp.hour, dow: lp.dow, cfg, todays, recent, unansweredStreak: streak, retired, mood, weekReady,
     checkinSentToday: todays.some((r) => r.kind === "checkin"), journalToday: !!(journal && journal.n > 0),
     lastUserIso: lastUser.sort().pop() || null, actionsDoneToday: done ? Number(done.n) : 0, nextActions: next,
     dueCards: due ? Number(due.n) : 0, pushReady: !!(subs && subs.n > 0), crisisLevel24h,
@@ -2596,9 +2701,9 @@ async function processInbox(env, deps, limit) {
 function pushPayloadFor(row) {
   const ask = ["micro", "body", "contact", "care", "cmp-next", "cmp-anchor", "cmp-review", "cmp-connect"].includes(row.kind);
   return {
-    title: row.kind === "cmp-care" || row.kind === "presence" || row.kind === "cmp-presence" ? "Here with you" : row.kind === "checkin" || row.kind === "cmp-checkin" ? "How's it landing?" : row.kind === "cmp-reflect" ? "Before the day closes" : row.kind === "cmp-measure" ? "Two-weekly check" : row.kind === "cmp-connect" ? "Someone to hear from" : "One small thing",
+    title: row.kind === "cmp-care" || row.kind === "presence" || row.kind === "cmp-presence" ? "Here with you" : row.kind === "checkin" || row.kind === "cmp-checkin" ? "How's it landing?" : row.kind === "cmp-reflect" ? "Before the day closes" : row.kind === "cmp-measure" ? "Two-weekly check" : row.kind === "cmp-connect" ? "Someone to hear from" : row.kind === "cmp-week" ? "Your week" : "One small thing",
     body: String(row.ask || "").slice(0, 300), tag: "cmp-" + row.id, id: row.id, kind: row.kind,
-    url: "/companion#n=" + row.id, ask
+    url: row.kind === "cmp-week" ? "/companion#week" : "/companion#n=" + row.id, ask
   };
 }
 // deps.pushed: { has(id), add(id) } so a ladder row is pushed once. deps.keys: VAPID keys. deps.fetch: optional.
@@ -2665,8 +2770,11 @@ async function today(env, deps) {
   let weather = null;
   if (deps && deps.weather) { try { const w = await deps.weather(env); if (w && w.ok) weather = w; } catch (e) { /* offline */ } }
   const suggestion = st.mood.today !== null && st.mood.today <= 2 ? null : chooseAction(st.nextActions, energyFor(st.mood));
+  let week = null;
+  const wk = weekWindow({ day: st.day, hour: st.hour, dow: st.dow });
+  if (wk && st.cfg.week_seen !== wk) { try { const w = await weekLookback(env, st.nowIso, wk); if (w.enough) week = { week: w.week, title: w.title, lines: w.lines }; } catch (e) { week = null; } }
   return {
-    day: st.day, greeting: greet, hour: Math.round(st.hour * 100) / 100, mood: st.mood, sleep, weather,
+    day: st.day, greeting: greet, hour: Math.round(st.hour * 100) / 100, mood: st.mood, sleep, weather, week,
     low_day: (st.mood.today !== null && st.mood.today <= 2) || st.crisisLevel24h >= 1,
     one_thing: suggestion, next_actions: st.nextActions.slice(0, 12), actions_done_today: st.actionsDoneToday,
     due_cards: st.dueCards, open_nudges: open, inbox_unprocessed: inbox ? Number(inbox.n) : 0, last_journal: lastJournal,
@@ -3012,6 +3120,8 @@ async function handleCompanion(request, env, ctx, deps) {
     if (r === "who5" && m === "GET") return J(Object.assign({ ok: true, items: WHO5_ITEMS, scale: WHO5_SCALE }, await who5Status(env, await loadCfg(env))));
     if (r === "who5" && m === "POST") { const b = await body(); const out = await recordWho5(env, b.items); return J(out, out.ok ? 200 : 400); }
     if (r === "settings" && m === "POST") { const out = await saveSettings(env, await body()); return J(out, out.ok ? 200 : 400); }
+    if (r === "week" && m === "GET") return J(await weekLookback(env, undefined, url.searchParams.get("week")));
+    if (r === "week/seen" && m === "POST") { const b = await body(); const out = await weekSeen(env, b.week); return J(out, out.ok ? 200 : 400); }
     if (r === "pause" && m === "POST") { const b = await body(); const out = await setPause(env, b.hours); return J(out, out.ok ? 200 : 400); }
     if (r === "push/key" && m === "GET") return stub().fetch("https://do/companion-do/key");
     if (r === "push/subscribe" && m === "POST") {
@@ -3155,9 +3265,10 @@ function renderToday(t){$('login').classList.add('hide');var v=$('v-today');v.in
  if(t.crisis_lines)v.appendChild(el('div',{cls:'warn',style:'margin:0 0 12px'},[t.crisis_lines]));
  if(t.paused_until)v.appendChild(el('div',{cls:'card'},[el('div',{text:'Reach-outs are paused until '+t.paused_until.slice(0,16).replace('T',' ')+' UTC. Everything here still works.'}),el('div',{cls:'row',style:'margin-top:8px'},[el('button',{text:'Resume now',onclick:function(){pause(0)}})])]));
  if(t.low_day){var lc=el('div',{cls:'card'},[el('div',{text:'Today looks heavy. Nothing on this page is required. If you want, start with water and a window.'})]);if(t.safety_plan_filled)lc.appendChild(el('div',{cls:'row',style:'margin-top:8px'},[el('button',{text:'Open my plan',onclick:function(){go('data');setTimeout(function(){var p=$('plan');if(p)p.scrollIntoView()},400)}})]));v.appendChild(lc)}
+ if(t.week){var wkc=el('div',{cls:'card',id:'week'},[el('h2',{text:t.week.title})].concat(t.week.lines.map(function(x){return el('div',{text:x,style:'margin:4px 0'})})));wkc.appendChild(el('div',{cls:'row',style:'margin-top:8px'},[el('button',{text:'Thanks, hide this',onclick:function(){api('/companion/api/week/seen',{json:{week:t.week.week}}).then(function(r){wkc.innerHTML='';say(wkc,r.reply||r.error)})}})]));v.appendChild(wkc)}
  if(t.support_hint)v.appendChild(el('div',{cls:'card'},[el('div',{text:t.support_hint})]));
  if(t.who5_due){var wc=el('div',{cls:'card'},[el('h2',{text:'Two-weekly check'}),el('div',{cls:'mute',text:'Five questions about the last two weeks (WHO-5). About a minute, whenever you like.'})]);wc.appendChild(el('div',{cls:'row',style:'margin-top:8px'},[el('button',{cls:'p',text:'Start',onclick:function(){who5Form(wc)}})]));v.appendChild(wc)}
- (t.open_nudges||[]).forEach(function(n){var c=el('div',{cls:'card'},[el('div',{text:n.ask})]);if(['checkin','cmp-checkin','presence','cmp-presence','cmp-measure'].indexOf(n.kind)<0){c.appendChild(el('div',{cls:'row',style:'margin-top:8px'},[el('button',{cls:'p',text:'Did it',onclick:function(){answer(n.id,'done',c,['cmp-next','cmp-anchor','cmp-connect','micro','body','contact'].indexOf(n.kind)>=0?{nudge_id:n.id}:null)}}),el('button',{text:'Not today',onclick:function(){answer(n.id,'declined',c)}})]))}v.appendChild(c)});
+ (t.open_nudges||[]).forEach(function(n){if(n.kind==='cmp-week')return;var c=el('div',{cls:'card'},[el('div',{text:n.ask})]);if(['checkin','cmp-checkin','presence','cmp-presence','cmp-measure'].indexOf(n.kind)<0){c.appendChild(el('div',{cls:'row',style:'margin-top:8px'},[el('button',{cls:'p',text:'Did it',onclick:function(){answer(n.id,'done',c,['cmp-next','cmp-anchor','cmp-connect','micro','body','contact'].indexOf(n.kind)>=0?{nudge_id:n.id}:null)}}),el('button',{text:'Not today',onclick:function(){answer(n.id,'declined',c)}})]))}v.appendChild(c)});
  var m=el('div',{cls:'card'});m.appendChild(el('h2',{text:t.mood&&t.mood.today?'Mood today: '+t.mood.today+'/5 (log again any time)':'How are you?'}));
  pick={mood:null,energy:null,tags:{}};m.appendChild(scale('mood',MOOD));m.appendChild(el('div',{cls:'mute',text:'energy',style:'margin:8px 0 4px'}));m.appendChild(scale('energy',EN));
  var tg=el('div',{cls:'row',style:'margin-top:8px'});TAGS.forEach(function(x){var b=el('button',{cls:'chip',text:x,onclick:function(){pick.tags[x]=!pick.tags[x];b.classList.toggle('sel',!!pick.tags[x])}});tg.appendChild(b)});m.appendChild(tg);
@@ -3213,6 +3324,7 @@ function loadData(){api('/companion/api/dashboard').then(function(d){var b=$('da
  var na=el('input',{placeholder:'Add your own: something that usually lifts you',style:'margin-top:8px'});wh.appendChild(na);wh.appendChild(el('div',{cls:'row',style:'margin-top:6px'},[el('button',{text:'Add',onclick:function(){if(!na.value.trim())return;api('/companion/api/activities',{json:{title:na.value.trim()}}).then(function(){na.value='';say(wh,'Added to your ideas.')})}})]));b.appendChild(wh);
  if((d.who5_history||[]).length){var w5=el('div',{cls:'card'},[el('h2',{text:'Well-being, two-weekly (WHO-5, 0-100)'})]);d.who5_history.forEach(function(x){w5.appendChild(el('div',{cls:'row'},[el('div',{text:x.day,style:'width:96px',cls:'mute'}),el('div',{cls:'grow'},[el('div',{cls:'bar',style:'width:'+x.score+'%'})]),el('div',{text:String(x.score),style:'width:40px'})]))});w5.appendChild(el('div',{cls:'mute',text:'50 or more is generally a good range. A lower score is a reason to be kind to yourself and to talk to someone, not a diagnosis.'}));b.appendChild(w5)}
  if((d.mood_by_tags_60d||[]).length){var tt=el('div',{cls:'card'},[el('h2',{text:'Mood by tags (60 days)'})]);d.mood_by_tags_60d.forEach(function(x){tt.appendChild(el('div',{cls:'mute',text:x.tags+': '+x.mood+' ('+x.n+')'}))});b.appendChild(tt)}});
+ api('/companion/api/week').then(function(w){if(!w||!w.lines)return;var lw=el('div',{cls:'card'},[el('h2',{text:'Week of '+w.week})].concat(w.lines.map(function(x){return el('div',{cls:'mute',text:x})})));var first=b.firstChild;b.insertBefore(lw,first)}).catch(warn);
  loadPlan();
  api('/companion/api/privacy').then(function(p){var b=$('priv');b.innerHTML='';var t=el('table');t.appendChild(el('tr',{},[el('th',{text:'What'}),el('th',{text:'rows'}),el('th',{text:'since'})]));p.tables.forEach(function(x){t.appendChild(el('tr',{},[el('td',{text:x.what}),el('td',{text:String(x.rows)}),el('td',{text:(x.oldest||'').slice(0,10)})]))});
  var conf=el('input',{placeholder:"type: delete everything"});var out=el('div');
@@ -3233,13 +3345,13 @@ function enablePush(){if(!('serviceWorker' in navigator)||!('PushManager' in win
 var views={today:load,capture:inbox,talk:drawChat,do:loadDo,learn:loadLearn,journal:loadJournal,data:loadData};
 function go(v){Array.prototype.forEach.call(document.querySelectorAll('.v'),function(s){s.classList.add('hide')});$('v-'+v).classList.remove('hide');Array.prototype.forEach.call(document.querySelectorAll('nav button'),function(b){b.classList.toggle('on',b.getAttribute('data-v')===v)});views[v]()}
 Array.prototype.forEach.call(document.querySelectorAll('nav button'),function(b){b.onclick=function(){go(b.getAttribute('data-v'))}});
-function fromHash(){var h=location.hash.slice(1);if(!h)return;var q={};h.split('&').forEach(function(x){var p=x.split('=');q[p[0]]=decodeURIComponent(p[1]||'')});history.replaceState(null,'','/companion');if(q.n&&(q.a==='done'||q.a==='no'))api('/companion/api/nudge',{json:{id:Number(q.n),state:q.a==='done'?'done':'declined'}}).then(load)}
+function fromHash(){var h=location.hash.slice(1);if(!h)return;var q={};h.split('&').forEach(function(x){var p=x.split('=');q[p[0]]=decodeURIComponent(p[1]||'')});history.replaceState(null,'','/companion');if(q.week!==undefined){go('today');setTimeout(function(){var w=$('week');if(w)w.scrollIntoView()},800);return}if(q.n&&(q.a==='done'||q.a==='no'))api('/companion/api/nudge',{json:{id:Number(q.n),state:q.a==='done'?'done':'declined'}}).then(load)}
 if('serviceWorker' in navigator)navigator.serviceWorker.register('/companion/sw.js',{scope:'/companion'}).catch(warn);
 fromHash();go('today')
 window.addEventListener('hashchange',fromHash);
 </script></body></html>`;
 
-return Object.freeze({ COMPANION_VERSION, TZ, CONTEXTS, ENERGY, NUDGE_KINDS, LADDER_KINDS, DDL, TASK_COLUMNS, ensureSchema, nowIso, FRESH_DUE_SQL, rid, esc, tzOffsetMinutes, localParts, dayKey, inQuiet, FSRS_W, RETENTION, MAX_INTERVAL_DAYS, retrievability, intervalDays, fsrsSchedule, CLARIFY_SYSTEM, contextFor, heuristicClarify, parseClarify, crisisSignal, FALLBACK_CRISIS_LINES, crisisText, SAFETY_PLAN_FIELDS, normalizeSafetyPlan, saveSafetyPlan, ACTIVITY_CATEGORIES, SEED_ACTIVITIES, helpScores, pickActivity, logActivity, whatHelps, activityBank, addActivity, WHO5_ITEMS, WHO5_SCALE, who5Score, who5Read, recordWho5, who5Status, setPause, fallbackReply, EMAIL_MODES, saveSettings, LOGIN_TO, SESSION_COOKIE, SESSION_MS, maskedLoginTo, sessionFor, sendLoginCode, verifyLoginCode, isPaused, NEVER_RETIRE, retiredFrom, DISCREET_KINDS, discreetPayload, pruneMedia, TEXTS, pickLru, energyFor, chooseAction, receptiveHours, planNudge, b64u, unb64u, makeVapidKeys, vapidAuthHeader, encryptPayload, sendPush, pushAll, loadCfg, dayStartIso, sleepFromTimestamps, sleepWindow, moodStats, retiredKinds, daysSinceSocial, unansweredStreak, gatherState, remember, recall, contextSnapshot, recordMood, moodReply, addAction, upsertProject, actionDone, addJournal, addCard, reviewCard, answerNudge, MAX_CAPTURE_BYTES, transcribe, capture, clarify, processItem, processInbox, pushPayloadFor, companionTick, today, dashboard, PRIVACY_TABLES, privacy, exportAll, deleteData, PERSONA, untrusted, chatContext, noteRiskInChat, companionTools, TOOL_APPENDIX_LINE, TICK_MS, doKeys, doEnsure, doTick, doAlarm, doFetch, handleTranscription, handleCompanion, MANIFEST, ICON_SVG, SW_JS, PAGE_HTML });
+return Object.freeze({ COMPANION_VERSION, TZ, CONTEXTS, ENERGY, NUDGE_KINDS, LADDER_KINDS, DDL, TASK_COLUMNS, ensureSchema, nowIso, FRESH_DUE_SQL, rid, esc, tzOffsetMinutes, localParts, dayKey, inQuiet, FSRS_W, RETENTION, MAX_INTERVAL_DAYS, retrievability, intervalDays, fsrsSchedule, CLARIFY_SYSTEM, contextFor, heuristicClarify, parseClarify, crisisSignal, FALLBACK_CRISIS_LINES, crisisText, SAFETY_PLAN_FIELDS, normalizeSafetyPlan, saveSafetyPlan, ACTIVITY_CATEGORIES, SEED_ACTIVITIES, helpScores, pickActivity, logActivity, whatHelps, activityBank, addActivity, WHO5_ITEMS, WHO5_SCALE, who5Score, who5Read, recordWho5, who5Status, setPause, fallbackReply, EMAIL_MODES, saveSettings, LOGIN_TO, SESSION_COOKIE, SESSION_MS, maskedLoginTo, sessionFor, sendLoginCode, verifyLoginCode, isPaused, NEVER_RETIRE, retiredFrom, DISCREET_KINDS, discreetPayload, pruneMedia, TEXTS, pickLru, energyFor, chooseAction, receptiveHours, addDays, mondayOf, weekWindow, weekText, weekLookback, weekSeen, planNudge, b64u, unb64u, makeVapidKeys, vapidAuthHeader, encryptPayload, sendPush, pushAll, loadCfg, dayStartIso, sleepFromTimestamps, sleepWindow, moodStats, retiredKinds, daysSinceSocial, unansweredStreak, gatherState, remember, recall, contextSnapshot, recordMood, moodReply, addAction, upsertProject, actionDone, addJournal, addCard, reviewCard, answerNudge, MAX_CAPTURE_BYTES, transcribe, capture, clarify, processItem, processInbox, pushPayloadFor, companionTick, today, dashboard, PRIVACY_TABLES, privacy, exportAll, deleteData, PERSONA, untrusted, chatContext, noteRiskInChat, companionTools, TOOL_APPENDIX_LINE, TICK_MS, doKeys, doEnsure, doTick, doAlarm, doFetch, handleTranscription, handleCompanion, MANIFEST, ICON_SVG, SW_JS, PAGE_HTML });
 })();
 // COMPANION-INLINE-END
 var CMP_DEPS = {

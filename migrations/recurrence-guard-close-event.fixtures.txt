@@ -1,0 +1,80 @@
+#@ about 0 0 0
+RECURRENCE-GUARD-CLOSE-EVENT-1 fixtures (VERIFICATION-PATH-3, agent_issues 100224), copied verbatim from qnfo-audit sqlite_master on 2026-10-19 (SELECT only; D1 database 35e2e573-92f3-46ac-83c6-22f6429fc5e5). Same format as relapse-window-close-event.fixtures.txt, which supplies the five issue tables and their triggers: "#@ <type> <table> <name> <length>" with length(sql) as D1 reported it. Here: the DDL of fleet_tick, ops_config, queue_sla_actions and recurrence_guard_actions, the live recurrence_guard_tick and the one trigger on queue_sla_actions.
+#@ table fleet_tick fleet_tick 158
+CREATE TABLE fleet_tick (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  ts TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')),
+  source TEXT NOT NULL
+)
+#@ trigger fleet_tick recurrence_guard_tick 3284
+CREATE TRIGGER recurrence_guard_tick AFTER INSERT ON fleet_tick
+WHEN (strftime('%M', 'now') < '10' OR NEW.source LIKE 'migration:%')
+  AND COALESCE((SELECT value FROM ops_config WHERE key = 'queue_sla_autofix'), 'on') <> 'off'
+BEGIN
+  INSERT INTO recurrence_guard_actions (issue_id, class, fails, last_observed, prior_status, prior_close_evidence)
+    SELECT x.issue_id, x.class, x.fails, x.last_observed, x.status, x.close_evidence
+    FROM (
+      SELECT c.issue_id, c.class, a.status, c.max_attempts, t.close_evidence,
+        (SELECT COUNT(*) FROM remediation_verifications v WHERE v.class = c.class AND v.pass = 0
+           AND COALESCE(v.observed, '') <> '' AND lower(trim(v.observed)) NOT LIKE 'pending%'
+           AND v.verified_at > MAX(datetime(a.updated_at / 1000, 'unixepoch'),
+                 COALESCE((SELECT MAX(p.verified_at) FROM remediation_verifications p WHERE p.class = c.class AND p.pass = 1), '1970-01-01'))) AS fails,
+        (SELECT substr(v.observed, 1, 120) FROM remediation_verifications v WHERE v.class = c.class ORDER BY v.verified_at DESC LIMIT 1) AS last_observed
+      FROM remediation_contracts c JOIN agent_issues a ON a.id = c.issue_id LEFT JOIN issue_triage t ON t.issue_id = a.id
+      WHERE c.status IN ('active', 'holding') AND a.status IN ('closed', 'resolved') AND typeof(a.updated_at) = 'integer'
+        AND a.updated_at < (CAST(strftime('%s', 'now') AS INTEGER) - 7200) * 1000
+    ) x
+    WHERE x.fails >= MAX(1, COALESCE(x.max_attempts, 3))
+      AND COALESCE(x.last_observed, '') <> '' AND lower(trim(x.last_observed)) NOT LIKE 'pending%';
+  UPDATE agent_issues SET status = 'open', updated_at = CAST(strftime('%s', 'now') AS INTEGER) * 1000,
+      description = COALESCE(description, '') || char(10) || 'REOPENED ' || strftime('%Y-%m-%dT%H:%M:%SZ', 'now') || ' (RECURRENCE-GUARD-SQL-1, qnfo-audit recurrence_guard_tick): '
+        || COALESCE((SELECT 'contract ' || g.class || ' failed ' || g.fails || 'x after the closure and its last pass (last observed ' || COALESCE(g.last_observed, '?') || '). Prior close_evidence: ' || substr(COALESCE(g.prior_close_evidence, '(none)'), 1, 300)
+                       FROM recurrence_guard_actions g WHERE g.issue_id = agent_issues.id ORDER BY g.id DESC LIMIT 1), 'a contract failed after the closure')
+  WHERE status IN ('closed', 'resolved')
+    AND id IN (SELECT issue_id FROM recurrence_guard_actions WHERE applied = 0)
+    AND NOT EXISTS (SELECT 1 FROM agent_issues o WHERE o.status = 'open' AND o.id <> agent_issues.id AND lower(trim(o.title)) = lower(trim(agent_issues.title)));
+  UPDATE issue_triage SET reopened_count = COALESCE(reopened_count, 0) + 1, triage_state = 'triaged', close_evidence = NULL
+  WHERE issue_id IN (SELECT issue_id FROM recurrence_guard_actions WHERE applied = 0)
+    AND issue_id IN (SELECT id FROM agent_issues WHERE status = 'open');
+  UPDATE remediation_contracts SET status = 'active'
+  WHERE status = 'holding' AND class IN (SELECT class FROM recurrence_guard_actions WHERE applied = 0);
+  INSERT INTO queue_sla_actions (stuck_type, n, note)
+    SELECT 'closure-relapse', COUNT(*), group_concat(issue_id, ',') FROM recurrence_guard_actions
+    WHERE applied = 0 HAVING COUNT(*) > 0;
+  UPDATE recurrence_guard_actions SET applied = 1 WHERE applied = 0;
+END
+#@ table ops_config ops_config 112
+CREATE TABLE ops_config (key TEXT PRIMARY KEY, value TEXT, note TEXT, updated_at TEXT DEFAULT (datetime('now')))
+#@ table queue_sla_actions queue_sla_actions 204
+CREATE TABLE queue_sla_actions (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  ts TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')),
+  stuck_type TEXT NOT NULL,
+  n INTEGER NOT NULL,
+  note TEXT
+)
+#@ trigger queue_sla_actions decision_log_queue_sla_ai 1083
+CREATE TRIGGER decision_log_queue_sla_ai AFTER INSERT ON queue_sla_actions
+WHEN NEW.n > 0
+BEGIN
+  INSERT INTO decision_log (actor, assumption, action, evidence, outcome, blast_radius, rollback_path, capability_gain, predicted_outcome, reach_gain, surfaces_tested)
+  VALUES ('queue-sla-tick', 'an item past its SLA is fixed by the tick, not left for a person (QUEUE-SLA-1)',
+    'queue_sla auto-fix ' || NEW.stuck_type || ' on ' || NEW.n || ' item(s)', 'queue_sla_actions #' || NEW.id || ': ' || COALESCE(NEW.note, ''),
+    COALESCE((SELECT auto_fix FROM queue_sla WHERE stuck_type = NEW.stuck_type), 'the fix recorded in queue_sla'),
+    NEW.n || ' row(s) of ' || COALESCE((SELECT queue FROM queue_sla WHERE stuck_type = NEW.stuck_type), 'the queue'),
+    'the revert text each fixed row carries (its prior status); ops_config queue_sla_autofix = off stops the fixes', NULL,
+    'stuck_items_over_sla <= ' || COALESCE((SELECT CAST(CAST(last_value AS INTEGER) AS TEXT) FROM metric_registry WHERE metric = 'stuck_items_over_sla'), '0') || ' within 1 h',
+    NULL, 'D1 fleet tick');
+END
+#@ table recurrence_guard_actions recurrence_guard_actions 336
+CREATE TABLE recurrence_guard_actions (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  ts TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')),
+  issue_id INTEGER NOT NULL,
+  class TEXT NOT NULL,
+  fails INTEGER NOT NULL,
+  last_observed TEXT,
+  prior_status TEXT,
+  prior_close_evidence TEXT,
+  applied INTEGER NOT NULL DEFAULT 0
+)

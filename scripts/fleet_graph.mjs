@@ -76,7 +76,7 @@ export function safeBinding(b) {
 const SQL_START = /^\s*(?:WITH\b|SELECT\b|INSERT\b|UPDATE\b|DELETE\b|REPLACE\b|CREATE\s+(?:TABLE|VIEW|TRIGGER|INDEX|UNIQUE)|ALTER\s+TABLE|DROP\s+(?:TABLE|VIEW|TRIGGER|INDEX))/;
 export function looksLikeSql(s) { return typeof s === "string" && s.length >= 12 && s.length <= 200000 && SQL_START.test(s) && /\b(?:FROM|INTO|UPDATE|TABLE|VIEW|TRIGGER|INDEX|SET)\b/.test(s); }
 const NOT_TABLES = new Set(["select", "values", "set", "where", "json_each", "json_tree", "sqlite_master", "sqlite_schema",
-  "sqlite_sequence", "sqlite_temp_master", "pragma_table_info", "pragma_index_list", "dual", "new", "old", "excluded", "__dyn__", "if", "not", "exists", "lateral"]);
+  "sqlite_sequence", "sqlite_temp_master", "pragma_table_info", "pragma_index_list", "dual", "new", "old", "excluded", "__dyn__", "if", "not", "exists", "lateral", "d1_schema_index"]);
 const IDENT = String.raw`["\x60\[]?([A-Za-z_][A-Za-z0-9_]*)["\x60\]]?`;
 export function sqlTables(sqlIn) {
   const sql = String(sqlIn || "").replace(/--[^\n]*/g, " ").replace(/\/\*[\s\S]*?\*\//g, " ");

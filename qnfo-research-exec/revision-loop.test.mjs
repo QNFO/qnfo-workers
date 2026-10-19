@@ -2,7 +2,8 @@
 // version with a Version History; hand-written papers are never queued; a version that failed RL_MAX_TRIES times waits.
 // Offline, scripted D1s. Run: node qnfo-research-exec/revision-loop.test.mjs
 import assert from "node:assert/strict";
-import { rlNextVersion, rlChangeSummary, rlWithHistory, rlIsRevision, rlEligible, rlSourceId, revisionLoopTick } from "./worker.js";
+import { readFileSync } from "node:fs";
+import { rlNextVersion, rlChangeSummary, rlWithHistory, rlIsRevision, rlEligible, rlErrataBlock, rlSourceId, revisionLoopTick } from "./worker.js";
 
 // Versions move forward from the live one; a rewrite is never a fixed 2.0.0.
 assert.equal(rlNextVersion("1.0.0", true), "1.1.0");
@@ -17,10 +18,15 @@ assert.ok(rlIsRevision({ source: "remediation", source_id: rlSourceId("a-paper",
 assert.ok(!rlIsRevision({ source: "remediation", source_id: "completeness:abc" }));
 assert.ok(!rlIsRevision({ source: "proposal", source_id: "revision:x@1#1" }));
 
-// Only the pipeline's own papers; never one with a named human author.
+// Only the pipeline's own papers, by identifier or queue row; the owner's byline on a pipeline paper does not exclude it.
 assert.ok(rlEligible({ slug: "s", identifier: "qnf-2026-001", authors: "[\"QNFO Research\"]" }, {}));
 assert.ok(rlEligible({ slug: "s", identifier: "x", authors: "" }, { s: 1 }));
-assert.ok(!rlEligible({ slug: "s", identifier: "qnf-2026-001", authors: "[\"Rowan Brad Quni-Gudzinas\"]" }, { s: 1 }));
+assert.ok(rlEligible({ slug: "s", identifier: "qnf-2026-001", authors: "[\"Rowan Brad Quni-Gudzinas\"]" }, {}));
+assert.ok(!rlEligible({ slug: "s", identifier: "adelic-quantum-statistics", authors: "[\"Rowan Brad Quni-Gudzinas\"]" }, {}));
+assert.ok(!rlEligible({ slug: "chapter-1", identifier: "qnfo-2025-00-chapter-1", authors: "[\"QNFO Research\"]" }, {}), "imported owner writing is not a pipeline paper");
+assert.ok(/source_id LIKE 'revision:%' THEN 0 ELSE 1 END, CASE WHEN created_at/.test(readFileSync(new URL("./worker.js", import.meta.url), "utf8")), "queued revisions are claimed ahead of the 72-hour FIFO");
+assert.equal(rlErrataBlock([]), "");
+assert.match(rlErrataBlock([{ claim_text: "U = p(1-p) is concave", detected_by: "qnfo-lifecycle PAPER-LEARN-1" }]), /Reported errors[\s\S]*1\. U = p\(1-p\) is concave \(confirmed by a second model\)/);
 assert.ok(!rlEligible({ slug: "s", identifier: "10.5281/zenodo.1", authors: "" }, {}));
 
 const oldMd = "# T\n\n## Abstract\n\nA.\n\n## 1. Introduction\n\nx y z\n\n## References\n\n[1] One.\n[2] Two.\n";
@@ -50,6 +56,7 @@ function makeEnv(o) {
       if (/FROM version_queue/.test(sql)) return o.vq || [];
       if (/source_id LIKE 'revision:%'/.test(sql)) return o.tries || [];
       if (/SELECT DISTINCT paper_slug/.test(sql)) return o.pipeline || [];
+      if (/FROM internal_errata/.test(sql)) return o.errata || [];
       return [];
     };
     const stmt = (a) => ({
@@ -64,13 +71,16 @@ function makeEnv(o) {
     });
     return Object.assign(stmt([]), { bind: (...a) => stmt(a) });
   } };
-  const papers = { prepare: (sql) => ({ bind: (...a) => ({ all: async () => { w.ageArg = a[0]; return { results: o.papers || [] }; } }) }) };
+  const papers = { prepare: (sql) => ({ bind: (...a) => ({ all: async () => {
+    if (/slug IN/.test(sql)) { w.errataArgs = a; return { results: (o.errataPapers || []).filter((p) => a.indexOf(p.slug) > 0) }; }
+    w.ageArg = a[0]; return { results: o.papers || [] };
+  } }) }) };
   return { env: { QNFO_AUDIT: audit, LIVING_PAPER: papers }, w };
 }
 const P = (slug, extra) => Object.assign({ slug, title: "Title " + slug, abstract: "abs", version: "1.0.0", identifier: "qnf-" + slug, authors: "[\"QNFO Research\"]", release_gate_pass: 0 }, extra || {});
 console.error = () => {};
 {
-  const { env, w } = makeEnv({ papers: [P("busy"), P("human", { authors: "Rowan Brad Quni-Gudzinas" }), P("tried"), P("a"), P("b")], open: [{ paper_slug: "busy", source_id: "completeness:1" }], tries: [1, 2, 3].map((n) => ({ source_id: "revision:tried@1.0.0#" + n })) });
+  const { env, w } = makeEnv({ papers: [P("busy"), P("human", { identifier: "adelic-quantum-statistics", authors: "Rowan Brad Quni-Gudzinas" }), P("tried"), P("a"), P("b")], open: [{ paper_slug: "busy", source_id: "completeness:1" }], tries: [1, 2, 3].map((n) => ({ source_id: "revision:tried@1.0.0#" + n })) });
   const out = await revisionLoopTick(env);
   assert.equal(out.mode, "on");
   assert.equal(w.ageArg, "-1440 minutes");
@@ -98,8 +108,17 @@ console.error = () => {};
   assert.equal(retry.w.queued[0][1], "revision:a@1.0.0#2");
 }
 
+{
+  // A paper with open errata goes first, past the min age, and its brief lists the errors.
+  const e = makeEnv({ papers: [P("a"), P("b")], errata: [{ target_ref: "g", claim_text: "duty cycle is not optimal", detected_by: "qnfo-lifecycle PAPER-LEARN-1" }], errataPapers: [P("g", { authors: "Rowan Brad Quni-Gudzinas", version: "1.0.1" })] });
+  const o4 = await revisionLoopTick(e.env);
+  assert.equal(o4.queued[0].slug, "g");
+  assert.equal(o4.queued[0].errata, 1);
+  assert.equal(e.w.errataArgs[0], "-60 minutes");
+  assert.match(e.w.queued[0][2], /Reported errors[\s\S]*duty cycle is not optimal \(confirmed by a second model\)/);
+}
+
 // remediationPublish carries the computed version and the history (source check: the fixed '2.0.0' literal is gone).
-import { readFileSync } from "node:fs";
 const src = readFileSync(new URL("./worker.js", import.meta.url), "utf8");
 const rp = src.slice(src.indexOf("async function remediationPublish("), src.indexOf("__name(remediationPublish"));
 assert.ok(!/'2\.0\.0','drafted'|,'2\.0\.0',\?5/.test(rp), "remediationPublish no longer writes a fixed 2.0.0");
