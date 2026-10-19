@@ -40,4 +40,4 @@ binding = "VAULT"
 bucket_name = "obsidian-vault"
 
 [triggers]
-crons = ["23 * * * *"]
+crons = ["25 * * * *"]

@@ -426,10 +426,14 @@ rb.exec(mig2.split(/;\s*\n/).map((x) => x.replace(/^\s*--.*$/gm, "").trim()).fil
 for (const x of rbStmts) rb.exec(x);
 assert.deepEqual(rb.prepare("SELECT name FROM pragma_table_info('v_tracker_drift')").all().map((c) => c.name), ["kind", "ref", "detail"], "the rollback restores the 3-column view");
 
-// The scheduled handler routes the 10-minute cron to the tracker only.
+// The scheduled handler routes the 10-minute cron to the tracker only; CRON-GRID-1 (0.6.0) adds the settings reconcile on
+// the :15 fire alone (its old 6-hourly trigger is a grid job).
 calls = [];
-await w.scheduled({ cron: "3,13,23,33,43,53 * * * *" }, env, { waitUntil() {} });
-assert.ok(!calls.some((c) => c.startsWith("GET /orgs/")), "the tracker tick does not run the 6-hourly settings reconcile");
+await w.scheduled({ cron: "5,15,25,35,45,55 * * * *", scheduledTime: Date.UTC(2026, 9, 19, 10, 5) }, env, { waitUntil() {} });
+assert.ok(!calls.some((c) => c.startsWith("GET /orgs/")), "the :05 tracker tick does not run the settings reconcile");
+calls = [];
+await w.scheduled({ cron: "5,15,25,35,45,55 * * * *", scheduledTime: Date.UTC(2026, 9, 19, 10, 15) }, env, { waitUntil() {} });
+assert.ok(calls.some((c) => c.startsWith("GET /orgs/")), "the :15 fire runs the hourly settings reconcile");
 const g = await w.fetch(new Request("https://s.test/tracker"), env);
-assert.equal((await g.json()).cron, "3,13,23,33,43,53 * * * *");
+assert.equal((await g.json()).cron, "5,15,25,35,45,55 * * * *");
 console.log("tracker-sync.test.mjs ok");

@@ -61,4 +61,4 @@ service = "qnfo-pdf"
 # Secrets (wrangler secret put): SYNC_TOKEN, TURNSTILE_SECRET
 
 [triggers]
-crons = ["0 6 * * *"]
+crons = ["0 * * * *"]

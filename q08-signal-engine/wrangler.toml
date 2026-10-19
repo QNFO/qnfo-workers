@@ -80,4 +80,4 @@ service = "qnfo-email"
 environment = "production"
 
 [triggers]
-crons = ["0 * * * *", "30 * * * *", "0 17 * * *"]
+crons = ["0 * * * *", "30 * * * *"]

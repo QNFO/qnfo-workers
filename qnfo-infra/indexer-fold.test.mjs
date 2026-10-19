@@ -58,7 +58,8 @@ const ok = (c, m, x) => { if (c) pass++; else { fail++; console.log("FAIL " + m 
   }
   ok((await get("/indexer/count", "POST")).status === 404, "only GET reaches the member");
 }
-ok(/\ncrons = \["30 6 \* \* \*", "0 18 \* \* \*"\]\n/.test(toml), "wrangler.toml keeps the host's two crons and adds none for the member");
+// CRON-GRID-1 (1.6.0): one hourly :30 trigger; the 06:30 and 18:00 slots live in CRON_GRID_CFG.
+ok(/\ncrons = \["30 \* \* \* \*"\]\n/.test(toml) && src.indexOf('{"cron": "30 6 * * *", "periodMin": 1440, "retry": true}, {"cron": "0 18 * * *", "periodMin": 1440, "retry": true}') > 0, "wrangler.toml declares one hourly trigger and adds none for the member; the two slots are grid jobs");
 ok(existsSync(new URL("../qnfo-paper-indexer/FOLDED", import.meta.url)), "qnfo-paper-indexer carries a FOLDED marker");
 
 // WORKERS-STANDARDS-1 (host 1.3.4): the index token check is constant time and accepts exactly the configured value.

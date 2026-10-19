@@ -50,7 +50,7 @@
 // VERSION-BUMP-GUARD-1 requires the literal var-VERSION-equals-double-quoted-string form: this constant is
 // what fleet-autoaudit's strict numeric-ahead deploy check and deploy-drift's string
 // compare both read. `const` here would make the bundle invisible to deploy-drift.
-var VERSION = "1.4.1-log-catch"; // 1.4.1 WORKERS-BP-LOGGING-1 (agent_issues 2342, RESOLVE-ALL-OPEN-1 2026-10-19): the scheduled() error-event write no longer swallows its own failure; it logs a structured console.error.
+var VERSION = "1.5.0-cron-grid-1"; // 1.5.0 CRON-GRID-1 (owner directive 2026-10-19, pillar autonomy): one hourly :20 trigger. The benchmark battery keeps its 6-hour cadence (slots 00:17, 06:17, 12:17, 18:17 run on the :20 fire) because it calls models while the Workers AI cap is breached; a failed run is retried hourly, at most 3 times, and now fails the run instead of being swallowed. Every fire is logged to cron_fire_log for CRON-WATCH-1. // 1.4.1 WORKERS-BP-LOGGING-1 (agent_issues 2342, RESOLVE-ALL-OPEN-1 2026-10-19): the scheduled() error-event write no longer swallows its own failure; it logs a structured console.error.
 const BATTERY_VERSION = "cfmb-2";
 const DOCS_INDEX = "https://developers.cloudflare.com/workers-ai/models/index.md";
 const docsModel = (slug) => `https://developers.cloudflare.com/workers-ai/models/${slug}/index.md`;
@@ -862,7 +862,7 @@ async function manifest(env) {
     capabilities: ["catalog-discovery", "model-benchmark-battery", "incumbent-control-baseline",
       "cost-aware-promotion", "harness-error-classification", "decision-model-canary", "backlog-escalation"],
     routes: ["/health", "/manifest", "/catalog", "/evals", "/runs", "/leaderboard", "/promotions", "/canary", "/run"],
-    crons: ["17 */6 * * *"], battery: BATTERY_VERSION,
+    crons: ["20 * * * *"], battery_cadence: "17 */6 * * * (CRON-GRID-1)", battery: BATTERY_VERSION,
     controls: CONTROLS.map((c) => c.model_id),
     budget: { max_models_per_run: await cfg(env, "max_models_per_run", "6"), canary_enabled: await cfg(env, "canary_enabled", "0") },
     counts,
@@ -935,6 +935,10 @@ export default {
     }
   },
   async scheduled(_event, env, ctx) {
+    return cronGridRun(env.AUDIT, _event, ctx, CRON_GRID_CFG, function (ev, c) { return modelEvalScheduled(ev, env, c); });
+  }
+};
+function modelEvalScheduled(_event, env, ctx) {
     ctx.waitUntil(runLoop(env, "cron", {}).catch(async (e) => {
       try {
         await env.AUDIT.prepare(
@@ -943,6 +947,96 @@ export default {
       } catch (eLog) {
         console.error(JSON.stringify({ worker: "qnfo-model-eval", where: "scheduled:error-event", error: String(eLog && eLog.message || eLog), cron_error: String(e && e.message || e) }));
       }
+      throw e;
     }));
+}
+// ---- CRON-GRID-1:BEGIN (owner directive 2026-10-19: "ALL CRON TICKS SHALL BE MEASURED IN 5-MINUTE INTERVALS, AND NO CRON
+// SHALL EXECUTE LESS THAN ONCE EVERY HOUR. ALL CRON FAILURES/ERRORS SHALL BE TRIAGED AND REMEDIATED AUTOMATICALLY BY THE FLEET.")
+// Cloudflare fires this worker only on triggers that repeat at least hourly, on minutes that are multiples of 5. A job that
+// had its own slower trigger (daily, weekly, every 6 hours) keeps its cadence: it runs on the first grid fire after its old
+// slot, and is retried on later fires while its last good run is older than its period plus 30 minutes, at most
+// CRON_GRID_RETRIES times in a row; past that CRON-WATCH-1 (qnfo-audit fleet_tasks cron-watch) escalates it to the code loop.
+// Every run is one cron_fire_log row (source worker:<name>, outcome ok, error or idle) that CRON-WATCH-1 reads. A job named
+// retry: false (a send to people outside the fleet) runs only on its slot, so a failure is never repeated at a reader.
+var CRON_GRID_RETRIES = 3;
+function cronGridField(spec, v, lo, hi) {
+  return String(spec).split(",").some(function (part) {
+    var step = 1, sm = /^(.*)\/(\d+)$/.exec(part), a, b;
+    if (sm) { part = sm[1]; step = Math.max(1, parseInt(sm[2], 10)); }
+    if (part === "*") { a = lo; b = hi; }
+    else if (part.indexOf("-") > 0) { a = parseInt(part, 10); b = parseInt(part.split("-")[1], 10); }
+    else { a = parseInt(part, 10); b = sm ? hi : a; }
+    return v >= a && v <= b && (v - a) % step === 0;
+  });
+}
+// Cloudflare numbers weekdays 1 (Sunday) to 7 (Saturday) (CF-DOW, qnfo-fleet-control 2026-10-05).
+function cronGridMatch(expr, d) {
+  var f = String(expr).trim().split(/\s+/);
+  if (f.length !== 5) return false;
+  var domOk = cronGridField(f[2], d.getUTCDate(), 1, 31), dowOk = cronGridField(f[4], d.getUTCDay() + 1, 1, 7);
+  var dayOk = f[2] !== "*" && f[4] !== "*" ? (domOk || dowOk) : (domOk && dowOk);
+  return dayOk && cronGridField(f[0], d.getUTCMinutes(), 0, 59) && cronGridField(f[1], d.getUTCHours(), 0, 23) && cronGridField(f[3], d.getUTCMonth() + 1, 1, 12);
+}
+// True when expr had a slot in the window (sinceMs, untilMs].
+function cronGridSlot(expr, sinceMs, untilMs) {
+  for (var t = Math.floor(untilMs / 60000) * 60000; t > sinceMs; t -= 60000) if (cronGridMatch(expr, new Date(t))) return true;
+  return false;
+}
+async function cronGridLog(db, worker, expr, startMs, outcome, note) {
+  if (!db) return;
+  try {
+    await db.prepare("INSERT INTO cron_fire_log (cron_name, task_id, cron_expr, fired_at, fired_epoch_ms, outcome, source, note) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)")
+      .bind(worker + "|" + expr, worker, expr, new Date(startMs).toISOString(), startMs, outcome, "worker:" + worker, String(note || "").slice(0, 500)).run();
+  } catch (e) { console.error(JSON.stringify({ worker: worker, where: "cron-grid-log", error: String(e && e.message || e).slice(0, 200) })); }
+}
+async function cronGridDue(db, cfg, nowMs) {
+  var out = [], lag = cfg.lagMin || 0;
+  for (var i = 0; i < cfg.jobs.length; i++) {
+    var j = cfg.jobs[i];
+    if (cronGridSlot(j.cron, nowMs - (lag + cfg.tickMin) * 60000, nowMs - lag * 60000)) { out.push({ cron: j.cron, why: "slot" }); continue; }
+    if (!db || !j.retry) continue;
+    try {
+      var name = cfg.worker + "|" + j.cron;
+      var r = await db.prepare("SELECT COUNT(*) AS n, MAX(CASE WHEN outcome = 'ok' THEN fired_epoch_ms END) AS last_ok, SUM(CASE WHEN outcome = 'error' AND fired_epoch_ms > COALESCE((SELECT MAX(fired_epoch_ms) FROM cron_fire_log WHERE cron_name = ?1 AND outcome = 'ok'), 0) THEN 1 ELSE 0 END) AS fails FROM cron_fire_log WHERE cron_name = ?1").bind(name).first();
+      if (r && Number(r.n) > 0 && Number(r.fails || 0) < CRON_GRID_RETRIES && nowMs - Number(r.last_ok || 0) > (j.periodMin + 30) * 60000) out.push({ cron: j.cron, why: "retry" });
+    } catch (e) { console.error(JSON.stringify({ worker: cfg.worker, where: "cron-grid-due", error: String(e && e.message || e).slice(0, 200) })); }
   }
-};
+  return out;
+}
+// One run of the worker's own handler, awaited with its waitUntil work, logged with its outcome.
+async function cronGridOne(db, worker, expr, why, ev, ctx, run) {
+  var t0 = Date.now(), pending = [];
+  var c = { waitUntil: function (p) { pending.push(Promise.resolve(p)); } };
+  try {
+    await run(ev, c);
+    // Index loop, not allSettled: work a waitUntil promise adds while it runs is awaited too.
+    var bad = null;
+    for (var k = 0; k < pending.length; k++) { try { await pending[k]; } catch (e) { if (!bad) bad = e || new Error("waitUntil rejected"); } }
+    if (bad) throw bad;
+    await cronGridLog(db, worker, expr, t0, "ok", why + " " + (Date.now() - t0) + " ms");
+  } catch (e) {
+    await cronGridLog(db, worker, expr, t0, "error", why + ": " + String(e && e.message || e));
+    throw e;
+  }
+}
+// cfg: { worker, tick, tickMin, lagMin, jobs: [{ cron, periodMin, retry }], own: "self" | "none" | "<cron the tick runs as>", ownWhenDue }
+async function cronGridRun(db, event, ctx, cfg, run) {
+  var cron = String((event && event.cron) || "");
+  var nowMs = Number(event && event.scheduledTime) || Date.now();
+  if (cron !== cfg.tick) return cronGridOne(db, cfg.worker, cron || "manual", "fire", event, ctx, run);
+  var due = await cronGridDue(db, cfg, nowMs), firstErr = null;
+  for (var i = 0; i < due.length; i++) {
+    try { await cronGridOne(db, cfg.worker, due[i].cron, due[i].why, { cron: due[i].cron, scheduledTime: nowMs, type: "scheduled" }, ctx, run); }
+    catch (e) { if (!firstErr) firstErr = e; }
+  }
+  if (cfg.own === "none" || (due.length && cfg.ownWhenDue === false)) {
+    if (!due.length) await cronGridLog(db, cfg.worker, cfg.tick, nowMs, "idle", "grid tick: no job due");
+  } else {
+    var ev = cfg.own && cfg.own !== "self" ? { cron: cfg.own, scheduledTime: nowMs, type: "scheduled" } : event;
+    try { await cronGridOne(db, cfg.worker, cfg.tick, "tick", ev, ctx, run); } catch (e) { if (!firstErr) firstErr = e; }
+  }
+  if (firstErr) throw firstErr;
+}
+// ---- CRON-GRID-1:END ----
+var CRON_GRID_CFG = {"worker": "qnfo-model-eval", "tick": "20 * * * *", "tickMin": 60, "jobs": [{"cron": "17 */6 * * *", "periodMin": 360, "retry": true}], "own": "none"};
+
