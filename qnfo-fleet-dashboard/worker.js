@@ -9,7 +9,7 @@ var __name22 = /* @__PURE__ */ __name2((target, value) => __defProp22(target, "n
 var __defProp222 = Object.defineProperty;
 var __name222 = /* @__PURE__ */ __name22((target, value) => __defProp222(target, "name", { value, configurable: true }), "__name");
 var __name2222 = /* @__PURE__ */ __name222((target, value) => Object.defineProperty(target, "name", { value, configurable: true }), "__name");
-var VERSION = "1.51.13-codeagent"; /* 1.51.8 VERSION-LINE-NOTES-1 (2026-10-19, agent_issues 100243, pillar autonomy; patch, a comment moved): the release notes of every earlier version rode on this line (178 notes, about 200,000 chars), so a version bump of this worker was an 820,000-char patch (worker and mirror, removed and added): 12 code tasks ended on the publisher size cap on 2026-10-19 and three issues were exhausted for three days. They are in git history (git log -S '<release tag>' -- qnfo-fleet-dashboard/worker.js); the changelog is built from the deploy ledger and commits, and the guards read only the quoted version string. A new note goes on this line and stays short. */
+var VERSION = "1.51.14-codeagent"; /* 1.51.8 VERSION-LINE-NOTES-1 (2026-10-19, agent_issues 100243, pillar autonomy; patch, a comment moved): the release notes of every earlier version rode on this line (178 notes, about 200,000 chars), so a version bump of this worker was an 820,000-char patch (worker and mirror, removed and added): 12 code tasks ended on the publisher size cap on 2026-10-19 and three issues were exhausted for three days. They are in git history (git log -S '<release tag>' -- qnfo-fleet-dashboard/worker.js); the changelog is built from the deploy ledger and commits, and the guards read only the quoted version string. A new note goes on this line and stays short. */
 
 // REVIEW-GATE-1 (2026-10-01, docs/STRATEGY.md s9): the 2026-10-25 impressions gate is retired. The research layer is
 // reviewed on this date against the reach scorecard; nothing deletes research data automatically (phase 2 needs the
@@ -5081,6 +5081,22 @@ async function q08ReviewStatus(env) {
 async function reachLatestAgg(env, source, from, to) {
   return d1all(env.AUDIT, "SELECT r.metric AS metric, r.quality AS quality, COUNT(*) AS n, SUM(r.value) AS v FROM reach_signals r JOIN (SELECT channel, entity_type, entity_id, metric, MAX(date) AS md FROM reach_signals WHERE source = ? AND date >= ? AND date <= ? GROUP BY channel, entity_type, entity_id, metric) m ON r.channel = m.channel AND r.entity_type = m.entity_type AND r.entity_id = m.entity_id AND r.metric = m.metric AND r.date = m.md WHERE r.source = ? GROUP BY r.metric, r.quality", [source, from, to, source]);
 }
+// RUM-ZERO-DAY-1 part C (issue 100171, 2026-10-19): the window reads one source per day. A day's pageviews are its cf-rum-human site row
+// (bot:0 ground truth, rows begin 2026-10-06) and otherwise its cf-rum site row; a stored 0 is skipped when the same source holds a referrer
+// row of that day above 0 (a degraded read that was written as a measured zero), so the day falls back to the other source or is left out.
+// On 2026-10-19 this showed 5,815 views for the 7 days ending 2026-10-18 against 7,331 in the human rows, and 9,646 over 22 days against 11,145.
+// Top pages come from the same two sources with the same per-day choice and leave out the owner's own hosts (fleet.qnfo.org, ideas.qnfo.org
+// and any workers.dev host), as top_pages_rum already does: four of the five top pages were the owner's dashboard pages.
+var REACH_PV_DAY_SQL = "SELECT d.date AS date, COALESCE("
+  + "(SELECT h.value FROM reach_signals h WHERE h.source = 'cf-rum-human' AND h.entity_type = 'site' AND h.metric = 'pageviews' AND h.date = d.date AND NOT (h.value = 0 AND EXISTS (SELECT 1 FROM reach_signals r WHERE r.source = 'cf-rum-human' AND r.entity_type = 'referrer' AND r.metric = 'pageviews' AND r.date = d.date AND r.value > 0))), "
+  + "(SELECT c.value FROM reach_signals c WHERE c.source = 'cf-rum' AND c.entity_type = 'site' AND c.metric = 'pageviews' AND c.date = d.date AND NOT (c.value = 0 AND EXISTS (SELECT 1 FROM reach_signals r2 WHERE r2.source = 'cf-rum' AND r2.entity_type = 'referrer' AND r2.metric = 'pageviews' AND r2.date = d.date AND r2.value > 0)))"
+  + ") AS v FROM (SELECT DISTINCT date FROM reach_signals WHERE source IN ('cf-rum', 'cf-rum-human') AND entity_type = 'site' AND metric = 'pageviews' AND date >= ?1 AND date <= ?2) d";
+var REACH_PV_SQL = "SELECT COUNT(*) AS days, SUM(v) AS v FROM (" + REACH_PV_DAY_SQL + ") WHERE v IS NOT NULL";
+var REACH_TOP_PAGES_SQL = "SELECT t, id, SUM(v) AS v FROM ("
+  + "SELECT entity_type AS t, entity_id AS id, value AS v FROM reach_signals WHERE source = 'cf-rum-human' AND entity_type IN ('paper','page') AND metric = 'pageviews' AND entity_id != '(other)' AND entity_id NOT LIKE 'fleet.qnfo.org%' AND entity_id NOT LIKE 'ideas.qnfo.org%' AND entity_id NOT LIKE '%.workers.dev%' AND date >= ?1 AND date <= ?2 "
+  + "UNION ALL SELECT entity_type, entity_id, value FROM reach_signals WHERE source = 'cf-rum' AND entity_type IN ('paper','page') AND metric = 'pageviews' AND entity_id != '(other)' AND entity_id NOT LIKE 'fleet.qnfo.org%' AND entity_id NOT LIKE 'ideas.qnfo.org%' AND entity_id NOT LIKE '%.workers.dev%' AND date >= ?3 AND date <= ?4 "
+  + "AND date NOT IN (SELECT date FROM reach_signals WHERE source = 'cf-rum-human' AND entity_type = 'site' AND metric = 'pageviews' AND value > 0)"
+  + ") GROUP BY t, id ORDER BY v DESC LIMIT 5";
 async function reachWindow(env, from, to) {
   const w = { from, to };
   const q = async function(fn) {
@@ -5092,11 +5108,11 @@ async function reachWindow(env, from, to) {
     }
   };
   const pv = await q(function() {
-    return d1all(env.AUDIT, "SELECT COUNT(DISTINCT date) AS days, SUM(value) AS v FROM reach_signals WHERE source = 'cf-rum' AND entity_type = 'site' AND metric = 'pageviews' AND date >= ? AND date <= ?", [from, to]);
+    return d1all(env.AUDIT, REACH_PV_SQL, [from, to]);
   });
   w.pageviews = pv && pv[0] && pv[0].days ? { value: pv[0].v, days: pv[0].days } : null;
   w.top_pages = await q(function() {
-    return d1all(env.AUDIT, "SELECT entity_type AS t, entity_id AS id, SUM(value) AS v FROM reach_signals WHERE source = 'cf-rum' AND entity_type IN ('paper','page') AND metric = 'pageviews' AND entity_id != '(other)' AND date >= ? AND date <= ? GROUP BY entity_type, entity_id ORDER BY v DESC LIMIT 5", [from, to]);
+    return d1all(env.AUDIT, REACH_TOP_PAGES_SQL, [from, to, from, to]);
   });
   w.top_referrers = await q(function() {
     // Own hosts (internal navigation) are left out, the same set refreshRegistryMetrics excludes from referral_30d.

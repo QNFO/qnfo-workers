@@ -3,7 +3,7 @@
 // Offline, scripted D1s. Run: node qnfo-research-exec/revision-loop.test.mjs
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { rlNextVersion, rlChangeSummary, rlWithHistory, rlIsRevision, rlEligible, rlErrataBlock, rlSourceId, revisionLoopTick } from "./worker.js";
+import { ciStripPipeline, rlRegression, rlNextVersion, rlChangeSummary, rlWithHistory, rlIsRevision, rlEligible, rlErrataBlock, rlSourceId, revisionLoopTick } from "./worker.js";
 
 // Versions move forward from the live one; a rewrite is never a fixed 2.0.0.
 assert.equal(rlNextVersion("1.0.0", true), "1.1.0");
@@ -127,3 +127,24 @@ assert.match(rp, /rlWithHistory\(paper, versionTo/);
 const pv = src.slice(src.indexOf("async function publishV2("), src.indexOf("__name(publishV2"));
 assert.ok(pv.indexOf("rlArchiveVersion(env, vSlug") > 0 && pv.indexOf("rlArchiveVersion(env, vSlug") < pv.indexOf("UPDATE papers SET title=?, body_md=?, version=?, abstract="), "the live text is archived before a revision replaces it");
 console.log("revision-loop: ok");
+
+// REVISION-CLAIMGATE-1: the claim gate never reads the pipeline's own banner, Version History or Provenance as the authors' claims.
+{
+  const md = rlWithHistory("# T\n\nWe prove a bound.\n\n## Results\n\nThe bound holds.\n\n## Provenance and AI Involvement\n\n- This paper was drafted, reconciled, reviewed, revised and checked by the QNFO automated research pipeline.\n\n## References\n\n1. A.\n", "1.1.0", "2026-10-19", ["Version 1.1.0: revised."]);
+  const s = ciStripPipeline(md);
+  assert.ok(!/Revised \(version/.test(s), "banner stripped");
+  assert.ok(!/Version History/.test(s), "history stripped");
+  assert.ok(!/automated research pipeline/.test(s), "provenance stripped");
+  assert.ok(/The bound holds\./.test(s) && /## References/.test(s) && /We prove a bound\./.test(s), "paper text kept");
+}
+
+// REVISION-NONREGRESS-1: a revision thinner than the live paper does not replace it.
+{
+  const refs = (n) => "## References\n\n" + Array.from({ length: n }, (_, i) => "[" + (i + 1) + "] Ref " + i + ".").join("\n") + "\n";
+  const words = (n) => "# T\n\n" + "word ".repeat(n) + "\n\n";
+  assert.equal(rlRegression(words(2000) + refs(10), words(2100) + refs(9)), "");
+  assert.match(rlRegression(words(2000) + refs(10), words(2100) + refs(6)), /^references 10 -> 6$/);
+  assert.match(rlRegression(words(5000) + refs(5), words(2500) + refs(5)), /^length/);
+  assert.equal(rlRegression(words(200) + refs(1), words(50) + refs(0)), "");
+  assert.ok(/rlRegression\(existing\.body_md, paper\)/.test(readFileSync(new URL("./worker.js", import.meta.url), "utf8")), "remediationPublish checks a loop revision against the live paper");
+}

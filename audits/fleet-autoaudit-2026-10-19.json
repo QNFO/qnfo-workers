@@ -1,8 +1,15 @@
 {
-  "audited_at": "2026-10-19 20:12:11",
+  "audited_at": "2026-10-19 21:18:35",
   "d1_write_failures": [],
   "d1_writes_ok": 120,
   "guard": {
+    "_drift_confirm": {
+      "first_pass": [
+        "qnfo-research-exec"
+      ],
+      "refreshed": true,
+      "second_pass": []
+    },
     "_guard_rc": 0,
     "ahead": [],
     "cf_script_list": true,
@@ -545,7 +552,7 @@
       },
       {
         "dir": "personal-companion",
-        "version": "1.37.0-stall-yield",
+        "version": "1.37.1-version-line-pruned",
         "worker": "personal-companion"
       },
       {
@@ -610,7 +617,7 @@
       },
       {
         "dir": "qnfo-fleet-dashboard",
-        "version": "1.51.11-codeagent",
+        "version": "1.51.12-codeagent",
         "worker": "qnfo-fleet-dashboard"
       },
       {
@@ -620,7 +627,7 @@
       },
       {
         "dir": "qnfo-github-steward",
-        "version": "0.7.0-protection-visible-1",
+        "version": "0.7.1-codeagent",
         "worker": "qnfo-github-steward"
       },
       {
@@ -670,7 +677,7 @@
       },
       {
         "dir": "qnfo-research-exec",
-        "version": "0.27.4-codeagent",
+        "version": "0.27.6-revision-nonregress",
         "worker": "qnfo-research-exec"
       },
       {
@@ -938,9 +945,9 @@
       "worker": "personal-api"
     },
     "personal-companion": {
-      "before": "1.37.0-stall-yield",
+      "before": "1.37.1-version-line-pruned",
       "http": 200,
-      "live": "1.37.0-stall-yield",
+      "live": "1.37.1-version-line-pruned",
       "match": 1,
       "note": "SYNC",
       "worker": "personal-companion"
@@ -1321,9 +1328,9 @@
       "worker": "qnfo-fleet-control"
     },
     "qnfo-fleet-dashboard": {
-      "before": "1.51.11-codeagent",
+      "before": "1.51.12-codeagent",
       "http": 200,
-      "live": "1.51.11-codeagent",
+      "live": "1.51.12-codeagent",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-fleet-dashboard"
@@ -1355,9 +1362,9 @@
       "worker": "qnfo-gateway"
     },
     "qnfo-github-steward": {
-      "before": "0.7.0-protection-visible-1",
+      "before": "0.7.1-codeagent",
       "http": 200,
-      "live": "0.7.0-protection-visible-1",
+      "live": "0.7.1-codeagent",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-github-steward"
@@ -1561,9 +1568,9 @@
       "worker": "qnfo-register-guard"
     },
     "qnfo-research-exec": {
-      "before": "0.27.4-codeagent",
+      "before": "0.27.6-revision-nonregress",
       "http": 200,
-      "live": "0.27.4-codeagent",
+      "live": "0.27.6-revision-nonregress",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-research-exec"
