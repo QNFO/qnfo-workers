@@ -22,7 +22,7 @@
  *   * archived repositories are read-only and are skipped, not reported as drift;
  *   * GET /report and GET /health are public reads; POST /tick needs STEWARD_KEY.
  */
-var VERSION = "0.6.0-cron-grid-1"; // 0.6.0 CRON-GRID-1 (owner directive 2026-10-19, pillar autonomy): the tracker tick moves to the 5-minute grid (:05, :15 ... :55) and the repository reconcile runs hourly on the :15 fire (it ran every 6 hours on its own trigger). Every fire is logged to cron_fire_log for CRON-WATCH-1. // 0.5.0 TRACKER-DRAIN-1 (agent_issues 2940 follow-up): ISSUE-SYNC-FORWARD-1 closes the GitHub issue of a resolved worker-observability dispatch row (and reopens it on a recurrence, before the reverse leg can swallow it); the state sync runs oldest D1 change first inside a time/subrequest budget and stops on 403/429 instead of a flat 20; the mass-flip guard refuses only unexplained disagreement (explained = D1 moved across open/closed since the link last agreed, not an updated_at window); a 403 stops the tick only when GitHub says rate limit (one shared flag), a per-issue 403 is skipped; the subrequest budget counts D1 calls; one status mapping (monitoring is closed not_planned naming its twin, never a completed close with no evidence); superseded attempt PRs outside the recent window are matched by stem and recorded with head_ref and task_ref; v_tracker_drift gains age_min and metric tracker_drift_oldest_min. // 0.4.8 TRACKER-REPAIR-ROUND-1 (agent_issues 2940): a codeagent-<stem>-rN pull request of an earlier repair round is matched to its task by the branch stem, so it is no longer pr-without-task drift. // 0.4.6 PORTFOLIO-HEARTBEAT-1 (2026-10-18): publish the portfolio run as in_progress BEFORE the work, so a tick killed by the CPU budget is distinguishable from a record that was never writtenIVENESS-1 (2026-10-18): this worker, on its own 10-minute cron and outside the qnfo-code-orchestrator process, reads the freshest fleet_crons.last_fired and files liveness:dispatcher-stalled when the per-minute dispatcher has been quiet for over 20 minutes -- the one stall no watchdog inside that failure domain can report, because NEVER-STALL-1 is itself a fleet_cron dispatched by the tick it would be reporting on. // 0.4.4 NOTIFY-ATTEMPT-TITLE-1 (2026-10-18): a re-run notification title ("workflow run, Attempt #2 failed") is parsed like the first attempt, so its resolved thread is cleared (three were kept at 10:52Z). // 0.4.3 TRACKER-SYNC-1: stale pr-without-task rows are cleared every tick; a merge fix reads merged_by from the single PR; 0.4.2 TRACKER-SYNC-1: the recent-PR window is a deliberate partial read (every post-backfill tick refused it); 0.4.1 org projects declared on (the portfolio board needs them); 0.4.0 PORTFOLIO-SYNC-1: projects derived from the census, metric breaches as roadmap objectives, programs/projects/issues/roadmap mirrored to GitHub labels, milestones, issues and a Projects board every 10 minutes; 0.3.1 a task is matched to its PR by number too (pr-without-task false positive on PR 381); 0.3.0 TRACKER-SYNC-1: agent_issues <-> GitHub issues and code_tasks <-> PRs every 10 minutes (0.2.2 ISSUE-SYNC-1)
+var VERSION = "0.7.0-protection-visible-1"; // 0.7.0 PROTECTION-VISIBLE-1 (agent_issues 2927 INTEG-GITHUB-HARDEN-1, pillar security): the branch-protection step ignored every answer except 404 and 200, so a credential that cannot read protection (403 "Resource not accessible by integration") produced repos_protected 0, errors 0 and drift 0 for every run since 2026-10-17 while 55 public repositories stayed unprotected. A GET that answers anything else is now counted (result.protection_unreadable: count, status map, GitHub's own text, an example repository) and written as one limitation; and the run records the rules that apply to QNFO/qnfo-workers main (result.main_rules: status, rule types, whether required_status_checks and pull_request are among them; one public GET), so the DoD of 2927 is a number in github_steward_runs.detail on every tick. // 0.6.0 CRON-GRID-1 (owner directive 2026-10-19, pillar autonomy): the tracker tick moves to the 5-minute grid (:05, :15 ... :55) and the repository reconcile runs hourly on the :15 fire (it ran every 6 hours on its own trigger). Every fire is logged to cron_fire_log for CRON-WATCH-1. // 0.5.0 TRACKER-DRAIN-1 (agent_issues 2940 follow-up): ISSUE-SYNC-FORWARD-1 closes the GitHub issue of a resolved worker-observability dispatch row (and reopens it on a recurrence, before the reverse leg can swallow it); the state sync runs oldest D1 change first inside a time/subrequest budget and stops on 403/429 instead of a flat 20; the mass-flip guard refuses only unexplained disagreement (explained = D1 moved across open/closed since the link last agreed, not an updated_at window); a 403 stops the tick only when GitHub says rate limit (one shared flag), a per-issue 403 is skipped; the subrequest budget counts D1 calls; one status mapping (monitoring is closed not_planned naming its twin, never a completed close with no evidence); superseded attempt PRs outside the recent window are matched by stem and recorded with head_ref and task_ref; v_tracker_drift gains age_min and metric tracker_drift_oldest_min. // 0.4.8 TRACKER-REPAIR-ROUND-1 (agent_issues 2940): a codeagent-<stem>-rN pull request of an earlier repair round is matched to its task by the branch stem, so it is no longer pr-without-task drift. // 0.4.6 PORTFOLIO-HEARTBEAT-1 (2026-10-18): publish the portfolio run as in_progress BEFORE the work, so a tick killed by the CPU budget is distinguishable from a record that was never writtenIVENESS-1 (2026-10-18): this worker, on its own 10-minute cron and outside the qnfo-code-orchestrator process, reads the freshest fleet_crons.last_fired and files liveness:dispatcher-stalled when the per-minute dispatcher has been quiet for over 20 minutes -- the one stall no watchdog inside that failure domain can report, because NEVER-STALL-1 is itself a fleet_cron dispatched by the tick it would be reporting on. // 0.4.4 NOTIFY-ATTEMPT-TITLE-1 (2026-10-18): a re-run notification title ("workflow run, Attempt #2 failed") is parsed like the first attempt, so its resolved thread is cleared (three were kept at 10:52Z). // 0.4.3 TRACKER-SYNC-1: stale pr-without-task rows are cleared every tick; a merge fix reads merged_by from the single PR; 0.4.2 TRACKER-SYNC-1: the recent-PR window is a deliberate partial read (every post-backfill tick refused it); 0.4.1 org projects declared on (the portfolio board needs them); 0.4.0 PORTFOLIO-SYNC-1: projects derived from the census, metric breaches as roadmap objectives, programs/projects/issues/roadmap mirrored to GitHub labels, milestones, issues and a Projects board every 10 minutes; 0.3.1 a task is matched to its PR by number too (pr-without-task false positive on PR 381); 0.3.0 TRACKER-SYNC-1: agent_issues <-> GitHub issues and code_tasks <-> PRs every 10 minutes (0.2.2 ISSUE-SYNC-1)
 
 var ORG = "QNFO";
 var USER = "rwnq8";
@@ -139,6 +139,33 @@ async function reconcileOrg(env, result) {
   }
 }
 
+/* PROTECTION-VISIBLE-1 (agent_issues 2927). Pure bookkeeping: one aggregate per run, never one entry per repository. */
+function protectionUnreadable(result, full, r) {
+  var b = result.protection_unreadable || (result.protection_unreadable = { count: 0, statuses: {}, sample: null, example_repo: null });
+  b.count++;
+  b.statuses[r.status] = (b.statuses[r.status] || 0) + 1;
+  if (!b.sample) { b.sample = String(r.text || "").slice(0, 160); b.example_repo = full; }
+}
+function protectionLimitation(result) {
+  var b = result.protection_unreadable;
+  if (!b) return;
+  result.limitations.push("branch_protection: GET /branches/<default>/protection answered " + JSON.stringify(b.statuses) + " for " + b.count +
+    " public repositories (e.g. " + b.example_repo + ": " + b.sample + "); this credential cannot read branch protection, so it is never reconciled here (INTEG-GITHUB-HARDEN-1)");
+}
+/* The rules that apply to the default branch of the fleet's own repository, from the public rules endpoint (rulesets and classic
+ * protection together). The DoD of agent_issues 2927 is "an active main ruleset with required checks": this is that fact, per tick. */
+async function mainRulesVisibility(env, result) {
+  var r = await gh(env, "GET", "/repos/" + ORG + "/qnfo-workers/rules/branches/main");
+  var types = [];
+  if (r.status === 200 && Array.isArray(r.body)) r.body.forEach(function (x) { if (x && x.type && types.indexOf(x.type) < 0) types.push(x.type); });
+  types.sort();
+  result.main_rules = {
+    status: r.status, types: types,
+    required_checks: types.indexOf("required_status_checks") >= 0 ? "yes" : "no",
+    pull_request_required: types.indexOf("pull_request") >= 0 ? "yes" : "no"
+  };
+}
+
 async function reconcileRepo(env, listed, result) {
   var full = listed.full_name;
   var isPrivate = listed.private === true;
@@ -198,6 +225,10 @@ async function reconcileRepo(env, listed, result) {
         var fix = await gh(env, "PUT", "/repos/" + full + "/branches/" + br + "/protection", PROTECTION);
         result.drift.push({ scope: full, field: "protection:" + weak.join(","), fixed: fix.status === 200 });
       }
+    } else if (!cur.limited) {
+      /* PROTECTION-VISIBLE-1: any other answer (403 for a credential without Administration, 401, 5xx) used to fall through here
+       * silently. Count it; runReconcile turns the count into one limitation. A rate limit is not a refusal and is left to GH_LIMIT. */
+      protectionUnreadable(result, full, cur);
     }
   } else {
     result.limitations.push(full + ":branch_protection (needs GitHub Pro on a private repo)");
@@ -1456,6 +1487,9 @@ async function runReconcile(env, opts) {
       result.errors.push({ scope: active[i].full_name, why: String(e && e.message || e).slice(0, 140) });
     }
   }
+
+  protectionLimitation(result);
+  try { await mainRulesVisibility(env, result); } catch (eM) { result.errors.push({ scope: "main_rules", why: String(eM && eM.message || eM).slice(0, 140) }); }
 
   if (!opts || opts.notifications !== false) {
     try { await triageNotifications(env, result); } catch (eN) { result.errors.push({ scope: "notifications", why: String(eN && eN.message || eN).slice(0, 140) }); }

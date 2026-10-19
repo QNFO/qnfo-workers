@@ -1,0 +1,98 @@
+name: Build PDFs from Legacy Papers
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - 'releases/papers/**.md'
+  workflow_dispatch:
+
+# GHA-AUDIT-DOTGITHUB-1 (2026-10-19, QNFO/qnfo-workers agent_issues 2507): a read-only default token; ONE concurrency group shared with catalog-regen.yml (the two
+# workflows both commit to master on the same push and raced each other); the push trigger is limited to master; a PDF that fails to
+# build fails the run (`|| echo` hid every failure) after the PDFs that did build are committed.
+permissions:
+  contents: read
+
+# WORKFLOW-CONCURRENCY-1 (2026-10-17): a second run of the same workflow on the same
+# branch queues behind the first instead of racing it. Publishing pipelines must never be
+# cancelled mid-flight (a half-published DOI is worse than a late one), so this queues.
+concurrency:
+  group: legacy-papers-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build-pdfs:
+    runs-on: ubuntu-latest
+    # WORKFLOW-TIMEOUT-1 (2026-10-17): bound a hung runner.
+    timeout-minutes: 30
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Setup Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: pip install markdown
+
+      - name: Build PDFs for all papers
+        id: build
+        run: |
+          mkdir -p releases/papers/pdf
+          FAILED=0
+          # process substitution keeps the loop in this shell, so FAILED survives it (a pipe ran it in a subshell)
+          while IFS= read -r -d '' paper; do
+            echo "Building PDF for: $paper"
+            if ! python scripts/build_pdf.py --input "$paper" --output "releases/papers/pdf/$(basename "$paper" .md).pdf" --style academic 2>&1; then
+              echo "::error::PDF build failed for $paper"
+              FAILED=$((FAILED + 1))
+            fi
+          done < <(find releases/papers -maxdepth 1 -name '*.md' ! -name 'index.md' -print0)
+          echo "failed=${FAILED}" >> "$GITHUB_OUTPUT"
+
+      - name: Upload PDF artifacts
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: legacy-paper-pdfs
+          path: releases/papers/pdf/*.pdf
+          retention-days: 90
+          if-no-files-found: warn
+
+      - name: Commit PDFs to repo
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add releases/papers/pdf/
+          if git diff --cached --quiet; then
+            echo "No PDF changes to commit"
+            exit 0
+          fi
+          git commit -m "auto: Build legacy paper PDFs [skip ci]"
+          # COMMITBACK-PUSH-RACE-1 (2026-10-17): a bare `git push` into a shared branch loses the race
+          # whenever another writer lands first, and the whole run then fails AFTER doing the work.
+          # Measured 15:01:49Z: "! [rejected] master -> master (fetch first)" with 77 rebuilt PDFs
+          # staged, so every one of them was discarded and the run went red. Rebase onto the new tip
+          # and retry, bounded -- the pattern qnfo-workers already uses for its commit-back steps.
+          for i in 1 2 3 4 5; do
+            git pull --rebase --autostash origin master >/dev/null 2>&1 || true
+            if git push origin HEAD:master; then
+              echo "pushed on attempt $i"
+              exit 0
+            fi
+            echo "push attempt $i rejected by a concurrent writer; retrying"
+            sleep $((i * 5))
+          done
+          echo "PUSH FAILED after 5 attempts -- COMMITBACK-PUSH-RACE-1"
+          exit 1
+
+      - name: Fail when a PDF did not build
+        if: always() && steps.build.outputs.failed != '0' && steps.build.outputs.failed != ''
+        env:
+          FAILED: ${{ steps.build.outputs.failed }}
+        run: |
+          echo "::error::${FAILED} PDF build(s) failed; the PDFs that built were committed above"
+          exit 1

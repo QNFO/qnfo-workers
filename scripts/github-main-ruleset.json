@@ -1,0 +1,28 @@
+{
+  "_comment": "INTEG-GITHUB-HARDEN-1 (agent_issues 2927). The declared main ruleset for QNFO/qnfo-workers, applied only by scripts/github-settings-actions.mjs (action ruleset-main, mode live) from .github/workflows/github-settings-actions.yml. It ADDS a ruleset beside the existing main-safety (deletion, non_fast_forward); revert deletes only this name.",
+  "repo": "QNFO/qnfo-workers",
+  "name": "main-gate",
+  "target": "branch",
+  "enforcement": "active",
+  "conditions": { "ref_name": { "include": ["~DEFAULT_BRANCH"], "exclude": [] } },
+  "required_checks": ["gate", "guard", "mirror-guard", "identity-guard"],
+  "strict_required_status_checks_policy": false,
+  "pull_request": {
+    "required_approving_review_count": 0,
+    "dismiss_stale_reviews_on_push": false,
+    "require_code_owner_review": false,
+    "require_last_push_approval": false,
+    "required_review_thread_resolution": false
+  },
+  "bypass": {
+    "repository_roles": [{ "name": "admin", "actor_id": 5 }],
+    "integrations": [
+      { "slug": "github-actions", "actor_id": 15368, "why": "workflows commit ci-status, mirrors, the charter and the portfolio straight to main with GITHUB_TOKEN" },
+      { "slug": "qnfo-fleet", "actor_id": null, "why": "the code loop and the portfolio loop write through the qnfo-fleet GitHub App; its id is read from GET /orgs/QNFO/installations at apply time" }
+    ]
+  },
+  "known_direct_pushers": ["github-actions[bot]", "qnfo-fleet[bot]", "rwnq8"],
+  "_known_direct_pushers_why": "GET /repos/QNFO/qnfo-workers/activity?ref=refs/heads/main, 2026-10-19: github-actions[bot] 47 pushes, qnfo-fleet[bot] 18 pr_merge + 5 push, rwnq8 28 pr_merge + 2 push. Live refuses when anyone else pushed directly, because the ruleset would block them.",
+  "_why_not_strict": "strict_required_status_checks_policy true makes every pull request rebase whenever main moves (every few minutes here) and would stall the stale-PR lane; the checks already run on the merge ref.",
+  "_why_zero_reviews": "one account authors every pull request in this fleet, so a required approving review could never be given; the required checks are the gate."
+}

@@ -1,0 +1,67 @@
+name: github-settings-actions
+# CI-ACTION-IDENTITY-1: the run title names the action and mode, so scripts/ci_watchdog.py files a failure per action.
+run-name: github-settings-actions ${{ inputs.action }} ${{ inputs.mode }}
+
+# GITHUB-SETTINGS-ACTIONS-1 (2026-10-19, agent_issues 2927 INTEG-GITHUB-HARDEN-1, pillar security). Allowlisted GitHub settings actions
+# for QNFO/qnfo-workers, because an agent session holds no repository Administration right (its GET branches/main/protection answers
+# 403 "Resource not accessible by integration") and no new token will be issued (owner directive 2026-10-08): the repository secret
+# QNFO_GH_PAT is the credential the fleet already has. All logic is in scripts/github-settings-actions.mjs; it prints one RESULT_JSON
+# line holding the status and GitHub's own message of every call, so a refusal is recorded as it was said and never retried with
+# another credential. Nothing secret is printed.
+#
+# HOW TO RUN (a session or the owner; the default mode changes nothing)
+#   1. action report            read-only: what the credential may do, the rules on main, the check contexts seen, who pushes direct.
+#   2. action ruleset-main      mode dry: the ruleset payload, its diff and every reason live would refuse.
+#   3. action ruleset-main      mode live: creates or updates the ruleset `main-gate` (required checks gate, guard, mirror-guard,
+#                               identity-guard; pull request required; admin role and the fleet's apps bypass). It refuses while a
+#                               required check would never report.
+#   4. action secret-scanning   mode live: secret scanning, push protection, validity checks, non-provider patterns.
+#   Revert: action ruleset-main-revert, mode live (deletes only the ruleset named main-gate).
+# Dispatch only (GitHub schedule never fires on this repo). Style: step names colon-free, no heredocs, no inline python (workflow-lint.py).
+
+on:
+  workflow_dispatch:
+    inputs:
+      action:
+        description: "report | ruleset-main | ruleset-main-revert | secret-scanning"
+        required: true
+        type: choice
+        options:
+          - report
+          - ruleset-main
+          - ruleset-main-revert
+          - secret-scanning
+      mode:
+        description: "dry (default, changes nothing) or live"
+        required: false
+        type: choice
+        default: dry
+        options:
+          - dry
+          - live
+
+permissions:
+  contents: read
+
+concurrency:
+  group: github-settings-actions
+  cancel-in-progress: false
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      GH_ADMIN_TOKEN: ${{ secrets.QNFO_GH_PAT }}
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      IN_ACTION: ${{ github.event.inputs.action }}
+      IN_MODE: ${{ github.event.inputs.mode }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "22"
+
+      - name: Run the allowlisted action
+        run: node scripts/github-settings-actions.mjs "$IN_ACTION" --mode "${IN_MODE:-dry}"

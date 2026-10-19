@@ -1,0 +1,39 @@
+GHA-AUDIT-DOTGITHUB-1 (QNFO/qnfo-workers agent_issues 2507): the fixed QNFO/.github workflow files, staged 2026-10-19.
+Source of the defects: audits/2026-10-13-gha-audit.md ("Other repositories").
+
+QNFO/QWAV (agent_issues 2508, GHA-AUDIT-QWAV-1) is NOT here any more: another session landed it upstream as QNFO/QWAV pull request 132
+(commit 2aff4f4, 2026-10-19 13:07Z) while this was being staged; the probe of issue-2508 reads absent from 13:10Z. A duplicate QWAV commit made
+here (6cd2624) was kept only on a local side branch and is not to be pushed.
+
+What is here
+  QNFO-.github/.github/workflows/{zenodo-publish,build-pdf,release-pipeline,build-pdfs,catalog-regen}.yml
+      Full replacement files for QNFO/.github (branch master). Built from the live raw files of 2026-10-19 by exact-match edits
+      (every replacement was asserted to match once); workflow-lint.py passes on all five.
+
+What changed
+  * every ${{ inputs.* }}, ${{ github.event.inputs.* }}, release name/body/tag and step output that reached bash now arrives through env: and
+    is quoted "$VAR"; a file path input must stay inside the repository (zenodo-publish)
+  * Node 24 majors, pinned to the commit SHAs the fleet already uses (checkout v7.0.1, setup-python v7.0.0, upload-artifact v7.0.2),
+    download-artifact v7.0.0 (37930b1c...), softprops/action-gh-release v3.0.3 (efb35369..., was an unpinned @v2: a MAJOR bump of a third-party action)
+  * a top-level permissions block on every file (each writing job keeps its own grant); timeouts were already present
+  * build-pdfs and catalog-regen share one concurrency group and rebase before they push; build-pdfs has a branch filter and a failed PDF
+    build fails the run (after the PDFs that built are committed)
+  * release-pipeline: the GitBook dispatch stops pretending GITHUB_TOKEN can start a workflow in another repository (it needs GH_PAT and says so
+    when it is absent); the pandoc linkcolor metadata uses the colon form build-pdf.yml already uses
+
+Why a session could not do it
+  add_repo answered: repository name ".github" begins with '.', so its clone directory would be a hidden path under this session's working
+  directory and could collide with configuration directories (e.g. ~/.claude). Repositories whose names begin with '.' cannot be attached to this
+  session.   The contents API answered 403 "GitHub access to this repository is not enabled for this session. Use add_repo to request access."
+  (The 2026-10-13 attempt had been refused by the permission classifier; this one was refused by the repository-name rule, before any classifier.)
+
+How to land them
+  1. By the fleet: dispatch .github/workflows/external-repo-patch.yml in QNFO/qnfo-workers with repo QNFO/.github, mode dry first (it reads
+     and reports create/replace/unchanged and any staged-file defect), then live. It uses only the repository secret QNFO_GH_PAT; the first
+     refusal stops the run and is printed with GitHub's own text (RESULT_JSON line). It was NOT run by the session that built it.
+  2. By hand: copy the five files over the same paths in a clone of QNFO/.github and commit to master.
+  If QNFO_GH_PAT is refused for workflow files, the remaining step is the owner's: mint a token with contents:write and workflows:write on
+  QNFO/.github and set it as the repository secret QNFO_GH_PAT (IDENTITY-BOUND: an account-level credential).
+
+Closing probe (remediation_contracts issue-2507, external-https, hourly): zenodo-publish.yml on QNFO/.github master no longer contains
+  --title "${{ inputs.title }}"

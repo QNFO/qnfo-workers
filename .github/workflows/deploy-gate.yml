@@ -17,9 +17,16 @@ on:
   pull_request:
     branches: [main]
   # GATE-NIGHTLY-FULL-1 (2026-10-17): a PR validates only its changed directories (PRS-SCOPE-1), so
-  # without this the full 429-suite sweep ran only on a push to main - i.e. after the merge. Nightly.
+  # without this the full 429-suite sweep ran only on a push to main - i.e. after the merge. Every two hours.
+  # MERGE-BOUNDARY-GATE-1 (2026-10-19): a PR that touches a control-plane worker or a shared path runs the full set before the merge
+  # (scripts/run-suites.mjs), every PR loads every worker, and ci-watchdog files a suite-red finding for a red full run on main.
   schedule:
     - cron: "43 */2 * * *"
+  # MERGE-BOUNDARY-GATE-1 (2026-10-19, agent_issues 2830): path A of the issue, switched on by a repository setting. When a merge queue
+  # is enabled on main, the queue runs this workflow on the merge group's head; it takes the full-set branch below (not the
+  # pull-request one), so the commit that would land is validated with every suite before it lands. Inert while no queue exists.
+  merge_group:
+    types: [checks_requested]
   workflow_dispatch:
 
 # GATE-RUN-ALL-1 (2026-10-06): every check step runs even after an earlier one failed (if: !cancelled()), so one broken
@@ -62,6 +69,11 @@ jobs:
           fi
           git diff --name-only "$BASE" HEAD 2>/dev/null | awk -F/ 'NF>1{print $1}' | sort -u | sed '/^$/d' > /tmp/changed.txt || true
           echo "changed dirs:"; cat /tmp/changed.txt || true
+          # MERGE-BOUNDARY-GATE-1: a change to a file at the repository root (deploy-targets.txt, the root worker.js and wrangler.toml)
+          # names no directory, so it selected no suite at all. The suite selection reads this copy, where "." marks it as a shared path;
+          # the build gate above keeps reading /tmp/changed.txt (a root marker is not a worker directory). Prose files do not count.
+          cp /tmp/changed.txt /tmp/changed-suites.txt
+          git diff --name-only "$BASE" HEAD 2>/dev/null | awk -F/ 'NF==1 && $0 !~ /(\.md|\.cff)$/ && $0 != "LICENSE" && $0 != "codemeta.json" {print "."}' | sort -u >> /tmp/changed-suites.txt || true
 
       # PR-NO-DEPLOY-TOKEN-1 (2026-10-13): the build gate is `wrangler deploy --dry-run`, which bundles locally; it passed
       # without any Cloudflare credential for qnfo-fleet-dashboard and the container worker qnfo-code-orchestrator. A pull
@@ -169,13 +181,23 @@ jobs:
         with:
           node-version: "22"
 
-      # SUITE-RUNNER-1 (transformation levers T1.10 + T5.4): every suite of each changed worker runs here, and the full
-      # set runs when a control-plane worker or a shared path (scripts, .github, migrations) changes and on push to main.
+      # MERGE-BOUNDARY-GATE-1 (2026-10-19, agent_issues 2830): every worker entry is LOADED on every event, not only the changed
+      # workers. node --check accepts the 2026-10-17 break (a relative import in personal-companion/worker.js, which killed all 30 of
+      # that worker's suites and would have failed the one-module deploy); a real load with the Workers-only modules stubbed and no
+      # network refuses it, and also a top-level throw and a bare package nothing bundles. About three seconds for ~100 workers.
+      - name: MERGE-BOUNDARY-GATE-1 worker load gate (every worker directory, every event)
+        if: ${{ !cancelled() }}
+        run: node scripts/worker-load-gate.mjs
+
+      # SUITE-RUNNER-1 (transformation levers T1.10 + T5.4): every suite of each changed worker runs here. The full set runs when a
+      # control-plane worker or a shared path (scripts, .github, migrations, _shared, a root file) changes, on push to main, in a merge
+      # queue's merge group, and on the 2-hourly schedule. A suite that is red for a reason outside the change is excused only by a
+      # dated, referenced line in scripts/suite-quarantine.txt (the recorded override); see scripts/run-suites.mjs.
       # No suite depends on being hand-wired below (19 were not, and three had been failing on main unnoticed).
       - name: SUITE-RUNNER-1 changed-worker suites (full set for control-plane and shared changes)
         run: |
           if [ "${{ github.event_name }}" = "pull_request" ]; then
-            node scripts/run-suites.mjs --changed-file /tmp/changed.txt --jobs 4 --timeout 180
+            node scripts/run-suites.mjs --changed-file /tmp/changed-suites.txt --jobs 4 --timeout 180
           else
             node scripts/run-suites.mjs --all --jobs 4 --timeout 180
           fi
@@ -876,6 +898,10 @@ jobs:
       - name: CI-ACTION-IDENTITY-1 offline suite (scripts/ci_watchdog.py and ci_watchdog_resolve.py)
         if: ${{ !cancelled() }}
         run: python3 scripts/ci_watchdog_action_test.py
+      # MERGE-BOUNDARY-GATE-1 (agent_issues 2830): a red full sweep on main is filed as suite-red, not as a bundle failure.
+      - name: MERGE-BOUNDARY-GATE-1 offline suite (scripts/ci_watchdog.py deploy_gate_failure)
+        if: ${{ !cancelled() }}
+        run: python3 scripts/ci_watchdog_suite_red_test.py
       - name: ci-watchdog selftest
         if: ${{ !cancelled() }}
         run: python3 scripts/ci-watchdog-selftest.py

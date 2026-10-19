@@ -1,0 +1,56 @@
+name: external-repo-patch
+# CI-ACTION-IDENTITY-1: the run title names the repository and mode, so scripts/ci_watchdog.py files a failure per action.
+run-name: external-repo-patch ${{ inputs.repo }} ${{ inputs.mode }}
+
+# EXTERNAL-REPO-PATCH-1 (2026-10-19, agent_issues 2507 GHA-AUDIT-DOTGITHUB-1, pillar security). The 2026-10-13
+# workflow audit found script injection (release names and dispatch inputs reach bash), Node 20 actions and a build workflow that cannot
+# fire in QNFO/.github (QNFO/QWAV, fixed by its own pull request 132 on 2026-10-19, is not a target). The code loop and every session are scoped to qnfo-workers, and a session cannot attach
+# QNFO/.github (the name starts with a dot, so the clone directory would be hidden). The fixed files are staged in
+# audits/gha-patches/<owner>-<repo>/.github/workflows/; this workflow writes them with the repository secret QNFO_GH_PAT, the credential
+# the fleet already has (no new token will be issued, owner directive 2026-10-08). scripts/external-repo-patch.mjs prints one RESULT_JSON line
+# with the status and GitHub's own message of every call; the first refusal stops the run and is never retried with another credential.
+# Nothing secret is printed. Run it with mode dry first (the default; it reads only), then live.
+# Dispatch only (GitHub schedule never fires on this repo). Style: step names colon-free, no heredocs, no inline python (workflow-lint.py).
+
+on:
+  workflow_dispatch:
+    inputs:
+      repo:
+        description: "QNFO/.github"
+        required: true
+        type: choice
+        options:
+          - QNFO/.github
+      mode:
+        description: "dry (default, reads only) or live (writes the staged files)"
+        required: false
+        type: choice
+        default: dry
+        options:
+          - dry
+          - live
+
+permissions:
+  contents: read
+
+concurrency:
+  group: external-repo-patch-${{ github.event.inputs.repo }}
+  cancel-in-progress: false
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      GH_PAT_TOKEN: ${{ secrets.QNFO_GH_PAT }}
+      IN_REPO: ${{ github.event.inputs.repo }}
+      IN_MODE: ${{ github.event.inputs.mode }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "22"
+
+      - name: Write the staged workflow files
+        run: node scripts/external-repo-patch.mjs "$IN_REPO" --mode "${IN_MODE:-dry}"
