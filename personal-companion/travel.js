@@ -88,6 +88,7 @@ export const DEFAULTS = {
   home_airports: "AMS,EIN,RTM", // a travel row titled "... to <one of these>" right after a stay means the trip ends
   lead_days: "3",           // propose when the next unbooked night is this close (the owner books late)
   nights: "2",              // default stay length per stop
+  adults: "1",              // party size for stay searches (TRAVEL-CONTEXT-1); the owner's row says who travels
   max_per_night: "100",     // search filter ceiling
   currency: "EUR",
   ideas_weekday: "0",       // 0 = Sunday: weekly "where next" ideas while nothing is booked; "-1" turns them off
@@ -103,6 +104,9 @@ export const DEFAULTS = {
 };
 
 export const MODELS = ["@cf/zai-org/glm-5.3-flash", "@cf/openai/gpt-oss-20b"];
+// Profile text handed to a model, travel facet first. 4000 cut the travel facet itself once it grew past ~6k characters
+// (TRAVEL-CONTEXT-1, 2026-10-19: budget, stay type, trip style and home base were dropped); 12000 is ~3k tokens.
+export const PROFILE_CHARS = 12000;
 export const BASE = "https://reading.q08.org";
 
 export async function ensureTravel(db, nowIso) {
@@ -169,12 +173,12 @@ export function tripState(rows, today, c) {
   return { mode: "home", city: c.home_city, country: c.home_country, checkin: null, recent, futureBooked };
 }
 
-export function bookingLink({ city, country, checkin, nights, maxPerNight, currency }) {
+export function bookingLink({ city, country, checkin, nights, maxPerNight, currency, adults }) {
   const q = new URLSearchParams({
     ss: [city, country].filter(Boolean).join(", "),
     checkin: checkin,
     checkout: addDays(checkin, Math.max(1, Number(nights) || 1)),
-    group_adults: "1",
+    group_adults: String(Math.min(8, Math.max(1, Math.round(Number(adults) || 1)))),
     no_rooms: "1",
     group_children: "0",
     selected_currency: currency || "EUR",
@@ -233,14 +237,14 @@ export function rankAndMark(opts, reactions, state) {
 }
 
 export function promptFor(state, c, profileRows, reactions, monthName) {
-  const facts = (profileRows || []).map((r) => "- " + String(r.label || "") + ": " + String(r.statement || "")).join("\n").slice(0, 3000);
+  const facts = (profileRows || []).map((r) => "- " + String(r.label || "") + ": " + String(r.statement || "")).join("\n").slice(0, PROFILE_CHARS);
   const picked = (reactions || []).filter((r) => r.reaction === "pick" || r.reaction === "booked").slice(0, 10).map((r) => r.city + (r.kind ? " (" + r.kind + ")" : "")).join(", ");
   const rejected = (reactions || []).filter((r) => r.reaction === "no").slice(0, 15).map((r) => r.city).join(", ");
   const task = state.mode === "road"
     ? "The traveller checks out of " + state.city + (state.country ? ", " + state.country : "") + " on " + state.checkin + " and has nothing booked after that. Propose exactly 3 next stops reachable by train, bus or a short flight, each for " + c.nights + " nights or a length you justify."
     : "The traveller is home in " + c.home_city + " with nothing booked. Propose exactly 3 trips that could start within the next three weeks, each a first stop of " + c.nights + "-3 nights.";
   return [
-    { role: "system", content: "You plan travel for one solo traveller who loves travel and hates planning. You never ask questions. Reply with JSON only: {\"options\":[{\"city\":\"\",\"country\":\"\",\"kind\":\"old town|coast|second city|nature|capital\",\"nights\":2,\"est_per_night\":0,\"why\":\"one sentence in plain English\"}]}. Respect every logistics fact (visas, residence rules) in the profile." },
+    { role: "system", content: "You plan travel for one traveller who loves travel and hates planning; they sometimes travel with a companion (the profile says who and how). You never ask questions. Reply with JSON only: {\"options\":[{\"city\":\"\",\"country\":\"\",\"kind\":\"old town|coast|second city|nature|capital\",\"nights\":2,\"est_per_night\":0,\"why\":\"one sentence in plain English\"}]}. Respect every logistics fact (visas, residence rules) in the profile." },
     { role: "user", content: [
       task,
       "Month: " + monthName + ". Typical lodging budget: up to " + c.max_per_night + " " + c.currency + " per night.",
@@ -384,7 +388,7 @@ export async function travelTick(env, deps = {}) {
   const exists = await db.prepare("SELECT 1 FROM travel_options WHERE trip_key = ? LIMIT 1").bind(tripKey).first();
   if (exists) { out.skipped = "already proposed " + tripKey; return out; }
 
-  const profile = await many(db, "SELECT label, statement FROM profile WHERE facet IN ('travel','likes','dislikes','logistics') AND (domain IS NULL OR domain IN ('personal','straddle')) AND (status IS NULL OR status IN ('accepted','active')) ORDER BY confidence DESC LIMIT 40");
+  const profile = await many(db, "SELECT label, statement FROM profile WHERE facet IN ('travel','likes','dislikes','logistics') AND (domain IS NULL OR domain IN ('personal','straddle')) AND (status IS NULL OR status IN ('accepted','active')) ORDER BY CASE facet WHEN 'travel' THEN 0 ELSE 1 END, confidence DESC LIMIT 80");
   const reactions = await many(db, "SELECT reaction, city, kind FROM travel_reactions WHERE ts >= ? ORDER BY ts DESC LIMIT 60", addDays(today, -365));
   const month = new Date(checkin + "T12:00:00Z").toLocaleString("en-GB", { month: "long", timeZone: "UTC" });
   const messages = promptFor(state, c, profile, reactions, month);
@@ -406,7 +410,7 @@ export async function travelTick(env, deps = {}) {
   for (const [i, o] of opts.entries()) {
     o.id = optionId();
     o.nights = o.nights || Number(c.nights) || 2;
-    o.link = bookingLink({ city: o.city, country: o.country, checkin, nights: o.nights, maxPerNight: c.max_per_night, currency: c.currency });
+    o.link = bookingLink({ city: o.city, country: o.country, checkin, nights: o.nights, maxPerNight: c.max_per_night, currency: c.currency, adults: c.adults });
     links[i] = key ? BASE + "/travel/o/" + o.id + "?s=" + encodeURIComponent(await sign(key, o.id)) : null;
   }
   const mail = mailFor(state, opts, links, c);
@@ -588,7 +592,7 @@ export function parseChat(text, today) {
 }
 
 export const CHAT_SYSTEM = [
-  "You are a personal travel planner for one solo traveller who loves the stimulation of travel and hates planning it. You talk with them in a chat.",
+  "You are a personal travel planner for one traveller who loves the stimulation of travel and hates planning it. They sometimes travel with a companion; the profile says who and how, so plan for the party it describes. You talk with them in a chat.",
   "How you work:",
   "- Lead with something concrete. When the next destination or step is open, propose 2 or 3 specific places and mark one as your pick. Never send a list of questions or a questionnaire.",
   "- Use what you know (their profile, past picks and rejections, where they are now, what is booked) and say in one sentence why each option fits them in particular.",
@@ -608,7 +612,7 @@ export function chatContext(x) {
     ? "On the road: staying in " + x.state.city + (x.state.country ? ", " + x.state.country : "") + ", checks out " + x.state.checkin + " with nothing booked after that."
     : "No open gap detected; home base is " + c.home_city + (c.home_country ? ", " + c.home_country : "") + ".";
   const booked = (x.booked || []).map((b) => "- " + (b.city || b.title) + (b.country ? ", " + b.country : "") + ": " + b.start_date + " to " + b.end_date).join("\n");
-  const facts = (x.profile || []).map((r) => "- " + String(r.label || "") + ": " + String(r.statement || "")).join("\n").slice(0, 4000);
+  const facts = (x.profile || []).map((r) => "- " + String(r.label || "") + ": " + String(r.statement || "")).join("\n").slice(0, PROFILE_CHARS);
   const picked = (x.reactions || []).filter((r) => r.reaction === "pick" || r.reaction === "booked").slice(0, 12).map((r) => r.city + (r.kind ? " (" + r.kind + ")" : "")).join(", ");
   const rejected = (x.reactions || []).filter((r) => r.reaction === "no").slice(0, 20).map((r) => r.city).join(", ");
   return [
@@ -655,7 +659,7 @@ const slug = (s) => norm(s).replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").
 async function chatContextRows(db, today) {
   const rows = await many(db, "SELECT id, category, title, city, country, start_date, end_date, booking_ref FROM events WHERE category IN ('lodging','travel') AND (end_date >= ? OR start_date >= ?)", addDays(today, -60), addDays(today, -60));
   let profile = [];
-  try { profile = await many(db, "SELECT id, facet, label, statement FROM profile WHERE facet IN ('travel','likes','dislikes','logistics') AND (domain IS NULL OR domain IN ('personal','straddle')) AND (status IS NULL OR status IN ('accepted','active')) ORDER BY CASE facet WHEN 'travel' THEN 0 ELSE 1 END, confidence DESC LIMIT 60"); }
+  try { profile = await many(db, "SELECT id, facet, label, statement FROM profile WHERE facet IN ('travel','likes','dislikes','logistics') AND (domain IS NULL OR domain IN ('personal','straddle')) AND (status IS NULL OR status IN ('accepted','active')) ORDER BY CASE facet WHEN 'travel' THEN 0 ELSE 1 END, confidence DESC LIMIT 80"); }
   catch (e) { console.error(JSON.stringify({ evt: "travel-chat:profile-read", error: String(e && e.message || e).slice(0, 200) })); }
   const reactions = await many(db, "SELECT reaction, city, kind FROM travel_reactions WHERE ts >= ? ORDER BY ts DESC LIMIT 60", addDays(today, -365));
   return { rows, profile, reactions };
@@ -699,7 +703,7 @@ export async function chatTurn(env, deps, input) {
     const checkin = o.checkin || (state.mode === "road" ? state.checkin : addDays(today, 7));
     const nights = o.nights || Number(c.nights) || 2;
     const opt = { id: optionId(), city: o.city, country: o.country, kind: o.kind, checkin, nights, est_per_night: o.est_per_night, why: o.why, pick: o.pick, status: "proposed",
-      link: bookingLink({ city: o.city, country: o.country, checkin, nights, maxPerNight: c.max_per_night, currency: c.currency }),
+      link: bookingLink({ city: o.city, country: o.country, checkin, nights, maxPerNight: c.max_per_night, currency: c.currency, adults: c.adults }),
       transit: transitLink(from, [o.city, o.country].filter(Boolean).join(", ")) };
     await db.prepare("INSERT INTO travel_options (id, trip_key, rank, pick, mode, city, country, kind, checkin, nights, est_per_night, currency, why, link, model, status, created_at) VALUES (?, ?, ?, ?, 'chat', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'proposed', ?) ON CONFLICT(trip_key, rank) DO NOTHING")
       .bind(opt.id, tripKey, i + 1, opt.pick, opt.city, opt.country || null, opt.kind || null, checkin, nights, opt.est_per_night, c.currency, opt.why || null, opt.link, model, nowIso).run();

@@ -4506,6 +4506,13 @@ __name222(stageReview, "stageReview");
 __name2222(stageReview, "stageReview");
 async function stageRevise(env, row) {
   __attrStageSet(env, "revise");
+  // REVISE-DEADLINE-1 (2026-10-19, issue 100178): 20 exceededWallTime invocations in 24 h ended in the kimi-k2.6 3046
+  // timeout/retry chain while a stuck slot idled the others. The tick start recorded by runLeased (globalThis.__qnfoTickStart,
+  // falling back to this stage's entry time when absent) bounds the retries: with under 8 minutes of the 900 s wall left,
+  // the second-model retry and the kimi last resort are skipped and revise-patch-deadline is logged, so the pass fails
+  // fast and the recover loop re-arms the row instead of running past the wall.
+  const _tickStart = globalThis.__qnfoTickStart || Date.now();
+  const _remMs = function() { return 900e3 - (Date.now() - _tickStart); };
   // MATH-LATEX-AUTOFIX-1: a math finding is resolved here without a model edit; when it was the only HARD fix, the paper goes
   // back to review (as an applied patch does) instead of asking the models for an edit they could not place.
   const paper = await mathAutofixStored(env, row, await r2Get(env, String(row.id) + "/reconciled.md"), "revise");
@@ -4594,7 +4601,10 @@ async function stageRevise(env, row) {
     // the stricter text when the first fallback already used it.
     const _strict = _p.proposed === 0 && _hardIds.length ? "\n\nSTRICT RETRY: the previous answer proposed no edit, which is not acceptable for a non-empty fix list. The HARD fixes to resolve are: " + _hardIds.join(", ") + ". Return at least one edit for EACH of these fix ids, as a JSON array of {\"find\",\"replace\"} objects and nothing else; an empty array is a wrong answer. Where a fix cannot be met from the PAPER and the FIXES, resolve it by replacing the offending sentence with an empty string." : "";
     const _shrinkNote = _p.refused ? "\n\nLENGTH RETRY: the previous answer's edits " + _p.refused + ". The paper is " + paper.length + " characters and must stay at least " + floorChars(row) + ". Resolve each HARD fix by replacing the text with corrected text of about the same length; do not delete sections or citations." : "";
-    if (!_p.applied && (_pmodel !== MODELS[1] || _strict || _shrinkNote)) {
+    if (!_p.applied && _remMs() <= 480e3) {
+      await logEvent(env, "revise-patch-deadline", "row=" + row.id + " ms_left=" + Math.max(0, Math.round(_remMs())) + " under 480000: second-model revise retry skipped", "warn");
+    }
+    if (!_p.applied && _remMs() > 480e3 && (_pmodel !== MODELS[1] || _strict || _shrinkNote)) {
       await logEvent(env, "revise-patch", "row=" + row.id + " model=" + _pmodel + " proposed=" + _p.proposed + " applied=0 raw_chars=" + String(_praw || "").length + " out_chars=" + _p.text.length + (_p.refused ? " refused=" + _p.refused : "") + " second-model retry" + (_strict ? " (strict: " + _hardIds.join(",") + ")" : ""), "warn");
       const _praw2 = await aiText(env, MODELS[1], _pprompt + _strict + _shrinkNote, 8192, "low");
       const _p2 = await _applyGuarded(_praw2, MODELS[1]);
@@ -4606,7 +4616,10 @@ async function stageRevise(env, row) {
     }
     // WAI-WIDTH-GOVERNOR-1 (d): one last retry on kimi-k2.6 once gpt-oss-120b and glm-5.3-flash both failed to apply an edit. 6.3x the
     // flash input rate and 172 of 324 calls failed (3046 timeouts of about 210 s) on 10-19, so it is no longer the first or second model.
-    if (!_p.applied && (await floorFlag(env, "research_kimi_last_resort")) !== "off") {
+    if (!_p.applied && _remMs() <= 480e3) {
+      await logEvent(env, "revise-patch-deadline", "row=" + row.id + " ms_left=" + Math.max(0, Math.round(_remMs())) + " under 480000: kimi last resort skipped", "warn");
+    }
+    if (!_p.applied && _remMs() > 480e3 && (await floorFlag(env, "research_kimi_last_resort")) !== "off") {
       await logEvent(env, "revise-patch", "row=" + row.id + " model=" + _pmodel + " applied=0 after gpt-oss-120b and glm-5.3-flash; last resort " + MODELS[2], "warn");
       const _praw3 = await aiText(env, MODELS[2], _pprompt + _strict + _shrinkNote, 8192, "low");
       const _p3 = await _applyGuarded(_praw3, MODELS[2]);
