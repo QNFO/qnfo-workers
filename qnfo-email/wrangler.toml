@@ -73,11 +73,12 @@ database_id = "e8d6c61a-10b7-4086-b81e-9e6e85afa407"
 # email-routing worker (fetch handler); this cron drives scheduled() ->
 # sendInboundDigest(). Reminder dispatch lives in qnfo-calendar-intake.
 # CRON-RATE-CEILING-1 (owner directive 2026-09-23): this declaration previously said
-# "*/5 * * * *" while the LIVE schedule was already "0 7 * * *" -- a latent violation
+# "*/5 * * * *" while the LIVE schedule was already the daily 07:00 cron -- a latent violation
 # (288 fires/24h) that any wrangler deploy would have applied. Repo now matches LIVE.
 [triggers]
 # EMAIL-TICK-1 (2.9.0, 2026-10-12): the voice drafter and the reply drain run every 15 minutes (96 fires/24h, under the
-# CRON-RATE-CEILING-1 floor of one fire per 10 minutes); the daily 07:00 cron keeps the index, freshness and voice-learning steps.
+# CRON-RATE-CEILING-1 floor of one fire per 10 minutes); the index, freshness and voice-learning steps run once a day at 07:00 inside that tick
+# (CRON-GRID-1, 2.10.0: no trigger slower than hourly; worker.js CRON_GRID_CFG).
 crons = ["*/15 * * * *"]
 
 # Secrets (set via `wrangler secret put`, never committed):

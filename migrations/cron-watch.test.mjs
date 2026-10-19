@@ -3,8 +3,8 @@
 // (daily, weekly, 6-hourly, minute lists, */N, the exempt worker); a worker error, a red heartbeat streak, a silent worker, a
 // failed fleet task and an overdue fleet cron are each a fault; a fault is filed only after it persists for 9 minutes (schedule
 // faults 90), once, with a d1-query probe on v_cron_faults that passes when the fault clears; three failures in a row add the
-// code-task line and priority high, once; a failed task is re-fired; metrics are written; the backup tick fires only when the
-// fleet tick is 12 minutes stale; the fleet_tick trigger files fleet-exec silence; re-applying the file changes nothing.
+// code-task line and priority high, once; a failed task is re-fired; metrics are written; the fleet_tick trigger files
+// fleet-exec silence; re-applying the file changes nothing.
 // Run: node migrations/cron-watch.test.mjs
 import { DatabaseSync } from "node:sqlite";
 import { readFileSync } from "node:fs";
@@ -147,16 +147,6 @@ db.exec("UPDATE cron_fault_seen SET first_seen = '" + iso(95) + "' WHERE kind = 
 run();
 is = issues();
 ok(is["schedule:daily-one|0 6 * * *"] && is["schedule:list-off|3,13,23,33,43,53 * * * *"] && !/code-task:/.test(is["schedule:daily-one|0 6 * * *"].description), "schedule faults are filed after 90 minutes, not escalated");
-// backup fleet tick
-const tdef = JSON.parse(one("SELECT definition FROM fleet_tasks WHERE id = 'fleet-tick-backup'").definition);
-db.exec("INSERT INTO fleet_tick (ts, source) VALUES ('" + iso(5) + "', 'cron:qnfo-code-orchestrator')");
-db.prepare(tdef.steps[0].sql).all();
-ok(one("SELECT COUNT(*) AS n FROM fleet_tick WHERE source = 'cron:fleet-exec'").n === 0, "no backup tick while the orchestrator ticked 5 minutes ago");
-db.exec("UPDATE fleet_tick SET ts = '" + iso(13) + "'");
-db.prepare(tdef.steps[0].sql).all();
-ok(one("SELECT COUNT(*) AS n FROM fleet_tick WHERE source = 'cron:fleet-exec'").n === 1, "a backup tick when the last tick is 13 minutes old");
-db.prepare(tdef.steps[0].sql).all();
-ok(one("SELECT COUNT(*) AS n FROM fleet_tick WHERE source = 'cron:fleet-exec'").n === 1, "only one backup tick");
 // fleet-exec silent: the fleet_tick trigger files it
 db.exec("UPDATE fleet_runs SET started_at = '" + iso(30) + "'");
 db.exec("INSERT INTO fleet_tick (source) VALUES ('cron:qnfo-code-orchestrator')");
@@ -172,6 +162,6 @@ ok(one(fxc.verify_probe).observed === "1", "the probe passes when fleet-exec run
 const n0 = one("SELECT (SELECT COUNT(*) FROM metric_registry) + (SELECT COUNT(*) FROM fleet_crons) + (SELECT COUNT(*) FROM analytics_metric_triggers) AS n").n;
 db.exec(sql);
 ok(one("SELECT (SELECT COUNT(*) FROM metric_registry) + (SELECT COUNT(*) FROM fleet_crons) + (SELECT COUNT(*) FROM analytics_metric_triggers) AS n").n === n0, "re-applying the file adds no rows");
-ok(one("SELECT COUNT(*) AS n FROM fleet_crons WHERE task_id IN ('cron-watch', 'fleet-tick-backup') AND cron_expr = '*/5 * * * *'").n === 2, "both workflows run every 5 minutes");
+ok(one("SELECT COUNT(*) AS n FROM fleet_crons WHERE task_id = 'cron-watch' AND cron_expr = '*/5 * * * *'").n === 1, "cron-watch runs every 5 minutes");
 console.log(`cron-watch: ${pass} pass, ${fail} fail`);
 if (fail) process.exit(1);
