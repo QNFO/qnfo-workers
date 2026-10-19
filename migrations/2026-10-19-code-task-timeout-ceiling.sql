@@ -1,0 +1,14 @@
+-- KIMI-OUT-UNDER-CEILING-1 (2026-10-19, pillar autonomy). qnfo-code-orchestrator gave kimi-k2.7-code, its first rung, 16384 output
+-- tokens; at its measured 41.7 tokens/s (ai_call_counters, 172 calls since 2026-10-17) a reply past about 10k tokens runs into the
+-- 240 s Workers AI ceiling (3046). cloud_ops_events held 445 code-task.timeout events from 2026-10-18 07:00Z to 2026-10-19 07:00Z,
+-- 139 of them on a task's first try, each holding a lane for 240 s and parking the task 2 minutes. qnfo-code-orchestrator 0.18.24
+-- gives kimi 9216 tokens (about 221 s) and names the timed-out rung in each event (meta.model). This file records the failure mode
+-- and its detector: at most 5 timeouts on the kimi rung in the last 60 minutes.
+-- Idempotent (INSERT OR IGNORE). The contract is created active and due now.
+-- APPLY-BY: ci
+-- DB: qnfo-audit
+-- Rollback: DELETE FROM remediation_contracts WHERE class = 'fm-code-task-timeout-over-ceiling'; DELETE FROM failure_modes WHERE fm_key = 'code-task-timeout-over-ceiling';
+INSERT OR IGNORE INTO failure_modes (fm_key, failure_mode, root_cause, remediation, detector, probe_class, first_seen, issue_id, trigger_condition, symptom, blast_radius) VALUES
+ ('code-task-timeout-over-ceiling', 'the code loop''s first rung times out on long replies', 'kimi-k2.7-code had a 16384-token output budget but decodes at about 41.7 tokens/s, so any reply over about 10k tokens passes the 240 s Workers AI ceiling and throws 3046', 'qnfo-code-orchestrator 0.18.24 KIMI-OUT-UNDER-CEILING-1: kimi gets 9216 output tokens; TIMEOUT-MODEL-ATTR-1 names the rung in each code-task.timeout event', 'fm-code-task-timeout-over-ceiling: code-task.timeout events with meta.model kimi-k2.7-code in the last 60 minutes, at most 5', 'fm-code-task-timeout-over-ceiling', '2026-10-17T00:00:00Z', NULL, 'a propose reply longer than the rung can decode in 240 s', 'code-task.timeout events, 49 in the 06Z hour of 2026-10-19', 'code loop: every task spends lanes and 2-minute parks on timeouts before an answer');
+INSERT OR IGNORE INTO remediation_contracts (class, issue_id, precondition, action, verify_probe, verify_transport, max_attempts, escalate_to, expected_cadence_h, status, next_due_at, module, budget_ms, max_items, requires_container) VALUES
+ ('fm-code-task-timeout-over-ceiling', NULL, 'KIMI-OUT-UNDER-CEILING-1', 'failure-mode detector', 'SELECT ''1'' AS expected, CASE WHEN (SELECT COUNT(*) FROM cloud_ops_events WHERE job = ''qnfo-code-orchestrator'' AND kind = ''code-task.timeout'' AND json_extract(meta, ''$.model'') = ''@cf/moonshotai/kimi-k2.7-code'' AND ts > strftime(''%Y-%m-%dT%H:%M:%SZ'', ''now'', ''-60 minutes'')) <= 5 THEN ''1'' ELSE ''0'' END AS observed', 'd1-query', 3, 'qnfo-code-orchestrator', 1, 'active', strftime('%Y-%m-%d %H:%M:%S', 'now'), 'failure-mode', 45000, 5, 0);
