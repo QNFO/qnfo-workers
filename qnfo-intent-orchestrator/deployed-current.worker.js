@@ -5,7 +5,7 @@ var __name = (target, value) => __defProp(target, "name", { value, configurable:
 var __defProp2 = Object.defineProperty;
 var __name2 = /* @__PURE__ */ __name((target, value) => __defProp2(target, "name", { value, configurable: true }), "__name");
 var NL = String.fromCharCode(10);
-var VERSION = "1.5.0-cron-heartbeat"; /* 1.5.0 CRON-ONLY-HEARTBEAT-1 (2026-10-13, agent_issues 2397, pillar autonomy): scheduled() upserts fleet_heartbeat when the run ends (ok 0 when the work threw or the triage cron logged an error); the write is try/caught and never fails the cron. */ /* 1.4.1-activity-store: 1.4.1 (2026-10-12): merged with main 1.3.11-codeagent. The activity is stored in this worker's own vector index (the result that decides done or failed); main's forward to personal-api /activity is kept as a second, best-effort copy whose failure is logged and never fails the intent (the route answered 404 on 2026-10-12). */ /* 1.4.0 AUTOAUDIT-DEAD-CALLERS-1 (2026-10-12, agent_issues 2302, pillar personal): an activity intent is stored in this worker's own vector index and ends done or failed with the error logged (it called a retired worker through a removed binding and the empty catch dropped it); GET /personal/search serves the personal index to qnfo-tools-mcp. */ /* 1.3.10 MODEL-ID-AUDIT-1 (2026-10-11): the classifier asked qnfo-ai for the bare id glm-5.2, which its MODELS table does not route (it fell back to deepseek-v4-flash while the stats recorded glm-5.2). It now asks glm-5.3-flash with deepseek-v4-flash as the second leg. */ /* 1.3.9 NO-TOPIC-HARDCODE-1 (owner directive 2026-10-10): the triage prompt names no program or field; cluster_key tags come from the tags already in research_candidates. */
+var VERSION = "1.6.0-cron-grid-1"; /* 1.6.0 CRON-GRID-1 (owner directive 2026-10-19, pillar autonomy): one trigger, 0,30 every hour; the 06:00 digest (retry false: it mails the owner) and the 06:30 triage (retried up to 3 times) run on the grid fire of their slot, and every run is a cron_fire_log row CRON-WATCH-1 reads. */ /* 1.5.0 CRON-ONLY-HEARTBEAT-1 (2026-10-13, agent_issues 2397, pillar autonomy): scheduled() upserts fleet_heartbeat when the run ends (ok 0 when the work threw or the triage cron logged an error); the write is try/caught and never fails the cron. */ /* 1.4.1-activity-store: 1.4.1 (2026-10-12): merged with main 1.3.11-codeagent. The activity is stored in this worker's own vector index (the result that decides done or failed); main's forward to personal-api /activity is kept as a second, best-effort copy whose failure is logged and never fails the intent (the route answered 404 on 2026-10-12). */ /* 1.4.0 AUTOAUDIT-DEAD-CALLERS-1 (2026-10-12, agent_issues 2302, pillar personal): an activity intent is stored in this worker's own vector index and ends done or failed with the error logged (it called a retired worker through a removed binding and the empty catch dropped it); GET /personal/search serves the personal index to qnfo-tools-mcp. */ /* 1.3.10 MODEL-ID-AUDIT-1 (2026-10-11): the classifier asked qnfo-ai for the bare id glm-5.2, which its MODELS table does not route (it fell back to deepseek-v4-flash while the stats recorded glm-5.2). It now asks glm-5.3-flash with deepseek-v4-flash as the second leg. */ /* 1.3.9 NO-TOPIC-HARDCODE-1 (owner directive 2026-10-10): the triage prompt names no program or field; cluster_key tags come from the tags already in research_candidates. */
 var ROUTER = "https://qnfo-ai.q08.workers.dev";
 var AGENT_ORCH = "https://qnfo-agent-orchestrator.q08.workers.dev";
 var PROMOTE_THRESHOLD = 60;
@@ -585,8 +585,100 @@ async function selfRegister(env) {
 }
 __name(selfRegister, "selfRegister");
 __name2(selfRegister, "selfRegister");
+// ---- CRON-GRID-1:BEGIN (owner directive 2026-10-19: "ALL CRON TICKS SHALL BE MEASURED IN 5-MINUTE INTERVALS, AND NO CRON
+// SHALL EXECUTE LESS THAN ONCE EVERY HOUR. ALL CRON FAILURES/ERRORS SHALL BE TRIAGED AND REMEDIATED AUTOMATICALLY BY THE FLEET.")
+// Cloudflare fires this worker only on triggers that repeat at least hourly, on minutes that are multiples of 5. A job that
+// had its own slower trigger (daily, weekly, every 6 hours) keeps its cadence: it runs on the first grid fire after its old
+// slot, and is retried on later fires while its last good run is older than its period plus 30 minutes, at most
+// CRON_GRID_RETRIES times in a row; past that CRON-WATCH-1 (qnfo-audit fleet_tasks cron-watch) escalates it to the code loop.
+// Every run is one cron_fire_log row (source worker:<name>, outcome ok, error or idle) that CRON-WATCH-1 reads. A job named
+// retry: false (a send to people outside the fleet) runs only on its slot, so a failure is never repeated at a reader.
+var CRON_GRID_RETRIES = 3;
+function cronGridField(spec, v, lo, hi) {
+  return String(spec).split(",").some(function (part) {
+    var step = 1, sm = /^(.*)\/(\d+)$/.exec(part), a, b;
+    if (sm) { part = sm[1]; step = Math.max(1, parseInt(sm[2], 10)); }
+    if (part === "*") { a = lo; b = hi; }
+    else if (part.indexOf("-") > 0) { a = parseInt(part, 10); b = parseInt(part.split("-")[1], 10); }
+    else { a = parseInt(part, 10); b = sm ? hi : a; }
+    return v >= a && v <= b && (v - a) % step === 0;
+  });
+}
+// Cloudflare numbers weekdays 1 (Sunday) to 7 (Saturday) (CF-DOW, qnfo-fleet-control 2026-10-05).
+function cronGridMatch(expr, d) {
+  var f = String(expr).trim().split(/\s+/);
+  if (f.length !== 5) return false;
+  var domOk = cronGridField(f[2], d.getUTCDate(), 1, 31), dowOk = cronGridField(f[4], d.getUTCDay() + 1, 1, 7);
+  var dayOk = f[2] !== "*" && f[4] !== "*" ? (domOk || dowOk) : (domOk && dowOk);
+  return dayOk && cronGridField(f[0], d.getUTCMinutes(), 0, 59) && cronGridField(f[1], d.getUTCHours(), 0, 23) && cronGridField(f[3], d.getUTCMonth() + 1, 1, 12);
+}
+// True when expr had a slot in the window (sinceMs, untilMs].
+function cronGridSlot(expr, sinceMs, untilMs) {
+  for (var t = Math.floor(untilMs / 60000) * 60000; t > sinceMs; t -= 60000) if (cronGridMatch(expr, new Date(t))) return true;
+  return false;
+}
+async function cronGridLog(db, worker, expr, startMs, outcome, note) {
+  if (!db) return;
+  try {
+    await db.prepare("INSERT INTO cron_fire_log (cron_name, task_id, cron_expr, fired_at, fired_epoch_ms, outcome, source, note) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)")
+      .bind(worker + "|" + expr, worker, expr, new Date(startMs).toISOString(), startMs, outcome, "worker:" + worker, String(note || "").slice(0, 500)).run();
+  } catch (e) { console.error(JSON.stringify({ worker: worker, where: "cron-grid-log", error: String(e && e.message || e).slice(0, 200) })); }
+}
+async function cronGridDue(db, cfg, nowMs) {
+  var out = [], lag = cfg.lagMin || 0;
+  for (var i = 0; i < cfg.jobs.length; i++) {
+    var j = cfg.jobs[i];
+    if (cronGridSlot(j.cron, nowMs - (lag + cfg.tickMin) * 60000, nowMs - lag * 60000)) { out.push({ cron: j.cron, why: "slot" }); continue; }
+    if (!db || !j.retry) continue;
+    try {
+      var name = cfg.worker + "|" + j.cron;
+      var r = await db.prepare("SELECT COUNT(*) AS n, MAX(CASE WHEN outcome = 'ok' THEN fired_epoch_ms END) AS last_ok, SUM(CASE WHEN outcome = 'error' AND fired_epoch_ms > COALESCE((SELECT MAX(fired_epoch_ms) FROM cron_fire_log WHERE cron_name = ?1 AND outcome = 'ok'), 0) THEN 1 ELSE 0 END) AS fails FROM cron_fire_log WHERE cron_name = ?1").bind(name).first();
+      if (r && Number(r.n) > 0 && Number(r.fails || 0) < CRON_GRID_RETRIES && nowMs - Number(r.last_ok || 0) > (j.periodMin + 30) * 60000) out.push({ cron: j.cron, why: "retry" });
+    } catch (e) { console.error(JSON.stringify({ worker: cfg.worker, where: "cron-grid-due", error: String(e && e.message || e).slice(0, 200) })); }
+  }
+  return out;
+}
+// One run of the worker's own handler, awaited with its waitUntil work, logged with its outcome.
+async function cronGridOne(db, worker, expr, why, ev, ctx, run) {
+  var t0 = Date.now(), pending = [];
+  var c = { waitUntil: function (p) { pending.push(Promise.resolve(p)); }, passThroughOnException: function () { if (ctx && ctx.passThroughOnException) ctx.passThroughOnException(); } };
+  try {
+    await run(ev, c);
+    // Index loop, not allSettled: work a waitUntil promise adds while it runs is awaited too.
+    var bad = null;
+    for (var k = 0; k < pending.length; k++) { try { await pending[k]; } catch (e) { if (!bad) bad = e || new Error("waitUntil rejected"); } }
+    if (bad) throw bad;
+    await cronGridLog(db, worker, expr, t0, "ok", why + " " + (Date.now() - t0) + " ms");
+  } catch (e) {
+    await cronGridLog(db, worker, expr, t0, "error", why + ": " + String(e && e.message || e));
+    throw e;
+  }
+}
+// cfg: { worker, tick, tickMin, lagMin, jobs: [{ cron, periodMin, retry }], own: "self" | "none" | "<cron the tick runs as>", ownWhenDue }
+async function cronGridRun(db, event, ctx, cfg, run) {
+  var cron = String((event && event.cron) || "");
+  var nowMs = Number(event && event.scheduledTime) || Date.now();
+  if (cron !== cfg.tick) return cronGridOne(db, cfg.worker, cron || "manual", "fire", event, ctx, run);
+  var due = await cronGridDue(db, cfg, nowMs), firstErr = null;
+  for (var i = 0; i < due.length; i++) {
+    try { await cronGridOne(db, cfg.worker, due[i].cron, due[i].why, { cron: due[i].cron, scheduledTime: nowMs, type: "scheduled" }, ctx, run); }
+    catch (e) { if (!firstErr) firstErr = e; }
+  }
+  if (cfg.own === "none" || (due.length && cfg.ownWhenDue === false)) {
+    if (!due.length) await cronGridLog(db, cfg.worker, cfg.tick, nowMs, "idle", "grid tick: no job due");
+  } else {
+    var ev = cfg.own && cfg.own !== "self" ? { cron: cfg.own, scheduledTime: nowMs, type: "scheduled" } : event;
+    try { await cronGridOne(db, cfg.worker, cfg.tick, "tick", ev, ctx, run); } catch (e) { if (!firstErr) firstErr = e; }
+  }
+  if (firstErr) throw firstErr;
+}
+// ---- CRON-GRID-1:END ----
+var CRON_GRID_CFG = { worker: "qnfo-intent-orchestrator", tick: "0,30 * * * *", tickMin: 30, lagMin: 0, jobs: [{ cron: "0 6 * * *", periodMin: 1440, retry: false }, { cron: "30 6 * * *", periodMin: 1440, retry: true }], own: "none" };
 var worker_default = {
-  async scheduled(event, env) {
+  async scheduled(event, env, ctx) {
+    return cronGridRun(env.D1, event, ctx, CRON_GRID_CFG, (ev) => worker_default.scheduledOnce(ev, env));
+  },
+  async scheduledOnce(event, env) {
     let hbOk = 1;
     try {
     if (event.cron === "0 6 * * *") {
@@ -637,7 +729,7 @@ var worker_default = {
       if (ctx && ctx.waitUntil && env.QNFO_OPS && env.REGISTRY_TOKEN) {
         ctx.waitUntil(selfRegister(env).catch((e) => console.log("self-register err", e && e.message || e)));
       }
-      return new Response(JSON.stringify({ ok: true, worker: "qnfo-intent-orchestrator", version: VERSION, capabilities: ["intent-intake", "intent-triage", "research-dispatch", "daily-digest", "personal-search"], limitations: ["every route except /health needs a bearer token", "AI classification at intake is bounded at 8 s (INTAKE-PERSIST-BUDGET-1)", "the digest is sent at 06:00 and triage plus research dispatch run at 06:30 daily"] }), { headers: { "Content-Type": "application/json", ...cors } });
+      return new Response(JSON.stringify({ ok: true, worker: "qnfo-intent-orchestrator", version: VERSION, capabilities: ["intent-intake", "intent-triage", "research-dispatch", "daily-digest", "personal-search"], limitations: ["every route except /health needs a bearer token", "AI classification at intake is bounded at 8 s (INTAKE-PERSIST-BUDGET-1)", "the digest is sent at 06:00 and triage plus research dispatch run at 06:30 daily, on the 0,30 grid trigger (CRON-GRID-1)"] }), { headers: { "Content-Type": "application/json", ...cors } });
     }
     const token = (request.headers.get("Authorization") || "").replace(/^Bearer\s+/i, "");
     if (!auth(token, env)) return new Response("unauthorized", { status: 401, headers: cors });

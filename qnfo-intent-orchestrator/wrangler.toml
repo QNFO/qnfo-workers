@@ -74,4 +74,5 @@ invocation_logs = true
 enabled = true
 
 [triggers]
-crons = ["0 6 * * *", "30 6 * * *"]
+# CRON-GRID-1 (1.6.0): no trigger slower than hourly; the daily jobs live in worker.js CRON_GRID_CFG.
+crons = ["0,30 * * * *"]
