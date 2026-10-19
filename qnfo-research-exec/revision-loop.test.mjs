@@ -191,3 +191,4 @@ console.log("revision-loop: ok");
   assert.ok(!/Correction/.test(up[1][1][1]) && /## Version History\n\n- Version 1\.0\.1 .*wording/.test(up[1][1][1]), up[1][1][1]);
   assert.ok(!up.some(([, a]) => a[0] === "pipe-gone"), "a pipeline retraction stays");
 }
+assert.ok(/if \(r\.verdict === "flagged" && live\[r\.slug\]\) st\.flagged\+\+/.test(readFileSync(new URL("./worker.js", import.meta.url), "utf8")), "papers_fabricated_claims_open counts only papers the sweep still covers");
