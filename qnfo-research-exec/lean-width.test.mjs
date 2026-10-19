@@ -7,14 +7,14 @@ const src = readFileSync(new URL("./worker.js", import.meta.url), "utf8");
 let pass = 0, fail = 0;
 const ok = (c, m, x) => { if (c) pass++; else { fail++; console.log("FAIL " + m + (x !== undefined ? "  -- " + JSON.stringify(x) : "")); } };
 const grab = (name) => { const i = src.indexOf("async function " + name + "("); const j = src.indexOf("\n}\n", i); return src.slice(i, j + 2); };
-const consts = ["RESEARCH_PARALLEL_DEFAULT", "RESEARCH_PARALLEL_MAX", "RESEARCH_PARALLEL_LEAN"].map((c) => { const m = new RegExp("var " + c + " = (\\d+);").exec(src); return m ? "var " + c + " = " + m[1] + ";" : ""; }).join("\n");
+const consts = ["RESEARCH_PARALLEL_DEFAULT", "RESEARCH_PARALLEL_MAX", "RESEARCH_PARALLEL_LEAN", "WIDTH_FLOOR", "WIDTH_STEP_UP", "WIDTH_RL_SHARE", "WIDTH_RL_MIN", "WIDTH_LOOKBACK_MIN", "WIDTH_PREV_MAX_MIN", "WORKER"].map((c) => { const m = new RegExp("\nvar " + c + " = ([^;\\n]+);").exec(src); return m ? "var " + c + " = " + m[1] + ";" : ""; }).join("\n");
 ok(/var RESEARCH_PARALLEL_LEAN = 24;/.test(src), "lean width default is 24");
-const make = new Function(consts + "\n" + grab("leanEnsemble") + "\n" + grab("researchLeanWidth") + "\n" + grab("researchParallel") + "\nreturn researchParallel;");
+const make = new Function(consts + "\nasync function logEvent() {}\n" + grab("floorFlag") + "\n" + grab("widthGovern") + "\n" + grab("leanEnsemble") + "\n" + grab("researchLeanWidth") + "\n" + grab("researchParallel") + "\nreturn researchParallel;");
 const researchParallel = make();
-const envWith = (cfg, breached) => ({ QNFO_AUDIT: { prepare: (sql) => ({ first: async () => {
+const envWith = (cfg0, breached) => { const cfg = Object.assign({ research_governor: "off" }, cfg0); return { QNFO_AUDIT: { prepare: (sql) => { let args = []; const q = { bind: (...a) => { args = a; return q; }, first: async () => {
   if (/fleet_budget/.test(sql)) return { n: breached ? 1 : 0 };
-  const k = /key = '([a-z_]+)'/.exec(sql); return k && cfg[k[1]] != null ? { value: String(cfg[k[1]]) } : null;
-} }) } });
+  const k = /key = '([a-z_]+)'/.exec(sql) || (/key = \?1/.test(sql) ? [0, args[0]] : null); return k && cfg[k[1]] != null ? { value: String(cfg[k[1]]) } : null;
+} }; return q; } } }; };
 console.error = () => {};
 ok(await researchParallel(envWith({ research_parallel: 96 }, false)) === 48, "no breach: 96 is clamped to the 48 ceiling as before");
 ok(await researchParallel(envWith({ research_parallel: 96 }, true)) === 24, "breach: the width falls to the lean default 24");

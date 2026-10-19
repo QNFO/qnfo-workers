@@ -35,8 +35,11 @@ const row = { id: "r1", context: "{}", recover_count: 0, source: "idea-hub", sta
 {
   const t = mkEnv("[]");
   const res = await stageRevise(t.env, Object.assign({}, row));
-  ok(t.calls.length === 2, "the empty answer is retried exactly once", t.calls.length);
+  // WAI-WIDTH-GOVERNOR-1 (0.25.0): gpt-oss-120b, then glm-5.3-flash with the strict text, then kimi-k2.6 once as the last retry.
+  ok(t.calls.length === 3, "the empty answer is retried on the second family and once more on the last resort", t.calls.length);
   ok(t.calls[0].model !== t.calls[1].model, "the retry runs on another model", t.calls.map((c) => c.model));
+  ok(/gpt-oss-120b/.test(t.calls[0].model) && /glm-5\.3-flash/.test(t.calls[1].model) && /kimi-k2\.6/.test(t.calls[2].model), "the order is gpt-oss-120b, glm-5.3-flash, kimi-k2.6 (kimi only last)", t.calls.map((c) => c.model));
+  ok(t.calls[2].prompt === t.calls[1].prompt, "the last-resort call carries the same strict text", t.calls[2].prompt.slice(-80));
   ok(t.calls[1].prompt.startsWith(t.calls[0].prompt), "the retry prompt keeps the first prompt (preamble + paper + fixes) as its prefix, so the cached prefix is unchanged");
   const add = t.calls[1].prompt.slice(t.calls[0].prompt.length);
   ok(/STRICT RETRY/.test(add) && /\bh1\b/.test(add) && /at least one edit for EACH/.test(add) && /empty array is a wrong answer/.test(add), "the retry names the fix id and demands one edit per HARD fix", add);
@@ -64,7 +67,7 @@ const row = { id: "r1", context: "{}", recover_count: 0, source: "idea-hub", sta
 {
   const t = mkEnv((n) => n === 1 ? "I cannot find a suitable edit." : n === 2 ? "[]" : "[]");
   const res = await stageRevise(t.env, Object.assign({}, row));
-  ok(t.calls.length === 3 && /STRICT RETRY/.test(t.calls[2].prompt) && !/STRICT RETRY/.test(t.calls[1].prompt), "no-bracket answer, then '[]', then the strict retry", t.calls.map((c) => c.model + ":" + c.prompt.slice(-40)));
+  ok(t.calls.length === 4 && /STRICT RETRY/.test(t.calls[2].prompt) && !/STRICT RETRY/.test(t.calls[1].prompt) && /kimi-k2\.6/.test(t.calls[3].model) && !t.calls.slice(0, 3).some((c) => /kimi/.test(c.model)), "no-bracket answer, then '[]', then the strict retry, then kimi-k2.6 as the last resort", t.calls.map((c) => c.model + ":" + c.prompt.slice(-40)));
   ok(res && res.ok === false && res.withheld === "revise-noop", "still no advance when every answer is empty", res);
 }
 

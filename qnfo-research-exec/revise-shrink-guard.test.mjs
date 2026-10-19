@@ -96,12 +96,12 @@ const SMALL_EDIT = JSON.stringify([{ find: S(5), replace: "Step 5 of the derivat
 {
   const t = mkEnv(() => BIG_CUT);
   const res = await stageRevise(t.env, row());
-  ok(t.calls.length === 2, "two answers, both refused", t.calls.length);
+  ok(t.calls.length === 3, "three answers (gpt-oss-120b, glm-5.3-flash, kimi-k2.6 as the last resort), all refused", t.calls.length);
   ok(t.store["pipeline/r1/reconciled.md"] === BIGP, "the stored paper is untouched");
   ok(res && res.ok === false && res.withheld === "revise-noop", "the pass fails as revise-noop (recover path), it does not advance", res);
   ok(!stageUpdates(t).some((s) => /stage='review'/.test(s.sql)), "the row is not advanced to review");
   const ev = events(t);
-  ok(ev.filter((e) => e.kind === "revise-shrink-refused").length === 2 && ev.some((e) => e.kind === "revise-noop" && /shrink refused: below the 20000-char floor/.test(e.text)), "both refusals and the noop reason are logged", ev.map((e) => e.kind));
+  ok(ev.filter((e) => e.kind === "revise-shrink-refused").length === 3 && ev.some((e) => e.kind === "revise-noop" && /shrink refused: below the 20000-char floor/.test(e.text)), "every refusal and the noop reason are logged", ev.map((e) => e.kind));
 }
 
 // 4. The same model family twice: the first fallback already ran on MODELS[2] (no '[' in the first answer), then a refused answer still gets its retry.
