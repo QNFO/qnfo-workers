@@ -199,13 +199,15 @@ SELECT * FROM v_cron_faults_worker
 UNION ALL
 SELECT * FROM v_cron_faults_task;
 
--- The faults the last cron-watch run saw, and those of them old enough to file.
+-- The faults the last cron-watch run saw, and those of them old enough to file. A schedule fault that already has its open
+-- CRON-HOURLY-FLOOR-1:<worker> conversion issue (scripts/cron-tempo-allowlist.txt) is not filed a second time.
 CREATE VIEW IF NOT EXISTS v_cron_fault_now AS
 SELECT fault_key, kind, worker, worker_dir, detail, consecutive_fails, first_seen, last_seen FROM cron_fault_seen
 WHERE cleared_at IS NULL AND fault_key <> '#run';
 CREATE VIEW IF NOT EXISTS v_cron_fault_due AS
 SELECT * FROM v_cron_fault_now
-WHERE first_seen <= strftime('%Y-%m-%dT%H:%M:%SZ', 'now', CASE WHEN kind = 'schedule' THEN '-90 minutes' ELSE '-9 minutes' END);
+WHERE first_seen <= strftime('%Y-%m-%dT%H:%M:%SZ', 'now', CASE WHEN kind = 'schedule' THEN '-90 minutes' ELSE '-9 minutes' END)
+  AND NOT (kind = 'schedule' AND EXISTS (SELECT 1 FROM agent_issues a WHERE a.status = 'open' AND a.title LIKE 'CRON-HOURLY-FLOOR-1:' || v_cron_fault_now.worker || ':%'));
 
 -- The loop's runner is fleet-exec; when fleet-exec stops, the code orchestrator's fleet_tick is the second path that says so.
 CREATE TRIGGER IF NOT EXISTS cron_watch_exec_silent_tick AFTER INSERT ON fleet_tick

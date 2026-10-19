@@ -143,10 +143,12 @@ const reopened = all("SELECT * FROM agent_issues WHERE title = 'CRON-FAULT-1: ta
 ok(reopened.length === 1 && reopened[0].priority === "high" && /fix it by migration/.test(reopened[0].description) && !/code-task:/.test(reopened[0].description), "3 task failures in a row: a new issue at high priority, no code-task", reopened);
 ok(one("SELECT next_fire FROM fleet_crons WHERE name = 'flaky-hourly'").next_fire > iso(0), "at 3 failures in a row the task is no longer re-fired");
 // schedule faults after 90 minutes
+db.exec("INSERT INTO agent_issues (title, status) VALUES ('CRON-HOURLY-FLOOR-1:six-hourly: cron 17 */6 fires less than hourly', 'open')");
 db.exec("UPDATE cron_fault_seen SET first_seen = '" + iso(95) + "' WHERE kind = 'schedule'");
 run();
 is = issues();
 ok(is["schedule:daily-one|0 6 * * *"] && is["schedule:list-off|3,13,23,33,43,53 * * * *"] && !/code-task:/.test(is["schedule:daily-one|0 6 * * *"].description), "schedule faults are filed after 90 minutes, not escalated");
+ok(!is["schedule:six-hourly|17 */6 * * *"], "a schedule fault with an open CRON-HOURLY-FLOOR-1 conversion issue is not filed twice");
 // fleet-exec silent: the fleet_tick trigger files it
 db.exec("UPDATE fleet_runs SET started_at = '" + iso(30) + "'");
 db.exec("INSERT INTO fleet_tick (source) VALUES ('cron:qnfo-code-orchestrator')");
