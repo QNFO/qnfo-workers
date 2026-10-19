@@ -34,6 +34,7 @@ CREATE TABLE decision_log (id INTEGER PRIMARY KEY AUTOINCREMENT, ts TEXT NOT NUL
 CREATE TABLE decision_predictions (id INTEGER PRIMARY KEY AUTOINCREMENT, decision_id INTEGER NOT NULL, kind TEXT NOT NULL CHECK (kind IN ('metric', 'issue')), subject TEXT NOT NULL, op TEXT NOT NULL, value REAL, value2 REAL, due_at TEXT NOT NULL, origin TEXT NOT NULL CHECK (origin IN ('parsed', 'seeded')), created_at TEXT, scored_at TEXT, observed TEXT, matched INTEGER, UNIQUE (decision_id, subject, op));
 CREATE TABLE cloud_ops_events (id TEXT PRIMARY KEY, ts TEXT, kind TEXT, text TEXT, meta TEXT, job TEXT, status TEXT);
 CREATE TABLE ops_config (key TEXT PRIMARY KEY, value TEXT, note TEXT, updated_at TEXT);
+CREATE TABLE spof_registry (component TEXT PRIMARY KEY, critical_path TEXT NOT NULL, alternate_path TEXT, alternate_tested_at TEXT, evidence TEXT NOT NULL, issue_id INTEGER, reviewed_at TEXT);
 CREATE VIEW v_cron_health AS SELECT name, cron_expr, enabled, last_fired, next_fire, ROUND((julianday('now') - julianday(next_fire)) * 1440, 1) AS overdue_min FROM fleet_crons WHERE enabled = 1;`);
 // Fleet state before apply.
 const ws = db.prepare("INSERT INTO worker_schedules VALUES (?, ?, ?)");
@@ -164,6 +165,7 @@ ok(one(fxc.verify_probe).observed === "1", "the probe passes when fleet-exec run
 const n0 = one("SELECT (SELECT COUNT(*) FROM metric_registry) + (SELECT COUNT(*) FROM fleet_crons) + (SELECT COUNT(*) FROM analytics_metric_triggers) AS n").n;
 db.exec(sql);
 ok(one("SELECT (SELECT COUNT(*) FROM metric_registry) + (SELECT COUNT(*) FROM fleet_crons) + (SELECT COUNT(*) FROM analytics_metric_triggers) AS n").n === n0, "re-applying the file adds no rows");
+ok(one("SELECT COUNT(*) AS n FROM spof_registry").n === 2, "both new paths are in spof_registry with their second path");
 ok(one("SELECT COUNT(*) AS n FROM fleet_crons WHERE task_id = 'cron-watch' AND cron_expr = '*/5 * * * *'").n === 1, "cron-watch runs every 5 minutes");
 console.log(`cron-watch: ${pass} pass, ${fail} fail`);
 if (fail) process.exit(1);

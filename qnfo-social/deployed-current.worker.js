@@ -3218,7 +3218,7 @@ async function cronGridDue(db, cfg, nowMs) {
 // One run of the worker's own handler, awaited with its waitUntil work, logged with its outcome.
 async function cronGridOne(db, worker, expr, why, ev, ctx, run) {
   var t0 = Date.now(), pending = [];
-  var c = { waitUntil: function (p) { pending.push(Promise.resolve(p)); }, passThroughOnException: function () { if (ctx && ctx.passThroughOnException) ctx.passThroughOnException(); } };
+  var c = { waitUntil: function (p) { pending.push(Promise.resolve(p)); } };
   try {
     await run(ev, c);
     // Index loop, not allSettled: work a waitUntil promise adds while it runs is awaited too.

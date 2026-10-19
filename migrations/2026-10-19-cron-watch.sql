@@ -276,6 +276,15 @@ VALUES ('fm-cron-fault-untriaged', NULL, 'CRON-WATCH-1', 'failure-mode detector'
   'SELECT ''0'' AS expected, CAST((SELECT COUNT(*) FROM v_cron_fault_due f WHERE NOT EXISTS (SELECT 1 FROM agent_issues a WHERE a.title = ''CRON-FAULT-1: '' || f.fault_key AND a.status = ''open'')) AS TEXT) AS observed',
   'd1-query', 3, 'qnfo-fleet-control', 1, 'active', 'failure-mode', datetime('now'));
 
+-- SPOF-REVIEW-GATE-1: the scheduled workers' triggers and the new fleet_heartbeat / fleet_tick triggers, with their second paths.
+INSERT OR REPLACE INTO spof_registry (component, critical_path, alternate_path, alternate_tested_at, evidence)
+VALUES ('cron execution of the scheduled workers (CRON-GRID-1 triggers)', 'each worker''s own Cloudflare cron trigger, hourly or faster on the 5-minute grid; a daily or weekly job runs on the first grid fire after its slot',
+  'the same worker retries a failed job on its next fires (CRON-GRID-1, up to 3 in a row); CRON-WATCH-1 (fleet-exec, every 5 minutes) files a silent, failing or overdue cron with a probe and hands a third failure to the code loop',
+  strftime('%Y-%m-%dT%H:%M:%SZ', 'now'), 'migrations/2026-10-19-cron-watch.sql, migrations/cron-watch.test.mjs, scripts/cron-grid.test.mjs'),
+  ('CRON-WATCH-1 runner (fleet-exec)', 'fleet-exec */5 runs fleet_tasks cron-watch',
+  'the fleet_tick trigger cron_watch_exec_silent_tick, fed by qnfo-code-orchestrator and the dashboard fallback producer, files fleet-exec silence after 15 minutes; the cron_outcomes triggers only append a ledger row and cannot block a heartbeat write (no RAISE)',
+  strftime('%Y-%m-%dT%H:%M:%SZ', 'now'), 'migrations/2026-10-19-cron-watch.sql, migrations/cron-watch.test.mjs');
+
 INSERT OR IGNORE INTO capability_ledger (capability, provenance, prerequisites, reliability, acquired_at, evidence)
 VALUES ('cron-fault-self-remediation', 'migrations/2026-10-19-cron-watch.sql (CRON-WATCH-1) and the CRON-GRID-1 helper in each scheduled worker',
   'fleet-exec workflow cron, both remediation contract runners, the code loop issue intake (ISSUE-INTAKE-1)',
