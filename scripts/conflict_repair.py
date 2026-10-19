@@ -30,6 +30,7 @@ USAGE python3 scripts/conflict_repair.py --pr <n> [--push] [--keep-branch]
       Exit 0 unless the arguments are wrong: an outcome is data, written to the ledger and printed as JSON.
 """
 import argparse
+import calendar
 import json
 import os
 import re
@@ -42,7 +43,10 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 REPO = os.environ.get("GITHUB_REPOSITORY") or "QNFO/qnfo-workers"
 DB_ID = "35e2e573-92f3-46ac-83c6-22f6429fc5e5"
-VERSION_LINE = re.compile(r'^var VERSION = "([^"\n]*)"(;?.*)$', re.M)
+VERSION_LINE = re.compile(r'^(var VERSION ?= ?)"([^"\n]*)"(;?.*)$', re.M)  # group 1 keeps the file's own spacing (qnfo-gateway writes var VERSION="x")
+NOTE_BLOCK = re.compile(r"/\*.*?\*/", re.S)
+HOLD_RE = re.compile(r"(^|[\s\[(])(wip|do[\s-]*not[\s-]*merge|hold)([\s:\])]|$)", re.I)
+DIRTY_QUIET_MIN = 10  # a pull request whose newest commit is younger is still being worked on
 ISSUE_PR = re.compile(r"STALE-PR-CONFLICT-REPAIR-1\b[^\d#]{0,40}#?(\d+)")
 DISPATCHABLE = ["deploy-gate.yml", "version-bump-guard.yml", "charter-guard.yml", "version-compare.yml"]
 
@@ -92,7 +96,7 @@ def gh(path, method="GET", fields=None, raw=False):
 
 def read_version(text):
     m = VERSION_LINE.search(str(text or ""))
-    return m.group(1) if m else None
+    return m.group(2) if m else None
 
 
 def core(v):
@@ -119,12 +123,30 @@ def bump_above(version, others):
 def set_version(text, new):
     if len(VERSION_LINE.findall(text)) != 1:
         return None
-    return VERSION_LINE.sub(lambda m: 'var VERSION = "' + new + '"' + m.group(2), text, count=1)
+    return VERSION_LINE.sub(lambda m: m.group(1) + '"' + new + '"' + m.group(3), text, count=1)
 
 
-def resolve_version_only(text):
-    """A file with merge conflict markers -> its text with every hunk resolved to the incoming (pull request) side, when every
-    hunk is nothing but the VERSION line on both sides; None when any hunk carries something else (a semantic overlap)."""
+def chain_notes(pr_line, main_line):
+    """The VERSION line of the pull request with main's release notes kept: the pull request's own new notes first, then every
+    note main carries (its new ones and the tail both share). Only /* */ notes are chained; a line whose notes are anything else
+    (// style, text outside the blocks) keeps the pull request's line as it is, because those notes cannot be split safely."""
+    mp, mm = VERSION_LINE.fullmatch(pr_line), VERSION_LINE.fullmatch(main_line)
+    if not mp or not mm:
+        return pr_line
+    pb, mb = NOTE_BLOCK.findall(mp.group(3)), NOTE_BLOCK.findall(mm.group(3))
+    if not pb or not mb or NOTE_BLOCK.sub("", mp.group(3)).strip(" ;") or NOTE_BLOCK.sub("", mm.group(3)).strip(" ;"):
+        return pr_line
+    k = 0
+    while k < min(len(pb), len(mb)) and pb[-1 - k] == mb[-1 - k]:
+        k += 1
+    return mp.group(1) + '"' + mp.group(2) + '"; ' + " ".join(pb[: len(pb) - k] + mb)
+
+
+def resolve_version_only(text, pr_side="theirs"):
+    """A file with merge conflict markers -> its text with every hunk resolved to the pull request's VERSION line (its release notes
+    chained with main's, see chain_notes), when every hunk is nothing but the VERSION line on both sides; None when any hunk carries
+    something else (a semantic overlap). pr_side says which side of the markers is the pull request: "theirs" when the pull request
+    is merged into a branch cut from main (a replacement), "ours" when main is merged into the pull request's own branch."""
     out, i, lines, hunks = [], 0, str(text).split("\n"), 0
     while i < len(lines):
         if not lines[i].startswith("<<<<<<< "):
@@ -146,9 +168,47 @@ def resolve_version_only(text):
         i += 1
         if len(ours) != 1 or len(theirs) != 1 or not VERSION_LINE.fullmatch(ours[0]) or not VERSION_LINE.fullmatch(theirs[0]):
             return None
-        out.append(theirs[0])
+        pr_line, main_line = (ours[0], theirs[0]) if pr_side == "ours" else (theirs[0], ours[0])
+        out.append(chain_notes(pr_line, main_line))
         hunks += 1
     return "\n".join(out) if hunks else None
+
+
+def asks_to_wait(pr):
+    """True when the pull request's title, labels or description ask not to be touched (WIP, hold, do not merge)."""
+    labels = " ".join(str((l or {}).get("name") or "") for l in (pr.get("labels") or []))
+    return bool(HOLD_RE.search(str(pr.get("title") or "")) or HOLD_RE.search(labels) or re.search(r"\bdo[\s-]*not[\s-]*merge\b", str(pr.get("body") or ""), re.I))
+
+
+def dirty_prs(limit, quiet_min=DIRTY_QUIET_MIN, now=None, ghf=None, sleep=time.sleep):
+    """Open pull requests GitHub reports as conflicting with main (mergeable_state dirty), oldest-quiet first, up to limit: any author,
+    any branch except repair/*, a draft, a hold or a fork. A pull request whose newest commit is younger than quiet_min minutes
+    is left to its author. GitHub computes mergeability on the first read, so a null is read again a few times."""
+    ghf = ghf or gh
+    now = time.time() if now is None else now
+    found = []
+    for p in ghf("repos/%s/pulls?state=open&per_page=100" % REPO) or []:
+        n, ref = p.get("number"), str((p.get("head") or {}).get("ref") or "")
+        if not n or p.get("draft") or ref.startswith("repair/") or asks_to_wait(p):
+            continue
+        full = None
+        for tries in range(3):
+            full = ghf("repos/%s/pulls/%d" % (REPO, n))
+            if not isinstance(full, dict) or full.get("mergeable") is not None:
+                break
+            sleep(5)
+        if not isinstance(full, dict) or eligible(full) or full.get("mergeable") is not False or full.get("mergeable_state") != "dirty":
+            continue
+        c = ghf("repos/%s/commits/%s" % (REPO, full["head"]["sha"])) or {}
+        stamp = ((c.get("commit") or {}).get("committer") or {}).get("date") or ""
+        try:
+            age = (now - calendar.timegm(time.strptime(stamp, "%Y-%m-%dT%H:%M:%SZ"))) / 60.0
+        except ValueError:
+            age = 1e9
+        if age >= quiet_min:
+            found.append((age, n))
+    found.sort(reverse=True)
+    return [n for _, n in found[: max(1, limit)]]
 
 
 def eligible(pr):
@@ -197,12 +257,18 @@ def issue_prs(titles):
 
 # ---- the re-apply ------------------------------------------------------------------------------------------------------
 
-def reapply(head_ref, base_ref, branch, cwd=None, message=None):
+def reapply(head_ref, base_ref, branch, cwd=None, message=None, in_place=False):
     """Merges head_ref into a new branch cut from base_ref and resolves VERSION-only and mirror conflicts.
+    in_place=True runs the other way round: base_ref is merged into a branch cut from head_ref (the pull request's own commits stay
+    where they are, so the pull request, its number and its code task survive; the result is pushed to the pull request's branch).
     Returns {"outcome": "reapplied", "workers": [dir], "resolved": [path]} with the merge staged but NOT committed, or
     {"outcome": "needs-session" | "clean" | "error", ...} with the tree restored."""
-    git(["checkout", "-q", "-B", branch, base_ref], cwd)
-    r = sh(["git", "merge", "--no-ff", "--no-commit", head_ref], cwd, check=False)
+    if in_place:
+        git(["checkout", "-q", "-B", branch, head_ref], cwd)
+        r = sh(["git", "merge", "--no-ff", "--no-commit", base_ref], cwd, check=False)
+    else:
+        git(["checkout", "-q", "-B", branch, base_ref], cwd)
+        r = sh(["git", "merge", "--no-ff", "--no-commit", head_ref], cwd, check=False)
     conflicted = [p for p in git(["diff", "--name-only", "--diff-filter=U"], cwd).split("\n") if p]
     if r.returncode != 0 and not conflicted:
         sh(["git", "merge", "--abort"], cwd, check=False)
@@ -214,7 +280,7 @@ def reapply(head_ref, base_ref, branch, cwd=None, message=None):
             continue  # rewritten from worker.js below
         if os.path.basename(p) == "worker.js" and os.path.isfile(full):
             with open(full, encoding="utf-8", errors="replace") as fh:
-                fixed = resolve_version_only(fh.read())
+                fixed = resolve_version_only(fh.read(), "ours" if in_place else "theirs")
             if fixed is not None:
                 with open(full, "w", encoding="utf-8") as fh:
                     fh.write(fixed)
@@ -405,7 +471,7 @@ def settle_issue(number, evidence):
         return False
 
 
-def repair(number, push=False, keep_branch=False):
+def repair(number, push=False, keep_branch=False, in_place=False):
     pr = gh("repos/%s/pulls/%d" % (REPO, number))
     why = eligible(pr)
     if why:
@@ -419,7 +485,10 @@ def repair(number, push=False, keep_branch=False):
         return {"pr": number, "outcome": "skipped", "why": "head %s was already re-applied and pushed" % head_sha[:7]}
     files = [f.get("filename") for f in gh("repos/%s/pulls/%d/files?per_page=100" % (REPO, number)) or []]
     branch = branch_name(pr)
-    meta = {"pr": number, "head": head_sha, "branch": branch, "pushed": 0}
+    head_ref = str(pr["head"].get("ref") or "")
+    if in_place:
+        branch = "inplace/pr-%d-%s" % (number, head_sha[:7])  # a local work branch; the push goes to the pull request's own branch
+    meta = {"pr": number, "head": head_sha, "branch": head_ref if in_place else branch, "pushed": 0, "in_place": 1 if in_place else 0}
     if any(str(f).startswith(".github/") for f in files):
         res = {"pr": number, "outcome": "needs-session", "why": "the pull request changes .github/, which the Actions token may not push", "files": [f for f in files if str(f).startswith(".github/")]}
         ledger(number, head_sha, "warn", "CONFLICT-REPAIR-DOER-1 PR %d not re-applied: %s" % (number, res["why"]), dict(meta, outcome="needs-session"))
@@ -427,9 +496,9 @@ def repair(number, push=False, keep_branch=False):
     start = git(["rev-parse", "--abbrev-ref", "HEAD"]).strip()
     git(["fetch", "-q", "origin", "main"])
     git(["fetch", "-q", "origin", "+refs/pull/%d/head:refs/remotes/origin/pr-%d" % (number, number)])
-    res = {"pr": number, "branch": branch}
+    res = {"pr": number, "branch": head_ref if in_place else branch, "in_place": in_place}
     try:
-        r = reapply("refs/remotes/origin/pr-%d" % number, "origin/main", branch)
+        r = reapply("refs/remotes/origin/pr-%d" % number, "origin/main", branch, in_place=in_place)
         res.update(r)
         if r["outcome"] not in ("reapplied", "clean"):
             ledger(number, head_sha, "warn", "CONFLICT-REPAIR-DOER-1 PR %d not re-applied (%s): %s" % (number, r["outcome"], ", ".join(r.get("files") or []) or r.get("error") or ""), dict(meta, outcome=r["outcome"], files=r.get("files")))
@@ -439,8 +508,7 @@ def repair(number, push=False, keep_branch=False):
         bumped = bump_workers(r["workers"], number)
         res["bumped"] = bumped
         git(["-c", "user.name=qnfo-conflict-repair", "-c", "user.email=conflict-repair@users.noreply.github.com", "commit", "-q", "-m",
-             "re-apply #%d onto main (CONFLICT-REPAIR-DOER-1)\n\n%s\n\nResolved without judgement: %s. VERSION: %s." % (
-                 number, str(pr.get("title") or "")[:200], ", ".join(r["resolved"]) or "nothing (clean merge)", "; ".join("%s %s -> %s" % b for b in bumped) or "unchanged")])
+             ("merge main into %s (CONFLICT-REPAIR-INPLACE-1, #%d)" % (head_ref, number) if in_place else "re-apply #%d onto main (CONFLICT-REPAIR-DOER-1)" % number) + "\n\n%s\n\nResolved without judgement: %s. VERSION: %s." % ( str(pr.get("title") or "")[:200], ", ".join(r["resolved"]) or "nothing (clean merge)", "; ".join("%s %s -> %s" % b for b in bumped) or "unchanged")])
         checks = run_checks(r["workers"], "origin/main")
         res["checks"] = checks
         res["sha"] = git(["rev-parse", "HEAD"]).strip()
@@ -450,6 +518,29 @@ def repair(number, push=False, keep_branch=False):
             return res
         if not push:
             res["outcome"] = "reapplied-dry"
+            return res
+        if in_place:
+            # CONFLICT-REPAIR-INPLACE-1: the merge commit goes on the pull request's own branch (a fast-forward, never forced, so an
+            # author's concurrent push wins and the next main push tries again). A push with GITHUB_TOKEN starts no pull_request workflow,
+            # so the check workflows that accept a dispatch are dispatched on the branch, as for a replacement.
+            pushed = sh(["git", "push", "origin", branch + ":refs/heads/" + head_ref], check=False, timeout=300)
+            if pushed.returncode != 0:
+                res["outcome"] = "push-refused"
+                res["error"] = (pushed.stderr or pushed.stdout).strip()[:300]
+                ledger(number, head_sha, "warn", "CONFLICT-REPAIR-INPLACE-1 PR %d merged main locally but the push to %s was refused: %s" % (number, head_ref, res["error"]), dict(meta, outcome="push-refused"))
+                return res
+            meta["pushed"] = 1
+            for wf in DISPATCHABLE:
+                sh(["gh", "workflow", "run", wf, "--repo", REPO, "--ref", head_ref], check=False, timeout=60)
+            note = ("CONFLICT-REPAIR-INPLACE-1: this pull request conflicted with main and was quiet, so main was merged into `%s` "
+                    "(only VERSION-line and mirror conflicts were resolved: %s; VERSION: %s). The checks ran on the runner before the push (%s) "
+                    "and are dispatched again on the branch.\n\n---\n_Generated by [Claude Code](https://claude.ai/code)_") % (
+                head_ref, ", ".join(r["resolved"]) or "none", "; ".join("%s %s -> %s" % b for b in bumped) or "unchanged",
+                "; ".join("%s %s" % (k, "ok" if v else "FAILED") for k, v in checks))
+            gh("repos/%s/issues/%d/comments" % (REPO, number), "POST", {"body": note})
+            res["outcome"] = "updated"
+            ledger(number, head_sha, "ok", "CONFLICT-REPAIR-INPLACE-1 PR %d: main merged into %s (%s)" % (number, head_ref, res["sha"][:7]),
+                   dict(meta, outcome="updated", sha=res["sha"], bumped=bumped))
             return res
         git(["push", "origin", branch])
         meta["pushed"] = 1
@@ -549,6 +640,61 @@ def selftest():
         ok(r2["outcome"] == "needs-session" and r2["files"] == ["w/worker.js"] and git(["status", "--porcelain"], d).strip() == "" and "a: 8" in open(os.path.join(d, "w", "worker.js")).read(), "reapply: an overlap in code is refused, the merge aborted and main's text kept", r2)
         g("checkout", "-q", "main"); g("checkout", "-q", "-b", "clean"); open(os.path.join(d, "notes.txt"), "w").write("one\ntwo\n"); g("commit", "-qam", "notes"); g("checkout", "-q", "main")
         ok(reapply("clean", "main", "repair/pr-3-aaa", d)["outcome"] == "clean", "reapply: a change that no longer conflicts is a clean merge")
+    # CONFLICT-REPAIR-INPLACE-1 (2026-10-19): release notes survive, the gateway's spacing survives, conflicting quiet PRs are found, main goes into the PR
+    mn = 'var VERSION = "1.47.0-main"; /* 1.47.0 main note */ /* 1.46.1 shared */'
+    pn = 'var VERSION = "1.46.2"; /* 1.46.2 pr note */ /* 1.46.1 shared */'
+    ok(chain_notes(pn, mn) == 'var VERSION = "1.46.2"; /* 1.46.2 pr note */ /* 1.47.0 main note */ /* 1.46.1 shared */', "chain_notes: the pull request's new notes first, then main's, the shared tail once", chain_notes(pn, mn))
+    ok(chain_notes('var VERSION = "0.2.0"; // pr note', 'var VERSION = "0.3.0"; // main note') == 'var VERSION = "0.2.0"; // pr note' and chain_notes('var VERSION = "1"; /* a */ tail', mn) == 'var VERSION = "1"; /* a */ tail', "chain_notes: a note style it cannot split safely keeps the pull request's line")
+    gw = 'var VERSION="3.26.4-codeagent"; /* 3.26.4 x */'
+    ok(read_version(gw) == "3.26.4-codeagent" and set_version(gw, "3.26.5-codeagent") == 'var VERSION="3.26.5-codeagent"; /* 3.26.4 x */', "VERSION lines without spaces (qnfo-gateway) are read and rewritten in their own style")
+    ok(resolve_version_only('<<<<<<< HEAD\n' + pn + '\n=======\n' + mn + '\n>>>>>>> main\n', "ours") == 'var VERSION = "1.46.2"; /* 1.46.2 pr note */ /* 1.47.0 main note */ /* 1.46.1 shared */\n'
+       and resolve_version_only('<<<<<<< HEAD\n' + mn + '\n=======\n' + pn + '\n>>>>>>> pr\n') == 'var VERSION = "1.46.2"; /* 1.46.2 pr note */ /* 1.47.0 main note */ /* 1.46.1 shared */\n', "resolve_version_only: either direction yields the pull request's version with both note chains")
+    ok(asks_to_wait({"title": "WIP: x"}) and asks_to_wait({"title": "hold: y"}) and asks_to_wait({"title": "z", "labels": [{"name": "do not merge"}]}) and asks_to_wait({"title": "z", "body": "please do-not-merge"}) and not asks_to_wait({"title": "Withhold nothing, shipping soon", "body": "ok"}), "asks_to_wait: WIP, hold and do-not-merge, not words that merely contain them")
+    stamp = lambda secs: time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(1000000 + secs))
+    prs = {1: dict(base_pr, number=1, mergeable=False, mergeable_state="dirty", head=dict(base_pr["head"], sha="a1", ref="codeagent-x")), 2: dict(base_pr, number=2, mergeable=False, mergeable_state="dirty", head=dict(base_pr["head"], sha="a2", ref="fix/y")),
+           3: dict(base_pr, number=3, mergeable=True, mergeable_state="clean", head=dict(base_pr["head"], sha="a3")), 4: dict(base_pr, number=4, mergeable=False, mergeable_state="dirty", head=dict(base_pr["head"], sha="a4", ref="repair/pr-9-abc")),
+           5: dict(base_pr, number=5, mergeable=False, mergeable_state="dirty", head=dict(base_pr["head"], sha="a5")), 6: dict(base_pr, number=6, mergeable=False, mergeable_state="dirty", head=dict(base_pr["head"], sha="a6")), 7: dict(base_pr, number=7, mergeable=False, mergeable_state="dirty", draft=True, head=dict(base_pr["head"], sha="a7"))}
+    prs[5]["title"] = "WIP: not yet"
+    ages = {"a1": 600, "a2": 3600, "a3": 99999, "a5": 99999, "a6": 30, "a7": 99999}  # seconds since the newest commit at now = 1000000 + 4000
+    reads = {"n": 0}
+    def fake_gh(path):
+        if path.endswith("/pulls?state=open&per_page=100"):
+            return [{"number": n, "draft": v.get("draft"), "title": v["title"], "body": v.get("body"), "labels": [], "head": {"ref": v["head"]["ref"]}} for n, v in prs.items()]
+        mm = re.search(r"/pulls/(\d+)$", path)
+        if mm:
+            reads["n"] += 1
+            v = dict(prs[int(mm.group(1))])
+            if int(mm.group(1)) == 2 and reads["n"] < 3:
+                v["mergeable"] = None  # GitHub has not computed it yet
+            return v
+        mm = re.search(r"/commits/(\w+)$", path)
+        return {"commit": {"committer": {"date": stamp(4000 - ages[mm.group(1)])}}} if mm else None
+    got = dirty_prs(5, 10, now=1000000 + 4000, ghf=fake_gh, sleep=lambda x: None)
+    ok(got == [2, 1], "dirty_prs: conflicting quiet pull requests, longest quiet first; a clean one, a repair branch, a hold, a draft and one committed 30 s ago are left; a null mergeability is read again", got)
+    ok(dirty_prs(1, 10, now=1000000 + 4000, ghf=fake_gh, sleep=lambda x: None) == [2], "dirty_prs: the limit is honoured")
+    # in-place: main is merged into the pull request's own branch; the pull request keeps its commits and gets main's
+    with tempfile.TemporaryDirectory() as d:
+        def g(*a):
+            return git(list(a), d)
+        g("init", "-q", "-b", "main"); g("config", "user.email", "a@b.c"); g("config", "user.name", "t")
+        os.mkdir(os.path.join(d, "w"))
+        src = 'var VERSION = "1.0.0"; /* 1.0.0 base */\nexport default {\n  a: 1,\n\n\n\n\n  z: 1\n};\n'
+        for f in ("worker.js", "deployed-current.worker.js"):
+            open(os.path.join(d, "w", f), "w").write(src)
+        g("add", "-A"); g("commit", "-qm", "base"); g("checkout", "-q", "-b", "pr")
+        for f in ("worker.js", "deployed-current.worker.js"):
+            open(os.path.join(d, "w", f), "w").write(src.replace('"1.0.0"; /*', '"1.0.1-pr"; /* 1.0.1 pr note */ /*').replace("z: 1", "z: 2"))
+        g("commit", "-qam", "pr change"); g("checkout", "-q", "main")
+        for f in ("worker.js", "deployed-current.worker.js"):
+            open(os.path.join(d, "w", f), "w").write(src.replace('"1.0.0"; /*', '"1.0.3-main"; /* 1.0.3 main note */ /*').replace("a: 1", "a: 9"))
+        g("commit", "-qam", "main moved")
+        r = reapply("pr", "main", "inplace/pr-1-abc", d, in_place=True)
+        text = open(os.path.join(d, "w", "worker.js")).read()
+        ok(r["outcome"] == "reapplied" and 'var VERSION = "1.0.1-pr"; /* 1.0.1 pr note */ /* 1.0.3 main note */ /* 1.0.0 base */' in text and "a: 9" in text and "z: 2" in text and text == open(os.path.join(d, "w", "deployed-current.worker.js")).read(),
+           "reapply in place: main goes into the pull request's branch, both release notes survive, the mirror follows", (r, text))
+        moved = bump_workers(r["workers"], 1, d, claims=lambda w, skip: ["1.0.3-main"])
+        g("-c", "user.name=t", "-c", "user.email=a@b.c", "commit", "-qm", "merge main into pr")
+        ok(moved == [("w", "1.0.1-pr", "1.0.4-pr")] and git(["log", "--first-parent", "--format=%s", "-3"], d).strip().split("\n")[1] == "pr change", "the merge commit sits on top of the pull request's own commits", moved)
     emit("conflict_repair selftest: " + ("ok" if not fails else "%d FAILED" % len(fails)))
     return 1 if fails else 0
 
@@ -557,6 +703,9 @@ def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--pr", type=int)
     ap.add_argument("--all", action="store_true")
+    ap.add_argument("--dirty", action="store_true", help="also take every open pull request GitHub reports as conflicting and quiet "
+                    "(CONFLICT-REPAIR-INPLACE-1): main is merged into its own branch, VERSION-line and mirror conflicts only")
+    ap.add_argument("--quiet-min", type=int, default=DIRTY_QUIET_MIN)
     ap.add_argument("--max", type=int, default=3)
     ap.add_argument("--push", action="store_true")
     ap.add_argument("--keep-branch", action="store_true")
@@ -564,21 +713,31 @@ def main(argv=None):
     a = ap.parse_args(argv)
     if a.selftest:
         return selftest()
-    if not a.pr and not a.all:
-        ap.error("--pr <n> or --all")
-    try:
-        numbers = [a.pr] if a.pr else open_issue_prs()[: max(1, a.max)]
-    except Exception as e:  # noqa: BLE001
-        emit("::warning::conflict-repair: cannot read the repair issues: " + str(e)[:200])
-        numbers = []
-    if a.all:
-        heartbeat(len(numbers), a.push)
-    if not numbers:
+    if not a.pr and not a.all and not a.dirty:
+        ap.error("--pr <n>, --all or --dirty")
+    work = []  # (number, in_place)
+    if a.pr:
+        work.append((a.pr, False))
+    else:
+        if a.all:
+            try:
+                work += [(n, False) for n in open_issue_prs()[: max(1, a.max)]]
+            except Exception as e:  # noqa: BLE001
+                emit("::warning::conflict-repair: cannot read the repair issues: " + str(e)[:200])
+        if a.dirty:
+            try:
+                taken = {n for n, _ in work}
+                work += [(n, True) for n in dirty_prs(max(1, a.max), a.quiet_min) if n not in taken]
+            except Exception as e:  # noqa: BLE001
+                emit("::warning::conflict-repair: cannot list the conflicting pull requests: " + str(e)[:200])
+    if a.all or a.dirty:
+        heartbeat(len(work), a.push)
+    if not work:
         emit(json.dumps({"conflict_repair": "nothing to do"}))
         return 0
-    for n in numbers:
+    for n, in_place in work:
         try:
-            emit(json.dumps({"conflict_repair": repair(n, a.push, a.keep_branch)}, default=str))
+            emit(json.dumps({"conflict_repair": repair(n, a.push, a.keep_branch, in_place)}, default=str))
         except Exception as e:  # noqa: BLE001  (one pull request's failure never stops the next)
             emit(json.dumps({"conflict_repair": {"pr": n, "outcome": "error", "error": type(e).__name__ + ": " + str(e)[:300]}}))
     return 0
