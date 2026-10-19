@@ -627,17 +627,42 @@ const HARD = [
   /\b(overdos\w*)\b/,
   // "cut myself some slack" is not a crisis. The lookahead keeps ordinary English out.
   /\b(hurt|harm|cut|burn|starve|poison|stab|choke)\w*\s+my\s?self\b(?!\s+(some|a)\s+(slack|break))/,
-  /\b(don'?t|do\s+not)\s+want\s+to\s+(be\s+here|exist|wake\s+up)\b/
+  /\b(don'?t|do\s+not)\s+want\s+to\s+(be\s+here|exist|wake\s+up|live|be\s+alive|go\s+on)\b/,
+  // COMPANION-CRISIS-PARITY-1 (agent_issues 100040): the phrasings personal-api/companion.js
+  // added in RED-TEAM-1 (PR 2602), copied at the same level.
+  /\bwish\s+(i\s+)?(was|were|could\s+be)\s+dead\b/,
+  /\b(end|ending|finish)\s+it(\s+(all|tonight|today|now))?\s*$/,
+  /\b(going|want|wanna|plan(ning)?)\s+to\s+end\s+it\b/,
+  /\b(better|be)\s+off\s+without\s+me\b/,
+  /\bno\s?one\s+would\s+(miss|notice|care\s+if)\s+(me|i)\b/,
+  /\bnobody\s+would\s+(miss|notice|care\s+if)\s+(me|i)\b/,
+  /\bkms\b/,
+  /\bunalive\b/,
+  /\b(jump|jumping)\s+(off|in\s+front\s+of)\b/,
+  /\b(take|taking|swallow)\s+(all\s+)?(my|the)\s+(pills|tablets|meds)\b/,
+  // Dutch: zelfmoord, dood willen, er een eind aan maken, mezelf iets aandoen.
+  /\bzelfmoord\w*\b/,
+  /\bsuïcid\w*\b/,
+  /\bik\s+wil\s+(dood|sterven|niet\s+meer\s+(leven|bestaan|wakker\s+worden))\b/,
+  /\b(er\s+)?een\s+(eind|einde)\s+aan\s+(maken|te\s+maken)\b/,
+  /\bmezelf\s+(iets\s+aan\s?doen|pijn\s+doen|snijden|van\s+kant\s+maken)\b/,
+  /\bik\s+wil\s+er\s+niet\s+meer\s+zijn\b/,
+  /\bliever\s+dood\b/
 ];
 
 const SOFT = [
   "can't go on", "cant go on", "can not go on", "give up", "hopeless", "pointless",
   "nothing matters", "can't cope", "cant cope", "falling apart", "hate myself",
-  "so tired of everything", "what's the point", "whats the point", "numb"
+  "so tired of everything", "what's the point", "whats the point", "numb",
+  "i'm a mess", "im a mess", "can't do this anymore", "cant do this anymore", "want to disappear",
+  "worthless", "a burden", "trapped", "empty inside",
+  "ik zie het niet meer zitten", "ik kan niet meer", "het heeft geen zin", "hopeloos", "ik haat mezelf",
+  "ik ben op", "ik ben een last"
 ];
 
 export function crisisSignal(text) {
-  const t = String(text || "").toLowerCase().replace(/\s+/g, " ");
+  // Phones type curly apostrophes (U+2018/U+2019) by default; the patterns use a straight one.
+  const t = String(text || "").toLowerCase().replace(/[‘’ʼ`´]/g, "'").replace(/\s+/g, " ").trim();
   for (const re of HARD) {
     const m = t.match(re);
     if (m) return { level: 2, match: m[0] };
