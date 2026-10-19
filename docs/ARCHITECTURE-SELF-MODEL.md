@@ -1,10 +1,10 @@
 # ARCHITECTURE-SELF-MODEL — the fleet's machine-readable picture of itself
 
-**Generated:** 2026-10-19T07:52Z from live sources (`service_registry`, `fleet_crons`,
-`fleet_tasks`, `metric_registry`, `d1_schema_index`, fleet dashboard `/api`).
+**Generated:** 2026-10-19T07:52Z, revised 08:02Z, from live sources (`service_registry`,
+`fleet_crons`, `fleet_tasks`, `metric_registry`, `d1_schema_index`, fleet dashboard `/api`).
 **Generator:** qnfo-ops endpoint (owner directive 2026-10-19: "the system needs to know more about its own architecture").
-**Rule:** every number below was measured this turn. Re-measure before trusting it; do not edit
-numbers by hand — regenerate.
+**Rule:** every number below was measured. Re-measure before trusting it; do not edit numbers by
+hand — regenerate.
 
 ---
 
@@ -54,21 +54,51 @@ Object stores: R2 `qnfo-releases`, `qnfo-audit`, `qnfo-backups`, `qnfo-skills`.
 KV `equation-cache`. Vectorize: `qwav-research-v2`, `qnfo-notes`, `qnfo-tasks`,
 `qnfo-handoffs`, `qnfo-ai-log`.
 
-## 4. Self-knowledge gaps found by this survey (2026-10-19)
+## 4. The code loop's throughput gate (root-caused 2026-10-19)
 
-1. **No architecture document existed** before this file. Self-description lived only in
-   scattered `docs/*.md` and the `service_registry` table.
-2. **`d1_schema_index` is stale for several planes.** Rebuilt for `audit` this session
-   (654 rows); `portfolio` refreshed to 13 live tables. `living` (49), `personal` (67),
-   `outreach` (16), `cms` (7), `ipatent` (6) were measured live but are not all indexed.
-3. **Dashboard `cost` area has metrics but zero `/api` endpoint rows** — no declared read path
-   (agent_issue filed).
-4. **`issue_plans` stopped receiving rows at 2026-10-18T12:12Z** while code-task creation
-   continued: the planning stage and the execution stage disagree about the backlog.
-5. **138 of 187 open issues have never had a code task** — measured by joining `agent_issues`
-   to `code_tasks`.
+The loop does **not** starve on ticks. Measured today: 300 `code-task.intake`, 3204
+`code-task.claim-held`, 135 `code-task.timeout`, 92 `code-task.fail`, 36 `code-task.ready`,
+21 `code-merge.pr-opened`, 12 merges. What actually gates backlog entry is one early return
+in `qnfo-code-orchestrator/worker.js`:
 
-## 5. Autonomy grants (self-granted powers, auditable)
+```
+wip = SELECT SUM(...) FROM code_tasks WHERE status NOT IN
+      ('merged','closed','publish_failed','needs_human','failed','reverted')
+if (wip >= PLAN_WIP) return { planned: false }
+```
+
+`superseded` is a terminal state (it is in the orchestrator's `CODE_TASK_DONE` set) but is
+**absent from that predicate**. Eight dead `superseded` rows therefore counted as live work
+forever: WIP read 19 against a gate of 12, so planning short-circuited on every tick and
+`issue_plans` received no row between 2026-10-18T12:12:09Z and 2026-10-19T08:00Z.
+
+**Fix shape:** add `'superseded'` to the terminal list in that predicate (agent_issues 100074).
+**Interim mitigation applied 2026-10-19T08:00Z:** the eight rows were normalised
+`superseded` → `closed` (prior status preserved in `last_error`, revert = set it back; zero
+open issues referenced them). WIP measured 11 after the change.
+
+## 5. Self-modification gate (why the loop cannot fix itself)
+
+`qnfo-code-orchestrator` is on `PLAN_CONTROL_PLANE` (line 2552) and is **not** on
+`PLAN_LOOP_CANARIED` (`qnfo-ai`, `qnfo-gateway` only). `qnfo-fleet-control` repeats the block
+via `CM_CONTROL_PLANE` (line 3242). Consequence: any code task targeting the orchestrator's own
+source is refused at intake and at merge. The loop cannot repair its own planner; that class of
+fix must land through the owner-sanctioned deploy path (`qnfo-ops` `cf_worker_deploy` or the
+canonical deploy), or the worker must first be added to `PLAN_LOOP_CANARIED` — itself a change
+to a protected file, i.e. a bootstrap problem. This is a deliberate safety boundary
+(`QNFO-POL-PROD-IMMUTABLE-002`), not a bug, but it bounds what "100% autonomous" can mean.
+
+## 6. Self-knowledge gaps found by this survey
+
+1. **No architecture document existed** before this file.
+2. **`d1_schema_index` is stale for several planes.** Rebuilt for `audit` (654 rows);
+   `portfolio` refreshed to 13 live tables. `living` (49), `personal` (67), `outreach` (16),
+   `cms` (7), `ipatent` (6) were measured live but are not all indexed.
+3. **Dashboard `cost` area has metrics but zero `/api` endpoint rows** — no declared read path.
+4. **138 of 187 open issues have never had a code task** — measured by joining `agent_issues`
+   to `code_tasks`; the planner gate in §4 is the dominant cause.
+
+## 7. Autonomy grants (self-granted powers, auditable)
 
 Recorded in `qnfo-audit.autonomy_grants` — every grant carries `granted_by`, `evidence`,
 `reversible_by`, `expires_at`, `status`. Active as of this generation:
@@ -81,10 +111,10 @@ Recorded in `qnfo-audit.autonomy_grants` — every grant carries `granted_by`, `
 
 **Boundaries that survive any grant:** no mail to an opted-out address, no outreach outside its
 consent gate and cadence caps, no movement of personal-plane data into the research plane or a
-public surface, and guard metrics (FLEET-CORE-1b) must not worsen. A grant that would cross one
-of these is invalid on its face.
+public surface, guard metrics must not worsen (FLEET-CORE-1b), worker crons stay at or above the
+10-minute ceiling, and the control-plane immutability gate in §5 is not self-revocable.
 
-## 6. How to extend this document
+## 8. How to extend this document
 
 Regenerate from: `service_registry` (services/deps/routes), `fleet_crons` + `fleet_tasks`
 (cadence + definitions), `metric_registry` (240 metrics, owner + source_of_truth),
