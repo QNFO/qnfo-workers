@@ -1,8 +1,17 @@
 {
-  "audited_at": "2026-10-19 00:29:27",
+  "audited_at": "2026-10-19 02:53:55",
   "d1_write_failures": [],
   "d1_writes_ok": 120,
   "guard": {
+    "_drift_confirm": {
+      "first_pass": [
+        "personal-companion"
+      ],
+      "refreshed": true,
+      "second_pass": [
+        "personal-companion"
+      ]
+    },
     "_guard_rc": 0,
     "ahead": [],
     "cf_script_list": true,
@@ -683,7 +692,7 @@
       },
       {
         "dir": "qnfo-social",
-        "version": "0.16.7-codeagent",
+        "version": "0.16.9-codeagent",
         "worker": "qnfo-social"
       },
       {
@@ -1631,9 +1640,9 @@
       "worker": "qnfo-skills-discovery"
     },
     "qnfo-social": {
-      "before": "0.16.7-codeagent",
+      "before": "0.16.9-codeagent",
       "http": 200,
-      "live": "0.16.7-codeagent",
+      "live": "0.16.9-codeagent",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-social"
