@@ -140,8 +140,27 @@ export function activityActors(list) {
 }
 // A direct push (activity_type push, not pr_merge) by an actor the ruleset would block: neither a bypass app nor a known admin.
 export function unlistedPushers(actors, cfg) {
+  // GitHub Actions cannot be a ruleset bypass actor, so pushes by github-actions[bot] must be moved to a bypass-listed identity.
   const known = new Set(cfg.known_direct_pushers || []);
-  return Object.keys(actors).filter((who) => (actors[who].push || 0) > 0 && !known.has(who));
+  known.delete("github-actions[bot]");
+  return Object.keys(actors).filter((who) => (actors[who].push || 0) > 0 && who !== "github-actions[bot]" && !known.has(who));
+}
+
+// Audit the workflow files for any command that pushes directly to refs/heads/main. Those paths currently push as github-actions[bot].
+export function workflowPushPaths(root) {
+  const dir = join(root, ".github", "workflows");
+  const out = [];
+  if (!existsSync(dir)) return out;
+  for (const f of readdirSync(dir).filter((x) => /\.ya?ml$/.test(x)).sort()) {
+    const lines = readFileSync(join(dir, f), "utf8").split("\n");
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i];
+      if (/\bgit\s+push\b/.test(line) && /\bmain\b/.test(line)) {
+        out.push({ workflow: f, line: i + 1, snippet: line.trim() });
+      }
+    }
+  }
+  return out;
 }
 
 // ---- reads shared by report and the live safety check ----
@@ -162,6 +181,10 @@ async function resolveIntegrations(api, cfg) {
   let listing = null;
   for (const i of cfg.bypass.integrations) {
     if (i.actor_id) { out.push({ slug: i.slug, actor_id: i.actor_id }); continue; }
+    if (i.slug === "github-actions" || i.slug === "github-actions[bot]") {
+      unresolved.push(i.slug + " is not a bypass-eligible actor (move direct pushes to a bypass-listed app identity): ruleset refused");
+      continue;
+    }
     const pub = await api.call("GET", "/apps/" + i.slug);
     if (pub.ok && pub.body && pub.body.id && pub.body.slug === i.slug) { out.push({ slug: i.slug, actor_id: pub.body.id }); continue; }
     if (!listing) listing = await api.call("GET", "/orgs/QNFO/installations?per_page=100");
@@ -195,6 +218,7 @@ export async function actionReport(api, cfg, root) {
   r.pushers_last_100 = act.ok ? activityActors(act.body) : null;
   r.unlisted_direct_pushers = act.ok ? unlistedPushers(r.pushers_last_100, cfg) : null;
   r.workflow_problems = checkProblems(cfg, root);
+  r.workflow_push_paths = workflowPushPaths(root);
   r.token_can_administer = prot.status === 200 || prot.status === 404 ? "yes: branch protection answered " + prot.status : "no: GET branches/main/protection answered " + prot.status + " " + prot.message;
   return r;
 }
@@ -202,6 +226,9 @@ export async function actionReport(api, cfg, root) {
 export async function actionRulesetMain(api, cfg, root, mode) {
   const repo = cfg.repo, r = { action: "ruleset-main", repo, mode, ok: false, problems: [] };
   r.problems.push(...checkProblems(cfg, root));
+  const pushPaths = workflowPushPaths(root);
+  r.workflow_push_paths = pushPaths;
+  for (const p of pushPaths) r.problems.push("workflow " + p.workflow + " line " + p.line + " pushes to main as github-actions[bot]; move this path to a bypass-listed identity: " + p.snippet);
   const { integrations, unresolved } = await resolveIntegrations(api, cfg);
   for (const u of unresolved) r.problems.push("cannot resolve the app " + u + ": a ruleset without it would lock that app out of main");
   const cs = await seenContexts(api, repo);
