@@ -386,3 +386,9 @@ environment = "production"
 binding = "CH_QNFO_MODEL_EVAL"
 service = "qnfo-model-eval"
 environment = "production"
+
+# CENSUS-ARTIFACTS-1 (2.50.1): qnfo-artifacts is back on the canonical path (SCRIPT-SOURCE-RECONCILE-1) and its /health is read through this binding.
+[[services]]
+binding = "CH_QNFO_ARTIFACTS"
+service = "qnfo-artifacts"
+environment = "production"
