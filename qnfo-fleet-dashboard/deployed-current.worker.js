@@ -9,7 +9,7 @@ var __name22 = /* @__PURE__ */ __name2((target, value) => __defProp22(target, "n
 var __defProp222 = Object.defineProperty;
 var __name222 = /* @__PURE__ */ __name22((target, value) => __defProp222(target, "name", { value, configurable: true }), "__name");
 var __name2222 = /* @__PURE__ */ __name222((target, value) => Object.defineProperty(target, "name", { value, configurable: true }), "__name");
-var VERSION = "1.51.15-reader-report-watchmaker"; /* 1.51.15 READER-REPORT-WATCHMAKER-1 (2026-10-19, agent_issues 100264, pillar autonomy; patch): WATCHMAKER_OPS counts the hourly reader-report sweep of qnfo-gateway 3.29.0 (rrSweep), read from the gateway tick in cron_fire_log, because reader_reports holds no row until a reader writes one. */ /* 1.51.8 VERSION-LINE-NOTES-1 (2026-10-19, agent_issues 100243, pillar autonomy; patch, a comment moved): the release notes of every earlier version rode on this line (178 notes, about 200,000 chars), so a version bump of this worker was an 820,000-char patch (worker and mirror, removed and added): 12 code tasks ended on the publisher size cap on 2026-10-19 and three issues were exhausted for three days. They are in git history (git log -S '<release tag>' -- qnfo-fleet-dashboard/worker.js); the changelog is built from the deploy ledger and commits, and the guards read only the quoted version string. A new note goes on this line and stays short. */
+var VERSION = "1.51.16-parked-card-reason"; /* 1.51.16 PARKED-CARD-REASON-1 (2026-10-19, agent_issues 100173, pillar autonomy; patch): the parked code-task card branches on the cause wherever it sits in last_error (the loop writes "model <id>: noop-proposal: ..." and "model <id> proposed no change", so a prefix test never matched), and the dead execOne edit of PR 3106 (fleet_issue_dispatch has no last_error) is removed. */ /* 1.51.15 READER-REPORT-WATCHMAKER-1 (2026-10-19, agent_issues 100264, pillar autonomy; patch): WATCHMAKER_OPS counts the hourly reader-report sweep of qnfo-gateway 3.29.0 (rrSweep), read from the gateway tick in cron_fire_log, because reader_reports holds no row until a reader writes one. */ /* 1.51.8 VERSION-LINE-NOTES-1 (2026-10-19, agent_issues 100243, pillar autonomy; patch, a comment moved): the release notes of every earlier version rode on this line (178 notes, about 200,000 chars), so a version bump of this worker was an 820,000-char patch (worker and mirror, removed and added): 12 code tasks ended on the publisher size cap on 2026-10-19 and three issues were exhausted for three days. They are in git history (git log -S '<release tag>' -- qnfo-fleet-dashboard/worker.js); the changelog is built from the deploy ledger and commits, and the guards read only the quoted version string. A new note goes on this line and stays short. */
 
 // REVIEW-GATE-1 (2026-10-01, docs/STRATEGY.md s9): the 2026-10-25 impressions gate is retired. The research layer is
 // reviewed on this date against the reach scorecard; nothing deletes research data automatically (phase 2 needs the
@@ -1147,11 +1147,7 @@ async function execOne(env, row, prevState) {
   if (!spec || !spec.safe) {
     const escalate = !!(spec && spec.escalate);
     const state2 = escalate ? "needs-human" : "no-action";
-    let noteMsg = spec && spec.note ? spec.note : "no safe auto-action";
-if (state2 === "needs-human" && row.last_error) {
-  noteMsg = "The code loop could not verify this change itself. " + row.last_error;
-}
-await env.AUDIT.prepare("UPDATE fleet_issue_dispatch SET exec_state=?, exec_ts=?, exec_result=?, exec_attempts=COALESCE(exec_attempts,0)+1 WHERE fingerprint=?").bind(state2, now, noteMsg, row.fingerprint).run();
+    await env.AUDIT.prepare("UPDATE fleet_issue_dispatch SET exec_state=?, exec_ts=?, exec_result=?, exec_attempts=COALESCE(exec_attempts,0)+1 WHERE fingerprint=?").bind(state2, now, spec && spec.note || "no safe auto-action", row.fingerprint).run();
     // ESCALATE-NO-HANDLER-1 (2026-09-27): an unmapped/no-safe-producer category MUST escalate to an
     // OWNED disposition (reorg_work_queue) instead of silently closing as terminal 'no-action'. The old
     // detect-not-fix behavior dropped 82/93 issues as no-handler-superseded/closed-no-action with no
@@ -1168,7 +1164,7 @@ await env.AUDIT.prepare("UPDATE fleet_issue_dispatch SET exec_state=?, exec_ts=?
     }
     if (state2 !== prior) {
       try {
-        await env.AUDIT.prepare("INSERT INTO self_heal_actions (kind, ref, action, ts, status, verified_at) VALUES (?,?,?,?,?,?)").bind("fleet-execute", row.fingerprint, "[" + state2 + "] " + noteMsg, now, state2, now).run();
+        await env.AUDIT.prepare("INSERT INTO self_heal_actions (kind, ref, action, ts, status, verified_at) VALUES (?,?,?,?,?,?)").bind("fleet-execute", row.fingerprint, "[" + state2 + "] " + (spec && spec.note || ""), now, state2, now).run();
         await env.AUDIT.prepare("UPDATE self_heal_actions SET status=?1, verified_at=?2, claim=COALESCE(claim,?3), confidence=COALESCE(confidence,'high') WHERE kind='fleet-issue' AND ref=?4 AND status='dispatched'").bind(state2, now, "SELFHEAL-WRITEBACK-CLOSE-1: closed by paired fleet-execute receipt", row.fingerprint).run();
       } catch (e) {
       }
@@ -6113,6 +6109,8 @@ async function collectHumanActions(env) {
     for (const r of rows) {
       const err = String(r.last_error || "");
       let why, action;
+      // The loop prefixes a model verdict ("model @cf/<id>: noop-proposal: ..." or "model @cf/<id> proposed no change"), so the cause is
+      // looked for anywhere in last_error, never only at its start.
       if (err.indexOf("MERGE-SCOPE-AT-READ-1") === 0) {
         if (/issue\s+closed|closed|superseded/i.test(err)) {
           why = "Refused at read: the issue is closed and the scope rule has been lifted.";
@@ -6121,8 +6119,11 @@ async function collectHumanActions(env) {
           why = "Refused at read: " + (r.repo || "worker") + " is outside the merge runner scope.";
           action = "None needed once the scope rule is lifted; the loop re-queues it.";
         }
-      } else if (err.indexOf("noop-proposal") === 0) {
+      } else if (err.indexOf("noop-proposal") >= 0) {
         why = "The model proposed an edit that changes only text, no behaviour.";
+        action = "Narrow the goal or give a code-anchor.";
+      } else if (/proposed no change/.test(err)) {
+        why = "The model proposed no change to the file.";
         action = "Narrow the goal or give a code-anchor.";
       } else {
         why = "The code loop could not verify this change itself. " + squash(err).slice(0, 140);
