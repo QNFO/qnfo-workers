@@ -2,14 +2,14 @@
  "ok": true,
  "marker": "REMEDIATION-CONTRACT-BRIDGE-1",
  "probe_map_entries": 44,
- "open_issues": 200,
- "with_contract_before": 200,
+ "open_issues": 183,
+ "with_contract_before": 183,
  "upgraded_sentinel_to_active": 0,
  "inserted_active": 0,
  "inserted_needs_machine_probe": 0,
- "active_contracts": 463,
- "active_with_executable_probe": 334,
- "active_with_prose_probe": 129,
+ "active_contracts": 465,
+ "active_with_executable_probe": 335,
+ "active_with_prose_probe": 130,
  "prose_probe_contracts": [
   {
    "class": "issue-2017",
@@ -212,8 +212,8 @@
    "reason": "not-a-select"
   }
  ],
- "contracts_needs_machine_probe": 38,
- "open_issues_without_active_contract": 90,
+ "contracts_needs_machine_probe": 37,
+ "open_issues_without_active_contract": 89,
  "residual_gap_ids": [
   100088,
   2081,
@@ -228,7 +228,6 @@
   2953,
   2954,
   2957,
-  3010,
   99909,
   99924,
   99925,
@@ -237,7 +236,9 @@
   99928,
   99934,
   100080,
-  100123,
+  100148,
+  100149,
+  100150,
   100130,
   100138,
   100144,
@@ -254,7 +255,6 @@
   2782,
   2790,
   2801,
-  2819,
   2831,
   2832,
   2833,
@@ -276,7 +276,7 @@
   99915,
   99916
  ],
- "head": "bf9209dcf05c5b200cde9ca49dcc66270a785953",
+ "head": "d3375e819dd9adf0997507c7e9d658850199b31c",
  "job_status": "success",
- "ts": "2026-10-19T11:46:41Z"
+ "ts": "2026-10-19T12:19:26Z"
 }
