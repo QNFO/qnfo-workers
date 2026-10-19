@@ -8,7 +8,8 @@
 // Run: node migrations/cron-watch.test.mjs
 import { DatabaseSync } from "node:sqlite";
 import { readFileSync } from "node:fs";
-const sql = readFileSync(new URL("./2026-10-19-cron-watch.sql", import.meta.url), "utf8");
+const sql = readFileSync(new URL("./2026-10-19-cron-watch.sql", import.meta.url), "utf8")
+  + "\n" + readFileSync(new URL("./2026-10-19-cron-watch-2.sql", import.meta.url), "utf8"); // CRON-WATCH-2 replaces the fleet-exec silence trigger
 let pass = 0, fail = 0;
 const ok = (c, m, d) => { if (c) pass++; else { fail++; console.log("FAIL " + m + (d === undefined ? "" : " :: " + JSON.stringify(d))); } };
 const db = new DatabaseSync(":memory:");
@@ -150,17 +151,20 @@ run();
 is = issues();
 ok(is["schedule:daily-one|0 6 * * *"] && is["schedule:list-off|3,13,23,33,43,53 * * * *"] && !/code-task:/.test(is["schedule:daily-one|0 6 * * *"].description), "schedule faults are filed after 90 minutes, not escalated");
 ok(!is["schedule:six-hourly|17 */6 * * *"], "a schedule fault with an open CRON-HOURLY-FLOOR-1 conversion issue is not filed twice");
-// fleet-exec silent: the fleet_tick trigger files it
+// fleet-exec silent: every other producer's fleet_tick refreshes fleet_exec_silent_min; the tick itself writes no issue
 db.exec("UPDATE fleet_runs SET started_at = '" + iso(30) + "'");
+const issues0 = one("SELECT COUNT(*) AS n FROM agent_issues").n;
 db.exec("INSERT INTO fleet_tick (source) VALUES ('cron:qnfo-code-orchestrator')");
-const fx = all("SELECT * FROM agent_issues WHERE title = 'CRON-FAULT-1: worker-silent:fleet-exec'");
-ok(fx.length === 1 && fx[0].priority === "critical" && /code-task: repo=qnfo-workers path=fleet-exec\/worker\.js/.test(fx[0].description), "the fleet_tick trigger files fleet-exec silence", fx);
-const fxc = one("SELECT * FROM remediation_contracts WHERE class = ?", "issue-" + fx[0].id);
-ok(fxc.module === "cron-watch-v1" && one(fxc.verify_probe).observed === "0", "its probe fails while fleet_runs is quiet");
-db.exec("INSERT INTO fleet_tick (source) VALUES ('cron:qnfo-code-orchestrator')");
-ok(one("SELECT COUNT(*) AS n FROM agent_issues WHERE title = 'CRON-FAULT-1: worker-silent:fleet-exec'").n === 1, "filed once");
+const sm = () => one("SELECT last_value FROM metric_registry WHERE metric = 'fleet_exec_silent_min'").last_value;
+ok(+sm() >= 29 && +sm() <= 31, "a code-orchestrator tick measures fleet-exec quiet for 30 minutes", sm());
+ok(one("SELECT COUNT(*) AS n FROM agent_issues").n === issues0, "the fleet_tick trigger writes no agent_issues row");
+const st = one("SELECT * FROM analytics_metric_triggers WHERE metric_key = 'fleet_exec_silent_min'");
+ok(st && st.operator === "gt" && +st.threshold === 15 && st.enabled === 1, "the metric loop files fleet-exec silence above 15 minutes", st);
 db.prepare("INSERT INTO fleet_runs (task_id, status, started_at) VALUES ('x', 'ok', ?)").run(iso(0));
-ok(one(fxc.verify_probe).observed === "1", "the probe passes when fleet-exec runs again");
+db.exec("INSERT INTO fleet_tick (source) VALUES ('cron:fleet-exec')");
+ok(+sm() >= 29, "fleet-exec's own tick does not refresh it");
+db.exec("INSERT INTO fleet_tick (source) VALUES ('cron:qnfo-fleet-dashboard')");
+ok(+sm() <= 1, "it reads 0 once fleet-exec runs again", sm());
 // re-apply
 const n0 = one("SELECT (SELECT COUNT(*) FROM metric_registry) + (SELECT COUNT(*) FROM fleet_crons) + (SELECT COUNT(*) FROM analytics_metric_triggers) AS n").n;
 db.exec(sql);

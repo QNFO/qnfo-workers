@@ -40,7 +40,7 @@ import { createHash } from "node:crypto";
 import { gzipSync } from "node:zlib";
 import { fileURLToPath } from "node:url";
 
-export const VERSION = "1.0.0";
+export const VERSION = "1.0.1"; // 1.0.1 FLEET-GRAPH-DELETE-DEPTH-1: at most 80 OR terms per DELETE (D1 expression depth 100)
 export const GRAPH_DB_ID = "a1954b92-d681-4d02-b1f6-f9a2eb4c265d"; // qnfo-graph (also in qnfo-memory-mcp/wrangler.toml)
 export const AUDIT_DB_ID = "35e2e573-92f3-46ac-83c6-22f6429fc5e5"; // qnfo-audit
 export const SNAPSHOT_BUCKET = "qnfo-backups";
@@ -726,6 +726,7 @@ export const SCHEMA_SQL = [
 const NODE_COLS = ["id", "scope", "kind", "name", "worker", "path", "line", "attrs", "source", "h", "updated_at"];
 const EDGE_COLS = ["src", "rel", "dst", "scope", "confidence", "source", "path", "attrs", "h", "updated_at"];
 const MAX_STMT = 90000;
+const DELETE_TERMS = 80; // under D1's expression depth limit of 100 (FLEET-GRAPH-DELETE-DEPTH-1)
 
 export function insertStatements(table, cols, rows) {
   const out = []; let cur = []; let size = 0;
@@ -744,7 +745,9 @@ export function deleteStatements(table, where, keyCols, keys) {
   for (const k of keys) {
     const parts = keyCols.length === 1 ? [k] : k.split(EDGE_SEP);
     const cond = "(" + keyCols.map((c, i) => c + " = " + sqlStr(parts[i])).join(" AND ") + ")";
-    if (size + cond.length > MAX_STMT || cur.length >= 400) flush();
+    // FLEET-GRAPH-DELETE-DEPTH-1: SQLite parses "a OR b OR ..." as a tree as deep as its terms, and D1 refuses depth over 100
+    // ("Expression tree is too large"), so a run deleting more than ~99 rows failed every push from 2026-10-19 11:15Z (760a20a).
+    if (size + cond.length > MAX_STMT || cur.length >= DELETE_TERMS) flush();
     cur.push(cond); size += cond.length + 4;
   }
   flush();
@@ -988,6 +991,9 @@ export async function selftest(log = console.log) {
   const canary = "fg-canary-" + "9f3c1a7e";
   const sb = safeBinding({ name: "X_TOKEN", type: "secret_text", text: canary, json: { v: canary }, extra: { deep: canary } });
   ok(!JSON.stringify(sb).includes(canary), "safeBinding drops text/json/objects");
+  // FLEET-GRAPH-DELETE-DEPTH-1: no DELETE carries more OR terms than D1's expression depth allows.
+  const manyDel = deleteStatements("fg_edge", "scope = 'code'", ["src", "rel", "dst"], Array.from({ length: 250 }, (_, i) => "s" + i + EDGE_SEP + "r" + EDGE_SEP + "d"));
+  ok(manyDel.length === 4 && manyDel.every((s) => s.split(" OR ").length <= DELETE_TERMS), "250 edge deletes split into statements of at most " + DELETE_TERMS + " OR terms");
   ok(sb.name === "X_TOKEN" && sb.type === "secret_text", "safeBinding keeps name and type");
   const gl = new Graph("live");
   addLive(gl, { workers: [{ name: "w1", bindings: [safeBinding({ name: "S", type: "secret_text", text: canary }), safeBinding({ name: "V", type: "plain_text", text: canary }), safeBinding({ name: "DB", type: "d1", database_id: "id1" })], crons: ["0 * * * *"], handlers: [] }], d1: [{ name: "db1", id: "id1" }], kv: [], r2: [], queues: [], vectorize: [], workflows: [], domains: [], routes: [], schema: { db1: [{ type: "table", name: "t1" }, { type: "trigger", name: "tr1", sql: "CREATE TRIGGER tr1 AFTER INSERT ON t1 BEGIN INSERT INTO t2 (a) SELECT a FROM t3; END" }] } });
