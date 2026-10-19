@@ -59,6 +59,10 @@ crons = ["0 * * * *"]
 [observability]
 enabled = true
 head_sampling_rate = 1
+# TRAVEL-PLANNER-1 (2026-10-19): mailed links carry secrets in the query string (wellbeing ?t=<token>, travel ?s=<hmac>).
+# Workers docs: redact_query_string removes query strings from request URLs in logs and traces (applied by /ops/deploy,
+# OBSERVABILITY-DECLARED-APPLY-1).
+redact_query_string = true
 
 # WORKERS-STANDARDS-1 (owner standards 2026-10-12): logs and traces declared. Workers docs: `enabled` alone turns on logs only;
 # traces need [observability.traces]. Traces are sampled at the default rate of 1.
