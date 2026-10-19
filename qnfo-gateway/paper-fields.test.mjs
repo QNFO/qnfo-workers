@@ -45,6 +45,13 @@ const ROWS = [
   { authors: "Quni-Gudzinas, Rowan", keywords: null, a: ["Quni-Gudzinas, Rowan"], k: [] }
 ];
 
+// The list helpers themselves (the block between gwJsonTry and the esbuild prelude): a JSON string holding keywords reads as that one
+// keyword. qnfo-gateway 3.26.4 (#2679) added the line; the squash of PR 2680 deleted it with a VERSION rollback, and no row below caught it.
+const helpers = new Function(src.slice(src.indexOf("function gwJsonTry"), src.indexOf("var __defProp")) + ";return { gwSplitKeywords, gwSplitAuthors };")();
+eq(helpers.gwSplitKeywords('"single keyword"'), ["single keyword"], "gwSplitKeywords decodes a JSON string");
+eq(helpers.gwSplitKeywords("a, b; c"), ["a", "b", "c"], "gwSplitKeywords splits plain text on commas and semicolons");
+eq(helpers.gwSplitAuthors('"Ada Lovelace"'), ["Ada Lovelace"], "gwSplitAuthors decodes a JSON string");
+
 const errors = [];
 const origError = console.error;
 console.error = (...a) => { errors.push(a.join(" ")); };
