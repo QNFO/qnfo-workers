@@ -1,4 +1,4 @@
--- MIGRATION-SUPERSEDED-RECORD-1 (2026-10-19, pillar autonomy; RESOLVE-ALL-OPEN-1, issue 99963 METRIC-TRIGGER-5190-MIGRATIONS-UNAPPLIED).
+-- MIGRATION-SUPERSEDED-RECORD-1 (2026-10-19, pillar autonomy; RESOLVE-ALL-OPEN-1, issue 99963 METRIC-TRIGGER-5190-MIGRATIONS-UNAPPLIED and 99991 LOOP-BREAKER-1).
 -- migrations_unapplied reads 1: scripts/remediation_consumer.py migrations_sweep retries migrations/2026-10-18-issue-sla-window-retry.sql
 -- every run (cloud_ops_events migration-sweep 02:09Z, 02:50Z, 03:50Z on 2026-10-19, all "failed"), and apply_migrations.py refuses it
 -- each time under D1-TRIGGER-DEPTH-RETRY-1 because the same content was refused as migration_runs 296 (2026-10-18 13:12:49Z). The file
