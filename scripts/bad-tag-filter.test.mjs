@@ -85,7 +85,7 @@ for (const w of Object.keys(fns)) {
   ok(!/replace\(\/<(script|style|noscript)\[\\s\\S\]\*\?<\\\/(script|style|noscript)>\/gi/.test(src), w + ": no end-tag-exact tag filter left");
   ok(src === read(w, "deployed-current.worker.js"), w + ": deployed-current.worker.js is identical to worker.js");
   const v = /var VERSION = "(\d+)\.(\d+)\.(\d+)/.exec(src), m = MIN[w];
-  ok(v && [1, 2, 3].every((i) => Number(v[i]) === m[i - 1] ? true : Number(v[i]) > m[i - 1]) && (Number(v[1]) > m[0] || (Number(v[1]) === m[0] && (Number(v[2]) > m[1] || (Number(v[2]) === m[1] && Number(v[3]) >= m[2])))), w + ": VERSION is at least " + m.join("."), v && v[0]);
+  ok(v && (Number(v[1]) > m[0] || (Number(v[1]) === m[0] && (Number(v[2]) > m[1] || (Number(v[2]) === m[1] && Number(v[3]) >= m[2])))), w + ": VERSION is at least " + m.join("."), v && v[0]);
 }
 console.log(pass + " passed, " + fail + " failed");
 process.exit(fail ? 1 : 0);
