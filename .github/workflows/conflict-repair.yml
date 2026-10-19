@@ -14,6 +14,14 @@ name: conflict-repair
 # repair runs without a session and without a GitHub `schedule` (those fire rarely on this repository).
 # It pushes only repair/* branches, so the chain is acyclic.
 #
+# CONFLICT-REPAIR-INPLACE-1 (2026-10-19, owner directive "pull requests need to squash, merge and close faster as they are holding up code
+# loops and CI pipelines"): a pull request that conflicted with main waited for the hourly consumer, a repair issue and a quiet window, and
+# a code-loop branch (codeagent-*) was never taken at all, so five pull requests sat 75 to 1091 minutes on 2026-10-19. Now every push to
+# main looks for open pull requests GitHub reports as conflicting (mergeable_state dirty) whose newest commit is 10 minutes old, any author
+# and branch, and merges main into the pull request's OWN branch (never forced; VERSION-line and mirror conflicts only; release notes of both
+# sides kept; VERSION raised above main and the other open claims; suites and guards run first), then dispatches the check workflows on it.
+# A cheap probe step skips the whole job when nothing conflicts, so a push to main costs a few API reads.
+#
 # SECRETS: CLOUDFLARE_API_TOKEN / CLOUDFLARE_ACCOUNT_ID for the ledger rows (cloud_ops_events kind
 # conflict-repair-reapplied, branch_hygiene_log), as remediation-consumer uses them; nothing new.
 # A pull request opened with GITHUB_TOKEN starts no pull_request workflow, so the script dispatches the check workflows
@@ -33,6 +41,8 @@ on:
   workflow_run:
     workflows: ["remediation-consumer"]
     types: [completed]
+  push:
+    branches: [main]
 
 permissions:
   contents: write
@@ -55,27 +65,52 @@ jobs:
       INPUT_PR: ${{ github.event.inputs.pr }}
       INPUT_PUSH: ${{ github.event.inputs.push }}
     steps:
+      # CONFLICT-REPAIR-INPLACE-1: on a push to main, look before paying for a checkout. GitHub computes mergeability on the first read after
+      # main moves, so a null is read again (up to 3 times, 15 s apart). Any other trigger always runs the job.
+      - name: "probe (push to main, is any open pull request conflicting?)"
+        id: probe
+        run: |
+          set -uo pipefail
+          if [ "${GITHUB_EVENT_NAME}" != "push" ]; then echo "dirty=1" >> "$GITHUB_OUTPUT"; exit 0; fi
+          dirty=0
+          for try in 1 2 3; do
+            dirty=0; unknown=0
+            for n in $(gh api "repos/${GITHUB_REPOSITORY}/pulls?state=open&per_page=100" --jq '.[]|select(.draft==false)|.number'); do
+              st=$(gh api "repos/${GITHUB_REPOSITORY}/pulls/$n" --jq '"\(.mergeable) \(.mergeable_state)"' 2>/dev/null || echo "null unknown")
+              case "$st" in "false dirty") dirty=$((dirty+1));; "null "*) unknown=$((unknown+1));; esac
+            done
+            [ "$unknown" -eq 0 ] && break
+            sleep 15
+          done
+          echo "dirty=$dirty" >> "$GITHUB_OUTPUT"
+          echo "open pull requests conflicting with main: $dirty"
+
       # A workflow_run checks out the trigger's SHA, which can be stale; the repair is cut from the CURRENT main.
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - if: steps.probe.outputs.dirty != '0'
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: main
           fetch-depth: 0
 
-      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+      - if: steps.probe.outputs.dirty != '0'
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: "3.11"
 
       # The re-applied worker's suites run before the branch is pushed; they need node:sqlite (Node 22).
-      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+      - if: steps.probe.outputs.dirty != '0'
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: "22"
 
       - name: doer self-test (offline)
+        if: steps.probe.outputs.dirty != '0'
         run: |
           if [ ! -f scripts/conflict_repair.py ]; then echo "scripts/conflict_repair.py is not on main yet; nothing to do"; exit 0; fi
           python3 scripts/conflict_repair.py --selftest
 
       - name: re-apply conflicting quiet pull requests onto main (never merges)
+        if: steps.probe.outputs.dirty != '0'
         run: |
           set -uo pipefail
           if [ ! -f scripts/conflict_repair.py ]; then exit 0; fi
@@ -84,5 +119,5 @@ jobs:
           if printf '%s' "${INPUT_PR:-}" | grep -Eq '^[0-9]+$'; then
             python3 scripts/conflict_repair.py --pr "$INPUT_PR" $MODE
           else
-            python3 scripts/conflict_repair.py --all --max 3 $MODE
+            python3 scripts/conflict_repair.py --all --dirty --max 4 $MODE
           fi
