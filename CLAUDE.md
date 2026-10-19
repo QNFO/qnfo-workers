@@ -58,6 +58,10 @@ because each one was broken at least once; the linked issue holds the evidence.
 - Decide, don't ask. Before any question, exhaust tools, files, D1, the charter and this file; state the assumption in one
   line, act, verify, and report what the tools returned. Never stop to ask which approach, whether to proceed, or for a
   merge approval on reversible work, and never end a turn as a courtesy while work remains.
+- Owner directive 2026-10-19 (DECISION-AUTOPROCEED-1): reversible fleet decisions always take the recommended option and proceed
+  without waiting for approval; record the decision in `decision_log` with its revert path. It moves no limit: the interrupt gate
+  below, the harness's permission checks, the secret lock and live work claims keep their precedence. Stored in
+  `ops_config.OWNER_DIRECTIVE_2026_10_19_DECISION_AUTOPROCEED_1` and docs/AUTONOMOUS-OPERATION-DOCTRINE.md (standing directive 2026-10-19).
 - The only interrupt is an action that is both irreversible and identity-bound: a credential only the owner can mint,
   money, a legal or signing act, the owner's own accounts, machine or personal data, or posting on a channel whose
   terms forbid automation. Everything else proceeds: reads, compute, code, config, deploys, content, reversible changes.
@@ -69,6 +73,18 @@ because each one was broken at least once; the linked issue holds the evidence.
   `human_actions` card, and one that is not irreversible and identity-bound becomes an `AUTONOMY-FIRST-REROUTE-1` issue
   for the fleet, with the card set `rerouted`. A card that truly needs the owner but reads as technical carries an
   `IDENTITY-BOUND:` line in its `why`. `ops_config autonomy_first_gate = off` stops the reroute without a deploy.
+- Decisions default to approve (DEFAULT-APPROVE-1 is the D1 enforcement of the directive above, DECISION-AUTOPROCEED-1; owner
+  directive 2026-10-19: "ALL DECISIONS SHALL ALWAYS BE DEFAULT APPROVE ... Reversible fleet decisions SHALL ALWAYS take the
+  recommended option and proceed without waiting"). A decision card (it offers an
+  `Approve:` option, "Pick one" or "Choose one", or its title asks) is never closed on a status-quo default such as "The deny stays"
+  (human_actions 115 was, at birth, by DEFAULT-ADOPTED-1). Write the recommended option as the default. When the card grades `fleet` in
+  `v_human_action_gate`, carries no `IDENTITY-BOUND:` line and matches no `hard` marker, `human_actions_default_approve_ai` queues it for
+  the fleet to execute (migrations/2026-10-19-default-approve.sql, `v_human_action_decision`, detectors `fm-card-default-denies-decision`
+  and `fm-default-approve-issue-unexecuted`, `ops_config default_approve_gate = off` restores the old paths). The `hard` markers
+  (`default_approve_markers`, add one by INSERT with a note) are money, a legal or signing act, destroying data, the owner's accounts,
+  credentials, mailbox and name (IC-GATE-001), and the security and privacy limits (one-time codes, privacy, personal data, suppression,
+  opt-out, consent); such a card keeps its old path. A decision card that carries an `IDENTITY-BOUND:` line and no hard marker is held
+  open for the owner and its stated default is not adopted: a writer who labels a card so says it truly needs the owner.
 - The hourly metric tick audits it: `v_autonomy_first_audit`, metrics `owner_queue_fleet_cards_open` and
   `session_dependent_issues_open` (target 0 each), triggers on both and on `code_task_superseded_share_30d`.
 

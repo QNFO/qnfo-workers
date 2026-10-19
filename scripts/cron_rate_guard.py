@@ -100,6 +100,25 @@ OWNER_OVERRIDES = {
 }
 
 
+# CRON-GRID-1 (2026-10-19, owner directive: "ALL CRON TICKS SHALL BE MEASURED IN 5-MINUTE INTERVALS, AND NO CRON SHALL
+# EXECUTE LESS THAN ONCE EVERY HOUR").
+#   GRID     a fire lands on a minute that is not a multiple of 5 (a worker whose override allows a sub-5-minute gap,
+#            qnfo-code-orchestrator */2, is measured in 5-minute buckets and exempt).
+#   TEMPO    a cron slower than hourly fails through CRON-HOURLY-FLOOR-1 (scripts/cron-tempo-allowlist.txt, shrink-only).
+#            A daily or weekly job keeps its cadence inside the worker (CRON-GRID-1 cronGridRun on an hourly trigger).
+GRID_MINUTES = 5
+
+
+def off_grid(worker, fires):
+    """CRON-GRID-1: the first fire minute that is not on the 5-minute grid, or None."""
+    if limits_for(worker)[1] < GRID_MINUTES:
+        return None
+    for f in fires:
+        if (f % 60) % GRID_MINUTES:
+            return f % 60
+    return None
+
+
 def limits_for(worker):
     """(max_fires_24h, min_gap_minutes) for a worker, honouring a named owner override."""
     o = OWNER_OVERRIDES.get(worker) or {}
@@ -348,6 +367,9 @@ def audit_repo(root, strict_worker=False):
                 # every run (visible, never silent) and failing under --tempo-strict.
                 report.setdefault("tempo", []).append(
                     dict({"worker": name, "cron": cron, "reason": slow}, **stats))
+            og = off_grid(name, cron_fires(cron, days=8))
+            if og is not None:
+                report["violations"].append({"worker": name, "cron": cron, "reason": "GRID: fires at minute %d, not a multiple of %d" % (og, GRID_MINUTES)})
             gaps_seen.append(stats.get("max_gap_minutes"))
         hb = heartbeat_reason(name, gaps_seen)
         if hb:
@@ -421,6 +443,9 @@ def audit_live():
                 # every run (visible, never silent) and failing under --tempo-strict.
                 report.setdefault("tempo", []).append(
                     dict({"worker": name, "cron": cron, "reason": slow}, **stats))
+            og = off_grid(name, cron_fires(cron, days=8))
+            if og is not None:
+                report["violations"].append({"worker": name, "cron": cron, "reason": "GRID: fires at minute %d, not a multiple of %d" % (og, GRID_MINUTES)})
             gaps_seen.append(stats.get("max_gap_minutes"))
         hb = heartbeat_reason(name, gaps_seen)
         if hb:

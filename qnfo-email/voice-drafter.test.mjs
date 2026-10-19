@@ -60,9 +60,10 @@ ok(src.indexOf("email_suppression WHERE lower(email)=?1\").bind(normalizeAddress
 ok(src.indexOf("await voiceLearnWeekly(env)") > 0, "scheduled: weekly learning runs");
 // EMAIL-TICK-1 (2.9.0): the drafter and the drain run on the 15-minute cron; the index, freshness and learning steps stay daily
 const toml = fs.readFileSync(new URL("./wrangler.toml", import.meta.url), "utf8");
-ok(/crons = \["\*\/15 \* \* \* \*", "0 7 \* \* \*"\]/.test(toml), "wrangler: a 15-minute cron and the daily cron are declared");
+// CRON-GRID-1 (2.10.0): the daily cron is gone from wrangler; the grid config runs the daily job on the first 15-minute fire after 07:00.
+ok(/crons = \["\*\/15 \* \* \* \*"\]/.test(toml) && /"jobs": \[\{"cron": "0 7 \* \* \*", "periodMin": 1440, "retry": true\}\]/.test(src), "wrangler: the 15-minute cron only; the daily job is in CRON_GRID_CFG");
 ok(lib.EMAIL_TICK_CRON === "*/15 * * * *" && lib.EMAIL_DAILY_CRON === "0 7 * * *", "worker: the two cron strings are named");
-const sched = src.slice(src.indexOf("async scheduled("), src.indexOf("async fetch("));
+const sched = src.slice(src.indexOf("async function emailScheduled("), src.indexOf("export default{async email("));
 ok(sched.indexOf("await tierReplyQueue(env)") < sched.indexOf("if(daily)") && sched.indexOf("await drainReplyQueue(env)") < sched.indexOf("if(daily)") && sched.indexOf("await replyStallGuard(env)") < sched.indexOf("if(daily)"), "scheduled: tier, drain and stall guard run on every tick");
 ok(sched.indexOf("await emailIndexSync(env)") > sched.indexOf("if(daily)") && sched.indexOf("await voiceLearnWeekly(env)") > sched.indexOf("if(daily)") && sched.indexOf("await freshnessGuard(env)") > sched.indexOf("if(daily)"), "scheduled: index, freshness and learning run only on the daily cron");
 ok(/const daily=cronExpr===""\|\|cronExpr===EMAIL_DAILY_CRON/.test(sched), "scheduled: a run with no cron string does everything");

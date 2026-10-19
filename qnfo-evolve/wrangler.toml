@@ -50,7 +50,7 @@ cpu_ms = 30000
 # code-orchestrator's plan tick. CRON_RATE_GUARD-1 requires at least 10 minutes between fires;
 # 15 satisfies it with margin.
 [triggers]
-crons = ["2,17,32,47 * * * *"]
+crons = ["5,20,35,50 * * * *"]
 
 [[d1_databases]]
 binding = "AUDIT"

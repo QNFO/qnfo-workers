@@ -91,4 +91,5 @@ type = "durable-object"
 storage = "sqlite"
 
 [triggers]
-crons = ["5 5 * * *"]
+# CRON-GRID-1: no trigger slower than hourly; the daily 05:05 run lives in worker.js CRON_GRID_CFG.
+crons = ["5 * * * *"]

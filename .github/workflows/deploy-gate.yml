@@ -126,6 +126,21 @@ jobs:
         if: ${{ !cancelled() }}
         run: python3 scripts/cloudflare-only-host-guard.py
 
+      # SKIP-TOKEN-GUARD-1 (2026-10-19): GitHub starts no push workflow for a commit whose message holds a skip-CI token anywhere, and a squash
+      # merge builds the main commit's message from the pull request's title, description and commits. The merge of #2811 explained the token in
+      # its description and lost the push runs of that merge (03d801a0: no deploy, no migration apply, no guards). Bot status commits carry the
+      # token on purpose and never pass through a pull request, so a pull request that names it fails here. The text reaches the script
+      # through the environment, never the command line.
+      - name: SKIP-TOKEN-GUARD-1 (a pull request names no skip-CI token)
+        if: ${{ !cancelled() && github.event_name == 'pull_request' }}
+        env:
+          PR_TITLE: ${{ github.event.pull_request.title }}
+          PR_BODY: ${{ github.event.pull_request.body }}
+        run: |
+          git fetch --no-tags origin "${{ github.base_ref }}"
+          python3 scripts/skip-token-guard.py --selftest
+          python3 scripts/skip-token-guard.py --base "origin/${{ github.base_ref }}"
+
       # WORKERS-STANDARDS-GUARD-1 (owner directive 2026-10-12, WORKERS-BEST-PRACTICES-1): a change may not ADD a known Workers anti-pattern
       # (Math.random ids/tokens, passThroughOnException, destructured ctx, string-compared secrets) or remove/omit observability and traces.
       # Diff-only, so existing debt other PRs are fixing never blocks this one; `// standards-ok: <reason>` marks a false positive.
