@@ -1,8 +1,15 @@
 {
-  "audited_at": "2026-10-19 14:28:56",
+  "audited_at": "2026-10-19 15:09:52",
   "d1_write_failures": [],
   "d1_writes_ok": 120,
   "guard": {
+    "_drift_confirm": {
+      "first_pass": [
+        "personal-companion"
+      ],
+      "refreshed": true,
+      "second_pass": []
+    },
     "_guard_rc": 0,
     "ahead": [],
     "cf_script_list": true,
@@ -545,7 +552,7 @@
       },
       {
         "dir": "personal-companion",
-        "version": "1.32.2-codeagent",
+        "version": "1.33.0-travel-chat",
         "worker": "personal-companion"
       },
       {
@@ -660,7 +667,7 @@
       },
       {
         "dir": "qnfo-ops",
-        "version": "2.50.5-context-compact-2",
+        "version": "2.50.6-codeagent",
         "worker": "qnfo-ops"
       },
       {
@@ -670,7 +677,7 @@
       },
       {
         "dir": "qnfo-research-exec",
-        "version": "0.25.0-wai-width-governor",
+        "version": "0.26.0-revision-loop",
         "worker": "qnfo-research-exec"
       },
       {
@@ -938,9 +945,9 @@
       "worker": "personal-api"
     },
     "personal-companion": {
-      "before": "1.32.2-codeagent",
+      "before": "1.33.0-travel-chat",
       "http": 200,
-      "live": "1.32.2-codeagent",
+      "live": "1.33.0-travel-chat",
       "match": 1,
       "note": "SYNC",
       "worker": "personal-companion"
@@ -1473,9 +1480,9 @@
       "worker": "qnfo-observability"
     },
     "qnfo-ops": {
-      "before": "2.50.5-context-compact-2",
+      "before": "2.50.6-codeagent",
       "http": 200,
-      "live": "2.50.5-context-compact-2",
+      "live": "2.50.6-codeagent",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-ops"
@@ -1561,9 +1568,9 @@
       "worker": "qnfo-register-guard"
     },
     "qnfo-research-exec": {
-      "before": "0.25.0-wai-width-governor",
+      "before": "0.26.0-revision-loop",
       "http": 200,
-      "live": "0.25.0-wai-width-governor",
+      "live": "0.26.0-revision-loop",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-research-exec"
