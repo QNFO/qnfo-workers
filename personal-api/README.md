@@ -1,6 +1,23 @@
-# personal-api - Agentic Personal Twin (v4.10.0)
+# personal-api - Agentic Personal Twin (v4.11.0)
 
 Rowan's personal-assistant endpoint: personal-api.q08.workers.dev/v1 (OpenAI-compatible).
+
+## v4.11.0 (2026-10-19) - the companion, evidence-based (pillar: personal, COMPANION-BEST-PRACTICE-1)
+Changes that follow from a review of the research on digital mental-health companions (the write-up lives in the
+Personal Companion project files, companion/best-practices.md). Rules 8-15 in the head of `companion.js`.
+- **Behavioral activation**: rate a finished activity for enjoyment and achievement (1-5); an activity bank
+  (`cmp_activities`, seeded across movement, nature, connection, mastery, pleasure, rest, plus his own); the shapeless-day
+  anchor and the low-day care line draw on what he rated as helping. Data tab shows "what helps" and mood on days with
+  and without a rated activity. API: `POST /companion/api/activity`, `GET|POST /companion/api/activities`, `GET /companion/api/helps`.
+- **Safety plan** (Stanley-Brown, seven steps, his own words) in `wellbeing_config.safety_plan`; every crisis reply adds
+  it after the fixed lines. `GET|POST /companion/api/safety-plan`.
+- **WHO-5** every 14 days (`cmp_measures`); 28 or less, or two readings under 50, adds a gentle GP (huisarts) suggestion
+  on Today and in chat. Never a diagnosis. `GET|POST /companion/api/who5`.
+- **Control and learning**: `POST /companion/api/pause {hours}` silences reach-outs (risk-word care still goes out);
+  a retired nudge kind gets one retry a week; a connection nudge after four days with nothing social.
+- **Privacy**: care and presence pushes show a neutral lock-screen line (`wellbeing_config.discreet_push` care|all|off);
+  raw voice notes are deleted after `media_retention_days` (30), the transcript stays. New stores are in the privacy
+  view, the export and "delete everything".
 
 ## v4.10.0 (2026-10-19) - the companion (pillar: personal, COMPANION-1)
 An active companion on top of the twin, built on the personal infrastructure that already existed. Source:
