@@ -57,6 +57,38 @@ Paste a value once into the client that needs it:
    minutes and marks `freshness_guard` signal `owner_client_keys` stale after 26 h, so a broken owner key is seen
    server-side (OWNER-CLIENT-PROBE-1). A rotation is not finished until a `check` run passes.
 
+### File an idea, an issue or a paper draft (one call, IDEAS-INTAKE-OWNER-1)
+
+The `ideas` key (host `ideas`, secret `OWNER_TOKEN`) is the only key that files an idea. The `ai`, `ops` and `personal` keys each open
+one host and never open this one, so a valid `ai.qnfo.org` key sent here answers 401. Read the `ideas` value at `/api/owner/keys`
+like the others.
+
+```
+POST https://ideas.qnfo.org/api/intake
+Authorization: Bearer <ideas key>
+Content-Type: application/json
+
+{"kind": "idea", "title": "short title (up to 300 characters)", "body": "the idea (up to 200,000 characters)"}
+```
+
+- `kind` is `idea` (the default), `issue` (an `agent_issues` row with source `owner-chat`; optional `category`, `priority`) or
+  `paper` (a draft row in living-paper, status `draft`; on 2026-10-04 the papers reader listed every draft row that was not
+  quarantined, so file a paper draft only when it may be seen).
+- An idea answers `{"ok": true, "kind": "idea", "id": <row id>, ...}` from 1.10.12. The row is in `qnfo-audit.idea_proposals`
+  (name `owner-chat`, contact `owner`). The hourly triage accepts an owner-authored idea without waiting on the model's verdict and
+  queues it in `research_queue` (`source_id` is the row id). Since 1.10.12 the research admission cap never holds it; before that,
+  an idea filed while `research_queue` had 120 or more rows stayed `triaged_hold` for good.
+- A wrong or missing key answers 401; a `GET` with a valid key answers 405; `/api/ask`, `/api/proposals` and `/run` answer 503 on
+  purpose (the public site is read-only).
+
+What does not file an idea: the router key at `ai.qnfo.org` on its own. A chat through it posts the first message of a thread to the
+intent orchestrator as an intent, and only when all of these hold: the client is ChatBox or DeepChat (read from the user agent), it
+is the first user message of the thread, it has at least 12 characters, and it does not read as a fleet command (a verb such as
+check, fix, deploy or triage followed by a fleet word). That path does not insert into `idea_proposals` itself. Notes in the Obsidian
+vault reach `idea_proposals` through the owner-corpus feeder: up to 6 notes on each hourly run (2 while `research_queue` holds 12
+or more rows, none while proposal backpressure holds), a note under 600 characters is skipped, and an extraction can come back
+as none. Those rows stay under the research admission cap.
+
 ## Credentials that are not owner keys
 
 | Credential | Status | What to do |
