@@ -1,0 +1,734 @@
+diff --git a/migrations/2026-10-19-control-alternate-probes.sql b/migrations/2026-10-19-control-alternate-probes.sql
+new file mode 100644
+index 00000000..f977f21c
+--- /dev/null
++++ b/migrations/2026-10-19-control-alternate-probes.sql
+@@ -0,0 +1,230 @@
++-- CONTROL-ALT-PROBES-1 (2026-10-19, pillar autonomy; agent_issues 2826 PATHS-UNTESTED-1 and 2880 controls_on_critical_path_untested;
++-- doctrine sections 10-11, chaos verification; the design is docs/handoff/2026-10-19-closeout.md, control-alternates-never-drilled).
++-- A control that declares an alternate path is only as safe as the last time that alternate ran, and control_registry.alternate_tested_at
++-- had no writer except a session typing a date. CHAOS-DRILL-1 (migration 2026-10-12-39) fixed this for the single points of failure
++-- (spof_alternate_probes, re-run every 6 h by qnfo-fleet-control chaosDrill) and never reached the controls. Measured 2026-10-19T13:00Z:
++-- control_registry 75 rows, all with an alternate_path, 18 with alternate_tested_at NULL (v_path_coverage_violations alternate-untested 18,
++-- of which 3 carry the recorded reason ALTERNATE-NOT-EXERCISABLE). The 7 critical controls that controls_on_critical_path_untested counted
++-- were stamped by hand at 12:55Z (7 to 0), so the metric is green on dates nothing will ever re-check.
++--
++-- This file gives every exercisable control a drilled alternate in the same shape as CHAOS-DRILL-1:
++--   * control_alternate_probes: one read-only expected/observed probe per control (the chaosJudge shape: expected 'ok', observed 'ok' or
++--     the reason the alternate is not proven), the 7 critical controls first, then the other exercisable controls, then the probe set's
++--     own control. A probe reads the alternate's own evidence (a trigger in sqlite_master, a config lever, a ledger row, an event within
++--     the window in window_note). Nothing is stamped from a declaration. Live read-only runs on 2026-10-19: 22 of 22 control probes pass.
++--   * v_control_alternate_status and v_control_alternate_untested: the per-control drill state (a pass older than 480 minutes, the drill's 6 h cadence
++--     plus the 120 minutes SLA-120M-1 allows, reads probe-stale) and the counts, so the metric behind 2880 is
++--     computable from this table (critical_untested_by_probe next to critical_untested_by_register, which is the v_doctrine_scorecard_v2
++--     expression). The scorecard and metric_registry definitions are not touched.
++--   * v_path_coverage_gaps reads a row whose alternate is 'none needed' and whose evidence records ALTERNATE-NOT-EXERCISABLE as the distinct
++--     state 'alternate-not-exercisable' (reason on the row), and v_path_coverage_violations lists it no more. The 3 rows (research-owner-hold,
++--     command-drain-key, outreach-consent-gate) protect people outside the fleet or have no bypass route, so no probe can exercise them.
++--   * failure mode control-alternate-undrilled with its fm- detector contract, a control_registry row for the probe set, evidence on
++--     the 22 controls it drills, a decision_log row.
++-- The runner is NOT in this file: chaosDrill reads only spof_alternate_probes (qnfo-fleet-control 0.37.0, CHAOS-DRILL-1 block) and cannot
++-- read a second table without a worker change, so the second pass is filed below as CONTROL-ALT-PROBES-RUNNER-1 with a code-task line and a
++-- code-probe that closes it when the code reading this table is on main. Until it lands, last_run_at stays NULL and no control is stamped by
++-- this table; the existing hand-written stamps are unchanged.
++-- The agent-issues-enum-guard probe exempts a 'monitoring' row that has an open twin: that status is the deliberate parked-twin state, it is
++-- not in status_canon, and agent_issues_reopen_open_twin_guard refuses the tick's rewrite to open on purpose (METRIC-TRIGGER-TWIN-1).
++--
++-- APPLY-BY: ci
++-- DB: qnfo-audit
++-- BACKUP: control_registry
++-- Rollback: DROP VIEW IF EXISTS v_control_alternate_untested; DROP VIEW IF EXISTS v_control_alternate_status; DROP TABLE IF EXISTS control_alternate_probes; UPDATE control_registry SET evidence = replace(evidence, ' | CONTROL-ALT-PROBES-1 2026-10-19: probed by its control_alternate_probes row, which the chaos drill runs once CONTROL-ALT-PROBES-RUNNER-1 lands, and only a passing probe stamps alternate_tested_at', '') WHERE evidence LIKE '%CONTROL-ALT-PROBES-1 2026-10-19%'; DELETE FROM control_registry WHERE control = 'control-alternate-probes'; DELETE FROM remediation_contracts WHERE class = 'fm-control-alternate-undrilled'; DELETE FROM failure_modes WHERE fm_key = 'control-alternate-undrilled'; DROP VIEW IF EXISTS v_path_coverage_violations; DROP VIEW IF EXISTS v_path_coverage_gaps; CREATE VIEW v_path_coverage_gaps AS SELECT 'control_registry' AS source, control AS process, kind AS path_kind, CASE WHEN alternate_path IS NULL OR trim(alternate_path) = '' THEN 'no-alternate' WHEN alternate_tested_at IS NULL THEN 'alternate-untested' ELSE 'ok' END AS path_state, alternate_path AS alternate, alternate_tested_at FROM control_registry UNION ALL SELECT 'process_contracts' AS source, process, 'contract-paths' AS path_kind, CASE WHEN json_valid(paths_json) = 0 THEN 'paths-not-json' WHEN json_array_length(paths_json) < 2 THEN 'single-path' WHEN json_array_length(paths_json) = 2 THEN 'two-paths-no-spare' ELSE 'ok' END AS path_state, NULL AS alternate, NULL AS alternate_tested_at FROM process_contracts; CREATE VIEW v_path_coverage_violations AS SELECT source, process, path_kind, path_state, alternate, alternate_tested_at FROM v_path_coverage_gaps WHERE path_state <> 'ok'
++-- Rollback note: the decision_log row stays (append-only) and the CONTROL-ALT-PROBES-RUNNER-1 issue stays open until its code-probe or a closing record resolves it.
++
++CREATE TABLE IF NOT EXISTS control_alternate_probes (
++  control TEXT PRIMARY KEY,
++  probe_sql TEXT NOT NULL,
++  window_note TEXT NOT NULL,
++  enabled INTEGER NOT NULL DEFAULT 1,
++  last_run_at TEXT,
++  last_pass INTEGER,
++  last_pass_at TEXT,
++  last_observed TEXT,
++  created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
++);
++INSERT OR IGNORE INTO control_alternate_probes (control, probe_sql, window_note, enabled) VALUES
++ ('agent-issues-enum-guard',
++  'SELECT ''ok'' AS expected, CASE WHEN NOT EXISTS (SELECT 1 FROM sqlite_master WHERE type = ''trigger'' AND name = ''agent_issues_normalise_tick'' AND tbl_name = ''fleet_tick'' AND sql LIKE ''%status_canon%'' AND sql LIKE ''%priority_canon%'' AND sql LIKE ''%NO-SILENT%'') THEN ''the normalise tick trigger agent_issues_normalise_tick is missing or no longer reads the canon tables'' WHEN (SELECT COUNT(*) FROM status_canon) = 0 OR (SELECT COUNT(*) FROM priority_canon) = 0 THEN ''status_canon or priority_canon is empty, so the tick cannot map a status'' WHEN EXISTS (SELECT 1 FROM agent_issues a WHERE ((a.status IS NOT NULL AND NOT EXISTS (SELECT 1 FROM status_canon s WHERE s.raw_value = a.status) AND NOT (a.status = ''monitoring'' AND EXISTS (SELECT 1 FROM agent_issues o WHERE o.id <> a.id AND o.status = ''open'' AND lower(trim(o.title)) = lower(trim(a.title))))) OR (a.priority IS NOT NULL AND NOT EXISTS (SELECT 1 FROM priority_canon p WHERE p.raw_value = a.priority))) AND typeof(a.updated_at) = ''integer'' AND a.updated_at < (CAST(strftime(''%s'', ''now'') AS INTEGER) - 1800) * 1000) THEN ''an agent_issues row kept a status or priority that the canon tables do not map for over 30 minutes, so the tick did not normalise it'' ELSE ''ok'' END AS observed',
++  '30 min: the tick runs every 5-10 minutes and a row still unmapped after 30 minutes was not normalised (state probe on the trigger text, the canon vocabulary and the rows). A monitoring row with an open twin is the deliberate parked-twin state: it is not in status_canon and the twin guard refuses the rewrite to open', 1),
++ ('agent-issues-evidence-guard',
++  'SELECT ''ok'' AS expected, CASE WHEN NOT EXISTS (SELECT 1 FROM sqlite_master WHERE type = ''trigger'' AND name = ''agent_issues_evidence_annotate_ai'' AND tbl_name = ''agent_issues'' AND sql LIKE ''%NO-SILENT%'') THEN ''the annotate trigger agent_issues_evidence_annotate_ai is missing'' WHEN EXISTS (SELECT 1 FROM sqlite_master WHERE type = ''trigger'' AND name = ''agent_issues_evidence_must_exist_ins'') THEN ''the abort trigger agent_issues_evidence_must_exist_ins is back, so an issue that cites a missing event would be lost'' WHEN EXISTS (SELECT 1 FROM agent_issues a WHERE a.source LIKE ''cloud_ops_events:%'' AND typeof(a.created_at) = ''integer'' AND a.created_at > (CAST(strftime(''%s'', ''now'') AS INTEGER) - 1209600) * 1000 AND NOT EXISTS (SELECT 1 FROM cloud_ops_events e WHERE e.id = substr(a.source, 18)) AND COALESCE(a.description, '''') NOT LIKE ''%the cited evidence event%'') THEN ''an issue of the last 14 days cites a missing event and carries no annotation'' ELSE ''ok'' END AS observed',
++  '14 days: the trigger text from sqlite_master plus the issues it should have annotated; a production row that needed it is rare, so the replay lives in migrations/control-alternate-probes.test.mjs', 1),
++ ('idea-triaged-hold-owner-and-reentry',
++  'SELECT ''ok'' AS expected, CASE WHEN EXISTS (SELECT 1 FROM idea_proposals WHERE (name LIKE ''owner%'' OR name LIKE ''rowan%'' OR name = ''chat-session'' OR contact = ''owner'' OR contact LIKE ''rowan%'') AND name <> ''owner-corpus'' AND name NOT LIKE ''intake:%'' AND status IN (''triaged_hold'', ''rejected'') AND COALESCE(rationale, '''') NOT LIKE ''%withdrawn by owner%'' AND created_at > strftime(''%Y-%m-%dT%H:%M:%SZ'', ''now'', ''-30 days'')) THEN ''an owner-authored idea of the last 30 days was held or rejected'' WHEN NOT EXISTS (SELECT 1 FROM signals WHERE source = ''artifact_reentry'' AND status = ''consumed'' AND ts > strftime(''%Y-%m-%dT%H:%M:%SZ'', ''now'', ''-7 days'')) THEN ''no re-entry signal was consumed in 7 days, so re-entry is not flowing as a rate'' ELSE ''ok'' END AS observed',
++  '30 days for owner ideas (rare; an idea the owner withdrew is not counted), 7 days for re-entry (idea-hub 1.8.0 admits 2 a day); the replacement tests are idea-hub/owner-admission-bypass.test.mjs and idea-hub/reentry-drain.test.mjs', 1),
++ ('research-citation-unverified-hold',
++  'SELECT ''ok'' AS expected, CASE WHEN NOT EXISTS (SELECT 1 FROM sqlite_master WHERE type = ''trigger'' AND name = ''research_hold_expiry_tick'' AND tbl_name = ''fleet_tick'' AND sql LIKE ''%360 minutes%'') THEN ''the 6 h hold-expiry trigger research_hold_expiry_tick is missing or its window changed'' WHEN COALESCE((SELECT value FROM ops_config WHERE key = ''research_citation_gate''), ''enforce'') NOT IN (''enforce'', ''measure'') THEN ''ops_config research_citation_gate holds a value other than enforce or measure'' WHEN EXISTS (SELECT 1 FROM research_queue q JOIN research_hold_seen h ON h.id = q.id WHERE q.status = ''held'' AND instr(COALESCE(q.error, ''''), ''Revert: status review, stage publish'') > 0 AND h.first_seen < strftime(''%Y-%m-%dT%H:%M:%SZ'', ''now'', ''-480 minutes'')) THEN ''a held research row with a revert line passed 8 h without release (the expiry is 6 h)'' ELSE ''ok'' END AS observed',
++  'state probe: the release trigger, the measure lever and no hold past 8 h; the citation lookups themselves are pinned by qnfo-research-exec/citation-gate-step.test.mjs', 1),
++ ('research-gate-structure',
++  'SELECT ''ok'' AS expected, CASE WHEN NOT EXISTS (SELECT 1 FROM cloud_ops_events WHERE kind = ''revise-patch'' AND status IN (''ok'', ''warn'') AND ts > strftime(''%Y-%m-%dT%H:%M:%SZ'', ''now'', ''-7 days'')) THEN ''the revise route recorded no revise-patch event in 7 days, so a failing first pass has no live route'' ELSE ''ok'' END AS observed',
++  '7 days: event-driven path (the drill cannot manufacture a failing paper); the structure rules are pinned by qnfo-research-exec/verify-precision.test.mjs', 1),
++ ('research-review-hard-gate',
++  'SELECT ''ok'' AS expected, CASE WHEN COALESCE((SELECT value FROM ops_config WHERE key = ''research_review_gate''), '''') NOT IN (''enforce'', ''measure'') THEN ''ops_config research_review_gate is neither enforce nor measure, so the reversible lever is unreadable'' WHEN NOT EXISTS (SELECT 1 FROM cloud_ops_events WHERE kind = ''review-triage'' AND status = ''ok'' AND ts > strftime(''%Y-%m-%dT%H:%M:%SZ'', ''now'', ''-48 hours'')) THEN ''no ok review-triage event in 48 h, so a withheld row has no recover loop'' ELSE ''ok'' END AS observed',
++  '48 h: the review triage loop runs every tick; the gate behaviour is pinned by qnfo-research-exec/verify-precision.test.mjs', 1),
++ ('zenodo-enabled',
++  'SELECT ''ok'' AS expected, CASE WHEN EXISTS (SELECT 1 FROM ops_config WHERE key LIKE ''%zenodo%'' AND lower(COALESCE(value, '''')) IN (''1'', ''on'', ''true'', ''enabled'', ''enforce'')) OR EXISTS (SELECT 1 FROM pipeline_flags WHERE key LIKE ''%zenodo%'' AND lower(COALESCE(value, '''')) IN (''1'', ''on'', ''true'', ''enabled'')) THEN ''a Zenodo switch is on again, so the in-house path is no longer the only one'' WHEN NOT EXISTS (SELECT 1 FROM research_queue WHERE status = ''published'' AND published_at > strftime(''%Y-%m-%dT%H:%M:%SZ'', ''now'', ''-48 hours'')) THEN ''no paper reached published in 48 h through the in-house path'' WHEN EXISTS (SELECT 1 FROM research_queue WHERE status = ''published'' AND published_at > strftime(''%Y-%m-%dT%H:%M:%SZ'', ''now'', ''-48 hours'') AND doi LIKE ''10.5281/%'') THEN ''a paper published in 48 h carries a Zenodo DOI'' ELSE ''ok'' END AS observed',
++  '48 h: in-house publication and identifiers are the alternate (INHOUSE-PUBLISH-1 landed); the switch stays off', 1),
++ ('social-weekly-caps',
++  'SELECT ''ok'' AS expected, CASE WHEN (SELECT value FROM pipeline_flags WHERE key = ''social_channel_caps'') IS NULL OR json_valid((SELECT value FROM pipeline_flags WHERE key = ''social_channel_caps'')) = 0 THEN ''pipeline_flags social_channel_caps is missing or not JSON'' WHEN COALESCE((SELECT MIN(gap_min) FROM (SELECT (julianday(substr(published_at, 1, 19)) - julianday(LAG(substr(published_at, 1, 19)) OVER (PARTITION BY platform ORDER BY published_at))) * 1440 AS gap_min FROM social_media_posts WHERE status = ''published'' AND platform <> ''buffer-substack'' AND published_at > strftime(''%Y-%m-%dT%H:%M:%SZ'', ''now'', ''-7 days''))), 99999) < 360 THEN ''two posts on one channel landed under 6 h apart, so the spacing that stands in for the cap is not holding'' ELSE ''ok'' END AS observed',
++  '7 days: the spacing between consecutive published posts per channel (Substack Notes roll-ups excluded); the cap itself is read from pipeline_flags', 1),
++ ('cf-obs-nested-too-deep-pin',
++  'SELECT ''ok'' AS expected, CASE WHEN NOT EXISTS (SELECT 1 FROM remediation_contracts WHERE class = ''fm-trigger-depth-compile'' AND status = ''active'') THEN ''the fm-trigger-depth-compile detector contract is missing or not active'' WHEN COALESCE((SELECT last_verdict FROM remediation_contracts WHERE class = ''fm-trigger-depth-compile''), '''') <> ''pass'' THEN ''the fm-trigger-depth-compile detector does not read pass'' ELSE ''ok'' END AS observed',
++  'the contract runs hourly; its latest verdict is the evidence the rule''s alternate (a recurrence re-activates the group) is not hiding a depth fault', 1),
++ ('compat-advance-review-gate',
++  'SELECT ''ok'' AS expected, CASE WHEN NOT EXISTS (SELECT 1 FROM deployment_history WHERE action = ''deploy'' AND status = ''success'' AND deployed_at > strftime(''%Y-%m-%dT%H:%M:%SZ'', ''now'', ''-24 hours'')) THEN ''no successful deploy in 24 h, so the gate may be withholding more than the date change'' WHEN NOT EXISTS (SELECT 1 FROM cloud_ops_events WHERE kind = ''compat-verify'' AND status = ''ok'' AND ts > strftime(''%Y-%m-%dT%H:%M:%SZ'', ''now'', ''-7 days'')) THEN ''no ok compat-verify event in 7 days'' ELSE ''ok'' END AS observed',
++  '24 h for deploys (the gate withholds only the date, never the upload), 7 days for the compat verifier; qnfo-ops/compat-date-apply.test.mjs pins each branch', 1),
++ ('gh_app_primary',
++  'SELECT ''ok'' AS expected, CASE WHEN COALESCE((SELECT value FROM ops_config WHERE key = ''gh_app_primary''), '''') NOT IN (''on'', ''off'') THEN ''ops_config gh_app_primary is neither on nor off, so the kill switch is unreadable'' WHEN NOT EXISTS (SELECT 1 FROM cloud_ops_events WHERE kind = ''github'' AND status = ''ok'' AND ts > strftime(''%Y-%m-%dT%H:%M:%SZ'', ''now'', ''-24 hours'')) THEN ''no ok github event in 24 h, so neither the app token nor the personal fallback is carrying calls'' ELSE ''ok'' END AS observed',
++  '24 h: GitHub writes keep succeeding with the switch readable; the per-request fallback is pinned by qnfo-fleet-control/gh-app-broker.test.mjs', 1),
++ ('improvement-loop-superseded-marker',
++  'SELECT ''ok'' AS expected, CASE WHEN (SELECT COUNT(*) FROM analytics_metric_triggers WHERE metric_key IN (''issues_open_over_120m'', ''open_issues_without_doer_120m'') AND enabled = 1) < 2 THEN ''a successor metric of a superseded one has no enabled trigger'' WHEN (SELECT COUNT(*) FROM metric_registry WHERE metric IN (''issues_open_over_120m'', ''open_issues_without_doer_120m'')) < 2 THEN ''a successor metric is not in metric_registry'' ELSE ''ok'' END AS observed',
++  'state probe: the successors named in the control (issues_open_over_120m and open_issues_without_doer_120m) stay registered with an enabled trigger', 1),
++ ('migration-header-guard',
++  'SELECT ''ok'' AS expected, CASE WHEN NOT EXISTS (SELECT 1 FROM remediation_contracts WHERE class = ''fm-migration-headerless-silent-skip'' AND status = ''active'') THEN ''the fm-migration-headerless-silent-skip detector contract is missing or not active'' WHEN NOT EXISTS (SELECT 1 FROM migration_runs WHERE status = ''ok'' AND applied_at > strftime(''%Y-%m-%dT%H:%M:%SZ'', ''now'', ''-7 days'')) THEN ''no migration run applied in 7 days'' WHEN COALESCE((SELECT last_refreshed FROM metric_registry WHERE metric = ''migrations_unapplied''), '''') < strftime(''%Y-%m-%dT%H:%M:%SZ'', ''now'', ''-3 hours'') THEN ''the migrations_unapplied sweep metric was not refreshed in 3 h'' ELSE ''ok'' END AS observed',
++  '7 days for applied runs, 3 h for the unapplied-sweep metric; scripts/apply_migrations_test.py pins the header guard itself', 1),
++ ('migration-headerless-allowlist',
++  'SELECT ''ok'' AS expected, CASE WHEN date(''now'') > ''2026-11-19'' THEN ''the allowlist passed its stated expiry 2026-11-19 and is still in use'' WHEN NOT EXISTS (SELECT 1 FROM migration_runs WHERE status = ''ok'' AND applied_at > strftime(''%Y-%m-%dT%H:%M:%SZ'', ''now'', ''-7 days'')) THEN ''no migration run applied in 7 days, so a headered file is not being picked up'' ELSE ''ok'' END AS observed',
++  'asserts the stated reason of ''none needed'': the runner is alive and the grandfather clause is inside its recorded expiry (2026-11-19)', 1),
++ ('ops-jobs-payload-redaction',
++  'SELECT ''ok'' AS expected, CASE WHEN EXISTS (SELECT 1 FROM ops_jobs WHERE payload LIKE ''%magic-link%'' OR payload LIKE ''%magic_link%'' OR payload LIKE ''%/login%token=%'' OR payload LIKE ''%/verify%token=%'' OR payload LIKE ''%/reset%token=%'' OR payload LIKE ''%verification code%'' OR payload LIKE ''%one-time code%'' OR payload LIKE ''%login code%'') THEN ''a stored ops_jobs payload still holds a login link or a one-time code'' WHEN EXISTS (SELECT 1 FROM ops_jobs WHERE status IN (''succeeded'', ''failed'', ''terminated'', ''cancelled'') AND updated_at < strftime(''%Y-%m-%dT%H:%M:%fZ'', ''now'', ''-15 days'')) THEN ''a terminal ops_jobs row is older than 15 days, so the 14-day sweep is not running'' ELSE ''ok'' END AS observed',
++  'state probe on the stored payloads and the 14-day sweep that bounds what a user-typed link can keep', 1),
++ ('ops-jobs-terminal-sweep',
++  'SELECT ''ok'' AS expected, CASE WHEN NOT EXISTS (SELECT 1 FROM queue_sla WHERE stuck_type = ''ops-job-terminal-retained'') THEN ''the queue_sla row ops-job-terminal-retained is missing'' WHEN NOT EXISTS (SELECT 1 FROM remediation_contracts WHERE class = ''fm-ops-jobs-sweep-status-gap'' AND status = ''active'') THEN ''the fm-ops-jobs-sweep-status-gap contract is missing or not active'' WHEN COALESCE((SELECT last_verdict FROM remediation_contracts WHERE class = ''fm-ops-jobs-sweep-status-gap''), '''') <> ''pass'' THEN ''the fm-ops-jobs-sweep-status-gap contract does not read pass'' ELSE ''ok'' END AS observed',
++  'asserts the stated reason of ''none needed'': the sweep''s failure is measured by queue_sla and the detector contract', 1),
++ ('owner-request-receipt-gate',
++  'SELECT ''ok'' AS expected, CASE WHEN COALESCE((SELECT value FROM ops_config WHERE key = ''autonomy_first_gate''), '''') NOT IN (''on'', ''off'') THEN ''ops_config autonomy_first_gate is neither on nor off, so the off lever is unreadable'' WHEN NOT EXISTS (SELECT 1 FROM sqlite_master WHERE type = ''view'' AND name = ''v_human_action_gate'' AND sql LIKE ''%receipt%'') THEN ''v_human_action_gate no longer carries the receipt branch'' ELSE ''ok'' END AS observed',
++  'state probe: the lever the control names (autonomy_first_gate) and the view branch it can switch off', 1),
++ ('owner-request-requires-card',
++  'SELECT ''ok'' AS expected, CASE WHEN NOT EXISTS (SELECT 1 FROM sqlite_master WHERE type = ''trigger'' AND name = ''owner_request_requires_card'' AND tbl_name = ''agent_issues'') THEN ''the owner_request_requires_card trigger is missing'' WHEN NOT EXISTS (SELECT 1 FROM issue_lifecycle WHERE event = ''dispositioned'' AND ts > strftime(''%Y-%m-%dT%H:%M:%SZ'', ''now'', ''-7 days'')) THEN ''issue_lifecycle recorded no closure in 7 days, so the second record of a closure is silent'' WHEN EXISTS (SELECT 1 FROM agent_issues a WHERE a.category = ''owner-request'' AND a.status IN (''closed'', ''resolved'', ''wontfix'') AND typeof(a.updated_at) = ''integer'' AND a.updated_at > (CAST(strftime(''%s'', ''now'') AS INTEGER) - 604800) * 1000 AND NOT EXISTS (SELECT 1 FROM issue_triage t WHERE t.issue_id = a.id AND t.close_evidence IS NOT NULL AND trim(t.close_evidence) <> '''')) THEN ''an owner-request issue closed in 7 days has no close_evidence'' ELSE ''ok'' END AS observed',
++  '7 days: the alternate record of a closure (issue_lifecycle and issue_triage.close_evidence) does not depend on the trigger', 1),
++ ('perf-loop-enabled',
++  'SELECT ''ok'' AS expected, CASE WHEN COALESCE((SELECT value FROM ops_config WHERE key = ''perf_loop_enabled''), '''') <> ''1'' THEN ''the perf loop is paused again (perf_loop_enabled is not 1)'' WHEN NOT EXISTS (SELECT 1 FROM ops_config WHERE key = ''perf_pin:q08-cadence'') OR NOT EXISTS (SELECT 1 FROM ops_config WHERE key = ''q08_max_per_day'') THEN ''the q08 cadence pin or the cap it protects is missing, so the loop could search the owners cap'' ELSE ''ok'' END AS observed',
++  'state probe: the loop runs again behind PERF-PIN-1, which is the alternate to the old pause', 1),
++ ('research-admission-cap',
++  'SELECT ''ok'' AS expected, CASE WHEN EXISTS (SELECT 1 FROM idea_proposals WHERE rationale LIKE ''[research admission cap%'' AND status NOT IN (''triaged_hold'', ''triaged_accepted'', ''ensemble-registered'')) THEN ''an admission-cap row left the hold without being re-queued (it was rejected or lost)'' WHEN NOT EXISTS (SELECT 1 FROM idea_proposals WHERE triaged_at > strftime(''%Y-%m-%dT%H:%M:%SZ'', ''now'', ''-24 hours'')) THEN ''idea triage recorded nothing in 24 h, so held cap rows are not being re-queued'' ELSE ''ok'' END AS observed',
++  '24 h: triage runs every cycle and re-queues held cap rows oldest first; idea-hub/owner-admission-bypass.test.mjs pins the owner bypass', 1),
++ ('tool_error_exclusions',
++  'SELECT ''ok'' AS expected, CASE WHEN NOT EXISTS (SELECT 1 FROM sqlite_master WHERE type = ''view'' AND name = ''tool_failures_excluded_24h'') THEN ''the tool_failures_excluded_24h view is missing, so excluded errors are no longer listed'' WHEN NOT EXISTS (SELECT 1 FROM sqlite_master WHERE type = ''view'' AND name = ''tool_failures_24h'' AND sql LIKE ''%failure_class%'') THEN ''tool_failures_24h no longer carries failure_class'' WHEN EXISTS (SELECT 1 FROM tool_error_exclusions WHERE rationale IS NULL OR trim(rationale) = '''') THEN ''an exclusion pattern has no rationale'' ELSE ''ok'' END AS observed',
++  'state probe: every excluded error stays listed with its class and every pattern keeps its rationale', 1),
++ ('tracker-mass-flip-guard',
++  'SELECT ''ok'' AS expected, CASE WHEN COALESCE((SELECT updated_at FROM tracker_sync_state WHERE k = ''last_run''), '''') < strftime(''%Y-%m-%dT%H:%M:%SZ'', ''now'', ''-2 hours'') THEN ''the tracker sync recorded no run in 2 h'' WHEN NOT EXISTS (SELECT 1 FROM gh_issue_links WHERE d1_status IS NOT NULL AND synced_at > strftime(''%Y-%m-%dT%H:%M:%SZ'', ''now'', ''-24 hours'')) THEN ''no gh_issue_links row refreshed its d1_status in 24 h, so a mass flip cannot be explained'' ELSE ''ok'' END AS observed',
++  '2 h for the sync run, 24 h for the d1_status refresh the guard reads to tell a D1 burst from drift', 1),
++ ('control-alternate-probes',
++  'SELECT ''ok'' AS expected, CASE WHEN NOT EXISTS (SELECT 1 FROM remediation_contracts WHERE class = ''fm-control-alternate-undrilled'' AND status = ''active'') THEN ''the fm-control-alternate-undrilled detector contract is missing or not active'' WHEN NOT EXISTS (SELECT 1 FROM sqlite_master WHERE type = ''view'' AND name = ''v_control_alternate_untested'') THEN ''v_control_alternate_untested is missing'' WHEN COALESCE((SELECT controls_untested_without_probe FROM v_control_alternate_untested), 1) > 0 THEN ''a control with an alternate has no probe and no tested date'' ELSE ''ok'' END AS observed',
++  'the detector contract runs hourly from the remediation consumer and needs no worker: it is the alternate to the chaos drills second pass', 1);
++
++UPDATE control_registry SET evidence = evidence || ' | CONTROL-ALT-PROBES-1 2026-10-19: probed by its control_alternate_probes row, which the chaos drill runs once CONTROL-ALT-PROBES-RUNNER-1 lands, and only a passing probe stamps alternate_tested_at'
++WHERE control IN (SELECT control FROM control_alternate_probes) AND evidence NOT LIKE '%CONTROL-ALT-PROBES-1 2026-10-19%';
++
++INSERT OR IGNORE INTO control_registry (control, location, kind, guards_against, critical_path, disposition, disposition_state, alternate_path, alternate_tested_at, evidence, issue_id) VALUES
++ ('control-alternate-probes', 'qnfo-audit.control_alternate_probes (read by v_control_alternate_status and v_control_alternate_untested, run by the qnfo-fleet-control chaos drill once CONTROL-ALT-PROBES-RUNNER-1 lands)', 'guard',
++  'a control alternate path declared tested once by hand that nothing re-runs, so its alternate_tested_at decays unseen', 0, 'keep', 'applied',
++  'the fm-control-alternate-undrilled detector contract and the v_control_alternate_untested view read the table without the worker, and any probe_sql can be run by hand as a SELECT',
++  NULL, 'CONTROL-ALT-PROBES-1 2026-10-19: 23 read-only probes, 22 live read-only runs passed on 2026-10-19 and the 23rd (this row) needs the objects this file creates. Not stamped: the chaos drill stamps it on its first passing run (CONTROL-ALT-PROBES-RUNNER-1).', 2826);
++
++CREATE VIEW IF NOT EXISTS v_control_alternate_status AS
++SELECT c.control AS control, c.critical_path AS critical_path, c.disposition AS disposition, c.disposition_state AS disposition_state,
++  c.alternate_path AS alternate_path, c.alternate_tested_at AS alternate_tested_at,
++  p.enabled AS probe_enabled, p.last_run_at AS last_run_at, p.last_pass AS last_pass, p.last_pass_at AS last_pass_at, p.last_observed AS last_observed,
++  p.window_note AS window_note,
++  CASE
++    WHEN c.alternate_path IS NULL OR trim(c.alternate_path) = '' THEN 'no-alternate'
++    WHEN c.disposition = 'remove' AND c.disposition_state = 'applied' THEN 'removed'
++    WHEN p.control IS NULL AND lower(trim(c.alternate_path)) LIKE 'none needed%' AND c.evidence LIKE '%ALTERNATE-NOT-EXERCISABLE%' THEN 'not-exercisable'
++    WHEN p.control IS NULL THEN 'no-probe'
++    WHEN p.enabled <> 1 THEN 'probe-disabled'
++    WHEN p.last_run_at IS NULL THEN 'probe-never-run'
++    WHEN p.last_pass IS NOT 1 THEN 'probe-failing'
++    WHEN p.last_pass_at IS NULL OR p.last_pass_at < strftime('%Y-%m-%dT%H:%M:%SZ', 'now', '-480 minutes') THEN 'probe-stale'
++    ELSE 'drilled'
++  END AS drill_state
++FROM control_registry c LEFT JOIN control_alternate_probes p ON p.control = c.control;
++
++CREATE VIEW IF NOT EXISTS v_control_alternate_untested AS
++SELECT
++  (SELECT COUNT(*) FROM control_registry WHERE critical_path = 1 AND NOT (disposition = 'remove' AND disposition_state = 'applied') AND alternate_tested_at IS NULL) AS critical_untested_by_register,
++  (SELECT COUNT(*) FROM v_control_alternate_status WHERE critical_path = 1 AND drill_state NOT IN ('no-alternate', 'removed', 'not-exercisable', 'drilled')) AS critical_untested_by_probe,
++  (SELECT COUNT(*) FROM v_control_alternate_status WHERE critical_path = 1 AND drill_state IN ('probe-disabled', 'probe-never-run', 'probe-failing', 'probe-stale')) AS critical_probe_not_drilled,
++  (SELECT COUNT(*) FROM v_control_alternate_status WHERE critical_path = 1 AND drill_state = 'no-probe') AS critical_without_probe,
++  (SELECT COUNT(*) FROM v_control_alternate_status WHERE drill_state = 'no-probe' AND alternate_tested_at IS NULL) AS controls_untested_without_probe,
++  (SELECT COUNT(*) FROM v_control_alternate_status WHERE drill_state = 'no-probe' AND alternate_tested_at IS NOT NULL) AS controls_hand_stamped_without_probe,
++  (SELECT COUNT(*) FROM v_control_alternate_status WHERE drill_state = 'probe-failing') AS probes_failing,
++  (SELECT COUNT(*) FROM control_alternate_probes WHERE enabled = 1) AS probes_enabled,
++  (SELECT COUNT(*) FROM control_alternate_probes) AS probes_total;
++
++DROP VIEW IF EXISTS v_path_coverage_gaps;
++CREATE VIEW v_path_coverage_gaps AS
++SELECT
++  'control_registry' AS source,
++  control AS process,
++  kind AS path_kind,
++  CASE
++    WHEN alternate_path IS NULL OR trim(alternate_path) = '' THEN 'no-alternate'
++    WHEN alternate_tested_at IS NULL AND lower(trim(alternate_path)) LIKE 'none needed%' AND evidence LIKE '%ALTERNATE-NOT-EXERCISABLE%' THEN 'alternate-not-exercisable'
++    WHEN alternate_tested_at IS NULL THEN 'alternate-untested'
++    ELSE 'ok'
++  END AS path_state,
++  alternate_path AS alternate,
++  alternate_tested_at
++FROM control_registry
++UNION ALL
++SELECT
++  'process_contracts' AS source,
++  process,
++  'contract-paths' AS path_kind,
++  CASE
++    WHEN json_valid(paths_json) = 0 THEN 'paths-not-json'
++    WHEN json_array_length(paths_json) < 2 THEN 'single-path'
++    WHEN json_array_length(paths_json) = 2 THEN 'two-paths-no-spare'
++    ELSE 'ok'
++  END AS path_state,
++  NULL AS alternate,
++  NULL AS alternate_tested_at
++FROM process_contracts;
++
++DROP VIEW IF EXISTS v_path_coverage_violations;
++CREATE VIEW v_path_coverage_violations AS
++SELECT source, process, path_kind, path_state, alternate, alternate_tested_at
++FROM v_path_coverage_gaps
++WHERE path_state NOT IN ('ok', 'alternate-not-exercisable');
++
++INSERT OR IGNORE INTO failure_modes (fm_key, failure_mode, root_cause, remediation, detector, probe_class, first_seen, issue_id, trigger_condition, symptom, blast_radius)
++VALUES ('control-alternate-undrilled', 'a control declares an alternate path that nothing re-runs, so its tested date is a hand-written stamp that decays',
++  'CHAOS-DRILL-1 reads only spof_alternate_probes, and control_registry.alternate_tested_at had no writer except a session: 25 declared alternates sat untested on 2026-10-19 and the 7 critical ones were then stamped by hand',
++  'control_alternate_probes holds a read-only expected/observed probe per exercisable control and the chaos drill runs them and stamps alternate_tested_at on a pass (CONTROL-ALT-PROBES-1, runner CONTROL-ALT-PROBES-RUNNER-1)',
++  'the fm-control-alternate-undrilled contract counts controls with an alternate, no tested date and no probe row (v_control_alternate_untested.controls_untested_without_probe)',
++  'fm-control-alternate-undrilled', strftime('%Y-%m-%dT%H:%M:%SZ', 'now'), 2826,
++  'a control_registry row with alternate_path set, alternate_tested_at NULL and no control_alternate_probes row',
++  'v_path_coverage_violations alternate-untested, controls_on_critical_path_untested, a tested date older than any evidence',
++  'the doctrine scorecard, the path coverage views and the CHAOS-DRILL-FAILED-1 control issues');
++
++INSERT OR IGNORE INTO remediation_contracts (class, issue_id, precondition, action, verify_probe, verify_transport, max_attempts, escalate_to, expected_cadence_h, status, module, next_due_at)
++VALUES ('fm-control-alternate-undrilled', NULL, 'CONTROL-ALT-PROBES-1', 'failure-mode detector',
++  'SELECT ''0'' AS expected, CAST((SELECT controls_untested_without_probe FROM v_control_alternate_untested) AS TEXT) AS observed',
++  'd1-query', 3, 'qnfo-fleet-control', 1, 'active', 'failure-mode', datetime('now'));
++INSERT INTO agent_issues (title, description, source, category, priority, status, created_at, updated_at)
++SELECT 'CONTROL-ALT-PROBES-RUNNER-1: chaosDrill never reads control_alternate_probes, so no control alternate is re-drilled',
++  'Charter pillar: autonomy. CONTROL-ALT-PROBES-1 (migrations/2026-10-19-control-alternate-probes.sql) created control_alternate_probes with 23 read-only expected/observed probes (the 7 critical controls first), the views v_control_alternate_status and v_control_alternate_untested and the fm-control-alternate-undrilled detector. qnfo-fleet-control chaosDrill (CHAOS-DRILL-1) reads only spof_alternate_probes, so nothing runs those probes and control_registry.alternate_tested_at still has no writer but a session (agent_issues 2826 and 2880). Change in chaosDrill: after the loop over the spof probes and before the plan is built, read SELECT control, probe_sql FROM control_alternate_probes WHERE enabled = 1 ORDER BY control inside a try/catch (a missing table must not break the spof pass), judge each row with chaosJudge as a spof row is judged, write last_run_at, last_pass, last_observed and last_pass_at on the row (same CASE as the spof update), and push a verdict whose component is control:<name> so chaosPlan files one deduped CHAOS-DRILL-FAILED-1: control:<name> issue and closes it on the next pass. In the stamp loop a stamp entry that starts with control: runs UPDATE control_registry SET alternate_tested_at = nowIso, reviewed_at = nowIso WHERE control = ?. Keep chaosUntested over the spof rows only and add controls=N and control_pass=M to the chaos-drill event text. Test in qnfo-fleet-control/chaos-drill.test.mjs: a passing control probe stamps alternate_tested_at, a failing probe leaves it unchanged and files exactly one issue, a second failing run files none, a later pass closes it, a disabled row is skipped, a missing table leaves the spof pass intact. Raise the minor version (VERSION-MINOR-CAPABILITY-1: the worker now decides on its own to mark controls tested). After the deploy force one drill (POST /chaos-drill?force=1 on qnfo-fleet-control) and read SELECT * FROM v_control_alternate_untested, then give the controls counted in controls_hand_stamped_without_probe their probes. Then replace the age probes of issue-2826 and issue-2880 (UPDATE on class issue-<id>) with their substance: for 2826 expected 0 and observed COUNT(*) FROM v_path_coverage_violations WHERE path_state = ''alternate-untested'', for 2880 expected 0 and observed critical_untested_by_probe FROM v_control_alternate_untested. The probe set was run read-only against qnfo-audit on 2026-10-19 and 22 of 22 control probes passed, so a first-drill failure is a real broken alternate.' || char(10) || 'code-task: repo=qnfo-workers path=qnfo-fleet-control/worker.js' || char(10) || 'code-anchor: var openTitles = open.map(function(r) { return r.title; });' || char(10) || 'code-probe: {"paths": ["qnfo-fleet-control/worker.js"], "contains": "FROM control_alternate_probes WHERE enabled = 1"}',
++  'migration-2026-10-19-control-alternate-probes', 'reliability', 'high', 'open', CAST(strftime('%s', 'now') AS INTEGER) * 1000, CAST(strftime('%s', 'now') AS INTEGER) * 1000
++WHERE NOT EXISTS (SELECT 1 FROM agent_issues WHERE title LIKE 'CONTROL-ALT-PROBES-RUNNER-1:%' AND status = 'open');
++
++UPDATE remediation_contracts SET verify_transport = 'code-read', verify_probe = '{"paths": ["qnfo-fleet-control/worker.js"], "contains": "FROM control_alternate_probes WHERE enabled = 1"}', status = 'active', module = 'code-probe-line-v1', attempts = 0, last_verdict = NULL,
++  next_due_at = datetime('now'), expected_cadence_h = 6, max_attempts = 3, precondition = 'code-probe line in the issue (PROBE-BIRTH-2)',
++  action = 'the doer changes the code on main, scripts/remediation_consumer.py reads its checkout of main and a pass closes the issue'
++WHERE class = 'issue-' || (SELECT MAX(id) FROM agent_issues WHERE title LIKE 'CONTROL-ALT-PROBES-RUNNER-1:%' AND status = 'open');
++
++INSERT INTO decision_log (actor, assumption, action, evidence, outcome, blast_radius, rollback_path, capability_gain, predicted_outcome, reach_gain, surfaces_tested)
++SELECT 'session_01QpQv19uh1padRwZ3u1r766',
++  'a control alternate counts as tested only while a probe on its own evidence keeps passing, a date written once by hand decays, and chaosDrill reads only spof_alternate_probes so it cannot run a second table without a worker change',
++  'CONTROL-ALT-PROBES-1: control_alternate_probes with 23 read-only expected/observed probes (the 7 critical controls first), views v_control_alternate_status and v_control_alternate_untested, the state alternate-not-exercisable in v_path_coverage_gaps, failure mode control-alternate-undrilled with its detector; the chaos drill second pass is filed as CONTROL-ALT-PROBES-RUNNER-1 with a code-task line',
++  'read 2026-10-19T13:00Z: control_registry 75 rows, 18 untested, v_path_coverage_violations alternate-untested 18, the 7 critical controls stamped by hand at 12:55Z (controls_on_critical_path_untested 7 to 0); qnfo-fleet-control 0.37.0 chaosDrill reads only spof_alternate_probes; the 22 control probes ran read-only against qnfo-audit and 22 passed; 34 monitoring rows with an open twin are the parked-twin state the enum probe exempts',
++  'migration only, no worker change: nothing stamps alternate_tested_at from the new table until CONTROL-ALT-PROBES-RUNNER-1 lands',
++  'one new table, two new views, two redefined views (v_path_coverage_gaps and v_path_coverage_violations, no other reader), evidence text on 22 control_registry rows, one control row, one failure mode, one detector contract, one issue',
++  'the Rollback line of migrations/2026-10-19-control-alternate-probes.sql',
++  'the fleet can say which control alternates are proven by a recent probe instead of a hand-written date',
++  'on apply v_path_coverage_violations alternate-untested falls from 18 to 16 (3 not-exercisable rows leave it, the probe set joins it); after CONTROL-ALT-PROBES-RUNNER-1 deploys and one forced drill it reads 0 and v_control_alternate_untested.critical_untested_by_probe reads 0 with every probe passing',
++  'none', 'd1:qnfo-audit read-only probe runs, node:sqlite fixtures in migrations/control-alternate-probes.test.mjs'
++WHERE NOT EXISTS (SELECT 1 FROM decision_log WHERE action LIKE 'CONTROL-ALT-PROBES-1:%');
+diff --git a/migrations/control-alternate-probes.test.mjs b/migrations/control-alternate-probes.test.mjs
+new file mode 100644
+index 00000000..671d1eee
+--- /dev/null
++++ b/migrations/control-alternate-probes.test.mjs
+@@ -0,0 +1,492 @@
++// CONTROL-ALT-PROBES-1 offline suite: runs migrations/2026-10-19-control-alternate-probes.sql on SQLite (node:sqlite) over fixtures built from the
++// live qnfo-audit schemas. Proves: the table has the columns the brief names and is seeded with one read-only expected/observed probe per exercisable
++// control (the 7 critical controls first); every probe passes on a fixture where its alternate is in place and FAILS, with a reason, on a fixture where
++// that alternate is broken (one failing fixture per control, several for the guards); the verdicts are judged by the real chaosJudge sliced from
++// qnfo-fleet-control/worker.js; the live enum and evidence triggers (their sqlite_master text) do their job when fired; the views v_control_alternate_status
++// and v_control_alternate_untested compute the critical-path count from the table and agree with the scorecard expression; v_path_coverage_gaps reads a
++// recorded ALTERNATE-NOT-EXERCISABLE row as its own state (and the old definition does not); the fm- detector passes at birth and fails for a control with
++// an alternate, no tested date and no probe; the runner issue carries a precise code-task / code-anchor / code-probe; re-applying changes nothing.
++// Run: node migrations/control-alternate-probes.test.mjs
++import { DatabaseSync } from "node:sqlite";
++import { readFileSync } from "node:fs";
++import { dirname, join } from "node:path";
++import { fileURLToPath } from "node:url";
++
++const here = dirname(fileURLToPath(import.meta.url));
++const MIGRATION = join(here, "2026-10-19-control-alternate-probes.sql");
++const sql = readFileSync(MIGRATION, "utf8");
++const workerSrc = readFileSync(join(here, "..", "qnfo-fleet-control", "worker.js"), "utf8");
++
++let pass = 0, fail = 0;
++const ok = (c, m, d) => { if (c) pass++; else { fail++; console.log("FAIL " + m + (d === undefined ? "" : " :: " + JSON.stringify(d).slice(0, 500))); } };
++
++// ---- the real judge, sliced from the worker (the same function the chaos drill uses) ----
++const BEGIN = "// ---- CHAOS-DRILL-1:BEGIN", END = "// ---- CHAOS-DRILL-1:END ----";
++const a = workerSrc.indexOf(BEGIN), b = workerSrc.indexOf(END);
++ok(a > 0 && b > a, "chaos drill block markers present in qnfo-fleet-control/worker.js");
++let block = workerSrc.slice(a, b);
++block = block.slice(0, block.indexOf("async function chaosExercise("));
++const { chaosJudge, chaosPlan } = new Function("__name", block + "\nreturn { chaosJudge, chaosPlan };")(function () {});
++
++// ---- fixture: live schemas, minimal rows ----
++const NOW = Date.now();
++const iso = (minAgo) => new Date(NOW - minAgo * 6e4).toISOString();
++const ms = (minAgo) => NOW - minAgo * 6e4;
++const TODAY = "2026-10-19";
++
++const SCHEMA = `
++CREATE TABLE control_registry (
++  control TEXT PRIMARY KEY, location TEXT NOT NULL,
++  kind TEXT NOT NULL CHECK (kind IN ('hold', 'filter', 'pause', 'kill-switch', 'gate', 'cap', 'guard', 'lease')),
++  guards_against TEXT, critical_path INTEGER NOT NULL DEFAULT 0,
++  disposition TEXT NOT NULL CHECK (disposition IN ('remove', 'demote', 'replace', 'keep')),
++  disposition_state TEXT NOT NULL DEFAULT 'planned' CHECK (disposition_state IN ('planned', 'applied')),
++  alternate_path TEXT, alternate_tested_at TEXT, evidence TEXT NOT NULL, issue_id INTEGER,
++  reviewed_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')));
++CREATE TABLE process_contracts (process TEXT PRIMARY KEY, paths_json TEXT);
++CREATE TABLE agent_issues (id INTEGER PRIMARY KEY AUTOINCREMENT, title TEXT, description TEXT, source TEXT, category TEXT DEFAULT 'optimization',
++  priority TEXT DEFAULT 'medium', status TEXT DEFAULT 'open', linked_session TEXT, created_at INTEGER, updated_at INTEGER,
++  pipeline_stage TEXT DEFAULT NULL, predicate_id TEXT, recheck_count INTEGER DEFAULT 0, close_channel TEXT);
++CREATE TABLE remediation_contracts (class TEXT PRIMARY KEY, issue_id INTEGER, precondition TEXT NOT NULL, action TEXT NOT NULL, verify_probe TEXT NOT NULL,
++  verify_transport TEXT NOT NULL, max_attempts INTEGER NOT NULL DEFAULT 3, escalate_to TEXT NOT NULL, expected_cadence_h INTEGER, status TEXT DEFAULT 'active',
++  ts TEXT DEFAULT (datetime('now')), last_attempt_at TEXT, last_verdict TEXT, module TEXT, budget_ms INTEGER DEFAULT 45000, next_due_at TEXT,
++  max_items INTEGER DEFAULT 5, requires_container INTEGER DEFAULT 0, attempts INTEGER DEFAULT 0);
++CREATE TABLE failure_modes (fm_key TEXT PRIMARY KEY, failure_mode TEXT NOT NULL, root_cause TEXT NOT NULL, remediation TEXT NOT NULL, detector TEXT NOT NULL,
++  probe_class TEXT, first_seen TEXT NOT NULL, issue_id INTEGER, trigger_condition TEXT, symptom TEXT, blast_radius TEXT);
++CREATE TABLE decision_log (id INTEGER PRIMARY KEY AUTOINCREMENT, ts TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')), actor TEXT NOT NULL,
++  assumption TEXT NOT NULL, action TEXT NOT NULL, evidence TEXT NOT NULL, outcome TEXT NOT NULL, blast_radius TEXT NOT NULL, rollback_path TEXT NOT NULL,
++  capability_gain TEXT, predicted_outcome TEXT, reach_gain TEXT, surfaces_tested TEXT, outcome_matched INTEGER);
++CREATE TABLE status_canon (raw_value TEXT PRIMARY KEY, canonical TEXT NOT NULL, is_open INTEGER NOT NULL, is_terminal INTEGER NOT NULL, note TEXT);
++CREATE TABLE priority_canon (raw_value TEXT PRIMARY KEY, canonical TEXT NOT NULL, rank INTEGER NOT NULL, note TEXT);
++CREATE TABLE fleet_tick (id INTEGER PRIMARY KEY AUTOINCREMENT, ts TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')), source TEXT NOT NULL);
++CREATE TABLE cloud_ops_events (id TEXT PRIMARY KEY, ts TEXT, kind TEXT, text TEXT, meta TEXT, job TEXT, status TEXT);
++CREATE TABLE ops_config (key TEXT PRIMARY KEY, value TEXT, note TEXT, updated_at TEXT DEFAULT (datetime('now')));
++CREATE TABLE pipeline_flags (key TEXT PRIMARY KEY, value TEXT NOT NULL, updated_at TEXT);
++CREATE TABLE idea_proposals (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT, idea TEXT NOT NULL, contact TEXT, status TEXT DEFAULT 'new', ip_hash TEXT,
++  created_at TEXT DEFAULT (datetime('now')), decision TEXT, score REAL, rationale TEXT, triaged_at TEXT);
++CREATE TABLE signals (id TEXT PRIMARY KEY, ts TEXT, source TEXT, source_ref TEXT, content TEXT, open_questions TEXT, evidential_weight REAL, domain TEXT,
++  status TEXT DEFAULT 'new', decision TEXT, score REAL, created_at TEXT);
++CREATE TABLE research_queue (id TEXT PRIMARY KEY, source TEXT, source_id TEXT, idea TEXT, summary TEXT, score REAL, decision TEXT, status TEXT DEFAULT 'queued',
++  claimed_at TEXT, completed_at TEXT, paper_slug TEXT, created_at TEXT, stage TEXT, agent_task_id TEXT, attempt INTEGER DEFAULT 0, revise_count INTEGER DEFAULT 0,
++  context TEXT, published_at TEXT, doi TEXT, paper_url TEXT, error TEXT, recover_count INTEGER DEFAULT 0, terminal_rearms INTEGER DEFAULT 0, publish_due_at TEXT);
++CREATE TABLE research_hold_seen (id TEXT PRIMARY KEY, first_seen TEXT NOT NULL);
++CREATE TABLE queue_sla_actions (id INTEGER PRIMARY KEY AUTOINCREMENT, stuck_type TEXT, n INTEGER, note TEXT);
++CREATE TABLE social_media_posts (id TEXT PRIMARY KEY, platform TEXT NOT NULL, published_at TEXT, status TEXT DEFAULT 'published');
++CREATE TABLE deployment_history (id INTEGER PRIMARY KEY AUTOINCREMENT, action TEXT, status TEXT, deployed_at TEXT);
++CREATE TABLE analytics_metric_triggers (id INTEGER PRIMARY KEY AUTOINCREMENT, metric_key TEXT UNIQUE, enabled INTEGER DEFAULT 1);
++CREATE TABLE metric_registry (metric TEXT PRIMARY KEY, last_value TEXT, last_refreshed TEXT);
++CREATE TABLE migration_runs (id INTEGER PRIMARY KEY AUTOINCREMENT, file TEXT, status TEXT NOT NULL, applied_at TEXT);
++CREATE TABLE ops_jobs (id TEXT PRIMARY KEY, status TEXT NOT NULL DEFAULT 'queued', model TEXT, strategy TEXT, payload TEXT, response TEXT, tool_log TEXT, error TEXT,
++  created_at TEXT, updated_at TEXT, origin TEXT, surfaced_at TEXT);
++CREATE TABLE queue_sla (stuck_type TEXT PRIMARY KEY, queue TEXT, definition TEXT);
++CREATE TABLE issue_lifecycle (id INTEGER PRIMARY KEY AUTOINCREMENT, ts TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')), issue_id INTEGER, event TEXT);
++CREATE TABLE issue_triage (issue_id INTEGER PRIMARY KEY, rc TEXT NOT NULL, triage_state TEXT NOT NULL DEFAULT 'triaged', owner TEXT NOT NULL, sla_due_at TEXT NOT NULL,
++  triaged_at TEXT DEFAULT (datetime('now')), remediation TEXT, close_evidence TEXT, reopened_count INTEGER NOT NULL DEFAULT 0);
++CREATE TABLE tool_error_exclusions (pattern TEXT PRIMARY KEY, err_class TEXT NOT NULL, rationale TEXT, added_at TEXT DEFAULT (datetime('now')));
++CREATE TABLE tracker_sync_state (k TEXT PRIMARY KEY, v TEXT, updated_at TEXT);
++CREATE TABLE gh_issue_links (issue_id INTEGER PRIMARY KEY, gh_number INTEGER NOT NULL UNIQUE, gh_state TEXT, d1_status TEXT, synced_at TEXT, gh_close_reason TEXT);
++CREATE VIEW v_human_action_gate AS SELECT 'owner-request-issue' AS source, 'receipt' AS gate;
++CREATE VIEW tool_failures_excluded_24h AS SELECT pattern, err_class FROM tool_error_exclusions;
++CREATE VIEW tool_failures_24h AS SELECT pattern AS tool, err_class AS failure_class FROM tool_error_exclusions;
++-- the live trigger texts of the guards the probes read (sqlite_master, qnfo-audit, 2026-10-19)
++CREATE TRIGGER agent_issues_normalise_tick AFTER INSERT ON fleet_tick
++BEGIN
++  UPDATE agent_issues SET
++    description = COALESCE(description, '') || char(10) || 'NO-SILENT-DROP-1: unmapped status/priority "' || COALESCE(status, '') || '"/"' || COALESCE(priority, '') || '" normalised by the fleet tick instead of refused.',
++    status = CASE WHEN status IS NULL OR EXISTS (SELECT 1 FROM status_canon s WHERE s.raw_value = agent_issues.status) THEN status ELSE 'open' END,
++    priority = CASE WHEN priority IS NULL OR EXISTS (SELECT 1 FROM priority_canon p WHERE p.raw_value = agent_issues.priority) THEN priority ELSE 'medium' END
++  WHERE (status IS NOT NULL AND NOT EXISTS (SELECT 1 FROM status_canon s WHERE s.raw_value = agent_issues.status))
++     OR (priority IS NOT NULL AND NOT EXISTS (SELECT 1 FROM priority_canon p WHERE p.raw_value = agent_issues.priority));
++END;
++CREATE TRIGGER agent_issues_evidence_annotate_ai AFTER INSERT ON agent_issues
++WHEN NEW.source LIKE 'cloud_ops_events:%' AND NOT EXISTS (SELECT 1 FROM cloud_ops_events e WHERE e.id = replace(NEW.source, 'cloud_ops_events:', ''))
++BEGIN
++  UPDATE agent_issues SET description = COALESCE(description, '') || char(10) || 'NO-SILENT-DROP-1: the cited evidence event ' || NEW.source || ' does not exist; the issue was kept and needs its evidence re-attached.'
++  WHERE id = NEW.id;
++END;
++CREATE TRIGGER research_hold_expiry_tick AFTER INSERT ON fleet_tick
++BEGIN
++  DELETE FROM research_hold_seen WHERE id NOT IN (SELECT id FROM research_queue WHERE status = 'held');
++  INSERT OR IGNORE INTO research_hold_seen (id, first_seen)
++    SELECT id, strftime('%Y-%m-%dT%H:%M:%SZ', 'now') FROM research_queue WHERE status = 'held';
++  UPDATE research_queue SET status = 'review', stage = 'publish', claimed_at = NULL,
++      error = substr('HOLD-EXPIRY-1 ' || strftime('%Y-%m-%dT%H:%M:%SZ', 'now') || ': released after 6 h held (a hold needs an expiry). Was: ' || COALESCE(error, ''), 1, 500)
++  WHERE COALESCE((SELECT value FROM ops_config WHERE key = 'queue_sla_autofix'), 'on') <> 'off'
++    AND status = 'held' AND instr(COALESCE(error, ''), 'Revert: status review, stage publish') > 0
++    AND id IN (SELECT id FROM research_hold_seen WHERE first_seen < strftime('%Y-%m-%dT%H:%M:%SZ', 'now', '-360 minutes'));
++END;
++CREATE TRIGGER owner_request_requires_card BEFORE UPDATE OF status ON agent_issues BEGIN SELECT 1; END;
++CREATE TRIGGER agent_issues_birth_contract_ins AFTER INSERT ON agent_issues WHEN NEW.status = 'open' AND NOT EXISTS (SELECT 1 FROM remediation_contracts c WHERE c.issue_id = NEW.id)
++BEGIN INSERT OR IGNORE INTO remediation_contracts (class, issue_id, precondition, action, verify_probe, verify_transport, max_attempts, escalate_to, expected_cadence_h, status, module)
++  VALUES ('issue-' || NEW.id, NEW.id, 'born with the issue (ORPHAN-GUARD-BIRTH-1)', 'needs-machine-probe', 'needs-machine-probe', 'd1-query', 3, 'qnfo-fleet-control', 1, 'needs-machine-probe', 'birth'); END;
++`;
++
++// control_registry rows: [control, critical, disposition, state, alternate, tested_at, evidence]
++const CONTROLS = [
++  ["agent-issues-enum-guard", 1, "replace", "applied", "accept then normalise", null, "RAISE(ABORT) became a silent drop"],
++  ["agent-issues-evidence-guard", 1, "replace", "applied", "accept and annotate", null, "abort dropped the issue"],
++  ["idea-triaged-hold-owner-and-reentry", 1, "replace", "planned", "owner ideas accepted, re-entry as a rate", null, "31 held ideas released"],
++  ["research-citation-unverified-hold", 1, "keep", "applied", "second lookup, expiry after 6 h", null, "7 of 77 runs unverified"],
++  ["research-gate-structure", 1, "keep", "applied", "a failing first pass goes to revise", null, "sections 5 to 7 absent"],
++  ["research-review-hard-gate", 1, "keep", "applied", "measure restores the advance", null, "158 of 421 steps"],
++  ["zenodo-enabled", 1, "demote", "planned", "in-house publication", null, "the switch mirrors an outside refusal"],
++  ["social-weekly-caps", 0, "demote", "applied", "spacing keeps posts spread", null, "raised by owner directive"],
++  ["cf-obs-nested-too-deep-pin", 0, "demote", "applied", "holds only while seen inside 72 h", null, "7 of 10 assertions pass"],
++  ["compat-advance-review-gate", 0, "keep", "applied", "withholds only the date change", null, "runs each branch"],
++  ["gh_app_primary", 0, "keep", "applied", "per-request fallback", null, "0.32.0"],
++  ["improvement-loop-superseded-marker", 0, "keep", "applied", "successor carries its own trigger", null, "10 of 19 assertions pass"],
++  ["migration-header-guard", 0, "keep", "applied", "the remediation consumer sweep", null, "a headerless file fails --check"],
++  ["migration-headerless-allowlist", 0, "demote", "planned", "none needed: a file on the list is simply not checked", null, "grandfather clause only"],
++  ["ops-jobs-payload-redaction", 0, "keep", "applied", "system and user messages stay verbatim", null, "TRADEOFF: replay sees redacted output"],
++  ["ops-jobs-terminal-sweep", 0, "keep", "applied", "none needed: a failure only keeps rows longer", null, "cancelled was never swept"],
++  ["owner-request-receipt-gate", 0, "keep", "applied", "autonomy_first_gate = off stops the reroute", null, "5 of 7 receipts"],
++  ["owner-request-requires-card", 0, "keep", "applied", "the closure is also recorded in issue_lifecycle", null, "kept as live"],
++  ["perf-loop-enabled", 0, "replace", "applied", "PERF-PIN-1", null, "paused 2026-10-06"],
++  ["research-admission-cap", 0, "demote", "applied", "a generated accept over the cap waits as triaged_hold", null, "before 1.10.12"],
++  ["tool_error_exclusions", 0, "keep", "applied", "tool_failures_excluded_24h lists every excluded row", null, "every pattern carries a rationale"],
++  ["tracker-mass-flip-guard", 0, "demote", "applied", "a disagreement is explained when D1 moved", null, "the guard had never fired"],
++  // not exercisable, recorded reason (live: research-owner-hold and command-drain-key are removed, outreach-consent-gate is kept)
++  ["research-owner-hold", 1, "remove", "applied", "none needed", null, "19 rows released | PATHS-UNTESTED-1: ALTERNATE-NOT-EXERCISABLE: the declared alternate is none needed"],
++  ["command-drain-key", 0, "remove", "applied", "none needed", null, "removed | PATHS-UNTESTED-1: ALTERNATE-NOT-EXERCISABLE: the declared alternate is none needed"],
++  ["outreach-consent-gate", 0, "keep", "applied", "none needed: protects people outside the fleet", null, "never on a research path | PATHS-UNTESTED-1: ALTERNATE-NOT-EXERCISABLE: the declared alternate is none needed"],
++  // already tested by hand, no probe: stays tested, shows as hand-stamped without a probe
++  ["canary-functional", 1, "keep", "applied", "a second canary", "2026-10-12T08:30:00Z", "stamped by hand"],
++  ["code-merge-max-per-tick", 1, "demote", "applied", "the stale-PR lane", "2026-10-08", "stamped by hand"],
++  // no alternate at all
++  ["bare-control", 0, "keep", "applied", "", null, "no alternate declared"]
++];
++
++function seedGood(db) {
++  for (const c of CONTROLS) db.prepare("INSERT INTO control_registry (control, location, kind, critical_path, disposition, disposition_state, alternate_path, alternate_tested_at, evidence) VALUES (?, 'loc', 'guard', ?, ?, ?, ?, ?, ?)").run(c[0], c[1], c[2], c[3], c[4], c[5], c[6]);
++  db.exec("INSERT INTO process_contracts VALUES ('p-ok', '[1,2,3]'), ('p-single', '[1]'), ('p-two', '[1,2]'), ('p-bad', 'not json')");
++  for (const s of ["open", "closed", "resolved", "wontfix", "OPEN"]) db.prepare("INSERT INTO status_canon VALUES (?, ?, 1, 0, NULL)").run(s, s.toLowerCase());
++  for (const p of ["low", "medium", "high", "critical"]) db.prepare("INSERT INTO priority_canon VALUES (?, ?, 1, NULL)").run(p, p);
++  const cfg = db.prepare("INSERT INTO ops_config (key, value) VALUES (?, ?)");
++  for (const [k, v] of [["research_review_gate", "enforce"], ["gh_app_primary", "on"], ["autonomy_first_gate", "on"], ["perf_loop_enabled", "1"], ["perf_pin:q08-cadence", "owner cap q08_max_per_day (card 58)"], ["q08_max_per_day", "10"], ["queue_sla_autofix", "on"]]) cfg.run(k, v);
++  db.prepare("INSERT INTO pipeline_flags VALUES ('social_channel_caps', '{\"linkedin\":7,\"mastodon\":14,\"twitter\":14,\"substack\":14}', ?)").run(iso(5));
++  const post = db.prepare("INSERT INTO social_media_posts (id, platform, published_at) VALUES (?, ?, ?)");
++  post.run("p1", "buffer-x", iso(60 * 30)); post.run("p2", "buffer-x", iso(60 * 10));
++  post.run("p3", "buffer-substack", iso(60 * 3)); post.run("p4", "buffer-substack", iso(60 * 3 - 20));
++  const ev = db.prepare("INSERT INTO cloud_ops_events (id, ts, kind, status) VALUES (?, ?, ?, ?)");
++  ev.run("e-revise", iso(60), "revise-patch", "ok"); ev.run("e-triage", iso(60), "review-triage", "ok");
++  ev.run("e-compat", iso(60 * 24), "compat-verify", "ok"); ev.run("e-github", iso(60), "github", "ok");
++  db.prepare("INSERT INTO deployment_history (action, status, deployed_at) VALUES ('deploy', 'success', ?)").run(iso(60));
++  db.prepare("INSERT INTO research_queue (id, status, published_at, doi) VALUES ('r1', 'published', ?, NULL)").run(iso(60));
++  db.prepare("INSERT INTO signals (id, ts, source, status) VALUES ('s1', ?, 'artifact_reentry', 'consumed')").run(iso(60 * 24));
++  const idea = db.prepare("INSERT INTO idea_proposals (name, idea, contact, status, rationale, created_at, triaged_at) VALUES (?, 'x', ?, ?, ?, ?, ?)");
++  idea.run("rowan-chat", "chat", "triaged_accepted", "OWNER-IDEA-PRIORITY-1: released", iso(60 * 24 * 3), iso(60));
++  idea.run("owner-import", "owner", "triaged_hold", "withdrawn by owner 2026-10-04: premature", iso(60 * 24 * 5), iso(60));
++  idea.run("auto-scan", null, "triaged_hold", "[research admission cap 300/120] scored", iso(60 * 24), iso(30));
++  const rc = db.prepare("INSERT INTO remediation_contracts (class, precondition, action, verify_probe, verify_transport, escalate_to, status, last_verdict) VALUES (?, 'p', 'a', 'x', 'd1-query', 'e', 'active', ?)");
++  rc.run("fm-trigger-depth-compile", "pass"); rc.run("fm-migration-headerless-silent-skip", "pass"); rc.run("fm-ops-jobs-sweep-status-gap", "pass");
++  const trg = db.prepare("INSERT INTO analytics_metric_triggers (metric_key, enabled) VALUES (?, 1)");
++  trg.run("issues_open_over_120m"); trg.run("open_issues_without_doer_120m");
++  const mr = db.prepare("INSERT INTO metric_registry (metric, last_value, last_refreshed) VALUES (?, '0', ?)");
++  mr.run("issues_open_over_120m"); mr.run("open_issues_without_doer_120m"); mr.run("migrations_unapplied");
++  db.prepare("UPDATE metric_registry SET last_refreshed = ?").run(iso(60));
++  db.prepare("INSERT INTO migration_runs (file, status, applied_at) VALUES ('f.sql', 'ok', ?)").run(iso(60));
++  db.prepare("INSERT INTO ops_jobs (id, status, payload, updated_at) VALUES ('j1', 'succeeded', 'plain request', ?)").run(iso(60 * 24));
++  db.exec("INSERT INTO queue_sla (stuck_type, queue, definition) VALUES ('ops-job-terminal-retained', 'ops_jobs', 'd')");
++  db.prepare("INSERT INTO issue_lifecycle (ts, issue_id, event) VALUES (?, 1, 'dispositioned')").run(iso(60));
++  db.exec("INSERT INTO tool_error_exclusions (pattern, err_class, rationale) VALUES ('bad input', 'caller', 'caller-input errors are not tool defects')");
++  db.prepare("INSERT INTO tracker_sync_state VALUES ('last_run', '{}', ?)").run(iso(10));
++  db.prepare("INSERT INTO gh_issue_links (issue_id, gh_number, d1_status, synced_at) VALUES (1, 101, 'open', ?)").run(iso(10));
++}
++
++function fresh(applyMigration = true) {
++  const db = new DatabaseSync(":memory:");
++  db.exec(SCHEMA);
++  seedGood(db);
++  if (applyMigration) db.exec(sql);
++  return db;
++}
++
++// the probes read date('now') for the one stated expiry (2026-11-19): pin the date so the suite does not turn red on that day
++function runProbe(db, control, today = TODAY) {
++  const row = db.prepare("SELECT probe_sql FROM control_alternate_probes WHERE control = ?").get(control);
++  if (!row) return { missing: true };
++  const probe = row.probe_sql.split("date('now')").join("date('" + today + "')");
++  const before = db.prepare("SELECT total_changes() AS n").get().n;
++  const rows = db.prepare(probe).all();
++  const after = db.prepare("SELECT total_changes() AS n").get().n;
++  const v = chaosJudge(rows);
++  v.readOnly = before === after;
++  v.cols = rows[0] ? Object.keys(rows[0]).join(",") : "";
++  v.rows = rows.length;
++  return v;
++}
++
++// ---- 1. the table, the seeds ----
++const db0 = fresh();
++const cols = db0.prepare("PRAGMA table_info(control_alternate_probes)").all().map((c) => c.name);
++ok(JSON.stringify(cols) === JSON.stringify(["control", "probe_sql", "window_note", "enabled", "last_run_at", "last_pass", "last_pass_at", "last_observed", "created_at"]), "control_alternate_probes has the columns of the brief (control PK, probe_sql, window_note, enabled, last_run_at, last_pass, last_pass_at, last_observed)", cols);
++ok(db0.prepare("PRAGMA table_info(control_alternate_probes)").all().find((c) => c.name === "control").pk === 1, "control is the primary key");
++const seeded = db0.prepare("SELECT control, probe_sql, window_note, enabled FROM control_alternate_probes ORDER BY rowid").all();
++const CRITICAL = ["agent-issues-enum-guard", "agent-issues-evidence-guard", "idea-triaged-hold-owner-and-reentry", "research-citation-unverified-hold", "research-gate-structure", "research-review-hard-gate", "zenodo-enabled"];
++ok(seeded.length === 23, "23 probes are seeded (7 critical, 15 other exercisable controls, the probe set's own control)", seeded.length);
++ok(JSON.stringify(seeded.slice(0, 7).map((r) => r.control)) === JSON.stringify(CRITICAL), "the 7 critical controls come first", seeded.slice(0, 7).map((r) => r.control));
++const names = new Set(CONTROLS.map((c) => c[0]));
++ok(seeded.filter((r) => r.control !== "control-alternate-probes").every((r) => names.has(r.control)), "every seeded probe names a control_registry control");
++ok(!seeded.some((r) => ["research-owner-hold", "command-drain-key", "outreach-consent-gate"].includes(r.control)), "the three not-exercisable controls have no probe (no stamp from a declaration)");
++ok(seeded.every((r) => r.enabled === 1 && r.window_note.length > 20), "every probe is enabled and says how far back its evidence may be");
++const WRITE = /\b(insert|update|delete|drop|alter|create|replace|attach|pragma|vacuum|reindex)\b/i;
++for (const r of seeded) {
++  ok(/^SELECT 'ok' AS expected, /.test(r.probe_sql) && /AS observed$/.test(r.probe_sql), r.control + ": probe is the expected/observed shape");
++  ok(!WRITE.test(r.probe_sql) && !r.probe_sql.includes(";"), r.control + ": probe is a single read-only SELECT (no write keyword, no semicolon)", r.probe_sql.match(WRITE));
++}
++const lastRun = db0.prepare("SELECT COUNT(*) AS n FROM control_alternate_probes WHERE last_run_at IS NOT NULL OR last_pass IS NOT NULL OR last_pass_at IS NOT NULL").get().n;
++ok(lastRun === 0, "nothing is stamped as run by the migration (the runner writes last_run_at)");
++ok(db0.prepare("SELECT COUNT(*) AS n FROM control_registry WHERE alternate_tested_at IS NOT NULL").get().n === 2, "the migration stamps no alternate_tested_at (only the two hand-stamped fixture rows have one)");
++
++// ---- 2. every probe passes where the alternate is in place, read-only, judged by the real chaosJudge ----
++for (const r of seeded) {
++  const v = runProbe(db0, r.control);
++  ok(v.pass === true && v.observed === "ok", r.control + ": passes on a fixture where its alternate is in place", v);
++  ok(v.readOnly === true && v.rows === 1 && v.cols === "expected,observed", r.control + ": one row (expected, observed), no change to the database", v);
++}
++
++// ---- 3. a failing fixture per control: the broken alternate is reported with a reason ----
++const trig = (n) => "DROP TRIGGER " + n + ";";
++const BREAKS = {
++  "agent-issues-enum-guard": [
++    ["the normalise trigger is gone", trig("agent_issues_normalise_tick"), /normalise tick trigger/],
++    ["the canon tables are empty", "DELETE FROM status_canon;", /canon/],
++    ["a row keeps an unmapped status for 2 h", `INSERT INTO agent_issues (title, status, priority, created_at, updated_at) VALUES ('t-weird', 'weird', 'medium', ${ms(120)}, ${ms(120)});`, /did not normalise/],
++    ["a row keeps an unmapped priority for 2 h", `INSERT INTO agent_issues (title, status, priority, created_at, updated_at) VALUES ('t-prio', 'open', 'P9', ${ms(120)}, ${ms(120)});`, /did not normalise/],
++    ["a monitoring row with no open twin is not the parked-twin state", `INSERT INTO agent_issues (title, status, priority, created_at, updated_at) VALUES ('t-mon', 'monitoring', 'medium', ${ms(120)}, ${ms(120)});`, /did not normalise/]
++  ],
++  "agent-issues-evidence-guard": [
++    ["the annotate trigger is gone", trig("agent_issues_evidence_annotate_ai"), /annotate trigger/],
++    ["the abort trigger is back", "CREATE TRIGGER agent_issues_evidence_must_exist_ins BEFORE INSERT ON agent_issues BEGIN SELECT 1; END;", /abort trigger/],
++    ["an issue cites a missing event and was left unannotated", trig("agent_issues_evidence_annotate_ai") + ` INSERT INTO agent_issues (title, source, description, created_at, updated_at) VALUES ('t-ev', 'cloud_ops_events:nope', 'plain', ${ms(60)}, ${ms(60)}); CREATE TRIGGER agent_issues_evidence_annotate_ai AFTER INSERT ON agent_issues BEGIN SELECT 'NO-SILENT'; END;`, /no annotation/]
++  ],
++  "idea-triaged-hold-owner-and-reentry": [
++    ["an owner-authored idea is held", `INSERT INTO idea_proposals (name, idea, contact, status, rationale, created_at) VALUES ('owner-chat', 'x', 'owner', 'triaged_hold', 'LLM HOLD', '${iso(60)}');`, /owner-authored idea/],
++    ["re-entry signals stopped flowing", "DELETE FROM signals;", /re-entry/]
++  ],
++  "research-citation-unverified-hold": [
++    ["the 6 h expiry trigger is gone", trig("research_hold_expiry_tick"), /hold-expiry trigger/],
++    ["the citation gate lever holds a stray value", "INSERT INTO ops_config (key, value) VALUES ('research_citation_gate', 'off');", /research_citation_gate/],
++    ["a hold passed 8 h without release", `INSERT INTO research_queue (id, status, error) VALUES ('h1', 'held', 'x Revert: status review, stage publish'); INSERT INTO research_hold_seen VALUES ('h1', '${iso(9 * 60)}');`, /passed 8 h/]
++  ],
++  "research-gate-structure": [["no revise-patch event in 7 days", "DELETE FROM cloud_ops_events WHERE kind = 'revise-patch';", /revise route/]],
++  "research-review-hard-gate": [
++    ["the lever is unreadable", "UPDATE ops_config SET value = 'banana' WHERE key = 'research_review_gate';", /research_review_gate/],
++    ["no review triage in 48 h", "DELETE FROM cloud_ops_events WHERE kind = 'review-triage';", /review-triage/]
++  ],
++  "zenodo-enabled": [
++    ["a Zenodo switch is on again", "INSERT INTO ops_config (key, value) VALUES ('zenodo_enabled', '1');", /Zenodo switch/],
++    ["nothing published in 48 h", "DELETE FROM research_queue;", /no paper/],
++    ["a published paper carries a Zenodo DOI", "UPDATE research_queue SET doi = '10.5281/zenodo.1';", /Zenodo DOI/]
++  ],
++  "social-weekly-caps": [
++    ["two posts on one channel an hour apart", `INSERT INTO social_media_posts (id, platform, published_at) VALUES ('p9', 'buffer-x', '${iso(60 * 9)}');`, /under 6 h/],
++    ["the caps flag is not JSON", "UPDATE pipeline_flags SET value = 'not json';", /not JSON/]
++  ],
++  "cf-obs-nested-too-deep-pin": [["the detector reads fail", "UPDATE remediation_contracts SET last_verdict = 'fail' WHERE class = 'fm-trigger-depth-compile';", /does not read pass/], ["the detector is retired", "UPDATE remediation_contracts SET status = 'retired' WHERE class = 'fm-trigger-depth-compile';", /not active/]],
++  "compat-advance-review-gate": [["no deploy in 24 h", "DELETE FROM deployment_history;", /no successful deploy/], ["no compat-verify in 7 days", "DELETE FROM cloud_ops_events WHERE kind = 'compat-verify';", /compat-verify/]],
++  "gh_app_primary": [["the switch is unreadable", "UPDATE ops_config SET value = 'maybe' WHERE key = 'gh_app_primary';", /kill switch/], ["no github event in 24 h", "DELETE FROM cloud_ops_events WHERE kind = 'github';", /no ok github event/]],
++  "improvement-loop-superseded-marker": [["a successor trigger is disabled", "UPDATE analytics_metric_triggers SET enabled = 0 WHERE metric_key = 'issues_open_over_120m';", /no enabled trigger/], ["a successor metric is gone", "DELETE FROM metric_registry WHERE metric = 'open_issues_without_doer_120m';", /not in metric_registry/]],
++  "migration-header-guard": [["the detector is retired", "UPDATE remediation_contracts SET status = 'retired' WHERE class = 'fm-migration-headerless-silent-skip';", /detector contract/], ["no migration applied in 7 days", "DELETE FROM migration_runs;", /no migration run/], ["the unapplied sweep metric is stale", `UPDATE metric_registry SET last_refreshed = '${iso(5 * 60)}' WHERE metric = 'migrations_unapplied';`, /not refreshed/]],
++  "migration-headerless-allowlist": [["no migration applied in 7 days", "DELETE FROM migration_runs;", /no migration run/]],
++  "ops-jobs-payload-redaction": [["a stored payload holds a login link", "INSERT INTO ops_jobs (id, status, payload, updated_at) VALUES ('j2', 'queued', 'sign in at https://x.example/login?token=abc', '" + iso(5) + "');", /login link/], ["a terminal row outlived the 14-day sweep", "INSERT INTO ops_jobs (id, status, payload, updated_at) VALUES ('j3', 'cancelled', 'old', '" + iso(60 * 24 * 20) + "');", /sweep is not running/]],
++  "ops-jobs-terminal-sweep": [["the queue_sla row is gone", "DELETE FROM queue_sla;", /queue_sla row/], ["the detector reads fail", "UPDATE remediation_contracts SET last_verdict = 'fail' WHERE class = 'fm-ops-jobs-sweep-status-gap';", /does not read pass/]],
++  "owner-request-receipt-gate": [["the lever is unreadable", "UPDATE ops_config SET value = 'x' WHERE key = 'autonomy_first_gate';", /off lever/]],
++  "owner-request-requires-card": [["the card trigger is gone", trig("owner_request_requires_card"), /trigger is missing/], ["no closure recorded in 7 days", "DELETE FROM issue_lifecycle;", /no closure/], ["an owner-request closed without evidence", `INSERT INTO agent_issues (title, category, status, created_at, updated_at) VALUES ('t-or', 'owner-request', 'closed', ${ms(60)}, ${ms(60)});`, /no close_evidence/]],
++  "perf-loop-enabled": [["the loop is paused again", "UPDATE ops_config SET value = '0' WHERE key = 'perf_loop_enabled';", /paused again/], ["the pin is gone", "DELETE FROM ops_config WHERE key = 'perf_pin:q08-cadence';", /pin or the cap/]],
++  "research-admission-cap": [["a cap-held row was rejected", "UPDATE idea_proposals SET status = 'rejected' WHERE rationale LIKE '[research admission cap%';", /left the hold/], ["triage stopped", "UPDATE idea_proposals SET triaged_at = NULL;", /triage recorded nothing/]],
++  "tool_error_exclusions": [["the excluded view is gone", "DROP VIEW tool_failures_excluded_24h;", /excluded errors/], ["failure_class is gone", "DROP VIEW tool_failures_24h; CREATE VIEW tool_failures_24h AS SELECT pattern AS tool FROM tool_error_exclusions;", /failure_class/], ["a pattern has no rationale", "INSERT INTO tool_error_exclusions (pattern, err_class, rationale) VALUES ('x', 'y', '  ');", /no rationale/]],
++  "tracker-mass-flip-guard": [["the sync stopped", `UPDATE tracker_sync_state SET updated_at = '${iso(5 * 60)}';`, /no run in 2 h/], ["d1_status is never refreshed", `UPDATE gh_issue_links SET synced_at = '${iso(60 * 48)}';`, /d1_status/]],
++  "control-alternate-probes": [
++    ["the detector contract is retired", "UPDATE remediation_contracts SET status = 'retired' WHERE class = 'fm-control-alternate-undrilled';", /detector contract/],
++    ["a control with an alternate has neither a probe nor a tested date", "INSERT INTO control_registry (control, location, kind, disposition, alternate_path, evidence) VALUES ('new-control', 'l', 'gate', 'keep', 'a second path', 'e');", /no probe and no tested date/]
++  ]
++};
++ok(JSON.stringify(Object.keys(BREAKS).sort()) === JSON.stringify(seeded.map((r) => r.control).sort()), "a failing fixture is defined for every seeded control", { missing: seeded.map((r) => r.control).filter((c) => !BREAKS[c]) });
++for (const [control, cases] of Object.entries(BREAKS)) {
++  for (const [what, brk, re] of cases) {
++    const db = fresh();
++    db.exec(brk);
++    const v = runProbe(db, control);
++    ok(v.pass === false && v.expected === "ok" && v.observed !== "ok" && re.test(v.observed), control + ": fails when " + what, v);
++    ok(v.readOnly === true, control + ": the failing run still changed nothing (" + what + ")");
++  }
++}
++{ // the allowlist's stated expiry is a failure of its own once the date passes
++  const db = fresh();
++  const v = runProbe(db, "migration-headerless-allowlist", "2026-11-20");
++  ok(v.pass === false && /stated expiry 2026-11-19/.test(v.observed), "migration-headerless-allowlist: fails after its recorded expiry date", v);
++  ok(runProbe(db, "migration-headerless-allowlist", "2026-11-19").pass === true, "migration-headerless-allowlist: still passes on the expiry day itself");
++}
++
++// ---- 4. the exemptions and the live guards in action ----
++{
++  const db = fresh();
++  // the parked-twin state: a monitoring row whose open twin exists is exempt; a fresh unmapped row is inside the 30-minute grace
++  db.exec(`INSERT INTO agent_issues (title, status, priority, created_at, updated_at) VALUES ('Twin', 'open', 'medium', ${ms(300)}, ${ms(300)}), ('twin', 'monitoring', 'medium', ${ms(300)}, ${ms(300)}), ('t-new', 'weird', 'medium', ${ms(5)}, ${ms(5)});`);
++  const v = runProbe(db, "agent-issues-enum-guard");
++  ok(v.pass === true, "enum guard: a monitoring row with an open twin and a row unmapped for 5 minutes are not failures", v);
++  // the live normalise trigger text, fired by a fleet_tick row, repairs the stale unmapped row and the probe passes
++  db.exec(`INSERT INTO agent_issues (title, status, priority, created_at, updated_at) VALUES ('t-stale', 'weird', 'medium', ${ms(120)}, ${ms(120)});`);
++  ok(runProbe(db, "agent-issues-enum-guard").pass === false, "enum guard: the stale unmapped row fails the probe before the tick");
++  db.exec("INSERT INTO fleet_tick (source) VALUES ('cron:test')");
++  const fixed = db.prepare("SELECT status, description FROM agent_issues WHERE title = 't-stale'").get();
++  ok(fixed.status === "open" && /NO-SILENT-DROP-1: unmapped status/.test(fixed.description), "enum guard: the live normalise trigger text rewrites the unmapped status and annotates the row", fixed);
++  ok(runProbe(db, "agent-issues-enum-guard").pass === true, "enum guard: the probe passes once the tick normalised the row");
++}
++{
++  const db = fresh();
++  db.exec(`INSERT INTO agent_issues (title, source, description, created_at, updated_at) VALUES ('t-ev', 'cloud_ops_events:missing', 'plain', ${ms(60)}, ${ms(60)});`);
++  const row = db.prepare("SELECT description FROM agent_issues WHERE title = 't-ev'").get();
++  ok(/NO-SILENT-DROP-1: the cited evidence event cloud_ops_events:missing does not exist/.test(row.description), "evidence guard: the live annotate trigger text keeps and annotates an issue that cites a missing event", row);
++  ok(runProbe(db, "agent-issues-evidence-guard").pass === true, "evidence guard: the annotated issue keeps the probe green");
++  db.exec("INSERT INTO cloud_ops_events (id, ts, kind, status) VALUES ('present', '" + iso(1) + "', 'x', 'ok'); INSERT INTO agent_issues (title, source, description, created_at, updated_at) VALUES ('t-ev2', 'cloud_ops_events:present', 'plain', " + ms(60) + ", " + ms(60) + ");");
++  ok(db.prepare("SELECT description FROM agent_issues WHERE title = 't-ev2'").get().description === "plain", "evidence guard: an issue that cites an existing event is untouched");
++}
++{
++  const db = fresh();
++  db.exec("INSERT INTO research_queue (id, status, error) VALUES ('h2', 'held', 'x Revert: status review, stage publish'); INSERT INTO research_hold_seen VALUES ('h2', '" + iso(7 * 60) + "');");
++  ok(runProbe(db, "research-citation-unverified-hold").pass === true, "citation hold: a hold 7 h old is inside the 8 h allowance");
++  db.exec("INSERT INTO fleet_tick (source) VALUES ('cron:test')");
++  const h = db.prepare("SELECT status, stage FROM research_queue WHERE id = 'h2'").get();
++  ok(h.status === "review" && h.stage === "publish", "citation hold: the live expiry trigger text releases a hold past 6 h", h);
++}
++
++// ---- 5. the views: the critical-path count comes from the table ----
++{
++  const db = fresh();
++  const state = (c) => db.prepare("SELECT drill_state FROM v_control_alternate_status WHERE control = ?").get(c).drill_state;
++  const counts = () => db.prepare("SELECT * FROM v_control_alternate_untested").get();
++  ok(state("agent-issues-enum-guard") === "probe-never-run", "status: a seeded control whose probe never ran reads probe-never-run");
++  ok(state("research-owner-hold") === "removed" && state("command-drain-key") === "removed", "status: a removed control reads removed");
++  ok(state("outreach-consent-gate") === "not-exercisable", "status: a none-needed control with the recorded reason reads not-exercisable");
++  ok(state("canary-functional") === "no-probe", "status: a hand-stamped control without a probe reads no-probe");
++  ok(state("bare-control") === "no-alternate", "status: no alternate declared reads no-alternate");
++  const scorecard = db.prepare("SELECT COUNT(*) AS n FROM control_registry WHERE critical_path = 1 AND NOT (disposition = 'remove' AND disposition_state = 'applied') AND alternate_tested_at IS NULL").get().n;
++  let c = counts();
++  ok(c.critical_untested_by_register === scorecard && scorecard === 7, "untested view: critical_untested_by_register equals the v_doctrine_scorecard_v2 expression (7 critical controls untested)", { c, scorecard });
++  ok(c.critical_probe_not_drilled === 7 && c.critical_without_probe === 2 && c.critical_untested_by_probe === 9, "untested view: before any drill 7 critical probes are not drilled and 2 hand-stamped critical controls have no probe", c);
++  ok(c.controls_untested_without_probe === 0 && c.controls_hand_stamped_without_probe === 2 && c.probes_total === 23 && c.probes_enabled === 23 && c.probes_failing === 0, "untested view: no control is untested without a probe, 2 are hand-stamped without one", c);
++  // what the runner will write: a pass, a stale pass, a failure, a disabled row
++  const run = db.prepare("UPDATE control_alternate_probes SET last_run_at = ?1, last_pass = ?2, last_pass_at = ?3, last_observed = ?4, enabled = ?5 WHERE control = ?6");
++  for (const k of CRITICAL.slice(0, 4)) run.run(iso(5), 1, iso(5), "ok", 1, k);
++  c = counts();
++  ok(c.critical_probe_not_drilled === 3 && c.critical_untested_by_probe === 5, "untested view: four passing probes leave three critical probes undrilled", c);
++  ok(state("research-gate-structure") === "probe-never-run" && state("agent-issues-enum-guard") === "drilled", "status: a fresh pass reads drilled");
++  run.run(iso(5), 1, iso(30 * 60), "ok", 1, "research-gate-structure");
++  ok(state("research-gate-structure") === "probe-stale", "status: a pass older than 24 h reads probe-stale");
++  run.run(iso(5), 1, iso(7 * 60), "ok", 1, "research-gate-structure");
++  ok(state("research-gate-structure") === "drilled", "status: a pass 7 h old (inside the 6 h cadence plus 120 minutes) still reads drilled");
++  run.run(iso(5), 1, iso(9 * 60), "ok", 1, "research-gate-structure");
++  ok(state("research-gate-structure") === "probe-stale", "status: a pass 9 h old (past the cadence plus 120 minutes) reads probe-stale");
++  run.run(iso(5), 1, iso(30 * 60), "ok", 1, "research-gate-structure");
++  run.run(iso(5), 0, iso(30 * 60), "the revise route recorded no revise-patch event", 1, "research-review-hard-gate");
++  ok(state("research-review-hard-gate") === "probe-failing" && counts().probes_failing === 1, "status: a failing probe reads probe-failing and is counted");
++  run.run(iso(5), 1, iso(5), "ok", 0, "zenodo-enabled");
++  ok(state("zenodo-enabled") === "probe-disabled", "status: a disabled probe reads probe-disabled");
++  for (const k of CRITICAL) run.run(iso(5), 1, iso(5), "ok", 1, k);
++  c = counts();
++  ok(c.critical_probe_not_drilled === 0 && c.critical_untested_by_probe === c.critical_without_probe && c.critical_without_probe === 2, "untested view: with every critical probe passing only the two critical controls without a probe remain", c);
++}
++
++// ---- 6. v_path_coverage_gaps / violations ----
++{
++  const db = fresh(false);
++  const OLD = `CREATE VIEW v_path_coverage_gaps AS SELECT 'control_registry' AS source, control AS process, kind AS path_kind, CASE WHEN alternate_path IS NULL OR trim(alternate_path) = '' THEN 'no-alternate' WHEN alternate_tested_at IS NULL THEN 'alternate-untested' ELSE 'ok' END AS path_state, alternate_path AS alternate, alternate_tested_at FROM control_registry UNION ALL SELECT 'process_contracts' AS source, process, 'contract-paths' AS path_kind, CASE WHEN json_valid(paths_json) = 0 THEN 'paths-not-json' WHEN json_array_length(paths_json) < 2 THEN 'single-path' WHEN json_array_length(paths_json) = 2 THEN 'two-paths-no-spare' ELSE 'ok' END AS path_state, NULL AS alternate, NULL AS alternate_tested_at FROM process_contracts;
++CREATE VIEW v_path_coverage_violations AS SELECT source, process, path_kind, path_state, alternate, alternate_tested_at FROM v_path_coverage_gaps WHERE path_state <> 'ok';`;
++  db.exec(OLD);
++  const st = (d, p) => d.prepare("SELECT path_state FROM v_path_coverage_gaps WHERE process = ?").get(p).path_state;
++  ok(st(db, "outreach-consent-gate") === "alternate-untested", "pre-fix: a recorded ALTERNATE-NOT-EXERCISABLE row still reads alternate-untested (the defect)");
++  const before = db.prepare("SELECT COUNT(*) AS n FROM v_path_coverage_violations WHERE path_state = 'alternate-untested'").get().n;
++  db.exec(sql);
++  const after = db.prepare("SELECT COUNT(*) AS n FROM v_path_coverage_violations WHERE path_state = 'alternate-untested'").get().n;
++  ok(st(db, "outreach-consent-gate") === "alternate-not-exercisable" && st(db, "command-drain-key") === "alternate-not-exercisable" && st(db, "research-owner-hold") === "alternate-not-exercisable", "the three recorded not-exercisable rows read alternate-not-exercisable");
++  ok(before - after === 2, "alternate-untested falls by those three rows and gains the probe set's own control (not yet stamped): net 2", { before, after });
++  ok(db.prepare("SELECT COUNT(*) AS n FROM v_path_coverage_violations WHERE path_state = 'alternate-untested' AND process = 'control-alternate-probes'").get().n === 1, "the probe set's own control reads alternate-untested until the drill stamps it (not stamped from a declaration)");
++  ok(st(db, "ops-jobs-terminal-sweep") === "alternate-untested" && st(db, "migration-headerless-allowlist") === "alternate-untested", "a none-needed row WITHOUT the recorded reason stays alternate-untested (it has a probe instead)");
++  ok(st(db, "canary-functional") === "ok" && st(db, "bare-control") === "no-alternate", "tested rows stay ok and an empty alternate stays no-alternate");
++  ok(st(db, "p-ok") === "ok" && st(db, "p-single") === "single-path" && st(db, "p-two") === "two-paths-no-spare" && st(db, "p-bad") === "paths-not-json", "the process_contracts branch is unchanged");
++  const viol = db.prepare("SELECT path_state, COUNT(*) AS n FROM v_path_coverage_violations GROUP BY path_state ORDER BY path_state").all();
++  ok(!viol.some((r) => r.path_state === "alternate-not-exercisable"), "v_path_coverage_violations lists no alternate-not-exercisable row", viol);
++  ok(db.prepare("SELECT alternate_tested_at FROM v_path_coverage_gaps WHERE process = 'outreach-consent-gate'").get().alternate_tested_at === null, "the not-exercisable row is not stamped (alternate_tested_at stays NULL)");
++  // a later stamp (the runner on a pass) turns an untested row ok
++  db.exec("UPDATE control_registry SET alternate_tested_at = '2026-10-19T14:00:00Z' WHERE control = 'social-weekly-caps'");
++  ok(st(db, "social-weekly-caps") === "ok", "a stamped row reads ok");
++}
++
++// ---- 7. failure mode, detector, control row, evidence, decision, issue ----
++{
++  const db = fresh();
++  const fm = db.prepare("SELECT * FROM failure_modes WHERE fm_key = 'control-alternate-undrilled'").get();
++  ok(fm && fm.probe_class === "fm-control-alternate-undrilled" && fm.issue_id === 2826 && [fm.failure_mode, fm.root_cause, fm.remediation, fm.detector, fm.trigger_condition, fm.symptom, fm.blast_radius].every((s) => s && s.length > 30), "failure mode control-alternate-undrilled is recorded with root cause, remediation, detector and blast radius", fm);
++  const rc = db.prepare("SELECT * FROM remediation_contracts WHERE class = 'fm-control-alternate-undrilled'").get();
++  ok(rc && rc.verify_transport === "d1-query" && rc.status === "active" && rc.module === "failure-mode", "the fm- detector contract is an active d1-query contract", rc);
++  const det = (d) => chaosJudge(d.prepare(rc.verify_probe).all());
++  ok(det(db).pass === true && det(db).observed === "0", "the detector reads 0 at birth: every control with an alternate and no tested date has a probe or a recorded reason", det(db));
++  db.exec("INSERT INTO control_registry (control, location, kind, disposition, alternate_path, evidence) VALUES ('new-control', 'l', 'gate', 'keep', 'a second path', 'e')");
++  ok(det(db).pass === false && det(db).observed === "1", "the detector FAILS for a new control with an alternate, no tested date and no probe", det(db));
++  db.exec("INSERT INTO control_alternate_probes (control, probe_sql, window_note) VALUES ('new-control', 'SELECT ''ok'' AS expected, ''ok'' AS observed', 'test')");
++  ok(det(db).pass === true, "the detector passes again once the control has a probe row");
++  db.exec("INSERT INTO control_registry (control, location, kind, disposition, alternate_path, alternate_tested_at, evidence) VALUES ('stamped-control', 'l', 'gate', 'keep', 'a second path', '2026-10-01', 'e')");
++  ok(det(db).pass === true, "a hand-stamped control without a probe is reported by v_control_alternate_untested, not by the detector");
++
++  const self = db.prepare("SELECT * FROM control_registry WHERE control = 'control-alternate-probes'").get();
++  ok(self && self.kind === "guard" && self.alternate_tested_at === null && self.disposition === "keep" && self.alternate_path.length > 40 && self.evidence.includes("CONTROL-ALT-PROBES-1"), "the probe set is a control_registry row with its own alternate, not stamped", self);
++  const withEv = db.prepare("SELECT control, evidence, alternate_tested_at FROM control_registry WHERE evidence LIKE '%CONTROL-ALT-PROBES-1 2026-10-19%' AND control <> 'control-alternate-probes'").all();
++  ok(withEv.length === 22 && withEv.every((r) => (r.evidence.match(/CONTROL-ALT-PROBES-1 2026-10-19/g) || []).length === 1), "the 22 drilled controls carry the evidence note exactly once", withEv.length);
++  ok(db.prepare("SELECT alternate_tested_at FROM control_registry WHERE control = 'canary-functional'").get().alternate_tested_at === "2026-10-12T08:30:00Z" && !db.prepare("SELECT evidence FROM control_registry WHERE control = 'canary-functional'").get().evidence.includes("CONTROL-ALT-PROBES-1"), "a control without a probe keeps its stamp and gets no note");
++
++  const dl = db.prepare("SELECT * FROM decision_log").all();
++  ok(dl.length === 1 && dl[0].actor.startsWith("session_") && [dl[0].assumption, dl[0].action, dl[0].evidence, dl[0].outcome, dl[0].blast_radius, dl[0].rollback_path, dl[0].capability_gain, dl[0].predicted_outcome, dl[0].surfaces_tested].every((s) => s && s.length > 5), "one decision_log row with capability_gain, predicted_outcome and surfaces_tested", dl.length);
++
++  const iss = db.prepare("SELECT * FROM agent_issues WHERE title LIKE 'CONTROL-ALT-PROBES-RUNNER-1:%'").all();
++  ok(iss.length === 1 && iss[0].status === "open" && iss[0].priority === "high", "exactly one open runner issue is filed", iss.length);
++  const lines = iss[0].description.split("\n");
++  const taskLine = lines.find((l) => l.startsWith("code-task: "));
++  const anchorLine = lines.find((l) => l.startsWith("code-anchor: "));
++  const probeLine = lines.find((l) => l.startsWith("code-probe: "));
++  ok(taskLine === "code-task: repo=qnfo-workers path=qnfo-fleet-control/worker.js", "the issue carries the code-task line on a line of its own (ACT-BRIDGE-1)", taskLine);
++  const anchor = anchorLine && anchorLine.slice("code-anchor: ".length);
++  const cp = probeLine && JSON.parse(probeLine.slice("code-probe: ".length));
++  ok(cp && Array.isArray(cp.paths) && cp.paths[0] === "qnfo-fleet-control/worker.js" && typeof cp.contains === "string" && cp.contains.includes("control_alternate_probes"), "the code-probe line is valid JSON naming the file and the text the runner must contain", cp);
++  const landed = cp && workerSrc.includes(cp.contains);
++  const occ = anchor ? workerSrc.split(anchor).length - 1 : 0;
++  ok(landed || occ === 1, "the code-anchor occurs exactly once in qnfo-fleet-control/worker.js (or the runner has landed)", { occ, landed });
++  ok(landed || !workerSrc.includes("control_alternate_probes"), "until the runner lands the worker does not read the table (so the code-probe is a real pending check)");
++  const ct = db.prepare("SELECT * FROM remediation_contracts WHERE class = ?").get("issue-" + iss[0].id);
++  ok(ct && ct.verify_transport === "code-read" && ct.status === "active" && JSON.parse(ct.verify_probe).contains === cp.contains && ct.module === "code-probe-line-v1", "the issue's contract is the code-read probe on main (UPDATE on class issue-<id>)", ct);
++  ok(/spof_alternate_probes/.test(iss[0].description) && /chaosJudge/.test(iss[0].description) && /control:<name>/.test(iss[0].description) && /alternate_tested_at/.test(iss[0].description), "the issue names the exact change: second pass, chaosJudge, control:<name> verdicts, the stamp");
++}
++
++// ---- 8. re-applying changes nothing ----
++{
++  const db = fresh();
++  const snap = () => JSON.stringify([
++    db.prepare("SELECT COUNT(*) AS n FROM control_alternate_probes").get().n,
++    db.prepare("SELECT COUNT(*) AS n FROM failure_modes").get().n,
++    db.prepare("SELECT COUNT(*) AS n FROM remediation_contracts").get().n,
++    db.prepare("SELECT COUNT(*) AS n FROM decision_log").get().n,
++    db.prepare("SELECT COUNT(*) AS n FROM agent_issues").get().n,
++    db.prepare("SELECT COUNT(*) AS n FROM control_registry").get().n,
++    db.prepare("SELECT group_concat(evidence, '|') AS e FROM control_registry").get().e
++  ]);
++  const s1 = snap();
++  let threw = null;
++  try { db.exec(sql); } catch (e) { threw = String(e && e.message || e); }
++  ok(threw === null && snap() === s1, "applying the migration a second time changes nothing", threw);
++}
++
++// ---- 9. house rules on the text we wrote ----
++{
++  const test = readFileSync(fileURLToPath(import.meta.url), "utf8");
++  for (const [name, text] of [["migration", sql], ["test", test]]) {
++    ok(!new RegExp("claude" + "\\.ai", "i").test(text), name + ": no link to the assistant vendor host");
++    ok(!/(^|[^\w&])#\d+/m.test(text), name + ": no bare hash-number issue reference");
++    ok(!/\[skip ci\]|\[ci skip\]/i.test(text), name + ": no skip-CI token");
++  }
++  ok(/^-- APPLY-BY: ci$/m.test(sql) && /^-- DB: qnfo-audit$/m.test(sql) && /^-- Rollback: .+/m.test(sql) && /^-- BACKUP: control_registry$/m.test(sql), "migration header lines: APPLY-BY ci, DB qnfo-audit, Rollback, BACKUP");
++  ok(!/^\s*(DELETE\s+FROM|DROP\s+TABLE)\b/im.test(sql.replace(/^--.*$/gm, "")), "the file deletes no rows and drops no table (only views are redefined)");
++}
++
++console.log(pass + " passed, " + fail + " failed");
++process.exit(fail ? 1 : 0);

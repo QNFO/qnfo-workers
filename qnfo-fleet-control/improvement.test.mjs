@@ -146,8 +146,8 @@ eq(rr.usd_30d, 0, "under the free allocation costs nothing");
 eq(I.ilDirection(I.IL_RUN_RATE_METRIC.target), "down", "run-rate target is lower-is-better");
 
 // self metrics declare targets and triggers the trigger loop can read
-eq(I.IL_SELF_METRICS.length, 3, "three self metrics");
-eq(I.IL_SELF_METRICS.filter((m) => m.trigger).length, 2, "two self triggers");
+eq(I.IL_SELF_METRICS.length, 4, "four self metrics (IL-RELAPSE-TRIGGER-1 adds fix_target_hold_rate_30d, a guard with no threshold trigger)");
+eq(I.IL_SELF_METRICS.filter((m) => m.trigger).length, 2, "two self triggers (the new guard metric is a named METRIC-CLOSED-LOOP-1 exemption)");
 
 // --- the hourly tick against an in-memory D1 (node:sqlite, Node 22) ---------------------------------------------------
 let sqlite = null;
@@ -192,7 +192,7 @@ CREATE TRIGGER issue_close_evidence_required BEFORE UPDATE OF status ON agent_is
   eq(t.filed, 0, "tick 1 files nothing");
   eq(one("SELECT meets FROM metric_history WHERE metric='cost_usd_30d'").meets, 0, "cost 450 > 200 recorded as off target");
   eq(one("SELECT meets FROM metric_history WHERE metric='pageviews_30d'").meets, 1, "pageviews 5960 >= 5000 recorded as inside target");
-  eq(one("SELECT COUNT(*) n FROM metric_registry WHERE metric IN ('improvement_rate_7d','metric_regressions_7d','fix_hold_rate_30d')").n, 3, "self metrics registered past the integrity triggers");
+  eq(one("SELECT COUNT(*) n FROM metric_registry WHERE metric IN ('improvement_rate_7d','metric_regressions_7d','fix_hold_rate_30d','fix_target_hold_rate_30d')").n, 4, "self metrics registered past the integrity triggers");
   eq(one("SELECT COUNT(*) n FROM analytics_metric_triggers WHERE notes='seeded by IMPROVEMENT-LOOP-1'").n, 2, "self triggers seeded");
   t = await I.improvementLoopTick(env);
   eq(one("SELECT COUNT(*) n FROM metric_history").n, 2, "same-day tick upserts, never duplicates");

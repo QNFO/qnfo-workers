@@ -1,5 +1,5 @@
 {
-  "audited_at": "2026-10-19 14:28:56",
+  "audited_at": "2026-10-19 16:25:56",
   "d1_write_failures": [],
   "d1_writes_ok": 120,
   "guard": {
@@ -545,7 +545,7 @@
       },
       {
         "dir": "personal-companion",
-        "version": "1.32.2-codeagent",
+        "version": "1.33.1-travel-context",
         "worker": "personal-companion"
       },
       {
@@ -605,7 +605,7 @@
       },
       {
         "dir": "qnfo-fleet-control",
-        "version": "0.37.0-code-loop-control-plane",
+        "version": "0.39.0-il-relapse",
         "worker": "qnfo-fleet-control"
       },
       {
@@ -640,7 +640,7 @@
       },
       {
         "dir": "qnfo-lifecycle",
-        "version": "1.11.5-ping-404",
+        "version": "1.12.0-paper-learn",
         "worker": "qnfo-lifecycle"
       },
       {
@@ -660,7 +660,7 @@
       },
       {
         "dir": "qnfo-ops",
-        "version": "2.50.5-context-compact-2",
+        "version": "2.50.6-codeagent",
         "worker": "qnfo-ops"
       },
       {
@@ -670,7 +670,7 @@
       },
       {
         "dir": "qnfo-research-exec",
-        "version": "0.25.0-wai-width-governor",
+        "version": "0.26.1-codeagent",
         "worker": "qnfo-research-exec"
       },
       {
@@ -938,9 +938,9 @@
       "worker": "personal-api"
     },
     "personal-companion": {
-      "before": "1.32.2-codeagent",
+      "before": "1.33.1-travel-context",
       "http": 200,
-      "live": "1.32.2-codeagent",
+      "live": "1.33.1-travel-context",
       "match": 1,
       "note": "SYNC",
       "worker": "personal-companion"
@@ -1313,9 +1313,9 @@
       "worker": "qnfo-fleet-calibrator"
     },
     "qnfo-fleet-control": {
-      "before": "0.37.0-code-loop-control-plane",
+      "before": "0.39.0-il-relapse",
       "http": 200,
-      "live": "0.37.0-code-loop-control-plane",
+      "live": "0.39.0-il-relapse",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-fleet-control"
@@ -1432,9 +1432,9 @@
       "worker": "qnfo-kaizen"
     },
     "qnfo-lifecycle": {
-      "before": "1.11.5-ping-404",
+      "before": "1.12.0-paper-learn",
       "http": 200,
-      "live": "1.11.5-ping-404",
+      "live": "1.12.0-paper-learn",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-lifecycle"
@@ -1473,9 +1473,9 @@
       "worker": "qnfo-observability"
     },
     "qnfo-ops": {
-      "before": "2.50.5-context-compact-2",
+      "before": "2.50.6-codeagent",
       "http": 200,
-      "live": "2.50.5-context-compact-2",
+      "live": "2.50.6-codeagent",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-ops"
@@ -1561,9 +1561,9 @@
       "worker": "qnfo-register-guard"
     },
     "qnfo-research-exec": {
-      "before": "0.25.0-wai-width-governor",
+      "before": "0.26.1-codeagent",
       "http": 200,
-      "live": "0.25.0-wai-width-governor",
+      "live": "0.26.1-codeagent",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-research-exec"

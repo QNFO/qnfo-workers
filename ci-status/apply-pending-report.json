@@ -1,17 +1,14 @@
 {
   "workflow": "apply-pending-patches",
   "marker": "APPLY-PENDING-1",
-  "head": "016b9e214c3b4e5f647e0a6c4902024220583ecd",
-  "total": 76,
+  "head": "3e2e1427eafd09ff0c33cda5792fc6b42d12f111",
+  "total": 77,
   "summary": {
-    "already-applied": 71,
+    "already-applied": 73,
     "stale-anchor": 3,
-    "landed": 1,
     "error": 1
   },
-  "landed": [
-    "cron-tick-5m-patch.py"
-  ],
+  "landed": [],
   "retired": [],
   "reverted": [],
   "results": [
@@ -75,7 +72,7 @@
       "verdict": "already-applied",
       "changed": false,
       "reverted": [],
-      "seconds": 0.05,
+      "seconds": 0.07,
       "tail": "POST_CONDITIONS_OK /home/runner/work/qnfo-workers/qnfo-workers/scripts/applier-doctor.py"
     },
     {
@@ -111,7 +108,7 @@
       "verdict": "already-applied",
       "changed": false,
       "reverted": [],
-      "seconds": 0.02,
+      "seconds": 0.03,
       "tail": "already patched: scripts/ci_watchdog.py contains '_raw_log'; no change"
     },
     {
@@ -147,8 +144,17 @@
       "verdict": "already-applied",
       "changed": false,
       "reverted": [],
-      "seconds": 0.03,
+      "seconds": 0.09,
       "tail": "ALREADY PATCHED (CLOUD-OPS-HEALTH-AUTH-1 present); no change"
+    },
+    {
+      "script": "code_task_publish_patch_size_test.py",
+      "rc": 0,
+      "verdict": "already-applied",
+      "changed": false,
+      "reverted": [],
+      "seconds": 0.19,
+      "tail": "6 passed, 0 failed"
     },
     {
       "script": "container-config-drop-guard-patch.py",
@@ -189,11 +195,11 @@
     {
       "script": "cron-tick-5m-patch.py",
       "rc": 0,
-      "verdict": "landed",
-      "changed": true,
+      "verdict": "already-applied",
+      "changed": false,
       "reverted": [],
-      "seconds": 0.04,
-      "tail": "APPLIED qnfo-fleet-control/worker.js, qnfo-fleet-control/deployed-current.worker.js, fleet-exec/worker.js, fleet-exec/deployed-current.worker.js, scripts/cron_rate_guard.py"
+      "seconds": 0.03,
+      "tail": "ALREADY-APPLIED"
     },
     {
       "script": "dashboard-agissue-undercount-patch.py",
@@ -201,7 +207,7 @@
       "verdict": "stale-anchor",
       "changed": false,
       "reverted": [],
-      "seconds": 0.04,
+      "seconds": 0.03,
       "tail": "FAIL-CLOSED: anchor A1 occurs 0 times (expected exactly 1) - nothing written"
     },
     {
@@ -228,7 +234,7 @@
       "verdict": "already-applied",
       "changed": false,
       "reverted": [],
-      "seconds": 0.03,
+      "seconds": 0.02,
       "tail": "invariants asserted: 2/2"
     },
     {
@@ -237,7 +243,7 @@
       "verdict": "already-applied",
       "changed": false,
       "reverted": [],
-      "seconds": 0.03,
+      "seconds": 0.02,
       "tail": "already applied: /home/runner/work/qnfo-workers/qnfo-workers/scripts/deploy-drift-guard.py"
     },
     {
@@ -291,7 +297,7 @@
       "verdict": "already-applied",
       "changed": false,
       "reverted": [],
-      "seconds": 0.03,
+      "seconds": 0.04,
       "tail": "changed=false"
     },
     {
@@ -328,7 +334,7 @@
       "changed": false,
       "reverted": [],
       "seconds": 0.04,
-      "tail": "  deployed-current.worker.js bytes=588402 marker=1"
+      "tail": "  deployed-current.worker.js bytes=647829 marker=1"
     },
     {
       "script": "outreach-cap-status-1-patch.py",
@@ -363,7 +369,7 @@
       "verdict": "already-applied",
       "changed": false,
       "reverted": [],
-      "seconds": 0.06,
+      "seconds": 0.07,
       "tail": "OK"
     },
     {
@@ -390,7 +396,7 @@
       "verdict": "already-applied",
       "changed": false,
       "reverted": [],
-      "seconds": 0.04,
+      "seconds": 0.05,
       "tail": "no-op: every target already carries the fix"
     },
     {
@@ -444,7 +450,7 @@
       "verdict": "already-applied",
       "changed": false,
       "reverted": [],
-      "seconds": 0.02,
+      "seconds": 0.03,
       "tail": "ALREADY APPLIED: OPS-D1-SCHEMA-HINT-FULL-1 present; nothing to do"
     },
     {
@@ -453,7 +459,7 @@
       "verdict": "already-applied",
       "changed": false,
       "reverted": [],
-      "seconds": 0.02,
+      "seconds": 0.03,
       "tail": "OK changed=0"
     },
     {
@@ -543,7 +549,7 @@
       "verdict": "already-applied",
       "changed": false,
       "reverted": [],
-      "seconds": 0.09,
+      "seconds": 0.08,
       "tail": "POST-CONDITIONS OK (4/4 literals extracted, incl. single-quoted)"
     },
     {
@@ -562,7 +568,7 @@
       "changed": false,
       "reverted": [],
       "seconds": 0.04,
-      "tail": "already patched (marker '_lastRouterHost' present); no write. sha256=b5abffc4766b6bfd"
+      "tail": "already patched (marker '_lastRouterHost' present); no write. sha256=96cc239b50a99bce"
     },
     {
       "script": "routerfetch-host-order-correction-patch.py",
@@ -571,7 +577,7 @@
       "changed": false,
       "reverted": [],
       "seconds": 0.04,
-      "tail": "already corrected (marker 'ROUTER-HOST-ORDER-CORRECTION-1' present); no write. sha256=b5abffc4766b6bfd"
+      "tail": "already corrected (marker 'ROUTER-HOST-ORDER-CORRECTION-1' present); no write. sha256=96cc239b50a99bce"
     },
     {
       "script": "samezone-fetch-fallback-patch.py",
@@ -597,7 +603,7 @@
       "verdict": "already-applied",
       "changed": false,
       "reverted": [],
-      "seconds": 0.1,
+      "seconds": 0.03,
       "tail": "nothing to do"
     },
     {
@@ -625,7 +631,7 @@
       "changed": false,
       "reverted": [],
       "seconds": 0.04,
-      "tail": "{\"ok\": true, \"already_patched\": true, \"marker\": \"STALE-GATE-FAILCLOSED-1\", \"bytes\": 1058374}"
+      "tail": "{\"ok\": true, \"already_patched\": true, \"marker\": \"STALE-GATE-FAILCLOSED-1\", \"bytes\": 1230356}"
     },
     {
       "script": "tool-budget-pending-toolcalls-patch.py",
@@ -642,7 +648,7 @@
       "verdict": "already-applied",
       "changed": false,
       "reverted": [],
-      "seconds": 0.08,
+      "seconds": 0.09,
       "tail": "TOOLBUDGET-BAIL-1: APPLIED AND VERIFIED (0 target(s) changed)"
     },
     {
@@ -687,7 +693,7 @@
       "verdict": "already-applied",
       "changed": false,
       "reverted": [],
-      "seconds": 0.03,
+      "seconds": 0.04,
       "tail": "TOOLBUDGET-SOURCE-LOCK-1: no change - worker.js already satisfies all canonical invariants"
     },
     {
@@ -700,5 +706,5 @@
       "tail": "SUPERSEDED: UNAUTH-TRIGGER-1 already closed by patch-fleet-exec-tick-unauth-1.py (commit 81581bf); no-op"
     }
   ],
-  "ts": "2026-10-19T09:29:58Z"
+  "ts": "2026-10-19T16:30:05Z"
 }
