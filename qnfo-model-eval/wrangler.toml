@@ -1,5 +1,10 @@
 name = "qnfo-model-eval"
 main = "worker.js"
+# COMPAT-ADVANCE-WAVE-3 (2026-10-19, RESOLVE-ALL-OPEN-1, agent_issues 99953/99955, worker_compat_state live 2026-09-01):
+# the date moves from 2026-09-01 to 2026-10-10 on the next canonical deploy. Reviewed against qnfo-ops COMPAT_FLIPS
+# between the two dates: 2026-10-01 Durable Object eviction (no Durable Object here). worker.js has no node: import, no
+# typeof process/Buffer branch and no timer id read as a number. /ops/deploy keeps the date only when /health answers.
+# compat-advance: reviewed 2026-10-19
 compatibility_date = "2026-10-10"
 workers_dev = true
 # charter-pillar: autonomy (CF-MODEL-EVAL-1)
