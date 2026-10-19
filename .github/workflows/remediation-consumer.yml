@@ -70,22 +70,21 @@ jobs:
     outputs:
       run: ${{ steps.g.outputs.run }}
     steps:
+      # CONSUMER-GATE-STARVATION-1 (2026-10-19): a skipped trigger ends with its consume job skipped and the workflow run concluded
+      # success, so the shell this step used to run counted every skipped trigger as a consumer run and restarted the 20-minute
+      # window. With merges arriving faster than that, no consumer ran from 08:56Z to past 10:04Z. The decision is in
+      # scripts/consumer-cadence-gate.mjs (suite scripts/consumer-cadence-gate.test.mjs): only a run whose consume job ran counts.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          sparse-checkout: scripts/consumer-cadence-gate.mjs
+          sparse-checkout-cone-mode: false
       - id: g
         env:
           GH_TOKEN: ${{ github.token }}
           EVENT: ${{ github.event_name }}
+          RUN_ID: ${{ github.run_id }}
           HEAD_MSG: ${{ github.event.workflow_run.head_commit.message }}
-        run: |
-          set -uo pipefail
-          if [ "$EVENT" != "workflow_run" ]; then echo "run=true" >> "$GITHUB_OUTPUT"; exit 0; fi
-          case "$HEAD_MSG" in *"[skip ci]"*) echo "skip: triggering commit is [skip ci]"; echo "run=false" >> "$GITHUB_OUTPUT"; exit 0;; esac
-          last=$(gh api "repos/${{ github.repository }}/actions/workflows/remediation-consumer.yml/runs?per_page=20" \
-            -q '[.workflow_runs[] | select(.id != ${{ github.run_id }}) | select(.status == "in_progress" or .conclusion == "success") | .run_started_at] | max // ""' 2>/dev/null || echo "")
-          if [ -n "$last" ]; then
-            age=$(( $(date -u +%s) - $(date -u -d "$last" +%s) ))
-            if [ "$age" -lt 1200 ]; then echo "skip: last consumer run started ${age}s ago (< 1200 s)"; echo "run=false" >> "$GITHUB_OUTPUT"; exit 0; fi
-          fi
-          echo "run=true" >> "$GITHUB_OUTPUT"
+        run: node scripts/consumer-cadence-gate.mjs
 
   consume:
     needs: cadence-gate
