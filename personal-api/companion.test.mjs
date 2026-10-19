@@ -471,5 +471,59 @@ console.log("\n[e-mail setting and stale reminders]");
   ok("stale: a reminder weeks past its date is not the one thing or a next action", !(t.next_actions || []).some((a) => a.id === "old") && (!t.one_thing || t.one_thing.id !== "old"), t.next_actions);
   ok("stale: Today counts it once", t.stale_reminders === 1 && t.email_mode === "daily", { s: t.stale_reminders, e: t.email_mode });
 }
+
+console.log("\n[your week (COMPANION-WEEK-1)]");
+{
+  ok("week: Monday of a Sunday is six days back", C.mondayOf("2026-10-25") === "2026-10-19" && C.mondayOf("2026-10-19") === "2026-10-19");
+  ok("week: Sunday 18:00 looks at this week, Monday at the last, Wednesday at none",
+    C.weekWindow({ day: "2026-10-25", hour: 18.5, dow: 0 }) === "2026-10-19" && C.weekWindow({ day: "2026-10-26", hour: 9, dow: 1 }) === "2026-10-19" &&
+    C.weekWindow({ day: "2026-10-25", hour: 17, dow: 0 }) === null && C.weekWindow({ day: "2026-10-21", hour: 12, dow: 3 }) === null);
+  const thin = C.weekText({ week: "2026-10-19", moodDays: [{ day: "2026-10-20", m: 3 }], activities: [], actionsDone: 0 });
+  ok("week: a thin week is not enough and says so kindly", !thin.enough && thin.lines.length === 1 && !/miss|only|didn/i.test(thin.lines[0]), thin);
+  const w = C.weekText({ week: "2026-10-19", moodDays: [{ day: "2026-10-20", m: 2 }, { day: "2026-10-22", m: 4 }, { day: "2026-10-24", m: 3 }], prevAvg: 2.5,
+    activities: [{ title: "walk by the canal", pleasure: 4, mastery: 5 }, { title: "call Sam", pleasure: 3, mastery: 3 }], actionsDone: 2, idea: { title: "read something you chose", minutes: 20 } });
+  const txt = w.lines.join("\n");
+  ok("week: mood, change, best day, what was done, what felt good, one idea", w.enough && /3 days/.test(txt) && /higher than the week before \(2\.5\)/.test(txt) &&
+    /best day was Thursday/.test(txt) && /walk by the canal; call Sam/.test(txt) && /walk by the canal felt good \(4\.5/.test(txt) && /2 things off your list/.test(txt) && /read something you chose \(20 min\)/.test(txt), w.lines);
+  ok("week: never counts what was missed", !/miss|skipp|didn't|failed|only \d/i.test(txt), txt);
+  const lower = C.weekText({ week: "2026-10-19", moodDays: [{ day: "2026-10-20", m: 2 }, { day: "2026-10-21", m: 2 }], prevAvg: 3.4 });
+  ok("week: a lower week is framed as information", /lower than the week before \(3\.4\)\. That's information, not a grade\./.test(lower.lines.join(" ")), lower.lines);
+
+  const wdb = new DatabaseSync(":memory:");
+  const wenv = Object.assign({}, env, { PERSONAL: d1(wdb) });
+  await C.ensureSchema(wenv.PERSONAL, true);
+  for (const [day, sc] of [["2026-10-20", 2], ["2026-10-22", 4], ["2026-10-24", 3], ["2026-10-14", 2]]) wdb.prepare("INSERT INTO cmp_mood (id, ts, day, score) VALUES (?, ?, ?, ?)").run("m" + day, day + "T09:00:00Z", day, sc);
+  wdb.prepare("INSERT INTO wellbeing_checkins (ts, day, mood, source) VALUES ('2026-10-13T09:00:00Z', '2026-10-13', 3, 'reply')").run();
+  wdb.prepare("INSERT INTO cmp_activity_log (id, ts, day, title, category, pleasure, mastery) VALUES ('a1', '2026-10-21T15:00:00Z', '2026-10-21', 'walk by the canal', 'movement', 5, 4)").run();
+  wdb.prepare("INSERT INTO tasks (id, ts, kind, title, status, done_at) VALUES ('t1', '2026-10-20T08:00:00Z', 'task', 'Pay rent', 'done', '2026-10-22T10:00:00Z')").run();
+  const sun = "2026-10-25T17:30:00Z"; // 18:30 in Amsterdam (CET from 25 October)
+  const lb = await C.weekLookback(wenv, sun);
+  ok("week: built from mood taps, check-in replies, rated activities and done actions", lb.ok && lb.week === "2026-10-19" && lb.enough && lb.mood_days.length === 3 && /walk by the canal/.test(lb.lines.join(" ")) && /1 thing off your list/.test(lb.lines.join(" ")) && /same as the week before|higher|lower/.test(lb.lines[0]), lb);
+  wdb.prepare("INSERT INTO cmp_push_subs (endpoint, p256dh, auth, created_at) VALUES ('https://push.example/x', 'k', 'a', ?)").run(sun);
+  const st = await C.gatherState(wenv, sun);
+  ok("week: Sunday evening marks the week ready for one push", st.weekReady === "2026-10-19", st.weekReady);
+  const plan = C.planNudge(Object.assign({}, st, { lastUserIso: null }));
+  ok("week: the planner sends the look-back once, as a quiet push", plan.kind === "cmp-week" && /Nothing to do/.test(plan.ask), plan);
+  const pl = C.pushPayloadFor({ id: 9, kind: "cmp-week", ask: plan.ask });
+  ok("week: the notification is titled Your week and opens the card", pl.title === "Your week" && pl.url === "/companion#week" && !pl.ask, pl);
+  wdb.prepare("INSERT INTO companion_nudges (ts, day, kind, ask, state, sent_at) VALUES (?, '2026-10-25', 'cmp-week', 'x', 'sent', ?)").run(sun, sun);
+  const st2 = await C.gatherState(wenv, sun);
+  ok("week: no second push the same week", st2.weekReady === null && C.planNudge(st2).kind !== "cmp-week", st2.weekReady);
+  ok("week: Wednesday builds nothing for the planner", (await C.gatherState(wenv, "2026-10-21T12:00:00Z")).weekReady === null);
+  const quiet = C.planNudge(Object.assign({}, st, { hour: 22.5 }));
+  ok("week: quiet hours still bind it (rule 1)", quiet.skip === "quiet-hours", quiet);
+  const paused = C.planNudge(Object.assign({}, st, { cfg: Object.assign({}, st.cfg, { pause_until: "2099-01-01T00:00:00Z" }) }));
+  ok("week: a pause still binds it (rule 11)", paused.skip === "paused", paused);
+  const r = await C.weekSeen(wenv, "2026-10-19");
+  ok("week: hiding the card records the week and counts the push as landed", r.ok && JSON.parse(wdb.prepare("SELECT value FROM wellbeing_config WHERE key='week_seen'").get().value) === "2026-10-19" &&
+    wdb.prepare("SELECT state FROM companion_nudges WHERE kind='cmp-week'").get().state === "done");
+  ok("week: a missing week is refused", !(await C.weekSeen(wenv, "soon")).ok);
+  ok("week: once seen, Sunday evening is no longer ready", (await C.gatherState(wenv, sun)).weekReady === null);
+  const HW = (path) => C.handleCompanion(new Request("https://me.q08.org/companion/api/" + path, { headers: { Authorization: "Bearer k" } }), wenv, { waitUntil() {} }, Object.assign({}, deps, { auth: async (q) => q.headers.get("Authorization") === "Bearer k", version: "test", doStub: () => ({ fetch: async () => new Response("{}") }) }));
+  const gw = await (await HW("week?week=2026-10-19")).json();
+  ok("week: GET /companion/api/week returns any week's look-back", gw.ok && gw.week === "2026-10-19" && Array.isArray(gw.lines), gw);
+  const page = fs.readFileSync(new URL("./companion.js", import.meta.url), "utf8");
+  ok("week: the page shows the card, hides the nudge copy and opens #week", page.includes("api/week/seen") && page.includes("n.kind==='cmp-week'") && page.includes("q.week!==undefined"));
+}
 console.log("\n" + pass + " passed, " + fail + " failed");
 if (fail) process.exit(1);
