@@ -32,6 +32,7 @@ ok(!/github_issue|github_projects|fleet_graph|dashboard_feed|cf_docs/.test(pub),
 // a minimum, not an exact pin: the next patch release would break an exact one (CLAUDE.md, suites that pin a VERSION)
 const _ver = (/var VERSION = "(\d+)\.(\d+)\.(\d+)/.exec(src) || []).slice(1).map(Number);
 ok(_ver.length === 3 && (_ver[0] > 2 || (_ver[0] === 2 && (_ver[1] > 50 || (_ver[1] === 50 && _ver[2] >= 0)))), "VERSION is at least 2.50.0", _ver);
+ok(!/model such as llama/i.test(src.split("\n").filter((l) => l.includes('name: "cf_docs"')).join("\n")), "the cf_docs description names no banned model (MODEL-FLOOR-REPAIR-1)");
 
 (async () => {
   // Issues list: PRs dropped, labels flattened, query built.

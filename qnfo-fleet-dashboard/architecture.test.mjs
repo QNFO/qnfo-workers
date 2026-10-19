@@ -72,7 +72,9 @@ function auditDb(opts) {
   a.exec(`CREATE TABLE service_registry (service TEXT, kind TEXT, version TEXT, base_url TEXT, purpose TEXT, capabilities TEXT, routes TEXT, tools TEXT, models TEXT, deps TEXT, updated_at TEXT, state TEXT);
   CREATE TABLE fleet_heartbeat (worker TEXT PRIMARY KEY, version TEXT, ts TEXT, ok INTEGER);
   CREATE TABLE fleet_crons (id INTEGER, name TEXT, cron_expr TEXT, task_id TEXT, enabled INTEGER, timezone TEXT, last_fired TEXT, next_fire TEXT, updated_at TEXT);
-  CREATE TABLE agent_issues (id INTEGER); CREATE TABLE code_tasks (id TEXT);`);
+  CREATE TABLE agent_issues (id INTEGER); CREATE TABLE code_tasks (id TEXT);
+  CREATE TABLE cron_fire_log (id INTEGER PRIMARY KEY, cron_name TEXT, task_id TEXT, cron_expr TEXT, fired_at TEXT, fired_epoch_ms INTEGER, outcome TEXT, source TEXT, note TEXT);`);
+  for (const [w, expr, outcome, agoMin] of (opts && opts.fires) || []) a.prepare("INSERT INTO cron_fire_log (cron_name, task_id, cron_expr, fired_at, fired_epoch_ms, outcome, source, note) VALUES (?, ?, ?, ?, ?, ?, ?, '')").run(w + "|" + expr, w, expr, new Date(Date.now() - (agoMin || 0) * 60000).toISOString(), Date.now() - (agoMin || 0) * 60000, outcome, "worker:" + w);
   a.prepare("INSERT INTO service_registry (service, kind, version, purpose, state) VALUES ('qnfo-fleet-control','worker','0.34.0','merged fleet control','live'), ('qnfo-ops','worker','2.49.0','ops endpoint','live'), ('qnfo-gateway','worker','3.26.5','landing and papers','live'), ('old-folded','member','1.0.0','gone','retired')").run();
   a.prepare("INSERT INTO fleet_heartbeat VALUES ('qnfo-fleet-control','0.34.0',?,1), ('qnfo-ops','2.49.0',?,0)").run(NOW, NOW);
   for (const [w, ago, ok] of (opts && opts.beats) || []) a.prepare("INSERT OR REPLACE INTO fleet_heartbeat VALUES (?, '1.0.0', ?, ?)").run(w, new Date(Date.now() - ago * 60000).toISOString(), ok);
@@ -215,6 +217,36 @@ const envI = mkEnv({ crons: [["qnfo-fleet-control", "0 0 1 * *"]], beats: [["qnf
 r = await get(envI, "/api/architecture");
 ok(r.j.workers.find((w) => w.name === "qnfo-fleet-control").cadence_min === null && r.j.summary.overdue_loops === 0, "a cron that pins the day of the month is not judged", r.j.workers.find((w) => w.name === "qnfo-fleet-control").cadence_min);
 ok(/overdue when its last tick is older than its schedule/.test(JSON.stringify(r.j.self.limits)), "self.limits says how overdue is judged");
+
+// (I) ARCH-OVERDUE-GRID-1: a cron-grid worker's trigger is not its schedule
+// personal-api: hourly grid trigger, daily job not run since the grid began (idle ticks only), heartbeat 441 minutes old
+// qnfo-gateway: hourly grid trigger, daily job `5 6 * * *` has run (ok), heartbeat 1000 minutes old, then 1700
+// qnfo-intent-orchestrator: half-hourly grid trigger, jobs 0,30 are its trigger itself (idle only) - unknown
+// qnfo-subscribers: a worker on a plain hourly cron that logs ok rows for its own trigger: no grid, judged by the trigger
+const envG = mkEnv({ crons: [["personal-api", "5 * * * *"], ["qnfo-gateway", "0 * * * *"], ["qnfo-intent-orchestrator", "0,30 * * * *"], ["qnfo-subscribers", "0 * * * *"]],
+  beats: [["personal-api", 441, 1], ["qnfo-gateway", 1000, 1], ["qnfo-intent-orchestrator", 357, 1], ["qnfo-subscribers", 441, 1]],
+  fires: [["personal-api", "5 * * * *", "idle", 20], ["qnfo-gateway", "0 * * * *", "idle", 30], ["qnfo-gateway", "5 6 * * *", "ok", 500], ["qnfo-intent-orchestrator", "0,30 * * * *", "idle", 10], ["qnfo-subscribers", "0 * * * *", "ok", 20]] });
+r = await get(envG, "/api/architecture");
+const WG = (n) => r.j.workers.find((w) => w.name === n);
+ok(WG("personal-api").cadence_min === null && WG("personal-api").cadence_source === "cron-grid-unknown" && WG("personal-api").beat.overdue === false, "a grid worker that has only idled is not judged, however old its heartbeat is", [WG("personal-api").cadence_min, WG("personal-api").cadence_source, WG("personal-api").beat]);
+ok(WG("qnfo-gateway").cadence_min === 1440 && WG("qnfo-gateway").cadence_source === "cron-grid" && WG("qnfo-gateway").beat.overdue === false, "a grid worker whose daily job has run is judged by that job (1440), a heartbeat 1000 minutes old is on time", [WG("qnfo-gateway").cadence_min, WG("qnfo-gateway").cadence_source, WG("qnfo-gateway").beat]);
+ok(WG("qnfo-intent-orchestrator").cadence_min === null && WG("qnfo-intent-orchestrator").cadence_source === "cron-grid-unknown", "a grid worker whose only logged expression is its own trigger is not judged", WG("qnfo-intent-orchestrator").cadence_source);
+ok(WG("qnfo-subscribers").cadence_min === 60 && WG("qnfo-subscribers").cadence_source === "cron" && WG("qnfo-subscribers").beat.overdue === true, "a worker without a grid keeps its trigger as its schedule: hourly with a 441-minute heartbeat is late", [WG("qnfo-subscribers").cadence_min, WG("qnfo-subscribers").cadence_source, WG("qnfo-subscribers").beat]);
+ok(r.j.overdue.map((o) => o.name).join() === "qnfo-subscribers" || r.j.overdue.filter((o) => o.kind === "worker").map((o) => o.name).join() === "qnfo-subscribers", "only the worker without a grid is listed late", r.j.overdue);
+ok(r.j.workers.find((w) => w.name === "qnfo-ops").cadence_source === null, "a worker with no cron has no cadence source");
+// the heartbeat on the qnfo-gateway job goes late when it is older than the job plus 120 minutes
+const envG2 = mkEnv({ crons: [["qnfo-gateway", "0 * * * *"]], beats: [["qnfo-gateway", 1700, 1]], fires: [["qnfo-gateway", "0 * * * *", "idle", 30], ["qnfo-gateway", "5 6 * * *", "ok", 500]] });
+r = await get(envG2, "/api/architecture");
+ok(r.j.workers.find((w) => w.name === "qnfo-gateway").beat.overdue === true, "a grid worker's daily job is still caught when its heartbeat is older than 1440 + 120 minutes", r.j.workers.find((w) => w.name === "qnfo-gateway").beat);
+// an unreadable fire log falls back to the trigger and says nothing false about itself
+const envG3 = mkEnv({ crons: [["personal-api", "5 * * * *"]], beats: [["personal-api", 441, 1]] });
+const auditG3 = envG3.AUDIT;
+envG3.AUDIT = { prepare(sql) { return /cron_fire_log/.test(sql) ? { bind() { return this; }, async all() { throw new Error("no such table: cron_fire_log"); } } : auditG3.prepare(sql); } };
+r = await get(envG3, "/api/architecture");
+ok(r.s === 200 && r.j.workers.find((w) => w.name === "personal-api").cadence_min === 60 && r.j.workers.find((w) => w.name === "personal-api").cadence_source === "cron", "an unreadable fire log falls back to the trigger, and the page still answers", r.j.workers.find((w) => w.name === "personal-api").cadence_source);
+ok(JSON.stringify(r.j.self).indexOf("cron fire log") >= 0, "the unreadable source is named in what the model could not read", r.j.self);
+ok(/ARCH-OVERDUE-GRID-1/.test(src) && /cron-grid-unknown/.test(src) && /FROM cron_fire_log/.test(src), "the worker reads cron_fire_log and names the unknown grid cadence");
+ok(/cron grid \(CRON-GRID-1/.test(JSON.stringify(r.j.self.limits)), "self.limits says how grid workers are judged");
 
 console.log(pass + " passed, " + fail + " failed");
 if (fail) process.exit(1);

@@ -7,6 +7,7 @@
 //   node model-floor-guard.mjs                 # repo scan (default)
 //   node model-floor-guard.mjs --live          # repo + live bundles
 //   node model-floor-guard.mjs --json          # machine-readable summary
+//   node model-floor-guard.mjs --base <dir>    # pull-request mode: only violations added against the tree in <dir>
 
 import fs from "node:fs";
 import path from "node:path";
@@ -100,12 +101,32 @@ function scan(text) {
 
 export { BANNED, scan };
 
-function scanRepo() {
+// MODEL-FLOOR-PREMERGE-1 (2026-10-19, agent_issues 100121): a pull request fails only for a violation it ADDS. A violation is the
+// worker, the banned label and the trimmed source text, so a hit that moves lines is not new and debt already on the base branch
+// never blocks an unrelated pull request. diffViolations(head, base) takes two scanRepo() results and returns the added rows.
+function violationKeys(rows) {
+  const keys = new Set();
+  for (const r of rows || []) for (const h of r.hits || []) keys.add(r.name + "|" + h.label + "|" + String(h.text || "").trim());
+  return keys;
+}
+function diffViolations(head, base) {
+  const known = violationKeys(base);
+  const out = [];
+  for (const r of head || []) {
+    const added = (r.hits || []).filter((h) => !known.has(r.name + "|" + h.label + "|" + String(h.text || "").trim()));
+    if (added.length) out.push({ name: r.name, hits: added });
+  }
+  return out;
+}
+export { diffViolations, violationKeys };
+
+function scanRepo(root) {
+  const base = root || REPO;
   const res = [];
   let dirs = [];
-  try { dirs = fs.readdirSync(REPO, { withFileTypes: true }).filter((d) => d.isDirectory()).map((d) => d.name); } catch { return [{ name: "(repo unreadable)", hits: [] }]; }
+  try { dirs = fs.readdirSync(base, { withFileTypes: true }).filter((d) => d.isDirectory()).map((d) => d.name); } catch { return [{ name: "(repo unreadable)", hits: [] }]; }
   for (const d of dirs) {
-    const f = path.join(REPO, d, "worker.js");
+    const f = path.join(base, d, "worker.js");
     if (!fs.existsSync(f)) continue;
     const hits = scan(fs.readFileSync(f, "utf8"));
     const v = hits.filter((h) => h.kind === "VIOLATION");
@@ -149,6 +170,19 @@ function isEntry() {
 async function main() {
   const wantLive = process.argv.includes("--live");
   const wantJson = process.argv.includes("--json");
+  const bi = process.argv.indexOf("--base");
+  if (bi > 0) {
+    // Pull-request mode: scan the checked-out tree and the base tree, report only what the change adds.
+    const baseDir = process.argv[bi + 1];
+    if (!baseDir || !fs.existsSync(baseDir)) { console.log("model-floor-guard --base: base directory not found: " + baseDir); process.exit(2); }
+    const added = diffViolations(scanRepo(), scanRepo(baseDir));
+    if (wantJson) console.log(JSON.stringify({ added }, null, 1));
+    else {
+      console.log("== ADDED BY THIS CHANGE (" + added.length + " workers with new code-level violations against the base)");
+      for (const r of added) { console.log("  " + r.name); for (const h of r.hits.slice(0, 6)) console.log("      L" + h.line + " [" + h.label + "] " + h.text); }
+    }
+    process.exit(added.length > 0 ? 1 : 0);
+  }
   const repo = scanRepo();
   const live = wantLive ? await scanLive() : [];
 

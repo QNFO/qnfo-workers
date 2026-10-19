@@ -49,6 +49,31 @@ const marks = (db) => db.prepare("SELECT COUNT(*) n FROM fixer_marks").get().n;
 { const { env } = mk({ broken: true }); logs.length = 0; let threw = false, r = null;
   try { r = await lib.feedFallbackTick(env); } catch (e) { threw = true; }
   ok(!threw && r === 0 && logs.length === 2, "two failures return 0 (heartbeat ok 0), log both and never throw", { threw, r, logs: logs.length }); }
+// STANDBY-PROOF-1 (agent_issues 100136): the standby producer proves itself every 6 hours even while the primary ticks.
+{ const { db, env } = mk({ healthy: true });
+  db.prepare("INSERT INTO fleet_tick (source) VALUES ('cron:qnfo-code-orchestrator')").run();
+  const r = await lib.feedFallbackTick(env);
+  ok(r === 1 && ticks(db).join() === "cron:qnfo-code-orchestrator,cron:qnfo-fleet-dashboard", "a fresh primary tick and no row of its own in 6 h: the standby writes one proof tick", { r, t: ticks(db) }); }
+{ const { db, env } = mk({ healthy: true });
+  db.prepare("INSERT INTO fleet_tick (source) VALUES ('cron:qnfo-code-orchestrator')").run();
+  db.prepare("INSERT INTO fleet_tick (ts, source) VALUES (strftime('%Y-%m-%dT%H:%M:%SZ','now','-60 minutes'), 'cron:qnfo-fleet-dashboard')").run();
+  await lib.feedFallbackTick(env);
+  ok(ticks(db).length === 2, "a fresh primary tick and a row of its own 1 h ago: no proof tick", ticks(db)); }
+{ const { db, env } = mk({ healthy: true });
+  db.prepare("INSERT INTO fleet_tick (source) VALUES ('cron:qnfo-code-orchestrator')").run();
+  db.prepare("INSERT INTO fleet_tick (ts, source) VALUES (strftime('%Y-%m-%dT%H:%M:%SZ','now','-7 hours'), 'cron:qnfo-fleet-dashboard')").run();
+  await lib.feedFallbackTick(env);
+  ok(ticks(db).length === 3, "its own last row 7 h ago: a proof tick is written", ticks(db)); }
+{ const { db, env } = mk({ healthy: true });
+  db.prepare("INSERT INTO fleet_tick (ts, source) VALUES (strftime('%Y-%m-%dT%H:%M:%SZ','now','-30 minutes'), 'cron:qnfo-code-orchestrator')").run();
+  const r = await lib.feedFallbackTick(env);
+  ok(r === 1 && ticks(db).includes("cron:qnfo-fleet-dashboard"), "a stale primary still gets the standby tick (the original duty is unchanged)", ticks(db)); }
+{ const probe = "SELECT COUNT(*) n FROM fleet_tick WHERE source LIKE 'cron:qnfo-fleet-dashboard%' AND ts > strftime('%Y-%m-%dT%H:%M:%SZ','now','-24 hours')";
+  const { db, env } = mk({ healthy: true });  /* then a failing fan-out: the :isolated row also satisfies the drill probe */
+  db.prepare("INSERT INTO fleet_tick (source) VALUES ('cron:qnfo-code-orchestrator')").run();
+  db.exec("CREATE TRIGGER fixer_reopen_twin AFTER INSERT ON fleet_tick BEGIN UPDATE agent_issues SET status = 'open' WHERE title = 'same title' AND status = 'closed'; END;");
+  await lib.feedFallbackTick(env);
+  ok(db.prepare(probe).get().n >= 1, "the chaos-drill probe (a dashboard-sourced row in 24 h) is satisfied, isolated rows included", ticks(db)); }
 ok(/const tickOk = await feedFallbackTick\(env\);/.test(src) && !/INSERT INTO fleet_tick \(source\) SELECT 'cron:qnfo-fleet-dashboard' WHERE/.test(src), "scheduled() uses the helper and no longer carries the bare insert");
 { const m = /var VERSION = "(\d+)\.(\d+)\.(\d+)/.exec(src); ok(m && Number(m[1]) * 1e6 + Number(m[2]) * 1e3 + Number(m[3]) >= 1049002, "VERSION is at least 1.49.2", m && m[0]); }
 console.log(fail ? fail + " failed, " + pass + " passed" : pass + " passed, 0 failed");

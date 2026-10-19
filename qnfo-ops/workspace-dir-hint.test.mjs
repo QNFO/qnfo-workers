@@ -3,6 +3,7 @@
 // /workspace says the container was recycled; any other failure, a missing dir argument, a listing that fails and a success are unchanged.
 // Run: node qnfo-ops/workspace-dir-hint.test.mjs   -> prints "N passed, 0 failed"
 import { readFileSync } from "node:fs";
+import { versionAtLeast } from "../scripts/version-at-least.mjs";
 const src = readFileSync(new URL("./worker.js", import.meta.url), "utf8");
 let pass = 0, fail = 0;
 const ok = (c, m, x) => { if (c) pass++; else { fail++; console.log("FAIL " + m + (x !== undefined ? " :: " + JSON.stringify(x).slice(0, 500) : "")); } };
@@ -68,7 +69,7 @@ const CD_FAIL = "bash: line 1: cd: /workspace/qw: No such file or directory";
   const r = await containerWorkspaceExec({}, { cmd: "echo done", dir: "qnfo-workers" });
   ok(r.ok === true && r.stdout === "done\n" && r.workspace_dirs === undefined && calls.length === 1, "a successful command is unchanged", r);
 }
-ok(/var VERSION = "2\.50\.3/.test(src) || /var VERSION = "2\.(5[1-9]|[6-9]\d)\./.test(src) || /var VERSION = "[3-9]\./.test(src), "VERSION is at least 2.50.3");
+ok(versionAtLeast((/var VERSION = "([^"]*)"/.exec(src) || [])[1] || "", "2.50.3"), "VERSION is at least 2.50.3"); // VERSION-PIN-TESTS-1: a minimum through versionAtLeast, never a range regex (a range regex rejected 2.50.4)
 
 console.log(pass + " passed, " + fail + " failed");
 if (fail) process.exit(1);
