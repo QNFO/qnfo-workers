@@ -1,0 +1,13 @@
+{
+  "marker": "TRAVEL-HOST-1",
+  "host": "travel.q08.org",
+  "service": "personal-companion",
+  "token_present": true,
+  "route_id": "f0428823014b467487c28eda6ede0f41",
+  "dns_created": "e4731acadbc8e08c8d42d7248434a2be",
+  "status": "ok",
+  "detail": null,
+  "version": "1.33.0-travel-chat",
+  "ts": "2026-10-19T15:08:33Z",
+  "route_created": true
+}
