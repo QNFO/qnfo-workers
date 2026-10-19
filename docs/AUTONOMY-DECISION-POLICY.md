@@ -11,6 +11,13 @@ Every decision point gets an **automatic safe default**. The system applies the 
 default; nothing waits for one. "Needs the owner" is never a terminal state for work on the critical path (deploys, audits, the research
 pipeline, serving traffic). It is a **parked** state with a default already in effect.
 
+### The recommended option (DECISION-AUTOPROCEED-1, owner directive 2026-10-19)
+"Reversible fleet decisions SHALL ALWAYS take the recommended option and proceed without waiting for approval." For a tier T1 decision
+(reversible, bounded, inside existing limits) the safe default above **is** the recommended option: it is taken in the same cycle, recorded in
+`decision_log` with its revert path, and reported as done, never offered as a menu or held for a reply. Tier T2 and Never are unchanged: the
+directive covers only what can be undone, and it moves no limit. Recorded in `ops_config.OWNER_DIRECTIVE_2026_10_19_DECISION_AUTOPROCEED_1` and
+in docs/AUTONOMOUS-OPERATION-DOCTRINE.md (standing directive 2026-10-19).
+
 ## Three tiers
 | Tier | What | The system |
 |---|---|---|
