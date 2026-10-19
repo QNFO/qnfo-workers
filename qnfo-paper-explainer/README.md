@@ -38,7 +38,7 @@ the account that explains science to everyone.
    arrive (outage, unparseable reply) or the abstract is missing, nothing is posted, no log row is
    written (the paper stays eligible, the next run retries) and a
    `PAPER-EXPLAIN-CHECKER-UNAVAILABLE` issue is filed. There is no degraded / fail-open path.
-4. **Post** - own AT Protocol session -> Bluesky (qnfo.bsky.social), then Buffer GraphQL
+4. **Post** - own AT Protocol session -> Bluesky (qnfo.org), then Buffer GraphQL
    API (`https://api.buffer.com`, `Bearer` key) -> Mastodon + LinkedIn + X (best-effort;
    a Buffer failure never blocks the Bluesky post).
 5. **Log** — `paper_explain_log` (full explanation artifact) + `cloud_ops_events`
