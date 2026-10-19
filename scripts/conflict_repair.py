@@ -358,10 +358,61 @@ def open_issue_prs():
     return issue_prs([r.get("title") for r in rows or []])
 
 
+def settled_evidence(pr):
+    """A pull request object -> the close evidence for its repair issue when the PR is no longer open, else None.
+    CONFLICT-REPAIR-SETTLE-1 (2026-10-19, agent_issues 2305/2898): the doer skipped a merged or closed pull request and
+    left its repair issue open for good (2898: PR 1417 merged 2026-10-18T08:57Z, issue still open 20 h later)."""
+    if not isinstance(pr, dict) or not pr.get("number") or pr.get("state") == "open":
+        return None
+    if pr.get("merged_at"):
+        how = "merged at %s" % pr.get("merged_at")
+    else:
+        how = "closed unmerged at %s" % (pr.get("closed_at") or "?")
+    return "CONFLICT-REPAIR-SETTLE-1: GitHub reads PR #%d %s, so there is no conflict left to repair." % (int(pr["number"]), how)
+
+
+# CONFLICT-REPAIR-SETTLE-2 (2026-10-19, PR 2603 review): the first settle INSERTed into issue_triage without sla_due_at, which is
+# NOT NULL with no default in the live schema; SQLite checks NOT NULL before the ON CONFLICT upsert, so the statement failed even
+# when a triage row existed and the repair issue of a merged or closed pull request (2898, 2305, 99905, 100038) stayed open.
+# agent_issues_autotriage2_ins gives every issue a triage row, so the evidence goes in by UPDATE; the guarded INSERT covers an
+# issue that has none and supplies every NOT NULL column (due on arrival, PRIORITY-QUEUE-1). scripts/conflict_repair_test.py runs
+# these statements against the live issue_triage definition and the close triggers.
+SETTLE_TRIAGE_SQL = ("INSERT INTO issue_triage (issue_id, rc, owner, sla_due_at, close_evidence) "
+                     "SELECT ?1, 'CONFLICT-REPAIR-SETTLE-1', 'conflict-repair', datetime('now'), ?2 "
+                     "WHERE NOT EXISTS (SELECT 1 FROM issue_triage WHERE issue_id = ?1)")
+SETTLE_EVIDENCE_SQL = "UPDATE issue_triage SET close_evidence = ?2 WHERE issue_id = ?1"
+SETTLE_CLOSE_SQL = "UPDATE agent_issues SET status = 'closed', updated_at = CAST(strftime('%s','now') AS INTEGER) * 1000 WHERE id = ?1 AND status = 'open'"
+
+
+def settle_issue(number, evidence):
+    """Close the open STALE-PR-CONFLICT-REPAIR-1 issue of a pull request that is no longer open, with the GitHub read as
+    evidence. The close triggers still apply (issue_close_evidence_required, CLOSE-BINDS-TO-PROBE-1): a failing contract
+    keeps the issue open and the refusal is reported, never bypassed."""
+    acct, token = os.environ.get("CLOUDFLARE_ACCOUNT_ID") or os.environ.get("CF_ACCOUNT_ID"), os.environ.get("CLOUDFLARE_API_TOKEN")
+    if not (acct and token):
+        return False
+    try:
+        from apply_migrations import d1
+        rows = d1(acct, token, DB_ID, "SELECT id FROM agent_issues WHERE status = 'open' AND title LIKE ?1", ["STALE-PR-CONFLICT-REPAIR-1 PR %d:%%" % number])
+        for r in rows or []:
+            iid = int(r.get("id"))
+            d1(acct, token, DB_ID, SETTLE_TRIAGE_SQL, [iid, evidence])
+            d1(acct, token, DB_ID, SETTLE_EVIDENCE_SQL, [iid, evidence])
+            d1(acct, token, DB_ID, SETTLE_CLOSE_SQL, [iid])
+        return True
+    except Exception as e:  # noqa: BLE001
+        emit("::warning::conflict-repair: repair issue of PR %d not settled: %s" % (number, str(e)[:200]))
+        return False
+
+
 def repair(number, push=False, keep_branch=False):
     pr = gh("repos/%s/pulls/%d" % (REPO, number))
     why = eligible(pr)
     if why:
+        ev = settled_evidence(pr)
+        if ev and push:
+            done = settle_issue(number, ev)
+            return {"pr": number, "outcome": "settled" if done else "settle-failed", "why": why, "evidence": ev}
         return {"pr": number, "outcome": "skipped", "why": why}
     head_sha = pr["head"]["sha"]
     if push and attempted(number, head_sha):
@@ -436,6 +487,10 @@ def selftest():
     ce = clean_env()
     ok("CONFLICT_REPAIR_SELFTEST_TOKEN" not in ce and not any(SECRET_ENV.search(k) for k in ce) and "PATH" in ce, "clean_env drops every credential-named variable and keeps PATH")
     ok(core("0.14.0-conflict-repair") == (0, 14, 0) and core("x") is None, "core reads the numeric part")
+    ok(settled_evidence({"number": 1417, "state": "closed", "merged_at": "2026-10-18T08:57:52Z"}) == "CONFLICT-REPAIR-SETTLE-1: GitHub reads PR #1417 merged at 2026-10-18T08:57:52Z, so there is no conflict left to repair."
+       and "closed unmerged" in settled_evidence({"number": 9, "state": "closed", "merged_at": None, "closed_at": "x"})
+       and settled_evidence({"number": 9, "state": "open"}) is None and settled_evidence(None) is None,
+       "a merged or closed pull request settles its repair issue with the GitHub read; an open one does not")
     ok(bump_above("0.14.0-fix", ["0.13.9", "0.12.0"]) == "0.14.0-fix", "a VERSION already ahead stays")
     ok(bump_above("0.13.2-fix", ["0.13.5-a", "0.13.4"]) == "0.13.6-fix", "a patch release lands one patch above the highest claim, suffix kept")
     ok(bump_above("0.14.0-feature", ["0.16.1-perf", "0.15.0"]) == "0.17.0-feature", "a minor release stays a minor release above the highest claim")

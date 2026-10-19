@@ -4,9 +4,12 @@ ONE human page: https://fleet.qnfo.org/  answers "what do I have to do, and shou
 Mirror: https://qnfo-fleet-dashboard.q08.workers.dev/
 
 ## The page
-- **Organised by functional area (AREAS-1, 1.38.0).** Five tiles under the verdict: Cost, Research and content, Reach and growth, Autonomy loop, Reliability and security. Each shows one star metric with its 14-day direction (improving or worsening is judged against the breach operator, so a falling run-rate is good and falling subscriber growth is bad). A tile is green with no breach, amber with breaches below priority 8, red with a priority 8 or higher breach or eight or more breaches.
+- **Organised by functional area (AREAS-1, 1.38.0; pages and navigation by area since AREA-PAGES-1, 1.45.0, below).** Five tiles under the verdict: Cost, Research and content, Reach and growth, Autonomy loop, Reliability and security. Each shows one star metric with its 14-day direction (improving or worsening is judged against the breach operator, so a falling run-rate is good and falling subscriber growth is bad). A tile is green with no breach, amber with breaches below priority 8, red with a priority 8 or higher breach or eight or more breaches.
 - **Management by exception.** Under the queue, each area lists only metrics in breach (qnfo-audit v_metric_trigger_state, hit = 1), worst three first (priority, then size of the gap), each with owner, 14-day sparkline from metric_history and a Diagnose control that fills the command line (nothing runs until the owner presses Enter). The remainder is a count that opens a command-line listing. A metric maps to one area by key (AREA_DEFS); an unmapped key falls into Autonomy loop rather than disappearing.
-- **Pipelines and bottlenecks.** Open issues by age, code loop (30 days), research queue and outreach, one bar per stage. The bottleneck is named by rule: failing stages that hold over 40% of finished work, else the largest waiting stage with at least 5 items and 30% of the pipeline. Age buckets and declined items never qualify, but a stale bucket is flagged.
+- **Pipelines and bottlenecks** (on each area's page since 1.45.0; the overview shows a bottleneck on the area's row). The Code loop flow
+  (30 days) splits "closed" by what happened to the pull request, from `code_task_pr_links` (CODE-FLOW-PR-SPLIT-1, 1.46.0): closed, never
+  opened a PR; PR closed unmerged; superseded (`status` or `merge_state` superseded, or a `last_error` that starts with superseded), which is
+  not a failure and stays out of the failure share. Open issues by age, code loop (30 days), research queue and outreach, one bar per stage. The bottleneck is named by rule: failing stages that hold over 40% of finished work, else the largest waiting stage with at least 5 items and 30% of the pipeline. Age buckets and declined items never qualify, but a stale bucket is flagged.
 - **Removed as redundant:** the four-number KPI strip (now the tiles and the verdict reasons), the Business case grid (every figure is a tile, a verdict reason or the Progress card), the Open data link card (the footer carries the JSON links). GET /api/areas returns the same model (fleet-areas/v1); a source that cannot be read is named in blind and its pipeline is left out, never shown as zero.
 - Banner: `N things need you` / `Nothing needs you` / `Can't confirm` (a source could not be read, or system data is >60 min old; it never claims all-clear blind).
 - One card per human action: what, why only you, what happens if you wait, what to do, link.
@@ -73,6 +76,49 @@ File or clear an action from any worker/session (header `x-loop-token`, secret `
 
 `GET /api/human` returns the same view as JSON (`fleet-human/v1`).
 
+## Pages by functional area (AREA-PAGES-1, 1.45.0)
+Owner directive 2026-10-18, repeated 2026-10-19 ("REFACTOR FLEET DASHBOARD BY FUNCTIONAL AREA"): the dashboard is organised by the
+same six functional areas as its feeds. `AREA_REGISTRY` in worker.js is the one table: for each area it holds the name and what it
+covers, the metric keys that belong to it, its headline metric, root cause, pipelines, the cards and tabs that describe it, the
+pipeline switches it owns and the owner-queue cards that are about it. `FEED_AREAS`, `AREA_DEFS`, `AREA_STARS`, `AREA_ROOT` and
+`AREA_FLOW` are derived from it, so the page, `GET /api` and `GET /api/area/<id>` cannot disagree about which areas exist
+(`area-pages.test.mjs` holds them to each other).
+
+- **Navigation is the areas:** Overview, Cost, Research, Reach, Autonomy, Reliability, Platform, Command line. Metrics (`/kpi`), Content
+  (`/content`) and Changelog (`/changelog`) are pages of an area, not top-level tabs: they light their area in the navigation and show
+  the area's sub-bar. The old anchors (`/#queue`, `/#areas`, `/#flow`, `/#invest`) still land on the overview.
+- **Overview (`/`):** the owner queue (each card names its area; a receipt for a request of yours that the fleet closed sits apart under
+  *Closed for you*, with its issue number and no issue text, and is never counted as waiting on you: OWNER-REQUEST-RECEIPT-1; the gate grades the same cards `notice`, OWNER-NOTICE-GATE-1), one row per metric area (the worst breach, its lever and, when there is one,
+  a named bottleneck or a stopped pipeline switch), and the two headline answers the page promises: *Keep investing?* and *System health*.
+- **`/area/<id>` for `cost`, `research`, `reach`, `autonomy`, `reliability`, `platform`:** the headline metric and trend; the queue cards
+  that are about the area; the constraint and every breach; the area's pipelines; the cards that used to sit on the overview (Keep
+  investing? under Cost, Progress and the social-distribution switch under Reach, System health under Reliability, the owner-queue
+  switch under Autonomy); and a table of every read in the area, page and feed, with its source and worst-case lag. `platform` has no
+  metrics (it is the API and the fleet state itself) and lists the feeds of every area. A source the model could not read is named at the top
+  of the page, limited to the sources that area is built from, and is never shown as zero.
+- **Live:** the page fetches `/area/<id>?frag=1&rev=<revision>` every 15 s and swaps the area in place; `204` while nothing in the area moved.
+  Ages and the version are outside the revision, so an unchanged area keeps it.
+- **Which area a queue card belongs to:** its source first (`billing`, `decision`, `shutdown` are Cost; `inbox` is Reach; `code-loop`,
+  `issue-loop`, `objectives`, `register`, `gtd` are Autonomy), then the area's own words for a card with no source of its own
+  (`AREA_REGISTRY[].queue.rx`); a card nothing recognises is Autonomy, as an unmapped metric is.
+- **Not changed:** the command line, the owner console and the owner documents stay where they were; their code is mapped under Platform and
+  Autonomy below.
+
+## Code map by functional area
+One worker is deployed as one file (`worker.js`, uploaded as a single module by the canonical path), so the code is mapped, not split.
+Every region starts with a banner `// ==== AREA-MAP <area>: <what> ====`; `grep -n "AREA-MAP reach" qnfo-fleet-dashboard/worker.js` lists the
+code of one area. `area-pages.test.mjs` fails on a banner with an unknown area, a repeated region name, or an area with no region, so a new
+region gets its banner in the PR that adds it.
+
+| Area | Regions (banner text) |
+| --- | --- |
+| `cost` | keep investing: decision rule, governance snapshot, spend and return (INVEST-DECISION-1) |
+| `research` | q08 review decision; text generator inventory; Content tab (CONTENT-PIPELINE-1) |
+| `reach` | human audience; engaged human sessions; reach signals ingest; work-with-me contacts; attention loop; GA4 ingest and the reach tick; reach scorecard; portfolio daily run and the owner-voice guard |
+| `autonomy` | code task outcomes split by pull request (shared by the flow and the Metrics tab); issue ledger and the GitHub issue loop; autonomy score (SAI) and the weekly report card; owner queue tables and objective revisions; watchmaker index; owner queue mail classification and collectHumanActions; changes feed, the owner view model and published feeds; owner responses, prompts and Ask now; owner documents, identity store and the weekly review |
+| `reliability` | schedule maths; state store, 24 h analytics and probes; live inventories; fleet state (buildState, integration view, report-card data) |
+| `platform` | shared primitives; fleet state refresh coordination; read API (feed table, API index, revalidation); area registry; HTTP routes; worker entry; metric_registry refresh pass; area model (AREAS-1); area pages (AREA-PAGES-1); overview page and its wrapper; page shell and navigation (FLEET-UI-2); Metrics tab; Changelog tab; command line; fleet console |
+
 ## Feeds by functional area (AREA-FEEDS-1, 1.44.0)
 Owner directive 2026-10-18: *refactor the fleet dashboard and API feeds by functional area; feeds shall always be updated
 automatically from live data and real time.* The read surface is therefore organised by the same five functional areas the
@@ -92,14 +138,14 @@ so is a malformed percent escape in the id (1.44.2: it answered 500 `URI malform
 is the same list of unreadable sources `/api/areas` sends, and `degraded` is true when it is non-empty, so a table that
 failed can never render as "all clear" (1.44.3).
 
-| area | own feed | other reads | source |
-| --- | --- | --- | --- |
-| `cost` | `/api/area/cost` | (none: the metric triggers are the whole area) | live |
-| `research` | `/api/area/research` | `/api/generators`, `/api/content`, `/api/q08-review` | live |
-| `reach` | `/api/area/reach` | `/api/reach`, `/api/attention`, `/api/ga4` | live |
-| `autonomy` | `/api/area/autonomy` | `/api/human`, `/api/actions`, `/api/loop`, `/api/changes`, `/api/watchmaker`, `/api/owner/*` | live + snapshot |
-| `reliability` | `/api/area/reliability` | `/api/integration` | live + snapshot |
-| `platform` | `/api/area/platform` | `/api`, `/api/live`, `/api/areas`, `/api/state`, `/api/decision`, `/api/kpi`, `/api/changelog`, `/api/cmd` | live + snapshot |
+| area | page | own feed | other reads | source |
+| --- | --- | --- | --- | --- |
+| `cost` | `/area/cost` | `/api/area/cost` | (none: the metric triggers are the whole area) | live |
+| `research` | `/area/research` (tab: `/content`) | `/api/area/research` | `/api/generators`, `/api/content`, `/api/q08-review` | live |
+| `reach` | `/area/reach` | `/api/area/reach` | `/api/reach`, `/api/attention`, `/api/ga4` | live |
+| `autonomy` | `/area/autonomy` | `/api/area/autonomy` | `/api/human`, `/api/actions`, `/api/loop`, `/api/changes`, `/api/watchmaker`, `/api/owner/*` | live + snapshot |
+| `reliability` | `/area/reliability` | `/api/area/reliability` | `/api/integration` | live + snapshot |
+| `platform` | `/area/platform` (tabs: `/kpi`, `/changelog`, `/cmd`) | `/api/area/platform` | `/api`, `/api/live`, `/api/areas`, `/api/state`, `/api/decision`, `/api/kpi`, `/api/changelog`, `/api/cmd` | live + snapshot |
 
 Live means: `v_metric_trigger_state` and `metric_history` (and the area's queues) are read from D1 at request time, cached
 at most 60 s per isolate, and the body says `live: true`, `max_lag_s: 60` and which tables it read (`computed_from`). A
@@ -117,6 +163,7 @@ hide behind a live-looking answer.
 The page's area renderer (`focusRowsHtml`, which `humanHtml` calls) already listed all five areas. Each row now ends with a
 link to that area's machine feed (`feed: /api/area/<id>`), including the rows that read `all clear`, so the page and the API
 describe the same boundary. (`areaSectionsHtml` is dead code and is not the page; it was left alone rather than rewired.)
+Since 1.45.0 each row's area name links to its own page, `/area/<id>`, and `GET /api` `by_area` and `GET /api/area/<id>` carry that page's path.
 
 In `by_area`, `all_members_live` is about the area's member reads (false when one is snapshot-backed); the area feed
 itself is always `live: true` with `max_lag_s: 60`. The two flags deliberately do not share a name.
@@ -142,9 +189,21 @@ makes that one panel unmeasured and is listed under `unreadable`.
 
 | Section | What it shows | Source |
 |---|---|---|
-| Issues | open now, by priority and category; opened and closed per day (14 days); median age; oldest; closed with evidence in 24 h and 7 d; code-loop tasks merged and failed | `agent_issues`, `issue_lifecycle`, `code_tasks` |
+| Service levels (KPI-THRESHOLDS-1, 1.46.0) | every registered metric against its threshold: value, operator and threshold (or `no threshold`), state `BREACH` / `WARN` / `NO_READING` / `OK` / `NO_THRESHOLD`, time in breach, owner and area, `BREACH` first and longest first; items past their SLA by class with the age of the oldest | `v_metric_trigger_state`, `metric_registry`, `metric_history`, `v_sla_over_120m` |
+| Issues | open now, by priority and category; opened and closed per day (14 days); median age; oldest; closed with evidence in 24 h and 7 d; code-loop tasks of the last 30 days by how they ended (merged, failed, never opened a pull request, pull request closed unmerged, superseded, in flight) | `agent_issues`, `issue_lifecycle`, `code_tasks` |
 | Reach | bot-filtered page views per property and day (visits once the ingest's per-host row exists); outreach actions and events per channel and day; posts per channel; posts ranked by reader actions, with links; subscribers; mentions and citations | `reach_signals`, `outreach_log`, `social_threads`, `social_media_posts`, `social_engagements`, `social_replies`, `subscribers`, `subscribe_funnel`, `external_mentions`, `dissemination_tracker`, `outreach_learner_sends` |
 | Buffer | connected channels, posts sent through Buffer, per-post statistics | `social_channels`, `social_media_posts`, `social_engagements` (platform `buffer`) |
+
+**Service levels (KPI-THRESHOLDS-1, agent_issues 2727; owner directive 2026-10-17: "Last 7 days" and "All time" are meaningless).** The
+document has no `last_7d` or `all_time` key; a figure is judged against the level it must hold. `BREACH` is the rule
+`v_metric_trigger_state` applies (`hit = 1`). `WARN` is a metric that is not in breach but is past its registered `warning_band`, when
+that band is a comparison and a number (`< 80`, `>= 2`, `> 6h behind`); a band that is not (`any rc != 0`) gives no `WARN`. `NO_READING`:
+the trigger has no value. `NO_THRESHOLD`: a registered metric no trigger holds to a level, listed by name and never counted as OK. Time
+in breach runs from the first of the current run of breached **daily** readings in `metric_history` (day resolution, the finest anything
+records a breach at; a run that reaches the oldest day read, 45 days back, is shown as "at least"). SLA items come from every numeric
+column of `v_sla_over_120m` except the total and the "oldest" helpers, so a class the view gains appears without an edit; a column named
+`..._180m`, `..._3h` or `..._60m` carries its own SLA. `GET /api/kpi` returns `service_levels` (`counts`, `metrics[]`) and `sla`
+(`total_over_sla`, `classes[]`). No new table, cron or model call.
 
 The block never reads the private `qnfo-outreach` database and returns counts, public post links and public mention links
 only. The daily reach ingest writes one `cf-rum-human` row per host (`entity_type = 'host'`, metrics `pageviews` and

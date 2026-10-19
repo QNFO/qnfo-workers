@@ -16,8 +16,14 @@ const ok = (c, m) => { if (c) pass++; else { fail++; console.log("FAIL: " + m); 
 const src = readFileSync(join(here, "worker.js"), "utf8");
 const a = src.indexOf("/* AREAS-1:BEGIN"), b = src.indexOf("/* AREAS-1:END */");
 ok(a > 0 && b > a, "AREAS-1 block markers present");
+// AREA-PAGES-1: the metric model is a view of AREA_REGISTRY, which lives in its own marked block ahead of the feed table.
+const ra = src.indexOf("/* AREA-REGISTRY:BEGIN"), rb = src.indexOf("/* AREA-REGISTRY:END */");
+ok(ra > 0 && rb > ra && rb < a, "AREA-REGISTRY block markers present, ahead of AREAS-1");
+// CODE-FLOW-PR-SPLIT-1: the Code loop flow reads its outcome SQL and stage builder from the shared CODE-OUTCOMES block.
+const ca = src.indexOf("/* CODE-OUTCOMES:BEGIN"), cb = src.indexOf("/* CODE-OUTCOMES:END */");
+ok(ca > 0 && cb > ca, "CODE-OUTCOMES block markers present");
 const cx = vm.createContext({ console, Date, JSON, Math, Number, String, Object, RegExp, isFinite, Promise });
-vm.runInContext(src.slice(a, b) + "\nglobalThis.X = { areaOf, prioNum, gapOf, trendOf, bottleneckOf, buildAreas, fmtNum, shortTitle, sparkSvg, areaTilesHtml, areaSectionsHtml, flowHtml, focusOf, leverKind, leverLine, clipWords, focusRowsHtml, controlsHtml, areaDetailHtml };", cx);
+vm.runInContext(src.slice(ra, rb) + "\n" + src.slice(ca, cb) + "\n" + src.slice(a, b) + "\nglobalThis.X = { areaOf, prioNum, gapOf, trendOf, bottleneckOf, buildAreas, fmtNum, shortTitle, sparkSvg, areaTilesHtml, areaSectionsHtml, flowHtml, focusOf, leverKind, leverLine, clipWords, focusRowsHtml, controlsHtml, areaDetailHtml };", cx);
 vm.runInContext("async function d1all(db, sql, params) { let ps = db.prepare(sql); if (params && params.length) ps = ps.bind.apply(ps, params); const r = await ps.all(); return r.results || []; }; globalThis.areasModel = areasModel;", cx);
 const X = cx.X;
 // A
