@@ -22,7 +22,7 @@
 // 'read' with attempts >= 1, CROSS-FAMILY-1 (ct_im2403) among them. repoSlug() now strips one leading owner segment at
 // intake and at read, so the live queue drains without a data migration and no future owner-qualified row can wedge the
 // loop. The 16 existing rows are repaired in D1 separately. */
-var VERSION = "0.18.22-merge-scope-at-read-1"; /* 0.18.22 MERGE-SCOPE-AT-READ-1 (2026-10-19, agent_issues 99951/2983/3000): mergeScopeWhy normalizes an owner-qualified repo slug and also runs at the read step, so a task written straight into code_tasks on a path the merge runner never merges ends needs_human before any model call. */ /* 0.18.16 MODEL-ATTRIBUTION-1 (2026-10-18): a task that fails at
+var VERSION = "0.18.23-lease-fence-1"; /* 0.18.23 LEASE-FENCE-1 (2026-10-19, pillar autonomy): every save inside a step is fenced on the lease the lane claimed (status queued, lease_until unchanged), so a lane whose 90 s lease lapsed during a slow model call can no longer overwrite the task another lane already moved on; a fenced save that matches no row ends the stale step with event code-task.lease-lost and writes nothing (ct_zogt4y5sdzauqw: ready_to_publish at 06:26:44Z, then step verify and no ctx.patch from the stale lane, publish_failed at 06:27:31Z; 6 such rows in 48 h). */ /* 0.18.22 MERGE-SCOPE-AT-READ-1 (2026-10-19, agent_issues 99951/2983/3000): mergeScopeWhy normalizes an owner-qualified repo slug and also runs at the read step, so a task written straight into code_tasks on a path the merge runner never merges ends needs_human before any model call. */ /* 0.18.16 MODEL-ATTRIBUTION-1 (2026-10-18): a task that fails at
 propose now keeps the rung that answered in code_tasks.model (it was written only when a proposal built, so 8 of
 the 14 distinct failures in the 24h to 20:26Z had model=NULL and four of those named the model in last_error).
 No behaviour change beyond the column. 0.18.15 TEMPO-5M-1 (2026-10-18): the member fleet-exec (FLEET-EXEC-FOLD-1) moved from a 10-minute to a 5-minute dispatch tick; the host carries the member verbatim, so its embedded copy moved with it. No host logic changed. */ /* 0.18.14 /* 0.18.14 CLAIM-TERMINAL-RELEASE-1 (2026-10-18, owner audit closeout): CODE_TASK_DONE was missing 'superseded', so claimsSweep renewed the file claim of an already-superseded task (claimTake stamps the current status into the intent: "code task ct_7rev1stride2k (superseded)") and held file:qnfo-research-exec/worker.js to its 2h TTL. 10 queued tasks on that file were deferred the whole time, CROSS-FAMILY-1 (#2403) among them, which is why the read fix alone moved nothing. 'superseded' is now in the done set, and a finished task's leftover claim is released by the sweep with its status as the outcome. */ /* 0.18.12 MERGE-SCOPE-SCRIPTS-1 (2026-10-18): mergeScopeWhy now mirrors qnfo-fleet-control's CM_SCRIPT_DENY, so a task on a scripts/*.py|*.mjs the runner never auto-merges is refused at intake instead of after 8 model attempts (ct_xo808yx0h3ieeh). */ /* 0.18.9 LADDER-DEEPSEEK-BUDGET-1 (2026-10-18): the deepseek-v4-flash rung gets the 16k reasoning budget (its empty replies were reasoning exhausting 8192) and an empty reply logs finish_reason. */ /* 0.18.4 PLAN-METRIC-ATTR-1 (2026-10-17, owner directive "IMPLEMENT AND DEPLOY ALL REMEDIATION, ALL MEASURES"; carries the concurrent PLAN-RESERVE-1 noted at the budget line): the measured backlog was 188 open issues, of which 163 had NEVER had a code task; issue_plans showed 128 of 150 planner decisions were "not-code" and 67 shared one reason -- "the issue names no worker the code loop may change", 54 of them metric-trigger issues from qnfo-fleet-control. (1) PLAN-METRIC-OWNER-ATTR-1 reads the metric key out of a METRIC-TRIGGER-<n>-<KEY> title and asks metric_registry who owns that metric, accepting the answer only when the owner is already in the live, non-control-plane worker list, and records the attribution on the plan; (2) PLAN_DAILY_CAP 8 -> 24 against 720 ticks a day. Together with PLAN-RESERVE-1 (a 15 s slice of every tick is kept for planning) this is the difference between a planner that cannot reach the backlog and one that reaches it. */ // 0.18.3 PLAN-RESERVE-1 (2026-10-17, owner directive "MORE PARALLEL WORKERS, FASTER TICKS, MORE THROUGHPUT/OUTPUT/RESOLVED", after the ceiling, the 1-2 tasks-per-tick measurement and the 144-fires/day limit were shown): (1) the cron is every minute, under the named OWNER_OVERRIDES entry for this worker in scripts/cron_rate_guard.py, so the 40 s budget runs 60 times an hour instead of 6; (2) TICK_LANES 4 -> 8, MAX_OPEN_TASKS 20 -> 48, intake 4 -> 8 an issue a tick, PLAN_WIP 6 -> 12, so the lanes have work and the planner feeds them; (3) SINGLE-FLIGHT-1, a loop_lock row makes one tick run at a time and a minute that arrives mid-tick is skipped with an event instead of stacking eight more lanes; (4) SPEND-CAP-1, a tick spends nothing once today's model calls reach ops_config code_loop_daily_calls (default 1500, about $16 at the measured $0.011 a call), because throughput and spend are the same dial and an uncapped one is not a decision. */ // 0.18.1 CLAIM-THRESHOLD-1 (2026-10-17, completing 0.18.0): 0.18.0 cut CLAIM_BACKOFF_MS to 5 min, the same value as RETRY_BACKOFF_MS[0], so a task parked in its first round backoff no longer EXCEEDED the park threshold and kept its file, against CLAIM-HELD-IN-BACKOFF-1; cutting it to 3 min made a 4-minute CLAIM_WAIT_MS deferral read as a park, against CLAIMS-FIRST-1. The threshold now sits between the two kinds of wait: TIMEOUT_WAIT_MS 2 min and CLAIM_WAIT_MS 2 min are the task's own work and keep the claim, CLAIM_BACKOFF_MS 4 min is the park threshold, and RETRY_BACKOFF_MS[0] 5 min is a failed round, which releases the file. */ // 0.18.0 SLA-PATHS-ACCEL-1 (2026-10-17, owner directive "ALL STEPS, ALL PROCESSES SHALL HAVE SLA AND MULTIPLE EXECUTION/REMEDIATION/WORKAROUND PATHS" + "make ticks faster"): measured on code_tasks 2026-10-17 (4-hour window, distinct updated_at buckets) the loop touched 1-2 tasks per 10-minute tick against a 16-step budget, because ONE propose step (a reasoning model call) costs most of the 40 s budget; the queue held 7 tasks, every one of them at step propose, for 22-50 minutes each, and 14-day time-to-merge ran 70-650 minutes. Four changes, cron untouched so CRON-RATE-CEILING-1 still holds: (1) TICK-PARALLEL-N, the tick runs up to TICK_LANES (4) task lanes concurrently, each claiming atomically through the same claim(), so a slow model call no longer serialises every other task; (2) SLA-COMPRESS-1, every wait is cut (round backoff 1 h/2 h -> 5 m/15 m, provider-timeout wait 10 m -> 2 m, claim-held wait 20 m -> 4 m, claim park 30 m -> 5 m, intake retry cooldown 120 m -> 30 m, no-progress ceiling 180 m -> 45 m); (3) STEP-SLA-1, every step carries an explicit SLA (read 10, propose 20, verify 15, commit 10 minutes) and slaSweep() acts on a breach by dropping the task's stale lease so the next lane takes it now, instead of leaving it parked to the end of a wait; (4) the tick reports its lanes and SLA sweep so a slowdown is visible in the tick payload, not inferred. */ // 0.17.2 CODE-TASK-STATUS-UNWEDGE-1 (2026-10-17): the D1 reroute trigger made every UPDATE OF status on code_tasks fail at prepare time ("triggers nested too deep"), so the code loop could not settle, claim or cut; the trigger is dropped by migration 2026-10-17 and pathBusy now fails closed with a code-task.ceiling-error audit row when the no-progress check itself cannot run. // 0.17.1 NO-PROGRESS-CEILING-1 (2026-10-17, pillar autonomy, agent_issues 2726): a code task whose attempts stop producing NEW failure signatures for path_hold_max_min (default 180) minutes, after 2 or more failed attempts, is set failed and its claim released, so a task that is looping no longer blocks every other issue on that file while one that is still making progress (each failure new) keeps working. // 0.16.2 SLA-120M-7 (2026-10-14, pillar autonomy; owner directive 2026-10-14: no SLA exceeds 120 minutes): an issue whose last code task ended (stale base, refusal, failed ladder) is taken again after INTAKE_RETRY_COOLDOWN_MIN (120 minutes), not 6 h; the per-window cap of 3 tasks is unchanged. // 0.16.1 WORKERS-BP-LOGGING-qnfo-code-orchestrator-1 (agent_issues 2531, child of WORKERS-BP-LOGGING-1 #2342, pillar autonomy): the eight empty catches (the ai_spend_ledger and ai_call_counters writes, the trusted-sources read, the three intake description updates, the fleet-exec member's tick-error write and the host's run of that member) log console.error(JSON.stringify({worker, where, error})) to Workers Logs. Control flow unchanged. 0.16.0 (pillar autonomy, failure mode code-task-retry-holds-file, agent_issues 1834/2491): FAIL-SIGNATURE-STOP-1, every failed attempt leaves a short signature (failing suite and first assertion line, or the error class); 3 identical in a row end the task 'failed' with its CODE-LOOP-EXHAUSTED-1 issue (provider timeouts do not count); an attempt the publisher's suite feedback added is accounted at the next step, so the stop, the 9-attempt end and the round backoff apply to it (ct_oevdiafbcde2mg 5, ct_53djh2yfqk3ocj 8 attempts of one failure on 2026-10-13, holding their files); every backoff releases the claim with outcome backoff, the sweep never re-takes a queued task's released claim, and a task that ends releases at once. 0.15.1 (pillar autonomy, agent_issues 2397/1834): CRON-ONLY-HEARTBEAT-1, each */10 scheduled run ends with a qnfo-audit fleet_heartbeat upsert (ok=0 when the tick threw; write errors logged); CODE-LADDER-ORDER-1, the default ladder is kimi-k2.7-code, glm-5.3, then qwen2.5-coder-32b (fewest invented SEARCH texts first). 0.15.0 (pillar autonomy, agent_issues 1834/2313/2496/2499/2506): CODE-LOOP-2X-1 (owner directive 2026-10-13, "quickened/increased a minimum of 100%") doubles the cron tick to 40 s / 16 steps (caps 50 s / 24), issue intake to 4 per tick and PLAN_WIP to 6; EDITS-OVERLAP-RESOLVE-1 drops an edit that repeats a change an overlapping edit already makes and names both edits and the shared line for any other overlap (was a bare "edits overlap"); SEARCH-ELISION-1 says a SEARCH that abbreviates with "..." can never match; SYNTAX-HINT-1 adds to a verify SyntaxError the edits that change the bracket balance and the lines that declare an already-declared identifier. 0.14.5 CLAIM-AT-RUN-1 (agent_issues 2491 CODE-QUEUE-CLAIM-HOLD-1, pillar autonomy): a code task takes its file claim at its first step, not at enqueue, and the claims sweep never takes or renews a claim for a queued task that has not started (step read, no attempt, no timeout retry) and releases one it still holds (event code-task.claim-unstarted); measured 2026-10-13 12:32Z, ct_47mzp4hr1ttd7o held file:qnfo-fleet-dashboard/worker.js from enqueue at 10:11Z, renewed to 13:32Z, before running a step. 0.14.4 EXEC-LOG-SIGNATURE-1 (agent_issues 2488): a proposal syntax check is logged by its label and the error it found, as status rejected, so three rejected drafts no longer read as one recurring orchestrator failure. 0.14.3 CODE-BACKOFF-SLA-1: the self-repair waits are 1 h and 2 h (the 6 h second wait broke the 180-minute code-task-stalled SLA). 0.14.2 CLAIM-HELD-IN-BACKOFF-1 (pillar autonomy): a queued task whose next attempt is over CLAIM_BACKOFF_MS (30 min) away releases its file claim (fail() at a SELF-REPAIR-1 backoff, the claims sweep for a task parked earlier) and the sweep never takes or renews a parked task's claim; on resume the task takes a new claim through claimEnsure and a refusal is the claim-held deferral, never a failure (measured 2026-10-13 07:34Z: ct_ne8sjnxe748hiz held file:qnfo-research-exec/worker.js from 01:30:55Z, renewed 4 times to 08:50:56Z, while queued in backoff to 11:50:55Z, so every session was refused the file, e.g. the security fix of agent_issues 2432).
@@ -363,6 +363,24 @@ async function save(env, id, f) {
   const vals = keys.map(function (k) { return f[k]; }).concat([iso(), id]);
   const st = env.AUDIT_DB.prepare("UPDATE code_tasks SET " + sets + " WHERE id=?");
   await st.bind.apply(st, vals).run();
+}
+// LEASE-FENCE-1 (0.18.23): claim() hands a lane the row with a fresh lease_until; a step's model call can outlast LEASE_MS, the
+// lease lapses, and a second lane claims the same row. Both used to write it unconditionally, so the slower lane's save (step
+// verify, a ctx without the patch) landed on a task the faster lane had already made ready_to_publish, and the publisher failed
+// it with "task has no patch in ctx.patch". saveFenced writes only while the row is still queued under the lease this lane
+// holds; it returns false (nothing written) when another lane or a terminal status got there first.
+async function saveFenced(env, id, f, lease) {
+  const keys = Object.keys(f);
+  const sets = keys.map(function (k) { return k + "=?"; }).concat(["updated_at=?"]).join(", ");
+  const vals = keys.map(function (k) { return f[k]; }).concat([iso(), id, lease == null ? null : String(lease)]);
+  const st = env.AUDIT_DB.prepare("UPDATE code_tasks SET " + sets + " WHERE id=? AND status='queued' AND lease_until IS ?");
+  const r = await st.bind.apply(st, vals).run();
+  return !!(r && r.meta && r.meta.changes > 0);
+}
+function leaseLostError(id, lease) {
+  const e = new Error("LEASE-FENCE-1: " + id + " was taken over by another lane (lease " + (lease || "none") + " no longer holds); this step's writes are dropped");
+  e.leaseLost = true;
+  return e;
 }
 // ---- CLAIMS-FIRST-1:BEGIN (0.3.21, transformation lever T1.14, pillar autonomy) ----
 // Measured 2026-10-06 over the 64 code tasks of 30 days: 16 merged; most of the 48 others ended superseded by a session's
@@ -1895,6 +1913,16 @@ async function fileLoopIssue(env, task, msg, attempts, sig) {
 // ONE bounded step. Returns the task's new state; never throws (a throw becomes a recorded failed attempt).
 async function stepTask(env, task) {
   const ctx = getCtx(task);
+  // LEASE-FENCE-1: every write of this step is fenced on the lease this lane was handed; tsave follows the lease the step itself sets.
+  let fence = task.lease_until == null ? null : task.lease_until;
+  const tsave = async function (f) {
+    if (!(await saveFenced(env, task.id, f, fence))) throw leaseLostError(task.id, fence);
+    if (Object.prototype.hasOwnProperty.call(f, "lease_until")) fence = f.lease_until == null ? null : f.lease_until;
+  };
+  const leaseLost = async function (e) {
+    await audit(env, "code-task.lease-lost", task.id + " " + task.step + ": " + String(e.message).slice(0, 300), { id: task.id, step: task.step, lease: fence }, "retry");
+    return { ok: false, dead: false, lease_lost: true, error: String(e.message) };
+  };
   // terminal = a refusal no model can fix (needs_human). Otherwise the attempt counts toward a round of MAX_ATTEMPTS: inside a round
   // the next rung runs at once; at a round's end the task waits RETRY_BACKOFF_MS (lease_until, which claim() honours) and, after the
   // last round, is 'failed' with one fleet issue (SELF-REPAIR-1).
@@ -1902,7 +1930,7 @@ async function stepTask(env, task) {
   const noopRefuse = async function (env2, task2, ctx2, model, why) {
     ctx2.lastError = why; ctx2.noop = (ctx2.noop || 0) + 1; ctx2.edits = []; delete ctx2.proposal;
     if (Array.isArray(ctx2.x)) ctx2.x.forEach(function (x) { delete x.edits; });
-    await save(env2, task2.id, { ctx: JSON.stringify(ctx2) });
+    await tsave({ ctx: JSON.stringify(ctx2) });
     const last = ctx2.noop >= NOOP_MAX;
     await audit(env2, "code-task.noop-refused", task2.id + " " + model + " (" + ctx2.noop + " of " + NOOP_MAX + "): " + why.slice(0, 160), { id: task2.id, model: model, n: ctx2.noop, terminal: last }, last ? "error" : "retry");
     return await fail("model " + model + ": " + why + (last ? " [" + NOOP_MAX + " no-op proposals in a row: needs a person or a narrower goal]" : ""), last);
@@ -1918,6 +1946,9 @@ async function stepTask(env, task) {
   // settle() closes over this function, not that block, so the last rung tried is lifted here.
   let attemptModel = null;
   const settle = async function (msg, terminal, attempts) {
+    // LEASE-FENCE-1: a lane that lost its lease files no handoff issue (ct_im100041 was handed off twice, 06:24:30Z and 06:25:01Z).
+    const held = await env.AUDIT_DB.prepare("SELECT 1 AS h FROM code_tasks WHERE id=? AND status='queued' AND lease_until IS ?").bind(task.id, fence).first();
+    if (!held) throw leaseLostError(task.id, fence);
     const round = Math.ceil(attempts / MAX_ATTEMPTS);
     // FAIL-SIGNATURE-STOP-1: the same signature SIG_REPEAT_MAX times in a row ends the task like the last round does.
     const ns = noteSig(ctx, msg, attempts);
@@ -1935,7 +1966,7 @@ async function stepTask(env, task) {
     const f = { attempts: attempts, last_error: String(msg).slice(0, Math.max(100, 500 - note.length)) + note, lease_until: retryAt,
       status: terminal ? "needs_human" : giveUp ? "failed" : "queued", step: dead ? task.step : (task.step === "verify" || task.step === "propose" ? "propose" : task.step) };
     if (attemptModel) f.model = attemptModel; // the rung that answered, whether or not it produced a patch
-    await save(env, task.id, f);
+    await tsave(f);
     await env.AUDIT_DB.prepare("UPDATE code_tasks SET ctx=json_set(json_set(json_set(COALESCE(ctx,'{}'), '$.sigs', json(?)), '$.sig_n', ?), '$.last_new_sig_at', ?) WHERE id=?").bind(JSON.stringify(ctx.sigs), attempts, ctx.last_new_sig_at || "", task.id).run();
     await audit(env, "code-task.fail", task.id + " " + task.step + ": " + String(msg).slice(0, 200), { id: task.id, attempts: attempts, dead: dead, retry_at: retryAt, sig: ns.sig, streak: ns.streak }, dead ? "error" : "retry");
     if (sigStop) await audit(env, "code-task.sig-stop", task.id + " " + task.path + ": " + ns.sig + " x" + ns.streak, { id: task.id, sig: ns.sig, streak: ns.streak, attempts: attempts }, "error");
@@ -1959,7 +1990,7 @@ async function stepTask(env, task) {
     if (n > TIMEOUT_MAX) return null;
     cur.timeouts = n;
     const at = new Date(Date.now() + TIMEOUT_WAIT_MS).toISOString();
-    await save(env, task.id, { ctx: JSON.stringify(cur), lease_until: at });
+    await tsave({ ctx: JSON.stringify(cur), lease_until: at });
     await audit(env, "code-task.timeout", task.id + " " + task.step + " (" + n + " of " + TIMEOUT_MAX + "): " + String(msg).slice(0, 160) + "; same attempt, next rung, after " + at, { id: task.id, n: n, step: task.step, retry_at: at }, "retry");
     return { ok: false, dead: false, timeout: true, error: String(msg), retry_at: at, n: n };
   };
@@ -1969,7 +2000,7 @@ async function stepTask(env, task) {
     const n = (ctx.rereads || 0) + 1;
     if (n > LARGE_REREADS) return await fail("LARGE-FILE-WINDOW-1: " + why + "; the file was re-read " + LARGE_REREADS + " times and keeps changing under the task", true);
     await audit(env, "code-task.reread", task.id + " (" + n + " of " + LARGE_REREADS + "): " + String(why).slice(0, 200), { id: task.id, n: n }, "retry");
-    await save(env, task.id, { ctx: JSON.stringify({ anchor: ctx.anchor, rereads: n, claim: ctx.claim || undefined, extras: ctx.extras || undefined, repair_round: ctx.repair_round != null ? ctx.repair_round : undefined, lastError: ctx.lastError || undefined, refusal: ctx.refusal || undefined, sigs: ctx.sigs || undefined, sig_n: ctx.sig_n != null ? ctx.sig_n : undefined, last_new_sig_at: ctx.last_new_sig_at || undefined }), step: "read", lease_until: null, last_error: null });
+    await tsave({ ctx: JSON.stringify({ anchor: ctx.anchor, rereads: n, claim: ctx.claim || undefined, extras: ctx.extras || undefined, repair_round: ctx.repair_round != null ? ctx.repair_round : undefined, lastError: ctx.lastError || undefined, refusal: ctx.refusal || undefined, sigs: ctx.sigs || undefined, sig_n: ctx.sig_n != null ? ctx.sig_n : undefined, last_new_sig_at: ctx.last_new_sig_at || undefined }), step: "read", lease_until: null, last_error: null });
     return { ok: true, step: "read", reread: n };
   };
   try {
@@ -2051,7 +2082,7 @@ async function stepTask(env, task) {
         nctx.extras = ctx.extras; nctx.x = xr.x;
         if (nctx.mode !== "patch") { nctx.mode = "patch"; nctx.win = { ws: 0, we: base.length }; }
       }
-      await save(env, task.id, { ctx: JSON.stringify(nctx), step: "propose", lease_until: null });
+      await tsave({ ctx: JSON.stringify(nctx), step: "propose", lease_until: null });
       return { ok: true, step: "propose" };
     }
     if (task.step === "propose") {
@@ -2069,7 +2100,7 @@ async function stepTask(env, task) {
           const _cur = Array.isArray(ctx.extras) ? ctx.extras.slice() : [];
           if (!_have && _cur.length < MAX_EXTRAS && !extraWhy(task.path, _tp)) {
             ctx.extras = _cur.concat([{ path: _tp }]);
-            await save(env, task.id, { ctx: JSON.stringify(ctx) });
+            await tsave({ ctx: JSON.stringify(ctx) });
             await audit(env, "code-task.suite-scope", task.id + ": " + _tp + " added as a companion because its suite pins the behaviour the goal changes");
             return { ok: true, step: "read" };
           }
@@ -2099,7 +2130,7 @@ async function stepTask(env, task) {
           ctx.edits = parseEdits(reply);
           built = ctx.edits.length ? buildProposal(ctx, task.path, base) : { ok: false, error: noBlockWhy(reply) };
         }
-        if (!built.ok) { ctx.lastError = built.error; ctx.lastReply = String(reply || "").slice(0, MAX_REPLY_KEEP); ctx.edits = []; if (multi) ctx.x.forEach(function (x) { delete x.edits; }); await save(env, task.id, { ctx: JSON.stringify(ctx) }); return await fail("model " + model + ": " + built.error, false); }
+        if (!built.ok) { ctx.lastError = built.error; ctx.lastReply = String(reply || "").slice(0, MAX_REPLY_KEEP); ctx.edits = []; if (multi) ctx.x.forEach(function (x) { delete x.edits; }); await tsave({ ctx: JSON.stringify(ctx) }); return await fail("model " + model + ": " + built.error, false); }
         delete ctx.lastReply;
         if (built.fuzzies && built.fuzzies.length) await audit(env, "code-task.edit-fuzzy", task.id + " " + model + ": " + built.fuzzies.map(function (x) { return "edit " + x.edit + " matched with whitespace/quotes/blank lines ignored"; }).join(", "), { id: task.id, model: model, fuzzies: built.fuzzies }, "ok");
         // EDITS-OVERLAP-RESOLVE-1: a duplicate edit leaves ctx.edits here, so verify, commit and the publisher's rebuild (which
@@ -2120,14 +2151,14 @@ async function stepTask(env, task) {
           const fresh = dr.names.filter(function (n) { return seen.indexOf(n) < 0; });
           if (fresh.length) {
             ctx.dangling = seen.concat(fresh).slice(-12); ctx.lastError = dr.why;
-            await save(env, task.id, { ctx: JSON.stringify(ctx) });
+            await tsave({ ctx: JSON.stringify(ctx) });
             await audit(env, "code-task.dangling-refused", task.id + " " + model + ": " + dr.why.slice(0, 200), { id: task.id, model: model, names: dr.names }, "retry");
             return await fail("model " + model + ": " + dr.why, false);
           }
           await audit(env, "code-task.dangling-passed", task.id + " " + model + ": " + dr.names.join(", ") + " came back after one refusal; let through to verify and the suites", { id: task.id, model: model, names: dr.names }, "ok");
         }
         delete ctx.timeouts; // TIMEOUT-RETRY-1: a propose that answered ends the timeout streak, so a later round starts at rung 1
-        await save(env, task.id, { ctx: JSON.stringify(ctx), model: model, step: "verify", lease_until: null });
+        await tsave({ ctx: JSON.stringify(ctx), model: model, step: "verify", lease_until: null });
         return { ok: true, step: "verify", model: model };
       }
       attemptModel = model;
@@ -2141,7 +2172,7 @@ async function stepTask(env, task) {
       if (npw) return await noopRefuse(env, task, ctx, model, npw);
       ctx.proposal = file;
       delete ctx.timeouts;
-      await save(env, task.id, { ctx: JSON.stringify(ctx), model: model, step: "verify", lease_until: null });
+      await tsave({ ctx: JSON.stringify(ctx), model: model, step: "verify", lease_until: null });
       return { ok: true, step: "verify", model: model };
     }
     if (task.step === "verify") {
@@ -2164,7 +2195,7 @@ async function stepTask(env, task) {
       if (v.verdict === "fail") {
         // SYNTAX-HINT-1: a parse error names the edit and the line it comes from, so the next rung fixes that block.
         const hint = /SyntaxError/.test(String(v.error || "")) ? syntaxHint(v.error, prop.resolved || (ctx.mode === "patch" ? ctx.edits : null), prop.text) : "";
-        ctx.lastError = String(v.error || "") + hint; await save(env, task.id, { ctx: JSON.stringify(ctx) }); return await fail("verify failed: " + v.error + hint, false);
+        ctx.lastError = String(v.error || "") + hint; await tsave({ ctx: JSON.stringify(ctx) }); return await fail("verify failed: " + v.error + hint, false);
       }
       // MULTI-FILE-CODE-TASKS-1: every companion that changes is verified by its type before the patch is parked.
       if (Array.isArray(ctx.x) && ctx.x.length) {
@@ -2172,7 +2203,7 @@ async function stepTask(env, task) {
         if (!bx.ok) return await fail("stored edits no longer apply: " + bx.error, true);
         for (let i = 0; i < bx.files.length; i++) {
           const vx = await verifyExtra(env, bx.files[i]);
-          if (vx.verdict === "fail") { ctx.lastError = vx.error; await save(env, task.id, { ctx: JSON.stringify(ctx) }); return await fail("verify failed: " + vx.error, false); }
+          if (vx.verdict === "fail") { ctx.lastError = vx.error; await tsave({ ctx: JSON.stringify(ctx) }); return await fail("verify failed: " + vx.error, false); }
           if (vx.verdict === "defer") {
             if (String(env.PR_PUBLISH_MODE || "") !== "pull") return await fail(bx.files[i].path + ": " + vx.error, true);
             deferred = deferred || (bx.files[i].path + ": " + String(vx.error || "no verifier"));
@@ -2181,12 +2212,12 @@ async function stepTask(env, task) {
       }
       if (deferred) {
         ctx.verify_deferred = deferred.slice(0, 300);
-        await save(env, task.id, { ctx: JSON.stringify(ctx), step: "commit", lease_until: null, last_error: null });
+        await tsave({ ctx: JSON.stringify(ctx), step: "commit", lease_until: null, last_error: null });
         await audit(env, "code-task.verify-deferred", task.id + ": " + ctx.verify_deferred.slice(0, 200) + "; the publisher parses it and runs the suites before any push", { id: task.id }, "ok");
         return { ok: true, step: "commit", deferred: true };
       }
-      if (ctx.verify_deferred) { delete ctx.verify_deferred; await save(env, task.id, { ctx: JSON.stringify(ctx) }); }
-      await save(env, task.id, { step: "commit", lease_until: null, last_error: null });
+      if (ctx.verify_deferred) { delete ctx.verify_deferred; await tsave({ ctx: JSON.stringify(ctx) }); }
+      await tsave({ step: "commit", lease_until: null, last_error: null });
       return { ok: true, step: "commit" };
     }
     if (task.step === "commit") {
@@ -2222,7 +2253,7 @@ async function stepTask(env, task) {
         // the current file), hunkPatch returns "" and the task would still be marked ready_to_publish, then fail
         // at publish with "task has no patch in ctx.patch". Fail terminal here with a clear reason instead.
         if (!ctx.patch) return await fail("no change: the patch is empty (the goal is already satisfied in the current file)", true);
-        await save(env, task.id, { ctx: JSON.stringify(ctx), status: "ready_to_publish", step: "done", branch: branch, lease_until: null, last_error: null });
+        await tsave({ ctx: JSON.stringify(ctx), status: "ready_to_publish", step: "done", branch: branch, lease_until: null, last_error: null });
         await audit(env, "code-task.ready", task.id + " ready_to_publish on " + branch, { id: task.id }, "ok");
         return { ok: true, step: "done", status: "ready_to_publish" };
       }
@@ -2231,16 +2262,22 @@ async function stepTask(env, task) {
         base_branch: "main", create_pr: true, commit_message: "qnfo-code-orchestrator: " + task.goal.slice(0, 60) });
       if (!r || r.ok !== true) return await fail("commit failed: " + ((r && r.error) || "unknown") + " (HTTP " + (r && r.status) + ")", false);
       if (!r.pr_url) return await fail("committed to " + branch + " but no PR was opened: " + (r.pr_error || "unknown"), false);
-      await save(env, task.id, { status: "pr_open", step: "done", branch: branch, pr_url: r.pr_url, lease_until: null, last_error: null });
+      await tsave({ status: "pr_open", step: "done", branch: branch, pr_url: r.pr_url, lease_until: null, last_error: null });
       await audit(env, "code-task.pr", task.id + " -> " + r.pr_url, { id: task.id, pr: r.pr || null }, "ok");
       return { ok: true, step: "done", pr_url: r.pr_url };
     }
     return await fail("unknown step " + task.step, true);
   } catch (e) {
+    if (e && e.leaseLost) return await leaseLost(e);
     const msg = String((e && e.message) || e);
-    // TIMEOUT-RETRY-1: only the read and propose steps talk to a provider; a verify or commit step that times out is a failed attempt.
-    if (TIMEOUT_RE.test(msg) && (task.step === "read" || task.step === "propose")) { const tr = await timeoutRetry(msg); if (tr) return tr; }
-    return await fail("step threw: " + msg, false);
+    try {
+      // TIMEOUT-RETRY-1: only the read and propose steps talk to a provider; a verify or commit step that times out is a failed attempt.
+      if (TIMEOUT_RE.test(msg) && (task.step === "read" || task.step === "propose")) { const tr = await timeoutRetry(msg); if (tr) return tr; }
+      return await fail("step threw: " + msg, false);
+    } catch (e2) {
+      if (e2 && e2.leaseLost) return await leaseLost(e2);
+      throw e2;
+    }
   }
 }
 // ISSUE-INTAKE-1: the Quniverse equivalent of the Stop-hook re-prompt. An open agent_issues row that carries an explicit opt-in line
