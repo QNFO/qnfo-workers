@@ -10,11 +10,22 @@
 -- stayed in issues_unprobed_60m (about 25 of 120 at 06:30Z). Step 2 now leaves alone a contract that is the only live contract of
 -- an open, non-METRIC-TRIGGER issue - the same rule step 6 re-arms by - so it keeps its hourly probe. red_snapshots still counts it
 -- as a breach contract (step 4 reads active failing contracts). Step 6 stays as the safety net for anything parked another way.
+--
+-- REPO-SLUG-BARE-1 (same file, same red-drain version; found by the triage thread, LOOP-BREAKER issue 100050). Step 3 wrote
+-- code_tasks.repo as REPLACE(<repo= value>, 'qnfo-workers', 'QNFO/qnfo-workers'), so an issue whose code-task line already said
+-- repo=QNFO/qnfo-workers (issues 100020, 100025) became 'QNFO/QNFO/qnfo-workers' and every raw read was refused. code_tasks
+-- holds bare slugs (all 107 rows of the last 2 days read 'qnfo-workers'; trigger code_tasks_repo_slug_ai strips one 'qnfo/'), so
+-- step 3 now strips every 'QNFO/' and 'qnfo/' and defaults to 'qnfo-workers'. The table-side guard (2026-10-19-repo-slug-any-depth.sql,
+-- triage thread) stays as the second path.
 
 CREATE TABLE IF NOT EXISTS bak_20261019_parked_rearm2_task AS SELECT * FROM fleet_tasks WHERE id = 'red-drain';
 
 UPDATE fleet_tasks SET
-  definition = json_set(definition, '$.steps[2].sql', 'UPDATE remediation_contracts SET status=''escalated'',
+  definition = json_set(definition,
+    '$.steps[3].sql', replace(replace(json_extract(definition, '$.steps[3].sql'),
+        'COALESCE(REPLACE(CASE', 'COALESCE(REPLACE(REPLACE(CASE'),
+        ',''qnfo-workers'',''QNFO/qnfo-workers''),''QNFO/qnfo-workers'')', ',''QNFO/'',''''),''qnfo/'',''''),''qnfo-workers'') /* REPO-SLUG-BARE-1 */'),
+    '$.steps[2].sql', 'UPDATE remediation_contracts SET status=''escalated'',
         last_verdict=''escalated:over-retried (probe re-ran past 5x max_attempts with no code task in flight; parked for RED-DRAIN while the issue stays open)'',
         last_attempt_at=datetime(''now'')
       WHERE status IN (''active'',''holding'') AND last_verdict=''fail'' AND attempts > 5*COALESCE(max_attempts,3)
