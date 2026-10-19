@@ -197,19 +197,23 @@
    "verdict": "already-applied"
   },
   {
-   "changed_files": [],
+   "changed_files": [
+    " M qnfo-fleet-dashboard/deployed-current.worker.js",
+    " M qnfo-fleet-dashboard/owner-morning.test.mjs",
+    " M qnfo-fleet-dashboard/worker.js"
+   ],
    "declared_signals": [
     "CREDIT-HALT-ONLY-1",
     "async function creditHaltCard(",
     "key: \"credit-runway\"",
     "only a credit halt becomes a queue card"
    ],
-   "rc": 1,
+   "rc": 0,
    "script": "scripts/credit-halt-only-1-patch.py",
    "tail": [
-    "FAIL-CLOSED qnfo-fleet-dashboard/worker.js: creditRunwayDays anchor matched 0 times (expected exactly 1) - nothing written",
-    "FAIL-CLOSED qnfo-fleet-dashboard/deployed-current.worker.js: creditRunwayDays anchor matched 0 times (expected exactly 1) - nothing written",
-    "RESULT failed: nothing committed"
+    "patched qnfo-fleet-dashboard/owner-morning.test.mjs (R5/R6 rewritten to the halt-only rule)",
+    "mirror ok: worker.js == deployed-current.worker.js",
+    "RESULT ok: 3 file(s) changed"
    ],
    "verdict": "undetermined"
   },
@@ -795,7 +799,7 @@
  "stale_anchor": [],
  "superseded": [],
  "total": 75,
- "ts": "2026-10-19T08:07:17.235Z",
+ "ts": "2026-10-19T08:08:02.407Z",
  "undetermined": [
   "scripts/credit-halt-only-1-patch.py",
   "scripts/dashboard-agissue-undercount-patch.py",
