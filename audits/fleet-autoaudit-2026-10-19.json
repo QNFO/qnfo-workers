@@ -1,5 +1,5 @@
 {
-  "audited_at": "2026-10-19 18:27:01",
+  "audited_at": "2026-10-19 18:59:05",
   "d1_write_failures": [],
   "d1_writes_ok": 120,
   "guard": {
@@ -550,7 +550,7 @@
       },
       {
         "dir": "q08-signal-engine",
-        "version": "0.31.2-codeagent",
+        "version": "0.31.3-codeagent",
         "worker": "q08-signal-engine"
       },
       {
@@ -605,12 +605,12 @@
       },
       {
         "dir": "qnfo-fleet-control",
-        "version": "0.40.1-version-line-pruned",
+        "version": "0.40.2-codeagent",
         "worker": "qnfo-fleet-control"
       },
       {
         "dir": "qnfo-fleet-dashboard",
-        "version": "1.51.8-version-line-pruned",
+        "version": "1.51.10-codeagent",
         "worker": "qnfo-fleet-dashboard"
       },
       {
@@ -670,7 +670,7 @@
       },
       {
         "dir": "qnfo-research-exec",
-        "version": "0.27.2-revision-eligible",
+        "version": "0.27.3-revision-first",
         "worker": "qnfo-research-exec"
       },
       {
@@ -982,9 +982,9 @@
       "worker": "personal-life-search"
     },
     "q08-signal-engine": {
-      "before": "0.31.2-codeagent",
+      "before": "0.31.3-codeagent",
       "http": 200,
-      "live": "0.31.2-codeagent",
+      "live": "0.31.3-codeagent",
       "match": 1,
       "note": "SYNC",
       "worker": "q08-signal-engine"
@@ -1313,17 +1313,17 @@
       "worker": "qnfo-fleet-calibrator"
     },
     "qnfo-fleet-control": {
-      "before": "0.40.1-version-line-pruned",
+      "before": "0.40.2-codeagent",
       "http": 200,
-      "live": "0.40.1-version-line-pruned",
+      "live": "0.40.2-codeagent",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-fleet-control"
     },
     "qnfo-fleet-dashboard": {
-      "before": "1.51.8-version-line-pruned",
+      "before": "1.51.10-codeagent",
       "http": 200,
-      "live": "1.51.8-version-line-pruned",
+      "live": "1.51.10-codeagent",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-fleet-dashboard"
@@ -1561,9 +1561,9 @@
       "worker": "qnfo-register-guard"
     },
     "qnfo-research-exec": {
-      "before": "0.27.2-revision-eligible",
+      "before": "0.27.3-revision-first",
       "http": 200,
-      "live": "0.27.2-revision-eligible",
+      "live": "0.27.3-revision-first",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-research-exec"
