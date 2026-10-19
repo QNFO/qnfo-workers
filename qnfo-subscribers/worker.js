@@ -2,7 +2,7 @@ var __defProp = Object.defineProperty;
 var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
 
 // worker.js
-var VERSION = "1.3.4-attribution-chain-1"; // 1.3.4 SUBSCRIBERS-ATTRIBUTION-CHAIN-1 (2026-10-19, agent_issues 2899, QNFO/qnfo-workers#2489, pillar reach): the attribution snapshot passes the reach_signals CHECK (quality unknown), is one batch with its DELETE, sums per entity_id, and the utm columns are ensured per column before the cron reads them. // 1.3.1 WORKERS-BP-LOGGING-qnfo-subscribers-1 (2026-10-14, agent_issues 2539, child of 2342, pillar autonomy): the swallowed catch in handleSubscribe logs as a structured console.error (worker, where, error); control flow unchanged. // 1.3.0 (2026-10-13, pillar autonomy, issue 2397) CRON-ONLY-HEARTBEAT-1: the weekly cron upserts qnfo-audit.fleet_heartbeat after the digest run.
+var VERSION = "1.3.3-utm-metric-1"; // 1.3.1 WORKERS-BP-LOGGING-qnfo-subscribers-1 (2026-10-14, agent_issues 2539, child of 2342, pillar autonomy): the swallowed catch in handleSubscribe logs as a structured console.error (worker, where, error); control flow unchanged. // 1.3.0 (2026-10-13, pillar autonomy, issue 2397) CRON-ONLY-HEARTBEAT-1: the weekly cron upserts qnfo-audit.fleet_heartbeat after the digest run.
 // 1.2.0 (2026-10-12, pillar reach, issue 1753) SUBSCRIBE-FUNNEL-1: every step of the sign-up
 // funnel is counted in qnfo-audit.subscribe_funnel (day, stage, source, n; a counter, never an address): box and page views,
 // submits by outcome (accepted, honeypot, invalid, rate-limited, suppressed, repeat), confirmation mails sent or failed,
@@ -284,25 +284,17 @@ function digestText(papers, token) {
 }
 __name(digestText, "digestText");
 /* SUBSCRIBE-UTM-ATTRIBUTION-1: ensure the utm_source/utm_campaign columns exist (lazy ALTER, safe
- * when the migration already ran) so the sign-up can record which tagged link drove it.
- * SUBSCRIBERS-ATTRIBUTION-CHAIN-1: one try per column (a duplicate on the first must not skip the second), a real
- * failure is logged and retried on the next call, and the isolate guard is set only when both columns exist. */
+ * when the migration already ran) so the sign-up can record which tagged link drove it. */
 var SUB_UTM_READY = new WeakSet();
 async function ensureSubscriberUtm(env) {
-  if (!env.AUDIT || SUB_UTM_READY.has(env.AUDIT)) return;
-  let ready = true;
-  for (const col of ["utm_source", "utm_campaign"]) {
-    try {
-      await env.AUDIT.prepare("ALTER TABLE subscribers ADD COLUMN " + col + " TEXT NOT NULL DEFAULT ''").run();
-    } catch (e) {
-      const msg = String(e && e.message || e);
-      if (!/duplicate column/i.test(msg)) {
-        ready = false;
-        console.error(JSON.stringify({ worker: "qnfo-subscribers", where: "ensureSubscriberUtm", column: col, error: msg.slice(0, 200) }));
-      }
-    }
+  try {
+    if (!env.AUDIT || SUB_UTM_READY.has(env.AUDIT)) return;
+    await env.AUDIT.prepare("ALTER TABLE subscribers ADD COLUMN utm_source TEXT NOT NULL DEFAULT ''").run();
+    await env.AUDIT.prepare("ALTER TABLE subscribers ADD COLUMN utm_campaign TEXT NOT NULL DEFAULT ''").run();
+  } catch (e) {
+    /* columns already exist (migration applied first) -- continue */
   }
-  if (ready) SUB_UTM_READY.add(env.AUDIT);
+  SUB_UTM_READY.add(env.AUDIT);
 }
 
 async function handleSubscribe(request, env) {
@@ -561,31 +553,22 @@ __name(health, "health");
 /* SUBSCRIBE-UTM-METRIC-1 (owner directive 2026-10-18, pillar reach): aggregate confirmed
  * subscribers by utm_campaign/utm_source into reach_signals so reach metrics can attribute
  * subscriber growth to the tagged link that drove it (closes UTM-CLICK-LEDGER-1 -> subscriber).
- * SUBSCRIBERS-ATTRIBUTION-CHAIN-1 (agent_issues 2899): the utm columns are ensured first (the cron read them before
- * any sign-up had added them), the rows are summed per entity_id (two sources under one campaign collided on the
- * primary key), quality is 'unknown' (the live CHECK allows human, bot, unknown; 'derived' refused every insert), and the
- * previous snapshot is deleted in the same batch as the inserts, so a failed insert cannot wipe it. */
+ * Idempotent: the previous snapshot is deleted then re-inserted. */
 async function writeSubscriberAttribution(env) {
   try {
     if (!env.AUDIT) return;
-    await ensureSubscriberUtm(env);
+    await env.AUDIT.prepare("DELETE FROM reach_signals WHERE source = 'subscriber-attribution'").run();
     const rows = await env.AUDIT.prepare(
       "SELECT COALESCE(utm_campaign,'') AS camp, COALESCE(utm_source,'') AS src, COUNT(*) AS n FROM subscribers WHERE (confirmed_at IS NOT NULL OR status='subscribed') AND (utm_campaign != '' OR utm_source != '') GROUP BY utm_campaign, utm_source"
     ).all();
     const list = rows.results || [];
-    const byId = new Map();
     for (let i = 0; i < list.length; i++) {
       const r = list[i];
       const id = String(r.camp || r.src || "untagged").slice(0, 80);
-      byId.set(id, (byId.get(id) || 0) + (Number(r.n) || 0));
+      await env.AUDIT.prepare(
+        "INSERT INTO reach_signals (date, source, channel, entity_type, entity_id, metric, value, quality, collected_at) VALUES (date('now'), 'subscriber-attribution', 'email', 'campaign', ?1, 'subscribers_confirmed_attributed', ?2, 'derived', datetime('now'))"
+      ).bind(id, Number(r.n) || 0).run();
     }
-    const stmts = [env.AUDIT.prepare("DELETE FROM reach_signals WHERE source = 'subscriber-attribution'")];
-    for (const [id, n] of byId) {
-      stmts.push(env.AUDIT.prepare(
-        "INSERT INTO reach_signals (date, source, channel, entity_type, entity_id, metric, value, quality, collected_at) VALUES (date('now'), 'subscriber-attribution', 'email', 'campaign', ?1, 'subscribers_confirmed_attributed', ?2, 'unknown', datetime('now'))"
-      ).bind(id, n));
-    }
-    await env.AUDIT.batch(stmts);
   } catch (e) {
     console.error(JSON.stringify({ worker: "qnfo-subscribers", where: "writeSubscriberAttribution", error: String(e && e.message || e).slice(0, 200) }));
   }
@@ -651,8 +634,6 @@ export {
   worker_default as default,
   funnelSummary,
   funnelSource,
-  safeEqual,
-  ensureSubscriberUtm,
-  writeSubscriberAttribution
+  safeEqual
 };
 //# sourceMappingURL=worker.js.map
