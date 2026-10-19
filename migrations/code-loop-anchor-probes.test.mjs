@@ -17,6 +17,8 @@ CREATE TABLE roadmap_implementation (id INTEGER PRIMARY KEY AUTOINCREMENT, item 
 CREATE TABLE decision_log (id INTEGER PRIMARY KEY AUTOINCREMENT, actor TEXT, assumption TEXT, action TEXT, evidence TEXT, outcome TEXT, blast_radius TEXT, rollback_path TEXT, capability_gain TEXT, predicted_outcome TEXT, reach_gain TEXT, surfaces_tested TEXT);`);
 const oldProbe = "SELECT 'ok' AS expected, CASE WHEN EXISTS (SELECT 1 FROM cloud_ops_events WHERE kind = 'code-task.anchor-repaired' AND status = 'ok' AND ts >= '2026-10-06T08:41:00Z') THEN 'ok' WHEN strftime('%Y-%m-%dT%H:%M:%SZ', 'now') >= '2026-10-20T08:41:00Z' AND NOT EXISTS (SELECT 1 FROM code_tasks WHERE instr(last_error, 'anchor occurs') > 0 AND updated_at >= '2026-10-06T08:41:00Z') THEN 'ok' ELSE 'pending: no anchor repair yet' END AS observed";
 db.prepare("INSERT INTO remediation_contracts (class, issue_id, precondition, action, verify_probe, verify_transport, max_attempts, escalate_to, status, last_verdict, attempts) VALUES ('issue-2007', 2007, 'x', 'x', ?, 'd1-query', 15, 'qnfo-code-orchestrator', 'active', 'fail', 400)").run(oldProbe);
+const p2008 = "SELECT 'ok' AS expected, CASE WHEN (SELECT COUNT(*) FROM code_tasks WHERE instr(COALESCE(last_error,''),'required check(s) failed') > 0) > 0 THEN 'pending: a code-loop pull request failed a required check in the last 14 days' WHEN strftime('%Y-%m-%dT%H:%M:%SZ','now') < '2026-10-27T00:00:00Z' THEN 'pending: measuring 14 days from 2026-10-13' ELSE 'ok' END AS observed";
+db.prepare("INSERT INTO remediation_contracts (class, issue_id, precondition, action, verify_probe, verify_transport, max_attempts, escalate_to, status, last_verdict, attempts) VALUES ('issue-2008', 2008, 'x', 'x', ?, 'd1-query', 3, 'qnfo-code-orchestrator', 'active', 'fail', 399)").run(p2008);
 db.exec("INSERT INTO roadmap_implementation (id, item, source, title, artifact_type, status, evidence) VALUES (11, 'RM', 's', 't', 'core', 'partial', 'Not yet')");
 db.exec("INSERT INTO code_tasks VALUES ('ct_2daxzx8qdcy4nq', 'closed', 'anchor occurs 0 times', '2026-10-06T11:47:00Z')");
 const ago = (d) => new Date(Date.now() - d * 864e5).toISOString().slice(0, 19) + "Z";
@@ -27,12 +29,17 @@ ok(probe().startsWith("pending"), "old probe stays pending on a closed 'anchor o
 db.exec(sql);
 const c = db.prepare("SELECT status, attempts, verify_transport FROM remediation_contracts WHERE class = 'issue-2007'").get();
 ok(c.status === "active" && c.attempts === 0 && c.verify_transport === "d1-query", "contract re-armed with attempts reset", c);
-ok(probe() === "pending: no anchor-located event in 14 days", "no located event reads pending", probe());
+ok(probe() === "defect: no anchor-located event in 14 days", "no located event reads defect (not a deferral)", probe());
 ev.run(ago(1), "code-task.anchor-located", "ok", "located"); ev.run(ago(2), "code-task.fail", "fail", "ANCHOR-LOCATOR-1 found no unique line");
-ok(probe() === "pending: 1 task read-steps failed on an anchor in the last 14 days", "an anchor failure in window reads pending with its count", probe());
+ok(probe() === "defect: 1 task read-steps failed on an anchor in the last 14 days", "an anchor failure in window reads defect with its count", probe());
 db.exec("UPDATE cloud_ops_events SET ts = '" + ago(15) + "' WHERE kind = 'code-task.fail'");
 ev.run(ago(1), "code-task.fail", "fail", "required check failed");
 ok(probe() === "ok", "located event and no anchor failure in 14 days reads ok (closed rows no longer block)", probe());
+const run = (cls) => db.prepare(db.prepare("SELECT verify_probe FROM remediation_contracts WHERE class = ?").get(cls).verify_probe).get().observed;
+db.exec("INSERT INTO code_tasks VALUES ('ct_x', 'failed', 'required check(s) failed', '2026-10-18T00:00:00Z')");
+ok(run("issue-2008") === "defect: a code-loop pull request failed a required check in the last 14 days", "issue-2008 reports a failed check as a defect, not a deferral", run("issue-2008"));
+db.exec("DELETE FROM code_tasks WHERE id = 'ct_x'");
+ok(run("issue-2008").startsWith("pending: measuring") || run("issue-2008") === "ok", "issue-2008 keeps its finite measuring wait", run("issue-2008"));
 ok(fmProbe() === "0", "fm detector reads 0 after apply", fmProbe());
 ok(db.prepare("SELECT instr(evidence, 'ANCHOR-PROBE-REACHABLE-1') > 0 AS n FROM roadmap_implementation WHERE id = 11").get().n === 1, "roadmap 11 evidence appended");
 db.exec("UPDATE remediation_contracts SET attempts = 7 WHERE class = 'issue-2007'");
@@ -42,5 +49,6 @@ ok(db.prepare("SELECT COUNT(*) AS n FROM decision_log").get().n === 1 && (db.pre
 db.exec(sql.split("\n").find((l) => l.startsWith("-- Rollback:")).slice(12));
 ok(db.prepare("SELECT verify_probe FROM remediation_contracts WHERE class = 'issue-2007'").get().verify_probe === oldProbe, "Rollback restores the old probe");
 ok(db.prepare("SELECT COUNT(*) AS n FROM remediation_contracts WHERE class = 'fm-probe-unemitted-kind'").get().n === 0, "Rollback removes the fm contract");
+ok(db.prepare("SELECT verify_probe FROM remediation_contracts WHERE class = 'issue-2008'").get().verify_probe === p2008, "Rollback restores the issue-2008 probe");
 console.log(`code-loop-anchor-probes: ${pass} pass, ${fail} fail`);
 if (fail) process.exit(1);

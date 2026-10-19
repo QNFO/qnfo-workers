@@ -1,7 +1,7 @@
 -- APPLY-BY: ci
 -- DB: qnfo-audit
 -- BACKUP: bak_20261019_rc_2007
--- Rollback: UPDATE remediation_contracts SET verify_probe = (SELECT b.verify_probe FROM bak_20261019_rc_2007 b WHERE b.class = 'issue-2007'), max_attempts = (SELECT b.max_attempts FROM bak_20261019_rc_2007 b WHERE b.class = 'issue-2007'), attempts = (SELECT b.attempts FROM bak_20261019_rc_2007 b WHERE b.class = 'issue-2007') WHERE class = 'issue-2007'; DELETE FROM remediation_contracts WHERE class = 'fm-probe-unemitted-kind'; DELETE FROM failure_modes WHERE fm_key = 'probe-unemitted-kind'
+-- Rollback: UPDATE remediation_contracts SET verify_probe = (SELECT b.verify_probe FROM bak_20261019_rc_2007 b WHERE b.class = 'issue-2007'), max_attempts = (SELECT b.max_attempts FROM bak_20261019_rc_2007 b WHERE b.class = 'issue-2007'), attempts = (SELECT b.attempts FROM bak_20261019_rc_2007 b WHERE b.class = 'issue-2007') WHERE class = 'issue-2007'; UPDATE remediation_contracts SET verify_probe = (SELECT b.verify_probe FROM bak_20261019_rc_2007 b WHERE b.class = 'issue-2008') WHERE class = 'issue-2008'; DELETE FROM remediation_contracts WHERE class = 'fm-probe-unemitted-kind'; DELETE FROM failure_modes WHERE fm_key = 'probe-unemitted-kind'
 -- spof-review: none added
 --
 -- ANCHOR-PROBE-REACHABLE-1 (2026-10-19, pillar autonomy; issue 2007 TP-1c-ANCHOR-REPAIR-NOT-NEEDS-HUMAN-1, plan
@@ -14,11 +14,16 @@
 -- so the issue stays open on a probe that can close it. The bar is not lowered: issue 2007 closes only when anchor failures stop.
 -- The class row exists from birth (ORPHAN-GUARD-BIRTH-1), so this is an UPDATE. failure_modes probe-unemitted-kind records the
 -- defect shape (a probe that waits on an event kind nobody writes) with a detector for this kind.
+-- DEFECT-NOT-DEFERRAL-1 (same file; issues 100194 and 100195, VERIFICATION-PATH-1 escalations): a probe that has measured the defect
+-- reports it as a failure, not as 'pending'. 'pending' is the deferral convention (the probe cannot judge yet), so a present defect
+-- worded 'pending: ...' left both contracts deferred for 13 days and blind to the 7-day escalation's definition of done. The new
+-- issue-2007 probe says 'defect: ...'; the issue-2008 branch that has seen a failed required check says 'defect: ...' too. Its
+-- 'pending: measuring 14 days from 2026-10-13' branch is a real, finite wait (ends 2026-10-27) and stays a deferral.
 
-CREATE TABLE IF NOT EXISTS bak_20261019_rc_2007 AS SELECT * FROM remediation_contracts WHERE class = 'issue-2007';
+CREATE TABLE IF NOT EXISTS bak_20261019_rc_2007 AS SELECT * FROM remediation_contracts WHERE class IN ('issue-2007', 'issue-2008');
 
 UPDATE remediation_contracts SET
-  verify_probe = 'SELECT ''ok'' AS expected, CASE WHEN (SELECT COUNT(*) FROM cloud_ops_events WHERE kind = ''code-task.anchor-located'' AND status = ''ok'' AND ts >= strftime(''%Y-%m-%dT%H:%M:%SZ'', ''now'', ''-14 days'')) = 0 THEN ''pending: no anchor-located event in 14 days'' WHEN (SELECT COUNT(*) FROM cloud_ops_events WHERE kind = ''code-task.fail'' AND ts >= strftime(''%Y-%m-%dT%H:%M:%SZ'', ''now'', ''-14 days'') AND instr(lower(text), ''anchor'') > 0) > 0 THEN ''pending: '' || (SELECT COUNT(*) FROM cloud_ops_events WHERE kind = ''code-task.fail'' AND ts >= strftime(''%Y-%m-%dT%H:%M:%SZ'', ''now'', ''-14 days'') AND instr(lower(text), ''anchor'') > 0) || '' task read-steps failed on an anchor in the last 14 days'' ELSE ''ok'' END AS observed /* ANCHOR-PROBE-REACHABLE-1 */',
+  verify_probe = 'SELECT ''ok'' AS expected, CASE WHEN (SELECT COUNT(*) FROM cloud_ops_events WHERE kind = ''code-task.anchor-located'' AND status = ''ok'' AND ts >= strftime(''%Y-%m-%dT%H:%M:%SZ'', ''now'', ''-14 days'')) = 0 THEN ''defect: no anchor-located event in 14 days'' WHEN (SELECT COUNT(*) FROM cloud_ops_events WHERE kind = ''code-task.fail'' AND ts >= strftime(''%Y-%m-%dT%H:%M:%SZ'', ''now'', ''-14 days'') AND instr(lower(text), ''anchor'') > 0) > 0 THEN ''defect: '' || (SELECT COUNT(*) FROM cloud_ops_events WHERE kind = ''code-task.fail'' AND ts >= strftime(''%Y-%m-%dT%H:%M:%SZ'', ''now'', ''-14 days'') AND instr(lower(text), ''anchor'') > 0) || '' task read-steps failed on an anchor in the last 14 days'' ELSE ''ok'' END AS observed /* ANCHOR-PROBE-REACHABLE-1 */',
   verify_transport = 'd1-query',
   status = 'active',
   attempts = 0,
@@ -26,6 +31,10 @@ UPDATE remediation_contracts SET
   next_due_at = datetime('now'),
   last_verdict = 'rearmed: ANCHOR-PROBE-REACHABLE-1 (old probe branches unreachable)'
 WHERE class = 'issue-2007' AND instr(verify_probe, 'ANCHOR-PROBE-REACHABLE-1') = 0;
+
+UPDATE remediation_contracts SET
+  verify_probe = replace(verify_probe, 'THEN ''pending: a code-loop pull request failed a required check in the last 14 days''', 'THEN ''defect: a code-loop pull request failed a required check in the last 14 days'' /* DEFECT-NOT-DEFERRAL-1 */')
+WHERE class = 'issue-2008' AND instr(verify_probe, 'DEFECT-NOT-DEFERRAL-1') = 0;
 
 INSERT OR IGNORE INTO failure_modes (fm_key, failure_mode, root_cause, remediation, detector, probe_class, first_seen, issue_id, symptom, blast_radius)
 VALUES ('probe-unemitted-kind',
@@ -49,10 +58,10 @@ INSERT INTO decision_log (actor, assumption, action, evidence, outcome, blast_ra
 SELECT 'session_01EFM65CoycWBmyc1XeocwDL',
   'a closing probe must be able to pass when the defect is fixed',
   'ANCHOR-PROBE-REACHABLE-1: replace the unsatisfiable issue-2007 probe with a rolling 14-day probe on anchor-located and code-task.fail events',
-  'live 2026-10-19 15:30Z: 0 code-task.anchor-repaired rows ever; contract at 400 attempts; new probe reads pending: 15 anchor failures in 14 days',
+  'live 2026-10-19 15:30Z: 0 code-task.anchor-repaired rows ever; contract at 400 attempts; new probe reads defect: 15 anchor failures in 14 days',
   'applied', 'one remediation_contracts row, one failure_modes row, one fm contract, roadmap_implementation id 11 evidence text',
   'the Rollback header restores the contract from bak_20261019_rc_2007',
   'issue 2007 can now close on its own when anchor failures stop',
-  'contract issue-2007 last_verdict reads pending with a count within 2 h; issue 2007 closes once 14 days pass with no anchor failure',
+  'contracts issue-2007 and issue-2008 stop deferring (deferred_since cleared) within 2 h and escalations 100194 and 100195 close; issue 2007 closes once 14 days pass with no anchor failure',
   'none', 'cloud_ops_events kinds, code_tasks.last_error, remediation_contracts'
 WHERE NOT EXISTS (SELECT 1 FROM decision_log WHERE action LIKE 'ANCHOR-PROBE-REACHABLE-1:%');
