@@ -1,15 +1,8 @@
 {
-  "audited_at": "2026-10-19 16:54:09",
+  "audited_at": "2026-10-19 17:23:41",
   "d1_write_failures": [],
   "d1_writes_ok": 120,
   "guard": {
-    "_drift_confirm": {
-      "first_pass": [
-        "qnfo-gateway"
-      ],
-      "refreshed": true,
-      "second_pass": []
-    },
     "_guard_rc": 0,
     "ahead": [],
     "cf_script_list": true,
@@ -547,12 +540,12 @@
       },
       {
         "dir": "personal-api",
-        "version": "4.13.1-companion-query",
+        "version": "4.15.0-companion-week",
         "worker": "personal-api"
       },
       {
         "dir": "personal-companion",
-        "version": "1.35.0-travel-trip",
+        "version": "1.36.0-email-opt-in",
         "worker": "personal-companion"
       },
       {
@@ -562,12 +555,12 @@
       },
       {
         "dir": "qnfo-ai",
-        "version": "5.36.9-codeagent",
+        "version": "5.36.10-codeagent",
         "worker": "qnfo-ai"
       },
       {
         "dir": "qnfo-ai-calibration",
-        "version": "1.6.2-codeagent",
+        "version": "1.6.3-codeagent",
         "worker": "qnfo-ai-calibration"
       },
       {
@@ -617,7 +610,7 @@
       },
       {
         "dir": "qnfo-fleet-dashboard",
-        "version": "1.51.4-codeagent",
+        "version": "1.51.5-paper-learn-watch",
         "worker": "qnfo-fleet-dashboard"
       },
       {
@@ -677,12 +670,12 @@
       },
       {
         "dir": "qnfo-research-exec",
-        "version": "0.26.2-codeagent",
+        "version": "0.27.2-revision-eligible",
         "worker": "qnfo-research-exec"
       },
       {
         "dir": "qnfo-social",
-        "version": "0.18.1-bsky-session-count",
+        "version": "0.18.2-codeagent",
         "worker": "qnfo-social"
       },
       {
@@ -937,17 +930,17 @@
       "worker": "patches"
     },
     "personal-api": {
-      "before": "4.13.1-companion-query",
+      "before": "4.15.0-companion-week",
       "http": 200,
-      "live": "4.13.1-companion-query",
+      "live": "4.15.0-companion-week",
       "match": 1,
       "note": "SYNC",
       "worker": "personal-api"
     },
     "personal-companion": {
-      "before": "1.35.0-travel-trip",
+      "before": "1.36.0-email-opt-in",
       "http": 200,
-      "live": "1.35.0-travel-trip",
+      "live": "1.36.0-email-opt-in",
       "match": 1,
       "note": "SYNC",
       "worker": "personal-companion"
@@ -1024,17 +1017,17 @@
       "worker": "qnfo-agent-ws"
     },
     "qnfo-ai": {
-      "before": "5.36.9-codeagent",
+      "before": "5.36.10-codeagent",
       "http": 200,
-      "live": "5.36.9-codeagent",
+      "live": "5.36.10-codeagent",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-ai"
     },
     "qnfo-ai-calibration": {
-      "before": "1.6.2-codeagent",
+      "before": "1.6.3-codeagent",
       "http": 200,
-      "live": "1.6.2-codeagent",
+      "live": "1.6.3-codeagent",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-ai-calibration"
@@ -1328,9 +1321,9 @@
       "worker": "qnfo-fleet-control"
     },
     "qnfo-fleet-dashboard": {
-      "before": "1.51.4-codeagent",
+      "before": "1.51.5-paper-learn-watch",
       "http": 200,
-      "live": "1.51.4-codeagent",
+      "live": "1.51.5-paper-learn-watch",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-fleet-dashboard"
@@ -1568,9 +1561,9 @@
       "worker": "qnfo-register-guard"
     },
     "qnfo-research-exec": {
-      "before": "0.26.2-codeagent",
+      "before": "0.27.2-revision-eligible",
       "http": 200,
-      "live": "0.26.2-codeagent",
+      "live": "0.27.2-revision-eligible",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-research-exec"
@@ -1630,9 +1623,9 @@
       "worker": "qnfo-skills-discovery"
     },
     "qnfo-social": {
-      "before": "0.18.1-bsky-session-count",
+      "before": "0.18.2-codeagent",
       "http": 200,
-      "live": "0.18.1-bsky-session-count",
+      "live": "0.18.2-codeagent",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-social"
