@@ -177,7 +177,10 @@ def live_dirs(root=REPO):
             if m:
                 name = m.group(1)
         with open(os.path.join(p, "worker.js"), encoding="utf-8", errors="replace") as f:
-            v = re.search(r'var VERSION = "([^"]*)"', f.read(200000))
+            # DEPLOY-COHERENCE-VERSION-RE-1 (2026-10-19, issue 100008): the declaration starts its line. An unanchored search
+            # read qnfo-model-eval's comment `var VERSION = "..."` as its main version (failing every run), and the
+            # spaces-only form missed qnfo-gateway and qnfo-email (`var VERSION="..."`), which were never judged.
+            v = re.search(r'^[ \t]*var VERSION\s*=\s*"([^"]*)"', f.read(200000), re.M)
         out[name] = {"dir": d, "version": v.group(1) if v else None}
     return out
 
