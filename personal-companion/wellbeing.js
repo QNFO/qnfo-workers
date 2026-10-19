@@ -627,7 +627,17 @@ const HARD = [
   /\b(overdos\w*)\b/,
   // "cut myself some slack" is not a crisis. The lookahead keeps ordinary English out.
   /\b(hurt|harm|cut|burn|starve|poison|stab|choke)\w*\s+my\s?self\b(?!\s+(some|a)\s+(slack|break))/,
-  /\b(don'?t|do\s+not)\s+want\s+to\s+(be\s+here|exist|wake\s+up)\b/
+  /\b(don'?t|do\s+not)\s+want\s+to\s+(be\s+here|exist|wake\s+up)\b/,
+  // Added Dutch and additional English patterns
+  /\bzelfmoord\b/,
+  /\bik wil dood\b/,
+  /\ber een eind aan maken\b/,
+  /\bik wil er niet meer zijn\b/,
+  /\bik zie het niet meer zitten\b/,
+  /\bkms\b/,
+  /\bwish i was dead\b/,
+  /\bbetter off without me\b/,
+  /\bnobody would miss me\b/
 ];
 
 const SOFT = [
@@ -637,7 +647,8 @@ const SOFT = [
 ];
 
 export function crisisSignal(text) {
-  const t = String(text || "").toLowerCase().replace(/\s+/g, " ");
+  // Normalize curly apostrophes to ASCII apostrophe, then lower‑case and collapse whitespace.
+  const t = String(text || "").replace(/[\u2018\u2019]/g, "'").toLowerCase().replace(/\s+/g, " ");
   for (const re of HARD) {
     const m = t.match(re);
     if (m) return { level: 2, match: m[0] };
