@@ -1,8 +1,15 @@
 {
-  "audited_at": "2026-10-19 05:37:13",
+  "audited_at": "2026-10-19 07:14:27",
   "d1_write_failures": [],
   "d1_writes_ok": 120,
   "guard": {
+    "_drift_confirm": {
+      "first_pass": [
+        "q08-signal-engine"
+      ],
+      "refreshed": true,
+      "second_pass": []
+    },
     "_guard_rc": 0,
     "ahead": [],
     "cf_script_list": true,
@@ -541,7 +548,7 @@
     "sync_workers": [
       {
         "dir": "idea-hub",
-        "version": "1.11.0-share-subscribe",
+        "version": "1.11.1",
         "worker": "idea-hub"
       },
       {
@@ -556,7 +563,7 @@
       },
       {
         "dir": "q08-signal-engine",
-        "version": "0.28.14-sql-arity",
+        "version": "0.28.16-codeagent",
         "worker": "q08-signal-engine"
       },
       {
@@ -586,7 +593,7 @@
       },
       {
         "dir": "qnfo-code-orchestrator",
-        "version": "0.18.22-merge-scope-at-read-1",
+        "version": "0.18.23-lease-fence-1",
         "worker": "qnfo-code-orchestrator"
       },
       {
@@ -616,12 +623,12 @@
       },
       {
         "dir": "qnfo-fleet-dashboard",
-        "version": "1.44.5-codeagent",
+        "version": "1.44.8-codeagent",
         "worker": "qnfo-fleet-dashboard"
       },
       {
         "dir": "qnfo-gateway",
-        "version": "3.26.1-gw-json-quiet",
+        "version": "3.26.3-codeagent",
         "worker": "qnfo-gateway"
       },
       {
@@ -676,7 +683,7 @@
       },
       {
         "dir": "qnfo-research-exec",
-        "version": "0.19.2-retry-not-error",
+        "version": "0.19.3-codeagent",
         "worker": "qnfo-research-exec"
       },
       {
@@ -686,7 +693,7 @@
       },
       {
         "dir": "qnfo-subscribers",
-        "version": "1.3.3-utm-metric-1",
+        "version": "1.3.4-attribution-chain-1",
         "worker": "qnfo-subscribers"
       },
       {
@@ -807,9 +814,9 @@
       "worker": "funding"
     },
     "idea-hub": {
-      "before": "1.11.0-share-subscribe",
+      "before": "1.11.1",
       "http": 200,
-      "live": "1.11.0-share-subscribe",
+      "live": "1.11.1",
       "match": 1,
       "note": "SYNC",
       "worker": "idea-hub"
@@ -988,9 +995,9 @@
       "worker": "personal-life-search"
     },
     "q08-signal-engine": {
-      "before": "0.28.14-sql-arity",
+      "before": "0.28.16-codeagent",
       "http": 200,
-      "live": "0.28.14-sql-arity",
+      "live": "0.28.16-codeagent",
       "match": 1,
       "note": "SYNC",
       "worker": "q08-signal-engine"
@@ -1189,9 +1196,9 @@
       "worker": "qnfo-code-agent"
     },
     "qnfo-code-orchestrator": {
-      "before": "0.18.22-merge-scope-at-read-1",
+      "before": "0.18.23-lease-fence-1",
       "http": 200,
-      "live": "0.18.22-merge-scope-at-read-1",
+      "live": "0.18.23-lease-fence-1",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-code-orchestrator"
@@ -1327,9 +1334,9 @@
       "worker": "qnfo-fleet-control"
     },
     "qnfo-fleet-dashboard": {
-      "before": "1.44.5-codeagent",
+      "before": "1.44.8-codeagent",
       "http": 200,
-      "live": "1.44.5-codeagent",
+      "live": "1.44.8-codeagent",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-fleet-dashboard"
@@ -1353,9 +1360,9 @@
       "worker": "qnfo-fleet-feed"
     },
     "qnfo-gateway": {
-      "before": "3.26.1-gw-json-quiet",
+      "before": "3.26.3-codeagent",
       "http": 200,
-      "live": "3.26.1-gw-json-quiet",
+      "live": "3.26.3-codeagent",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-gateway"
@@ -1567,9 +1574,9 @@
       "worker": "qnfo-register-guard"
     },
     "qnfo-research-exec": {
-      "before": "0.19.2-retry-not-error",
+      "before": "0.19.3-codeagent",
       "http": 200,
-      "live": "0.19.2-retry-not-error",
+      "live": "0.19.3-codeagent",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-research-exec"
@@ -1637,9 +1644,9 @@
       "worker": "qnfo-social"
     },
     "qnfo-subscribers": {
-      "before": "1.3.3-utm-metric-1",
+      "before": "1.3.4-attribution-chain-1",
       "http": 200,
-      "live": "1.3.3-utm-metric-1",
+      "live": "1.3.4-attribution-chain-1",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-subscribers"

@@ -371,9 +371,23 @@ def settled_evidence(pr):
     return "CONFLICT-REPAIR-SETTLE-1: GitHub reads PR #%d %s, so there is no conflict left to repair." % (int(pr["number"]), how)
 
 
+# CONFLICT-REPAIR-SETTLE-2 (2026-10-19, PR 2603 review): the first settle INSERTed into issue_triage without sla_due_at, which is
+# NOT NULL with no default in the live schema; SQLite checks NOT NULL before the ON CONFLICT upsert, so the statement failed even
+# when a triage row existed and the repair issue of a merged or closed pull request (2898, 2305, 99905, 100038) stayed open.
+# agent_issues_autotriage2_ins gives every issue a triage row, so the evidence goes in by UPDATE; the guarded INSERT covers an
+# issue that has none and supplies every NOT NULL column (due on arrival, PRIORITY-QUEUE-1). scripts/conflict_repair_test.py runs
+# these statements against the live issue_triage definition and the close triggers.
+SETTLE_TRIAGE_SQL = ("INSERT INTO issue_triage (issue_id, rc, owner, sla_due_at, close_evidence) "
+                     "SELECT ?1, 'CONFLICT-REPAIR-SETTLE-1', 'conflict-repair', datetime('now'), ?2 "
+                     "WHERE NOT EXISTS (SELECT 1 FROM issue_triage WHERE issue_id = ?1)")
+SETTLE_EVIDENCE_SQL = "UPDATE issue_triage SET close_evidence = ?2 WHERE issue_id = ?1"
+SETTLE_CLOSE_SQL = "UPDATE agent_issues SET status = 'closed', updated_at = CAST(strftime('%s','now') AS INTEGER) * 1000 WHERE id = ?1 AND status = 'open'"
+
+
 def settle_issue(number, evidence):
     """Close the open STALE-PR-CONFLICT-REPAIR-1 issue of a pull request that is no longer open, with the GitHub read as
-    evidence. The close-evidence trigger still applies: a failing contract keeps the issue open."""
+    evidence. The close triggers still apply (issue_close_evidence_required, CLOSE-BINDS-TO-PROBE-1): a failing contract
+    keeps the issue open and the refusal is reported, never bypassed."""
     acct, token = os.environ.get("CLOUDFLARE_ACCOUNT_ID") or os.environ.get("CF_ACCOUNT_ID"), os.environ.get("CLOUDFLARE_API_TOKEN")
     if not (acct and token):
         return False
@@ -382,8 +396,9 @@ def settle_issue(number, evidence):
         rows = d1(acct, token, DB_ID, "SELECT id FROM agent_issues WHERE status = 'open' AND title LIKE ?1", ["STALE-PR-CONFLICT-REPAIR-1 PR %d:%%" % number])
         for r in rows or []:
             iid = int(r.get("id"))
-            d1(acct, token, DB_ID, "INSERT INTO issue_triage (issue_id, rc, owner, close_evidence) VALUES (?1, 'CONFLICT-REPAIR-SETTLE-1', 'conflict-repair', ?2) ON CONFLICT(issue_id) DO UPDATE SET close_evidence = excluded.close_evidence", [iid, evidence])
-            d1(acct, token, DB_ID, "UPDATE agent_issues SET status = 'closed', updated_at = CAST(strftime('%s','now') AS INTEGER) * 1000 WHERE id = ?1 AND status = 'open'", [iid])
+            d1(acct, token, DB_ID, SETTLE_TRIAGE_SQL, [iid, evidence])
+            d1(acct, token, DB_ID, SETTLE_EVIDENCE_SQL, [iid, evidence])
+            d1(acct, token, DB_ID, SETTLE_CLOSE_SQL, [iid])
         return True
     except Exception as e:  # noqa: BLE001
         emit("::warning::conflict-repair: repair issue of PR %d not settled: %s" % (number, str(e)[:200]))
@@ -396,8 +411,8 @@ def repair(number, push=False, keep_branch=False):
     if why:
         ev = settled_evidence(pr)
         if ev and push:
-            settle_issue(number, ev)
-            return {"pr": number, "outcome": "settled", "why": why, "evidence": ev}
+            done = settle_issue(number, ev)
+            return {"pr": number, "outcome": "settled" if done else "settle-failed", "why": why, "evidence": ev}
         return {"pr": number, "outcome": "skipped", "why": why}
     head_sha = pr["head"]["sha"]
     if push and attempted(number, head_sha):

@@ -89,7 +89,7 @@
 // Carries forward v1.0.5-boundary-match-20260926 (fix #1168 FEED-GATE-SUBSTRING-COLLISION-1:
 //   single alphanumeric denylist tokens are matched with word boundaries
 //   (?<![a-z0-9])token(?![a-z0-9]); phrases keep substring matching).
-var VERSION = "1.11.0-share-subscribe"; // 1.11.0 REACH-IDEA-1 (2026-10-19, agent_issues 2480, pillar reach): every /s/ thread page carries the subscribe box the home page has (ideaSubBox, shared). Carries 1.10.12 IDEAS-INTAKE-OWNER-1 from main.
+var VERSION = "1.11.1"; /* 1.11.1 IDEAS-CAP-GENERATED-RELEASE-1 (2026-10-19, agent_issues 100047, pillar research): triage re-queues accepts the research admission cap held, oldest first, as many as fit under the cap; they were stranded for good before. */ // 1.11.0 REACH-IDEA-1 (2026-10-19, agent_issues 2480, pillar reach): every /s/ thread page carries the subscribe box the home page has (ideaSubBox, shared). Carries 1.10.12 IDEAS-INTAKE-OWNER-1 from main.
 // Diversity enforcement: ensure no topic exceeds 50% of accepted proposals in the last 30 days.
 const MAX_TOPIC_SHARE = 0.5;
 async function applyDiversityConstraint(proposal, getRecentAccepts) {
@@ -717,6 +717,21 @@ async function enqueueAccepted(env, id, idea, score, now, direct) {
   await env.QNFO_AUDIT.prepare("INSERT OR IGNORE INTO research_queue (id, source, source_id, idea, summary, score, decision, status, created_at) VALUES (?1,'proposal',?2,?3,'',?4,?5,'queued',?6)").bind(crypto.randomUUID(), String(id), String(idea || "").slice(0, 3000), score, "ACCEPT", now).run();
   return true;
 }
+async function capRelease(env, out) {
+  out.cap_released = 0;
+  var q = await env.QNFO_AUDIT.prepare("SELECT COUNT(*) AS n FROM research_queue WHERE status IN ('queued','researching','review','deferred')").first();
+  var room = Math.min(TRIAGE_BATCH, RESEARCH_ADMISSION_CAP - Number(q && q.n || 0));
+  if (!(room > 0)) return;
+  var held = (await env.QNFO_AUDIT.prepare("SELECT id, idea, score, rationale FROM idea_proposals WHERE decision = 'ACCEPT' AND status = 'triaged_hold' AND rationale LIKE '[research admission cap %' ORDER BY created_at ASC, id ASC LIMIT ?1").bind(room).all()).results || [];
+  var now = new Date().toISOString();
+  for (var i = 0; i < held.length; i++) {
+    var h = held[i], rationale = String(h.rationale || "").replace(/^\[research admission cap [^\]]*\] /, "");
+    var up = await env.QNFO_AUDIT.prepare("UPDATE idea_proposals SET status = 'triaged_accepted', rationale = ?1 WHERE id = ?2 AND status = 'triaged_hold'").bind(rationale, h.id).run();
+    if (!(Number(up && up.meta && up.meta.changes) > 0)) continue;
+    await env.QNFO_AUDIT.prepare("INSERT OR IGNORE INTO research_queue (id, source, source_id, idea, summary, score, decision, status, created_at) VALUES (?1,'proposal',?2,?3,'',?4,'ACCEPT','queued',?5)").bind(crypto.randomUUID(), String(h.id), String(h.idea || "").slice(0, 3000), h.score, now).run();
+    out.cap_released++;
+  }
+}
 // Expire held rows that left the window (terminal HOLD, score kept); then release the best held rows the current mix
 // allows, up to TRIAGE_BATCH a run. No model call either way. Since 1.6.0 (BUDGET-SOFT-ROUTE-1) a cap no longer holds
 // the release back; the breached argument is kept for callers and ignored.
@@ -761,6 +776,11 @@ async function triageProposals(env, deadline) {
       out.released = Number(rel && rel.meta && rel.meta.changes) || 0;
     } catch (e) { out.errors++; }
   }
+  // IDEAS-CAP-GENERATED-RELEASE-1 (1.11.1, agent_issues 100047): enqueueAccepted holds a generated ACCEPT as triaged_hold with a
+  // '[research admission cap n/120]' rationale while the queue is full, and nothing ever re-admitted it (66 rows held since
+  // 2026-10-17 on 2026-10-19). Each run now re-queues held cap rows oldest first, as many as fit under RESEARCH_ADMISSION_CAP
+  // and at most TRIAGE_BATCH. The cap itself stays: a full queue releases nothing.
+  try { await capRelease(env, out); } catch (e) { out.errors++; }
   var rows = (await env.QNFO_AUDIT.prepare("SELECT id, idea, name, contact FROM idea_proposals WHERE status='new' ORDER BY created_at ASC LIMIT ?1").bind(TRIAGE_BATCH).all()).results || [];
   // IDEA-DIVERSITY-CAP-1: the 30-day accepted mix, read once and kept current as this run accepts. Unreadable: no cap
   // this run (null), and the error is counted.
