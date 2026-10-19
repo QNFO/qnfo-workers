@@ -57,8 +57,12 @@
 //  23. No ask while a timed calendar event is on; with three or more events the day is lighter (optional asks stop one short of
 //      the daily cap and offer the smallest step); and one short "after <event>" check-in once a social or heavy event ends.
 //      Risk-word care and presence are never held back by the calendar.
+// COMPANION-GP-SUMMARY-1 (2026-10-19): something to bring to the GP (huisarts).
+//  24. The Data tab builds, when he asks, a one-page 90-day summary in plain words (mood by week, WHO-5, the sleep proxy, what
+//      helped), with no diagnosis and no chat text; journal lines and mood notes only when he ticks them. It is read behind the
+//      sign-in, printed or saved by him, and never stored, mailed, shared or posted by the companion.
 
-export const COMPANION_VERSION = "1.8.0";
+export const COMPANION_VERSION = "1.9.0";
 export const TZ = "Europe/Amsterdam";
 export const CONTEXTS = [
   { name: "@home", hint: "chores, cooking, things in the flat" },
@@ -1267,6 +1271,97 @@ export async function loadEvents(env, deps, day, tz) {
 }
 export const afterEventText = (title) => "After " + s(title, 60) + ": how are you doing now? A number is plenty; nothing else needed.";
 
+// ---------------------------------------------------------------- a summary for his GP (COMPANION-GP-SUMMARY-1, rule 24)
+// The companion suggests talking to the GP (huisarts) when the WHO-5 stays low and until now gave him nothing to bring. This
+// builds a one-page summary of the last 90 days in plain words: mood by week, WHO-5 readings, the sleep proxy and what helped.
+// It never diagnoses and carries no chat text; journal lines and the notes he typed on mood taps are included only when he ticks
+// them. It is generated for him when he asks, shown on the Data tab behind the sign-in, and printed or saved by him. It is not
+// stored, mailed, shared or posted anywhere: there is no route that sends it and no row that keeps it.
+export const GP_DAYS = 90;
+const GP_TEXT_LIMIT = 20;
+// Pure: the sheet from the numbers. d: { from, to, days, moodDays:[{day,m}], who5:[{day,score}], sleepDays:[{day,hours}], helps:{activities},
+// journal:[{date,content}]|null, notes:[{day,score,note}]|null }.
+export function gpSummaryBuild(d) {
+  const days = d.days || GP_DAYS;
+  const moodDays = (d.moodDays || []).filter((x) => x && Number.isFinite(Number(x.m)));
+  const byWeek = {};
+  for (const x of moodDays) { const w = mondayOf(x.day); (byWeek[w] = byWeek[w] || []).push(Number(x.m)); }
+  const avg = (xs) => xs.reduce((a, b) => a + b, 0) / xs.length;
+  const weeks = Object.keys(byWeek).sort().map((w) => ({ week: w, days: byWeek[w].length, avg: r1(avg(byWeek[w])), low: Math.min(...byWeek[w]), high: Math.max(...byWeek[w]) }));
+  const who5 = (d.who5 || []).filter((x) => x && Number.isFinite(Number(x.score))).map((x) => ({ day: x.day, score: Number(x.score) })).sort((a, b) => String(a.day).localeCompare(String(b.day)));
+  const sleepDays = (d.sleepDays || []).filter((x) => x && Number.isFinite(Number(x.hours)));
+  const sleep = sleepDays.length ? { nights: sleepDays.length, avg_hours: r1(avg(sleepDays.map((x) => Number(x.hours)))), shortest: Math.min(...sleepDays.map((x) => Number(x.hours))), longest: Math.max(...sleepDays.map((x) => Number(x.hours))) } : null;
+  const helps = ((d.helps && d.helps.activities) || []).filter((a) => a.n >= 2 && a.score >= 3.5).slice(0, 5).map((a) => ({ title: String(a.title || ""), score: a.score, times: a.n }));
+  const lines = [];
+  lines.push("Period: " + d.from + " to " + d.to + " (" + days + " days). Prepared by my personal companion app from my own entries. It is a self-tracking summary, not a medical assessment, and it does not diagnose anything.");
+  // Mood
+  if (moodDays.length < 3) {
+    lines.push("Mood: I logged my mood on only " + moodDays.length + (moodDays.length === 1 ? " day" : " days") + " in this period, which is too few to show a pattern.");
+  } else {
+    const all = moodDays.map((x) => Number(x.m));
+    let l = "Mood (1 is rough, 5 is great): logged on " + moodDays.length + " of " + days + " days, average " + r1(avg(all)) + ", lowest " + Math.min(...all) + ", highest " + Math.max(...all) + ".";
+    const low = moodDays.filter((x) => Number(x.m) <= 2).length;
+    if (low) l += " " + low + (low === 1 ? " day was" : " days were") + " rated 1 or 2.";
+    lines.push(l);
+    const recent = moodDays.filter((x) => x.day > addDays(d.to, -28)).map((x) => Number(x.m));
+    const prior = moodDays.filter((x) => x.day > addDays(d.to, -56) && x.day <= addDays(d.to, -28)).map((x) => Number(x.m));
+    if (recent.length >= 4 && prior.length >= 4) {
+      const a = r1(avg(recent)), b = r1(avg(prior));
+      lines.push("The last four weeks averaged " + a + ", against " + b + " for the four weeks before: " + (a - b >= 0.3 ? "a little higher." : b - a >= 0.3 ? "a little lower." : "about the same."));
+    }
+  }
+  // WHO-5
+  if (who5.length) {
+    const lo = who5.reduce((m, x) => (x.score < m.score ? x : m), who5[0]);
+    lines.push("WHO-5 well-being index (0 to 100, higher is better; below 50 is the published threshold for a closer look): " + who5.map((x) => x.score + " on " + x.day).join("; ") + ". The lowest was " + lo.score + " on " + lo.day + ".");
+  } else lines.push("WHO-5 well-being index: no readings in this period.");
+  // Sleep proxy
+  if (sleep) lines.push("Rest, estimated from the longest overnight gap between my messages (a proxy from message times, not measured sleep): about " + sleep.avg_hours + " hours on average over " + sleep.nights + " nights, from " + sleep.shortest + " to " + sleep.longest + " hours.");
+  else lines.push("Rest: not enough message times to estimate overnight rest. This app does not measure sleep.");
+  // What helped
+  if (helps.length) lines.push("What I rated as helping (enjoyment and achievement, 1 to 5): " + helps.map((h) => h.title + " (" + h.score + ", " + h.times + " times)").join("; ") + ".");
+  else lines.push("What helped: I have not rated enough activities yet to say.");
+  const texts = d.journal || d.notes ? {
+    journal: d.journal ? d.journal.slice(0, GP_TEXT_LIMIT).map((j) => ({ date: j.date, text: s(j.content, 400) })) : null,
+    notes: d.notes ? d.notes.slice(0, GP_TEXT_LIMIT).map((n) => ({ day: n.day, score: n.score, text: s(n.note, 300) })) : null
+  } : null;
+  return {
+    title: "Self-tracking summary for my GP (huisarts)", period: { from: d.from, to: d.to, days }, lines, weeks, who5, sleep, helps, texts,
+    included: { journal: !!d.journal, notes: !!d.notes },
+    footer: "Written by me, with my companion app, for my own use. It was not sent to anyone; I chose to show it."
+  };
+}
+// The 90 days of his own record, then the sheet. opts.journal / opts.notes are his ticks and default to off.
+export async function gpSummary(env, opts) {
+  await ensureSchema(env.PERSONAL);
+  const o = opts || {};
+  const now = nowIso();
+  const cfg = await loadCfg(env);
+  const tz = (await effectiveTz(env, now, cfg)).tz;
+  const to = localParts(now, tz).day, from = addDays(to, -(GP_DAYS - 1));
+  const sinceIso = dayStartIso(from, tz);
+  const stamps = [];
+  for (const sql of ["SELECT ts FROM chat WHERE role = 'user' AND ts >= ? LIMIT 8000", "SELECT ts FROM cmp_inbox WHERE ts >= ? LIMIT 4000", "SELECT ts FROM cmp_mood WHERE ts >= ? LIMIT 2000", "SELECT ts FROM journal WHERE ts >= ? LIMIT 2000"]) {
+    try { for (const r of await all(env.PERSONAL, sql, sinceIso)) { const ms = Date.parse(r.ts); if (Number.isFinite(ms)) stamps.push(ms); } } catch (e) { /* table may be absent */ }
+  }
+  stamps.sort((a, b) => a - b);
+  const sleepDays = [];
+  for (let i = 0; i < GP_DAYS; i++) {
+    const day = addDays(from, i), st = new Date(dayStartIso(day, tz)).getTime();
+    const win = stamps.filter((t) => t >= st - 6 * 36e5 && t <= st + 14 * 36e5).map((t) => new Date(t).toISOString());
+    const sl = sleepFromTimestamps(win, day, tz);
+    if (sl) sleepDays.push({ day, hours: sl.hours });
+  }
+  const [moodDays, who5, helps] = await Promise.all([
+    moodByDay(env, from, addDays(to, 1)),
+    all(env.PERSONAL, "SELECT day, score FROM cmp_measures WHERE instrument = 'who5' AND day >= ? ORDER BY ts", from).catch(() => []),
+    whatHelps(env, GP_DAYS).catch(() => null)
+  ]);
+  const journal = o.journal ? await all(env.PERSONAL, "SELECT date, content FROM journal WHERE date >= ? ORDER BY ts DESC LIMIT " + GP_TEXT_LIMIT, from).catch(() => []) : null;
+  const notes = o.notes ? await all(env.PERSONAL, "SELECT day, score, note FROM cmp_mood WHERE day >= ? AND note IS NOT NULL AND note != '' ORDER BY ts DESC LIMIT " + GP_TEXT_LIMIT, from).catch(() => []) : null;
+  return Object.assign({ ok: true, generated: now }, gpSummaryBuild({ from, to, days: GP_DAYS, moodDays, who5, sleepDays, helps, journal, notes }));
+}
+
 // The longest quiet stretch overnight, read from when he wrote anything. A proxy, labelled as one.
 export function sleepFromTimestamps(isos, day, tz) {
   const start = new Date(dayStartIso(day, tz)).getTime() - 6 * 3600e3;   // 18:00 the evening before
@@ -2049,6 +2144,8 @@ export async function handleCompanion(request, env, ctx, deps) {
     if (r === "who5" && m === "POST") { const b = await body(); const out = await recordWho5(env, b.items); return J(out, out.ok ? 200 : 400); }
     if (r === "settings" && m === "POST") { const out = await saveSettings(env, await body()); return J(out, out.ok ? 200 : 400); }
     if (r === "week" && m === "GET") return J(await weekLookback(env, undefined, url.searchParams.get("week")));
+    // COMPANION-GP-SUMMARY-1: generated on request, read-only, never stored or sent; the ticks are his choice of what text goes in.
+    if (r === "gp-summary" && m === "GET") return J(await gpSummary(env, { journal: url.searchParams.get("journal") === "1", notes: url.searchParams.get("notes") === "1" }));
     if (r === "week/seen" && m === "POST") { const b = await body(); const out = await weekSeen(env, b.week); return J(out, out.ok ? 200 : 400); }
     if (r === "pause" && m === "POST") { const b = await body(); const out = await setPause(env, b.hours); return J(out, out.ok ? 200 : 400); }
     if (r === "push/key" && m === "GET") return stub().fetch("https://do/companion-do/key");
@@ -2229,8 +2326,11 @@ nav button{border:0;background:none;font-size:.78rem;padding:6px 4px;color:var(-
 table{width:100%;border-collapse:collapse;font-size:.9rem}td,th{text-align:left;padding:6px 4px;border-top:1px solid var(--line)}
 .bar{height:8px;background:var(--acc);border-radius:4px}
 .hide{display:none}
+.sheet p{margin:.5rem 0}.sheet h1{font-size:1.25rem}
+@media print{html,body{background:#fff!important;color:#000!important}nav,#q-note,#login,.v,.noprint{display:none!important}#gp-print:not(.hide){display:block!important}.card{border:0;padding:0}.mute{color:#333}main{max-width:none;padding:0}}
 </style></head><body><main>
 <div id="q-note"></div>
+<div id="gp-print" class="hide"></div>
 <div id="login" class="card hide"><h1>Hi, Rowan.</h1><p>To open your companion on this device, I'll e-mail you a 6-digit code. After that this device stays signed in for six months.</p><div class="row"><button class="p" id="li-send" onclick="sendCode()">E-mail me a code</button></div><div id="li-step" class="hide" style="margin-top:10px"><div class="row"><input id="li-code" inputmode="numeric" autocomplete="one-time-code" maxlength="6" placeholder="6-digit code" class="grow"><button class="p" onclick="verifyCode()">Open</button></div></div><div id="li-out"></div></div>
 <section id="v-today" class="v"></section>
 <section id="v-capture" class="v hide"><h1>Capture</h1>
@@ -2245,7 +2345,7 @@ table{width:100%;border-collapse:collapse;font-size:.9rem}td,th{text-align:left;
 <section id="v-learn" class="v hide"><h1>Review</h1><div id="learn"></div>
  <div class="card"><h2>New card</h2><input id="c-front" placeholder="Question"><textarea id="c-back" placeholder="Answer" style="margin-top:8px;min-height:60px"></textarea><div class="row" style="margin-top:8px"><button class="p" onclick="addCard()">Add card</button></div></div></section>
 <section id="v-journal" class="v hide"><h1>Journal</h1><div class="card"><textarea id="j-text" placeholder="One line is enough."></textarea><div class="row" style="margin-top:8px"><button class="p" onclick="addJournal()">Keep it</button></div><div id="j-out"></div></div><div class="card"><h2>Recent</h2><div id="journal"></div></div></section>
-<section id="v-data" class="v hide"><h1>Patterns, plan and privacy</h1><div id="dash"></div><div id="plan" class="card"></div><div id="priv"></div></section>
+<section id="v-data" class="v hide"><h1>Patterns, plan and privacy</h1><div id="dash"></div><div id="plan" class="card"></div><div id="gp"></div><div id="priv"></div></section>
 </main>
 <nav><button data-v="today" class="on">Today</button><button data-v="capture">Capture</button><button data-v="talk">Talk</button><button data-v="do">Do</button><button data-v="learn">Learn</button><button data-v="journal">Journal</button><button data-v="data">Data</button></nav>
 <script>
@@ -2257,7 +2357,7 @@ function warn(e){try{console.warn('companion:',e&&e.message||e)}catch(x){console
 function el(t,a,kids){var e=document.createElement(t);if(a)for(var k in a){if(k==='text')e.textContent=a[k];else if(k==='cls')e.className=a[k];else if(k.slice(0,2)==='on')e[k]=a[k];else e.setAttribute(k,a[k])}(kids||[]).forEach(function(c){if(c)e.appendChild(typeof c==='string'?document.createTextNode(c):c)});return e}
 function getKey(){try{var k=localStorage.getItem('cmp-key');if(k)return k;var o=JSON.parse(localStorage.getItem('qnfo-chat')||'{}');return o.key||''}catch(e){return ''}}
 function hdrs(){var h={'X-Companion':'1'};var k=getKey();if(k)h.Authorization='Bearer '+k;return h}
-function showLogin(){Array.prototype.forEach.call(document.querySelectorAll('.v'),function(s){s.classList.add('hide')});$('login').classList.remove('hide')}
+function showLogin(){closeGp();Array.prototype.forEach.call(document.querySelectorAll('.v'),function(s){s.classList.add('hide')});$('login').classList.remove('hide')}
 function sendCode(){$('li-out').innerHTML='';fetch('/companion/api/login/code',{method:'POST',headers:{'X-Companion':'1'}}).then(function(r){return r.json()}).then(function(r){say($('li-out'),r.reply||r.error,!r.ok);if(r.ok){$('li-step').classList.remove('hide');$('li-send').textContent='Send another code';$('li-code').focus()}}).catch(warn)}
 function verifyCode(){$('li-out').innerHTML='';fetch('/companion/api/login/verify',{method:'POST',headers:{'Content-Type':'application/json','X-Companion':'1'},body:JSON.stringify({code:$('li-code').value})}).then(function(r){return r.json()}).then(function(r){if(!r.ok){say($('li-out'),r.error,true);return}$('login').classList.add('hide');fromHash();go('today')}).catch(warn)}
 function signOut(){(qstore?qstore.clear().catch(warn):Promise.resolve()).then(function(){showPending();return api('/companion/api/logout',{json:{}})}).then(function(){try{localStorage.removeItem('cmp-key')}catch(e){warn(e)}showLogin()}).catch(warn)}
@@ -2340,7 +2440,7 @@ function loadData(){api('/companion/api/dashboard').then(function(d){var b=$('da
  if((d.who5_history||[]).length){var w5=el('div',{cls:'card'},[el('h2',{text:'Well-being, two-weekly (WHO-5, 0-100)'})]);d.who5_history.forEach(function(x){w5.appendChild(el('div',{cls:'row'},[el('div',{text:x.day,style:'width:96px',cls:'mute'}),el('div',{cls:'grow'},[el('div',{cls:'bar',style:'width:'+x.score+'%'})]),el('div',{text:String(x.score),style:'width:40px'})]))});w5.appendChild(el('div',{cls:'mute',text:'50 or more is generally a good range. A lower score is a reason to be kind to yourself and to talk to someone, not a diagnosis.'}));b.appendChild(w5)}
  if((d.mood_by_tags_60d||[]).length){var tt=el('div',{cls:'card'},[el('h2',{text:'Mood by tags (60 days)'})]);d.mood_by_tags_60d.forEach(function(x){tt.appendChild(el('div',{cls:'mute',text:x.tags+': '+x.mood+' ('+x.n+')'}))});b.appendChild(tt)}});
  api('/companion/api/week').then(function(w){if(!w||!w.lines)return;var lw=el('div',{cls:'card'},[el('h2',{text:'Week of '+w.week})].concat(w.lines.map(function(x){return el('div',{cls:'mute',text:x})})));var first=b.firstChild;b.insertBefore(lw,first)}).catch(warn);
- loadPlan();
+ loadPlan();var gpb=$('gp');gpb.innerHTML='';gpb.appendChild(gpCard());
  api('/companion/api/privacy').then(function(p){var b=$('priv');b.innerHTML='';var t=el('table');t.appendChild(el('tr',{},[el('th',{text:'What'}),el('th',{text:'rows'}),el('th',{text:'since'})]));p.tables.forEach(function(x){t.appendChild(el('tr',{},[el('td',{text:x.what}),el('td',{text:String(x.rows)}),el('td',{text:(x.oldest||'').slice(0,10)})]))});
  var conf=el('input',{placeholder:"type: delete everything"});var out=el('div');
  b.appendChild(el('div',{cls:'card'},[el('h2',{text:'Your data'}),el('div',{cls:'mute',text:p.where}),t,el('div',{cls:'mute',text:'Files: '+p.files.objects+' ('+Math.round(p.files.bytes/1024)+' KB). '+p.encryption,style:'margin-top:8px'}),
@@ -2348,6 +2448,21 @@ function loadData(){api('/companion/api/dashboard').then(function(d){var b=$('da
   el('div',{cls:'row',style:'margin-top:10px'},[el('button',{text:'Sign out on this device',onclick:signOut})]),
   el('div',{cls:'row',style:'margin-top:10px'},[el('button',{text:'Download everything',onclick:function(){fetch('/companion/api/export',{headers:hdrs()}).then(function(r){return r.blob()}).then(function(bl){var a=el('a',{href:URL.createObjectURL(bl),download:'companion-export.json'});document.body.appendChild(a);a.click();a.remove()})}})]),
   el('div',{style:'margin-top:10px'},[el('div',{cls:'mute',text:'Delete everything the companion stored (captures, moods, cards, files, Talk conversations, its nudges). Your older twin data stays.'}),conf,el('div',{cls:'row',style:'margin-top:6px'},[el('button',{text:'Delete',onclick:function(){api('/companion/api/delete',{json:{scope:'all',confirm:conf.value}}).then(function(r){out.innerHTML='';say(out,r.ok?'Deleted.':r.error)})}})]),out])]))})}
+function gpCard(){var c=el('div',{cls:'card'},[el('h2',{text:'For your GP (huisarts)'}),el('div',{cls:'mute',text:'A one-page summary of the last 90 days in plain words: mood by week, your WHO-5 scores, rest and what helped. It does not diagnose anything. Nothing is sent to anyone: you decide whether to show it or print it.'})]);
+ var j=el('input',{type:'checkbox',style:'width:auto'}),n=el('input',{type:'checkbox',style:'width:auto'});
+ c.appendChild(el('label',{cls:'row',style:'margin-top:8px'},[j,el('span',{text:'Include my journal lines (the last 20)'})]));
+ c.appendChild(el('label',{cls:'row',style:'margin-top:4px'},[n,el('span',{text:'Include the notes I typed with mood taps (the last 20)'})]));
+ var out=el('div');
+ c.appendChild(el('div',{cls:'row',style:'margin-top:8px'},[el('button',{cls:'p',text:'Show the summary',onclick:function(){out.innerHTML='';api('/companion/api/gp-summary?journal='+(j.checked?1:0)+'&notes='+(n.checked?1:0)).then(function(r){if(!r.ok){say(out,r.error||'failed',true);return}showGp(r)}).catch(function(e){say(out,e.message,true)})}})]));c.appendChild(out);return c}
+function closeGp(){var p=$('gp-print');if(p){p.classList.add('hide');p.innerHTML=''}}
+function showGp(r){var p=$('gp-print');p.innerHTML='';
+ p.appendChild(el('div',{cls:'row noprint',style:'margin:0 0 10px'},[el('button',{cls:'p',text:'Print or save as PDF',onclick:function(){window.print()}}),el('button',{text:'Close',onclick:closeGp})]));
+ var sh=el('div',{cls:'card sheet'},[el('h1',{text:r.title}),el('div',{cls:'mute',text:'Generated '+String(r.generated||'').slice(0,10)})]);
+ (r.lines||[]).forEach(function(x){sh.appendChild(el('p',{text:x}))});
+ if((r.weeks||[]).length){var t=el('table');t.appendChild(el('tr',{},[el('th',{text:'Week of'}),el('th',{text:'days logged'}),el('th',{text:'average'}),el('th',{text:'lowest'}),el('th',{text:'highest'})]));r.weeks.forEach(function(w){t.appendChild(el('tr',{},[el('td',{text:w.week}),el('td',{text:String(w.days)}),el('td',{text:String(w.avg)}),el('td',{text:String(w.low)}),el('td',{text:String(w.high)})]))});sh.appendChild(el('h2',{text:'Mood by week (1 to 5)'}));sh.appendChild(t)}
+ if(r.texts&&r.texts.journal&&r.texts.journal.length){sh.appendChild(el('h2',{text:'Journal lines I chose to include'}));r.texts.journal.forEach(function(x){sh.appendChild(el('p',{text:x.date+': '+x.text}))})}
+ if(r.texts&&r.texts.notes&&r.texts.notes.length){sh.appendChild(el('h2',{text:'Notes I typed with mood taps'}));r.texts.notes.forEach(function(x){sh.appendChild(el('p',{text:x.day+' (mood '+x.score+'): '+x.text}))})}
+ sh.appendChild(el('p',{cls:'mute',text:r.footer}));p.appendChild(sh);p.classList.remove('hide');window.scrollTo(0,0)}
 function discreetRow(){var sel=el('select',{cls:'grow'});[['care','Hide care notes on the lock screen'],['all','Hide every note on the lock screen'],['off','Show full text on the lock screen']].forEach(function(o){sel.appendChild(el('option',{value:o[0],text:o[1]}))});api('/companion/api/today').then(function(t){sel.value=t.discreet_push||'care'}).catch(warn);sel.onchange=function(){api('/companion/api/settings',{json:{discreet_push:sel.value}}).catch(warn)};return el('div',{cls:'row',style:'margin-top:10px'},[sel])}
 function emailRow(){var sel=el('select',{cls:'grow'});[['off','No e-mail from the companion (notifications and this page only)'],['daily','One morning e-mail a day'],['all','E-mail every nudge and question too']].forEach(function(o){sel.appendChild(el('option',{value:o[0],text:o[1]}))});api('/companion/api/today').then(function(t){sel.value=t.email_mode||'off'}).catch(warn);sel.onchange=function(){api('/companion/api/settings',{json:{email_mode:sel.value}}).catch(warn)};return el('div',{cls:'row',style:'margin-top:10px'},[sel])}
 function loadPlan(){api('/companion/api/safety-plan').then(function(p){var b=$('plan');b.innerHTML='';b.appendChild(el('h2',{text:'My safety plan'}));b.appendChild(el('div',{cls:'mute',text:'For a hard moment, written in a calm one. Your own words, one per line. If you ever write something that worries me, I show you these with the crisis lines.'}));var tas={};
