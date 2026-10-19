@@ -214,6 +214,25 @@ export async function actionReport(api, cfg, root) {
   r.org_apps = inst.ok && inst.body && Array.isArray(inst.body.installations) ? inst.body.installations.map((x) => x.app_slug + ":" + x.app_id) : null;
   const cs = await seenContexts(api, repo);
   r.contexts_seen_on_recent_pr_heads = cs.seen; r.prs_sampled = cs.prs_sampled;
+  // MAIN-RULESET-PUSH-IDENTITY-1 (issue 100168): audit every write path to main and the identity it uses, report-only.
+  const dir = join(root, ".github", "workflows");
+  const wfFiles = existsSync(dir) ? readdirSync(dir).filter((x) => /\.ya?ml$/.test(x)).sort() : [];
+  const pushIdentities = [];
+  for (const f of wfFiles) {
+    const text = readFileSync(join(dir, f), "utf8");
+    if (!text) continue;
+    const hasCheckoutToken = /persist-credentials:\s*false/.test(text) ? "checkout does not persist the default token" : "checkout persists the default GITHUB_TOKEN identity (github-actions[bot]) unless overridden";
+    const pushes = [];
+    if (/\bgit\s+push\b/.test(text)) pushes.push("git push");
+    if (/\/contents\//.test(text) && /(PUT|patch)/i.test(text)) pushes.push("contents PUT/PATCH");
+    if (/\/git\/refs\//.test(text)) pushes.push("git refs PATCH/POST");
+    if (/canary_revert/.test(text)) pushes.push("canary_revert");
+    if (/QNFO_GH_PAT/.test(text)) pushIdentities.push({ workflow: f, credential: "QNFO_GH_PAT (admin PAT)", paths: pushes.length ? pushes : ["other"] });
+    else if (pushes.length) pushIdentities.push({ workflow: f, credential: hasCheckoutToken, paths: pushes, identity: "github-actions[bot] unless a bypass-listed app token is configured" });
+  }
+  r.main_push_paths = workflowPushPaths(root);
+  r.main_push_identities = pushIdentities;
+  r.main_push_identity_note = "ruleset-main refuses while any workflow pushes to main as github-actions[bot]; each push path must move to a bypass-listed identity (QNFO_GH_PAT or the qnfo-fleet app token) before ruleset-main goes live";
   const act = await probe("GET activity main", "/repos/" + repo + "/activity?ref=refs/heads/main&per_page=100");
   r.pushers_last_100 = act.ok ? activityActors(act.body) : null;
   r.unlisted_direct_pushers = act.ok ? unlistedPushers(r.pushers_last_100, cfg) : null;
