@@ -1268,7 +1268,7 @@ async function psRoadmap(env, out, projects) {
       r = await gh(env, "PATCH", PS_REPO + "/issues/" + l.gh_number, { state: "closed", state_reason: l.status === "retired" ? "not_planned" : "completed" });
       if (r.status === 200) out.roadmap_closed++;
     }
-    if (r && r.status === 200) { fixed++; rbudget.d1(1); await env.AUDIT.prepare("UPDATE roadmap_gh_links SET gh_state = ?, d1_status = ?, synced_at = ? WHERE roadmap_id = ?").bind(PS_RM_DONE[l.status] ? "closed" : "open", l.status, now, l.roadmap_id).run(); }
+    if (r && r.status >= 200 && r.status < 300) { fixed++; rbudget.d1(1); await env.AUDIT.prepare("UPDATE roadmap_gh_links SET gh_state = ?, d1_status = ?, synced_at = ? WHERE roadmap_id = ?").bind(PS_RM_DONE[l.status] ? "closed" : "open", l.status, now, l.roadmap_id).run(); }
     else { out.errors.push({ scope: "portfolio-roadmap-state " + l.roadmap_id, status: r && r.status, why: String(r && r.text || "").slice(0, 100) }); if (tsRateLimited(r)) break; }
   }
   var stmts = [];
