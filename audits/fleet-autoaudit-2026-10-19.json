@@ -1,5 +1,5 @@
 {
-  "audited_at": "2026-10-19 13:53:55",
+  "audited_at": "2026-10-19 14:28:56",
   "d1_write_failures": [],
   "d1_writes_ok": 120,
   "guard": {
@@ -620,7 +620,7 @@
       },
       {
         "dir": "qnfo-github-steward",
-        "version": "0.6.0-cron-grid-1",
+        "version": "0.7.0-protection-visible-1",
         "worker": "qnfo-github-steward"
       },
       {
@@ -1355,9 +1355,9 @@
       "worker": "qnfo-gateway"
     },
     "qnfo-github-steward": {
-      "before": "0.6.0-cron-grid-1",
+      "before": "0.7.0-protection-visible-1",
       "http": 200,
-      "live": "0.6.0-cron-grid-1",
+      "live": "0.7.0-protection-visible-1",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-github-steward"
