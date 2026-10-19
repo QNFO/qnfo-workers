@@ -28,7 +28,8 @@ function makeD1() {
   db.exec(`CREATE TABLE agent_issues (id INTEGER PRIMARY KEY AUTOINCREMENT, title TEXT, description TEXT, source TEXT, category TEXT, priority TEXT, status TEXT DEFAULT 'open', created_at INTEGER, updated_at INTEGER);
     CREATE TABLE service_registry (service TEXT PRIMARY KEY, state TEXT, kind TEXT, base_url TEXT);
     CREATE TABLE cloud_ops_events (id TEXT, ts TEXT, kind TEXT, text TEXT, meta TEXT, job TEXT, status TEXT);`);
-  for (const n of ["q08-signal-engine", "qnfo-social", "qnfo-cloud-ops", "qnfo-fleet-control", "qnfo-ai"]) db.prepare("INSERT INTO service_registry VALUES (?, 'live', 'worker', '')").run(n);
+  // qnfo-observability (the scorer host, still denied) stands in for the denied worker the issue texts mention; qnfo-fleet-control is the loop's own scope since CODE-LOOP-CONTROL-PLANE-1
+  for (const n of ["q08-signal-engine", "qnfo-social", "qnfo-cloud-ops", "qnfo-observability", "qnfo-ai"]) db.prepare("INSERT INTO service_registry VALUES (?, 'live', 'worker', '')").run(n);
   return { prepare: wrap, _db: db };
 }
 const Q08 = ["var VERSION = \"0.7.37\";", "async function handle(req, env) {", "  if (path === \"/api/f\") {", "    return recordVote(req, env);", "  }", "}"].join("\n");

@@ -31,10 +31,11 @@ function makeD1() {
     CREATE TABLE cloud_ops_events (id TEXT, ts TEXT, kind TEXT, text TEXT, meta TEXT, job TEXT, status TEXT);
     CREATE TABLE service_registry (service TEXT PRIMARY KEY, kind TEXT NOT NULL DEFAULT 'worker', version TEXT, state TEXT NOT NULL DEFAULT 'live');
     CREATE TABLE worker_removals (id INTEGER PRIMARY KEY AUTOINCREMENT, worker TEXT NOT NULL, removed_at TEXT, action TEXT, target TEXT, rationale TEXT, evidence TEXT, source TEXT, recorded_at TEXT DEFAULT (datetime('now')));
-    INSERT INTO service_registry (service) VALUES ('qnfo-lifecycle'), ('qnfo-code-orchestrator'), ('radar-hub'), ('qnfo-infra');
+    INSERT INTO service_registry (service) VALUES ('qnfo-lifecycle'), ('qnfo-code-orchestrator'), ('radar-hub'), ('qnfo-infra'), ('qnfo-observability');
     INSERT INTO worker_removals (worker, removed_at, action, target, recorded_at) VALUES
       ('calendar-api', '2026-10-06 11:02:41', 'folded', 'qnfo-lifecycle', '2026-10-06 11:02:41'),
       ('fleet-exec', '2026-10-06 07:31:38', 'folded', 'qnfo-code-orchestrator', '2026-10-06 07:31:38'),
+      ('qnfo-autonomy-scorer', '2026-10-06 07:31:38', 'folded', 'qnfo-observability', '2026-10-06 07:31:38'),
       ('events-radar', '2026-10-01', 'folded', 'radar-hub', '2026-10-01 00:00:00'),
       ('qnfo-paper-indexer', '2026-10-06 07:31:38', 'folded', 'qnfo-infra', '2026-10-06 07:31:38'),
       ('qnfo-errata-publish', '2026-10-01', 'folded', 'qnfo-errata-hub', '2026-10-01 00:00:00');`);
@@ -99,9 +100,12 @@ ok(atLeast(h.version, "0.6.0") && h.capabilities.indexOf("folded-redirect") >= 0
 // ===== 4. a host on the control plane is refused as a session task, after the redirect =====
 {
   const env = mkEnv();
-  const c = await addTask(env, "fleet-exec/worker.js");
-  ok(c.status === 422 && /^session task: qnfo-code-orchestrator is a control-plane or code-loop worker/.test(c.j.error || ""), "fleet-exec -> qnfo-code-orchestrator: a session task naming the host", c.j);
+  const c = await addTask(env, "qnfo-autonomy-scorer/worker.js");
+  ok(c.status === 422 && /^session task: qnfo-observability is a control-plane or code-loop worker/.test(c.j.error || ""), "qnfo-autonomy-scorer -> qnfo-observability: a session task naming the host", c.j);
   ok(events(env, "code-task.intake-redirect").length === 1, "the redirect is still audited", events(env, "code-task.intake-redirect"));
+  // CODE-LOOP-CONTROL-PLANE-1 (0.19.0, owner directive 2026-10-19): the orchestrator is the loop's own code, so a member folded into it is accepted
+  const own = await addTask(env, "fleet-exec/worker.js");
+  ok(own.status === 202 && row(env, own.j.id).path === "qnfo-code-orchestrator/worker.js", "fleet-exec -> qnfo-code-orchestrator: the loop's own code is in scope and the task is redirected to the host", own);
 }
 
 // ===== 5. intake: an issue naming the member is preflighted on the host's file and enqueued against the host =====
