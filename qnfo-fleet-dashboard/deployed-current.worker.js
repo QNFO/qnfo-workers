@@ -9,7 +9,7 @@ var __name22 = /* @__PURE__ */ __name2((target, value) => __defProp22(target, "n
 var __defProp222 = Object.defineProperty;
 var __name222 = /* @__PURE__ */ __name22((target, value) => __defProp222(target, "name", { value, configurable: true }), "__name");
 var __name2222 = /* @__PURE__ */ __name222((target, value) => Object.defineProperty(target, "name", { value, configurable: true }), "__name");
-var VERSION = "1.51.10-codeagent"; /* 1.51.8 VERSION-LINE-NOTES-1 (2026-10-19, agent_issues 100243, pillar autonomy; patch, a comment moved): the release notes of every earlier version rode on this line (178 notes, about 200,000 chars), so a version bump of this worker was an 820,000-char patch (worker and mirror, removed and added): 12 code tasks ended on the publisher size cap on 2026-10-19 and three issues were exhausted for three days. They are in git history (git log -S '<release tag>' -- qnfo-fleet-dashboard/worker.js); the changelog is built from the deploy ledger and commits, and the guards read only the quoted version string. A new note goes on this line and stays short. */
+var VERSION = "1.51.11-codeagent"; /* 1.51.8 VERSION-LINE-NOTES-1 (2026-10-19, agent_issues 100243, pillar autonomy; patch, a comment moved): the release notes of every earlier version rode on this line (178 notes, about 200,000 chars), so a version bump of this worker was an 820,000-char patch (worker and mirror, removed and added): 12 code tasks ended on the publisher size cap on 2026-10-19 and three issues were exhausted for three days. They are in git history (git log -S '<release tag>' -- qnfo-fleet-dashboard/worker.js); the changelog is built from the deploy ledger and commits, and the guards read only the quoted version string. A new note goes on this line and stays short. */
 
 // REVIEW-GATE-1 (2026-10-01, docs/STRATEGY.md s9): the 2026-10-25 impressions gate is retired. The research layer is
 // reviewed on this date against the reach scorecard; nothing deletes research data automatically (phase 2 needs the
@@ -4088,6 +4088,11 @@ async function ingestReachSignals(env, opts) {
     ["cf-rum-human:pages", "requestHost requestPath", function(g, d) { return reachRumPageRows(g, d, "cf-rum-human", "human"); }, "bot: 0"],
     ["cf-rum-human:referrers", "refererHost", function(g, d) { return reachRumReferrerRows(g, d, "cf-rum-human", "human"); }, "bot: 0"],
     ["cf-rum-human:external", "requestHost requestPath refererHost", atRumExternalRows, "bot: 0"]];
+  // RUM-ZERO-DAY-1 (1.38.0): a successful-but-empty pages read is not a measured zero. Each ":pages" query's rows are
+  // held until its sibling ":referrers" query of the same source has been read: a site "(all)" total of 0 with
+  // referrer loads above 0 writes no site row and ends the day partial, so the live-day retry re-reads it. Pages empty
+  // AND referrers empty stays a measured 0.
+  const heldPages = {};
   for (const q of rumQ) {
     const r = await reachGf(env, reachRumQuery(q[1], geq, leq, q[3] || undefined));
     const groups = r.err ? null : reachRumGroups(r.data);
@@ -4098,8 +4103,32 @@ async function ingestReachSignals(env, opts) {
       continue;
     }
     if (groups.length >= REACH_RUM_LIMIT) out.notes.push(q[0] + ": hit limit " + REACH_RUM_LIMIT + ", totals are a lower bound");
-    await put(q[0], q[2](groups, day));
+    if (String(q[0]).slice(-6) === ":pages") {
+      heldPages[q[0]] = q[2](groups, day);
+      continue;
+    }
+    const rows = q[2](groups, day);
+    await put(q[0], rows);
+    if (String(q[0]).slice(-10) !== ":referrers") continue;
+    const pk = String(q[0]).slice(0, -10) + ":pages";
+    if (heldPages[pk] == null) continue;
+    const pRows = heldPages[pk];
+    delete heldPages[pk];
+    let refSum = 0;
+    for (const x of rows) refSum += Number(x && x.value) || 0;
+    const site = pRows.filter(function(x) {
+      return x && x.entity_type === "site" && x.entity_id === "(all)";
+    })[0];
+    if (site && !(Number(site.value) > 0) && refSum > 0) {
+      out.skipped.push(pk + ": empty with " + refSum + " referrer page loads, site total not written (RUM-ZERO-DAY-1)");
+      await put(pk, pRows.filter(function(x) {
+        return !(x && x.entity_type === "site" && x.entity_id === "(all)");
+      }));
+    } else await put(pk, pRows);
   }
+  // A referrers query that was refused or empty of groups leaves its sibling pages rows unreleased: write them as before
+  // (nothing is known about that source's referrers, so no zero is judged).
+  for (const pk of Object.keys(heldPages)) await put(pk, heldPages[pk]);
   // a2. FLEET-KPI-1 (1.30.0): one bot-filtered row per host with page loads and Cloudflare's visit count, so the Metrics tab
   // reads a property's day without summing capped page rows. If the visit sum is refused the page loads are still kept.
   {
@@ -4233,6 +4262,52 @@ async function ingestReachSignals(env, opts) {
   }).join(", ");
   await record(out.skipped.length ? "partial" : "ok", "reach ingest " + day + ": " + (summary || "nothing written") + (out.skipped.length ? "; skipped " + out.skipped.length : ""));
   return out;
+}
+// RUM-ZERO-DAY-1 (1.38.0): repair of a stored false zero. Find the newest day in the last REACH_ZERO_SCAN_DAYS days
+// holding a site "(all)" cf-rum or cf-rum-human pageviews row of 0 whose same-source same-day referrer rows sum above 0
+// (a degraded read stored as a measured zero) and re-read it through the existing ingest path (ingestReachSignals with
+// { day }, INSERT OR REPLACE). One day per tick, at most REACH_ZERO_REPAIR_MAX attempts per day, ledger id
+// reach-zero-repair-<day>; a re-read that still reports RUM-ZERO-DAY-1 stays partial so a later tick retries it.
+// Called from reachIngestTick after the backfill step: await reachZeroRepair(env);.
+const REACH_ZERO_SCAN_DAYS = 28;
+const REACH_ZERO_REPAIR_MAX = 3;
+async function reachZeroRepair(env, nowMs) {
+  nowMs = nowMs || Date.now();
+  const today = reachYesterday(nowMs);
+  const from = reachShiftDay(today, -(REACH_ZERO_SCAN_DAYS - 1));
+  let days = [];
+  try {
+    days = await d1all(env.AUDIT, "SELECT date AS d, source AS src FROM reach_signals WHERE entity_type = 'site' AND entity_id = '(all)' AND metric = 'pageviews' AND value = 0 AND source IN ('cf-rum', 'cf-rum-human') AND date >= ? AND date <= ? AND EXISTS (SELECT 1 FROM reach_signals r2 WHERE r2.source = reach_signals.source AND r2.date = reach_signals.date AND r2.entity_type = 'referrer' AND r2.metric = 'pageviews' AND r2.value > 0) ORDER BY date DESC", [from, today]);
+  } catch (e) {
+    return { error: reachErr(e) };
+  }
+  for (const r of days) {
+    const rid = "reach-zero-repair-" + r.d;
+    let att = 0;
+    try {
+      const prev = await d1all(env.AUDIT, "SELECT status, meta FROM cloud_ops_events WHERE id = ?", [rid]);
+      if (prev.length) {
+        if (prev[0].status === "ok") continue;
+        try {
+          att = Number((JSON.parse(prev[0].meta || "{}") || {}).attempts) || 0;
+        } catch (e) {
+        }
+      }
+    } catch (e) {
+      continue;
+    }
+    if (att >= REACH_ZERO_REPAIR_MAX) continue;
+    const res = await ingestReachSignals(env, { day: r.d, nowMs });
+    const still = res && (res.skipped || []).some(function(s) {
+      return /RUM-ZERO-DAY-1/.test(String(s));
+    });
+    try {
+      await env.AUDIT.prepare("INSERT OR REPLACE INTO cloud_ops_events (id, ts, kind, text, meta, job, status) VALUES (?, ?, 'reach-zero-repair', ?, ?, ?, ?)").bind(rid, new Date(nowMs).toISOString(), "reach zero repair " + r.d + " (" + r.src + ")", JSON.stringify({ day: r.d, source: r.src, attempts: att + 1 }).slice(0, 4e3), NAME, still ? "partial" : "ok").run();
+    } catch (e) {
+    }
+    return { day: r.d, source: r.src, attempts: att + 1, still_false_zero: still };
+  }
+  return { none: true };
 }
 // ==== AREA-MAP reach: attention loop: per-channel verdicts (ATTENTION-LOOP-1) ====
 // ---- ATTENTION-LOOP-1:BEGIN (1.24.0, 2026-10-06; pillar reach; owner directive 2026-10-06 07:44Z) ----
