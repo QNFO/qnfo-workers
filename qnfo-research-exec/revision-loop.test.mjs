@@ -3,7 +3,7 @@
 // Offline, scripted D1s. Run: node qnfo-research-exec/revision-loop.test.mjs
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { ciStripPipeline, rlRegression, rlNextVersion, rlChangeSummary, rlWithHistory, rlIsRevision, rlEligible, rlErrataBlock, rlSourceId, revisionLoopTick } from "./worker.js";
+import { noticeRepairTick, rlStripNotices, ciStripPipeline, rlRegression, rlNextVersion, rlChangeSummary, rlWithHistory, rlIsRevision, rlEligible, rlErrataBlock, rlSourceId, revisionLoopTick } from "./worker.js";
 
 // Versions move forward from the live one; a rewrite is never a fixed 2.0.0.
 assert.equal(rlNextVersion("1.0.0", true), "1.1.0");
@@ -36,15 +36,13 @@ assert.match(sum, /new sections: Prior Work/);
 assert.match(sum, /references 2 -> 3/);
 
 const h = rlWithHistory(newMd, "1.1.0", "2026-10-19", ["Version 1.0.1 (2026-10-19, from 1.0.0): corrected statements", "Version 1.1.0 (2026-10-19, from 1.0.1): " + sum]);
-assert.match(h, /^# T\n\n> \*\*Revised \(version 1\.1\.0, 2026-10-19\):\*\*/);
+assert.ok(!/> \*\*Revised/.test(h), "no banner under the title (PROPORTIONATE-NOTICE-1)");
 assert.ok(h.indexOf("## Version History") > 0 && h.indexOf("## Version History") < h.indexOf("## References"), "history sits before the references");
 assert.match(h, /- Version 1\.0\.1 .*\n- Version 1\.1\.0/);
 // A second pass replaces the banner and section instead of stacking them.
 const h2 = rlWithHistory(h, "1.2.0", "2026-10-20", ["Version 1.2.0 (2026-10-20, from 1.1.0): again"]);
 assert.equal((h2.match(/## Version History/g) || []).length, 1);
-assert.equal((h2.match(/> \*\*Revised/g) || []).length, 1);
-assert.match(h2, /version 1\.2\.0/);
-assert.ok(!/1\.1\.0, 2026-10-19\):\*\*/.test(h2));
+assert.match(h2, /Version 1\.2\.0/);
 
 // The tick: scripted qnfo-audit and living-paper.
 function makeEnv(o) {
@@ -147,4 +145,49 @@ console.log("revision-loop: ok");
   assert.match(rlRegression(words(5000) + refs(5), words(2500) + refs(5)), /^length/);
   assert.equal(rlRegression(words(200) + refs(1), words(50) + refs(0)), "");
   assert.ok(/rlRegression\(existing\.body_md, paper\)/.test(readFileSync(new URL("./worker.js", import.meta.url), "utf8")), "remediationPublish checks a loop revision against the live paper");
+}
+
+// PROPORTIONATE-NOTICE-1: earlier banners and Correction Notice sections become nothing but the history line.
+{
+  const old = "# T\n\n> **Correction (version 1.0.1, 2026-10-19):** statements ... none took place. See the Correction Notice.\n\nBody.\n\n## Correction Notice\n\nVersion 1.0.1 corrects...\n- The previous version stated: x\n\n## References\n\n[1] A.\n";
+  const s = rlStripNotices(old);
+  assert.ok(!/Correction/.test(s) && /Body\./.test(s) && /## References/.test(s), s);
+  const w = rlWithHistory(old, "1.0.1", "2026-10-19", ["Version 1.0.1 (2026-10-19, from 1.0.0): wording: 1 sentence was restated as a proposal"]);
+  assert.ok(!/Correction/.test(w) && /## Version History\n\n- Version 1\.0\.1/.test(w), w);
+  assert.equal(rlWithHistory("# T\n\nBody.\n", "1.0.0", "2026-10-19", []), "# T\n\nBody.\n");
+  const src = readFileSync(new URL("./worker.js", import.meta.url), "utf8");
+  assert.ok(/filter\(function\(p\) \{ return rlEligible\(p, pipeSlugs\); \}\)/.test(src), "the claim sweep covers pipeline papers only");
+  assert.ok(!/withCorrection\(applied\.md/.test(src), "a correction no longer writes a banner and notice");
+}
+
+// PROPORTIONATE-NOTICE-1 repair tick: owner papers restored from backup, pipeline banners cleaned, pipeline retractions kept.
+{
+  const writes = [];
+  const papers = [
+    { slug: "owner-one", identifier: "qnfo-2026-1", version: "1.0.1", status: "retracted", title: "Retracted: Owner One" },
+    { slug: "pipe-one", identifier: "qnf-1", version: "1.0.1", status: "published", title: "Pipe One" },
+    { slug: "pipe-gone", identifier: "qnf-2", version: "1.0.1", status: "retracted", title: "Retracted: Pipe Gone" },
+  ];
+  const stmt = (sql, rows) => ({ bind: (...a) => ({ all: async () => ({ results: rows(a) }), first: async () => (rows(a) || [])[0] || null, run: async () => { writes.push([sql, a]); return { meta: { changes: 1 } }; } }), all: async () => ({ results: rows([]) }), first: async () => (rows([]) || [])[0] || null, run: async () => { writes.push([sql, []]); return {}; } });
+  const env = {
+    QNFO_AUDIT: { prepare: (sql) => stmt(sql, () => {
+      if (/FROM paper_integrity_backups/.test(sql)) return [{ slug: "owner-one", version: "1.0.0", status: "published", title: "Owner One", abstract: "A", body_md: "# Owner One\n\nOriginal." }, { slug: "pipe-gone", version: "1.0.0", status: "published", title: "Pipe Gone", abstract: "", body_md: "# x" }];
+      if (/SELECT DISTINCT paper_slug/.test(sql)) return [];
+      if (/FROM paper_revision_log/.test(sql)) return [{ version_from: "1.0.0", version_to: "1.0.1", status: "claim-corrected", day: "2026-10-19" }];
+      return [];
+    }) },
+    LIVING_PAPER: { prepare: (sql) => stmt(sql, (a) => {
+      if (/WHERE status IN/.test(sql)) return papers;
+      if (/SELECT body_md FROM papers/.test(sql)) return [{ body_md: "# Pipe One\n\n> **Correction (version 1.0.1, 2026-10-19):** x\n\nBody.\n\n## Correction Notice\n\nx\n\n## References\n\n[1] A.\n" }];
+      return [];
+    }) },
+  };
+  const r = await noticeRepairTick(env);
+  assert.deepEqual(r.restored, ["owner-one"]);
+  assert.deepEqual(r.cleaned, ["pipe-one"]);
+  const up = writes.filter(([s]) => /UPDATE papers SET/.test(s));
+  assert.equal(up.length, 2);
+  assert.deepEqual(up[0][1].slice(0, 6), ["owner-one", "Owner One", "A", "# Owner One\n\nOriginal.", "1.0.0", "published"]);
+  assert.ok(!/Correction/.test(up[1][1][1]) && /## Version History\n\n- Version 1\.0\.1 .*wording/.test(up[1][1][1]), up[1][1][1]);
+  assert.ok(!up.some(([, a]) => a[0] === "pipe-gone"), "a pipeline retraction stays");
 }
