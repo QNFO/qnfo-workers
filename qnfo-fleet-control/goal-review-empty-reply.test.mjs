@@ -11,6 +11,8 @@
  *   - the budget is higher than the old 3000, a retry asks for reasoning_effort low only on a model that accepts it, and a
  *     reply cut at the budget raises the budget on the next try;
  *   - a recovered no-verdict logs warn only; all tries unreadable logs one error and ends "the checks decide".
+ * REVIEW-POOL-ORDER-1 (0.34.4, issue 100091): the pool is in order of measured readability and the retry budget is 3x the first try; scenarios F and G
+ *   drive the DEFAULT pool, the others are pinned to an explicit one.
  * Output MUST contain "0 failed" on success.
  *
  *   node qnfo-fleet-control/goal-review-empty-reply.test.mjs
@@ -49,7 +51,7 @@ const sandbox = {
   aiRunAttr: async (env, worker, purpose, model, input) => { calls.push({ model, input }); const r = script(model, input, calls.length); if (r instanceof Error) throw r; return r; }
 };
 vm.createContext(sandbox);
-vm.runInContext(src.slice(g1, g2) + "\n" + src.slice(r1, r2) + '\n__export = { cmReviewModel, cmSecondReviewer, cmReviewRun, cmGoalReview, CM_REVIEW_MODELS, CM_REVIEW_TRIES, cmReviewReply: typeof cmReviewReply === "function" ? cmReviewReply : function() { return {}; }, CM_REVIEW_MAX_TOKENS: typeof CM_REVIEW_MAX_TOKENS === "number" ? CM_REVIEW_MAX_TOKENS : 3000 };', sandbox);
+vm.runInContext(src.slice(g1, g2) + "\n" + src.slice(r1, r2) + '\n__export = { cmReviewModel, cmSecondReviewer, cmReviewRun, cmGoalReview, CM_REVIEW_MODELS, CM_REVIEW_MAX_TOKENS_RETRY, CM_REVIEW_TRIES, cmReviewReply: typeof cmReviewReply === "function" ? cmReviewReply : function() { return {}; }, CM_REVIEW_MAX_TOKENS: typeof CM_REVIEW_MAX_TOKENS === "number" ? CM_REVIEW_MAX_TOKENS : 3000 };', sandbox);
 const W = sandbox.__export;
 
 let passed = 0, failed = 0;
@@ -61,14 +63,16 @@ const VERDICT = '{"verdict":"implements","harm":false,"defects":[]}';
 const msg = (content, extra, finish, tokens) => ({ choices: [{ message: Object.assign({ content }, extra || {}), finish_reason: finish || "stop" }], usage: { completion_tokens: tokens == null ? 7 : tokens } });
 
 // ---- pure: the reviewer rotates with the try, never into the proposer's family
-ok(W.cmReviewModel(PROPOSER) === DS && W.cmReviewModel(PROPOSER, null, 0) === DS, "try 0 keeps the first eligible reviewer (deepseek for an openai proposer)");
-ok(W.cmReviewModel(PROPOSER, null, 1) === NEM, "try 1 rotates to the next eligible reviewer", W.cmReviewModel(PROPOSER, null, 1));
-ok(W.cmReviewModel(PROPOSER, null, 2) === DS && W.cmReviewModel(PROPOSER, null, 3) === NEM, "the rotation wraps over the eligible models only");
+ok(W.cmReviewModel(PROPOSER) === NEM && W.cmReviewModel(PROPOSER, null, 0) === NEM, "try 0 is the most readable eligible reviewer (REVIEW-POOL-ORDER-1: nemotron for an openai proposer)");
+ok(W.cmReviewModel(PROPOSER, null, 1) === DS, "try 1 rotates to the next eligible reviewer", W.cmReviewModel(PROPOSER, null, 1));
+ok(W.cmReviewModel(PROPOSER, null, 2) === NEM && W.cmReviewModel(PROPOSER, null, 3) === DS, "the rotation wraps over the eligible models only");
 ok([0, 1, 2, 3].every((i) => !/openai/.test(W.cmReviewModel(PROPOSER, null, i))), "no try picks the proposer's family");
-ok(W.cmReviewModel(null, null, 0) === GPT && W.cmReviewModel(null, null, 1) === DS, "no proposer recorded: every model is eligible");
+ok(W.cmReviewModel(null, null, 0) === GPT && W.cmReviewModel(null, null, 1) === NEM, "no proposer recorded: every model is eligible");
 ok(W.cmReviewModel("@cf/qwen/x", ["@cf/qwen/y"], 2) === null, "no eligible reviewer: null");
 ok(W.cmSecondReviewer(PROPOSER, NEM, null, 0) === DS && W.cmSecondReviewer(PROPOSER, NEM, null, 1) === DS, "second reviewer: neither the proposer's nor the first reviewer's family");
-ok(W.cmSecondReviewer("@cf/qwen/q", GPT, null, 0) === DS && W.cmSecondReviewer("@cf/qwen/q", GPT, null, 1) === NEM && W.cmSecondReviewer("@cf/qwen/q", GPT, null, 2) === DS, "second reviewer rotates over the families left");
+ok(W.cmSecondReviewer("@cf/qwen/q", GPT, null, 0) === NEM && W.cmSecondReviewer("@cf/qwen/q", GPT, null, 1) === DS && W.cmSecondReviewer("@cf/qwen/q", GPT, null, 2) === NEM, "second reviewer rotates over the families left");
+ok(W.CM_REVIEW_MODELS.indexOf(NEM) < W.CM_REVIEW_MODELS.indexOf(DS) && W.CM_REVIEW_MODELS[0] === GPT, "REVIEW-POOL-ORDER-1: the pool is in order of measured readability (gpt-oss 46/46, nemotron 14/16, deepseek 29/61)", W.CM_REVIEW_MODELS);
+ok(W.CM_REVIEW_MAX_TOKENS_RETRY === 3 * W.CM_REVIEW_MAX_TOKENS && W.CM_REVIEW_MAX_TOKENS_RETRY > 6144, "REVIEW-POOL-ORDER-1: a retry after a cut reply has room for a reasoning model without an effort knob (the two unavailable reviews since 0.33.20 ended length at 6144)", [W.CM_REVIEW_MAX_TOKENS, W.CM_REVIEW_MAX_TOKENS_RETRY]);
 
 // ---- pure: the reply reader
 let rr = W.cmReviewReply(msg(VERDICT, null, "stop", 12));
@@ -86,7 +90,9 @@ ok(rr.text === "" && rr.from === "none", "no reply reads as empty");
 
 // ---- cmGoalReview driven across ticks (one try per call; the cached row carries the slot)
 const env = { AI: {}, AUDIT };
-const cfg = { goalReview: true, reviewModels: null };
+// The rotation mechanics below are pinned to an explicit pool (deepseek first for an openai proposer); the default pool is covered by F and G.
+const cfg = { goalReview: true, reviewModels: [GPT, DS, NEM] };
+const cfgDefault = { goalReview: true, reviewModels: null };
 const cx = { iso: "2026-10-19T06:00:00.000Z" };
 const task = (id) => ({ id, model: PROPOSER, goal: "do the thing", path: "qnfo-x/worker.js" });
 const files = [{ filename: "qnfo-x/worker.js", patch: "@@ -1,1 +1,2 @@\n var x = 1;\n+var y = 2;\n" }];
@@ -172,6 +178,20 @@ await W.cmGoalReview(env, cx, task("ct_e"), cfg, "eeeeeeeeeeee5555", files);
 await W.cmGoalReview(env, cx, task("ct_e"), cfg, "eeeeeeeeeeee5555", files);
 row = rowOf("ct_e", "eeeeeeeeeeee5555");
 ok(row.verdict === "implements" && row.model === NEM && logs.error.length === 0, "a thrown error on try 1 rotates to the next model and recovers without an error log", { row, logs });
+
+// F. the default pool, an openai proposer: nemotron reads at the first try, deepseek is never called
+reset();
+script = (model) => model === NEM ? msg(VERDICT) : msg("", { reasoning_content: "thinking..." }, "length", 6144);
+await W.cmGoalReview(env, cx, task("ct_f"), cfgDefault, "ffffffffffff6666", files);
+row = rowOf("ct_f", "ffffffffffff6666");
+ok(calls.length === 1 && calls[0].model === NEM && row.verdict === "implements" && row.tries === 1 && row.models.join() === NEM, "REVIEW-POOL-ORDER-1: the default pool reads an openai proposer's diff with nemotron at the first try", { calls: calls.map((c) => c.model), row });
+
+// G. the default pool, nemotron empty: deepseek is the second try with the larger budget, then nemotron again
+reset();
+script = (model) => model === DS ? msg("", { reasoning_content: "thinking..." }, "length", 4096) : msg("", null, "stop", 0);
+for (let i = 0; i < 4; i++) await W.cmGoalReview(env, cx, task("ct_g"), cfgDefault, "gggggggggggg7777", files);
+ok(calls.length === 3 && calls.map((c) => c.model).join() === [NEM, DS, NEM].join(), "REVIEW-POOL-ORDER-1: an unreadable openai-proposer review tries nemotron, deepseek, nemotron", calls.map((c) => c.model));
+ok(calls[1].input.max_tokens === W.CM_REVIEW_MAX_TOKENS && calls[2].input.max_tokens === W.CM_REVIEW_MAX_TOKENS_RETRY, "the try after the cut reply (deepseek, length) gets the retry budget", calls.map((c) => c.input.max_tokens));
 
 console.log(`${passed} passed, ${failed} failed`);
 process.exit(failed ? 1 : 0);
