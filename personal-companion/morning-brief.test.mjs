@@ -22,6 +22,8 @@ const today = new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Amsterdam" })
 function setup(sendImpl) {
   const p = new DatabaseSync(":memory:"), a = new DatabaseSync(":memory:"), sqls = [], sent = [];
   p.exec("CREATE TABLE daily_briefs (date TEXT PRIMARY KEY, payload TEXT)");
+  // COMPANION-EMAIL-OPT-IN-1: e-mail is off by default; the mail-path cases run with the owner opted in to "all".
+  p.exec("CREATE TABLE wellbeing_config (key TEXT PRIMARY KEY, value TEXT, updated_at TEXT); INSERT INTO wellbeing_config VALUES ('email_mode','\"all\"','x')");
   p.prepare("INSERT INTO daily_briefs VALUES (?,?)").run(today, JSON.stringify({ weather: { text: "mild" }, calendar: { today: [], upcoming7: [] }, open: { tasks: [] } }));
   a.exec("CREATE TABLE email_suppression (email TEXT PRIMARY KEY, source TEXT); INSERT INTO email_suppression VALUES ('rwnquni@outlook.com','owner-request-2026-09-22'); CREATE TABLE calendar_meta (k TEXT PRIMARY KEY, v TEXT); CREATE TABLE calendar_feedback (id INTEGER PRIMARY KEY AUTOINCREMENT, cal_id INTEGER, ts TEXT DEFAULT (datetime('now'))); CREATE TABLE agent_issues (id INTEGER PRIMARY KEY, title TEXT, description TEXT, source TEXT, category TEXT, priority TEXT, status TEXT DEFAULT 'open', created_at INTEGER, updated_at INTEGER)");
   a.exec("CREATE TABLE owner_questions (id INTEGER PRIMARY KEY AUTOINCREMENT, kind TEXT NOT NULL, ref TEXT, subject TEXT NOT NULL, body TEXT NOT NULL, priority INTEGER DEFAULT 5, not_before TEXT, created_at TEXT DEFAULT (datetime('now')), sent_at TEXT, attempts INTEGER DEFAULT 0, last_error TEXT, UNIQUE(kind, ref))");
@@ -78,4 +80,20 @@ let iss = T.a.prepare("SELECT * FROM agent_issues").all();
 ok(f.filed === 1 && iss.length === 1 && iss[0].title === "OWNER-QUESTION-UNDELIVERABLE-1: Stuck q" && iss[0].source === "personal-companion" && iss[0].category === "personal" && iss[0].priority === "medium" && iss[0].status === "open", "one medium personal issue for the stuck question only");
 f = await flagUndeliverableQuestions(T.env); ok(f.filed === 0 && T.a.prepare("SELECT count(*) n FROM agent_issues").get().n === 1, "no duplicate while an open one exists");
 T.a.exec("UPDATE agent_issues SET status='closed'"); f = await flagUndeliverableQuestions(T.env); ok(f.filed === 0, "PERSONAL-RESILIENCE-1: a closed issue is not refiled while the same row is still stuck (flagged once per row)");
+// COMPANION-EMAIL-OPT-IN-1: off by default, "daily" mails the brief only, a crisis is mailed in every mode
+T = setup(); T.p.exec("DELETE FROM wellbeing_config");
+r = await sendMorningBrief(T.env); ok(r.skipped === "companion e-mail mode" && T.sent.length === 0 && T.p.prepare("SELECT count(*) n FROM sqlite_master WHERE name = 'companion_morning_brief'").get().n === 0, "no email_mode row: the brief is not mailed and no claim is written");
+r = await sendOwnerNotice(T.env, "q", "t", "question"); ok(!r.ok && r.disabled && r.app && r.mode === "off" && T.sent.length === 0, "off: a question is not mailed, and the result says the app carries it");
+r = await sendOwnerNotice(T.env, "not alone", "t", "crisis"); ok(r.ok && T.sent.length === 1, "off: a crisis follow-up is still mailed");
+T = setup(); T.p.exec("UPDATE wellbeing_config SET value = '\"daily\"'");
+r = await sendOwnerNotice(T.env, "q", "t", "nudge"); ok(!r.ok && r.disabled && T.sent.length === 0, "daily: a nudge is not mailed");
+r = await sendMorningBrief(T.env); ok(r.ok && T.sent.length === 1, "daily: the brief is mailed");
+// COMPANION-STALE-1: reminders long past their date are counted once, not listed; questions older than 36 h are not listed
+T = setup();
+T.p.prepare("UPDATE daily_briefs SET payload = ? WHERE date = ?").run(JSON.stringify({ calendar: { today: [{ title: "Radar pick", calendar: "suggestion", dtstart: today }], upcoming7: [] }, open: { tasks: [{ id: "a", title: "Follow up with Dale", due: "2026-09-05T17:00:00+02:00" }, { id: "b", title: "Buy tickets", due: "2026-09-10" }, { id: "c", title: "Fresh thing", due: null }] } }), today);
+T.a.exec("INSERT INTO owner_questions (kind, ref, subject, body, created_at) VALUES ('after-event','old','Did you go to the old gig?','b','2026-09-01 10:00:00')");
+await sendMorningBrief(T.env);
+ok(/Fresh thing/.test(T.sent[0].text) && !/Follow up with Dale/.test(T.sent[0].text) && !/Buy tickets/.test(T.sent[0].text) && /2 older reminders are past their date/.test(T.sent[0].text), "stale reminders counted once, fresh ones listed");
+ok(/Radar pick @?.*\(suggestion\)/.test(T.sent[0].text), "a radar suggestion is labelled as one");
+ok(!/old gig/.test(T.sent[0].text), "a question queued weeks ago is not listed as waiting");
 console.log(pass + " passed, " + fail + " failed"); process.exit(fail ? 1 : 0);

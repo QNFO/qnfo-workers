@@ -24,7 +24,9 @@ function setup(emailResult) {
   const sqls = [];
   const audit = wrap(db); const orig = audit.prepare; audit.prepare = (q) => { sqls.push(q); return orig(q); };
   const EMAIL = { fetch: async (url, init) => { calls.push({ url, body: JSON.parse(init.body), auth: init.headers.Authorization }); return emailResult ? emailResult(calls.length) : new Response("{}", { status: 200 }); } };
-  return { db, env: { AUDIT: audit, EMAIL }, calls, sqls };
+  // COMPANION-EMAIL-OPT-IN-1: companion e-mail is off by default; these cases test the mail path, so the owner opted in to "all".
+  const pdb = new DatabaseSync(":memory:"); pdb.exec("CREATE TABLE wellbeing_config (key TEXT PRIMARY KEY, value TEXT, updated_at TEXT); INSERT INTO wellbeing_config VALUES ('email_mode','\"all\"','x')");
+  return { db, pdb, env: { AUDIT: audit, EMAIL, PERSONAL: wrap(pdb) }, calls, sqls };
 }
 const noon = new Date("2026-10-06T10:00:00Z").getTime();      // 12:00 Amsterdam
 const lateNight = new Date("2026-10-06T21:30:00Z").getTime(); // 23:30 Amsterdam

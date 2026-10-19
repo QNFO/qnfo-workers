@@ -27,6 +27,7 @@ const T1500 = at("2026-10-06T13:00:00Z"); // 15:00 Amsterdam
 function setup(sendImpl, auditHook) {
   const p = new DatabaseSync(":memory:"), a = new DatabaseSync(":memory:"), sent = [];
   p.exec("CREATE TABLE daily_briefs (date TEXT PRIMARY KEY, payload TEXT)");
+  p.exec("CREATE TABLE wellbeing_config (key TEXT PRIMARY KEY, value TEXT, updated_at TEXT); INSERT INTO wellbeing_config VALUES ('email_mode','\"all\"','x')"); // COMPANION-EMAIL-OPT-IN-1: mail path under test
   p.prepare("INSERT INTO daily_briefs VALUES (?,?)").run(DAY, JSON.stringify({ weather: { text: "mild" }, calendar: { today: [], upcoming7: [] }, open: { tasks: [] } }));
   a.exec("CREATE TABLE calendar_meta (k TEXT PRIMARY KEY, v TEXT); CREATE TABLE calendar_feedback (id INTEGER PRIMARY KEY AUTOINCREMENT, cal_id INTEGER, ts TEXT); CREATE TABLE agent_issues (id INTEGER PRIMARY KEY, title TEXT, description TEXT, source TEXT, category TEXT, priority TEXT, status TEXT DEFAULT 'open', created_at INTEGER, updated_at INTEGER)");
   a.exec("CREATE TABLE owner_questions (id INTEGER PRIMARY KEY AUTOINCREMENT, kind TEXT NOT NULL, ref TEXT, subject TEXT NOT NULL, body TEXT NOT NULL, priority INTEGER DEFAULT 5, not_before TEXT, created_at TEXT DEFAULT (datetime('now')), sent_at TEXT, attempts INTEGER DEFAULT 0, last_error TEXT, UNIQUE(kind, ref))");
@@ -135,6 +136,7 @@ ok(r.ok, "an unreadable switch table defaults to on");
 const winter = at("2026-12-10T10:00:00Z");
 T = setup(); addQ(T.a, "a", "Q1"); addQ(T.a, "b", "old1"); addQ(T.a, "c", "old2");
 T.a.prepare("UPDATE owner_questions SET sent_at='2026-12-09 22:30:00', attempts=1 WHERE ref IN ('b','c')").run(); // 23:30 Amsterdam on Dec 9
+T.a.prepare("UPDATE owner_questions SET created_at='2026-12-10 08:00:00' WHERE ref = 'a'").run(); // COMPANION-STALE-1: queued on the injected day, not weeks before it
 r = await deliverOwnerPrompts(T.env, winter);
 ok(r.sent === 1, "two mails sent 23:30 Amsterdam yesterday do not count against today's cap in winter (" + JSON.stringify(r) + ")");
 T = setup(); addQ(T.a, "a", "Q1"); addQ(T.a, "b", "t1"); addQ(T.a, "c", "t2");
