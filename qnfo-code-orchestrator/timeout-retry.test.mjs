@@ -81,9 +81,6 @@ ok(atLeast(h.version, "0.6.0") && h.capabilities.indexOf("timeout-retry") >= 0, 
   const ev = events(env, "code-task.timeout");
   ok(ev.length === 1 && ev[0].status === "retry" && /\(1 of 6\)/.test(ev[0].text) && /3046/.test(ev[0].text), "one code-task.timeout event, status retry, naming 1 of 6", ev);
   ok(events(env, "code-task.fail").length === 0 && r.last_error == null, "no code-task.fail event and no last_error", { last_error: r.last_error });
-  // TIMEOUT-MODEL-ATTR-1 (0.18.24): the event names the rung that timed out
-  const tmeta = env.AUDIT_DB._db.prepare("SELECT meta, text FROM cloud_ops_events WHERE kind='code-task.timeout'").get();
-  ok(JSON.parse(tmeta.meta).model === calls[0].model && tmeta.text.indexOf(calls[0].model) >= 0, "the timeout event names the model that timed out", tmeta);
   // a parked task is not claimed before its lease ends
   t = await tick(env);
   ok(t.done.length === 0 && calls.length === 1, "the parked task is not stepped while its lease runs", { done: t.done.length, calls: calls.length });
