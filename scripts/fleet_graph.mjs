@@ -671,7 +671,12 @@ export function computeFindings(ctx) {
       for (const [env, line] of cw.envReads) {
         if (live.has(env) || cw.declared.has(env)) continue;
         if (["CF_PAGES", "CF_VERSION_METADATA"].includes(env)) continue;
-        add("env-undeclared", name + "." + env, "warn", "worker.js reads env." + env + " (line " + line + ") but neither wrangler.toml nor the deployed script defines it (no binding, var or secret of that name), so it is undefined at run time");
+        // FLEET-GRAPH-1: env names whose every read is an optional config read with a default (cw.optionalEnv tracks them)
+        // are an extractor false-positive class: the var being unset is fine, so they demote to info env-optional-unset.
+        const optional = !!(cw.optionalEnv && cw.optionalEnv.has(env));
+        add(optional ? "env-optional-unset" : "env-undeclared", name + "." + env, optional ? "info" : "warn", optional
+          ? "worker.js reads env." + env + " (line " + line + ") only as an optional config read with a default; neither wrangler.toml nor the deployed script defines it, so the default is used"
+          : "worker.js reads env." + env + " (line " + line + ") but neither wrangler.toml nor the deployed script defines it (no binding, var or secret of that name), so it is undefined at run time");
       }
       if (!cw.computedEnv) for (const [b, type] of live) {
         if (["secret_text", "secret_key", "plain_text", "json"].includes(type)) continue;
@@ -699,6 +704,9 @@ export function computeFindings(ctx) {
     for (const s of codeSql) {
       const known = liveTables.get(s.db);
       if (!known || known.has(s.table.toLowerCase()) || s.createdInCode) continue;
+      // FLEET-GRAPH-1: SQL-in-prose false positives (a, fleet, live): only a string literal that begins a statement is a real
+      // table reference; anything lifted out of prose or inline text is dropped here, not reported as a missing table.
+      if (!s.stmtLeading) continue;
       add("sql-table-missing", s.worker + ":" + s.db + "." + s.table, s.confidence === "EXTRACTED" ? "warn" : "info", s.unit + " " + s.rel + " " + s.table + " in " + s.db + ", which has no table or view of that name");
     }
   }
