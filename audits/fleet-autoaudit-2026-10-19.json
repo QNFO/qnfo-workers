@@ -1,16 +1,8 @@
 {
-  "audited_at": "2026-10-19 10:01:40",
+  "audited_at": "2026-10-19 10:43:09",
   "d1_write_failures": [],
   "d1_writes_ok": 120,
   "guard": {
-    "_drift_confirm": {
-      "first_pass": [
-        "qnfo-fleet-control",
-        "qnfo-fleet-dashboard"
-      ],
-      "refreshed": true,
-      "second_pass": []
-    },
     "_guard_rc": 0,
     "ahead": [],
     "cf_script_list": true,
@@ -688,7 +680,7 @@
       },
       {
         "dir": "qnfo-research-exec",
-        "version": "0.21.0-thin-prior-work-1",
+        "version": "0.21.1-kimi-timeout-fallback-1",
         "worker": "qnfo-research-exec"
       },
       {
@@ -1578,9 +1570,9 @@
       "worker": "qnfo-register-guard"
     },
     "qnfo-research-exec": {
-      "before": "0.21.0-thin-prior-work-1",
+      "before": "0.21.1-kimi-timeout-fallback-1",
       "http": 200,
-      "live": "0.21.0-thin-prior-work-1",
+      "live": "0.21.1-kimi-timeout-fallback-1",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-research-exec"
