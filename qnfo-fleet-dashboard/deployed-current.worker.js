@@ -9,7 +9,7 @@ var __name22 = /* @__PURE__ */ __name2((target, value) => __defProp22(target, "n
 var __defProp222 = Object.defineProperty;
 var __name222 = /* @__PURE__ */ __name22((target, value) => __defProp222(target, "name", { value, configurable: true }), "__name");
 var __name2222 = /* @__PURE__ */ __name222((target, value) => Object.defineProperty(target, "name", { value, configurable: true }), "__name");
-var VERSION = "1.51.9-codeagent"; /* 1.51.8 VERSION-LINE-NOTES-1 (2026-10-19, agent_issues 100243, pillar autonomy; patch, a comment moved): the release notes of every earlier version rode on this line (178 notes, about 200,000 chars), so a version bump of this worker was an 820,000-char patch (worker and mirror, removed and added): 12 code tasks ended on the publisher size cap on 2026-10-19 and three issues were exhausted for three days. They are in git history (git log -S '<release tag>' -- qnfo-fleet-dashboard/worker.js); the changelog is built from the deploy ledger and commits, and the guards read only the quoted version string. A new note goes on this line and stays short. */
+var VERSION = "1.51.10-codeagent"; /* 1.51.8 VERSION-LINE-NOTES-1 (2026-10-19, agent_issues 100243, pillar autonomy; patch, a comment moved): the release notes of every earlier version rode on this line (178 notes, about 200,000 chars), so a version bump of this worker was an 820,000-char patch (worker and mirror, removed and added): 12 code tasks ended on the publisher size cap on 2026-10-19 and three issues were exhausted for three days. They are in git history (git log -S '<release tag>' -- qnfo-fleet-dashboard/worker.js); the changelog is built from the deploy ledger and commits, and the guards read only the quoted version string. A new note goes on this line and stays short. */
 
 // REVIEW-GATE-1 (2026-10-01, docs/STRATEGY.md s9): the 2026-10-25 impressions gate is retired. The research layer is
 // reviewed on this date against the reach scorecard; nothing deletes research data automatically (phase 2 needs the
@@ -6009,9 +6009,29 @@ async function collectHumanActions(env) {
       add({ key: "disp:" + r.fingerprint, source: "issue-loop", title: String(p.title || r.category || "Fleet issue needs a decision").slice(0, 160), why: "The issue loop found no safe autonomous fix. " + squash(String(r.exec_result || "")).slice(0, 160), fallback: "The system keeps the current safe configuration serving.", action: String(r.action || ""), url: r.gh_number ? "https://github.com/" + GH_REPO + "/issues/" + r.gh_number : "", due: "", age: ageDaysOf(r.created_at) });
     }
   });
+  // PARKED-CARD-REASON-1: branch the card text so a parked code task tells the owner what actually blocked it.
   await read("code-tasks", async function() {
     const rows = await d1all(env.AUDIT, "SELECT id, goal, repo, last_error, pr_url, updated_at FROM code_tasks WHERE status='needs_human' ORDER BY updated_at");
-    for (const r of rows) add({ key: "code:" + r.id, source: "code-loop", title: "Code task parked: " + String(r.goal || r.id).slice(0, 140), why: "The code loop could not verify this change itself. " + squash(String(r.last_error || "")).slice(0, 140), fallback: "Nothing is merged or deployed until it is verified.", action: "Review or drop it.", url: r.pr_url || "", due: "", age: ageDaysOf(r.updated_at) });
+    for (const r of rows) {
+      const err = String(r.last_error || "");
+      let why, action;
+      if (err.indexOf("MERGE-SCOPE-AT-READ-1") === 0) {
+        if (/issue\s+closed|closed|superseded/i.test(err)) {
+          why = "Refused at read: the issue is closed and the scope rule has been lifted.";
+          action = "No action needed; the task is superseded.";
+        } else {
+          why = "Refused at read: " + (r.repo || "worker") + " is outside the merge runner scope.";
+          action = "None needed once the scope rule is lifted; the loop re-queues it.";
+        }
+      } else if (err.indexOf("noop-proposal") === 0) {
+        why = "The model proposed an edit that changes only text, no behaviour.";
+        action = "Narrow the goal or give a code-anchor.";
+      } else {
+        why = "The code loop could not verify this change itself. " + squash(err).slice(0, 140);
+        action = "Review or drop it.";
+      }
+      add({ key: "code:" + r.id, source: "code-loop", title: "Code task parked: " + String(r.goal || r.id).slice(0, 140), why: why, fallback: "Nothing is merged or deployed until it is verified.", action: action, url: r.pr_url || "", due: "", age: ageDaysOf(r.updated_at) });
+    }
   });
   // OWNER-SURFACE-HONESTY-1: a card only for mail that owes the owner a reply, saying why it looks like a person and what
   // the authentication said; the public card names the sender's domain only (never a subject or address), the owner's view
