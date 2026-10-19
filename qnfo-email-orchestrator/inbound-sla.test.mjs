@@ -246,7 +246,7 @@ function fresh(opts) {
   t.ai.reply = "ESCALATE";
   t.correspondent("r3@uni3.example");
   const c = t.inbound({ from: "r3@uni3.example", subject: "Re: theory", body: "What is the exchange phase for odd turns?", h: 30 });
-  const young = t.inbound({ from: "r3@uni3.example", subject: "Re: another", body: "And for even turns?", h: 5 });
+  const young = t.inbound({ from: "r3@uni3.example", subject: "Re: another", body: "And for even turns?", h: 1 }); // 60 minutes: inside the 90-minute grace (INBOUND-SLA-GRACE-1)
   const calls = t.ai.calls;
   await step(t.env, {});
   ok(t.decision(c).outcome === "acked" && /drafter escalated/.test(t.decision(c).reason) && t.ai.calls === calls + 1, "a technical question the drafter escalates gets the acknowledgement");
@@ -411,16 +411,16 @@ function fresh(opts) {
   const sys = envAi.sys;
   ok(/expertise, judgement, a decision, an opinion or a commitment/.test(sys) && /Every name, number and date in the reply must appear in the email/.test(sys) && /no sign-off/.test(sys), "the prompt states the escalation rule and the grounding rule");
   ok(!/meeting|receipt|scientific|licensing|legal|financial|scheduling/i.test(sys), "the prompt names no example subject");
-  ok(Object.keys(RULES).every((k) => RULES[k].after_h === 0 || RULES[k].after_h === 12), "every grace is 0 or 12 h, under the 24 h target of inbound_first_response_h_median_30d", Object.keys(RULES).map((k) => RULES[k].after_h));
+  ok(Object.keys(RULES).every((k) => RULES[k].after_h === 0 || RULES[k].after_h === 1.5), "every grace is 0 or 90 minutes, inside the 120-minute first-action SLA (INBOUND-SLA-GRACE-1)", Object.keys(RULES).map((k) => RULES[k].after_h));
   ok(/var VERSION = "0\.5\.([5-9]|\d\d)/.test(src), "orchestrator version is at least 0.5.5");
 }
 {
-  // a held message is first acted on at about 12 h, so a queue of graced messages has a median under the 24 h target
+  // INBOUND-SLA-GRACE-1: a held message is first acted on after 90 minutes, inside the 120-minute first-action SLA
   const t = fresh();
-  const a13 = t.inbound({ from: "p1@elsewhere.example", subject: "A question", body: "Could you tell me how the method treats odd turns?", h: 13 });
-  const a11 = t.inbound({ from: "p2@elsewhere.example", subject: "A question", body: "Could you tell me how the method treats even turns?", h: 11 });
+  const a13 = t.inbound({ from: "p1@elsewhere.example", subject: "A question", body: "Could you tell me how the method treats odd turns?", h: 100 / 60 });
+  const a11 = t.inbound({ from: "p2@elsewhere.example", subject: "A question", body: "Could you tell me how the method treats even turns?", h: 80 / 60 });
   await step(t.env, {});
-  ok(!!t.decision(a13) && !t.decision(a11), "a 13 h old message is decided, an 11 h old one waits", [!!t.decision(a13), !!t.decision(a11)]);
+  ok(!!t.decision(a13) && !t.decision(a11), "a 100-minute-old message is decided, an 80-minute-old one waits", [!!t.decision(a13), !!t.decision(a11)]);
 }
 
 console.log(pass + " passed, " + fail + " failed");

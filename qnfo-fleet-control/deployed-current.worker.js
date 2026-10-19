@@ -3252,7 +3252,7 @@ var CM_CONTROL_PLANE = EVOLVE_DENY.concat(["qnfo-code-orchestrator", "qnfo-code-
 // 14:06Z); the verifier workers (fleet-control, code-orchestrator, deploy-guard, qnfo-ops) and the scorer host stay denied, since
 // they would break their own rollback or grade themselves. qnfo-code-orchestrator PLAN_LOOP_CANARIED mirrors this list and
 // fold-guard.test.mjs holds the copies equal. The lane's control-plane handling (bhControlPlaneDecide) still uses the full list.
-// CODE-LOOP-CONTROL-PLANE-1 (0.35.0, owner directive 2026-10-19, charter pillar autonomy; control_registry control-plane-deny), verbatim:
+// CODE-LOOP-CONTROL-PLANE-1 (0.36.0, owner directive 2026-10-19, charter pillar autonomy; control_registry control-plane-deny), verbatim:
 // "The code loop SHALL ALWAYS BE ABLE TO change qnfo-fleet-control, qnfo-ops, qnfo-deploy-guard and the loop's own code." The three
 // verifier workers and qnfo-code-orchestrator join the list. Each already has a CP_CANARY_WORKERS /health canary, a canary_revert.py
 // CANARY_WORKERS entry and a FUNCTIONAL check (fold-guard.test.mjs requires all three of every canaried worker; 126 canary-functional ok
@@ -3292,7 +3292,7 @@ __name(cmIssueId, "cmIssueId");
 // Which paths may auto-merge, and how a merge is verified.
 // SCOPE-SCRIPTS-1 (0.10.0, issue 2101): the scripts the loop may not change on its own: the CI gates and guards that judge its
 // pull requests, the suites those run, the deploy primitives (deploy, raw_put, canary) and the loop's own runners (remediation,
-// secrets). Matched against the file name under scripts/. CODE-LOOP-CONTROL-PLANE-1 (0.35.0): code-task-* (the loop's own publish
+// secrets). Matched against the file name under scripts/. CODE-LOOP-CONTROL-PLANE-1 (0.36.0): code-task-* (the loop's own publish
 // script) left this list with the loop's workers; qnfo-code-orchestrator/worker.js keeps a character-for-character copy.
 var CM_SCRIPT_DENY = /(guard|gate|lint|deploy|raw_put|run-suites|apply_migrations|canary_revert|remediation|secret|selftest|_test\.py$|[-.]test\.mjs$)/i;
 function cmScope(path) {
@@ -8912,7 +8912,7 @@ function tpIssueTitle(l) {
 }
 function tpOnControlPlane(path) {
   var dir = String(path || "").split("/")[0];
-  // CODE-LOOP-CONTROL-PLANE-1 (0.35.0): a worker the code loop may merge (CM_LOOP_CANARIED) is not a session lever, so a lever on it is dispatched
+  // CODE-LOOP-CONTROL-PLANE-1 (0.36.0): a worker the code loop may merge (CM_LOOP_CANARIED) is not a session lever, so a lever on it is dispatched
   return TP_CONTROL_PLANE.indexOf(dir) >= 0 && CM_LOOP_CANARIED.indexOf(dir) < 0;
 }
 // The child issue a lever becomes. mode 'code' carries the lines the code orchestrator's intake reads; 'session' carries a

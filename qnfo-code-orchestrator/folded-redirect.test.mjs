@@ -103,7 +103,7 @@ ok(atLeast(h.version, "0.6.0") && h.capabilities.indexOf("folded-redirect") >= 0
   const c = await addTask(env, "qnfo-autonomy-scorer/worker.js");
   ok(c.status === 422 && /^session task: qnfo-observability is a control-plane or code-loop worker/.test(c.j.error || ""), "qnfo-autonomy-scorer -> qnfo-observability: a session task naming the host", c.j);
   ok(events(env, "code-task.intake-redirect").length === 1, "the redirect is still audited", events(env, "code-task.intake-redirect"));
-  // CODE-LOOP-CONTROL-PLANE-1 (0.19.0, owner directive 2026-10-19): the orchestrator is the loop's own code, so a member folded into it is accepted
+  // CODE-LOOP-CONTROL-PLANE-1 (0.20.0, owner directive 2026-10-19): the orchestrator is the loop's own code, so a member folded into it is accepted
   const own = await addTask(env, "fleet-exec/worker.js");
   ok(own.status === 202 && row(env, own.j.id).path === "qnfo-code-orchestrator/worker.js", "fleet-exec -> qnfo-code-orchestrator: the loop's own code is in scope and the task is redirected to the host", own);
 }

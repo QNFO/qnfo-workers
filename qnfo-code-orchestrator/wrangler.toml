@@ -93,3 +93,11 @@ crons = ["*/2 * * * *"]
 [[services]]
 binding = "DEPLOY_GUARD"
 service = "qnfo-deploy-guard"
+
+# PLAN-TOPOLOGY-1 (0.19.0, agent_issues 100102): the planner reads the fleet code + live topology graph (scripts/fleet_graph.mjs,
+# docs/FLEET-GRAPH.md) to attribute an issue that names only tables to the worker that writes them. Read-only use; a missing
+# binding or a failed read leaves the planner unchanged.
+[[d1_databases]]
+binding = "GRAPH_DB"
+database_name = "qnfo-graph"
+database_id = "a1954b92-d681-4d02-b1f6-f9a2eb4c265d"

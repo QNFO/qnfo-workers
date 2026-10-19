@@ -101,7 +101,7 @@ const FIX = (anchor, extra) => JSON.stringify(Object.assign({ code_fixable: true
 // 4. no plannable worker; control-plane workers never planned
 {
   const { env, prompts } = envWith([]);
-  // CONTROL-PLANE-FUNCTIONAL-CANARY-1 (0.13.0): qnfo-ai and qnfo-gateway are planned now. CODE-LOOP-CONTROL-PLANE-1 (0.19.0, owner directive
+  // CONTROL-PLANE-FUNCTIONAL-CANARY-1 (0.13.0): qnfo-ai and qnfo-gateway are planned now. CODE-LOOP-CONTROL-PLANE-1 (0.20.0, owner directive
   // 2026-10-19): so are qnfo-fleet-control, qnfo-ops, qnfo-deploy-guard and this worker; the scorer host and the scorer still never are.
   issue(env, { title: "METRIC-TRIGGER-7-Z: cost gap", description: "Find the top callers in ai_spend_ledger (owner qnfo-observability) and fix the qnfo-autonomy-scorer deploy route" });
   const r = await plan(env);
@@ -243,6 +243,56 @@ const WIP = Number((/^const PLAN_WIP = (\d+);/m.exec(fs.readFileSync(new URL("./
   let reached = false;
   for (let t = 0; t < 8 && !reached; t++) { await plan(env); reached = prompts.length > 0; }
   ok(reached, "12 a trusted issue behind 45 untrusted critical ones reaches the model within 8 ticks", prompts.length);
+}
+// PLAN-TOPOLOGY-1 (0.19.0, agent_issues 100102): an issue that names only tables is attributed through the fleet graph to the
+// one plannable worker that writes them; the prompt carries a TOPOLOGY block; a tie, a control-plane-only writer, or no graph
+// leaves the old "names no worker" decision.
+{
+  const graph = new DatabaseSync(":memory:");
+  graph.exec("CREATE TABLE fg_edge (src TEXT, rel TEXT, dst TEXT, scope TEXT, confidence TEXT)");
+  const e = graph.prepare("INSERT INTO fg_edge VALUES (?, ?, ?, 'code', ?)");
+  e.run("fn:qnfo-social#drain", "writes", "d1t:qnfo-audit.social_posts", "EXTRACTED");
+  e.run("fn:qnfo-social#drain", "writes", "d1t:qnfo-audit.social_queue", "EXTRACTED");
+  e.run("fn:qnfo-ai-search#ask", "writes", "d1t:qnfo-audit.social_queue", "EXTRACTED");
+  e.run("fn:qnfo-ai-search#ask", "writes", "d1t:qnfo-audit.social_posts", "INFERRED");
+  e.run("fn:qnfo-fleet-control#tick", "writes", "d1t:qnfo-audit.fleet_tick", "EXTRACTED");
+  e.run("fn:qnfo-social#drain", "reads", "d1t:qnfo-audit.paper_queue", "EXTRACTED");
+  e.run("worker:qnfo-social", "has_cron", "cron:qnfo-social@30 * * * *", "EXTRACTED");
+  e.run("binding:qnfo-ops.CH_QNFO_SOCIAL", "binds", "worker:qnfo-social", "EXTRACTED");
+  e.run("fn:q08-signal-engine#a", "writes", "d1t:qnfo-audit.tie_a", "EXTRACTED");
+  e.run("fn:qnfo-social#b", "writes", "d1t:qnfo-audit.tie_b", "EXTRACTED");
+  const gdb = { prepare: (sql) => { let a = []; const st = { bind: (...x) => { a = x; return st; }, all: async () => ({ results: graph.prepare(sql).all(...a) }), first: async () => graph.prepare(sql).get(...a) || null }; return st; } };
+  {
+    const { env, prompts } = envWith([JSON.stringify({ code_fixable: false, reason: "x" })]);
+    env.GRAPH_DB = gdb;
+    const id = issue(env, { title: "STALL-1: social_posts stopped growing", description: "social_posts and social_queue have no row since 06:00", source: "claude-session-x" });
+    await plan(env);
+    const u = prompts[0] && prompts[0].input.messages[1].content;
+    ok(prompts.length === 1 && u.includes("WORKER: qnfo-social"), "13a an issue naming only tables is planned on the worker that writes most of them", u && u.slice(0, 300));
+    ok(u && u.includes("TOPOLOGY (fleet graph):") && u.includes("writes tables: social_posts, social_queue") && u.includes("reads tables: paper_queue") && u.includes("crons: 30 * * * *") && u.includes("bound by workers: qnfo-ops"), "13b the prompt carries the worker's topology", u && u.slice(u.indexOf("TOPOLOGY"), u.indexOf("SNIPPETS")));
+    ok(/fleet graph: qnfo-social writes social_posts, social_queue/.test(plans(env).find((p) => p.issue_id === id).detail || "") || plans(env).find((p) => p.issue_id === id).outcome === "not-code", "13c the decision is recorded", plans(env));
+  }
+  {
+    const { env, prompts } = envWith([]);
+    env.GRAPH_DB = gdb;
+    issue(env, { title: "TICK-1: fleet_tick rows missing", description: "fleet_tick has gaps", source: "claude-session-x" });
+    issue(env, { title: "TIE-1: tie_a and tie_b", description: "tie_a tie_b", source: "claude-session-x" });
+    await plan(env);
+    ok(prompts.length === 0 && plans(env).length === 2 && plans(env).every((p) => /names no worker/.test(p.detail)), "13d a control-plane-only writer and a tie attribute nothing", plans(env));
+  }
+  {
+    const { env, prompts } = envWith([]);
+    issue(env, { title: "STALL-2: social_posts stopped", description: "social_posts", source: "claude-session-x" });
+    await plan(env);
+    ok(prompts.length === 0 && /names no worker/.test(plans(env)[0].detail), "13e without GRAPH_DB the planner is unchanged", plans(env));
+  }
+  {
+    const { env, prompts } = envWith([JSON.stringify({ code_fixable: false, reason: "x" })]);
+    env.GRAPH_DB = { prepare: () => { throw new Error("D1_ERROR: no such table: fg_edge"); } };
+    issue(env, { title: "METRIC-TRIGGER-9-Q08-VOTES: q08-signal-engine", description: "/api/f" });
+    await plan(env);
+    ok(prompts.length === 1 && !prompts[0].input.messages[1].content.includes("TOPOLOGY"), "13f a failing graph read changes nothing", prompts.length);
+  }
 }
 console.log(pass + " passed, " + fail + " failed");
 process.exit(fail ? 1 : 0);

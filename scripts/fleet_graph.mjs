@@ -726,6 +726,10 @@ export const SCHEMA_SQL = [
 const NODE_COLS = ["id", "scope", "kind", "name", "worker", "path", "line", "attrs", "source", "h", "updated_at"];
 const EDGE_COLS = ["src", "rel", "dst", "scope", "confidence", "source", "path", "attrs", "h", "updated_at"];
 const MAX_STMT = 90000;
+// FLEET-GRAPH-DELETE-DEPTH-1 (2026-10-19, ci-watchdog 2849): a DELETE chains its key conditions with OR, which SQLite parses left-deep, and D1 refuses an
+// expression tree deeper than 100 ("Expression tree is too large (maximum depth 100)"; fleet-graph run 39243325831 on 760a20a4 with 4,028 code units). 400 terms
+// per statement was far over that; 80 keeps the tree under the limit with room for the scope and key-column ANDs.
+const DELETE_MAX_TERMS = 80;
 
 export function insertStatements(table, cols, rows) {
   const out = []; let cur = []; let size = 0;
@@ -744,7 +748,7 @@ export function deleteStatements(table, where, keyCols, keys) {
   for (const k of keys) {
     const parts = keyCols.length === 1 ? [k] : k.split(EDGE_SEP);
     const cond = "(" + keyCols.map((c, i) => c + " = " + sqlStr(parts[i])).join(" AND ") + ")";
-    if (size + cond.length > MAX_STMT || cur.length >= 400) flush();
+    if (size + cond.length > MAX_STMT || cur.length >= DELETE_MAX_TERMS) flush();
     cur.push(cond); size += cond.length + 4;
   }
   flush();

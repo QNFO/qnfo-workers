@@ -33,6 +33,14 @@ ok(s.suites.length === 0 && /no worker directory/.test(s.reason), "no change run
 s = select(all, ["docs"]);
 ok(s.suites.every((x) => x.startsWith("docs/") || ALWAYS.includes(x)) && !s.suites.some((x) => /^qnfo-/.test(x)), "a docs-only change runs only the docs suites (docs/doctrine-readings.test.mjs since #853) and the repository guards, never a worker suite", s.suites);
 
+// SUITE-DEPENDENTS-1: with a reader, a suite in another directory that reads a file of the changed one runs too
+const rd = (x) => readFileSync(join(root, x), "utf8");
+s = select(all, ["qnfo-gateway"], rd);
+ok(s.suites.includes("qnfo-gateway/utm-click-ledger.test.mjs") && s.suites.some((x) => !x.startsWith("qnfo-gateway/") && !ALWAYS.includes(x) && rd(x).includes("../qnfo-gateway/")) && /read them/.test(s.reason), "a suite elsewhere that reads ../qnfo-gateway/ runs when qnfo-gateway changes", s.reason);
+ok(s.suites.every((x) => x.startsWith("qnfo-gateway/") || ALWAYS.includes(x) || rd(x).includes("../qnfo-gateway/")), "nothing unrelated is added", s.suites.filter((x) => !x.startsWith("qnfo-gateway/")));
+ok(select(all, ["qnfo-gateway"]).suites.every((x) => x.startsWith("qnfo-gateway/") || ALWAYS.includes(x)), "without a reader select() is unchanged");
+ok(select(["a/x.test.mjs", "b/y.test.mjs", "c/z.test.mjs"], ["a"], (x) => (x === "b/y.test.mjs" ? 'import w from "../a/worker.js"' : x === "c/z.test.mjs" ? '"../ab/worker.js"' : "")).suites.join() === "a/x.test.mjs,b/y.test.mjs", "the match is on the whole directory name (../ab/ is not ../a/)");
+
 // SUITE-SYNTAX-CHECK-1: the changed worker files are syntax-checked; shared paths are not worker directories
 let syn = syntaxTargets(root, ["qnfo-email", "scripts", "migrations", ""], false);
 ok(syn.includes("qnfo-email/worker.js") && syn.includes("qnfo-email/deployed-current.worker.js") && !syn.some((x) => /^(scripts|migrations)\//.test(x)), "a changed worker's two files are syntax-checked, shared paths are not", syn);

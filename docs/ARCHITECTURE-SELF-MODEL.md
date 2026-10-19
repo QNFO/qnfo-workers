@@ -86,8 +86,8 @@ the verifier workers (`qnfo-fleet-control`, `qnfo-ops`, `qnfo-deploy-guard`), wa
 and at merge, so the loop could not repair its own planner or merge runner; that class of fix had
 to land through a session pull request (`QNFO-POL-PROD-IMMUTABLE-002`).
 
-**Lifted by the owner on 2026-10-19** (CODE-LOOP-CONTROL-PLANE-1, `qnfo-fleet-control` 0.35.0 and
-`qnfo-code-orchestrator` 0.19.0): "The code loop SHALL ALWAYS BE ABLE TO change qnfo-fleet-control,
+**Lifted by the owner on 2026-10-19** (CODE-LOOP-CONTROL-PLANE-1, `qnfo-fleet-control` 0.36.0 and
+`qnfo-code-orchestrator` 0.20.0): "The code loop SHALL ALWAYS BE ABLE TO change qnfo-fleet-control,
 qnfo-ops, qnfo-deploy-guard and the loop's own code." All four are now on `CM_LOOP_CANARIED` /
 `PLAN_LOOP_CANARIED` (held equal by `qnfo-fleet-control/fold-guard.test.mjs`, which also requires each
 to have a `/health` canary, a `canary_revert.py` FUNCTIONAL check and an Actions revert); a bad merge
