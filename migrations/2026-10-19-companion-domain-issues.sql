@@ -5,7 +5,7 @@
 -- carries them. Each insert is skipped when an open issue with the same title prefix exists. No worker, cron or trigger is added.
 -- APPLY-BY: ci
 -- DB: qnfo-audit
--- Rollback: DELETE FROM agent_issues WHERE status = 'open' AND (title LIKE 'DOMAIN-PLANE-1:personal.qnfo.org%' OR title LIKE 'DOMAIN-PLANE-1:personal-mail-sender%' OR title LIKE 'DOMAIN-PLANE-AUDIT-1:%' OR title LIKE 'COMPANION-SIGNIN-LIVE-1:%')
+-- Rollback: DELETE FROM agent_issues WHERE status = 'open' AND (title LIKE 'DOMAIN-PLANE-1:personal.qnfo.org%' OR title LIKE 'DOMAIN-PLANE-1:personal-mail-sender%' OR title LIKE 'DOMAIN-PLANE-AUDIT-1:%' OR title LIKE 'COMPANION-SIGNIN-LIVE-1:%' OR title LIKE 'COMPANION-MCP-CONSENT-CODE-1:%')
 
 INSERT INTO agent_issues (title, description, source, category, priority, status)
 SELECT 'DOMAIN-PLANE-1:personal.qnfo.org personal twin host sits on the research domain',
@@ -42,3 +42,12 @@ SELECT 'COMPANION-SIGNIN-LIVE-1: the companion opens at me.q08.org with an e-mai
  'runtime-probe: {"url": "https://me.q08.org/companion", "status": 200, "contains": "E-mail me a code"}',
  'session', 'personal', 'high', 'open'
 WHERE NOT EXISTS (SELECT 1 FROM agent_issues WHERE status = 'open' AND title LIKE 'COMPANION-SIGNIN-LIVE-1:%');
+
+INSERT INTO agent_issues (title, description, source, category, priority, status)
+SELECT 'COMPANION-MCP-CONSENT-CODE-1: the personal twin MCP consent page asks the owner for the API key',
+ 'Charter pillar: personal. Owner 2026-10-19: "stop asking me for keys ... one-time email passwords are fine." Connecting the personal twin to an MCP client (OAuth 2.1 at personal-api /mcp) shows a consent page that takes the personal API key (consentPage, safeEqual(P.key, env.API_KEY)). personal-api 4.14.0 has an e-mailed-code session (COMPANION-LOGIN-1: sendLoginCode, verifyLoginCode, sessionFor).' || char(10) ||
+ 'Doer: the code loop (personal-api). Lever: on the OAuth consent page, accept a live cmp_s session cookie as consent, or offer "E-mail me a code" and verify it with verifyLoginCode, keeping the key field only as a fallback; add a test that consent succeeds with a session and no key.' || char(10) ||
+ 'Definition of done: the consent page offers the e-mailed code and no longer requires the key.' || char(10) ||
+ 'code-probe: {"paths": ["personal-api/worker.js"], "contains": "COMPANION-MCP-CONSENT-CODE-1"}',
+ 'session', 'personal', 'medium', 'open'
+WHERE NOT EXISTS (SELECT 1 FROM agent_issues WHERE status = 'open' AND title LIKE 'COMPANION-MCP-CONSENT-CODE-1:%');
