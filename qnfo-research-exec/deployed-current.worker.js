@@ -33,7 +33,7 @@ var __name22222 = /* @__PURE__ */ __name2222((target, value) => __defProp22222(t
 // an empty catch. CITE-CONSISTENCY-1 asks the reviewer to compare the draft against cited QNFO work.
 // REVIEW-TRIAGE-CAP-1 is a defect fix: drift demotion at the cycle cap silently turned a blocking finding into a pass, so
 // REVIEW-HARD-GATE-1 withheld nothing there (reviewer findings 2 -> 0 at the cap; an unparseable review advanced to verify).
-var VERSION = "0.18.43-codeagent"; /* 0.18.38 TICK-10M-1 + RECLAIM-KEEP-STAGE-1 + IDEA-TO-PUBLISH-METRIC-1 (2026-10-18, owner directive: idea to publication under 100 hours; pillar research): (a) the cron runs every 10 minutes (was 15; 144/day = CRON-MANDATE-1 ceiling, same schedule count); member windows are 10 minutes wide so each errata/reviser job still runs exactly once per slot; the 03:00 sweep window is 10 minutes; (b) a stale reclaim keeps a resumable stage (complete/review/revise/verify), and RESUME-DRAFT-1 at claim falls back to ground when reconciled.md is missing, so a stalled draft is not re-drafted from scratch; (c) idea_to_publish_h_p50_7d (median hours idea_proposals.created_at -> published_at, 7 days) is written to metric_registry on the :00 tick. */ /* 0.18.37 ERRATA-HIGHRISK-ROUTE-1 folded (errata member 1.6.2): a high-risk errata correction draft older than 6 h becomes a remediation research row instead of waiting audited forever; internal_errata closes with its queue row. */ /* 0.18.36 CLAIM-HEARTBEAT-1 + RESUME-DRAFT-1 + REVIEW-SECOND-MODEL-1 (2026-10-18): a stage returning ok refreshes claimed_at so the stale-claim reclaimer stops re-grounding papers still advancing (550 releases/24h, 302 ground claims of 72 rows); a resumable stage is kept when its draft exists in R2 (70 revise rows were re-drafted from ground); the review second path names its model (not kimi-k2.6 after #1429). */ /* 0.18.35 CLAIM-HEARTBEAT-1 (2026-10-18): a stage that returns ok refreshes claimed_at, so the 120-min stale-claim reclaimer no longer re-grounds papers that are still advancing (550 releases/24h, 302 ground claims of 72 rows). */ /* 0.18.34 REVIEW-EMPTY-SECOND-PATH-1 (2026-10-18): an unreadable review takes a second model family in the same tick and, still unreadable, re-runs review directly instead of sending the review-parse placeholder through two no-op patch calls (237 of 264 revise-noop events, 329 hard=1 cycles in 3 days). */ /* 0.18.33 PATCH-FLEX-REGEX-OVERFLOW-1 (2026-10-18, agent_issues 2886): findFlexible caps the flexible matcher at 400 tokens and fails closed on any regex error, so a whole-section find text no longer throws "Invalid regular expression: Stack overflow" out of the slot. */ /* 0.18.32 AI-RATE-FALLBACK-1 (2026-10-18): a 3021/3040/3046 on the primary model after backoff takes one call on another family (glm<->gpt-oss-120b) instead of failing the stage; 3040 no longer misread as a reasoning_effort rejection. */ /* 0.18.31 VERIFY-AUTOCORRECT-1 (2026-10-18): papers fail verify with REAL arithmetic errors (the reconcile/ensemble writer computes a number that does not match its own stated inputs) and the revise loop cannot reliably fix a bare number, so such papers cycle until park. Verify already holds both values — independently computed `computed` and the paper's stated `expected` — so stageVerify now corrects the number deterministically (autoCorrectNumeric) instead of sending it back through a model. Fail-closed: only a stated value found exactly once (verbatim or as an unambiguous bare mantissa in LaTeX/\\times 10^N) is corrected; anything ambiguous is skipped and falls through to revise. Every correction is logged as verify-autocorrect and appended to verification.md. */ /* 0.18.29 VERIFY-CYCLE-CAP-1 (2026-10-17, owner directive "REMEDIATE ALL ISSUES AND FAILURE MODES"): the verify->revise edge reset the review cycle counter to 0 (context={cycles:0,verifyPass:1}) while EVERY other edge preserves it (3716, 3735, 3753) and the review stage is the one that increments it. That single reset made MAX_REVIEW_CYCLES (6) unreachable, so an item that fails verify re-enters revise, resets to cycle 0, and loops until recover_count runs out — measured 2026-10-17: review-unresolved events exist ONLY at cycle 2 (193) and 3 (165), never 4; 96 rerun-route and 278 revise-patch events against ~100 rows; and stage='publish' is EMPTY, which is why 151 complete events produced 0 publications and why the publish quota (24) guarded an empty queue. The edge now preserves the count, so the existing six-cycle cap can terminate an item visibly instead of cycling forever. The gate itself (gates2) is unchanged: this does not let a failing draft through, it lets a draft that cannot pass STOP. */ // 0.18.28-codeagent
+var VERSION = "0.19.0-resolve-research"; /* 0.19.0 RESOLVE-ALL-OPEN-1 (2026-10-19, owner directive "RESOLVE/REMEDIATE ALL OPEN ISSUES"; pillar research): (a) RESEARCH-REVIEW-BIB-TRUNC-1 (#2800): the reviewer sees the index line of every bibliography entry, then bounded excerpts, instead of the first 8,000 chars (2-3 of 9-14 entries); (b) SLOP-SCAN-1 (#2407): a deterministic inflated-prose scan adds SOFT findings with locations against a corpus baseline read from its own slop-scan events; (c) REVISE-STRIDE-1 (#2847): queued rows at a resumable stage are claimed before ground rows; (d) EXTENSION-ACTIVATION-1 (#2824): extension rows (<= research_extension_per_day) bypass research_ready_cap, ops_config research_extension_cap_mode=respect restores it; (e) SWEEP-REARM-INLINE-1 (#2393): the completeness sweep re-arms remediation rows a 2026-10-17 cleanup closed as published without publishing; (f) RECONCILE-READ-1 (c) (#2725): an incomplete draft names its failed checks. */ /* 0.18.38 TICK-10M-1 + RECLAIM-KEEP-STAGE-1 + IDEA-TO-PUBLISH-METRIC-1 (2026-10-18, owner directive: idea to publication under 100 hours; pillar research): (a) the cron runs every 10 minutes (was 15; 144/day = CRON-MANDATE-1 ceiling, same schedule count); member windows are 10 minutes wide so each errata/reviser job still runs exactly once per slot; the 03:00 sweep window is 10 minutes; (b) a stale reclaim keeps a resumable stage (complete/review/revise/verify), and RESUME-DRAFT-1 at claim falls back to ground when reconciled.md is missing, so a stalled draft is not re-drafted from scratch; (c) idea_to_publish_h_p50_7d (median hours idea_proposals.created_at -> published_at, 7 days) is written to metric_registry on the :00 tick. */ /* 0.18.37 ERRATA-HIGHRISK-ROUTE-1 folded (errata member 1.6.2): a high-risk errata correction draft older than 6 h becomes a remediation research row instead of waiting audited forever; internal_errata closes with its queue row. */ /* 0.18.36 CLAIM-HEARTBEAT-1 + RESUME-DRAFT-1 + REVIEW-SECOND-MODEL-1 (2026-10-18): a stage returning ok refreshes claimed_at so the stale-claim reclaimer stops re-grounding papers still advancing (550 releases/24h, 302 ground claims of 72 rows); a resumable stage is kept when its draft exists in R2 (70 revise rows were re-drafted from ground); the review second path names its model (not kimi-k2.6 after #1429). */ /* 0.18.35 CLAIM-HEARTBEAT-1 (2026-10-18): a stage that returns ok refreshes claimed_at, so the 120-min stale-claim reclaimer no longer re-grounds papers that are still advancing (550 releases/24h, 302 ground claims of 72 rows). */ /* 0.18.34 REVIEW-EMPTY-SECOND-PATH-1 (2026-10-18): an unreadable review takes a second model family in the same tick and, still unreadable, re-runs review directly instead of sending the review-parse placeholder through two no-op patch calls (237 of 264 revise-noop events, 329 hard=1 cycles in 3 days). */ /* 0.18.33 PATCH-FLEX-REGEX-OVERFLOW-1 (2026-10-18, agent_issues 2886): findFlexible caps the flexible matcher at 400 tokens and fails closed on any regex error, so a whole-section find text no longer throws "Invalid regular expression: Stack overflow" out of the slot. */ /* 0.18.32 AI-RATE-FALLBACK-1 (2026-10-18): a 3021/3040/3046 on the primary model after backoff takes one call on another family (glm<->gpt-oss-120b) instead of failing the stage; 3040 no longer misread as a reasoning_effort rejection. */ /* 0.18.31 VERIFY-AUTOCORRECT-1 (2026-10-18): papers fail verify with REAL arithmetic errors (the reconcile/ensemble writer computes a number that does not match its own stated inputs) and the revise loop cannot reliably fix a bare number, so such papers cycle until park. Verify already holds both values — independently computed `computed` and the paper's stated `expected` — so stageVerify now corrects the number deterministically (autoCorrectNumeric) instead of sending it back through a model. Fail-closed: only a stated value found exactly once (verbatim or as an unambiguous bare mantissa in LaTeX/\\times 10^N) is corrected; anything ambiguous is skipped and falls through to revise. Every correction is logged as verify-autocorrect and appended to verification.md. */ /* 0.18.29 VERIFY-CYCLE-CAP-1 (2026-10-17, owner directive "REMEDIATE ALL ISSUES AND FAILURE MODES"): the verify->revise edge reset the review cycle counter to 0 (context={cycles:0,verifyPass:1}) while EVERY other edge preserves it (3716, 3735, 3753) and the review stage is the one that increments it. That single reset made MAX_REVIEW_CYCLES (6) unreachable, so an item that fails verify re-enters revise, resets to cycle 0, and loops until recover_count runs out — measured 2026-10-17: review-unresolved events exist ONLY at cycle 2 (193) and 3 (165), never 4; 96 rerun-route and 278 revise-patch events against ~100 rows; and stage='publish' is EMPTY, which is why 151 complete events produced 0 publications and why the publish quota (24) guarded an empty queue. The edge now preserves the count, so the existing six-cycle cap can terminate an item visibly instead of cycling forever. The gate itself (gates2) is unchanged: this does not let a failing draft through, it lets a draft that cannot pass STOP. */ // 0.18.28-codeagent
 // WORKERS-AI-ATTRIBUTION-1 (2026-10-01, #1681): per-worker Workers AI attribution. Returns a shallow env copy whose AI
 // binding records each .run() (calls, errors, ms, tokens, neurons) into qnfo-audit ai_call_counters (purpose 'binding').
 // Neurons = usage tokens x Cloudflare's published per-model rates (neurons per M tokens). Fail-soft; env is never mutated.
@@ -2005,6 +2005,58 @@ function pseudoMathScan(md) {
   t.split("\n").forEach(function(l) { if (PM_BOX_RE.test(l)) { count++; if (samples.length < 8) samples.push(l.trim().slice(0, 60)); } });
   return { count, samples };
 }
+// SLOP-SCAN-1 (0.19.0, agent_issues 2407; Kobak et al., Science Advances 2025: LLM-processed text carries a measurable
+// excess of a family of style words). Per section of the paper body (References skipped, sections under 150 words skipped):
+// the density of the excess-vocabulary FAMILY per 1,000 words (stems, so inflections and near-synonyms count together),
+// em-dash density, repeated paragraph openers and bullet-heavy sections. A section whose family density exceeds the corpus
+// baseline by SLOP_FACTOR becomes a SOFT finding with its location; nothing here is HARD and nothing blocks a paper. The
+// baseline is the median paper density of the last 30 days of slop-scan events (the corpus statistic refreshes itself
+// as papers are reviewed), SLOP_BASELINE_DEFAULT until 20 events exist.
+var SLOP_FAMILY_RE = /\b(?:delv\w*|underscor\w*|showcas\w*|intricat\w*|pivotal|crucial(?:ly)?|meticulous\w*|multifaceted|tapestr\w*|realm\w*|foster\w*|seamless\w*|nuanced|groundbreaking|paramount|invaluable|noteworthy|unwavering|testament|endeavou?r\w*|holistic\w*|garner\w*|bolster\w*|elucidat\w*|illuminat\w*|intricac\w*|commendabl\w*|notabl[ey]|comprehensive\w*|leverag\w*|navigat\w*|landscape|profound\w*|seamlessly|robustly|harness\w*|unveil\w*|vital|transformative|cutting-edge|interplay|myriad|plethora|captivat\w*|embark\w*|enhanc\w*|streamlin\w*|furthermore|moreover|additionally)\b/gi;
+var SLOP_BASELINE_DEFAULT = 6, SLOP_FACTOR = 2, SLOP_BASE_CACHE = { at: 0, v: 0 };
+async function slopBaseline(env) {
+  if (SLOP_BASE_CACHE.v && Date.now() - SLOP_BASE_CACHE.at < 36e5) return SLOP_BASE_CACHE.v;
+  let v = SLOP_BASELINE_DEFAULT;
+  try {
+    const r = await env.QNFO_AUDIT.prepare("SELECT text FROM cloud_ops_events WHERE job = ?1 AND kind = 'slop-scan' AND ts > ?2 ORDER BY ts DESC LIMIT 400").bind(WORKER, new Date(Date.now() - 30 * 864e5).toISOString()).all();
+    const xs = ((r && r.results) || []).map(function(e) { const m = /density=([\d.]+)/.exec(String(e.text || "")); return m ? parseFloat(m[1]) : NaN; }).filter(function(x) { return Number.isFinite(x) && x > 0; }).sort(function(a, b) { return a - b; });
+    if (xs.length >= 20) v = xs[Math.floor(xs.length / 2)];
+  } catch (e) {
+  }
+  SLOP_BASE_CACHE = { at: Date.now(), v: v };
+  return v;
+}
+function slopScan(md, baseline) {
+  const base = Number(baseline) > 0 ? Number(baseline) : SLOP_BASELINE_DEFAULT;
+  const text = String(md || "");
+  const parts = text.split(/^(?=#{1,3}[ \t])/m);
+  const findings = [];
+  let words = 0, hits = 0;
+  for (const part of parts) {
+    const hm = /^#{1,3}[ \t]*(.+)$/m.exec(part);
+    const name = hm && part.indexOf(hm[0]) === 0 ? hm[1].trim().slice(0, 60) : "(preamble)";
+    if (/^(?:\d+\.?\s*)?(?:References|Bibliography)\b/i.test(name)) continue;
+    const body = part.replace(/^#{1,3}[ \t].*$/m, "").replace(/\$\$[\s\S]*?\$\$|```[\s\S]*?```/g, " ");
+    const w = (body.match(/[A-Za-z][A-Za-z'-]*/g) || []).length;
+    const fam = (body.match(SLOP_FAMILY_RE) || []).length;
+    words += w;
+    hits += fam;
+    if (w < 150 || findings.length >= 6) continue;
+    const dens = 1e3 * fam / w;
+    if (dens > base * SLOP_FACTOR) findings.push({ id: "slop-density", severity: "SOFT", claim: "section «" + name + "»", reason: "SLOP-SCAN-1: inflated-style vocabulary at " + dens.toFixed(1) + " per 1,000 words (corpus baseline " + base.toFixed(1) + ")", fix: "Replace generic emphasis words (pivotal, crucial, delve, comprehensive, notably, moreover ...) with the specific claim or quantity they stand for, or delete them." });
+    const dashes = (body.match(/—/g) || []).length;
+    if (1e3 * dashes / w > 10) findings.push({ id: "slop-emdash", severity: "SOFT", claim: "section «" + name + "»", reason: "SLOP-SCAN-1: " + dashes + " em dashes in " + w + " words", fix: "Use commas, colons or separate sentences for most of the em-dash asides." });
+    const paras = body.split(/\n\s*\n/).map(function(x) { return x.trim(); }).filter(function(x) { return x.length > 60 && !/^[-*|>]/.test(x); });
+    const openers = {};
+    paras.forEach(function(x) { const k = x.split(/\s+/).slice(0, 2).join(" ").toLowerCase(); openers[k] = (openers[k] || 0) + 1; });
+    const rep = Object.keys(openers).filter(function(k) { return openers[k] >= 3; });
+    if (rep.length) findings.push({ id: "slop-openers", severity: "SOFT", claim: "section «" + name + "»", reason: "SLOP-SCAN-1: paragraphs repeatedly open with «" + rep[0] + "» (" + openers[rep[0]] + "x)", fix: "Vary the paragraph openings; lead each with its own subject." });
+    const lines = body.split("\n").filter(function(x) { return x.trim(); });
+    const bullets = lines.filter(function(x) { return /^\s*(?:[-*•]|\d+\.)\s/.test(x); }).length;
+    if (lines.length >= 8 && bullets / lines.length > 0.6) findings.push({ id: "slop-bullets", severity: "SOFT", claim: "section «" + name + "»", reason: "SLOP-SCAN-1: " + bullets + " of " + lines.length + " lines are list items", fix: "Write the argument as connected prose; keep lists for enumerations." });
+  }
+  return { density: words ? 1e3 * hits / words : 0, baseline: base, findings: findings.slice(0, 6) };
+}
 function mathLatexFix(scan) {
   return { id: "gate-math-latex", severity: "HARD", claim: scan.count + " plain-text math tokens outside $...$", reason: "MATH-LATEX-2: math written as Unicode super/subscripts, Unicode operators or bare ^ and _ is not typeset on papers.qnfo.org. Examples: " + scan.samples.map(function(s) { return "\u00ab" + s + "\u00bb"; }).join(" "), fix: "Rewrite each such expression in LaTeX inside $...$ (inline) or $$...$$ (display), for example 10\u207b\u2074 -> $10^{-4}$, T\u2081 -> $T_1$, \u2248 -> $\\approx$, d^3 -> $d^3$. Change only the notation, not the values." };
 }
@@ -3365,7 +3417,7 @@ __name(stageComplete, "stageComplete");
 var SWEEP_MAX_PER_RUN = 25;
 // The sweep's rule set. A sweep logged under an older rule set does not count, so the first tick after a deploy that changes
 // what the sweep looks for runs it at once instead of at the next 03:00 (CITE-FULLTEXT-3).
-var SWEEP_RULES = "complete+cite-fulltext-3+abstract-clean-2";
+var SWEEP_RULES = "complete+cite-fulltext-3+abstract-clean-2+rearm-inline-1";
 // Due on the 03:00 UTC tick, and on any tick when no sweep has run for 26 h (the first tick after a deploy, or a missed day).
 async function completenessSweepDue(env, ms) {
   var d = new Date(ms);
@@ -3420,6 +3472,24 @@ async function completenessSweep(env) {
       var why = (pc.complete ? [] : ["incomplete: " + pc.reasons.join("; ")]).concat(so.length ? ["CITE-FULLTEXT-1 cites a work from its summary alone: " + so[0]] : []);
       out.truncated++;
       var open = await env.QNFO_AUDIT.prepare("SELECT id FROM research_queue WHERE source = 'remediation' AND (paper_slug = ?1 OR source_id = ?2) LIMIT 1").bind(p.slug, "completeness:" + src.id).first();
+      // SWEEP-REARM-INLINE-1 (0.19.0, agent_issues 2393): a 2026-10-17 cleanup (RECONCILE-IN-LINE-1) set 72 remediation rows
+      // to status published without publishing anything, so a paper that is still cut off (factoring-hardness-as-a-bayesian-
+      // prior: no Results, Discussion or Conclusion) was blocked from re-queueing for good. Such a row is re-armed at ground
+      // instead of blocking, on the same per-run rate; any other remediation row still blocks.
+      if (open && out.queued < SWEEP_MAX_PER_RUN) {
+        var ra = null;
+        try {
+          ra = await env.QNFO_AUDIT.prepare("UPDATE research_queue SET status = 'queued', stage = 'ground', error = NULL, claimed_at = NULL, attempt = 0, recover_count = 0 WHERE id = ?1 AND error LIKE 'RECONCILE-IN-LINE-1%'").bind(open.id).run();
+        } catch (eRa) {
+          ra = null;
+        }
+        if (ra && ra.meta && ra.meta.changes) {
+          out.queued++;
+          out.rearmed = (out.rearmed || 0) + 1;
+          out.slugs.push(p.slug.slice(0, 60));
+          continue;
+        }
+      }
       if (open || out.queued >= SWEEP_MAX_PER_RUN) {
         out.skipped++;
         continue;
@@ -3649,6 +3719,18 @@ function deterministicCrossSectionCheck(text) {
   return { ok: issues.length === 0, issues: issues.slice(0, 30) };
 }
 
+// RESEARCH-REVIEW-BIB-TRUNC-1 (0.19.0, agent_issues 2800): the reviewer got the first 8,000 chars of a ~50,000-char
+// grounding bibliography (2-3 of 9-14 entries, each carrying full-text excerpts), so 121 of 175 body citations pointed
+// past what it saw and it filed HARD "reference [n] is not in the provided bibliography" findings about entries that
+// exist; the reviser then deleted legitimate citations. The reviewer now gets the index of EVERY entry ("[n] id | title",
+// one line each) and then the excerpts, still bounded, so the existence check sees the whole list.
+var REVIEW_BIB_INDEX_MAX = 12e3, REVIEW_BIB_EXCERPT_MAX = 8e3;
+function reviewBibliography(grounding) {
+  const tail = String(grounding || "").split("## Bibliography")[1] || "";
+  const index = (tail.match(/^\[\d+\] .+$/gm) || []).map(function(l) { return l.slice(0, 400); }).join("\n").slice(0, REVIEW_BIB_INDEX_MAX);
+  if (!index) return tail.slice(0, REVIEW_BIB_EXCERPT_MAX);
+  return "INDEX (every entry the paper may cite):\n" + index + "\n\nEXCERPTS (leading entries, for attribution checks):\n" + tail.slice(0, REVIEW_BIB_EXCERPT_MAX);
+}
 async function stageReconcile(env, row) {
   __attrStageSet(env, "reconcile");
   const parts = [];
@@ -3670,7 +3752,9 @@ if (!paper || !paper.trim()) {
 }
 const contract = paperCompleteness(paper);
 if (!contract.complete) {
-  await markError(env, row, "reconcile: invalid paper contract");
+  // RECONCILE-READ-1 (c) (0.19.0, agent_issues 2725): the message names the failed checks, so a thin draft is told apart
+  // from a read failure (which takes the "draft-0 unreadable" path above) without opening R2.
+  await markError(env, row, ("reconcile: invalid paper contract: " + (contract.reasons || []).join("; ")).slice(0, 220));
   return { ok: false, stage: "reconcile" };
 }
   // LEAN-ENSEMBLE-1: a lean run writes two drafts, so a draft-2 left by an earlier attempt on another grounding must not
@@ -3861,7 +3945,7 @@ async function stageReview(env, row) {
     await env.QNFO_AUDIT.prepare("UPDATE research_queue SET stage='complete', context=? WHERE id=?").bind(JSON.stringify(Object.assign({}, ctx, { completeFrom: "review" })).slice(0, 6e3), row.id).run();
     return { ok: true, stage: "review->complete", incomplete: _pcR.reasons };
   }
-  const bib = (grounding.split("## Bibliography")[1] || "").slice(0, 8e3);
+  const bib = reviewBibliography(grounding);
   // CITE-CONSISTENCY-1 (2026-10-17): no review ever compared the draft against the fleet's own cited papers, so a paper
   // that silently inverted a claim of a work it cites passed every gate. One added instruction; the finding rides the
   // existing HARD/SOFT pipeline, no new stage, cron or model call.
@@ -3917,6 +4001,14 @@ async function stageReview(env, row) {
   // review -> revise cycles (bounded by MAX_REVIEW_CYCLES) and the patch reviser converts the listed expressions to LaTeX.
   const _pm = pseudoMathScan(paper);
   if (_pm.count > PSEUDO_MATH_MAX) hard.push(mathLatexFix(_pm));
+  // SLOP-SCAN-1: deterministic inflated-prose scan, SOFT findings only (never blocks; no model call).
+  try {
+    const _sl = slopScan(paper, await slopBaseline(env));
+    await logEvent(env, "slop-scan", "row=" + row.id + " density=" + _sl.density.toFixed(2) + " baseline=" + _sl.baseline.toFixed(2) + " flagged=" + _sl.findings.length, "ok");
+    if (_sl.findings.length) findings.soft = (findings.soft || []).concat(_sl.findings);
+  } catch (eSl) {
+    console.error(JSON.stringify({ worker: WORKER, where: "slop-scan", error: String(eSl && eSl.message || eSl).slice(0, 200) }));
+  }
   if (!_revParsed && hard.length && hard.every(function(f) { return f && f.id === "review-parse"; })) {
     if ((ctx.reparse || 0) < 2) {
       await env.QNFO_AUDIT.prepare("UPDATE research_queue SET stage='review', context=? WHERE id=?").bind(JSON.stringify(Object.assign({}, ctx, { cycles: cycle, reparse: (ctx.reparse || 0) + 1 })).slice(0, 6e3), row.id).run();
@@ -5178,7 +5270,18 @@ async function extensionCandidateSweep(env) {
     const live = await env.QNFO_AUDIT.prepare("SELECT COUNT(*) n FROM research_queue WHERE status IN ('queued','researching')").first();
     // A skipped sweep used to be silent, which made the feature look deployed-but-dead: with the ready queue at 161 and
     // research_ready_cap 120 this returned early every tick and nothing said so. The skip is now reported once an hour.
-    if ((Number(live && live.n) || 0) >= cap) {
+    // EXTENSION-ACTIVATION-1 (0.19.0, agent_issues 2824): with the ready queue above research_ready_cap every tick
+    // (237/192 on 2026-10-19) this guard returned early for two days and the selector produced nothing. Extension rows are
+    // already bounded by research_extension_per_day (default 2, max 10), so they bypass the cap by default;
+    // ops_config research_extension_cap_mode = respect restores the guard without a deploy.
+    let capMode = "bypass";
+    try {
+      const cm = await env.QNFO_AUDIT.prepare("SELECT value FROM ops_config WHERE key = 'research_extension_cap_mode'").first();
+      if (cm && String(cm.value || "").trim().toLowerCase() === "respect") capMode = "respect";
+    } catch (e) {
+    }
+    out.capMode = capMode;
+    if (capMode === "respect" && (Number(live && live.n) || 0) >= cap) {
       out.skipped = "queue full (" + (Number(live && live.n) || 0) + "/" + cap + ")";
       try {
         if (new Date().getUTCMinutes() < 20) await logEvent(env, "extension-skipped", out.skipped, "warn");
@@ -5525,14 +5628,19 @@ function resumeStage(row) {
 // queued, which is why width (24, then 48) never appeared as concurrency and only 6-14 papers published a day.
 // The claim is now ONE statement that removes the row it updates, so N slots admit N distinct rows. The stage CASE
 // reproduces resumeStage() in SQL (RESUME-STAGE-1) so a re-armed row still enters at revise rather than ground.
+// REVISE-STRIDE-1 (0.19.0, agent_issues 2847): a queued row that already holds a draft at a resumable stage is claimed
+// before a row that starts at ground. Measured 2026-10-19: 45 rows sat queued at stage revise for up to 14.5 h while fresh
+// ground rows won the claim on score, although a claimed revise row leaves the stage in 11.8 min on average (1300 of
+// 1302 within 120 min). Finishing started papers first is what drains revise; anti-starvation (72 h FIFO) still orders
+// the rest.
 async function claimNew(env) {
   let row = null;
   try {
-    row = await env.QNFO_AUDIT.prepare("UPDATE research_queue SET status='researching', stage = CASE WHEN stage IN ('complete','review','revise','verify') THEN stage ELSE 'ground' END, claimed_at=?1, attempt=attempt+1 WHERE id = (SELECT id FROM research_queue WHERE status='queued' ORDER BY CASE WHEN created_at < strftime('%Y-%m-%dT%H:%M:%SZ','now','-72 hours') THEN 0 ELSE 1 END, CASE WHEN created_at < strftime('%Y-%m-%dT%H:%M:%SZ','now','-72 hours') THEN created_at END ASC, score DESC LIMIT 1) AND status='queued' RETURNING *").bind(nowIso()).first();
+    row = await env.QNFO_AUDIT.prepare("UPDATE research_queue SET status='researching', stage = CASE WHEN stage IN ('complete','review','revise','verify') THEN stage ELSE 'ground' END, claimed_at=?1, attempt=attempt+1 WHERE id = (SELECT id FROM research_queue WHERE status='queued' ORDER BY CASE WHEN stage IN ('complete','review','revise','verify') THEN 0 ELSE 1 END, CASE WHEN created_at < strftime('%Y-%m-%dT%H:%M:%SZ','now','-72 hours') THEN 0 ELSE 1 END, CASE WHEN created_at < strftime('%Y-%m-%dT%H:%M:%SZ','now','-72 hours') THEN created_at END ASC, score DESC LIMIT 1) AND status='queued' RETURNING *").bind(nowIso()).first();
   } catch (eClaim) {
     // A dialect without UPDATE ... RETURNING keeps the old two-step claim rather than stopping the pipeline.
     await logEvent(env, "claim-atomic-fallback", String(eClaim && eClaim.message || eClaim).slice(0, 200), "warn");
-    row = await env.QNFO_AUDIT.prepare("SELECT * FROM research_queue WHERE status='queued' ORDER BY CASE WHEN created_at < strftime('%Y-%m-%dT%H:%M:%SZ','now','-72 hours') THEN 0 ELSE 1 END, CASE WHEN created_at < strftime('%Y-%m-%dT%H:%M:%SZ','now','-72 hours') THEN created_at END ASC, score DESC LIMIT 1").first();
+    row = await env.QNFO_AUDIT.prepare("SELECT * FROM research_queue WHERE status='queued' ORDER BY CASE WHEN stage IN ('complete','review','revise','verify') THEN 0 ELSE 1 END, CASE WHEN created_at < strftime('%Y-%m-%dT%H:%M:%SZ','now','-72 hours') THEN 0 ELSE 1 END, CASE WHEN created_at < strftime('%Y-%m-%dT%H:%M:%SZ','now','-72 hours') THEN created_at END ASC, score DESC LIMIT 1").first();
     if (!row) return { status: "ok", claimed: 0 };
     const resumeLegacy = resumeStage(row);
     const up = await env.QNFO_AUDIT.prepare("UPDATE research_queue SET status='researching', stage=?1, claimed_at=?2, attempt=attempt+1 WHERE id=?3 AND status='queued'").bind(resumeLegacy, nowIso(), row.id).run();
@@ -5583,7 +5691,7 @@ async function run(env) {
     // score (daily radar supply scores 0.70-0.80) outbid 8 rows that had waited 17 days, so they were claimable but never won.
     // Rows older than 72h are claimed first, oldest first (FIFO); everything fresher stays in score order. created_at is ISO-8601
     // text, compared against an ISO bound exactly as the failed-row re-arm below does.
-    row = await env.QNFO_AUDIT.prepare("SELECT * FROM research_queue WHERE status='queued' ORDER BY CASE WHEN created_at < strftime('%Y-%m-%dT%H:%M:%SZ','now','-72 hours') THEN 0 ELSE 1 END, CASE WHEN created_at < strftime('%Y-%m-%dT%H:%M:%SZ','now','-72 hours') THEN created_at END ASC, score DESC LIMIT 1").first();
+    row = await env.QNFO_AUDIT.prepare("SELECT * FROM research_queue WHERE status='queued' ORDER BY CASE WHEN stage IN ('complete','review','revise','verify') THEN 0 ELSE 1 END, CASE WHEN created_at < strftime('%Y-%m-%dT%H:%M:%SZ','now','-72 hours') THEN 0 ELSE 1 END, CASE WHEN created_at < strftime('%Y-%m-%dT%H:%M:%SZ','now','-72 hours') THEN created_at END ASC, score DESC LIMIT 1").first();
     if (!row) {
       return { status: "ok", claimed: 0 };
     }
@@ -28537,6 +28645,8 @@ export {
   mathGate,
   parkPoisonRow,
   pseudoMathScan,
+  reviewBibliography,
+  slopScan,
   citationGateStep,
   corpusWidth,
   citationRowsFromBib,
