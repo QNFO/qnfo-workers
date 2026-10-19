@@ -1,7 +1,7 @@
 -- CODE-LOOP-CONTROL-PLANE-1 (2026-10-19, charter pillar autonomy; lever T1.23; control_registry control-plane-deny).
 -- Owner directive 2026-10-19, verbatim: "The code loop SHALL ALWAYS BE ABLE TO change qnfo-fleet-control, qnfo-ops, qnfo-deploy-guard and
--- the loop's own code." qnfo-fleet-control 0.35.0 (CM_LOOP_CANARIED, cmScope, tpOnControlPlane, CM_SCRIPT_DENY) and qnfo-code-orchestrator
--- 0.19.0 (PLAN_LOOP_CANARIED, CM_SCRIPT_DENY) carry the change; this file records it in the registries and adds the detector.
+-- the loop's own code." qnfo-fleet-control 0.36.0 (CM_LOOP_CANARIED, cmScope, tpOnControlPlane, CM_SCRIPT_DENY) and qnfo-code-orchestrator
+-- 0.20.0 (PLAN_LOOP_CANARIED, CM_SCRIPT_DENY) carry the change; this file records it in the registries and adds the detector.
 -- APPLY-BY: ci
 -- DB: qnfo-audit
 -- Rollback: DELETE FROM remediation_contracts WHERE class = 'fm-code-loop-barred-from-control-plane'; DELETE FROM failure_modes WHERE fm_key = 'code-loop-barred-from-control-plane'; UPDATE control_registry SET evidence = replace(evidence, ' | APPLIED 2026-10-19 (CODE-LOOP-CONTROL-PLANE-1)', '') WHERE control = 'control-plane-deny';
