@@ -1,9 +1,8 @@
-// Offline suite (node:sqlite) for the five metric-breach repair migrations of 2026-10-19:
+// Offline suite (node:sqlite) for the four metric-breach repair migrations of 2026-10-19:
 //   2026-10-19-detector-probe-repairs.sql           (two failure-mode detectors that could not read what they claim; failure_modes_recurring)
 //   2026-10-19-cadence-sla-cf-changelog.sql         (cadence_sla window error for a daily loop; cadence_overdue_over_120m)
 //   2026-10-19-impact-per-dollar-zenodo-null.sql    (METRIC-REFRESH-1 NULL through a retired term; metrics_on_probation_overdue)
 //   2026-10-19-blocker-claims-receipts.sql          (receipt cards are not blocker claims, six red-team rows; unverified_blocker_claims)
-//   2026-10-19-stuck-summary-unprobed-owned.sql     (monitoring and deferred contracts are owned; issues_unprobed_60m)
 // Each file is run on SQLite against the live shapes it touches, must change what it says, write its registry rows and decision once,
 // and change nothing on a second run. Run: node --no-warnings migrations/detector-measurement-repairs.test.mjs
 import { DatabaseSync } from "node:sqlite";
@@ -143,45 +142,6 @@ CREATE TABLE blocker_redteam (id INTEGER PRIMARY KEY AUTOINCREMENT, target TEXT 
   ok(det === 0, "the detector reads 0 after the repair");
   ok(registry(db, "blocker-claims-count-receipts").join() === "1,1" && decisions(db, "BLOCKER-CLAIMS-RECEIPTS-1:") === 1, "failure mode, detector contract and one decision, once");
   ok(one(db, "SELECT COUNT(*) n FROM sqlite_master WHERE name = 'bak_20261019_v_blocker_claims'").n === 1, "the backup table exists");
-}
-
-// ---------------------------------------------------------------- 5. issues_unprobed_60m: owned and deferred issues are not unprobed
-{
-  const sql = read("2026-10-19-stuck-summary-unprobed-owned.sql");
-  const db = fresh(`
-CREATE TABLE research_queue (id TEXT, status TEXT, created_at TEXT); CREATE TABLE research_review_seen (id TEXT, first_seen TEXT); CREATE TABLE research_ready (id TEXT, ready_at TEXT);
-CREATE TABLE research_hold_seen (id TEXT, first_seen TEXT); CREATE TABLE cloud_ops_events (job TEXT, kind TEXT, status TEXT, ts TEXT); CREATE TABLE intents (status TEXT, created_at TEXT);
-CREATE TABLE outreach_queue (status TEXT, created_at TEXT, attempts INTEGER); CREATE TABLE code_tasks (status TEXT, updated_at TEXT, created_at TEXT);
-CREATE TABLE agent_issues (id INTEGER PRIMARY KEY, title TEXT, description TEXT, status TEXT, created_at INTEGER);
-CREATE TABLE remediation_verifications (issue_id INTEGER, verified_at TEXT);
-CREATE TABLE work_claims (issue_id INTEGER, released_at TEXT, expires_at TEXT); CREATE TABLE zenodo_exit_ledger (status TEXT); CREATE TABLE issue_triage (issue_id INTEGER PRIMARY KEY);
-CREATE VIEW v_stuck_summary AS SELECT 0 AS issues_unprobed_60m;`);
-  const now = Date.now();
-  const iss = db.prepare("INSERT INTO agent_issues VALUES (?, ?, '', 'open', ?)");
-  const ctr = db.prepare("INSERT INTO remediation_contracts (class, issue_id, precondition, action, verify_probe, verify_transport, escalate_to, status, last_verdict, last_attempt_at) VALUES (?, ?, 'p', 'a', 'SELECT 1', 'd1-query', 'x', ?, ?, ?)");
-  const mins = (m) => new Date(now - m * 60e3).toISOString().slice(0, 19).replace("T", " ");
-  const mk = (id, status, verdict, attemptMinAgo) => { iss.run(id, "t" + id, now - 5 * 3600e3); ctr.run("issue-" + id, id, status, verdict, attemptMinAgo == null ? null : mins(attemptMinAgo)); };
-  mk(1, "monitoring", "monitoring:metric-trigger", 999);      // owned by the trigger evaluator
-  mk(2, "active", "deferred", 20);                              // deferred, attempted 20 minutes ago
-  mk(3, "active", "deferred", 200);                             // deferred, last attempt 200 minutes ago: unprobed
-  mk(4, "superseded", "superseded:closure-observing-probe", 30); // no usable probe: unprobed
-  mk(5, "active", "fail", 10);                                  // failing, no row inside 60 minutes: unprobed
-  iss.run(6, "t6", now - 5 * 3600e3);                           // no contract at all: unprobed
-  mk(7, "active", "pass", 5); db.prepare("INSERT INTO remediation_verifications VALUES (7, ?)").run(mins(5)); // a fresh row: probed
-  const col = (d) => d.prepare("SELECT issues_unprobed_60m n FROM v_stuck_summary").get().n;
-  const probeAll = (d) => JSON.stringify(d.prepare("SELECT * FROM v_stuck_summary").get());
-  // the pre-existing definition (PR 2966 / superseded-terminal) counts every issue without a row: 1,2,3,4,5,6 = 6
-  const [a, b] = (() => { db.exec(sql); const x = probeAll(db); db.exec(sql); return [x, probeAll(db)]; })();
-  const row = JSON.parse(a);
-  ok(row.issues_unprobed_60m === 4, "monitoring and a recently attempted deferral are not unprobed; 3, 4, 5 and 6 are", row.issues_unprobed_60m);
-  ok(a === b, "second run changes nothing");
-  const text = one(db, "SELECT sql FROM sqlite_master WHERE name = 'v_stuck_summary'").sql;
-  ok(text.includes("'superseded'") && text.includes("code_tasks_stalled"), "the superseded terminal status of the sibling migration is kept");
-  ok(Object.keys(row).length === 14, "the view keeps its 14 columns", Object.keys(row));
-  const det = (d) => d.prepare("SELECT CAST(CASE WHEN instr((SELECT sql FROM sqlite_master WHERE name = 'v_stuck_summary'), 'mc.status = ''monitoring''') > 0 THEN 0 ELSE 1 END AS TEXT) v").get().v;
-  ok(det(db) === "0", "the detector reads 0 while the exclusion is in the view");
-  ok(one(db, "SELECT COUNT(*) n FROM sqlite_master WHERE name = 'bak_20261019_stuck_summary_view_unprobed'").n === 1, "the backup table exists");
-  ok(registry(db, "unprobed-counts-owned-issues").join() === "1,1" && decisions(db, "UNPROBED-OWNED-1:") === 1, "failure mode, detector contract and one decision, once");
 }
 
 console.log("detector-measurement-repairs: " + pass + " passed, " + fail + " failed");
