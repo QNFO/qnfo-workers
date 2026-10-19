@@ -106,7 +106,7 @@ function clampMaxTokens(requested, isReason) {
 __name(clampMaxTokens, "clampMaxTokens");
 __name2(clampMaxTokens, "clampMaxTokens");
 __name22(clampMaxTokens, "clampMaxTokens");
-var VERSION = "4.15.1-bad-tag-filter"; // 4.15.0 COMPANION-WEEK-1 (2026-10-19, agent_issues 100197, pillar personal, owner ask: "WHAT ELSE IS IN BACKLOG/ROADMAP THAT CAN BE IMPLEMENTED?"): with companion e-mail off the Sunday review reached no one; the companion now builds "Your week" from its own record (mood days against the week before, best day, what was done and what felt good, actions done, one idea from what helped; never what was missed), shows it on Today from Sunday 18:00 through Monday with a hide button, sends one quiet "Your week" push on Sunday evening under quiet hours, the cap and the pause, and shows the last week on the Data tab (GET /companion/api/week, POST /companion/api/week/seen). // 4.14.0 COMPANION-LOGIN-1 + COMPANION-DOMAIN-1 + COMPANION-EMAIL-OPT-IN-1 + COMPANION-STALE-1 (2026-10-19, owner: "stop asking me for keys ... one-time email passwords are fine"; "for personal shit, use q08.org"; "the emails are stale"; pillar personal): /companion signs in with a 6-digit code mailed to the owner (SEND_EMAIL, one fixed address, rate-limited) and the device stays signed in for 180 days by an HttpOnly cookie (cmp_sessions, hashes only; cookie writes also need X-Companion: 1); the bearer key still works for tools and MCP; me.q08.org/ opens the companion; Data tab sets companion e-mail off (default), daily or all and signs out; reminders more than 3 days past their date are no longer the one thing or a nudge, and Today counts them once. // 4.13.1 COMPANION-CONTEXT-QUERY-URL-1 (issue 100041, privacy): GET /companion/api/context?q= put the owner's words in a logged URL; the route is now POST with q in the JSON body, and a GET answers 405 without reading the query. // 4.12.0 RED-TEAM-1: the companion red-teamed (risk words with curly apostrophes, more phrasings and Dutch; care and presence never retire; risk follow-up with the crisis lines on Today for a day; quiet hours on mirrored pushes; pause shared with the e-mail ladder; captured text treated as data in the chat prompt; Talk conversations in export and delete; warm fallback when the model is down; lock-screen setting; tick heartbeat on Today). // 4.11.0 COMPANION-BEST-PRACTICE-1: evidence-based companion (behavioral activation ratings and an activity bank, a Stanley-Brown safety plan in crisis replies, two-weekly WHO-5 with a gentle GP suggestion, pause, weekly retry of retired nudges, connection nudge, discreet lock-screen care pushes, 30-day voice-note retention). // 4.10.0 COMPANION-1: /companion (capture text, voice and photos; GTD next actions; mood with context; FSRS flashcards; journal; privacy export and delete), Web Push nudges from the companion Durable Object on a 15-minute alarm sharing the wellbeing ladder's budget, cmp_* tools in chat and MCP, /v1/audio/transcriptions. // 4.9.1-log-catches 4.9.0 CRON-ONLY-HEARTBEAT-1 (agent_issues 2397): the scheduled run upserts its qnfo-audit fleet_heartbeat row when it finishes. // 4.8.6 CRYPTO-IDS-1: the 18 row ids and the feed fallback id come from crypto.getRandomValues (rhex), not Math.random; same id shapes. // 4.8.5 // 4.8.5-doi-scrub NOZ-DOI-1: the separation prompt names no external registry. 4.8.4 below. // 4.13.0 CRON-GRID-1 (owner directive 2026-10-19, pillar personal): the trigger is hourly at :05; the daily 05:05 run (mail sync, ledger sync, companion re-arm, brief) runs on the grid fire of its slot, never retried (it sends the brief), and every fire is a cron_fire_log row CRON-WATCH-1 reads. // 4.12.0 RED-TEAM-1: the companion red-teamed (risk words with curly apostrophes, more phrasings and Dutch; care and presence never retire; risk follow-up with the crisis lines on Today for a day; quiet hours on mirrored pushes; pause shared with the e-mail ladder; captured text treated as data in the chat prompt; Talk conversations in export and delete; warm fallback when the model is down; lock-screen setting; tick heartbeat on Today). // 4.11.0 COMPANION-BEST-PRACTICE-1: evidence-based companion (behavioral activation ratings and an activity bank, a Stanley-Brown safety plan in crisis replies, two-weekly WHO-5 with a gentle GP suggestion, pause, weekly retry of retired nudges, connection nudge, discreet lock-screen care pushes, 30-day voice-note retention). // 4.10.0 COMPANION-1: /companion (capture text, voice and photos; GTD next actions; mood with context; FSRS flashcards; journal; privacy export and delete), Web Push nudges from the companion Durable Object on a 15-minute alarm sharing the wellbeing ladder's budget, cmp_* tools in chat and MCP, /v1/audio/transcriptions. // 4.9.1-log-catches 4.9.0 CRON-ONLY-HEARTBEAT-1 (agent_issues 2397): the scheduled run upserts its qnfo-audit fleet_heartbeat row when it finishes. // 4.8.6 CRYPTO-IDS-1: the 18 row ids and the feed fallback id come from crypto.getRandomValues (rhex), not Math.random; same id shapes. // 4.8.5 // 4.8.5-doi-scrub NOZ-DOI-1: the separation prompt names no external registry. 4.8.4 below.
+var VERSION = "4.20.0-gp-summary"; // 4.20.0 COMPANION-GP-SUMMARY-1 (2026-10-19, agent_issues 100202, pillar personal): the Data tab can build, when the owner asks, a one-page 90-day summary to show his GP (huisarts) in plain words (mood by week, WHO-5 readings, the sleep proxy labelled as a proxy, what helped; no diagnosis, no chat or capture text; journal lines and mood notes only when ticked), GET /companion/api/gp-summary behind the sign-in, printed or saved as PDF by him from the page; read-only: nothing is stored, mailed, shared or posted by the companion. // 4.19.0 COMPANION-CALENDAR-AWARE-1 (2026-10-19, agent_issues 100200, pillar personal): the companion's nudges now read the owner's calendar (personal-life.events, plus the twin's Google and store calendar through a reader the worker supplies): no ask while a timed event is on; with three or more events the day is lighter (optional asks stop one short of the daily cap and offer only the smallest step); and one short After <event> check-in (kind cmp-after, event name kept off the lock screen) within 75 minutes after a social or heavy event ends, unless he has already logged a mood. Risk-word care and presence are never held back by the calendar. // 4.18.0 COMPANION-TRAVEL-TZ-1 (2026-10-19, agent_issues 100199, pillar personal): while a lodging row in personal-life.events covers now (the stay's own nights plus the check-out morning, in the stay's zone), the companion's day follows the traveller: quiet hours (22:00-07:30), the morning and evening check-in windows, the day keys of moods, journal lines, activities, WHO-5 and nudges, the sleep proxy and the Sunday look-back run in that place's time zone (a fixed country and city table; an unknown place or a stay at home keeps the configured zone), and Today says Times follow you: <place>. // 4.17.0 COMPANION-OFFLINE-1 (2026-10-19, agent_issues 100201, pillar personal): the companion app opens without a signal and loses nothing made offline: the service worker keeps the page shell (HTML, manifest, icon; no personal data) and serves it when the network is down; a capture, mood tap or journal line made offline waits in IndexedDB on the phone with the time it was made, is sent when the connection returns (online, app in front, after Today loads) and is stored at that time, never twice, and the queue is cleared at sign-out; Today shows an offline view with the mood card and the line saved on this phone, and API reads are never cached. // 4.16.0 COMPANION-NOTIFY-ANSWER-1 (2026-10-19, agent_issues 100198, pillar personal): the Did it and Not today buttons on a companion notification record the answer from the service worker (POST /companion/api/nudge under the sign-in cookie with X-Companion: 1) and show a short confirmation instead of opening the app, falling back to opening the app when signed out or offline; a check-in notification opens on the mood picker (/companion#mood). // 4.15.0 COMPANION-WEEK-1 (2026-10-19, agent_issues 100197, pillar personal, owner ask: "WHAT ELSE IS IN BACKLOG/ROADMAP THAT CAN BE IMPLEMENTED?"): with companion e-mail off the Sunday review reached no one; the companion now builds "Your week" from its own record (mood days against the week before, best day, what was done and what felt good, actions done, one idea from what helped; never what was missed), shows it on Today from Sunday 18:00 through Monday with a hide button, sends one quiet "Your week" push on Sunday evening under quiet hours, the cap and the pause, and shows the last week on the Data tab (GET /companion/api/week, POST /companion/api/week/seen). // 4.14.0 COMPANION-LOGIN-1 + COMPANION-DOMAIN-1 + COMPANION-EMAIL-OPT-IN-1 + COMPANION-STALE-1 (2026-10-19, owner: "stop asking me for keys ... one-time email passwords are fine"; "for personal shit, use q08.org"; "the emails are stale"; pillar personal): /companion signs in with a 6-digit code mailed to the owner (SEND_EMAIL, one fixed address, rate-limited) and the device stays signed in for 180 days by an HttpOnly cookie (cmp_sessions, hashes only; cookie writes also need X-Companion: 1); the bearer key still works for tools and MCP; me.q08.org/ opens the companion; Data tab sets companion e-mail off (default), daily or all and signs out; reminders more than 3 days past their date are no longer the one thing or a nudge, and Today counts them once. // 4.13.1 COMPANION-CONTEXT-QUERY-URL-1 (issue 100041, privacy): GET /companion/api/context?q= put the owner's words in a logged URL; the route is now POST with q in the JSON body, and a GET answers 405 without reading the query. // 4.12.0 RED-TEAM-1: the companion red-teamed (risk words with curly apostrophes, more phrasings and Dutch; care and presence never retire; risk follow-up with the crisis lines on Today for a day; quiet hours on mirrored pushes; pause shared with the e-mail ladder; captured text treated as data in the chat prompt; Talk conversations in export and delete; warm fallback when the model is down; lock-screen setting; tick heartbeat on Today). // 4.11.0 COMPANION-BEST-PRACTICE-1: evidence-based companion (behavioral activation ratings and an activity bank, a Stanley-Brown safety plan in crisis replies, two-weekly WHO-5 with a gentle GP suggestion, pause, weekly retry of retired nudges, connection nudge, discreet lock-screen care pushes, 30-day voice-note retention). // 4.10.0 COMPANION-1: /companion (capture text, voice and photos; GTD next actions; mood with context; FSRS flashcards; journal; privacy export and delete), Web Push nudges from the companion Durable Object on a 15-minute alarm sharing the wellbeing ladder's budget, cmp_* tools in chat and MCP, /v1/audio/transcriptions. // 4.9.1-log-catches 4.9.0 CRON-ONLY-HEARTBEAT-1 (agent_issues 2397): the scheduled run upserts its qnfo-audit fleet_heartbeat row when it finishes. // 4.8.6 CRYPTO-IDS-1: the 18 row ids and the feed fallback id come from crypto.getRandomValues (rhex), not Math.random; same id shapes. // 4.8.5 // 4.8.5-doi-scrub NOZ-DOI-1: the separation prompt names no external registry. 4.8.4 below. // 4.13.0 CRON-GRID-1 (owner directive 2026-10-19, pillar personal): the trigger is hourly at :05; the daily 05:05 run (mail sync, ledger sync, companion re-arm, brief) runs on the grid fire of its slot, never retried (it sends the brief), and every fire is a cron_fire_log row CRON-WATCH-1 reads. // 4.12.0 RED-TEAM-1: the companion red-teamed (risk words with curly apostrophes, more phrasings and Dutch; care and presence never retire; risk follow-up with the crisis lines on Today for a day; quiet hours on mirrored pushes; pause shared with the e-mail ladder; captured text treated as data in the chat prompt; Talk conversations in export and delete; warm fallback when the model is down; lock-screen setting; tick heartbeat on Today). // 4.11.0 COMPANION-BEST-PRACTICE-1: evidence-based companion (behavioral activation ratings and an activity bank, a Stanley-Brown safety plan in crisis replies, two-weekly WHO-5 with a gentle GP suggestion, pause, weekly retry of retired nudges, connection nudge, discreet lock-screen care pushes, 30-day voice-note retention). // 4.10.0 COMPANION-1: /companion (capture text, voice and photos; GTD next actions; mood with context; FSRS flashcards; journal; privacy export and delete), Web Push nudges from the companion Durable Object on a 15-minute alarm sharing the wellbeing ladder's budget, cmp_* tools in chat and MCP, /v1/audio/transcriptions. // 4.9.1-log-catches 4.9.0 CRON-ONLY-HEARTBEAT-1 (agent_issues 2397): the scheduled run upserts its qnfo-audit fleet_heartbeat row when it finishes. // 4.8.6 CRYPTO-IDS-1: the 18 row ids and the feed fallback id come from crypto.getRandomValues (rhex), not Math.random; same id shapes. // 4.8.5 // 4.8.5-doi-scrub NOZ-DOI-1: the separation prompt names no external registry. 4.8.4 below.
 // CRYPTO-IDS-1 (WORKERS-BEST-PRACTICES-1): row ids and nonces come from crypto.getRandomValues, never Math.random. rhex(n) returns n lowercase hex characters (same shape as the old Math.random().toString(16).slice(2, 2 + n)).
 function rhex(n) { var b = new Uint8Array(Math.ceil(n / 2)); crypto.getRandomValues(b); var h = ""; for (var i = 0; i < b.length; i++) h += (b[i] + 256).toString(16).slice(1); return h.slice(0, n); }
 // 4.8.4 NO-TOPIC-HARDCODE-1 (owner directive 2026-10-10): the twin, planner and predictor prompts no longer carry the owner's profile gates as hard-coded text; they apply only the gates found in the retrieved profile facets. //4.8.2 LEDGER-PAGE-1 (#1951): the Ledger sync drains calendar-api /feedback by after_id in pages of 500 (max 10 pages per run, id cursor feedback_after_id) so rows beyond the newest 500 are no longer skipped; AWAY-AMS-1 (#1883): inside an away window the brief keeps Google/ICS and manual calendar events whose location is in the Amsterdam area and hides only radar/twin suggestions and catalog rows. // 4.8.0 TWIN-FLASH-1 (owner directive 2026-10-05, #1818): twin primary model glm-5.3-flash (reasoning_effort low), deepseek-v4-pro per-request fallback, automatic revert when today's flash failure share >= 20% over >= 10 calls; 4.7.2 WORKERS-AI-ATTRIBUTION-1 for personal-api (#1833): every env.AI.run (embeddings, OCR/vision, chat, Durable Object chat) is counted in qnfo-audit.ai_call_counters (purpose binding: calls, tokens, neurons; counts only, no text) through the same __aiAttrEnv shim qnfo-research-exec uses; no new model call, no behaviour change. // 4.7.1 TOOL-TRACE-MEMORY-1 (#1805): internal tool-trace chat rows (model tool/mcp-tool) no longer reach thread memory or the cross-thread context.
@@ -1377,8 +1377,26 @@ var CMP = (() => {
 // COMPANION-WEEK-1 (2026-10-19): companion e-mail is off by default, so the Sunday review lives in the app.
 //  19. "Your week" on Today from Sunday 18:00 to the end of Monday, one quiet push on Sunday evening under rules 1, 2
 //      and 11, and the last week on the Data tab. It says what happened and what helped, never what was missed.
+// COMPANION-NOTIFY-ANSWER-1 (2026-10-19): low effort keeps people using it, so a notification is answerable without the app.
+//  20. "Did it" and "Not today" answer from the service worker under the sign-in cookie and confirm briefly; a check-in
+//      notification opens on the mood picker. Signed out or offline, the app opens on the answer as before.
+// COMPANION-OFFLINE-1 (2026-10-19): the app opens without a signal and loses nothing made offline.
+//  21. The service worker keeps the page shell (HTML, manifest, icon: no personal data) and serves it when the network is
+//      down. A capture, mood tap or journal line made offline waits in IndexedDB on the phone with the time it was made,
+//      is sent when the connection returns, and is removed at sign-out. Nothing else is cached; API reads never are.
+// COMPANION-TRAVEL-TZ-1 (2026-10-19): abroad, the companion's day follows the traveller.
+//  22. While a lodging row in personal-life.events covers now, quiet hours, check-in windows, day keys and the Sunday look-back run
+//      in that place's time zone (a fixed table; an unknown place keeps home time), and Today says "Times follow you: <place>".
+// COMPANION-CALENDAR-AWARE-1 (2026-10-19): the companion looks at the day he is having before it asks anything.
+//  23. No ask while a timed calendar event is on; with three or more events the day is lighter (optional asks stop one short of
+//      the daily cap and offer the smallest step); and one short "after <event>" check-in once a social or heavy event ends.
+//      Risk-word care and presence are never held back by the calendar.
+// COMPANION-GP-SUMMARY-1 (2026-10-19): something to bring to the GP (huisarts).
+//  24. The Data tab builds, when he asks, a one-page 90-day summary in plain words (mood by week, WHO-5, the sleep proxy, what
+//      helped), with no diagnosis and no chat text; journal lines and mood notes only when he ticks them. It is read behind the
+//      sign-in, printed or saved by him, and never stored, mailed, shared or posted by the companion.
 
-const COMPANION_VERSION = "1.4.0";
+const COMPANION_VERSION = "1.9.0";
 const TZ = "Europe/Amsterdam";
 const CONTEXTS = [
   { name: "@home", hint: "chores, cooking, things in the flat" },
@@ -1389,7 +1407,7 @@ const CONTEXTS = [
   { name: "@anywhere", hint: "thinking, reading, small things" }
 ];
 const ENERGY = ["low", "medium", "high"];
-const NUDGE_KINDS = ["cmp-checkin", "cmp-care", "cmp-reflect", "cmp-next", "cmp-review", "cmp-anchor", "cmp-presence", "cmp-measure", "cmp-connect", "cmp-week"];
+const NUDGE_KINDS = ["cmp-checkin", "cmp-care", "cmp-reflect", "cmp-next", "cmp-review", "cmp-anchor", "cmp-presence", "cmp-measure", "cmp-connect", "cmp-week", "cmp-after"];
 // The e-mail ladder's asks are pushed to the phone too, so the two senders read as one companion.
 const LADDER_KINDS = ["checkin", "micro", "body", "contact", "care", "presence"];
 
@@ -1509,6 +1527,16 @@ function localParts(iso, tz) {
   return { day: d.toISOString().slice(0, 10), hour: d.getUTCHours() + d.getUTCMinutes() / 60, dow: d.getUTCDay() };
 }
 const dayKey = (iso, tz) => localParts(iso, tz).day;
+// COMPANION-OFFLINE-1: a note made offline carries `at`, the time it was made. It is kept as the entry's own time when it is
+// not in the future and not older than OFFLINE_MAX_AGE_MS; anything else is stamped now. A repeat of the same `at` is the same
+// note arriving twice (a lost reply), so the writers answer it as a duplicate instead of storing it again.
+const OFFLINE_MAX_AGE_MS = 30 * 864e5;
+function clientStamp(at, nowMs) {
+  const t = Date.parse(String(at === undefined || at === null ? "" : at));
+  const now = nowMs === undefined ? Date.now() : nowMs;
+  if (!Number.isFinite(t) || t > now + 60000 || now - t > OFFLINE_MAX_AGE_MS) return null;
+  return new Date(t).toISOString();
+}
 function inQuiet(h, qs, qe) {
   if (qs === qe) return false;
   if (qs < qe) return h >= qs && h < qe;
@@ -1790,7 +1818,7 @@ async function logActivity(env, a) {
   if (!title && nudgeId) { const r = await one(env.PERSONAL, "SELECT ask, context_json FROM companion_nudges WHERE id = ?", nudgeId); if (r) { title = s(r.ask, 200); try { const c = JSON.parse(r.context_json || "{}"); activityId = activityId || c.activity_id || null; } catch (e) { /* plain ask */ } } }
   if (!title) return { ok: false, error: "title, activity_id, action_id or nudge_id required" };
   if (!category && activityId) { const r = await one(env.PERSONAL, "SELECT category FROM cmp_activities WHERE id = ?", activityId); if (r) category = r.category; }
-  const now = nowIso(), day = dayKey(now), id = rid("bal");
+  const now = nowIso(), day = await localDay(env, now), id = rid("bal");
   const mood = await one(env.PERSONAL, "SELECT score FROM cmp_mood WHERE day = ? ORDER BY ts DESC LIMIT 1", day).catch(() => null);
   await env.PERSONAL.prepare("INSERT INTO cmp_activity_log (id, ts, day, activity_id, action_id, nudge_id, title, category, pleasure, mastery, mood_before, note) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)")
     .bind(id, now, day, activityId, actionId, nudgeId, title, category, pleasure, mastery, mood ? Number(mood.score) : null, s(a && a.note, 500) || null).run();
@@ -1850,7 +1878,7 @@ async function recordWho5(env, items) {
   const sc = who5Score(items);
   if (!sc) return { ok: false, error: "five answers from 0 to 5 required" };
   const now = nowIso(), id = rid("who5");
-  await env.PERSONAL.prepare("INSERT INTO cmp_measures (id, ts, day, instrument, items_json, raw, score) VALUES (?, ?, ?, 'who5', ?, ?, ?)").bind(id, now, dayKey(now), JSON.stringify(items.map(Number)), sc.raw, sc.score).run();
+  await env.PERSONAL.prepare("INSERT INTO cmp_measures (id, ts, day, instrument, items_json, raw, score) VALUES (?, ?, ?, 'who5', ?, ?, ?)").bind(id, now, await localDay(env, now), JSON.stringify(items.map(Number)), sc.raw, sc.score).run();
   await closeOpen(env, ["cmp-measure"], "done", "who5 " + sc.score);
   const st = await who5Status(env);
   return { ok: true, id, raw: sc.raw, score: sc.score, read: st.read, reply: "Thank you. Your score is " + sc.score + " out of 100." + (st.read.hint ? " " + st.read.hint : "") };
@@ -1994,7 +2022,7 @@ function retiredFrom(rows, cfg, nowMs) {
   return out;
 }
 // What the lock screen shows (rule 14). The full text is always in the app.
-const DISCREET_KINDS = ["cmp-care", "care", "cmp-presence", "presence", "crisis", "cmp-measure"];
+const DISCREET_KINDS = ["cmp-care", "care", "cmp-presence", "presence", "crisis", "cmp-measure", "cmp-after"];
 function discreetPayload(payload, mode) {
   const m = mode === undefined || mode === null || mode === "" ? "care" : String(mode);
   if (m === "off") return payload;
@@ -2151,13 +2179,14 @@ async function moodByDay(env, from, to) {
 async function weekLookback(env, atIso, week) {
   const cfg = await loadCfg(env);
   const now = atIso || nowIso();
-  const lp = localParts(now, cfg.tz);
+  const tz = (await effectiveTz(env, now, cfg)).tz;
+  const lp = localParts(now, tz);
   const wk = /^\d{4}-\d{2}-\d{2}$/.test(String(week || "")) ? mondayOf(week) : weekWindow(lp) || addDays(mondayOf(lp.day), -7);
   const end = addDays(wk, 7);
   const [moodDays, prevDays, activities, done, helps, bank] = await Promise.all([
     moodByDay(env, wk, end), moodByDay(env, addDays(wk, -7), wk),
     all(env.PERSONAL, "SELECT title, category, activity_id, pleasure, mastery FROM cmp_activity_log WHERE day >= ? AND day < ? ORDER BY ts", wk, end).catch(() => []),
-    one(env.PERSONAL, "SELECT COUNT(*) AS n FROM tasks WHERE status = 'done' AND done_at >= ? AND done_at < ?", dayStartIso(wk, cfg.tz), dayStartIso(end, cfg.tz)).catch(() => null),
+    one(env.PERSONAL, "SELECT COUNT(*) AS n FROM tasks WHERE status = 'done' AND done_at >= ? AND done_at < ?", dayStartIso(wk, tz), dayStartIso(end, tz)).catch(() => null),
     whatHelps(env, 90).catch(() => null), activityBank(env)
   ]);
   const doneThisWeek = activities.map((a) => String(a.title || "").toLowerCase());
@@ -2207,6 +2236,12 @@ function planNudge(st) {
     if (kindsToday.has("presence") || kindsToday.has("cmp-presence")) return { skip: "presence-already-sent" };
     return mk("cmp-presence", TEXTS.presence[0], 0, 360, "unanswered-streak=" + st.unansweredStreak);
   }
+  // Rule 23: the calendar. A timed event that is on now holds every ask (risk-word care above is never held); three or more
+  // events make a lighter day.
+  const events = st.events || [];
+  const busy = events.find((e) => !e.allDay && e.startMs <= nowMs && nowMs < e.endMs);
+  if (busy) return { skip: "during-event" };
+  const lightDay = events.length >= LIGHT_DAY_EVENTS;
   const noMood = mood.today === null || mood.today === undefined;
   // Morning: make the check-in reach the phone (the e-mail ladder may already have asked; this is the same ask).
   if (h >= 8.5 && h < 12 && noMood && !kindsToday.has("cmp-checkin") && !retired.has("cmp-checkin")) {
@@ -2219,6 +2254,12 @@ function planNudge(st) {
     const helpedTitle = helped ? ((st.activityBank || []).find((b) => b.id === helped.key) || helped).title : "";
     const pool = helped ? TEXTS.care.concat(["Last time, " + helpedTitle + " helped a little. Only if it feels right; resting is fine too."]) : TEXTS.care;
     return mk("cmp-care", pickLru(pool, recentAsks), 2, 360, "low-day mood=" + mood.today + " avg2=" + mood.avg2 + " avg7=" + mood.avg7);
+  }
+  // Rule 23: a social or heavy event that ended within the last 75 minutes gets one short check-in, unless he has already told us.
+  const justEnded = events.filter((e) => !e.allDay && (e.social || e.heavy) && e.endMs <= nowMs && nowMs - e.endMs <= AFTER_EVENT_WINDOW_MS)
+    .filter((e) => !(st.lastMoodIso && Date.parse(st.lastMoodIso) >= e.endMs)).sort((a, b) => b.endMs - a.endMs)[0];
+  if (justEnded && !kindsToday.has("cmp-after") && !retired.has("cmp-after")) {
+    return mk("cmp-after", afterEventText(justEnded.title), 1, 120, "after-event " + (justEnded.heavy ? "heavy" : "social"));
   }
   // Rule 19: one Sunday-evening push when the week has something to show (gatherState sets weekReady).
   if (st.weekReady && h >= 18 && h < 21.5 && !kindsToday.has("cmp-week") && !retired.has("cmp-week")) {
@@ -2239,10 +2280,13 @@ function planNudge(st) {
   const OPTIONAL = ["cmp-next", "cmp-anchor", "cmp-review", "cmp-connect"];
   const optionalRecently = (st.recent || []).some((r) => OPTIONAL.includes(r.kind) && nowMs - new Date(r.sent_at || r.ts).getTime() < 3 * 864e5);
   if (optionalRecently && st.receptive && st.receptive.size && ![Math.floor(h) - 1, Math.floor(h), Math.floor(h) + 1].some((x) => st.receptive.has(x))) return { skip: "not-a-receptive-hour" };
-  const action = chooseAction(st.nextActions, energyFor(mood));
+  // A lighter day: optional asks stop one short of the daily cap and offer only the smallest step.
+  if (lightDay && todays.length >= Number(cfg.max_per_day) - 1) return { skip: "light-day" };
+  const energy = lightDay ? "low" : energyFor(mood);
+  const action = chooseAction(st.nextActions, energy);
   if (h >= 11 && h < 16.5 && !(st.actionsDoneToday > 0) && !kindsToday.has("cmp-anchor") && !retired.has("cmp-anchor")) {
     // No next action fits: an activity from his bank, chosen by what he rated as helping (behavioral activation).
-    const act = action ? null : pickActivity(st.activityBank, st.helps, energyFor(mood), recentAsks);
+    const act = action ? null : pickActivity(st.activityBank, st.helps, energy, recentAsks);
     const what = action ? action.title + " (" + (action.minutes || 15) + " min)" : act ? act.title + " (" + (act.minutes || 10) + " min)" : "a ten-minute walk outside, no phone";
     return mk("cmp-anchor", pickLru(TEXTS.anchor, recentAsks) + what + ". That's all.", action ? (action.minutes || 15) : act ? (act.minutes || 10) : 10, 180, "shapeless-day", action ? { action_id: action.id } : act ? { activity_id: act.id } : {});
   }
@@ -2251,7 +2295,7 @@ function planNudge(st) {
     return mk("cmp-connect", pickLru(TEXTS.connect, recentAsks), 5, 480, "no-social-" + st.daysSinceSocial + "d");
   }
   if (action && !kindsToday.has("cmp-next") && !retired.has("cmp-next")) {
-    return mk("cmp-next", "One small thing, if you have it in you: " + action.title + " (" + (action.minutes || 15) + " min, " + (action.context || "@anywhere") + ").", action.minutes || 15, 240, "idle " + Math.round(Math.min(idleMin, 9999)) + "m energy=" + energyFor(mood), { action_id: action.id });
+    return mk("cmp-next", "One small thing, if you have it in you: " + action.title + " (" + (action.minutes || 15) + " min, " + (action.context || "@anywhere") + ").", action.minutes || 15, 240, "idle " + Math.round(Math.min(idleMin, 9999)) + "m energy=" + energy + (lightDay ? " light-day" : ""), { action_id: action.id });
   }
   if ((st.dueCards || 0) >= 3 && !kindsToday.has("cmp-review") && !retired.has("cmp-review")) {
     return mk("cmp-review", st.dueCards + " cards are ready. Five minutes of review while you have a moment?", 5, 240, "cards-due=" + st.dueCards);
@@ -2354,6 +2398,304 @@ function dayStartIso(day, tz) {
   const guess = new Date(day + "T00:00:00Z").getTime();
   return new Date(guess - tzOffsetMinutes(tz || TZ, guess) * 60000).toISOString();
 }
+// ---------------------------------------------------------------- time zone while travelling (COMPANION-TRAVEL-TZ-1, rule 22)
+// The configured tz is home. personal-companion's itinerary ingest (ITINERARY-INGEST-1) keeps the owner's stays in
+// personal-life.events (category lodging, ISO dates, check-in start_date, check-out end_date, a city and a two-letter country).
+// While a stay in another zone covers now, quiet hours, check-in windows, day keys and the Sunday look-back follow that place.
+// The zone comes from a fixed table (no lookup service): a country with one zone, or a known city where a country has several;
+// an unknown place leaves home time in force rather than guessing. Nothing is stored: it is read from the stay each time.
+const COUNTRY_TZ = {
+  AD: "Europe/Andorra", AE: "Asia/Dubai", AF: "Asia/Kabul", AL: "Europe/Tirane", AM: "Asia/Yerevan", AR: "America/Argentina/Buenos_Aires",
+  AT: "Europe/Vienna", AZ: "Asia/Baku", BA: "Europe/Sarajevo", BD: "Asia/Dhaka", BE: "Europe/Brussels", BG: "Europe/Sofia", BH: "Asia/Bahrain",
+  BO: "America/La_Paz", BR: "America/Sao_Paulo", BT: "Asia/Thimphu", BY: "Europe/Minsk", CH: "Europe/Zurich", CL: "America/Santiago",
+  CN: "Asia/Shanghai", CO: "America/Bogota", CR: "America/Costa_Rica", CU: "America/Havana", CV: "Atlantic/Cape_Verde", CY: "Asia/Nicosia",
+  CZ: "Europe/Prague", DE: "Europe/Berlin", DK: "Europe/Copenhagen", DO: "America/Santo_Domingo", DZ: "Africa/Algiers", EC: "America/Guayaquil",
+  EE: "Europe/Tallinn", EG: "Africa/Cairo", ES: "Europe/Madrid", ET: "Africa/Addis_Ababa", FI: "Europe/Helsinki", FJ: "Pacific/Fiji",
+  FR: "Europe/Paris", GB: "Europe/London", GE: "Asia/Tbilisi", GH: "Africa/Accra", GI: "Europe/Gibraltar", GR: "Europe/Athens",
+  GT: "America/Guatemala", HK: "Asia/Hong_Kong", HN: "America/Tegucigalpa", HR: "Europe/Zagreb", HU: "Europe/Budapest", IE: "Europe/Dublin",
+  IL: "Asia/Jerusalem", IN: "Asia/Kolkata", IQ: "Asia/Baghdad", IR: "Asia/Tehran", IS: "Atlantic/Reykjavik", IT: "Europe/Rome",
+  JM: "America/Jamaica", JO: "Asia/Amman", JP: "Asia/Tokyo", KE: "Africa/Nairobi", KG: "Asia/Bishkek", KH: "Asia/Phnom_Penh", KR: "Asia/Seoul",
+  KW: "Asia/Kuwait", KZ: "Asia/Almaty", LA: "Asia/Vientiane", LB: "Asia/Beirut", LI: "Europe/Vaduz", LK: "Asia/Colombo", LT: "Europe/Vilnius",
+  LU: "Europe/Luxembourg", LV: "Europe/Riga", MA: "Africa/Casablanca", MC: "Europe/Monaco", MD: "Europe/Chisinau", ME: "Europe/Podgorica",
+  MG: "Indian/Antananarivo", MK: "Europe/Skopje", MM: "Asia/Yangon", MN: "Asia/Ulaanbaatar", MO: "Asia/Macau", MT: "Europe/Malta",
+  MU: "Indian/Mauritius", MV: "Indian/Maldives", MX: "America/Mexico_City", MY: "Asia/Kuala_Lumpur", MZ: "Africa/Maputo", NA: "Africa/Windhoek",
+  NG: "Africa/Lagos", NI: "America/Managua", NL: "Europe/Amsterdam", NO: "Europe/Oslo", NP: "Asia/Kathmandu", NZ: "Pacific/Auckland",
+  OM: "Asia/Muscat", PA: "America/Panama", PE: "America/Lima", PH: "Asia/Manila", PK: "Asia/Karachi", PL: "Europe/Warsaw", PR: "America/Puerto_Rico",
+  PT: "Europe/Lisbon", PY: "America/Asuncion", QA: "Asia/Qatar", RO: "Europe/Bucharest", RS: "Europe/Belgrade", RW: "Africa/Kigali",
+  SA: "Asia/Riyadh", SE: "Europe/Stockholm", SG: "Asia/Singapore", SI: "Europe/Ljubljana", SK: "Europe/Bratislava", SM: "Europe/San_Marino",
+  SN: "Africa/Dakar", SV: "America/El_Salvador", TH: "Asia/Bangkok", TJ: "Asia/Dushanbe", TN: "Africa/Tunis", TR: "Europe/Istanbul",
+  TW: "Asia/Taipei", TZ: "Africa/Dar_es_Salaam", UA: "Europe/Kyiv", UG: "Africa/Kampala", UY: "America/Montevideo", UZ: "Asia/Tashkent",
+  VE: "America/Caracas", VN: "Asia/Ho_Chi_Minh", XK: "Europe/Belgrade", ZA: "Africa/Johannesburg", ZM: "Africa/Lusaka", ZW: "Africa/Harare"
+};
+// Countries that span several zones: a stay there needs a known city, otherwise home time stays.
+const CITY_TZ = {
+  "new york": "America/New_York", boston: "America/New_York", washington: "America/New_York", philadelphia: "America/New_York", miami: "America/New_York",
+  atlanta: "America/New_York", orlando: "America/New_York", detroit: "America/Detroit", chicago: "America/Chicago", houston: "America/Chicago",
+  dallas: "America/Chicago", austin: "America/Chicago", "new orleans": "America/Chicago", minneapolis: "America/Chicago", nashville: "America/Chicago",
+  denver: "America/Denver", "salt lake city": "America/Denver", phoenix: "America/Phoenix", "los angeles": "America/Los_Angeles",
+  "san francisco": "America/Los_Angeles", "san diego": "America/Los_Angeles", "san jose": "America/Los_Angeles", seattle: "America/Los_Angeles",
+  portland: "America/Los_Angeles", "las vegas": "America/Los_Angeles", honolulu: "Pacific/Honolulu", anchorage: "America/Anchorage",
+  toronto: "America/Toronto", ottawa: "America/Toronto", montreal: "America/Toronto", quebec: "America/Toronto", vancouver: "America/Vancouver",
+  calgary: "America/Edmonton", edmonton: "America/Edmonton", winnipeg: "America/Winnipeg", halifax: "America/Halifax", "st. john's": "America/St_Johns",
+  sydney: "Australia/Sydney", melbourne: "Australia/Melbourne", canberra: "Australia/Sydney", hobart: "Australia/Hobart", brisbane: "Australia/Brisbane",
+  cairns: "Australia/Brisbane", perth: "Australia/Perth", adelaide: "Australia/Adelaide", darwin: "Australia/Darwin",
+  moscow: "Europe/Moscow", "saint petersburg": "Europe/Moscow", "st petersburg": "Europe/Moscow", kaliningrad: "Europe/Kaliningrad",
+  ekaterinburg: "Asia/Yekaterinburg", novosibirsk: "Asia/Novosibirsk", irkutsk: "Asia/Irkutsk", vladivostok: "Asia/Vladivostok",
+  jakarta: "Asia/Jakarta", bandung: "Asia/Jakarta", yogyakarta: "Asia/Jakarta", surabaya: "Asia/Jakarta", bali: "Asia/Makassar", denpasar: "Asia/Makassar",
+  ubud: "Asia/Makassar", canggu: "Asia/Makassar", kuta: "Asia/Makassar", seminyak: "Asia/Makassar", lombok: "Asia/Makassar", makassar: "Asia/Makassar",
+  jayapura: "Asia/Jayapura", manaus: "America/Manaus", cancun: "America/Cancun", tijuana: "America/Tijuana",
+  "las palmas": "Atlantic/Canary", "santa cruz de tenerife": "Atlantic/Canary", tenerife: "Atlantic/Canary", lanzarote: "Atlantic/Canary", "ponta delgada": "Atlantic/Azores",
+  funchal: "Atlantic/Madeira"
+};
+const MULTI_TZ_COUNTRIES = ["US", "CA", "AU", "RU", "ID"];
+const COUNTRY_NAMES = {
+  netherlands: "NL", holland: "NL", germany: "DE", france: "FR", spain: "ES", italy: "IT", portugal: "PT", "united kingdom": "GB", uk: "GB", england: "GB",
+  scotland: "GB", wales: "GB", ireland: "IE", belgium: "BE", austria: "AT", switzerland: "CH", poland: "PL", czechia: "CZ", "czech republic": "CZ",
+  hungary: "HU", greece: "GR", turkey: "TR", turkiye: "TR", nepal: "NP", india: "IN", thailand: "TH", vietnam: "VN", japan: "JP", china: "CN",
+  "south korea": "KR", korea: "KR", indonesia: "ID", malaysia: "MY", singapore: "SG", philippines: "PH", "sri lanka": "LK", morocco: "MA", egypt: "EG",
+  "south africa": "ZA", kenya: "KE", tanzania: "TZ", "united states": "US", usa: "US", "united states of america": "US", canada: "CA", mexico: "MX",
+  brazil: "BR", argentina: "AR", colombia: "CO", peru: "PE", chile: "CL", australia: "AU", "new zealand": "NZ", norway: "NO", sweden: "SE",
+  denmark: "DK", finland: "FI", iceland: "IS", croatia: "HR", slovenia: "SI", serbia: "RS", romania: "RO", bulgaria: "BG", ukraine: "UA",
+  georgia: "GE", armenia: "AM", uae: "AE", "united arab emirates": "AE", israel: "IL", jordan: "JO", cambodia: "KH", laos: "LA", myanmar: "MM",
+  bhutan: "BT", bangladesh: "BD", pakistan: "PK", uzbekistan: "UZ", kazakhstan: "KZ", mongolia: "MN", taiwan: "TW", "hong kong": "HK", estonia: "EE",
+  latvia: "LV", lithuania: "LT", luxembourg: "LU", malta: "MT", cyprus: "CY", albania: "AL", montenegro: "ME", bosnia: "BA", "north macedonia": "MK",
+  russia: "RU"
+};
+const plainPlace = (v) => String(v === null || v === undefined ? "" : v).normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().split(",")[0].replace(/\s+/g, " ").trim();
+function countryCode(v) {
+  const t = String(v === null || v === undefined ? "" : v).trim();
+  if (/^[A-Za-z]{2}$/.test(t)) return t.toUpperCase();
+  return COUNTRY_NAMES[plainPlace(t)] || null;
+}
+// The IANA zone for a stay's city and country, or null when it cannot be told.
+function placeTz(city, country) {
+  const c = plainPlace(city);
+  if (c && CITY_TZ[c]) return CITY_TZ[c];
+  const cc = countryCode(country);
+  if (!cc || MULTI_TZ_COUNTRIES.includes(cc)) return null;
+  return COUNTRY_TZ[cc] || null;
+}
+const placeLabel = (city, country) => {
+  const c = String(city || "").trim();
+  if (c) return c.split(/\s+/).map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(" ").slice(0, 60);
+  return (countryCode(country) || String(country || "").trim() || "away").slice(0, 60);
+};
+// Pure. rows: lodging rows {city, country, start_date, end_date}. A stay covers the local day when check-in is on or before it
+// and check-out is after it (the nights), and also the check-out morning (before 12:00), judged in the stay's own zone so
+// a night in Bangkok is not cut at Amsterdam midnight. The latest check-in wins where stays meet.
+function stayAt(rows, atIso) {
+  let best = null;
+  for (const r of rows || []) {
+    const st = String(r.start_date || "").slice(0, 10), en = String(r.end_date || "").slice(0, 10);
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(st) || !/^\d{4}-\d{2}-\d{2}$/.test(en) || en <= st) continue;
+    const tz = placeTz(r.city, r.country);
+    if (!tz) continue;
+    const lp = localParts(atIso, tz);
+    const covers = (st <= lp.day && lp.day < en) || (lp.day === en && lp.hour < 12);
+    if (!covers) continue;
+    if (!best || st > best.start || (st === best.start && en > best.end)) best = { tz, start: st, end: en, city: r.city || "", country: r.country || "", place: placeLabel(r.city, r.country) };
+  }
+  return best;
+}
+// The zone to run the companion's day in: the stay's, or home. away is null at home and carries the place when abroad.
+async function effectiveTz(env, atIso, cfg) {
+  const home = (cfg && cfg.tz) || TZ;
+  try {
+    const d = new Date(atIso).getTime();
+    const from = new Date(d - 2 * 864e5).toISOString().slice(0, 10), to = new Date(d + 2 * 864e5).toISOString().slice(0, 10);
+    const rows = await all(env.PERSONAL, "SELECT city, country, start_date, end_date FROM events WHERE category = 'lodging' AND end_date >= ? AND start_date <= ? ORDER BY start_date", from, to);
+    const stay = stayAt(rows, atIso);
+    if (stay && stay.tz !== home) return { tz: stay.tz, home, away: { place: stay.place, tz: stay.tz, until: stay.end } };
+  } catch (e) { /* no events table or a read error: home time, the safe default */ }
+  return { tz: home, home, away: null };
+}
+// The day key in force right now (the stay's local day abroad), for every write that is filed by day.
+async function localDay(env, atIso) {
+  const cfg = await loadCfg(env);
+  return dayKey(atIso, (await effectiveTz(env, atIso, cfg)).tz);
+}
+
+// ---------------------------------------------------------------- the calendar (COMPANION-CALENDAR-AWARE-1, rule 23)
+// planNudge used to decide on time, mood, sleep proxy and weather and never looked at the day he is having. It now reads the
+// same calendar the twin reads for ON TODAY/TOMORROW: personal-life.events (a row with a time in start_date/end_date is timed, a
+// date alone is "all day") and, when the worker gives it a reader (deps.calendar), the twin's calendar with Google's timed events.
+// What it does with them, and nothing else: no optional ask while a timed event is on; a lighter day when three or more things
+// are on (the last slot of the daily cap stays free and what is offered is the smallest step); and one short "after <event>"
+// check-in once a social or heavy event has ended. All-day items on the twin calendar (holidays, birthdays, reminders) are
+// not counted; an all-day row in personal-life.events (a trip day, a conference) counts toward the load but never blocks a slot.
+// Event titles stay in personal-life (the nudge row), never leave it.
+const EVENT_DEFAULT_MIN = 90, EVENT_HEAVY_MIN = 120, AFTER_EVENT_WINDOW_MIN = 75, LIGHT_DAY_EVENTS = 3;
+const AFTER_EVENT_WINDOW_MS = AFTER_EVENT_WINDOW_MIN * 60000;
+const SOCIAL_CATEGORIES = ["social", "party", "dinner", "drinks", "meetup", "birthday", "friends", "family", "wedding", "date"];
+const SOCIAL_RE = /\b(party|dinner|drinks?|birthday|wedding|reunion|meet-?up|friends?|borrel|verjaardag|feest|diner|date night|bbq|brunch|housewarming|(lunch|coffee|tea) with)\b/i;
+const HEAVY_CATEGORIES = ["exam", "interview", "medical", "conference"];
+const HEAVY_RE = /\b(exam|interview|presentation|pitch|defen[cs]e|surgery|dentist|doctor|huisarts|funeral|court|hearing|therapy|therapist|appointment)\b/i;
+const HEAVY_LABEL_RE = /heavy|draining|intense|high|zwaar|exhaust/i;
+// An ISO date-time to epoch ms. With an offset or Z it is exact; without one it is local time in `tz`. A date alone is null.
+function eventMs(v, tz) {
+  const t = String(v === null || v === undefined ? "" : v).trim();
+  if (!/^\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}/.test(t)) return null;
+  const iso = t.replace(" ", "T");
+  if (/(Z|[+-]\d{2}:?\d{2})$/.test(iso)) { const ms = Date.parse(iso); return Number.isFinite(ms) ? ms : null; }
+  const guess = Date.parse(iso.slice(0, 16) + ":00Z");
+  if (!Number.isFinite(guess)) return null;
+  let ms = guess - tzOffsetMinutes(tz || TZ, guess) * 60000;
+  ms = guess - tzOffsetMinutes(tz || TZ, ms) * 60000;
+  return ms;
+}
+// rows: [{ title, category, start, end, allDay, tag, energy_label }] from any source. Returns today's events, deduplicated,
+// each { title, startMs, endMs, allDay, social, heavy }; a timed event gets a default length when it has no end.
+function normalizeEvents(rows, day, tz) {
+  const out = [], seen = new Set();
+  for (const r of rows || []) {
+    const title = s(r.title, 120);
+    if (!title) continue;
+    const cat = String(r.category || "").toLowerCase();
+    if (cat === "lodging" || cat === "suggestion") continue;
+    let startMs = r.allDay ? null : eventMs(r.start, tz), endMs = r.allDay ? null : eventMs(r.end, tz);
+    let allDay = startMs === null;
+    if (allDay) {
+      const sDay = String(r.start || "").slice(0, 10);
+      const eDay = String(r.end || "").slice(0, 10) || sDay;
+      if (!(sDay <= day && day <= eDay)) continue;
+    } else {
+      const sLocal = dayKey(new Date(startMs).toISOString(), tz);
+      const eLocal = endMs !== null ? dayKey(new Date(endMs).toISOString(), tz) : sLocal;
+      // A row that runs over several days is a stretch of days, not a slot inside this one: it counts toward the load only.
+      if (sLocal === day) { if (eLocal !== day && endMs - startMs > 20 * 36e5) allDay = true; }
+      else if (sLocal < day && eLocal >= day) allDay = true;
+      else continue;
+    }
+    const social = SOCIAL_CATEGORIES.includes(cat) || String(r.tag || "").toLowerCase() === "social" || SOCIAL_RE.test(title);
+    const heavy = HEAVY_CATEGORIES.includes(cat) || HEAVY_RE.test(title) || HEAVY_LABEL_RE.test(String(r.energy_label || ""));
+    if (!allDay && (endMs === null || endMs <= startMs)) endMs = startMs + (heavy ? EVENT_HEAVY_MIN : EVENT_DEFAULT_MIN) * 60000;
+    const key = title.slice(0, 60).toLowerCase() + "|" + (allDay ? day : startMs);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push({ title, startMs: allDay ? null : startMs, endMs: allDay ? null : endMs, allDay, social, heavy });
+  }
+  return out.sort((a, b) => (a.startMs === null ? -1 : a.startMs) - (b.startMs === null ? -1 : b.startMs));
+}
+let _evCache = { key: "", at: 0, events: null };
+function clearEventCache() { _evCache = { key: "", at: 0, events: null }; }
+// Today's events for the local `day` in `tz`. Every read fails soft: no table, no calendar reader or a slow one means fewer
+// events, never a thrown tick. The calendar reader (Google and the twin store) is given 3 s and its answer is kept for 2 minutes.
+async function loadEvents(env, deps, day, tz) {
+  const rows = [];
+  try {
+    for (const r of await all(env.PERSONAL, "SELECT title, category, start_date, end_date, energy_label FROM events WHERE COALESCE(category, '') != 'lodging' AND substr(start_date, 1, 10) <= ? AND COALESCE(NULLIF(substr(end_date, 1, 10), ''), substr(start_date, 1, 10)) >= ? LIMIT 40", day, day)) {
+      rows.push({ title: r.title, category: r.category, start: r.start_date, end: r.end_date, energy_label: r.energy_label });
+    }
+  } catch (e) { /* no events table */ }
+  if (deps && typeof deps.calendar === "function") {
+    const key = day + "|" + tz;
+    let cal = _evCache.key === key && Date.now() - _evCache.at < 12e4 ? _evCache.events : null;
+    if (!cal) {
+      try {
+        const r = await Promise.race([deps.calendar(env, day, day), new Promise((res) => setTimeout(() => res(null), Number(deps.calendarTimeoutMs) || 3000))]);
+        if (r && r.ok && Array.isArray(r.events)) {
+          cal = r.events.filter((e) => e && !e.all_day && e.calendar !== "suggestion" && e.source !== "personal-radar").map((e) => ({ title: e.title, category: e.domain || "", start: e.dtstart, end: e.dtend, allDay: false, tag: e.domain || e.tag || "" }));
+          _evCache = { key, at: Date.now(), events: cal };
+        }
+      } catch (e) { cal = null; }
+    }
+    for (const c of cal || []) rows.push(c);
+  }
+  return normalizeEvents(rows, day, tz);
+}
+const afterEventText = (title) => "After " + s(title, 60) + ": how are you doing now? A number is plenty; nothing else needed.";
+
+// ---------------------------------------------------------------- a summary for his GP (COMPANION-GP-SUMMARY-1, rule 24)
+// The companion suggests talking to the GP (huisarts) when the WHO-5 stays low and until now gave him nothing to bring. This
+// builds a one-page summary of the last 90 days in plain words: mood by week, WHO-5 readings, the sleep proxy and what helped.
+// It never diagnoses and carries no chat text; journal lines and the notes he typed on mood taps are included only when he ticks
+// them. It is generated for him when he asks, shown on the Data tab behind the sign-in, and printed or saved by him. It is not
+// stored, mailed, shared or posted anywhere: there is no route that sends it and no row that keeps it.
+const GP_DAYS = 90;
+const GP_TEXT_LIMIT = 20;
+// Pure: the sheet from the numbers. d: { from, to, days, moodDays:[{day,m}], who5:[{day,score}], sleepDays:[{day,hours}], helps:{activities},
+// journal:[{date,content}]|null, notes:[{day,score,note}]|null }.
+function gpSummaryBuild(d) {
+  const days = d.days || GP_DAYS;
+  const moodDays = (d.moodDays || []).filter((x) => x && Number.isFinite(Number(x.m)));
+  const byWeek = {};
+  for (const x of moodDays) { const w = mondayOf(x.day); (byWeek[w] = byWeek[w] || []).push(Number(x.m)); }
+  const avg = (xs) => xs.reduce((a, b) => a + b, 0) / xs.length;
+  const weeks = Object.keys(byWeek).sort().map((w) => ({ week: w, days: byWeek[w].length, avg: r1(avg(byWeek[w])), low: Math.min(...byWeek[w]), high: Math.max(...byWeek[w]) }));
+  const who5 = (d.who5 || []).filter((x) => x && Number.isFinite(Number(x.score))).map((x) => ({ day: x.day, score: Number(x.score) })).sort((a, b) => String(a.day).localeCompare(String(b.day)));
+  const sleepDays = (d.sleepDays || []).filter((x) => x && Number.isFinite(Number(x.hours)));
+  const sleep = sleepDays.length ? { nights: sleepDays.length, avg_hours: r1(avg(sleepDays.map((x) => Number(x.hours)))), shortest: Math.min(...sleepDays.map((x) => Number(x.hours))), longest: Math.max(...sleepDays.map((x) => Number(x.hours))) } : null;
+  const helps = ((d.helps && d.helps.activities) || []).filter((a) => a.n >= 2 && a.score >= 3.5).slice(0, 5).map((a) => ({ title: String(a.title || ""), score: a.score, times: a.n }));
+  const lines = [];
+  lines.push("Period: " + d.from + " to " + d.to + " (" + days + " days). Prepared by my personal companion app from my own entries. It is a self-tracking summary, not a medical assessment, and it does not diagnose anything.");
+  // Mood
+  if (moodDays.length < 3) {
+    lines.push("Mood: I logged my mood on only " + moodDays.length + (moodDays.length === 1 ? " day" : " days") + " in this period, which is too few to show a pattern.");
+  } else {
+    const all = moodDays.map((x) => Number(x.m));
+    let l = "Mood (1 is rough, 5 is great): logged on " + moodDays.length + " of " + days + " days, average " + r1(avg(all)) + ", lowest " + Math.min(...all) + ", highest " + Math.max(...all) + ".";
+    const low = moodDays.filter((x) => Number(x.m) <= 2).length;
+    if (low) l += " " + low + (low === 1 ? " day was" : " days were") + " rated 1 or 2.";
+    lines.push(l);
+    const recent = moodDays.filter((x) => x.day > addDays(d.to, -28)).map((x) => Number(x.m));
+    const prior = moodDays.filter((x) => x.day > addDays(d.to, -56) && x.day <= addDays(d.to, -28)).map((x) => Number(x.m));
+    if (recent.length >= 4 && prior.length >= 4) {
+      const a = r1(avg(recent)), b = r1(avg(prior));
+      lines.push("The last four weeks averaged " + a + ", against " + b + " for the four weeks before: " + (a - b >= 0.3 ? "a little higher." : b - a >= 0.3 ? "a little lower." : "about the same."));
+    }
+  }
+  // WHO-5
+  if (who5.length) {
+    const lo = who5.reduce((m, x) => (x.score < m.score ? x : m), who5[0]);
+    lines.push("WHO-5 well-being index (0 to 100, higher is better; below 50 is the published threshold for a closer look): " + who5.map((x) => x.score + " on " + x.day).join("; ") + ". The lowest was " + lo.score + " on " + lo.day + ".");
+  } else lines.push("WHO-5 well-being index: no readings in this period.");
+  // Sleep proxy
+  if (sleep) lines.push("Rest, estimated from the longest overnight gap between my messages (a proxy from message times, not measured sleep): about " + sleep.avg_hours + " hours on average over " + sleep.nights + " nights, from " + sleep.shortest + " to " + sleep.longest + " hours.");
+  else lines.push("Rest: not enough message times to estimate overnight rest. This app does not measure sleep.");
+  // What helped
+  if (helps.length) lines.push("What I rated as helping (enjoyment and achievement, 1 to 5): " + helps.map((h) => h.title + " (" + h.score + ", " + h.times + " times)").join("; ") + ".");
+  else lines.push("What helped: I have not rated enough activities yet to say.");
+  const texts = d.journal || d.notes ? {
+    journal: d.journal ? d.journal.slice(0, GP_TEXT_LIMIT).map((j) => ({ date: j.date, text: s(j.content, 400) })) : null,
+    notes: d.notes ? d.notes.slice(0, GP_TEXT_LIMIT).map((n) => ({ day: n.day, score: n.score, text: s(n.note, 300) })) : null
+  } : null;
+  return {
+    title: "Self-tracking summary for my GP (huisarts)", period: { from: d.from, to: d.to, days }, lines, weeks, who5, sleep, helps, texts,
+    included: { journal: !!d.journal, notes: !!d.notes },
+    footer: "Written by me, with my companion app, for my own use. It was not sent to anyone; I chose to show it."
+  };
+}
+// The 90 days of his own record, then the sheet. opts.journal / opts.notes are his ticks and default to off.
+async function gpSummary(env, opts) {
+  await ensureSchema(env.PERSONAL);
+  const o = opts || {};
+  const now = nowIso();
+  const cfg = await loadCfg(env);
+  const tz = (await effectiveTz(env, now, cfg)).tz;
+  const to = localParts(now, tz).day, from = addDays(to, -(GP_DAYS - 1));
+  const sinceIso = dayStartIso(from, tz);
+  const stamps = [];
+  for (const sql of ["SELECT ts FROM chat WHERE role = 'user' AND ts >= ? LIMIT 8000", "SELECT ts FROM cmp_inbox WHERE ts >= ? LIMIT 4000", "SELECT ts FROM cmp_mood WHERE ts >= ? LIMIT 2000", "SELECT ts FROM journal WHERE ts >= ? LIMIT 2000"]) {
+    try { for (const r of await all(env.PERSONAL, sql, sinceIso)) { const ms = Date.parse(r.ts); if (Number.isFinite(ms)) stamps.push(ms); } } catch (e) { /* table may be absent */ }
+  }
+  stamps.sort((a, b) => a - b);
+  const sleepDays = [];
+  for (let i = 0; i < GP_DAYS; i++) {
+    const day = addDays(from, i), st = new Date(dayStartIso(day, tz)).getTime();
+    const win = stamps.filter((t) => t >= st - 6 * 36e5 && t <= st + 14 * 36e5).map((t) => new Date(t).toISOString());
+    const sl = sleepFromTimestamps(win, day, tz);
+    if (sl) sleepDays.push({ day, hours: sl.hours });
+  }
+  const [moodDays, who5, helps] = await Promise.all([
+    moodByDay(env, from, addDays(to, 1)),
+    all(env.PERSONAL, "SELECT day, score FROM cmp_measures WHERE instrument = 'who5' AND day >= ? ORDER BY ts", from).catch(() => []),
+    whatHelps(env, GP_DAYS).catch(() => null)
+  ]);
+  const journal = o.journal ? await all(env.PERSONAL, "SELECT date, content FROM journal WHERE date >= ? ORDER BY ts DESC LIMIT " + GP_TEXT_LIMIT, from).catch(() => []) : null;
+  const notes = o.notes ? await all(env.PERSONAL, "SELECT day, score, note FROM cmp_mood WHERE day >= ? AND note IS NOT NULL AND note != '' ORDER BY ts DESC LIMIT " + GP_TEXT_LIMIT, from).catch(() => []) : null;
+  return Object.assign({ ok: true, generated: now }, gpSummaryBuild({ from, to, days: GP_DAYS, moodDays, who5, sleepDays, helps, journal, notes }));
+}
+
 // The longest quiet stretch overnight, read from when he wrote anything. A proxy, labelled as one.
 function sleepFromTimestamps(isos, day, tz) {
   const start = new Date(dayStartIso(day, tz)).getTime() - 6 * 3600e3;   // 18:00 the evening before
@@ -2410,18 +2752,21 @@ async function daysSinceSocial(env, atIso) {
   const last = [a && a.t, b && b.t].filter(Boolean).map((x) => Date.parse(x)).sort((x, y) => y - x)[0];
   return last ? Math.floor((now - last) / 864e5) : 14;
 }
-const ASK_KINDS = ["micro", "body", "contact", "care", "cmp-next", "cmp-anchor", "cmp-review", "cmp-reflect", "cmp-checkin", "cmp-care", "cmp-measure", "cmp-connect"];
+const ASK_KINDS = ["micro", "body", "contact", "care", "cmp-next", "cmp-anchor", "cmp-review", "cmp-reflect", "cmp-checkin", "cmp-care", "cmp-measure", "cmp-connect", "cmp-after"];
 async function unansweredStreak(env) {
   const rows = await all(env.PERSONAL, "SELECT state FROM companion_nudges WHERE kind IN (" + ASK_KINDS.map(() => "?").join(",") + ") AND state IN ('sent','shown','done','declined','expired') ORDER BY ts DESC LIMIT 10", ...ASK_KINDS).catch(() => []);
   let n = 0;
   for (const r of rows) { if (r.state === "done" || r.state === "declined") break; n++; }
   return n;
 }
-async function gatherState(env, at) {
+async function gatherState(env, at, deps) {
   const now = at || nowIso();
   const cfg = await loadCfg(env);
-  const lp = localParts(now, cfg.tz);
-  const start = dayStartIso(lp.day, cfg.tz);
+  // COMPANION-TRAVEL-TZ-1: the day, the hour and the quiet hours are the traveller's own while a stay in another zone covers now.
+  const eff = await effectiveTz(env, now, cfg);
+  const tz = eff.tz;
+  const lp = localParts(now, tz);
+  const start = dayStartIso(lp.day, tz);
   const db = env.PERSONAL;
   const [todays, recent, streak, retired, mood, journal, lastUser, done, next, due, subs, recentTexts, answerRows] = await Promise.all([
     all(db, "SELECT * FROM companion_nudges WHERE day = ? ORDER BY id", lp.day).catch(() => []),
@@ -2446,8 +2791,10 @@ async function gatherState(env, at) {
       try { if ((await weekLookback(env, now, wk)).enough) weekReady = wk; } catch (e) { weekReady = null; }
     }
   }
-  const [bank, helps, who5, social] = await Promise.all([
-    activityBank(env), whatHelps(env, 90).catch(() => null), who5Status(env, cfg, now).catch(() => ({ due: false })), daysSinceSocial(env, now).catch(() => null)
+  const [bank, helps, who5, social, events, lastMood] = await Promise.all([
+    activityBank(env), whatHelps(env, 90).catch(() => null), who5Status(env, cfg, now).catch(() => ({ due: false })), daysSinceSocial(env, now).catch(() => null),
+    loadEvents(env, deps, lp.day, tz).catch(() => []),
+    one(db, "SELECT MAX(ts) AS t FROM (SELECT ts FROM cmp_mood WHERE day = ? UNION ALL SELECT ts FROM wellbeing_checkins WHERE day = ? AND mood IS NOT NULL)", lp.day, lp.day).catch(() => null)
   ]);
   return {
     activityBank: bank, helps, who5Due: !!who5.due, who5: who5.read || null, daysSinceSocial: social, paused: isPaused(cfg, Date.parse(now)),
@@ -2455,7 +2802,8 @@ async function gatherState(env, at) {
     checkinSentToday: todays.some((r) => r.kind === "checkin"), journalToday: !!(journal && journal.n > 0),
     lastUserIso: lastUser.sort().pop() || null, actionsDoneToday: done ? Number(done.n) : 0, nextActions: next,
     dueCards: due ? Number(due.n) : 0, pushReady: !!(subs && subs.n > 0), crisisLevel24h,
-    receptive: receptiveHours(answerRows.map((r) => r.ts ? Math.floor(localParts(r.ts, cfg.tz).hour) : NaN))
+    receptive: receptiveHours(answerRows.map((r) => r.ts ? Math.floor(localParts(r.ts, tz).hour) : NaN)),
+    tz, away: eff.away, events, lastMoodIso: lastMood && lastMood.t ? lastMood.t : null
   };
 }
 async function recentUserTexts(env, sinceIso) {
@@ -2492,16 +2840,17 @@ async function recall(env, deps, q, k) {
 // ---------------------------------------------------------------- writes
 
 async function closeOpen(env, kinds, state, response) {
-  const day = dayKey(nowIso());
+  const day = await localDay(env, nowIso());
   await env.PERSONAL.prepare("UPDATE companion_nudges SET state = ?, closed_at = ?, response = COALESCE(?, response) WHERE day = ? AND state IN ('sent','shown') AND kind IN (" + kinds.map(() => "?").join(",") + ")")
     .bind(state, nowIso(), response || null, day, ...kinds).run();
 }
 async function contextSnapshot(env, deps, at) {
   const now = at || nowIso();
-  const lp = localParts(now);
+  const tz = (await effectiveTz(env, now, await loadCfg(env))).tz;
+  const lp = localParts(now, tz);
   const snap = { local_time: String(Math.floor(lp.hour)).padStart(2, "0") + ":" + String(Math.round((lp.hour % 1) * 60) % 60).padStart(2, "0"), weekday: ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"][lp.dow] };
-  try { snap.sleep = await sleepWindow(env, lp.day); } catch (e) { snap.sleep = null; }
-  try { const d = await one(env.PERSONAL, "SELECT COUNT(*) AS n FROM tasks WHERE status = 'done' AND done_at >= ?", dayStartIso(lp.day)); snap.actions_done_today = d ? Number(d.n) : 0; } catch (e) { /* absent */ }
+  try { snap.sleep = await sleepWindow(env, lp.day, tz); } catch (e) { snap.sleep = null; }
+  try { const d = await one(env.PERSONAL, "SELECT COUNT(*) AS n FROM tasks WHERE status = 'done' AND done_at >= ?", dayStartIso(lp.day, tz)); snap.actions_done_today = d ? Number(d.n) : 0; } catch (e) { /* absent */ }
   try { const r = await all(env.PERSONAL, "SELECT title FROM tasks WHERE status = 'done' AND done_at >= ? ORDER BY done_at DESC LIMIT 3", new Date(Date.parse(now) - 864e5).toISOString()); snap.recent_done = r.map((x) => x.title); } catch (e) { /* absent */ }
   if (deps && deps.weather) {
     try { const w = await deps.weather(env); if (w && w.ok) snap.weather = { where: w.location, now: typeof w.weather === "string" ? w.weather.slice(0, 160) : w.weather && (w.weather.summary || w.weather.current || JSON.stringify(w.weather).slice(0, 160)) }; } catch (e) { /* offline */ }
@@ -2514,9 +2863,12 @@ async function recordMood(env, deps, a) {
   const energy = a.energy === undefined || a.energy === null || a.energy === "" ? null : clampInt(a.energy, 1, 5);
   const tags = Array.isArray(a.tags) ? a.tags.map((x) => s(x, 30)).filter(Boolean).join(",") : s(a.tags, 200);
   const note = s(a.note, 2000) || null;
-  const now = nowIso();
-  const day = dayKey(now);
-  const ctx = await contextSnapshot(env, deps, now);
+  const stamp = clientStamp(a.at);
+  const now = stamp || nowIso();
+  if (stamp) { const dup = await one(env.PERSONAL, "SELECT id, day, score FROM cmp_mood WHERE ts = ?", now).catch(() => null); if (dup) return { ok: true, duplicate: true, id: dup.id, day: dup.day, score: Number(dup.score), reply: "Already saved." }; }
+  const day = await localDay(env, now);
+  const late = !!stamp && Date.now() - Date.parse(now) > 36e5;
+  const ctx = await contextSnapshot(env, late ? null : deps, now);
   const id = rid("mood");
   await env.PERSONAL.prepare("INSERT INTO cmp_mood (id, ts, day, score, energy, tags, note, context_json, source) VALUES (?,?,?,?,?,?,?,?,?)")
     .bind(id, now, day, score, energy, tags || null, note, JSON.stringify(ctx), s(a.source, 40) || "companion").run();
@@ -2524,7 +2876,7 @@ async function recordMood(env, deps, a) {
   await env.PERSONAL.prepare(`INSERT INTO wellbeing_checkins (ts, day, mood, energy, note, source, raw_json) VALUES (?, ?, ?, ?, ?, 'companion', ?)
      ON CONFLICT(day, source) DO UPDATE SET ts = excluded.ts, mood = excluded.mood, energy = COALESCE(excluded.energy, energy), note = COALESCE(excluded.note, note), raw_json = excluded.raw_json`)
     .bind(now, day, score, energy, note, JSON.stringify({ tags, cmp_mood_id: id })).run();
-  await closeOpen(env, ["checkin", "cmp-checkin"], "done", "mood " + score);
+  if (day === await localDay(env, nowIso())) await closeOpen(env, ["checkin", "cmp-checkin", "cmp-after"], "done", "mood " + score);
   if (note) await remember(env, deps, id, "mood", "Mood " + score + "/5" + (tags ? " (" + tags + ")" : "") + ": " + note);
   const sig = crisisSignal(note);
   return { ok: true, id, day, score, energy, tags, context: ctx, crisis: sig.level >= 2 ? crisisText(await loadCfg(env)) : null, reply: moodReply(score, sig.level) };
@@ -2565,9 +2917,11 @@ async function actionDone(env, id) {
 async function addJournal(env, deps, a) {
   const content = s(a && a.content, 5000);
   if (content.length < 2) return { ok: false, error: "content required" };
-  const now = nowIso(), id = rid("jrn");
-  await env.PERSONAL.prepare("INSERT INTO journal (id, ts, date, content, mood, tags, source) VALUES (?,?,?,?,?,?, 'companion')").bind(id, now, dayKey(now), content, s(a.mood, 20), s(a.tags, 200)).run();
-  await closeOpen(env, ["cmp-reflect"], "done", "journal");
+  const stamp = clientStamp(a.at);
+  const now = stamp || nowIso(), id = rid("jrn");
+  if (stamp) { const dup = await one(env.PERSONAL, "SELECT id FROM journal WHERE ts = ? AND content = ?", now, content).catch(() => null); if (dup) return { ok: true, duplicate: true, id: dup.id, crisis: null }; }
+  await env.PERSONAL.prepare("INSERT INTO journal (id, ts, date, content, mood, tags, source) VALUES (?,?,?,?,?,?, 'companion')").bind(id, now, await localDay(env, now), content, s(a.mood, 20), s(a.tags, 200)).run();
+  if ((await localDay(env, now)) === (await localDay(env, nowIso()))) await closeOpen(env, ["cmp-reflect"], "done", "journal");
   await remember(env, deps, id, "journal", content);
   const sig = crisisSignal(content);
   return { ok: true, id, crisis: sig.level >= 2 ? crisisText(await loadCfg(env)) : null };
@@ -2624,7 +2978,9 @@ async function transcribe(env, bytes) {
   return { ok: false, error: errors.join(" | ") };
 }
 async function capture(env, deps, input) {
-  const now = nowIso(), id = rid("inb"), day = dayKey(now);
+  const stamp = clientStamp(input && input.at);
+  const now = stamp || nowIso(), id = rid("inb"), day = dayKey(now);
+  if (stamp) { const dup = await one(env.PERSONAL, "SELECT id FROM cmp_inbox WHERE ts = ?", now).catch(() => null); if (dup) return { ok: true, duplicate: true, id: dup.id, kind: "text", text: "", media_key: null, note: null, processed: null }; }
   let kind = "text", text = s(input && input.text, 8000), mediaKey = null, mime = null, note = null;
   if (input && input.audio && input.audio.length) {
     if (input.audio.length > MAX_CAPTURE_BYTES) return { ok: false, error: "audio over 20 MB" };
@@ -2677,7 +3033,7 @@ async function processItem(env, deps, row) {
   } else if (c.type === "reference") {
     await env.PERSONAL.prepare("INSERT INTO notes (id, ts, kind, content, source) VALUES (?, ?, 'reference', ?, 'companion')").bind("ref-" + row.id, nowIso(), text).run();
   } else if (c.type === "journal") {
-    await env.PERSONAL.prepare("INSERT INTO journal (id, ts, date, content, mood, tags, source) VALUES (?,?,?,?, '', 'inbox', 'companion')").bind("jrn-" + row.id, nowIso(), dayKey(nowIso()), text).run();
+    await env.PERSONAL.prepare("INSERT INTO journal (id, ts, date, content, mood, tags, source) VALUES (?,?,?,?, '', 'inbox', 'companion')").bind("jrn-" + row.id, nowIso(), await localDay(env, nowIso()), text).run();
     await closeOpen(env, ["cmp-reflect"], "done", "journal via inbox");
   } else if (c.type === "card") {
     const k = await addCard(env, { front: c.front || c.title, back: c.back || text, source_id: row.id });
@@ -2701,9 +3057,9 @@ async function processInbox(env, deps, limit) {
 function pushPayloadFor(row) {
   const ask = ["micro", "body", "contact", "care", "cmp-next", "cmp-anchor", "cmp-review", "cmp-connect"].includes(row.kind);
   return {
-    title: row.kind === "cmp-care" || row.kind === "presence" || row.kind === "cmp-presence" ? "Here with you" : row.kind === "checkin" || row.kind === "cmp-checkin" ? "How's it landing?" : row.kind === "cmp-reflect" ? "Before the day closes" : row.kind === "cmp-measure" ? "Two-weekly check" : row.kind === "cmp-connect" ? "Someone to hear from" : row.kind === "cmp-week" ? "Your week" : "One small thing",
+    title: row.kind === "cmp-care" || row.kind === "presence" || row.kind === "cmp-presence" ? "Here with you" : row.kind === "checkin" || row.kind === "cmp-checkin" ? "How's it landing?" : row.kind === "cmp-reflect" ? "Before the day closes" : row.kind === "cmp-measure" ? "Two-weekly check" : row.kind === "cmp-connect" ? "Someone to hear from" : row.kind === "cmp-week" ? "Your week" : row.kind === "cmp-after" ? "How did it go?" : "One small thing",
     body: String(row.ask || "").slice(0, 300), tag: "cmp-" + row.id, id: row.id, kind: row.kind,
-    url: row.kind === "cmp-week" ? "/companion#week" : "/companion#n=" + row.id, ask
+    url: row.kind === "cmp-week" ? "/companion#week" : row.kind === "checkin" || row.kind === "cmp-checkin" || row.kind === "cmp-after" ? "/companion#mood" : "/companion#n=" + row.id, ask
   };
 }
 // deps.pushed: { has(id), add(id) } so a ladder row is pushed once. deps.keys: VAPID keys. deps.fetch: optional.
@@ -2718,10 +3074,11 @@ async function companionTick(env, deps, opts) {
   const cfg0 = await loadCfg(env);
   // Once a day, before dawn: raw voice notes past their retention go (rule 15).
   const lh = localParts(now, cfg0.tz).hour;
+  const lhHere = localParts(now, (await effectiveTz(env, now, cfg0)).tz).hour;
   if (o.prune || (lh >= 4 && lh < 4.25)) { try { out.pruned = await pruneMedia(env, cfg0.media_retention_days, now); } catch (e) { out.pruned = { error: String(e && e.message || e).slice(0, 160) }; } }
   // 1. The e-mail ladder's fresh asks also reach the phone, once each (not while he has paused reach-outs).
   // RED-TEAM-1: and never inside quiet hours; a ladder row sent at night waits, and the 45-minute window drops it.
-  if (deps.keys && deps.pushed && !isPaused(cfg0, Date.parse(now)) && !inQuiet(lh, Number(cfg0.quiet_start), Number(cfg0.quiet_end))) {
+  if (deps.keys && deps.pushed && !isPaused(cfg0, Date.parse(now)) && !inQuiet(lhHere, Number(cfg0.quiet_start), Number(cfg0.quiet_end))) {
     const fresh = await all(env.PERSONAL, "SELECT * FROM companion_nudges WHERE kind IN (" + LADDER_KINDS.map(() => "?").join(",") + ") AND state = 'sent' AND sent_at >= ? ORDER BY id LIMIT 3", ...LADDER_KINDS, new Date(Date.parse(now) - 45 * 60000).toISOString()).catch(() => []);
     out.mirrored = 0;
     for (const r of fresh) {
@@ -2732,7 +3089,7 @@ async function companionTick(env, deps, opts) {
     }
   }
   // 2. At most one companion nudge per tick, under the shared rules.
-  const st = await gatherState(env, now);
+  const st = await gatherState(env, now, deps);
   if (o.force) Object.assign(st.cfg, { quiet_start: 0, quiet_end: 0, max_per_day: 99, min_gap_min: 0 });
   const plan = planNudge(st);
   out.plan = plan.skip ? { skip: plan.skip } : { kind: plan.kind, reason: plan.reason };
@@ -2757,12 +3114,12 @@ async function companionTick(env, deps, opts) {
 
 async function today(env, deps) {
   await ensureSchema(env.PERSONAL);
-  const st = await gatherState(env);
+  const st = await gatherState(env, undefined, deps);
   const db = env.PERSONAL;
   const greet = st.hour < 5 ? "Still up" : st.hour < 12 ? "Morning" : st.hour < 18 ? "Afternoon" : "Evening";
   const [open, sleep, inbox, lastJournal, projects] = await Promise.all([
     all(db, "SELECT id, kind, ask, sent_at, due_at FROM companion_nudges WHERE day = ? AND state IN ('sent','shown') AND kind NOT IN ('crisis') ORDER BY id DESC", st.day),
-    sleepWindow(env, st.day).catch(() => null),
+    sleepWindow(env, st.day, st.tz).catch(() => null),
     one(db, "SELECT COUNT(*) AS n FROM cmp_inbox WHERE status = 'unprocessed'"),
     one(db, "SELECT date, substr(content, 1, 140) AS line FROM journal ORDER BY ts DESC LIMIT 1").catch(() => null),
     all(db, "SELECT id, name FROM cmp_projects WHERE status = 'active' ORDER BY ts DESC LIMIT 8")
@@ -2774,7 +3131,7 @@ async function today(env, deps) {
   const wk = weekWindow({ day: st.day, hour: st.hour, dow: st.dow });
   if (wk && st.cfg.week_seen !== wk) { try { const w = await weekLookback(env, st.nowIso, wk); if (w.enough) week = { week: w.week, title: w.title, lines: w.lines }; } catch (e) { week = null; } }
   return {
-    day: st.day, greeting: greet, hour: Math.round(st.hour * 100) / 100, mood: st.mood, sleep, weather, week,
+    day: st.day, greeting: greet, hour: Math.round(st.hour * 100) / 100, mood: st.mood, sleep, weather, week, travel: st.away, events_today: st.events.length, light_day: st.events.length >= LIGHT_DAY_EVENTS, busy_now: st.events.some((e) => !e.allDay && e.startMs <= Date.parse(st.nowIso) && Date.parse(st.nowIso) < e.endMs),
     low_day: (st.mood.today !== null && st.mood.today <= 2) || st.crisisLevel24h >= 1,
     one_thing: suggestion, next_actions: st.nextActions.slice(0, 12), actions_done_today: st.actionsDoneToday,
     due_cards: st.dueCards, open_nudges: open, inbox_unprocessed: inbox ? Number(inbox.n) : 0, last_journal: lastJournal,
@@ -2951,7 +3308,7 @@ async function noteRiskInChat(env, q) {
   const sig = crisisSignal(q);
   if (sig.level < 2) return null;
   try {
-    await env.PERSONAL.prepare("INSERT INTO companion_nudges (ts, day, kind, ladder_step, ask, minutes, state, sent_at, reason) VALUES (?, ?, 'crisis', 0, 'escalation (chat)', 0, 'sent', ?, ?)").bind(nowIso(), dayKey(nowIso()), nowIso(), "signal:" + sig.match + " source:chat").run();
+    await env.PERSONAL.prepare("INSERT INTO companion_nudges (ts, day, kind, ladder_step, ask, minutes, state, sent_at, reason) VALUES (?, ?, 'crisis', 0, 'escalation (chat)', 0, 'sent', ?, ?)").bind(nowIso(), await localDay(env, nowIso()), nowIso(), "signal:" + sig.match + " source:chat").run();
   } catch (e) { /* the reply carries the lines; the ledger row is best effort */ }
   return sig;
 }
@@ -3042,7 +3399,7 @@ async function readCapture(request) {
   if (ct.startsWith("audio/") || ct.startsWith("video/webm")) return { audio: new Uint8Array(await request.arrayBuffer()), mime: ct.split(";")[0].replace("video/", "audio/") };
   if (ct.startsWith("image/")) return { image: new Uint8Array(await request.arrayBuffer()), mime: ct };
   const b = await request.json().catch(() => ({}));
-  const out = { text: b.text || b.content || "", source: b.source || "api" };
+  const out = { text: b.text || b.content || "", source: b.source || "api", at: b.at };
   if (b.audio_b64) { out.audio = unb64(b.audio_b64); out.mime = b.mime || "audio/webm"; }
   if (b.image_b64) { out.image = unb64(b.image_b64); out.mime = b.mime || "image/jpeg"; }
   return out;
@@ -3121,6 +3478,8 @@ async function handleCompanion(request, env, ctx, deps) {
     if (r === "who5" && m === "POST") { const b = await body(); const out = await recordWho5(env, b.items); return J(out, out.ok ? 200 : 400); }
     if (r === "settings" && m === "POST") { const out = await saveSettings(env, await body()); return J(out, out.ok ? 200 : 400); }
     if (r === "week" && m === "GET") return J(await weekLookback(env, undefined, url.searchParams.get("week")));
+    // COMPANION-GP-SUMMARY-1: generated on request, read-only, never stored or sent; the ticks are his choice of what text goes in.
+    if (r === "gp-summary" && m === "GET") return J(await gpSummary(env, { journal: url.searchParams.get("journal") === "1", notes: url.searchParams.get("notes") === "1" }));
     if (r === "week/seen" && m === "POST") { const b = await body(); const out = await weekSeen(env, b.week); return J(out, out.ok ? 200 : 400); }
     if (r === "pause" && m === "POST") { const b = await body(); const out = await setPause(env, b.hours); return J(out, out.ok ? 200 : 400); }
     if (r === "push/key" && m === "GET") return stub().fetch("https://do/companion-do/key");
@@ -3176,24 +3535,100 @@ const MANIFEST = {
   icons: [{ src: "/companion/icon.svg", sizes: "any", type: "image/svg+xml", purpose: "any maskable" }]
 };
 const ICON_SVG = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 96 96"><rect width="96" height="96" rx="22" fill="#2f5d50"/><circle cx="48" cy="44" r="20" fill="none" stroke="#f6f4ef" stroke-width="7"/><path d="M30 74c5-6 11-9 18-9s13 3 18 9" fill="none" stroke="#f6f4ef" stroke-width="7" stroke-linecap="round"/></svg>';
-const SW_JS = `self.addEventListener('install', e => self.skipWaiting());
-self.addEventListener('activate', e => e.waitUntil(self.clients.claim()));
+const SW_JS = `// COMPANION-OFFLINE-1: only the page shell is cached (HTML, manifest, icon: no personal data). API calls are never cached or
+// intercepted; what is made offline waits in the page's own IndexedDB queue.
+const SHELL = 'cmp-shell-v1';
+const SHELL_URLS = ['/companion', '/companion/manifest.webmanifest', '/companion/icon.svg'];
+self.addEventListener('install', e => {
+  e.waitUntil(caches.open(SHELL).then(c => Promise.all(SHELL_URLS.map(u => fetch(u, { credentials: 'same-origin' }).then(r => r.ok ? c.put(u, r) : null).catch(() => null)))).then(() => self.skipWaiting()));
+});
+self.addEventListener('activate', e => {
+  e.waitUntil(caches.keys().then(ks => Promise.all(ks.filter(k => k.indexOf('cmp-shell-') === 0 && k !== SHELL).map(k => caches.delete(k)))).then(() => self.clients.claim()));
+});
+self.addEventListener('fetch', e => {
+  const r = e.request;
+  if (r.method !== 'GET') return;
+  const u = new URL(r.url);
+  if (u.origin !== self.location.origin || SHELL_URLS.indexOf(u.pathname) < 0) return;
+  e.respondWith(fetch(r).then(res => {
+    if (res.ok) { const copy = res.clone(); caches.open(SHELL).then(c => c.put(u.pathname, copy)).catch(() => null); }
+    return res;
+  }).catch(() => caches.match(u.pathname).then(m => m || Response.error())));
+});
 self.addEventListener('push', e => {
   let d = {}; try { d = e.data ? e.data.json() : {}; } catch (x) { d = { body: e.data ? e.data.text() : '' }; }
-  const opts = { body: d.body || '', tag: d.tag || 'companion', icon: '/companion/icon.svg', badge: '/companion/icon.svg', data: { url: d.url || '/companion', id: d.id || null }, renotify: false };
+  const opts = { body: d.body || '', tag: d.tag || 'companion', icon: '/companion/icon.svg', badge: '/companion/icon.svg', data: { url: d.url || '/companion', id: d.id || null, tag: d.tag || 'companion' }, renotify: false };
   if (d.ask && d.id) opts.actions = [{ action: 'done', title: 'Did it' }, { action: 'no', title: 'Not today' }];
   e.waitUntil(self.registration.showNotification(d.title || 'Companion', opts));
 });
+function openApp(url) {
+  return self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then(list => {
+    for (const c of list) { if (c.url.includes('/companion')) { c.navigate(url); return c.focus(); } }
+    return self.clients.openWindow(url);
+  });
+}
+// COMPANION-NOTIFY-ANSWER-1: "Did it" and "Not today" answer from the notification itself, under the sign-in cookie, and a
+// short confirmation replaces it. Not signed in on this device (or offline): the app opens on the answer, as before.
+function answerFromNotification(d, action) {
+  const tag = d.tag || 'companion';
+  return fetch('/companion/api/nudge', { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json', 'X-Companion': '1' }, body: JSON.stringify({ id: Number(d.id), state: action === 'done' ? 'done' : 'declined' }) })
+    .then(r => r.ok ? r.json() : null)
+    .then(j => {
+      if (!j) throw new Error('not signed in');
+      return self.registration.showNotification('Companion', { body: j.reply || 'Noted.', tag: tag, icon: '/companion/icon.svg', badge: '/companion/icon.svg', silent: true, data: { url: '/companion', id: null, tag: tag } })
+        .then(() => new Promise(r => setTimeout(r, 4000)))
+        .then(() => self.registration.getNotifications({ tag: tag }))
+        .then(list => list.forEach(n => n.close()));
+    })
+    .catch(() => openApp('/companion#n=' + d.id + '&a=' + action));
+}
 self.addEventListener('notificationclick', e => {
   e.notification.close();
   const d = e.notification.data || {};
-  let url = d.url || '/companion';
-  if (d.id && (e.action === 'done' || e.action === 'no')) url = '/companion#n=' + d.id + '&a=' + e.action;
-  e.waitUntil(self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then(list => {
-    for (const c of list) { if (c.url.includes('/companion')) { c.navigate(url); return c.focus(); } }
-    return self.clients.openWindow(url);
-  }));
+  if (d.id && (e.action === 'done' || e.action === 'no')) { e.waitUntil(answerFromNotification(d, e.action)); return; }
+  e.waitUntil(openApp(d.url || '/companion'));
 });`;
+
+// COMPANION-OFFLINE-1: the queue core, plain ES5 so the page embeds it as is and the suite runs it in a vm. `store` is
+// {add(item), all(), del(id), clear()}; idb() builds one over IndexedDB. Only a capture, mood tap or journal line (JSON) is
+// queued; voice and photo uploads are not. Nothing but the unsent note is stored, and sign-out clears it.
+const OFFLINE_JS = `var CMPQ=(function(){
+var PATHS={'/companion/api/capture':1,'/companion/api/mood':1,'/companion/api/journal':1};
+var MAX_ITEMS=100,MAX_AGE_MS=30*86400000;
+var SAVED='Saved on this phone. I will send it when you are online.';
+var SAFE=' If things feel unsafe right now: 112 for danger, 113 (0800-0113, free) at any hour.';
+function queueable(path,opt){return !!(opt&&opt.method==='POST'&&PATHS[path]===1&&typeof opt.body==='string')}
+function isNetworkError(e){return !!e&&e.name==='TypeError'}
+function make(path,body,nowMs){var o={};try{o=JSON.parse(body)||{}}catch(e){o={}}o.at=new Date(nowMs).toISOString();return {path:path,body:JSON.stringify(o),at:nowMs}}
+function add(store,path,body,nowMs){return store.all().then(function(items){if((items||[]).length>=MAX_ITEMS)return {ok:false,full:true};return store.add(make(path,body,nowMs)).then(function(){return {ok:true}})})}
+function flush(store,send,nowMs){
+var res={sent:0,dropped:0,left:0,crisis:[],stopped:null};
+return store.all().then(function(items){
+items=(items||[]).slice().sort(function(a,b){return (a.at-b.at)||(a.id-b.id)});
+var i=0;
+function next(){
+if(i>=items.length)return Promise.resolve();
+var it=items[i++];
+if(nowMs-it.at>MAX_AGE_MS){res.dropped++;return store.del(it.id).then(next)}
+return send(it).then(function(r){
+var st=r&&r.status;
+if(st>=200&&st<300){res.sent++;var b=(r&&r.body)||{};var c=b.crisis||(b.processed&&b.processed.crisis);if(c)res.crisis.push(c);return store.del(it.id).then(next)}
+if(st===400||st===404||st===405||st===413||st===422){res.dropped++;return store.del(it.id).then(next)}
+res.stopped=st;return null
+},function(){res.stopped='network';return null})
+}
+return next()
+}).then(function(){return store.all()}).then(function(left){res.left=(left||[]).length;return res})
+}
+function idb(factory){
+if(!factory)return null;
+var dbp=null;
+function open(){if(dbp)return dbp;dbp=new Promise(function(res,rej){var rq=factory.open('cmp-offline',1);rq.onupgradeneeded=function(){rq.result.createObjectStore('q',{keyPath:'id',autoIncrement:true})};rq.onsuccess=function(){res(rq.result)};rq.onerror=function(){dbp=null;rej(rq.error||new Error('indexedDB'))}});return dbp}
+function run(mode,fn){return open().then(function(db){return new Promise(function(res,rej){var tx=db.transaction('q',mode);var rq=fn(tx.objectStore('q'));tx.oncomplete=function(){res(rq&&rq.result)};tx.onerror=function(){rej(tx.error)};tx.onabort=function(){rej(tx.error)}})})}
+return {add:function(it){return run('readwrite',function(st){return st.add(it)})},all:function(){return run('readonly',function(st){return st.getAll()})},del:function(id){return run('readwrite',function(st){return st.delete(id)})},clear:function(){return run('readwrite',function(st){return st.clear()})}}
+}
+return {PATHS:PATHS,MAX_ITEMS:MAX_ITEMS,MAX_AGE_MS:MAX_AGE_MS,SAVED:SAVED+SAFE,queueable:queueable,isNetworkError:isNetworkError,make:make,add:add,flush:flush,idb:idb}
+})();`;
 
 // The phone page. Plain HTML, no external script: it holds the personal API key in localStorage, so nothing else loads.
 const PAGE_HTML = `<!doctype html><html lang="en"><head><meta charset="utf-8">
@@ -3225,7 +3660,11 @@ nav button{border:0;background:none;font-size:.78rem;padding:6px 4px;color:var(-
 table{width:100%;border-collapse:collapse;font-size:.9rem}td,th{text-align:left;padding:6px 4px;border-top:1px solid var(--line)}
 .bar{height:8px;background:var(--acc);border-radius:4px}
 .hide{display:none}
+.sheet p{margin:.5rem 0}.sheet h1{font-size:1.25rem}
+@media print{html,body{background:#fff!important;color:#000!important}nav,#q-note,#login,.v,.noprint{display:none!important}#gp-print:not(.hide){display:block!important}.card{border:0;padding:0}.mute{color:#333}main{max-width:none;padding:0}}
 </style></head><body><main>
+<div id="q-note"></div>
+<div id="gp-print" class="hide"></div>
 <div id="login" class="card hide"><h1>Hi, Rowan.</h1><p>To open your companion on this device, I'll e-mail you a 6-digit code. After that this device stays signed in for six months.</p><div class="row"><button class="p" id="li-send" onclick="sendCode()">E-mail me a code</button></div><div id="li-step" class="hide" style="margin-top:10px"><div class="row"><input id="li-code" inputmode="numeric" autocomplete="one-time-code" maxlength="6" placeholder="6-digit code" class="grow"><button class="p" onclick="verifyCode()">Open</button></div></div><div id="li-out"></div></div>
 <section id="v-today" class="v"></section>
 <section id="v-capture" class="v hide"><h1>Capture</h1>
@@ -3240,27 +3679,40 @@ table{width:100%;border-collapse:collapse;font-size:.9rem}td,th{text-align:left;
 <section id="v-learn" class="v hide"><h1>Review</h1><div id="learn"></div>
  <div class="card"><h2>New card</h2><input id="c-front" placeholder="Question"><textarea id="c-back" placeholder="Answer" style="margin-top:8px;min-height:60px"></textarea><div class="row" style="margin-top:8px"><button class="p" onclick="addCard()">Add card</button></div></div></section>
 <section id="v-journal" class="v hide"><h1>Journal</h1><div class="card"><textarea id="j-text" placeholder="One line is enough."></textarea><div class="row" style="margin-top:8px"><button class="p" onclick="addJournal()">Keep it</button></div><div id="j-out"></div></div><div class="card"><h2>Recent</h2><div id="journal"></div></div></section>
-<section id="v-data" class="v hide"><h1>Patterns, plan and privacy</h1><div id="dash"></div><div id="plan" class="card"></div><div id="priv"></div></section>
+<section id="v-data" class="v hide"><h1>Patterns, plan and privacy</h1><div id="dash"></div><div id="plan" class="card"></div><div id="gp"></div><div id="priv"></div></section>
 </main>
 <nav><button data-v="today" class="on">Today</button><button data-v="capture">Capture</button><button data-v="talk">Talk</button><button data-v="do">Do</button><button data-v="learn">Learn</button><button data-v="journal">Journal</button><button data-v="data">Data</button></nav>
 <script>
 var VERSION='__VERSION__';
+${OFFLINE_JS}
+var qstore=null,flushing=false;try{qstore=CMPQ.idb(window.indexedDB)}catch(e){console.warn('companion: no offline queue',e)}
 function $(i){return document.getElementById(i)}
 function warn(e){try{console.warn('companion:',e&&e.message||e)}catch(x){console.log(x)}}
 function el(t,a,kids){var e=document.createElement(t);if(a)for(var k in a){if(k==='text')e.textContent=a[k];else if(k==='cls')e.className=a[k];else if(k.slice(0,2)==='on')e[k]=a[k];else e.setAttribute(k,a[k])}(kids||[]).forEach(function(c){if(c)e.appendChild(typeof c==='string'?document.createTextNode(c):c)});return e}
 function getKey(){try{var k=localStorage.getItem('cmp-key');if(k)return k;var o=JSON.parse(localStorage.getItem('qnfo-chat')||'{}');return o.key||''}catch(e){return ''}}
 function hdrs(){var h={'X-Companion':'1'};var k=getKey();if(k)h.Authorization='Bearer '+k;return h}
-function showLogin(){Array.prototype.forEach.call(document.querySelectorAll('.v'),function(s){s.classList.add('hide')});$('login').classList.remove('hide')}
+function showLogin(){closeGp();Array.prototype.forEach.call(document.querySelectorAll('.v'),function(s){s.classList.add('hide')});$('login').classList.remove('hide')}
 function sendCode(){$('li-out').innerHTML='';fetch('/companion/api/login/code',{method:'POST',headers:{'X-Companion':'1'}}).then(function(r){return r.json()}).then(function(r){say($('li-out'),r.reply||r.error,!r.ok);if(r.ok){$('li-step').classList.remove('hide');$('li-send').textContent='Send another code';$('li-code').focus()}}).catch(warn)}
 function verifyCode(){$('li-out').innerHTML='';fetch('/companion/api/login/verify',{method:'POST',headers:{'Content-Type':'application/json','X-Companion':'1'},body:JSON.stringify({code:$('li-code').value})}).then(function(r){return r.json()}).then(function(r){if(!r.ok){say($('li-out'),r.error,true);return}$('login').classList.add('hide');fromHash();go('today')}).catch(warn)}
-function signOut(){api('/companion/api/logout',{json:{}}).then(function(){try{localStorage.removeItem('cmp-key')}catch(e){warn(e)}showLogin()}).catch(warn)}
+function signOut(){(qstore?qstore.clear().catch(warn):Promise.resolve()).then(function(){showPending();return api('/companion/api/logout',{json:{}})}).then(function(){try{localStorage.removeItem('cmp-key')}catch(e){warn(e)}showLogin()}).catch(warn)}
 function api(path,opt){opt=opt||{};opt.headers=Object.assign(hdrs(),opt.headers||{});if(opt.json!==undefined){opt.method=opt.method||'POST';opt.headers['Content-Type']='application/json';opt.body=JSON.stringify(opt.json);delete opt.json}
- return fetch(path,opt).then(function(r){if(r.status===401){showLogin();throw new Error('sign in needed')}return r.json()})}
+ var q=CMPQ.queueable(path,opt);
+ return fetch(path,opt).then(function(r){if(r.status===401){showLogin();throw new Error('sign in needed')}return r.json()}).catch(function(e){
+  if(q&&qstore&&CMPQ.isNetworkError(e))return CMPQ.add(qstore,path,opt.body,Date.now()).then(function(r){showPending();return r.ok?{ok:true,queued:true,reply:CMPQ.SAVED}:{ok:false,error:'Too many unsent notes are saved on this phone. Connect first, then try again.'}},function(){throw e});
+  throw e})}
+function showPending(sent,crisis){var b=$('q-note');if(!b)return;b.innerHTML='';(qstore?qstore.all():Promise.resolve([])).then(function(items){if(sent)b.appendChild(el('div',{cls:'say',text:sent,style:'margin:0 0 12px'}));(crisis||[]).forEach(function(t){b.appendChild(el('div',{cls:'warn',text:t,style:'margin:0 0 12px'}))});if(items.length)b.appendChild(el('div',{cls:'card'},[el('div',{text:items.length+(items.length===1?' note is':' notes are')+' saved on this phone and will be sent when you are online.'}),el('div',{cls:'row',style:'margin-top:8px'},[el('button',{text:'Send now',onclick:flushQueue})])]))}).catch(warn)}
+function flushQueue(){if(!qstore||flushing)return;flushing=true;CMPQ.flush(qstore,function(it){return fetch(it.path,{method:'POST',credentials:'same-origin',headers:Object.assign(hdrs(),{'Content-Type':'application/json'}),body:it.body}).then(function(r){return r.json().catch(function(){return {}}).then(function(j){return {status:r.status,body:j}})})},Date.now()).then(function(res){flushing=false;if(res.sent){showPending('Sent '+res.sent+(res.sent===1?' saved note.':' saved notes.'),res.crisis);if(!$('v-today').classList.contains('hide'))load()}else showPending()}).catch(function(e){flushing=false;warn(e)})}
 function say(box,text,warn){if(!text)return;box.appendChild(el('div',{cls:warn?'warn':'say',text:text}))}
 var MOOD=['rough','low','okay','good','great'],EN=['empty','thin','steady','strong','full'],TAGS=['sleep','body','social','alone','work','outside','money','family','creative'];
 var pick={mood:null,energy:null,tags:{}};
 function scale(name,words){var r=el('div',{cls:'row scale'});words.forEach(function(w,i){var b=el('button',{onclick:function(){pick[name]=i+1;Array.prototype.forEach.call(r.children,function(c,j){c.classList.toggle('sel',j===i)})}},[String(i+1),el('small',{text:w})]);r.appendChild(b)});return r}
+function moodCard(t){var m=el('div',{cls:'card',id:'mood-card'});m.appendChild(el('h2',{text:t.mood&&t.mood.today?'Mood today: '+t.mood.today+'/5 (log again any time)':'How are you?'}));
+ pick={mood:null,energy:null,tags:{}};m.appendChild(scale('mood',MOOD));m.appendChild(el('div',{cls:'mute',text:'energy',style:'margin:8px 0 4px'}));m.appendChild(scale('energy',EN));
+ var tg=el('div',{cls:'row',style:'margin-top:8px'});TAGS.forEach(function(x){var b=el('button',{cls:'chip',text:x,onclick:function(){pick.tags[x]=!pick.tags[x];b.classList.toggle('sel',!!pick.tags[x])}});tg.appendChild(b)});m.appendChild(tg);
+ var note=el('input',{placeholder:'a word or a line (optional)',style:'margin-top:8px'});m.appendChild(note);var out=el('div');
+ m.appendChild(el('div',{cls:'row',style:'margin-top:8px'},[el('button',{cls:'p',text:'Log',onclick:function(){if(!pick.mood){say(out,'Pick a number first.');return}api('/companion/api/mood',{json:{score:pick.mood,energy:pick.energy,tags:Object.keys(pick.tags).filter(function(k){return pick.tags[k]}),note:note.value}}).then(function(r){out.innerHTML='';say(out,r.reply||r.error);if(r.crisis)say(out,r.crisis,true);if(!r.queued)setTimeout(load,1800)})}})]));m.appendChild(out);return m}
 function renderToday(t){$('login').classList.add('hide');var v=$('v-today');v.innerHTML='';v.appendChild(el('h1',{text:t.greeting+', Rowan.'}));
+ if(t.travel)v.appendChild(el('div',{cls:'mute',text:'Times follow you: '+t.travel.place+' ('+t.travel.tz.replace('_',' ')+'). Quiet hours and check-ins run on local time.',style:'margin:-6px 0 12px'}));
  if(t.stale_reminders)v.appendChild(el('div',{cls:'card'},[el('div',{text:t.stale_reminders+(t.stale_reminders===1?' old reminder is':' old reminders are')+' past '+(t.stale_reminders===1?'its':'their')+' date. I stopped bringing '+(t.stale_reminders===1?'it':'them')+' up.'}),el('div',{cls:'row',style:'margin-top:8px'},[el('button',{text:'Tidy them on Do',onclick:function(){go('do')}})])]));
  if(t.crisis_lines)v.appendChild(el('div',{cls:'warn',style:'margin:0 0 12px'},[t.crisis_lines]));
  if(t.paused_until)v.appendChild(el('div',{cls:'card'},[el('div',{text:'Reach-outs are paused until '+t.paused_until.slice(0,16).replace('T',' ')+' UTC. Everything here still works.'}),el('div',{cls:'row',style:'margin-top:8px'},[el('button',{text:'Resume now',onclick:function(){pause(0)}})])]));
@@ -3268,16 +3720,12 @@ function renderToday(t){$('login').classList.add('hide');var v=$('v-today');v.in
  if(t.week){var wkc=el('div',{cls:'card',id:'week'},[el('h2',{text:t.week.title})].concat(t.week.lines.map(function(x){return el('div',{text:x,style:'margin:4px 0'})})));wkc.appendChild(el('div',{cls:'row',style:'margin-top:8px'},[el('button',{text:'Thanks, hide this',onclick:function(){api('/companion/api/week/seen',{json:{week:t.week.week}}).then(function(r){wkc.innerHTML='';say(wkc,r.reply||r.error)})}})]));v.appendChild(wkc)}
  if(t.support_hint)v.appendChild(el('div',{cls:'card'},[el('div',{text:t.support_hint})]));
  if(t.who5_due){var wc=el('div',{cls:'card'},[el('h2',{text:'Two-weekly check'}),el('div',{cls:'mute',text:'Five questions about the last two weeks (WHO-5). About a minute, whenever you like.'})]);wc.appendChild(el('div',{cls:'row',style:'margin-top:8px'},[el('button',{cls:'p',text:'Start',onclick:function(){who5Form(wc)}})]));v.appendChild(wc)}
- (t.open_nudges||[]).forEach(function(n){if(n.kind==='cmp-week')return;var c=el('div',{cls:'card'},[el('div',{text:n.ask})]);if(['checkin','cmp-checkin','presence','cmp-presence','cmp-measure'].indexOf(n.kind)<0){c.appendChild(el('div',{cls:'row',style:'margin-top:8px'},[el('button',{cls:'p',text:'Did it',onclick:function(){answer(n.id,'done',c,['cmp-next','cmp-anchor','cmp-connect','micro','body','contact'].indexOf(n.kind)>=0?{nudge_id:n.id}:null)}}),el('button',{text:'Not today',onclick:function(){answer(n.id,'declined',c)}})]))}v.appendChild(c)});
- var m=el('div',{cls:'card'});m.appendChild(el('h2',{text:t.mood&&t.mood.today?'Mood today: '+t.mood.today+'/5 (log again any time)':'How are you?'}));
- pick={mood:null,energy:null,tags:{}};m.appendChild(scale('mood',MOOD));m.appendChild(el('div',{cls:'mute',text:'energy',style:'margin:8px 0 4px'}));m.appendChild(scale('energy',EN));
- var tg=el('div',{cls:'row',style:'margin-top:8px'});TAGS.forEach(function(x){var b=el('button',{cls:'chip',text:x,onclick:function(){pick.tags[x]=!pick.tags[x];b.classList.toggle('sel',!!pick.tags[x])}});tg.appendChild(b)});m.appendChild(tg);
- var note=el('input',{placeholder:'a word or a line (optional)',style:'margin-top:8px'});m.appendChild(note);var out=el('div');
- m.appendChild(el('div',{cls:'row',style:'margin-top:8px'},[el('button',{cls:'p',text:'Log',onclick:function(){if(!pick.mood){say(out,'Pick a number first.');return}api('/companion/api/mood',{json:{score:pick.mood,energy:pick.energy,tags:Object.keys(pick.tags).filter(function(k){return pick.tags[k]}),note:note.value}}).then(function(r){out.innerHTML='';say(out,r.reply||r.error);if(r.crisis)say(out,r.crisis,true);setTimeout(load,1800)})}})]));m.appendChild(out);v.appendChild(m);
+ (t.open_nudges||[]).forEach(function(n){if(n.kind==='cmp-week')return;var c=el('div',{cls:'card'},[el('div',{text:n.ask})]);if(['checkin','cmp-checkin','cmp-after','presence','cmp-presence','cmp-measure'].indexOf(n.kind)<0){c.appendChild(el('div',{cls:'row',style:'margin-top:8px'},[el('button',{cls:'p',text:'Did it',onclick:function(){answer(n.id,'done',c,['cmp-next','cmp-anchor','cmp-connect','micro','body','contact'].indexOf(n.kind)>=0?{nudge_id:n.id}:null)}}),el('button',{text:'Not today',onclick:function(){answer(n.id,'declined',c)}})]))}v.appendChild(c)});
+ v.appendChild(moodCard(t));
  if(!t.push_ready)v.appendChild(el('div',{cls:'card'},[el('div',{text:'Let me reach you here: a few gentle notifications a day at most, never at night.'}),el('div',{cls:'row',style:'margin-top:8px'},[el('button',{cls:'p',text:'Turn on notifications',onclick:enablePush})])]));
  if(t.one_thing){var o=el('div',{cls:'card'},[el('h2',{text:'One thing, if you want it'}),el('div',{text:t.one_thing.title+' ('+(t.one_thing.minutes||15)+' min, '+(t.one_thing.context||'@anywhere')+')'})]);o.appendChild(el('div',{cls:'row',style:'margin-top:8px'},[el('button',{cls:'p',text:'Done',onclick:function(){api('/companion/api/actions/done',{json:{id:t.one_thing.id}}).then(function(r){o.innerHTML='';say(o,r.reply||r.error);if(r.ok)rateBox(o,{action_id:t.one_thing.id})})}})]));v.appendChild(o)}
  var info=[];if(t.sleep)info.push('Quiet overnight '+t.sleep.from+' to '+t.sleep.to+' (about '+t.sleep.hours+' h, from message times).');if(t.weather&&t.weather.weather)info.push('Weather: '+(typeof t.weather.weather==='string'?t.weather.weather:(t.weather.weather.summary||JSON.stringify(t.weather.weather))).slice(0,140));
- if(t.mood&&t.mood.avg7)info.push('Mood this week: '+t.mood.avg7+' on average.');if((t.what_helps||[]).length)info.push('What has helped you: '+t.what_helps.map(function(a){return a.title}).join('; ')+'.');function pl(n,w){return n+' '+w+(n===1?'':'s')}info.push(t.actions_done_today+' done today. '+pl(t.due_cards,'card')+' ready. '+pl(t.next_actions.length,'next action')+'.');
+ if(t.mood&&t.mood.avg7)info.push('Mood this week: '+t.mood.avg7+' on average.');if((t.what_helps||[]).length)info.push('What has helped you: '+t.what_helps.map(function(a){return a.title}).join('; ')+'.');if(t.light_day)info.push('A full day ('+t.events_today+' things on). I will keep nudges few and small.');function pl(n,w){return n+' '+w+(n===1?'':'s')}info.push(t.actions_done_today+' done today. '+pl(t.due_cards,'card')+' ready. '+pl(t.next_actions.length,'next action')+'.');
  v.appendChild(el('div',{cls:'card'},[el('h2',{text:'Today'})].concat(info.map(function(x){return el('div',{cls:'mute',text:x})}))));
  if(!t.paused_until)v.appendChild(el('div',{cls:'row',style:'margin:0 0 10px'},[el('span',{cls:'mute',text:'Need quiet? Pause reach-outs:'}),el('button',{cls:'chip',text:'4 h',onclick:function(){pause(4)}}),el('button',{cls:'chip',text:'1 day',onclick:function(){pause(24)}}),el('button',{cls:'chip',text:'3 days',onclick:function(){pause(72)}})]));
  v.appendChild(el('div',{cls:'mute',text:'Companion '+VERSION+'. Nudges today: '+t.nudges_today+' of '+t.cap+'.'+(t.tick_age_min!==null&&t.tick_age_min>45?' Reach-outs are delayed: my last check ran '+t.tick_age_min+' minutes ago. Everything here still works.':'')}))}
@@ -3290,9 +3738,10 @@ function rateBox(box,ref){var p={pleasure:null,mastery:null};var w=el('div',{sty
 function who5Form(box){api('/companion/api/who5').then(function(q){box.innerHTML='';box.appendChild(el('h2',{text:'Over the last two weeks'}));var ans=[null,null,null,null,null];
  q.items.forEach(function(it,i){box.appendChild(el('div',{text:it,style:'margin-top:10px'}));var r=el('div',{cls:'row scale'});q.scale.forEach(function(w,j){r.appendChild(el('button',{onclick:function(){ans[i]=j;Array.prototype.forEach.call(r.children,function(c,k){c.classList.toggle('sel',k===j)})}},[String(j),el('small',{text:w})]))});box.appendChild(r)});
  var out=el('div');box.appendChild(el('div',{cls:'row',style:'margin-top:10px'},[el('button',{cls:'p',text:'Save',onclick:function(){if(ans.indexOf(null)>=0){say(out,'One answer per line, please.');return}api('/companion/api/who5',{json:{items:ans}}).then(function(r){out.innerHTML='';say(out,r.reply||r.error)})}})]));box.appendChild(out)})}
-function load(){api('/companion/api/today').then(renderToday).catch(warn)}
+function renderOffline(){var v=$('v-today');v.innerHTML='';v.appendChild(el('h1',{text:'No signal, still here.'}));v.appendChild(el('div',{cls:'card'},[el('div',{text:'I cannot reach the server right now. You can still tap your mood, capture a thought or write a journal line: I keep it on this phone and send it when you are online.'}),el('div',{cls:'row',style:'margin-top:8px'},[el('button',{text:'Try again',onclick:load})])]));v.appendChild(moodCard({mood:null}));showPending()}
+function load(){api('/companion/api/today').then(function(t){renderToday(t);flushQueue()}).catch(function(e){warn(e);if(CMPQ.isNetworkError(e))renderOffline()})}
 function capText(){var t=$('cap-text').value.trim();if(!t)return;$('cap-out').innerHTML='';say($('cap-out'),'Saving...');api('/companion/api/capture',{json:{text:t}}).then(function(r){$('cap-text').value='';showCap(r)})}
-function showCap(r){var o=$('cap-out');o.innerHTML='';if(!r.ok){say(o,r.error||'failed');return}var p=r.processed||{};var w={action:'Next action',project:'Project',someday:'Someday',reference:'Kept as reference',journal:'Journal',card:'Flashcard',trash:'Nothing to keep'}[p.type]||'In the inbox';
+function showCap(r){var o=$('cap-out');o.innerHTML='';if(!r.ok){say(o,r.error||'failed');return}if(r.queued){say(o,r.reply);return}var p=r.processed||{};var w={action:'Next action',project:'Project',someday:'Someday',reference:'Kept as reference',journal:'Journal',card:'Flashcard',trash:'Nothing to keep'}[p.type]||'In the inbox';
  say(o,w+(p.title?': '+p.title:'')+(p.context?' ('+p.context+')':'')+(r.kind!=='text'&&r.text?'\\n\\nI heard/saw: '+r.text.slice(0,400):''));if(p.crisis)say(o,p.crisis,true);inbox()}
 var rec=null,chunks=[];function toggleRec(){if(rec){rec.stop();return}navigator.mediaDevices.getUserMedia({audio:true}).then(function(st){chunks=[];rec=new MediaRecorder(st);rec.ondataavailable=function(e){chunks.push(e.data)};rec.onstop=function(){st.getTracks().forEach(function(t){t.stop()});var b=new Blob(chunks,{type:rec.mimeType||'audio/webm'});rec=null;$('rec').textContent='Voice note';$('rec').classList.remove('sel');upload(b,'voice.'+(b.type.indexOf('mp4')>=0?'m4a':'webm'))};rec.start();$('rec').textContent='Stop';$('rec').classList.add('sel')}).catch(function(e){say($('cap-out'),'Microphone not available: '+e.message)})}
 function capImg(inp){if(inp.files&&inp.files[0])upload(inp.files[0],inp.files[0].name);inp.value=''}
@@ -3312,7 +3761,7 @@ function drawCard(){var b=$('learn');b.innerHTML='';if(!due.length){b.appendChil
  if(show){k.appendChild(el('div',{cls:'flash',text:c.back,style:'border-top:1px solid var(--line)'}));var r=el('div',{cls:'row'});[['Again',1],['Hard',2],['Good',3],['Easy',4]].forEach(function(x){r.appendChild(el('button',{cls:x[1]===3?'p grow':'grow',text:x[0],onclick:function(){api('/companion/api/cards/review',{json:{id:c.id,rating:x[1]}}).then(function(){due.shift();show=false;drawCard()})}}))});k.appendChild(r)}
  else k.appendChild(el('div',{cls:'row'},[el('button',{cls:'p grow',text:'Show answer',onclick:function(){show=true;drawCard()}})]));b.appendChild(k)}
 function addCard(){var f=$('c-front').value.trim(),bk=$('c-back').value.trim();if(!f||!bk)return;api('/companion/api/cards',{json:{front:f,back:bk}}).then(function(){$('c-front').value='';$('c-back').value='';loadLearn()})}
-function addJournal(){var t=$('j-text').value.trim();if(!t)return;api('/companion/api/journal',{json:{content:t}}).then(function(r){$('j-text').value='';$('j-out').innerHTML='';say($('j-out'),r.ok?'Kept. Thank you for writing it down.':r.error);if(r.crisis)say($('j-out'),r.crisis,true);loadJournal()})}
+function addJournal(){var t=$('j-text').value.trim();if(!t)return;api('/companion/api/journal',{json:{content:t}}).then(function(r){$('j-text').value='';$('j-out').innerHTML='';say($('j-out'),r.queued?r.reply:r.ok?'Kept. Thank you for writing it down.':r.error);if(r.crisis)say($('j-out'),r.crisis,true);loadJournal()})}
 function loadJournal(){api('/companion/api/journal').then(function(r){var b=$('journal');b.innerHTML='';(r.entries||[]).forEach(function(j){b.appendChild(el('div',{cls:'item'},[el('div',{cls:'grow'},[el('div',{text:j.content.slice(0,600)}),el('div',{cls:'mute',text:j.date+(j.mood?' · '+j.mood:'')})])]))})})}
 function loadData(){api('/companion/api/dashboard').then(function(d){var b=$('dash');b.innerHTML='';var c=el('div',{cls:'card'},[el('h2',{text:'Mood by week'})]);if(!(d.mood_weekly||[]).length)c.appendChild(el('div',{cls:'mute',text:'A few days of check-ins and the pattern shows up here.'}));
  (d.mood_weekly||[]).forEach(function(w){c.appendChild(el('div',{cls:'row'},[el('div',{text:w.week,style:'width:86px',cls:'mute'}),el('div',{cls:'grow'},[el('div',{cls:'bar',style:'width:'+Math.round((w.mood||0)/5*100)+'%'})]),el('div',{text:String(w.mood),style:'width:40px'})]))});b.appendChild(c);
@@ -3325,7 +3774,7 @@ function loadData(){api('/companion/api/dashboard').then(function(d){var b=$('da
  if((d.who5_history||[]).length){var w5=el('div',{cls:'card'},[el('h2',{text:'Well-being, two-weekly (WHO-5, 0-100)'})]);d.who5_history.forEach(function(x){w5.appendChild(el('div',{cls:'row'},[el('div',{text:x.day,style:'width:96px',cls:'mute'}),el('div',{cls:'grow'},[el('div',{cls:'bar',style:'width:'+x.score+'%'})]),el('div',{text:String(x.score),style:'width:40px'})]))});w5.appendChild(el('div',{cls:'mute',text:'50 or more is generally a good range. A lower score is a reason to be kind to yourself and to talk to someone, not a diagnosis.'}));b.appendChild(w5)}
  if((d.mood_by_tags_60d||[]).length){var tt=el('div',{cls:'card'},[el('h2',{text:'Mood by tags (60 days)'})]);d.mood_by_tags_60d.forEach(function(x){tt.appendChild(el('div',{cls:'mute',text:x.tags+': '+x.mood+' ('+x.n+')'}))});b.appendChild(tt)}});
  api('/companion/api/week').then(function(w){if(!w||!w.lines)return;var lw=el('div',{cls:'card'},[el('h2',{text:'Week of '+w.week})].concat(w.lines.map(function(x){return el('div',{cls:'mute',text:x})})));var first=b.firstChild;b.insertBefore(lw,first)}).catch(warn);
- loadPlan();
+ loadPlan();var gpb=$('gp');gpb.innerHTML='';gpb.appendChild(gpCard());
  api('/companion/api/privacy').then(function(p){var b=$('priv');b.innerHTML='';var t=el('table');t.appendChild(el('tr',{},[el('th',{text:'What'}),el('th',{text:'rows'}),el('th',{text:'since'})]));p.tables.forEach(function(x){t.appendChild(el('tr',{},[el('td',{text:x.what}),el('td',{text:String(x.rows)}),el('td',{text:(x.oldest||'').slice(0,10)})]))});
  var conf=el('input',{placeholder:"type: delete everything"});var out=el('div');
  b.appendChild(el('div',{cls:'card'},[el('h2',{text:'Your data'}),el('div',{cls:'mute',text:p.where}),t,el('div',{cls:'mute',text:'Files: '+p.files.objects+' ('+Math.round(p.files.bytes/1024)+' KB). '+p.encryption,style:'margin-top:8px'}),
@@ -3333,6 +3782,21 @@ function loadData(){api('/companion/api/dashboard').then(function(d){var b=$('da
   el('div',{cls:'row',style:'margin-top:10px'},[el('button',{text:'Sign out on this device',onclick:signOut})]),
   el('div',{cls:'row',style:'margin-top:10px'},[el('button',{text:'Download everything',onclick:function(){fetch('/companion/api/export',{headers:hdrs()}).then(function(r){return r.blob()}).then(function(bl){var a=el('a',{href:URL.createObjectURL(bl),download:'companion-export.json'});document.body.appendChild(a);a.click();a.remove()})}})]),
   el('div',{style:'margin-top:10px'},[el('div',{cls:'mute',text:'Delete everything the companion stored (captures, moods, cards, files, Talk conversations, its nudges). Your older twin data stays.'}),conf,el('div',{cls:'row',style:'margin-top:6px'},[el('button',{text:'Delete',onclick:function(){api('/companion/api/delete',{json:{scope:'all',confirm:conf.value}}).then(function(r){out.innerHTML='';say(out,r.ok?'Deleted.':r.error)})}})]),out])]))})}
+function gpCard(){var c=el('div',{cls:'card'},[el('h2',{text:'For your GP (huisarts)'}),el('div',{cls:'mute',text:'A one-page summary of the last 90 days in plain words: mood by week, your WHO-5 scores, rest and what helped. It does not diagnose anything. Nothing is sent to anyone: you decide whether to show it or print it.'})]);
+ var j=el('input',{type:'checkbox',style:'width:auto'}),n=el('input',{type:'checkbox',style:'width:auto'});
+ c.appendChild(el('label',{cls:'row',style:'margin-top:8px'},[j,el('span',{text:'Include my journal lines (the last 20)'})]));
+ c.appendChild(el('label',{cls:'row',style:'margin-top:4px'},[n,el('span',{text:'Include the notes I typed with mood taps (the last 20)'})]));
+ var out=el('div');
+ c.appendChild(el('div',{cls:'row',style:'margin-top:8px'},[el('button',{cls:'p',text:'Show the summary',onclick:function(){out.innerHTML='';api('/companion/api/gp-summary?journal='+(j.checked?1:0)+'&notes='+(n.checked?1:0)).then(function(r){if(!r.ok){say(out,r.error||'failed',true);return}showGp(r)}).catch(function(e){say(out,e.message,true)})}})]));c.appendChild(out);return c}
+function closeGp(){var p=$('gp-print');if(p){p.classList.add('hide');p.innerHTML=''}}
+function showGp(r){var p=$('gp-print');p.innerHTML='';
+ p.appendChild(el('div',{cls:'row noprint',style:'margin:0 0 10px'},[el('button',{cls:'p',text:'Print or save as PDF',onclick:function(){window.print()}}),el('button',{text:'Close',onclick:closeGp})]));
+ var sh=el('div',{cls:'card sheet'},[el('h1',{text:r.title}),el('div',{cls:'mute',text:'Generated '+String(r.generated||'').slice(0,10)})]);
+ (r.lines||[]).forEach(function(x){sh.appendChild(el('p',{text:x}))});
+ if((r.weeks||[]).length){var t=el('table');t.appendChild(el('tr',{},[el('th',{text:'Week of'}),el('th',{text:'days logged'}),el('th',{text:'average'}),el('th',{text:'lowest'}),el('th',{text:'highest'})]));r.weeks.forEach(function(w){t.appendChild(el('tr',{},[el('td',{text:w.week}),el('td',{text:String(w.days)}),el('td',{text:String(w.avg)}),el('td',{text:String(w.low)}),el('td',{text:String(w.high)})]))});sh.appendChild(el('h2',{text:'Mood by week (1 to 5)'}));sh.appendChild(t)}
+ if(r.texts&&r.texts.journal&&r.texts.journal.length){sh.appendChild(el('h2',{text:'Journal lines I chose to include'}));r.texts.journal.forEach(function(x){sh.appendChild(el('p',{text:x.date+': '+x.text}))})}
+ if(r.texts&&r.texts.notes&&r.texts.notes.length){sh.appendChild(el('h2',{text:'Notes I typed with mood taps'}));r.texts.notes.forEach(function(x){sh.appendChild(el('p',{text:x.day+' (mood '+x.score+'): '+x.text}))})}
+ sh.appendChild(el('p',{cls:'mute',text:r.footer}));p.appendChild(sh);p.classList.remove('hide');window.scrollTo(0,0)}
 function discreetRow(){var sel=el('select',{cls:'grow'});[['care','Hide care notes on the lock screen'],['all','Hide every note on the lock screen'],['off','Show full text on the lock screen']].forEach(function(o){sel.appendChild(el('option',{value:o[0],text:o[1]}))});api('/companion/api/today').then(function(t){sel.value=t.discreet_push||'care'}).catch(warn);sel.onchange=function(){api('/companion/api/settings',{json:{discreet_push:sel.value}}).catch(warn)};return el('div',{cls:'row',style:'margin-top:10px'},[sel])}
 function emailRow(){var sel=el('select',{cls:'grow'});[['off','No e-mail from the companion (notifications and this page only)'],['daily','One morning e-mail a day'],['all','E-mail every nudge and question too']].forEach(function(o){sel.appendChild(el('option',{value:o[0],text:o[1]}))});api('/companion/api/today').then(function(t){sel.value=t.email_mode||'off'}).catch(warn);sel.onchange=function(){api('/companion/api/settings',{json:{email_mode:sel.value}}).catch(warn)};return el('div',{cls:'row',style:'margin-top:10px'},[sel])}
 function loadPlan(){api('/companion/api/safety-plan').then(function(p){var b=$('plan');b.innerHTML='';b.appendChild(el('h2',{text:'My safety plan'}));b.appendChild(el('div',{cls:'mute',text:'For a hard moment, written in a calm one. Your own words, one per line. If you ever write something that worries me, I show you these with the crisis lines.'}));var tas={};
@@ -3345,13 +3809,15 @@ function enablePush(){if(!('serviceWorker' in navigator)||!('PushManager' in win
 var views={today:load,capture:inbox,talk:drawChat,do:loadDo,learn:loadLearn,journal:loadJournal,data:loadData};
 function go(v){Array.prototype.forEach.call(document.querySelectorAll('.v'),function(s){s.classList.add('hide')});$('v-'+v).classList.remove('hide');Array.prototype.forEach.call(document.querySelectorAll('nav button'),function(b){b.classList.toggle('on',b.getAttribute('data-v')===v)});views[v]()}
 Array.prototype.forEach.call(document.querySelectorAll('nav button'),function(b){b.onclick=function(){go(b.getAttribute('data-v'))}});
-function fromHash(){var h=location.hash.slice(1);if(!h)return;var q={};h.split('&').forEach(function(x){var p=x.split('=');q[p[0]]=decodeURIComponent(p[1]||'')});history.replaceState(null,'','/companion');if(q.week!==undefined){go('today');setTimeout(function(){var w=$('week');if(w)w.scrollIntoView()},800);return}if(q.n&&(q.a==='done'||q.a==='no'))api('/companion/api/nudge',{json:{id:Number(q.n),state:q.a==='done'?'done':'declined'}}).then(load)}
+function fromHash(){var h=location.hash.slice(1);if(!h)return;var q={};h.split('&').forEach(function(x){var p=x.split('=');q[p[0]]=decodeURIComponent(p[1]||'')});history.replaceState(null,'','/companion');if(q.week!==undefined){go('today');setTimeout(function(){var w=$('week');if(w)w.scrollIntoView()},800);return}if(q.mood!==undefined){go('today');setTimeout(function(){var m=$('mood-card');if(m)m.scrollIntoView()},800);return}if(q.n&&(q.a==='done'||q.a==='no'))api('/companion/api/nudge',{json:{id:Number(q.n),state:q.a==='done'?'done':'declined'}}).then(load)}
 if('serviceWorker' in navigator)navigator.serviceWorker.register('/companion/sw.js',{scope:'/companion'}).catch(warn);
 fromHash();go('today')
 window.addEventListener('hashchange',fromHash);
+window.addEventListener('online',flushQueue);document.addEventListener('visibilitychange',function(){if(!document.hidden)flushQueue()});
+flushQueue();showPending();
 </script></body></html>`;
 
-return Object.freeze({ COMPANION_VERSION, TZ, CONTEXTS, ENERGY, NUDGE_KINDS, LADDER_KINDS, DDL, TASK_COLUMNS, ensureSchema, nowIso, FRESH_DUE_SQL, rid, esc, tzOffsetMinutes, localParts, dayKey, inQuiet, FSRS_W, RETENTION, MAX_INTERVAL_DAYS, retrievability, intervalDays, fsrsSchedule, CLARIFY_SYSTEM, contextFor, heuristicClarify, parseClarify, crisisSignal, FALLBACK_CRISIS_LINES, crisisText, SAFETY_PLAN_FIELDS, normalizeSafetyPlan, saveSafetyPlan, ACTIVITY_CATEGORIES, SEED_ACTIVITIES, helpScores, pickActivity, logActivity, whatHelps, activityBank, addActivity, WHO5_ITEMS, WHO5_SCALE, who5Score, who5Read, recordWho5, who5Status, setPause, fallbackReply, EMAIL_MODES, saveSettings, LOGIN_TO, SESSION_COOKIE, SESSION_MS, maskedLoginTo, sessionFor, sendLoginCode, verifyLoginCode, isPaused, NEVER_RETIRE, retiredFrom, DISCREET_KINDS, discreetPayload, pruneMedia, TEXTS, pickLru, energyFor, chooseAction, receptiveHours, addDays, mondayOf, weekWindow, weekText, weekLookback, weekSeen, planNudge, b64u, unb64u, makeVapidKeys, vapidAuthHeader, encryptPayload, sendPush, pushAll, loadCfg, dayStartIso, sleepFromTimestamps, sleepWindow, moodStats, retiredKinds, daysSinceSocial, unansweredStreak, gatherState, remember, recall, contextSnapshot, recordMood, moodReply, addAction, upsertProject, actionDone, addJournal, addCard, reviewCard, answerNudge, MAX_CAPTURE_BYTES, transcribe, capture, clarify, processItem, processInbox, pushPayloadFor, companionTick, today, dashboard, PRIVACY_TABLES, privacy, exportAll, deleteData, PERSONA, untrusted, chatContext, noteRiskInChat, companionTools, TOOL_APPENDIX_LINE, TICK_MS, doKeys, doEnsure, doTick, doAlarm, doFetch, handleTranscription, handleCompanion, MANIFEST, ICON_SVG, SW_JS, PAGE_HTML });
+return Object.freeze({ COMPANION_VERSION, TZ, CONTEXTS, ENERGY, NUDGE_KINDS, LADDER_KINDS, DDL, TASK_COLUMNS, ensureSchema, nowIso, FRESH_DUE_SQL, rid, esc, tzOffsetMinutes, localParts, dayKey, OFFLINE_MAX_AGE_MS, clientStamp, inQuiet, FSRS_W, RETENTION, MAX_INTERVAL_DAYS, retrievability, intervalDays, fsrsSchedule, CLARIFY_SYSTEM, contextFor, heuristicClarify, parseClarify, crisisSignal, FALLBACK_CRISIS_LINES, crisisText, SAFETY_PLAN_FIELDS, normalizeSafetyPlan, saveSafetyPlan, ACTIVITY_CATEGORIES, SEED_ACTIVITIES, helpScores, pickActivity, logActivity, whatHelps, activityBank, addActivity, WHO5_ITEMS, WHO5_SCALE, who5Score, who5Read, recordWho5, who5Status, setPause, fallbackReply, EMAIL_MODES, saveSettings, LOGIN_TO, SESSION_COOKIE, SESSION_MS, maskedLoginTo, sessionFor, sendLoginCode, verifyLoginCode, isPaused, NEVER_RETIRE, retiredFrom, DISCREET_KINDS, discreetPayload, pruneMedia, TEXTS, pickLru, energyFor, chooseAction, receptiveHours, addDays, mondayOf, weekWindow, weekText, weekLookback, weekSeen, planNudge, b64u, unb64u, makeVapidKeys, vapidAuthHeader, encryptPayload, sendPush, pushAll, loadCfg, dayStartIso, COUNTRY_TZ, CITY_TZ, MULTI_TZ_COUNTRIES, countryCode, placeTz, stayAt, effectiveTz, localDay, EVENT_DEFAULT_MIN, eventMs, normalizeEvents, clearEventCache, loadEvents, afterEventText, GP_DAYS, gpSummaryBuild, gpSummary, sleepFromTimestamps, sleepWindow, moodStats, retiredKinds, daysSinceSocial, unansweredStreak, gatherState, remember, recall, contextSnapshot, recordMood, moodReply, addAction, upsertProject, actionDone, addJournal, addCard, reviewCard, answerNudge, MAX_CAPTURE_BYTES, transcribe, capture, clarify, processItem, processInbox, pushPayloadFor, companionTick, today, dashboard, PRIVACY_TABLES, privacy, exportAll, deleteData, PERSONA, untrusted, chatContext, noteRiskInChat, companionTools, TOOL_APPENDIX_LINE, TICK_MS, doKeys, doEnsure, doTick, doAlarm, doFetch, handleTranscription, handleCompanion, MANIFEST, ICON_SVG, SW_JS, OFFLINE_JS, PAGE_HTML });
 })();
 // COMPANION-INLINE-END
 var CMP_DEPS = {
@@ -3360,6 +3826,8 @@ var CMP_DEPS = {
   embed: (env, texts) => embed(env, texts),
   vision: (env, content) => visionRun(env, content, 1200),
   weather: (env) => weatherT(env),
+  // COMPANION-CALENDAR-AWARE-1: the twin's calendar (Google and the twin store) for today's events; companion.js adds the events table.
+  calendar: (env, from, to) => calList(env, from, to, 40),
   // Sorting and short texts use the brief models (cheap flash first), through the AI Gateway like every twin call.
   llm: async (env, system, user, maxTokens) => {
     const up = await upstreamChat(env, system, [{ role: "user", content: user }], 0.2, maxTokens || 600, false, true, 45e3);

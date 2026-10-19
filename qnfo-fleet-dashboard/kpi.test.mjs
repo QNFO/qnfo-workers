@@ -80,6 +80,11 @@ rs("2026-10-10", "cf-rum-human", "web", "page", "q08.org/a/b", "pageviews", 5);
 rs("2026-10-10", "cf-rum-human", "web", "page", "reading.q08.org/", "pageviews", 20);
 rs("2026-10-10", "cf-rum-human", "web", "paper", "some-paper", "pageviews", 30);
 rs("2026-10-10", "cf-rum-human", "web", "page", "(other)", "pageviews", 5);
+rs("2026-10-08", "cf-rum-human", "web", "page", "fleet.qnfo.org/owner", "pageviews", 90); // the owner's own surface: never a reader link
+rs("2026-10-08", "cf-rum-human", "web", "page", "some-worker.q08.workers.dev/x", "pageviews", 60); // a workers.dev host: never a reader link
+rs("2026-10-08", "cf-rum-human", "web", "page", "bad host/\"x", "pageviews", 3); // not a link: shown without a url
+rs("2026-10-08", "cf-rum-human", "web", "paper", "(other)", "pageviews", 9); // the unattributed bucket is not a paper
+rs("2026-10-08", "cf-rum", "web", "paper", "not-human-paper", "pageviews", 99); // another source (bots included): not direct traffic
 rs("2026-10-10", "cf-rum", "web", "page", "q08.org/", "pageviews", 999); // unfiltered rows are never read
 rs("2026-10-11", "cf-rum-human", "web", "site", "(all)", "pageviews", 80);
 rs("2026-10-11", "cf-rum-human", "web", "page", "q08.org/", "pageviews", 777); // ignored: the day has host rows
@@ -120,7 +125,7 @@ const shim = {
   }
 };
 const ctx = vm.createContext({ VERSION: "1.30.0-test", FLEET_SHELL_JS: "", fleetHead: (t) => "<html><title>" + t + "</title><body>", fleetTop: (cur) => "<nav data-current=\"" + cur + "\"></nav>", console, Date, JSON, Math, Object, Promise, String, Number, isFinite, areaOf: (k) => (/guard|worker/.test(k) ? "reliability" : "autonomy") });
-vm.runInContext(d1allSrc + escSrc + rowSrc + hostSrc + outcomeSrc + block + "\nthis.K = { kpiData, kpiCompute, kpiHtml, kpiShapeService, kpiShapeSla, kpiServiceHtml, kpiParseBand, kpiOpHolds, kpiMinText, kpiFmtVal, KPI_STATE_RANK, kpiProperty, kpiBskyUrl, kpiHttpUrl, kpiChannel, kpiMedian, kpiDays, kpiBufferMetric, kpiFmt, reachRumHostRows, KPI_SQL, KPI_TTL_MS, KPI_CSS, reset: function() { kpiCache = null; } };", ctx);
+vm.runInContext(d1allSrc + escSrc + rowSrc + hostSrc + outcomeSrc + block + "\nthis.K = { kpiData, kpiCompute, kpiHtml, kpiShapeService, kpiShapeSla, kpiServiceHtml, kpiParseBand, kpiOpHolds, kpiMinText, kpiFmtVal, KPI_STATE_RANK, kpiProperty, kpiBskyUrl, kpiHttpUrl, kpiChannel, kpiMedian, kpiDays, kpiBufferMetric, kpiFmt, reachRumHostRows, kpiShapeDirectTraffic, KPI_SQL, KPI_TTL_MS, KPI_CSS, reset: function() { kpiCache = null; } };", ctx);
 const K = ctx.K, env = { AUDIT: shim };
 const j = (x) => JSON.parse(JSON.stringify(x));
 
@@ -142,6 +147,17 @@ ok(!/[^\x00-\x7F]/.test(block), "the block is ASCII (ASCII-SOURCE-1)");
 const v = j(await K.kpiData(env, NOW));
 const I = v.issues;
 ok(v.ok === true && v.as_of === "2026-10-12T09:00:00.000Z" && v.cache_ttl_s === 60 && v.days.length === 14 && v.days[13] === "2026-10-12", "envelope: ok, as_of, ttl, 14 days ending today");
+// ---- direct traffic (reach shaping of top_papers_rum and top_pages_rum, KPI-DIRECT-TRAFFIC-1): human page loads by paper and by page, the fleet's own surfaces left out
+const DT = v.reach.direct_traffic;
+ok(DT && /cf-rum-human/.test(DT.source) && Array.isArray(DT.papers) && Array.isArray(DT.links) && DT.notes.length === 2, "direct traffic is a panel with its source, papers, links and two notes", DT && Object.keys(DT));
+ok(DT.papers.length === 1 && DT.papers[0].slug === "some-paper" && DT.papers[0].pageviews === 30 && DT.papers[0].url === "https://papers.qnfo.org/papers/some-paper", "papers: human loads only, the (other) bucket and another source left out, each with its public link", DT.papers);
+const L = (p) => DT.links.find((x) => x.page === p);
+ok(DT.links[0].page === "q08.org/" && DT.links[0].pageviews >= 40 && DT.links.map((x) => x.pageviews).join() === DT.links.map((x) => x.pageviews).slice().sort((a, b) => b - a).join(), "links: the most opened page first, ordered by page views", DT.links);
+ok(L("reading.q08.org/").pageviews === 20 && L("reading.q08.org/").url === "https://reading.q08.org/" && L("q08.org/a/b").url === "https://q08.org/a/b", "links: a page carries its https link", DT.links);
+ok(!L("fleet.qnfo.org/owner") && !L("(other)") && !DT.links.some((x) => /workers\.dev/.test(x.page)), "links: the owner's surface, workers.dev hosts and the (other) bucket are not reader traffic", DT.links.map((x) => x.page));
+ok(L('bad host/"x') && L('bad host/"x').url === null, "links: an entity that is not a host and path is listed without a link, never as markup", DT.links);
+const DT0 = K.kpiShapeDirectTraffic ? K.kpiShapeDirectTraffic({ top_papers_rum: { err: "no such table: reach_signals" }, top_pages_rum: { rows: [] } }, NOW) : null;
+ok(DT0 === null || (DT0.papers === null && Array.isArray(DT0.links) && DT0.links.length === 0 && /top papers: no such table/.test(DT0.notes[2])), "an unreadable read is null with its reason in the notes; an empty read is a measured empty list", DT0);
 ok(/^\d+\.\d+\.\d+/.test(v.version) && Number(src.match(/var VERSION = "(\d+)\.(\d+)/).slice(1).join(".")) >= 1.3, "VERSION is at least 1.30");
 ok(I.open_total === 5 && I.by_priority.map((p) => p.priority + p.n).join() === "critical1,high2,medium1,low1", "open total and priority order critical, high, medium, low");
 ok(I.by_category[0].category === "reliability" && I.by_category[0].n === 2 && I.by_category.some((c) => c.category === "(none)" && c.n === 1), "categories ranked, empty category named (none)");
