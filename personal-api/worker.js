@@ -106,7 +106,7 @@ function clampMaxTokens(requested, isReason) {
 __name(clampMaxTokens, "clampMaxTokens");
 __name2(clampMaxTokens, "clampMaxTokens");
 __name22(clampMaxTokens, "clampMaxTokens");
-var VERSION = "4.16.0-notify-answer"; // 4.16.0 COMPANION-NOTIFY-ANSWER-1 (2026-10-19, agent_issues 100198, pillar personal): the Did it and Not today buttons on a companion notification record the answer from the service worker (POST /companion/api/nudge under the sign-in cookie with X-Companion: 1) and show a short confirmation instead of opening the app, falling back to opening the app when signed out or offline; a check-in notification opens on the mood picker (/companion#mood). // 4.15.0 COMPANION-WEEK-1 (2026-10-19, agent_issues 100197, pillar personal, owner ask: "WHAT ELSE IS IN BACKLOG/ROADMAP THAT CAN BE IMPLEMENTED?"): with companion e-mail off the Sunday review reached no one; the companion now builds "Your week" from its own record (mood days against the week before, best day, what was done and what felt good, actions done, one idea from what helped; never what was missed), shows it on Today from Sunday 18:00 through Monday with a hide button, sends one quiet "Your week" push on Sunday evening under quiet hours, the cap and the pause, and shows the last week on the Data tab (GET /companion/api/week, POST /companion/api/week/seen). // 4.14.0 COMPANION-LOGIN-1 + COMPANION-DOMAIN-1 + COMPANION-EMAIL-OPT-IN-1 + COMPANION-STALE-1 (2026-10-19, owner: "stop asking me for keys ... one-time email passwords are fine"; "for personal shit, use q08.org"; "the emails are stale"; pillar personal): /companion signs in with a 6-digit code mailed to the owner (SEND_EMAIL, one fixed address, rate-limited) and the device stays signed in for 180 days by an HttpOnly cookie (cmp_sessions, hashes only; cookie writes also need X-Companion: 1); the bearer key still works for tools and MCP; me.q08.org/ opens the companion; Data tab sets companion e-mail off (default), daily or all and signs out; reminders more than 3 days past their date are no longer the one thing or a nudge, and Today counts them once. // 4.13.1 COMPANION-CONTEXT-QUERY-URL-1 (issue 100041, privacy): GET /companion/api/context?q= put the owner's words in a logged URL; the route is now POST with q in the JSON body, and a GET answers 405 without reading the query. // 4.12.0 RED-TEAM-1: the companion red-teamed (risk words with curly apostrophes, more phrasings and Dutch; care and presence never retire; risk follow-up with the crisis lines on Today for a day; quiet hours on mirrored pushes; pause shared with the e-mail ladder; captured text treated as data in the chat prompt; Talk conversations in export and delete; warm fallback when the model is down; lock-screen setting; tick heartbeat on Today). // 4.11.0 COMPANION-BEST-PRACTICE-1: evidence-based companion (behavioral activation ratings and an activity bank, a Stanley-Brown safety plan in crisis replies, two-weekly WHO-5 with a gentle GP suggestion, pause, weekly retry of retired nudges, connection nudge, discreet lock-screen care pushes, 30-day voice-note retention). // 4.10.0 COMPANION-1: /companion (capture text, voice and photos; GTD next actions; mood with context; FSRS flashcards; journal; privacy export and delete), Web Push nudges from the companion Durable Object on a 15-minute alarm sharing the wellbeing ladder's budget, cmp_* tools in chat and MCP, /v1/audio/transcriptions. // 4.9.1-log-catches 4.9.0 CRON-ONLY-HEARTBEAT-1 (agent_issues 2397): the scheduled run upserts its qnfo-audit fleet_heartbeat row when it finishes. // 4.8.6 CRYPTO-IDS-1: the 18 row ids and the feed fallback id come from crypto.getRandomValues (rhex), not Math.random; same id shapes. // 4.8.5 // 4.8.5-doi-scrub NOZ-DOI-1: the separation prompt names no external registry. 4.8.4 below. // 4.13.0 CRON-GRID-1 (owner directive 2026-10-19, pillar personal): the trigger is hourly at :05; the daily 05:05 run (mail sync, ledger sync, companion re-arm, brief) runs on the grid fire of its slot, never retried (it sends the brief), and every fire is a cron_fire_log row CRON-WATCH-1 reads. // 4.12.0 RED-TEAM-1: the companion red-teamed (risk words with curly apostrophes, more phrasings and Dutch; care and presence never retire; risk follow-up with the crisis lines on Today for a day; quiet hours on mirrored pushes; pause shared with the e-mail ladder; captured text treated as data in the chat prompt; Talk conversations in export and delete; warm fallback when the model is down; lock-screen setting; tick heartbeat on Today). // 4.11.0 COMPANION-BEST-PRACTICE-1: evidence-based companion (behavioral activation ratings and an activity bank, a Stanley-Brown safety plan in crisis replies, two-weekly WHO-5 with a gentle GP suggestion, pause, weekly retry of retired nudges, connection nudge, discreet lock-screen care pushes, 30-day voice-note retention). // 4.10.0 COMPANION-1: /companion (capture text, voice and photos; GTD next actions; mood with context; FSRS flashcards; journal; privacy export and delete), Web Push nudges from the companion Durable Object on a 15-minute alarm sharing the wellbeing ladder's budget, cmp_* tools in chat and MCP, /v1/audio/transcriptions. // 4.9.1-log-catches 4.9.0 CRON-ONLY-HEARTBEAT-1 (agent_issues 2397): the scheduled run upserts its qnfo-audit fleet_heartbeat row when it finishes. // 4.8.6 CRYPTO-IDS-1: the 18 row ids and the feed fallback id come from crypto.getRandomValues (rhex), not Math.random; same id shapes. // 4.8.5 // 4.8.5-doi-scrub NOZ-DOI-1: the separation prompt names no external registry. 4.8.4 below.
+var VERSION = "4.17.0-offline"; // 4.17.0 COMPANION-OFFLINE-1 (2026-10-19, agent_issues 100201, pillar personal): the companion app opens without a signal and loses nothing made offline: the service worker keeps the page shell (HTML, manifest, icon; no personal data) and serves it when the network is down; a capture, mood tap or journal line made offline waits in IndexedDB on the phone with the time it was made, is sent when the connection returns (online, app in front, after Today loads) and is stored at that time, never twice, and the queue is cleared at sign-out; Today shows an offline view with the mood card and the line saved on this phone, and API reads are never cached. // 4.16.0 COMPANION-NOTIFY-ANSWER-1 (2026-10-19, agent_issues 100198, pillar personal): the Did it and Not today buttons on a companion notification record the answer from the service worker (POST /companion/api/nudge under the sign-in cookie with X-Companion: 1) and show a short confirmation instead of opening the app, falling back to opening the app when signed out or offline; a check-in notification opens on the mood picker (/companion#mood). // 4.15.0 COMPANION-WEEK-1 (2026-10-19, agent_issues 100197, pillar personal, owner ask: "WHAT ELSE IS IN BACKLOG/ROADMAP THAT CAN BE IMPLEMENTED?"): with companion e-mail off the Sunday review reached no one; the companion now builds "Your week" from its own record (mood days against the week before, best day, what was done and what felt good, actions done, one idea from what helped; never what was missed), shows it on Today from Sunday 18:00 through Monday with a hide button, sends one quiet "Your week" push on Sunday evening under quiet hours, the cap and the pause, and shows the last week on the Data tab (GET /companion/api/week, POST /companion/api/week/seen). // 4.14.0 COMPANION-LOGIN-1 + COMPANION-DOMAIN-1 + COMPANION-EMAIL-OPT-IN-1 + COMPANION-STALE-1 (2026-10-19, owner: "stop asking me for keys ... one-time email passwords are fine"; "for personal shit, use q08.org"; "the emails are stale"; pillar personal): /companion signs in with a 6-digit code mailed to the owner (SEND_EMAIL, one fixed address, rate-limited) and the device stays signed in for 180 days by an HttpOnly cookie (cmp_sessions, hashes only; cookie writes also need X-Companion: 1); the bearer key still works for tools and MCP; me.q08.org/ opens the companion; Data tab sets companion e-mail off (default), daily or all and signs out; reminders more than 3 days past their date are no longer the one thing or a nudge, and Today counts them once. // 4.13.1 COMPANION-CONTEXT-QUERY-URL-1 (issue 100041, privacy): GET /companion/api/context?q= put the owner's words in a logged URL; the route is now POST with q in the JSON body, and a GET answers 405 without reading the query. // 4.12.0 RED-TEAM-1: the companion red-teamed (risk words with curly apostrophes, more phrasings and Dutch; care and presence never retire; risk follow-up with the crisis lines on Today for a day; quiet hours on mirrored pushes; pause shared with the e-mail ladder; captured text treated as data in the chat prompt; Talk conversations in export and delete; warm fallback when the model is down; lock-screen setting; tick heartbeat on Today). // 4.11.0 COMPANION-BEST-PRACTICE-1: evidence-based companion (behavioral activation ratings and an activity bank, a Stanley-Brown safety plan in crisis replies, two-weekly WHO-5 with a gentle GP suggestion, pause, weekly retry of retired nudges, connection nudge, discreet lock-screen care pushes, 30-day voice-note retention). // 4.10.0 COMPANION-1: /companion (capture text, voice and photos; GTD next actions; mood with context; FSRS flashcards; journal; privacy export and delete), Web Push nudges from the companion Durable Object on a 15-minute alarm sharing the wellbeing ladder's budget, cmp_* tools in chat and MCP, /v1/audio/transcriptions. // 4.9.1-log-catches 4.9.0 CRON-ONLY-HEARTBEAT-1 (agent_issues 2397): the scheduled run upserts its qnfo-audit fleet_heartbeat row when it finishes. // 4.8.6 CRYPTO-IDS-1: the 18 row ids and the feed fallback id come from crypto.getRandomValues (rhex), not Math.random; same id shapes. // 4.8.5 // 4.8.5-doi-scrub NOZ-DOI-1: the separation prompt names no external registry. 4.8.4 below. // 4.13.0 CRON-GRID-1 (owner directive 2026-10-19, pillar personal): the trigger is hourly at :05; the daily 05:05 run (mail sync, ledger sync, companion re-arm, brief) runs on the grid fire of its slot, never retried (it sends the brief), and every fire is a cron_fire_log row CRON-WATCH-1 reads. // 4.12.0 RED-TEAM-1: the companion red-teamed (risk words with curly apostrophes, more phrasings and Dutch; care and presence never retire; risk follow-up with the crisis lines on Today for a day; quiet hours on mirrored pushes; pause shared with the e-mail ladder; captured text treated as data in the chat prompt; Talk conversations in export and delete; warm fallback when the model is down; lock-screen setting; tick heartbeat on Today). // 4.11.0 COMPANION-BEST-PRACTICE-1: evidence-based companion (behavioral activation ratings and an activity bank, a Stanley-Brown safety plan in crisis replies, two-weekly WHO-5 with a gentle GP suggestion, pause, weekly retry of retired nudges, connection nudge, discreet lock-screen care pushes, 30-day voice-note retention). // 4.10.0 COMPANION-1: /companion (capture text, voice and photos; GTD next actions; mood with context; FSRS flashcards; journal; privacy export and delete), Web Push nudges from the companion Durable Object on a 15-minute alarm sharing the wellbeing ladder's budget, cmp_* tools in chat and MCP, /v1/audio/transcriptions. // 4.9.1-log-catches 4.9.0 CRON-ONLY-HEARTBEAT-1 (agent_issues 2397): the scheduled run upserts its qnfo-audit fleet_heartbeat row when it finishes. // 4.8.6 CRYPTO-IDS-1: the 18 row ids and the feed fallback id come from crypto.getRandomValues (rhex), not Math.random; same id shapes. // 4.8.5 // 4.8.5-doi-scrub NOZ-DOI-1: the separation prompt names no external registry. 4.8.4 below.
 // CRYPTO-IDS-1 (WORKERS-BEST-PRACTICES-1): row ids and nonces come from crypto.getRandomValues, never Math.random. rhex(n) returns n lowercase hex characters (same shape as the old Math.random().toString(16).slice(2, 2 + n)).
 function rhex(n) { var b = new Uint8Array(Math.ceil(n / 2)); crypto.getRandomValues(b); var h = ""; for (var i = 0; i < b.length; i++) h += (b[i] + 256).toString(16).slice(1); return h.slice(0, n); }
 // 4.8.4 NO-TOPIC-HARDCODE-1 (owner directive 2026-10-10): the twin, planner and predictor prompts no longer carry the owner's profile gates as hard-coded text; they apply only the gates found in the retrieved profile facets. //4.8.2 LEDGER-PAGE-1 (#1951): the Ledger sync drains calendar-api /feedback by after_id in pages of 500 (max 10 pages per run, id cursor feedback_after_id) so rows beyond the newest 500 are no longer skipped; AWAY-AMS-1 (#1883): inside an away window the brief keeps Google/ICS and manual calendar events whose location is in the Amsterdam area and hides only radar/twin suggestions and catalog rows. // 4.8.0 TWIN-FLASH-1 (owner directive 2026-10-05, #1818): twin primary model glm-5.3-flash (reasoning_effort low), deepseek-v4-pro per-request fallback, automatic revert when today's flash failure share >= 20% over >= 10 calls; 4.7.2 WORKERS-AI-ATTRIBUTION-1 for personal-api (#1833): every env.AI.run (embeddings, OCR/vision, chat, Durable Object chat) is counted in qnfo-audit.ai_call_counters (purpose binding: calls, tokens, neurons; counts only, no text) through the same __aiAttrEnv shim qnfo-research-exec uses; no new model call, no behaviour change. // 4.7.1 TOOL-TRACE-MEMORY-1 (#1805): internal tool-trace chat rows (model tool/mcp-tool) no longer reach thread memory or the cross-thread context.
@@ -1380,8 +1380,12 @@ var CMP = (() => {
 // COMPANION-NOTIFY-ANSWER-1 (2026-10-19): low effort keeps people using it, so a notification is answerable without the app.
 //  20. "Did it" and "Not today" answer from the service worker under the sign-in cookie and confirm briefly; a check-in
 //      notification opens on the mood picker. Signed out or offline, the app opens on the answer as before.
+// COMPANION-OFFLINE-1 (2026-10-19): the app opens without a signal and loses nothing made offline.
+//  21. The service worker keeps the page shell (HTML, manifest, icon: no personal data) and serves it when the network is
+//      down. A capture, mood tap or journal line made offline waits in IndexedDB on the phone with the time it was made,
+//      is sent when the connection returns, and is removed at sign-out. Nothing else is cached; API reads never are.
 
-const COMPANION_VERSION = "1.5.0";
+const COMPANION_VERSION = "1.6.0";
 const TZ = "Europe/Amsterdam";
 const CONTEXTS = [
   { name: "@home", hint: "chores, cooking, things in the flat" },
@@ -1512,6 +1516,16 @@ function localParts(iso, tz) {
   return { day: d.toISOString().slice(0, 10), hour: d.getUTCHours() + d.getUTCMinutes() / 60, dow: d.getUTCDay() };
 }
 const dayKey = (iso, tz) => localParts(iso, tz).day;
+// COMPANION-OFFLINE-1: a note made offline carries `at`, the time it was made. It is kept as the entry's own time when it is
+// not in the future and not older than OFFLINE_MAX_AGE_MS; anything else is stamped now. A repeat of the same `at` is the same
+// note arriving twice (a lost reply), so the writers answer it as a duplicate instead of storing it again.
+const OFFLINE_MAX_AGE_MS = 30 * 864e5;
+function clientStamp(at, nowMs) {
+  const t = Date.parse(String(at === undefined || at === null ? "" : at));
+  const now = nowMs === undefined ? Date.now() : nowMs;
+  if (!Number.isFinite(t) || t > now + 60000 || now - t > OFFLINE_MAX_AGE_MS) return null;
+  return new Date(t).toISOString();
+}
 function inQuiet(h, qs, qe) {
   if (qs === qe) return false;
   if (qs < qe) return h >= qs && h < qe;
@@ -2517,9 +2531,12 @@ async function recordMood(env, deps, a) {
   const energy = a.energy === undefined || a.energy === null || a.energy === "" ? null : clampInt(a.energy, 1, 5);
   const tags = Array.isArray(a.tags) ? a.tags.map((x) => s(x, 30)).filter(Boolean).join(",") : s(a.tags, 200);
   const note = s(a.note, 2000) || null;
-  const now = nowIso();
+  const stamp = clientStamp(a.at);
+  const now = stamp || nowIso();
+  if (stamp) { const dup = await one(env.PERSONAL, "SELECT id, day, score FROM cmp_mood WHERE ts = ?", now).catch(() => null); if (dup) return { ok: true, duplicate: true, id: dup.id, day: dup.day, score: Number(dup.score), reply: "Already saved." }; }
   const day = dayKey(now);
-  const ctx = await contextSnapshot(env, deps, now);
+  const late = !!stamp && Date.now() - Date.parse(now) > 36e5;
+  const ctx = await contextSnapshot(env, late ? null : deps, now);
   const id = rid("mood");
   await env.PERSONAL.prepare("INSERT INTO cmp_mood (id, ts, day, score, energy, tags, note, context_json, source) VALUES (?,?,?,?,?,?,?,?,?)")
     .bind(id, now, day, score, energy, tags || null, note, JSON.stringify(ctx), s(a.source, 40) || "companion").run();
@@ -2527,7 +2544,7 @@ async function recordMood(env, deps, a) {
   await env.PERSONAL.prepare(`INSERT INTO wellbeing_checkins (ts, day, mood, energy, note, source, raw_json) VALUES (?, ?, ?, ?, ?, 'companion', ?)
      ON CONFLICT(day, source) DO UPDATE SET ts = excluded.ts, mood = excluded.mood, energy = COALESCE(excluded.energy, energy), note = COALESCE(excluded.note, note), raw_json = excluded.raw_json`)
     .bind(now, day, score, energy, note, JSON.stringify({ tags, cmp_mood_id: id })).run();
-  await closeOpen(env, ["checkin", "cmp-checkin"], "done", "mood " + score);
+  if (day === dayKey(nowIso())) await closeOpen(env, ["checkin", "cmp-checkin"], "done", "mood " + score);
   if (note) await remember(env, deps, id, "mood", "Mood " + score + "/5" + (tags ? " (" + tags + ")" : "") + ": " + note);
   const sig = crisisSignal(note);
   return { ok: true, id, day, score, energy, tags, context: ctx, crisis: sig.level >= 2 ? crisisText(await loadCfg(env)) : null, reply: moodReply(score, sig.level) };
@@ -2568,9 +2585,11 @@ async function actionDone(env, id) {
 async function addJournal(env, deps, a) {
   const content = s(a && a.content, 5000);
   if (content.length < 2) return { ok: false, error: "content required" };
-  const now = nowIso(), id = rid("jrn");
+  const stamp = clientStamp(a.at);
+  const now = stamp || nowIso(), id = rid("jrn");
+  if (stamp) { const dup = await one(env.PERSONAL, "SELECT id FROM journal WHERE ts = ? AND content = ?", now, content).catch(() => null); if (dup) return { ok: true, duplicate: true, id: dup.id, crisis: null }; }
   await env.PERSONAL.prepare("INSERT INTO journal (id, ts, date, content, mood, tags, source) VALUES (?,?,?,?,?,?, 'companion')").bind(id, now, dayKey(now), content, s(a.mood, 20), s(a.tags, 200)).run();
-  await closeOpen(env, ["cmp-reflect"], "done", "journal");
+  if (dayKey(now) === dayKey(nowIso())) await closeOpen(env, ["cmp-reflect"], "done", "journal");
   await remember(env, deps, id, "journal", content);
   const sig = crisisSignal(content);
   return { ok: true, id, crisis: sig.level >= 2 ? crisisText(await loadCfg(env)) : null };
@@ -2627,7 +2646,9 @@ async function transcribe(env, bytes) {
   return { ok: false, error: errors.join(" | ") };
 }
 async function capture(env, deps, input) {
-  const now = nowIso(), id = rid("inb"), day = dayKey(now);
+  const stamp = clientStamp(input && input.at);
+  const now = stamp || nowIso(), id = rid("inb"), day = dayKey(now);
+  if (stamp) { const dup = await one(env.PERSONAL, "SELECT id FROM cmp_inbox WHERE ts = ?", now).catch(() => null); if (dup) return { ok: true, duplicate: true, id: dup.id, kind: "text", text: "", media_key: null, note: null, processed: null }; }
   let kind = "text", text = s(input && input.text, 8000), mediaKey = null, mime = null, note = null;
   if (input && input.audio && input.audio.length) {
     if (input.audio.length > MAX_CAPTURE_BYTES) return { ok: false, error: "audio over 20 MB" };
@@ -3045,7 +3066,7 @@ async function readCapture(request) {
   if (ct.startsWith("audio/") || ct.startsWith("video/webm")) return { audio: new Uint8Array(await request.arrayBuffer()), mime: ct.split(";")[0].replace("video/", "audio/") };
   if (ct.startsWith("image/")) return { image: new Uint8Array(await request.arrayBuffer()), mime: ct };
   const b = await request.json().catch(() => ({}));
-  const out = { text: b.text || b.content || "", source: b.source || "api" };
+  const out = { text: b.text || b.content || "", source: b.source || "api", at: b.at };
   if (b.audio_b64) { out.audio = unb64(b.audio_b64); out.mime = b.mime || "audio/webm"; }
   if (b.image_b64) { out.image = unb64(b.image_b64); out.mime = b.mime || "image/jpeg"; }
   return out;
@@ -3179,8 +3200,26 @@ const MANIFEST = {
   icons: [{ src: "/companion/icon.svg", sizes: "any", type: "image/svg+xml", purpose: "any maskable" }]
 };
 const ICON_SVG = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 96 96"><rect width="96" height="96" rx="22" fill="#2f5d50"/><circle cx="48" cy="44" r="20" fill="none" stroke="#f6f4ef" stroke-width="7"/><path d="M30 74c5-6 11-9 18-9s13 3 18 9" fill="none" stroke="#f6f4ef" stroke-width="7" stroke-linecap="round"/></svg>';
-const SW_JS = `self.addEventListener('install', e => self.skipWaiting());
-self.addEventListener('activate', e => e.waitUntil(self.clients.claim()));
+const SW_JS = `// COMPANION-OFFLINE-1: only the page shell is cached (HTML, manifest, icon: no personal data). API calls are never cached or
+// intercepted; what is made offline waits in the page's own IndexedDB queue.
+const SHELL = 'cmp-shell-v1';
+const SHELL_URLS = ['/companion', '/companion/manifest.webmanifest', '/companion/icon.svg'];
+self.addEventListener('install', e => {
+  e.waitUntil(caches.open(SHELL).then(c => Promise.all(SHELL_URLS.map(u => fetch(u, { credentials: 'same-origin' }).then(r => r.ok ? c.put(u, r) : null).catch(() => null)))).then(() => self.skipWaiting()));
+});
+self.addEventListener('activate', e => {
+  e.waitUntil(caches.keys().then(ks => Promise.all(ks.filter(k => k.indexOf('cmp-shell-') === 0 && k !== SHELL).map(k => caches.delete(k)))).then(() => self.clients.claim()));
+});
+self.addEventListener('fetch', e => {
+  const r = e.request;
+  if (r.method !== 'GET') return;
+  const u = new URL(r.url);
+  if (u.origin !== self.location.origin || SHELL_URLS.indexOf(u.pathname) < 0) return;
+  e.respondWith(fetch(r).then(res => {
+    if (res.ok) { const copy = res.clone(); caches.open(SHELL).then(c => c.put(u.pathname, copy)).catch(() => null); }
+    return res;
+  }).catch(() => caches.match(u.pathname).then(m => m || Response.error())));
+});
 self.addEventListener('push', e => {
   let d = {}; try { d = e.data ? e.data.json() : {}; } catch (x) { d = { body: e.data ? e.data.text() : '' }; }
   const opts = { body: d.body || '', tag: d.tag || 'companion', icon: '/companion/icon.svg', badge: '/companion/icon.svg', data: { url: d.url || '/companion', id: d.id || null, tag: d.tag || 'companion' }, renotify: false };
@@ -3215,6 +3254,47 @@ self.addEventListener('notificationclick', e => {
   e.waitUntil(openApp(d.url || '/companion'));
 });`;
 
+// COMPANION-OFFLINE-1: the queue core, plain ES5 so the page embeds it as is and the suite runs it in a vm. `store` is
+// {add(item), all(), del(id), clear()}; idb() builds one over IndexedDB. Only a capture, mood tap or journal line (JSON) is
+// queued; voice and photo uploads are not. Nothing but the unsent note is stored, and sign-out clears it.
+const OFFLINE_JS = `var CMPQ=(function(){
+var PATHS={'/companion/api/capture':1,'/companion/api/mood':1,'/companion/api/journal':1};
+var MAX_ITEMS=100,MAX_AGE_MS=30*86400000;
+var SAVED='Saved on this phone. I will send it when you are online.';
+var SAFE=' If things feel unsafe right now: 112 for danger, 113 (0800-0113, free) at any hour.';
+function queueable(path,opt){return !!(opt&&opt.method==='POST'&&PATHS[path]===1&&typeof opt.body==='string')}
+function isNetworkError(e){return !!e&&e.name==='TypeError'}
+function make(path,body,nowMs){var o={};try{o=JSON.parse(body)||{}}catch(e){o={}}o.at=new Date(nowMs).toISOString();return {path:path,body:JSON.stringify(o),at:nowMs}}
+function add(store,path,body,nowMs){return store.all().then(function(items){if((items||[]).length>=MAX_ITEMS)return {ok:false,full:true};return store.add(make(path,body,nowMs)).then(function(){return {ok:true}})})}
+function flush(store,send,nowMs){
+var res={sent:0,dropped:0,left:0,crisis:[],stopped:null};
+return store.all().then(function(items){
+items=(items||[]).slice().sort(function(a,b){return (a.at-b.at)||(a.id-b.id)});
+var i=0;
+function next(){
+if(i>=items.length)return Promise.resolve();
+var it=items[i++];
+if(nowMs-it.at>MAX_AGE_MS){res.dropped++;return store.del(it.id).then(next)}
+return send(it).then(function(r){
+var st=r&&r.status;
+if(st>=200&&st<300){res.sent++;var b=(r&&r.body)||{};var c=b.crisis||(b.processed&&b.processed.crisis);if(c)res.crisis.push(c);return store.del(it.id).then(next)}
+if(st===400||st===404||st===405||st===413||st===422){res.dropped++;return store.del(it.id).then(next)}
+res.stopped=st;return null
+},function(){res.stopped='network';return null})
+}
+return next()
+}).then(function(){return store.all()}).then(function(left){res.left=(left||[]).length;return res})
+}
+function idb(factory){
+if(!factory)return null;
+var dbp=null;
+function open(){if(dbp)return dbp;dbp=new Promise(function(res,rej){var rq=factory.open('cmp-offline',1);rq.onupgradeneeded=function(){rq.result.createObjectStore('q',{keyPath:'id',autoIncrement:true})};rq.onsuccess=function(){res(rq.result)};rq.onerror=function(){dbp=null;rej(rq.error||new Error('indexedDB'))}});return dbp}
+function run(mode,fn){return open().then(function(db){return new Promise(function(res,rej){var tx=db.transaction('q',mode);var rq=fn(tx.objectStore('q'));tx.oncomplete=function(){res(rq&&rq.result)};tx.onerror=function(){rej(tx.error)};tx.onabort=function(){rej(tx.error)}})})}
+return {add:function(it){return run('readwrite',function(st){return st.add(it)})},all:function(){return run('readonly',function(st){return st.getAll()})},del:function(id){return run('readwrite',function(st){return st.delete(id)})},clear:function(){return run('readwrite',function(st){return st.clear()})}}
+}
+return {PATHS:PATHS,MAX_ITEMS:MAX_ITEMS,MAX_AGE_MS:MAX_AGE_MS,SAVED:SAVED+SAFE,queueable:queueable,isNetworkError:isNetworkError,make:make,add:add,flush:flush,idb:idb}
+})();`;
+
 // The phone page. Plain HTML, no external script: it holds the personal API key in localStorage, so nothing else loads.
 const PAGE_HTML = `<!doctype html><html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
@@ -3246,6 +3326,7 @@ table{width:100%;border-collapse:collapse;font-size:.9rem}td,th{text-align:left;
 .bar{height:8px;background:var(--acc);border-radius:4px}
 .hide{display:none}
 </style></head><body><main>
+<div id="q-note"></div>
 <div id="login" class="card hide"><h1>Hi, Rowan.</h1><p>To open your companion on this device, I'll e-mail you a 6-digit code. After that this device stays signed in for six months.</p><div class="row"><button class="p" id="li-send" onclick="sendCode()">E-mail me a code</button></div><div id="li-step" class="hide" style="margin-top:10px"><div class="row"><input id="li-code" inputmode="numeric" autocomplete="one-time-code" maxlength="6" placeholder="6-digit code" class="grow"><button class="p" onclick="verifyCode()">Open</button></div></div><div id="li-out"></div></div>
 <section id="v-today" class="v"></section>
 <section id="v-capture" class="v hide"><h1>Capture</h1>
@@ -3265,6 +3346,8 @@ table{width:100%;border-collapse:collapse;font-size:.9rem}td,th{text-align:left;
 <nav><button data-v="today" class="on">Today</button><button data-v="capture">Capture</button><button data-v="talk">Talk</button><button data-v="do">Do</button><button data-v="learn">Learn</button><button data-v="journal">Journal</button><button data-v="data">Data</button></nav>
 <script>
 var VERSION='__VERSION__';
+${OFFLINE_JS}
+var qstore=null,flushing=false;try{qstore=CMPQ.idb(window.indexedDB)}catch(e){console.warn('companion: no offline queue',e)}
 function $(i){return document.getElementById(i)}
 function warn(e){try{console.warn('companion:',e&&e.message||e)}catch(x){console.log(x)}}
 function el(t,a,kids){var e=document.createElement(t);if(a)for(var k in a){if(k==='text')e.textContent=a[k];else if(k==='cls')e.className=a[k];else if(k.slice(0,2)==='on')e[k]=a[k];else e.setAttribute(k,a[k])}(kids||[]).forEach(function(c){if(c)e.appendChild(typeof c==='string'?document.createTextNode(c):c)});return e}
@@ -3273,13 +3356,23 @@ function hdrs(){var h={'X-Companion':'1'};var k=getKey();if(k)h.Authorization='B
 function showLogin(){Array.prototype.forEach.call(document.querySelectorAll('.v'),function(s){s.classList.add('hide')});$('login').classList.remove('hide')}
 function sendCode(){$('li-out').innerHTML='';fetch('/companion/api/login/code',{method:'POST',headers:{'X-Companion':'1'}}).then(function(r){return r.json()}).then(function(r){say($('li-out'),r.reply||r.error,!r.ok);if(r.ok){$('li-step').classList.remove('hide');$('li-send').textContent='Send another code';$('li-code').focus()}}).catch(warn)}
 function verifyCode(){$('li-out').innerHTML='';fetch('/companion/api/login/verify',{method:'POST',headers:{'Content-Type':'application/json','X-Companion':'1'},body:JSON.stringify({code:$('li-code').value})}).then(function(r){return r.json()}).then(function(r){if(!r.ok){say($('li-out'),r.error,true);return}$('login').classList.add('hide');fromHash();go('today')}).catch(warn)}
-function signOut(){api('/companion/api/logout',{json:{}}).then(function(){try{localStorage.removeItem('cmp-key')}catch(e){warn(e)}showLogin()}).catch(warn)}
+function signOut(){(qstore?qstore.clear().catch(warn):Promise.resolve()).then(function(){showPending();return api('/companion/api/logout',{json:{}})}).then(function(){try{localStorage.removeItem('cmp-key')}catch(e){warn(e)}showLogin()}).catch(warn)}
 function api(path,opt){opt=opt||{};opt.headers=Object.assign(hdrs(),opt.headers||{});if(opt.json!==undefined){opt.method=opt.method||'POST';opt.headers['Content-Type']='application/json';opt.body=JSON.stringify(opt.json);delete opt.json}
- return fetch(path,opt).then(function(r){if(r.status===401){showLogin();throw new Error('sign in needed')}return r.json()})}
+ var q=CMPQ.queueable(path,opt);
+ return fetch(path,opt).then(function(r){if(r.status===401){showLogin();throw new Error('sign in needed')}return r.json()}).catch(function(e){
+  if(q&&qstore&&CMPQ.isNetworkError(e))return CMPQ.add(qstore,path,opt.body,Date.now()).then(function(r){showPending();return r.ok?{ok:true,queued:true,reply:CMPQ.SAVED}:{ok:false,error:'Too many unsent notes are saved on this phone. Connect first, then try again.'}},function(){throw e});
+  throw e})}
+function showPending(sent,crisis){var b=$('q-note');if(!b)return;b.innerHTML='';(qstore?qstore.all():Promise.resolve([])).then(function(items){if(sent)b.appendChild(el('div',{cls:'say',text:sent,style:'margin:0 0 12px'}));(crisis||[]).forEach(function(t){b.appendChild(el('div',{cls:'warn',text:t,style:'margin:0 0 12px'}))});if(items.length)b.appendChild(el('div',{cls:'card'},[el('div',{text:items.length+(items.length===1?' note is':' notes are')+' saved on this phone and will be sent when you are online.'}),el('div',{cls:'row',style:'margin-top:8px'},[el('button',{text:'Send now',onclick:flushQueue})])]))}).catch(warn)}
+function flushQueue(){if(!qstore||flushing)return;flushing=true;CMPQ.flush(qstore,function(it){return fetch(it.path,{method:'POST',credentials:'same-origin',headers:Object.assign(hdrs(),{'Content-Type':'application/json'}),body:it.body}).then(function(r){return r.json().catch(function(){return {}}).then(function(j){return {status:r.status,body:j}})})},Date.now()).then(function(res){flushing=false;if(res.sent){showPending('Sent '+res.sent+(res.sent===1?' saved note.':' saved notes.'),res.crisis);if(!$('v-today').classList.contains('hide'))load()}else showPending()}).catch(function(e){flushing=false;warn(e)})}
 function say(box,text,warn){if(!text)return;box.appendChild(el('div',{cls:warn?'warn':'say',text:text}))}
 var MOOD=['rough','low','okay','good','great'],EN=['empty','thin','steady','strong','full'],TAGS=['sleep','body','social','alone','work','outside','money','family','creative'];
 var pick={mood:null,energy:null,tags:{}};
 function scale(name,words){var r=el('div',{cls:'row scale'});words.forEach(function(w,i){var b=el('button',{onclick:function(){pick[name]=i+1;Array.prototype.forEach.call(r.children,function(c,j){c.classList.toggle('sel',j===i)})}},[String(i+1),el('small',{text:w})]);r.appendChild(b)});return r}
+function moodCard(t){var m=el('div',{cls:'card',id:'mood-card'});m.appendChild(el('h2',{text:t.mood&&t.mood.today?'Mood today: '+t.mood.today+'/5 (log again any time)':'How are you?'}));
+ pick={mood:null,energy:null,tags:{}};m.appendChild(scale('mood',MOOD));m.appendChild(el('div',{cls:'mute',text:'energy',style:'margin:8px 0 4px'}));m.appendChild(scale('energy',EN));
+ var tg=el('div',{cls:'row',style:'margin-top:8px'});TAGS.forEach(function(x){var b=el('button',{cls:'chip',text:x,onclick:function(){pick.tags[x]=!pick.tags[x];b.classList.toggle('sel',!!pick.tags[x])}});tg.appendChild(b)});m.appendChild(tg);
+ var note=el('input',{placeholder:'a word or a line (optional)',style:'margin-top:8px'});m.appendChild(note);var out=el('div');
+ m.appendChild(el('div',{cls:'row',style:'margin-top:8px'},[el('button',{cls:'p',text:'Log',onclick:function(){if(!pick.mood){say(out,'Pick a number first.');return}api('/companion/api/mood',{json:{score:pick.mood,energy:pick.energy,tags:Object.keys(pick.tags).filter(function(k){return pick.tags[k]}),note:note.value}}).then(function(r){out.innerHTML='';say(out,r.reply||r.error);if(r.crisis)say(out,r.crisis,true);if(!r.queued)setTimeout(load,1800)})}})]));m.appendChild(out);return m}
 function renderToday(t){$('login').classList.add('hide');var v=$('v-today');v.innerHTML='';v.appendChild(el('h1',{text:t.greeting+', Rowan.'}));
  if(t.stale_reminders)v.appendChild(el('div',{cls:'card'},[el('div',{text:t.stale_reminders+(t.stale_reminders===1?' old reminder is':' old reminders are')+' past '+(t.stale_reminders===1?'its':'their')+' date. I stopped bringing '+(t.stale_reminders===1?'it':'them')+' up.'}),el('div',{cls:'row',style:'margin-top:8px'},[el('button',{text:'Tidy them on Do',onclick:function(){go('do')}})])]));
  if(t.crisis_lines)v.appendChild(el('div',{cls:'warn',style:'margin:0 0 12px'},[t.crisis_lines]));
@@ -3289,11 +3382,7 @@ function renderToday(t){$('login').classList.add('hide');var v=$('v-today');v.in
  if(t.support_hint)v.appendChild(el('div',{cls:'card'},[el('div',{text:t.support_hint})]));
  if(t.who5_due){var wc=el('div',{cls:'card'},[el('h2',{text:'Two-weekly check'}),el('div',{cls:'mute',text:'Five questions about the last two weeks (WHO-5). About a minute, whenever you like.'})]);wc.appendChild(el('div',{cls:'row',style:'margin-top:8px'},[el('button',{cls:'p',text:'Start',onclick:function(){who5Form(wc)}})]));v.appendChild(wc)}
  (t.open_nudges||[]).forEach(function(n){if(n.kind==='cmp-week')return;var c=el('div',{cls:'card'},[el('div',{text:n.ask})]);if(['checkin','cmp-checkin','presence','cmp-presence','cmp-measure'].indexOf(n.kind)<0){c.appendChild(el('div',{cls:'row',style:'margin-top:8px'},[el('button',{cls:'p',text:'Did it',onclick:function(){answer(n.id,'done',c,['cmp-next','cmp-anchor','cmp-connect','micro','body','contact'].indexOf(n.kind)>=0?{nudge_id:n.id}:null)}}),el('button',{text:'Not today',onclick:function(){answer(n.id,'declined',c)}})]))}v.appendChild(c)});
- var m=el('div',{cls:'card',id:'mood-card'});m.appendChild(el('h2',{text:t.mood&&t.mood.today?'Mood today: '+t.mood.today+'/5 (log again any time)':'How are you?'}));
- pick={mood:null,energy:null,tags:{}};m.appendChild(scale('mood',MOOD));m.appendChild(el('div',{cls:'mute',text:'energy',style:'margin:8px 0 4px'}));m.appendChild(scale('energy',EN));
- var tg=el('div',{cls:'row',style:'margin-top:8px'});TAGS.forEach(function(x){var b=el('button',{cls:'chip',text:x,onclick:function(){pick.tags[x]=!pick.tags[x];b.classList.toggle('sel',!!pick.tags[x])}});tg.appendChild(b)});m.appendChild(tg);
- var note=el('input',{placeholder:'a word or a line (optional)',style:'margin-top:8px'});m.appendChild(note);var out=el('div');
- m.appendChild(el('div',{cls:'row',style:'margin-top:8px'},[el('button',{cls:'p',text:'Log',onclick:function(){if(!pick.mood){say(out,'Pick a number first.');return}api('/companion/api/mood',{json:{score:pick.mood,energy:pick.energy,tags:Object.keys(pick.tags).filter(function(k){return pick.tags[k]}),note:note.value}}).then(function(r){out.innerHTML='';say(out,r.reply||r.error);if(r.crisis)say(out,r.crisis,true);setTimeout(load,1800)})}})]));m.appendChild(out);v.appendChild(m);
+ v.appendChild(moodCard(t));
  if(!t.push_ready)v.appendChild(el('div',{cls:'card'},[el('div',{text:'Let me reach you here: a few gentle notifications a day at most, never at night.'}),el('div',{cls:'row',style:'margin-top:8px'},[el('button',{cls:'p',text:'Turn on notifications',onclick:enablePush})])]));
  if(t.one_thing){var o=el('div',{cls:'card'},[el('h2',{text:'One thing, if you want it'}),el('div',{text:t.one_thing.title+' ('+(t.one_thing.minutes||15)+' min, '+(t.one_thing.context||'@anywhere')+')'})]);o.appendChild(el('div',{cls:'row',style:'margin-top:8px'},[el('button',{cls:'p',text:'Done',onclick:function(){api('/companion/api/actions/done',{json:{id:t.one_thing.id}}).then(function(r){o.innerHTML='';say(o,r.reply||r.error);if(r.ok)rateBox(o,{action_id:t.one_thing.id})})}})]));v.appendChild(o)}
  var info=[];if(t.sleep)info.push('Quiet overnight '+t.sleep.from+' to '+t.sleep.to+' (about '+t.sleep.hours+' h, from message times).');if(t.weather&&t.weather.weather)info.push('Weather: '+(typeof t.weather.weather==='string'?t.weather.weather:(t.weather.weather.summary||JSON.stringify(t.weather.weather))).slice(0,140));
@@ -3310,9 +3399,10 @@ function rateBox(box,ref){var p={pleasure:null,mastery:null};var w=el('div',{sty
 function who5Form(box){api('/companion/api/who5').then(function(q){box.innerHTML='';box.appendChild(el('h2',{text:'Over the last two weeks'}));var ans=[null,null,null,null,null];
  q.items.forEach(function(it,i){box.appendChild(el('div',{text:it,style:'margin-top:10px'}));var r=el('div',{cls:'row scale'});q.scale.forEach(function(w,j){r.appendChild(el('button',{onclick:function(){ans[i]=j;Array.prototype.forEach.call(r.children,function(c,k){c.classList.toggle('sel',k===j)})}},[String(j),el('small',{text:w})]))});box.appendChild(r)});
  var out=el('div');box.appendChild(el('div',{cls:'row',style:'margin-top:10px'},[el('button',{cls:'p',text:'Save',onclick:function(){if(ans.indexOf(null)>=0){say(out,'One answer per line, please.');return}api('/companion/api/who5',{json:{items:ans}}).then(function(r){out.innerHTML='';say(out,r.reply||r.error)})}})]));box.appendChild(out)})}
-function load(){api('/companion/api/today').then(renderToday).catch(warn)}
+function renderOffline(){var v=$('v-today');v.innerHTML='';v.appendChild(el('h1',{text:'No signal, still here.'}));v.appendChild(el('div',{cls:'card'},[el('div',{text:'I cannot reach the server right now. You can still tap your mood, capture a thought or write a journal line: I keep it on this phone and send it when you are online.'}),el('div',{cls:'row',style:'margin-top:8px'},[el('button',{text:'Try again',onclick:load})])]));v.appendChild(moodCard({mood:null}));showPending()}
+function load(){api('/companion/api/today').then(function(t){renderToday(t);flushQueue()}).catch(function(e){warn(e);if(CMPQ.isNetworkError(e))renderOffline()})}
 function capText(){var t=$('cap-text').value.trim();if(!t)return;$('cap-out').innerHTML='';say($('cap-out'),'Saving...');api('/companion/api/capture',{json:{text:t}}).then(function(r){$('cap-text').value='';showCap(r)})}
-function showCap(r){var o=$('cap-out');o.innerHTML='';if(!r.ok){say(o,r.error||'failed');return}var p=r.processed||{};var w={action:'Next action',project:'Project',someday:'Someday',reference:'Kept as reference',journal:'Journal',card:'Flashcard',trash:'Nothing to keep'}[p.type]||'In the inbox';
+function showCap(r){var o=$('cap-out');o.innerHTML='';if(!r.ok){say(o,r.error||'failed');return}if(r.queued){say(o,r.reply);return}var p=r.processed||{};var w={action:'Next action',project:'Project',someday:'Someday',reference:'Kept as reference',journal:'Journal',card:'Flashcard',trash:'Nothing to keep'}[p.type]||'In the inbox';
  say(o,w+(p.title?': '+p.title:'')+(p.context?' ('+p.context+')':'')+(r.kind!=='text'&&r.text?'\\n\\nI heard/saw: '+r.text.slice(0,400):''));if(p.crisis)say(o,p.crisis,true);inbox()}
 var rec=null,chunks=[];function toggleRec(){if(rec){rec.stop();return}navigator.mediaDevices.getUserMedia({audio:true}).then(function(st){chunks=[];rec=new MediaRecorder(st);rec.ondataavailable=function(e){chunks.push(e.data)};rec.onstop=function(){st.getTracks().forEach(function(t){t.stop()});var b=new Blob(chunks,{type:rec.mimeType||'audio/webm'});rec=null;$('rec').textContent='Voice note';$('rec').classList.remove('sel');upload(b,'voice.'+(b.type.indexOf('mp4')>=0?'m4a':'webm'))};rec.start();$('rec').textContent='Stop';$('rec').classList.add('sel')}).catch(function(e){say($('cap-out'),'Microphone not available: '+e.message)})}
 function capImg(inp){if(inp.files&&inp.files[0])upload(inp.files[0],inp.files[0].name);inp.value=''}
@@ -3332,7 +3422,7 @@ function drawCard(){var b=$('learn');b.innerHTML='';if(!due.length){b.appendChil
  if(show){k.appendChild(el('div',{cls:'flash',text:c.back,style:'border-top:1px solid var(--line)'}));var r=el('div',{cls:'row'});[['Again',1],['Hard',2],['Good',3],['Easy',4]].forEach(function(x){r.appendChild(el('button',{cls:x[1]===3?'p grow':'grow',text:x[0],onclick:function(){api('/companion/api/cards/review',{json:{id:c.id,rating:x[1]}}).then(function(){due.shift();show=false;drawCard()})}}))});k.appendChild(r)}
  else k.appendChild(el('div',{cls:'row'},[el('button',{cls:'p grow',text:'Show answer',onclick:function(){show=true;drawCard()}})]));b.appendChild(k)}
 function addCard(){var f=$('c-front').value.trim(),bk=$('c-back').value.trim();if(!f||!bk)return;api('/companion/api/cards',{json:{front:f,back:bk}}).then(function(){$('c-front').value='';$('c-back').value='';loadLearn()})}
-function addJournal(){var t=$('j-text').value.trim();if(!t)return;api('/companion/api/journal',{json:{content:t}}).then(function(r){$('j-text').value='';$('j-out').innerHTML='';say($('j-out'),r.ok?'Kept. Thank you for writing it down.':r.error);if(r.crisis)say($('j-out'),r.crisis,true);loadJournal()})}
+function addJournal(){var t=$('j-text').value.trim();if(!t)return;api('/companion/api/journal',{json:{content:t}}).then(function(r){$('j-text').value='';$('j-out').innerHTML='';say($('j-out'),r.queued?r.reply:r.ok?'Kept. Thank you for writing it down.':r.error);if(r.crisis)say($('j-out'),r.crisis,true);loadJournal()})}
 function loadJournal(){api('/companion/api/journal').then(function(r){var b=$('journal');b.innerHTML='';(r.entries||[]).forEach(function(j){b.appendChild(el('div',{cls:'item'},[el('div',{cls:'grow'},[el('div',{text:j.content.slice(0,600)}),el('div',{cls:'mute',text:j.date+(j.mood?' · '+j.mood:'')})])]))})})}
 function loadData(){api('/companion/api/dashboard').then(function(d){var b=$('dash');b.innerHTML='';var c=el('div',{cls:'card'},[el('h2',{text:'Mood by week'})]);if(!(d.mood_weekly||[]).length)c.appendChild(el('div',{cls:'mute',text:'A few days of check-ins and the pattern shows up here.'}));
  (d.mood_weekly||[]).forEach(function(w){c.appendChild(el('div',{cls:'row'},[el('div',{text:w.week,style:'width:86px',cls:'mute'}),el('div',{cls:'grow'},[el('div',{cls:'bar',style:'width:'+Math.round((w.mood||0)/5*100)+'%'})]),el('div',{text:String(w.mood),style:'width:40px'})]))});b.appendChild(c);
@@ -3369,9 +3459,11 @@ function fromHash(){var h=location.hash.slice(1);if(!h)return;var q={};h.split('
 if('serviceWorker' in navigator)navigator.serviceWorker.register('/companion/sw.js',{scope:'/companion'}).catch(warn);
 fromHash();go('today')
 window.addEventListener('hashchange',fromHash);
+window.addEventListener('online',flushQueue);document.addEventListener('visibilitychange',function(){if(!document.hidden)flushQueue()});
+flushQueue();showPending();
 </script></body></html>`;
 
-return Object.freeze({ COMPANION_VERSION, TZ, CONTEXTS, ENERGY, NUDGE_KINDS, LADDER_KINDS, DDL, TASK_COLUMNS, ensureSchema, nowIso, FRESH_DUE_SQL, rid, esc, tzOffsetMinutes, localParts, dayKey, inQuiet, FSRS_W, RETENTION, MAX_INTERVAL_DAYS, retrievability, intervalDays, fsrsSchedule, CLARIFY_SYSTEM, contextFor, heuristicClarify, parseClarify, crisisSignal, FALLBACK_CRISIS_LINES, crisisText, SAFETY_PLAN_FIELDS, normalizeSafetyPlan, saveSafetyPlan, ACTIVITY_CATEGORIES, SEED_ACTIVITIES, helpScores, pickActivity, logActivity, whatHelps, activityBank, addActivity, WHO5_ITEMS, WHO5_SCALE, who5Score, who5Read, recordWho5, who5Status, setPause, fallbackReply, EMAIL_MODES, saveSettings, LOGIN_TO, SESSION_COOKIE, SESSION_MS, maskedLoginTo, sessionFor, sendLoginCode, verifyLoginCode, isPaused, NEVER_RETIRE, retiredFrom, DISCREET_KINDS, discreetPayload, pruneMedia, TEXTS, pickLru, energyFor, chooseAction, receptiveHours, addDays, mondayOf, weekWindow, weekText, weekLookback, weekSeen, planNudge, b64u, unb64u, makeVapidKeys, vapidAuthHeader, encryptPayload, sendPush, pushAll, loadCfg, dayStartIso, sleepFromTimestamps, sleepWindow, moodStats, retiredKinds, daysSinceSocial, unansweredStreak, gatherState, remember, recall, contextSnapshot, recordMood, moodReply, addAction, upsertProject, actionDone, addJournal, addCard, reviewCard, answerNudge, MAX_CAPTURE_BYTES, transcribe, capture, clarify, processItem, processInbox, pushPayloadFor, companionTick, today, dashboard, PRIVACY_TABLES, privacy, exportAll, deleteData, PERSONA, untrusted, chatContext, noteRiskInChat, companionTools, TOOL_APPENDIX_LINE, TICK_MS, doKeys, doEnsure, doTick, doAlarm, doFetch, handleTranscription, handleCompanion, MANIFEST, ICON_SVG, SW_JS, PAGE_HTML });
+return Object.freeze({ COMPANION_VERSION, TZ, CONTEXTS, ENERGY, NUDGE_KINDS, LADDER_KINDS, DDL, TASK_COLUMNS, ensureSchema, nowIso, FRESH_DUE_SQL, rid, esc, tzOffsetMinutes, localParts, dayKey, OFFLINE_MAX_AGE_MS, clientStamp, inQuiet, FSRS_W, RETENTION, MAX_INTERVAL_DAYS, retrievability, intervalDays, fsrsSchedule, CLARIFY_SYSTEM, contextFor, heuristicClarify, parseClarify, crisisSignal, FALLBACK_CRISIS_LINES, crisisText, SAFETY_PLAN_FIELDS, normalizeSafetyPlan, saveSafetyPlan, ACTIVITY_CATEGORIES, SEED_ACTIVITIES, helpScores, pickActivity, logActivity, whatHelps, activityBank, addActivity, WHO5_ITEMS, WHO5_SCALE, who5Score, who5Read, recordWho5, who5Status, setPause, fallbackReply, EMAIL_MODES, saveSettings, LOGIN_TO, SESSION_COOKIE, SESSION_MS, maskedLoginTo, sessionFor, sendLoginCode, verifyLoginCode, isPaused, NEVER_RETIRE, retiredFrom, DISCREET_KINDS, discreetPayload, pruneMedia, TEXTS, pickLru, energyFor, chooseAction, receptiveHours, addDays, mondayOf, weekWindow, weekText, weekLookback, weekSeen, planNudge, b64u, unb64u, makeVapidKeys, vapidAuthHeader, encryptPayload, sendPush, pushAll, loadCfg, dayStartIso, sleepFromTimestamps, sleepWindow, moodStats, retiredKinds, daysSinceSocial, unansweredStreak, gatherState, remember, recall, contextSnapshot, recordMood, moodReply, addAction, upsertProject, actionDone, addJournal, addCard, reviewCard, answerNudge, MAX_CAPTURE_BYTES, transcribe, capture, clarify, processItem, processInbox, pushPayloadFor, companionTick, today, dashboard, PRIVACY_TABLES, privacy, exportAll, deleteData, PERSONA, untrusted, chatContext, noteRiskInChat, companionTools, TOOL_APPENDIX_LINE, TICK_MS, doKeys, doEnsure, doTick, doAlarm, doFetch, handleTranscription, handleCompanion, MANIFEST, ICON_SVG, SW_JS, OFFLINE_JS, PAGE_HTML });
 })();
 // COMPANION-INLINE-END
 var CMP_DEPS = {
