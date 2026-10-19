@@ -1080,7 +1080,7 @@ function secretEq(a, b) {
   return diff === 0;
 }
 __name(secretEq, "secretEq");
-var VERSION = "0.40.2-codeagent"; /* 0.40.1 VERSION-LINE-NOTES-1 (2026-10-19, agent_issues 100243, pillar autonomy; patch, a comment moved): the release notes of every earlier version rode on this line (178 notes, about 200,000 chars), so a version bump of this worker was an 820,000-char patch (worker and mirror, removed and added): 12 code tasks ended on the publisher size cap on 2026-10-19 and three issues were exhausted for three days. They are in git history (git log -S '<release tag>' -- qnfo-fleet-control/worker.js); the changelog is built from the deploy ledger and commits, and the guards read only the quoted version string. A new note goes on this line and stays short. */
+var VERSION = "0.40.3-live-check-grace"; /* 0.40.1 VERSION-LINE-NOTES-1 (2026-10-19, agent_issues 100243, pillar autonomy; patch, a comment moved): the release notes of every earlier version rode on this line (178 notes, about 200,000 chars), so a version bump of this worker was an 820,000-char patch (worker and mirror, removed and added): 12 code tasks ended on the publisher size cap on 2026-10-19 and three issues were exhausted for three days. They are in git history (git log -S '<release tag>' -- qnfo-fleet-control/worker.js); the changelog is built from the deploy ledger and commits, and the guards read only the quoted version string. A new note goes on this line and stays short. */
 // (older release notes: git history of qnfo-fleet-control/worker.js)
 // 0.4.112 CF-CHANGELOG-LOOP-1 (pillar autonomy, RM-CAPABILITY-PRODUCT-LOOP-1): once a day, inside the existing hourly tick (no new worker, cron or model call), the fleet reads Cloudflare's changelog feed, classifies each recent item against cloudflare_capability_catalog and the service registry, files at most 2 deduped issues a day for billing/deprecation changes to products the fleet uses, reopens catalog rows that were rejected when the product launches or goes GA (max 2 a day), adds not_considered rows for unknown products (max 5), and measures itself (cf_changelog_audit_age_h, cf_changelog_open_proposals_14d); GET /cf-changelog, POST /cf-changelog/run.
 // 0.4.111 PRIORITY-QUEUE-1b/1c (issues 1912, 1913; owner directive 2026-10-03): self-repair (evPropose) admits critical
@@ -3114,15 +3114,25 @@ async function evDeployRow(env, worker, versionTo) {
   return await env.AUDIT.prepare("SELECT ts FROM fleet_deploys WHERE worker=?1 AND to_sha=?2 AND ok=1 ORDER BY id DESC LIMIT 1").bind(worker, versionTo).first();
 }
 __name(evDeployRow, "evDeployRow");
+// LIVE-CHECK-PROPAGATION-GRACE-1 (issue 100256, CODE-MERGE-REVERT-FAILED-1 for ct_im100188, PR 3110, qnfo-gateway 3.28.3-codeagent):
+// the canonical deploy wrote its fleet_deploys row at 18:59:02Z and the live audit taken 93 seconds later read http 200 with the previous
+// version 3.28.2, which was declared "post-deploy live check failed" and a revert PR (3112) was opened for a change that was live and healthy
+// minutes later (worker_live_audit 3.28.3 http 200 SYNC); the revert then ended ci-rejected and the issue asked for a manual revert. A worker
+// answers 200 with the old version while the new one propagates, so an audit taken within EV_PROPAGATION_GRACE_MIN of the deploy that still
+// shows another version is "waiting"; a non-200 answer, or the old version in an audit taken after the grace, is still "failed".
+var EV_PROPAGATION_GRACE_MIN = 15;
 async function evLiveCheck(env, worker, versionTo, sinceIso) {
   var la = await env.AUDIT.prepare("SELECT http, live_version, probed_at FROM worker_live_audit WHERE worker=?1").bind(worker).first();
   var since = Date.parse(sinceIso);
-  var probedAfter = la && la.probed_at && Date.parse(String(la.probed_at).replace(" ", "T") + (/[zZ]$/.test(la.probed_at) ? "" : "Z")) > since;
+  var probedMs = la && la.probed_at ? Date.parse(String(la.probed_at).replace(" ", "T") + (/[zZ]$/.test(la.probed_at) ? "" : "Z")) : NaN;
+  var probedAfter = probedMs > since;
   if (!probedAfter) return { state: "waiting", la: la };
   var mine = await env.AUDIT.prepare("SELECT MAX(id) id FROM fleet_deploys WHERE worker=?1 AND to_sha=?2 AND ok=1").bind(worker, versionTo).first();
   var later = mine && mine.id ? await env.AUDIT.prepare("SELECT COUNT(*) n FROM fleet_deploys WHERE worker=?1 AND ok=1 AND to_sha IS NOT NULL AND to_sha != ?2 AND id > ?3").bind(worker, versionTo, mine.id).first() : null;
   var superseded = !!(later && Number(later.n) > 0);
-  return { state: la.http === 200 && (la.live_version === versionTo || superseded) ? "ok" : "failed", la: la, superseded: superseded };
+  var good = la.http === 200 && (la.live_version === versionTo || superseded);
+  if (!good && la.http === 200 && la.live_version && probedMs - since < EV_PROPAGATION_GRACE_MIN * 6e4) return { state: "waiting", la: la, grace: true };
+  return { state: good ? "ok" : "failed", la: la, superseded: superseded };
 }
 __name(evLiveCheck, "evLiveCheck");
 async function evAdvance(env, c) {
