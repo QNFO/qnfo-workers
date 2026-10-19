@@ -150,6 +150,16 @@ const WIP = Number((/^const PLAN_WIP = (\d+);/m.exec(fs.readFileSync(new URL("./
   for (let i = 0; i < 24; i++) d.prepare("INSERT INTO issue_plans (issue_id, planned_at, outcome, model) VALUES (?, ?, 'not-code', 'm')").run(9000 + i, today);
   r = await plan(env);
   ok(!r.planned && /daily cap/.test(r.why) && prompts.length === 0, "7b at most 24 plans a day (PLAN-DAILY-24-1)", r);
+  // CODE-LOOP-CEILINGS-TUNABLE-1 (0.18.26): ops_config code_plan_daily_cap moves the cap without a deploy; a bad value keeps the default.
+  d.exec("CREATE TABLE IF NOT EXISTS ops_config (key TEXT PRIMARY KEY, value TEXT)");
+  d.exec("INSERT INTO ops_config VALUES ('code_plan_daily_cap', 'x')");
+  r = await plan(env);
+  ok(!r.planned && r.why === "daily cap 24", "7b1 an unreadable code_plan_daily_cap keeps the default 24", r);
+  d.exec("UPDATE ops_config SET value = '48' WHERE key = 'code_plan_daily_cap'");
+  r = await plan(env);
+  ok(!/daily cap/.test(String(r.why || "")), "7b1 code_plan_daily_cap 48 lets the 25th plan of the day through", r);
+  d.exec("UPDATE ops_config SET value = '24' WHERE key = 'code_plan_daily_cap'");
+  prompts.length = 0;
 }
 // 7c. refusals cost no model call: several are decided in one tick, they do not use the daily cap, and the tick still plans
 {
@@ -196,6 +206,22 @@ const WIP = Number((/^const PLAN_WIP = (\d+);/m.exec(fs.readFileSync(new URL("./
   issue(env, { title: "METRIC-TRIGGER-15-F: qnfo-ai-search answers fail", description: "qnfo-ai-search returns empty answers" });
   await plan(env);
   ok(prompts.length === 1 && prompts[0].input.messages[1].content.includes("WORKER: qnfo-ai-search"), "10 qnfo-ai-search is planned as itself, not as qnfo-ai", prompts[0] && prompts[0].input.messages[1].content.slice(0, 400));
+}
+// CODE-LOOP-CEILINGS-TUNABLE-1 (0.18.26): the tick's lane count reads ops_config code_tick_lanes, bounded 1-16, default 8.
+{
+  const { env } = envWith([]);
+  const d = env.AUDIT_DB._db;
+  const lanesOf = async () => (await call(env, "POST", "/v1/tick")).lanes;
+  await call(env, "POST", "/v1/plan");
+  let l = await lanesOf();
+  ok(l === 8, "11 the tick runs 8 lanes with no ops_config row", l);
+  d.exec("CREATE TABLE IF NOT EXISTS ops_config (key TEXT PRIMARY KEY, value TEXT)");
+  d.exec("INSERT OR REPLACE INTO ops_config VALUES ('code_tick_lanes', '12')");
+  l = await lanesOf();
+  ok(l === 12, "11 code_tick_lanes 12 runs 12 lanes", l);
+  d.exec("UPDATE ops_config SET value = '99' WHERE key = 'code_tick_lanes'");
+  l = await lanesOf();
+  ok(l === 16, "11 code_tick_lanes is bounded at 16", l);
 }
 console.log(pass + " passed, " + fail + " failed");
 process.exit(fail ? 1 : 0);
