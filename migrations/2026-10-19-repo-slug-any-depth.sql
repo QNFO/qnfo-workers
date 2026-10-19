@@ -2,6 +2,7 @@
 -- APPLY-BY: ci
 -- DB: qnfo-audit
 -- BACKUP: bak_20261019_repo_slug_any_depth
+-- spof-review: the triggers are the second path, not a single one: qnfo-code-orchestrator repoSlug() (REPOSLUG-UNIFORM-1), scripts/code-task-publish.py repo_slug() and RED-DRAIN-1 step 3 (PR 2660) each normalise the slug on their own, and fm-code-task-repo-slug fails on any unfinished task whose repo still holds a slash
 -- Rollback: DROP TRIGGER IF EXISTS code_tasks_repo_slug_upd; DROP TRIGGER IF EXISTS code_tasks_repo_slug_ai; CREATE TRIGGER code_tasks_repo_slug_ai AFTER INSERT ON code_tasks WHEN lower(substr(COALESCE(NEW.repo, ''), 1, 5)) = 'qnfo/' AND length(NEW.repo) > 5 AND instr(substr(NEW.repo, 6), '/') = 0 BEGIN UPDATE code_tasks SET repo = substr(NEW.repo, 6) WHERE id = NEW.id; END; UPDATE code_tasks SET repo = (SELECT b.repo FROM bak_20261019_repo_slug_any_depth b WHERE b.id = code_tasks.id) WHERE id IN (SELECT id FROM bak_20261019_repo_slug_any_depth); UPDATE remediation_contracts SET verify_probe = (SELECT b.verify_probe FROM bak_20261019_repo_slug_any_depth_rc b WHERE b.class = remediation_contracts.class) WHERE class IN (SELECT class FROM bak_20261019_repo_slug_any_depth_rc); DELETE FROM failure_modes WHERE fm_key = 'code-task-repo-double-owner'
 --
 -- WHY (measured 2026-10-19 07:00Z)
