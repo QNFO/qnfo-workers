@@ -88,7 +88,7 @@ pipeline switches it owns and the owner-queue cards that are about it. `FEED_ARE
   (`/content`) and Changelog (`/changelog`) are pages of an area, not top-level tabs: they light their area in the navigation and show
   the area's sub-bar. The old anchors (`/#queue`, `/#areas`, `/#flow`, `/#invest`) still land on the overview.
 - **Overview (`/`):** the owner queue (each card names its area; a receipt for a request of yours that the fleet closed sits apart under
-  *Closed for you*, with its issue number and no issue text, and is never counted as waiting on you: OWNER-REQUEST-RECEIPT-1), one row per metric area (the worst breach, its lever and, when there is one,
+  *Closed for you*, with its issue number and no issue text, and is never counted as waiting on you: OWNER-REQUEST-RECEIPT-1; the gate grades the same cards `notice`, OWNER-NOTICE-GATE-1), one row per metric area (the worst breach, its lever and, when there is one,
   a named bottleneck or a stopped pipeline switch), and the two headline answers the page promises: *Keep investing?* and *System health*.
 - **`/area/<id>` for `cost`, `research`, `reach`, `autonomy`, `reliability`, `platform`:** the headline metric and trend; the queue cards
   that are about the area; the constraint and every breach; the area's pipelines; the cards that used to sit on the overview (Keep
