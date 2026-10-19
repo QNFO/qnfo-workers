@@ -22,7 +22,7 @@
  *   * archived repositories are read-only and are skipped, not reported as drift;
  *   * GET /report and GET /health are public reads; POST /tick needs STEWARD_KEY.
  */
-var VERSION = "0.5.0-tracker-drain"; // 0.5.0 TRACKER-DRAIN-1 (agent_issues 2940 follow-up): ISSUE-SYNC-FORWARD-1 closes the GitHub issue of a resolved worker-observability dispatch row (and reopens it on a recurrence, before the reverse leg can swallow it); the state sync runs oldest D1 change first inside a time/subrequest budget and stops on 403/429 instead of a flat 20; the mass-flip guard refuses only unexplained disagreement (explained = D1 moved across open/closed since the link last agreed, not an updated_at window); a 403 stops the tick only when GitHub says rate limit (one shared flag), a per-issue 403 is skipped; the subrequest budget counts D1 calls; one status mapping (monitoring is closed not_planned naming its twin, never a completed close with no evidence); superseded attempt PRs outside the recent window are matched by stem and recorded with head_ref and task_ref; v_tracker_drift gains age_min and metric tracker_drift_oldest_min. // 0.4.8 TRACKER-REPAIR-ROUND-1 (agent_issues 2940): a codeagent-<stem>-rN pull request of an earlier repair round is matched to its task by the branch stem, so it is no longer pr-without-task drift. // 0.4.6 PORTFOLIO-HEARTBEAT-1 (2026-10-18): publish the portfolio run as in_progress BEFORE the work, so a tick killed by the CPU budget is distinguishable from a record that was never writtenIVENESS-1 (2026-10-18): this worker, on its own 10-minute cron and outside the qnfo-code-orchestrator process, reads the freshest fleet_crons.last_fired and files liveness:dispatcher-stalled when the per-minute dispatcher has been quiet for over 20 minutes -- the one stall no watchdog inside that failure domain can report, because NEVER-STALL-1 is itself a fleet_cron dispatched by the tick it would be reporting on. // 0.4.4 NOTIFY-ATTEMPT-TITLE-1 (2026-10-18): a re-run notification title ("workflow run, Attempt #2 failed") is parsed like the first attempt, so its resolved thread is cleared (three were kept at 10:52Z). // 0.4.3 TRACKER-SYNC-1: stale pr-without-task rows are cleared every tick; a merge fix reads merged_by from the single PR; 0.4.2 TRACKER-SYNC-1: the recent-PR window is a deliberate partial read (every post-backfill tick refused it); 0.4.1 org projects declared on (the portfolio board needs them); 0.4.0 PORTFOLIO-SYNC-1: projects derived from the census, metric breaches as roadmap objectives, programs/projects/issues/roadmap mirrored to GitHub labels, milestones, issues and a Projects board every 10 minutes; 0.3.1 a task is matched to its PR by number too (pr-without-task false positive on PR 381); 0.3.0 TRACKER-SYNC-1: agent_issues <-> GitHub issues and code_tasks <-> PRs every 10 minutes (0.2.2 ISSUE-SYNC-1)
+var VERSION = "0.6.0-cron-grid-1"; // 0.6.0 CRON-GRID-1 (owner directive 2026-10-19, pillar autonomy): the tracker tick moves to the 5-minute grid (:05, :15 ... :55) and the repository reconcile runs hourly on the :15 fire (it ran every 6 hours on its own trigger). Every fire is logged to cron_fire_log for CRON-WATCH-1. // 0.5.0 TRACKER-DRAIN-1 (agent_issues 2940 follow-up): ISSUE-SYNC-FORWARD-1 closes the GitHub issue of a resolved worker-observability dispatch row (and reopens it on a recurrence, before the reverse leg can swallow it); the state sync runs oldest D1 change first inside a time/subrequest budget and stops on 403/429 instead of a flat 20; the mass-flip guard refuses only unexplained disagreement (explained = D1 moved across open/closed since the link last agreed, not an updated_at window); a 403 stops the tick only when GitHub says rate limit (one shared flag), a per-issue 403 is skipped; the subrequest budget counts D1 calls; one status mapping (monitoring is closed not_planned naming its twin, never a completed close with no evidence); superseded attempt PRs outside the recent window are matched by stem and recorded with head_ref and task_ref; v_tracker_drift gains age_min and metric tracker_drift_oldest_min. // 0.4.8 TRACKER-REPAIR-ROUND-1 (agent_issues 2940): a codeagent-<stem>-rN pull request of an earlier repair round is matched to its task by the branch stem, so it is no longer pr-without-task drift. // 0.4.6 PORTFOLIO-HEARTBEAT-1 (2026-10-18): publish the portfolio run as in_progress BEFORE the work, so a tick killed by the CPU budget is distinguishable from a record that was never writtenIVENESS-1 (2026-10-18): this worker, on its own 10-minute cron and outside the qnfo-code-orchestrator process, reads the freshest fleet_crons.last_fired and files liveness:dispatcher-stalled when the per-minute dispatcher has been quiet for over 20 minutes -- the one stall no watchdog inside that failure domain can report, because NEVER-STALL-1 is itself a fleet_cron dispatched by the tick it would be reporting on. // 0.4.4 NOTIFY-ATTEMPT-TITLE-1 (2026-10-18): a re-run notification title ("workflow run, Attempt #2 failed") is parsed like the first attempt, so its resolved thread is cleared (three were kept at 10:52Z). // 0.4.3 TRACKER-SYNC-1: stale pr-without-task rows are cleared every tick; a merge fix reads merged_by from the single PR; 0.4.2 TRACKER-SYNC-1: the recent-PR window is a deliberate partial read (every post-backfill tick refused it); 0.4.1 org projects declared on (the portfolio board needs them); 0.4.0 PORTFOLIO-SYNC-1: projects derived from the census, metric breaches as roadmap objectives, programs/projects/issues/roadmap mirrored to GitHub labels, milestones, issues and a Projects board every 10 minutes; 0.3.1 a task is matched to its PR by number too (pr-without-task false positive on PR 381); 0.3.0 TRACKER-SYNC-1: agent_issues <-> GitHub issues and code_tasks <-> PRs every 10 minutes (0.2.2 ISSUE-SYNC-1)
 
 var ORG = "QNFO";
 var USER = "rwnq8";
@@ -514,7 +514,7 @@ async function issueSyncForward(env, result) {
  * personal or security issues are mirrored by number only. Scope (owner choice 2026-10-18): open issues only. */
 var TS_REPO = "/repos/" + ORG + "/qnfo-workers";
 var TS_LABEL = "fleet-issue";
-var TS_CRON = "3,13,23,33,43,53 * * * *";
+var TS_CRON = "5,15,25,35,45,55 * * * *";
 var TS_CREATE_PER_TICK = 20;
 /* TRACKER-STATE-BUDGET-1: the state fixes (close, reopen) were a flat 20 per tick in unspecified order. Measured 2026-10-19 05:43Z:
  * 20 fixes took 46.9 s with no errors, the cap drained a 61-row burst in about three ticks, and the unordered join fixed the newest
@@ -1580,6 +1580,10 @@ export default {
   },
 
   async scheduled(event, env, ctx) {
+    return cronGridRun(env.AUDIT, event, ctx, CRON_GRID_CFG, function (ev, c) { return stewardScheduled(ev, env, c); });
+  }
+};
+async function stewardScheduled(event, env, ctx) {
     if (event && event.cron === TS_CRON) {
       var ts = await trackerSync(env);
       console.log(JSON.stringify({ worker: "qnfo-github-steward", version: VERSION, cron: event.cron, tracker: { mirrored: ts.mirrored, relinked: ts.relinked, closed: ts.closed, reopened: ts.reopened, carried: ts.state_sync ? ts.state_sync.carried : null, tasks_fixed: ts.tasks_fixed.length, drift: ts.drift, errors: ts.errors.length } }));
@@ -1595,5 +1599,94 @@ export default {
       checked: res.repos_checked, fixed: res.repos_fixed, protected: res.repos_protected,
       drift: res.drift.length, errors: res.errors.length, limitations: res.limitations.length
     }));
+}
+// ---- CRON-GRID-1:BEGIN (owner directive 2026-10-19: "ALL CRON TICKS SHALL BE MEASURED IN 5-MINUTE INTERVALS, AND NO CRON
+// SHALL EXECUTE LESS THAN ONCE EVERY HOUR. ALL CRON FAILURES/ERRORS SHALL BE TRIAGED AND REMEDIATED AUTOMATICALLY BY THE FLEET.")
+// Cloudflare fires this worker only on triggers that repeat at least hourly, on minutes that are multiples of 5. A job that
+// had its own slower trigger (daily, weekly, every 6 hours) keeps its cadence: it runs on the first grid fire after its old
+// slot, and is retried on later fires while its last good run is older than its period plus 30 minutes, at most
+// CRON_GRID_RETRIES times in a row; past that CRON-WATCH-1 (qnfo-audit fleet_tasks cron-watch) escalates it to the code loop.
+// Every run is one cron_fire_log row (source worker:<name>, outcome ok, error or idle) that CRON-WATCH-1 reads. A job named
+// retry: false (a send to people outside the fleet) runs only on its slot, so a failure is never repeated at a reader.
+var CRON_GRID_RETRIES = 3;
+function cronGridField(spec, v, lo, hi) {
+  return String(spec).split(",").some(function (part) {
+    var step = 1, sm = /^(.*)\/(\d+)$/.exec(part), a, b;
+    if (sm) { part = sm[1]; step = Math.max(1, parseInt(sm[2], 10)); }
+    if (part === "*") { a = lo; b = hi; }
+    else if (part.indexOf("-") > 0) { a = parseInt(part, 10); b = parseInt(part.split("-")[1], 10); }
+    else { a = parseInt(part, 10); b = sm ? hi : a; }
+    return v >= a && v <= b && (v - a) % step === 0;
+  });
+}
+// Cloudflare numbers weekdays 1 (Sunday) to 7 (Saturday) (CF-DOW, qnfo-fleet-control 2026-10-05).
+function cronGridMatch(expr, d) {
+  var f = String(expr).trim().split(/\s+/);
+  if (f.length !== 5) return false;
+  var domOk = cronGridField(f[2], d.getUTCDate(), 1, 31), dowOk = cronGridField(f[4], d.getUTCDay() + 1, 1, 7);
+  var dayOk = f[2] !== "*" && f[4] !== "*" ? (domOk || dowOk) : (domOk && dowOk);
+  return dayOk && cronGridField(f[0], d.getUTCMinutes(), 0, 59) && cronGridField(f[1], d.getUTCHours(), 0, 23) && cronGridField(f[3], d.getUTCMonth() + 1, 1, 12);
+}
+// True when expr had a slot in the window (sinceMs, untilMs].
+function cronGridSlot(expr, sinceMs, untilMs) {
+  for (var t = Math.floor(untilMs / 60000) * 60000; t > sinceMs; t -= 60000) if (cronGridMatch(expr, new Date(t))) return true;
+  return false;
+}
+async function cronGridLog(db, worker, expr, startMs, outcome, note) {
+  if (!db) return;
+  try {
+    await db.prepare("INSERT INTO cron_fire_log (cron_name, task_id, cron_expr, fired_at, fired_epoch_ms, outcome, source, note) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)")
+      .bind(worker + "|" + expr, worker, expr, new Date(startMs).toISOString(), startMs, outcome, "worker:" + worker, String(note || "").slice(0, 500)).run();
+  } catch (e) { console.error(JSON.stringify({ worker: worker, where: "cron-grid-log", error: String(e && e.message || e).slice(0, 200) })); }
+}
+async function cronGridDue(db, cfg, nowMs) {
+  var out = [], lag = cfg.lagMin || 0;
+  for (var i = 0; i < cfg.jobs.length; i++) {
+    var j = cfg.jobs[i];
+    if (cronGridSlot(j.cron, nowMs - (lag + cfg.tickMin) * 60000, nowMs - lag * 60000)) { out.push({ cron: j.cron, why: "slot" }); continue; }
+    if (!db || !j.retry) continue;
+    try {
+      var name = cfg.worker + "|" + j.cron;
+      var r = await db.prepare("SELECT COUNT(*) AS n, MAX(CASE WHEN outcome = 'ok' THEN fired_epoch_ms END) AS last_ok, SUM(CASE WHEN outcome = 'error' AND fired_epoch_ms > COALESCE((SELECT MAX(fired_epoch_ms) FROM cron_fire_log WHERE cron_name = ?1 AND outcome = 'ok'), 0) THEN 1 ELSE 0 END) AS fails FROM cron_fire_log WHERE cron_name = ?1").bind(name).first();
+      if (r && Number(r.n) > 0 && Number(r.fails || 0) < CRON_GRID_RETRIES && nowMs - Number(r.last_ok || 0) > (j.periodMin + 30) * 60000) out.push({ cron: j.cron, why: "retry" });
+    } catch (e) { console.error(JSON.stringify({ worker: cfg.worker, where: "cron-grid-due", error: String(e && e.message || e).slice(0, 200) })); }
   }
-};
+  return out;
+}
+// One run of the worker's own handler, awaited with its waitUntil work, logged with its outcome.
+async function cronGridOne(db, worker, expr, why, ev, ctx, run) {
+  var t0 = Date.now(), pending = [];
+  var c = { waitUntil: function (p) { pending.push(Promise.resolve(p)); }, passThroughOnException: function () { if (ctx && ctx.passThroughOnException) ctx.passThroughOnException(); } };
+  try {
+    await run(ev, c);
+    // Index loop, not allSettled: work a waitUntil promise adds while it runs is awaited too.
+    var bad = null;
+    for (var k = 0; k < pending.length; k++) { try { await pending[k]; } catch (e) { if (!bad) bad = e || new Error("waitUntil rejected"); } }
+    if (bad) throw bad;
+    await cronGridLog(db, worker, expr, t0, "ok", why + " " + (Date.now() - t0) + " ms");
+  } catch (e) {
+    await cronGridLog(db, worker, expr, t0, "error", why + ": " + String(e && e.message || e));
+    throw e;
+  }
+}
+// cfg: { worker, tick, tickMin, lagMin, jobs: [{ cron, periodMin, retry }], own: "self" | "none" | "<cron the tick runs as>", ownWhenDue }
+async function cronGridRun(db, event, ctx, cfg, run) {
+  var cron = String((event && event.cron) || "");
+  var nowMs = Number(event && event.scheduledTime) || Date.now();
+  if (cron !== cfg.tick) return cronGridOne(db, cfg.worker, cron || "manual", "fire", event, ctx, run);
+  var due = await cronGridDue(db, cfg, nowMs), firstErr = null;
+  for (var i = 0; i < due.length; i++) {
+    try { await cronGridOne(db, cfg.worker, due[i].cron, due[i].why, { cron: due[i].cron, scheduledTime: nowMs, type: "scheduled" }, ctx, run); }
+    catch (e) { if (!firstErr) firstErr = e; }
+  }
+  if (cfg.own === "none" || (due.length && cfg.ownWhenDue === false)) {
+    if (!due.length) await cronGridLog(db, cfg.worker, cfg.tick, nowMs, "idle", "grid tick: no job due");
+  } else {
+    var ev = cfg.own && cfg.own !== "self" ? { cron: cfg.own, scheduledTime: nowMs, type: "scheduled" } : event;
+    try { await cronGridOne(db, cfg.worker, cfg.tick, "tick", ev, ctx, run); } catch (e) { if (!firstErr) firstErr = e; }
+  }
+  if (firstErr) throw firstErr;
+}
+// ---- CRON-GRID-1:END ----
+var CRON_GRID_CFG = {"worker": "qnfo-github-steward", "tick": "5,15,25,35,45,55 * * * *", "tickMin": 10, "jobs": [{"cron": "15 * * * *", "periodMin": 60, "retry": true}], "own": "self"};
+

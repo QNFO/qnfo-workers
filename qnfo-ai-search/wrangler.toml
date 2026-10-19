@@ -35,7 +35,7 @@ binding = "IDEAS"
 service = "idea-hub"
 
 [triggers]
-crons = ["41 * * * *"]
+crons = ["40 * * * *"]
 
 [observability]
 enabled = true

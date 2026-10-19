@@ -73,6 +73,6 @@ check(sq.prepare("SELECT COUNT(*) n FROM analytics_action_log WHERE trigger_id=8
 
 const pp = cut("async function publicationPreflight(env)", "__name(publicationPreflight");
 check(/sok && open[\s\S]*INSERT INTO issue_triage[\s\S]*close_evidence[\s\S]*UPDATE agent_issues SET status='closed'/.test(pp), "the publication preflight closes its own issue with evidence on recovery");
-check(/if \(cron === "30 3 \* \* 1"\) type = "stress"/.test(src) && /"30 3 \* \* 1"/.test(readFileSync(join(here, "wrangler.toml"), "utf8")), "the calibrator's stress key matches the declared Monday cron");
+check(/if \(cron === "30 3 \* \* 1"\) type = "stress"/.test(src) && src.indexOf('{"cron": "30 3 * * 1", "periodMin": 10080, "retry": true}') > 0, "the calibrator's stress key matches the declared Monday cron");
 console.log(fails + " failure(s)");
 process.exit(fails ? 1 : 0);

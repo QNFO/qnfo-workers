@@ -78,7 +78,7 @@ database_id = "e8d6c61a-10b7-4086-b81e-9e6e85afa407"
 [triggers]
 # EMAIL-TICK-1 (2.9.0, 2026-10-12): the voice drafter and the reply drain run every 15 minutes (96 fires/24h, under the
 # CRON-RATE-CEILING-1 floor of one fire per 10 minutes); the daily 07:00 cron keeps the index, freshness and voice-learning steps.
-crons = ["*/15 * * * *", "0 7 * * *"]
+crons = ["*/15 * * * *"]
 
 # Secrets (set via `wrangler secret put`, never committed):
 #   GATEWAY_EMAIL_KEY   - AI Gateway key for reply drafting

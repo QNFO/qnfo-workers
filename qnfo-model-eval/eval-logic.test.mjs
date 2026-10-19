@@ -47,7 +47,8 @@ ok(typeof mod.handlers.fetch === "function", "default export has a fetch handler
 ok(typeof mod.handlers.scheduled === "function", "default export has a scheduled handler");
 
 /* ---- wrangler: cadence and binding --------------------------------------- */
-ok(/crons\s*=\s*\["17 \*\/6 \* \* \*"\]/.test(toml), "wrangler declares the 6-hourly sweep", toml.match(/crons.*$/m)?.[0]);
+// CRON-GRID-1 (1.5.0): an hourly :20 trigger; the 6-hourly battery is a grid job.
+ok(/crons\s*=\s*\["20 \* \* \* \*"\]/.test(toml) && readFileSync(new URL("./worker.js", import.meta.url), "utf8").indexOf('{"cron": "17 */6 * * *", "periodMin": 360, "retry": true}') > 0, "wrangler declares the hourly trigger and the 6-hourly sweep is a grid job", toml.match(/crons.*$/m)?.[0]);
 ok(/binding\s*=\s*"AUDIT"/.test(toml), "wrangler binds AUDIT");
 ok(/traces\]\s*\n\s*enabled\s*=\s*true/.test(toml), "wrangler enables traces");
 

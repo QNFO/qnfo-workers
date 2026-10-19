@@ -100,6 +100,38 @@ OWNER_OVERRIDES = {
 }
 
 
+# CRON-GRID-1 (2026-10-19, owner directive: "ALL CRON TICKS SHALL BE MEASURED IN 5-MINUTE INTERVALS, AND NO CRON SHALL
+# EXECUTE LESS THAN ONCE EVERY HOUR"): two failures, no longer tracked migrations.
+#   GRID     a fire lands on a minute that is not a multiple of 5 (a worker whose override allows a sub-5-minute gap,
+#            qnfo-code-orchestrator */2, is measured in 5-minute buckets and exempt).
+#   TEMPO    a live worker's cron leaves more than 60 minutes between fires. A daily or weekly job keeps its cadence
+#            inside the worker (CRON-GRID-1 cronGridRun on an hourly trigger), never as a slower trigger.
+# A directory with a RETIRED or FOLDED marker is not deployed (#1704) and is skipped.
+GRID_MINUTES = 5
+# Live work claims held by another session on these workers' worker.js (WORK-CLAIM-1) when CRON-GRID-1 landed; their move
+# follows in the next CRON-GRID-1 pull request. Listed (TEMPO-PENDING), not failed, until the date; past it they fail.
+TEMPO_PENDING = {
+    "personal-api": "2026-10-20",
+    "qnfo-intent-orchestrator": "2026-10-20",
+}
+
+
+def tempo_pending(worker, today=None):
+    until = TEMPO_PENDING.get(worker)
+    today = today or _dt.datetime.now(_dt.timezone.utc).strftime("%Y-%m-%d")
+    return bool(until) and today <= until
+
+
+def off_grid(worker, fires):
+    """CRON-GRID-1: the first fire minute that is not on the 5-minute grid, or None."""
+    if limits_for(worker)[1] < GRID_MINUTES:
+        return None
+    for f in fires:
+        if (f % 60) % GRID_MINUTES:
+            return f % 60
+    return None
+
+
 def limits_for(worker):
     """(max_fires_24h, min_gap_minutes) for a worker, honouring a named owner override."""
     o = OWNER_OVERRIDES.get(worker) or {}
@@ -261,6 +293,9 @@ def audit_repo(root, strict_worker=False):
         wtoml = os.path.join(wdir, "wrangler.toml")
         if not os.path.isfile(wtoml):
             continue
+        if os.path.exists(os.path.join(wdir, "RETIRED")) or os.path.exists(os.path.join(wdir, "FOLDED")):
+            report.setdefault("skipped_retired", []).append(name)
+            continue
         crons = toml_crons(wtoml)
         if not crons:
             continue
@@ -286,10 +321,14 @@ def audit_repo(root, strict_worker=False):
                     dict({"worker": name, "cron": cron, "reason": reason}, **stats))
             slow = slow_reason(name, stats)
             if slow:
-                # TEMPO-120M-5M-1: a producer above 120 minutes is a migration item: listed in
-                # every run (visible, never silent) and failing under --tempo-strict.
+                # CRON-GRID-1: a cron slower than hourly fails (it was a tracked TEMPO migration item).
                 report.setdefault("tempo", []).append(
                     dict({"worker": name, "cron": cron, "reason": slow}, **stats))
+                if not tempo_pending(name):
+                    report["violations"].append(dict({"worker": name, "cron": cron, "reason": "TEMPO " + slow}, **stats))
+            og = off_grid(name, cron_fires(cron, days=8))
+            if og is not None:
+                report["violations"].append({"worker": name, "cron": cron, "reason": "GRID: fires at minute %d, not a multiple of %d" % (og, GRID_MINUTES)})
             gaps_seen.append(stats.get("max_gap_minutes"))
         hb = heartbeat_reason(name, gaps_seen)
         if hb:
@@ -359,10 +398,14 @@ def audit_live():
                     dict({"worker": name, "cron": cron, "reason": reason}, **stats))
             slow = slow_reason(name, stats)
             if slow:
-                # TEMPO-120M-5M-1: a producer above 120 minutes is a migration item: listed in
-                # every run (visible, never silent) and failing under --tempo-strict.
+                # CRON-GRID-1: a cron slower than hourly fails (it was a tracked TEMPO migration item).
                 report.setdefault("tempo", []).append(
                     dict({"worker": name, "cron": cron, "reason": slow}, **stats))
+                if not tempo_pending(name):
+                    report["violations"].append(dict({"worker": name, "cron": cron, "reason": "TEMPO " + slow}, **stats))
+            og = off_grid(name, cron_fires(cron, days=8))
+            if og is not None:
+                report["violations"].append({"worker": name, "cron": cron, "reason": "GRID: fires at minute %d, not a multiple of %d" % (og, GRID_MINUTES)})
             gaps_seen.append(stats.get("max_gap_minutes"))
         hb = heartbeat_reason(name, gaps_seen)
         if hb:

@@ -5,7 +5,7 @@ var __name = (target, value) => __defProp(target, "name", { value, configurable:
 var __defProp2 = Object.defineProperty;
 var __name2 = /* @__PURE__ */ __name((target, value) => __defProp2(target, "name", { value, configurable: true }), "__name");
 var NL = String.fromCharCode(10);
-var VERSION = "1.5.1-bp-logging"; // 1.5.1 WORKERS-BP-LOGGING-qnfo-infra-1 (2026-10-14, agent_issues 2534, child of 2342, pillar autonomy): the 3 swallowed catches in handleWebhook log as a structured console.error (worker, where, error); control flow unchanged. // 1.5.0 CRON-ONLY-HEARTBEAT-1 (agent_issues 2397, pillar autonomy): scheduled() upserts its fleet_heartbeat row after the run, ok=0 when the work threw. // 1.4.0 SOURCE-VOICE-1 (agent_issues 2468, owner directive 2026-10-13 "Papers shall cite full texts, not merely reference work summaries"; pillar research): a PAPER_VZ hit in /context carries the passage of the paper's body that matched (the indexer's own chunk, from metadata.chunk), after the abstract when one is stored; it was title + status + abstract.slice(0, 220), so a paper with no abstract (269 of 575 published on 2026-10-13) reached qnfo-ai's retrieved context as its title alone. renderContext gives a paper hit up to 1300 characters (300 before). isZenodoId was defined only inside the folded indexer member, so the /context enrichment and metaLine threw a ReferenceError on every paper hit and returned "slug <x> (enrich error)"; it is now defined at module scope too. // 1.3.4 WORKERS-STANDARDS-1 (2026-10-12, pillar security): the indexer member compares X-Index-Token in constant time (same accepted value). // 1.3.1 INDEXER-FOLD-1 (#1756): qnfo-paper-indexer runs here as a member (its two jobs on this worker's existing 06:30 trigger, no cron added; /indexer/* read routes).
+var VERSION = "1.6.0-cron-grid-1"; // 1.6.0 CRON-GRID-1 (owner directive 2026-10-19, pillar autonomy): one hourly :30 trigger. The 06:30 run (indexer member + state refresh) and the 18:00 refresh keep their slots on it and are retried hourly, at most 3 times, while their last good run is over 24.5 h old; every other hour runs the state refresh (it ran twice a day). Every fire is logged to cron_fire_log for CRON-WATCH-1. // 1.5.1 WORKERS-BP-LOGGING-qnfo-infra-1 (2026-10-14, agent_issues 2534, child of 2342, pillar autonomy): the 3 swallowed catches in handleWebhook log as a structured console.error (worker, where, error); control flow unchanged. // 1.5.0 CRON-ONLY-HEARTBEAT-1 (agent_issues 2397, pillar autonomy): scheduled() upserts its fleet_heartbeat row after the run, ok=0 when the work threw. // 1.4.0 SOURCE-VOICE-1 (agent_issues 2468, owner directive 2026-10-13 "Papers shall cite full texts, not merely reference work summaries"; pillar research): a PAPER_VZ hit in /context carries the passage of the paper's body that matched (the indexer's own chunk, from metadata.chunk), after the abstract when one is stored; it was title + status + abstract.slice(0, 220), so a paper with no abstract (269 of 575 published on 2026-10-13) reached qnfo-ai's retrieved context as its title alone. renderContext gives a paper hit up to 1300 characters (300 before). isZenodoId was defined only inside the folded indexer member, so the /context enrichment and metaLine threw a ReferenceError on every paper hit and returned "slug <x> (enrich error)"; it is now defined at module scope too. // 1.3.4 WORKERS-STANDARDS-1 (2026-10-12, pillar security): the indexer member compares X-Index-Token in constant time (same accepted value). // 1.3.1 INDEXER-FOLD-1 (#1756): qnfo-paper-indexer runs here as a member (its two jobs on this worker's existing 06:30 trigger, no cron added; /indexer/* read routes).
 function auth(token, env) {
   const exp = env.INFRA_TOKEN;
   if (!exp || !token) return false;
@@ -869,11 +869,100 @@ async function runScheduled(event, env, ctx) {
       await store(env, "records", r);
     }
 }
+// ---- CRON-GRID-1:BEGIN (owner directive 2026-10-19: "ALL CRON TICKS SHALL BE MEASURED IN 5-MINUTE INTERVALS, AND NO CRON
+// SHALL EXECUTE LESS THAN ONCE EVERY HOUR. ALL CRON FAILURES/ERRORS SHALL BE TRIAGED AND REMEDIATED AUTOMATICALLY BY THE FLEET.")
+// Cloudflare fires this worker only on triggers that repeat at least hourly, on minutes that are multiples of 5. A job that
+// had its own slower trigger (daily, weekly, every 6 hours) keeps its cadence: it runs on the first grid fire after its old
+// slot, and is retried on later fires while its last good run is older than its period plus 30 minutes, at most
+// CRON_GRID_RETRIES times in a row; past that CRON-WATCH-1 (qnfo-audit fleet_tasks cron-watch) escalates it to the code loop.
+// Every run is one cron_fire_log row (source worker:<name>, outcome ok, error or idle) that CRON-WATCH-1 reads. A job named
+// retry: false (a send to people outside the fleet) runs only on its slot, so a failure is never repeated at a reader.
+var CRON_GRID_RETRIES = 3;
+function cronGridField(spec, v, lo, hi) {
+  return String(spec).split(",").some(function (part) {
+    var step = 1, sm = /^(.*)\/(\d+)$/.exec(part), a, b;
+    if (sm) { part = sm[1]; step = Math.max(1, parseInt(sm[2], 10)); }
+    if (part === "*") { a = lo; b = hi; }
+    else if (part.indexOf("-") > 0) { a = parseInt(part, 10); b = parseInt(part.split("-")[1], 10); }
+    else { a = parseInt(part, 10); b = sm ? hi : a; }
+    return v >= a && v <= b && (v - a) % step === 0;
+  });
+}
+// Cloudflare numbers weekdays 1 (Sunday) to 7 (Saturday) (CF-DOW, qnfo-fleet-control 2026-10-05).
+function cronGridMatch(expr, d) {
+  var f = String(expr).trim().split(/\s+/);
+  if (f.length !== 5) return false;
+  var domOk = cronGridField(f[2], d.getUTCDate(), 1, 31), dowOk = cronGridField(f[4], d.getUTCDay() + 1, 1, 7);
+  var dayOk = f[2] !== "*" && f[4] !== "*" ? (domOk || dowOk) : (domOk && dowOk);
+  return dayOk && cronGridField(f[0], d.getUTCMinutes(), 0, 59) && cronGridField(f[1], d.getUTCHours(), 0, 23) && cronGridField(f[3], d.getUTCMonth() + 1, 1, 12);
+}
+// True when expr had a slot in the window (sinceMs, untilMs].
+function cronGridSlot(expr, sinceMs, untilMs) {
+  for (var t = Math.floor(untilMs / 60000) * 60000; t > sinceMs; t -= 60000) if (cronGridMatch(expr, new Date(t))) return true;
+  return false;
+}
+async function cronGridLog(db, worker, expr, startMs, outcome, note) {
+  if (!db) return;
+  try {
+    await db.prepare("INSERT INTO cron_fire_log (cron_name, task_id, cron_expr, fired_at, fired_epoch_ms, outcome, source, note) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)")
+      .bind(worker + "|" + expr, worker, expr, new Date(startMs).toISOString(), startMs, outcome, "worker:" + worker, String(note || "").slice(0, 500)).run();
+  } catch (e) { console.error(JSON.stringify({ worker: worker, where: "cron-grid-log", error: String(e && e.message || e).slice(0, 200) })); }
+}
+async function cronGridDue(db, cfg, nowMs) {
+  var out = [], lag = cfg.lagMin || 0;
+  for (var i = 0; i < cfg.jobs.length; i++) {
+    var j = cfg.jobs[i];
+    if (cronGridSlot(j.cron, nowMs - (lag + cfg.tickMin) * 60000, nowMs - lag * 60000)) { out.push({ cron: j.cron, why: "slot" }); continue; }
+    if (!db || !j.retry) continue;
+    try {
+      var name = cfg.worker + "|" + j.cron;
+      var r = await db.prepare("SELECT COUNT(*) AS n, MAX(CASE WHEN outcome = 'ok' THEN fired_epoch_ms END) AS last_ok, SUM(CASE WHEN outcome = 'error' AND fired_epoch_ms > COALESCE((SELECT MAX(fired_epoch_ms) FROM cron_fire_log WHERE cron_name = ?1 AND outcome = 'ok'), 0) THEN 1 ELSE 0 END) AS fails FROM cron_fire_log WHERE cron_name = ?1").bind(name).first();
+      if (r && Number(r.n) > 0 && Number(r.fails || 0) < CRON_GRID_RETRIES && nowMs - Number(r.last_ok || 0) > (j.periodMin + 30) * 60000) out.push({ cron: j.cron, why: "retry" });
+    } catch (e) { console.error(JSON.stringify({ worker: cfg.worker, where: "cron-grid-due", error: String(e && e.message || e).slice(0, 200) })); }
+  }
+  return out;
+}
+// One run of the worker's own handler, awaited with its waitUntil work, logged with its outcome.
+async function cronGridOne(db, worker, expr, why, ev, ctx, run) {
+  var t0 = Date.now(), pending = [];
+  var c = { waitUntil: function (p) { pending.push(Promise.resolve(p)); }, passThroughOnException: function () { if (ctx && ctx.passThroughOnException) ctx.passThroughOnException(); } };
+  try {
+    await run(ev, c);
+    // Index loop, not allSettled: work a waitUntil promise adds while it runs is awaited too.
+    var bad = null;
+    for (var k = 0; k < pending.length; k++) { try { await pending[k]; } catch (e) { if (!bad) bad = e || new Error("waitUntil rejected"); } }
+    if (bad) throw bad;
+    await cronGridLog(db, worker, expr, t0, "ok", why + " " + (Date.now() - t0) + " ms");
+  } catch (e) {
+    await cronGridLog(db, worker, expr, t0, "error", why + ": " + String(e && e.message || e));
+    throw e;
+  }
+}
+// cfg: { worker, tick, tickMin, lagMin, jobs: [{ cron, periodMin, retry }], own: "self" | "none" | "<cron the tick runs as>", ownWhenDue }
+async function cronGridRun(db, event, ctx, cfg, run) {
+  var cron = String((event && event.cron) || "");
+  var nowMs = Number(event && event.scheduledTime) || Date.now();
+  if (cron !== cfg.tick) return cronGridOne(db, cfg.worker, cron || "manual", "fire", event, ctx, run);
+  var due = await cronGridDue(db, cfg, nowMs), firstErr = null;
+  for (var i = 0; i < due.length; i++) {
+    try { await cronGridOne(db, cfg.worker, due[i].cron, due[i].why, { cron: due[i].cron, scheduledTime: nowMs, type: "scheduled" }, ctx, run); }
+    catch (e) { if (!firstErr) firstErr = e; }
+  }
+  if (cfg.own === "none" || (due.length && cfg.ownWhenDue === false)) {
+    if (!due.length) await cronGridLog(db, cfg.worker, cfg.tick, nowMs, "idle", "grid tick: no job due");
+  } else {
+    var ev = cfg.own && cfg.own !== "self" ? { cron: cfg.own, scheduledTime: nowMs, type: "scheduled" } : event;
+    try { await cronGridOne(db, cfg.worker, cfg.tick, "tick", ev, ctx, run); } catch (e) { if (!firstErr) firstErr = e; }
+  }
+  if (firstErr) throw firstErr;
+}
+// ---- CRON-GRID-1:END ----
+var CRON_GRID_CFG = {"worker": "qnfo-infra", "tick": "30 * * * *", "tickMin": 60, "jobs": [{"cron": "30 6 * * *", "periodMin": 1440, "retry": true}, {"cron": "0 18 * * *", "periodMin": 1440, "retry": true}], "own": "0 * * * *", "ownWhenDue": false};
 var worker_default = {
   async scheduled(event, env, ctx) {
     // CRON-ONLY-HEARTBEAT-1 (agent_issues 2397): the row means "the scheduled run finished"; the write never throws or masks the run's error.
     let ok = 1, err = null;
-    try { await runScheduled(event, env, ctx); } catch (e) { ok = 0; err = e; }
+    try { await cronGridRun(env.AUDIT, event, ctx, CRON_GRID_CFG, function (ev, c) { return runScheduled(ev, env, c); }); } catch (e) { ok = 0; err = e; }
     try {
       await env.AUDIT.prepare("INSERT INTO fleet_heartbeat (worker, version, ts, ok) VALUES (?1, ?2, ?3, ?4) ON CONFLICT(worker) DO UPDATE SET version=excluded.version, ts=excluded.ts, ok=excluded.ok").bind("qnfo-infra", VERSION, new Date().toISOString(), ok).run();
     } catch (e) { console.error(JSON.stringify({ worker: "qnfo-infra", event: "fleet-heartbeat-write-failed", error: String(e && e.message || e) })); }
@@ -894,7 +983,7 @@ var worker_default = {
       return indexerMod.fetch(new Request(iu.toString(), request), indexerEnv(env), {});
     }
     if (path === "/health" && method === "GET") {
-      return new Response(JSON.stringify({ ok: true, worker: "qnfo-infra", version: VERSION, capabilities: ["infra-retrieve", "context", "state-refresh", "analytics"], limitations: ["every route except /health needs a bearer token", "state refreshes on the 06:30 and 18:00 crons"], oracle: { retrieve: "GET /retrieve?q=&scope=&k=", context: "GET /context?q=&scope=&k=" }, bindings: { audit: !!env.AUDIT, graph: !!env.GRAPH, living: !!env.LIVING, personal: !!env.PERSONAL, portfolio: !!env.PORTFOLIO, paper_vz: !!env.PAPER_VZ, notes_vz: !!env.NOTES_VZ, tasks_vz: !!env.TASKS_VZ, log_vz: !!env.LOG_VZ, handoffs_vz: !!env.HANDOFFS_VZ, ipatent_vz: !!env.IPATENT_VZ, infra_vz: !!env.VZ, ai: !!env.AI } }), { headers: { "Content-Type": "application/json", ...cors } });
+      return new Response(JSON.stringify({ ok: true, worker: "qnfo-infra", version: VERSION, capabilities: ["infra-retrieve", "context", "state-refresh", "analytics"], limitations: ["every route except /health needs a bearer token", "state refreshes hourly at :30 (CRON-GRID-1); the indexer member runs on the 06:30 fire"], oracle: { retrieve: "GET /retrieve?q=&scope=&k=", context: "GET /context?q=&scope=&k=" }, bindings: { audit: !!env.AUDIT, graph: !!env.GRAPH, living: !!env.LIVING, personal: !!env.PERSONAL, portfolio: !!env.PORTFOLIO, paper_vz: !!env.PAPER_VZ, notes_vz: !!env.NOTES_VZ, tasks_vz: !!env.TASKS_VZ, log_vz: !!env.LOG_VZ, handoffs_vz: !!env.HANDOFFS_VZ, ipatent_vz: !!env.IPATENT_VZ, infra_vz: !!env.VZ, ai: !!env.AI } }), { headers: { "Content-Type": "application/json", ...cors } });
     }
     const token = (request.headers.get("Authorization") || "").replace(/^Bearer\s+/i, "");
     if (!auth(token, env)) return new Response("unauthorized", { status: 401, headers: cors });
