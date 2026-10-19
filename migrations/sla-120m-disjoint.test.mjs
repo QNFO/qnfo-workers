@@ -37,8 +37,13 @@ const ddl = {
 const LIVE_PROBE = "SELECT '1' AS expected, CASE WHEN total_over_120m = issues_open_over_120m + research_review_error + research_head_stalled + research_queued_180m + intents_pending + outreach_waiting + code_tasks_stalled + issues_without_doer_3h + zenodo_exit_pending_stalled + research_held_over_sla + triage_gap + contracts_cadence_drift + code_tasks_queued_over_120m + predictions_unscored_over_sla + doctrine_proposals_waiting + content_items_over_sla + research_claims_over_120m + cadence_overdue_over_120m AND issues_open_over_120m = (SELECT COUNT(*) FROM v_issue_age WHERE age_min > 120) THEN '1' ELSE '0' END AS observed FROM v_sla_over_120m";
 const WRITE_KW = ["insert into", "update ", "delete from", "drop table", "drop index", "alter table", "create table", "create index", "create trigger", "attach ", "detach ", "pragma ", "replace into", "vacuum"];
 
-const iso = (minAgo) => new Date(Date.now() - minAgo * 6e4).toISOString().replace(/\.\d+Z$/, "Z");
-const ms = (minAgo) => Date.now() - minAgo * 6e4;
+// one frozen clock for every fixture, so the base and migrated databases (two build() calls) hold identical timestamps
+const NOW = Date.now();
+const iso = (minAgo) => new Date(NOW - minAgo * 6e4).toISOString().replace(/\.\d+Z$/, "Z");
+const ms = (minAgo) => NOW - minAgo * 6e4;
+// the two age columns grow with the wall clock: the views are read at two different instants, so a minute boundary between the reads moves
+// them by one (oldest_open_issue_min read 299 on the base and 300 on the migrated view in the deploy-gate run on 58a8ed35)
+const AGE_COLS = ["oldest_open_issue_min", "code_tasks_queued_oldest_min"];
 
 function build(withMigration) {
   const db = new DatabaseSync(":memory:");
@@ -131,8 +136,9 @@ ok(old.total_over_120m === 19 && old.total_over_120m > DISTINCT, "base: the old 
 const db = build(true);
 const nw = { ...one(db, "SELECT * FROM v_sla_over_120m") };
 ok(Object.keys(nw).join() === Object.keys(old).join(), "v_sla_over_120m keeps every column name in the same position", { old: Object.keys(old), now: Object.keys(nw) });
-const same = Object.keys(old).filter((k) => k !== "total_over_120m").every((k) => old[k] === nw[k]);
-ok(same, "every column except the total keeps its value", { old, nw });
+const same = Object.keys(old).filter((k) => k !== "total_over_120m" && !AGE_COLS.includes(k)).every((k) => old[k] === nw[k]);
+ok(same, "every column except the total and the two wall-clock ages keeps its value", { old, nw });
+ok(AGE_COLS.every((k) => Math.abs(old[k] - nw[k]) <= 1), "the two age columns keep their value to within the minute that passes between the reads", { old, nw });
 ok(nw.total_over_120m === DISTINCT, "the total counts each of the 12 distinct items once", nw.total_over_120m);
 const ov = one(db, "SELECT * FROM v_sla_overlap_120m");
 ok(ov.research_in_content_over_sla === 4 && ov.triage_gap_in_open_120m === 1 && ov.code_tasks_stalled_and_queued_120m === 1, "the overlap view finds the 4 research rows (queued, review, held, researching), the aged untriaged issue and the queued stalled task", ov);
