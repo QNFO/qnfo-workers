@@ -9,7 +9,7 @@ var __name22 = /* @__PURE__ */ __name2((target, value) => __defProp22(target, "n
 var __defProp222 = Object.defineProperty;
 var __name222 = /* @__PURE__ */ __name22((target, value) => __defProp222(target, "name", { value, configurable: true }), "__name");
 var __name2222 = /* @__PURE__ */ __name222((target, value) => Object.defineProperty(target, "name", { value, configurable: true }), "__name");
-var VERSION = "1.51.16-parked-card-reason"; /* 1.51.16 PARKED-CARD-REASON-1 (2026-10-19, agent_issues 100173, pillar autonomy; patch): the parked code-task card branches on the cause wherever it sits in last_error (the loop writes "model <id>: noop-proposal: ..." and "model <id> proposed no change", so a prefix test never matched), and the dead execOne edit of PR 3106 (fleet_issue_dispatch has no last_error) is removed. */ /* 1.51.15 READER-REPORT-WATCHMAKER-1 (2026-10-19, agent_issues 100264, pillar autonomy; patch): WATCHMAKER_OPS counts the hourly reader-report sweep of qnfo-gateway 3.29.0 (rrSweep), read from the gateway tick in cron_fire_log, because reader_reports holds no row until a reader writes one. */ /* 1.51.8 VERSION-LINE-NOTES-1 (2026-10-19, agent_issues 100243, pillar autonomy; patch, a comment moved): the release notes of every earlier version rode on this line (178 notes, about 200,000 chars), so a version bump of this worker was an 820,000-char patch (worker and mirror, removed and added): 12 code tasks ended on the publisher size cap on 2026-10-19 and three issues were exhausted for three days. They are in git history (git log -S '<release tag>' -- qnfo-fleet-dashboard/worker.js); the changelog is built from the deploy ledger and commits, and the guards read only the quoted version string. A new note goes on this line and stays short. */
+var VERSION = "1.51.17-cost-window-7d"; /* 1.51.17 COST-FEED-7D-WINDOW-1 (2026-10-19, agent_issues 100169, pillar cost; patch): /api/cost by_model_7d and by_worker_7d sum the 7 complete UTC days (today, a partial day, was a 8th bucket under the 7d label, +31.8 percent), and the body says which days (window_7d) and that est_usd is list price before the free tier (est_usd_basis). */ /* 1.51.16 PARKED-CARD-REASON-1 (2026-10-19, agent_issues 100173, pillar autonomy; patch): the parked code-task card branches on the cause wherever it sits in last_error (the loop writes "model <id>: noop-proposal: ..." and "model <id> proposed no change", so a prefix test never matched), and the dead execOne edit of PR 3106 (fleet_issue_dispatch has no last_error) is removed. */ /* 1.51.15 READER-REPORT-WATCHMAKER-1 (2026-10-19, agent_issues 100264, pillar autonomy; patch): WATCHMAKER_OPS counts the hourly reader-report sweep of qnfo-gateway 3.29.0 (rrSweep), read from the gateway tick in cron_fire_log, because reader_reports holds no row until a reader writes one. */ /* 1.51.8 VERSION-LINE-NOTES-1 (2026-10-19, agent_issues 100243, pillar autonomy; patch, a comment moved): the release notes of every earlier version rode on this line (178 notes, about 200,000 chars), so a version bump of this worker was an 820,000-char patch (worker and mirror, removed and added): 12 code tasks ended on the publisher size cap on 2026-10-19 and three issues were exhausted for three days. They are in git history (git log -S '<release tag>' -- qnfo-fleet-dashboard/worker.js); the changelog is built from the deploy ledger and commits, and the guards read only the quoted version string. A new note goes on this line and stays short. */
 
 // REVIEW-GATE-1 (2026-10-01, docs/STRATEGY.md s9): the 2026-10-25 impressions gate is retired. The research layer is
 // reviewed on this date against the reach scorecard; nothing deletes research data automatically (phase 2 needs the
@@ -5132,11 +5132,14 @@ async function reachWindow(env, from, to) {
 // Workers AI is billed per 1,000 neurons at USD 0.011 (developers.cloudflare.com/workers-ai/platform/pricing), so est_usd
 // is neurons x 0.011 / 1000; a model routed through a gateway and billed elsewhere shows calls and errors with est_usd 0.
 var COST_USD_PER_KNEURON = 0.011;
+// COST-FEED-7D-WINDOW-1: the 7 complete UTC days before today, like v_cost_run_rate; today is a partial bucket.
+var COST_WINDOW_SQL = "day >= date('now', '-7 days') AND day < date('now')";
+var COST_FREE_NEURONS_PER_DAY = 10000;
 var COST_FEED_SQL = {
   run_rate: "SELECT source_group, daily_7d, daily_10d, run_rate_30d_7d, run_rate_30d_10d FROM v_cost_run_rate ORDER BY run_rate_30d_7d DESC",
   daily_14d: "SELECT date, ROUND(SUM(usd), 4) AS usd FROM cost_daily WHERE date >= date('now', '-14 days') AND (source = 'workers_ai' OR instr(source, 'ai_gateway:') = 1 OR instr(source, ':daily') > 0) GROUP BY date ORDER BY date",
-  by_model_7d: "SELECT model, SUM(calls) AS calls, SUM(errors) AS errors, SUM(in_tok) AS in_tok, SUM(out_tok) AS out_tok, ROUND(SUM(neurons)) AS neurons, ROUND(SUM(neurons) * " + COST_USD_PER_KNEURON + " / 1000, 4) AS est_usd FROM ai_call_counters WHERE day >= date('now', '-7 days') GROUP BY model ORDER BY SUM(neurons) DESC, SUM(calls) DESC LIMIT 20",
-  by_worker_7d: "SELECT worker, SUM(calls) AS calls, SUM(errors) AS errors, ROUND(SUM(neurons)) AS neurons, ROUND(SUM(neurons) * " + COST_USD_PER_KNEURON + " / 1000, 4) AS est_usd FROM ai_call_counters WHERE day >= date('now', '-7 days') GROUP BY worker ORDER BY SUM(neurons) DESC, SUM(calls) DESC LIMIT 20",
+  by_model_7d: "SELECT model, SUM(calls) AS calls, SUM(errors) AS errors, SUM(in_tok) AS in_tok, SUM(out_tok) AS out_tok, ROUND(SUM(neurons)) AS neurons, ROUND(SUM(neurons) * " + COST_USD_PER_KNEURON + " / 1000, 4) AS est_usd FROM ai_call_counters WHERE " + COST_WINDOW_SQL + " GROUP BY model ORDER BY SUM(neurons) DESC, SUM(calls) DESC LIMIT 20",
+  by_worker_7d: "SELECT worker, SUM(calls) AS calls, SUM(errors) AS errors, ROUND(SUM(neurons)) AS neurons, ROUND(SUM(neurons) * " + COST_USD_PER_KNEURON + " / 1000, 4) AS est_usd, MIN(day) AS first_day, MAX(day) AS last_day FROM ai_call_counters WHERE " + COST_WINDOW_SQL + " GROUP BY worker ORDER BY SUM(neurons) DESC, SUM(calls) DESC LIMIT 20",
   budgets: "SELECT node_class, cap, target, current, unit, updated_at, CASE WHEN current > cap THEN 1 ELSE 0 END AS breached, cap - current AS headroom FROM fleet_budget WHERE node_class LIKE 'ai_spend:%' OR node_class LIKE '%cost%' OR lower(unit) LIKE '%usd%' ORDER BY breached DESC, node_class"
 };
 async function costFeedData(env) {
@@ -5147,6 +5150,17 @@ async function costFeedData(env) {
   const tot = (out.run_rate || []).filter(function(r) { return r.source_group === "total:all-billing"; })[0];
   out.run_rate_30d_usd = tot ? tot.run_rate_30d_7d : null;
   out.budgets_breached = (out.budgets || []).filter(function(b) { return Number(b.breached) === 1; }).length;
+  // The window is read from the rows, never from intent; all null when the counters were unreadable or empty.
+  const wd = (out.by_worker_7d || []).filter(function(r) { return r.first_day && r.last_day; });
+  out.window_7d = null;
+  if (wd.length) {
+    const first = wd.map(function(r) { return String(r.first_day); }).sort()[0], last = wd.map(function(r) { return String(r.last_day); }).sort().pop();
+    const span = Math.round((Date.parse(last + "T00:00:00Z") - Date.parse(first + "T00:00:00Z")) / 864e5) + 1;
+    const incl = last >= new Date().toISOString().slice(0, 10);
+    out.window_7d = { first_day: first, last_day: last, span_days: span, includes_today: incl, label: span + (incl ? " UTC days including partial today" : " complete UTC days") };
+  }
+  out.est_usd_basis = "worker counters (ai_call_counters) at list price, before the 10,000 neurons/day free tier";
+  out.free_tier_neurons_per_day = COST_FREE_NEURONS_PER_DAY;
   return out;
 }
 async function reachScorecardData(env, nowMs) {

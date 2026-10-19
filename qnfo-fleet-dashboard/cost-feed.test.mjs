@@ -18,7 +18,7 @@ function mk(withCounters) {
   db.exec("INSERT INTO cost_daily VALUES (date('now','-1 day'), 'workers_ai', 1.25), (date('now','-1 day'), 'ai_gateway:openrouter', 0.5), (date('now','-1 day'), 'r2', 9), (date('now','-30 days'), 'workers_ai', 7)");
   if (withCounters) {
     db.exec(`CREATE TABLE ai_call_counters (day TEXT, worker TEXT, purpose TEXT, model TEXT, calls INTEGER DEFAULT 0, errors INTEGER DEFAULT 0, in_chars INTEGER DEFAULT 0, ms INTEGER DEFAULT 0, in_tok INTEGER DEFAULT 0, out_tok INTEGER DEFAULT 0, neurons REAL DEFAULT 0, PRIMARY KEY (day, worker, purpose, model))`);
-    db.exec("INSERT INTO ai_call_counters VALUES (date('now','-1 day'), 'qnfo-ai', 'chat', '@cf/big', 10, 1, 0, 0, 100, 50, 200000), (date('now','-2 day'), 'qnfo-social', 'post', '@cf/big', 5, 0, 0, 0, 10, 5, 100000), (date('now','-1 day'), 'qnfo-social', 'post', '@cf/small', 40, 2, 0, 0, 10, 5, 1000), (date('now','-20 day'), 'qnfo-ai', 'chat', '@cf/old', 99, 0, 0, 0, 0, 0, 9e9)");
+    db.exec("INSERT INTO ai_call_counters VALUES (date('now','-1 day'), 'qnfo-ai', 'chat', '@cf/big', 10, 1, 0, 0, 100, 50, 200000), (date('now','-2 day'), 'qnfo-social', 'post', '@cf/big', 5, 0, 0, 0, 10, 5, 100000), (date('now','-1 day'), 'qnfo-social', 'post', '@cf/small', 40, 2, 0, 0, 10, 5, 1000), (date('now','-20 day'), 'qnfo-ai', 'chat', '@cf/old', 99, 0, 0, 0, 0, 0, 9e9), (date('now'), 'qnfo-ai', 'chat', '@cf/big', 7, 0, 0, 0, 0, 0, 500000), (date('now','-8 day'), 'qnfo-ai', 'chat', '@cf/edge', 1, 0, 0, 0, 0, 0, 7000)");
   }
   const prep = (sql) => { let a = []; const q = { bind(...x) { a = x; return q; }, async all() { return { results: db.prepare(sql).all(...a) }; }, async run() { db.prepare(sql).run(...a); return { success: true, meta: { changes: 0 } }; }, async first() { return db.prepare(sql).get(...a) || null; } }; return q; };
   return { AUDIT: { prepare: prep, async batch() { return []; } } };
@@ -37,7 +37,12 @@ ok(b.schema_version === "fleet-cost/v1", "the body names its schema (the closing
 ok(b.run_rate_30d_usd === 90, "the 30-day run-rate is the all-billing total", b.run_rate_30d_usd);
 ok(Array.isArray(b.daily_14d) && b.daily_14d.length === 1 && Math.abs(b.daily_14d[0].usd - 1.75) < 1e-9, "daily spend counts AI and gateway sources in the window only", b.daily_14d);
 ok(b.by_model_7d[0].model === "@cf/big" && b.by_model_7d[0].calls === 15 && Math.abs(b.by_model_7d[0].est_usd - 3.3) < 1e-9, "by model: 300k neurons = USD 3.30, 7-day window", b.by_model_7d);
-ok(!b.by_model_7d.some((m) => m.model === "@cf/old"), "rows older than 7 days are left out");
+ok(!b.by_model_7d.some((m) => m.model === "@cf/old" || m.model === "@cf/edge"), "rows older than 7 days are left out");
+// COST-FEED-7D-WINDOW-1 (agent_issues 100169): the window is the 7 complete UTC days; today is a partial bucket and is left out.
+ok(b.by_model_7d[0].calls === 15 && b.by_worker_7d.find((w) => w.worker === "qnfo-ai").calls === 10 && b.by_worker_7d.find((w) => w.worker === "qnfo-ai").neurons === 200000, "today's partial counters are not in the 7-day sums", b.by_worker_7d);
+ok(b.window_7d && b.window_7d.last_day === new Date(Date.now() - 864e5).toISOString().slice(0, 10) && b.window_7d.first_day === new Date(Date.now() - 2 * 864e5).toISOString().slice(0, 10) && b.window_7d.span_days === 2 && b.window_7d.includes_today === false && b.window_7d.label === "2 complete UTC days", "window_7d is read from the rows: first and last day, span, no partial today, label", b.window_7d);
+ok(/list price/.test(b.est_usd_basis) && /free tier/.test(b.est_usd_basis) && b.free_tier_neurons_per_day === 10000, "est_usd says it is list price before the free tier", [b.est_usd_basis, b.free_tier_neurons_per_day]);
+ok(!/including partial today/.test(JSON.stringify(b)), "no label claims a partial day");
 ok(b.by_worker_7d.length === 2 && b.by_worker_7d[0].worker === "qnfo-ai", "by worker, largest first", b.by_worker_7d);
 ok(b.budgets.length === 2 && b.budgets_breached === 1 && b.budgets[0].node_class === "ai_spend:fleet" && b.budgets[0].headroom === -26, "spend budgets with headroom, breached first", b.budgets);
 ok(!b.blind, "no part is blind when every table exists");
@@ -49,6 +54,7 @@ ok(r.status === 304, "an unchanged feed revalidates with 304", r.status);
 r = await call(mk(false), "/api/cost");
 j = await r.json();
 const b2 = j.data || j;
+ok(b2.window_7d === null && /list price/.test(b2.est_usd_basis), "a blind counters read keeps window_7d null and still states the basis", b2.window_7d);
 ok(r.status === 200 && b2.by_model_7d.length === 0 && b2.blind.length === 2 && /ai_call_counters/.test(b2.blind[0]) && b2.budgets.length === 2, "a missing table blanks only its parts, with the reason", b2);
 
 r = await call(env, "/api");
