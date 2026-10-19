@@ -1,4 +1,4 @@
-var VERSION = "1.12.0-paper-learn"; /* 1.12.0 PAPER-LEARN-1 (2026-10-19, pillar autonomy, owner directive "THE SYSTEM/FLEET SHALL ALWAYS LEARN FROM ITS OWN RESEARCH PAPERS"): a new hourly step reads each new or revised published paper (up to ops_config paper_learn_per_tick, default 4, newest first), stores its fleet-relevant claims in qnfo-audit.paper_learnings with a verification status decided from the paper itself (unverified, derived-unchecked, cited-unchecked, assumption), routes errors a second model family confirms to internal_errata for the revision loop, files one PAPER-LEARN-1 follow-up issue with a closing probe for a strong direct learning, writes metric papers_unlearned_over_120m; GET /paper-learn/status and /paper-learn/learnings?slug=; paper_learn_mode = off stops it. */ /* 1.11.5 ping-404. */ /* 1.11.4 SLA-120M-7 (2026-10-14, pillar autonomy; owner directive 2026-10-14: no SLA exceeds 120 minutes): the advisor-noise sweep closes an OPEN-ISSUES snapshot after ADVISOR_NOISE_MAX_MIN (120 minutes), not 3 h, and its caught error is logged. */ /* 1.11.3 WORKERS-BP-LOGGING-qnfo-lifecycle-1 (2026-10-14, agent_issues 2536, child of 2342, pillar autonomy): the swallowed catches log as a structured console.error (worker, where, error); control flow unchanged. */ /* 1.11.2: backlog member 2.0.7 BACKLOG-LATEST-PASS-1, an issue closes only when its latest verification passed within 3 h (agent_issues 2222 was closed on a stale pass while its latest verification failed). */ /* 1.11.1: /noz-scrub/status answers a fixed message on failure and logs the error (CodeQL alerts 394, 395). */ /* 1.11.0-noz-scrub NOZ-SCRUB-LOOP-1 (2026-10-12, agent_issues 2273 and 2278, pillar research): a new hourly step cleans the stored living-paper.papers rows that still name the dead deposit registrar or carry its DOIs (up to 150 rows, 10 MB or 20 s a tick; line-local scrub; DOI/URL columns of the registrar set NULL; old value of every changed field kept first in living-paper.papers_bak_nozdoi; idempotent, residual rows marked and not retried; GET /noz-scrub/status; ledger cloud_ops_events job noz-scrub). Was 1.10.1-doi-scrub. 1.10.0-spare-domains SPARE-DOMAINS-1 (agent_issues 2077, pillar reach): twelve spare-domain hostnames (ipatent.me, qwav.net, qwav.uk, qwave.tech, q-wave.tech, empoweringchange.today and their www) answer 301 to their canonical site (ipatent.qnfo.org, qwav.org, qnfo.org), path and query kept. 1.9.1-retired-hosts RETIRED-HOSTS-1: twelve retired qnfo.org hostnames answer 410 Gone (noindex) instead of 522 via Workers routes on this worker (agent_issues 2010). 1.9.0-calendar-fold CALENDAR-FOLD-2 (2026-10-06, T3.10, agent_issues 2010, pillar cost, OWNER-STANDING-GRANT-1): calendar-api (ICS publish, notes intake, event feedback, owner questions) runs here as the member calendarApiFoldMod on the hourly tick, awaited; its feedback-link key is HMAC-derived from this worker's CF_API_TOKEN by the fold kit (CAL_KEY_SEED), never copied or minted; public /calendar/health, /calendar/e/<id> (GET page, POST answer) and /calendar/events.ics; binders personal-api, qnfo-intent-orchestrator and radar-hub reach it with props.member (FOLD-KIT-1). Was 1.8.1-one-worker-count. */ // 1.8.1 ONE-WORKER-COUNT-1 (2026-10-06, pillar core, transformation lever T5.10): runMetricFreshness no longer writes metric_registry.worker_count; qnfo-fleet-control 0.4.137 writes it from the live scripts census beside fleet_budget.workers (COUNT(service_registry) counted retired rows too, 32 against 31 on 2026-10-06). 1.8.0 BACKLOG-FOLD-1 (#1756, pillar cost): qnfo-backlog-exec runs here as a member (backlogMod) on the 02:00 tick; GET /backlog/health; qnfo-ops reaches its drain over the BACKLOG binding (props.member). qnfo-archive (retired: its KG seed got HTTP 401 on every batch) leaves runPing. 1.7.3 LIFECYCLE-PING-1042-1 (#1994): wrangler.toml sets global_fetch_strictly_public, so runPing and runSync reach *.q08.workers.dev (150 PING FAIL HTTP 404 rows were Cloudflare error 1042). 1.7.2 METRIC-CADENCE-UNITS-1 + METRIC-UNMEASURED-CLASS-1 (#1865): "*/3h" and "2h" cadences parse with their unit; never-measured UNMEASURED/n/a metrics are their own class. 1.7.0 CRON-SINGLE-TRIGGER-1 (#1785): one hourly trigger, CRON_TABLE in code. Worker Contract v1 VERSION constant (read by version-bump-guard / drift checks)
+var VERSION = "1.12.1-codeagent"; /* 1.12.0 PAPER-LEARN-1 (2026-10-19, pillar autonomy, owner directive "THE SYSTEM/FLEET SHALL ALWAYS LEARN FROM ITS OWN RESEARCH PAPERS"): a new hourly step reads each new or revised published paper (up to ops_config paper_learn_per_tick, default 4, newest first), stores its fleet-relevant claims in qnfo-audit.paper_learnings with a verification status decided from the paper itself (unverified, derived-unchecked, cited-unchecked, assumption), routes errors a second model family confirms to internal_errata for the revision loop, files one PAPER-LEARN-1 follow-up issue with a closing probe for a strong direct learning, writes metric papers_unlearned_over_120m; GET /paper-learn/status and /paper-learn/learnings?slug=; paper_learn_mode = off stops it. */ /* 1.11.5 ping-404. */ /* 1.11.4 SLA-120M-7 (2026-10-14, pillar autonomy; owner directive 2026-10-14: no SLA exceeds 120 minutes): the advisor-noise sweep closes an OPEN-ISSUES snapshot after ADVISOR_NOISE_MAX_MIN (120 minutes), not 3 h, and its caught error is logged. */ /* 1.11.3 WORKERS-BP-LOGGING-qnfo-lifecycle-1 (2026-10-14, agent_issues 2536, child of 2342, pillar autonomy): the swallowed catches log as a structured console.error (worker, where, error); control flow unchanged. */ /* 1.11.2: backlog member 2.0.7 BACKLOG-LATEST-PASS-1, an issue closes only when its latest verification passed within 3 h (agent_issues 2222 was closed on a stale pass while its latest verification failed). */ /* 1.11.1: /noz-scrub/status answers a fixed message on failure and logs the error (CodeQL alerts 394, 395). */ /* 1.11.0-noz-scrub NOZ-SCRUB-LOOP-1 (2026-10-12, agent_issues 2273 and 2278, pillar research): a new hourly step cleans the stored living-paper.papers rows that still name the dead deposit registrar or carry its DOIs (up to 150 rows, 10 MB or 20 s a tick; line-local scrub; DOI/URL columns of the registrar set NULL; old value of every changed field kept first in living-paper.papers_bak_nozdoi; idempotent, residual rows marked and not retried; GET /noz-scrub/status; ledger cloud_ops_events job noz-scrub). Was 1.10.1-doi-scrub. 1.10.0-spare-domains SPARE-DOMAINS-1 (agent_issues 2077, pillar reach): twelve spare-domain hostnames (ipatent.me, qwav.net, qwav.uk, qwave.tech, q-wave.tech, empoweringchange.today and their www) answer 301 to their canonical site (ipatent.qnfo.org, qwav.org, qnfo.org), path and query kept. 1.9.1-retired-hosts RETIRED-HOSTS-1: twelve retired qnfo.org hostnames answer 410 Gone (noindex) instead of 522 via Workers routes on this worker (agent_issues 2010). 1.9.0-calendar-fold CALENDAR-FOLD-2 (2026-10-06, T3.10, agent_issues 2010, pillar cost, OWNER-STANDING-GRANT-1): calendar-api (ICS publish, notes intake, event feedback, owner questions) runs here as the member calendarApiFoldMod on the hourly tick, awaited; its feedback-link key is HMAC-derived from this worker's CF_API_TOKEN by the fold kit (CAL_KEY_SEED), never copied or minted; public /calendar/health, /calendar/e/<id> (GET page, POST answer) and /calendar/events.ics; binders personal-api, qnfo-intent-orchestrator and radar-hub reach it with props.member (FOLD-KIT-1). Was 1.8.1-one-worker-count. */ // 1.8.1 ONE-WORKER-COUNT-1 (2026-10-06, pillar core, transformation lever T5.10): runMetricFreshness no longer writes metric_registry.worker_count; qnfo-fleet-control 0.4.137 writes it from the live scripts census beside fleet_budget.workers (COUNT(service_registry) counted retired rows too, 32 against 31 on 2026-10-06). 1.8.0 BACKLOG-FOLD-1 (#1756, pillar cost): qnfo-backlog-exec runs here as a member (backlogMod) on the 02:00 tick; GET /backlog/health; qnfo-ops reaches its drain over the BACKLOG binding (props.member). qnfo-archive (retired: its KG seed got HTTP 401 on every batch) leaves runPing. 1.7.3 LIFECYCLE-PING-1042-1 (#1994): wrangler.toml sets global_fetch_strictly_public, so runPing and runSync reach *.q08.workers.dev (150 PING FAIL HTTP 404 rows were Cloudflare error 1042). 1.7.2 METRIC-CADENCE-UNITS-1 + METRIC-UNMEASURED-CLASS-1 (#1865): "*/3h" and "2h" cadences parse with their unit; never-measured UNMEASURED/n/a metrics are their own class. 1.7.0 CRON-SINGLE-TRIGGER-1 (#1785): one hourly trigger, CRON_TABLE in code. Worker Contract v1 VERSION constant (read by version-bump-guard / drift checks)
 const QNFO_VERSION = VERSION;
 var __defProp = Object.defineProperty;
 var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
@@ -1698,7 +1698,8 @@ async function notesRegenIndex(env) {
     try { var r = await env.CAL_DB.prepare(sql).all(); return r.results || []; } catch (e) { return []; }
   }
   var proj = await rows("SELECT title,path,status FROM notes_intake WHERE type='project' AND status NOT IN ('done','archived') ORDER BY (priority IS NULL), priority LIMIT 50");
-  var nas = await rows("SELECT title,next_action,due,path FROM notes_intake WHERE next_action IS NOT NULL AND status='active' ORDER BY (due IS NULL), due LIMIT 50");
+try { await processOwnerReplies(env); } catch (eOqReply) { console.error(JSON.stringify({stage:"processOwnerReplies", error:eOqReply.message, stack:eOqReply.stack})); }
+var nas = await rows("SELECT title,next_action,due,path FROM notes_intake WHERE next_action IS NOT NULL AND status='active' ORDER BY (due IS NULL), due LIMIT 50");
   var waiting = await rows("SELECT title,path FROM notes_intake WHERE status='waiting' LIMIT 50");
   var areas = await rows("SELECT title,path FROM notes_intake WHERE type='area' AND status!='archived' LIMIT 50");
   var triage = await rows("SELECT path,title FROM notes_intake WHERE triage_state='needs_triage' LIMIT 50");
@@ -1979,7 +1980,56 @@ __name(fbHandle, "fbHandle");
 // Only FB_SOURCES rows qualify (their signed page refuses every other source); manual rows, trip- uids, all-day or
 // date-only rows, rows inside a trip window and places outside the Amsterdam area are skipped (OQ-TRIP-WINDOW-1 below). No model call.
 var OQ_DDL = "CREATE TABLE IF NOT EXISTS owner_questions (id INTEGER PRIMARY KEY AUTOINCREMENT, kind TEXT NOT NULL, ref TEXT, subject TEXT NOT NULL, body TEXT NOT NULL, priority INTEGER DEFAULT 5, not_before TEXT, created_at TEXT DEFAULT (datetime('now')), sent_at TEXT, attempts INTEGER DEFAULT 0, last_error TEXT, UNIQUE(kind, ref))";
-var OQ_DEFAULT_LEN_MS = 2 * 36e5;
+ // CALENDAR-CHECKIN-REPLY-PARSE-2 (2026-10-19, issue 100186, charter pillar: personal; successor of 2682): owner replies to
+ // "Did you go to X?" check-ins were never recorded. owner_questions has no message-id column, so a reply is matched by
+ // subject: emails.subject = 'Re: ' || owner_questions.subject, sender rwnquni@%. The yes/no is taken from the first line of
+ // the reply only (affirmative -> went, negative -> nope; no reason is invented). Each parsed answer is stored in
+ // calendar_feedback with source 'email-reply' and the calendar row status is set (went -> confirmed, nope -> cancelled).
+ // Rows already carrying an email-reply feedback (or any feedback for that event) are skipped, so a rerun adds nothing.
+ async function processOwnerReplies(env) {
+   if (!env || !env.CAL_DB) return 0;
+   var qs = [];
+   try {
+     qs = await runQuery(env, "SELECT id, ref, subject FROM owner_questions WHERE kind='after-event' AND ref IS NOT NULL", []);
+   } catch (eQ) {
+     console.error(JSON.stringify({stage:"owner_questions_query", error:eQ.message, stack:eQ.stack}));
+     return 0;
+   }
+   var done = 0;
+   for (var q of qs) {
+     var ref = parseInt(q.ref, 10);
+     if (!ref) continue;
+     var seen = await env.CAL_DB.prepare("SELECT id FROM calendar_feedback WHERE cal_id=?").bind(ref).first();
+     if (seen) continue;
+     var want = "Re: " + q.subject;
+     var em = [];
+     try {
+       em = await runQuery(env, "SELECT body FROM emails WHERE subject=? AND sender LIKE 'rwnquni@%' ORDER BY id DESC LIMIT 1", [want]);
+     } catch (eE1) {
+       console.error(JSON.stringify({stage:"email_query_primary", error:eE1.message, stack:eE1.stack}));
+       try {
+         em = await runQuery(env, 'SELECT body FROM emails WHERE subject=? AND "from" LIKE \'rwnquni@%\' ORDER BY id DESC LIMIT 1', [want]);
+       } catch (eE2) {
+         console.error(JSON.stringify({stage:"email_query_fallback", error:eE2.message, stack:eE2.stack}));
+         continue;
+       }
+     }
+     if (!em.length) continue;
+     var first = String(em[0].body || "").split(/\r?\n/)[0].trim().toLowerCase();
+     var action = /\b(yes|yeah|yep|yup|went|i did|did go|sure)\b/.test(first) ? "went" : /\b(no|nope|nah|didn'?t|did not|did not go)\b/.test(first) ? "nope" : null;
+     if (!action) continue;
+     var cal = await env.CAL_DB.prepare("SELECT * FROM calendar WHERE id=?").bind(ref).first();
+     if (!cal) continue;
+     await env.CAL_DB.batch([
+       env.CAL_DB.prepare("INSERT INTO calendar_feedback (cal_id, uid, action, source, title, location, domain, dtstart, relevance, friction) VALUES (?,?,?,?,?,?,?,?,?,?)").bind(ref, cal.uid, action, "email-reply", cal.title, cal.location, cal.domain, cal.dtstart, cal.relevance, cal.friction),
+       env.CAL_DB.prepare("UPDATE calendar SET status=?, updated=datetime('now') WHERE id=?").bind(action === "went" ? "confirmed" : "cancelled", ref)
+     ]);
+     done++;
+   }
+   return done;
+ }
+ __name(processOwnerReplies, "processOwnerReplies");
+ var OQ_DEFAULT_LEN_MS = 2 * 36e5;
 // OQ-TRIP-WINDOW-1 (0.7.3): "is this event local?" is decided from the calendar itself, not from a list of foreign places.
 //  1. Trip windows: confirmed personal rows with domain 'travel', a 'trip-' uid or a travel-sync-key note, whose location is
 //     not in the Amsterdam area (a hotel, flight or "Away:" banner). Window = [start date, end date), end exclusive, so the
