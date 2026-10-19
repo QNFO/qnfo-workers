@@ -8,6 +8,7 @@
     "apply-pending.json",
     "attach-ask-qwav-route.json",
     "attach-lifecycle-custom-domain.json",
+    "attach-me-q08-route.json",
     "attach-surface-routes.json",
     "attach-travel-host.json",
     "backlog-health-cheap.json",
@@ -57,6 +58,6 @@
     "version-precedence-2.json",
     "version-quote-1.json"
   ],
-  "count": 54,
+  "count": 55,
   "note": "Only these filenames exist in ci-status/ for this run. Any other ci-status/<name>.json is absent by construction - do not poll it."
 }
