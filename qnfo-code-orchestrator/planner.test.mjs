@@ -101,7 +101,7 @@ const FIX = (anchor, extra) => JSON.stringify(Object.assign({ code_fixable: true
 // 4. no plannable worker; control-plane workers never planned
 {
   const { env, prompts } = envWith([]);
-  // CONTROL-PLANE-FUNCTIONAL-CANARY-1 (0.13.0): qnfo-ai and qnfo-gateway are planned now. CODE-LOOP-CONTROL-PLANE-1 (0.20.0, owner directive
+  // CONTROL-PLANE-FUNCTIONAL-CANARY-1 (0.13.0): qnfo-ai and qnfo-gateway are planned now. CODE-LOOP-CONTROL-PLANE-1 (0.22.0, owner directive
   // 2026-10-19): so are qnfo-fleet-control, qnfo-ops, qnfo-deploy-guard and this worker; the scorer host and the scorer still never are.
   issue(env, { title: "METRIC-TRIGGER-7-Z: cost gap", description: "Find the top callers in ai_spend_ledger (owner qnfo-observability) and fix the qnfo-autonomy-scorer deploy route" });
   const r = await plan(env);

@@ -1,4 +1,4 @@
-// REMEDIATION-STAMP-STATUS-1 offline suite (qnfo-fleet-control 0.36.0): the remediation tick's contract stamp must not write back a status another
+// REMEDIATION-STAMP-STATUS-1 offline suite (qnfo-fleet-control 0.37.0): the remediation tick's contract stamp must not write back a status another
 // writer set between the probe and the stamp. Live case: issue 100000 closed as superseded at 10:45:49Z, agent_issues_superseded_contracts_upd set its
 // contract to superseded, the tick's stamp at 10:45:50Z wrote it back to holding (fm-superseded-closure-reopened and -via-status read recurring).
 // The suite extracts the statement from worker.js and runs it on SQLite, so it fails if the guard is removed.

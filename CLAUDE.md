@@ -329,7 +329,7 @@ because each one was broken at least once; the linked issue holds the evidence.
   that the worker works: LOOP-WATCH-1 and the metric triggers are the next line. `off` restores CONTROL-PLANE-MANUAL-1 without a
   deploy. Workflows under `.github/` never auto-merge.
   CODE-LOOP-CONTROL-PLANE-1 (lever T1.23; owner directive 2026-10-19, verbatim: "The code loop SHALL ALWAYS BE ABLE TO change
-  qnfo-fleet-control, qnfo-ops, qnfo-deploy-guard and the loop's own code."; qnfo-fleet-control 0.36.0, qnfo-code-orchestrator 0.20.0,
+  qnfo-fleet-control, qnfo-ops, qnfo-deploy-guard and the loop's own code."; qnfo-fleet-control 0.37.0, qnfo-code-orchestrator 0.22.0,
   human_actions 115): the code loop plans and merges those three workers, qnfo-code-orchestrator and scripts/code-task-* like qnfo-ai
   and qnfo-gateway, behind the same functional canary and automatic revert (`CM_LOOP_CANARIED` and `PLAN_LOOP_CANARIED`, held equal by
   fold-guard.test.mjs, which also requires a canary entry for each). It replaces the earlier wait for five lane merges with no canary

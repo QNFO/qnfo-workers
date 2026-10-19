@@ -1,7 +1,7 @@
 -- CODE-LOOP-CONTROL-PLANE-1 (2026-10-19, charter pillar autonomy; lever T1.23; control_registry control-plane-deny).
 -- Owner directive 2026-10-19, verbatim: "The code loop SHALL ALWAYS BE ABLE TO change qnfo-fleet-control, qnfo-ops, qnfo-deploy-guard and
--- the loop's own code." qnfo-fleet-control 0.36.0 (CM_LOOP_CANARIED, cmScope, tpOnControlPlane, CM_SCRIPT_DENY) and qnfo-code-orchestrator
--- 0.20.0 (PLAN_LOOP_CANARIED, CM_SCRIPT_DENY) carry the change; this file records it in the registries and adds the detector.
+-- the loop's own code." qnfo-fleet-control 0.37.0 (CM_LOOP_CANARIED, cmScope, tpOnControlPlane, CM_SCRIPT_DENY) and qnfo-code-orchestrator
+-- 0.22.0 (PLAN_LOOP_CANARIED, CM_SCRIPT_DENY) carry the change; this file records it in the registries and adds the detector.
 -- APPLY-BY: ci
 -- DB: qnfo-audit
 -- Rollback: DELETE FROM remediation_contracts WHERE class = 'fm-code-loop-barred-from-control-plane'; DELETE FROM failure_modes WHERE fm_key = 'code-loop-barred-from-control-plane'; UPDATE control_registry SET evidence = replace(evidence, ' | APPLIED 2026-10-19 (CODE-LOOP-CONTROL-PLANE-1)', '') WHERE control = 'control-plane-deny';
@@ -12,7 +12,7 @@
 -- filed when it fires. The merge runner still merges one change at a time and never while the same worker has a change in flight.
 
 UPDATE control_registry SET
-  evidence = evidence || ' | APPLIED 2026-10-19 (CODE-LOOP-CONTROL-PLANE-1): qnfo-fleet-control 0.36.0 and qnfo-code-orchestrator 0.20.0 put qnfo-fleet-control, qnfo-ops, qnfo-deploy-guard and qnfo-code-orchestrator on CM_LOOP_CANARIED / PLAN_LOOP_CANARIED (held equal by fold-guard.test.mjs, which requires a /health canary, a FUNCTIONAL check and a canary_revert.py entry for each); the deny stays for qnfo-observability, qnfo-autonomy-scorer and qnfo-containers-pilot.',
+  evidence = evidence || ' | APPLIED 2026-10-19 (CODE-LOOP-CONTROL-PLANE-1): qnfo-fleet-control 0.37.0 and qnfo-code-orchestrator 0.22.0 put qnfo-fleet-control, qnfo-ops, qnfo-deploy-guard and qnfo-code-orchestrator on CM_LOOP_CANARIED / PLAN_LOOP_CANARIED (held equal by fold-guard.test.mjs, which requires a /health canary, a FUNCTIONAL check and a canary_revert.py entry for each); the deny stays for qnfo-observability, qnfo-autonomy-scorer and qnfo-containers-pilot.',
   disposition_state = 'applied',
   reviewed_at = strftime('%Y-%m-%dT%H:%M:%SZ', 'now')
 WHERE control = 'control-plane-deny' AND evidence NOT LIKE '%APPLIED 2026-10-19 (CODE-LOOP-CONTROL-PLANE-1)%';
@@ -21,7 +21,7 @@ INSERT OR IGNORE INTO failure_modes (fm_key, failure_mode, root_cause, remediati
 VALUES ('code-loop-barred-from-control-plane',
   'the code loop is barred from qnfo-fleet-control, qnfo-ops, qnfo-deploy-guard and its own orchestrator, so every defect in the merge runner, the deploy path or the planner waits for a chat session',
   'CM_LOOP_CANARIED / PLAN_LOOP_CANARIED listed only qnfo-ai and qnfo-gateway (CONTROL-PLANE-FUNCTIONAL-CANARY-1, 2026-10-12) and the decision card that asked to lift it for qnfo-fleet-control (human_actions 115) was closed at birth on its "The deny stays" default (DEFAULT-ADOPTED-1)',
-  'owner directive 2026-10-19: both lists carry the four workers (qnfo-fleet-control 0.36.0, qnfo-code-orchestrator 0.20.0); DEFAULT-APPROVE-1 stops a decision card closing on a status-quo default; fold-guard.test.mjs fails CI if a list drops one',
+  'owner directive 2026-10-19: both lists carry the four workers (qnfo-fleet-control 0.37.0, qnfo-code-orchestrator 0.22.0); DEFAULT-APPROVE-1 stops a decision card closing on a status-quo default; fold-guard.test.mjs fails CI if a list drops one',
   'qnfo-fleet-control/worker.js and qnfo-code-orchestrator/worker.js on main both contain the six-worker list (a code-read contract: the consumer reads its checkout of main)',
   'fm-code-loop-barred-from-control-plane', '2026-10-19', NULL,
   'a change shortens either list, or a merge conflict resolution keeps the old two-worker line',

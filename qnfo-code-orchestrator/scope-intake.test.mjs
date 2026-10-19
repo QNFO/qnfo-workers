@@ -22,7 +22,7 @@ const ok = (c, m, x) => { if (c) pass++; else { fail++; console.log("FAIL " + m 
 for (const w of ["qnfo-observability", "qnfo-autonomy-scorer", "qnfo-containers-pilot", "qnfo-code-agent"]) {
   ok(/control-plane/.test(String(__scope("qnfo-workers", w + "/worker.js"))), w + "/worker.js is a session task");
 }
-// CODE-LOOP-CONTROL-PLANE-1 (0.20.0, owner directive 2026-10-19): the loop's scope includes the verifier workers and its own orchestrator.
+// CODE-LOOP-CONTROL-PLANE-1 (0.22.0, owner directive 2026-10-19): the loop's scope includes the verifier workers and its own orchestrator.
 for (const w of ["qnfo-fleet-control", "qnfo-deploy-guard", "qnfo-ops", "qnfo-code-orchestrator"]) {
   ok(__scope("qnfo-workers", w + "/worker.js") === null && __scope("qnfo-workers", w + "/deployed-current.worker.js") === null && !__deny.includes(w), w + "/worker.js is in the loop's scope (owner directive 2026-10-19)");
 }
