@@ -29,4 +29,4 @@ INSERT OR IGNORE INTO control_registry (control, location, kind, guards_against,
 VALUES ('tool_error_exclusions', 'qnfo-audit.tool_error_exclusions (read by tool_error_files_issue_v2, tool_error_rate_24h, tool_failures_24h)', 'filter',
  'TOOL-FAILURE issues filed for caller-input errors no tool change can fix', 0, 'keep', 'applied',
  'tool_failures_excluded_24h lists every excluded error row; failure_class column in tool_failures_24h',
- 'RESOLVE-ALL-OPEN-1 2026-10-19: 53 patterns, each with a rationale; 2026-10-17/19 TOOL-FAILURE issues 2740/2799/2801/2820 were all caller-input errors (cloud_ops_events kind ops_ai_tool).', 2799);
+ 'RESOLVE-ALL-OPEN-1 2026-10-19: every pattern carries a rationale; 2026-10-17/19 TOOL-FAILURE issues 2740/2799/2801/2820 were all caller-input errors (cloud_ops_events kind ops_ai_tool).', 2799);
