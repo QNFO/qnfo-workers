@@ -24,7 +24,7 @@ An active companion on top of the twin, built on the personal infrastructure tha
 `companion.js` (inlined into `worker.js` by `node personal-api/inline-companion.mjs`; edit companion.js, then re-run).
 Tests: `node personal-api/companion.test.mjs` (planner rules, FSRS, RFC 8291/8292 push crypto, capture, privacy, parity).
 
-- **Page**: `https://personal-api.q08.workers.dev/companion` (installable on the phone). Today (mood and energy taps with
+- **Page**: `https://me.q08.org` (installable on the phone; sign in with a 6-digit code e-mailed to the owner, then the device stays signed in for 180 days; the bearer key still works for tools). Today (mood and energy taps with
   tags, one thing that fits today's energy, open nudges with "did it / not today"), Capture (text, voice note, photo),
   Talk (the twin in companion mode), Do (next actions by context), Learn (flashcards), Journal, Data (patterns, privacy,
   export, delete). The personal API key is entered once and stays on the device.

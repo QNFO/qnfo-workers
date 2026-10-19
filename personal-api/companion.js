@@ -40,7 +40,7 @@
 //  17. Quiet hours and pause bind every sender: mirrored ladder pushes and the e-mail ladder itself.
 //  18. Captured text is data in the chat prompt (untrusted()); export and delete cover Talk conversations.
 
-export const COMPANION_VERSION = "1.2.0";
+export const COMPANION_VERSION = "1.3.0";
 export const TZ = "Europe/Amsterdam";
 export const CONTEXTS = [
   { name: "@home", hint: "chores, cooking, things in the flat" },
@@ -105,6 +105,11 @@ export const DDL = [
      id INTEGER PRIMARY KEY AUTOINCREMENT, ts TEXT NOT NULL, day TEXT NOT NULL, mood INTEGER, energy INTEGER,
      sleep_hours REAL, load TEXT, note TEXT, source TEXT NOT NULL DEFAULT 'reply', raw_json TEXT, UNIQUE(day, source))`,
   `CREATE TABLE IF NOT EXISTS wellbeing_config (key TEXT PRIMARY KEY, value TEXT NOT NULL, updated_at TEXT NOT NULL)`,
+  // COMPANION-LOGIN-1: e-mailed one-time codes and the device sessions they open. Only SHA-256 hashes are stored.
+  `CREATE TABLE IF NOT EXISTS cmp_login_codes (id INTEGER PRIMARY KEY AUTOINCREMENT, code_hash TEXT NOT NULL, created_ms INTEGER NOT NULL,
+     expires_ms INTEGER NOT NULL, tries INTEGER NOT NULL DEFAULT 0, used_ms INTEGER, sent_ok INTEGER)`,
+  `CREATE TABLE IF NOT EXISTS cmp_sessions (token_hash TEXT PRIMARY KEY, created_ms INTEGER NOT NULL, expires_ms INTEGER NOT NULL,
+     last_seen_ms INTEGER, revoked INTEGER NOT NULL DEFAULT 0, device TEXT)`,
   `CREATE TABLE IF NOT EXISTS journal (id TEXT PRIMARY KEY, ts TEXT NOT NULL, date TEXT NOT NULL, content TEXT NOT NULL,
      mood TEXT, tags TEXT, source TEXT DEFAULT 'twin')`,
   `CREATE TABLE IF NOT EXISTS tasks (id TEXT PRIMARY KEY, ts TEXT NOT NULL, kind TEXT NOT NULL DEFAULT 'task',
@@ -139,6 +144,9 @@ export async function ensureSchema(db, force) {
 // ---------------------------------------------------------------- small helpers
 
 export const nowIso = () => new Date().toISOString();
+// COMPANION-STALE-1: a reminder more than three days past its date ("Buy tickets", due 2026-09-10) is no longer offered as the
+// one thing to do next or nudged; Today counts it once and the Do tab still lists it to mark done or drop.
+export const FRESH_DUE_SQL = "(due IS NULL OR due = '' OR substr(due, 1, 10) >= date('now', '-3 days'))";
 export function rid(prefix) {
   const b = new Uint8Array(8);
   crypto.getRandomValues(b);
@@ -534,11 +542,100 @@ export function fallbackReply(level) {
   return "I'm here. I couldn't put an answer together just now; what you wrote is safe with me. Try again in a minute, or put it in Capture or the journal.";
 }
 // RED-TEAM-1: lock-screen privacy was only settable in D1. discreet_push: care (default) | all | off.
+// COMPANION-EMAIL-OPT-IN-1: email_mode off (default) | daily (the morning brief only) | all. personal-companion reads the same
+// wellbeing_config row before any owner mail; a crisis follow-up is mailed in every mode.
+export const EMAIL_MODES = ["off", "daily", "all"];
 export async function saveSettings(env, a) {
-  const v = s(a && a.discreet_push, 10);
-  if (!["care", "all", "off"].includes(v)) return { ok: false, error: "discreet_push must be care, all or off" };
-  await env.PERSONAL.prepare("INSERT INTO wellbeing_config (key, value, updated_at) VALUES ('discreet_push', ?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at").bind(JSON.stringify(v), nowIso()).run();
-  return { ok: true, discreet_push: v };
+  const out = { ok: true };
+  const put = (k, v) => env.PERSONAL.prepare("INSERT INTO wellbeing_config (key, value, updated_at) VALUES (?, ?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at").bind(k, JSON.stringify(v), nowIso()).run();
+  if (a && a.discreet_push !== undefined) {
+    const v = s(a.discreet_push, 10);
+    if (!["care", "all", "off"].includes(v)) return { ok: false, error: "discreet_push must be care, all or off" };
+    await put("discreet_push", v); out.discreet_push = v;
+  }
+  if (a && a.email_mode !== undefined) {
+    const v = s(a.email_mode, 10);
+    if (!EMAIL_MODES.includes(v)) return { ok: false, error: "email_mode must be off, daily or all" };
+    await put("email_mode", v); out.email_mode = v;
+  }
+  if (out.discreet_push === undefined && out.email_mode === undefined) return { ok: false, error: "nothing to save (discreet_push or email_mode)" };
+  return out;
+}
+
+// ---------------------------------------------------------------- sign-in (COMPANION-LOGIN-1)
+// Owner 2026-10-19: "stop asking me for keys ... one-time email passwords are fine". The page signs in with a 6-digit code
+// mailed to the owner's own mailbox (a fixed address: nobody can choose where a code goes, so a stranger pressing the button
+// can only send the owner a rate-limited e-mail), and the device then stays signed in for SESSION_MS through an HttpOnly
+// cookie. The pattern is qnfo-fleet-dashboard FLEET-CMD-1. The bearer API key keeps working for tools and MCP clients.
+export const LOGIN_TO = "rwnquni@outlook.com";
+const LOGIN_FROM = [{ email: "companion@q08.org", name: "Companion" }, { email: "rowan.quni@qnfo.org", name: "Companion" }];
+export const SESSION_COOKIE = "cmp_s";
+export const SESSION_MS = 180 * 864e5;
+const CODE_TTL_MS = 10 * 60000, CODE_MIN_GAP_MS = 60000, CODE_MAX_PER_HOUR = 5, CODE_MAX_TRIES = 5, VERIFY_FAILS_PER_HOUR = 20;
+async function liHash(t) { const d = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(String(t))); return Array.from(new Uint8Array(d)).map((b) => b.toString(16).padStart(2, "0")).join(""); }
+function liRand(n) { const a = new Uint8Array(n); crypto.getRandomValues(a); return Array.from(a).map((b) => b.toString(16).padStart(2, "0")).join(""); }
+function liEq(a, b) { a = String(a || ""); b = String(b || ""); let r = a.length === b.length ? 0 : 1; for (let i = 0; i < Math.max(a.length, b.length); i++) r |= (a.charCodeAt(i % (a.length || 1)) ^ b.charCodeAt(i % (b.length || 1))) | 0; return r === 0; }
+const liSalt = (env) => String((env && env.API_KEY) || "") + "|companion-code";
+export function maskedLoginTo() { const p = LOGIN_TO.split("@"); return p[0].slice(0, 2) + "\u2026@" + p[1]; }
+// The live session behind the cookie, or null. Never throws.
+export async function sessionFor(request, env, nowMs) {
+  try {
+    const m = /(?:^|;\s*)cmp_s=([0-9a-f]{64})/.exec(request.headers.get("Cookie") || "");
+    if (!m || !env || !env.PERSONAL) return null;
+    await ensureSchema(env.PERSONAL);
+    const now = nowMs || Date.now();
+    const h = await liHash(m[1]);
+    const row = await env.PERSONAL.prepare("SELECT token_hash, expires_ms, last_seen_ms FROM cmp_sessions WHERE token_hash = ? AND revoked = 0").bind(h).first();
+    if (!row || Number(row.expires_ms) < now) return null;
+    // Sliding: a device in use keeps its session; one unused for SESSION_MS signs in again.
+    if (!row.last_seen_ms || now - Number(row.last_seen_ms) > 36e5) await env.PERSONAL.prepare("UPDATE cmp_sessions SET last_seen_ms = ?, expires_ms = ? WHERE token_hash = ?").bind(now, now + SESSION_MS, h).run();
+    return { hash: h };
+  } catch (e) { console.error(JSON.stringify({ evt: "companion:session", error: String(e && e.message || e).slice(0, 200) })); return null; }
+}
+export async function sendLoginCode(env, nowMs) {
+  await ensureSchema(env.PERSONAL);
+  const now = nowMs || Date.now();
+  const recent = await env.PERSONAL.prepare("SELECT MAX(created_ms) AS last, COUNT(*) AS n FROM cmp_login_codes WHERE created_ms > ?").bind(now - 36e5).first();
+  if (recent && Number(recent.n) >= CODE_MAX_PER_HOUR) return { ok: false, status: 429, error: "Too many codes this hour. Try again a bit later." };
+  if (recent && now - (Number(recent.last) || 0) < CODE_MIN_GAP_MS) return { ok: true, sent: false, reply: "A code went out less than a minute ago. Check " + maskedLoginTo() + "." };
+  if (!env.SEND_EMAIL) return { ok: false, status: 503, error: "Sign-in e-mail is not set up yet." };
+  const r = new Uint32Array(1); crypto.getRandomValues(r);
+  const code = String(r[0] % 1e6).padStart(6, "0");
+  const ins = await env.PERSONAL.prepare("INSERT INTO cmp_login_codes (code_hash, created_ms, expires_ms) VALUES ('pending', ?, ?)").bind(now, now + CODE_TTL_MS).run();
+  const id = ins && ins.meta && ins.meta.last_row_id != null ? Number(ins.meta.last_row_id) : Number(((await env.PERSONAL.prepare("SELECT MAX(id) AS id FROM cmp_login_codes").first()) || {}).id);
+  await env.PERSONAL.prepare("UPDATE cmp_login_codes SET code_hash = ? WHERE id = ?").bind(await liHash(code + "|" + id + "|" + liSalt(env)), id).run();
+  let sentOk = false, err = null;
+  // Two senders: the personal domain first, the proven qnfo.org sender if that one is refused.
+  for (const from of LOGIN_FROM) {
+    try {
+      await env.SEND_EMAIL.send({ to: LOGIN_TO, from, subject: "Your companion code: " + code, text: "Your code is " + code + ".\n\nIt works for 10 minutes. After that, this device stays signed in for six months.\n\nhttps://me.q08.org\n\nIf you didn't ask for it, ignore this e-mail. Nothing opens without the code." });
+      sentOk = true; break;
+    } catch (e) { err = String(e && e.message || e).slice(0, 160); }
+  }
+  await env.PERSONAL.prepare("UPDATE cmp_login_codes SET sent_ok = ? WHERE id = ?").bind(sentOk ? 1 : 0, id).run();
+  if (!sentOk) return { ok: false, status: 502, error: "The code e-mail could not be sent (" + err + ")." };
+  return { ok: true, sent: true, reply: "Sent to " + maskedLoginTo() + ". It works for 10 minutes." };
+}
+export async function verifyLoginCode(env, codeIn, device, nowMs) {
+  await ensureSchema(env.PERSONAL);
+  const code = String(codeIn || "").replace(/\D/g, "");
+  if (code.length !== 6) return { ok: false, status: 400, error: "The code has 6 digits." };
+  const now = nowMs || Date.now();
+  const fails = await env.PERSONAL.prepare("SELECT COALESCE(SUM(tries), 0) AS t FROM cmp_login_codes WHERE created_ms > ?").bind(now - 36e5).first();
+  if (fails && Number(fails.t) >= VERIFY_FAILS_PER_HOUR) return { ok: false, status: 429, error: "Too many wrong codes this hour." };
+  const rows = await all(env.PERSONAL, "SELECT id, code_hash, tries FROM cmp_login_codes WHERE used_ms IS NULL AND expires_ms > ? AND sent_ok = 1 ORDER BY id DESC LIMIT 3", now);
+  for (const r of rows) {
+    if (Number(r.tries) >= CODE_MAX_TRIES) continue;
+    if (liEq(r.code_hash, await liHash(code + "|" + r.id + "|" + liSalt(env)))) {
+      const u = await env.PERSONAL.prepare("UPDATE cmp_login_codes SET used_ms = ? WHERE id = ? AND used_ms IS NULL").bind(now, r.id).run();
+      if (!(u.meta && u.meta.changes)) break;
+      const token = liRand(32);
+      await env.PERSONAL.prepare("INSERT INTO cmp_sessions (token_hash, created_ms, expires_ms, last_seen_ms, device) VALUES (?, ?, ?, ?, ?)").bind(await liHash(token), now, now + SESSION_MS, now, s(device, 120)).run();
+      return { ok: true, cookie: SESSION_COOKIE + "=" + token + "; Path=/; Max-Age=" + Math.round(SESSION_MS / 1000) + "; HttpOnly; Secure; SameSite=Lax" };
+    }
+  }
+  if (rows.length) await env.PERSONAL.prepare("UPDATE cmp_login_codes SET tries = tries + 1 WHERE id = ?").bind(rows[0].id).run();
+  return { ok: false, status: 401, error: rows.length ? "That code isn't right." : "No code is waiting. Ask for a new one." };
 }
 export const isPaused = (cfg, nowMs) => !!(cfg && cfg.pause_until && Date.parse(cfg.pause_until) > nowMs);
 // Rule 5 retires a kind that never lands; rule 12 gives it one fresh try once a week so the learning keeps exploring.
@@ -902,7 +999,7 @@ export async function gatherState(env, at) {
     one(db, "SELECT COUNT(*) AS n FROM journal WHERE date = ?", lp.day).catch(() => null),
     activityStamps(env, new Date(Date.parse(now) - 2 * 864e5).toISOString()),
     one(db, "SELECT COUNT(*) AS n FROM tasks WHERE status = 'done' AND done_at >= ?", start).catch(() => null),
-    all(db, "SELECT id, ts, title, context, energy, minutes, due FROM tasks WHERE status = 'open' AND COALESCE(gtd, 'next') = 'next' ORDER BY COALESCE(due, '9999'), ts LIMIT 30").catch(() => []),
+    all(db, "SELECT id, ts, title, context, energy, minutes, due FROM tasks WHERE status = 'open' AND COALESCE(gtd, 'next') = 'next' AND " + FRESH_DUE_SQL + " ORDER BY COALESCE(due, '9999'), ts LIMIT 30").catch(() => []),
     one(db, "SELECT COUNT(*) AS n FROM cmp_cards WHERE suspended = 0 AND due <= ?", now).catch(() => null),
     one(db, "SELECT COUNT(*) AS n FROM cmp_push_subs WHERE failures < 20").catch(() => null),
     recentUserTexts(env, new Date(Date.parse(now) - 864e5).toISOString()),
@@ -1246,6 +1343,8 @@ export async function today(env, deps) {
     safety_plan_filled: normalizeSafetyPlan(st.cfg.safety_plan).filled,
     // RED-TEAM-1: for a day after risk words, the fixed lines stay on the Today page, not only in the reply that caught them.
     crisis_lines: st.crisisLevel24h >= 2 ? crisisText(st.cfg) : null, discreet_push: st.cfg.discreet_push || "care",
+    email_mode: EMAIL_MODES.includes(st.cfg.email_mode) ? st.cfg.email_mode : "off",
+    stale_reminders: await env.PERSONAL.prepare("SELECT COUNT(*) AS n FROM tasks WHERE status = 'open' AND NOT " + FRESH_DUE_SQL).first().then((x) => (x ? Number(x.n) : 0)).catch(() => 0),
     tick_age_min: st.cfg.cmp_last_tick ? Math.round((Date.parse(st.nowIso) - Date.parse(st.cfg.cmp_last_tick)) / 60000) : null,
     plan_preview: (() => { const p = planNudge(Object.assign({}, st, { pushReady: true })); return p.skip ? { skip: p.skip } : { kind: p.kind, reason: p.reason }; })()
   };
@@ -1286,7 +1385,7 @@ export const PRIVACY_TABLES = [
   { table: "cmp_activities", what: "your activity bank (starting ideas and your own)", where: "1=1" },
   { table: "cmp_activity_log", what: "activities you did and how they felt", where: "1=1" },
   { table: "cmp_measures", what: "two-weekly WHO-5 well-being answers", where: "1=1" },
-  { table: "wellbeing_config", what: "your safety plan and companion settings", where: "key IN ('safety_plan', 'pause_until', 'discreet_push')" },
+  { table: "wellbeing_config", what: "your safety plan and companion settings", where: "key IN ('safety_plan', 'pause_until', 'discreet_push', 'email_mode')" },
   // RED-TEAM-1: the Talk tab's conversations were stored by the twin's chat log and missing from export and delete.
   { table: "chat", what: "conversations on the Talk tab", where: "thread LIKE 'companion-%'" }
 ];
@@ -1529,10 +1628,26 @@ export async function handleCompanion(request, env, ctx, deps) {
   if (p === "/companion/manifest.webmanifest") return new Response(JSON.stringify(MANIFEST), { headers: { "Content-Type": "application/manifest+json", "Cache-Control": "public, max-age=3600" } });
   if (p === "/companion/icon.svg") return new Response(ICON_SVG, { headers: { "Content-Type": "image/svg+xml", "Cache-Control": "public, max-age=86400" } });
   if (!p.startsWith("/companion/api/")) return J({ ok: false, error: "not found" }, 404);
-  if (!(await deps.auth(request, env))) return J({ ok: false, error: "unauthorized: send Authorization: Bearer <personal API key>" }, 401);
-  await ensureSchema(env.PERSONAL);
   const r = p.slice("/companion/api/".length);
   const m = request.method;
+  // COMPANION-LOGIN-1: sign-in routes need no credential; everything else takes the session cookie or the bearer key.
+  if (r === "login/code" && m === "POST") { const o = await sendLoginCode(env); return J(o, o.status || 200); }
+  if (r === "login/verify" && m === "POST") {
+    const b = await request.json().catch(() => ({}));
+    const o = await verifyLoginCode(env, b.code, request.headers.get("User-Agent") || "");
+    if (!o.ok) return J(o, o.status || 401);
+    return new Response(JSON.stringify({ ok: true }), { headers: { "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store", "Set-Cookie": o.cookie } });
+  }
+  const bearerOk = await deps.auth(request, env);
+  const session = bearerOk ? null : await sessionFor(request, env);
+  if (!bearerOk && !session) return J({ ok: false, signed_in: false, error: "sign in: ask for a code by e-mail (or send Authorization: Bearer <personal API key>)", login_to: maskedLoginTo() }, 401);
+  // The cookie rides on any same-site request, so a cookie-only write must also carry the page's own header (a cross-site form cannot).
+  if (!bearerOk && m !== "GET" && request.headers.get("X-Companion") !== "1") return J({ ok: false, error: "missing X-Companion header" }, 403);
+  if (r === "logout" && m === "POST") {
+    if (session) await env.PERSONAL.prepare("UPDATE cmp_sessions SET revoked = 1 WHERE token_hash = ?").bind(session.hash).run();
+    return new Response(JSON.stringify({ ok: true }), { headers: { "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store", "Set-Cookie": SESSION_COOKIE + "=; Path=/; Max-Age=0; HttpOnly; Secure; SameSite=Lax" } });
+  }
+  await ensureSchema(env.PERSONAL);
   const body = async () => (m === "POST" ? await request.json().catch(() => ({})) : {});
   const stub = () => deps.doStub(env);
   const ensure = () => { try { ctx.waitUntil(stub().fetch("https://do/companion-do/ensure").catch(() => null)); } catch (e) { /* DO absent in tests */ } };
@@ -1592,7 +1707,7 @@ export async function handleCompanion(request, env, ctx, deps) {
       const msgs = (Array.isArray(b.messages) ? b.messages : []).filter((x) => x && (x.role === "user" || x.role === "assistant")).slice(-16).map((x) => ({ role: x.role, content: s(x.content, 6000) }));
       const last = msgs.slice().reverse().find((x) => x.role === "user");
       if (!last) return J({ ok: false, error: "messages required" }, 400);
-      const req2 = new Request(new URL("/v1/chat/completions", url).toString(), { method: "POST", headers: { "Content-Type": "application/json", Authorization: request.headers.get("Authorization") || "", "User-Agent": "companion-page" }, body: JSON.stringify({ model: "personal", companion: true, thread_id: s(b.thread_id, 80) || "companion-" + dayKey(nowIso()), messages: msgs }) });
+      const req2 = new Request(new URL("/v1/chat/completions", url).toString(), { method: "POST", headers: { "Content-Type": "application/json", Authorization: bearerOk ? request.headers.get("Authorization") || "" : "Bearer " + String(env.API_KEY || ""), "User-Agent": "companion-page" }, body: JSON.stringify({ model: "personal", companion: true, thread_id: s(b.thread_id, 80) || "companion-" + dayKey(nowIso()), messages: msgs }) });
       const sig = crisisSignal(last.content);
       let j = null;
       try { const res = await deps.chat(req2, env, ctx); j = await res.json().catch(() => null); } catch (e) { console.error(JSON.stringify({ evt: "companion:chat", error: String(e && e.message || e).slice(0, 200) })); }
@@ -1667,7 +1782,7 @@ table{width:100%;border-collapse:collapse;font-size:.9rem}td,th{text-align:left;
 .bar{height:8px;background:var(--acc);border-radius:4px}
 .hide{display:none}
 </style></head><body><main>
-<div id="login" class="card hide"><h1>Companion</h1><p class="mute">Enter your personal API key once. It stays on this device.</p><div class="row"><input id="key" type="password" autocomplete="off" class="grow"><button class="p" onclick="saveKey()">Open</button></div></div>
+<div id="login" class="card hide"><h1>Hi, Rowan.</h1><p>To open your companion on this device, I'll e-mail you a 6-digit code. After that this device stays signed in for six months.</p><div class="row"><button class="p" id="li-send" onclick="sendCode()">E-mail me a code</button></div><div id="li-step" class="hide" style="margin-top:10px"><div class="row"><input id="li-code" inputmode="numeric" autocomplete="one-time-code" maxlength="6" placeholder="6-digit code" class="grow"><button class="p" onclick="verifyCode()">Open</button></div></div><div id="li-out"></div></div>
 <section id="v-today" class="v"></section>
 <section id="v-capture" class="v hide"><h1>Capture</h1>
  <div class="card"><textarea id="cap-text" placeholder="Anything on your mind. A task, an idea, a worry, something to remember."></textarea>
@@ -1690,14 +1805,19 @@ function $(i){return document.getElementById(i)}
 function warn(e){try{console.warn('companion:',e&&e.message||e)}catch(x){console.log(x)}}
 function el(t,a,kids){var e=document.createElement(t);if(a)for(var k in a){if(k==='text')e.textContent=a[k];else if(k==='cls')e.className=a[k];else if(k.slice(0,2)==='on')e[k]=a[k];else e.setAttribute(k,a[k])}(kids||[]).forEach(function(c){if(c)e.appendChild(typeof c==='string'?document.createTextNode(c):c)});return e}
 function getKey(){try{var k=localStorage.getItem('cmp-key');if(k)return k;var o=JSON.parse(localStorage.getItem('qnfo-chat')||'{}');return o.key||''}catch(e){return ''}}
-function saveKey(){try{localStorage.setItem('cmp-key',$('key').value.trim())}catch(e){warn(e)}$('login').classList.add('hide');go('today')}
-function api(path,opt){opt=opt||{};opt.headers=Object.assign({'Authorization':'Bearer '+getKey()},opt.headers||{});if(opt.json!==undefined){opt.method=opt.method||'POST';opt.headers['Content-Type']='application/json';opt.body=JSON.stringify(opt.json);delete opt.json}
- return fetch(path,opt).then(function(r){if(r.status===401){$('login').classList.remove('hide');throw new Error('key needed')}return r.json()})}
+function hdrs(){var h={'X-Companion':'1'};var k=getKey();if(k)h.Authorization='Bearer '+k;return h}
+function showLogin(){Array.prototype.forEach.call(document.querySelectorAll('.v'),function(s){s.classList.add('hide')});$('login').classList.remove('hide')}
+function sendCode(){$('li-out').innerHTML='';fetch('/companion/api/login/code',{method:'POST',headers:{'X-Companion':'1'}}).then(function(r){return r.json()}).then(function(r){say($('li-out'),r.reply||r.error,!r.ok);if(r.ok){$('li-step').classList.remove('hide');$('li-send').textContent='Send another code';$('li-code').focus()}}).catch(warn)}
+function verifyCode(){$('li-out').innerHTML='';fetch('/companion/api/login/verify',{method:'POST',headers:{'Content-Type':'application/json','X-Companion':'1'},body:JSON.stringify({code:$('li-code').value})}).then(function(r){return r.json()}).then(function(r){if(!r.ok){say($('li-out'),r.error,true);return}$('login').classList.add('hide');fromHash();go('today')}).catch(warn)}
+function signOut(){api('/companion/api/logout',{json:{}}).then(function(){try{localStorage.removeItem('cmp-key')}catch(e){warn(e)}showLogin()}).catch(warn)}
+function api(path,opt){opt=opt||{};opt.headers=Object.assign(hdrs(),opt.headers||{});if(opt.json!==undefined){opt.method=opt.method||'POST';opt.headers['Content-Type']='application/json';opt.body=JSON.stringify(opt.json);delete opt.json}
+ return fetch(path,opt).then(function(r){if(r.status===401){showLogin();throw new Error('sign in needed')}return r.json()})}
 function say(box,text,warn){if(!text)return;box.appendChild(el('div',{cls:warn?'warn':'say',text:text}))}
 var MOOD=['rough','low','okay','good','great'],EN=['empty','thin','steady','strong','full'],TAGS=['sleep','body','social','alone','work','outside','money','family','creative'];
 var pick={mood:null,energy:null,tags:{}};
 function scale(name,words){var r=el('div',{cls:'row scale'});words.forEach(function(w,i){var b=el('button',{onclick:function(){pick[name]=i+1;Array.prototype.forEach.call(r.children,function(c,j){c.classList.toggle('sel',j===i)})}},[String(i+1),el('small',{text:w})]);r.appendChild(b)});return r}
-function renderToday(t){var v=$('v-today');v.innerHTML='';v.appendChild(el('h1',{text:t.greeting+', Rowan.'}));
+function renderToday(t){$('login').classList.add('hide');var v=$('v-today');v.innerHTML='';v.appendChild(el('h1',{text:t.greeting+', Rowan.'}));
+ if(t.stale_reminders)v.appendChild(el('div',{cls:'card'},[el('div',{text:t.stale_reminders+(t.stale_reminders===1?' old reminder is':' old reminders are')+' past '+(t.stale_reminders===1?'its':'their')+' date. I stopped bringing '+(t.stale_reminders===1?'it':'them')+' up.'}),el('div',{cls:'row',style:'margin-top:8px'},[el('button',{text:'Tidy them on Do',onclick:function(){go('do')}})])]));
  if(t.crisis_lines)v.appendChild(el('div',{cls:'warn',style:'margin:0 0 12px'},[t.crisis_lines]));
  if(t.paused_until)v.appendChild(el('div',{cls:'card'},[el('div',{text:'Reach-outs are paused until '+t.paused_until.slice(0,16).replace('T',' ')+' UTC. Everything here still works.'}),el('div',{cls:'row',style:'margin-top:8px'},[el('button',{text:'Resume now',onclick:function(){pause(0)}})])]));
  if(t.low_day){var lc=el('div',{cls:'card'},[el('div',{text:'Today looks heavy. Nothing on this page is required. If you want, start with water and a window.'})]);if(t.safety_plan_filled)lc.appendChild(el('div',{cls:'row',style:'margin-top:8px'},[el('button',{text:'Open my plan',onclick:function(){go('data');setTimeout(function(){var p=$('plan');if(p)p.scrollIntoView()},400)}})]));v.appendChild(lc)}
@@ -1763,10 +1883,12 @@ function loadData(){api('/companion/api/dashboard').then(function(d){var b=$('da
  api('/companion/api/privacy').then(function(p){var b=$('priv');b.innerHTML='';var t=el('table');t.appendChild(el('tr',{},[el('th',{text:'What'}),el('th',{text:'rows'}),el('th',{text:'since'})]));p.tables.forEach(function(x){t.appendChild(el('tr',{},[el('td',{text:x.what}),el('td',{text:String(x.rows)}),el('td',{text:(x.oldest||'').slice(0,10)})]))});
  var conf=el('input',{placeholder:"type: delete everything"});var out=el('div');
  b.appendChild(el('div',{cls:'card'},[el('h2',{text:'Your data'}),el('div',{cls:'mute',text:p.where}),t,el('div',{cls:'mute',text:'Files: '+p.files.objects+' ('+Math.round(p.files.bytes/1024)+' KB). '+p.encryption,style:'margin-top:8px'}),
-  discreetRow(),
-  el('div',{cls:'row',style:'margin-top:10px'},[el('button',{text:'Download everything',onclick:function(){fetch('/companion/api/export',{headers:{Authorization:'Bearer '+getKey()}}).then(function(r){return r.blob()}).then(function(bl){var a=el('a',{href:URL.createObjectURL(bl),download:'companion-export.json'});document.body.appendChild(a);a.click();a.remove()})}})]),
+  discreetRow(),emailRow(),
+  el('div',{cls:'row',style:'margin-top:10px'},[el('button',{text:'Sign out on this device',onclick:signOut})]),
+  el('div',{cls:'row',style:'margin-top:10px'},[el('button',{text:'Download everything',onclick:function(){fetch('/companion/api/export',{headers:hdrs()}).then(function(r){return r.blob()}).then(function(bl){var a=el('a',{href:URL.createObjectURL(bl),download:'companion-export.json'});document.body.appendChild(a);a.click();a.remove()})}})]),
   el('div',{style:'margin-top:10px'},[el('div',{cls:'mute',text:'Delete everything the companion stored (captures, moods, cards, files, Talk conversations, its nudges). Your older twin data stays.'}),conf,el('div',{cls:'row',style:'margin-top:6px'},[el('button',{text:'Delete',onclick:function(){api('/companion/api/delete',{json:{scope:'all',confirm:conf.value}}).then(function(r){out.innerHTML='';say(out,r.ok?'Deleted.':r.error)})}})]),out])]))})}
 function discreetRow(){var sel=el('select',{cls:'grow'});[['care','Hide care notes on the lock screen'],['all','Hide every note on the lock screen'],['off','Show full text on the lock screen']].forEach(function(o){sel.appendChild(el('option',{value:o[0],text:o[1]}))});api('/companion/api/today').then(function(t){sel.value=t.discreet_push||'care'}).catch(warn);sel.onchange=function(){api('/companion/api/settings',{json:{discreet_push:sel.value}}).catch(warn)};return el('div',{cls:'row',style:'margin-top:10px'},[sel])}
+function emailRow(){var sel=el('select',{cls:'grow'});[['off','No e-mail from the companion (notifications and this page only)'],['daily','One morning e-mail a day'],['all','E-mail every nudge and question too']].forEach(function(o){sel.appendChild(el('option',{value:o[0],text:o[1]}))});api('/companion/api/today').then(function(t){sel.value=t.email_mode||'off'}).catch(warn);sel.onchange=function(){api('/companion/api/settings',{json:{email_mode:sel.value}}).catch(warn)};return el('div',{cls:'row',style:'margin-top:10px'},[sel])}
 function loadPlan(){api('/companion/api/safety-plan').then(function(p){var b=$('plan');b.innerHTML='';b.appendChild(el('h2',{text:'My safety plan'}));b.appendChild(el('div',{cls:'mute',text:'For a hard moment, written in a calm one. Your own words, one per line. If you ever write something that worries me, I show you these with the crisis lines.'}));var tas={};
  p.fields.forEach(function(f){b.appendChild(el('div',{text:f[1],style:'margin-top:10px'}));var ta=el('textarea',{style:'min-height:56px'});ta.value=(p[f[0]]||[]).join('\\n');tas[f[0]]=ta;b.appendChild(ta)});
  var out=el('div');b.appendChild(el('div',{cls:'row',style:'margin-top:8px'},[el('button',{cls:'p',text:'Save my plan',onclick:function(){var o={};Object.keys(tas).forEach(function(k){o[k]=tas[k].value.split(/\\r?\\n/)});api('/companion/api/safety-plan',{json:o}).then(function(r){out.innerHTML='';say(out,r.ok?'Saved. It stays private, in your own account.':r.error)})}})]));b.appendChild(out)})}
@@ -1775,10 +1897,10 @@ function enablePush(){if(!('serviceWorker' in navigator)||!('PushManager' in win
  Notification.requestPermission().then(function(perm){if(perm!=='granted')throw new Error('notifications were not allowed');return navigator.serviceWorker.register('/companion/sw.js',{scope:'/companion'})}).then(function(reg){return navigator.serviceWorker.ready.then(function(){return api('/companion/api/push/key')}).then(function(k){return reg.pushManager.subscribe({userVisibleOnly:true,applicationServerKey:b64ToU8(k.public_key)})})})
  .then(function(sub){return api('/companion/api/push/subscribe',{json:{subscription:sub.toJSON()}})}).then(function(){return api('/companion/api/push/test',{json:{}})}).then(load).catch(function(e){alert(e.message)})}
 var views={today:load,capture:inbox,talk:drawChat,do:loadDo,learn:loadLearn,journal:loadJournal,data:loadData};
-function go(v){Array.prototype.forEach.call(document.querySelectorAll('.v'),function(s){s.classList.add('hide')});$('v-'+v).classList.remove('hide');Array.prototype.forEach.call(document.querySelectorAll('nav button'),function(b){b.classList.toggle('on',b.getAttribute('data-v')===v)});if(getKey())views[v]()}
+function go(v){Array.prototype.forEach.call(document.querySelectorAll('.v'),function(s){s.classList.add('hide')});$('v-'+v).classList.remove('hide');Array.prototype.forEach.call(document.querySelectorAll('nav button'),function(b){b.classList.toggle('on',b.getAttribute('data-v')===v)});views[v]()}
 Array.prototype.forEach.call(document.querySelectorAll('nav button'),function(b){b.onclick=function(){go(b.getAttribute('data-v'))}});
 function fromHash(){var h=location.hash.slice(1);if(!h)return;var q={};h.split('&').forEach(function(x){var p=x.split('=');q[p[0]]=decodeURIComponent(p[1]||'')});history.replaceState(null,'','/companion');if(q.n&&(q.a==='done'||q.a==='no'))api('/companion/api/nudge',{json:{id:Number(q.n),state:q.a==='done'?'done':'declined'}}).then(load)}
 if('serviceWorker' in navigator)navigator.serviceWorker.register('/companion/sw.js',{scope:'/companion'}).catch(warn);
-if(!getKey())$('login').classList.remove('hide');else{fromHash();go('today')}
+fromHash();go('today')
 window.addEventListener('hashchange',fromHash);
 </script></body></html>`;

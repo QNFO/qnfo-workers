@@ -421,5 +421,55 @@ ok("worker.js routes /companion and ticks the companion", ["CMP.handleCompanion(
 const vm = w.match(/var VERSION = "(\d+)\.(\d+)\.(\d+)/);
 ok("VERSION at or above 4.10.0", vm && (Number(vm[1]) > 4 || (Number(vm[1]) === 4 && Number(vm[2]) >= 10)));
 
+console.log("\n[sign-in by e-mailed code (COMPANION-LOGIN-1)]");
+{
+  const ldb = new DatabaseSync(":memory:"); const mails = [];
+  const lenv = Object.assign({}, env, { PERSONAL: d1(ldb), API_KEY: "the-key", SEND_EMAIL: { send: async (m) => { if (m.from.email === "companion@q08.org" && lenv.failQ08) throw new Error("sender refused"); mails.push(m); } } });
+  await C.ensureSchema(lenv.PERSONAL, true);
+  const L = (path, init) => C.handleCompanion(new Request("https://me.q08.org/companion/api/" + path, init), lenv, { waitUntil() {} }, hdeps);
+  ok("login: no cookie and no key is a 401 that says how to sign in", (await L("today")).status === 401);
+  let r = await (await L("login/code", { method: "POST" })).json();
+  ok("login: a code is mailed to the owner's fixed address only", r.ok && r.sent && mails.length === 1 && mails[0].to === C.LOGIN_TO && /^Your companion code: \d{6}$/.test(mails[0].subject), { r, mails });
+  r = await (await L("login/code", { method: "POST" })).json();
+  ok("login: a second ask within a minute sends nothing", r.ok && r.sent === false && mails.length === 1);
+  const code = /(\d{6})/.exec(mails[0].subject)[1];
+  ok("login: only hashes are stored", !ldb.prepare("SELECT code_hash FROM cmp_login_codes").all().some((x) => x.code_hash.includes(code)));
+  const bad = await L("login/verify", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ code: code === "000000" ? "111111" : "000000" }) });
+  ok("login: a wrong code is refused and counted", bad.status === 401 && ldb.prepare("SELECT tries FROM cmp_login_codes").get().tries === 1);
+  const good = await L("login/verify", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ code }) });
+  const ck = good.headers.get("Set-Cookie") || "";
+  ok("login: the right code sets a 180-day HttpOnly Secure cookie", good.status === 200 && /^cmp_s=[0-9a-f]{64};/.test(ck) && /Max-Age=15552000/.test(ck) && /HttpOnly/.test(ck) && /Secure/.test(ck), ck);
+  const cookie = ck.split(";")[0];
+  ok("login: the code works once", (await L("login/verify", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ code }) })).status === 401);
+  ok("login: the cookie opens Today", (await L("today", { headers: { Cookie: cookie } })).status === 200);
+  ok("login: a cookie-only write without X-Companion is refused", (await L("pause", { method: "POST", headers: { Cookie: cookie, "Content-Type": "application/json" }, body: JSON.stringify({ hours: 0 }) })).status === 403);
+  ok("login: a cookie-only write with X-Companion works", (await L("pause", { method: "POST", headers: { Cookie: cookie, "X-Companion": "1", "Content-Type": "application/json" }, body: JSON.stringify({ hours: 0 }) })).status === 200);
+  ok("login: the bearer key still works for tools", (await L("today", { headers: { Authorization: "Bearer k" } })).status === 200);
+  ok("login: a forged cookie is refused", (await L("today", { headers: { Cookie: "cmp_s=" + "a".repeat(64) } })).status === 401);
+  const so = await L("logout", { method: "POST", headers: { Cookie: cookie, "X-Companion": "1" } });
+  ok("login: sign out revokes the session", so.status === 200 && (await L("today", { headers: { Cookie: cookie } })).status === 401);
+  lenv.failQ08 = true; ldb.exec("DELETE FROM cmp_login_codes");
+  r = await (await L("login/code", { method: "POST" })).json();
+  ok("login: a refused q08.org sender falls back to the qnfo.org sender", r.ok && mails.length === 2 && mails[1].from.email === "rowan.quni@qnfo.org", { r, mails: mails.length });
+  ldb.prepare("UPDATE cmp_login_codes SET created_ms = ?").run(Date.now() - 2 * 60000);
+  for (let i = 0; i < 6; i++) { ldb.prepare("INSERT INTO cmp_login_codes (code_hash, created_ms, expires_ms, sent_ok) VALUES ('x', ?, ?, 1)").run(Date.now() - 5 * 60000, Date.now()); }
+  ok("login: at most five codes an hour", (await L("login/code", { method: "POST" })).status === 429);
+}
+
+console.log("\n[e-mail setting and stale reminders]");
+{
+  const sdb = new DatabaseSync(":memory:");
+  const senv = Object.assign({}, env, { PERSONAL: d1(sdb) });
+  await C.ensureSchema(senv.PERSONAL, true);
+  let r = await C.saveSettings(senv, { email_mode: "daily" });
+  ok("email: the mode is saved in wellbeing_config for personal-companion to read", r.ok && JSON.parse(sdb.prepare("SELECT value FROM wellbeing_config WHERE key='email_mode'").get().value) === "daily");
+  ok("email: an unknown mode is refused", !(await C.saveSettings(senv, { email_mode: "loud" })).ok);
+  ok("email: the lock-screen setting still saves on its own", (await C.saveSettings(senv, { discreet_push: "all" })).discreet_push === "all");
+  sdb.prepare("INSERT INTO tasks (id, ts, kind, title, due, status) VALUES ('old', '2026-09-03T00:00:00Z', 'reminder', 'Follow up with Dale', '2026-09-05T17:00:00+02:00', 'open')").run();
+  sdb.prepare("INSERT INTO tasks (id, ts, kind, title, due, status) VALUES ('new', ?, 'task', 'Call the GP', NULL, 'open')").run(new Date().toISOString());
+  const t = await C.today(senv, deps);
+  ok("stale: a reminder weeks past its date is not the one thing or a next action", !(t.next_actions || []).some((a) => a.id === "old") && (!t.one_thing || t.one_thing.id !== "old"), t.next_actions);
+  ok("stale: Today counts it once", t.stale_reminders === 1 && t.email_mode === "daily", { s: t.stale_reminders, e: t.email_mode });
+}
 console.log("\n" + pass + " passed, " + fail + " failed");
 if (fail) process.exit(1);
