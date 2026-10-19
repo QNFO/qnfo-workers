@@ -33,6 +33,14 @@ binding = "DB"
 database_name = "qnfo-audit"
 database_id = "35e2e573-92f3-46ac-83c6-22f6429fc5e5"
 
+# LEARNER-ARMS-2 (0.18.0, agent_issues 2722): read-only, paper_category only (slug, category). The attention learner names the arm of
+# a post that links a paper by the paper's own shelf; the gateway (qnfo-gateway) and thirteen other workers hold the same binding.
+# Unreadable or absent, every paper's post takes the generic arm (learnerCategories is fail-soft).
+[[d1_databases]]
+binding = "LIVING_PAPER"
+database_name = "living-paper"
+database_id = "70a58cb3-b2cd-498d-877f-ecca86859a22"
+
 [ai]
 binding = "AI"
 

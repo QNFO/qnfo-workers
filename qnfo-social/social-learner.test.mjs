@@ -98,7 +98,9 @@ ok(mod.learnerClassify({ slug: "q", title: "x", posts: JSON.stringify(Q08) }, "t
 ok(mod.learnerClassify({ slug: "q2", title: "JPCUB", doi: "10.1000/t.21637028", posts: JSON.stringify(Q08) }, "thread").topic === null, "a q08 link wins over a selected DOI: never an arm");
 ok(mod.learnerClassify({ slug: "u", title: "Ultrametric intelligence", posts: JSON.stringify(ULTRA) }, "thread").topic === null, "pillar 4 (ultrametric) is not an arm");
 c = mod.learnerClassify({ id: "d1", paper_slug: "braid-x", paper_doi: "10.1000/t.23086421", paper_title: "Braid Group Representations, Modular Data, and the Classification of Majorana Zero Modes", pages_url: "https://papers.qnfo.org/papers/braid-x/" }, "dissem");
-ok(c.topic === null && c.format === "single" && c.link_slug === "braid-x", "dissemination card on an unlisted topic: single, not an arm");
+ok(c.topic === "research" && c.format === "single" && c.link_slug === "braid-x", "dissemination card on an unlisted topic: single, the generic arm research (LEARNER-ARMS-2: a post that links a paper is never stored without an arm)");
+c = mod.learnerClassify({ id: "d1", paper_slug: "braid-x", paper_title: "Braid Group Representations, Modular Data, and the Classification of Majorana Zero Modes", pages_url: "https://papers.qnfo.org/papers/braid-x/" }, "dissem", { categories: { "braid-x": "physics" } });
+ok(c.topic === "physics", "the paper's own shelf (paper_category) names the arm when the post links the paper");
 ok(mod.learnerClassify({ id: "d2", paper_slug: "llm", paper_doi: "10.1000/t.21945415", paper_title: "Joules-per-Solution for Stochastic and Agentic Inference" }, "dissem").topic === "energy", "dissemination card of selected work 4: energy");
 ok(mod.learnerClassify({ id: "d3", paper_slug: "v", paper_title: "Why Vertices, Not Points? Vertex-Anchored Braiding" }, "dissem").format === "question", "a title that asks a question is question-led");
 ok(!mod.learnerIsQuestion("Claim: 0.5 J per answer. Is it right?") && mod.learnerIsQuestion("What does 1.5 J mean? Read on.") && mod.learnerIsQuestion("Is it? https://x.org/a?b=1"), "question detection: first sentence only, decimals are not sentence ends");
@@ -191,11 +193,12 @@ ok(up.next_week_allocation && ["topic", "format", "slot"].every((d) => near(Obje
 const seedQueue = () => {
   reset();
   const ids = {};
+  // the dissemination row is a pillar-4 paper (p-adic), so it stays a non-arm row; a plain paper is an arm since LEARNER-ARMS-2
   ids.ultra = addThread("ultra", "Ultrametric intelligence", null, ULTRA);
   ids.q08 = addThread("q08-x", "q08", null, Q08);
   ids.jps = addThread("jps-metric", "The Joules-per-Solution Metric", "10.1000/t.21637028", JPS, { flags: "selected" });
   ids.fleet = addThread("fleet-q", "Operating the Quniverse Fleet", "10.1000/t.23003473", FLEETQ);
-  addDissem("res-b", "braid-x", "10.1000/t.23086421", "Braid Group Representations and Modular Data");
+  addDissem("res-b", "braid-x", "10.1000/t.23086421", "p-adic Braid Group Representations and Modular Data");
   return ids;
 };
 let ids = seedQueue();
@@ -217,7 +220,7 @@ const dec = st.decision;
 ok(dec.source === "thread" && [ids.jps, ids.fleet].includes(Number(dec.id)) && dec.topic && Object.keys(mod.LEARNER_SLOTS).includes(dec.slot), "the choice is an arm row (never the ultrametric, q08 or braid row) with a slot");
 let ev = decisionEvents();
 const evm = ev.length ? JSON.parse(ev[0].meta) : {};
-ok(ev.length === 1 && Object.keys(evm.decision.samples.topic).length === 3 && Object.keys(evm.decision.samples.format).length === 3 && Object.keys(evm.decision.samples.slot).length === 3 && evm.candidates.length === 5 && evm.candidates.filter((x) => x.score !== null).length === 2, "the decision is logged with every draw and the five scored candidates (two arms)");
+ok(ev.length === 1 && Object.keys(evm.decision.samples.topic).length === mod.LEARNER_TOPICS.length && Object.keys(evm.decision.samples.format).length === 3 && Object.keys(evm.decision.samples.slot).length === 3 && evm.candidates.length === 5 && evm.candidates.filter((x) => x.score !== null).length === 2, "the decision is logged with every draw and the five scored candidates (two arms)");
 d = await mod.drainDissemination(env, { nowMs: OFF });
 ok(d.posted === 0 && d.learner.held === "slot" && records.length === 0, "the dissemination drain holds too: it cannot use the capacity the learner is saving");
 q = await mod.drainQueue(env, { nowMs: OFF + 2 * 36e5 + (mod.learnerSlotOf(OFF + 2 * 36e5) === dec.slot ? 36e5 * 12 : 0) });
