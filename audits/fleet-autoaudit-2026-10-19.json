@@ -1,5 +1,5 @@
 {
-  "audited_at": "2026-10-19 11:15:51",
+  "audited_at": "2026-10-19 11:48:47",
   "d1_write_failures": [],
   "d1_writes_ok": 120,
   "guard": {
@@ -535,22 +535,22 @@
     "sync_workers": [
       {
         "dir": "idea-hub",
-        "version": "1.11.2-codeagent",
+        "version": "1.11.3-cron-grid-1",
         "worker": "idea-hub"
       },
       {
         "dir": "personal-api",
-        "version": "4.12.0",
+        "version": "4.13.0-cron-grid-1",
         "worker": "personal-api"
       },
       {
         "dir": "personal-companion",
-        "version": "1.32.1-codeagent",
+        "version": "1.32.2-codeagent",
         "worker": "personal-companion"
       },
       {
         "dir": "q08-signal-engine",
-        "version": "0.28.16-codeagent",
+        "version": "0.30.0-cron-grid-1",
         "worker": "q08-signal-engine"
       },
       {
@@ -565,7 +565,7 @@
       },
       {
         "dir": "qnfo-ai-search",
-        "version": "2.6.4-model-floor-1",
+        "version": "2.6.5-cron-grid-1",
         "worker": "qnfo-ai-search"
       },
       {
@@ -575,12 +575,12 @@
       },
       {
         "dir": "qnfo-cloud-ops",
-        "version": "1.32.0-fleet-graph-cadence",
+        "version": "1.32.1-inbound-sla-grace-1",
         "worker": "qnfo-cloud-ops"
       },
       {
         "dir": "qnfo-code-orchestrator",
-        "version": "0.18.29-window-relocate-1",
+        "version": "0.21.0-search-nearest-1",
         "worker": "qnfo-code-orchestrator"
       },
       {
@@ -595,42 +595,42 @@
       },
       {
         "dir": "qnfo-email",
-        "version": "2.9.7-codeagent",
+        "version": "2.10.0-cron-grid",
         "worker": "qnfo-email"
       },
       {
         "dir": "qnfo-evolve",
-        "version": "0.2.3-evolve-compat-1",
+        "version": "0.2.4-cron-grid-1",
         "worker": "qnfo-evolve"
       },
       {
         "dir": "qnfo-fleet-control",
-        "version": "0.34.3-cost-owner-split",
+        "version": "0.36.1-goal-review-no-patch-1",
         "worker": "qnfo-fleet-control"
       },
       {
         "dir": "qnfo-fleet-dashboard",
-        "version": "1.49.1",
+        "version": "1.50.0",
         "worker": "qnfo-fleet-dashboard"
       },
       {
         "dir": "qnfo-gateway",
-        "version": "3.26.6-codeagent",
+        "version": "3.27.0-cron-grid-1",
         "worker": "qnfo-gateway"
       },
       {
         "dir": "qnfo-github-steward",
-        "version": "0.5.0-tracker-drain",
+        "version": "0.6.0-cron-grid-1",
         "worker": "qnfo-github-steward"
       },
       {
         "dir": "qnfo-infra",
-        "version": "1.5.1-bp-logging",
+        "version": "1.6.0-cron-grid-1",
         "worker": "qnfo-infra"
       },
       {
         "dir": "qnfo-intent-orchestrator",
-        "version": "1.5.0-cron-heartbeat",
+        "version": "1.6.1-codeagent",
         "worker": "qnfo-intent-orchestrator"
       },
       {
@@ -650,12 +650,12 @@
       },
       {
         "dir": "qnfo-model-eval",
-        "version": "1.4.1-log-catch",
+        "version": "1.5.0-cron-grid-1",
         "worker": "qnfo-model-eval"
       },
       {
         "dir": "qnfo-observability",
-        "version": "1.5.0-wae-fleet",
+        "version": "1.5.1-cron-grid-1",
         "worker": "qnfo-observability"
       },
       {
@@ -670,17 +670,17 @@
       },
       {
         "dir": "qnfo-research-exec",
-        "version": "0.21.1-kimi-timeout-fallback-1",
+        "version": "0.21.2-codeagent",
         "worker": "qnfo-research-exec"
       },
       {
         "dir": "qnfo-social",
-        "version": "0.16.12-codeagent",
+        "version": "0.17.0-cron-grid-1",
         "worker": "qnfo-social"
       },
       {
         "dir": "qnfo-subscribers",
-        "version": "1.3.4-attribution-chain-1",
+        "version": "1.4.0-cron-grid-1",
         "worker": "qnfo-subscribers"
       },
       {
@@ -801,9 +801,9 @@
       "worker": "funding"
     },
     "idea-hub": {
-      "before": "1.11.2-codeagent",
+      "before": "1.11.3-cron-grid-1",
       "http": 200,
-      "live": "1.11.2-codeagent",
+      "live": "1.11.3-cron-grid-1",
       "match": 1,
       "note": "SYNC",
       "worker": "idea-hub"
@@ -930,17 +930,17 @@
       "worker": "patches"
     },
     "personal-api": {
-      "before": "4.12.0",
+      "before": "4.13.0-cron-grid-1",
       "http": 200,
-      "live": "4.12.0",
+      "live": "4.13.0-cron-grid-1",
       "match": 1,
       "note": "SYNC",
       "worker": "personal-api"
     },
     "personal-companion": {
-      "before": "1.32.1-codeagent",
+      "before": "1.32.2-codeagent",
       "http": 200,
-      "live": "1.32.1-codeagent",
+      "live": "1.32.2-codeagent",
       "match": 1,
       "note": "SYNC",
       "worker": "personal-companion"
@@ -982,9 +982,9 @@
       "worker": "personal-life-search"
     },
     "q08-signal-engine": {
-      "before": "0.28.16-codeagent",
+      "before": "0.30.0-cron-grid-1",
       "http": 200,
-      "live": "0.28.16-codeagent",
+      "live": "0.30.0-cron-grid-1",
       "match": 1,
       "note": "SYNC",
       "worker": "q08-signal-engine"
@@ -1033,9 +1033,9 @@
       "worker": "qnfo-ai-calibration"
     },
     "qnfo-ai-search": {
-      "before": "2.6.4-model-floor-1",
+      "before": "2.6.5-cron-grid-1",
       "http": 200,
-      "live": "2.6.4-model-floor-1",
+      "live": "2.6.5-cron-grid-1",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-ai-search"
@@ -1166,9 +1166,9 @@
       "worker": "qnfo-citation-watch"
     },
     "qnfo-cloud-ops": {
-      "before": "1.32.0-fleet-graph-cadence",
+      "before": "1.32.1-inbound-sla-grace-1",
       "http": 200,
-      "live": "1.32.0-fleet-graph-cadence",
+      "live": "1.32.1-inbound-sla-grace-1",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-cloud-ops"
@@ -1183,9 +1183,9 @@
       "worker": "qnfo-code-agent"
     },
     "qnfo-code-orchestrator": {
-      "before": "0.18.29-window-relocate-1",
+      "before": "0.21.0-search-nearest-1",
       "http": 200,
-      "live": "0.18.29-window-relocate-1",
+      "live": "0.21.0-search-nearest-1",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-code-orchestrator"
@@ -1216,9 +1216,9 @@
       "worker": "qnfo-deploy-guard"
     },
     "qnfo-email": {
-      "before": "2.9.7-codeagent",
+      "before": "2.10.0-cron-grid",
       "http": 200,
-      "live": "2.9.7-codeagent",
+      "live": "2.10.0-cron-grid",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-email"
@@ -1287,9 +1287,9 @@
       "worker": "qnfo-events"
     },
     "qnfo-evolve": {
-      "before": "0.2.3-evolve-compat-1",
+      "before": "0.2.4-cron-grid-1",
       "http": 200,
-      "live": "0.2.3-evolve-compat-1",
+      "live": "0.2.4-cron-grid-1",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-evolve"
@@ -1313,17 +1313,17 @@
       "worker": "qnfo-fleet-calibrator"
     },
     "qnfo-fleet-control": {
-      "before": "0.34.3-cost-owner-split",
+      "before": "0.36.1-goal-review-no-patch-1",
       "http": 200,
-      "live": "0.34.3-cost-owner-split",
+      "live": "0.36.1-goal-review-no-patch-1",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-fleet-control"
     },
     "qnfo-fleet-dashboard": {
-      "before": "1.49.1",
+      "before": "1.50.0",
       "http": 200,
-      "live": "1.49.1",
+      "live": "1.50.0",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-fleet-dashboard"
@@ -1347,17 +1347,17 @@
       "worker": "qnfo-fleet-feed"
     },
     "qnfo-gateway": {
-      "before": "3.26.6-codeagent",
+      "before": "3.27.0-cron-grid-1",
       "http": 200,
-      "live": "3.26.6-codeagent",
+      "live": "3.27.0-cron-grid-1",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-gateway"
     },
     "qnfo-github-steward": {
-      "before": "0.5.0-tracker-drain",
+      "before": "0.6.0-cron-grid-1",
       "http": 200,
-      "live": "0.5.0-tracker-drain",
+      "live": "0.6.0-cron-grid-1",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-github-steward"
@@ -1399,17 +1399,17 @@
       "worker": "qnfo-impact"
     },
     "qnfo-infra": {
-      "before": "1.5.1-bp-logging",
+      "before": "1.6.0-cron-grid-1",
       "http": 200,
-      "live": "1.5.1-bp-logging",
+      "live": "1.6.0-cron-grid-1",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-infra"
     },
     "qnfo-intent-orchestrator": {
-      "before": "1.5.0-cron-heartbeat",
+      "before": "1.6.1-codeagent",
       "http": 200,
-      "live": "1.5.0-cron-heartbeat",
+      "live": "1.6.1-codeagent",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-intent-orchestrator"
@@ -1457,17 +1457,17 @@
       "worker": "qnfo-memory-mcp-legacy-dup"
     },
     "qnfo-model-eval": {
-      "before": "1.4.1-log-catch",
+      "before": "1.5.0-cron-grid-1",
       "http": 200,
-      "live": "1.4.1-log-catch",
+      "live": "1.5.0-cron-grid-1",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-model-eval"
     },
     "qnfo-observability": {
-      "before": "1.5.0-wae-fleet",
+      "before": "1.5.1-cron-grid-1",
       "http": 200,
-      "live": "1.5.0-wae-fleet",
+      "live": "1.5.1-cron-grid-1",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-observability"
@@ -1561,9 +1561,9 @@
       "worker": "qnfo-register-guard"
     },
     "qnfo-research-exec": {
-      "before": "0.21.1-kimi-timeout-fallback-1",
+      "before": "0.21.2-codeagent",
       "http": 200,
-      "live": "0.21.1-kimi-timeout-fallback-1",
+      "live": "0.21.2-codeagent",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-research-exec"
@@ -1623,17 +1623,17 @@
       "worker": "qnfo-skills-discovery"
     },
     "qnfo-social": {
-      "before": "0.16.12-codeagent",
+      "before": "0.17.0-cron-grid-1",
       "http": 200,
-      "live": "0.16.12-codeagent",
+      "live": "0.17.0-cron-grid-1",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-social"
     },
     "qnfo-subscribers": {
-      "before": "1.3.4-attribution-chain-1",
+      "before": "1.4.0-cron-grid-1",
       "http": 200,
-      "live": "1.3.4-attribution-chain-1",
+      "live": "1.4.0-cron-grid-1",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-subscribers"
