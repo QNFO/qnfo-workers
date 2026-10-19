@@ -35,7 +35,7 @@
  *   GET /report  the last 20 filings and the last run (public read)
  *   POST /tick   same work as the cron; needs x-loop-token when LOOP_TOKEN is configured
  */
-var VERSION = "0.2.4-cron-grid-1"; // 0.2.4 CRON-GRID-1 (owner directive 2026-10-19: every cron tick on the 5-minute grid, none slower than hourly): trigger minute moved onto the 5-minute grid (2,17,32,47 -> 5,20,35,50).
+var VERSION = "0.2.5-health-contract-1"; // 0.2.5 HEALTH-CONTRACT-1 (agent_issues 2852, capability_contract_conformance, pillar autonomy): /health declares capabilities[] and limitations[] (module constants CAPABILITIES and LIMITATIONS, read from this worker's own header and constants), so the fleet snapshot counts it as conforming. No behaviour change. // 0.2.4 CRON-GRID-1 (owner directive 2026-10-19: every cron tick on the 5-minute grid, none slower than hourly): trigger minute moved onto the 5-minute grid (2,17,32,47 -> 5,20,35,50).
 var WORKER = "qnfo-evolve";
 var SOURCE = "qnfo-evolve|EVOLVE-1";
 var MAX_OPEN = 5;
@@ -429,6 +429,31 @@ function tickAllowed(env, req) {
   return sameSecret(req.headers.get("x-loop-token"), env.LOOP_TOKEN);
 }
 
+/* HEALTH-CONTRACT-1 (agent_issues 2852): the capability contract on /health. qnfo-deploy-guard snapshots capabilities[] and
+ * limitations[] from every live worker's /health and qnfo-fleet-control grades the share that declare both
+ * (capability_contract_conformance). Each line states what this file does or refuses to do; the suite pins both lists
+ * non-empty and the limits that are also constants here (MAX_NEW_PER_TICK, MAX_OPEN, WIP_ATTEMPTS, WIP_STALE_MIN). */
+var CAPABILITIES = [
+  "gap-register-read: reads v_process_path_gaps and v_dod_spof_gaps from the AUDIT D1",
+  "owner-worker-resolution: names the worker and file that own a gap from evolve_targets",
+  "issue-filing: files one agent_issues row per gap with the live worker, the file, the reproduction SQL and a query as the definition of done",
+  "auto-close: re-runs each filing's probe and closes the issue itself (close_channel evolve-auto) when the probe returns 0 rows",
+  "wip-recovery: parks a code task that has burned 6 attempts and not moved for 10 minutes while the planner queue is at its ceiling, after backing its row up to ops_config",
+  "control-plane-visibility: counts a gap whose owner the code loop may not change and reports it instead of filing it",
+  "run-ledger: records every tick in evolve_runs",
+  "report: GET /report returns the last 20 filings and the last run",
+  "manual-tick: POST /tick runs the same work as the cron, gated by x-loop-token when LOOP_TOKEN is configured"
+];
+var LIMITATIONS = [
+  "never edits code, opens a pull request, deploys or changes a view; it writes only its own agent_issues rows and its own tables",
+  "files at most " + MAX_NEW_PER_TICK + " issues per tick and holds at most " + MAX_OPEN + " open filings, so a wide register cannot flood the code loop",
+  "files only a gap whose owning worker evolve_targets names; an unnamed owner is recorded as a skip, never re-worded into something easier",
+  "never files against a control-plane worker in DENY_WORKERS, a hand-kept mirror of the orchestrator's plan denylist; such a gap is only counted",
+  "wip recovery never touches a task with fewer than " + WIP_ATTEMPTS + " attempts or one that moved in the last " + WIP_STALE_MIN + " minutes, acts at most " + WIP_PARK_PER_TICK + " times per tick and only while the queue is at its ceiling",
+  "reads and writes one D1 binding (AUDIT) and holds no other binding or secret; with no AUDIT binding a tick does nothing",
+  "runs on a 5,20,35,50 minute cron; /health reports only the last recorded run"
+];
+
 async function handleFetch(request, env) {
   var req = request;
   var url = new URL(req.url);
@@ -442,7 +467,7 @@ async function handleFetch(request, env) {
         ).all();
         last = ((lr && lr.results) || [])[0] || null;
       } catch (e) { last = { error: errText(e) }; }
-      return json({ ok: true, worker: WORKER, version: VERSION, last_run: last });
+      return json({ ok: true, worker: WORKER, version: VERSION, last_run: last, capabilities: CAPABILITIES, limitations: LIMITATIONS });
     }
     if (path === "/report") return json(await report(env));
     if (path === "/tick" && req.method === "POST") {

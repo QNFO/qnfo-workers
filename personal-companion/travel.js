@@ -77,6 +77,34 @@ export const DDL = [
   `CREATE TABLE IF NOT EXISTS travel_secrets (
      k TEXT PRIMARY KEY,
      v TEXT NOT NULL
+   )`,
+  // TRAVEL-TRIP-1: the planned stops (end_date = the day the party leaves), visa limits, and cached weather by request URL.
+  `CREATE TABLE IF NOT EXISTS travel_stops (
+     id TEXT PRIMARY KEY,
+     trip TEXT NOT NULL DEFAULT 'next',
+     city TEXT NOT NULL,
+     country TEXT,
+     lat REAL,
+     lon REAL,
+     start_date TEXT NOT NULL,
+     end_date TEXT NOT NULL,
+     note TEXT,
+     updated_at TEXT NOT NULL
+   )`,
+  `CREATE TABLE IF NOT EXISTS travel_permits (
+     id TEXT PRIMARY KEY,
+     person TEXT NOT NULL,
+     country TEXT NOT NULL,
+     entry_date TEXT NOT NULL,
+     max_days INTEGER NOT NULL,
+     year_cap INTEGER,
+     note TEXT,
+     updated_at TEXT NOT NULL
+   )`,
+  `CREATE TABLE IF NOT EXISTS travel_weather (
+     url TEXT PRIMARY KEY,
+     data TEXT NOT NULL,
+     fetched_at TEXT NOT NULL
    )`
 ];
 
@@ -100,7 +128,11 @@ export const DEFAULTS = {
   chat_models: "@cf/openai/gpt-oss-120b,@cf/zai-org/glm-5.3,@cf/moonshotai/kimi-k2.6",
   // Cloudflare Access: when both are set, a valid Cf-Access-Jwt-Assertion for this team and audience signs the owner in.
   access_team: "",
-  access_aud: ""
+  access_aud: "",
+  // TRAVEL-TRIP-1: arrival wording in early check-in drafts, and the inbound address that turns a forwarded confirmation
+  // into a booking (qnfo-email ITINERARY-INGEST-1); empty hides the hint.
+  checkin_arrival: "around midday",
+  forward_to: ""
 };
 
 export const MODELS = ["@cf/zai-org/glm-5.3-flash", "@cf/openai/gpt-oss-20b"];
@@ -108,6 +140,7 @@ export const MODELS = ["@cf/zai-org/glm-5.3-flash", "@cf/openai/gpt-oss-20b"];
 // (TRAVEL-CONTEXT-1, 2026-10-19: budget, stay type, trip style and home base were dropped); 12000 is ~3k tokens.
 export const PROFILE_CHARS = 12000;
 export const BASE = "https://reading.q08.org";
+export const PLANNER_URL = "https://travel.q08.org/travel";
 
 export async function ensureTravel(db, nowIso) {
   for (const s of DDL) await db.prepare(s).run();
@@ -309,17 +342,6 @@ export function mailFor(state, opts, links, c) {
   return { subject: (state.mode === "road" ? "Next stop after " + state.city + ": " : "Where next: ") + pick.city + " is my pick", body: lines.join("\n") };
 }
 
-export function checkinDraft(ev) {
-  return [
-    "Hello,",
-    "",
-    "I have a booking from " + ev.start_date + (ev.booking_ref ? " (reference " + ev.booking_ref + ")" : "") + " and expect to arrive around midday.",
-    "Would an early check-in be possible? If not, could I leave my bag with you until the room is ready?",
-    "",
-    "Thank you!"
-  ].join("\n");
-}
-
 async function many(db, sql, ...a) { const r = await db.prepare(sql).bind(...a).all(); return r.results || []; }
 
 // Record bookings that match an open proposal (strongest signal) and close proposals whose night is now covered or past.
@@ -370,10 +392,26 @@ export async function travelTick(env, deps = {}) {
   for (const ev of rows.filter((r) => r.category === "lodging" && r.start_date === addDays(today, 1))) {
     const seen = await db.prepare("SELECT 1 FROM travel_notices WHERE kind = 'checkin' AND ref = ?").bind(ev.id).first();
     if (seen) continue;
-    const r = deps.dry ? { ok: true } : await send("Tomorrow: " + (ev.title || ev.city) + " - early check-in note", "Your stay starts tomorrow. A message for the host, ready to paste in the booking app:\n\n" + checkinDraft(ev));
+    const r = deps.dry ? { ok: true } : await send("Tomorrow: " + (ev.title || ev.city) + " - early check-in note", "Your stay starts tomorrow. A message for the host, ready to paste in the booking app (nothing was sent to them):\n\n" + checkinDraft(ev, c));
     if (r && r.ok && !deps.dry) await db.prepare("INSERT OR IGNORE INTO travel_notices (kind, ref, sent_at) VALUES ('checkin', ?, ?)").bind(ev.id, nowIso).run();
     if (r && r.ok) out.notices++;
   }
+
+  // TRAVEL-TRIP-1: a visa limit the plan breaks or nearly breaks is mailed once per status and planned exit.
+  try {
+    const trip = await tripRows(db, today);
+    const allStops = await many(db, "SELECT city, country, start_date, end_date FROM travel_stops");
+    for (const v of visaStatus(trip.permits, allStops, today)) {
+      if (v.status !== "warn" && v.status !== "over") continue;
+      if (v.exit && v.exit < today) continue;
+      const ref = v.id + ":" + v.status + ":" + v.exit;
+      const seen = await db.prepare("SELECT 1 FROM travel_notices WHERE kind = 'visa' AND ref = ?").bind(ref).first();
+      if (seen) continue;
+      const r = deps.dry ? { ok: true } : await send((v.status === "over" ? "Visa: the plan overstays " : "Visa: close to the limit in ") + v.name, v.text + "\n\nThe trip plan and its day counter: " + PLANNER_URL);
+      if (r && r.ok && !deps.dry) await db.prepare("INSERT OR IGNORE INTO travel_notices (kind, ref, sent_at) VALUES ('visa', ?, ?)").bind(ref, nowIso).run();
+      if (r && r.ok) out.notices++;
+    }
+  } catch (e) { console.error(JSON.stringify({ evt: "travel-trip:visa-check-failed", error: String(e && e.message || e).slice(0, 200) })); }
 
   const state = tripState(rows, today, c);
   out.mode = state.mode;
@@ -620,12 +658,13 @@ export function chatContext(x) {
     "Today: " + x.today + ".",
     where,
     "Booked ahead:\n" + (booked || "- nothing"),
+    x.plan || "",
     "Default lodging budget: up to " + c.max_per_night + " " + c.currency + " per night; default stay " + c.nights + " nights per stop.",
     "Profile:\n" + (facts || "- (nothing stored yet)"),
     "Stayed in recently: " + ((x.state.recent || []).join(", ") || "none"),
     "Picked or booked before: " + (picked || "none"),
     "Turned down before: " + (rejected || "none")
-  ].join("\n\n");
+  ].filter(Boolean).join("\n\n");
 }
 
 export function historyText(row) {
@@ -680,7 +719,9 @@ export async function chatTurn(env, deps, input) {
   const state = tripState(rows, today, c);
   const booked = rows.filter((r) => r.category === "lodging" && r.end_date >= today).sort((a, b) => (a.start_date < b.start_date ? -1 : 1)).slice(0, 8);
   const history = (await many(db, "SELECT role, content, meta FROM travel_chat ORDER BY id DESC LIMIT 16")).reverse();
-  const messages = chatPrompt({ c, today, state, booked, profile, reactions, history, text });
+  const trip = await tripRows(db, today);
+  const plan = planText(trip.stops, visaStatus(trip.permits, await many(db, "SELECT city, country, start_date, end_date FROM travel_stops"), today));
+  const messages = chatPrompt({ c, today, state, booked, profile, reactions, history, text, plan });
   let parsed = null, model = null, lastErr = "";
   for (const m of chatModels(c, deps.modelAllowed)) {
     try {
@@ -709,18 +750,25 @@ export async function chatTurn(env, deps, input) {
       .bind(opt.id, tripKey, i + 1, opt.pick, opt.city, opt.country || null, opt.kind || null, checkin, nights, opt.est_per_night, c.currency, opt.why || null, opt.link, model, nowIso).run();
     options.push(opt);
   }
-  const learned = [];
-  for (const l of parsed.learned) {
-    const id = "travel:chat-" + (slug(l.label) || "note");
-    try {
-      await db.prepare("INSERT INTO profile (id, facet, label, statement, evidence, confidence, updated_at, domain, status) VALUES (?, 'travel', ?, ?, ?, 0.7, ?, 'personal', 'active') ON CONFLICT(id) DO UPDATE SET statement = excluded.statement, evidence = excluded.evidence, updated_at = excluded.updated_at, status = 'active', confidence = MIN(0.95, profile.confidence + 0.05)")
-        .bind(id, l.label, l.statement, "travel chat " + today + (text ? ": \"" + text.slice(0, 160) + "\"" : ""), nowIso).run();
-      learned.push({ id, label: l.label, statement: l.statement });
-    } catch (e) { console.error(JSON.stringify({ evt: "travel-chat:learn-failed", error: String(e && e.message || e).slice(0, 200) })); }
-  }
+  const learned = await learnPrefs(db, parsed.learned, "travel chat " + today + (text ? ": \"" + text.slice(0, 160) + "\"" : ""), nowIso);
   const meta = { options, question: parsed.question, learned, model };
   const ins = await db.prepare("INSERT INTO travel_chat (role, content, meta, ts) VALUES ('assistant', ?, ?, ?)").bind(parsed.reply, JSON.stringify(meta), nowIso).run();
   return { ok: true, message: { id: ins && ins.meta && ins.meta.last_row_id || null, role: "assistant", content: parsed.reply, meta, ts: nowIso } };
+}
+
+// Learned preferences go to the one preferences store, personal-life.profile (facet travel, ids travel:chat-*); a repeat
+// raises confidence.
+async function learnPrefs(db, list, evidence, nowIso) {
+  const learned = [];
+  for (const l of list || []) {
+    const id = "travel:chat-" + (slug(l.label) || "note");
+    try {
+      await db.prepare("INSERT INTO profile (id, facet, label, statement, evidence, confidence, updated_at, domain, status) VALUES (?, 'travel', ?, ?, ?, 0.7, ?, 'personal', 'active') ON CONFLICT(id) DO UPDATE SET statement = excluded.statement, evidence = excluded.evidence, updated_at = excluded.updated_at, status = 'active', confidence = MIN(0.95, profile.confidence + 0.05)")
+        .bind(id, l.label, l.statement, evidence, nowIso).run();
+      learned.push({ id, label: l.label, statement: l.statement });
+    } catch (e) { console.error(JSON.stringify({ evt: "travel-chat:learn-failed", error: String(e && e.message || e).slice(0, 200) })); }
+  }
+  return learned;
 }
 
 // Chat history for the page, with each option's live status (picked, rejected, booked) folded back in.
@@ -764,9 +812,20 @@ const CHAT_CSS = ":root{--bg:#f7f6f3;--card:#fff;--ink:#1b1b1b;--muted:#5d5d5d;-
   "footer{border-top:1px solid var(--line);padding:.6rem .75rem calc(.6rem + env(safe-area-inset-bottom));background:var(--bg)}" +
   "form#f{display:flex;gap:.5rem;max-width:44rem;margin:0 auto}textarea{flex:1;font:inherit;padding:.55rem .7rem;border-radius:.7rem;border:1px solid var(--line);background:var(--card);color:var(--ink);resize:none;min-height:2.6rem;max-height:9rem}" +
   "details{max-width:44rem;margin:.4rem auto 0;font-size:.9rem;color:var(--muted)}details li{margin:.2rem 0}select{font:inherit;background:var(--card);color:var(--ink);border:1px solid var(--line);border-radius:.4rem;padding:.2rem}" +
-  ".typing{color:var(--muted);font-style:italic}";
+  ".typing{color:var(--muted);font-style:italic}" +
+  "nav.tabs{display:flex;gap:.3rem;margin-left:auto}nav.tabs button[aria-pressed=true]{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}" +
+  "section.tab{flex:1;overflow-y:auto;padding:1rem;max-width:44rem;width:100%;margin:0 auto}section.tab h2{font-size:1rem;margin:1.2rem 0 .5rem}" +
+  ".card{background:var(--card);border:1px solid var(--line);border-radius:.8rem;padding:.7rem .9rem;margin:0 0 .6rem}.card.warn{border-color:var(--warn)}.card.over{border-color:var(--warn);box-shadow:0 0 0 2px var(--warn)}" +
+  ".big{font-size:1.4rem;font-weight:700}.flag{color:var(--warn);font-size:.88rem;margin:.15rem 0}.muted{color:var(--muted);font-size:.88rem}" +
+  ".day{display:grid;grid-template-columns:5.6rem 1fr;gap:.5rem;padding:.45rem 0;border-bottom:1px solid var(--line)}.day .d{color:var(--muted);font-size:.88rem}.day .wx{font-size:.88rem;color:var(--muted)}.badge{font-size:.75rem;border:1px solid var(--accent);color:var(--accent);border-radius:.4rem;padding:0 .3rem;margin-left:.3rem}" +
+  "pre.draft{white-space:pre-wrap;font:inherit;background:var(--bg);border:1px solid var(--line);border-radius:.5rem;padding:.5rem;margin:.4rem 0}" +
+  ".ed{display:flex;flex-wrap:wrap;gap:.4rem;margin:.4rem 0}.ed label{display:flex;flex-direction:column;font-size:.8rem;color:var(--muted)}.ed input{font:inherit;font-size:.92rem;padding:.3rem .4rem;border:1px solid var(--line);border-radius:.4rem;background:var(--card);color:var(--ink);max-width:11rem}" +
+  "#imptext{width:100%;min-height:10rem;font:inherit;padding:.6rem;border-radius:.7rem;border:1px solid var(--line);background:var(--card);color:var(--ink)}";
 
-const CHAT_BODY = "<header><h1>Travel planner</h1><span id=\"where\"></span></header><main id=\"log\" aria-live=\"polite\"></main>" +
+const CHAT_BODY = "<header><h1>Travel planner</h1><span id=\"where\"></span><nav class=\"tabs\"><button type=\"button\" data-tab=\"chat\" aria-pressed=\"true\">Chat</button><button type=\"button\" data-tab=\"trip\" aria-pressed=\"false\">Trip</button><button type=\"button\" data-tab=\"imp\" aria-pressed=\"false\">Import</button></nav></header>" +
+  "<main id=\"log\" aria-live=\"polite\"></main>" +
+  "<section class=\"tab\" id=\"trip\" hidden><div id=\"visa\"></div><div id=\"checkins\"></div><h2>Stops</h2><div id=\"stops\"></div><p><button type=\"button\" id=\"addstop\">Add a stop</button> <button type=\"button\" id=\"addvisa\">Add a visa</button></p><h2>Day by day</h2><p class=\"muted\">Weather: forecast for the next 16 days; after that, the same dates last year.</p><div id=\"days\"></div></section>" +
+  "<section class=\"tab\" id=\"imp\" hidden><h2>Import a booking</h2><p class=\"muted\">Paste a confirmation email or any booking text. I pick out the stays and journeys and add them to your trips.</p><p id=\"fwd\" class=\"muted\"></p><textarea id=\"imptext\" aria-label=\"Booking text\"></textarea><p><button class=\"primary\" type=\"button\" id=\"impgo\">Import</button></p><div id=\"impout\"></div></section>" +
   "<footer><form id=\"f\"><textarea id=\"t\" rows=\"1\" placeholder=\"Where to, or react to an idea...\" aria-label=\"Message\"></textarea><button class=\"primary\" id=\"send\">Send</button></form>" +
   "<details id=\"settings\"><summary>Settings and what I know</summary><p>Model: <select id=\"model\"></select> <span id=\"modelnote\"></span></p><p>What I use to plan (remove anything wrong):</p><ul id=\"known\"></ul>" +
   "<p><button id=\"fresh\" type=\"button\">Start a fresh conversation</button> <button id=\"out\" type=\"button\">Sign out</button></p></details></footer>";
@@ -873,6 +932,97 @@ async function boot() {
   const last = h[h.length - 1];
   if (!last || Date.now() - Date.parse(last.ts) > 12 * 3600e3) send("", true);
 }
+function el(tag, cls, text) { const x = document.createElement(tag); if (cls) x.className = cls; if (text != null) x.textContent = text; return x; }
+function btn(label, fn, cls) { const b = el("button", cls || "", label); b.type = "button"; b.onclick = fn; return b; }
+function fmtDay(d) { const t = new Date(d + "T12:00:00Z"); return t.toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short", timeZone: "UTC" }); }
+function editor(fields, values, onSave, onDelete) {
+  const f = el("div", "ed");
+  const inputs = {};
+  for (const [name, label, type] of fields) {
+    const l = el("label", "", label); const i = document.createElement("input"); i.type = type || "text"; i.value = values[name] == null ? "" : values[name]; inputs[name] = i; l.appendChild(i); f.appendChild(l);
+  }
+  const msg = el("span", "muted");
+  f.appendChild(btn("Save", async () => { const v = {}; for (const k in inputs) v[k] = inputs[k].value.trim(); const r = await onSave(v); if (r && r.ok) loadTrip(); else msg.textContent = (r && r.error) || "Not saved."; }, "primary"));
+  if (onDelete) f.appendChild(btn("Remove", async () => { await onDelete(); loadTrip(); }));
+  f.appendChild(msg);
+  return f;
+}
+const STOP_FIELDS = [["city", "Place"], ["country", "Country (2 letters)"], ["start_date", "Arrive", "date"], ["end_date", "Leave", "date"], ["note", "Note"]];
+const VISA_FIELDS = [["person", "Who"], ["country", "Country (2 letters)"], ["entry_date", "Entry day", "date"], ["max_days", "Days allowed", "number"], ["year_cap", "Days per calendar year (optional)", "number"]];
+function renderTrip(t) {
+  const visa = $("#visa"); visa.innerHTML = "";
+  if (t.visa.length) visa.appendChild(el("h2", "", "Visa days"));
+  for (const v of t.visa) {
+    const c = el("div", "card " + (v.status === "over" || v.status === "warn" ? v.status : ""));
+    if (v.now) c.appendChild(el("div", "big", "Day " + v.now.day + " of " + v.max_days + " in " + v.name + ", " + v.now.left + " left"));
+    c.appendChild(el("div", "", v.text));
+    if (v.note) c.appendChild(el("div", "muted", v.note));
+    const row = el("div", "row"); let open = null;
+    row.appendChild(btn("Edit", () => { if (open) { open.remove(); open = null; return; } open = editor(VISA_FIELDS, v, (x) => api("/travel/api/permit", { ...x, id: v.id, note: v.note }), () => api("/travel/api/permit", { id: v.id, delete: true })); c.appendChild(open); }));
+    c.appendChild(row); visa.appendChild(c);
+  }
+  const ck = $("#checkins"); ck.innerHTML = "";
+  if (t.checkins.length) ck.appendChild(el("h2", "", "Early check-in requests"));
+  for (const k of t.checkins) {
+    const c = el("div", "card");
+    c.appendChild(el("strong", "", k.title + ", from " + fmtDay(k.start_date)));
+    c.appendChild(el("div", "muted", k.sent ? "You marked this as sent." : "Draft only: nothing goes to the host until you send it from the booking app."));
+    c.appendChild(el("pre", "draft", k.draft));
+    const row = el("div", "row");
+    const cp = btn("Copy", async () => { try { await navigator.clipboard.writeText(k.draft); cp.textContent = "Copied"; } catch (e) { cp.textContent = "Select the text to copy"; } }, "primary");
+    row.appendChild(cp);
+    if (!k.sent) row.appendChild(btn("Mark as sent", async () => { await api("/travel/api/checkin-sent", { id: k.id }); loadTrip(); }));
+    c.appendChild(row); ck.appendChild(c);
+  }
+  const st = $("#stops"); st.innerHTML = "";
+  if (!t.stops.length) st.appendChild(el("p", "muted", "No stops planned yet. Add one, or ask in the chat."));
+  for (const s of t.stops) {
+    const c = el("div", "card");
+    c.appendChild(el("strong", "", s.city + (s.country_name ? ", " + s.country_name : "")));
+    c.appendChild(el("div", "muted", fmtDay(s.start_date) + " to " + fmtDay(s.end_date) + (s.note ? " · " + s.note : "") + (s.lat == null ? " · no weather (place not found)" : "")));
+    let open = null;
+    c.appendChild(btn("Edit", () => { if (open) { open.remove(); open = null; return; } open = editor(STOP_FIELDS, s, (x) => api("/travel/api/stop", { ...x, id: s.id }), () => api("/travel/api/stop", { id: s.id, delete: true })); c.appendChild(open); }));
+    st.appendChild(c);
+  }
+  const dl = $("#days"); dl.innerHTML = "";
+  for (const d of t.days) {
+    const r = el("div", "day");
+    r.appendChild(el("div", "d", fmtDay(d.day)));
+    const b = el("div");
+    const head = el("div", "", d.move ? d.move : (d.city || "")); if (d.booked) head.appendChild(el("span", "badge", "booked")); b.appendChild(head);
+    if (d.wx) b.appendChild(el("div", "wx", (d.wx.tmax != null ? Math.round(d.wx.tmax) + "°/" + Math.round(d.wx.tmin) + "° " : "") + (d.wx.text || "") + (d.wx.kind === "lastyear" ? " (last year)" : "")));
+    if (d.note) b.appendChild(el("div", "muted", d.note));
+    for (const f of d.flags) b.appendChild(el("div", "flag", f));
+    r.appendChild(b); dl.appendChild(r);
+  }
+}
+async function loadTrip() { try { const t = await api("/travel/api/trip"); if (t.ok) renderTrip(t); $("#fwd").textContent = t.forward_to ? "Or forward the confirmation email to " + t.forward_to + " and it lands here on its own." : ""; } catch (e) { $("#days").textContent = "Could not load the trip: " + e.message; } }
+let addOpen = null;
+$("#addstop").onclick = () => { if (addOpen) addOpen.remove(); addOpen = editor(STOP_FIELDS, {}, (x) => api("/travel/api/stop", x)); $("#stops").appendChild(addOpen); };
+$("#addvisa").onclick = () => { if (addOpen) addOpen.remove(); addOpen = editor(VISA_FIELDS, {}, (x) => api("/travel/api/permit", x)); $("#visa").appendChild(addOpen); };
+$("#impgo").onclick = async () => {
+  const out = $("#impout"); const v = $("#imptext").value.trim(); if (!v) return;
+  $("#impgo").disabled = true; out.textContent = "Reading...";
+  try {
+    const r = await api("/travel/api/import", { text: v });
+    out.innerHTML = "";
+    if (!r.ok) { out.appendChild(el("p", "err", r.error || "Nothing imported.")); }
+    else {
+      for (const b of r.added) out.appendChild(el("div", "card", (b.category === "lodging" ? "Stay: " : "Journey: ") + b.title + (b.city ? ", " + b.city : "") + " · " + fmtDay(b.start_date) + (b.end_date !== b.start_date ? " to " + fmtDay(b.end_date) : "")));
+      if (r.learned.length) out.appendChild(el("p", "learned", "Noted for next time: " + r.learned.map((x) => x.statement).join(" ")));
+      if (!r.added.length && !r.learned.length) out.appendChild(el("p", "muted", "Nothing to add."));
+      $("#imptext").value = "";
+    }
+  } catch (e) { out.textContent = "Could not import: " + e.message; }
+  $("#impgo").disabled = false;
+};
+document.querySelectorAll("nav.tabs button").forEach((b) => b.onclick = () => {
+  const tab = b.dataset.tab;
+  document.querySelectorAll("nav.tabs button").forEach((x) => x.setAttribute("aria-pressed", String(x === b)));
+  $("#log").hidden = tab !== "chat"; document.querySelector("footer").hidden = tab !== "chat";
+  $("#trip").hidden = tab !== "trip"; $("#imp").hidden = tab !== "imp";
+  if (tab === "trip" || tab === "imp") loadTrip();
+});
 $("#f").onsubmit = (e) => { e.preventDefault(); const v = ta.value.trim(); if (!v) return; ta.value = ""; send(v); };
 ta.addEventListener("keydown", (e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); $("#f").requestSubmit(); } });
 $("#fresh").onclick = async () => { await api("/travel/api/reset", {}); log.innerHTML = ""; send("", true); };
@@ -1006,6 +1156,7 @@ export async function handleTravel(request, env, deps = {}) {
   if (!who) return jsonRes({ ok: false, error: "unauthorized" }, 401);
 
   if (p === "/travel/api/state" && request.method === "GET") return jsonRes({ ok: true, ...(await chatState(db, c, nowMs)) });
+  if (p === "/travel/api/trip" && request.method === "GET") return jsonRes({ ok: true, ...(await planState(db, c, nowMs, deps)) });
   if (request.method !== "POST") return jsonRes({ ok: false, error: "POST only" }, 405);
   // Cross-site requests: JSON bodies need a CORS preflight this route never grants, and a foreign Origin is refused outright.
   const origin = request.headers.get("Origin");
@@ -1015,6 +1166,15 @@ export async function handleTravel(request, env, deps = {}) {
   try { body = await request.json(); } catch (e) { return jsonRes({ ok: false, error: "bad JSON" }, 400); }
 
   if (p === "/travel/api/chat") return jsonRes(await chatTurn(env, deps, { text: body.text, open: body.open === true }));
+  if (p === "/travel/api/import") return jsonRes(await importText(env, deps, { text: body.text }));
+  if (p === "/travel/api/stop") return jsonRes(await saveStop(db, deps, body, nowIso));
+  if (p === "/travel/api/permit") return jsonRes(await savePermit(db, body, nowIso));
+  if (p === "/travel/api/checkin-sent") {
+    const ev = await db.prepare("SELECT id FROM events WHERE id = ? AND category = 'lodging'").bind(String(body.id || "")).first();
+    if (!ev) return jsonRes({ ok: false, error: "no such stay" }, 404);
+    await db.prepare("INSERT OR IGNORE INTO travel_notices (kind, ref, sent_at) VALUES ('checkin-sent', ?, ?)").bind(ev.id, nowIso).run();
+    return jsonRes({ ok: true });
+  }
   if (p === "/travel/api/react") {
     const action = body.action;
     if (action !== "pick" && action !== "no") return jsonRes({ ok: false, error: "action must be pick or no" }, 400);
@@ -1073,4 +1233,352 @@ async function optionPage(request, env, deps, db, u, id, nowIso) {
     (o.why ? "<p>" + esc(o.why) + "</p>" : "") +
     "<p><a href=\"" + esc(o.link) + "\">See stays</a></p>" +
     (o.status === "proposed" || o.status === "picked" ? action("pick", "This one", "pick") + action("no", "Not for me", "") : "<p class=\"muted\">Closed: " + esc(o.status) + "</p>"));
+}
+
+// ---------------------------------------------------------------------------------------------------------------------
+// TRAVEL-TRIP-1 (2026-10-19, owner asked for all five: a visa day counter, import by paste, a day-by-day plan with weather
+// and fog notes, early check-in drafts, one preferences store). The plan is travel_stops (one row per stop; end_date is the
+// day the party leaves), the visa limits are travel_permits (one row per person, country and entry). Both are personal data
+// and live only in D1. Weather comes from Open-Meteo through deps.http (the worker's fetch, Open-Meteo hosts only):
+// the forecast for the next 16 days, and the same dates last year beyond that ("last year" is labelled, never a forecast).
+// Check-in requests are drafts for the owner to copy into the booking app; nothing is sent to a host from here.
+
+export const WX_FORECAST_DAYS = 16;
+export const VISA_WARN_DAYS = 7;          // a planned exit this close to the last allowed day is a warning
+const FORECAST_TTL_MS = 3 * 3600e3;
+// Indo-Gangetic plain and the Nepal Terai and valleys: dense winter fog (mid-December to early February) stops trains and flights.
+export const FOG_BELT = { latMin: 23.5, latMax: 31.5, lonMin: 73, lonMax: 89 };
+const WX_CODES = { 0: "clear", 1: "mostly clear", 2: "partly cloudy", 3: "overcast", 45: "fog", 48: "freezing fog", 51: "light drizzle", 53: "drizzle", 55: "heavy drizzle", 61: "light rain", 63: "rain", 65: "heavy rain", 71: "light snow", 73: "snow", 75: "heavy snow", 80: "showers", 81: "showers", 82: "heavy showers", 95: "thunderstorms", 96: "thunderstorms", 99: "thunderstorms" };
+
+export function daysBetween(a, b) { return Math.round((Date.parse(b + "T12:00:00Z") - Date.parse(a + "T12:00:00Z")) / 86400e3); }
+
+export function countryName(cc) {
+  const code = String(cc || "").toUpperCase();
+  if (!/^[A-Z]{2}$/.test(code)) return String(cc || "");
+  try { return new Intl.DisplayNames(["en"], { type: "region" }).of(code) || code; } catch (e) { return code; }
+}
+
+// a real calendar day (V8's Date.parse rolls 2027-02-30 over to 2 March, so the round trip decides)
+const isoDay = (s) => { if (!/^\d{4}-\d{2}-\d{2}$/.test(String(s || ""))) return false; const t = Date.parse(s + "T12:00:00Z"); return !Number.isNaN(t) && new Date(t).toISOString().slice(0, 10) === s; };
+
+export function shiftYear(iso, n) {
+  const y = Number(iso.slice(0, 4)) + n;
+  const md = iso.slice(5) === "02-29" ? "02-28" : iso.slice(5);
+  return y + "-" + md;
+}
+
+export function fogSeason(lat, lon, day) {
+  if (lat == null || lon == null) return false;
+  const b = FOG_BELT;
+  if (lat < b.latMin || lat > b.latMax || lon < b.lonMin || lon > b.lonMax) return false;
+  const md = String(day).slice(5);
+  return md >= "12-10" || md <= "02-10";
+}
+
+// Dates the party is in each country: a stop covers start_date through end_date (the travel day counts in both countries,
+// as immigration counts it).
+export function presence(stops) {
+  const by = {};
+  for (const s of stops || []) {
+    if (!isoDay(s.start_date) || !isoDay(s.end_date) || s.end_date < s.start_date) continue;
+    const cc = String(s.country || "").toUpperCase();
+    by[cc] = by[cc] || new Set();
+    for (let d = s.start_date; d <= s.end_date; d = addDays(d, 1)) by[cc].add(d);
+  }
+  return by;
+}
+
+// One line per permit: days used against days allowed, from entry to the planned exit (the last day of the unbroken stay
+// that starts at entry), plus a calendar-year cap where the country has one.
+export function visaStatus(permits, stops, today) {
+  const pres = presence(stops);
+  return (permits || []).map((p) => {
+    const cc = String(p.country || "").toUpperCase();
+    const days = pres[cc] || new Set();
+    const limit = addDays(p.entry_date, Number(p.max_days) - 1);
+    let exit = null;
+    if (days.has(p.entry_date)) { exit = p.entry_date; while (days.has(addDays(exit, 1))) exit = addDays(exit, 1); }
+    const used = exit ? daysBetween(p.entry_date, exit) + 1 : 0;
+    const spare = exit ? daysBetween(exit, limit) : null;
+    let status = !exit ? "unplanned" : spare < 0 ? "over" : spare <= VISA_WARN_DAYS ? "warn" : "ok";
+    const name = countryName(cc);
+    const who = p.person ? " (" + p.person + ")" : "";
+    let text;
+    if (!exit) text = name + who + ": no stop in the plan starts on the entry day " + p.entry_date + ".";
+    else if (status === "over") text = name + who + ": the plan has " + used + " days from " + p.entry_date + " to " + exit + ", but the visa allows " + p.max_days + ". Leave by " + limit + " or get a longer visa.";
+    else text = name + who + ": " + used + " of " + p.max_days + " days (" + p.entry_date + " to " + exit + "), " + spare + " to spare; last allowed day " + limit + ".";
+    let now = null;
+    if (exit && today >= p.entry_date && today <= exit) now = { day: daysBetween(p.entry_date, today) + 1, left: daysBetween(today, limit) };
+    let year = null;
+    if (Number(p.year_cap) > 0) {
+      const y = p.entry_date.slice(0, 4);
+      const n = [...days].filter((d) => d.slice(0, 4) === y).length;
+      year = { year: y, used: n, cap: Number(p.year_cap) };
+      if (n > year.cap) { status = "over"; text += " Calendar " + y + ": " + n + " days, over the " + year.cap + "-day yearly limit."; }
+      else if (year.cap - n <= VISA_WARN_DAYS && status === "ok") { status = "warn"; text += " Calendar " + y + ": " + n + " of " + year.cap + " days."; }
+    }
+    return { id: p.id, person: p.person, country: cc, name, entry_date: p.entry_date, max_days: Number(p.max_days), year_cap: p.year_cap == null ? null : Number(p.year_cap), exit, used, limit, spare, status, now, year, text, note: p.note || "" };
+  });
+}
+
+// What to fetch for one stop: the forecast part (next 16 days) and the same dates last year for anything later.
+export function weatherRequests(stop, today) {
+  if (stop.lat == null || stop.lon == null || !isoDay(stop.start_date) || !isoDay(stop.end_date) || stop.end_date < today) return [];
+  const q = "latitude=" + Number(stop.lat).toFixed(2) + "&longitude=" + Number(stop.lon).toFixed(2) + "&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_sum&timezone=auto";
+  const s = stop.start_date < today ? today : stop.start_date;
+  const lastFc = addDays(today, WX_FORECAST_DAYS - 1);
+  const out = [];
+  if (s <= lastFc) out.push({ kind: "forecast", url: "https://api.open-meteo.com/v1/forecast?" + q + "&start_date=" + s + "&end_date=" + (stop.end_date < lastFc ? stop.end_date : lastFc) });
+  if (stop.end_date > lastFc) {
+    const hs = s > lastFc ? s : addDays(lastFc, 1);
+    out.push({ kind: "lastyear", url: "https://archive-api.open-meteo.com/v1/archive?" + q + "&start_date=" + shiftYear(hs, -1) + "&end_date=" + shiftYear(stop.end_date, -1) });
+  }
+  return out;
+}
+
+export function parseWeather(j, kind) {
+  const d = (j && j.daily) || {};
+  const out = {};
+  (d.time || []).forEach((t, i) => {
+    const day = kind === "lastyear" ? shiftYear(t, 1) : t;
+    const code = d.weather_code ? d.weather_code[i] : null;
+    out[day] = { kind, code, text: WX_CODES[code] || "", tmax: d.temperature_2m_max ? d.temperature_2m_max[i] : null, tmin: d.temperature_2m_min ? d.temperature_2m_min[i] : null, rain: d.precipitation_sum ? d.precipitation_sum[i] : null };
+  });
+  return out;
+}
+
+async function weatherFor(db, stops, today, deps, nowMs) {
+  const wx = {};
+  if (typeof deps.http !== "function") return wx;
+  const reqs = [];
+  for (const s of stops) for (const r of weatherRequests(s, today)) reqs.push({ ...r, stop: s.id });
+  await Promise.all(reqs.map(async (r) => {
+    let data = null;
+    const row = await db.prepare("SELECT data, fetched_at FROM travel_weather WHERE url = ?").bind(r.url).first();
+    if (row && (r.kind === "lastyear" || nowMs - Date.parse(row.fetched_at) < FORECAST_TTL_MS)) { try { data = JSON.parse(row.data); } catch (e) { data = null; } }
+    if (!data) {
+      try {
+        data = parseWeather(await deps.http(r.url), r.kind);
+        await db.prepare("INSERT INTO travel_weather (url, data, fetched_at) VALUES (?, ?, ?) ON CONFLICT(url) DO UPDATE SET data = excluded.data, fetched_at = excluded.fetched_at").bind(r.url, JSON.stringify(data), new Date(nowMs).toISOString()).run();
+      } catch (e) {
+        console.error(JSON.stringify({ evt: "travel-trip:weather-failed", kind: r.kind, error: String(e && e.message || e).slice(0, 160) }));
+        if (row) { try { data = JSON.parse(row.data); } catch (e2) { data = null; } }
+      }
+    }
+    wx[r.stop] = Object.assign(wx[r.stop] || {}, data || {});
+  }));
+  return wx;
+}
+
+// Day by day from today (or the first stop) to the last stop's departure: where the party sleeps, travel days, the weather
+// and fog notes, and the booking that covers the night when one has landed in events.
+export function dayPlan(stops, today, wx, lodging) {
+  const list = (stops || []).filter((s) => isoDay(s.start_date) && isoDay(s.end_date) && s.end_date >= s.start_date)
+    .sort((a, b) => (a.start_date < b.start_date ? -1 : a.start_date > b.start_date ? 1 : 0));
+  if (!list.length) return [];
+  const last = list.reduce((m, s) => (s.end_date > m ? s.end_date : m), list[0].end_date);
+  if (last < today) return [];
+  const first = list[0].start_date > today ? list[0].start_date : today;
+  const days = [];
+  for (let d = first; d <= last && days.length < 220; d = addDays(d, 1)) {
+    const sleep = list.find((s) => s.start_date <= d && s.end_date > d) || null;
+    const leaving = list.find((s) => s.end_date === d && s !== sleep) || null;
+    const here = sleep || leaving;
+    const w = here && wx && wx[here.id] ? wx[here.id][d] || null : null;
+    const flags = [];
+    // The long fog note goes on travel days (from the place being left, where a delayed departure strands the party) and
+    // on the first fog-season day of a stop; the days in between carry a short reminder.
+    const moving = leaving && leaving !== sleep;
+    if (moving && fogSeason(leaving.lat, leaving.lon, d)) flags.push("Travel day in fog season: dense morning fog in " + leaving.city + " often delays trains and flights. Leave after late morning and keep a buffer.");
+    else if (here && fogSeason(here.lat, here.lon, d)) flags.push(days.length && days[days.length - 1].stop === here.id && fogSeason(here.lat, here.lon, addDays(d, -1)) ? "Fog season." : "Fog season here: dense morning fog often delays trains and flights. Plan moves for late morning.");
+    if (w && (w.code === 45 || w.code === 48)) flags.push(w.kind === "forecast" ? "Fog in the forecast." : "There was fog on this date last year.");
+    if (w && w.kind === "forecast" && w.rain != null && w.rain >= 20) flags.push("Heavy rain forecast (" + Math.round(w.rain) + " mm).");
+    const booked = sleep ? (lodging || []).find((e) => e.start_date <= d && e.end_date > d) || null : null;
+    days.push({
+      day: d,
+      city: sleep ? sleep.city : null,
+      country: sleep ? sleep.country : null,
+      stop: sleep ? sleep.id : null,
+      move: leaving && sleep && leaving.city !== sleep.city ? leaving.city + " to " + sleep.city : (leaving && !sleep ? "Leave " + leaving.city : null),
+      note: sleep && sleep.start_date === d ? sleep.note || "" : "",
+      wx: w,
+      flags,
+      booked: booked ? (booked.title || booked.city) : null
+    });
+  }
+  return days;
+}
+
+// A request for the host, in the party's voice. ev: a lodging event; c: config (adults, checkin_arrival).
+export function checkinDraft(ev, c) {
+  const n = Math.max(1, Number(c && c.adults) || 1);
+  const we = n > 1;
+  const when = String(c && c.checkin_arrival || "around midday");
+  return [
+    "Hello,",
+    "",
+    (we ? "We have" : "I have") + " a booking from " + ev.start_date + (ev.booking_ref ? " (reference " + ev.booking_ref + ")" : "") + (we ? " for " + n + " adults" : "") + " and expect to arrive " + when + ".",
+    "Would an early check-in be possible? If not, could " + (we ? "we leave our bags" : "I leave my bag") + " with you until the room is ready?",
+    "",
+    "Thank you!"
+  ].join("\n");
+}
+
+async function tripRows(db, today) {
+  const stops = await many(db, "SELECT id, trip, city, country, lat, lon, start_date, end_date, note FROM travel_stops WHERE end_date >= ? ORDER BY start_date", addDays(today, -1));
+  const permits = await many(db, "SELECT id, person, country, entry_date, max_days, year_cap, note FROM travel_permits ORDER BY entry_date");
+  return { stops, permits };
+}
+
+// Lodging starting today through the next 3 days, each with its draft and whether the owner marked it sent.
+async function checkinCards(db, c, today) {
+  const evs = await many(db, "SELECT id, title, city, country, start_date, end_date, booking_ref FROM events WHERE category = 'lodging' AND start_date >= ? AND start_date <= ? ORDER BY start_date", today, addDays(today, 3));
+  const out = [];
+  for (const ev of evs) {
+    const sent = await db.prepare("SELECT sent_at FROM travel_notices WHERE kind = 'checkin-sent' AND ref = ?").bind(ev.id).first();
+    out.push({ id: ev.id, title: ev.title || ev.city, city: ev.city, start_date: ev.start_date, draft: checkinDraft(ev, c), sent: sent ? sent.sent_at : null });
+  }
+  return out;
+}
+
+export async function planState(db, c, nowMs, deps) {
+  const today = localParts(nowMs, c.tz).day;
+  const { stops, permits } = await tripRows(db, today);
+  const lodging = await many(db, "SELECT title, city, start_date, end_date FROM events WHERE category = 'lodging' AND end_date >= ?", today);
+  const wx = await weatherFor(db, stops, today, deps || {}, nowMs);
+  return {
+    today,
+    stops: stops.map((s) => ({ ...s, country_name: countryName(s.country) })),
+    visa: visaStatus(permits, (await many(db, "SELECT city, country, start_date, end_date FROM travel_stops")), today),
+    days: dayPlan(stops, today, wx, lodging),
+    checkins: await checkinCards(db, c, today),
+    forward_to: c.forward_to || ""
+  };
+}
+
+export const IMPORT_SYSTEM = [
+  "You turn pasted travel text (booking confirmations, emails, notes) into structured bookings. Extract only what the text states; never guess a date, place or reference.",
+  "Reply with JSON only, exactly this shape:",
+  "{\"bookings\":[{\"category\":\"lodging|travel\",\"title\":\"short name, e.g. the hotel or 'Flight KTM to DEL'\",\"venue\":\"\",\"city\":\"\",\"country\":\"two-letter code\",\"start_date\":\"YYYY-MM-DD\",\"end_date\":\"YYYY-MM-DD\",\"booking_ref\":\"\"}],\"learned\":[{\"label\":\"two to four words\",\"statement\":\"one sentence about the traveller's preference\"}]}",
+  "lodging: start_date is check-in, end_date is check-out, city is where the stay is. travel: one row per flight, train or bus leg; start_date is the departure day, city is the destination.",
+  "learned: only preferences the text plainly shows (a room type they chose, a class they booked). Use [] when there is nothing."
+].join("\n");
+
+export function parseImport(text) {
+  const j = firstJson(text);
+  const rows = j && Array.isArray(j.bookings) ? j.bookings : [];
+  const bookings = [];
+  for (const b of rows.slice(0, 20)) {
+    if (!b || typeof b !== "object") continue;
+    const category = b.category === "lodging" || b.category === "travel" ? b.category : "";
+    const start = String(b.start_date || "");
+    let end = String(b.end_date || "");
+    if (!category || !isoDay(start)) continue;
+    if (category === "travel" && !isoDay(end)) end = start;
+    if (!isoDay(end) || end < start || (category === "lodging" && end === start)) continue;
+    const title = clean(b.title, 120) || clean(b.venue, 120) || clean(b.city, 80);
+    if (!title) continue;
+    const cc = clean(b.country, 40);
+    bookings.push({ category, title, venue: clean(b.venue, 120), city: clean(b.city, 80), country: /^[A-Za-z]{2}$/.test(cc) ? cc.toUpperCase() : cc, start_date: start, end_date: end, booking_ref: clean(b.booking_ref, 40).replace(/[^A-Za-z0-9-]/g, "") });
+  }
+  const learned = (j && Array.isArray(j.learned) ? j.learned : []).map((l) => ({ label: clean(l && l.label, 50), statement: clean(l && l.statement, 240) })).filter((l) => l.label && l.statement).slice(0, 3);
+  return { bookings, learned };
+}
+
+async function hex(s) {
+  const d = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(s));
+  return [...new Uint8Array(d)].map((b) => b.toString(16).padStart(2, "0")).join("");
+}
+
+// Paste import: a model reads the text, the code validates every field, and each booking becomes a personal-life.events
+// row (source travel-paste) that the planner, the trip view and the radar see like a forwarded confirmation. Re-pasting the
+// same booking updates the same row.
+export async function importText(env, deps, input) {
+  const db = env.PERSONAL;
+  const nowMs = deps.now || Date.now();
+  const nowIso = new Date(nowMs).toISOString();
+  await ensureTravel(db, nowIso);
+  const c = await cfg(db);
+  const text = String(input && input.text || "").trim().slice(0, 12000);
+  if (text.length < 20) return { ok: false, error: "Paste the confirmation text first." };
+  if (typeof deps.ai !== "function") return { ok: false, error: "no model caller" };
+  const today = localParts(nowMs, c.tz).day;
+  const messages = [{ role: "system", content: IMPORT_SYSTEM + "\nToday is " + today + "." }, { role: "user", content: text }];
+  let parsed = null, lastErr = "";
+  for (const m of chatModels(c, deps.modelAllowed)) {
+    try {
+      const pi = parseImport(modelText(await deps.ai(m, { messages, max_tokens: 1500, temperature: 0.1 })));
+      if (pi.bookings.length || pi.learned.length) { parsed = pi; break; }
+      lastErr = m + " found no booking";
+    } catch (e) { lastErr = m + ": " + String(e && e.message || e).slice(0, 160); }
+  }
+  if (!parsed) return { ok: false, error: "I could not find a booking with dates in that text (" + lastErr + ")." };
+  const added = [];
+  for (const b of parsed.bookings) {
+    const id = "paste:" + (await hex([b.category, b.start_date, b.end_date, norm(b.city), b.booking_ref, norm(b.title)].join("|"))).slice(0, 20);
+    await db.prepare("INSERT INTO events (id, category, title, venue, city, country, start_date, end_date, booking_ref, source, source_subject, ingested_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'travel-paste', ?, ?) ON CONFLICT(id) DO UPDATE SET title = excluded.title, venue = excluded.venue, city = excluded.city, country = excluded.country, booking_ref = excluded.booking_ref, ingested_at = excluded.ingested_at")
+      .bind(id, b.category, b.title, b.venue || null, b.city || null, b.country || null, b.start_date, b.end_date, b.booking_ref || null, text.slice(0, 120).replace(/\s+/g, " "), nowIso).run();
+    added.push({ id, ...b });
+  }
+  const learned = await learnPrefs(db, parsed.learned, "travel import " + today, nowIso);
+  return { ok: true, added, learned };
+}
+
+async function geocode(deps, city, country) {
+  if (typeof deps.http !== "function") return null;
+  try {
+    const j = await deps.http("https://geocoding-api.open-meteo.com/v1/search?count=1&language=en&format=json&name=" + encodeURIComponent(city) + (/^[A-Z]{2}$/.test(country || "") ? "&countryCode=" + country : ""));
+    const r = j && j.results && j.results[0];
+    return r && typeof r.latitude === "number" ? { lat: r.latitude, lon: r.longitude, country: String(r.country_code || "").toUpperCase() } : null;
+  } catch (e) { console.error(JSON.stringify({ evt: "travel-trip:geocode-failed", error: String(e && e.message || e).slice(0, 160) })); return null; }
+}
+
+const rid = (p) => { const b = new Uint8Array(9); crypto.getRandomValues(b); return p + [...b].map((x) => x.toString(16).padStart(2, "0")).join(""); };
+
+export async function saveStop(db, deps, body, nowIso) {
+  const id = /^st_[0-9a-f]{18}$/.test(String(body.id || "")) ? body.id : "";
+  if (body.delete === true) {
+    if (!id) return { ok: false, error: "no such stop" };
+    await db.prepare("DELETE FROM travel_stops WHERE id = ?").bind(id).run();
+    return { ok: true, deleted: id };
+  }
+  const city = clean(body.city, 80);
+  let country = clean(body.country, 2).toUpperCase();
+  const start = String(body.start_date || ""), end = String(body.end_date || "");
+  if (!city || !isoDay(start) || !isoDay(end) || end <= start) return { ok: false, error: "A stop needs a place, an arrival day and a later leaving day." };
+  const old = id ? await db.prepare("SELECT city, country, lat, lon FROM travel_stops WHERE id = ?").bind(id).first() : null;
+  let lat = old ? old.lat : null, lon = old ? old.lon : null;
+  if (!old || norm(old.city) !== norm(city) || (country && old.country !== country) || lat == null) {
+    const g = await geocode(deps, city, country);
+    lat = g ? g.lat : null; lon = g ? g.lon : null;
+    if (g && !country) country = g.country;
+  }
+  if (!/^[A-Z]{2}$/.test(country)) country = old && old.country ? old.country : "";
+  const sid = id || rid("st_");
+  await db.prepare("INSERT INTO travel_stops (id, trip, city, country, lat, lon, start_date, end_date, note, updated_at) VALUES (?, 'next', ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET city = excluded.city, country = excluded.country, lat = excluded.lat, lon = excluded.lon, start_date = excluded.start_date, end_date = excluded.end_date, note = excluded.note, updated_at = excluded.updated_at")
+    .bind(sid, city, country || null, lat, lon, start, end, clean(body.note, 300) || null, nowIso).run();
+  return { ok: true, id: sid, located: lat != null };
+}
+
+export async function savePermit(db, body, nowIso) {
+  const id = /^vp_[0-9a-f]{18}$/.test(String(body.id || "")) ? body.id : "";
+  if (body.delete === true) {
+    if (!id) return { ok: false, error: "no such visa" };
+    await db.prepare("DELETE FROM travel_permits WHERE id = ?").bind(id).run();
+    return { ok: true, deleted: id };
+  }
+  const person = clean(body.person, 40), country = clean(body.country, 2).toUpperCase(), entry = String(body.entry_date || "");
+  const max = Math.round(Number(body.max_days)), cap = body.year_cap == null || body.year_cap === "" ? null : Math.round(Number(body.year_cap));
+  if (!person || !/^[A-Z]{2}$/.test(country) || !isoDay(entry) || !(max >= 1 && max <= 3650) || (cap != null && !(cap >= 1 && cap <= 366))) return { ok: false, error: "A visa needs a person, a country, an entry day and the days allowed." };
+  const vid = id || rid("vp_");
+  await db.prepare("INSERT INTO travel_permits (id, person, country, entry_date, max_days, year_cap, note, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET person = excluded.person, country = excluded.country, entry_date = excluded.entry_date, max_days = excluded.max_days, year_cap = excluded.year_cap, note = excluded.note, updated_at = excluded.updated_at")
+    .bind(vid, person, country, entry, max, cap, clean(body.note, 200) || null, nowIso).run();
+  return { ok: true, id: vid };
+}
+
+// Plan lines for the chat model, so a proposal respects the dated stops and the visa limits.
+export function planText(stops, visa) {
+  const s = (stops || []).slice(0, 30).map((x) => "- " + x.city + (x.country ? ", " + x.country : "") + ": " + x.start_date + " to " + x.end_date + (x.note ? " (" + x.note + ")" : "")).join("\n");
+  const v = (visa || []).map((x) => "- " + x.text).join("\n");
+  return (s ? "Planned stops (not booked unless listed under Booked ahead):\n" + s : "") + (v ? (s ? "\n" : "") + "Visa limits:\n" + v : "");
 }

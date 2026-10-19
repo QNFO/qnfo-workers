@@ -8,7 +8,9 @@ import { DatabaseSync } from "node:sqlite";
 import {
   DDL, DEFAULTS, ensureTravel, cfg, addDays, localParts, tripState, bookingLink, parseOptions, rankAndMark,
   promptFor, modelText, sign, verify, mailFor, travelTick, handleTravel, reconcile,
-  parseChat, chatPrompt, chatModels, chatTurn, makeToken, tokenOk, authKey, accessOk, CHAT_SYSTEM
+  parseChat, chatPrompt, chatModels, chatTurn, makeToken, tokenOk, authKey, accessOk, CHAT_SYSTEM,
+  visaStatus, weatherRequests, parseWeather, fogSeason, dayPlan, checkinDraft, parseImport, importText, saveStop, savePermit,
+  shiftYear, planText, chatContext
 } from "./travel.js";
 
 let pass = 0, fail = 0;
@@ -363,6 +365,114 @@ console.log("\n[chat: Cloudflare Access]");
   ok("expired token refused", !(await accessOk(rq(good), c, deps, NOW + 3600e3)));
   ok("tampered token refused", !(await accessOk(rq(good.slice(0, -4) + "AAAA"), c, deps, NOW)));
   ok("Access off when not configured", !(await accessOk(rq(good), { access_team: "", access_aud: "" }, deps, NOW)));
+}
+
+console.log("\n[trip: visa counter, plan, weather, fog, check-in, import]");
+{
+  // invented fixture: a two-country trip, people A and B
+  const stops = [
+    { id: "s1", city: "Valley", country: "NP", lat: 27.7, lon: 85.3, start_date: "2026-11-05", end_date: "2026-11-24" },
+    { id: "s2", city: "Riverside", country: "IN", lat: 25.3, lon: 83.0, start_date: "2026-11-24", end_date: "2026-12-20" },
+    { id: "s3", city: "Coast", country: "IN", lat: 15.5, lon: 73.8, start_date: "2026-12-20", end_date: "2027-02-14" },
+    { id: "s4", city: "Lakes", country: "NP", lat: 28.2, lon: 84.0, start_date: "2027-02-15", end_date: "2027-03-25" }
+  ];
+  const v = visaStatus([
+    { id: "p1", person: "B", country: "IN", entry_date: "2026-11-24", max_days: 90 },
+    { id: "p2", person: "A and B", country: "NP", entry_date: "2027-02-15", max_days: 30, year_cap: 150 },
+    { id: "p3", person: "A", country: "IN", entry_date: "2026-11-24", max_days: 85 },
+    { id: "p4", person: "A", country: "TH", entry_date: "2026-12-01", max_days: 30 }
+  ], stops, "2026-10-19");
+  ok("90-day visa: 83 days from entry to the planned exit, 7 to spare, flagged as close", v[0].used === 83 && v[0].exit === "2027-02-14" && v[0].limit === "2027-02-21" && v[0].spare === 7 && v[0].status === "warn", v[0]);
+  ok("a stay longer than the visa is over, with the last allowed day", v[1].status === "over" && v[1].used === 39 && /Leave by 2027-03-16/.test(v[1].text), v[1]);
+  ok("a stay with 2 days to spare warns", v[2].status === "warn" && v[2].spare === 2, v[2]);
+  ok("a visa with no stop on its entry day says so", v[3].status === "unplanned");
+  const inTrip = visaStatus([{ id: "p1", person: "B", country: "IN", entry_date: "2026-11-24", max_days: 90 }], stops, "2027-01-10");
+  ok("during the stay the counter shows the day and days left", inTrip[0].now.day === 48 && inTrip[0].now.left === 42, inTrip[0].now);
+  const cap = visaStatus([{ id: "c", person: "A", country: "NP", entry_date: "2027-02-15", max_days: 90, year_cap: 30 }], stops, "2026-10-19");
+  ok("a calendar-year cap is counted across the year", cap[0].status === "over" && cap[0].year.used === 39 && /yearly limit/.test(cap[0].text), cap[0]);
+
+  ok("shiftYear keeps 29 February valid", shiftYear("2028-02-29", -1) === "2027-02-28" && shiftYear("2026-11-05", 1) === "2027-11-05");
+  const rq = weatherRequests(stops[1], "2026-11-20");
+  ok("weather: forecast for the next 16 days, last year's dates after that", rq.length === 2 && rq[0].kind === "forecast" && /api\.open-meteo\.com\/v1\/forecast\?.*start_date=2026-11-24&end_date=2026-12-05/.test(rq[0].url) && rq[1].kind === "lastyear" && /archive-api\.open-meteo\.com.*start_date=2025-12-06&end_date=2025-12-20/.test(rq[1].url), rq);
+  ok("weather: nothing for a stop without a location or in the past", weatherRequests({ ...stops[0], lat: null }, "2026-11-01").length === 0 && weatherRequests(stops[0], "2027-01-01").length === 0);
+  const wx = parseWeather({ daily: { time: ["2025-12-28"], weather_code: [45], temperature_2m_max: [19.4], temperature_2m_min: [7.1], precipitation_sum: [0] } }, "lastyear");
+  ok("last year's reading is filed under this year's date", wx["2026-12-28"] && wx["2026-12-28"].text === "fog" && wx["2026-12-28"].kind === "lastyear");
+  ok("fog season: the northern plains in January", fogSeason(25.3, 83.0, "2027-01-05") && !fogSeason(15.5, 73.8, "2027-01-05") && !fogSeason(25.3, 83.0, "2027-03-01") && fogSeason(27.7, 85.3, "2026-12-15"));
+  const days = dayPlan(stops, "2026-11-23", { s2: wx }, [{ title: "Guesthouse", city: "Riverside", start_date: "2026-11-24", end_date: "2026-11-27" }]);
+  const d24 = days.find((d) => d.day === "2026-11-24"), d28 = days.find((d) => d.day === "2026-12-28") || null;
+  ok("day by day: a travel day names the move and the booked stay", d24.move === "Valley to Riverside" && d24.city === "Riverside" && d24.booked === "Guesthouse", d24);
+  ok("day by day: runs to the last departure", days[0].day === "2026-11-23" && days.at(-1).day === "2027-03-25" && days.at(-1).move === "Leave Lakes");
+  const dFog = dayPlan([stops[1]].map((s) => ({ ...s, end_date: "2026-12-30" })), "2026-12-20", { s2: wx }, []).find((d) => d.day === "2026-12-28");
+  ok("fog notes: season and last year's fog", dFog.flags.length === 2 && /Fog season/.test(dFog.flags[0]) && /last year/.test(dFog.flags[1]), dFog);
+  const fogDays = dayPlan([{ ...stops[1], start_date: "2026-12-20", end_date: "2026-12-24" }, { ...stops[2], start_date: "2026-12-24" }], "2026-12-20", {}, []);
+  ok("fog notes: long on the first day, short after, and a travel day checks the place being left", /dense morning fog/.test(fogDays[0].flags[0]) && fogDays[1].flags[0] === "Fog season." && /Travel day in fog season: dense morning fog in Riverside/.test(fogDays[4].flags[0]), fogDays.map((d) => d.flags));
+  ok("plan lines for the chat carry stops and visa text", /Riverside, IN: 2026-11-24 to 2026-12-20/.test(planText(stops, v)) && /Visa limits:/.test(planText(stops, v)));
+  ok("the chat context includes the plan", /Planned stops/.test(chatContext({ c: C, today: "2026-10-19", state: { mode: "home", recent: [] }, booked: [], profile: [], reactions: [], plan: planText(stops, v) })));
+
+  const ev2 = { start_date: "2026-11-24", booking_ref: "AB12" };
+  ok("check-in draft speaks for the party", /^Hello,/.test(checkinDraft(ev2, { adults: "2" })) && /We have a booking from 2026-11-24 \(reference AB12\) for 2 adults/.test(checkinDraft(ev2, { adults: "2" })) && /our bags/.test(checkinDraft(ev2, { adults: "2" })));
+  ok("check-in draft alone", /I have a booking/.test(checkinDraft(ev2, { adults: "1", checkin_arrival: "at 10:00" })) && /arrive at 10:00/.test(checkinDraft(ev2, { adults: "1", checkin_arrival: "at 10:00" })));
+
+  const pi = parseImport(JSON.stringify({ bookings: [
+    { category: "lodging", title: "Lake Inn", city: "Lakes", country: "np", start_date: "2027-02-15", end_date: "2027-02-18", booking_ref: "X-9 9<" },
+    { category: "travel", title: "Bus to Lakes", city: "Lakes", start_date: "2027-02-15" },
+    { category: "lodging", title: "Same day", start_date: "2027-02-15", end_date: "2027-02-15" },
+    { category: "lodging", title: "Bad date", start_date: "2027-02-30", end_date: "2027-03-02" },
+    { category: "spa", title: "?", start_date: "2027-02-15" }
+  ], learned: [{ label: "Lake view", statement: "Booked a lake-view room." }] }));
+  ok("import keeps valid bookings and drops bad ones", pi.bookings.length === 2 && pi.bookings[0].country === "NP" && pi.bookings[0].booking_ref === "X-99" && pi.bookings[1].end_date === "2027-02-15", pi);
+
+  const { raw, env } = freshEnv();
+  const fakeAi = async () => ({ response: JSON.stringify({ bookings: [{ category: "lodging", title: "Lake Inn", city: "Lakes", country: "NP", start_date: "2027-02-15", end_date: "2027-02-18", booking_ref: "QQ1" }], learned: [{ label: "Lake view", statement: "Likes a lake view." }] }) });
+  const im = await importText(env, { ai: fakeAi, now: NOW }, { text: "Your booking at Lake Inn is confirmed, 15-18 Feb 2027, ref QQ1" });
+  await importText(env, { ai: fakeAi, now: NOW }, { text: "Your booking at Lake Inn is confirmed, 15-18 Feb 2027, ref QQ1 (again)" });
+  const evs = raw.prepare("SELECT * FROM events WHERE source = 'travel-paste'").all();
+  ok("import writes one events row, and a re-paste updates it", im.ok && im.added.length === 1 && evs.length === 1 && evs[0].category === "lodging" && evs[0].id.startsWith("paste:"), evs);
+  ok("import learns into the one preferences store", raw.prepare("SELECT facet, status FROM profile WHERE id = 'travel:chat-lake-view'").get().facet === "travel");
+  ok("import refuses empty text", !(await importText(env, { ai: fakeAi, now: NOW }, { text: "hi" })).ok);
+
+  let geo = 0;
+  const http = async (url) => { geo++; if (!/geocoding-api/.test(url)) throw new Error("unexpected " + url); return { results: [{ latitude: 28.21, longitude: 83.98, country_code: "np" }] }; };
+  await ensureTravel(env.PERSONAL);
+  const sv = await saveStop(env.PERSONAL, { http }, { city: "Lakes", start_date: "2027-02-15", end_date: "2027-03-01" }, "2026-10-19T00:00:00Z");
+  const row = raw.prepare("SELECT * FROM travel_stops WHERE id = ?").get(sv.id);
+  ok("a new stop is located and its country filled", sv.ok && sv.located && row.lat === 28.21 && row.country === "NP", row);
+  await saveStop(env.PERSONAL, { http }, { id: sv.id, city: "Lakes", country: "NP", start_date: "2027-02-16", end_date: "2027-03-01" }, "2026-10-19T00:00:00Z");
+  ok("changing only the dates does not look the place up again", geo === 1 && raw.prepare("SELECT start_date FROM travel_stops WHERE id = ?").get(sv.id).start_date === "2027-02-16");
+  ok("a stop that leaves before it arrives is refused", !(await saveStop(env.PERSONAL, { http }, { city: "X", start_date: "2027-02-16", end_date: "2027-02-16" }, "x")).ok);
+  await saveStop(env.PERSONAL, { http }, { id: sv.id, delete: true }, "x");
+  ok("a stop can be removed", raw.prepare("SELECT COUNT(*) n FROM travel_stops").get().n === 0);
+  const pv = await savePermit(env.PERSONAL, { person: "B", country: "in", entry_date: "2026-11-24", max_days: "90" }, "x");
+  ok("a visa row is saved with its country code", pv.ok && raw.prepare("SELECT country, max_days, year_cap FROM travel_permits").get().country === "IN");
+  ok("a visa without days allowed is refused", !(await savePermit(env.PERSONAL, { person: "B", country: "IN", entry_date: "2026-11-24", max_days: "" }, "x")).ok);
+
+  // the page API, signed in with the companion key cookie
+  const H = "https://travel.q08.org";
+  const envK = { ...env, COMPANION_KEY: "ck" };
+  const cookie = { Cookie: "pc_key=ck" };
+  const jp = (path, body) => handleTravel(new Request(H + path, { method: "POST", headers: { ...cookie, "Content-Type": "application/json" }, body: JSON.stringify(body) }), envK, { now: NOW, http, ai: fakeAi });
+  const s1 = await (await jp("/travel/api/stop", { city: "Lakes", start_date: "2026-11-03", end_date: "2026-11-08" })).json();
+  raw.prepare("INSERT INTO events (id, category, title, city, start_date, end_date, ingested_at) VALUES ('h1', 'lodging', 'Lake Inn', 'Lakes', '2026-11-04', '2026-11-06', 'x')").run();
+  const httpWx = async (url) => /geocoding/.test(url) ? http(url) : { daily: { time: ["2026-11-03"], weather_code: [2], temperature_2m_max: [21], temperature_2m_min: [9], precipitation_sum: [0] } };
+  const tr = await (await handleTravel(new Request(H + "/travel/api/trip", { headers: cookie }), envK, { now: NOW, http: httpWx })).json();
+  ok("trip view: stops, visa lines, days with weather, check-in drafts", tr.ok && tr.stops.length === 1 && tr.visa.length === 1 && tr.days[0].wx && tr.days[0].wx.text === "partly cloudy" && tr.checkins.length === 1 && /early check-in/.test(tr.checkins[0].draft), tr);
+  ok("weather is cached by request", raw.prepare("SELECT COUNT(*) n FROM travel_weather").get().n === 1);
+  ok("mark as sent records it and sends nothing", (await (await jp("/travel/api/checkin-sent", { id: "h1" })).json()).ok && raw.prepare("SELECT COUNT(*) n FROM travel_notices WHERE kind = 'checkin-sent'").get().n === 1);
+  ok("the trip view needs sign-in", (await handleTravel(new Request(H + "/travel/api/trip"), envK, { now: NOW })).status === 401);
+  ok("import over the page API", (await (await jp("/travel/api/import", { text: "Your booking at Lake Inn is confirmed, ref QQ1, February" })).json()).ok);
+  ok("stop saved over the page API", s1.ok);
+
+  // hourly tick: a visa warning is mailed once
+  raw.prepare("DELETE FROM travel_stops").run();
+  raw.prepare("DELETE FROM travel_permits").run();
+  raw.prepare("INSERT INTO travel_stops (id, city, country, start_date, end_date, updated_at) VALUES ('t1', 'Lakes', 'NP', '2026-11-05', '2026-12-10', 'x')").run();
+  raw.prepare("INSERT INTO travel_permits (id, person, country, entry_date, max_days, updated_at) VALUES ('vp1', 'A', 'NP', '2026-11-05', 30, 'x')").run();
+  const sent = [];
+  const tdeps = { now: NOW, send: async (sub, b) => { sent.push({ sub, b }); return { ok: true }; } };
+  await travelTick(env, tdeps);
+  await travelTick(env, tdeps);
+  const vm = sent.filter((m) => /^Visa:/.test(m.sub));
+  ok("the tick mails a visa overstay once", vm.length === 1 && /overstays Nepal/.test(vm[0].sub) && /travel\.q08\.org/.test(vm[0].b), sent.map((m) => m.sub));
 }
 
 console.log("\n[repository hygiene]");

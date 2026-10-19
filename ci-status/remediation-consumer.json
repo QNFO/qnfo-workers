@@ -1,71 +1,55 @@
 {
  "ok": true,
  "marker": "REMEDIATION-CONSUMER-1",
- "verifier": "remediation-consumer@6ebc19d1341d",
- "due": 24,
- "pass": 14,
- "fail": 7,
- "skipped": 3,
- "deferred": 3,
+ "verifier": "remediation-consumer@b0b73968a252",
+ "due": 17,
+ "pass": 11,
+ "fail": 4,
+ "skipped": 2,
+ "deferred": 1,
  "contracts": [
   {
-   "class": "issue-100177",
-   "issue_id": 100177,
-   "verdict": "fail",
-   "expected": "ok",
-   "observed": "stale-title",
-   "written": true
-  },
-  {
-   "class": "fm-learner-topic-null",
-   "issue_id": 2722,
+   "class": "fm-parked-contract-unprobed",
+   "issue_id": null,
    "verdict": "pass",
-   "expected": "1",
-   "observed": "1",
+   "expected": "0",
+   "observed": "0",
    "written": true
   },
   {
-   "class": "issue-100176",
-   "issue_id": 100176,
+   "class": "issue-2036",
+   "issue_id": 2036,
    "verdict": "fail",
    "expected": "1",
    "observed": "0",
    "written": true
   },
   {
-   "class": "fm-closure-relapse-unreopened",
-   "issue_id": null,
+   "class": "issue-2782",
+   "issue_id": 2782,
    "verdict": "pass",
-   "expected": "0",
-   "observed": "0",
-   "written": true
-  },
-  {
-   "class": "fm-selfheal-executed-unverified",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "0",
-   "observed": "0",
-   "written": true
-  },
-  {
-   "class": "fm-capability-snapshot-retired-row",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "0",
-   "observed": "0",
-   "written": true
-  },
-  {
-   "class": "issue-2754",
-   "issue_id": 2754,
-   "verdict": "fail",
    "expected": "ok",
-   "observed": "stale: the filing loop qnfo-deploy-guard did not close it within 48h",
+   "observed": "ok",
    "written": true
   },
   {
-   "class": "fm-schema-index-mixed-refresh",
+   "class": "issue-2831",
+   "issue_id": 2831,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "issue-2833",
+   "issue_id": 2833,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "fm-blocker-claims-count-receipts",
    "issue_id": null,
    "verdict": "pass",
    "expected": "0",
@@ -73,7 +57,23 @@
    "written": true
   },
   {
-   "class": "plane-living-paper-fresh",
+   "class": "fm-code-patch-version-line-over-cap",
+   "issue_id": null,
+   "verdict": "fail",
+   "expected": "0",
+   "observed": "14",
+   "written": true
+  },
+  {
+   "class": "fm-verification-deferral-unaged",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "0",
+   "observed": "0",
+   "written": true
+  },
+  {
+   "class": "fm-code-read-stale-checkout",
    "issue_id": null,
    "verdict": "pass",
    "expected": "ok",
@@ -81,7 +81,23 @@
    "written": true
   },
   {
-   "class": "fm-code-proposal-dangling-reference",
+   "class": "fm-probe-dynamic-like-too-complex",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "0",
+   "observed": "0",
+   "written": true
+  },
+  {
+   "class": "goal-TP-5-MEASURE-TO-ACT-1",
+   "issue_id": null,
+   "verdict": "deferred",
+   "expected": "ok",
+   "observed": "pending: breach_code_task_pct 10.4, needs-machine-probe contracts 35",
+   "reason": "the probe cannot judge yet: pending: breach_code_task_pct 10.4, needs-machine-probe contracts 35"
+  },
+  {
+   "class": "goal-TWIN-FRONTIER-MODEL-1",
    "issue_id": null,
    "verdict": "pass",
    "expected": "1",
@@ -89,31 +105,15 @@
    "written": true
   },
   {
-   "class": "issue-2881",
-   "issue_id": 2881,
-   "verdict": "deferred",
-   "expected": "ok",
-   "observed": "pending: filed by qnfo-fleet-control, which owns it for 48h",
-   "reason": "the probe cannot judge yet: pending: filed by qnfo-fleet-control, which owns it for 48h"
-  },
-  {
-   "class": "goal-PRG-QNFO-RSCH-DEFECTS-0",
+   "class": "goal-TWIN-NATIVE-TOOLS-1",
    "issue_id": null,
    "verdict": "fail",
    "expected": "ok",
-   "observed": "open defects in QNFO.RSCH: 9",
+   "observed": "present-marker:personal-api/worker.js",
    "written": true
   },
   {
-   "class": "goal-PRG-QNFO-INFRA-DEFECTS-0",
-   "issue_id": null,
-   "verdict": "fail",
-   "expected": "ok",
-   "observed": "open defects in QNFO.INFRA: 2",
-   "written": true
-  },
-  {
-   "class": "fm-probe-line-unparsed",
+   "class": "fm-ideas-cap-hold-no-expiry",
    "issue_id": null,
    "verdict": "pass",
    "expected": "0",
@@ -121,83 +121,27 @@
    "written": true
   },
   {
-   "class": "fm-code-review-single-model",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "0",
-   "observed": "0",
-   "written": true
+   "class": "issue-100220",
+   "issue_id": 100220,
+   "verdict": "checkout-older-than-contract",
+   "expected": "ok",
+   "observed": "missing-marker:qnfo-fleet-dashboard/worker.js",
+   "reason": "contract created 2026-10-19 16:30:35, after this checkout's commit, and main has moved past it (or its tip cannot be read); the next run judges it"
   },
   {
-   "class": "goal-CONNECTION-LEDGER-1",
-   "issue_id": null,
-   "verdict": "deferred",
+   "class": "issue-100221",
+   "issue_id": 100221,
+   "verdict": "fail",
    "expected": "1",
-   "observed": "pending: no went answer with a name in calendar_feedback yet (owner action)",
-   "reason": "the probe cannot judge yet: pending: no went answer with a name in calendar_feedback yet (owner action)"
-  },
-  {
-   "class": "goal-PRG-QNFO-OPS-DEFECTS-0",
-   "issue_id": null,
-   "verdict": "fail",
-   "expected": "ok",
-   "observed": "open defects in QNFO.OPS: 142",
-   "written": true
-  },
-  {
-   "class": "fm-producer-lateness-in-hours",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "0",
    "observed": "0",
    "written": true
   },
   {
-   "class": "fm-code-review-dead-end-at-open",
+   "class": "fm-metric-refresh-null-component",
    "issue_id": null,
    "verdict": "pass",
    "expected": "0",
    "observed": "0",
-   "written": true
-  },
-  {
-   "class": "fm-code-review-noise-defect",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "0",
-   "observed": "0",
-   "written": true
-  },
-  {
-   "class": "issue-2826",
-   "issue_id": 2826,
-   "verdict": "deferred",
-   "expected": "ok",
-   "observed": "pending: filed by qnfo-fleet-control, which owns it for 48h",
-   "reason": "the probe cannot judge yet: pending: filed by qnfo-fleet-control, which owns it for 48h"
-  },
-  {
-   "class": "goal-PRG-QNFO-REACH-DEFECTS-0",
-   "issue_id": null,
-   "verdict": "fail",
-   "expected": "ok",
-   "observed": "open defects in QNFO.REACH: 13",
-   "written": true
-  },
-  {
-   "class": "fm-code-merge-race-moved-head",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "1",
-   "observed": "1",
-   "written": true
-  },
-  {
-   "class": "fm-breach-anchor-stale",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "1",
-   "observed": "1",
    "written": true
   }
  ],
@@ -225,7 +169,7 @@
   "runner-https"
  ],
  "budget_exhausted": false,
- "runtime_verified_share_24h": 9.6,
+ "runtime_verified_share_24h": 9.7,
  "host_census": {
   "skipped": "ran within 6h"
  },
@@ -238,27 +182,25 @@
   "path": "accounts"
  },
  "migrations": {
-  "opted_in": 360,
+  "opted_in": 373,
   "unapplied": [
-   "migrations/2026-10-19-consumer-pending-deferral.sql",
-   "migrations/2026-10-19-control-alternate-probes2.sql",
-   "migrations/2026-10-19-parked-task-issue-closed.sql",
-   "migrations/2026-10-19-remedy-efficacy-per-trigger.sql",
-   "migrations/2026-10-19-stuck-summary-superseded-terminal.sql"
+   "migrations/2026-10-19-rearm-factoring-completeness.sql",
+   "migrations/2026-10-19-rearm-thin-draft-row.sql",
+   "migrations/2026-10-19-relapse-window-close-event.sql",
+   "migrations/2026-10-19-trigger-done-criteria.sql"
   ],
   "applied_now": [
-   "migrations/2026-10-19-consumer-pending-deferral.sql",
-   "migrations/2026-10-19-parked-task-issue-closed.sql",
-   "migrations/2026-10-19-remedy-efficacy-per-trigger.sql",
-   "migrations/2026-10-19-stuck-summary-superseded-terminal.sql"
+   "migrations/2026-10-19-rearm-factoring-completeness.sql",
+   "migrations/2026-10-19-rearm-thin-draft-row.sql",
+   "migrations/2026-10-19-trigger-done-criteria.sql"
   ],
   "failed": [
-   "migrations/2026-10-19-control-alternate-probes2.sql"
+   "migrations/2026-10-19-relapse-window-close-event.sql"
   ],
   "metric": 1
  },
- "spent_ms": 120413,
- "head": "6ebc19d1341db42dfb1b3746dda0933d733d2f12",
+ "spent_ms": 73541,
+ "head": "b0b73968a25280fd8709a95235b66bbf8d4c386a",
  "job_status": "success",
- "ts": "2026-10-19T16:06:23Z"
+ "ts": "2026-10-19T16:36:42Z"
 }
