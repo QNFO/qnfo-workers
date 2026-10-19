@@ -1,4 +1,4 @@
-var VERSION = "1.11.5-ping-404"; /* 1.11.4 SLA-120M-7 (2026-10-14, pillar autonomy; owner directive 2026-10-14: no SLA exceeds 120 minutes): the advisor-noise sweep closes an OPEN-ISSUES snapshot after ADVISOR_NOISE_MAX_MIN (120 minutes), not 3 h, and its caught error is logged. */ /* 1.11.3 WORKERS-BP-LOGGING-qnfo-lifecycle-1 (2026-10-14, agent_issues 2536, child of 2342, pillar autonomy): the swallowed catches log as a structured console.error (worker, where, error); control flow unchanged. */ /* 1.11.2: backlog member 2.0.7 BACKLOG-LATEST-PASS-1, an issue closes only when its latest verification passed within 3 h (agent_issues 2222 was closed on a stale pass while its latest verification failed). */ /* 1.11.1: /noz-scrub/status answers a fixed message on failure and logs the error (CodeQL alerts 394, 395). */ /* 1.11.0-noz-scrub NOZ-SCRUB-LOOP-1 (2026-10-12, agent_issues 2273 and 2278, pillar research): a new hourly step cleans the stored living-paper.papers rows that still name the dead deposit registrar or carry its DOIs (up to 150 rows, 10 MB or 20 s a tick; line-local scrub; DOI/URL columns of the registrar set NULL; old value of every changed field kept first in living-paper.papers_bak_nozdoi; idempotent, residual rows marked and not retried; GET /noz-scrub/status; ledger cloud_ops_events job noz-scrub). Was 1.10.1-doi-scrub. 1.10.0-spare-domains SPARE-DOMAINS-1 (agent_issues 2077, pillar reach): twelve spare-domain hostnames (ipatent.me, qwav.net, qwav.uk, qwave.tech, q-wave.tech, empoweringchange.today and their www) answer 301 to their canonical site (ipatent.qnfo.org, qwav.org, qnfo.org), path and query kept. 1.9.1-retired-hosts RETIRED-HOSTS-1: twelve retired qnfo.org hostnames answer 410 Gone (noindex) instead of 522 via Workers routes on this worker (agent_issues 2010). 1.9.0-calendar-fold CALENDAR-FOLD-2 (2026-10-06, T3.10, agent_issues 2010, pillar cost, OWNER-STANDING-GRANT-1): calendar-api (ICS publish, notes intake, event feedback, owner questions) runs here as the member calendarApiFoldMod on the hourly tick, awaited; its feedback-link key is HMAC-derived from this worker's CF_API_TOKEN by the fold kit (CAL_KEY_SEED), never copied or minted; public /calendar/health, /calendar/e/<id> (GET page, POST answer) and /calendar/events.ics; binders personal-api, qnfo-intent-orchestrator and radar-hub reach it with props.member (FOLD-KIT-1). Was 1.8.1-one-worker-count. */ // 1.8.1 ONE-WORKER-COUNT-1 (2026-10-06, pillar core, transformation lever T5.10): runMetricFreshness no longer writes metric_registry.worker_count; qnfo-fleet-control 0.4.137 writes it from the live scripts census beside fleet_budget.workers (COUNT(service_registry) counted retired rows too, 32 against 31 on 2026-10-06). 1.8.0 BACKLOG-FOLD-1 (#1756, pillar cost): qnfo-backlog-exec runs here as a member (backlogMod) on the 02:00 tick; GET /backlog/health; qnfo-ops reaches its drain over the BACKLOG binding (props.member). qnfo-archive (retired: its KG seed got HTTP 401 on every batch) leaves runPing. 1.7.3 LIFECYCLE-PING-1042-1 (#1994): wrangler.toml sets global_fetch_strictly_public, so runPing and runSync reach *.q08.workers.dev (150 PING FAIL HTTP 404 rows were Cloudflare error 1042). 1.7.2 METRIC-CADENCE-UNITS-1 + METRIC-UNMEASURED-CLASS-1 (#1865): "*/3h" and "2h" cadences parse with their unit; never-measured UNMEASURED/n/a metrics are their own class. 1.7.0 CRON-SINGLE-TRIGGER-1 (#1785): one hourly trigger, CRON_TABLE in code. Worker Contract v1 VERSION constant (read by version-bump-guard / drift checks)
+var VERSION = "1.12.0-paper-learn"; /* 1.12.0 PAPER-LEARN-1 (2026-10-19, pillar autonomy, owner directive "THE SYSTEM/FLEET SHALL ALWAYS LEARN FROM ITS OWN RESEARCH PAPERS"): a new hourly step reads each new or revised published paper (up to ops_config paper_learn_per_tick, default 4, newest first), stores its fleet-relevant claims in qnfo-audit.paper_learnings with a verification status decided from the paper itself (unverified, derived-unchecked, cited-unchecked, assumption), routes errors a second model family confirms to internal_errata for the revision loop, files one PAPER-LEARN-1 follow-up issue with a closing probe for a strong direct learning, writes metric papers_unlearned_over_120m; GET /paper-learn/status and /paper-learn/learnings?slug=; paper_learn_mode = off stops it. */ /* 1.11.5 ping-404. */ /* 1.11.4 SLA-120M-7 (2026-10-14, pillar autonomy; owner directive 2026-10-14: no SLA exceeds 120 minutes): the advisor-noise sweep closes an OPEN-ISSUES snapshot after ADVISOR_NOISE_MAX_MIN (120 minutes), not 3 h, and its caught error is logged. */ /* 1.11.3 WORKERS-BP-LOGGING-qnfo-lifecycle-1 (2026-10-14, agent_issues 2536, child of 2342, pillar autonomy): the swallowed catches log as a structured console.error (worker, where, error); control flow unchanged. */ /* 1.11.2: backlog member 2.0.7 BACKLOG-LATEST-PASS-1, an issue closes only when its latest verification passed within 3 h (agent_issues 2222 was closed on a stale pass while its latest verification failed). */ /* 1.11.1: /noz-scrub/status answers a fixed message on failure and logs the error (CodeQL alerts 394, 395). */ /* 1.11.0-noz-scrub NOZ-SCRUB-LOOP-1 (2026-10-12, agent_issues 2273 and 2278, pillar research): a new hourly step cleans the stored living-paper.papers rows that still name the dead deposit registrar or carry its DOIs (up to 150 rows, 10 MB or 20 s a tick; line-local scrub; DOI/URL columns of the registrar set NULL; old value of every changed field kept first in living-paper.papers_bak_nozdoi; idempotent, residual rows marked and not retried; GET /noz-scrub/status; ledger cloud_ops_events job noz-scrub). Was 1.10.1-doi-scrub. 1.10.0-spare-domains SPARE-DOMAINS-1 (agent_issues 2077, pillar reach): twelve spare-domain hostnames (ipatent.me, qwav.net, qwav.uk, qwave.tech, q-wave.tech, empoweringchange.today and their www) answer 301 to their canonical site (ipatent.qnfo.org, qwav.org, qnfo.org), path and query kept. 1.9.1-retired-hosts RETIRED-HOSTS-1: twelve retired qnfo.org hostnames answer 410 Gone (noindex) instead of 522 via Workers routes on this worker (agent_issues 2010). 1.9.0-calendar-fold CALENDAR-FOLD-2 (2026-10-06, T3.10, agent_issues 2010, pillar cost, OWNER-STANDING-GRANT-1): calendar-api (ICS publish, notes intake, event feedback, owner questions) runs here as the member calendarApiFoldMod on the hourly tick, awaited; its feedback-link key is HMAC-derived from this worker's CF_API_TOKEN by the fold kit (CAL_KEY_SEED), never copied or minted; public /calendar/health, /calendar/e/<id> (GET page, POST answer) and /calendar/events.ics; binders personal-api, qnfo-intent-orchestrator and radar-hub reach it with props.member (FOLD-KIT-1). Was 1.8.1-one-worker-count. */ // 1.8.1 ONE-WORKER-COUNT-1 (2026-10-06, pillar core, transformation lever T5.10): runMetricFreshness no longer writes metric_registry.worker_count; qnfo-fleet-control 0.4.137 writes it from the live scripts census beside fleet_budget.workers (COUNT(service_registry) counted retired rows too, 32 against 31 on 2026-10-06). 1.8.0 BACKLOG-FOLD-1 (#1756, pillar cost): qnfo-backlog-exec runs here as a member (backlogMod) on the 02:00 tick; GET /backlog/health; qnfo-ops reaches its drain over the BACKLOG binding (props.member). qnfo-archive (retired: its KG seed got HTTP 401 on every batch) leaves runPing. 1.7.3 LIFECYCLE-PING-1042-1 (#1994): wrangler.toml sets global_fetch_strictly_public, so runPing and runSync reach *.q08.workers.dev (150 PING FAIL HTTP 404 rows were Cloudflare error 1042). 1.7.2 METRIC-CADENCE-UNITS-1 + METRIC-UNMEASURED-CLASS-1 (#1865): "*/3h" and "2h" cadences parse with their unit; never-measured UNMEASURED/n/a metrics are their own class. 1.7.0 CRON-SINGLE-TRIGGER-1 (#1785): one hourly trigger, CRON_TABLE in code. Worker Contract v1 VERSION constant (read by version-bump-guard / drift checks)
 const QNFO_VERSION = VERSION;
 var __defProp = Object.defineProperty;
 var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
@@ -2626,7 +2626,328 @@ function withNozScrub(inner) {
 }
 var __noz_scrub_default = withNozScrub(__retired_hosts_default);
 // ---- NOZ-SCRUB-LOOP-1:END ----
+// ---- PAPER-LEARN-1 (1.12.0, owner directive 2026-10-19, pillar autonomy) ----
+// Owner, 2026-10-19: "THE SYSTEM/FLEET SHALL ALWAYS LEARN FROM ITS OWN RESEARCH PAPERS". Until now a published paper fed the
+// citation graph, the social roll-up and the revision loop, but nothing read what a paper claims and asked what it means for
+// the fleet itself. Each hourly tick reads up to paper_learn_per_tick published papers (default 4, at most 8) whose slug and
+// version have no paper_learn_state row, newest first, so a new paper or a new version is read within the hour and the older
+// corpus drains behind it. One model (glm-5.3-flash, gpt-oss-120b as the per-request fallback) reads the full body (up to
+// PL_BODY_MAX characters) and returns its claims as JSON; each claim is stored in qnfo-audit.paper_learnings with:
+//   kind          derived | cited | empirical | assumption, as the paper presents it;
+//   verification  set here, never by the model: empirical with no support -> unverified; derived -> derived-unchecked (the
+//                 model did not recompute it); cited -> cited-unchecked; assumption -> assumption. A claim is a lead for the
+//                 fleet, not a fact, until a session or loop checks it and sets verification = checked.
+//   fleet lever   what in the fleet the claim bears on (a loop parameter, a metric, a doctrine rule) and how; applicability
+//                 direct | analogy | none; fleet_status proposed (direct or analogy) or n/a.
+// Errors the reader finds in the paper (a derivation that does not follow, a claim its own model contradicts) are checked by a
+// second model family; a confirmed one becomes an internal_errata row (owner qnfo-research-exec), the queue the errata member
+// and the revision loop read, so the paper is corrected through the pipeline that wrote it. At most PL_ERRATA_MAX per paper.
+// A paper with a direct learning at confidence PL_ISSUE_CONF or more files one agent_issues row (PAPER-LEARN-1: apply ...),
+// at most one per tick and none while PL_ISSUE_OPEN_MAX such issues are open (backpressure, not a hold); its remediation
+// contract closes it when no direct learning of that paper is still proposed (applied or rejected, with a reason).
+// The tick writes metric papers_unlearned_over_120m (papers whose version changed in the last 1,440 minutes and has waited more
+// than 120 minutes unread; the older corpus drains behind them uncounted) and a
+// cloud_ops_events job-run row (job paper-learn). GET /paper-learn/status and GET /paper-learn/learnings?slug= are open reads.
+// ops_config: paper_learn_mode on (default) | off; paper_learn_per_tick. Rollback: paper_learn_mode = off.
+var PL_PRIMARY = "@cf/zai-org/glm-5.3-flash";
+var PL_SECOND = "@cf/openai/gpt-oss-120b";
+var PL_PER_TICK_DEFAULT = 4, PL_PER_TICK_MAX = 8, PL_SCAN = 400, PL_MIN_BODY = 8000, PL_BODY_MAX = 60000;
+var PL_LEARN_MAX = 8, PL_ERRATA_MAX = 2, PL_MAX_TRIES = 3, PL_ISSUE_CONF = 0.8, PL_ISSUE_OPEN_MAX = 5, PL_SLA_MIN = 120, PL_SLA_WINDOW_MIN = 1440;
+var PL_KINDS = ["derived", "cited", "empirical", "assumption"];
+var PL_APPLIC = ["direct", "analogy", "none"];
+var PL_DDL = [
+  "CREATE TABLE IF NOT EXISTS paper_learnings (id INTEGER PRIMARY KEY AUTOINCREMENT, slug TEXT NOT NULL, version TEXT, title TEXT, claim TEXT NOT NULL, section TEXT, kind TEXT NOT NULL, support TEXT, verification TEXT NOT NULL, fleet_lever TEXT, application TEXT, applicability TEXT NOT NULL, confidence REAL, fleet_status TEXT NOT NULL DEFAULT 'proposed', status_note TEXT, issue_id INTEGER, source TEXT NOT NULL DEFAULT 'qnfo-lifecycle PAPER-LEARN-1', model TEXT, created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')), updated_at TEXT)",
+  "CREATE INDEX IF NOT EXISTS idx_paper_learnings_slug ON paper_learnings (slug, version)",
+  "CREATE TABLE IF NOT EXISTS paper_learn_state (slug TEXT NOT NULL, version TEXT NOT NULL, title TEXT, status TEXT NOT NULL, attempts INTEGER NOT NULL DEFAULT 0, n_learnings INTEGER DEFAULT 0, n_unverified INTEGER DEFAULT 0, n_direct INTEGER DEFAULT 0, n_errata INTEGER DEFAULT 0, issue_id INTEGER, model TEXT, note TEXT, learned_at TEXT NOT NULL, PRIMARY KEY (slug, version))"
+];
+var PL_FLEET = "The reader is an autonomous fleet of about 40 Cloudflare Workers that runs itself: hourly and 10-minute loops (a code loop that opens and merges pull requests, a research pipeline that writes and revises papers, outreach, monitoring), " +
+  "a D1 issue queue (agent_issues) drained by loops, a metric registry with triggers that file an issue when a metric breaches, remediation probes that close issues, AI spend budgets that steer to cheaper models instead of stopping work, " +
+  "work claims between concurrent sessions, a doctrine of rules it amends itself, a trust ledger that widens a loop's scope with verified outcomes, and model ensembles that check each other.";
+function plPrompt(title, version, body) {
+  return "You read a research paper for an engineering team. " + PL_FLEET + "\n\n" +
+    "Task: list the paper's claims that could change how such a fleet is designed or tuned, and any errors in the paper.\n" +
+    "Rules:\n" +
+    "- At most " + PL_LEARN_MAX + " learnings, most useful first. Quote or closely paraphrase the paper's own claim; never add a claim it does not make.\n" +
+    "- kind: derived (the paper derives it from its stated assumptions), cited (it attributes it to a cited work), empirical (it states a measured fact about the world), assumption (it assumes it).\n" +
+    "- support: where the paper supports it (section and how), or none.\n" +
+    "- fleet_lever: the concrete part of the fleet it bears on (a loop's cadence or batch size, a metric and its threshold, a budget rule, a review rule, a doctrine rule); application: one or two sentences on what the fleet would change and how it would measure it.\n" +
+    "- applicability: direct (the fleet has this exact trade-off and can act on it), analogy (suggestive only), none.\n" +
+    "- errors: a derivation that does not follow, a number that does not match its own inputs, a conclusion the paper's own model contradicts. Show why in one or two sentences. Do not list style issues.\n" +
+    "Answer with JSON only: {\"learnings\":[{\"claim\":\"\",\"section\":\"\",\"kind\":\"\",\"support\":\"\",\"fleet_lever\":\"\",\"application\":\"\",\"applicability\":\"\",\"confidence\":0.0}],\"errors\":[{\"claim\":\"\",\"why\":\"\"}]}\n\n" +
+    "PAPER: " + String(title || "") + " (version " + String(version || "") + ")\n\n" + body;
+}
+function plConfirmPrompt(title, body, errors) {
+  return "A reviewer claims the paper below contains these errors. For each one, check it against the paper's own text and math. " +
+    "Answer with JSON only: {\"verdicts\":[{\"i\":0,\"confirmed\":true,\"why\":\"\"}]} with one verdict per error, confirmed true only when the error is real.\n\n" +
+    "ERRORS:\n" + errors.map(function (e, i) { return i + ". " + e.claim + " -- " + e.why; }).join("\n") + "\n\nPAPER: " + String(title || "") + "\n\n" + body;
+}
+// The first balanced JSON object in a reply (models wrap JSON in prose or code fences).
+function plJson(text) {
+  var s = String(text || ""), start = s.indexOf("{");
+  while (start >= 0) {
+    var depth = 0, inStr = false, esc = false;
+    for (var i = start; i < s.length; i++) {
+      var c = s[i];
+      if (inStr) { if (esc) esc = false; else if (c === "\\") esc = true; else if (c === "\"") inStr = false; continue; }
+      if (c === "\"") inStr = true;
+      else if (c === "{") depth++;
+      else if (c === "}" && --depth === 0) {
+        var chunk = s.slice(start, i + 1);
+        try { return JSON.parse(chunk); } catch (e) {
+          try { return JSON.parse(chunk.replace(/\\(?!["\\/bfnrtu])/g, "\\\\")); } catch (e2) { break; } // lone LaTeX backslashes
+        }
+      }
+    }
+    start = s.indexOf("{", start + 1);
+  }
+  return null;
+}
+function plStr(v, n) { return String(v == null ? "" : v).replace(/\s+/g, " ").trim().slice(0, n); }
+// Verification is decided here from what the paper says about a claim, never taken from the model.
+function plVerification(kind, support) {
+  var none = !support || /^(none|n\/a|no|unsupported|-)?$/i.test(String(support).trim());
+  if (kind === "empirical") return none ? "unverified" : "cited-unchecked";
+  if (kind === "derived") return "derived-unchecked";
+  if (kind === "cited") return "cited-unchecked";
+  return "assumption";
+}
+function plNormalize(parsed) {
+  var out = { learnings: [], errors: [] };
+  if (!parsed || typeof parsed !== "object") return out;
+  (Array.isArray(parsed.learnings) ? parsed.learnings : []).slice(0, PL_LEARN_MAX).forEach(function (l) {
+    if (!l || typeof l !== "object") return;
+    var claim = plStr(l.claim, 600);
+    if (claim.length < 12) return;
+    var kind = PL_KINDS.indexOf(String(l.kind || "").toLowerCase()) >= 0 ? String(l.kind).toLowerCase() : "assumption";
+    var applic = PL_APPLIC.indexOf(String(l.applicability || "").toLowerCase()) >= 0 ? String(l.applicability).toLowerCase() : "analogy";
+    var conf = Number(l.confidence);
+    var support = plStr(l.support, 300);
+    out.learnings.push({
+      claim: claim, section: plStr(l.section, 80), kind: kind, support: support, verification: plVerification(kind, support),
+      fleet_lever: plStr(l.fleet_lever, 200), application: plStr(l.application, 600), applicability: applic,
+      confidence: isFinite(conf) ? Math.max(0, Math.min(1, conf)) : 0.5, fleet_status: applic === "none" ? "n/a" : "proposed"
+    });
+  });
+  (Array.isArray(parsed.errors) ? parsed.errors : []).slice(0, 4).forEach(function (e) {
+    if (!e || typeof e !== "object") return;
+    var claim = plStr(e.claim, 600), why = plStr(e.why, 600);
+    if (claim.length >= 12 && why.length >= 12) out.errors.push({ claim: claim, why: why });
+  });
+  return out;
+}
+async function plAi(env, model, prompt, maxTokens) {
+  var opts = { messages: [{ role: "user", content: prompt }], max_tokens: maxTokens || 4096, temperature: 0.2 };
+  if (/^@cf\/zai-org\/glm-/.test(model)) opts.reasoning_effort = "low";
+  var r = await env.AI.run(model, opts);
+  if (typeof r === "string") return r;
+  if (r && typeof r.response === "string") return r.response;
+  if (r && r.choices && r.choices[0] && r.choices[0].message) return String(r.choices[0].message.content || "");
+  return "";
+}
+// One model reads; the other family is the per-request fallback, so one model's outage or rate limit never stops the loop.
+async function plRead(env, prompt, maxTokens, order) {
+  var models = order || [PL_PRIMARY, PL_SECOND], errs = [];
+  for (var i = 0; i < models.length; i++) {
+    try {
+      var t = await plAi(env, models[i], prompt, maxTokens);
+      var j = plJson(t);
+      if (j) return { model: models[i], json: j };
+      errs.push(models[i].split("/").pop() + ": no JSON");
+    } catch (e) {
+      errs.push(models[i].split("/").pop() + ": " + String(e && e.message || e).slice(0, 120));
+    }
+  }
+  return { model: null, json: null, error: errs.join("; ") };
+}
+async function plConfig(env) {
+  var cfg = { mode: "on", perTick: PL_PER_TICK_DEFAULT };
+  try {
+    var rows = (await env.QNFO_AUDIT.prepare("SELECT key, value FROM ops_config WHERE key IN ('paper_learn_mode', 'paper_learn_per_tick')").all()).results || [];
+    rows.forEach(function (r) {
+      if (r.key === "paper_learn_mode") cfg.mode = String(r.value || "").trim().toLowerCase() === "off" ? "off" : "on";
+      var n = Math.floor(Number(r.value));
+      if (r.key === "paper_learn_per_tick" && n >= 0) cfg.perTick = Math.min(PL_PER_TICK_MAX, n);
+    });
+  } catch (e) {
+    console.error(JSON.stringify({ worker: "qnfo-lifecycle", where: "paper-learn-config", error: String(e && e.message || e).slice(0, 200) }));
+  }
+  return cfg;
+}
+async function plEnsure(env) {
+  for (var i = 0; i < PL_DDL.length; i++) await env.QNFO_AUDIT.prepare(PL_DDL[i]).run();
+}
+function plIsoAge(ts, now) {
+  var s = String(ts || "").trim();
+  if (/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}/.test(s)) s = s.replace(" ", "T") + (/[zZ]|[+-]\d\d:?\d\d$/.test(s) ? "" : "Z");
+  var t = Date.parse(s);
+  return isFinite(t) ? (now - t) / 60000 : 0;
+}
+// Which (slug, version) pairs still need reading: no state row, or a failed one under PL_MAX_TRIES. Newest change first.
+async function plCandidates(env, now) {
+  var papers = (await env.LIVING_PAPER.prepare("SELECT slug, title, version, updated_at FROM papers WHERE status = 'published' AND slug IS NOT NULL AND slug <> '' AND length(body_md) >= ?1 ORDER BY datetime(updated_at) DESC LIMIT ?2").bind(PL_MIN_BODY, PL_SCAN).all()).results || [];
+  var state = {};
+  (((await env.QNFO_AUDIT.prepare("SELECT slug, version, status, attempts FROM paper_learn_state").all()).results) || []).forEach(function (r) { state[r.slug + "@" + r.version] = r; });
+  var todo = [];
+  papers.forEach(function (p) {
+    var v = String(p.version || "1.0.0"), st = state[p.slug + "@" + v];
+    if (st && (st.status !== "failed" || st.attempts >= PL_MAX_TRIES)) return;
+    todo.push({ slug: p.slug, title: p.title, version: v, attempts: st ? st.attempts : 0, updated_at: p.updated_at });
+  });
+  return { todo: todo, scanned: papers.length };
+}
+async function plLearnOne(env, p, out) {
+  var row = await env.LIVING_PAPER.prepare("SELECT body_md FROM papers WHERE slug = ?1").bind(p.slug).first();
+  var body = String(row && row.body_md || "").slice(0, PL_BODY_MAX);
+  var read = await plRead(env, plPrompt(p.title, p.version, body), 4096);
+  var res = { key: p.slug + "@" + p.version, slug: p.slug.slice(0, 80), version: p.version, learnings: 0, unverified: 0, direct: 0, errata: 0, issue: null };
+  var now = new Date().toISOString();
+  if (!read.json) {
+    await env.QNFO_AUDIT.prepare("INSERT INTO paper_learn_state (slug, version, title, status, attempts, model, note, learned_at) VALUES (?1, ?2, ?3, 'failed', ?4, NULL, ?5, ?6) ON CONFLICT (slug, version) DO UPDATE SET status = 'failed', attempts = excluded.attempts, note = excluded.note, learned_at = excluded.learned_at")
+      .bind(p.slug, p.version, p.title, p.attempts + 1, String(read.error || "no answer").slice(0, 400), now).run();
+    res.failed = String(read.error || "no answer").slice(0, 160);
+    return res;
+  }
+  var n = plNormalize(read.json);
+  var stmts = [];
+  n.learnings.forEach(function (l) {
+    stmts.push(env.QNFO_AUDIT.prepare("INSERT INTO paper_learnings (slug, version, title, claim, section, kind, support, verification, fleet_lever, application, applicability, confidence, fleet_status, model, created_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15)")
+      .bind(p.slug, p.version, p.title, l.claim, l.section, l.kind, l.support, l.verification, l.fleet_lever, l.application, l.applicability, l.confidence, l.fleet_status, read.model, now));
+    res.learnings++;
+    if (l.verification === "unverified") res.unverified++;
+    if (l.applicability === "direct") res.direct++;
+  });
+  // Errors: a second family confirms each one against the same text before it enters the errata queue.
+  var confirmed = [];
+  if (n.errors.length) {
+    var other = read.model === PL_PRIMARY ? [PL_SECOND, PL_PRIMARY] : [PL_PRIMARY, PL_SECOND];
+    var check = await plRead(env, plConfirmPrompt(p.title, body, n.errors), 2048, other.slice(0, 1));
+    var verdicts = check.json && Array.isArray(check.json.verdicts) ? check.json.verdicts : [];
+    verdicts.forEach(function (v) {
+      var i = Number(v && v.i);
+      if (v && v.confirmed === true && n.errors[i] && confirmed.indexOf(n.errors[i]) < 0) confirmed.push(Object.assign({ check: plStr(v.why, 400), by: check.model }, n.errors[i]));
+    });
+  }
+  confirmed.slice(0, PL_ERRATA_MAX).forEach(function (e, i) {
+    stmts.push(env.QNFO_AUDIT.prepare("INSERT INTO paper_learnings (slug, version, title, claim, section, kind, support, verification, fleet_lever, application, applicability, confidence, fleet_status, status_note, model, created_at) VALUES (?1, ?2, ?3, ?4, '', 'error', ?5, 'error-confirmed', '', '', 'none', NULL, 'routed', 'internal_errata ' || ?6, ?7, ?8)")
+      .bind(p.slug, p.version, p.title, e.claim, e.why, "pl-" + p.slug.slice(0, 80) + "-" + p.version + "-" + i, read.model, now));
+    stmts.push(env.QNFO_AUDIT.prepare("INSERT OR IGNORE INTO internal_errata (id, target_kind, target_ref, detected_at, detected_by, severity, claim_text, falsification, evidence, remediation, status, owner) VALUES (?1, 'paper', ?2, ?3, 'qnfo-lifecycle PAPER-LEARN-1', 'high', ?4, ?5, ?6, ?7, 'open', 'qnfo-research-exec')")
+      .bind("pl-" + p.slug.slice(0, 80) + "-" + p.version + "-" + i, p.slug, now, e.claim, e.why,
+        "found by " + read.model + " and confirmed by " + e.by + " against version " + p.version + ": " + e.check,
+        "revise through the research pipeline (REVISION-LOOP-1 or a remediation row): correct the derivation or qualify the claim and every place that repeats it"));
+    res.errata++;
+  });
+  stmts.push(env.QNFO_AUDIT.prepare("INSERT INTO paper_learn_state (slug, version, title, status, attempts, n_learnings, n_unverified, n_direct, n_errata, model, note, learned_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12) ON CONFLICT (slug, version) DO UPDATE SET status = excluded.status, attempts = excluded.attempts, n_learnings = excluded.n_learnings, n_unverified = excluded.n_unverified, n_direct = excluded.n_direct, n_errata = excluded.n_errata, model = excluded.model, note = excluded.note, learned_at = excluded.learned_at")
+    .bind(p.slug, p.version, p.title, res.learnings ? "ok" : "empty", p.attempts + 1, res.learnings, res.unverified, res.direct, res.errata, read.model, n.errors.length + " errors claimed, " + confirmed.length + " confirmed", now));
+  await env.QNFO_AUDIT.batch(stmts);
+  // One follow-up issue for a paper with a strong direct learning, at most one per tick and while few are open.
+  var strong = n.learnings.filter(function (l) { return l.applicability === "direct" && l.confidence >= PL_ISSUE_CONF; });
+  if (strong.length && !out.issueFiled) {
+    var open = await env.QNFO_AUDIT.prepare("SELECT COUNT(*) AS n FROM agent_issues WHERE status = 'open' AND title LIKE 'PAPER-LEARN-1: apply %'").first();
+    if (!open || Number(open.n) < PL_ISSUE_OPEN_MAX) res.issue = await plFileIssue(env, p, strong);
+    if (res.issue) out.issueFiled = true;
+  }
+  return res;
+}
+function plSqlStr(s) { return "'" + String(s).replace(/'/g, "''") + "'"; }
+async function plFileIssue(env, p, strong) {
+  var title = "PAPER-LEARN-1: apply " + String(p.slug).slice(0, 120) + " to the fleet";
+  var dup = await env.QNFO_AUDIT.prepare("SELECT id FROM agent_issues WHERE title = ?1 AND status = 'open'").bind(title).first();
+  if (dup) return null;
+  var lines = strong.map(function (l, i) { return (i + 1) + ". " + l.claim + " [" + l.kind + ", " + l.verification + "] Lever: " + l.fleet_lever + ". " + l.application; });
+  var desc = "Charter pillar: autonomy. PAPER-LEARN-1 (qnfo-lifecycle) read the published paper \"" + String(p.title || "").slice(0, 300) + "\" (https://papers.qnfo.org/papers/" + p.slug + ", version " + p.version + ") and found learnings that bear directly on the fleet:\n" + lines.join("\n") +
+    "\n\nEach learning is a lead, not a fact: check the claim (recompute a derived one, read the cited source for a cited one) before acting. Apply a sound one through the canonical path (a PR or a migration with its metric and trigger) and set its paper_learnings row fleet_status = 'applied' with the PR or migration in status_note; set 'rejected' with the reason otherwise. " +
+    "Read: SELECT id, claim, kind, verification, fleet_lever, application, confidence FROM paper_learnings WHERE slug = " + plSqlStr(p.slug) + " AND version = " + plSqlStr(p.version) + " AND applicability = 'direct'. " +
+    "The probe closes this issue when none of those rows is still proposed.";
+  var now = Date.now();
+  var ins = await env.QNFO_AUDIT.prepare("INSERT INTO agent_issues (title, description, source, category, priority, status, created_at, updated_at) VALUES (?1, ?2, 'qnfo-lifecycle', 'optimization', 'medium', 'open', ?3, ?3)").bind(title, desc, now).run();
+  var id = ins && ins.meta && ins.meta.last_row_id;
+  if (!id) return null;
+  var probe = "SELECT '0' AS expected, CAST(COUNT(*) AS TEXT) AS observed FROM paper_learnings WHERE slug = " + plSqlStr(p.slug) + " AND version = " + plSqlStr(p.version) + " AND applicability = 'direct' AND fleet_status = 'proposed'";
+  await env.QNFO_AUDIT.batch([
+    env.QNFO_AUDIT.prepare("UPDATE paper_learnings SET issue_id = ?1 WHERE slug = ?2 AND version = ?3 AND applicability = 'direct'").bind(id, p.slug, p.version),
+    env.QNFO_AUDIT.prepare("UPDATE paper_learn_state SET issue_id = ?1 WHERE slug = ?2 AND version = ?3").bind(id, p.slug, p.version),
+    // ORPHAN-GUARD-BIRTH-1 wrote the issue-<id> contract at birth; the probe goes in by UPDATE (an INSERT is the fallback when no row exists).
+    env.QNFO_AUDIT.prepare("UPDATE remediation_contracts SET verify_probe = ?2, verify_transport = 'd1-query', precondition = 'PAPER-LEARN-1 follow-up', action = 'apply or reject each direct learning of the paper' WHERE class = ?1").bind("issue-" + id, probe),
+    env.QNFO_AUDIT.prepare("INSERT OR IGNORE INTO remediation_contracts (class, issue_id, precondition, action, verify_probe, verify_transport, escalate_to, expected_cadence_h) VALUES (?1, ?2, 'PAPER-LEARN-1 follow-up', 'apply or reject each direct learning of the paper', ?3, 'd1-query', 'qnfo-fleet-control', 1)").bind("issue-" + id, id, probe)
+  ]);
+  return id;
+}
+async function paperLearnTick(env, opts) {
+  var o = opts || {}, t0 = Date.now();
+  var out = { marker: "PAPER-LEARN-1", at: new Date(t0).toISOString(), mode: "on", read: [], errors: [] };
+  if (!env.LIVING_PAPER || !env.QNFO_AUDIT || !env.AI) { out.errors.push("missing binding"); return out; }
+  var cfg = await plConfig(env);
+  out.mode = cfg.mode;
+  if (cfg.mode === "off" && !o.force) { out.skipped = true; return out; }
+  await plEnsure(env);
+  var c = await plCandidates(env, t0);
+  out.waiting = c.todo.length;
+  var pick = o.slug ? c.todo.filter(function (p) { return p.slug === o.slug; }) : c.todo;
+  var n = o.slug ? 1 : cfg.perTick;
+  for (var i = 0; i < pick.length && out.read.length < n; i++) {
+    try { out.read.push(await plLearnOne(env, pick[i], out)); }
+    catch (e) { out.errors.push(String(pick[i].slug).slice(0, 60) + ": " + String(e && e.message || e).slice(0, 160)); }
+  }
+  // papers_unlearned_over_120m: versions still unread after this tick that have waited longer than the SLA.
+  var done = {};
+  out.read.forEach(function (r) { if (!r.failed) done[r.key] = 1; });
+  out.overdue = c.todo.filter(function (p) { var age = plIsoAge(p.updated_at, t0); return !done[p.slug + "@" + p.version] && age > PL_SLA_MIN && age <= PL_SLA_WINDOW_MIN; }).length;
+  try {
+    await env.QNFO_AUDIT.prepare("UPDATE metric_registry SET last_value = ?1, last_refreshed = ?2, state = 'MEASURED' WHERE metric = 'papers_unlearned_over_120m'").bind(String(out.overdue), out.at).run();
+  } catch (e) { out.errors.push("metric: " + String(e && e.message || e).slice(0, 120)); }
+  out.ms = Date.now() - t0;
+  return out;
+}
+async function paperLearnStatus(env, slug) {
+  await plEnsure(env);
+  if (slug) {
+    var rows = (await env.QNFO_AUDIT.prepare("SELECT id, version, claim, section, kind, support, verification, fleet_lever, application, applicability, confidence, fleet_status, status_note, issue_id, source, model, created_at FROM paper_learnings WHERE slug = ?1 ORDER BY id").bind(slug).all()).results || [];
+    return { marker: "PAPER-LEARN-1", slug: slug, learnings: rows };
+  }
+  var s = await env.QNFO_AUDIT.prepare("SELECT COUNT(*) AS versions, COALESCE(SUM(status = 'ok'), 0) AS ok, COALESCE(SUM(status = 'failed'), 0) AS failed, COALESCE(SUM(n_errata), 0) AS errata, MAX(learned_at) AS last FROM paper_learn_state").first();
+  var l = (await env.QNFO_AUDIT.prepare("SELECT verification, applicability, fleet_status, COUNT(*) AS n FROM paper_learnings GROUP BY 1, 2, 3 ORDER BY n DESC").all()).results || [];
+  var m = await env.QNFO_AUDIT.prepare("SELECT last_value, last_refreshed FROM metric_registry WHERE metric = 'papers_unlearned_over_120m'").first();
+  return { marker: "PAPER-LEARN-1", version: typeof QNFO_VERSION === "string" ? QNFO_VERSION : "", state: s, learnings: l, papers_unlearned_over_120m: m ? m.last_value : null, cadence: "hourly (0 * * * *)", per_tick_default: PL_PER_TICK_DEFAULT };
+}
+function withPaperLearn(inner) {
+  var out = Object.assign({}, inner, {
+    async fetch(request, env, ctx) {
+      var u = new URL(request.url);
+      if ((u.pathname === "/paper-learn/status" || u.pathname === "/paper-learn/learnings") && request.method === "GET") {
+        var st;
+        try { st = await paperLearnStatus(env, u.pathname === "/paper-learn/learnings" ? (u.searchParams.get("slug") || "").slice(0, 200) || null : null); }
+        catch (e) { console.error("[qnfo-lifecycle] paper-learn status failed: " + String(e && e.message || e).slice(0, 300)); st = { error: "status unavailable (logged)" }; }
+        return new Response(JSON.stringify(st), { status: st.error ? 500 : 200, headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" } });
+      }
+      return inner.fetch(request, env, ctx);
+    },
+    async scheduled(event, env, ctx) {
+      var first = null;
+      try { await inner.scheduled(event, env, ctx); } catch (e) { first = e; }
+      // Once per hourly tick: a former trigger handed straight to the dispatcher (not the tick) does not read papers again.
+      if (!event || event.cron === TICK_CRON) {
+        try {
+          var r = await paperLearnTick(env);
+          console.log("[qnfo-lifecycle] paper-learn:", JSON.stringify(r).slice(0, 2000));
+          if (!r.skipped && env.QNFO_AUDIT) {
+            var learned = r.read.reduce(function (a, x) { return a + (x.learnings || 0); }, 0), errata = r.read.reduce(function (a, x) { return a + (x.errata || 0); }, 0);
+            await env.QNFO_AUDIT.prepare("INSERT INTO cloud_ops_events (id, ts, kind, text, meta, job, status) VALUES (?1, ?2, 'job-run', ?3, ?4, 'paper-learn', ?5)")
+              .bind("jr-paper-learn-" + Date.now().toString(36), r.at, "PAPER-LEARN-1: " + r.read.length + " papers read, " + learned + " learnings, " + errata + " errata routed, " + r.waiting + " waiting (" + r.overdue + " over 120 min)", JSON.stringify(r).slice(0, 800), r.errors.length ? "error" : "ok").run();
+          }
+        } catch (e) {
+          console.error("[qnfo-lifecycle] paper-learn error:", String(e && e.message || e));
+        }
+      }
+      if (first) throw first;
+    }
+  });
+  ["__foldHost", "__foldMember", "__noz"].forEach(function (k) { if (inner[k] !== undefined) Object.defineProperty(out, k, { value: inner[k], enumerable: false }); });
+  Object.defineProperty(out, "__paperLearn", { value: { tick: paperLearnTick, status: paperLearnStatus, normalize: plNormalize, json: plJson, verification: plVerification, prompt: plPrompt, ddl: PL_DDL }, enumerable: false });
+  return out;
+}
+var __paper_learn_default = withPaperLearn(__noz_scrub_default);
+// ---- PAPER-LEARN-1:END ----
 export {
-  __noz_scrub_default as default
+  __paper_learn_default as default
 };
 //# sourceMappingURL=worker.js.map
