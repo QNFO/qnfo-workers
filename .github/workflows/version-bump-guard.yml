@@ -30,11 +30,11 @@ on:
       - 'scripts/version-bump-guard.py'
       - 'scripts/cf-import-guard.py'
       - '.github/workflows/version-bump-guard.yml'
+  # INTEG-GITHUB-HARDEN-1 (agent_issues 2927, 2026-10-19): no `paths:` filter on the pull_request trigger. This job (`guard`) is a
+  # required check of the main ruleset; GitHub does not run a workflow whose paths a pull request leaves alone, and a required check that
+  # never runs stays "Expected" for ever, so a migrations-only or docs-only pull request could never merge. With no worker bundle in the
+  # range the version guard prints "nothing to check" and exits 0 (verified), so the filter saved only runner minutes.
   pull_request:
-    paths:
-      - '*/worker.js'
-      - '*/deployed-current.worker.js'
-      - 'scripts/cf-import-guard.py'
   workflow_dispatch:
 
 permissions:

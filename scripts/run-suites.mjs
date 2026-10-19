@@ -4,8 +4,11 @@
 // WHAT   Runs the repository's offline suites (<worker>/*.test.mjs and scripts/*.test.mjs) so that no suite depends on
 //        someone remembering to wire it into a workflow. With --changed-file it runs every suite of each changed worker
 //        directory; when a changed directory is a control-plane worker (CONTROL_PLANE, mirrored from qnfo-fleet-control
-//        TP_CONTROL_PLANE and checked by scripts/run-suites.test.mjs) or a shared path (scripts, .github, migrations), it
-//        runs every suite in the repository. --all runs every suite (push to main, manual dispatch).
+//        TP_CONTROL_PLANE and checked by scripts/run-suites.test.mjs) or a shared path (scripts, .github, migrations, _shared,
+//        or a root file, "."), it runs every suite in the repository (MERGE-BOUNDARY-GATE-1). --all runs every suite (push to
+//        main, merge queue, manual dispatch). A suite that is red on main for a reason outside the change can be listed, with
+//        an issue, a reason and an expiry, in scripts/suite-quarantine.txt: it then runs and is reported but does not fail the
+//        run until the entry expires (the explicit, recorded override; an expired or malformed entry fails the run).
 // WHY    On 2026-10-06, 19 suites were referenced by no workflow, and three of them (radar-hub away-gate, taste-learn,
 //        title-noise) had been failing on main unnoticed. Code-loop PRs are only as safe as the suites that run on them,
 //        and the control plane can only be opened to the loop (T1.8) once its PRs run the full set (T5.4).
@@ -18,7 +21,9 @@ import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 
 export const CONTROL_PLANE = ["qnfo-fleet-control", "qnfo-ops", "qnfo-deploy-guard", "qnfo-containers-pilot", "qnfo-gateway", "qnfo-ai", "qnfo-autonomy-scorer", "qnfo-observability", "qnfo-code-orchestrator", "qnfo-code-agent"];
-export const SHARED = ["scripts", ".github", "migrations"];
+// "." stands for a change to a file at the repository root (deploy-targets.txt, the root worker.js and wrangler.toml); the workflow
+// writes it into the changed-dirs file. `_shared` holds code copied into workers by their build scripts.
+export const SHARED = ["scripts", ".github", "migrations", "_shared", "."];
 
 // Every suite file in the repository, as relative paths, sorted.
 export function discover(root) {
@@ -33,9 +38,13 @@ export function discover(root) {
   return out;
 }
 
-// The suites a change needs: every suite of each changed directory; a shared path (scripts, .github, migrations) still
-// forces the full set. PRS-SCOPE-1 (2026-10-17): a control-plane worker validates its own suites on a PR; the full sweep
-// stays on main's push (--all), so one worker's stale suite can no longer block every PR in the fleet.
+// The suites a change needs: every suite of each changed directory plus the guards. The FULL set runs when the change touches a
+// shared path (scripts, .github, migrations, _shared, a root file) or a control-plane worker (CONTROL_PLANE). History: PRS-SCOPE-1
+// (2026-10-17) took the control plane out of the full-set rule because one worker's stale suite blocked every PR in the fleet;
+// MERGE-BOUNDARY-GATE-1 (2026-10-19, agent_issues 2830) puts it back, because a control-plane change is the one that can break a
+// suite in another directory, and the full set takes about two minutes and was green on that day (527 of 527). The failure PRS-SCOPE-1
+// removed is handled by the quarantine file instead of by skipping suites. Every other worker still runs its own suites, so one
+// worker's PR is not held by an unrelated directory.
 // SUITE-GUARDS-ALWAYS-1 (2026-10-12): the repository-wide guard suites scan every suite or worker, so they run for any
 // change at all; PR 946 (one worker) merged a range-regex VERSION pin that version-pin-guard refused on the next full-set run.
 export const ALWAYS = ["scripts/version-pin-guard.test.mjs", "scripts/cron-single-trigger.test.mjs", "scripts/prompt-cache.test.mjs", "scripts/corruption-guard.test.mjs"];
@@ -56,11 +65,45 @@ export function dependents(all, dirs, read) {
 }
 export function select(all, changedDirs, read) {
   const dirs = Array.from(new Set((changedDirs || []).map((d) => String(d).trim()).filter(Boolean)));
-  const wide = dirs.filter((d) => SHARED.includes(d));
+  const wide = dirs.filter((d) => SHARED.includes(d) || CONTROL_PLANE.includes(d));
   if (wide.length) return { suites: all.slice(), reason: "full set: " + wide.join(", ") + " changed" };
   const dep = dependents(all, dirs, read);
   const picked = all.filter((s) => dirs.includes(s.split("/")[0]) || (dirs.length && ALWAYS.includes(s)) || dep.includes(s));
   return { suites: picked, reason: dirs.length ? "suites of " + dirs.join(", ") + " plus the repository guards" + (dep.length ? " and " + dep.length + " suite(s) that read them (" + dep.join(", ") + ")" : "") : "no worker directory changed" };
+}
+
+// MERGE-BOUNDARY-GATE-1 override: scripts/suite-quarantine.txt, one entry per line,
+//   <dir>/<name>.test.mjs | <expires YYYY-MM-DD, at most QUARANTINE_MAX_DAYS ahead> | <issue or PR reference> | <reason, 10+ chars>
+// A listed suite still runs. While its entry is live a failure is reported (::warning) and does not fail the run; a pass is reported as
+// a stale entry. An entry past its expiry no longer excuses its suite (a red suite then fails the run again, a green one makes the
+// line a warning to delete), and an entry with a horizon beyond the maximum or a malformed line FAILS the run, so an override cannot
+// become permanent by being forgotten (the same expiring shape as scripts/cron-tempo-allowlist.txt) and a forgotten line cannot
+// block a green fleet.
+export const QUARANTINE_FILE = "scripts/suite-quarantine.txt";
+export const QUARANTINE_MAX_DAYS = 7;
+export function parseQuarantine(text, today) {
+  const active = new Map(), problems = [], warnings = [];
+  const t0 = Date.parse(today + "T00:00:00Z");
+  String(text || "").split(/\r?\n/).forEach((raw, i) => {
+    const line = raw.trim();
+    if (!line || line.startsWith("#")) return;
+    const p = line.split("|").map((x) => x.trim());
+    const where = QUARANTINE_FILE + ":" + (i + 1);
+    if (p.length < 4 || !/^[^/\s]+\/[^/\s]+\.test\.mjs$/.test(p[0]) || !/^\d{4}-\d{2}-\d{2}$/.test(p[1]) || !p[2] || p[3].length < 10) { problems.push(where + ": malformed entry (need: suite | YYYY-MM-DD | issue | reason of 10+ characters)"); return; }
+    const exp = Date.parse(p[1] + "T00:00:00Z");
+    if (!(exp >= t0)) { warnings.push(where + ": the quarantine of " + p[0] + " expired " + p[1] + " and no longer excuses it (fix the suite or renew the entry with a new reason; delete the line when the suite is green)"); return; }
+    if (exp > t0 + QUARANTINE_MAX_DAYS * 864e5) { problems.push(where + ": the expiry " + p[1] + " is more than " + QUARANTINE_MAX_DAYS + " days away"); return; }
+    active.set(p[0], { suite: p[0], expires: p[1], ref: p[2], reason: p[3] });
+  });
+  return { active, problems, warnings };
+}
+// failed: result rows ({suite, code}). Returns the failures that still fail the run, the ones an override covers, and the live
+// entries whose suite passed (stale: delete the line).
+export function applyQuarantine(results, active) {
+  const real = [], quarantined = [];
+  for (const r of results.filter((x) => x.code !== 0)) { const q = active.get(r.suite); if (q) quarantined.push({ ...r, q }); else real.push(r); }
+  const stale = [...active.values()].filter((q) => results.some((r) => r.suite === q.suite && r.code === 0));
+  return { real, quarantined, stale };
 }
 
 // SUITE-SYNTAX-CHECK-1 (2026-10-13, failure mode version-note-comment-terminator): node --check every worker.js and
@@ -129,11 +172,20 @@ async function main() {
   console.log("SUITE-SYNTAX-CHECK-1: " + syn.length + " worker file(s) syntax-checked, " + results.length + " failed");
   await Promise.all(Array.from({ length: jobs }, async () => { while (queue.length) results.push(await runOne(root, queue.shift(), timeoutS)); }));
   results.sort((a, b) => a.suite.localeCompare(b.suite));
-  const failed = results.filter((r) => r.code !== 0);
-  for (const r of results) console.log((r.code === 0 ? "ok   " : "FAIL ") + String(r.ms).padStart(6) + " ms  " + r.suite);
+  // MERGE-BOUNDARY-GATE-1: the recorded override (scripts/suite-quarantine.txt). Read from the checkout, never from the network.
+  const today = arg("--today", new Date().toISOString().slice(0, 10));
+  const qf = join(root, QUARANTINE_FILE);
+  const q = existsSync(qf) ? parseQuarantine(readFileSync(qf, "utf8"), today) : { active: new Map(), problems: [], warnings: [] };
+  const split = applyQuarantine(results, q.active);
+  const failed = split.real;
+  for (const r of results) console.log((r.code === 0 ? "ok   " : q.active.has(r.suite) ? "QUAR " : "FAIL ") + String(r.ms).padStart(6) + " ms  " + r.suite);
   for (const r of failed) { console.log("\n::group::FAIL " + r.suite + " (exit " + r.code + ")"); console.log(r.out.split("\n").slice(-40).join("\n")); console.log("::endgroup::"); }
-  console.log("\nSUITE-RUNNER-1: " + (results.length - failed.length) + " passed, " + failed.length + " failed");
-  process.exit(failed.length ? 1 : 0);
+  for (const r of split.quarantined) console.log("::warning::SUITE-QUARANTINE-1 " + r.suite + " is red and quarantined until " + r.q.expires + " (" + r.q.ref + "): " + r.q.reason);
+  for (const x of split.stale) console.log("::warning::SUITE-QUARANTINE-1 " + x.suite + " passes: delete its line in " + QUARANTINE_FILE);
+  for (const w of q.warnings) console.log("::warning::SUITE-QUARANTINE-1 " + w);
+  for (const p of q.problems) console.log("::error::SUITE-QUARANTINE-1 " + p);
+  console.log("\nSUITE-RUNNER-1: " + (results.length - failed.length - split.quarantined.length) + " passed, " + failed.length + " failed" + (split.quarantined.length ? ", " + split.quarantined.length + " quarantined" : ""));
+  process.exit(failed.length || q.problems.length ? 1 : 0);
 }
 
 // ENTRY-POINT-1 (2026-10-17): `import.meta.url === "file://" + process.argv[1]` is POSIX-only. On Windows

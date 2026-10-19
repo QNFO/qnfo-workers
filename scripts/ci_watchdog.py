@@ -13,6 +13,8 @@ WHAT IT CATCHES (one class per real failure mode observed 2026-09-26/27)
   silent-schedule   a workflow declares `schedule` but has 0 schedule-event runs
   mirror-lag        mirror-guard red: deployed-current.worker.js lags worker.js
   build-gate        deploy-gate red: WORKER-BUILD-GATE-1 / wrangler dry-run
+  suite-red         deploy-gate red in its SUITE-RUNNER-1 step: the full suite sweep failed on main (MERGE-BOUNDARY-GATE-1)
+  load-gate-red     deploy-gate red in the worker load gate step (MERGE-BOUNDARY-GATE-1)
   invalid-workflow  a run exists with ZERO jobs (broken workflow YAML)
   missing-module    MODULE_NOT_FOUND in the job log (workflow references an
                     uncommitted file)
@@ -285,6 +287,40 @@ def classify_structural(name: str, run: dict) -> tuple[str, str]:
     if name in ("deploy-drift", "indexnow-submit"):
         return "external-runner", "driven by the watchdog because GitHub `schedule` fires rarely and late on this repo"
     return "unknown", "inspect the job log"
+
+
+def deploy_gate_failure(jobs: list | None) -> tuple[str, str] | None:
+    """MERGE-BOUNDARY-GATE-1 (agent_issues 2830): name WHICH deploy-gate step failed, from the jobs list (no log download).
+
+    classify_structural() called every red deploy-gate run `build-gate` ("a wrangler.toml main does not resolve"), so a red full
+    suite sweep on main was filed with a wrong hint and the same title as a bundle failure. The full sweep is the net under the
+    pull-request runs that only validate their changed directories; a red one is a finding of its own, filed within one watchdog
+    run (the deploy-gate completion on main starts it). Returns None when no step failed (a cancelled or skipped job).
+    """
+    failed = []
+    for j in jobs or []:
+        for st in j.get("steps") or []:
+            if st.get("conclusion") == "failure":
+                failed.append(str(st.get("name") or ""))
+    if not failed:
+        return None
+    for n in failed:
+        if n.startswith("SUITE-RUNNER-1"):
+            return "suite-red", (
+                f"the full suite sweep is RED on main (step `{n}`). Reproduce with `node scripts/run-suites.mjs --all`; fix the suite, "
+                "or when the failure is outside the last change list the suite in scripts/suite-quarantine.txt with this issue, a reason "
+                "and an expiry within 7 days (the recorded override, MERGE-BOUNDARY-GATE-1). A change must not reach main with a red full set."
+            )
+    for n in failed:
+        if n.startswith("MERGE-BOUNDARY-GATE-1 worker load gate"):
+            return "load-gate-red", (
+                f"step `{n}` failed on main: a worker entry does not load (relative import, bare package, syntax or top-level error). "
+                "Run `node scripts/worker-load-gate.mjs`; the ::error lines name the worker and the class."
+            )
+    for n in failed:
+        if n.startswith("Gate every changed worker dir") or n.startswith("Gate ALL worker dirs"):
+            return "build-gate", "WORKER-BUILD-GATE-1: a wrangler.toml `main` does not resolve in a changed dir, or the dry-run bundle failed"
+    return "gate-step-red", "deploy-gate step(s) failed on main: " + "; ".join(failed[:4]) + ". Open the run for the step output."
 
 
 def runner_not_acquired(jobs: list | None) -> bool:
@@ -684,6 +720,10 @@ def main() -> int:
                                                    "Re-run the failed jobs once; a second starvation is filed.")
             else:
                 kl, hint = classify_structural(name, r)
+                if name == "deploy-gate" and stj == 200:
+                    refined = deploy_gate_failure(jd.get("jobs"))
+                    if refined:
+                        kl, hint = refined
             if kl == "unknown" and not retired and log_fetches < MAX_LOG_FETCHES:
                 if stj == 200 and not jd.get("jobs"):
                     kl, hint = "invalid-workflow", "the workflow YAML is invalid; GitHub created the run with zero jobs"

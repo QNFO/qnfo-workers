@@ -1,0 +1,193 @@
+name: Release Pipeline
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      paper_path:
+        description: "Path to markdown file"
+        required: false
+        type: string
+      sandbox:
+        description: "Publish to Zenodo SANDBOX (requires ZENODO_SANDBOX_TOKEN). Default false. sandbox:true fails closed if the token is absent."
+        required: false
+        type: boolean
+        default: false
+
+# GHA-AUDIT-DOTGITHUB-1 (2026-10-19, QNFO/qnfo-workers agent_issues 2507): release and dispatch values reach bash through env: and are quoted (a release
+# tag or a paper path with a quote or $( used to run as code); Node 24 action majors; a read-only default token (each job that writes keeps
+# its own grant); the GitBook dispatch no longer pretends GITHUB_TOKEN can start a workflow in another repository.
+permissions:
+  contents: read
+
+# WORKFLOW-CONCURRENCY-1 (2026-10-17): a second run of the same workflow on the same
+# branch queues behind the first instead of racing it. Publishing pipelines must never be
+# cancelled mid-flight (a half-published DOI is worse than a late one), so this queues.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build-pdf:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    # WORKFLOW-PERMS-1 (2026-10-17): softprops/action-gh-release attaches publication.pdf to the
+    # release, which is a contents write. The org default GITHUB_TOKEN is read-only now, so this
+    # grant is explicit -- without it the release asset upload is refused on every release event.
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Determine paper path
+        id: path
+        env:
+          IN_PAPER_PATH: ${{ github.event.inputs.paper_path }}
+        run: |
+          PAPER="${IN_PAPER_PATH:-README.md}"
+          if [ ! -f "$PAPER" ]; then
+            echo "::warning::File not found: $PAPER — using README.md"
+            PAPER="README.md"
+          fi
+          echo "paper=$PAPER" >> "$GITHUB_OUTPUT"
+
+      - name: Build PDF (with retry)
+        env:
+          PAPER_FROM_STEP: ${{ steps.path.outputs.paper }}
+        run: |
+          PAPER="$PAPER_FROM_STEP"
+          for i in 1 2 3; do
+            echo "Attempt $i/3..."
+            if docker run --rm -v "${PWD}:/data" -w /data pandoc/latex:latest \
+              "$PAPER" \
+              --from=markdown+yaml_metadata_block+tex_math_dollars \
+              --to=pdf --pdf-engine=xelatex \
+              --metadata=colorlinks:true --metadata=linkcolor:blue \
+              --output=publication.pdf 2>&1; then
+              [ -f publication.pdf ] && [ "$(stat -c%s publication.pdf 2>/dev/null || echo 0)" -gt 1000 ] && break
+            fi
+            [ $i -eq 3 ] && { echo "FATAL: PDF build failed"; exit 1; }
+            sleep 10
+          done
+
+      - name: Upload PDF to Release
+        if: github.event_name == 'release'
+        uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3.0.3
+        with:
+          files: publication.pdf
+
+      - name: Upload PDF as Artifact
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: publication-pdf
+          path: publication.pdf
+
+  zenodo-publish:
+    needs: build-pdf
+    uses: QNFO/.github/.github/workflows/zenodo-publish.yml@master
+    with:
+      title: ${{ github.event.release.name || 'Manual Publication' }}
+      author: "Quni-Gudzinas, Rowan Brad"
+      file_path: "publication.pdf"
+      abstract: ${{ github.event.release.body || 'Open-access research publication from QNFO.' }}
+      keywords: "ultrametric,quantum-computing,QWAV"
+      sandbox: ${{ github.event_name == 'workflow_dispatch' && inputs.sandbox }}
+    secrets:
+      ZENODO_TOKEN: ${{ secrets.ZENODO_TOKEN }}
+      ZENODO_SANDBOX_TOKEN: ${{ secrets.ZENODO_SANDBOX_TOKEN }}
+
+  update-readme:
+    needs: zenodo-publish
+    runs-on: ubuntu-latest
+    # WORKFLOW-TIMEOUT-1 (2026-10-17): bound a hung runner.
+    timeout-minutes: 30
+    if: needs.zenodo-publish.outputs.doi != ''
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Add DOI badge
+        env:
+          ZENODO_DOI: ${{ needs.zenodo-publish.outputs.doi }}
+        run: |
+          DOI="$ZENODO_DOI"
+          BADGE="[![DOI](https://zenodo.org/badge/DOI/${DOI}.svg)](https://doi.org/${DOI})"
+          if ! grep -qF "$DOI" README.md; then
+            echo "" >> README.md
+            echo "$BADGE" >> README.md
+            git config user.name "QNFO Bot"
+            git config user.email "bot@qnfo.org"
+            git add README.md
+            git commit -m "docs: add DOI badge ${DOI}"
+            for i in 1 2 3; do
+              if git push origin master 2>&1; then break; fi
+              [ $i -eq 3 ] && echo "::warning::Failed to push DOI badge after 3 attempts"
+              sleep 10
+            done
+          fi
+
+  report-failure:
+    needs: [build-pdf, zenodo-publish, update-readme]
+    if: failure()
+    runs-on: ubuntu-latest
+    # WORKFLOW-TIMEOUT-1 (2026-10-17): bound a hung runner.
+    timeout-minutes: 30
+    # Repair 2026-09-24: this job previously used
+    #   GH_TOKEN: ${{ secrets.GH_PAT || secrets.GITHUB_TOKEN }}
+    # The fine-grained GH_PAT violates the org policy
+    # ("QNFO forbids fine-grained PATs whose lifetime exceeds 366 days"), so
+    # every failure notification died with a GraphQL error on the PAT. Issue
+    # creation in the same repository needs no PAT — the run-scoped GITHUB_TOKEN
+    # plus an explicit `issues: write` grant is sufficient.
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - name: Create failure issue
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          TITLE="Release pipeline failure — $(date -u +'%Y-%m-%d')"
+          BODY="## Release pipeline failed
+
+          **Release:** ${RELEASE_TAG:-Manual}
+          **Run:** ${RUN_URL}
+          **Failed jobs:** Check run log above
+
+          Automated failure notification from release-pipeline.yml."
+          # A notifier must not itself fail: if the requested labels are absent
+          # (they were: `P1` is not defined in QNFO/.github), retry unlabelled
+          # rather than losing the failure notification.
+          gh issue create --repo QNFO/.github --title "$TITLE" --label "bug,P1" --body "$BODY" \
+            || { echo "::warning::labelled issue create failed (missing label?); retrying without labels"; \
+                 gh issue create --repo QNFO/.github --title "$TITLE" --body "$BODY"; }
+
+  trigger-gitbook:
+    needs: zenodo-publish
+    runs-on: ubuntu-latest
+    # WORKFLOW-TIMEOUT-1 (2026-10-17): bound a hung runner.
+    timeout-minutes: 30
+    if: needs.zenodo-publish.outputs.doi != ''
+    steps:
+      - name: Dispatch GitBook sync
+        env:
+          # GITHUB_TOKEN is scoped to this repository and cannot start a workflow in QNFO/gitbook (the call always failed three times and
+          # warned). Only a personal or App token can; without GH_PAT the step says so and the lever stays the publications-updated
+          # repository_dispatch from push to publications/**.
+          GH_TOKEN: ${{ secrets.GH_PAT }}
+        run: |
+          if [ -z "${GH_TOKEN:-}" ]; then
+            echo "::notice::GH_PAT is not configured; GitBook is synced by the publications-updated dispatch, not from this job"
+            exit 0
+          fi
+          for i in 1 2 3; do
+            if gh workflow run sync-publications.yml --repo QNFO/gitbook --ref main 2>&1; then
+              break
+            fi
+            [ $i -eq 3 ] && echo "::warning::Failed to trigger GitBook sync after 3 attempts"
+            sleep 10
+          done

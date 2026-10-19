@@ -1,0 +1,168 @@
+name: Zenodo DOI Registration
+
+on:
+  workflow_call:
+    inputs:
+      title:
+        required: true
+        type: string
+      author:
+        required: true
+        type: string
+        default: "Quni-Gudzinas, Rowan Brad"
+      file_path:
+        required: true
+        type: string
+      abstract:
+        required: false
+        type: string
+        default: ""
+      keywords:
+        required: false
+        type: string
+        default: "ultrametric,quantum-computing,QWAV"
+      sandbox:
+        required: false
+        type: boolean
+        default: false
+      communities:
+        required: false
+        type: string
+        default: ""
+    secrets:
+      ZENODO_TOKEN:
+        required: true
+      ZENODO_SANDBOX_TOKEN:
+        required: false
+    outputs:
+      doi:
+        value: ${{ jobs.publish.outputs.doi }}
+      zenodo_id:
+        value: ${{ jobs.publish.outputs.zenodo_id }}
+
+# GHA-AUDIT-DOTGITHUB-1 (2026-10-19, QNFO/qnfo-workers agent_issues 2507): every input reaches bash through env: and is quoted "$VAR" (a release name
+# or body with a quote, a backtick or $( used to run as code on the runner that holds ZENODO_TOKEN); Node 24 action majors;
+# read-only token.
+permissions:
+  contents: read
+
+# WORKFLOW-CONCURRENCY-1 (2026-10-17): a second run of the same workflow on the same
+# branch queues behind the first instead of racing it. Publishing pipelines must never be
+# cancelled mid-flight (a half-published DOI is worse than a late one), so this queues.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    outputs:
+      doi: ${{ steps.retry.outputs.doi }}
+      zenodo_id: ${{ steps.retry.outputs.zenodo_id }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: QNFO/zenodo-automation
+          path: zenodo-automation
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          path: source-repo
+
+      # The calling workflow builds the PDF in its build-pdf job and uploads it
+      # as the `publication-pdf` artifact; it is NOT committed to the repo, so
+      # the reusable workflow must fetch it back before `--file` can resolve.
+      # Repair 2026-09-24: without this the publish step failed on a missing
+      # `source-repo/publication.pdf`.
+      - name: Fetch built PDF artifact
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
+        continue-on-error: true
+        with:
+          name: publication-pdf
+          path: source-repo
+
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.12"
+
+      - name: Publish to Zenodo (with retry)
+        id: retry
+        env:
+          ZENODO_TOKEN: ${{ secrets.ZENODO_TOKEN }}
+          ZENODO_SANDBOX_TOKEN: ${{ secrets.ZENODO_SANDBOX_TOKEN }}
+          IN_TITLE: ${{ inputs.title }}
+          IN_AUTHOR: ${{ inputs.author }}
+          IN_FILE_PATH: ${{ inputs.file_path }}
+          IN_ABSTRACT: ${{ inputs.abstract }}
+          IN_KEYWORDS: ${{ inputs.keywords }}
+          IN_SANDBOX: ${{ inputs.sandbox }}
+        run: |
+          # Repair 2026-09-24 (three defects in the previous revision):
+          #  1. `$ARGS` was expanded unquoted, so the escaped quotes became
+          #     literal characters and argparse saw e.g. --title '"Manual'
+          #     followed by a stray positional -> exit 2 on attempt 1.
+          #     Fixed by using a bash array and "${ARGS[@]}".
+          #  2. `OUTPUT=$(...)` under `set -e` aborted the whole step on the
+          #     first non-zero exit, so attempts 2/3 never ran and the captured
+          #     output was never echoed. Fixed by disabling `-e` around the call
+          #     and capturing $? explicitly.
+          #  3. In sandbox mode the client prints "[SANDBOX] ... Testing
+          #     complete" and never the word "published"/"DOI:", so the success
+          #     grep could never match and a dispatch run could never pass.
+          set -uo pipefail
+
+          # A Zenodo SANDBOX token is a SEPARATE credential from the production
+          # token. Presenting a production token to sandbox.zenodo.org returns
+          # HTTP 403 "Permission denied." Select explicitly so a missing sandbox
+          # credential fails with an actionable message rather than a bare 403.
+          if [ "$IN_SANDBOX" = "true" ]; then
+            if [ -z "${ZENODO_SANDBOX_TOKEN:-}" ]; then
+              echo "::error::A sandbox run was requested but ZENODO_SANDBOX_TOKEN is not configured. Mint one at https://sandbox.zenodo.org/account/settings/applications/ and add it as the ZENODO_SANDBOX_TOKEN repository secret."
+              exit 1
+            fi
+            ARGS=( --token "$ZENODO_SANDBOX_TOKEN" )
+          else
+            ARGS=( --token "$ZENODO_TOKEN" )
+          fi
+          # the file must stay inside the checked-out source repository
+          case "$IN_FILE_PATH" in
+            /*|*..*) echo "::error::file_path must be a relative path inside the repository"; exit 1 ;;
+          esac
+          ARGS+=( --title "$IN_TITLE" )
+          ARGS+=( --author "$IN_AUTHOR" )
+          ARGS+=( --file "source-repo/$IN_FILE_PATH" )
+          if [ -n "$IN_ABSTRACT" ]; then ARGS+=( --abstract "$IN_ABSTRACT" ); fi
+          if [ -n "$IN_KEYWORDS" ]; then ARGS+=( --keywords "$IN_KEYWORDS" ); fi
+          # NOTE: the client (zenodo_publish.py) defines no --communities flag;
+          # passing it would abort argparse with exit 2, so the declared input is
+          # intentionally not forwarded.
+          if [ "$IN_SANDBOX" = "true" ]; then ARGS+=( --sandbox ); fi
+
+          for i in 1 2 3; do
+            echo "=== Attempt $i/3 ==="
+            set +e
+            OUTPUT=$(python zenodo-automation/zenodo_publish.py "${ARGS[@]}" 2>&1)
+            rc=$?
+            set -e
+            echo "$OUTPUT" | tee zenodo_output.txt
+
+            if [ "$rc" -eq 0 ] && echo "$OUTPUT" | grep -qiE "published|doi:|testing complete|deposition id:"; then
+              DOI=$(echo "$OUTPUT" | grep -oP 'doi\.org/\K10\.\d{4,9}/zenodo\.\d+' || true)
+              [ -z "$DOI" ] && DOI=$(echo "$OUTPUT" | grep -oP 'DOI:?\s*\K10\.\d{4,9}/zenodo\.\d+' || true)
+              ZID=$(echo "$OUTPUT" | grep -oP 'Deposition ID:\s*\K\d+' || true)
+              [ -z "$ZID" ] && ZID=$(echo "$DOI" | grep -oP '\d+$' || true)
+              echo "doi=$DOI" >> "$GITHUB_OUTPUT"
+              echo "zenodo_id=$ZID" >> "$GITHUB_OUTPUT"
+              echo "SUCCESS: rc=$rc doi=${DOI:-<sandbox>} zenodo_id=${ZID:-<none>}"
+              exit 0
+            fi
+
+            if [ "$i" -eq 3 ]; then
+              echo "FATAL: Zenodo publish failed after 3 attempts (last rc=$rc)"
+              echo "::error::Zenodo publication failed — see the captured output above"
+              exit 1
+            fi
+            echo "Attempt $i failed (rc=$rc), retrying in 15s..."
+            sleep 15
+          done
