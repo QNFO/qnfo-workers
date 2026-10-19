@@ -1354,8 +1354,8 @@ var CMP = (() => {
 //   6. Risk language is answered with the fixed crisis lines from wellbeing_config, never with model text alone.
 //   7. Everything stored is listed, exportable and deletable from /companion (privacy view).
 //
-// Evidence-based additions (COMPANION-BEST-PRACTICE-1, 2026-10-19; the reasoning and sources are in the project's
-// companion/best-practices.md):
+// Evidence-based additions (COMPANION-BEST-PRACTICE-1, 2026-10-19; the reasoning and sources are in
+// personal-api/COMPANION-BEST-PRACTICES.md):
 //   8. Behavioral activation: a finished activity can be rated for enjoyment and achievement (1-5 each), and the
 //      companion suggests from his own "what helps" record and a small bank of activities (movement, nature,
 //      connection, mastery, pleasure, rest) instead of a fixed walk.

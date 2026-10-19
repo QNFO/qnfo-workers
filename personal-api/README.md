@@ -3,8 +3,8 @@
 Rowan's personal-assistant endpoint: personal-api.q08.workers.dev/v1 (OpenAI-compatible).
 
 ## v4.11.0 (2026-10-19) - the companion, evidence-based (pillar: personal, COMPANION-BEST-PRACTICE-1)
-Changes that follow from a review of the research on digital mental-health companions (the write-up lives in the
-Personal Companion project files, companion/best-practices.md). Rules 8-15 in the head of `companion.js`.
+Changes that follow from a review of the research on digital mental-health companions (the write-up is
+`COMPANION-BEST-PRACTICES.md` next to this file). Rules 8-15 in the head of `companion.js`.
 - **Behavioral activation**: rate a finished activity for enjoyment and achievement (1-5); an activity bank
   (`cmp_activities`, seeded across movement, nature, connection, mastery, pleasure, rest, plus his own); the shapeless-day
   anchor and the low-day care line draw on what he rated as helping. Data tab shows "what helps" and mood on days with
