@@ -1147,7 +1147,11 @@ async function execOne(env, row, prevState) {
   if (!spec || !spec.safe) {
     const escalate = !!(spec && spec.escalate);
     const state2 = escalate ? "needs-human" : "no-action";
-    await env.AUDIT.prepare("UPDATE fleet_issue_dispatch SET exec_state=?, exec_ts=?, exec_result=?, exec_attempts=COALESCE(exec_attempts,0)+1 WHERE fingerprint=?").bind(state2, now, spec && spec.note || "no safe auto-action", row.fingerprint).run();
+    let noteMsg = spec && spec.note ? spec.note : "no safe auto-action";
+if (state2 === "needs-human" && row.last_error) {
+  noteMsg = "The code loop could not verify this change itself. " + row.last_error;
+}
+await env.AUDIT.prepare("UPDATE fleet_issue_dispatch SET exec_state=?, exec_ts=?, exec_result=?, exec_attempts=COALESCE(exec_attempts,0)+1 WHERE fingerprint=?").bind(state2, now, noteMsg, row.fingerprint).run();
     // ESCALATE-NO-HANDLER-1 (2026-09-27): an unmapped/no-safe-producer category MUST escalate to an
     // OWNED disposition (reorg_work_queue) instead of silently closing as terminal 'no-action'. The old
     // detect-not-fix behavior dropped 82/93 issues as no-handler-superseded/closed-no-action with no
@@ -1164,7 +1168,7 @@ async function execOne(env, row, prevState) {
     }
     if (state2 !== prior) {
       try {
-        await env.AUDIT.prepare("INSERT INTO self_heal_actions (kind, ref, action, ts, status, verified_at) VALUES (?,?,?,?,?,?)").bind("fleet-execute", row.fingerprint, "[" + state2 + "] " + (spec && spec.note || ""), now, state2, now).run();
+        await env.AUDIT.prepare("INSERT INTO self_heal_actions (kind, ref, action, ts, status, verified_at) VALUES (?,?,?,?,?,?)").bind("fleet-execute", row.fingerprint, "[" + state2 + "] " + noteMsg, now, state2, now).run();
         await env.AUDIT.prepare("UPDATE self_heal_actions SET status=?1, verified_at=?2, claim=COALESCE(claim,?3), confidence=COALESCE(confidence,'high') WHERE kind='fleet-issue' AND ref=?4 AND status='dispatched'").bind(state2, now, "SELFHEAL-WRITEBACK-CLOSE-1: closed by paired fleet-execute receipt", row.fingerprint).run();
       } catch (e) {
       }
