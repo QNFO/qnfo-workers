@@ -1,5 +1,5 @@
 {
-  "audited_at": "2026-10-19 22:52:23",
+  "audited_at": "2026-10-19 23:24:23",
   "d1_write_failures": [],
   "d1_writes_ok": 120,
   "guard": {
@@ -555,7 +555,7 @@
       },
       {
         "dir": "qnfo-ai",
-        "version": "5.37.0-no-downgrade",
+        "version": "5.37.1-email-binding",
         "worker": "qnfo-ai"
       },
       {
@@ -605,7 +605,7 @@
       },
       {
         "dir": "qnfo-fleet-control",
-        "version": "0.41.0-ensure-live-path",
+        "version": "0.41.1-pool-bound-sources",
         "worker": "qnfo-fleet-control"
       },
       {
@@ -1017,9 +1017,9 @@
       "worker": "qnfo-agent-ws"
     },
     "qnfo-ai": {
-      "before": "5.37.0-no-downgrade",
+      "before": "5.37.1-email-binding",
       "http": 200,
-      "live": "5.37.0-no-downgrade",
+      "live": "5.37.1-email-binding",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-ai"
@@ -1313,9 +1313,9 @@
       "worker": "qnfo-fleet-calibrator"
     },
     "qnfo-fleet-control": {
-      "before": "0.41.0-ensure-live-path",
+      "before": "0.41.1-pool-bound-sources",
       "http": 200,
-      "live": "0.41.0-ensure-live-path",
+      "live": "0.41.1-pool-bound-sources",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-fleet-control"
