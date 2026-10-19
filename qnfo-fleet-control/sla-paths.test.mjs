@@ -22,7 +22,7 @@ let fails = 0, n = 0;
 const check = (c, m, x) => { n++; if (!c) { fails++; console.log("FAIL " + m + (x !== undefined ? " -- " + JSON.stringify(x) : "")); } };
 
 const v = /var VERSION = "0\.(\d+)\.(\d+)-/.exec(src);
-check(!!v && (+v[1] > 33 || (+v[1] === 33 && +v[2] >= 8)), "VERSION carries the SLA-PATHS-1 delta (0.33.8-probe-error-visible or later)", v && v[0]);
+check(!!v && +v[1] === 33 && +v[2] >= 8, "VERSION carries the SLA-PATHS-1 delta (0.33.8-probe-error-visible or later)", v && v[0]);
 
 // node:sqlite on Node 22.16 refuses positional binding to ?N placeholders ("column index out of range"), so the
 // shim rewrites ?N to :pN and binds by name, the same workaround the other remediation shims use.
