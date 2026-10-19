@@ -750,6 +750,8 @@ ok(!W.CM_REVIEW_MODELS.some((m) => ["qwen", "moonshotai", "zai-org"].includes(W.
 ok(J(W.cmReviewParse('<think>the diff passes [] only</think>{"verdict":"no","defects":["publishStage only passes [] to publishToArchive; no citation is checked"]}')).verdict === "no", "a reply with a think block parses");
 ok(W.cmReviewParse('```json\n{"verdict": "Implements", "defects": []}\n```').verdict === "implements" && W.cmReviewParse('noise "verdict": "partial" noise').verdict === "partial", "fenced JSON and a bare verdict field parse; case is ignored");
 ok(W.cmReviewParse("I think it is fine").verdict === null && W.cmReviewParse('{"verdict":"maybe"}').verdict === null && W.cmReviewParse("").verdict === null, "an unreadable reply or an unknown verdict is no verdict");
+ok(W.cmReviewParse("Verdict: **partial**\nThe gateway half is missing.").verdict === "partial" && W.cmReviewParse("verdict = implements").verdict === "implements", "REVIEW-NO-VERDICT-1: a verdict written outside JSON is read");
+ok(W.cmReviewParse("").why === "empty" && W.cmReviewParse('{"verdict": "impl').why === "truncated-json" && W.cmReviewParse("I think it is fine").why === "prose", "REVIEW-NO-VERDICT-1: a reply with no verdict is classed");
 ok(W.cmReviewParse('{"verdict":"no","defects":["a","b","c","d","e","f"]}').defects.length === 4, "at most 4 defects are kept");
 ok(J(W.cmReviewParse('Reasoning {x}. {"verdict":"no","defects":["handleClaims writes papers.claim_line but no line runs ALTER TABLE papers ADD COLUMN claim_line { }"]}')).defects[0].indexOf("ALTER TABLE") > 0, "a defect that quotes braces, after braces in prose, is kept");
 {
