@@ -1,4 +1,4 @@
-// PAPER-FIELDS-1 + GW-JSON-QUIET-1 offline suite (qnfo-gateway 3.25.1, #99979 #99957 #99989 #99998).
+// PAPER-FIELDS-1 + GW-JSON-QUIET-1 + GW-PAPER-AUTHORS-SCALAR-1 offline suite (qnfo-gateway 3.25.1, #99979 #99957 #99989 #99998, 100061).
 // papers.authors and papers.keywords hold a JSON array in most living-paper rows and plain text in the rest
 // ("QNFO Research", "Tuomo Kiiskinen, Oscar Kivinen, Manuel A Rivas", "a; b; c", "", NULL). Each must read as a list,
 // and serving /feed.json, /api/papers and /oai over such rows must log no error: Workers Observability files every
@@ -33,8 +33,24 @@ const ROWS = [
   { authors: "Quni-Gudzinas, Rowan Brad", keywords: null, a: ["Rowan Brad Quni-Gudzinas"], k: [] },
   { authors: "", keywords: "[]", a: [], k: [] },
   { authors: null, keywords: '"single keyword"', a: [], k: ["single keyword"] },
-  { authors: "[not json", keywords: "{broken", a: ["[not json"], k: ["{broken"] }
+  { authors: "[not json", keywords: "{broken", a: ["[not json"], k: ["{broken"] },
+  // GW-PAPER-AUTHORS-SCALAR-1 (agent_issues 100061): JSON that is not a list of names holds no author name.
+  { authors: "null", keywords: null, a: [], k: [] },
+  { authors: "123", keywords: null, a: [], k: [] },
+  { authors: "true", keywords: null, a: [], k: [] },
+  { authors: '{"name":"Ada Lovelace"}', keywords: null, a: ["Ada Lovelace"], k: [] },
+  { authors: '{"id":7}', keywords: null, a: [], k: [] },
+  { authors: "Alice, Bob", keywords: null, a: ["Alice", "Bob"], k: [] },
+  { authors: "Lovelace, Ada Augusta", keywords: null, a: ["Lovelace, Ada Augusta"], k: [] },
+  { authors: "Quni-Gudzinas, Rowan", keywords: null, a: ["Quni-Gudzinas, Rowan"], k: [] }
 ];
+
+// The list helpers themselves (the block between gwJsonTry and the esbuild prelude): a JSON string holding keywords reads as that one
+// keyword. qnfo-gateway 3.26.4 (#2679) added the line; the squash of PR 2680 deleted it with a VERSION rollback, and no row below caught it.
+const helpers = new Function(src.slice(src.indexOf("function gwJsonTry"), src.indexOf("var __defProp")) + ";return { gwSplitKeywords, gwSplitAuthors };")();
+eq(helpers.gwSplitKeywords('"single keyword"'), ["single keyword"], "gwSplitKeywords decodes a JSON string");
+eq(helpers.gwSplitKeywords("a, b; c"), ["a", "b", "c"], "gwSplitKeywords splits plain text on commas and semicolons");
+eq(helpers.gwSplitAuthors('"Ada Lovelace"'), ["Ada Lovelace"], "gwSplitAuthors decodes a JSON string");
 
 const errors = [];
 const origError = console.error;
@@ -59,6 +75,7 @@ for (const it of items) {
   eq(it.authors, ROWS[i].a, "authors of row " + i + " (" + JSON.stringify(ROWS[i].authors) + ")");
   eq(it.keywords, ROWS[i].k, "keywords of row " + i + " (" + JSON.stringify(ROWS[i].keywords) + ")");
 }
+ok(items.every((it) => it.authors.every((n) => !/^(null|true|false|-?\d[\d.]*|[{\[].*)$/.test(n) || n === "[not json")), "no author name is JSON text (null, a number, true, an object)", items.map((it) => it.authors));
 const feed = await get("/feed.json");
 ok(feed.s === 200, "/feed.json answers 200", feed.s);
 let fi = [];
