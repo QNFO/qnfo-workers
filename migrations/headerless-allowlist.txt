@@ -97,5 +97,4 @@
 2026-10-18-paper-tags.sql
 2026-10-18-portfolio-autopilot.sql
 2026-10-18-red-gate.sql
-2026-10-18-subscribers-utm-attribution.sql
 2026-10-18-verification-verdict-split.sql

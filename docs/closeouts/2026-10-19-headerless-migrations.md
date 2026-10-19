@@ -1,5 +1,7 @@
 # Headerless migrations audit (MIGRATION-HEADER-GUARD-1)
 
+> Update (same PR, SUBSCRIBERS-ATTRIBUTION-CHAIN-1): `2026-10-18-subscribers-utm-attribution.sql` gained its `APPLY-BY: ci` header in the same change as this guard, so it has left the allowlist and CI applies it on merge. The counts below are as measured before that edit.
+
 Date: 2026-10-19. Charter pillar: autonomy. Related: QNFO/qnfo-workers#2489 (qnfo-subscribers `utm_*` columns), follow-up issue
 `MIGRATION-HEADERLESS-AUDIT-1` (filed by `migrations/2026-10-19-fm-migration-headerless.sql`).
 
