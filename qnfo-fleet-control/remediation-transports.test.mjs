@@ -50,7 +50,8 @@ const routes = {
   "https://raw.githubusercontent.com/QNFO/license/main/VERSION": { status: 200, body: "2.1\n" },
   "https://pypi.org/pypi/ignorance-audit/json": { status: 200, body: JSON.stringify({ info: { version: "0.1.0", name: "ignorance-audit" } }) },
   "https://doi.org/10.9999/ext.1": { status: 302, headers: { location: "https://example.org/records/1" } },
-  "https://api.openalex.org/authors/A1": { status: 404, body: "{}" }
+  "https://api.openalex.org/authors/A1": { status: 404, body: "{}" },
+  "https://mstdn.science/api/v1/accounts/lookup?acct=QNFO": { status: 200, body: JSON.stringify({ fields: [{ name: "Website", verified_at: "2026-10-19T10:00:00.000+00:00" }] }) }
 };
 const fetchStub = async (url, init) => {
   calls.push({ url, init });
@@ -121,6 +122,13 @@ db.exec("INSERT INTO agent_issues (id, title, status) VALUES (9, 'unbound', 'ope
 add("port2", 9, "d1-query@portfolio-state", "SELECT 'x' AS expected, 'x' AS observed");
 await W.remediationContractsTick({ AUDIT: wrap(db) });
 check(ver("port2").length === 0 && con("port2").last_verdict === "probe-db-unbound", "an unbound portfolio DB yields probe-db-unbound, not a pass");
+// EXTERNAL-HTTPS-MASTODON-HOST-1: the public Mastodon account lookup is an allowed host; a look-alike host is not.
+db.exec("INSERT INTO agent_issues (id, title, status) VALUES (10, 'mastodon', 'open'), (11, 'lookalike', 'open')");
+add("mstdn", 10, "external-https", { url: "https://mstdn.science/api/v1/accounts/lookup?acct=QNFO", check: 'body-contains:"verified_at":"20', expected: "present" });
+add("mstdn-evil", 11, "external-https", { url: "https://mstdn.science.evil.example/api/v1/accounts/lookup?acct=QNFO", check: 'body-contains:"verified_at":"20', expected: "present" });
+await W.remediationContractsTick({ AUDIT: wrap(db) });
+check(ver("mstdn").length === 1 && ver("mstdn")[0].pass === 1 && ver("mstdn")[0].observed === "present" && st(10) === "closed", "mstdn.science is an allowed external-https host and a verified_at field passes");
+check(ver("mstdn-evil").length === 0 && con("mstdn-evil").last_verdict === "probe-not-machine-executable" && !calls.some((c) => /evil\.example/.test(c.url)), "a look-alike host is refused and never requested");
 check(W.RT_TRANSPORTS.join(",") === "d1-query,d1-query@portfolio-state,external-https", "the transport list");
 console.log(n + " checks, " + fails + " failure(s)");
 if (fails) process.exit(1);
