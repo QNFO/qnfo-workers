@@ -8716,6 +8716,19 @@ async function ownerRoutes(request, env, ctx, path, owner) {
         return { ok: true, status: "answered", answer: di.text };
       }
       c.mail = await mailAskFacts(env, text, v, holder);
+      if (!c.mail && v && (v.email_human_pending_v2 && v.email_human_pending_v2.length || v.emails && v.emails.length)) {
+        let pending = (v.email_human_pending_v2 || []).slice();
+        if (!pending.length) pending = (v.emails || []).filter(function(m) { return m && (m.is_human || m.human || m.is_person || m.class === "person" || m.category === "person" || !m.is_internal); });
+        pending = pending.slice(0, 5);
+        if (pending.length) {
+          const domains = Array.from(new Set(pending.map(function(m) { return String(m.domain || m.from_domain || "email"); }).filter(Boolean)));
+          c.mail = {
+            domains,
+            facts: pending.map(function(m) { return "- From " + (m.from || m.sender || "human") + " <" + (m.domain || m.from_domain || "email") + ">, received " + (m.received_at || m.ts || "?") + ": " + String(m.subject || m.summary || "message").slice(0, 80); }).join("\n"),
+            source: "mail:" + (domains[0] || "human")
+          };
+        }
+      }
       const ans = await runAsk(env, text, v, c.mail);
       if (ans.ok) {
         await env.AUDIT.prepare("UPDATE owner_prompts SET status='answered', response=?1, model=?2 WHERE id=?3").bind(ans.text, ans.model, id).run();
