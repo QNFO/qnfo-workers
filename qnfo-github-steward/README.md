@@ -76,7 +76,29 @@ Links live in `gh_issue_links` and `code_task_pr_links` (not new `agent_issues` 
 it with `SELECT *`). `v_tracker_drift` lists what is still out of step; metric `tracker_drift` (target 0, trigger at > 0)
 is graded once the open-issue backfill has finished. Scope (owner choice): open issues only; closed history stays in D1.
 Public repository: descriptions are fenced, tokens and e-mail addresses redacted, personal and security issues mirrored by number only.
-A failed or partial GitHub read changes nothing, and more than half the links disagreeing at once is refused as an anomaly.
+A failed or partial GitHub read changes nothing, and more than half the links disagreeing at once although D1 has not changed since the link last agreed is refused as an anomaly.
+
+### TRACKER-DRAIN-1 (0.5.0)
+
+* **Budgeted, oldest first.** State fixes run oldest D1 change first (reopens lead, up to a quarter of the cap) until `TS_FIX_MS`
+  (50 s) or `TS_FIX_CALLS` (110 subrequests, GitHub and D1 calls of the loop together), at least 10 and at most 40 attempts a tick.
+  A disagreement is *explained* when D1 moved across open/closed since the link last agreed (`gh_issue_links.d1_status`, refreshed every
+  tick, differs from the current status; roadmap links likewise): GitHub is simply behind, a burst, drained in slices. A row whose
+  `d1_status` already equals its status while GitHub differs is a GitHub-side change (label rename, hand close, API anomaly) however
+  recent `updated_at` is, and is refused when such rows are over half the links (control `tracker-mass-flip-guard`).
+  **Rate limits** (TRACKER-RATE-LIMIT-1): only a 429, or a 403 with Retry-After, `x-ratelimit-remaining: 0` or a rate-limit/abuse/secondary
+  message, is a limit. It latches one flag for the whole tick (`last_run.rate_limited`): every later stage (mirror, forward, reverse, PR
+  sync, portfolio) makes no GitHub call. Any other 403 is that issue's refusal, recorded and skipped. `GET /tracker` `last_run.state_sync`
+  reports drift, tried, fixed, carried, oldest_min and rate_limited; `v_tracker_drift.age_min` and metric `tracker_drift_oldest_min`
+  (target <= 30) measure how long the oldest issue row (`issue-state`, `issue-unmirrored`) has waited; `code-task-pr` rows belong to the
+  code loop and are counted by `tracker_code_task_drift`, not aged here. The `tracker_drift` count itself is not graced.
+* **One status mapping.** Only `open` is open on GitHub. `monitoring` (a parked twin of a newer open row) closes `not_planned` with a
+  comment naming the twin; `wontfix` closes `not_planned`; the rest `completed`. "Close evidence" is quoted only when D1 holds it.
+  A monitoring card an earlier version closed as completed is corrected once (`gh_issue_links.gh_close_reason`).
+* **ISSUE-SYNC-FORWARD-1.** A resolved `worker-observability` dispatch row closes its GitHub issue (`exec_state closed-by-sync`);
+  a recurrence reopens it before the reverse leg can read the closed issue and flip the row to done.
+* **Attempt PRs.** A pr-without-task row outside the recent window is read once by number, matched to its task by branch stem, and
+  recorded with `head_ref` / `task_ref`.
 
 `GET /tracker` shows the last tick; `POST /tracker/tick` (`x-steward-key`) runs one now.
 

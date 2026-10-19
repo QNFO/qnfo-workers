@@ -887,3 +887,8 @@ jobs:
       - name: IDEA-CHAIN-SINGLE-PRODUCER-1 offline suite (qnfo-signal-loop)
         if: ${{ !cancelled() }}
         run: node qnfo-signal-loop/consume-bound.test.mjs
+      # CF-OBS-BRIDGE-LOOP-1 (second review, 2026-10-19): the bridge suite (an offline SQLite model of issue_refile_reopen and the
+      # lifecycle log) used to run only inside remediation-consumer.yml after the merge, so a broken suite could not fail a PR.
+      - name: CF-OBS-BRIDGE-LOOP-1 offline suite (scripts/cf_obs_issue_bridge.py)
+        if: ${{ !cancelled() }}
+        run: python3 scripts/cf_obs_issue_bridge_test.py

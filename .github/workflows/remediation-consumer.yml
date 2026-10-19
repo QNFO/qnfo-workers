@@ -138,7 +138,10 @@ jobs:
       - name: Bridge Cloudflare Observability issues into the tracker
         continue-on-error: true
         run: |
-          python3 scripts/cf_obs_issue_bridge.py --selftest && python3 scripts/cf_obs_issue_bridge.py
+          # CF-OBS-BRIDGE-LOOP-1: the suite is a PR gate (deploy-gate.yml), so a failure here is logged and the sweep still runs;
+          # chaining with && would silence the whole bridge on one broken assertion.
+          python3 scripts/cf_obs_issue_bridge.py --selftest || echo "cf-obs-bridge selftest failed; running the sweep anyway"
+          python3 scripts/cf_obs_issue_bridge.py
 
       # LOOP-BREAKER-1 and DOCTRINE-AUDIT-1 (agent_issues 2183, 2181): files repeated-failure and weekly doctrine-audit issues
       # at depth 0 (a fleet_tick trigger would nest the issue triggers past D1's limit). Deterministic; never fails the job.

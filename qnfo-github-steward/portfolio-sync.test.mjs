@@ -155,6 +155,26 @@ assert.ok(r9.errors.some((e) => e.scope === "portfolio-milestones"));
 assert.ok(!calls.some((c) => c.startsWith("PATCH /repos/QNFO/qnfo-workers/issues")), "no issue placement on a failed milestone read");
 failMs = false;
 
+// Roadmap mass-flip guard (TRACKER-DRAIN-1). "Explained" = the item moved across done/not-done since its link last agreed (the link's
+// d1_status differs). Recently created or verified rows whose d1_status already equals status, vanished from GitHub's open list (a
+// label rename), are unexplained: refused with zero writes. A real D1 change inside that mass is still processed.
+const rmGIns = db.prepare("INSERT INTO roadmap_implementation (item, source, title, artifact_type, artifact_ref, status, created_at, verified_at) VALUES (?, 'charter', ?, 'worker', 'qnfo-ops', 'not-built', ?, ?)");
+const rmGLink = db.prepare("INSERT INTO roadmap_gh_links (roadmap_id, gh_number, gh_state, d1_status, synced_at) VALUES (?, ?, 'open', 'not-built', '')");
+const nowIso = new Date().toISOString(), gIds = [];
+for (let i = 0; i < 30; i++) { const id = Number(rmGIns.run("RM-G" + i, "guard " + i, nowIso, nowIso).lastInsertRowid); gIds.push(id); rmGLink.run(id, 9500 + i); gIssues.push({ number: 9500 + i, node_id: "NG" + i, title: "[RM-" + id + "] g", labels: i < 3 ? [{ name: "roadmap" }] : [], state: "open" }); }
+calls = [];
+const rg1 = await tick();
+assert.ok(rg1.errors.some((e) => e.scope === "portfolio-roadmap" && /mass state flip/.test(e.why)), "recently touched roadmap rows whose d1_status equals status are unexplained and refused: " + JSON.stringify(rg1.errors.map((e) => e.scope)));
+assert.ok(!calls.some((c) => /^(PATCH|POST) \/repos\/QNFO\/qnfo-workers\/issues\/95(0[3-9]|[12]\d)/.test(c)), "and nothing is written to the unexplained ones");
+for (const id of gIds.slice(0, 3)) db.prepare("UPDATE roadmap_implementation SET status='verified', evidence='ok', verified_at=? WHERE id=?").run(nowIso, id);
+calls = [];
+const rg2 = await tick();
+assert.ok(rg2.errors.some((e) => e.scope === "portfolio-roadmap" && /mass state flip/.test(e.why)), "the unexplained mass is still refused");
+const rgPatched = calls.filter((c) => /^PATCH \/repos\/QNFO\/qnfo-workers\/issues\/95\d\d$/.test(c)).sort();
+assert.deepEqual(rgPatched, ["PATCH /repos/QNFO/qnfo-workers/issues/9500", "PATCH /repos/QNFO/qnfo-workers/issues/9501", "PATCH /repos/QNFO/qnfo-workers/issues/9502"], "only the three real D1 changes are closed");
+db.prepare("DELETE FROM roadmap_gh_links WHERE gh_number >= 9500 AND gh_number < 9600").run(); db.prepare("DELETE FROM roadmap_implementation WHERE item LIKE 'RM-G%'").run();
+gIssues = gIssues.filter((x) => !(x.number >= 9500 && x.number < 9600));
+
 // Public tree: personal projects counted, not itemised.
 const tree = await (await w.fetch(new Request("https://s.test/roadmap"), env)).json();
 const pers = tree.programs.find((p) => p.program === "QNFO.PERSONAL");
