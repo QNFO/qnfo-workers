@@ -40,7 +40,7 @@ import { createHash } from "node:crypto";
 import { gzipSync } from "node:zlib";
 import { fileURLToPath } from "node:url";
 
-export const VERSION = "1.0.1"; // 1.0.1 FLEET-GRAPH-DELETE-DEPTH-1: at most 80 OR terms per DELETE (D1 expression depth 100)
+export const VERSION = "1.0.2"; // 1.0.2 FLEET-GRAPH-DELETE-ADAPT-1: a DELETE D1 still refuses for expression depth is retried with half the terms; 1.0.1 FLEET-GRAPH-DELETE-DEPTH-1: at most 80 OR terms per DELETE (D1 expression depth 100)
 export const GRAPH_DB_ID = "a1954b92-d681-4d02-b1f6-f9a2eb4c265d"; // qnfo-graph (also in qnfo-memory-mcp/wrangler.toml)
 export const AUDIT_DB_ID = "35e2e573-92f3-46ac-83c6-22f6429fc5e5"; // qnfo-audit
 export const SNAPSHOT_BUCKET = "qnfo-backups";
@@ -739,7 +739,7 @@ export function insertStatements(table, cols, rows) {
   if (cur.length) out.push(head + cur.join(", "));
   return out;
 }
-export function deleteStatements(table, where, keyCols, keys) {
+export function deleteStatements(table, where, keyCols, keys, terms = DELETE_TERMS) {
   const out = []; let cur = []; let size = 0;
   const flush = () => { if (!cur.length) return; out.push("DELETE FROM " + table + " WHERE " + where + " AND (" + cur.join(" OR ") + ")"); cur = []; size = 0; };
   for (const k of keys) {
@@ -747,11 +747,31 @@ export function deleteStatements(table, where, keyCols, keys) {
     const cond = "(" + keyCols.map((c, i) => c + " = " + sqlStr(parts[i])).join(" AND ") + ")";
     // FLEET-GRAPH-DELETE-DEPTH-1: SQLite parses "a OR b OR ..." as a tree as deep as its terms, and D1 refuses depth over 100
     // ("Expression tree is too large"), so a run deleting more than ~99 rows failed every push from 2026-10-19 11:15Z (760a20a).
-    if (size + cond.length > MAX_STMT || cur.length >= DELETE_TERMS) flush();
+    if (size + cond.length > MAX_STMT || cur.length >= terms) flush();
     cur.push(cond); size += cond.length + 4;
   }
   flush();
   return out;
+}
+
+// FLEET-GRAPH-DELETE-ADAPT-1 (1.0.2, agent_issues 100146): 1.0.1 fixed the depth at 80 terms, a number that came from one live measurement
+// (96 terms of a three-column key pass, 99 fail). A DELETE D1 still refuses with "Expression tree is too large" (its limit moved, or a
+// WHERE grew) now retries the same keys with half the terms per statement, down to one, instead of failing every push until someone
+// edits DELETE_TERMS. DELETE of a key that is already gone changes nothing, so a retried chunk is safe. Any other error is thrown at once.
+export const DEPTH_ERR = /Expression tree is too large/i;
+export async function runDeletes(cf, dbId, table, where, keyCols, keys, terms = DELETE_TERMS) {
+  let n = Math.max(1, terms), done = 0, shrunk = 0;
+  while (done < keys.length) {
+    const chunk = keys.slice(done, done + n);
+    try {
+      for (const st of deleteStatements(table, where, keyCols, chunk, n)) await cf.d1(dbId, st);
+      done += chunk.length;
+    } catch (e) {
+      if (!DEPTH_ERR.test(String((e && e.message) || e)) || n <= 1) throw e;
+      n = Math.max(1, Math.floor(n / 2)); shrunk++;
+    }
+  }
+  return { terms: n, shrunk };
 }
 
 async function storedHashes(cf, scope) {
@@ -774,17 +794,21 @@ async function storedHashes(cf, scope) {
 export async function writeScope(cf, scope, built, opts) {
   const stored = await storedHashes(cf, scope);
   const dn = diffRows(built.nodes, stored.nodes), de = diffRows(built.edges, stored.edges);
+  const whereScope = "scope = " + sqlStr(scope);
+  const inserts = [...insertStatements("fg_node", NODE_COLS, dn.upsert), ...insertStatements("fg_edge", EDGE_COLS, de.upsert)];
   const stmts = [
-    ...deleteStatements("fg_node", "scope = " + sqlStr(scope), ["id"], dn.del),
-    ...deleteStatements("fg_edge", "scope = " + sqlStr(scope), ["src", "rel", "dst"], de.del),
-    ...insertStatements("fg_node", NODE_COLS, dn.upsert),
-    ...insertStatements("fg_edge", EDGE_COLS, de.upsert),
+    ...deleteStatements("fg_node", whereScope, ["id"], dn.del),
+    ...deleteStatements("fg_edge", whereScope, ["src", "rel", "dst"], de.del),
+    ...inserts,
   ];
   const planned = dn.upsert.length + de.upsert.length + dn.del.length + de.del.length;
   const res = { scope, upsert_nodes: dn.upsert.length, upsert_edges: de.upsert.length, del_nodes: dn.del.length, del_edges: de.del.length, statements: stmts.length, planned };
   if (planned > opts.maxWrites) { res.refused = "planned " + planned + " row changes > --max-writes " + opts.maxWrites; return res; }
   if (opts.dryRun) { res.dry_run = true; return res; }
-  for (const s of stmts) await cf.d1(GRAPH_DB_ID, s);
+  const dnr = await runDeletes(cf, GRAPH_DB_ID, "fg_node", whereScope, ["id"], dn.del);
+  const der = await runDeletes(cf, GRAPH_DB_ID, "fg_edge", whereScope, ["src", "rel", "dst"], de.del);
+  if (dnr.shrunk || der.shrunk) res.delete_terms_shrunk = { nodes: dnr.terms, edges: der.terms };
+  for (const s of inserts) await cf.d1(GRAPH_DB_ID, s);
   return res;
 }
 
@@ -795,8 +819,11 @@ export async function writeFindings(cf, findings, now, dryRun) {
   const del = [...stored.keys()].filter((k) => !keep.has(k));
   // last_seen is refreshed on every run only for changed rows; unchanged rows keep their stored last_seen (fg_state says when the run was).
   const up = rows.filter((r) => r.changed);
-  const stmts = [...deleteStatements("fg_finding", "1 = 1", ["id"], del), ...insertStatements("fg_finding", ["id", "kind", "subject", "severity", "detail", "h", "first_seen", "last_seen"], up)];
-  if (!dryRun) for (const s of stmts) await cf.d1(GRAPH_DB_ID, s);
+  const inserts = insertStatements("fg_finding", ["id", "kind", "subject", "severity", "detail", "h", "first_seen", "last_seen"], up);
+  if (!dryRun) {
+    await runDeletes(cf, GRAPH_DB_ID, "fg_finding", "1 = 1", ["id"], del);
+    for (const s of inserts) await cf.d1(GRAPH_DB_ID, s);
+  }
   return { findings: rows.length, changed: up.length, removed: del.length, warn: rows.filter((r) => r.severity === "warn").length };
 }
 
@@ -994,6 +1021,30 @@ export async function selftest(log = console.log) {
   // FLEET-GRAPH-DELETE-DEPTH-1: no DELETE carries more OR terms than D1's expression depth allows.
   const manyDel = deleteStatements("fg_edge", "scope = 'code'", ["src", "rel", "dst"], Array.from({ length: 250 }, (_, i) => "s" + i + EDGE_SEP + "r" + EDGE_SEP + "d"));
   ok(manyDel.length === 4 && manyDel.every((s) => s.split(" OR ").length <= DELETE_TERMS), "250 edge deletes split into statements of at most " + DELETE_TERMS + " OR terms");
+  // FLEET-GRAPH-DELETE-ADAPT-1: a fake D1 that refuses a DELETE deeper than its limit (measured live: a three-column key passes at 96
+  // OR terms and fails at 99, so depth is about terms + 4). At the 100 limit nothing is retried; at a limit that moved to 30 the
+  // runner halves 80 -> 40 -> 20, every key is still deleted, and an unrelated error is thrown at once.
+  const depthErr = () => new Error("D1 a1954b92 -> 400 " + JSON.stringify([{ code: 7500, message: "Expression tree is too large (maximum depth 100): SQLITE_ERROR" }]));
+  const fakeD1 = (limit) => { const seen = []; const cf = { seen, refused: 0, async d1(db, sql) { if (sql.split(" OR ").length + 4 > limit) { cf.refused++; throw depthErr(); } for (const m of sql.matchAll(/src = 's(\d+)'/g)) seen.push(Number(m[1])); return []; } }; return cf; };
+  const edgeKeys = Array.from({ length: 250 }, (_, i) => "s" + i + EDGE_SEP + "r" + EDGE_SEP + "d");
+  const cf100 = fakeD1(100);
+  const r100 = await runDeletes(cf100, "db", "fg_edge", "scope = 'code'", ["src", "rel", "dst"], edgeKeys);
+  ok(cf100.refused === 0 && r100.shrunk === 0 && r100.terms === DELETE_TERMS && cf100.seen.length === 250, "at D1's depth limit of 100 the 250 deletes need no retry");
+  const cf30 = fakeD1(30);
+  const r30 = await runDeletes(cf30, "db", "fg_edge", "scope = 'code'", ["src", "rel", "dst"], edgeKeys);
+  ok(cf30.refused === 2 && r30.shrunk === 2 && r30.terms === 20 && cf30.seen.length === 250 && new Set(cf30.seen).size === 250, "a limit that moved to 30 halves 80 -> 40 -> 20 and still deletes all 250 keys once: " + JSON.stringify({ refused: cf30.refused, r30, seen: cf30.seen.length }));
+  const cf5 = fakeD1(4);
+  let tooDeep = null; try { await runDeletes(cf5, "db", "fg_edge", "scope = 'code'", ["src", "rel", "dst"], edgeKeys.slice(0, 3)); } catch (e) { tooDeep = e; }
+  ok(tooDeep && DEPTH_ERR.test(tooDeep.message) && cf5.refused > 3, "a limit nothing satisfies ends in the original error after reaching one term per statement");
+  let other = null; const cfBad = { n: 0, async d1() { cfBad.n++; throw new Error("D1 a1954b92 -> 400 no such table: fg_edge"); } };
+  try { await runDeletes(cfBad, "db", "fg_edge", "scope = 'code'", ["src", "rel", "dst"], edgeKeys); } catch (e) { other = e; }
+  ok(other && /no such table/.test(other.message) && cfBad.n === 1, "an error that is not about depth is thrown at once, not retried");
+  ok((await runDeletes({ d1: async () => { throw new Error("must not run"); } }, "db", "fg_node", "scope = 'code'", ["id"], [])).shrunk === 0, "no keys, no statements");
+  // writeScope and writeFindings use the adaptive runner: a stored scope with 300 stale nodes and edges is deleted under a limit of 30.
+  const cfW = { stmts: [], async d1(db, sql) { if (/^DELETE/.test(sql) && sql.split(" OR ").length + 4 > 30) throw depthErr(); if (/SELECT 1 FROM fg_node/.test(sql)) return [{ 1: 1 }]; if (/^SELECT id, h FROM fg_node/.test(sql)) return Array.from({ length: 300 }, (_, i) => ({ id: "n" + i, h: "x" })); if (/^SELECT src, rel, dst, h FROM fg_edge/.test(sql)) return Array.from({ length: 300 }, (_, i) => ({ src: "s" + i, rel: "r", dst: "d", h: "x" })); this.stmts.push(sql); return []; } };
+  const wr = await writeScope(cfW, "code", { nodes: new Map(), edges: new Map() }, { maxWrites: 1000, dryRun: false });
+  const delStmts = cfW.stmts.filter((s) => /^DELETE/.test(s));
+  ok(!wr.refused && wr.del_nodes === 300 && wr.del_edges === 300 && delStmts.length >= 30 && delStmts.every((s) => s.split(" OR ").length + 4 <= 30) && wr.delete_terms_shrunk && wr.delete_terms_shrunk.edges <= 20, "writeScope deletes 300 stale nodes and 300 stale edges under a limit of 30: " + JSON.stringify({ stmts: delStmts.length, shrunk: wr.delete_terms_shrunk, refused: wr.refused }));
   ok(sb.name === "X_TOKEN" && sb.type === "secret_text", "safeBinding keeps name and type");
   const gl = new Graph("live");
   addLive(gl, { workers: [{ name: "w1", bindings: [safeBinding({ name: "S", type: "secret_text", text: canary }), safeBinding({ name: "V", type: "plain_text", text: canary }), safeBinding({ name: "DB", type: "d1", database_id: "id1" })], crons: ["0 * * * *"], handlers: [] }], d1: [{ name: "db1", id: "id1" }], kv: [], r2: [], queues: [], vectorize: [], workflows: [], domains: [], routes: [], schema: { db1: [{ type: "table", name: "t1" }, { type: "trigger", name: "tr1", sql: "CREATE TRIGGER tr1 AFTER INSERT ON t1 BEGIN INSERT INTO t2 (a) SELECT a FROM t3; END" }] } });
