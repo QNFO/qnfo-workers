@@ -29,7 +29,9 @@ ok(/2\. Tools:[^\n]*github_projects_list[^\n]*fleet_graph[^\n]*dashboard_feed[^\
 ok(/github_issue_comment: "completed"/.test(src), "the comment write is in the audit trail");
 const pub = grab("var OPS_PUBLIC_TOOLS = OPS_TOOLS.filter", "}).concat([");
 ok(!/github_issue|github_projects|fleet_graph|dashboard_feed|cf_docs/.test(pub), "public mode keeps its three tools (OPS-PUBLIC-READ-1)");
-ok(/var VERSION = "2\.50\.0/.test(src), "VERSION is 2.50.0");
+// a minimum, not an exact pin: the next patch release would break an exact one (CLAUDE.md, suites that pin a VERSION)
+const _ver = (/var VERSION = "(\d+)\.(\d+)\.(\d+)/.exec(src) || []).slice(1).map(Number);
+ok(_ver.length === 3 && (_ver[0] > 2 || (_ver[0] === 2 && (_ver[1] > 50 || (_ver[1] === 50 && _ver[2] >= 0)))), "VERSION is at least 2.50.0", _ver);
 
 (async () => {
   // Issues list: PRs dropped, labels flattened, query built.
