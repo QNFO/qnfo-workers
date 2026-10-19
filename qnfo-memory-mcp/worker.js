@@ -4,7 +4,7 @@ var __name = (target, value) => __defProp(target, "name", { value, configurable:
 // worker.js
 var PROTOCOL_VERSION = "2024-11-05";
 var SERVER_NAME = "qnfo-memory-mcp";
-var VERSION = "2.0.6-doi-scrub";
+var VERSION = "2.1.0-fleet-graph"; // 2.1.0 FLEET-GRAPH-1 (2026-10-19, pillar autonomy): the fleet code + topology graph (qnfo-graph fg_* tables, built by scripts/fleet_graph.mjs) as MCP tools fleet_graph_* and open read-only GET /fleet-graph/* routes: find, node, impact (blast radius), path, worker, resource, findings, freshness. Secret NAMES are served only to authenticated MCP clients; the open routes give counts.
 // NOZ-DOI-1: Zenodo DOIs are dead (account blocked) and are never returned; third-party DOIs pass through.
 function nozDoi(d) { return d && !/10\.5281\/|zenodo/i.test(String(d)) ? d : null; }
 var SERVER_VERSION = VERSION;
@@ -17,7 +17,19 @@ var TOOLS = [
   { name: "remember_fact", description: "Store a durable fact with vector embedding. D1 + Vectorize + optional KG bridge.", inputSchema: { type: "object", properties: { content: { type: "string" }, category: { type: "string", enum: ["user_preference", "project_fact", "task_outcome", "heuristic", "anti_pattern"] }, importance: { type: "number", default: 0.7 }, summary: { type: "string" }, session_id: { type: "string" } }, required: ["content", "category"] } },
   { name: "recall_facts", description: "Recall stored facts from D1 by category or keyword match.", inputSchema: { type: "object", properties: { category: { type: "string" }, keyword: { type: "string" }, limit: { type: "number", default: 10 } }, required: [] } },
   { name: "query_graph", description: "Query the QNFO Knowledge Graph. stats, nodes, neighbors, impact, raw SQL.", inputSchema: { type: "object", properties: { endpoint: { type: "string", enum: ["stats", "nodes", "neighbors", "impact", "query"] }, params: { type: "object" } }, required: ["endpoint"] } },
-  { name: "get_paper_context", description: "Get full paper body content from D1 living-paper database by slug.", inputSchema: { type: "object", properties: { slug: { type: "string" }, limit_chars: { type: "number", default: 5e3 } }, required: ["slug"] } }
+  { name: "get_paper_context", description: "Get full paper body content from D1 living-paper database by slug.", inputSchema: { type: "object", properties: { slug: { type: "string" }, limit_chars: { type: "number", default: 5e3 } }, required: ["slug"] } },
+  // FLEET-GRAPH-1: the fleet's code + live Cloudflare topology graph. Node ids: worker:<name>, fn:<worker>#<function>,
+  // binding:<worker>.<NAME>, d1:<db>, d1t:<db>.<table>, d1v:<db>.<view>, d1trg:<db>.<trigger>, kv:<id>, r2:<bucket>, vz:<index>,
+  // queue:<name>, cron:<worker>@<expr>, route:<pattern>, domain:<host>, secret:<worker>.<NAME>, host:<external host>,
+  // migration:<file>, gha:<workflow file>, script:<path>. A name that matches several nodes is refused with the candidates.
+  { name: "fleet_graph_find", description: "Find fleet graph nodes (workers, functions, bindings, D1 tables/views/triggers, crons, routes, queues, buckets) by id or name. Use before the other fleet_graph tools to get an exact id.", inputSchema: { type: "object", properties: { query: { type: "string" }, kind: { type: "string", description: "worker|function|handler|binding|d1|d1_table|d1_view|d1_trigger|cron|route|custom_domain|queue|r2|kv|vectorize|secret|external_host|migration|gh_workflow|script" }, limit: { type: "number", default: 20 } }, required: ["query"] } },
+  { name: "fleet_graph_node", description: "One node with its incoming and outgoing edges (relation, confidence EXTRACTED|INFERRED|OBSERVED, scope code|live).", inputSchema: { type: "object", properties: { id: { type: "string" }, limit: { type: "number", default: 100 } }, required: ["id"] } },
+  { name: "fleet_graph_impact", description: "Blast radius before a change: everything that depends on a node (direction up, default) or everything it depends on (down), bounded by depth. Run it before changing a binding, D1 table, cron, route or exported function.", inputSchema: { type: "object", properties: { id: { type: "string" }, depth: { type: "number", default: 3 }, direction: { type: "string", enum: ["up", "down"], default: "up" }, include_inferred: { type: "boolean", default: true }, limit: { type: "number", default: 300 } }, required: ["id"] } },
+  { name: "fleet_graph_path", description: "Shortest dependency path between two nodes (directed first, then undirected).", inputSchema: { type: "object", properties: { from: { type: "string" }, to: { type: "string" }, max_depth: { type: "number", default: 6 } }, required: ["from", "to"] } },
+  { name: "fleet_graph_worker", description: "Everything about one worker: version, declared vs live bindings and crons, routes, secret names, D1 tables it reads/writes, workers it calls and that call it, its findings.", inputSchema: { type: "object", properties: { worker: { type: "string" } }, required: ["worker"] } },
+  { name: "fleet_graph_resource", description: "Who uses a resource: a D1 database or table, KV, R2 bucket, Vectorize index, queue, service or external host. Lists binders, readers, writers, triggers and views.", inputSchema: { type: "object", properties: { id: { type: "string" } }, required: ["id"] } },
+  { name: "fleet_graph_findings", description: "Current fleet graph findings: binding/cron drift, env reads with no binding, SQL against missing tables, untracked or undeployed workers, orphaned resources, unused bindings, trigger depth.", inputSchema: { type: "object", properties: { kind: { type: "string" }, severity: { type: "string", enum: ["warn", "info"] }, subject: { type: "string" }, limit: { type: "number", default: 200 } } } },
+  { name: "fleet_graph_freshness", description: "When each graph scope (code, live, findings) was last built, from which commit, and how many rows changed.", inputSchema: { type: "object", properties: {} } }
 ];
 function corsHeaders() {
   return { "Access-Control-Allow-Origin": "https://qnfo.org", "Access-Control-Allow-Methods": "GET, POST, OPTIONS", "Access-Control-Allow-Headers": "Content-Type, Authorization, Mcp-Session-Id" };
@@ -299,6 +311,182 @@ async function tool_get_paper_context(args, env) {
   }) }] };
 }
 __name(tool_get_paper_context, "tool_get_paper_context");
+// ---------------------------------------------------------------------------------------------------------------------------
+// FLEET-GRAPH-1 (2.1.0): read-only queries over qnfo-graph fg_node / fg_edge / fg_finding / fg_state.
+// Every query is parameterised and bounded (depth, LIMIT, a row cap inside the recursive CTE); no caller SQL is executed.
+// ---------------------------------------------------------------------------------------------------------------------------
+var FG_KINDS = ["worker", "function", "handler", "class", "binding", "d1", "d1_table", "d1_view", "d1_trigger", "cron", "route", "custom_domain", "queue", "r2", "kv", "vectorize", "workflow", "durable_object", "secret", "external_host", "platform", "migration", "gh_workflow", "script", "container", "analytics_engine", "ai_search"];
+var FG_NO_IMPACT = ["defines", "drops", "chained_after"];
+function fgInt(v, dflt, lo, hi) { const n = parseInt(v, 10); return Math.max(lo, Math.min(hi, Number.isFinite(n) ? n : dflt)); }
+function fgStr(v) { return String(v == null ? "" : v).replace(/[\u0000-\u001F\u007F]/g, "").trim().slice(0, 300); }
+function fgAttrs(a) { try { return JSON.parse(a || "{}"); } catch (e) { return {}; } }
+function fgHideSecrets(rows, open) { return open ? rows.filter((r) => !String(r.id || r.dst || r.src || "").startsWith("secret:") && !String(r.dst || "").startsWith("secret:") && !String(r.src || "").startsWith("secret:")) : rows; }
+async function fgResolve(env, ref) {
+  const q = fgStr(ref);
+  if (!q) return { error: "id required" };
+  const exact = await env.GRAPH_DB.prepare("SELECT id, kind, name, worker FROM fg_node WHERE id = ?1 LIMIT 1").bind(q).first();
+  if (exact) return { id: exact.id, node: exact };
+  const byName = await env.GRAPH_DB.prepare("SELECT DISTINCT id, kind, name, worker FROM fg_node WHERE name = ?1 LIMIT 12").bind(q).all();
+  const rows = byName.results || [];
+  if (rows.length === 1) return { id: rows[0].id, node: rows[0] };
+  if (rows.length > 1) return { error: "ambiguous: " + rows.length + " nodes are named " + q + "; pass one id", candidates: rows };
+  return { error: "no node with id or name " + q + "; use fleet_graph_find" };
+}
+async function fg_find(env, args) {
+  const q = fgStr(args.query || args.q);
+  if (!q) return { error: "query required" };
+  const kind = FG_KINDS.indexOf(fgStr(args.kind)) >= 0 ? fgStr(args.kind) : null;
+  const limit = fgInt(args.limit, 20, 1, 100);
+  const sql = "SELECT id, kind, name, worker, path, line, MIN(CASE WHEN id = ?1 OR name = ?1 THEN 0 WHEN name LIKE ?2 THEN 1 ELSE 2 END) AS rank_ FROM fg_node WHERE (id = ?1 OR name = ?1 OR name LIKE ?2 OR instr(lower(id), lower(?1)) > 0)" + (kind ? " AND kind = ?3" : "") + " GROUP BY id ORDER BY rank_, length(name), id LIMIT " + limit;
+  const st = env.GRAPH_DB.prepare(sql);
+  const r = kind ? await st.bind(q, q + "%", kind).all() : await st.bind(q, q + "%").all();
+  return { query: q, count: (r.results || []).length, results: (r.results || []).map(({ rank_, ...x }) => x) };
+}
+async function fg_node(env, args, open) {
+  const res = await fgResolve(env, args.id);
+  if (res.error) return res;
+  const limit = fgInt(args.limit, 100, 1, 500);
+  const id = res.id;
+  const nodes = await env.GRAPH_DB.prepare("SELECT id, scope, kind, name, worker, path, line, attrs, source, updated_at FROM fg_node WHERE id = ?1").bind(id).all();
+  const out = await env.GRAPH_DB.prepare("SELECT e.rel, e.dst, e.confidence, e.scope, e.path, n.kind AS dst_kind, n.name AS dst_name FROM fg_edge e LEFT JOIN fg_node n ON n.id = e.dst AND n.scope = e.scope WHERE e.src = ?1 ORDER BY e.rel, e.dst LIMIT " + limit).bind(id).all();
+  const inc = await env.GRAPH_DB.prepare("SELECT e.rel, e.src, e.confidence, e.scope, e.path, n.kind AS src_kind, n.name AS src_name FROM fg_edge e LEFT JOIN fg_node n ON n.id = e.src AND n.scope = e.scope WHERE e.dst = ?1 ORDER BY e.rel, e.src LIMIT " + limit).bind(id).all();
+  return { id, node: (nodes.results || []).map((n) => Object.assign({}, n, { attrs: fgAttrs(n.attrs) })), out: fgHideSecrets(out.results || [], open), in: fgHideSecrets(inc.results || [], open) };
+}
+// Level-by-level breadth-first walk with a visited set, one query per level (frontier passed as one JSON parameter), so a
+// hub node is expanded once and the cost is bounded by depth x the edges actually touched.
+async function fgWalk(env, start, opts) {
+  const seen = new Map([[start, { depth: 0, via: null, from: null }]]);
+  let frontier = [start];
+  const relFilter = " AND e.rel NOT IN ('" + FG_NO_IMPACT.join("','") + "')" + (opts.inferred ? "" : " AND e.confidence <> 'INFERRED'");
+  let rowsRead = 0, capped = false;
+  for (let d = 1; d <= opts.depth && frontier.length; d++) {
+    const next = [];
+    for (let i = 0; i < frontier.length; i += 400) {
+      const chunk = JSON.stringify(frontier.slice(i, i + 400));
+      const parts = [];
+      if (opts.mode !== "down") parts.push("SELECT e.dst AS here, e.src AS there, e.rel FROM fg_edge e WHERE e.dst IN (SELECT value FROM json_each(?1))" + relFilter);
+      if (opts.mode !== "up") parts.push("SELECT e.src AS here, e.dst AS there, e.rel FROM fg_edge e WHERE e.src IN (SELECT value FROM json_each(?1))" + relFilter);
+      const r = await env.GRAPH_DB.prepare(parts.join(" UNION ALL ") + " LIMIT 20000").bind(chunk).all();
+      rowsRead += r.meta && r.meta.rows_read || 0;
+      for (const x of r.results || []) {
+        if (seen.has(x.there)) continue;
+        seen.set(x.there, { depth: d, via: x.rel, from: x.here });
+        next.push(x.there);
+        if (seen.size >= opts.cap) { capped = true; break; }
+      }
+      if (capped) break;
+    }
+    if (opts.target && seen.has(opts.target)) break;
+    if (capped) break;
+    frontier = next;
+  }
+  return { seen, rowsRead, capped };
+}
+async function fg_impact(env, args, open) {
+  const res = await fgResolve(env, args.id);
+  if (res.error) return res;
+  const depth = fgInt(args.depth, 3, 1, 6);
+  const limit = fgInt(args.limit, 300, 1, 2000);
+  const up = fgStr(args.direction || "up") !== "down";
+  const w = await fgWalk(env, res.id, { depth, mode: up ? "up" : "down", inferred: !(args.include_inferred === false || args.include_inferred === "false"), cap: 20000 });
+  const ids = Array.from(w.seen.keys()).filter((k) => k !== res.id);
+  const meta = new Map();
+  for (let i = 0; i < ids.length; i += 400) {
+    const r = await env.GRAPH_DB.prepare("SELECT id, MAX(kind) AS kind, MAX(name) AS name, MAX(worker) AS worker FROM fg_node WHERE id IN (SELECT value FROM json_each(?1)) GROUP BY id").bind(JSON.stringify(ids.slice(i, i + 400))).all();
+    for (const x of r.results || []) meta.set(x.id, x);
+  }
+  let rows = ids.map((id) => { const s = w.seen.get(id), m = meta.get(id) || {}; return { id, depth: s.depth, via: s.via, from: s.from, kind: m.kind || null, name: m.name || null, worker: m.worker || null }; });
+  rows = fgHideSecrets(rows, open).sort((x, y) => x.depth - y.depth || String(x.kind).localeCompare(String(y.kind)) || x.id.localeCompare(y.id));
+  const byKind = {}, workers = {};
+  for (const x of rows) { byKind[x.kind || "?"] = (byKind[x.kind || "?"] || 0) + 1; const wk = x.worker || (x.kind === "worker" ? x.name : null); if (wk) workers[wk] = Math.min(workers[wk] ?? 99, x.depth); }
+  return { id: res.id, direction: up ? "up (what depends on it)" : "down (what it depends on)", depth, count: rows.length, truncated: rows.length > limit || w.capped, by_kind: byKind, workers_affected: workers, results: rows.slice(0, limit), rows_read: w.rowsRead };
+}
+async function fg_path(env, args, open) {
+  const a = await fgResolve(env, args.from), b = await fgResolve(env, args.to);
+  if (a.error) return { error: "from: " + a.error, candidates: a.candidates };
+  if (b.error) return { error: "to: " + b.error, candidates: b.candidates };
+  const maxd = fgInt(args.max_depth, 6, 1, 8);
+  for (const mode of ["down", "both"]) {
+    const w = await fgWalk(env, a.id, { depth: maxd, mode, inferred: true, cap: 30000, target: b.id });
+    if (!w.seen.has(b.id)) continue;
+    const steps = []; let cur = b.id;
+    while (cur && cur !== a.id) { const s = w.seen.get(cur); steps.unshift(s.from + " -[" + s.via + "]- " + cur); cur = s.from; }
+    if (open && steps.some((x) => x.indexOf("secret:") >= 0)) continue;
+    return { from: a.id, to: b.id, directed: mode === "down", length: steps.length, path: steps, rows_read: w.rowsRead };
+  }
+  return { from: a.id, to: b.id, path: null, note: "no path within " + maxd + " steps" };
+}
+async function fg_worker(env, args, open) {
+  const w = fgStr(args.worker).replace(/^worker:/, "");
+  if (!w) return { error: "worker required" };
+  const wid = "worker:" + w;
+  const nodes = (await env.GRAPH_DB.prepare("SELECT scope, attrs, path FROM fg_node WHERE id = ?1").bind(wid).all()).results || [];
+  if (!nodes.length) return { error: "no worker " + w + "; use fleet_graph_find with kind worker" };
+  const edges = (await env.GRAPH_DB.prepare("SELECT src, rel, dst, scope, confidence FROM fg_edge WHERE src = ?1 AND rel IN ('has_binding','has_cron','serves','has_secret','consumes','produces','runs_container','hosts_workflow','tails_to')").bind(wid).all()).results || [];
+  const binds = (await env.GRAPH_DB.prepare("SELECT e.src AS binding, e.dst AS resource, e.scope FROM fg_edge e WHERE e.rel = 'binds' AND e.src LIKE ?1").bind("binding:" + w + ".%").all()).results || [];
+  const tables = (await env.GRAPH_DB.prepare("SELECT e.rel, e.dst AS table_id, COUNT(*) AS functions FROM fg_edge e WHERE e.src LIKE ?1 AND e.rel IN ('reads','writes','creates') AND e.dst LIKE 'd1t:%' GROUP BY e.rel, e.dst ORDER BY e.dst LIMIT 400").bind("fn:" + w + "#%").all()).results || [];
+  const callsOut = (await env.GRAPH_DB.prepare("SELECT e.dst, e.rel, COUNT(*) AS n FROM fg_edge e WHERE e.src LIKE ?1 AND e.rel IN ('http_calls','references') GROUP BY e.dst, e.rel ORDER BY n DESC LIMIT 100").bind("fn:" + w + "#%").all()).results || [];
+  const callsIn = (await env.GRAPH_DB.prepare("SELECT CASE WHEN instr(e.src, '#') > 0 THEN substr(e.src, 4, instr(e.src, '#') - 4) WHEN e.src LIKE 'binding:%' THEN substr(e.src, 9, instr(e.src, '.') - 9) ELSE e.src END AS from_, e.rel, COUNT(*) AS n FROM fg_edge e WHERE e.dst = ?1 AND e.rel IN ('http_calls','references','binds','tails_to') GROUP BY from_, e.rel ORDER BY n DESC LIMIT 100").bind(wid).all()).results || [];
+  const findings = (await env.GRAPH_DB.prepare("SELECT kind, subject, severity, detail FROM fg_finding WHERE subject = ?1 OR subject LIKE ?2 OR subject LIKE ?3 ORDER BY severity DESC, kind LIMIT 100").bind(w, w + ".%", w + ":%").all()).results || [];
+  const pick = (rel, scope) => edges.filter((e) => e.rel === rel && e.scope === scope).map((e) => e.dst.split(rel === "has_cron" ? "@" : ":").slice(1).join(rel === "has_cron" ? "@" : ":"));
+  const resOf = new Map(binds.map((b) => [b.binding + "|" + b.scope, b.resource]));
+  const bindingsOf = (scope) => edges.filter((e) => e.rel === "has_binding" && e.scope === scope).map((e) => ({ name: e.dst.slice(("binding:" + w + ".").length), resource: resOf.get(e.dst + "|" + scope) || null }));
+  const secrets = edges.filter((e) => e.rel === "has_secret").map((e) => e.dst.slice(("secret:" + w + ".").length));
+  return {
+    worker: w,
+    code: Object.assign({}, fgAttrs((nodes.find((n) => n.scope === "code") || {}).attrs), { path: (nodes.find((n) => n.scope === "code") || {}).path || null }),
+    live: fgAttrs((nodes.find((n) => n.scope === "live") || {}).attrs),
+    bindings: { declared: bindingsOf("code"), live: bindingsOf("live") },
+    crons: { declared: pick("has_cron", "code"), live: pick("has_cron", "live") },
+    serves: Array.from(new Set(edges.filter((e) => e.rel === "serves").map((e) => e.dst))),
+    queues: edges.filter((e) => e.rel === "consumes" || e.rel === "produces").map((e) => e.rel + " " + e.dst),
+    secrets: open ? { count: secrets.length, names: "served to authenticated MCP clients only" } : secrets,
+    d1_tables: tables,
+    calls_out: callsOut,
+    called_by: callsIn,
+    findings
+  };
+}
+async function fg_resource(env, args, open) {
+  const res = await fgResolve(env, args.id);
+  if (res.error) return res;
+  const id = res.id;
+  const inc = (await env.GRAPH_DB.prepare("SELECT e.rel, e.src, e.confidence, e.scope, n.kind, n.worker FROM fg_edge e LEFT JOIN fg_node n ON n.id = e.src AND n.scope = e.scope WHERE e.dst = ?1 ORDER BY e.rel, e.src LIMIT 800").bind(id).all()).results || [];
+  const group = {};
+  for (const e of fgHideSecrets(inc, open)) { const k = e.rel; (group[k] = group[k] || []).push({ src: e.src, worker: e.worker || (e.src.startsWith("binding:") ? e.src.slice(8).split(".")[0] : null), confidence: e.confidence, scope: e.scope }); }
+  const workers = {};
+  for (const [rel, list] of Object.entries(group)) for (const x of list) if (x.worker) (workers[x.worker] = workers[x.worker] || new Set()).add(rel);
+  let contains = null;
+  if (id.startsWith("d1:")) contains = ((await env.GRAPH_DB.prepare("SELECT kind, COUNT(*) AS n FROM fg_node WHERE id LIKE ?1 AND scope = 'live' GROUP BY kind").bind(id.replace(/^d1:/, "d1%:") + ".%").all()).results || []);
+  return { id, node: res.node, workers: Object.fromEntries(Object.entries(workers).map(([k, v]) => [k, Array.from(v)])), by_relation: group, contains };
+}
+async function fg_findings(env, args) {
+  const where = [], binds = [];
+  if (args.kind) { binds.push(fgStr(args.kind)); where.push("kind = ?" + binds.length); }
+  if (args.severity) { binds.push(fgStr(args.severity)); where.push("severity = ?" + binds.length); }
+  if (args.subject) { binds.push("%" + fgStr(args.subject) + "%"); where.push("subject LIKE ?" + binds.length); }
+  const limit = fgInt(args.limit, 200, 1, 1000);
+  const st = env.GRAPH_DB.prepare("SELECT kind, subject, severity, detail, first_seen, last_seen FROM fg_finding" + (where.length ? " WHERE " + where.join(" AND ") : "") + " ORDER BY CASE severity WHEN 'warn' THEN 0 ELSE 1 END, kind, subject LIMIT " + limit);
+  const r = binds.length ? await st.bind(...binds).all() : await st.all();
+  const totals = (await env.GRAPH_DB.prepare("SELECT kind, severity, COUNT(*) AS n FROM fg_finding GROUP BY kind, severity ORDER BY severity DESC, n DESC").all()).results || [];
+  return { totals, count: (r.results || []).length, results: r.results || [] };
+}
+async function fg_freshness(env) {
+  const r = await env.GRAPH_DB.prepare("SELECT scope, sha, built_at, CAST((julianday('now') - julianday(built_at)) * 1440 AS INTEGER) AS age_min, nodes, edges, written, deleted, ms, status, version FROM fg_state ORDER BY scope").all();
+  return { scopes: r.results || [], note: "built by scripts/fleet_graph.mjs (fleet-graph.yml on push to main; remediation-consumer hourly as the second path)" };
+}
+var FG_ROUTES = { find: fg_find, node: fg_node, impact: fg_impact, path: fg_path, worker: fg_worker, resource: fg_resource, findings: fg_findings, freshness: fg_freshness };
+async function fgCall(name, args, env, open) {
+  const fn = FG_ROUTES[name];
+  if (!fn) return { error: "unknown fleet graph query " + name, queries: Object.keys(FG_ROUTES) };
+  try { return await fn(env, args || {}, open); }
+  catch (e) { const m = String(e && e.message || e); return { error: /no such table: fg_/.test(m) ? "the fleet graph has not been built yet (fg_* tables missing)" : "query failed: " + m.slice(0, 300) }; }
+}
+async function fgTool(name, args, env) {
+  const out = await fgCall(name.replace(/^fleet_graph_/, ""), args, env, false);
+  return { content: [{ type: "text", text: JSON.stringify(out) }], isError: !!out.error };
+}
+__name(fgTool, "fgTool");
 async function callTool(name, args, env) {
   const handlers = {
     search_papers: tool_search_papers,
@@ -310,6 +498,7 @@ async function callTool(name, args, env) {
     query_graph: tool_query_graph,
     get_paper_context: tool_get_paper_context
   };
+  if (/^fleet_graph_/.test(String(name))) return await fgTool(name, args, env);
   const fn = handlers[name];
   return fn ? await fn(args, env) : { content: [{ type: "text", text: "Unknown tool: " + name }], isError: true };
 }
@@ -354,7 +543,19 @@ var worker_default = {
     const url = new URL(request.url);
     if (request.method === "OPTIONS") return new Response(null, { status: 204, headers: corsHeaders() });
     if (url.pathname === "/health") {
-      return json({ status: "ok", server: SERVER_NAME, version: SERVER_VERSION, auth: !!env.MCP_TOKEN, capabilities: ["mcp", "persistent-memory", "knowledge-graph", "vector-recall"], limitations: ["bearer token required on /mcp and /mcp/sse", "fails closed (503) when MCP_TOKEN is unset", "the tool list is served only to authenticated clients"] });
+      return json({ status: "ok", server: SERVER_NAME, version: SERVER_VERSION, auth: !!env.MCP_TOKEN, capabilities: ["mcp", "persistent-memory", "knowledge-graph", "vector-recall", "fleet-graph"], limitations: ["bearer token required on /mcp and /mcp/sse", "fails closed (503) when MCP_TOKEN is unset", "the tool list is served only to authenticated clients", "GET /fleet-graph/* is open and read-only (OPEN-ACCESS-1); secret names are withheld there"] });
+    }
+    // FLEET-GRAPH-1: open, read-only, parameterised queries (OPEN-ACCESS-1). No caller SQL, bounded depth and rows.
+    if (url.pathname === "/fleet-graph" || url.pathname === "/fleet-graph/") {
+      return json({ graph: "qnfo fleet code + topology graph (FLEET-GRAPH-1)", queries: Object.keys(FG_ROUTES).map((q) => "/fleet-graph/" + q), examples: ["/fleet-graph/find?query=agent_issues", "/fleet-graph/impact?id=d1t:qnfo-audit.agent_issues&depth=2", "/fleet-graph/worker?worker=qnfo-ops", "/fleet-graph/findings?severity=warn", "/fleet-graph/freshness"], snapshot: "R2 qnfo-backups/fleet-graph/latest.json.gz (node-link JSON)" });
+    }
+    if (url.pathname.startsWith("/fleet-graph/") && request.method === "GET") {
+      const q = url.pathname.slice("/fleet-graph/".length).replace(/\/+$/, "");
+      const args = Object.fromEntries(url.searchParams.entries());
+      const out = await fgCall(q, args, env, true);
+      const r = json(out, out.error ? (/^unknown/.test(out.error) ? 404 : /not been built/.test(out.error) ? 503 : 400) : 200);
+      if (!out.error) r.headers.set("Cache-Control", "public, max-age=60");
+      return r;
     }
     // MCP-AUTH-1 (2026-09-30, closes the external red-team finding "qnfo-memory-mcp is
     // unauthenticated"): anonymous tools/list + arbitrary query_graph SQL + a remember_fact WRITE
