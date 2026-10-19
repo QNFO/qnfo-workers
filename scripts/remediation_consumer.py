@@ -696,6 +696,37 @@ def _selftest():
             or newer_than_checkout(None, 1791890700)):
         print(json.dumps({"ok": False, "case": "code-read-fresh-checkout"}))
         return 1
+    # CODE-READ-STALE-CHECKOUT-1: a checkout that IS the tip of main judges a contract written after its commit; one main has moved past waits.
+    import subprocess
+
+    def _git(cwd, *a):
+        env = dict(os.environ, GIT_AUTHOR_NAME="t", GIT_AUTHOR_EMAIL="t@t", GIT_COMMITTER_NAME="t", GIT_COMMITTER_EMAIL="t@t",
+                   GIT_AUTHOR_DATE="2026-10-13T11:00:00+0000", GIT_COMMITTER_DATE="2026-10-13T11:00:00+0000", GIT_CONFIG_GLOBAL=os.devnull)
+        return subprocess.run(["git", "-C", cwd] + list(a), capture_output=True, text=True, env=env, timeout=30)
+
+    org, clone = os.path.join(tmp, "origin"), os.path.join(tmp, "clone")
+    os.makedirs(org)
+    _git(org, "init", "-q")
+    _git(org, "symbolic-ref", "HEAD", "refs/heads/main")
+    with open(os.path.join(org, "a.txt"), "w") as fh:
+        fh.write("1")
+    _git(org, "add", "a.txt")
+    _git(org, "commit", "-q", "-m", "one")
+    subprocess.run(["git", "clone", "-q", org, clone], capture_output=True, text=True, timeout=30, env=dict(os.environ, GIT_CONFIG_GLOBAL=os.devnull))
+    after, before = "2026-10-13 11:26:05", "2026-10-13 10:00:00"
+    tip_now = checkout_is_tip(clone)
+    cur = checkout_behind_contract(after, clone)
+    with open(os.path.join(org, "a.txt"), "w") as fh:
+        fh.write("2")
+    _git(org, "commit", "-q", "-am", "two")
+    moved, behind_moved, behind_old = checkout_is_tip(clone), checkout_behind_contract(after, clone), checkout_behind_contract(before, clone)
+    _git(clone, "remote", "set-url", "origin", os.path.join(tmp, "gone"))
+    unknown, behind_unknown = checkout_is_tip(clone), checkout_behind_contract(after, clone)
+    if (tip_now is not True or cur is not False or moved is not False or behind_moved is not True or behind_old is not False
+            or unknown is not None or behind_unknown is not True):
+        print(json.dumps({"ok": False, "case": "code-read-stale-checkout", "tip_now": tip_now, "cur": cur, "moved": moved,
+                          "behind_moved": behind_moved, "behind_old": behind_old, "unknown": unknown, "behind_unknown": behind_unknown}))
+        return 1
     for bad, want in (('{"paths": ["../etc/passwd"], "absent": "x"}', "bad-path"), ('{"paths": ["/etc/passwd"], "absent": "x"}', "bad-path"),
                       ('{"paths": ["a"]}', "no-condition"), ('{"paths": ["a"], "absent": "x", "sql": 1}', "unknown-key:sql")):
         if parse_code_probe(bad)[1] != want:
@@ -947,6 +978,44 @@ def newer_than_checkout(ts, epoch):
     return ce is not None and epoch is not None and ce > epoch
 
 
+# CODE-READ-STALE-CHECKOUT-1 (2026-10-19, issue 100081): commit time against contract time called a current checkout "older" whenever
+# main had no commit since the contract was written. issue-100062 (REPOSLUG-UNIFORM-1) read checkout-older-than-contract from 07:49Z
+# although its fix was on main and live, and kept reading it until some other merge happened to land. A checkout is behind exactly
+# when origin main has moved past its HEAD, and git answers that directly. ls-remote reads the tip without fetching, so the checkout's
+# history is untouched. The contract row only exists once the merge that brings its marker is on main, so a HEAD that is the tip holds
+# that merge and its failing verdict is real. A remote git cannot reach (None) keeps the CODE-READ-FRESH-CHECKOUT-1 deferral.
+_CHECKOUT_TIP = []
+
+
+def checkout_is_tip(root=None):
+    """True when HEAD is the tip of origin main right now, False when main has moved past it, None when git cannot say."""
+    if root is None and _CHECKOUT_TIP:
+        return _CHECKOUT_TIP[0]
+    import subprocess
+    cwd = root or REPO_ROOT
+    val = None
+    try:
+        head = subprocess.run(["git", "-C", cwd, "rev-parse", "HEAD"], capture_output=True, text=True, timeout=10)
+        tip = subprocess.run(["git", "-C", cwd, "ls-remote", "origin", "refs/heads/main"], capture_output=True, text=True, timeout=30)
+        h, t = head.stdout.strip(), (tip.stdout.split() or [""])[0]
+        if head.returncode == 0 and tip.returncode == 0 and h and t:
+            val = h == t
+        else:
+            print("CODE-READ-STALE-CHECKOUT-1: tip unreadable: %s" % (tip.stderr.strip() or head.stderr.strip() or "no answer")[:160], file=sys.stderr)
+    except (OSError, subprocess.SubprocessError) as e:
+        print("CODE-READ-STALE-CHECKOUT-1: git failed: %s" % e, file=sys.stderr)
+    if root is None:
+        _CHECKOUT_TIP.append(val)
+    return val
+
+
+def checkout_behind_contract(ts, root=None):
+    """True when a failing code-read verdict on a contract created at ts must wait for a newer checkout: the contract postdates the
+    checkout's HEAD commit AND main has moved past that HEAD (or git cannot say). The tip is read only when the commit-time rule would
+    defer, so a passing run never asks the remote."""
+    return newer_than_checkout(ts, checkout_epoch(root)) and checkout_is_tip(root) is not True
+
+
 def consume_code(c, rec, out, trusted):
     """Run one code-read contract against this checkout of main."""
     probe, why = parse_code_probe(c.get("verify_probe"))
@@ -960,9 +1029,9 @@ def consume_code(c, rec, out, trusted):
         return
     obs = run_code_probe(probe)
     passed, verdict = classify("ok", obs)
-    if passed != 1 and newer_than_checkout(c.get("ts"), checkout_epoch()):
+    if passed != 1 and checkout_behind_contract(c.get("ts")):
         rec.update({"expected": "ok", "observed": obs, "verdict": "checkout-older-than-contract",
-                    "reason": "contract created %s, after this checkout's commit; the next run judges it" % c.get("ts")})
+                    "reason": "contract created %s, after this checkout's commit, and main has moved past it (or its tip cannot be read); the next run judges it" % c.get("ts")})
         out["skipped"] += 1
         return
     rec.update({"expected": "ok", "observed": obs, "verdict": verdict})
