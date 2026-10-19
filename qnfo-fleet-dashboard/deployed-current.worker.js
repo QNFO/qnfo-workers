@@ -9,7 +9,7 @@ var __name22 = /* @__PURE__ */ __name2((target, value) => __defProp22(target, "n
 var __defProp222 = Object.defineProperty;
 var __name222 = /* @__PURE__ */ __name22((target, value) => __defProp222(target, "name", { value, configurable: true }), "__name");
 var __name2222 = /* @__PURE__ */ __name222((target, value) => Object.defineProperty(target, "name", { value, configurable: true }), "__name");
-var VERSION = "1.51.9-codeagent"; /* 1.51.8 VERSION-LINE-NOTES-1 (2026-10-19, agent_issues 100243, pillar autonomy; patch, a comment moved): the release notes of every earlier version rode on this line (178 notes, about 200,000 chars), so a version bump of this worker was an 820,000-char patch (worker and mirror, removed and added): 12 code tasks ended on the publisher size cap on 2026-10-19 and three issues were exhausted for three days. They are in git history (git log -S '<release tag>' -- qnfo-fleet-dashboard/worker.js); the changelog is built from the deploy ledger and commits, and the guards read only the quoted version string. A new note goes on this line and stays short. */
+var VERSION = "1.51.11-codeagent"; /* 1.51.8 VERSION-LINE-NOTES-1 (2026-10-19, agent_issues 100243, pillar autonomy; patch, a comment moved): the release notes of every earlier version rode on this line (178 notes, about 200,000 chars), so a version bump of this worker was an 820,000-char patch (worker and mirror, removed and added): 12 code tasks ended on the publisher size cap on 2026-10-19 and three issues were exhausted for three days. They are in git history (git log -S '<release tag>' -- qnfo-fleet-dashboard/worker.js); the changelog is built from the deploy ledger and commits, and the guards read only the quoted version string. A new note goes on this line and stays short. */
 
 // REVIEW-GATE-1 (2026-10-01, docs/STRATEGY.md s9): the 2026-10-25 impressions gate is retired. The research layer is
 // reviewed on this date against the reach scorecard; nothing deletes research data automatically (phase 2 needs the
@@ -3415,6 +3415,15 @@ function rumDaysCovered(rows) {
 var HA_PUBLIC_HOSTS = ["qnfo.org", "www.qnfo.org", "papers.qnfo.org", "archive.qnfo.org", "legal.qnfo.org", "ipatent.qnfo.org", "q08.org", "www.q08.org", "reading.q08.org", "ask.qwav.tech", "qwav.tech", "www.qwav.tech", "qwav.org", "www.qwav.org"];
 var HA_FLEET_HOST_RE = /(^|\.)(qnfo\.(org|net|uk)|q08\.org|qwav\.(tech|org|net|uk)|q-wave\.tech|qwave\.tech|ipatent\.me|empoweringchange\.today|workers\.dev|pages\.dev|localhost)$/i;
 var HA_DAYS = 7;
+ // RUMCOUNT-EMPTY-WINDOW-1 fix: treat empty-but-successful RUM reads as null to avoid zero pageviews misleading output
+ if (typeof rumCount === "function") {
+   const _origRumCount = rumCount;
+   rumCount = function(...args) {
+     const result = _origRumCount.apply(this, args);
+     if (result && result.count === 0 && result.days === 0) return null;
+     return result;
+   };
+ }
 var HA_REGISTRY = [
   "INSERT OR IGNORE INTO metric_registry (metric, layer, kind, formula, source_of_truth, baseline, target, owner, disposition_actor, refresh_cadence, warning_band, kill_band, state, refresh_class) VALUES ('external_referred_pageviews_7d', 'fleet', 'leading', 'Cloudflare Web Analytics (RUM) page loads in the last 7 days with the Exclude-bots filter (bot: 0) on the public properties (qnfo.org, papers.qnfo.org, archive/legal/ipatent.qnfo.org, q08.org, reading.q08.org, ask.qwav.tech, qwav.tech/.org) whose referrer host is outside every fleet-owned domain: readers who found a page from a search engine, a social platform or another site. Direct loads (no referrer) are excluded: that is where the fleet''s own renders and probes and the owner''s typed URLs land (qnfo-fleet-dashboard HUMAN-AUDIENCE-1, hourly)', 'CF GraphQL rumPageloadEventsAdaptiveGroups filter bot: 0, dimensions requestHost refererHost (qnfo-fleet-dashboard, CF_TOKEN); breakdown in cloud_ops_events human-audience-<day>; series in reach_signals source cf-rum-human', '30 (2026-10-06 live read: t.co 10, www.google.com 20)', '>= 100 a week by 2026-12-31, rising (STRATEGY s6.3 engaged humans; s9 review gate)', 'qnfo-social', 'trigger lt 50 -> METRIC-TRIGGER issue (migrations/2026-10-06-human-audience-metrics.sql)', 'hourly', '< 50', '< 20', 'MEASURED', 'computed')",
   "INSERT OR IGNORE INTO metric_registry (metric, layer, kind, formula, source_of_truth, baseline, target, owner, disposition_actor, refresh_cadence, warning_band, kill_band, state, refresh_class) VALUES ('continuation_pageviews_7d', 'fleet', 'leading', 'Cloudflare Web Analytics (RUM) page loads in the last 7 days with the Exclude-bots filter (bot: 0) on the public properties whose referrer host is itself one of those public hosts: a second page in the same visit, so the reader chose to keep reading. The owner''s surfaces (fleet.qnfo.org, ideas.qnfo.org) and the workers.dev hosts count neither as pages nor as referrers (qnfo-fleet-dashboard HUMAN-AUDIENCE-1, hourly)', 'CF GraphQL rumPageloadEventsAdaptiveGroups filter bot: 0, dimensions requestHost refererHost (qnfo-fleet-dashboard, CF_TOKEN); breakdown in cloud_ops_events human-audience-<day>; series in reach_signals source cf-rum-human', '370 (2026-10-06 live read; includes the owner''s own reading, which RUM cannot separate)', 'rising; >= 500 a week by 2026-12-31 (STRATEGY s6.3 attention, not hits)', 'qnfo-gateway', 'trigger lt 150 (a floor below the live value, so a breach is a real decline) -> METRIC-TRIGGER issue (migrations/2026-10-06-human-audience-metrics.sql)', 'hourly', '< 200', '< 150', 'MEASURED', 'computed')"
@@ -6004,9 +6013,29 @@ async function collectHumanActions(env) {
       add({ key: "disp:" + r.fingerprint, source: "issue-loop", title: String(p.title || r.category || "Fleet issue needs a decision").slice(0, 160), why: "The issue loop found no safe autonomous fix. " + squash(String(r.exec_result || "")).slice(0, 160), fallback: "The system keeps the current safe configuration serving.", action: String(r.action || ""), url: r.gh_number ? "https://github.com/" + GH_REPO + "/issues/" + r.gh_number : "", due: "", age: ageDaysOf(r.created_at) });
     }
   });
+  // PARKED-CARD-REASON-1: branch the card text so a parked code task tells the owner what actually blocked it.
   await read("code-tasks", async function() {
     const rows = await d1all(env.AUDIT, "SELECT id, goal, repo, last_error, pr_url, updated_at FROM code_tasks WHERE status='needs_human' ORDER BY updated_at");
-    for (const r of rows) add({ key: "code:" + r.id, source: "code-loop", title: "Code task parked: " + String(r.goal || r.id).slice(0, 140), why: "The code loop could not verify this change itself. " + squash(String(r.last_error || "")).slice(0, 140), fallback: "Nothing is merged or deployed until it is verified.", action: "Review or drop it.", url: r.pr_url || "", due: "", age: ageDaysOf(r.updated_at) });
+    for (const r of rows) {
+      const err = String(r.last_error || "");
+      let why, action;
+      if (err.indexOf("MERGE-SCOPE-AT-READ-1") === 0) {
+        if (/issue\s+closed|closed|superseded/i.test(err)) {
+          why = "Refused at read: the issue is closed and the scope rule has been lifted.";
+          action = "No action needed; the task is superseded.";
+        } else {
+          why = "Refused at read: " + (r.repo || "worker") + " is outside the merge runner scope.";
+          action = "None needed once the scope rule is lifted; the loop re-queues it.";
+        }
+      } else if (err.indexOf("noop-proposal") === 0) {
+        why = "The model proposed an edit that changes only text, no behaviour.";
+        action = "Narrow the goal or give a code-anchor.";
+      } else {
+        why = "The code loop could not verify this change itself. " + squash(err).slice(0, 140);
+        action = "Review or drop it.";
+      }
+      add({ key: "code:" + r.id, source: "code-loop", title: "Code task parked: " + String(r.goal || r.id).slice(0, 140), why: why, fallback: "Nothing is merged or deployed until it is verified.", action: action, url: r.pr_url || "", due: "", age: ageDaysOf(r.updated_at) });
+    }
   });
   // OWNER-SURFACE-HONESTY-1: a card only for mail that owes the owner a reply, saying why it looks like a person and what
   // the authentication said; the public card names the sender's domain only (never a subject or address), the owner's view

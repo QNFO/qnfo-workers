@@ -1080,7 +1080,7 @@ function secretEq(a, b) {
   return diff === 0;
 }
 __name(secretEq, "secretEq");
-var VERSION = "0.40.1-version-line-pruned"; /* 0.40.1 VERSION-LINE-NOTES-1 (2026-10-19, agent_issues 100243, pillar autonomy; patch, a comment moved): the release notes of every earlier version rode on this line (178 notes, about 200,000 chars), so a version bump of this worker was an 820,000-char patch (worker and mirror, removed and added): 12 code tasks ended on the publisher size cap on 2026-10-19 and three issues were exhausted for three days. They are in git history (git log -S '<release tag>' -- qnfo-fleet-control/worker.js); the changelog is built from the deploy ledger and commits, and the guards read only the quoted version string. A new note goes on this line and stays short. */
+var VERSION = "0.40.2-codeagent"; /* 0.40.1 VERSION-LINE-NOTES-1 (2026-10-19, agent_issues 100243, pillar autonomy; patch, a comment moved): the release notes of every earlier version rode on this line (178 notes, about 200,000 chars), so a version bump of this worker was an 820,000-char patch (worker and mirror, removed and added): 12 code tasks ended on the publisher size cap on 2026-10-19 and three issues were exhausted for three days. They are in git history (git log -S '<release tag>' -- qnfo-fleet-control/worker.js); the changelog is built from the deploy ledger and commits, and the guards read only the quoted version string. A new note goes on this line and stays short. */
 // (older release notes: git history of qnfo-fleet-control/worker.js)
 // 0.4.112 CF-CHANGELOG-LOOP-1 (pillar autonomy, RM-CAPABILITY-PRODUCT-LOOP-1): once a day, inside the existing hourly tick (no new worker, cron or model call), the fleet reads Cloudflare's changelog feed, classifies each recent item against cloudflare_capability_catalog and the service registry, files at most 2 deduped issues a day for billing/deprecation changes to products the fleet uses, reopens catalog rows that were rejected when the product launches or goes GA (max 2 a day), adds not_considered rows for unknown products (max 5), and measures itself (cf_changelog_audit_age_h, cf_changelog_open_proposals_14d); GET /cf-changelog, POST /cf-changelog/run.
 // 0.4.111 PRIORITY-QUEUE-1b/1c (issues 1912, 1913; owner directive 2026-10-03): self-repair (evPropose) admits critical
@@ -10702,7 +10702,8 @@ async function costImpactGuard(env) {
     await db.prepare("CREATE TABLE IF NOT EXISTS cost_impact_guard (id INTEGER PRIMARY KEY AUTOINCREMENT, ts TEXT, cost_7d REAL, cost_prev_7d REAL, impact_7d REAL, impact_prev_7d REAL, top_model TEXT, top_share REAL, cpi REAL, impact_flat INTEGER, due_cents INTEGER, gateway_limit_before REAL, gateway_limit_after REAL, action TEXT)").run();
     var wk = await db.prepare("SELECT SUM(cost_usd) c FROM llm_gateway_log WHERE datetime(ts) > datetime('now','-7 days')").first();
     var prev = await db.prepare("SELECT SUM(cost_usd) c FROM llm_gateway_log WHERE datetime(ts) BETWEEN datetime('now','-14 days') AND datetime('now','-7 days')").first();
-    var cost7 = wk && wk.c ? Number(wk.c) : 0;
+    var owner = await db.prepare("SELECT COALESCE(SUM(usd),0) c FROM ai_spend_owner_local WHERE day >= date('now','-7 days')").first();
+    var cost7 = (wk && wk.c ? Number(wk.c) : 0) + (owner && owner.c ? Number(owner.c) : 0);
     var costPrev = prev && prev.c ? Number(prev.c) : 0;
     var top = await db.prepare("SELECT model, SUM(cost_usd) c FROM llm_gateway_log WHERE datetime(ts) > datetime('now','-7 days') GROUP BY model ORDER BY c DESC LIMIT 1").first();
     var topModel = top && top.model ? String(top.model) : "none";
@@ -10742,7 +10743,12 @@ async function costImpactGuard(env) {
       var vr = await fetch(gurl, { headers: { Authorization: "Bearer " + token }, signal: AbortSignal.timeout(8e3) });
       var vj = await vr.json().catch(function(){ return null; });
       var verified = !!(vj && vj.success && vj.result.spend_limits && vj.result.spend_limits.rules && Number(vj.result.spend_limits.rules[0].limit) === newLimit);
-      if (!applied || !verified) { action = action + "-failed"; newLimit = curLimit; }
+      if (!applied || !verified) {
+        var putStatus = pr3 && pr3.status ? pr3.status : 0;
+        var bodySnippet = pj3 ? JSON.stringify(pj3).slice(0, 120) : "";
+        action = action + "-failed:put=" + putStatus + ":body=" + bodySnippet;
+        newLimit = curLimit;
+      }
     }
     await db.prepare("INSERT INTO cost_impact_guard (ts, cost_7d, cost_prev_7d, impact_7d, impact_prev_7d, top_model, top_share, cpi, impact_flat, due_cents, gateway_limit_before, gateway_limit_after, action) VALUES (datetime('now'),?,?,?,?,?,?,?,?,?,?,?,?)").bind(cost7, costPrev, impact7, impactPrev, topModel, share, cpi === Infinity ? -1 : cpi, impactFlat ? 1 : 0, dueCents == null ? -1 : dueCents, curLimit, newLimit, action).run();
     return { ok: true, cost7: cost7, impact7: impact7, topModel: topModel, share: share, cpi: cpi === Infinity ? -1 : cpi, divergence: divergence, action: action, limitBefore: curLimit, limitAfter: newLimit };
