@@ -5,7 +5,8 @@ A version bump in a worker whose `var VERSION` line carries its release notes (q
 qnfo-fleet-control 199,469 chars) is a ~816,000-char patch once the mirror is counted, so a 200,000-char cap refused every code
 task on those files. Proves: the cap admits the measured 816,888-char patch of ct_d5z3pztl2s5ynh (the size check no longer
 refuses it; the next check, repo identity, does), a patch over the cap and a whole-file fallback of a 1.2 MB worker are still
-refused with "patch larger than", and the cap is below a D1 row (2 MB).
+refused with "patch larger than", and the cap is below a D1 row (2 MB). PATCH-CAP-1500K-1 adds the 1,022,726-char qnfo-fleet-control patch
+(ct_qlk9bm3gwuo7cb, issue 100185) that the 1,000,000 cap still refused.
 Run: python3 scripts/code_task_publish_patch_size_test.py   (prints "N passed, 0 failed")
 """
 import importlib.util
@@ -38,11 +39,17 @@ def task_with(patch_len):
 
 
 ok(P.MAX_PATCH >= 820_000, "the cap admits an 816,888-char version-bump patch on a 202k VERSION line", P.MAX_PATCH)
+ok(P.MAX_PATCH >= 1_030_000, "the cap admits the 1,022,726-char patch of ct_qlk9bm3gwuo7cb (qnfo-fleet-control, issue 100185) with room for its next release note", P.MAX_PATCH)
 ok(P.MAX_PATCH <= 1_500_000, "the cap stays well under one D1 row (2 MB)", P.MAX_PATCH)
 
 status, url, err, note = P.publish_one(task_with(816_888), "/nonexistent", "main", None)
 ok(status == "publish_failed" and "patch larger than" not in str(err), "816,888 chars passes the size check (refused later, on the repo)", err)
 ok("task repo is not" in str(err), "the next check in order (repo identity) is the one that answers", err)
+
+status, url, err, note = P.publish_one(task_with(1_022_726), "/nonexistent", "main", None)
+ok(status == "publish_failed" and "patch larger than" not in str(err), "1,022,726 chars passes the size check (refused later, on the repo)", err)
+ok("task repo is not" in str(err), "the next check in order (repo identity) is the one that answers for the fleet-control patch", err)
+ok(P.MAX_PATCH + 60_000 < 2_000_000, "ctx (a cap-size patch plus about 60,000 chars of context; ct_qlk9bm3gwuo7cb carried 28,606) fits one D1 row (2 MB)", P.MAX_PATCH)
 
 status, url, err, note = P.publish_one(task_with(P.MAX_PATCH + 1), "/nonexistent", "main", None)
 ok(status == "publish_failed" and str(err).startswith("patch larger than"), "one char over the cap is still refused with the size message", err)
