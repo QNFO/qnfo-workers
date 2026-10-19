@@ -3,7 +3,7 @@ var __name = (target, value) => __defProp(target, "name", { value, configurable:
 var PROBER_CRON = "*/20 * * * *";
 
 // worker.js
-var VERSION = "1.5.6-model-floor-1"; /* 1.5.1 CALIBRATION-TASK-TRUTH-1 (agent_issues 2338): the truth probe sends hedge:false; the first run (2026-10-13 19:00Z) measured the router hedge, not the models: 16 of 20 answers came from llama-3.3-70b-instruct-fp8-fast through the TURN-BUDGET-1 fast lane. */ /* 1.5.0 1.5.0 CALIBRATION-TASK-TRUTH-1 (2026-10-13, pillar research, agent_issues 2338): once an hour every model answers a few integer sums, differences and products whose operands come from the UTC hour and whose answers the code computes; one row per item and model in ai_calibration_truth (right or wrong, served_by), 30 days kept, GET /truth gives the pair table (n11, n10, n01, n00, kappa) of the last 7 days; ai_calibration_config truth_probe_items sets the items an hour, 0 is off. */ /* 1.4.0 1.4.0 PROBE-CADENCE-COST-1 (2026-10-12, pillar cost, agent_issues 2118): the full model/vision/tools/stream/routing sweep runs every 4th 30-minute tick (ai_calibration_config model_sweep_every_ticks); the ticks between re-probe only models whose ai_model_health row is not ok. About 2,500 Workers AI calls a day through qnfo-ai become about 700. */ /* 1.3.4 WORKERS-STANDARDS-1 (2026-10-12, pillar security): the calibration run id is drawn from crypto.randomUUID instead of Math.random (same shape). */ /* 1.3.3 AMH-ROSTER-PRUNE-1 (2026-10-06, pillar autonomy, lever T5.11): the dead per-tick ai_model_health prune is removed (wrong bind receiver, never ran; fixed as written it would have deleted the canonical roster rows); the 24 never-probed external ids were pruned once after a backup by migration. 1.3.2 FOLD-HYGIENE-1 + FRESHNESS-REGISTERS-RETIRED-1 writer side (2026-10-06, agent_issues 1756 and 2028, pillar autonomy): the prober member's freshness SIGNALS no longer grade kaizen_candidates (qnfo-kaizen was retired in PR 657, so the register read stale forever, and the 07:40Z tick re-wrote the row PR 677 had deleted); version_queue is an event register with a 336 h window (the reviser queues a version only when a paper needs one, so idleness is not staleness); amh_coverage grades the probe roster (MODELS), not the 24 external ids registered 2026-09-19 that no probe covers, and names how many it leaves out (AMH-COVERAGE-ROSTER-1). 1.3.1 PROBER-ON-CAL-TICK-1 (2026-10-06, #1756): the every-20-minutes trigger registered for the member never fired (no prober run at 06:40 or 07:00 while the every-30-minutes calibration ran), so the member now runs on the every-30-minutes tick next to the calibration, the host awaits its waitUntil work, and the every-20-minutes trigger is dropped (one cron fewer). 1.3.0 PROBER-FOLD-1 (2026-10-06, pillar core, #1756): ai-health-prober runs here as a member (proberMod, the every-20-minutes cron, /prober/health and /prober/freshness, /prober/run behind the calibration key); the separate ai-health-prober worker is retired by fold. 1.2.9 GW-402-UNFUNDED-1 (2026-10-05, pillar: cost; agent_issues #1992, root cause shared with #1986): a provider's HTTP 402 ("Insufficient Balance", DeepSeek, owner decision 2026-10-05: do not top up) is an unfunded account, not a degraded model. The sweep classed it "other", set ai_model_health deepseek/deepseek-v4-flash degraded on every window with >= 2 such calls (15 at 16:00Z), and qnfo-fleet-control refiled MODEL-DEGRADED (#1992, #1256, #1099 ...). Now status 402 or an insufficient-balance/payment-required body is error_class "unfunded": recorded in ai_gateway_failures, never a [gw-fail] issue, never a degraded health row, and ignored (like rate-capacity) by the 24h reconcile that clears a degraded row, so the row recovers on the next sweep. The spend-side fix (stop paying for the failed first round trip) is #1986 in qnfo-ops. */
+var VERSION = "1.6.0-budget-probe-1"; /* 1.6.0 BUDGET-PROBE-1 (2026-10-19, pillar cost, agent_issues 2829 path A): ai_model_health stops reading ok for a model that answers a one-token ping and an empty reply to a real request (glm-5.3-flash 0.53 error share over 5,991 calls, qwen3.8-27b 0.77 over 105, both ok). Both writers of status ok, the sweep (probeBudgetCompletion) and the folded prober member 2.3.16 (applyBudgetProbe), keep the cheap ping and send text models one more request: a trivial sum, max_tokens 256, a DONE marker; empty content (finish_reason length) or no marker is a failed probe on the existing degraded then failing path, with no new status value. Models with a Workers AI id are probed through env.AI.run by both writers (probeBudgetDirect): the router's small-answer lane (reasoning_effort low or none at max_tokens <= 2048) would hide the empty reply; only deepseek-v4-flash and -thinking use the router. ai_calibration_config budget_probe = off reverts to the ping-only verdict without a deploy (control_registry ai-calibration-budget-probe-switch); fm-health-ok-but-empty detects ok rows with a 0.5 error share. */ /* 1.5.1 CALIBRATION-TASK-TRUTH-1 (agent_issues 2338): the truth probe sends hedge:false; the first run (2026-10-13 19:00Z) measured the router hedge, not the models: 16 of 20 answers came from llama-3.3-70b-instruct-fp8-fast through the TURN-BUDGET-1 fast lane. */ /* 1.5.0 1.5.0 CALIBRATION-TASK-TRUTH-1 (2026-10-13, pillar research, agent_issues 2338): once an hour every model answers a few integer sums, differences and products whose operands come from the UTC hour and whose answers the code computes; one row per item and model in ai_calibration_truth (right or wrong, served_by), 30 days kept, GET /truth gives the pair table (n11, n10, n01, n00, kappa) of the last 7 days; ai_calibration_config truth_probe_items sets the items an hour, 0 is off. */ /* 1.4.0 1.4.0 PROBE-CADENCE-COST-1 (2026-10-12, pillar cost, agent_issues 2118): the full model/vision/tools/stream/routing sweep runs every 4th 30-minute tick (ai_calibration_config model_sweep_every_ticks); the ticks between re-probe only models whose ai_model_health row is not ok. About 2,500 Workers AI calls a day through qnfo-ai become about 700. */ /* 1.3.4 WORKERS-STANDARDS-1 (2026-10-12, pillar security): the calibration run id is drawn from crypto.randomUUID instead of Math.random (same shape). */ /* 1.3.3 AMH-ROSTER-PRUNE-1 (2026-10-06, pillar autonomy, lever T5.11): the dead per-tick ai_model_health prune is removed (wrong bind receiver, never ran; fixed as written it would have deleted the canonical roster rows); the 24 never-probed external ids were pruned once after a backup by migration. 1.3.2 FOLD-HYGIENE-1 + FRESHNESS-REGISTERS-RETIRED-1 writer side (2026-10-06, agent_issues 1756 and 2028, pillar autonomy): the prober member's freshness SIGNALS no longer grade kaizen_candidates (qnfo-kaizen was retired in PR 657, so the register read stale forever, and the 07:40Z tick re-wrote the row PR 677 had deleted); version_queue is an event register with a 336 h window (the reviser queues a version only when a paper needs one, so idleness is not staleness); amh_coverage grades the probe roster (MODELS), not the 24 external ids registered 2026-09-19 that no probe covers, and names how many it leaves out (AMH-COVERAGE-ROSTER-1). 1.3.1 PROBER-ON-CAL-TICK-1 (2026-10-06, #1756): the every-20-minutes trigger registered for the member never fired (no prober run at 06:40 or 07:00 while the every-30-minutes calibration ran), so the member now runs on the every-30-minutes tick next to the calibration, the host awaits its waitUntil work, and the every-20-minutes trigger is dropped (one cron fewer). 1.3.0 PROBER-FOLD-1 (2026-10-06, pillar core, #1756): ai-health-prober runs here as a member (proberMod, the every-20-minutes cron, /prober/health and /prober/freshness, /prober/run behind the calibration key); the separate ai-health-prober worker is retired by fold. 1.2.9 GW-402-UNFUNDED-1 (2026-10-05, pillar: cost; agent_issues #1992, root cause shared with #1986): a provider's HTTP 402 ("Insufficient Balance", DeepSeek, owner decision 2026-10-05: do not top up) is an unfunded account, not a degraded model. The sweep classed it "other", set ai_model_health deepseek/deepseek-v4-flash degraded on every window with >= 2 such calls (15 at 16:00Z), and qnfo-fleet-control refiled MODEL-DEGRADED (#1992, #1256, #1099 ...). Now status 402 or an insufficient-balance/payment-required body is error_class "unfunded": recorded in ai_gateway_failures, never a [gw-fail] issue, never a degraded health row, and ignored (like rate-capacity) by the 24h reconcile that clears a degraded row, so the row recovers on the next sweep. The spend-side fix (stop paying for the failed first round trip) is #1986 in qnfo-ops. */
 var DEEPSEEK = "https://api.deepseek.com/v1";
 var ACCOUNT = "edb167b78c9fb901ea5bca3ce58ccc4b";
 var CATALOG = "https://api.cloudflare.com/client/v4/accounts/" + ACCOUNT;
@@ -277,6 +277,88 @@ async function probeCompletion(env, model) {
   }
 }
 __name(probeCompletion, "probeCompletion");
+// ---- BUDGET-PROBE-1:BEGIN (1.6.0, pillar cost, agent_issues 2829 path A) ----
+// ai_model_health said ok for a model that answers a one-token ping, never for one that answers a real request: on 2026-10-19
+// glm-5.3-flash read ok with a 0.53 error share over 5,991 calls and qwen3.8-27b with 0.77 over 105, because the model spends
+// its token budget on reasoning and returns empty content (finish_reason length). Both writers of status ok (the sweep's
+// probeCompletion and the folded prober's probeOne) now keep their cheap ping for reachability and, for text models only,
+// send one more request shaped like a caller's: a trivial sum, max_tokens 256, a DONE marker asked for. Empty content or no
+// marker is a failed probe and takes the existing path (degraded at the first failure, failing at fail_threshold); no status
+// value is new. One budget probe per model per run, never skipped at a breached ai_spend cap (BUDGET-SOFT-ROUTE-1: it is the
+// lean shape already, 256 tokens at most). ai_calibration_config budget_probe = off restores the ping-only verdict.
+// Lane (review of 65693a88): qnfo-ai sets reasoning_effort low/none for glm-5.3-flash, kimi-k2.6 and gpt-oss-120b on any request
+// with max_tokens <= 2048 (REASONING_SMALL_MAX), the lane that exists because those models otherwise spend the allowance
+// reasoning. A budget probe sent through the router at 256 runs in that lane and passes. So every model with a Workers AI id is
+// probed through env.AI.run (probeBudgetDirect), the request a caller outside the lane sends, and the prober member uses the
+// same function: the two writers of one ai_model_health row run one shape, and a pass of one cannot mask a failure of the other.
+// Only the DeepSeek ids with no Workers AI id (flash, flash-thinking, written by the sweep alone) keep the router path; the
+// lane does not touch them.
+var BUDGET_PROMPT = "What is 17 + 25? Reply with the number, then the word DONE.";
+var BUDGET_MAX_TOKENS = 256;
+var BUDGET_DIRECT_IDS = Object.assign({}, TIER0_WA, { "deepseek-v4-pro": "@cf/deepseek-ai/deepseek-v4-pro-0813" });
+function replyParts(r) {
+  var ch = r && r.choices && r.choices[0];
+  var c = ch && ch.message && ch.message.content;
+  if (Array.isArray(c)) c = c.map(function (p) { return p && (p.text || p.content) || ""; }).join("");
+  if ((c == null || c === "") && r && typeof r.response === "string") c = r.response;
+  if ((c == null || c === "") && r && r.result && typeof r.result.response === "string") c = r.result.response;
+  var fin = (ch && ch.finish_reason) || (r && r.finish_reason) || null;
+  return { content: c == null ? "" : String(c), finish: fin ? String(fin) : null };
+}
+__name(replyParts, "replyParts");
+function judgeBudgetReply(r) {
+  var p = replyParts(r);
+  var fin = p.finish ? " finish_reason=" + p.finish : "";
+  if (!p.content.trim()) return { ok: false, reason: "empty content" + fin + " under max_tokens " + BUDGET_MAX_TOKENS };
+  if (!/\bDONE\b/i.test(p.content)) return { ok: false, reason: "no DONE marker" + fin + " got " + JSON.stringify(p.content.slice(0, 40)) };
+  return { ok: true, reason: "ok" };
+}
+__name(judgeBudgetReply, "judgeBudgetReply");
+async function budgetProbeOn(env) {
+  return String(await cfgGet(env, "budget_probe", "on")).trim().toLowerCase() !== "off";
+}
+__name(budgetProbeOn, "budgetProbeOn");
+// One budget request straight to the Workers AI binding (messages, then prompt when the model refuses that shape). Shared by the
+// sweep and the prober member so a row both write is judged on one request shape.
+async function probeBudgetDirect(env, cfId) {
+  var bodies = [{ messages: [{ role: "user", content: BUDGET_PROMPT }], max_tokens: BUDGET_MAX_TOKENS }, { prompt: BUDGET_PROMPT, max_tokens: BUDGET_MAX_TOKENS }];
+  var v = null, lastErr = null;
+  for (var i = 0; i < bodies.length && !v; i++) {
+    try {
+      v = judgeBudgetReply(await env.AI.run(cfId, bodies[i]));
+    } catch (e) {
+      lastErr = String(e && e.message || e).slice(0, 100);
+    }
+  }
+  return v || { ok: false, reason: "budget request failed: " + lastErr };
+}
+__name(probeBudgetDirect, "probeBudgetDirect");
+async function probeBudgetCompletion(env, model) {
+  var t0 = Date.now();
+  if (BUDGET_DIRECT_IDS[model] && env.AI) {
+    var d = await probeBudgetDirect(env, BUDGET_DIRECT_IDS[model]);
+    return { status: d.ok ? "pass" : "fail", latency_ms: Date.now() - t0, detail: d.ok ? "ok direct" : "budget direct " + d.reason };
+  }
+  try {
+    var r = await jfetch(
+      env,
+      "https://qnfo-ai.internal/v1/chat/completions",
+      { Authorization: "Bearer " + env.QNFO_ROUTER_KEY },
+      { model, messages: [{ role: "user", content: BUDGET_PROMPT }], max_tokens: BUDGET_MAX_TOKENS, stream: false, hedge: false },
+      45e3,
+      "QNFO_AI"
+    );
+    if (r.status !== 200) return { status: "fail", latency_ms: Date.now() - t0, detail: "budget router http=" + r.status };
+    // a reply from another model says nothing about this one (the ping row already fails on a mismatch)
+    if (!(r.data && r.data.model === model)) return { status: "pass", latency_ms: Date.now() - t0, detail: "inconclusive: served by " + String(r.data && r.data.model).slice(0, 60) };
+    var v = judgeBudgetReply(r.data);
+    return { status: v.ok ? "pass" : "fail", latency_ms: Date.now() - t0, detail: v.ok ? "ok router" : "budget router " + v.reason };
+  } catch (e) {
+    return { status: "fail", latency_ms: Date.now() - t0, detail: "budget router err " + String(e && e.message || e).slice(0, 120) };
+  }
+}
+__name(probeBudgetCompletion, "probeBudgetCompletion");
+// ---- BUDGET-PROBE-1:END ----
 async function probeVision(env, model) {
   var t0 = Date.now();
   var msgs = [{ role: "user", content: [{ type: "text", text: "What color is this image? Reply in one word." }, { type: "image_url", image_url: { url: "data:image/png;base64," + RED10X10_B64 } }] }];
@@ -783,9 +865,18 @@ async function calibration(env, trigger) {
     if (!fullSweep) results.push({ probe: "cadence", target: "model-sweep", status: "pass", latency_ms: 0, detail: "lean tick: re-probed " + sweepModels.length + " not-ok of " + ALL_MODELS.length + " models; full sweep every " + sweepEvery + " ticks (PROBE-CADENCE-COST-1)" });
   }
   if (fullSweep) sweepModels = ALL_MODELS;
+  var budgetOn = await budgetProbeOn(env);
   await runPool(sweepModels, 4, async function(m) {
     var res = await probeCompletion(env, m);
     results.push(Object.assign({ probe: "model", target: m }, res));
+    // BUDGET-PROBE-1 (1.6.0): a model that answers the ping gets one budget-shaped request; a failure there decides the health
+    // row (detail and failure count) while the ping row and its latency stay as they were.
+    var bres = null;
+    if (res.status === "pass" && budgetOn) {
+      bres = await probeBudgetCompletion(env, m);
+      results.push(Object.assign({ probe: "model-budget", target: m }, bres));
+      if (bres.status !== "pass") res = Object.assign({}, res, { status: "fail", detail: bres.detail });
+    }
     if (res.status !== "pass" && /http=40[13]\b/.test(String(res.detail || ""))) return res;
     try {
       var prev = await env.QNFO_AUDIT.prepare("SELECT consecutive_failures FROM ai_model_health WHERE model_id = ?1").bind(m).first();
@@ -851,12 +942,12 @@ __name(calibration, "calibration");
 // The member code is the prober's worker.js 2.3.14 unchanged except for its version constant and its limitation text; it keeps
 // WORKER = "ai-health-prober", so ai_model_health, freshness_guard, fleet_heartbeat and capability_audit_snapshot rows keep
 // their writer name. The host dispatches the */20 cron to it and exposes its read routes under /prober/.
-var PROBER_VERSION = "2.3.15-folded";
+var PROBER_VERSION = "2.3.16-budget-probe";
 var proberMod = (function() {
   var WORKER = "ai-health-prober";
   var VERSION = PROBER_VERSION; // member version (PROBER-FOLD-1); was 2.3.14-text-writers-probed as its own worker; // 2.3.14 PROBER-MODELS-1 (pillar: reach): probes the 4 text models the writing loops depend on and nobody watched (nemotron-3-120b = q08 primary writer; gemma-4-26b-a4b, qwen3-30b-a3b, llama-3.3-70b = q08 panel judges / ask writers); healthy models are probed every 9h instead of 6h so the unique-id calls per day do not rise (9 ids x 4 = 36 before, 13 ids x 2.67 = 34.7 after; fleet_budget ai_spend caps are breached, so no net model calls). Shared ids were already probed once per tick (byId), so the repeated deepseek-v4-pro-0813 row costs no extra call;
   var CAPS = ["model-health-probe", "freshness-check", "health-coverage"];
-  var LIMS = ["runs every 30 minutes inside qnfo-ai-calibration, on its calibration tick (PROBER-FOLD-1, PROBER-ON-CAL-TICK-1); read routes /prober/health and /prober/freshness, /prober/run needs the calibration key", "a healthy model is re-probed every 6 hours; degraded or failing models every 2 hours", "liveness is published to fleet_heartbeat and this capability row from the cron"];
+  var LIMS = ["runs every 30 minutes inside qnfo-ai-calibration, on its calibration tick (PROBER-FOLD-1, PROBER-ON-CAL-TICK-1); read routes /prober/health and /prober/freshness, /prober/run needs the calibration key", "a healthy model is re-probed every 6 hours; degraded or failing models every 2 hours", "liveness is published to fleet_heartbeat and this capability row from the cron", "BUDGET-PROBE-1: a text model that answers the ping also gets one max_tokens 256 request asking for DONE; empty content or no marker is degraded (ai_calibration_config budget_probe = off restores the ping-only verdict)"];
   // v2.3.3 AMH-NAMESPACE-2 (2026-09-13): the ID-NAMESPACE-1 fix was INCOMPLETE.
   // MODELS[0] still carried a QUALIFIED internal key ("@cf/qwen/qwen3.8-27b"), i.e. this
   // prober itself kept writing one row in the `@cf/` namespace it was supposed to abandon.
@@ -906,6 +997,29 @@ var proberMod = (function() {
     return { ok: false, err: lastErr };
   }
   __name(probeOne, "probeOne");
+  // BUDGET-PROBE-1 (member 2.3.16): probeOne above is the folded prober's cheap ping, kept verbatim (prober-fold.test.mjs pins it
+  // line for line). A text model that passes it gets one budget-shaped request through the same Workers AI binding
+  // (probeBudgetDirect, the function the sweep uses for these ids too); empty content or no DONE marker turns the result into a failed probe, which
+  // runProbe writes through its existing degraded -> failing UPDATE. Embedding models are judged by the ping alone. The verdict
+  // is also kept in ai_calibration_results (probe model-budget) so a degraded row has its reason.
+  async function applyBudgetProbe(env, m, r) {
+    r.budgetChecked = true;
+    if (!r.ok || m.kind !== "text") return;
+    if (!await budgetProbeOn(env)) return;
+    const t0 = Date.now();
+    const v = await probeBudgetDirect(env, m.id);
+    if (!v.ok) {
+      r.ok = false;
+      r.err = "budget-probe: " + v.reason;
+    }
+    if (env.QNFO_AUDIT) {
+      try {
+        await env.QNFO_AUDIT.prepare("INSERT INTO ai_calibration_results (run_id, ts, probe, target, status, latency_ms, detail) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)").bind("prober-" + t0, t0, "model-budget", canonicalId(m.internal || m.id), v.ok ? "pass" : "fail", Date.now() - t0, String(v.ok ? "ok" : v.reason).slice(0, 300)).run();
+      } catch (e) {
+      }
+    }
+  }
+  __name(applyBudgetProbe, "applyBudgetProbe");
   function toMs(m) {
     if (m == null) return null;
     if (typeof m === "number") return m > 1e12 ? m : m * 1e3;
@@ -985,6 +1099,7 @@ var proberMod = (function() {
         continue;
       }
       const r = byId[m.id] || (byId[m.id] = await probeOne(env, m));
+      if (!r.budgetChecked) await applyBudgetProbe(env, m, r);
       results.push({ model: mid, ok: r.ok, ms: r.ms || null });
       if (env.QNFO_AUDIT) {
         try {

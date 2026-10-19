@@ -31,7 +31,7 @@ const ok = (c, m, extra) => { if (c) pass++; else { fail++; console.log("FAIL " 
   const inPrune = (l) => { const i = body.indexOf(l); return ps > fs0 && pe > ps && pe < fe && i >= ps && i <= pe; };
   const changed = body.filter((l) => l.trim() && !src.includes(l.trim()) && !inCov(l) && !inPrune(l));
   ok(cs > 0 && ce > cs && changed.length === 3 && changed.some((l) => l.startsWith("var VERSION = ")) && changed.some((l) => l.startsWith("var LIMS = ")) && changed.some((l) => l.startsWith("var SIGNALS = ")), "every prober line is in the host except its VERSION, LIMS and SIGNALS lines (SIGNALS drops the retired kaizen register, FOLD-HYGIENE-1)", changed.map((l) => l.slice(0, 60)));
-  ok(versionAtLeast(api.VERSION, "1.3.1") && api.PROBER_VERSION === "2.3.15-folded" && api.PROBER_CRON === "*/20 * * * *", "host 1.3.1+, member 2.3.15-folded, legacy member cron */20 kept for dispatch");
+  ok(versionAtLeast(api.VERSION, "1.3.1") && versionAtLeast(api.PROBER_VERSION, "2.3.15") && api.PROBER_CRON === "*/20 * * * *", "host 1.3.1+, member 2.3.15 or later, legacy member cron */20 kept for dispatch");
   ok(!/"kaizen", "kaizen_candidates"/.test(src), "the prober SIGNALS in the host no longer grade the retired kaizen register (FOLD-HYGIENE-1)");
   ok(src.includes('["version_queue", "version_queue", "created_at", 336, "event"]') && !src.includes('["version_queue", "version_queue", "created_at", 72, "heartbeat"]'), "version_queue is an event register with a 336 h window (#2028)");
   ok((src.match(/var VERSION = "/g) || []).length === 1, "one quoted VERSION constant in the bundle (FM7 parity applies to the host)");
@@ -65,21 +65,22 @@ const runCron = async (cron) => {
   const t = await runCron("*/30 * * * *");
   const hb = t.sql.find((x) => /INSERT INTO fleet_heartbeat/.test(x.q) && x.a[0] === "ai-health-prober");
   ok(t.sql.some((x) => /ai_calibration_(runs|results)/.test(x.q)), "*/30 runs the calibration");
-  ok(hb && hb.a[1] === "2.3.15-folded", "*/30 also runs the prober member: heartbeat as ai-health-prober with the member version", hb && hb.a);
+  ok(hb && hb.a[1] === api.PROBER_VERSION, "*/30 also runs the prober member: heartbeat as ai-health-prober with the member version", hb && hb.a);
   ok(t.hostWaits === 0, "the member's waitUntil work is awaited inside the handler, not handed to the host's waitUntil", t.hostWaits);
 }
 {
   const t = await runCron("*/20 * * * *");
   const hb = t.sql.find((x) => /INSERT INTO fleet_heartbeat/.test(x.q));
   ok(hb && hb.a[0] === "ai-health-prober", "a legacy */20 event runs the prober member", hb && hb.a);
-  ok(!t.sql.some((x) => /ai_calibration_(runs|results)/.test(x.q)), "a legacy */20 event does not run the calibration (no extra model calls)");
+  // BUDGET-PROBE-1: the member records its own budget verdicts in ai_calibration_results (probe model-budget); a calibration run writes ai_calibration_runs and other probes
+  ok(!t.sql.some((x) => /INSERT INTO ai_calibration_runs/.test(x.q) || (/INSERT INTO ai_calibration_results/.test(x.q) && x.a[2] !== "model-budget")), "a legacy */20 event does not run the calibration (no extra model calls)");
 }
 
 // 3. routes
 const get = (path, headers, envv) => api.worker_default.fetch(new Request("https://qnfo-ai-calibration.q08.workers.dev" + path, { headers: headers || {} }), envv || mkEnv().env, { waitUntil() {} });
 {
   const r = await get("/prober/health"); const j = await r.json();
-  ok(r.status === 200 && j.worker === "ai-health-prober" && j.version === "2.3.15-folded" && /inside qnfo-ai-calibration/.test(j.limitations[0]), "/prober/health answers as the member", j);
+  ok(r.status === 200 && j.worker === "ai-health-prober" && j.version === api.PROBER_VERSION && /inside qnfo-ai-calibration/.test(j.limitations[0]), "/prober/health answers as the member", j);
   const f = await get("/prober/freshness");
   ok(f.status === 200, "/prober/freshness is public", f.status);
   const t = mkEnv();
@@ -90,7 +91,7 @@ const get = (path, headers, envv) => api.worker_default.fetch(new Request("https
   ok(run2.status === 200, "/prober/run with the calibration key runs", run2.status);
   ok((await get("/prober/other")).status === 404, "other /prober paths are 404");
   const h = await (await get("/health")).json();
-  ok(h.version === api.VERSION && h.members && h.members["ai-health-prober"] === "2.3.15-folded" && JSON.stringify(h.crons) === JSON.stringify(["*/30 * * * *"]), "/health lists the member and the one cron", h);
+  ok(h.version === api.VERSION && h.members && h.members["ai-health-prober"] === api.PROBER_VERSION && JSON.stringify(h.crons) === JSON.stringify(["*/30 * * * *"]), "/health lists the member and the one cron", h);
 }
 
 // 4. wrangler
