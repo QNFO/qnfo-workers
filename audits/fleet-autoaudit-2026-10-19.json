@@ -1,8 +1,15 @@
 {
-  "audited_at": "2026-10-19 17:23:41",
+  "audited_at": "2026-10-19 17:54:50",
   "d1_write_failures": [],
   "d1_writes_ok": 120,
   "guard": {
+    "_drift_confirm": {
+      "first_pass": [
+        "personal-companion"
+      ],
+      "refreshed": true,
+      "second_pass": []
+    },
     "_guard_rc": 0,
     "ahead": [],
     "cf_script_list": true,
@@ -535,7 +542,7 @@
     "sync_workers": [
       {
         "dir": "idea-hub",
-        "version": "1.12.0-cap-rate-1",
+        "version": "1.13.0-scoring-backoff",
         "worker": "idea-hub"
       },
       {
@@ -545,12 +552,12 @@
       },
       {
         "dir": "personal-companion",
-        "version": "1.36.0-email-opt-in",
+        "version": "1.36.1-codeagent",
         "worker": "personal-companion"
       },
       {
         "dir": "q08-signal-engine",
-        "version": "0.31.1-panel-calibration-1",
+        "version": "0.31.2-codeagent",
         "worker": "q08-signal-engine"
       },
       {
@@ -580,7 +587,7 @@
       },
       {
         "dir": "qnfo-code-orchestrator",
-        "version": "0.23.0-edit-reliability",
+        "version": "0.24.0-intake-infra-fail",
         "worker": "qnfo-code-orchestrator"
       },
       {
@@ -605,12 +612,12 @@
       },
       {
         "dir": "qnfo-fleet-control",
-        "version": "0.39.0-il-relapse",
+        "version": "0.40.0-control-alt-drill",
         "worker": "qnfo-fleet-control"
       },
       {
         "dir": "qnfo-fleet-dashboard",
-        "version": "1.51.5-paper-learn-watch",
+        "version": "1.51.7-codeagent",
         "worker": "qnfo-fleet-dashboard"
       },
       {
@@ -801,9 +808,9 @@
       "worker": "funding"
     },
     "idea-hub": {
-      "before": "1.12.0-cap-rate-1",
+      "before": "1.13.0-scoring-backoff",
       "http": 200,
-      "live": "1.12.0-cap-rate-1",
+      "live": "1.13.0-scoring-backoff",
       "match": 1,
       "note": "SYNC",
       "worker": "idea-hub"
@@ -938,9 +945,9 @@
       "worker": "personal-api"
     },
     "personal-companion": {
-      "before": "1.36.0-email-opt-in",
+      "before": "1.36.1-codeagent",
       "http": 200,
-      "live": "1.36.0-email-opt-in",
+      "live": "1.36.1-codeagent",
       "match": 1,
       "note": "SYNC",
       "worker": "personal-companion"
@@ -982,9 +989,9 @@
       "worker": "personal-life-search"
     },
     "q08-signal-engine": {
-      "before": "0.31.1-panel-calibration-1",
+      "before": "0.31.2-codeagent",
       "http": 200,
-      "live": "0.31.1-panel-calibration-1",
+      "live": "0.31.2-codeagent",
       "match": 1,
       "note": "SYNC",
       "worker": "q08-signal-engine"
@@ -1183,9 +1190,9 @@
       "worker": "qnfo-code-agent"
     },
     "qnfo-code-orchestrator": {
-      "before": "0.23.0-edit-reliability",
+      "before": "0.24.0-intake-infra-fail",
       "http": 200,
-      "live": "0.23.0-edit-reliability",
+      "live": "0.24.0-intake-infra-fail",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-code-orchestrator"
@@ -1313,17 +1320,17 @@
       "worker": "qnfo-fleet-calibrator"
     },
     "qnfo-fleet-control": {
-      "before": "0.39.0-il-relapse",
+      "before": "0.40.0-control-alt-drill",
       "http": 200,
-      "live": "0.39.0-il-relapse",
+      "live": "0.40.0-control-alt-drill",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-fleet-control"
     },
     "qnfo-fleet-dashboard": {
-      "before": "1.51.5-paper-learn-watch",
+      "before": "1.51.7-codeagent",
       "http": 200,
-      "live": "1.51.5-paper-learn-watch",
+      "live": "1.51.7-codeagent",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-fleet-dashboard"
