@@ -1,5 +1,5 @@
 {
-  "audited_at": "2026-10-19 23:24:23",
+  "audited_at": "2026-10-19 23:57:46",
   "d1_write_failures": [],
   "d1_writes_ok": 120,
   "guard": {
@@ -540,7 +540,7 @@
       },
       {
         "dir": "personal-api",
-        "version": "4.15.1-bad-tag-filter",
+        "version": "4.20.0-gp-summary",
         "worker": "personal-api"
       },
       {
@@ -560,7 +560,7 @@
       },
       {
         "dir": "qnfo-ai-calibration",
-        "version": "1.6.3-codeagent",
+        "version": "1.6.4-downgrade-inconclusive",
         "worker": "qnfo-ai-calibration"
       },
       {
@@ -605,12 +605,12 @@
       },
       {
         "dir": "qnfo-fleet-control",
-        "version": "0.41.1-pool-bound-sources",
+        "version": "0.41.2-mastodon-probe-host",
         "worker": "qnfo-fleet-control"
       },
       {
         "dir": "qnfo-fleet-dashboard",
-        "version": "1.51.15-reader-report-watchmaker",
+        "version": "1.51.17-cost-window-7d",
         "worker": "qnfo-fleet-dashboard"
       },
       {
@@ -660,7 +660,7 @@
       },
       {
         "dir": "qnfo-ops",
-        "version": "2.51.1-bad-tag-filter",
+        "version": "2.52.0-job-prompt-cap",
         "worker": "qnfo-ops"
       },
       {
@@ -930,9 +930,9 @@
       "worker": "patches"
     },
     "personal-api": {
-      "before": "4.15.1-bad-tag-filter",
+      "before": "4.20.0-gp-summary",
       "http": 200,
-      "live": "4.15.1-bad-tag-filter",
+      "live": "4.20.0-gp-summary",
       "match": 1,
       "note": "SYNC",
       "worker": "personal-api"
@@ -1025,9 +1025,9 @@
       "worker": "qnfo-ai"
     },
     "qnfo-ai-calibration": {
-      "before": "1.6.3-codeagent",
+      "before": "1.6.4-downgrade-inconclusive",
       "http": 200,
-      "live": "1.6.3-codeagent",
+      "live": "1.6.4-downgrade-inconclusive",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-ai-calibration"
@@ -1313,17 +1313,17 @@
       "worker": "qnfo-fleet-calibrator"
     },
     "qnfo-fleet-control": {
-      "before": "0.41.1-pool-bound-sources",
+      "before": "0.41.2-mastodon-probe-host",
       "http": 200,
-      "live": "0.41.1-pool-bound-sources",
+      "live": "0.41.2-mastodon-probe-host",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-fleet-control"
     },
     "qnfo-fleet-dashboard": {
-      "before": "1.51.15-reader-report-watchmaker",
+      "before": "1.51.17-cost-window-7d",
       "http": 200,
-      "live": "1.51.15-reader-report-watchmaker",
+      "live": "1.51.17-cost-window-7d",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-fleet-dashboard"
@@ -1473,9 +1473,9 @@
       "worker": "qnfo-observability"
     },
     "qnfo-ops": {
-      "before": "2.51.1-bad-tag-filter",
+      "before": "2.52.0-job-prompt-cap",
       "http": 200,
-      "live": "2.51.1-bad-tag-filter",
+      "live": "2.52.0-job-prompt-cap",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-ops"
