@@ -82,6 +82,15 @@ environment = "production"
 
 # v5.14.0 - QNFO.OPS.010 Stage C: twin calendar retrieval (plane=qnfo)
 
+# EMAIL-BINDING-RESTORE-1 (5.37.1, human_actions 108): the agent's email_check and email_send tools call qnfo-email through this
+# binding. qnfo-email authenticates a service-binding caller by ctx.props.caller (EMAIL-CALLER-PROPS-1), so no copy of its API key is
+# needed here (CLAUDE.md, internal calls: props = { caller = "<worker name>" }, installed by the canonical deploy).
+[[services]]
+binding = "EMAIL"
+service = "qnfo-email"
+environment = "production"
+props = { caller = "qnfo-ai" }
+
 # v5.16.2 - QNFO.OPS.011: restore QNFO_INTENT service binding. auto-express (expressIdea)
 # was silently 404ing: the binding was absent so expressIdea fell back to a public
 # workers.dev fetch, which returns 404 from a Worker (same-account restriction).
