@@ -47,7 +47,9 @@ ok(probe().observed === "1", "and passes once no unfinished task holds a slash",
 ok(db.prepare("SELECT next_due_at FROM remediation_contracts").get().next_due_at === null, "the detector is due now");
 const fm = db.prepare("SELECT * FROM failure_modes WHERE fm_key = 'code-task-repo-double-owner'").get();
 ok(fm && fm.probe_class === "fm-code-task-repo-slug" && fm.issue_id === 100050, "the failure mode is recorded with its detector", fm);
-const bak = db.prepare("SELECT id, repo FROM bak_20261019_repo_slug_any_depth").all();
+const bak = db.prepare("SELECT id, repo FROM bak_20261019_repo_slug_any_depth_v2 WHERE kind = 'row'").all();
+const bakT = db.prepare("SELECT id, repo FROM bak_20261019_repo_slug_any_depth_v2 WHERE kind = 'trigger'").all();
+ok(bakT.length === 1 && bakT[0].id === "code_tasks_repo_slug_ai" && /AFTER INSERT ON code_tasks/.test(bakT[0].repo), "BACKUP-NONEMPTY-1: the backup holds the replaced trigger definition, so it is never empty", bakT);
 ok(bak.length === 1 && bak[0].id === "ct_double" && bak[0].repo === "QNFO/QNFO/qnfo-workers", "the backup holds the row as it was", bak);
 const snap = JSON.stringify(db.prepare("SELECT * FROM code_tasks ORDER BY id").all()) + JSON.stringify(db.prepare("SELECT * FROM remediation_contracts").all());
 db.exec(sql);

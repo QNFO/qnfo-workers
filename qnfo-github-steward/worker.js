@@ -22,7 +22,7 @@
  *   * archived repositories are read-only and are skipped, not reported as drift;
  *   * GET /report and GET /health are public reads; POST /tick needs STEWARD_KEY.
  */
-var VERSION = "0.4.8-tracker-repair-round-1"; // 0.4.8 TRACKER-REPAIR-ROUND-1 (agent_issues 2940): a codeagent-<stem>-rN pull request of an earlier repair round is matched to its task by the branch stem, so it is no longer pr-without-task drift. // 0.4.6 PORTFOLIO-HEARTBEAT-1 (2026-10-18): publish the portfolio run as in_progress BEFORE the work, so a tick killed by the CPU budget is distinguishable from a record that was never writtenIVENESS-1 (2026-10-18): this worker, on its own 10-minute cron and outside the qnfo-code-orchestrator process, reads the freshest fleet_crons.last_fired and files liveness:dispatcher-stalled when the per-minute dispatcher has been quiet for over 20 minutes -- the one stall no watchdog inside that failure domain can report, because NEVER-STALL-1 is itself a fleet_cron dispatched by the tick it would be reporting on. // 0.4.4 NOTIFY-ATTEMPT-TITLE-1 (2026-10-18): a re-run notification title ("workflow run, Attempt #2 failed") is parsed like the first attempt, so its resolved thread is cleared (three were kept at 10:52Z). // 0.4.3 TRACKER-SYNC-1: stale pr-without-task rows are cleared every tick; a merge fix reads merged_by from the single PR; 0.4.2 TRACKER-SYNC-1: the recent-PR window is a deliberate partial read (every post-backfill tick refused it); 0.4.1 org projects declared on (the portfolio board needs them); 0.4.0 PORTFOLIO-SYNC-1: projects derived from the census, metric breaches as roadmap objectives, programs/projects/issues/roadmap mirrored to GitHub labels, milestones, issues and a Projects board every 10 minutes; 0.3.1 a task is matched to its PR by number too (pr-without-task false positive on PR 381); 0.3.0 TRACKER-SYNC-1: agent_issues <-> GitHub issues and code_tasks <-> PRs every 10 minutes (0.2.2 ISSUE-SYNC-1)
+var VERSION = "0.5.0-tracker-drain"; // 0.5.0 TRACKER-DRAIN-1 (agent_issues 2940 follow-up): ISSUE-SYNC-FORWARD-1 closes the GitHub issue of a resolved worker-observability dispatch row (and reopens it on a recurrence, before the reverse leg can swallow it); the state sync runs oldest D1 change first inside a time/subrequest budget and stops on 403/429 instead of a flat 20; the mass-flip guard refuses only unexplained disagreement (explained = D1 moved across open/closed since the link last agreed, not an updated_at window); a 403 stops the tick only when GitHub says rate limit (one shared flag), a per-issue 403 is skipped; the subrequest budget counts D1 calls; one status mapping (monitoring is closed not_planned naming its twin, never a completed close with no evidence); superseded attempt PRs outside the recent window are matched by stem and recorded with head_ref and task_ref; v_tracker_drift gains age_min and metric tracker_drift_oldest_min. // 0.4.8 TRACKER-REPAIR-ROUND-1 (agent_issues 2940): a codeagent-<stem>-rN pull request of an earlier repair round is matched to its task by the branch stem, so it is no longer pr-without-task drift. // 0.4.6 PORTFOLIO-HEARTBEAT-1 (2026-10-18): publish the portfolio run as in_progress BEFORE the work, so a tick killed by the CPU budget is distinguishable from a record that was never writtenIVENESS-1 (2026-10-18): this worker, on its own 10-minute cron and outside the qnfo-code-orchestrator process, reads the freshest fleet_crons.last_fired and files liveness:dispatcher-stalled when the per-minute dispatcher has been quiet for over 20 minutes -- the one stall no watchdog inside that failure domain can report, because NEVER-STALL-1 is itself a fleet_cron dispatched by the tick it would be reporting on. // 0.4.4 NOTIFY-ATTEMPT-TITLE-1 (2026-10-18): a re-run notification title ("workflow run, Attempt #2 failed") is parsed like the first attempt, so its resolved thread is cleared (three were kept at 10:52Z). // 0.4.3 TRACKER-SYNC-1: stale pr-without-task rows are cleared every tick; a merge fix reads merged_by from the single PR; 0.4.2 TRACKER-SYNC-1: the recent-PR window is a deliberate partial read (every post-backfill tick refused it); 0.4.1 org projects declared on (the portfolio board needs them); 0.4.0 PORTFOLIO-SYNC-1: projects derived from the census, metric breaches as roadmap objectives, programs/projects/issues/roadmap mirrored to GitHub labels, milestones, issues and a Projects board every 10 minutes; 0.3.1 a task is matched to its PR by number too (pr-without-task false positive on PR 381); 0.3.0 TRACKER-SYNC-1: agent_issues <-> GitHub issues and code_tasks <-> PRs every 10 minutes (0.2.2 ISSUE-SYNC-1)
 
 var ORG = "QNFO";
 var USER = "rwnq8";
@@ -68,7 +68,22 @@ var PROTECTION = {
   allow_fork_syncing: false
 };
 
+/* Subrequests spent by this isolate; a tick budget (tsBudget) reads the difference, so no reset is needed. */
+var GH_CALLS = 0;
+/* TRACKER-RATE-LIMIT-1: one flag for every stage of a tick. A response is a rate limit only when GitHub says so: 429, or a 403 that
+ * carries Retry-After, x-ratelimit-remaining 0 or a rate-limit/abuse/secondary message. Any other 403 (a locked or forbidden issue)
+ * is that issue's refusal and the loop moves on. gh() latches the first limit for Retry-After seconds (60 s default, at most 600),
+ * every later stage reads ghLimited() and makes no further call, and trackerSync copies it to the tick result. */
+var GH_LIMIT = null;
+function ghLimited() { return !!GH_LIMIT && Date.now() < GH_LIMIT.until; }
+function ghIsLimit(status, headers, text) {
+  if (status === 429) return true;
+  if (status !== 403) return false;
+  var h = function (k) { return headers && headers.get ? headers.get(k) : null; };
+  return !!h("retry-after") || h("x-ratelimit-remaining") === "0" || /rate limit|abuse|secondary/i.test(String(text || "").slice(0, 400));
+}
 function gh(env, method, path, body) {
+  GH_CALLS++;
   var init = {
     method: method,
     headers: {
@@ -84,7 +99,9 @@ function gh(env, method, path, body) {
     return r.text().then(function (t) {
       var j = null;
       try { j = t ? JSON.parse(t) : null; } catch (e) { j = null; }
-      return { status: r.status, body: j, text: t };
+      var limited = ghIsLimit(r.status, r.headers, t);
+      if (limited) { var ra = Number(r.headers && r.headers.get && r.headers.get("retry-after")); if (!ghLimited()) GH_LIMIT = { status: r.status, until: Date.now() + (ra > 0 ? Math.min(ra, 600) : 60) * 1000 }; }
+      return { status: r.status, body: j, text: t, limited: limited };
     });
   });
 }
@@ -322,6 +339,7 @@ async function triageNotifications(env, result) {
  * error is recorded and the row stays queued for the next run, never retried as drift). */
 async function issueSync(env, result) {
   if (!env.AUDIT) return;
+  if (ghLimited()) { result.issue_sync = { mirrored: 0, failed: 0, backlog_seen: 0, skipped: "rate limited" }; return; }
   try {
     var rows = await env.AUDIT.prepare(
       "SELECT fingerprint, category, sev, owner, payload, gh_number FROM fleet_issue_dispatch WHERE state IN ('queued','tracked') AND (gh_number IS NULL OR gh_number = '') LIMIT 20"
@@ -362,6 +380,7 @@ async function issueSync(env, result) {
       } else {
         failed++;
         result.errors.push({ scope: "issue-sync:" + row.fingerprint, status: c.status, why: String(c.text).slice(0, 120) });
+        if (c.limited) break; /* rate limited: the rest waits for the next tick */
       }
     }
     result.issue_sync = { mirrored: created, failed: failed, backlog_seen: list.length };
@@ -376,9 +395,10 @@ async function issueSync(env, result) {
  * read-mostly, and fail-safe (an API error leaves the row tracked for the next run). */
 async function issueSyncReverse(env, result) {
   if (!env.AUDIT) return;
+  if (ghLimited()) { result.issue_sync_reverse = { closed: 0, still_open: 0, errored: 0, checked: 0, skipped: "rate limited" }; return; }
   try {
     var rows = await env.AUDIT.prepare(
-      "SELECT fingerprint, gh_number FROM fleet_issue_dispatch WHERE state = 'tracked' AND gh_number IS NOT NULL AND gh_number != '' LIMIT 50"
+      "SELECT fingerprint, gh_number FROM fleet_issue_dispatch WHERE state = 'tracked' AND gh_number IS NOT NULL AND gh_number != '' AND COALESCE(exec_state, '') <> 'closed-by-sync' LIMIT 50"
     ).all();
     var list = rows.results || [];
     var closed = 0, stillOpen = 0, errored = 0;
@@ -394,11 +414,87 @@ async function issueSyncReverse(env, result) {
         stillOpen++;
       } else {
         errored++;
+        if (g.limited) { result.errors.push({ scope: "issue-sync-reverse", status: g.status, why: "rate limited; the rest waits for the next tick" }); break; }
       }
     }
     result.issue_sync_reverse = { closed: closed, still_open: stillOpen, errored: errored, checked: list.length };
   } catch (e) {
     result.errors.push({ scope: "issue-sync-reverse", why: String(e && e.message || e).slice(0, 160) });
+  }
+}
+
+/* ISSUE-SYNC-FORWARD-1 (agent_issues 2940 follow-up, clusters cf-obs-mirror-never-closes and fleet-issue-dispatch-github-mirror-never-closes):
+ * ISSUE-SYNC-1 mirrors a Cloudflare Observability group (fleet_issue_dispatch, category worker-observability) to a GitHub
+ * issue and ISSUE-SYNC-REVERSE-1 copies a GitHub close back, but nothing closed the GitHub issue when pollObservability resolved
+ * the group: 42 [fleet] issues stayed open for good (measured 2026-10-19 05:50Z, 48 resolved rows with exec_state created).
+ * Forward: a resolved row whose issue is open gets a comment and a completed close, exec_state closed-by-sync; an issue already
+ * closed is only recorded (a GET, no write). Relapse: pollObservability re-sets state tracked on recurrence and leaves exec_state
+ * alone, so tracked + closed-by-sync means the group came back; the issue is reopened BEFORE issueSyncReverse runs (otherwise the
+ * reverse leg reads the closed issue and flips the row to done, and the recurrence is silent), and the reverse leg skips a
+ * closed-by-sync row whose reopen failed. Oldest first, a bounded batch, stop on 403/429. */
+var TS_FORWARD_PER_TICK = 20;
+async function issueSyncForward(env, result) {
+  if (ghLimited()) { result.issue_sync_forward = { closed: 0, already_closed: 0, reopened: 0, errored: 0, checked: 0, carried: 0, rate_limited: true, skipped: "rate limited earlier in this tick" }; return; }
+  if (!env.AUDIT) return;
+  var res = { closed: 0, already_closed: 0, reopened: 0, errored: 0, checked: 0, carried: 0, rate_limited: false };
+  result.issue_sync_forward = res;
+  try {
+    var rows = ((await env.AUDIT.prepare(
+      "SELECT fingerprint, gh_number FROM fleet_issue_dispatch WHERE category = 'worker-observability' AND state = 'tracked' AND exec_state = 'closed-by-sync' AND gh_number IS NOT NULL AND gh_number != '' ORDER BY COALESCE(exec_ts, '') LIMIT ?"
+    ).bind(TS_FORWARD_PER_TICK).all()).results) || [];
+    for (var j = 0; j < rows.length; j++) {
+      var b = rows[j];
+      var ro = await gh(env, "PATCH", TS_REPO + "/issues/" + b.gh_number, { state: "open" });
+      if (ro.limited) { res.rate_limited = true; result.errors.push({ scope: "issue-sync-forward-reopen", status: ro.status, why: String(ro.text).slice(0, 100) }); return; }
+      if (ro.status < 200 || ro.status >= 300) {
+        /* a per-issue refusal: stamp exec_ts so the row moves behind the others (the queue is oldest exec_ts first) and is retried */
+        res.errored++; result.errors.push({ scope: "issue-sync-forward-reopen:" + b.fingerprint, status: ro.status, why: String(ro.text).slice(0, 100) });
+        await env.AUDIT.prepare("UPDATE fleet_issue_dispatch SET exec_ts = ?, exec_result = ? WHERE fingerprint = ?").bind(new Date().toISOString(), "forward-reopen failed: " + ro.status, b.fingerprint).run();
+        continue;
+      }
+      await gh(env, "POST", TS_REPO + "/issues/" + b.gh_number + "/comments", { body: "Reopened by ISSUE-SYNC-FORWARD-1: the Cloudflare Observability group `" + tsRedact(b.fingerprint) + "` is tracked again in qnfo-audit (it recurred after it was closed here)." });
+      await env.AUDIT.prepare("UPDATE fleet_issue_dispatch SET exec_state = 'created', exec_ts = ?, exec_result = NULL WHERE fingerprint = ?").bind(new Date().toISOString(), b.fingerprint).run();
+      res.reopened++;
+    }
+
+    var todo = ((await env.AUDIT.prepare(
+      "SELECT fingerprint, gh_number FROM fleet_issue_dispatch WHERE category = 'worker-observability' AND state IN ('resolved', 'done') AND gh_number IS NOT NULL AND gh_number != '' AND COALESCE(exec_state, '') NOT IN ('closed', 'closed-by-sync') ORDER BY COALESCE(exec_attempts, 0), COALESCE(exec_ts, '') LIMIT ?"
+    ).bind(TS_FORWARD_PER_TICK + 1).all()).results) || [];
+    res.carried = Math.max(0, todo.length - TS_FORWARD_PER_TICK);
+    todo = todo.slice(0, TS_FORWARD_PER_TICK);
+    for (var i = 0; i < todo.length; i++) {
+      var row = todo[i], now = new Date().toISOString();
+      res.checked++;
+      var g = await gh(env, "GET", TS_REPO + "/issues/" + row.gh_number);
+      if (g.limited) { res.rate_limited = true; result.errors.push({ scope: "issue-sync-forward", status: g.status, why: String(g.text).slice(0, 100) }); return; }
+      var fail = null;
+      if (g.status === 404 || g.status === 410) {
+        await env.AUDIT.prepare("UPDATE fleet_issue_dispatch SET exec_state = 'closed', exec_ts = ?, exec_result = ? WHERE fingerprint = ?").bind(now, "forward-close: github issue " + row.gh_number + " is gone (" + g.status + ")", row.fingerprint).run();
+        res.already_closed++;
+      } else if (g.status === 200 && g.body && g.body.state === "closed") {
+        await env.AUDIT.prepare("UPDATE fleet_issue_dispatch SET exec_state = 'closed-by-sync', exec_ts = ?, exec_result = ? WHERE fingerprint = ?").bind(now, "forward-close: github issue already closed", row.fingerprint).run();
+        res.already_closed++;
+      } else if (g.status === 200 && g.body && g.body.pull_request) {
+        fail = "number is a pull request";
+      } else if (g.status === 200) {
+        await gh(env, "POST", TS_REPO + "/issues/" + row.gh_number + "/comments", { body: "Closed by ISSUE-SYNC-FORWARD-1: the Cloudflare Observability group `" + tsRedact(row.fingerprint) + "` is resolved in qnfo-audit (fleet_issue_dispatch state resolved: it is no longer in the active issue list). It is reopened here if the group recurs." });
+        var p = await gh(env, "PATCH", TS_REPO + "/issues/" + row.gh_number, { state: "closed", state_reason: "completed" });
+        if (p.status >= 200 && p.status < 300) {
+          await env.AUDIT.prepare("UPDATE fleet_issue_dispatch SET exec_state = 'closed-by-sync', exec_ts = ?, exec_result = ? WHERE fingerprint = ?").bind(now, "forward-close: closed github issue " + row.gh_number + " (completed)", row.fingerprint).run();
+          res.closed++;
+        } else {
+          if (p.limited) { res.rate_limited = true; result.errors.push({ scope: "issue-sync-forward", status: p.status, why: String(p.text).slice(0, 100) }); return; }
+          fail = "close " + p.status;
+        }
+      } else fail = "read " + g.status;
+      if (fail) {
+        res.errored++;
+        await env.AUDIT.prepare("UPDATE fleet_issue_dispatch SET exec_attempts = COALESCE(exec_attempts, 0) + 1, exec_result = ? WHERE fingerprint = ?").bind("forward-close failed: " + fail, row.fingerprint).run();
+        result.errors.push({ scope: "issue-sync-forward:" + row.fingerprint, why: fail });
+      }
+    }
+  } catch (e) {
+    result.errors.push({ scope: "issue-sync-forward", why: String(e && e.message || e).slice(0, 160) });
   }
 }
 
@@ -420,7 +516,15 @@ var TS_REPO = "/repos/" + ORG + "/qnfo-workers";
 var TS_LABEL = "fleet-issue";
 var TS_CRON = "3,13,23,33,43,53 * * * *";
 var TS_CREATE_PER_TICK = 20;
-var TS_STATE_FIX_PER_TICK = 20;
+/* TRACKER-STATE-BUDGET-1: the state fixes (close, reopen) were a flat 20 per tick in unspecified order. Measured 2026-10-19 05:43Z:
+ * 20 fixes took 46.9 s with no errors, the cap drained a 61-row burst in about three ticks, and the unordered join fixed the newest
+ * ids last (one row waited 85 min behind newer ones). The loop now runs oldest D1 change first and stops on a budget, not a count:
+ * at least TS_FIX_MIN attempts always run, then it stops at TS_FIX_MS of wall time or TS_FIX_CALLS GitHub subrequests, never
+ * more than TS_FIX_MAX attempts (GitHub's secondary limit is about 80 content-creating requests a minute and 500 an hour), and
+ * on the first 403/429. The portfolio roadmap twin uses the same budget. A reopen (D1 open, GitHub closed) is a phantom issue
+ * and goes first, up to a quarter of TS_FIX_MAX. */
+var TS_FIX_MIN = 10, TS_FIX_MAX = 40, TS_FIX_MS = 50000, TS_FIX_CALLS = 110;
+var TS_RECLASS_PER_TICK = 8, TS_PR_REVISIT_PER_TICK = 10;
 var TS_PRIVATE_CATEGORIES = { personal: 1, security: 1 };
 
 function tsRedact(s) {
@@ -487,8 +591,86 @@ async function tsState(env, k, v) {
     .bind(k, String(v), new Date().toISOString()).run();
 }
 
+/* How a D1 agent_issues status shows on GitHub (TRACKER-STATUS-MAP-1). One table for the worker; migrations/2026-10-19-tracker-drift-age.sql
+ * v_tracker_drift uses the same open set (a test reads both). Only 'open' is open on GitHub. 'monitoring' is not a terminal
+ * state and no evidence is claimed for it: the 42 rows parked there are twins of a newer open row (agent-issues-reopen-twin-guard),
+ * so it is closed as not_planned with a comment naming the live twin. Mapping it to open would put 42 duplicates beside their twins. */
+var TS_STATUS_OPEN = { open: 1 };
+var TS_STATUS_NOT_PLANNED = { wontfix: 1, monitoring: 1 };
+function tsGhWant(status) {
+  if (TS_STATUS_OPEN[status]) return { open: true, reason: null };
+  return { open: false, reason: TS_STATUS_NOT_PLANNED[status] ? "not_planned" : "completed" };
+}
+
+/* The budget counts every subrequest the loop makes: GitHub calls (GH_CALLS) and the D1 calls the loop reports through d1(n); both
+ * are subrequests of the invocation. */
+function tsBudget(max) {
+  var t0 = Date.now(), c0 = GH_CALLS, d1 = 0;
+  return {
+    d1: function (n) { d1 += n === undefined ? 1 : n; },
+    more: function (tried) {
+      if (tried >= max) return false;
+      if (tried < TS_FIX_MIN) return true;
+      return Date.now() - t0 < TS_FIX_MS && GH_CALLS - c0 + d1 < TS_FIX_CALLS;
+    }
+  };
+}
+
+function tsRateLimited(r) { return !!r && !!r.limited; }
+
+/* Oldest D1 change first; reopens lead up to a quarter of the cap, the rest of them follow the closes. */
+function tsOrder(mism, isReopen, changedOf, idOf) {
+  var by = function (a, b) { return changedOf(a) - changedOf(b) || idOf(a) - idOf(b); };
+  var re = mism.filter(isReopen).sort(by), cl = mism.filter(function (l) { return !isReopen(l); }).sort(by);
+  var q = Math.ceil(TS_FIX_MAX / 4);
+  return re.slice(0, q).concat(cl, re.slice(q));
+}
+
+/* The mass-flip guard exists for a label rename or an API anomaly, where GitHub differs and D1 has NOT changed. "Explained" is
+ * what the link already knows, not a clock: a mismatch is explained when D1 moved across the open/closed line since the last time
+ * the two agreed (the link's last-synced d1_status maps to the other GitHub state than the current status). A row whose d1_status
+ * already equals its status and whose GitHub side differs is a GitHub-side change (a removed label, a hand close, an API
+ * anomaly) however recently agent_issues.updated_at was touched: bulk closes and 24 h age bumps touch it on nearly every link,
+ * so an updated_at window explained everything and the guard never fired. The guard refuses the unexplained rows only when they
+ * are over half the links; explained rows are always processed in budgeted slices (a D1 burst over half the links used to stall the
+ * sync for good, since nothing a refusal leaves undone can shrink the count). */
+function tsGuard(mism, total, explainedOf) {
+  var explained = mism.filter(explainedOf);
+  var unexplained = mism.length - explained.length;
+  if (total >= 10 && unexplained > total / 2) return { rows: explained, refused: unexplained };
+  return { rows: mism, refused: 0 };
+}
+
+async function tsHasColumn(env, table, col) {
+  try { return (((await env.AUDIT.prepare("PRAGMA table_info(" + table + ")").all()).results) || []).some(function (c) { return c.name === col; }); }
+  catch (e) { return false; }
+}
+
+async function tsTwinGh(env, l) {
+  try {
+    var r = await env.AUDIT.prepare(
+      "SELECT l2.gh_number FROM agent_issues b JOIN gh_issue_links l2 ON l2.issue_id = b.id WHERE b.status = 'open' AND b.id <> ? AND lower(trim(b.title)) = lower(trim(?)) ORDER BY b.id DESC LIMIT 1"
+    ).bind(l.issue_id, l.title || "").first();
+    return r ? r.gh_number : null;
+  } catch (e) { return null; }
+}
+
+/* The close comment. Evidence is quoted only when D1 holds it: "(none recorded)" on a public tracker read as a completed fix.
+ * A monitoring row says what it is instead of claiming evidence; a close with neither says nothing (the state reason is the record). */
+async function tsCloseComment(env, l) {
+  if (l.status === "monitoring") {
+    var twin = await tsTwinGh(env, l);
+    return "Closed here by TRACKER-SYNC-1: agent_issues " + l.issue_id + " is status **monitoring** in qnfo-audit, which is not resolved and carries no close evidence. " +
+      (twin ? "The work is tracked by its live twin #" + twin + "; this card is closed as not planned and is not a completed fix." : "It is parked under observation, not on the defect register; it is mirrored open again if it returns to status open.");
+  }
+  var ev = String(l.close_evidence == null ? "" : l.close_evidence).trim();
+  if (!ev) return null;
+  return "Closed in qnfo-audit (agent_issues " + l.issue_id + ": status **" + String(l.status || "missing") + "**, channel " + String(l.close_channel || "none recorded") + "). Close evidence:\n\n" + tsFence(ev, 3000);
+}
+
 async function tsIssues(env, out) {
   var now = new Date().toISOString();
+  if (ghLimited()) { out.errors.push({ scope: "tracker-issues", why: "rate limited; no state change this tick" }); return; }
   var open = await tsListAll(env, TS_REPO + "/issues?state=open&labels=" + TS_LABEL, 15);
   if (!open) { out.errors.push({ scope: "tracker-issues", why: "could not list open " + TS_LABEL + " issues; no state change this tick" }); return; }
   var openNums = {}, byId = {};
@@ -499,52 +681,88 @@ async function tsIssues(env, out) {
     if (m) byId[m[1]] = g.number;
   });
 
+  var hasReason = await tsHasColumn(env, "gh_issue_links", "gh_close_reason");
   var links = (await env.AUDIT.prepare(
-    "SELECT l.issue_id, l.gh_number, l.gh_state, a.status, a.close_channel, t.close_evidence FROM gh_issue_links l LEFT JOIN agent_issues a ON a.id = l.issue_id LEFT JOIN issue_triage t ON t.issue_id = l.issue_id"
+    "SELECT l.issue_id, l.gh_number, l.gh_state, l.d1_status, " + (hasReason ? "l.gh_close_reason" : "NULL") + " AS gh_close_reason, a.status, a.title, a.updated_at, a.close_channel, t.close_evidence FROM gh_issue_links l LEFT JOIN agent_issues a ON a.id = l.issue_id LEFT JOIN issue_triage t ON t.issue_id = l.issue_id"
   ).all()).results || [];
-  var mism = links.filter(function (l) { return (l.status === "open") !== !!openNums[l.gh_number]; });
+  var wantOpen = function (l) { return tsGhWant(l.status).open; };
+  var changedOf = function (l) { return Number(l.updated_at) || 0; };
+  var mism = links.filter(function (l) { return wantOpen(l) !== !!openNums[l.gh_number]; });
+  var oldest = mism.reduce(function (m, l) { return Math.min(m, changedOf(l) || Date.now()); }, Date.now());
+  /* d1_status is the status at the last agreement (refreshed every tick for links that agree): D1 changed since then, or it did not. */
+  var guard = tsGuard(mism, links.length, function (l) { return !!l.d1_status && tsGhWant(l.d1_status).open !== tsGhWant(l.status).open; });
+  /* A label rename or an API anomaly would make every link look closed: refuse the unexplained part of a mass flip. */
+  if (guard.refused) out.errors.push({ scope: "tracker-issues", why: guard.refused + " of " + links.length + " links disagree with GitHub although D1 has not changed since the last sync; refusing a mass state flip" });
+  mism = tsOrder(guard.rows, wantOpen, changedOf, function (l) { return Number(l.issue_id) || 0; });
   var mismIds = {};
-  /* A label rename or an API anomaly would make every link look closed: refuse a mass flip instead of acting on it. */
-  if (links.length >= 10 && mism.length > links.length / 2) {
-    out.errors.push({ scope: "tracker-issues", why: mism.length + " of " + links.length + " links disagree; refusing a mass state flip" });
-    mism = [];
-  }
   mism.forEach(function (l) { mismIds[l.issue_id] = 1; });
-  var fixed = 0;
-  for (var i = 0; i < mism.length && fixed < TS_STATE_FIX_PER_TICK; i++) {
-    var l = mism[i], r;
-    if (l.status === "open") {
+  var fixed = 0, tried = 0, budget = tsBudget(TS_FIX_MAX), limited = null;
+  for (var i = 0; i < mism.length && budget.more(tried); i++) {
+    var l = mism[i], r, want = tsGhWant(l.status), reason = null;
+    tried++;
+    if (want.open) {
       r = await gh(env, "PATCH", TS_REPO + "/issues/" + l.gh_number, { state: "open" });
       if (r.status >= 200 && r.status < 300) {
         await gh(env, "POST", TS_REPO + "/issues/" + l.gh_number + "/comments", { body: "Reopened by TRACKER-SYNC-1: agent_issues " + l.issue_id + " is still open in qnfo-audit, which is authoritative. It closes here when it is closed there with close evidence." });
         out.reopened++;
       }
     } else {
-      await gh(env, "POST", TS_REPO + "/issues/" + l.gh_number + "/comments", { body: "Closed in qnfo-audit (agent_issues " + l.issue_id + ": status **" + String(l.status || "missing") + "**, channel " + String(l.close_channel || "none recorded") + "). Close evidence:\n\n" + tsFence(l.close_evidence || "(none recorded)", 3000) });
-      r = await gh(env, "PATCH", TS_REPO + "/issues/" + l.gh_number, { state: "closed", state_reason: l.status === "wontfix" ? "not_planned" : "completed" });
-      if (r.status >= 200 && r.status < 300) out.closed++;
+      var note = await tsCloseComment(env, l);
+      if (l.status === "monitoring") budget.d1(1);
+      if (note) {
+        var cr = await gh(env, "POST", TS_REPO + "/issues/" + l.gh_number + "/comments", { body: note });
+        if (tsRateLimited(cr)) { limited = cr.status; out.errors.push({ scope: "tracker-issue " + l.issue_id, status: cr.status, why: "rate limited; the rest waits for the next tick" }); break; }
+      }
+      r = await gh(env, "PATCH", TS_REPO + "/issues/" + l.gh_number, { state: "closed", state_reason: want.reason });
+      if (r.status >= 200 && r.status < 300) { out.closed++; reason = want.reason; }
     }
     if (r && r.status >= 200 && r.status < 300) {
       fixed++;
-      await env.AUDIT.prepare("UPDATE gh_issue_links SET gh_state = ?, d1_status = ?, synced_at = ? WHERE issue_id = ?")
-        .bind(l.status === "open" ? "open" : "closed", l.status || "missing", now, l.issue_id).run();
+      budget.d1(1);
+      var gs = want.open ? "open" : "closed";
+      if (hasReason) await env.AUDIT.prepare("UPDATE gh_issue_links SET gh_state = ?, d1_status = ?, synced_at = ?, gh_close_reason = ? WHERE issue_id = ?").bind(gs, l.status || "missing", now, reason, l.issue_id).run();
+      else await env.AUDIT.prepare("UPDATE gh_issue_links SET gh_state = ?, d1_status = ?, synced_at = ? WHERE issue_id = ?").bind(gs, l.status || "missing", now, l.issue_id).run();
     } else {
       out.errors.push({ scope: "tracker-issue " + l.issue_id, status: r && r.status, why: String(r && r.text || "").slice(0, 120) });
+      if (tsRateLimited(r)) { limited = r.status; break; }
     }
   }
-  /* Record GitHub's state for links that agree, so v_tracker_drift reads the truth and not the last write. */
+  out.state_sync = { drift: mism.length, tried: tried, fixed: fixed, carried: Math.max(0, mism.length - tried), oldest_min: mism.length ? Math.round((Date.now() - oldest) / 60000) : 0, rate_limited: limited };
+
+  /* A monitoring card an earlier version closed as "completed" with "(none recorded)" is corrected once: not_planned plus the
+   * comment naming its twin. gh_close_reason is the memo, so a row is never touched twice; a refusal other than a rate limit is
+   * memoised too ("kept:<status>") so one stubborn row cannot hold the head of the queue. */
+  if (hasReason && !limited && !ghLimited()) {
+    var recl = links.filter(function (x) { return x.status === "monitoring" && !openNums[x.gh_number] && !mismIds[x.issue_id] && !x.gh_close_reason; }).slice(0, TS_RECLASS_PER_TICK);
+    for (var q = 0; q < recl.length; q++) {
+      var x = recl[q];
+      var rc = await tsCloseComment(env, x);
+      var cm = await gh(env, "POST", TS_REPO + "/issues/" + x.gh_number + "/comments", { body: "Corrected by TRACKER-SYNC-1: this card was closed as completed earlier with no close evidence. " + rc });
+      if (tsRateLimited(cm)) { out.state_sync.rate_limited = cm.status; break; }
+      var rp = await gh(env, "PATCH", TS_REPO + "/issues/" + x.gh_number, { state: "closed", state_reason: "not_planned" });
+      if (tsRateLimited(rp)) { out.state_sync.rate_limited = rp.status; break; }
+      var ok = rp.status >= 200 && rp.status < 300;
+      if (!ok) out.errors.push({ scope: "tracker-reclass " + x.issue_id, status: rp.status, why: String(rp.text).slice(0, 100) });
+      await env.AUDIT.prepare("UPDATE gh_issue_links SET gh_close_reason = ?, synced_at = ? WHERE issue_id = ?").bind(ok ? "not_planned" : "kept:" + rp.status, now, x.issue_id).run();
+      if (ok) out.reclassified = (out.reclassified || 0) + 1;
+    }
+  }
+
+  /* Record GitHub's state for links that agree, so v_tracker_drift reads the truth and not the last write (d1_status too:
+   * it was refreshed only when gh_state changed, so it was a stale snapshot). */
   var stmts = [];
   links.forEach(function (x) {
     var st = openNums[x.gh_number] ? "open" : "closed";
-    if (!mismIds[x.issue_id] && (x.gh_state !== st)) stmts.push(env.AUDIT.prepare("UPDATE gh_issue_links SET gh_state = ?, d1_status = ?, synced_at = ? WHERE issue_id = ?").bind(st, x.status || "missing", now, x.issue_id));
+    if (!mismIds[x.issue_id] && (x.gh_state !== st || x.d1_status !== (x.status || "missing"))) stmts.push(env.AUDIT.prepare("UPDATE gh_issue_links SET gh_state = ?, d1_status = ?, synced_at = ? WHERE issue_id = ?").bind(st, x.status || "missing", now, x.issue_id));
   });
-  if (stmts.length) await env.AUDIT.batch(stmts);
+  for (var sb = 0; sb < stmts.length; sb += 50) await env.AUDIT.batch(stmts.slice(sb, sb + 50));
 
   /* Mirror open issues that have no GitHub issue yet, oldest first. A "[#id]" title already on GitHub is linked, not re-filed. */
   var todo = ((await env.AUDIT.prepare(
     "SELECT a.id, a.title, a.description, a.source, a.category, a.priority, a.created_at FROM agent_issues a LEFT JOIN gh_issue_links l ON l.issue_id = a.id WHERE a.status = 'open' AND l.issue_id IS NULL ORDER BY a.id LIMIT ?"
   ).bind(TS_CREATE_PER_TICK).all()).results) || [];
   for (var j = 0; j < todo.length; j++) {
+    if (ghLimited()) break;
     var row = todo[j];
     var num = byId[String(row.id)];
     if (num) {
@@ -553,7 +771,7 @@ async function tsIssues(env, out) {
       var c = await gh(env, "POST", TS_REPO + "/issues", { title: tsTitle(row), body: tsBody(row), labels: [TS_LABEL] });
       if (c.status !== 201 || !c.body || !c.body.number) {
         out.errors.push({ scope: "tracker-mirror " + row.id, status: c.status, why: String(c.text).slice(0, 120) });
-        if (c.status === 403 || c.status === 429) break; /* rate limited: the rest waits for the next tick */
+        if (c.limited) break; /* rate limited: the rest waits for the next tick */
         continue;
       }
       num = c.body.number;
@@ -570,6 +788,7 @@ function tsPrNum(url) {
 
 async function tsCodeTasks(env, out) {
   var now = new Date().toISOString();
+  if (ghLimited()) { out.errors.push({ scope: "tracker-prs", why: "rate limited earlier in this tick; no code task change" }); return; }
   var backfilled = await tsState(env, "pr_backfill_done");
   var prs = await tsListAll(env, TS_REPO + "/pulls?state=all&sort=updated&direction=desc", backfilled ? 2 : 30, !!backfilled);
   if (!prs) { out.errors.push({ scope: "tracker-prs", why: "could not list pull requests; no code task change this tick" }); return; }
@@ -580,30 +799,32 @@ async function tsCodeTasks(env, out) {
     "SELECT t.id, t.status, t.branch, t.pr_url, k.pr_number AS known_pr, k.pr_state AS known_state, k.task_status AS known_status, k.drift AS known_drift FROM code_tasks t LEFT JOIN code_task_pr_links k ON k.task_id = t.id"
   ).all()).results) || [];
   var known = {};
-  (((await env.AUDIT.prepare("SELECT task_id, pr_state, drift FROM code_task_pr_links WHERE task_id LIKE 'pr:%'").all()).results) || []).forEach(function (k) { known[k.task_id] = k; });
+  /* head_ref / task_ref (migrations/2026-10-19-tracker-drift-age.sql) are optional until that migration has applied. */
+  var hasRef = await tsHasColumn(env, "code_task_pr_links", "head_ref");
+  (((await env.AUDIT.prepare("SELECT task_id, pr_number, pr_state, drift" + (hasRef ? ", head_ref, task_ref" : "") + " FROM code_task_pr_links WHERE task_id LIKE 'pr:%'").all()).results) || []).forEach(function (k) { known[k.task_id] = k; });
   /* Write a link only when it changed: an unchanged row rewritten every 10 minutes is write volume nothing reads. */
   var same = function (a, b) { return String(a == null ? "" : a) === String(b == null ? "" : b); };
   var branches = {}, taskPrs = {}, stems = {}, stmts = [];
   for (var i = 0; i < tasks.length; i++) {
     var t = tasks[i];
-    if (t.branch) branches[t.branch] = 1;
+    if (t.branch) branches[t.branch] = t.id;
     /* TRACKER-REPAIR-ROUND-1: a repair round re-pushes as codeagent-<stem>-rN and overwrites code_tasks.branch and
      * pr_url, so the earlier rounds' pull requests keep a branch no row names (PR 1413 -> ct_yhjw5pnqkdnbep, now -r3;
      * PR 2577 -> ct_im2924, now -r2). The branch stem is the task id without ct_, cut to 12 characters. */
     stems["codeagent-" + String(t.id || "").replace(/^ct_/, "").slice(0, 12)] = t.id;
     var n = tsPrNum(t.pr_url) || t.known_pr || null;
-    if (n) taskPrs[n] = 1;
+    if (n) taskPrs[n] = t.id;
     var p = (n && byNum[n]) || (t.branch && byHead[t.branch]) || null;
     if (!p) {
       /* Not in the recent window. Settled links (terminal PR, same task status) need no read; anything else gets one. */
       if (backfilled && t.known_status === t.status && (t.known_state === "merged" || t.known_state === "closed" || (!n && t.known_state === "never-opened"))) continue;
-      if (n) { var g = await gh(env, "GET", TS_REPO + "/pulls/" + n); if (g.status === 200) p = g.body; else continue; }
+      if (n) { if (ghLimited()) continue; var g = await gh(env, "GET", TS_REPO + "/pulls/" + n); if (g.status === 200) p = g.body; else continue; }
     }
     var prState = !p ? "never-opened" : (p.merged_at ? "merged" : p.state);
     var drift = null, status = t.status;
     if (prState === "merged" && t.status !== "merged") {
       /* The list endpoint carries no merged_by; read the one PR so the ledger names who merged it. */
-      if (!p.merged_by) { var one = await gh(env, "GET", TS_REPO + "/pulls/" + p.number); if (one.status >= 200 && one.status < 300 && one.body) p = one.body; }
+      if (!p.merged_by && !ghLimited()) { var one = await gh(env, "GET", TS_REPO + "/pulls/" + p.number); if (one.status >= 200 && one.status < 300 && one.body) p = one.body; }
       var note = "TRACKER-SYNC-1: PR #" + p.number + " merged on GitHub at " + p.merged_at + "; code_tasks said '" + t.status + "'";
       var u = await env.AUDIT.prepare(
         "UPDATE code_tasks SET status = 'merged', merged_at = ?, merged_sha = COALESCE(merged_sha, ?), merged_by = COALESCE(merged_by, ?), merge_note = ? || CASE WHEN merge_note IS NULL THEN '' ELSE ' | was: ' || substr(merge_note, 1, 400) END, updated_at = ? WHERE id = ? AND status <> 'merged'"
@@ -623,22 +844,42 @@ async function tsCodeTasks(env, out) {
   }
   /* A code-loop PR the ledger does not know is work the metrics never count: drift while open or within 30 days. */
   var cutoff = Date.now() - 30 * 86400000;
-  Object.keys(byHead).forEach(function (h) {
-    var p = byHead[h];
-    if (h.indexOf("codeagent-") !== 0 || branches[h] || taskPrs[p.number]) return;
-    var owned = stems[h.replace(/-r\d+$/, "")] || null;
-    var recent = !owned && (p.state === "open" || Date.parse(p.merged_at || p.closed_at || p.updated_at || 0) >= cutoff);
+  /* TRACKER-PR-ATTEMPTS-1: the stem match above only sees the 2-page recent window, so a superseded attempt that has since left it
+   * (PRs 780, 1042, 1067, 1070, 1413, 1414: closed unmerged, recorded pr-without-task at the 09:43Z backfill) was never revisited
+   * and stayed drift. A drift row with no head_ref yet is read once by number (a bounded batch), matched like the others, and its
+   * head_ref and owning task are recorded: the row then says which task it was an attempt of, and is not read again. */
+  var revisited = {}, orphans = Object.keys(byHead).map(function (h) { return byHead[h]; });
+  if (hasRef) {
+    var stale = Object.keys(known).filter(function (id) { var k = known[id]; return k.drift && !k.head_ref && !byNum[k.pr_number]; }).slice(0, TS_PR_REVISIT_PER_TICK);
+    for (var v = 0; v < stale.length; v++) {
+      if (ghLimited()) break;
+      var gp = await gh(env, "GET", TS_REPO + "/pulls/" + known[stale[v]].pr_number);
+      if (tsRateLimited(gp)) { out.errors.push({ scope: "tracker-pr-revisit", status: gp.status, why: "rate limited; the rest waits for the next tick" }); break; }
+      if (gp.status === 200 && gp.body && gp.body.head) { revisited[gp.body.number] = 1; orphans.push(gp.body); }
+      else if (gp.status === 404 || gp.status === 410) stmts.push(env.AUDIT.prepare("UPDATE code_task_pr_links SET drift = NULL, head_ref = 'gone', synced_at = ? WHERE task_id = ?").bind(now, stale[v]));
+    }
+  }
+  orphans.forEach(function (p) {
+    var h = (p.head && p.head.ref) || "";
+    var direct = branches[h] || taskPrs[p.number] || null, codeagent = h.indexOf("codeagent-") === 0;
+    if (!revisited[p.number] && (!codeagent || direct)) return;
+    var owned = direct || (codeagent && stems[h.replace(/-r\d+$/, "")]) || null;
+    var recent = codeagent && !owned && (p.state === "open" || Date.parse(p.merged_at || p.closed_at || p.updated_at || 0) >= cutoff);
     if (recent) out.task_drift++;
+    if (owned && !direct) out.attempts_linked = (out.attempts_linked || 0) + 1;
     var k = known["pr:" + p.number], st = p.merged_at ? "merged" : p.state, dr = recent ? "pr-without-task" : null;
-    if (k && same(k.pr_state, st) && same(k.drift, dr)) return;
-    stmts.push(env.AUDIT.prepare(
+    if (k && same(k.pr_state, st) && same(k.drift, dr) && (!hasRef || (same(k.head_ref, h) && same(k.task_ref, owned)))) return;
+    stmts.push(hasRef ? env.AUDIT.prepare(
+      "INSERT INTO code_task_pr_links (task_id, pr_number, pr_state, merged_at, head_sha, task_status, drift, synced_at, head_ref, task_ref) VALUES (?, ?, ?, ?, ?, NULL, ?, ?, ?, ?) ON CONFLICT(task_id) DO UPDATE SET pr_state = excluded.pr_state, merged_at = excluded.merged_at, drift = excluded.drift, synced_at = excluded.synced_at, head_ref = excluded.head_ref, task_ref = excluded.task_ref"
+    ).bind("pr:" + p.number, p.number, st, p.merged_at || null, p.head ? p.head.sha : null, dr, now, h, owned) : env.AUDIT.prepare(
       "INSERT INTO code_task_pr_links (task_id, pr_number, pr_state, merged_at, head_sha, task_status, drift, synced_at) VALUES (?, ?, ?, ?, ?, NULL, ?, ?) ON CONFLICT(task_id) DO UPDATE SET pr_state = excluded.pr_state, merged_at = excluded.merged_at, drift = excluded.drift, synced_at = excluded.synced_at"
-    ).bind("pr:" + p.number, p.number, p.merged_at ? "merged" : p.state, p.merged_at || null, p.head ? p.head.sha : null, recent ? "pr-without-task" : null, now));
+    ).bind("pr:" + p.number, p.number, st, p.merged_at || null, p.head ? p.head.sha : null, dr, now));
   });
   /* A pr-without-task row is only revisited while its PR is in the recent window, so clear what is no longer true: a PR a
-   * task now points at, or one merged more than 30 days ago. Without this a fixed false positive stays drift for good. */
+   * task now points at, one merged more than 30 days ago, or one closed unmerged (its row last changed when it closed) more than
+   * 30 days ago. Without this a fixed false positive stays drift for good. */
   stmts.push(env.AUDIT.prepare(
-    "UPDATE code_task_pr_links SET drift = NULL, synced_at = ? WHERE task_id LIKE 'pr:%' AND drift IS NOT NULL AND (pr_number IN (SELECT pr_number FROM code_task_pr_links WHERE task_id NOT LIKE 'pr:%' AND pr_number IS NOT NULL) OR (merged_at IS NOT NULL AND merged_at < ?))"
+    "UPDATE code_task_pr_links SET drift = NULL, synced_at = ?1 WHERE task_id LIKE 'pr:%' AND drift IS NOT NULL AND (pr_number IN (SELECT pr_number FROM code_task_pr_links WHERE task_id NOT LIKE 'pr:%' AND pr_number IS NOT NULL) OR (merged_at IS NOT NULL AND merged_at < ?2) OR (pr_state = 'closed' AND merged_at IS NULL AND synced_at < ?2))"
   ).bind(now, new Date(cutoff).toISOString()));
   for (var s = 0; s < stmts.length; s += 50) await env.AUDIT.batch(stmts.slice(s, s + 50));
   if (!backfilled) await tsState(env, "pr_backfill_done", now);
@@ -698,15 +939,19 @@ async function trackerSync(env) {
   var started = Date.now();
   var out = { version: VERSION, started_at: new Date(started).toISOString(), mirrored: 0, relinked: 0, closed: 0, reopened: 0, tasks_fixed: [], task_drift: 0, errors: [] };
   if (!env.AUDIT || !env.GITHUB_TOKEN) { out.errors.push({ scope: "tracker", why: "AUDIT binding or GITHUB_TOKEN missing" }); return out; }
+  GH_LIMIT = null; /* a new tick decides afresh; the cron is 10 minutes apart */
   try { await tsIssues(env, out); } catch (e) { out.errors.push({ scope: "tracker-issues", why: String(e && e.message || e).slice(0, 160) }); }
   try { await tsCodeTasks(env, out); } catch (e) { out.errors.push({ scope: "tracker-prs", why: String(e && e.message || e).slice(0, 160) }); }
   /* The fleet_issue_dispatch mirror (ISSUE-SYNC-1) rides the same 10-minute grid instead of the 6-hourly reconcile. */
-  var legacy = { errors: [], issue_sync: null, issue_sync_reverse: null, dispatch_liveness: null };
+  var legacy = { errors: [], issue_sync: null, issue_sync_reverse: null, issue_sync_forward: null, dispatch_liveness: null };
   await dispatchLiveness(env, legacy);
   await issueSync(env, legacy);
+  /* Forward (and its relapse reopen) before reverse: see ISSUE-SYNC-FORWARD-1. */
+  await issueSyncForward(env, legacy);
   await issueSyncReverse(env, legacy);
   out.dispatch_liveness = legacy.dispatch_liveness;
   out.dispatch_sync = legacy.issue_sync;
+  out.dispatch_sync_forward = legacy.issue_sync_forward;
   out.dispatch_sync_reverse = legacy.issue_sync_reverse;
   out.errors = out.errors.concat(legacy.errors);
   try {
@@ -723,8 +968,18 @@ async function trackerSync(env) {
     if (!full && unmirrored === 0) { full = at; await tsState(env, "issue_backfill_done", at); }
     if (full) w.push(put("tracker_drift", issue + task));
     await env.AUDIT.batch(w);
+    /* Age of the oldest drift row this loop drains (issue-state, issue-unmirrored), in minutes (the view's age_min exists once
+     * migrations/2026-10-19-tracker-drift-age.sql has applied). A code-task-pr row is a task/PR contradiction the code loop owns and
+     * has its own count (tracker_code_task_drift), so it does not age this metric. The count above is not graced or filtered: a burst
+     * shows as drift at once, and this says how long the oldest row has waited. */
+    try {
+      var ag = await env.AUDIT.prepare("SELECT COALESCE(MAX(age_min), 0) AS m FROM v_tracker_drift WHERE kind IN ('issue-state', 'issue-unmirrored')").first();
+      out.drift.oldest_min = ag ? Number(ag.m) || 0 : 0;
+      if (full) await put("tracker_drift_oldest_min", out.drift.oldest_min).run();
+    } catch (eAge) { out.drift.oldest_min = null; }
   } catch (e) { out.errors.push({ scope: "tracker-metrics", why: String(e && e.message || e).slice(0, 160) }); }
   out.duration_ms = Date.now() - started;
+  out.rate_limited = ghLimited() ? GH_LIMIT.status : null; /* the one flag: any stage that met a GitHub rate limit */
   try { await tsState(env, "last_run", JSON.stringify(out).slice(0, 20000)); } catch (e) { out.errors.push({ scope: "tracker-record", why: String(e && e.message || e).slice(0, 120) }); }
   return out;
 }
@@ -753,7 +1008,7 @@ async function trackerSync(env) {
  *   6 MEASURE     v_portfolio_drift -> metric portfolio_drift (target 0). */
 var PS_REPO = "/repos/" + ORG + "/qnfo-workers";
 var PS_BOARD = "QNFO Fleet Portfolio";
-var PS_MS_PER_TICK = 15, PS_ISSUE_PER_TICK = 40, PS_RM_CREATE_PER_TICK = 15, PS_RM_STATE_PER_TICK = 20, PS_BOARD_PER_TICK = 30;
+var PS_MS_PER_TICK = 15, PS_ISSUE_PER_TICK = 40, PS_RM_CREATE_PER_TICK = 15, PS_RM_STATE_MAX = 40, PS_BOARD_PER_TICK = 30;
 var PS_RM_DONE = { verified: 1, "enforced-verified": 1, "violated-remediated": 1, retired: 1 };
 var PS_PROGRAMS = {
   "QNFO.RSCH": { label: "program:research", color: "1d76db", desc: "Research & Publications" },
@@ -992,16 +1247,19 @@ async function psRoadmap(env, out, projects) {
   if (!open) { out.errors.push({ scope: "portfolio-roadmap", why: "could not list open roadmap issues; no roadmap change this tick" }); return null; }
   var openNums = {}, byId = {};
   open.forEach(function (g) { if (g.pull_request) return; openNums[g.number] = g; var m = /^\[RM-(\d+)\]/.exec(g.title || ""); if (m) byId[m[1]] = g.number; });
-  var links = ((await env.AUDIT.prepare("SELECT g.roadmap_id, g.gh_number, g.gh_state, g.gh_node, r.status, r.evidence, r.item FROM roadmap_gh_links g JOIN roadmap_implementation r ON r.id = g.roadmap_id").all()).results) || [];
+  var links = ((await env.AUDIT.prepare("SELECT g.roadmap_id, g.gh_number, g.gh_state, g.d1_status, g.gh_node, r.status, r.evidence, r.item, r.verified_at, r.created_at FROM roadmap_gh_links g JOIN roadmap_implementation r ON r.id = g.roadmap_id").all()).results) || [];
   var mism = links.filter(function (l) { return (!PS_RM_DONE[l.status]) !== !!openNums[l.gh_number]; });
-  if (links.length >= 10 && mism.length > links.length / 2) {
-    out.errors.push({ scope: "portfolio-roadmap", why: mism.length + " of " + links.length + " roadmap links disagree; refusing a mass state flip" });
-    mism = [];
-  }
-  var now = new Date().toISOString(), fixed = 0, mismIds = {};
+  /* Same budget, order and explained-burst guard as TRACKER-STATE-BUDGET-1 (the D1 change time is verified_at, else created_at). */
+  var changedRm = function (l) { return Date.parse(l.verified_at || l.created_at || 0) || 0; };
+  /* Explained = the item moved across done/not-done since the last agreement (the link's d1_status, refreshed every tick for links that agree). */
+  var rguard = tsGuard(mism, links.length, function (l) { return !!l.d1_status && !!PS_RM_DONE[l.d1_status] !== !!PS_RM_DONE[l.status]; });
+  if (rguard.refused) out.errors.push({ scope: "portfolio-roadmap", why: rguard.refused + " of " + links.length + " roadmap links disagree with GitHub although D1 has not changed since the last sync; refusing a mass state flip" });
+  mism = tsOrder(rguard.rows, function (l) { return !PS_RM_DONE[l.status]; }, changedRm, function (l) { return Number(l.roadmap_id) || 0; });
+  var now = new Date().toISOString(), fixed = 0, tried = 0, rbudget = tsBudget(PS_RM_STATE_MAX), mismIds = {};
   mism.forEach(function (l) { mismIds[l.roadmap_id] = 1; });
-  for (var i = 0; i < mism.length && fixed < PS_RM_STATE_PER_TICK; i++) {
+  for (var i = 0; i < mism.length && rbudget.more(tried); i++) {
     var l = mism[i], r;
+    tried++;
     if (!PS_RM_DONE[l.status]) {
       r = await gh(env, "PATCH", PS_REPO + "/issues/" + l.gh_number, { state: "open" });
       if (r.status === 200) { await gh(env, "POST", PS_REPO + "/issues/" + l.gh_number + "/comments", { body: "Reopened by PORTFOLIO-SYNC-1: roadmap item " + tsRedact(l.item) + " is '" + l.status + "' in qnfo-audit.roadmap_implementation, which is authoritative." }); out.roadmap_reopened++; }
@@ -1010,13 +1268,13 @@ async function psRoadmap(env, out, projects) {
       r = await gh(env, "PATCH", PS_REPO + "/issues/" + l.gh_number, { state: "closed", state_reason: l.status === "retired" ? "not_planned" : "completed" });
       if (r.status === 200) out.roadmap_closed++;
     }
-    if (r && r.status === 200) { fixed++; await env.AUDIT.prepare("UPDATE roadmap_gh_links SET gh_state = ?, d1_status = ?, synced_at = ? WHERE roadmap_id = ?").bind(PS_RM_DONE[l.status] ? "closed" : "open", l.status, now, l.roadmap_id).run(); }
-    else out.errors.push({ scope: "portfolio-roadmap-state " + l.roadmap_id, status: r && r.status, why: String(r && r.text || "").slice(0, 100) });
+    if (r && r.status >= 200 && r.status < 300) { fixed++; rbudget.d1(1); await env.AUDIT.prepare("UPDATE roadmap_gh_links SET gh_state = ?, d1_status = ?, synced_at = ? WHERE roadmap_id = ?").bind(PS_RM_DONE[l.status] ? "closed" : "open", l.status, now, l.roadmap_id).run(); }
+    else { out.errors.push({ scope: "portfolio-roadmap-state " + l.roadmap_id, status: r && r.status, why: String(r && r.text || "").slice(0, 100) }); if (tsRateLimited(r)) break; }
   }
   var stmts = [];
   links.forEach(function (x) {
     var g = openNums[x.gh_number], st = g ? "open" : "closed";
-    if (!mismIds[x.roadmap_id] && (x.gh_state !== st || (g && !x.gh_node))) stmts.push(env.AUDIT.prepare("UPDATE roadmap_gh_links SET gh_state = ?, d1_status = ?, gh_node = COALESCE(gh_node, ?), synced_at = ? WHERE roadmap_id = ?").bind(st, x.status, g ? g.node_id : null, now, x.roadmap_id));
+    if (!mismIds[x.roadmap_id] && (x.gh_state !== st || x.d1_status !== x.status || (g && !x.gh_node))) stmts.push(env.AUDIT.prepare("UPDATE roadmap_gh_links SET gh_state = ?, d1_status = ?, gh_node = COALESCE(gh_node, ?), synced_at = ? WHERE roadmap_id = ?").bind(st, x.status, g ? g.node_id : null, now, x.roadmap_id));
   });
   for (var s = 0; s < stmts.length; s += 50) await env.AUDIT.batch(stmts.slice(s, s + 50));
 
@@ -1111,7 +1369,12 @@ async function portfolioSync(env) {
    * completion means the tick died; no marker at all means it never started. A heartbeat write must
    * never block the tick, so it is best-effort. */
   try { await tsState(env, "portfolio_last_run", JSON.stringify({ version: VERSION, started_at: out.started_at, state: "in_progress" })); } catch (e) { /* heartbeat is best-effort */ }
-  var step = async function (name, fn) { try { return await fn(); } catch (e) { out.errors.push({ scope: "portfolio-" + name, why: String(e && e.message || e).slice(0, 160) }); return null; } };
+  /* The GitHub steps make no call once a rate limit was met earlier in this invocation (the tracker tick just before it, or a step above). */
+  var GH_STEPS = { labels: 1, milestones: 1, list: 1, issues: 1, roadmap: 1 };
+  var step = async function (name, fn) {
+    if (GH_STEPS[name] && ghLimited()) { out.errors.push({ scope: "portfolio-" + name, why: "rate limited; skipped this tick" }); return null; }
+    try { return await fn(); } catch (e) { out.errors.push({ scope: "portfolio-" + name, why: String(e && e.message || e).slice(0, 160) }); return null; }
+  };
   await step("derive", function () { return psDerive(env, out); });
   await step("objectives", function () { return psObjectives(env, out); });
   var projects = (await step("projects", async function () { return ((await env.AUDIT.prepare("SELECT project_code, program_code, name, description, status, gh_milestone FROM projects ORDER BY project_code").all()).results) || []; })) || [];
@@ -1124,7 +1387,7 @@ async function portfolioSync(env) {
     else out.errors.push({ scope: "portfolio-issues", why: "could not list open fleet-issue issues; no issue placement this tick" });
     await step("roadmap", function () { return psRoadmap(env, out, projects); });
   }
-  await psBoard(env, out);
+  if (!ghLimited()) await psBoard(env, out);
   await step("measure", async function () {
     var d = ((await env.AUDIT.prepare("SELECT kind, count(*) AS n FROM v_portfolio_drift GROUP BY kind").all()).results) || [];
     var total = 0; out.drift = {};
@@ -1133,6 +1396,7 @@ async function portfolioSync(env) {
     await env.AUDIT.prepare("UPDATE metric_registry SET last_value = ?, last_refreshed = ?, state = 'MEASURED' WHERE metric = 'portfolio_drift'").bind(String(total), new Date().toISOString()).run();
   });
   out.duration_ms = Date.now() - started;
+  out.rate_limited = ghLimited() ? GH_LIMIT.status : null;
   try { await tsState(env, "portfolio_last_run", JSON.stringify(out).slice(0, 20000)); } catch (e) { out.errors.push({ scope: "portfolio-record", why: String(e && e.message || e).slice(0, 120) }); }
   return out;
 }
@@ -1318,7 +1582,7 @@ export default {
   async scheduled(event, env, ctx) {
     if (event && event.cron === TS_CRON) {
       var ts = await trackerSync(env);
-      console.log(JSON.stringify({ worker: "qnfo-github-steward", version: VERSION, cron: event.cron, tracker: { mirrored: ts.mirrored, relinked: ts.relinked, closed: ts.closed, reopened: ts.reopened, tasks_fixed: ts.tasks_fixed.length, drift: ts.drift, errors: ts.errors.length } }));
+      console.log(JSON.stringify({ worker: "qnfo-github-steward", version: VERSION, cron: event.cron, tracker: { mirrored: ts.mirrored, relinked: ts.relinked, closed: ts.closed, reopened: ts.reopened, carried: ts.state_sync ? ts.state_sync.carried : null, tasks_fixed: ts.tasks_fixed.length, drift: ts.drift, errors: ts.errors.length } }));
       /* PORTFOLIO-SYNC-1 runs after the tracker so it places the issues this tick just mirrored. */
       var ps = await portfolioSync(env);
       console.log(JSON.stringify({ worker: "qnfo-github-steward", version: VERSION, cron: event.cron, portfolio: { projects_created: ps.projects_created, projects_retired: ps.projects_retired, objectives_opened: ps.objectives_opened, objectives_verified: ps.objectives_verified, milestones_created: ps.milestones_created, issues_synced: ps.issues_synced, roadmap_mirrored: ps.roadmap_mirrored, roadmap_closed: ps.roadmap_closed, drift: ps.drift, errors: ps.errors.length, limitations: ps.limitations.length } }));

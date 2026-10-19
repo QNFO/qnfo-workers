@@ -126,6 +126,15 @@ const WIP = Number((/^const PLAN_WIP = (\d+);/m.exec(fs.readFileSync(new URL("./
   let r = await plan(env);
   ok(!r.planned && /work in progress/.test(r.why) && prompts.length === 0, "7a no planning while PLAN_WIP code tasks are unfinished", r);
   d.exec("DELETE FROM code_tasks");
+  // PLAN-WIP-SUPERSEDED-1 (0.18.25, agent_issues 100074): superseded is terminal, so PLAN_WIP superseded tasks plus one live
+  // task under the gate do not lock the planner out (8 superseded rows stalled issue_plans for 20 h on 2026-10-18/19).
+  for (let i = 0; i < WIP; i++) d.prepare("INSERT INTO code_tasks (id, repo, path, goal, status, step, attempts, created_at, updated_at) VALUES (?, 'qnfo-workers', 'x/worker.js', 'g', 'superseded', 'read', 0, 'n', 'n')").run("ct_s" + i);
+  r = await plan(env);
+  ok(!/work in progress/.test(String(r.why || "")), "7a1 superseded code tasks are not work in progress", r);
+  ok(prompts.length === 1, "7a1 the planner reached the model with only superseded tasks on the books", prompts.length);
+  prompts.length = 0;
+  d.exec("DELETE FROM code_tasks"); d.exec("DELETE FROM issue_plans");
+  issue(env, { title: "METRIC-TRIGGER-14-C: q08-signal-engine", description: "/api/f" });
   // PLAN-WIP-HANDOFF-1: tasks waiting on the merge runner are not this worker's work in progress, but are bounded.
   for (let i = 0; i < 10; i++) d.prepare("INSERT INTO code_tasks (id, repo, path, goal, status, step, attempts, created_at, updated_at) VALUES (?, 'qnfo-workers', 'x/worker.js', 'g', ?, 'done', 0, 'n', 'n')").run("ct_h" + i, ["branch_pushed", "published", "pr_open"][i % 3]);
   r = await plan(env);

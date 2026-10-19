@@ -1,4 +1,4 @@
-// INTEG-MASTODON-VERIFY-1 offline suite (qnfo-social 0.16.11, agent_issues 2925). Proves the Mastodon profile sync is a function of
+// INTEG-MASTODON-VERIFY-1 offline suite (qnfo-social 0.16.12, agent_issues 2925). Proves the Mastodon profile sync is a function of
 // env (the 0.16.10-codeagent draft was a top-level block on process.env that a Worker cannot run): it keeps the account's other
 // link fields, drops the closed registrar's entry, sets Website to https://qnfo.org, PATCHes only when the fields differ, reports a
 // failure's reason, and the daily engagement step calls it.
