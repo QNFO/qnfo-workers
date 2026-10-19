@@ -9,7 +9,7 @@ var __name22 = /* @__PURE__ */ __name2((target, value) => __defProp22(target, "n
 var __defProp222 = Object.defineProperty;
 var __name222 = /* @__PURE__ */ __name22((target, value) => __defProp222(target, "name", { value, configurable: true }), "__name");
 var __name2222 = /* @__PURE__ */ __name222((target, value) => Object.defineProperty(target, "name", { value, configurable: true }), "__name");
-var VERSION = "1.51.11-codeagent"; /* 1.51.8 VERSION-LINE-NOTES-1 (2026-10-19, agent_issues 100243, pillar autonomy; patch, a comment moved): the release notes of every earlier version rode on this line (178 notes, about 200,000 chars), so a version bump of this worker was an 820,000-char patch (worker and mirror, removed and added): 12 code tasks ended on the publisher size cap on 2026-10-19 and three issues were exhausted for three days. They are in git history (git log -S '<release tag>' -- qnfo-fleet-dashboard/worker.js); the changelog is built from the deploy ledger and commits, and the guards read only the quoted version string. A new note goes on this line and stays short. */
+var VERSION = "1.51.12-codeagent"; /* 1.51.8 VERSION-LINE-NOTES-1 (2026-10-19, agent_issues 100243, pillar autonomy; patch, a comment moved): the release notes of every earlier version rode on this line (178 notes, about 200,000 chars), so a version bump of this worker was an 820,000-char patch (worker and mirror, removed and added): 12 code tasks ended on the publisher size cap on 2026-10-19 and three issues were exhausted for three days. They are in git history (git log -S '<release tag>' -- qnfo-fleet-dashboard/worker.js); the changelog is built from the deploy ledger and commits, and the guards read only the quoted version string. A new note goes on this line and stays short. */
 
 // REVIEW-GATE-1 (2026-10-01, docs/STRATEGY.md s9): the 2026-10-25 impressions gate is retired. The research layer is
 // reviewed on this date against the reach scorecard; nothing deletes research data automatically (phase 2 needs the
@@ -6640,8 +6640,8 @@ async function changesSince(env, sinceRaw) {
 }
 var CHANGES_JS = "<script>(function(){var box=document.getElementById('since');if(!box||!window.fetch)return;var K='fleet-last-visit',prev=null;try{prev=localStorage.getItem(K)}catch(e){console.debug('qnfo-fleet-dashboard: browser storage unavailable',e)}var since=prev||new Date(Date.now()-864e5).toISOString();function esc(t){return String(t==null?'':t).replace(/[&<>\"]/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;'}[c]})}function ago(iso){var h=(Date.now()-Date.parse(iso))/36e5;return h<1?Math.max(1,Math.round(h*60))+' min':h<48?Math.round(h)+' h':Math.round(h/24)+' days'}fetch('/api/changes?since='+encodeURIComponent(since),{cache:'no-store'}).then(function(r){return r.ok?r.json():null}).then(function(j){if(!j)return;var parts=[];if(j.deploy_count)parts.push('<b>'+j.deploy_count+'</b> worker'+(j.deploy_count===1?'':'s')+' deployed');if(j.code_merged.length)parts.push('<b>'+j.code_merged.length+'</b> code fix'+(j.code_merged.length===1?'':'es')+' merged by the fleet');parts.push('<b>'+j.issues_closed+'</b> issue'+(j.issues_closed===1?'':'s')+' closed, '+j.issues_opened+' opened');if(j.owner_new.length)parts.push('<b>'+j.owner_new.length+'</b> new for you');var det='';if(j.deploys.length)det+='<h3>Deployed</h3><ul>'+j.deploys.map(function(d){return '<li>'+esc(d.worker)+' <span class=meta>'+esc(d.version||'')+'</span></li>'}).join('')+'</ul>';if(j.code_merged.length)det+='<h3>Fixed by the code loop</h3><ul>'+j.code_merged.map(function(c){return '<li>'+(c.pr?'<a href=\"'+esc(c.pr)+'\">'+esc(c.path)+'</a>':esc(c.path))+'</li>'}).join('')+'</ul>';if(j.closed_sample.length)det+='<h3>Recently closed</h3><ul>'+j.closed_sample.map(function(t){return '<li>'+esc(t)+'</li>'}).join('')+'</ul>';if(j.owner_new.length)det+='<h3>New for you</h3><ul>'+j.owner_new.map(function(t){return '<li>'+esc(t)+'</li>'}).join('')+'</ul>';box.innerHTML='<details><summary><span class=since-h>'+(prev?'Since you last looked, '+ago(j.since)+' ago':'In the last 24 hours')+'</span> '+parts.join(' &middot; ')+'</summary><div class=since-d>'+det+'</div></details>';box.hidden=false}).catch(function(e){console.debug('qnfo-fleet-dashboard: request failed',e)});var mark=function(){try{localStorage.setItem(K,new Date().toISOString())}catch(e){console.debug('qnfo-fleet-dashboard: browser storage unavailable',e)}};setTimeout(mark,15000);document.addEventListener('visibilitychange',function(){if(document.hidden)mark()})})()<\/script>";
 var CREDIT_RUNWAY_WARN_DAYS = 7;
-// Burn = what draws on the prepaid credit: third-party models through the AI Gateway in the last 7 days (Workers AI is
-// billed to the account, not to this credit). The 30-day unified spend is only the fallback when the 7-day read failed.
+ // Burn = daily draw on prepaid credit, derived from third-party list cost per day (prepaid_burn_per_day).
+ // Workers AI usage is billed directly to the account, not to this credit. The 30-day unified spend is a fallback.
 // OWNER-MORNING-2: the current rate is the last 24 h when it was read and non-zero; a one-day burst a week ago (2026-10-01:
 // an outside client spent ~$120 on gpt-5.5 and DeepSeek) made the 7-day average read "0 days" while the credit drained
 // $2.76 a day. The 7-day figure stays in the card's text.
@@ -6651,7 +6651,36 @@ function creditDailyBurn(c) {
   if (c && c.spend30 != null && isFinite(Number(c.spend30))) return Number(c.spend30) / 30;
   return null;
 }
-// CREDIT-HALT-ONLY-1 (1.47.0, owner directive 2026-10-19): "AI credit runs out in about N days" is never an issue,
+ // CREDIT-HALT-ONLY-1 (1.47.0, owner directive 2026-10-19): "AI credit runs out in about N days" is never an issue,
+ // (functionality unchanged)
+ 
+ // Added helper to transform cost view for humanView
+ function costForView(c, at) {
+   const out = Object.assign({}, c);
+   // rename fields
+   if (out.credit_burn7 != null) {
+     out.third_party_list_cost7 = out.credit_burn7;
+     delete out.credit_burn7;
+   }
+   if (out.credit_burn24 != null) {
+     out.third_party_list_cost24 = out.credit_burn24;
+     delete out.credit_burn24;
+   }
+   out.third_party_list_cost_label = "third-party list cost (BYOK, not billed)";
+   // calculate prepaid burn per day
+   const periodGross = Number(c && c.period_gross);
+   if (!isNaN(periodGross) && at) {
+     const date = new Date(at);
+     const dayOfMonth = date.getUTCDate(); // 1-31
+     const divisor = Math.max(1, dayOfMonth);
+     out.prepaid_burn_per_day = Math.round((periodGross / divisor) * 100) / 100;
+   } else {
+     out.prepaid_burn_per_day = null;
+   }
+   out.prepaid_burn_basis = "invoice-preview prepaid lines (Workers AI), period gross over days elapsed this month; display only (CREDIT-HALT-ONLY-1)";
+   return out;
+ }
+ // CREDIT-HALT-ONLY-1 (1.47.0, owner directive 2026-10-19): "AI credit runs out in about N days" is never an issue,
 // let alone urgent. Cloudflare tops the prepaid balance up on its own, so a low balance halts nothing. The ONLY credit
 // condition that is a card is a balance at or below zero AND gateway calls actually failing on credit (no top-up
 // landing). A runway is display context, never a card; a D1 error returns no card rather than inventing one.
@@ -6708,6 +6737,9 @@ async function humanView(env, st, ctx) {
   } catch (e) {
   }
   const govAge = gov ? Date.now() - Date.parse(gov.at) : null;
+if (gov && gov.cost) {
+  gov.cost = costForView(gov.cost, gov.at);
+}
   // Real-time: money/return inputs are re-measured on demand when older than 5 min (throttled to one run / 2 min).
   if ((!gov || govAge > HUMAN_SNAPSHOT_MAX_AGE_MS) && ctx && ctx.waitUntil) ctx.waitUntil(govClaim(env, 12e4).then(function(ok) {
     return ok ? governanceSnapshot(env, st) : null;
@@ -6716,10 +6748,10 @@ async function humanView(env, st, ctx) {
   const inp = gov ? investInputs(gov, facts) : null;
   const decision = inp ? decideInvestment(inp) : { verdict: "UNKNOWN", risk: null, basis: "none", headline: "Money and return figures are being measured for the first time.", reasons: [], flips: [], levers: [], gate: { due: REVIEW_GATE_DATE } };
   if (inp && inp.ownerLocal30 != null) {
-    const msg = "Of that 30-day spend, $" + inp.ownerLocal30.toFixed(0) + " came from untagged desktop clients on the stored gateway key (owner-local), not from fleet workers; the fleet's own share is smaller.";
-    const idx = decision.reasons.findIndex(function(r) { return typeof r === "string" && r.startsWith("AI spend over the last 30 days, unified billing"); });
-    if (idx >= 0) decision.reasons.splice(idx + 1, 0, msg);
-    else decision.reasons.push(msg);
+      const msg = "Separately, $" + inp.ownerLocal30.toFixed(0) + " of list cost over 30 days came from untagged owner-local desktop clients; it is excluded from the fleet figures above.";
+      const idx = decision.reasons.findIndex(function(r) { return typeof r === "string" && r.startsWith("AI spend over the last 30 days, unified billing"); });
+      if (idx >= 0) decision.reasons.splice(idx + 1, 0, msg);
+      else decision.reasons.push(msg);
   }
   if (gov) {
     const lv = decision.levers;
@@ -6761,7 +6793,11 @@ async function humanView(env, st, ctx) {
   if (decision.verdict === "KILL" || gateDue && decision.verdict === "UNKNOWN") items.unshift({ key: "decision", source: "decision", sev: decision.verdict === "SCALE_BACK" ? "normal" : "urgent", title: decision.verdict === "KILL" ? "Decide: stop the fleet?" : decision.verdict === "SCALE_BACK" ? "Decide: scale the fleet back" : "Decide: continue or stop (review gate due)", why: decision.headline, fallback: "Nothing is retired, deleted or re-capped until you act. The armed shutdown_manifest rows still apply on their own dates.", action: "Read the decision below. Email 'shutdown' to qnfo@qnfo.org to stop, or attest evidence at /api/decision/fact.", url: "", due: gateDue ? REVIEW_GATE_DATE : "", age: null });
   // OWNER-MORNING-1 (autonomy audit 2026-10-02): credit left was shown without a runway; at $17 against ~$7.50/day the
   // fleet had about two days of prepaid AI credit and the queue said nothing. Money is the owner's call, so this is a card.
-  const runway = gov ? creditRunwayDays(gov.cost || {}) : null;
+  const runway = gov ? (() => {
+  const costCopy = Object.assign({}, gov.cost);
+  if (costCopy.prepaid_burn_per_day != null) costCopy.credit_burn24 = costCopy.prepaid_burn_per_day;
+  return creditRunwayDays(costCopy);
+})() : null;
   // CREDIT-HALT-ONLY-1 (1.47.0, owner directive 2026-10-19): a runway PROJECTION is never a queue card and is never
   // urgent. The prepaid balance is topped up automatically, so a low balance halts nothing. The only credit condition
   // that is an issue is a balance at or below zero with AI calls actually failing on credit and no top-up landing.
