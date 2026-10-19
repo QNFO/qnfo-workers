@@ -1,4 +1,4 @@
-// PAPER-FIELDS-1 + GW-JSON-QUIET-1 offline suite (qnfo-gateway 3.25.1, #99979 #99957 #99989 #99998).
+// PAPER-FIELDS-1 + GW-JSON-QUIET-1 + GW-PAPER-AUTHORS-SCALAR-1 offline suite (qnfo-gateway 3.25.1, #99979 #99957 #99989 #99998, 100061).
 // papers.authors and papers.keywords hold a JSON array in most living-paper rows and plain text in the rest
 // ("QNFO Research", "Tuomo Kiiskinen, Oscar Kivinen, Manuel A Rivas", "a; b; c", "", NULL). Each must read as a list,
 // and serving /feed.json, /api/papers and /oai over such rows must log no error: Workers Observability files every
@@ -33,7 +33,16 @@ const ROWS = [
   { authors: "Quni-Gudzinas, Rowan Brad", keywords: null, a: ["Rowan Brad Quni-Gudzinas"], k: [] },
   { authors: "", keywords: "[]", a: [], k: [] },
   { authors: null, keywords: '"single keyword"', a: [], k: ["single keyword"] },
-  { authors: "[not json", keywords: "{broken", a: ["[not json"], k: ["{broken"] }
+  { authors: "[not json", keywords: "{broken", a: ["[not json"], k: ["{broken"] },
+  // GW-PAPER-AUTHORS-SCALAR-1 (agent_issues 100061): JSON that is not a list of names holds no author name.
+  { authors: "null", keywords: null, a: [], k: [] },
+  { authors: "123", keywords: null, a: [], k: [] },
+  { authors: "true", keywords: null, a: [], k: [] },
+  { authors: '{"name":"Ada Lovelace"}', keywords: null, a: ["Ada Lovelace"], k: [] },
+  { authors: '{"id":7}', keywords: null, a: [], k: [] },
+  { authors: "Alice, Bob", keywords: null, a: ["Alice", "Bob"], k: [] },
+  { authors: "Lovelace, Ada Augusta", keywords: null, a: ["Lovelace, Ada Augusta"], k: [] },
+  { authors: "Quni-Gudzinas, Rowan", keywords: null, a: ["Quni-Gudzinas, Rowan"], k: [] }
 ];
 
 const errors = [];
@@ -59,6 +68,7 @@ for (const it of items) {
   eq(it.authors, ROWS[i].a, "authors of row " + i + " (" + JSON.stringify(ROWS[i].authors) + ")");
   eq(it.keywords, ROWS[i].k, "keywords of row " + i + " (" + JSON.stringify(ROWS[i].keywords) + ")");
 }
+ok(items.every((it) => it.authors.every((n) => !/^(null|true|false|-?\d[\d.]*|[{\[].*)$/.test(n) || n === "[not json")), "no author name is JSON text (null, a number, true, an object)", items.map((it) => it.authors));
 const feed = await get("/feed.json");
 ok(feed.s === 200, "/feed.json answers 200", feed.s);
 let fi = [];
