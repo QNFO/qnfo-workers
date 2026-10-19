@@ -168,7 +168,7 @@
    "rc": 0,
    "script": "scripts/code_task_publish_patch_size_test.py",
    "tail": [
-    "6 passed, 0 failed"
+    "10 passed, 0 failed"
    ],
    "verdict": "already-applied"
   },
@@ -314,7 +314,7 @@
    "script": "scripts/github-write-409-retry-patch.py",
    "tail": [
     "ALREADY REPAIRED (marker(s) GITHUB-409-RETRY-1); no change",
-    "bytes: 647827 (unchanged)",
+    "bytes: 650393 (unchanged)",
     "parity: source==mirror"
    ],
    "verdict": "already-applied"
@@ -336,7 +336,7 @@
    "script": "scripts/github409-variant-reread-patch.py",
    "tail": [
     "already applied (idempotent no-op): qnfo-ops/deployed-current.worker.js",
-    "mirror pair byte-identical (647829 bytes)",
+    "mirror pair byte-identical (650395 bytes)",
     "changed=false"
    ],
    "verdict": "already-applied"
@@ -383,8 +383,8 @@
    "script": "scripts/ops-deploy-ledger-patch.py",
    "tail": [
     "already patched (marker present) - no-op",
-    "  worker.js bytes=647829 marker=1",
-    "  deployed-current.worker.js bytes=647829 marker=1"
+    "  worker.js bytes=650395 marker=1",
+    "  deployed-current.worker.js bytes=650395 marker=1"
    ],
    "verdict": "already-applied"
   },
@@ -652,7 +652,7 @@
    "rc": 0,
    "script": "scripts/routerfetch-host-order-body-patch.py",
    "tail": [
-    "already patched (marker '_lastRouterHost' present); no write. sha256=96cc239b50a99bce"
+    "already patched (marker '_lastRouterHost' present); no write. sha256=9710084be649ae1e"
    ],
    "verdict": "already-applied"
   },
@@ -661,7 +661,7 @@
    "rc": 0,
    "script": "scripts/routerfetch-host-order-correction-patch.py",
    "tail": [
-    "already corrected (marker 'ROUTER-HOST-ORDER-CORRECTION-1' present); no write. sha256=96cc239b50a99bce"
+    "already corrected (marker 'ROUTER-HOST-ORDER-CORRECTION-1' present); no write. sha256=9710084be649ae1e"
    ],
    "verdict": "already-applied"
   },
@@ -719,7 +719,7 @@
    "rc": 0,
    "script": "scripts/stale-gate-failclosed-patch.py",
    "tail": [
-    "{\"ok\": true, \"already_patched\": true, \"marker\": \"STALE-GATE-FAILCLOSED-1\", \"bytes\": 1230356}"
+    "{\"ok\": true, \"already_patched\": true, \"marker\": \"STALE-GATE-FAILCLOSED-1\", \"bytes\": 1232023}"
    ],
    "verdict": "already-applied"
   },
@@ -807,7 +807,7 @@
  "stale_anchor": [],
  "superseded": [],
  "total": 77,
- "ts": "2026-10-19T16:29:53.984Z",
+ "ts": "2026-10-19T17:27:17.464Z",
  "undetermined": [
   "scripts/dashboard-agissue-undercount-patch.py",
   "scripts/math-sym-escape-patch.py",
