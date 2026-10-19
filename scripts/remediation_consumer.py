@@ -56,6 +56,7 @@ RUNTIME PROBES (PROBE-TRANSPORT-MONOCULTURE-1, agent_issues 2060, 2026-10-06)
      trigger breaches if this runner stops, which a Cloudflare cron evaluates.
 """
 
+import calendar
 import json
 import re
 import concurrent.futures
@@ -508,6 +509,71 @@ def refresh_runtime_share(out):
        ["n/a" if v is None else str(v), time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())])
 
 
+# CF-TOKEN-WATCH-1 (2026-10-19, agent_issues 2581, pillar autonomy): the repository CLOUDFLARE_API_TOKEN carries every
+# deploy, migration and cf-ops action, and the owner directive of 2026-10-08 says no new Cloudflare token will be issued,
+# so a lapse would stop the GitHub -> Cloudflare half with no successor. Nothing measured it. Each consumer run (at least
+# hourly, PROBE-CADENCE-1) asks Cloudflare to verify the token (account-owned path first, then the user path) and writes
+# cloudflare_token_ok (1 when status is active) and cloudflare_token_expires_in_min (999999 when it has no expiry) to
+# metric_registry; their triggers live in migrations/2026-10-19-resolve-cf-token-watch.sql. The token is never printed.
+def cf_token_watch_values(result, now=None):
+    """result: the Cloudflare tokens/verify `result` object (or None) -> (ok, expires_in_min)."""
+    now = time.time() if now is None else now
+    if not isinstance(result, dict):
+        return 0, 0
+    ok = 1 if str(result.get("status") or "").lower() == "active" else 0
+    exp = result.get("expires_on")
+    if not exp:
+        return ok, 999999
+    try:
+        ts = calendar.timegm(time.strptime(str(exp)[:19], "%Y-%m-%dT%H:%M:%S"))
+    except (ValueError, OverflowError):
+        return ok, 999999
+    mins = int((ts - now) // 60)
+    if mins <= 0:
+        return 0, 0
+    return ok, mins
+
+
+# CF-TOKEN-WATCH-2 (2026-10-19, PR 2603 review): a run whose verify calls both failed to get an answer (network error, 5xx,
+# timeout) wrote cloudflare_token_ok=0, and the priority-0 trigger on that metric filed a false critical "deploys are blocked".
+# 0 is now written only for a definite verdict: Cloudflare answered every path it was asked with HTTP 401/403, or answered
+# success=false, or reported a status other than active. Anything else leaves the last value in place and records the error.
+CF_REFUSAL = re.compile(r"HTTP (401|403)\b")
+
+
+def cf_token_watch(out, req=None):
+    if req is None and not TOKEN:
+        out["cf_token_watch"] = {"skipped": "no token in this environment"}
+        return out["cf_token_watch"]
+    req = req or _req
+    result, used, errors, undecided = None, None, [], False
+    for path in ("/accounts/%s/tokens/verify" % ACCOUNT, "/user/tokens/verify"):
+        try:
+            r = req("GET", CF_API + path)
+        except Exception as e:  # noqa: BLE001 - an account-owned token answers 4xx on the user path and vice versa
+            msg = str(e).replace(TOKEN, "***") if TOKEN else str(e)
+            errors.append(path.split("/")[1] + ": " + msg[:120])
+            if not CF_REFUSAL.search(msg):
+                undecided = True  # no HTTP answer, or a 5xx/429: Cloudflare gave no verdict on this path
+            continue
+        if r.get("success") and isinstance(r.get("result"), dict):
+            result, used = r["result"], path.split("/")[1]
+            break
+        if r.get("success") is not False:
+            undecided = True
+            errors.append(path.split("/")[1] + ": unreadable answer")
+    if result is None and undecided:
+        out["cf_token_watch"] = {"skipped": "no verdict from Cloudflare, last value kept", "errors": errors}
+        return out["cf_token_watch"]
+    ok, mins = cf_token_watch_values(result)
+    stamp = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+    for metric, val in (("cloudflare_token_ok", ok), ("cloudflare_token_expires_in_min", mins)):
+        d1("UPDATE metric_registry SET last_value = ?1, last_refreshed = ?2, state = 'MEASURED' WHERE metric = ?3",
+           [str(val), stamp, metric])
+    out["cf_token_watch"] = {"ok": ok, "expires_in_min": mins, "path": used}
+    return out["cf_token_watch"]
+
+
 def _selftest():
     cases = [
         ("SELECT 'a' AS expected, 'a' AS observed", 1, "pass"),
@@ -671,7 +737,14 @@ def _selftest():
         print(json.dumps({"ok": False, "case": "merge-out", "got": agg}))
         return 1
     g = globals()
-    saved = (g["d1"], g["MAX_ITEMS"], g["_req"])
+    saved = (g["d1"], g["MAX_ITEMS"], g["_req"], g["migrations_sweep"])
+    # SELFTEST-HERMETIC-1 (2026-10-19): main() below also runs the host census, the fleet journeys and the migration sweep.
+    # With the fake d1 every migration read as unapplied, so the sweep called apply_migrations.apply_file on all 266
+    # opted-in files with the real token: 8 of the job's 15 minutes went to that before a single contract was probed
+    # (run 39199001472: self-test 04:20:56-04:29:04, consumer 22 s), and a genuinely unapplied file would have been
+    # applied by a test. fleet_journeys.run and host_census.run likewise ran live off the fake d1's empty answers. The
+    # drain case now stubs all three; their own self-tests below still cover them.
+    stub_mods = {"host_census": None, "fleet_journeys": None}
     due = ["c%d" % i for i in range(9)]
     seen_sql = []
 
@@ -695,13 +768,27 @@ def _selftest():
         def no_net(*a, **k):
             raise RuntimeError("selftest: no network")
         g["_req"] = no_net
-        import io, contextlib
+        sweeps = []
+        g["migrations_sweep"] = lambda out, apply=None, root=None: sweeps.append(1) or out.setdefault("migrations", {"selftest": "stubbed"})
+        import io, contextlib, types
+        for name in stub_mods:
+            stub_mods[name] = sys.modules.get(name)
+            sys.modules[name] = types.SimpleNamespace(run=lambda *a, **k: {"skipped": "selftest"})
         buf = io.StringIO()
         with contextlib.redirect_stdout(buf):
             main()
         res = json.loads(buf.getvalue().strip().splitlines()[-1])
     finally:
-        g["d1"], g["MAX_ITEMS"], g["_req"] = saved
+        g["d1"], g["MAX_ITEMS"], g["_req"], g["migrations_sweep"] = saved
+        for name, mod in stub_mods.items():
+            if mod is None:
+                sys.modules.pop(name, None)
+            else:
+                sys.modules[name] = mod
+    if sweeps != [1] or res.get("migrations") != {"selftest": "stubbed"} or (res.get("fleet_journeys") or {}).get("skipped") != "selftest":
+        print(json.dumps({"ok": False, "case": "drain-hermetic", "sweeps": len(sweeps), "migrations": res.get("migrations"),
+                          "fleet_journeys": res.get("fleet_journeys")}))
+        return 1
     if res.get("due") != 9 or res.get("pass") != 9 or due:
         print(json.dumps({"ok": False, "case": "drain", "got": {k: res.get(k) for k in ("due", "pass", "fail", "skipped")}, "left": due}))
         return 1
@@ -1119,6 +1206,12 @@ def main():
         out["fleet_journeys"] = fleet_journeys.run(d1, VERIFIER)
     except Exception as e:  # noqa: BLE001
         out["fleet_journeys_error"] = str(e)[:200]
+
+    # CF-TOKEN-WATCH-1: the repository Cloudflare token's validity and expiry, every run. A failure never stops the run.
+    try:
+        cf_token_watch(out)
+    except Exception as e:  # noqa: BLE001
+        out["cf_token_watch_error"] = str(e)[:200]
 
     # MIGRATION-UNAPPLIED-1: merged migrations the push-triggered runner never ran are applied here, within the hour.
     migrations_sweep(out)

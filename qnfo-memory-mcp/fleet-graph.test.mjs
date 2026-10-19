@@ -5,6 +5,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { DatabaseSync } from "node:sqlite";
 import assert from "node:assert/strict";
+import { versionAtLeast } from "../scripts/version-at-least.mjs";
 const here = dirname(fileURLToPath(import.meta.url));
 const w = (await import(pathToFileURL(join(here, "worker.js")).href)).default;
 const FG = await import(pathToFileURL(join(here, "..", "scripts", "fleet_graph.mjs")).href);
@@ -50,7 +51,7 @@ const get = async (p) => { const r = await w.fetch(new Request("https://m.test" 
 const mcp = async (name, args, token) => { const r = await w.fetch(new Request("https://m.test/mcp", { method: "POST", headers: { Authorization: "Bearer " + (token || "t0k3n"), "Content-Type": "application/json" }, body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/call", params: { name, arguments: args } }) }), env); return { status: r.status, body: await r.json() }; };
 
 const h = await get("/health");
-assert.ok(h.body.capabilities.includes("fleet-graph") && /^2\.1\./.test(h.body.version), "health names the capability and the minor bump");
+assert.ok(h.body.capabilities.includes("fleet-graph") && versionAtLeast(h.body.version, "2.1.0"), "health names the capability and the minor bump");
 const idx = await get("/fleet-graph");
 assert.ok(idx.body.queries.includes("/fleet-graph/impact"), "index lists the queries");
 

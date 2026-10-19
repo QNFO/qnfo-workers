@@ -49,8 +49,12 @@ sys.path.insert(0, HERE)
 # Mirrors CP_CANARY_WORKERS in qnfo-fleet-control (bhControlPlaneDecide); fold-guard parity is the test's job.
 CANARY_WORKERS = ["qnfo-fleet-control", "qnfo-ops", "qnfo-deploy-guard", "qnfo-gateway", "qnfo-ai", "qnfo-observability", "qnfo-code-orchestrator"]
 HEALTH_URL = "https://{worker}.q08.workers.dev/health"
-VERSION_RE = re.compile(r'^var VERSION = "([^"\n]*)"', re.M)
-VERSION_LINE_RE = re.compile(r'^var VERSION = "[^"\n]*"(;?)', re.M)
+# CANARY-VERSION-REGEX-1 (2026-10-19): a worker whose first line is `var VERSION="..";;` (qnfo-gateway, qnfo-email, qnfo-calendar-intake)
+# has no spaces around '=' and a doubled ';'. The strict pattern missed it, so qnfo-gateway had no canary and no revert protection.
+# Whitespace around '=' is optional; the value stays a quoted literal, and a `var VERSION = OTHER_CONST;` line (no quote) still
+# does not count. Same parse as version-bump-guard.py and canonical_deploy.py (the test pins that).
+VERSION_RE = re.compile(r'^var\s+VERSION\s*=\s*"([^"\n]*)"', re.M)
+VERSION_LINE_RE = re.compile(r'^(var\s+VERSION\s*=\s*")[^"\n]*(")', re.M)
 DB_ID = "35e2e573-92f3-46ac-83c6-22f6429fc5e5"
 
 # CONTROL-PLANE-FUNCTIONAL-CANARY-1: per worker, the read-only routes that prove it works beyond /health. Each check is
@@ -112,7 +116,8 @@ def bump_for_revert(base_content, bad_version, tag):
     if not m:
         return None
     new_version = "%s.%s.%d%s" % (m.group(1), m.group(2), int(m.group(3)) + 1, tag)
-    new_content = VERSION_LINE_RE.sub(lambda mm: 'var VERSION = "' + new_version + '"' + mm.group(1), str(base_content), count=1)
+    # Only the value is replaced: the base line's own spacing and trailing ';' or ';;' stay as they were.
+    new_content = VERSION_LINE_RE.sub(lambda mm: mm.group(1) + new_version + mm.group(2), str(base_content), count=1)
     return new_version, new_content
 
 
@@ -414,6 +419,9 @@ def selftest():
     ok(read_version('x\nvar VERSION = "0.7.0-a"; /* c */\n') == "0.7.0-a" and read_version("nothing") is None, "read_version reads the single VERSION line")
     ok(judge({"version": "1.2.3-x"}, "1.2.3-x") == ("ok", "1.2.3-x") and judge({"version": "1.2.2"}, "1.2.3-x")[0] == "wrong-version" and judge({"ok": True}, "1")[0] == "no-version" and judge(None, "1")[0] == "no-version", "judge: ok, wrong-version, no-version")
     ok(is_revert_commit("Revert \"x\"") and is_revert_commit("revert: abc (CONTROL-PLANE-CANARY-1)") and not is_revert_commit("feat: x"), "a revert commit is recognised, one level only")
+    ok(read_version('var VERSION="3.26.1-gw";; /* c */\n') == "3.26.1-gw" and read_version("var VERSION  =  'x';") is None and read_version("  var VERSION = \"x\";") is None, "read_version: no spaces and ';;' accepted (CANARY-VERSION-REGEX-1), single quotes and indented lines are not")
+    g = bump_for_revert('var VERSION="3.26.1-gw";; /* c */\nb', "3.26.2-bad", "-revert-abc1234")
+    ok(g and g[0] == "3.26.3-revert-abc1234" and g[1] == 'var VERSION="3.26.3-revert-abc1234";; /* c */\nb', "bump_for_revert keeps a no-space ';;' line as written")
     r = bump_for_revert('a\nvar VERSION = "0.6.1-base"; /* old */\nb', "0.7.0-bad", "-revert-abc1234")
     ok(r and r[0] == "0.7.1-revert-abc1234" and 'var VERSION = "0.7.1-revert-abc1234";' in r[1] and r[1].endswith("\nb"), "bump_for_revert: base content, VERSION above the bad one, tag kept")
     ok(bump_for_revert('var VERSION = "1";\nvar VERSION = "2";', "1.0.0", "-r") is None and bump_for_revert('var VERSION = "1.0.0";', "nope", "-r") is None, "bump_for_revert refuses two VERSION lines or a bad version")

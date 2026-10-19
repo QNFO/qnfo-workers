@@ -2,15 +2,35 @@
  "ok": true,
  "marker": "REMEDIATION-CONTRACT-BRIDGE-1",
  "probe_map_entries": 44,
- "open_issues": 189,
- "with_contract_before": 189,
+ "open_issues": 185,
+ "with_contract_before": 185,
  "upgraded_sentinel_to_active": 0,
  "inserted_active": 0,
  "inserted_needs_machine_probe": 0,
- "active_contracts": 305,
- "active_with_executable_probe": 243,
- "active_with_prose_probe": 62,
+ "active_contracts": 393,
+ "active_with_executable_probe": 304,
+ "active_with_prose_probe": 89,
  "prose_probe_contracts": [
+  {
+   "class": "issue-2017",
+   "issue_id": 2017,
+   "reason": "not-a-select"
+  },
+  {
+   "class": "issue-2305",
+   "issue_id": 2305,
+   "reason": "not-a-select"
+  },
+  {
+   "class": "issue-2342",
+   "issue_id": 2342,
+   "reason": "not-a-select"
+  },
+  {
+   "class": "issue-2397",
+   "issue_id": 2397,
+   "reason": "not-a-select"
+  },
   {
    "class": "issue-2402",
    "issue_id": 2402,
@@ -49,6 +69,11 @@
   {
    "class": "fm-math-delim-pairing-shift",
    "issue_id": null,
+   "reason": "not-a-select"
+  },
+  {
+   "class": "issue-2480",
+   "issue_id": 2480,
    "reason": "not-a-select"
   },
   {
@@ -147,6 +172,11 @@
    "reason": "not-a-select"
   },
   {
+   "class": "issue-2538",
+   "issue_id": 2538,
+   "reason": "not-a-select"
+  },
+  {
    "class": "fm-companion-analysis-line-misplaced",
    "issue_id": null,
    "reason": "not-a-select"
@@ -180,86 +210,32 @@
    "class": "fm-companion-century-ordinal-flagged",
    "issue_id": null,
    "reason": "not-a-select"
-  },
-  {
-   "class": "fm-companion-topic-without-causes",
-   "issue_id": null,
-   "reason": "not-a-select"
-  },
-  {
-   "class": "fm-companion-source-cut-mid-sentence",
-   "issue_id": null,
-   "reason": "not-a-select"
-  },
-  {
-   "class": "fm-backlog-close-on-stale-pass",
-   "issue_id": null,
-   "reason": "not-a-select"
-  },
-  {
-   "class": "fm-companion-single-writer-family",
-   "issue_id": null,
-   "reason": "not-a-select"
-  },
-  {
-   "class": "fm-companion-objection-heading-only",
-   "issue_id": null,
-   "reason": "not-a-select"
-  },
-  {
-   "class": "fm-companion-like-pattern-over-50",
-   "issue_id": null,
-   "reason": "not-a-select"
   }
  ],
  "contracts_needs_machine_probe": 40,
- "open_issues_without_active_contract": 150,
+ "open_issues_without_active_contract": 93,
  "residual_gap_ids": [
-  2017,
-  2068,
   2081,
-  2111,
-  2116,
   2244,
-  2305,
-  2507,
-  2508,
   2600,
-  2606,
-  2694,
-  2727,
   2750,
-  2755,
-  2756,
-  2780,
   2805,
-  2811,
   2818,
-  2826,
-  2827,
   2828,
   2829,
   2830,
-  2837,
-  2844,
-  2877,
   2878,
   2879,
-  2880,
-  2881,
-  2884,
   2899,
-  2922,
   2927,
   2930,
   2931,
   2935,
-  2940,
   2953,
   2954,
+  2957,
   2987,
   3010,
-  99905,
   99909,
   99913,
   99924,
@@ -269,14 +245,38 @@
   99928,
   99934,
   99953,
-  99990,
-  99991,
-  100008,
-  100036,
-  1798,
-  1838
+  100070,
+  1838,
+  2047,
+  2442,
+  2447,
+  2455,
+  2459,
+  2522,
+  2679,
+  2682,
+  2740,
+  2782,
+  2790,
+  2792,
+  2831,
+  2832,
+  2833,
+  2852,
+  2857,
+  2891,
+  2924,
+  2925,
+  2926,
+  2928,
+  2937,
+  2938,
+  2971,
+  2993,
+  3001,
+  3002
  ],
- "head": "ef01a7515c1c6e7268ef070bdd078be2a1845254",
+ "head": "212b2263388f1978f8dbc8f12f9707a5e3f13e59",
  "job_status": "success",
- "ts": "2026-10-19T05:05:30Z"
+ "ts": "2026-10-19T07:42:22Z"
 }
