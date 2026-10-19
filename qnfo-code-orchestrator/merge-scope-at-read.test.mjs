@@ -57,12 +57,21 @@ const add = (id, p) => db.prepare("INSERT INTO code_tasks (id, repo, path, goal,
 add("ct_scope_cp", "qnfo-observability/worker.js");
 add("ct_scope_sc", "scripts/remediation_consumer.py");
 add("ct_scope_ok", "fxok/worker.js");
-await tick(); await tick();
+// agent_issues 100092 (LOOP-BREAKER-1): ct_im100009, ct_im100020, ct_im100072 and ct_im100091 (qnfo-fleet-control), ct_im100073 (qnfo-ops) and ct_im100062 and ct_im100075
+// (qnfo-code-orchestrator) were refused at the read step on 2026-10-19 before 0.22.0; with CODE-LOOP-CONTROL-PLANE-1 the four workers the owner named
+// are in the loop's scope there too, an owner-qualified slug included, so the read step reaches the file read (a 404 here) and never names the scope rule.
+const LOOP_WORKERS = ["qnfo-fleet-control", "qnfo-ops", "qnfo-deploy-guard", "qnfo-code-orchestrator"];
+for (const w of LOOP_WORKERS) add("ct_scope_loop_" + w, w + "/worker.js");
+await tick(); await tick(); await tick();
 const row = (id) => db.prepare("SELECT status, step, attempts, last_error FROM code_tasks WHERE id = ?").get(id);
 for (const id of ["ct_scope_cp", "ct_scope_sc"]) {
   const r = row(id);
   ok(r.status === "needs_human", id + " ends needs_human", r);
   ok(String(r.last_error || "").includes("MERGE-SCOPE-AT-READ-1"), id + " names the scope rule", r);
+}
+for (const w of LOOP_WORKERS) {
+  const r = row("ct_scope_loop_" + w);
+  ok(r && !String(r.last_error || "").includes("MERGE-SCOPE-AT-READ-1") && !String(r.last_error || "").includes("CM_DENY"), w + "/worker.js is not refused by the read-step scope guard (CODE-LOOP-CONTROL-PLANE-1)", r);
 }
 const okr = row("ct_scope_ok");
 ok(!String(okr.last_error || "").includes("MERGE-SCOPE-AT-READ-1"), "an in-scope owner-qualified row is not refused by scope", okr);
