@@ -6040,7 +6040,7 @@ async function sendMorningBrief(env, nowMs) {
     }
     if (split.stale.length) {
       L.push("");
-      L.push(split.stale.length + " older reminder" + (split.stale.length === 1 ? " is" : "s are") + " past " + (split.stale.length === 1 ? "its" : "their") + " date. Mark them done or drop them on the Do tab: https://personal-api.q08.workers.dev/companion");
+      L.push(split.stale.length + " older reminder" + (split.stale.length === 1 ? " is" : "s are") + " past " + (split.stale.length === 1 ? "its" : "their") + " date. Mark them done or drop them on the Do tab: https://me.q08.org");
     }
     var up = (b.calendar && b.calendar.upcoming7) || [];
     var ups = [];

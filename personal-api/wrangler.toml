@@ -90,6 +90,15 @@ class_name = "PersonalTwinAgent"
 type = "durable-object"
 storage = "sqlite"
 
+# COMPANION-LOGIN-1 (4.14.0): the companion's sign-in code is mailed to the owner's own mailbox only (the same verified
+# destination qnfo-fleet-dashboard FLEET-CMD-1 mails its code to). No other address can receive mail from this binding.
+[[send_email]]
+name = "SEND_EMAIL"
+allowed_destination_addresses = ["rwnquni@outlook.com"]
+
+# COMPANION-DOMAIN-1: me.q08.org/* is a zone route to this worker, attached by .github/workflows/attach-me-q08-route.yml
+# (scripts/attach-me-q08-route.py), not declared here.
+
 [triggers]
 # CRON-GRID-1: no trigger slower than hourly; the daily 05:05 run lives in worker.js CRON_GRID_CFG.
 crons = ["5 * * * *"]
