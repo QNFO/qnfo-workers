@@ -43,6 +43,7 @@ CREATE TABLE cf_changelog_runs (id INTEGER PRIMARY KEY AUTOINCREMENT, ts TEXT, s
 CREATE TABLE intents (id TEXT PRIMARY KEY, status TEXT, type TEXT, created_at TEXT);
 CREATE TABLE code_tasks (id TEXT PRIMARY KEY, status TEXT, updated_at TEXT, merged_by TEXT, merged_at TEXT, merge_state TEXT, green_since TEXT, merge_note TEXT, last_error TEXT);
 CREATE TABLE ops_config (key TEXT PRIMARY KEY, value TEXT, note TEXT, updated_at TEXT);
+CREATE TABLE cron_fire_log (cron_name TEXT, task_id TEXT, cron_expr TEXT, fired_at TEXT, fired_epoch_ms INTEGER, outcome TEXT, source TEXT, note TEXT);
 CREATE TABLE errata_watch (key TEXT PRIMARY KEY, value TEXT);
 CREATE TABLE social_channels (channel_id TEXT PRIMARY KEY, service TEXT, name TEXT, connected INTEGER, checked_at TEXT, checked_day TEXT);
 CREATE TABLE handoffs (id INTEGER PRIMARY KEY AUTOINCREMENT, session_id TEXT NOT NULL, project_id TEXT NOT NULL, timestamp TEXT NOT NULL, claim_sheet TEXT);
@@ -60,6 +61,7 @@ db.prepare("INSERT INTO cloud_ops_events (id, ts, kind, status) VALUES ('ga4-ing
 db.prepare("INSERT INTO cloud_ops_events (id, ts, status) VALUES ('jo-qnfo-backlog-exec-abc', ?, 'ok')").run(ago(7));
 db.prepare("INSERT INTO cloud_ops_events (id, ts, status) VALUES ('jr-grant-followup-ok1', ?, 'ok')").run(ago(4));
 db.prepare("INSERT INTO cloud_ops_events (id, ts, status) VALUES ('code-merge-tick-2026-10-06', ?, 'ok')").run(ago(0.5));
+db.prepare("INSERT INTO cron_fire_log (task_id, cron_expr, fired_at, outcome) VALUES ('qnfo-gateway', '0 * * * *', ?, 'idle')").run(ago(0.4));   // READER-REPORT-WATCHMAKER-1 (100264): the hourly gateway tick that carries rrSweep
 db.prepare("INSERT INTO cloud_ops_events (id, ts, status) VALUES ('probe-review-tick', ?, 'ok')").run(ago(0.2));   // PROBE-REVIEW-WATCHMAKER-1 (#2131): qnfo-cloud-ops probe-review heartbeat
 db.prepare("INSERT INTO cloud_ops_events (id, ts, status) VALUES ('branch-hygiene-tick-2026-10-06', ?, 'ok')").run(ago(0.5));
 // SECRET-CHANGE-WATCH-1 (qnfo-ops 2.38.39): the */30 heartbeat.
