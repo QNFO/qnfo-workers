@@ -56,6 +56,7 @@ RUNTIME PROBES (PROBE-TRANSPORT-MONOCULTURE-1, agent_issues 2060, 2026-10-06)
      trigger breaches if this runner stops, which a Cloudflare cron evaluates.
 """
 
+import calendar
 import json
 import re
 import concurrent.futures
@@ -524,7 +525,7 @@ def cf_token_watch_values(result, now=None):
     if not exp:
         return ok, 999999
     try:
-        ts = time.mktime(time.strptime(str(exp)[:19], "%Y-%m-%dT%H:%M:%S")) - time.timezone
+        ts = calendar.timegm(time.strptime(str(exp)[:19], "%Y-%m-%dT%H:%M:%S"))
     except (ValueError, OverflowError):
         return ok, 999999
     mins = int((ts - now) // 60)
@@ -533,20 +534,37 @@ def cf_token_watch_values(result, now=None):
     return ok, mins
 
 
+# CF-TOKEN-WATCH-2 (2026-10-19, PR 2603 review): a run whose verify calls both failed to get an answer (network error, 5xx,
+# timeout) wrote cloudflare_token_ok=0, and the priority-0 trigger on that metric filed a false critical "deploys are blocked".
+# 0 is now written only for a definite verdict: Cloudflare answered every path it was asked with HTTP 401/403, or answered
+# success=false, or reported a status other than active. Anything else leaves the last value in place and records the error.
+CF_REFUSAL = re.compile(r"HTTP (401|403)\b")
+
+
 def cf_token_watch(out, req=None):
     if req is None and not TOKEN:
         out["cf_token_watch"] = {"skipped": "no token in this environment"}
         return out["cf_token_watch"]
     req = req or _req
-    result, used = None, None
+    result, used, errors, undecided = None, None, [], False
     for path in ("/accounts/%s/tokens/verify" % ACCOUNT, "/user/tokens/verify"):
         try:
             r = req("GET", CF_API + path)
-        except Exception:  # noqa: BLE001 - an account-owned token answers 4xx on the user path and vice versa
+        except Exception as e:  # noqa: BLE001 - an account-owned token answers 4xx on the user path and vice versa
+            msg = str(e).replace(TOKEN, "***") if TOKEN else str(e)
+            errors.append(path.split("/")[1] + ": " + msg[:120])
+            if not CF_REFUSAL.search(msg):
+                undecided = True  # no HTTP answer, or a 5xx/429: Cloudflare gave no verdict on this path
             continue
         if r.get("success") and isinstance(r.get("result"), dict):
             result, used = r["result"], path.split("/")[1]
             break
+        if r.get("success") is not False:
+            undecided = True
+            errors.append(path.split("/")[1] + ": unreadable answer")
+    if result is None and undecided:
+        out["cf_token_watch"] = {"skipped": "no verdict from Cloudflare, last value kept", "errors": errors}
+        return out["cf_token_watch"]
     ok, mins = cf_token_watch_values(result)
     stamp = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
     for metric, val in (("cloudflare_token_ok", ok), ("cloudflare_token_expires_in_min", mins)):
