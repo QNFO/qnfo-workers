@@ -32,7 +32,7 @@ function shim(db, counter) {
   };
 }
 const NOW = new Date().toISOString();
-function graphDb() {
+function graphDb(extraCrons) {
   const g = new DatabaseSync(":memory:");
   g.exec(`CREATE TABLE fg_node (id TEXT, scope TEXT, kind TEXT, name TEXT, worker TEXT, path TEXT, line INTEGER, attrs TEXT, source TEXT, h TEXT, updated_at TEXT);
   CREATE TABLE fg_edge (src TEXT, rel TEXT, dst TEXT, scope TEXT, confidence TEXT, source TEXT, path TEXT, attrs TEXT, h TEXT, updated_at TEXT);
@@ -62,11 +62,12 @@ function graphDb() {
     node("fn:" + w + "#" + fn, "code", "function", fn, w, {});
     edge("fn:" + w + "#" + fn, rel, "d1t:" + t);
   }
+  for (const [w, expr] of extraCrons || []) edge("worker:" + w, "has_cron", "cron:" + w + "@" + expr, "live");
   g.prepare("INSERT INTO fg_finding (id, kind, subject, severity, detail) VALUES ('f1','env-undeclared','qnfo-gateway.SOME_VAR','warn','read but not declared'), ('f2','resource-orphan','d1:personal-prefs','info','bound to no worker')").run();
   g.prepare("INSERT INTO fg_state (scope, sha, built_at, nodes, edges, status) VALUES ('code','abc1234',?,10,12,'ok'), ('live','abc1234',?,5,6,'ok')").run(NOW, NOW);
   return g;
 }
-function auditDb() {
+function auditDb(opts) {
   const a = new DatabaseSync(":memory:");
   a.exec(`CREATE TABLE service_registry (service TEXT, kind TEXT, version TEXT, base_url TEXT, purpose TEXT, capabilities TEXT, routes TEXT, tools TEXT, models TEXT, deps TEXT, updated_at TEXT, state TEXT);
   CREATE TABLE fleet_heartbeat (worker TEXT PRIMARY KEY, version TEXT, ts TEXT, ok INTEGER);
@@ -74,7 +75,8 @@ function auditDb() {
   CREATE TABLE agent_issues (id INTEGER); CREATE TABLE code_tasks (id TEXT);`);
   a.prepare("INSERT INTO service_registry (service, kind, version, purpose, state) VALUES ('qnfo-fleet-control','worker','0.34.0','merged fleet control','live'), ('qnfo-ops','worker','2.49.0','ops endpoint','live'), ('qnfo-gateway','worker','3.26.5','landing and papers','live'), ('old-folded','member','1.0.0','gone','retired')").run();
   a.prepare("INSERT INTO fleet_heartbeat VALUES ('qnfo-fleet-control','0.34.0',?,1), ('qnfo-ops','2.49.0',?,0)").run(NOW, NOW);
-  a.prepare("INSERT INTO fleet_crons (id, name, cron_expr, enabled, last_fired) VALUES (1,'fleet-exec dispatch','*/5 * * * *',1,?)").run(NOW);
+  for (const [w, ago, ok] of (opts && opts.beats) || []) a.prepare("INSERT OR REPLACE INTO fleet_heartbeat VALUES (?, '1.0.0', ?, ?)").run(w, new Date(Date.now() - ago * 60000).toISOString(), ok);
+  a.prepare("INSERT INTO fleet_crons (id, name, cron_expr, enabled, last_fired) VALUES (1,'fleet-exec dispatch','*/5 * * * *',1,?)").run(opts && opts.loopAgo ? new Date(Date.now() - opts.loopAgo * 60000).toISOString() : NOW);
   a.prepare("INSERT INTO agent_issues VALUES (1),(2),(3)").run();
   return a;
 }
@@ -85,7 +87,7 @@ const get = async (env, path) => {
   try { j = JSON.parse(t); } catch (e) { j = null; }
   return { s: r.status, t, j, h: r.headers };
 };
-const mkEnv = (opts) => { const c = { n: 0 }; const env = { AUDIT: shim(auditDb(), c), GRAPH: opts && opts.noGraph ? undefined : shim(graphDb(), c) }; env.__count = c; return env; };
+const mkEnv = (opts) => { const c = { n: 0 }; const env = { AUDIT: shim(auditDb(opts), c), GRAPH: opts && opts.noGraph ? undefined : shim(graphDb(opts && opts.crons), c) }; env.__count = c; return env; };
 
 // (A) wiring
 ok(/ARCH-SELF-MODEL:BEGIN/.test(src) && /ARCH-SELF-MODEL:END/.test(src), "the architecture block is delimited");
@@ -189,6 +191,30 @@ ok(envC.__count.n === n1 && n1 > 5, "the model is read once and kept for its TTL
 const envD = mkEnv();
 await get(envD, "/api/architecture");
 ok(envD.__count.n > 5, "a different env reads its own");
+
+// (H) ARCH-OVERDUE-LOOPS-1: a loop is late against its own schedule (largest gap in a week + 120 minutes), not against a fixed number
+envA = mkEnv();
+r = await get(envA, "/api/architecture");
+ok(r.j.summary.overdue_loops === 0 && r.j.overdue.length === 0, "a fresh fixture has no overdue loop", r.j.overdue);
+ok(r.j.workers.find((w) => w.name === "qnfo-fleet-control").cadence_min === 5 && r.j.workers.find((w) => w.name === "qnfo-fleet-control").beat.overdue === false, "a */5 loop with a fresh tick has cadence 5 and is not overdue");
+ok(r.j.workers.find((w) => w.name === "qnfo-ops").cadence_min === null, "a worker with no cron has no cadence and is not judged");
+const envH = mkEnv({ crons: [["qnfo-ops", "0 6 * * *"], ["qnfo-gateway", "0 6,18 * * *"], ["mystery-worker", "0 16 * * 1"]],
+  beats: [["qnfo-fleet-control", 200, 1], ["qnfo-ops", 1000, 1], ["qnfo-gateway", 900, 1], ["mystery-worker", 1085, 1]], loopAgo: 300 });
+r = await get(envH, "/api/architecture");
+const WH = (n) => r.j.workers.find((w) => w.name === n);
+ok(WH("qnfo-fleet-control").beat.overdue === true, "a */5 loop 200 minutes old is overdue (limit 125)", WH("qnfo-fleet-control").beat);
+ok(WH("qnfo-ops").cadence_min === 1440 && WH("qnfo-ops").beat.overdue === false, "a daily loop 1000 minutes old is not overdue (limit 1560)", [WH("qnfo-ops").cadence_min, WH("qnfo-ops").beat]);
+ok(WH("qnfo-gateway").cadence_min === 720 && WH("qnfo-gateway").beat.overdue === true, "a twice-daily loop 900 minutes old is overdue (limit 840): the largest gap counts, not the average", [WH("qnfo-gateway").cadence_min, WH("qnfo-gateway").beat]);
+ok(WH("mystery-worker").cadence_min === 10080 && WH("mystery-worker").beat.overdue === false, "a weekly cron (Cloudflare day 1 = Sunday) has a 10080-minute cadence and a tick 1085 minutes old is not late", [WH("mystery-worker").cadence_min, WH("mystery-worker").beat]);
+ok(r.j.loops[0].overdue === true && r.j.loops[0].age_min >= 299 && r.j.loops[0].cadence_min === 5, "a fleet-exec task last fired 300 minutes ago is overdue", r.j.loops[0]);
+ok(r.j.summary.overdue_loops === 3 && r.j.overdue.map((o) => o.kind + ":" + o.name).sort().join() === "loop:fleet-exec dispatch,worker:qnfo-fleet-control,worker:qnfo-gateway", "the summary and the overdue list name exactly the late ones", r.j.overdue);
+ok(r.j.overdue.every((o) => o.limit_min === o.cadence_min + 120), "every overdue entry carries its limit (cadence + 120)");
+r = await get(envH, "/architecture");
+ok(/class="ar-late">overdue</.test(r.t) && /Overdue loops/.test(r.t), "the page marks the late loops and counts them");
+const envI = mkEnv({ crons: [["qnfo-fleet-control", "0 0 1 * *"]], beats: [["qnfo-fleet-control", 5000, 1]] });
+r = await get(envI, "/api/architecture");
+ok(r.j.workers.find((w) => w.name === "qnfo-fleet-control").cadence_min === null && r.j.summary.overdue_loops === 0, "a cron that pins the day of the month is not judged", r.j.workers.find((w) => w.name === "qnfo-fleet-control").cadence_min);
+ok(/overdue when its last tick is older than its schedule/.test(JSON.stringify(r.j.self.limits)), "self.limits says how overdue is judged");
 
 console.log(pass + " passed, " + fail + " failed");
 if (fail) process.exit(1);
