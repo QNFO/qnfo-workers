@@ -52,7 +52,7 @@ TARGETS = [
 ]
 TEST_TARGET = "qnfo-fleet-dashboard/owner-morning.test.mjs"
 
-HELPER_ANCHOR = "async function creditRunwayDays(c) {"
+HELPER_ANCHOR = "function creditRunwayDays(c) {"
 CARD_PREFIX = '  if (runway != null && runway < CREDIT_RUNWAY_WARN_DAYS) items.unshift({ key: "credit-runway"'
 
 HELPER = '''// CREDIT-HALT-ONLY-1 (1.47.0, owner directive 2026-10-19): "AI credit runs out in about N days" is never an issue,
