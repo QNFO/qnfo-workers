@@ -15,7 +15,7 @@
 // Vars (optional): SOCIAL_WEEKLY_CAP. D1: DB (qnfo-audit.social_threads, dissemination_tracker, pipeline_flags; 0.7.28 also
 // social_learner_posts, ops_config social_learner_enabled / social_learner_pending, metric_registry). AI: env.AI.
 
-var VERSION = "0.17.1-pause-stale-until-1"; /* 0.17.1 SOCIAL-PAUSE-STALE-UNTIL-1 (2026-10-19, pillar reach, agent_issues 2818): social_paused_until ends a pause only when it was written with that pause (a stale until from an earlier episode is ignored and the pause holds), a pause whose expiry clear fails still holds, and every pause read logs one pause-read line (value, until, write times, result). The 2026-10-17 14:30Z drains posted without a SOCIAL-PAUSE-1 line while the flag read 1 (Workers Logs); the expiry path had no test. */ // 0.17.0 CRON-GRID-1 (owner directive 2026-10-19, pillar autonomy): one hourly :30 trigger. The 06:00 scan runs on the 06:30 fire and is retried hourly (at most 3 times) when it fails; the 07:00 alert digest and engagement run on the 07:30 fire, never retried (they send the owner a digest). Every fire is logged to cron_fire_log for CRON-WATCH-1. // 0.16.12 INTEG-MASTODON-VERIFY-1 (2026-10-19, pillar reach, agent_issues 2925, code task ct_im2925): the profile sync that 0.16.10-codeagent added as a top-level block (process.env, a fetch in global scope) could never run on a Worker; it is now mastodonProfileSync(env) on the daily engagement step, idempotent, with a read-back of the verified fields and a test (mastodon-profile.test.mjs). // 0.16.6 BSKY-SESSION-REUSE-1 (2026-10-18): one Bluesky session per isolate for 30 minutes instead of one createSession per step (createSession is limited to 30 per 5 min and 300 a day per account). 0.16.5 THREAD-CLOSE-1 (2026-10-18): a queued curated thread every Buffer channel has carried is marked posted after each drain (thread 153 sat queued 16 days after all three channels posted it); 0.16.0 PAPER-ROLLUP-1 (2026-10-14, pillar reach; owner directive "substack swapped for mastodon on buffer. update expectations and post/outreach schedule accordingly and implement full-throated/full-throttle publication and dissemination pipelines....clear out backlogs and queues now and forever...100% server-side and 100% automatically"): every published paper is disseminated, none is suppressed for volume. drainRollup runs every hourly tick (cron 30 * * * *, was every 2 h): a Substack Note lists every queued paper (up to ROLLUP_SUBSTACK_MAX, oldest first, each link probed and tagged utm_source=substack with the paper as campaign) and marks it posted (mode rollup); a Bluesky thread then carries up to ROLLUP_BSKY_MAX of those papers, one post each, inside the Bluesky gate (default 21 a week, spaced), each paper recording its own post id so RETRACT-DEAD-LINKS-1 still works. The single-paper Buffer drain reads posted and queued papers of 30 days, so LinkedIn, Mastodon (direct) and X keep taking the newest paper they have not carried; Substack takes roll-ups only. The gate counts a roll-up thread as one post. retractDeadLinks re-checks at most RETRACT_MAX posts of 30 days a run. // 0.15.0 0.15.0 OUTREACH-ACCELERATE-1 (2026-10-14, pillar reach; owner directive "Accelerate all social media and all external outreach, communication, and promotion. All available channels shall be fully utilized as appropriate and effective, including email, Buffer, Mastodon, Bluesky, Substack, and all other channels."): Bluesky defaults to 14 posts a week (2 a day) and the Buffer channels to LinkedIn 7 (queue or drafts, ToS 3.1 unchanged), Mastodon 14, X 14 and Substack Notes 14 (clamp 0..21); the attention share now steers between a floor and the cap (pipeline_flags social_share_floor, default 0.5) instead of cutting a channel to one post a week on a thin sample; Bluesky posts are spaced (at most one per 2-hourly run, at least 7 days / cap minus 1 h apart) so the higher cap never bursts; SUBSTACK-CHANNEL-1: a Substack channel connected in Buffer (Notes; API supported on the free plan) is drained and cross-posted like LinkedIn (whole thread, subscribe line, utm_source substack); MASTODON-DIRECT-1: with MASTODON_TOKEN set, Mastodon posts go straight to the instance API (MASTODON_HOST, default mstdn.science) instead of Buffer, which frees a Buffer channel slot, and their counts are read from the public status API at 07:00. // 0.14.3 LOG-NOISE-1 (2026-10-14, pillar core, found by FLEET-JOURNEYS-2 and the Cloudflare Observability Issues ingest): the three ensure*Schema ALTERs no longer log their expected "duplicate column" answer as an error.
+var VERSION = "0.18.0-learner-arms-2"; /* 0.18.0 LEARNER-ARMS-2 (2026-10-19, pillar reach, agent_issues 2722): the attention learner learns from the posts it files. 50 of 61 learner rows read not-arm on 2026-10-17 and 124 of 137 on 2026-10-19 because learnerTopicOf named a topic for three keyword lists only and the channel-drain insert stored a null link slug. A post that links a paper now takes the paper's own shelf (living-paper paper_category, read through the new LIVING_PAPER binding; energy, ai-epistemics and ai-operations keep the arm names energy, epistemics and operations; qec, physics, mathematics, logic, synthesis and assessment are arms too) and the generic arm research when the paper has no shelf row or the binding is unreadable; q08, pillar 4 (ultrametric, adelic, p-adic, autaxic, topos), roll-up posts and posts with no paper link stay not-arm. The channel drain stores the paper slug as link_slug (parsed from the posted text, else the known paper slug). learnerVisits joins the utm ledger on the gateway's own campaign key (lower case, 64 characters) and on the row's slug, the campaign the post was tagged with, so a curated thread whose slug differs from its paper slug and a slug longer than 64 characters read their clicks. migrations/2026-10-19-learner-arms-backfill.sql re-files the recoverable not-arm rows. */ /* 0.17.1 SOCIAL-PAUSE-STALE-UNTIL-1 (2026-10-19, pillar reach, agent_issues 2818): social_paused_until ends a pause only when it was written with that pause (a stale until from an earlier episode is ignored and the pause holds), a pause whose expiry clear fails still holds, and every pause read logs one pause-read line (value, until, write times, result). The 2026-10-17 14:30Z drains posted without a SOCIAL-PAUSE-1 line while the flag read 1 (Workers Logs); the expiry path had no test. */ // 0.17.0 CRON-GRID-1 (owner directive 2026-10-19, pillar autonomy): one hourly :30 trigger. The 06:00 scan runs on the 06:30 fire and is retried hourly (at most 3 times) when it fails; the 07:00 alert digest and engagement run on the 07:30 fire, never retried (they send the owner a digest). Every fire is logged to cron_fire_log for CRON-WATCH-1. // 0.16.12 INTEG-MASTODON-VERIFY-1 (2026-10-19, pillar reach, agent_issues 2925, code task ct_im2925): the profile sync that 0.16.10-codeagent added as a top-level block (process.env, a fetch in global scope) could never run on a Worker; it is now mastodonProfileSync(env) on the daily engagement step, idempotent, with a read-back of the verified fields and a test (mastodon-profile.test.mjs). // 0.16.6 BSKY-SESSION-REUSE-1 (2026-10-18): one Bluesky session per isolate for 30 minutes instead of one createSession per step (createSession is limited to 30 per 5 min and 300 a day per account). 0.16.5 THREAD-CLOSE-1 (2026-10-18): a queued curated thread every Buffer channel has carried is marked posted after each drain (thread 153 sat queued 16 days after all three channels posted it); 0.16.0 PAPER-ROLLUP-1 (2026-10-14, pillar reach; owner directive "substack swapped for mastodon on buffer. update expectations and post/outreach schedule accordingly and implement full-throated/full-throttle publication and dissemination pipelines....clear out backlogs and queues now and forever...100% server-side and 100% automatically"): every published paper is disseminated, none is suppressed for volume. drainRollup runs every hourly tick (cron 30 * * * *, was every 2 h): a Substack Note lists every queued paper (up to ROLLUP_SUBSTACK_MAX, oldest first, each link probed and tagged utm_source=substack with the paper as campaign) and marks it posted (mode rollup); a Bluesky thread then carries up to ROLLUP_BSKY_MAX of those papers, one post each, inside the Bluesky gate (default 21 a week, spaced), each paper recording its own post id so RETRACT-DEAD-LINKS-1 still works. The single-paper Buffer drain reads posted and queued papers of 30 days, so LinkedIn, Mastodon (direct) and X keep taking the newest paper they have not carried; Substack takes roll-ups only. The gate counts a roll-up thread as one post. retractDeadLinks re-checks at most RETRACT_MAX posts of 30 days a run. // 0.15.0 0.15.0 OUTREACH-ACCELERATE-1 (2026-10-14, pillar reach; owner directive "Accelerate all social media and all external outreach, communication, and promotion. All available channels shall be fully utilized as appropriate and effective, including email, Buffer, Mastodon, Bluesky, Substack, and all other channels."): Bluesky defaults to 14 posts a week (2 a day) and the Buffer channels to LinkedIn 7 (queue or drafts, ToS 3.1 unchanged), Mastodon 14, X 14 and Substack Notes 14 (clamp 0..21); the attention share now steers between a floor and the cap (pipeline_flags social_share_floor, default 0.5) instead of cutting a channel to one post a week on a thin sample; Bluesky posts are spaced (at most one per 2-hourly run, at least 7 days / cap minus 1 h apart) so the higher cap never bursts; SUBSTACK-CHANNEL-1: a Substack channel connected in Buffer (Notes; API supported on the free plan) is drained and cross-posted like LinkedIn (whole thread, subscribe line, utm_source substack); MASTODON-DIRECT-1: with MASTODON_TOKEN set, Mastodon posts go straight to the instance API (MASTODON_HOST, default mstdn.science) instead of Buffer, which frees a Buffer channel slot, and their counts are read from the public status API at 07:00. // 0.14.3 LOG-NOISE-1 (2026-10-14, pillar core, found by FLEET-JOURNEYS-2 and the Cloudflare Observability Issues ingest): the three ensure*Schema ALTERs no longer log their expected "duplicate column" answer as an error.
 
 
 // Wrap socialPausedBy to log its reads and fail‑closed on errors.
@@ -2214,7 +2214,7 @@ async function drainDissemination(env, opts) {
       await env.DB.prepare("UPDATE dissemination_tracker SET action='posted', posted_at=datetime('now'), post_url=?, post_id=?, post_text_snippet=COALESCE(?, post_text_snippet), updated_at=datetime('now') WHERE id=?").bind(postUrl, r.uri, typeof r.stored_text === 'string' && r.stored_text ? r.stored_text : (typeof r.text === 'string' && r.text ? r.text : null), row.id).run();
       posted++;
       if (decision) learner = await learnerRecordPost(env, decision, r.uri, opts.nowMs);
-      else await learnerRecordPost(env, learnerBackfillDecision(row, 'dissem', opts.nowMs), r.uri, opts.nowMs);
+      else await learnerRecordPost(env, learnerBackfillDecision(row, 'dissem', opts.nowMs, await learnerHintsFor(env, [row], 'dissem')), r.uri, opts.nowMs);
     } catch (e) {
       failed++;
       await env.DB.prepare("UPDATE dissemination_tracker SET action='failed', post_text_snippet=?, updated_at=datetime('now') WHERE id=?").bind(String(e).slice(0, 180), row.id).run();
@@ -2352,7 +2352,7 @@ async function drainQueue(env, opts) {
       await markPosted(env, row.id, postUriValue(uris[0], bufferResult), sent);
       posted++;
       if (decision) learner = await learnerRecordPost(env, decision, uris[0], opts.nowMs);
-      else await learnerRecordPost(env, learnerBackfillDecision(row, 'thread', opts.nowMs), uris[0], opts.nowMs);
+      else await learnerRecordPost(env, learnerBackfillDecision(row, 'thread', opts.nowMs, await learnerHintsFor(env, [row], 'thread')), uris[0], opts.nowMs);
       // SOCIAL-RUN-LEDGER-1: what Buffer did with this post, per platform, for the run record.
       if (bufferResult && Array.isArray(bufferResult.results)) for (const br of bufferResult.results) buffer.push(String(br.platform || 'buffer') + ':' + String(br.status || '?'));
       else if (bufferResult) buffer.push('buffer:' + (bufferResult.skipped ? 'skipped' : 'error'));
@@ -2460,7 +2460,15 @@ function engagementRunStatus(o) {
 // is refreshed daily in the same cron, whatever the switch says (it is measurement only).
 // Kill switch: ops_config social_learner_enabled ('0', 'off', 'false', 'no', 'disabled' = off; absent = on; unreadable =
 // off). Off is the 0.7.27 order and timing exactly, and the weekly update records 'skipped'.
-var LEARNER_TOPICS = ['energy', 'epistemics', 'operations'];
+// LEARNER-ARMS-2 (0.18.0, agent_issues 2722): the topic arm of a post that links a paper is the paper's own shelf (living-paper
+// paper_category: the audience classification papers.qnfo.org shows, 606 papers on 2026-10-19), so no such post is stored without
+// an arm (124 of 137 rows were not-arm on 2026-10-19: the three keyword lists below named a topic for 3 of 61 posts). The three
+// strategy pillars keep their older arm names, so the credited rows they already hold stay on the same arm; a paper with no shelf
+// row, or an unreadable shelf table, takes the generic arm. A post with no paper link and no keyword topic, q08, pillar 4 and a
+// roll-up post (several papers, no single arm) are still not arms.
+var LEARNER_GENERIC_TOPIC = 'research';
+var LEARNER_CATEGORY_TOPIC = { energy: 'energy', 'ai-epistemics': 'epistemics', 'ai-operations': 'operations', qec: 'qec', physics: 'physics', mathematics: 'mathematics', logic: 'logic', synthesis: 'synthesis', assessment: 'assessment' };
+var LEARNER_TOPICS = ['energy', 'epistemics', 'operations', 'qec', 'physics', 'mathematics', 'logic', 'synthesis', 'assessment', LEARNER_GENERIC_TOPIC];
 // LEARNER-CHANNEL-ARM-1 (0.8.1, 2026-10-06; transformation lever T7.13): a fourth arm dimension, the channel. The Buffer
 // channel posts the drain records (social_media_posts, platform buffer-<service>) become learner rows (post_key
 // channel:<id>, chosen_by channel-drain) with the thread's topic and format, credited from the reach ledger's buffer rows
@@ -2520,31 +2528,94 @@ function learnerLinkSlug(text) {
   const m = /https?:\/\/(?:[a-z0-9-]+\.)*qnfo\.org\/papers\/([^\/?#\s"'<>()\[\]]+)/i.exec(String(text || ''));
   return m ? m[1] : null;
 }
-function learnerTopicOf(doi, text) {
+// ctx (LEARNER-ARMS-2): { paper: the post links a paper, category: the paper's shelf or null }. Exclusions first (q08, pillar 4), then
+// the keyword pillars, then the paper's shelf, then the generic arm for a post that links a paper; with no paper link: null.
+function learnerTopicOf(doi, text, ctx) {
   const s = String(text || '');
   if (Q08_LINK_RE.test(s)) return null;                       // never q08
   const d = String(doi || '').trim().toLowerCase();
   if (LEARNER_NOT_ARM_RE.test(s)) return null;                // pillar 4 stays out of outreach (STRATEGY 2.3)
   for (const t of LEARNER_TOPIC_RE) if (t[1].test(s)) return t[0];
+  if (!ctx || !(ctx.paper || ctx.category)) return null;
+  return LEARNER_CATEGORY_TOPIC[String(ctx.category || '')] || LEARNER_GENERIC_TOPIC;
+}
+// The shelf of the first slug that has one in hints.categories ({ slug: category }, learnerCategories), else null.
+function learnerCategoryOf(hints, slugs) {
+  const m = hints && hints.categories;
+  if (!m) return null;
+  for (const k of slugs || []) if (k && m[String(k)]) return String(m[String(k)]);
   return null;
 }
-function learnerClassify(row, source) {
+function learnerClassify(row, source, hints) {
   row = row || {};
   if (source === 'dissem') {
     const title = String(row.paper_title || row.paper_slug || '');
     const link = String(row.pages_url || '');
     const slug = String(row.paper_slug || row.id || '');
-    let topic = learnerTopicOf(row.paper_doi, title + '\n' + link);
+    const linkSlug = learnerLinkSlug(link) || (row.paper_slug ? String(row.paper_slug) : null);
+    let topic = learnerTopicOf(row.paper_doi, title + '\n' + link, { paper: !!linkSlug, category: learnerCategoryOf(hints, [linkSlug, slug]) });
     if (slug.startsWith('rollup-')) topic = null;
-    return { topic: topic, format: learnerIsQuestion(title) ? 'question' : 'single', n_posts: 1,
-      link_slug: learnerLinkSlug(link) || (row.paper_slug ? String(row.paper_slug) : null), slug: slug };
+    return { topic: topic, format: learnerIsQuestion(title) ? 'question' : 'single', n_posts: 1, link_slug: linkSlug, slug: slug };
   }
   const posts = learnerPostsOf(row.posts);
   const all = posts.join('\n');
   let link = null;
   for (const p of posts) { link = learnerLinkSlug(p); if (link) break; }
+  const slug = String(row.slug || row.id || '');
   const format = learnerIsQuestion(posts[0] || '') ? 'question' : (posts.length >= 2 ? 'thread' : 'single');
-  return { topic: learnerTopicOf(row.doi || findDoi(all), String(row.title || '') + '\n' + all), format: format, n_posts: posts.length, link_slug: link, slug: String(row.slug || row.id || '') };
+  const topic = /^rollup-/i.test(slug) ? null : learnerTopicOf(row.doi || findDoi(all), String(row.title || '') + '\n' + all, { paper: !!link, category: learnerCategoryOf(hints, [link, slug]) });
+  return { topic: topic, format: format, n_posts: posts.length, link_slug: link, slug: slug };
+}
+// LEARNER-ARMS-2: a Buffer channel post with no social_threads row (a paper from the dissemination queue, a roll-up, a post
+// whose thread is gone). The drain stores the slug it tagged the post with as project_id, so that is the row's slug; the link
+// is the papers.qnfo.org slug in the posted text, else the project_id when it names a known paper (r.is_paper: a
+// dissemination_tracker row carries it) or a paper shelf. A roll-up carries several papers: no link, no arm.
+function learnerClassifyChannel(r, hints) {
+  r = r || {};
+  const slug = String(r.project_id || '');
+  const text = String(r.content_preview || '');
+  if (/^rollup-/i.test(slug)) return { topic: null, format: 'single', n_posts: 1, link_slug: null, slug: slug };
+  // content_preview is cut at 200 characters, so a link in it can end inside the slug: the project_id (the campaign, the whole
+  // slug) names the paper when it is a known one or the text's slug is a prefix of it; a text slug alone is the last resort.
+  const inText = learnerLinkSlug(text);
+  const category = learnerCategoryOf(hints, [slug, inText]);
+  let link = null;
+  if (slug && (Number(r.is_paper) === 1 || category)) link = slug;
+  else if (inText) link = slug.length > inText.length && slug.indexOf(inText) === 0 ? slug : inText;
+  return { topic: learnerTopicOf(null, text + '\n' + slug, { paper: !!link, category: category }), format: learnerIsQuestion(text) ? 'question' : 'single', n_posts: 1, link_slug: link, slug: slug };
+}
+// LEARNER-ARMS-2: the shelf of each slug, one read per 90 slugs of living-paper paper_category (the binding the gateway
+// also holds). Missing binding, missing table or a failed read: no shelves, and the generic arm names the paper's post.
+async function learnerCategories(env, slugs) {
+  const out = {};
+  const db = env && env.LIVING_PAPER;
+  if (!db || typeof db.prepare !== 'function') return out;
+  const uniq = Array.from(new Set((slugs || []).filter(Boolean).map(String))).slice(0, 450);
+  for (let i = 0; i < uniq.length; i += 90) {
+    const chunk = uniq.slice(i, i + 90);
+    try {
+      const r = await db.prepare('SELECT slug, category FROM paper_category WHERE slug IN (' + chunk.map(function(_, k) { return '?' + (k + 1); }).join(', ') + ')').bind(...chunk).all();
+      for (const x of (r && r.results) || []) if (x && x.slug && x.category) out[String(x.slug)] = String(x.category);
+    } catch (e) {
+      console.log('LEARNER-ARMS-2 paper_category read failed, generic arm: ' + String(e && e.message || e).slice(0, 160));
+      break;
+    }
+  }
+  return out;
+}
+// The slugs a set of rows can be filed under (the paper link and the row's own slug), for one learnerCategories read.
+function learnerSlugsOf(rows, source) {
+  const out = [];
+  for (const r of rows || []) { const a = learnerClassify(r, source); out.push(a.link_slug, a.slug); }
+  return out;
+}
+async function learnerHintsFor(env, rows, source) {
+  return { categories: await learnerCategories(env, learnerSlugsOf(rows, source)) };
+}
+// The gateway keys its utm click ledger by the campaign cleaned this way (qnfo-gateway utmClean): a slug longer than 64
+// characters is stored cut, so the learner looks it up the same way.
+function learnerUtmCampaign(v) {
+  return String(v || '').toLowerCase().trim().replace(/[^a-z0-9._-]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 64);
 }
 function learnerSlotOf(ms) {
   const h = new Date(ms).getUTCHours();
@@ -2711,9 +2782,12 @@ function learnerBrief(dec) {
 async function learnerCandidates(env) {
   const out = [];
   const a = await env.DB.prepare("SELECT id, slug, title, doi, posts, flags, notes, created_at FROM social_threads WHERE status='queued' ORDER BY CASE WHEN COALESCE(flags,'') LIKE '%selected%' OR COALESCE(notes,'') LIKE 'selected%' THEN 0 ELSE 1 END, id ASC LIMIT 50").all();
-  for (const r of (a && a.results) || []) out.push({ source: 'thread', id: r.id, row: r, arms: learnerClassify(r, 'thread') });
   const b = await env.DB.prepare("SELECT * FROM dissemination_tracker WHERE action='queued' AND channel='bluesky' ORDER BY created_at ASC LIMIT 50").all();
-  for (const r of (b && b.results) || []) out.push({ source: 'dissem', id: r.id, row: r, arms: learnerClassify(r, 'dissem') });
+  const ra = (a && a.results) || [], rb = (b && b.results) || [];
+  // LEARNER-ARMS-2: one shelf read for both queues (the paper's own category names its arm; none readable: the generic arm).
+  const hints = { categories: await learnerCategories(env, learnerSlugsOf(ra, 'thread').concat(learnerSlugsOf(rb, 'dissem'))) };
+  for (const r of ra) out.push({ source: 'thread', id: r.id, row: r, arms: learnerClassify(r, 'thread', hints) });
+  for (const r of rb) out.push({ source: 'dissem', id: r.id, row: r, arms: learnerClassify(r, 'dissem', hints) });
   return out;
 }
 
@@ -2754,7 +2828,7 @@ async function learnerPick(env, who, nowMs) {
 }
 // After the chosen post went out: its reward row (pending until the 72h window closes) and the 24h spacing marker.
 async function learnerRecordPost(env, dec, bskyUri, nowMs, row, source) {
-  if (!dec && row) dec = learnerBackfillDecision(row, source, nowMs);
+  if (!dec && row) dec = learnerBackfillDecision(row, source, nowMs, await learnerHintsFor(env, [row], source));
   const iso = new Date(nowMs || Date.now()).toISOString();
   const key = (dec.source === 'dissem' ? 'dissem:' : 'thread:') + dec.id;
   const by = dec.chosen_by === 'backfill' ? 'backfill' : 'learner';
@@ -2770,8 +2844,8 @@ async function learnerRecordPost(env, dec, bskyUri, nowMs, row, source) {
 // LEARNER-COVERAGE-1 (0.14.0, agent_issues 2381): a post the drain sent without a learner decision (learner off, no
 // answer, or the old order) is recorded too, with arms built from the row itself (topic and format from learnerClassify,
 // slot from the posted hour, link slug from the utm campaign), so its utm clicks reach the posterior at the 72h credit.
-function learnerBackfillDecision(row, source, nowMs) {
-  const a = learnerClassify(row, source);
+function learnerBackfillDecision(row, source, nowMs, hints) {
+  const a = learnerClassify(row, source, hints);
   const campaign = source === 'dissem' ? (row && row.paper_slug) : (row && row.slug);
   return { source: source, id: row && row.id, slug: a.slug || null, topic: a.topic || null, format: a.format || null, n_posts: a.n_posts || 1,
     link_slug: a.link_slug || (campaign ? String(campaign) : null), slot: learnerSlotOf(nowMs || Date.now()), chosen_by: 'backfill', decided_at: new Date(nowMs || Date.now()).toISOString(), version: VERSION };
@@ -2811,15 +2885,18 @@ function learnerEngagementOf(rows, nPosts) {
 }
 // UTM-VISITS-1 (0.8.2): the utm_source values a learner channel's posts carry (POST-ID-UTM-1 and BUFFER_UTM_SOURCE).
 var LEARNER_UTM_SOURCES = { bluesky: ['bluesky'], linkedin: ['linkedin'], mastodon: ['mastodon'], x: ['x', 'twitter'] };
-async function learnerVisits(env, slug, d0, channel) {
+// LEARNER-ARMS-2: the utm ledger is keyed by the campaign the post was tagged with (the row's slug: the thread slug of a curated
+// thread, the paper slug of a paper), cleaned and cut to 64 characters by the gateway; the paper slug (link_slug) is what the RUM
+// fallback below needs. Both keys are read, so 'jps-metric' (thread) and an 80-character paper slug join their clicks.
+async function learnerVisits(env, slug, d0, channel, campaign) {
   if (!slug) return { visits: null, status: 'no papers.qnfo.org link' };
   // UTM-VISITS-1 (0.8.2, lever T7.9 half 2): a tagged page load counted by qnfo-gateway 3.10.0 (reach_signals source utm,
   // metric clicks_human, entity campaign = the paper slug, channel = utm_source) is a direct measurement of the visits this
   // post caused. When the 72h window carries any such row for the post's channel, they are the visits; else the RUM lift below.
   try {
     const srcs = (channel && LEARNER_UTM_SOURCES[String(channel)]) || null;
-    const u = await env.DB.prepare("SELECT SUM(CASE WHEN metric = 'clicks_human' THEN value ELSE 0 END) AS h, SUM(CASE WHEN metric = 'clicks_bot' THEN value ELSE 0 END) AS b, COUNT(*) AS n, MAX(date) AS d FROM reach_signals WHERE source = 'utm' AND entity_type = 'campaign' AND entity_id = ?1 AND date >= ?2 AND date <= ?3 AND (?4 IS NULL OR channel IN (?4, ?5))")
-      .bind(String(slug), d0, learnerShiftDay(d0, 2), srcs ? srcs[0] : null, srcs ? (srcs[1] || srcs[0]) : null).first();
+    const u = await env.DB.prepare("SELECT SUM(CASE WHEN metric = 'clicks_human' THEN value ELSE 0 END) AS h, SUM(CASE WHEN metric = 'clicks_bot' THEN value ELSE 0 END) AS b, COUNT(*) AS n, MAX(date) AS d FROM reach_signals WHERE source = 'utm' AND entity_type = 'campaign' AND entity_id IN (?1, ?6) AND date >= ?2 AND date <= ?3 AND (?4 IS NULL OR channel IN (?4, ?5))")
+      .bind(learnerUtmCampaign(slug), d0, learnerShiftDay(d0, 2), srcs ? srcs[0] : null, srcs ? (srcs[1] || srcs[0]) : null, learnerUtmCampaign(campaign || slug)).first();
     if (u && Number(u.n) > 0) return { visits: Number(u.h) || 0, window_views: Number(u.h) || 0, bot_clicks: Number(u.b) || 0, status: 'ok', source: 'utm', channel: channel || 'all', last_day: String(u.d) };
   } catch (e) { /* no utm rows yet (the ledger starts with the first tagged load): the RUM lift below */ }
   // ATTENTION-LOOP-1 (0.8.0): the bot-filtered per-item rows (source cf-rum-human) when the three window days carry them,
@@ -2866,19 +2943,29 @@ async function learnerDiscover(env, nowMs) {
     stmts.push(env.DB.prepare(ins).bind(key, arms.slug || null, uri, arms.link_slug || null, arms.topic || null, arms.format || null, learnerSlotOf(ms), Number(arms.n_posts) || 1, new Date(ms).toISOString(), arms.topic ? 'pending' : 'not-arm', iso));
   };
   const a = await env.DB.prepare("SELECT id, slug, title, doi, posts, post_uri, posted_at FROM social_threads WHERE status = 'posted' AND post_uri IS NOT NULL AND post_uri <> '' AND posted_at >= ?1 AND NOT EXISTS (SELECT 1 FROM social_learner_posts l WHERE l.post_key = 'thread:' || social_threads.id) ORDER BY posted_at ASC LIMIT 200").bind(LEARNER_EPOCH_SQL).all();
-  for (const r of (a && a.results) || []) add('thread:' + r.id, learnerClassify(r, 'thread'), blueskyUriOf(r.post_uri), r.posted_at);
   const b = await env.DB.prepare("SELECT id, paper_slug, paper_doi, paper_title, pages_url, post_id, posted_at FROM dissemination_tracker WHERE action = 'posted' AND channel = 'bluesky' AND post_id LIKE 'at://%' AND posted_at >= ?1 AND NOT EXISTS (SELECT 1 FROM social_learner_posts l WHERE l.post_key = 'dissem:' || dissemination_tracker.id) ORDER BY posted_at ASC LIMIT 200").bind(LEARNER_EPOCH_SQL).all();
-  for (const r of (b && b.results) || []) add('dissem:' + r.id, learnerClassify(r, 'dissem'), blueskyUriOf(r.post_id), r.posted_at);
   // LEARNER-CHANNEL-ARM-1: the Buffer channel posts the drain recorded teach the channel arm. Arms come from the thread row
   // the slug names (topic, format, link), the slot from the publish time; the engagement is read at credit time from the
   // reach ledger's buffer rows (reach_signals source buffer, per channel post).
+  // LEARNER-ARMS-2: a channel post whose thread row is gone (a paper from the dissemination queue, a roll-up) is classified from
+  // the text the drain posted and the project_id it tagged the post with (learnerClassifyChannel); the link slug is the paper slug,
+  // so learnerVisits can join the post's utm clicks, and a roll-up (several papers) is the only channel row with no link.
+  let c = null;
   try {
-    const c = await env.DB.prepare("SELECT p.id, p.platform, p.buffer_id, p.project_id, p.published_at, t.id AS thread_id, t.slug, t.title, t.doi, t.posts FROM social_media_posts p LEFT JOIN social_threads t ON t.slug = p.project_id WHERE p.platform LIKE 'buffer-%' AND p.status NOT IN ('failed', 'error') AND p.buffer_id IS NOT NULL AND p.published_at >= ?1 AND NOT EXISTS (SELECT 1 FROM social_learner_posts l WHERE l.post_key = 'channel:' || p.id) ORDER BY p.published_at ASC LIMIT 200").bind(LEARNER_EPOCH_SQL).all();
-    for (const r of (c && c.results) || []) {
+    c = await env.DB.prepare("SELECT p.id, p.platform, p.buffer_id, p.project_id, p.published_at, p.content_preview, EXISTS (SELECT 1 FROM dissemination_tracker d WHERE d.paper_slug = p.project_id) AS is_paper, t.id AS thread_id, t.slug, t.title, t.doi, t.posts FROM social_media_posts p LEFT JOIN social_threads t ON t.slug = p.project_id WHERE p.platform LIKE 'buffer-%' AND p.status NOT IN ('failed', 'error') AND p.buffer_id IS NOT NULL AND p.published_at >= ?1 AND NOT EXISTS (SELECT 1 FROM social_learner_posts l WHERE l.post_key = 'channel:' || p.id) ORDER BY p.published_at ASC LIMIT 200").bind(LEARNER_EPOCH_SQL).all();
+  } catch (e) { console.log('LEARNER-CHANNEL-ARM-1 discover failed: ' + String(e && e.message || e).slice(0, 160)); }
+  const ra = (a && a.results) || [], rb = (b && b.results) || [], rc = (c && c.results) || [];
+  const chanSlugs = [];
+  for (const r of rc) { if (r.thread_id) { const x = learnerClassify({ slug: r.slug, title: r.title, doi: r.doi, posts: r.posts }, 'thread'); chanSlugs.push(x.link_slug, x.slug); } else { const x = learnerClassifyChannel(r); chanSlugs.push(x.link_slug, x.slug); } }
+  const hints = { categories: await learnerCategories(env, learnerSlugsOf(ra, 'thread').concat(learnerSlugsOf(rb, 'dissem'), chanSlugs)) };
+  for (const r of ra) add('thread:' + r.id, learnerClassify(r, 'thread', hints), blueskyUriOf(r.post_uri), r.posted_at);
+  for (const r of rb) add('dissem:' + r.id, learnerClassify(r, 'dissem', hints), blueskyUriOf(r.post_id), r.posted_at);
+  try {
+    for (const r of rc) {
       const ch = LEARNER_CHANNEL_OF[String(r.platform)] || null;
       const ms = learnerParseTs(r.published_at);
       if (!ch || !isFinite(ms)) continue;
-      const arms = r.thread_id ? learnerClassify({ slug: r.slug, title: r.title, doi: r.doi, posts: r.posts }, 'thread') : { topic: null, format: 'single', n_posts: 1, link_slug: null, slug: String(r.project_id || '') };
+      const arms = r.thread_id ? learnerClassify({ slug: r.slug, title: r.title, doi: r.doi, posts: r.posts }, 'thread', hints) : learnerClassifyChannel(r, hints);
       stmts.push(env.DB.prepare("INSERT OR IGNORE INTO social_learner_posts (post_key, slug, bsky_uri, link_slug, topic, format, slot, n_posts, posted_at, chosen_by, status, created_at, channel, buffer_id) VALUES (?1, ?2, NULL, ?3, ?4, ?5, ?6, 1, ?7, 'channel-drain', ?8, ?9, ?10, ?11)")
         .bind('channel:' + r.id, arms.slug || String(r.project_id || ''), arms.link_slug || null, arms.topic || null, arms.format || null, learnerSlotOf(ms), new Date(ms).toISOString(), arms.topic ? 'pending' : 'not-arm', iso, ch, String(r.buffer_id)));
     }
@@ -2999,7 +3086,7 @@ async function learnerCreditPending(env, now, out) {
     }
     let vis = null;
     if (!eng) {
-      vis = await learnerVisits(env, p.link_slug, w.from, ch);
+      vis = await learnerVisits(env, p.link_slug, w.from, ch, p.slug);
       if (vis && vis.source === 'utm') eng = { e: 0, likes: 0, reposts: 0, quotes: 0, replies: 0, self_replies: 0, snapshot_day: null, measured: 'none: credited on utm clicks only' };
     }
     if (!eng && recredit) continue;
@@ -3012,7 +3099,7 @@ async function learnerCreditPending(env, now, out) {
       await learnerLogEvent(env, 'social-learner-reward-' + p.post_key, 'social-learner-reward', 'no-data', 'qnfo-social learner: ' + p.post_key + ' has no engagement snapshot inside its 72h window; no update', { post_key: p.post_key, arms: arms, detail: detail }, now);
       continue;
     }
-    if (!vis) vis = await learnerVisits(env, p.link_slug, w.from, ch);
+    if (!vis) vis = await learnerVisits(env, p.link_slug, w.from, ch, p.slug);
     const rw = learnerRewardOf(eng, vis.visits);
     const detail = { engagement: eng, visits: vis, x: rw.x, reward: rw.reward, window: [w.from, w.to], chosen_by: p.chosen_by };
     if (recredit) detail.recredited_from = 'no-data';
@@ -3551,6 +3638,6 @@ async function aiRunAttr(env, worker, purpose, model, input, opts) {
 // end aiRunAttr
 export { mastodonWantedFields, mastodonProfileSync, drainRollup, rollupNoteText, rollupSubstack, rollupBluesky, rollupRunStatus, ROLLUP_SUBSTACK_MAX, ROLLUP_BSKY_MAX, mastodonCreate, mastodonDirectStats, channelCreate, findChannel, blueskySpacing, CHANNEL_ORDER, collectBufferStats, bufferStatsPlan, bufferRefusedFields, bufferStatsQuery, bufferGqlBounded, BUFFER_STATS_PER_CHANNEL, BUFFER_STATS_CHANNELS, readTextCapped, probeLink, proseUnits, splitForThread, fitWhole, threadPlan, postThread, pickBufferText, collectReplies, replyRowsOf, replyWordCount, threadGroundingIssues, groundingProblems, composePrompt, repairPrompt, buildFacets, truncateSafe, applyLink, findDoi, byteLen, extractUrls, utmHost, sentPostsJson, utmTag, utmTagText,fitKeepUrls, tagAndFit, tagFacets, postText, postUriValue, weeklyCap, socialGate, drainQueue, drainDissemination, repairMojibake, contentGate, markPosted, routeGate, collectEngagement, blueskyUriOf, bufferPost, syncProfile, PROFILE_DESCRIPTION, bufferChannelAudit, linkedinMode, recordSocialRun, profileRunStatus, drainRunStatus, engagementRunStatus, autoScan,
   drainChannels, channelsRunStatus, channelText, channelCaps, channelWindow, channelCarried, pickChannelRow, CHANNEL_WEEKLY_CAP, CHANNEL_PLATFORM, CHANNEL_MAX_CHARS, CHANNEL_REPEAT_DAYS, SUBSCRIBE_LINE,
-  learnerClassify, learnerIsQuestion, learnerTopicOf, learnerSlotOf, learnerBeta, learnerPrior, learnerPosterior, learnerChoose, learnerPBest,
+  learnerClassify, learnerClassifyChannel, learnerCategories, learnerHintsFor, learnerUtmCampaign, learnerDiscover, LEARNER_TOPICS, LEARNER_CATEGORY_TOPIC, LEARNER_GENERIC_TOPIC, learnerIsQuestion, learnerTopicOf, learnerSlotOf, learnerBeta, learnerPrior, learnerPosterior, learnerChoose, learnerPBest,
   learnerEnabled, learnerPick, learnerEngagementOf, learnerVisits, learnerRewardOf, learnerWeeklyUpdate, learnerWeeklyTick, learnerCreditPending, learnerDailyCredit, attentionShares, shareCap, attentionOrder, learnerChannelOrder, learnerChannelEngagement, LEARNER_CHANNELS, LEARNER_CHANNEL_OF,
   learnerEngagementRate, learnerReport, parseCheckerIssues, socialHeartbeat, mastodonPublicStats, mastodonStatusRef, learnerBackfillDecision, learnerRecordPost, MASTODON_PUBLIC_MAX, ensureLearnerSchema, setLearnerRng, LEARNER_SLOTS, LEARNER_METRIC, LEARNER_METRIC_DEF , pickPaperRow, PAPER_PROMOTE_DAYS };

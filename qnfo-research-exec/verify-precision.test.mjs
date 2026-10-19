@@ -174,7 +174,7 @@ put("s-noop"); r2.set("pipeline/s-noop/fixes.json", hardFixes);
 ai.answer = () => badEdit; nCalls = ai.calls.length;
 res = await stageRevise(env, row("s-noop", "revise", { cycles: 0 }));
 let used = ai.calls.slice(nCalls).map((c) => c.model);
-ok(res.ok === false && res.withheld === "revise-noop" && get("s-noop").status === "researching" && get("s-noop").stage === "revise" && /^RERUN-ROUTE-1 revise-once: revise: .*not advanced unrevised/.test(get("s-noop").error) && used.length === 2 && used[0] !== used[1], "no applied edit from two model families fails the pass; the paper never advances unrevised", { res, used });
+ok(res.ok === false && res.withheld === "revise-noop" && get("s-noop").status === "researching" && get("s-noop").stage === "revise" && /^RERUN-ROUTE-1 revise-once: revise: .*not advanced unrevised/.test(get("s-noop").error) && used.length === 3 && new Set(used).size === 3 && /kimi/.test(used[2]) && !/kimi/.test(used[0] + used[1]), "no applied edit from gpt-oss-120b, glm-5.3-flash and the kimi-k2.6 last resort fails the pass; the paper never advances unrevised", { res, used });
 put("s-second"); r2.set("pipeline/s-second/fixes.json", hardFixes);
 ai.answer = (task, model) => /gpt-oss/.test(model) ? goodEdit : badEdit;
 res = await stageRevise(env, row("s-second", "revise", { cycles: 0 }));

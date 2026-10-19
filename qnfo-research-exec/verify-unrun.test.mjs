@@ -53,9 +53,9 @@ const CLAIMS_JSON = JSON.stringify([{ id: "Q1", statement: "the plant runs 8760 
 function mkEnv(opts) {
   const store = { "pipeline/v1/reconciled.md": PAPER, "pipeline/v1/grounding.md": "" };
   const sqls = [], calls = [];
-  const D1 = { prepare(sql) { let args = []; const q = { bind(...x) { args = x; return q; }, async run() { sqls.push({ sql, args }); return { meta: { changes: 1 } }; }, async first() { return null; }, async all() { return { results: [] }; } }; return q; } };
+  const D1 = { prepare(sql) { let args = []; const q = { bind(...x) { args = x; return q; }, async run() { sqls.push({ sql, args }); return { meta: { changes: 1 } }; }, async first() { return /FROM ops_config/.test(sql) && opts.cfg && opts.cfg[args[0]] != null ? { value: opts.cfg[args[0]] } : null; }, async all() { return { results: [] }; } }; return q; } };
   const MIRROR = { async get(k) { const v = store[k]; return v == null ? null : { text: async () => v }; }, async put(k, v) { store[k] = v; } };
-  const AI = { async run(model, input) { const p = input.messages[0].content; calls.push({ model, p }); if (p.includes("=== TASK: VERIFY_EXTRACT ===")) return { response: CLAIMS_JSON }; if (p.includes("=== TASK: VERIFY_GEN ===")) return { response: "```python\nimport math\nprint('CLAIM Q1: computed=%.8f expected=8760 match=yes' % (365*24))\nprint('CLAIM Q2: computed=%.8f expected=2.44 match=yes' % (6.1/2.5))\n```" }; if (p.includes("=== TASK: VERIFY_TEXT ===")) return { response: opts.text }; return { response: "" }; } };
+  const AI = { async run(model, input) { const p = input.messages[0].content; calls.push({ model, p }); if (p.includes("=== TASK: VERIFY_EXTRACT ===")) return { response: CLAIMS_JSON }; if (p.includes("=== TASK: VERIFY_GEN ===")) return { response: "```python\nimport math\nprint('CLAIM Q1: computed=%.8f expected=8760 match=yes' % (365*24))\nprint('CLAIM Q2: computed=%.8f expected=2.44 match=yes' % (6.1/2.5))\n```" }; if (p.includes("=== TASK: VERIFY_TEXT ===")) return { response: typeof opts.text === "function" ? opts.text(model) : opts.text }; return { response: "" }; } };
   const env = { AI, QNFO_AUDIT: D1, MIRROR };
   if (opts.pilot) env.CONTAINERS_PILOT = { async fetch() { return { ok: true, status: 200, async json() { return opts.pilot; } }; } };
   return { env, sqls, calls, store, events() { return sqls.filter((s) => /INSERT INTO cloud_ops_events/.test(s.sql)).map((s) => s.args[2] + ": " + s.args[3]); } };
@@ -70,6 +70,9 @@ const realFetch = globalThis.fetch;
   const res = await stageVerify(t.env, row());
   globalThis.fetch = realFetch;
   ok(t.calls.some((c) => c.p.includes("=== TASK: VERIFY_TEXT ===") && c.p.includes("CLAIMS (JSON):")), "the text-level recomputation is asked for with the claims", t.calls.map((c) => c.model));
+  // WAI-WIDTH-GOVERNOR-1 (0.25.0): glm-5.3-flash first; kimi-k2.6 (6.3x its input rate) only as the last resort.
+  const vt = t.calls.filter((c) => c.p.includes("=== TASK: VERIFY_TEXT ===")).map((c) => c.model);
+  ok(vt.length === 1 && /glm-5\.3-flash/.test(vt[0]), "the text recomputation runs on glm-5.3-flash and, having decided, on nothing else", vt);
   const ev = t.events();
   ok(ev.some((e) => /^verify-text-fallback: /.test(e) && /cause=pilot-unreachable/.test(e) && /ECONNREFUSED/.test(e) && /decided=2/.test(e)), "the fallback event names the cause and what the text decided", ev);
   ok(ev.some((e) => /^verify-adjudication: /.test(e) && /basis=text/.test(e) && /mismatches=0/.test(e)), "the adjudication event carries basis=text", ev);
@@ -97,6 +100,23 @@ const realFetch = globalThis.fetch;
   ok(res && res.ok === true && res.unrun === undefined && res.stage === "verify->publish" && res.basis === "script", "CLAIM lines without match= are adjudicated from their numbers and the row advances", res);
   ok(t.events().some((e) => /^verify-adjudication: /.test(e) && /basis=script/.test(e) && /claims=2/.test(e) && /undecided=0/.test(e)), "the adjudication event records the script basis", t.events());
   ok(!t.calls.some((c) => c.p.includes("=== TASK: VERIFY_TEXT ===")), "no text fallback was needed");
+}
+
+// E. WAI-WIDTH-GOVERNOR-1: no model decides a CLAIM line. glm-5.3-flash, then gpt-oss-120b, then kimi-k2.6 as the last resort; the
+// stage then fails as verify-unrun (retry), as before. ops_config research_kimi_last_resort = off drops the last call.
+{
+  globalThis.fetch = async () => { throw new Error("ECONNREFUSED pilot"); };
+  const t = mkEnv({ text: () => "I could not recompute these." });
+  const res = await stageVerify(t.env, row());
+  const vt = t.calls.filter((c) => c.p.includes("=== TASK: VERIFY_TEXT ===")).map((c) => c.model);
+  ok(vt.length === 3 && /glm-5\.3-flash/.test(vt[0]) && /gpt-oss-120b/.test(vt[1]) && /kimi-k2\.6/.test(vt[2]), "three undecided answers: glm-5.3-flash, gpt-oss-120b, kimi-k2.6 last", vt);
+  ok(res && res.ok === false && res.stage === "verify" && res.unrun === 1, "and the stage fails as unrun (retry) as before", res);
+  ok(t.events().some((e) => /^verify-text-fallback: /.test(e) && /model=@cf\/moonshotai\/kimi-k2\.6/.test(e)), "the fallback event names the model of the last attempt", t.events());
+  const u = mkEnv({ text: () => "I could not recompute these.", cfg: { research_kimi_last_resort: "off" } });
+  await stageVerify(u.env, row());
+  const vu = u.calls.filter((c) => c.p.includes("=== TASK: VERIFY_TEXT ===")).map((c) => c.model);
+  globalThis.fetch = realFetch;
+  ok(vu.length === 2 && !vu.some((m) => /kimi/.test(m)), "research_kimi_last_resort = off: glm-5.3-flash and gpt-oss-120b only", vu);
 }
 
 // D. A second mismatch pass: the existing loop bound still fails the row with its reason (regression guard).

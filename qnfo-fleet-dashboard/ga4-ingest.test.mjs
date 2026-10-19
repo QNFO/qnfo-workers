@@ -30,7 +30,7 @@ const pem = "-----BEGIN PRIVATE KEY-----\n" + pkcs8 + "\n-----END PRIVATE KEY---
 const pubPem = "-----BEGIN PUBLIC KEY-----\n" + spki + "\n-----END PUBLIC KEY-----\n";
 const SA = JSON.stringify({ type: "service_account", client_email: "fleet@qnfo.iam.gserviceaccount.com", private_key: pem, token_uri: "https://oauth2.googleapis.com/token" });
 
-let mode = "ok", adminMode = "empty"; const calls = [];
+let mode = "ok", adminMode = "empty", hostMode = "site"; const calls = [];
 const fetchMock = async (url, init) => {
   calls.push({ url: String(url), body: init && init.body });
   if (String(url).includes("oauth2.googleapis.com")) {
@@ -52,6 +52,7 @@ const fetchMock = async (url, init) => {
   if (String(url).includes("analyticsdata.googleapis.com")) {
     if (mode === "403") return new Response(JSON.stringify({ error: { status: "PERMISSION_DENIED" } }), { status: 403 });
     const b = JSON.parse(init.body);
+    if (b.dimensions[0].name === "hostName" && hostMode === "other") return new Response(JSON.stringify({ rows: [ { dimensionValues: [{ value: "qnfo-publications.pages.dev" }], metricValues: [{ value: "2" }, { value: "1" }, { value: "1" }, { value: "1" }] } ] }), { status: 200 });
     if (b.dimensions[0].name === "hostName") return new Response(JSON.stringify({ rows: [ { dimensionValues: [{ value: "qnfo.org" }], metricValues: [{ value: "120" }, { value: "40" }, { value: "55" }, { value: "30" }] }, { dimensionValues: [{ value: "(not set)" }], metricValues: [{ value: "9" }, { value: "1" }, { value: "1" }, { value: "0" }] } ] }), { status: 200 });
     return new Response(JSON.stringify({ rows: [ { dimensionValues: [{ value: "bsky.app" }], metricValues: [{ value: "12" }, { value: "7" }] } ] }), { status: 200 });
   }
@@ -115,6 +116,24 @@ db.exec("DELETE FROM ops_config; DELETE FROM cloud_ops_events");
 adminMode = "403";
 r = await G.ga4Ingest({ AUDIT: d1, GA4_SA_KEY: SA }, { nowMs: now + 5 * 864e5 });
 ok(!r.error && /property discovery failed: accountSummaries 403/.test(r.property_warning || "") && r.property === "486253526", "a refused Admin call is a warning, never a stop: the default is read", r);
+
+// GA4-HONEST-1 (agent_issues 2935): discovery refused and the default property reports none of the site hosts -> a different property;
+// its rows are stored as quality "unknown" and the ledger line says so. A site host in the report keeps quality "human".
+db.exec("DELETE FROM ops_config; DELETE FROM cloud_ops_events; DELETE FROM reach_signals");
+adminMode = "403"; hostMode = "other";
+r = await G.ga4Ingest({ AUDIT: d1, GA4_SA_KEY: SA }, { nowMs: now + 6 * 864e5 });
+ok(!r.error && r.quality === "unknown" && /none of the site hosts/.test(r.property_warning || ""), "a property with no site host is flagged, not trusted", r);
+const unk = db.prepare("SELECT entity_type, entity_id, quality FROM reach_signals WHERE source='ga4'").all();
+ok(unk.length > 0 && unk.every((x) => x.quality === "unknown"), "every row of that property is stored as quality unknown", unk);
+ok(/quality unknown/.test(db.prepare("SELECT text FROM cloud_ops_events WHERE kind='ga4-ingest'").get().text), "the ledger text says the rows are quality unknown");
+db.exec("DELETE FROM ops_config; DELETE FROM cloud_ops_events; DELETE FROM reach_signals");
+hostMode = "site";
+r = await G.ga4Ingest({ AUDIT: d1, GA4_SA_KEY: SA }, { nowMs: now + 7 * 864e5 });
+ok(!r.error && r.quality === "human" && db.prepare("SELECT COUNT(*) n FROM reach_signals WHERE source='ga4' AND quality='human'").get().n === 6, "a site host in the report keeps quality human", r);
+db.exec("DELETE FROM ops_config; DELETE FROM cloud_ops_events; DELETE FROM reach_signals");
+hostMode = "other"; adminMode = "found";
+r = await G.ga4Ingest({ AUDIT: d1, GA4_SA_KEY: SA }, { nowMs: now + 8 * 864e5 });
+ok(!r.error && r.property_source === "discovered" && r.quality === "human", "a discovered property is trusted whatever its first host row is", r);
 
 console.log((fail ? "FAIL" : "PASS") + "  " + pass + " passed, " + fail + " failed");
 process.exit(fail ? 1 : 0);
