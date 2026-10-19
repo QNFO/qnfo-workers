@@ -131,12 +131,12 @@ const FACT_OK = JSON.stringify({ unsupported: [], verdict: "pass" });
   R.resetReviewerHealth();
   let calls = [];
   const slow = new Set([GLM, QWEN]);
-  const envOk = { AI: { run: async (model) => { calls.push(model); if (slow.has(model)) throw new Error("timeout after 80 s"); return { response: READER_OK }; } } };
+  const envOk = { Q08_PANEL_ORDER: "measured", AI: { run: async (model) => { calls.push(model); if (slow.has(model)) throw new Error("timeout after 80 s"); return { response: READER_OK }; } } };
   const pan = await R.panelRead(envOk, "# t\n\nbody", ["nvidia"], 3, 2);
   ok(pan && pan.n === 2 && pan.judges.map((j) => j.model).sort().join() === [DSF, KIMI].sort().join() && calls.length === 2 && !calls.some((m) => slow.has(m)), "panel: the two working judges answer and the failing ones are never called", { calls: calls.map(short), judges: pan && pan.judges.map((j) => short(j.model)) });
   calls = [];
   const down = new Set([KIMI, DSF]);
-  const envDown = { AI: { run: async (model) => { calls.push(model); if (down.has(model)) throw new Error("down"); return { response: READER_OK }; } } };
+  const envDown = { Q08_PANEL_ORDER: "measured", AI: { run: async (model) => { calls.push(model); if (down.has(model)) throw new Error("down"); return { response: READER_OK }; } } };
   const pan2 = await R.panelRead(envDown, "# t\n\nbody", ["nvidia"], 3, 2);
   ok(pan2 && pan2.n === 2 && pan2.judges.map((j) => j.model).join() === [GLM, QWEN].join() && calls.length === 4, "panel: both primaries down, the previous panel answers (per-request fallback)", { calls: calls.map(short), judges: pan2 && pan2.judges.map((j) => short(j.model)) });
   calls = [];
@@ -161,13 +161,57 @@ const FACT_OK = JSON.stringify({ unsupported: [], verdict: "pass" });
   ok(fc.ok === true && calls.join() === [OSS20, NEMO].join(), "fact-check: leaders erroring in ai_call_counters (deepseek-v4-flash, kimi) are asked after the healthy models (gpt-oss-20b and nemotron answer first)", calls.map(short));
   R.resetReviewerHealth();
   calls.length = 0;
-  const pan = await R.panelRead({ AUDIT: env.AUDIT, AI: { run: async (model) => { calls.push(model); return { response: READER_OK }; } } }, "# t\n\nbody", ["nvidia"], 0, 2);
-  ok(pan && pan.n === 2 && calls.join() === [GLM, QWEN].join(), "panel: with both primaries flagged in ai_call_counters the previous panel is asked first (the revert)", calls.map(short));
+  const pan = await R.panelRead({ Q08_PANEL_ORDER: "measured", AUDIT: env.AUDIT, AI: { run: async (model) => { calls.push(model); return { response: READER_OK }; } } }, "# t\n\nbody", ["nvidia"], 0, 2);
+  ok(pan && pan.n === 2 && calls.join() === [GLM, QWEN].join(), "panel (q08_panel_order measured): with both primaries flagged in ai_call_counters the previous panel is asked first (the revert)", calls.map(short));
   R.resetReviewerHealth();
 }
 
+
+// ---- 10. Q08-PANEL-CALIBRATION-1: the reader panel rotates over the whole pool unless ops_config q08_panel_order is measured ------------------
+{
+  const LEG = R.LEGACY_PANEL;
+  ok(LEG.length === 4 && [KIMI, QWEN, GLM, DSF].every((m) => LEG.includes(m)) && LEG.join() === [KIMI, QWEN, GLM, DSF].join(), "the rotating pool is the pre-0.31.0 order (kimi, qwen3.8, glm, deepseek)", LEG);
+  const heads = new Set();
+  for (let sd = 0; sd < 4; sd++) { const p = R.pickPanel([], 2, sd, undefined, "rotate"); heads.add(p[0]); ok(p.length === 2, "rotate: a two-judge panel for seed " + sd, p.map(short)); }
+  ok(heads.size === 4, "rotate: every model of the pool takes the head over four seeds (no permanent strict pair)", [...heads].map(short));
+  const flaggedAll = { [GLM]: true, [QWEN]: true };
+  ok(R.pickPanel([], 2, 0, flaggedAll, "rotate").join() === R.pickPanel([], 2, 0, undefined, "rotate").join(), "rotate: the health flags do not reorder the reader panel");
+  ok(R.pickPanel([], 2, 0, flaggedAll).join() === R.pickPanel([], 2, 0, flaggedAll, "measured").join(), "no mode keeps the measured order (existing callers unchanged)");
+  ok(R.pickPanel(["moonshot"], 2, 0, undefined, "rotate").every((m) => fam(m) !== "moonshot"), "rotate: an excluded family is never asked");
+
+  // the switch: default rotate, env override, ops_config, cache, fail open
+  R.resetPanelOrder();
+  ok(await R.panelOrderMode(null) === "rotate" && await R.panelOrderMode({}) === "rotate" && await R.panelOrderMode({ AUDIT: {} }) === "rotate", "no binding: rotate");
+  ok(await R.panelOrderMode({ Q08_PANEL_ORDER: "measured" }) === "measured" && await R.panelOrderMode({ Q08_PANEL_ORDER: "anything else" }) === "rotate", "the env override reads measured and nothing else");
+  let qn = 0, lastSql = "", val = "measured";
+  const envCfg = { AUDIT: { prepare: (sql) => { lastSql = sql; return { first: async () => { qn++; return val === null ? null : { value: val }; } }; } } };
+  R.resetPanelOrder();
+  ok(await R.panelOrderMode(envCfg) === "measured" && /FROM ops_config WHERE key = 'q08_panel_order'/.test(lastSql), "ops_config q08_panel_order = measured switches the order", lastSql);
+  await R.panelOrderMode(envCfg); await R.panelOrderMode(envCfg);
+  ok(qn === 1, "the answer is cached for five minutes", qn);
+  val = "rotate"; R.resetPanelOrder();
+  ok(await R.panelOrderMode(envCfg) === "rotate", "ops_config rotate (or any other value) rotates");
+  val = null; R.resetPanelOrder();
+  ok(await R.panelOrderMode(envCfg) === "rotate", "no row: rotate");
+  R.resetPanelOrder();
+  const origErr = console.error; console.error = () => {};
+  let failMode;
+  try { failMode = await R.panelOrderMode({ AUDIT: { prepare: () => ({ first: async () => { throw new Error("D1 down"); } }) } }); } finally { console.error = origErr; }
+  ok(failMode === "rotate", "a failing read fails open to rotate");
+  R.resetPanelOrder();
+
+  // behaviour: with no switch, flagged primaries do not move the panel; with the switch they do
+  R.resetReviewerHealth();
+  const flaggedRows = { prepare: (sql) => ({ all: async () => ({ results: [{ model: DSF, c: 50, e: 30 }, { model: KIMI, c: 50, e: 20 }, { model: GLM, c: 400, e: 10 }] }), first: async () => null }) };
+  const calls = [];
+  const envRot = { AUDIT: flaggedRows, AI: { run: async (model) => { calls.push(model); return { response: READER_OK }; } } };
+  const pr = await R.panelRead(envRot, "# t\n\nbody", ["nvidia"], 0, 2);
+  ok(pr && pr.n === 2 && calls.join() === [KIMI, QWEN].join(), "panelRead default: the seed-0 panel is kimi-k2.6 and qwen3.8 whatever ai_call_counters says", calls.map(short));
+  R.resetReviewerHealth(); R.resetPanelOrder();
+}
+
 // ---- 9. wiring and the ASCII rule ---------------------------------------------------------------------------------------------------------
-ok(/pickPanel\(exclude, want \+ 2, seed, await reviewerHealth\(env\)\)/.test(src) && /factCheckOrder\(\[wf\], await reviewerHealth\(env\)\)/.test(src), "panelRead and factCheck order their reviewers by reviewerHealth");
+ok(/pickPanel\(exclude, want \+ 2, seed, mode === "measured" \? await reviewerHealth\(env\) : undefined, mode\)/.test(src) && /factCheckOrder\(\[wf\], await reviewerHealth\(env\)\)/.test(src), "panelRead orders its reviewers by reviewerHealth only in measured mode and factCheck always");
 {
   // Q08-ASCII-SOURCE-1: new literals are escaped. (Ten older lines of worker.js hold raw non-ASCII characters; this change adds none.)
   const blocks = [src.slice(src.indexOf("// Q08-REVIEWER-SWAP-1 (0.31.0, Q08-YIELD-1"), src.indexOf("function seedOf(")), src.slice(src.indexOf("// Q08-REVIEWER-SWAP-1 (0.31.0): the same eight"), src.indexOf("async function factCheck("))];
