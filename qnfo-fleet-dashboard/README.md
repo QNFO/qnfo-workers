@@ -226,6 +226,8 @@ no detail; an unknown name returns no match, never an invented one.
 | The fleet's memory (row counts) | the registries listed in `ARCH_REGISTRIES` |
 | Layers, the change path, the lanes of authority | tables in the `ARCH-SELF-MODEL` block, written from CLAUDE.md and the doctrine (a description, not a measurement) |
 
+A loop is **overdue** (`overdue_loops`, `overdue[]`, a marker on the page) when its last tick is older than its schedule's largest gap in a week plus 120 minutes (SLA-120M-1); a worker with no cron or a cron that pins a day of the month is not judged. Cloudflare cron day-of-week is 1-7 with 1 = Sunday.
+
 The model reports what it cannot see: `self.sources` (each read and whether it succeeded), `self.blind` (reads that failed: the part is missing, not empty) and
 `self.limits` (static extraction misses a table named through a variable; layers are a judgement; a worker no layer names is `unclassified`). No secret name or value
 is read. Suite: `architecture.test.mjs`.
