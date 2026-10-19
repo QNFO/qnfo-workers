@@ -1,6 +1,6 @@
 -- APPLY-BY: ci
 -- DB: qnfo-audit
--- Rollback: UPDATE agent_issues SET status = 'superseded' WHERE title LIKE 'COMPANION-CRISIS-PARITY-1:%' OR title LIKE 'COMPANION-CONTEXT-QUERY-URL-1:%'; DELETE FROM decision_log WHERE instr(action, 'COMPANION-FLEET-HANDOFF-20261019:') = 1; DELETE FROM session_records WHERE session_id = 'session_01NzewstG2ZVyaKp17FfXYDt'
+-- Rollback: DELETE FROM remediation_contracts WHERE class = 'fm-quick-read-digest-spend'; DELETE FROM failure_modes WHERE fm_key = 'quick-read-digest-spend'; UPDATE agent_issues SET status = 'superseded' WHERE title LIKE 'COMPANION-CRISIS-PARITY-1:%' OR title LIKE 'COMPANION-CONTEXT-QUERY-URL-1:%'; DELETE FROM decision_log WHERE instr(action, 'COMPANION-FLEET-HANDOFF-20261019:') = 1; DELETE FROM session_records WHERE session_id = 'session_01NzewstG2ZVyaKp17FfXYDt'
 -- COMPANION-FLEET-HANDOFF-1 (2026-10-19, pillar personal). Owner request in the Personal Companion project: "CLOSEOUT THIS
 -- THREAD AND HANDOFF ALL WORK SERVER-SIDE TO CLOUDFLARE QUNIVERSE FLEET". The companion (personal-api /companion, PRs 2587,
 -- 2594, 2602; personal-api 4.12.0 and personal-companion 1.31.1 deployed 04:58 UTC, deployment_history
@@ -47,3 +47,16 @@ INSERT INTO session_records (session_id, wbs_code, agent_name, summary, decision
  'docs/HANDOFF-2026-10-19-personal-companion.md, migrations/2026-10-19-companion-fleet-handoff.sql', '1', 'none',
  'COMPANION-CRISIS-PARITY-1, COMPANION-CONTEXT-QUERY-URL-1 and 100031 COMPANION-HEARTBEAT-1 carry the remaining work; each closes by its probe',
  1.0, 5, 5, '2026-10-19T04:57:43Z', strftime('%Y-%m-%dT%H:%M:%SZ','now'));
+
+-- QUICK-READ-DIGEST-SUITE-RED-1 (agent_issues 100037, owner request "Fix CI"): ef01a75 landed qnfo-gateway 3.25.0, whose digest
+-- built the plain-language summary with up to two model calls on a reader's GET; quick-read.test.mjs failed 2 of 101 on main.
+-- qnfo-gateway 3.26.0 (same pull request) reads plain_summary only on GET and builds it in the daily cron (plainFill).
+INSERT OR IGNORE INTO failure_modes (fm_key, failure_mode, root_cause, remediation, detector, probe_class, first_seen, issue_id, trigger_condition, symptom, blast_radius) VALUES
+ ('quick-read-digest-spend', 'the Quick read digest GET spent model calls on a cache miss, so a crawler following a link cost money and the quick-read suite failed on main',
+  'the plain-language build (3.25.0-plain-language-1) was landed from the deployed worker with plainSummary on the GET path; the suite that holds the no-spend rule was not run before the landing commit',
+  'PLAIN-FILL-1 (qnfo-gateway 3.26.0): GET reads plain_summary only, the daily cron builds up to PLAIN_FILL_MAX summaries',
+  'qnfo-gateway/worker.js on main does not call plainSummary', 'fm-quick-read-digest-spend', '2026-10-19', 100037,
+  'a code change on the digest GET path that calls the model', 'quick-read.test.mjs on main: 99 passed, 2 failed (aiCalls 2)', 'every full-suite PR and the digest spend');
+INSERT OR IGNORE INTO remediation_contracts (class, issue_id, precondition, action, verify_probe, verify_transport, max_attempts, escalate_to, expected_cadence_h, status, module, budget_ms, max_items, requires_container, next_due_at) VALUES
+ ('fm-quick-read-digest-spend', NULL, 'PLAIN-FILL-1', 'failure-mode detector', '{"paths": ["qnfo-gateway/worker.js"], "absent": "plainSummary("}', 'code-read', 3, 'qnfo-fleet-control', 1, 'active', 'failure-mode', 45000, 5, 0, datetime('now'));
+UPDATE remediation_contracts SET verify_probe = '{"paths": ["qnfo-gateway/worker.js"], "absent": "plainSummary("}', verify_transport = 'code-read', next_due_at = datetime('now') WHERE class = 'issue-100037';
