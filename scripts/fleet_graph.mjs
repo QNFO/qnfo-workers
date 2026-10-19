@@ -1024,6 +1024,13 @@ export async function selftest(log = console.log) {
   ok(ins.length === 1 && ins[0].includes("'a''b'"), "sql escaping");
   const del = deleteStatements("fg_edge", "scope = 'code'", ["src", "rel", "dst"], ["s" + EDGE_SEP + "r" + EDGE_SEP + "d"]);
   ok(del[0].includes("src = 's' AND rel = 'r' AND dst = 'd'"), "delete statement for an edge key");
+  // FLEET-GRAPH-DELETE-DEPTH-1: no DELETE chains more OR terms than D1's expression-depth limit (100) allows
+  const manyKeys = Array.from({ length: 1000 }, (_, i) => "s" + i + EDGE_SEP + "r" + EDGE_SEP + "d" + i);
+  const manyDel = deleteStatements("fg_edge", "scope = 'code'", ["src", "rel", "dst"], manyKeys);
+  ok(manyDel.length >= 13 && manyDel.every((q) => q.split(" OR ").length <= 80), "a 1000-key delete is split so no statement chains more than 80 OR terms (D1 depth limit 100)");
+  ok(manyDel.map((q) => (q.match(/src = '/g) || []).length).reduce((a, b) => a + b, 0) === 1000, "every key is deleted exactly once");
+  const nodeDel = deleteStatements("fg_node", "scope = 'code'", ["id"], Array.from({ length: 500 }, (_, i) => "n" + i));
+  ok(nodeDel.every((q) => q.split(" OR ").length <= 80) && nodeDel.length === 7, "a 500-id delete is 7 statements");
   // findings
   const cw = new Map([["w1", { declared: new Map([["DB", "d1"], ["GONE", "kv_namespace"]]), crons: ["5 * * * *"], envReads: new Map([["DB", 3], ["NOPE", 9], ["S", 4]]), computedEnv: false, bindingUses: new Set(["DB"]) }], ["w9", { declared: new Map(), crons: [], envReads: new Map(), computedEnv: false, bindingUses: new Set() }]]);
   const snap = { workers: [{ name: "w1", bindings: [{ name: "DB", type: "d1", database_id: "id1" }, { name: "S", type: "secret_text" }, { name: "EXTRA", type: "r2_bucket", bucket_name: "b" }], crons: ["0 * * * *"] }, { name: "w2", bindings: [], crons: [] }], d1: [{ name: "db1", id: "id1" }, { name: "lonely", id: "id2" }], kv: [], r2: [{ name: "b" }], queues: [], vectorize: [] };

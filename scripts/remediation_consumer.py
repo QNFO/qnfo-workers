@@ -1130,7 +1130,9 @@ def consume_one(c, trusted):
         d1(
             "UPDATE remediation_contracts SET attempts = COALESCE(attempts,0) + 1, "
             "last_attempt_at = datetime('now'), last_verdict = ?, "
-            "next_due_at = datetime('now', ?), status = COALESCE(?, status) WHERE class = ?",
+            # CONSUMER-STAMP-STATUS-1 (session_01SPji35 root cause): a status another writer set between the probe and this stamp (the superseded-closure
+            # trigger sets 'superseded') must not be written back; only an active or holding contract takes the verdict's next status.
+            "next_due_at = datetime('now', ?), status = CASE WHEN status IN ('active', 'holding') THEN COALESCE(?, status) ELSE status END WHERE class = ?",
             [rec["verdict"], next_due_offset(cadence), next_status, cls],
         )
     except Exception as e:  # noqa: BLE001
