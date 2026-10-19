@@ -504,5 +504,18 @@ console.log("\n[http]");
   ok("api still flags the missing backstop", json.config_gaps.includes("backstop_contact"), json.config_gaps);
 }
 
+console.log("\n[pause shared with /companion (RED-TEAM-1)]");
+{
+  const p = (() => { const d = new DatabaseSync(":memory:"); return { db: d, env: { PERSONAL: d1(d), WELLBEING_TOKEN: "t0k" } }; })();
+  await ensureWellbeing(p.env.PERSONAL);
+  p.db.prepare("INSERT INTO wellbeing_config (key, value, updated_at) VALUES ('pause_until', ?, ?)").run(JSON.stringify(new Date(Date.parse("2026-10-19T09:00:00Z") + 864e5).toISOString()), "2026-10-19T09:00:00Z");
+  let sends = 0;
+  const pt = await wellbeingTick(p.env, { send: async () => { sends++; return { ok: true }; }, nowIso: "2026-10-19T09:00:00Z" });
+  ok("a pause set on /companion silences the e-mail check-in and the ladder", pt.skipped === "paused" && sends === 0, pt);
+  p.db.prepare("UPDATE wellbeing_config SET value = ? WHERE key = 'pause_until'").run(JSON.stringify("2026-10-18T00:00:00.000Z"));
+  const pt2 = await wellbeingTick(p.env, { send: async () => { sends++; return { ok: true }; }, nowIso: "2026-10-19T09:00:00Z" });
+  ok("an expired pause lets the morning check-in through", pt2.skipped !== "paused" && sends >= 1, pt2);
+}
+
 console.log("\n" + (fail === 0 ? "PASS" : "FAIL") + "  " + pass + " passed, " + fail + " failed");
 process.exit(fail === 0 ? 0 : 1);
