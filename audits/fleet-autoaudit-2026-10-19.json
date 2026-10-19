@@ -1,5 +1,5 @@
 {
-  "audited_at": "2026-10-19 10:43:09",
+  "audited_at": "2026-10-19 11:15:51",
   "d1_write_failures": [],
   "d1_writes_ok": 120,
   "guard": {
@@ -82,6 +82,7 @@
       "errata-hub",
       "errata-orchestrator",
       "events-radar",
+      "fleet-exec",
       "jnl-pipeline",
       "jnl-referee",
       "jnl-reviser",
@@ -149,7 +150,7 @@
       "skills-discovery",
       "vault-indexer"
     ],
-    "not_deployed_notdrift": 74,
+    "not_deployed_notdrift": 75,
     "not_deployed_workers": [
       {
         "dir": "agent-orchestrator",
@@ -190,6 +191,11 @@
         "dir": "events-radar",
         "marker": "FOLDED",
         "worker": "events-radar"
+      },
+      {
+        "dir": "fleet-exec",
+        "marker": "FOLDED",
+        "worker": "fleet-exec"
       },
       {
         "dir": "jnl-pipeline",
@@ -522,27 +528,11 @@
         "worker": "vault-indexer"
       }
     ],
-    "retired_present": [
-      {
-        "dir": "fleet-exec",
-        "marker": "FOLDED",
-        "worker": "fleet-exec"
-      },
-      {
-        "dir": "qnfo-artifacts",
-        "marker": "RETIRED",
-        "worker": "qnfo-artifacts"
-      }
-    ],
-    "retired_present_count": 2,
+    "retired_present": [],
+    "retired_present_count": 0,
     "scope": "all",
-    "sync": 33,
+    "sync": 32,
     "sync_workers": [
-      {
-        "dir": "fleet-exec",
-        "version": "1.0.5-cron-tick-5m-1",
-        "worker": "fleet-exec"
-      },
       {
         "dir": "idea-hub",
         "version": "1.11.2-codeagent",
@@ -670,7 +660,7 @@
       },
       {
         "dir": "qnfo-ops",
-        "version": "2.50.0-full-plane-access",
+        "version": "2.50.1-census-artifacts",
         "worker": "qnfo-ops"
       },
       {
@@ -795,10 +785,11 @@
     },
     "fleet-exec": {
       "before": null,
-      "http": null,
+      "http": 404,
       "live": null,
       "match": 0,
-      "note": "RETIRED_PRESENT",
+      "note": "NOT_DEPLOYED",
+      "retired": "FOLDED",
       "worker": "fleet-exec"
     },
     "funding": {
@@ -1077,11 +1068,11 @@
       "worker": "qnfo-artifact-agent"
     },
     "qnfo-artifacts": {
-      "before": null,
-      "http": null,
-      "live": null,
-      "match": 0,
-      "note": "RETIRED_PRESENT",
+      "before": "1.2.2",
+      "http": 200,
+      "live": "1.2.2",
+      "match": 1,
+      "note": "SYNC",
       "worker": "qnfo-artifacts"
     },
     "qnfo-arxiv-radar": {
@@ -1482,9 +1473,9 @@
       "worker": "qnfo-observability"
     },
     "qnfo-ops": {
-      "before": "2.50.0-full-plane-access",
+      "before": "2.50.1-census-artifacts",
       "http": 200,
-      "live": "2.50.0-full-plane-access",
+      "live": "2.50.1-census-artifacts",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-ops"
