@@ -19,7 +19,10 @@ if (a < 0 || b < 0 || b < a) { console.error("FAIL transformation block markers 
 // The block reads D1 through charterRows/charterOne (defined elsewhere in the worker); the sandbox carries the same two.
 const sb = { VERSION: "0.4.132-test", console, Date, Math, JSON, Number, String, Object, Array, RegExp, isFinite, __export: null };
 vm.createContext(sb);
+// tpOnControlPlane reads CM_LOOP_CANARIED (CODE-LOOP-CONTROL-PLANE-1, 0.35.0), which the worker defines in its merge-runner section
+const cmCanaried = src.slice(src.indexOf("var CM_LOOP_CANARIED = "), src.indexOf("\n", src.indexOf("var CM_LOOP_CANARIED = ")));
 vm.runInContext(
+  cmCanaried + "\n" +
   "async function charterRows(env, sql) { try { var r = await env.AUDIT.prepare(sql).all(); return (r && r.results) || []; } catch (e) { return []; } }\n" +
   "async function charterOne(env, sql) { try { return await env.AUDIT.prepare(sql).first(); } catch (e) { return null; } }\n" +
   src.slice(a, b + END.length) +
@@ -85,8 +88,10 @@ eq(sc.length, T.TP_SCOREBOARD.length, "every section 6 metric is graded");
 const L = (o) => Object.assign({ id: 1, tp: 1, n: 3, key: "rebase-before-publish", title: "Rebase before publish", kind: "code", wave: "W0", path: "radar-hub/worker.js", anchor: 'var VERSION = "x"', status: "pending", issue_id: null, dispatched_at: null }, o);
 eq(T.tpKey(L({})), "TP-1.3-REBASE-BEFORE-PUBLISH-1", "lever key is TP-<tp>.<n>-<KEY>-1");
 eq(T.tpIssueTitle(L({})).startsWith("TP-1.3-REBASE-BEFORE-PUBLISH-1: Rebase before publish"), true, "issue title carries the key and the title");
-eq(T.tpOnControlPlane("qnfo-fleet-control/worker.js"), true, "fleet-control is control plane");
-eq(T.tpOnControlPlane("qnfo-code-orchestrator/worker.js"), true, "the code orchestrator is control plane (CM_DENY)");
+eq(T.tpOnControlPlane("qnfo-fleet-control/worker.js"), false, "fleet-control is a worker the code loop may change (CODE-LOOP-CONTROL-PLANE-1, owner directive 2026-10-19)");
+eq(T.tpOnControlPlane("qnfo-code-orchestrator/worker.js"), false, "the code orchestrator is a worker the code loop may change (the loop's own code)");
+eq(T.tpOnControlPlane("qnfo-ops/worker.js") || T.tpOnControlPlane("qnfo-deploy-guard/worker.js"), false, "qnfo-ops and qnfo-deploy-guard are workers the code loop may change");
+eq(T.tpOnControlPlane("qnfo-observability/worker.js"), true, "the scorer host is still control plane (CM_DENY)");
 eq(T.tpOnControlPlane("radar-hub/worker.js"), false, "radar-hub is not");
 const codeBody = T.tpIssueBody(L({ detail: "Re-anchor against main.", dod: "no stale base failures" }), "code");
 eq(/\ncode-task: repo=qnfo-workers path=radar-hub\/worker\.js\ncode-anchor: var VERSION = "x"$/.test(codeBody), true, "a code issue ends with the two ACT-BRIDGE-1 lines");
@@ -101,10 +106,12 @@ const plan = (levers, active, issues, tasks) => T.tpPlan(levers, active == null 
 let p = plan([L({ id: 1, n: 1 }), L({ id: 2, n: 2 }), L({ id: 3, n: 3 })]);
 eq(p.dispatch.length, T.TP_DISPATCH_MAX, "at most TP_DISPATCH_MAX code levers are dispatched a tick");
 eq(p.session.length, 0, "a dispatchable code lever over the cap waits a tick; it never becomes a session lever");
-p = plan([L({ id: 1, path: "qnfo-fleet-control/worker.js" })]);
-eq(p.dispatch.length === 0 && p.session.length === 1 && /control-plane/.test(p.session[0].why), true, "a code lever on a control-plane worker goes to a session until T1 lever 8 lands");
-p = plan([L({ id: 1, path: "qnfo-fleet-control/worker.js" }), L({ id: 8, tp: 1, n: 8, key: "branch-protection", kind: "platform", status: "landed" })]);
+p = plan([L({ id: 1, path: "qnfo-observability/worker.js" })]);
+eq(p.dispatch.length === 0 && p.session.length === 1 && /control-plane/.test(p.session[0].why), true, "a code lever on a control-plane worker the loop may not change goes to a session until T1 lever 8 lands");
+p = plan([L({ id: 1, path: "qnfo-observability/worker.js" }), L({ id: 8, tp: 1, n: 8, key: "branch-protection", kind: "platform", status: "landed" })]);
 eq(p.dispatch.length, 1, "once T1 lever 8 has landed, control-plane code levers are dispatched to the code loop");
+p = plan([L({ id: 1, path: "qnfo-fleet-control/worker.js" })]);
+eq(p.dispatch.length === 1 && p.session.length === 0, true, "a code lever on qnfo-fleet-control is dispatched to the code loop without waiting for T1 lever 8 (CODE-LOOP-CONTROL-PLANE-1)");
 p = plan([L({ id: 1, anchor: null })]);
 eq(p.session.length === 1 && /no anchor/.test(p.session[0].why), true, "a code lever without an anchor goes to a session and says so");
 p = plan([L({ id: 1, kind: "refactor" }), L({ id: 2, n: 4, kind: "retire" }), L({ id: 3, n: 5, kind: "migration" }), L({ id: 4, n: 6, kind: "platform" })]);

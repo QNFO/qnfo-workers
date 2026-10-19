@@ -1600,7 +1600,10 @@ export async function handleCompanion(request, env, ctx, deps) {
       // RED-TEAM-1: when the model is down he gets a warm fixed line, never an upstream error string.
       return J({ ok: !!text, reply: text || fallbackReply(sig.level), crisis: sig.level >= 2 ? crisisText(await loadCfg(env)) : null });
     }
-    if (r === "context" && m === "GET") return J({ ok: true, context: await chatContext(env, deps, url.searchParams.get("q") || "", true) });
+    // COMPANION-CONTEXT-QUERY-URL-1 (issue 100041): the owner's words go in the JSON body, never the URL, where request logs keep them.
+    // A GET is told to POST and its query string is not read.
+    if (r === "context" && m === "POST") { const b = await body(); return J({ ok: true, context: await chatContext(env, deps, s(b.q, 2000), true) }); }
+    if (r === "context") return J({ ok: false, error: "POST with q in the JSON body; the query string is never read" }, 405);
   } catch (e) {
     console.error(JSON.stringify({ evt: "companion:api", route: r, error: String(e && e.message || e).slice(0, 300) }));
     return J({ ok: false, error: String(e && e.message || e).slice(0, 300) }, 500);

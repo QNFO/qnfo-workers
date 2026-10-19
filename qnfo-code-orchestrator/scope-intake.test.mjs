@@ -19,8 +19,12 @@ const { __scope, __enqueue, __intake, __deny, __repair } = await import(pathToFi
 let pass = 0, fail = 0;
 const ok = (c, m, x) => { if (c) pass++; else { fail++; console.log("FAIL " + m + (x !== undefined ? " :: " + JSON.stringify(x).slice(0, 300) : "")); } };
 
-for (const w of ["qnfo-fleet-control", "qnfo-deploy-guard", "qnfo-observability", "qnfo-ops", "qnfo-code-orchestrator"]) {
+for (const w of ["qnfo-observability", "qnfo-autonomy-scorer", "qnfo-containers-pilot", "qnfo-code-agent"]) {
   ok(/control-plane/.test(String(__scope("qnfo-workers", w + "/worker.js"))), w + "/worker.js is a session task");
+}
+// CODE-LOOP-CONTROL-PLANE-1 (0.22.0, owner directive 2026-10-19): the loop's scope includes the verifier workers and its own orchestrator.
+for (const w of ["qnfo-fleet-control", "qnfo-deploy-guard", "qnfo-ops", "qnfo-code-orchestrator"]) {
+  ok(__scope("qnfo-workers", w + "/worker.js") === null && __scope("qnfo-workers", w + "/deployed-current.worker.js") === null && !__deny.includes(w), w + "/worker.js is in the loop's scope (owner directive 2026-10-19)");
 }
 // CONTROL-PLANE-FUNCTIONAL-CANARY-1 (0.13.0, agent_issues 2176): the two workers with a functional canary and an automatic revert are planned.
 for (const w of ["qnfo-ai", "qnfo-gateway"]) {
@@ -33,10 +37,10 @@ ok(__scope("qnfo-workers", "scripts/x.py") === null, "other paths are left to th
 // MERGE-SCOPE-SCRIPTS-1 (0.18.12): a script the merge runner's CM_SCRIPT_DENY never auto-merges is a session
 // task here, so the loop does not spend model calls on a change it can never ship. Agent 2026-10-18:
 // ct_xo808yx0h3ieeh burned 8 attempts on scripts/remediation_consumer.py and then failed at the runner.
-for (const p of ["scripts/remediation_consumer.py", "scripts/run-suites.mjs", "scripts/code-task-publish.py", "scripts/cron_rate_guard.py"]) {
+for (const p of ["scripts/remediation_consumer.py", "scripts/run-suites.mjs", "scripts/canary_revert.py", "scripts/cron_rate_guard.py"]) {
   ok(/CM_SCRIPT_DENY|auto-merge scope/.test(String(__scope("qnfo-workers", p))), p + " is a session task (CM_SCRIPT_DENY)");
 }
-for (const p of ["scripts/fleet_report.py", "scripts/worker_readme.py"]) {
+for (const p of ["scripts/fleet_report.py", "scripts/worker_readme.py", "scripts/code-task-publish.py"]) {
   ok(__scope("qnfo-workers", p) === null, p + " is still in the loop's scope");
 }
 ok(__scope("other-repo", "qnfo-ops/worker.js") === null, "other repositories are not judged by the qnfo-workers merge runner");
@@ -70,18 +74,18 @@ function mkEnv(issues) {
 
 {
   const { env, tasks } = mkEnv([]);
-  const r = await __enqueue(env, { repo: "qnfo-workers", path: "qnfo-ops/worker.js", goal: "[issue #1] a goal long enough to pass validation of the task body" });
+  const r = await __enqueue(env, { repo: "qnfo-workers", path: "qnfo-observability/worker.js", goal: "[issue #1] a goal long enough to pass validation of the task body" });
   ok(r.ok === false && r.status === 422 && r.session === true && /control-plane/.test(r.error), "enqueue refuses a control-plane path with a session-task answer", r);
   ok(tasks.length === 0, "no code task row is written for it");
 }
 {
   const issues = [
-    { id: 2023, title: "METRIC-TRIGGER-498 registry render", source: "qnfo-fleet-control", description: "Fix the render.\ncode-task: repo=qnfo-workers path=qnfo-ops/worker.js\ncode-anchor: function renderRegistry(" },
+    { id: 2023, title: "METRIC-TRIGGER-498 registry render", source: "qnfo-fleet-control", description: "Fix the render.\ncode-task: repo=qnfo-workers path=qnfo-observability/worker.js\ncode-anchor: function renderRegistry(" },
   ];
   const { env, tasks } = mkEnv(issues);
   const out = await __intake(env, 2);
   ok(out.ok && out.created.length === 0 && tasks.length === 0, "intake builds no task for a control-plane code-task line", out);
-  ok(/session-task: repo=qnfo-workers path=qnfo-ops\/worker\.js/.test(issues[0].description) && !/code-task: repo=/.test(issues[0].description), "the issue's code-task line became a session-task line", issues[0].description);
+  ok(/session-task: repo=qnfo-workers path=qnfo-observability\/worker\.js/.test(issues[0].description) && !/code-task: repo=/.test(issues[0].description), "the issue's code-task line became a session-task line", issues[0].description);
   ok(/MERGE-SCOPE-INTAKE-1 .*control-plane/.test(issues[0].description), "the issue says why", issues[0].description);
 }
 {

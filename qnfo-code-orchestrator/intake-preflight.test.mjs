@@ -123,7 +123,7 @@ const auditText = (audits) => audits.map((x) => x.map(String).join(" | ")).join(
 }
 {
   files = {}; fetched = [];
-  const issues = [{ id: 3007, title: "CP-1: x", source: "claude-session:t", description: "Fix.\ncode-task: repo=qnfo-workers path=qnfo-fleet-control/worker.js" }];
+  const issues = [{ id: 3007, title: "CP-1: x", source: "claude-session:t", description: "Fix.\ncode-task: repo=qnfo-workers path=qnfo-observability/worker.js" }];
   const { env, inserted } = mkEnv(issues);
   await __intake(env, 2);
   ok(inserted.length === 0 && /MERGE-SCOPE-INTAKE-1/.test(issues[0].description) && !/CODE-TASK-PREFLIGHT-1/.test(issues[0].description), "a control-plane path keeps lever 15's routing and is not preflighted", issues[0].description);

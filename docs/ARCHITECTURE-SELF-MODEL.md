@@ -79,14 +79,20 @@ open issues referenced them). WIP measured 11 after the change.
 
 ## 5. Self-modification gate (why the loop cannot fix itself)
 
-`qnfo-code-orchestrator` is on `PLAN_CONTROL_PLANE` (line 2552) and is **not** on
-`PLAN_LOOP_CANARIED` (`qnfo-ai`, `qnfo-gateway` only). `qnfo-fleet-control` repeats the block
-via `CM_CONTROL_PLANE` (line 3242). Consequence: any code task targeting the orchestrator's own
-source is refused at intake and at merge. The loop cannot repair its own planner; that class of
-fix must land through the owner-sanctioned deploy path (`qnfo-ops` `cf_worker_deploy` or the
-canonical deploy), or the worker must first be added to `PLAN_LOOP_CANARIED` — itself a change
-to a protected file, i.e. a bootstrap problem. This is a deliberate safety boundary
-(`QNFO-POL-PROD-IMMUTABLE-002`), not a bug, but it bounds what "100% autonomous" can mean.
+Until 2026-10-19 `qnfo-code-orchestrator` was on `PLAN_CONTROL_PLANE` and **not** on
+`PLAN_LOOP_CANARIED` (`qnfo-ai`, `qnfo-gateway` only), and `qnfo-fleet-control` repeated the block
+via `CM_CONTROL_PLANE`. Consequence: any code task targeting the orchestrator's own source, or
+the verifier workers (`qnfo-fleet-control`, `qnfo-ops`, `qnfo-deploy-guard`), was refused at intake
+and at merge, so the loop could not repair its own planner or merge runner; that class of fix had
+to land through a session pull request (`QNFO-POL-PROD-IMMUTABLE-002`).
+
+**Lifted by the owner on 2026-10-19** (CODE-LOOP-CONTROL-PLANE-1, `qnfo-fleet-control` 0.37.0 and
+`qnfo-code-orchestrator` 0.22.0): "The code loop SHALL ALWAYS BE ABLE TO change qnfo-fleet-control,
+qnfo-ops, qnfo-deploy-guard and the loop's own code." All four are now on `CM_LOOP_CANARIED` /
+`PLAN_LOOP_CANARIED` (held equal by `qnfo-fleet-control/fold-guard.test.mjs`, which also requires each
+to have a `/health` canary, a `canary_revert.py` FUNCTIONAL check and an Actions revert); a bad merge
+is reverted from GitHub Actions, outside the worker that was changed. The scorer host
+(`qnfo-observability`), `qnfo-autonomy-scorer` and `qnfo-containers-pilot` stay denied.
 
 ## 6. Self-knowledge gaps found by this survey
 
@@ -112,7 +118,9 @@ Recorded in `qnfo-audit.autonomy_grants` — every grant carries `granted_by`, `
 **Boundaries that survive any grant:** no mail to an opted-out address, no outreach outside its
 consent gate and cadence caps, no movement of personal-plane data into the research plane or a
 public surface, guard metrics must not worsen (FLEET-CORE-1b), worker crons stay at or above the
-10-minute ceiling, and the control-plane immutability gate in §5 is not self-revocable.
+10-minute ceiling, and the control-plane gate in §5 (still closed for the scorer host, the scorer and
+the container pilot) is not self-revocable: the fleet lifted nothing for itself; the four workers in §5 were
+opened by the owner's directive of 2026-10-19.
 
 ## 8. How to extend this document
 

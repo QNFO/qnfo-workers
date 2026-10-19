@@ -386,6 +386,18 @@ ok("red-team: model throws -> still the fixed crisis lines", chatThrow.crisis &&
 // Lock-screen setting.
 ok("red-team: lock-screen setting is saved and bounded", (await H("settings", { discreet_push: "all" })).status === 200 && (await C.loadCfg(env)).discreet_push === "all" && (await H("settings", { discreet_push: "loud" })).status === 400);
 ok("red-team: 'all' hides a task title on the lock screen", C.discreetPayload({ kind: "cmp-next", title: "One small thing", body: "Call the psychiatrist" }, "all").body.indexOf("psychiatrist") < 0);
+// COMPANION-CONTEXT-QUERY-URL-1 (issue 100041): the owner's words ride in the JSON body, never the URL, where request logs keep them.
+{
+  const post = await H("context", { q: "how have I been sleeping" });
+  const pj = await post.json();
+  ok("context-query: POST with q in the body answers with the context", post.status === 200 && pj.ok === true && typeof pj.context === "string" && /COMPANION STATE/.test(pj.context), pj);
+  const get = await C.handleCompanion(new Request("https://x/companion/api/context?q=my%20private%20words", { headers: { Authorization: "Bearer k" } }), env, { waitUntil() {} }, hdeps2);
+  const gj = await get.json();
+  ok("context-query: a GET is refused with 405 and the query string is neither read nor echoed", get.status === 405 && gj.ok === false && !gj.context && !/private|words/.test(JSON.stringify(gj)), gj);
+  const csrc = fs.readFileSync(new URL("./companion.js", import.meta.url), "utf8"), wsrc = fs.readFileSync(new URL("./worker.js", import.meta.url), "utf8");
+  const ctxLines = (t) => t.split("\n").filter((l) => /r === "context"/.test(l));
+  ok("context-query: no context route reads q from the URL, in companion.js or the inlined worker.js", ctxLines(csrc).length === 2 && ctxLines(wsrc).length === 2 && [...ctxLines(csrc), ...ctxLines(wsrc)].every((l) => !/searchParams/.test(l) && !/m === "GET"/.test(l)));
+}
 // Export and delete cover Talk conversations and the chat crisis rows.
 raw.prepare("INSERT INTO chat (id, thread, ts, role, content) VALUES ('c1-u', 'companion-2026-10-19', ?, 'user', 'a private talk'), ('t1-u', 'other-thread', ?, 'user', 'twin chat')").run(C.nowIso(), C.nowIso());
 const exr = await C.exportAll(env);

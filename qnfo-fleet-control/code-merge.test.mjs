@@ -193,8 +193,11 @@ ok(W.cmBump('const VERSION = "1.0.0";\n', "-r") === null && W.cmBump('var VERSIO
 
 // ================================================================ 2. scope, required checks, provenance
 ok(J(W.cmScope(PATH)).kind === "worker" && J(W.cmScope("docs/a/b.md")).kind === "doc" && J(W.cmScope("qnfo-x/README.md")).kind === "doc" && J(W.cmScope("scripts/cf_ops_actions.py")).kind === "script" && J(W.cmScope("scripts/drift-check.mjs")).kind === "script" && J(W.cmScope("scripts/fleet-autoaudit.py")).kind === "script", "worker.js, docs/**.md, <dir>/README.md and fleet scripts are in scope (SCOPE-SCRIPTS-1)");
-ok(["scripts/deploy_gate.py", "scripts/mirror-guard.py", "scripts/version-bump-guard.py", "scripts/workflow-lint.py", "scripts/run-suites.mjs", "scripts/code-task-publish.py", "scripts/canary_revert.py", "scripts/canonical_deploy.py", "scripts/raw_put.py", "scripts/remediation_consumer.py", "scripts/secret_lock.py", "scripts/fold_worker_selftest.py", "scripts/cf_ops_delete_worker_test.py", "scripts/probe-semicolon.test.mjs", "scripts/mention-radar-test.mjs", "scripts/x.sh", "scripts/sub/x.py", ".github/workflows/a.yml", "qnfo-x/wrangler.toml", "migrations/a.sql", "qnfo-x/a.test.mjs", "qnfo-x/registry.js", "docs/../x.md"].every((p) => !W.cmScope(p).ok), "gates, guards, suites, deploy primitives, the loop's runners, workflows, configs, migrations, tests and other modules are out of scope");
-ok(["qnfo-fleet-control", "qnfo-ops", "qnfo-deploy-guard", "qnfo-observability", "qnfo-code-orchestrator", "qnfo-code-agent"].every((w) => !W.cmScope(w + "/worker.js").ok), "the verifier workers, the scorer host and the code-loop workers never auto-merge");
+ok(["scripts/deploy_gate.py", "scripts/mirror-guard.py", "scripts/version-bump-guard.py", "scripts/workflow-lint.py", "scripts/run-suites.mjs", "scripts/canary_revert.py", "scripts/canonical_deploy.py", "scripts/raw_put.py", "scripts/remediation_consumer.py", "scripts/secret_lock.py", "scripts/fold_worker_selftest.py", "scripts/cf_ops_delete_worker_test.py", "scripts/probe-semicolon.test.mjs", "scripts/mention-radar-test.mjs", "scripts/x.sh", "scripts/sub/x.py", ".github/workflows/a.yml", "qnfo-x/wrangler.toml", "migrations/a.sql", "qnfo-x/a.test.mjs", "qnfo-x/registry.js", "docs/../x.md"].every((p) => !W.cmScope(p).ok), "gates, guards, suites, deploy primitives, the loop's runners, workflows, configs, migrations, tests and other modules are out of scope");
+ok(["qnfo-observability", "qnfo-autonomy-scorer", "qnfo-containers-pilot", "qnfo-code-agent"].every((w) => !W.cmScope(w + "/worker.js").ok), "the scorer host, the scorer, the container pilot and the retired code agent never auto-merge");
+// CODE-LOOP-CONTROL-PLANE-1 (0.37.0, owner directive 2026-10-19): the code loop may always change the verifier workers and its own code.
+ok(["qnfo-fleet-control", "qnfo-ops", "qnfo-deploy-guard", "qnfo-code-orchestrator"].every((w) => J(W.cmScope(w + "/worker.js")).ok === true && J(W.cmScope(w + "/worker.js")).kind === "worker" && J(W.cmScope(w + "/worker.js")).mirror === w + "/deployed-current.worker.js"), "qnfo-fleet-control, qnfo-ops, qnfo-deploy-guard and qnfo-code-orchestrator auto-merge with their mirror (the loop's own code)");
+ok(J(W.cmScope("scripts/code-task-publish.py")).ok === true && J(W.cmScope("scripts/code-task-publish.py")).kind === "script" && !W.cmScope("scripts/code-task-publish.test.mjs").ok, "the loop's own publish script is in scope, its test is not");
 // CONTROL-PLANE-FUNCTIONAL-CANARY-1 (0.20.0, agent_issues 2176): the two control-plane workers with a functional canary and an automatic revert are in scope.
 ok(["qnfo-ai", "qnfo-gateway"].every((w) => J(W.cmScope(w + "/worker.js")).ok === true && J(W.cmScope(w + "/worker.js")).kind === "worker"), "qnfo-ai and qnfo-gateway (functional canary) auto-merge");
 ok(J(W.cmRequired([PATH, MIRROR])).join(",") === "gate,mirror-guard,comparator,guard", "a worker.js needs gate, mirror-guard, comparator and guard");
@@ -231,7 +234,7 @@ const refuses = [
   ["only the mirror", task(), g({ files: [{ filename: MIRROR, status: "modified" }] })],
   ["an added file", task(), g({ files: [{ filename: PATH, status: "added" }] })],
   ["a path out of scope", task({ path: "scripts/deploy_gate.py" }), g({ files: [{ filename: "scripts/deploy_gate.py", status: "modified" }] })],
-  ["a denied worker", task({ path: "qnfo-ops/worker.js" }), g({ files: [{ filename: "qnfo-ops/worker.js", status: "modified" }] })],
+  ["a denied worker", task({ path: "qnfo-observability/worker.js" }), g({ files: [{ filename: "qnfo-observability/worker.js", status: "modified" }] })],
   ["an untrusted origin", task(), g({ provenance: { ok: false, why: "source issue #50 came from 'kaizen-ai'" } })],
   ["a failed required check", task(), g({ checks: green("h1", ["gate", "mirror-guard", "comparator"]).concat([{ id: 300, name: "guard", status: "completed", conclusion: "failure" }]) })],
   ["a failing commit status", task(), g({ status: { state: "failure", total_count: 1 } })],
@@ -762,7 +765,7 @@ ok(gh.newPulls.length === 2 && r.opened.length === 1 && r.decided.length >= 1, "
 // ---------------------------------------------------------------- GOAL-REVIEW-1 (0.9.0)
 // Pure parts: reviewer choice outside the proposer's family, reply parsing, the diff the reviewer reads, the decision.
 ok(W.cmModelFamily("@cf/qwen/qwen2.5-coder-32b-instruct") === "qwen" && W.cmModelFamily("@cf/openai/gpt-oss-120b") === "openai", "model family is the @cf/<family>/ segment");
-ok(W.cmReviewModel("@cf/qwen/qwen2.5-coder-32b-instruct") === "@cf/openai/gpt-oss-120b" && W.cmReviewModel("@cf/openai/gpt-oss-20b") === "@cf/deepseek-ai/deepseek-v4-flash-0731", "the reviewer is the first listed model outside the proposer's family");
+ok(W.cmReviewModel("@cf/qwen/qwen2.5-coder-32b-instruct") === "@cf/openai/gpt-oss-120b" && W.cmReviewModel("@cf/openai/gpt-oss-20b") === "@cf/nvidia/nemotron-3-120b-a12b", "the reviewer is the first listed model outside the proposer's family");
 ok(W.cmReviewModel(null) === W.CM_REVIEW_MODELS[0] && W.cmReviewModel("@cf/qwen/x", ["@cf/qwen/y"]) === null, "no proposer recorded: the first reviewer; only same-family reviewers: none");
 ok(!W.CM_REVIEW_MODELS.some((m) => ["qwen", "moonshotai", "zai-org"].includes(W.cmModelFamily(m))), "the default reviewers share no family with the orchestrator's default ladder (qwen, moonshotai, zai-org)");
 {
@@ -815,8 +818,8 @@ goalSetup();
 sandbox.aiRunAttr = reviewer('{"verdict":"no","defects":["a() now returns 11 but the goal asks for the citation check, which no line adds"]}');
 r = J(await W.codeMergeTick(genv, { now: NOW }));
 row = one("SELECT * FROM code_tasks WHERE id = ?", ID);
-ok(gh.newPulls.length === 0 && row.status === "queued" && row.step === "propose" && /goal review \(@cf\/openai\/gpt-oss-120b \+ @cf\/deepseek-ai\/deepseek-v4-flash-0731\): the diff does not implement the goal: a\(\) now returns 11/.test(row.merge_note) && JSON.parse(row.ctx).refusal.kind === "goal-review" && JSON.parse(row.ctx).refusal.reasons.length === 2 && /a\(\) now returns 11/.test(JSON.parse(row.ctx).lastError), "verdict no from two reviewers: the PR is not opened and the task goes back to propose with the defects (REPAIR-AT-OPEN-1)", { pulls: gh.newPulls.length, row: [row.status, row.step, row.merge_note] });
-ok(aiCalls.length === 2 && aiCalls[0].purpose === "goal-review" && aiCalls[0].model === "@cf/openai/gpt-oss-120b" && aiCalls[1].model === "@cf/deepseek-ai/deepseek-v4-flash-0731" && /fix a/.test(aiCalls[0].input.messages[1].content) && /\+  return 11;/.test(aiCalls[0].input.messages[1].content) && aiCalls[1].input.messages[1].content === aiCalls[0].input.messages[1].content, "two metered calls (purpose goal-review) to reviewers of two families outside the proposer's, with the goal and the head diff", aiCalls.map((c) => [c.purpose, c.model]));
+ok(gh.newPulls.length === 0 && row.status === "queued" && row.step === "propose" && /goal review \(@cf\/openai\/gpt-oss-120b \+ @cf\/nvidia\/nemotron-3-120b-a12b\): the diff does not implement the goal: a\(\) now returns 11/.test(row.merge_note) && JSON.parse(row.ctx).refusal.kind === "goal-review" && JSON.parse(row.ctx).refusal.reasons.length === 2 && /a\(\) now returns 11/.test(JSON.parse(row.ctx).lastError), "verdict no from two reviewers: the PR is not opened and the task goes back to propose with the defects (REPAIR-AT-OPEN-1)", { pulls: gh.newPulls.length, row: [row.status, row.step, row.merge_note] });
+ok(aiCalls.length === 2 && aiCalls[0].purpose === "goal-review" && aiCalls[0].model === "@cf/openai/gpt-oss-120b" && aiCalls[1].model === "@cf/nvidia/nemotron-3-120b-a12b" && /fix a/.test(aiCalls[0].input.messages[1].content) && /\+  return 11;/.test(aiCalls[0].input.messages[1].content) && aiCalls[1].input.messages[1].content === aiCalls[0].input.messages[1].content, "two metered calls (purpose goal-review) to reviewers of two families outside the proposer's, with the goal and the head diff", aiCalls.map((c) => [c.purpose, c.model]));
 ok(one("SELECT status FROM cloud_ops_events WHERE id = ?", "goal-review-" + ID + "-h1").status === "refused", "the verdict is cached under goal-review-<task>-<head>");
 goalSetup();
 sandbox.aiRunAttr = reviewer('{"verdict":"implements","defects":[]}');
@@ -884,7 +887,7 @@ sandbox.aiRunAttr = async () => null;
 
 // ================================================================ 0.18.0: the merge side of the code loop
 // GOAL-REVIEW-2, REFUSAL-REASON-1, REPAIR-AT-OPEN-1, PATCH-REBUILD-1, MIRROR-FOLLOWS-SOURCE-1, MERGE-MULTI-FILE-1, PUBLISH-DISPATCH-1
-const M1 = "@cf/openai/gpt-oss-120b", M2 = "@cf/deepseek-ai/deepseek-v4-flash-0731";
+const M1 = "@cf/openai/gpt-oss-120b", M2 = "@cf/nvidia/nemotron-3-120b-a12b"; // REVIEW-POOL-ORDER-1 (0.34.4): nemotron leads deepseek in the default pool, so it is the second reviewer for these proposers
 const reviewerBy = (map) => async (env0, worker, purpose, model, input) => { aiCalls.push({ worker, purpose, model, input }); const rp = model in map ? map[model] : map["*"]; if (rp instanceof Error) throw rp; return { choices: [{ message: { content: rp } }] }; };
 ok(Number(/var VERSION = "0\.(\d+)\./.exec(src)[1]) >= 18, "qnfo-fleet-control is at least 0.18.0", /var VERSION = "[^"]*"/.exec(src)[0]);
 { // ---- pure: the second reviewer, quoted lines, screening
@@ -954,7 +957,7 @@ row = one("SELECT * FROM code_tasks WHERE id = ?", ID);
 ok(gh.merges.length === 1 && row.status === "merged" && aiCalls.length === 2 && /one model's opinion does not refuse/.test(row.merge_note), "green required checks then merge it: a single model's refusal never overrides them (no further model call)", [row.status, row.merge_note, aiCalls.length]);
 // ---- the second reviewer is down: three tries, then the checks decide
 goalSetup();
-sandbox.aiRunAttr = reviewerBy({ [M1]: '{"verdict":"no","defects":["the diff does not add the citation check"]}', [M2]: new Error("3046: Request timeout"), "*": new Error("3046: Request timeout") }); // REVIEW-ROTATE-1: the second reviewer's next try goes to the next family (nemotron), which is down too
+sandbox.aiRunAttr = reviewerBy({ [M1]: '{"verdict":"no","defects":["the diff does not add the citation check"]}', [M2]: new Error("3046: Request timeout"), "*": new Error("3046: Request timeout") }); // REVIEW-ROTATE-1: the second reviewer's next try goes to the next family (deepseek), which is down too
 for (let k = 0; k < 2; k++) r = J(await W.codeMergeTick(genv, { now: NOW + k * 36e5 }));
 row = one("SELECT * FROM code_tasks WHERE id = ?", ID);
 ok(gh.newPulls.length === 0 && row.status === "branch_pushed" && /second reviewer pending \(try 2 of 3: 3046/.test(row.merge_note), "a failing second reviewer only waits", row.merge_note);
