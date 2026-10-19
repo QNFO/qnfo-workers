@@ -336,12 +336,12 @@ function fresh(opts) {
   ok(out.unactioned_72h === 2, "unactioned counts every waiting row older than 72h, the 40-day-old one included (80h + 40d)", out.unactioned_72h);
   ok(Math.abs(out.median_h - 10) < 0.2, "the median counts waiting rows at their age (2, 5, 10, 25, 80 -> 10)", out.median_h);
   const rows = t.audit.prepare("SELECT * FROM metric_registry ORDER BY metric").all();
-  ok(rows.length === 2 && rows[0].metric === "inbound_first_response_h_median_30d" && rows[1].metric === "inbound_unactioned_72h" && rows[1].last_value === "2" && rows.every((x) => x.refresh_cadence === "*/3h" && x.source_of_truth && x.disposition_actor === "fleet"), "both metrics carry the METRIC-INTEGRITY-1 fields", rows);
+  ok(rows.length === 3 && rows[0].metric === "inbound_first_response_h_median_30d" && rows[1].metric === "inbound_unactioned_120m" && rows[1].last_value === "3" && rows[2].metric === "inbound_unactioned_72h" && rows[2].last_value === "2" && rows.every((x) => x.refresh_cadence === "*/10m" && x.source_of_truth && x.disposition_actor === "fleet"), "all three metrics carry the METRIC-INTEGRITY-1 fields (SLA-120M-INBOUND-1 adds inbound_unactioned_120m: 80h, 40d and 5h rows wait past 120 minutes)", rows);
   const first = rows[0].last_refreshed;
   await new Promise((r) => setTimeout(r, 5));
   await metrics(t.env, {});
   const again = t.audit.prepare("SELECT * FROM metric_registry ORDER BY metric").all();
-  ok(again.length === 2 && again[0].last_refreshed > first, "a second refresh updates in place (idempotent)");
+  ok(again.length === 3 && again[0].last_refreshed > first, "a second refresh updates in place (idempotent)");
   const empty = fresh({});
   await metrics(empty.env, {});
   ok(/^n\/a/.test(empty.audit.prepare("SELECT last_value FROM metric_registry WHERE metric = 'inbound_first_response_h_median_30d'").get().last_value), "no inbound in 30 days reads n/a, not 0");
@@ -354,9 +354,10 @@ function fresh(opts) {
   const legacy = await worker.runRepliesInternal(t.env, false);
   ok(legacy.scanned === 0 && t.sent.length === 0 && t.q(p).decision === "pending", "the legacy drafter no longer mails 'pending' rows (it mailed funders and outsiders ungated)");
   await worker.scheduled({ cron: "0 */3 * * *" }, t.env, {});
-  ok(!t.decision(p) && t.audit.prepare("SELECT COUNT(*) n FROM metric_registry").get().n === 2, "the 3-hourly cron refreshes the metrics and does not run the step");
+  ok(!t.decision(p) && t.audit.prepare("SELECT COUNT(*) n FROM metric_registry").get().n === 0, "the 3-hourly cron does not run the step (SLA-120M-INBOUND-1: the metrics moved to the 15-minute cron)");
   await worker.scheduled({ cron: "*/15 * * * *" }, t.env, {});
   ok(t.decision(p) && t.decision(p).category === "funder" && t.decision(p).outcome === "held" && t.sent.length === 0, "the 15-minute cron runs the step: the pending funder row is held, nothing sent");
+  ok(t.audit.prepare("SELECT COUNT(*) n FROM metric_registry").get().n === 3, "the 15-minute cron also refreshes the three metrics");
   const hb = t.audit.prepare("SELECT version, ok FROM fleet_heartbeat WHERE worker = 'qnfo-email-orchestrator'").get();
   const cap = t.audit.prepare("SELECT capabilities FROM capability_audit_snapshot WHERE service = 'qnfo-email-orchestrator'").get();
   ok(hb && hb.version === mod.__VERSION && hb.ok === 1 && /inbound-sla/.test(cap.capabilities), "the heartbeat and capability row carry the new version and the inbound-sla capability");
@@ -374,7 +375,7 @@ function fresh(opts) {
   await metrics(a.env, {});
   const ra = a.audit.prepare("SELECT metric, layer, kind, formula, source_of_truth, target, owner, refresh_cadence, last_value FROM metric_registry ORDER BY metric").all();
   const rb = b.audit.prepare("SELECT metric, layer, kind, formula, source_of_truth, target, owner, refresh_cadence FROM metric_registry ORDER BY metric").all();
-  ok(ra.length === 2 && ra.every((r, i) => ["metric", "layer", "kind", "formula", "source_of_truth", "target", "owner", "refresh_cadence"].every((k) => r[k] === rb[i][k])), "the migration registers exactly the metric text the worker writes", { ra, rb });
+  ok(ra.length === 3 && ra.filter((r) => r.metric !== "inbound_unactioned_120m").every((r) => { const o = rb.find((x) => x.metric === r.metric); return o && ["metric", "layer", "kind", "formula", "source_of_truth", "target", "owner"].every((k) => r[k] === o[k]); }), "the migration registers exactly the metric text the worker writes", { ra, rb });
   ok(ra[1].last_value === "0", "the worker refreshes the value of the migration's row");
   const tr = a.audit.prepare("SELECT metric_key, operator, threshold, owner, enabled, action FROM analytics_metric_triggers ORDER BY metric_key").all();
   ok(tr.length === 2 && tr.every((t) => t.enabled === 1 && t.owner === "qnfo-email-orchestrator" && /Definition of done/.test(t.action)) && tr[0].metric_key === "inbound_first_response_h_median_30d" && tr[0].operator === "gt" && tr[0].threshold === 48 && tr[1].metric_key === "inbound_unactioned_72h" && tr[1].threshold === 0, "one enabled trigger per metric, with its lever and definition of done", tr.map((t) => [t.metric_key, t.operator, t.threshold]));

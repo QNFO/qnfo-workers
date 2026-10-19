@@ -212,6 +212,7 @@ globalThis.fetch = realFetch;
 row("p-review", "publish", null, { status: "review", recover: 3 });
 await parkPoisonRow(env, get("p-review"), "publish: boom");
 ok(get("p-review").status === "wontfix" && get("p-review").stage === "parked" && /^PARKED-POISON-1: .*publish: boom/.test(get("p-review").error), "a failing publish-stage row in status review is parked (RESEARCH-PARK-REVIEW-1)", get("p-review"));
+ok(doneStatus({ ok: false, stage: "verify", unrun: 1, cause: "script-error", retry: true }) === "warn" && doneStatus({ ok: false, stage: "verify", unrun: 3, cause: "script-error" }) === "error", "RETRY-NOT-ERROR-1: a retry still in budget is a warn; the exhausted pass is an error");
 ok(doneStatus({ ok: true }) === "ok" && doneStatus({ ok: false, withheld: "review-hard" }) === "warn" && doneStatus({ ok: false, stage: "verify" }) === "error", "a withheld paper is a warn event; a broken stage stays an error");
 
 // ---- 8. router drill ---------------------------------------------------------------------------------------------------

@@ -56,6 +56,16 @@ DENY_PATH = re.compile(r"^(\.github/|\.git/)|(^|/)(wrangler\.toml|deploy-targets
 BRANCH_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._/-]{0,100}$")
 
 
+def repo_slug(repo) -> str:
+    """REPO-SLUG-PUBLISH-1 (2026-10-19): a code_tasks row written straight into D1 may carry the owner-qualified
+    "QNFO/qnfo-workers" (6 RED-DRAIN-1 rows, ct_im99928..ct_im99979, sat in ready_to_publish from 2026-10-18 14:49Z while
+    every run logged "skip: repo QNFO/qnfo-workers is not qnfo-workers" and held their file claims). The orchestrator
+    strips one leading owner segment since 0.18.13 (repoSlug); the publisher now does the same."""
+    r = str(repo or "").strip()
+    owner, sep, rest = r.partition("/")
+    return rest if sep and owner.lower() == "qnfo" and rest and "/" not in rest else r
+
+
 def now() -> str:
     return datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.000Z")
 
@@ -582,7 +592,7 @@ def publish_one(task, repo_dir, base, pr, delegate=False):
             return "publish_failed", None, "path refused by policy: " + path[:100], None
         if not BRANCH_RE.match(branch) or branch in ("main", "master") or ".." in branch:
             return "publish_failed", None, "branch refused: " + branch[:100], None
-        if task.get("repo") != REPO_NAME:
+        if repo_slug(task.get("repo")) != REPO_NAME:
             return "publish_failed", None, "task repo is not " + REPO_NAME, None
         # The patch may only touch the task's declared path.
         files = set(re.findall(r"^\+\+\+ b/(.+)$", patch, re.M)) | set(re.findall(r"^--- a/(.+)$", patch, re.M))
@@ -719,6 +729,15 @@ def publish_all(store, repo_dir, base, pr, log=print, delegate=False):
         return {"published": 0, "failed": 0, "skipped": 0}
     out = {"published": 0, "failed": 0, "skipped": 0}
     for t in ready:
+        if t.get("repo") != REPO_NAME and repo_slug(t.get("repo")) == REPO_NAME:
+            # REPO-SLUG-PUBLISH-1: repair the row to the bare slug (qnfo-fleet-control's opener and merge runner compare
+            # t.repo with "qnfo-workers" too), compare-and-set on the status the run just read.
+            try:
+                store.changes("UPDATE code_tasks SET repo=? WHERE id=? AND repo=? AND status='ready_to_publish'", [REPO_NAME, t["id"], t.get("repo")])
+                log(f"repo-slug {t['id']}: {t.get('repo')} -> {REPO_NAME}")
+            except Exception as e:  # noqa: BLE001 - the publish below still runs on the normalized slug; logged, never silent
+                log(f"::warning::repo-slug {t['id']}: could not repair the row: {e}")
+            t = dict(t, repo=REPO_NAME)
         if t.get("repo") != REPO_NAME:
             log(f"skip {t['id']}: repo {t.get('repo')} is not {REPO_NAME}")
             out["skipped"] += 1
@@ -1052,6 +1071,16 @@ def selftest():
     add(store, "ct_otherrepo001", good, repo="qnfo-site")
     publish_all(store, work, "main", pr, quiet)
     check("tasks for other repos are skipped, not failed", row(store, "ct_otherrepo001")["status"] == "ready_to_publish")
+    add(store, "ct_ownerslug001", good, repo="QNFO/qnfo-workers")
+    add(store, "ct_ownerother01", good, repo="QNFO/qnfo-site")
+    publish_all(store, work, "main", pr, quiet)
+    t = row(store, "ct_ownerslug001")
+    check("REPO-SLUG-PUBLISH-1: an owner-qualified QNFO/qnfo-workers row is published and its repo repaired to the bare slug",
+          t["status"] == "published" and t["repo"] == REPO_NAME, dict(t))
+    check("REPO-SLUG-PUBLISH-1: an owner-qualified other repo is still skipped, untouched",
+          row(store, "ct_ownerother01")["status"] == "ready_to_publish" and row(store, "ct_ownerother01")["repo"] == "QNFO/qnfo-site")
+    check("repo_slug strips exactly one QNFO owner segment", repo_slug("QNFO/qnfo-workers") == REPO_NAME and repo_slug("qnfo/qnfo-workers") == REPO_NAME
+          and repo_slug("other/qnfo-workers") == "other/qnfo-workers" and repo_slug("QNFO/a/b") == "QNFO/a/b" and repo_slug(None) == "")
     check("a lost claim race is detected", claim(store, row(store, "ct_idem00000001")) is False)
 
     # 5. PR creation refused by the repo setting -> branch stays pushed, recorded as branch_pushed with a compare URL, not a failure

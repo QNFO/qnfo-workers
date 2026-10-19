@@ -508,6 +508,54 @@ def refresh_runtime_share(out):
        ["n/a" if v is None else str(v), time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())])
 
 
+# CF-TOKEN-WATCH-1 (2026-10-19, agent_issues 2581, pillar autonomy): the repository CLOUDFLARE_API_TOKEN carries every
+# deploy, migration and cf-ops action, and the owner directive of 2026-10-08 says no new Cloudflare token will be issued,
+# so a lapse would stop the GitHub -> Cloudflare half with no successor. Nothing measured it. Each consumer run (at least
+# hourly, PROBE-CADENCE-1) asks Cloudflare to verify the token (account-owned path first, then the user path) and writes
+# cloudflare_token_ok (1 when status is active) and cloudflare_token_expires_in_min (999999 when it has no expiry) to
+# metric_registry; their triggers live in migrations/2026-10-19-resolve-cf-token-watch.sql. The token is never printed.
+def cf_token_watch_values(result, now=None):
+    """result: the Cloudflare tokens/verify `result` object (or None) -> (ok, expires_in_min)."""
+    now = time.time() if now is None else now
+    if not isinstance(result, dict):
+        return 0, 0
+    ok = 1 if str(result.get("status") or "").lower() == "active" else 0
+    exp = result.get("expires_on")
+    if not exp:
+        return ok, 999999
+    try:
+        ts = time.mktime(time.strptime(str(exp)[:19], "%Y-%m-%dT%H:%M:%S")) - time.timezone
+    except (ValueError, OverflowError):
+        return ok, 999999
+    mins = int((ts - now) // 60)
+    if mins <= 0:
+        return 0, 0
+    return ok, mins
+
+
+def cf_token_watch(out, req=None):
+    if req is None and not TOKEN:
+        out["cf_token_watch"] = {"skipped": "no token in this environment"}
+        return out["cf_token_watch"]
+    req = req or _req
+    result, used = None, None
+    for path in ("/accounts/%s/tokens/verify" % ACCOUNT, "/user/tokens/verify"):
+        try:
+            r = req("GET", CF_API + path)
+        except Exception:  # noqa: BLE001 - an account-owned token answers 4xx on the user path and vice versa
+            continue
+        if r.get("success") and isinstance(r.get("result"), dict):
+            result, used = r["result"], path.split("/")[1]
+            break
+    ok, mins = cf_token_watch_values(result)
+    stamp = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+    for metric, val in (("cloudflare_token_ok", ok), ("cloudflare_token_expires_in_min", mins)):
+        d1("UPDATE metric_registry SET last_value = ?1, last_refreshed = ?2, state = 'MEASURED' WHERE metric = ?3",
+           [str(val), stamp, metric])
+    out["cf_token_watch"] = {"ok": ok, "expires_in_min": mins, "path": used}
+    return out["cf_token_watch"]
+
+
 def _selftest():
     cases = [
         ("SELECT 'a' AS expected, 'a' AS observed", 1, "pass"),
@@ -1119,6 +1167,12 @@ def main():
         out["fleet_journeys"] = fleet_journeys.run(d1, VERIFIER)
     except Exception as e:  # noqa: BLE001
         out["fleet_journeys_error"] = str(e)[:200]
+
+    # CF-TOKEN-WATCH-1: the repository Cloudflare token's validity and expiry, every run. A failure never stops the run.
+    try:
+        cf_token_watch(out)
+    except Exception as e:  # noqa: BLE001
+        out["cf_token_watch_error"] = str(e)[:200]
 
     # MIGRATION-UNAPPLIED-1: merged migrations the push-triggered runner never ran are applied here, within the hour.
     migrations_sweep(out)

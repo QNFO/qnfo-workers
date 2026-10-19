@@ -33,7 +33,7 @@ var __name22222 = /* @__PURE__ */ __name2222((target, value) => __defProp22222(t
 // an empty catch. CITE-CONSISTENCY-1 asks the reviewer to compare the draft against cited QNFO work.
 // REVIEW-TRIAGE-CAP-1 is a defect fix: drift demotion at the cycle cap silently turned a blocking finding into a pass, so
 // REVIEW-HARD-GATE-1 withheld nothing there (reviewer findings 2 -> 0 at the cap; an unparseable review advanced to verify).
-var VERSION = "0.19.0-math-latex-autofix"; /* 0.19.0 MATH-LATEX-AUTOFIX-1 (2026-10-19, agent_issues 100027, pillar research): 8 finished papers were parked from 2026-10-12 because gate-math-latex was left to the revise models' search/replace edits, which often did not apply. Plain-text math with one LaTeX spelling (Unicode super/subscripts, bare ^ and _ scripts, bra-kets, the scanner's operators) is now converted deterministically in review, revise and verify (event math-autofix); box drawings and lines holding currency still go to the models. */ /* 0.18.38 TICK-10M-1 + RECLAIM-KEEP-STAGE-1 + IDEA-TO-PUBLISH-METRIC-1 (2026-10-18, owner directive: idea to publication under 100 hours; pillar research): (a) the cron runs every 10 minutes (was 15; 144/day = CRON-MANDATE-1 ceiling, same schedule count); member windows are 10 minutes wide so each errata/reviser job still runs exactly once per slot; the 03:00 sweep window is 10 minutes; (b) a stale reclaim keeps a resumable stage (complete/review/revise/verify), and RESUME-DRAFT-1 at claim falls back to ground when reconciled.md is missing, so a stalled draft is not re-drafted from scratch; (c) idea_to_publish_h_p50_7d (median hours idea_proposals.created_at -> published_at, 7 days) is written to metric_registry on the :00 tick. */ /* 0.18.37 ERRATA-HIGHRISK-ROUTE-1 folded (errata member 1.6.2): a high-risk errata correction draft older than 6 h becomes a remediation research row instead of waiting audited forever; internal_errata closes with its queue row. */ /* 0.18.36 CLAIM-HEARTBEAT-1 + RESUME-DRAFT-1 + REVIEW-SECOND-MODEL-1 (2026-10-18): a stage returning ok refreshes claimed_at so the stale-claim reclaimer stops re-grounding papers still advancing (550 releases/24h, 302 ground claims of 72 rows); a resumable stage is kept when its draft exists in R2 (70 revise rows were re-drafted from ground); the review second path names its model (not kimi-k2.6 after #1429). */ /* 0.18.35 CLAIM-HEARTBEAT-1 (2026-10-18): a stage that returns ok refreshes claimed_at, so the 120-min stale-claim reclaimer no longer re-grounds papers that are still advancing (550 releases/24h, 302 ground claims of 72 rows). */ /* 0.18.34 REVIEW-EMPTY-SECOND-PATH-1 (2026-10-18): an unreadable review takes a second model family in the same tick and, still unreadable, re-runs review directly instead of sending the review-parse placeholder through two no-op patch calls (237 of 264 revise-noop events, 329 hard=1 cycles in 3 days). */ /* 0.18.33 PATCH-FLEX-REGEX-OVERFLOW-1 (2026-10-18, agent_issues 2886): findFlexible caps the flexible matcher at 400 tokens and fails closed on any regex error, so a whole-section find text no longer throws "Invalid regular expression: Stack overflow" out of the slot. */ /* 0.18.32 AI-RATE-FALLBACK-1 (2026-10-18): a 3021/3040/3046 on the primary model after backoff takes one call on another family (glm<->gpt-oss-120b) instead of failing the stage; 3040 no longer misread as a reasoning_effort rejection. */ /* 0.18.31 VERIFY-AUTOCORRECT-1 (2026-10-18): papers fail verify with REAL arithmetic errors (the reconcile/ensemble writer computes a number that does not match its own stated inputs) and the revise loop cannot reliably fix a bare number, so such papers cycle until park. Verify already holds both values — independently computed `computed` and the paper's stated `expected` — so stageVerify now corrects the number deterministically (autoCorrectNumeric) instead of sending it back through a model. Fail-closed: only a stated value found exactly once (verbatim or as an unambiguous bare mantissa in LaTeX/\\times 10^N) is corrected; anything ambiguous is skipped and falls through to revise. Every correction is logged as verify-autocorrect and appended to verification.md. */ /* 0.18.29 VERIFY-CYCLE-CAP-1 (2026-10-17, owner directive "REMEDIATE ALL ISSUES AND FAILURE MODES"): the verify->revise edge reset the review cycle counter to 0 (context={cycles:0,verifyPass:1}) while EVERY other edge preserves it (3716, 3735, 3753) and the review stage is the one that increments it. That single reset made MAX_REVIEW_CYCLES (6) unreachable, so an item that fails verify re-enters revise, resets to cycle 0, and loops until recover_count runs out — measured 2026-10-17: review-unresolved events exist ONLY at cycle 2 (193) and 3 (165), never 4; 96 rerun-route and 278 revise-patch events against ~100 rows; and stage='publish' is EMPTY, which is why 151 complete events produced 0 publications and why the publish quota (24) guarded an empty queue. The edge now preserves the count, so the existing six-cycle cap can terminate an item visibly instead of cycling forever. The gate itself (gates2) is unchanged: this does not let a failing draft through, it lets a draft that cannot pass STOP. */ // 0.18.28-codeagent
+var VERSION = "0.19.2-retry-not-error"; /* 0.19.2 (2026-10-19, RESOLVE-ALL-OPEN-1): merges main's 0.19.0 MATH-LATEX-AUTOFIX-1 with PR 2603's 0.19.0/0.19.1 fixes below. */ /* 0.19.1 EXTRACT-JSON-ROBUST-1 (issue 2877): parseExtractedClaims reads the first balanced JSON list or object (trailing prose no longer breaks it) and re-parses with lone LaTeX backslashes escaped; an empty extraction reply is asked once more in the tick. RETRY-NOT-ERROR-1 (issue 99990): a verify retry still in budget (retry: true) logs its done event as warn; only the pass that exhausts its retries is an error, so LOOP-BREAKER-1 counts real failures. WORKERS-BP-LOGGING (issue 2538): the 21 swallowed catches log a structured console.error (two trial parses carry a comment), control flow unchanged. */ /* 0.19.0 RESOLVE-ALL-OPEN-1 (2026-10-19, owner directive "RESOLVE/REMEDIATE ALL OPEN ISSUES"; pillar research): (a) RESEARCH-REVIEW-BIB-TRUNC-1 (#2800): the reviewer sees the index line of every bibliography entry, then bounded excerpts, instead of the first 8,000 chars (2-3 of 9-14 entries); (b) SLOP-SCAN-1 (#2407): a deterministic inflated-prose scan adds SOFT findings with locations against a corpus baseline read from its own slop-scan events; (c) REVISE-STRIDE-1 (#2847): queued rows at a resumable stage are claimed before ground rows; (d) EXTENSION-ACTIVATION-1 (#2824): extension rows (<= research_extension_per_day) bypass research_ready_cap, ops_config research_extension_cap_mode=respect restores it; (e) SWEEP-REARM-INLINE-1 (#2393): the completeness sweep re-arms remediation rows a 2026-10-17 cleanup closed as published without publishing; (f) RECONCILE-READ-1 (c) (#2725): an incomplete draft names its failed checks. */ /* 0.18.38 TICK-10M-1 + RECLAIM-KEEP-STAGE-1 + IDEA-TO-PUBLISH-METRIC-1 (2026-10-18, owner directive: idea to publication under 100 hours; pillar research): (a) the cron runs every 10 minutes (was 15; 144/day = CRON-MANDATE-1 ceiling, same schedule count); member windows are 10 minutes wide so each errata/reviser job still runs exactly once per slot; the 03:00 sweep window is 10 minutes; (b) a stale reclaim keeps a resumable stage (complete/review/revise/verify), and RESUME-DRAFT-1 at claim falls back to ground when reconciled.md is missing, so a stalled draft is not re-drafted from scratch; (c) idea_to_publish_h_p50_7d (median hours idea_proposals.created_at -> published_at, 7 days) is written to metric_registry on the :00 tick. */ /* 0.18.37 ERRATA-HIGHRISK-ROUTE-1 folded (errata member 1.6.2): a high-risk errata correction draft older than 6 h becomes a remediation research row instead of waiting audited forever; internal_errata closes with its queue row. */ /* 0.18.36 CLAIM-HEARTBEAT-1 + RESUME-DRAFT-1 + REVIEW-SECOND-MODEL-1 (2026-10-18): a stage returning ok refreshes claimed_at so the stale-claim reclaimer stops re-grounding papers still advancing (550 releases/24h, 302 ground claims of 72 rows); a resumable stage is kept when its draft exists in R2 (70 revise rows were re-drafted from ground); the review second path names its model (not kimi-k2.6 after #1429). */ /* 0.18.35 CLAIM-HEARTBEAT-1 (2026-10-18): a stage that returns ok refreshes claimed_at, so the 120-min stale-claim reclaimer no longer re-grounds papers that are still advancing (550 releases/24h, 302 ground claims of 72 rows). */ /* 0.18.34 REVIEW-EMPTY-SECOND-PATH-1 (2026-10-18): an unreadable review takes a second model family in the same tick and, still unreadable, re-runs review directly instead of sending the review-parse placeholder through two no-op patch calls (237 of 264 revise-noop events, 329 hard=1 cycles in 3 days). */ /* 0.18.33 PATCH-FLEX-REGEX-OVERFLOW-1 (2026-10-18, agent_issues 2886): findFlexible caps the flexible matcher at 400 tokens and fails closed on any regex error, so a whole-section find text no longer throws "Invalid regular expression: Stack overflow" out of the slot. */ /* 0.18.32 AI-RATE-FALLBACK-1 (2026-10-18): a 3021/3040/3046 on the primary model after backoff takes one call on another family (glm<->gpt-oss-120b) instead of failing the stage; 3040 no longer misread as a reasoning_effort rejection. */ /* 0.18.31 VERIFY-AUTOCORRECT-1 (2026-10-18): papers fail verify with REAL arithmetic errors (the reconcile/ensemble writer computes a number that does not match its own stated inputs) and the revise loop cannot reliably fix a bare number, so such papers cycle until park. Verify already holds both values — independently computed `computed` and the paper's stated `expected` — so stageVerify now corrects the number deterministically (autoCorrectNumeric) instead of sending it back through a model. Fail-closed: only a stated value found exactly once (verbatim or as an unambiguous bare mantissa in LaTeX/\\times 10^N) is corrected; anything ambiguous is skipped and falls through to revise. Every correction is logged as verify-autocorrect and appended to verification.md. */ /* 0.18.29 VERIFY-CYCLE-CAP-1 (2026-10-17, owner directive "REMEDIATE ALL ISSUES AND FAILURE MODES"): the verify->revise edge reset the review cycle counter to 0 (context={cycles:0,verifyPass:1}) while EVERY other edge preserves it (3716, 3735, 3753) and the review stage is the one that increments it. That single reset made MAX_REVIEW_CYCLES (6) unreachable, so an item that fails verify re-enters revise, resets to cycle 0, and loops until recover_count runs out — measured 2026-10-17: review-unresolved events exist ONLY at cycle 2 (193) and 3 (165), never 4; 96 rerun-route and 278 revise-patch events against ~100 rows; and stage='publish' is EMPTY, which is why 151 complete events produced 0 publications and why the publish quota (24) guarded an empty queue. The edge now preserves the count, so the existing six-cycle cap can terminate an item visibly instead of cycling forever. The gate itself (gates2) is unchanged: this does not let a failing draft through, it lets a draft that cannot pass STOP. */ // 0.18.28-codeagent /* 0.19.0 MATH-LATEX-AUTOFIX-1 (2026-10-19, agent_issues 100027, pillar research): 8 finished papers were parked from 2026-10-12 because gate-math-latex was left to the revise models' search/replace edits, which often did not apply. Plain-text math with one LaTeX spelling (Unicode super/subscripts, bare ^ and _ scripts, bra-kets, the scanner's operators) is now converted deterministically in review, revise and verify (event math-autofix); box drawings and lines holding currency still go to the models. */ /* 0.18.38 TICK-10M-1 + RECLAIM-KEEP-STAGE-1 + IDEA-TO-PUBLISH-METRIC-1 (2026-10-18, owner directive: idea to publication under 100 hours; pillar research): (a) the cron runs every 10 minutes (was 15; 144/day = CRON-MANDATE-1 ceiling, same schedule count); member windows are 10 minutes wide so each errata/reviser job still runs exactly once per slot; the 03:00 sweep window is 10 minutes; (b) a stale reclaim keeps a resumable stage (complete/review/revise/verify), and RESUME-DRAFT-1 at claim falls back to ground when reconciled.md is missing, so a stalled draft is not re-drafted from scratch; (c) idea_to_publish_h_p50_7d (median hours idea_proposals.created_at -> published_at, 7 days) is written to metric_registry on the :00 tick. */ /* 0.18.37 ERRATA-HIGHRISK-ROUTE-1 folded (errata member 1.6.2): a high-risk errata correction draft older than 6 h becomes a remediation research row instead of waiting audited forever; internal_errata closes with its queue row. */ /* 0.18.36 CLAIM-HEARTBEAT-1 + RESUME-DRAFT-1 + REVIEW-SECOND-MODEL-1 (2026-10-18): a stage returning ok refreshes claimed_at so the stale-claim reclaimer stops re-grounding papers still advancing (550 releases/24h, 302 ground claims of 72 rows); a resumable stage is kept when its draft exists in R2 (70 revise rows were re-drafted from ground); the review second path names its model (not kimi-k2.6 after #1429). */ /* 0.18.35 CLAIM-HEARTBEAT-1 (2026-10-18): a stage that returns ok refreshes claimed_at, so the 120-min stale-claim reclaimer no longer re-grounds papers that are still advancing (550 releases/24h, 302 ground claims of 72 rows). */ /* 0.18.34 REVIEW-EMPTY-SECOND-PATH-1 (2026-10-18): an unreadable review takes a second model family in the same tick and, still unreadable, re-runs review directly instead of sending the review-parse placeholder through two no-op patch calls (237 of 264 revise-noop events, 329 hard=1 cycles in 3 days). */ /* 0.18.33 PATCH-FLEX-REGEX-OVERFLOW-1 (2026-10-18, agent_issues 2886): findFlexible caps the flexible matcher at 400 tokens and fails closed on any regex error, so a whole-section find text no longer throws "Invalid regular expression: Stack overflow" out of the slot. */ /* 0.18.32 AI-RATE-FALLBACK-1 (2026-10-18): a 3021/3040/3046 on the primary model after backoff takes one call on another family (glm<->gpt-oss-120b) instead of failing the stage; 3040 no longer misread as a reasoning_effort rejection. */ /* 0.18.31 VERIFY-AUTOCORRECT-1 (2026-10-18): papers fail verify with REAL arithmetic errors (the reconcile/ensemble writer computes a number that does not match its own stated inputs) and the revise loop cannot reliably fix a bare number, so such papers cycle until park. Verify already holds both values — independently computed `computed` and the paper's stated `expected` — so stageVerify now corrects the number deterministically (autoCorrectNumeric) instead of sending it back through a model. Fail-closed: only a stated value found exactly once (verbatim or as an unambiguous bare mantissa in LaTeX/\\times 10^N) is corrected; anything ambiguous is skipped and falls through to revise. Every correction is logged as verify-autocorrect and appended to verification.md. */ /* 0.18.29 VERIFY-CYCLE-CAP-1 (2026-10-17, owner directive "REMEDIATE ALL ISSUES AND FAILURE MODES"): the verify->revise edge reset the review cycle counter to 0 (context={cycles:0,verifyPass:1}) while EVERY other edge preserves it (3716, 3735, 3753) and the review stage is the one that increments it. That single reset made MAX_REVIEW_CYCLES (6) unreachable, so an item that fails verify re-enters revise, resets to cycle 0, and loops until recover_count runs out — measured 2026-10-17: review-unresolved events exist ONLY at cycle 2 (193) and 3 (165), never 4; 96 rerun-route and 278 revise-patch events against ~100 rows; and stage='publish' is EMPTY, which is why 151 complete events produced 0 publications and why the publish quota (24) guarded an empty queue. The edge now preserves the count, so the existing six-cycle cap can terminate an item visibly instead of cycling forever. The gate itself (gates2) is unchanged: this does not let a failing draft through, it lets a draft that cannot pass STOP. */ // 0.18.28-codeagent
 // WORKERS-AI-ATTRIBUTION-1 (2026-10-01, #1681): per-worker Workers AI attribution. Returns a shallow env copy whose AI
 // binding records each .run() (calls, errors, ms, tokens, neurons) into qnfo-audit ai_call_counters (purpose 'binding').
 // Neurons = usage tokens x Cloudflare's published per-model rates (neurons per M tokens). Fail-soft; env is never mutated.
@@ -93,15 +93,15 @@ function __aiAttrBinding(ai, db, worker, attrCtx) {
         try { res = await t.run(model, input, (function () { /* PROMPT-CACHE-1: same model + same first 4 KB of prompt -> same instance, so Workers AI prefix caching bills repeated context at the cached-input rate (glm-5.3-flash $0.03 vs $0.15 per M) */ try { if (opts && opts.extraHeaders && opts.extraHeaders["x-session-affinity"]) return opts; var m = input && input.messages, c = m && m.length ? m[0].content : (input && input.prompt); var s = typeof c === "string" ? c : JSON.stringify(c || ""); if (s.length < 1024) return opts; s = String(model) + "|" + s.slice(0, 4096); var h = 2166136261; for (var i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); } var o = Object.assign({}, opts || {}); o.extraHeaders = Object.assign({}, o.extraHeaders || {}, { "x-session-affinity": "pc-" + (h >>> 0).toString(36) }); return o; } catch (ePc) { return opts; } })()); return res; } catch (e) { ok = 0; throw e; }
         finally {
           try {
-            var u = res && typeof res === "object" && res.usage || {}; if (!/bge|embed|whisper|m2m100|resnet|flux|sdxl/i.test(String(model))) try { var cTok = Number(u.prompt_tokens_details && u.prompt_tokens_details.cached_tokens || u.cached_tokens || u.input_tokens_details && u.input_tokens_details.cached_tokens || 0) || 0; await db.prepare("INSERT INTO ai_cache_counters (day, worker, model, calls, cached_calls, in_tok, cached_tok) VALUES (?1,?2,?3,1,?4,?5,?6) ON CONFLICT(day, worker, model) DO UPDATE SET calls=calls+1, cached_calls=cached_calls+excluded.cached_calls, in_tok=in_tok+excluded.in_tok, cached_tok=cached_tok+excluded.cached_tok").bind(new Date().toISOString().slice(0, 10), worker, String(model).slice(0, 120), cTok > 0 ? 1 : 0, Number(u.prompt_tokens || u.input_tokens || 0) || 0, cTok).run(); } catch (eCc) {}
-            var chars = 0; try { chars = JSON.stringify(input && (input.messages || input.prompt || input.text) || input || "").length; } catch (e1) {}
+            var u = res && typeof res === "object" && res.usage || {}; if (!/bge|embed|whisper|m2m100|resnet|flux|sdxl/i.test(String(model))) try { var cTok = Number(u.prompt_tokens_details && u.prompt_tokens_details.cached_tokens || u.cached_tokens || u.input_tokens_details && u.input_tokens_details.cached_tokens || 0) || 0; await db.prepare("INSERT INTO ai_cache_counters (day, worker, model, calls, cached_calls, in_tok, cached_tok) VALUES (?1,?2,?3,1,?4,?5,?6) ON CONFLICT(day, worker, model) DO UPDATE SET calls=calls+1, cached_calls=cached_calls+excluded.cached_calls, in_tok=in_tok+excluded.in_tok, cached_tok=cached_tok+excluded.cached_tok").bind(new Date().toISOString().slice(0, 10), worker, String(model).slice(0, 120), cTok > 0 ? 1 : 0, Number(u.prompt_tokens || u.input_tokens || 0) || 0, cTok).run(); } catch (eCc) { console.error(JSON.stringify({ worker: "qnfo-research-exec", where: "ai-attr-cache-tokens", error: String(eCc && eCc.message || eCc).slice(0, 200) })); }
+            var chars = 0; try { chars = JSON.stringify(input && (input.messages || input.prompt || input.text) || input || "").length; } catch (e1) { console.error(JSON.stringify({ worker: "qnfo-research-exec", where: "ai-attr-input-chars", error: String(e1 && e1.message || e1).slice(0, 200) })); }
             var inTok = Number(u.prompt_tokens || u.input_tokens || 0) || Math.round(chars / 4);
             var outTok = Number(u.completion_tokens || u.output_tokens || 0);
             var r = __AI_ATTR_RATES[String(model)] || [0, 0];
             var neurons = (inTok * r[0] + outTok * r[1]) / 1e6;
             await db.prepare("INSERT INTO ai_call_counters (day, worker, purpose, model, calls, errors, in_chars, ms, in_tok, out_tok, neurons) VALUES (?1,?2,?10,?3,1,?4,?5,?6,?7,?8,?9) ON CONFLICT(day, worker, purpose, model) DO UPDATE SET calls=calls+1, errors=errors+excluded.errors, in_chars=in_chars+excluded.in_chars, ms=ms+excluded.ms, in_tok=in_tok+excluded.in_tok, out_tok=out_tok+excluded.out_tok, neurons=neurons+excluded.neurons")
               .bind(new Date().toISOString().slice(0, 10), worker, String(model).slice(0, 120), ok ? 0 : 1, chars, Date.now() - t0, inTok, outTok, neurons, attrCtx && attrCtx.stage ? "binding:" + attrCtx.stage : "binding").run();
-          } catch (e2) {}
+          } catch (e2) { console.error(JSON.stringify({ worker: "qnfo-research-exec", where: "ai-attr-counter", error: String(e2 && e2.message || e2).slice(0, 200) })); }
         }
       };
     } });
@@ -376,7 +376,7 @@ __name22222(reasoningPreamble, "reasoningPreamble");
 async function parkPoisonRow(env, row, msg) {
   var reason = "PARKED-POISON-1: recover_count exhausted (" + Number(row.recover_count || 0) + "); last error: " + String(msg || "unknown");
   var r = await env.QNFO_AUDIT.prepare("UPDATE research_queue SET status='wontfix', stage='parked', error=?, claimed_at=NULL WHERE id=? AND status IN ('researching','queued','failed','review')").bind(reason.slice(0, 300), row.id).run();
-  try { await logEvent(env, "poison-park", "parked research row " + String(row.id).slice(0, 8) + " recover_count=" + Number(row.recover_count || 0), "warn"); } catch (e) {}
+  try { await logEvent(env, "poison-park", "parked research row " + String(row.id).slice(0, 8) + " recover_count=" + Number(row.recover_count || 0), "warn"); } catch (e) { console.error(JSON.stringify({ worker: "qnfo-research-exec", where: "poison-park-log", error: String(e && e.message || e).slice(0, 200) })); }
   return r;
 }
 var RESEARCH_CLAIM_STALE_MIN = 120;
@@ -446,7 +446,7 @@ async function markError(env, row, msg) {
         await terminalContentContract(env, row, msg, _rid);
       }
       await logEvent(env, "terminal-issue", "filed agent_issue for terminal row " + _rid, "error");
-    } catch (eF) {}
+    } catch (eF) { console.error(JSON.stringify({ worker: "qnfo-research-exec", where: "terminal-issue", error: String(eF && eF.message || eF).slice(0, 200) })); }
   }
 }
 // RESEARCH-TERMINAL-SELFCLOSE-1 (2026-10-02): a row parked for a content failure only (verify mismatch, every gate passed)
@@ -1614,7 +1614,7 @@ async function leanEnsemble(env) {
   try {
     var off = await env.QNFO_AUDIT.prepare("SELECT value FROM ops_config WHERE key = 'research_lean_ensemble'").first();
     if (off && String(off.value).trim().toLowerCase() === "off") return false;
-  } catch (e) {}
+  } catch (e) { console.error(JSON.stringify({ worker: "qnfo-research-exec", where: "lean-ensemble-flag", error: String(e && e.message || e).slice(0, 200) })); }
   try {
     var b = await env.QNFO_AUDIT.prepare("SELECT COUNT(*) AS n FROM fleet_budget WHERE node_class LIKE 'ai_spend:%' AND current > cap").first();
     return !!(b && Number(b.n) > 0);
@@ -1732,7 +1732,7 @@ async function researchAffinityScope(env) {
   try {
     var r = await env.QNFO_AUDIT.prepare("SELECT value FROM ops_config WHERE key = 'research_affinity_scope'").first();
     if (r && String(r.value).trim().toLowerCase() === "prefix") scope = "prefix";
-  } catch (e) {}
+  } catch (e) { console.error(JSON.stringify({ worker: "qnfo-research-exec", where: "affinity-scope-flag", error: String(e && e.message || e).slice(0, 200) })); }
   _researchAffinityScope = scope;
   _researchAffinityAt = now;
   return scope;
@@ -2005,6 +2005,58 @@ function pseudoMathScan(md) {
   t.split("\n").forEach(function(l) { if (PM_BOX_RE.test(l)) { count++; if (samples.length < 8) samples.push(l.trim().slice(0, 60)); } });
   return { count, samples };
 }
+// SLOP-SCAN-1 (0.19.0, agent_issues 2407; Kobak et al., Science Advances 2025: LLM-processed text carries a measurable
+// excess of a family of style words). Per section of the paper body (References skipped, sections under 150 words skipped):
+// the density of the excess-vocabulary FAMILY per 1,000 words (stems, so inflections and near-synonyms count together),
+// em-dash density, repeated paragraph openers and bullet-heavy sections. A section whose family density exceeds the corpus
+// baseline by SLOP_FACTOR becomes a SOFT finding with its location; nothing here is HARD and nothing blocks a paper. The
+// baseline is the median paper density of the last 30 days of slop-scan events (the corpus statistic refreshes itself
+// as papers are reviewed), SLOP_BASELINE_DEFAULT until 20 events exist.
+var SLOP_FAMILY_RE = /\b(?:delv\w*|underscor\w*|showcas\w*|intricat\w*|pivotal|crucial(?:ly)?|meticulous\w*|multifaceted|tapestr\w*|realm\w*|foster\w*|seamless\w*|nuanced|groundbreaking|paramount|invaluable|noteworthy|unwavering|testament|endeavou?r\w*|holistic\w*|garner\w*|bolster\w*|elucidat\w*|illuminat\w*|intricac\w*|commendabl\w*|notabl[ey]|comprehensive\w*|leverag\w*|navigat\w*|landscape|profound\w*|seamlessly|robustly|harness\w*|unveil\w*|vital|transformative|cutting-edge|interplay|myriad|plethora|captivat\w*|embark\w*|enhanc\w*|streamlin\w*|furthermore|moreover|additionally)\b/gi;
+var SLOP_BASELINE_DEFAULT = 6, SLOP_FACTOR = 2, SLOP_BASE_CACHE = { at: 0, v: 0 };
+async function slopBaseline(env) {
+  if (SLOP_BASE_CACHE.v && Date.now() - SLOP_BASE_CACHE.at < 36e5) return SLOP_BASE_CACHE.v;
+  let v = SLOP_BASELINE_DEFAULT;
+  try {
+    const r = await env.QNFO_AUDIT.prepare("SELECT text FROM cloud_ops_events WHERE job = ?1 AND kind = 'slop-scan' AND ts > ?2 ORDER BY ts DESC LIMIT 400").bind(WORKER, new Date(Date.now() - 30 * 864e5).toISOString()).all();
+    const xs = ((r && r.results) || []).map(function(e) { const m = /density=([\d.]+)/.exec(String(e.text || "")); return m ? parseFloat(m[1]) : NaN; }).filter(function(x) { return Number.isFinite(x) && x > 0; }).sort(function(a, b) { return a - b; });
+    if (xs.length >= 20) v = xs[Math.floor(xs.length / 2)];
+  } catch (e) {
+  }
+  SLOP_BASE_CACHE = { at: Date.now(), v: v };
+  return v;
+}
+function slopScan(md, baseline) {
+  const base = Number(baseline) > 0 ? Number(baseline) : SLOP_BASELINE_DEFAULT;
+  const text = String(md || "");
+  const parts = text.split(/^(?=#{1,3}[ \t])/m);
+  const findings = [];
+  let words = 0, hits = 0;
+  for (const part of parts) {
+    const hm = /^#{1,3}[ \t]*(.+)$/m.exec(part);
+    const name = hm && part.indexOf(hm[0]) === 0 ? hm[1].trim().slice(0, 60) : "(preamble)";
+    if (/^(?:\d+\.?\s*)?(?:References|Bibliography)\b/i.test(name)) continue;
+    const body = part.replace(/^#{1,3}[ \t].*$/m, "").replace(/\$\$[\s\S]*?\$\$|```[\s\S]*?```/g, " ");
+    const w = (body.match(/[A-Za-z][A-Za-z'-]*/g) || []).length;
+    const fam = (body.match(SLOP_FAMILY_RE) || []).length;
+    words += w;
+    hits += fam;
+    if (w < 150 || findings.length >= 6) continue;
+    const dens = 1e3 * fam / w;
+    if (dens > base * SLOP_FACTOR) findings.push({ id: "slop-density", severity: "SOFT", claim: "section «" + name + "»", reason: "SLOP-SCAN-1: inflated-style vocabulary at " + dens.toFixed(1) + " per 1,000 words (corpus baseline " + base.toFixed(1) + ")", fix: "Replace generic emphasis words (pivotal, crucial, delve, comprehensive, notably, moreover ...) with the specific claim or quantity they stand for, or delete them." });
+    const dashes = (body.match(/—/g) || []).length;
+    if (1e3 * dashes / w > 10) findings.push({ id: "slop-emdash", severity: "SOFT", claim: "section «" + name + "»", reason: "SLOP-SCAN-1: " + dashes + " em dashes in " + w + " words", fix: "Use commas, colons or separate sentences for most of the em-dash asides." });
+    const paras = body.split(/\n\s*\n/).map(function(x) { return x.trim(); }).filter(function(x) { return x.length > 60 && !/^[-*|>]/.test(x); });
+    const openers = {};
+    paras.forEach(function(x) { const k = x.split(/\s+/).slice(0, 2).join(" ").toLowerCase(); openers[k] = (openers[k] || 0) + 1; });
+    const rep = Object.keys(openers).filter(function(k) { return openers[k] >= 3; });
+    if (rep.length) findings.push({ id: "slop-openers", severity: "SOFT", claim: "section «" + name + "»", reason: "SLOP-SCAN-1: paragraphs repeatedly open with «" + rep[0] + "» (" + openers[rep[0]] + "x)", fix: "Vary the paragraph openings; lead each with its own subject." });
+    const lines = body.split("\n").filter(function(x) { return x.trim(); });
+    const bullets = lines.filter(function(x) { return /^\s*(?:[-*•]|\d+\.)\s/.test(x); }).length;
+    if (lines.length >= 8 && bullets / lines.length > 0.6) findings.push({ id: "slop-bullets", severity: "SOFT", claim: "section «" + name + "»", reason: "SLOP-SCAN-1: " + bullets + " of " + lines.length + " lines are list items", fix: "Write the argument as connected prose; keep lists for enumerations." });
+  }
+  return { density: words ? 1e3 * hits / words : 0, baseline: base, findings: findings.slice(0, 6) };
+}
 function mathLatexFix(scan) {
   return { id: "gate-math-latex", severity: "HARD", claim: scan.count + " plain-text math tokens outside $...$", reason: "MATH-LATEX-2: math written as Unicode super/subscripts, Unicode operators or bare ^ and _ is not typeset on papers.qnfo.org. Examples: " + scan.samples.map(function(s) { return "\u00ab" + s + "\u00bb"; }).join(" "), fix: "Rewrite each such expression in LaTeX inside $...$ (inline) or $$...$$ (display), for example 10\u207b\u2074 -> $10^{-4}$, T\u2081 -> $T_1$, \u2248 -> $\\approx$, d^3 -> $d^3$. Change only the notation, not the values." };
 }
@@ -2264,8 +2316,8 @@ function topLevelJsonValues(t) {
 function parsePatchEdits(raw) {
   const t = String(raw || "").replace(/```(?:json)?/gi, "");
   const tryParse = function(x) {
-    try { return JSON.parse(repairJsonBackslashes(x)); } catch (e) {}
-    try { return JSON.parse(x); } catch (e) {}
+    try { return JSON.parse(repairJsonBackslashes(x)); } catch (e) { /* trial parse (REVISE-PATCH): the unrepaired form is tried next */ }
+    try { return JSON.parse(x); } catch (e) { /* trial parse: a segment that is not JSON returns null and the caller tries the next one */ }
     return null;
   };
   const editsOf = function(v) {
@@ -3134,7 +3186,7 @@ async function ensemblePrefixStaggerMs(env) {
       var v = Number(r.value);
       if (isFinite(v)) return Math.max(0, Math.min(3e4, Math.round(v)));
     }
-  } catch (e) {}
+  } catch (e) { console.error(JSON.stringify({ worker: "qnfo-research-exec", where: "ops-config-number", error: String(e && e.message || e).slice(0, 200) })); }
   return ENSEMBLE_PREFIX_STAGGER_MS;
 }
 async function stageEnsemble(env, row) {
@@ -3479,7 +3531,7 @@ __name(stageComplete, "stageComplete");
 var SWEEP_MAX_PER_RUN = 25;
 // The sweep's rule set. A sweep logged under an older rule set does not count, so the first tick after a deploy that changes
 // what the sweep looks for runs it at once instead of at the next 03:00 (CITE-FULLTEXT-3).
-var SWEEP_RULES = "complete+cite-fulltext-3+abstract-clean-2";
+var SWEEP_RULES = "complete+cite-fulltext-3+abstract-clean-2+rearm-inline-1";
 // Due on the 03:00 UTC tick, and on any tick when no sweep has run for 26 h (the first tick after a deploy, or a missed day).
 async function completenessSweepDue(env, ms) {
   var d = new Date(ms);
@@ -3534,6 +3586,24 @@ async function completenessSweep(env) {
       var why = (pc.complete ? [] : ["incomplete: " + pc.reasons.join("; ")]).concat(so.length ? ["CITE-FULLTEXT-1 cites a work from its summary alone: " + so[0]] : []);
       out.truncated++;
       var open = await env.QNFO_AUDIT.prepare("SELECT id FROM research_queue WHERE source = 'remediation' AND (paper_slug = ?1 OR source_id = ?2) LIMIT 1").bind(p.slug, "completeness:" + src.id).first();
+      // SWEEP-REARM-INLINE-1 (0.19.0, agent_issues 2393): a 2026-10-17 cleanup (RECONCILE-IN-LINE-1) set 72 remediation rows
+      // to status published without publishing anything, so a paper that is still cut off (factoring-hardness-as-a-bayesian-
+      // prior: no Results, Discussion or Conclusion) was blocked from re-queueing for good. Such a row is re-armed at ground
+      // instead of blocking, on the same per-run rate; any other remediation row still blocks.
+      if (open && out.queued < SWEEP_MAX_PER_RUN) {
+        var ra = null;
+        try {
+          ra = await env.QNFO_AUDIT.prepare("UPDATE research_queue SET status = 'queued', stage = 'ground', error = NULL, claimed_at = NULL, attempt = 0, recover_count = 0 WHERE id = ?1 AND error LIKE 'RECONCILE-IN-LINE-1%'").bind(open.id).run();
+        } catch (eRa) {
+          ra = null;
+        }
+        if (ra && ra.meta && ra.meta.changes) {
+          out.queued++;
+          out.rearmed = (out.rearmed || 0) + 1;
+          out.slugs.push(p.slug.slice(0, 60));
+          continue;
+        }
+      }
       if (open || out.queued >= SWEEP_MAX_PER_RUN) {
         out.skipped++;
         continue;
@@ -3763,6 +3833,18 @@ function deterministicCrossSectionCheck(text) {
   return { ok: issues.length === 0, issues: issues.slice(0, 30) };
 }
 
+// RESEARCH-REVIEW-BIB-TRUNC-1 (0.19.0, agent_issues 2800): the reviewer got the first 8,000 chars of a ~50,000-char
+// grounding bibliography (2-3 of 9-14 entries, each carrying full-text excerpts), so 121 of 175 body citations pointed
+// past what it saw and it filed HARD "reference [n] is not in the provided bibliography" findings about entries that
+// exist; the reviser then deleted legitimate citations. The reviewer now gets the index of EVERY entry ("[n] id | title",
+// one line each) and then the excerpts, still bounded, so the existence check sees the whole list.
+var REVIEW_BIB_INDEX_MAX = 12e3, REVIEW_BIB_EXCERPT_MAX = 8e3;
+function reviewBibliography(grounding) {
+  const tail = String(grounding || "").split("## Bibliography")[1] || "";
+  const index = (tail.match(/^\[\d+\] .+$/gm) || []).map(function(l) { return l.slice(0, 400); }).join("\n").slice(0, REVIEW_BIB_INDEX_MAX);
+  if (!index) return tail.slice(0, REVIEW_BIB_EXCERPT_MAX);
+  return "INDEX (every entry the paper may cite):\n" + index + "\n\nEXCERPTS (leading entries, for attribution checks):\n" + tail.slice(0, REVIEW_BIB_EXCERPT_MAX);
+}
 async function stageReconcile(env, row) {
   __attrStageSet(env, "reconcile");
   const parts = [];
@@ -3784,7 +3866,9 @@ if (!paper || !paper.trim()) {
 }
 const contract = paperCompleteness(paper);
 if (!contract.complete) {
-  await markError(env, row, "reconcile: invalid paper contract");
+  // RECONCILE-READ-1 (c) (0.19.0, agent_issues 2725): the message names the failed checks, so a thin draft is told apart
+  // from a read failure (which takes the "draft-0 unreadable" path above) without opening R2.
+  await markError(env, row, ("reconcile: invalid paper contract: " + (contract.reasons || []).join("; ")).slice(0, 220));
   return { ok: false, stage: "reconcile" };
 }
   // LEAN-ENSEMBLE-1: a lean run writes two drafts, so a draft-2 left by an earlier attempt on another grounding must not
@@ -3976,7 +4060,7 @@ async function stageReview(env, row) {
     await env.QNFO_AUDIT.prepare("UPDATE research_queue SET stage='complete', context=? WHERE id=?").bind(JSON.stringify(Object.assign({}, ctx, { completeFrom: "review" })).slice(0, 6e3), row.id).run();
     return { ok: true, stage: "review->complete", incomplete: _pcR.reasons };
   }
-  const bib = (grounding.split("## Bibliography")[1] || "").slice(0, 8e3);
+  const bib = reviewBibliography(grounding);
   // CITE-CONSISTENCY-1 (2026-10-17): no review ever compared the draft against the fleet's own cited papers, so a paper
   // that silently inverted a claim of a work it cites passed every gate. One added instruction; the finding rides the
   // existing HARD/SOFT pipeline, no new stage, cron or model call.
@@ -4032,6 +4116,14 @@ async function stageReview(env, row) {
   // review -> revise cycles (bounded by MAX_REVIEW_CYCLES) and the patch reviser converts the listed expressions to LaTeX.
   const _pm = pseudoMathScan(paper);
   if (_pm.count > PSEUDO_MATH_MAX) hard.push(mathLatexFix(_pm));
+  // SLOP-SCAN-1: deterministic inflated-prose scan, SOFT findings only (never blocks; no model call).
+  try {
+    const _sl = slopScan(paper, await slopBaseline(env));
+    await logEvent(env, "slop-scan", "row=" + row.id + " density=" + _sl.density.toFixed(2) + " baseline=" + _sl.baseline.toFixed(2) + " flagged=" + _sl.findings.length, "ok");
+    if (_sl.findings.length) findings.soft = (findings.soft || []).concat(_sl.findings);
+  } catch (eSl) {
+    console.error(JSON.stringify({ worker: WORKER, where: "slop-scan", error: String(eSl && eSl.message || eSl).slice(0, 200) }));
+  }
   if (!_revParsed && hard.length && hard.every(function(f) { return f && f.id === "review-parse"; })) {
     if ((ctx.reparse || 0) < 2) {
       await env.QNFO_AUDIT.prepare("UPDATE research_queue SET stage='review', context=? WHERE id=?").bind(JSON.stringify(Object.assign({}, ctx, { cycles: cycle, reparse: (ctx.reparse || 0) + 1 })).slice(0, 6e3), row.id).run();
@@ -4520,25 +4612,73 @@ async function parkMathRow(env, row, pm) {
 }
 // VERIFY-EXTRACT-FAIL-CLOSED-1: "the extractor answered with a list" (possibly empty: a qualitative paper) is told apart from
 // "the extractor returned nothing, or text that holds no readable list" (nothing is known about the paper's claims).
+// EXTRACT-JSON-ROBUST-1 (0.19.1, issue 2877): the first balanced [...] or {...} in a model reply, string-aware.
+function firstBalancedJson(s) {
+  const str = String(s || "");
+  for (let i = 0; i < str.length; i++) {
+    const c0 = str[i];
+    if (c0 !== "[" && c0 !== "{") continue;
+    const stack = [];
+    let inStr = false, esc = false;
+    for (let j = i; j < str.length; j++) {
+      const c = str[j];
+      if (inStr) {
+        if (esc) esc = false;
+        else if (c === "\\") esc = true;
+        else if (c === '"') inStr = false;
+        continue;
+      }
+      if (c === '"') inStr = true;
+      else if (c === "[" || c === "{") stack.push(c === "[" ? "]" : "}");
+      else if (c === "]" || c === "}") {
+        if (stack.pop() !== c) break;
+        if (!stack.length) {
+          const cand = str.slice(i, j + 1);
+          if (/^\[\s*(?:\{|\]|")/.test(cand) || /^\{\s*"/.test(cand)) return cand;
+          break;
+        }
+      }
+    }
+  }
+  return null;
+}
+// A backslash that does not start a valid JSON escape becomes an escaped backslash ("\\alpha" -> "\\\\alpha"). A "\\f", "\\b",
+// "\\n", "\\t" or "\\r" followed by another letter is LaTeX (\\frac, \\beta, \\nu, \\theta, \\rho), not a control escape.
+function escapeLoneBackslashes(t) {
+  return String(t).replace(/\\(\\|["\/]|u[0-9a-fA-F]{4}|[bfnrt](?![A-Za-z]))?/g, function(m, e) {
+    return e ? m : "\\\\";
+  });
+}
 function parseExtractedClaims(raw) {
   const s = String(raw == null ? "" : raw).replace(/<think>[\s\S]*?<\/think>/gi, "").trim();
   if (!s) return { answered: false, claims: [], reason: "empty-reply" };
   const tries = [];
   const fence = s.match(/```(?:json)?\s*([\s\S]*?)```/i);
   if (fence) tries.push(fence[1].trim());
+  // EXTRACT-JSON-ROBUST-1 (0.19.1, issue 2877): the first BALANCED array or object, so trailing prose after the JSON (or a
+  // second bracket in it) no longer makes the greedy first-to-last slice unparseable.
+  const bal = firstBalancedJson(s);
+  if (bal) tries.push(bal);
   const arr = s.match(/\[[\s\S]*\]/);
   if (arr) tries.push(arr[0]);
   const ob = s.indexOf("{"), oe = s.lastIndexOf("}");
   if (ob >= 0 && oe > ob) tries.push(s.slice(ob, oe + 1));
   let reason = "no-json-list";
   for (const t of tries) {
-    let v;
-    try {
-      v = JSON.parse(t);
-    } catch (e) {
-      reason = "unparseable: " + String(e && e.message || e).slice(0, 80);
-      continue;
+    // A LaTeX statement ("\\frac", "\\alpha") carries backslashes that are not JSON escapes: the escaped text is parsed too,
+    // first when a "\\t"-like escape runs into a letter (\\theta would otherwise parse as a tab and "heta").
+    const forms = /(^|[^\\])\\[bfnrt][A-Za-z]/.test(t) ? [escapeLoneBackslashes(t), t] : [t, escapeLoneBackslashes(t)];
+    let v, parsed = false;
+    for (const form of forms) {
+      try {
+        v = JSON.parse(form);
+        parsed = true;
+        break;
+      } catch (e) {
+        if (form === forms[0]) reason = "unparseable: " + String(e && e.message || e).slice(0, 80);
+      }
     }
+    if (!parsed) continue;
     if (v && !Array.isArray(v) && Array.isArray(v.claims)) v = v.claims;
     if (!Array.isArray(v)) {
       reason = "not-a-list";
@@ -4583,18 +4723,25 @@ async function stageVerify(env, row) {
   }
   // A verification that did not run is retried after a pause; until then the row waits without a model call.
   if (ctx.verifyUnrunAt && Date.now() - (Date.parse(ctx.verifyUnrunAt) || 0) < VERIFY_UNRUN_WAIT_MS) return { ok: true, stage: "verify", deferred: "verification retry pending" };
-  const exRaw = await gwCall(env, stageContextPrompt("VERIFY_EXTRACT", "PAPER", paper, ""), 8e3);
+  let exRaw = await gwCall(env, stageContextPrompt("VERIFY_EXTRACT", "PAPER", paper, ""), 8e3);
   // VERIFY-EXTRACT-FAIL-CLOSED-1 (0.18.0, agent_issues 2502): an empty or unparseable extraction used to leave claims = []
   // (the JSON error was swallowed) and the paper went down the qualitative branch to publish with nothing verified. Only an
   // extractor that answered with a list (empty for a qualitative paper) proceeds; anything else waits VERIFY_UNRUN_WAIT_MS
   // (verifyUnrunAt) and is extracted again, and the third failed extraction fails the pass into markError.
-  const ex = parseExtractedClaims(exRaw);
+  let ex = parseExtractedClaims(exRaw);
+  // EXTRACT-JSON-ROBUST-1 (0.19.1, issue 2877): an empty reply is a transient gateway outcome, so it is asked once more in
+  // this tick before the row waits VERIFY_UNRUN_WAIT_MS.
+  if (!ex.answered && ex.reason === "empty-reply") {
+    exRaw = await gwCall(env, stageContextPrompt("VERIFY_EXTRACT", "PAPER", paper, ""), 8e3);
+    ex = parseExtractedClaims(exRaw);
+    if (ex.answered) await logEvent(env, "verify-extract-retry", "row=" + row.id + " empty reply re-asked in tick: " + ex.reason, "ok");
+  }
   if (!ex.answered) {
     const xf = (ctx.verifyExtractFail || 0) + 1;
     await logEvent(env, "verify-extract-fail", "row=" + row.id + " attempt=" + xf + " reason=" + ex.reason + " raw_chars=" + String(exRaw || "").length + " head=" + String(exRaw || "").replace(/\s+/g, " ").slice(0, 160), "warn");
     if (xf < 3) {
       await env.QNFO_AUDIT.prepare("UPDATE research_queue SET context=? WHERE id=?").bind(JSON.stringify(Object.assign({}, ctx, { verifyExtractFail: xf, verifyUnrunAt: nowIso() })).slice(0, 6e3), row.id).run();
-      return { ok: false, stage: "verify", extractFailed: xf, cause: ex.reason };
+      return { ok: false, stage: "verify", extractFailed: xf, cause: ex.reason, retry: true };
     }
     await markError(env, row, "verify: claim extraction gave no readable claim list in " + xf + " attempts (" + ex.reason + "); nothing verified");
     return { ok: false, stage: "verify", extractFailed: xf, cause: ex.reason };
@@ -4681,7 +4828,7 @@ async function stageVerify(env, row) {
       await logEvent(env, "verify-unrun", "row=" + row.id + " attempt=" + _un + " claims=" + claims.length + " cause=" + cause.kind + " detail=" + cause.detail + " output=" + String(out).replace(/\s+/g, " ").slice(0, 200), "warn");
       if (_un < 3) {
         await env.QNFO_AUDIT.prepare("UPDATE research_queue SET context=? WHERE id=?").bind(JSON.stringify(Object.assign({}, ctx, { verifyUnrun: _un, verifyUnrunAt: nowIso() })).slice(0, 6e3), row.id).run();
-        return { ok: false, stage: "verify", unrun: _un, cause: cause.kind, detail: cause.detail.slice(0, 120) };
+        return { ok: false, stage: "verify", unrun: _un, cause: cause.kind, detail: cause.detail.slice(0, 120), retry: true };
       }
       await markError(env, row, "verify: the verification script produced no result in " + _un + " attempts (" + cause.kind + ": " + cause.detail.slice(0, 120) + "); nothing verified");
       return { ok: false, stage: "verify", unrun: _un, cause: cause.kind, detail: cause.detail.slice(0, 120) };
@@ -5141,7 +5288,7 @@ async function citationGateStepWithSupportCheck(env, row, bodyMd) {
   try {
     const r = await env.QNFO_AUDIT.prepare("SELECT value FROM ops_config WHERE key = 'research_citation_gate'").first();
     if (r && r.value) mode = String(r.value).toLowerCase();
-  } catch (e) {}
+  } catch (e) { console.error(JSON.stringify({ worker: "qnfo-research-exec", where: "citation-gate-mode", error: String(e && e.message || e).slice(0, 200) })); }
   if (mode === "off") return { proceed: true };
   let res;
   try {
@@ -5152,7 +5299,7 @@ async function citationGateStepWithSupportCheck(env, row, bodyMd) {
   const summary = CITATION_GATE.describeFailures(res) + (res.unverified.length ? " | unverified: " + res.unverified.map(function(u) { return u.id; }).join(",") : "");
   try {
     await logEvent(env, "citation-gate", (String(row.id).slice(0, 8) + " " + summary).slice(0, 500), res.pass ? "ok" : (res.retry ? "warn" : "err"));
-  } catch (e) {}
+  } catch (e) { console.error(JSON.stringify({ worker: "qnfo-research-exec", where: "citation-gate-log", error: String(e && e.message || e).slice(0, 200) })); }
   if (res.pass || mode === "measure") return { proceed: true, result: res };
   // CITATION-UNVERIFIED-HOLD-1 (0.13.0, agent_issues 2052: every cited id resolves and matches before a paper releases): an
   // unconfirmed citation used to publish (7 of 77 gate runs since 2026-10-09 ended "unverified"). It now returns retry; the
@@ -5314,7 +5461,18 @@ async function extensionCandidateSweep(env) {
     const live = await env.QNFO_AUDIT.prepare("SELECT COUNT(*) n FROM research_queue WHERE status IN ('queued','researching')").first();
     // A skipped sweep used to be silent, which made the feature look deployed-but-dead: with the ready queue at 161 and
     // research_ready_cap 120 this returned early every tick and nothing said so. The skip is now reported once an hour.
-    if ((Number(live && live.n) || 0) >= cap) {
+    // EXTENSION-ACTIVATION-1 (0.19.0, agent_issues 2824): with the ready queue above research_ready_cap every tick
+    // (237/192 on 2026-10-19) this guard returned early for two days and the selector produced nothing. Extension rows are
+    // already bounded by research_extension_per_day (default 2, max 10), so they bypass the cap by default;
+    // ops_config research_extension_cap_mode = respect restores the guard without a deploy.
+    let capMode = "bypass";
+    try {
+      const cm = await env.QNFO_AUDIT.prepare("SELECT value FROM ops_config WHERE key = 'research_extension_cap_mode'").first();
+      if (cm && String(cm.value || "").trim().toLowerCase() === "respect") capMode = "respect";
+    } catch (e) {
+    }
+    out.capMode = capMode;
+    if (capMode === "respect" && (Number(live && live.n) || 0) >= cap) {
       out.skipped = "queue full (" + (Number(live && live.n) || 0) + "/" + cap + ")";
       try {
         if (new Date().getUTCMinutes() < 20) await logEvent(env, "extension-skipped", out.skipped, "warn");
@@ -5460,7 +5618,7 @@ async function publishStageV2(env, row) {
     try {
       const nowMs = Date.now();
       await env.QNFO_AUDIT.prepare("INSERT INTO agent_issues (title, description, source, category, priority, status, created_at, updated_at) SELECT ?1, ?2, 'qnfo-research-exec', 'remediation', 'high', 'open', ?3, ?3 WHERE NOT EXISTS (SELECT 1 FROM agent_issues WHERE title = ?1 AND status = 'open')").bind("CITATION-HELD: research_queue " + String(row.id).slice(0, 8) + " (paper " + slug + ")", "CITATION-EXISTENCE-GATE-1 held the publish of research_queue row " + row.id + " before the publish: " + String(cg.note).slice(0, 600) + ". Doer: qnfo-research-exec revise path or a session: correct the citation in LIVING_PAPER.papers body_md (slug " + slug + ") using the arXiv API (export.arxiv.org) or doi.org to find the real source, then set research_queue.status back to 'review' (stage publish). Closing probe: the row is no longer held. Pillar research.", nowMs).run();
-    } catch (e) {}
+    } catch (e) { console.error(JSON.stringify({ worker: "qnfo-research-exec", where: "citation-gate-issue", error: String(e && e.message || e).slice(0, 200) })); }
     return { ok: false, stage: "publish", held: true };
   }
   try {
@@ -5587,14 +5745,17 @@ async function researchParallel(env) {
     const r = await env.QNFO_AUDIT.prepare("SELECT value FROM ops_config WHERE key = 'research_parallel'").first();
     const n = r ? parseInt(String(r.value), 10) : NaN;
     if (Number.isFinite(n) && n >= 1) return Math.min(n, RESEARCH_PARALLEL_MAX);
-  } catch (e) {}
+  } catch (e) { console.error(JSON.stringify({ worker: "qnfo-research-exec", where: "research-parallel-flag", error: String(e && e.message || e).slice(0, 200) })); }
   return RESEARCH_PARALLEL_DEFAULT;
 }
 // A stage that withheld a paper on a quality gate (a verify mismatch, HARD review findings, thin literature, an
 // unconfirmed citation) is the gate working: its done event is a warning that names the gate. status error is kept for a
 // stage that broke (transport, model, storage), which is what LOOP-BREAKER-1 groups by signature.
+// RETRY-NOT-ERROR-1 (0.19.1, issues 99990 and 2877): a bounded retry still in budget (retry: true, e.g. verify's second try
+// after a generated-script SyntaxError or an unreadable extraction) is a warning; the pass that exhausts its retries
+// (markError) stays an error, so LOOP-BREAKER-1 counts exhausted failures, not scheduled retries.
 function doneStatus(r) {
-  return r && r.ok ? "ok" : r && r.withheld ? "warn" : "error";
+  return r && r.ok ? "ok" : r && (r.withheld || r.retry) ? "warn" : "error";
 }
 // CLAIM-HEARTBEAT-1 (0.18.35, 2026-10-18): claimed_at was written only at claim, so a paper still advancing through its
 // ~10 stages (ground .. verify, one stage per 15-min tick, ~2.5 h) aged past RESEARCH_CLAIM_STALE_MIN (120 min) and
@@ -5661,14 +5822,19 @@ function resumeStage(row) {
 // queued, which is why width (24, then 48) never appeared as concurrency and only 6-14 papers published a day.
 // The claim is now ONE statement that removes the row it updates, so N slots admit N distinct rows. The stage CASE
 // reproduces resumeStage() in SQL (RESUME-STAGE-1) so a re-armed row still enters at revise rather than ground.
+// REVISE-STRIDE-1 (0.19.0, agent_issues 2847): a queued row that already holds a draft at a resumable stage is claimed
+// before a row that starts at ground. Measured 2026-10-19: 45 rows sat queued at stage revise for up to 14.5 h while fresh
+// ground rows won the claim on score, although a claimed revise row leaves the stage in 11.8 min on average (1300 of
+// 1302 within 120 min). Finishing started papers first is what drains revise; anti-starvation (72 h FIFO) still orders
+// the rest.
 async function claimNew(env) {
   let row = null;
   try {
-    row = await env.QNFO_AUDIT.prepare("UPDATE research_queue SET status='researching', stage = CASE WHEN stage IN ('complete','review','revise','verify') THEN stage ELSE 'ground' END, claimed_at=?1, attempt=attempt+1 WHERE id = (SELECT id FROM research_queue WHERE status='queued' ORDER BY CASE WHEN created_at < strftime('%Y-%m-%dT%H:%M:%SZ','now','-72 hours') THEN 0 ELSE 1 END, CASE WHEN created_at < strftime('%Y-%m-%dT%H:%M:%SZ','now','-72 hours') THEN created_at END ASC, score DESC LIMIT 1) AND status='queued' RETURNING *").bind(nowIso()).first();
+    row = await env.QNFO_AUDIT.prepare("UPDATE research_queue SET status='researching', stage = CASE WHEN stage IN ('complete','review','revise','verify') THEN stage ELSE 'ground' END, claimed_at=?1, attempt=attempt+1 WHERE id = (SELECT id FROM research_queue WHERE status='queued' ORDER BY CASE WHEN stage IN ('complete','review','revise','verify') THEN 0 ELSE 1 END, CASE WHEN created_at < strftime('%Y-%m-%dT%H:%M:%SZ','now','-72 hours') THEN 0 ELSE 1 END, CASE WHEN created_at < strftime('%Y-%m-%dT%H:%M:%SZ','now','-72 hours') THEN created_at END ASC, score DESC LIMIT 1) AND status='queued' RETURNING *").bind(nowIso()).first();
   } catch (eClaim) {
     // A dialect without UPDATE ... RETURNING keeps the old two-step claim rather than stopping the pipeline.
     await logEvent(env, "claim-atomic-fallback", String(eClaim && eClaim.message || eClaim).slice(0, 200), "warn");
-    row = await env.QNFO_AUDIT.prepare("SELECT * FROM research_queue WHERE status='queued' ORDER BY CASE WHEN created_at < strftime('%Y-%m-%dT%H:%M:%SZ','now','-72 hours') THEN 0 ELSE 1 END, CASE WHEN created_at < strftime('%Y-%m-%dT%H:%M:%SZ','now','-72 hours') THEN created_at END ASC, score DESC LIMIT 1").first();
+    row = await env.QNFO_AUDIT.prepare("SELECT * FROM research_queue WHERE status='queued' ORDER BY CASE WHEN stage IN ('complete','review','revise','verify') THEN 0 ELSE 1 END, CASE WHEN created_at < strftime('%Y-%m-%dT%H:%M:%SZ','now','-72 hours') THEN 0 ELSE 1 END, CASE WHEN created_at < strftime('%Y-%m-%dT%H:%M:%SZ','now','-72 hours') THEN created_at END ASC, score DESC LIMIT 1").first();
     if (!row) return { status: "ok", claimed: 0 };
     const resumeLegacy = resumeStage(row);
     const up = await env.QNFO_AUDIT.prepare("UPDATE research_queue SET status='researching', stage=?1, claimed_at=?2, attempt=attempt+1 WHERE id=?3 AND status='queued'").bind(resumeLegacy, nowIso(), row.id).run();
@@ -5719,7 +5885,7 @@ async function run(env) {
     // score (daily radar supply scores 0.70-0.80) outbid 8 rows that had waited 17 days, so they were claimable but never won.
     // Rows older than 72h are claimed first, oldest first (FIFO); everything fresher stays in score order. created_at is ISO-8601
     // text, compared against an ISO bound exactly as the failed-row re-arm below does.
-    row = await env.QNFO_AUDIT.prepare("SELECT * FROM research_queue WHERE status='queued' ORDER BY CASE WHEN created_at < strftime('%Y-%m-%dT%H:%M:%SZ','now','-72 hours') THEN 0 ELSE 1 END, CASE WHEN created_at < strftime('%Y-%m-%dT%H:%M:%SZ','now','-72 hours') THEN created_at END ASC, score DESC LIMIT 1").first();
+    row = await env.QNFO_AUDIT.prepare("SELECT * FROM research_queue WHERE status='queued' ORDER BY CASE WHEN stage IN ('complete','review','revise','verify') THEN 0 ELSE 1 END, CASE WHEN created_at < strftime('%Y-%m-%dT%H:%M:%SZ','now','-72 hours') THEN 0 ELSE 1 END, CASE WHEN created_at < strftime('%Y-%m-%dT%H:%M:%SZ','now','-72 hours') THEN created_at END ASC, score DESC LIMIT 1").first();
     if (!row) {
       return { status: "ok", claimed: 0 };
     }
@@ -6351,7 +6517,7 @@ async function processPaper(env, paper, mode, runId) {
     if (!dry) {
       try {
         await env.WATCH_DB.prepare("INSERT INTO paper_revision_log (slug, doi, title, version_from, status, audit_summary, error, created_at, updated_at) VALUES (?, ?, ?, ?, 'needs-substantive-revision', ?, ?, datetime('now'), datetime('now'))").bind(paper.slug, doi, paper.title, paper.version, JSON.stringify(auditSummary), "AI revision rejected: " + _reason).run();
-      } catch (eRj) {}
+      } catch (eRj) { console.error(JSON.stringify({ worker: "qnfo-research-exec", where: "paper-revision-log", error: String(eRj && eRj.message || eRj).slice(0, 200) })); }
     }
     return { slug: paper.slug, rejected: true, reason: _reason, issues: auditSummary, doi: doi };
   }
@@ -6889,7 +7055,7 @@ __name(respondToItem, "respondToItem");
 async function notifyUser(env, paper, corr, action) {
   if (!env.SEND_EMAIL) return { skipped: "no send_email binding" };
   // SUPPRESSION-1 (2026-09-22): honour owner opt-out before emailing the receipt.
-  try { if (env.AUDIT_DB) { const _s = await env.AUDIT_DB.prepare("SELECT 1 FROM email_suppression WHERE lower(email)='rwnquni@outlook.com'").first(); if (_s) return { skipped: "owner opted out" }; } } catch (e) {}
+  try { if (env.AUDIT_DB) { const _s = await env.AUDIT_DB.prepare("SELECT 1 FROM email_suppression WHERE lower(email)='rwnquni@outlook.com'").first(); if (_s) return { skipped: "owner opted out" }; } } catch (e) { console.error(JSON.stringify({ worker: "qnfo-research-exec", where: "owner-suppression-check", error: String(e && e.message || e).slice(0, 200) })); }
   try {
     const subject = "QNFO errata drafted: " + (paper.slug || safeDoi(paper.doi) || "");
     const text = [
@@ -28024,7 +28190,7 @@ async function verifyPublished(env) {
       out.verified++;
     } else if (a.updated_at && Date.parse(String(a.updated_at).replace(" ", "T") + "Z") < Date.now() - 48 * 36e5) {
       await env.WATCH_DB.prepare("UPDATE errata_actions SET status='verify-failed', updated_at=datetime('now') WHERE id=?").bind(a.id).run();
-      try { await notifyUser(env, { paper_doi: a.paper_doi }, a.slug ? { slug: a.slug, doi: a.paper_doi } : null, null, "post-correction re-publication check failed after 48h: " + why); } catch (e) {}
+      try { await notifyUser(env, { paper_doi: a.paper_doi }, a.slug ? { slug: a.slug, doi: a.paper_doi } : null, null, "post-correction re-publication check failed after 48h: " + why); } catch (e) { console.error(JSON.stringify({ worker: "qnfo-research-exec", where: "errata-notify", error: String(e && e.message || e).slice(0, 200) })); }
       out.failed++;
     } else out.pending++;
   }
@@ -28458,15 +28624,15 @@ function __aiAttrEnv(env, worker, aiKey, dbKey) {
         try { res = await t.run(model, input, (function () { /* PROMPT-CACHE-1: same model + same first 4 KB of prompt -> same instance, so Workers AI prefix caching bills repeated context at the cached-input rate (glm-5.3-flash $0.03 vs $0.15 per M) */ try { if (opts && opts.extraHeaders && opts.extraHeaders["x-session-affinity"]) return opts; var m = input && input.messages, c = m && m.length ? m[0].content : (input && input.prompt); var s = typeof c === "string" ? c : JSON.stringify(c || ""); if (s.length < 1024) return opts; s = String(model) + "|" + s.slice(0, 4096); var h = 2166136261; for (var i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); } var o = Object.assign({}, opts || {}); o.extraHeaders = Object.assign({}, o.extraHeaders || {}, { "x-session-affinity": "pc-" + (h >>> 0).toString(36) }); return o; } catch (ePc) { return opts; } })()); return res; } catch (e) { ok = 0; throw e; }
         finally {
           try {
-            var u = res && typeof res === "object" && res.usage || {}; if (!/bge|embed|whisper|m2m100|resnet|flux|sdxl/i.test(String(model))) try { var cTok = Number(u.prompt_tokens_details && u.prompt_tokens_details.cached_tokens || u.cached_tokens || u.input_tokens_details && u.input_tokens_details.cached_tokens || 0) || 0; await db.prepare("INSERT INTO ai_cache_counters (day, worker, model, calls, cached_calls, in_tok, cached_tok) VALUES (?1,?2,?3,1,?4,?5,?6) ON CONFLICT(day, worker, model) DO UPDATE SET calls=calls+1, cached_calls=cached_calls+excluded.cached_calls, in_tok=in_tok+excluded.in_tok, cached_tok=cached_tok+excluded.cached_tok").bind(new Date().toISOString().slice(0, 10), worker, String(model).slice(0, 120), cTok > 0 ? 1 : 0, Number(u.prompt_tokens || u.input_tokens || 0) || 0, cTok).run(); } catch (eCc) {}
-            var chars = 0; try { chars = JSON.stringify(input && (input.messages || input.prompt || input.text) || input || "").length; } catch (e1) {}
+            var u = res && typeof res === "object" && res.usage || {}; if (!/bge|embed|whisper|m2m100|resnet|flux|sdxl/i.test(String(model))) try { var cTok = Number(u.prompt_tokens_details && u.prompt_tokens_details.cached_tokens || u.cached_tokens || u.input_tokens_details && u.input_tokens_details.cached_tokens || 0) || 0; await db.prepare("INSERT INTO ai_cache_counters (day, worker, model, calls, cached_calls, in_tok, cached_tok) VALUES (?1,?2,?3,1,?4,?5,?6) ON CONFLICT(day, worker, model) DO UPDATE SET calls=calls+1, cached_calls=cached_calls+excluded.cached_calls, in_tok=in_tok+excluded.in_tok, cached_tok=cached_tok+excluded.cached_tok").bind(new Date().toISOString().slice(0, 10), worker, String(model).slice(0, 120), cTok > 0 ? 1 : 0, Number(u.prompt_tokens || u.input_tokens || 0) || 0, cTok).run(); } catch (eCc) { console.error(JSON.stringify({ worker: "qnfo-research-exec", where: "ai-attr-cache-tokens", error: String(eCc && eCc.message || eCc).slice(0, 200) })); }
+            var chars = 0; try { chars = JSON.stringify(input && (input.messages || input.prompt || input.text) || input || "").length; } catch (e1) { console.error(JSON.stringify({ worker: "qnfo-research-exec", where: "ai-attr-input-chars", error: String(e1 && e1.message || e1).slice(0, 200) })); }
             var inTok = Number(u.prompt_tokens || u.input_tokens || 0) || Math.round(chars / 4);
             var outTok = Number(u.completion_tokens || u.output_tokens || 0);
             var r = __AI_ATTR_RATES[String(model)] || [0, 0];
             var neurons = (inTok * r[0] + outTok * r[1]) / 1e6;
             await db.prepare("INSERT INTO ai_call_counters (day, worker, purpose, model, calls, errors, in_chars, ms, in_tok, out_tok, neurons) VALUES (?1,?2,'binding',?3,1,?4,?5,?6,?7,?8,?9) ON CONFLICT(day, worker, purpose, model) DO UPDATE SET calls=calls+1, errors=errors+excluded.errors, in_chars=in_chars+excluded.in_chars, ms=ms+excluded.ms, in_tok=in_tok+excluded.in_tok, out_tok=out_tok+excluded.out_tok, neurons=neurons+excluded.neurons")
               .bind(new Date().toISOString().slice(0, 10), worker, String(model).slice(0, 120), ok ? 0 : 1, chars, Date.now() - t0, inTok, outTok, neurons).run();
-          } catch (e2) {}
+          } catch (e2) { console.error(JSON.stringify({ worker: "qnfo-research-exec", where: "ai-attr-counter", error: String(e2 && e2.message || e2).slice(0, 200) })); }
         }
       };
     } });
@@ -28522,7 +28688,7 @@ async function runErrataMember(event, raw) {
 var worker_default = {
   async scheduled(event, env, ctx) {
     var rawEnv = env;
-    var reviserRun = reviserDue(Number(event && event.scheduledTime) || Date.now()) ? reviserMod.scheduled(event, reviserEnv(rawEnv), ctx).catch(function () {}) : null;
+    var reviserRun = reviserDue(Number(event && event.scheduledTime) || Date.now()) ? reviserMod.scheduled(event, reviserEnv(rawEnv), ctx).catch(function (eRv) { console.error(JSON.stringify({ worker: "qnfo-research-exec", where: "reviser-scheduled", error: String(eRv && eRv.message || eRv).slice(0, 200) })); }) : null;
     var errataRun = runErrataMember(event, rawEnv).catch(function (e) { console.error("errata-hub member: " + String(e && e.message || e)); });
     env = __aiAttrEnv(env, "qnfo-research-exec", "AI", "QNFO_AUDIT");
     ctx.waitUntil((async function() {
@@ -28673,6 +28839,8 @@ export {
   mathGate,
   parkPoisonRow,
   pseudoMathScan,
+  reviewBibliography,
+  slopScan,
   mathLatexAutofix,
   citationGateStep,
   corpusWidth,

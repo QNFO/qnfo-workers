@@ -107,6 +107,8 @@ function ghRoute(method, path, body) {
   if (method === "POST" && path === "/git/refs") return resp(201, { ref: body.ref });
   if (method === "POST" && /^\/actions\/workflows\/[^/]+\/dispatches$/.test(path)) { (gh.dispatches = gh.dispatches || []).push({ path, body }); return resp(gh.dispatchStatus || 204, gh.dispatchStatus ? { message: "Resource not accessible by personal access token" } : null); }
   if (method === "POST" && path === "/pulls") {
+    if (gh.pull422) { const n = gh.pull422; gh.pull422 = null; seedWorkerPr(n, body.head, gh.branches[body.head]); return resp(422, { message: "Validation Failed", errors: [{ resource: "PullRequest", code: "custom", message: "A pull request already exists for QNFO:" + body.head + "." }] }); }
+    if (gh.pull422bare) { gh.pull422bare = false; return resp(422, { message: "Validation Failed", errors: [{ resource: "PullRequest", code: "custom", message: "No commits between main and " + body.head }] }); }
     const number = 900 + gh.newPulls.length, sha = gh.branches[body.head];
     gh.newPulls.push({ number, ...body });
     if (sha) { gh.pulls[number] = prJson({ number, title: body.title, head: { ref: body.head, sha, repo: { full_name: "QNFO/qnfo-workers" } } }); gh.files[number] = gh.compareFiles[sha] || []; }
@@ -578,6 +580,27 @@ gh.branches[BRANCH] = "h1";
 r = J(await W.codeMergeTick(env, { now: NOW }));
 ok(r.opened[0].action === "adopt" && gh.newPulls.length === 0 && one("SELECT pr_url FROM code_tasks WHERE id = ?", ID).pr_url === "https://github.com/QNFO/qnfo-workers/pull/480", "a PR that already exists for the branch is adopted");
 
+// PR-OPEN-422-ADOPT-1 (0.33.19, issue 100020): a 422 on POST /pulls because the PR now exists adopts it, not an error
+freshDb(); freshGh();
+db.prepare("INSERT INTO agent_issues (id, title, description, source, status) VALUES (50, 'OWNER-TASK-9: fix a', 'desc', 'qnfo-fleet-dashboard:owner-request', 'open')").run();
+seedTask({ repo: "QNFO/qnfo-workers", status: "branch_pushed", pr_url: "https://github.com/QNFO/qnfo-workers/compare/main..." + BRANCH + "?expand=1" });
+gh.branches[BRANCH] = "h1";
+seedHead("h1");
+gh.pull422 = 482;
+r = J(await W.codeMergeTick(env, { now: NOW }));
+ok(r.opened[0].action === "adopt" && r.opened[0].pr === 482 && one("SELECT status, pr_url FROM code_tasks WHERE id = ?", ID).pr_url === "https://github.com/QNFO/qnfo-workers/pull/482"
+  && one("SELECT status FROM code_tasks WHERE id = ?", ID).status === "published" && one("SELECT COUNT(*) n FROM cloud_ops_events WHERE kind = 'code-merge.pr-open-failed'").n === 0,
+  "PR-OPEN-422-ADOPT-1: a 422 because the PR already exists adopts it (published, no pr-open-failed); REPO-SLUG-PUBLISH-1: an owner-qualified repo row is opened", r.opened);
+freshDb(); freshGh();
+db.prepare("INSERT INTO agent_issues (id, title, description, source, status) VALUES (50, 'OWNER-TASK-9: fix a', 'desc', 'qnfo-fleet-dashboard:owner-request', 'open')").run();
+seedTask({ status: "branch_pushed", pr_url: "https://github.com/QNFO/qnfo-workers/compare/main..." + BRANCH + "?expand=1" });
+gh.branches[BRANCH] = "h1";
+seedHead("h1");
+gh.pull422bare = true;
+r = J(await W.codeMergeTick(env, { now: NOW }));
+ok(r.opened[0].action === "open-failed" && /No commits between/.test(r.opened[0].why) && one("SELECT status FROM code_tasks WHERE id = ?", ID).status === "branch_pushed",
+  "a 422 with no PR to adopt stays an open failure and records GitHub's errors[] reason", r.opened);
+
 // ================================================================ 7. evAdvance after the shared-helper refactor
 freshDb(); freshGh();
 await W.evSchema(env);
@@ -750,6 +773,8 @@ ok(!W.CM_REVIEW_MODELS.some((m) => ["qwen", "moonshotai", "zai-org"].includes(W.
 ok(J(W.cmReviewParse('<think>the diff passes [] only</think>{"verdict":"no","defects":["publishStage only passes [] to publishToArchive; no citation is checked"]}')).verdict === "no", "a reply with a think block parses");
 ok(W.cmReviewParse('```json\n{"verdict": "Implements", "defects": []}\n```').verdict === "implements" && W.cmReviewParse('noise "verdict": "partial" noise').verdict === "partial", "fenced JSON and a bare verdict field parse; case is ignored");
 ok(W.cmReviewParse("I think it is fine").verdict === null && W.cmReviewParse('{"verdict":"maybe"}').verdict === null && W.cmReviewParse("").verdict === null, "an unreadable reply or an unknown verdict is no verdict");
+ok(W.cmReviewParse("Verdict: **partial**\nThe gateway half is missing.").verdict === "partial" && W.cmReviewParse("verdict = implements").verdict === "implements", "REVIEW-NO-VERDICT-1: a verdict written outside JSON is read");
+ok(W.cmReviewParse("").why === "empty" && W.cmReviewParse('{"verdict": "impl').why === "truncated-json" && W.cmReviewParse("I think it is fine").why === "prose", "REVIEW-NO-VERDICT-1: a reply with no verdict is classed");
 ok(W.cmReviewParse('{"verdict":"no","defects":["a","b","c","d","e","f"]}').defects.length === 4, "at most 4 defects are kept");
 ok(J(W.cmReviewParse('Reasoning {x}. {"verdict":"no","defects":["handleClaims writes papers.claim_line but no line runs ALTER TABLE papers ADD COLUMN claim_line { }"]}')).defects[0].indexOf("ALTER TABLE") > 0, "a defect that quotes braces, after braces in prose, is kept");
 {

@@ -370,3 +370,19 @@ environment = "production"
 binding = "CH_IDEA_HUB"
 service = "idea-hub"
 environment = "production"
+
+# BINDING-CENSUS-BLIND-1 (2.48.4, issue 2755): /health probes for the census (COMPAT_HEALTH_BINDINGS).
+[[services]]
+binding = "CH_QNFO_EVOLVE"
+service = "qnfo-evolve"
+environment = "production"
+
+[[services]]
+binding = "CH_QNFO_GITHUB_STEWARD"
+service = "qnfo-github-steward"
+environment = "production"
+
+[[services]]
+binding = "CH_QNFO_MODEL_EVAL"
+service = "qnfo-model-eval"
+environment = "production"
