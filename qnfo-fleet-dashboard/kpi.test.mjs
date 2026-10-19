@@ -8,6 +8,7 @@ import vm from "node:vm";
 const src = readFileSync(new URL("./worker.js", import.meta.url), "utf8");
 const cut = (from, to) => { const a = src.indexOf(from), b = src.indexOf(to, a); if (a < 0 || b < a) throw new Error("not found in worker.js: " + from); return src.slice(a, b); };
 const block = cut("// ---- FLEET-KPI-1:BEGIN ----", "// ---- FLEET-KPI-1:END ----");
+const outcomeSrc = cut("/* CODE-OUTCOMES:BEGIN", "/* CODE-OUTCOMES:END */");
 const d1allSrc = cut("async function d1all(db, sql, params) {", "__name(d1all, \"d1all\");");
 const escSrc = cut("function esc(s) {", "__name(esc, \"esc\");");
 const rowSrc = cut("function reachRow(day, source, channel, type, id, metric, value, quality) {", "// /papers/<slug>");
@@ -20,7 +21,12 @@ const ms = (iso) => Date.parse(iso);
 const db = new DatabaseSync(":memory:");
 db.exec(`CREATE TABLE agent_issues (id INTEGER PRIMARY KEY AUTOINCREMENT, title TEXT, description TEXT, category TEXT, priority TEXT, status TEXT DEFAULT 'open', created_at INTEGER, updated_at INTEGER);
   CREATE TABLE issue_lifecycle (id INTEGER PRIMARY KEY AUTOINCREMENT, issue_id INTEGER NOT NULL, event TEXT NOT NULL, from_status TEXT, to_status TEXT, has_evidence INTEGER, ts TEXT NOT NULL);
-  CREATE TABLE code_tasks (id TEXT PRIMARY KEY, status TEXT, merge_state TEXT, updated_at TEXT);
+  CREATE TABLE code_tasks (id TEXT PRIMARY KEY, status TEXT, merge_state TEXT, last_error TEXT, created_at TEXT, updated_at TEXT);
+  CREATE TABLE code_task_pr_links (task_id TEXT PRIMARY KEY, pr_state TEXT);
+  CREATE TABLE v_metric_trigger_state (metric_key TEXT, title TEXT, operator TEXT, threshold REAL, owner TEXT, priority INTEGER, val REAL, hit INTEGER);
+  CREATE TABLE metric_registry (metric TEXT PRIMARY KEY, owner TEXT, last_value TEXT, last_refreshed TEXT, warning_band TEXT);
+  CREATE TABLE metric_history (metric TEXT, day TEXT, value REAL, ts TEXT);
+  CREATE TABLE v_sla_over_120m (issues_open_over_120m INTEGER, oldest_open_issue_min INTEGER, code_tasks_queued_over_120m INTEGER, code_tasks_queued_oldest_min INTEGER, issues_without_doer_3h INTEGER, issues_unprobed_60m INTEGER, research_queued_180m INTEGER, content_items_over_sla INTEGER, triage_gap INTEGER, total_over_120m INTEGER);
   CREATE TABLE reach_signals (date TEXT NOT NULL, source TEXT NOT NULL, channel TEXT NOT NULL, entity_type TEXT NOT NULL, entity_id TEXT NOT NULL, metric TEXT NOT NULL, value REAL, quality TEXT, PRIMARY KEY (date, source, channel, entity_type, entity_id, metric));
   CREATE TABLE outreach_log (id INTEGER PRIMARY KEY AUTOINCREMENT, email TEXT, subject TEXT, message_id TEXT, sent_at TEXT, status TEXT);
   CREATE TABLE social_threads (id INTEGER PRIMARY KEY AUTOINCREMENT, slug TEXT, title TEXT, status TEXT, posted_at TEXT, post_uri TEXT);
@@ -47,7 +53,25 @@ life(c1, "dispositioned", "closed", 1, "2026-10-12T04:00:00Z"); // the same issu
 life(c2, "dispositioned", "closed", 0, "2026-10-11T20:00:00Z");
 life(c3, "dispositioned", "resolved", 1, "2026-10-09T10:00:00Z");
 life(iA, "dispositioned", "closed", 1, "2026-10-12T01:00:00Z"); life(iA, "reopened", "open", 1, "2026-10-12T02:00:00Z"); // closed, then reopened: open now
-for (const [id, st, at] of [["a", "merged", "2026-10-11T00:00:00.000Z"], ["b", "merged", "2026-09-01T00:00:00.000Z"], ["c", "failed", "2026-10-12T00:00:00.000Z"], ["d", "publish_failed", "2026-10-10T00:00:00.000Z"], ["e", "queued", "2026-10-12T08:00:00.000Z"], ["f", "closed", "2026-10-01T00:00:00.000Z"]]) ins("INSERT INTO code_tasks (id, status, updated_at) VALUES (?, ?, ?)", id, st, at);
+for (const [id, st, at, ms2, err, pr] of [["a", "merged", "2026-10-11T00:00:00.000Z", null, null, "merged"], ["b", "merged", "2026-09-01T00:00:00.000Z", null, null, "merged"], ["c", "failed", "2026-10-12T00:00:00.000Z", null, null, "never-opened"], ["d", "publish_failed", "2026-10-10T00:00:00.000Z", null, null, "never-opened"], ["e", "queued", "2026-10-12T08:00:00.000Z", null, null, "never-opened"], ["f", "closed", "2026-10-01T00:00:00.000Z", null, null, "never-opened"], ["g", "closed", "2026-10-02T00:00:00.000Z", null, null, "closed"], ["h", "closed", "2026-10-03T00:00:00.000Z", "superseded", null, "never-opened"], ["i", "superseded", "2026-10-04T00:00:00.000Z", null, null, null]]) { ins("INSERT INTO code_tasks (id, status, merge_state, last_error, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)", id, st, ms2, err, at, at); if (pr) ins("INSERT INTO code_task_pr_links (task_id, pr_state) VALUES (?, ?)", id, pr); }
+// KPI-THRESHOLDS-1 fixtures: seven triggers (three in breach, one warning, one without a reading), a registered metric nothing triggers on, and the SLA view.
+const trig = (key, title, op, thr, owner, pri, val, hit) => ins("INSERT INTO v_metric_trigger_state VALUES (?, ?, ?, ?, ?, ?, ?, ?)", key, title, op, thr, owner, pri, val, hit);
+trig("worker_count", "Workers over the solo band", "gt", 30, "qnfo-fleet-control", 8, 32, 1);
+trig("guard_rcs", "A CI guard is failing", "gt", 0, "qnfo-deploy-guard", 9, 2, 1);
+trig("open_agent_issues", "Open issues above the ceiling", "gt", 50, "qnfo-fleet-control", 8, 187, 1);
+trig("ops_agent_empty_answers_7d", "Agent answers empty", "gte", 1, "qnfo-ops", 5, 0, 0);
+trig("session_execution_ratio_30d", "Session execution ratio low", "lt", 0.6, "claude-session", 5, 0.65, 0);
+trig("probe_coverage_pct", "Probe coverage low", "lt", 90, "qnfo-fleet-control", 5, null, null);
+trig("social_posts_7d", "Social posts a week", "lt", 25, "qnfo-social", 5, 51, 0);
+const regm = (m, owner, last, band) => ins("INSERT INTO metric_registry VALUES (?, ?, ?, NULL, ?)", m, owner, last, band);
+regm("worker_count", "fleet", "32", "> 32"); regm("guard_rcs", "guard", "2", "> 0"); regm("open_agent_issues", "fleet", "187", "> 100"); regm("ops_agent_empty_answers_7d", "ops", "0", ">= 1"); regm("session_execution_ratio_30d", "sessions", "0.65", "< 0.7");
+regm("probe_coverage_pct", "fleet", "", "<90"); regm("social_posts_7d", "social", "51", "a band nobody can parse"); regm("lonely_metric", "somebody", "12", null);
+const hist = (m, day, v, ts) => ins("INSERT INTO metric_history (metric, day, value, ts) VALUES (?, ?, ?, ?)", m, day, v, ts || null);
+for (const [d, v] of [["2026-10-07", 29], ["2026-10-08", 31], ["2026-10-09", 32], ["2026-10-10", 33], ["2026-10-11", 32]]) hist("worker_count", d, v);   // breach run starts 10-08 (10-07 is within the rule)
+for (const [d, v] of [["2026-10-10", 3], ["2026-10-11", 0], ["2026-10-12", 2]]) hist("guard_rcs", d, v);                                                       // the run is today only: 10-11 was clean
+for (let k = 0; k < 44; k++) hist("open_agent_issues", new Date(Date.parse("2026-08-29T00:00:00Z") + k * 864e5).toISOString().slice(0, 10), 100 + k);                  // breaching since the oldest day read
+hist("social_posts_7d", "2026-10-11", 10);                                                                                                                         // not in breach: never read
+ins("INSERT INTO v_sla_over_120m VALUES (168, 24295, 17, 2305, 121, 0, 199, 407, 0, 921)");
 // Reach: 10-10 has only page rows (page-rows basis), 10-11 has host rows (host basis, with visits). Nothing before 10-10.
 const rs = (date, source, channel, type, id, metric, value) => ins("INSERT INTO reach_signals (date, source, channel, entity_type, entity_id, metric, value, quality) VALUES (?, ?, ?, ?, ?, ?, ?, 'human')", date, source, channel, type, id, metric, value);
 rs("2026-10-10", "cf-rum-human", "web", "site", "(all)", "pageviews", 100);
@@ -95,8 +119,8 @@ const shim = {
     return st;
   }
 };
-const ctx = vm.createContext({ VERSION: "1.30.0-test", FLEET_SHELL_JS: "", fleetHead: (t) => "<html><title>" + t + "</title><body>", fleetTop: (cur) => "<nav data-current=\"" + cur + "\"></nav>", console, Date, JSON, Math, Object, Promise, String, Number, isFinite });
-vm.runInContext(d1allSrc + escSrc + rowSrc + hostSrc + block + "\nthis.K = { kpiData, kpiCompute, kpiHtml, kpiProperty, kpiBskyUrl, kpiHttpUrl, kpiChannel, kpiMedian, kpiDays, kpiBufferMetric, kpiFmt, reachRumHostRows, KPI_SQL, KPI_TTL_MS, KPI_CSS, reset: function() { kpiCache = null; } };", ctx);
+const ctx = vm.createContext({ VERSION: "1.30.0-test", FLEET_SHELL_JS: "", fleetHead: (t) => "<html><title>" + t + "</title><body>", fleetTop: (cur) => "<nav data-current=\"" + cur + "\"></nav>", console, Date, JSON, Math, Object, Promise, String, Number, isFinite, areaOf: (k) => (/guard|worker/.test(k) ? "reliability" : "autonomy") });
+vm.runInContext(d1allSrc + escSrc + rowSrc + hostSrc + outcomeSrc + block + "\nthis.K = { kpiData, kpiCompute, kpiHtml, kpiShapeService, kpiShapeSla, kpiServiceHtml, kpiParseBand, kpiOpHolds, kpiMinText, kpiFmtVal, KPI_STATE_RANK, kpiProperty, kpiBskyUrl, kpiHttpUrl, kpiChannel, kpiMedian, kpiDays, kpiBufferMetric, kpiFmt, reachRumHostRows, KPI_SQL, KPI_TTL_MS, KPI_CSS, reset: function() { kpiCache = null; } };", ctx);
 const K = ctx.K, env = { AUDIT: shim };
 const j = (x) => JSON.parse(JSON.stringify(x));
 
@@ -128,7 +152,7 @@ ok(day("2026-10-12").closed === 2 && day("2026-10-12").closed_with_evidence === 
 ok(day("2026-10-07").closed === null && day("2026-10-07").closed_with_evidence === null && day("2026-10-08").closed === 0 && I.ledger_since === "2026-10-08T15:34:26Z", "a day before the ledger's first row is not measured (null), not 0");
 ok(I.closed_24h.closed === 3 && I.closed_24h.still_closed === 2 && I.closed_24h.with_evidence === 1 && I.closed_24h.reopened_since === 1 && I.closed_24h.complete === true, "24 h: 3 closed, 2 still closed, 1 of those with evidence, 1 reopened since");
 ok(I.closed_7d.closed === 4 && I.closed_7d.with_evidence === 2 && I.closed_7d.complete === false && I.notes.some((n) => /younger than 7 days/.test(n)), "7 d: counted, and flagged as covering less than 7 days of ledger");
-ok(I.code_tasks.merged.total === 2 && I.code_tasks.merged.last_7d === 1 && I.code_tasks.failed.total === 2 && I.code_tasks.failed.last_7d === 2 && I.code_tasks.in_flight.total === 1 && I.code_tasks.closed_unmerged.total === 1, "code tasks: merged, failed (with failed publish), in flight, closed");
+ok(I.code_tasks.window_days === 30 && I.code_tasks.merged === 1 && I.code_tasks.failed === 2 && I.code_tasks.closed_never_opened_pr === 1 && I.code_tasks.closed_pr_unmerged === 1 && I.code_tasks.superseded === 2 && I.code_tasks.in_flight === 1 && I.code_tasks.closed_pr_state_differs === 0 && I.code_tasks.finished === 5 && I.code_tasks.merged_share_of_finished === 20, "code tasks, 30 days, split by the pull request: merged, failed (with failed publish), never opened a PR, PR closed unmerged, superseded kept out of the share, in flight: " + JSON.stringify(I.code_tasks));
 const P = v.reach.pageviews, prop = (k) => P.properties.find((p) => p.key === k), pd = (k, d) => prop(k).daily.find((x) => x.day === d);
 ok(P.basis[P.days.indexOf("2026-10-10")] === "page-rows" && P.basis[P.days.indexOf("2026-10-11")] === "host" && P.basis[P.days.indexOf("2026-10-12")] === null && P.data_through === "2026-10-11", "each day names its basis; a day with no ingest has none");
 ok(pd("q08", "2026-10-10").pageviews === 45 && pd("reading", "2026-10-10").pageviews === 20 && pd("qnfo", "2026-10-10").pageviews === 30 && pd("other", "2026-10-10").pageviews === 5 && pd("q08", "2026-10-10").visits === null, "page-rows day: hosts from page ids, papers under QNFO, overflow under other, visits not measured");
@@ -147,7 +171,7 @@ ok(T.top[0].id === U1 && T.top[0].score === 7 && T.top[0].clicks === 4 && T.top[
 ok(T.top[2].id === U2 && T.top[2].title === "Thread two" && T.top[2].score === 6 && T.top[3].id === "buf-l-1" && T.top[3].clicks === 2 && T.ranked_of === 5, "a uri inside a JSON post_uri still finds its thread; a tie goes to the newer post; a campaign tag cut at 64 characters still matches its post");
 ok(!T.top.some((p) => p.id === U3) && T.snapshot === "2026-10-12" && T.top.every((p, i) => p.rank === i + 1), "a post with no reader action is not ranked; ranks are 1..n");
 const ppc = v.reach.posts_per_channel.rows, pr = (ch, tb) => ppc.find((x) => x.channel === ch && x.table === tb);
-ok(pr("bluesky", "social_threads").total === 2 && pr("bluesky", "social_threads").last_7d === 1 && pr("mastodon", "social_media_posts").via === "Buffer" && pr("mastodon", "social_media_posts").last_7d === 1 && !pr("x", "social_media_posts") && pr("bluesky", "dissemination_tracker").total === 1 && pr("bluesky", "dissemination_tracker").last_30d === 1, "posts per channel, each ledger on its own, failed posts left out");
+ok(pr("bluesky", "social_threads").last_30d === 2 && pr("mastodon", "social_media_posts").via === "Buffer" && pr("mastodon", "social_media_posts").last_30d === 1 && !pr("x", "social_media_posts") && pr("bluesky", "dissemination_tracker").last_30d === 1 && !ppc.some((x) => "last_7d" in x || "total" in x), "posts per channel, each ledger on its own, failed posts left out, 30 days only")
 const S = v.reach.subscribers, C = v.reach.credibility;
 ok(S.total === 3 && S.subscribed === 1 && S.pending === 2 && S.funnel_30d === null && S.notes.some((n) => /not measured/.test(n)) && !/@/.test(JSON.stringify(S)), "subscribers by state, counts only; the funnel is unmeasured while its table is missing");
 ok(C.citations.citations === 3 && C.citations.works === 2 && C.citations.day === "2026-10-11" && C.mentions.find((m) => m.source === "openalex-citation").last_30d === 1 && C.mentions.find((m) => m.source === "bluesky").last_30d === 0 && C.recent[0].url === "https://example.org/w1" && C.recent[1].url === null, "credibility: latest citation day, mentions by source, unsafe link dropped");
@@ -204,9 +228,45 @@ ok(K.kpiHtml(x, false).includes("agent_issues could not be read"), "the page say
 const hr = j(K.reachRumHostRows([{ count: 10, sum: { visits: 4 }, dimensions: { requestHost: "Q08.org" } }, { count: 2, sum: { visits: 1 }, dimensions: { requestHost: "q08.org" } }, { count: 5, dimensions: { requestHost: "" } }], "2026-10-11"));
 ok(hr.length === 3 && hr.find((r) => r.entity_id === "q08.org" && r.metric === "pageviews").value === 12 && hr.find((r) => r.entity_id === "q08.org" && r.metric === "visits").value === 5 && hr.every((r) => r.entity_type === "host" && r.source === "cf-rum-human" && r.quality === "human") && !hr.some((r) => r.entity_id === "(unknown-host)" && r.metric === "visits"), "host rows: page loads always, visits only where the response carried them");
 ok(/hq\.replace\("\{ count dimensions", "\{ count sum \{ visits \} dimensions"\)/.test(src) && src.includes('reachRumQuery("requestHost", geq, leq, "bot: 0")') && /\{ count dimensions \{ " \+ dims/.test(src), "the ingest asks for the visit sum per host with bots excluded, on the query shape reachRumQuery really builds");
-ok(/path === "\/kpi" \|\| path === "\/kpi\/" \|\| path === "\/api\/kpi"/.test(src) && /\["Metrics", "\/kpi", "kpi"\]/.test(src), "the routes and the nav tab are wired");
+ok(/path === "\/kpi" \|\| path === "\/kpi\/" \|\| path === "\/api\/kpi"/.test(src) && /\{ key: "kpi", label: "Metrics", href: "\/kpi", feed: "\/api\/kpi" \}/.test(src), "the routes are wired and the Metrics tab is a page of its area in AREA_REGISTRY (AREA-PAGES-1: the nav is the areas; the tab sits under Platform)");
 const routeAt = src.indexOf('path === "/api/kpi") && request.method === "GET"'), routeEnd = src.indexOf("\n  }\n", routeAt);
 ok(routeAt > 0 && !/LOOP_TOKEN|x-loop-token|owner\.authed\) return|401|403/.test(src.slice(routeAt, routeEnd)), "the read is open: no token, key or login on the route (OPEN-ACCESS-1)");
+
+// ---- KPI-THRESHOLDS-1: service levels
+{
+  const SL = v.service_levels, M = (k) => SL.metrics.find((m) => m.metric === k);
+  ok(SL.counts.metrics === 8 && SL.counts.breach === 3 && SL.counts.warn === 1 && SL.counts.ok === 2 && SL.counts.no_reading === 1 && SL.counts.no_threshold === 1, "service levels: counts by state: " + JSON.stringify(SL.counts));
+  ok(SL.metrics.map((m) => m.metric).join() === "open_agent_issues,worker_count,guard_rcs,session_execution_ratio_30d,probe_coverage_pct,ops_agent_empty_answers_7d,social_posts_7d,lonely_metric", "BREACH first and longest in breach first, then WARN, NO_READING, OK, NO_THRESHOLD: " + SL.metrics.map((m) => m.metric));
+  ok(SL.metrics.every((m) => "threshold" in m && "state" in m) && SL.metrics.every((m) => typeof m.threshold === "number" || m.threshold === "no threshold"), "every metric object has a threshold (a number, or the words no threshold) and a state");
+  ok(M("lonely_metric").state === "NO_THRESHOLD" && M("lonely_metric").threshold === "no threshold" && M("lonely_metric").value === 12, "a registered metric with no trigger is a named exemption, never OK");
+  ok(M("worker_count").state === "BREACH" && M("worker_count").breach_since === "2026-10-08" && M("worker_count").time_in_breach_min === 6300 && M("worker_count").time_in_breach_is_lower_bound === false, "time in breach runs from the first of the current run of breached daily readings (10-08; 10-07 was within the rule): " + JSON.stringify(M("worker_count")));
+  ok(M("guard_rcs").breach_since === "2026-10-12" && M("guard_rcs").time_in_breach_min === 540, "a run of today only is measured from the start of today: " + M("guard_rcs").time_in_breach_min);
+  ok(M("open_agent_issues").time_in_breach_is_lower_bound === true && M("open_agent_issues").breach_since === "2026-08-29" && M("open_agent_issues").time_in_breach_min === 63900, "a run that reaches the oldest day read is a lower bound: " + JSON.stringify(M("open_agent_issues")));
+  ok(M("session_execution_ratio_30d").state === "WARN" && M("ops_agent_empty_answers_7d").state === "OK" && M("probe_coverage_pct").state === "NO_READING" && M("probe_coverage_pct").value === null, "WARN is past a machine-readable warning band while not in breach; a metric with no value is NO_READING");
+  ok(M("social_posts_7d").state === "OK" && K.kpiParseBand("a band nobody can parse") === null && K.kpiParseBand("> 6h behind").op === "gt" && K.kpiParseBand(">= 2").n === 2 && K.kpiParseBand("any rc != 0") === null, "a warning band that cannot be read gives no WARN");
+  ok(K.kpiOpHolds("gt", 1, 0) && !K.kpiOpHolds("gt", 0, 0) && K.kpiOpHolds("gte", 1, 1) && K.kpiOpHolds("lte", 1, 1) && K.kpiOpHolds("lt", 0.5, 0.6) && K.kpiOpHolds("anything", 5, 5), "the breach rule is the view's: gt, gte, lt, lte, eq, and gte for anything else");
+  const L = v.sla;
+  ok(L.total_over_sla === 921 && L.classes.map((c) => c.class).join() === "content_items_over_sla,research_queued_180m,issues_open_over_120m,issues_without_doer_3h,code_tasks_queued_over_120m" && L.classes_at_zero === 2, "SLA items by class, largest first, zero classes counted: " + L.classes.map((c) => c.class));
+  const C = (k) => L.classes.find((c) => c.class === k);
+  ok(C("issues_open_over_120m").sla_min === 120 && C("issues_open_over_120m").oldest_min === 24295 && C("code_tasks_queued_over_120m").oldest_min === 2305 && C("research_queued_180m").sla_min === 180 && C("issues_without_doer_3h").sla_min === 180 && C("content_items_over_sla").sla_min === null && C("content_items_over_sla").oldest_min === null, "each class carries its own SLA (from its name) and the age of its oldest item where the view has one");
+  ok(!/"last_7d"|"all_time"|"closed_7d_total"/.test(JSON.stringify(v)) && !("total" in ppc[0]), "the document has no key named last_7d or all_time");
+  // the page
+  const M0 = (k) => SL.metrics.find((m) => m.metric === k);
+  const html = K.kpiHtml(j(v), false);
+  ok(html.includes('id="service"') && html.includes('href="#service"') && html.indexOf('id="service"') < html.indexOf('id="issues"'), "the page opens with Service levels");
+  ok(!/Last 7 days|All time/.test(html), "no Last 7 days or All time column is left on the page");
+  const at = (k) => html.indexOf("<small>" + k + "</small>");
+  ok(at("open_agent_issues") > 0 && at("open_agent_issues") < at("worker_count") && at("worker_count") < at("guard_rcs") && at("guard_rcs") < at("session_execution_ratio_30d") && at("session_execution_ratio_30d") < at("probe_coverage_pct"), "the table lists BREACH rows by time in breach, then the warning, then the missing reading");
+  ok(/kp-st-breach">BREACH/.test(html) && /kp-st-warn">WARN/.test(html) && /kp-st-no-reading">NO READING/.test(html) && html.includes("&gt; 30") && html.includes("no threshold"), "state chips carry their words; the threshold shows its operator");
+  ok(html.includes("at least 1.5 days") === false && /at least 44\.4 days|at least 44 days|at least 44\.\d days/.test(html), "a lower bound reads at least: " + (html.match(/at least [^<]*/) || [""])[0]);
+  ok(html.includes('href="/area/reliability#guard_rcs"') && html.includes('href="/area/autonomy#open_agent_issues"') && M0("lonely_metric").area === "autonomy", "a breach row links to its area page; every row names its area");
+  ok(html.includes("Items past their SLA, by class") && html.includes("Content items over sla") && html.includes("its own stage SLA") && html.includes("180 min"), "the SLA table names each class and its SLA");
+  ok(/<details><summary>Within threshold \(2\)/.test(html) && /<details><summary>No threshold \(1\)/.test(html), "rows within threshold and rows with no threshold sit in their own collapsed lists");
+  ok(!/[^\x00-\x7F]/.test(block), "the block is still ASCII");
+  // an unreadable source is named, never shown as OK or zero
+  const w2 = j(await K.kpiCompute({ AUDIT: { prepare: (sql) => { let a = []; const st = { bind: (...x) => { a = x; return st; }, all: async () => { if (/v_metric_trigger_state|v_sla_over_120m/.test(sql)) throw new Error("no such table: nope"); return { results: db.prepare(sql).all(...a) }; } }; return st; } } }, NOW));
+  ok(w2.service_levels.metrics === null && w2.service_levels.counts === null && /not created/.test(w2.service_levels.reason) && w2.sla.classes === null && K.kpiHtml(w2, false).includes("could not be read"), "with the views unreadable the section says so instead of showing zeros");
+}
 
 console.log(pass + " passed, " + fail + " failed");
 if (fail) process.exit(1);

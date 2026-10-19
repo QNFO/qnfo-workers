@@ -12,8 +12,23 @@ const dsrc = readFileSync(new URL("../qnfo-fleet-dashboard/worker.js", import.me
 const cut = (src, a, b) => { const i = src.indexOf(a), j = src.indexOf(b, i + 1); if (i < 0 || j < i) throw new Error("block not found: " + a); return src.slice(i, j); };
 let pass = 0, fail = 0;
 const ok = (c, m, extra) => { if (c) pass++; else { fail++; console.log("FAIL " + m + (extra !== undefined ? " :: " + JSON.stringify(extra) : "")); } };
+// D1-SHIM-NAMED-PARAMS-1: node:sqlite refuses positional binding for numbered placeholders (?1, ?2). The gateway's
+// utm_clicks insert numbers them all, so the shim binds by name when the SQL is numbered and positionally otherwise,
+// exactly as D1 accepts both.
 const shim = (db) => {
-  const on = (sql) => { let args = []; const s = { bind(...x) { args = x.map((v) => (v === undefined ? null : v)); return s; }, async all() { return { results: db.prepare(sql).all(...args) }; }, async first() { return db.prepare(sql).get(...args) || null; }, async run() { const r = db.prepare(sql).run(...args); return { success: true, meta: { changes: Number(r.changes) } }; } }; return s; };
+  const on = (sql) => {
+    let args = [];
+    const named = /\?\d/.test(sql);
+    const bound = () => { const stmt = db.prepare(sql); return named ? stmt : stmt; };
+    const obj = () => Object.fromEntries(args.map((v, i) => [String(i + 1), v === undefined ? null : v]));
+    const s = {
+      bind(...x) { args = x.map((v) => (v === undefined ? null : v)); return s; },
+      async all() { const stmt = bound(); return { results: named ? stmt.all(obj()) : stmt.all(...args) }; },
+      async first() { const stmt = bound(); return (named ? stmt.get(obj()) : stmt.get(...args)) || null; },
+      async run() { const stmt = bound(); const r = named ? stmt.run(obj()) : stmt.run(...args); return { success: true, meta: { changes: Number(r.changes) } }; }
+    };
+    return s;
+  };
   return { prepare: on, async batch(st) { const o = []; for (const x of st) o.push(await x.run()); return o; } };
 };
 

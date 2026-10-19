@@ -22,7 +22,7 @@
  *   * archived repositories are read-only and are skipped, not reported as drift;
  *   * GET /report and GET /health are public reads; POST /tick needs STEWARD_KEY.
  */
-var VERSION = "0.4.5-dispatch-liveness"; // 0.4.5 DISPATCH-LIVENESS-1 (2026-10-18): this worker, on its own 10-minute cron and outside the qnfo-code-orchestrator process, reads the freshest fleet_crons.last_fired and files liveness:dispatcher-stalled when the per-minute dispatcher has been quiet for over 20 minutes -- the one stall no watchdog inside that failure domain can report, because NEVER-STALL-1 is itself a fleet_cron dispatched by the tick it would be reporting on. // 0.4.4 NOTIFY-ATTEMPT-TITLE-1 (2026-10-18): a re-run notification title ("workflow run, Attempt #2 failed") is parsed like the first attempt, so its resolved thread is cleared (three were kept at 10:52Z). // 0.4.3 TRACKER-SYNC-1: stale pr-without-task rows are cleared every tick; a merge fix reads merged_by from the single PR; 0.4.2 TRACKER-SYNC-1: the recent-PR window is a deliberate partial read (every post-backfill tick refused it); 0.4.1 org projects declared on (the portfolio board needs them); 0.4.0 PORTFOLIO-SYNC-1: projects derived from the census, metric breaches as roadmap objectives, programs/projects/issues/roadmap mirrored to GitHub labels, milestones, issues and a Projects board every 10 minutes; 0.3.1 a task is matched to its PR by number too (pr-without-task false positive on PR 381); 0.3.0 TRACKER-SYNC-1: agent_issues <-> GitHub issues and code_tasks <-> PRs every 10 minutes (0.2.2 ISSUE-SYNC-1)
+var VERSION = "0.4.8-tracker-repair-round-1"; // 0.4.8 TRACKER-REPAIR-ROUND-1 (agent_issues 2940): a codeagent-<stem>-rN pull request of an earlier repair round is matched to its task by the branch stem, so it is no longer pr-without-task drift. // 0.4.6 PORTFOLIO-HEARTBEAT-1 (2026-10-18): publish the portfolio run as in_progress BEFORE the work, so a tick killed by the CPU budget is distinguishable from a record that was never writtenIVENESS-1 (2026-10-18): this worker, on its own 10-minute cron and outside the qnfo-code-orchestrator process, reads the freshest fleet_crons.last_fired and files liveness:dispatcher-stalled when the per-minute dispatcher has been quiet for over 20 minutes -- the one stall no watchdog inside that failure domain can report, because NEVER-STALL-1 is itself a fleet_cron dispatched by the tick it would be reporting on. // 0.4.4 NOTIFY-ATTEMPT-TITLE-1 (2026-10-18): a re-run notification title ("workflow run, Attempt #2 failed") is parsed like the first attempt, so its resolved thread is cleared (three were kept at 10:52Z). // 0.4.3 TRACKER-SYNC-1: stale pr-without-task rows are cleared every tick; a merge fix reads merged_by from the single PR; 0.4.2 TRACKER-SYNC-1: the recent-PR window is a deliberate partial read (every post-backfill tick refused it); 0.4.1 org projects declared on (the portfolio board needs them); 0.4.0 PORTFOLIO-SYNC-1: projects derived from the census, metric breaches as roadmap objectives, programs/projects/issues/roadmap mirrored to GitHub labels, milestones, issues and a Projects board every 10 minutes; 0.3.1 a task is matched to its PR by number too (pr-without-task false positive on PR 381); 0.3.0 TRACKER-SYNC-1: agent_issues <-> GitHub issues and code_tasks <-> PRs every 10 minutes (0.2.2 ISSUE-SYNC-1)
 
 var ORG = "QNFO";
 var USER = "rwnq8";
@@ -48,9 +48,16 @@ var DESIRED_REPO = {
 /* Fields the free plan refuses on private repositories. Recorded, not retried as errors. */
 var PAID_ONLY_IF_PRIVATE = { allow_auto_merge: true };
 var PROTECTION = {
-  required_status_checks: null,
+  required_status_checks: {
+    strict: true,
+    contexts: ["gate", "guard", "mirror-guard", "identity-guard"]
+  },
   enforce_admins: false,
-  required_pull_request_reviews: null,
+  required_pull_request_reviews: {
+    required_approving_review_count: 1,
+    dismiss_stale_reviews: true,
+    require_code_owner_reviews: true
+  },
   restrictions: null,
   required_linear_history: false,
   allow_force_pushes: false,
@@ -576,10 +583,14 @@ async function tsCodeTasks(env, out) {
   (((await env.AUDIT.prepare("SELECT task_id, pr_state, drift FROM code_task_pr_links WHERE task_id LIKE 'pr:%'").all()).results) || []).forEach(function (k) { known[k.task_id] = k; });
   /* Write a link only when it changed: an unchanged row rewritten every 10 minutes is write volume nothing reads. */
   var same = function (a, b) { return String(a == null ? "" : a) === String(b == null ? "" : b); };
-  var branches = {}, taskPrs = {}, stmts = [];
+  var branches = {}, taskPrs = {}, stems = {}, stmts = [];
   for (var i = 0; i < tasks.length; i++) {
     var t = tasks[i];
     if (t.branch) branches[t.branch] = 1;
+    /* TRACKER-REPAIR-ROUND-1: a repair round re-pushes as codeagent-<stem>-rN and overwrites code_tasks.branch and
+     * pr_url, so the earlier rounds' pull requests keep a branch no row names (PR 1413 -> ct_yhjw5pnqkdnbep, now -r3;
+     * PR 2577 -> ct_im2924, now -r2). The branch stem is the task id without ct_, cut to 12 characters. */
+    stems["codeagent-" + String(t.id || "").replace(/^ct_/, "").slice(0, 12)] = t.id;
     var n = tsPrNum(t.pr_url) || t.known_pr || null;
     if (n) taskPrs[n] = 1;
     var p = (n && byNum[n]) || (t.branch && byHead[t.branch]) || null;
@@ -615,7 +626,8 @@ async function tsCodeTasks(env, out) {
   Object.keys(byHead).forEach(function (h) {
     var p = byHead[h];
     if (h.indexOf("codeagent-") !== 0 || branches[h] || taskPrs[p.number]) return;
-    var recent = p.state === "open" || Date.parse(p.merged_at || p.closed_at || p.updated_at || 0) >= cutoff;
+    var owned = stems[h.replace(/-r\d+$/, "")] || null;
+    var recent = !owned && (p.state === "open" || Date.parse(p.merged_at || p.closed_at || p.updated_at || 0) >= cutoff);
     if (recent) out.task_drift++;
     var k = known["pr:" + p.number], st = p.merged_at ? "merged" : p.state, dr = recent ? "pr-without-task" : null;
     if (k && same(k.pr_state, st) && same(k.drift, dr)) return;
@@ -1092,6 +1104,13 @@ async function portfolioSync(env) {
   var started = Date.now();
   var out = { version: VERSION, started_at: new Date(started).toISOString(), projects_created: 0, projects_reactivated: 0, projects_retired: 0, objectives_opened: 0, objectives_reopened: 0, objectives_verified: 0, issues_placed: 0, labels_created: 0, milestones_created: 0, milestones_reopened: 0, milestones_closed: 0, issues_synced: 0, roadmap_mirrored: 0, roadmap_relinked: 0, roadmap_closed: 0, roadmap_reopened: 0, board_items_added: 0, errors: [], limitations: [] };
   if (!env.AUDIT || !env.GITHUB_TOKEN) { out.errors.push({ scope: "portfolio", why: "AUDIT binding or GITHUB_TOKEN missing" }); return out; }
+  /* PORTFOLIO-HEARTBEAT-1: measured 2026-10-18, /portfolio reported last_run 13:43:19Z while the
+   * 13:53 tick was running, and there was no way to tell a stalled tick from a record that simply
+   * had not been written yet (the record is only written at the END, line ~1119). Publishing an
+   * in_progress marker first makes the two distinguishable: a marker with an old started_at and no
+   * completion means the tick died; no marker at all means it never started. A heartbeat write must
+   * never block the tick, so it is best-effort. */
+  try { await tsState(env, "portfolio_last_run", JSON.stringify({ version: VERSION, started_at: out.started_at, state: "in_progress" })); } catch (e) { /* heartbeat is best-effort */ }
   var step = async function (name, fn) { try { return await fn(); } catch (e) { out.errors.push({ scope: "portfolio-" + name, why: String(e && e.message || e).slice(0, 160) }); return null; } };
   await step("derive", function () { return psDerive(env, out); });
   await step("objectives", function () { return psObjectives(env, out); });

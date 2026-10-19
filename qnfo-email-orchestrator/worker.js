@@ -2,7 +2,7 @@ var __defProp = Object.defineProperty;
 var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
 
 // worker.js
-var VERSION = "0.5.10-model-floor-1"; // 0.5.9 WORKERS-BP-LOGGING-qnfo-cloud-ops-1 (2026-10-14, agent_issues 2530): the swallowed catches log as a structured console.error; host parity with qnfo-cloud-ops 1.28.2 (member 0.5.8-folded). // 0.5.8 WORKERS-BP-DEBT-2 (2026-10-12): the inbound-sla failure id takes rndB36 (crypto.getRandomValues) instead of Math.random; host parity with qnfo-cloud-ops 1.26.2. 0.5.7-solicit-journal; // 0.5.7 MAIL-ASK-1 (2026-10-12): SLA_SOLICIT_RX matches journal call-for-paper mail and reads 1200 body characters (source of the member folded into qnfo-cloud-ops 1.26.1); merged on top of 0.5.6 DRAFT-GROUNDING-1, both behaviours kept. // 0.5.6 DRAFT-GROUNDING-1 (agent_issues 2282, 2272): the triage prompt names no example subject and escalates anything needing expertise, judgement, a decision, an opinion or a commitment; ungroundedTerms() escalates a draft with a name, number or date absent from the inbound email; stripSignoff() cuts a model-written closing; SLA-GRACE-1 (agent_issues 2204): grace 12 h, was 24 h, the same number as the metric target. 0.5.3 0.5.3 CLEARED-SEND-RETRY-1: a cleared reply whose send fails keeps its auto-send marker and is retried up to 3 times (row 56 dead-ended on a 401 on 2026-10-05); the EMAIL binding declares props.caller so qnfo-email 2.5.1+ authenticates this worker without a key copy (#1923 class, CLAUDE.md #1703); 0.5.2 SLA-SES-ENVELOPE-1 (#1957): an Amazon SES message-id envelope (010101a1...-000000@sesmail.<domain>) is a transactional or bulk sender, so INBOUND-SLA-1 closes it as automated instead of holding it as an unknown person (iPostal1 mailbox notices reached the owner queue as "mail:ipostal1.com"; the owner closed the card, note 38). // 0.5.1: a failed send records a unique failure row (same-millisecond failures left a stale claim that read as an acknowledgement) /* 0.5.0 INBOUND-SLA-1 (2026-10-02, pillar: reach): no human inbound message waits more than 72h without a fleet action; category->action map, decision log, kill switch ops_config inbound_sla_enabled, metrics inbound_first_response_h_median_30d + inbound_unactioned_72h. 0.4.3 CAPABILITY-SELF-REPORT-1 */
+var VERSION = "0.5.11-sla-120m-inbound"; // 0.5.11 SLA-120M-INBOUND-1 (2026-10-19, agent_issues 2583): source copy of the host qnfo-cloud-ops 1.31.0 inbound_unactioned_120m metric, kept line-identical for email-orch-fold.test.mjs. 0.5.9 WORKERS-BP-LOGGING-qnfo-cloud-ops-1 (2026-10-14, agent_issues 2530): the swallowed catches log as a structured console.error; host parity with qnfo-cloud-ops 1.28.2 (member 0.5.8-folded). // 0.5.8 WORKERS-BP-DEBT-2 (2026-10-12): the inbound-sla failure id takes rndB36 (crypto.getRandomValues) instead of Math.random; host parity with qnfo-cloud-ops 1.26.2. 0.5.7-solicit-journal; // 0.5.7 MAIL-ASK-1 (2026-10-12): SLA_SOLICIT_RX matches journal call-for-paper mail and reads 1200 body characters (source of the member folded into qnfo-cloud-ops 1.26.1); merged on top of 0.5.6 DRAFT-GROUNDING-1, both behaviours kept. // 0.5.6 DRAFT-GROUNDING-1 (agent_issues 2282, 2272): the triage prompt names no example subject and escalates anything needing expertise, judgement, a decision, an opinion or a commitment; ungroundedTerms() escalates a draft with a name, number or date absent from the inbound email; stripSignoff() cuts a model-written closing; SLA-GRACE-1 (agent_issues 2204): grace 12 h, was 24 h, the same number as the metric target. 0.5.3 0.5.3 CLEARED-SEND-RETRY-1: a cleared reply whose send fails keeps its auto-send marker and is retried up to 3 times (row 56 dead-ended on a 401 on 2026-10-05); the EMAIL binding declares props.caller so qnfo-email 2.5.1+ authenticates this worker without a key copy (#1923 class, CLAUDE.md #1703); 0.5.2 SLA-SES-ENVELOPE-1 (#1957): an Amazon SES message-id envelope (010101a1...-000000@sesmail.<domain>) is a transactional or bulk sender, so INBOUND-SLA-1 closes it as automated instead of holding it as an unknown person (iPostal1 mailbox notices reached the owner queue as "mail:ipostal1.com"; the owner closed the card, note 38). // 0.5.1: a failed send records a unique failure row (same-millisecond failures left a stale claim that read as an acknowledgement) /* 0.5.0 INBOUND-SLA-1 (2026-10-02, pillar: reach): no human inbound message waits more than 72h without a fleet action; category->action map, decision log, kill switch ops_config inbound_sla_enabled, metrics inbound_first_response_h_median_30d + inbound_unactioned_72h. 0.4.3 CAPABILITY-SELF-REPORT-1 */
 var CLEARED_SEND_MAX_TRIES = 3;
 var CAPS = ["reply-drafts", "cadence-log", "email-filters", "inbound-sla"];
 var LIMS = ["cron-only: no public route; the reply-draft pass runs on its */15 and 3-hourly crons, INBOUND-SLA-1 on */15, its metrics on the 3-hourly cron", "never sends outreach or follow-ups; replies only to inbound mail, through qnfo-email /send", "INBOUND-SLA-1 mails nobody outside the research-outreach campaign and never a funder or hiring manager (docs/STRATEGY.md section 5): those messages are held and recorded for the weekly identity review", "publishes this capability row from the cron"];
@@ -64,6 +64,7 @@ async function capSelfReport(db, name) {
 // cloud_ops_events row (id inbound-sla-q-<queue id>; no body text, sender domain only) and the queue row's skip_reason;
 // each run upserts inbound-sla-run-<day> (meta.last_ok), which the dashboard WATCHMAKER_OPS entry 'inbound-sla' reads.
 var INBOUND_SLA = { deadline_h: 72, ack_max_age_d: 14, ack_sender_window_d: 30, scan_limit: 40, max_sends_per_run: 2, max_sends_per_day: 6, max_sends_per_domain_day: 2, max_drafts_per_run: 3, max_send_failures: 2, from: "rowan.quni@qnfo.org" };
+INBOUND_SLA.first_action_min = 120;
 // The category -> action map. action: close | skip (terminal, nothing sent), hold (nothing sent; recorded for the weekly
 // identity review), hold_ack (one holding acknowledgement if the sender is a research correspondent, then hold), answer
 // (a gated short answer from the drafter, else as hold_ack). after_h: grace before acting (0 = at once).
@@ -524,7 +525,7 @@ async function inboundSlaMetrics(env, opts) {
   // The median covers messages received in the last 30 days; the unactioned count covers every waiting row, however old.
   var rows = await slaAll(env.AUDIT_DB, "SELECT q.id, q.decision, q.skip_reason, julianday(q.received_at) >= julianday(?1) AS in_window, julianday(COALESCE(q.received_at, q.created_at)) AS rj, julianday(q.sent_at) AS sj, julianday(q.updated_at) AS uj, (SELECT julianday(d.ts) FROM cloud_ops_events d WHERE d.id = 'inbound-sla-q-' || q.id) AS dj, (SELECT MIN(julianday(o.received_at)) FROM emails o WHERE o.status IN ('sent', 'replied') AND lower(o.sender) LIKE '%@qnfo.org' AND instr(lower(o.recipient), lower(q.sender)) > 0 AND julianday(o.received_at) > julianday(q.received_at)) AS oj FROM email_reply_queue q WHERE julianday(q.received_at) >= julianday(?1) OR q.decision IN ('escalate', 'pending')", [since]);
   var nowJ = nowMs / 864e5 + 2440587.5;
-  var hours = [], unactioned = 0, waiting = 0;
+    var hours = [], unactioned = 0, unactioned120 = 0, waiting = 0;
   for (var i = 0; i < rows.length; i++) {
     var r = rows[i];
     if (r.rj == null || SLA_NOT_HUMAN_RX.test(String(r.skip_reason || ""))) continue;
@@ -532,6 +533,8 @@ async function inboundSlaMetrics(env, opts) {
     if (!cands.length && r.decision !== "escalate" && r.decision !== "pending" && r.uj != null) cands.push(Math.max(r.uj, r.rj));
     var first = cands.length ? Math.min.apply(null, cands) : null;
     if (first == null && (nowJ - r.rj) * 24 > INBOUND_SLA.deadline_h) unactioned++;
+      // SLA-120M-INBOUND-1 (1.31.0, agent_issues 2583): the SLA is the fleet's first action within 120 minutes, in minutes.
+      if (first == null && (nowJ - r.rj) * 1440 > INBOUND_SLA.first_action_min) unactioned120++;
     if (!Number(r.in_window)) continue;
     if (first == null) waiting++;
     hours.push(((first == null ? nowJ : first) - r.rj) * 24);
@@ -542,13 +545,14 @@ async function inboundSlaMetrics(env, opts) {
   var at = new Date(nowMs).toISOString();
   var defs = [
     ["inbound_first_response_h_median_30d", "lagging", "median hours from a human inbound message (email_reply_queue, last 30 days, machine/solicitation/automated excluded) to the first fleet action: INBOUND-SLA-1 decision, sent_at, or an outbound mail to the sender; unanswered rows count at their current age", "<=24", value],
-    ["inbound_unactioned_72h", "leading", "human inbound messages of any age still waiting (escalate/pending) more than 72h with no fleet action: no INBOUND-SLA-1 decision, no sent_at, no outbound mail to the sender (INBOUND-SLA-1 target 0)", "0", String(unactioned)]
+    ["inbound_unactioned_72h", "leading", "human inbound messages of any age still waiting (escalate/pending) more than 72h with no fleet action: no INBOUND-SLA-1 decision, no sent_at, no outbound mail to the sender (INBOUND-SLA-1 target 0)", "0", String(unactioned)],
+    ["inbound_unactioned_120m", "leading", "human inbound messages of any age still waiting more than 120 minutes (INBOUND_SLA.first_action_min) with no first fleet action: no INBOUND-SLA-1 decision, no sent_at, no outbound mail to the sender (SLA-120M-INBOUND-1 target 0)", "0", String(unactioned120)]
   ];
   for (var k = 0; k < defs.length; k++) {
-    await slaRun(env.AUDIT_DB, "INSERT OR IGNORE INTO metric_registry (metric, layer, kind, formula, source_of_truth, target, owner, disposition_actor, refresh_cadence, state) VALUES (?1, 'fleet', ?2, ?3, 'qnfo-audit email_reply_queue + cloud_ops_events inbound-sla-q-* + outbound emails (qnfo-email-orchestrator INBOUND-SLA-1)', ?4, 'qnfo-email-orchestrator', 'fleet', '*/3h', 'MEASURED')", [defs[k][0], defs[k][1], defs[k][2], defs[k][3]]);
+    await slaRun(env.AUDIT_DB, "INSERT OR IGNORE INTO metric_registry (metric, layer, kind, formula, source_of_truth, target, owner, disposition_actor, refresh_cadence, state) VALUES (?1, 'fleet', ?2, ?3, 'qnfo-audit email_reply_queue + cloud_ops_events inbound-sla-q-* + outbound emails (qnfo-email-orchestrator INBOUND-SLA-1)', ?4, 'qnfo-email-orchestrator', 'fleet', '*/10m', 'MEASURED')", [defs[k][0], defs[k][1], defs[k][2], defs[k][3]]);
     await slaRun(env.AUDIT_DB, "UPDATE metric_registry SET last_value = ?1, last_refreshed = ?2 WHERE metric = ?3", [defs[k][4], at, defs[k][0]]);
   }
-  return { human_30d: hours.length, waiting: waiting, unactioned_72h: unactioned, median_h: med == null ? null : Math.round(med * 10) / 10 };
+  return { human_30d: hours.length, waiting: waiting, unactioned_72h: unactioned, unactioned_120m: unactioned120, median_h: med == null ? null : Math.round(med * 10) / 10 };
 }
 var worker_default = {
   async fetch(request, env) {
@@ -627,13 +631,13 @@ var worker_default = {
     try { var r = await this.runRepliesInternal(env, false); console.log("reply-draft:", JSON.stringify(r)); }
     catch (e) { hbOk = 0; console.error("reply-draft failed:", String(e && e.message || e)); }
     // INBOUND-SLA-1: the SLA step on the */15 cron only (the 3-hourly cron fires in the same minute, and two concurrent
-    // steps must not race; the per-thread claim row would stop a double send anyway), the metrics on the 3-hourly cron.
+      // steps must not race; the per-thread claim row would stop a double send anyway). SLA-120M-INBOUND-1 (1.31.0): the
+      // metrics run on the same */15 member tick (two of every three 10-minute host ticks, so at most 20 minutes apart),
+      // not only on the 3-hourly one, because inbound_unactioned_120m is measured in minutes.
     var cron = controller && controller.cron || "";
     if (!cron || cron === "*/15 * * * *") {
       try { var s = await inboundSlaStep(env, {}); console.log("inbound-sla:", JSON.stringify({ scanned: s.scanned, counts: s.counts, disabled: s.disabled || null, error: s.error || null })); }
       catch (e) { console.error("inbound-sla failed:", String(e && e.message || e)); }
-    }
-    if (!cron || cron === "0 */3 * * *") {
       try { console.log("inbound-sla metrics:", JSON.stringify(await inboundSlaMetrics(env, {}))); }
       catch (e) { console.error("inbound-sla metrics failed:", String(e && e.message || e)); }
     }

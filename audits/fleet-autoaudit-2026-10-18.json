@@ -1,5 +1,5 @@
 {
-  "audited_at": "2026-10-18 13:28:34",
+  "audited_at": "2026-10-18 22:19:12",
   "d1_write_failures": [],
   "d1_writes_ok": 120,
   "guard": {
@@ -548,7 +548,7 @@
     "sync_workers": [
       {
         "dir": "idea-hub",
-        "version": "1.10.10-wall-deadline",
+        "version": "1.10.11-codeagent",
         "worker": "idea-hub"
       },
       {
@@ -558,12 +558,12 @@
       },
       {
         "dir": "q08-signal-engine",
-        "version": "0.28.11-yield-order",
+        "version": "0.28.13-codeagent",
         "worker": "q08-signal-engine"
       },
       {
         "dir": "qnfo-ai",
-        "version": "5.36.5-hedge-healthy",
+        "version": "5.36.7-codeagent",
         "worker": "qnfo-ai"
       },
       {
@@ -583,12 +583,12 @@
       },
       {
         "dir": "qnfo-cloud-ops",
-        "version": "1.30.3-codeagent",
+        "version": "1.30.4-codeagent",
         "worker": "qnfo-cloud-ops"
       },
       {
         "dir": "qnfo-code-orchestrator",
-        "version": "0.18.14-claim-terminal-release-1",
+        "version": "0.18.21-claims-bind-and-visibility-1",
         "worker": "qnfo-code-orchestrator"
       },
       {
@@ -603,7 +603,7 @@
       },
       {
         "dir": "qnfo-email",
-        "version": "2.9.5-splice-repair",
+        "version": "2.9.7-codeagent",
         "worker": "qnfo-email"
       },
       {
@@ -613,22 +613,22 @@
       },
       {
         "dir": "qnfo-fleet-control",
-        "version": "0.33.14-no-untracked-close-2",
+        "version": "0.33.17-metric-trigger-twin-2",
         "worker": "qnfo-fleet-control"
       },
       {
         "dir": "qnfo-fleet-dashboard",
-        "version": "1.43.2-all-reads",
+        "version": "1.44.5-codeagent",
         "worker": "qnfo-fleet-dashboard"
       },
       {
         "dir": "qnfo-gateway",
-        "version": "3.23.2-quick-read-6",
+        "version": "3.24.3-quick-read-digest-4",
         "worker": "qnfo-gateway"
       },
       {
         "dir": "qnfo-github-steward",
-        "version": "0.4.5-dispatch-liveness",
+        "version": "0.4.7-codeagent",
         "worker": "qnfo-github-steward"
       },
       {
@@ -673,17 +673,17 @@
       },
       {
         "dir": "qnfo-pdf",
-        "version": "1.4.0-cron-heartbeat",
+        "version": "1.5.2-typeset-biblio-3",
         "worker": "qnfo-pdf"
       },
       {
         "dir": "qnfo-research-exec",
-        "version": "0.18.40-reconcile-cycle-preserve-1",
+        "version": "0.18.43-codeagent",
         "worker": "qnfo-research-exec"
       },
       {
         "dir": "qnfo-social",
-        "version": "0.16.6-bsky-session-reuse-1",
+        "version": "0.16.7-codeagent",
         "worker": "qnfo-social"
       },
       {
@@ -809,9 +809,9 @@
       "worker": "funding"
     },
     "idea-hub": {
-      "before": "1.10.10-wall-deadline",
+      "before": "1.10.11-codeagent",
       "http": 200,
-      "live": "1.10.10-wall-deadline",
+      "live": "1.10.11-codeagent",
       "match": 1,
       "note": "SYNC",
       "worker": "idea-hub"
@@ -990,9 +990,9 @@
       "worker": "personal-life-search"
     },
     "q08-signal-engine": {
-      "before": "0.28.11-yield-order",
+      "before": "0.28.13-codeagent",
       "http": 200,
-      "live": "0.28.11-yield-order",
+      "live": "0.28.13-codeagent",
       "match": 1,
       "note": "SYNC",
       "worker": "q08-signal-engine"
@@ -1025,9 +1025,9 @@
       "worker": "qnfo-agent-ws"
     },
     "qnfo-ai": {
-      "before": "5.36.5-hedge-healthy",
+      "before": "5.36.7-codeagent",
       "http": 200,
-      "live": "5.36.5-hedge-healthy",
+      "live": "5.36.7-codeagent",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-ai"
@@ -1174,9 +1174,9 @@
       "worker": "qnfo-citation-watch"
     },
     "qnfo-cloud-ops": {
-      "before": "1.30.3-codeagent",
+      "before": "1.30.4-codeagent",
       "http": 200,
-      "live": "1.30.3-codeagent",
+      "live": "1.30.4-codeagent",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-cloud-ops"
@@ -1191,9 +1191,9 @@
       "worker": "qnfo-code-agent"
     },
     "qnfo-code-orchestrator": {
-      "before": "0.18.14-claim-terminal-release-1",
+      "before": "0.18.21-claims-bind-and-visibility-1",
       "http": 200,
-      "live": "0.18.14-claim-terminal-release-1",
+      "live": "0.18.21-claims-bind-and-visibility-1",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-code-orchestrator"
@@ -1224,9 +1224,9 @@
       "worker": "qnfo-deploy-guard"
     },
     "qnfo-email": {
-      "before": "2.9.5-splice-repair",
+      "before": "2.9.7-codeagent",
       "http": 200,
-      "live": "2.9.5-splice-repair",
+      "live": "2.9.7-codeagent",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-email"
@@ -1321,17 +1321,17 @@
       "worker": "qnfo-fleet-calibrator"
     },
     "qnfo-fleet-control": {
-      "before": "0.33.14-no-untracked-close-2",
+      "before": "0.33.17-metric-trigger-twin-2",
       "http": 200,
-      "live": "0.33.14-no-untracked-close-2",
+      "live": "0.33.17-metric-trigger-twin-2",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-fleet-control"
     },
     "qnfo-fleet-dashboard": {
-      "before": "1.43.2-all-reads",
+      "before": "1.44.5-codeagent",
       "http": 200,
-      "live": "1.43.2-all-reads",
+      "live": "1.44.5-codeagent",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-fleet-dashboard"
@@ -1355,17 +1355,17 @@
       "worker": "qnfo-fleet-feed"
     },
     "qnfo-gateway": {
-      "before": "3.23.2-quick-read-6",
+      "before": "3.24.3-quick-read-digest-4",
       "http": 200,
-      "live": "3.23.2-quick-read-6",
+      "live": "3.24.3-quick-read-digest-4",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-gateway"
     },
     "qnfo-github-steward": {
-      "before": "0.4.5-dispatch-liveness",
+      "before": "0.4.7-codeagent",
       "http": 200,
-      "live": "0.4.5-dispatch-liveness",
+      "live": "0.4.7-codeagent",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-github-steward"
@@ -1525,9 +1525,9 @@
       "worker": "qnfo-paper-reviser"
     },
     "qnfo-pdf": {
-      "before": "1.4.0-cron-heartbeat",
+      "before": "1.5.2-typeset-biblio-3",
       "http": 200,
-      "live": "1.4.0-cron-heartbeat",
+      "live": "1.5.2-typeset-biblio-3",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-pdf"
@@ -1569,9 +1569,9 @@
       "worker": "qnfo-register-guard"
     },
     "qnfo-research-exec": {
-      "before": "0.18.40-reconcile-cycle-preserve-1",
+      "before": "0.18.43-codeagent",
       "http": 200,
-      "live": "0.18.40-reconcile-cycle-preserve-1",
+      "live": "0.18.43-codeagent",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-research-exec"
@@ -1631,9 +1631,9 @@
       "worker": "qnfo-skills-discovery"
     },
     "qnfo-social": {
-      "before": "0.16.6-bsky-session-reuse-1",
+      "before": "0.16.7-codeagent",
       "http": 200,
-      "live": "0.16.6-bsky-session-reuse-1",
+      "live": "0.16.7-codeagent",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-social"

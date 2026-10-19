@@ -9,17 +9,22 @@ var __name22 = /* @__PURE__ */ __name2((target, value) => __defProp22(target, "n
 var __defProp222 = Object.defineProperty;
 var __name222 = /* @__PURE__ */ __name22((target, value) => __defProp222(target, "name", { value, configurable: true }), "__name");
 var __name2222 = /* @__PURE__ */ __name222((target, value) => Object.defineProperty(target, "name", { value, configurable: true }), "__name");
-var VERSION = "1.43.2-all-reads"; /* 1.43.2 ALL-READS-1 (2026-10-18, pillar autonomy; owner directive "FIX ALL AUTOMATICALLY"): the last two open reads join the same contract, so every open read now revalidates. GET /api/loop and GET /api/changes kept returning no-store with no validator; both now go through rtRead and carry a revision, an ETag and ?since= (on /api/changes ?since= still means the timestamp it always meant: a revision is eight hex characters and can never equal an ISO date, so the two meanings cannot collide). With this the whole open read surface - 18 endpoints plus /health - answers the same way. */ /* 1.43.1 KPI-CLOCK-1 (2026-10-18, pillar autonomy; COMPACT-READS-1 follow-up, found by verifying the deploy): /api/kpi answered 200 instead of 304 because its body carries as_of and activity_as_of, built from Date.now() on every build, so two isolates (or one cache expiry) could never agree on a revision. The route suite missed it because kpiData hands back an isolate-cached object, so both calls in one process saw the same as_of; rt-api.test.mjs now slices the digest block and asserts a clock field never moves the revision and a content field always does (J2-J6), which fails without this fix. Both fields join RT_CLOCK. No behaviour change beyond the 304. */ /* 1.43.0 COMPACT-READS-1 (2026-10-18, pillar autonomy; owner directive "FIX ALL AUTOMATICALLY" after the RT-API-1 report): the three items that report listed as deliberately not done or as a sharp edge. (a) GET /api/areas was 101 KB and 55 KB of it was fullLever, the same text the clipped lever already carries at ten times the length; the API now sends the compact row and keeps the whole source text behind ?full=1, schema_version fleet-areas/v3 (the page is untouched: it renders from areasModel, not from the API). (b) GET /api/changelog sent all 267 releases (164 KB) to every poller that wanted the newest ten; it is now one page of 20 with ?limit=1..200, ?offset= and ?limit=all, schema_version changelog/v2, and it revalidates like the other reads instead of no-store. (c) the digest no longer strips fields by a blanket name rule: RT_CLOCK is the explicit list of clock fields and everything else is part of the identity, and rt-api.test.mjs now mutates a NON-clock field of every revalidating read and requires the ETag to move, so over-stripping fails the suite instead of silently serving a stale 304. (d) ?since=<revision> is now on /api/areas, /api/human and /api/changelog as well as /api/live, every revalidating read returns X-Revision, and a body field `revision`, so a client that cannot send a header can still dedupe. No route removed; no field removed without a parameter that restores it. */ /* 1.42.1 RT-API-FRAGMENT-REV-1 (2026-10-18, pillar autonomy; RT-API-1 follow-up, found by verifying the deploy): the first deploy revalidated the JSON reads exactly as designed (/api/live, /api/areas, /api/human answered 304 with no body) but the page fragment did not: the same code path sets an ETag and the edge serves X-Generated-At while the ETag never arrives on text/html, so the poll's If-None-Match could not match and it kept re-downloading 12 KB. The fragment now carries X-Content-Revision and accepts it back as ?rev=, answering 204 with no body while nothing has changed; If-None-Match and 304 remain honoured. No other route is touched. */ /* 1.42.0 RT-API-1 (2026-10-18, pillar autonomy; owner directive "REFACTOR FLEET DASHBOARD AND REAL-TIME APIS"): measured on the live worker before the change, no read answered with an ETag, every read answered Cache-Control: no-store and GET /api was a 404, so a poller could neither ask "did anything change?" nor enumerate what it may call; /api/areas alone was 122 KB and the page re-downloaded and re-rendered its fragment every 60 s whether or not anything had moved. Now (a) GET /api is the read API's own index: every public read with its auth, schema_version, cache policy and what makes it change (API_INDEX, one table instead of scattered knowledge); (b) GET /api/live is one consolidated snapshot for pollers (state verdict and probe counts, queue open/urgent/oldest, the five areas with their constraint and lever, the invest verdict, a content revision) so a poll is one call instead of four; (c) a read carries a weak ETag computed over its CONTENT digest (time-derived fields excluded, or nothing would ever revalidate), honours If-None-Match with 304 and an empty body, and states a cache policy: public reads may be reused 15 s, a response carrying owner fields never may (private, no-store, Vary on the credential); (d) /api/areas, /api/human and /api/live answer 304, and /api/live also accepts ?since=<revision> for clients that cannot send a header; (e) the page's 60 s poll sends the fragment's ETag and on 304 leaves the DOM untouched (no re-render, no lost focus or scroll); (f) /health advertises api-index, live-snapshot and conditional-reads. No route was removed and no payload field was dropped. */ /* 1.41.0 GA4-DATA-API-1 (2026-10-18, pillar reach): the GA4 stubs are replaced by a real Data API read (service account GA4_SA_KEY, RS256 JWT in WebCrypto) into reach_signals source ga4 once a day, ledger cloud_ops_events ga4-ingest-<day>, GET/POST /api/ga4, watchmaker op ga4-ingest; a refused grant writes its reason, never a zero. */ /* 1.40.1 WORKERS-BP-LOGGING-2 (2026-10-17, pillar security/observability): the request and cron error catches now log at error severity with structured JSON (they previously returned the error without logging, so unhandled request/cron failures were invisible in the logs); the remaining string-concatenated console.log/console.error calls are converted to structured JSON.stringify so logs are searchable. No control-flow changes. */ /* 1.40.0 REACH-DIRECT-TRAFFIC-1 (2026-10-17, pillar reach; owner directive: see which papers and links are accessed directly from Cloudflare analytics/logs, not just social-media clicks): the /kpi Reach section gains "Top papers, opened directly" and "Top links, opened directly" (7 days), read from reach_signals source cf-rum-human (Cloudflare Web Analytics RUM page loads, bots excluded) grouped per paper slug and per page, excluding the fleet's own surfaces so the owner's own browsing is not reader traffic. This is the direct-traffic complement to the social-post click counts under "Most popular posts". */ /* 1.39.2 OWNER-VOICE-CAP-PARITY-1 (2026-10-17, pillar reach, agent_issues 2729): portfolioWeeklyCap falls back to PORTFOLIO_SOCIAL_WEEKLY_CAP_DEFAULT = 21, the cap qnfo-social weeklyCap runs (PAPER-ROLLUP-1), instead of the literal 2; the 2 failed the cadence check on any normal week, so the 05:00Z guard wrote social_paused=1 on 10-15, 10-16 and 10-17. wrangler.toml sets SOCIAL_ALLOW_Q08=1 so the 1.38.3 q08-link rule does not flag links Q08-OPEN-1 made allowed. // 1.39.1 (2026-10-17): a lever is clipped on a word boundary, so it can no longer end mid-word ("about 4k neur..."), and the root-cause sentence names the titles it is expected to clear in quotes. */ /* 1.39.0 AREAS-2 (2026-10-17, pillar autonomy; owner directive EXECUTE REFACTOR: organise the dashboard by functional area and action, not by data source, without overload, extraneous information or redundancy): the 15-row breach wall and the five tiles are replaced by five constraint rows, each carrying the cost of its constraint, its owner, its lever, the lever type (code loop / your decision / fleet loops) and its remedy history; every other breach moves to a deterministic /area/<id> page, which replaces 15 per-row Diagnose model calls; AREA_ROOT promotes the known root cause (verification monoculture) over the tautological probe count and names the breaches it explains; a Pipeline controls card shows kill-switch state and when it was set; the duplicate Subscribers progress bar is removed; GET /api/areas carries schema_version fleet-areas/v2. */ /* 1.38.0 AREAS-1 (2026-10-17, pillar autonomy; owner request: refactor the dashboard around functional areas and action items, with bottlenecks and progress, without overload or redundancy): five area tiles (cost, research and content, reach and growth, autonomy loop, reliability and security) each with one star metric and its 14-day trend replace the four-number strip; breaching metrics are listed per area, worst three first (priority, then gap), each with owner, sparkline, direction and a Diagnose control that fills the command line; a Pipelines panel shows issue age, code loop, research queue and outreach with the bottleneck stage named; the Open data card and the business-case section are removed (every figure is a tile, a verdict reason or a sparkline); GET /api/areas. / 1.37.6 SCHEMA-ALTER-PROBE (2026-10-14, pillar core; the qnfo-ops 2.48.2 pattern, PR 1258): liveScheduled reads pragma_table_info(worker_schedules) and runs ALTER ... ADD COLUMN created_on only when the column is missing, so no failed D1 statement reaches Workers telemetry on each call; the schema block's outer catch logs. */ /* 1.37.5 WORKERS-BP-LOGGING-qnfo-fleet-dashboard-1 (2026-10-14, agent_issues 2532, pillar security): the 14 swallowed catches log; the nine server-side ones write console.error JSON with worker and where (the ALTER TABLE on worker_schedules skips the expected duplicate-column error), and the five in the browser scripts write console.debug. Control flow unchanged. */ /* 1.37.4 FLEET-JOURNEYS-WATCHMAKER-1 (2026-10-14, agent_issues 2554, pillar core): WATCHMAKER_OPS lists fleet-journeys, the qnfo-fleet-control journey tick (journey_runs runner cf, every 20 minutes). */ /* 1.37.3 SLA-120M (2026-10-14, owner directive: no SLA exceeds 120 minutes, 10-minute resolution): the loop-signal warn SLA is 120 min (was 720) and its breach comment speaks in minutes; the watchmaker stuck limits are in minutes (stuck_min) and every SLA-type limit is 120 min (inbound mail 72 h, code-loop PR green 6 h and waiting 48 h, attention decisions 240 h, transformation levers 24 h, q08 review and intents 48 h); lookback windows keep their length (Gmail runs and person merges 30 days, outreach-learner allocation 48 h). */ /* 1.37.2: the outreach-learner stuck count excludes jr-outreach-lookup-* runs, as it excludes jr-outreach-learner-*. */ /* 1.37.1 OUTREACH-LOOKUP-WATCHMAKER-1 (2026-10-14, pillar reach): WATCHMAKER_OPS lists outreach-lookup, the qnfo-cloud-ops email lookup that runs every 120 minutes (SLA-120M-3). */ /* 1.37.0 CONTENT-PIPELINE-1 (2026-10-14, pillars research and reach; owner directive "visibility onto the content creation process end-to-end on fleet dashboard"): a Content tab (/content, JSON /api/content, open) shows every idea, paper, revision, erratum and post on one production line from qnfo-audit v_content_pipeline (stage, state, time in stage, SLA verdict), with papers.qnfo.org release-gate verdicts (living-paper) and q08.org signal-to-piece gates (q08-signal); the cron writes metric papers_live_failing_release_gate hourly. */ /* 1.36.1 COMPAT-WATCHMAKER-1 (2026-10-13, agent_issues 2412, pillar autonomy): WATCHMAKER_OPS lists compat-exposure, the qnfo-ops worker_compat_state snapshot (cadence 12h). ATTENTION-STOP-GRADE-1 (agent_issues 2467): a STOP decision is graded on its prediction, the other social channels' pooled 7-day attention per item, not on its own channel, whose share it set to 0 (that read 0 -> 0, flat, for every STOP). */ /* 1.36.0 MAIL-REPLY-INSTRUCTION-1 (2026-10-13, pillar personal; owner screenshot "Fail."): "reply 984 always show me draft first before sending" was offered for sending as the email text. reply <id> <text> now sends the text as written only when it reads as an email (greeting, several lines or a sign-off); otherwise the text is the owner's instruction and the fleet writes a complete draft of that reply, shown first with Send reply. The Reply button on inbox cards and in mail <id> runs that draft directly. */ /* 1.35.0 MAIL-DRAFT-COMPLETE-1 (2026-10-13, pillar personal; owner: "when prompted the system must generate full, complete, ready-to-send drafts. do not burden the user with manual effort or input"): drafts no longer carry [[FILL]] gaps. The fleet reads the facts itself (the qnfo.org public profile, the owner identity document in the private store, and the GitHub record of any file or commit the thread names) and the model writes a complete reply, including any requested statement, from those records only; a sentence with a title, unit or placeholder no record supports is dropped in code; every draft carries Send reply. */ /* 1.34.0 MAIL-DRAFT-1 (2026-10-13, pillar personal; owner: "NEVER INVENT TITLES OR BUSINESS UNITS OR FABRICATE ANY OTHER INFORMATION ... REQUIRING MULTIPLE BACK-AND-FORTH PROMPTS"): a request to draft a reply no longer goes to the general question prompt. It finds the message by address, id or inbox card, gives the model the stored thread and only the owner's name, turns every fact on record nowhere into a [[FILL: ...]] gap (a title or unit the thread lacks is replaced in code), writes the sign-off in code (name and sending address), shows real line breaks, and offers Edit, then send (the full reply in the command line, up to 8000 characters) and, with no gap left, Send reply; "send it" sends the last draft; a reply holding a gap is refused. */ /* 1.33.0 OWNER-DOC-API-1 (2026-10-12, agent_issues 2373 EMAIL-VOICE-DRAFTER-1, pillar personal): GET and POST /api/owner/doc/<key> let a fleet worker read an owner document and propose a new version (or create a seed the owner then edits) through this worker, the only one bound to the private store; the caller is a service binding that names itself in props (qnfo-email), the loop token or the owner session. 1.31.3: main (1.30.1-kpi) merged into this branch; the version moves so the push is ahead. 1.31.2: the inbox reply and spam paths log their caught errors to Workers Logs (WORKERS-STANDARDS-GUARD-1). 1.31.1: INBOX-REPLY-1 (below) and OUTREACH-SLA-CYCLE-1 ship in the same PR as 1.31.0; the version moves so each push is ahead. */ /* 1.31.0 DASHBOARD-FULL-ACCESS-1 (2026-10-12, pillar autonomy; owner: "the fleet dashboard is my one-stop assistant to the Quniverse and shall have full access to all resources"): every ask since 09:33Z answered "the model service answered HTTP 401": a secret added to this worker in the Cloudflare dashboard (GA4_SA_KEY) made a version that copied the bindings without props, so SVC_QNFO_AI lost caller = qnfo-fleet-dashboard and qnfo-ai refused it. A model leg that qnfo-ai refuses (401/403/5xx or a network error) now runs the same Workers AI model through the new direct AI binding, so a lost prop or a router outage no longer silences the command line. The console gains mail (search the inbox, read a message in full; owner session), service bindings to qnfo-email, qnfo-cloud-ops and qnfo-fleet-control for call, and sql reads of q08 and the private identity D1 (owner session; identity stays read-only). info shows the signed-in owner up to 1500 characters of each message and tells a visitor to sign in for subject and text. MAIL-ASK-1 (same day, owner: "what do they say? don't waste my time"): "WHAT'S UP WITH RESEARCHLETTERS EMAILS?" and the follow-up "AND WHAT DO THEY SAY?" reached the model with no message at all (MAIL_ASK_RX had no plurals, "researchletters" did not name theresearchletters.org, a follow-up named no sender); plurals, say/said/content, a card domain typed without "the" or the TLD, and a follow-up with mail cards in the queue now read the messages, and the owner's context carries 1500 characters of each (was 300). A journal call for papers ("We invite your research article", "submit your full-length article", "fits our journal scope", an ISSN line) is a solicitation, not a person owed a reply (MAIL_SOLICIT_RX, parity with qnfo-cloud-ops 1.25.2), so it leaves the owner queue and is listed as handled. INBOX-REPLY-1 (same day, owner: "THE FLEET DASHBOARD IS THE QNFO INBOX"): inbox cards carry Reply (fills "reply <id> " in the command line), Read and Spam; "reply <id> <text>" sends through qnfo-email /send as the address the mail was written to (rowan.quni@qnfo.org by default) with "Re: <subject>", marks the message replied and closes its queue rows (fresh code: it speaks in the owner's name); "spam <id> ..." marks messages spam and adds the sender to email_sender_policy junk; the card no longer says "Open the qnfo inbox". */ /* 1.30.1: hosts fold to their property by domain, probe clicks left out, 64-character campaign tags matched, ingest notes carry no upstream error text. 1.30.0 FLEET-KPI-1 (owner request 2026-10-12, pillar reach): a Metrics tab (/kpi, JSON /api/kpi, open to everyone) computed from qnfo-audit at request time: open issues by priority and category, opened and closed per day, median age, oldest, closed with evidence in 24 h and 7 d, code-loop tasks; bot-filtered page views per property and day, outreach actions and events per channel and day, posts per channel, the most popular posts with links, subscribers, mentions and citations; the Buffer channels, posts and per-post statistics; a value nothing measures is null and shown as not measured; the daily reach ingest adds a per-host row with page loads and visits. */ /* 1.29.4 CMD-AI-TIMEOUT-1 (agent_issues 2316): cmdModelCall sends timeout_ms just under its own abort and names a 504 router_timeout; WATCHMAKER-TICK-LEDGER-1 (2363): tick-sequence-ledger entry, duplicate dangling-bindings-census entry removed; REPORT-CARD-CATCHUP-1 (2054): the weekly card is caught up on any tick and deduped only against measured rows. */ /* 1.29.3 WORKERS-BEST-PRACTICES-1: every LOOP_TOKEN check (6 POST routes + the machine flag) uses constEq instead of !==/===. */ /* 1.29.2 MODEL-ID-AUDIT-1 (2026-10-11): qnfo-ai routes only the ids in its MODELS table; llama-3.3-70b-instruct-fp8-fast is not one, so the third ask leg silently became a second deepseek-v4-flash. Order is now glm-5.3-flash, deepseek-v4-flash-wa, gpt-oss-120b: the Workers AI legs probe at 2-3 s through qnfo-ai, the DeepSeek API leg at 13 s. */ /* 1.29.1 CMD-ASK-BUDGET-1 (2026-10-11): 1.29.0 raised CMD_AI_BUDGET_MS to 40 s, but the job runs in ctx.waitUntil, which the runtime cancels 30 s after the response, so the first live ask (cmd-517f7562d37f1041ef0a) never wrote its fallback and stayed running until the page gave up at 45 s; the budget is back under that limit (24 s, hedge 4 s) and a suite asserts it stays below 28 s. 1.29.0 CMD-ASK-FAST-1 (2026-10-11, pillar autonomy; owner: "Fix fleet command line"): every command-line and Ask question since 2026-10-06 ended in the stored-data fallback ("The AI model did not answer just now (it timed out)", 7 of the last 7 rows): ASK_MODELS named glm-5.2, a model qnfo-ai no longer lists, so the first call burned its slot and glm-5.3-flash, asked second with the remaining budget, timed out at 13 s. The models are now raced with a staggered start (ASK_HEDGE_MS, first answer wins; each failure names its model in cmd_log.error), the budget is 40 s, and a question about Q08 reads published_pieces from the q08-signal D1 (new read binding Q08) into the model context and into the no-model fallback, which also says plainly when its stored data does not cover the question instead of answering with a status dump. 1.28.2 1.28.2 NOZ-DOI-1 (2026-10-10, pillar reach): no deposit-service (10.5281) data is collected, scored or shown: reach rows, the impact KPI, the identity-weekly lookups and the watchmaker op are removed, and entity_map ignores that DOI prefix. 1.28.1 NO-MEMORY-FACTS-1 (owner directive 2026-10-10): the public Ask and command prompts state that no fact, name, figure or history may come from outside CONTEXT. */ /* 1.28.0 CONSOLE-BUDGET-WRITE-1 (agent_issues 2072, 2026-10-08, pillar autonomy): the console accepts sql! writes to fleet_budget (RULE-8-RETIRED-1: the fleet sets its own spend limits), with the same WHERE, row cap, console_backups copy and confirm button as every other write. 1.27.0 DASHBOARD-AUTONOMY-FIRST-1 (2026-10-08, agent_issues 2171, pillars autonomy and research): SCALE_BACK no longer puts "Decide: scale the fleet back" in the owner queue (spend caps are the fleet's, charter rules 10 and 11; /api/human carries spend_decision "fleet"), and a question about research, the pipeline, papers or the queue reads research_queue facts into Ask and its no-model fallback; the 15-minute cron is the second direct producer of qnfo-audit.fleet_tick (D1-TRIGGER-DEPTH-1). 1.26.8 (2026-10-08, pillar autonomy, PROBE-RUNNER-WATCHMAKER-1 #2076): WATCHMAKER_OPS time-gated-verification reads the consumer's own verification rows (cadence 2h) and probe-cadence reads the qnfo-cloud-ops scheduler_state stamp. 1.26.2 (2026-10-06, pillar cost): the ask-corpus-sync watchmaker entry says the feeder runs lean, not stopped, while an ai_spend cap is breached (BUDGET-SOFT-ROUTE-1). 1.26.1 (2026-10-06, pillar autonomy, OWNER-NO-LOOSE-ENDS-1): SAI-KAIZEN-GRADIENT-1 (#2054): computeSai kaizen = 1 / (1 + step x open issues), a gradient at every backlog size (the linear clamp read 0 above 20 open issues), in parity with qnfo-observability; WATCHMAKER-BY-PERSON-PRECISION-1 (#1726): code-task-merge counts a closed task as needing a person only when a person or session closed it or landed the change (23 of 53 counted rows were runner closures); WATCHMAKER_OPS gains owner-steps-watch (#2058, qnfo-cloud-ops) and dangling-bindings-census (#2051, qnfo-fleet-control). 1.26.0 UTM-CLICK-LEDGER-1 (transformation lever T7.9, pillar reach): the daily reach ingest reads qnfo-graph utm_clicks (written by qnfo-gateway 3.10.0 for every utm-tagged HTML page load, bot/human class, no cookie or IP) through the GRAPH binding into reach_signals source utm (channel = utm_source, entity campaign = utm_campaign, metric clicks_human / clicks_bot), so a social post or digest joins to the visits it caused; before the first tagged load the missing table is a note, not an error. 1.25.0 1.25.0 FLEET-CHANGELOG-1 (owner request 2026-10-06, pillar autonomy): a Changelog tab (/changelog, JSON /api/changelog, open to everyone) of what the fleet ships for itself: each worker version whose major or minor number is above every earlier one, and each worker Cloudflare created after 2026-09-29, from the canonical deploy ledger deployment_history; described from the commit on main that set the version (no model call), tagged with charter pillar and the public hostnames it serves, filterable (autonomy, public-facing, new workers, major, pillar); patch fixes are counted, not listed; an autonomy trend strip reads metric_history (watchmaker_index, metrics_in_breach, code_task_success_rate_30d, session_execution_ratio_30d); personal-plane releases in full only for the signed-in owner; synced in the existing 15-minute cron into qnfo-audit.fleet_changelog, heartbeat changelog-tick in WATCHMAKER_OPS. 1.24.1 (2026-10-06): WATCHMAKER_OPS ask-corpus-sync for qnfo-ai-search 2.2.8 ASK-CORPUS-FEEDER-1 (agent_issues 2029, carried for session 01KzS1 and PR 676); 1.24.1 is above PR 671's 1.24.0 (VERSION-AHEAD-1). 1.24.0 ATTENTION-LOOP-1 (2026-10-06, pillar reach; owner directive 2026-10-06 07:44Z: granular human attention per outreach channel and item, audit automatically, do more of what gets noticed, promote better or stop what is not): the reach ingest writes bot-filtered per-item rows (source cf-rum-human: pageviews per page, paper and referrer host; external_pageviews and continuation_pageviews per page) and the Buffer per-post metrics qnfo-cloud-ops collects (source buffer, per channel post); a daily scorecard after the ingest (attention_scorecard: items, human engagements, attention per item, referred visits, impressions per channel over 7 and 28 days; pages and papers noticed from outside; subscribers by source) with a verdict per social channel (INSUFFICIENT, STOP, PROMOTE, IMPROVE, KEEP, RETEST after 28 days) and a share in [0, 1] written to ops_config attention_channel_share, which qnfo-social multiplies into the owner caps and uses to order content by attention; every change is an attention_decisions row with evidence, a prediction and a 7-day verification that grades attention_decision_efficacy_30d; metrics attention_events_7d, attention_per_post_7d, pages_noticed_7d, attention_channels_stopped; GET /api/attention; WATCHMAKER_OPS attention-scorecard; no new cron, binding or model call. 1.23.2 (2026-10-06): the transformation-loop watchmaker entry names qnfo-fleet-control 0.4.132 (TP-1a parity, open-issue contract count, wave-exit stall); 1.23.1 (2026-10-06, pillar autonomy): WATCHMAKER_OPS measures TRANSFORMATION-LOOP-1 (qnfo-fleet-control 0.4.132: the transformation program engine, hourly; counted when its tick is stalled or an open CODE-TASK-NEEDS-SESSION-1 row names a lever only a session can land, so session dependence is measured as it falls). 1.22.4 (2026-10-06): the agent-issues remediation lane no longer dispatches to the retired qnfo-kaizen (WORKER-RETIRE-WAVE-2, #1756; noAction with a note) and qnfo-kaizen leaves CON_SVC; 1.22.3 HUMAN-AUDIENCE-1 (2026-10-06, pillar reach; owner directive 2026-10-06 "do real humans find and visit the pages, and keep reading"): two hourly metrics from one bot-filtered RUM read over 7 days, external_referred_pageviews_7d (page loads on the public hosts whose referrer is outside every fleet domain; direct loads excluded, that is where renders, probes and the owner land) and continuation_pageviews_7d (page loads whose referrer is another public page: the reader clicked on), both with falsifiable triggers; breakdown in cloud_ops_events human-audience-<day>, series in reach_signals cf-rum-human; WATCHMAKER_OPS measures the qnfo-social per-channel drain (DAILY-DISTRIBUTION-1) and the radar-hub signal intake (SIGNAL-INTAKE-SOURCES-1). 1.22.2 TEXT-QUALITY-LOOP-1 (agent_issues 1895, pillar reach): GET /api/generators lists the 12 text generators from D1 qnfo-audit.text_generator_inventory with writer family, non-model gate, cross-family read and outcome metric, and each one's latest run from a fixed query in GENERATOR_RUNS; open to everyone, no new cron, no model call. 1.22.1 FLEET-CONSOLE-REDOS-1: dispatch inputs are parsed one anchored k=v token at a time (linear, max 10), so crafted input can no longer backtrack exponentially (CodeQL js/redos alerts 331/332 on PR 623); 1.22.0 FLEET-CONSOLE-1 (owner request 2026-10-05: full control, input and remediation from the dashboard, every detail and decision without leaving it): the command line gains issue <id> (row, triage, contracts, verifications, claims, code task), backlog, info <queue item> (a Details button on every queue card), tasks, locks, prs, pr <n>, runs (open reads); logs <worker>, sql [db] <select>, prio/owner/comment/codetask/reopen (owner session); close/wontfix with evidence, sql! writes backed up to console_backups first, worker calls, workflow dispatch, deploy via canonical-deploy.yml, merge and close PRs (owner + fresh code, confirm button); the loop token cannot run console actions; auto-run owner actions are logged in cmd_log; 1.21.7 OUTREACH-WEEKDAY-1 (#1940): the outreach queue's freshness counts weekday (UTC) hours, because qnfo-cloud-ops sends Monday to Friday only (it read STALE every weekend); REACH-INGEST-BACKFILL-1 (#1711): after yesterday's reach ingest, each tick backfills the most recent of the previous 7 days that has no reach-ingest row (one day per tick), so a day the cron missed (10-04) needs no manual ingest; 1.21.6 REFRESH-INFLIGHT-1 (#1942): every 15-minute cron since 2026-10-04 14:45Z ended exceededWallTime (900 s, cpu 0, no subrequest; 4 internalError an hour, 93 of 93 scheduled events in 24h) because it awaited a refresh promise left by a cancelled fetch invocation that could never settle; reuse of that promise is now age-bounded (120 s), only its owner clears it, and the cron runs its own refresh behind a 150 s bound and falls back to the saved state, so every later step of scheduled() runs; HUMAN-SEV-HIGH-1 (#1896): human_actions sev "high" and "critical" show as urgent; OBJECTIVE-WEIGHT-OWNER-ONLY-1 (#1823): a weight revision is ratified only with the owner's emailed-code session (loop token, legacy owner-key cookie and unrecorded ratifications are held as proposed: 403 plus a 'ratify-held' row from the route, back to 'proposed' from the sweep); constraint revisions stay delegable; OBJECTIVE-CARD-PLAIN-1 (#1944): each objective proposal opens with a plain sentence of what it changes and what Ratify, Reject and no decision do; the Open data links name docs/keys/owner-api-keys.md (#1933); 1.21.5 SOURCE-RESTORE-1 (GitHub #608): main's worker.js is hand-written source again; commit 1e97baba (LAND-CODE-FIX-1) had landed the wrangler bundle of 1.21.4 over it (comments and block markers gone, __name2 helpers), which broke deploy-gate and seven offline suites; this file is the 1.21.3 source plus the 1.21.4 change; 1.21.4 OWNER-KEYS-VIEW-1: GET /api/owner/keys lists the active owner_client_keys rows from the private qnfo-identity D1 (owner session or loop token only, like every /api/owner/* read; OWNER-CLIENT-KEY-DRIFT-1, #1886); 1.21.3 FLEET-CMD-Q08-1: command-line ops "style" (standing editorial direction, qnfo-audit q08_editor_notes, read by q08-signal-engine 0.8.4 as authenticated text) and "verdict" (good|flat|no on the q08 article the page link was opened from, qnfo-audit q08_owner_verdicts, weighted 3 in q08 feedbackScan); both owner-session only (emailed code), so a stranger can never steer the publication; 1.21.2 LOOP-SYNC-DEADLINE-1: loopSync stops starting issues after 4 minutes and loopMaybeSync abandons it after 6, so the cron no longer runs into the 15-minute wall limit (#1938, #1942); 1.21.1 BRANCH-HYGIENE-1: WATCHMAKER_OPS measures qnfo-fleet-control 0.4.110's hourly branch sweeper (heartbeat branch-hygiene-tick; counted when it is stalled or its last tick errored); 1.20.3 render-health-watch; 1.20.1 CTL-FROM-NO-QUERY-1: /ctl.js scopes its link with origin + path, never the query string (q08 and companion confirm/unsubscribe pages carry ?t=<token>; a click sent it to /cmd); 1.18.10 WATCHMAKER_OPS measures ERROR-DETAIL-CAPTURE-1 (qnfo-ops 2.38.40: every 30-minute tick copies Workers Logs error events into worker_logs, heartbeat error-capture-tick; an error tick, e.g. a token without the observability read scope, does not prove the run); 1.18.9 GUARD-RCS-CANCELLED-1: guard_rcs reads each guard's latest run that concluded (not cancelled or skipped), so a concurrency-cancelled run no longer raises the security-gap trigger (agent_issues 1797); WATCHMAKER_OPS measures SECRET-CHANGE-WATCH-1 (qnfo-ops 2.38.39: every worker secret change recorded in cloud_ops_events and filed for a consumer check, heartbeat secret-watch-tick); 1.18.8 PAGEVIEWS-HUMAN-1: pageviews_30d and the prior window behind impressions_growth_30d read RUM with the Exclude-bots filter (bot: 0), the filter engaged_human_sessions_28d already uses, so crawler page loads no longer count as readers; the registry formula says so; 1.18.7 GRANT-FOLLOWUP-HONEST-1: WATCHMAKER_OPS grant-followup dates the runner's last run of any status and counts the runs since the last full read with their reason (gmail_pass_unset, errors), instead of reading "never ran" for a runner that runs without GMAIL_PASS; 1.18.6 IPATENT-USAGE-1: the ipatent command and patent questions read iPatent views, searches and drafts by topic (counts only) over SVC_QNFO_IPATENT; 1.18.5 ASK-TRUNCATED-JSON-1: a reply cut at max_tokens is salvaged (answer + complete actions), never shown as raw JSON; max_tokens stays 700 (the open-access cost bound); 1.18.4 ASK-RETRY-1: abandoned asks are answered again by the cron (max 2 tries, 3 per run); fastest model first (glm-5.2, 2s) instead of a 13s timeout on glm-5.3-flash; owner command-line asks in the request history; 1.18.3 REACH-IDEATION-1: WATCHMAKER_OPS measures qnfo-fleet-control's daily reach ideation; 1.18.2 ASCII-SOURCE-1: every non-ASCII character in the source is written as an escape, because the canonical deploy uploads the file as Latin-1 and the live page showed the KPI arrow as mojibake; 1.18.1 OWNER-SURFACE-HONESTY-1 + OBJECTIVE-AUTHORITY-TRUTH-1: an inbox card only for mail that owes the owner a reply, classified by INBOUND-SLA-1's category or the same header/subject rules (a funder's automated receipt such as emails 903 gets no card and is listed as handled), with sender domain, subject and authentication on the public card and the sender's name and address only for the signed-in owner; "fix all the issues" and search-query questions are answered from fleet data with no model and change nothing; a model failure answers from the data instead of failing bare, and the legacy Ask works inside waitUntil so it can no longer be left 'running'; Ask context carries the stored facts (domain, subject, received, auth verdict, classification; name, address and 300 characters for the owner) of the messages a question names; the ratify route records the credential that acted (human_responses.credential), and the apply step stamps ratified_by and objective_revision_applies.via from it ('owner (fleet.qnfo.org, emailed code)', 'delegated (loop token, OWNER-QUEUE-DELEGATION-1)', 'unknown credential'), never assuming the owner; the objective card shows the full statement and rationale; the open-issue digest never echoes a D1 error (public answer; CodeQL js/stack-trace-exposure); 1.18.0 FLEET-UI-2: the dashboard, /cmd and the queue fragment rebuilt in the QNFO design system shared with ask.qwav.tech and papers.qnfo.org (hero verdict with KPI meters, queue cards, investment and system rail, business grid with trend bars, dark mode); same view model, routes, controls and refresh contract; 1.17.8 FLEET-CTL-PRINT-SAFE-1: the /ctl.js link hides in print/PDF and in automated browsers; 1.17.7 PERFORMANCE-LOOP-1: engaged_human_sessions_28d from bot-filtered RUM (STRATEGY s6.3, s9) in the registry refresh; WATCHMAKER_OPS measures qnfo-fleet-control's lever experiments and its five hourly KPIs; 1.17.6 OUTREACH-LEARNER-1: WATCHMAKER_OPS measures qnfo-cloud-ops 1.18.0's outreach learner (daily ol-tick heartbeat; an outreach run with no logged allocation counts as stuck); 1.17.5 SOCIAL-DISTRIBUTION-LEARNER-1: WATCHMAKER_OPS social-learner reads the weekly update ledger of the qnfo-social 0.7.28 distribution learner (social-learner-update-<day>, meta.last_ok; cadence 168h, first due 2026-10-13); 1.17.4 INBOUND-SLA-1: WATCHMAKER_OPS measures qnfo-email-orchestrator's inbound SLA step (counted when its 15-minute runner is stalled or disabled, or a human inbound message is older than 72h with no fleet action); the weekly identity review lists the inbound messages it held without a substantive answer (category and sender domain only); 1.17.3 WATCHMAKER_OPS measures ASK-LOOP-1 (qnfo-ai-search 2.0.1: ask.qwav.tech measured hourly, evaluated, tuned and repaired daily); 1.17.2 WORK-WITH-ME-METRIC-1: the daily reach ingest counts inbound mail tagged [work-with-me:<offer>] (qnfo-gateway WORK-WITH-ME-1) and RUM page views of qnfo.org/work-with-me over 30 days into reach_signals and metric_registry (inbound_contacts_30d, work_with_me_pageviews_30d), shown in GET /api/reach and the portfolio KPIs, watched by WATCHMAKER_OPS; 1.17.1 IMPROVEMENT-LOOP-1: WATCHMAKER_OPS measures qnfo-fleet-control's hourly improvement loop (metric_history, regressions, fix durability); 1.17.0 FLEET-CMD-1: "Ask the fleet" becomes a natural-language command line (pinned on /, full page /cmd, /ctl.js link for any fleet page): instant read commands, plain-English answers with one-tap proposed actions, run in the background and polled (the old panel was wiped by the 10s refresh and its asks hung in status running); actions need an emailed 6-digit code (OWNER_CODE_TO, 12h session, destructive ones need a code from the last 15 min); abandoned running rows swept; no refresh on the ask path; 1.16.5 CODE-TASK-MERGE-RUNNER-1: code-task-merge is run by qnfo-fleet-control 0.4.86 (opens and merges code-loop PRs, hourly heartbeat) and counted only when the runner is stalled or disabled, a PR is stuck, a task needs a person, a pushed branch waits 6h for its PR, a revert failed, or a person merged or closed a code-loop PR after the runner's first ok tick; EVOLVE-HEARTBEAT-1: fleet-defects reads evolveTick's daily heartbeat; 1.16.4 REACH-LOOPS-WATCH-1: WATCHMAKER_OPS measures the delegated identity and reach loops (qnfo-social profile sync, posting and Buffer cross-post, scan, channel audit, engagement; qnfo-cloud-ops engagement, email triage, radar; radar-hub mention radar, job-market watch, events radar); 1.16.3 WATCHMAKER_OPS measures GRANT-FOLLOWUP-1 (qnfo-cloud-ops); 1.16.2 WATCHMAKER_OPS lists OBJECTIVE-CONSTRAINTS-1 (qnfo-fleet-control hourly, owner-ratified goals 41, 43, 57); 1.16.1 WATCHMAKER_OPS measures errata-hub's hourly members (#1747); 1.16.0 Q08-REVIEW-2026-10-31 (#1716): one-shot q08 decision on bot-filtered RUM page views; cadence cut via ops_config q08_max_per_day; 1.15.2 /health capabilities and limitations (#1735); 1.15.1 IDENTITY-WEEKLY-DELEGATED-1: no re-ask cards under the owner's queue delegation; decided leads skipped; 1.15.0 OPEN-ACCESS-1: no token or login to read or Ask; fleet-changing controls off the public page; 1.14.1 TASK-INTENT-INTAKE-1 (1733); 1.14.0 WATCHMAKER-INDEX-1; 1.13.1 OWNER-NOTES-ROUTE-1 files owner tasks and notes as agent_issues; 1.13.0 OBJECTIVE-REVISION-APPLY-1 + OWNER-NOTES-ROUTE-1 + STRATEGY KPI by tag; 1.12.1 IDENTITY-STORE-1 hardening + copy-only sync; owner links refuse claude.ai; 1.12.0 IDENTITY-STORE-1 + IDENTITY-WEEKLY-1; 1.11.1 OWNER-EDIT-1 */
+var VERSION = "1.46.0"; /* 1.46.0 KPI-THRESHOLDS-1 + CODE-FLOW-PR-SPLIT-1 + OWNER-REQUEST-RECEIPT-1 (2026-10-19, pillar autonomy; agent_issues 2727 and 2941, and the owner-queue metrics owner_queue_fleet_cards_open and owner_dispatched_items_7d): (1) the Metrics tab opens with Service levels: every registered metric against its threshold with a state (BREACH, WARN, NO_READING, OK, NO_THRESHOLD), the time in breach and its area, BREACH first and longest first, and the items past their SLA by class with the age of the oldest (v_metric_trigger_state, metric_registry, metric_history, v_sla_over_120m); GET /api/kpi gains service_levels and sla and loses every last_7d and all_time key (code tasks are one 30-day split, posts per channel 30 days). (2) The Code loop flow splits "closed, unmerged" by what happened to the pull request (code_task_pr_links): closed never opened a PR, PR closed unmerged, and superseded, which stays out of the failure share; one SQL (CODE_OUTCOME_SQL) feeds the flow and the Metrics tab. (3) The card the owner_request_requires_card trigger writes when an owner-request issue closes (source owner-request-issue) is a receipt: listed apart as Closed for you with its issue number, never in the count, the banner or an area queue; the gate already grades such a card "notice" (OWNER-NOTICE-GATE-1, migrations/2026-10-19-owner-notice-gate.sql), so the two metrics do not count it; this release changes only the page. */ /* 1.45.0 AREA-PAGES-1 (2026-10-19, pillar autonomy; owner directive 2026-10-18 "refactor the fleet dashboard and API feeds by functional area", repeated 2026-10-19 as "REFACTOR FLEET DASHBOARD BY FUNCTIONAL AREA"): the page half of AREA-FEEDS-1. (1) AREA_REGISTRY is the one table for the six areas; FEED_AREAS, AREA_DEFS, AREA_STARS, AREA_ROOT and AREA_FLOW are derived from it, and it holds what each area's page, tabs, cards, switches and owner-queue cards are. (2) The navigation is the areas (Overview, Cost, Research, Reach, Autonomy, Reliability, Platform, Command line); Metrics, Content and Changelog sit under their area behind a sub-bar. (3) /area/<id> answers for all six areas (/area/platform was a 404): the area's queue cards, constraint and breaches, pipelines, the cards that sat on the overview (Keep investing? under Cost, Progress and the social switch under Reach, System health under Reliability, the owner-queue switch under Autonomy), its reads with their lag, and a live refresh (?frag=1&rev=, 204 while nothing moved). The overview keeps the queue, one row per area (a named bottleneck or a stopped switch shows on the row) and the two headline cards. (4) GET /api by_area and /api/area/<id> name each area's page. (5) AREAS2_CSS was defined and never sent, so the per-area rows, the switch list and the summary link shipped unstyled on 1.44.5; it is in the page head now. (6) /kpi and /api/kpi answered 500 on 1.44.5 (a half-built KPI-THRESHOLDS-1 rebuilt the KPI document as if it were a map of metrics); the route serves the document as computed, and agent_issues 2727 stays open. (7) "AREA-MAP <id>:" banners mark 40 regions of this file by area (README, Code map). Additive except the overview's Pipelines, Progress and Pipeline controls cards, which moved to their areas. */ /* 1.44.7 FALLBACK-HEARTBEAT-PROOF-1 (2026-10-19, pillar autonomy): each scheduled run writes fleet_heartbeat (ok = the guarded fleet_tick fallback insert ran without error), so fm-single-heartbeat proves the second heartbeat producer is alive on a day the primary never misses instead of failing 24 hours after the last fallback tick. */ /* 1.44.4 AREA-FEEDS-5 (2026-10-18, pillar autonomy; deployment test of 1.44.3): GET /api was the one read that carried an ETag but no body `revision` and no ?since=, so a client that cannot send a header - the reason ?since= exists - could not dedupe the 13 KB index, and the index's own note ("a read with ?since=<revision> answers {not_modified:true}") was false about itself. It now goes through rtRead like every other read: body revision, ?since=, and an ETag over the content (endpoints plus the area grouping) instead of a path-and-schema string. The catalogue row now says "public 15s, ETag". Additive: no field removed, the ETag is strictly stronger. */ /* 1.44.3 AREA-FEEDS-4 (2026-10-18, pillar autonomy; closeout review of 1.44.2): the area feed omitted `blind`, the list of sources areasModel could not read, while /api/areas carries it. With a table unreadable and no breach rows the feed would have answered breaches:0 and status ok - a false green in the one read whose job is truthful state, which is exactly what AREAS-1 forbids ("an unreadable source is named in blind, never shown as zero"). The feed now carries blind (the same list /api/areas sends) and degraded:true when it is non-empty. Additive only: no field removed, status still agrees with /api/areas so the two cannot disagree. */ /* 1.44.2 AREA-FEEDS-3 (2026-10-18, pillar autonomy; red-team of the live 1.44.1): GET /api/area/<id> answered 500 {"error":"URI malformed"} for a malformed percent sequence (/api/area/%E0%A4%A, /api/area/%C0%80) because decodeURIComponent throws and the id was decoded unguarded, while every pre-existing read compares the raw path and answers 404. An anonymous poller can send one by accident, so a 500 here is noise in the fleet's own error accounting. The decode is now guarded and an unreadable escape falls back to the raw segment, which takes the 404 path. Everything else red-teamed clean: trailing slash, case, empty and nested ids, ?since= with and without the rev: prefix, ?full=1 size, the revision holding steady while data.age_min moved 22 -> 23 over 65 s (the nested clock field really is excluded), and no owner field in the body. No route or field removed. */ /* 1.44.1 AREA-FEEDS-2 (2026-10-18, pillar autonomy; two defects found by verifying 1.44.0 in production, both mine): (a) the page claim was wrong - humanHtml renders areas through focusRowsHtml, not areaSectionsHtml, which is dead code with no call site, so editing it changed nothing anyone sees; that edit is reverted and the link that was actually missing (an area row to its machine feed) is added to focusRowsHtml in both branches, clean areas included. (b) by_area[].live meant "every member read is live" while the feed's own live:true means "this feed is computed at request time"; two meanings under one name in one response, so the grouping field is renamed all_members_live and the feed keeps live. No route, field or behaviour removed. */ /* 1.44.0 AREA-FEEDS-1 (2026-10-18, owner directive "REFACTOR FLEET DASHBOARD AND API FEEDS BY FUNCTIONAL AREA. FEEDS SHALL ALWAYS BE UPDATED AUTOMATICALLY FROM LIVE DATA AND REAL-TIME"): the read surface is now organised by functional area, as data, not as a convention. (a) Every row of API_INDEX names the one functional area it serves (cost, research, reach, autonomy, reliability, platform), whether it is computed live at request time or from the rebuilt fleet state, and the worst-case lag a client must assume (source, lag_s). GET /api returns that grouping as areas + by_area, so a client can enumerate an area's feeds instead of guessing. (b) GET /api/area/<id> is one functional area as its own feed: its star metric and trend, its breaches ranked, the constraint it is believed to be stuck behind, its pipelines, and the reads that belong to it with their declared lag. It is computed from D1 at request time and revalidates like every other read. (c) Fixed a shadowed route: GET /api/ga4 answered 500 "GA4 property ID not set" live because an older handler for the same path stood in front of the GA4-DATA-API-1 ledger read and called the retired stub helpers; the stale handler and its two dead helpers are removed, so the ledger read answers and revalidates. (d) A snapshot-backed read now refreshes itself: /api/actions and /api/integration read fleet_dashboard_state without ever scheduling a rebuild (only /api/state did), so a poller could keep receiving a 15-minute-old answer; both go through freshState, and /health states which reads are snapshot-backed and which are live. (e) the area feed states the age of the oldest metric it reports (data.age_min) because those metrics are refreshed by other workers and on 2026-10-18 ranged from minutes to 18 hours; RT_CLOCK strips age_min at any depth, so the age never moves the revision while the values and the count do. No route removed, no field removed. */ /* 1.43.2 ALL-READS-1 (2026-10-18, pillar autonomy; owner directive "FIX ALL AUTOMATICALLY"): the last two open reads join the same contract, so every open read now revalidates. GET /api/loop and GET /api/changes kept returning no-store with no validator; both now go through rtRead and carry a revision, an ETag and ?since= (on /api/changes ?since= still means the timestamp it always meant: a revision is eight hex characters and can never equal an ISO date, so the two meanings cannot collide). With this the whole open read surface - 18 endpoints plus /health - answers the same way. */ /* 1.43.1 KPI-CLOCK-1 (2026-10-18, pillar autonomy; COMPACT-READS-1 follow-up, found by verifying the deploy): /api/kpi answered 200 instead of 304 because its body carries as_of and activity_as_of, built from Date.now() on every build, so two isolates (or one cache expiry) could never agree on a revision. The route suite missed it because kpiData hands back an isolate-cached object, so both calls in one process saw the same as_of; rt-api.test.mjs now slices the digest block and asserts a clock field never moves the revision and a content field always does (J2-J6), which fails without this fix. Both fields join RT_CLOCK. No behaviour change beyond the 304. */ /* 1.43.0 COMPACT-READS-1 (2026-10-18, pillar autonomy; owner directive "FIX ALL AUTOMATICALLY" after the RT-API-1 report): the three items that report listed as deliberately not done or as a sharp edge. (a) GET /api/areas was 101 KB and 55 KB of it was fullLever, the same text the clipped lever already carries at ten times the length; the API now sends the compact row and keeps the whole source text behind ?full=1, schema_version fleet-areas/v3 (the page is untouched: it renders from areasModel, not from the API). (b) GET /api/changelog sent all 267 releases (164 KB) to every poller that wanted the newest ten; it is now one page of 20 with ?limit=1..200, ?offset= and ?limit=all, schema_version changelog/v2, and it revalidates like the other reads instead of no-store. (c) the digest no longer strips fields by a blanket name rule: RT_CLOCK is the explicit list of clock fields and everything else is part of the identity, and rt-api.test.mjs now mutates a NON-clock field of every revalidating read and requires the ETag to move, so over-stripping fails the suite instead of silently serving a stale 304. (d) ?since=<revision> is now on /api/areas, /api/human and /api/changelog as well as /api/live, every revalidating read returns X-Revision, and a body field `revision`, so a client that cannot send a header can still dedupe. No route removed; no field removed without a parameter that restores it. */ /* 1.42.1 RT-API-FRAGMENT-REV-1 (2026-10-18, pillar autonomy; RT-API-1 follow-up, found by verifying the deploy): the first deploy revalidated the JSON reads exactly as designed (/api/live, /api/areas, /api/human answered 304 with no body) but the page fragment did not: the same code path sets an ETag and the edge serves X-Generated-At while the ETag never arrives on text/html, so the poll's If-None-Match could not match and it kept re-downloading 12 KB. The fragment now carries X-Content-Revision and accepts it back as ?rev=, answering 204 with no body while nothing has changed; If-None-Match and 304 remain honoured. No other route is touched. */ /* 1.42.0 RT-API-1 (2026-10-18, pillar autonomy; owner directive "REFACTOR FLEET DASHBOARD AND REAL-TIME APIS"): measured on the live worker before the change, no read answered with an ETag, every read answered Cache-Control: no-store and GET /api was a 404, so a poller could neither ask "did anything change?" nor enumerate what it may call; /api/areas alone was 122 KB and the page re-downloaded and re-rendered its fragment every 60 s whether or not anything had moved. Now (a) GET /api is the read API's own index: every public read with its auth, schema_version, cache policy and what makes it change (API_INDEX, one table instead of scattered knowledge); (b) GET /api/live is one consolidated snapshot for pollers (state verdict and probe counts, queue open/urgent/oldest, the five areas with their constraint and lever, the invest verdict, a content revision) so a poll is one call instead of four; (c) a read carries a weak ETag computed over its CONTENT digest (time-derived fields excluded, or nothing would ever revalidate), honours If-None-Match with 304 and an empty body, and states a cache policy: public reads may be reused 15 s, a response carrying owner fields never may (private, no-store, Vary on the credential); (d) /api/areas, /api/human and /api/live answer 304, and /api/live also accepts ?since=<revision> for clients that cannot send a header; (e) the page's 60 s poll sends the fragment's ETag and on 304 leaves the DOM untouched (no re-render, no lost focus or scroll); (f) /health advertises api-index, live-snapshot and conditional-reads. No route was removed and no payload field was dropped. */ /* 1.41.0 GA4-DATA-API-1 (2026-10-18, pillar reach): the GA4 stubs are replaced by a real Data API read (service account GA4_SA_KEY, RS256 JWT in WebCrypto) into reach_signals source ga4 once a day, ledger cloud_ops_events ga4-ingest-<day>, GET/POST /api/ga4, watchmaker op ga4-ingest; a refused grant writes its reason, never a zero. */ /* 1.40.1 WORKERS-BP-LOGGING-2 (2026-10-17, pillar security/observability): the request and cron error catches now log at error severity with structured JSON (they previously returned the error without logging, so unhandled request/cron failures were invisible in the logs); the remaining string-concatenated console.log/console.error calls are converted to structured JSON.stringify so logs are searchable. No control-flow changes. */ /* 1.40.0 REACH-DIRECT-TRAFFIC-1 (2026-10-17, pillar reach; owner directive: see which papers and links are accessed directly from Cloudflare analytics/logs, not just social-media clicks): the /kpi Reach section gains "Top papers, opened directly" and "Top links, opened directly" (7 days), read from reach_signals source cf-rum-human (Cloudflare Web Analytics RUM page loads, bots excluded) grouped per paper slug and per page, excluding the fleet's own surfaces so the owner's own browsing is not reader traffic. This is the direct-traffic complement to the social-post click counts under "Most popular posts". */ /* 1.39.2 OWNER-VOICE-CAP-PARITY-1 (2026-10-17, pillar reach, agent_issues 2729): portfolioWeeklyCap falls back to PORTFOLIO_SOCIAL_WEEKLY_CAP_DEFAULT = 21, the cap qnfo-social weeklyCap runs (PAPER-ROLLUP-1), instead of the literal 2; the 2 failed the cadence check on any normal week, so the 05:00Z guard wrote social_paused=1 on 10-15, 10-16 and 10-17. wrangler.toml sets SOCIAL_ALLOW_Q08=1 so the 1.38.3 q08-link rule does not flag links Q08-OPEN-1 made allowed. // 1.39.1 (2026-10-17): a lever is clipped on a word boundary, so it can no longer end mid-word ("about 4k neur..."), and the root-cause sentence names the titles it is expected to clear in quotes. */ /* 1.39.0 AREAS-2 (2026-10-17, pillar autonomy; owner directive EXECUTE REFACTOR: organise the dashboard by functional area and action, not by data source, without overload, extraneous information or redundancy): the 15-row breach wall and the five tiles are replaced by five constraint rows, each carrying the cost of its constraint, its owner, its lever, the lever type (code loop / your decision / fleet loops) and its remedy history; every other breach moves to a deterministic /area/<id> page, which replaces 15 per-row Diagnose model calls; AREA_ROOT promotes the known root cause (verification monoculture) over the tautological probe count and names the breaches it explains; a Pipeline controls card shows kill-switch state and when it was set; the duplicate Subscribers progress bar is removed; GET /api/areas carries schema_version fleet-areas/v2. */ /* 1.38.0 AREAS-1 (2026-10-17, pillar autonomy; owner request: refactor the dashboard around functional areas and action items, with bottlenecks and progress, without overload or redundancy): five area tiles (cost, research and content, reach and growth, autonomy loop, reliability and security) each with one star metric and its 14-day trend replace the four-number strip; breaching metrics are listed per area, worst three first (priority, then gap), each with owner, sparkline, direction and a Diagnose control that fills the command line; a Pipelines panel shows issue age, code loop, research queue and outreach with the bottleneck stage named; the Open data card and the business-case section are removed (every figure is a tile, a verdict reason or a sparkline); GET /api/areas. / 1.37.6 SCHEMA-ALTER-PROBE (2026-10-14, pillar core; the qnfo-ops 2.48.2 pattern, PR 1258): liveScheduled reads pragma_table_info(worker_schedules) and runs ALTER ... ADD COLUMN created_on only when the column is missing, so no failed D1 statement reaches Workers telemetry on each call; the schema block's outer catch logs. */ /* 1.37.5 WORKERS-BP-LOGGING-qnfo-fleet-dashboard-1 (2026-10-14, agent_issues 2532, pillar security): the 14 swallowed catches log; the nine server-side ones write console.error JSON with worker and where (the ALTER TABLE on worker_schedules skips the expected duplicate-column error), and the five in the browser scripts write console.debug. Control flow unchanged. */ /* 1.37.4 FLEET-JOURNEYS-WATCHMAKER-1 (2026-10-14, agent_issues 2554, pillar core): WATCHMAKER_OPS lists fleet-journeys, the qnfo-fleet-control journey tick (journey_runs runner cf, every 20 minutes). */ /* 1.37.3 SLA-120M (2026-10-14, owner directive: no SLA exceeds 120 minutes, 10-minute resolution): the loop-signal warn SLA is 120 min (was 720) and its breach comment speaks in minutes; the watchmaker stuck limits are in minutes (stuck_min) and every SLA-type limit is 120 min (inbound mail 72 h, code-loop PR green 6 h and waiting 48 h, attention decisions 240 h, transformation levers 24 h, q08 review and intents 48 h); lookback windows keep their length (Gmail runs and person merges 30 days, outreach-learner allocation 48 h). */ /* 1.37.2: the outreach-learner stuck count excludes jr-outreach-lookup-* runs, as it excludes jr-outreach-learner-*. */ /* 1.37.1 OUTREACH-LOOKUP-WATCHMAKER-1 (2026-10-14, pillar reach): WATCHMAKER_OPS lists outreach-lookup, the qnfo-cloud-ops email lookup that runs every 120 minutes (SLA-120M-3). */ /* 1.37.0 CONTENT-PIPELINE-1 (2026-10-14, pillars research and reach; owner directive "visibility onto the content creation process end-to-end on fleet dashboard"): a Content tab (/content, JSON /api/content, open) shows every idea, paper, revision, erratum and post on one production line from qnfo-audit v_content_pipeline (stage, state, time in stage, SLA verdict), with papers.qnfo.org release-gate verdicts (living-paper) and q08.org signal-to-piece gates (q08-signal); the cron writes metric papers_live_failing_release_gate hourly. */ /* 1.36.1 COMPAT-WATCHMAKER-1 (2026-10-13, agent_issues 2412, pillar autonomy): WATCHMAKER_OPS lists compat-exposure, the qnfo-ops worker_compat_state snapshot (cadence 12h). ATTENTION-STOP-GRADE-1 (agent_issues 2467): a STOP decision is graded on its prediction, the other social channels' pooled 7-day attention per item, not on its own channel, whose share it set to 0 (that read 0 -> 0, flat, for every STOP). */ /* 1.36.0 MAIL-REPLY-INSTRUCTION-1 (2026-10-13, pillar personal; owner screenshot "Fail."): "reply 984 always show me draft first before sending" was offered for sending as the email text. reply <id> <text> now sends the text as written only when it reads as an email (greeting, several lines or a sign-off); otherwise the text is the owner's instruction and the fleet writes a complete draft of that reply, shown first with Send reply. The Reply button on inbox cards and in mail <id> runs that draft directly. */ /* 1.35.0 MAIL-DRAFT-COMPLETE-1 (2026-10-13, pillar personal; owner: "when prompted the system must generate full, complete, ready-to-send drafts. do not burden the user with manual effort or input"): drafts no longer carry [[FILL]] gaps. The fleet reads the facts itself (the qnfo.org public profile, the owner identity document in the private store, and the GitHub record of any file or commit the thread names) and the model writes a complete reply, including any requested statement, from those records only; a sentence with a title, unit or placeholder no record supports is dropped in code; every draft carries Send reply. */ /* 1.34.0 MAIL-DRAFT-1 (2026-10-13, pillar personal; owner: "NEVER INVENT TITLES OR BUSINESS UNITS OR FABRICATE ANY OTHER INFORMATION ... REQUIRING MULTIPLE BACK-AND-FORTH PROMPTS"): a request to draft a reply no longer goes to the general question prompt. It finds the message by address, id or inbox card, gives the model the stored thread and only the owner's name, turns every fact on record nowhere into a [[FILL: ...]] gap (a title or unit the thread lacks is replaced in code), writes the sign-off in code (name and sending address), shows real line breaks, and offers Edit, then send (the full reply in the command line, up to 8000 characters) and, with no gap left, Send reply; "send it" sends the last draft; a reply holding a gap is refused. */ /* 1.33.0 OWNER-DOC-API-1 (2026-10-12, agent_issues 2373 EMAIL-VOICE-DRAFTER-1, pillar personal): GET and POST /api/owner/doc/<key> let a fleet worker read an owner document and propose a new version (or create a seed the owner then edits) through this worker, the only one bound to the private store; the caller is a service binding that names itself in props (qnfo-email), the loop token or the owner session. 1.31.3: main (1.30.1-kpi) merged into this branch; the version moves so the push is ahead. 1.31.2: the inbox reply and spam paths log their caught errors to Workers Logs (WORKERS-STANDARDS-GUARD-1). 1.31.1: INBOX-REPLY-1 (below) and OUTREACH-SLA-CYCLE-1 ship in the same PR as 1.31.0; the version moves so each push is ahead. */ /* 1.31.0 DASHBOARD-FULL-ACCESS-1 (2026-10-12, pillar autonomy; owner: "the fleet dashboard is my one-stop assistant to the Quniverse and shall have full access to all resources"): every ask since 09:33Z answered "the model service answered HTTP 401": a secret added to this worker in the Cloudflare dashboard (GA4_SA_KEY) made a version that copied the bindings without props, so SVC_QNFO_AI lost caller = qnfo-fleet-dashboard and qnfo-ai refused it. A model leg that qnfo-ai refuses (401/403/5xx or a network error) now runs the same Workers AI model through the new direct AI binding, so a lost prop or a router outage no longer silences the command line. The console gains mail (search the inbox, read a message in full; owner session), service bindings to qnfo-email, qnfo-cloud-ops and qnfo-fleet-control for call, and sql reads of q08 and the private identity D1 (owner session; identity stays read-only). info shows the signed-in owner up to 1500 characters of each message and tells a visitor to sign in for subject and text. MAIL-ASK-1 (same day, owner: "what do they say? don't waste my time"): "WHAT'S UP WITH RESEARCHLETTERS EMAILS?" and the follow-up "AND WHAT DO THEY SAY?" reached the model with no message at all (MAIL_ASK_RX had no plurals, "researchletters" did not name theresearchletters.org, a follow-up named no sender); plurals, say/said/content, a card domain typed without "the" or the TLD, and a follow-up with mail cards in the queue now read the messages, and the owner's context carries 1500 characters of each (was 300). A journal call for papers ("We invite your research article", "submit your full-length article", "fits our journal scope", an ISSN line) is a solicitation, not a person owed a reply (MAIL_SOLICIT_RX, parity with qnfo-cloud-ops 1.25.2), so it leaves the owner queue and is listed as handled. INBOX-REPLY-1 (same day, owner: "THE FLEET DASHBOARD IS THE QNFO INBOX"): inbox cards carry Reply (fills "reply <id> " in the command line), Read and Spam; "reply <id> <text>" sends through qnfo-email /send as the address the mail was written to (rowan.quni@qnfo.org by default) with "Re: <subject>", marks the message replied and closes its queue rows (fresh code: it speaks in the owner's name); "spam <id> ..." marks messages spam and adds the sender to email_sender_policy junk; the card no longer says "Open the qnfo inbox". */ /* 1.30.1: hosts fold to their property by domain, probe clicks left out, 64-character campaign tags matched, ingest notes carry no upstream error text. 1.30.0 FLEET-KPI-1 (owner request 2026-10-12, pillar reach): a Metrics tab (/kpi, JSON /api/kpi, open to everyone) computed from qnfo-audit at request time: open issues by priority and category, opened and closed per day, median age, oldest, closed with evidence in 24 h and 7 d, code-loop tasks; bot-filtered page views per property and day, outreach actions and events per channel and day, posts per channel, the most popular posts with links, subscribers, mentions and citations; the Buffer channels, posts and per-post statistics; a value nothing measures is null and shown as not measured; the daily reach ingest adds a per-host row with page loads and visits. */ /* 1.29.4 CMD-AI-TIMEOUT-1 (agent_issues 2316): cmdModelCall sends timeout_ms just under its own abort and names a 504 router_timeout; WATCHMAKER-TICK-LEDGER-1 (2363): tick-sequence-ledger entry, duplicate dangling-bindings-census entry removed; REPORT-CARD-CATCHUP-1 (2054): the weekly card is caught up on any tick and deduped only against measured rows. */ /* 1.29.3 WORKERS-BEST-PRACTICES-1: every LOOP_TOKEN check (6 POST routes + the machine flag) uses constEq instead of !==/===. */ /* 1.29.2 MODEL-ID-AUDIT-1 (2026-10-11): qnfo-ai routes only the ids in its MODELS table; llama-3.3-70b-instruct-fp8-fast is not one, so the third ask leg silently became a second deepseek-v4-flash. Order is now glm-5.3-flash, deepseek-v4-flash-wa, gpt-oss-120b: the Workers AI legs probe at 2-3 s through qnfo-ai, the DeepSeek API leg at 13 s. */ /* 1.29.1 CMD-ASK-BUDGET-1 (2026-10-11): 1.29.0 raised CMD_AI_BUDGET_MS to 40 s, but the job runs in ctx.waitUntil, which the runtime cancels 30 s after the response, so the first live ask (cmd-517f7562d37f1041ef0a) never wrote its fallback and stayed running until the page gave up at 45 s; the budget is back under that limit (24 s, hedge 4 s) and a suite asserts it stays below 28 s. 1.29.0 CMD-ASK-FAST-1 (2026-10-11, pillar autonomy; owner: "Fix fleet command line"): every command-line and Ask question since 2026-10-06 ended in the stored-data fallback ("The AI model did not answer just now (it timed out)", 7 of the last 7 rows): ASK_MODELS named glm-5.2, a model qnfo-ai no longer lists, so the first call burned its slot and glm-5.3-flash, asked second with the remaining budget, timed out at 13 s. The models are now raced with a staggered start (ASK_HEDGE_MS, first answer wins; each failure names its model in cmd_log.error), the budget is 40 s, and a question about Q08 reads published_pieces from the q08-signal D1 (new read binding Q08) into the model context and into the no-model fallback, which also says plainly when its stored data does not cover the question instead of answering with a status dump. 1.28.2 1.28.2 NOZ-DOI-1 (2026-10-10, pillar reach): no deposit-service (10.5281) data is collected, scored or shown: reach rows, the impact KPI, the identity-weekly lookups and the watchmaker op are removed, and entity_map ignores that DOI prefix. 1.28.1 NO-MEMORY-FACTS-1 (owner directive 2026-10-10): the public Ask and command prompts state that no fact, name, figure or history may come from outside CONTEXT. */ /* 1.28.0 CONSOLE-BUDGET-WRITE-1 (agent_issues 2072, 2026-10-08, pillar autonomy): the console accepts sql! writes to fleet_budget (RULE-8-RETIRED-1: the fleet sets its own spend limits), with the same WHERE, row cap, console_backups copy and confirm button as every other write. 1.27.0 DASHBOARD-AUTONOMY-FIRST-1 (2026-10-08, agent_issues 2171, pillars autonomy and research): SCALE_BACK no longer puts "Decide: scale the fleet back" in the owner queue (spend caps are the fleet's, charter rules 10 and 11; /api/human carries spend_decision "fleet"), and a question about research, the pipeline, papers or the queue reads research_queue facts into Ask and its no-model fallback; the 15-minute cron is the second direct producer of qnfo-audit.fleet_tick (D1-TRIGGER-DEPTH-1). 1.26.8 (2026-10-08, pillar autonomy, PROBE-RUNNER-WATCHMAKER-1 #2076): WATCHMAKER_OPS time-gated-verification reads the consumer's own verification rows (cadence 2h) and probe-cadence reads the qnfo-cloud-ops scheduler_state stamp. 1.26.2 (2026-10-06, pillar cost): the ask-corpus-sync watchmaker entry says the feeder runs lean, not stopped, while an ai_spend cap is breached (BUDGET-SOFT-ROUTE-1). 1.26.1 (2026-10-06, pillar autonomy, OWNER-NO-LOOSE-ENDS-1): SAI-KAIZEN-GRADIENT-1 (#2054): computeSai kaizen = 1 / (1 + step x open issues), a gradient at every backlog size (the linear clamp read 0 above 20 open issues), in parity with qnfo-observability; WATCHMAKER-BY-PERSON-PRECISION-1 (#1726): code-task-merge counts a closed task as needing a person only when a person or session closed it or landed the change (23 of 53 counted rows were runner closures); WATCHMAKER_OPS gains owner-steps-watch (#2058, qnfo-cloud-ops) and dangling-bindings-census (#2051, qnfo-fleet-control). 1.26.0 UTM-CLICK-LEDGER-1 (transformation lever T7.9, pillar reach): the daily reach ingest reads qnfo-graph utm_clicks (written by qnfo-gateway 3.10.0 for every utm-tagged HTML page load, bot/human class, no cookie or IP) through the GRAPH binding into reach_signals source utm (channel = utm_source, entity campaign = utm_campaign, metric clicks_human / clicks_bot), so a social post or digest joins to the visits it caused; before the first tagged load the missing table is a note, not an error. 1.25.0 1.25.0 FLEET-CHANGELOG-1 (owner request 2026-10-06, pillar autonomy): a Changelog tab (/changelog, JSON /api/changelog, open to everyone) of what the fleet ships for itself: each worker version whose major or minor number is above every earlier one, and each worker Cloudflare created after 2026-09-29, from the canonical deploy ledger deployment_history; described from the commit on main that set the version (no model call), tagged with charter pillar and the public hostnames it serves, filterable (autonomy, public-facing, new workers, major, pillar); patch fixes are counted, not listed; an autonomy trend strip reads metric_history (watchmaker_index, metrics_in_breach, code_task_success_rate_30d, session_execution_ratio_30d); personal-plane releases in full only for the signed-in owner; synced in the existing 15-minute cron into qnfo-audit.fleet_changelog, heartbeat changelog-tick in WATCHMAKER_OPS. 1.24.1 (2026-10-06): WATCHMAKER_OPS ask-corpus-sync for qnfo-ai-search 2.2.8 ASK-CORPUS-FEEDER-1 (agent_issues 2029, carried for session 01KzS1 and PR 676); 1.24.1 is above PR 671's 1.24.0 (VERSION-AHEAD-1). 1.24.0 ATTENTION-LOOP-1 (2026-10-06, pillar reach; owner directive 2026-10-06 07:44Z: granular human attention per outreach channel and item, audit automatically, do more of what gets noticed, promote better or stop what is not): the reach ingest writes bot-filtered per-item rows (source cf-rum-human: pageviews per page, paper and referrer host; external_pageviews and continuation_pageviews per page) and the Buffer per-post metrics qnfo-cloud-ops collects (source buffer, per channel post); a daily scorecard after the ingest (attention_scorecard: items, human engagements, attention per item, referred visits, impressions per channel over 7 and 28 days; pages and papers noticed from outside; subscribers by source) with a verdict per social channel (INSUFFICIENT, STOP, PROMOTE, IMPROVE, KEEP, RETEST after 28 days) and a share in [0, 1] written to ops_config attention_channel_share, which qnfo-social multiplies into the owner caps and uses to order content by attention; every change is an attention_decisions row with evidence, a prediction and a 7-day verification that grades attention_decision_efficacy_30d; metrics attention_events_7d, attention_per_post_7d, pages_noticed_7d, attention_channels_stopped; GET /api/attention; WATCHMAKER_OPS attention-scorecard; no new cron, binding or model call. 1.23.2 (2026-10-06): the transformation-loop watchmaker entry names qnfo-fleet-control 0.4.132 (TP-1a parity, open-issue contract count, wave-exit stall); 1.23.1 (2026-10-06, pillar autonomy): WATCHMAKER_OPS measures TRANSFORMATION-LOOP-1 (qnfo-fleet-control 0.4.132: the transformation program engine, hourly; counted when its tick is stalled or an open CODE-TASK-NEEDS-SESSION-1 row names a lever only a session can land, so session dependence is measured as it falls). 1.22.4 (2026-10-06): the agent-issues remediation lane no longer dispatches to the retired qnfo-kaizen (WORKER-RETIRE-WAVE-2, #1756; noAction with a note) and qnfo-kaizen leaves CON_SVC; 1.22.3 HUMAN-AUDIENCE-1 (2026-10-06, pillar reach; owner directive 2026-10-06 "do real humans find and visit the pages, and keep reading"): two hourly metrics from one bot-filtered RUM read over 7 days, external_referred_pageviews_7d (page loads on the public hosts whose referrer is outside every fleet domain; direct loads excluded, that is where renders, probes and the owner land) and continuation_pageviews_7d (page loads whose referrer is another public page: the reader clicked on), both with falsifiable triggers; breakdown in cloud_ops_events human-audience-<day>, series in reach_signals cf-rum-human; WATCHMAKER_OPS measures the qnfo-social per-channel drain (DAILY-DISTRIBUTION-1) and the radar-hub signal intake (SIGNAL-INTAKE-SOURCES-1). 1.22.2 TEXT-QUALITY-LOOP-1 (agent_issues 1895, pillar reach): GET /api/generators lists the 12 text generators from D1 qnfo-audit.text_generator_inventory with writer family, non-model gate, cross-family read and outcome metric, and each one's latest run from a fixed query in GENERATOR_RUNS; open to everyone, no new cron, no model call. 1.22.1 FLEET-CONSOLE-REDOS-1: dispatch inputs are parsed one anchored k=v token at a time (linear, max 10), so crafted input can no longer backtrack exponentially (CodeQL js/redos alerts 331/332 on PR 623); 1.22.0 FLEET-CONSOLE-1 (owner request 2026-10-05: full control, input and remediation from the dashboard, every detail and decision without leaving it): the command line gains issue <id> (row, triage, contracts, verifications, claims, code task), backlog, info <queue item> (a Details button on every queue card), tasks, locks, prs, pr <n>, runs (open reads); logs <worker>, sql [db] <select>, prio/owner/comment/codetask/reopen (owner session); close/wontfix with evidence, sql! writes backed up to console_backups first, worker calls, workflow dispatch, deploy via canonical-deploy.yml, merge and close PRs (owner + fresh code, confirm button); the loop token cannot run console actions; auto-run owner actions are logged in cmd_log; 1.21.7 OUTREACH-WEEKDAY-1 (#1940): the outreach queue's freshness counts weekday (UTC) hours, because qnfo-cloud-ops sends Monday to Friday only (it read STALE every weekend); REACH-INGEST-BACKFILL-1 (#1711): after yesterday's reach ingest, each tick backfills the most recent of the previous 7 days that has no reach-ingest row (one day per tick), so a day the cron missed (10-04) needs no manual ingest; 1.21.6 REFRESH-INFLIGHT-1 (#1942): every 15-minute cron since 2026-10-04 14:45Z ended exceededWallTime (900 s, cpu 0, no subrequest; 4 internalError an hour, 93 of 93 scheduled events in 24h) because it awaited a refresh promise left by a cancelled fetch invocation that could never settle; reuse of that promise is now age-bounded (120 s), only its owner clears it, and the cron runs its own refresh behind a 150 s bound and falls back to the saved state, so every later step of scheduled() runs; HUMAN-SEV-HIGH-1 (#1896): human_actions sev "high" and "critical" show as urgent; OBJECTIVE-WEIGHT-OWNER-ONLY-1 (#1823): a weight revision is ratified only with the owner's emailed-code session (loop token, legacy owner-key cookie and unrecorded ratifications are held as proposed: 403 plus a 'ratify-held' row from the route, back to 'proposed' from the sweep); constraint revisions stay delegable; OBJECTIVE-CARD-PLAIN-1 (#1944): each objective proposal opens with a plain sentence of what it changes and what Ratify, Reject and no decision do; the Open data links name docs/keys/owner-api-keys.md (#1933); 1.21.5 SOURCE-RESTORE-1 (GitHub #608): main's worker.js is hand-written source again; commit 1e97baba (LAND-CODE-FIX-1) had landed the wrangler bundle of 1.21.4 over it (comments and block markers gone, __name2 helpers), which broke deploy-gate and seven offline suites; this file is the 1.21.3 source plus the 1.21.4 change; 1.21.4 OWNER-KEYS-VIEW-1: GET /api/owner/keys lists the active owner_client_keys rows from the private qnfo-identity D1 (owner session or loop token only, like every /api/owner/* read; OWNER-CLIENT-KEY-DRIFT-1, #1886); 1.21.3 FLEET-CMD-Q08-1: command-line ops "style" (standing editorial direction, qnfo-audit q08_editor_notes, read by q08-signal-engine 0.8.4 as authenticated text) and "verdict" (good|flat|no on the q08 article the page link was opened from, qnfo-audit q08_owner_verdicts, weighted 3 in q08 feedbackScan); both owner-session only (emailed code), so a stranger can never steer the publication; 1.21.2 LOOP-SYNC-DEADLINE-1: loopSync stops starting issues after 4 minutes and loopMaybeSync abandons it after 6, so the cron no longer runs into the 15-minute wall limit (#1938, #1942); 1.21.1 BRANCH-HYGIENE-1: WATCHMAKER_OPS measures qnfo-fleet-control 0.4.110's hourly branch sweeper (heartbeat branch-hygiene-tick; counted when it is stalled or its last tick errored); 1.20.3 render-health-watch; 1.20.1 CTL-FROM-NO-QUERY-1: /ctl.js scopes its link with origin + path, never the query string (q08 and companion confirm/unsubscribe pages carry ?t=<token>; a click sent it to /cmd); 1.18.10 WATCHMAKER_OPS measures ERROR-DETAIL-CAPTURE-1 (qnfo-ops 2.38.40: every 30-minute tick copies Workers Logs error events into worker_logs, heartbeat error-capture-tick; an error tick, e.g. a token without the observability read scope, does not prove the run); 1.18.9 GUARD-RCS-CANCELLED-1: guard_rcs reads each guard's latest run that concluded (not cancelled or skipped), so a concurrency-cancelled run no longer raises the security-gap trigger (agent_issues 1797); WATCHMAKER_OPS measures SECRET-CHANGE-WATCH-1 (qnfo-ops 2.38.39: every worker secret change recorded in cloud_ops_events and filed for a consumer check, heartbeat secret-watch-tick); 1.18.8 PAGEVIEWS-HUMAN-1: pageviews_30d and the prior window behind impressions_growth_30d read RUM with the Exclude-bots filter (bot: 0), the filter engaged_human_sessions_28d already uses, so crawler page loads no longer count as readers; the registry formula says so; 1.18.7 GRANT-FOLLOWUP-HONEST-1: WATCHMAKER_OPS grant-followup dates the runner's last run of any status and counts the runs since the last full read with their reason (gmail_pass_unset, errors), instead of reading "never ran" for a runner that runs without GMAIL_PASS; 1.18.6 IPATENT-USAGE-1: the ipatent command and patent questions read iPatent views, searches and drafts by topic (counts only) over SVC_QNFO_IPATENT; 1.18.5 ASK-TRUNCATED-JSON-1: a reply cut at max_tokens is salvaged (answer + complete actions), never shown as raw JSON; max_tokens stays 700 (the open-access cost bound); 1.18.4 ASK-RETRY-1: abandoned asks are answered again by the cron (max 2 tries, 3 per run); fastest model first (glm-5.2, 2s) instead of a 13s timeout on glm-5.3-flash; owner command-line asks in the request history; 1.18.3 REACH-IDEATION-1: WATCHMAKER_OPS measures qnfo-fleet-control's daily reach ideation; 1.18.2 ASCII-SOURCE-1: every non-ASCII character in the source is written as an escape, because the canonical deploy uploads the file as Latin-1 and the live page showed the KPI arrow as mojibake; 1.18.1 OWNER-SURFACE-HONESTY-1 + OBJECTIVE-AUTHORITY-TRUTH-1: an inbox card only for mail that owes the owner a reply, classified by INBOUND-SLA-1's category or the same header/subject rules (a funder's automated receipt such as emails 903 gets no card and is listed as handled), with sender domain, subject and authentication on the public card and the sender's name and address only for the signed-in owner; "fix all the issues" and search-query questions are answered from fleet data with no model and change nothing; a model failure answers from the data instead of failing bare, and the legacy Ask works inside waitUntil so it can no longer be left 'running'; Ask context carries the stored facts (domain, subject, received, auth verdict, classification; name, address and 300 characters for the owner) of the messages a question names; the ratify route records the credential that acted (human_responses.credential), and the apply step stamps ratified_by and objective_revision_applies.via from it ('owner (fleet.qnfo.org, emailed code)', 'delegated (loop token, OWNER-QUEUE-DELEGATION-1)', 'unknown credential'), never assuming the owner; the objective card shows the full statement and rationale; the open-issue digest never echoes a D1 error (public answer; CodeQL js/stack-trace-exposure); 1.18.0 FLEET-UI-2: the dashboard, /cmd and the queue fragment rebuilt in the QNFO design system shared with ask.qwav.tech and papers.qnfo.org (hero verdict with KPI meters, queue cards, investment and system rail, business grid with trend bars, dark mode); same view model, routes, controls and refresh contract; 1.17.8 FLEET-CTL-PRINT-SAFE-1: the /ctl.js link hides in print/PDF and in automated browsers; 1.17.7 PERFORMANCE-LOOP-1: engaged_human_sessions_28d from bot-filtered RUM (STRATEGY s6.3, s9) in the registry refresh; WATCHMAKER_OPS measures qnfo-fleet-control's lever experiments and its five hourly KPIs; 1.17.6 OUTREACH-LEARNER-1: WATCHMAKER_OPS measures qnfo-cloud-ops 1.18.0's outreach learner (daily ol-tick heartbeat; an outreach run with no logged allocation counts as stuck); 1.17.5 SOCIAL-DISTRIBUTION-LEARNER-1: WATCHMAKER_OPS social-learner reads the weekly update ledger of the qnfo-social 0.7.28 distribution learner (social-learner-update-<day>, meta.last_ok; cadence 168h, first due 2026-10-13); 1.17.4 INBOUND-SLA-1: WATCHMAKER_OPS measures qnfo-email-orchestrator's inbound SLA step (counted when its 15-minute runner is stalled or disabled, or a human inbound message is older than 72h with no fleet action); the weekly identity review lists the inbound messages it held without a substantive answer (category and sender domain only); 1.17.3 WATCHMAKER_OPS measures ASK-LOOP-1 (qnfo-ai-search 2.0.1: ask.qwav.tech measured hourly, evaluated, tuned and repaired daily); 1.17.2 WORK-WITH-ME-METRIC-1: the daily reach ingest counts inbound mail tagged [work-with-me:<offer>] (qnfo-gateway WORK-WITH-ME-1) and RUM page views of qnfo.org/work-with-me over 30 days into reach_signals and metric_registry (inbound_contacts_30d, work_with_me_pageviews_30d), shown in GET /api/reach and the portfolio KPIs, watched by WATCHMAKER_OPS; 1.17.1 IMPROVEMENT-LOOP-1: WATCHMAKER_OPS measures qnfo-fleet-control's hourly improvement loop (metric_history, regressions, fix durability); 1.17.0 FLEET-CMD-1: "Ask the fleet" becomes a natural-language command line (pinned on /, full page /cmd, /ctl.js link for any fleet page): instant read commands, plain-English answers with one-tap proposed actions, run in the background and polled (the old panel was wiped by the 10s refresh and its asks hung in status running); actions need an emailed 6-digit code (OWNER_CODE_TO, 12h session, destructive ones need a code from the last 15 min); abandoned running rows swept; no refresh on the ask path; 1.16.5 CODE-TASK-MERGE-RUNNER-1: code-task-merge is run by qnfo-fleet-control 0.4.86 (opens and merges code-loop PRs, hourly heartbeat) and counted only when the runner is stalled or disabled, a PR is stuck, a task needs a person, a pushed branch waits 6h for its PR, a revert failed, or a person merged or closed a code-loop PR after the runner's first ok tick; EVOLVE-HEARTBEAT-1: fleet-defects reads evolveTick's daily heartbeat; 1.16.4 REACH-LOOPS-WATCH-1: WATCHMAKER_OPS measures the delegated identity and reach loops (qnfo-social profile sync, posting and Buffer cross-post, scan, channel audit, engagement; qnfo-cloud-ops engagement, email triage, radar; radar-hub mention radar, job-market watch, events radar); 1.16.3 WATCHMAKER_OPS measures GRANT-FOLLOWUP-1 (qnfo-cloud-ops); 1.16.2 WATCHMAKER_OPS lists OBJECTIVE-CONSTRAINTS-1 (qnfo-fleet-control hourly, owner-ratified goals 41, 43, 57); 1.16.1 WATCHMAKER_OPS measures errata-hub's hourly members (#1747); 1.16.0 Q08-REVIEW-2026-10-31 (#1716): one-shot q08 decision on bot-filtered RUM page views; cadence cut via ops_config q08_max_per_day; 1.15.2 /health capabilities and limitations (#1735); 1.15.1 IDENTITY-WEEKLY-DELEGATED-1: no re-ask cards under the owner's queue delegation; decided leads skipped; 1.15.0 OPEN-ACCESS-1: no token or login to read or Ask; fleet-changing controls off the public page; 1.14.1 TASK-INTENT-INTAKE-1 (1733); 1.14.0 WATCHMAKER-INDEX-1; 1.13.1 OWNER-NOTES-ROUTE-1 files owner tasks and notes as agent_issues; 1.13.0 OBJECTIVE-REVISION-APPLY-1 + OWNER-NOTES-ROUTE-1 + STRATEGY KPI by tag; 1.12.1 IDENTITY-STORE-1 hardening + copy-only sync; owner links refuse claude.ai; 1.12.0 IDENTITY-STORE-1 + IDENTITY-WEEKLY-1; 1.11.1 OWNER-EDIT-1 */
 
 // REVIEW-GATE-1 (2026-10-01, docs/STRATEGY.md s9): the 2026-10-25 impressions gate is retired. The research layer is
 // reviewed on this date against the reach scorecard; nothing deletes research data automatically (phase 2 needs the
 // owner's email confirmation). One constant replaces the six hard-coded "2026-10-25" strings.
+// CODE MAP BY FUNCTIONAL AREA (AREA-PAGES-1): one file is deployed, so the code stays in one file and is mapped, not split. Every region
+// starts with a banner "// ==== AREA-MAP <area>: <what> ====", where <area> is an id of AREA_REGISTRY (cost, research, reach, autonomy,
+// reliability, platform). `grep -n "AREA-MAP reach" qnfo-fleet-dashboard/worker.js` lists the code of one area; README.md has the table.
+// A new region gets a banner in the PR that adds it; area-pages.test.mjs fails on an unknown area id or an area with no region.
 var REVIEW_GATE_DATE = "2026-12-31";
 var NAME = "qnfo-fleet-dashboard";
 var PROBE_UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36";
 var ACCOUNT = "edb167b78c9fb901ea5bca3ce58ccc4b";
 var STALE_MS = 60 * 1e3;
 var DAY_MS = 24 * 60 * 60 * 1e3;
+// ==== AREA-MAP platform: shared primitives: time, escaping, read-cache and JSON helpers ====
 function pad2(n) {
   return (n < 10 ? "0" : "") + n;
 }
@@ -114,6 +119,7 @@ __name2(json, "json");
 __name22(json, "json");
 __name222(json, "json");
 __name2222(json, "json");
+// ==== AREA-MAP reliability: schedule maths: cron fields, next runs, expected fires ====
 function parseField(f, lo, hi) {
   f = String(f).trim();
   if (f === "*" || f === "") return null;
@@ -244,6 +250,7 @@ __name2(expectedFires, "expectedFires");
 __name22(expectedFires, "expectedFires");
 __name222(expectedFires, "expectedFires");
 __name2222(expectedFires, "expectedFires");
+// ==== AREA-MAP reliability: state store, 24 h analytics and probes (fleet_dashboard_state) ====
 async function d1all(db, sql, params) {
   let ps = db.prepare(sql);
   if (params && params.length) ps = ps.bind.apply(ps, params);
@@ -493,6 +500,7 @@ __name2(healthProbes, "healthProbes");
 __name22(healthProbes, "healthProbes");
 __name222(healthProbes, "healthProbes");
 __name2222(healthProbes, "healthProbes");
+// ==== AREA-MAP reliability: live inventories: scheduled workers, device tasks, scripts, SAI inputs ====
 var CLOSED = { closed: 1, done: 1, resolved: 1, completed: 1, cancelled: 1, canceled: 1, wontfix: 1, dismissed: 1, superseded: 1, archived: 1, fixed: 1, rejected: 1 };
 function isOpenish(st) {
   return !CLOSED[String(st || "").toLowerCase()];
@@ -703,6 +711,7 @@ __name2(liveScripts, "liveScripts");
 __name22(liveScripts, "liveScripts");
 __name222(liveScripts, "liveScripts");
 __name2222(liveScripts, "liveScripts");
+// ==== AREA-MAP autonomy: issue ledger and the GitHub issue loop (fleet_issue_loop) ====
 function stableKey(category, text) {
   const t = String(text || "");
   let subj = "";
@@ -1413,6 +1422,7 @@ __name2(loopMaybeSync, "loopMaybeSync");
 __name22(loopMaybeSync, "loopMaybeSync");
 __name222(loopMaybeSync, "loopMaybeSync");
 __name2222(loopMaybeSync, "loopMaybeSync");
+// ==== AREA-MAP reliability: fleet state: buildState, the integration view and report-card data ====
 // OUTREACH-WEEKDAY-1 (#1940): whole hours between raw and nowMs that fall on a weekday (UTC); Saturdays and Sundays do
 // not count. Outreach sends Monday to Friday only, so its queue's freshness is judged in these hours.
 function weekdayHoursSince(raw, nowMs) {
@@ -2118,7 +2128,25 @@ __name2(reportCardData, "reportCardData");
 __name22(reportCardData, "reportCardData");
 __name222(reportCardData, "reportCardData");
 __name2222(reportCardData, "reportCardData");
+// ==== AREA-MAP platform: fleet state refresh coordination (currentState, freshState) ====
 var inflight = null;
+// Ensure attention decisions move attention per item by at least a third within 7 days.
+// Wrap the original atVerdict (if it exists) to enforce this rule.
+if (typeof atVerdict === 'function') {
+  const _originalAtVerdict = atVerdict;
+  atVerdict = function (stats, prev, th, nowIso) {
+    const res = _originalAtVerdict(stats, prev, th, nowIso);
+    // If the result includes an attention movement metric, enforce the 1/3 threshold.
+    if (res && res.attention && typeof res.attention.moveRatio === 'number') {
+      if (res.attention.moveRatio < 0.33) {
+        // Mark the decision as not having sufficiently raised attention.
+        res.attention.moveRatio = 0;
+        res.attention.status = 'insufficient';
+      }
+    }
+    return res;
+  };
+}
 // REFRESH-INFLIGHT-1 (#1942): the shared refresh promise belongs to the invocation that started it. When that invocation
 // is cancelled (a fetch's waitUntil cut off after /api/decision?refresh=1), its 90 s timer never fires and the promise
 // never settles, so every later */15 cron in the isolate awaited it until exceededWallTime (900 s, cpu 0, no subrequest):
@@ -2156,33 +2184,207 @@ async function currentState(env, ctx, maxAgeMs) {
   }));
   return rec.state;
 }
+// AREA-FEEDS-1: a snapshot-backed read must not serve a body nobody has refreshed. /api/state already scheduled a
+// rebuild when its record was older than STALE_MS, but /api/actions and /api/integration read the record directly, so a
+// poller could keep receiving a fifteen-minute-old answer while the fleet looked healthy. The three now share this.
+async function freshState(env, ctx, maxAgeMs) {
+  const rec = await loadState(env);
+  if (!rec) return await runRefresh(env, ctx);
+  if (Date.now() - new Date(rec.updatedAt).getTime() > (maxAgeMs || STALE_MS)) ctx.waitUntil(runRefresh(env, ctx).catch(function() {
+  }));
+  return rec.state;
+}
+// ==== AREA-MAP platform: read API: feed table, API index and revalidation (RT-API-1) ====
 // ---- RT-API-1: the read API describes itself ----
 // One table is the single source of truth for what a poller may call, who may call it and how fresh the answer can be.
 // GET /api serves it; rt-api.test.mjs holds the table to the routes that actually answer (every path listed here is
 // called, and the ones not listed must not be readers). A route added without an entry shows up as an unlisted 200.
+// ==== AREA-MAP platform: area registry: the one table the page, the feeds and the model derive from ====
+/* AREA-REGISTRY:BEGIN (1.45.0, AREA-PAGES-1, 2026-10-19, pillar autonomy; owner directive 2026-10-18, repeated 2026-10-19: refactor the
+   fleet dashboard and API feeds by functional area). ONE table says what each functional area is and everything that belongs to it:
+   its metrics (rx), star metric, root cause, pipelines (flows), the page widgets and tabs that describe it, the owner-queue items
+   that are about it, and the controls that stop it. The page (navigation, /area/<id>, the home rows), the feeds (GET /api, GET
+   /api/area/<id>) and the metric model (AREA_DEFS, AREA_STARS, AREA_ROOT, AREA_FLOW, FEED_AREAS below) are all derived from it, so an
+   area cannot exist in one and be missing from another; area-pages.test.mjs holds the three to each other.
+   Five areas carry breaching metrics (rx); "platform" carries none: it is the API and the fleet state itself. An unmapped metric key
+   falls into autonomy rather than disappearing (areaOf). "sources" is what the area feed reads at request time. */
+var AREA_REGISTRY = [
+  { id: "cost", name: "Cost", short: "Cost", what: "what the fleet spends: model run-rate, spend per published piece, budget headroom", sources: ["v_metric_trigger_state", "metric_history"],
+    rx: /cost|run_rate|spend|_usd/, star: { key: "fleet_ai_run_rate_30d_usd", label: "Fleet AI run-rate, 30d", unit: "$", good: "down" },
+    flows: [], widgets: ["invest"], controls: [], pages: [],
+    queue: { sources: ["billing", "decision", "shutdown"], rx: /payment|credit|budget|spend|billing|invoice|cost|funding|revenue|money|\$\d/i } },
+  { id: "research", name: "Research and content", short: "Research", what: "what the fleet produces and publishes: q08, papers, ideas, generators", sources: ["v_metric_trigger_state", "metric_history", "research_queue", "code_tasks"],
+    rx: /q08|paper|research|content_|idea_|publication|zenodo/, star: { key: "publications_30d", label: "Publications, 30d", unit: "", good: "up" },
+    flows: ["research"], widgets: [], controls: [], pages: [{ key: "content", label: "Content pipeline", href: "/content", feed: "/api/content" }],
+    queue: { sources: [], rx: /paper|q08|research|publication|publish|zenodo|osf|manuscript|idea/i } },
+  { id: "reach", name: "Reach and growth", short: "Reach", what: "who reads it: pageviews, referrers, search, outreach, subscribers, attention", sources: ["v_metric_trigger_state", "metric_history", "outreach_queue"],
+    rx: /subscri|pageview|referr|social|outreach|work_with_me|inbound_contact|attention|impression|engage|reply_rate|distribution|buffer/, star: { key: "pageviews_30d", label: "Pageviews, 30d", unit: "", good: "up" },
+    flows: ["outreach"], widgets: ["progress", "controls"], controls: ["social_paused"], pages: [],
+    queue: { sources: ["inbox"], rx: /subscriber|social|bluesky|linkedin|mastodon|outreach|audience|inbox|pageview|referrer|buffer|newsletter|substack/i } },
+  { id: "autonomy", name: "Autonomy loop", short: "Autonomy", what: "how the fleet works on itself: issues, the code loop, remedies, dispatches, the owner queue", sources: ["v_metric_trigger_state", "metric_history", "agent_issues", "code_tasks", "human_actions"],
+    rx: /issue|code_|remedy|fix_|mttr|driver|watchmaker|contracts|session_|owner_dispatch|human_wait|backlog/, star: { key: "open_agent_issues", label: "Open issues", unit: "", good: "down" },
+    root: { key: "remedy_efficacy_30d", explains: ["fix_hold_rate_30d"] },
+    flows: ["issues", "code"], widgets: ["controls"], controls: ["owner_queue_delegated"], pages: [],
+    queue: { sources: ["code-loop", "issue-loop", "objectives", "register", "gtd"], rx: null } },
+  { id: "reliability", name: "Reliability and security", short: "Reliability", what: "whether it stays up and honest: guards, probes, drift, cron cadence, failure modes", sources: ["v_metric_trigger_state", "metric_history", "fleet probes"],
+    rx: /guard|github_app|spof|runtime_verified|probe|drift|cadence_overdue|failure_mode|roster|blocker|dangling|cron_|deploy_|false_stops|security|sla_breach/, star: { key: "guard_rcs", label: "Guards failing", unit: "", good: "down" },
+    root: { key: "runtime_verified_share_24h", explains: ["remedy_efficacy_30d", "fix_hold_rate_30d", "code_task_success_rate_30d"] },
+    flows: [], widgets: ["system"], controls: [], pages: [],
+    queue: { sources: [], rx: /token|secret|credential|guard|security|probe|outage|dns|deploy|access|permission/i } },
+  { id: "platform", name: "Platform and index", short: "Platform", what: "the API and the fleet state it is built on: this index, the snapshot, the decision, the changelog", sources: ["fleet_dashboard_state", "deployment_history", "D1"],
+    rx: null, star: null, flows: [], widgets: [], controls: [],
+    pages: [{ key: "kpi", label: "Metrics", href: "/kpi", feed: "/api/kpi" }, { key: "changelog", label: "Changelog", href: "/changelog", feed: "/api/changelog" }, { key: "cmd", label: "Command line", href: "/cmd", feed: "/api/cmd", tool: true }],
+    queue: { sources: [], rx: null } }
+];
+function registryArea(id) {
+  for (const a of AREA_REGISTRY) if (a.id === id) return a;
+  return null;
+}
+// The area a page token belongs to: an area id is its own area, a tab key (kpi, content, changelog, cmd) is the area that lists it.
+// The overview's legacy anchors (queue, areas, flow, invest) belong to no area. A token nothing lists is null, never a guess.
+function areaOfPage(token) {
+  for (const a of AREA_REGISTRY) {
+    if (a.id === token) return a.id;
+    for (const p of a.pages) if (p.key === token) return a.id;
+  }
+  return null;
+}
+// The area an owner-queue card is about. The card's source decides first (a billing card is Cost; a parked code task is Autonomy),
+// then the registry's words for a card that carries none; a card nothing recognises falls to autonomy, as an unmapped metric does.
+function queueAreaOf(it) {
+  const src = String(it && it.source || "");
+  for (const a of AREA_REGISTRY) if (a.queue.sources.indexOf(src) >= 0) return a.id;
+  const text = String(it && it.title || "") + " " + String(it && it.key || "");
+  for (const a of AREA_REGISTRY) if (a.queue.rx && a.queue.rx.test(text)) return a.id;
+  return "autonomy";
+}
+function areaBlindRelevant(reg, name) {
+  // m.blind names every source the model could not read, for the whole fleet. An area page names only the ones it is built from: the metric
+  // reads feed every area; each queue or table feeds the areas whose registry sources list it. /api/area/<id> still carries the full list.
+  const n = String(name || "");
+  if (n === "metric triggers" || n === "metric history") return true;
+  if (n === "issue age") return reg.sources.indexOf("agent_issues") >= 0;
+  return reg.sources.indexOf(n.replace(/ /g, "_")) >= 0;
+}
+/* AREA-REGISTRY:END */
+// AREA-FEEDS-1: the functional areas the read surface is organised by, derived from AREA_REGISTRY (same ids, names and sources).
+var FEED_AREAS = AREA_REGISTRY.map(function(a) {
+  return { id: a.id, name: a.name, what: a.what, sources: a.sources };
+});
+function feedAreaOf(id) {
+  for (const a of FEED_AREAS) if (a.id === id) return a;
+  return null;
+}
+// ==== AREA-MAP autonomy: code task outcomes split by pull request, shared by the flow and the Metrics tab (CODE-FLOW-PR-SPLIT-1) ====
+/* CODE-OUTCOMES:BEGIN (CODE-FLOW-PR-SPLIT-1, agent_issues 2941, pillar autonomy). How each code task of a window ended, split by what happened to its
+   pull request, as one SQL expression the Code loop flow (areasModel) and the Metrics tab (kpiCompute) both use, so the two cannot disagree.
+   Measured 2026-10-18: the flow counted every code_tasks.status = 'closed' as "closed, unmerged" (67 in 30 days) and said "73% of finished work
+   does not complete", but only 24 of the 67 ever opened a pull request, about 15 were superseded or already on main, and 43 never reached a PR.
+   TRACKER-SYNC-1 writes the PR state of every task to code_task_pr_links (pr_state: merged | closed | open | never-opened); a task with no row
+   is read as never-opened. "superseded" is work another change made unnecessary (status superseded, merge_state superseded, or a last_error that
+   starts with superseded) and is not a failure: the flow keeps it out of the failure share. A merged task is never superseded. */
+var CODE_OUTCOME_SQL = "CASE WHEN t.status <> 'merged' AND (t.status = 'superseded' OR t.merge_state = 'superseded' OR t.last_error LIKE 'superseded%') THEN 'superseded' WHEN t.status = 'closed' AND l.pr_state = 'closed' THEN 'closed_pr' WHEN t.status = 'closed' AND COALESCE(l.pr_state, 'never-opened') = 'never-opened' THEN 'closed_no_pr' WHEN t.status = 'closed' THEN 'closed_other' ELSE t.status END";
+var CODE_OUTCOME_FROM = "code_tasks t LEFT JOIN code_task_pr_links l ON l.task_id = t.id";
+function codeFlowStages(rows) {
+  // PRECONDITION: rows = [{ status, n }] from CODE_OUTCOME_SQL. POSTCONDITION: the Code loop flow's stages; superseded is kind "drop" so
+  // bottleneckOf leaves it out of finished work and of the failure share.
+  const cnt = function(k) {
+    let n = 0;
+    for (const r of rows || []) if (r.status === k) n += Number(r.n) || 0;
+    return n;
+  };
+  const stages = [
+    { k: "queued", label: "queued", n: cnt("queued") + cnt("ready_to_publish"), kind: "wip" },
+    { k: "merged", label: "merged", n: cnt("merged"), kind: "done" },
+    { k: "closed-no-pr", label: "closed, never opened a PR", n: cnt("closed_no_pr"), kind: "fail" },
+    { k: "closed-pr", label: "PR closed unmerged", n: cnt("closed_pr"), kind: "fail" },
+    { k: "superseded", label: "superseded (not a failure)", n: cnt("superseded"), kind: "drop" },
+    { k: "failed", label: "failed", n: cnt("failed"), kind: "fail" }
+  ];
+  // a closed task whose PR is open or merged is a ledger drift: shown, never folded into another stage
+  if (cnt("closed_other")) stages.splice(4, 0, { k: "closed-other", label: "closed, PR state differs (drift)", n: cnt("closed_other"), kind: "fail" });
+  return stages;
+}
+/* CODE-OUTCOMES:END */
+// AREA-FEEDS-1: "live" is a measurement, not a claim. The feed is computed at request time, but the metrics it reports
+// are refreshed by other workers, and on 2026-10-18 the registry ranged from minutes to 18 hours old (196 of 227 under
+// an hour, 17 over six). The area feed therefore states the age of the oldest underlying metric it reports, measured now,
+// so a stale number can never hide behind a live-looking answer. The field is `data.age_min`: RT_CLOCK strips `age_min`
+// at any depth, so the age does not move the revision while the value and the count do.
+async function areaDataAge(env, keys) {
+  const ks = (keys || []).filter(function(k) {
+    return k != null && String(k) !== "";
+  }).map(function(k) {
+    return "'" + String(k).replace(/'/g, "''") + "'";
+  });
+  if (!ks.length) return { age_min: null, metrics: 0 };
+  try {
+    const r = await d1all(env.AUDIT, "SELECT CAST(ROUND(MAX((julianday('now') - julianday(last_refreshed)) * 1440)) AS INTEGER) AS age_min, COUNT(*) AS n FROM metric_registry WHERE last_refreshed IS NOT NULL AND metric IN (" + ks.join(",") + ")");
+    const row = r && r[0] ? r[0] : null;
+    return { age_min: row && row.age_min != null ? Number(row.age_min) : null, metrics: row ? Number(row.n) || 0 : 0 };
+  } catch (e) {
+    return { age_min: null, metrics: 0, blind: "metric_registry" };
+  }
+}
+// The grouping GET /api publishes, derived from the same table that governs the routes: a row that forgets its area is
+// counted under platform, and rt-api.test.mjs fails the build rather than letting a feed go unclassified.
+function feedsByArea() {
+  return FEED_AREAS.map(function(a) {
+    const own = "/api/area/" + a.id;
+    const feeds = API_INDEX.filter(function(e) {
+      return (e.area || "platform") === a.id;
+    });
+    let worst = 60, allLive = true;
+    for (const e of feeds) {
+      worst = Math.max(worst, Number(e.lag_s) || 0);
+      if (e.source !== "live") allLive = false;
+    }
+    return {
+      id: a.id,
+      name: a.name,
+      // AREA-PAGES-1: the area's page and its tabs, beside its feeds, so the page and the API describe one boundary.
+      page: "/area/" + a.id,
+      pages: registryArea(a.id).pages.map(function(p) {
+        return { label: p.label, href: p.href, feed: p.feed };
+      }),
+      path: own,
+      schema_version: "fleet-area-feed/v1",
+      feed_count: feeds.length + 1,
+      // the area's own feed is a member of its own grouping: an area that no existing read happens to serve (cost) still
+      // answers as a feed instead of showing up empty, which is the defect this refactor exists to remove.
+      feeds: [own].concat(feeds.map(function(e) {
+        return e.path;
+      })),
+      // the area feed itself is live; this flag is about its MEMBERS, so the two meanings never share a name
+      all_members_live: allLive,
+      worst_lag_s: worst
+    };
+  });
+}
 var API_INDEX = [
-  { path: "/api", method: "GET", auth: "open", schema_version: "fleet-api-index/v1", cache: "public 15s", freshness: "static (this table)", what: "This index: every read endpoint, its auth, its cache policy and what makes it change." },
-  { path: "/api/live", method: "GET", auth: "open", schema_version: "fleet-live/v1", cache: "public 15s, ETag", freshness: "state refreshed by the */15 cron; queue read live from D1", what: "One consolidated snapshot for pollers: state verdict, queue counts, the five areas, the invest verdict. Send If-None-Match, or ?since=<revision>." },
-  { path: "/api/human", method: "GET", auth: "open (owner fields with a holder)", schema_version: "fleet-human/v2", cache: "public 15s open / private no-store with a holder, ETag", freshness: "queue read live from D1", what: "The owner queue the page renders: items, upcoming, blind sources, decision, system summary. Send If-None-Match or ?since=<revision>." },
-  { path: "/api/areas", method: "GET", auth: "open", schema_version: "fleet-areas/v3", cache: "public 15s, ETag", freshness: "v_metric_trigger_state and metric_history, cached 60 s per isolate", what: "Breaching metrics by functional area, with each area's constraint, lever and remedy history. Compact by default: the full lever text is only sent with ?full=1 (it was 55 KB of the 101 KB body). Send If-None-Match or ?since=<revision>." },
-  { path: "/api/decision", method: "GET", auth: "open", schema_version: "fleet-decision/v1", cache: "public 15s, ETag", freshness: "governance snapshot, re-measured when older than 5 min", what: "Continue / scale back / stop, its reasons, and what would flip it." },
-  { path: "/api/state", method: "GET", auth: "open", schema_version: "fleet-state/v1.1", cache: "public 15s, ETag", freshness: "fleet_dashboard_state, rebuilt by the */15 cron", what: "The full machine state: scheduled workers, probes, integration, issues." },
-  { path: "/api/actions", method: "GET", auth: "open", schema_version: "fleet-actions/v1", cache: "public 15s, ETag", freshness: "same state as /api/state", what: "The issue list as machine actions with remediation." },
-  { path: "/api/loop", method: "GET", auth: "open", schema_version: "fleet-loop/v1", cache: "public 15s, ETag", freshness: "fleet_issue_loop and fleet_issue_dispatch", what: "The GitHub issue loop: ledger, dispatch queue, last sync." },
-  { path: "/api/integration", method: "GET", auth: "open", schema_version: "integration/v1", cache: "public 15s, ETag", freshness: "same state as /api/state", what: "Worker dependency graph, islands, sinks, drift." },
-  { path: "/api/changes", method: "GET", auth: "open", schema_version: "fleet-changes/v1", cache: "public 15s, ETag", freshness: "deployment_history, agent_issues, code_tasks", what: "What changed since ?since= (default 24 h, clamped to 7 days)." },
-  { path: "/api/watchmaker", method: "GET", auth: "open", schema_version: "watchmaker/v1", cache: "public 15s, ETag", freshness: "one watchmaker_runs row a day after 07:00Z", what: "Recurring operations that still need a person or a session." },
-  { path: "/api/generators", method: "GET", auth: "open", schema_version: "generators/v1", cache: "public 15s, ETag", freshness: "text_generator_inventory plus fixed run queries", what: "Every text generator, its gates and its latest proven run." },
-  { path: "/api/reach", method: "GET", auth: "open", schema_version: "reach-scorecard/v1", cache: "public 15s, ETag", freshness: "reach_signals, ingested once a day for the day before", what: "Page views, referrers, outreach, subscribers and citations over 7 and 28 days." },
-  { path: "/api/attention", method: "GET", auth: "open", schema_version: "attention/v1", cache: "public 15s, ETag", freshness: "the daily attention scorecard", what: "Human attention per channel, verdicts, shares and graded decisions." },
-  { path: "/api/kpi", method: "GET", auth: "open", schema_version: "fleet-kpi/v1", cache: "public 15s, ETag (60 s in isolate memory)", freshness: "qnfo-audit read at request time", what: "The Metrics tab: issues, reach, posts, Buffer, subscribers." },
-  { path: "/api/content", method: "GET", auth: "open", schema_version: "content-pipeline/v1", cache: "public 15s, ETag (60 s in isolate memory)", freshness: "v_content_pipeline, living-paper, q08-signal", what: "The content production line end to end." },
-  { path: "/api/changelog", method: "GET", auth: "open (personal releases for a holder)", schema_version: "changelog/v2", cache: "public 15s, ETag", freshness: "deployment_history, enriched every 15 min", what: "What the fleet shipped for itself, newest first. One page of 20 by default (?limit=1..200, ?offset=, ?limit=all for the 267-release history it used to send whole). Send If-None-Match or ?since=<revision>." },
-  { path: "/api/ga4", method: "GET", auth: "open", schema_version: "ga4/v1", cache: "public 15s, ETag", freshness: "one ga4-ingest ledger row a day", what: "GA4 ingest runs and whether the service-account key is present." },
-  { path: "/api/q08-review", method: "GET", auth: "open", schema_version: "q08-review-status/v1", cache: "public 15s, ETag", freshness: "the one-shot 2026-10-31 review state", what: "q08's human-read review: decision, rule and last attempt." },
-  { path: "/api/owner/*", method: "GET/POST", auth: "owner (emailed code) or x-loop-token", schema_version: "owner/v1", cache: "private no-store", freshness: "read live", what: "Owner prompts, responses, keys and documents. Never cacheable." },
-  { path: "/api/cmd", method: "GET/POST", auth: "open to ask; actions need the owner code", schema_version: "cmd/v1", cache: "private no-store", freshness: "read live", what: "The command line: deterministic reads, plain-English answers, gated actions." },
-  { path: "/health", method: "GET", auth: "open", schema_version: "health/v1", cache: "no-store", freshness: "static", what: "Capabilities and limitations of this worker." }
+  { path: "/api", area: "platform", source: "live", lag_s: 0, method: "GET", auth: "open", schema_version: "fleet-api-index/v2", cache: "public 15s, ETag", freshness: "static (this table)", what: "This index: every read endpoint, its functional area, its auth, its cache policy, whether it is computed live or from the rebuilt state, and what makes it change. Send If-None-Match or ?since=<revision>." },
+  { path: "/api/live", area: "platform", source: "mixed", lag_s: 900, method: "GET", auth: "open", schema_version: "fleet-live/v1", cache: "public 15s, ETag", freshness: "state refreshed by the */15 cron; queue read live from D1", what: "One consolidated snapshot for pollers: state verdict, queue counts, the five areas, the invest verdict. Send If-None-Match, or ?since=<revision>." },
+  { path: "/api/human", area: "autonomy", source: "live", lag_s: 60, method: "GET", auth: "open (owner fields with a holder)", schema_version: "fleet-human/v2", cache: "public 15s open / private no-store with a holder, ETag", freshness: "queue read live from D1", what: "The owner queue the page renders: items, upcoming, blind sources, decision, system summary. Send If-None-Match or ?since=<revision>." },
+  { path: "/api/areas", area: "platform", source: "live", lag_s: 60, method: "GET", auth: "open", schema_version: "fleet-areas/v3", cache: "public 15s, ETag", freshness: "v_metric_trigger_state and metric_history, cached 60 s per isolate", what: "Breaching metrics by functional area, with each area's constraint, lever and remedy history. Compact by default: the full lever text is only sent with ?full=1 (it was 55 KB of the 101 KB body). Send If-None-Match or ?since=<revision>." },
+  { path: "/api/decision", area: "platform", source: "snapshot", lag_s: 900, method: "GET", auth: "open", schema_version: "fleet-decision/v1", cache: "public 15s, ETag", freshness: "governance snapshot, re-measured when older than 5 min", what: "Continue / scale back / stop, its reasons, and what would flip it." },
+  { path: "/api/state", area: "platform", source: "snapshot", lag_s: 900, method: "GET", auth: "open", schema_version: "fleet-state/v1.1", cache: "public 15s, ETag", freshness: "fleet_dashboard_state, rebuilt by the */15 cron", what: "The full machine state: scheduled workers, probes, integration, issues." },
+  { path: "/api/actions", area: "autonomy", source: "snapshot", lag_s: 900, method: "GET", auth: "open", schema_version: "fleet-actions/v1", cache: "public 15s, ETag", freshness: "same state as /api/state", what: "The issue list as machine actions with remediation." },
+  { path: "/api/loop", area: "autonomy", source: "live", lag_s: 60, method: "GET", auth: "open", schema_version: "fleet-loop/v1", cache: "public 15s, ETag", freshness: "fleet_issue_loop and fleet_issue_dispatch", what: "The GitHub issue loop: ledger, dispatch queue, last sync." },
+  { path: "/api/integration", area: "reliability", source: "snapshot", lag_s: 900, method: "GET", auth: "open", schema_version: "integration/v1", cache: "public 15s, ETag", freshness: "same state as /api/state", what: "Worker dependency graph, islands, sinks, drift." },
+  { path: "/api/changes", area: "autonomy", source: "live", lag_s: 60, method: "GET", auth: "open", schema_version: "fleet-changes/v1", cache: "public 15s, ETag", freshness: "deployment_history, agent_issues, code_tasks", what: "What changed since ?since= (default 24 h, clamped to 7 days)." },
+  { path: "/api/watchmaker", area: "autonomy", source: "live", lag_s: 60, method: "GET", auth: "open", schema_version: "watchmaker/v1", cache: "public 15s, ETag", freshness: "one watchmaker_runs row a day after 07:00Z", what: "Recurring operations that still need a person or a session." },
+  { path: "/api/generators", area: "research", source: "live", lag_s: 60, method: "GET", auth: "open", schema_version: "generators/v1", cache: "public 15s, ETag", freshness: "text_generator_inventory plus fixed run queries", what: "Every text generator, its gates and its latest proven run." },
+  { path: "/api/reach", area: "reach", source: "live", lag_s: 60, method: "GET", auth: "open", schema_version: "reach-scorecard/v1", cache: "public 15s, ETag", freshness: "reach_signals, ingested once a day for the day before", what: "Page views, referrers, outreach, subscribers and citations over 7 and 28 days." },
+  { path: "/api/attention", area: "reach", source: "live", lag_s: 60, method: "GET", auth: "open", schema_version: "attention/v1", cache: "public 15s, ETag", freshness: "the daily attention scorecard", what: "Human attention per channel, verdicts, shares and graded decisions." },
+  { path: "/api/kpi", area: "platform", source: "live", lag_s: 60, method: "GET", auth: "open", schema_version: "fleet-kpi/v1", cache: "public 15s, ETag (60 s in isolate memory)", freshness: "qnfo-audit read at request time", what: "The Metrics tab: issues, reach, posts, Buffer, subscribers." },
+  { path: "/api/content", area: "research", source: "live", lag_s: 60, method: "GET", auth: "open", schema_version: "content-pipeline/v1", cache: "public 15s, ETag (60 s in isolate memory)", freshness: "v_content_pipeline, living-paper, q08-signal", what: "The content production line end to end." },
+  { path: "/api/changelog", area: "platform", source: "live", lag_s: 60, method: "GET", auth: "open (personal releases for a holder)", schema_version: "changelog/v2", cache: "public 15s, ETag", freshness: "deployment_history, enriched every 15 min", what: "What the fleet shipped for itself, newest first. One page of 20 by default (?limit=1..200, ?offset=, ?limit=all for the 267-release history it used to send whole). Send If-None-Match or ?since=<revision>." },
+  { path: "/api/ga4", area: "reach", source: "live", lag_s: 60, method: "GET", auth: "open", schema_version: "ga4/v1", cache: "public 15s, ETag", freshness: "one ga4-ingest ledger row a day", what: "GA4 ingest runs and whether the service-account key is present." },
+  { path: "/api/q08-review", area: "research", source: "live", lag_s: 60, method: "GET", auth: "open", schema_version: "q08-review-status/v1", cache: "public 15s, ETag", freshness: "the one-shot 2026-10-31 review state", what: "q08's human-read review: decision, rule and last attempt." },
+  { path: "/api/area/<id>", method: "GET", auth: "open", area: "platform", source: "live", lag_s: 60, schema_version: "fleet-area-feed/v1", cache: "public 15s, ETag", freshness: "v_metric_trigger_state, metric_history, code_tasks, research_queue, outreach_queue, agent_issues read at request time (60 s at most in isolate memory)", what: "One functional area as its own feed: its star metric and trend, its breaches ranked, its named constraint, its pipelines, and the reads that belong to it with each one's declared lag (?full=1 adds the whole lever text and every breach row). Send If-None-Match or ?since=<revision>." },
+  { path: "/api/owner/*", area: "autonomy", source: "live", lag_s: 0, method: "GET/POST", auth: "owner (emailed code) or x-loop-token", schema_version: "owner/v1", cache: "private no-store", freshness: "read live", what: "Owner prompts, responses, keys and documents. Never cacheable." },
+  { path: "/api/cmd", area: "platform", source: "live", lag_s: 0, method: "GET/POST", auth: "open to ask; actions need the owner code", schema_version: "cmd/v1", cache: "private no-store", freshness: "read live", what: "The command line: deterministic reads, plain-English answers, gated actions." },
+  { path: "/health", area: "platform", source: "live", lag_s: 0, method: "GET", auth: "open", schema_version: "health/v1", cache: "no-store", freshness: "static", what: "Capabilities and limitations of this worker." }
 ];
 // The clock fields, and only these, are excluded from a content digest: they move on every request, and hashing them
 // would make every poll look like a change, which is the defect this refactor removes. Everything else is part of the
@@ -2191,7 +2393,9 @@ var API_INDEX = [
 // `since` is in the list because GET /api/changes echoes the window start it defaulted to (now - 24 h) in its body; the
 // content that window produces is what the revision must track, not the echoed clock. Nothing else in this worker sends a
 // field named since.
-var RT_CLOCK = ["generated_at", "age_min", "oldest_days", "state_age_min", "age", "as_of", "activity_as_of", "since"];
+// KPI-THRESHOLDS-1: time_in_breach_min and an SLA class's oldest_min grow by one every minute while nothing else moves; breach_since (a day)
+// and the class count are what identify a change, so the two counters are clock fields.
+var RT_CLOCK = ["generated_at", "age_min", "oldest_days", "state_age_min", "age", "as_of", "activity_as_of", "since", "time_in_breach_min", "oldest_min"];
 function rtClock(x) {
   if (Array.isArray(x)) return x.map(rtClock);
   if (x && typeof x === "object") {
@@ -2228,6 +2432,51 @@ function areasApiBody(m, full) {
     return c;
   });
   return body;
+}
+// AREA-FEEDS-1: one functional area as its own feed. Every number is read from D1 at request time through areasModel;
+// this function only shapes the answer, so it cannot go stale on its own. The member reads are copied from API_INDEX
+// with their declared lag, so a client can see what else belongs to the area without a second discovery call.
+// POSTCONDITION: a stable object plus revision; no clock field other than generated_at (RT_CLOCK), or nothing revalidates.
+function areaFeedView(a, fa, mA, full, data) {
+  const row = a ? Object.assign({}, a) : null;
+  if (row) {
+    if (Array.isArray(row.top)) row.top = row.top.map(areasApiRow);
+    if (Array.isArray(row.all)) row.all = row.all.map(areasApiRow);
+    if (row.focus) row.focus = areasApiRow(row.focus);
+    if (!full) delete row.all;
+  }
+  const flowIds = (typeof AREA_FLOW !== "undefined" && AREA_FLOW[fa.id]) || [];
+  // A source that could not be read must be named here, exactly as /api/areas names it: an area feed that renders
+  // breaches:0 because its table failed would read as "all clear", which is the false green AREAS-1 forbids.
+  const blind = (mA && mA.blind) || [];
+  const self = { path: "/api/area/" + fa.id, method: "GET", schema_version: "fleet-area-feed/v1", source: "live", lag_s: 60, what: "This feed: the area, its star metric, its breaches and its pipelines." };
+  const feeds = [self].concat(API_INDEX.filter(function(e) {
+    return (e.area || "platform") === fa.id;
+  }).map(function(e) {
+    return { path: e.path, method: e.method, schema_version: e.schema_version, source: e.source || "live", lag_s: Number(e.lag_s) || 0, what: e.what };
+  }));
+  return {
+    schema_version: "fleet-area-feed/v1",
+    worker: NAME,
+    version: VERSION,
+    area: { id: fa.id, name: fa.name, what: fa.what, page: "/area/" + fa.id },
+    generated_at: (/* @__PURE__ */ new Date()).toISOString(),
+    live: true,
+    max_lag_s: 60,
+    computed_from: fa.sources,
+    data: data || { age_min: null, metrics: 0 },
+    total_in_breach: mA ? mA.total : null,
+    blind,
+    degraded: blind.length > 0,
+    status: row ? row.status : "unknown",
+    star: row ? row.star : null,
+    breaches: { total: row ? row.count : 0, more: row ? row.more : 0, top: row ? row.top : [], all: row && row.all ? row.all : null },
+    constraint: row ? row.focus : null,
+    flows: (mA && mA.flows || []).filter(function(f) {
+      return flowIds.indexOf(f.id) >= 0;
+    }),
+    feeds
+  };
 }
 // One page of the changelog. 267 releases shipped whole (164 KB) and every poller paid for the history to read the newest
 // ten; the page is 20 by default and the history is still one parameter away (?limit=all).
@@ -2266,11 +2515,15 @@ function rtRead(request, url, body, opts) {
 }
 function apiIndexView() {
   return {
-    schema_version: "fleet-api-index/v1",
+    schema_version: "fleet-api-index/v2",
     worker: NAME,
     version: VERSION,
     generated_at: (/* @__PURE__ */ new Date()).toISOString(),
-    note: "Every read is open unless the row says otherwise (OPEN-ACCESS-1). A read that returns an ETag answers If-None-Match with 304 and no body; a read with ?since=<revision> answers {not_modified:true} (RT-API-1).",
+    note: "Every read is open unless the row says otherwise (OPEN-ACCESS-1). A read that returns an ETag answers If-None-Match with 304 and no body; a read with ?since=<revision> answers {not_modified:true} (RT-API-1). Reads are grouped by functional area (AREA-FEEDS-1): each row names its area, whether it is computed live at request time (source live), from the rebuilt fleet state (snapshot) or both (mixed), and the worst case lag a client must assume (lag_s). by_area lists the same grouping with the area feed path.",
+    areas: FEED_AREAS.map(function(a) {
+      return { id: a.id, name: a.name, what: a.what, sources: a.sources };
+    }),
+    by_area: feedsByArea(),
     endpoints: API_INDEX
   };
 }
@@ -2324,6 +2577,7 @@ function rtQueueDigest(v) {
     count: v.count,
     urgent: v.urgent,
     items: v.items || [],
+    receipts: v.receipts || [],
     upcoming: v.upcoming || [],
     blind: v.blind || [],
     decision: v.decision,
@@ -2333,6 +2587,7 @@ function rtQueueDigest(v) {
 function rtAreasDigest(bodyA) {
   return rtDigest(bodyA);
 }
+// ==== AREA-MAP platform: HTTP routes (handleRequest) ====
 async function handleRequest(request, env, ctx) {
   const url = new URL(request.url);
   const path = url.pathname;
@@ -2348,10 +2603,12 @@ async function handleRequest(request, env, ctx) {
   // target and does anything need me". Both are open (OPEN-ACCESS-1) and both revalidate: a poller that sends the last
   // ETag (or ?since=<revision>) gets 304 with no body while the fleet's content has not moved.
   if (path === "/api" || path === "/api/") {
-    const ix = apiIndexView();
-    return json(ix, 200, { req: request, digest: ix.endpoints.map(function(e) {
-      return e.path + " " + e.method + " " + e.schema_version;
-    }).join(";"), cache: RT_CACHE_PUBLIC });
+    // AREA-FEEDS-5: the index is a read like every other one and now behaves like one. It carried an ETag from a
+    // hand-rolled digest but no body `revision` and no ?since=, while its own note promises that "a read with
+    // ?since=<revision> answers {not_modified:true}" - a client that cannot send a header (the reason ?since= exists)
+    // could not dedupe the 13 KB index. rtDigest covers the same table plus the area grouping, so the tag is strictly
+    // stronger than the path-and-schema string it replaces.
+    return rtRead(request, url, apiIndexView(), { schema: "fleet-api-index/v2" });
   }
   if (path === "/api/live" && request.method === "GET") {
     const since = (url.searchParams.get("since") || "").replace(/^rev:/, "");
@@ -2365,8 +2622,8 @@ async function handleRequest(request, env, ctx) {
     }
     return json(live, 200, { req: request, digest: live.revision, cache: RT_CACHE_PUBLIC, headers: rtHeaders });
   }
-  if (path === "/health") {
-    return json({ ok: true, worker: NAME, version: VERSION, capabilities: ["fleet-dashboard", "areas", "owner-queue", "objective-decisions", "watchmaker-index", "command-line", "owner-console", "owner-documents", "ctl-link", "changelog", "api-index", "live-snapshot", "conditional-reads"], limitations: ["every read, every read-only command and plain-English answers are open to everyone; plain-English answers are capped at 5 a day per anonymous visitor and by a global daily cap", "actions (done, dismiss, snooze, notes, tasks, ratify, reject) need the owner: an emailed 6-digit code opens a 12h session, destructive ones need a code from the last 15 minutes; x-loop-token still works for loops; private owner documents keep their gate", "FLEET-CONSOLE-1 console reads (issue, backlog, info, tasks, locks, prs, pr, runs) are open; logs, SQL reads and issue edits need the owner's code session; SQL writes, closes, non-GET worker calls, workflow dispatch, deploy, merge and PR close need a code from the last 15 minutes; the loop token cannot run console actions; no DROP/ALTER/REPLACE, UPDATE/DELETE need a WHERE and are backed up to console_backups first; fleet_budget, remediation_verifications, work_claims and the sign-in tables are read-only; qnfo-identity is not reachable; worker calls carry no credential (a worker that demands its own token answers 401)", "the state refreshes on the */15 cron, so a view can be up to 15 minutes old"], generated_at: (/* @__PURE__ */ new Date()).toISOString() });
+if (path === "/health") {
+    return json({ ok: true, worker: NAME, version: VERSION, capabilities: ["fleet-dashboard", "areas", "owner-queue", "objective-decisions", "watchmaker-index", "command-line", "owner-console", "owner-documents", "ctl-link", "changelog", "api-index", "live-snapshot", "conditional-reads", "feeds-by-area", "area-feed", "area-pages"], limitations: ["every read, every read-only command and plain-English answers are open to everyone; plain-English answers are capped at 5 a day per anonymous visitor and by a global daily cap", "actions (done, dismiss, snooze, notes, tasks, ratify, reject) need the owner: an emailed 6-digit code opens a 12h session, destructive ones need a code from the last 15 minutes; x-loop-token still works for loops; private owner documents keep their gate", "FLEET-CONSOLE-1 console reads (issue, backlog, info, tasks, locks, prs, pr, runs) are open; logs, SQL reads and issue edits need the owner's code session; SQL writes, closes, non-GET worker calls, workflow dispatch, deploy, merge and PR close need a code from the last 15 minutes; the loop token cannot run console actions; no DROP/ALTER/REPLACE, UPDATE/DELETE need a WHERE and are backed up to console_backups first; fleet_budget, remediation_verifications, work_claims and the sign-in tables are read-only; qnfo-identity is not reachable; worker calls carry no credential (a worker that demands its own token answers 401)", "reads are grouped by functional area (GET /api, GET /api/area/<id>) and each index row states its source and worst-case lag: /api/area/<id>, /api/areas, /api/human, /api/kpi, /api/content, /api/reach, /api/attention, /api/changelog, /api/loop, /api/changes, /api/generators and /api/watchmaker are computed from D1 at request time (60 s at most in isolate memory); /api/state, /api/actions, /api/integration, /api/decision and /api/live are backed by fleet_dashboard_state, which the */15 cron rebuilds and which a read refreshes in the background once it is older than 60 s, so their first answer after a quiet period can be up to 15 minutes old and says so in state_age_min"], generated_at: (/* @__PURE__ */ new Date()).toISOString() });
   }
   if (path === "/api/refresh") {
     const st = await runRefresh(env, ctx);
@@ -2384,8 +2641,7 @@ async function handleRequest(request, env, ctx) {
     return rtRead(request, url, rec.state, { schema: "fleet-state/v1.1" });
   }
   if (path === "/api/actions") {
-    const rec = await loadState(env);
-    const st = rec ? rec.state : await runRefresh(env, ctx);
+    const st = await freshState(env, ctx);
     const acts = (st.issues || []).map(function(i) {
       return { id: i.id, severity: i.sev, severity_rank: i.severity_rank, category: i.category, resource: i.resource, title: i.title, detail: i.detail, owner: i.owner, auto_actionable: i.auto_actionable, remediation: i.remediation, first_seen: i.first_seen, last_seen: i.last_seen, occurrences: i.occurrences, github: i.github || null };
     });
@@ -2423,8 +2679,7 @@ async function handleRequest(request, env, ctx) {
     return json(await loopExecute(env));
   }
   if (path === "/api/integration") {
-    const rec = await loadState(env);
-    const st = rec ? rec.state : await runRefresh(env, ctx);
+    const st = await freshState(env, ctx);
     return rtRead(request, url, st.integration || { error: "no integration data" }, { schema: "integration/v1" });
   }
   if (path === "/" || path === "") {
@@ -2465,17 +2720,25 @@ async function handleRequest(request, env, ctx) {
     }
     return new Response(body, { headers: pageHeaders });
   }
-  // AREAS-2 (1.39.0): one functional area in full. Deterministic and free: it replaces the 15-row breach wall and the 15 per-row
-  // "Diagnose" model calls that used to sit on the front page. Every breach in the area, its lever, its remedy history, its flow.
+  // AREAS-2 (1.39.0) / AREA-PAGES-1 (1.45.0): one functional area in full. Deterministic and free (no model call). Every id in AREA_REGISTRY
+  // has a page, "platform" included; before 1.45.0 the page covered the five metric areas, took no part in the live refresh and had no
+  // command line or theme script. ?frag=1&rev=<tag> is the refresh: 204 while nothing in the area moved.
   const areaHit = /^\/area\/([a-z]+)\/?$/.exec(path);
-  if (areaHit) {
+  if (areaHit && (request.method === "GET" || request.method === "HEAD")) {
+    const regA = registryArea(areaHit[1]);
+    if (!regA) return new Response("no such area: " + areaHit[1] + " (one of " + AREA_REGISTRY.map(function(x) { return x.id; }).join(", ") + ")", { status: 404, headers: { "Content-Type": "text/plain; charset=utf-8" } });
     const stA = await currentState(env, ctx, 5 * 6e4);
     const vA = await humanView(env, stA, ctx);
     const mA = await areasModel(env, vA.system);
-    const aA = mA.areas.filter(function(x) { return x.id === areaHit[1]; })[0];
-    if (!aA) return new Response("no such area: " + areaHit[1] + " (one of " + mA.areas.map(function(x) { return x.id; }).join(", ") + ")", { status: 404, headers: { "Content-Type": "text/plain; charset=utf-8" } });
-    const bodyA = fleetHead(aA.name + " - fleet") + fleetTop("areas", false, !!(owner && owner.authed)) + '<main class="wrap fl">' + areaDetailHtml(aA, mA, esc) + '<footer class="fl-foot">v' + esc(VERSION) + ' &middot; <a href="/#areas">&larr; all areas</a> &middot; <a href="/api/areas">areas JSON</a></footer></main>';
-    return new Response(bodyA, { headers: { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store" } });
+    const aA = (mA.areas || []).filter(function(x) { return x.id === regA.id; })[0] || null;
+    const keysA = (AREA_STARS[regA.id] ? [AREA_STARS[regA.id].key] : []).concat(aA ? (aA.all || []).map(function(x) { return x.key; }) : []);
+    const partsA = areaPageParts(regA, vA, mA, await areaDataAge(env, keysA));
+    const tagA = rtEtag(partsA.stable);
+    const fragA = url.searchParams.get("frag") === "1";
+    const revA = fragA ? (url.searchParams.get("rev") || "") : "";
+    const hdrA = { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store", "ETag": tagA, "X-Content-Revision": tagA };
+    if (fragA && (revA === tagA || rtMatches(request, tagA))) return new Response(null, { status: revA === tagA ? 204 : 304, headers: { "ETag": tagA, "X-Content-Revision": tagA, "Cache-Control": "no-store" } });
+    return new Response(fragA ? partsA.stable + "<!--ap-foot-->" + partsA.foot : areaPageHtml(regA, partsA, tagA, !!(owner && owner.authed)), { headers: hdrA });
   }
   // REACH-SIGNALS-INGEST-1 (2026-10-01, #1711): the scorecard as JSON for the daily portfolio run, and a token-gated
   // ingest of one complete UTC day (backfill, or a re-run of yesterday) that bypasses the daily throttle.
@@ -2533,6 +2796,34 @@ async function handleRequest(request, env, ctx) {
     if (sinceA && sinceA === revA) return json({ schema_version: "fleet-areas/v3", not_modified: true, revision: revA }, 200, { req: request, digest: revA, cache: RT_CACHE_PUBLIC, headers: hdrA });
     return json(bodyA, 200, { req: request, digest: revA, cache: RT_CACHE_PUBLIC, headers: hdrA });
   }
+  // AREA-FEEDS-1: GET /api/area/<id> is a functional area's own live feed. It reads the same model /api/areas does, so
+  // the two can never disagree about a breach; it is a 404 with the valid ids rather than an empty 200 for an unknown area.
+  if (path.indexOf("/api/area/") === 0 && request.method === "GET") {
+    // A malformed percent sequence must not become a 500. The rest of this worker never decodes the path - it compares the
+    // raw pathname - so a bad escape answers 404 like any unknown route. Measured live on 1.44.1: GET /api/area/%E0%A4%A
+    // answered 500 {"error":"URI malformed"} because decodeURIComponent throws, and an anonymous poller can send one by
+    // accident, so the fallback is the raw segment (which then fails the id lookup and takes the 404 path).
+    let idA = path.slice(10).replace(/\/+$/, "");
+    try {
+      idA = decodeURIComponent(idA).replace(/\/+$/, "");
+    } catch (e) {
+    }
+    const faA = feedAreaOf(idA);
+    if (!faA) return json({ ok: false, error: "no such functional area", asked: idA, areas: FEED_AREAS.map(function(x) {
+      return x.id;
+    }) }, 404, { cache: "no-store" });
+    const stA = await currentState(env, ctx, 5 * 6e4);
+    const vA = await humanView(env, stA, ctx);
+    const mAA = await areasModel(env, vA.system);
+    const rowA = (mAA.areas || []).filter(function(x) {
+      return x.id === idA;
+    })[0] || null;
+    const keysA = [];
+    if (AREA_STARS[idA]) keysA.push(AREA_STARS[idA].key);
+    for (const r of (rowA && rowA.all) || []) keysA.push(r.key);
+    const dataA = await areaDataAge(env, keysA);
+    return rtRead(request, url, areaFeedView(rowA, faA, mAA, url.searchParams.get("full") === "1", dataA), { schema: "fleet-area-feed/v1" });
+  }
   if (path === "/api/human" && request.method === "GET") {
     const st = await currentState(env, ctx, 5 * 6e4);
     const v = await humanView(env, st, ctx);
@@ -2582,7 +2873,14 @@ async function handleRequest(request, env, ctx) {
     } catch (e) {
       return json({ ok: false, error: "metrics unavailable" }, 503);
     }
-    if (path === "/api/kpi") return rtRead(request, url, kv, { schema: "fleet-kpi/v1" });
+    // AREA-PAGES-1 (1.45.0): /kpi and /api/kpi answered HTTP 500 on 1.44.5 (live, and offline as "days.map is not a function"). A half-built
+    // KPI-THRESHOLDS-1 sat here: it treated the KPI document as a map of metrics and rebuilt each top-level field as an object, so the
+    // `days` array reached kpiHtml as an object, and it read metric_registry through .all(), which returns { results }, as if it were rows.
+    // The document is served as computed again. KPI-THRESHOLDS-1 (agent_issues 2727: value, threshold, OK/WARN/BREACH and time in breach
+    // per figure) stays open; it needs its own shaper inside kpiCompute, not a loop over the finished document.
+    if (path === "/api/kpi") {
+      return rtRead(request, url, kv, { schema: "fleet-kpi/v1" });
+    }
     return new Response(kpiHtml(kv, !!(owner.authed || owner.loop)), { headers: { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "public, max-age=60" } });
   }
   // CONTENT-PIPELINE-1 (1.37.0): the Content tab and its JSON, read-only, open to everyone.
@@ -2679,6 +2977,7 @@ __name2(handleRequest, "handleRequest");
 __name22(handleRequest, "handleRequest");
 __name222(handleRequest, "handleRequest");
 __name2222(handleRequest, "handleRequest");
+// ==== AREA-MAP autonomy: autonomy score (SAI) and the weekly report card ====
 async function runRefresh(env, ctx, opts) {
   if (inflight && !(opts && opts.fresh) && Date.now() - inflightAt < INFLIGHT_REUSE_MS) return inflight;
   const p = (async function() {
@@ -2862,6 +3161,7 @@ __name2(persistWeeklyReportCard, "persistWeeklyReportCard");
 __name22(persistWeeklyReportCard, "persistWeeklyReportCard");
 __name222(persistWeeklyReportCard, "persistWeeklyReportCard");
 __name2222(persistWeeklyReportCard, "persistWeeklyReportCard");
+// ==== AREA-MAP platform: worker entry: fetch and scheduled (cron fan-out) ====
 // DASHBOARD-NOINDEX-1 (2026-10-01): fleet.qnfo.org is an internal dashboard (revenue, AI spend)
 // that search engines could index. robots.txt is answered before any routing, and every response
 // leaves through this one exit, so no route can forget the header. Falls back to a copy when a
@@ -2895,10 +3195,20 @@ var worker_default = {
     // D1-TRIGGER-DEPTH-1 (1.27.0): the second direct producer of qnfo-audit.fleet_tick (qnfo-code-orchestrator */10 is the
     // first; at most one row per 9 minutes between them), so the 10-minute D1 fixers keep running when the fleet-cron
     // dispatcher is down. First, before any long step can use the wall time; a failure is logged, never thrown.
+    // FALLBACK-HEARTBEAT-PROOF-1 (1.44.7): the fallback inserts only when the primary missed a slot, so on a healthy day it
+    // leaves no row and fm-single-heartbeat could not tell an idle fallback from a dead one. Each run now records in
+    // fleet_heartbeat whether the guarded insert executed (ok 1) or threw (ok 0, the 2026-10-18 12:14Z outage shape).
+    let tickOk = 1;
     try {
       await env.AUDIT.prepare("INSERT INTO fleet_tick (source) SELECT 'cron:qnfo-fleet-dashboard' WHERE NOT EXISTS (SELECT 1 FROM fleet_tick WHERE ts > strftime('%Y-%m-%dT%H:%M:%SZ', 'now', '-9 minutes'))").run();
     } catch (e) {
+      tickOk = 0;
       console.log(JSON.stringify({ worker: NAME, where: "scheduled:fleet_tick", note: String(e && e.message || e) }));
+    }
+    try {
+      await env.AUDIT.prepare("INSERT OR REPLACE INTO fleet_heartbeat (worker, version, ts, ok) VALUES ('qnfo-fleet-dashboard', ?, ?, ?)").bind(VERSION, new Date().toISOString(), tickOk).run();
+    } catch (e) {
+      console.log(JSON.stringify({ worker: NAME, where: "scheduled:fleet_heartbeat", note: String(e && e.message || e) }));
     }
     const deadline = Date.now() + SCHEDULED_BUDGET_MS;
     const within = function(p, reserveMs) {
@@ -2993,6 +3303,7 @@ var worker_default = {
     }
   }
 };
+// ==== AREA-MAP platform: metric_registry refresh pass: guard_rcs, pageviews_30d, referral_30d and others ====
 // REGISTRY-REFRESH-DASHBOARD-1 (2026-09-30, agent_issues #1411): metric_registry names this worker's
 // cron as the refresher for pageviews_30d / impressions_growth_30d, but nothing wrote them (stale
 // since 09-27/09-29), and guard_rcs / referral_30d / fleet_context_tokens had no live writer at all.
@@ -3020,6 +3331,7 @@ function rumDaysCovered(rows) {
   for (const r of rows || []) { const k = r && r.dimensions && r.dimensions.date; if (k && (r.count || 0) > 0) d[k] = 1; }
   return Object.keys(d).length;
 }
+// ==== AREA-MAP reach: human audience (HUMAN-AUDIENCE-1) ====
 // ---- HUMAN-AUDIENCE-1:BEGIN (1.22.3, 2026-10-06, pillar reach; owner directive 2026-10-06) ----
 // "Do real human people that are not AI crawler bots actually find out about and visit Quniverse pages, and are they
 // interested enough to want to keep reading more?" pageviews_30d (6570, bot: 0) cannot answer that: read live on
@@ -3197,6 +3509,7 @@ async function refreshRegistryMetrics(env) {
   }
   return out;
 }
+// ==== AREA-MAP reach: engaged human sessions (PERFORMANCE-LOOP-1) ====
 // ---- ENGAGED-HUMAN-SESSIONS-1:BEGIN (PERFORMANCE-LOOP-1, 1.17.4; STRATEGY s6.3 and s9; pillar reach) ----
 // engaged_human_sessions_28d is the STRATEGY s6.3 reach KPI: Cloudflare Web Analytics (RUM) page views over the last 28 days
 // with the "Exclude bots" filter (bot: 0). It is read through the reach ingest's own GraphQL path (reachGf on CF_TOKEN, which
@@ -3300,6 +3613,7 @@ async function roiGf(env, query) {
 }
 __name(roiGf, "roiGf");
 __name2(roiGf, "roiGf");
+// ==== AREA-MAP reach: reach signals ingest, daily (REACH-SIGNALS-INGEST-1) ====
 // REACH-SIGNALS-INGEST-1 (2026-10-01, agent_issues #1711; docs/STRATEGY.md 6.1-6.3): phase 1 of the one-schema signal
 // loop, from sources that need no new credential. Once per UTC day, after 02:00Z, the cron copies the previous complete
 // UTC day into qnfo-audit.reach_signals: RUM pageviews by page and by referrer (CF GraphQL),
@@ -3501,6 +3815,7 @@ function reachOutreachRows(rows, fromDay, toDay) {
   }
   return out;
 }
+// ==== AREA-MAP reach: work-with-me contacts (WORK-WITH-ME-METRIC-1) ====
 // WORK-WITH-ME-METRIC-1 (1.17.2, 2026-10-02, charter pillar: reach; STRATEGY 6.3 "warm conversations"). qnfo.org/work-with-me
 // (qnfo-gateway WORK-WITH-ME-1) offers five ways to work with the owner; every button is a mailto to rowan.quni@qnfo.org
 // whose subject starts with [work-with-me:<offer>]. qnfo-email stores that mail in qnfo-audit.emails. Once a day, inside the
@@ -3850,6 +4165,7 @@ async function ingestReachSignals(env, opts) {
   await record(out.skipped.length ? "partial" : "ok", "reach ingest " + day + ": " + (summary || "nothing written") + (out.skipped.length ? "; skipped " + out.skipped.length : ""));
   return out;
 }
+// ==== AREA-MAP reach: attention loop: per-channel verdicts (ATTENTION-LOOP-1) ====
 // ---- ATTENTION-LOOP-1:BEGIN (1.24.0, 2026-10-06; pillar reach; owner directive 2026-10-06 07:44Z) ----
 // Owner directive: "track granular impressions/eyeballs (humans, not bots/crawlers/AI) from outreach channels (web page/site
 // visits, individual email outreach, social media posts) and audit to do more of what gets noticed; if something isn't
@@ -4232,6 +4548,7 @@ async function attentionLatest(env) {
     scorecard: rows.map(function(r) { return Object.assign({}, r, { extra: parse(r.extra) }); }), decisions, shares };
 }
 // ---- ATTENTION-LOOP-1:END ----
+// ==== AREA-MAP reach: GA4 ingest and the reach tick (GA4-DATA-API-1) ====
 // REACH-INGEST-BACKFILL-1 (#1711): a day the cron never ingested (2026-10-04: every tick hung until REFRESH-INFLIGHT-1) is
 // picked up by a later tick: once yesterday's run is settled, the most recent day of the previous REACH_BACKFILL_DAYS with
 // no reach-ingest-<day> row at all is ingested through the same path as the manual POST /api/reach/ingest?day=, one day
@@ -4381,6 +4698,7 @@ async function reachIngestTick(env, opts) {
   const b = await ingestReachSignals(env, Object.assign({ day: missing }, opts.nowMs ? { nowMs: opts.nowMs } : {}));
   return { live, attention, ga4, backfill: { day: missing, written: b && b.written, skipped: b && b.skipped } };
 }
+// ==== AREA-MAP research: q08 review decision (Q08-REVIEW-2026-10-31) ====
 // Q08-REVIEW-2026-10-31 (agent_issues 1716, docs/STRATEGY.md s7; charter pillar: cost). q08-signal-engine writes an AI
 // essay every 2 hours, and published_pieces.reads counts every GET, bots included, so it cannot decide q08's future. The
 // review measures human page views on q08.org and www.q08.org from Cloudflare Web Analytics (RUM) over the 7 complete UTC
@@ -4558,6 +4876,7 @@ async function q08ReviewStatus(env) {
   return out;
 }
 // Q08-REVIEW-2026-10-31 end
+// ==== AREA-MAP reach: reach scorecard: windows and aggregates (/api/reach) ====
 // Scorecard (STRATEGY 6.3) over reach_signals. Flows (pageviews, outreach) are summed over the window; stocks
 // (Bluesky counts per post, citations per DOI, subscribers) take each entity's latest row in it.
 async function reachLatestAgg(env, source, from, to) {
@@ -4623,6 +4942,7 @@ async function reachScorecardData(env, nowMs) {
   }
   return sc;
 }
+// ==== AREA-MAP autonomy: owner queue tables and objective revisions (OBJECTIVE-REVISION-APPLY-1) ====
 // HUMAN-DASHBOARD-1 (2026-10-01): fleet.qnfo.org is ONE page for the human owner. It answers a single
 // question -- "what do I have to do?" -- and nothing else. The old root (9-panel failure inventory), /ops
 // (scheduler view) and /roi (cost view) were consolidated here; they redirect to "/". Everything the system
@@ -4936,6 +5256,7 @@ async function objectiveRevisionSweep(env) {
   for (const r of rows) out.push(await objectiveRevisionApply(env, Number(r.id), "cron"));
   return out;
 }
+// ==== AREA-MAP research: text generator inventory (/api/generators) ====
 // TEXT-QUALITY-LOOP-1 (1.22.2, agent_issues 1895, docs/ENSEMBLE-POLICY.md): the fleet's text generators (a model writes prose
 // that readers outside the fleet see) live in D1 qnfo-audit.text_generator_inventory
 // (migrations/2026-10-05-text-generator-inventory.sql), one row each: writer family, non-model gate, cross-family read
@@ -4994,6 +5315,7 @@ async function generatorInventory(env, nowMs) {
     generators: out
   };
 }
+// ==== AREA-MAP autonomy: watchmaker index (WATCHMAKER-INDEX-1) ====
 // WATCHMAKER-INDEX-1 (1.14.0, roadmap RM-WATCHMAKER-INDEX-1, agent_issues 1726): the fleet's own daily count of recurring
 // operations that still need a person or a Claude session, target 0. Every recurring operation is listed below with who
 // runs it and how its last run is measured from D1. It counts when (a) a person or a session runs it, (b) its Cloudflare
@@ -5269,6 +5591,7 @@ async function watchmakerDaily(env, opts) {
   await A.prepare("UPDATE metric_registry SET last_value = ?1, last_refreshed = ?2 WHERE metric = 'watchmaker_index'").bind(String(m.index), new Date(now).toISOString()).run();
   return m;
 }
+// ==== AREA-MAP autonomy: owner queue: mail classification and collectHumanActions ====
 // NO-CLAUDE-RUNTIME-DEPENDENCY-1: the owner's data and workflow live on Cloudflare. A dashboard item never links to
 // claude.ai or anthropic.com, and only https links are rendered.
 function safeLink(u) {
@@ -5515,8 +5838,14 @@ async function collectHumanActions(env) {
   };
   await read("human_actions", async function() {
     await ensureHumanTable(env);
-    const rows = await d1all(env.AUDIT, "SELECT slug, title, why, default_in_effect, action, url, sev, due, created_at FROM human_actions WHERE status='open' ORDER BY id");
-    for (const r of rows) add({ key: "ha:" + r.slug, source: "queue", title: r.title, why: r.why || "", fallback: r.default_in_effect || "", action: r.action || "", url: safeLink(r.url), sev: urgentSev(r.sev) ? "urgent" : "normal", due: r.due || "", age: ageDaysOf(r.created_at) });
+    // OWNER-REQUEST-RECEIPT-1: `source` says where a card came from; a database without the column (an older D1, an offline fixture) reads every card as a card.
+    let rows;
+    try {
+      rows = await d1all(env.AUDIT, "SELECT slug, title, why, default_in_effect, action, url, sev, due, created_at, source AS origin FROM human_actions WHERE status='open' ORDER BY id");
+    } catch (e) {
+      rows = await d1all(env.AUDIT, "SELECT slug, title, why, default_in_effect, action, url, sev, due, created_at FROM human_actions WHERE status='open' ORDER BY id");
+    }
+    for (const r of rows) add({ key: "ha:" + r.slug, source: "queue", receipt: r.origin === "owner-request-issue", title: r.title, why: r.why || "", fallback: r.default_in_effect || "", action: r.action || "", url: safeLink(r.url), sev: urgentSev(r.sev) ? "urgent" : "normal", due: r.due || "", age: ageDaysOf(r.created_at) });
   });
   await read("register", async function() {
     const rows = await d1all(env.AUDIT, "SELECT id, title, dod, due, updated_at FROM v_waiting_on_human ORDER BY due = '', due, id");
@@ -5630,6 +5959,7 @@ async function collectHumanActions(env) {
   });
   return { items, blind, mailHandled };
 }
+// ==== AREA-MAP cost: keep investing: decision rule, governance snapshot, spend and return (INVEST-DECISION-1) ====
 // INVEST-DECISION-1 (2026-10-01): the page also answers "do I keep putting my time and money into this
 // fleet, scale it back, or stop?" It applies the owner-ratified rule from impact_thresholds
 // review_gate_2026_12_31 (continue iff credibility_events>=2 OR confirmed_subscribers>=50 OR funding_secured,
@@ -6036,6 +6366,7 @@ function investInputs(snap, facts) {
   const fund = facts.funding_secured ? facts.funding_secured.value : null;
   return { spend30: c.spend30 != null ? c.spend30 : null, ownerLocal30: c.owner_local30 != null ? c.owner_local30 : null, metered30: c.metered30 != null ? c.metered30 : null, cap: c.cap != null ? c.cap : SPEND_CAP_USD, subs: r.subs_confirmed != null ? r.subs_confirmed : 0, subsNew30: r.subs_new30 != null ? r.subs_new30 : 0, credibility: cred, funding: fund, revenue30: facts.revenue_30d_usd ? facts.revenue_30d_usd.value : null, attested: !!(facts.credibility_events || facts.funding_secured), early: snap ? snap.early_trigger : null, days: gateDays, gate_date: REVIEW_GATE_DATE };
 }
+// ==== AREA-MAP autonomy: changes feed, the owner view model (humanView) and the feeds published to other workers ====
 // OWNER-MORNING-1 (autonomy audit 2026-10-02): the owner had no answer to "what changed overnight". One read of the
 // audit DB: deploys by worker (latest version each), agent issues the fleet closed and opened, code-loop fixes merged,
 // and new owner cards, since ?since= (clamped to 7 days; default 24 h). Titles are cut to 90 characters.
@@ -6088,6 +6419,14 @@ async function humanView(env, st, ctx) {
   }).length;
   h.items = h.items.filter(function(i) {
     return !snoozes[i.key];
+  });
+  // OWNER-REQUEST-RECEIPT-1: when an owner-request issue closes, a trigger writes a card (source owner-request-issue) so the owner sees how
+  // their request ended. It asks for no decision: listed apart ("Closed for you"), never in the count, the banner or the area queues.
+  const receipts = h.items.filter(function(i) {
+    return i.receipt;
+  });
+  h.items = h.items.filter(function(i) {
+    return !i.receipt;
   });
   let gov = null;
   try {
@@ -6169,6 +6508,7 @@ async function humanView(env, st, ctx) {
       return i.sev === "urgent";
     }).length,
     items,
+    receipts,
     upcoming,
     blind: h.blind,
     // OWNER-SURFACE-HONESTY-1: inbox mail that owes no reply (sender domain, category, reason; never a subject), so a missing
@@ -6290,26 +6630,19 @@ async function publishFeeds(env, v) {
   await loopMetaSet(env, "invest_feed_status", JSON.stringify({ at: new Date().toISOString(), registry: out.registry, logged: out.log, issue: out.issue, wiring_errors: out.wiring_errors || [], registry_missing: out.registry_missing || [], log_error: out.log_error || null }));
   return out;
 }
+// ==== AREA-MAP platform: area model: buildAreas, areasModel and the area rows (AREAS-1) ====
 /* AREAS-1:BEGIN (1.38.0, 2026-10-17, pillar autonomy; owner request: functional areas, actions, bottlenecks, progress, no overload). The page is organised by
    functional area, not by data source. Practices applied: management by exception (only breaching metrics are listed, top 3 per area,
    ranked by priority then gap size), SRE symptom-first (each row is a fleet-level symptom with its owner, never a raw counter), Kanban
    flow metrics (WIP and conversion per pipeline), Theory of Constraints (one named bottleneck stage per flow), a trend beside every
    number (14-day sparkline from metric_history, direction judged against the breach operator), one control per row (Fix fills the
    command line, which owns the action and its auth). The pure functions are exercised by areas.test.mjs. */
-var AREA_DEFS = [
-  { id: "cost", name: "Cost", rx: /cost|run_rate|spend|_usd/ },
-  { id: "research", name: "Research and content", rx: /q08|paper|research|content_|idea_|publication|zenodo/ },
-  { id: "reach", name: "Reach and growth", rx: /subscri|pageview|referr|social|outreach|work_with_me|inbound_contact|attention|impression|engage|reply_rate|distribution|buffer/ },
-  { id: "autonomy", name: "Autonomy loop", rx: /issue|code_|remedy|fix_|mttr|driver|watchmaker|contracts|session_|owner_dispatch|human_wait|backlog/ },
-  { id: "reliability", name: "Reliability and security", rx: /guard|github_app|spof|runtime_verified|probe|drift|cadence_overdue|failure_mode|roster|blocker|dangling|cron_|deploy_|false_stops|security|sla_breach/ }
-];
-var AREA_STARS = {
-  cost: { key: "fleet_ai_run_rate_30d_usd", label: "Fleet AI run-rate, 30d", unit: "$", good: "down" },
-  research: { key: "publications_30d", label: "Publications, 30d", unit: "", good: "up" },
-  reach: { key: "pageviews_30d", label: "Pageviews, 30d", unit: "", good: "up" },
-  autonomy: { key: "open_agent_issues", label: "Open issues", unit: "", good: "down" },
-  reliability: { key: "guard_rcs", label: "Guards failing", unit: "", good: "down" }
-};
+/* AREA-PAGES-1: the metric model's tables are views of AREA_REGISTRY (declared above, before FEED_AREAS), not a second copy. */
+var AREA_DEFS = AREA_REGISTRY.filter(function(a) { return a.rx; }).map(function(a) {
+  return { id: a.id, name: a.name, rx: a.rx };
+});
+var AREA_STARS = {};
+for (const a of AREA_REGISTRY) if (a.star) AREA_STARS[a.id] = a.star;
 function areaOf(key) {
   const k = String(key || "");
   for (const a of AREA_DEFS) if (a.rx.test(k)) return a.id;
@@ -6464,11 +6797,12 @@ var AREAS_CSS = ".ar-tiles{display:grid;grid-template-columns:repeat(5,minmax(0,
    static /area/<id> page, never an LLM call). AREA_ROOT is the only hand-maintained knowledge here: it is opt-in per area, it can only be
    promoted when the named metric is itself in breach, and an unknown or absent root falls back to the score winner, so a stale entry
    degrades to AREAS-1 behaviour rather than hiding a breach. */
-var AREA_ROOT = {
-  reliability: { key: "runtime_verified_share_24h", explains: ["remedy_efficacy_30d", "fix_hold_rate_30d", "code_task_success_rate_30d"] },
-  autonomy: { key: "remedy_efficacy_30d", explains: ["fix_hold_rate_30d"] }
-};
-var AREA_FLOW = { autonomy: ["issues", "code"], research: ["research"], reach: ["outreach"] };
+var AREA_ROOT = {};
+var AREA_FLOW = {};
+for (const a of AREA_REGISTRY) {
+  if (a.root) AREA_ROOT[a.id] = a.root;
+  if (a.flows && a.flows.length) AREA_FLOW[a.id] = a.flows;
+}
 function leverKind(action) {
   // Which machine can act on this breach without a person: the code loop (the trigger carries a code-task line), the owner
   // (a decision only a human makes), or the fleet's own loops. Never inferred from the metric name.
@@ -6519,7 +6853,11 @@ function focusRowsHtml(m, esc) {
     const f = a.focus;
     o += '<section class="fx-r ' + a.status + '" id="area-' + a.id + '"><div class="fx-h"><a class="fx-n" href="/area/' + a.id + '">' + esc(a.name) + "</a>";
     if (!f) {
-      o += '<span class="fx-c">all clear</span><span class="fx-v">&mdash;</span></div></section>';
+      // AREA-FEEDS-1: a clean area still names its machine feed, so the page and GET /api/area/<id> describe the same six
+      // areas. This is the renderer the page uses (humanHtml -> focusRowsHtml); areaSectionsHtml is retained dead code.
+      // AREA-PAGES-1: an area with a source the model could not read is "can't confirm", never "all clear" (AREAS-1: blind is not zero).
+      const blindA = (m.blind || []).filter(function(n) { return areaBlindRelevant(registryArea(a.id), n); });
+      o += '<span class="fx-c">' + (blindA.length ? "can't confirm: could not read " + esc(blindA.join("; ")) : "all clear") + '</span><span class="fx-v">&mdash;</span></div><div class="fx-m">' + areaPulseHtml(a, m, esc) + '<a class="fx-more" href="/api/area/' + a.id + '">feed: /api/area/' + a.id + "</a></div></section>";
       continue;
     }
     o += '<span class="fx-c">' + (f.root ? '<span class="tag u">root cause</span> ' : "") + esc(f.title) + '</span><span class="fx-v">' + esc(fmtNum(f.val)) +
@@ -6533,25 +6871,44 @@ function focusRowsHtml(m, esc) {
     if (f.explains && f.explains.length) {
       o += '<div class="fx-x"><b>Root cause.</b> This is expected to clear ' + f.explains.map(function(x) { return '"' + esc(x.title) + '" (' + esc(x.area) + ")"; }).join(", ") + " as well, so they are not separate jobs.</div>";
     }
+    o += '<div class="fx-m">' + areaPulseHtml(a, m, esc) + '<a class="fx-more" href="/api/area/' + a.id + '">feed: /api/area/' + a.id + "</a></div>";
     o += "</section>";
   }
   o += "</div>";
   return o;
 }
-function controlsHtml(m, esc) {
-  if (!m.controls || !m.controls.length) return "";
+// AREA-PAGES-1: what the overview used to show in three separate cards (Pipelines, Pipeline controls) now rides on its area's row,
+// and only when it is a problem: a named bottleneck on one of the area's pipelines, or a switch that has stopped one. The full
+// pipeline and control cards live on /area/<id>. m may lack flows or controls (a bare buildAreas model): then nothing renders.
+function areaPulseHtml(a, m, esc) {
+  let o = "";
+  const ids = AREA_FLOW[a.id] || [];
+  for (const f of (m && m.flows || [])) {
+    if (ids.indexOf(f.id) >= 0 && f.bottleneck) o += '<span class="tag u">bottleneck: ' + esc(f.bottleneck.k) + " (" + esc(f.name) + ")</span>";
+  }
+  const reg = registryArea(a.id);
+  for (const c of (m && m.controls || [])) {
+    if (c.on && reg && reg.controls.indexOf(c.key) >= 0) o += '<span class="tag u">' + esc(c.label) + ": " + esc(c.state) + "</span>";
+  }
+  return o;
+}
+function controlsHtml(m, esc, keys) {
+  // keys (optional): only the controls an area owns (AREA_REGISTRY controls); without it, every control, as before.
+  const list = (m.controls || []).filter(function(c) { return !keys || keys.indexOf(c.key) >= 0; });
+  if (!list.length) return "";
   let o = '<section class="card ctl" id="controls"><h3>Pipeline controls</h3><ul class="ctl-l">';
-  for (const c of m.controls) {
+  for (const c of list) {
     o += "<li><b>" + esc(c.label) + '</b><span class="' + (c.on ? "bad" : "ok") + '">' + esc(c.state) + "</span>" + (c.since ? '<span class="meta">set ' + esc(c.since) + "</span>" : "") + '<button type="button" data-fleet-cmd="info ' + esc(c.key) + '">Details</button></li>';
   }
   return o + '</ul><p class="meta">State of the switches that stop a pipeline outright. A pause nobody resumed is the largest hidden bottleneck there is.</p></section>';
 }
-function areaDetailHtml(a, m, esc) {
+function areaDetailHtml(a, m, esc, opts) {
   // PRECONDITION: a = one area from areasModel (a.all holds every breach, not the top three). POSTCONDITION: a static page string.
+  // opts.bare (AREA-PAGES-1): the caller owns the page header, so the back link and the title are left out.
   const o = [];
-  o.push('<p class="meta"><a href="/#areas">&larr; all areas</a></p><h1 class="fl-h">' + esc(a.name) + ' <span class="ct">' + a.count + " in breach" + "</span></h1>");
+  if (!(opts && opts.bare)) o.push('<p class="meta"><a href="/#areas">&larr; all areas</a></p><h1 class="fl-h">' + esc(a.name) + ' <span class="ct">' + a.count + " in breach" + "</span></h1>");
   if (!a.count) {
-    o.push('<div class="empty q-card"><div><b>Every metric in this area is on target.</b></div></div>');
+    o.push(opts && opts.unverified ? '<div class="empty q-card"><div><b>No breach found in what could be read.</b> Part of this area could not be read (see above), so this is not an all clear.</div></div>' : '<div class="empty q-card"><div><b>Every metric in this area is on target.</b></div></div>');
   } else {
     const f = a.focus;
     if (f) {
@@ -6568,7 +6925,7 @@ function areaDetailHtml(a, m, esc) {
   if (fl.length) o.push(flowHtml({ flows: fl }, esc));
   return o.join("");
 }
-var AREAS2_CSS = ".fl-sum{margin:9px 0 0;font-size:13.5px}.fl-sum a{color:var(--teal);text-decoration:none}.fx{display:grid;gap:10px;margin:12px 0 0}.fx-r{background:var(--surface);border:1px solid var(--rule);border-left:4px solid var(--green);border-radius:var(--r);padding:11px 13px}.fx-r.unk{border-left-color:var(--amber)}.fx-r.act{border-left-color:var(--red)}.fx-h{display:flex;gap:12px;align-items:baseline;flex-wrap:wrap}.fx-n{font:600 12px/1.2 var(--sans);letter-spacing:.05em;text-transform:uppercase;color:var(--muted);text-decoration:none;min-width:150px}.fx-n:hover{color:var(--teal)}.fx-c{font:400 15px/1.35 var(--serif);flex:1;min-width:180px}.fx-v{font:500 19px/1 var(--serif);white-space:nowrap;font-variant-numeric:tabular-nums;margin-left:auto}.fx-v small{font:400 12px var(--sans);color:var(--muted)}.fx-m{display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-top:6px;font-size:12.5px;color:var(--muted)}.fx-m .tag{border:1px solid var(--rule);border-radius:99px;padding:1px 8px;font-size:11.5px;white-space:nowrap}.fx-m .tag.u{border-color:var(--amber);color:var(--amber)}.fx-l{flex:1;min-width:200px;color:var(--ink);font-size:13.5px}.fx-o{font-family:var(--mono);font-size:11.5px}.fx-t{white-space:nowrap}.fx-more{color:var(--teal);text-decoration:none}.fx-x{margin-top:7px;padding:7px 10px;border-radius:var(--r-sm);background:var(--amber-wash);color:var(--ink);font-size:13px}.fx-k{font:400 11.5px var(--mono);color:var(--muted)}.ctl-l{list-style:none;margin:0;padding:0;display:grid;gap:8px}.ctl-l li{display:flex;gap:9px;align-items:baseline;flex-wrap:wrap;font-size:13px}.ctl-l .ok{color:var(--green)}.ctl-l .bad{color:var(--red);font-weight:600}.ctl-l button{margin-left:auto;border:1px solid var(--rule);background:var(--surface);color:var(--ink);border-radius:8px;padding:3px 10px;font-size:12.5px;cursor:pointer}";
+var AREAS2_CSS = ".fl-sum{margin:9px 0 0;font-size:13.5px}.fl-sum a{color:var(--teal);text-decoration:none}.fx{display:grid;gap:10px;margin:12px 0 0}.fx-r{background:var(--surface);border:1px solid var(--rule);border-left:4px solid var(--green);border-radius:var(--r);padding:11px 13px}.fx-r.unk{border-left-color:var(--amber)}.fx-r.act{border-left-color:var(--red)}.fx-h{display:flex;gap:12px;align-items:baseline;flex-wrap:wrap}.fx-n{font:600 12px/1.2 var(--sans);letter-spacing:.05em;text-transform:uppercase;color:var(--muted);text-decoration:none;min-width:150px}.fx-n:hover{color:var(--teal)}.fx-c{font:400 15px/1.35 var(--serif);flex:1;min-width:180px}.fx-v{font:500 19px/1 var(--serif);white-space:nowrap;font-variant-numeric:tabular-nums;margin-left:auto}.fx-v small{font:400 12px var(--sans);color:var(--muted)}.fx-m{display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-top:6px;font-size:12.5px;color:var(--muted)}.fx-m .tag{border:1px solid var(--rule);border-radius:99px;padding:1px 8px;font-size:11.5px;white-space:nowrap}.fx-m .tag.u{border-color:var(--amber);color:var(--amber)}.fx-l{flex:1;min-width:200px;color:var(--ink);font-size:13.5px}.fx-o{font-family:var(--mono);font-size:11.5px}.fx-t{white-space:nowrap}.fx-more{color:var(--teal);text-decoration:none}.fx-x{margin-top:7px;padding:7px 10px;border-radius:var(--r-sm);background:var(--amber-wash);color:var(--ink);font-size:13px}.fx-k{font:400 11.5px var(--mono);color:var(--muted)}.ctl-l{list-style:none;margin:0;padding:0;display:grid;gap:8px}.ctl-l li{display:flex;gap:9px;align-items:baseline;flex-wrap:wrap;font-size:13px}.ctl-l .ok{color:var(--green)}.ctl-l .bad{color:var(--red);font-weight:600}.ctl-l button{margin-left:auto;border:1px solid var(--rule);background:var(--surface);color:var(--ink);border-radius:8px;padding:3px 10px;font-size:12.5px;cursor:pointer}.q-sub{border-bottom:1px solid var(--rule);background:var(--surface)}.q-sub .wrap{display:flex;gap:6px;align-items:center;flex-wrap:wrap;padding-top:6px;padding-bottom:6px;font-size:13.5px}.q-sub-n{color:var(--muted);margin-right:8px;font-weight:600;font-size:12px;letter-spacing:.05em;text-transform:uppercase}.q-sub a{text-decoration:none;padding:4px 10px;border-radius:8px;color:var(--muted)}.q-sub a:hover{background:var(--wash);color:var(--ink)}.q-sub a[aria-current]{color:var(--ink);background:var(--wash);font-weight:500}.it-area{font-size:11.5px;text-decoration:none;color:var(--muted);border:1px solid var(--rule);border-radius:99px;padding:0 8px}.it-area:hover{border-color:var(--teal);color:var(--teal)}.ap-head{margin:6px 0 4px}.ap-head h1{margin:2px 0 4px}.ap-what{margin:0 0 10px;color:var(--muted);max-width:70ch}.ap-top{display:flex;gap:14px;align-items:stretch;flex-wrap:wrap;margin:6px 0 4px}.ap-star{display:grid;gap:3px;background:var(--surface);border:1px solid var(--rule);border-left:4px solid var(--green);border-radius:var(--r);padding:11px 13px;min-width:210px}.ap-head.unk .ap-star{border-left-color:var(--amber)}.ap-head.act .ap-star{border-left-color:var(--red)}.ap-w{display:grid;grid-template-columns:repeat(auto-fit,minmax(340px,1fr));gap:14px;margin:14px 0;align-items:start}.ap-scroll{overflow-x:auto;-webkit-overflow-scrolling:touch}#live>.fl-h{margin-top:24px}#live>.empty{margin:8px 0}.ap-reads{width:100%;min-width:540px;border-collapse:collapse;font-size:13px}.ap-reads th,.ap-reads td{text-align:left;padding:6px 8px;border-top:1px solid var(--rule);vertical-align:top}.ap-reads th{font-size:11.5px;letter-spacing:.05em;text-transform:uppercase;color:var(--muted);border-top:0}.ap-reads code{font-family:var(--mono);font-size:12px}.ap-reads a{color:var(--teal);text-decoration:none}.ap-ask{margin:10px 0}.ap-ask button{border:1px solid var(--rule);background:var(--surface);color:var(--ink);border-radius:8px;padding:5px 12px;font-size:13px;cursor:pointer}.ap-ask button:hover{border-color:var(--teal);color:var(--teal)}";
 var AREAS_CACHE = { at: 0, v: null };
 async function areasModel(env, sys) {
   // PRECONDITION: env.AUDIT is qnfo-audit. POSTCONDITION: never throws; an unreadable source is named in model.blind, never shown as zero.
@@ -6578,12 +6935,21 @@ async function areasModel(env, sys) {
   const safe = async function(name, sql) {
     try { return await d1all(A, sql); } catch (e) { blind.push(name); return null; }
   };
+  let ctSplit = true;
   const starKeys = Object.keys(AREA_STARS).map(function(k) { return "'" + AREA_STARS[k].key + "'"; }).join(",");
   const cut = new Date(now - 30 * 864e5).toISOString();
   const [rows, hr, ct, rq, oq, ia] = await Promise.all([
     safe("metric triggers", "SELECT metric_key, title, operator, threshold, owner, priority, val FROM v_metric_trigger_state WHERE hit = 1"),
     safe("metric history", "SELECT metric, day, value FROM metric_history WHERE day >= date('now','-14 day') AND (metric IN (SELECT metric_key FROM v_metric_trigger_state WHERE hit = 1) OR metric IN (" + starKeys + ")) ORDER BY metric, day"),
-    safe("code tasks", "SELECT status, COUNT(*) n FROM code_tasks WHERE created_at >= '" + cut + "' GROUP BY status"),
+    // CODE-FLOW-PR-SPLIT-1: the split needs code_task_pr_links; a database without it (an older D1, an offline fixture) keeps the plain status count.
+    (async function() {
+      try {
+        return await d1all(A, "SELECT " + CODE_OUTCOME_SQL + " AS status, COUNT(*) n FROM " + CODE_OUTCOME_FROM + " WHERE t.created_at >= '" + cut + "' GROUP BY 1");
+      } catch (e) {
+        ctSplit = false;
+        return safe("code tasks", "SELECT status, COUNT(*) n FROM code_tasks WHERE created_at >= '" + cut + "' GROUP BY status");
+      }
+    })(),
     safe("research queue", "SELECT status, COUNT(*) n FROM research_queue GROUP BY status"),
     safe("outreach queue", "SELECT status, COUNT(*) n FROM outreach_queue GROUP BY status"),
     safe("issue age", "SELECT SUM(a < 1) d0, SUM(a >= 1 AND a < 3) d1, SUM(a >= 3 AND a < 7) d3, SUM(a >= 7) d7 FROM (SELECT (strftime('%s','now') * 1000.0 - created_at) / 86400000.0 a FROM agent_issues WHERE status = 'open')")
@@ -6612,7 +6978,7 @@ async function areasModel(env, sys) {
   const cnt = function(list, k) { const x = (list || []).filter(function(r) { return r.status === k; })[0]; return x ? Number(x.n) : 0; };
   const flows = [];
   if (ia && ia[0]) flows.push({ id: "issues", name: "Open issues by age", stages: [{ k: "<1d", label: "under 1 day", n: Number(ia[0].d0) || 0, kind: "info" }, { k: "1-3d", label: "1 to 3 days", n: Number(ia[0].d1) || 0, kind: "info" }, { k: "3-7d", label: "3 to 7 days", n: Number(ia[0].d3) || 0, kind: "info" }, { k: "7d+", label: "over 7 days", n: Number(ia[0].d7) || 0, kind: "stale" }] });
-  if (ct) flows.push({ id: "code", name: "Code loop, 30 days", stages: [{ k: "queued", label: "queued", n: cnt(ct, "queued") + cnt(ct, "ready_to_publish"), kind: "wip" }, { k: "merged", label: "merged", n: cnt(ct, "merged"), kind: "done" }, { k: "closed", label: "closed, unmerged", n: cnt(ct, "closed"), kind: "fail" }, { k: "failed", label: "failed", n: cnt(ct, "failed"), kind: "fail" }] });
+  if (ct) flows.push({ id: "code", name: "Code loop, 30 days", stages: ctSplit ? codeFlowStages(ct) : [{ k: "queued", label: "queued", n: cnt(ct, "queued") + cnt(ct, "ready_to_publish"), kind: "wip" }, { k: "merged", label: "merged", n: cnt(ct, "merged"), kind: "done" }, { k: "closed", label: "closed, unmerged", n: cnt(ct, "closed"), kind: "fail" }, { k: "failed", label: "failed", n: cnt(ct, "failed"), kind: "fail" }] });
   if (rq) flows.push({ id: "research", name: "Research queue", stages: [{ k: "deferred", label: "deferred", n: cnt(rq, "deferred"), kind: "parked" }, { k: "queued", label: "queued", n: cnt(rq, "queued"), kind: "wip" }, { k: "researching", label: "researching", n: cnt(rq, "researching"), kind: "wip" }, { k: "published", label: "published", n: cnt(rq, "published"), kind: "done" }, { k: "wontfix", label: "declined", n: cnt(rq, "wontfix"), kind: "drop" }] });
   if (oq) flows.push({ id: "outreach", name: "Outreach", stages: [{ k: "pending", label: "pending", n: cnt(oq, "pending"), kind: "wip" }, { k: "needs-contact", label: "needs contact", n: cnt(oq, "needs-contact"), kind: "wip" }, { k: "sent", label: "sent", n: cnt(oq, "sent"), kind: "done" }] });
   const model = buildAreas(rows || [], hist, flows, sys);
@@ -6648,6 +7014,81 @@ async function areasModel(env, sys) {
   return model;
 }
 /* AREAS-1:END */
+// ==== AREA-MAP platform: area pages: /area/<id> for all six areas, live refresh (AREA-PAGES-1) ====
+/* AREA-PAGES-1:BEGIN (1.45.0, 2026-10-19, pillar autonomy; the page half of the 2026-10-18 owner directive "refactor the fleet dashboard and API
+   feeds by functional area"). /area/<id> is the complete page of one functional area, for all six areas in AREA_REGISTRY (the five that carry
+   breaching metrics and "platform"): its headline metric and trend, the owner-queue cards that are about it, the constraint and every breach,
+   its pipelines, the cards that used to sit on the overview (Keep investing? under Cost, Progress and the social switch under Reach, System
+   health under Reliability, the owner-queue switch under Autonomy), and a table of every read that belongs to it, page and feed, with its
+   lag. It refreshes itself like the overview (GET /area/<id>?frag=1&rev=<tag> answers 204 while nothing moved), so "live" is the same claim
+   on the page and on the feed. Volatile text (ages) is kept out of the revision, or an unchanged area would look changed every minute. */
+var AREA_POLL_JS = "<script>(function(){var live=document.getElementById('live'),foot=document.getElementById('ap-foot'),dot=document.getElementById('dot'),age=document.getElementById('age');if(!live||!foot)return;var last=Date.now(),busy=false,etag=live.getAttribute('data-rev')||'';function paint(){if(!dot||!age)return;var s=(Date.now()-last)/1000;age.textContent=s<30?'live':'updated '+Math.round(s)+'s ago';dot.className='dot '+(s<45?'g':s<120?'a':'r')}function tick(){if(document.hidden||busy)return;busy=true;var ops=[].map.call(live.querySelectorAll('details'),function(d){return d.open});fetch(location.pathname+'?frag=1'+(etag?'&rev='+encodeURIComponent(etag):''),{cache:'no-store'}).then(function(r){var t=r.headers.get('X-Content-Revision');if(r.status===204||r.status===304){last=Date.now();return null}if(!r.ok)throw 0;if(t)etag=t;return r.text()}).then(function(h){if(h===null)return;var i=h.indexOf('<!--ap-foot-->');live.innerHTML=i<0?h:h.slice(0,i);if(i>=0)foot.innerHTML=h.slice(i+14);[].forEach.call(live.querySelectorAll('details'),function(d,k){if(ops[k])d.open=true});last=Date.now()}).catch(function(e){console.debug('qnfo-fleet-dashboard: area refresh failed',e)}).then(function(){busy=false;paint()})}setInterval(tick,15000);setInterval(paint,5000);document.addEventListener('visibilitychange',function(){if(!document.hidden)tick()});paint()})()<\/script>";
+function areaReadRows(reg) {
+  // Every read that belongs to the area: its own feed first, then the API_INDEX rows that name it. A page is attached to the read it shows.
+  const own = { path: "/api/area/" + reg.id, source: "live", lag_s: 60, what: "This area as one feed: headline metric, breaches, constraint, pipelines and these reads." };
+  return [own].concat(API_INDEX.filter(function(x) { return (x.area || "platform") === reg.id; }));
+}
+function areaPageParts(reg, v, m, dataAge) {
+  // PRECONDITION: reg from AREA_REGISTRY; v = humanView(); m = areasModel() (may be missing platform: it has no metrics). POSTCONDITION:
+  // { stable, foot }: stable is everything the revision covers, foot carries the ages and the version and never moves the revision.
+  const e = esc;
+  const a = (m && m.areas || []).filter(function(x) { return x.id === reg.id; })[0] || null;
+  const st = a && a.star ? a.star : null;
+  const o = [];
+  // A source that could not be read is named here, as /api/area/<id> names it: an area page must never read all clear because a table failed.
+  const blindHere = (m && m.blind || []).filter(function(n) { return areaBlindRelevant(reg, n); });
+  const unverified = !!(a && !a.count && blindHere.length);
+  o.push('<section class="ap-head ' + (a ? (unverified ? "unk" : a.status) : "na") + '" aria-labelledby="ap-h1"><p class="q-eyebrow"><a href="/">Overview</a> &rsaquo; Area</p><h1 class="fl-h" id="ap-h1">' + e(reg.name) +
+    ' <span class="ct">' + (a ? (a.count ? a.count + " in breach" : unverified ? "can't confirm" : "all clear") : "no metrics here") + '</span></h1><p class="ap-what">' + e(reg.what.charAt(0).toUpperCase() + reg.what.slice(1)) + ".</p>");
+  if (st) o.push('<div class="ap-top"><div class="ap-star"><span class="ar-v">' + e(st.text != null ? st.text : (st.unit || "") + fmtNum(st.value)) + '</span><span class="ar-l">' + e(st.label) + '</span><span class="ar-f">' + (st.trend && st.trend.dir ? e(trendLabel(st.trend)) : "no trend yet") + "</span></div></div>");
+  if (a && a.count) o.push('<p class="ap-ask"><button type="button" data-fleet-fill="' + e("what is the smallest fix for the worst breach in the " + reg.name + " area, and who owns it?") + '">Diagnose this area</button></p>');
+  o.push("</section>");
+  if (blindHere.length) o.push('<div class="note">Could not read: ' + e(blindHere.join("; ")) + ". Figures below that depend on it are missing, not zero.</div>");
+  const mine = (v.items || []).filter(function(it) { return queueAreaOf(it) === reg.id; });
+  o.push('<h2 class="fl-h" id="ap-queue">Waiting on you here <span class="ct">' + mine.length + "</span></h2>");
+  if (!mine.length) o.push('<div class="empty q-card"><div><b>Nothing in this area needs you.</b></div></div>');
+  mine.slice(0, 6).forEach(function(it) {
+    o.push('<article class="card item' + (it.sev === "urgent" ? " urgent" : "") + '"><div class="it-top"><span class="it-src">' + e(it.source || "") + "</span>" + (it.sev === "urgent" ? '<span class="tag u">urgent</span>' : "") +
+      (it.due ? '<span class="it-due">due ' + e(it.due) + "</span>" : "") + (it.age != null ? '<span class="it-age">waiting ' + e(agoText(it.age).replace(" ago", "")) + "</span>" : "") + "</div><h2>" + e(it.title) + '</h2><div class="it-rows">' +
+      (it.why ? '<div class="row"><span class="k">Why you</span><span class="v">' + e(it.why) + "</span></div>" : "") +
+      (it.fallback ? '<div class="row"><span class="k">If you wait</span><span class="v">' + e(it.fallback) + "</span></div>" : "") +
+      (it.action ? '<div class="row do-row"><span class="k">To do</span><span class="v">' + e(it.action) + "</span></div>" : "") +
+      '</div><div class="acts">' + (/^https:\/\//.test(it.url || "") ? '<a class="do" href="' + e(it.url) + '" rel="noopener">Open</a>' : "") + '<a href="/#queue">Respond on the overview</a></div></article>');
+  });
+  if (mine.length > 6) o.push('<p class="meta">' + (mine.length - 6) + ' more in <a href="/#queue">the overview queue</a>.</p>');
+  if (a) o.push(areaDetailHtml(a, m, e, { bare: true, unverified }));
+  const w = [];
+  for (const k of reg.widgets) {
+    if (k === "invest" && v.decision) w.push(investCardHtml(v.decision, e));
+    else if (k === "progress") w.push(progressCardHtml(v.business, e));
+    else if (k === "system" && v.system) w.push(systemCardHtml(v, e));
+    else if (k === "controls") w.push(controlsHtml(m || {}, e, reg.controls));
+  }
+  const wh = w.filter(Boolean).join("");
+  if (wh) o.push('<div class="ap-w">' + wh + "</div>");
+  if (reg.id === "platform") {
+    o.push('<h2 class="fl-h" id="ap-by-area">Feeds by area <span class="ct">' + AREA_REGISTRY.length + '</span></h2><section class="card"><div class="ap-scroll"><table class="ap-reads"><thead><tr><th>Area</th><th>Own feed</th><th>Reads</th><th>Members</th><th>Worst lag</th></tr></thead><tbody>');
+    for (const f of feedsByArea()) o.push('<tr><td><a href="' + e(f.page) + '">' + e(f.name) + '</a></td><td><a href="' + e(f.path) + '"><code>' + e(f.path) + "</code></a></td><td>" + e(f.feed_count) + "</td><td>" + (f.all_members_live ? "live" : "live and snapshot") + "</td><td>" + e(f.worst_lag_s) + " s</td></tr>");
+    o.push("</tbody></table></div></section>");
+  }
+  const reads = areaReadRows(reg);
+  o.push('<h2 class="fl-h" id="ap-reads">Reads in this area <span class="ct">' + reads.length + '</span></h2><section class="card"><div class="ap-scroll"><table class="ap-reads"><thead><tr><th>Read</th><th>What</th><th>Source</th><th>Lag</th><th>Page</th></tr></thead><tbody>');
+  for (const x of reads) {
+    const linkable = !/[<*]/.test(x.path);
+    const pg = reg.pages.filter(function(p) { return p.feed === x.path; })[0];
+    o.push("<tr><td>" + (linkable ? '<a href="' + e(x.path) + '"><code>' + e(x.path) + "</code></a>" : "<code>" + e(x.path) + "</code>") + "</td><td>" + e(clipWords(x.what || "", 150)) + "</td><td>" + e(x.source || "live") + "</td><td>" + e(Number(x.lag_s) || 0) + " s</td><td>" + (pg ? '<a href="' + e(pg.href) + '">' + e(pg.label) + "</a>" : "&mdash;") + "</td></tr>");
+  }
+  o.push('</tbody></table></div><p class="meta">Live is computed from D1 when you ask; snapshot is the rebuilt fleet state. Lag is the worst case to assume, not an average.</p></section>');
+  const sys = v.system || {};
+  const foot = "v" + e(VERSION) + " &middot; " + (dataAge && dataAge.age_min != null ? "oldest metric here " + e(dataAge.age_min) + " min old (" + e(dataAge.metrics) + " measured)" : "metric age not measured") +
+    " &middot; system state " + (sys.state_age_min != null ? e(sys.state_age_min) + " min old" : "unknown") + ' &middot; <a href="/api/area/' + e(reg.id) + '">area feed</a> &middot; <a href="/api">API index</a> &middot; <a href="/">&larr; overview</a>';
+  return { stable: o.join(""), foot };
+}
+function areaPageHtml(reg, parts, tag, holder) {
+  return fleetHead(reg.name + " - fleet") + fleetTop(reg.id, true, false) + '<main class="wrap fl">' + cmdPanelHtml(holder, "", "") + '<div id="live" data-rev="' + esc(tag) + '">' + parts.stable + '</div><footer class="fl-foot" id="ap-foot">' + parts.foot + "</footer></main>" + cmdScript(holder) + AREA_POLL_JS + FLEET_SHELL_JS + "</body></html>";
+}
+/* AREA-PAGES-1:END */
+// ==== AREA-MAP platform: overview page: the queue, the area rows and the two headline cards ====
 // ---------- page ----------
 function humanFragment(v) {
   // FLEET-UI-2 (1.18.0): the queue, the investment verdict, the business case and system health as one console in the
@@ -6668,7 +7109,7 @@ function humanFragment(v) {
   };
   // ---- hero: verdict + four headline numbers
   o.push('<section class="fl-hero ' + banner.cls + '" aria-labelledby="fl-h1"><div class="fl-status"><p class="q-eyebrow">Your queue</p><h1 id="fl-h1">' + e(banner.big) + "</h1><p>" + e(banner.sub) + '</p><div class="fl-pills"><span class="pill ' + (s.stuck.length ? "act" : s.errors || String(s.verdict).toUpperCase() !== "OK" ? "unk" : "ok") + '"><i></i>System ' + e(String(s.verdict).toLowerCase()) + "</span><span class=\"pill\">" + '' + "" + (v.attention.open ? '<span class="pill">oldest item ' + (v.attention.oldest_days >= 1 ? Math.round(v.attention.oldest_days) + "d" : "today") + "</span>" : "") + "</div></div>");
-  if (v.areas && v.areas.total) o.push('<p class="fl-sum"><a href="#areas">' + v.areas.total + " metrics in breach across five areas &rarr;</a></p>");
+  if (v.areas && v.areas.total) o.push('<p class="fl-sum"><a href="#areas">' + v.areas.total + (v.areas.total === 1 ? " metric" : " metrics") + " in breach across five areas &rarr;</a></p>");
   o.push("</section>");
   if (v.verdict === "ACTION" && v.blind.length) o.push('<div class="note">Also could not read: ' + e(v.blind.join("; ")) + "</div>");
   // ---- main column: the queue
@@ -6679,7 +7120,8 @@ function humanFragment(v) {
     if (shown === 5) o.push('<details class="more"><summary>' + (v.items.length - 5) + " more waiting on you</summary>");
     shown++;
     const kind = String(it.source || "");
-    o.push('<article class="card item' + (it.sev === "urgent" ? " urgent" : "") + '"><div class="it-top"><span class="it-src">' + e(kind) + "</span>" + (it.sev === "urgent" ? '<span class="tag u">urgent</span>' : "") + (it.due ? '<span class="it-due">due ' + e(it.due) + "</span>" : "") + (it.age != null ? '<span class="it-age">waiting ' + e(agoText(it.age).replace(" ago", "")) + "</span>" : "") + "</div><h2>" + e(it.title) + '</h2><div class="it-rows">');
+    const itArea = registryArea(queueAreaOf(it));
+    o.push('<article class="card item' + (it.sev === "urgent" ? " urgent" : "") + '" data-area="' + e(itArea.id) + '"><div class="it-top"><span class="it-src">' + e(kind) + '</span><a class="it-area" href="/area/' + e(itArea.id) + '">' + e(itArea.short) + "</a>" + (it.sev === "urgent" ? '<span class="tag u">urgent</span>' : "") + (it.due ? '<span class="it-due">due ' + e(it.due) + "</span>" : "") + (it.age != null ? '<span class="it-age">waiting ' + e(agoText(it.age).replace(" ago", "")) + "</span>" : "") + "</div><h2>" + e(it.title) + '</h2><div class="it-rows">');
     if (it.why) o.push('<div class="row"><span class="k">Why you</span><span class="v">' + e(it.why) + "</span></div>");
     if (it.fallback) o.push('<div class="row"><span class="k">If you wait</span><span class="v">' + e(it.fallback) + "</span></div>");
     if (it.action) o.push('<div class="row do-row"><span class="k">To do</span><span class="v">' + e(it.action) + "</span></div>");
@@ -6703,6 +7145,16 @@ function humanFragment(v) {
     for (const it of v.upcoming) o.push("<li><b>" + e(it.due) + "</b> " + e(it.title) + (it.action ? ' <span class="meta">&mdash; ' + e(it.action) + "</span>" : "") + (/^https:\/\//.test(it.url || "") ? ' <a href="' + e(it.url) + '" rel="noopener">open</a>' : "") + "</li>");
     o.push("</ul></details>");
   }
+  // OWNER-REQUEST-RECEIPT-1: how the owner's own requests ended. Title and issue number only: the issue text can quote private notes.
+  if (v.receipts && v.receipts.length) {
+    const rh = !!(v.owner && v.owner.authed);
+    o.push('<details class="card up" id="receipts"><summary>Closed for you <span class="ct">' + e(v.receipts.length) + '</span></summary><p class="meta">Requests of yours that the fleet closed with evidence. None of these needs a decision' + (rh ? "; Done clears a line" : "") + ".</p><ul>");
+    for (const it of v.receipts) {
+      const num = /^ha:issue-(\d+)$/.exec(String(it.key));
+      o.push("<li><b>" + e(String(it.title || "").slice(0, 140)) + "</b>" + (num ? ' <span class="meta">issue #' + e(num[1]) + "</span>" : "") + (rh ? ' <span class="acts" data-key="' + e(it.key) + '"><button data-act="done">Done</button></span>' : "") + "</li>");
+    }
+    o.push("</ul></details>");
+  }
   // FLEET-CMD-1: the command line sits outside #live (humanHtml), so a 10s refresh can no longer wipe a question in flight.
   const holder = !!(v.owner && v.owner.authed);
   if (holder && v.prompts && v.prompts.length) {
@@ -6720,17 +7172,31 @@ function humanFragment(v) {
   }
   if (v.areas) o.push(focusRowsHtml(v.areas, e));
   o.push("</div>");
-  // ---- rail: the investment verdict and system health
+  // ---- rail: the two headline answers. AREA-PAGES-1 (1.45.0): pipelines, progress and pipeline controls moved to the area pages
+  // (/area/<id>); the investment verdict (Cost) and system health (Reliability) stay on the overview because the page promises both,
+  // and each is also the first card of its own area page. Same functions, so the two can never disagree.
+  o.push('<aside class="fl-rail">' + investCardHtml(d, e) + systemCardHtml(v, e) + "</aside></div>");
+
+  o.push('<footer class="fl-foot">v' + e(v.version) + " &middot; system state " + (s.state_age_min != null ? e(s.state_age_min) + " min old" : "unknown") + ' &middot; <a href="/api/human">human JSON</a> &middot; <a href="/api/areas">areas JSON</a> &middot; <a href="/api/decision">decision JSON</a> &middot; <a href="/api/watchmaker">watchmaker index</a> &middot; <a href="/cmd">command line</a></footer>');
+  return o.join("");
+}
+function investCardHtml(d, e) {
+  // The Keep investing? card (Cost area). PRECONDITION: d = humanView().decision. POSTCONDITION: one section string.
+  const o = [];
   const lbl = { CONTINUE: "CONTINUE", SCALE_BACK: "SCALE BACK", KILL: "STOP", UNKNOWN: "CAN'T JUDGE" }[d.verdict] || d.verdict;
   const dcls = d.verdict === "CONTINUE" ? d.risk === "at_risk" ? "unk" : "ok" : d.verdict === "UNKNOWN" ? "unk" : "act";
-  o.push('<aside class="fl-rail"><section class="card verdict ' + dcls + '" id="invest" aria-labelledby="inv-h"><h3 id="inv-h">Keep investing?</h3><div class="vtop"><span class="chip ' + dcls + '">' + e(lbl) + "</span>" + (d.risk === "at_risk" ? '<span class="tag">at risk</span>' : "") + (d.basis === "metered-estimate" ? '<span class="tag">cost unverified</span>' : "") + '<span class="gate">' + e(d.gate.days) + " days to the " + e(REVIEW_GATE_DATE) + ' gate</span></div><p class="vhead">' + e(d.headline) + "</p>");
+  o.push('<section class="card verdict ' + dcls + '" id="invest" aria-labelledby="inv-h"><h3 id="inv-h">Keep investing?</h3><div class="vtop"><span class="chip ' + dcls + '">' + e(lbl) + "</span>" + (d.risk === "at_risk" ? '<span class="tag">at risk</span>' : "") + (d.basis === "metered-estimate" ? '<span class="tag">cost unverified</span>' : "") + '<span class="gate">' + e(d.gate.days) + " days to the " + e(REVIEW_GATE_DATE) + ' gate</span></div><p class="vhead">' + e(d.headline) + "</p>");
   if (d.reasons.length) o.push('<ul class="why">' + d.reasons.map(function(r) {
     return "<li>" + e(r) + "</li>";
   }).join("") + "</ul>");
   if (d.flips.length) o.push('<div class="row"><span class="k">What changes it</span><span class="v">' + e(d.flips.join(" ")) + "</span></div>");
   if (d.levers.length && d.verdict !== "CONTINUE") o.push('<div class="row"><span class="k">Levers</span><span class="v">' + e(d.levers.join(" ")) + "</span></div>");
   o.push('<p class="meta rule">Rule (STRATEGY.md s9, you ratified it): continue only if credibility events &ge; ' + INVEST_CRED_TARGET + " OR confirmed subscribers &ge; " + INVEST_SUBS_TARGET + " OR funding, AND spend within the cap, judged at " + e(REVIEW_GATE_DATE) + " (" + e(d.gate.days) + " days). Advisory: the system never stops itself.</p></section>");
-  if (v.areas) o.push(flowHtml(v.areas, e));
+  return o.join("");
+}
+function progressCardHtml(b, e) {
+  // Progress since the first snapshot (Reach area). Empty when the business case has no trend yet.
+  const o = [];
   if (b && b.trend) {
     // Progress since the first snapshot: kept from the business case because progress over time is the one thing the area tiles do not show.
     const t = b.trend;
@@ -6740,6 +7206,12 @@ function humanFragment(v) {
     };
     o.push('<section class="card trend" id="progress"><h3>Progress since ' + e(t.from) + '</h3>' + tr("Pageviews", t.pageviews) + tr("Papers in the corpus", t.papers) + '</section>');
   }
+  return o.join("");
+}
+function systemCardHtml(v, e) {
+  // System health (Reliability area). PRECONDITION: v = humanView(). POSTCONDITION: one section string.
+  const o = [];
+  const s = v.system;
   const sysBad = s.stuck.length > 0;
   const pr = s.probes_total ? s.probes_ok / s.probes_total : 0, C = 2 * Math.PI * 26;
   o.push('<section class="card sys" id="system" aria-labelledby="sys-h"><h3 id="sys-h">System health</h3><div class="sys-top"><svg viewBox="0 0 64 64" class="ring" role="img" aria-label="' + e(s.probes_ok) + " of " + e(s.probes_total) + ' probes ok"><circle cx="32" cy="32" r="26" class="tr"/><circle cx="32" cy="32" r="26" class="fg ' + (pr >= 1 ? "ok" : pr >= 0.9 ? "unk" : "act") + '" stroke-dasharray="' + (C * pr).toFixed(1) + " " + C.toFixed(1) + '" transform="rotate(-90 32 32)"/><text x="32" y="36" text-anchor="middle">' + Math.round(pr * 100) + '%</text></svg><dl class="sys-n"><div><dt>Verdict</dt><dd>' + e(s.verdict) + "</dd></div><div><dt>Errors</dt><dd" + (s.errors ? ' class="bad"' : "") + ">" + e(s.errors) + "</dd></div><div><dt>Warnings</dt><dd" + (s.warnings ? ' class="amber"' : "") + ">" + e(s.warnings) + "</dd></div><div><dt>State age</dt><dd>" + (s.state_age_min != null ? e(s.state_age_min) + " min" : "unknown") + "</dd></div></dl></div>");
@@ -6753,12 +7225,9 @@ function humanFragment(v) {
     return e(m.domain) + " (" + e(m.why) + ")";
   }).join("; ") + ".</div>");
   o.push('<div class="meta" style="margin-top:8px">Red flags, drift, queues and retries are worked by the issue loop and qnfo-fleet-control and are not your job unless they appear above.' + (s.drift ? " Drift: " + e(s.drift) + "." : "") + "</div></details></section>");
-  if (v.areas) o.push(controlsHtml(v.areas, e));
-  o.push("</aside></div>");
-
-  o.push('<footer class="fl-foot">v' + e(v.version) + " &middot; system state " + (s.state_age_min != null ? e(s.state_age_min) + " min old" : "unknown") + ' &middot; <a href="/api/human">human JSON</a> &middot; <a href="/api/areas">areas JSON</a> &middot; <a href="/api/decision">decision JSON</a> &middot; <a href="/api/watchmaker">watchmaker index</a> &middot; <a href="/cmd">command line</a></footer>');
   return o.join("");
 }
+// ==== AREA-MAP platform: page shell: design system, head and navigation (FLEET-UI-2) ====
 // ---- FLEET-UI-2:BEGIN (1.18.0, 2026-10-02, pillar autonomy: the owner's one decision surface) ----
 var FLEET_DS = ":root{--paper:#F5F7FB;--surface:#FFFFFF;--ink:#182042;--muted:#5A6386;--rule:#D9DEEC;--wash:#E9EDF7;--teal:#0E7C70;--teal-wash:#DDF1EE;--amber:#8A5300;--amber-wash:#FCEFD6;--red:#B42318;--red-wash:#FDECEA;--green:#157F3B;--green-wash:#E5F4EA;--violet:#5B4BB7;--violet-wash:#ECE9FA;--rust:#B5562A;--rust-wash:#FBE9E0;--serif:\"Newsreader\",Georgia,\"Times New Roman\",serif;--sans:\"Familjen Grotesk\",system-ui,-apple-system,\"Segoe UI\",sans-serif;--mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;--r-sm:6px;--r:10px;--r-lg:14px;--shadow:0 1px 2px rgba(24,32,66,.06),0 8px 24px -12px rgba(24,32,66,.18);color-scheme:light}@media (prefers-color-scheme:dark){:root:not([data-theme=\"light\"]){--paper:#141A33;--surface:#1B2346;--ink:#E6E8F3;--muted:#9AA3C6;--rule:#2D3762;--wash:#222B52;--teal:#5FD3C4;--teal-wash:#173B45;--amber:#F2B544;--amber-wash:#3A2F1A;--red:#FF8A80;--red-wash:#3A1D22;--green:#6FD39A;--green-wash:#163326;--violet:#A99BFF;--violet-wash:#2A2752;--rust:#F08A5D;--rust-wash:#3A2420;--shadow:0 1px 2px rgba(0,0,0,.3),0 10px 30px -14px rgba(0,0,0,.6);color-scheme:dark}}:root[data-theme=\"dark\"]{--paper:#141A33;--surface:#1B2346;--ink:#E6E8F3;--muted:#9AA3C6;--rule:#2D3762;--wash:#222B52;--teal:#5FD3C4;--teal-wash:#173B45;--amber:#F2B544;--amber-wash:#3A2F1A;--red:#FF8A80;--red-wash:#3A1D22;--green:#6FD39A;--green-wash:#163326;--violet:#A99BFF;--violet-wash:#2A2752;--rust:#F08A5D;--rust-wash:#3A2420;--shadow:0 1px 2px rgba(0,0,0,.3),0 10px 30px -14px rgba(0,0,0,.6);color-scheme:dark}[hidden]{display:none!important}*{box-sizing:border-box}html{-webkit-text-size-adjust:100%;scroll-padding-top:84px}body{margin:0;background:var(--paper);color:var(--ink);font:400 16px/1.5 var(--sans);font-feature-settings:\"tnum\" 1;-webkit-font-smoothing:antialiased}a{color:inherit;text-underline-offset:3px;text-decoration-thickness:1px}a:hover{color:var(--teal)}:focus-visible{outline:2px solid var(--teal);outline-offset:2px;border-radius:4px}button{font:inherit;color:inherit;cursor:pointer}.sr{position:absolute!important;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}.wrap{max-width:1240px;margin:0 auto;padding:0 24px}.q-top{position:sticky;top:0;z-index:40;background:color-mix(in srgb,var(--paper) 88%,transparent);backdrop-filter:saturate(1.4) blur(10px);-webkit-backdrop-filter:saturate(1.4) blur(10px);border-bottom:1px solid transparent;transition:border-color .2s}.q-top.scrolled{border-bottom-color:var(--rule)}.q-top .wrap{display:flex;align-items:center;gap:22px;height:64px}.q-mark{display:flex;align-items:center;gap:10px;text-decoration:none;font-weight:600;font-size:17px;letter-spacing:-.01em;white-space:nowrap}.q-mark svg{width:26px;height:26px;flex:none}.q-mark small{font-weight:400;color:var(--muted);font-size:15px}.q-nav{display:flex;gap:4px;margin-left:auto;font-size:14.5px;color:var(--muted)}.q-nav a{text-decoration:none;padding:6px 10px;border-radius:8px}.q-nav a:hover{background:var(--wash);color:var(--ink)}.q-nav a[aria-current]{color:var(--ink);background:var(--wash);font-weight:500}.q-theme{border:1px solid var(--rule);background:none;border-radius:999px;width:34px;height:34px;display:grid;place-items:center;color:var(--muted);flex:none}.q-theme:hover{color:var(--ink);border-color:var(--muted)}.q-theme svg{width:16px;height:16px}.q-btn{display:inline-flex;align-items:center;gap:8px;border:1px solid var(--rule);background:var(--surface);border-radius:10px;padding:8px 14px;font-weight:500;font-size:14px;text-decoration:none;color:var(--ink);white-space:nowrap;transition:border-color .15s,background .15s}.q-btn:hover{border-color:var(--muted);color:var(--ink)}.q-btn svg{width:16px;height:16px;flex:none}.q-btn.pri{background:var(--ink);border-color:var(--ink);color:var(--paper)}.q-btn.pri:hover{opacity:.9;color:var(--paper)}.q-btn.teal{background:var(--teal);border-color:var(--teal);color:var(--paper)}.q-btn.teal:hover{color:var(--paper);opacity:.92}.q-btn:disabled{opacity:.45;cursor:default}.q-chip{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--rule);background:var(--surface);border-radius:999px;padding:5px 12px;font-size:13.5px;text-decoration:none;color:var(--ink);white-space:nowrap}.q-chip:hover{border-color:var(--muted);color:var(--ink)}.q-chip[aria-pressed=\"true\"],.q-chip.on{background:var(--ink);border-color:var(--ink);color:var(--paper)}.q-chip b{font-weight:600;font-variant-numeric:tabular-nums;opacity:.7}.q-eyebrow{font:600 12px/1 var(--sans);letter-spacing:.09em;text-transform:uppercase;color:var(--teal)}.q-card{background:var(--surface);border:1px solid var(--rule);border-radius:var(--r-lg)}.q-tag{display:inline-flex;align-items:center;gap:5px;font:600 11.5px/1 var(--sans);letter-spacing:.04em;text-transform:uppercase;padding:4px 8px;border-radius:6px;background:var(--wash);color:var(--muted)}.q-foot{border-top:1px solid var(--rule);margin-top:64px;padding:26px 0 44px;font-size:13.5px;color:var(--muted)}.q-foot .wrap{display:flex;gap:10px 22px;flex-wrap:wrap;align-items:center}.q-foot a{color:var(--muted)}.q-foot a:hover{color:var(--teal)}.q-skel{display:block;height:13px;border-radius:4px;background:linear-gradient(90deg,var(--wash),var(--rule),var(--wash));background-size:200% 100%;animation:qsk 1.4s ease infinite;margin:10px 0}@keyframes qsk{to{background-position:-200% 0}}.q-spin{display:inline-block;width:12px;height:12px;border:2px solid var(--rule);border-top-color:var(--teal);border-radius:50%;animation:qsp .8s linear infinite;vertical-align:-1px}@keyframes qsp{to{transform:rotate(360deg)}}.q-toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%) translateY(20px);background:var(--ink);color:var(--paper);padding:10px 16px;border-radius:10px;font-size:14px;opacity:0;pointer-events:none;transition:all .2s;z-index:90}.q-toast.on{opacity:1;transform:translateX(-50%) translateY(0)}.q-menu{display:none;position:relative}.q-menu summary{list-style:none;cursor:pointer;border:1px solid var(--rule);border-radius:999px;width:34px;height:34px;display:grid;place-items:center;color:var(--muted)}.q-menu summary::-webkit-details-marker{display:none}.q-menu summary svg{width:16px;height:16px}.q-menu-panel{position:absolute;right:0;top:44px;z-index:50;min-width:210px;background:var(--surface);border:1px solid var(--rule);border-radius:12px;padding:8px;display:grid;box-shadow:var(--shadow)}.q-menu-panel a{padding:10px 12px;border-radius:8px;text-decoration:none;font-size:15px}.q-menu-panel a:hover,.q-menu-panel a[aria-current]{background:var(--wash)}@media (max-width:760px){.wrap{padding:0 16px}.q-nav{display:none}.q-menu{display:block;margin-left:auto}.q-theme{margin-left:0}.q-top .wrap{height:56px;gap:10px}}@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important;scroll-behavior:auto!important}}@media print{.q-top,.q-foot,.q-theme,.no-print{display:none!important}body{background:#fff;color:#000}}";
 var FLEET_CSS = ".wrap{max-width:1280px}:root{--card:var(--surface);--line:var(--rule);--bg:var(--paper);--mute:var(--muted);--link:var(--teal);--act:var(--red);--actbg:var(--red-wash);--ok:var(--green);--okbg:var(--green-wash);--unk:var(--amber);--unkbg:var(--amber-wash);--warn:var(--amber)}.live{display:inline-flex;align-items:center;gap:7px;font-size:13px;color:var(--muted);white-space:nowrap;margin-left:auto}.q-nav+.live{margin-left:12px}.dot{display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--muted)}.dot.g{background:var(--green);box-shadow:0 0 0 3px var(--green-wash)}.dot.a{background:var(--amber);box-shadow:0 0 0 3px var(--amber-wash)}.dot.r{background:var(--red);box-shadow:0 0 0 3px var(--red-wash)}#so{color:var(--muted);font-size:13px;margin-left:8px}main.fl{padding-top:18px;padding-bottom:20px}/* command bar */.cmd{background:var(--surface);border:1.5px solid var(--rule);border-radius:var(--r-lg);padding:12px 14px 10px;margin:0 0 22px;transition:border-color .15s,box-shadow .15s}.cmd:focus-within{border-color:var(--teal);box-shadow:0 0 0 4px var(--teal-wash)}.cmd form{display:flex;gap:10px;align-items:flex-start}.cmd .pr0{font:600 18px/38px var(--mono);color:var(--teal)}#ctext{flex:1;min-width:0;resize:none;border:0;background:none;color:var(--ink);font:400 18px/1.45 var(--serif);height:38px;max-height:180px;padding:7px 2px;outline:none}#ctext:focus{outline:none}.cmd button{border:1px solid var(--rule);background:var(--paper);color:var(--ink);border-radius:9px;padding:7px 12px;font:500 13px var(--sans)}.cmd button.p{background:var(--ink);border-color:var(--ink);color:var(--paper);padding:9px 18px;font-size:14px;font-weight:600}.cmd .chips{display:flex;gap:6px;flex-wrap:wrap;margin-top:6px;padding-left:28px}.cmd .chips button{border-radius:99px;padding:4px 11px;font:500 12.5px var(--mono);color:var(--muted);background:none}.cmd .chips button:hover{color:var(--ink);border-color:var(--muted)}.cmeta{display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;font-size:12.5px;color:var(--muted);margin-top:8px;padding:8px 0 0 28px;border-top:1px dashed var(--rule)}.cmeta a{color:var(--teal)}#cout:empty{display:none}#cout{margin:8px 0 0 28px}.co{border-top:1px solid var(--rule);padding:10px 0 6px}.co .q{font:13px var(--mono);color:var(--muted)}.co pre{font:13.5px/1.5 var(--mono);white-space:pre-wrap;word-break:break-word;margin:6px 0 0}/* hero */.fl-hero{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.5fr);gap:28px;align-items:stretch;margin:0 0 26px}.fl-status{border-radius:var(--r-lg);padding:24px 24px 20px;background:var(--surface);border:1px solid var(--rule);border-top:4px solid var(--muted);display:flex;flex-direction:column}.fl-hero.act .fl-status{border-top-color:var(--red)}.fl-hero.ok .fl-status{border-top-color:var(--green)}.fl-hero.unk .fl-status{border-top-color:var(--amber)}.fl-status .q-eyebrow{color:var(--muted)}.fl-status h1{font:500 clamp(30px,3.4vw,44px)/1.05 var(--serif);letter-spacing:-.02em;margin:12px 0 8px}.fl-hero.act h1{color:var(--red)}.fl-hero.ok h1{color:var(--green)}.fl-hero.unk h1{color:var(--amber)}.fl-status>p{margin:0 0 16px;color:var(--muted);font-size:15px}.fl-pills{display:flex;flex-wrap:wrap;gap:6px;margin-top:auto}.pill{display:inline-flex;align-items:center;gap:6px;font-size:12.5px;color:var(--muted);background:var(--wash);border-radius:99px;padding:4px 10px}.pill i{width:7px;height:7px;border-radius:50%;background:var(--muted)}.pill.ok i{background:var(--green)}.pill.unk i{background:var(--amber)}.pill.act i{background:var(--red)}.fl-kpis{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.kpi{background:var(--surface);border:1px solid var(--rule);border-radius:var(--r-lg);padding:16px 18px;display:flex;flex-direction:column;gap:6px;min-width:0}.k-l{font-size:12.5px;color:var(--muted);font-weight:500}.k-n{font:500 32px/1 var(--serif);letter-spacing:-.02em;font-variant-numeric:tabular-nums}.k-n small{font:500 14px var(--sans);color:var(--muted);letter-spacing:0;margin-left:6px}.k-n.act{color:var(--red)}.k-n.unk{color:var(--amber)}.k-n.ok{color:var(--green)}.k-d{font-size:13px;font-weight:600;color:var(--muted)}.k-d.ok{color:var(--green)}.k-d.act{color:var(--red)}.k-s{font-size:12px;color:var(--muted);margin-top:auto}.mt{display:block;height:6px;background:var(--wash);border-radius:99px;overflow:hidden}.mt i{display:block;height:100%;border-radius:99px;background:var(--muted)}.mt i.ok{background:var(--green)}.mt i.unk{background:var(--amber)}.mt i.act{background:var(--red)}.mt i.teal{background:var(--teal)}.note{background:var(--amber-wash);color:var(--amber);border-radius:var(--r);padding:10px 14px;font-size:14px;margin:-10px 0 18px}/* grid */.fl-grid{display:grid;grid-template-columns:minmax(0,1fr) 380px;gap:28px;align-items:start}.fl-h{font:500 24px/1.2 var(--serif);margin:0 0 14px;display:flex;align-items:center;gap:10px}.ct{font:600 12.5px/1 var(--sans);background:var(--wash);color:var(--muted);border-radius:99px;padding:4px 9px}.card{background:var(--surface);border:1px solid var(--rule);border-radius:var(--r-lg);padding:18px 20px;margin-bottom:12px}.item{position:relative;padding-left:24px;transition:box-shadow .15s,border-color .15s}.item::before{content:\"\";position:absolute;left:0;top:14px;bottom:14px;width:4px;border-radius:0 4px 4px 0;background:var(--rule)}.item.urgent::before{background:var(--red)}.item:hover{box-shadow:var(--shadow)}.it-top{display:flex;flex-wrap:wrap;gap:6px 12px;align-items:center;font-size:12.5px;color:var(--muted);margin-bottom:6px}.it-src{font-weight:600;text-transform:uppercase;letter-spacing:.06em;font-size:11.5px;color:var(--teal)}.it-due{color:var(--amber);font-weight:600}.item h2{font:500 21px/1.3 var(--serif);margin:0 0 12px;letter-spacing:-.005em}.it-rows{display:flex;flex-direction:column;gap:8px}.row{display:grid;grid-template-columns:110px minmax(0,1fr);gap:12px;font-size:14.5px;line-height:1.5;margin-top:8px}.it-rows .row{margin-top:0}.row .k{color:var(--muted);font-weight:600;font-size:13px;padding-top:1px}.do-row .v{color:var(--ink);font-weight:500}.meta{font-size:13px;color:var(--muted)}.tag{display:inline-block;font:700 10.5px/1 var(--sans);letter-spacing:.06em;text-transform:uppercase;padding:4px 7px;border-radius:5px;background:var(--wash);color:var(--muted)}.tag.u{background:var(--red);color:#fff}.acts{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-top:14px;padding-top:12px;border-top:1px solid var(--rule)}.acts button{border:1px solid var(--rule);background:var(--paper);color:var(--ink);border-radius:8px;padding:6px 12px;font:500 13px var(--sans)}.acts button:hover{border-color:var(--teal);color:var(--teal)}.acts button:disabled{opacity:.5;cursor:default}.do{display:inline-flex;align-items:center;gap:6px;background:var(--ink);color:var(--paper);border-radius:8px;padding:7px 14px;text-decoration:none;font:600 13.5px var(--sans)}.do:hover{color:var(--paper);opacity:.9}.do::after{content:\"\\2192\"}.pr{border-top:1px solid var(--rule);margin-top:12px;padding-top:10px;font-size:14px}.ans{white-space:pre-wrap;font-size:14px;margin-top:6px}details{border-radius:var(--r-lg)}summary{cursor:pointer;color:var(--muted);font-size:14px}details.more{margin:0}details.more>summary{padding:8px 2px 12px;font-weight:500;color:var(--teal)}details.up summary{display:flex;align-items:center;gap:8px;font-weight:500;color:var(--ink)}details ul{margin:10px 0 0;padding-left:18px;font-size:14px;line-height:1.55}details li{margin-bottom:4px}.empty{display:flex;gap:14px;align-items:center;color:var(--muted)}.empty svg{width:34px;height:34px;color:var(--green);background:var(--green-wash);border-radius:50%;padding:6px;flex:none}.empty b{color:var(--ink)}/* rail */.fl-rail{position:sticky;top:84px;display:flex;flex-direction:column;gap:0}.fl-rail h3,.trend h3{font:600 12px var(--sans);letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin:0 0 12px}.verdict{border-top:4px solid var(--muted)}.verdict.ok{border-top-color:var(--green)}.verdict.unk{border-top-color:var(--amber)}.verdict.act{border-top-color:var(--red)}.vtop{display:flex;gap:8px;align-items:center;flex-wrap:wrap}.chip{font:700 13px var(--sans);letter-spacing:.05em;padding:5px 10px;border-radius:7px}.chip.ok{background:var(--green-wash);color:var(--green)}.chip.unk{background:var(--amber-wash);color:var(--amber)}.chip.act{background:var(--red-wash);color:var(--red)}.gate{font-size:12px;color:var(--muted);margin-left:auto}.vhead{font:500 18px/1.35 var(--serif);margin:12px 0 8px}.why{margin:0 0 4px;padding-left:18px;font-size:13.5px;color:var(--muted);line-height:1.5}.verdict .row{grid-template-columns:1fr;gap:2px;font-size:13.5px}.rule{margin:12px 0 0;padding-top:10px;border-top:1px dashed var(--rule);font-size:12px;line-height:1.5}.sys-top{display:flex;gap:16px;align-items:center;margin-bottom:6px}.ring{width:76px;height:76px;flex:none}.ring .tr{fill:none;stroke:var(--wash);stroke-width:7}.ring .fg{fill:none;stroke-width:7;stroke-linecap:round;stroke:var(--muted)}.ring .fg.ok{stroke:var(--green)}.ring .fg.unk{stroke:var(--amber)}.ring .fg.act{stroke:var(--red)}.ring text{font:600 14px var(--sans);fill:var(--ink)}.sys-n{display:grid;grid-template-columns:1fr 1fr;gap:8px 14px;margin:0;flex:1}.sys-n dt{font-size:11.5px;color:var(--muted)}.sys-n dd{margin:0;font:600 15px var(--sans)}.sys details{margin-top:10px;border-top:1px solid var(--rule);padding-top:10px;border-radius:0}.sys summary{font-size:13px}.links{display:flex;flex-wrap:wrap;gap:6px 14px;font-size:13.5px}.links h3{width:100%;margin-bottom:4px}.links a{color:var(--teal);text-decoration:none}.links a:hover{text-decoration:underline}/* business */.fl-biz{margin-top:30px;padding-top:26px;border-top:1px solid var(--rule)}.grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin-bottom:12px}.stat{background:var(--surface);border:1px solid var(--rule);border-radius:var(--r-lg);padding:14px 16px}.stat .n{font:500 26px/1.1 var(--serif);letter-spacing:-.01em;margin-bottom:6px}.stat .l{font-size:12.5px;color:var(--muted);line-height:1.4}.bad{color:var(--red)}.good{color:var(--green)}.amber{color:var(--amber)}.trend{max-width:640px}.tr-r{display:grid;grid-template-columns:110px 1fr 120px;gap:12px;align-items:center;font-size:13.5px;margin-bottom:8px}.tr-r b{text-align:right;font-weight:600;font-variant-numeric:tabular-nums}.tr-b{position:relative;height:16px;display:flex;flex-direction:column;gap:3px}.tr-b i{display:block;height:6px;border-radius:99px;background:var(--rule)}.tr-b i.now{background:var(--teal)}.fl-biz>.meta{line-height:1.6;max-width:110ch}.since{margin:-8px 0 22px;padding:12px 18px}.since summary{color:var(--ink);font-size:14.5px;list-style:none}.since summary::-webkit-details-marker{display:none}.since summary::before{content:'\\25B8';color:var(--muted);margin-right:8px;display:inline-block;transition:transform .15s}.since details[open] summary::before{transform:rotate(90deg)}.since-h{font-weight:600;margin-right:6px}.since b{font-weight:600}.since-d{margin-top:4px;max-width:900px}.since-d h3{font:600 12px var(--sans);color:var(--muted);margin:12px 0 4px}.since-d ul{margin:0;padding-left:18px;font-size:13.5px}.fl-foot{margin-top:28px;font-size:12.5px;color:var(--muted)}.fl-foot a{color:var(--muted)}@media (max-width:1100px){.fl-hero{grid-template-columns:1fr}.fl-grid{grid-template-columns:1fr}.fl-rail{position:static}.grid{grid-template-columns:repeat(2,minmax(0,1fr))}}@media (max-width:560px){.fl-kpis{grid-template-columns:1fr 1fr;gap:8px}.kpi{padding:12px}.k-n{font-size:24px}.row{grid-template-columns:1fr;gap:2px}.item{padding:16px 16px 16px 20px}.item h2{font-size:19px}.cmd .chips,.cmeta,#cout{padding-left:0;margin-left:0}.tr-r{grid-template-columns:84px 1fr 92px}.live span#age{display:none}.gate{margin-left:0;width:100%}}";
@@ -6768,13 +7237,40 @@ var FLEET_MARK = '<svg viewBox="0 0 32 32" aria-hidden="true"><path d="M6 16h7M1
 var FLEET_THEME_BTN = '<button class="q-theme" id="q-theme" type="button" aria-label="Switch colour theme"><svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="6.2" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M8 1.8a6.2 6.2 0 0 1 0 12.4z" fill="currentColor"/></svg></button>';
 var FLEET_SHELL_JS = "<script>(function(){var r=document.documentElement,b=document.getElementById('q-theme');if(b)b.addEventListener('click',function(){var c=r.getAttribute('data-theme')||(matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light'),n=c==='dark'?'light':'dark';r.setAttribute('data-theme',n);try{localStorage.setItem('qnfo-theme',n)}catch(e){console.debug('qnfo-fleet-dashboard: browser storage unavailable',e)}});var t=document.getElementById('q-top');if(t){var f=function(){t.classList.toggle('scrolled',scrollY>4)};addEventListener('scroll',f,{passive:true});f()}})()<\/script>";
 function fleetHead(title) {
-  return '<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#F5F7FB" media="(prefers-color-scheme: light)"><meta name="theme-color" content="#141A33" media="(prefers-color-scheme: dark)"><title>' + esc(title) + '</title>' + FLEET_BOOT + FLEET_FONTS + '<style>' + FLEET_DS + CMD_CSS + FLEET_CSS + AREAS_CSS + '</style></head><body>';
+  return '<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#F5F7FB" media="(prefers-color-scheme: light)"><meta name="theme-color" content="#141A33" media="(prefers-color-scheme: dark)"><title>' + esc(title) + '</title>' + FLEET_BOOT + FLEET_FONTS + '<style>' + FLEET_DS + CMD_CSS + FLEET_CSS + AREAS_CSS + AREAS2_CSS + '</style></head><body>';
+}
+// ---- AREA-PAGES-1 (1.45.0): the navigation is the functional areas ----
+// Overview, one link per area (AREA_REGISTRY order), the command line. A tab page (Metrics, Content, Changelog) lights its area, and
+// the area's own pages sit in a sub-bar under the header, so the page you are on always says which area it belongs to. fleetTop keeps
+// its signature and its legacy tokens (queue, areas, flow, invest): every renderer that already calls it needs no change.
+function fleetNavItems() {
+  const items = [["Overview", "/", "overview"]];
+  for (const a of AREA_REGISTRY) items.push([a.short, "/area/" + a.id, a.id]);
+  items.push(["Command line", "/cmd", "cmd"]);
+  return items;
+}
+function fleetNavCurrent(current) {
+  if (current === "cmd") return "cmd";
+  const area = areaOfPage(current);
+  if (area) return area;
+  return current ? "overview" : "";
+}
+function fleetSubBar(current) {
+  const id = areaOfPage(current);
+  const reg = id ? registryArea(id) : null;
+  if (!reg || !reg.pages.length) return "";
+  const links = [["Overview", "/area/" + reg.id, reg.id]].concat(reg.pages.map(function(p) { return [p.label, p.href, p.key]; }));
+  return '<nav class="q-sub" aria-label="' + esc(reg.name) + '"><div class="wrap"><span class="q-sub-n">' + esc(reg.name) + "</span>" + links.map(function(l) {
+    return '<a href="' + l[1] + '"' + (l[2] === current ? ' aria-current="page"' : "") + ">" + esc(l[0]) + "</a>";
+  }).join("") + "</div></nav>";
 }
 function fleetTop(current, live, holder) {
-  const nav = [["Queue", "/#queue", "queue"], ["Areas", "/#areas", "areas"], ["Pipelines", "/#flow", "flow"], ["Invest", "/#invest", "invest"], ["Metrics", "/kpi", "kpi"], ["Content", "/content", "content"], ["Changelog", "/changelog", "changelog"], ["Command line", "/cmd", "cmd"]];
-  return '<header class="q-top" id="q-top"><div class="wrap"><a class="q-mark" href="/" aria-label="QNFO Fleet home">' + FLEET_MARK + 'QNFO <small>Fleet</small></a><nav class="q-nav" aria-label="Dashboard">' + nav.map(function(n) { return '<a href="' + n[1] + '"' + (n[2] === current ? ' aria-current="page"' : '') + '>' + n[0] + '</a>'; }).join('') + '</nav>' + '<details class="q-menu"><summary aria-label="Menu"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2 4h12M2 8h12M2 12h12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg></summary><div class="q-menu-panel">' + nav.map(function(n) { return '<a href="' + n[1] + '"' + (n[2] === current ? ' aria-current="page"' : '') + '>' + n[0] + '</a>'; }).join('') + '<a href="https://qnfo.org/">QNFO public site</a></div></details>' + (live ? '<span class="live"><span id="dot" class="dot g"></span><span id="age">live</span>' + (holder ? '<a href="#" id="so">sign out</a>' : '') + '</span>' : '<span class="live"></span>') + FLEET_THEME_BTN + '</div></header>';
+  const nav = fleetNavItems();
+  const cur = fleetNavCurrent(current);
+  return '<header class="q-top" id="q-top"><div class="wrap"><a class="q-mark" href="/" aria-label="QNFO Fleet home">' + FLEET_MARK + 'QNFO <small>Fleet</small></a><nav class="q-nav" aria-label="Dashboard">' + nav.map(function(n) { return '<a href="' + n[1] + '"' + (n[2] === cur ? ' aria-current="page"' : '') + '>' + n[0] + '</a>'; }).join('') + '</nav>' + '<details class="q-menu"><summary aria-label="Menu"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2 4h12M2 8h12M2 12h12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg></summary><div class="q-menu-panel">' + nav.map(function(n) { return '<a href="' + n[1] + '"' + (n[2] === cur ? ' aria-current="page"' : '') + '>' + n[0] + '</a>'; }).join('') + '<a href="https://qnfo.org/">QNFO public site</a></div></details>' + (live ? '<span class="live"><span id="dot" class="dot g"></span><span id="age">live</span>' + (holder ? '<a href="#" id="so">sign out</a>' : '') + '</span>' : '<span class="live"></span>') + FLEET_THEME_BTN + '</div></header>' + fleetSubBar(current);
 }
 // ---- FLEET-UI-2:END ----
+// ==== AREA-MAP platform: Metrics tab (FLEET-KPI-1) ====
 // ---- FLEET-KPI-1:BEGIN ----
 // FLEET-KPI-1 (1.30.0, pillar reach; owner request 2026-10-12: "Fleet dashboard needs more metrics and performance
 // indicators, including total open issues and more granular analytics/impressions (how many outreach actions/events, which
@@ -6791,6 +7287,7 @@ function fleetTop(current, live, holder) {
 // qnfo-outreach is not read here. The page has no script; every chart also has a table.
 var KPI_TTL_MS = 6e4;
 var KPI_DAYS = 14;
+var KPI_HISTORY_DAYS = 45;
 var KPI_DAY_MS = 864e5;
 var kpiCache = null;
 // A property is a set of hosts. /papers/<slug> rows carry no host in reach_signals (reachClassifyPath) and are served by
@@ -6912,7 +7409,14 @@ var KPI_SQL = {
   closed_day: "SELECT substr(l.ts, 1, 10) AS day, COUNT(DISTINCT l.issue_id) AS n, COUNT(DISTINCT CASE WHEN l.has_evidence = 1 THEN l.issue_id END) AS with_evidence FROM issue_lifecycle l WHERE l.to_status IS NOT NULL AND l.to_status <> 'open' AND l.event NOT IN ('opened', 'reopened') AND substr(l.ts, 1, 10) >= ?1 GROUP BY 1",
   ledger_first: "SELECT MIN(ts) AS first_ts, MAX(ts) AS last_ts FROM issue_lifecycle",
   closed_window: "SELECT COUNT(DISTINCT l.issue_id) AS closed, COUNT(DISTINCT CASE WHEN a.status IS NOT NULL AND a.status <> 'open' THEN l.issue_id END) AS still_closed, COUNT(DISTINCT CASE WHEN a.status IS NOT NULL AND a.status <> 'open' AND l.has_evidence = 1 THEN l.issue_id END) AS with_evidence FROM issue_lifecycle l LEFT JOIN agent_issues a ON a.id = l.issue_id WHERE l.to_status IS NOT NULL AND l.to_status <> 'open' AND l.event NOT IN ('opened', 'reopened') AND l.ts >= ?1",
-  code_tasks: "SELECT status, COUNT(*) AS n, SUM(CASE WHEN updated_at >= ?1 THEN 1 ELSE 0 END) AS n7, MAX(updated_at) AS last FROM code_tasks GROUP BY 1",
+  // CODE-FLOW-PR-SPLIT-1: tasks created in the last 30 days, by how they ended (the same split the Code loop flow uses).
+  code_tasks: "SELECT " + CODE_OUTCOME_SQL + " AS status, COUNT(*) AS n FROM " + CODE_OUTCOME_FROM + " WHERE t.created_at >= ?1 GROUP BY 1",
+  // KPI-THRESHOLDS-1: every figure against its threshold. v_metric_trigger_state holds the breach rule the metric triggers apply; the history
+  // read is limited to the metrics in breach, for the length of the current run; v_sla_over_120m is the queue SLA figure the 10-minute tick acts on.
+  sl_triggers: "SELECT metric_key, title, operator, threshold, owner, priority, val, hit FROM v_metric_trigger_state",
+  sl_registry: "SELECT metric, owner, last_value, last_refreshed, warning_band FROM metric_registry",
+  sl_history: "SELECT metric, day, value, ts FROM metric_history WHERE day >= ?1 AND metric IN (SELECT metric_key FROM v_metric_trigger_state WHERE hit = 1) ORDER BY metric, day",
+  sla_view: "SELECT * FROM v_sla_over_120m",
   host_day: "SELECT date AS day, entity_id AS host, metric, value FROM reach_signals WHERE source = 'cf-rum-human' AND entity_type = 'host' AND metric IN ('pageviews', 'visits') AND date >= ?1",
   page_day: "SELECT date AS day, CASE WHEN entity_type = 'paper' THEN 'papers.qnfo.org' WHEN instr(entity_id, '/') > 0 THEN substr(entity_id, 1, instr(entity_id, '/') - 1) ELSE entity_id END AS host, SUM(value) AS value FROM reach_signals WHERE source = 'cf-rum-human' AND metric = 'pageviews' AND entity_type IN ('page', 'paper') AND date >= ?1 GROUP BY 1, 2",
   site_day: "SELECT date AS day, value FROM reach_signals WHERE source = 'cf-rum-human' AND entity_type = 'site' AND entity_id = '(all)' AND metric = 'pageviews' AND date >= ?1",
@@ -6944,6 +7448,110 @@ var KPI_SQL = {
   top_pages_rum: "SELECT entity_id AS page, SUM(value) AS pv FROM reach_signals WHERE source = 'cf-rum-human' AND entity_type = 'page' AND metric = 'pageviews' AND entity_id <> '(other)' AND entity_id NOT LIKE 'fleet.qnfo.org%' AND entity_id NOT LIKE 'ideas.qnfo.org%' AND entity_id NOT LIKE '%.workers.dev%' AND date >= ?1 GROUP BY entity_id ORDER BY pv DESC LIMIT 12"
 };
 // ---- shaping (pure: rows in, panel out) ----
+// ---- KPI-THRESHOLDS-1 (agent_issues 2727, owner directive 2026-10-17): figures against their service levels, not windows ----
+// "Last 7 days" and "All time" say nothing about whether the fleet meets its service levels, so the panels that carried them are gone. A figure is
+// shown with its current value, its threshold and operator (or "no threshold", a named exemption, never OK), a state and the time it has been in
+// breach, BREACH first, longest first. The breach rule is the one v_metric_trigger_state applies. WARN is a figure that is not in breach but is past
+// the metric's registered warning band, when that band is machine readable (a comparison and a number); a band that is not gives no WARN. Time in
+// breach is measured from the first of the current run of breached daily readings in metric_history (a run that reaches the oldest day read is a
+// lower bound), because nothing records a breach more finely than a day. No new table, cron or model call.
+var KPI_STATE_RANK = { BREACH: 0, WARN: 1, NO_READING: 2, OK: 3, NO_THRESHOLD: 4 };
+function kpiOpHolds(op, v, thr) {
+  if (op === "gt") return v > thr;
+  if (op === "lte") return v <= thr;
+  if (op === "lt") return v < thr;
+  if (op === "eq") return v === thr;
+  return v >= thr;
+}
+function kpiParseBand(raw) {
+  const m = /^\s*(>=|<=|>|<)\s*(-?\d+(?:\.\d+)?)\s*(?:%|h|m|d)?\s*(?:behind)?\s*$/i.exec(String(raw === null || raw === undefined ? "" : raw));
+  if (!m) return null;
+  return { op: m[1] === ">" ? "gt" : m[1] === ">=" ? "gte" : m[1] === "<" ? "lt" : "lte", n: Number(m[2]) };
+}
+function kpiNumOrNull(v) {
+  if (v === null || v === undefined || String(v).trim() === "") return null;
+  const n = Number(String(v).replace(/[%,\s]/g, ""));
+  return isFinite(n) ? n : null;
+}
+function kpiShapeService(r, nowMs) {
+  const asOf = new Date(nowMs).toISOString();
+  const out = { source: "qnfo-audit.v_metric_trigger_state (the breach rule of the metric triggers), metric_registry (owner, warning band), metric_history (daily readings, for time in breach)", as_of: asOf, rule: "BREACH: the trigger's rule holds. WARN: not in breach, past a machine-readable warning band. NO_READING: the trigger has no value. OK: otherwise. NO_THRESHOLD: a registered metric with no trigger, never counted as OK.", counts: null, metrics: null, notes: [] };
+  if (!r.sl_triggers.rows) { out.reason = r.sl_triggers.err; out.notes.push("v_metric_trigger_state: " + r.sl_triggers.err); return out; }
+  const reg = {};
+  if (r.sl_registry.rows) for (const x of r.sl_registry.rows) reg[x.metric] = x; else out.notes.push("metric_registry: " + r.sl_registry.err + " (warning bands, owners and the metrics without a threshold are not shown)");
+  const hist = {};
+  if (r.sl_history.rows) for (const x of r.sl_history.rows) (hist[x.metric] = hist[x.metric] || []).push(x); else out.notes.push("metric_history: " + r.sl_history.err + " (time in breach is not measured)");
+  const today = asOf.slice(0, 10);
+  const area = function(k) { return typeof areaOf === "function" ? areaOf(k) : null; };
+  const metrics = [];
+  const seen = {};
+  for (const x of r.sl_triggers.rows) {
+    const key = String(x.metric_key);
+    seen[key] = true;
+    const rg = reg[key] || {};
+    const val = kpiNumOrNull(x.val), thr = kpiNumOrNull(x.threshold);
+    const hit = x.hit === null || x.hit === undefined ? null : Number(x.hit) === 1;
+    let state = val === null || hit === null ? "NO_READING" : hit ? "BREACH" : "OK";
+    const band = kpiParseBand(rg.warning_band);
+    if (state === "OK" && band && kpiOpHolds(band.op, val, band.n)) state = "WARN";
+    const row = { metric: key, title: x.title || key, area: area(key), value: val, operator: x.operator || null, threshold: thr === null ? "no threshold" : thr, state: state, warning_band: rg.warning_band || null, owner: x.owner || rg.owner || null, priority: kpiNumOrNull(x.priority), breach_since: null, time_in_breach_min: null, time_in_breach_is_lower_bound: false };
+    if (state === "BREACH" && r.sl_history.rows) {
+      // walk back from today through the daily readings while the rule still holds; today's reading is the live value, which breaches
+      const days = (hist[key] || []).slice().sort(function(a, b) { return String(a.day) < String(b.day) ? -1 : 1; });
+      let i = days.length - 1;
+      if (i >= 0 && String(days[i].day) === today) i--;
+      let first = null;
+      for (; i >= 0; i--) {
+        const hv = kpiNumOrNull(days[i].value);
+        if (hv === null) continue;
+        if (kpiOpHolds(x.operator, hv, thr)) first = days[i]; else break;
+      }
+      const startMs = first ? (Date.parse(first.ts) || Date.parse(String(first.day) + "T00:00:00Z")) : Date.parse(today + "T00:00:00Z");
+      row.breach_since = first ? String(first.day) : today;
+      row.time_in_breach_min = isFinite(startMs) ? Math.max(0, Math.round((nowMs - startMs) / 6e4)) : null;
+      row.time_in_breach_is_lower_bound = i < 0 && !!first;
+    }
+    metrics.push(row);
+  }
+  if (r.sl_registry.rows) for (const k of Object.keys(reg).sort()) {
+    if (seen[k]) continue;
+    metrics.push({ metric: k, title: k, area: area(k), value: kpiNumOrNull(reg[k].last_value), operator: null, threshold: "no threshold", state: "NO_THRESHOLD", warning_band: reg[k].warning_band || null, owner: reg[k].owner || null, priority: null, breach_since: null, time_in_breach_min: null, time_in_breach_is_lower_bound: false });
+  }
+  metrics.sort(function(a, b) {
+    if (KPI_STATE_RANK[a.state] !== KPI_STATE_RANK[b.state]) return KPI_STATE_RANK[a.state] - KPI_STATE_RANK[b.state];
+    if (a.state === "BREACH" && (b.time_in_breach_min || 0) !== (a.time_in_breach_min || 0)) return (b.time_in_breach_min || 0) - (a.time_in_breach_min || 0);
+    return String(a.metric) < String(b.metric) ? -1 : 1;
+  });
+  const c = { metrics: metrics.length, breach: 0, warn: 0, ok: 0, no_reading: 0, no_threshold: 0 };
+  for (const m of metrics) c[m.state === "BREACH" ? "breach" : m.state === "WARN" ? "warn" : m.state === "OK" ? "ok" : m.state === "NO_READING" ? "no_reading" : "no_threshold"]++;
+  out.counts = c;
+  out.metrics = metrics;
+  return out;
+}
+// The queue SLA figure by class. Every numeric column of v_sla_over_120m except the total and the "oldest" helpers is one class, so a class
+// the view gains shows up here without an edit; a column named ..._180m, ..._3h or ..._60m carries its own SLA in the name.
+function kpiShapeSla(r, nowMs) {
+  const out = { source: "qnfo-audit.v_sla_over_120m (the queue SLA figure the 10-minute tick acts on)", as_of: new Date(nowMs).toISOString(), total_over_sla: null, classes: null, classes_at_zero: null, notes: [] };
+  if (!r.sla_view.rows || !r.sla_view.rows[0]) { out.reason = r.sla_view.rows ? "the view returned no row" : r.sla_view.err; out.notes.push("v_sla_over_120m: " + out.reason); return out; }
+  const row = r.sla_view.rows[0];
+  out.total_over_sla = kpiNumOrNull(row.total_over_120m);
+  const classes = [];
+  let zero = 0;
+  for (const k of Object.keys(row)) {
+    if (k === "total_over_120m" || k === "oldest_open_issue_min" || /_oldest_min$/.test(k)) continue;
+    const n = kpiNumOrNull(row[k]);
+    if (n === null) continue;
+    if (n === 0) { zero++; continue; }
+    const mm = /_(\d+)([mh])$/.exec(k);
+    const prefix = k.replace(/_(?:over_)?\d+[mh]$/, "");
+    const oldestKey = k === "issues_open_over_120m" ? "oldest_open_issue_min" : prefix + "_oldest_min";
+    classes.push({ class: k, label: k.charAt(0).toUpperCase() + k.slice(1).replace(/_/g, " "), n: n, sla_min: mm ? Number(mm[1]) * (mm[2] === "h" ? 60 : 1) : null, oldest_min: kpiNumOrNull(row[oldestKey]) });
+  }
+  classes.sort(function(a, b) { return b.n - a.n || (a.class < b.class ? -1 : 1); });
+  out.classes = classes;
+  out.classes_at_zero = zero;
+  return out;
+}
 function kpiShapeIssues(r, nowMs, days) {
   const asOf = new Date(nowMs).toISOString();
   const out = { source: "qnfo-audit.agent_issues, issue_lifecycle, code_tasks", as_of: asOf, notes: [] };
@@ -7002,15 +7610,18 @@ function kpiShapeIssues(r, nowMs, days) {
   out.closed_7d = win(r.closed_7d, 168);
   if (out.closed_7d.closed !== null && !out.closed_7d.complete) out.notes.push("the 7-day close count covers only the time since " + first + " (the ledger is younger than 7 days)");
   if (r.code_tasks.rows) {
+    // CODE-FLOW-PR-SPLIT-1 / KPI-THRESHOLDS-1: one 30-day window, split by what happened to the pull request; superseded work is not a failure.
     const g = function(names) {
-      let n = 0, n7 = 0;
-      for (const x of r.code_tasks.rows) if (names.indexOf(String(x.status)) >= 0) { n += Number(x.n) || 0; n7 += Number(x.n7) || 0; }
-      return { total: n, last_7d: n7 };
+      let n = 0;
+      for (const x of r.code_tasks.rows) if (names.indexOf(String(x.status)) >= 0) n += Number(x.n) || 0;
+      return n;
     };
-    const known = ["merged", "failed", "publish_failed", "closed"];
-    const open = { total: 0, last_7d: 0 };
-    for (const x of r.code_tasks.rows) if (known.indexOf(String(x.status)) < 0) { open.total += Number(x.n) || 0; open.last_7d += Number(x.n7) || 0; }
-    out.code_tasks = { source: "qnfo-audit.code_tasks (status; 7-day figures by updated_at)", merged: g(["merged"]), failed: g(["failed", "publish_failed"]), closed_unmerged: g(["closed"]), in_flight: open };
+    const known = ["merged", "failed", "publish_failed", "closed_no_pr", "closed_pr", "closed_other", "superseded"];
+    let inFlight = 0;
+    for (const x of r.code_tasks.rows) if (known.indexOf(String(x.status)) < 0) inFlight += Number(x.n) || 0;
+    const merged = g(["merged"]), failed = g(["failed", "publish_failed"]), noPr = g(["closed_no_pr"]), prClosed = g(["closed_pr"]), other = g(["closed_other"]);
+    const finished = merged + failed + noPr + prClosed + other;
+    out.code_tasks = { source: "qnfo-audit.code_tasks joined to code_task_pr_links (tasks created in the last 30 days; superseded work is not a failure)", window_days: 30, merged: merged, failed: failed, closed_never_opened_pr: noPr, closed_pr_unmerged: prClosed, closed_pr_state_differs: other, superseded: g(["superseded"]), in_flight: inFlight, finished: finished, merged_share_of_finished: finished ? Math.round(merged / finished * 1000) / 10 : null };
   } else {
     out.code_tasks = null;
     out.notes.push("code tasks: " + r.code_tasks.err);
@@ -7109,7 +7720,7 @@ function kpiShapeActions(r, nowMs, days) {
 function kpiShapePostCounts(r, nowMs) {
   const out = { source: "qnfo-audit.social_threads, social_media_posts, dissemination_tracker (each table counted on its own; the same post can be in more than one)", as_of: new Date(nowMs).toISOString(), rows: [], notes: [] };
   const push = function(channel, via, table, x) {
-    out.rows.push({ channel: channel, via: via, table: table, last_7d: Number(x.n7) || 0, last_30d: Number(x.n30) || 0, total: Number(x.total) || 0, last: x.last || null });
+    out.rows.push({ channel: channel, via: via, table: table, last_30d: Number(x.n30) || 0, last: x.last || null });
   };
   if (r.posts_threads.rows) { if (r.posts_threads.rows[0]) push("bluesky", "direct", "social_threads", r.posts_threads.rows[0]); } else out.notes.push("social_threads: " + r.posts_threads.err);
   if (r.posts_smp.rows) for (const x of r.posts_smp.rows) push(kpiChannel(x.platform), /^buffer/i.test(String(x.platform)) ? "Buffer" : "direct", "social_media_posts", x); else out.notes.push("social_media_posts: " + r.posts_smp.err);
@@ -7241,7 +7852,7 @@ async function kpiCompute(env, nowMs) {
   const plan = {
     open_priority: [], open_category: [], open_ages: [], opened_day: [Date.parse(d14 + "T00:00:00Z")], closed_day: [d14], ledger_first: [],
     closed_24h: ["closed_window", [iso(nowMs - KPI_DAY_MS).slice(0, 19) + "Z"]], closed_7d: ["closed_window", [iso(nowMs - 7 * KPI_DAY_MS).slice(0, 19) + "Z"]],
-    code_tasks: [iso(nowMs - 7 * KPI_DAY_MS)], host_day: [d14], page_day: [d14], site_day: [d14], email_day: [d14], thread_day: [d14], smp_day: [d14],
+    code_tasks: [iso(nowMs - 30 * KPI_DAY_MS)], sl_triggers: [], sl_registry: [], sl_history: [kpiDay(nowMs - (KPI_HISTORY_DAYS - 1) * KPI_DAY_MS)], sla_view: [], host_day: [d14], page_day: [d14], site_day: [d14], email_day: [d14], thread_day: [d14], smp_day: [d14],
     reply_mail_day: [d14], utm_day: [d14], mention_day: [d14], social_reply_day: [d14], posts_threads: [d7, d30], posts_smp: [d7, d30], posts_dissemination: [d7, d30],
     bsky_posts: [], threads: [], smp_recent: [], utm_campaign: [d30], other_replies: [], buffer_stats: [d30], buffer_auth: [], channels: [], subscribers: [], funnel: [d30],
     mentions_total: [d30], mentions_recent: [], citations: [], mail_outcomes: [], top_papers_rum: [d7], top_pages_rum: [d7]
@@ -7260,6 +7871,8 @@ async function kpiCompute(env, nowMs) {
   return {
     ok: true, version: VERSION, as_of: iso(nowMs), cache_ttl_s: KPI_TTL_MS / 1e3, window_days: KPI_DAYS, days: days,
     unmeasured_rule: "null means not measured (the reason is in the panel's notes); 0 is a measured zero",
+    service_levels: kpiShapeService(r, nowMs),
+    sla: kpiShapeSla(r, nowMs),
     issues: kpiShapeIssues(r, nowMs, days),
     reach: { pageviews: kpiShapePageviews(r, nowMs, days), actions: act.actions, events: act.events, activity_as_of: act.as_of, posts_per_channel: kpiShapePostCounts(r, nowMs), top_posts: posts.panel, direct_traffic: kpiShapeDirectTraffic(r, nowMs), subscribers: aud.subscribers, credibility: aud.credibility },
     buffer: kpiShapeBuffer(r, nowMs, posts.bufferPosts, posts.bufferStatPosts),
@@ -7289,7 +7902,7 @@ var KPI_CSS = ":root{--kp-a:#008A7B;--kp-b:#B5562A}@media (prefers-color-scheme:
   + ".kp-strips{display:grid;grid-template-columns:minmax(96px,max-content) minmax(0,1fr) max-content;gap:10px 12px;align-items:end;font-size:13.5px}.kp-strips .l{align-self:center;line-height:1.25}.kp-strips .l small{display:block;color:var(--muted);font-size:11.5px}.kp-strips b{font-weight:600;font-variant-numeric:tabular-nums;text-align:right;align-self:center}.kp-st{height:34px;display:grid;grid-auto-flow:column;grid-auto-columns:minmax(0,1fr);gap:2px;align-items:end;border-bottom:1px solid var(--rule)}.kp-st i{display:block;min-height:0;background:var(--kp-a);border-radius:3px 3px 0 0}.kp-st i.u{height:6px;border-radius:2px}.kp-st i.z{height:0}.kp-axis{grid-column:2;display:flex;justify-content:space-between;font-size:11px;color:var(--muted);margin-top:-6px;font-variant-numeric:tabular-nums}"
   + ".kp-tw{overflow-x:auto;-webkit-overflow-scrolling:touch}.kp-t{border-collapse:collapse;width:100%;font-size:13.5px}.kp-t th{font:600 12px var(--sans);color:var(--muted);text-align:left;padding:6px 10px 6px 0;border-bottom:1px solid var(--rule);white-space:nowrap}.kp-t td{padding:7px 10px 7px 0;border-bottom:1px solid var(--rule);vertical-align:top}.kp-t td.n,.kp-t th.n{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}.kp-t tr:last-child td{border-bottom:0}.kp-t a{color:var(--teal)}.kp-t .ti{min-width:200px;max-width:420px}.kp-t small{color:var(--muted)}"
   + ".kp details{margin-top:10px}.kp details>summary{font-size:12.5px;color:var(--teal)}.kp-ol{margin:6px 0 0;padding-left:18px;font-size:13.5px;line-height:1.5}.kp-kv{display:grid;grid-template-columns:max-content minmax(0,1fr);gap:4px 14px;font-size:13.5px;margin:0}.kp-kv dt{color:var(--muted)}.kp-kv dd{margin:0;font-weight:500;overflow-wrap:anywhere}"
-  + "@media (max-width:900px){.kp-tiles{grid-template-columns:repeat(2,minmax(0,1fr))}.kp-two{grid-template-columns:minmax(0,1fr)}}@media (max-width:560px){.kp-card{padding:14px}.kp-x span:nth-child(even){visibility:hidden}.kp-strips{grid-template-columns:minmax(0,1fr) max-content}.kp-strips .l{grid-column:1/-1;margin-bottom:-6px}.kp-strips .l small{display:inline;margin-left:6px}.kp-axis{grid-column:1}.kp-tiles .k-n{font-size:25px}}";
+  + "@media (max-width:900px){.kp-tiles{grid-template-columns:repeat(2,minmax(0,1fr))}.kp-two{grid-template-columns:minmax(0,1fr)}}@media (max-width:560px){.kp-card{padding:14px}.kp-x span:nth-child(even){visibility:hidden}.kp-strips{grid-template-columns:minmax(0,1fr) max-content}.kp-strips .l{grid-column:1/-1;margin-bottom:-6px}.kp-strips .l small{display:inline;margin-left:6px}.kp-axis{grid-column:1}.kp-tiles .k-n{font-size:25px}}.kp-st{display:inline-block;border-radius:99px;padding:1px 9px;font-size:11.5px;font-weight:600;letter-spacing:.03em;white-space:nowrap;border:1px solid var(--rule);background:var(--wash);color:var(--ink)}.kp-st-breach{background:var(--red-wash);border-color:var(--red);color:var(--red)}.kp-st-warn{background:var(--amber-wash);border-color:var(--amber);color:var(--amber)}.kp-st-ok{background:var(--green-wash);border-color:var(--green);color:var(--green)}.kp-st-no-reading,.kp-st-no-threshold{color:var(--muted)}";
 function kpiFmt(n) {
   if (n === null || n === undefined) return null;
   const v = Number(n);
@@ -7363,6 +7976,54 @@ function kpiHBars(rows) {
   for (const r of rows) max = Math.max(max, r.n || 0);
   return '<div class="kp-hb">' + rows.map(function(r) { return '<span>' + esc(r.label) + '</span><span class="t"><i style="width:' + (max ? (r.n / max * 100).toFixed(1) : 0) + '%"' + (r.n ? '' : ' hidden') + '></i></span><b>' + esc(kpiFmt(r.n)) + '</b>'; }).join('') + '</div>';
 }
+// ---- KPI-THRESHOLDS-1: the page section ----
+var KPI_OP_SYM = { gt: ">", gte: ">=", lt: "<", lte: "<=", eq: "=" };
+function kpiFmtVal(n) {
+  // a threshold of 0.05 or 0.6 must not be rounded to 0.1 or 0.6 by the whole-number rules of kpiFmt
+  const v = Number(n);
+  if (n === null || n === undefined || !isFinite(v)) return null;
+  if (Math.abs(v) >= 100) return String(Math.round(v)).replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+  return String(Number(v.toPrecision(3)));
+}
+function kpiMinText(m, lower) {
+  if (m === null || m === undefined) return "&mdash;";
+  const t = m < 120 ? m + " min" : m < 2880 ? kpiFmt(Math.round(m / 6) / 10) + " h" : kpiFmt(Math.round(m / 144) / 10) + " days";
+  return (lower ? "at least " : "") + esc(t);
+}
+function kpiStateChip(st) {
+  return '<span class="kp-st kp-st-' + esc(String(st).toLowerCase().replace(/_/g, "-")) + '">' + esc(String(st).replace(/_/g, " ")) + "</span>";
+}
+function kpiServiceHtml(S, L) {
+  S = S || { counts: null, metrics: null, reason: "not computed", notes: [] };
+  L = L || { total_over_sla: null, classes: null, reason: "not computed", notes: [] };
+  const c = S.counts;
+  const row = function(m) {
+    const name = m.state === "BREACH" && m.area ? '<a href="/area/' + esc(m.area) + "#" + esc(m.metric) + '">' + esc(m.title) + "</a>" : esc(m.title);
+    const thr = typeof m.threshold === "number" ? esc((KPI_OP_SYM[m.operator] || m.operator || "") + " " + kpiFmtVal(m.threshold)) : '<abbr class="kp-u" title="A named exemption: no trigger holds a threshold for this metric">no threshold</abbr>';
+    return '<tr><td class="ti">' + name + "<br><small>" + esc(m.metric) + "</small></td><td>" + (m.area ? '<a href="/area/' + esc(m.area) + '">' + esc(m.area) + "</a>" : "") + '</td><td class="n">' + (m.value === null ? '<abbr class="kp-u" title="The trigger has no value for this metric">no reading</abbr>' : esc(kpiFmtVal(m.value))) + "</td><td>" + thr + "</td><td>" + kpiStateChip(m.state) + '</td><td class="n">' + (m.state === "BREACH" ? kpiMinText(m.time_in_breach_min, m.time_in_breach_is_lower_bound) : "&mdash;") + "</td><td>" + esc(m.owner || "") + "</td></tr>";
+  };
+  const head = [["Metric"], ["Area"], ["Value", 1], ["Threshold"], ["State"], ["In breach for", 1], ["Owner"]];
+  let metricsHtml;
+  if (!S.metrics) {
+    metricsHtml = "<p>" + kpiU("v_metric_trigger_state could not be read: " + (S.reason || "")) + "</p>";
+  } else {
+    const now = S.metrics.filter(function(m) { return m.state === "BREACH" || m.state === "WARN" || m.state === "NO_READING"; });
+    const ok = S.metrics.filter(function(m) { return m.state === "OK"; });
+    const none = S.metrics.filter(function(m) { return m.state === "NO_THRESHOLD"; });
+    metricsHtml = (now.length ? kpiTable(head, now.map(row)) : '<p class="meta">Every metric with a threshold is within it.</p>')
+      + (ok.length ? "<details><summary>Within threshold (" + esc(String(ok.length)) + ")</summary>" + kpiTable(head, ok.map(row)) + "</details>" : "")
+      + (none.length ? "<details><summary>No threshold (" + esc(String(none.length)) + "): registered metrics nothing holds to a level</summary>" + kpiTable(head, none.map(row)) + "</details>" : "");
+  }
+  const slaHtml = !L.classes
+    ? "<p>" + kpiU("v_sla_over_120m could not be read: " + (L.reason || "")) + "</p>"
+    : (L.classes.length ? kpiTable([["Class"], ["Past SLA", 1], ["SLA"], ["Oldest", 1]], L.classes.map(function(k) {
+      return "<tr><td>" + esc(k.label) + "</td>" + '<td class="n">' + esc(kpiFmt(k.n)) + "</td><td>" + (k.sla_min ? esc(String(k.sla_min)) + " min" : "its own stage SLA") + '</td><td class="n">' + kpiMinText(k.oldest_min, false) + "</td></tr>";
+    })) : '<p class="meta">Nothing is past its SLA.</p>') + '<p class="kp-note">' + esc(kpiFmt(L.classes_at_zero)) + " further classes are at zero.</p>";
+  return '<section class="kp-sec" id="service"><h2>Service levels</h2><p class="meta">Each figure against the level it must hold, not a window of history. BREACH first, longest in breach first.</p>'
+    + (c ? '<div class="kp-tiles">' + kpiTile("In breach", esc(kpiFmt(c.breach)), esc(kpiFmt(c.breach + c.warn + c.ok + c.no_reading)) + " metrics have a threshold") + kpiTile("Warning", esc(kpiFmt(c.warn)), "within the trigger, past the warning band") + kpiTile("No reading", esc(kpiFmt(c.no_reading)), "a threshold, but no value") + kpiTile("No threshold", esc(kpiFmt(c.no_threshold)), "named exemptions, never counted as OK") + kpiTile("Items past their SLA", L.total_over_sla === null ? kpiU(L.reason) : esc(kpiFmt(L.total_over_sla)), "all classes, by class below") + "</div>" : "")
+    + '<div class="kp-card"><h3>Metrics against their thresholds</h3>' + kpiSrc(S.source, S.as_of) + metricsHtml + '<p class="kp-note">' + esc(S.rule || "") + " Time in breach runs from the first of the current run of breached daily readings.</p>" + kpiNotes(S.notes) + "</div>"
+    + '<div class="kp-card"><h3>Items past their SLA, by class</h3>' + kpiSrc(L.source, L.as_of) + slaHtml + kpiNotes(L.notes) + "</div></section>";
+}
 function kpiHtml(v, holder) {
   const I = v.issues, R = v.reach, B = v.buffer, days = v.days;
   const cell = function(n, reason) { return '<td class="n">' + kpiV(n, reason) + '</td>'; };
@@ -7381,7 +8042,7 @@ function kpiHtml(v, holder) {
     + '<div class="kp-two"><div class="kp-card"><h3>Open by priority</h3>' + kpiSrc("qnfo-audit.agent_issues, status open", I.as_of) + (I.by_priority ? kpiHBars(I.by_priority.map(function(p) { return { label: p.priority, n: p.n }; })) : '<p>' + kpiU("agent_issues could not be read") + '</p>')
     + (I.oldest ? '<p class="kp-note">Oldest open: #' + esc(String(I.oldest.id)) + ' ' + esc(I.oldest.title) + ' (' + esc(String(I.oldest.priority || "")) + ', opened ' + esc(I.oldest.opened.slice(0, 10)) + ').</p>' : '') + '</div>'
     + '<div class="kp-card"><h3>Open by category</h3>' + kpiSrc("qnfo-audit.agent_issues, status open", I.as_of) + (I.by_category ? kpiHBars(I.by_category.slice(0, 10).map(function(c) { return { label: c.category, n: c.n }; })) + (I.by_category.length > 10 ? '<details><summary>All ' + I.by_category.length + ' categories</summary>' + kpiTable([["Category"], ["Open", 1]], I.by_category.map(function(c) { return '<tr><td>' + esc(c.category) + '</td>' + cell(c.n) + '</tr>'; })) + '</details>' : '') : '<p>' + kpiU("agent_issues could not be read") + '</p>') + '</div></div>'
-    + '<div class="kp-card"><h3>Code-loop tasks</h3>' + kpiSrc(ct ? ct.source : "qnfo-audit.code_tasks", I.as_of) + (ct ? kpiTable([["Outcome"], ["Last 7 days", 1], ["All time", 1]], [["Merged", ct.merged], ["Failed (including a failed publish)", ct.failed], ["Closed without a merge", ct.closed_unmerged], ["In flight", ct.in_flight]].map(function(x) { return '<tr><td>' + x[0] + '</td>' + cell(x[1].last_7d) + cell(x[1].total) + '</tr>'; })) : '<p>' + kpiU("code_tasks could not be read") + '</p>') + '</div>'
+    + '<div class="kp-card"><h3>Code-loop tasks, 30 days</h3>' + kpiSrc(ct ? ct.source : "qnfo-audit.code_tasks", I.as_of) + (ct ? kpiTable([["Outcome"], ["Tasks", 1]], [["Merged", ct.merged], ["Failed (including a failed publish)", ct.failed], ["Closed, never opened a pull request", ct.closed_never_opened_pr], ["Pull request closed unmerged", ct.closed_pr_unmerged], ["Superseded (not a failure)", ct.superseded], ["In flight", ct.in_flight]].concat(ct.closed_pr_state_differs ? [["Closed, pull request state differs (drift)", ct.closed_pr_state_differs]] : []).map(function(x) { return '<tr><td>' + x[0] + '</td>' + cell(x[1]) + '</tr>'; })) + '<p class="kp-note">' + (ct.merged_share_of_finished === null ? 'No task has finished in 30 days.' : 'Merged: ' + esc(kpiFmt(ct.merged_share_of_finished)) + '% of the ' + esc(kpiFmt(ct.finished)) + ' that finished; superseded work is left out.') + ' The level the fleet holds this to is code_task_success_rate_30d, under Service levels.</p>' : '<p>' + kpiU("code_tasks could not be read") + '</p>') + '</div>'
     + kpiNotes(I.notes) + '</section>';
   // -- reach
   const P = R.pageviews;
@@ -7403,7 +8064,7 @@ function kpiHtml(v, holder) {
     + '<div class="kp-card"><h3>Most popular posts</h3>' + kpiSrc(T.source, T.as_of, T.snapshot ? "engagement snapshot " + T.snapshot : null) + topTable + kpiNotes(T.notes) + '</div>'
     + '<div class="kp-two"><div class="kp-card"><h3>Top papers, opened directly (7 days)</h3>' + kpiSrc(DT.source, DT.as_of) + (DT.papers && DT.papers.length ? kpiTable([["Paper"], ["Views", 1]], DT.papers.map(function(p) { return '<tr><td class="ti">' + (p.url ? '<a href="' + esc(p.url) + '" rel="noopener">' + esc(p.slug) + '</a>' : esc(p.slug)) + '</td>' + cell(p.pageviews) + '</tr>'; })) : '<p class="meta">No bot-filtered paper view in the window.</p>') + kpiNotes(DT.notes) + '</div>'
     + '<div class="kp-card"><h3>Top links, opened directly (7 days)</h3>' + kpiSrc(DT.source, DT.as_of) + (DT.links && DT.links.length ? kpiTable([["Page"], ["Views", 1]], DT.links.map(function(p) { return '<tr><td class="ti">' + (p.url ? '<a href="' + esc(p.url) + '" rel="noopener">' + esc(p.page) + '</a>' : esc(p.page)) + '</td>' + cell(p.pageviews) + '</tr>'; })) : '<p class="meta">No bot-filtered page view in the window.</p>') + '</div></div>'
-    + '<div class="kp-two"><div class="kp-card"><h3>Posts published per channel</h3>' + kpiSrc(ppc.source, ppc.as_of) + kpiTable([["Channel"], ["Ledger"], ["7 days", 1], ["30 days", 1], ["All time", 1]], ppc.rows.map(function(x) { return '<tr><td>' + esc(x.channel) + (x.via === "Buffer" ? ' <small>via Buffer</small>' : '') + '</td><td><small>' + esc(x.table) + '</small></td>' + cell(x.last_7d) + cell(x.last_30d) + cell(x.total) + '</tr>'; })) + kpiNotes(ppc.notes) + '</div>'
+    + '<div class="kp-two"><div class="kp-card"><h3>Posts published per channel</h3>' + kpiSrc(ppc.source, ppc.as_of) + kpiTable([["Channel"], ["Ledger"], ["30 days", 1]], ppc.rows.map(function(x) { return '<tr><td>' + esc(x.channel) + (x.via === "Buffer" ? ' <small>via Buffer</small>' : '') + '</td><td><small>' + esc(x.table) + '</small></td>' + cell(x.last_30d) + '</tr>'; })) + kpiNotes(ppc.notes) + '</div>'
     + '<div class="kp-card"><h3>Subscribers</h3>' + kpiSrc(S.source, S.as_of) + '<dl class="kp-kv"><dt>Confirmed</dt><dd>' + kpiV(S.subscribed, "subscribers could not be read") + '</dd><dt>Waiting to confirm</dt><dd>' + kpiV(S.pending, "subscribers could not be read") + '</dd><dt>Other (left or suppressed)</dt><dd>' + kpiV(S.other, "subscribers could not be read") + '</dd>'
     + (S.funnel_30d && S.funnel_30d.length ? S.funnel_30d.map(function(f) { return '<dt>Step, 30 days: ' + esc(f.stage) + '</dt><dd>' + esc(kpiFmt(f.n)) + '</dd>'; }).join('') : '<dt>Sign-up steps, 30 days</dt><dd>' + kpiU(S.funnel_30d ? "no step was counted in 30 days" : "subscribe_funnel is not there yet") + '</dd>') + '</dl>' + kpiNotes(S.notes) + '</div></div>'
     + '<div class="kp-card"><h3>Credibility events</h3>' + kpiSrc(C.source, C.as_of) + '<dl class="kp-kv"><dt>Citations of the fleet\'s papers</dt><dd>' + (C.citations ? esc(kpiFmt(C.citations.citations)) + ' across ' + esc(kpiFmt(C.citations.works)) + ' works (OpenAlex, ' + esc(C.citations.day) + ')' : kpiU("no OpenAlex row")) + '</dd>'
@@ -7420,11 +8081,12 @@ function kpiHtml(v, holder) {
       return '<tr>' + post(p) + '<td>' + esc(p.buffer_status || "") + '</td>' + cell(p.impressions, why) + cell(p.likes, why) + cell(p.reposts, why) + cell(p.replies_all, why) + cell(p.buffer_clicks, why) + cell(p.clicks, "the post has no campaign tag") + '</tr>';
     })) : '<p class="meta">No post has gone out through Buffer.</p>') + kpiNotes(B.notes) + '</div></section>';
   return fleetHead("Fleet metrics") + '<style>' + KPI_CSS + '</style>' + fleetTop("kpi", false, holder) + '<main class="wrap fl kp"><h1>Metrics</h1><p class="kp-lede">Every figure on this page is read from the fleet\'s own database when you open it, and each panel names the table it comes from. Where nothing measures a value the page says so and shows no number.</p>'
-    + '<nav class="kp-jump" aria-label="Sections"><a href="#issues">Issues</a><a href="#reach">Reach</a><a href="#buffer">Buffer</a><a href="/api/kpi">The same data as JSON</a></nav>'
-    + issuesHtml + reachHtml + bufHtml
+    + '<nav class="kp-jump" aria-label="Sections"><a href="#service">Service levels</a><a href="#issues">Issues</a><a href="#reach">Reach</a><a href="#buffer">Buffer</a><a href="/api/kpi">The same data as JSON</a></nav>'
+    + kpiServiceHtml(v.service_levels, v.sla) + issuesHtml + reachHtml + bufHtml
     + '<p class="fl-foot">Computed ' + esc(v.as_of.slice(0, 19).replace("T", " ")) + ' UTC by qnfo-fleet-dashboard ' + esc(v.version) + ' and kept for ' + v.cache_ttl_s + ' s. ' + (v.unreadable.length ? esc(String(v.unreadable.length)) + ' reads returned nothing: ' + esc(v.unreadable.map(function(u) { return u.read + " (" + u.reason + ")"; }).join(", ")) + '.' : 'Every read succeeded.') + '</p></main>' + FLEET_SHELL_JS + '</body></html>';
 }
 // ---- FLEET-KPI-1:END ----
+// ==== AREA-MAP research: Content tab (CONTENT-PIPELINE-1) ====
 // ---- CONTENT-PIPELINE-1:BEGIN ----
 // CONTENT-PIPELINE-1 (1.37.0, pillars research and reach; owner directive 2026-10-14: "The system shall provide visibility onto
 // the content creation process end-to-end on fleet dashboard: what topics/ideas are in process, which are being researched,
@@ -7614,6 +8276,7 @@ async function contentGateMetric(env) {
   return { value: n };
 }
 // ---- CONTENT-PIPELINE-1:END ----
+// ==== AREA-MAP platform: Changelog tab (FLEET-CHANGELOG-1) ====
 // ---- FLEET-CHANGELOG-1:BEGIN ----
 // FLEET-CHANGELOG-1 (1.25.0, pillar autonomy; owner request 2026-10-06: "a changelog on the fleet dashboard as a new tab, to
 // know what new features and functionality the system releases for itself ... major new features, not minor fixes ... keep
@@ -7936,6 +8599,7 @@ function changelogHtml(v, holder) {
   return fleetHead("Fleet changelog") + css + fleetTop("changelog", false, holder) + '<main class="wrap fl" style="max-width:980px"><h1 class="fl-h" style="font-size:30px;margin:10px 0 6px">Changelog</h1><p class="meta" style="margin:0 0 18px;max-width:90ch">What the fleet has shipped for itself: new capabilities (a major or minor version), new workers, and changes to public sites. Fixes and small improvements (patch versions) are counted, not listed' + (v.patches_30d != null ? ': ' + v.patches_30d + ' in the last 30 days' : '') + '. Updated every 15 minutes from the canonical deploy ledger. JSON: <a href="/api/changelog">/api/changelog</a>.</p><div class="fl-kpis cl-kpis" style="display:grid;gap:12px;margin:0 0 22px">' + kpi(c.releases_7d, "Releases, 7 days") + kpi(c.releases_30d, "Releases, 30 days") + kpi(c.autonomy_30d, "Autonomy releases, 30 days") + kpi(c.public_30d, "Public-facing, 30 days") + kpi(c.new_workers_30d, "New workers, 30 days") + '</div><section class="card" style="margin-bottom:22px"><h3 style="font:600 12px var(--sans);letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin:0 0 6px">Is the fleet getting more autonomous?</h3>' + trendRows + '</section><div class="cl-chips" role="group" aria-label="Filter releases">' + chips + '</div>' + (items || '<div class="card empty"><b>No releases recorded yet.</b> The first sync after this deploy reads the deploy ledger.</div>') + '<p class="fl-foot">' + esc(v.rule) + '</p></main>' + js + FLEET_SHELL_JS + '</body></html>';
 }
 // ---- FLEET-CHANGELOG-1:END ----
+// ==== AREA-MAP platform: overview page wrapper: humanHtml and its 10 s refresh ====
 function humanHtml(v) {
   const o = [];
   const holder = !!(v.owner && v.owner.authed);
@@ -7950,6 +8614,7 @@ function humanHtml(v) {
 o.push("</main><script>(function(){var live=document.getElementById('live'),dot=document.getElementById('dot'),age=document.getElementById('age'),last=Date.now(),busy=false,lastAns='';var H={'Content-Type':'application/json','x-fleet-ui':'1'},etag='';function paint(){var s=(Date.now()-last)/1000;age.textContent=s<15?'live':'updated '+Math.round(s)+'s ago';dot.className='dot '+(s<30?'g':s<90?'a':'r')}function tick(force){if((document.hidden&&!force)||busy)return;busy=true;var ops=[].map.call(live.querySelectorAll('details'),function(d){return d.open}),ta=document.getElementById('ptext'),tv=ta?ta.value:'',tf=ta&&document.activeElement===ta;fetch('/?frag=1'+(etag?'&rev='+encodeURIComponent(etag):''),{cache:'no-store',headers:etag?{'If-None-Match':etag}:{}}).then(function(r){if(r.status===401){location.reload();throw 0}var t=r.headers.get('X-Content-Revision')||r.headers.get('ETag');if(t)etag=t;if(r.status===304||r.status===204){last=Date.now();return null}if(!r.ok)throw 0;return r.text()}).then(function(h){if(h===null)return;live.innerHTML=h;[].forEach.call(live.querySelectorAll('details'),function(d,i){if(ops[i])d.open=true});var t=document.getElementById('ptext');if(t&&tv){t.value=tv;if(tf)t.focus()}var pa=document.getElementById('pans');if(pa&&lastAns)pa.textContent=lastAns;last=Date.now()}).catch(function(e){console.debug('qnfo-fleet-dashboard: request failed',e)}).then(function(){busy=false;paint()})}function post(u,b){return fetch(u,{method:'POST',headers:H,body:JSON.stringify(b)}).then(function(r){if(r.status===401){location.reload();throw 0}return r.json()})}live.addEventListener('click',function(ev){var t=ev.target;if(!t||t.tagName!=='BUTTON')return;var box=t.closest('.acts');if(t.id==='pask'||t.id==='ptask'){var ta=document.getElementById('ptext'),m=document.getElementById('pmsg');if(!ta.value.trim())return;var mode=t.id==='pask'?'ask':'task';t.disabled=true;m.textContent=mode==='ask'?'asking...':'queuing...';post('/api/owner/prompt',{text:ta.value,mode:mode}).then(function(j){m.textContent=j.ok?'':(j.error||'failed');if(j.ok){ta.value='';if(mode==='ask'){lastAns=j.answer||'';var pa=document.getElementById('pans');if(pa)pa.textContent=lastAns}}tick(true)}).catch(function(e){console.debug('qnfo-fleet-dashboard: request failed',e)}).then(function(){t.disabled=false});return}if(t.dataset.oid){if(!confirm((t.dataset.act==='ratify'?'Ratify':'Reject')+' this objective revision?'))return;t.disabled=true;post('/api/owner/objective',{id:Number(t.dataset.oid),decision:t.dataset.act}).then(function(j){if(!j.ok){alert(j.error||'failed');t.disabled=false;if(j.need){var c=document.getElementById('ctext');if(c){c.value='login';c.focus()}}}tick(true)}).catch(function(){t.disabled=false});return}if(!box||!t.dataset.act)return;var body={key:box.dataset.key,kind:t.dataset.act};if(t.dataset.act==='snooze')body.days=Number(t.dataset.days);if(t.dataset.act==='note'){var n=prompt('Note to the fleet (kept with this item and filed as fleet work):');if(!n)return;body.note=n}if(t.dataset.act==='done'&&!confirm('Mark this as done?'))return;t.disabled=true;post('/api/owner/respond',body).then(function(j){if(!j.ok){alert(j.error||'failed');if(j.need){var c=document.getElementById('ctext');if(c){c.value='login';c.focus()}}}tick(true)}).catch(function(){t.disabled=false})});var so=document.getElementById('so');if(so)so.addEventListener('click',function(ev){ev.preventDefault();post('/api/owner/logout',{}).then(function(){location.reload()})});window.fleetTick=tick;setInterval(tick,60000);setInterval(paint,1000);document.addEventListener('visibilitychange',function(){if(!document.hidden)tick()})})();</script>" + cmdScript(holder) + FLEET_SHELL_JS + "</body></html>");
   return o.join("");
 }
+// ==== AREA-MAP autonomy: owner responses, prompts and Ask now (OWNER-RESPOND-1) ====
 // OWNER-RESPOND-1 (2026-10-01): respond to the fleet from the dashboard itself, and start/track server-side prompts.
 //
 // What existed before: no web page for this in this repo. ai.qnfo.org (research chat) and personal.qnfo.org (personal
@@ -8294,6 +8959,19 @@ async function ownerRoutes(request, env, ctx, path, owner) {
         return { ok: true, status: "answered", answer: di.text };
       }
       c.mail = await mailAskFacts(env, text, v, holder);
+      if (!c.mail && v && (v.email_human_pending_v2 && v.email_human_pending_v2.length || v.emails && v.emails.length)) {
+        let pending = (v.email_human_pending_v2 || []).slice();
+        if (!pending.length) pending = (v.emails || []).filter(function(m) { return m && (m.is_human || m.human || m.is_person || m.class === "person" || m.category === "person" || !m.is_internal); });
+        pending = pending.slice(0, 5);
+        if (pending.length) {
+          const domains = Array.from(new Set(pending.map(function(m) { return String(m.domain || m.from_domain || "email"); }).filter(Boolean)));
+          c.mail = {
+            domains,
+            facts: pending.map(function(m) { return "- From " + (m.from || m.sender || "human") + " <" + (m.domain || m.from_domain || "email") + ">, received " + (m.received_at || m.ts || "?") + ": " + String(m.subject || m.summary || "message").slice(0, 80); }).join("\n"),
+            source: "mail:" + (domains[0] || "human")
+          };
+        }
+      }
       const ans = await runAsk(env, text, v, c.mail);
       if (ans.ok) {
         await env.AUDIT.prepare("UPDATE owner_prompts SET status='answered', response=?1, model=?2 WHERE id=?3").bind(ans.text, ans.model, id).run();
@@ -8318,6 +8996,7 @@ async function ownerRoutes(request, env, ctx, path, owner) {
   }
   return ownerJson({ error: "not found" }, 404);
 }
+// ==== AREA-MAP platform: command line: sign-in, parser, models and mail drafting (FLEET-CMD-1) ====
 // FLEET-CMD-1 (2026-10-02, owner request): "Ask the fleet" becomes a natural-language command line for action, decisions
 // and management, at fleet.qnfo.org (pinned on "/", full page at /cmd, and a discreet link on any fleet page via /ctl.js).
 //
@@ -8882,6 +9561,31 @@ function mailDomainNamed(text, dom) {
   const core = label.replace(/^(the|www|mail)/, "");
   return core.length >= 5 && flat.indexOf(core) >= 0;
 }
+// MAIL-ASK-INBOX-1
+function buildMailEntry(f, holder, cardItem, pending) {
+  const owner_card = cardItem ? cardItem.key : (f.person ? "none" : "none: it owes you no reply");
+  const o = {
+    from_domain: f.domain,
+    received_at: f.received_at,
+    to: f.recipient || null,
+    classification: f.person ? "looks like a person (" + f.category + ")" : "automated, not a person (" + f.category + ")",
+    basis: f.basis,
+    why: f.why,
+    automation_signals: f.signals,
+    authentication: f.auth.summary,
+    owner_card
+  };
+  if (pending) o.pending = true;
+  if (cardItem && (cardItem.snoozed_until || cardItem.snooze_until)) o.snoozed_until = cardItem.snoozed_until || cardItem.snooze_until;
+  if (holder) {
+    o.subject = f.subject;
+    o.from_name = f.name || null;
+    o.from_address = f.address;
+    o.body_text = mailBodyHead(f.body, 1500);
+  }
+  return o;
+}
+
 async function mailAskFacts(env, text, v, holder) {
   const t = String(text || "");
   const doms = [];
@@ -8889,11 +9593,19 @@ async function mailAskFacts(env, text, v, holder) {
     d = String(d || "").toLowerCase().replace(/\.+$/, "");
     if (d && doms.indexOf(d) < 0 && !MAIL_INTERNAL_RX.test("@" + d) && doms.length < 2) doms.push(d);
   };
-  const cards = (v && v.items || []).filter(function(i) {
+  const cardItems = (v && v.items || []).filter(function(i) {
     return /^mail:/.test(String(i.key || ""));
-  }).map(function(i) {
+  });
+  const cards = cardItems.map(function(i) {
     return String(i.key).slice(5);
   });
+  const cardByDom = {};
+  for (const it of cardItems) {
+    cardByDom[String(it.key).slice(5).toLowerCase()] = it;
+  }
+  const pendingRows = globalThis.v_email_human_pending_v2 || [];
+  const pendingIds = {};
+  for (const p of pendingRows) pendingIds[Number(p.id || p)] = true;
   let m;
   const re1 = /\bmail:([a-z0-9-]+(?:\.[a-z0-9-]+)+)/gi;
   while (m = re1.exec(t)) push(m[1]);
@@ -8912,16 +9624,52 @@ async function mailAskFacts(env, text, v, holder) {
       continue;
     }
     for (const f of await mailFacts(env, rows)) {
-      const card = cards.indexOf(f.domain) >= 0;
-      const o = { from_domain: f.domain, received_at: f.received_at, to: f.recipient || null, classification: f.person ? "looks like a person (" + f.category + ")" : "automated, not a person (" + f.category + ")", basis: f.basis, why: f.why, automation_signals: f.signals, authentication: f.auth.summary, owner_card: card ? "mail:" + f.domain : f.person ? "none" : "none: it owes you no reply" };
-      if (holder) {
-        o.subject = f.subject;
-        o.from_name = f.name || null;
-        o.from_address = f.address;
-        o.body_text = mailBodyHead(f.body, 1500);
-      }
-      out.push(o);
+      if (MAIL_INTERNAL_RX.test("@" + f.domain)) continue;
+      const it = cardByDom[f.domain] || null;
+      out.push(buildMailEntry(f, holder, it, pendingIds[Number(f.id)] === true));
     }
+  }
+  if (!doms.length && MAIL_ASK_RX.test(t)) {
+    // MAIL-ASK-INBOX-1: read the inbox directly when no sender domain matched.
+    const since = new Date(Date.now() - 7 * DAY_MS).toISOString();
+    let rows = [];
+    try {
+      rows = await d1all(env.AUDIT, "SELECT id, sender, recipient, subject, received_at, headers_json, substr(COALESCE(body_text, ''), 1, 1600) AS body_head FROM emails WHERE received_at >= ?1 AND lower(sender) NOT LIKE '%@qnfo.org' ORDER BY received_at DESC LIMIT 40", [since]);
+    } catch (e) {
+      /* swallow read errors */
+    }
+    const haveIds = {};
+    for (const r of rows) haveIds[Number(r.id)] = true;
+    const missing = [];
+    for (const id in pendingIds) {
+      if (!haveIds[id]) missing.push(Number(id));
+    }
+    if (missing.length) {
+      try {
+        const extra = await d1all(env.AUDIT, "SELECT id, sender, recipient, subject, received_at, headers_json, substr(COALESCE(body_text, ''), 1, 1600) AS body_head FROM emails WHERE id IN (" + missing.map(function() { return "?"; }).join(",") + ")", missing);
+        rows = rows.concat(extra);
+      } catch (e) {
+        /* swallow read errors */
+      }
+    }
+    const facts = (await mailFacts(env, rows)).filter(function(f) {
+      return !MAIL_INTERNAL_RX.test("@" + f.domain);
+    });
+    facts.sort(function(a, b) {
+      const pa = a.person ? 1 : 0, pb = b.person ? 1 : 0;
+      if (pa !== pb) return pb - pa;
+      return String(b.received_at || "").localeCompare(String(a.received_at || ""));
+    });
+    const scan = { window_days: 7, inbound: rows.length, persons: 0, automated: 0 };
+    for (const f of facts) {
+      if (f.person) scan.persons++;
+      else scan.automated++;
+    }
+    for (const f of facts.slice(0, 8)) {
+      const it = cardByDom[f.domain] || null;
+      out.push(buildMailEntry(f, holder, it, pendingIds[Number(f.id)] === true));
+    }
+    out.scan = scan;
   }
   return out;
 }
@@ -9007,6 +9755,7 @@ function ipatentText(m) {
 function cmdAiContext(c) {
   const v = c.v, st = c.st || {};
   const ctx = v ? askContextObj(v, c.mail) : c.mail && c.mail.length ? { mail: c.mail } : {};
+  if (c.mail && c.mail.scan) ctx.mail_scan = c.mail.scan;
   ctx.queue_keys = cmdQueue(v).slice(0, 15).map(function(i, n) {
     return { n: n + 1, key: i.key, title: i.title, due: i.due || null };
   });
@@ -9725,6 +10474,7 @@ async function cmdRoutes(request, env, ctx, path, owner) {
   }));
   return ownerJson({ ok: true, kind: "pending", id, holder }, 202);
 }
+// ==== AREA-MAP platform: fleet console: reads and gated writes (DASHBOARD-FULL-ACCESS-1) ====
 // FLEET-CONSOLE-1 (2026-10-05, owner request: "full control, input and remediation from the UI ... get all information and
 // execute all decisions without ever leaving the fleet dashboard"). The command line gains the server-side operations a
 // session used to run by hand, so the owner never needs a session or another site to inspect or remediate a task:
@@ -10454,6 +11204,7 @@ function lockedHtml() {
   o.push("<script>document.getElementById('f').addEventListener('submit',function(ev){ev.preventDefault();var e=document.getElementById('e');e.textContent='';fetch('/api/owner/login',{method:'POST',headers:{'Content-Type':'application/json','x-fleet-ui':'1'},body:JSON.stringify({token:document.getElementById('k').value})}).then(function(r){return r.json().then(function(j){return{r:r,j:j}})}).then(function(x){if(x.r.ok)location.reload();else e.textContent=x.j.error||'failed'}).catch(function(){e.textContent='network error'})})</script></body></html>");
   return o.join("");
 }
+// ==== AREA-MAP reach: portfolio daily run and the owner-voice guard (PORTFOLIO-DAILY-1) ====
 // PORTFOLIO-DAILY-1 (2026-10-01, docs/PORTFOLIO-OPERATIONS.md s2, owner directive "never claude.ai"): the deterministic
 // duties of the retired claude.ai portfolio routine, run by this worker's cron on Cloudflare. Once per UTC day after
 // 05:00Z (after the 02:00Z reach ingest), throttled on cloud_ops_events row portfolio-daily-<day>:
@@ -10809,6 +11560,7 @@ async function portfolioDailyRun(env, opts) {
   await record("ok", summary.slice(0, 500));
   return out;
 }
+// ==== AREA-MAP autonomy: owner documents, identity store and the weekly review (OWNER-PAGE-1, IDENTITY-STORE-1) ====
 // OWNER-PAGE-1 (2026-10-01): the owner's private page. qnfo-audit.owner_docs holds personal data (email, EIN, career,
 // job applications), so it is never public. personal-api (personal.qnfo.org, Bearer API_KEY) has no binding to
 // qnfo-audit, so the page lives here behind the existing LOOP_TOKEN check; no new secret. The token is accepted as

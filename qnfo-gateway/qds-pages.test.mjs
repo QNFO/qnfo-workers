@@ -9,7 +9,15 @@ const worker = (await import(pathToFileURL(join(here, "worker.js")).href)).defau
 const db = new DatabaseSync(":memory:");
 db.exec("CREATE TABLE papers (slug TEXT, title TEXT, body_md TEXT, abstract TEXT, authors TEXT, doi TEXT, created_at TEXT, updated_at TEXT, status TEXT, version TEXT, pdf_path TEXT, license TEXT)");
 for (const [s, t] of [["distinction-lattice-framework", "Distinction-Lattice Framework"], ["joules-per-solution-metric", "The Joules-per-Solution Metric"], ["hidden", "Hidden"]]) db.prepare("INSERT INTO papers VALUES (?,?,?,?,?,?,?,?,?,?,?,?)").run(s, t, "# x", "abs", "Rowan", "10.1234/x.1", "2026-09-24", "2026-09-24", s === "hidden" ? "quarantined" : "published", "1", null, s === "joules-per-solution-metric" ? "CC BY 4.0" : "QNFO-ULA");
-const d1 = { prepare(sql) { let a = []; const q = sql.replace(/\?(\d+)/g, "?$1"); const st = { bind(...x) { a = x; return st; }, async all() { try { return { results: db.prepare(q).all(...a) }; } catch (e) { return { results: [] }; } }, async first() { try { return db.prepare(q).get(...a) ?? null; } catch (e) { return null; } }, async run() { return {}; } }; return st; } };
+// D1-SHIM-NAMED-PARAMS-1: node:sqlite refuses positional binding for numbered placeholders (?1, ?2), and the worker
+// numbers them (a query may also reuse ?1, as the not-found suggester does). Bind by name instead, and let a failure be
+// loud: a shim that answered "no rows" on every error made a driver mismatch read as "the suggester found nothing".
+const sqlBind = (stmt, sql, a) => {
+  const named = /\?\d/.test(sql);
+  const obj = () => Object.fromEntries(a.map((v, i) => [String(i + 1), v === undefined ? null : v]));
+  return { all: () => (named ? stmt.all(obj()) : stmt.all(...a)), get: () => (named ? stmt.get(obj()) : stmt.get(...a)) };
+};
+const d1 = { prepare(sql) { let a = []; const st = { bind(...x) { a = x; return st; }, async all() { try { return { results: sqlBind(db.prepare(sql), sql, a).all() }; } catch (e) { console.error(JSON.stringify({ where: "qds-pages.shim.all", sql: sql.slice(0, 120), error: String(e && e.message || e) })); throw e; } }, async first() { try { return sqlBind(db.prepare(sql), sql, a).get() ?? null; } catch (e) { console.error(JSON.stringify({ where: "qds-pages.shim.first", sql: sql.slice(0, 120), error: String(e && e.message || e) })); throw e; } }, async run() { return {}; } }; return st; } };
 const env = { LIVING_PAPER: d1, DB: d1, QNFO_BUCKET: { async get() { return null; } }, RELEASES: { async head() { return null; } } };
 const get = async (url, accept) => { const r = await worker.fetch(new Request(url, { headers: accept ? { Accept: accept } : {} }), env, { waitUntil() {} }); return { status: r.status, ct: r.headers.get("content-type") || "", loc: r.headers.get("location"), text: await r.text() }; };
 let pass = 0, fail = 0;

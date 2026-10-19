@@ -20,8 +20,15 @@ WHY    On 2026-10-06 all 75 files under migrations/ had been applied by hand by 
 USAGE  python3 scripts/apply_migrations.py --check  migrations/a.sql [...]
        python3 scripts/apply_migrations.py --apply  migrations/a.sql [...] [--commit SHA]
        --apply reads CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID. Exit 0 = every opted-in file passed (or was skipped).
+HEADERLESS (MIGRATION-HEADER-GUARD-1, 2026-10-19): a file with no "APPLY-BY: ci" used to be skipped without a word, so a migration
+       that forgot the header was never applied (2026-10-18-subscribers-utm-attribution.sql: its columns were missing live while the
+       code that reads them shipped). --check now refuses a file whose SQL contains an executable statement (ALTER, CREATE,
+       INSERT, UPDATE, DELETE, DROP, REPLACE) and that declares neither "-- APPLY-BY: ci" nor "-- APPLY-BY: manual (<reason>)" /
+       "-- APPLY-BY: none (<reason>)". The files that already existed are listed in migrations/headerless-allowlist.txt
+       (shrink-only: a file that gains a header leaves the list). --apply is unchanged and still skips a file without "ci".
 """
 import argparse
+import datetime
 import hashlib
 import json
 import os
@@ -54,6 +61,13 @@ DESTRUCTIVE = re.compile(r"^\s*(DELETE\s+FROM|DROP\s+(TABLE|INDEX|VIEW|TRIGGER))
 APPEND_ONLY = ("decision_log", "issue_lifecycle")
 APPEND_ONLY_WRITE = re.compile(r"^\s*(?:UPDATE(?:\s+OR\s+\w+)?|DELETE\s+FROM|(?:INSERT\s+OR\s+REPLACE|REPLACE)\s+INTO)\s+\"?("
                                + "|".join(APPEND_ONLY) + r")\"?\b", re.I)
+# STEP-SCHEMA-LINT-1 (2026-10-18, fleet_runs 10278 at 16:18:57Z): a fleet_tasks workflow step without "type" passed
+# --check and then aborted its run at execution time with "unsupported step type: undefined" (every step after it never
+# ran). Measured in qnfo-audit on 2026-10-18: 184 steps across 39 fleet_tasks rows of type 'workflow' -- 'sql' 183 (38
+# tasks), 'http' 1. Every live step carries a type; 151 of 184 carry no "name" and ran fine, so name stays optional; no
+# sql step lacks db/sql and the one http step carries url. A file may name a type the runner gained with a
+# "-- STEP-TYPES: sql,http,<new>" header line, so a new capability is a one-line header and not a red PR.
+STEP_TYPES = ("sql", "http")
 LEDGER_DDL = ("CREATE TABLE IF NOT EXISTS migration_runs (id INTEGER PRIMARY KEY AUTOINCREMENT, file TEXT NOT NULL, "
               "sha256 TEXT NOT NULL, commit_sha TEXT, db TEXT, status TEXT NOT NULL, statements INTEGER, error TEXT, "
               "applied_by TEXT, applied_at TEXT DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now')))")
@@ -80,6 +94,83 @@ def header_value(lines, key):
         if m:
             return m.group(1).strip()
     return None
+
+
+# MIGRATION-HEADER-GUARD-1: the statement keywords that change a database. A file with none of them (comments, SELECT, a note) needs no
+# header; a file with one and no APPLY-BY declaration is the silent-skip defect. A WITH (CTE) statement counts when it writes: its
+# CTE list is followed by INSERT, UPDATE, DELETE or REPLACE INTO (2026-10-02-work-with-me-triggers.sql is one). Comments of both kinds
+# (full-line, trailing and /* */) and string literals are removed first, so neither hides a statement nor fakes one.
+EXECUTABLE = re.compile(r"^\s*(?:ALTER|CREATE|INSERT|UPDATE|DELETE|DROP|REPLACE)\b", re.I)
+WITH_WRITE = re.compile(r"^\s*WITH\b.*\b(?:INSERT|UPDATE|DELETE|REPLACE\s+INTO)\b", re.I | re.S)
+APPLY_BY_DECLARED = re.compile(r"^(manual|none)\s*\(\s*(\S.*?)\s*\)\s*$", re.I)
+ALLOWLIST = os.path.join(HERE, "..", "migrations", "headerless-allowlist.txt")
+
+
+def load_allowlist(path=None):
+    """(names, expires): the grandfathered file names and the "# EXPIRES: yyyy-mm-dd" date of migrations/headerless-allowlist.txt."""
+    names, expires = set(), None
+    try:
+        for line in open(path or ALLOWLIST, encoding="utf-8").read().splitlines():
+            line = line.strip()
+            m = re.match(r"^#\s*EXPIRES\s*:\s*(\d{4}-\d{2}-\d{2})\b", line, re.I)
+            if m:
+                expires = m.group(1)
+            if line and not line.startswith("#"):
+                names.add(os.path.basename(line))
+    except OSError:
+        pass
+    return names, expires
+
+
+def strip_sql(sql):
+    """sql without comments ("--" to end of line, /* */) and with each string literal emptied: what is left is the SQL's shape."""
+    out, i, n = [], 0, len(sql)
+    while i < n:
+        two, c = sql[i:i + 2], sql[i]
+        if two == "--":
+            while i < n and sql[i] != "\n":
+                i += 1
+        elif two == "/*":
+            j = sql.find("*/", i + 2)
+            i = n if j < 0 else j + 2
+            out.append(" ")
+        elif c in "'\"`":
+            j = i + 1
+            while j < n and not (sql[j] == c and sql[j + 1:j + 2] != c):
+                j += 2 if sql[j] == c else 1
+            out.append(c + c)
+            i = j + 1
+        else:
+            out.append(c)
+            i += 1
+    return "".join(out)
+
+
+def has_executable(text):
+    for s in statements(text):
+        b = strip_sql(s.replace("__INCOMPLETE__", "", 1))
+        if EXECUTABLE.match(b) or WITH_WRITE.match(b):
+            return True
+    return False
+
+
+def headerless_verdict(path, text, allow=None):
+    """MIGRATION-HEADER-GUARD-1: what --check says about a file plan() skipped (no "APPLY-BY: ci"). Returns (verdict, note):
+    'declared' (APPLY-BY: manual|none with a reason), 'no-sql' (nothing executable, no header needed), 'grandfathered' (listed in
+    migrations/headerless-allowlist.txt) or 'refused' (executable SQL that nothing will ever apply)."""
+    by = header_value(header(text), "APPLY-BY")
+    if by and APPLY_BY_DECLARED.match(by):
+        return "declared", "APPLY-BY: " + by
+    if not has_executable(text):
+        return "no-sql", None
+    names = allow if allow is not None else load_allowlist()[0]
+    if os.path.basename(path) in names:
+        return "grandfathered", "listed in migrations/headerless-allowlist.txt"
+    got = ("APPLY-BY: " + by) if by else "no APPLY-BY header"
+    return "refused", ("has executable SQL (ALTER/CREATE/INSERT/UPDATE/DELETE/DROP) but " + got + ", so no run applies it and "
+                       "nothing reports it (MIGRATION-HEADER-GUARD-1): add '-- APPLY-BY: ci', '-- DB: qnfo-audit' and "
+                       "'-- Rollback: <sql>' to apply it on merge, or '-- APPLY-BY: manual (<reason>)' / '-- APPLY-BY: none (<reason>)' "
+                       "when it is applied some other way or not at all")
 
 
 def body(stmt):
@@ -310,6 +401,73 @@ def enum_violations(sql):
     return out
 
 
+def _literals(sql):
+    """Every single-quoted literal in a statement, decoded (SQL '' is an escaped quote), skipping -- comments."""
+    out, i, n = [], 0, len(sql)
+    while i < n:
+        if sql[i] == "-" and sql.startswith("--", i):
+            j = sql.find("\n", i)
+            i = n if j < 0 else j + 1
+            continue
+        if sql[i] != "'":
+            i += 1
+            continue
+        j, buf = i + 1, []
+        while j < n:
+            if sql[j] == "'":
+                if j + 1 < n and sql[j + 1] == "'":
+                    buf.append("'")
+                    j += 2
+                    continue
+                break
+            buf.append(sql[j])
+            j += 1
+        out.append("".join(buf))
+        i = j + 1
+    return out
+
+
+def step_violations(sql, allowed=None):
+    """A problem per fleet_tasks workflow step the runner would refuse at execution time (STEP-SCHEMA-LINT-1)."""
+    allowed = [t.strip().lower() for t in (allowed or STEP_TYPES) if t and t.strip()]
+    problems = []
+    for lit in _literals(sql):
+        if '"steps"' not in lit:
+            continue
+        try:
+            doc = json.loads(lit)
+        except ValueError:
+            continue  # a fragment this lint cannot read: make no claim about it
+        steps = doc.get("steps") if isinstance(doc, dict) else None
+        if not isinstance(steps, list):
+            continue
+        for n, step in enumerate(steps, 1):
+            if not isinstance(step, dict):
+                problems.append("step " + str(n) + " is not a JSON object")
+                continue
+            kind = step.get("type")
+            label = "step " + str(n) + " (" + str(step.get("name") or "unnamed") + ")"
+            if not isinstance(kind, str) or not kind.strip():
+                problems.append("step " + str(n) + " has no \"type\": the runner aborts the whole run with "
+                                "'unsupported step type: undefined'")
+                continue
+            if kind.strip().lower() not in allowed:
+                problems.append(label + " type '" + kind + "' is not a type the runner executes ("
+                                + ", ".join(allowed) + "); add it to a '-- STEP-TYPES:' header line if the runner "
+                                "gained it")
+                continue
+            if kind.strip().lower() == "sql":
+                for key in ("db", "sql"):
+                    v = step.get(key)
+                    if not isinstance(v, str) or not v.strip():
+                        problems.append(label + " has no \"" + key + "\" (a sql step needs both db and sql)")
+            else:
+                v = step.get("url")
+                if not isinstance(v, str) or not v.strip():
+                    problems.append(label + " has no \"url\" (an http step needs one)")
+    return problems
+
+
 def plan(path, text):
     """Validate one file. Returns (opted_in, problems, info)."""
     lines = header(text)
@@ -351,6 +509,10 @@ def plan(path, text):
         if m:
             problems.append(m.group(1).lower() + " is append-only (its D1 trigger aborts UPDATE, DELETE and REPLACE); "
                             "INSERT a new row instead (APPEND-ONLY-LINT-1)")
+    step_types = header_value(lines, "STEP-TYPES")
+    for s in stmts:
+        for bad in step_violations(body(s), step_types.split(",") if step_types else None):
+            problems.append(bad + " (STEP-SCHEMA-LINT-1)")
     destructive = [s for s in stmts if DESTRUCTIVE.match(body(s))]
     backup = header_value(lines, "BACKUP")
     if destructive and not backup:
@@ -625,12 +787,26 @@ def main(argv=None):
             text = open(f, encoding="utf-8").read()
             ok, problems, info = plan(f, text)
             if not ok:
-                print(json.dumps({"file": f, "skipped": info.get("skip")}))
+                verdict, note = headerless_verdict(f, text)
+                if verdict == "refused":
+                    rc = 1
+                    print(json.dumps({"file": f, "refused": [note]}))
+                else:
+                    res = {"file": f, "skipped": info.get("skip")}
+                    if verdict in ("declared", "grandfathered"):
+                        res[verdict] = note
+                    print(json.dumps(res))
             elif problems:
                 rc = 1
                 print(json.dumps({"file": f, "refused": problems}))
             else:
                 print(json.dumps({"file": f, "ok": True, **info}))
+        names, expires = load_allowlist()
+        if names and expires and expires < datetime.date.today().isoformat():
+            # A reminder, not a failure: the list is a grandfather clause with an expiry (control_registry
+            # migration-headerless-allowlist), and a lapsed one must not turn unrelated PRs red.
+            print("migrations/headerless-allowlist.txt expired " + expires + " with " + str(len(names)) + " file(s) still listed: "
+                  "give each a header or APPLY-BY: manual (<reason>) and remove it from the list", file=sys.stderr)
         return rc
     acct, token = os.environ.get("CLOUDFLARE_ACCOUNT_ID", ""), os.environ.get("CLOUDFLARE_API_TOKEN", "")
     if not acct or not token:

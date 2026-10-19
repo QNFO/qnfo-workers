@@ -12,6 +12,12 @@ workers_dev = true
 enabled = true
 head_sampling_rate = 1
 
+# WORKERS-BP-DEBT-1 idea-hub (agent_issues 2756, RESOLVE-ALL-OPEN-1 2026-10-19): `enabled` alone turns on logs only; traces need
+# [observability.traces]. Sampled like the rest of the fleet (TRACES-SAMPLING-BEFORE-BILLING-1: stored traces bill from 2026-12-01).
+[observability.traces]
+enabled = true
+head_sampling_rate = 0.05
+
 [ai]
 binding = "AI"
 

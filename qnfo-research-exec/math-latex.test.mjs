@@ -4,12 +4,14 @@
 // the LaTeX rule; review turns plain-text math into a HARD gate-math-latex finding that goes to revise (no model call to
 // decide it) and leaves a LaTeX paper alone; verify logs a math-scan event; in the default measure mode it still publishes;
 // with ops_config research_math_gate=enforce the first failing pass goes back to revise and a second, math-only failing
-// pass parks the row (no re-arm).
+// pass parks the row (no re-arm). MATH-LATEX-AUTOFIX-1 (agent_issues 100027): the forms that have one LaTeX spelling are
+// converted with no model call in review, revise and verify, so only what the converter leaves (box drawings, a line that
+// already holds currency) still reaches the models and the park.
 // Run: node qnfo-research-exec/math-latex.test.mjs   -> prints "math-latex tests passed"
 import { DatabaseSync } from "node:sqlite";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { pseudoMathScan, stageReview, stageVerify } from "./worker.js";
+import { pseudoMathScan, mathLatexAutofix, stageReview, stageRevise, stageVerify } from "./worker.js";
 
 const src = readFileSync(new URL("./worker.js", import.meta.url), "utf8");
 
@@ -73,42 +75,85 @@ const row = (id, ctx) => { db.prepare("INSERT OR REPLACE INTO research_queue (id
 const get = (id) => db.prepare("SELECT * FROM research_queue WHERE id = ?").get(id);
 const events = (kind) => db.prepare("SELECT text, status FROM cloud_ops_events WHERE kind = ?").all(kind);
 
-// 3. review: a model-passing review with plain-text math goes to revise with the deterministic HARD fix
+// MATH-LATEX-AUTOFIX-1: a box drawing is left to the models, so it still exercises the finding, revise and park paths.
+const BOX = mkPaper("The layout:\n\n\u250c\u2500\u2500\u2510\n\u2502ab\u2502\n\u2514\u2500\u2500\u2518\n\nas drawn.");
+const stored = (id) => r2.get("pipeline/" + id + "/reconciled.md");
+
+// 3. review: plain-text math is converted before the review (no finding); a box drawing still goes to revise
 put("r1", PSEUDO);
 let out = await stageReview(env, row("r1", { cycles: 0 }));
-assert.equal(out.stage, "review->revise", "plain-text math sends the paper to revise: " + JSON.stringify(out));
-const fx = JSON.parse(r2.get("pipeline/r1/fixes.json"));
+assert.equal(out.stage, "review->verify", "converted math passes review: " + JSON.stringify(out));
+assert.equal(pseudoMathScan(stored("r1")).count, 0, "the stored paper is converted: " + stored("r1").split("\n")[4]);
+assert.ok(/\$T_\{1\} \\approx 10\^\{-4\}\$/.test(stored("r1")), "T1 and 10^-4 become one LaTeX span");
+assert.ok(events("math-autofix").some((e) => /row=r1 stage=review pseudo_math \d+->0/.test(e.text) && e.status === "ok"), "math-autofix event logged");
+put("r3", BOX);
+out = await stageReview(env, row("r3", { cycles: 0 }));
+assert.equal(out.stage, "review->revise", "a box drawing still sends the paper to revise: " + JSON.stringify(out));
+const fx = JSON.parse(r2.get("pipeline/r3/fixes.json"));
 assert.ok(Array.isArray(fx) && fx.some((f) => f.id === "gate-math-latex" && f.severity === "HARD" && /\$10\^\{-4\}\$/.test(f.fix)), "fixes.json carries gate-math-latex with a LaTeX example");
 put("r2", CLEAN);
 out = await stageReview(env, row("r2", { cycles: 0 }));
 assert.equal(out.stage, "review->verify", "a LaTeX paper passes review: " + JSON.stringify(out));
+assert.equal(stored("r2"), CLEAN, "a LaTeX paper is not rewritten");
 
-// 4. verify, default measure mode: logs math-scan (warn) and still publishes
+// 4. verify, default measure mode: logs math-scan and publishes; a converted paper scans clean
 put("v1", PSEUDO);
 out = await stageVerify(env, row("v1", { cycles: 2, verifyPass: 1 }));
 assert.equal(out.stage, "verify->publish", "measure mode publishes: " + JSON.stringify(out));
-assert.ok(events("math-scan").some((e) => /row=v1 pseudo_math=\d+ mode=measure/.test(e.text) && e.status === "warn"), "math-scan warn event logged");
+assert.ok(events("math-scan").some((e) => /row=v1 pseudo_math=0 mode=measure/.test(e.text) && e.status === "ok"), "verify converted the paper before the scan");
+put("v3", BOX);
+out = await stageVerify(env, row("v3", { cycles: 2, verifyPass: 1 }));
+assert.equal(out.stage, "verify->publish", "measure mode publishes a box drawing too");
+assert.ok(events("math-scan").some((e) => /row=v3 pseudo_math=\d+ mode=measure/.test(e.text) && e.status === "warn"), "math-scan warn event logged");
 put("v2", CLEAN);
 out = await stageVerify(env, row("v2", { cycles: 2 }));
 assert.equal(out.stage, "verify->publish");
 assert.ok(events("math-scan").some((e) => /row=v2 pseudo_math=0 /.test(e.text) && e.status === "ok"), "a clean paper logs an ok math-scan");
 
-// 5. enforce mode: first failing pass -> revise; second math-only failing pass -> parked, not re-armed
+// 5. enforce mode: first failing pass -> revise; second math-only failing pass -> parked, not re-armed; convertible math
+// is no longer parked (the 8 rows parked from 2026-10-12 to 2026-10-19 were this case)
 db.prepare("INSERT INTO ops_config (key, value) VALUES ('research_math_gate', 'enforce')").run();
-put("e1", PSEUDO);
+put("e1", BOX);
 out = await stageVerify(env, row("e1", { cycles: 2 }));
 assert.equal(out.stage, "verify->revise", "enforce: first failing pass goes back to revise: " + JSON.stringify(out));
 assert.ok(JSON.parse(r2.get("pipeline/e1/fixes.json")).some((f) => f.id === "gate-math-latex"));
-put("e2", PSEUDO);
+put("e2", BOX);
 out = await stageVerify(env, row("e2", { cycles: 2, verifyPass: 1 }));
 assert.ok(out.parked && out.stage === "verify", "enforce: second math-only failure parks: " + JSON.stringify(out));
 const e2 = get("e2");
 assert.equal(e2.stage, "parked"); assert.equal(e2.status, "wontfix"); assert.match(e2.error, /^PARKED-MATH-LATEX-2: \d+ plain-text math tokens/);
 assert.equal(e2.recover_count, 0, "not re-armed");
 assert.equal(events("math-park").length, 1);
+put("e4", PSEUDO);
+out = await stageVerify(env, row("e4", { cycles: 2, verifyPass: 1 }));
+assert.equal(out.stage, "verify->publish", "enforce: convertible math is converted and published, not parked: " + JSON.stringify(out));
 put("e3", CLEAN);
 out = await stageVerify(env, row("e3", { cycles: 2, verifyPass: 1 }));
 assert.equal(out.stage, "verify->publish", "enforce: a LaTeX paper publishes");
 assert.ok(routerCalls > 0, "the router stub served the review and extract calls");
+
+// 6. revise: a math-only fix list is resolved without a model call and goes back to review
+put("m1", PSEUDO);
+r2.set("pipeline/m1/fixes.json", JSON.stringify([{ id: "gate-math-latex", severity: "HARD", claim: "5 plain-text math tokens", fix: "x" }]));
+const callsBefore = routerCalls;
+out = await stageRevise(env, row("m1", { cycles: 1, verifyPass: 1 }));
+assert.equal(out.stage, "revise->review", "math-only revise returns to review: " + JSON.stringify(out));
+assert.ok(out.mathAutofix, "the autofix resolved it");
+assert.equal(routerCalls, callsBefore, "no model call for a math-only fix list");
+assert.equal(JSON.parse(get("m1").context).verifyPass, 1, "verifyPass is kept");
+assert.equal(pseudoMathScan(stored("m1")).count, 0);
+
+// 7. the converter itself
+const conv = [
+  ["Absorption at 1600 cm\u207b\u00b9 and x\u2081\u00b2 + y\u2082 \u2264 3.", "Absorption at 1600 $\\mathrm{cm}^{-1}$ and $x_{1}^{2}$ + $y_{2} \\le 3$."],
+  ["The overlap |\u27e8\u03c8|\u03c6\u27e9|\u00b2 is near 1.", "The overlap $|\\langle \u03c8|\u03c6\\rangle|^{2}$ is near 1."],
+  ["Error falls as p^(\u22122) and \u221a2 \u2248 1.41.", "Error falls as $p^{-2}$ and $\\sqrt{2} \\approx 1.41$."],
+  ["values \u2264 threshold and a \u2260 b.", "values $\\le$ threshold and $a \\neq b$."],
+  ["We wrote $x$\u00b2 inline.", "We wrote $x^{2}$ inline."],
+];
+for (const [i, o] of conv) assert.equal(mathLatexAutofix(i), o, "converts " + i);
+for (const keep of ["Costs $5 per run with T\u2081 limits.", "Keep `x_1^2` and [l](https://a.org/x_1), snake_case_name, arXiv:2401.00001, 10.1000/x_1.", "```\ny^2 \u2264 3\n```", "## References\n\n[1] Qubit T\u2081 \u2248 10\u207b\u2074 limits.\n"]) assert.equal(mathLatexAutofix(keep), keep, "left unchanged: " + keep);
+for (const [i] of conv) assert.equal(mathLatexAutofix(mathLatexAutofix(i)), mathLatexAutofix(i), "idempotent: " + i);
+assert.ok(!/\$\$/.test(mathLatexAutofix("A $x$\u00b2 and $y$ then T\u2081 $z$.")), "never emits $$ next to existing math");
 
 console.log("math-latex tests passed");

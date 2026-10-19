@@ -22,7 +22,10 @@
 // 'read' with attempts >= 1, CROSS-FAMILY-1 (ct_im2403) among them. repoSlug() now strips one leading owner segment at
 // intake and at read, so the live queue drains without a data migration and no future owner-qualified row can wedge the
 // loop. The 16 existing rows are repaired in D1 separately. */
-var VERSION = "0.18.15-tempo-5m-1"; /* 0.18.15 TEMPO-5M-1 (2026-10-18): the member fleet-exec (FLEET-EXEC-FOLD-1) moved from a 10-minute to a 5-minute dispatch tick; the host carries the member verbatim, so its embedded copy moved with it. No host logic changed. */ /* 0.18.14 /* 0.18.14 CLAIM-TERMINAL-RELEASE-1 (2026-10-18, owner audit closeout): CODE_TASK_DONE was missing 'superseded', so claimsSweep renewed the file claim of an already-superseded task (claimTake stamps the current status into the intent: "code task ct_7rev1stride2k (superseded)") and held file:qnfo-research-exec/worker.js to its 2h TTL. 10 queued tasks on that file were deferred the whole time, CROSS-FAMILY-1 (#2403) among them, which is why the read fix alone moved nothing. 'superseded' is now in the done set, and a finished task's leftover claim is released by the sweep with its status as the outcome. */ /* 0.18.12 MERGE-SCOPE-SCRIPTS-1 (2026-10-18): mergeScopeWhy now mirrors qnfo-fleet-control's CM_SCRIPT_DENY, so a task on a scripts/*.py|*.mjs the runner never auto-merges is refused at intake instead of after 8 model attempts (ct_xo808yx0h3ieeh). */ /* 0.18.9 LADDER-DEEPSEEK-BUDGET-1 (2026-10-18): the deepseek-v4-flash rung gets the 16k reasoning budget (its empty replies were reasoning exhausting 8192) and an empty reply logs finish_reason. */ /* 0.18.4 PLAN-METRIC-ATTR-1 (2026-10-17, owner directive "IMPLEMENT AND DEPLOY ALL REMEDIATION, ALL MEASURES"; carries the concurrent PLAN-RESERVE-1 noted at the budget line): the measured backlog was 188 open issues, of which 163 had NEVER had a code task; issue_plans showed 128 of 150 planner decisions were "not-code" and 67 shared one reason -- "the issue names no worker the code loop may change", 54 of them metric-trigger issues from qnfo-fleet-control. (1) PLAN-METRIC-OWNER-ATTR-1 reads the metric key out of a METRIC-TRIGGER-<n>-<KEY> title and asks metric_registry who owns that metric, accepting the answer only when the owner is already in the live, non-control-plane worker list, and records the attribution on the plan; (2) PLAN_DAILY_CAP 8 -> 24 against 720 ticks a day. Together with PLAN-RESERVE-1 (a 15 s slice of every tick is kept for planning) this is the difference between a planner that cannot reach the backlog and one that reaches it. */ // 0.18.3 PLAN-RESERVE-1 (2026-10-17, owner directive "MORE PARALLEL WORKERS, FASTER TICKS, MORE THROUGHPUT/OUTPUT/RESOLVED", after the ceiling, the 1-2 tasks-per-tick measurement and the 144-fires/day limit were shown): (1) the cron is every minute, under the named OWNER_OVERRIDES entry for this worker in scripts/cron_rate_guard.py, so the 40 s budget runs 60 times an hour instead of 6; (2) TICK_LANES 4 -> 8, MAX_OPEN_TASKS 20 -> 48, intake 4 -> 8 an issue a tick, PLAN_WIP 6 -> 12, so the lanes have work and the planner feeds them; (3) SINGLE-FLIGHT-1, a loop_lock row makes one tick run at a time and a minute that arrives mid-tick is skipped with an event instead of stacking eight more lanes; (4) SPEND-CAP-1, a tick spends nothing once today's model calls reach ops_config code_loop_daily_calls (default 1500, about $16 at the measured $0.011 a call), because throughput and spend are the same dial and an uncapped one is not a decision. */ // 0.18.1 CLAIM-THRESHOLD-1 (2026-10-17, completing 0.18.0): 0.18.0 cut CLAIM_BACKOFF_MS to 5 min, the same value as RETRY_BACKOFF_MS[0], so a task parked in its first round backoff no longer EXCEEDED the park threshold and kept its file, against CLAIM-HELD-IN-BACKOFF-1; cutting it to 3 min made a 4-minute CLAIM_WAIT_MS deferral read as a park, against CLAIMS-FIRST-1. The threshold now sits between the two kinds of wait: TIMEOUT_WAIT_MS 2 min and CLAIM_WAIT_MS 2 min are the task's own work and keep the claim, CLAIM_BACKOFF_MS 4 min is the park threshold, and RETRY_BACKOFF_MS[0] 5 min is a failed round, which releases the file. */ // 0.18.0 SLA-PATHS-ACCEL-1 (2026-10-17, owner directive "ALL STEPS, ALL PROCESSES SHALL HAVE SLA AND MULTIPLE EXECUTION/REMEDIATION/WORKAROUND PATHS" + "make ticks faster"): measured on code_tasks 2026-10-17 (4-hour window, distinct updated_at buckets) the loop touched 1-2 tasks per 10-minute tick against a 16-step budget, because ONE propose step (a reasoning model call) costs most of the 40 s budget; the queue held 7 tasks, every one of them at step propose, for 22-50 minutes each, and 14-day time-to-merge ran 70-650 minutes. Four changes, cron untouched so CRON-RATE-CEILING-1 still holds: (1) TICK-PARALLEL-N, the tick runs up to TICK_LANES (4) task lanes concurrently, each claiming atomically through the same claim(), so a slow model call no longer serialises every other task; (2) SLA-COMPRESS-1, every wait is cut (round backoff 1 h/2 h -> 5 m/15 m, provider-timeout wait 10 m -> 2 m, claim-held wait 20 m -> 4 m, claim park 30 m -> 5 m, intake retry cooldown 120 m -> 30 m, no-progress ceiling 180 m -> 45 m); (3) STEP-SLA-1, every step carries an explicit SLA (read 10, propose 20, verify 15, commit 10 minutes) and slaSweep() acts on a breach by dropping the task's stale lease so the next lane takes it now, instead of leaving it parked to the end of a wait; (4) the tick reports its lanes and SLA sweep so a slowdown is visible in the tick payload, not inferred. */ // 0.17.2 CODE-TASK-STATUS-UNWEDGE-1 (2026-10-17): the D1 reroute trigger made every UPDATE OF status on code_tasks fail at prepare time ("triggers nested too deep"), so the code loop could not settle, claim or cut; the trigger is dropped by migration 2026-10-17 and pathBusy now fails closed with a code-task.ceiling-error audit row when the no-progress check itself cannot run. // 0.17.1 NO-PROGRESS-CEILING-1 (2026-10-17, pillar autonomy, agent_issues 2726): a code task whose attempts stop producing NEW failure signatures for path_hold_max_min (default 180) minutes, after 2 or more failed attempts, is set failed and its claim released, so a task that is looping no longer blocks every other issue on that file while one that is still making progress (each failure new) keeps working. // 0.16.2 SLA-120M-7 (2026-10-14, pillar autonomy; owner directive 2026-10-14: no SLA exceeds 120 minutes): an issue whose last code task ended (stale base, refusal, failed ladder) is taken again after INTAKE_RETRY_COOLDOWN_MIN (120 minutes), not 6 h; the per-window cap of 3 tasks is unchanged. // 0.16.1 WORKERS-BP-LOGGING-qnfo-code-orchestrator-1 (agent_issues 2531, child of WORKERS-BP-LOGGING-1 #2342, pillar autonomy): the eight empty catches (the ai_spend_ledger and ai_call_counters writes, the trusted-sources read, the three intake description updates, the fleet-exec member's tick-error write and the host's run of that member) log console.error(JSON.stringify({worker, where, error})) to Workers Logs. Control flow unchanged. 0.16.0 (pillar autonomy, failure mode code-task-retry-holds-file, agent_issues 1834/2491): FAIL-SIGNATURE-STOP-1, every failed attempt leaves a short signature (failing suite and first assertion line, or the error class); 3 identical in a row end the task 'failed' with its CODE-LOOP-EXHAUSTED-1 issue (provider timeouts do not count); an attempt the publisher's suite feedback added is accounted at the next step, so the stop, the 9-attempt end and the round backoff apply to it (ct_oevdiafbcde2mg 5, ct_53djh2yfqk3ocj 8 attempts of one failure on 2026-10-13, holding their files); every backoff releases the claim with outcome backoff, the sweep never re-takes a queued task's released claim, and a task that ends releases at once. 0.15.1 (pillar autonomy, agent_issues 2397/1834): CRON-ONLY-HEARTBEAT-1, each */10 scheduled run ends with a qnfo-audit fleet_heartbeat upsert (ok=0 when the tick threw; write errors logged); CODE-LADDER-ORDER-1, the default ladder is kimi-k2.7-code, glm-5.3, then qwen2.5-coder-32b (fewest invented SEARCH texts first). 0.15.0 (pillar autonomy, agent_issues 1834/2313/2496/2499/2506): CODE-LOOP-2X-1 (owner directive 2026-10-13, "quickened/increased a minimum of 100%") doubles the cron tick to 40 s / 16 steps (caps 50 s / 24), issue intake to 4 per tick and PLAN_WIP to 6; EDITS-OVERLAP-RESOLVE-1 drops an edit that repeats a change an overlapping edit already makes and names both edits and the shared line for any other overlap (was a bare "edits overlap"); SEARCH-ELISION-1 says a SEARCH that abbreviates with "..." can never match; SYNTAX-HINT-1 adds to a verify SyntaxError the edits that change the bracket balance and the lines that declare an already-declared identifier. 0.14.5 CLAIM-AT-RUN-1 (agent_issues 2491 CODE-QUEUE-CLAIM-HOLD-1, pillar autonomy): a code task takes its file claim at its first step, not at enqueue, and the claims sweep never takes or renews a claim for a queued task that has not started (step read, no attempt, no timeout retry) and releases one it still holds (event code-task.claim-unstarted); measured 2026-10-13 12:32Z, ct_47mzp4hr1ttd7o held file:qnfo-fleet-dashboard/worker.js from enqueue at 10:11Z, renewed to 13:32Z, before running a step. 0.14.4 EXEC-LOG-SIGNATURE-1 (agent_issues 2488): a proposal syntax check is logged by its label and the error it found, as status rejected, so three rejected drafts no longer read as one recurring orchestrator failure. 0.14.3 CODE-BACKOFF-SLA-1: the self-repair waits are 1 h and 2 h (the 6 h second wait broke the 180-minute code-task-stalled SLA). 0.14.2 CLAIM-HELD-IN-BACKOFF-1 (pillar autonomy): a queued task whose next attempt is over CLAIM_BACKOFF_MS (30 min) away releases its file claim (fail() at a SELF-REPAIR-1 backoff, the claims sweep for a task parked earlier) and the sweep never takes or renews a parked task's claim; on resume the task takes a new claim through claimEnsure and a refusal is the claim-held deferral, never a failure (measured 2026-10-13 07:34Z: ct_ne8sjnxe748hiz held file:qnfo-research-exec/worker.js from 01:30:55Z, renewed 4 times to 08:50:56Z, while queued in backoff to 11:50:55Z, so every session was refused the file, e.g. the security fix of agent_issues 2432).
+var VERSION = "0.18.24-timeout-under-ceiling-1"; /* 0.18.24 KIMI-OUT-UNDER-CEILING-1 + TIMEOUT-MODEL-ATTR-1 + WHOLE-FILE-PATCH-1 + REPOSLUG-UNIFORM-1 + MIRROR-READ-RETRY-1 (2026-10-19, pillar autonomy): a failed read of the deployed-current mirror is retried instead of dropping the mirror (PR 2665 failed mirror-guard); repoSlug strips only the QNFO owner, any number of times, as the publisher, fleet-control and the D1 triggers do; a file of 24k-60k chars with no anchor is edited by SEARCH/REPLACE over the whole file instead of being written back whole (10 of 10 such tasks since 2026-10-05 failed on timeouts or a missing file block); kimi-k2.7-code gets 9216 output tokens (was 16384; at its measured 41.7 tokens/s a reply past about 10k tokens hit the 240 s Workers AI ceiling), and each code-task.timeout event names the rung that timed out (meta.model), so timeouts are graded per model. */ /* 0.18.23 LEASE-FENCE-1 (2026-10-19, pillar autonomy): every save inside a step is fenced on the lease the lane claimed (status queued, lease_until unchanged), and the lease is 5 minutes (was 90 s, under the 106 s and 175 s average calls of two ladder rungs), so a lane whose lease lapsed during a slow model call can no longer overwrite the task another lane already moved on; a fenced save that matches no row ends the stale step with event code-task.lease-lost and writes nothing (ct_zogt4y5sdzauqw: ready_to_publish at 06:26:44Z, then step verify and no ctx.patch from the stale lane, publish_failed at 06:27:31Z; 6 such rows in 48 h). */ /* 0.18.22 MERGE-SCOPE-AT-READ-1 (2026-10-19, agent_issues 99951/2983/3000): mergeScopeWhy normalizes an owner-qualified repo slug and also runs at the read step, so a task written straight into code_tasks on a path the merge runner never merges ends needs_human before any model call. */ /* 0.18.16 MODEL-ATTRIBUTION-1 (2026-10-18): a task that fails at
+propose now keeps the rung that answered in code_tasks.model (it was written only when a proposal built, so 8 of
+the 14 distinct failures in the 24h to 20:26Z had model=NULL and four of those named the model in last_error).
+No behaviour change beyond the column. 0.18.15 TEMPO-5M-1 (2026-10-18): the member fleet-exec (FLEET-EXEC-FOLD-1) moved from a 10-minute to a 5-minute dispatch tick; the host carries the member verbatim, so its embedded copy moved with it. No host logic changed. */ /* 0.18.14 /* 0.18.14 CLAIM-TERMINAL-RELEASE-1 (2026-10-18, owner audit closeout): CODE_TASK_DONE was missing 'superseded', so claimsSweep renewed the file claim of an already-superseded task (claimTake stamps the current status into the intent: "code task ct_7rev1stride2k (superseded)") and held file:qnfo-research-exec/worker.js to its 2h TTL. 10 queued tasks on that file were deferred the whole time, CROSS-FAMILY-1 (#2403) among them, which is why the read fix alone moved nothing. 'superseded' is now in the done set, and a finished task's leftover claim is released by the sweep with its status as the outcome. */ /* 0.18.12 MERGE-SCOPE-SCRIPTS-1 (2026-10-18): mergeScopeWhy now mirrors qnfo-fleet-control's CM_SCRIPT_DENY, so a task on a scripts/*.py|*.mjs the runner never auto-merges is refused at intake instead of after 8 model attempts (ct_xo808yx0h3ieeh). */ /* 0.18.9 LADDER-DEEPSEEK-BUDGET-1 (2026-10-18): the deepseek-v4-flash rung gets the 16k reasoning budget (its empty replies were reasoning exhausting 8192) and an empty reply logs finish_reason. */ /* 0.18.4 PLAN-METRIC-ATTR-1 (2026-10-17, owner directive "IMPLEMENT AND DEPLOY ALL REMEDIATION, ALL MEASURES"; carries the concurrent PLAN-RESERVE-1 noted at the budget line): the measured backlog was 188 open issues, of which 163 had NEVER had a code task; issue_plans showed 128 of 150 planner decisions were "not-code" and 67 shared one reason -- "the issue names no worker the code loop may change", 54 of them metric-trigger issues from qnfo-fleet-control. (1) PLAN-METRIC-OWNER-ATTR-1 reads the metric key out of a METRIC-TRIGGER-<n>-<KEY> title and asks metric_registry who owns that metric, accepting the answer only when the owner is already in the live, non-control-plane worker list, and records the attribution on the plan; (2) PLAN_DAILY_CAP 8 -> 24 against 720 ticks a day. Together with PLAN-RESERVE-1 (a 15 s slice of every tick is kept for planning) this is the difference between a planner that cannot reach the backlog and one that reaches it. */ // 0.18.3 PLAN-RESERVE-1 (2026-10-17, owner directive "MORE PARALLEL WORKERS, FASTER TICKS, MORE THROUGHPUT/OUTPUT/RESOLVED", after the ceiling, the 1-2 tasks-per-tick measurement and the 144-fires/day limit were shown): (1) the cron is every minute, under the named OWNER_OVERRIDES entry for this worker in scripts/cron_rate_guard.py, so the 40 s budget runs 60 times an hour instead of 6; (2) TICK_LANES 4 -> 8, MAX_OPEN_TASKS 20 -> 48, intake 4 -> 8 an issue a tick, PLAN_WIP 6 -> 12, so the lanes have work and the planner feeds them; (3) SINGLE-FLIGHT-1, a loop_lock row makes one tick run at a time and a minute that arrives mid-tick is skipped with an event instead of stacking eight more lanes; (4) SPEND-CAP-1, a tick spends nothing once today's model calls reach ops_config code_loop_daily_calls (default 1500, about $16 at the measured $0.011 a call), because throughput and spend are the same dial and an uncapped one is not a decision. */ // 0.18.1 CLAIM-THRESHOLD-1 (2026-10-17, completing 0.18.0): 0.18.0 cut CLAIM_BACKOFF_MS to 5 min, the same value as RETRY_BACKOFF_MS[0], so a task parked in its first round backoff no longer EXCEEDED the park threshold and kept its file, against CLAIM-HELD-IN-BACKOFF-1; cutting it to 3 min made a 4-minute CLAIM_WAIT_MS deferral read as a park, against CLAIMS-FIRST-1. The threshold now sits between the two kinds of wait: TIMEOUT_WAIT_MS 2 min and CLAIM_WAIT_MS 2 min are the task's own work and keep the claim, CLAIM_BACKOFF_MS 4 min is the park threshold, and RETRY_BACKOFF_MS[0] 5 min is a failed round, which releases the file. */ // 0.18.0 SLA-PATHS-ACCEL-1 (2026-10-17, owner directive "ALL STEPS, ALL PROCESSES SHALL HAVE SLA AND MULTIPLE EXECUTION/REMEDIATION/WORKAROUND PATHS" + "make ticks faster"): measured on code_tasks 2026-10-17 (4-hour window, distinct updated_at buckets) the loop touched 1-2 tasks per 10-minute tick against a 16-step budget, because ONE propose step (a reasoning model call) costs most of the 40 s budget; the queue held 7 tasks, every one of them at step propose, for 22-50 minutes each, and 14-day time-to-merge ran 70-650 minutes. Four changes, cron untouched so CRON-RATE-CEILING-1 still holds: (1) TICK-PARALLEL-N, the tick runs up to TICK_LANES (4) task lanes concurrently, each claiming atomically through the same claim(), so a slow model call no longer serialises every other task; (2) SLA-COMPRESS-1, every wait is cut (round backoff 1 h/2 h -> 5 m/15 m, provider-timeout wait 10 m -> 2 m, claim-held wait 20 m -> 4 m, claim park 30 m -> 5 m, intake retry cooldown 120 m -> 30 m, no-progress ceiling 180 m -> 45 m); (3) STEP-SLA-1, every step carries an explicit SLA (read 10, propose 20, verify 15, commit 10 minutes) and slaSweep() acts on a breach by dropping the task's stale lease so the next lane takes it now, instead of leaving it parked to the end of a wait; (4) the tick reports its lanes and SLA sweep so a slowdown is visible in the tick payload, not inferred. */ // 0.17.2 CODE-TASK-STATUS-UNWEDGE-1 (2026-10-17): the D1 reroute trigger made every UPDATE OF status on code_tasks fail at prepare time ("triggers nested too deep"), so the code loop could not settle, claim or cut; the trigger is dropped by migration 2026-10-17 and pathBusy now fails closed with a code-task.ceiling-error audit row when the no-progress check itself cannot run. // 0.17.1 NO-PROGRESS-CEILING-1 (2026-10-17, pillar autonomy, agent_issues 2726): a code task whose attempts stop producing NEW failure signatures for path_hold_max_min (default 180) minutes, after 2 or more failed attempts, is set failed and its claim released, so a task that is looping no longer blocks every other issue on that file while one that is still making progress (each failure new) keeps working. // 0.16.2 SLA-120M-7 (2026-10-14, pillar autonomy; owner directive 2026-10-14: no SLA exceeds 120 minutes): an issue whose last code task ended (stale base, refusal, failed ladder) is taken again after INTAKE_RETRY_COOLDOWN_MIN (120 minutes), not 6 h; the per-window cap of 3 tasks is unchanged. // 0.16.1 WORKERS-BP-LOGGING-qnfo-code-orchestrator-1 (agent_issues 2531, child of WORKERS-BP-LOGGING-1 #2342, pillar autonomy): the eight empty catches (the ai_spend_ledger and ai_call_counters writes, the trusted-sources read, the three intake description updates, the fleet-exec member's tick-error write and the host's run of that member) log console.error(JSON.stringify({worker, where, error})) to Workers Logs. Control flow unchanged. 0.16.0 (pillar autonomy, failure mode code-task-retry-holds-file, agent_issues 1834/2491): FAIL-SIGNATURE-STOP-1, every failed attempt leaves a short signature (failing suite and first assertion line, or the error class); 3 identical in a row end the task 'failed' with its CODE-LOOP-EXHAUSTED-1 issue (provider timeouts do not count); an attempt the publisher's suite feedback added is accounted at the next step, so the stop, the 9-attempt end and the round backoff apply to it (ct_oevdiafbcde2mg 5, ct_53djh2yfqk3ocj 8 attempts of one failure on 2026-10-13, holding their files); every backoff releases the claim with outcome backoff, the sweep never re-takes a queued task's released claim, and a task that ends releases at once. 0.15.1 (pillar autonomy, agent_issues 2397/1834): CRON-ONLY-HEARTBEAT-1, each */10 scheduled run ends with a qnfo-audit fleet_heartbeat upsert (ok=0 when the tick threw; write errors logged); CODE-LADDER-ORDER-1, the default ladder is kimi-k2.7-code, glm-5.3, then qwen2.5-coder-32b (fewest invented SEARCH texts first). 0.15.0 (pillar autonomy, agent_issues 1834/2313/2496/2499/2506): CODE-LOOP-2X-1 (owner directive 2026-10-13, "quickened/increased a minimum of 100%") doubles the cron tick to 40 s / 16 steps (caps 50 s / 24), issue intake to 4 per tick and PLAN_WIP to 6; EDITS-OVERLAP-RESOLVE-1 drops an edit that repeats a change an overlapping edit already makes and names both edits and the shared line for any other overlap (was a bare "edits overlap"); SEARCH-ELISION-1 says a SEARCH that abbreviates with "..." can never match; SYNTAX-HINT-1 adds to a verify SyntaxError the edits that change the bracket balance and the lines that declare an already-declared identifier. 0.14.5 CLAIM-AT-RUN-1 (agent_issues 2491 CODE-QUEUE-CLAIM-HOLD-1, pillar autonomy): a code task takes its file claim at its first step, not at enqueue, and the claims sweep never takes or renews a claim for a queued task that has not started (step read, no attempt, no timeout retry) and releases one it still holds (event code-task.claim-unstarted); measured 2026-10-13 12:32Z, ct_47mzp4hr1ttd7o held file:qnfo-fleet-dashboard/worker.js from enqueue at 10:11Z, renewed to 13:32Z, before running a step. 0.14.4 EXEC-LOG-SIGNATURE-1 (agent_issues 2488): a proposal syntax check is logged by its label and the error it found, as status rejected, so three rejected drafts no longer read as one recurring orchestrator failure. 0.14.3 CODE-BACKOFF-SLA-1: the self-repair waits are 1 h and 2 h (the 6 h second wait broke the 180-minute code-task-stalled SLA). 0.14.2 CLAIM-HELD-IN-BACKOFF-1 (pillar autonomy): a queued task whose next attempt is over CLAIM_BACKOFF_MS (30 min) away releases its file claim (fail() at a SELF-REPAIR-1 backoff, the claims sweep for a task parked earlier) and the sweep never takes or renews a parked task's claim; on resume the task takes a new claim through claimEnsure and a refusal is the claim-held deferral, never a failure (measured 2026-10-13 07:34Z: ct_ne8sjnxe748hiz held file:qnfo-research-exec/worker.js from 01:30:55Z, renewed 4 times to 08:50:56Z, while queued in backoff to 11:50:55Z, so every session was refused the file, e.g. the security fix of agent_issues 2432).
 // 0.14.1 BACKLOG-DRIVER-PULLER-1 (agent_issues 2362): intake reads code-task issues in v_issue_queue_v2 order, with the priority/id order as fallback. 0.14.0 WORKER-TIMER-GATE-1 (#2379, pillar autonomy): a proposal that adds setInterval, or setTimeout with a literal delay of a minute or more, goes back to the next rung once with the reason (three goal-review refusals of 2026-10-12 scheduled the work with a timer that never fires in a Worker); test files are not judged. 0.13.0 CONTROL-PLANE-FUNCTIONAL-CANARY-1 (#2176, pillar autonomy): the planner and intake accept qnfo-ai and qnfo-gateway (PLAN_LOOP_CANARIED), the two control-plane workers whose canonical deploy runs a functional canary with an automatic revert; the verifier workers and the scorer host stay on PLAN_DENY_WORKERS. 0.12.4 GOAL-ROOM-1 (#2378, re-applied from PR 997, closed unmerged after its base PR 960 squash-merged): one GOAL_MAX of 6000 chars for validTask, the planner and the intake body cut (was 2000 / 1500); measured on code_tasks 2026-10-12, clipped goals failed 57% vs 21% under 1500 chars. 0.12.3 READ-KEEPS-REPAIR-1: the read step keeps ctx.repair_round, ctx.lastError and ctx.refusal, so a repair sent back to read stays bounded and the model sees the refusal. 0.12.2 EDITS-RESOLVED-1: edits that applied through a tolerant match are parked as the file's own text, so the publisher's rebuild and the merge runner's REBASE-INTEGRITY-1 can re-apply them. 0.12.1: INTAKE-ANCHOR-INHERIT-1 (each push of the pull request that changes the bundle carries a bump, as version-bump-guard requires). 0.12.0 (2026-10-12, pillar autonomy; issues 2074, 2008, 2007, 1834, 2313, 2168; from the last 40 failed code_tasks rows) MULTI-FILE-CODE-TASKS-1: a task may carry up to 3 companion files (the worker's tests, a file of its directory, a migrations/*.sql) edited under FILE: lines and parked in one patch (ctx.paths); intake takes a multi-path code-task line once ops_config code_merge_multi_file is on. DANGLING-REF-GATE-1: a proposal that calls a function defined nowhere, or removes a declaration still in use, goes back to the next rung once (6 of 12 goal-review refusals). REPAIR-SHOWS-EDITS-1: a retry after edits that applied shows the model those edits. WINDOW-LONG-LINE-1: the window no longer stretches to the ends of very long lines (ct_i03tgmilanmuzk saw 128,767 chars). VERIFY-DEFER-PUBLISHER-1: a JavaScript proposal this worker cannot verify goes to the publisher (node --check and the suites) instead of needs_human. GOAL-VERSION-1: a goal that names the next VERSION gets it. INTAKE-ANCHOR-INHERIT-1: a retry starts from its earlier task's anchor. ANCHOR-KEYWORD-FALLBACK-1: a failed locator pick or call falls back to the unique line holding the goal's keyword. Ids from crypto.getRandomValues, constant-time bearer check, bounded raw read. // 0.11.0 SEARCH-FUZZY-1 (2026-10-12, pillar autonomy): a SEARCH absent exactly and with indentation ignored still applies when it differs only in whitespace runs, smart quotes/dashes, nbsp or blank lines and matches uniquely (event code-task.edit-fuzzy); a true miss names the closest file lines so the next rung copies them. 0.10.0 INTAKE-WINDOW-1 (2026-10-11): 0.10.0 INTAKE-WINDOW-1 (2026-10-11): the three-tasks-per-issue cap counts only the last 3 days, so issues exhausted before the code loop improved are taken again. // 0.9.0 D1-TRIGGER-DEPTH-1 (2026-10-08, pillar autonomy): the */10 fleet-cron tick inserts the qnfo-audit fleet_tick row itself (the D1 trigger feeders made cron-log and heartbeat writes nest past D1's 10-level limit) and records a failed tick as a fleet-cron-tick-error event instead of swallowing it. 0.8.0 EDIT-INDENT-TOLERANT-1 (2026-10-07, pillar autonomy, agent_issues 2111; FAILURE-AUDIT-1 by session_013sMN4): a SEARCH block that differs from the shown content only in indentation (13 of 56 code-task failures in 7 days, rung 1 indents by 6 where the file has 4) is matched line by line with each line trimmed, only when it occurs 0 times exactly and exactly once trimmed; the REPLACE lines are re-indented by swapping the SEARCH indent prefix for the file one, audited as code-task.edit-indent. Also from the PR 756 review: a provider timeout is retried only in the read and propose steps, and ctx.timeouts resets once a propose answers. // 0.7.0 TIMEOUT-RETRY-1 + FOLDED-TARGET-REDIRECT-1 + ORCH-NEURON-ATTR-1 (2026-10-07, pillars autonomy and cost, issues 2099, 2102 and 2097; the third: every ladder call is counted in ai_call_counters, which workers_ai_attribution_coverage_pct reads, so the loop's ~30k neurons a day are attributed): a Workers AI request timeout (3046) no longer costs a task an attempt or a round: the same attempt runs again on the next rung after TIMEOUT_WAIT_MS, at most TIMEOUT_MAX times per task (11 of the 21 code-task failures from 2026-10-06 18:00Z to 2026-10-07 08:10Z were "step threw: 3046: Request timeout"); and a task whose path names a FOLDED worker is rewritten to the host that carries its code (worker_removals action folded, host live in service_registry) at enqueue and at intake, instead of a RETIRED-TARGET-1 refusal (issue 2027 was done by hand that way). // 0.5.0 CI-FEEDBACK-1 (2026-10-07, pillar autonomy): an intake retry puts the previous task's failure (its merge_note or last_error, which qnfo-fleet-control 0.8.0 fills with the failing suites and assertion lines of a failed check) at the head of the goal, ahead of the issue body, which is cut to fit the 2000-char goal; before this a retry asked for the same change with nothing about why the last one failed. 0.4.1 CLAIMS-CTX-1 (2026-10-06, pillar autonomy, fix to CLAIMS-FIRST-1 of 0.3.21): the claim token now survives every step. The tick stepped the row it had read before claimEnsure saved the claim, and the read step rebuilt ctx without it, so from the first step on every acquire went out without the token and the guard refused it as held by the task itself (its own lease), CLAIM_WAIT_MS at a time until the 2h lease lapsed; measured 2026-10-06 14:00Z to 19:00Z on ct_we0i8w9v2kmpjp, ct_yop1itun7a9ulz, ct_qjjo05t4elayld and ct_2klffxr2t0uhlh (code-task.claim-held "held by qnfo-code-orchestrator:<itself>"). claimEnsure updates the in-memory row, the read step and the large-file re-read carry ctx.claim, and claims-first.test.mjs now models the guard's refusal of a token-less acquire against a live lease. // 0.4.0 (2026-10-06, pillar autonomy; owner directive 2026-10-06: more flexibility and autonomy, proceed with all changes) three capabilities, each with its own audit event kind. LARGE-FILE-WINDOW-1 (agent_issues 2073, transformation lever T1.22): a file over MAX_PATCH_FILE_CHARS (900k chars, the D1 row bound) is edited from its anchor window alone; the task row keeps the window text and offsets, never the base; every later step re-reads main (baseFor) and finds the window again, a window that moved is re-located, one that vanished re-reads the file from the anchor at most LARGE_REREADS times (code-task.reread), then needs_human; qnfo-research-exec (1.03M chars, issue 2052 ended "too large for the loop") and qnfo-agent-ws (2.4M) become editable, and the planner may plan them (PLAN_FILE_MAX). ANCHOR-LOCATOR-1 (agent_issues 2007 second half, human_actions 60): an anchor that still occurs 0 or 2+ times after ANCHOR-REPAIR-1, or a file over MAX_FILE_CHARS filed without one, gets one pick by the cheapest rung among the lines near the goal's keywords (locateAnchor, code-task.anchor-located); a pick that occurs exactly once is the anchor, otherwise the task parks exactly as before. CODE-TASK-PREFLIGHT-1 (agent_issues 2067, T1 lever 15+; session_013sMN4): intake reads the target from main once before it creates a task and refuses, with no model call and no code_tasks row, a task that cannot succeed: the file is over MAX_LARGE_FILE_CHARS, or the issue key already shipped in fleet_changelog within 72h; the issue keeps its target as a session-task line with a dated reason (lever 15 routing). An anchor that occurs 0 times is repaired at intake (ANCHOR-REPAIR-1); the other anchor cases are left to the read step, where the locator makes its pick. // 0.3.23 INTAKE-DEPENDS-1 (2026-10-06, pillar autonomy): an issue whose description carries a "depends-on: #N" line is not taken by intake until agent issue N is no longer open (audited once as code-task.intake-waiting); an unreadable dependency waits too. A sequenced change (one change per component, rule 7) then starts on its own when its predecessor closes, instead of starting early or waiting on a session. // 0.3.22 (2026-10-06): CLAIMS-FIRST-1's claim calls go over the DEPLOY_GUARD service binding only (wrangler.toml [[services]]; code-loop-test counts every outbound fetch of a keyless read), bumped because version-bump-guard requires a bump per byte change. 0.3.21 CLAIMS-FIRST-1 (2026-10-06, pillar autonomy, transformation lever T1.14): the loop takes the WORK-CLAIM-1 claim on a task's file through qnfo-deploy-guard /work-lock (owner qnfo-code-orchestrator:<task>, intent = the goal) when the task is enqueued, before every step and on every tick while the task waits on the publisher or the merge runner, and releases it with the pull request and the outcome when the task ends; a session's acquire then reads 409 with the task as holder, and a task whose file a session holds waits (lease CLAIM_WAIT_MS, code-task.claim-held) instead of building against a file about to change (measured 2026-10-06: most of the 48 unmerged tasks of 30 days were superseded by a session's PR on the same file or stale against it). 0.3.20-intake-provenance 0.3.20 (2026-10-06, pillar autonomy, docs/TRANSFORMATION-PROGRAM.md T1): INTAKE-PROVENANCE-1, intake applies the merge runner's trusted-origin rule (ops_config code_merge_trusted_sources, else the same default as qnfo-fleet-control CM_TRUSTED_SOURCES) before any model call, so an issue from an untrusted source is a session task at once (ct_w4bx54dabidh09, issue 1641 from qnfo-ops-deep-sweep-2026-09-30, was built and then refused for provenance: a model call and a failed row in code_task_success_rate_30d); CODE-TASK-REINTAKE-1 (agent_issues 2021), a code-task issue whose last task ended closed, failed or needs_human is taken again after INTAKE_RETRY_COOLDOWN_MS (6 h), at most INTAKE_MAX_TASKS (3) tasks per issue, never after a review rejection, a no-op refusal or a supersession, and never while a task is in flight or after one merged; the goal keeps "[issue #N]" first and adds "[retry k]". 0.3.19 (2026-10-06, pillar autonomy, docs/TRANSFORMATION-PROGRAM.md 1.2): JS-VERIFY-PARSE-SHAPE-1, a V8 parse-error message that crosses the sandbox boundary without its SyntaxError class ("Unexpected identifier '__name'", ct_lc6has32addg0m 07:41Z) is a failed proposal the next rung retries with the error, not an unverified one that ends needs_human; ANCHOR-REPAIR-1 (T1 lever 4, agent_issues 2007), an anchor that no longer occurs in the file is repaired without a model call (its whitespace-normalised text, else its longest line that occurs exactly once) instead of ending the task needs_human; SCORER-HOST-DENY-1, PLAN_DENY_WORKERS names qnfo-observability, which hosts the folded autonomy scorer since SCORER-FOLD-1, so the loop never plans a change to the formula that grades it; MERGE-SCOPE-INTAKE-1, a qnfo-workers task on a PLAN_DENY_WORKERS worker (the merge runner never opens or merges its pull request) is refused before any model call, and an issue that asked for one has its code-task line turned into a session-task line with the reason (ct_u4ih8uzgsfxzvm and ct_rwqd5kegl1awi4 were built and then refused on 2026-10-06, each one a model call and a failure in code_task_success_rate_30d, the metric wave W0 of the transformation program waits on). 0.3.18 FLEET-EXEC-FOLD-1 (agent_issues 1756, pillar cost): fleet-exec runs here as a member on the */10 tick (fleetExecMod; AUDIT_DB and AI only), GET /fleet-exec/health; its script is deleted after this is live. 0.3.17 NOOP-PROPOSAL-GATE-1 (agent_issues 2018, TP-1e, pillar autonomy): a JavaScript proposal whose changed lines (VERSION aside) are the same code once string-literal contents and comments are removed, and whose new text is prose, is refused before verify with a reason the next rung reads (cloud_ops_events kind code-task.noop-refused); a second no-op in a row ends the task needs_human instead of a PR. On 2026-10-06 ct_r3k9lrbd7oijxr (#2006) and ct_5fibb664gtvew4 (#2007) each answered a feature goal with a 2-line paraphrase of a string on the anchor line, parsed, verified and reached ready_to_publish; a session review was the only stop. A string whose new value is code-like (a model id, SQL, a URL, a key) still passes. 0.3.16 CODE-DISPATCH-DEDUPE-1 (agent_issues 1876, 1834): a new code task is refused while the same repo file (or its deployed-current mirror) has an unfinished code task or a live session work claim (qnfo-audit.work_claims, the ledger GET /work-locks reads), and the planner skips such an issue before its model call; RETIRED-TARGET-1: a <dir>/worker.js that is not a live worker in service_registry (RETIRED or FOLDED) is refused, because the canonical deploy skips it; VERSION_DECL accepts `VERSION="x"` without spaces and without a semicolon (qnfo-email, qnfo-gateway); 0.3.15 PRIORITY-QUEUE-1: code-task intake takes issues in master-queue order (critical, high, medium, low, then oldest), not creation order (owner directive 2026-10-03; v_issue_queue); 0.3.14 PLAN-DENY-NEGATION-1: the issue planner refuses an issue that asks to raise a cap, rotate a secret or delete, not one whose advice forbids it ("never raise a cap"; agent_issues 1807; 0.3.13 was the rejected code task ct_fd830vzqefw1ti); 0.3.12 PLAN-WIP-HANDOFF-1: tasks waiting on the merge runner no longer lock the issue planner out (agent_issues 1788); 0.3.11 JS-VERIFY-RUNTIME-SHAPE-1: a runtime error that reaches the verifier as a bare V8 message (no class name) still means the module parsed; 0.3.10 REACH-IDEA-TRUST-1: REACH-IDEA-1 issues filed by qnfo-fleet-control REACH-IDEATION-1 are planner-trusted; // 0.3.9 CLAIM-AGE-1: a queued task waiting 20 min is claimed first, so retries cannot starve behind new intake; 0.3.8 JS-VERIFY-FAIL-CLOSED-1: unknown JS start failures stop for review instead of passing as syntax OK (#445); 0.3.7 SELF-REPAIR-1: exhausted model attempts retry with backoff, then file a fleet issue, never an owner card; 0.3.6 PATCH-MODE-LIVE-1 (code task ct_patchproof20261002, #431); 0.3.5 ISSUE-PLANNER-2: refusals no longer use a tick or the daily model cap; 0.3.4 ISSUE-PLANNER-1: prose issues from trusted sources become code tasks (one per tick); 0.3.3 frontier rungs (ACT-BRIDGE-1); 0.3.2 HUNK-NO-EOL-1
 const WORKER = "qnfo-code-orchestrator";
 const CODE_AGENT = "https://qnfo-code-agent.q08.workers.dev";
@@ -243,7 +246,11 @@ const TICK_LANES = 8;
 // budget is spent, recording ONE code-task.spend-cap event per hour. ops_config code_loop_daily_calls tunes it without a deploy;
 // the default is sized from the measured 2026-10-17 cost (39 calls = $0.42, so ~$0.011 a call: 1500 calls is about $16 a day).
 const DAILY_MODEL_CALLS_DEFAULT = 1500;
-const LEASE_MS = 90000;
+// LEASE-FENCE-1 (0.18.23): was 90 s. Measured in ai_call_counters 2026-10-18/19, a ladder call averages 44 s (gpt-oss-120b), 106 s
+// (kimi-k2.7-code) and 175 s (glm-5.3), so most propose steps outlived their lease and a second lane ran the same step: two model
+// calls for one attempt, and the slower lane overwrote the faster one. Five minutes covers the slowest rung's average; a crashed
+// lane's task is claimable again well inside the 10-minute step SLA. saveFenced() stays the guard for the calls that run longer.
+const LEASE_MS = 300000;
 // TIMEOUT-RETRY-1 (0.6.0, issue 2099): a provider timeout is not a verdict on the proposal. Workers AI error 3046 ("Request
 // timeout") was 11 of the 21 code-task failures from 2026-10-06 18:00Z to 2026-10-07 08:10Z, each costing an attempt and, at
 // the third, a round's backoff, so latency alone exhausted ladders. A step that throws a timeout keeps its attempt count,
@@ -298,7 +305,11 @@ const DEFAULT_LADDER = ["@cf/moonshotai/kimi-k2.7-code", "@cf/zai-org/glm-5.3", 
 // given the 8192 default, so on a full-file prompt its thought consumed the budget and content came back empty: 13 of the
 // 30-day failures read "no SEARCH/REPLACE block found in the reply: the reply was empty", all on this rung. A live probe
 // (2026-10-18) shows it emits a correct SEARCH/REPLACE block when content has room. It gets the same 16k as the others.
-const REASONING_OUT = { "@cf/moonshotai/kimi-k2.7-code": 16384, "@cf/zai-org/glm-5.3": 16384 };
+// KIMI-OUT-UNDER-CEILING-1 (0.18.24, 2026-10-19): kimi-k2.7-code decodes at 41.7 tokens/s (ai_call_counters, 172 calls since
+// 2026-10-17: 4639 output tokens a call), so any reply past about 10k tokens reaches the 240 s ceiling (3046) and the 16k budget
+// only bought timeouts: 445 code-task.timeout events from 2026-10-18 07:00Z to 2026-10-19 07:00Z, 139 of them on the first try, where kimi is the rung. 9216 tokens
+// finish in about 221 s. glm-5.3 decodes at 79 tokens/s, so its 16k (about 207 s) stays.
+const REASONING_OUT = { "@cf/moonshotai/kimi-k2.7-code": 9216, "@cf/zai-org/glm-5.3": 16384 };
 const LADDER_RATES = { "@cf/openai/gpt-oss-120b": [31818, 68182], "@cf/moonshotai/kimi-k2.7-code": [86364, 363636], "@cf/zai-org/glm-5.3": [127273, 400000], "@cf/meta/llama-3.3-70b-instruct-fp8-fast": [26668, 204805] };
 const DENY_PATH = /^(\.github\/|\.git\/)|(^|\/)(wrangler\.toml|deploy-targets\.txt|\.env[^/]*)$/i;
 const VERIFIABLE = ["py", "json", "md", "txt"];
@@ -314,6 +325,19 @@ async function ensureSchema(env) {
     "CREATE TABLE IF NOT EXISTS code_tasks (id TEXT PRIMARY KEY, repo TEXT NOT NULL, path TEXT NOT NULL, goal TEXT NOT NULL, " +
     "status TEXT NOT NULL DEFAULT 'queued', step TEXT NOT NULL DEFAULT 'read', attempts INTEGER NOT NULL DEFAULT 0, " +
     "model TEXT, ctx TEXT, branch TEXT, pr_url TEXT, last_error TEXT, lease_until TEXT, created_at TEXT NOT NULL, updated_at TEXT NOT NULL)"
+  ).run();
+  // CTX-JSON-1 (0.18.19, 2026-10-18): code_tasks.ctx is JSON -- the claims sweep reads it with json_extract -- and one
+  // row carrying 11112 chars of prose (ct_plain_language_1) made every sweep query throw, which stopped the
+  // finished-task release and deferred four tasks on every tick until the row was repaired by hand. The read side now
+  // tolerates it (CTX-JSON-GUARD-1, 0.18.18); this refuses the write at its source, so a bad row fails where it is
+  // written instead of hours later in a loop that merely looks quiet. Both are kept: the writer may be outside this
+  // worker (that row was inserted by hand, id ct_plain_language_1, created 20:00:00Z, attempts 0), and a reader that
+  // must not fall over is a different guarantee from a writer that must not be wrong.
+  await env.AUDIT_DB.prepare(
+    "CREATE TRIGGER IF NOT EXISTS code_tasks_ctx_json_ins BEFORE INSERT ON code_tasks FOR EACH ROW WHEN NEW.ctx IS NOT NULL AND json_valid(NEW.ctx) = 0 BEGIN SELECT RAISE(ABORT, 'CTX-JSON-1: code_tasks.ctx must be JSON text (the claim sweep reads it with json_extract); put prose in goal or last_error'); END"
+  ).run();
+  await env.AUDIT_DB.prepare(
+    "CREATE TRIGGER IF NOT EXISTS code_tasks_ctx_json_upd BEFORE UPDATE OF ctx ON code_tasks FOR EACH ROW WHEN NEW.ctx IS NOT NULL AND json_valid(NEW.ctx) = 0 BEGIN SELECT RAISE(ABORT, 'CTX-JSON-1: code_tasks.ctx must be JSON text (the claim sweep reads it with json_extract); put prose in goal or last_error'); END"
   ).run();
   // SINGLE-FLIGHT-1 (0.18.2): one tick at a time. The scheduler now fires every minute while a tick may run ~45 s, so a
   // slow tick and the next one could overlap; the row is the mutex and its expiry is the crash recovery.
@@ -347,6 +371,24 @@ async function save(env, id, f) {
   const vals = keys.map(function (k) { return f[k]; }).concat([iso(), id]);
   const st = env.AUDIT_DB.prepare("UPDATE code_tasks SET " + sets + " WHERE id=?");
   await st.bind.apply(st, vals).run();
+}
+// LEASE-FENCE-1 (0.18.23): claim() hands a lane the row with a fresh lease_until; a step's model call can outlast LEASE_MS, the
+// lease lapses, and a second lane claims the same row. Both used to write it unconditionally, so the slower lane's save (step
+// verify, a ctx without the patch) landed on a task the faster lane had already made ready_to_publish, and the publisher failed
+// it with "task has no patch in ctx.patch". saveFenced writes only while the row is still queued under the lease this lane
+// holds; it returns false (nothing written) when another lane or a terminal status got there first.
+async function saveFenced(env, id, f, lease) {
+  const keys = Object.keys(f);
+  const sets = keys.map(function (k) { return k + "=?"; }).concat(["updated_at=?"]).join(", ");
+  const vals = keys.map(function (k) { return f[k]; }).concat([iso(), id, lease == null ? null : String(lease)]);
+  const st = env.AUDIT_DB.prepare("UPDATE code_tasks SET " + sets + " WHERE id=? AND status='queued' AND lease_until IS ?");
+  const r = await st.bind.apply(st, vals).run();
+  return !!(r && r.meta && r.meta.changes > 0);
+}
+function leaseLostError(id, lease) {
+  const e = new Error("LEASE-FENCE-1: " + id + " was taken over by another lane (lease " + (lease || "none") + " no longer holds); this step's writes are dropped");
+  e.leaseLost = true;
+  return e;
 }
 // ---- CLAIMS-FIRST-1:BEGIN (0.3.21, transformation lever T1.14, pillar autonomy) ----
 // Measured 2026-10-06 over the 64 code tasks of 30 days: 16 merged; most of the 48 others ended superseded by a session's
@@ -460,17 +502,24 @@ function claimUnstarted(task) {
   if (String(task.status || "") !== "queued" || String(task.step || "read") !== "read" || Number(task.attempts || 0) !== 0) return false;
   return !(Number(getCtx(task).timeouts || 0) > 0);
 }
-const UNSTARTED_SQL = "(status = 'queued' AND COALESCE(step, 'read') = 'read' AND COALESCE(attempts, 0) = 0 AND COALESCE(json_extract(ctx, '$.timeouts'), 0) = 0)";
+// CTX-JSON-GUARD-1 (0.18.18, 2026-10-18): one row with prose in the JSON ctx column (ct_plain_language_1, 11112 chars)
+// made json_extract throw for every claimsSweep query on every tick. The sweep runs its lanes first, so the first two
+// loops still emitted events while the finished-task release never ran: ct_im2936 stayed superseded and held
+// file:qnfo-fleet-dashboard/worker.js, deferring ct_im2924, ct_im2727, ct_im2935 and ct_ndnfg4kxco2hlr on every tick
+// from 20:18Z until the row was repaired at 20:46Z (the release landed 20:49:26Z). A malformed row may cost its own
+// claim; it may never cost everyone else's. JCTX makes every json_extract in this sweep read an empty object instead.
+const JCTX = "(CASE WHEN json_valid(ctx) THEN ctx ELSE '{}' END)";
+const UNSTARTED_SQL = "(status = 'queued' AND COALESCE(step, 'read') = 'read' AND COALESCE(attempts, 0) = 0 AND COALESCE(json_extract(" + JCTX + ", '$.timeouts'), 0) = 0)";
 // ---- CLAIM-AT-RUN-1:END ----
 async function claimsSweep(env) {
   const out = { taken: 0, renewed: 0, held: 0, released: 0, parked: 0, unstarted: 0, errors: 0 };
-  const ph = CODE_TASK_DONE.map(function () { return "?"; }).join(",");
+  const ph = CLAIM_RELEASED.map(function () { return "?"; }).join(",");
   const nowMs = Date.now();
   const parkIso = new Date(nowMs + CLAIM_BACKOFF_MS).toISOString();
   // CLAIM-HELD-IN-BACKOFF-1: a parked task (queued, next attempt over CLAIM_BACKOFF_MS away) is neither taken nor renewed here.
   // CLAIM-AT-RUN-1: nor is a task that has not started; it takes its claim at its first step.
   const so = env.AUDIT_DB.prepare("SELECT id, path, goal, status, step, attempts, pr_url, lease_until, ctx FROM code_tasks WHERE status NOT IN (" + ph + ") AND NOT (status = 'queued' AND COALESCE(lease_until, '') > ?) AND NOT " + UNSTARTED_SQL + " ORDER BY updated_at ASC LIMIT " + CLAIM_SWEEP_MAX);
-  const open = await so.bind.apply(so, CODE_TASK_DONE.concat([parkIso])).all();
+  const open = await so.bind.apply(so, CLAIM_RELEASED.concat([parkIso])).all();
   for (const t of (open.results || [])) {
     const c = getCtx(t).claim || null;
     // FAIL-SIGNATURE-STOP-1 (0.16.0): a queued task whose claim was released (a backoff of any length) takes a fresh one at its
@@ -488,39 +537,46 @@ async function claimsSweep(env) {
   // tasks on that file, CROSS-FAMILY-1 (#2403) among them - the file looked busy while nothing could run on it. A
   // finished task never holds a claim now: 'superseded' joined CODE_TASK_DONE above, and any claim a finished task still
   // holds is released here, with its status as the outcome.
-  const st = env.AUDIT_DB.prepare("SELECT id, path, status, pr_url, ctx FROM code_tasks WHERE status IN (" + ph + ") AND json_extract(ctx, '$.claim.token') IS NOT NULL LIMIT 25");
-  const stale = await st.bind.apply(st, CODE_TASK_DONE).all();
+  const st = env.AUDIT_DB.prepare("SELECT id, path, status, pr_url, ctx FROM code_tasks WHERE status IN (" + ph + ") AND json_extract(" + JCTX + ", '$.claim.token') IS NOT NULL LIMIT 25");
+  // CLAIMS-BIND-COUNT-1 (0.18.21): ph holds one marker per CLAIM_RELEASED entry. This bind said CODE_TASK_DONE, so after
+  // 0.18.20 added 'published' the statement had 8 markers and 7 values: node:sqlite binds the gap as NULL and every suite
+  // passed, while production D1 answers "Wrong number of parameter bindings for SQL query." and threw on every tick, which
+  // killed this loop and the three that follow it. Bind the same list the markers came from.
+  const stale = await st.bind.apply(st, CLAIM_RELEASED).all();
   for (const t of (stale.results || [])) {
     const c = getCtx(t).claim || null;
     if (!c || c.released_at) continue;
     const r = await claimRelease(env, t, c, claimOutcome(t.status));
     if (r && r.ok) { c.released_at = iso(); c.outcome = claimOutcome(t.status); c.release_status = r.status; await claimSave(env, t.id, c); out.released++; }
-    else out.errors++;
+    // CLAIMS-ERROR-VISIBLE-1 (0.18.21): a refused release used to be a silent out.errors++. ct_6stuyid3pw7mfz sat
+    // 'merged' from 21:03Z holding file:qnfo-fleet-dashboard/worker.js and nothing anywhere recorded why.
+    else { out.errors++; await audit(env, "code-task.claim-release-error", t.id + " " + String((c && c.key) || "") + " release refused (HTTP " + (r && r.status) + ")", { id: t.id, status: r && r.status }, "error"); }
   }
   // CLAIM-HELD-IN-BACKOFF-1: a parked task that still holds its claim (parked before 0.14.2, or a release that did not reach
   // the guard) lets go of it now.
-  const sp = env.AUDIT_DB.prepare("SELECT id, path, status, pr_url, lease_until, ctx FROM code_tasks WHERE status = 'queued' AND COALESCE(lease_until, '') > ? AND json_extract(ctx, '$.claim.token') IS NOT NULL AND json_extract(ctx, '$.claim.released_at') IS NULL ORDER BY updated_at ASC LIMIT " + CLAIM_SWEEP_MAX);
+  const sp = env.AUDIT_DB.prepare("SELECT id, path, status, pr_url, lease_until, ctx FROM code_tasks WHERE status = 'queued' AND COALESCE(lease_until, '') > ? AND json_extract(" + JCTX + ", '$.claim.token') IS NOT NULL AND json_extract(" + JCTX + ", '$.claim.released_at') IS NULL ORDER BY updated_at ASC LIMIT " + CLAIM_SWEEP_MAX);
   const parked = await sp.bind(parkIso).all();
   for (const t of (parked.results || [])) {
     const r = await claimPark(env, t, getCtx(t).claim, t.lease_until);
     if (r && r.ok) out.parked++; else if (r) out.errors++;
   }
   // CLAIM-AT-RUN-1: an unstarted task that still holds a claim (taken at enqueue before 0.14.5) lets go of it.
-  const su = env.AUDIT_DB.prepare("SELECT id, path, status, step, attempts, pr_url, lease_until, ctx FROM code_tasks WHERE " + UNSTARTED_SQL + " AND json_extract(ctx, '$.claim.token') IS NOT NULL AND json_extract(ctx, '$.claim.released_at') IS NULL ORDER BY updated_at ASC LIMIT " + CLAIM_SWEEP_MAX);
+  const su = env.AUDIT_DB.prepare("SELECT id, path, status, step, attempts, pr_url, lease_until, ctx FROM code_tasks WHERE " + UNSTARTED_SQL + " AND json_extract(" + JCTX + ", '$.claim.token') IS NOT NULL AND json_extract(" + JCTX + ", '$.claim.released_at') IS NULL ORDER BY updated_at ASC LIMIT " + CLAIM_SWEEP_MAX);
   const idle = await su.all();
   for (const t of (idle.results || [])) {
     const r = await claimPark(env, t, getCtx(t).claim, null, true);
     if (r && r.ok) out.unstarted++; else if (r) out.errors++;
   }
-  const sf = env.AUDIT_DB.prepare("SELECT id, path, status, pr_url, ctx FROM code_tasks WHERE status IN (" + ph + ") AND json_extract(ctx, '$.claim.token') IS NOT NULL AND json_extract(ctx, '$.claim.released_at') IS NULL ORDER BY updated_at DESC LIMIT " + CLAIM_SWEEP_MAX);
-  const fin = await sf.bind.apply(sf, CODE_TASK_DONE).all();
+  const sf = env.AUDIT_DB.prepare("SELECT id, path, status, pr_url, ctx FROM code_tasks WHERE status IN (" + ph + ") AND json_extract(" + JCTX + ", '$.claim.token') IS NOT NULL AND json_extract(" + JCTX + ", '$.claim.released_at') IS NULL ORDER BY updated_at DESC LIMIT " + CLAIM_SWEEP_MAX);
+  const fin = await sf.bind.apply(sf, CLAIM_RELEASED).all();
   for (const t of (fin.results || [])) {
     const c = getCtx(t).claim;
     if (!c || !c.token || c.released_at) continue;
     const r = await claimRelease(env, t, c);
     c.released_at = iso(); c.release_status = r.status; c.outcome = claimOutcome(t.status);
     await claimSave(env, t.id, c);
-    if (r.ok) out.released++; else out.errors++;
+    if (r.ok) out.released++;
+    else { out.errors++; await audit(env, "code-task.claim-release-error", t.id + " " + String(c.key || "") + " release refused (HTTP " + r.status + ")", { id: t.id, status: r.status }, "error"); }
   }
   return out;
 }
@@ -534,6 +590,15 @@ async function claimsSweep(env) {
 // store, not a second one). Intake retries a refused code-task line on the next tick; the planner skips the issue before its
 // model call and does not record it, so it is planned once the file is free.
 const CODE_TASK_DONE = ["merged", "closed", "superseded", "publish_failed", "needs_human", "failed", "reverted"]; // = qnfo-deploy-guard CODE_TASK_DONE
+// CLAIM-PUBLISHED-RELEASE-1 (0.18.20, 2026-10-18): "published" is not in CODE_TASK_DONE and must not be - that list also
+// decides whether a file is busy for CODE-DISPATCH-DEDUPE-1 (a second task on a file with an unmerged PR is exactly what
+// it prevents) and whether a retry is refused as "in flight". But a published task will never edit the file again, and the
+// sweep renewed its claim for ever: measured 21:13Z, ct_im2925 published at 13:55:57Z still held
+// file:qnfo-social/worker.js and deferred 9 tasks 104 times in 28 minutes; the four contended files (social 104,
+// research-exec 69, gateway 65, fleet-dashboard 50 deferrals) are all held by published or ready_to_publish tasks. This
+// list is used ONLY by claimsSweep, to stop renewing a finished task's claim and to release it, so the file-busy and
+// in-flight semantics above are untouched.
+const CLAIM_RELEASED = CODE_TASK_DONE.concat(["published"]);
 function taskPaths(path) {
   const m = /^([a-z0-9][a-z0-9-]*)\/(?:deployed-current\.)?worker\.js$/.exec(String(path || ""));
   return m ? [m[1] + "/worker.js", m[1] + "/deployed-current.worker.js"] : [String(path || ""), String(path || "")];
@@ -678,7 +743,9 @@ async function foldedHost(env, repo, path) {
 // spent 8 attempts, then failed with "path scripts/remediation_consumer.py is outside the auto-merge scope".
 const CM_SCRIPT_DENY = /(guard|gate|lint|deploy|raw_put|run-suites|apply_migrations|code-task|canary_revert|remediation|secret|selftest|_test\.py$|[-.]test\.mjs$)/i;
 function mergeScopeWhy(repo, path) {
-  if (String(repo) !== "qnfo-workers") return null;
+  // MERGE-SCOPE-AT-READ-1 (0.18.22): an owner-qualified slug ("QNFO/qnfo-workers", written by a direct D1 dispatcher) is
+  // the same repository; before this it returned null and the scope rule never applied to those rows.
+  if (repoSlug(repo) !== "qnfo-workers") return null;
   const p = String(path || "");
   const m = /^([a-z0-9][a-z0-9-]*)\/(?:deployed-current\.)?worker\.js$/.exec(p);
   if (m) return PLAN_DENY_WORKERS.indexOf(m[1]) >= 0 ? m[1] + " is a control-plane or code-loop worker: the merge runner never opens or merges its pull request (CM_DENY, human_actions 21)" : null;
@@ -1683,10 +1750,11 @@ const RAW_OWNER = "QNFO";
 // code-agent branch ran first) and 16 queued tasks could not read the file they were planned on - CROSS-FAMILY-1
 // (ct_im2403) among them, which is why PR #2113's rebuild never produced a successor PR. The slug is now normalized
 // at intake and at read, so a legacy row reads and a future owner-qualified row cannot wedge the loop.
+// REPOSLUG-UNIFORM-1 (0.18.24, agent_issues 100062): only the QNFO owner is stripped, as code-task-publish.py repo_slug(),
+// qnfo-fleet-control cmRepoSlug() and the code_tasks triggers do, and every repeat of it (QNFO/QNFO/qnfo-workers, agent_issues
+// 100050); another owner (other/qnfo-workers) stays as written, so the raw read refuses it instead of reading this repository.
 function repoSlug(repo) {
-  const r = String(repo == null ? "" : repo).trim().replace(/^\/+|\/+$/g, "");
-  const m = /^[A-Za-z0-9._-]+\/([A-Za-z0-9._-]{1,100})$/.exec(r);
-  return m ? m[1] : r;
+  return String(repo == null ? "" : repo).trim().replace(/^\/+|\/+$/g, "").replace(/^(?:qnfo\/)+/i, "");
 }
 async function readRepoFile(env, repo, path, maxChars) {
   repo = repoSlug(repo);
@@ -1854,6 +1922,16 @@ async function fileLoopIssue(env, task, msg, attempts, sig) {
 // ONE bounded step. Returns the task's new state; never throws (a throw becomes a recorded failed attempt).
 async function stepTask(env, task) {
   const ctx = getCtx(task);
+  // LEASE-FENCE-1: every write of this step is fenced on the lease this lane was handed; tsave follows the lease the step itself sets.
+  let fence = task.lease_until == null ? null : task.lease_until;
+  const tsave = async function (f) {
+    if (!(await saveFenced(env, task.id, f, fence))) throw leaseLostError(task.id, fence);
+    if (Object.prototype.hasOwnProperty.call(f, "lease_until")) fence = f.lease_until == null ? null : f.lease_until;
+  };
+  const leaseLost = async function (e) {
+    await audit(env, "code-task.lease-lost", task.id + " " + task.step + ": " + String(e.message).slice(0, 300), { id: task.id, step: task.step, lease: fence }, "retry");
+    return { ok: false, dead: false, lease_lost: true, error: String(e.message) };
+  };
   // terminal = a refusal no model can fix (needs_human). Otherwise the attempt counts toward a round of MAX_ATTEMPTS: inside a round
   // the next rung runs at once; at a round's end the task waits RETRY_BACKOFF_MS (lease_until, which claim() honours) and, after the
   // last round, is 'failed' with one fleet issue (SELF-REPAIR-1).
@@ -1861,14 +1939,25 @@ async function stepTask(env, task) {
   const noopRefuse = async function (env2, task2, ctx2, model, why) {
     ctx2.lastError = why; ctx2.noop = (ctx2.noop || 0) + 1; ctx2.edits = []; delete ctx2.proposal;
     if (Array.isArray(ctx2.x)) ctx2.x.forEach(function (x) { delete x.edits; });
-    await save(env2, task2.id, { ctx: JSON.stringify(ctx2) });
+    await tsave({ ctx: JSON.stringify(ctx2) });
     const last = ctx2.noop >= NOOP_MAX;
     await audit(env2, "code-task.noop-refused", task2.id + " " + model + " (" + ctx2.noop + " of " + NOOP_MAX + "): " + why.slice(0, 160), { id: task2.id, model: model, n: ctx2.noop, terminal: last }, last ? "error" : "retry");
     return await fail("model " + model + ": " + why + (last ? " [" + NOOP_MAX + " no-op proposals in a row: needs a person or a narrower goal]" : ""), last);
   };
   // settle: the accounting of failed attempt number `attempts` (fail() for a failure in this step; the step-start check for a
   // failure the publisher fed back, which already counted its attempt).
+  // MODEL-ATTRIBUTION-1 (0.18.16): code_tasks.model was written only where a proposal built ("model: model" on the way
+  // to verify), so a task that failed at propose kept model=NULL: 8 of the 14 distinct failures in the 24h to
+  // 2026-10-18T20:26Z, and four of those named a model in last_error anyway ("gpt-oss-120b returned no ```file block"
+  // x3, "glm-5.3: no SEARCH/REPLACE block" x1) - the attribution existed at failure time and was dropped. A rung's
+  // failure rate cannot be measured from that, which is the input the owner's ladder decision (card
+  // decide-code-loop-model-payment-2026-10-18) needs. `model` is block-scoped inside the propose branch below and
+  // settle() closes over this function, not that block, so the last rung tried is lifted here.
+  let attemptModel = null;
   const settle = async function (msg, terminal, attempts) {
+    // LEASE-FENCE-1: a lane that lost its lease files no handoff issue (ct_im100041 was handed off twice, 06:24:30Z and 06:25:01Z).
+    const held = await env.AUDIT_DB.prepare("SELECT 1 AS h FROM code_tasks WHERE id=? AND status='queued' AND lease_until IS ?").bind(task.id, fence).first();
+    if (!held) throw leaseLostError(task.id, fence);
     const round = Math.ceil(attempts / MAX_ATTEMPTS);
     // FAIL-SIGNATURE-STOP-1: the same signature SIG_REPEAT_MAX times in a row ends the task like the last round does.
     const ns = noteSig(ctx, msg, attempts);
@@ -1883,8 +1972,10 @@ async function stepTask(env, task) {
       note = sigStop ? " [FAIL-SIGNATURE-STOP-1: the same failure " + ns.streak + " attempts in a row (" + ns.sig + "); " + to + "]" : " [SELF-REPAIR-1: " + RETRY_ROUNDS + " rounds failed; " + to + "]";
     }
     const dead = !!(terminal || giveUp);
-    await save(env, task.id, { attempts: attempts, last_error: String(msg).slice(0, Math.max(100, 500 - note.length)) + note, lease_until: retryAt,
-      status: terminal ? "needs_human" : giveUp ? "failed" : "queued", step: dead ? task.step : (task.step === "verify" || task.step === "propose" ? "propose" : task.step) });
+    const f = { attempts: attempts, last_error: String(msg).slice(0, Math.max(100, 500 - note.length)) + note, lease_until: retryAt,
+      status: terminal ? "needs_human" : giveUp ? "failed" : "queued", step: dead ? task.step : (task.step === "verify" || task.step === "propose" ? "propose" : task.step) };
+    if (attemptModel) f.model = attemptModel; // the rung that answered, whether or not it produced a patch
+    await tsave(f);
     await env.AUDIT_DB.prepare("UPDATE code_tasks SET ctx=json_set(json_set(json_set(COALESCE(ctx,'{}'), '$.sigs', json(?)), '$.sig_n', ?), '$.last_new_sig_at', ?) WHERE id=?").bind(JSON.stringify(ctx.sigs), attempts, ctx.last_new_sig_at || "", task.id).run();
     await audit(env, "code-task.fail", task.id + " " + task.step + ": " + String(msg).slice(0, 200), { id: task.id, attempts: attempts, dead: dead, retry_at: retryAt, sig: ns.sig, streak: ns.streak }, dead ? "error" : "retry");
     if (sigStop) await audit(env, "code-task.sig-stop", task.id + " " + task.path + ": " + ns.sig + " x" + ns.streak, { id: task.id, sig: ns.sig, streak: ns.streak, attempts: attempts }, "error");
@@ -1908,8 +1999,10 @@ async function stepTask(env, task) {
     if (n > TIMEOUT_MAX) return null;
     cur.timeouts = n;
     const at = new Date(Date.now() + TIMEOUT_WAIT_MS).toISOString();
-    await save(env, task.id, { ctx: JSON.stringify(cur), lease_until: at });
-    await audit(env, "code-task.timeout", task.id + " " + task.step + " (" + n + " of " + TIMEOUT_MAX + "): " + String(msg).slice(0, 160) + "; same attempt, next rung, after " + at, { id: task.id, n: n, step: task.step, retry_at: at }, "retry");
+    await tsave({ ctx: JSON.stringify(cur), lease_until: at });
+    // TIMEOUT-MODEL-ATTR-1 (0.18.24): the rung that timed out, by the propose step's own pick, so timeouts are graded per model.
+    const lt = ladder(env), tm = task.step === "propose" ? lt[Math.min((task.attempts + (n - 1)) % MAX_ATTEMPTS, lt.length - 1)] : null;
+    await audit(env, "code-task.timeout", task.id + " " + task.step + " (" + n + " of " + TIMEOUT_MAX + ")" + (tm ? " on " + tm : "") + ": " + String(msg).slice(0, 160) + "; same attempt, next rung, after " + at, { id: task.id, n: n, step: task.step, retry_at: at, model: tm }, "retry");
     return { ok: false, dead: false, timeout: true, error: String(msg), retry_at: at, n: n };
   };
   // LARGE-FILE-WINDOW-1: the anchor window is gone from main (the file changed under the task): start again from the anchor,
@@ -1918,7 +2011,7 @@ async function stepTask(env, task) {
     const n = (ctx.rereads || 0) + 1;
     if (n > LARGE_REREADS) return await fail("LARGE-FILE-WINDOW-1: " + why + "; the file was re-read " + LARGE_REREADS + " times and keeps changing under the task", true);
     await audit(env, "code-task.reread", task.id + " (" + n + " of " + LARGE_REREADS + "): " + String(why).slice(0, 200), { id: task.id, n: n }, "retry");
-    await save(env, task.id, { ctx: JSON.stringify({ anchor: ctx.anchor, rereads: n, claim: ctx.claim || undefined, extras: ctx.extras || undefined, repair_round: ctx.repair_round != null ? ctx.repair_round : undefined, lastError: ctx.lastError || undefined, refusal: ctx.refusal || undefined, sigs: ctx.sigs || undefined, sig_n: ctx.sig_n != null ? ctx.sig_n : undefined, last_new_sig_at: ctx.last_new_sig_at || undefined }), step: "read", lease_until: null, last_error: null });
+    await tsave({ ctx: JSON.stringify({ anchor: ctx.anchor, rereads: n, claim: ctx.claim || undefined, extras: ctx.extras || undefined, repair_round: ctx.repair_round != null ? ctx.repair_round : undefined, lastError: ctx.lastError || undefined, refusal: ctx.refusal || undefined, sigs: ctx.sigs || undefined, sig_n: ctx.sig_n != null ? ctx.sig_n : undefined, last_new_sig_at: ctx.last_new_sig_at || undefined }), step: "read", lease_until: null, last_error: null });
     return { ok: true, step: "read", reread: n };
   };
   try {
@@ -1935,6 +2028,12 @@ async function stepTask(env, task) {
       await env.AUDIT_DB.prepare("UPDATE code_tasks SET ctx=json_set(json_set(json_set(COALESCE(ctx,'{}'), '$.sigs', json(?)), '$.sig_n', ?), '$.last_new_sig_at', ?) WHERE id=?").bind(JSON.stringify(ctx.sigs), nAtt, ctx.last_new_sig_at || "", task.id).run();
     }
     if (task.step === "read") {
+      // MERGE-SCOPE-AT-READ-1 (0.18.22, agent_issues 99951/2983/3000): a row inserted straight into code_tasks (the
+      // RED-DRAIN-1 dispatch wrote ct_im2909 on qnfo-fleet-control/worker.js and ct_im2581 on scripts/remediation_consumer.py)
+      // never passed enqueue() or intakeIssues(), so it spent 4-5 model attempts before the merge runner refused a path it
+      // can never merge. The same rule now runs before the first read, with no model call; the task ends needs_human.
+      const scopeWhy = mergeScopeWhy(task.repo, task.path);
+      if (scopeWhy) { await audit(env, "code-task.scope-refused", task.id + " " + task.path + ": " + scopeWhy.slice(0, 200), { id: task.id, path: task.path }, "refused"); return await fail("MERGE-SCOPE-AT-READ-1: " + scopeWhy, true); }
       const r = await readRepoFile(env, task.repo, task.path, MAX_LARGE_FILE_CHARS + 1);
       if (!r || r.ok !== true) return await fail("read failed: " + ((r && r.error) || "unknown") + " (HTTP " + (r && r.status) + ")", false);
       const base = String(r.content || "");
@@ -1978,7 +2077,10 @@ async function stepTask(env, task) {
       if (anchor) {
         nctx.anchor = anchor; nctx.mode = "patch"; nctx.win = windowFor(base, anchor);
         if (large) nctx.win_text = base.slice(nctx.win.ws, nctx.win.we);
-      } else if (base.length > PATCH_MIN_CHARS && base.length <= WINDOW_CHARS) {
+      } else if (base.length > PATCH_MIN_CHARS) {
+        // WHOLE-FILE-PATCH-1 (0.18.24): a file up to MAX_FILE_CHARS with no anchor is shown whole and edited by SEARCH/REPLACE.
+        // Whole-file mode above WINDOW_CHARS (24000) asked the model to write the file back: 30-60k chars, 8-15k tokens, past the
+        // 8192-token budget or the 240 s ceiling; all 10 such tasks since 2026-10-05 failed (3046 timeouts, "no ```file block").
         nctx.mode = "patch"; nctx.win = { ws: 0, we: base.length };
       }
       // A worker source and its deployed-current mirror change together (mirror-guard).
@@ -1986,6 +2088,9 @@ async function stepTask(env, task) {
         const mp = task.path.replace(/worker\.js$/, "deployed-current.worker.js");
         const mr = await readRepoFile(env, task.repo, mp, MAX_LARGE_FILE_CHARS + 1);
         if (mr && mr.ok === true && String(mr.content || "") === base) nctx.mirror = mp;
+        // MIRROR-READ-RETRY-1 (0.18.24, agent_issues 100059): a mirror read that failed for any reason but a 404 is retried,
+        // never taken as "no mirror": ct_im99975 (414k chars) went on without its mirror, and PR 2665 failed mirror-guard.
+        else if (!mr || (mr.ok !== true && Number(mr.status) !== 404)) return await fail("MIRROR-READ-RETRY-1: could not read " + mp + " (" + String((mr && (mr.error || mr.status)) || "no answer").slice(0, 80) + "); the mirror must change with the worker", false);
       }
       // MULTI-FILE-CODE-TASKS-1: the companions are read once; the task then always runs in patch mode.
       if (Array.isArray(ctx.extras) && ctx.extras.length) {
@@ -1994,7 +2099,7 @@ async function stepTask(env, task) {
         nctx.extras = ctx.extras; nctx.x = xr.x;
         if (nctx.mode !== "patch") { nctx.mode = "patch"; nctx.win = { ws: 0, we: base.length }; }
       }
-      await save(env, task.id, { ctx: JSON.stringify(nctx), step: "propose", lease_until: null });
+      await tsave({ ctx: JSON.stringify(nctx), step: "propose", lease_until: null });
       return { ok: true, step: "propose" };
     }
     if (task.step === "propose") {
@@ -2012,7 +2117,7 @@ async function stepTask(env, task) {
           const _cur = Array.isArray(ctx.extras) ? ctx.extras.slice() : [];
           if (!_have && _cur.length < MAX_EXTRAS && !extraWhy(task.path, _tp)) {
             ctx.extras = _cur.concat([{ path: _tp }]);
-            await save(env, task.id, { ctx: JSON.stringify(ctx) });
+            await tsave({ ctx: JSON.stringify(ctx) });
             await audit(env, "code-task.suite-scope", task.id + ": " + _tp + " added as a companion because its suite pins the behaviour the goal changes");
             return { ok: true, step: "read" };
           }
@@ -2029,6 +2134,7 @@ async function stepTask(env, task) {
         const msgs = multi ? promptForMulti(task, base.slice(win.ws, win.we), win.ws > 0 || win.we < base.length, windowCut(base, win), ctx.x, ctx.lastError || null, multiPrevText(ctx, task.path))
           : promptForPatch(task, base.slice(win.ws, win.we), win.ws > 0 || win.we < base.length, ctx.lastError || null, ctx.edits || null, windowCut(base, win));
         if (multi && msgs[1].content.length > MULTI_RUNG1_MAX_CHARS && model === l[0] && l.length > 1) model = l[1];
+        attemptModel = model;
         const reply = await ai(env, model, msgs);
         let built;
         if (multi) {
@@ -2041,7 +2147,7 @@ async function stepTask(env, task) {
           ctx.edits = parseEdits(reply);
           built = ctx.edits.length ? buildProposal(ctx, task.path, base) : { ok: false, error: noBlockWhy(reply) };
         }
-        if (!built.ok) { ctx.lastError = built.error; ctx.lastReply = String(reply || "").slice(0, MAX_REPLY_KEEP); ctx.edits = []; if (multi) ctx.x.forEach(function (x) { delete x.edits; }); await save(env, task.id, { ctx: JSON.stringify(ctx) }); return await fail("model " + model + ": " + built.error, false); }
+        if (!built.ok) { ctx.lastError = built.error; ctx.lastReply = String(reply || "").slice(0, MAX_REPLY_KEEP); ctx.edits = []; if (multi) ctx.x.forEach(function (x) { delete x.edits; }); await tsave({ ctx: JSON.stringify(ctx) }); return await fail("model " + model + ": " + built.error, false); }
         delete ctx.lastReply;
         if (built.fuzzies && built.fuzzies.length) await audit(env, "code-task.edit-fuzzy", task.id + " " + model + ": " + built.fuzzies.map(function (x) { return "edit " + x.edit + " matched with whitespace/quotes/blank lines ignored"; }).join(", "), { id: task.id, model: model, fuzzies: built.fuzzies }, "ok");
         // EDITS-OVERLAP-RESOLVE-1: a duplicate edit leaves ctx.edits here, so verify, commit and the publisher's rebuild (which
@@ -2062,16 +2168,17 @@ async function stepTask(env, task) {
           const fresh = dr.names.filter(function (n) { return seen.indexOf(n) < 0; });
           if (fresh.length) {
             ctx.dangling = seen.concat(fresh).slice(-12); ctx.lastError = dr.why;
-            await save(env, task.id, { ctx: JSON.stringify(ctx) });
+            await tsave({ ctx: JSON.stringify(ctx) });
             await audit(env, "code-task.dangling-refused", task.id + " " + model + ": " + dr.why.slice(0, 200), { id: task.id, model: model, names: dr.names }, "retry");
             return await fail("model " + model + ": " + dr.why, false);
           }
           await audit(env, "code-task.dangling-passed", task.id + " " + model + ": " + dr.names.join(", ") + " came back after one refusal; let through to verify and the suites", { id: task.id, model: model, names: dr.names }, "ok");
         }
         delete ctx.timeouts; // TIMEOUT-RETRY-1: a propose that answered ends the timeout streak, so a later round starts at rung 1
-        await save(env, task.id, { ctx: JSON.stringify(ctx), model: model, step: "verify", lease_until: null });
+        await tsave({ ctx: JSON.stringify(ctx), model: model, step: "verify", lease_until: null });
         return { ok: true, step: "verify", model: model };
       }
+      attemptModel = model;
       const txt = await ai(env, model, promptFor(task, ctx.base || "", ctx.lastError || null));
       let file = extractFile(txt);
       // NEWLINE-PRESERVE-1: a fenced block drops the final newline; keep the base file's convention (the smoke PR #297 lost it).
@@ -2082,7 +2189,7 @@ async function stepTask(env, task) {
       if (npw) return await noopRefuse(env, task, ctx, model, npw);
       ctx.proposal = file;
       delete ctx.timeouts;
-      await save(env, task.id, { ctx: JSON.stringify(ctx), model: model, step: "verify", lease_until: null });
+      await tsave({ ctx: JSON.stringify(ctx), model: model, step: "verify", lease_until: null });
       return { ok: true, step: "verify", model: model };
     }
     if (task.step === "verify") {
@@ -2105,7 +2212,7 @@ async function stepTask(env, task) {
       if (v.verdict === "fail") {
         // SYNTAX-HINT-1: a parse error names the edit and the line it comes from, so the next rung fixes that block.
         const hint = /SyntaxError/.test(String(v.error || "")) ? syntaxHint(v.error, prop.resolved || (ctx.mode === "patch" ? ctx.edits : null), prop.text) : "";
-        ctx.lastError = String(v.error || "") + hint; await save(env, task.id, { ctx: JSON.stringify(ctx) }); return await fail("verify failed: " + v.error + hint, false);
+        ctx.lastError = String(v.error || "") + hint; await tsave({ ctx: JSON.stringify(ctx) }); return await fail("verify failed: " + v.error + hint, false);
       }
       // MULTI-FILE-CODE-TASKS-1: every companion that changes is verified by its type before the patch is parked.
       if (Array.isArray(ctx.x) && ctx.x.length) {
@@ -2113,7 +2220,7 @@ async function stepTask(env, task) {
         if (!bx.ok) return await fail("stored edits no longer apply: " + bx.error, true);
         for (let i = 0; i < bx.files.length; i++) {
           const vx = await verifyExtra(env, bx.files[i]);
-          if (vx.verdict === "fail") { ctx.lastError = vx.error; await save(env, task.id, { ctx: JSON.stringify(ctx) }); return await fail("verify failed: " + vx.error, false); }
+          if (vx.verdict === "fail") { ctx.lastError = vx.error; await tsave({ ctx: JSON.stringify(ctx) }); return await fail("verify failed: " + vx.error, false); }
           if (vx.verdict === "defer") {
             if (String(env.PR_PUBLISH_MODE || "") !== "pull") return await fail(bx.files[i].path + ": " + vx.error, true);
             deferred = deferred || (bx.files[i].path + ": " + String(vx.error || "no verifier"));
@@ -2122,12 +2229,12 @@ async function stepTask(env, task) {
       }
       if (deferred) {
         ctx.verify_deferred = deferred.slice(0, 300);
-        await save(env, task.id, { ctx: JSON.stringify(ctx), step: "commit", lease_until: null, last_error: null });
+        await tsave({ ctx: JSON.stringify(ctx), step: "commit", lease_until: null, last_error: null });
         await audit(env, "code-task.verify-deferred", task.id + ": " + ctx.verify_deferred.slice(0, 200) + "; the publisher parses it and runs the suites before any push", { id: task.id }, "ok");
         return { ok: true, step: "commit", deferred: true };
       }
-      if (ctx.verify_deferred) { delete ctx.verify_deferred; await save(env, task.id, { ctx: JSON.stringify(ctx) }); }
-      await save(env, task.id, { step: "commit", lease_until: null, last_error: null });
+      if (ctx.verify_deferred) { delete ctx.verify_deferred; await tsave({ ctx: JSON.stringify(ctx) }); }
+      await tsave({ step: "commit", lease_until: null, last_error: null });
       return { ok: true, step: "commit" };
     }
     if (task.step === "commit") {
@@ -2163,7 +2270,7 @@ async function stepTask(env, task) {
         // the current file), hunkPatch returns "" and the task would still be marked ready_to_publish, then fail
         // at publish with "task has no patch in ctx.patch". Fail terminal here with a clear reason instead.
         if (!ctx.patch) return await fail("no change: the patch is empty (the goal is already satisfied in the current file)", true);
-        await save(env, task.id, { ctx: JSON.stringify(ctx), status: "ready_to_publish", step: "done", branch: branch, lease_until: null, last_error: null });
+        await tsave({ ctx: JSON.stringify(ctx), status: "ready_to_publish", step: "done", branch: branch, lease_until: null, last_error: null });
         await audit(env, "code-task.ready", task.id + " ready_to_publish on " + branch, { id: task.id }, "ok");
         return { ok: true, step: "done", status: "ready_to_publish" };
       }
@@ -2172,16 +2279,22 @@ async function stepTask(env, task) {
         base_branch: "main", create_pr: true, commit_message: "qnfo-code-orchestrator: " + task.goal.slice(0, 60) });
       if (!r || r.ok !== true) return await fail("commit failed: " + ((r && r.error) || "unknown") + " (HTTP " + (r && r.status) + ")", false);
       if (!r.pr_url) return await fail("committed to " + branch + " but no PR was opened: " + (r.pr_error || "unknown"), false);
-      await save(env, task.id, { status: "pr_open", step: "done", branch: branch, pr_url: r.pr_url, lease_until: null, last_error: null });
+      await tsave({ status: "pr_open", step: "done", branch: branch, pr_url: r.pr_url, lease_until: null, last_error: null });
       await audit(env, "code-task.pr", task.id + " -> " + r.pr_url, { id: task.id, pr: r.pr || null }, "ok");
       return { ok: true, step: "done", pr_url: r.pr_url };
     }
     return await fail("unknown step " + task.step, true);
   } catch (e) {
+    if (e && e.leaseLost) return await leaseLost(e);
     const msg = String((e && e.message) || e);
-    // TIMEOUT-RETRY-1: only the read and propose steps talk to a provider; a verify or commit step that times out is a failed attempt.
-    if (TIMEOUT_RE.test(msg) && (task.step === "read" || task.step === "propose")) { const tr = await timeoutRetry(msg); if (tr) return tr; }
-    return await fail("step threw: " + msg, false);
+    try {
+      // TIMEOUT-RETRY-1: only the read and propose steps talk to a provider; a verify or commit step that times out is a failed attempt.
+      if (TIMEOUT_RE.test(msg) && (task.step === "read" || task.step === "propose")) { const tr = await timeoutRetry(msg); if (tr) return tr; }
+      return await fail("step threw: " + msg, false);
+    } catch (e2) {
+      if (e2 && e2.leaseLost) return await leaseLost(e2);
+      throw e2;
+    }
   }
 }
 // ISSUE-INTAKE-1: the Quniverse equivalent of the Stop-hook re-prompt. An open agent_issues row that carries an explicit opt-in line
@@ -2768,7 +2881,7 @@ async function tick(env, opts) {
   const gate = await spendGate(env);
   if (!gate.ok) {
     let claimsCap = null;
-    if (!opts || opts.claims !== false) { try { claimsCap = await claimsSweep(env); } catch (e) { claimsCap = { error: String((e && e.message) || e).slice(0, 200) }; } }
+    if (!opts || opts.claims !== false) { try { claimsCap = await claimsSweep(env); } catch (e) { claimsCap = { error: String((e && e.message) || e).slice(0, 200) }; await audit(env, "code-task.claims-error", claimsCap.error, null, "error"); } }
     return { ok: true, steps: 0, lanes: 0, capped: true, calls_today: gate.used, daily_cap: gate.cap, done: [], plan: null, claims: claimsCap, sla: null };
   }
   const budget = Math.min(Number(opts && opts.budgetMs) || 20000, 50000); // PLAN-RESERVE-1 (0.18.3): the plan step runs AFTER the lanes and the lanes spend the whole budget, so with a failing queue the tick never reached planning -- measured 2026-10-17: fleet_tick every 10 min, code_tasks moving every minute, WIP below PLAN_WIP, cap headroom, 40 candidates waiting, and issue_plans recorded nothing from 15:21:02Z. Planning gets a reserved slice instead of whatever is left over. The reserve never starves the lanes: it is skipped when the budget is too small to split.
@@ -2804,7 +2917,7 @@ async function tick(env, opts) {
   for (let i = 0; i < Math.min(lanes, maxSteps); i++) running.push(lane());
   await Promise.all(running);
   let claims = null;
-  if (!opts || opts.claims !== false) { try { claims = await claimsSweep(env); } catch (e) { claims = { error: String((e && e.message) || e).slice(0, 200) }; } }
+  if (!opts || opts.claims !== false) { try { claims = await claimsSweep(env); } catch (e) { claims = { error: String((e && e.message) || e).slice(0, 200) }; await audit(env, "code-task.claims-error", claims.error, null, "error"); } }
   // ISSUE-PLANNER-1: after the steps, turn at most one prose issue into a code task (or record why not).
   let plan = null;
   if (!opts || opts.plan !== false) { try { plan = await planIssues(env); } catch (e) { plan = { planned: false, error: String((e && e.message) || e).slice(0, 200) }; await audit(env, "code-task.plan-error", plan.error, null, "error"); } }

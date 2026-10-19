@@ -370,5 +370,125 @@ _, pr, inf = M.plan("migrations/no-backup.sql", "-- APPLY-BY: ci\n-- DB: qnfo-au
                     "CREATE TABLE IF NOT EXISTS new_ledger (id INTEGER PRIMARY KEY, ts TEXT);\n")
 ok(not pr, "the same file without the BACKUP line passes (it deletes nothing)", pr)
 
+# STEP-SCHEMA-LINT-1 (2026-10-18, fleet_runs 10278): a fleet_tasks workflow step without "type" passed --check and then
+# aborted its run with "unsupported step type: undefined". The shape below is the one that reached production.
+def steps_task(doc, extra_header=""):
+    return (en_hdr + extra_header + "INSERT OR REPLACE INTO fleet_tasks (id, type, definition) VALUES "
+            "('t', 'workflow', '" + doc.replace("'", "''") + "');\n")
+
+
+_, pr, _ = M.plan("migrations/steps-nokind.sql", steps_task('{"steps":[{"name":"a","db":"AUDIT","sql":"SELECT 1"}]}'))
+ok(any("STEP-SCHEMA-LINT-1" in p and "undefined" in p for p in pr), "a step without type is refused, naming the runtime error", pr)
+_, pr, _ = M.plan("migrations/steps-emptykind.sql", steps_task('{"steps":[{"type":"","db":"AUDIT","sql":"SELECT 1"}]}'))
+ok(any("STEP-SCHEMA-LINT-1" in p for p in pr), "an empty type is refused", pr)
+_, pr, _ = M.plan("migrations/steps-ok.sql", steps_task('{"steps":[{"type":"sql","name":"a","db":"AUDIT","sql":"SELECT 1"}]}'))
+ok(not [p for p in pr if "STEP-SCHEMA-LINT-1" in p], "a well-formed sql step passes", pr)
+_, pr, _ = M.plan("migrations/steps-noname.sql", steps_task('{"steps":[{"type":"sql","db":"AUDIT","sql":"SELECT 1"}]}'))
+ok(not [p for p in pr if "STEP-SCHEMA-LINT-1" in p], "a step without name passes (151 of 184 live steps carry none)", pr)
+_, pr, _ = M.plan("migrations/steps-nodb.sql", steps_task('{"steps":[{"type":"sql","name":"a","sql":"SELECT 1"}]}'))
+ok(any('has no "db"' in p for p in pr), "a sql step without db is refused", pr)
+_, pr, _ = M.plan("migrations/steps-nosql.sql", steps_task('{"steps":[{"type":"sql","name":"a","db":"AUDIT"}]}'))
+ok(any('has no "sql"' in p for p in pr), "a sql step without sql is refused", pr)
+_, pr, _ = M.plan("migrations/steps-http-ok.sql", steps_task('{"steps":[{"type":"http","url":"https://fleet.qnfo.org/api/decision?refresh=1","method":"GET"}]}'))
+ok(not [p for p in pr if "STEP-SCHEMA-LINT-1" in p], "the live http step shape passes", pr)
+_, pr, _ = M.plan("migrations/steps-http-nourl.sql", steps_task('{"steps":[{"type":"http","name":"h","method":"GET"}]}'))
+ok(any('has no "url"' in p for p in pr), "an http step without url is refused", pr)
+_, pr, _ = M.plan("migrations/steps-probe.sql", steps_task('{"steps":[{"type":"probe","url":"x"}]}'))
+ok(any("not a type the runner executes" in p for p in pr), "an unknown type is refused", pr)
+_, pr, _ = M.plan("migrations/steps-probe-hdr.sql",
+                  steps_task('{"steps":[{"type":"probe","url":"x"}]}', extra_header="-- STEP-TYPES: sql,http,probe\n"))
+ok(not [p for p in pr if "STEP-SCHEMA-LINT-1" in p], "a '-- STEP-TYPES:' header line admits a type the runner gained", pr)
+_, pr, _ = M.plan("migrations/steps-quotes.sql",
+                  steps_task('{"steps":[{"type":"sql","name":"a","db":"AUDIT","sql":"UPDATE t SET s=\'open\' WHERE 1"}]}'))
+ok(not [p for p in pr if "STEP-SCHEMA-LINT-1" in p], "quotes doubled inside the step's sql do not break the literal scan", pr)
+ok(M.step_violations("INSERT INTO t (x) VALUES ('plain text, no steps here')") == [], "a literal that is not a steps array makes no claim")
+
+# MIGRATION-HEADER-GUARD-1 (2026-10-19): a migration without an APPLY-BY declaration but with executable SQL was skipped in silence
+# (2026-10-18-subscribers-utm-attribution.sql: its ALTERs never ran). --check now refuses it; a declared or SQL-free file passes.
+import tempfile  # noqa: E402
+
+
+def check_file(name, text, allow=None):
+    """Run --check on one file in a temp migrations folder; returns (rc, parsed output lines)."""
+    d = tempfile.mkdtemp()
+    p = os.path.join(d, name)
+    open(p, "w", encoding="utf-8").write(text)
+    buf = io.StringIO()
+    with contextlib.redirect_stdout(buf):
+        rc = M.main(["--check", p])
+    return rc, [json.loads(l) for l in buf.getvalue().splitlines() if l.strip()]
+
+
+ddl = "-- add a column\nALTER TABLE subscribers ADD COLUMN utm_source TEXT;\n"
+rc, ls = check_file("2099-01-01-new-headerless.sql", ddl)
+ok(rc == 1 and ls and "MIGRATION-HEADER-GUARD-1" in json.dumps(ls[0].get("refused")), "a new headerless file with ALTER is refused by --check", ls)
+for kw in ("CREATE TABLE IF NOT EXISTS t (a TEXT);", "INSERT INTO t (a) VALUES (1);", "UPDATE t SET a = 1;", "DELETE FROM t;",
+           "DROP TABLE t;", "REPLACE INTO t (a) VALUES (1);", "/* note */ CREATE VIEW v AS SELECT 1;"):
+    rc, ls = check_file("2099-01-01-kw.sql", "-- note\n" + kw + "\n")
+    ok(rc == 1, "headerless " + kw.split("(")[0][:30] + " is refused", ls)
+rc, ls = check_file("2099-01-01-sel.sql", "-- only reads\nSELECT 1;\n")
+ok(rc == 0 and "skipped" in ls[0], "a headerless file with only a SELECT needs no header", ls)
+rc, ls = check_file("2099-01-01-notes.sql", "-- ALTER TABLE t ADD COLUMN x TEXT;\n-- written down, not run\n")
+ok(rc == 0, "ALTER inside a comment is not executable SQL", ls)
+rc, ls = check_file("2099-01-01-manual.sql", "-- APPLY-BY: manual (applied by hand on the dashboard D1)\n" + ddl)
+ok(rc == 0 and "declared" in ls[0], "APPLY-BY: manual (<reason>) is accepted and reported", ls)
+rc, ls = check_file("2099-01-01-none.sql", "-- APPLY-BY: none (superseded by 2099-01-02)\n" + ddl)
+ok(rc == 0 and "declared" in ls[0], "APPLY-BY: none (<reason>) is accepted", ls)
+rc, ls = check_file("2099-01-01-noreason.sql", "-- APPLY-BY: manual\n" + ddl)
+ok(rc == 1 and "APPLY-BY: manual" in json.dumps(ls[0].get("refused")), "APPLY-BY: manual without a reason is refused", ls)
+rc, ls = check_file("2099-01-01-emptyreason.sql", "-- APPLY-BY: none ( )\n" + ddl)
+ok(rc == 1, "APPLY-BY: none with an empty reason is refused", ls)
+rc, ls = check_file("2099-01-01-hand.sql", "-- APPLY-BY: hand\n" + ddl)
+ok(rc == 1, "an unknown APPLY-BY value with SQL is refused", ls)
+rc, ls = check_file("2099-01-01-late.sql", ddl + "-- APPLY-BY: ci\n-- DB: qnfo-audit\n-- Rollback: x\n")
+ok(rc == 1, "an APPLY-BY line after the first statement is not a header", ls)
+rc, ls = check_file("2099-01-01-ci.sql", "-- APPLY-BY: ci\n-- DB: qnfo-audit\n-- Rollback: ALTER TABLE subscribers DROP COLUMN utm_source;\n" + ddl)
+ok(rc == 0 and ls[0].get("ok") is True, "an APPLY-BY: ci file is checked exactly as before", ls)
+rc, ls = check_file("2099-01-01-ci-bad.sql", "-- APPLY-BY: ci\n-- DB: qnfo-audit\n" + ddl)
+ok(rc == 1 and "Rollback" in json.dumps(ls[0].get("refused")), "an APPLY-BY: ci file without Rollback is still refused", ls)
+# Review repair: a CTE write and a block comment followed by a trailing comment were classified 'no-sql' and passed silently.
+for name, sql in (("cte-insert", "WITH x AS (SELECT 1 a) INSERT INTO t SELECT a FROM x;"),
+                  ("cte-values", "WITH v(a) AS (VALUES (1)) INSERT OR IGNORE INTO t (a) SELECT a FROM v;"),
+                  ("cte-update", "WITH x AS (SELECT 1 a) UPDATE t SET a = 2 WHERE a IN (SELECT a FROM x);"),
+                  ("cte-delete", "with x as (select 1 a) delete from t where a in (select a from x);"),
+                  ("block-then-trailing", "/* c */ -- note\nALTER TABLE t ADD COLUMN a TEXT;"),
+                  ("trailing-comment", "CREATE TABLE t (a TEXT); -- done\n"),
+                  ("no-semicolon", "ALTER TABLE t ADD COLUMN a TEXT")):
+    rc, ls = check_file("2099-01-01-" + name + ".sql", "-- note\n" + sql + "\n")
+    ok(rc == 1 and "MIGRATION-HEADER-GUARD-1" in json.dumps(ls[0].get("refused")), "headerless " + name + " is refused", ls)
+for name, sql in (("cte-select", "WITH x AS (SELECT replace('a', 'b', 'c') a) SELECT a FROM x;"),
+                  ("literal", "SELECT 'INSERT INTO t' AS s; -- DELETE FROM t"),
+                  ("block-only", "/* ALTER TABLE t ADD COLUMN a; */"),
+                  ("open-block", "SELECT 1;\n/* never closed ALTER TABLE t ADD COLUMN a;")):
+    rc, ls = check_file("2099-01-01-" + name + ".sql", "-- note\n" + sql + "\n")
+    ok(rc == 0 and "skipped" in ls[0], "headerless " + name + " makes no write and needs no header", ls)
+ok(M.headerless_verdict("migrations/x.sql", ddl, allow={"x.sql"})[0] == "grandfathered", "a listed file is grandfathered")
+ok(M.headerless_verdict("migrations/y.sql", ddl, allow={"x.sql"})[0] == "refused", "a name that is not listed is refused")
+
+# The allowlist is shrink-only: every listed file exists, is still headerless and still carries executable SQL; a file that gained a
+# header (or lost its SQL) must leave the list, so the list cannot hide a file the runner now applies.
+names, expires = M.load_allowlist()
+mig_dir = os.path.join(HERE, "..", "migrations")
+ok(len(names) > 0 and expires is not None, "the allowlist parses (names and an EXPIRES date)", (len(names), expires))
+stale = []
+for n in sorted(names):
+    fp = os.path.join(mig_dir, n)
+    if not os.path.exists(fp):
+        stale.append(n + " (missing)")
+        continue
+    t = open(fp, encoding="utf-8").read()
+    if M.plan(fp, t)[0] or M.header_value(M.header(t), "APPLY-BY") or not M.has_executable(t):
+        stale.append(n + " (has a header or no executable SQL; remove it from the list)")
+ok(not stale, "the allowlist holds no file that has gained a header, lost its SQL or been removed", stale[:5])
+unlisted = []
+for fp in sorted(glob.glob(os.path.join(mig_dir, "*.sql"))):
+    t = open(fp, encoding="utf-8").read()
+    if not M.plan(fp, t)[0] and M.headerless_verdict(fp, t)[0] == "refused":
+        unlisted.append(os.path.basename(fp))
+ok(not unlisted, "every headerless migration with SQL in the repository is on the allowlist or declared", unlisted[:5])
+exp = os.path.join(tempfile.mkdtemp(), "al.txt")
+open(exp, "w").write("# comment\n# EXPIRES: 2020-01-01\nmigrations/a.sql\nb.sql\n")
+ok(M.load_allowlist(exp) == ({"a.sql", "b.sql"}, "2020-01-01"), "load_allowlist reads names (path or bare) and the EXPIRES date", M.load_allowlist(exp))
+
 print(f"{passed} passed, {failed} failed")
 sys.exit(1 if failed else 0)
