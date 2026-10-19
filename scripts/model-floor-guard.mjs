@@ -8,10 +8,19 @@
 //   node model-floor-guard.mjs --live          # repo + live bundles
 //   node model-floor-guard.mjs --json          # machine-readable summary
 //   node model-floor-guard.mjs --base <dir>    # pull-request mode: only violations added against the tree in <dir>
+//   node model-floor-guard.mjs --unlisted      # also list pinned @cf/ model ids that are in neither BANNED nor the allowed table
+//   node model-floor-guard.mjs --strict-allowed  # exit 1 when a worker pins an @cf/ model id that is not in the allowed table
+//   node model-floor-guard.mjs --policy <file> # read the allowed table from <file> instead of scripts/model-policy.json
+//
+// FOLDED-AND-RETIRED-MODEL-COVERAGE-1 (agent_issues 2831): a directory carrying a RETIRED marker is not deployed and is not scanned; a
+// directory carrying a FOLDED marker runs inside a host bundle, so its findings name that host (the marker text says "FOLDED into <host>").
+// MODEL-POLICY-SINGLE-SOURCE-1 (agent_issues 2833): scripts/model-policy.json carries an `allowed` table (id, family, wa, ctx, reasoning)
+// that this guard reads next to BANNED: every row is validated, a row that matches a BANNED rule is a conflict (exit 2), and a pinned
+// `@cf/` id that is not in the table is reported (`--unlisted`) or fails the run (`--strict-allowed`).
 
 import fs from "node:fs";
 import path from "node:path";
-import { pathToFileURL } from "node:url";
+import { pathToFileURL, fileURLToPath } from "node:url";
 
 const REPO = process.env.QNFO_WORKERS || "C:/Users/LENOVO/Documents/GitHub/qnfo-workers";
 const ACCT = process.env.CF_ACCOUNT_ID || "edb167b78c9fb901ea5bca3ce58ccc4b";
@@ -74,6 +83,70 @@ function isDeclRow(code) {
   return MODEL_IDLIKE_RE.test(key);
 }
 
+// MODEL-POLICY-SINGLE-SOURCE-1: the allowed-model table. One row per model id a worker may select: `id` the router alias, `family` the
+// vendor family (panels count families), `wa` the Workers AI id a worker pins, `ctx` the context window in tokens and `reasoning`
+// whether it spends output tokens on thought. The rows are seeded from the qnfo-ai router catalog (MODELS in qnfo-ai/worker.js).
+const POLICY_FILE = path.join(path.dirname(fileURLToPath(import.meta.url)), "model-policy.json");
+
+function loadPolicy(file) {
+  let text;
+  try { text = fs.readFileSync(file || POLICY_FILE, "utf8"); } catch { return { allowed: [], problems: [], found: false }; }
+  let doc;
+  try { doc = JSON.parse(text); } catch (e) { return { allowed: [], problems: ["policy file is not valid JSON: " + (e && e.message)], found: true }; }
+  const allowed = Array.isArray(doc && doc.allowed) ? doc.allowed : [];
+  return { allowed, problems: validateAllowed(allowed), found: true };
+}
+
+// A row is well formed (string id, family and @cf/ wa; positive integer ctx; boolean reasoning), unique by id and wa, and matches no
+// BANNED rule: the table may not re-admit what BANNED forbids, so the two cannot drift apart silently.
+function validateAllowed(allowed) {
+  const problems = [];
+  const ids = new Set(), was = new Set();
+  allowed.forEach((r, i) => {
+    const at = "allowed[" + i + "]" + (r && r.id ? " (" + r.id + ")" : "");
+    if (!r || typeof r !== "object") { problems.push(at + " is not an object"); return; }
+    if (typeof r.id !== "string" || !r.id) problems.push(at + " has no string id");
+    if (typeof r.family !== "string" || !r.family) problems.push(at + " has no string family");
+    if (typeof r.wa !== "string" || !/^@cf\/[\w.-]+\/[\w.-]+$/.test(r.wa)) problems.push(at + " wa is not an @cf/<vendor>/<model> id");
+    if (!Number.isInteger(r.ctx) || r.ctx <= 0) problems.push(at + " ctx is not a positive integer");
+    if (typeof r.reasoning !== "boolean") problems.push(at + " reasoning is not a boolean");
+    if (typeof r.id === "string") { if (ids.has(r.id)) problems.push(at + " duplicates an id"); ids.add(r.id); }
+    if (typeof r.wa === "string") { if (was.has(r.wa)) problems.push(at + " duplicates a wa id"); was.add(r.wa); }
+    for (const field of [r.id, r.wa]) {
+      if (typeof field !== "string") continue;
+      const b = BANNED.find((x) => x.re.test(field));
+      if (b) { problems.push(at + " conflicts with BANNED [" + b.label + "]: " + field); break; }
+    }
+  });
+  return problems;
+}
+
+// `@cf/<vendor>/<model>` ids a worker pins in code (comments, BANNED lists and price/attribution rows are not selections) that the
+// allowed table does not list and BANNED does not already report. Embedding, speech and image models are not text-generation
+// selections, so they are not part of this table.
+const CF_ID_RE = /@cf\/[a-z0-9_.-]+\/[\w.-]+/gi;
+const NON_TEXT_RE = /@cf\/(baai|openai\/whisper|deepgram|myshell-ai|black-forest-labs|leonardo|lykon|runwayml|stabilityai|bytedance|pfnet|facebook|huggingface|microsoft\/resnet|unum)\b|-(embed|embedding|reranker)\b|\b(bge|whisper|melotts|flux|aura|nova|stable-diffusion)-/i;
+function scanUnlisted(text, allowed) {
+  const wa = new Set((allowed || []).map((r) => String(r.wa || "").toLowerCase()));
+  const out = [];
+  const lines = String(text).split(/\r?\n/);
+  let inBanList = 0;
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i], t = line.trim();
+    if (/\b(BANNED|DENY|BLOCK|FORBID)[\w_]*\s*=/.test(line)) inBanList++;
+    else if (inBanList > 0 && /\]/.test(line)) inBanList = Math.max(0, inBanList - 1);
+    if (t.startsWith("//") || t.startsWith("*") || t.startsWith("/*")) continue;
+    const code = codePart(line);
+    if (!code || inBanList > 0 || isDeclRow(code) || line.indexOf("MODEL-FLOOR-OK") >= 0) continue;
+    for (const m of code.match(CF_ID_RE) || []) {
+      const id = m.replace(/[.-]+$/, "");
+      if (wa.has(id.toLowerCase()) || NON_TEXT_RE.test(id) || BANNED.some((b) => b.re.test(id))) continue;
+      out.push({ line: i + 1, id, text: t.slice(0, 110) });
+    }
+  }
+  return out;
+}
+
 function scan(text) {
   const lines = String(text).split(/\r?\n/);
   const out = [];
@@ -99,7 +172,7 @@ function scan(text) {
   return out;
 }
 
-export { BANNED, scan };
+export { BANNED, scan, scanUnlisted, loadPolicy, validateAllowed };
 
 // MODEL-FLOOR-PREMERGE-1 (2026-10-19, agent_issues 100121): a pull request fails only for a violation it ADDS. A violation is the
 // worker, the banned label and the trimmed source text, so a hit that moves lines is not new and debt already on the base branch
@@ -114,26 +187,95 @@ function diffViolations(head, base) {
   const out = [];
   for (const r of head || []) {
     const added = (r.hits || []).filter((h) => !known.has(r.name + "|" + h.label + "|" + String(h.text || "").trim()));
-    if (added.length) out.push({ name: r.name, hits: added });
+    if (added.length) out.push(r.folded ? { name: r.name, folded: true, host: r.host || null, hits: added } : { name: r.name, hits: added });
   }
   return out;
 }
 export { diffViolations, violationKeys };
 
+// FOLDED-AND-RETIRED-MODEL-COVERAGE-1: marker files. A RETIRED directory is not deployed (its code reaches no bundle), so it is not
+// scanned. A FOLDED directory is a member of a host bundle: the marker says "<name> is FOLDED into <host>" (or "folded into <host>"), or, for
+// the 2026-10-01 markers, "Its duties live in <host>" where <host> is a worker directory. A marker that names no host leaves host null; the
+// member is still scanned, because its code is live inside some bundle, and its findings say the host is unnamed.
+function foldedHost(text, workerDirs) {
+  const t = String(text || "");
+  let m = /\bFOLDED\s+into\s+([a-z0-9][\w-]*)/i.exec(t);
+  if (m) return m[1];
+  m = /\bduties\s+(?:now\s+)?(?:live|run)s?\s+(?:in|inside)\s+([a-z0-9][\w-]*)/i.exec(t);
+  if (m && (!workerDirs || workerDirs.has(m[1]))) return m[1];
+  return null;
+}
+
+function listWorkerDirs(base) {
+  try { return fs.readdirSync(base, { withFileTypes: true }).filter((d) => d.isDirectory()).map((d) => d.name); } catch { return null; }
+}
+
+// { retired: [dir], folded: [{ name, host }] } for the worker directories under root (a directory with both markers counts as retired).
+function repoMarkers(root) {
+  const base = root || REPO;
+  const out = { retired: [], folded: [] };
+  const dirs = listWorkerDirs(base) || [];
+  const set = new Set(dirs);
+  for (const d of dirs) {
+    if (fs.existsSync(path.join(base, d, "RETIRED"))) { out.retired.push(d); continue; }
+    const fm = path.join(base, d, "FOLDED");
+    if (!fs.existsSync(fm)) continue;
+    let text = "";
+    try { text = fs.readFileSync(fm, "utf8"); } catch {}
+    out.folded.push({ name: d, host: foldedHost(text, set) });
+  }
+  return out;
+}
+
 function scanRepo(root) {
   const base = root || REPO;
   const res = [];
-  let dirs = [];
-  try { dirs = fs.readdirSync(base, { withFileTypes: true }).filter((d) => d.isDirectory()).map((d) => d.name); } catch { return [{ name: "(repo unreadable)", hits: [] }]; }
+  const dirs = listWorkerDirs(base);
+  if (!dirs) return [{ name: "(repo unreadable)", hits: [] }];
+  const markers = repoMarkers(base);
+  const retired = new Set(markers.retired);
+  const folded = new Map(markers.folded.map((x) => [x.name, x.host]));
   for (const d of dirs) {
+    if (retired.has(d)) continue;                                       // not deployed: nothing to attribute
     const f = path.join(base, d, "worker.js");
     if (!fs.existsSync(f)) continue;
     const hits = scan(fs.readFileSync(f, "utf8"));
     const v = hits.filter((h) => h.kind === "VIOLATION");
-    if (v.length) res.push({ name: d, hits: v });
+    if (!v.length) continue;
+    res.push(folded.has(d) ? { name: d, folded: true, host: folded.get(d), hits: v } : { name: d, hits: v });
   }
   return res;
 }
+
+// The deployed artifact each finding belongs to: a worker is its own artifact, a FOLDED member rolls up to its host (or "(unnamed host)").
+function byArtifact(rows) {
+  const m = new Map();
+  for (const r of rows || []) {
+    const key = r.folded ? (r.host || "(unnamed host)") : r.name;
+    const a = m.get(key) || { artifact: key, own: 0, members: [] };
+    if (r.folded) a.members.push({ name: r.name, hits: r.hits.length }); else a.own += r.hits.length;
+    m.set(key, a);
+  }
+  return [...m.values()].sort((a, b) => a.artifact.localeCompare(b.artifact));
+}
+export { foldedHost, repoMarkers, byArtifact, scanRepo };
+
+// The allowed-table check over the repo: pinned @cf/ ids in worker.js files that are not in the table (RETIRED directories skipped).
+function scanRepoUnlisted(root, allowed) {
+  const base = root || REPO;
+  const res = [];
+  const dirs = listWorkerDirs(base) || [];
+  const retired = new Set(repoMarkers(base).retired);
+  for (const d of dirs) {
+    if (retired.has(d)) continue;
+    const f = path.join(base, d, "worker.js");
+    if (!fs.existsSync(f)) continue;
+    const hits = scanUnlisted(fs.readFileSync(f, "utf8"), allowed);
+    if (hits.length) res.push({ name: d, hits });
+  }
+  return res;
+}
+export { scanRepoUnlisted };
 
 async function scanLive() {
   const res = [];
@@ -143,6 +285,9 @@ async function scanLive() {
     const r = await fetch("https://api.cloudflare.com/client/v4/accounts/" + ACCT + "/workers/scripts", { headers: { Authorization: "Bearer " + TOKEN } });
     list = ((await r.json()).result || []).map((x) => x.id).sort();
   } catch { return [{ name: "(live list failed)", hits: [] }]; }
+  // A live bundle that hosts FOLDED members names them, so a hit inside it can be traced to the member directory that carries the same text.
+  const liveMembers = {};
+  for (const f of repoMarkers().folded) if (f.host) (liveMembers[f.host] = liveMembers[f.host] || []).push(f.name);
   const cap = 6;
   for (let i = 0; i < list.length; i += cap) {
     const chunk = list.slice(i, i + cap);
@@ -151,7 +296,7 @@ async function scanLive() {
         const r = await fetch("https://api.cloudflare.com/client/v4/accounts/" + ACCT + "/workers/scripts/" + name + "/content/v2", { headers: { Authorization: "Bearer " + TOKEN } });
         if (!r.ok) return;
         const hits = scan(await r.text()).filter((h) => h.kind === "VIOLATION");
-        if (hits.length) res.push({ name, hits });
+        if (hits.length) res.push({ name, members: liveMembers[name] || [], hits });
       } catch {}
     }));
   }
@@ -167,40 +312,86 @@ function isEntry() {
   try { return import.meta.url === pathToFileURL(process.argv[1]).href; } catch { return false; }
 }
 
+// An unlisted id a pull request ADDS (worker and id are the key; a hit that moves lines is not new).
+function diffUnlisted(head, base) {
+  const known = new Set();
+  for (const r of base || []) for (const h of r.hits) known.add(r.name + "|" + h.id);
+  const out = [];
+  for (const r of head || []) {
+    const added = r.hits.filter((h) => !known.has(r.name + "|" + h.id));
+    if (added.length) out.push({ name: r.name, hits: added });
+  }
+  return out;
+}
+export { diffUnlisted };
+
+const rowLabel = (r) => r.name + (r.folded ? " (FOLDED into " + (r.host || "an unnamed host") + ")" : "");
+const argValue = (flag) => { const k = process.argv.indexOf(flag); return k > 0 ? process.argv[k + 1] : undefined; };
+
 async function main() {
   const wantLive = process.argv.includes("--live");
   const wantJson = process.argv.includes("--json");
+  const strictAllowed = process.argv.includes("--strict-allowed");
+  const wantUnlisted = strictAllowed || process.argv.includes("--unlisted");
+
+  // MODEL-POLICY-SINGLE-SOURCE-1: the allowed table is read next to BANNED; a malformed row or one that re-admits a banned model is a
+  // configuration error (exit 2), never a silent pass.
+  const policy = loadPolicy(argValue("--policy"));
+  if (policy.problems.length) {
+    if (wantJson) console.log(JSON.stringify({ policy_problems: policy.problems }, null, 1));
+    else { console.log("== MODEL POLICY (" + policy.problems.length + " problems in the allowed table)"); for (const p of policy.problems) console.log("  " + p); }
+    process.exit(2);
+  }
+
   const bi = process.argv.indexOf("--base");
   if (bi > 0) {
     // Pull-request mode: scan the checked-out tree and the base tree, report only what the change adds.
     const baseDir = process.argv[bi + 1];
     if (!baseDir || !fs.existsSync(baseDir)) { console.log("model-floor-guard --base: base directory not found: " + baseDir); process.exit(2); }
     const added = diffViolations(scanRepo(), scanRepo(baseDir));
-    if (wantJson) console.log(JSON.stringify({ added }, null, 1));
+    const addedUnlisted = strictAllowed ? diffUnlisted(scanRepoUnlisted(undefined, policy.allowed), scanRepoUnlisted(baseDir, policy.allowed)) : [];
+    if (wantJson) console.log(JSON.stringify({ added, added_unlisted: addedUnlisted }, null, 1));
     else {
       console.log("== ADDED BY THIS CHANGE (" + added.length + " workers with new code-level violations against the base)");
-      for (const r of added) { console.log("  " + r.name); for (const h of r.hits.slice(0, 6)) console.log("      L" + h.line + " [" + h.label + "] " + h.text); }
+      for (const r of added) { console.log("  " + rowLabel(r)); for (const h of r.hits.slice(0, 6)) console.log("      L" + h.line + " [" + h.label + "] " + h.text); }
+      if (strictAllowed) {
+        console.log("== ADDED UNLISTED MODEL IDS (" + addedUnlisted.length + " workers pin an @cf/ id that is not in the allowed table)");
+        for (const r of addedUnlisted) { console.log("  " + r.name); for (const h of r.hits.slice(0, 6)) console.log("      L" + h.line + " " + h.id); }
+      }
     }
-    process.exit(added.length > 0 ? 1 : 0);
+    process.exit(added.length + addedUnlisted.length > 0 ? 1 : 0);
   }
   const repo = scanRepo();
   const live = wantLive ? await scanLive() : [];
+  const markers = repoMarkers();
+  const unlisted = wantUnlisted ? scanRepoUnlisted(undefined, policy.allowed) : [];
 
   if (wantJson) {
-    console.log(JSON.stringify({ repo, live }, null, 1));
+    const out = { repo, live, artifacts: byArtifact(repo), markers: { retired_skipped: markers.retired, folded: markers.folded } };
+    if (wantUnlisted) out.unlisted = unlisted;
+    console.log(JSON.stringify(out, null, 1));
   } else {
     const show = (title, rows) => {
       console.log("== " + title + " (" + rows.length + " workers with code-level violations)");
       for (const r of rows) {
-        console.log("  " + r.name);
+        console.log("  " + rowLabel(r));
         for (const h of r.hits.slice(0, 6)) console.log("      L" + h.line + " [" + h.label + "] " + h.text);
       }
     };
     show("REPO SOURCES", repo);
     if (wantLive) show("LIVE BUNDLES", live);
+    if (repo.some((r) => r.folded)) {
+      console.log("== BY DEPLOYED ARTIFACT (FOLDED members roll up to the host bundle that runs them)");
+      for (const a of byArtifact(repo)) console.log("  " + a.artifact + ": " + a.own + " own hits" + (a.members.length ? "; members " + a.members.map((m) => m.name + " " + m.hits).join(", ") : ""));
+    }
+    console.log("== MARKERS: " + markers.retired.length + " RETIRED directories not scanned, " + markers.folded.length + " FOLDED members (" + markers.folded.filter((f) => f.host).length + " name a host)");
+    if (wantUnlisted) {
+      console.log("== UNLISTED MODEL IDS (" + unlisted.length + " workers pin an @cf/ id that is not in the allowed table of " + policy.allowed.length + " models)");
+      for (const r of unlisted) { console.log("  " + r.name); for (const h of r.hits.slice(0, 6)) console.log("      L" + h.line + " " + h.id); }
+    }
   }
 
-  const total = repo.length + live.length;
+  const total = repo.length + live.length + (strictAllowed ? unlisted.length : 0);
   process.exit(total > 0 ? 1 : 0);
 }
 
