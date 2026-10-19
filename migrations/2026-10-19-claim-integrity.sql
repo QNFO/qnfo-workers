@@ -12,8 +12,9 @@
 -- t_P = 1800 s" and "blind expert reviewers assign a score"; 55 published papers carry an "experimental design" or "experimental
 -- setup", 47 mention participants, 40 ethics approval, IRB or informed consent. The pipeline performs none of these acts.
 --
--- claim_integrity_mode starts at 'measure' so the first sweep's verdicts are read before any public paper changes; the session
--- that ships this sets it to 'enforce' after that read (decision_log row below). 'off' stops the gate and the sweep.
+-- claim_integrity_mode starts at 'enforce' (owner closeout 2026-10-19: no session stays to flip a measure phase): a statement is
+-- changed only when a second model family confirms it, every original is backed up first, and 'measure' or 'off' stops public
+-- changes without a deploy (decision_log row below).
 
 CREATE TABLE IF NOT EXISTS paper_claim_audits (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -46,7 +47,7 @@ CREATE TABLE IF NOT EXISTS paper_integrity_backups (
 CREATE INDEX IF NOT EXISTS idx_paper_integrity_backups_slug ON paper_integrity_backups (slug);
 
 INSERT OR IGNORE INTO ops_config (key, value, note) VALUES
- ('claim_integrity_mode', 'measure', 'CLAIM-INTEGRITY-1 (qnfo-research-exec 0.22.0): enforce = gate + correct/retract published papers; measure = gate + audit only, no public change; off = neither. Starts at measure for one read of the first verdicts.'),
+ ('claim_integrity_mode', 'enforce', 'CLAIM-INTEGRITY-1 (qnfo-research-exec 0.22.0): enforce = gate + correct/retract published papers; measure = gate + audit only, no public change; off = neither.'),
  ('claim_integrity_batch', '6', 'CLAIM-INTEGRITY-1: published papers audited per 10-minute tick (1..12), three at a time.');
 
 INSERT OR IGNORE INTO metric_registry (metric, layer, kind, formula, source_of_truth, baseline, target, owner, disposition_actor, refresh_cadence, warning_band, kill_band, state, refresh_class)
@@ -86,7 +87,7 @@ VALUES ('post-publication-claim-correction', 'migrations/2026-10-19-claim-integr
 
 INSERT INTO decision_log (actor, assumption, action, evidence, outcome, blast_radius, rollback_path, capability_gain, predicted_outcome, reach_gain, surfaces_tested)
 VALUES ('session CLAIM-INTEGRITY-1', 'The pipeline performs no empirical act, so any sentence stating one as done is false; two model families plus a deterministic scan separate such statements from proposals and cited work well enough to correct automatically, and 5 or more confirmed statements mean the findings rest on them',
- 'Gate fabricated empirical claims before publication and in revisions; audit all published papers newest first; correct (new version with a Correction Notice) or retract (status retracted, notice served at the same address); start in measure mode for one read of the verdicts, then enforce',
+ 'Gate fabricated empirical claims before publication and in revisions; audit all published papers newest first; correct (new version with a Correction Notice) or retract (status retracted, notice served at the same address); enforce from the first tick (two-family confirmation, backup before every change)',
  'owner directive 2026-10-19; live paper evaluating-the-productivity-gains-... states pre-registration, an open data deposit and pilot measurements; 55 published papers carry an experimental design or setup',
  'pending', 'public papers on papers.qnfo.org (bodies, versions, status), the research corpus, dissemination queue rows of retracted papers',
  'ops_config claim_integrity_mode = off stops new changes; restore a paper from paper_integrity_backups (title, abstract, body_md, version, status); revert the PR for the code',
