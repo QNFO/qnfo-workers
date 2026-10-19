@@ -125,6 +125,15 @@ const WIP = Number((/^const PLAN_WIP = (\d+);/m.exec(fs.readFileSync(new URL("./
   issue(env, { title: "METRIC-TRIGGER-12-C: q08-signal-engine", description: "/api/f" });
   let r = await plan(env);
   ok(!r.planned && /work in progress/.test(r.why) && prompts.length === 0, "7a no planning while PLAN_WIP code tasks are unfinished", r);
+  // PLAN-WIP-TUNABLE-1 (0.18.27, agent_issues 100086): ops_config code_plan_wip lifts the gate without a deploy.
+  d.exec("CREATE TABLE IF NOT EXISTS ops_config (key TEXT PRIMARY KEY, value TEXT)");
+  d.exec("INSERT OR REPLACE INTO ops_config VALUES ('code_plan_wip', '40')");
+  r = await plan(env);
+  ok(!/work in progress/.test(String(r.why || "")) && prompts.length === 1, "7a4 code_plan_wip 40 lets the planner run with PLAN_WIP tasks unfinished", r);
+  d.exec("DELETE FROM ops_config WHERE key = 'code_plan_wip'");
+  prompts.length = 0;
+  d.exec("DELETE FROM issue_plans");
+  issue(env, { title: "METRIC-TRIGGER-15-C: q08-signal-engine", description: "/api/f" });
   d.exec("DELETE FROM code_tasks");
   // PLAN-WIP-SUPERSEDED-1 (0.18.25, agent_issues 100074): superseded is terminal, so PLAN_WIP superseded tasks plus one live
   // task under the gate do not lock the planner out (8 superseded rows stalled issue_plans for 20 h on 2026-10-18/19).
