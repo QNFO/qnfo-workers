@@ -183,7 +183,7 @@ return execDefault;
 
 // fleet-scheduler v0.1.0 - dynamic cron dispatcher
 // Per-minute tick reads fleet_crons from qnfo-audit D1, dispatches due jobs to fleet-executor.
-var VERSION = "1.0.4-capability-contract";
+var VERSION = "1.0.5-cron-tick-5m-1"; // CRON-TICK-5M-1: redeploy so raw_put applies the declared */5 tick
 
 function json(obj, status) {
   return new Response(JSON.stringify(obj), { status: status || 200, headers: { "content-type": "application/json" } });

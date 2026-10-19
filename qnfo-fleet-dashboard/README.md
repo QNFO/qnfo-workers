@@ -210,6 +210,26 @@ only. The daily reach ingest writes one `cf-rum-human` row per host (`entity_typ
 `visits`). Suite: `node --no-warnings qnfo-fleet-dashboard/kpi.test.mjs`. Chart colours are a validated pair per theme
 (light `#008A7B` / `#B5562A`, dark `#2AA595` / `#D06C3E`); the page has no script and every chart has a table.
 
+## Architecture self-model (ARCH-SELF-MODEL-1, v1.48.0, pillar autonomy)
+The fleet's model of itself, computed at request time and kept 5 minutes per isolate; open and read-only (OPEN-ACCESS-1), names and counts only.
+Page `/architecture` (Platform area, sub-bar "Architecture"); JSON `GET /api/architecture` (`?full=1` adds the table index and per-worker table lists,
+`?q=<text>` searches workers and tables), `/api/architecture/worker/<name>`, `/api/architecture/table/<name>` (bare name, suffix or `db.table`) and
+`/api/architecture/impact/<worker>` (direct and transitive dependents, tables it writes that others read). An ambiguous name returns its candidates and
+no detail; an unknown name returns no match, never an invented one.
+
+| Part | Source |
+|---|---|
+| Workers, bindings, service dependencies both ways, schedules, routes, tables read and written, findings | the fleet code + live topology graph (FLEET-GRAPH-1: qnfo-graph `fg_node`, `fg_edge`, `fg_finding`, `fg_state`, binding `GRAPH`) |
+| Purpose, version, state | `service_registry` |
+| Last tick | `fleet_heartbeat` |
+| Fleet-exec loops | `fleet_crons` |
+| The fleet's memory (row counts) | the registries listed in `ARCH_REGISTRIES` |
+| Layers, the change path, the lanes of authority | tables in the `ARCH-SELF-MODEL` block, written from CLAUDE.md and the doctrine (a description, not a measurement) |
+
+The model reports what it cannot see: `self.sources` (each read and whether it succeeded), `self.blind` (reads that failed: the part is missing, not empty) and
+`self.limits` (static extraction misses a table named through a variable; layers are a judgement; a worker no layer names is `unclassified`). No secret name or value
+is read. Suite: `architecture.test.mjs`.
+
 ## Content tab (CONTENT-PIPELINE-1, v1.37.0, pillars research and reach)
 `GET /content` (page) and `GET /api/content` (JSON, `content-pipeline/v1`) are open to everyone and follow the Metrics tab's
 rules (60 s cache, sources named, `null` = not measured). They show every content item on one production line: the stage

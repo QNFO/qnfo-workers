@@ -1,11 +1,13 @@
 {
-  "audited_at": "2026-10-19 08:58:38",
+  "audited_at": "2026-10-19 09:32:19",
   "d1_write_failures": [],
   "d1_writes_ok": 120,
   "guard": {
     "_drift_confirm": {
       "first_pass": [
-        "personal-companion"
+        "fleet-exec",
+        "qnfo-code-orchestrator",
+        "qnfo-fleet-control"
       ],
       "refreshed": true,
       "second_pass": []
@@ -89,7 +91,6 @@
       "errata-hub",
       "errata-orchestrator",
       "events-radar",
-      "fleet-exec",
       "jnl-pipeline",
       "jnl-referee",
       "jnl-reviser",
@@ -157,7 +158,7 @@
       "skills-discovery",
       "vault-indexer"
     ],
-    "not_deployed_notdrift": 75,
+    "not_deployed_notdrift": 74,
     "not_deployed_workers": [
       {
         "dir": "agent-orchestrator",
@@ -198,11 +199,6 @@
         "dir": "events-radar",
         "marker": "FOLDED",
         "worker": "events-radar"
-      },
-      {
-        "dir": "fleet-exec",
-        "marker": "FOLDED",
-        "worker": "fleet-exec"
       },
       {
         "dir": "jnl-pipeline",
@@ -537,15 +533,25 @@
     ],
     "retired_present": [
       {
+        "dir": "fleet-exec",
+        "marker": "FOLDED",
+        "worker": "fleet-exec"
+      },
+      {
         "dir": "qnfo-artifacts",
         "marker": "RETIRED",
         "worker": "qnfo-artifacts"
       }
     ],
-    "retired_present_count": 1,
+    "retired_present_count": 2,
     "scope": "all",
-    "sync": 32,
+    "sync": 33,
     "sync_workers": [
+      {
+        "dir": "fleet-exec",
+        "version": "1.0.5-cron-tick-5m-1",
+        "worker": "fleet-exec"
+      },
       {
         "dir": "idea-hub",
         "version": "1.11.2-codeagent",
@@ -593,7 +599,7 @@
       },
       {
         "dir": "qnfo-code-orchestrator",
-        "version": "0.18.27-plan-wip-tunable-1",
+        "version": "0.18.29-window-relocate-1",
         "worker": "qnfo-code-orchestrator"
       },
       {
@@ -618,12 +624,12 @@
       },
       {
         "dir": "qnfo-fleet-control",
-        "version": "0.34.0-review-rotate-superseded",
+        "version": "0.34.2-cron-tick-5m-1",
         "worker": "qnfo-fleet-control"
       },
       {
         "dir": "qnfo-fleet-dashboard",
-        "version": "1.47.0-credit-halt-only-1",
+        "version": "1.48.0",
         "worker": "qnfo-fleet-dashboard"
       },
       {
@@ -798,11 +804,10 @@
     },
     "fleet-exec": {
       "before": null,
-      "http": 404,
+      "http": null,
       "live": null,
       "match": 0,
-      "note": "NOT_DEPLOYED",
-      "retired": "FOLDED",
+      "note": "RETIRED_PRESENT",
       "worker": "fleet-exec"
     },
     "funding": {
@@ -1196,9 +1201,9 @@
       "worker": "qnfo-code-agent"
     },
     "qnfo-code-orchestrator": {
-      "before": "0.18.27-plan-wip-tunable-1",
+      "before": "0.18.29-window-relocate-1",
       "http": 200,
-      "live": "0.18.27-plan-wip-tunable-1",
+      "live": "0.18.29-window-relocate-1",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-code-orchestrator"
@@ -1326,17 +1331,17 @@
       "worker": "qnfo-fleet-calibrator"
     },
     "qnfo-fleet-control": {
-      "before": "0.34.0-review-rotate-superseded",
+      "before": "0.34.2-cron-tick-5m-1",
       "http": 200,
-      "live": "0.34.0-review-rotate-superseded",
+      "live": "0.34.2-cron-tick-5m-1",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-fleet-control"
     },
     "qnfo-fleet-dashboard": {
-      "before": "1.47.0-credit-halt-only-1",
+      "before": "1.48.0",
       "http": 200,
-      "live": "1.47.0-credit-halt-only-1",
+      "live": "1.48.0",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-fleet-dashboard"
