@@ -1,5 +1,5 @@
 {
-  "audited_at": "2026-10-19 05:08:10",
+  "audited_at": "2026-10-19 05:37:13",
   "d1_write_failures": [],
   "d1_writes_ok": 120,
   "guard": {
@@ -541,7 +541,7 @@
     "sync_workers": [
       {
         "dir": "idea-hub",
-        "version": "1.10.12-codeagent",
+        "version": "1.11.0-share-subscribe",
         "worker": "idea-hub"
       },
       {
@@ -556,12 +556,12 @@
       },
       {
         "dir": "q08-signal-engine",
-        "version": "0.28.13-codeagent",
+        "version": "0.28.14-sql-arity",
         "worker": "q08-signal-engine"
       },
       {
         "dir": "qnfo-ai",
-        "version": "5.36.7-codeagent",
+        "version": "5.36.8-router-drill-sync",
         "worker": "qnfo-ai"
       },
       {
@@ -581,12 +581,12 @@
       },
       {
         "dir": "qnfo-cloud-ops",
-        "version": "1.30.4-codeagent",
+        "version": "1.31.0-sla-120m-inbound",
         "worker": "qnfo-cloud-ops"
       },
       {
         "dir": "qnfo-code-orchestrator",
-        "version": "0.18.21-claims-bind-and-visibility-1",
+        "version": "0.18.22-merge-scope-at-read-1",
         "worker": "qnfo-code-orchestrator"
       },
       {
@@ -611,7 +611,7 @@
       },
       {
         "dir": "qnfo-fleet-control",
-        "version": "0.33.17-metric-trigger-twin-2",
+        "version": "0.33.19-pr-open-422-adopt",
         "worker": "qnfo-fleet-control"
       },
       {
@@ -621,12 +621,12 @@
       },
       {
         "dir": "qnfo-gateway",
-        "version": "3.25.0-plain-language-1",
+        "version": "3.26.1-gw-json-quiet",
         "worker": "qnfo-gateway"
       },
       {
         "dir": "qnfo-github-steward",
-        "version": "0.4.7-codeagent",
+        "version": "0.4.8-tracker-repair-round-1",
         "worker": "qnfo-github-steward"
       },
       {
@@ -656,7 +656,7 @@
       },
       {
         "dir": "qnfo-model-eval",
-        "version": "1.4.0-canary-glossary",
+        "version": "1.4.1-log-catch",
         "worker": "qnfo-model-eval"
       },
       {
@@ -666,7 +666,7 @@
       },
       {
         "dir": "qnfo-ops",
-        "version": "2.48.3-model-floor-1",
+        "version": "2.49.0-log-redact-1",
         "worker": "qnfo-ops"
       },
       {
@@ -676,7 +676,7 @@
       },
       {
         "dir": "qnfo-research-exec",
-        "version": "0.18.43-codeagent",
+        "version": "0.19.2-retry-not-error",
         "worker": "qnfo-research-exec"
       },
       {
@@ -807,9 +807,9 @@
       "worker": "funding"
     },
     "idea-hub": {
-      "before": "1.10.12-codeagent",
+      "before": "1.11.0-share-subscribe",
       "http": 200,
-      "live": "1.10.12-codeagent",
+      "live": "1.11.0-share-subscribe",
       "match": 1,
       "note": "SYNC",
       "worker": "idea-hub"
@@ -988,9 +988,9 @@
       "worker": "personal-life-search"
     },
     "q08-signal-engine": {
-      "before": "0.28.13-codeagent",
+      "before": "0.28.14-sql-arity",
       "http": 200,
-      "live": "0.28.13-codeagent",
+      "live": "0.28.14-sql-arity",
       "match": 1,
       "note": "SYNC",
       "worker": "q08-signal-engine"
@@ -1023,9 +1023,9 @@
       "worker": "qnfo-agent-ws"
     },
     "qnfo-ai": {
-      "before": "5.36.7-codeagent",
+      "before": "5.36.8-router-drill-sync",
       "http": 200,
-      "live": "5.36.7-codeagent",
+      "live": "5.36.8-router-drill-sync",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-ai"
@@ -1172,9 +1172,9 @@
       "worker": "qnfo-citation-watch"
     },
     "qnfo-cloud-ops": {
-      "before": "1.30.4-codeagent",
+      "before": "1.31.0-sla-120m-inbound",
       "http": 200,
-      "live": "1.30.4-codeagent",
+      "live": "1.31.0-sla-120m-inbound",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-cloud-ops"
@@ -1189,9 +1189,9 @@
       "worker": "qnfo-code-agent"
     },
     "qnfo-code-orchestrator": {
-      "before": "0.18.21-claims-bind-and-visibility-1",
+      "before": "0.18.22-merge-scope-at-read-1",
       "http": 200,
-      "live": "0.18.21-claims-bind-and-visibility-1",
+      "live": "0.18.22-merge-scope-at-read-1",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-code-orchestrator"
@@ -1319,9 +1319,9 @@
       "worker": "qnfo-fleet-calibrator"
     },
     "qnfo-fleet-control": {
-      "before": "0.33.17-metric-trigger-twin-2",
+      "before": "0.33.19-pr-open-422-adopt",
       "http": 200,
-      "live": "0.33.17-metric-trigger-twin-2",
+      "live": "0.33.19-pr-open-422-adopt",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-fleet-control"
@@ -1353,17 +1353,17 @@
       "worker": "qnfo-fleet-feed"
     },
     "qnfo-gateway": {
-      "before": "3.25.0-plain-language-1",
+      "before": "3.26.1-gw-json-quiet",
       "http": 200,
-      "live": "3.25.0-plain-language-1",
+      "live": "3.26.1-gw-json-quiet",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-gateway"
     },
     "qnfo-github-steward": {
-      "before": "0.4.7-codeagent",
+      "before": "0.4.8-tracker-repair-round-1",
       "http": 200,
-      "live": "0.4.7-codeagent",
+      "live": "0.4.8-tracker-repair-round-1",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-github-steward"
@@ -1463,9 +1463,9 @@
       "worker": "qnfo-memory-mcp-legacy-dup"
     },
     "qnfo-model-eval": {
-      "before": "1.4.0-canary-glossary",
+      "before": "1.4.1-log-catch",
       "http": 200,
-      "live": "1.4.0-canary-glossary",
+      "live": "1.4.1-log-catch",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-model-eval"
@@ -1479,9 +1479,9 @@
       "worker": "qnfo-observability"
     },
     "qnfo-ops": {
-      "before": "2.48.3-model-floor-1",
+      "before": "2.49.0-log-redact-1",
       "http": 200,
-      "live": "2.48.3-model-floor-1",
+      "live": "2.49.0-log-redact-1",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-ops"
@@ -1567,9 +1567,9 @@
       "worker": "qnfo-register-guard"
     },
     "qnfo-research-exec": {
-      "before": "0.18.43-codeagent",
+      "before": "0.19.2-retry-not-error",
       "http": 200,
-      "live": "0.18.43-codeagent",
+      "live": "0.19.2-retry-not-error",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-research-exec"
