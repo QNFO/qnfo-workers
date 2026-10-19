@@ -67,13 +67,29 @@ not tell whether anything was getting better. The hourly tick now:
   up) and files `METRIC-REGRESSION-1: <metric>` on a >= 15% worsening, including `maximize` metrics that have no trigger
   (pageviews, referrals, impact per dollar); it closes itself, with hysteresis, when the decline stops;
 - re-checks metric issues closed in the last 30 days and files `METRIC-FIX-RELAPSED-1: <metric>` naming the issue whose
-  remediation did not hold;
+  remediation did not hold. A `METRIC-TRIGGER` issue closes when its trigger predicate clears (TRIGGER-RECOVERY-1), so since
+  0.39.0 (IL-RELAPSE-TRIGGER-1) a relapse is that trigger hit again on a day after the closure; a metric that only misses a
+  stricter registry target with the trigger clear is an early warning (no issue, listed in `GET /improvement`
+  `target_misses`). A closure with no readable or no enabled trigger (a constraint breach, a deleted or disabled trigger) is judged on the target;
+  `ops_config il_relapse_trigger_judge = off` restores the target judgement for every closure without a deploy;
 - grades itself in `metric_registry`: `improvement_rate_7d` (>= 0.5), `metric_regressions_7d` (<= 1), `fix_hold_rate_30d`
-  (>= 0.8), with seeded triggers so a loop that stops improving things files its own issue.
+  (>= 0.8, closures judged by the trigger predicate), with seeded triggers so a loop that stops improving things files its
+  own issue, and the guard `fix_target_hold_rate_30d` (the same closures judged on the registry target; trended, no threshold
+  trigger by design) so the relapse rule cannot hide a metric that is off target.
 Unknown is never a finding (4 daily points per window, so about 10 days of history before the first verdict). One issue per
 metric: a finding already carried by an open trigger or constraint issue is not filed twice. At most 3 new issues per tick.
 Read: `GET /improvement`. Run now: `POST /improvement/tick` (admin token). Ledger: `improvement_loop_runs`. Suite:
-`improvement.test.mjs` (pure half plus the tick on an in-memory D1 with the live integrity and close-evidence triggers).
+`improvement.test.mjs` (pure half plus the tick on an in-memory D1 with the live integrity and close-evidence triggers) and
+`improvement-relapse-trigger.test.mjs` (trigger-judged relapse against the gateway_cap_30d_usd and server_side_close_share_7d fixtures).
+
+## VERIFICATION-PATH-1 (0.38.0, 2026-10-19, pillar autonomy; agent_issues 2953, 2954)
+`rtReopenOnRelapse` starts its failure window at the issue's newest `issue_lifecycle` close event (event dispositioned or closed that landed
+on closed or resolved), not at `agent_issues.updated_at`, which every annotation of the row moves; an issue with no lifecycle row keeps the old
+anchor. `remediation_contracts.deferred_since` (migrations/2026-10-19-contract-deferred-since.sql) is stamped when a contract first reads
+deferred and cleared by any real verdict; a deferral older than 7 days files one deduped `VERIFICATION-DEFERRED-7D-1: <class>` issue that quotes
+the pending reason as the unblocker and closes itself when the contract reads a verdict or is parked. The sweep is bounded: 3 issues a tick, 12 in
+any 24 hours, oldest first. Revert switches, no deploy: `ops_config rt_close_event_anchor = off` (window back on updated_at) and
+`ops_config rt_deferral_escalation = off` (no escalation issues; the stamp keeps running). Suite: `verification-path.test.mjs`.
 
 ## SURFACE-METRICS-1 (0.4.88, 2026-10-02, pillar reach)
 `IL_SURFACES` lists public surfaces that publish aggregate metrics. Each improvement tick reads them into `metric_registry`
