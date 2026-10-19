@@ -1,62 +1,30 @@
 {
  "ok": true,
  "marker": "REMEDIATION-CONSUMER-1",
- "verifier": "remediation-consumer@63e63ab8b350",
- "due": 15,
- "pass": 7,
- "fail": 8,
+ "verifier": "remediation-consumer@4208f991c8b1",
+ "due": 5,
+ "pass": 1,
+ "fail": 4,
  "skipped": 0,
  "contracts": [
   {
-   "class": "fm-skip-token-in-merge-message",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "ok",
-   "observed": "ok",
-   "written": true
-  },
-  {
-   "class": "issue-100133",
-   "issue_id": 100133,
+   "class": "issue-100136",
+   "issue_id": 100136,
    "verdict": "fail",
    "expected": "ok",
-   "observed": "missing-marker:CLAUDE.md",
+   "observed": "missing-marker:qnfo-fleet-dashboard/worker.js",
    "written": true
   },
   {
-   "class": "issue-100134",
-   "issue_id": 100134,
-   "verdict": "fail",
-   "expected": "ok",
-   "observed": "missing-marker:qnfo-fleet-control/worker.js",
-   "written": true
-  },
-  {
-   "class": "issue-2818",
-   "issue_id": 2818,
-   "verdict": "fail",
-   "expected": "ok",
-   "observed": "missing-marker:qnfo-social/worker.js",
-   "written": true
-  },
-  {
-   "class": "issue-2829",
-   "issue_id": 2829,
-   "verdict": "fail",
-   "expected": "ok",
-   "observed": "missing-marker:qnfo-ai-calibration/worker.js",
-   "written": true
-  },
-  {
-   "class": "fm-goal-review-empty-reply",
+   "class": "goal-TP-1-AUTONOMY-ENGINE-1",
    "issue_id": null,
    "verdict": "fail",
-   "expected": "0",
-   "observed": "1",
+   "expected": "ok",
+   "observed": "pending: code_task_success_rate_30d 0.34 (needs >= 0.6 on 14 days)",
    "written": true
   },
   {
-   "class": "fm-cf-obs-nested-pin-stale",
+   "class": "fm-code-task-whole-file-over-window",
    "issue_id": null,
    "verdict": "pass",
    "expected": "0",
@@ -64,67 +32,19 @@
    "written": true
   },
   {
-   "class": "fm-cf-obs-bridge-refile-loop",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "0",
-   "observed": "0",
-   "written": true
-  },
-  {
-   "class": "fm-owner-queue-objects-outside-repo",
-   "issue_id": null,
-   "verdict": "pass",
+   "class": "issue-2036",
+   "issue_id": 2036,
+   "verdict": "fail",
    "expected": "1",
-   "observed": "1",
-   "written": true
-  },
-  {
-   "class": "fm-tracker-state-lag",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "ok",
-   "observed": "ok",
-   "written": true
-  },
-  {
-   "class": "belief-repo-token-writes-routes",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "1",
-   "observed": "1",
-   "written": true
-  },
-  {
-   "class": "issue-100135",
-   "issue_id": 100135,
-   "verdict": "fail",
-   "expected": "ok",
-   "observed": "pending: filed by qnfo-code-orchestrator, which owns it for 48h",
-   "written": true
-  },
-  {
-   "class": "fm-metric-close-flap",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "0",
    "observed": "0",
    "written": true
   },
   {
-   "class": "issue-2838",
-   "issue_id": 2838,
+   "class": "issue-100142",
+   "issue_id": 100142,
    "verdict": "fail",
-   "expected": "tested",
-   "observed": "untested",
-   "written": true
-  },
-  {
-   "class": "fm-script-live-without-source",
-   "issue_id": null,
-   "verdict": "fail",
-   "expected": "0",
-   "observed": "2",
+   "expected": "ok",
+   "observed": "missing-marker",
    "written": true
   }
  ],
@@ -151,8 +71,9 @@
   "http",
   "runner-https"
  ],
+ "https": 1,
  "budget_exhausted": false,
- "runtime_verified_share_24h": 6.5,
+ "runtime_verified_share_24h": 6.6,
  "host_census": {
   "skipped": "ran within 6h"
  },
@@ -165,14 +86,14 @@
   "path": "accounts"
  },
  "migrations": {
-  "opted_in": 322,
+  "opted_in": 323,
   "unapplied": [],
   "applied_now": [],
   "failed": [],
   "metric": 0
  },
- "spent_ms": 14940,
- "head": "63e63ab8b3508703c8fa986753951ecfabd6c4df",
+ "spent_ms": 14787,
+ "head": "4208f991c8b1d19fcca936e5afcf30651a2061df",
  "job_status": "success",
- "ts": "2026-10-19T11:06:28Z"
+ "ts": "2026-10-19T11:26:16Z"
 }
