@@ -50,7 +50,7 @@
 // VERSION-BUMP-GUARD-1 requires the literal var-VERSION-equals-double-quoted-string form: this constant is
 // what fleet-autoaudit's strict numeric-ahead deploy check and deploy-drift's string
 // compare both read. `const` here would make the bundle invisible to deploy-drift.
-var VERSION = "1.6.0-ab-harness-1"; // 1.6.0 AB-HARNESS-1 (agent_issues 2828 MODEL-QUALITY-PARITY-1, pillar autonomy): a paired A/B quality harness. For one worker and task set it puts the pre-change answer (a recorded baseline reply, or the pre-change model live) and the post-change answer (the post-change model through qnfo-ai, pin_model true) in front of two judges from two other model families, at least one outside every family the worker uses, and writes the win rate against a stated threshold (0.40) to model_ab_runs. Triggers on the hourly tick: a changed model in scripts/model-policy.json, or a model a worker newly uses in ai_call_counters; classification lanes reuse clefCanary agreement. A regression files an issue. Routes GET /ab/runs, GET /ab/fixtures, POST /ab/run (x-eval-key). Switch: cf_model_eval_config ab_enabled = 0 (control_registry model-ab-switch). New QNFO_AI service binding (props caller qnfo-model-eval). Tests: ab-harness.test.mjs. // 1.5.0 CRON-GRID-1 (owner directive 2026-10-19, pillar autonomy): one hourly :20 trigger. The benchmark battery keeps its 6-hour cadence (slots 00:17, 06:17, 12:17, 18:17 run on the :20 fire) because it calls models while the Workers AI cap is breached; a failed run is retried hourly, at most 3 times, and now fails the run instead of being swallowed. Every fire is logged to cron_fire_log for CRON-WATCH-1. // 1.4.1 WORKERS-BP-LOGGING-1 (agent_issues 2342, RESOLVE-ALL-OPEN-1 2026-10-19): the scheduled() error-event write no longer swallows its own failure; it logs a structured console.error.
+var VERSION = "1.6.1-health-contract-1"; // 1.6.1 HEALTH-CONTRACT-1 (agent_issues 2852, capability_contract_conformance, pillar autonomy): /health now declares capabilities[] and limitations[] (module constants CAPABILITIES and LIMITATIONS, the same lists /manifest returns), so the fleet snapshot counts this worker as conforming; before this /health carried only ok, version and the catalog count. No behaviour change. // 1.6.0 AB-HARNESS-1 (agent_issues 2828 MODEL-QUALITY-PARITY-1, pillar autonomy): a paired A/B quality harness. For one worker and task set it puts the pre-change answer (a recorded baseline reply, or the pre-change model live) and the post-change answer (the post-change model through qnfo-ai, pin_model true) in front of two judges from two other model families, at least one outside every family the worker uses, and writes the win rate against a stated threshold (0.40) to model_ab_runs. Triggers on the hourly tick: a changed model in scripts/model-policy.json, or a model a worker newly uses in ai_call_counters; classification lanes reuse clefCanary agreement. A regression files an issue. Routes GET /ab/runs, GET /ab/fixtures, POST /ab/run (x-eval-key). Switch: cf_model_eval_config ab_enabled = 0 (control_registry model-ab-switch). New QNFO_AI service binding (props caller qnfo-model-eval). Tests: ab-harness.test.mjs. // 1.5.0 CRON-GRID-1 (owner directive 2026-10-19, pillar autonomy): one hourly :20 trigger. The benchmark battery keeps its 6-hour cadence (slots 00:17, 06:17, 12:17, 18:17 run on the :20 fire) because it calls models while the Workers AI cap is breached; a failed run is retried hourly, at most 3 times, and now fails the run instead of being swallowed. Every fire is logged to cron_fire_log for CRON-WATCH-1. // 1.4.1 WORKERS-BP-LOGGING-1 (agent_issues 2342, RESOLVE-ALL-OPEN-1 2026-10-19): the scheduled() error-event write no longer swallows its own failure; it logs a structured console.error.
 const BATTERY_VERSION = "cfmb-2";
 const DOCS_INDEX = "https://developers.cloudflare.com/workers-ai/models/index.md";
 const docsModel = (slug) => `https://developers.cloudflare.com/workers-ai/models/${slug}/index.md`;
@@ -1356,6 +1356,24 @@ async function abMarkSeen(env, c) {
 }
 // ---- AB-HARNESS-1:END ----
 
+// HEALTH-CONTRACT-1 (agent_issues 2852): the capability contract. qnfo-deploy-guard snapshots capabilities[] and limitations[] from
+// /health and qnfo-fleet-control grades the share of live workers that declare both (capability_contract_conformance). Each line is
+// stated in this file's own header, battery notes or A/B block comments; /health and /manifest return the same two lists.
+const CAPABILITIES = ["catalog-discovery", "model-benchmark-battery", "incumbent-control-baseline",
+  "cost-aware-promotion", "harness-error-classification", "decision-model-canary", "backlog-escalation",
+  "paired-ab-quality-harness", "model-change-trigger"];
+const LIMITATIONS = [
+  "the cfmb-2 battery has 10 chat probes and 8 decision probes: it separates capability floors and cost and does not measure top-end reasoning differences between two models that both score 1.0, so a saturated control yields a cost win or parity, never better",
+  "a promotion is a recommendation, not a switch: the ladder row is written with active=0 and a roadmap item and a deduped agent_issue name the exact change, so routing never changes by surprise",
+  "a model that rejects the system role or has no account config is recorded as harness_error and left a candidate, never rejected: a harness failure is not a quality verdict",
+  "the A/B fixtures are passage-grounded, short and generic: they catch empty, unsupported, wrong or truncated answers and are not a worker's own prompts",
+  "the A/B seed baselines are reference answers authored in worker.js, not machine recordings; only live_pre records real pre-change replies",
+  "the decision-model canary over real labelled agent_issues runs only while cf_model_eval_config canary_enabled is 1 (default 0)",
+  "bounded per run and per day: max_models_per_run (default 6) models per battery run, ab_max_runs_per_tick (default 2) and ab_daily_cap (default 12) A/B runs, switched by ab_enabled",
+  "the A/B model-change trigger needs scripts/model-policy.json read from main over HTTPS and ai_call_counters; a worker seen for the first time in the policy is only recorded as a baseline, never run",
+  "POST /run, POST /canary and POST /ab/run need the x-eval-key manual key; the read routes are open"
+];
+
 async function manifest(env) {
   const db = env.AUDIT;
   const counts = await db.prepare(
@@ -1370,9 +1388,7 @@ async function manifest(env) {
   return {
     service: "qnfo-model-eval", kind: "worker", version: VERSION,
     purpose: "CF-MODEL-EVAL-1 continuous evaluation of new Cloudflare Workers AI models for fleet production adoption",
-    capabilities: ["catalog-discovery", "model-benchmark-battery", "incumbent-control-baseline",
-      "cost-aware-promotion", "harness-error-classification", "decision-model-canary", "backlog-escalation",
-      "paired-ab-quality-harness", "model-change-trigger"],
+    capabilities: CAPABILITIES, limitations: LIMITATIONS,
     routes: ["/health", "/manifest", "/catalog", "/evals", "/runs", "/leaderboard", "/promotions", "/canary", "/run", "/ab/runs", "/ab/fixtures", "/ab/run"],
     crons: ["20 * * * *"], battery_cadence: "17 */6 * * * (CRON-GRID-1)", battery: BATTERY_VERSION,
     controls: CONTROLS.map((c) => c.model_id),
@@ -1389,7 +1405,7 @@ export default {
     try {
       if (p === "/health" || p === "/") {
         const c = await env.AUDIT.prepare("SELECT COUNT(*) n FROM cf_model_catalog").first();
-        return json({ ok: true, service: "qnfo-model-eval", version: VERSION, catalog: c ? c.n : 0 });
+        return json({ ok: true, service: "qnfo-model-eval", version: VERSION, catalog: c ? c.n : 0, capabilities: CAPABILITIES, limitations: LIMITATIONS });
       }
       if (p === "/manifest") return json(await manifest(env));
       if (p === "/catalog") {

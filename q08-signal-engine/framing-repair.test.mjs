@@ -119,17 +119,17 @@ ok(/var retryPrompt = retryPromptFor\(prompt, piece\.text, gateResult\.problems\
   const fam = mod.__quality.familyOf;
   ok(F.FACTCHECK_POOL.length === 8 && F.MODEL_FAMILY["@cf/openai/gpt-oss-20b"] === "openai" && new Set(F.FACTCHECK_POOL.map(fam)).size === 6, "the pool holds eight models over six families (google and meta left with MODEL-FLOOR-1)");
   const o1 = F.factCheckOrder([fam("@cf/openai/gpt-oss-120b")]);
-  ok(o1.length === 6 && !o1.some((m) => /gpt-oss/.test(m)) && o1.slice(0, 4).join() === F.FACTCHECK_POOL.slice(0, 4).join() && /nemotron/.test(o1[4]) && /deepseek-v4-pro/.test(o1[5]), "a gpt-oss writer: the four non-writer families in pool order, then nemotron, never openai", o1);
+  ok(o1.length === 6 && !o1.some((m) => /gpt-oss/.test(m)) && o1.slice(0, 3).map((m) => m.split("/").pop()).join() === "deepseek-v4-flash-0731,kimi-k2.6,nemotron-3-120b-a12b" && /deepseek-v4-pro/.test(o1[3]) && o1.slice(4).map((m) => m.split("/").pop()).join() === "glm-5.3-flash,qwen3.8-27b", "a gpt-oss writer (Q08-REVIEWER-SWAP-1): the working non-writer families first, the deepseek sibling next, the previous reviewers last, never openai", o1);
   const o2 = F.factCheckOrder([fam("@cf/nvidia/nemotron-3-120b-a12b")]);
   ok(o2.length === 7 && o2.indexOf("@cf/openai/gpt-oss-20b") < o2.indexOf("@cf/openai/gpt-oss-120b") && o2.indexOf("@cf/openai/gpt-oss-20b") > 0, "a nemotron writer: the cheaper gpt-oss sibling is tried before the larger one", o2);
   let calls = [];
   const envFive = { AI: { run: async (model, input) => { calls.push(model); if (/llama|qwen|gemma|glm|deepseek|kimi/.test(model)) throw new Error("timeout"); return { response: '{"unsupported":[],"verdict":"pass"}' }; } } };
   const fc = await V.factCheck(envFive, "# T\n\nSome essay text that is long enough.", "Some source text.", "@cf/zzz/writer", "s");
-  ok(fc.unavailable === false && fc.ok === true && fc.judges.length === 2 && new Set(fc.judges.map((j) => j.family)).size === 2 && calls.length === 6, "the five proven families down: the two writer families still give two verdicts", { calls, judges: fc.judges.map((j) => j.model) });
+  ok(fc.unavailable === false && fc.ok === true && fc.judges.length === 2 && new Set(fc.judges.map((j) => j.family)).size === 2 && calls.length === 4 && !calls.some((m) => /glm|qwen3\.8/.test(m)), "deepseek-flash and kimi down: the two writer families give the two verdicts after four calls, before the previous reviewers are asked", { calls, judges: fc.judges.map((j) => j.model) });
   calls = [];
   const envSib = { AI: { run: async (model) => { calls.push(model); if (/llama|qwen|gemma|glm|deepseek|kimi|gpt-oss-20b/.test(model)) throw new Error("timeout"); return { response: '{"unsupported":[],"verdict":"pass"}' }; } } };
   const fc2 = await V.factCheck(envSib, "# T\n\nSome essay text.", "Some source text.", "@cf/zzz/writer", "s");
-  ok(fc2.ok === true && fc2.judges.length === 2 && calls.length === 8 && fc2.judges.map((j) => j.model).join() === "@cf/nvidia/nemotron-3-120b-a12b,@cf/openai/gpt-oss-120b", "the cheaper sibling down: its larger sibling stands in for the family, two verdicts after all eight calls", { calls, judges: fc2.judges.map((j) => j.model) });
+  ok(fc2.ok === true && fc2.judges.length === 2 && calls.length === 6 && fc2.judges.map((j) => j.model).join() === "@cf/nvidia/nemotron-3-120b-a12b,@cf/openai/gpt-oss-120b", "the cheaper sibling down: its larger sibling stands in for the family, two verdicts after six calls (the previous reviewers are still unasked)", { calls, judges: fc2.judges.map((j) => j.model) });
   calls = [];
   const envAll = { AI: { run: async (model) => { calls.push(model); throw new Error("timeout"); } } };
   const fcAll = await V.factCheck(envAll, "# T\n\nSome essay text.", "Some source text.", "@cf/zzz/writer", "s");
@@ -141,7 +141,7 @@ ok(/var retryPrompt = retryPromptFor\(prompt, piece\.text, gateResult\.problems\
   calls = [];
   const envOne = { AI: { run: async (model) => { calls.push(model); if (/qwen/.test(model)) throw new Error("timeout"); return { response: '{"unsupported":[],"verdict":"pass"}' }; } } };
   const fc4 = await V.factCheck(envOne, "# T\n\nSome essay text.", "Some source text.", "@cf/openai/gpt-oss-120b", "s");
-  ok(fc4.ok && fc4.judges.length === 2 && calls.join() === ["@cf/zai-org/glm-5.3-flash", "@cf/deepseek-ai/deepseek-v4-flash-0731"].join(), "one family fails: the next family gives the second verdict, two calls", calls);
+  ok(fc4.ok && fc4.judges.length === 2 && calls.join() === ["@cf/deepseek-ai/deepseek-v4-flash-0731", "@cf/moonshotai/kimi-k2.6"].join(), "the working reviewers lead: deepseek-v4-flash then kimi-k2.6 give the two verdicts in two calls even while qwen fails", calls);
 }
 ok(/^var VERSION = "0\.13\./m.test(src) || /^var VERSION = "0\.(1[4-9]|[2-9][0-9])\./m.test(src), "VERSION is at least 0.13");
 ok(typeof mod.default.fetch === "function", "worker module loads");
