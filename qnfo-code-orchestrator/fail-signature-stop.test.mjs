@@ -70,7 +70,7 @@ const fixture = (name) => {
   return l.join("\n");
 };
 const FILES = {};
-for (const d of ["fx-a", "fx-b", "fx-c", "fx-c2", "fx-d"]) { FILES[d + "/worker.js"] = fixture(d); FILES[d + "/deployed-current.worker.js"] = FILES[d + "/worker.js"]; }
+for (const d of ["fx-a", "fx-b", "fx-c", "fx-c2", "fx-d", "fx-e", "fx-e2"]) { FILES[d + "/worker.js"] = fixture(d); FILES[d + "/deployed-current.worker.js"] = FILES[d + "/worker.js"]; }
 globalThis.fetch = async (u) => {
   const m = /^https:\/\/raw\.githubusercontent\.com\/QNFO\/qnfo-workers\/main\/(.+)$/.exec(String(u));
   const p = m ? decodeURIComponent(m[1]) : null;
@@ -193,6 +193,22 @@ ok(atLeast((await (await worker.fetch(new Request("https://x/health"), env)).jso
   await tick();
   const r = row(id);
   ok(r.status === "failed" && r.attempts === 3 && /SEARCH occurs 0 times/.test(r.last_error), "D2 three identical failures around a timeout still stop the task", { st: r.status, a: r.attempts, err: r.last_error });
+}
+
+// ===== E. FOLD-PAIR-TASK-1 (0.19.0): a parity-suite failure ends the task at the first one, before any model call =====
+{
+  const cases = [["fx-e", "FAIL qnfo-cloud-ops/email-orch-fold.test.mjs: FAIL every orchestrator line is in the host except its VERSION line :: [\"var SLA_GRACE_H = 12;\"]"],
+    ["fx-e2", "FAIL personal-api/companion.test.mjs: FAIL worker.js carries the current companion.js (run personal-api/inline-companion.mjs)"]];
+  for (const [dir, err] of cases) {
+    const id = await add(dir);
+    replies.push(GOOD); await tick();
+    publisherFail(id, err);
+    const n0 = aiCalls;
+    await tick();
+    const r = row(id);
+    ok(r.status !== "queued" && r.status !== "ready_to_publish" && /^FOLD-PAIR-TASK-1: /.test(r.last_error) && aiCalls === n0, "E1 " + dir + ": the first parity-suite failure ends the task with no model call", { st: r.status, err: r.last_error, calls: aiCalls - n0 });
+    ok(events("code-task.pair-refused", id).length === 1, "E2 " + dir + ": the stop is audited (code-task.pair-refused)");
+  }
 }
 
 console.log("fail-signature-stop: " + pass + " passed, " + fail + " failed");
