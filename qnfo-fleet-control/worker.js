@@ -1080,7 +1080,7 @@ function secretEq(a, b) {
   return diff === 0;
 }
 __name(secretEq, "secretEq");
-var VERSION = "0.41.0-ensure-live-path"; /* 0.41.0 REOPEN-LIVE-PATH-3 (issue 100271): the remediation tick files one deduped PROBE-NEEDED-1 issue per open issue left without a live contract. 0.40.1 VERSION-LINE-NOTES-1 (2026-10-19, agent_issues 100243, pillar autonomy; patch, a comment moved): the release notes of every earlier version rode on this line (178 notes, about 200,000 chars), so a version bump of this worker was an 820,000-char patch (worker and mirror, removed and added): 12 code tasks ended on the publisher size cap on 2026-10-19 and three issues were exhausted for three days. They are in git history (git log -S '<release tag>' -- qnfo-fleet-control/worker.js); the changelog is built from the deploy ledger and commits, and the guards read only the quoted version string. A new note goes on this line and stays short. */
+var VERSION = "0.41.1-pool-bound-sources"; /* 0.41.1 POOL-BOUND-SOURCES-1 (issue 100213, human_actions 107; patch): POOL-BOUND-1 parks notebook extractions (idea_proposals name owner-corpus) like any generated row and never parks a row an owner directive queued directly (source idea, chat, operator-prime). 0.41.0 REOPEN-LIVE-PATH-3 (issue 100271): the remediation tick files one deduped PROBE-NEEDED-1 issue per open issue left without a live contract. 0.40.1 VERSION-LINE-NOTES-1 (2026-10-19, agent_issues 100243, pillar autonomy; patch, a comment moved): the release notes of every earlier version rode on this line (178 notes, about 200,000 chars), so a version bump of this worker was an 820,000-char patch (worker and mirror, removed and added): 12 code tasks ended on the publisher size cap on 2026-10-19 and three issues were exhausted for three days. They are in git history (git log -S '<release tag>' -- qnfo-fleet-control/worker.js); the changelog is built from the deploy ledger and commits, and the guards read only the quoted version string. A new note goes on this line and stays short. */
 // (older release notes: git history of qnfo-fleet-control/worker.js)
 // 0.4.112 CF-CHANGELOG-LOOP-1 (pillar autonomy, RM-CAPABILITY-PRODUCT-LOOP-1): once a day, inside the existing hourly tick (no new worker, cron or model call), the fleet reads Cloudflare's changelog feed, classifies each recent item against cloudflare_capability_catalog and the service registry, files at most 2 deduped issues a day for billing/deprecation changes to products the fleet uses, reopens catalog rows that were rejected when the product launches or goes GA (max 2 a day), adds not_considered rows for unknown products (max 5), and measures itself (cf_changelog_audit_age_h, cf_changelog_open_proposals_14d); GET /cf-changelog, POST /cf-changelog/run.
 // 0.4.111 PRIORITY-QUEUE-1b/1c (issues 1912, 1913; owner directive 2026-10-03): self-repair (evPropose) admits critical
@@ -5611,7 +5611,13 @@ __name(activitySnapshotDaily, "activitySnapshotDaily");
 // and releases the whole pool on the next tick.
 var RB_CAP_DEFAULT = 3, rbEventSeq = 0;
 var RB_POOL_MAX_DEFAULT = 60, RB_POOL_MARK = "POOL-BOUND-1";
-var RB_ORDER_SQL = "CASE WHEN q.source = 'remediation' THEN 0 WHEN EXISTS (SELECT 1 FROM idea_proposals p WHERE CAST(p.id AS TEXT) = q.source_id AND (p.name LIKE 'owner%' OR p.name LIKE 'rowan%' OR p.name = 'chat-session' OR p.contact = 'owner' OR p.contact LIKE 'rowan%')) THEN 1 ELSE 2 END, COALESCE(q.score, 0) DESC, q.created_at ASC";
+// POOL-BOUND-SOURCES-1 (0.41.1, issue 100213 and human_actions 107): a row an owner directive put in research_queue directly (source idea,
+// chat or operator-prime: a session's routed task, never a model extraction) ranks with the remediation rows and is never parked.
+// Measured 2026-10-19: research_queue idea-reality-idempotent-exchange-symmetry-20261019 (source idea, owner task 99956) sat parked
+// by POOL-BOUND-1 as a generated row. A notebook extraction (idea_proposals name owner-corpus) is a generated row for the pool bound:
+// it parks beyond research_deferred_max like any other, while RB_ORDER_SQL keeps ranking it with the owner's proposals.
+var RB_DIRECT_SRC_SQL = "q.source IN ('idea', 'chat', 'operator-prime')";
+var RB_ORDER_SQL = "CASE WHEN q.source = 'remediation' OR " + RB_DIRECT_SRC_SQL + " THEN 0 WHEN EXISTS (SELECT 1 FROM idea_proposals p WHERE CAST(p.id AS TEXT) = q.source_id AND (p.name LIKE 'owner%' OR p.name LIKE 'rowan%' OR p.name = 'chat-session' OR p.contact = 'owner' OR p.contact LIKE 'rowan%')) THEN 1 ELSE 2 END, COALESCE(q.score, 0) DESC, q.created_at ASC";
 // Pure: which ids to defer and which to release, given the queued and deferred ids in priority order.
 function rbPlan(queuedIds, deferredIds, cap, on) {
   var q = (queuedIds || []).slice(), d = (deferredIds || []).slice();
@@ -5661,7 +5667,7 @@ async function researchBackpressureTick(env) {
     } catch (ePb) { console.error("POOL-BOUND-1 ops_config:", ePb && ePb.message || ePb); }
     out.pool_max = pbMax; out.pool_parked = 0; out.pool_rearmed = 0;
     if (pbMax > 0 && out.on) {
-      var pool = (await db.prepare("SELECT q.id, CASE WHEN q.source = 'remediation' THEN 0 WHEN EXISTS (SELECT 1 FROM idea_proposals p WHERE CAST(p.id AS TEXT) = q.source_id AND (p.name LIKE 'owner%' OR p.name LIKE 'rowan%' OR p.name = 'chat-session' OR p.contact = 'owner' OR p.contact LIKE 'rowan%')) THEN 1 ELSE 2 END AS pri FROM research_queue q WHERE q.status = 'deferred' ORDER BY " + RB_ORDER_SQL).all()).results || [];
+      var pool = (await db.prepare("SELECT q.id, CASE WHEN q.source = 'remediation' OR " + RB_DIRECT_SRC_SQL + " THEN 0 WHEN EXISTS (SELECT 1 FROM idea_proposals p WHERE CAST(p.id AS TEXT) = q.source_id AND p.name <> 'owner-corpus' AND (p.name LIKE 'owner%' OR p.name LIKE 'rowan%' OR p.name = 'chat-session' OR p.contact = 'owner' OR p.contact LIKE 'rowan%')) THEN 1 ELSE 2 END AS pri FROM research_queue q WHERE q.status = 'deferred' ORDER BY " + RB_ORDER_SQL).all()).results || [];
       if (pool.length > pbMax) {
         var over = pool.slice(pbMax).filter(function (r) { return Number(r.pri) === 2; });
         for (var k = 0; k < over.length; k++) {
