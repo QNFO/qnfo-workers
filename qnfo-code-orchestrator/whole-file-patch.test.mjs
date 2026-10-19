@@ -3,7 +3,8 @@
 // (60000) with no anchor ran in whole-file mode and failed (10 of 10: 3046 timeouts and "returned no ```file block"), because the
 // model had to write 30-60k chars back. This suite proves that such a file now runs in patch mode over the whole file: the
 // prompt carries the whole file, a SEARCH/REPLACE reply far shorter than the file is applied to it, and the task reaches
-// ready_to_publish; a file under PATCH_MIN_CHARS keeps whole-file mode.
+// ready_to_publish; a file under PATCH_MIN_CHARS keeps whole-file mode. MIRROR-READ-RETRY-1: a failed read of the
+// deployed-current mirror keeps the task at read (ct_im99975 went on without it and PR 2665 failed mirror-guard); a 404 does not.
 // Real SQL (node:sqlite behind a D1-shaped shim), scripted model, scripted GitHub raw reads.
 // Run: node --no-warnings qnfo-code-orchestrator/whole-file-patch.test.mjs   (exit 0 = all passed)
 import { DatabaseSync } from "node:sqlite";
@@ -39,7 +40,9 @@ const MID = 'export default { fetch() { return new Response("a"); } };\n';
 const BIG = pad(15000) + MID + pad(15000);
 const SMALL = MID;
 const FILES = { "fx-big/worker.js": BIG, "fx-big/deployed-current.worker.js": BIG, "fx-small/worker.js": SMALL, "fx-small/deployed-current.worker.js": SMALL };
+let failMirror = false;
 globalThis.fetch = async (u) => {
+  if (failMirror && /deployed-current\.worker\.js$/.test(String(u))) return new Response("boom", { status: 500 });
   const m = /^https:\/\/raw\.githubusercontent\.com\/QNFO\/qnfo-workers\/main\/(.+)$/.exec(String(u));
   const p = m ? decodeURIComponent(m[1]) : null;
   return p && FILES[p] != null ? new Response(FILES[p], { status: 200 }) : new Response("nf", { status: 404 });
@@ -82,7 +85,31 @@ ok(atLeast(h.version, "0.18.24"), "health: 0.18.24+", { version: h.version });
   ok(patch.indexOf('+export default { fetch() { return new Response("b"); } };') >= 0 && patch.length < 5000, "the patch is a small hunk, not a rewrite", patch.length);
 }
 
-// ===== 2. a file under PATCH_MIN_CHARS keeps whole-file mode =====
+// ===== 2. MIRROR-READ-RETRY-1: a failed mirror read is retried, not taken as "no mirror" =====
+{
+  const { env } = envWith([EDIT]);
+  const c = await addTask(env, "fx-big/worker.js");
+  failMirror = true;
+  await tick(env);
+  let r = row(env, c.id);
+  ok(r.step === "read" && /MIRROR-READ-RETRY-1/.test(r.last_error || "") && !ctxOf(r).mirror, "a 500 on the mirror keeps the task at read with the reason", { step: r.step, last_error: r.last_error });
+  failMirror = false;
+  env.AUDIT_DB._db.prepare("UPDATE code_tasks SET lease_until = NULL WHERE id = ?").run(c.id);
+  await tick(env);
+  r = row(env, c.id);
+  ok(r.step === "propose" && ctxOf(r).mirror === "fx-big/deployed-current.worker.js", "the next read carries the mirror", { step: r.step, mirror: ctxOf(r).mirror, last_error: r.last_error });
+}
+{
+  delete FILES["fx-small/deployed-current.worker.js"];
+  FILES["fx-nomirror/worker.js"] = BIG;
+  const { env } = envWith([EDIT]);
+  const c = await addTask(env, "fx-nomirror/worker.js");
+  await tick(env);
+  const r = row(env, c.id);
+  ok(r.step === "propose" && !ctxOf(r).mirror, "a worker with no mirror file (404) goes on without one", { step: r.step, last_error: r.last_error });
+}
+
+// ===== 3. a file under PATCH_MIN_CHARS keeps whole-file mode =====
 {
   const { env } = envWith([WHOLE]);
   const c = await addTask(env, "fx-small/worker.js");
