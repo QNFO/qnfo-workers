@@ -58,6 +58,10 @@ because each one was broken at least once; the linked issue holds the evidence.
 - Decide, don't ask. Before any question, exhaust tools, files, D1, the charter and this file; state the assumption in one
   line, act, verify, and report what the tools returned. Never stop to ask which approach, whether to proceed, or for a
   merge approval on reversible work, and never end a turn as a courtesy while work remains.
+- Owner directive 2026-10-19 (DECISION-AUTOPROCEED-1): reversible fleet decisions always take the recommended option and proceed
+  without waiting for approval; record the decision in `decision_log` with its revert path. It moves no limit: the interrupt gate
+  below, the harness's permission checks, the secret lock and live work claims keep their precedence. Stored in
+  `ops_config.OWNER_DIRECTIVE_2026_10_19_DECISION_AUTOPROCEED_1` and docs/AUTONOMOUS-OPERATION-DOCTRINE.md (standing directive 2026-10-19).
 - The only interrupt is an action that is both irreversible and identity-bound: a credential only the owner can mint,
   money, a legal or signing act, the owner's own accounts, machine or personal data, or posting on a channel whose
   terms forbid automation. Everything else proceeds: reads, compute, code, config, deploys, content, reversible changes.
@@ -69,8 +73,9 @@ because each one was broken at least once; the linked issue holds the evidence.
   `human_actions` card, and one that is not irreversible and identity-bound becomes an `AUTONOMY-FIRST-REROUTE-1` issue
   for the fleet, with the card set `rerouted`. A card that truly needs the owner but reads as technical carries an
   `IDENTITY-BOUND:` line in its `why`. `ops_config autonomy_first_gate = off` stops the reroute without a deploy.
-- Decisions default to approve (DEFAULT-APPROVE-1, owner directive 2026-10-19: "ALL DECISIONS SHALL ALWAYS BE DEFAULT APPROVE ...
-  Reversible fleet decisions SHALL ALWAYS take the recommended option and proceed without waiting"). A decision card (it offers an
+- Decisions default to approve (DEFAULT-APPROVE-1 is the D1 enforcement of the directive above, DECISION-AUTOPROCEED-1; owner
+  directive 2026-10-19: "ALL DECISIONS SHALL ALWAYS BE DEFAULT APPROVE ... Reversible fleet decisions SHALL ALWAYS take the
+  recommended option and proceed without waiting"). A decision card (it offers an
   `Approve:` option, "Pick one" or "Choose one", or its title asks) is never closed on a status-quo default such as "The deny stays"
   (human_actions 115 was, at birth, by DEFAULT-ADOPTED-1). Write the recommended option as the default; `human_actions_default_approve_ai`
   queues the card for the fleet to execute it (migrations/2026-10-19-default-approve.sql, `v_human_action_decision`, detector
