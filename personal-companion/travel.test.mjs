@@ -7,7 +7,8 @@ import { travelBlock } from "../scripts/inline-companion-travel.mjs";
 import { DatabaseSync } from "node:sqlite";
 import {
   DDL, DEFAULTS, ensureTravel, cfg, addDays, localParts, tripState, bookingLink, parseOptions, rankAndMark,
-  promptFor, modelText, sign, verify, mailFor, travelTick, handleTravel, reconcile
+  promptFor, modelText, sign, verify, mailFor, travelTick, handleTravel, reconcile,
+  parseChat, chatPrompt, chatModels, chatTurn, makeToken, tokenOk, authKey, accessOk, CHAT_SYSTEM
 } from "./travel.js";
 
 let pass = 0, fail = 0;
@@ -220,11 +221,153 @@ console.log("\n[routes]");
   ok("run route is POST only", (await handleTravel(new Request("https://reading.q08.org/api/travel/run", { headers: { Authorization: "Bearer test-companion-key" } }), env, deps)).status === 405);
 }
 
+
+console.log("\n[chat: parsing]");
+{
+  const good = JSON.stringify({ reply: "Three ideas.", options: [{ city: "Lisbon", country: "PT", kind: "capital", checkin: "2026-11-20", nights: 3, est_per_night: 70, why: "Light and cheap.", pick: false }, { city: "Porto", country: "PT", nights: 2, pick: true }, { city: "Lisbon" }], question: { text: "Before or after the 20th?", choices: ["Before", "After", "", "Either", "Flexible"] }, learned: [{ label: "likes coast", statement: "Prefers a sea view." }, { label: "", statement: "x" }] });
+  const pc = parseChat("```json\n" + good + "\n```", "2026-11-03");
+  ok("chat JSON parsed from a fenced reply", pc.reply === "Three ideas." && pc.options.length === 2, pc);
+  ok("one pick kept, as the model marked it", pc.options.filter((o) => o.pick).length === 1 && pc.options[1].pick === 1);
+  ok("a valid future check-in is kept", pc.options[0].checkin === "2026-11-20");
+  ok("question keeps at most 4 non-empty choices", pc.question.text === "Before or after the 20th?" && pc.question.choices.length === 4 && !pc.question.choices.includes(""), pc.question);
+  ok("learned items need a label and a statement", pc.learned.length === 1);
+  ok("a past check-in is dropped", parseChat(JSON.stringify({ reply: "x", options: [{ city: "Gent", checkin: "2026-01-01" }] }), "2026-11-03").options[0].checkin === "");
+  const prose = parseChat("Lisbon is lovely this time of year.", "2026-11-03");
+  ok("prose without JSON is still shown", prose.reply.startsWith("Lisbon") && prose.options.length === 0);
+  ok("raw broken JSON is not shown as a reply", parseChat("{\"reply\": \"cut", "2026-11-03").reply === "");
+  ok("html is stripped from the reply", !/<script/.test(parseChat(JSON.stringify({ reply: "hi <script>x</script>" })).reply));
+}
+
+console.log("\n[chat: prompt and models]");
+{
+  const msgs = chatPrompt({ c: C, today: "2026-11-03", state: { mode: "road", city: "Lecce", country: "IT", checkin: "2026-11-04", recent: ["Bari"] }, booked: [], profile: [{ label: "museums", statement: "Likes museums." }], reactions: [{ reaction: "no", city: "Rome" }],
+    history: [{ role: "user", content: "somewhere warm" }, { role: "assistant", content: "Ideas.", meta: JSON.stringify({ options: [{ city: "Malaga", pick: 1 }], question: { text: "How long?" } }) }], text: "" });
+  ok("system prompt forbids questionnaires and booking", /Never send a list of questions/.test(CHAT_SYSTEM) && /never book or pay/i.test(CHAT_SYSTEM));
+  ok("context carries location, profile and rejections", /Lecce/.test(msgs[0].content) && /Likes museums/.test(msgs[0].content) && /Turned down before: Rome/.test(msgs[0].content));
+  ok("history replays the options shown", /Options shown: Malaga \(my pick\)/.test(msgs[2].content) && /Asked: How long\?/.test(msgs[2].content));
+  ok("an empty turn asks for an opening proposal", /just opened the planner/.test(msgs[msgs.length - 1].content));
+  ok("chat models come from config, filtered by the worker's ban list", JSON.stringify(chatModels({ chat_models: "@cf/a/x-flash, @cf/b/y,not-a-model" }, (m) => !/-flash/.test(m))) === JSON.stringify(["@cf/b/y"]));
+  ok("an empty model list falls back to the menu", chatModels({ chat_models: "" }).length === 3);
+}
+
+console.log("\n[chat: turn]");
+{
+  const { raw, env } = freshEnv();
+  ev(raw, "l1", "lodging", "Stay Lecce", "Lecce", "IT", "2026-11-01", "2026-11-04");
+  raw.prepare("INSERT INTO profile (id, facet, label, statement, confidence, updated_at, domain) VALUES ('travel:stay-type', 'travel', 'stay type', 'Private room with own bathroom.', 0.9, 'x', 'personal')").run();
+  const seen = [];
+  const reply = { reply: "From Lecce, three stops. **Matera** is my pick.", options: [{ city: "Matera", country: "IT", kind: "old town", nights: 2, why: "Cave town, two hours away.", pick: true }, { city: "Bari", country: "IT" }, { city: "Polignano a Mare", country: "IT" }], question: null, learned: [{ label: "likes old towns", statement: "Enjoys walkable old towns." }] };
+  const deps = { now: NOW, ai: async (m, input) => { seen.push({ m, input }); if (m === "@cf/openai/gpt-oss-120b") throw new Error("model down"); return { response: JSON.stringify(reply) }; } };
+  const r = await chatTurn(env, deps, { text: "Somewhere nearby, nothing big." });
+  ok("first model failing falls through to the next", r.ok && r.message.meta.model === "@cf/zai-org/glm-5.3", r);
+  ok("the model saw the stored preference and the user's words", /Private room with own bathroom/.test(seen[1].input.messages[0].content) && seen[1].input.messages.at(-1).content === "Somewhere nearby, nothing big.");
+  ok("options come back with stay and transit links from where the owner is", r.message.meta.options.length === 3 && /booking\.com/.test(r.message.meta.options[0].link) && /origin=Lecce/.test(r.message.meta.options[0].transit) && r.message.meta.options[0].checkin === "2026-11-04");
+  ok("options are stored for reconcile and reactions", raw.prepare("SELECT COUNT(*) n FROM travel_options WHERE mode = 'chat'").get().n === 3);
+  const learned = raw.prepare("SELECT * FROM profile WHERE id = 'travel:chat-likes-old-towns'").get();
+  ok("what it learned is written to the profile (facet travel)", learned && learned.facet === "travel" && learned.status === "active" && /walkable/.test(learned.statement), learned);
+  ok("both sides of the turn are kept", raw.prepare("SELECT COUNT(*) n FROM travel_chat").get().n === 2);
+  await chatTurn(env, { ...deps, ai: async () => ({ response: JSON.stringify({ ...reply, learned: [{ label: "likes old towns", statement: "Loves old towns." }] }) }) }, { text: "more like Matera" });
+  const again = raw.prepare("SELECT statement, confidence FROM profile WHERE id = 'travel:chat-likes-old-towns'").get();
+  ok("learning the same thing again updates it and raises confidence", again.statement === "Loves old towns." && again.confidence > 0.7, again);
+  const down = await chatTurn(env, { ...deps, ai: async () => { throw new Error("all down"); } }, { text: "hello" });
+  ok("all models down: an honest error and nothing stored", !down.ok && /No model answered/.test(down.error) && raw.prepare("SELECT COUNT(*) n FROM travel_chat").get().n === 4);
+  ok("an empty message without open is refused", !(await chatTurn(env, deps, { text: "  " })).ok);
+}
+
+console.log("\n[chat: sign-in and routes]");
+{
+  const { raw, env } = freshEnv();
+  delete env.COMPANION_KEY;
+  const mails = [];
+  const deps = { now: NOW, send: async (s, b) => { mails.push({ s, b }); return { ok: true }; }, ai: async () => ({ response: JSON.stringify({ reply: "Hello. Porto is my pick.", options: [{ city: "Porto", country: "PT" }, { city: "Gent", country: "BE" }], question: { text: "This month?", choices: ["Yes", "No"] }, learned: [] }) }) };
+  const H = "https://reading.q08.org";
+  const page0 = await handleTravel(new Request(H + "/travel"), env, deps);
+  ok("signed out: /travel offers an email code, no key", page0.status === 401 && /Email me a code/.test(await page0.text()));
+  ok("signed out: the API refuses", (await handleTravel(new Request(H + "/travel/api/state"), env, deps)).status === 401);
+  const key = await authKey(env, env.PERSONAL);
+  ok("no worker secret: a random signing key is generated once and kept", key.length > 30 && key === await authKey(env, env.PERSONAL));
+  const lg = await handleTravel(new Request(H + "/travel/login", { method: "POST" }), env, deps);
+  const code = (/code: (\d{6})/.exec(mails[0] && mails[0].b || "") || [])[1];
+  ok("login mails a 6-digit code to the owner and shows the code box", lg.status === 200 && mails.length === 1 && !!code && /Travel planner code: \d{6}/.test(mails[0].s) && /one-time-code/.test(await lg.text()));
+  ok("the code is stored only as a MAC", !raw.prepare("SELECT code_mac FROM travel_logins").get().code_mac.includes(code));
+  const form = (c) => new Request(H + "/travel/code", { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" }, body: "code=" + c });
+  const wrong = await handleTravel(form(code === "000000" ? "111111" : "000000"), env, deps);
+  ok("a wrong code is refused and counted", wrong.status === 401 && raw.prepare("SELECT attempts FROM travel_logins").get().attempts === 1);
+  const pst = await handleTravel(form(code.slice(0, 3) + " " + code.slice(3)), env, deps);
+  const ck = pst.headers.get("Set-Cookie") || "";
+  ok("the right code (spaces allowed) sets a long-lived HttpOnly session cookie", pst.status === 303 && /^trv=\d+\./.test(ck) && /HttpOnly/.test(ck) && /Secure/.test(ck) && /Max-Age=10368000/.test(ck), ck);
+  ok("a code works once", (await handleTravel(form(code), env, deps)).status === 401);
+  const deps2 = { ...deps };
+  await handleTravel(new Request(H + "/travel/login", { method: "POST" }), env, deps2);
+  const code2 = /code: (\d{6})/.exec(mails[1].b)[1];
+  for (let i = 0; i < 5; i++) await handleTravel(form(code2 === "000000" ? "111111" : "000000"), env, deps2);
+  ok("five wrong guesses kill the code", (await handleTravel(form(code2), env, deps2)).status === 401);
+  ok("an expired code is refused", (await handleTravel(new Request(H + "/travel/login", { method: "POST" }), env, deps)) && (await handleTravel(form(/code: (\d{6})/.exec(mails[2].b)[1]), env, { ...deps, now: NOW + 21 * 60e3 })).status === 401);
+  await handleTravel(new Request(H + "/travel/login", { method: "POST" }), env, deps);
+  const link = new URL(/https:\/\/\S+/.exec(mails[3].b)[0]);
+  const g = await handleTravel(new Request(link.toString()), env, deps);
+  ok("GET on the one-tap link only shows a button (mail scanners spend nothing)", g.status === 200 && /Sign in on this device/.test(await g.text()));
+  ok("POST on the link signs in", (await handleTravel(new Request(link.toString(), { method: "POST" }), env, deps)).status === 303);
+  ok("the link works once", (await handleTravel(new Request(link.toString(), { method: "POST" }), env, deps)).status === 401);
+  ok("login mails are capped per hour", (await handleTravel(new Request(H + "/travel/login", { method: "POST" }), env, deps)).status === 429 && mails.length === 4, mails.length);
+  const cookie = { Cookie: ck.split(";")[0] };
+  const pg = await handleTravel(new Request(H + "/travel", { headers: cookie }), env, deps);
+  const csp = pg.headers.get("Content-Security-Policy") || "";
+  const old = await makeToken(key, "sess", Math.floor(NOW / 1000) + 10 * 86400);
+  ok("a session near its end is renewed on use", /Max-Age=10368000/.test((await handleTravel(new Request(H + "/travel", { headers: { Cookie: "trv=" + old } }), env, deps)).headers.get("Set-Cookie") || ""));
+  ok("signed in: the chat page is served with a nonce CSP", pg.status === 200 && /Travel planner/.test(await pg.text()) && /script-src 'nonce-/.test(csp) && /frame-ancestors 'none'/.test(csp), csp);
+  const jpost = (path, body, extra) => handleTravel(new Request(H + path, { method: "POST", headers: { ...cookie, "Content-Type": "application/json", ...(extra || {}) }, body: JSON.stringify(body) }), env, deps);
+  const ch = await (await jpost("/travel/api/chat", { open: true })).json();
+  ok("opening turn proposes without a user message", ch.ok && ch.message.meta.options.length === 2 && raw.prepare("SELECT COUNT(*) n FROM travel_chat WHERE role = 'user'").get().n === 0, ch);
+  ok("a foreign origin is refused", (await jpost("/travel/api/chat", { text: "hi" }, { Origin: "https://evil.example" })).status === 403);
+  ok("a form post (no JSON) is refused", (await handleTravel(new Request(H + "/travel/api/chat", { method: "POST", headers: { ...cookie, "Content-Type": "application/x-www-form-urlencoded" }, body: "text=hi" }), env, deps)).status === 415);
+  const optId = ch.message.meta.options[0].id;
+  ok("react pick records the choice", (await (await jpost("/travel/api/react", { id: optId, action: "pick" })).json()).changed === true && raw.prepare("SELECT status FROM travel_options WHERE id = ?").get(optId).status === "picked");
+  const st = await (await handleTravel(new Request(H + "/travel/api/state", { headers: cookie }), env, deps)).json();
+  ok("state folds live option status into the history", st.history.at(-1).meta.options[0].status === "picked" && st.models.menu.length === 3, st);
+  raw.prepare("INSERT INTO profile (id, facet, label, statement, updated_at, domain) VALUES ('travel:chat-x', 'travel', 'x', 'X.', 'x', 'personal'), ('likes.museums', 'likes', 'museums', 'M.', 'x', 'personal')").run();
+  await jpost("/travel/api/forget", { id: "travel:chat-x" });
+  await jpost("/travel/api/forget", { id: "likes.museums" });
+  ok("forget retracts a travel preference and leaves other facets alone", raw.prepare("SELECT status FROM profile WHERE id = 'travel:chat-x'").get().status === "retracted" && raw.prepare("SELECT status FROM profile WHERE id = 'likes.museums'").get().status === null);
+  const mm = await (await jpost("/travel/api/model", { model: "@cf/moonshotai/kimi-k2.6" })).json();
+  ok("the model menu reorders chat_models", mm.ok && (await cfg(env.PERSONAL)).chat_models.startsWith("@cf/moonshotai/kimi-k2.6,"));
+  ok("a non-Workers-AI model id is refused", (await jpost("/travel/api/model", { model: "https://example.com/v1" })).status === 400);
+  await jpost("/travel/api/reset", {});
+  ok("a fresh conversation archives the old turns", raw.prepare("SELECT COUNT(*) n FROM travel_chat").get().n === 0 && raw.prepare("SELECT COUNT(*) n FROM travel_chat_archive").get().n === 1);
+  const out = await jpost("/travel/api/logout", {});
+  ok("sign out clears the cookie", /Max-Age=0/.test(out.headers.get("Set-Cookie") || ""));
+  ok("a forged session cookie is refused", (await handleTravel(new Request(H + "/travel/api/state", { headers: { Cookie: "trv=9999999999.AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA" } }), env, deps)).status === 401);
+  const env2 = { ...env, COMPANION_KEY: "ck" };
+  ok("the companion key cookie also signs in", (await handleTravel(new Request(H + "/travel/api/state", { headers: { Cookie: "a=b; pc_key=ck" } }), env2, deps)).status === 200);
+  const t = await makeToken("k", "sess", Math.floor(NOW / 1000) + 60);
+  ok("tokens are bound to their kind", (await tokenOk("k", "sess", t, NOW)) && !(await tokenOk("k", "login", t, NOW)));
+}
+
+console.log("\n[chat: Cloudflare Access]");
+{
+  const kp = await crypto.subtle.generateKey({ name: "RSASSA-PKCS1-v1_5", modulusLength: 2048, publicExponent: new Uint8Array([1, 0, 1]), hash: "SHA-256" }, true, ["sign", "verify"]);
+  const jwk = { ...(await crypto.subtle.exportKey("jwk", kp.publicKey)), kid: "k1" };
+  const b64 = (o) => Buffer.from(typeof o === "string" ? o : JSON.stringify(o)).toString("base64url");
+  const mk = async (payload) => { const hp = b64({ alg: "RS256", kid: "k1" }) + "." + b64(payload); const sig = Buffer.from(await crypto.subtle.sign("RSASSA-PKCS1-v1_5", kp.privateKey, new TextEncoder().encode(hp))).toString("base64url"); return hp + "." + sig; };
+  const c = { access_team: "team", access_aud: "aud1" };
+  const deps = { accessCerts: async () => ({ keys: [jwk] }) };
+  const good = await mk({ aud: ["aud1"], exp: Math.floor(NOW / 1000) + 600, iss: "https://team.cloudflareaccess.com" });
+  const rq = (j) => new Request("https://reading.q08.org/travel", { headers: { "Cf-Access-Jwt-Assertion": j } });
+  ok("a valid Access token signs in", await accessOk(rq(good), c, deps, NOW));
+  ok("wrong audience refused", !(await accessOk(rq(await mk({ aud: ["other"], exp: Math.floor(NOW / 1000) + 600, iss: "https://team.cloudflareaccess.com" })), c, deps, NOW)));
+  ok("expired token refused", !(await accessOk(rq(good), c, deps, NOW + 3600e3)));
+  ok("tampered token refused", !(await accessOk(rq(good.slice(0, -4) + "AAAA"), c, deps, NOW)));
+  ok("Access off when not configured", !(await accessOk(rq(good), { access_team: "", access_aud: "" }, deps, NOW)));
+}
+
 console.log("\n[repository hygiene]");
 {
   const src = readFileSync(new URL("./travel.js", import.meta.url), "utf8");
   ok("module holds no mail address", !/[a-z0-9._-]+@[a-z0-9.-]+\.[a-z]{2,}/i.test(src));
-  ok("module never calls a booking or payment API", !/fetch\(/.test(src));
+  // the chat page's own script calls only this worker's /travel/api routes; the module itself fetches nothing
+  const js = /const CHAT_JS = String\.raw`([\s\S]*?)`;/.exec(src);
+  ok("module never calls a booking or payment API", !/fetch\(/.test(src.replace(js ? js[0] : "", "")));
+  ok("the page script fetches only its own relative API", !!js && /fetch\(path/.test(js[1]) && !/https?:\/\//.test(js[1].replace(/https?:\/\/[^"'`\s]*\$\{/g, "")) && /"\/travel\/api\//.test(js[1]));
 }
 
 {
