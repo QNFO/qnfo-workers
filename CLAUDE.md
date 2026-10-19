@@ -69,6 +69,14 @@ because each one was broken at least once; the linked issue holds the evidence.
   `human_actions` card, and one that is not irreversible and identity-bound becomes an `AUTONOMY-FIRST-REROUTE-1` issue
   for the fleet, with the card set `rerouted`. A card that truly needs the owner but reads as technical carries an
   `IDENTITY-BOUND:` line in its `why`. `ops_config autonomy_first_gate = off` stops the reroute without a deploy.
+- Decisions default to approve (DEFAULT-APPROVE-1, owner directive 2026-10-19: "ALL DECISIONS SHALL ALWAYS BE DEFAULT APPROVE ...
+  Reversible fleet decisions SHALL ALWAYS take the recommended option and proceed without waiting"). A decision card (it offers an
+  `Approve:` option, "Pick one" or "Choose one", or its title asks) is never closed on a status-quo default such as "The deny stays"
+  (human_actions 115 was, at birth, by DEFAULT-ADOPTED-1). Write the recommended option as the default; `human_actions_default_approve_ai`
+  queues the card for the fleet to execute it (migrations/2026-10-19-default-approve.sql, `v_human_action_decision`, detector
+  `fm-card-default-denies-decision`, `ops_config default_approve_gate = off` restores the old paths). A card that is hard by its own
+  words keeps its old path: money, a legal or signing act, destroying data, the owner's accounts and credentials (IC-GATE-001), and the
+  security and privacy limits (one-time codes, privacy, personal data).
 - The hourly metric tick audits it: `v_autonomy_first_audit`, metrics `owner_queue_fleet_cards_open` and
   `session_dependent_issues_open` (target 0 each), triggers on both and on `code_task_superseded_share_30d`.
 
