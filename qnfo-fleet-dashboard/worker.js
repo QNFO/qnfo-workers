@@ -9,7 +9,7 @@ var __name22 = /* @__PURE__ */ __name2((target, value) => __defProp22(target, "n
 var __defProp222 = Object.defineProperty;
 var __name222 = /* @__PURE__ */ __name22((target, value) => __defProp222(target, "name", { value, configurable: true }), "__name");
 var __name2222 = /* @__PURE__ */ __name222((target, value) => Object.defineProperty(target, "name", { value, configurable: true }), "__name");
-var VERSION = "1.51.11-codeagent"; /* 1.51.8 VERSION-LINE-NOTES-1 (2026-10-19, agent_issues 100243, pillar autonomy; patch, a comment moved): the release notes of every earlier version rode on this line (178 notes, about 200,000 chars), so a version bump of this worker was an 820,000-char patch (worker and mirror, removed and added): 12 code tasks ended on the publisher size cap on 2026-10-19 and three issues were exhausted for three days. They are in git history (git log -S '<release tag>' -- qnfo-fleet-dashboard/worker.js); the changelog is built from the deploy ledger and commits, and the guards read only the quoted version string. A new note goes on this line and stays short. */
+var VERSION = "1.51.12-codeagent"; /* 1.51.8 VERSION-LINE-NOTES-1 (2026-10-19, agent_issues 100243, pillar autonomy; patch, a comment moved): the release notes of every earlier version rode on this line (178 notes, about 200,000 chars), so a version bump of this worker was an 820,000-char patch (worker and mirror, removed and added): 12 code tasks ended on the publisher size cap on 2026-10-19 and three issues were exhausted for three days. They are in git history (git log -S '<release tag>' -- qnfo-fleet-dashboard/worker.js); the changelog is built from the deploy ledger and commits, and the guards read only the quoted version string. A new note goes on this line and stays short. */
 
 // REVIEW-GATE-1 (2026-10-01, docs/STRATEGY.md s9): the 2026-10-25 impressions gate is retired. The research layer is
 // reviewed on this date against the reach scorecard; nothing deletes research data automatically (phase 2 needs the
@@ -4355,7 +4355,7 @@ var AT_SOCIAL = ["bluesky", "linkedin", "mastodon", "x"];
 var AT_CHANNELS = AT_SOCIAL.concat(["email"]);
 var AT_SHORT = 7, AT_LONG = 28, AT_RETEST_DAYS = 28, AT_RETEST_SHARE = 0.25, AT_VERIFY_DAYS = 7;
 var AT_DEFAULT_THRESHOLDS = { min_items: 5, stop_items: 10, stop_per_item: 0.1, improve_per_item: 0.34, promote_per_item: 1 };
-var AT_SHARE = { PROMOTE: 1, KEEP: 1, IMPROVE: 0.5, STOP: 0, RETEST: AT_RETEST_SHARE, INSUFFICIENT: 1 };
+var AT_SHARE = { PROMOTE: 1, KEEP: 1, IMPROVE: 0.5, STOP: 0, RETEST: 0.25, INSUFFICIENT: 1 };
 var AT_REFERRER = [["bluesky", /^(www\.)?bsky\.app$/], ["linkedin", /linkedin\.(com|android)$/], ["linkedin", /^lnkd\.in$/], ["x", /^t\.co$/], ["x", /^(www\.|mobile\.)?(x|twitter)\.com$/],
   ["mastodon", /mastodon|mstdn|fosstodon\.org$|mathstodon\.xyz$|scholar\.social$|hachyderm\.io$|infosec\.exchange$|sciences\.social$|fediscience\.org$/]];
 var AT_BUFFER_METRIC = { reactions: "reactions", likes: "reactions", like: "reactions", favorites: "reactions", comments: "comments", replies: "comments", reposts: "reposts", retweets: "reposts", reblogs: "reposts", shares: "shares", impressions: "impressions", reach: "reach", views: "views", clicks: "clicks", "link clicks": "clicks", engagements: "engagements", quotes: "quotes" };
