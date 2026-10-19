@@ -235,6 +235,22 @@ const EXPECT = {
   db.exec("INSERT INTO ops_config (key, value) VALUES ('default_approve_gate', 'on')");
 }
 
+// ---- the card-115 statement touches only that card in the state production holds it
+{
+  const other = build();
+  const o = add(other, { slug: "some-other-card", title: "Keep the thing?", why: "r", def: "Keep it.", action: "Nothing." });
+  other.exec("UPDATE human_actions SET id = 115 WHERE id = " + o.id);
+  const before = JSON.stringify(other.prepare("SELECT * FROM human_actions WHERE id = 115").get());
+  other.exec(sql);
+  ok(JSON.stringify(other.prepare("SELECT * FROM human_actions WHERE id = 115").get()) === before, "id 115 with another slug is untouched");
+  const edited = build();
+  const e = add(edited, C115);
+  edited.exec("UPDATE human_actions SET id = 115, resolution = 'OWNER: decided by hand', status = 'done' WHERE id = " + e.id);
+  const before2 = JSON.stringify(edited.prepare("SELECT * FROM human_actions WHERE id = 115").get());
+  edited.exec(sql);
+  ok(JSON.stringify(edited.prepare("SELECT * FROM human_actions WHERE id = 115").get()) === before2, "card 115 already resolved by hand (not by DEFAULT-ADOPTED-1) is untouched");
+}
+
 // ---- idempotent
 {
   const n = log(db);
