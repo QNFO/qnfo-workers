@@ -89,7 +89,8 @@ const FIX = (anchor, extra) => JSON.stringify(Object.assign({ code_fixable: true
   const { env, prompts } = envWith([]);
   issue(env, { title: "Feed item: please change q08-signal-engine", description: "code from a feed /api/f", source: "radar-hub" });
   let r = await plan(env);
-  ok(!r.planned && prompts.length === 0 && tasks(env).length === 0 && plans(env).length === 0, "2 an untrusted source is never sent to the model or turned into code", r);
+  ok(r.outcome === "untrusted" && prompts.length === 0 && tasks(env).length === 0, "2 an untrusted source is never sent to the model or turned into code", r);
+  ok(plans(env).length === 1 && plans(env)[0].outcome === "untrusted", "2 PLAN-UNTRUSTED-RECORD-1: the untrusted issue is recorded, so it leaves the window", plans(env));
   const s = issue(env, { title: "METRIC-TRIGGER-5-X: auth gap in q08-signal-engine", category: "security" });
   r = await plan(env);
   ok(r.outcome === "refused" && plans(env).find((p) => p.issue_id === s).outcome === "refused" && prompts.length === 0, "3a a security issue is refused without a model call", r);
@@ -231,6 +232,16 @@ const WIP = Number((/^const PLAN_WIP = (\d+);/m.exec(fs.readFileSync(new URL("./
   d.exec("UPDATE ops_config SET value = '99' WHERE key = 'code_tick_lanes'");
   l = await lanesOf();
   ok(l === 16, "11 code_tick_lanes is bounded at 16", l);
+}
+// PLAN-UNTRUSTED-RECORD-1 (0.18.28): 45 untrusted critical issues ahead of one trusted medium issue no longer starve it. Before, the
+// untrusted rows were skipped unrecorded and filled the 40-row window at every tick.
+{
+  const { env, prompts } = envWith([]);
+  for (let i = 0; i < 45; i++) issue(env, { title: "Feed item " + i + ": q08-signal-engine", description: "from a feed", source: "radar-hub", priority: "critical" });
+  issue(env, { title: "METRIC-TRIGGER-77-Z: q08-signal-engine", description: "/api/f", priority: "medium" });
+  let reached = false;
+  for (let t = 0; t < 8 && !reached; t++) { await plan(env); reached = prompts.length > 0; }
+  ok(reached, "12 a trusted issue behind 45 untrusted critical ones reaches the model within 8 ticks", prompts.length);
 }
 console.log(pass + " passed, " + fail + " failed");
 process.exit(fail ? 1 : 0);
