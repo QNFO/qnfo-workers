@@ -50,7 +50,7 @@
 // VERSION-BUMP-GUARD-1 requires the literal var-VERSION-equals-double-quoted-string form: this constant is
 // what fleet-autoaudit's strict numeric-ahead deploy check and deploy-drift's string
 // compare both read. `const` here would make the bundle invisible to deploy-drift.
-var VERSION = "1.5.0-cron-grid-1"; // 1.5.0 CRON-GRID-1 (owner directive 2026-10-19, pillar autonomy): one hourly :20 trigger. The benchmark battery keeps its 6-hour cadence (slots 00:17, 06:17, 12:17, 18:17 run on the :20 fire) because it calls models while the Workers AI cap is breached; a failed run is retried hourly, at most 3 times, and now fails the run instead of being swallowed. Every fire is logged to cron_fire_log for CRON-WATCH-1. // 1.4.1 WORKERS-BP-LOGGING-1 (agent_issues 2342, RESOLVE-ALL-OPEN-1 2026-10-19): the scheduled() error-event write no longer swallows its own failure; it logs a structured console.error.
+var VERSION = "1.6.0-ab-harness-1"; // 1.6.0 AB-HARNESS-1 (agent_issues 2828 MODEL-QUALITY-PARITY-1, pillar autonomy): a paired A/B quality harness. For one worker and task set it puts the pre-change answer (a recorded baseline reply, or the pre-change model live) and the post-change answer (the post-change model through qnfo-ai, pin_model true) in front of two judges from two other model families, at least one outside every family the worker uses, and writes the win rate against a stated threshold (0.40) to model_ab_runs. Triggers on the hourly tick: a changed model in scripts/model-policy.json, or a model a worker newly uses in ai_call_counters; classification lanes reuse clefCanary agreement. A regression files an issue. Routes GET /ab/runs, GET /ab/fixtures, POST /ab/run (x-eval-key). Switch: cf_model_eval_config ab_enabled = 0 (control_registry model-ab-switch). New QNFO_AI service binding (props caller qnfo-model-eval). Tests: ab-harness.test.mjs. // 1.5.0 CRON-GRID-1 (owner directive 2026-10-19, pillar autonomy): one hourly :20 trigger. The benchmark battery keeps its 6-hour cadence (slots 00:17, 06:17, 12:17, 18:17 run on the :20 fire) because it calls models while the Workers AI cap is breached; a failed run is retried hourly, at most 3 times, and now fails the run instead of being swallowed. Every fire is logged to cron_fire_log for CRON-WATCH-1. // 1.4.1 WORKERS-BP-LOGGING-1 (agent_issues 2342, RESOLVE-ALL-OPEN-1 2026-10-19): the scheduled() error-event write no longer swallows its own failure; it logs a structured console.error.
 const BATTERY_VERSION = "cfmb-2";
 const DOCS_INDEX = "https://developers.cloudflare.com/workers-ai/models/index.md";
 const docsModel = (slug) => `https://developers.cloudflare.com/workers-ai/models/${slug}/index.md`;
@@ -559,7 +559,7 @@ function canaryGate(agreement, catAgreement) {
   };
 }
 
-async function clefCanary(env, modelId, limit = 12) {
+async function clefCanary(env, modelId, limit = 12, ids = null) {
   const db = env.AUDIT;
   await db.prepare(
     `CREATE TABLE IF NOT EXISTS cf_model_canary (
@@ -596,7 +596,14 @@ async function clefCanary(env, modelId, limit = 12) {
     category: { type: "choice", instructions: "Which part of the fleet does this issue concern?", criteria },
     priority: { type: "choice", instructions: "How urgent is this issue?", criteria: priCriteria },
   };
-  const rows = (await db.prepare(
+  // AB-HARNESS-1: with ids the canary scores exactly those rows, so the pre-change and post-change models are paired.
+  const rows = Array.isArray(ids) && ids.length
+    ? (await db.prepare(
+      `SELECT id, title, COALESCE(NULLIF(category,''),'?') cat, COALESCE(NULLIF(priority,''),'medium') pri,
+              COALESCE(description,'') des
+         FROM agent_issues WHERE category IS NOT NULL AND id IN (${ids.map((_, i) => "?" + (i + 1)).join(",")})`
+    ).bind(...ids).all()).results || []
+    : (await db.prepare(
     `SELECT id, title, COALESCE(NULLIF(category,''),'?') cat, COALESCE(NULLIF(priority,''),'medium') pri,
             COALESCE(description,'') des
        FROM agent_issues WHERE status='open' AND category IS NOT NULL
@@ -640,7 +647,7 @@ async function clefCanary(env, modelId, limit = 12) {
   return {
     ok: true, model_id: modelId, n, agree, agreement, cat_agreement: catAgreement,
     categories_offered: Object.keys(criteria).length, categories_described: described,
-    mean_latency_ms: Math.round(lat / Math.max(1, n)), pairs: pairs.slice(0, 6),
+    mean_latency_ms: Math.round(lat / Math.max(1, n)), pairs: pairs.slice(0, 6), rows: pairs,
   };
 }
 
@@ -845,6 +852,510 @@ async function runLoop(env, trigger, opts) {
   return summary;
 }
 
+// ---- AB-HARNESS-1:BEGIN (agent_issues 2828 MODEL-QUALITY-PARITY-1, pillar autonomy; migrations/2026-10-19-model-ab.sql) ----
+// WHY: on 2026-10-17 twenty workers moved off sub-frontier models and nothing measured whether the answers got worse. Every
+// existing check (ai_model_health, the battery, the error counters) sees reachability, policy compliance or an ERROR. A model
+// that answers fluently and worse raises none of them. This is the instrument for that: for one worker and one task set it
+// puts the pre-change answer and the post-change answer to the same prompt in front of two judges from different model families
+// and writes the paired win rate, against a stated threshold, to model_ab_runs.
+//
+// HOW, per fixture (AB_FIXTURES, stored in this file so a run is repeatable offline and a test can replay it):
+//   pre-change answer   the fixture's recorded baseline reply; with live_pre the pre-change model is called instead (path B)
+//   post-change answer  the post-change model through qnfo-ai with pin_model true (QNFO_AI service binding, props caller
+//                       qnfo-model-eval); a reply served by another model is never scored: the same prompt goes to the
+//                       Workers AI id through the AI binding (row detail post_paths says which path answered), and without
+//                       a direct path the fixture is dropped
+//   verdict             two judges from two families outside the pair under test, at least one outside every family the worker
+//                       uses; each sees the two answers in the opposite order of the other (position bias cancels per fixture)
+//   score               win 1, tie 0.5, loss 0 per judge, averaged; an EMPTY post-change answer is a loss without a judge
+//                       (the kimi-k2.6 failure, 2026-10-17: a reasoning model spends the budget and returns nothing)
+// win_rate = mean score over fixtures with a verdict. Parity is 0.5; the pass line (AB_THRESHOLD 0.40, non-inferiority margin
+// 0.10) is the stated threshold; a run with fewer than AB_MIN_VALID fixtures, or judges that disagree on most fixtures, is
+// inconclusive and never a pass. A regression files an agent_issues row (fileIssue) so the finding has a doer.
+//
+// WHAT IT DOES NOT SHOW: the fixtures are passage-grounded (so the qnfo-ai accuracy layer does not rewrite the reply), short and
+// generic. They catch empty, unsupported, wrong or truncated answers; they are not the worker's own prompts. The seed
+// baselines are reference answers authored in this file, not machine recordings; live_pre records real pre-change replies.
+// Classification lanes (task_set clef-classification) use clefCanary agreement on the same labelled agent_issues rows instead.
+//
+// TRIGGERS (abTick, the hourly grid tick): (1) scripts/model-policy.json on main, read from raw.githubusercontent.com, names the
+// model each governed worker uses; a changed model for a worker is a run, a worker seen for the first time is a baseline, not a
+// run; (2) ai_call_counters, for a change nobody declared: a model with >= 20 calls yesterday or today that the same worker did
+// not use (< 3 calls) in the 2 to 15 days before, against that worker's busiest earlier model. Both are bounded by
+// ab_max_runs_per_tick and ab_daily_cap, switched by ab_enabled (control_registry model-ab-switch), deduped on worker, pre and
+// post model for 7 days, and an errored run is retried up to 3 times a day.
+const AB_THRESHOLD = 0.4;
+const AB_MIN_VALID = 6;
+const AB_FIXTURE_LIMIT = 8;
+const AB_CLASSIFY_SET = "clef-classification";
+// A run starts no new fixture after AB_RUN_BUDGET_MS (calls already started finish within their 90 s timeout) and a tick starts no
+// new run after AB_TICK_START_GATE_MS, so two runs stay inside a cron invocation's 15 minutes; a candidate left over is detected
+// again on the next tick.
+const AB_RUN_BUDGET_MS = 240000;
+const AB_TICK_START_GATE_MS = 300000;
+const AB_POLICY_URL = "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/scripts/model-policy.json";
+// Judges, in preference order. One model per family; the pair under test and (preferably) the worker's families are skipped.
+const AB_JUDGE_POOL = [
+  { family: "openai", model: "@cf/openai/gpt-oss-120b" },
+  { family: "deepseek", model: "@cf/deepseek-ai/deepseek-v4-flash-0731" },
+  { family: "zai", model: "@cf/zai-org/glm-5.3" },
+  { family: "nvidia", model: "@cf/nvidia/nemotron-3-120b-a12b" },
+  { family: "moonshot", model: "@cf/moonshotai/kimi-k2.6" },
+];
+const AB_FAMILY_RULES = [
+  ["moonshot", /kimi|moonshot/], ["openai", /gpt-oss|openai/], ["zai", /glm|zai/], ["deepseek", /deepseek/],
+  ["nvidia", /nemotron|nvidia/], ["alibaba", /qwen/], ["google", /gemma|google/], ["meta", /meta|llama/],
+  ["mistral", /mistral/], ["cloudflare", /cloudflare/],
+];
+const abGrounded = (passage, question) =>
+  "Answer the question using only the passage. Reply in one or two sentences. If the passage does not say, state that it does not.\n\nPassage: " + passage + "\n\nQuestion: " + question;
+const abSummary = (passage) => "Summarize the passage in one sentence of at most 30 words.\n\nPassage: " + passage;
+const abReason = (problem) =>
+  "Solve the problem. Show brief working, then give the final answer on a last line that starts with 'Answer:'.\n\nProblem: " + problem;
+const AB_FIXTURES = {
+  "grounded-qa": [
+    { id: "gq-1", max_tokens: 300, gold: "since 2004",
+      prompt: abGrounded("The Harlow Bridge opened in 1931 and spans 412 metres. It was closed for repairs from March to September 1987 and has carried only pedestrians and cyclists since 2004.", "Since when has the bridge carried only pedestrians and cyclists?"),
+      baseline: "It has carried only pedestrians and cyclists since 2004." },
+    { id: "gq-2", max_tokens: 300, gold: "culture C, 42 degrees, after 20 hours",
+      prompt: abGrounded("Three cultures were incubated: culture A at 30 degrees, culture B at 37 degrees and culture C at 42 degrees. Only culture B reached confluence within 48 hours. Culture C died after 20 hours.", "Which culture died, at what temperature, and after how long?"),
+      baseline: "Culture C, incubated at 42 degrees, died after 20 hours." },
+    { id: "gq-3", max_tokens: 300, gold: "250",
+      prompt: abGrounded("The Aldous fund ledger shows a deposit of 1200 in January, a withdrawal of 450 in February, a deposit of 300 in March and a withdrawal of 800 in April. The fund started at zero.", "What was the balance after April?"),
+      baseline: "The balance after April was 250 (1200 - 450 + 300 - 800)." },
+    { id: "gq-4", max_tokens: 300, gold: "it is rejected with an error",
+      prompt: abGrounded("Requests under 10 MB are processed immediately. Requests from 10 MB up to 100 MB are queued and finished within one hour. Requests above 100 MB are rejected with an error.", "What happens to a 250 MB request?"),
+      baseline: "A 250 MB request is above 100 MB, so it is rejected with an error." },
+    { id: "gq-5", max_tokens: 300, gold: "never retried; port 7121",
+      prompt: abGrounded("The Meridian protocol sends control messages on port 7120 and data messages on port 7121. A control message is retried three times, two seconds apart. A data message is never retried.", "How many times is a data message retried, and on which port is it sent?"),
+      baseline: "A data message is never retried, and it is sent on port 7121." },
+    { id: "gq-6", max_tokens: 300, gold: "the passage does not say who leads imaging today; it only says Dr. Lindqvist led it until 2021 and Dr. Okafor moved into it in 2021",
+      prompt: abGrounded("Dr. Okafor joined the laboratory in 2019 and moved to the imaging group in 2021. Dr. Lindqvist led the imaging group until 2021 and then took over the sequencing group.", "Who leads the imaging group today?"),
+      baseline: "The passage does not say who leads the imaging group today. It only says that Dr. Lindqvist led it until 2021 and that Dr. Okafor moved into it in 2021." },
+    { id: "gq-7", max_tokens: 300, gold: "stations 2 and 4, 18 cubic metres per second",
+      prompt: abGrounded("A river survey recorded flow rates of 14, 18, 22 and 18 cubic metres per second at stations 1, 2, 3 and 4.", "Which stations recorded the same flow rate, and what was it?"),
+      baseline: "Stations 2 and 4 recorded the same flow rate, 18 cubic metres per second." },
+    { id: "gq-8", max_tokens: 300, gold: "only --strict",
+      prompt: abGrounded("Release 3.2 removed the --legacy flag, deprecated the --compat option and added the --strict option. Release 3.3 removes --compat.", "After release 3.3, which of the three options named in the passage can still be used?"),
+      baseline: "Only --strict: --legacy was removed in 3.2 and --compat is removed in 3.3." },
+  ],
+  "summarize": [
+    { id: "su-1", max_tokens: 200, gold: "40 old diesel buses replaced by electric over two years; first 10 on the airport route; fuel costs expected to fall by a third; winter range still being tested",
+      prompt: abSummary("The Ostrava transit authority will replace its 40 oldest diesel buses with electric models over two years. The first 10 arrive in March and will run on the airport route, where charging depots already exist. Officials expect fuel costs to fall by a third, but warn that winter range is still being tested."),
+      baseline: "The transit authority will replace 40 old diesel buses with electric ones over two years, starting with 10 on the airport route, expecting a third lower fuel costs while winter range remains under test." },
+    { id: "su-2", max_tokens: 200, gold: "600 office workers, six months; four-day week: output unchanged, burnout down 22 percent; customer support saw no benefit because of coverage rules",
+      prompt: abSummary("A study of 600 office workers compared a four-day week with a five-day week over six months. Output measured by completed tasks was unchanged, while reported burnout fell by 22 percent. Participants in customer support roles saw no benefit because coverage rules forced them to keep five-day rotas."),
+      baseline: "In a six-month study of 600 office workers, a four-day week left output unchanged and cut reported burnout by 22 percent, except in customer support where coverage rules kept five-day rotas." },
+    { id: "su-3", max_tokens: 200, gold: "Treve lost its bakery in 2020; residents raised 85,000 by cooperative and reopened it in 2022; six employees; supplies two villages",
+      prompt: abSummary("The village of Treve lost its only bakery in 2020. Residents formed a cooperative, raised 85,000 in shares, and reopened the building as a community bakery in 2022. It now employs six people and supplies two neighbouring villages."),
+      baseline: "After Treve lost its bakery in 2020, residents raised 85,000 through a cooperative and reopened it in 2022; it now employs six and supplies two nearby villages." },
+    { id: "su-4", max_tokens: 200, gold: "mirror warped by under a micrometre in the cold; corrected with 120 actuators over two nights; observations resumed on the third; temperature sensors planned",
+      prompt: abSummary("Engineers found that the telescope mirror had warped by less than a micrometre during the cold snap. They corrected it by adjusting 120 actuators over two nights, and observations resumed on the third. The team plans to add temperature sensors behind the mirror to catch such drift earlier."),
+      baseline: "A telescope mirror warped slightly in the cold and was corrected by adjusting 120 actuators over two nights, and the team will add temperature sensors to catch drift sooner." },
+    { id: "su-5", max_tokens: 200, gold: "council voted 7 to 2 to ban cars from the old market square on weekends; loading before 9 a.m. exempt; review after one year",
+      prompt: abSummary("The city council voted 7 to 2 to ban cars from the old market square on weekends. Shop owners objected, citing lost deliveries, so the ban exempts vehicles loading before 9 a.m. A review is scheduled after one year."),
+      baseline: "The council voted 7 to 2 to ban weekend cars from the old market square, exempting vehicles loading before 9 a.m. after shop owners objected, with a review in a year." },
+    { id: "su-6", max_tokens: 200, gold: "small model predicts landslides from rainfall and soil data; flagged 81 percent of events; about one in four warnings false; should support human forecasters",
+      prompt: abSummary("Researchers trained a small model to predict landslides from rainfall and soil data. On held-out regions it flagged 81 percent of events, but it also raised false alarms for roughly one in four warnings. The authors say it should support, not replace, human forecasters."),
+      baseline: "A small landslide model flagged 81 percent of events on held-out regions but gave false alarms on about one in four warnings, so the authors say it should support human forecasters." },
+    { id: "su-7", max_tokens: 200, gold: "12,000 pages of 19th-century letters scanned in a year; handwriting recognition about 70 percent correct; volunteers proofread; free online search next spring",
+      prompt: abSummary("The library's digitisation project scanned 12,000 pages of 19th-century letters in its first year. Handwriting recognition read about 70 percent correctly, so volunteers now proofread each page. The finished archive will be free to search online next spring."),
+      baseline: "The library scanned 12,000 pages of 19th-century letters in a year; because handwriting recognition is about 70 percent accurate, volunteers proofread, and the archive will be searchable free online next spring." },
+    { id: "su-8", max_tokens: 200, gold: "recall of 3,400 pressure cookers sold May to August; lid lock can fail; no injuries; stop using and get a free replacement lid",
+      prompt: abSummary("A recall affects 3,400 pressure cookers sold between May and August because the lid lock can fail. No injuries have been reported. Owners should stop using the product and contact the maker for a free replacement lid."),
+      baseline: "3,400 pressure cookers sold from May to August are recalled because the lid lock can fail; there are no reported injuries and owners should stop using them and request a free replacement lid." },
+  ],
+  "reasoning-short": [
+    { id: "rs-1", max_tokens: 400, gold: "155 minutes",
+      prompt: abReason("A train leaves at 09:15 and arrives at 11:50. How many minutes long is the trip?"),
+      baseline: "From 09:15 to 11:50 is 2 hours 35 minutes, which is 120 + 35 = 155 minutes.\nAnswer: 155 minutes" },
+    { id: "rs-2", max_tokens: 400, gold: "192 litres",
+      prompt: abReason("A tank holds 240 litres. It leaks 4 litres every 15 minutes. How many litres remain after 3 hours?"),
+      baseline: "3 hours is 180 minutes, so there are 12 intervals of 15 minutes. The tank leaks 12 x 4 = 48 litres, leaving 240 - 48 = 192.\nAnswer: 192 litres" },
+    { id: "rs-3", max_tokens: 400, gold: "4 hours",
+      prompt: abReason("Three workers paint a fence in 8 hours. How long would 6 workers take at the same rate?"),
+      baseline: "The job is 3 x 8 = 24 worker-hours. Six workers need 24 / 6 = 4 hours.\nAnswer: 4 hours" },
+    { id: "rs-4", max_tokens: 400, gold: "80",
+      prompt: abReason("A shop raises a price of 80 by 25 percent and then reduces the new price by 20 percent. What is the final price?"),
+      baseline: "80 x 1.25 = 100, then 100 x 0.8 = 80.\nAnswer: 80" },
+    { id: "rs-5", max_tokens: 400, gold: "24",
+      prompt: abReason("Ana is twice as old as Ben. In 6 years the sum of their ages will be 48. How old is Ana now?"),
+      baseline: "Let Ben be b and Ana 2b. In 6 years (2b + 6) + (b + 6) = 48, so 3b = 36 and b = 12. Ana is 24.\nAnswer: 24" },
+    { id: "rs-6", max_tokens: 400, gold: "127",
+      prompt: abReason("A sequence starts 3, 7, 15, 31 and each term is twice the previous term plus 1. What is the 6th term?"),
+      baseline: "The 5th term is 2 x 31 + 1 = 63 and the 6th is 2 x 63 + 1 = 127.\nAnswer: 127" },
+    { id: "rs-7", max_tokens: 400, gold: "2 hours",
+      prompt: abReason("Two cyclists start 60 km apart and ride toward each other at 12 km/h and 18 km/h. After how many hours do they meet?"),
+      baseline: "They close the gap at 12 + 18 = 30 km/h, so they meet after 60 / 30 = 2 hours.\nAnswer: 2 hours" },
+    { id: "rs-8", max_tokens: 400, gold: "2/9",
+      prompt: abReason("A box has 5 red, 3 blue and 2 green balls. Two are drawn without replacement. What is the probability that both are red? Give a fraction."),
+      baseline: "The first is red with probability 5/10 and the second with 4/9, so (5/10) x (4/9) = 20/90 = 2/9.\nAnswer: 2/9" },
+  ],
+};
+
+function abTail(id) { return String(id == null ? "" : id).toLowerCase().split("/").pop(); }
+// One model, however the router spells it: the Workers AI id, the internal name, the dated build and the "-wa" binding alias.
+function abCanon(id) { return abTail(id).replace(/-wa$/, "").replace(/-\d{4}$/, ""); }
+function abSameModel(a, b) { return !!a && !!b && abCanon(a) === abCanon(b); }
+function abFamily(id) {
+  const s = String(id == null ? "" : id).toLowerCase();
+  for (const r of AB_FAMILY_RULES) if (r[1].test(s)) return r[0];
+  return "other";
+}
+
+// Two judges from two families, neither a family of the pair under test, and at least one that the worker does not use at all.
+function abPickJudges(preModel, postModel, workerModels) {
+  const pair = new Set([abFamily(preModel), abFamily(postModel)]);
+  const used = new Set(pair);
+  for (const m of workerModels || []) used.add(abFamily(m));
+  const cands = AB_JUDGE_POOL.filter((j) => !pair.has(j.family));
+  cands.sort((a, b) => (used.has(a.family) ? 1 : 0) - (used.has(b.family) ? 1 : 0));
+  const picked = cands.slice(0, 2);
+  if (picked.length < 2) return { ok: false, judges: picked, reason: "fewer than two judge families outside the pair under test" };
+  const independent = picked.filter((j) => !used.has(j.family)).map((j) => j.family);
+  if (!independent.length) return { ok: false, judges: picked, reason: "no judge family is independent of the models the worker uses" };
+  return { ok: true, judges: picked, independent };
+}
+
+function abJudgePrompt(fx, replyA, replyB) {
+  return [
+    "You are grading two answers, A and B, to the same task. Judge correctness, completeness and whether the task's instructions were followed. Ignore length, tone and formatting. An answer that states anything the task text does not support, or invents a fact, is worse than one that says the text does not give it. An empty or off-topic answer loses.",
+    "TASK:\n" + fx.prompt,
+    fx.gold ? "KNOWN CORRECT ANSWER (key facts): " + fx.gold : "",
+    "ANSWER A:\n" + replyA,
+    "ANSWER B:\n" + replyB,
+    "Reply with exactly one line: WINNER: A, WINNER: B or WINNER: TIE.",
+  ].filter(Boolean).join("\n\n");
+}
+
+// The last "WINNER: x" in the reply (a judge may think aloud first); a bare "A", "B" or "TIE" reply also counts.
+function abParseVerdict(text) {
+  const t = String(text == null ? "" : text);
+  let last = null;
+  for (const m of t.matchAll(/winner\s*[:=-]?\s*\**\s*(tie|a|b)\b/gi)) last = m[1];
+  if (last == null) {
+    const bare = /^\s*\**\s*(tie|a|b)\s*\**\s*[.!]?\s*$/i.exec(t);
+    if (bare) last = bare[1];
+  }
+  return last == null ? null : last.toUpperCase();
+}
+
+function abVerdictScore(v, postIsA) {
+  if (v === "TIE") return 0.5;
+  if (v === "A") return postIsA ? 1 : 0;
+  if (v === "B") return postIsA ? 0 : 1;
+  return null;
+}
+
+// items: [{ id, score|null, judge_scores: [] }]; a null score is a fixture that never reached a verdict (not counted).
+function abSummarize(items, o) {
+  const threshold = Number.isFinite(Number(o && o.threshold)) ? Number(o.threshold) : AB_THRESHOLD;
+  const minValid = Number.isFinite(Number(o && o.minValid)) ? Number(o.minValid) : AB_MIN_VALID;
+  const valid = (items || []).filter((i) => i && i.score != null);
+  const n = valid.length;
+  const win_rate = n ? Number((valid.reduce((a, i) => a + i.score, 0) / n).toFixed(4)) : null;
+  const wins = valid.filter((i) => i.score > 0.5).length;
+  const ties = valid.filter((i) => i.score === 0.5).length;
+  const losses = valid.filter((i) => i.score < 0.5).length;
+  const two = valid.filter((i) => Array.isArray(i.judge_scores) && i.judge_scores.length === 2);
+  const judge_agreement = two.length ? Number((two.filter((i) => i.judge_scores[0] === i.judge_scores[1]).length / two.length).toFixed(4)) : null;
+  let verdict, reason;
+  if (n < minValid) { verdict = "inconclusive"; reason = "only " + n + " of the fixtures reached a verdict (needs " + minValid + ")"; }
+  else if (two.length >= 4 && judge_agreement < 0.5) { verdict = "inconclusive"; reason = "the two judge families agree on " + judge_agreement + " of " + two.length + " fixtures"; }
+  else if (win_rate >= threshold) { verdict = "pass"; reason = "win rate " + win_rate + " >= threshold " + threshold; }
+  else { verdict = "regression"; reason = "win rate " + win_rate + " < threshold " + threshold; }
+  return { n, win_rate, wins, ties, losses, judge_agreement, judge_pairs: two.length, threshold, minValid, verdict, reason };
+}
+
+// One chat call through qnfo-ai, pinned to the model. A reply that carries no text is { ok: true, text: "" }, never the
+// stringified envelope (extractChatText would hand back the JSON of a reasoning-only reply as if it were an answer).
+async function abChat(env, model, content, maxTokens, timeoutMs) {
+  if (!env.QNFO_AI || typeof env.QNFO_AI.fetch !== "function") return { ok: false, error: "QNFO_AI binding missing" };
+  const ctl = new AbortController();
+  const timer = setTimeout(() => ctl.abort(), timeoutMs || 90000);
+  try {
+    const resp = await env.QNFO_AI.fetch("https://qnfo-ai.internal/v1/chat/completions", {
+      method: "POST",
+      headers: { "content-type": "application/json", "user-agent": "qnfo-model-eval/" + VERSION },
+      body: JSON.stringify({ model, messages: [{ role: "user", content }], max_tokens: maxTokens, stream: false, hedge: false, pin_model: true, cache: false, rag: false }),
+      signal: ctl.signal,
+    });
+    const raw = await resp.text();
+    let data = null;
+    try { data = JSON.parse(raw); } catch (_) { /* reported below */ }
+    if (!resp.ok || !data) return { ok: false, error: "http " + resp.status };
+    const choice = (data.choices && data.choices[0]) || {};
+    const c = choice.message && choice.message.content;
+    const text = typeof c === "string" ? c : Array.isArray(c) ? c.map((p) => (p && typeof p.text === "string" ? p.text : "")).join("") : "";
+    return { ok: true, text: text.trim(), served: String(data.model || ""), finish: choice.finish_reason || null };
+  } catch (e) {
+    return { ok: false, error: String(e && e.message ? e.message : e).slice(0, 120) };
+  } finally { clearTimeout(timer); }
+}
+
+// Second path (ANTIFRAGILE-1): the router serves only the ids in its MODELS table (nemotron-3-120b-a12b, qwen3.8-27b are
+// not there, so qnfo-ai answers them with its unknown-id default), and a spend cap can steer a pinned id to a cheaper twin.
+// Either way the reply is not the model under test. When the router did not serve exactly the asked-for Workers AI model, the
+// same prompt goes to it through the AI binding; the row records which path answered (via). A reasoning model asked directly
+// at a small max_tokens may answer empty where the router's small-answer lane would not: that is what a direct caller gets.
+async function abDirect(env, model, content, maxTokens, timeoutMs) {
+  if (!env.AI || typeof env.AI.run !== "function" || !/^@cf\//.test(String(model))) return { ok: false, error: "no direct path" };
+  let timer;
+  try {
+    const out = await Promise.race([
+      env.AI.run(model, { messages: [{ role: "user", content }], max_tokens: maxTokens }),
+      new Promise((_, rej) => { timer = setTimeout(() => rej(new Error("direct call timed out")), timeoutMs || 90000); }),
+    ]);
+    const choice = (out && out.choices && out.choices[0]) || {};
+    const c = choice.message && choice.message.content;
+    const text = typeof out === "string" ? out : out && typeof out.response === "string" ? out.response : typeof c === "string" ? c : "";
+    return { ok: true, text: text.trim(), served: model, finish: choice.finish_reason || null, via: "workers-ai" };
+  } catch (e) {
+    return { ok: false, error: String(e && e.message ? e.message : e).slice(0, 120) };
+  } finally { clearTimeout(timer); }
+}
+async function abCall(env, model, content, maxTokens) {
+  const r = await abChat(env, model, content, maxTokens, 90000);
+  if (r.ok && abSameModel(r.served, model)) return Object.assign(r, { via: "router" });
+  const d = await abDirect(env, model, content, maxTokens, 90000);
+  if (d.ok) return d;
+  return r.ok ? Object.assign(r, { unpinned: true }) : r;
+}
+
+async function abPool(items, limit, fn) {
+  const out = new Array(items.length);
+  let next = 0;
+  async function lane() { for (;;) { const i = next++; if (i >= items.length) return; out[i] = await fn(items[i], i); } }
+  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, lane));
+  return out;
+}
+
+async function abOneFixture(env, c, fx, idx, judges, deadline) {
+  if (Date.now() > deadline) return { id: fx.id, score: null, why: "deadline" };
+  const post = await abCall(env, c.post_model, fx.prompt, fx.max_tokens || 400);
+  if (!post.ok) return { id: fx.id, score: null, why: "post-call " + post.error, callFailed: true };
+  if (post.unpinned) return { id: fx.id, score: null, why: "unpinned: served " + (post.served || "nothing").slice(0, 60) };
+  if (!post.text) return { id: fx.id, score: 0, judge_scores: [], via: post.via, why: "empty post-change reply (finish " + post.finish + ")" };
+  let pre = fx.baseline;
+  if (c.live_pre) {
+    const p = await abCall(env, c.pre_model, fx.prompt, fx.max_tokens || 400);
+    if (!p.ok || p.unpinned || !p.text) return { id: fx.id, score: null, why: "live pre-change reply unavailable" };
+    pre = p.text;
+  }
+  const scores = await Promise.all(judges.map(async (j, ji) => {
+    const postIsA = (idx + ji) % 2 === 0;
+    const r = await abCall(env, j.model, abJudgePrompt(fx, postIsA ? post.text : pre, postIsA ? pre : post.text), 400);
+    if (!r.ok || r.unpinned) return null;
+    return abVerdictScore(abParseVerdict(r.text), postIsA);
+  }));
+  const valid = scores.filter((s) => s != null);
+  if (!valid.length) return { id: fx.id, score: null, why: "no judge reached a verdict" };
+  return { id: fx.id, score: valid.reduce((a, b) => a + b, 0) / valid.length, judge_scores: valid, via: post.via, post: post.text.slice(0, 160) };
+}
+
+// Classification lane: the same labelled agent_issues rows through both decision models (clefCanary), scored per row on the
+// two labels (category, priority). A row the post-change model gets more right is a win, fewer a loss.
+async function abRunClassify(env, c, threshold) {
+  const limit = Math.max(4, Math.min(24, Number(c.limit) || 12));
+  const post = await clefCanary(env, c.post_model, limit);
+  if (!post.ok) return { verdict: "error", reason: "post-change canary: " + (post.error || "failed"), n: 0, win_rate: null, threshold, judges: ["labels"], pre_source: "live" };
+  const ids = (post.rows || []).map((r) => r.id);
+  const pre = await clefCanary(env, c.pre_model, limit, ids);
+  if (!pre.ok) return { verdict: "error", reason: "pre-change canary: " + (pre.error || "failed"), n: 0, win_rate: null, threshold, judges: ["labels"], pre_source: "live" };
+  // A model that answers nothing on every row is a harness fault (or a dead model), not a tie with the other one.
+  const answered = (res) => (res.rows || []).some((r) => r && !r.err);
+  if (!answered(post)) return { verdict: "error", reason: "post-change model gave no answer on any row", n: 0, win_rate: null, threshold, judges: ["labels"], pre_source: "live" };
+  if (!answered(pre)) return { verdict: "error", reason: "pre-change model gave no answer on any row", n: 0, win_rate: null, threshold, judges: ["labels"], pre_source: "live" };
+  const rowScore = (r) => (r && !r.err ? ((r.catOk ? 1 : 0) + (r.priOk ? 1 : 0)) / 2 : 0);
+  const preById = new Map((pre.rows || []).map((r) => [r.id, r]));
+  const items = [];
+  for (const r of post.rows || []) {
+    if (!preById.has(r.id)) continue;
+    const a = rowScore(r), b = rowScore(preById.get(r.id));
+    items.push({ id: String(r.id), score: a > b ? 1 : a < b ? 0 : 0.5, judge_scores: [] });
+  }
+  const s = abSummarize(items, { threshold, minValid: Math.min(AB_MIN_VALID, limit) });
+  return Object.assign({}, s, { judges: ["labels"], pre_source: "live", extra: { post_agreement: post.agreement, pre_agreement: pre.agreement } });
+}
+
+// One paired run. Never writes; abExecute persists the result.
+async function abRunPair(env, c) {
+  const taskSet = String(c.task_set || "grounded-qa");
+  const threshold = Number.isFinite(Number(c.threshold)) ? Number(c.threshold) : AB_THRESHOLD;
+  if (taskSet === AB_CLASSIFY_SET) return abRunClassify(env, c, threshold);
+  const all = AB_FIXTURES[taskSet];
+  if (!all) return { verdict: "error", reason: "unknown task_set " + taskSet, n: 0, win_rate: null, threshold, judges: [], pre_source: "baseline" };
+  const pick = abPickJudges(c.pre_model, c.post_model, c.worker_models);
+  if (!pick.ok) return { verdict: "inconclusive", reason: pick.reason, n: 0, win_rate: null, threshold, judges: pick.judges.map((j) => j.model), pre_source: c.live_pre ? "live" : "baseline" };
+  const fixtures = all.slice(0, Math.max(1, Math.min(12, Number(c.limit) || AB_FIXTURE_LIMIT)));
+  const deadline = Date.now() + Math.max(15000, Math.min(480000, Number(c.budget_ms) || AB_RUN_BUDGET_MS));
+  const items = await abPool(fixtures, 3, (fx, i) => abOneFixture(env, c, fx, i, pick.judges, deadline));
+  const s = abSummarize(items, { threshold, minValid: Number(c.min_valid) || AB_MIN_VALID });
+  // Every fixture failed on the call itself: the router or the binding is down, not a verdict about the model. Retryable.
+  if (items.length && items.every((i) => i.callFailed)) { s.verdict = "error"; s.reason = "every post-change call failed: " + items[0].why; }
+  return Object.assign({}, s, {
+    judges: pick.judges.map((j) => j.model), independent: pick.independent, pre_source: c.live_pre ? "live" : "baseline",
+    skipped: items.filter((i) => i.score == null).map((i) => ({ id: i.id, why: i.why })),
+    items: items.filter((i) => i.score != null).map((i) => ({ id: i.id, s: i.score, js: i.judge_scores, via: i.via, why: i.why })),
+    post_paths: items.reduce((a, i) => { if (i.via) a[i.via] = (a[i.via] || 0) + 1; return a; }, {}),
+  });
+}
+
+async function abWorkerModels(env, worker) {
+  try {
+    const r = await env.AUDIT.prepare("SELECT DISTINCT model FROM ai_call_counters WHERE worker=?1 AND day >= date('now','-15 day') AND model IS NOT NULL").bind(worker).all();
+    return (r.results || []).map((x) => x.model);
+  } catch (_) { return []; }
+}
+
+async function abPersist(env, c, r) {
+  const detail = JSON.stringify({
+    reason: r.reason, wins: r.wins, ties: r.ties, losses: r.losses, judge_pairs: r.judge_pairs, min_valid: r.minValid,
+    independent_families: r.independent, post_paths: r.post_paths, skipped: r.skipped, items: r.items, extra: r.extra, worker_models: c.worker_models,
+  }).slice(0, 6000);
+  const res = await env.AUDIT.prepare(
+    `INSERT INTO model_ab_runs (run_id, model_pair, worker, task_set, pre_model, post_model, trigger_source, n, win_rate, threshold, verdict, judges, judge_agreement, pre_source, detail, completed_at)
+     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, datetime('now'))`
+  ).bind(
+    "ab-" + Date.now().toString(36), c.pre_model + " -> " + c.post_model, c.worker, c.task_set || "grounded-qa", c.pre_model, c.post_model,
+    c.source || "manual", r.n == null ? 0 : r.n, r.win_rate, r.threshold, r.verdict, (r.judges || []).join(","), r.judge_agreement == null ? null : r.judge_agreement,
+    r.pre_source || "baseline", detail
+  ).run();
+  return res && res.meta ? res.meta.last_row_id : null;
+}
+
+async function abExecute(env, c) {
+  const cand = Object.assign({}, c, { worker_models: c.worker_models || await abWorkerModels(env, c.worker) });
+  if (!(Number(cand.threshold) > 0 && Number(cand.threshold) < 1)) {
+    const t = Number(await cfg(env, "ab_threshold", String(AB_THRESHOLD)));
+    cand.threshold = t > 0 && t < 1 ? t : AB_THRESHOLD;
+  }
+  const r = await abRunPair(env, cand);
+  const id = await abPersist(env, cand, r);
+  if (r.verdict === "regression") {
+    const short = (m) => String(m).split("/").pop();
+    try {
+      await fileIssue(env,
+        "MODEL-AB-REGRESSION-1: " + c.worker + " " + short(c.pre_model) + " -> " + short(c.post_model) + " on " + (c.task_set || "grounded-qa") + ": win rate " + r.win_rate + " < " + r.threshold,
+        "The paired A/B harness (qnfo-model-eval AB-HARNESS-1, model_ab_runs id " + id + ") compared the post-change model with the pre-change baseline on the same prompts, judged by " +
+        (r.judges || []).join(" and ") + ": " + r.wins + " wins, " + r.ties + " ties, " + r.losses + " losses over " + r.n + " fixtures, win rate " + r.win_rate + " against the stated threshold " + r.threshold +
+        ". Either the model change made " + c.worker + "'s answers worse (revert it, or give the worker a better prompt or token budget) or the fixtures do not represent its work (say so with evidence and set the worker's task_set in scripts/model-policy.json). " +
+        "Read the per-fixture rows: SELECT detail FROM model_ab_runs WHERE id = " + id + ". It closes when a later run for the same worker and post-change model passes: " +
+        "SELECT 'pass' AS expected, (SELECT verdict FROM model_ab_runs WHERE worker = '" + String(c.worker).replace(/'/g, "''") + "' AND post_model = '" + String(c.post_model).replace(/'/g, "''") + "' ORDER BY id DESC LIMIT 1) AS observed",
+        "high");
+    } catch (e) { console.error(JSON.stringify({ worker: "qnfo-model-eval", where: "ab-file-issue", error: String(e && e.message || e).slice(0, 200) })); }
+  }
+  return { id, worker: c.worker, pre_model: c.pre_model, post_model: c.post_model, verdict: r.verdict, win_rate: r.win_rate, n: r.n, reason: r.reason };
+}
+
+async function abFetchPolicy(env) {
+  const url = await cfg(env, "ab_policy_url", AB_POLICY_URL);
+  const ctl = new AbortController();
+  const timer = setTimeout(() => ctl.abort(), 10000);
+  try {
+    const resp = await fetch(url + "?cb=" + Math.floor(Date.now() / 6e5), { headers: { "user-agent": "qnfo-model-eval/" + VERSION }, signal: ctl.signal });
+    if (!resp.ok) return { ok: false, error: "policy http " + resp.status };
+    const p = JSON.parse(await resp.text());
+    if (!p || typeof p !== "object" || !p.workers || typeof p.workers !== "object") return { ok: false, error: "policy has no workers object" };
+    return { ok: true, policy: p };
+  } catch (e) {
+    return { ok: false, error: "policy fetch: " + String(e && e.message ? e.message : e).slice(0, 120) };
+  } finally { clearTimeout(timer); }
+}
+
+// A worker whose declared model differs from the one last seen is a candidate; a worker seen for the first time is only recorded.
+async function abPolicyCandidates(env, notes) {
+  const got = await abFetchPolicy(env);
+  if (!got.ok) { notes.push(got.error); return []; }
+  const out = [];
+  const defSet = await cfg(env, "ab_default_task_set", "grounded-qa");
+  const entries = Object.entries(got.policy.workers).slice(0, 200);
+  for (const [worker, e] of entries) {
+    if (!e || typeof e.model !== "string" || !e.model) continue;
+    const seen = await env.AUDIT.prepare("SELECT model FROM model_ab_policy_seen WHERE worker=?1").bind(worker).first();
+    if (!seen) {
+      await env.AUDIT.prepare("INSERT OR IGNORE INTO model_ab_policy_seen (worker, model, task_set) VALUES (?1, ?2, ?3)").bind(worker, e.model, e.task_set || defSet).run();
+      notes.push("policy baseline: " + worker + " -> " + e.model);
+      continue;
+    }
+    if (seen.model !== e.model) {
+      out.push({ worker, pre_model: seen.model, post_model: e.model, task_set: e.task_set || defSet, threshold: e.threshold != null ? e.threshold : got.policy.threshold, live_pre: e.live_pre === true, source: "policy" });
+    }
+  }
+  return out;
+}
+
+const AB_NOT_CHAT_RE = /bge|embed|whisper|flux|clef|melotts|llava|stable-diffusion/i;
+async function abObservedCandidates(env, notes) {
+  const minCalls = Math.max(5, Number(await cfg(env, "ab_min_calls", "20")) || 20);
+  const defSet = await cfg(env, "ab_default_task_set", "grounded-qa");
+  const r = await env.AUDIT.prepare(
+    `WITH recent AS (SELECT worker, model, SUM(calls) c FROM ai_call_counters WHERE day >= date('now','-1 day') AND model IS NOT NULL GROUP BY worker, model HAVING SUM(calls) >= ?1),
+          prior AS (SELECT worker, model, SUM(calls) c FROM ai_call_counters WHERE day < date('now','-1 day') AND day >= date('now','-15 day') AND model IS NOT NULL GROUP BY worker, model)
+     SELECT r.worker, r.model AS post_model, r.c AS recent_calls,
+            (SELECT p2.model FROM prior p2 WHERE p2.worker = r.worker AND p2.model <> r.model AND p2.c >= ?1 ORDER BY p2.c DESC LIMIT 1) AS pre_model
+       FROM recent r LEFT JOIN prior p ON p.worker = r.worker AND p.model = r.model
+      WHERE COALESCE(p.c, 0) < 3
+      ORDER BY r.c DESC LIMIT 20`
+  ).bind(minCalls).all();
+  const out = [];
+  for (const x of r.results || []) {
+    if (!x.pre_model || AB_NOT_CHAT_RE.test(x.pre_model) || AB_NOT_CHAT_RE.test(x.post_model)) continue;
+    out.push({ worker: x.worker, pre_model: x.pre_model, post_model: x.post_model, task_set: defSet, source: "observed" });
+  }
+  if (out.length) notes.push("observed model changes: " + out.length);
+  return out;
+}
+
+async function abAlreadyRun(env, c) {
+  const r = await env.AUDIT.prepare(
+    `SELECT (SELECT COUNT(*) FROM model_ab_runs WHERE worker=?1 AND pre_model=?2 AND post_model=?3 AND verdict <> 'error' AND created_at >= datetime('now','-7 days')) AS done,
+            (SELECT COUNT(*) FROM model_ab_runs WHERE worker=?1 AND pre_model=?2 AND post_model=?3 AND verdict = 'error' AND created_at >= datetime('now','-1 day')) AS errs`
+  ).bind(c.worker, c.pre_model, c.post_model).first();
+  return { done: Number(r && r.done) > 0, exhausted: Number(r && r.errs) >= 3 };
+}
+
+// The hourly tick. Switched by cf_model_eval_config ab_enabled ('0' stops it, nothing else changes).
+async function abTick(env) {
+  const out = { enabled: true, candidates: 0, ran: [], skipped: 0, notes: [] };
+  if (["0", "off", "false"].includes(String(await cfg(env, "ab_enabled", "1")).toLowerCase())) { out.enabled = false; return out; }
+  try { await env.AUDIT.prepare("SELECT 1 FROM model_ab_runs LIMIT 1").first(); }
+  catch (e) { out.notes.push("model_ab_runs not readable yet: " + String(e && e.message ? e.message : e).slice(0, 100)); return out; }
+  const found = [];
+  const seenKey = new Set();
+  for (const c of [].concat(await abPolicyCandidates(env, out.notes), await abObservedCandidates(env, out.notes))) {
+    const k = c.worker + "|" + c.pre_model + "|" + c.post_model;
+    if (seenKey.has(k)) continue;
+    seenKey.add(k);
+    found.push(c);
+  }
+  out.candidates = found.length;
+  const perTick = Math.max(1, Math.min(6, Number(await cfg(env, "ab_max_runs_per_tick", "2")) || 2));
+  const dailyCap = Math.max(1, Number(await cfg(env, "ab_daily_cap", "12")) || 12);
+  const today = await env.AUDIT.prepare("SELECT COUNT(*) n FROM model_ab_runs WHERE created_at >= datetime('now','-1 day')").first();
+  let used = Number(today && today.n) || 0;
+  const tickStart = Date.now();
+  for (const c of found) {
+    const st = await abAlreadyRun(env, c);
+    if (st.done) {
+      if (c.source === "policy") await abMarkSeen(env, c);
+      out.skipped++;
+      continue;
+    }
+    if (st.exhausted) { out.skipped++; continue; }
+    if (out.ran.length >= perTick || used >= dailyCap || Date.now() - tickStart > AB_TICK_START_GATE_MS) { out.skipped++; continue; }
+    const row = await abExecute(env, Object.assign({}, c, { budget_ms: AB_RUN_BUDGET_MS }));
+    used++;
+    out.ran.push(row);
+    if (c.source === "policy" && row.verdict !== "error") await abMarkSeen(env, c);
+  }
+  return out;
+}
+async function abMarkSeen(env, c) {
+  await env.AUDIT.prepare("INSERT OR REPLACE INTO model_ab_policy_seen (worker, model, task_set, seen_at) VALUES (?1, ?2, ?3, datetime('now'))").bind(c.worker, c.post_model, c.task_set || null).run();
+}
+// ---- AB-HARNESS-1:END ----
+
 async function manifest(env) {
   const db = env.AUDIT;
   const counts = await db.prepare(
@@ -860,11 +1371,13 @@ async function manifest(env) {
     service: "qnfo-model-eval", kind: "worker", version: VERSION,
     purpose: "CF-MODEL-EVAL-1 continuous evaluation of new Cloudflare Workers AI models for fleet production adoption",
     capabilities: ["catalog-discovery", "model-benchmark-battery", "incumbent-control-baseline",
-      "cost-aware-promotion", "harness-error-classification", "decision-model-canary", "backlog-escalation"],
-    routes: ["/health", "/manifest", "/catalog", "/evals", "/runs", "/leaderboard", "/promotions", "/canary", "/run"],
+      "cost-aware-promotion", "harness-error-classification", "decision-model-canary", "backlog-escalation",
+      "paired-ab-quality-harness", "model-change-trigger"],
+    routes: ["/health", "/manifest", "/catalog", "/evals", "/runs", "/leaderboard", "/promotions", "/canary", "/run", "/ab/runs", "/ab/fixtures", "/ab/run"],
     crons: ["20 * * * *"], battery_cadence: "17 */6 * * * (CRON-GRID-1)", battery: BATTERY_VERSION,
     controls: CONTROLS.map((c) => c.model_id),
     budget: { max_models_per_run: await cfg(env, "max_models_per_run", "6"), canary_enabled: await cfg(env, "canary_enabled", "0") },
+    ab: { enabled: await cfg(env, "ab_enabled", "1"), threshold: AB_THRESHOLD, min_valid: AB_MIN_VALID, task_sets: Object.keys(AB_FIXTURES).concat([AB_CLASSIFY_SET]), max_runs_per_tick: await cfg(env, "ab_max_runs_per_tick", "2"), daily_cap: await cfg(env, "ab_daily_cap", "12") },
     counts,
   };
 }
@@ -912,6 +1425,30 @@ export default {
           "SELECT item, title, status, evidence, created_at FROM roadmap_implementation WHERE source='cf-model-eval' ORDER BY id DESC LIMIT 40").all();
         return json({ promoted_models: r.results || [], roadmap: rd.results || [] });
       }
+      if (p === "/ab/runs") {
+        const r = await env.AUDIT.prepare(
+          `SELECT id, created_at, completed_at, worker, task_set, model_pair, trigger_source, n, win_rate, threshold, verdict, judges, judge_agreement, pre_source
+             FROM model_ab_runs ORDER BY id DESC LIMIT 50`).all();
+        return json({ count: (r.results || []).length, threshold: AB_THRESHOLD, runs: r.results || [] });
+      }
+      if (p === "/ab/fixtures") {
+        const sets = {};
+        for (const k of Object.keys(AB_FIXTURES)) sets[k] = AB_FIXTURES[k].map((f) => ({ id: f.id, prompt: f.prompt }));
+        return json({ threshold: AB_THRESHOLD, min_valid: AB_MIN_VALID, judge_pool: AB_JUDGE_POOL, classification_set: AB_CLASSIFY_SET, sets });
+      }
+      if (p === "/ab/run" && req.method === "POST") {
+        const keyRow = await env.AUDIT.prepare("SELECT value FROM cf_model_eval_config WHERE key='manual_key'").first();
+        const sent = req.headers.get("x-eval-key") || "";
+        if (!keyRow || !keyRow.value || sent !== keyRow.value) return json({ ok: false, error: "forbidden" }, 403);
+        const body = await req.json().catch(() => ({}));
+        if (!body.worker || !body.pre_model || !body.post_model) return json({ ok: false, error: "worker, pre_model and post_model are required" }, 400);
+        const row = await abExecute(env, {
+          worker: String(body.worker), pre_model: String(body.pre_model), post_model: String(body.post_model),
+          task_set: body.task_set ? String(body.task_set) : "grounded-qa", threshold: body.threshold, limit: body.limit,
+          live_pre: body.live_pre === true, source: "manual", budget_ms: body.budget_ms,
+        });
+        return json({ ok: true, run: row });
+      }
       if (p === "/canary" && req.method === "POST") {
         const keyRow = await env.AUDIT.prepare("SELECT value FROM cf_model_eval_config WHERE key='manual_key'").first();
         const sent = req.headers.get("x-eval-key") || "";
@@ -929,7 +1466,7 @@ export default {
         const summary = await runLoop(env, "manual", body);
         return json({ ok: true, summary });
       }
-      return json({ ok: false, error: "not_found", routes: ["/health", "/manifest", "/catalog", "/evals", "/runs", "/leaderboard", "/promotions", "/canary", "/run"] }, 404);
+      return json({ ok: false, error: "not_found", routes: ["/health", "/manifest", "/catalog", "/evals", "/runs", "/leaderboard", "/promotions", "/canary", "/run", "/ab/runs", "/ab/fixtures", "/ab/run"] }, 404);
     } catch (e) {
       return json({ ok: false, error: String(e && e.message ? e.message : e), version: VERSION }, 500);
     }
@@ -939,6 +1476,20 @@ export default {
   }
 };
 function modelEvalScheduled(_event, env, ctx) {
+    // AB-HARNESS-1: the hourly grid tick runs the paired A/B trigger; the 6-hourly job (and a manual fire) runs the battery.
+    if (String(_event && _event.cron) === CRON_GRID_CFG.tick) {
+      ctx.waitUntil(abTick(env).catch(async (e) => {
+        try {
+          await env.AUDIT.prepare(
+            "INSERT OR REPLACE INTO cloud_ops_events (id, ts, kind, text, meta, job, status) VALUES (?1, datetime('now'), 'cf-model-eval', ?2, NULL, 'cf-model-eval', 'warn')"
+          ).bind("cf-model-eval-ab-err-" + Date.now(), "AB-HARNESS-1 tick failed: " + String(e && e.message ? e.message : e)).run();
+        } catch (eLog) {
+          console.error(JSON.stringify({ worker: "qnfo-model-eval", where: "ab-tick:error-event", error: String(eLog && eLog.message || eLog), tick_error: String(e && e.message || e) }));
+        }
+        throw e;
+      }));
+      return;
+    }
     ctx.waitUntil(runLoop(env, "cron", {}).catch(async (e) => {
       try {
         await env.AUDIT.prepare(
@@ -1038,5 +1589,5 @@ async function cronGridRun(db, event, ctx, cfg, run) {
   if (firstErr) throw firstErr;
 }
 // ---- CRON-GRID-1:END ----
-var CRON_GRID_CFG = {"worker": "qnfo-model-eval", "tick": "20 * * * *", "tickMin": 60, "jobs": [{"cron": "17 */6 * * *", "periodMin": 360, "retry": true}], "own": "none"};
+var CRON_GRID_CFG = {"worker": "qnfo-model-eval", "tick": "20 * * * *", "tickMin": 60, "jobs": [{"cron": "17 */6 * * *", "periodMin": 360, "retry": true}], "own": "self"};
 

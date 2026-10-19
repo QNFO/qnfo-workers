@@ -65,8 +65,42 @@ file the integration fix instead of a quality verdict.
 | `GET /promotions` | ladder rows and roadmap items this loop created |
 | `POST /canary` | run the decision canary (`x-eval-key`) |
 | `POST /run` | force a sweep (`x-eval-key`) |
+| `GET /ab/runs` | the last 50 paired A/B runs (`model_ab_runs`) |
+| `GET /ab/fixtures` | the A/B task sets, prompts and gold answers (not the baseline replies), the judge pool and the threshold |
+| `POST /ab/run` | one paired run for `{worker, pre_model, post_model, task_set?, threshold?, limit?, live_pre?}` (`x-eval-key`) |
 
 `x-eval-key` is `cf_model_eval_config.manual_key`.
+
+## Paired A/B quality harness (AB-HARNESS-1, agent_issues 2828)
+
+The battery above scores a *candidate* model. This answers a different question: after a worker's model changed,
+are its answers worse? Nothing else measures that (a model that answers fluently and worse raises no error).
+
+For one worker and one task set (`grounded-qa`, `summarize`, `reasoning-short`; all passage-grounded, 8 fixtures in
+`AB_FIXTURES` in `worker.js`, so a run is repeatable offline and `ab-harness.test.mjs` replays it) a run puts the
+pre-change answer and the post-change answer to the same prompt in front of two judges and writes the paired win
+rate to `qnfo-audit.model_ab_runs`:
+
+| step | what happens |
+|---|---|
+| pre-change answer | the fixture's recorded baseline reply; with `live_pre` the pre-change model is called instead |
+| post-change answer | the post-change model through qnfo-ai with `pin_model: true`, `hedge: false`, `cache: false` (the `QNFO_AI` service binding, props caller `qnfo-model-eval`); a reply served by another model is never scored: the prompt goes to the Workers AI id through the AI binding instead (`detail.post_paths` says which path answered) |
+| judges | two families outside the pair under test, at least one outside every family the worker uses; they see the two answers in opposite orders |
+| score | win 1, tie 0.5, loss 0 per judge, averaged; an empty post-change answer is a loss with no judge call |
+| verdict | `win_rate >= 0.40` passes (parity is 0.5, margin 0.10); fewer than 6 verdicts, or judges that disagree on most fixtures, is `inconclusive`; an unreachable router is `error` (retried, at most 3 a day); a regression files an `agent_issues` row |
+
+`classification` lanes (`task_set: clef-classification`) pair `clefCanary` agreement over the same labelled
+`agent_issues` rows instead of a judge.
+
+Triggers, on the hourly grid tick: a changed model for a worker in `scripts/model-policy.json` on main (a worker
+seen for the first time is only recorded), and a model a worker newly uses in `ai_call_counters` (at least 20 calls
+yesterday or today, fewer than 3 in the 2 to 15 days before, against that worker's busiest earlier model). Bounded
+by `ab_max_runs_per_tick` (2) and `ab_daily_cap` (12), deduped on worker, pre and post model for 7 days, and
+stopped by `ab_enabled = 0`.
+
+Not shown: the fixtures are generic and short; they catch empty, unsupported, wrong or truncated answers and are
+not a worker's own prompts. The seed baseline replies are authored reference answers, not machine recordings (use
+`live_pre` for a real pre-change reply). With 8 fixtures one run is a screen; read `judge_agreement` and `detail`.
 
 ## Known limitation
 
@@ -83,10 +117,13 @@ exactly why the decision lane has a real-data canary before any routing switch.
 | `max_models_per_run` | candidates evaluated per sweep (1–12) |
 | `canary_enabled` | `1` runs the decision canary at the end of each sweep |
 | `clef_winner` | current best decision model (score, then price) |
-| `manual_key` | `x-eval-key` for `POST /run`, `POST /canary` |
+| `manual_key` | `x-eval-key` for `POST /run`, `POST /canary`, `POST /ab/run` |
+| `ab_enabled` | `0` stops the A/B tick (kill switch, control_registry `model-ab-switch`) |
+| `ab_threshold`, `ab_max_runs_per_tick`, `ab_daily_cap`, `ab_min_calls`, `ab_default_task_set` | A/B pass line (0.4), runs per tick (2), runs per day (12), calls that make a model "used" (20), task set for an undeclared change |
 
 ## Test
 
 ```
 node qnfo-model-eval/eval-logic.test.mjs
+node qnfo-model-eval/ab-harness.test.mjs
 ```
