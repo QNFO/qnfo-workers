@@ -39,12 +39,28 @@ export function discover(root) {
 // SUITE-GUARDS-ALWAYS-1 (2026-10-12): the repository-wide guard suites scan every suite or worker, so they run for any
 // change at all; PR 946 (one worker) merged a range-regex VERSION pin that version-pin-guard refused on the next full-set run.
 export const ALWAYS = ["scripts/version-pin-guard.test.mjs", "scripts/cron-single-trigger.test.mjs", "scripts/prompt-cache.test.mjs", "scripts/corruption-guard.test.mjs"];
-export function select(all, changedDirs) {
+// SUITE-DEPENDENTS-1 (2026-10-19, agent_issues 2830 MERGE-BOUNDARY-GATE-1): a suite in one directory that reads a file of another
+// ("../qnfo-gateway/worker.js", 15 suites on 2026-10-19, e.g. qnfo-email/unsub-link.test.mjs and qnfo-research-exec/ground.test.mjs)
+// did not run when only that other directory changed, so a PR could merge green and break it on main. With a reader (the CLI
+// passes one), select() also takes every suite whose text names "../<changed dir>/"; without one it is unchanged.
+export function dependents(all, dirs, read) {
+  if (typeof read !== "function" || !dirs.length) return [];
+  const out = [];
+  for (const s of all) {
+    if (dirs.includes(s.split("/")[0])) continue;
+    let t = "";
+    try { t = String(read(s) || ""); } catch (e) { continue; }
+    if (dirs.some((d) => t.includes("../" + d + "/"))) out.push(s);
+  }
+  return out;
+}
+export function select(all, changedDirs, read) {
   const dirs = Array.from(new Set((changedDirs || []).map((d) => String(d).trim()).filter(Boolean)));
   const wide = dirs.filter((d) => SHARED.includes(d));
   if (wide.length) return { suites: all.slice(), reason: "full set: " + wide.join(", ") + " changed" };
-  const picked = all.filter((s) => dirs.includes(s.split("/")[0]) || (dirs.length && ALWAYS.includes(s)));
-  return { suites: picked, reason: dirs.length ? "suites of " + dirs.join(", ") + " plus the repository guards" : "no worker directory changed" };
+  const dep = dependents(all, dirs, read);
+  const picked = all.filter((s) => dirs.includes(s.split("/")[0]) || (dirs.length && ALWAYS.includes(s)) || dep.includes(s));
+  return { suites: picked, reason: dirs.length ? "suites of " + dirs.join(", ") + " plus the repository guards" + (dep.length ? " and " + dep.length + " suite(s) that read them (" + dep.join(", ") + ")" : "") : "no worker directory changed" };
 }
 
 // SUITE-SYNTAX-CHECK-1 (2026-10-13, failure mode version-note-comment-terminator): node --check every worker.js and
@@ -102,7 +118,7 @@ async function main() {
     const f = arg("--changed-file", null);
     if (!f || !existsSync(f)) { console.error("usage: run-suites.mjs --all | --changed-file <file of changed top-level dirs>"); process.exit(2); }
     const changed = readFileSync(f, "utf8").split(/\r?\n/);
-    sel = select(all, changed);
+    sel = select(all, changed, (suite) => readFileSync(join(root, suite), "utf8"));
     syn = syntaxTargets(root, changed, false);
   }
   console.log("SUITE-RUNNER-1: " + sel.suites.length + " of " + all.length + " suites (" + sel.reason + ")");
