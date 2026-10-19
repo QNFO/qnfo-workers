@@ -1,20 +1,12 @@
 {
  "ok": true,
  "marker": "REMEDIATION-CONSUMER-1",
- "verifier": "remediation-consumer@d15d14df9046",
- "due": 26,
- "pass": 6,
- "fail": 20,
+ "verifier": "remediation-consumer@40fdf4e93f86",
+ "due": 15,
+ "pass": 5,
+ "fail": 10,
  "skipped": 0,
  "contracts": [
-  {
-   "class": "issue-2403",
-   "issue_id": 2403,
-   "verdict": "fail",
-   "expected": "ok",
-   "observed": "missing-marker:qnfo-research-exec/worker.js",
-   "written": true
-  },
   {
    "class": "issue-2404",
    "issue_id": 2404,
@@ -24,16 +16,16 @@
    "written": true
   },
   {
-   "class": "issue-2405",
-   "issue_id": 2405,
+   "class": "issue-2402",
+   "issue_id": 2402,
    "verdict": "fail",
    "expected": "ok",
    "observed": "missing-marker:qnfo-research-exec/worker.js",
    "written": true
   },
   {
-   "class": "issue-2407",
-   "issue_id": 2407,
+   "class": "issue-2405",
+   "issue_id": 2405,
    "verdict": "fail",
    "expected": "ok",
    "observed": "missing-marker:qnfo-research-exec/worker.js",
@@ -64,8 +56,16 @@
    "written": true
   },
   {
-   "class": "issue-2402",
-   "issue_id": 2402,
+   "class": "issue-2403",
+   "issue_id": 2403,
+   "verdict": "fail",
+   "expected": "ok",
+   "observed": "missing-marker:qnfo-research-exec/worker.js",
+   "written": true
+  },
+  {
+   "class": "issue-2407",
+   "issue_id": 2407,
    "verdict": "fail",
    "expected": "ok",
    "observed": "missing-marker:qnfo-research-exec/worker.js",
@@ -112,107 +112,19 @@
    "written": true
   },
   {
-   "class": "issue-99967",
-   "issue_id": 99967,
+   "class": "issue-100004",
+   "issue_id": 100004,
    "verdict": "fail",
    "expected": "ok",
    "observed": "pending: filed by qnfo-research-exec, which owns it for 48h",
    "written": true
   },
   {
-   "class": "issue-99973",
-   "issue_id": 99973,
+   "class": "issue-100005",
+   "issue_id": 100005,
    "verdict": "fail",
    "expected": "ok",
    "observed": "pending: filed by qnfo-research-exec, which owns it for 48h",
-   "written": true
-  },
-  {
-   "class": "issue-99988",
-   "issue_id": 99988,
-   "verdict": "fail",
-   "expected": "ok",
-   "observed": "pending: filed by qnfo-research-exec, which owns it for 48h",
-   "written": true
-  },
-  {
-   "class": "issue-99992",
-   "issue_id": 99992,
-   "verdict": "fail",
-   "expected": "ok",
-   "observed": "pending: filed by qnfo-research-exec, which owns it for 48h",
-   "written": true
-  },
-  {
-   "class": "issue-99974",
-   "issue_id": 99974,
-   "verdict": "fail",
-   "expected": "ok",
-   "observed": "pending: filed by qnfo-research-exec, which owns it for 48h",
-   "written": true
-  },
-  {
-   "class": "issue-99987",
-   "issue_id": 99987,
-   "verdict": "fail",
-   "expected": "ok",
-   "observed": "pending: filed by qnfo-research-exec, which owns it for 48h",
-   "written": true
-  },
-  {
-   "class": "issue-99993",
-   "issue_id": 99993,
-   "verdict": "fail",
-   "expected": "ok",
-   "observed": "pending: filed by qnfo-research-exec, which owns it for 48h",
-   "written": true
-  },
-  {
-   "class": "issue-99996",
-   "issue_id": 99996,
-   "verdict": "fail",
-   "expected": "ok",
-   "observed": "pending: filed by qnfo-research-exec, which owns it for 48h",
-   "written": true
-  },
-  {
-   "class": "issue-99960",
-   "issue_id": 99960,
-   "verdict": "pass",
-   "expected": "1",
-   "observed": "1",
-   "written": true
-  },
-  {
-   "class": "issue-99989",
-   "issue_id": 99989,
-   "verdict": "fail",
-   "expected": "1",
-   "observed": "0",
-   "written": true
-  },
-  {
-   "class": "issue-99997",
-   "issue_id": 99997,
-   "verdict": "fail",
-   "expected": "ok",
-   "observed": "pending: filed by qnfo-research-exec, which owns it for 48h",
-   "written": true
-  },
-  {
-   "class": "issue-99990",
-   "issue_id": 99990,
-   "verdict": "fail",
-   "expected": "1",
-   "observed": "0",
-   "written": true
-  },
-  {
-   "class": "issue-99991",
-   "issue_id": 99991,
-   "verdict": "fail",
-   "expected": "1",
-   "observed": "0",
    "written": true
   }
  ],
@@ -240,67 +152,12 @@
   "runner-https"
  ],
  "budget_exhausted": false,
- "runtime_verified_share_24h": 9.4,
+ "runtime_verified_share_24h": 9.3,
  "host_census": {
   "skipped": "ran within 6h"
  },
  "fleet_journeys": {
-  "at": "2026-10-18T23:21:25Z",
-  "journeys": 6,
-  "failing": [
-   "deploy-coherence",
-   "binding-census",
-   "loop-heartbeats"
-  ],
-  "issues": {
-   "deploy-coherence": "filed",
-   "binding-census": "updated 2755",
-   "loop-heartbeats": "updated 2679"
-  },
-  "results": [
-   {
-    "journey": "deploy-coherence",
-    "ok": false,
-    "ms": 12254,
-    "failed": [
-     "qnfo-model-eval live == main"
-    ]
-   },
-   {
-    "journey": "binding-census",
-    "ok": false,
-    "ms": 3496,
-    "failed": [
-     "census sees every worker (blind <= 0)"
-    ]
-   },
-   {
-    "journey": "lock-roundtrip",
-    "ok": true,
-    "ms": 2548,
-    "failed": []
-   },
-   {
-    "journey": "papers-path",
-    "ok": true,
-    "ms": 1341,
-    "failed": []
-   },
-   {
-    "journey": "loop-heartbeats",
-    "ok": false,
-    "ms": 7288,
-    "failed": [
-     "dashboard state: no error-level issues"
-    ]
-   },
-   {
-    "journey": "ai-router",
-    "ok": true,
-    "ms": 549,
-    "failed": []
-   }
-  ]
+  "skipped": "ran within 50 min"
  },
  "migrations": {
   "opted_in": 266,
@@ -313,8 +170,8 @@
   ],
   "metric": 1
  },
- "spent_ms": 73301,
- "head": "d15d14df9046fef405f965634c9599b535260255",
- "job_status": "cancelled",
- "ts": "2026-10-18T23:26:05Z"
+ "spent_ms": 19083,
+ "head": "40fdf4e93f862843e46535d933f4b4b905f5f10a",
+ "job_status": "success",
+ "ts": "2026-10-19T00:04:27Z"
 }
