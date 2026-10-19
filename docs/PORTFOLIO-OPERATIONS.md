@@ -36,6 +36,23 @@ Other recurring work, and the split so nothing runs twice (all of it on Cloudfla
 - Agent sessions are optional contributors and nothing on this list waits for one. Nothing is scheduled on claude.ai
   (no Routines, no check-ins); a session that wants to follow its PR relies on GitHub events while it is open.
 
+## 1a. The hierarchy maintains itself (ROADMAP-SELF-MAINTAIN-1 and the loops before it)
+Every layer of portfolio -> program -> project -> roadmap -> issue has a Cloudflare writer and a closing rule; no layer waits
+for a session. Read it at `SELECT * FROM v_portfolio_tree` (one row per program) and `SELECT * FROM v_roadmap ORDER BY pos`
+(every roadmap row with its program, project and horizon now / next / later / done).
+
+| Layer | Populated by | Closed by |
+|---|---|---|
+| Programs' objectives | `roadmap-self-maintain` (:30) seeds `PRG-<program>-DEFECTS-0` per program | its DoD probe: no open issue mapped to the program |
+| Goals | goal author, objective decisions, migrations; `roadmap-self-maintain` repairs `program_code` | a `goal-<key>` contract (module `goal-dod-v1`) runs the DoD; a pass completes the goal, two failures reopen it (`goal_lifecycle`) |
+| Projects | qnfo-github-steward (service_registry + repos), `portfolio-lifecycle` (:10) | project status; `PROJ-` rows verify on completed / archived / retired |
+| Roadmap | `roadmap-backlog-sync` (:00), `portfolio-self-manage` (:40), qnfo-github-steward (metric breaches) | the issue, goal, failure-mode detector or project state behind each row |
+| Gaps -> issues | `portfolio-autopilot` (:20), `portfolio-gap-action` (:25) | the issue closing |
+| Issues | every loop; backlog order is `v_issue_queue` / `v_issue_queue_v2` | `issue_triage.close_evidence` and the remediation contracts |
+
+Guards: `goals_unevaluated` and `roadmap_open_unplaced` (target 0, each with a trigger), `goals_without_machine_dod`
+(research goals whose DoD is a publication; no trigger), `goals_completed_7d`, `portfolio_drift`, `tracker_drift`.
+
 ## 2. Daily run (every day)
 Steps 2, 4 and 7 run unattended in `portfolioDailyRun`. Steps 1, 3, 5 and 6 are what a contributor does with that run
 (the fleet's code loop and issue loop, or an optional session); none of them blocks the cron.
