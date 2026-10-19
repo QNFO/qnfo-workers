@@ -33,7 +33,7 @@ var __name22222 = /* @__PURE__ */ __name2222((target, value) => __defProp22222(t
 // an empty catch. CITE-CONSISTENCY-1 asks the reviewer to compare the draft against cited QNFO work.
 // REVIEW-TRIAGE-CAP-1 is a defect fix: drift demotion at the cycle cap silently turned a blocking finding into a pass, so
 // REVIEW-HARD-GATE-1 withheld nothing there (reviewer findings 2 -> 0 at the cap; an unparseable review advanced to verify).
-var VERSION = "0.25.0-wai-width-governor"; /* 0.25.0 WAI-WIDTH-GOVERNOR-1 (2026-10-19, pillar cost, agent_issues 99924, 2731, 99928, 99937, 2930; BUDGET-SOFT-ROUTE-1 backpressure, never a stop): (a) the stage width is governed AIMD style under the LEAN-WIDTH-1 cap: a tick whose last 30 minutes show more than 15% of its stage runs rate-limited (3021/3040 on the first attempt, at least 3) halves the next width (floor 4), a clean tick adds 2 (event research-width); ops_config research_governor = off restores the plain cap; (b) after a 3021/3040 on a model every slot of the isolate skips it for 20 s, to its fallback or by waiting; (c) AI_RATE_FALLBACK never names a model whose input rate is above the primary's (glm-5.3-flash fell back to gpt-oss-120b, 2.3x): the call waits one gauge window and tries once more; (d) kimi-k2.6 (6.3x the glm-5.3-flash input rate, 172 of 324 calls failed on 10-19, 29% of the worker's neurons) runs in revise and in the verify text path only as the last retry after glm-5.3-flash and gpt-oss-120b (ops_config research_kimi_last_resort = off drops it). */ /* 0.24.0 RESEARCH-FLOOR-1 (rebased onto 0.23.0 CLAIM-INTEGRITY-1) (2026-10-19, agent_issues 99913, pillar research): (a) REVISE-SHRINK-GUARD-1: a revise patch that would take a paper from at or above the publish floor (20,000 chars) to below it, cut more than 20% of it, or drop its cited references under the reference floor counts as not applied (event revise-shrink-refused), so the second model runs with the limit stated; (b) COMPLETE-TO-FLOOR-1: the complete stage extends a complete paper under the floor with grounded sections (event floor-extend, at most 6 rounds, goal 1.2x the floor) and gate-length / gate-refcount findings route verify and revise to complete instead of the patch reviser (event floor-route); (c) FLOOR-REARM-1: the hourly sweep returns the rows frozen in bak_20261019_research_parked to complete, 5 per run, once each. */ /* 0.22.0 CLAIM-INTEGRITY-1 (2026-10-19, owner directive: the pipeline published experimental designs, pilot measurements, pre-registrations and blind expert reviews that never happened; pillar research): the writer, reconcile, revise and patch prompts forbid describing empirical work as done and the reviewer counts it HARD; claimGate (deterministic scan, a gpt-oss-120b extraction and a glm-5.3-flash confirmation) holds such a paper in verify and blocks a publishV2 revision that carries one; claimIntegritySweep audits every published paper newest first on each 10-minute tick (again at each new version), rewrites confirmed statements as proposals or assumptions with a Correction Notice as a new version, and retracts a paper with 5 or more, or one a correction cannot clear (status retracted, notice body, original in qnfo-audit.paper_integrity_backups). GET /claim-integrity reads the ledger; ops_config claim_integrity_mode = measure | off. */ /* 0.21.1 KIMI-TIMEOUT-FALLBACK-1 (2026-10-19, pillar research): a 3046 timeout on kimi-k2.6, the revise stage's second model (268 of 520 calls failed on 10-18/19, ~210 s each), falls back at once to glm-5.3-flash instead of three retries and an empty answer. */ /* 0.21.0 THIN-PRIOR-WORK-1 (2026-10-19, pillar research, agent_issues 99949; metric papers_live_failing_release_gate 140): every hour at :30 two published papers that fail the release gate as quality:thin get a Prior Work and Related Literature section grounded in the full texts of up to three related gate-passing QNFO papers, checked by a second model family, and queued as a revision for publishV2; ops_config thin_prior_work = off stops it. 0.20.0 LEAN-WIDTH-1 (2026-10-19, pillar cost; metrics workers_ai_run_rate_usd 410.84 vs 95, fleet_cost_run_rate_usd): while an ai_spend cap is breached (leanEnsemble), the stage width is at most ops_config research_parallel_lean (default 24, half of RESEARCH_PARALLEL_MAX) instead of the full ceiling. Measured: 10-09..10-12 at width 8 published 22-31 papers a day at about 13k neurons each; 10-18 at width 48 (research_parallel 96, clamped) made 7720 calls, 3140 of them errors (rate limits on glm-5.3-flash, retried and re-run), for 3.77M neurons and 24 papers. BUDGET-SOFT-ROUTE-1: fewer items per tick, never none; research_parallel_lean = 48 restores the old behaviour without a deploy. */ /* 0.19.2 (2026-10-19, RESOLVE-ALL-OPEN-1): merges main's 0.19.0 MATH-LATEX-AUTOFIX-1 with PR 2603's 0.19.0/0.19.1 fixes below. */ /* 0.19.1 EXTRACT-JSON-ROBUST-1 (issue 2877): parseExtractedClaims reads the first balanced JSON list or object (trailing prose no longer breaks it) and re-parses with lone LaTeX backslashes escaped; an empty extraction reply is asked once more in the tick. RETRY-NOT-ERROR-1 (issue 99990): a verify retry still in budget (retry: true) logs its done event as warn; only the pass that exhausts its retries is an error, so LOOP-BREAKER-1 counts real failures. WORKERS-BP-LOGGING (issue 2538): the 21 swallowed catches log a structured console.error (two trial parses carry a comment), control flow unchanged. */ /* 0.19.0 RESOLVE-ALL-OPEN-1 (2026-10-19, owner directive "RESOLVE/REMEDIATE ALL OPEN ISSUES"; pillar research): (a) RESEARCH-REVIEW-BIB-TRUNC-1 (#2800): the reviewer sees the index line of every bibliography entry, then bounded excerpts, instead of the first 8,000 chars (2-3 of 9-14 entries); (b) SLOP-SCAN-1 (#2407): a deterministic inflated-prose scan adds SOFT findings with locations against a corpus baseline read from its own slop-scan events; (c) REVISE-STRIDE-1 (#2847): queued rows at a resumable stage are claimed before ground rows; (d) EXTENSION-ACTIVATION-1 (#2824): extension rows (<= research_extension_per_day) bypass research_ready_cap, ops_config research_extension_cap_mode=respect restores it; (e) SWEEP-REARM-INLINE-1 (#2393): the completeness sweep re-arms remediation rows a 2026-10-17 cleanup closed as published without publishing; (f) RECONCILE-READ-1 (c) (#2725): an incomplete draft names its failed checks. */ /* 0.18.38 TICK-10M-1 + RECLAIM-KEEP-STAGE-1 + IDEA-TO-PUBLISH-METRIC-1 (2026-10-18, owner directive: idea to publication under 100 hours; pillar research): (a) the cron runs every 10 minutes (was 15; 144/day = CRON-MANDATE-1 ceiling, same schedule count); member windows are 10 minutes wide so each errata/reviser job still runs exactly once per slot; the 03:00 sweep window is 10 minutes; (b) a stale reclaim keeps a resumable stage (complete/review/revise/verify), and RESUME-DRAFT-1 at claim falls back to ground when reconciled.md is missing, so a stalled draft is not re-drafted from scratch; (c) idea_to_publish_h_p50_7d (median hours idea_proposals.created_at -> published_at, 7 days) is written to metric_registry on the :00 tick. */ /* 0.18.37 ERRATA-HIGHRISK-ROUTE-1 folded (errata member 1.6.2): a high-risk errata correction draft older than 6 h becomes a remediation research row instead of waiting audited forever; internal_errata closes with its queue row. */ /* 0.18.36 CLAIM-HEARTBEAT-1 + RESUME-DRAFT-1 + REVIEW-SECOND-MODEL-1 (2026-10-18): a stage returning ok refreshes claimed_at so the stale-claim reclaimer stops re-grounding papers still advancing (550 releases/24h, 302 ground claims of 72 rows); a resumable stage is kept when its draft exists in R2 (70 revise rows were re-drafted from ground); the review second path names its model (not kimi-k2.6 after #1429). */ /* 0.18.35 CLAIM-HEARTBEAT-1 (2026-10-18): a stage that returns ok refreshes claimed_at, so the 120-min stale-claim reclaimer no longer re-grounds papers that are still advancing (550 releases/24h, 302 ground claims of 72 rows). */ /* 0.18.34 REVIEW-EMPTY-SECOND-PATH-1 (2026-10-18): an unreadable review takes a second model family in the same tick and, still unreadable, re-runs review directly instead of sending the review-parse placeholder through two no-op patch calls (237 of 264 revise-noop events, 329 hard=1 cycles in 3 days). */ /* 0.18.33 PATCH-FLEX-REGEX-OVERFLOW-1 (2026-10-18, agent_issues 2886): findFlexible caps the flexible matcher at 400 tokens and fails closed on any regex error, so a whole-section find text no longer throws "Invalid regular expression: Stack overflow" out of the slot. */ /* 0.18.32 AI-RATE-FALLBACK-1 (2026-10-18): a 3021/3040/3046 on the primary model after backoff takes one call on another family (glm<->gpt-oss-120b) instead of failing the stage; 3040 no longer misread as a reasoning_effort rejection. */ /* 0.18.31 VERIFY-AUTOCORRECT-1 (2026-10-18): papers fail verify with REAL arithmetic errors (the reconcile/ensemble writer computes a number that does not match its own stated inputs) and the revise loop cannot reliably fix a bare number, so such papers cycle until park. Verify already holds both values — independently computed `computed` and the paper's stated `expected` — so stageVerify now corrects the number deterministically (autoCorrectNumeric) instead of sending it back through a model. Fail-closed: only a stated value found exactly once (verbatim or as an unambiguous bare mantissa in LaTeX/\\times 10^N) is corrected; anything ambiguous is skipped and falls through to revise. Every correction is logged as verify-autocorrect and appended to verification.md. */ /* 0.18.29 VERIFY-CYCLE-CAP-1 (2026-10-17, owner directive "REMEDIATE ALL ISSUES AND FAILURE MODES"): the verify->revise edge reset the review cycle counter to 0 (context={cycles:0,verifyPass:1}) while EVERY other edge preserves it (3716, 3735, 3753) and the review stage is the one that increments it. That single reset made MAX_REVIEW_CYCLES (6) unreachable, so an item that fails verify re-enters revise, resets to cycle 0, and loops until recover_count runs out — measured 2026-10-17: review-unresolved events exist ONLY at cycle 2 (193) and 3 (165), never 4; 96 rerun-route and 278 revise-patch events against ~100 rows; and stage='publish' is EMPTY, which is why 151 complete events produced 0 publications and why the publish quota (24) guarded an empty queue. The edge now preserves the count, so the existing six-cycle cap can terminate an item visibly instead of cycling forever. The gate itself (gates2) is unchanged: this does not let a failing draft through, it lets a draft that cannot pass STOP. */ // 0.18.28-codeagent /* 0.19.0 MATH-LATEX-AUTOFIX-1 (2026-10-19, agent_issues 100027, pillar research): 8 finished papers were parked from 2026-10-12 because gate-math-latex was left to the revise models' search/replace edits, which often did not apply. Plain-text math with one LaTeX spelling (Unicode super/subscripts, bare ^ and _ scripts, bra-kets, the scanner's operators) is now converted deterministically in review, revise and verify (event math-autofix); box drawings and lines holding currency still go to the models. */ /* 0.18.38 TICK-10M-1 + RECLAIM-KEEP-STAGE-1 + IDEA-TO-PUBLISH-METRIC-1 (2026-10-18, owner directive: idea to publication under 100 hours; pillar research): (a) the cron runs every 10 minutes (was 15; 144/day = CRON-MANDATE-1 ceiling, same schedule count); member windows are 10 minutes wide so each errata/reviser job still runs exactly once per slot; the 03:00 sweep window is 10 minutes; (b) a stale reclaim keeps a resumable stage (complete/review/revise/verify), and RESUME-DRAFT-1 at claim falls back to ground when reconciled.md is missing, so a stalled draft is not re-drafted from scratch; (c) idea_to_publish_h_p50_7d (median hours idea_proposals.created_at -> published_at, 7 days) is written to metric_registry on the :00 tick. */ /* 0.18.37 ERRATA-HIGHRISK-ROUTE-1 folded (errata member 1.6.2): a high-risk errata correction draft older than 6 h becomes a remediation research row instead of waiting audited forever; internal_errata closes with its queue row. */ /* 0.18.36 CLAIM-HEARTBEAT-1 + RESUME-DRAFT-1 + REVIEW-SECOND-MODEL-1 (2026-10-18): a stage returning ok refreshes claimed_at so the stale-claim reclaimer stops re-grounding papers still advancing (550 releases/24h, 302 ground claims of 72 rows); a resumable stage is kept when its draft exists in R2 (70 revise rows were re-drafted from ground); the review second path names its model (not kimi-k2.6 after #1429). */ /* 0.18.35 CLAIM-HEARTBEAT-1 (2026-10-18): a stage that returns ok refreshes claimed_at, so the 120-min stale-claim reclaimer no longer re-grounds papers that are still advancing (550 releases/24h, 302 ground claims of 72 rows). */ /* 0.18.34 REVIEW-EMPTY-SECOND-PATH-1 (2026-10-18): an unreadable review takes a second model family in the same tick and, still unreadable, re-runs review directly instead of sending the review-parse placeholder through two no-op patch calls (237 of 264 revise-noop events, 329 hard=1 cycles in 3 days). */ /* 0.18.33 PATCH-FLEX-REGEX-OVERFLOW-1 (2026-10-18, agent_issues 2886): findFlexible caps the flexible matcher at 400 tokens and fails closed on any regex error, so a whole-section find text no longer throws "Invalid regular expression: Stack overflow" out of the slot. */ /* 0.18.32 AI-RATE-FALLBACK-1 (2026-10-18): a 3021/3040/3046 on the primary model after backoff takes one call on another family (glm<->gpt-oss-120b) instead of failing the stage; 3040 no longer misread as a reasoning_effort rejection. */ /* 0.18.31 VERIFY-AUTOCORRECT-1 (2026-10-18): papers fail verify with REAL arithmetic errors (the reconcile/ensemble writer computes a number that does not match its own stated inputs) and the revise loop cannot reliably fix a bare number, so such papers cycle until park. Verify already holds both values — independently computed `computed` and the paper's stated `expected` — so stageVerify now corrects the number deterministically (autoCorrectNumeric) instead of sending it back through a model. Fail-closed: only a stated value found exactly once (verbatim or as an unambiguous bare mantissa in LaTeX/\\times 10^N) is corrected; anything ambiguous is skipped and falls through to revise. Every correction is logged as verify-autocorrect and appended to verification.md. */ /* 0.18.29 VERIFY-CYCLE-CAP-1 (2026-10-17, owner directive "REMEDIATE ALL ISSUES AND FAILURE MODES"): the verify->revise edge reset the review cycle counter to 0 (context={cycles:0,verifyPass:1}) while EVERY other edge preserves it (3716, 3735, 3753) and the review stage is the one that increments it. That single reset made MAX_REVIEW_CYCLES (6) unreachable, so an item that fails verify re-enters revise, resets to cycle 0, and loops until recover_count runs out — measured 2026-10-17: review-unresolved events exist ONLY at cycle 2 (193) and 3 (165), never 4; 96 rerun-route and 278 revise-patch events against ~100 rows; and stage='publish' is EMPTY, which is why 151 complete events produced 0 publications and why the publish quota (24) guarded an empty queue. The edge now preserves the count, so the existing six-cycle cap can terminate an item visibly instead of cycling forever. The gate itself (gates2) is unchanged: this does not let a failing draft through, it lets a draft that cannot pass STOP. */ // 0.18.28-codeagent
+var VERSION = "0.26.0-revision-loop"; /* 0.26.0 REVISION-LOOP-1 (2026-10-19, pillar research, owner directive "continually self-improve, self-correct, loop in new information, and iterate"): published pipeline papers go back through the whole pipeline on a rate (ops_config revision_loop_*), oldest and gate failures first, and publish as the next minor version with a Version History; remediation rewrites follow the live version instead of a fixed 2.0.0; publishV2 keeps every replaced text in living-paper paper_version_history; GET /revision-loop and /paper-versions. */ /* 0.25.0 WAI-WIDTH-GOVERNOR-1 (2026-10-19, pillar cost, agent_issues 99924, 2731, 99928, 99937, 2930; BUDGET-SOFT-ROUTE-1 backpressure, never a stop): (a) the stage width is governed AIMD style under the LEAN-WIDTH-1 cap: a tick whose last 30 minutes show more than 15% of its stage runs rate-limited (3021/3040 on the first attempt, at least 3) halves the next width (floor 4), a clean tick adds 2 (event research-width); ops_config research_governor = off restores the plain cap; (b) after a 3021/3040 on a model every slot of the isolate skips it for 20 s, to its fallback or by waiting; (c) AI_RATE_FALLBACK never names a model whose input rate is above the primary's (glm-5.3-flash fell back to gpt-oss-120b, 2.3x): the call waits one gauge window and tries once more; (d) kimi-k2.6 (6.3x the glm-5.3-flash input rate, 172 of 324 calls failed on 10-19, 29% of the worker's neurons) runs in revise and in the verify text path only as the last retry after glm-5.3-flash and gpt-oss-120b (ops_config research_kimi_last_resort = off drops it). */ /* 0.24.0 RESEARCH-FLOOR-1 (rebased onto 0.23.0 CLAIM-INTEGRITY-1) (2026-10-19, agent_issues 99913, pillar research): (a) REVISE-SHRINK-GUARD-1: a revise patch that would take a paper from at or above the publish floor (20,000 chars) to below it, cut more than 20% of it, or drop its cited references under the reference floor counts as not applied (event revise-shrink-refused), so the second model runs with the limit stated; (b) COMPLETE-TO-FLOOR-1: the complete stage extends a complete paper under the floor with grounded sections (event floor-extend, at most 6 rounds, goal 1.2x the floor) and gate-length / gate-refcount findings route verify and revise to complete instead of the patch reviser (event floor-route); (c) FLOOR-REARM-1: the hourly sweep returns the rows frozen in bak_20261019_research_parked to complete, 5 per run, once each. */ /* 0.22.0 CLAIM-INTEGRITY-1 (2026-10-19, owner directive: the pipeline published experimental designs, pilot measurements, pre-registrations and blind expert reviews that never happened; pillar research): the writer, reconcile, revise and patch prompts forbid describing empirical work as done and the reviewer counts it HARD; claimGate (deterministic scan, a gpt-oss-120b extraction and a glm-5.3-flash confirmation) holds such a paper in verify and blocks a publishV2 revision that carries one; claimIntegritySweep audits every published paper newest first on each 10-minute tick (again at each new version), rewrites confirmed statements as proposals or assumptions with a Correction Notice as a new version, and retracts a paper with 5 or more, or one a correction cannot clear (status retracted, notice body, original in qnfo-audit.paper_integrity_backups). GET /claim-integrity reads the ledger; ops_config claim_integrity_mode = measure | off. */ /* 0.21.1 KIMI-TIMEOUT-FALLBACK-1 (2026-10-19, pillar research): a 3046 timeout on kimi-k2.6, the revise stage's second model (268 of 520 calls failed on 10-18/19, ~210 s each), falls back at once to glm-5.3-flash instead of three retries and an empty answer. */ /* 0.21.0 THIN-PRIOR-WORK-1 (2026-10-19, pillar research, agent_issues 99949; metric papers_live_failing_release_gate 140): every hour at :30 two published papers that fail the release gate as quality:thin get a Prior Work and Related Literature section grounded in the full texts of up to three related gate-passing QNFO papers, checked by a second model family, and queued as a revision for publishV2; ops_config thin_prior_work = off stops it. 0.20.0 LEAN-WIDTH-1 (2026-10-19, pillar cost; metrics workers_ai_run_rate_usd 410.84 vs 95, fleet_cost_run_rate_usd): while an ai_spend cap is breached (leanEnsemble), the stage width is at most ops_config research_parallel_lean (default 24, half of RESEARCH_PARALLEL_MAX) instead of the full ceiling. Measured: 10-09..10-12 at width 8 published 22-31 papers a day at about 13k neurons each; 10-18 at width 48 (research_parallel 96, clamped) made 7720 calls, 3140 of them errors (rate limits on glm-5.3-flash, retried and re-run), for 3.77M neurons and 24 papers. BUDGET-SOFT-ROUTE-1: fewer items per tick, never none; research_parallel_lean = 48 restores the old behaviour without a deploy. */ /* 0.19.2 (2026-10-19, RESOLVE-ALL-OPEN-1): merges main's 0.19.0 MATH-LATEX-AUTOFIX-1 with PR 2603's 0.19.0/0.19.1 fixes below. */ /* 0.19.1 EXTRACT-JSON-ROBUST-1 (issue 2877): parseExtractedClaims reads the first balanced JSON list or object (trailing prose no longer breaks it) and re-parses with lone LaTeX backslashes escaped; an empty extraction reply is asked once more in the tick. RETRY-NOT-ERROR-1 (issue 99990): a verify retry still in budget (retry: true) logs its done event as warn; only the pass that exhausts its retries is an error, so LOOP-BREAKER-1 counts real failures. WORKERS-BP-LOGGING (issue 2538): the 21 swallowed catches log a structured console.error (two trial parses carry a comment), control flow unchanged. */ /* 0.19.0 RESOLVE-ALL-OPEN-1 (2026-10-19, owner directive "RESOLVE/REMEDIATE ALL OPEN ISSUES"; pillar research): (a) RESEARCH-REVIEW-BIB-TRUNC-1 (#2800): the reviewer sees the index line of every bibliography entry, then bounded excerpts, instead of the first 8,000 chars (2-3 of 9-14 entries); (b) SLOP-SCAN-1 (#2407): a deterministic inflated-prose scan adds SOFT findings with locations against a corpus baseline read from its own slop-scan events; (c) REVISE-STRIDE-1 (#2847): queued rows at a resumable stage are claimed before ground rows; (d) EXTENSION-ACTIVATION-1 (#2824): extension rows (<= research_extension_per_day) bypass research_ready_cap, ops_config research_extension_cap_mode=respect restores it; (e) SWEEP-REARM-INLINE-1 (#2393): the completeness sweep re-arms remediation rows a 2026-10-17 cleanup closed as published without publishing; (f) RECONCILE-READ-1 (c) (#2725): an incomplete draft names its failed checks. */ /* 0.18.38 TICK-10M-1 + RECLAIM-KEEP-STAGE-1 + IDEA-TO-PUBLISH-METRIC-1 (2026-10-18, owner directive: idea to publication under 100 hours; pillar research): (a) the cron runs every 10 minutes (was 15; 144/day = CRON-MANDATE-1 ceiling, same schedule count); member windows are 10 minutes wide so each errata/reviser job still runs exactly once per slot; the 03:00 sweep window is 10 minutes; (b) a stale reclaim keeps a resumable stage (complete/review/revise/verify), and RESUME-DRAFT-1 at claim falls back to ground when reconciled.md is missing, so a stalled draft is not re-drafted from scratch; (c) idea_to_publish_h_p50_7d (median hours idea_proposals.created_at -> published_at, 7 days) is written to metric_registry on the :00 tick. */ /* 0.18.37 ERRATA-HIGHRISK-ROUTE-1 folded (errata member 1.6.2): a high-risk errata correction draft older than 6 h becomes a remediation research row instead of waiting audited forever; internal_errata closes with its queue row. */ /* 0.18.36 CLAIM-HEARTBEAT-1 + RESUME-DRAFT-1 + REVIEW-SECOND-MODEL-1 (2026-10-18): a stage returning ok refreshes claimed_at so the stale-claim reclaimer stops re-grounding papers still advancing (550 releases/24h, 302 ground claims of 72 rows); a resumable stage is kept when its draft exists in R2 (70 revise rows were re-drafted from ground); the review second path names its model (not kimi-k2.6 after #1429). */ /* 0.18.35 CLAIM-HEARTBEAT-1 (2026-10-18): a stage that returns ok refreshes claimed_at, so the 120-min stale-claim reclaimer no longer re-grounds papers that are still advancing (550 releases/24h, 302 ground claims of 72 rows). */ /* 0.18.34 REVIEW-EMPTY-SECOND-PATH-1 (2026-10-18): an unreadable review takes a second model family in the same tick and, still unreadable, re-runs review directly instead of sending the review-parse placeholder through two no-op patch calls (237 of 264 revise-noop events, 329 hard=1 cycles in 3 days). */ /* 0.18.33 PATCH-FLEX-REGEX-OVERFLOW-1 (2026-10-18, agent_issues 2886): findFlexible caps the flexible matcher at 400 tokens and fails closed on any regex error, so a whole-section find text no longer throws "Invalid regular expression: Stack overflow" out of the slot. */ /* 0.18.32 AI-RATE-FALLBACK-1 (2026-10-18): a 3021/3040/3046 on the primary model after backoff takes one call on another family (glm<->gpt-oss-120b) instead of failing the stage; 3040 no longer misread as a reasoning_effort rejection. */ /* 0.18.31 VERIFY-AUTOCORRECT-1 (2026-10-18): papers fail verify with REAL arithmetic errors (the reconcile/ensemble writer computes a number that does not match its own stated inputs) and the revise loop cannot reliably fix a bare number, so such papers cycle until park. Verify already holds both values — independently computed `computed` and the paper's stated `expected` — so stageVerify now corrects the number deterministically (autoCorrectNumeric) instead of sending it back through a model. Fail-closed: only a stated value found exactly once (verbatim or as an unambiguous bare mantissa in LaTeX/\\times 10^N) is corrected; anything ambiguous is skipped and falls through to revise. Every correction is logged as verify-autocorrect and appended to verification.md. */ /* 0.18.29 VERIFY-CYCLE-CAP-1 (2026-10-17, owner directive "REMEDIATE ALL ISSUES AND FAILURE MODES"): the verify->revise edge reset the review cycle counter to 0 (context={cycles:0,verifyPass:1}) while EVERY other edge preserves it (3716, 3735, 3753) and the review stage is the one that increments it. That single reset made MAX_REVIEW_CYCLES (6) unreachable, so an item that fails verify re-enters revise, resets to cycle 0, and loops until recover_count runs out — measured 2026-10-17: review-unresolved events exist ONLY at cycle 2 (193) and 3 (165), never 4; 96 rerun-route and 278 revise-patch events against ~100 rows; and stage='publish' is EMPTY, which is why 151 complete events produced 0 publications and why the publish quota (24) guarded an empty queue. The edge now preserves the count, so the existing six-cycle cap can terminate an item visibly instead of cycling forever. The gate itself (gates2) is unchanged: this does not let a failing draft through, it lets a draft that cannot pass STOP. */ // 0.18.28-codeagent /* 0.19.0 MATH-LATEX-AUTOFIX-1 (2026-10-19, agent_issues 100027, pillar research): 8 finished papers were parked from 2026-10-12 because gate-math-latex was left to the revise models' search/replace edits, which often did not apply. Plain-text math with one LaTeX spelling (Unicode super/subscripts, bare ^ and _ scripts, bra-kets, the scanner's operators) is now converted deterministically in review, revise and verify (event math-autofix); box drawings and lines holding currency still go to the models. */ /* 0.18.38 TICK-10M-1 + RECLAIM-KEEP-STAGE-1 + IDEA-TO-PUBLISH-METRIC-1 (2026-10-18, owner directive: idea to publication under 100 hours; pillar research): (a) the cron runs every 10 minutes (was 15; 144/day = CRON-MANDATE-1 ceiling, same schedule count); member windows are 10 minutes wide so each errata/reviser job still runs exactly once per slot; the 03:00 sweep window is 10 minutes; (b) a stale reclaim keeps a resumable stage (complete/review/revise/verify), and RESUME-DRAFT-1 at claim falls back to ground when reconciled.md is missing, so a stalled draft is not re-drafted from scratch; (c) idea_to_publish_h_p50_7d (median hours idea_proposals.created_at -> published_at, 7 days) is written to metric_registry on the :00 tick. */ /* 0.18.37 ERRATA-HIGHRISK-ROUTE-1 folded (errata member 1.6.2): a high-risk errata correction draft older than 6 h becomes a remediation research row instead of waiting audited forever; internal_errata closes with its queue row. */ /* 0.18.36 CLAIM-HEARTBEAT-1 + RESUME-DRAFT-1 + REVIEW-SECOND-MODEL-1 (2026-10-18): a stage returning ok refreshes claimed_at so the stale-claim reclaimer stops re-grounding papers still advancing (550 releases/24h, 302 ground claims of 72 rows); a resumable stage is kept when its draft exists in R2 (70 revise rows were re-drafted from ground); the review second path names its model (not kimi-k2.6 after #1429). */ /* 0.18.35 CLAIM-HEARTBEAT-1 (2026-10-18): a stage that returns ok refreshes claimed_at, so the 120-min stale-claim reclaimer no longer re-grounds papers that are still advancing (550 releases/24h, 302 ground claims of 72 rows). */ /* 0.18.34 REVIEW-EMPTY-SECOND-PATH-1 (2026-10-18): an unreadable review takes a second model family in the same tick and, still unreadable, re-runs review directly instead of sending the review-parse placeholder through two no-op patch calls (237 of 264 revise-noop events, 329 hard=1 cycles in 3 days). */ /* 0.18.33 PATCH-FLEX-REGEX-OVERFLOW-1 (2026-10-18, agent_issues 2886): findFlexible caps the flexible matcher at 400 tokens and fails closed on any regex error, so a whole-section find text no longer throws "Invalid regular expression: Stack overflow" out of the slot. */ /* 0.18.32 AI-RATE-FALLBACK-1 (2026-10-18): a 3021/3040/3046 on the primary model after backoff takes one call on another family (glm<->gpt-oss-120b) instead of failing the stage; 3040 no longer misread as a reasoning_effort rejection. */ /* 0.18.31 VERIFY-AUTOCORRECT-1 (2026-10-18): papers fail verify with REAL arithmetic errors (the reconcile/ensemble writer computes a number that does not match its own stated inputs) and the revise loop cannot reliably fix a bare number, so such papers cycle until park. Verify already holds both values — independently computed `computed` and the paper's stated `expected` — so stageVerify now corrects the number deterministically (autoCorrectNumeric) instead of sending it back through a model. Fail-closed: only a stated value found exactly once (verbatim or as an unambiguous bare mantissa in LaTeX/\\times 10^N) is corrected; anything ambiguous is skipped and falls through to revise. Every correction is logged as verify-autocorrect and appended to verification.md. */ /* 0.18.29 VERIFY-CYCLE-CAP-1 (2026-10-17, owner directive "REMEDIATE ALL ISSUES AND FAILURE MODES"): the verify->revise edge reset the review cycle counter to 0 (context={cycles:0,verifyPass:1}) while EVERY other edge preserves it (3716, 3735, 3753) and the review stage is the one that increments it. That single reset made MAX_REVIEW_CYCLES (6) unreachable, so an item that fails verify re-enters revise, resets to cycle 0, and loops until recover_count runs out — measured 2026-10-17: review-unresolved events exist ONLY at cycle 2 (193) and 3 (165), never 4; 96 rerun-route and 278 revise-patch events against ~100 rows; and stage='publish' is EMPTY, which is why 151 complete events produced 0 publications and why the publish quota (24) guarded an empty queue. The edge now preserves the count, so the existing six-cycle cap can terminate an item visibly instead of cycling forever. The gate itself (gates2) is unchanged: this does not let a failing draft through, it lets a draft that cannot pass STOP. */ // 0.18.28-codeagent
 // WORKERS-AI-ATTRIBUTION-1 (2026-10-01, #1681): per-worker Workers AI attribution. Returns a shallow env copy whose AI
 // binding records each .run() (calls, errors, ms, tokens, neurons) into qnfo-audit ai_call_counters (purpose 'binding').
 // Neurons = usage tokens x Cloudflare's published per-model rates (neurons per M tokens). Fail-soft; env is never mutated.
@@ -1446,6 +1446,8 @@ async function publishV2(env, row) {
   } else {
     // A revision's abstract follows its body when the body states one; otherwise the stored abstract stays.
     var vRevAbs = cleanAbstract(vBody) || clipSentence(corpusSummary(null, vBody), 1200);
+    // REVISION-LOOP-1: the live text is kept before it is replaced (living-paper paper_version_history, GET /paper-versions).
+    await rlArchiveVersion(env, vSlug, row.version_to || null);
     await env.LIVING_PAPER.prepare("UPDATE papers SET title=?, body_md=?, version=?, abstract=COALESCE(NULLIF(?, ''), abstract), doi=NULL, zenodo_doi=NULL, zenodo_url=NULL, updated_at=datetime('now') WHERE slug=?").bind(vTitle, vBody, row.version_to || "2.0.0", vRevAbs, vSlug).run();
   }
   try {
@@ -6113,27 +6115,43 @@ async function remediationPublish(env, row) {
   const planFile = prov.files.find(function(f) {
     return f.file === "PROJECT-PLAN.md";
   });
-  await env.QNFO_AUDIT.prepare("INSERT INTO version_queue (paper_doi, slug, title, version_from, version_to, corrected_md, references_bib, citation_audit, due_diligence, project_plan, readme_md, verify_script, verify_output, status, created_at, updated_at) VALUES (?1,?2,?3,?4,'2.0.0',?5,?6,?7,?8,?9,?10,?11,?12,'drafted',datetime('now'),datetime('now'))").bind(
+  // REVISION-LOOP-1: the new version follows the live one (a loop revision is the next minor version, any other rewrite the
+  // next major), where it was a fixed 2.0.0; the body carries a Version History built from paper_revision_log, and the log row
+  // written here turns 'published' when drainV2 publishes the version.
+  const isRev = rlIsRevision(row);
+  const versionFrom = existing.version || "1.0.0";
+  const versionTo = rlNextVersion(versionFrom, isRev);
+  const day = nowIso().slice(0, 10);
+  const changelog = (isRev ? "REVISION-LOOP-1: revised against the current literature, re-reviewed and re-verified. " : "REWRITE: rewritten in full through the research pipeline. ") + rlChangeSummary(existing.body_md, paper);
+  const history = (await rlHistoryEntries(env, slug)).concat(["Version " + versionTo + " (" + day + ", from " + versionFrom + "): " + changelog.replace(/^[A-Z0-9-]+: /, "")]);
+  const body = rlWithHistory(paper, versionTo, day, history);
+  await env.QNFO_AUDIT.prepare("INSERT INTO version_queue (paper_doi, slug, title, version_from, version_to, corrected_md, references_bib, citation_audit, due_diligence, project_plan, readme_md, verify_script, verify_output, status, created_at, updated_at) VALUES (?1,?2,?3,?4,?13,?5,?6,?7,?8,?9,?10,?11,?12,'drafted',datetime('now'),datetime('now'))").bind(
     slug,
     slug,
     existing.title || "",
-    existing.version || "1.0.0",
-    paper,
+    versionFrom,
+    body,
     bibFile ? bibFile.content : null,
     auditFile ? auditFile.content : null,
     grounding ? grounding.content.slice(0, 5e4) : null,
     planFile ? planFile.content : null,
     readmeFile ? readmeFile.content : null,
     verifPy ? verifPy.content : null,
-    verifMd ? verifMd.content : null
+    verifMd ? verifMd.content : null,
+    versionTo
   ).run();
+  try {
+    await env.QNFO_AUDIT.prepare("INSERT INTO paper_revision_log (slug, doi, title, version_from, version_to, status, audit_summary, changelog, created_at, updated_at) VALUES (?1, NULL, ?2, ?3, ?4, 'queued', ?5, ?6, datetime('now'), datetime('now'))").bind(slug, existing.title || "", versionFrom, versionTo, JSON.stringify({ row: row.id, source_id: row.source_id || null }), changelog.slice(0, 2000)).run();
+  } catch (eRl) {
+    console.error(JSON.stringify({ worker: WORKER, where: "remediation-revlog", slug: slug, error: String(eRl && eRl.message || eRl).slice(0, 200) }));
+  }
   const ghFiles = artifacts.map(function(a) {
     return { path: a.file, content: a.content };
   });
   const ghr = await pushArtifactsToGitHub(env, slug, ghFiles);
   await logEvent(env, "github", JSON.stringify(ghr).slice(0, 500), ghr.ok ? "ok" : "error");
   await env.QNFO_AUDIT.prepare("UPDATE research_queue SET status='published', stage='done', published_at=? WHERE id=?").bind(nowIso(), row.id).run();
-  await logEvent(env, "remediation", "queued newversion for " + slug + " -> 2.0.0", "ok");
+  await logEvent(env, isRev ? "revision-loop" : "remediation", "queued newversion for " + slug + " " + versionFrom + " -> " + versionTo, "ok");
   return { ok: true, stage: "publish->version-queued", slug, github: ghr };
 }
 __name(remediationPublish, "remediationPublish");
@@ -29892,6 +29910,210 @@ async function claimIntegrityStatus(env) {
   return { rules: CI_RULES, mode: await ciMode(env), latest_by_verdict: by, recent: recent };
 }
 // ---- CLAIM-INTEGRITY-1:END ----
+// ---- REVISION-LOOP-1 (0.26.0, owner directive 2026-10-19, pillar research) ----
+// Owner, 2026-10-19: "The intent of the system is to continually self-improve, self-correct, loop in more information, new
+// information, and iterate." Before this, a published paper changed only when a defect matched one rule (claim integrity, a cut
+// body, a thin prior-work section, a confirmed erratum): the folded reviser takes each paper once and logs every outcome as
+// terminal (347 already-revised, 181 needs-substantive-revision at 2026-10-19 14:45Z), and remediationPublish wrote version
+// 2.0.0 whatever the paper's version was, so a second revision of a 2.x paper did not show as a new version. This loop
+// re-reads published pipeline papers on a rate: each one, oldest first and gate failures first, goes back through the whole
+// pipeline (fresh literature search and full texts, ensemble drafting with the live paper as the text under revision, review,
+// revise, verify, claim gate) and is published as the next minor version with a Version History entry; the previous text is
+// kept in living-paper paper_version_history. Hand-written papers (an author other than the pipeline) are never rewritten.
+// ops_config: revision_loop_mode on (default) | off; revision_loop_inflight (open revision rows, default 8, max 24);
+// revision_loop_per_tick (rows queued per 10-minute tick, default 1, max 4); revision_loop_min_age_min (minutes since the
+// paper last changed, default 1440). A version that fails RL_MAX_TRIES times is left until it changes by another path.
+var RL_INFLIGHT_DEFAULT = 8, RL_INFLIGHT_MAX = 24, RL_PER_TICK_DEFAULT = 1, RL_PER_TICK_MAX = 4, RL_MIN_AGE_DEFAULT = 1440, RL_MAX_TRIES = 3;
+var RL_PREFIX = "revision:";
+function rlIsRevision(row) {
+  return !!row && row.source === "remediation" && String(row.source_id || "").indexOf(RL_PREFIX) === 0;
+}
+function rlSourceId(slug, version, n) {
+  return RL_PREFIX + slug + "@" + (version || "1.0.0") + "#" + n;
+}
+function rlParseVersion(v) {
+  var m = /^v?(\d+)(?:\.(\d+))?(?:\.(\d+))?/.exec(String(v || "").trim());
+  return m ? [Number(m[1]), Number(m[2] || 0), Number(m[3] || 0)] : null;
+}
+// A revision through the loop is the next minor version (1.0.1 -> 1.1.0); any other pipeline rewrite (a cut body, a high-risk
+// erratum) is the next major version (1.0.0 -> 2.0.0, 2.0.1 -> 3.0.0), never a fixed 2.0.0.
+function rlNextVersion(current, isRevision) {
+  var p = rlParseVersion(current);
+  if (!p) return isRevision ? "1.1.0" : "2.0.0";
+  return isRevision ? p[0] + "." + (p[1] + 1) + ".0" : (p[0] + 1) + ".0.0";
+}
+function rlBrief(title, version) {
+  return "Post-publication revision of the published paper \"" + String(title || "").slice(0, 300) + "\" (version " + (version || "1.0.0") + "). Write an improved version of the paper under revision: bring in the relevant work in the bibliography, especially newer work; strengthen the weakest arguments and derivations; correct every error; remove or qualify any claim the sources and derivations do not support; keep everything that is correct. The result is a complete paper, not a list of changes.";
+}
+function rlSections(md) {
+  return (String(md || "").match(/^#{2}[ \t]+[^\n]+$/gm) || []).map(function(h) {
+    return h.replace(/^#{2}[ \t]+/, "").replace(/^\d+(?:\.\d+)*\.?[ \t]*/, "").trim();
+  }).filter(function(h) { return h && !/^(?:version history|correction notice|retraction notice)$/i.test(h); });
+}
+function rlRefCount(md) {
+  var s = String(md || ""), hm = REFS_HEAD_RE.exec(s);
+  if (!hm) return 0;
+  var rest = s.slice(hm.index + hm[0].length), nx = rest.search(/^#{1,2}[ \t]/m);
+  if (nx >= 0) rest = rest.slice(0, nx);
+  return (rest.match(/^[ \t]*(?:\[\d+\]|\d+\.|[-*])[ \t]+\S/gm) || []).length;
+}
+// What changed, measured from the two texts (no model call): sections added or dropped, reference count, length.
+function rlChangeSummary(oldMd, newMd) {
+  var a = rlSections(oldMd), b = rlSections(newMd);
+  var la = a.map(function(x) { return x.toLowerCase(); }), lb = b.map(function(x) { return x.toLowerCase(); });
+  var added = b.filter(function(x, i) { return la.indexOf(lb[i]) < 0; });
+  var dropped = a.filter(function(x, i) { return lb.indexOf(la[i]) < 0; });
+  var ra = rlRefCount(oldMd), rb = rlRefCount(newMd);
+  var wa = String(oldMd || "").split(/\s+/).filter(Boolean).length, wb = String(newMd || "").split(/\s+/).filter(Boolean).length;
+  var parts = [];
+  if (added.length) parts.push("new sections: " + added.slice(0, 6).join("; "));
+  if (dropped.length) parts.push("sections folded or removed: " + dropped.slice(0, 6).join("; "));
+  parts.push("references " + ra + " -> " + rb);
+  parts.push("length " + wa + " -> " + wb + " words");
+  return parts.join(". ") + ".";
+}
+// The reader-facing record: a banner under the title and a Version History section before the references, listing every
+// earlier version the loop or a correction produced. An earlier Version History in the new text is replaced, not repeated.
+function rlWithHistory(md, versionTo, day, entries) {
+  var s = String(md || "");
+  var at = s.search(/^## Version History[ \t]*$/m);
+  if (at >= 0) {
+    var rest = s.slice(at).replace(/^## Version History[^\n]*\n/, ""), nx = rest.search(/^#{1,2}[ \t]/m);
+    s = (s.slice(0, at).replace(/\s+$/, "") + "\n\n" + (nx >= 0 ? rest.slice(nx) : "")).replace(/\s+$/, "") + "\n";
+  }
+  s = s.replace(/^> \*\*Revised \(version [^\n]*\n+/m, "");
+  var banner = "> **Revised (version " + versionTo + ", " + day + "):** this version revises the previous one against the current literature and was reviewed and checked again before release. See the Version History.";
+  var tm = /^# [^\n]*\n/m.exec(s);
+  if (tm) s = s.slice(0, tm.index + tm[0].length) + "\n" + banner + "\n" + s.slice(tm.index + tm[0].length);
+  else s = banner + "\n\n" + s;
+  var section = ["## Version History", ""].concat(entries.map(function(e) { return "- " + e; })).join("\n") + "\n";
+  var hm = REFS_HEAD_RE.exec(s);
+  var pv = s.indexOf(PROVENANCE_HEAD);
+  var ins = pv >= 0 && (!hm || pv < hm.index) ? pv : hm ? hm.index : -1;
+  if (ins < 0) return s.replace(/\s+$/, "") + "\n\n" + section;
+  return s.slice(0, ins).replace(/\s+$/, "") + "\n\n" + section + "\n" + s.slice(ins);
+}
+async function rlEnsureHistory(env) {
+  await env.LIVING_PAPER.prepare("CREATE TABLE IF NOT EXISTS paper_version_history (id INTEGER PRIMARY KEY AUTOINCREMENT, slug TEXT NOT NULL, version TEXT, title TEXT, abstract TEXT, body_md TEXT, archived_at TEXT NOT NULL, superseded_by TEXT)").run();
+}
+// publishV2 calls this before a revision overwrites a live paper, so every earlier version stays readable (GET /paper-versions).
+async function rlArchiveVersion(env, slug, versionTo) {
+  try {
+    await rlEnsureHistory(env);
+    await env.LIVING_PAPER.prepare("INSERT INTO paper_version_history (slug, version, title, abstract, body_md, archived_at, superseded_by) SELECT slug, version, title, abstract, body_md, ?2, ?3 FROM papers WHERE slug = ?1 AND NOT EXISTS (SELECT 1 FROM paper_version_history h WHERE h.slug = ?1 AND h.version = papers.version AND h.body_md = papers.body_md)").bind(slug, nowIso(), versionTo || null).run();
+  } catch (e) {
+    console.error(JSON.stringify({ worker: WORKER, where: "revision-archive", slug: slug, error: String(e && e.message || e).slice(0, 200) }));
+  }
+}
+async function rlHistoryEntries(env, slug) {
+  var out = [];
+  try {
+    var rows = (await env.QNFO_AUDIT.prepare("SELECT version_from, version_to, status, changelog, substr(updated_at, 1, 10) AS day FROM paper_revision_log WHERE slug = ?1 AND version_to IS NOT NULL AND status IN ('published', 'claim-corrected', 'claim-retracted') ORDER BY id ASC LIMIT 20").bind(slug).all()).results || [];
+    rows.forEach(function(r) {
+      var what = r.status === "claim-corrected" ? "corrected statements that described empirical work as done" : r.status === "claim-retracted" ? "retracted" : String(r.changelog || "revised").replace(/\s+/g, " ").slice(0, 400);
+      out.push("Version " + r.version_to + " (" + r.day + ", from " + (r.version_from || "?") + "): " + what);
+    });
+  } catch (e) {
+    console.error(JSON.stringify({ worker: WORKER, where: "revision-history", slug: slug, error: String(e && e.message || e).slice(0, 200) }));
+  }
+  return out;
+}
+async function rlConfig(env) {
+  var cfg = { mode: "on", inflight: RL_INFLIGHT_DEFAULT, perTick: RL_PER_TICK_DEFAULT, minAge: RL_MIN_AGE_DEFAULT };
+  try {
+    var rows = (await env.QNFO_AUDIT.prepare("SELECT key, value FROM ops_config WHERE key IN ('revision_loop_mode', 'revision_loop_inflight', 'revision_loop_per_tick', 'revision_loop_min_age_min')").all()).results || [];
+    rows.forEach(function(r) {
+      var n = Math.floor(Number(r.value));
+      if (r.key === "revision_loop_mode") cfg.mode = String(r.value || "").trim().toLowerCase() === "off" ? "off" : "on";
+      else if (r.key === "revision_loop_inflight" && n >= 0) cfg.inflight = Math.min(RL_INFLIGHT_MAX, n);
+      else if (r.key === "revision_loop_per_tick" && n >= 0) cfg.perTick = Math.min(RL_PER_TICK_MAX, n);
+      else if (r.key === "revision_loop_min_age_min" && n >= 10) cfg.minAge = n;
+    });
+  } catch (e) {
+    console.error(JSON.stringify({ worker: WORKER, where: "revision-loop-config", error: String(e && e.message || e).slice(0, 200) }));
+  }
+  return cfg;
+}
+// Which published papers are the pipeline's own: a pipeline identifier (qnf-, qnfo-) or a research_queue row that published
+// it, and no named human author.
+function rlEligible(p, pipelineSlugs) {
+  var authors = String(p.authors || "");
+  if (/rowan|quni/i.test(authors)) return false;
+  return /^qnf/i.test(String(p.identifier || "")) || !!pipelineSlugs[p.slug];
+}
+async function revisionLoopTick(env, opts) {
+  var o = opts || {};
+  var cfg = await rlConfig(env);
+  var out = { mode: cfg.mode, inflight: 0, queued: [], eligible: 0 };
+  if (cfg.mode === "off" && !o.force) return Object.assign(out, { skipped: true });
+  var open = (await env.QNFO_AUDIT.prepare("SELECT paper_slug, source_id FROM research_queue WHERE source = 'remediation' AND status IN ('queued', 'researching', 'review')").all()).results || [];
+  var busy = {};
+  open.forEach(function(r) {
+    if (r.paper_slug) busy[r.paper_slug] = 1;
+    if (String(r.source_id || "").indexOf(RL_PREFIX) === 0) out.inflight++;
+  });
+  (((await env.QNFO_AUDIT.prepare("SELECT slug FROM version_queue WHERE status IN ('drafted', 'publishing', 'gate-blocked')").all()).results) || []).forEach(function(r) { busy[r.slug] = 1; });
+  var tries = {};
+  (((await env.QNFO_AUDIT.prepare("SELECT source_id FROM research_queue WHERE source = 'remediation' AND source_id LIKE 'revision:%'").all()).results) || []).forEach(function(r) {
+    var k = String(r.source_id).slice(RL_PREFIX.length).replace(/#\d+$/, "");
+    tries[k] = (tries[k] || 0) + 1;
+  });
+  var pipelineSlugs = {};
+  (((await env.QNFO_AUDIT.prepare("SELECT DISTINCT paper_slug FROM research_queue WHERE source <> 'remediation' AND status = 'published' AND paper_slug IS NOT NULL AND paper_slug <> ''").all()).results) || []).forEach(function(r) { pipelineSlugs[r.paper_slug] = 1; });
+  var cands = (await env.LIVING_PAPER.prepare("SELECT slug, title, abstract, version, identifier, authors, release_gate_pass, updated_at FROM papers WHERE status = 'published' AND slug IS NOT NULL AND slug <> '' AND length(body_md) >= 8000 AND datetime(updated_at) < datetime('now', ?1) ORDER BY COALESCE(release_gate_pass, 0) ASC, datetime(updated_at) ASC LIMIT 400").bind("-" + cfg.minAge + " minutes").all()).results || [];
+  var pick = [];
+  cands.forEach(function(p) {
+    if (!rlEligible(p, pipelineSlugs)) return;
+    out.eligible++;
+    if (busy[p.slug] || (tries[p.slug + "@" + p.version] || 0) >= RL_MAX_TRIES) return;
+    if (o.slug ? p.slug === o.slug : true) pick.push(p);
+  });
+  out.waiting = pick.length;
+  var room = o.slug ? 1 : Math.max(0, Math.min(cfg.perTick, cfg.inflight - out.inflight));
+  for (var i = 0; i < pick.length && out.queued.length < room; i++) {
+    var p = pick[i];
+    var n = (tries[p.slug + "@" + p.version] || 0) + 1;
+    var src = await env.QNFO_AUDIT.prepare("SELECT idea, summary FROM research_queue WHERE paper_slug = ?1 AND source <> 'remediation' ORDER BY created_at DESC LIMIT 1").bind(p.slug).first();
+    var topic = String(src && (src.idea || src.summary) || (p.title + ". " + String(p.abstract || "").slice(0, 1200))).slice(0, 2500);
+    var idea = topic + "\n\n" + rlBrief(p.title, p.version);
+    var ins = await env.QNFO_AUDIT.prepare("INSERT OR IGNORE INTO research_queue (id, source, source_id, idea, summary, score, decision, status, paper_slug, created_at, stage, attempt, revise_count, recover_count) VALUES (?1, 'remediation', ?2, ?3, '', 0.96, 'ACCEPT', 'queued', ?4, ?5, 'ground', 0, 0, 0)").bind("rem-rev-" + crypto.randomUUID(), rlSourceId(p.slug, p.version, n), idea, p.slug, nowIso()).run();
+    if (ins && ins.meta && ins.meta.changes) {
+      out.queued.push({ slug: p.slug.slice(0, 80), version: p.version, gate: p.release_gate_pass, try: n });
+      try {
+        await env.QNFO_AUDIT.prepare("INSERT INTO paper_revision_log (slug, doi, title, version_from, status, audit_summary, created_at, updated_at) VALUES (?1, NULL, ?2, ?3, 'loop-revision-queued', ?4, datetime('now'), datetime('now'))").bind(p.slug, p.title, p.version, JSON.stringify({ loop: "REVISION-LOOP-1", try: n, release_gate_pass: p.release_gate_pass })).run();
+      } catch (eL) {
+        console.error(JSON.stringify({ worker: WORKER, where: "revision-loop-log", error: String(eL && eL.message || eL).slice(0, 200) }));
+      }
+    }
+  }
+  try {
+    var pub = await env.QNFO_AUDIT.prepare("SELECT COUNT(*) AS n FROM paper_revision_log WHERE status = 'published' AND changelog LIKE 'REVISION-LOOP-1%' AND updated_at >= datetime('now', '-1440 minutes')").first();
+    out.published24h = Number(pub && pub.n || 0);
+    await env.QNFO_AUDIT.prepare("UPDATE metric_registry SET last_value = CAST(?1 AS TEXT), last_refreshed = strftime('%Y-%m-%dT%H:%M:%SZ','now'), state = 'MEASURED' WHERE metric = 'paper_loop_revisions_24h'").bind(out.published24h).run();
+    await env.QNFO_AUDIT.prepare("UPDATE metric_registry SET last_value = CAST(?1 AS TEXT), last_refreshed = strftime('%Y-%m-%dT%H:%M:%SZ','now'), state = 'MEASURED' WHERE metric = 'papers_awaiting_revision'").bind(out.waiting).run();
+  } catch (eM) {
+    out.metricError = String(eM && eM.message || eM).slice(0, 160);
+  }
+  return out;
+}
+// GET /revision-loop: open read (OPEN-ACCESS-1) of the loop's state and its latest published revisions.
+async function revisionLoopStatus(env) {
+  var cfg = await rlConfig(env);
+  var rows = (await env.QNFO_AUDIT.prepare("SELECT status, stage, COUNT(*) AS n FROM research_queue WHERE source = 'remediation' AND source_id LIKE 'revision:%' GROUP BY 1, 2").all()).results || [];
+  var recent = (await env.QNFO_AUDIT.prepare("SELECT slug, version_from, version_to, status, changelog, updated_at FROM paper_revision_log WHERE status IN ('published', 'queued', 'loop-revision-queued') AND (changelog LIKE 'REVISION-LOOP-1%' OR status = 'loop-revision-queued') ORDER BY id DESC LIMIT 30").all()).results || [];
+  return { config: cfg, queue: rows, recent: recent };
+}
+async function paperVersions(env, slug) {
+  try {
+    await rlEnsureHistory(env);
+    var rows = (await env.LIVING_PAPER.prepare("SELECT version, title, archived_at, superseded_by, length(body_md) AS chars FROM paper_version_history WHERE slug = ?1 ORDER BY id DESC LIMIT 50").bind(slug).all()).results || [];
+    var cur = await env.LIVING_PAPER.prepare("SELECT version, title, updated_at, status FROM papers WHERE slug = ?1").bind(slug).first();
+    return { slug: slug, current: cur || null, earlier: rows };
+  } catch (e) {
+    return { slug: slug, error: String(e && e.message || e).slice(0, 200) };
+  }
+}
+// ---- REVISION-LOOP-1:END ----
 var worker_default = {
   async scheduled(event, env, ctx) {
     var rawEnv = env;
@@ -29907,6 +30129,16 @@ var worker_default = {
         if (!_cis.skipped && (_cis.processed.length || _cis.metricError)) await logEvent(env, "claim-integrity", JSON.stringify(_cis).slice(0, 790), _cis.processed.some(function(r) { return r.verdict === "error"; }) ? "warn" : "ok");
       } catch (eCi) {
         await logEvent(env, "claim-integrity", "sweep threw: " + String(eCi && eCi.message || eCi).slice(0, 200), "error");
+      }
+    })());
+    // REVISION-LOOP-1: published papers go back through the pipeline on a rate, every tick.
+    ctx.waitUntil((async function() {
+      if (env.RESEARCH_HALT === "1") return;
+      try {
+        var _rl = await revisionLoopTick(env);
+        if (!_rl.skipped && (_rl.queued.length || _rl.metricError)) await logEvent(env, "revision-loop", JSON.stringify(_rl).slice(0, 790), _rl.metricError ? "warn" : "ok");
+      } catch (eRl) {
+        await logEvent(env, "revision-loop", "tick threw: " + String(eRl && eRl.message || eRl).slice(0, 200), "error");
       }
     })());
     ctx.waitUntil((async function() {
@@ -30008,7 +30240,7 @@ var worker_default = {
     if (new URL(request.url).pathname === "/reviser/health" && request.method === "GET") return reviserMod.fetch(new Request(new URL("/health", request.url)), reviserEnv(env), ctx);
     env = __aiAttrEnv(env, "qnfo-research-exec", "AI", "QNFO_AUDIT");
     const url = new URL(request.url);
-    if (url.pathname === "/health") return json({ ok: true, worker: WORKER, version: VERSION, capabilities: ["research-pipeline", "arxiv-grounding", "ensemble-drafting", "review", "python-verification", "inhouse-publish", "claim-integrity"], limitations: ["stages run only on the */10 cron under a single-flight lease (research_parallel rows at once, stages back to back within the tick budget)", "papers cite only the grounding bibliography (arXiv API, DataCite arXiv records, QNFO corpus)", "a quantitative claim is checked at the precision the paper states", "quantitative verification needs the qnfo-containers-pilot binding", "a new paper must reach 20000 chars to publish"] });
+    if (url.pathname === "/health") return json({ ok: true, worker: WORKER, version: VERSION, capabilities: ["research-pipeline", "arxiv-grounding", "ensemble-drafting", "review", "python-verification", "inhouse-publish", "claim-integrity", "revision-loop"], limitations: ["stages run only on the */10 cron under a single-flight lease (research_parallel rows at once, stages back to back within the tick budget)", "papers cite only the grounding bibliography (arXiv API, DataCite arXiv records, QNFO corpus)", "a quantitative claim is checked at the precision the paper states", "quantitative verification needs the qnfo-containers-pilot binding", "a new paper must reach 20000 chars to publish"] });
     if (url.pathname === "/run" && request.method === "POST") {
       if (url.searchParams.get("sync") !== "1") {
         await logEvent(env, "kick", "HTTP /run kick accepted; drained by the cron under the single-flight lease", "ok");
@@ -30027,6 +30259,13 @@ var worker_default = {
       if (isPublicHost(url.hostname)) return json({ error: "forbidden: internal callers only (RUN-INTERNAL-1); the cron runs this" }, 403);
       const _m = url.searchParams.get("mode");
       return json({ ok: true, worker: WORKER, version: VERSION, out: await claimIntegritySweep(env, { slug: url.searchParams.get("slug") || "", mode: _m === "measure" ? "measure" : "" }) });
+    }
+    if (url.pathname === "/revision-loop" && request.method === "GET") return json(Object.assign({ ok: true, worker: WORKER, version: VERSION }, await revisionLoopStatus(env)));
+    if (url.pathname === "/paper-versions" && request.method === "GET") return json(Object.assign({ ok: true, worker: WORKER, version: VERSION }, await paperVersions(env, String(url.searchParams.get("slug") || "").slice(0, 200))));
+    if (url.pathname === "/revision-loop/run" && request.method === "POST") {
+      // Internal callers only, like /run: one tick, or one paper (?slug=) queued now whatever the rate.
+      if (isPublicHost(url.hostname)) return json({ error: "forbidden: internal callers only (RUN-INTERNAL-1); the cron runs this" }, 403);
+      return json({ ok: true, worker: WORKER, version: VERSION, out: await revisionLoopTick(env, { slug: url.searchParams.get("slug") || "", force: url.searchParams.get("force") === "1" }) });
     }
     if (url.pathname === "/run/drain-v2" && request.method === "POST") {
       if (isPublicHost(url.hostname)) return json({ error: "forbidden: internal callers only (RUN-INTERNAL-1); the cron runs this" }, 403);
@@ -30131,6 +30370,13 @@ export {
   claimAudit,
   claimGate,
   claimIntegritySweep,
+  rlNextVersion,
+  rlChangeSummary,
+  rlWithHistory,
+  rlIsRevision,
+  rlEligible,
+  rlSourceId,
+  revisionLoopTick,
   correctionNotice,
   withCorrection,
   retractionNotice,
