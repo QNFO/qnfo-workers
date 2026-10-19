@@ -954,7 +954,7 @@ row = one("SELECT * FROM code_tasks WHERE id = ?", ID);
 ok(gh.merges.length === 1 && row.status === "merged" && aiCalls.length === 2 && /one model's opinion does not refuse/.test(row.merge_note), "green required checks then merge it: a single model's refusal never overrides them (no further model call)", [row.status, row.merge_note, aiCalls.length]);
 // ---- the second reviewer is down: three tries, then the checks decide
 goalSetup();
-sandbox.aiRunAttr = reviewerBy({ [M1]: '{"verdict":"no","defects":["the diff does not add the citation check"]}', [M2]: new Error("3046: Request timeout") });
+sandbox.aiRunAttr = reviewerBy({ [M1]: '{"verdict":"no","defects":["the diff does not add the citation check"]}', [M2]: new Error("3046: Request timeout"), "*": new Error("3046: Request timeout") }); // REVIEW-ROTATE-1: the second reviewer's next try goes to the next family (nemotron), which is down too
 for (let k = 0; k < 2; k++) r = J(await W.codeMergeTick(genv, { now: NOW + k * 36e5 }));
 row = one("SELECT * FROM code_tasks WHERE id = ?", ID);
 ok(gh.newPulls.length === 0 && row.status === "branch_pushed" && /second reviewer pending \(try 2 of 3: 3046/.test(row.merge_note), "a failing second reviewer only waits", row.merge_note);
