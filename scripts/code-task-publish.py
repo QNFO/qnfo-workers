@@ -53,7 +53,13 @@ REPO_NAME_FULL = "QNFO/qnfo-workers"
 # code tasks on that file ended "publish: patch larger than 200000 chars" on 2026-10-19 (qnfo-fleet-control's VERSION line is
 # 199,469 chars, the same arithmetic). 1_000_000 passes those patches; a whole-file fallback for a 1.2 MB worker (2.4 MB) and any
 # runaway patch stay refused, and ctx plus patch still fit one D1 row (limit 2 MB).
-MAX_PATCH = 1_000_000
+# PATCH-CAP-1500K-1 (2026-10-19, agent_issues 100227): 1_000_000 was 22,726 chars short for qnfo-fleet-control. COST-GUARD-BLIND-2 (issue 100185,
+# ct_qlk9bm3gwuo7cb) is a real edit plus the same two ~203,400-char VERSION lines (worker and mirror, removed and added): a 1,022,726-char patch, a
+# ctx of 1,051,332 chars, three publish_failed attempts and a LOOP-BREAKER-1 issue. The release notes on those lines grow with every release (each
+# bump adds about 4 x 5,000 chars), so the cap carries headroom of about 20 releases instead of a margin of 2 percent. 1_500_000 still refuses a
+# whole-file fallback with its mirror for any worker over 375 KB (4 x the file size) and keeps ctx plus patch under one D1 row (2 MB). Pruning the
+# release notes off the VERSION line would remove the pressure at its source; that is a separate change.
+MAX_PATCH = 1_500_000
 STALE_PUBLISHING_MIN = 30
 D1_TIMEOUT_S = 45
 D1_READ_ATTEMPTS = 3
