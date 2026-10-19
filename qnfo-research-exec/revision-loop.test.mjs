@@ -3,7 +3,7 @@
 // Offline, scripted D1s. Run: node qnfo-research-exec/revision-loop.test.mjs
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { ciStripPipeline, rlNextVersion, rlChangeSummary, rlWithHistory, rlIsRevision, rlEligible, rlErrataBlock, rlSourceId, revisionLoopTick } from "./worker.js";
+import { ciStripPipeline, rlRegression, rlNextVersion, rlChangeSummary, rlWithHistory, rlIsRevision, rlEligible, rlErrataBlock, rlSourceId, revisionLoopTick } from "./worker.js";
 
 // Versions move forward from the live one; a rewrite is never a fixed 2.0.0.
 assert.equal(rlNextVersion("1.0.0", true), "1.1.0");
@@ -136,4 +136,15 @@ console.log("revision-loop: ok");
   assert.ok(!/Version History/.test(s), "history stripped");
   assert.ok(!/automated research pipeline/.test(s), "provenance stripped");
   assert.ok(/The bound holds\./.test(s) && /## References/.test(s) && /We prove a bound\./.test(s), "paper text kept");
+}
+
+// REVISION-NONREGRESS-1: a revision thinner than the live paper does not replace it.
+{
+  const refs = (n) => "## References\n\n" + Array.from({ length: n }, (_, i) => "[" + (i + 1) + "] Ref " + i + ".").join("\n") + "\n";
+  const words = (n) => "# T\n\n" + "word ".repeat(n) + "\n\n";
+  assert.equal(rlRegression(words(2000) + refs(10), words(2100) + refs(9)), "");
+  assert.match(rlRegression(words(2000) + refs(10), words(2100) + refs(6)), /^references 10 -> 6$/);
+  assert.match(rlRegression(words(5000) + refs(5), words(2500) + refs(5)), /^length/);
+  assert.equal(rlRegression(words(200) + refs(1), words(50) + refs(0)), "");
+  assert.ok(/rlRegression\(existing\.body_md, paper\)/.test(readFileSync(new URL("./worker.js", import.meta.url), "utf8")), "remediationPublish checks a loop revision against the live paper");
 }
