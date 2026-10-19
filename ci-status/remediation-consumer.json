@@ -1,10 +1,10 @@
 {
  "ok": true,
  "marker": "REMEDIATION-CONSUMER-1",
- "verifier": "remediation-consumer@0986a8672605",
- "due": 13,
- "pass": 5,
- "fail": 8,
+ "verifier": "remediation-consumer@60dae5732136",
+ "due": 30,
+ "pass": 15,
+ "fail": 15,
  "skipped": 0,
  "contracts": [
   {
@@ -32,11 +32,19 @@
    "written": true
   },
   {
-   "class": "issue-2405",
-   "issue_id": 2405,
+   "class": "issue-2407",
+   "issue_id": 2407,
    "verdict": "fail",
    "expected": "ok",
    "observed": "missing-marker:qnfo-research-exec/worker.js",
+   "written": true
+  },
+  {
+   "class": "issue-2521",
+   "issue_id": 2521,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
    "written": true
   },
   {
@@ -56,35 +64,11 @@
    "written": true
   },
   {
-   "class": "issue-2407",
-   "issue_id": 2407,
+   "class": "issue-2405",
+   "issue_id": 2405,
    "verdict": "fail",
    "expected": "ok",
    "observed": "missing-marker:qnfo-research-exec/worker.js",
-   "written": true
-  },
-  {
-   "class": "issue-2521",
-   "issue_id": 2521,
-   "verdict": "pass",
-   "expected": "ok",
-   "observed": "ok",
-   "written": true
-  },
-  {
-   "class": "issue-2521-radar",
-   "issue_id": 2521,
-   "verdict": "fail",
-   "expected": "ok",
-   "observed": "present-marker:radar-hub/worker.js",
-   "written": true
-  },
-  {
-   "class": "issue-2521-outreach",
-   "issue_id": 2521,
-   "verdict": "fail",
-   "expected": "ok",
-   "observed": "missing-marker:qnfo-cloud-ops/worker.js",
    "written": true
   },
   {
@@ -109,6 +93,158 @@
    "verdict": "pass",
    "expected": "0",
    "observed": "0",
+   "written": true
+  },
+  {
+   "class": "issue-2521-radar",
+   "issue_id": 2521,
+   "verdict": "fail",
+   "expected": "ok",
+   "observed": "present-marker:radar-hub/worker.js",
+   "written": true
+  },
+  {
+   "class": "issue-2521-outreach",
+   "issue_id": 2521,
+   "verdict": "fail",
+   "expected": "ok",
+   "observed": "missing-marker:qnfo-cloud-ops/worker.js",
+   "written": true
+  },
+  {
+   "class": "issue-2911",
+   "issue_id": 2911,
+   "verdict": "pass",
+   "expected": "1",
+   "observed": "1",
+   "written": true
+  },
+  {
+   "class": "issue-2912",
+   "issue_id": 2912,
+   "verdict": "pass",
+   "expected": "1",
+   "observed": "1",
+   "written": true
+  },
+  {
+   "class": "issue-99981",
+   "issue_id": 99981,
+   "verdict": "pass",
+   "expected": "1",
+   "observed": "1",
+   "written": true
+  },
+  {
+   "class": "issue-99959",
+   "issue_id": 99959,
+   "verdict": "pass",
+   "expected": "1",
+   "observed": "1",
+   "written": true
+  },
+  {
+   "class": "issue-99961",
+   "issue_id": 99961,
+   "verdict": "pass",
+   "expected": "1",
+   "observed": "1",
+   "written": true
+  },
+  {
+   "class": "issue-99982",
+   "issue_id": 99982,
+   "verdict": "pass",
+   "expected": "1",
+   "observed": "1",
+   "written": true
+  },
+  {
+   "class": "issue-99983",
+   "issue_id": 99983,
+   "verdict": "pass",
+   "expected": "1",
+   "observed": "1",
+   "written": true
+  },
+  {
+   "class": "issue-99984",
+   "issue_id": 99984,
+   "verdict": "pass",
+   "expected": "1",
+   "observed": "1",
+   "written": true
+  },
+  {
+   "class": "issue-99985",
+   "issue_id": 99985,
+   "verdict": "pass",
+   "expected": "1",
+   "observed": "1",
+   "written": true
+  },
+  {
+   "class": "issue-99995",
+   "issue_id": 99995,
+   "verdict": "pass",
+   "expected": "1",
+   "observed": "1",
+   "written": true
+  },
+  {
+   "class": "issue-2538",
+   "issue_id": 2538,
+   "verdict": "fail",
+   "expected": "0",
+   "observed": "21",
+   "written": true
+  },
+  {
+   "class": "issue-100014",
+   "issue_id": 100014,
+   "verdict": "fail",
+   "expected": "ok",
+   "observed": "pending: filed by qnfo-research-exec, which owns it for 48h",
+   "written": true
+  },
+  {
+   "class": "issue-2722",
+   "issue_id": 2722,
+   "verdict": "fail",
+   "expected": "1",
+   "observed": "0",
+   "written": true
+  },
+  {
+   "class": "issue-2917",
+   "issue_id": 2917,
+   "verdict": "fail",
+   "expected": "1",
+   "observed": "0",
+   "written": true
+  },
+  {
+   "class": "issue-99970",
+   "issue_id": 99970,
+   "verdict": "fail",
+   "expected": "ok",
+   "observed": "pending: filed by qnfo-fleet-control, which owns it for 48h",
+   "written": true
+  },
+  {
+   "class": "issue-99971",
+   "issue_id": 99971,
+   "verdict": "fail",
+   "expected": "ok",
+   "observed": "pending: filed by qnfo-research-exec, which owns it for 48h",
+   "written": true
+  },
+  {
+   "class": "issue-100006",
+   "issue_id": 100006,
+   "verdict": "fail",
+   "expected": "ok",
+   "observed": "pending: filed by qnfo-research-exec, which owns it for 48h",
    "written": true
   }
  ],
@@ -141,14 +277,13 @@
   "skipped": "ran within 6h"
  },
  "fleet_journeys": {
-  "at": "2026-10-19T00:38:56Z",
+  "at": "2026-10-19T01:31:11Z",
   "journeys": 6,
   "failing": [
    "binding-census",
    "loop-heartbeats"
   ],
   "issues": {
-   "deploy-coherence": "closed 100008",
    "binding-census": "updated 2755",
    "loop-heartbeats": "updated 2679"
   },
@@ -156,13 +291,13 @@
    {
     "journey": "deploy-coherence",
     "ok": true,
-    "ms": 9833,
+    "ms": 10811,
     "failed": []
    },
    {
     "journey": "binding-census",
     "ok": false,
-    "ms": 3168,
+    "ms": 2762,
     "failed": [
      "census sees every worker (blind <= 0)"
     ]
@@ -170,19 +305,19 @@
    {
     "journey": "lock-roundtrip",
     "ok": true,
-    "ms": 2479,
+    "ms": 2263,
     "failed": []
    },
    {
     "journey": "papers-path",
     "ok": true,
-    "ms": 1027,
+    "ms": 1678,
     "failed": []
    },
    {
     "journey": "loop-heartbeats",
     "ok": false,
-    "ms": 5845,
+    "ms": 6921,
     "failed": [
      "dashboard state: no error-level issues"
     ]
@@ -190,7 +325,7 @@
    {
     "journey": "ai-router",
     "ok": true,
-    "ms": 340,
+    "ms": 391,
     "failed": []
    }
   ]
@@ -206,8 +341,8 @@
   ],
   "metric": 1
  },
- "spent_ms": 53389,
- "head": "0986a8672605779060a15549f8c0ad6014693adf",
- "job_status": "success",
- "ts": "2026-10-19T00:44:04Z"
+ "spent_ms": 71578,
+ "head": "60dae57321360bc78e72b620cef46ed7422f2d0f",
+ "job_status": "cancelled",
+ "ts": "2026-10-19T01:36:06Z"
 }
