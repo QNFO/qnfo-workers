@@ -1,0 +1,19 @@
+-- SEARCH-NEAREST-1 (2026-10-19, charter pillar: autonomy; agent_issues 2111). cloud_ops_events kind code-task.fail with "SEARCH text occurs 0
+-- times in the shown content": 90 in the 7 days to 2026-10-19T09:30Z, 39 in the last 24 h (24 the day before), 15+8 of those from
+-- gpt-oss-120b. The messages that count shared lines show three shapes: a SEARCH with no line in the file (53 of 75 in the verifier's
+-- count), a one- or two-line SEARCH, and a real block of 5 to 11 lines with one line reworded (4 of 5, 5 of 6, 10 of 11 lines equal).
+-- qnfo-code-orchestrator 0.19.0 applies only the last shape: one window of the same line count with at least 75% of the SEARCH's
+-- non-blank lines equal and a mean line similarity of 0.92 or more, no rival window, never in a large file, after the exact,
+-- indentation, whitespace and 0.18.29 relocation paths, each repair audited as code-task.edit-nearest (score, sha-256 of both
+-- texts). The other shapes are model errors this worker cannot repair deterministically and still burn an attempt, so the
+-- detector below is a regression guard at the worst day measured before the fix (39 in 24 h), counted only from 2026-10-19T12:00Z (the
+-- fix cannot be live earlier, and 41 misses sat in the 24 h before this file), not a claim that the misses stop; the
+-- gain is read from code-task.edit-nearest events against the same count. No hold, filter or cap is added (control_registry: none).
+-- APPLY-BY: ci
+-- DB: qnfo-audit
+-- Rollback: DELETE FROM remediation_contracts WHERE class = 'fm-code-task-search-invented'; DELETE FROM failure_modes WHERE fm_key = 'code-task-search-invented'
+
+INSERT OR IGNORE INTO failure_modes (fm_key, failure_mode, root_cause, remediation, detector, probe_class, first_seen, issue_id, trigger_condition, symptom, blast_radius) VALUES
+ ('code-task-search-invented', 'a code task fails on "SEARCH text occurs 0 times in the shown content" because the model rewrote the text it was asked to copy', 'the rung writes the SEARCH from memory instead of copying it from the content: a line reworded or invented, a whole region paraphrased, or a function body restated; applyEdits needs a verbatim unique SEARCH and only repaired whitespace, indentation and a SEARCH that lies outside the window', 'qnfo-code-orchestrator 0.19.0 SEARCH-NEAREST-1: a SEARCH of 3 to 60 lines whose non-blank lines are at least 75% equal to one window of the same line count, with mean line similarity 0.92 or more and no rival window, applies to that window (the file keeps its own unchanged lines) and is audited as code-task.edit-nearest; every other invented SEARCH is refused as before with the closest lines named', 'fm-code-task-search-invented: code-task.fail events with a 0-times SEARCH miss, more than 39 in 24 h (the worst day before the fix)', 'fm-code-task-search-invented', '2026-10-12T14:40:46Z', 2111, 'a goal whose change needs a SEARCH longer than a line', 'code_task attempts spent on a SEARCH that occurs 0 times, 24 to 39 a day on gpt-oss-120b', 'code loop: attempts and time, not total failure (28 merges on 2026-10-18 because later rungs succeed)');
+INSERT OR IGNORE INTO remediation_contracts (class, issue_id, precondition, action, verify_probe, verify_transport, max_attempts, escalate_to, expected_cadence_h, status, next_due_at, module, budget_ms, max_items, requires_container) VALUES
+ ('fm-code-task-search-invented', NULL, 'SEARCH-NEAREST-1', 'failure-mode detector', 'SELECT ''0'' AS expected, CAST((SELECT CASE WHEN COUNT(*) <= 39 THEN 0 ELSE COUNT(*) END FROM cloud_ops_events WHERE job = ''qnfo-code-orchestrator'' AND kind = ''code-task.fail'' AND text LIKE ''%occurs 0 times in the shown content%'' AND ts >= max(''2026-10-19T12:00:00Z'', strftime(''%Y-%m-%dT%H:%M:%SZ'', ''now'', ''-24 hours''))) AS TEXT) AS observed', 'd1-query', 3, 'qnfo-code-orchestrator', 1, 'active', strftime('%Y-%m-%d %H:%M:%S', 'now'), 'failure-mode', 45000, 5, 0);
