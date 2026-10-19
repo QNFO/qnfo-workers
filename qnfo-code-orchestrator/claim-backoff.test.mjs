@@ -57,6 +57,7 @@ const guardFetch = async (u, init) => {
     return new Response(JSON.stringify({ acquired: true, renewed: false, key: body.key, token, holder: body.owner, expires_at: exp(body.ttl_sec) }), { status: 200 });
   }
   if (url.endsWith("/release")) {
+    if (/fx-i\//.test(body.key)) return new Response("boom", { status: 500 });
     if (!lease || lease.token !== body.token) return new Response(JSON.stringify({ key: body.key, released: false, error: "not_holder" }), { status: 409 });
     delete guard.lease[body.key]; delete guard.session[body.key];
     return new Response(JSON.stringify({ key: body.key, released: true }), { status: 200 });
@@ -179,6 +180,32 @@ guard.down = false; guard.calls.length = 0;
 t = await tick();
 const relF = callsFor("/work-lock/release", KF);
 ok(relF.length === 1 && relF[0].body.token === tokF && t.claims.parked === 1 && ctxOf(F.id).claim.released_at && callsFor("/work-lock/acquire", KF).length === 0, "5b the next sweep releases it and never renews it", { relF, claims: t.claims });
+
+// 7. CLAIM-GONE-1 (0.23.1): a release the guard answers 409 (the claim is no longer held under that token) is released, not an error
+const errEvents = (id) => db.prepare("SELECT COUNT(*) AS n FROM cloud_ops_events WHERE kind = 'code-task.claim-release-error' AND text LIKE ?").get(id + "%").n;
+const KG = "file:fx-g/worker.js";
+const G = await addTask("fx-g/worker.js", "claim-backoff fixture G: parked, its claim expired at the guard");
+db.prepare("UPDATE code_tasks SET attempts = 6, step = 'propose', lease_until = ? WHERE id = ?").run(inMin(5 * 60), G.id);
+delete guard.lease[KG]; delete guard.session[KG]; // the claim expired: the guard no longer knows the token
+guard.calls.length = 0;
+t = await tick();
+const cg = ctxOf(G.id).claim, evG = db.prepare("SELECT status, text FROM cloud_ops_events WHERE kind = 'code-task.claim-parked' AND text LIKE ?").get(G.id + "%");
+ok(callsFor("/work-lock/release", KG).length === 1 && cg.released_at && cg.release_status === 409 && t.claims.parked === 1 && t.claims.errors === 0, "7a a parked task whose claim expired: the 409 release marks it released and the sweep counts no error", { cg, claims: t.claims });
+ok(evG && evG.status === "ok" && /already gone/.test(evG.text) && errEvents(G.id) === 0, "7b the park is audited as ok with the note, never as code-task.claim-release-error", { evG, errs: errEvents(G.id) });
+guard.calls.length = 0;
+t = await tick();
+ok(callsFor("/work-lock/release", KG).length === 0 && t.claims.parked === 0, "7c it is not released again on the next sweep", { calls: guard.calls, claims: t.claims });
+
+const H = await addTask("fx-h/worker.js", "claim-backoff fixture H: merged, its claim expired at the guard");
+delete guard.lease["file:fx-h/worker.js"]; delete guard.session["file:fx-h/worker.js"];
+db.prepare("UPDATE code_tasks SET status = 'merged' WHERE id = ?").run(H.id);
+t = await tick();
+ok(ctxOf(H.id).claim.released_at && t.claims.errors === 0 && errEvents(H.id) === 0, "7d a finished task whose claim expired: released, no claim-release-error event, no error counted", { c: ctxOf(H.id).claim, claims: t.claims, errs: errEvents(H.id) });
+
+const I = await addTask("fx-i/worker.js", "claim-backoff fixture I: merged, the guard answers 500");
+db.prepare("UPDATE code_tasks SET status = 'merged' WHERE id = ?").run(I.id);
+t = await tick();
+ok(t.claims.errors >= 1 && errEvents(I.id) >= 1 && ctxOf(I.id).claim.release_status === 500, "7e any other refusal (HTTP 500) is still an error: counted and audited as code-task.claim-release-error", { c: ctxOf(I.id).claim, claims: t.claims, errs: errEvents(I.id) });
 
 // 6. /health names the behaviour; the version is a minimum, never an exact string
 const h = await (await worker.fetch(new Request("https://x/health"), env)).json();

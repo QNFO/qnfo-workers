@@ -35,6 +35,7 @@ import os
 import re
 import sqlite3
 import sys
+import time
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
@@ -661,6 +662,36 @@ def depth_canary(acct, token, db_id, table, advisory=None):
     return None
 
 
+# MIGRATION-CONCURRENT-APPLY-1 (2026-10-19, agent_issues 99991): the push-triggered runner (apply-migrations.yml) and the hourly
+# consumer sweep (MIGRATION-UNAPPLIED-1) can apply the same merged file at the same moment, because the sweep lists a file as
+# unapplied until the first runner records its ok row at the END of the file. The second runner then meets an object the first
+# one just created ("trigger remediation_reopen_on_relapse_d1 already exists", migration_runs 2026-10-19T16:32:39Z) and recorded an
+# error row plus a MIGRATION-APPLY-FAILED-1 issue, and the sweep reported "failed" in a migration-sweep event: 18 such events filed
+# LOOP-BREAKER-1 99991 while every file was in fact applied ok seconds later. When a statement fails with an "already exists"
+# class error, the runner waits up to CONCURRENT_WAIT_S for the other runner's ok row for the SAME content (sha256); finding it
+# is a success with no error row and no issue, and not finding it is recorded as a failure exactly as before.
+CONCURRENT_WAIT_S = 120
+CONCURRENT_POLL_S = 5
+CONCURRENT_ERRORS = ("already exists", "UNIQUE constraint failed")
+_sleep = time.sleep
+
+
+def applied_by_other(acct, token, db_id, path, sha, err):
+    """True when err is an already-exists class error and another runner records an ok run of this very content within the wait."""
+    if not any(k in str(err) for k in CONCURRENT_ERRORS):
+        return False
+    deadline = time.time() + CONCURRENT_WAIT_S
+    while True:
+        try:
+            if d1(acct, token, db_id, "SELECT id FROM migration_runs WHERE file = ?1 AND sha256 = ?2 AND status = 'ok' LIMIT 1", [path, sha]):
+                return True
+        except Exception:  # noqa: BLE001 - the ledger unreadable: record the failure as before
+            return False
+        if time.time() >= deadline:
+            return False
+        _sleep(CONCURRENT_POLL_S)
+
+
 def apply_file(path, text, acct, token, commit, emit=print):
     ok, problems, info = plan(path, text)
     if not ok:
@@ -744,6 +775,10 @@ def apply_file(path, text, acct, token, commit, emit=print):
             if ADD_COLUMN.match(body(s)) and "duplicate column name" in str(e):
                 done_n += 1
                 continue
+            if applied_by_other(acct, token, db_id, path, sha, e):
+                emit(json.dumps({"file": path, "already_applied": True, "concurrent": True, "sha256": sha[:12], "note": "MIGRATION-CONCURRENT-APPLY-1: statement "
+                                 + str(done_n + 1) + " met an object another runner created; that runner recorded this content ok, so nothing failed"}))
+                return 0
             return record_failure(path, sha, commit, info, acct, token, db_id, "statement " + str(done_n + 1) + ": " + str(e)[:400], emit, done_n)
         tm = TRIGGER_ON.match(body(s))
         if tm:
