@@ -57,11 +57,14 @@ db.prepare("INSERT INTO code_tasks (id, status, branch, pr_url) VALUES ('ct_a', 
 db.prepare("INSERT INTO code_tasks (id, status, branch, pr_url) VALUES ('ct_b', 'merged', 'codeagent-b', 'https://github.com/QNFO/qnfo-workers/pull/813')").run();
 db.prepare("INSERT INTO code_tasks (id, status, branch, pr_url) VALUES ('ct_c', 'closed', 'codeagent-c', 'https://github.com/QNFO/qnfo-workers/compare/main...codeagent-c?expand=1')").run();
 db.prepare("INSERT INTO code_tasks (id, status, branch, pr_url) VALUES ('ct_d', 'merged', NULL, 'https://github.com/QNFO/qnfo-workers/pull/381')").run();
+// TRACKER-REPAIR-ROUND-1: a repair round re-pushed ct_im2924x as -r2, so the first round's PR 901 names a branch no row holds.
+db.prepare("INSERT INTO code_tasks (id, status, branch, pr_url) VALUES ('ct_im2924x', 'queued', 'codeagent-im2924x-r2', 'https://github.com/QNFO/qnfo-workers/compare/main...codeagent-im2924x-r2?expand=1')").run();
 gPulls = [
   { number: 812, state: "closed", merged_at: "2026-10-08T18:09:05Z", merge_commit_sha: "cced805", head: { ref: "codeagent-a", sha: "s1" } },
   { number: 813, state: "closed", merged_at: null, head: { ref: "codeagent-b", sha: "s2" } },
   { number: 381, state: "closed", merged_at: "2026-10-01T21:37:29Z", head: { ref: "codeagent-readme", sha: "s4" } },
-  { number: 900, state: "open", merged_at: null, head: { ref: "codeagent-orphan", sha: "s3" }, updated_at: new Date().toISOString() }
+  { number: 900, state: "open", merged_at: null, head: { ref: "codeagent-orphan", sha: "s3" }, updated_at: new Date().toISOString() },
+  { number: 901, state: "closed", merged_at: null, head: { ref: "codeagent-im2924x", sha: "s5" }, closed_at: new Date().toISOString() }
 ];
 
 // Tick 1: mirror open issues, fix the phantom failure, flag the rest.
@@ -78,6 +81,7 @@ assert.match(db.prepare("SELECT merged_by FROM code_tasks WHERE id='ct_a'").get(
 const drift = Object.fromEntries(db.prepare("SELECT task_id, drift FROM code_task_pr_links").all().map((x) => [x.task_id, x.drift]));
 assert.equal(drift.ct_b, "task-merged-pr-closed", "a task that claims a merge GitHub does not have is drift, not silently rewritten");
 assert.equal(drift["pr:900"], "pr-without-task", "a code-loop PR without a task row is drift");
+assert.ok(!drift["pr:901"], "an earlier repair round's PR (codeagent-<stem> while the task now holds -r2) is matched by the stem, not drift");
 assert.equal(drift["pr:381"], undefined, "a PR matched to a task by number (task has no branch) is not pr-without-task");
 assert.equal(drift.ct_d, null, "a merged task whose PR merged is in sync");
 assert.equal(drift.ct_c, null, "a compare URL with no PR is recorded as never-opened, not drift");
