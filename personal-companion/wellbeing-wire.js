@@ -326,6 +326,14 @@ async function insertNudge(env, n) {
 }
 
 async function markSent(env, id, sent, nowIso) {
+  // COMPANION-EMAIL-OPT-IN-1: with companion e-mail off the ask still happens, on the phone: the row is marked sent "via app"
+  // and personal-api's companion tick mirrors fresh ladder rows to Web Push (and shows them on Today).
+  if (sent && sent.disabled && sent.app) {
+    await env.PERSONAL.prepare(
+      "UPDATE companion_nudges SET state = 'sent', sent_at = ?, outcome = ? WHERE id = ? AND state = 'queued'"
+    ).bind(nowIso, JSON.stringify({ via: "app", email_mode: sent.mode || "off" }), id).run();
+    return;
+  }
   // owner_notice_enabled=0 is a deliberate off switch, not a delivery failure: record it as closed
   // rather than leaving a row to be retried forever.
   if (sent && sent.disabled) {
@@ -355,7 +363,7 @@ export async function escalate(env, deps, { text, source }) {
   if (sig.level < 2) return { level: sig.level, sent: false };
   const body = block.text + "\n\n" + BASE + "/wb/checkin" + (env.WELLBEING_TOKEN ? "?t=" + encodeURIComponent(env.WELLBEING_TOKEN) : "");
   let sent = null;
-  try { sent = deps.send ? await deps.send(env, OWNER, "not alone", body) : null; } catch (e) { sent = { ok: false, error: String(e && e.message || e) }; }
+  try { sent = deps.send ? await deps.send(env, OWNER, "not alone", body, "crisis") : null; } catch (e) { sent = { ok: false, error: String(e && e.message || e) }; }
   try {
     await env.PERSONAL.prepare(
       "INSERT INTO companion_nudges (ts, day, kind, ladder_step, ask, minutes, expected, due_at, state, sent_at, reason) VALUES (?, ?, 'crisis', 0, ?, 0, NULL, ?, 'sent', ?, ?)"

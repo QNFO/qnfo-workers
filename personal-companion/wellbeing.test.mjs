@@ -532,5 +532,14 @@ console.log("\n[pause shared with /companion (RED-TEAM-1)]");
   ok("an expired pause lets the morning check-in through", pt2.skipped !== "paused" && sends >= 1, pt2);
 }
 
+console.log("\n[e-mail off: the ask goes to the app (COMPANION-EMAIL-OPT-IN-1)]");
+{
+  const q = (() => { const d = new DatabaseSync(":memory:"); return { db: d, env: { PERSONAL: d1(d), WELLBEING_TOKEN: "t0k" } }; })();
+  await ensureWellbeing(q.env.PERSONAL);
+  const qt = await wellbeingTick(q.env, { send: async () => ({ ok: false, disabled: true, app: true, mode: "off" }), nowIso: "2026-10-19T09:00:00Z" });
+  const rows = q.db.prepare("SELECT state, sent_at, outcome FROM companion_nudges").all();
+  ok("with companion e-mail off the check-in is marked sent via the app, so personal-api pushes it", rows.length >= 1 && rows.every((r) => r.state === "sent" && r.sent_at && /"via":"app"/.test(r.outcome)), { qt, rows });
+}
+
 console.log("\n" + (fail === 0 ? "PASS" : "FAIL") + "  " + pass + " passed, " + fail + " failed");
 process.exit(fail === 0 ? 0 : 1);

@@ -146,6 +146,12 @@ because each one was broken at least once; the linked issue holds the evidence.
   same rule (qnfo-fleet-control 0.4.130 -> 0.5.0 for its next feature). The owner's changelog (fleet.qnfo.org/changelog)
   lists only minor and major releases, so a feature shipped as a patch never reaches the owner.
 
+## Domains (DOMAIN-PLANE-1)
+- Owner directive 2026-10-19: personal surfaces on `q08.org`, research and the fleet on `qnfo.org`, quantum computing on `qwav.org`
+  (the owner wrote "qwave.org"; the account's zone is qwav.org), each on a short name a person can remember. A `*.workers.dev` host is
+  never the address given to the owner, and the owner signs in with an e-mailed code, never a key. `docs/DOMAINS.md` has the table and
+  the attach pattern; a surface on the wrong domain gets a `DOMAIN-PLANE-1:<host>` issue.
+
 ## Look up the blast radius first (FLEET-GRAPH-1)
 - The fleet code + live topology graph (docs/FLEET-GRAPH.md) answers in one call what depends on a worker, function, binding,
   D1 table, view or trigger, cron, route or queue: `GET https://qnfo-memory-mcp.q08.workers.dev/fleet-graph/impact?id=<node>`

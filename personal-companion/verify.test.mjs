@@ -223,6 +223,7 @@ const count = (p, t) => p.prepare("SELECT COUNT(*) n FROM " + t).get().n;
 // ---- nothing is mailed without a passing audit --------------------------------------------------------------------------------
 {
   const p = world(); let sent = 0;
+  p.exec("CREATE TABLE wellbeing_config (key TEXT PRIMARY KEY, value TEXT, updated_at TEXT); INSERT INTO wellbeing_config VALUES ('email_mode','\"all\"','x')"); // COMPANION-EMAIL-OPT-IN-1: mail path under test
   const env = { PERSONAL: wrap(p), SEND_EMAIL: { send: async () => { sent++; } } };
   await V.pieceVerified(env, "none");
   p.prepare("INSERT INTO companion_pieces (slug, form, title, body_md, day, created_at) VALUES ('u1','essay','Unaudited','body','2026-10-10','2026-10-10T00:00:00Z')").run();
