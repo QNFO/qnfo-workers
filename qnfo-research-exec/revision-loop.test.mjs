@@ -2,6 +2,7 @@
 // version with a Version History; hand-written papers are never queued; a version that failed RL_MAX_TRIES times waits.
 // Offline, scripted D1s. Run: node qnfo-research-exec/revision-loop.test.mjs
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import { rlNextVersion, rlChangeSummary, rlWithHistory, rlIsRevision, rlEligible, rlErrataBlock, rlSourceId, revisionLoopTick } from "./worker.js";
 
 // Versions move forward from the live one; a rewrite is never a fixed 2.0.0.
@@ -22,6 +23,8 @@ assert.ok(rlEligible({ slug: "s", identifier: "qnf-2026-001", authors: "[\"QNFO 
 assert.ok(rlEligible({ slug: "s", identifier: "x", authors: "" }, { s: 1 }));
 assert.ok(rlEligible({ slug: "s", identifier: "qnf-2026-001", authors: "[\"Rowan Brad Quni-Gudzinas\"]" }, {}));
 assert.ok(!rlEligible({ slug: "s", identifier: "adelic-quantum-statistics", authors: "[\"Rowan Brad Quni-Gudzinas\"]" }, {}));
+assert.ok(!rlEligible({ slug: "chapter-1", identifier: "qnfo-2025-00-chapter-1", authors: "[\"QNFO Research\"]" }, {}), "imported owner writing is not a pipeline paper");
+assert.ok(/source_id LIKE 'revision:%' THEN 0 ELSE 1 END, CASE WHEN created_at/.test(readFileSync(new URL("./worker.js", import.meta.url), "utf8")), "queued revisions are claimed ahead of the 72-hour FIFO");
 assert.equal(rlErrataBlock([]), "");
 assert.match(rlErrataBlock([{ claim_text: "U = p(1-p) is concave", detected_by: "qnfo-lifecycle PAPER-LEARN-1" }]), /Reported errors[\s\S]*1\. U = p\(1-p\) is concave \(confirmed by a second model\)/);
 assert.ok(!rlEligible({ slug: "s", identifier: "10.5281/zenodo.1", authors: "" }, {}));
@@ -116,7 +119,6 @@ console.error = () => {};
 }
 
 // remediationPublish carries the computed version and the history (source check: the fixed '2.0.0' literal is gone).
-import { readFileSync } from "node:fs";
 const src = readFileSync(new URL("./worker.js", import.meta.url), "utf8");
 const rp = src.slice(src.indexOf("async function remediationPublish("), src.indexOf("__name(remediationPublish"));
 assert.ok(!/'2\.0\.0','drafted'|,'2\.0\.0',\?5/.test(rp), "remediationPublish no longer writes a fixed 2.0.0");
