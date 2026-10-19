@@ -1,0 +1,587 @@
+diff --git a/idea-hub/cap-release.test.mjs b/idea-hub/cap-release.test.mjs
+index e2549ea4..12c8a8d6 100644
+--- a/idea-hub/cap-release.test.mjs
++++ b/idea-hub/cap-release.test.mjs
+@@ -1,7 +1,8 @@
+-// IDEAS-CAP-GENERATED-RELEASE-1 (1.11.1) offline suite. Runs the worker's own triageProposals in a vm against in-memory SQLite.
+-// Proves: with research_queue full a generated ACCEPT is held by the admission cap and nothing is released; once the queue drains
+-// below the cap the held rows are re-queued oldest first, only as many as fit, with the cap note stripped; a full queue again
+-// releases nothing.
++// IDEAS-CAP-GENERATED-RELEASE-1 (1.11.1) offline suite, updated for IDEAS-CAP-RATE-1 (1.12.0). Runs the worker's own triageProposals in
++// a vm against in-memory SQLite.
++// Proves the room path: with two slots under the cap, the held rows are re-queued oldest first, only as many as fit, with the cap note
++// stripped and no trickle counted; at the cap the remaining held row is admitted by the trickle (1.11.1 released nothing there, which
++// left 80 rows held with no expiry; idea-hub/cap-trickle.test.mjs covers the rate itself); with nothing held nothing is released.
+ // Run: node idea-hub/cap-release.test.mjs
+ import { readFileSync } from "node:fs";
+ import { dirname, join } from "node:path";
+@@ -27,7 +28,7 @@ let pass = 0, fail = 0;
+ const ok = (c, m, d) => { if (c) pass++; else { fail++; console.log("FAIL " + m + (d === undefined ? "" : " :: " + JSON.stringify(d))); } };
+ const CAP = api.RESEARCH_ADMISSION_CAP;
+ const fill = db.prepare("INSERT INTO research_queue (id, source, source_id, idea, summary, score, decision, status, created_at) VALUES (?, 'seed', ?, 'x', '', 0.5, 'ACCEPT', 'queued', datetime('now'))");
+-for (let i = 0; i < CAP + 5; i++) fill.run("seed-" + i, "seed-" + i);
++for (let i = 0; i < CAP - 2; i++) fill.run("seed-" + i, "seed-" + i);
+ const hold = db.prepare("INSERT INTO idea_proposals (name, idea, status, created_at, decision, score, rationale) VALUES ('auto-scan', ?, 'triaged_hold', ?, 'ACCEPT', 0.8, ?)");
+ hold.run("held A oldest", "2026-10-17T10:00:00Z", "[research admission cap 130/120] good idea A");
+ hold.run("held B", "2026-10-17T11:00:00Z", "[research admission cap 131/120] good idea B");
+@@ -36,10 +37,7 @@ db.prepare("INSERT INTO idea_proposals (name, idea, status, created_at, decision
+ const st = (idea) => db.prepare("SELECT status, rationale FROM idea_proposals WHERE idea = ?").get(idea);
+ const queued = (idea) => !!db.prepare("SELECT 1 FROM research_queue WHERE idea = ?").get(idea);
+ let out = await api.triageProposals(env);
+-ok(out.cap_released === 0 && st("held A oldest").status === "triaged_hold", "a full queue releases nothing", out.cap_released);
+-db.exec("DELETE FROM research_queue WHERE source_id IN ('seed-0','seed-1','seed-2','seed-3','seed-4','seed-5','seed-6')");
+-out = await api.triageProposals(env);
+-ok(out.cap_released === 2, "two slots under the cap release two rows", out.cap_released);
++ok(out.cap_released === 2 && out.cap_trickled === 0, "two slots under the cap release two rows by room, not by trickle", [out.cap_released, out.cap_trickled]);
+ ok(st("held A oldest").status === "triaged_accepted" && st("held B").status === "triaged_accepted" && st("held C newest").status === "triaged_hold", "oldest first", [st("held A oldest"), st("held C newest")]);
+ ok(st("held A oldest").rationale === "good idea A", "the cap note is stripped", st("held A oldest").rationale);
+ ok(queued("held A oldest") && queued("held B") && !queued("held C newest"), "released rows are in research_queue");
+@@ -47,6 +45,9 @@ ok(st("a real hold").status === "triaged_hold", "a hold for another reason is un
+ const n = db.prepare("SELECT COUNT(*) AS n FROM research_queue WHERE status IN ('queued','researching','review','deferred')").get().n;
+ ok(n === CAP, "the queue is filled exactly to the cap", n);
+ out = await api.triageProposals(env);
+-ok(out.cap_released === 0 && st("held C newest").status === "triaged_hold", "at the cap nothing more is released");
++ok(out.cap_released === 1 && out.cap_trickled === 1 && st("held C newest").status === "triaged_accepted" && queued("held C newest"), "at the cap the trickle admits the last held row (1.11.1 released nothing here)", [out.cap_released, out.cap_trickled]);
++out = await api.triageProposals(env);
++ok(out.cap_released === 0 && out.cap_trickled === 0, "nothing held, nothing released");
++ok(st("a real hold").status === "triaged_hold", "a hold for another reason is still untouched");
+ console.log(`cap-release: ${pass} passed, ${fail} failed`);
+ if (fail) process.exit(1);
+diff --git a/idea-hub/cap-trickle.test.mjs b/idea-hub/cap-trickle.test.mjs
+new file mode 100644
+index 00000000..c9d07064
+--- /dev/null
++++ b/idea-hub/cap-trickle.test.mjs
+@@ -0,0 +1,164 @@
++// IDEAS-CAP-RATE-1 (idea-hub 1.12.0, agent_issues 100047) offline suite. Runs the worker's own capRelease and triageProposals in a vm
++// against in-memory SQLite.
++// The 1.11.1 release fitted held rows under RESEARCH_ADMISSION_CAP only; research_queue sat at 473 of 120 (active rows plus the deferred
++// overflow), so room was never positive, 80 cap-held accepts stayed held with no expiry and the oldest was 44 hours old. Proves:
++//   - room <= 0 with 10 held rows: exactly CAP_TRICKLE_PER_RUN (3) oldest rows are released per run, oldest first by created_at (not by
++//     insert order), the cap note is stripped, the rows are in research_queue, the rest stay held, a hold for another reason and a
++//     non-ACCEPT row are untouched, and the run drains the backlog at a rate (3, 3, 3, 1, 0);
++//   - room > 0: unchanged (min(room, TRIAGE_BATCH) rows, no trickle counted, no trickle event);
++//   - every trickle run is logged: an append-only cloud_ops_events row of kind idea-cap-trickle names the rows and what is still held,
++//     and the hourly idea-triage-budget event carries cap_trickled_run; a run that admits nothing writes no trickle row;
++//   - a row another path already released (UPDATE changes 0 rows) is skipped, not counted and not queued.
++// Run: node idea-hub/cap-trickle.test.mjs
++import { readFileSync } from "node:fs";
++import { dirname, join } from "node:path";
++import { fileURLToPath } from "node:url";
++import vm from "node:vm";
++import { DatabaseSync } from "node:sqlite";
++const here = dirname(fileURLToPath(import.meta.url));
++const src = readFileSync(join(here, "worker.js"), "utf8").replace(/export default\s*\{/, "var __default = {");
++const sb = { console: { log() {}, error() {} }, Date, JSON, Math, Number, String, RegExp, Set, Map, Array, Object, Promise, URL, Response, Request, Headers, TextEncoder, crypto, fetch: async () => { throw new Error("no network"); } };
++vm.createContext(sb);
++vm.runInContext(src + "\n__x = { triageProposals, capRelease, RESEARCH_ADMISSION_CAP, TRIAGE_BATCH, CAP_TRICKLE_PER_RUN: typeof CAP_TRICKLE_PER_RUN === 'undefined' ? undefined : CAP_TRICKLE_PER_RUN };", sb);
++const api = sb.__x;
++const CAP = api.RESEARCH_ADMISSION_CAP;
++let pass = 0, fail = 0;
++const ok = (c, m, d) => { if (c) pass++; else { fail++; console.log("FAIL " + m + (d === undefined ? "" : " :: " + JSON.stringify(d))); } };
++const shim = (db, before) => ({ prepare(sql) { let a = []; const q = sql.replace(/\?(\d+)/g, "?"); const st = { bind(...x) { a = x; return st; }, async all() { return { results: db.prepare(q).all(...a) }; }, async first() { return db.prepare(q).get(...a) ?? null; }, async run() { if (before) before(sql, a); const r = db.prepare(q).run(...a); return { meta: { changes: Number(r.changes), last_row_id: Number(r.lastInsertRowid) } }; } }; return st; } });
++const fresh = () => {
++  const db = new DatabaseSync(":memory:");
++  db.exec(`CREATE TABLE idea_proposals (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT, idea TEXT NOT NULL, contact TEXT, status TEXT DEFAULT 'new', ip_hash TEXT, created_at TEXT, decision TEXT, score REAL, rationale TEXT, triaged_at TEXT);
++CREATE TABLE fleet_budget (node_class TEXT PRIMARY KEY, cap REAL, target REAL, current REAL, unit TEXT, updated_at TEXT);
++CREATE TABLE cloud_ops_events (id TEXT PRIMARY KEY, ts TEXT, kind TEXT, text TEXT, meta TEXT, job TEXT, status TEXT);
++CREATE TABLE research_queue (id TEXT PRIMARY KEY, source TEXT, source_id TEXT, idea TEXT, summary TEXT, score REAL, decision TEXT, status TEXT, created_at TEXT, UNIQUE(source, source_id));
++CREATE TABLE ai_call_counters (day TEXT, worker TEXT, purpose TEXT, model TEXT, calls INTEGER DEFAULT 0, errors INTEGER DEFAULT 0, in_chars INTEGER DEFAULT 0, ms INTEGER DEFAULT 0, PRIMARY KEY (day, worker, purpose, model));
++CREATE TABLE ai_cache_counters (day TEXT, worker TEXT, model TEXT, calls INTEGER DEFAULT 0, cached_calls INTEGER DEFAULT 0, in_tok INTEGER DEFAULT 0, cached_tok INTEGER DEFAULT 0, PRIMARY KEY (day, worker, model));`);
++  return db;
++};
++const seed = (db, n, status = "queued") => { const ins = db.prepare("INSERT INTO research_queue (id, source, source_id, idea, summary, score, decision, status, created_at) VALUES (?, 'seed', ?, 'x', '', 0.5, 'ACCEPT', ?, datetime('now'))"); for (let i = 0; i < n; i++) ins.run(status + "-" + i, status + "-" + i, status); };
++const activeN = (db) => db.prepare("SELECT COUNT(*) AS n FROM research_queue WHERE status IN ('queued','researching','review','deferred')").get().n;
++const heldN = (db) => db.prepare("SELECT COUNT(*) AS n FROM idea_proposals WHERE decision = 'ACCEPT' AND status = 'triaged_hold' AND rationale LIKE '[research admission cap %'").get().n;
++// Ten held cap rows inserted out of age order (ids 1..10), created 01:00..10:00 on 2026-10-17: "held 01" is the oldest.
++const AGES = [5, 3, 9, 1, 7, 2, 10, 4, 8, 6];
++const holdTen = (db) => { const ins = db.prepare("INSERT INTO idea_proposals (name, idea, status, created_at, decision, score, rationale) VALUES ('auto-scan', ?, 'triaged_hold', ?, 'ACCEPT', 0.8, ?)"); AGES.forEach((h, i) => ins.run("held " + String(h).padStart(2, "0"), "2026-10-17T" + String(h).padStart(2, "0") + ":00:00Z", "[research admission cap 473/120] note " + String(h).padStart(2, "0"))); };
++const byIdea = (db, idea) => db.prepare("SELECT id, status, rationale FROM idea_proposals WHERE idea = ?").get(idea);
++const queuedIdea = (db, idea) => !!db.prepare("SELECT 1 FROM research_queue WHERE idea = ?").get(idea);
++const trickleRows = (db) => db.prepare("SELECT id, kind, text, meta, job, status FROM cloud_ops_events WHERE kind = 'idea-cap-trickle' ORDER BY id").all();
++const mk = (db, before) => ({ QNFO_AUDIT: shim(db, before), AI: { async run() { return { response: "{}" }; } } });
++
++ok(api.CAP_TRICKLE_PER_RUN === 3, "the trickle is 3 rows a run", api.CAP_TRICKLE_PER_RUN);
++
++// 1. Room <= 0 (the live shape: queue far over the cap), 10 held rows: exactly 3 oldest per run.
++{
++  const db = fresh();
++  seed(db, CAP + 353, "queued");
++  holdTen(db);
++  db.prepare("INSERT INTO idea_proposals (name, idea, status, created_at, decision, rationale) VALUES ('x', 'a real hold', 'triaged_hold', '2026-10-01T00:00:00Z', 'HOLD', 'noise/question filter')").run();
++  db.prepare("INSERT INTO idea_proposals (name, idea, status, created_at, decision, score, rationale) VALUES ('x', 'accept held for another reason', 'triaged_hold', '2026-10-01T00:00:00Z', 'ACCEPT', 0.9, '[diversity hold expired] other')").run();
++  const env = mk(db);
++  const before = activeN(db);
++  let out = await api.triageProposals(env);
++  ok(out.cap_released === 3 && out.cap_trickled === 3 && out.released === 3, "queue over the cap, 10 held: exactly 3 released in the run", [out.cap_released, out.cap_trickled, out.released]);
++  ok(["held 01", "held 02", "held 03"].every((i) => byIdea(db, i).status === "triaged_accepted"), "the 3 oldest by created_at are the ones released (not insert order)", ["held 01", "held 02", "held 03"].map((i) => byIdea(db, i).status));
++  ok(["held 04", "held 05", "held 06", "held 07", "held 08", "held 09", "held 10"].every((i) => byIdea(db, i).status === "triaged_hold"), "the other 7 stay held");
++  ok(byIdea(db, "held 01").rationale === "note 01", "the cap note is stripped from a released row", byIdea(db, "held 01").rationale);
++  ok(["held 01", "held 02", "held 03"].every((i) => queuedIdea(db, i)) && !queuedIdea(db, "held 04"), "released rows are in research_queue, held ones are not");
++  ok(activeN(db) === before + 3, "the queue grew by exactly the 3 admitted", [before, activeN(db)]);
++  ok(byIdea(db, "a real hold").status === "triaged_hold" && byIdea(db, "accept held for another reason").status === "triaged_hold", "a hold for another reason is untouched");
++  const ev = trickleRows(db);
++  const meta = ev[0] && JSON.parse(ev[0].meta);
++  ok(ev.length === 1 && ev[0].job === "idea-hub" && ev[0].status === "ok", "one idea-cap-trickle event logged for the run", ev.length);
++  ok(meta && meta.queue_n === before && meta.cap === CAP && meta.trickle_per_run === 3 && meta.admitted_ids.length === 3 && meta.held_left === 7, "the event records queue size, cap, rate, admitted ids and rows still held", meta);
++  const ids = [byIdea(db, "held 01").id, byIdea(db, "held 02").id, byIdea(db, "held 03").id];
++  ok(meta && JSON.stringify(meta.admitted_ids) === JSON.stringify(ids) && ids.every((i) => ev[0].text.includes(String(i))), "the event names the admitted proposal ids, oldest first", [meta && meta.admitted_ids, ids]);
++  const hourly = db.prepare("SELECT meta FROM cloud_ops_events WHERE id = 'idea-triage-budget'").get();
++  const hm = hourly && JSON.parse(hourly.meta);
++  ok(hm && hm.cap_trickled_run === 3 && hm.cap_released_run === 3 && hm.released_run === 3, "the hourly idea-triage-budget event carries the trickle", hm && [hm.cap_trickled_run, hm.cap_released_run, hm.released_run]);
++  // The backlog drains at a rate: 3, 3, 1 more runs, then nothing and no further event.
++  const counts = [out.cap_trickled];
++  for (let r = 0; r < 4; r++) { out = await api.triageProposals(env); counts.push(out.cap_trickled); await new Promise((res) => setTimeout(res, 2)); }
++  ok(JSON.stringify(counts) === JSON.stringify([3, 3, 3, 1, 0]), "the backlog drains 3, 3, 3, 1, 0 over five runs", counts);
++  ok(heldN(db) === 0 && byIdea(db, "a real hold").status === "triaged_hold", "no cap-held row is left, other holds still are");
++  ok(trickleRows(db).length === 4, "four runs admitted rows, four trickle events; the empty run wrote none", trickleRows(db).length);
++  const lastEv = trickleRows(db)[3], last = lastEv ? JSON.parse(lastEv.meta) : {};
++  ok(Array.isArray(last.admitted_ids) && last.admitted_ids.length === 1 && last.held_left === 0, "the last event records 1 admitted and 0 left", last);
++  // No silent loss: all 10 ended in research_queue exactly once.
++  const rq = db.prepare("SELECT COUNT(*) AS n FROM research_queue WHERE source = 'proposal'").get().n;
++  ok(rq === 10, "all 10 held accepts reached research_queue exactly once", rq);
++}
++
++// 2. Room > 0 is unchanged: min(room, TRIAGE_BATCH), no trickle counted, no trickle event.
++{
++  const db = fresh();
++  seed(db, CAP - 2, "queued");
++  holdTen(db);
++  const env = mk(db);
++  let out = await api.triageProposals(env);
++  ok(out.cap_released === 2 && !out.cap_trickled, "room 2: 2 released by room, trickle not counted", [out.cap_released, out.cap_trickled]);
++  ok(byIdea(db, "held 01").status === "triaged_accepted" && byIdea(db, "held 02").status === "triaged_accepted" && byIdea(db, "held 03").status === "triaged_hold", "room path is oldest first");
++  ok(trickleRows(db).length === 0, "no trickle event on the room path", trickleRows(db).length);
++  const db2 = fresh();
++  holdTen(db2);
++  out = await api.triageProposals(mk(db2));
++  ok(out.cap_released === api.TRIAGE_BATCH && !out.cap_trickled, "an empty queue releases TRIAGE_BATCH (6), more than the trickle", [out.cap_released, out.cap_trickled]);
++  ok(heldN(db2) === 10 - api.TRIAGE_BATCH && trickleRows(db2).length === 0, "4 left held, no trickle event");
++}
++
++// 3. At exactly the cap the room is 0: the trickle applies (the boundary).
++{
++  const db = fresh();
++  seed(db, CAP, "queued");
++  holdTen(db);
++  const out = await api.triageProposals(mk(db));
++  ok(out.cap_released === 3 && out.cap_trickled === 3, "queue exactly at the cap: the trickle admits 3", [out.cap_released, out.cap_trickled]);
++}
++
++// 4. Deferred and researching rows count toward the queue (as before), published ones do not; a trickle needs no room either way.
++{
++  const db = fresh();
++  seed(db, 300, "published");
++  seed(db, 2, "queued");
++  holdTen(db);
++  const out = await api.triageProposals(mk(db));
++  ok(out.cap_released === 6 && !out.cap_trickled, "published rows do not count: room is positive and the room path runs", [out.cap_released, out.cap_trickled]);
++}
++
++// 5. Fewer held than the rate: only those are released.
++{
++  const db = fresh();
++  seed(db, CAP + 5, "deferred");
++  db.prepare("INSERT INTO idea_proposals (name, idea, status, created_at, decision, score, rationale) VALUES ('auto-scan', 'only one', 'triaged_hold', '2026-10-17T01:00:00Z', 'ACCEPT', 0.8, '[research admission cap 125/120] solo')").run();
++  const out = await api.triageProposals(mk(db));
++  ok(out.cap_released === 1 && out.cap_trickled === 1 && byIdea(db, "only one").rationale === "solo", "one held row, rate 3: one released", [out.cap_released, out.cap_trickled]);
++  const ev = trickleRows(db);
++  ok(ev.length === 1 && ev[0].text.includes("1 oldest held accept ") && ev[0].text.includes("0 still held"), "event text is singular and says nothing is left", ev[0] && ev[0].text);
++}
++
++// 6. A row another path released between the read and the UPDATE is skipped: not counted, not queued twice.
++{
++  const db = fresh();
++  seed(db, CAP + 5, "queued");
++  holdTen(db);
++  const raced = db.prepare("SELECT id FROM idea_proposals WHERE idea = 'held 02'").get().id;
++  let fired = false;
++  const env = mk(db, (sql, a) => { if (!fired && /^UPDATE idea_proposals SET status = 'triaged_accepted'/.test(sql) && a[1] === raced) { fired = true; db.prepare("UPDATE idea_proposals SET status = 'triaged_accepted' WHERE id = ?").run(raced); } });
++  const out = await api.triageProposals(env);
++  ok(fired && out.cap_released === 2 && out.cap_trickled === 2, "a row already released by another path is skipped and not counted", [fired, out.cap_released, out.cap_trickled]);
++  ok(!queuedIdea(db, "held 02") && queuedIdea(db, "held 01") && queuedIdea(db, "held 03"), "the raced row was not queued by this run, the other two were");
++  const ev6 = trickleRows(db)[0], meta = ev6 ? JSON.parse(ev6.meta) : {};
++  ok(Array.isArray(meta.admitted_ids) && meta.admitted_ids.length === 2 && !meta.admitted_ids.includes(raced), "the event lists only the rows this run admitted", meta.admitted_ids);
++}
++
++// 7. The log row is best effort: a failing cloud_ops_events insert never undoes or blocks the admission.
++{
++  const db = fresh();
++  seed(db, CAP + 5, "queued");
++  holdTen(db);
++  db.exec("DROP TABLE cloud_ops_events");
++  const out = { };
++  await api.capRelease(mk(db), out);
++  ok(out.cap_released === 3 && out.cap_trickled === 3 && queuedIdea(db, "held 01"), "a missing event table does not stop the admission", [out.cap_released, out.cap_trickled]);
++}
++
++console.log(`cap-trickle: ${pass} passed, ${fail} failed`);
++if (fail) process.exit(1);
+diff --git a/idea-hub/deployed-current.worker.js b/idea-hub/deployed-current.worker.js
+index 5eac1a46..8ef88bc4 100644
+--- a/idea-hub/deployed-current.worker.js
++++ b/idea-hub/deployed-current.worker.js
+@@ -89,7 +89,7 @@
+ // Carries forward v1.0.5-boundary-match-20260926 (fix #1168 FEED-GATE-SUBSTRING-COLLISION-1:
+ //   single alphanumeric denylist tokens are matched with word boundaries
+ //   (?<![a-z0-9])token(?![a-z0-9]); phrases keep substring matching).
+-var VERSION = "1.11.3-cron-grid-1"; // 1.11.3 CRON-GRID-1 (owner directive 2026-10-19: every cron tick on the 5-minute grid, none slower than hourly): trigger minute moved onto the 5-minute grid (:23 -> :25). /* 1.11.1 IDEAS-CAP-GENERATED-RELEASE-1 (2026-10-19, agent_issues 100047, pillar research): triage re-queues accepts the research admission cap held, oldest first, as many as fit under the cap; they were stranded for good before. */ // 1.11.0 REACH-IDEA-1 (2026-10-19, agent_issues 2480, pillar reach): every /s/ thread page carries the subscribe box the home page has (ideaSubBox, shared). Carries 1.10.12 IDEAS-INTAKE-OWNER-1 from main.
++var VERSION = "1.12.0-cap-rate-1"; // 1.12.0 IDEAS-CAP-RATE-1 (2026-10-19, agent_issues 100047, pillar research, ANTIFRAGILE-1): the research admission cap held generated accepts with no expiry, and the 1.11.1 release only fitted rows under the cap while research_queue sat at 473 of 120, so 80 accepts (oldest about 45 h) were never admitted; at or over the cap triage now admits CAP_TRICKLE_PER_RUN (3) oldest held rows per run, logs each trickle run to cloud_ops_events (kind idea-cap-trickle), and keeps the room path unchanged. // 1.11.3 CRON-GRID-1 (owner directive 2026-10-19: every cron tick on the 5-minute grid, none slower than hourly): trigger minute moved onto the 5-minute grid (:23 -> :25). /* 1.11.1 IDEAS-CAP-GENERATED-RELEASE-1 (2026-10-19, agent_issues 100047, pillar research): triage re-queues accepts the research admission cap held, oldest first, as many as fit under the cap; they were stranded for good before. */ // 1.11.0 REACH-IDEA-1 (2026-10-19, agent_issues 2480, pillar reach): every /s/ thread page carries the subscribe box the home page has (ideaSubBox, shared). Carries 1.10.12 IDEAS-INTAKE-OWNER-1 from main.
+ // Diversity enforcement: ensure no topic exceeds 50% of accepted proposals in the last 30 days.
+ const MAX_TOPIC_SHARE = 0.5;
+ async function applyDiversityConstraint(proposal, getRecentAccepts) {
+@@ -717,20 +717,41 @@ async function enqueueAccepted(env, id, idea, score, now, direct) {
+   await env.QNFO_AUDIT.prepare("INSERT OR IGNORE INTO research_queue (id, source, source_id, idea, summary, score, decision, status, created_at) VALUES (?1,'proposal',?2,?3,'',?4,?5,'queued',?6)").bind(crypto.randomUUID(), String(id), String(idea || "").slice(0, 3000), score, "ACCEPT", now).run();
+   return true;
+ }
++// IDEAS-CAP-RATE-1 (1.12.0, agent_issues 100047, ANTIFRAGILE-1: a hold needs an expiry, prefer a rate): the 1.11.1 release only
++// fitted held rows under RESEARCH_ADMISSION_CAP, and research_queue (queued, researching, review and the deferred overflow)
++// stays far above 120 (473 rows on 2026-10-19), so room was never positive and the step released nothing: 80 cap-held accepts, the
++// oldest about 45 hours, with no expiry. When room is not positive the cap now meters instead of holding: up to CAP_TRICKLE_PER_RUN of the
++// oldest held rows are admitted per run (the inflow was about 1.75 an hour, 42 in 24 h; one run an hour). Executor load stays metered where it was
++// before the cap, by research_ready_cap and deferral. A room > 0 run is unchanged (up to TRIAGE_BATCH, at most the room). Every
++// trickle run writes an append-only cloud_ops_events row naming the rows it admitted, so the change is never silent.
+ async function capRelease(env, out) {
+   out.cap_released = 0;
++  out.cap_trickled = 0;
+   var q = await env.QNFO_AUDIT.prepare("SELECT COUNT(*) AS n FROM research_queue WHERE status IN ('queued','researching','review','deferred')").first();
+-  var room = Math.min(TRIAGE_BATCH, RESEARCH_ADMISSION_CAP - Number(q && q.n || 0));
+-  if (!(room > 0)) return;
+-  var held = (await env.QNFO_AUDIT.prepare("SELECT id, idea, score, rationale FROM idea_proposals WHERE decision = 'ACCEPT' AND status = 'triaged_hold' AND rationale LIKE '[research admission cap %' ORDER BY created_at ASC, id ASC LIMIT ?1").bind(room).all()).results || [];
+-  var now = new Date().toISOString();
++  var qn = Number(q && q.n || 0);
++  var room = Math.min(TRIAGE_BATCH, RESEARCH_ADMISSION_CAP - qn);
++  var trickle = !(room > 0);
++  var take = trickle ? CAP_TRICKLE_PER_RUN : room;
++  var held = (await env.QNFO_AUDIT.prepare("SELECT id, idea, score, rationale FROM idea_proposals WHERE decision = 'ACCEPT' AND status = 'triaged_hold' AND rationale LIKE '[research admission cap %' ORDER BY created_at ASC, id ASC LIMIT ?1").bind(take).all()).results || [];
++  var now = new Date().toISOString(), ids = [];
+   for (var i = 0; i < held.length; i++) {
+     var h = held[i], rationale = String(h.rationale || "").replace(/^\[research admission cap [^\]]*\] /, "");
+     var up = await env.QNFO_AUDIT.prepare("UPDATE idea_proposals SET status = 'triaged_accepted', rationale = ?1 WHERE id = ?2 AND status = 'triaged_hold'").bind(rationale, h.id).run();
+     if (!(Number(up && up.meta && up.meta.changes) > 0)) continue;
+     await env.QNFO_AUDIT.prepare("INSERT OR IGNORE INTO research_queue (id, source, source_id, idea, summary, score, decision, status, created_at) VALUES (?1,'proposal',?2,?3,'',?4,'ACCEPT','queued',?5)").bind(crypto.randomUUID(), String(h.id), String(h.idea || "").slice(0, 3000), h.score, now).run();
+     out.cap_released++;
++    ids.push(h.id);
+   }
++  if (!trickle) return;
++  out.cap_trickled = out.cap_released;
++  if (!ids.length) return;
++  try {
++    var left = await env.QNFO_AUDIT.prepare("SELECT COUNT(*) AS n FROM idea_proposals WHERE decision = 'ACCEPT' AND status = 'triaged_hold' AND rationale LIKE '[research admission cap %'").first();
++    out.cap_held_left = Number(left && left.n) || 0;
++    await env.QNFO_AUDIT.prepare("INSERT OR IGNORE INTO cloud_ops_events (id, ts, kind, text, meta, job, status) VALUES (?1, ?2, 'idea-cap-trickle', ?3, ?4, 'idea-hub', 'ok')")
++      .bind("idea-cap-trickle-" + now, now, "research admission cap trickle (IDEAS-CAP-RATE-1): research_queue at " + qn + "/" + RESEARCH_ADMISSION_CAP + ", admitted the " + ids.length + " oldest held accept" + (ids.length === 1 ? "" : "s") + " (idea_proposals " + ids.join(", ") + "), " + out.cap_held_left + " still held",
++        JSON.stringify({ version: VERSION, queue_n: qn, cap: RESEARCH_ADMISSION_CAP, trickle_per_run: CAP_TRICKLE_PER_RUN, admitted_ids: ids, held_left: out.cap_held_left })).run();
++  } catch (e) { console.error(JSON.stringify({ worker: "idea-hub", where: "capRelease", error: String(e && e.message || e).slice(0, 300) })); }
+ }
+ // Expire held rows that left the window (terminal HOLD, score kept); then release the best held rows the current mix
+ // allows, up to TRIAGE_BATCH a run. No model call either way. Since 1.6.0 (BUDGET-SOFT-ROUTE-1) a cap no longer holds
+@@ -779,7 +800,8 @@ async function triageProposals(env, deadline) {
+   // IDEAS-CAP-GENERATED-RELEASE-1 (1.11.1, agent_issues 100047): enqueueAccepted holds a generated ACCEPT as triaged_hold with a
+   // '[research admission cap n/120]' rationale while the queue is full, and nothing ever re-admitted it (66 rows held since
+   // 2026-10-17 on 2026-10-19). Each run now re-queues held cap rows oldest first, as many as fit under RESEARCH_ADMISSION_CAP
+-  // and at most TRIAGE_BATCH. The cap itself stays: a full queue releases nothing.
++  // and at most TRIAGE_BATCH. IDEAS-CAP-RATE-1 (1.12.0): the cap itself stays, but a full queue no longer releases nothing; at or over
++  // the cap, CAP_TRICKLE_PER_RUN held rows are admitted per run (a rate, not a hold with no expiry).
+   try {
+     await capRelease(env, out);
+     out.released = (out.released || 0) + (out.cap_released || 0);
+@@ -849,7 +871,7 @@ async function triageProposals(env, deadline) {
+     out.diversity_held_total = Number(dd && dd.n) || 0;
+     var at = new Date().toISOString();
+     await env.QNFO_AUDIT.prepare("INSERT OR REPLACE INTO cloud_ops_events (id, ts, kind, text, meta, job, status) VALUES ('idea-triage-budget', ?1, 'idea-triage-budget', ?2, ?3, 'idea-hub', ?4)")
+-      .bind(at, "idea triage: " + (budget.breached ? "AI budget caps breached, scored lean on one cheap model; " : "caps clear; ") + out.released + " released, " + out.triaged + " triaged, " + out.deferred_total + " waiting as deferred_budget, " + out.diversity_held_total + " as deferred_diversity", JSON.stringify({ version: VERSION, breached: budget.breached, caps: budget.caps, deferred_run: out.deferred, released_run: out.released, deferred_total: out.deferred_total, triaged_run: out.triaged, diversity_held_run: out.diversity_held, diversity_released_run: out.diversity_released, diversity_expired_run: out.diversity_expired, diversity_held_total: out.diversity_held_total, diversity: out.diversity || null, novelty: out.novelty }), budget.breached ? "lean" : "ok").run();
++      .bind(at, "idea triage: " + (budget.breached ? "AI budget caps breached, scored lean on one cheap model; " : "caps clear; ") + out.released + " released, " + out.triaged + " triaged, " + out.deferred_total + " waiting as deferred_budget, " + out.diversity_held_total + " as deferred_diversity", JSON.stringify({ version: VERSION, breached: budget.breached, caps: budget.caps, deferred_run: out.deferred, released_run: out.released, cap_released_run: out.cap_released || 0, cap_trickled_run: out.cap_trickled || 0, deferred_total: out.deferred_total, triaged_run: out.triaged, diversity_held_run: out.diversity_held, diversity_released_run: out.diversity_released, diversity_expired_run: out.diversity_expired, diversity_held_total: out.diversity_held_total, diversity: out.diversity || null, novelty: out.novelty }), budget.breached ? "lean" : "ok").run();
+   } catch (e) { console.error(JSON.stringify({ worker: "idea-hub", where: "triageProposals", error: String(e && e.message || e).slice(0, 300) })); }
+   // OWNER-SIGNAL-INTAKE-1: metric owner_signal_share_30d (registered with its trigger in
+   // migrations/2026-10-07-owner-signal-intake.sql) is the share of research_queue rows created in the last 30 days that
+@@ -1096,6 +1118,8 @@ async function thinkSeed(env) {
+ var OWNER_CORPUS_BATCH = 6, OWNER_CORPUS_SLOW_BATCH = 2, OWNER_CORPUS_MIN_CHARS = 600, OWNER_CORPUS_EXCERPT = 7000, OWNER_CORPUS_RQ_CAP = 12;
+ // RESEARCH-ADMISSION-CAP-1: bound admission to what the executor can hold. See enqueueAccepted().
+ var RESEARCH_ADMISSION_CAP = 120;
++// IDEAS-CAP-RATE-1: at or over the cap, held accepts are admitted at this rate per run (oldest first) instead of waiting for room. See capRelease().
++var CAP_TRICKLE_PER_RUN = 3;
+ var OWNER_CORPUS_FLEET_ERA = "notes/v1/2026/08";
+ var OWNER_CORPUS_TYPES = ["note", "synthesis", "synthesis-working-draft", "development-note", "lesson"];
+ var OWNER_NOTE_RETRY_MIN = 120;
+diff --git a/idea-hub/worker.js b/idea-hub/worker.js
+index 5eac1a46..8ef88bc4 100644
+--- a/idea-hub/worker.js
++++ b/idea-hub/worker.js
+@@ -89,7 +89,7 @@
+ // Carries forward v1.0.5-boundary-match-20260926 (fix #1168 FEED-GATE-SUBSTRING-COLLISION-1:
+ //   single alphanumeric denylist tokens are matched with word boundaries
+ //   (?<![a-z0-9])token(?![a-z0-9]); phrases keep substring matching).
+-var VERSION = "1.11.3-cron-grid-1"; // 1.11.3 CRON-GRID-1 (owner directive 2026-10-19: every cron tick on the 5-minute grid, none slower than hourly): trigger minute moved onto the 5-minute grid (:23 -> :25). /* 1.11.1 IDEAS-CAP-GENERATED-RELEASE-1 (2026-10-19, agent_issues 100047, pillar research): triage re-queues accepts the research admission cap held, oldest first, as many as fit under the cap; they were stranded for good before. */ // 1.11.0 REACH-IDEA-1 (2026-10-19, agent_issues 2480, pillar reach): every /s/ thread page carries the subscribe box the home page has (ideaSubBox, shared). Carries 1.10.12 IDEAS-INTAKE-OWNER-1 from main.
++var VERSION = "1.12.0-cap-rate-1"; // 1.12.0 IDEAS-CAP-RATE-1 (2026-10-19, agent_issues 100047, pillar research, ANTIFRAGILE-1): the research admission cap held generated accepts with no expiry, and the 1.11.1 release only fitted rows under the cap while research_queue sat at 473 of 120, so 80 accepts (oldest about 45 h) were never admitted; at or over the cap triage now admits CAP_TRICKLE_PER_RUN (3) oldest held rows per run, logs each trickle run to cloud_ops_events (kind idea-cap-trickle), and keeps the room path unchanged. // 1.11.3 CRON-GRID-1 (owner directive 2026-10-19: every cron tick on the 5-minute grid, none slower than hourly): trigger minute moved onto the 5-minute grid (:23 -> :25). /* 1.11.1 IDEAS-CAP-GENERATED-RELEASE-1 (2026-10-19, agent_issues 100047, pillar research): triage re-queues accepts the research admission cap held, oldest first, as many as fit under the cap; they were stranded for good before. */ // 1.11.0 REACH-IDEA-1 (2026-10-19, agent_issues 2480, pillar reach): every /s/ thread page carries the subscribe box the home page has (ideaSubBox, shared). Carries 1.10.12 IDEAS-INTAKE-OWNER-1 from main.
+ // Diversity enforcement: ensure no topic exceeds 50% of accepted proposals in the last 30 days.
+ const MAX_TOPIC_SHARE = 0.5;
+ async function applyDiversityConstraint(proposal, getRecentAccepts) {
+@@ -717,20 +717,41 @@ async function enqueueAccepted(env, id, idea, score, now, direct) {
+   await env.QNFO_AUDIT.prepare("INSERT OR IGNORE INTO research_queue (id, source, source_id, idea, summary, score, decision, status, created_at) VALUES (?1,'proposal',?2,?3,'',?4,?5,'queued',?6)").bind(crypto.randomUUID(), String(id), String(idea || "").slice(0, 3000), score, "ACCEPT", now).run();
+   return true;
+ }
++// IDEAS-CAP-RATE-1 (1.12.0, agent_issues 100047, ANTIFRAGILE-1: a hold needs an expiry, prefer a rate): the 1.11.1 release only
++// fitted held rows under RESEARCH_ADMISSION_CAP, and research_queue (queued, researching, review and the deferred overflow)
++// stays far above 120 (473 rows on 2026-10-19), so room was never positive and the step released nothing: 80 cap-held accepts, the
++// oldest about 45 hours, with no expiry. When room is not positive the cap now meters instead of holding: up to CAP_TRICKLE_PER_RUN of the
++// oldest held rows are admitted per run (the inflow was about 1.75 an hour, 42 in 24 h; one run an hour). Executor load stays metered where it was
++// before the cap, by research_ready_cap and deferral. A room > 0 run is unchanged (up to TRIAGE_BATCH, at most the room). Every
++// trickle run writes an append-only cloud_ops_events row naming the rows it admitted, so the change is never silent.
+ async function capRelease(env, out) {
+   out.cap_released = 0;
++  out.cap_trickled = 0;
+   var q = await env.QNFO_AUDIT.prepare("SELECT COUNT(*) AS n FROM research_queue WHERE status IN ('queued','researching','review','deferred')").first();
+-  var room = Math.min(TRIAGE_BATCH, RESEARCH_ADMISSION_CAP - Number(q && q.n || 0));
+-  if (!(room > 0)) return;
+-  var held = (await env.QNFO_AUDIT.prepare("SELECT id, idea, score, rationale FROM idea_proposals WHERE decision = 'ACCEPT' AND status = 'triaged_hold' AND rationale LIKE '[research admission cap %' ORDER BY created_at ASC, id ASC LIMIT ?1").bind(room).all()).results || [];
+-  var now = new Date().toISOString();
++  var qn = Number(q && q.n || 0);
++  var room = Math.min(TRIAGE_BATCH, RESEARCH_ADMISSION_CAP - qn);
++  var trickle = !(room > 0);
++  var take = trickle ? CAP_TRICKLE_PER_RUN : room;
++  var held = (await env.QNFO_AUDIT.prepare("SELECT id, idea, score, rationale FROM idea_proposals WHERE decision = 'ACCEPT' AND status = 'triaged_hold' AND rationale LIKE '[research admission cap %' ORDER BY created_at ASC, id ASC LIMIT ?1").bind(take).all()).results || [];
++  var now = new Date().toISOString(), ids = [];
+   for (var i = 0; i < held.length; i++) {
+     var h = held[i], rationale = String(h.rationale || "").replace(/^\[research admission cap [^\]]*\] /, "");
+     var up = await env.QNFO_AUDIT.prepare("UPDATE idea_proposals SET status = 'triaged_accepted', rationale = ?1 WHERE id = ?2 AND status = 'triaged_hold'").bind(rationale, h.id).run();
+     if (!(Number(up && up.meta && up.meta.changes) > 0)) continue;
+     await env.QNFO_AUDIT.prepare("INSERT OR IGNORE INTO research_queue (id, source, source_id, idea, summary, score, decision, status, created_at) VALUES (?1,'proposal',?2,?3,'',?4,'ACCEPT','queued',?5)").bind(crypto.randomUUID(), String(h.id), String(h.idea || "").slice(0, 3000), h.score, now).run();
+     out.cap_released++;
++    ids.push(h.id);
+   }
++  if (!trickle) return;
++  out.cap_trickled = out.cap_released;
++  if (!ids.length) return;
++  try {
++    var left = await env.QNFO_AUDIT.prepare("SELECT COUNT(*) AS n FROM idea_proposals WHERE decision = 'ACCEPT' AND status = 'triaged_hold' AND rationale LIKE '[research admission cap %'").first();
++    out.cap_held_left = Number(left && left.n) || 0;
++    await env.QNFO_AUDIT.prepare("INSERT OR IGNORE INTO cloud_ops_events (id, ts, kind, text, meta, job, status) VALUES (?1, ?2, 'idea-cap-trickle', ?3, ?4, 'idea-hub', 'ok')")
++      .bind("idea-cap-trickle-" + now, now, "research admission cap trickle (IDEAS-CAP-RATE-1): research_queue at " + qn + "/" + RESEARCH_ADMISSION_CAP + ", admitted the " + ids.length + " oldest held accept" + (ids.length === 1 ? "" : "s") + " (idea_proposals " + ids.join(", ") + "), " + out.cap_held_left + " still held",
++        JSON.stringify({ version: VERSION, queue_n: qn, cap: RESEARCH_ADMISSION_CAP, trickle_per_run: CAP_TRICKLE_PER_RUN, admitted_ids: ids, held_left: out.cap_held_left })).run();
++  } catch (e) { console.error(JSON.stringify({ worker: "idea-hub", where: "capRelease", error: String(e && e.message || e).slice(0, 300) })); }
+ }
+ // Expire held rows that left the window (terminal HOLD, score kept); then release the best held rows the current mix
+ // allows, up to TRIAGE_BATCH a run. No model call either way. Since 1.6.0 (BUDGET-SOFT-ROUTE-1) a cap no longer holds
+@@ -779,7 +800,8 @@ async function triageProposals(env, deadline) {
+   // IDEAS-CAP-GENERATED-RELEASE-1 (1.11.1, agent_issues 100047): enqueueAccepted holds a generated ACCEPT as triaged_hold with a
+   // '[research admission cap n/120]' rationale while the queue is full, and nothing ever re-admitted it (66 rows held since
+   // 2026-10-17 on 2026-10-19). Each run now re-queues held cap rows oldest first, as many as fit under RESEARCH_ADMISSION_CAP
+-  // and at most TRIAGE_BATCH. The cap itself stays: a full queue releases nothing.
++  // and at most TRIAGE_BATCH. IDEAS-CAP-RATE-1 (1.12.0): the cap itself stays, but a full queue no longer releases nothing; at or over
++  // the cap, CAP_TRICKLE_PER_RUN held rows are admitted per run (a rate, not a hold with no expiry).
+   try {
+     await capRelease(env, out);
+     out.released = (out.released || 0) + (out.cap_released || 0);
+@@ -849,7 +871,7 @@ async function triageProposals(env, deadline) {
+     out.diversity_held_total = Number(dd && dd.n) || 0;
+     var at = new Date().toISOString();
+     await env.QNFO_AUDIT.prepare("INSERT OR REPLACE INTO cloud_ops_events (id, ts, kind, text, meta, job, status) VALUES ('idea-triage-budget', ?1, 'idea-triage-budget', ?2, ?3, 'idea-hub', ?4)")
+-      .bind(at, "idea triage: " + (budget.breached ? "AI budget caps breached, scored lean on one cheap model; " : "caps clear; ") + out.released + " released, " + out.triaged + " triaged, " + out.deferred_total + " waiting as deferred_budget, " + out.diversity_held_total + " as deferred_diversity", JSON.stringify({ version: VERSION, breached: budget.breached, caps: budget.caps, deferred_run: out.deferred, released_run: out.released, deferred_total: out.deferred_total, triaged_run: out.triaged, diversity_held_run: out.diversity_held, diversity_released_run: out.diversity_released, diversity_expired_run: out.diversity_expired, diversity_held_total: out.diversity_held_total, diversity: out.diversity || null, novelty: out.novelty }), budget.breached ? "lean" : "ok").run();
++      .bind(at, "idea triage: " + (budget.breached ? "AI budget caps breached, scored lean on one cheap model; " : "caps clear; ") + out.released + " released, " + out.triaged + " triaged, " + out.deferred_total + " waiting as deferred_budget, " + out.diversity_held_total + " as deferred_diversity", JSON.stringify({ version: VERSION, breached: budget.breached, caps: budget.caps, deferred_run: out.deferred, released_run: out.released, cap_released_run: out.cap_released || 0, cap_trickled_run: out.cap_trickled || 0, deferred_total: out.deferred_total, triaged_run: out.triaged, diversity_held_run: out.diversity_held, diversity_released_run: out.diversity_released, diversity_expired_run: out.diversity_expired, diversity_held_total: out.diversity_held_total, diversity: out.diversity || null, novelty: out.novelty }), budget.breached ? "lean" : "ok").run();
+   } catch (e) { console.error(JSON.stringify({ worker: "idea-hub", where: "triageProposals", error: String(e && e.message || e).slice(0, 300) })); }
+   // OWNER-SIGNAL-INTAKE-1: metric owner_signal_share_30d (registered with its trigger in
+   // migrations/2026-10-07-owner-signal-intake.sql) is the share of research_queue rows created in the last 30 days that
+@@ -1096,6 +1118,8 @@ async function thinkSeed(env) {
+ var OWNER_CORPUS_BATCH = 6, OWNER_CORPUS_SLOW_BATCH = 2, OWNER_CORPUS_MIN_CHARS = 600, OWNER_CORPUS_EXCERPT = 7000, OWNER_CORPUS_RQ_CAP = 12;
+ // RESEARCH-ADMISSION-CAP-1: bound admission to what the executor can hold. See enqueueAccepted().
+ var RESEARCH_ADMISSION_CAP = 120;
++// IDEAS-CAP-RATE-1: at or over the cap, held accepts are admitted at this rate per run (oldest first) instead of waiting for room. See capRelease().
++var CAP_TRICKLE_PER_RUN = 3;
+ var OWNER_CORPUS_FLEET_ERA = "notes/v1/2026/08";
+ var OWNER_CORPUS_TYPES = ["note", "synthesis", "synthesis-working-draft", "development-note", "lesson"];
+ var OWNER_NOTE_RETRY_MIN = 120;
+diff --git a/migrations/2026-10-19-ideas-cap-rate.sql b/migrations/2026-10-19-ideas-cap-rate.sql
+new file mode 100644
+index 00000000..13bc2558
+--- /dev/null
++++ b/migrations/2026-10-19-ideas-cap-rate.sql
+@@ -0,0 +1,73 @@
++-- IDEAS-CAP-RATE-1 (2026-10-19, pillar research; agent_issues 100047; control_registry research-admission-cap; ANTIFRAGILE-1).
++-- idea-hub 1.12.0 turns the research admission cap from a hold with no expiry into a rate. enqueueAccepted holds a generated ACCEPT as
++-- triaged_hold ('[research admission cap n/120]') while research_queue holds 120 or more active or deferred rows; the 1.11.1 release
++-- (IDEAS-CAP-GENERATED-RELEASE-1) re-queued held rows only as far as they fit under 120, and the queue never gets under 120.
++-- MEASURED 2026-10-19 12:39Z (qnfo-audit, read-only): research_queue queued+researching+review+deferred 473 (deferred 260), 80 held cap
++-- rows, oldest 2026-10-17T15:23:48Z (about 45 h), 76 older than 120 minutes, 38 older than 24 h, none older than 72 h, 42 new in the last 24 h
++-- (about 1.75 an hour); the 12:31Z idea-triage-budget event read '0 released'. So room was never positive and the release was a no-op.
++-- The fix, in the worker: at or over the cap, capRelease admits the CAP_TRICKLE_PER_RUN (3) oldest held rows per hourly run, logs each such run
++-- to cloud_ops_events (kind idea-cap-trickle: queue size, admitted proposal ids, rows still held) and puts cap_trickled_run in the
++-- idea-triage-budget event. Executor load is not raised by this: research_ready_cap (192) and deferral meter what the executor takes,
++-- as they did for the 260 deferred rows. A run with room is unchanged.
++-- Drain time, stated so the probe is not read as broken: 3 admitted against about 1.75 held an hour is a net 1.25 an hour, so the 80-row
++-- backlog needs about 64 hours and the issue-100047 probe (a held row older than 120 minutes) reads non-zero until then; it never reads
++-- 0 while the trickle is dead. The fm- detector below is the backstop on the same hold with a 72-hour bound (it reads 0 today).
++-- This file records the rest of the change: the control_registry disposition (demote to a rate, review date, tested alternate), the failure
++-- mode with its fm- detector, the replacement probe of issue 100047 (the generated contract probe returned 'pending' while the queue was at the cap,
++-- so it could not pass while the defect existed), and the decision.
++-- APPLY-BY: ci
++-- DB: qnfo-audit
++-- Rollback: UPDATE remediation_contracts SET verify_probe = 'SELECT ''0'' AS expected, CASE WHEN (SELECT COUNT(*) FROM research_queue WHERE status IN (''queued'',''researching'',''review'',''deferred'')) >= 120 THEN ''pending: research_queue at the admission cap, nothing to release yet'' ELSE CAST((SELECT COUNT(*) FROM idea_proposals WHERE decision = ''ACCEPT'' AND status = ''triaged_hold'' AND rationale LIKE ''[research admission cap %'' AND created_at < strftime(''%Y-%m-%dT%H:%M:%SZ'', ''now'', ''-120 minutes'')) AS TEXT) END AS observed' WHERE class = 'issue-100047'; DELETE FROM remediation_contracts WHERE class = 'fm-ideas-cap-hold-no-expiry'; DELETE FROM failure_modes WHERE fm_key = 'ideas-cap-hold-no-expiry'; UPDATE control_registry SET evidence = substr(evidence, 1, instr(evidence, ' | IDEAS-CAP-RATE-1') - 1), alternate_tested_at = NULL, location = substr(location, 1, instr(location, ' ; capRelease trickle') - 1) WHERE control = 'research-admission-cap' AND instr(evidence, ' | IDEAS-CAP-RATE-1') > 0; DELETE FROM decision_log WHERE instr(action, 'IDEAS-CAP-RATE-1:') = 1
++-- Rollback scope: the registry and probe rows only; the behaviour is the worker change (revert idea-hub/worker.js to 1.11.3 through the canonical path).
++-- spof-review: none added. The trickle is one more step in the existing hourly idea-hub triage (no new cron, binding or table); the rows it admits
++-- were already accepted by triage and only wait on the cap. The control it changes is the research-admission-cap row, disposition demote.
++
++-- 1. The cap row: demoted to a rate, with a review date and the tested alternate.
++UPDATE control_registry SET
++  location = location || ' ; capRelease trickle CAP_TRICKLE_PER_RUN = 3 (IDEAS-CAP-RATE-1, idea-hub 1.12.0)',
++  disposition = 'demote',
++  disposition_state = 'applied',
++  alternate_path = 'a generated accept over the cap waits in idea_proposals as triaged_hold with its rationale intact and is admitted by rate: at or over RESEARCH_ADMISSION_CAP the hourly triage queues the CAP_TRICKLE_PER_RUN (3) oldest held rows (room above the cap still releases up to TRIAGE_BATCH); every trickle run writes a cloud_ops_events row of kind idea-cap-trickle; an owner-authored idea (proposalKind direct) skips the cap and is queued on the same triage run; research_ready_cap and deferral meter executor load',
++  alternate_tested_at = '2026-10-19',
++  evidence = evidence || ' | IDEAS-CAP-RATE-1 (idea-hub 1.12.0, agent_issues 100047), MEASURED 2026-10-19 12:39Z: research_queue active+deferred 473 of 120, 80 cap-held accepts, oldest about 45 h, 76 older than 120 minutes, about 1.75 new held an hour, so the 1.11.1 release (room under the cap only) released 0 and the hold had no expiry. Now a rate: 3 oldest per hourly run at or over the cap, net drain about 1.25 an hour (about 64 h for the current backlog). idea-hub/cap-trickle.test.mjs: 30 assertions, 22 fail on 1.11.3 and all pass on 1.12.0 (10 held rows over the cap release exactly 3 oldest per run; room path unchanged; each run logged). REVIEW BY 2026-10-26: keep the rate while idea-cap-trickle events show held_left falling and fm-ideas-cap-hold-no-expiry reads 0; if research_queue deferred grows faster than before, lower CAP_TRICKLE_PER_RUN; if held_left does not fall, raise it.',
++  reviewed_at = strftime('%Y-%m-%dT%H:%M:%SZ', 'now')
++WHERE control = 'research-admission-cap' AND instr(evidence, 'IDEAS-CAP-RATE-1') = 0;
++
++-- 2. The failure mode: a cap that holds work with no expiry and no rate.
++INSERT OR IGNORE INTO failure_modes (fm_key, failure_mode, root_cause, remediation, detector, probe_class, first_seen, issue_id, trigger_condition, symptom, blast_radius)
++VALUES ('ideas-cap-hold-no-expiry',
++  'a generated ACCEPT held by the research admission cap waits with no expiry and no rate, so the ideas the fleet scored highest are never researched',
++  'enqueueAccepted parks an accept over RESEARCH_ADMISSION_CAP (120) as triaged_hold and the only release (IDEAS-CAP-GENERATED-RELEASE-1, 1.11.1) fitted rows under that same cap; research_queue counts the deferred overflow too and sat at 473, so room was never positive and the release was a no-op while 80 accepts waited, the oldest about 45 hours (ANTIFRAGILE-1: a hold needs an expiry, prefer a rate)',
++  'IDEAS-CAP-RATE-1 (idea-hub 1.12.0): at or over the cap capRelease admits CAP_TRICKLE_PER_RUN (3) oldest held rows per hourly run and logs each run to cloud_ops_events (kind idea-cap-trickle); research_ready_cap and deferral keep metering executor load; control_registry research-admission-cap is demote/applied with a review date',
++  'no ACCEPT proposal held by the research admission cap is older than 72 hours (the trickle drains a backlog at a net 1.25 an hour; a row older than that means the rate is dead or the inflow outran it)',
++  'fm-ideas-cap-hold-no-expiry', '2026-10-19', 100047,
++  'research_queue at or over 120 active and deferred rows for longer than the time one triage run needs, with generated accepts still arriving',
++  'idea_proposals rows with decision ACCEPT, status triaged_hold and a rationale starting [research admission cap, the oldest more than a day old; the idea-triage-budget event reads 0 released',
++  'every machine-generated accept while the queue is full: about 42 a day were held on 2026-10-18 and 19');
++
++INSERT OR IGNORE INTO remediation_contracts (class, issue_id, precondition, action, verify_probe, verify_transport, max_attempts, escalate_to, expected_cadence_h, status, module, budget_ms, max_items, requires_container, next_due_at)
++VALUES ('fm-ideas-cap-hold-no-expiry', NULL, 'IDEAS-CAP-RATE-1', 'failure mode detector',
++  'SELECT ''0'' AS expected, CAST((SELECT COUNT(*) FROM idea_proposals WHERE decision = ''ACCEPT'' AND status = ''triaged_hold'' AND rationale LIKE ''[research admission cap %'' AND created_at < strftime(''%Y-%m-%dT%H:%M:%SZ'', ''now'', ''-72 hours'')) AS TEXT) AS observed',
++  'd1-query', 3, 'qnfo-fleet-control', 1, 'active', 'failure-mode', 45000, 5, 0, datetime('now'));
++
++-- 3. The closing probe of issue 100047 measures the hold. UPDATE on the class, as ORPHAN-GUARD-BIRTH-1 requires (an INSERT OR IGNORE would be ignored).
++-- The replaced probe returned 'pending: research_queue at the admission cap' whenever the queue was at the cap, which is the defect, so it could not pass.
++UPDATE remediation_contracts SET ts = datetime('now'),
++  verify_probe = 'SELECT ''0'' AS expected, CAST((SELECT COUNT(*) FROM idea_proposals WHERE decision = ''ACCEPT'' AND status = ''triaged_hold'' AND rationale LIKE ''[research admission cap %'' AND created_at < strftime(''%Y-%m-%dT%H:%M:%SZ'', ''now'', ''-120 minutes'')) AS TEXT) AS observed',
++  next_due_at = strftime('%Y-%m-%d %H:%M:%S', 'now')
++WHERE class = 'issue-100047' AND instr(verify_probe, 'pending: research_queue at the admission cap') > 0;
++
++-- 4. The decision.
++INSERT INTO decision_log (actor, assumption, action, evidence, outcome, blast_radius, rollback_path, capability_gain, predicted_outcome, reach_gain, surfaces_tested)
++SELECT 'session_01QpQv19uh1padRwZ3u1r766',
++  'a held accept the triage already scored should be researched at a bounded rate, not wait for a queue that the deferred overflow keeps above the cap for good; the executor is metered by research_ready_cap and deferral, so three more queued rows an hour add no executor load the 260 deferred rows did not already add',
++  'IDEAS-CAP-RATE-1: capRelease admits the CAP_TRICKLE_PER_RUN (3) oldest cap-held ACCEPTs per hourly run when research_queue is at or over RESEARCH_ADMISSION_CAP, logs each run to cloud_ops_events (idea-cap-trickle), keeps the room path and the cap; control_registry research-admission-cap demote/applied with a review date; failure mode ideas-cap-hold-no-expiry with fm- detector (72 h); the probe of issue 100047 measures held rows older than 120 minutes',
++  'D1 2026-10-19 12:39Z: research_queue active+deferred 473 (deferred 260) against a cap of 120; 80 held cap rows, oldest 2026-10-17T15:23:48Z, 76 older than 120 minutes, 42 new in 24 h; idea-triage-budget event 12:31Z "0 released"; research_ready_cap 192; main idea-hub 1.11.3 capRelease returns when room is not positive; idea-hub/cap-trickle.test.mjs 30 assertions, 22 fail on 1.11.3',
++  'merged to main, deployed by the canonical path',
++  'idea-hub triage queues up to 3 more research_queue rows an hour (the oldest held accepts); no other worker, table or cron changes; the rows were already ACCEPTed by triage',
++  'revert idea-hub/worker.js to 1.11.3 through the canonical path (the trickle then stops; held rows stay held, none is lost); the Rollback header restores the probe and registry rows',
++  'the fleet researches its held high-score ideas at a bounded rate instead of leaving them parked with no expiry',
++  'idea-triage-budget carries cap_trickled_run 3 within one hourly run of the deploy; idea-cap-trickle events appear hourly; held cap rows older than 120 minutes fall from 76 by about 1.25 an hour and reach 0 in about 64 hours (the issue-100047 probe), fm-ideas-cap-hold-no-expiry stays 0',
++  'none',
++  'offline suites idea-hub/cap-trickle.test.mjs and cap-release.test.mjs; d1:qnfo-audit research_queue, idea_proposals, cloud_ops_events, control_registry, ops_config research_ready_cap'
++WHERE NOT EXISTS (SELECT 1 FROM decision_log WHERE instr(action, 'IDEAS-CAP-RATE-1:') = 1);
+diff --git a/migrations/ideas-cap-rate.test.mjs b/migrations/ideas-cap-rate.test.mjs
+new file mode 100644
+index 00000000..1c4d5256
+--- /dev/null
++++ b/migrations/ideas-cap-rate.test.mjs
+@@ -0,0 +1,109 @@
++// IDEAS-CAP-RATE-1 offline suite: replays migrations/2026-10-19-ideas-cap-rate.sql on SQLite. Proves: the research-admission-cap row is demoted to a
++// rate with a review date, a tested alternate and its earlier evidence kept; the failure mode and its fm- detector are created once and the detector
++// reads 0 for a 50 h hold and 1 for an 80 h one; the replacement probe of issue 100047 reads the held rows older than 120 minutes while research_queue
++// sits far above the cap (the generated probe it replaces returned 'pending' there, so it could not pass); the decision is logged once; re-applying
++// changes nothing; the Rollback line restores the old probe and removes the rows; and the constants the migration names are in idea-hub on main.
++// Run: node migrations/ideas-cap-rate.test.mjs
++import { DatabaseSync } from "node:sqlite";
++import { readFileSync } from "node:fs";
++const here = (f) => new URL("./" + f, import.meta.url);
++const root = (f) => new URL("../" + f, import.meta.url);
++const sql = readFileSync(here("2026-10-19-ideas-cap-rate.sql"), "utf8");
++let pass = 0, fail = 0;
++const ok = (c, m, d) => { if (c) pass++; else { fail++; console.log("FAIL " + m + (d === undefined ? "" : " :: " + JSON.stringify(d).slice(0, 300))); } };
++
++const OLD_PROBE = "SELECT '0' AS expected, CASE WHEN (SELECT COUNT(*) FROM research_queue WHERE status IN ('queued','researching','review','deferred')) >= 120 THEN 'pending: research_queue at the admission cap, nothing to release yet' ELSE CAST((SELECT COUNT(*) FROM idea_proposals WHERE decision = 'ACCEPT' AND status = 'triaged_hold' AND rationale LIKE '[research admission cap %' AND created_at < strftime('%Y-%m-%dT%H:%M:%SZ', 'now', '-120 minutes')) AS TEXT) END AS observed";
++const OLD_EVIDENCE = "before 1.10.12 the cap also held owner ideas and nothing re-admitted a held row";
++const OLD_ALT = "a generated accept over the cap waits in idea_proposals as triaged_hold with its rationale intact";
++const OLD_LOC = "idea-hub/worker.js enqueueAccepted, RESEARCH_ADMISSION_CAP = 120 (RESEARCH-ADMISSION-CAP-1, narrowed by IDEAS-INTAKE-OWNER-1 in 1.10.12)";
++
++const db = new DatabaseSync(":memory:");
++db.exec(`
++CREATE TABLE control_registry (control TEXT PRIMARY KEY, location TEXT NOT NULL, kind TEXT NOT NULL, guards_against TEXT, critical_path INTEGER NOT NULL DEFAULT 0, disposition TEXT NOT NULL, disposition_state TEXT NOT NULL DEFAULT 'planned', alternate_path TEXT, alternate_tested_at TEXT, evidence TEXT NOT NULL, issue_id INTEGER, reviewed_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')));
++CREATE TABLE failure_modes (fm_key TEXT PRIMARY KEY, failure_mode TEXT NOT NULL, root_cause TEXT NOT NULL, remediation TEXT NOT NULL, detector TEXT NOT NULL, probe_class TEXT, first_seen TEXT NOT NULL, issue_id INTEGER, trigger_condition TEXT, symptom TEXT, blast_radius TEXT);
++CREATE TABLE remediation_contracts (class TEXT PRIMARY KEY, issue_id INTEGER, precondition TEXT NOT NULL, action TEXT NOT NULL, verify_probe TEXT NOT NULL, verify_transport TEXT NOT NULL, max_attempts INTEGER NOT NULL DEFAULT 3, escalate_to TEXT NOT NULL, expected_cadence_h INTEGER, status TEXT DEFAULT 'active', ts TEXT DEFAULT (datetime('now')), last_attempt_at TEXT, last_verdict TEXT, module TEXT, budget_ms INTEGER DEFAULT 45000, next_due_at TEXT, max_items INTEGER DEFAULT 5, requires_container INTEGER DEFAULT 0, attempts INTEGER DEFAULT 0);
++CREATE TABLE decision_log (id INTEGER PRIMARY KEY AUTOINCREMENT, ts TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')), actor TEXT NOT NULL, assumption TEXT NOT NULL, action TEXT NOT NULL, evidence TEXT NOT NULL, outcome TEXT NOT NULL, blast_radius TEXT NOT NULL, rollback_path TEXT NOT NULL, capability_gain TEXT, predicted_outcome TEXT, reach_gain TEXT, surfaces_tested TEXT, outcome_matched INTEGER);
++CREATE TABLE idea_proposals (id INTEGER PRIMARY KEY AUTOINCREMENT, idea TEXT, status TEXT, created_at TEXT, decision TEXT, rationale TEXT);
++CREATE TABLE research_queue (id TEXT PRIMARY KEY, status TEXT);`);
++db.prepare("INSERT INTO control_registry (control, location, kind, guards_against, critical_path, disposition, disposition_state, alternate_path, alternate_tested_at, evidence, issue_id, reviewed_at) VALUES ('research-admission-cap', ?, 'cap', 'the machine producers filling research_queue', 0, 'demote', 'applied', ?, NULL, ?, NULL, '2026-10-19T04:56:02Z')").run(OLD_LOC, OLD_ALT + "; an owner-authored idea skips the cap", OLD_EVIDENCE + " (a test row read [research admission cap 300/120])");
++db.prepare("INSERT INTO remediation_contracts (class, issue_id, precondition, action, verify_probe, verify_transport, escalate_to, expected_cadence_h, status, module, attempts, last_verdict, next_due_at) VALUES ('issue-100047', 100047, 'no earlier birth template matched', 'VACUOUS-PROBE-V3-1 ...', ?, 'd1-query', 'qnfo-fleet-control', 1, 'active', 'probe-template-v3-generic', 19, 'fail', '2099-01-01 00:00:00')").run(OLD_PROBE);
++
++// The live shape: research_queue far above the cap and held rows of several ages.
++const rq = db.prepare("INSERT INTO research_queue VALUES (?, 'queued')");
++for (let i = 0; i < 473; i++) rq.run("q" + i);
++const hoursAgo = (h) => new Date(Date.now() - h * 36e5).toISOString().slice(0, 23) + "Z";
++const hold = db.prepare("INSERT INTO idea_proposals (idea, status, created_at, decision, rationale) VALUES (?, 'triaged_hold', ?, 'ACCEPT', '[research admission cap 473/120] x')");
++hold.run("fresh", hoursAgo(1));
++hold.run("three hours", hoursAgo(3));
++hold.run("fifty hours", hoursAgo(50));
++db.prepare("INSERT INTO idea_proposals (idea, status, created_at, decision, rationale) VALUES ('other hold', 'triaged_hold', ?, 'HOLD', 'noise/question filter')").run(hoursAgo(200));
++db.prepare("INSERT INTO idea_proposals (idea, status, created_at, decision, rationale) VALUES ('accepted long ago', 'triaged_accepted', ?, 'ACCEPT', 'fine')").run(hoursAgo(200));
++
++const observed = (probe) => db.prepare(probe).get();
++const probeOf = (cls) => db.prepare("SELECT verify_probe FROM remediation_contracts WHERE class = ?").get(cls).verify_probe;
++const old = observed(OLD_PROBE);
++ok(old.observed.startsWith("pending") && old.expected === "0", "the generated probe is vacuous: it reads 'pending' while the queue is over the cap, whatever is held", old);
++
++db.exec(sql);
++
++// 1. control_registry
++const cr = db.prepare("SELECT * FROM control_registry WHERE control = 'research-admission-cap'").get();
++ok(cr.disposition === "demote" && cr.disposition_state === "applied", "the cap row is demote / applied", [cr.disposition, cr.disposition_state]);
++ok(cr.alternate_tested_at === "2026-10-19" && cr.alternate_path.includes("CAP_TRICKLE_PER_RUN") && cr.alternate_path.includes("idea-cap-trickle"), "the tested alternate names the rate and its log", cr.alternate_path);
++ok(cr.evidence.startsWith(OLD_EVIDENCE) && cr.evidence.includes(" | IDEAS-CAP-RATE-1") && cr.evidence.includes("REVIEW BY 2026-10-26"), "the earlier evidence is kept and the new evidence carries a review date", cr.evidence.slice(0, 200));
++ok(cr.location.startsWith(OLD_LOC) && cr.location.includes("capRelease trickle CAP_TRICKLE_PER_RUN = 3"), "the location names the trickle", cr.location);
++ok(cr.reviewed_at > "2026-10-19T04:56:02Z", "reviewed_at moved", cr.reviewed_at);
++
++// 2. failure mode and detector
++const fm = db.prepare("SELECT * FROM failure_modes WHERE fm_key = 'ideas-cap-hold-no-expiry'").get();
++ok(fm && fm.issue_id === 100047 && fm.probe_class === "fm-ideas-cap-hold-no-expiry" && fm.root_cause && fm.remediation && fm.detector && fm.trigger_condition && fm.symptom && fm.blast_radius, "one fully described failure mode", fm && Object.keys(fm).filter((k) => !fm[k]));
++const det = db.prepare("SELECT * FROM remediation_contracts WHERE class = 'fm-ideas-cap-hold-no-expiry'").get();
++ok(det && det.verify_transport === "d1-query" && det.module === "failure-mode" && det.status === "active" && det.expected_cadence_h === 1, "one active d1-query detector", det);
++let r = observed(det.verify_probe);
++ok(r.expected === "0" && r.observed === "0", "the detector reads 0 while the oldest hold is 50 h", r);
++hold.run("eighty hours", hoursAgo(80));
++r = observed(det.verify_probe);
++ok(r.observed === "1", "the detector reads 1 once a cap hold is older than 72 h (only that row, not the other hold)", r);
++db.exec("DELETE FROM idea_proposals WHERE idea = 'eighty hours'");
++
++// 3. issue-100047's probe
++const ic = db.prepare("SELECT * FROM remediation_contracts WHERE class = 'issue-100047'").get();
++ok(ic.verify_probe !== OLD_PROBE && !ic.verify_probe.includes("pending:"), "the vacuous probe is replaced", ic.verify_probe.slice(0, 120));
++ok(ic.next_due_at !== "2099-01-01 00:00:00" && ic.verify_transport === "d1-query" && ic.attempts === 19, "due now, transport and attempts untouched", [ic.next_due_at, ic.verify_transport, ic.attempts]);
++r = observed(ic.verify_probe);
++ok(r.expected === "0" && r.observed === "2", "with 473 rows queued the probe counts the held rows older than 120 minutes (3 h and 50 h)", r);
++db.exec("DELETE FROM idea_proposals WHERE idea IN ('three hours', 'fifty hours')");
++r = observed(ic.verify_probe);
++ok(r.expected === "0" && r.observed === "0", "it passes (0) once no cap hold is older than 120 minutes, though the queue is still over the cap", r);
++hold.run("three hours", hoursAgo(3)); hold.run("fifty hours", hoursAgo(50));
++
++// 4. decision and idempotency
++const dec = () => db.prepare("SELECT COUNT(*) AS n FROM decision_log WHERE instr(action, 'IDEAS-CAP-RATE-1:') = 1").get().n;
++ok(dec() === 1, "one decision_log row");
++const dl = db.prepare("SELECT * FROM decision_log").get();
++ok(dl.capability_gain && dl.predicted_outcome && dl.surfaces_tested && dl.rollback_path, "the decision names capability gain, predicted outcome, surfaces and rollback");
++db.prepare("UPDATE remediation_contracts SET verify_probe = verify_probe || ' ' WHERE class = 'issue-100047'").run();
++const edited = probeOf("issue-100047");
++db.exec(sql);
++ok(dec() === 1 && db.prepare("SELECT COUNT(*) AS n FROM failure_modes").get().n === 1 && db.prepare("SELECT COUNT(*) AS n FROM remediation_contracts WHERE class LIKE 'fm-%'").get().n === 1, "re-applying adds no row");
++ok((db.prepare("SELECT evidence FROM control_registry WHERE control = 'research-admission-cap'").get().evidence.match(/IDEAS-CAP-RATE-1 \(idea-hub 1\.12\.0/g) || []).length === 1, "the evidence note is appended once");
++ok((db.prepare("SELECT location FROM control_registry WHERE control = 'research-admission-cap'").get().location.match(/capRelease trickle/g) || []).length === 1, "the location note is appended once");
++ok(probeOf("issue-100047") === edited, "a later probe edit is not overwritten by a re-apply", probeOf("issue-100047").slice(-20));
++
++// 5. rollback
++db.exec(/^-- Rollback: (.*)$/m.exec(sql)[1]);
++const back = db.prepare("SELECT * FROM control_registry WHERE control = 'research-admission-cap'").get();
++ok(back.evidence === OLD_EVIDENCE + " (a test row read [research admission cap 300/120])" && back.location === OLD_LOC && back.alternate_tested_at === null, "the Rollback line restores the evidence, location and tested date", [back.evidence.slice(-60), back.location.slice(-40), back.alternate_tested_at]);
++ok(probeOf("issue-100047") === OLD_PROBE, "the Rollback line restores the generated probe byte for byte");
++ok(db.prepare("SELECT COUNT(*) AS n FROM failure_modes").get().n === 0 && db.prepare("SELECT COUNT(*) AS n FROM remediation_contracts WHERE class LIKE 'fm-%'").get().n === 0 && dec() === 0, "the Rollback line removes the failure mode, detector and decision");
++
++// 6. what the migration names is in the worker on main, and the mirror is identical
++const w = readFileSync(root("idea-hub/worker.js"), "utf8");
++ok(/var CAP_TRICKLE_PER_RUN = 3;/.test(w) && w.includes("'idea-cap-trickle'") && /var RESEARCH_ADMISSION_CAP = 120;/.test(w), "idea-hub carries CAP_TRICKLE_PER_RUN = 3, the idea-cap-trickle kind and the cap of 120");
++const ver = /var VERSION = "(\d+)\.(\d+)\.(\d+)/.exec(w);
++ok(ver && (Number(ver[1]) > 1 || Number(ver[2]) >= 12), "idea-hub is at 1.12.0 or above", ver && ver[0]);
++ok(readFileSync(root("idea-hub/deployed-current.worker.js"), "utf8") === w, "deployed-current.worker.js is byte-identical to worker.js");
++ok(!/claude\.ai|anthropic\.com/i.test(sql), "no claude.ai or anthropic.com link (CLOUDFLARE-ONLY-HOST-1)");
++ok(!/(^|[^A-Za-z0-9_])#\d{2,}/.test(sql), "no bare issue-number references");
++console.log(`ideas-cap-rate: ${pass} pass, ${fail} fail`);
++if (fail) process.exit(1);
