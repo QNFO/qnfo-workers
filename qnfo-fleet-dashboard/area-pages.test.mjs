@@ -164,7 +164,8 @@ function withQueue(env, db) {
   ok(home.includes('id="invest"') && home.includes('id="system"'), "C10 the overview keeps the two headline answers");
   ok(!home.includes("Pipelines and bottlenecks") && !home.includes('id="flow"') && !home.includes('id="progress"') && !home.includes('id="controls"'), "C11 pipelines, progress and controls moved off the overview");
   ok((home.match(/<article class="card item[^"]*" data-area="(cost|research|reach|autonomy|reliability)"/g) || []).length === 2 && /class="it-area" href="\/area\/cost">Cost</.test(home) && /class="it-area" href="\/area\/reliability">Reliability</.test(home), "C12 every queue card on the overview names its area");
-  ok(/id="area-research"[\s\S]*?can't confirm: could not read code tasks; research queue/.test(home) && /id="area-reach"[\s\S]*?can't confirm: could not read outreach queue/.test(home), "C12b an overview row whose sources could not be read says can't confirm, not all clear");
+  const rowOf = (id) => (home.match(new RegExp('id="area-' + id + '"[\\s\\S]*?</section>')) || [""])[0];
+  ok(/can't confirm: could not read/.test(rowOf("research")) && /code tasks/.test(rowOf("research")) && /research queue/.test(rowOf("research")) && /can't confirm: could not read outreach queue/.test(rowOf("reach")), "C12b an overview row whose sources could not be read says can't confirm, not all clear");
   ok(home.includes('id="areas"') && IDS.slice(0, 5).every((i) => home.includes('id="area-' + i + '"')), "C13 the overview still has one row per metric area");
 }
 
@@ -266,6 +267,94 @@ function withQueue(env, db) {
   ok(/AREA_REGISTRY/.test(pagesSec) && IDS.every((id) => readme.includes("`/area/" + id + "`")), "I7 README describes the registry and names every area page");
   // the one-file contract: nothing imports a sibling module, or the canonical path (a single uploaded module) would break
   ok(!/^import\s/m.test(src), "I8 worker.js imports nothing: the canonical deploy uploads one module");
+}
+
+// ---- J. the Code loop flow splits "closed" by what happened to the pull request (CODE-FLOW-PR-SPLIT-1)
+{
+  const { env, db } = mk();
+  db.exec(`DROP TABLE code_tasks;
+    CREATE TABLE code_tasks (id TEXT PRIMARY KEY, repo TEXT, path TEXT, goal TEXT, status TEXT, merge_state TEXT, last_error TEXT, pr_url TEXT, created_at TEXT, updated_at TEXT);
+    CREATE TABLE code_task_pr_links (task_id TEXT PRIMARY KEY, pr_number INTEGER, pr_state TEXT, merged_at TEXT, head_sha TEXT, task_status TEXT, drift TEXT, synced_at TEXT);`);
+  const iso = (daysAgo) => new Date(Date.now() - daysAgo * 864e5).toISOString();
+  let n = 0;
+  const task = (status, pr, o) => {
+    const id = "ct" + (++n), x = o || {};
+    db.prepare("INSERT INTO code_tasks (id, repo, path, goal, status, merge_state, last_error, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?)").run(id, "qnfo-workers", "a/worker.js", "g", status, x.merge || null, x.err || null, iso(x.age || 2), iso(1));
+    if (pr) db.prepare("INSERT INTO code_task_pr_links (task_id, pr_number, pr_state) VALUES (?,?,?)").run(id, 1000 + n, pr);
+  };
+  for (let i = 0; i < 3; i++) task("merged", "merged");
+  task("merged", "merged", { err: "superseded by a later change" });       // a merged task is never superseded
+  for (let i = 0; i < 2; i++) task("queued", "never-opened");
+  task("ready_to_publish", "never-opened");
+  for (let i = 0; i < 4; i++) task("closed", "never-opened");
+  task("closed", null);                                                    // no link row yet: read as never opened
+  for (let i = 0; i < 2; i++) task("closed", "closed");
+  for (let i = 0; i < 3; i++) task("closed", "never-opened", { merge: "superseded" });
+  task("closed", "closed", { err: "superseded by #12: already on main" });
+  task("superseded", "never-opened");
+  for (let i = 0; i < 4; i++) task("failed", "never-opened");
+  task("closed", "open");                                                  // a closed task whose PR is open: drift, shown as such
+  task("closed", "never-opened", { age: 40 });                             // outside the 30 days
+  const realNow = Date.now; Date.now = () => realNow() + 600000;
+  const feed = await (await call(env, "/api/area/autonomy")).json();
+  Date.now = realNow;
+  const flow = (feed.flows || []).find((f) => f.id === "code");
+  const st = (k) => (flow && flow.stages.find((x) => x.k === k) || {}).n;
+  ok(!!flow && flow.stages.map((x) => x.k).join() === "queued,merged,closed-no-pr,closed-pr,closed-other,superseded,failed", "J1 the Code loop flow has the split stages: " + (flow && flow.stages.map((x) => x.k)));
+  ok(st("queued") === 3 && st("merged") === 4, "J2 queued counts queued and ready_to_publish; a merged task stays merged however its last_error reads");
+  ok(st("closed-no-pr") === 5, "J3 closed, never opened a PR matches code_task_pr_links (4 never-opened rows and 1 task with no row): " + st("closed-no-pr"));
+  ok(st("closed-pr") === 2, "J4 PR closed unmerged matches the links (2): " + st("closed-pr"));
+  ok(st("superseded") === 5, "J5 superseded counts merge_state, a last_error starting with superseded and the status (3 + 1 + 1): " + st("superseded"));
+  ok(st("closed-other") === 1 && st("failed") === 4, "J6 a closed task whose PR is open is its own stage; failed is unchanged");
+  const sup = flow && flow.stages.find((x) => x.k === "superseded");
+  ok(sup && sup.kind === "drop" && /not a failure/.test(sup.label), "J7 superseded is labelled not a failure and sits outside finished work");
+  ok(flow && flow.bottleneck && flow.bottleneck.k === "closed-no-pr" && /75%/.test(flow.bottleneck.why), "J8 the failure share leaves superseded out: 12 of 16 finished (4 merged), 75%, largest stage closed-no-pr: " + JSON.stringify(flow && flow.bottleneck));
+  ok(!flow.stages.some((x) => x.k === "closed") && ((feed.breaches || {}).total >= 0), "J9 the old closed, unmerged stage is gone");
+}
+
+// ---- K. a receipt for a closed owner request is not a card that waits on the owner (OWNER-REQUEST-RECEIPT-1)
+{
+  const { env, db } = mk();
+  const card = (slug, title, why, source) => db.prepare("INSERT INTO human_actions (slug,title,why,action,source) VALUES (?,?,?,?,?)").run(slug, title, why, "Open fleet.qnfo.org and decide or dismiss this card.", source);
+  card("issue-2783", "INTENT-TASK-int-1: HANDOFF the fleet closed", "PRIVATE-NOTE-TEXT from the owner's chat", "owner-request-issue");
+  card("issue-100023", "OWNER-TASK-op-1: restore a binding", "another private note", "owner-request-issue");
+  const hv = await (await call(env, "/api/human")).json();
+  const titles = (hv.items || []).map((i) => i.title);
+  ok(hv.receipts.length === 2 && !titles.some((t) => /HANDOFF|restore a binding/.test(t)), "K1 /api/human lists the two receipts apart from items");
+  ok(hv.count === (hv.items || []).length && hv.count === 1 && titles.includes("Top up the AI credit"), "K2 the count and the banner leave receipts out (one real card remains): " + hv.count);
+  const home = await (await call(env, "/")).text();
+  ok(/<details class="card up" id="receipts"><summary>Closed for you <span class="ct">2<\/span>/.test(home) && home.includes("issue #2783") && home.includes("issue #100023"), "K3 the overview lists them under Closed for you, with the issue number");
+  ok(!home.includes("PRIVATE-NOTE-TEXT") && !home.includes("another private note"), "K4 the receipt shows no issue text, which can quote private notes");
+  ok(/<h1 id="fl-h1">1 thing needs you<\/h1>/.test(home), "K5 the headline counts what waits on the owner only");
+  ok(!home.includes('data-key="ha:issue-2783"'), "K6 a visitor with no owner session gets no Done control on a receipt");
+  const aut = await (await call(env, "/area/autonomy")).text();
+  ok(!aut.includes("HANDOFF the fleet closed"), "K7 receipts are not in an area's waiting list");
+  // a database whose human_actions has no source column still lists its cards
+  db.exec("ALTER TABLE human_actions DROP COLUMN source");
+  const old = await (await call(env, "/api/human")).json();
+  ok(old.count === 3 && old.receipts.length === 0, "K8 without the source column every card is a card (count " + old.count + ")");
+}
+
+// ---- L. the service-level counters that grow every minute do not move the revision of /api/kpi (RT-API-1)
+{
+  const { env, db } = mk();
+  db.exec(`ALTER TABLE metric_registry ADD COLUMN owner TEXT; ALTER TABLE metric_registry ADD COLUMN warning_band TEXT; ALTER TABLE metric_history ADD COLUMN ts TEXT;
+    CREATE TABLE v_sla_over_120m (issues_open_over_120m INTEGER, oldest_open_issue_min INTEGER, total_over_120m INTEGER);
+    INSERT INTO v_sla_over_120m VALUES (3, 500, 3);`);
+  for (let k = 1; k <= 3; k++) db.prepare("INSERT INTO metric_history (metric, day, value) VALUES ('fleet_ai_run_rate_30d_usd', date('now', ?), ?)").run("-" + k + " day", 200 + k);
+  const realNow = Date.now;
+  Date.now = () => realNow() + 700000;
+  const a = await call(env, "/api/kpi");
+  const ja = await a.json();
+  Date.now = () => realNow() + 700000 + 5 * 60000;   // five minutes later, past the 60 s cache
+  const b = await call(env, "/api/kpi");
+  const jb = await b.json();
+  Date.now = realNow;
+  const row = (j) => (j.service_levels.metrics || []).find((m) => m.metric === "fleet_ai_run_rate_30d_usd");
+  ok(row(ja) && row(ja).state === "BREACH" && row(jb).time_in_breach_min - row(ja).time_in_breach_min >= 4, "L1 time in breach grows with the clock: " + (row(ja) && row(ja).time_in_breach_min) + " then " + (row(jb) && row(jb).time_in_breach_min));
+  const sla = (j) => (j.sla.classes || []).find((c) => c.class === "issues_open_over_120m");
+  ok(sla(ja) && sla(ja).oldest_min === 500 && sla(ja).n === 3, "L2 the SLA class reports its count and the age of its oldest item");
+  ok(a.headers.get("ETag") && a.headers.get("ETag") === b.headers.get("ETag"), "L3 the two counters are clock fields: five minutes later the ETag is unchanged (" + a.headers.get("ETag") + " vs " + b.headers.get("ETag") + ")");
 }
 
 console.log(pass + " passed, " + fail + " failed");
