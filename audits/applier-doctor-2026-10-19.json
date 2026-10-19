@@ -1,6 +1,6 @@
 {
  "counts": {
-  "already-applied": 70,
+  "already-applied": 71,
   "error": 1,
   "undetermined": 4
  },
@@ -197,23 +197,31 @@
    "verdict": "already-applied"
   },
   {
-   "changed_files": [
-    " M qnfo-fleet-dashboard/deployed-current.worker.js",
-    " M qnfo-fleet-dashboard/owner-morning.test.mjs",
-    " M qnfo-fleet-dashboard/worker.js"
-   ],
-   "declared_signals": [
-    "CREDIT-HALT-ONLY-1",
-    "async function creditHaltCard(",
-    "key: \"credit-runway\"",
-    "only a credit halt becomes a queue card"
-   ],
+   "changed_files": [],
    "rc": 0,
    "script": "scripts/credit-halt-only-1-patch.py",
    "tail": [
-    "patched qnfo-fleet-dashboard/owner-morning.test.mjs (R5/R6 rewritten to the halt-only rule)",
+    "already applied qnfo-fleet-dashboard/owner-morning.test.mjs",
     "mirror ok: worker.js == deployed-current.worker.js",
-    "RESULT ok: 3 file(s) changed"
+    "RESULT ok: 0 file(s) changed"
+   ],
+   "verdict": "already-applied"
+  },
+  {
+   "changed_files": [
+    " M fleet-exec/deployed-current.worker.js",
+    " M fleet-exec/worker.js",
+    " M qnfo-fleet-control/deployed-current.worker.js",
+    " M qnfo-fleet-control/worker.js",
+    " M scripts/cron_rate_guard.py"
+   ],
+   "declared_signals": [
+    "CRON-TICK-5M-1"
+   ],
+   "rc": 0,
+   "script": "scripts/cron-tick-5m-patch.py",
+   "tail": [
+    "APPLIED qnfo-fleet-control/worker.js, qnfo-fleet-control/deployed-current.worker.js, fleet-exec/worker.js, fleet-exec/deployed-current.worker.js, scripts/cron_rate_guard.py"
    ],
    "verdict": "undetermined"
   },
@@ -306,7 +314,7 @@
    "script": "scripts/github-write-409-retry-patch.py",
    "tail": [
     "ALREADY REPAIRED (marker(s) GITHUB-409-RETRY-1); no change",
-    "bytes: 579952 (unchanged)",
+    "bytes: 588400 (unchanged)",
     "parity: source==mirror"
    ],
    "verdict": "already-applied"
@@ -328,7 +336,7 @@
    "script": "scripts/github409-variant-reread-patch.py",
    "tail": [
     "already applied (idempotent no-op): qnfo-ops/deployed-current.worker.js",
-    "mirror pair byte-identical (579954 bytes)",
+    "mirror pair byte-identical (588402 bytes)",
     "changed=false"
    ],
    "verdict": "already-applied"
@@ -375,8 +383,8 @@
    "script": "scripts/ops-deploy-ledger-patch.py",
    "tail": [
     "already patched (marker present) - no-op",
-    "  worker.js bytes=579954 marker=1",
-    "  deployed-current.worker.js bytes=579954 marker=1"
+    "  worker.js bytes=588402 marker=1",
+    "  deployed-current.worker.js bytes=588402 marker=1"
    ],
    "verdict": "already-applied"
   },
@@ -644,7 +652,7 @@
    "rc": 0,
    "script": "scripts/routerfetch-host-order-body-patch.py",
    "tail": [
-    "already patched (marker '_lastRouterHost' present); no write. sha256=808251d833a659b9"
+    "already patched (marker '_lastRouterHost' present); no write. sha256=b5abffc4766b6bfd"
    ],
    "verdict": "already-applied"
   },
@@ -653,7 +661,7 @@
    "rc": 0,
    "script": "scripts/routerfetch-host-order-correction-patch.py",
    "tail": [
-    "already corrected (marker 'ROUTER-HOST-ORDER-CORRECTION-1' present); no write. sha256=808251d833a659b9"
+    "already corrected (marker 'ROUTER-HOST-ORDER-CORRECTION-1' present); no write. sha256=b5abffc4766b6bfd"
    ],
    "verdict": "already-applied"
   },
@@ -711,7 +719,7 @@
    "rc": 0,
    "script": "scripts/stale-gate-failclosed-patch.py",
    "tail": [
-    "{\"ok\": true, \"already_patched\": true, \"marker\": \"STALE-GATE-FAILCLOSED-1\", \"bytes\": 1016577}"
+    "{\"ok\": true, \"already_patched\": true, \"marker\": \"STALE-GATE-FAILCLOSED-1\", \"bytes\": 1058374}"
    ],
    "verdict": "already-applied"
   },
@@ -798,10 +806,10 @@
  ],
  "stale_anchor": [],
  "superseded": [],
- "total": 75,
- "ts": "2026-10-19T08:08:02.407Z",
+ "total": 76,
+ "ts": "2026-10-19T09:29:59.836Z",
  "undetermined": [
-  "scripts/credit-halt-only-1-patch.py",
+  "scripts/cron-tick-5m-patch.py",
   "scripts/dashboard-agissue-undercount-patch.py",
   "scripts/math-sym-escape-patch.py",
   "scripts/outreach-cap-status-1-patch.py"
