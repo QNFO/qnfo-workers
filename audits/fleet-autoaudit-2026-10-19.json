@@ -1,15 +1,8 @@
 {
-  "audited_at": "2026-10-19 13:17:29",
+  "audited_at": "2026-10-19 13:53:55",
   "d1_write_failures": [],
   "d1_writes_ok": 120,
   "guard": {
-    "_drift_confirm": {
-      "first_pass": [
-        "qnfo-research-exec"
-      ],
-      "refreshed": true,
-      "second_pass": []
-    },
     "_guard_rc": 0,
     "ahead": [],
     "cf_script_list": true,
@@ -567,7 +560,7 @@
       },
       {
         "dir": "qnfo-ai-calibration",
-        "version": "1.6.0-budget-probe-1",
+        "version": "1.6.1-budget-probe-refresh-1",
         "worker": "qnfo-ai-calibration"
       },
       {
@@ -587,7 +580,7 @@
       },
       {
         "dir": "qnfo-code-orchestrator",
-        "version": "0.22.0-code-loop-control-plane",
+        "version": "0.23.0-edit-reliability",
         "worker": "qnfo-code-orchestrator"
       },
       {
@@ -617,7 +610,7 @@
       },
       {
         "dir": "qnfo-fleet-dashboard",
-        "version": "1.51.2-standby-proof-1",
+        "version": "1.51.3-ga4-honest-1",
         "worker": "qnfo-fleet-dashboard"
       },
       {
@@ -657,7 +650,7 @@
       },
       {
         "dir": "qnfo-model-eval",
-        "version": "1.5.0-cron-grid-1",
+        "version": "1.6.0-ab-harness-1",
         "worker": "qnfo-model-eval"
       },
       {
@@ -667,7 +660,7 @@
       },
       {
         "dir": "qnfo-ops",
-        "version": "2.50.4-workspace-checkout-hint",
+        "version": "2.50.5-context-compact-2",
         "worker": "qnfo-ops"
       },
       {
@@ -677,12 +670,12 @@
       },
       {
         "dir": "qnfo-research-exec",
-        "version": "0.23.1-codeagent",
+        "version": "0.25.0-wai-width-governor",
         "worker": "qnfo-research-exec"
       },
       {
         "dir": "qnfo-social",
-        "version": "0.17.1-pause-stale-until-1",
+        "version": "0.18.0-learner-arms-2",
         "worker": "qnfo-social"
       },
       {
@@ -1032,9 +1025,9 @@
       "worker": "qnfo-ai"
     },
     "qnfo-ai-calibration": {
-      "before": "1.6.0-budget-probe-1",
+      "before": "1.6.1-budget-probe-refresh-1",
       "http": 200,
-      "live": "1.6.0-budget-probe-1",
+      "live": "1.6.1-budget-probe-refresh-1",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-ai-calibration"
@@ -1190,9 +1183,9 @@
       "worker": "qnfo-code-agent"
     },
     "qnfo-code-orchestrator": {
-      "before": "0.22.0-code-loop-control-plane",
+      "before": "0.23.0-edit-reliability",
       "http": 200,
-      "live": "0.22.0-code-loop-control-plane",
+      "live": "0.23.0-edit-reliability",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-code-orchestrator"
@@ -1328,9 +1321,9 @@
       "worker": "qnfo-fleet-control"
     },
     "qnfo-fleet-dashboard": {
-      "before": "1.51.2-standby-proof-1",
+      "before": "1.51.3-ga4-honest-1",
       "http": 200,
-      "live": "1.51.2-standby-proof-1",
+      "live": "1.51.3-ga4-honest-1",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-fleet-dashboard"
@@ -1464,9 +1457,9 @@
       "worker": "qnfo-memory-mcp-legacy-dup"
     },
     "qnfo-model-eval": {
-      "before": "1.5.0-cron-grid-1",
+      "before": "1.6.0-ab-harness-1",
       "http": 200,
-      "live": "1.5.0-cron-grid-1",
+      "live": "1.6.0-ab-harness-1",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-model-eval"
@@ -1480,9 +1473,9 @@
       "worker": "qnfo-observability"
     },
     "qnfo-ops": {
-      "before": "2.50.4-workspace-checkout-hint",
+      "before": "2.50.5-context-compact-2",
       "http": 200,
-      "live": "2.50.4-workspace-checkout-hint",
+      "live": "2.50.5-context-compact-2",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-ops"
@@ -1568,9 +1561,9 @@
       "worker": "qnfo-register-guard"
     },
     "qnfo-research-exec": {
-      "before": "0.23.1-codeagent",
+      "before": "0.25.0-wai-width-governor",
       "http": 200,
-      "live": "0.23.1-codeagent",
+      "live": "0.25.0-wai-width-governor",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-research-exec"
@@ -1630,9 +1623,9 @@
       "worker": "qnfo-skills-discovery"
     },
     "qnfo-social": {
-      "before": "0.17.1-pause-stale-until-1",
+      "before": "0.18.0-learner-arms-2",
       "http": 200,
-      "live": "0.17.1-pause-stale-until-1",
+      "live": "0.18.0-learner-arms-2",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-social"
