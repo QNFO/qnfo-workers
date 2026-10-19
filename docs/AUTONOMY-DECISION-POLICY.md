@@ -75,6 +75,26 @@ live text in the repo (same text modulo whitespace) and changes no behaviour on 
 (`autonomy-reroute-undrained`, 10-minute cycle, SLA 120 minutes, fix = that cron) and the column `v_stuck_summary_kernel.reroute_queue_undrained_over_sla`. A request that really needs the owner is still a card, written by whoever needs the step, with an
 `IDENTITY-BOUND:` line in its `why`. Detector `fm-owner-queue-objects-outside-repo`; offline suite `migrations/owner-request-notice.test.mjs`.
 
+### Decisions default to approve (DEFAULT-APPROVE-1, owner directive 2026-10-19)
+The owner's rule: "ALL DECISIONS SHALL ALWAYS BE DEFAULT APPROVE ... Reversible fleet decisions SHALL ALWAYS take the recommended option and
+proceed without waiting." The case that showed the gap was card 115 ("Let the code loop change qnfo-fleet-control ...?"): its recommended option
+was Approve, its stated default was "The deny stays", and `human_actions_default_adopt_ai` (DEFAULT-ADOPTED-1, 2026-10-12) closes any card at
+birth on its stated default, so the card was resolved on the deny in the statement that filed it. A card writer names the risk, so the stated
+default is usually the status quo; adopting it takes the opposite of the owner's rule. `migrations/2026-10-19-default-approve.sql`:
+
+| Card shape | Path |
+|---|---|
+| a decision (offers `Approve:`/`Decline:`, "Pick one", "Choose one", "option (a)", "which of", or a title that decides or asks) that is not hard, carries no `IDENTITY-BOUND:` line and grades `fleet` in `v_human_action_gate` | `human_actions_default_approve_ai`: queued in `autonomy_reroute_queue` for the fleet to execute the recommended option (the Approve option, else option (a), else the first; a card with no option, the course its why recommends), card `rerouted` with the approve default in effect; the stated default is kept in the text as superseded; one `decision_log` row |
+| a decision that is not hard but carries an `IDENTITY-BOUND:` line (the shape of card 115) | held: the stated default is not adopted and the fleet is not told to execute it; the card stays open for the owner, who labelled it |
+| hard by its own words (a `hard` row of `default_approve_markers`): money, a legal or signing act, destroying data, the owner's accounts, credentials, mailbox and name (IC-GATE-001), one-time or verification codes, privacy, personal data, suppression, opt-out, consent | unchanged: DEFAULT-ADOPTED-1 or the owner path; the fleet does not approve these |
+| offers no options (an owner step with a safe default) | unchanged: DEFAULT-ADOPTED-1 |
+| a closure notice (source `owner-request-issue`) | unchanged: never approved, never re-graded |
+
+`v_human_action_decision` grades the columns `decision`, `hard`, `ib`, `gate`, `approve` and `held` from the rows of `default_approve_markers` (kinds `hard`, `decision_action`, `decision_title`, `decision_title_not`; a marker is added by INSERT with a note); `ops_config default_approve_gate = off` restores the previous
+behaviour of every path at once; detector `fm-card-default-denies-decision` reads above 0 when a decision card is closed on a default while the gate
+is on. The harness permission checks, the shared-secrets lock and another session's live claim still win over an approval; a step one of them
+refuses is stated with its reason and filed with a closing probe. Offline suite `migrations/default-approve.test.mjs`.
+
 ## Owner-voice publishing (gated T1)
 Source: docs/STRATEGY.md section 5, which is authoritative; this is a summary. The system decides and executes inside these
 gates and records each act.
