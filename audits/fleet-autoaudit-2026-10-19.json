@@ -1,5 +1,5 @@
 {
-  "audited_at": "2026-10-19 19:35:30",
+  "audited_at": "2026-10-19 20:12:11",
   "d1_write_failures": [],
   "d1_writes_ok": 120,
   "guard": {
@@ -545,7 +545,7 @@
       },
       {
         "dir": "personal-companion",
-        "version": "1.36.1-codeagent",
+        "version": "1.37.0-stall-yield",
         "worker": "personal-companion"
       },
       {
@@ -938,9 +938,9 @@
       "worker": "personal-api"
     },
     "personal-companion": {
-      "before": "1.36.1-codeagent",
+      "before": "1.37.0-stall-yield",
       "http": 200,
-      "live": "1.36.1-codeagent",
+      "live": "1.37.0-stall-yield",
       "match": 1,
       "note": "SYNC",
       "worker": "personal-companion"
