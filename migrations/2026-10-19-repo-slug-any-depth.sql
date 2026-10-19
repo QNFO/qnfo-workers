@@ -1,9 +1,9 @@
 -- REPO-SLUG-ANY-DEPTH-1 (2026-10-19, charter pillar: autonomy; agent_issues 100050, 100032).
 -- APPLY-BY: ci
 -- DB: qnfo-audit
--- BACKUP: bak_20261019_repo_slug_any_depth
+-- BACKUP: bak_20261019_repo_slug_any_depth_v2
 -- spof-review: the triggers are the second path, not a single one: qnfo-code-orchestrator repoSlug() (REPOSLUG-UNIFORM-1), scripts/code-task-publish.py repo_slug() and RED-DRAIN-1 step 3 (PR 2660) each normalise the slug on their own, and fm-code-task-repo-slug fails on any unfinished task whose repo still holds a slash
--- Rollback: DROP TRIGGER IF EXISTS code_tasks_repo_slug_upd; DROP TRIGGER IF EXISTS code_tasks_repo_slug_ai; CREATE TRIGGER code_tasks_repo_slug_ai AFTER INSERT ON code_tasks WHEN lower(substr(COALESCE(NEW.repo, ''), 1, 5)) = 'qnfo/' AND length(NEW.repo) > 5 AND instr(substr(NEW.repo, 6), '/') = 0 BEGIN UPDATE code_tasks SET repo = substr(NEW.repo, 6) WHERE id = NEW.id; END; UPDATE code_tasks SET repo = (SELECT b.repo FROM bak_20261019_repo_slug_any_depth b WHERE b.id = code_tasks.id) WHERE id IN (SELECT id FROM bak_20261019_repo_slug_any_depth); UPDATE remediation_contracts SET verify_probe = (SELECT b.verify_probe FROM bak_20261019_repo_slug_any_depth_rc b WHERE b.class = remediation_contracts.class) WHERE class IN (SELECT class FROM bak_20261019_repo_slug_any_depth_rc); DELETE FROM failure_modes WHERE fm_key = 'code-task-repo-double-owner'
+-- Rollback: DROP TRIGGER IF EXISTS code_tasks_repo_slug_upd; DROP TRIGGER IF EXISTS code_tasks_repo_slug_ai; CREATE TRIGGER code_tasks_repo_slug_ai AFTER INSERT ON code_tasks WHEN lower(substr(COALESCE(NEW.repo, ''), 1, 5)) = 'qnfo/' AND length(NEW.repo) > 5 AND instr(substr(NEW.repo, 6), '/') = 0 BEGIN UPDATE code_tasks SET repo = substr(NEW.repo, 6) WHERE id = NEW.id; END; UPDATE code_tasks SET repo = (SELECT b.repo FROM bak_20261019_repo_slug_any_depth_v2 b WHERE b.id = code_tasks.id) WHERE id IN (SELECT id FROM bak_20261019_repo_slug_any_depth_v2 WHERE kind = 'row'); UPDATE remediation_contracts SET verify_probe = (SELECT b.verify_probe FROM bak_20261019_repo_slug_any_depth_rc b WHERE b.class = remediation_contracts.class) WHERE class IN (SELECT class FROM bak_20261019_repo_slug_any_depth_rc); DELETE FROM failure_modes WHERE fm_key = 'code-task-repo-double-owner'
 --
 -- WHY (measured 2026-10-19 07:00Z)
 -- LOOP-BREAKER issue 100050: "read failed: repo name refused for raw read (HTTP 400)" recurred 19 times in 24 h. ct_im100025
@@ -16,13 +16,18 @@
 -- WHAT
 -- 1. code_tasks_repo_slug_ai is replaced: a repo that starts with 'qnfo/' (any case, any number of owner segments) becomes
 --    its last segment right after insert. code_tasks_repo_slug_upd does the same when a writer later sets such a repo.
--- 2. Live rows of that shape are repaired now (old values in bak_20261019_repo_slug_any_depth).
+-- 2. Live rows of that shape are repaired now (old values in bak_20261019_repo_slug_any_depth_v2).
 -- 3. fm-code-task-repo-slug counts any unfinished task whose repo still holds a '/', so the blind spot is gone; failure
 --    mode code-task-repo-double-owner records the root cause.
 -- The dispatcher's REPLACE lives in RED-DRAIN-1, owned by another session; this file makes the table immune to it.
 
-CREATE TABLE IF NOT EXISTS bak_20261019_repo_slug_any_depth AS
-  SELECT id, repo, status FROM code_tasks WHERE lower(repo) LIKE 'qnfo/%';
+-- BACKUP-NONEMPTY-1 (2026-10-19, migration_runs 361): the first apply refused at statement 3 because no live row needed repair
+-- (RED-DRAIN-1 writes the bare slug since PR 2660), so the row backup was empty. The backup now also holds the trigger
+-- definition it replaces (kind 'trigger'), which always exists, and the repaired rows (kind 'row').
+CREATE TABLE IF NOT EXISTS bak_20261019_repo_slug_any_depth_v2 AS
+  SELECT 'trigger' AS kind, name AS id, sql AS repo, NULL AS status FROM sqlite_master WHERE type = 'trigger' AND name = 'code_tasks_repo_slug_ai'
+  UNION ALL
+  SELECT 'row' AS kind, id, repo, status FROM code_tasks WHERE lower(repo) LIKE 'qnfo/%';
 
 CREATE TABLE IF NOT EXISTS bak_20261019_repo_slug_any_depth_rc AS
   SELECT class, verify_probe FROM remediation_contracts WHERE class = 'fm-code-task-repo-slug';
