@@ -1,5 +1,5 @@
 {
-  "audited_at": "2026-10-19 21:49:35",
+  "audited_at": "2026-10-19 22:20:59",
   "d1_write_failures": [],
   "d1_writes_ok": 120,
   "guard": {
@@ -540,7 +540,7 @@
       },
       {
         "dir": "personal-api",
-        "version": "4.15.0-companion-week",
+        "version": "4.15.1-bad-tag-filter",
         "worker": "personal-api"
       },
       {
@@ -555,7 +555,7 @@
       },
       {
         "dir": "qnfo-ai",
-        "version": "5.36.10-codeagent",
+        "version": "5.37.0-no-downgrade",
         "worker": "qnfo-ai"
       },
       {
@@ -640,7 +640,7 @@
       },
       {
         "dir": "qnfo-lifecycle",
-        "version": "1.12.1-codeagent",
+        "version": "1.13.0-model-health-sweep",
         "worker": "qnfo-lifecycle"
       },
       {
@@ -660,7 +660,7 @@
       },
       {
         "dir": "qnfo-ops",
-        "version": "2.51.0-research-kick",
+        "version": "2.51.1-bad-tag-filter",
         "worker": "qnfo-ops"
       },
       {
@@ -670,7 +670,7 @@
       },
       {
         "dir": "qnfo-research-exec",
-        "version": "0.28.0-proportionate-notice",
+        "version": "0.28.1-proportionate-notice",
         "worker": "qnfo-research-exec"
       },
       {
@@ -690,7 +690,7 @@
       },
       {
         "dir": "radar-hub",
-        "version": "1.4.3-bp-logging",
+        "version": "1.4.4-bad-tag-filter",
         "worker": "radar-hub"
       }
     ]
@@ -930,9 +930,9 @@
       "worker": "patches"
     },
     "personal-api": {
-      "before": "4.15.0-companion-week",
+      "before": "4.15.1-bad-tag-filter",
       "http": 200,
-      "live": "4.15.0-companion-week",
+      "live": "4.15.1-bad-tag-filter",
       "match": 1,
       "note": "SYNC",
       "worker": "personal-api"
@@ -1017,9 +1017,9 @@
       "worker": "qnfo-agent-ws"
     },
     "qnfo-ai": {
-      "before": "5.36.10-codeagent",
+      "before": "5.37.0-no-downgrade",
       "http": 200,
-      "live": "5.36.10-codeagent",
+      "live": "5.37.0-no-downgrade",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-ai"
@@ -1432,9 +1432,9 @@
       "worker": "qnfo-kaizen"
     },
     "qnfo-lifecycle": {
-      "before": "1.12.1-codeagent",
+      "before": "1.13.0-model-health-sweep",
       "http": 200,
-      "live": "1.12.1-codeagent",
+      "live": "1.13.0-model-health-sweep",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-lifecycle"
@@ -1473,9 +1473,9 @@
       "worker": "qnfo-observability"
     },
     "qnfo-ops": {
-      "before": "2.51.0-research-kick",
+      "before": "2.51.1-bad-tag-filter",
       "http": 200,
-      "live": "2.51.0-research-kick",
+      "live": "2.51.1-bad-tag-filter",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-ops"
@@ -1561,9 +1561,9 @@
       "worker": "qnfo-register-guard"
     },
     "qnfo-research-exec": {
-      "before": "0.28.0-proportionate-notice",
+      "before": "0.28.1-proportionate-notice",
       "http": 200,
-      "live": "0.28.0-proportionate-notice",
+      "live": "0.28.1-proportionate-notice",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-research-exec"
@@ -1682,9 +1682,9 @@
       "worker": "qnfo-web-unified"
     },
     "radar-hub": {
-      "before": "1.4.3-bp-logging",
+      "before": "1.4.4-bad-tag-filter",
       "http": 200,
-      "live": "1.4.3-bp-logging",
+      "live": "1.4.4-bad-tag-filter",
       "match": 1,
       "note": "SYNC",
       "worker": "radar-hub"
