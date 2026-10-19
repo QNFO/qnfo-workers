@@ -1080,7 +1080,7 @@ function secretEq(a, b) {
   return diff === 0;
 }
 __name(secretEq, "secretEq");
-var VERSION = "0.40.3-live-check-grace"; /* 0.40.1 VERSION-LINE-NOTES-1 (2026-10-19, agent_issues 100243, pillar autonomy; patch, a comment moved): the release notes of every earlier version rode on this line (178 notes, about 200,000 chars), so a version bump of this worker was an 820,000-char patch (worker and mirror, removed and added): 12 code tasks ended on the publisher size cap on 2026-10-19 and three issues were exhausted for three days. They are in git history (git log -S '<release tag>' -- qnfo-fleet-control/worker.js); the changelog is built from the deploy ledger and commits, and the guards read only the quoted version string. A new note goes on this line and stays short. */
+var VERSION = "0.41.0-ensure-live-path"; /* 0.41.0 REOPEN-LIVE-PATH-3 (issue 100271): the remediation tick files one deduped PROBE-NEEDED-1 issue per open issue left without a live contract. 0.40.1 VERSION-LINE-NOTES-1 (2026-10-19, agent_issues 100243, pillar autonomy; patch, a comment moved): the release notes of every earlier version rode on this line (178 notes, about 200,000 chars), so a version bump of this worker was an 820,000-char patch (worker and mirror, removed and added): 12 code tasks ended on the publisher size cap on 2026-10-19 and three issues were exhausted for three days. They are in git history (git log -S '<release tag>' -- qnfo-fleet-control/worker.js); the changelog is built from the deploy ledger and commits, and the guards read only the quoted version string. A new note goes on this line and stays short. */
 // (older release notes: git history of qnfo-fleet-control/worker.js)
 // 0.4.112 CF-CHANGELOG-LOOP-1 (pillar autonomy, RM-CAPABILITY-PRODUCT-LOOP-1): once a day, inside the existing hourly tick (no new worker, cron or model call), the fleet reads Cloudflare's changelog feed, classifies each recent item against cloudflare_capability_catalog and the service registry, files at most 2 deduped issues a day for billing/deprecation changes to products the fleet uses, reopens catalog rows that were rejected when the product launches or goes GA (max 2 a day), adds not_considered rows for unknown products (max 5), and measures itself (cf_changelog_audit_age_h, cf_changelog_open_proposals_14d); GET /cf-changelog, POST /cf-changelog/run.
 // 0.4.111 PRIORITY-QUEUE-1b/1c (issues 1912, 1913; owner directive 2026-10-03): self-repair (evPropose) admits critical
@@ -10977,7 +10977,7 @@ async function remediationContractsTick(env, opts) {
   if (!db) return { ok: false };
   // REMEDIATION-TICK-SLOT-1 (0.23.0): stop starting new probes once the budget is spent; the rest stay due for the next slot.
   var t0 = Date.now(), budgetMs = opts && Number(opts.budgetMs) > 0 ? Number(opts.budgetMs) : 0;
-  var out = { ok: true, due: 0, pass: 0, fail: 0, deferred: 0, skipped: 0, superseded: 0, carried_by_twin: 0, reopened: [], holding: 0, held: 0, budget_left: 0, deferral_started: 0, deferral_cleared: 0, deferral_escalated: [] };
+  var out = { ok: true, due: 0, pass: 0, fail: 0, deferred: 0, skipped: 0, superseded: 0, carried_by_twin: 0, reopened: [], holding: 0, held: 0, budget_left: 0, deferral_started: 0, deferral_cleared: 0, deferral_escalated: [], probe_needed_filed: [] };
   var rs = await db.prepare("SELECT c.class, c.issue_id, c.verify_probe, c.verify_transport, c.expected_cadence_h, c.max_attempts, c.status AS contract_status, a.status AS issue_status, a.updated_at AS issue_updated_at, (SELECT COUNT(*) FROM agent_issues o JOIN remediation_contracts tc ON tc.issue_id = o.id AND tc.status IN ('active', 'holding') WHERE o.status = 'open' AND o.id <> COALESCE(c.issue_id, -1) AND lower(trim(o.title)) = lower(trim(COALESCE(a.title, char(1))))) AS carrying_twin FROM remediation_contracts c LEFT JOIN agent_issues a ON a.id = c.issue_id WHERE c.status IN ('active', 'holding') AND c.verify_transport IN ('d1-query', 'd1-query@portfolio-state', 'external-https') AND (c.next_due_at IS NULL OR datetime(c.next_due_at) <= datetime('now')) ORDER BY COALESCE(c.next_due_at, c.ts) LIMIT 150").all().catch(function () { return { results: [] }; });
   var rows = rs.results || [];
   out.due = rows.length;
@@ -11149,6 +11149,8 @@ async function remediationContractsTick(env, opts) {
   }
   // VERIFICATION-PATH-1 (b): a deferral older than RT_DEFERRAL_ESCALATE_MIN names its unblocker in an issue (once per class).
   await rtEscalateStaleDeferrals(db, out);
+  // REOPEN-LIVE-PATH-3 (issue 100271): an open issue left without a live contract gets one deduped PROBE-NEEDED-1 issue naming the probe to write.
+  await rtEnsureLivePath(db, out);
   // SLA-PATHS-1 path-count check (docs/SLA-AND-PATHS-1.md s3). A process with two paths on paper and one in practice is
   // worse than one path, because it is believed safe: today the registry read 12 processes / 0 violations while evidence
   // persistence had one live path and it was refused. Liveness is AVAILABILITY, not recent use - a fallback is never used
@@ -11398,6 +11400,80 @@ async function rtEscalateStaleDeferrals(db, out) {
   }
 }
 // ---- VERIFICATION-PATH-1:END ----
+// ---- REOPEN-LIVE-PATH-3:BEGIN ----
+// REOPEN-LIVE-PATH-3 (0.41.0, 2026-10-19, issue 100271, pillar autonomy; REOPEN-LIVE-PATH-1 filed four PROBE-NEEDED-1 issues by hand): the D1 trigger cannot file one for a later orphan (D1 refuses an INSERT into
+// agent_issues inside a deep trigger chain), so an open issue left without a live contract was named only by the first term of fm-reopen-without-live-path and nobody was told which probe to write. This
+// tick files one deduped "PROBE-NEEDED-1: issue-<id>" issue per orphan: an open issue with no contract in status active, holding, monitoring or escalated, opened or reopened more than 60 minutes ago, with no open
+// PROBE-NEEDED-1 issue for it. It writes no contract for the target and never a probe that only reads pending: the orphan stays visible to fm-open-issue-no-doer and issues_without_next_action until a probe
+// exists. Bounds (a sweep that can file must not flood): 3 issues per tick and 12 per 1440 minutes. ops_config rt_ensure_live_path = off stops it.
+// Skips, so only issues with no verified closer are filed: while an open "REOPEN-LIVE-PATH-2:" issue exists, a source mapped in issue_source_hosts to a live host, chaos-drill, fleet-journeys and an "[ai-cal] "
+// title are left to it; and always the "[ai-cal] model probe failing:" and "MODEL-DEGRADED" families, which qnfo-lifecycle MODEL-HEALTH-SWEEP-1 closes on every hourly tick (fm-model-health-issue-stale reports one it does not).
+var RT_LIVEPATH_PREFIX = "PROBE-NEEDED-1: issue-";
+var RT_LIVEPATH_AGE_MIN = 60;
+var RT_LIVEPATH_MAX_PER_TICK = 3;
+var RT_LIVEPATH_MAX_PER_DAY = 12;
+// The closing probe of each PROBE-NEEDED-1 issue (the shape of migrations/2026-10-19-reopen-live-path.sql): ok when the target is no longer open or holds an active or holding contract with a probe of its own,
+// pending until then. The two markers it excludes are written as two literals each, so red-drain step 0 and fm-loop-owned-contract-circular do not match the probe's own text.
+function rtLivePathProbe(id) {
+  var n = parseInt(id, 10);
+  if (!(n > 0)) return null;
+  return "SELECT 'ok' AS expected, CASE WHEN NOT EXISTS (SELECT 1 FROM agent_issues x WHERE x.id = " + n + " AND x.status = 'open') THEN 'ok' WHEN EXISTS (SELECT 1 FROM remediation_contracts c WHERE c.issue_id = " + n + " AND c.status IN ('active', 'holding') AND instr(c.verify_probe, 'needs-machine' || '-probe') = 0 AND instr(c.verify_probe, 'SELECT status FROM agent_issues WHERE' || ' id =') = 0 AND instr(c.verify_probe, 'agent_issues WHERE id = " + n + ")') = 0) THEN 'ok' ELSE 'pending: issue " + n + " has no probe of its own yet, a doer writes one' END AS observed";
+}
+var RT_LIVEPATH_ORPHAN_SQL = "SELECT a.id, a.title, a.source, a.priority, (SELECT group_concat(c.status) FROM remediation_contracts c WHERE c.issue_id = a.id) AS contract_states FROM agent_issues a WHERE a.status = 'open' "
+  + "AND a.title NOT LIKE 'PROBE-NEEDED-1: issue-%' "
+  + "AND NOT EXISTS (SELECT 1 FROM remediation_contracts c WHERE c.issue_id = a.id AND c.status IN ('active', 'holding', 'monitoring', 'escalated')) "
+  + "AND COALESCE((SELECT MAX(l.ts) FROM issue_lifecycle l WHERE l.issue_id = a.id AND l.event IN ('opened', 'reopened')), strftime('%Y-%m-%dT%H:%M:%SZ', a.created_at / 1000, 'unixepoch')) <= strftime('%Y-%m-%dT%H:%M:%SZ', 'now', '-' || ?1 || ' minutes') "
+  + "AND NOT EXISTS (SELECT 1 FROM agent_issues p WHERE p.status = 'open' AND lower(trim(p.title)) = lower(trim('PROBE-NEEDED-1: issue-' || a.id))) "
+  + "AND a.title NOT LIKE '[ai-cal] model probe failing:%' AND a.title NOT LIKE 'MODEL-DEGRADED%' "
+  + "AND NOT (?2 = 1 AND (a.source IN ('chaos-drill', 'fleet-journeys') OR a.title LIKE '[ai-cal] %' OR EXISTS (SELECT 1 FROM issue_source_hosts m JOIN service_registry s ON s.service = m.host AND s.state = 'live' WHERE m.source = a.source))) "
+  + "ORDER BY CASE a.priority WHEN 'critical' THEN 0 WHEN 'high' THEN 1 WHEN 'medium' THEN 2 WHEN 'low' THEN 3 ELSE 4 END, a.id LIMIT ?3";
+async function rtFileLivePathIssue(db, o) {
+  var id = Number(o.id), title = RT_LIVEPATH_PREFIX + id;
+  var states = o.contract_states ? String(o.contract_states) : "none";
+  var desc = "Charter pillar: autonomy. AUTO-FILED by qnfo-fleet-control REOPEN-LIVE-PATH-3 (" + VERSION + "). Issue " + id + " (" + String(o.title || "").slice(0, 160) + "; source " + (o.source || "none") + ", priority " + (o.priority || "medium") + ") is open with no live verification path: none of its contracts is active, holding, monitoring or escalated (contract states: " + states + ") more than " + RT_LIVEPATH_AGE_MIN + " minutes after it opened or was reopened. A contract that was born superseded measures nothing while the issue is open, and a probe that only reads pending would take the issue out of fm-open-issue-no-doer and issues_without_next_action without anything measuring it, so the contract is left as it is.\n" +
+    "The probe to write: one that measures the issue's own definition of done where the fleet can see it (a d1-query over the tables the issue names, a runtime-probe or code-probe line, or a verify_transport the issue's description already points at). If no probe can measure it, park the contract by a recorded decision (a decision_log row naming issue-" + id + ", then a contract in status monitoring or holding) or have its owner loop name its closer.\n" +
+    "How: a migration (APPLY-BY ci, DB qnfo-audit, a Rollback line) with UPDATE remediation_contracts SET verify_probe = <SQL returning expected and observed>, verify_transport = 'd1-query', status = 'active', last_verdict = NULL, attempts = 0, deferred_since = NULL, next_due_at = datetime('now') WHERE class = 'issue-" + id + "' (INSERT OR IGNORE the contract when none exists). The probe must not read the status of issue " + id + " itself.\n" +
+    "Doer: the session or loop that takes issue " + id + " (take the work claim issue:" + id + " first).\n" +
+    "Definition of done: issue " + id + " has a contract in status active or holding whose probe measures the defect (it is not needs-machine-probe and does not read the status of the issue itself), or issue " + id + " is no longer open. The d1-query contract on this issue reads pending until then and ok after, and the autoclose path closes this issue.";
+  var ins = await db.prepare("INSERT OR IGNORE INTO agent_issues (title, description, source, category, priority, status, created_at, updated_at) VALUES (?1, ?2, 'qnfo-fleet-control', 'reliability', 'medium', 'open', ?3, ?3)").bind(title, desc, Date.now()).run();
+  if (!(ins && ins.meta && Number(ins.meta.changes) > 0)) return null;
+  var row = await db.prepare("SELECT id FROM agent_issues WHERE status = 'open' AND lower(trim(title)) = lower(trim(?1))").bind(title).first();
+  if (!row || row.id == null) return null;
+  var probe = rtLivePathProbe(id), cid = "issue-" + row.id;
+  var pre = "issue " + id + " is open and none of its contracts holds a probe that can judge it", act = "a doer writes the probe that measures issue " + id + " and sets its contract active";
+  var u = await db.prepare("UPDATE remediation_contracts SET verify_probe = ?2, verify_transport = 'd1-query', status = 'active', last_verdict = NULL, attempts = 0, next_due_at = NULL, module = 'reopen-live-path', precondition = ?3, action = ?4, escalate_to = 'qnfo-fleet-control', expected_cadence_h = 1 WHERE class = ?1").bind(cid, probe, pre, act).run();
+  if (!(u && u.meta && Number(u.meta.changes) > 0)) {
+    await db.prepare("INSERT OR IGNORE INTO remediation_contracts (class, issue_id, precondition, action, verify_probe, verify_transport, max_attempts, escalate_to, expected_cadence_h, status, module) VALUES (?1, ?2, ?3, ?4, ?5, 'd1-query', 3, 'qnfo-fleet-control', 1, 'active', 'reopen-live-path')").bind(cid, row.id, pre, act, probe).run();
+  }
+  try {
+    await db.prepare("INSERT INTO cloud_ops_events (id, ts, kind, text, job, status) VALUES (?1, strftime('%Y-%m-%dT%H:%M:%fZ','now'), 'remediation.probe-needed-filed', ?2, 'qnfo-fleet-control', 'warn')").bind("pnf-" + id + "-" + Date.now(), ("issue=" + id + " probe_needed_issue=" + row.id + " contract_states=" + states).slice(0, 400)).run();
+  } catch (eV) { /* the issue is the record; the event is a convenience */ }
+  return row.id;
+}
+var rtLivePathRetryAt = 0;
+async function rtEnsureLivePath(db, out) {
+  if (out && !out.probe_needed_filed) out.probe_needed_filed = [];
+  if (Date.now() < rtLivePathRetryAt) return;
+  try {
+    if (await rtFlagOff(db, "rt_ensure_live_path")) { out.ensure_live_path_off = 1; return; }
+    var made = await db.prepare("SELECT COUNT(*) AS n FROM agent_issues WHERE title LIKE ?1 || '%' AND created_at > ?2").bind(RT_LIVEPATH_PREFIX, Date.now() - 864e5).first();
+    var room = Math.min(RT_LIVEPATH_MAX_PER_TICK, RT_LIVEPATH_MAX_PER_DAY - (made ? Number(made.n) || 0 : 0));
+    if (room <= 0) { out.ensure_live_path_capped = 1; return; }
+    var lp2 = await db.prepare("SELECT 1 AS x FROM agent_issues WHERE status = 'open' AND title LIKE 'REOPEN-LIVE-PATH-2:%' LIMIT 1").first();
+    var rows = ((await db.prepare(RT_LIVEPATH_ORPHAN_SQL).bind(RT_LIVEPATH_AGE_MIN, lp2 ? 1 : 0, room).all()).results) || [];
+    for (var i = 0; i < rows.length; i++) {
+      try {
+        var nid = await rtFileLivePathIssue(db, rows[i]);
+        if (nid != null) out.probe_needed_filed.push(rows[i].id);
+      } catch (e2) { console.error(JSON.stringify({ evt: "fleet-control:remediationTick:probe-needed-file", issue: rows[i].id, error: String(e2 && e2.message).slice(0, 200) })); }
+    }
+  } catch (e) {
+    // a table or column that is not there yet (the migrations land with the deploy) pauses the filer for ten minutes without a log line per tick
+    if (/no such (table|column)/i.test(String(e && e.message || e))) { rtLivePathRetryAt = Date.now() + 600000; return; }
+    console.error(JSON.stringify({ evt: "fleet-control:remediationTick:ensure-live-path", error: String(e && e.message).slice(0, 200) }));
+  }
+}
+// ---- REOPEN-LIVE-PATH-3:END ----
 async function rtReopenOnRelapse(db, c, es, os) {
   var closedMs = Number(c.issue_updated_at) || 0;
   var since = closedMs > 0 ? new Date(closedMs).toISOString().replace("T", " ").slice(0, 19) : "1970-01-01 00:00:00";
