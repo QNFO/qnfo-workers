@@ -156,6 +156,21 @@ const REAL = [
   ok(t.status === "ready_to_publish" && calls.length === 1 && events(env, "code-task.noop-refused").length === 0, "D3 a SQL fragment quoted verbatim by the goal is still a real change", { st: t.status, err: t.last_error });
 }
 
+// ===== D4. NOOP-COPY-GOAL-1: a goal that asks for wording makes a literal-only edit the change =====
+{
+  const { env, calls } = envWith([block(AUDIT_LINE, PARAPHRASE)]);
+  await addTask(env, "Reword the ready_to_publish audit label in plain language: " + GOAL, AUDIT_LINE);
+  await tick(env);
+  const t = row(env);
+  ok(t.status === "ready_to_publish" && calls.length === 1 && events(env, "code-task.noop-refused").length === 0, "D4 a copy goal lets a prose-only string edit through to the verifier", { st: t.status, err: t.last_error });
+}
+{
+  const { env, calls } = envWith([block(AUDIT_LINE, AUDIT_LINE + " // pushes the branch through the Contents API"), block(AUDIT_LINE, REAL)]);
+  await addTask(env, "Reword the audit label: " + GOAL, AUDIT_LINE);
+  await tick(env);
+  ok(row(env).status === "ready_to_publish" && /noop-proposal: only comments changed/.test(calls[1].prompt), "D5 a copy goal still refuses a comment-only edit");
+}
+
 // ===== E. whole-file mode (no anchor, small file) is gated the same way =====
 {
   const asFile = (text) => "```file\n" + text + "```";
