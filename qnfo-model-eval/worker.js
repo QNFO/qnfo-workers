@@ -47,7 +47,7 @@
 // score 1.0. A saturated control therefore yields "cost win" or "parity", never
 // "better".
 
-// VERSION-BUMP-GUARD-1 requires the literal `var VERSION = "..."` form: this constant is
+// VERSION-BUMP-GUARD-1 requires the literal var-VERSION-equals-double-quoted-string form: this constant is
 // what fleet-autoaudit's strict numeric-ahead deploy check and deploy-drift's string
 // compare both read. `const` here would make the bundle invisible to deploy-drift.
 var VERSION = "1.4.1-log-catch"; // 1.4.1 WORKERS-BP-LOGGING-1 (agent_issues 2342, RESOLVE-ALL-OPEN-1 2026-10-19): the scheduled() error-event write no longer swallows its own failure; it logs a structured console.error.
