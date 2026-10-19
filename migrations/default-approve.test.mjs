@@ -57,6 +57,8 @@ const C115 = { slug: "code-loop-may-change-fleet-control", title: "Let the code 
   why: "The code loop may merge its own changes to qnfo-ai and qnfo-gateway. IDENTITY-BOUND: this lifts a deny the owner set for the system's own verifier.",
   def: "The deny stays. Changes to the five workers keep going through session pull requests, as today.",
   action: "Approve: add qnfo-fleet-control to CM_LOOP_CANARIED, one pull request. Decline: nothing changes." };
+// the same card without the IDENTITY-BOUND: line: a decision the fleet takes
+const C115_PLAIN = Object.assign({}, C115, { slug: "code-loop-may-change-fleet-control-plain", why: C115.why.replace("IDENTITY-BOUND: ", "") });
 const FLEET_DECISION = { slug: "pick-one-fleet", title: "Decide the cadence of the review loop", why: "measured 2026-10-19", def: "Keep the current cadence.", action: "Pick one: (a) every 10 minutes in worker.js, (b) leave it.", sev: "high" };
 const HARD_MONEY = { slug: "pay-model", title: "Payment decision: authorise a stronger code-loop model, or accept the growing queue", why: "spend", def: "No payment is made.", action: "Choose one: (a) authorise the payment, (b) accept the queue." };
 const HARD_CODES = { slug: "mail-codes", title: "Decide the scope of the qnfo-ai mail search", why: "IDENTITY-BOUND: one-time codes stay out of every automated path", def: "Nothing is built.", action: "Choose one: (a) build it, (b) drop the request." };
@@ -66,7 +68,7 @@ const NOTICE = { slug: "issue-77", title: "OWNER-TASK: decide the scope?", why: 
 
 function scenario(db) {
   const r = {};
-  r.c115 = add(db, C115); r.fleet = add(db, FLEET_DECISION); r.money = add(db, HARD_MONEY); r.codes = add(db, HARD_CODES);
+  r.c115 = add(db, C115); r.c115p = add(db, C115_PLAIN); r.fleet = add(db, FLEET_DECISION); r.money = add(db, HARD_MONEY); r.codes = add(db, HARD_CODES);
   r.step = add(db, OWNER_STEP); r.plain = add(db, FLEET_PLAIN); r.notice = add(db, NOTICE);
   return r;
 }
@@ -84,17 +86,22 @@ const db = build(); db.exec(sql);
 const r = scenario(db);
 
 // the view grades the shapes
-const g = (id) => db.prepare("SELECT decision, hard, approve FROM v_human_action_decision WHERE id = ?").get(id);
-ok(g(r.c115.id).decision === 1 && g(r.c115.id).hard === 0 && g(r.c115.id).approve === 1, "the card-115 shape is a decision, not hard, and approved", g(r.c115.id));
+const g = (id) => db.prepare("SELECT decision, hard, ib, gate, approve, held FROM v_human_action_decision WHERE id = ?").get(id);
+ok(g(r.c115.id).decision === 1 && g(r.c115.id).hard === 0 && g(r.c115.id).ib === 1 && g(r.c115.id).approve === 0 && g(r.c115.id).held === 1, "the card-115 shape (IDENTITY-BOUND: line) is a decision, not hard, held for the owner and not approved", g(r.c115.id));
+ok(g(r.c115p.id).decision === 1 && g(r.c115p.id).hard === 0 && g(r.c115p.id).ib === 0 && g(r.c115p.id).gate === "fleet" && g(r.c115p.id).approve === 1 && g(r.c115p.id).held === 0, "the same card without the IDENTITY-BOUND: line is approved", g(r.c115p.id));
 ok(g(r.fleet.id).approve === 1, "a fleet decision with a Pick one list is approved", g(r.fleet.id));
 ok(g(r.money.id).decision === 1 && g(r.money.id).hard === 1 && g(r.money.id).approve === 0, "a payment decision is hard and not approved", g(r.money.id));
 ok(g(r.codes.id).hard === 1 && g(r.codes.id).approve === 0, "a one-time-codes decision is hard and not approved", g(r.codes.id));
 ok(g(r.step.id).decision === 0 && g(r.step.id).approve === 0, "an owner step with no options is not a decision", g(r.step.id));
 ok(g(r.notice.id).decision === 1 && g(r.notice.id).approve === 0, "a closure notice is never approved even when its words are a decision", g(r.notice.id));
 
-// card 115 shape: approved
-const s115 = st(db, r.c115.id), q115 = queue(db, r.c115.id);
-ok(s115.status === "rerouted" && /^DEFAULT-APPROVE-1/.test(s115.resolution) && /^APPROVE \(DEFAULT-APPROVE-1/.test(s115.default_in_effect), "the card-115 shape is rerouted with the approve default in effect and not closed on the deny", s115);
+// the card-115 shape: held. It is not closed on the deny and not handed to the fleet: it stays open for the owner, who labelled it.
+const h115 = st(db, r.c115.id);
+ok(h115.status === "open" && h115.resolution === null && queue(db, r.c115.id).length === 0 && h115.default_in_effect.includes("The deny stays"), "the card-115 shape stays open: its deny default is not adopted and the fleet is not told to execute an IDENTITY-BOUND card", h115);
+ok(db.prepare("SELECT COUNT(*) AS n FROM decision_log WHERE actor LIKE 'trigger:%' AND evidence LIKE '%The deny stays%'").get().n === 1, "only the approved twin wrote a decision_log row for that default (the held card wrote none)");
+// the same card without the label: approved
+const s115 = st(db, r.c115p.id), q115 = queue(db, r.c115p.id);
+ok(s115.status === "rerouted" && /^DEFAULT-APPROVE-1/.test(s115.resolution) && /^APPROVE \(DEFAULT-APPROVE-1/.test(s115.default_in_effect), "the card-115 text without the label is rerouted with the approve default in effect and not closed on the deny", s115);
 ok(s115.default_in_effect.includes("The deny stays"), "the stated default is kept in the card text as superseded context", s115.default_in_effect);
 ok(q115.length === 1 && /^DEFAULT-APPROVE-1: /.test(q115[0].title) && /Execute the recommended option/.test(q115[0].description) && /IC-GATE-001/.test(q115[0].description) && q115[0].priority === "medium" && q115[0].category === "governance", "one queue row tells the fleet to execute the recommended option and names the limits that still win", q115);
 // a fleet-gate decision: queued once, by the approve trigger
@@ -121,6 +128,7 @@ ok(approvals === 2, "one decision_log row per approved card (115 shape and the f
   off.prepare("UPDATE ops_config SET value = 'off' WHERE key = 'default_approve_gate'").run();
   const x = scenario(off);
   const a = st(off, x.c115.id), f = st(off, x.fleet.id);
+  ok(st(off, x.c115p.id).status === "resolved" && /^DEFAULT-ADOPTED-1/.test(st(off, x.c115p.id).resolution), "default_approve_gate = off: the approvable card-115 text is closed on its default again", st(off, x.c115p.id));
   ok(a.status === "resolved" && /^DEFAULT-ADOPTED-1/.test(a.resolution) && queue(off, x.c115.id).length === 0, "default_approve_gate = off: the card-115 shape is closed on its default again", a);
   ok(f.status === "resolved" && /^DEFAULT-ADOPTED-1/.test(f.resolution), "default_approve_gate = off: a fleet decision with a default is adopted as before", f);
   ok(off.prepare("SELECT approve FROM v_human_action_decision WHERE id = ?").get(x.c115.id).approve === 0, "default_approve_gate = off: the view grades nothing approved");
@@ -128,7 +136,7 @@ ok(approvals === 2, "one decision_log row per approved card (115 shape and the f
   const det = off.prepare("SELECT verify_probe FROM remediation_contracts WHERE class = 'fm-card-default-denies-decision'").get().verify_probe;
   ok(off.prepare(det).get().observed === "0", "the fm detector reads 0 while the gate is off (a closure on a default is then intended)");
   off.prepare("UPDATE ops_config SET value = 'on' WHERE key = 'default_approve_gate'").run();
-  ok(off.prepare(det).get().observed === "2", "the fm detector reads 2 for the two decision cards closed on a default while the gate was off, once it is on", off.prepare(det).get());
+  ok(off.prepare(det).get().observed === "3", "the fm detector reads 3 for the three decision cards (approvable, held, fleet) closed on a default while the gate was off, once it is on", off.prepare(det).get());
 }
 
 // ---- the same card under the gate: the detector reads 0
@@ -152,6 +160,79 @@ ok(approvals === 2, "one decision_log row per approved card (115 shape and the f
   ok(/OWNER DIRECTIVE 2026-10-19/.test(cp.evidence) && cp.disposition_state === "applied", "control_registry control-plane-deny carries the owner directive (its state is moved by the worker change, not by this file)", cp);
   const det = pre.prepare("SELECT verify_probe FROM remediation_contracts WHERE class = 'fm-card-default-denies-decision'").get().verify_probe;
   ok(pre.prepare(det).get().observed === "0", "after the file card 115 no longer reads as a decision closed on a default", pre.prepare(det).get());
+}
+
+// ---- the grading markers, pinned by an independent list: a deleted or an added marker fails here
+const EXPECT = {
+  decision_action: ["%approve:%", "%decline:%", "%pick one%", "%choose one%", "%choose between%", "%which of%", "%option (a)%", "%option a%", "%(a)%(b)%"],
+  decision_title: ["decide %", "decide:%", "should %", "which of%", "pick %", "choose %", "%?"],
+  decision_title_not: ["why %", "is %", "did %", "what %", "how %", "are %", "does %"],
+  // one probe sentence per hard marker: a decision card whose text holds it must stay on the old path
+  hard: {
+    "% payment %": "pay the payment now", "% payments %": "the payments are due", "%payment decision%": "Payment decision: x", "%invoice%": "the invoice", "%bank %": "the bank card",
+    "%credit card%": "a credit card", "%billing account%": "the billing account", "%billing plan%": "the billing plan", "%billing project%": "the billing project",
+    "%purchase%": "a purchase", "%wire transfer%": "a wire transfer", "%top up%": "top up the balance", "%top-up%": "a top-up", "% fund %": "fund the wallet x", "%prepaid%": "prepaid credit",
+    "%subscri%": "subscribe to the plan", "% pay %": "pay the vendor", "% paid %": "it is paid now", "% fee %": "a fee applies", "% fees %": "fees apply", "%renew%": "renew the domain",
+    "%registrar%": "at the registrar", "%refund%": "a refund", "%wallet%": "the wallet", "%$_%": "costs $24 a year",
+    "% legal %": "a legal review", "% signature %": "needs a signature here", "%signing%": "the signing of it", "% sign the %": "sign the agreement", "%patent applic%": "a patent application",
+    "% dpa %": "the dpa is signed", "% dpa,%": "the dpa, signed",
+    "%irreversible%": "this is irreversible", "%delete%": "delete the rows", "%wipe%": "wipe the volume", "%erase%": "erase the log", "%truncate%": "truncate the table",
+    "%drop table%": "drop table x", "%destroy%": "destroy the backup", "%unbacked%": "unbacked data",
+    "%api key%": "an api key", "%oauth%": "an oauth grant", "%sign in to%": "sign in to the console", "%sign-in%": "a sign-in step", "%log in to%": "log in to the account",
+    "%login link%": "the login link", "%login code%": "the login code", "%password%": "a password", "%credential%": "a credential", "%rotate%": "rotate it", "%secret%": "a secret",
+    "%token%": "a token", "%grant access%": "grant access to x", "%your name%": "in your name", "%owner's name%": "in the owner's name", "%mailbox%": "the mailbox",
+    "%email from%": "an email from the owner", "%send an email%": "send an email to x", "%send email%": "send email to x", "%@_%._%": "write to a@b.co", "%visibility%": "change the visibility",
+    "%make public%": "make public the repo", "%be public%": "stay or be public", "%one-time code%": "a one-time code", "%verification code%": "a verification code", "%privacy of %": "the privacy of users",
+    "%gdpr%": "gdpr scope", "%personal data%": "personal data", "%suppress%": "suppress the address", "%opt-out%": "an opt-out", "%opt out%": "they opt out", "%unsubscribe%": "unsubscribe them", "%consent%": "their consent",
+  },
+};
+{
+  const rows = db.prepare("SELECT kind, pattern FROM default_approve_markers").all();
+  const have = (k) => rows.filter((r) => r.kind === k).map((r) => r.pattern).sort();
+  for (const k of ["decision_action", "decision_title", "decision_title_not"]) ok(JSON.stringify(have(k)) === JSON.stringify(EXPECT[k].slice().sort()), "the " + k + " markers are exactly the pinned list", { have: have(k), want: EXPECT[k] });
+  ok(JSON.stringify(have("hard")) === JSON.stringify(Object.keys(EXPECT.hard).sort()), "the hard markers are exactly the pinned list (a deleted or an added marker fails)", { extra: have("hard").filter((x) => !(x in EXPECT.hard)), missing: Object.keys(EXPECT.hard).filter((x) => !have("hard").includes(x)) });
+  let n = 0;
+  for (const [pat, text] of Object.entries(EXPECT.hard)) {
+    const c = add(db, { slug: "hard-" + (n++), title: "Pick one for x", why: "", def: "stays", action: "Approve: " + text + ". Decline: nothing." });
+    const v = g(c.id);
+    ok(v.hard === 1 && v.approve === 0, "hard marker " + pat + " keeps the card on the old path: " + text, v);
+  }
+  // the narrowed markers must not catch the plain words: reversible decisions stay approvable (false positives found in review)
+  const FP = [
+    ["Add a guard to the billing monitor?", "Approve: add it. Decline: no."], ["Let the code loop edit the PAYMENT-GUARD-1 test?", "Approve: yes. Decline: no."],
+    ["Purge the CDN cache on deploy?", "Approve: purge the edge cache. Decline: no."], ["Keep the login redirect on fleet.qnfo.org?", "Approve: keep it. Decline: no."],
+    ["Move the privacy-policy page link?", "Approve: move it. Decline: no."], ["Raise the review loop to every 10 minutes?", "Approve: set it. Decline: no."],
+  ];
+  FP.forEach(([title, action], i) => { const c = add(db, { slug: "fp-" + i, title, why: "reversible", def: "Nothing changes.", action }); const v = g(c.id); ok(v.decision === 1 && v.hard === 0 && v.approve === (v.gate === "fleet" ? 1 : 0), "the markers do not catch a plain word: " + title, v); });
+  // decision false negatives found in review, and questions that are not choices
+  const DN = [["Pick the retry policy", "Option A: three tries. Option B: five tries."], ["Cadence", "Choose between 10 and 20 minutes."], ["Model order", "Which of glm, qwen or kimi first?"], ["Should the fleet raise the window", "Set it."], ["Window", "Decide: 7 days or 24 hours (a) 7 days (b) 24 hours"]];
+  DN.forEach(([title, action], i) => { const c = add(db, { slug: "dn-" + i, title, why: "r", def: "Keep.", action }); const v = g(c.id); ok(v.decision === 1, "a choice is a decision: " + title + " / " + action, v); });
+  const NOT = [["Why did the drain stall?", "Read the log."], ["Is the cron firing?", "Check it."], ["What changed in the gateway?", "Read the diff."], ["How many papers are queued?", "Count them."]];
+  NOT.forEach(([title, action], i) => { const c = add(db, { slug: "nd-" + i, title, why: "r", def: "", action }); ok(g(c.id).decision === 0, "a question about a fact is not a decision: " + title, g(c.id)); });
+}
+
+// ---- inserts that must not abort or be touched
+{
+  const n0 = db.prepare("SELECT COUNT(*) AS n FROM human_actions").get().n;
+  let err = null;
+  try { db.prepare("INSERT INTO human_actions (slug, title, why, default_in_effect, action, status, source) VALUES (NULL, 'Decide the cadence?', 'x', 'Keep it.', 'Approve: set it. Decline: no.', 'open', 'session:t')").run(); } catch (e) { err = String(e.message || e); }
+  ok(err === null && db.prepare("SELECT COUNT(*) AS n FROM human_actions").get().n === n0 + 1, "a decision card with a NULL slug inserts (decision_log.action is NOT NULL)", err);
+  const nullRow = db.prepare("SELECT id, status FROM human_actions WHERE slug IS NULL ORDER BY id DESC LIMIT 1").get();
+  ok(nullRow.status === "rerouted" && queue(db, nullRow.id).length === 1, "the NULL-slug decision card is rerouted and queued", nullRow);
+  err = null;
+  try { db.prepare("INSERT INTO human_actions (slug, title, why, default_in_effect, action, status, source) VALUES (NULL, 'Owner step', 'x', 'Waits.', 'Do it on the console.', 'open', 'session:t')").run(); } catch (e) { err = String(e.message || e); }
+  ok(err === null, "a NULL-slug card with a default still inserts (adopt trigger)", err);
+  const closed = add(db, { slug: "already-closed", title: "Decide x?", why: "r", def: "d", action: "Approve: x. Decline: y." });
+  const before = db.prepare("SELECT COUNT(*) AS n FROM autonomy_reroute_queue").get().n;
+  db.prepare("INSERT INTO human_actions (slug, title, why, default_in_effect, action, status, source) VALUES ('born-done', 'Decide y?', 'r', 'd', 'Approve: x. Decline: y.', 'done', 'session:t')").run();
+  ok(db.prepare("SELECT COUNT(*) AS n FROM autonomy_reroute_queue").get().n === before && db.prepare("SELECT status FROM human_actions WHERE slug = 'born-done'").get().status === "done", "a card inserted with a status other than open is not touched");
+  const urgent = add(db, { slug: "urgent-one", title: "Decide the failover?", why: "r", def: "", action: "Approve: switch. Decline: stay.", sev: "urgent" });
+  ok(queue(db, urgent.id)[0].priority === "critical", "an urgent decision card is queued critical");
+  // the gate row missing means on (the default of every reader)
+  db.exec("DELETE FROM ops_config WHERE key = 'default_approve_gate'");
+  const nogate = add(db, { slug: "no-gate-row", title: "Decide z?", why: "r", def: "d", action: "Approve: x. Decline: y." });
+  ok(st(db, nogate.id).status === "rerouted", "with no default_approve_gate row the gate reads on");
+  db.exec("INSERT INTO ops_config (key, value) VALUES ('default_approve_gate', 'on')");
 }
 
 // ---- idempotent

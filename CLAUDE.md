@@ -77,11 +77,14 @@ because each one was broken at least once; the linked issue holds the evidence.
   directive 2026-10-19: "ALL DECISIONS SHALL ALWAYS BE DEFAULT APPROVE ... Reversible fleet decisions SHALL ALWAYS take the
   recommended option and proceed without waiting"). A decision card (it offers an
   `Approve:` option, "Pick one" or "Choose one", or its title asks) is never closed on a status-quo default such as "The deny stays"
-  (human_actions 115 was, at birth, by DEFAULT-ADOPTED-1). Write the recommended option as the default; `human_actions_default_approve_ai`
-  queues the card for the fleet to execute it (migrations/2026-10-19-default-approve.sql, `v_human_action_decision`, detector
-  `fm-card-default-denies-decision`, `ops_config default_approve_gate = off` restores the old paths). A card that is hard by its own
-  words keeps its old path: money, a legal or signing act, destroying data, the owner's accounts and credentials (IC-GATE-001), and the
-  security and privacy limits (one-time codes, privacy, personal data).
+  (human_actions 115 was, at birth, by DEFAULT-ADOPTED-1). Write the recommended option as the default. When the card grades `fleet` in
+  `v_human_action_gate`, carries no `IDENTITY-BOUND:` line and matches no `hard` marker, `human_actions_default_approve_ai` queues it for
+  the fleet to execute (migrations/2026-10-19-default-approve.sql, `v_human_action_decision`, detectors `fm-card-default-denies-decision`
+  and `fm-default-approve-issue-unexecuted`, `ops_config default_approve_gate = off` restores the old paths). The `hard` markers
+  (`default_approve_markers`, add one by INSERT with a note) are money, a legal or signing act, destroying data, the owner's accounts,
+  credentials, mailbox and name (IC-GATE-001), and the security and privacy limits (one-time codes, privacy, personal data, suppression,
+  opt-out, consent); such a card keeps its old path. A decision card that carries an `IDENTITY-BOUND:` line and no hard marker is held
+  open for the owner and its stated default is not adopted: a writer who labels a card so says it truly needs the owner.
 - The hourly metric tick audits it: `v_autonomy_first_audit`, metrics `owner_queue_fleet_cards_open` and
   `session_dependent_issues_open` (target 0 each), triggers on both and on `code_task_superseded_share_30d`.
 
