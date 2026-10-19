@@ -55,12 +55,14 @@ import re
 import sys
 import urllib.request
 
+# CRON-TICK-5M-1 (2026-10-19, owner directive): 5-minute spacing and 288 fires/24h are the
+# ceiling (was 10/144), and no cron may be slower than hourly (producer floor 120 -> 60).
 DAYS = 365
 START = _dt.datetime(2026, 1, 1, tzinfo=_dt.timezone.utc)
-MAX_FIRES_24H = 144
-MIN_GAP_MINUTES = 10
+MAX_FIRES_24H = 288
+MIN_GAP_MINUTES = 5
 # TEMPO-120M-5M-1: the slow side of the same policy.
-PRODUCER_MAX_GAP_MINUTES = 120
+PRODUCER_MAX_GAP_MINUTES = 60
 HEARTBEAT_MAX_GAP_MINUTES = 5
 HEARTBEAT_WORKERS = ("fleet-exec", "qnfo-fleet-control", "qnfo-code-orchestrator")
 
