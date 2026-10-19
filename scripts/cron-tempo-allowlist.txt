@@ -1,0 +1,24 @@
+# CRON-HOURLY-FLOOR-1 (owner directive 2026-10-19: "ACCELERATE ALL SCHEDULED CRON EXECUTION. ALL CRON TICKS SHALL BE
+# MEASURED IN 5-MINUTE INTERVALS, AND NO CRON SHALL EXECUTE LESS THAN ONCE EVERY HOUR").
+# worker|cron|expires (YYYY-MM-DD)|tracking
+# SHRINK-ONLY: scripts/cron_rate_guard.py fails on a slow cron that is not listed here, on an entry past its expiry, and on
+# an entry that no longer matches a slow cron (delete the line when you convert the worker). These are the 16 declared
+# crons of the 11 LIVE workers that are still slower than hourly on 2026-10-19; RETIRED and FOLDED directories are never
+# deployed and are not audited. Each worker has a CRON-HOURLY-FLOOR-1:<worker> issue in qnfo-audit.agent_issues with the
+# handler facts (branches on the cron string or not, side effects) and the gating the conversion needs.
+personal-api|5 5 * * *|2026-11-02|CRON-HOURLY-FLOOR-1:personal-api
+q08-signal-engine|0 17 * * *|2026-11-02|CRON-HOURLY-FLOOR-1:q08-signal-engine
+qnfo-email|0 7 * * *|2026-11-02|CRON-HOURLY-FLOOR-1:qnfo-email
+qnfo-fleet-control|0 3 * * *|2026-11-02|CRON-HOURLY-FLOOR-1:qnfo-fleet-control
+qnfo-fleet-control|0 4 1 * *|2026-11-02|CRON-HOURLY-FLOOR-1:qnfo-fleet-control
+qnfo-fleet-control|30 3 * * 1|2026-11-02|CRON-HOURLY-FLOOR-1:qnfo-fleet-control
+qnfo-gateway|0 6 * * *|2026-11-02|CRON-HOURLY-FLOOR-1:qnfo-gateway
+qnfo-github-steward|17 */6 * * *|2026-11-02|CRON-HOURLY-FLOOR-1:qnfo-github-steward
+qnfo-infra|30 6 * * *|2026-11-02|CRON-HOURLY-FLOOR-1:qnfo-infra
+qnfo-infra|0 18 * * *|2026-11-02|CRON-HOURLY-FLOOR-1:qnfo-infra
+qnfo-intent-orchestrator|0 6 * * *|2026-11-02|CRON-HOURLY-FLOOR-1:qnfo-intent-orchestrator
+qnfo-intent-orchestrator|30 6 * * *|2026-11-02|CRON-HOURLY-FLOOR-1:qnfo-intent-orchestrator
+qnfo-model-eval|17 */6 * * *|2026-11-02|CRON-HOURLY-FLOOR-1:qnfo-model-eval
+qnfo-social|0 6 * * *|2026-11-02|CRON-HOURLY-FLOOR-1:qnfo-social
+qnfo-social|0 7 * * *|2026-11-02|CRON-HOURLY-FLOOR-1:qnfo-social
+qnfo-subscribers|0 16 * * 1|2026-11-02|CRON-HOURLY-FLOOR-1:qnfo-subscribers
