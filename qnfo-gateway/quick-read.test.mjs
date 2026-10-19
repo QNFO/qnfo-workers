@@ -109,8 +109,7 @@ const AI = { run: async (model, input) => {
 } };
 
 function mkEnv() {
-  const qr = new Map();
-  const plain = new Map(); // plain_summary (3.25.0 PLAIN-LANGUAGE-1, 3.25.2 negative cache)
+  const qr = new Map(), plain = new Map();
   let n = 0;
   const stmt = (sql) => {
     const st = {
@@ -124,14 +123,14 @@ function mkEnv() {
       },
       async run() {
         if (/INSERT INTO quick_read/i.test(sql)) { qr.set(st.a[0] + "|" + st.a[1], { payload: st.a[3] }); }
-        if (/INSERT INTO plain_summary/i.test(sql)) { plain.set(st.a[0], { rev: st.a[1], text: st.a[2], dropped: st.a[3], grade: st.a[4], method: st.a[5], generated_at: st.a[6] }); }
+        if (/INSERT INTO plain_summary/i.test(sql)) { plain.set(st.a[0], { rev: st.a[1], text: st.a[2], dropped: st.a[3], grade: st.a[4] }); }
         return {};
       },
-      async all() { return /FROM papers/i.test(sql) ? { results: Object.values(papers) } : { results: [] }; }
+      async all() { return /FROM papers/i.test(sql) ? { results: Object.values(papers).map((p) => Object.assign({}, p, { plain_rev: (plain.get(p.slug) || {}).rev || null })) } : { results: [] }; }
     };
     return st;
   };
-  return { LIVING_PAPER: { prepare: stmt }, DB: { prepare: stmt }, AI, RELEASES: { head: async () => null } };
+  return { LIVING_PAPER: { prepare: stmt }, DB: { prepare: stmt }, AI, RELEASES: { head: async () => null }, _plain: plain };
 }
 globalThis.fetch = async () => new Response("", { status: 404 });
 const gw = (await import(pathToFileURL(join(here, "worker.js")).href)).default;
@@ -382,13 +381,10 @@ const Q = "What did the controller measure about the energy cost of one solution
 // ---- 17. QUICK-READ-DIGEST-1: nothing to type, nothing invented, no spend
 {
   const env = mkEnv();
-  // 3.25.0 PLAIN-LANGUAGE-1: the first view of a revision may build the cached plain summary (one model call per revision,
-  // stored in plain_summary); every later view of that revision spends nothing.
-  await (await call(env, "https://papers.qnfo.org/papers/" + SLUG + "/quickread")).text();
   aiCalls = 0;
   const r = await call(env, "https://papers.qnfo.org/papers/" + SLUG + "/quickread");
   const h = await r.text();
-  ok(r.status === 200 && aiCalls === 0, "the digest page answers with no model call once the revision's plain summary is cached", { s: r.status, aiCalls });
+  ok(r.status === 200 && aiCalls === 0, "the digest page answers with no model call", { s: r.status, aiCalls });
   ok(!/id="qr-q"/.test(h) && !/name="q"/.test(h), "the digest page asks nothing: it carries no question box", (h.match(/<input[^>]*name="q"[^>]*>/) || [])[0]);
   ok(/The controller ran 42 trials on the cryostat and measured 1.7 joules per solution under load/.test(h), "the abstract, verbatim, opens the page", h.length);
   ok(/What it claims/.test(h) === false, "a paper with no claim line does not get a claim section repeating its abstract", h.length);
@@ -417,11 +413,10 @@ const Q = "What did the controller measure about the energy cost of one solution
 // ---- 19. the digest is an API too, and it says where it has nothing to quote
 {
   const env = mkEnv();
-  await (await call(env, "https://papers.qnfo.org/api/quickread/" + SLUG)).json(); // the revision's plain summary is built (or its failure cached) once
   aiCalls = 0;
   const r = await call(env, "https://papers.qnfo.org/api/quickread/" + SLUG);
   const j = await r.json();
-  ok(r.status === 200 && j.kind === "digest" && aiCalls === 0, "the API returns the digest when no question is given, spending nothing after the first view of a revision", { s: r.status, kind: j.kind, aiCalls });
+  ok(r.status === 200 && j.kind === "digest" && aiCalls === 0, "the API returns the digest when no question is given, spending nothing", { s: r.status, kind: j.kind, aiCalls });
   ok(Array.isArray(j.numbers) && j.numbers.length === 0 && j.numbers_above >= 1, "a figure already shown in the abstract is not repeated below it", { numbers: j.numbers, above: j.numbers_above });
   ok(j.claim === "" && j.claim_source === "abstract" && /main result of this paper/.test(j.abstract[0]), "the abstract's opening sentence is the claim, and is not served twice", { claim: j.claim, abs: j.abstract[0] });
   const cl = await (await call(env, "https://papers.qnfo.org/api/quickread/" + CLAIMED)).json();
@@ -455,6 +450,27 @@ const Q = "What did the controller measure about the energy cost of one solution
   ok(!/env\.AI/.test(block), "the digest block makes no model call at all");
   ok(/location\.search\.indexOf\('ask=1'\)/.test(src), "the paper page opens the Ask rail from ?ask=1, so the digest can link to a question instead of embedding one");
   ok(/title="The paper in about a minute/.test(src), "the paper page's Quick read button says what the page now does");
+}
+
+// ---- 20. PLAIN-FILL-1: plain-language summaries are built by the daily cron, never on a reader's GET
+{
+  const env = mkEnv();
+  aiOut = "The team ran 42 trials on the cryostat. Each solution used 1.7 joules under load, which is the main result.";
+  aiCalls = 0;
+  await call(env, "https://papers.qnfo.org/papers/" + SLUG + "/quickread");
+  await call(env, "https://papers.qnfo.org/api/quickread/" + SLUG);
+  ok(aiCalls === 0 && env._plain.size === 0, "a digest GET with no cached summary spends nothing and builds nothing", { aiCalls, cached: env._plain.size });
+  ok(/async function plainFill\(env\)/.test(src) && /await plainFill\(env\)/.test(src), "the scheduled run calls plainFill");
+  const m = await import(pathToFileURL(join(here, "worker.js")).href);
+  ok(typeof m.default.scheduled === "function", "the worker has a scheduled handler");
+  const PLAIN_FILL = new Function("return " + src.match(/var PLAIN_FILL_MAX = (\d+);/)[1])();
+  aiCalls = 0;
+  await m.default.scheduled({ cron: "0 6 * * *" }, env, { waitUntil() {} }).catch(() => {});
+  ok(aiCalls > 0 && env._plain.size > 0 && env._plain.size <= PLAIN_FILL, "the cron builds missing summaries, at most PLAIN_FILL_MAX a run", { aiCalls, cached: env._plain.size, max: PLAIN_FILL });
+  aiCalls = 0;
+  const r = await call(env, "https://papers.qnfo.org/api/quickread/" + SLUG);
+  const j = await r.json();
+  ok(aiCalls === 0 && j.plain && /42 trials/.test(j.plain.text) && j.plain.method === "cache", "the digest then shows the cached summary with no model call", { aiCalls, plain: j.plain });
 }
 
 console.log(pass + " passed, " + fail + " failed");

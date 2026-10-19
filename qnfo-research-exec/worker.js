@@ -33,7 +33,7 @@ var __name22222 = /* @__PURE__ */ __name2222((target, value) => __defProp22222(t
 // an empty catch. CITE-CONSISTENCY-1 asks the reviewer to compare the draft against cited QNFO work.
 // REVIEW-TRIAGE-CAP-1 is a defect fix: drift demotion at the cycle cap silently turned a blocking finding into a pass, so
 // REVIEW-HARD-GATE-1 withheld nothing there (reviewer findings 2 -> 0 at the cap; an unparseable review advanced to verify).
-var VERSION = "0.19.1-retry-not-error"; /* 0.19.1 EXTRACT-JSON-ROBUST-1 (issue 2877): parseExtractedClaims reads the first balanced JSON list or object (trailing prose no longer breaks it) and re-parses with lone LaTeX backslashes escaped; an empty extraction reply is asked once more in the tick. RETRY-NOT-ERROR-1 (issue 99990): a verify retry still in budget (retry: true) logs its done event as warn; only the pass that exhausts its retries is an error, so LOOP-BREAKER-1 counts real failures. WORKERS-BP-LOGGING (issue 2538): the 21 swallowed catches log a structured console.error (two trial parses carry a comment), control flow unchanged. */ /* 0.19.0 RESOLVE-ALL-OPEN-1 (2026-10-19, owner directive "RESOLVE/REMEDIATE ALL OPEN ISSUES"; pillar research): (a) RESEARCH-REVIEW-BIB-TRUNC-1 (#2800): the reviewer sees the index line of every bibliography entry, then bounded excerpts, instead of the first 8,000 chars (2-3 of 9-14 entries); (b) SLOP-SCAN-1 (#2407): a deterministic inflated-prose scan adds SOFT findings with locations against a corpus baseline read from its own slop-scan events; (c) REVISE-STRIDE-1 (#2847): queued rows at a resumable stage are claimed before ground rows; (d) EXTENSION-ACTIVATION-1 (#2824): extension rows (<= research_extension_per_day) bypass research_ready_cap, ops_config research_extension_cap_mode=respect restores it; (e) SWEEP-REARM-INLINE-1 (#2393): the completeness sweep re-arms remediation rows a 2026-10-17 cleanup closed as published without publishing; (f) RECONCILE-READ-1 (c) (#2725): an incomplete draft names its failed checks. */ /* 0.18.38 TICK-10M-1 + RECLAIM-KEEP-STAGE-1 + IDEA-TO-PUBLISH-METRIC-1 (2026-10-18, owner directive: idea to publication under 100 hours; pillar research): (a) the cron runs every 10 minutes (was 15; 144/day = CRON-MANDATE-1 ceiling, same schedule count); member windows are 10 minutes wide so each errata/reviser job still runs exactly once per slot; the 03:00 sweep window is 10 minutes; (b) a stale reclaim keeps a resumable stage (complete/review/revise/verify), and RESUME-DRAFT-1 at claim falls back to ground when reconciled.md is missing, so a stalled draft is not re-drafted from scratch; (c) idea_to_publish_h_p50_7d (median hours idea_proposals.created_at -> published_at, 7 days) is written to metric_registry on the :00 tick. */ /* 0.18.37 ERRATA-HIGHRISK-ROUTE-1 folded (errata member 1.6.2): a high-risk errata correction draft older than 6 h becomes a remediation research row instead of waiting audited forever; internal_errata closes with its queue row. */ /* 0.18.36 CLAIM-HEARTBEAT-1 + RESUME-DRAFT-1 + REVIEW-SECOND-MODEL-1 (2026-10-18): a stage returning ok refreshes claimed_at so the stale-claim reclaimer stops re-grounding papers still advancing (550 releases/24h, 302 ground claims of 72 rows); a resumable stage is kept when its draft exists in R2 (70 revise rows were re-drafted from ground); the review second path names its model (not kimi-k2.6 after #1429). */ /* 0.18.35 CLAIM-HEARTBEAT-1 (2026-10-18): a stage that returns ok refreshes claimed_at, so the 120-min stale-claim reclaimer no longer re-grounds papers that are still advancing (550 releases/24h, 302 ground claims of 72 rows). */ /* 0.18.34 REVIEW-EMPTY-SECOND-PATH-1 (2026-10-18): an unreadable review takes a second model family in the same tick and, still unreadable, re-runs review directly instead of sending the review-parse placeholder through two no-op patch calls (237 of 264 revise-noop events, 329 hard=1 cycles in 3 days). */ /* 0.18.33 PATCH-FLEX-REGEX-OVERFLOW-1 (2026-10-18, agent_issues 2886): findFlexible caps the flexible matcher at 400 tokens and fails closed on any regex error, so a whole-section find text no longer throws "Invalid regular expression: Stack overflow" out of the slot. */ /* 0.18.32 AI-RATE-FALLBACK-1 (2026-10-18): a 3021/3040/3046 on the primary model after backoff takes one call on another family (glm<->gpt-oss-120b) instead of failing the stage; 3040 no longer misread as a reasoning_effort rejection. */ /* 0.18.31 VERIFY-AUTOCORRECT-1 (2026-10-18): papers fail verify with REAL arithmetic errors (the reconcile/ensemble writer computes a number that does not match its own stated inputs) and the revise loop cannot reliably fix a bare number, so such papers cycle until park. Verify already holds both values — independently computed `computed` and the paper's stated `expected` — so stageVerify now corrects the number deterministically (autoCorrectNumeric) instead of sending it back through a model. Fail-closed: only a stated value found exactly once (verbatim or as an unambiguous bare mantissa in LaTeX/\\times 10^N) is corrected; anything ambiguous is skipped and falls through to revise. Every correction is logged as verify-autocorrect and appended to verification.md. */ /* 0.18.29 VERIFY-CYCLE-CAP-1 (2026-10-17, owner directive "REMEDIATE ALL ISSUES AND FAILURE MODES"): the verify->revise edge reset the review cycle counter to 0 (context={cycles:0,verifyPass:1}) while EVERY other edge preserves it (3716, 3735, 3753) and the review stage is the one that increments it. That single reset made MAX_REVIEW_CYCLES (6) unreachable, so an item that fails verify re-enters revise, resets to cycle 0, and loops until recover_count runs out — measured 2026-10-17: review-unresolved events exist ONLY at cycle 2 (193) and 3 (165), never 4; 96 rerun-route and 278 revise-patch events against ~100 rows; and stage='publish' is EMPTY, which is why 151 complete events produced 0 publications and why the publish quota (24) guarded an empty queue. The edge now preserves the count, so the existing six-cycle cap can terminate an item visibly instead of cycling forever. The gate itself (gates2) is unchanged: this does not let a failing draft through, it lets a draft that cannot pass STOP. */ // 0.18.28-codeagent
+var VERSION = "0.19.2-retry-not-error"; /* 0.19.2 (2026-10-19, RESOLVE-ALL-OPEN-1): merges main's 0.19.0 MATH-LATEX-AUTOFIX-1 with PR 2603's 0.19.0/0.19.1 fixes below. */ /* 0.19.1 EXTRACT-JSON-ROBUST-1 (issue 2877): parseExtractedClaims reads the first balanced JSON list or object (trailing prose no longer breaks it) and re-parses with lone LaTeX backslashes escaped; an empty extraction reply is asked once more in the tick. RETRY-NOT-ERROR-1 (issue 99990): a verify retry still in budget (retry: true) logs its done event as warn; only the pass that exhausts its retries is an error, so LOOP-BREAKER-1 counts real failures. WORKERS-BP-LOGGING (issue 2538): the 21 swallowed catches log a structured console.error (two trial parses carry a comment), control flow unchanged. */ /* 0.19.0 RESOLVE-ALL-OPEN-1 (2026-10-19, owner directive "RESOLVE/REMEDIATE ALL OPEN ISSUES"; pillar research): (a) RESEARCH-REVIEW-BIB-TRUNC-1 (#2800): the reviewer sees the index line of every bibliography entry, then bounded excerpts, instead of the first 8,000 chars (2-3 of 9-14 entries); (b) SLOP-SCAN-1 (#2407): a deterministic inflated-prose scan adds SOFT findings with locations against a corpus baseline read from its own slop-scan events; (c) REVISE-STRIDE-1 (#2847): queued rows at a resumable stage are claimed before ground rows; (d) EXTENSION-ACTIVATION-1 (#2824): extension rows (<= research_extension_per_day) bypass research_ready_cap, ops_config research_extension_cap_mode=respect restores it; (e) SWEEP-REARM-INLINE-1 (#2393): the completeness sweep re-arms remediation rows a 2026-10-17 cleanup closed as published without publishing; (f) RECONCILE-READ-1 (c) (#2725): an incomplete draft names its failed checks. */ /* 0.18.38 TICK-10M-1 + RECLAIM-KEEP-STAGE-1 + IDEA-TO-PUBLISH-METRIC-1 (2026-10-18, owner directive: idea to publication under 100 hours; pillar research): (a) the cron runs every 10 minutes (was 15; 144/day = CRON-MANDATE-1 ceiling, same schedule count); member windows are 10 minutes wide so each errata/reviser job still runs exactly once per slot; the 03:00 sweep window is 10 minutes; (b) a stale reclaim keeps a resumable stage (complete/review/revise/verify), and RESUME-DRAFT-1 at claim falls back to ground when reconciled.md is missing, so a stalled draft is not re-drafted from scratch; (c) idea_to_publish_h_p50_7d (median hours idea_proposals.created_at -> published_at, 7 days) is written to metric_registry on the :00 tick. */ /* 0.18.37 ERRATA-HIGHRISK-ROUTE-1 folded (errata member 1.6.2): a high-risk errata correction draft older than 6 h becomes a remediation research row instead of waiting audited forever; internal_errata closes with its queue row. */ /* 0.18.36 CLAIM-HEARTBEAT-1 + RESUME-DRAFT-1 + REVIEW-SECOND-MODEL-1 (2026-10-18): a stage returning ok refreshes claimed_at so the stale-claim reclaimer stops re-grounding papers still advancing (550 releases/24h, 302 ground claims of 72 rows); a resumable stage is kept when its draft exists in R2 (70 revise rows were re-drafted from ground); the review second path names its model (not kimi-k2.6 after #1429). */ /* 0.18.35 CLAIM-HEARTBEAT-1 (2026-10-18): a stage that returns ok refreshes claimed_at, so the 120-min stale-claim reclaimer no longer re-grounds papers that are still advancing (550 releases/24h, 302 ground claims of 72 rows). */ /* 0.18.34 REVIEW-EMPTY-SECOND-PATH-1 (2026-10-18): an unreadable review takes a second model family in the same tick and, still unreadable, re-runs review directly instead of sending the review-parse placeholder through two no-op patch calls (237 of 264 revise-noop events, 329 hard=1 cycles in 3 days). */ /* 0.18.33 PATCH-FLEX-REGEX-OVERFLOW-1 (2026-10-18, agent_issues 2886): findFlexible caps the flexible matcher at 400 tokens and fails closed on any regex error, so a whole-section find text no longer throws "Invalid regular expression: Stack overflow" out of the slot. */ /* 0.18.32 AI-RATE-FALLBACK-1 (2026-10-18): a 3021/3040/3046 on the primary model after backoff takes one call on another family (glm<->gpt-oss-120b) instead of failing the stage; 3040 no longer misread as a reasoning_effort rejection. */ /* 0.18.31 VERIFY-AUTOCORRECT-1 (2026-10-18): papers fail verify with REAL arithmetic errors (the reconcile/ensemble writer computes a number that does not match its own stated inputs) and the revise loop cannot reliably fix a bare number, so such papers cycle until park. Verify already holds both values — independently computed `computed` and the paper's stated `expected` — so stageVerify now corrects the number deterministically (autoCorrectNumeric) instead of sending it back through a model. Fail-closed: only a stated value found exactly once (verbatim or as an unambiguous bare mantissa in LaTeX/\\times 10^N) is corrected; anything ambiguous is skipped and falls through to revise. Every correction is logged as verify-autocorrect and appended to verification.md. */ /* 0.18.29 VERIFY-CYCLE-CAP-1 (2026-10-17, owner directive "REMEDIATE ALL ISSUES AND FAILURE MODES"): the verify->revise edge reset the review cycle counter to 0 (context={cycles:0,verifyPass:1}) while EVERY other edge preserves it (3716, 3735, 3753) and the review stage is the one that increments it. That single reset made MAX_REVIEW_CYCLES (6) unreachable, so an item that fails verify re-enters revise, resets to cycle 0, and loops until recover_count runs out — measured 2026-10-17: review-unresolved events exist ONLY at cycle 2 (193) and 3 (165), never 4; 96 rerun-route and 278 revise-patch events against ~100 rows; and stage='publish' is EMPTY, which is why 151 complete events produced 0 publications and why the publish quota (24) guarded an empty queue. The edge now preserves the count, so the existing six-cycle cap can terminate an item visibly instead of cycling forever. The gate itself (gates2) is unchanged: this does not let a failing draft through, it lets a draft that cannot pass STOP. */ // 0.18.28-codeagent /* 0.19.0 MATH-LATEX-AUTOFIX-1 (2026-10-19, agent_issues 100027, pillar research): 8 finished papers were parked from 2026-10-12 because gate-math-latex was left to the revise models' search/replace edits, which often did not apply. Plain-text math with one LaTeX spelling (Unicode super/subscripts, bare ^ and _ scripts, bra-kets, the scanner's operators) is now converted deterministically in review, revise and verify (event math-autofix); box drawings and lines holding currency still go to the models. */ /* 0.18.38 TICK-10M-1 + RECLAIM-KEEP-STAGE-1 + IDEA-TO-PUBLISH-METRIC-1 (2026-10-18, owner directive: idea to publication under 100 hours; pillar research): (a) the cron runs every 10 minutes (was 15; 144/day = CRON-MANDATE-1 ceiling, same schedule count); member windows are 10 minutes wide so each errata/reviser job still runs exactly once per slot; the 03:00 sweep window is 10 minutes; (b) a stale reclaim keeps a resumable stage (complete/review/revise/verify), and RESUME-DRAFT-1 at claim falls back to ground when reconciled.md is missing, so a stalled draft is not re-drafted from scratch; (c) idea_to_publish_h_p50_7d (median hours idea_proposals.created_at -> published_at, 7 days) is written to metric_registry on the :00 tick. */ /* 0.18.37 ERRATA-HIGHRISK-ROUTE-1 folded (errata member 1.6.2): a high-risk errata correction draft older than 6 h becomes a remediation research row instead of waiting audited forever; internal_errata closes with its queue row. */ /* 0.18.36 CLAIM-HEARTBEAT-1 + RESUME-DRAFT-1 + REVIEW-SECOND-MODEL-1 (2026-10-18): a stage returning ok refreshes claimed_at so the stale-claim reclaimer stops re-grounding papers still advancing (550 releases/24h, 302 ground claims of 72 rows); a resumable stage is kept when its draft exists in R2 (70 revise rows were re-drafted from ground); the review second path names its model (not kimi-k2.6 after #1429). */ /* 0.18.35 CLAIM-HEARTBEAT-1 (2026-10-18): a stage that returns ok refreshes claimed_at, so the 120-min stale-claim reclaimer no longer re-grounds papers that are still advancing (550 releases/24h, 302 ground claims of 72 rows). */ /* 0.18.34 REVIEW-EMPTY-SECOND-PATH-1 (2026-10-18): an unreadable review takes a second model family in the same tick and, still unreadable, re-runs review directly instead of sending the review-parse placeholder through two no-op patch calls (237 of 264 revise-noop events, 329 hard=1 cycles in 3 days). */ /* 0.18.33 PATCH-FLEX-REGEX-OVERFLOW-1 (2026-10-18, agent_issues 2886): findFlexible caps the flexible matcher at 400 tokens and fails closed on any regex error, so a whole-section find text no longer throws "Invalid regular expression: Stack overflow" out of the slot. */ /* 0.18.32 AI-RATE-FALLBACK-1 (2026-10-18): a 3021/3040/3046 on the primary model after backoff takes one call on another family (glm<->gpt-oss-120b) instead of failing the stage; 3040 no longer misread as a reasoning_effort rejection. */ /* 0.18.31 VERIFY-AUTOCORRECT-1 (2026-10-18): papers fail verify with REAL arithmetic errors (the reconcile/ensemble writer computes a number that does not match its own stated inputs) and the revise loop cannot reliably fix a bare number, so such papers cycle until park. Verify already holds both values — independently computed `computed` and the paper's stated `expected` — so stageVerify now corrects the number deterministically (autoCorrectNumeric) instead of sending it back through a model. Fail-closed: only a stated value found exactly once (verbatim or as an unambiguous bare mantissa in LaTeX/\\times 10^N) is corrected; anything ambiguous is skipped and falls through to revise. Every correction is logged as verify-autocorrect and appended to verification.md. */ /* 0.18.29 VERIFY-CYCLE-CAP-1 (2026-10-17, owner directive "REMEDIATE ALL ISSUES AND FAILURE MODES"): the verify->revise edge reset the review cycle counter to 0 (context={cycles:0,verifyPass:1}) while EVERY other edge preserves it (3716, 3735, 3753) and the review stage is the one that increments it. That single reset made MAX_REVIEW_CYCLES (6) unreachable, so an item that fails verify re-enters revise, resets to cycle 0, and loops until recover_count runs out — measured 2026-10-17: review-unresolved events exist ONLY at cycle 2 (193) and 3 (165), never 4; 96 rerun-route and 278 revise-patch events against ~100 rows; and stage='publish' is EMPTY, which is why 151 complete events produced 0 publications and why the publish quota (24) guarded an empty queue. The edge now preserves the count, so the existing six-cycle cap can terminate an item visibly instead of cycling forever. The gate itself (gates2) is unchanged: this does not let a failing draft through, it lets a draft that cannot pass STOP. */ // 0.18.28-codeagent
 // WORKERS-AI-ATTRIBUTION-1 (2026-10-01, #1681): per-worker Workers AI attribution. Returns a shallow env copy whose AI
 // binding records each .run() (calls, errors, ms, tokens, neurons) into qnfo-audit ai_call_counters (purpose 'binding').
 // Neurons = usage tokens x Cloudflare's published per-model rates (neurons per M tokens). Fail-soft; env is never mutated.
@@ -2060,6 +2060,120 @@ function slopScan(md, baseline) {
 function mathLatexFix(scan) {
   return { id: "gate-math-latex", severity: "HARD", claim: scan.count + " plain-text math tokens outside $...$", reason: "MATH-LATEX-2: math written as Unicode super/subscripts, Unicode operators or bare ^ and _ is not typeset on papers.qnfo.org. Examples: " + scan.samples.map(function(s) { return "\u00ab" + s + "\u00bb"; }).join(" "), fix: "Rewrite each such expression in LaTeX inside $...$ (inline) or $$...$$ (display), for example 10\u207b\u2074 -> $10^{-4}$, T\u2081 -> $T_1$, \u2248 -> $\\approx$, d^3 -> $d^3$. Change only the notation, not the values." };
 }
+// MATH-LATEX-AUTOFIX-1 (agent_issues 100027, 2026-10-19, pillar research): 8 finished papers parked since 2026-10-12 because
+// gate-math-latex is decided deterministically (pseudoMathScan) but its fix was left to the revise models' search/replace
+// edits, whose excerpts often did not match the paper, so no edit applied and the row was re-drafted until PARKED-POISON-1.
+// The plain-text forms the scanner counts have one correct LaTeX spelling each, so they are converted here with no model call:
+// Unicode super/subscript runs ($10^{-4}$, $T_{1}$, $\mathrm{cm}^{-1}$), bare ^ and _ scripts (d^3 -> $d^3$), bra-kets
+// (<a|b> -> $\langle a|b\rangle$) and the scanner's operators (<= -> $\le$), an operator taking a number or a single symbol
+// on each side into its span. It skips exactly what pseudoMathScan skips (fences, inline code, existing math, links, URLs,
+// DOIs, arXiv ids, the References section), leaves any stretch that already holds a bare "$" (currency would pair with a new
+// delimiter in MathJax) and box-drawing lines to the models, merges touching spans so "$a$$b$" is never emitted, and is
+// idempotent. A row whose scan is under PSEUDO_MATH_MAX afterwards no longer carries the finding.
+var MA_SUP = { "⁰": "0", "¹": "1", "²": "2", "³": "3", "⁴": "4", "⁵": "5", "⁶": "6", "⁷": "7", "⁸": "8", "⁹": "9", "⁺": "+", "⁻": "-", "⁼": "=", "⁽": "(", "⁾": ")", "ⁱ": "i", "ⁿ": "n" };
+var MA_SUB = { "₀": "0", "₁": "1", "₂": "2", "₃": "3", "₄": "4", "₅": "5", "₆": "6", "₇": "7", "₈": "8", "₉": "9", "₊": "+", "₋": "-", "₌": "=", "₍": "(", "₎": ")", "ₐ": "a", "ₑ": "e", "ₒ": "o", "ₓ": "x", "ₔ": "\\vartheta", "ₕ": "h", "ₖ": "k", "ₗ": "l", "ₘ": "m", "ₙ": "n", "ₚ": "p", "ₛ": "s", "ₜ": "t", "ᵢ": "i", "ᵣ": "r", "ᵤ": "u", "ᵥ": "v", "ᵦ": "\\beta", "ᵧ": "\\gamma", "ᵨ": "\\rho", "ᵩ": "\\varphi", "ᵪ": "\\chi", "ⱼ": "j" };
+var MA_OPS = { "≤": "\\le", "≥": "\\ge", "≈": "\\approx", "≠": "\\neq", "≪": "\\ll", "≫": "\\gg", "∈": "\\in", "∉": "\\notin", "⊗": "\\otimes", "⊕": "\\oplus", "∑": "\\sum", "∏": "\\prod", "√": "\\sqrt", "∫": "\\int", "∂": "\\partial", "∇": "\\nabla", "⟨": "\\langle", "⟩": "\\rangle", "∞": "\\infty", "±": "\\pm", "∓": "\\mp", "∝": "\\propto", "≡": "\\equiv", "⊂": "\\subset", "⊆": "\\subseteq", "∪": "\\cup", "∩": "\\cap" };
+var MA_SUP_CH = "⁰¹²³⁴-ⁿ";
+var MA_SUB_CH = "₀-ₜᵢ-ᵪⱼ";
+// Protected stretches, in the scanner's order: fences, inline code, $$..$$, \[..\], \(..\), $..$, link targets, URLs/DOIs/arXiv.
+var MA_PROTECT_RE = /^(```|~~~)[^\n]*\n[\s\S]*?^\1[^\n]*$|`[^`\n]*`|\$\$[\s\S]*?\$\$|\\\[[\s\S]*?\\\]|\\\([\s\S]*?\\\)|(?<!\\)\$[^$\n]+?(?<!\\)\$|\]\([^)\s]*\)|https?:\/\/\S+|\b10\.\d{4,}\/\S+|\barXiv:\s*\S+/gim;
+var MA_MARK = "\u0001";
+function maScript(run, map) {
+  let out = "";
+  for (const ch of run) out += map[ch] != null ? map[ch] : ch;
+  return out.replace(/\\[a-z]+(?=[A-Za-z0-9])/g, function(m) { return m + " "; });
+}
+function maBase(b) {
+  if (!b) return "";
+  if (/^[A-Za-z]{2,}$/.test(b)) return "\\mathrm{" + b + "}";
+  return b;
+}
+function maWrap(tex) { return MA_MARK + tex + MA_MARK; }
+// Converts one unprotected stretch; returns it unchanged when it holds a bare "$".
+function maPlain(s) {
+  if (s.indexOf("$") >= 0) return s;
+  let t = s;
+  // bra-kets first, so their inner bar and letters stay one span
+  // (|<a|b>| keeps its absolute-value bars inside the span)
+  t = t.replace(/(\|?)⟨([^⟨⟩\n]{1,40})⟩(\|?)/g, function(m, l, inner, r) {
+    const bars = !!(l && r);
+    return (bars ? "" : l) + maWrap((bars ? "|" : "") + "\\langle " + inner.replace(/\s+/g, " ").trim() + "\\rangle" + (bars ? "|" : "")) + (bars ? "" : r);
+  });
+  // a base followed by super/subscript runs (10⁻⁴, T₁, cm⁻¹, x₁²); a run right after a span joins it
+  const scriptRe = new RegExp("(?:(?<![A-Za-z0-9\\u0391-\\u03c9\\u0001])(\\d+(?:\\.\\d+)?|[A-Za-z\\u0391-\\u03c9]+))?((?:[" + MA_SUP_CH + "]+|[" + MA_SUB_CH + "]+)+)", "g");
+  t = t.replace(scriptRe, function(m, base, runs) {
+    let tex = maBase(base || "");
+    const parts = runs.match(new RegExp("[" + MA_SUP_CH + "]+|[" + MA_SUB_CH + "]+", "g")) || [];
+    for (const p of parts) tex += (MA_SUP[p[0]] != null ? "^{" + maScript(p, MA_SUP) : "_{" + maScript(p, MA_SUB)) + "}";
+    return maWrap(tex);
+  });
+  // bare ^ and _ scripts (the scanner's PM_SCRIPT_RE shapes), a Unicode minus becomes "-" and ^(x) becomes ^{x}
+  t = t.replace(/(?<![A-Za-z0-9_\\.\u0001])(?:\d+(?:\.\d+)?|[A-Za-zΑ-ω)\]])\^(?:\{[^{}\n]{1,40}\}|\([^()\n]{1,30}\)|[-−]?[A-Za-z0-9]{1,6})|(?<![A-Za-z0-9_\\\u0001])[A-Za-zΑ-ω]_(?:\{[^{}\n]{1,40}\}|[A-Za-z0-9]{1,4})(?![A-Za-z0-9_])/g, function(m) {
+    return maWrap(m.replace(/−/g, "-").replace(/\^\(([^()\n]{1,30})\)/, "^{$1}"));
+  });
+  // operators, each taking a number or one symbol on either side (x ≤ 5 -> $x \le 5$; "values ≤ threshold" keeps its words)
+  const opnd = "(?:\\d+(?:[.,]\\d+)?|[A-Za-z\\u0391-\\u03c9])";
+  const opRe = new RegExp("(?:(?<![A-Za-z0-9_\\u0001])(" + opnd + ")[ \\u00a0]?)?([" + Object.keys(MA_OPS).join("") + "])(?:[ \\u00a0]?(" + opnd + ")(?![A-Za-z0-9_]))?", "g");
+  t = t.replace(opRe, function(m, l, op, r) { return maWrap((l ? l + " " : "") + maOp(op, r)); });
+  // merge spans that touch or are separated only by spaces, then emit $..$
+  t = t.replace(new RegExp(MA_MARK + "([ \\u00a0]*)" + MA_MARK, "g"), function(m, sp) { return sp ? " " : ""; });
+  return t.replace(new RegExp(MA_MARK + "([^" + MA_MARK + "]*)" + MA_MARK, "g"), function(m, tex) { return "$" + tex.trim() + "$"; });
+}
+function maOp(op, r) {
+  const cmd = MA_OPS[op];
+  if (op === "√") return r ? "\\sqrt{" + r + "}" : cmd + "{}";
+  return r ? cmd + " " + r : cmd;
+}
+function mathLatexAutofix(md) {
+  const src = String(md || "");
+  // The References section is copied verbatim from the bibliography (the scanner skips it too).
+  let body = src, refs = "";
+  const hm = /^#{1,3}[ \t]*(?:\d+\.?[ \t]*)?(?:References|Bibliography)\b.*$/im.exec(src);
+  if (hm) {
+    const after = src.slice(hm.index + hm[0].length);
+    const nx = after.search(/^#{1,2}\s/m);
+    body = src.slice(0, hm.index);
+    refs = src.slice(hm.index, nx >= 0 ? hm.index + hm[0].length + nx : src.length);
+    const rest = nx >= 0 ? after.slice(nx) : "";
+    if (rest) return mathLatexAutofix(body) + refs + mathLatexAutofix(rest);
+  }
+  let out = "", last = 0, m;
+  MA_PROTECT_RE.lastIndex = 0;
+  const pieces = [];
+  while ((m = MA_PROTECT_RE.exec(body)) !== null) {
+    if (m[0] === "") { MA_PROTECT_RE.lastIndex++; continue; }
+    pieces.push({ text: body.slice(last, m.index), plain: true }, { text: m[0], plain: false });
+    last = m.index + m[0].length;
+  }
+  pieces.push({ text: body.slice(last), plain: true });
+  for (let i = 0; i < pieces.length; i++) {
+    const pc = pieces[i];
+    if (!pc.plain) { out += pc.text; continue; }
+    let conv = maPlainLines(pc.text);
+    // A new span touching an inline $..$ is merged into it: "$x$" + "$^{2}$" would read as the display delimiter "$$".
+    const prev = pieces[i - 1], next = pieces[i + 1];
+    if (prev && /^\$[^$]/.test(prev.text) && conv.startsWith("$") && out.endsWith("$")) { out = out.slice(0, -1); conv = conv.slice(1); }
+    if (next && /^\$[^$]/.test(next.text) && conv.endsWith("$") && conv !== pc.text) { conv = conv.slice(0, -1); next.text = next.text.slice(1); }
+    out += conv;
+  }
+  return out + refs;
+}
+// Box-drawing lines are left as they are (a diagram belongs in a fence; that is a judgement for the models).
+function maPlainLines(s) {
+  return s.split("\n").map(function(l) { return /[─-╿]/.test(l) ? l : maPlain(l); }).join("\n");
+}
+// Runs the autofix on a stored paper: when it changes the text, the new text is written back and the before/after scan counts
+// are logged (event math-autofix). Returns the paper to use from here on.
+async function mathAutofixStored(env, row, paper, stage) {
+  const before = pseudoMathScan(paper).count;
+  if (before === 0) return paper;
+  const fixed = mathLatexAutofix(paper);
+  if (fixed === paper) return paper;
+  const after = pseudoMathScan(fixed).count;
+  await r2Put(env, String(row.id) + "/reconciled.md", fixed);
+  await logEvent(env, "math-autofix", "row=" + row.id + " stage=" + stage + " pseudo_math " + before + "->" + after, after > PSEUDO_MATH_MAX ? "warn" : "ok");
+  return fixed;
+}
 var RESEARCH_SHARED_PREAMBLE = [
   "### TASK WRITER",
   "You are one of three independent research writers producing a full-length preprint for open publication. All three writers receive the SAME input block; write independently and do not imitate a template beyond the required structure.",
@@ -3932,7 +4046,8 @@ async function triageHardFindings(env, row, paper, hard, cycle, cap) {
 __name(triageHardFindings, "triageHardFindings");
 async function stageReview(env, row) {
   __attrStageSet(env, "review");
-  const paper = await r2Get(env, String(row.id) + "/reconciled.md");
+  // MATH-LATEX-AUTOFIX-1: plain-text math is converted before the review reads the paper, so it never becomes a finding.
+  const paper = await mathAutofixStored(env, row, await r2Get(env, String(row.id) + "/reconciled.md"), "review");
   const grounding = await r2Get(env, String(row.id) + "/grounding.md");
   let ctx = { cycles: 0 };
   try {
@@ -4064,8 +4179,27 @@ __name222(stageReview, "stageReview");
 __name2222(stageReview, "stageReview");
 async function stageRevise(env, row) {
   __attrStageSet(env, "revise");
-  const paper = await r2Get(env, String(row.id) + "/reconciled.md");
-  const fixes = await r2Get(env, String(row.id) + "/fixes.json");
+  // MATH-LATEX-AUTOFIX-1: a math finding is resolved here without a model edit; when it was the only HARD fix, the paper goes
+  // back to review (as an applied patch does) instead of asking the models for an edit they could not place.
+  const paper = await mathAutofixStored(env, row, await r2Get(env, String(row.id) + "/reconciled.md"), "revise");
+  let fixes = await r2Get(env, String(row.id) + "/fixes.json");
+  if (pseudoMathScan(paper).count <= PSEUDO_MATH_MAX) {
+    try {
+      const _mj = JSON.parse(fixes || "[]");
+      const _list = Array.isArray(_mj) ? _mj : _mj && Array.isArray(_mj.hard) ? _mj.hard : null;
+      if (_list && _list.some(function(f) { return f && f.id === "gate-math-latex"; })) {
+        const _rest = _list.filter(function(f) { return !(f && f.id === "gate-math-latex"); });
+        if (!_rest.length && paper.length >= 1e4) {
+          let _mc = {};
+          try { _mc = JSON.parse(row.context || "{}"); } catch (eMC) { _mc = {}; }
+          await env.QNFO_AUDIT.prepare("UPDATE research_queue SET stage='review', context=? WHERE id=?").bind(JSON.stringify({ cycles: (_mc.cycles || 0) + 1, patch: 0, mathAutofix: 1, verifyPass: _mc.verifyPass || 0 }).slice(0, 6e3), row.id).run();
+          return { ok: true, stage: "revise->review", mathAutofix: true };
+        }
+        fixes = JSON.stringify(Array.isArray(_mj) ? _rest : Object.assign({}, _mj, { hard: _rest }));
+      }
+    } catch (eMF) {
+    }
+  }
   let ctx = { cycles: 0 };
   try {
     ctx = JSON.parse(row.context || "{}");
@@ -4573,6 +4707,8 @@ async function stageVerify(env, row) {
     }
   } catch (eRR) {
   }
+  // MATH-LATEX-AUTOFIX-1: the last chance before mathOnlyFailure can park a finished paper for plain-text math.
+  paper = await mathAutofixStored(env, row, paper, "verify");
   const gateOpts = { bibCount: bibCountFromGrounding(await r2Get(env, String(row.id) + "/grounding.md")), minChars: row.source === "remediation" ? MIN_PAPER_CHARS : PUBLISH_FLOOR_CHARS, structure: true };
   let ctx = {};
   try {
@@ -28705,6 +28841,7 @@ export {
   pseudoMathScan,
   reviewBibliography,
   slopScan,
+  mathLatexAutofix,
   citationGateStep,
   corpusWidth,
   citationRowsFromBib,
