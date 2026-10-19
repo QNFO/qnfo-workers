@@ -5,7 +5,7 @@ var __name = (target, value) => __defProp(target, "name", { value, configurable:
 var __defProp2 = Object.defineProperty;
 var __name2 = /* @__PURE__ */ __name((target, value) => __defProp2(target, "name", { value, configurable: true }), "__name");
 var NL = String.fromCharCode(10);
-var VERSION = "1.6.0-cron-grid-1"; /* 1.6.0 CRON-GRID-1 (owner directive 2026-10-19, pillar autonomy): one trigger, 0,30 every hour; the 06:00 digest (retry false: it mails the owner) and the 06:30 triage (retried up to 3 times) run on the grid fire of their slot, and every run is a cron_fire_log row CRON-WATCH-1 reads. */ /* 1.5.0 CRON-ONLY-HEARTBEAT-1 (2026-10-13, agent_issues 2397, pillar autonomy): scheduled() upserts fleet_heartbeat when the run ends (ok 0 when the work threw or the triage cron logged an error); the write is try/caught and never fails the cron. */ /* 1.4.1-activity-store: 1.4.1 (2026-10-12): merged with main 1.3.11-codeagent. The activity is stored in this worker's own vector index (the result that decides done or failed); main's forward to personal-api /activity is kept as a second, best-effort copy whose failure is logged and never fails the intent (the route answered 404 on 2026-10-12). */ /* 1.4.0 AUTOAUDIT-DEAD-CALLERS-1 (2026-10-12, agent_issues 2302, pillar personal): an activity intent is stored in this worker's own vector index and ends done or failed with the error logged (it called a retired worker through a removed binding and the empty catch dropped it); GET /personal/search serves the personal index to qnfo-tools-mcp. */ /* 1.3.10 MODEL-ID-AUDIT-1 (2026-10-11): the classifier asked qnfo-ai for the bare id glm-5.2, which its MODELS table does not route (it fell back to deepseek-v4-flash while the stats recorded glm-5.2). It now asks glm-5.3-flash with deepseek-v4-flash as the second leg. */ /* 1.3.9 NO-TOPIC-HARDCODE-1 (owner directive 2026-10-10): the triage prompt names no program or field; cluster_key tags come from the tags already in research_candidates. */
+var VERSION = "1.6.1-codeagent"; /* 1.6.0 CRON-GRID-1 (owner directive 2026-10-19, pillar autonomy): one trigger, 0,30 every hour; the 06:00 digest (retry false: it mails the owner) and the 06:30 triage (retried up to 3 times) run on the grid fire of their slot, and every run is a cron_fire_log row CRON-WATCH-1 reads. */ /* 1.5.0 CRON-ONLY-HEARTBEAT-1 (2026-10-13, agent_issues 2397, pillar autonomy): scheduled() upserts fleet_heartbeat when the run ends (ok 0 when the work threw or the triage cron logged an error); the write is try/caught and never fails the cron. */ /* 1.4.1-activity-store: 1.4.1 (2026-10-12): merged with main 1.3.11-codeagent. The activity is stored in this worker's own vector index (the result that decides done or failed); main's forward to personal-api /activity is kept as a second, best-effort copy whose failure is logged and never fails the intent (the route answered 404 on 2026-10-12). */ /* 1.4.0 AUTOAUDIT-DEAD-CALLERS-1 (2026-10-12, agent_issues 2302, pillar personal): an activity intent is stored in this worker's own vector index and ends done or failed with the error logged (it called a retired worker through a removed binding and the empty catch dropped it); GET /personal/search serves the personal index to qnfo-tools-mcp. */ /* 1.3.10 MODEL-ID-AUDIT-1 (2026-10-11): the classifier asked qnfo-ai for the bare id glm-5.2, which its MODELS table does not route (it fell back to deepseek-v4-flash while the stats recorded glm-5.2). It now asks glm-5.3-flash with deepseek-v4-flash as the second leg. */ /* 1.3.9 NO-TOPIC-HARDCODE-1 (owner directive 2026-10-10): the triage prompt names no program or field; cluster_key tags come from the tags already in research_candidates. */
 var ROUTER = "https://qnfo-ai.q08.workers.dev";
 var AGENT_ORCH = "https://qnfo-agent-orchestrator.q08.workers.dev";
 var PROMOTE_THRESHOLD = 60;
@@ -471,7 +471,7 @@ __name(triageIntent, "triageIntent");
 __name2(triageIntent, "triageIntent");
 async function runBatchTriage(env) {
   await ensureSchema(env);
-  const rows = await env.D1.prepare("SELECT * FROM intents WHERE status='pending' AND type='research' ORDER BY created_at DESC LIMIT 40").all();
+  const rows = await env.D1.prepare("SELECT * FROM intents WHERE status='pending' AND (type='research' OR domain='research') ORDER BY created_at DESC LIMIT 40").all();
   const out = [];
   for (const row of rows.results) out.push(await triageIntent(env, row));
   const counts = { scanned: out.length, promoted: 0, rejected: 0, deduped: 0, below: 0, deferred: 0, skipped: 0, errors: 0 };
@@ -744,7 +744,7 @@ var worker_default = {
       const device = url.searchParams.get("device") || body.device || "unknown";
       const intent = await handleIntent(env, body, source, device);
       if (intent.error) return new Response(JSON.stringify(intent), { status: 400, headers: { "Content-Type": "application/json", ...cors } });
-      if (intent.type === "research" && ctx && ctx.waitUntil) {
+      if ((intent.type === "research" || intent.domain === "research") && ctx && ctx.waitUntil) {
         ctx.waitUntil((async () => {
           await ensureSchema(env);
           await triageIntent(env, intent);
@@ -806,7 +806,7 @@ var worker_default = {
     }
     if (path === "/triage/stats" && method === "GET") {
       const rc = await env.D1.prepare("SELECT status, COUNT(*) AS n FROM research_candidates GROUP BY status").all();
-      const ic = await env.D1.prepare("SELECT status, COUNT(*) AS n FROM intents WHERE type='research' GROUP BY status").all();
+      const ic = await env.D1.prepare("SELECT status, COUNT(*) AS n FROM intents WHERE type='research' OR domain='research' GROUP BY status").all();
       return new Response(JSON.stringify({ candidates: rc.results, research_intents: ic.results, promote_threshold: PROMOTE_THRESHOLD }), { headers: { "Content-Type": "application/json", ...cors } });
     }
     if (path === "/triage/dispatch" && method === "POST") {
