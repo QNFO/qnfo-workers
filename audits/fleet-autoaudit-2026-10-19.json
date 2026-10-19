@@ -1,5 +1,5 @@
 {
-  "audited_at": "2026-10-19 22:20:59",
+  "audited_at": "2026-10-19 22:52:23",
   "d1_write_failures": [],
   "d1_writes_ok": 120,
   "guard": {
@@ -580,7 +580,7 @@
       },
       {
         "dir": "qnfo-code-orchestrator",
-        "version": "0.24.0-intake-infra-fail",
+        "version": "0.24.1-noop-copy-goal",
         "worker": "qnfo-code-orchestrator"
       },
       {
@@ -605,12 +605,12 @@
       },
       {
         "dir": "qnfo-fleet-control",
-        "version": "0.40.3-live-check-grace",
+        "version": "0.41.0-ensure-live-path",
         "worker": "qnfo-fleet-control"
       },
       {
         "dir": "qnfo-fleet-dashboard",
-        "version": "1.51.13-rum-window",
+        "version": "1.51.15-reader-report-watchmaker",
         "worker": "qnfo-fleet-dashboard"
       },
       {
@@ -620,7 +620,7 @@
       },
       {
         "dir": "qnfo-github-steward",
-        "version": "0.7.2-codeagent",
+        "version": "0.7.3-workflow-runs-object",
         "worker": "qnfo-github-steward"
       },
       {
@@ -640,7 +640,7 @@
       },
       {
         "dir": "qnfo-lifecycle",
-        "version": "1.13.0-model-health-sweep",
+        "version": "1.13.1-owner-reply-body-text",
         "worker": "qnfo-lifecycle"
       },
       {
@@ -650,7 +650,7 @@
       },
       {
         "dir": "qnfo-model-eval",
-        "version": "1.6.1-health-contract-1",
+        "version": "1.7.0-typed-input-model",
         "worker": "qnfo-model-eval"
       },
       {
@@ -1183,9 +1183,9 @@
       "worker": "qnfo-code-agent"
     },
     "qnfo-code-orchestrator": {
-      "before": "0.24.0-intake-infra-fail",
+      "before": "0.24.1-noop-copy-goal",
       "http": 200,
-      "live": "0.24.0-intake-infra-fail",
+      "live": "0.24.1-noop-copy-goal",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-code-orchestrator"
@@ -1313,17 +1313,17 @@
       "worker": "qnfo-fleet-calibrator"
     },
     "qnfo-fleet-control": {
-      "before": "0.40.3-live-check-grace",
+      "before": "0.41.0-ensure-live-path",
       "http": 200,
-      "live": "0.40.3-live-check-grace",
+      "live": "0.41.0-ensure-live-path",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-fleet-control"
     },
     "qnfo-fleet-dashboard": {
-      "before": "1.51.13-rum-window",
+      "before": "1.51.15-reader-report-watchmaker",
       "http": 200,
-      "live": "1.51.13-rum-window",
+      "live": "1.51.15-reader-report-watchmaker",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-fleet-dashboard"
@@ -1355,9 +1355,9 @@
       "worker": "qnfo-gateway"
     },
     "qnfo-github-steward": {
-      "before": "0.7.2-codeagent",
+      "before": "0.7.3-workflow-runs-object",
       "http": 200,
-      "live": "0.7.2-codeagent",
+      "live": "0.7.3-workflow-runs-object",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-github-steward"
@@ -1432,9 +1432,9 @@
       "worker": "qnfo-kaizen"
     },
     "qnfo-lifecycle": {
-      "before": "1.13.0-model-health-sweep",
+      "before": "1.13.1-owner-reply-body-text",
       "http": 200,
-      "live": "1.13.0-model-health-sweep",
+      "live": "1.13.1-owner-reply-body-text",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-lifecycle"
@@ -1457,9 +1457,9 @@
       "worker": "qnfo-memory-mcp-legacy-dup"
     },
     "qnfo-model-eval": {
-      "before": "1.6.1-health-contract-1",
+      "before": "1.7.0-typed-input-model",
       "http": 200,
-      "live": "1.6.1-health-contract-1",
+      "live": "1.7.0-typed-input-model",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-model-eval"
