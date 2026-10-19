@@ -20,7 +20,7 @@ let fail = 0, pass = 0;
 const ok = (c, m, d) => { if (c) pass++; else { fail++; console.error("FAIL", m, d === undefined ? "" : JSON.stringify(d)); } };
 
 const db = new DatabaseSync(":memory:");
-db.exec("CREATE TABLE cloud_ops_events (id TEXT PRIMARY KEY, ts TEXT, kind TEXT, text TEXT, meta TEXT, job TEXT, status TEXT); CREATE TABLE ops_config (key TEXT PRIMARY KEY, value TEXT, updated_at TEXT); CREATE TABLE reach_signals (date TEXT NOT NULL, source TEXT NOT NULL, channel TEXT NOT NULL, entity_type TEXT NOT NULL, entity_id TEXT NOT NULL, metric TEXT NOT NULL, value REAL, quality TEXT, collected_at TEXT DEFAULT (datetime('now')), PRIMARY KEY (date, source, channel, entity_type, entity_id, metric));");
+db.exec("CREATE TABLE cloud_ops_events (id TEXT PRIMARY KEY, ts TEXT, kind TEXT, text TEXT, meta TEXT, job TEXT, status TEXT); CREATE TABLE ops_config (key TEXT PRIMARY KEY, value TEXT, note TEXT, updated_at TEXT); CREATE TABLE reach_signals (date TEXT NOT NULL, source TEXT NOT NULL, channel TEXT NOT NULL, entity_type TEXT NOT NULL, entity_id TEXT NOT NULL, metric TEXT NOT NULL, value REAL, quality TEXT, collected_at TEXT DEFAULT (datetime('now')), PRIMARY KEY (date, source, channel, entity_type, entity_id, metric));");
 const d1 = { prepare(sql) { const st = db.prepare(sql); let args = []; return { bind(...a) { args = a; return this; }, async all() { return { results: st.all(...args) }; }, async run() { st.run(...args); return { success: true }; }, async first() { return st.get(...args) || null; } }; } };
 
 const { publicKey, privateKey } = await webcrypto.subtle.generateKey({ name: "RSASSA-PKCS1-v1_5", modulusLength: 2048, publicExponent: new Uint8Array([1, 0, 1]), hash: "SHA-256" }, true, ["sign", "verify"]);
@@ -30,7 +30,7 @@ const pem = "-----BEGIN PRIVATE KEY-----\n" + pkcs8 + "\n-----END PRIVATE KEY---
 const pubPem = "-----BEGIN PUBLIC KEY-----\n" + spki + "\n-----END PUBLIC KEY-----\n";
 const SA = JSON.stringify({ type: "service_account", client_email: "fleet@qnfo.iam.gserviceaccount.com", private_key: pem, token_uri: "https://oauth2.googleapis.com/token" });
 
-let mode = "ok"; const calls = [];
+let mode = "ok", adminMode = "empty"; const calls = [];
 const fetchMock = async (url, init) => {
   calls.push({ url: String(url), body: init && init.body });
   if (String(url).includes("oauth2.googleapis.com")) {
@@ -42,6 +42,12 @@ const fetchMock = async (url, init) => {
     ok(good, "the JWT signature verifies with the service account's public key");
     ok(claim.scope === "https://www.googleapis.com/auth/analytics.readonly" && claim.iss === "fleet@qnfo.iam.gserviceaccount.com" && claim.exp - claim.iat === 3600, "the JWT claims read-only scope, issuer and a 1h lifetime", claim);
     return new Response(JSON.stringify({ access_token: "ya29.test" }), { status: 200 });
+  }
+  if (String(url).includes("analyticsadmin.googleapis.com")) {
+    if (adminMode === "403") return new Response(JSON.stringify({ error: { status: "PERMISSION_DENIED" } }), { status: 403 });
+    if (/accountSummaries/.test(url)) return new Response(JSON.stringify({ accountSummaries: adminMode === "found" ? [{ propertySummaries: [{ property: "properties/111" }, { property: "properties/222" }] }] : [] }), { status: 200 });
+    const id = (/properties\/(\d+)\/dataStreams/.exec(url) || [])[1];
+    return new Response(JSON.stringify({ dataStreams: [{ webStreamData: { measurementId: id === "222" ? "G-LV7RHRVW6R" : "G-OTHER" } }] }), { status: 200 });
   }
   if (String(url).includes("analyticsdata.googleapis.com")) {
     if (mode === "403") return new Response(JSON.stringify({ error: { status: "PERMISSION_DENIED" } }), { status: 403 });
@@ -68,6 +74,7 @@ ok(db.prepare("SELECT status FROM cloud_ops_events WHERE id='ga4-ingest-2026-10-
 db.exec("DELETE FROM cloud_ops_events");
 r = await G.ga4Ingest({ AUDIT: d1, GA4_SA_KEY: SA }, { nowMs: now });
 ok(!r.error && r.written === 6 && r.property === "486253526", "a granted key writes 4 host rows and 2 source rows", r);
+ok(r.property_source === "default" && /no property the service account can read carries G-LV7RHRVW6R \(0 scanned\); reading the default 486253526/.test(r.property_warning || ""), "no accessible property carries the tag: warning, default read", r);
 const rows = db.prepare("SELECT entity_type, entity_id, metric, value, quality FROM reach_signals WHERE source='ga4' ORDER BY entity_type, metric").all();
 ok(rows.some((x) => x.entity_id === "qnfo.org" && x.metric === "screenPageViews" && x.value === 120 && x.quality === "human"), "page views per host", rows);
 ok(!rows.some((x) => x.entity_id === "(not set)"), "a (not set) dimension is skipped");
@@ -78,6 +85,8 @@ const n0 = calls.length;
 r = await G.ga4Ingest({ AUDIT: d1, GA4_SA_KEY: SA }, { nowMs: now });
 ok(r.throttled === "2026-10-17" && calls.length === n0, "an ok day is not read twice", r);
 
+// GA4-PROPERTY-MISMATCH-1: no pinned property -> the Admin API is asked; none carries the tag -> the default is read and the ledger says so.
+ok(/\(no property the service account can read/.test(db.prepare("SELECT text FROM cloud_ops_events WHERE id='ga4-ingest-2026-10-17'").get().text), "the ledger row text carries the property warning");
 db.exec("INSERT INTO ops_config (key, value) VALUES ('ga4_property_id', '999')");
 mode = "403";
 r = await G.ga4Ingest({ AUDIT: d1, GA4_SA_KEY: SA }, { nowMs: now + 864e5 });
@@ -89,6 +98,23 @@ ok(r.attempts === 3 && r.error, "the third attempt still runs", r);
 r = await G.ga4Ingest({ AUDIT: d1, GA4_SA_KEY: SA }, { nowMs: now + 864e5 });
 ok(r.gave_up === "2026-10-18", "after 3 failed attempts the day is given up", r);
 ok(G.ga4ParseKey("not json") === null && G.ga4ParseKey(SA).email === "fleet@qnfo.iam.gserviceaccount.com", "the key parser accepts only a service-account JSON key");
+
+
+// discovery finds the property by the measurement id of its web data stream, saves it, and the next run is pinned (no Admin call)
+db.exec("DELETE FROM ops_config; DELETE FROM cloud_ops_events; DELETE FROM reach_signals");
+mode = "ok"; adminMode = "found";
+let c0 = calls.length;
+r = await G.ga4Ingest({ AUDIT: d1, GA4_SA_KEY: SA }, { nowMs: now + 3 * 864e5 });
+ok(!r.error && r.property === "222" && r.property_source === "discovered" && r.scanned === 2, "the property whose stream carries G-LV7RHRVW6R is found among the readable ones", r);
+ok(db.prepare("SELECT value FROM ops_config WHERE key='ga4_property_id'").get().value === "222", "the discovered property is saved as ops_config ga4_property_id");
+ok(calls.slice(c0).some((c) => /properties\/222:runReport/.test(c.url)), "the report is read from the discovered property");
+c0 = calls.length;
+r = await G.ga4Ingest({ AUDIT: d1, GA4_SA_KEY: SA }, { nowMs: now + 4 * 864e5 });
+ok(r.property === "222" && !calls.slice(c0).some((c) => /analyticsadmin/.test(c.url)), "the next day is pinned: no Admin API call", r);
+db.exec("DELETE FROM ops_config; DELETE FROM cloud_ops_events");
+adminMode = "403";
+r = await G.ga4Ingest({ AUDIT: d1, GA4_SA_KEY: SA }, { nowMs: now + 5 * 864e5 });
+ok(!r.error && /property discovery failed: accountSummaries 403/.test(r.property_warning || "") && r.property === "486253526", "a refused Admin call is a warning, never a stop: the default is read", r);
 
 console.log((fail ? "FAIL" : "PASS") + "  " + pass + " passed, " + fail + " failed");
 process.exit(fail ? 1 : 0);
