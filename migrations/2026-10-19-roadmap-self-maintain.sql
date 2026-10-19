@@ -12,7 +12,7 @@
 --   So issues, projects and the GitHub mirror are populated. What is not maintained is the TOP of the hierarchy:
 --
 -- WHAT WAS MISSING (same read)
---   1. Goals never close. 61 goals are 'adopted', the newest change 2026-10-14. 13 carry a machine-checkable DoD
+--   1. Goals never close. 61 goals are 'adopted', the newest change 2026-10-14. 14 carry a machine-checkable DoD
 --      ("Done when this query reads ok or 1: SELECT ... AS expected ..." or a code-read spec) and nothing runs it, so the
 --      55 GL- roadmap rows can only ever read 'open'. The DoD queries were written to be run; none ever was.
 --   2. Programs have no objective of their own: QNFO.REACH and QNFO.PERSONAL hold 0 adopted goals, so the program layer
@@ -55,7 +55,7 @@
 --   Stop without a deploy: UPDATE fleet_crons SET enabled = 0 WHERE name = 'roadmap-self-maintain-hourly'.
 --
 -- Verify after apply:
---   SELECT COUNT(*) FROM remediation_contracts WHERE module = 'goal-dod-v1';                 -- >= 13 (+5 program objectives)
+--   SELECT COUNT(*) FROM remediation_contracts WHERE module = 'goal-dod-v1';                 -- 19 (14 checkable goals + 5 program objectives)
 --   SELECT status, COUNT(*) FROM fleet_runs WHERE task_id = 'roadmap-self-maintain' GROUP BY 1;  -- ok within the hour
 --   SELECT * FROM v_portfolio_tree;  SELECT horizon, COUNT(*) FROM v_roadmap GROUP BY 1;
 --
@@ -288,7 +288,7 @@ INSERT INTO decision_log (actor, assumption, action, evidence, outcome, blast_ra
 VALUES ('session claude/self-maintained-roadmap-ps423o',
   'Goals, programs and roadmap closure are the part of the portfolio hierarchy no loop maintained: every lower layer (issues, projects, gaps, GitHub mirror) already has an hourly or 10-minute writer',
   'ROADMAP-SELF-MAINTAIN-1: goal DoD contracts, goal complete/reopen on evidence, one objective per program, roadmap closure for GL-/NEXT-/PROJ-/FM- rows, v_roadmap and v_portfolio_tree, four metrics',
-  'qnfo-audit read 2026-10-19 ~04:05Z: 61 adopted goals (13 machine-checkable, none ever probed, newest change 2026-10-14), QNFO.REACH and QNFO.PERSONAL 0 goals, 13 goals without program, 11 NEXT- rows planned with no close path, roadmap_implementation without program or project',
+  'qnfo-audit read 2026-10-19 ~04:05Z: 61 adopted goals (14 machine-checkable, none ever probed, newest change 2026-10-14), QNFO.REACH and QNFO.PERSONAL 0 goals, 13 goals without program, 11 NEXT- rows planned with no close path, roadmap_implementation without program or project',
   'pending: first runs after apply', 'qnfo-audit goals (status, program_code), remediation_contracts (new goal-* rows), roadmap_implementation (status of GL-/NEXT-/PROJ-/FM- rows)',
   'Rollback line of migrations/2026-10-19-roadmap-self-maintain.sql; goals restored from bak_20261019_goals_rsm',
   'goal-self-closure', 'remediation_contracts module goal-dod-v1 >= 18 within 120 minutes', 'qnfo-audit (D1 MCP read), fleet-exec workflow engine, both contract runners');
