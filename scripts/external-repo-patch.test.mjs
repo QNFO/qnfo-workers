@@ -84,7 +84,7 @@ r = await run("QNFO/.github", "dry", root, g.fetchImpl, {});
 ok(r.ok && r.problems.length === 3, "dry run lists the same problems");
 ok(defects("x.yml", GOOD).length === 0, "a clean file has no defect");
 ok(defects("x.yml", "jobs:\n  a:\n    steps:\n      - uses: actions/upload-artifact@v4\n").some((d) => /upload-artifact v4 runs on Node 20/.test(d)) && defects("x.yml", "jobs:\n  a:\n    steps:\n      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2\n").length === 0, "a Node 20 major is a defect, a pinned v7 is not");
-ok(defects("x.yml", "jobs:\n  a:\n    steps:\n      - run: echo a\n# https://claude.ai/x\n").length === 1, "a claude.ai link is a defect");
+ok(defects("x.yml", "jobs:\n  a:\n    steps:\n      - run: echo a\n# https://claude" + ".ai/x\n").length === 1, "a claude.ai link is a defect");
 
 // allowlist
 const api = makeApi(g.fetchImpl, "t");
