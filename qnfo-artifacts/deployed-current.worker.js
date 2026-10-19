@@ -38,11 +38,26 @@
  *     the tidier binding: a worker that cannot be syntax-checked cannot be merged.
  */
 
-var VERSION = "1.2.2";
+var VERSION = "1.2.3"; // 1.2.3 HEALTH-CONTRACT-1 (agent_issues 2852, capability_contract_conformance, pillar autonomy): /health declares limitations[] next to capabilities[] (module constants CAPABILITIES and LIMITATIONS); before this the snapshot read an empty limitations list for this worker. No behaviour change.
 const MAX_TTL = 86400;
 const DEFAULT_TTL = 3600;
 const NAME_RE = /^[a-zA-Z0-9][a-zA-Z0-9._-]*$/;
 const NAMESPACES = ["qnfo", "rwnq8"];
+
+// HEALTH-CONTRACT-1 (agent_issues 2852): the capability contract on /health. qnfo-deploy-guard snapshots capabilities[] and
+// limitations[] from every live worker's /health and qnfo-fleet-control grades the share that declare both. Every limit below is
+// enforced in this file (the constants and routes it names) or stated in its header.
+const CAPABILITIES = ["artifacts-control-plane", "repo-list", "commit-log", "tree-listing",
+  "file-read", "scoped-git-tokens", "agent-workspace-provisioning"];
+const LIMITATIONS = [
+  "mutating routes (POST /repos, POST /repos/:ns/:name/token, POST /workspace) are default-deny: without OPS_ROUTER_AUTH_KEY they answer 503 writes_disabled, with it they need a matching Bearer or X-Ops-Key",
+  "no route deletes a repository or writes file content: the worker lists, reads and creates repositories, and a caller writes through the scoped Git token it mints",
+  "only the two Artifacts namespaces qnfo and rwnq8, each through its own binding (ARTIFACTS, ARTIFACTS_RWNQ8); a namespace with no binding is reported under missing_bindings and /health reads degraded when none is bound",
+  "paged and bounded: /repos returns at most 100 repositories per page (default 25), /log at most 100 commits (default 20) and /tree at most 500 file names (default 200, files_truncated says when it cut)",
+  "a scoped Git token lives at most " + MAX_TTL + " seconds (default " + DEFAULT_TTL + ")",
+  "a repository name must match " + NAME_RE.source + " and a description is cut at 1024 characters",
+  "/file returns one blob decoded as text, so it is not a binary-safe download, and no route serves a whole-tree archive"
+];
 
 function json(data, status = 200) {
   return new Response(JSON.stringify(data, null, 2), {
@@ -103,8 +118,8 @@ export default {
         namespaces: bound,
         missing_bindings: NAMESPACES.filter((n) => !nsBinding(env, n)),
         auth_required_for_writes: !!env.OPS_ROUTER_AUTH_KEY,
-        capabilities: ["artifacts-control-plane", "repo-list", "commit-log", "tree-listing",
-                       "file-read", "scoped-git-tokens", "agent-workspace-provisioning"],
+        capabilities: CAPABILITIES,
+        limitations: LIMITATIONS,
       });
     }
 

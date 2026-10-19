@@ -558,6 +558,16 @@ const seed = (db, rows) => { for (const [day, worker, model, calls, errors] of r
   res = await get("/manifest");
   j = await res.json();
   ok(j.routes.includes("/ab/runs") && j.capabilities.includes("paired-ab-quality-harness") && j.ab && j.ab.enabled === "1" && j.version === mod.VERSION, "manifest lists the harness", j.ab);
+  // HEALTH-CONTRACT-1 (agent_issues 2852, capability_contract_conformance): qnfo-deploy-guard snapshots capabilities[] and limitations[]
+  // from /health, and a worker whose /health lacks either counts against the fleet's conformance. /health and /manifest carry one list.
+  const manifestLists = { capabilities: j.capabilities, limitations: j.limitations };
+  res = await get("/health");
+  j = await res.json();
+  ok(res.status === 200 && j.ok === true && j.version === mod.VERSION, "GET /health answers ok with the version", j);
+  ok(Array.isArray(j.capabilities) && j.capabilities.length >= 5 && j.capabilities.every((c) => typeof c === "string" && c.length > 3), "/health declares at least five non-empty capabilities", j.capabilities);
+  ok(Array.isArray(j.limitations) && j.limitations.length >= 5 && j.limitations.every((c) => typeof c === "string" && c.length > 20), "/health declares at least five non-empty limitations", j.limitations);
+  ok(JSON.stringify(j.capabilities) === JSON.stringify(manifestLists.capabilities) && JSON.stringify(j.limitations) === JSON.stringify(manifestLists.limitations), "/health and /manifest return the same capability contract");
+  ok(j.capabilities.includes("paired-ab-quality-harness") && j.limitations.some((l) => /x-eval-key/.test(l)) && j.limitations.some((l) => /active=0/.test(l)), "the contract names the A/B harness, the key-gated routes and the active=0 promotion limit");
 }
 
 /* ---- 7. binding, policy file, floor ---------------------------------------------------------------------------------------- */

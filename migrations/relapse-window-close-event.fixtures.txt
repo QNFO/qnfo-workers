@@ -1,0 +1,611 @@
+#@ about 0 0 0
+RELAPSE-WINDOW-CLOSE-EVENT-1 fixtures (VERIFICATION-PATH-2, agent_issues 100193), copied verbatim from qnfo-audit sqlite_master on 2026-10-19 (SELECT only; D1 database 35e2e573-92f3-46ac-83c6-22f6429fc5e5). Each section starts with a line "#@ <type> <table> <name> <length>" where <length> is length(sql) as D1 reported it; the suite checks every body against it. table and index: the live DDL of remediation_verifications, remediation_contracts, agent_issues, issue_triage and issue_lifecycle. trigger: all 49 live triggers on those five tables. view: v_closure_relapses. Refresh by re-reading sqlite_master, never by hand.
+#@ table remediation_verifications remediation_verifications 280
+CREATE TABLE remediation_verifications (id INTEGER PRIMARY KEY AUTOINCREMENT, issue_id INTEGER, class TEXT, action_ref INTEGER, probe_url TEXT, transport TEXT NOT NULL, expected TEXT, observed TEXT, pass INTEGER NOT NULL, verified_at TEXT DEFAULT (datetime('now')), verifier TEXT)
+#@ table remediation_contracts remediation_contracts 569
+CREATE TABLE remediation_contracts (class TEXT PRIMARY KEY, issue_id INTEGER, precondition TEXT NOT NULL, action TEXT NOT NULL, verify_probe TEXT NOT NULL, verify_transport TEXT NOT NULL, max_attempts INTEGER NOT NULL DEFAULT 3, escalate_to TEXT NOT NULL, expected_cadence_h INTEGER, status TEXT DEFAULT 'active', ts TEXT DEFAULT (datetime('now')), last_attempt_at TEXT, last_verdict TEXT, module TEXT, budget_ms INTEGER DEFAULT 45000, next_due_at TEXT, max_items INTEGER DEFAULT 5, requires_container INTEGER DEFAULT 0, attempts INTEGER DEFAULT 0, deferred_since TEXT)
+#@ table agent_issues agent_issues 394
+CREATE TABLE agent_issues (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  title TEXT,
+  description TEXT,
+  source TEXT,
+  category TEXT DEFAULT 'optimization',
+  priority TEXT DEFAULT 'medium',
+  status TEXT DEFAULT 'open',
+  linked_session TEXT,
+  created_at INTEGER,
+  updated_at INTEGER
+, pipeline_stage TEXT DEFAULT NULL, predicate_id TEXT, recheck_count INTEGER DEFAULT 0, close_channel TEXT)
+#@ table issue_triage issue_triage 292
+CREATE TABLE issue_triage (issue_id INTEGER PRIMARY KEY, rc TEXT NOT NULL, triage_state TEXT NOT NULL DEFAULT 'triaged', owner TEXT NOT NULL, sla_due_at TEXT NOT NULL, triaged_at TEXT DEFAULT (datetime('now')), remediation TEXT, close_evidence TEXT, reopened_count INTEGER NOT NULL DEFAULT 0)
+#@ table issue_lifecycle issue_lifecycle 253
+CREATE TABLE issue_lifecycle (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  issue_id INTEGER NOT NULL,
+  event TEXT NOT NULL,
+  from_status TEXT,
+  to_status TEXT,
+  has_evidence INTEGER,
+  ts TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
+)
+#@ index agent_issues idx_agent_issues_open_title 92
+CREATE UNIQUE INDEX idx_agent_issues_open_title ON agent_issues(title) WHERE status = 'open'
+#@ index agent_issues idx_agent_issues_open_title_ci 108
+CREATE UNIQUE INDEX idx_agent_issues_open_title_ci ON agent_issues(lower(trim(title))) WHERE status = 'open'
+#@ index issue_lifecycle idx_issue_lifecycle_issue 72
+CREATE INDEX idx_issue_lifecycle_issue ON issue_lifecycle (issue_id, ts)
+#@ view v_closure_relapses v_closure_relapses 1708
+CREATE VIEW v_closure_relapses AS
+SELECT x.issue_id, x.class, x.status, x.closed_ms, x.close_evidence, x.fails, x.last_observed, x.max_attempts,
+  (SELECT MIN(o.id) FROM agent_issues o WHERE o.status = 'open' AND o.id <> x.issue_id AND lower(trim(o.title)) = lower(trim(x.title))) AS twin_issue_id
+FROM (
+  SELECT c.issue_id, c.class, a.status, a.title, c.max_attempts, t.close_evidence, a.updated_at AS closed_ms,
+    (SELECT COUNT(*) FROM remediation_verifications v WHERE v.class = c.class AND v.pass = 0
+       AND COALESCE(v.observed, '') <> '' AND lower(trim(v.observed)) NOT LIKE 'pending%'
+       AND v.verified_at > MAX(datetime(CASE WHEN a.updated_at > 100000000000 THEN a.updated_at / 1000 ELSE a.updated_at END, 'unixepoch'),
+             COALESCE((SELECT MAX(p.verified_at) FROM remediation_verifications p WHERE p.class = c.class AND p.pass = 1), '1970-01-01'))) AS fails,
+    (SELECT substr(v.observed, 1, 120) FROM remediation_verifications v WHERE v.class = c.class ORDER BY v.verified_at DESC LIMIT 1) AS last_observed
+  FROM remediation_contracts c JOIN agent_issues a ON a.id = c.issue_id LEFT JOIN issue_triage t ON t.issue_id = a.id
+  WHERE c.status IN ('active', 'holding') AND a.status IN ('closed', 'resolved') AND typeof(a.updated_at) = 'integer'
+    AND CASE WHEN a.updated_at > 100000000000 THEN a.updated_at / 1000 ELSE a.updated_at END < CAST(strftime('%s', 'now') AS INTEGER) - 7200
+    AND lower(substr(COALESCE(t.close_evidence, ''), 1, 10)) <> 'superseded' AND lower(substr(COALESCE(t.close_evidence, ''), 1, 4)) <> 'moot'
+) x
+WHERE x.fails >= MAX(1, COALESCE(x.max_attempts, 3))
+  AND COALESCE(x.last_observed, '') <> '' AND lower(trim(x.last_observed)) NOT LIKE 'pending%'
+#@ trigger remediation_verifications remediation_reopen_on_relapse_d1 3507
+CREATE TRIGGER remediation_reopen_on_relapse_d1 AFTER INSERT ON remediation_verifications
+WHEN NEW.pass = 0 AND COALESCE(NEW.observed, '') <> '' AND (lower(trim(NEW.observed)) NOT LIKE 'pending%' OR (NEW.observed GLOB '*[0-9]*' AND (NEW.observed LIKE '%ceiling%' OR lower(NEW.observed) LIKE '%target%' OR lower(NEW.observed) LIKE '%threshold%' OR lower(NEW.observed) LIKE '%limit%' OR lower(NEW.observed) LIKE '%fewer than%' OR lower(NEW.observed) LIKE '%more than%' OR NEW.observed LIKE '% <= %' OR NEW.observed LIKE '% >= %' OR NEW.observed LIKE '% < %' OR NEW.observed LIKE '% > %')))
+  AND EXISTS (SELECT 1 FROM remediation_contracts c JOIN agent_issues a ON a.id = c.issue_id
+              WHERE c.class = NEW.class AND c.status IN ('active', 'holding') AND a.status IN ('closed', 'resolved'))
+  AND NOT EXISTS (SELECT 1 FROM remediation_contracts c JOIN issue_triage t ON t.issue_id = c.issue_id WHERE c.class = NEW.class
+                  AND (lower(substr(COALESCE(t.close_evidence, ''), 1, 10)) = 'superseded' OR lower(substr(COALESCE(t.close_evidence, ''), 1, 4)) = 'moot'))
+  AND NOT EXISTS (SELECT 1 FROM remediation_contracts c JOIN agent_issues a ON a.id = c.issue_id JOIN agent_issues o ON o.status = 'open' AND o.id <> a.id
+                    AND lower(trim(o.title)) = lower(trim(a.title)) WHERE c.class = NEW.class)
+  AND (SELECT COUNT(*) FROM remediation_verifications v WHERE v.class = NEW.class AND v.pass = 0 AND COALESCE(v.observed, '') <> ''
+         AND (lower(trim(v.observed)) NOT LIKE 'pending%' OR (v.observed GLOB '*[0-9]*' AND (v.observed LIKE '%ceiling%' OR lower(v.observed) LIKE '%target%' OR lower(v.observed) LIKE '%threshold%' OR lower(v.observed) LIKE '%limit%' OR lower(v.observed) LIKE '%fewer than%' OR lower(v.observed) LIKE '%more than%' OR v.observed LIKE '% <= %' OR v.observed LIKE '% >= %' OR v.observed LIKE '% < %' OR v.observed LIKE '% > %')))
+         AND v.verified_at > MAX(
+           (SELECT datetime(CASE WHEN a.updated_at > 100000000000 THEN a.updated_at / 1000 ELSE a.updated_at END, 'unixepoch')
+              FROM remediation_contracts c JOIN agent_issues a ON a.id = c.issue_id WHERE c.class = NEW.class),
+           COALESCE((SELECT MAX(p.verified_at) FROM remediation_verifications p WHERE p.class = NEW.class AND p.pass = 1), '1970-01-01')))
+      >= MAX(1, COALESCE((SELECT max_attempts FROM remediation_contracts WHERE class = NEW.class), 3))
+BEGIN
+  UPDATE agent_issues SET status = 'open',
+    description = COALESCE(description, '') || char(10) || 'REOPENED ' || strftime('%Y-%m-%dT%H:%M:%SZ', 'now') ||
+      ' (REMEDIATION-REOPEN-2, D1 trigger): contract ' || NEW.class || ' failed max_attempts times after the closure (expected ' ||
+      substr(COALESCE(NEW.expected, ''), 1, 60) || ', observed ' || substr(NEW.observed, 1, 60) || '). Prior close_evidence: ' ||
+      substr(COALESCE((SELECT t.close_evidence FROM remediation_contracts c JOIN issue_triage t ON t.issue_id = c.issue_id WHERE c.class = NEW.class), '(none)'), 1, 300),
+    updated_at = CAST(strftime('%s', 'now') AS INTEGER) * 1000
+  WHERE id = (SELECT issue_id FROM remediation_contracts WHERE class = NEW.class) AND status IN ('closed', 'resolved');
+  UPDATE issue_triage SET reopened_count = COALESCE(reopened_count, 0) + 1, triage_state = 'triaged', close_evidence = NULL
+  WHERE issue_id = (SELECT issue_id FROM remediation_contracts WHERE class = NEW.class);
+  UPDATE remediation_contracts SET status = 'active' WHERE class = NEW.class AND status = 'holding';
+END
+#@ trigger remediation_verifications remediation_verification_autoclose_ins 2993
+CREATE TRIGGER remediation_verification_autoclose_ins AFTER INSERT ON remediation_verifications
+WHEN NEW.pass = 1
+  AND NOT EXISTS (SELECT 1 FROM remediation_contracts c2 WHERE c2.issue_id = NEW.issue_id AND c2.class <> COALESCE(NEW.class, '')
+                  AND c2.status IN ('active', 'holding')
+                  AND (SELECT v2.pass FROM remediation_verifications v2 WHERE v2.class = c2.class AND COALESCE(v2.observed, '') <> ''
+                       AND (lower(trim(v2.observed)) NOT LIKE 'pending%' OR (v2.observed GLOB '*[0-9]*' AND (v2.observed LIKE '%ceiling%' OR lower(v2.observed) LIKE '%target%' OR lower(v2.observed) LIKE '%threshold%' OR lower(v2.observed) LIKE '%limit%' OR lower(v2.observed) LIKE '%fewer than%' OR lower(v2.observed) LIKE '%more than%' OR v2.observed LIKE '% <= %' OR v2.observed LIKE '% >= %' OR v2.observed LIKE '% < %' OR v2.observed LIKE '% > %'))) ORDER BY v2.id DESC LIMIT 1) = 0)
+  AND (COALESCE((SELECT t.reopened_count FROM issue_triage t WHERE t.issue_id = NEW.issue_id), 0) = 0
+       OR (SELECT v3.pass FROM remediation_verifications v3 WHERE v3.class = NEW.class AND v3.id < NEW.id AND COALESCE(v3.observed, '') <> ''
+           AND (lower(trim(v3.observed)) NOT LIKE 'pending%' OR (v3.observed GLOB '*[0-9]*' AND (v3.observed LIKE '%ceiling%' OR lower(v3.observed) LIKE '%target%' OR lower(v3.observed) LIKE '%threshold%' OR lower(v3.observed) LIKE '%limit%' OR lower(v3.observed) LIKE '%fewer than%' OR lower(v3.observed) LIKE '%more than%' OR v3.observed LIKE '% <= %' OR v3.observed LIKE '% >= %' OR v3.observed LIKE '% < %' OR v3.observed LIKE '% > %'))) ORDER BY v3.id DESC LIMIT 1) = 1)
+BEGIN
+  INSERT INTO issue_triage (issue_id, rc, triage_state, owner, sla_due_at, close_evidence) SELECT NEW.issue_id, 'verified-remediation', 'closed', 'fleet-autoremediation', datetime('now','+7 days'), 'remediation_verifications#' || NEW.id || ' pass=1 class=' || COALESCE(NEW.class,'') || ' transport=' || NEW.transport || ' verified_at=' || COALESCE(NEW.verified_at, datetime('now')) WHERE EXISTS (SELECT 1 FROM agent_issues WHERE id = NEW.issue_id AND status = 'open') AND NOT EXISTS (SELECT 1 FROM remediation_contracts cb WHERE cb.issue_id = NEW.issue_id AND cb.status IN ('active', 'holding') AND COALESCE(cb.last_verdict, '') IN ('fail', 'vacuous-probe-result', 'probe-error', 'probe-not-machine-executable', 'probe-same-account-host')) ON CONFLICT(issue_id) DO UPDATE SET close_evidence = excluded.close_evidence WHERE COALESCE(issue_triage.close_evidence,'') = '';
+  UPDATE agent_issues SET status='closed', close_channel='auto:verified-remediation-trigger', updated_at = CAST(strftime('%s','now') AS INTEGER)*1000 WHERE id = NEW.issue_id AND status = 'open'
+    AND NOT EXISTS (SELECT 1 FROM remediation_contracts cb WHERE cb.issue_id = NEW.issue_id AND cb.status IN ('active', 'holding') AND COALESCE(cb.last_verdict, '') IN ('fail', 'vacuous-probe-result', 'probe-error', 'probe-not-machine-executable', 'probe-same-account-host'));
+END
+#@ trigger remediation_verifications remediation_verification_autoclose_upd 3031
+CREATE TRIGGER remediation_verification_autoclose_upd AFTER UPDATE OF pass ON remediation_verifications
+WHEN NEW.pass = 1 AND COALESCE(OLD.pass,0) <> 1
+  AND NOT EXISTS (SELECT 1 FROM remediation_contracts c2 WHERE c2.issue_id = NEW.issue_id AND c2.class <> COALESCE(NEW.class, '')
+                  AND c2.status IN ('active', 'holding')
+                  AND (SELECT v2.pass FROM remediation_verifications v2 WHERE v2.class = c2.class AND COALESCE(v2.observed, '') <> ''
+                       AND (lower(trim(v2.observed)) NOT LIKE 'pending%' OR (v2.observed GLOB '*[0-9]*' AND (v2.observed LIKE '%ceiling%' OR lower(v2.observed) LIKE '%target%' OR lower(v2.observed) LIKE '%threshold%' OR lower(v2.observed) LIKE '%limit%' OR lower(v2.observed) LIKE '%fewer than%' OR lower(v2.observed) LIKE '%more than%' OR v2.observed LIKE '% <= %' OR v2.observed LIKE '% >= %' OR v2.observed LIKE '% < %' OR v2.observed LIKE '% > %'))) ORDER BY v2.id DESC LIMIT 1) = 0)
+  AND (COALESCE((SELECT t.reopened_count FROM issue_triage t WHERE t.issue_id = NEW.issue_id), 0) = 0
+       OR (SELECT v3.pass FROM remediation_verifications v3 WHERE v3.class = NEW.class AND v3.id < NEW.id AND COALESCE(v3.observed, '') <> ''
+           AND (lower(trim(v3.observed)) NOT LIKE 'pending%' OR (v3.observed GLOB '*[0-9]*' AND (v3.observed LIKE '%ceiling%' OR lower(v3.observed) LIKE '%target%' OR lower(v3.observed) LIKE '%threshold%' OR lower(v3.observed) LIKE '%limit%' OR lower(v3.observed) LIKE '%fewer than%' OR lower(v3.observed) LIKE '%more than%' OR v3.observed LIKE '% <= %' OR v3.observed LIKE '% >= %' OR v3.observed LIKE '% < %' OR v3.observed LIKE '% > %'))) ORDER BY v3.id DESC LIMIT 1) = 1)
+BEGIN
+  INSERT INTO issue_triage (issue_id, rc, triage_state, owner, sla_due_at, close_evidence) SELECT NEW.issue_id, 'verified-remediation', 'closed', 'fleet-autoremediation', datetime('now','+7 days'), 'remediation_verifications#' || NEW.id || ' pass=1 class=' || COALESCE(NEW.class,'') || ' transport=' || NEW.transport || ' verified_at=' || COALESCE(NEW.verified_at, datetime('now')) WHERE EXISTS (SELECT 1 FROM agent_issues WHERE id = NEW.issue_id AND status = 'open') AND NOT EXISTS (SELECT 1 FROM remediation_contracts cb WHERE cb.issue_id = NEW.issue_id AND cb.status IN ('active', 'holding') AND COALESCE(cb.last_verdict, '') IN ('fail', 'vacuous-probe-result', 'probe-error', 'probe-not-machine-executable', 'probe-same-account-host')) ON CONFLICT(issue_id) DO UPDATE SET close_evidence = excluded.close_evidence WHERE COALESCE(issue_triage.close_evidence,'') = '';
+  UPDATE agent_issues SET status='closed', close_channel='auto:verified-remediation-trigger', updated_at = CAST(strftime('%s','now') AS INTEGER)*1000 WHERE id = NEW.issue_id AND status = 'open'
+    AND NOT EXISTS (SELECT 1 FROM remediation_contracts cb WHERE cb.issue_id = NEW.issue_id AND cb.status IN ('active', 'holding') AND COALESCE(cb.last_verdict, '') IN ('fail', 'vacuous-probe-result', 'probe-error', 'probe-not-machine-executable', 'probe-same-account-host'));
+END
+#@ trigger remediation_verifications remediation_verification_evidence_guard_ins 345
+CREATE TRIGGER remediation_verification_evidence_guard_ins BEFORE INSERT ON remediation_verifications WHEN NEW.pass=1 AND (NEW.expected IS NULL OR trim(NEW.expected)='' OR NEW.observed IS NULL OR trim(NEW.observed)='') BEGIN SELECT RAISE(ABORT,'VACUOUS-VERIFICATION-EVIDENCE-1: pass=1 requires non-empty expected AND observed (issue 1458)'); END
+#@ trigger remediation_verifications remediation_verification_evidence_guard_upd 371
+CREATE TRIGGER remediation_verification_evidence_guard_upd BEFORE UPDATE OF pass,expected,observed ON remediation_verifications WHEN NEW.pass=1 AND (NEW.expected IS NULL OR trim(NEW.expected)='' OR NEW.observed IS NULL OR trim(NEW.observed)='') BEGIN SELECT RAISE(ABORT,'VACUOUS-VERIFICATION-EVIDENCE-1: pass=1 requires non-empty expected AND observed (issue 1458)'); END
+#@ trigger remediation_verifications remediation_verification_transport_guard_ins 297
+CREATE TRIGGER remediation_verification_transport_guard_ins BEFORE INSERT ON remediation_verifications WHEN NEW.pass=1 AND NOT EXISTS (SELECT 1 FROM transport_trust t WHERE t.transport=NEW.transport AND t.trusted=1) BEGIN SELECT RAISE(ABORT,'unclassified-or-untrusted-verification-transport'); END
+#@ trigger remediation_verifications remediation_verification_transport_guard_upd 316
+CREATE TRIGGER remediation_verification_transport_guard_upd BEFORE UPDATE OF pass, transport ON remediation_verifications WHEN NEW.pass=1 AND NOT EXISTS (SELECT 1 FROM transport_trust t WHERE t.transport=NEW.transport AND t.trusted=1) BEGIN SELECT RAISE(ABORT,'unclassified-or-untrusted-verification-transport'); END
+#@ trigger issue_lifecycle issue_lifecycle_no_delete 178
+CREATE TRIGGER issue_lifecycle_no_delete BEFORE DELETE ON issue_lifecycle
+BEGIN SELECT RAISE(ABORT, 'NO-SILENT-DROP-2: issue_lifecycle is append-only (doctrine section 14)'); END
+#@ trigger issue_lifecycle issue_lifecycle_no_update 178
+CREATE TRIGGER issue_lifecycle_no_update BEFORE UPDATE ON issue_lifecycle
+BEGIN SELECT RAISE(ABORT, 'NO-SILENT-DROP-2: issue_lifecycle is append-only (doctrine section 14)'); END
+#@ trigger issue_triage issue_close_evidence_weak_predicate_ins 331
+CREATE TRIGGER issue_close_evidence_weak_predicate_ins BEFORE INSERT ON issue_triage WHEN NEW.close_evidence IS NOT NULL AND NEW.close_evidence LIKE '%present in%' AND NEW.close_evidence LIKE '%directory listing%' BEGIN SELECT RAISE(ABORT,'CLOSE-EVIDENCE-WEAK-PREDICATE-1: file presence is not defect resolution (issue 1698)'); END
+#@ trigger issue_triage issue_close_evidence_weak_predicate_upd 349
+CREATE TRIGGER issue_close_evidence_weak_predicate_upd BEFORE UPDATE OF close_evidence ON issue_triage WHEN NEW.close_evidence IS NOT NULL AND NEW.close_evidence LIKE '%present in%' AND NEW.close_evidence LIKE '%directory listing%' BEGIN SELECT RAISE(ABORT,'CLOSE-EVIDENCE-WEAK-PREDICATE-1: file presence is not defect resolution (issue 1698)'); END
+#@ trigger issue_triage triage_close_sync_issue_ins 347
+CREATE TRIGGER triage_close_sync_issue_ins AFTER INSERT ON issue_triage WHEN NEW.triage_state IN ('closed','closed-refuted','wontfix') BEGIN UPDATE agent_issues SET status = CASE WHEN NEW.triage_state='wontfix' THEN 'wontfix' ELSE 'closed' END, updated_at = CAST(strftime('%s','now') AS INTEGER)*1000 WHERE id = NEW.issue_id AND status='open'; END
+#@ trigger issue_triage triage_close_sync_issue_upd 363
+CREATE TRIGGER triage_close_sync_issue_upd AFTER UPDATE OF triage_state ON issue_triage WHEN NEW.triage_state IN ('closed','closed-refuted','wontfix') BEGIN UPDATE agent_issues SET status = CASE WHEN NEW.triage_state='wontfix' THEN 'wontfix' ELSE 'closed' END, updated_at = CAST(strftime('%s','now') AS INTEGER)*1000 WHERE id = NEW.issue_id AND status='open'; END
+#@ trigger issue_triage triage_close_sync_resolved_upd 336
+CREATE TRIGGER triage_close_sync_resolved_upd AFTER UPDATE OF triage_state ON issue_triage WHEN NEW.triage_state IN ('resolved','resolved-refuted') BEGIN UPDATE agent_issues SET status='closed', close_channel='auto:triage-resolved-sync', updated_at=CAST(strftime('%s','now') AS INTEGER)*1000 WHERE id=NEW.issue_id AND status='open'; END
+#@ trigger issue_triage triage_superseded_contracts_ins 516
+CREATE TRIGGER triage_superseded_contracts_ins AFTER INSERT ON issue_triage
+WHEN NEW.triage_state = 'closed' AND (lower(substr(COALESCE(NEW.close_evidence, ''), 1, 10)) = 'superseded' OR lower(substr(COALESCE(NEW.close_evidence, ''), 1, 4)) = 'moot')
+BEGIN
+  UPDATE remediation_contracts SET status = 'superseded', last_verdict = 'superseded:closure-superseded', last_attempt_at = datetime('now')
+  WHERE issue_id = NEW.issue_id AND status IN ('active', 'holding', 'needs-machine-probe', 'probe-review-refused');
+END
+#@ trigger issue_triage triage_superseded_contracts_upd 548
+CREATE TRIGGER triage_superseded_contracts_upd AFTER UPDATE OF triage_state, close_evidence ON issue_triage
+WHEN NEW.triage_state = 'closed' AND (lower(substr(COALESCE(NEW.close_evidence, ''), 1, 10)) = 'superseded' OR lower(substr(COALESCE(NEW.close_evidence, ''), 1, 4)) = 'moot')
+BEGIN
+  UPDATE remediation_contracts SET status = 'superseded', last_verdict = 'superseded:closure-superseded', last_attempt_at = datetime('now')
+  WHERE issue_id = NEW.issue_id AND status IN ('active', 'holding', 'needs-machine-probe', 'probe-review-refused');
+END
+#@ trigger remediation_contracts remediation_contracts_cadence_1h_ai 247
+CREATE TRIGGER remediation_contracts_cadence_1h_ai AFTER INSERT ON remediation_contracts
+WHEN NEW.expected_cadence_h IS NULL OR NEW.expected_cadence_h > 1
+BEGIN
+  UPDATE remediation_contracts SET expected_cadence_h = 1 WHERE class = NEW.class;
+END
+#@ trigger remediation_contracts remediation_contracts_cadence_floor_ai 333
+CREATE TRIGGER remediation_contracts_cadence_floor_ai AFTER INSERT ON remediation_contracts
+WHEN NEW.issue_id IS NOT NULL AND NEW.status IN ('active', 'needs-machine-probe') AND (NEW.expected_cadence_h IS NULL OR NEW.expected_cadence_h > 1)
+BEGIN
+  UPDATE remediation_contracts SET expected_cadence_h = 1 WHERE class = NEW.class;
+END
+#@ trigger remediation_contracts remediation_contracts_cadence_floor_au 363
+CREATE TRIGGER remediation_contracts_cadence_floor_au AFTER UPDATE OF expected_cadence_h, status ON remediation_contracts
+WHEN NEW.issue_id IS NOT NULL AND NEW.status IN ('active', 'needs-machine-probe') AND (NEW.expected_cadence_h IS NULL OR NEW.expected_cadence_h > 1)
+BEGIN
+  UPDATE remediation_contracts SET expected_cadence_h = 1 WHERE class = NEW.class;
+END
+#@ trigger remediation_contracts remediation_probe_edit_rerun 313
+CREATE TRIGGER remediation_probe_edit_rerun AFTER UPDATE OF verify_probe, verify_transport ON remediation_contracts
+WHEN NEW.verify_probe IS NOT OLD.verify_probe OR NEW.verify_transport IS NOT OLD.verify_transport
+BEGIN
+  UPDATE remediation_contracts SET next_due_at = datetime('now') WHERE class = NEW.class;
+END
+#@ trigger remediation_contracts remediation_probe_semicolon_ins 313
+CREATE TRIGGER remediation_probe_semicolon_ins AFTER INSERT ON remediation_contracts
+WHEN NEW.verify_transport LIKE 'd1-query%' AND instr(COALESCE(NEW.verify_probe, ''), ';') > 0
+BEGIN
+  UPDATE remediation_contracts SET verify_probe = replace(rtrim(trim(verify_probe), ';'), ';', ',') WHERE class = NEW.class;
+END
+#@ trigger remediation_contracts remediation_probe_semicolon_upd 347
+CREATE TRIGGER remediation_probe_semicolon_upd AFTER UPDATE OF verify_probe, verify_transport ON remediation_contracts
+WHEN NEW.verify_transport LIKE 'd1-query%' AND instr(COALESCE(NEW.verify_probe, ''), ';') > 0
+BEGIN
+  UPDATE remediation_contracts SET verify_probe = replace(rtrim(trim(verify_probe), ';'), ';', ',') WHERE class = NEW.class;
+END
+#@ trigger remediation_contracts sla_120_guard_contract_ins 228
+CREATE TRIGGER sla_120_guard_contract_ins AFTER INSERT ON remediation_contracts WHEN NEW.status = 'active' AND NEW.expected_cadence_h > 2 BEGIN UPDATE remediation_contracts SET expected_cadence_h = 2 WHERE class = NEW.class; END
+#@ trigger remediation_contracts sla_120_guard_contract_upd 258
+CREATE TRIGGER sla_120_guard_contract_upd AFTER UPDATE OF expected_cadence_h, status ON remediation_contracts WHEN NEW.status = 'active' AND NEW.expected_cadence_h > 2 BEGIN UPDATE remediation_contracts SET expected_cadence_h = 2 WHERE class = NEW.class; END
+#@ trigger remediation_contracts contract_probe_templates_v1 1579
+CREATE TRIGGER contract_probe_templates_v1
+AFTER INSERT ON remediation_contracts
+WHEN NEW.status = 'needs-machine-probe' AND NEW.issue_id IS NOT NULL
+BEGIN
+  UPDATE remediation_contracts
+  SET status = 'active', verify_transport = 'd1-query', module = 'probe-template-v1h', attempts = 0, last_verdict = NULL,
+      next_due_at = datetime('now'),
+      verify_probe = 'SELECT ''1'' AS expected, CASE WHEN (SELECT hit FROM v_metric_trigger_state WHERE id = '
+        || (SELECT CAST(substr(title, 16) AS INTEGER) FROM agent_issues WHERE id = NEW.issue_id)
+        || ') = 0 AND (SELECT val FROM v_metric_trigger_state WHERE id = '
+        || (SELECT CAST(substr(title, 16) AS INTEGER) FROM agent_issues WHERE id = NEW.issue_id)
+        || ') IS NOT NULL THEN CASE WHEN (SELECT COUNT(*) FROM (SELECT observed, verified_at FROM remediation_verifications WHERE class = ''issue-'
+        || CAST(NEW.issue_id AS INTEGER)
+        || ''' ORDER BY id DESC LIMIT 1) p WHERE p.observed = ''1'' OR (p.observed = ''recovering'' AND datetime(p.verified_at) < COALESCE(datetime((SELECT last_refreshed FROM metric_registry WHERE metric = (SELECT metric_key FROM analytics_metric_triggers WHERE id = '
+        || (SELECT CAST(substr(title, 16) AS INTEGER) FROM agent_issues WHERE id = NEW.issue_id)
+        || '))), datetime(''now'', ''-50 minutes'')))) > 0 THEN ''1'' ELSE ''recovering'' END ELSE ''0'' END AS observed'
+  WHERE class = NEW.class
+    AND EXISTS (SELECT 1 FROM agent_issues WHERE id = NEW.issue_id AND title LIKE 'METRIC-TRIGGER-%' AND CAST(substr(title, 16) AS INTEGER) > 0);
+END
+#@ trigger remediation_contracts contract_probe_templates_v3_generic 1498
+CREATE TRIGGER contract_probe_templates_v3_generic AFTER INSERT ON remediation_contracts
+WHEN NEW.status = 'needs-machine-probe' AND NEW.issue_id IS NOT NULL
+  AND NOT EXISTS (SELECT 1 FROM agent_issues a WHERE a.id = NEW.issue_id AND a.title LIKE 'METRIC-TRIGGER-%')
+  AND NOT EXISTS (SELECT 1 FROM agent_issues a JOIN service_registry s ON s.service = a.source AND s.state = 'live'
+                   WHERE a.id = NEW.issue_id)
+BEGIN
+  UPDATE remediation_contracts
+  SET status = 'superseded', verify_transport = 'd1-query', module = 'probe-template-v3-generic', attempts = 0,
+      last_verdict = 'superseded:closure-observing-probe-at-birth (CLOSE-PROBE-CIRCULAR-1: this template observes the guarded issue status, which issue_close_evidence_required only lets change after a close that the same probe blocks; a doer that knows the defect replaces it with a probe that measures it)',
+      next_due_at = NULL,
+      precondition = 'no earlier birth template matched this issue (ORPHAN-GUARD-BIRTH-1)',
+      action = 'VACUOUS-PROBE-V3-1: this contract measures nothing while the issue is open, so it is born superseded and never blocks the close. A doer that knows the defect replaces this probe with one that measures it.',
+      verify_probe = 'SELECT ''closed'' AS expected, (SELECT CASE WHEN status IN (''closed'', ''resolved'') THEN ''closed'' ELSE NULL END FROM agent_issues WHERE id = ' || NEW.issue_id || ') AS observed'
+  WHERE class = NEW.class AND status = 'needs-machine-probe';
+END
+#@ trigger remediation_contracts contract_probe_templates_loop_merged 4483
+CREATE TRIGGER contract_probe_templates_loop_merged AFTER INSERT ON remediation_contracts
+WHEN NEW.status = 'needs-machine-probe' AND NEW.issue_id IS NOT NULL
+  AND (EXISTS (SELECT 1 FROM agent_issues a WHERE a.id = NEW.issue_id AND a.title NOT LIKE 'METRIC-TRIGGER-%'
+                AND a.source NOT LIKE 'session%' AND a.source NOT LIKE 'claude%' AND a.source NOT LIKE 'chat%'
+                AND a.source NOT LIKE 'owner%' AND a.source NOT LIKE 'backlog%' AND a.source NOT LIKE 'cloud_ops_events%'
+                AND a.source NOT LIKE 'TRANSFORMATION-PROGRAM%' AND a.source NOT LIKE 'human%'
+                AND NOT EXISTS (SELECT 1 FROM issue_source_hosts m WHERE m.source = a.source))
+    OR EXISTS (SELECT 1 FROM agent_issues a JOIN issue_source_hosts m ON m.source = a.source
+                 JOIN service_registry s ON s.service = m.host AND s.state = 'live'
+                WHERE a.id = NEW.issue_id AND a.title NOT LIKE 'METRIC-TRIGGER-%')
+    OR EXISTS (SELECT 1 FROM agent_issues a JOIN service_registry s ON s.state = 'live' AND instr(a.source, s.service || '-') = 1
+                WHERE a.id = NEW.issue_id AND a.title NOT LIKE 'METRIC-TRIGGER-%')
+    OR EXISTS (SELECT 1 FROM agent_issues a JOIN service_registry s ON s.service = a.source AND s.state = 'live'
+                WHERE a.id = NEW.issue_id AND a.title NOT LIKE 'METRIC-TRIGGER-%'))
+BEGIN
+  UPDATE remediation_contracts
+     SET status = 'active', verify_transport = 'd1-query', attempts = 0, last_verdict = NULL,
+         next_due_at = datetime('now'),
+         action = 'the filing loop closes it on recovery; after 48h open the probe fails and the remediation tick escalates',
+         module = CASE
+           WHEN EXISTS (SELECT 1 FROM agent_issues a WHERE a.id = NEW.issue_id AND a.title NOT LIKE 'METRIC-TRIGGER-%'
+                     AND a.source NOT LIKE 'session%' AND a.source NOT LIKE 'claude%' AND a.source NOT LIKE 'chat%'
+                     AND a.source NOT LIKE 'owner%' AND a.source NOT LIKE 'backlog%' AND a.source NOT LIKE 'cloud_ops_events%'
+                     AND a.source NOT LIKE 'TRANSFORMATION-PROGRAM%' AND a.source NOT LIKE 'human%'
+                     AND NOT EXISTS (SELECT 1 FROM issue_source_hosts m WHERE m.source = a.source))
+             THEN 'probe-template-v2d-loop'
+           WHEN EXISTS (SELECT 1 FROM agent_issues a JOIN issue_source_hosts m ON m.source = a.source
+                          JOIN service_registry s ON s.service = m.host AND s.state = 'live'
+                         WHERE a.id = NEW.issue_id AND a.title NOT LIKE 'METRIC-TRIGGER-%')
+             THEN 'probe-template-v2c-loop'
+           ELSE 'probe-template-v2-loop' END,
+         precondition = CASE
+           WHEN EXISTS (SELECT 1 FROM agent_issues a WHERE a.id = NEW.issue_id AND a.title NOT LIKE 'METRIC-TRIGGER-%'
+                     AND a.source NOT LIKE 'session%' AND a.source NOT LIKE 'claude%' AND a.source NOT LIKE 'chat%'
+                     AND a.source NOT LIKE 'owner%' AND a.source NOT LIKE 'backlog%' AND a.source NOT LIKE 'cloud_ops_events%'
+                     AND a.source NOT LIKE 'TRANSFORMATION-PROGRAM%' AND a.source NOT LIKE 'human%'
+                     AND NOT EXISTS (SELECT 1 FROM issue_source_hosts m WHERE m.source = a.source))
+             THEN 'filed by a fleet loop under an unmapped label (ORPHAN-GUARD-BIRTH-1c), which owns it for 48h'
+           WHEN EXISTS (SELECT 1 FROM agent_issues a JOIN issue_source_hosts m ON m.source = a.source
+                          JOIN service_registry s ON s.service = m.host AND s.state = 'live'
+                         WHERE a.id = NEW.issue_id AND a.title NOT LIKE 'METRIC-TRIGGER-%')
+             THEN 'filed by a fleet loop under a mapped label (LOOP-SOURCE-HOSTS-1), which owns it for 48h'
+           ELSE 'filed by a live fleet loop, which owns it for 48h (ORPHAN-GUARD-BIRTH-1)' END,
+         verify_probe = 'SELECT ''ok'' AS expected, CASE WHEN (SELECT status FROM agent_issues WHERE id = ' || NEW.issue_id || ') <> ''open'' THEN ''ok'' WHEN (SELECT created_at FROM agent_issues WHERE id = ' || NEW.issue_id || ') > (CAST(strftime(''%s'', ''now'') AS INTEGER) - 172800) * 1000 THEN ''pending: filed by ' || (SELECT source FROM agent_issues WHERE id = NEW.issue_id) || ', which owns it for 48h'' ELSE ''stale: the filing loop ' || (SELECT source FROM agent_issues WHERE id = NEW.issue_id) || ' did not close it within 48h'' END AS observed'
+   WHERE class = NEW.class AND status = 'needs-machine-probe';
+END
+#@ trigger agent_issues agent_issues_autotriage2_ins 1130
+CREATE TRIGGER agent_issues_autotriage2_ins AFTER INSERT ON agent_issues
+WHEN NEW.status = 'open'
+BEGIN
+  INSERT OR IGNORE INTO issue_triage (issue_id, rc, triage_state, owner, sla_due_at)
+  SELECT NEW.id,
+         CASE WHEN o.owner IS NULL THEN 'AUTOTRIAGE-1' ELSE 'AUTOTRIAGE-2' END,
+         'triaged',
+         COALESCE(o.owner, 'qnfo-ops'),
+         datetime('now', '+120 minutes')
+    FROM (SELECT COALESCE(
+            (SELECT t.owner FROM analytics_metric_triggers t
+              WHERE NEW.title LIKE 'METRIC-TRIGGER-%'
+                AND t.id = CAST(substr(NEW.title, 16) AS INTEGER)
+                AND t.owner IN (SELECT service FROM service_registry)),
+            (SELECT s.service FROM service_registry s
+              WHERE instr(COALESCE(NEW.description, ''), 'code-task: repo=qnfo-workers path=') > 0
+                AND s.service = substr(substr(NEW.description, instr(NEW.description, 'code-task: repo=qnfo-workers path=') + 34), 1,
+                                       instr(substr(NEW.description, instr(NEW.description, 'code-task: repo=qnfo-workers path=') + 34), '/') - 1))
+          ) AS owner) o;
+END
+#@ trigger agent_issues agent_issues_birth_contract_ins 571
+CREATE TRIGGER agent_issues_birth_contract_ins AFTER INSERT ON agent_issues WHEN NEW.status = 'open' AND NOT EXISTS (SELECT 1 FROM remediation_contracts c WHERE c.issue_id = NEW.id) BEGIN INSERT OR IGNORE INTO remediation_contracts (class, issue_id, precondition, action, verify_probe, verify_transport, max_attempts, escalate_to, expected_cadence_h, status, module) VALUES ('issue-' || NEW.id, NEW.id, 'born with the issue (ORPHAN-GUARD-BIRTH-1)', 'needs-machine-probe', 'needs-machine-probe', 'd1-query', 3, 'qnfo-fleet-control', 1, 'needs-machine-probe', 'birth'); END
+#@ trigger agent_issues agent_issues_code_probe_upd 3079
+CREATE TRIGGER agent_issues_code_probe_upd AFTER UPDATE OF description ON agent_issues
+WHEN NEW.status = 'open' AND instr(COALESCE(NEW.description, ''), 'code-probe: {') > 0
+  AND (instr(COALESCE(OLD.description, ''), 'code-probe: {') = 0 OR substr(COALESCE(NEW.description, ''), instr(COALESCE(NEW.description, ''), 'code-probe: {'), instr(substr(COALESCE(NEW.description, ''), instr(COALESCE(NEW.description, ''), 'code-probe: {')), '}')) IS NOT substr(COALESCE(OLD.description, ''), instr(COALESCE(OLD.description, ''), 'code-probe: {'), instr(substr(COALESCE(OLD.description, ''), instr(COALESCE(OLD.description, ''), 'code-probe: {')), '}')))
+BEGIN
+  INSERT OR IGNORE INTO remediation_contracts (class, issue_id, precondition, action, verify_probe, verify_transport, max_attempts, escalate_to, expected_cadence_h, status, module)
+  VALUES ('issue-' || NEW.id, NEW.id, 'code-probe line in the issue (PROBE-BIRTH-2)', 'needs-machine-probe', 'needs-machine-probe', 'd1-query', 3, 'qnfo-fleet-control', 6, 'needs-machine-probe', 'birth');
+  UPDATE remediation_contracts
+  SET verify_transport = 'code-read', verify_probe = substr(substr(COALESCE(NEW.description, ''), instr(COALESCE(NEW.description, ''), 'code-probe: {') + 12), 1, instr(substr(COALESCE(NEW.description, ''), instr(COALESCE(NEW.description, ''), 'code-probe: {') + 12), '}')),
+      status = 'active', module = 'code-probe-line-v1', attempts = 0, last_verdict = NULL, next_due_at = datetime('now'),
+      expected_cadence_h = 6, max_attempts = 3,
+      precondition = 'code-probe line in the issue (PROBE-BIRTH-2)',
+      action = 'the doer changes the code on main; scripts/remediation_consumer.py reads its checkout of main and a pass closes the issue'
+  WHERE class = 'issue-' || NEW.id
+    AND NOT (verify_transport = 'code-read' AND status = 'active' AND verify_probe = substr(substr(COALESCE(NEW.description, ''), instr(COALESCE(NEW.description, ''), 'code-probe: {') + 12), 1, instr(substr(COALESCE(NEW.description, ''), instr(COALESCE(NEW.description, ''), 'code-probe: {') + 12), '}')))
+    AND json_valid(substr(substr(COALESCE(NEW.description, ''), instr(COALESCE(NEW.description, ''), 'code-probe: {') + 12), 1, instr(substr(COALESCE(NEW.description, ''), instr(COALESCE(NEW.description, ''), 'code-probe: {') + 12), '}'))) AND json_type(substr(substr(COALESCE(NEW.description, ''), instr(COALESCE(NEW.description, ''), 'code-probe: {') + 12), 1, instr(substr(COALESCE(NEW.description, ''), instr(COALESCE(NEW.description, ''), 'code-probe: {') + 12), '}')), '$.paths') = 'array' AND (json_type(substr(substr(COALESCE(NEW.description, ''), instr(COALESCE(NEW.description, ''), 'code-probe: {') + 12), 1, instr(substr(COALESCE(NEW.description, ''), instr(COALESCE(NEW.description, ''), 'code-probe: {') + 12), '}')), '$.contains') = 'text' OR json_type(substr(substr(COALESCE(NEW.description, ''), instr(COALESCE(NEW.description, ''), 'code-probe: {') + 12), 1, instr(substr(COALESCE(NEW.description, ''), instr(COALESCE(NEW.description, ''), 'code-probe: {') + 12), '}')), '$.absent') = 'text');
+END
+#@ trigger agent_issues agent_issues_directive_newline_ai 685
+CREATE TRIGGER agent_issues_directive_newline_ai AFTER INSERT ON agent_issues
+WHEN instr(NEW.description, '\ncode-') > 0 OR instr(NEW.description, '\nruntime-probe:') > 0 OR instr(NEW.description, '\nsession-task:') > 0 OR instr(NEW.description, '\ndepends-on:') > 0
+BEGIN
+  UPDATE agent_issues SET description = replace(replace(replace(replace(replace(replace(description,
+    '\ncode-task:', char(10) || 'code-task:'), '\ncode-anchor:', char(10) || 'code-anchor:'), '\ncode-probe:', char(10) || 'code-probe:'),
+    '\nruntime-probe:', char(10) || 'runtime-probe:'), '\nsession-task:', char(10) || 'session-task:'), '\ndepends-on:', char(10) || 'depends-on:')
+  WHERE id = NEW.id;
+END
+#@ trigger agent_issues agent_issues_evidence_annotate_ai 476
+CREATE TRIGGER agent_issues_evidence_annotate_ai AFTER INSERT ON agent_issues
+WHEN NEW.source LIKE 'cloud_ops_events:%' AND NOT EXISTS (SELECT 1 FROM cloud_ops_events e WHERE e.id = replace(NEW.source, 'cloud_ops_events:', ''))
+BEGIN
+  UPDATE agent_issues SET description = COALESCE(description, '') || char(10) || 'NO-SILENT-DROP-1: the cited evidence event ' || NEW.source || ' does not exist; the issue was kept and needs its evidence re-attached.'
+  WHERE id = NEW.id;
+END
+#@ trigger agent_issues agent_issues_open_dup_annotate 858
+CREATE TRIGGER agent_issues_open_dup_annotate BEFORE INSERT ON agent_issues
+WHEN COALESCE(NEW.status, 'open') = 'open'
+  AND EXISTS (SELECT 1 FROM agent_issues x WHERE x.status = 'open' AND lower(trim(x.title)) = lower(trim(NEW.title)))
+BEGIN
+  INSERT OR IGNORE INTO agent_issue_refiles (issue_id, refiles, first_at)
+    SELECT x.id, 0, strftime('%Y-%m-%dT%H:%M:%SZ', 'now') FROM agent_issues x
+    WHERE x.status = 'open' AND lower(trim(x.title)) = lower(trim(NEW.title)) ORDER BY x.id LIMIT 1;
+  UPDATE agent_issue_refiles SET refiles = refiles + 1, last_at = strftime('%Y-%m-%dT%H:%M:%SZ', 'now'),
+    last_source = substr(COALESCE(NEW.source, '?'), 1, 200)
+  WHERE issue_id = (SELECT x.id FROM agent_issues x WHERE x.status = 'open' AND lower(trim(x.title)) = lower(trim(NEW.title))
+                    ORDER BY x.id LIMIT 1);
+  SELECT RAISE(IGNORE);
+END
+#@ trigger agent_issues agent_issues_predicate_default_ins 297
+CREATE TRIGGER agent_issues_predicate_default_ins AFTER INSERT ON agent_issues WHEN NEW.predicate_id IS NULL BEGIN UPDATE agent_issues SET predicate_id = CASE WHEN instr(NEW.title,':')>1 THEN substr(NEW.title,1,MIN(instr(NEW.title,':')-1,80)) ELSE substr(NEW.title,1,80) END WHERE id = NEW.id; END
+#@ trigger agent_issues agent_issues_recheck_count_upd 302
+CREATE TRIGGER agent_issues_recheck_count_upd AFTER UPDATE OF updated_at ON agent_issues WHEN NEW.status='open' AND OLD.status='open' AND OLD.updated_at IS NOT NULL AND NEW.updated_at IS NOT OLD.updated_at BEGIN UPDATE agent_issues SET recheck_count = COALESCE(recheck_count,0)+1 WHERE id = NEW.id; END
+#@ trigger agent_issues agent_issues_reopen_open_twin_guard 376
+CREATE TRIGGER agent_issues_reopen_open_twin_guard
+BEFORE UPDATE OF status ON agent_issues
+WHEN NEW.status = 'open'
+  AND COALESCE(OLD.status, '') <> 'open'
+  AND EXISTS (SELECT 1 FROM agent_issues o
+               WHERE o.id <> NEW.id
+                 AND o.status = 'open'
+                 AND lower(trim(o.title)) = lower(trim(NEW.title)))
+BEGIN
+  SELECT RAISE(IGNORE);
+END
+#@ trigger agent_issues agent_issues_runtime_probe_upd 3427
+CREATE TRIGGER agent_issues_runtime_probe_upd AFTER UPDATE OF description ON agent_issues
+WHEN NEW.status = 'open' AND instr(COALESCE(NEW.description, ''), 'runtime-probe: {') > 0
+  AND (instr(COALESCE(OLD.description, ''), 'runtime-probe: {') = 0 OR substr(COALESCE(NEW.description, ''), instr(COALESCE(NEW.description, ''), 'runtime-probe: {'), instr(substr(COALESCE(NEW.description, ''), instr(COALESCE(NEW.description, ''), 'runtime-probe: {')), '}')) IS NOT substr(COALESCE(OLD.description, ''), instr(COALESCE(OLD.description, ''), 'runtime-probe: {'), instr(substr(COALESCE(OLD.description, ''), instr(COALESCE(OLD.description, ''), 'runtime-probe: {')), '}')))
+BEGIN
+  INSERT OR IGNORE INTO remediation_contracts (class, issue_id, precondition, action, verify_probe, verify_transport, max_attempts, escalate_to, expected_cadence_h, status, module)
+  VALUES ('issue-' || NEW.id, NEW.id, 'runtime-probe line in the issue (PROBE-BIRTH-2)', 'needs-machine-probe', 'needs-machine-probe', 'd1-query', 3, 'qnfo-fleet-control', 6, 'needs-machine-probe', 'birth');
+  UPDATE remediation_contracts
+  SET verify_transport = 'runner-https', verify_probe = substr(substr(COALESCE(NEW.description, ''), instr(COALESCE(NEW.description, ''), 'runtime-probe: {') + 15), 1, instr(substr(COALESCE(NEW.description, ''), instr(COALESCE(NEW.description, ''), 'runtime-probe: {') + 15), '}')),
+      status = 'active', module = 'runtime-probe-line-v2', attempts = 0, last_verdict = NULL, next_due_at = datetime('now'),
+      expected_cadence_h = 6, max_attempts = 3,
+      precondition = 'runtime-probe line in the issue (PROBE-BIRTH-2)',
+      action = 'the doer fixes the live behaviour; scripts/remediation_consumer.py GETs it from the GitHub runner and a pass closes the issue'
+  WHERE class = 'issue-' || NEW.id
+    AND NOT (verify_transport = 'runner-https' AND status = 'active' AND verify_probe = substr(substr(COALESCE(NEW.description, ''), instr(COALESCE(NEW.description, ''), 'runtime-probe: {') + 15), 1, instr(substr(COALESCE(NEW.description, ''), instr(COALESCE(NEW.description, ''), 'runtime-probe: {') + 15), '}')))
+    AND json_valid(substr(substr(COALESCE(NEW.description, ''), instr(COALESCE(NEW.description, ''), 'runtime-probe: {') + 15), 1, instr(substr(COALESCE(NEW.description, ''), instr(COALESCE(NEW.description, ''), 'runtime-probe: {') + 15), '}'))) AND json_extract(substr(substr(COALESCE(NEW.description, ''), instr(COALESCE(NEW.description, ''), 'runtime-probe: {') + 15), 1, instr(substr(COALESCE(NEW.description, ''), instr(COALESCE(NEW.description, ''), 'runtime-probe: {') + 15), '}')), '$.url') LIKE 'https://%' AND (json_type(substr(substr(COALESCE(NEW.description, ''), instr(COALESCE(NEW.description, ''), 'runtime-probe: {') + 15), 1, instr(substr(COALESCE(NEW.description, ''), instr(COALESCE(NEW.description, ''), 'runtime-probe: {') + 15), '}')), '$.contains') = 'text' OR json_type(substr(substr(COALESCE(NEW.description, ''), instr(COALESCE(NEW.description, ''), 'runtime-probe: {') + 15), 1, instr(substr(COALESCE(NEW.description, ''), instr(COALESCE(NEW.description, ''), 'runtime-probe: {') + 15), '}')), '$.absent') = 'text' OR json_type(substr(substr(COALESCE(NEW.description, ''), instr(COALESCE(NEW.description, ''), 'runtime-probe: {') + 15), 1, instr(substr(COALESCE(NEW.description, ''), instr(COALESCE(NEW.description, ''), 'runtime-probe: {') + 15), '}')), '$.status') = 'integer');
+END
+#@ trigger agent_issues agent_issues_superseded_contracts_upd 674
+CREATE TRIGGER agent_issues_superseded_contracts_upd AFTER UPDATE OF status ON agent_issues
+WHEN NEW.status IN ('closed', 'resolved') AND COALESCE(OLD.status, '') NOT IN ('closed', 'resolved')
+  AND EXISTS (SELECT 1 FROM issue_triage t WHERE t.issue_id = NEW.id
+              AND (lower(substr(COALESCE(t.close_evidence, ''), 1, 10)) = 'superseded' OR lower(substr(COALESCE(t.close_evidence, ''), 1, 4)) = 'moot'))
+BEGIN
+  UPDATE remediation_contracts SET status = 'superseded', last_verdict = 'superseded:closure-superseded', last_attempt_at = datetime('now')
+  WHERE issue_id = NEW.id AND status IN ('active', 'holding', 'needs-machine-probe', 'probe-review-refused');
+END
+#@ trigger agent_issues agent_issues_ts_norm_ins 1194
+CREATE TRIGGER agent_issues_ts_norm_ins AFTER INSERT ON agent_issues
+WHEN NEW.created_at IS NULL OR typeof(NEW.created_at)='text'
+  OR (typeof(NEW.created_at)='integer' AND NEW.created_at > 0 AND NEW.created_at < 100000000000)
+  OR NEW.updated_at IS NULL OR typeof(NEW.updated_at)='text'
+  OR (typeof(NEW.updated_at)='integer' AND NEW.updated_at > 0 AND NEW.updated_at < 100000000000)
+BEGIN
+  UPDATE agent_issues SET
+    created_at = CASE
+      WHEN NEW.created_at IS NULL THEN CAST(strftime('%s','now') AS INTEGER)*1000
+      WHEN typeof(NEW.created_at)='text' THEN COALESCE(CAST(strftime('%s', NEW.created_at) AS INTEGER)*1000, CAST(strftime('%s','now') AS INTEGER)*1000)
+      WHEN NEW.created_at > 0 AND NEW.created_at < 100000000000 THEN NEW.created_at*1000
+      ELSE NEW.created_at END,
+    updated_at = CASE
+      WHEN NEW.updated_at IS NULL THEN CAST(strftime('%s','now') AS INTEGER)*1000
+      WHEN typeof(NEW.updated_at)='text' THEN COALESCE(CAST(strftime('%s', NEW.updated_at) AS INTEGER)*1000, CAST(strftime('%s','now') AS INTEGER)*1000)
+      WHEN NEW.updated_at > 0 AND NEW.updated_at < 100000000000 THEN NEW.updated_at*1000
+      ELSE NEW.updated_at END
+  WHERE id = NEW.id;
+END
+#@ trigger agent_issues agent_issues_ts_norm_upd 1220
+CREATE TRIGGER agent_issues_ts_norm_upd AFTER UPDATE OF created_at, updated_at ON agent_issues
+WHEN NEW.created_at IS NULL OR typeof(NEW.created_at)='text'
+  OR (typeof(NEW.created_at)='integer' AND NEW.created_at > 0 AND NEW.created_at < 100000000000)
+  OR NEW.updated_at IS NULL OR typeof(NEW.updated_at)='text'
+  OR (typeof(NEW.updated_at)='integer' AND NEW.updated_at > 0 AND NEW.updated_at < 100000000000)
+BEGIN
+  UPDATE agent_issues SET
+    created_at = CASE
+      WHEN NEW.created_at IS NULL THEN CAST(strftime('%s','now') AS INTEGER)*1000
+      WHEN typeof(NEW.created_at)='text' THEN COALESCE(CAST(strftime('%s', NEW.created_at) AS INTEGER)*1000, CAST(strftime('%s','now') AS INTEGER)*1000)
+      WHEN NEW.created_at > 0 AND NEW.created_at < 100000000000 THEN NEW.created_at*1000
+      ELSE NEW.created_at END,
+    updated_at = CASE
+      WHEN NEW.updated_at IS NULL THEN CAST(strftime('%s','now') AS INTEGER)*1000
+      WHEN typeof(NEW.updated_at)='text' THEN COALESCE(CAST(strftime('%s', NEW.updated_at) AS INTEGER)*1000, CAST(strftime('%s','now') AS INTEGER)*1000)
+      WHEN NEW.updated_at > 0 AND NEW.updated_at < 100000000000 THEN NEW.updated_at*1000
+      ELSE NEW.updated_at END
+  WHERE id = NEW.id;
+END
+#@ trigger agent_issues issue_close_evidence_required 996
+CREATE TRIGGER issue_close_evidence_required
+BEFORE UPDATE OF status ON agent_issues
+WHEN NEW.status IN ('closed','resolved','wontfix') AND OLD.status NOT IN ('closed','resolved','wontfix')
+BEGIN
+  SELECT RAISE(ABORT,'close-without-evidence')
+    WHERE NOT EXISTS (SELECT 1 FROM issue_triage t WHERE t.issue_id = NEW.id AND t.close_evidence IS NOT NULL AND TRIM(t.close_evidence) <> '');
+  -- CLOSE-BINDS-TO-PROBE-1 (2026-10-18): a claim that the defect is GONE must agree with the fleet's own probe.
+  -- wontfix is deliberately exempt: declining to fix is a decision, not a claim of resolution.
+  SELECT RAISE(ABORT,'close-while-contract-fails')
+    WHERE NEW.status IN ('closed','resolved')
+      AND EXISTS (SELECT 1 FROM remediation_contracts c WHERE c.issue_id = NEW.id
+                    AND c.status IN ('active','holding')
+                    AND COALESCE(c.last_verdict,'') IN ('fail','vacuous-probe-result','probe-error','probe-not-machine-executable','probe-same-account-host'));
+END
+#@ trigger agent_issues issue_close_evidence_required_ins 450
+CREATE TRIGGER issue_close_evidence_required_ins BEFORE INSERT ON agent_issues WHEN NEW.status IN ('closed','resolved','wontfix') AND EXISTS (SELECT 1 FROM agent_issues o WHERE o.id = NEW.id AND o.status NOT IN ('closed','resolved','wontfix')) AND NOT EXISTS (SELECT 1 FROM issue_triage t WHERE t.issue_id = NEW.id AND t.close_evidence IS NOT NULL AND TRIM(t.close_evidence) <> '') BEGIN SELECT RAISE(ABORT,'close-without-evidence-replace-path'); END
+#@ trigger agent_issues issue_lifecycle_ai 190
+CREATE TRIGGER issue_lifecycle_ai AFTER INSERT ON agent_issues
+BEGIN
+  INSERT INTO issue_lifecycle (issue_id, event, to_status, has_evidence) VALUES (NEW.id, 'opened', NEW.status, NULL);
+END
+#@ trigger agent_issues issue_lifecycle_au 532
+CREATE TRIGGER issue_lifecycle_au AFTER UPDATE OF status ON agent_issues
+WHEN COALESCE(OLD.status, '') <> COALESCE(NEW.status, '')
+BEGIN
+  INSERT INTO issue_lifecycle (issue_id, event, from_status, to_status, has_evidence)
+  VALUES (NEW.id, CASE WHEN NEW.status IN ('closed', 'resolved', 'wontfix') THEN 'dispositioned' ELSE 'reopened' END, OLD.status, NEW.status,
+    CASE WHEN EXISTS (SELECT 1 FROM issue_triage t WHERE t.issue_id = NEW.id AND t.close_evidence IS NOT NULL AND TRIM(t.close_evidence) <> '') THEN 1 ELSE 0 END);
+END
+#@ trigger agent_issues issue_lifecycle_bd 313
+CREATE TRIGGER issue_lifecycle_bd BEFORE DELETE ON agent_issues
+BEGIN
+  INSERT INTO agent_issues_tombstone SELECT *, strftime('%Y-%m-%dT%H:%M:%SZ', 'now') FROM agent_issues WHERE id = OLD.id;
+  INSERT INTO issue_lifecycle (issue_id, event, from_status, has_evidence) VALUES (OLD.id, 'deleted', OLD.status, 0);
+END
+#@ trigger agent_issues issue_refile_reopen 927
+CREATE TRIGGER issue_refile_reopen BEFORE INSERT ON agent_issues
+WHEN EXISTS (SELECT 1 FROM agent_issues t WHERE t.title = NEW.title AND t.status IN ('resolved', 'wontfix', 'closed')
+  AND typeof(t.updated_at) = 'integer' AND t.updated_at > (strftime('%s', 'now') * 1000 - 86400000))
+BEGIN
+  UPDATE agent_issues SET status = 'open', updated_at = CAST(strftime('%s', 'now') AS INTEGER) * 1000,
+      description = COALESCE(description, '') || char(10) || 'REOPENED ' || strftime('%Y-%m-%dT%H:%M:%SZ', 'now') || ' by issue_refile_reopen (DOCTRINE-1): the same title was filed again within 24 h of the close, by ' || COALESCE(NEW.source, '?') || '.'
+  WHERE id = (SELECT t.id FROM agent_issues t WHERE t.title = NEW.title AND t.status IN ('resolved', 'wontfix', 'closed')
+    AND typeof(t.updated_at) = 'integer' AND t.updated_at > (strftime('%s', 'now') * 1000 - 86400000) ORDER BY t.id DESC LIMIT 1);
+  SELECT RAISE(IGNORE);
+END
+#@ trigger agent_issues owner_request_requires_card 936
+CREATE TRIGGER owner_request_requires_card BEFORE UPDATE OF status ON agent_issues WHEN NEW.category = 'owner-request' AND NEW.status IN ('closed','resolved','wontfix') AND OLD.status NOT IN ('closed','resolved','wontfix') AND NOT EXISTS (SELECT 1 FROM human_actions h WHERE h.slug = 'issue-' || NEW.id) BEGIN INSERT INTO human_actions (slug, title, why, default_in_effect, action, url, sev, status, source, created_at, updated_at) VALUES ('issue-' || NEW.id, substr(REPLACE(REPLACE(REPLACE(NEW.title,'Claude','owner agent'),'claude','owner agent'),'CLAUDE','OWNER AGENT'),1,120), substr(REPLACE(REPLACE(REPLACE(COALESCE(NEW.description,''),'Claude','owner agent'),'claude','owner agent'),'CLAUDE','OWNER AGENT'),1,400), '', 'Open fleet.qnfo.org and decide or dismiss this card.', 'https://fleet.qnfo.org/content', 'normal', 'open', 'owner-request-issue', strftime('%Y-%m-%dT%H:%M:%SZ','now'), strftime('%Y-%m-%dT%H:%M:%SZ','now')); END
+#@ trigger agent_issues tool_error_triage_mark_filed_ins 280
+CREATE TRIGGER tool_error_triage_mark_filed_ins
+AFTER INSERT ON agent_issues
+WHEN NEW.title LIKE 'TOOL-FAILURE: % [error]'
+BEGIN
+  UPDATE tool_error_triage
+     SET filed = 1
+   WHERE filed = 0
+     AND tool = replace(replace(NEW.title, 'TOOL-FAILURE: ', ''), ' [error]', '');
+END
+#@ trigger agent_issues tool_error_triage_mark_filed_rate_ins 261
+CREATE TRIGGER tool_error_triage_mark_filed_rate_ins
+AFTER INSERT ON agent_issues
+WHEN NEW.title LIKE 'TOOL-ERROR-RATE-%-1'
+BEGIN
+  UPDATE tool_error_triage
+     SET filed = 1
+   WHERE filed = 0
+     AND tool = substr(NEW.title, 17, length(NEW.title) - 18);
+END
+#@ table agent_issue_refiles agent_issue_refiles 158
+CREATE TABLE agent_issue_refiles (
+  issue_id INTEGER PRIMARY KEY,
+  refiles INTEGER NOT NULL DEFAULT 0,
+  first_at TEXT,
+  last_at TEXT,
+  last_source TEXT
+)
+#@ table agent_issues_tombstone agent_issues_tombstone 308
+CREATE TABLE agent_issues_tombstone(
+  id INT,
+  title TEXT,
+  description TEXT,
+  source TEXT,
+  category TEXT,
+  priority TEXT,
+  status TEXT,
+  linked_session TEXT,
+  created_at INT,
+  updated_at INT,
+  pipeline_stage TEXT,
+  predicate_id TEXT,
+  recheck_count INT,
+  close_channel TEXT
+, deleted_at TEXT)
+#@ table control_registry control_registry 638
+CREATE TABLE control_registry (
+  control TEXT PRIMARY KEY,
+  location TEXT NOT NULL,
+  kind TEXT NOT NULL CHECK (kind IN ('hold', 'filter', 'pause', 'kill-switch', 'gate', 'cap', 'guard', 'lease')),
+  guards_against TEXT,
+  critical_path INTEGER NOT NULL DEFAULT 0,
+  disposition TEXT NOT NULL CHECK (disposition IN ('remove', 'demote', 'replace', 'keep')),
+  disposition_state TEXT NOT NULL DEFAULT 'planned' CHECK (disposition_state IN ('planned', 'applied')),
+  alternate_path TEXT,
+  alternate_tested_at TEXT,
+  evidence TEXT NOT NULL,
+  issue_id INTEGER,
+  reviewed_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
+)
+#@ table decision_log decision_log 433
+CREATE TABLE decision_log (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  ts TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')),
+  actor TEXT NOT NULL,
+  assumption TEXT NOT NULL,
+  action TEXT NOT NULL,
+  evidence TEXT NOT NULL,
+  outcome TEXT NOT NULL,
+  blast_radius TEXT NOT NULL,
+  rollback_path TEXT NOT NULL
+, capability_gain TEXT, predicted_outcome TEXT, reach_gain TEXT, surfaces_tested TEXT, outcome_matched INTEGER)
+#@ table decision_predictions decision_predictions 557
+CREATE TABLE decision_predictions (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  decision_id INTEGER NOT NULL,
+  kind TEXT NOT NULL CHECK (kind IN ('metric', 'issue')),
+  subject TEXT NOT NULL,
+  op TEXT NOT NULL CHECK (op IN ('<', '<=', '>', '>=', '=', 'between', 'closed')),
+  value REAL,
+  value2 REAL,
+  due_at TEXT NOT NULL,
+  origin TEXT NOT NULL CHECK (origin IN ('parsed', 'seeded')),
+  created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')),
+  scored_at TEXT,
+  observed TEXT,
+  matched INTEGER,
+  UNIQUE (decision_id, subject, op)
+)
+#@ table failure_modes failure_modes 294
+CREATE TABLE failure_modes (
+  fm_key TEXT PRIMARY KEY,
+  failure_mode TEXT NOT NULL,
+  root_cause TEXT NOT NULL,
+  remediation TEXT NOT NULL,
+  detector TEXT NOT NULL,
+  probe_class TEXT,
+  first_seen TEXT NOT NULL,
+  issue_id INTEGER
+, trigger_condition TEXT, symptom TEXT, blast_radius TEXT)
+#@ trigger decision_log decision_log_no_delete 163
+CREATE TRIGGER decision_log_no_delete BEFORE DELETE ON decision_log
+BEGIN SELECT RAISE(ABORT, 'DOCTRINE-1: decision_log is append-only (doctrine section 12)'); END
+#@ trigger decision_log decision_log_no_update 163
+CREATE TRIGGER decision_log_no_update BEFORE UPDATE ON decision_log
+BEGIN SELECT RAISE(ABORT, 'DOCTRINE-1: decision_log is append-only (doctrine section 12)'); END
+#@ trigger decision_log decision_predictions_parse 2040
+CREATE TRIGGER decision_predictions_parse AFTER INSERT ON decision_log
+WHEN instr(COALESCE(NEW.predicted_outcome, ''), ' within ') > 0
+BEGIN
+  INSERT OR IGNORE INTO decision_predictions (decision_id, kind, subject, op, value, due_at, origin)
+    SELECT NEW.id, 'metric', t.tok1, t.tok2, CAST(t.tok3 AS REAL),
+      strftime('%Y-%m-%dT%H:%M:%SZ', 'now', '+' || CAST(t.after AS INTEGER) || CASE WHEN instr(t.after, ' d') > 0 THEN ' days' ELSE ' hours' END), 'parsed'
+    FROM (
+      SELECT u.tok1, u.tok2,
+        CASE WHEN instr(u.rest2, ' ') > 0 THEN substr(u.rest2, 1, instr(u.rest2, ' ') - 1) ELSE u.rest2 END AS tok3, u.after
+      FROM (
+        SELECT v.tok1,
+          CASE WHEN instr(v.rest1, ' ') > 0 THEN substr(v.rest1, 1, instr(v.rest1, ' ') - 1) ELSE v.rest1 END AS tok2,
+          CASE WHEN instr(v.rest1, ' ') > 0 THEN ltrim(substr(v.rest1, instr(v.rest1, ' ') + 1)) ELSE '' END AS rest2, v.after
+        FROM (
+          SELECT substr(w.p, 1, instr(w.p, ' ') - 1) AS tok1, ltrim(substr(w.p, instr(w.p, ' ') + 1)) AS rest1,
+            ltrim(substr(w.p, instr(w.p, ' within ') + 8)) AS after
+          FROM (SELECT trim(NEW.predicted_outcome) AS p) w
+        ) v
+      ) u
+    ) t
+    WHERE t.tok1 IN (SELECT metric FROM metric_registry) AND t.tok2 IN ('<', '<=', '>', '>=', '=')
+      AND t.tok3 GLOB '[0-9]*' AND CAST(t.after AS INTEGER) > 0;
+  INSERT OR IGNORE INTO decision_predictions (decision_id, kind, subject, op, value, due_at, origin)
+    SELECT NEW.id, 'issue', CAST(CAST(substr(w.p, 7) AS INTEGER) AS TEXT), 'closed', NULL,
+      strftime('%Y-%m-%dT%H:%M:%SZ', 'now', '+' || CAST(w.after AS INTEGER) || CASE WHEN instr(w.after, ' d') > 0 THEN ' days' ELSE ' hours' END), 'parsed'
+    FROM (SELECT trim(NEW.predicted_outcome) AS p, ltrim(substr(trim(NEW.predicted_outcome), instr(trim(NEW.predicted_outcome), ' within ') + 8)) AS after) w
+    WHERE lower(substr(w.p, 1, 6)) = 'issue ' AND CAST(substr(w.p, 7) AS INTEGER) > 0
+      AND instr(lower(w.p), ' closed within ') > 0 AND CAST(w.after AS INTEGER) > 0;
+END

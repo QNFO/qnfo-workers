@@ -47,7 +47,13 @@ import urllib.request
 AUDIT_DB = os.environ.get("AUDIT_D1_ID", "35e2e573-92f3-46ac-83c6-22f6429fc5e5")
 REPO_NAME = "qnfo-workers"
 REPO_NAME_FULL = "QNFO/qnfo-workers"
-MAX_PATCH = 200_000
+# PATCH-CAP-VERSION-LINE-1 (2026-10-19, agent_issues 100169, 100172, 100173, 100175): the cap was 200_000 chars. A bump of
+# `var VERSION` in qnfo-fleet-dashboard/worker.js replaces ONE 202,642-char line (the release notes ride on it as a comment) and
+# the same line in the deployed-current mirror, so even a 4-line edit is a ~816,000-char patch (removed plus added, twice): 5 of 5
+# code tasks on that file ended "publish: patch larger than 200000 chars" on 2026-10-19 (qnfo-fleet-control's VERSION line is
+# 199,469 chars, the same arithmetic). 1_000_000 passes those patches; a whole-file fallback for a 1.2 MB worker (2.4 MB) and any
+# runaway patch stay refused, and ctx plus patch still fit one D1 row (limit 2 MB).
+MAX_PATCH = 1_000_000
 STALE_PUBLISHING_MIN = 30
 D1_TIMEOUT_S = 45
 D1_READ_ATTEMPTS = 3
