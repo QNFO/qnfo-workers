@@ -89,7 +89,7 @@
 // Carries forward v1.0.5-boundary-match-20260926 (fix #1168 FEED-GATE-SUBSTRING-COLLISION-1:
 //   single alphanumeric denylist tokens are matched with word boundaries
 //   (?<![a-z0-9])token(?![a-z0-9]); phrases keep substring matching).
-var VERSION = "1.12.0-cap-rate-1"; // 1.12.0 IDEAS-CAP-RATE-1 (2026-10-19, agent_issues 100047, pillar research, ANTIFRAGILE-1): the research admission cap held generated accepts with no expiry, and the 1.11.1 release only fitted rows under the cap while research_queue sat at 473 of 120, so 80 accepts (oldest about 45 h) were never admitted; at or over the cap triage now admits CAP_TRICKLE_PER_RUN (3) oldest held rows per run, logs each trickle run to cloud_ops_events (kind idea-cap-trickle), and keeps the room path unchanged; ops_config ideas_cap_trickle_per_run (0 to 12) overrides the rate and 0 restores the old hold without a deploy. // 1.11.3 CRON-GRID-1 (owner directive 2026-10-19: every cron tick on the 5-minute grid, none slower than hourly): trigger minute moved onto the 5-minute grid (:23 -> :25). /* 1.11.1 IDEAS-CAP-GENERATED-RELEASE-1 (2026-10-19, agent_issues 100047, pillar research): triage re-queues accepts the research admission cap held, oldest first, as many as fit under the cap; they were stranded for good before. */ // 1.11.0 REACH-IDEA-1 (2026-10-19, agent_issues 2480, pillar reach): every /s/ thread page carries the subscribe box the home page has (ideaSubBox, shared). Carries 1.10.12 IDEAS-INTAKE-OWNER-1 from main.
+var VERSION = "1.13.0-scoring-backoff"; // 1.13.0 IDEA-SCORING-POISON-1 (2026-10-19, agent_issues 100145, pillar autonomy; minor: a decision triage now takes on its own): a row that no model in T_CHAIN can score (no JSON, an invalid scorecard) stayed status new, was scored again by up to four models on every hourly cycle, and counted out.errors, so fleet_heartbeat idea-hub read ok=0 on every cycle since 2026-10-19 10:32Z (CRON-FAULT-1 100145, four consecutive failures by 16:32Z) while ai_call_counters showed no API error (0 errors in 130 triage calls a day, the fallback models glm-5.3 and deepseek answering 74 of them). Row 1923 (owner-corpus) sat new from 13:25Z. A scoring failure of a generated or corpus row is now recorded on the row (rationale [scoring-error N ISO] reason, no new column), the row is retried on the next cycles up to 3 times and then once every 24 hours, rows without a failure marker are taken first so a failing row cannot starve the batch, and it is counted as scoring_failed (event meta scoring_failed, scoring_cooling, scoring_error, errors) and not as errors: a model that cannot read one text is not a cron fault, while a thrown error still is. A row scored later has its marker replaced by the rationale. idea-hub/scoring-failure.test.mjs. // 1.12.0 IDEAS-CAP-RATE-1 (2026-10-19, agent_issues 100047, pillar research, ANTIFRAGILE-1): the research admission cap held generated accepts with no expiry, and the 1.11.1 release only fitted rows under the cap while research_queue sat at 473 of 120, so 80 accepts (oldest about 45 h) were never admitted; at or over the cap triage now admits CAP_TRICKLE_PER_RUN (3) oldest held rows per run, logs each trickle run to cloud_ops_events (kind idea-cap-trickle), and keeps the room path unchanged; ops_config ideas_cap_trickle_per_run (0 to 12) overrides the rate and 0 restores the old hold without a deploy. // 1.11.3 CRON-GRID-1 (owner directive 2026-10-19: every cron tick on the 5-minute grid, none slower than hourly): trigger minute moved onto the 5-minute grid (:23 -> :25). /* 1.11.1 IDEAS-CAP-GENERATED-RELEASE-1 (2026-10-19, agent_issues 100047, pillar research): triage re-queues accepts the research admission cap held, oldest first, as many as fit under the cap; they were stranded for good before. */ // 1.11.0 REACH-IDEA-1 (2026-10-19, agent_issues 2480, pillar reach): every /s/ thread page carries the subscribe box the home page has (ideaSubBox, shared). Carries 1.10.12 IDEAS-INTAKE-OWNER-1 from main.
 // Diversity enforcement: ensure no topic exceeds 50% of accepted proposals in the last 30 days.
 const MAX_TOPIC_SHARE = 0.5;
 async function applyDiversityConstraint(proposal, getRecentAccepts) {
@@ -791,12 +791,19 @@ async function diversityRelease(env, mix, breached, out) {
 // 'new' oldest first, TRIAGE_BATCH a run, and are scored through the normal path. Each run writes the deferred count and
 // the breached caps to cloud_ops_events id 'idea-triage-budget'; /health reports the count. Producers count deferred
 // rows in their backpressure, so the backlog cannot grow without bound during a breach.
+// IDEA-SCORING-POISON-1 (1.13.0): the failure marker of a row no model could score lives in its rationale (a new row has none), so no migration
+// is needed. N failures so far and when the last one was; the first SCORING_RETRY_FAST failures are retried on the next cycle, then once a day.
+var SCORING_RETRY_FAST = 3, SCORING_RETRY_SLOW_MS = 24 * 3600 * 1000;
+function scoringErrorState(rationale) {
+  var m = /^\[scoring-error (\d+) ([0-9T:.\-]+Z)\]/.exec(String(rationale || ""));
+  return m ? { n: Number(m[1]), at: Date.parse(m[2]) || 0 } : { n: 0, at: 0 };
+}
 async function triageProposals(env, deadline) {
   // CRON-WALL-DEADLINE-1 (1.10.7, agent_issues 2904): the hourly cycle ended exceededWallTime because triage ran its full
   // batch (each row up to 3 scorecard models + an arXiv novelty screen) with no internal wall clock, and a single stage can
   // push the invocation past the 15-minute cron wall limit. A deadline (epoch ms) breaks the loop between rows; a skipped row
   // stays status 'new' for the next cycle. Absent deadline (tests) behaviour is unchanged.
-  var out = { triaged: 0, accepted: 0, errors: 0, deferred: 0, released: 0, diversity_held: 0, diversity_released: 0, diversity_expired: 0, wall_cut: 0, novelty: { screened: 0, held: 0, foundational_quota: 0, unscreened: 0, last_error: null } };
+  var out = { triaged: 0, accepted: 0, errors: 0, scoring_failed: 0, scoring_cooling: 0, scoring_error: null, deferred: 0, released: 0, diversity_held: 0, diversity_released: 0, diversity_expired: 0, wall_cut: 0, novelty: { screened: 0, held: 0, foundational_quota: 0, unscreened: 0, last_error: null } };
   var budget = await aiBudgetBreach(env);
   out.budget_breached = budget.breached;
   out.lean = budget.breached;
@@ -818,7 +825,8 @@ async function triageProposals(env, deadline) {
   } catch (e) {
     out.errors++;
   }
-  var rows = (await env.QNFO_AUDIT.prepare("SELECT id, idea, name, contact FROM idea_proposals WHERE status='new' ORDER BY created_at ASC LIMIT ?1").bind(TRIAGE_BATCH).all()).results || [];
+  // IDEA-SCORING-POISON-1 (1.13.0): rows that failed scoring earlier carry a [scoring-error N ISO] marker in rationale and go after the clean ones.
+  var rows = (await env.QNFO_AUDIT.prepare("SELECT id, idea, name, contact, rationale FROM idea_proposals WHERE status='new' ORDER BY (CASE WHEN rationale LIKE '[scoring-error %' THEN 1 ELSE 0 END) ASC, created_at ASC LIMIT ?1").bind(TRIAGE_BATCH).all()).results || [];
   // IDEA-DIVERSITY-CAP-1: the 30-day accepted mix, read once and kept current as this run accepts. Unreadable: no cap
   // this run (null), and the error is counted.
   var mix = null;
@@ -826,6 +834,8 @@ async function triageProposals(env, deadline) {
   for (var i = 0; i < rows.length; i++) {
     if (deadline && Date.now() > deadline) { out.wall_cut += rows.length - i; break; } // CRON-WALL-DEADLINE-1
     var row = rows[i], now = new Date().toISOString();
+    var se = scoringErrorState(row.rationale);
+    if (se.n >= SCORING_RETRY_FAST && Date.now() - se.at < SCORING_RETRY_SLOW_MS) { out.scoring_cooling++; continue; }
     try {
       // Research questions from the fleet's own producers are ideas, not chat questions: the chat-question filter
       // would HOLD every think-loop proposal unscored ("Can X predict Y?" matches it). OWNER-SIGNAL-INTAKE-1: Ask QWAV
@@ -838,7 +848,13 @@ async function triageProposals(env, deadline) {
         out.triaged++; continue;
       }
       var s = await scoreIdea(env, row.idea, budget.breached);
-      if (s.error && kind !== "direct") { out.errors++; continue; }
+      if (s.error && kind !== "direct") {
+        // IDEA-SCORING-POISON-1 (1.13.0): recorded on the row, retried a bounded number of times, and not a cron fault.
+        out.scoring_failed++;
+        if (!out.scoring_error) out.scoring_error = String(s.error).slice(0, 200);
+        await env.QNFO_AUDIT.prepare("UPDATE idea_proposals SET rationale = ?1 WHERE id = ?2 AND status = 'new'").bind("[scoring-error " + (se.n + 1) + " " + now + "] " + String(s.error).slice(0, 160), row.id).run();
+        continue;
+      }
       if (s.error) s = { score: null, decision: "HOLD", rationale: "scoring unavailable: " + String(s.error).slice(0, 80) };
       s = ownerDecision(kind, s);
       if (kind !== "generated") out.owner_accepted = (out.owner_accepted || 0) + (s.decision === "ACCEPT" ? 1 : 0);
@@ -881,7 +897,7 @@ async function triageProposals(env, deadline) {
     out.diversity_held_total = Number(dd && dd.n) || 0;
     var at = new Date().toISOString();
     await env.QNFO_AUDIT.prepare("INSERT OR REPLACE INTO cloud_ops_events (id, ts, kind, text, meta, job, status) VALUES ('idea-triage-budget', ?1, 'idea-triage-budget', ?2, ?3, 'idea-hub', ?4)")
-      .bind(at, "idea triage: " + (budget.breached ? "AI budget caps breached, scored lean on one cheap model; " : "caps clear; ") + out.released + " released, " + out.triaged + " triaged, " + out.deferred_total + " waiting as deferred_budget, " + out.diversity_held_total + " as deferred_diversity", JSON.stringify({ version: VERSION, breached: budget.breached, caps: budget.caps, deferred_run: out.deferred, released_run: out.released, cap_released_run: out.cap_released || 0, cap_trickled_run: out.cap_trickled || 0, deferred_total: out.deferred_total, triaged_run: out.triaged, diversity_held_run: out.diversity_held, diversity_released_run: out.diversity_released, diversity_expired_run: out.diversity_expired, diversity_held_total: out.diversity_held_total, diversity: out.diversity || null, novelty: out.novelty }), budget.breached ? "lean" : "ok").run();
+      .bind(at, "idea triage: " + (budget.breached ? "AI budget caps breached, scored lean on one cheap model; " : "caps clear; ") + out.released + " released, " + out.triaged + " triaged, " + out.deferred_total + " waiting as deferred_budget, " + out.diversity_held_total + " as deferred_diversity", JSON.stringify({ version: VERSION, breached: budget.breached, caps: budget.caps, deferred_run: out.deferred, released_run: out.released, cap_released_run: out.cap_released || 0, cap_trickled_run: out.cap_trickled || 0, deferred_total: out.deferred_total, triaged_run: out.triaged, diversity_held_run: out.diversity_held, diversity_released_run: out.diversity_released, diversity_expired_run: out.diversity_expired, diversity_held_total: out.diversity_held_total, diversity: out.diversity || null, novelty: out.novelty, scoring_failed: out.scoring_failed, scoring_cooling: out.scoring_cooling, scoring_error: out.scoring_error, errors: out.errors }), budget.breached ? "lean" : "ok").run();
   } catch (e) { console.error(JSON.stringify({ worker: "idea-hub", where: "triageProposals", error: String(e && e.message || e).slice(0, 300) })); }
   // OWNER-SIGNAL-INTAKE-1: metric owner_signal_share_30d (registered with its trigger in
   // migrations/2026-10-07-owner-signal-intake.sql) is the share of research_queue rows created in the last 30 days that
