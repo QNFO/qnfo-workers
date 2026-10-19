@@ -382,6 +382,21 @@ ok("suicidal ideation is caught", crisisSignal("I've been suicidal for a week").
 ok("'cut myself some slack' is not a crisis", crisisSignal("I should cut myself some slack today").level === 0);
 ok("'kill the build' is not a crisis", crisisSignal("I want to kill this build and start over").level === 0);
 ok("'nothing matters' is soft, not hard", crisisSignal("nothing matters anymore").level === 1);
+// COMPANION-CRISIS-PARITY-1 (agent_issues 100040): curly apostrophes and the phrasings personal-api catches.
+ok("curly apostrophe is normalised", crisisSignal("I don\u2019t want to live").level === 2);
+ok("left curly apostrophe is normalised", crisisSignal("I can\u2018t cope").level === 1);
+ok("'wish I was dead' is caught", crisisSignal("some days I wish I was dead").level === 2);
+ok("'better off without me' is caught", crisisSignal("they'd be better off without me").level === 2);
+ok("'nobody would miss me' is caught", crisisSignal("nobody would miss me").level === 2);
+ok("'kms' is caught", crisisSignal("honestly gonna kms").level === 2);
+ok("Dutch 'zelfmoord' is caught", crisisSignal("ik denk aan zelfmoord").level === 2);
+ok("Dutch 'ik wil dood' is caught", crisisSignal("ik wil dood").level === 2);
+ok("Dutch 'er een eind aan maken' is caught", crisisSignal("ik wil er een eind aan maken").level === 2);
+ok("Dutch 'ik wil er niet meer zijn' is caught", crisisSignal("ik wil er niet meer zijn").level === 2);
+ok("Dutch 'ik zie het niet meer zitten' is soft", crisisSignal("ik zie het niet meer zitten").level === 1);
+ok("'to die for' stays calm", crisisSignal("this cake is to die for").level === 0);
+ok("'killing time' stays calm", crisisSignal("just killing time before the meeting").level === 0);
+ok("an ordinary Dutch sentence stays calm", crisisSignal("ik ga morgen naar de markt").level === 0);
 const empty = crisisBlock({});
 ok("unconfigured backstop is admitted, not invented", empty.text.includes("No backstop is configured yet"));
 ok("unconfigured crisis lines are admitted", empty.text.includes("No crisis lines configured yet"));
