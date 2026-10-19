@@ -10,6 +10,7 @@ const src = readFileSync(new URL("./worker.js", import.meta.url), "utf8");
 const cut = (from, to) => { const a = src.indexOf(from), b = src.indexOf(to, a); if (a < 0 || b < a) throw new Error("not found in worker.js: " + from); return src.slice(a, b); };
 const block = cut("// ---- CONTENT-PIPELINE-1:BEGIN ----", "// ---- CONTENT-PIPELINE-1:END ----");
 const kpi = cut("// ---- FLEET-KPI-1:BEGIN ----", "// ---- FLEET-KPI-1:END ----");
+const outcomes = cut("/* CODE-OUTCOMES:BEGIN", "/* CODE-OUTCOMES:END */"); // the KPI block builds its code-task read from the shared outcome SQL
 const d1allSrc = cut("async function d1all(db, sql, params) {", "__name(d1all, \"d1all\");");
 const escSrc = cut("function esc(s) {", "__name(esc, \"esc\");");
 const migration = readFileSync(new URL("../migrations/2026-10-14-03-content-pipeline.sql", import.meta.url), "utf8");
@@ -119,7 +120,7 @@ q08.exec(`INSERT INTO signal_log (status, created_at) VALUES ('published', '${sq
 let reads = 0;
 const shimOf = (db) => ({ prepare: (sql) => { let args = []; const s = { bind: (...a) => { args = a; return s; }, all: async () => { reads++; return { results: db.prepare(sql).all(...args) }; }, run: async () => db.prepare(sql).run(...args) }; return s; } });
 const ctx = vm.createContext({ VERSION: "1.37.0-test", NAME: "qnfo-fleet-dashboard", FLEET_SHELL_JS: "", fleetHead: (t) => "<html><title>" + t + "</title><body>", fleetTop: (cur) => "<nav data-current=\"" + cur + "\"></nav>", console, Date, JSON, Math, Object, Promise, String, Number, Array, Set, isFinite });
-vm.runInContext(d1allSrc + escSrc + kpi + block + "\nthis.C = { contentData, contentHtml, contentGateMetric, reset: function() { contentCache = null; } };", ctx);
+vm.runInContext(d1allSrc + escSrc + outcomes + kpi + block + "\nthis.C = { contentData, contentHtml, contentGateMetric, reset: function() { contentCache = null; } };", ctx);
 const C = ctx.C, env = { AUDIT: shimOf(audit), LIVING: shimOf(living), Q08: shimOf(q08) };
 const j = (o) => JSON.parse(JSON.stringify(o));
 const v = j(await C.contentData(env, NOW));
