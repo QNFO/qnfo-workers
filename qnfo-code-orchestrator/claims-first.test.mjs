@@ -133,7 +133,7 @@ ok(releases().length === 1 && releases()[0].body.outcome === "abandoned" && rele
 {
   const envNo = Object.assign({}, env, { DEPLOY_GUARD: undefined });
   let guardCalls = 0; const f0 = globalThis.fetch; globalThis.fetch = async (...a) => { if (/deploy-guard|work-lock/.test(String(a[0]))) guardCalls++; return f0(...a); };
-  const c9 = await (await worker.fetch(new Request("https://x/v1/tasks", { method: "POST", headers: hdr, body: JSON.stringify({ repo: "qnfo-workers", path: "fx-worker/other.js", goal: "no binding" }) }), envNo)).json();
+  const c9 = await (await worker.fetch(new Request("https://x/v1/tasks", { method: "POST", headers: hdr, body: JSON.stringify({ repo: "qnfo-workers", path: "fx-other/worker.js", goal: "no binding" }) }), envNo)).json();
   // maxSteps 1: 0 reads as the default 8, and three failed reads park the task in a backoff the sweep skips (CLAIM-HELD-IN-BACKOFF-1).
   const t9 = await (await worker.fetch(new Request("https://x/v1/tick", { method: "POST", headers: hdr, body: JSON.stringify({ maxSteps: 1, plan: false, intake: false }) }), envNo)).json();
   ok(c9.ok && !ctxOf(c9.id).claim && t9.claims && t9.claims.errors >= 1 && t9.claims.taken === 0 && guardCalls === 0, "without the binding no claim is taken, the sweep counts it, and no guard call leaves the worker", { c9, claims: t9.claims, guardCalls });
@@ -149,17 +149,17 @@ ok(atLeast(h.version, "0.3.21") && (h.limitations || []).some((l) => /CLAIMS-FIR
 //     later acquire was refused by the task's own lease, which the stub now models like the real guard.
 {
   const f0 = globalThis.fetch, ai0 = env.AI.run;
-  globalThis.fetch = async (u) => /raw\.githubusercontent\.com\/QNFO\/qnfo-workers\/main\/fx-worker\/keep\.md$/.test(String(u)) ? new Response("# keep\n\nline\n", { status: 200 }) : new Response("nf", { status: 404 });
+  globalThis.fetch = async (u) => /raw\.githubusercontent\.com\/QNFO\/qnfo-workers\/main\/fx-worker\/README\.md$/.test(String(u)) ? new Response("# keep\n\nline\n", { status: 200 }) : new Response("nf", { status: 404 });
   env.AI.run = async () => ({ response: "```file\n# keep\n\nchanged\n```" });
   db.prepare("UPDATE code_tasks SET status = 'closed' WHERE status = 'queued'").run();
   guard.held = null; guard.lease = {}; guard.calls.length = 0;
-  const k = await (await worker.fetch(new Request("https://x/v1/tasks", { method: "POST", headers: hdr, body: JSON.stringify({ repo: "qnfo-workers", path: "fx-worker/keep.md", goal: "claims-ctx fixture: change the line" }) }), env)).json();
+  const k = await (await worker.fetch(new Request("https://x/v1/tasks", { method: "POST", headers: hdr, body: JSON.stringify({ repo: "qnfo-workers", path: "fx-worker/README.md", goal: "claims-ctx fixture: change the line" }) }), env)).json();
   ok(k.ok && !ctxOf(k.id).claim, "11a the task holds no claim at enqueue (CLAIM-AT-RUN-1)", ctxOf(k.id));
   guard.calls.length = 0;
   let tk = await tick();
   const tok = ctxOf(k.id).claim && ctxOf(k.id).claim.token;
   ok(tk.steps === 1 && !tk.done[0].deferred && tk.done[0].step === "read" && row(k.id).step === "propose" && acquires().length === 1 && !acquires()[0].body.token && tok, "11c the read step ran after taking the claim at its start", { tk, calls: guard.calls });
-  const selfRefused = await (await guardFetch(GUARD + "/work-lock/acquire", { body: JSON.stringify({ key: "file:fx-worker/keep.md", owner: "qnfo-code-orchestrator:" + k.id, ttl_sec: 7200 }) })).json();
+  const selfRefused = await (await guardFetch(GUARD + "/work-lock/acquire", { body: JSON.stringify({ key: "file:fx-worker/README.md", owner: "qnfo-code-orchestrator:" + k.id, ttl_sec: 7200 }) })).json();
   ok(selfRefused.acquired === false && selfRefused.holder === "qnfo-code-orchestrator:" + k.id, "11b the stub refuses a token-less acquire with the task's own lease, as the guard does", selfRefused);
   let ck = ctxOf(k.id);
   ok(ck.base === "# keep\n\nline\n" && ck.claim && ck.claim.token === tok, "11d after the read step the rebuilt ctx still carries the claim token", { claim: ck.claim, hasBase: !!ck.base });

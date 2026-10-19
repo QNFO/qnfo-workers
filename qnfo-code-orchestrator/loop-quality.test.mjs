@@ -44,7 +44,7 @@ function makeD1() {
 }
 const FILES = {};
 globalThis.fetch = async (u) => {
-  const m = /^https:\/\/raw\.githubusercontent\.com\/QNFO\/qnfo-workers\/main\/(.+)$/.exec(String(u));
+  const m = /^https:\/\/raw\.githubusercontent\.com\/QNFO\/[A-Za-z0-9._-]+\/main\/(.+)$/.exec(String(u));
   const p = m ? decodeURIComponent(m[1]) : null;
   return p && FILES[p] != null ? new Response(FILES[p], { status: 200 }) : new Response("nf", { status: 404 });
 };
@@ -178,9 +178,10 @@ const GOOD = block("  for (const r of refs) out.push(String(r));", "  for (const
   ok(t.status === "needs_human" && /verification/.test(t.last_error || ""), "5b without the pull publisher nothing is deferred: the task still parks", { st: t.status, err: t.last_error });
 }
 {
+  // MERGE-SCOPE-PARITY-1 (0.18.29): qnfo-workers refuses this path at enqueue, so the fixture lives in another repository.
   FILES["fx-worker/notes.toml2"] = "a = 1\n".repeat(10);
   const { env } = envWith(["```file\na = 2\n```"], { JS_VERIFY: "off" });
-  await worker.fetch(new Request("https://x/v1/tasks", { method: "POST", headers: hdr, body: JSON.stringify({ repo: "qnfo-workers", path: "fx-worker/notes.toml2", goal: "set a to 2 in the notes file" }) }), env);
+  await worker.fetch(new Request("https://x/v1/tasks", { method: "POST", headers: hdr, body: JSON.stringify({ repo: "qnfo-labs", path: "fx-worker/notes.toml2", goal: "set a to 2 in the notes file" }) }), env);
   await tick(env);
   const t = row(env);
   ok(t.status === "needs_human" && /no deterministic verifier/.test(t.last_error || ""), "5c a file type with no verifier anywhere still parks", { st: t.status, err: t.last_error });
