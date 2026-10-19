@@ -19,8 +19,23 @@
 //   5. A kind that keeps firing without ever landing is retired, using the same v_nudge_loop as the ladder.
 //   6. Risk language is answered with the fixed crisis lines from wellbeing_config, never with model text alone.
 //   7. Everything stored is listed, exportable and deletable from /companion (privacy view).
+//
+// Evidence-based additions (COMPANION-BEST-PRACTICE-1, 2026-10-19; the reasoning and sources are in
+// personal-api/COMPANION-BEST-PRACTICES.md):
+//   8. Behavioral activation: a finished activity can be rated for enjoyment and achievement (1-5 each), and the
+//      companion suggests from his own "what helps" record and a small bank of activities (movement, nature,
+//      connection, mastery, pleasure, rest) instead of a fixed walk.
+//   9. A personal safety plan (Stanley-Brown: warning signs, coping, distraction, people, professionals, a safer
+//      space, reasons) is part of every crisis reply when he has written one.
+//  10. Every two weeks, the WHO-5 well-being index (a validated five-item measure). A score of 28 or less, or two
+//      readings under 50 in a row, adds a gentle suggestion to talk to his GP; the companion never diagnoses.
+//  11. He controls the reach-outs: a pause (hours or days) silences every nudge except a care touch after risk words.
+//  12. A retired nudge kind gets one fresh try a week (exploration), so one bad week cannot silence it for good.
+//  13. Real people over the app: when no social contact shows up for four days, one gentle connection nudge.
+//  14. Lock-screen privacy: care and presence pushes show a neutral line by default (discreet_push = care|all|off).
+//  15. Data minimisation: raw voice recordings are deleted after media_retention_days (30); the transcript stays.
 
-export const COMPANION_VERSION = "1.0.0";
+export const COMPANION_VERSION = "1.1.0";
 export const TZ = "Europe/Amsterdam";
 export const CONTEXTS = [
   { name: "@home", hint: "chores, cooking, things in the flat" },
@@ -31,7 +46,7 @@ export const CONTEXTS = [
   { name: "@anywhere", hint: "thinking, reading, small things" }
 ];
 export const ENERGY = ["low", "medium", "high"];
-export const NUDGE_KINDS = ["cmp-checkin", "cmp-care", "cmp-reflect", "cmp-next", "cmp-review", "cmp-anchor", "cmp-presence"];
+export const NUDGE_KINDS = ["cmp-checkin", "cmp-care", "cmp-reflect", "cmp-next", "cmp-review", "cmp-anchor", "cmp-presence", "cmp-measure", "cmp-connect"];
 // The e-mail ladder's asks are pushed to the phone too, so the two senders read as one companion.
 export const LADDER_KINDS = ["checkin", "micro", "body", "contact", "care", "presence"];
 
@@ -59,6 +74,18 @@ export const DDL = [
   `CREATE TABLE IF NOT EXISTS cmp_reviews (
      id TEXT PRIMARY KEY, card_id TEXT NOT NULL, ts TEXT NOT NULL, rating INTEGER NOT NULL,
      elapsed_days REAL, scheduled_days REAL, stability REAL, difficulty REAL)`,
+  // Behavioral activation: the activity bank and what each activity felt like (enjoyment and achievement, 1-5).
+  `CREATE TABLE IF NOT EXISTS cmp_activities (
+     id TEXT PRIMARY KEY, ts TEXT NOT NULL, title TEXT NOT NULL, category TEXT NOT NULL, energy TEXT DEFAULT 'low',
+     minutes INTEGER DEFAULT 10, source TEXT DEFAULT 'seed', active INTEGER DEFAULT 1)`,
+  `CREATE TABLE IF NOT EXISTS cmp_activity_log (
+     id TEXT PRIMARY KEY, ts TEXT NOT NULL, day TEXT NOT NULL, activity_id TEXT, action_id TEXT, nudge_id INTEGER,
+     title TEXT NOT NULL, category TEXT, pleasure INTEGER, mastery INTEGER, mood_before INTEGER, note TEXT)`,
+  `CREATE INDEX IF NOT EXISTS cmp_activity_log_ts ON cmp_activity_log(ts)`,
+  // Validated measures (WHO-5 today), kept apart from the daily taps.
+  `CREATE TABLE IF NOT EXISTS cmp_measures (
+     id TEXT PRIMARY KEY, ts TEXT NOT NULL, day TEXT NOT NULL, instrument TEXT NOT NULL, items_json TEXT NOT NULL,
+     raw INTEGER NOT NULL, score INTEGER NOT NULL)`,
   `CREATE TABLE IF NOT EXISTS cmp_push_subs (
      endpoint TEXT PRIMARY KEY, p256dh TEXT NOT NULL, auth TEXT NOT NULL, ua TEXT,
      created_at TEXT NOT NULL, last_ok TEXT, last_error TEXT, failures INTEGER DEFAULT 0)`,
@@ -100,6 +127,7 @@ export async function ensureSchema(db, force) {
     }
   }
   for (const c of CONTEXTS) await db.prepare("INSERT INTO cmp_contexts (name, hint) VALUES (?, ?) ON CONFLICT(name) DO NOTHING").bind(c.name, c.hint).run();
+  for (const a of SEED_ACTIVITIES) await db.prepare("INSERT INTO cmp_activities (id, ts, title, category, energy, minutes, source) VALUES (?, ?, ?, ?, ?, ?, 'seed') ON CONFLICT(id) DO NOTHING").bind(a.id, nowIso(), a.title, a.category, a.energy, a.minutes).run();
   _schemaReady = true;
 }
 
@@ -289,11 +317,240 @@ export const FALLBACK_CRISIS_LINES = [
 export function crisisText(cfg) {
   const lines = Array.isArray(cfg && cfg.crisis_lines) && cfg.crisis_lines.length ? cfg.crisis_lines : FALLBACK_CRISIS_LINES;
   const who = cfg && (cfg.backstop_name || cfg.backstop_contact) ? (cfg.backstop_name || "your person") + (cfg.backstop_contact ? " (" + cfg.backstop_contact + ")" : "") : "";
+  const plan = normalizeSafetyPlan(cfg && cfg.safety_plan);
+  const people = plan.helpers.length ? plan.helpers.slice(0, 3).join(", ") : who;
   const out = ["I'm really glad you told me. I'm staying right here with you."];
-  out.push(who ? "Please tell " + who + " that you're not okay, right now. One line is enough." : "Please tell one real person that you're not okay, right now. One line is enough.");
+  out.push(people ? "Please tell " + people + " that you're not okay, right now. One line is enough." : "Please tell one real person that you're not okay, right now. One line is enough.");
   out.push("You can talk to someone at any hour: " + lines.map((l) => (l.label || "") + (l.number && !String(l.label || "").includes(l.number) ? " " + l.number : "") + (l.url ? " " + l.url : "")).join(" · "));
+  // His own safety plan, in his own words, follows the lines (rule 9). Short: a crisis is not the moment for a wall of text.
+  if (plan.filled) {
+    const P = ["Your plan, in your words:"];
+    if (plan.coping.length) P.push("- Things that help you get through: " + plan.coping.slice(0, 3).join("; "));
+    if (plan.distractions.length) P.push("- Places or people that take your mind off it: " + plan.distractions.slice(0, 2).join("; "));
+    if (plan.safe_environment.length) P.push("- Making where you are safer: " + plan.safe_environment.slice(0, 2).join("; "));
+    if (plan.professionals.length) P.push("- Professionals: " + plan.professionals.slice(0, 2).join("; "));
+    if (plan.reasons.length) P.push("- What you're living for: " + plan.reasons.slice(0, 3).join("; "));
+    if (P.length > 1) out.push(P.join("\n"));
+  }
   out.push("Nothing has to be solved tonight. If you can, tell me where you are and whether you're safe right now.");
   return out.join("\n\n");
+}
+
+// ---------------------------------------------------------------- safety plan (Stanley-Brown, his own words)
+
+// The seven steps of the Stanley-Brown Safety Planning Intervention. Each is a short list of his own lines.
+export const SAFETY_PLAN_FIELDS = [
+  ["warning_signs", "Warning signs that a crisis may be building (thoughts, moods, situations)"],
+  ["coping", "Things I can do on my own to take my mind off it"],
+  ["distractions", "People and places that help me feel better or distracted"],
+  ["helpers", "People I can ask for help (name and number)"],
+  ["professionals", "Professionals and services (GP, therapist, 113)"],
+  ["safe_environment", "How I can make where I am safer"],
+  ["reasons", "What matters to me and is worth living for"]
+];
+export function normalizeSafetyPlan(raw) {
+  let o = raw;
+  if (typeof o === "string") { try { o = JSON.parse(o); } catch (e) { o = {}; } }
+  if (!o || typeof o !== "object") o = {};
+  const out = { filled: false, updated_at: typeof o.updated_at === "string" ? o.updated_at : null };
+  for (const [k] of SAFETY_PLAN_FIELDS) {
+    const v = Array.isArray(o[k]) ? o[k] : typeof o[k] === "string" ? o[k].split(/\n+/) : [];
+    out[k] = v.map((x) => s(x, 200)).filter(Boolean).slice(0, 8);
+    if (out[k].length) out.filled = true;
+  }
+  return out;
+}
+export async function saveSafetyPlan(env, plan) {
+  const p = normalizeSafetyPlan(plan);
+  p.updated_at = nowIso();
+  delete p.filled;
+  await env.PERSONAL.prepare("INSERT INTO wellbeing_config (key, value, updated_at) VALUES ('safety_plan', ?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at").bind(JSON.stringify(p), p.updated_at).run();
+  return Object.assign({ ok: true }, normalizeSafetyPlan(p));
+}
+
+// ---------------------------------------------------------------- behavioral activation
+
+// A small starting bank across the behavioral-activation categories. He adds his own; ratings decide what comes back.
+export const ACTIVITY_CATEGORIES = ["movement", "nature", "connection", "mastery", "pleasure", "rest"];
+export const SEED_ACTIVITIES = [
+  { id: "act-walk", title: "a ten-minute walk outside, no phone", category: "nature", energy: "low", minutes: 10 },
+  { id: "act-stretch", title: "five minutes of stretching", category: "movement", energy: "low", minutes: 5 },
+  { id: "act-music", title: "one song you love, doing nothing else", category: "pleasure", energy: "low", minutes: 5 },
+  { id: "act-tea", title: "make a hot drink and drink it by a window", category: "rest", energy: "low", minutes: 10 },
+  { id: "act-shower", title: "a warm shower", category: "rest", energy: "low", minutes: 10 },
+  { id: "act-message", title: "send a two-line message to someone you like", category: "connection", energy: "low", minutes: 5 },
+  { id: "act-tidy", title: "tidy one surface, only one", category: "mastery", energy: "low", minutes: 10 },
+  { id: "act-cook", title: "cook something simple", category: "mastery", energy: "medium", minutes: 30 },
+  { id: "act-cycle", title: "a bike ride or a longer walk", category: "movement", energy: "medium", minutes: 30 },
+  { id: "act-call", title: "call someone, even for five minutes", category: "connection", energy: "medium", minutes: 15 },
+  { id: "act-read", title: "read something you chose, twenty minutes", category: "pleasure", energy: "medium", minutes: 20 },
+  { id: "act-make", title: "make something: draw, write, build, play", category: "pleasure", energy: "medium", minutes: 30 }
+];
+// Smoothed score per activity and per category from his ratings: (pleasure + mastery) / 2 with a prior of 3 worth two
+// ratings, so one good afternoon does not dominate and an unrated activity sits at the middle.
+export function helpScores(log) {
+  const by = {}, cat = {};
+  for (const r of log || []) {
+    const v = [r.pleasure, r.mastery].map(Number).filter((x) => x >= 1 && x <= 5);
+    if (!v.length) continue;
+    const m = v.reduce((a, b) => a + b, 0) / v.length;
+    const key = r.activity_id || ("t:" + String(r.title || "").toLowerCase());
+    by[key] = by[key] || { key, title: r.title, category: r.category || null, sum: 0, n: 0 };
+    by[key].sum += m; by[key].n++;
+    if (r.category) { cat[r.category] = cat[r.category] || { category: r.category, sum: 0, n: 0 }; cat[r.category].sum += m; cat[r.category].n++; }
+  }
+  const sm = (x) => Math.round((x.sum + 3 * 2) / (x.n + 2) * 100) / 100;
+  return {
+    activities: Object.values(by).map((x) => ({ key: x.key, title: x.title, category: x.category, score: sm(x), n: x.n })).sort((a, b) => b.score - a.score || b.n - a.n),
+    categories: Object.values(cat).map((x) => ({ category: x.category, score: sm(x), n: x.n })).sort((a, b) => b.score - a.score)
+  };
+}
+// One activity for now: fits today's energy, prefers what he rated well, never the one suggested most recently.
+export function pickActivity(bank, scores, energy, recentAsks) {
+  const order = { low: 0, medium: 1, high: 2 };
+  const cap = order[energy] === undefined ? 0 : order[energy];
+  const fits = (bank || []).filter((a) => a.active !== 0 && (order[a.energy] === undefined ? 0 : order[a.energy]) <= cap);
+  if (!fits.length) return null;
+  const sc = {}, cs = {};
+  for (const a of (scores && scores.activities) || []) sc[a.key] = a.score;
+  for (const c of (scores && scores.categories) || []) cs[c.category] = c.score;
+  const used = (recentAsks || []).join("\n").toLowerCase();
+  const val = (a) => (sc[a.id] !== undefined ? sc[a.id] : cs[a.category] !== undefined ? cs[a.category] : 3) - (used.includes(String(a.title).toLowerCase()) ? 1.5 : 0);
+  return fits.slice().sort((a, b) => val(b) - val(a) || (Number(a.minutes) || 10) - (Number(b.minutes) || 10) || String(a.id).localeCompare(String(b.id)))[0];
+}
+export async function logActivity(env, a) {
+  const pleasure = a && a.pleasure !== undefined && a.pleasure !== null && a.pleasure !== "" ? clampInt(a.pleasure, 1, 5) : null;
+  const mastery = a && a.mastery !== undefined && a.mastery !== null && a.mastery !== "" ? clampInt(a.mastery, 1, 5) : null;
+  let title = s(a && a.title, 200), category = ACTIVITY_CATEGORIES.includes(a && a.category) ? a.category : null, activityId = s(a && a.activity_id, 80) || null;
+  const actionId = s(a && a.action_id, 80) || null, nudgeId = a && a.nudge_id ? Number(a.nudge_id) : null;
+  if (activityId) { const r = await one(env.PERSONAL, "SELECT title, category FROM cmp_activities WHERE id = ?", activityId); if (r) { title = title || r.title; category = category || r.category; } }
+  if (!title && actionId) { const r = await one(env.PERSONAL, "SELECT title FROM tasks WHERE id = ?", actionId); if (r) title = r.title; }
+  if (!title && nudgeId) { const r = await one(env.PERSONAL, "SELECT ask, context_json FROM companion_nudges WHERE id = ?", nudgeId); if (r) { title = s(r.ask, 200); try { const c = JSON.parse(r.context_json || "{}"); activityId = activityId || c.activity_id || null; } catch (e) { /* plain ask */ } } }
+  if (!title) return { ok: false, error: "title, activity_id, action_id or nudge_id required" };
+  if (!category && activityId) { const r = await one(env.PERSONAL, "SELECT category FROM cmp_activities WHERE id = ?", activityId); if (r) category = r.category; }
+  const now = nowIso(), day = dayKey(now), id = rid("bal");
+  const mood = await one(env.PERSONAL, "SELECT score FROM cmp_mood WHERE day = ? ORDER BY ts DESC LIMIT 1", day).catch(() => null);
+  await env.PERSONAL.prepare("INSERT INTO cmp_activity_log (id, ts, day, activity_id, action_id, nudge_id, title, category, pleasure, mastery, mood_before, note) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)")
+    .bind(id, now, day, activityId, actionId, nudgeId, title, category, pleasure, mastery, mood ? Number(mood.score) : null, s(a && a.note, 500) || null).run();
+  if (nudgeId) await env.PERSONAL.prepare("UPDATE companion_nudges SET state = 'done', closed_at = ? WHERE id = ? AND state IN ('sent','shown','queued')").bind(now, nudgeId).run();
+  const m = [pleasure, mastery].filter((x) => x !== null);
+  const avg = m.length ? m.reduce((x, y) => x + y, 0) / m.length : null;
+  return { ok: true, id, title, reply: avg === null ? "Noted. Doing it counts." : avg >= 4 ? "That one seems to help. I'll remember it." : avg <= 2 ? "Thanks for being honest. I'll suggest it less." : "Noted. Every bit of this teaches me what helps." };
+}
+export async function whatHelps(env, days) {
+  const log = await all(env.PERSONAL, "SELECT activity_id, title, category, pleasure, mastery FROM cmp_activity_log WHERE ts >= datetime('now', ?)", "-" + (clampInt(days, 7, 365) || 90) + " days").catch(() => []);
+  const sc = helpScores(log);
+  return Object.assign({ ok: true, ratings: log.length }, sc);
+}
+export async function activityBank(env) {
+  return all(env.PERSONAL, "SELECT id, title, category, energy, minutes, source, active FROM cmp_activities WHERE active = 1 ORDER BY category, minutes").catch(() => []);
+}
+export async function addActivity(env, a) {
+  const title = s(a && a.title, 200);
+  if (!title) return { ok: false, error: "title required" };
+  const id = rid("act");
+  await env.PERSONAL.prepare("INSERT INTO cmp_activities (id, ts, title, category, energy, minutes, source) VALUES (?,?,?,?,?,?, 'own')")
+    .bind(id, nowIso(), title, ACTIVITY_CATEGORIES.includes(a.category) ? a.category : "pleasure", ENERGY.includes(a.energy) ? a.energy : "low", clampInt(a.minutes, 1, 240) || 10).run();
+  return { ok: true, id, title };
+}
+
+// ---------------------------------------------------------------- WHO-5 well-being index (validated, every two weeks)
+
+// WHO (1998) Well-Being Index, English wording. Each item 0 (at no time) to 5 (all of the time), over the last two weeks.
+export const WHO5_ITEMS = [
+  "I have felt cheerful and in good spirits",
+  "I have felt calm and relaxed",
+  "I have felt active and vigorous",
+  "I woke up feeling fresh and rested",
+  "My daily life has been filled with things that interest me"
+];
+export const WHO5_SCALE = ["At no time", "Some of the time", "Less than half of the time", "More than half of the time", "Most of the time", "All of the time"];
+export function who5Score(items) {
+  if (!Array.isArray(items) || items.length !== 5) return null;
+  const v = items.map((x) => Number(x));
+  if (v.some((x) => !Number.isInteger(x) || x < 0 || x > 5)) return null;
+  const raw = v.reduce((a, b) => a + b, 0);
+  return { raw, score: raw * 4 };
+}
+// Topp et al. 2015: below 50 suggests poor well-being worth a closer look; 28 or less is the usual depression screen
+// cut-off; a 10-point change is meaningful. The companion only suggests talking to someone, it never labels him.
+export function who5Read(scores) {
+  const list = (scores || []).map(Number).filter(Number.isFinite);
+  if (!list.length) return { level: "none", hint: null };
+  const last = list[0], prev = list.length > 1 ? list[1] : null;
+  const drop = prev !== null && prev - last >= 10;
+  if (last <= 28) return { level: "low", last, prev, drop, hint: "Your well-being score has been low for a while. It could really help to talk it through with your GP (huisarts) or someone you trust. I can help you write down what to say." };
+  if (last < 50 && prev !== null && prev < 50) return { level: "watch", last, prev, drop, hint: "Two readings in a row say these weeks have been hard. Worth mentioning to your GP (huisarts) if it keeps going; you don't need to be in crisis to ask for help." };
+  if (drop) return { level: "dip", last, prev, drop, hint: "Your score dropped since last time. Anything in particular weighing on you these two weeks?" };
+  return { level: last >= 50 ? "ok" : "single-low", last, prev, drop, hint: null };
+}
+export async function recordWho5(env, items) {
+  const sc = who5Score(items);
+  if (!sc) return { ok: false, error: "five answers from 0 to 5 required" };
+  const now = nowIso(), id = rid("who5");
+  await env.PERSONAL.prepare("INSERT INTO cmp_measures (id, ts, day, instrument, items_json, raw, score) VALUES (?, ?, ?, 'who5', ?, ?, ?)").bind(id, now, dayKey(now), JSON.stringify(items.map(Number)), sc.raw, sc.score).run();
+  await closeOpen(env, ["cmp-measure"], "done", "who5 " + sc.score);
+  const st = await who5Status(env);
+  return { ok: true, id, raw: sc.raw, score: sc.score, read: st.read, reply: "Thank you. Your score is " + sc.score + " out of 100." + (st.read.hint ? " " + st.read.hint : "") };
+}
+export async function who5Status(env, cfg, atIso) {
+  const rows = await all(env.PERSONAL, "SELECT ts, score FROM cmp_measures WHERE instrument = 'who5' ORDER BY ts DESC LIMIT 6").catch(() => []);
+  const every = Number(cfg && cfg.measure_every_days) || 14;
+  const last = rows[0] ? Date.parse(rows[0].ts) : null;
+  const due = !last || Date.parse(atIso || nowIso()) - last >= (every - 0.5) * 864e5;
+  return { due, every_days: every, history: rows, read: who5Read(rows.map((r) => r.score)) };
+}
+
+// ---------------------------------------------------------------- his controls and the learning loop
+
+// Pause: no reach-outs until the given time (rule 11). Stored with the shared config so a restart keeps it.
+export async function setPause(env, hours) {
+  const h = Number(hours);
+  if (!Number.isFinite(h) || h < 0 || h > 24 * 30) return { ok: false, error: "hours from 0 (resume) to 720" };
+  const until = h === 0 ? "" : new Date(Date.now() + h * 3600e3).toISOString();
+  await env.PERSONAL.prepare("INSERT INTO wellbeing_config (key, value, updated_at) VALUES ('pause_until', ?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at").bind(JSON.stringify(until), nowIso()).run();
+  return { ok: true, pause_until: until || null, reply: until ? "Paused. I'll stay quiet until " + until.slice(0, 16).replace("T", " ") + " UTC. Everything still works when you open it." : "I'm back. Still gentle, still few." };
+}
+export const isPaused = (cfg, nowMs) => !!(cfg && cfg.pause_until && Date.parse(cfg.pause_until) > nowMs);
+// Rule 5 retires a kind that never lands; rule 12 gives it one fresh try once a week so the learning keeps exploring.
+export function retiredFrom(rows, cfg, nowMs) {
+  const out = new Set();
+  const retry = (Number(cfg && cfg.retire_retry_days) || 7) * 864e5;
+  for (const r of rows || []) {
+    const fired = Number(r.fired), done = Number(r.done);
+    if (!(fired >= Number(cfg.retire_after_fired) && done / fired < Number(cfg.retire_below_done_rate))) continue;
+    const lastMs = r.last_ts ? Date.parse(String(r.last_ts).replace(" ", "T") + (/[zZ]|[+-]\d\d:?\d\d$/.test(String(r.last_ts)) ? "" : "Z")) : NaN;
+    if (Number.isFinite(lastMs) && nowMs - lastMs >= retry) continue;
+    out.add(r.kind);
+  }
+  return out;
+}
+// What the lock screen shows (rule 14). The full text is always in the app.
+export const DISCREET_KINDS = ["cmp-care", "care", "cmp-presence", "presence", "crisis", "cmp-measure"];
+export function discreetPayload(payload, mode) {
+  const m = mode === undefined || mode === null || mode === "" ? "care" : String(mode);
+  if (m === "off") return payload;
+  if (m === "all" || DISCREET_KINDS.includes(payload.kind)) return Object.assign({}, payload, { title: "Companion", body: "A note for you, whenever you're ready." });
+  return payload;
+}
+// Data minimisation (rule 15): raw voice notes go after N days; the transcript stays in cmp_inbox.
+export async function pruneMedia(env, days, atIso) {
+  if (!env.MEDIA) return { deleted: 0 };
+  const keep = Number(days);
+  if (!(keep > 0)) return { deleted: 0, skipped: "retention off" };
+  const cutoff = new Date(Date.parse(atIso || nowIso()) - keep * 864e5).toISOString().slice(0, 10);
+  let cursor, deleted = 0;
+  do {
+    const l = await env.MEDIA.list({ prefix: "companion/audio/", cursor, limit: 1000 });
+    const old = l.objects.map((o) => o.key).filter((k) => { const d = k.split("/")[2] || ""; return /^\d{4}-\d{2}-\d{2}$/.test(d) && d < cutoff; });
+    if (old.length) {
+      await env.MEDIA.delete(old);
+      for (const k of old) await env.PERSONAL.prepare("UPDATE cmp_inbox SET media_key = NULL, result_json = json_set(COALESCE(result_json, '{}'), '$.media_pruned', ?) WHERE media_key = ?").bind(nowIso(), k).run();
+      deleted += old.length;
+    }
+    cursor = l.truncated ? l.cursor : undefined;
+  } while (cursor);
+  return { deleted, cutoff };
 }
 
 // ---------------------------------------------------------------- what to say (fixed, his own words reused)
@@ -318,7 +575,13 @@ export const TEXTS = {
     "Not sure what to do with yourself? Pick just this, for twenty minutes: ",
     "One anchor for the afternoon: "
   ],
-  presence: ["I'm here. Nothing needed from you right now."]
+  presence: ["I'm here. Nothing needed from you right now."],
+  connect: [
+    "Who's someone you'd like to hear from this week? A two-line message counts.",
+    "Is there one person you could send a small hello to today? No reply needed for it to count.",
+    "When did you last see someone in person? If you like, plan one short coffee or walk with someone this week."
+  ],
+  measure: ["Every two weeks: five quick questions about how the last two weeks have been. About a minute."]
 };
 export function pickLru(pool, recentAsks) {
   const used = recentAsks || [];
@@ -370,10 +633,11 @@ export function planNudge(st) {
     (st.crisisLevel24h || 0) >= 1;
   const mk = (kind, text, minutes, dueMin, reason, extra) => Object.assign({ kind, ask: text, minutes, due_at: new Date(nowMs + dueMin * 60000).toISOString(), reason }, extra || {});
 
-  // Risk words in the last day get one quiet, caring touch even above the cap (never inside quiet hours).
+  // Risk words in the last day get one quiet, caring touch even above the cap or a pause (never inside quiet hours).
   if ((st.crisisLevel24h || 0) >= 1 && !kindsToday.has("cmp-care") && !retired.has("cmp-care")) {
     return mk("cmp-care", pickLru(TEXTS.care, recentAsks), 0, 360, "risk-words-24h");
   }
+  if (isPaused(cfg, nowMs)) return { skip: "paused" };
   if (todays.length >= Number(cfg.max_per_day)) return { skip: "daily-cap" };
   const lastSent = (st.recent || []).map((r) => new Date(r.sent_at || r.ts).getTime()).filter(Number.isFinite).sort((a, b) => b - a)[0];
   if (lastSent && nowMs - lastSent < Number(cfg.min_gap_min) * 60000) return { skip: "min-gap" };
@@ -388,19 +652,32 @@ export function planNudge(st) {
   }
   if (low) {
     if (kindsToday.has("cmp-care") || retired.has("cmp-care")) return { skip: "low-day-already-touched" };
-    return mk("cmp-care", pickLru(TEXTS.care, recentAsks), 2, 360, "low-day mood=" + mood.today + " avg2=" + mood.avg2 + " avg7=" + mood.avg7);
+    // Something he rated as helping before, low effort, offered as one option among the care lines (rule 8).
+    const helped = ((st.helps && st.helps.activities) || []).find((a) => a.n >= 2 && a.score >= 3.75 && (st.activityBank || []).some((b) => b.id === a.key && b.energy === "low"));
+    const helpedTitle = helped ? ((st.activityBank || []).find((b) => b.id === helped.key) || helped).title : "";
+    const pool = helped ? TEXTS.care.concat(["Last time, " + helpedTitle + " helped a little. Only if it feels right; resting is fine too."]) : TEXTS.care;
+    return mk("cmp-care", pickLru(pool, recentAsks), 2, 360, "low-day mood=" + mood.today + " avg2=" + mood.avg2 + " avg7=" + mood.avg7);
   }
   if (h >= 19.5 && h < 21.75 && !st.journalToday && !kindsToday.has("cmp-reflect") && !retired.has("cmp-reflect")) {
     return mk("cmp-reflect", pickLru(TEXTS.reflect, recentAsks), 3, 240, "evening-no-journal");
   }
   if (h < 10 || h >= 18.5) return { skip: "outside-daytime" };
+  if (st.who5Due && h < 18 && !kindsToday.has("cmp-measure") && !retired.has("cmp-measure")) {
+    return mk("cmp-measure", TEXTS.measure[0], 1, 480, "who5-due");
+  }
   const idleMin = st.lastUserIso ? (nowMs - new Date(st.lastUserIso).getTime()) / 60000 : Infinity;
   if (idleMin < 120) return { skip: "recently-active" };
   if (st.receptive && st.receptive.size && ![Math.floor(h) - 1, Math.floor(h), Math.floor(h) + 1].some((x) => st.receptive.has(x))) return { skip: "not-a-receptive-hour" };
   const action = chooseAction(st.nextActions, energyFor(mood));
   if (h >= 11 && h < 16.5 && !(st.actionsDoneToday > 0) && !kindsToday.has("cmp-anchor") && !retired.has("cmp-anchor")) {
-    const what = action ? action.title + " (" + (action.minutes || 15) + " min)" : "a ten-minute walk outside, no phone";
-    return mk("cmp-anchor", pickLru(TEXTS.anchor, recentAsks) + what + ". That's all.", action ? (action.minutes || 15) : 10, 180, "shapeless-day", action ? { action_id: action.id } : {});
+    // No next action fits: an activity from his bank, chosen by what he rated as helping (behavioral activation).
+    const act = action ? null : pickActivity(st.activityBank, st.helps, energyFor(mood), recentAsks);
+    const what = action ? action.title + " (" + (action.minutes || 15) + " min)" : act ? act.title + " (" + (act.minutes || 10) + " min)" : "a ten-minute walk outside, no phone";
+    return mk("cmp-anchor", pickLru(TEXTS.anchor, recentAsks) + what + ". That's all.", action ? (action.minutes || 15) : act ? (act.minutes || 10) : 10, 180, "shapeless-day", action ? { action_id: action.id } : act ? { activity_id: act.id } : {});
+  }
+  const connectRecently = (st.recent || []).some((r) => r.kind === "cmp-connect" && nowMs - new Date(r.sent_at || r.ts).getTime() < 3 * 864e5);
+  if (h >= 11 && h < 19 && (st.daysSinceSocial || 0) >= 4 && !connectRecently && !kindsToday.has("cmp-connect") && !retired.has("cmp-connect")) {
+    return mk("cmp-connect", pickLru(TEXTS.connect, recentAsks), 5, 480, "no-social-" + st.daysSinceSocial + "d");
   }
   if (action && !kindsToday.has("cmp-next") && !retired.has("cmp-next")) {
     return mk("cmp-next", "One small thing, if you have it in you: " + action.title + " (" + (action.minutes || 15) + " min, " + (action.context || "@anywhere") + ").", action.minutes || 15, 240, "idle " + Math.round(Math.min(idleMin, 9999)) + "m energy=" + energyFor(mood), { action_id: action.id });
@@ -496,9 +773,9 @@ const all = async (db, sql, ...b) => ((await db.prepare(sql).bind(...b).all()).r
 const one = async (db, sql, ...b) => (await db.prepare(sql).bind(...b).first()) || null;
 
 export async function loadCfg(env) {
-  const out = { quiet_start: 22, quiet_end: 7.5, max_per_day: 3, min_gap_min: 150, max_unanswered: 3, retire_after_fired: 6, retire_below_done_rate: 0.05, crisis_lines: [], backstop_name: "", backstop_contact: "", tz: TZ };
+  const out = { quiet_start: 22, quiet_end: 7.5, max_per_day: 3, min_gap_min: 150, max_unanswered: 3, retire_after_fired: 6, retire_below_done_rate: 0.05, retire_retry_days: 7, crisis_lines: [], backstop_name: "", backstop_contact: "", tz: TZ, pause_until: "", discreet_push: "care", media_retention_days: 30, measure_every_days: 14, safety_plan: null };
   try { for (const r of await all(env.PERSONAL, "SELECT key, value FROM wellbeing_config")) out[r.key] = parseVal(r.value); } catch (e) { /* defaults */ }
-  for (const k of ["quiet_start", "quiet_end", "max_per_day", "min_gap_min", "max_unanswered", "retire_after_fired", "retire_below_done_rate"]) out[k] = Number(out[k]);
+  for (const k of ["quiet_start", "quiet_end", "max_per_day", "min_gap_min", "max_unanswered", "retire_after_fired", "retire_below_done_rate", "retire_retry_days", "media_retention_days", "measure_every_days"]) out[k] = Number(out[k]);
   return out;
 }
 // Local midnight of `day` as a UTC instant, for comparing against ISO timestamps.
@@ -546,13 +823,23 @@ export async function moodStats(env, day) {
   const avg = (xs) => xs.length ? Math.round(xs.reduce((a, b) => a + Number(b.m), 0) / xs.length * 100) / 100 : null;
   return { today: t, energy_today: e, avg7: days.length >= 3 ? avg(days) : null, avg2: days.length >= 3 ? avg(days.slice(0, 2)) : null, days7: days.length };
 }
-export async function retiredKinds(env, cfg) {
-  const rows = await all(env.PERSONAL, "SELECT kind, COUNT(*) AS fired, SUM(CASE WHEN state = 'done' THEN 1 ELSE 0 END) AS done FROM companion_nudges WHERE ts >= datetime('now', '-28 days') GROUP BY kind").catch(() => []);
-  const out = new Set();
-  for (const r of rows) if (Number(r.fired) >= cfg.retire_after_fired && Number(r.done) / Number(r.fired) < cfg.retire_below_done_rate) out.add(r.kind);
-  return out;
+export async function retiredKinds(env, cfg, atIso) {
+  const rows = await all(env.PERSONAL, "SELECT kind, COUNT(*) AS fired, SUM(CASE WHEN state = 'done' THEN 1 ELSE 0 END) AS done, MAX(ts) AS last_ts FROM companion_nudges WHERE ts >= datetime('now', '-28 days') GROUP BY kind").catch(() => []);
+  return retiredFrom(rows, cfg, Date.parse(atIso || nowIso()));
 }
-const ASK_KINDS = ["micro", "body", "contact", "care", "cmp-next", "cmp-anchor", "cmp-review", "cmp-reflect", "cmp-checkin", "cmp-care"];
+// Days since anything social showed up: a mood tagged social or connection, or a connection activity. Null when there
+// is too little data to say (fewer than three mood entries in two weeks), so a quiet record never reads as isolation.
+export async function daysSinceSocial(env, atIso) {
+  const now = Date.parse(atIso || nowIso());
+  const since = new Date(now - 14 * 864e5).toISOString();
+  const n = await one(env.PERSONAL, "SELECT COUNT(*) AS n FROM cmp_mood WHERE ts >= ?", since).catch(() => null);
+  if (!n || Number(n.n) < 3) return null;
+  const a = await one(env.PERSONAL, "SELECT MAX(ts) AS t FROM cmp_mood WHERE ts >= ? AND (',' || COALESCE(tags, '') || ',') LIKE '%,social,%'", since).catch(() => null);
+  const b = await one(env.PERSONAL, "SELECT MAX(ts) AS t FROM cmp_activity_log WHERE ts >= ? AND category = 'connection'", since).catch(() => null);
+  const last = [a && a.t, b && b.t].filter(Boolean).map((x) => Date.parse(x)).sort((x, y) => y - x)[0];
+  return last ? Math.floor((now - last) / 864e5) : 14;
+}
+const ASK_KINDS = ["micro", "body", "contact", "care", "cmp-next", "cmp-anchor", "cmp-review", "cmp-reflect", "cmp-checkin", "cmp-care", "cmp-measure", "cmp-connect"];
 export async function unansweredStreak(env) {
   const rows = await all(env.PERSONAL, "SELECT state FROM companion_nudges WHERE kind IN (" + ASK_KINDS.map(() => "?").join(",") + ") AND state IN ('sent','shown','done','declined','expired') ORDER BY ts DESC LIMIT 10", ...ASK_KINDS).catch(() => []);
   let n = 0;
@@ -568,7 +855,7 @@ export async function gatherState(env, at) {
   const [todays, recent, streak, retired, mood, journal, lastUser, done, next, due, subs, recentTexts, answerRows] = await Promise.all([
     all(db, "SELECT * FROM companion_nudges WHERE day = ? ORDER BY id", lp.day).catch(() => []),
     all(db, "SELECT * FROM companion_nudges ORDER BY id DESC LIMIT 40").catch(() => []),
-    unansweredStreak(env), retiredKinds(env, cfg), moodStats(env, lp.day),
+    unansweredStreak(env), retiredKinds(env, cfg, now), moodStats(env, lp.day),
     one(db, "SELECT COUNT(*) AS n FROM journal WHERE date = ?", lp.day).catch(() => null),
     activityStamps(env, new Date(Date.parse(now) - 2 * 864e5).toISOString()),
     one(db, "SELECT COUNT(*) AS n FROM tasks WHERE status = 'done' AND done_at >= ?", start).catch(() => null),
@@ -580,7 +867,11 @@ export async function gatherState(env, at) {
   ]);
   let crisisLevel24h = 0;
   for (const t of recentTexts) crisisLevel24h = Math.max(crisisLevel24h, crisisSignal(t).level);
+  const [bank, helps, who5, social] = await Promise.all([
+    activityBank(env), whatHelps(env, 90).catch(() => null), who5Status(env, cfg, now).catch(() => ({ due: false })), daysSinceSocial(env, now).catch(() => null)
+  ]);
   return {
+    activityBank: bank, helps, who5Due: !!who5.due, who5: who5.read || null, daysSinceSocial: social, paused: isPaused(cfg, Date.parse(now)),
     nowIso: now, day: lp.day, hour: lp.hour, cfg, todays, recent, unansweredStreak: streak, retired, mood,
     checkinSentToday: todays.some((r) => r.kind === "checkin"), journalToday: !!(journal && journal.n > 0),
     lastUserIso: lastUser.sort().pop() || null, actionsDoneToday: done ? Number(done.n) : 0, nextActions: next,
@@ -829,9 +1120,9 @@ export async function processInbox(env, deps, limit) {
 // ---------------------------------------------------------------- the tick (runs in the companion Durable Object)
 
 export function pushPayloadFor(row) {
-  const ask = ["micro", "body", "contact", "care", "cmp-next", "cmp-anchor", "cmp-review"].includes(row.kind);
+  const ask = ["micro", "body", "contact", "care", "cmp-next", "cmp-anchor", "cmp-review", "cmp-connect"].includes(row.kind);
   return {
-    title: row.kind === "cmp-care" || row.kind === "presence" || row.kind === "cmp-presence" ? "Here with you" : row.kind === "checkin" || row.kind === "cmp-checkin" ? "How's it landing?" : row.kind === "cmp-reflect" ? "Before the day closes" : "One small thing",
+    title: row.kind === "cmp-care" || row.kind === "presence" || row.kind === "cmp-presence" ? "Here with you" : row.kind === "checkin" || row.kind === "cmp-checkin" ? "How's it landing?" : row.kind === "cmp-reflect" ? "Before the day closes" : row.kind === "cmp-measure" ? "Two-weekly check" : row.kind === "cmp-connect" ? "Someone to hear from" : "One small thing",
     body: String(row.ask || "").slice(0, 300), tag: "cmp-" + row.id, id: row.id, kind: row.kind,
     url: "/companion#n=" + row.id, ask
   };
@@ -845,13 +1136,17 @@ export async function companionTick(env, deps, opts) {
   out.processed = (await processInbox(env, deps, 5)).length;
   const exp = await env.PERSONAL.prepare("UPDATE companion_nudges SET state = 'expired', closed_at = ? WHERE kind LIKE 'cmp-%' AND state IN ('sent','shown') AND due_at IS NOT NULL AND due_at < ?").bind(now, now).run();
   out.expired = exp.meta ? exp.meta.changes : 0;
-  // 1. The e-mail ladder's fresh asks also reach the phone, once each.
-  if (deps.keys && deps.pushed) {
+  const cfg0 = await loadCfg(env);
+  // Once a day, before dawn: raw voice notes past their retention go (rule 15).
+  const lh = localParts(now, cfg0.tz).hour;
+  if (o.prune || (lh >= 4 && lh < 4.25)) { try { out.pruned = await pruneMedia(env, cfg0.media_retention_days, now); } catch (e) { out.pruned = { error: String(e && e.message || e).slice(0, 160) }; } }
+  // 1. The e-mail ladder's fresh asks also reach the phone, once each (not while he has paused reach-outs).
+  if (deps.keys && deps.pushed && !isPaused(cfg0, Date.parse(now))) {
     const fresh = await all(env.PERSONAL, "SELECT * FROM companion_nudges WHERE kind IN (" + LADDER_KINDS.map(() => "?").join(",") + ") AND state = 'sent' AND sent_at >= ? ORDER BY id LIMIT 3", ...LADDER_KINDS, new Date(Date.parse(now) - 45 * 60000).toISOString()).catch(() => []);
     out.mirrored = 0;
     for (const r of fresh) {
       if (await deps.pushed.has(r.id)) continue;
-      const res = await pushAll(env, pushPayloadFor(r), deps.keys, deps.fetch);
+      const res = await pushAll(env, discreetPayload(pushPayloadFor(r), cfg0.discreet_push), deps.keys, deps.fetch);
       await deps.pushed.add(r.id);
       if (res.ok) out.mirrored++;
     }
@@ -865,13 +1160,13 @@ export async function companionTick(env, deps, opts) {
   let id;
   try {
     const r = await env.PERSONAL.prepare("INSERT INTO companion_nudges (ts, day, kind, ladder_step, ask, minutes, expected, due_at, state, reason, context_json) VALUES (?,?,?,0,?,?,?,?, 'queued', ?, ?)")
-      .bind(now, st.day, plan.kind, plan.ask, plan.minutes || 0, "log:" + plan.kind, plan.due_at, plan.reason, JSON.stringify({ action_id: plan.action_id || null, mood: st.mood, hour: Math.round(st.hour * 10) / 10 })).run();
+      .bind(now, st.day, plan.kind, plan.ask, plan.minutes || 0, "log:" + plan.kind, plan.due_at, plan.reason, JSON.stringify({ action_id: plan.action_id || null, activity_id: plan.activity_id || null, mood: st.mood, hour: Math.round(st.hour * 10) / 10 })).run();
     id = r.meta && r.meta.last_row_id;
   } catch (e) {
     if (String(e && e.message || e).includes("NUDGE-DUP-1")) { out.plan.skip = "duplicate-kind-today"; return out; }
     throw e;
   }
-  const res = await pushAll(env, pushPayloadFor({ id, kind: plan.kind, ask: plan.ask }), deps.keys, deps.fetch);
+  const res = await pushAll(env, discreetPayload(pushPayloadFor({ id, kind: plan.kind, ask: plan.ask }), st.cfg.discreet_push), deps.keys, deps.fetch);
   if (res.ok > 0) await env.PERSONAL.prepare("UPDATE companion_nudges SET state = 'sent', sent_at = ?, outcome = ? WHERE id = ?").bind(now, JSON.stringify({ via: "push", subs: res.subs, ok: res.ok }), id).run();
   else await env.PERSONAL.prepare("UPDATE companion_nudges SET state = 'expired', closed_at = ?, outcome = ? WHERE id = ?").bind(now, JSON.stringify({ via: "push", send_failed: res }), id).run();
   out.sent = { id, kind: plan.kind, push: res };
@@ -901,6 +1196,10 @@ export async function today(env, deps) {
     one_thing: suggestion, next_actions: st.nextActions.slice(0, 12), actions_done_today: st.actionsDoneToday,
     due_cards: st.dueCards, open_nudges: open, inbox_unprocessed: inbox ? Number(inbox.n) : 0, last_journal: lastJournal,
     projects, push_ready: st.pushReady, nudges_today: st.todays.length, cap: st.cfg.max_per_day,
+    paused_until: st.paused ? st.cfg.pause_until : null, who5_due: st.who5Due, who5: st.who5,
+    support_hint: st.who5 && st.who5.hint && (st.who5.level === "low" || st.who5.level === "watch") ? st.who5.hint : null,
+    what_helps: ((st.helps && st.helps.activities) || []).filter((a) => a.n >= 2 && a.score >= 3.5).slice(0, 3),
+    safety_plan_filled: normalizeSafetyPlan(st.cfg.safety_plan).filled,
     plan_preview: (() => { const p = planNudge(Object.assign({}, st, { pushReady: true })); return p.skip ? { skip: p.skip } : { kind: p.kind, reason: p.reason }; })()
   };
 }
@@ -916,7 +1215,11 @@ export async function dashboard(env) {
     one(db, "SELECT COUNT(*) AS n FROM tasks WHERE status = 'done' AND done_at >= datetime('now', '-7 days')"),
     all(db, "SELECT tags, ROUND(AVG(score), 2) AS mood, COUNT(*) AS n FROM cmp_mood WHERE tags IS NOT NULL AND tags != '' AND ts >= datetime('now', '-60 days') GROUP BY tags ORDER BY n DESC LIMIT 12")
   ]);
-  return { mood_weekly: weeks, mood_daily_30d: days, actions_by_context: byCtx, actions_done_7d: done7 ? Number(done7.n) : 0, cards_due: due ? Number(due.n) : 0, cards_new_due: due ? Number(due.fresh || 0) : 0, nudge_loop_28d: loop, mood_by_tags_60d: tags };
+  const helps = await whatHelps(env, 90).catch(() => null);
+  const who5 = await all(db, "SELECT day, score FROM cmp_measures WHERE instrument = 'who5' ORDER BY ts DESC LIMIT 12").catch(() => []);
+  // Mood on days with a rated activity against days without one: the behavioral-activation link, in his own data.
+  const link = await one(db, "SELECT ROUND(AVG(CASE WHEN a.day IS NOT NULL THEN w.mood END), 2) AS with_activity, ROUND(AVG(CASE WHEN a.day IS NULL THEN w.mood END), 2) AS without_activity, COUNT(DISTINCT CASE WHEN a.day IS NOT NULL THEN w.day END) AS days_with FROM wellbeing_checkins w LEFT JOIN (SELECT DISTINCT day FROM cmp_activity_log) a ON a.day = w.day WHERE w.mood IS NOT NULL AND w.day >= date('now', '-60 days')").catch(() => null);
+  return { what_helps: helps, who5_history: who5, activity_mood_link_60d: link, mood_weekly: weeks, mood_daily_30d: days, actions_by_context: byCtx, actions_done_7d: done7 ? Number(done7.n) : 0, cards_due: due ? Number(due.n) : 0, cards_new_due: due ? Number(due.fresh || 0) : 0, nudge_loop_28d: loop, mood_by_tags_60d: tags };
 }
 
 // ---------------------------------------------------------------- privacy: what is stored, export, delete
@@ -932,14 +1235,18 @@ export const PRIVACY_TABLES = [
   { table: "cmp_cards", what: "flashcards", where: "1=1" },
   { table: "cmp_reviews", what: "flashcard review history", where: "1=1" },
   { table: "companion_nudges", what: "every nudge sent and how it ended", where: "1=1" },
-  { table: "cmp_push_subs", what: "phone/browser push subscriptions", where: "1=1" }
+  { table: "cmp_push_subs", what: "phone/browser push subscriptions", where: "1=1" },
+  { table: "cmp_activities", what: "your activity bank (starting ideas and your own)", where: "1=1" },
+  { table: "cmp_activity_log", what: "activities you did and how they felt", where: "1=1" },
+  { table: "cmp_measures", what: "two-weekly WHO-5 well-being answers", where: "1=1" },
+  { table: "wellbeing_config", what: "your safety plan and companion settings", where: "key IN ('safety_plan', 'pause_until')" }
 ];
-const DELETABLE = { cmp_inbox: "id", cmp_mood: "id", tasks: "id", cmp_projects: "id", journal: "id", cmp_cards: "id", cmp_push_subs: "endpoint", companion_nudges: "id" };
+const DELETABLE = { cmp_inbox: "id", cmp_mood: "id", tasks: "id", cmp_projects: "id", journal: "id", cmp_cards: "id", cmp_push_subs: "endpoint", companion_nudges: "id", cmp_activities: "id", cmp_activity_log: "id", cmp_measures: "id" };
 export async function privacy(env) {
   await ensureSchema(env.PERSONAL);
   const rows = [];
   for (const t of PRIVACY_TABLES) {
-    const tsCol = t.table === "wellbeing_checkins" || t.table === "companion_nudges" ? "ts" : t.table === "cmp_push_subs" ? "created_at" : "ts";
+    const tsCol = t.table === "cmp_push_subs" ? "created_at" : t.table === "wellbeing_config" ? "updated_at" : "ts";
     const r = await one(env.PERSONAL, "SELECT COUNT(*) AS n, MIN(" + tsCol + ") AS oldest, MAX(" + tsCol + ") AS newest FROM " + t.table + " WHERE " + t.where).catch(() => null);
     rows.push({ table: t.table, what: t.what, rows: r ? Number(r.n) : 0, oldest: r && r.oldest, newest: r && r.newest });
   }
@@ -978,7 +1285,7 @@ export async function deleteData(env, a) {
     if (s(a.confirm, 40).toLowerCase() !== "delete everything") return { ok: false, error: "type the words 'delete everything' to confirm" };
     const ids = (await all(env.PERSONAL, "SELECT id FROM cmp_inbox UNION ALL SELECT id FROM cmp_mood UNION ALL SELECT id FROM journal WHERE source = 'companion'")).map((r) => "cmp:" + r.id);
     const counts = {};
-    for (const [t, where] of [["cmp_inbox", "1=1"], ["cmp_mood", "1=1"], ["cmp_cards", "1=1"], ["cmp_reviews", "1=1"], ["cmp_projects", "1=1"], ["cmp_push_subs", "1=1"], ["tasks", "source = 'companion'"], ["journal", "source = 'companion'"], ["notes", "source = 'companion'"], ["wellbeing_checkins", "source = 'companion'"], ["companion_nudges", "kind LIKE 'cmp-%'"]]) {
+    for (const [t, where] of [["cmp_inbox", "1=1"], ["cmp_mood", "1=1"], ["cmp_cards", "1=1"], ["cmp_reviews", "1=1"], ["cmp_projects", "1=1"], ["cmp_push_subs", "1=1"], ["tasks", "source = 'companion'"], ["journal", "source = 'companion'"], ["notes", "source = 'companion'"], ["wellbeing_checkins", "source = 'companion'"], ["companion_nudges", "kind LIKE 'cmp-%'"], ["cmp_activity_log", "1=1"], ["cmp_measures", "1=1"], ["cmp_activities", "source = 'own'"], ["wellbeing_config", "key IN ('safety_plan', 'pause_until')"]]) {
       const r = await env.PERSONAL.prepare("DELETE FROM " + t + " WHERE " + where).run();
       counts[t] = r.meta ? r.meta.changes : 0;
     }
@@ -998,7 +1305,11 @@ export const PERSONA = [
   "Notice how he is before what he should do. If he is low, slow down: acknowledge it, offer presence or one tiny kind step (water, air, food, a person), never a list.",
   "When he doesn't know what to do with himself, give the day a shape: one concrete thing for the next 20-60 minutes, picked from his own next actions when one fits his energy.",
   "Turn loose thoughts into his system with the cmp_* tools: cmp_capture for anything to remember or do, cmp_mood when he tells you how he feels (score 1-5), cmp_action_done when he did something, cmp_card_add for something he wants to learn.",
-  "Never diagnose, never moralise, never count what he failed to do. Celebrate small things plainly."
+  "Never diagnose, never moralise, never count what he failed to do. Celebrate small things plainly.",
+  "Be honest that you are an AI when it matters; do not claim feelings or a life of your own, and do not flatter. Agree only with what you actually think is right.",
+  "You are a bridge to people, not a replacement: when it fits, encourage contact with friends, family and, if things stay hard for weeks, his GP (huisarts). Never discourage him from seeking human or professional help.",
+  "When he did something, ask how it felt (enjoyment and achievement, 1-5) and log it with cmp_activity; suggest from what helped before (cmp_helps).",
+  "If he mentions a crisis plan or feeling unsafe, his own safety plan comes before your words."
 ].join("\n");
 export async function chatContext(env, deps, q, companionMode) {
   try {
@@ -1008,6 +1319,11 @@ export async function chatContext(env, deps, q, companionMode) {
     L.push("- mood today: " + (st.mood.today === null ? "not logged" : st.mood.today + "/5") + (st.mood.avg7 !== null ? "; 7-day average " + st.mood.avg7 : "") + (st.mood.avg2 !== null && st.mood.avg7 !== null && st.mood.avg7 - st.mood.avg2 >= 0.75 ? " (dipping lately)" : ""));
     if (st.nextActions.length) L.push("- next actions (id: title [context, energy, minutes]): " + st.nextActions.slice(0, 6).map((a) => a.id + ": " + a.title + " [" + (a.context || "@anywhere") + ", " + (a.energy || "low") + ", " + (a.minutes || 15) + "m]").join("; "));
     L.push("- done today: " + st.actionsDoneToday + "; flashcards due: " + st.dueCards + "; journal today: " + (st.journalToday ? "yes" : "no"));
+    const helped = ((st.helps && st.helps.activities) || []).filter((a) => a.n >= 2 && a.score >= 3.5).slice(0, 3);
+    if (helped.length) L.push("- what has helped him (his ratings): " + helped.map((a) => a.title + " " + a.score + "/5").join("; "));
+    if (st.who5 && st.who5.last !== undefined) L.push("- WHO-5 well-being (0-100, two-weekly): " + st.who5.last + (st.who5.prev !== null && st.who5.prev !== undefined ? " (before: " + st.who5.prev + ")" : ""));
+    if (st.who5 && (st.who5.level === "low" || st.who5.level === "watch")) L.push("- CARE NOTE: his well-being score has been low; when it fits naturally, gently mention that talking to his GP (huisarts) or someone he trusts could help. Once per conversation at most.");
+    if (st.paused) L.push("- he has paused reach-outs until " + st.cfg.pause_until + "; respect it, do not suggest turning them back on.");
     const openN = st.todays.filter((r) => r.state === "sent" || r.state === "shown");
     if (openN.length) L.push("- open nudge(s): " + openN.map((r) => "#" + r.id + " " + r.ask).join(" | "));
     if (companionMode && q) {
@@ -1048,10 +1364,12 @@ export function companionTools(deps) {
     cmp_cards_due: T("Companion: flashcards due for review now", {}, async (env) => { await ensureSchema(env.PERSONAL); return { ok: true, cards: await all(env.PERSONAL, "SELECT id, front, back, state, reps FROM cmp_cards WHERE suspended = 0 AND due <= ? ORDER BY due LIMIT 20", nowIso()) }; }),
     cmp_card_review: T("Companion: record a flashcard review, rating 1 again, 2 hard, 3 good, 4 easy", { id: { type: "string", required: true }, rating: { type: "number", required: true } }, async (env, a) => { await ensureSchema(env.PERSONAL); return reviewCard(env, a.id, a.rating); }),
     cmp_today: T("Companion: today's picture (mood, sleep proxy, one thing, next actions, due cards, open nudges)", {}, async (env) => Object.assign({ ok: true }, await today(env, deps))),
-    cmp_dashboard: T("Companion: weekly mood averages, actions by context, cards due, how nudges landed", {}, async (env) => Object.assign({ ok: true }, await dashboard(env)))
+    cmp_dashboard: T("Companion: weekly mood averages, actions by context, cards due, how nudges landed", {}, async (env) => Object.assign({ ok: true }, await dashboard(env))),
+    cmp_activity: T("Companion: log an activity Rowan did and how it felt, enjoyment (pleasure) and achievement (mastery) 1-5 each (behavioral activation)", { title: { type: "string", required: true }, pleasure: { type: "number", required: false }, mastery: { type: "number", required: false }, category: { type: "string", required: false, desc: ACTIVITY_CATEGORIES.join("|") } }, async (env, a) => { await ensureSchema(env.PERSONAL); return logActivity(env, a); }),
+    cmp_helps: T("Companion: what has helped Rowan before, from his own activity ratings, plus his activity bank", {}, async (env) => { await ensureSchema(env.PERSONAL); return Object.assign(await whatHelps(env, 90), { bank: await activityBank(env) }); })
   };
 }
-export const TOOL_APPENDIX_LINE = " cmp_capture {text}; cmp_mood {score,energy?,tags?,note?}; cmp_next {energy?}; cmp_action_add {title,context?,energy?,minutes?,project?,due?}; cmp_action_done {id}; cmp_card_add {front,back}; cmp_cards_due {}; cmp_card_review {id,rating}; cmp_today {}; cmp_dashboard {}.";
+export const TOOL_APPENDIX_LINE = " cmp_capture {text}; cmp_mood {score,energy?,tags?,note?}; cmp_next {energy?}; cmp_action_add {title,context?,energy?,minutes?,project?,due?}; cmp_action_done {id}; cmp_card_add {front,back}; cmp_cards_due {}; cmp_card_review {id,rating}; cmp_today {}; cmp_dashboard {}; cmp_activity {title,pleasure?,mastery?,category?}; cmp_helps {}.";
 
 // ---------------------------------------------------------------- Durable Object hooks (PersonalTwinAgent instance "companion")
 
@@ -1169,6 +1487,15 @@ export async function handleCompanion(request, env, ctx, deps) {
     if (r === "cards" && m === "POST") { const out = await addCard(env, await body()); return J(out, out.ok ? 200 : 400); }
     if (r === "cards/review" && m === "POST") { const b = await body(); return J(await reviewCard(env, b.id, b.rating)); }
     if (r === "nudge" && m === "POST") { const b = await body(); return J(await answerNudge(env, b.id, b.state)); }
+    if (r === "activity" && m === "POST") { const out = await logActivity(env, await body()); return J(out, out.ok ? 200 : 400); }
+    if (r === "activities" && m === "GET") return J({ ok: true, activities: await activityBank(env), categories: ACTIVITY_CATEGORIES });
+    if (r === "activities" && m === "POST") { const out = await addActivity(env, await body()); return J(out, out.ok ? 200 : 400); }
+    if (r === "helps" && m === "GET") return J(await whatHelps(env, 90));
+    if (r === "safety-plan" && m === "GET") return J(Object.assign({ ok: true, fields: SAFETY_PLAN_FIELDS }, normalizeSafetyPlan((await loadCfg(env)).safety_plan)));
+    if (r === "safety-plan" && m === "POST") return J(await saveSafetyPlan(env, await body()));
+    if (r === "who5" && m === "GET") return J(Object.assign({ ok: true, items: WHO5_ITEMS, scale: WHO5_SCALE }, await who5Status(env, await loadCfg(env))));
+    if (r === "who5" && m === "POST") { const b = await body(); const out = await recordWho5(env, b.items); return J(out, out.ok ? 200 : 400); }
+    if (r === "pause" && m === "POST") { const b = await body(); const out = await setPause(env, b.hours); return J(out, out.ok ? 200 : 400); }
     if (r === "push/key" && m === "GET") return stub().fetch("https://do/companion-do/key");
     if (r === "push/subscribe" && m === "POST") {
       const b = await body();
@@ -1282,7 +1609,7 @@ table{width:100%;border-collapse:collapse;font-size:.9rem}td,th{text-align:left;
 <section id="v-learn" class="v hide"><h1>Review</h1><div id="learn"></div>
  <div class="card"><h2>New card</h2><input id="c-front" placeholder="Question"><textarea id="c-back" placeholder="Answer" style="margin-top:8px;min-height:60px"></textarea><div class="row" style="margin-top:8px"><button class="p" onclick="addCard()">Add card</button></div></div></section>
 <section id="v-journal" class="v hide"><h1>Journal</h1><div class="card"><textarea id="j-text" placeholder="One line is enough."></textarea><div class="row" style="margin-top:8px"><button class="p" onclick="addJournal()">Keep it</button></div><div id="j-out"></div></div><div class="card"><h2>Recent</h2><div id="journal"></div></div></section>
-<section id="v-data" class="v hide"><h1>Patterns and privacy</h1><div id="dash"></div><div id="priv"></div></section>
+<section id="v-data" class="v hide"><h1>Patterns, plan and privacy</h1><div id="dash"></div><div id="plan" class="card"></div><div id="priv"></div></section>
 </main>
 <nav><button data-v="today" class="on">Today</button><button data-v="capture">Capture</button><button data-v="talk">Talk</button><button data-v="do">Do</button><button data-v="learn">Learn</button><button data-v="journal">Journal</button><button data-v="data">Data</button></nav>
 <script>
@@ -1299,20 +1626,32 @@ var MOOD=['rough','low','okay','good','great'],EN=['empty','thin','steady','stro
 var pick={mood:null,energy:null,tags:{}};
 function scale(name,words){var r=el('div',{cls:'row scale'});words.forEach(function(w,i){var b=el('button',{onclick:function(){pick[name]=i+1;Array.prototype.forEach.call(r.children,function(c,j){c.classList.toggle('sel',j===i)})}},[String(i+1),el('small',{text:w})]);r.appendChild(b)});return r}
 function renderToday(t){var v=$('v-today');v.innerHTML='';v.appendChild(el('h1',{text:t.greeting+', Rowan.'}));
- if(t.low_day)v.appendChild(el('div',{cls:'card'},[el('div',{text:'Today looks heavy. Nothing on this page is required. If you want, start with water and a window.'})]));
- (t.open_nudges||[]).forEach(function(n){var c=el('div',{cls:'card'},[el('div',{text:n.ask})]);if(['checkin','cmp-checkin','presence','cmp-presence'].indexOf(n.kind)<0){c.appendChild(el('div',{cls:'row',style:'margin-top:8px'},[el('button',{cls:'p',text:'Did it',onclick:function(){answer(n.id,'done',c)}}),el('button',{text:'Not today',onclick:function(){answer(n.id,'declined',c)}})]))}v.appendChild(c)});
+ if(t.paused_until)v.appendChild(el('div',{cls:'card'},[el('div',{text:'Reach-outs are paused until '+t.paused_until.slice(0,16).replace('T',' ')+' UTC. Everything here still works.'}),el('div',{cls:'row',style:'margin-top:8px'},[el('button',{text:'Resume now',onclick:function(){pause(0)}})])]));
+ if(t.low_day){var lc=el('div',{cls:'card'},[el('div',{text:'Today looks heavy. Nothing on this page is required. If you want, start with water and a window.'})]);if(t.safety_plan_filled)lc.appendChild(el('div',{cls:'row',style:'margin-top:8px'},[el('button',{text:'Open my plan',onclick:function(){go('data');setTimeout(function(){var p=$('plan');if(p)p.scrollIntoView()},400)}})]));v.appendChild(lc)}
+ if(t.support_hint)v.appendChild(el('div',{cls:'card'},[el('div',{text:t.support_hint})]));
+ if(t.who5_due){var wc=el('div',{cls:'card'},[el('h2',{text:'Two-weekly check'}),el('div',{cls:'mute',text:'Five questions about the last two weeks (WHO-5). About a minute, whenever you like.'})]);wc.appendChild(el('div',{cls:'row',style:'margin-top:8px'},[el('button',{cls:'p',text:'Start',onclick:function(){who5Form(wc)}})]));v.appendChild(wc)}
+ (t.open_nudges||[]).forEach(function(n){var c=el('div',{cls:'card'},[el('div',{text:n.ask})]);if(['checkin','cmp-checkin','presence','cmp-presence','cmp-measure'].indexOf(n.kind)<0){c.appendChild(el('div',{cls:'row',style:'margin-top:8px'},[el('button',{cls:'p',text:'Did it',onclick:function(){answer(n.id,'done',c,['cmp-next','cmp-anchor','cmp-connect','micro','body','contact'].indexOf(n.kind)>=0?{nudge_id:n.id}:null)}}),el('button',{text:'Not today',onclick:function(){answer(n.id,'declined',c)}})]))}v.appendChild(c)});
  var m=el('div',{cls:'card'});m.appendChild(el('h2',{text:t.mood&&t.mood.today?'Mood today: '+t.mood.today+'/5 (log again any time)':'How are you?'}));
  pick={mood:null,energy:null,tags:{}};m.appendChild(scale('mood',MOOD));m.appendChild(el('div',{cls:'mute',text:'energy',style:'margin:8px 0 4px'}));m.appendChild(scale('energy',EN));
  var tg=el('div',{cls:'row',style:'margin-top:8px'});TAGS.forEach(function(x){var b=el('button',{cls:'chip',text:x,onclick:function(){pick.tags[x]=!pick.tags[x];b.classList.toggle('sel',!!pick.tags[x])}});tg.appendChild(b)});m.appendChild(tg);
  var note=el('input',{placeholder:'a word or a line (optional)',style:'margin-top:8px'});m.appendChild(note);var out=el('div');
  m.appendChild(el('div',{cls:'row',style:'margin-top:8px'},[el('button',{cls:'p',text:'Log',onclick:function(){if(!pick.mood){say(out,'Pick a number first.');return}api('/companion/api/mood',{json:{score:pick.mood,energy:pick.energy,tags:Object.keys(pick.tags).filter(function(k){return pick.tags[k]}),note:note.value}}).then(function(r){out.innerHTML='';say(out,r.reply||r.error);if(r.crisis)say(out,r.crisis,true);setTimeout(load,1800)})}})]));m.appendChild(out);v.appendChild(m);
  if(!t.push_ready)v.appendChild(el('div',{cls:'card'},[el('div',{text:'Let me reach you here: a few gentle notifications a day at most, never at night.'}),el('div',{cls:'row',style:'margin-top:8px'},[el('button',{cls:'p',text:'Turn on notifications',onclick:enablePush})])]));
- if(t.one_thing){var o=el('div',{cls:'card'},[el('h2',{text:'One thing, if you want it'}),el('div',{text:t.one_thing.title+' ('+(t.one_thing.minutes||15)+' min, '+(t.one_thing.context||'@anywhere')+')'})]);o.appendChild(el('div',{cls:'row',style:'margin-top:8px'},[el('button',{cls:'p',text:'Done',onclick:function(){api('/companion/api/actions/done',{json:{id:t.one_thing.id}}).then(function(r){o.innerHTML='';say(o,r.reply||r.error);setTimeout(load,1500)})}})]));v.appendChild(o)}
+ if(t.one_thing){var o=el('div',{cls:'card'},[el('h2',{text:'One thing, if you want it'}),el('div',{text:t.one_thing.title+' ('+(t.one_thing.minutes||15)+' min, '+(t.one_thing.context||'@anywhere')+')'})]);o.appendChild(el('div',{cls:'row',style:'margin-top:8px'},[el('button',{cls:'p',text:'Done',onclick:function(){api('/companion/api/actions/done',{json:{id:t.one_thing.id}}).then(function(r){o.innerHTML='';say(o,r.reply||r.error);if(r.ok)rateBox(o,{action_id:t.one_thing.id})})}})]));v.appendChild(o)}
  var info=[];if(t.sleep)info.push('Quiet overnight '+t.sleep.from+' to '+t.sleep.to+' (about '+t.sleep.hours+' h, from message times).');if(t.weather&&t.weather.weather)info.push('Weather: '+(typeof t.weather.weather==='string'?t.weather.weather:(t.weather.weather.summary||JSON.stringify(t.weather.weather))).slice(0,140));
- if(t.mood&&t.mood.avg7)info.push('Mood this week: '+t.mood.avg7+' on average.');function pl(n,w){return n+' '+w+(n===1?'':'s')}info.push(t.actions_done_today+' done today. '+pl(t.due_cards,'card')+' ready. '+pl(t.next_actions.length,'next action')+'.');
+ if(t.mood&&t.mood.avg7)info.push('Mood this week: '+t.mood.avg7+' on average.');if((t.what_helps||[]).length)info.push('What has helped you: '+t.what_helps.map(function(a){return a.title}).join('; ')+'.');function pl(n,w){return n+' '+w+(n===1?'':'s')}info.push(t.actions_done_today+' done today. '+pl(t.due_cards,'card')+' ready. '+pl(t.next_actions.length,'next action')+'.');
  v.appendChild(el('div',{cls:'card'},[el('h2',{text:'Today'})].concat(info.map(function(x){return el('div',{cls:'mute',text:x})}))));
+ if(!t.paused_until)v.appendChild(el('div',{cls:'row',style:'margin:0 0 10px'},[el('span',{cls:'mute',text:'Need quiet? Pause reach-outs:'}),el('button',{cls:'chip',text:'4 h',onclick:function(){pause(4)}}),el('button',{cls:'chip',text:'1 day',onclick:function(){pause(24)}}),el('button',{cls:'chip',text:'3 days',onclick:function(){pause(72)}})]));
  v.appendChild(el('div',{cls:'mute',text:'Companion '+VERSION+'. Nudges today: '+t.nudges_today+' of '+t.cap+'.'}))}
-function answer(id,state,box){api('/companion/api/nudge',{json:{id:id,state:state}}).then(function(r){box.innerHTML='';say(box,r.reply||r.error)})}
+function answer(id,state,box,rate){api('/companion/api/nudge',{json:{id:id,state:state}}).then(function(r){box.innerHTML='';say(box,r.reply||r.error);if(rate&&state==='done')rateBox(box,rate)})}
+function pause(h){api('/companion/api/pause',{json:{hours:h}}).then(function(r){alert(r.reply||r.error);load()})}
+function rateBox(box,ref){var p={pleasure:null,mastery:null};var w=el('div',{style:'margin-top:10px'},[el('div',{cls:'mute',text:'How was it? This is how I learn what helps you.'}),el('div',{cls:'mute',text:'enjoyment',style:'margin-top:6px'})]);
+ function sc(k){var r=el('div',{cls:'row scale'});[1,2,3,4,5].forEach(function(i){var b=el('button',{text:String(i),onclick:function(){p[k]=i;Array.prototype.forEach.call(r.children,function(c,j){c.classList.toggle('sel',j===i-1)})}});r.appendChild(b)});return r}
+ w.appendChild(sc('pleasure'));w.appendChild(el('div',{cls:'mute',text:'sense of achievement',style:'margin-top:6px'}));w.appendChild(sc('mastery'));
+ w.appendChild(el('div',{cls:'row',style:'margin-top:8px'},[el('button',{cls:'p',text:'Save',onclick:function(){api('/companion/api/activity',{json:Object.assign({pleasure:p.pleasure,mastery:p.mastery},ref)}).then(function(r){w.innerHTML='';say(w,r.reply||r.error);setTimeout(load,1800)})}}),el('button',{text:'Skip',onclick:function(){w.remove();load()}})]));box.appendChild(w)}
+function who5Form(box){api('/companion/api/who5').then(function(q){box.innerHTML='';box.appendChild(el('h2',{text:'Over the last two weeks'}));var ans=[null,null,null,null,null];
+ q.items.forEach(function(it,i){box.appendChild(el('div',{text:it,style:'margin-top:10px'}));var r=el('div',{cls:'row scale'});q.scale.forEach(function(w,j){r.appendChild(el('button',{onclick:function(){ans[i]=j;Array.prototype.forEach.call(r.children,function(c,k){c.classList.toggle('sel',k===j)})}},[String(j),el('small',{text:w})]))});box.appendChild(r)});
+ var out=el('div');box.appendChild(el('div',{cls:'row',style:'margin-top:10px'},[el('button',{cls:'p',text:'Save',onclick:function(){if(ans.indexOf(null)>=0){say(out,'One answer per line, please.');return}api('/companion/api/who5',{json:{items:ans}}).then(function(r){out.innerHTML='';say(out,r.reply||r.error)})}})]));box.appendChild(out)})}
 function load(){api('/companion/api/today').then(renderToday).catch(warn)}
 function capText(){var t=$('cap-text').value.trim();if(!t)return;$('cap-out').innerHTML='';say($('cap-out'),'Saving...');api('/companion/api/capture',{json:{text:t}}).then(function(r){$('cap-text').value='';showCap(r)})}
 function showCap(r){var o=$('cap-out');o.innerHTML='';if(!r.ok){say(o,r.error||'failed');return}var p=r.processed||{};var w={action:'Next action',project:'Project',someday:'Someday',reference:'Kept as reference',journal:'Journal',card:'Flashcard',trash:'Nothing to keep'}[p.type]||'In the inbox';
@@ -1341,12 +1680,21 @@ function loadData(){api('/companion/api/dashboard').then(function(d){var b=$('da
  (d.mood_weekly||[]).forEach(function(w){c.appendChild(el('div',{cls:'row'},[el('div',{text:w.week,style:'width:86px',cls:'mute'}),el('div',{cls:'grow'},[el('div',{cls:'bar',style:'width:'+Math.round((w.mood||0)/5*100)+'%'})]),el('div',{text:String(w.mood),style:'width:40px'})]))});b.appendChild(c);
  var t=el('table');t.appendChild(el('tr',{},[el('th',{text:'Nudge'}),el('th',{text:'sent'}),el('th',{text:'did it'}),el('th',{text:'not today'})]));(d.nudge_loop_28d||[]).forEach(function(n){t.appendChild(el('tr',{},[el('td',{text:n.kind}),el('td',{text:String(n.fired)}),el('td',{text:String(n.done)}),el('td',{text:String(n.declined)})]))});
  b.appendChild(el('div',{cls:'card'},[el('h2',{text:'How nudges landed (28 days)'}),t,el('div',{cls:'mute',text:'A kind of nudge that never lands is retired automatically.'})]));
+ var wh=el('div',{cls:'card'},[el('h2',{text:'What helps'})]);var ha=((d.what_helps||{}).activities||[]);if(!ha.length)wh.appendChild(el('div',{cls:'mute',text:'When you finish something, rate how it felt. After a few, the things that lift you show up here and I suggest them first.'}));
+ ha.slice(0,8).forEach(function(a){wh.appendChild(el('div',{cls:'row'},[el('div',{cls:'grow',text:a.title}),el('div',{cls:'mute',text:a.score+'/5 ('+a.n+')'})]))});
+ var lk=d.activity_mood_link_60d;if(lk&&lk.days_with>=3&&lk.with_activity!==null&&lk.without_activity!==null)wh.appendChild(el('div',{cls:'mute',style:'margin-top:8px',text:'Mood on days you did a rated activity: '+lk.with_activity+'; other days: '+lk.without_activity+' (60 days).'}));
+ var na=el('input',{placeholder:'Add your own: something that usually lifts you',style:'margin-top:8px'});wh.appendChild(na);wh.appendChild(el('div',{cls:'row',style:'margin-top:6px'},[el('button',{text:'Add',onclick:function(){if(!na.value.trim())return;api('/companion/api/activities',{json:{title:na.value.trim()}}).then(function(){na.value='';say(wh,'Added to your ideas.')})}})]));b.appendChild(wh);
+ if((d.who5_history||[]).length){var w5=el('div',{cls:'card'},[el('h2',{text:'Well-being, two-weekly (WHO-5, 0-100)'})]);d.who5_history.forEach(function(x){w5.appendChild(el('div',{cls:'row'},[el('div',{text:x.day,style:'width:96px',cls:'mute'}),el('div',{cls:'grow'},[el('div',{cls:'bar',style:'width:'+x.score+'%'})]),el('div',{text:String(x.score),style:'width:40px'})]))});w5.appendChild(el('div',{cls:'mute',text:'50 or more is generally a good range. A lower score is a reason to be kind to yourself and to talk to someone, not a diagnosis.'}));b.appendChild(w5)}
  if((d.mood_by_tags_60d||[]).length){var tt=el('div',{cls:'card'},[el('h2',{text:'Mood by tags (60 days)'})]);d.mood_by_tags_60d.forEach(function(x){tt.appendChild(el('div',{cls:'mute',text:x.tags+': '+x.mood+' ('+x.n+')'}))});b.appendChild(tt)}});
+ loadPlan();
  api('/companion/api/privacy').then(function(p){var b=$('priv');b.innerHTML='';var t=el('table');t.appendChild(el('tr',{},[el('th',{text:'What'}),el('th',{text:'rows'}),el('th',{text:'since'})]));p.tables.forEach(function(x){t.appendChild(el('tr',{},[el('td',{text:x.what}),el('td',{text:String(x.rows)}),el('td',{text:(x.oldest||'').slice(0,10)})]))});
  var conf=el('input',{placeholder:"type: delete everything"});var out=el('div');
  b.appendChild(el('div',{cls:'card'},[el('h2',{text:'Your data'}),el('div',{cls:'mute',text:p.where}),t,el('div',{cls:'mute',text:'Files: '+p.files.objects+' ('+Math.round(p.files.bytes/1024)+' KB). '+p.encryption,style:'margin-top:8px'}),
   el('div',{cls:'row',style:'margin-top:10px'},[el('button',{text:'Download everything',onclick:function(){fetch('/companion/api/export',{headers:{Authorization:'Bearer '+getKey()}}).then(function(r){return r.blob()}).then(function(bl){var a=el('a',{href:URL.createObjectURL(bl),download:'companion-export.json'});document.body.appendChild(a);a.click();a.remove()})}})]),
   el('div',{style:'margin-top:10px'},[el('div',{cls:'mute',text:'Delete everything the companion stored (captures, moods, cards, files, its nudges). Your older twin data stays.'}),conf,el('div',{cls:'row',style:'margin-top:6px'},[el('button',{text:'Delete',onclick:function(){api('/companion/api/delete',{json:{scope:'all',confirm:conf.value}}).then(function(r){out.innerHTML='';say(out,r.ok?'Deleted.':r.error)})}})]),out])]))})}
+function loadPlan(){api('/companion/api/safety-plan').then(function(p){var b=$('plan');b.innerHTML='';b.appendChild(el('h2',{text:'My safety plan'}));b.appendChild(el('div',{cls:'mute',text:'For a hard moment, written in a calm one. Your own words, one per line. If you ever write something that worries me, I show you these with the crisis lines.'}));var tas={};
+ p.fields.forEach(function(f){b.appendChild(el('div',{text:f[1],style:'margin-top:10px'}));var ta=el('textarea',{style:'min-height:56px'});ta.value=(p[f[0]]||[]).join('\\n');tas[f[0]]=ta;b.appendChild(ta)});
+ var out=el('div');b.appendChild(el('div',{cls:'row',style:'margin-top:8px'},[el('button',{cls:'p',text:'Save my plan',onclick:function(){var o={};Object.keys(tas).forEach(function(k){o[k]=tas[k].value.split(/\\r?\\n/)});api('/companion/api/safety-plan',{json:o}).then(function(r){out.innerHTML='';say(out,r.ok?'Saved. It stays private, in your own account.':r.error)})}})]));b.appendChild(out)})}
 function b64ToU8(s){var p=s.replace(/-/g,'+').replace(/_/g,'/');var b=atob(p+'==='.slice((p.length+3)%4));var o=new Uint8Array(b.length);for(var i=0;i<b.length;i++)o[i]=b.charCodeAt(i);return o}
 function enablePush(){if(!('serviceWorker' in navigator)||!('PushManager' in window)){alert('This browser cannot receive notifications. On iPhone, add this page to the home screen first.');return}
  Notification.requestPermission().then(function(perm){if(perm!=='granted')throw new Error('notifications were not allowed');return navigator.serviceWorker.register('/companion/sw.js',{scope:'/companion'})}).then(function(reg){return navigator.serviceWorker.ready.then(function(){return api('/companion/api/push/key')}).then(function(k){return reg.pushManager.subscribe({userVisibleOnly:true,applicationServerKey:b64ToU8(k.public_key)})})})
