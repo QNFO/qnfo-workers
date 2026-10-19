@@ -50,7 +50,7 @@
 // VERSION-BUMP-GUARD-1 requires the literal `var VERSION = "..."` form: this constant is
 // what fleet-autoaudit's strict numeric-ahead deploy check and deploy-drift's string
 // compare both read. `const` here would make the bundle invisible to deploy-drift.
-var VERSION = "1.4.0-canary-glossary";
+var VERSION = "1.4.1-log-catch"; // 1.4.1 WORKERS-BP-LOGGING-1 (agent_issues 2342, RESOLVE-ALL-OPEN-1 2026-10-19): the scheduled() error-event write no longer swallows its own failure; it logs a structured console.error.
 const BATTERY_VERSION = "cfmb-2";
 const DOCS_INDEX = "https://developers.cloudflare.com/workers-ai/models/index.md";
 const docsModel = (slug) => `https://developers.cloudflare.com/workers-ai/models/${slug}/index.md`;
@@ -940,7 +940,9 @@ export default {
         await env.AUDIT.prepare(
           "INSERT OR REPLACE INTO cloud_ops_events (id, ts, kind, text, meta, job, status) VALUES (?1, datetime('now'), 'cf-model-eval', ?2, NULL, 'cf-model-eval', 'warn')"
         ).bind("cf-model-eval-err-" + Date.now(), "CF-MODEL-EVAL-1 cron failed: " + String(e && e.message ? e.message : e)).run();
-      } catch (_) { }
+      } catch (eLog) {
+        console.error(JSON.stringify({ worker: "qnfo-model-eval", where: "scheduled:error-event", error: String(eLog && eLog.message || eLog), cron_error: String(e && e.message || e) }));
+      }
     }));
   }
 };
