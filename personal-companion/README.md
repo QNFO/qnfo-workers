@@ -192,3 +192,21 @@ was, and nothing it suggested ever closed (`proactive_signals`: 30 rows, 9 shown
   instead of inventing a person or a number.
 - Known limitation: `activity` is stale by design and `chat` volume moves with the client in use,
   so `drift()` scores both as weak; text signals and self-report carry the judgement.
+
+## Travel planner (TRAVEL-PLANNER-1, pillar personal)
+`travel.js` plans the owner's travel on the hourly tick, server-side, from data the fleet already holds: lodging and travel
+rows in personal-life.events (written by qnfo-email ITINERARY-INGEST-1 from booking confirmations), the profile rows with
+facet travel/likes/dislikes/logistics, and the append-only `travel_reactions` ledger.
+- On the road: when the next unbooked night is within `lead_days` (default 3) and no flight home follows the stay, one mail
+  proposes 3 next stops (Workers AI, two models, nothing on failure), one marked as the pick, each with a Booking.com search
+  link (dates, one adult, price ceiling) and a transit link. At home with nothing booked: 3 trip ideas on `ideas_weekday`.
+- The day before a stay starts: one mail with an early check-in request ready to paste to the host.
+- `/travel/o/<id>?s=<hmac>`: GET shows an option, POST `action=pick|no` records it. Links are HMAC-signed (TRAVEL_KEY, else
+  WELLBEING_TOKEN, else COMPANION_KEY); no key means no state-changing links. Nothing is ever booked or paid.
+- A booking that later lands in events for a proposed city is recorded as `booked` (strongest signal); other options for
+  those nights are superseded; past ones expire. Rejected cities are never proposed again; the pick favours the stay kind
+  the owner books most.
+- `GET /api/travel` and `POST /api/travel/run[?dry=1&force=1]` take the COMPANION_KEY bearer.
+- Config: personal-life `travel_config` rows (`enabled`, `home_city`, `home_airports`, `lead_days`, `nights`,
+  `max_per_night`, `currency`, `ideas_weekday`, `mail_from_hour`, `mail_to_hour`, `tz`); an owner edit always wins.
+Tests: node --no-warnings personal-companion/travel.test.mjs
