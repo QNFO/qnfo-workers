@@ -1,0 +1,420 @@
+diff --git a/migrations/2026-10-19-consumer-pending-deferral.sql b/migrations/2026-10-19-consumer-pending-deferral.sql
+new file mode 100644
+index 00000000..8654685f
+--- /dev/null
++++ b/migrations/2026-10-19-consumer-pending-deferral.sql
+@@ -0,0 +1,41 @@
++-- CONSUMER-PENDING-IS-DEFERRAL-1 (2026-10-19, charter pillar: autonomy; agent_issues 2954, 2826, 2880, 2881, 2953). Companion to the scripts/remediation_consumer.py change.
++-- Measured 2026-10-19 to 12:10Z: the consumer wrote 223 pass = 0 rows in 24 hours for d1-query reads that began with 'pending' (203 plain, 20 in the
++-- measured-pending shape), and stamped the contract last_verdict 'fail'. qnfo-fleet-control's tick has treated 'pending' as a deferral since 0.33.11
++-- (verdict 'deferred', no row), so the two loops probing the same contracts disagreed. The loop-owned contracts issue-2826, issue-2880 and issue-2881
++-- ("pending: filed by qnfo-fleet-control, which owns it for 48h") sat at 'fail', which remediation_verification_autoclose_ins reads as a failing
++-- verdict (cb.last_verdict IN ('fail', ...)) to refuse the filing loop's own close. The consumer now defers a plain pending read exactly as the tick does;
++-- the measured-pending shape that remediation_reopen_on_relapse_d1 counts (a number against a ceiling, target, threshold, limit or operator) stays a failure.
++-- The detector below counts plain-pending pass = 0 rows written by a consumer run after this migration plus a 90 minute grace for runs in flight at
++-- the merge (the anchor is fixed when the file is applied), and holds that at 0.
++-- APPLY-BY: ci
++-- DB: qnfo-audit
++-- Rollback: DELETE FROM remediation_contracts WHERE class = 'fm-consumer-pending-recorded-as-failure'; DELETE FROM failure_modes WHERE fm_key = 'consumer-pending-recorded-as-failure'
++-- Rollback scope: the registry rows only; the behaviour is the scripts/remediation_consumer.py change (revert that file).
++
++INSERT OR IGNORE INTO failure_modes (fm_key, failure_mode, root_cause, remediation, detector, probe_class, first_seen, issue_id, trigger_condition, symptom, blast_radius) VALUES
++ ('consumer-pending-recorded-as-failure',
++  'a d1-query probe that reads ''pending: <reason>'' (it cannot judge yet) is recorded by the consumer as a failed verification and stamps its contract last_verdict fail',
++  'scripts/remediation_consumer.py classified every observed that differed from expected as fail. The deferral convention (REMEDIATION-PENDING-PREFIX-1) was honoured by qnfo-fleet-control''s tick (DEFERRAL-NOT-A-FAILURE-1) but never by the consumer, which probes the same d1-query contracts every 22 minutes, so each pending read wrote a pass = 0 row and a fail stamp',
++  'scripts/remediation_consumer.py CONSUMER-PENDING-IS-DEFERRAL-1: a pending read is verdict deferred, counted as skipped, with no verification row; the measured-pending shape the D1 trigger remediation_reopen_on_relapse_d1 counts (a number and a ceiling, target, threshold, limit, fewer than, more than or a comparison operator) stays a failure; scripts/remediation_consumer_pending_test.py compares the carve-out with the trigger''s own expression',
++  'fm-consumer-pending-recorded-as-failure: plain-pending pass = 0 rows from remediation-consumer@* written after this migration (90 minute grace)',
++  'fm-consumer-pending-recorded-as-failure', '2026-10-19T12:10:00Z', 2954,
++  'a contract''s probe returns observed ''pending'' or ''pending: <reason>'' without a measurement (a loop-owned issue inside its 48 hour window, a window not yet open) and the consumer is the loop that reads it',
++  'pass = 0 rows and last_verdict fail on contracts that have not failed; the filing loop''s own close is refused by the autoclose trigger while an active contract of the issue reads fail; the failure share and the runtime-share denominator are inflated by about 220 rows a day',
++  'every d1-query contract with a pending branch (75 distinct contracts read pending in the 24 hours to 12:10Z, 176 of the 223 rows on issue contracts); the issues they guard cannot close while the stamp reads fail');
++
++INSERT OR IGNORE INTO remediation_contracts (class, issue_id, precondition, action, verify_probe, verify_transport, max_attempts, escalate_to, expected_cadence_h, status, next_due_at, module, budget_ms, max_items, requires_container) VALUES
++ ('fm-consumer-pending-recorded-as-failure', NULL, 'CONSUMER-PENDING-IS-DEFERRAL-1', 'failure-mode detector',
++  'SELECT ''0'' AS expected, CAST((SELECT COUNT(*) FROM remediation_verifications WHERE verified_at > ''' || strftime('%Y-%m-%d %H:%M:%S', 'now', '+90 minutes') || ''' AND pass = 0 AND verifier LIKE ''remediation-consumer@%'' AND lower(trim(observed)) LIKE ''pending%'' AND NOT (observed GLOB ''*[0-9]*'' AND (observed LIKE ''%ceiling%'' OR lower(observed) LIKE ''%target%'' OR lower(observed) LIKE ''%threshold%'' OR lower(observed) LIKE ''%limit%'' OR lower(observed) LIKE ''%fewer than%'' OR lower(observed) LIKE ''%more than%'' OR observed LIKE ''% <= %'' OR observed LIKE ''% >= %'' OR observed LIKE ''% < %'' OR observed LIKE ''% > %''))) AS TEXT) AS observed',
++  'd1-query', 3, 'qnfo-fleet-control', 1, 'active', strftime('%Y-%m-%d %H:%M:%S', 'now'), 'failure-mode', 45000, 5, 0);
++
++INSERT INTO decision_log (actor, assumption, action, evidence, outcome, blast_radius, rollback_path, capability_gain, predicted_outcome, reach_gain, surfaces_tested)
++SELECT 'session_01QpQv19uh1padRwZ3u1r766',
++  'the worker tick''s reading of a pending observation (a deferral, no verdict) is the fleet''s convention (REMEDIATION-PENDING-PREFIX-1, DEFERRAL-NOT-A-FAILURE-1), so the consumer that probes the same d1-query contracts follows it; the measured-pending shape stays a failure because the D1 triggers that reopen and close issues already count it so',
++  'CONSUMER-PENDING-IS-DEFERRAL-1: scripts/remediation_consumer.py consume_d1 records a plain pending read as verdict deferred (skipped, no verification row, last_verdict deferred); failure mode consumer-pending-recorded-as-failure and its detector registered',
++  'qnfo-audit 2026-10-19 to 12:10Z: 223 pass = 0 pending rows in 24 h from remediation-consumer@* (203 plain, 20 measured); issue-2826, issue-2880, issue-2881 at last_verdict fail on a pending read; remediation_reopen_on_relapse_d1 read from sqlite_master; scripts/remediation_consumer_pending_test.py fails against the previous consumer and passes after',
++  'merged to main', 'the consumer verdict path for d1-query contracts only; runner-https and code-read are unchanged; a pending read no longer counts as a failure, an attempt still counts, and a measured-pending read still does',
++  'revert scripts/remediation_consumer.py; the Rollback header removes the failure mode and its detector',
++  'a contract that cannot judge yet reads deferred in both loops, so a loop-owned issue can be closed by the loop that filed it',
++  'within 24 hours of the merge fm-consumer-pending-recorded-as-failure reads 0, contracts issue-2826, issue-2880 and issue-2881 read last_verdict deferred, and plain pending pass = 0 rows from remediation-consumer@* stop',
++  'none', 'offline: scripts/consumer-pending.test.mjs (real consume_one on sqlite, parity with the trigger expression over a corpus), remediation_consumer.py --selftest, migrations/consumer-pending-deferral.test.mjs'
++WHERE NOT EXISTS (SELECT 1 FROM decision_log WHERE instr(action, 'CONSUMER-PENDING-IS-DEFERRAL-1:') = 1);
+diff --git a/migrations/consumer-pending-deferral.test.mjs b/migrations/consumer-pending-deferral.test.mjs
+new file mode 100644
+index 00000000..59d823d0
+--- /dev/null
++++ b/migrations/consumer-pending-deferral.test.mjs
+@@ -0,0 +1,50 @@
++// CONSUMER-PENDING-IS-DEFERRAL-1 offline suite: runs migrations/2026-10-19-consumer-pending-deferral.sql on SQLite. Proves the failure mode, its detector
++// and the decision are recorded once (the file is re-runnable), that the detector is a literal read the consumer will execute, and that it counts exactly
++// the rows the consumer must no longer write: a plain pending pass = 0 row from remediation-consumer@* after the grace anchor; not a measured-pending
++// row, a pass, a stale read, a row from another verifier, nor a row inside the grace window. The consumer's behaviour is covered by
++// scripts/consumer-pending.test.mjs. Run: node migrations/consumer-pending-deferral.test.mjs
++import { DatabaseSync } from "node:sqlite";
++import { readFileSync } from "node:fs";
++const sql = readFileSync(new URL("./2026-10-19-consumer-pending-deferral.sql", import.meta.url), "utf8");
++let pass = 0, fail = 0;
++const ok = (c, m, d) => { if (c) pass++; else { fail++; console.log("FAIL " + m + (d === undefined ? "" : " :: " + JSON.stringify(d))); } };
++ok(/^-- APPLY-BY: ci$/m.test(sql) && /^-- DB: qnfo-audit$/m.test(sql) && /^-- Rollback: .*fm-consumer-pending-recorded-as-failure/m.test(sql), "the migration opts in with the three header lines and the rollback removes the detector");
++ok(!/\b(DELETE|DROP)\b/i.test(sql.split("\n").filter((l) => !l.startsWith("--")).join("\n")), "the body deletes and drops nothing, so it needs no BACKUP line");
++const db = new DatabaseSync(":memory:");
++db.exec(`CREATE TABLE failure_modes (fm_key TEXT PRIMARY KEY, failure_mode TEXT NOT NULL, root_cause TEXT NOT NULL, remediation TEXT NOT NULL, detector TEXT NOT NULL, probe_class TEXT, first_seen TEXT NOT NULL, issue_id INTEGER, trigger_condition TEXT, symptom TEXT, blast_radius TEXT);
++CREATE TABLE remediation_contracts (class TEXT PRIMARY KEY, issue_id INTEGER, precondition TEXT NOT NULL, action TEXT NOT NULL, verify_probe TEXT NOT NULL, verify_transport TEXT NOT NULL, max_attempts INTEGER NOT NULL DEFAULT 3, escalate_to TEXT NOT NULL, expected_cadence_h INTEGER, status TEXT DEFAULT 'active', ts TEXT DEFAULT (datetime('now')), last_attempt_at TEXT, last_verdict TEXT, module TEXT, budget_ms INTEGER DEFAULT 45000, next_due_at TEXT, max_items INTEGER DEFAULT 5, requires_container INTEGER DEFAULT 0, attempts INTEGER DEFAULT 0);
++CREATE TABLE decision_log (id INTEGER PRIMARY KEY AUTOINCREMENT, ts TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')), actor TEXT NOT NULL, assumption TEXT NOT NULL, action TEXT NOT NULL, evidence TEXT NOT NULL, outcome TEXT NOT NULL, blast_radius TEXT NOT NULL, rollback_path TEXT NOT NULL, capability_gain TEXT, predicted_outcome TEXT, reach_gain TEXT, surfaces_tested TEXT, outcome_matched INTEGER);
++CREATE TABLE remediation_verifications (id INTEGER PRIMARY KEY AUTOINCREMENT, issue_id INTEGER, class TEXT, probe_url TEXT, transport TEXT, expected TEXT, observed TEXT, pass INTEGER, verifier TEXT, verified_at TEXT DEFAULT (datetime('now')));`);
++db.exec(sql);
++db.exec(sql); // re-running it changes nothing
++const q = (s, ...a) => db.prepare(s).all(...a);
++const fm = q("SELECT * FROM failure_modes WHERE fm_key = 'consumer-pending-recorded-as-failure'");
++ok(fm.length === 1 && fm[0].issue_id === 2954 && fm[0].probe_class === "fm-consumer-pending-recorded-as-failure", "the failure mode is recorded once against issue 2954", fm);
++const c = q("SELECT * FROM remediation_contracts WHERE class = 'fm-consumer-pending-recorded-as-failure'");
++ok(c.length === 1 && c[0].verify_transport === "d1-query" && c[0].status === "active" && c[0].expected_cadence_h === 1 && c[0].issue_id === null, "the detector contract is active, hourly, d1-query and standing (no issue)", c);
++const dl = q("SELECT * FROM decision_log WHERE instr(action, 'CONSUMER-PENDING-IS-DEFERRAL-1:') = 1");
++ok(dl.length === 1 && dl[0].capability_gain && dl[0].predicted_outcome && dl[0].rollback_path, "the decision is logged once with its capability gain and predicted outcome", dl.length);
++const probe = c[0].verify_probe;
++const WRITE_KW = ["insert into", "update ", "delete from", "drop table", "drop index", "alter table", "create table", "create index", "create trigger", "attach ", "detach ", "pragma ", "replace into", "vacuum"];
++ok(/^select /i.test(probe) && !probe.includes(";") && !WRITE_KW.some((k) => probe.toLowerCase().includes(k)), "the probe is a literal read the consumer executes (select, one statement, no write keyword)", probe.slice(0, 120));
++const run = () => q(probe)[0];
++ok(run().expected === "0" && run().observed === "0", "the detector passes with no rows", run());
++const row = (observed, pass, verifier, when) => db.prepare("INSERT INTO remediation_verifications (class, transport, expected, observed, pass, verifier, verified_at) VALUES ('issue-1', 'd1-query', 'ok', ?, ?, ?, strftime('%Y-%m-%d %H:%M:%S', 'now', ?))").run(observed, pass, verifier, when);
++const PLAIN = "pending: filed by qnfo-fleet-control, which owns it for 48h";
++row(PLAIN, 0, "remediation-consumer@abc", "+0 minutes");
++row(PLAIN, 0, "remediation-consumer@abc", "+60 minutes");
++ok(run().observed === "0", "rows written by runs in flight at the merge (inside the 90 minute grace) are not counted", run());
++row("pending: worker_count 33 (needs <= 24)", 0, "remediation-consumer@abc", "+3 hours");
++row("pending: 169 open issues, ceiling 50", 0, "remediation-consumer@abc", "+3 hours");
++row("stale: the filing loop did not close it within 48h", 0, "remediation-consumer@abc", "+3 hours");
++row("ok", 1, "remediation-consumer@abc", "+3 hours");
++row(PLAIN, 0, "qnfo-fleet-control/remediation-tick@0.37.0", "+3 hours");
++row(PLAIN, 1, "remediation-consumer@abc", "+3 hours");
++ok(run().observed === "0", "measured-pending, stale, pass, other-verifier and pass = 1 rows are not counted", run());
++row(PLAIN, 0, "remediation-consumer@def", "+3 hours");
++ok(run().observed === "1" && run().expected === "0", "one plain-pending pass = 0 row from a consumer run after the grace fails the detector", run());
++row("Pending: window not open", 0, "remediation-consumer@def", "+4 hours");
++row("pending", 0, "remediation-consumer@def", "+4 hours");
++ok(run().observed === "3", "every plain-pending form is counted (case, bare word)", run());
++console.log(pass + " passed, " + fail + " failed");
++if (fail) process.exit(1);
+diff --git a/scripts/consumer-pending.test.mjs b/scripts/consumer-pending.test.mjs
+new file mode 100644
+index 00000000..784e1a93
+--- /dev/null
++++ b/scripts/consumer-pending.test.mjs
+@@ -0,0 +1,18 @@
++// CONSUMER-PENDING-IS-DEFERRAL-1 suite: runs scripts/remediation_consumer_pending_test.py, which drives the consumer's real consume_one
++// against sqlite and proves a pending d1-query read is a deferral (no verification row, last_verdict deferred, counted as skipped) while the
++// measured-pending shape, a stale read and a pass keep their rows, and that the carve-out agrees with the D1 trigger's own expression.
++// Run: node scripts/consumer-pending.test.mjs
++import { spawnSync } from "node:child_process";
++import { dirname, join } from "node:path";
++import { fileURLToPath } from "node:url";
++
++const here = dirname(fileURLToPath(import.meta.url));
++const r = spawnSync("python3", [join(here, "remediation_consumer_pending_test.py")], { encoding: "utf8" });
++const out = (r.stdout || "") + (r.stderr || "");
++let pass = 0, fail = 0;
++const ok = (c, m, x) => { if (c) pass++; else { fail++; console.log("FAIL " + m + (x !== undefined ? " :: " + JSON.stringify(x).slice(0, 400) : "")); } };
++ok(r.status === 0 && /all passed/.test(out) && !/^FAIL/m.test(out), "the pending-is-deferral test passes", out.slice(-500));
++ok((out.match(/^ok /gm) || []).length >= 60, "the test covers the cases and the trigger parity corpus", (out.match(/^ok /gm) || []).length);
++ok(/same verdict as the D1 trigger/.test(out), "the carve-out is compared with the trigger's own expression");
++console.log(pass + " passed, " + fail + " failed");
++if (fail) process.exit(1);
+diff --git a/scripts/remediation_consumer.py b/scripts/remediation_consumer.py
+index 414ebafe..31c29577 100644
+--- a/scripts/remediation_consumer.py
++++ b/scripts/remediation_consumer.py
+@@ -54,6 +54,13 @@ RUNTIME PROBES (PROBE-TRANSPORT-MONOCULTURE-1, agent_issues 2060, 2026-10-06)
+   9. Each run writes metric runtime_verified_share_24h (share of the last 24h of
+      verifications on a trusted, independent, runtime-observable transport); its
+      trigger breaches if this runner stops, which a Cloudflare cron evaluates.
++
++DEFERRALS (CONSUMER-PENDING-IS-DEFERRAL-1, 2026-10-19)
++  10. A d1-query read whose observed starts with 'pending' is a deferral, as it is in
++     qnfo-fleet-control's tick: verdict 'deferred', counted as skipped, no
++     remediation_verifications row, last_verdict 'deferred' (never 'fail'). A pending
++     read that carries a number against a bound (the measured-pending shape the D1
++     trigger remediation_reopen_on_relapse_d1 still counts) remains a failure.
+ """
+ 
+ import calendar
+@@ -293,6 +300,46 @@ def classify(expected, observed):
+     return 0, "fail"
+ 
+ 
++# CONSUMER-PENDING-IS-DEFERRAL-1 (2026-10-19, agent_issues 2954, 2826, 2880, 2881, 2953): 'pending' and 'pending: <reason>' are the fleet's
++# deferral convention (REMEDIATION-PENDING-PREFIX-1): the probe cannot judge yet, so the read is not a verdict. qnfo-fleet-control's tick has
++# treated it so since 0.33.11 (DEFERRAL-NOT-A-FAILURE-1: verdict 'deferred', no verification row), but this consumer, which probes the same
++# d1-query contracts every 22 minutes, classified every such read as expected != observed and wrote pass = 0 plus last_verdict 'fail'.
++# Measured 2026-10-19 to 12:10Z: 223 pending pass = 0 rows in 24 h from remediation-consumer@* (203 plain, 20 measured), and the
++# loop-owned contracts issue-2826, issue-2880 and issue-2881 ("pending: filed by qnfo-fleet-control, which owns it for 48h") sat at
++# last_verdict 'fail', which is exactly what remediation_verification_autoclose_ins reads (cb.last_verdict IN ('fail', ...)) to refuse
++# the filing loop's own close. The carve-out is the one remediation_reopen_on_relapse_d1 applies: a pending read that carries a number
++# and a ceiling, target, threshold, limit, "fewer than", "more than" or a comparison operator is a measurement that is off target, not a
++# probe that cannot judge, and stays a failure (e.g. "pending: worker_count 33 (needs <= 24)"). Only d1-query reads can say pending: the
++# runner-https and code-read judges return 'ok' or a failure token.
++_MEASURED_PENDING_WORDS = ("ceiling", "target", "threshold", "limit", "fewer than", "more than")
++_MEASURED_PENDING_OPS = (" <= ", " >= ", " < ", " > ")
++
++
++def _observed_text(observed):
++    return "" if observed is None else str(observed).strip()
++
++
++def is_deferral(observed):
++    """True for 'pending' and 'pending: <reason>' (any case). Mirrors rtIsDeferral in qnfo-fleet-control/worker.js."""
++    return re.match(r"pending", _observed_text(observed), re.I) is not None
++
++
++def is_measured_pending(observed):
++    """True when a pending read carries a measurement against a bound. Twin of the WHEN clause of the D1 trigger
++    remediation_reopen_on_relapse_d1: observed GLOB '*[0-9]*' AND (LIKE '%ceiling%' / '%target%' / '%threshold%' / '%limit%' /
++    '%fewer than%' / '%more than%' / '% <= %' / '% >= %' / '% < %' / '% > %'); SQLite LIKE is case-insensitive for ASCII."""
++    o = _observed_text(observed)
++    if re.search(r"[0-9]", o) is None:
++        return False
++    low = o.lower()
++    return any(w in low for w in _MEASURED_PENDING_WORDS) or any(op in o for op in _MEASURED_PENDING_OPS)
++
++
++def is_deferred_read(observed):
++    """A read that is a deferral and not a verdict: pending, and not the measured-pending shape the relapse trigger still counts."""
++    return is_deferral(observed) and not is_measured_pending(observed)
++
++
+ def host_allowed(url):
+     """https only, and the host is an allowlisted fleet domain or a subdomain of one."""
+     try:
+@@ -756,6 +803,40 @@ def _selftest():
+     if classify("ok", "status=404") != (0, "fail") or classify("ok", "ok") != (1, "pass"):
+         print(json.dumps({"ok": False, "case": "https-classify"}))
+         return 1
++    # CONSUMER-PENDING-IS-DEFERRAL-1: a pending read is a deferral (no verification row, verdict 'deferred'); the measured-pending shape
++    # the D1 relapse trigger counts, a real failure token and a pass keep their rows. The full fake-d1 suite is scripts/remediation_consumer_pending_test.py.
++    deferral_cases = [
++        ("pending", True), ("pending: filed by qnfo-fleet-control, which owns it for 48h", True), ("  Pending: window not open", True),
++        ("pending: worker_count 33 (needs <= 24)", False), ("pending: unmanaged share 0.55 (target 0.5)", False),
++        ("pending: 7 rows", True), ("pending: no limit reached", True),
++        ("stale: the filing loop did not close it", False), ("ok", False), ("", False), (None, False),
++    ]
++    for obs_, want in deferral_cases:
++        if is_deferred_read(obs_) != want:
++            print(json.dumps({"ok": False, "case": "pending-is-deferral", "observed": obs_, "want": want}))
++            return 1
++    probe_read, inserts = {}, []
++
++    def fake_d1_pending(sql, params=None):
++        if sql.lstrip().startswith("INSERT"):
++            inserts.append(sql)
++            return []
++        return [{"expected": "ok", "observed": probe_read["observed"]}]
++    saved_d1 = globals()["d1"]
++    globals()["d1"] = fake_d1_pending
++    try:
++        for observed_, want_v, want_wrote in (("pending: filed by x, which owns it for 48h", "deferred", False),
++                                              ("pending: worker_count 33 (needs <= 24)", "fail", True),
++                                              ("stale: x did not close it", "fail", True), ("ok", "pass", True)):
++            probe_read["observed"] = observed_
++            del inserts[:]
++            rec_, out_ = {}, {"pass": 0, "fail": 0, "skipped": 0}
++            consume_d1({"class": "issue-1", "issue_id": 1, "verify_transport": "d1-query", "verify_probe": "SELECT 1"}, rec_, out_, {"d1-query"})
++            if rec_.get("verdict") != want_v or bool(inserts) != want_wrote or (want_v == "deferred") != (out_["skipped"] == 1 and out_.get("deferred") == 1):
++                print(json.dumps({"ok": False, "case": "pending-consume-d1", "observed": observed_, "got": rec_.get("verdict"), "writes": len(inserts), "out": out_}))
++                return 1
++    finally:
++        globals()["d1"] = saved_d1
+     # PROBE-DRAIN-1: hourly contracts come due inside their 60-minute window; counters from parallel probes add up; a run
+     # drains every due batch and never probes a contract twice.
+     # REMEDIATION-2X-1: half the earlier offsets (45, 345, 30 minutes).
+@@ -1072,6 +1153,13 @@ def consume_d1(c, rec, out, trusted):
+         out["skipped"] += 1
+         rec["verdict"] = "untrusted-transport"
+         rec["reason"] = "%r not trusted" % transport
++    elif is_deferred_read(obs):
++        # CONSUMER-PENDING-IS-DEFERRAL-1: exactly as qnfo-fleet-control's tick treats it (DEFERRAL-NOT-A-FAILURE-1): the verdict is
++        # 'deferred', no verification row is written (the table is a verdict ledger), and the contract is stamped 'deferred', never 'fail'.
++        out["skipped"] += 1
++        out["deferred"] = out.get("deferred", 0) + 1
++        rec["verdict"] = "deferred"
++        rec["reason"] = "the probe cannot judge yet: %s" % str(obs).strip()[:160]
+     else:
+         record_verification(c.get("issue_id"), cls, "d1:remediation_contracts/" + str(cls),
+                             transport, str(exp).strip(), str(obs).strip(), passed)
+@@ -1227,7 +1315,7 @@ def _apply_migration(path, text):
+ def main():
+     t0 = time.time()
+     out = {"ok": True, "marker": "REMEDIATION-CONSUMER-1", "verifier": VERIFIER,
+-           "due": 0, "pass": 0, "fail": 0, "skipped": 0, "contracts": []}
++           "due": 0, "pass": 0, "fail": 0, "skipped": 0, "deferred": 0, "contracts": []}
+ 
+     trusted = {r["transport"] for r in d1("SELECT transport FROM transport_trust WHERE trusted = 1")}
+     out["trusted_transports"] = sorted(trusted)
+diff --git a/scripts/remediation_consumer_pending_test.py b/scripts/remediation_consumer_pending_test.py
+new file mode 100644
+index 00000000..2b40de9c
+--- /dev/null
++++ b/scripts/remediation_consumer_pending_test.py
+@@ -0,0 +1,158 @@
++#!/usr/bin/env python3
++"""CONSUMER-PENDING-IS-DEFERRAL-1 offline test (2026-10-19, pillar autonomy; agent_issues 2954, 2826, 2880, 2881, 2953).
++
++A d1-query read whose observed starts with 'pending' means "the probe cannot judge yet". qnfo-fleet-control's tick treats it as a
++deferral (verdict 'deferred', no remediation_verifications row, DEFERRAL-NOT-A-FAILURE-1), but the consumer, which probes the same
++contracts, wrote pass = 0 and stamped last_verdict 'fail'. Measured 2026-10-19: 223 such rows in 24 h, and the loop-owned contracts
++issue-2826, issue-2880 and issue-2881 sat at last_verdict 'fail' on "pending: filed by qnfo-fleet-control, which owns it for 48h", which
++is what the autoclose triggers read to refuse the filing loop's own close. The measured-pending shape (a number against a bound, e.g.
++"pending: worker_count 33 (needs <= 24)") is still a failure, exactly as the D1 trigger remediation_reopen_on_relapse_d1 counts it.
++
++Runs the real consume_one against an in-memory sqlite behind a fake d1, and checks the consumer's carve-out against the trigger's own WHEN
++expression, read from migrations/2026-10-17-measured-pending-triggers.sql, over a corpus of observed strings.
++
++Run: python3 scripts/remediation_consumer_pending_test.py
++"""
++import os
++import re
++import sqlite3
++import sys
++
++HERE = os.path.dirname(os.path.abspath(__file__))
++sys.path.insert(0, HERE)
++os.environ.setdefault("CLOUDFLARE_ACCOUNT_ID", "acct")
++os.environ.setdefault("CLOUDFLARE_API_TOKEN", "tok")
++os.environ.setdefault("CF_API_TOKEN", "tok")
++
++import remediation_consumer as rc  # noqa: E402
++
++fails = 0
++
++
++def check(cond, msg, extra=None):
++    global fails
++    if cond:
++        print("ok   " + msg)
++    else:
++        fails += 1
++        print("FAIL " + msg + ("" if extra is None else " -- " + repr(extra)))
++
++
++db = sqlite3.connect(":memory:")
++db.execute("CREATE TABLE remediation_contracts (class TEXT PRIMARY KEY, status TEXT, attempts INTEGER, last_attempt_at TEXT, last_verdict TEXT, next_due_at TEXT)")
++db.execute("CREATE TABLE remediation_verifications (id INTEGER PRIMARY KEY AUTOINCREMENT, issue_id INTEGER, class TEXT, probe_url TEXT, transport TEXT, "
++           "expected TEXT, observed TEXT, pass INTEGER, verifier TEXT, verified_at TEXT DEFAULT (datetime('now')))")
++probe_read = {}
++
++
++def fake_d1(sql, params=None):
++    s = sql.lstrip()
++    if s.startswith("SELECT 'ok' AS expected"):
++        return [{"expected": probe_read["expected"], "observed": probe_read["observed"]}]
++    if s.startswith("UPDATE remediation_contracts SET attempts") or s.startswith("INSERT INTO remediation_verifications"):
++        db.execute(sql, params or [])
++        return []
++    return []
++
++
++def run(observed, expected="ok", transport="d1-query", trusted=("d1-query",), status="active"):
++    """One consume_one on a d1-query contract whose probe reads (expected, observed); returns (rows, contract, local counters, rec)."""
++    db.execute("DELETE FROM remediation_contracts")
++    db.execute("DELETE FROM remediation_verifications")
++    db.execute("INSERT INTO remediation_contracts (class, status, attempts) VALUES ('issue-1', ?, 4)", (status,))
++    probe_read.update(expected=expected, observed=observed)
++    c = {"class": "issue-1", "issue_id": 1, "verify_transport": transport, "expected_cadence_h": 1, "max_attempts": 3,
++         "verify_probe": "SELECT 'ok' AS expected, 'x' AS observed"}
++    rec, local = rc.consume_one(c, set(trusted))
++    rows = db.execute("SELECT expected, observed, pass FROM remediation_verifications").fetchall()
++    contract = db.execute("SELECT status, attempts, last_verdict FROM remediation_contracts WHERE class = 'issue-1'").fetchone()
++    return rows, contract, local, rec
++
++
++saved = rc.d1
++rc.d1 = fake_d1
++try:
++    # the loop-owned template read that blocked issues 2826, 2880 and 2881
++    loop = "pending: filed by qnfo-fleet-control, which owns it for 48h"
++    rows, contract, local, rec = run(loop)
++    check(rows == [], "a pending read writes no verification row", rows)
++    check(contract[2] == "deferred", "the contract is stamped deferred, not fail", contract)
++    check(contract[1] == 5 and contract[0] == "active", "the attempt is counted and the contract stays active", contract)
++    check(local["skipped"] == 1 and local["fail"] == 0 and local["pass"] == 0, "it counts as skipped, never as a fail", local)
++    check(rec["verdict"] == "deferred", "the run record says deferred", rec)
++    gate = ("fail", "vacuous-probe-result", "probe-error", "probe-not-machine-executable", "probe-same-account-host")
++    check(contract[2] not in gate, "the stamp is not one the autoclose triggers read as a failing sibling", contract)
++
++    for obs in ("pending", "Pending: window not open", "  pending: no data yet", "PENDING", "pending: 7 rows so far", "pending: no limit reached"):
++        rows, contract, local, rec = run(obs)
++        check(rows == [] and contract[2] == "deferred" and local["fail"] == 0, "deferral variant %r" % obs, (rows, contract, local))
++
++    # a pending read is a deferral even when the probe's expected value equals it (the worker tick checks the read before it compares)
++    rows, contract, local, _ = run("pending", expected="pending")
++    check(rows == [] and contract[2] == "deferred", "an expected value equal to a pending read does not become a pass", (rows, contract))
++
++    # the measured-pending carve-out: a number against a bound is a failure, as remediation_reopen_on_relapse_d1 counts it
++    for obs in ("pending: worker_count 33 (needs <= 24)", "pending: unmanaged_direct_spend_share reads 0.5554 (target <= 0.5, lever: x)",
++                "pending: 169 open issues, ceiling 50", "pending: code_task_success_rate_30d 0.34 (needs >= 0.6 on 14 days)",
++                "pending: queue 398.8 min > 120"):
++        rows, contract, local, rec = run(obs)
++        check(len(rows) == 1 and rows[0][2] == 0 and rows[0][1] == obs, "measured-pending keeps its pass = 0 row: %r" % obs, rows)
++        check(contract[2] == "fail" and local["fail"] == 1 and local["skipped"] == 0, "measured-pending keeps the fail stamp", (contract, local))
++
++    # other reads keep their paths
++    rows, contract, local, _ = run("stale: the filing loop qnfo-fleet-control did not close it within 48h")
++    check(len(rows) == 1 and rows[0][2] == 0 and contract[2] == "fail" and local["fail"] == 1, "a stale read is still a failure", (rows, contract))
++    rows, contract, local, _ = run("ok")
++    check(len(rows) == 1 and rows[0][2] == 1 and contract[2] == "pass" and local["pass"] == 1, "a pass is still written", (rows, contract))
++    rows, contract, local, _ = run("closed", expected="closed")
++    check(len(rows) == 1 and rows[0][2] == 1 and contract[2] == "pass", "a pass on another token is still written", (rows, contract))
++    rows, contract, local, _ = run(None)
++    check(rows == [] and contract[2] == "vacuous-probe-result" and local["skipped"] == 1, "an empty observation is still vacuous, not deferred", (rows, contract))
++    rows, contract, local, _ = run(loop, trusted=())
++    check(rows == [] and contract[2] == "untrusted-transport", "an untrusted transport still reports itself before a deferral", contract)
++
++    # a deferral followed by a real failure writes the failure: the deferral hides nothing
++    run(loop)
++    rows, contract, local, _ = run("stale: x")
++    check(len(rows) == 1 and contract[2] == "fail", "the next real failure is recorded", (rows, contract))
++finally:
++    rc.d1 = saved
++
++
++def trigger_when_expression():
++    """The pending/measured term of remediation_reopen_on_relapse_d1's WHEN clause, as the migration that reproduces the live trigger has it."""
++    text = open(os.path.join(HERE, "..", "migrations", "2026-10-17-measured-pending-triggers.sql"), encoding="utf-8").read()
++    m = re.search(r"CREATE TRIGGER remediation_reopen_on_relapse_d1[^\n]*\nWHEN [^\n]*?(\(lower\(trim\(NEW\.observed\)\) NOT LIKE 'pending%')", text)
++    if not m:
++        return None
++    start, depth = m.start(1), 0
++    for i in range(start, len(text)):
++        if text[i] == "(":
++            depth += 1
++        elif text[i] == ")":
++            depth -= 1
++            if depth == 0:
++                return text[start:i + 1].replace("NEW.observed", ":o")
++    return None
++
++
++expr = trigger_when_expression()
++check(expr is not None and "GLOB '*[0-9]*'" in expr and "'%ceiling%'" in expr, "the trigger's measured-pending expression is found in its migration", expr)
++corpus = [
++    "pending", "pending: filed by qnfo-fleet-control, which owns it for 48h", "Pending: window not open", "  pending: x", "PENDING: 12 target",
++    "pending: worker_count 33 (needs <= 24)", "pending: worker_count 32 (needs <= 24)", "pending: 169 open issues, ceiling 50", "pending: 5 CEILING",
++    "pending: 5 Target", "pending: 5 THRESHOLD", "pending: 5 Limit", "pending: fewer than 3 seen", "pending: 4 More Than 2", "pending: a>=b 3", "pending: 3 >= 2",
++    "pending: x < 5", "pending: 5 > 4", "pending: 5 <= 6", "pending: 5<6", "pending: no limit reached", "pending: no target set", "pending: 7 rows so far",
++    "pending: the newest workers best-practice audit reads 0 fail and 41 advisory findings at 2026-10-19T11:38:25Z (target 0)",
++    "pending: fleet_ai_run_rate_30d_usd 474.45, workers_ai_cost_30d_usd 167.26 (needs <= 40 on 14 days and <= 25)",
++    "stale: the filing loop did not close it within 48h", "ok", "status=404", "0", "closed", "off-target 31455", "pendingly: 5 target", "not pending: 5 target",
++]
++if expr is not None:
++    q = "SELECT %s AS counts_as_failure" % expr
++    for obs in corpus:
++        sql_says = bool(db.execute(q, {"o": obs}).fetchone()[0])
++        py_says = not rc.is_deferred_read(obs)
++        check(sql_says == py_says, "same verdict as the D1 trigger on %r (failure: %s)" % (obs, sql_says), (sql_says, py_says))
++
++print("%d failed" % fails if fails else "all passed")
++sys.exit(1 if fails else 0)
