@@ -11,6 +11,13 @@
 // router at max_tokens 256 runs in that lane and passes. The sweep therefore probes every model that has a Workers AI id through
 // env.AI.run, the request shape the prober sends, so the two writers of one ai_model_health row run one shape and a pass of one cannot
 // mask a failure of the other; only the DeepSeek ids with no Workers AI id (flash, flash-thinking, written by the sweep alone) use the router.
+// SPEND-DOWNGRADE-INCONCLUSIVE-1 (1.6.4), the second path for a router-swapped ping. qnfo-ai 5.37.0 (MODEL-HEALTH-FLAP-1) honours no_downgrade
+// for the caller qnfo-ai-calibration at max_tokens 512 or less, so the 16-token ping normally reaches the model it names (section 4c, case G, pins
+// the request shape that rule needs). Where the router still swaps the ping for glm-5.3-flash (flag not honoured, ceiling exceeded, caller not
+// identified, older router) the sweep used to score the swap as a model failure: degraded at one full sweep, failing plus an [ai-cal] issue at the
+// next. Section 4c proves a swapped ping is inconclusive: judged on the direct probe when the model has a Workers AI id (pass: ok, 0 failures, the
+// issue resolved; fail: the unchanged degraded then failing path), no health write and no issue when it has none or budget_probe is off. The
+// probe = model row is never rewritten: it stays "downgraded" and the verdict is the probe = model-budget row.
 // Run: node qnfo-ai-calibration/budget-probe.test.mjs   -> prints "N passed, 0 failed"
 import fs from "node:fs";
 import { versionAtLeast } from "../scripts/version-at-least.mjs";
@@ -19,7 +26,7 @@ const mirror = fs.readFileSync(new URL("./deployed-current.worker.js", import.me
 let mig = "";
 try { mig = fs.readFileSync(new URL("../migrations/2026-10-19-model-health-budget-probe.sql", import.meta.url), "utf8"); } catch (e) { /* absent on the base commit: the migration checks below fail */ }
 const api = new Function(src.replace(/export \{\s*worker_default as default\s*\};?/, "") +
-  "\nreturn { worker_default, VERSION, PROBER_VERSION, judge: typeof judgeBudgetReply === 'function' ? judgeBudgetReply : null };")();
+  "\nreturn { worker_default, VERSION, PROBER_VERSION, judge: typeof judgeBudgetReply === 'function' ? judgeBudgetReply : null, fnv32 };")();
 let pass = 0, fail = 0;
 const ok = (c, m, extra) => { if (c) pass++; else { fail++; console.log("FAIL " + m + (extra !== undefined ? " :: " + JSON.stringify(extra).slice(0, 300) : "")); } };
 globalThis.fetch = async () => new Response("{}", { status: 200 });
@@ -59,6 +66,7 @@ function mkEnv(o) {
         sql.push({ q, a });
         if (/FROM ai_calibration_config/.test(q)) return a[0] in cfg ? { value: cfg[a[0]] } : null;
         if (/SELECT consecutive_failures FROM ai_model_health/.test(q)) return a[0] in prevCf ? { consecutive_failures: prevCf[a[0]] } : null;
+        if (/FROM issue_ledger WHERE fingerprint = \?1 AND status = 'open'/.test(q)) return (o.openFps || []).indexOf(a[0]) >= 0 ? { fingerprint: a[0] } : null;
         return null;
       },
       async all() {
@@ -90,7 +98,11 @@ function mkEnv(o) {
         if (/\/health$/.test(String(url))) return new Response(JSON.stringify({ status: "ok", version: "t" }), { status: 200 });
         if (/\/v1\/models$/.test(String(url))) return new Response(JSON.stringify({ data: [] }), { status: 200 });
         const reply = body.max_tokens === 256 ? (scripted[body.model] || good) : { choices: [{ message: { content: "OK" }, finish_reason: "stop" }] };
-        return new Response(JSON.stringify(Object.assign({ model: body.model }, reply)), { status: 200 });
+        // o.downgrade: the spend governor answers the 16-token ping with another model (the router did not honour no_downgrade). o.honour models
+        // qnfo-ai 5.37.0: a request with no_downgrade: true and at most 512 output tokens from this caller is never swapped.
+        const honoured = !!o.honour && body.no_downgrade === true && body.max_tokens > 0 && body.max_tokens <= 512;
+        const served = (!honoured && o.downgrade && body.max_tokens === 16 && o.downgrade[body.model]) || body.model;
+        return new Response(JSON.stringify(Object.assign({ model: served }, reply)), { status: 200 });
       }
     },
     QNFO_OPS: { async fetch() { return new Response("{}", { status: 200 }); } },
@@ -239,8 +251,126 @@ const routerBudgets = (t) => t.router.filter((c) => c.body && c.body.max_tokens 
   } finally { Date.now = realNow; }
 }
 
+// 4c. SPEND-DOWNGRADE-INCONCLUSIVE-1: where the router still swaps the ping, a downgraded ping is inconclusive; the model is judged on the direct probe
+{
+  const GPT = "@cf/openai/gpt-oss-120b", SWAP = "glm-5.3-flash";
+  const failingTitle = (m) => "[ai-cal] model probe failing: " + m;
+  const fpOf = (m) => "cal:" + api.fnv32(failingTitle(m));
+  const filed = (t, m) => t.sql.filter((x) => /INSERT INTO issue_ledger|UPDATE issue_ledger SET occurrences/.test(x.q) && x.a.some((v) => typeof v === "string" && (v === failingTitle(m) || v === fpOf(m))));
+  const resolved = (t, m) => t.sql.filter((x) => /UPDATE issue_ledger SET status = 'resolved'/.test(x.q) && x.a[0] === fpOf(m));
+  const rowsOf = (j, probe, m) => (j.digest && j.digest.results || []).filter((x) => x.probe === probe && x.target === m);
+  const directCalls = (t, id) => t.ai.filter((c) => c.model === id && c.input && c.input.max_tokens === 256);
+  const run = async (t) => (await (await api.worker_default.fetch(req("/run", "POST"), t.env, { waitUntil() {} })).json());
+
+  // the harness itself: with o.downgrade and no o.honour the mock swaps the ping, so these cases exercise the router that still swaps it
+  {
+    const t = mkEnv({ downgrade: { "gpt-oss-120b": SWAP } });
+    const j = await run(t);
+    ok(rowsOf(j, "model", "gpt-oss-120b").length === 1, "harness: the sweep records a model row for gpt-oss-120b");
+    const pinged = t.router.filter((c) => c.body && c.body.model === "gpt-oss-120b" && c.body.max_tokens === 16);
+    ok(pinged.length === 1 && pinged[0].body.no_downgrade === true, "harness: the ping asks for no_downgrade (the mock router does not honour it in these cases)", pinged.map((c) => c.body));
+  }
+
+  // Case A: downgraded ping, direct probe passes -> ok with 0 failures, no degraded row, no issue filed, the open issue resolved, the ping row left as it was
+  {
+    const t = mkEnv({ downgrade: { "gpt-oss-120b": SWAP }, prevCf: { "gpt-oss-120b": 1 }, openFps: [fpOf("gpt-oss-120b")] });
+    const j = await run(t);
+    const w = sweepWrite(t, "gpt-oss-120b");
+    ok(w.length === 1 && w[0].status === "ok" && w[0].failures === 0, "A: a downgraded ping with a passing direct probe writes ok with 0 failures (cf 1 is cleared)", w);
+    ok(w.every((x) => x.status !== "degraded" && x.status !== "failing"), "A: no degraded or failing row is written", w);
+    ok(filed(t, "gpt-oss-120b").length === 0, "A: no fileIssue call for the model", filed(t, "gpt-oss-120b").map((x) => x.a));
+    ok(resolved(t, "gpt-oss-120b").length === 1, "A: closeIssue resolves the open [ai-cal] model probe failing row", resolved(t, "gpt-oss-120b"));
+    ok(directCalls(t, GPT).length === 1, "A: exactly one direct budget probe is sent for the model (no second probe after the swap)", directCalls(t, GPT).length);
+    const b = rowsOf(j, "model-budget", "gpt-oss-120b"), p = rowsOf(j, "model", "gpt-oss-120b");
+    ok(b.length === 1 && b[0].status === "pass" && /direct/.test(b[0].detail), "A: the direct verdict is recorded as a model-budget row", b);
+    ok(p.length === 1 && p[0].status === "downgraded" && p[0].detail === "downgraded to glm-5.3-flash", "A: the model row is not rewritten: it stays downgraded, the machine-readable record that the routed ping was answered by another model", p);
+    ok(sweepWrite(t, "kimi-k2.6").length === 1 && sweepWrite(t, "kimi-k2.6")[0].status === "ok", "A: a model that was not downgraded is untouched");
+    ok(directCalls(t, "@cf/moonshotai/kimi-k2.6").length === 1, "A: and gets its single budget probe as before");
+  }
+
+  // Case B: downgraded ping, the direct probe fails -> a genuine failure keeps the degraded then failing path
+  {
+    const t1 = mkEnv({ downgrade: { "gpt-oss-120b": SWAP }, budget: { "gpt-oss-120b": emptyLength } });
+    const j1 = await run(t1);
+    const w1 = sweepWrite(t1, "gpt-oss-120b");
+    ok(w1.length === 1 && w1[0].status === "degraded" && w1[0].failures === 1, "B: a failing direct probe writes degraded (failures 1)", w1);
+    ok(filed(t1, "gpt-oss-120b").length === 0, "B: the first failure files no issue");
+    ok(resolved(t1, "gpt-oss-120b").length === 0, "B: and resolves nothing");
+    const b1 = rowsOf(j1, "model-budget", "gpt-oss-120b"), p1 = rowsOf(j1, "model", "gpt-oss-120b");
+    ok(b1.length === 1 && b1[0].status === "fail" && /empty/.test(b1[0].detail), "B: the model-budget row carries the failure reason", b1);
+    ok(p1.length === 1 && p1[0].status === "downgraded" && p1[0].detail === "downgraded to glm-5.3-flash", "B: the model row is not rewritten either: it stays downgraded, the failure is the model-budget row", p1);
+    const t2 = mkEnv({ downgrade: { "gpt-oss-120b": SWAP }, prevCf: { "gpt-oss-120b": 1 }, budget: { "gpt-oss-120b": emptyLength } });
+    await run(t2);
+    const w2 = sweepWrite(t2, "gpt-oss-120b");
+    ok(w2.length === 1 && w2[0].status === "failing" && w2[0].failures === 2, "B: the second consecutive direct failure writes failing (failures 2)", w2);
+    ok(filed(t2, "gpt-oss-120b").length >= 1, "B: and files the [ai-cal] model probe failing issue", filed(t2, "gpt-oss-120b").map((x) => x.a));
+    ok(filed(t2, "gpt-oss-120b").some((x) => x.a.some((v) => /budget direct/.test(String(v)))), "B: the issue detail is the direct probe's reason, not the swap");
+  }
+
+  // Case C: a model with no Workers AI id (deepseek-v4-flash) whose ping is downgraded -> inconclusive: no health write, no issue
+  {
+    const t = mkEnv({ downgrade: { "deepseek-v4-flash": SWAP }, prevCf: { "deepseek-v4-flash": 1 } });
+    const j = await run(t);
+    ok(sweepWrite(t, "deepseek-v4-flash").length === 0, "C: no ai_model_health write for a downgraded ping with no direct id (cf stays where it was)", sweepWrite(t, "deepseek-v4-flash"));
+    ok(filed(t, "deepseek-v4-flash").length === 0 && resolved(t, "deepseek-v4-flash").length === 0, "C: no issue filed or resolved");
+    ok(routerBudgets(t).every((c) => c.body.model !== "deepseek-v4-flash"), "C: and no budget request goes through the router for it (the swap would be judged as the asked model)");
+    const p = rowsOf(j, "model", "deepseek-v4-flash")[0];
+    ok(p && p.status === "downgraded", "C: the ping row stays downgraded so the swap is visible, not scored", p);
+    ok(sweepWrite(t, "deepseek-v4-flash-thinking").length === 1, "C: a sibling that was not downgraded is still written");
+  }
+
+  // Case D: budget_probe = off -> no health write for a downgraded ping, no direct request
+  {
+    const t = mkEnv({ cfg: { budget_probe: "off" }, downgrade: { "gpt-oss-120b": SWAP }, prevCf: { "gpt-oss-120b": 1 } });
+    await run(t);
+    ok(sweepWrite(t, "gpt-oss-120b").length === 0, "D: budget_probe = off: a downgraded ping writes no health row", sweepWrite(t, "gpt-oss-120b"));
+    ok(filed(t, "gpt-oss-120b").length === 0, "D: and files no issue");
+    ok(directCalls(t, GPT).length === 0, "D: and sends no direct request");
+    ok(sweepWrite(t, "kimi-k2.6").length === 1 && sweepWrite(t, "kimi-k2.6")[0].status === "ok", "D: models whose ping was not downgraded keep the ping-only verdict");
+  }
+
+  // Case E: a ping that fails for another reason (not the glm-5.3-flash swap) is still a failure
+  {
+    const t = mkEnv({ downgrade: { "gpt-oss-120b": "some-other-model" }, prevCf: { "gpt-oss-120b": 1 } });
+    await run(t);
+    const w = sweepWrite(t, "gpt-oss-120b");
+    ok(w.length === 1 && w[0].status === "failing" && w[0].failures === 2, "E: a ping served by a model other than the glm-5.3-flash swap still fails as before", w);
+  }
+
+  // Case F: the live shape at the cap, six models downgraded at once, writes only ok rows and files nothing
+  {
+    const swap = {}, prevCf = {};
+    for (const m of ["kimi-k2.6", "kimi-k2.7-code", "gpt-oss-120b", "glm-5.3", "deepseek-v4-pro-wa", "deepseek-v4-flash-wa"]) { swap[m] = SWAP; prevCf[m] = 1; }
+    const t = mkEnv({ downgrade: swap, prevCf });
+    await run(t);
+    const writes = t.sql.filter((x) => /INSERT INTO ai_model_health/.test(x.q) && x.a.length === 5 && /ctx_override/.test(x.q));
+    ok(Object.keys(swap).every((m) => sweepWrite(t, m).length === 1 && sweepWrite(t, m)[0].status === "ok" && sweepWrite(t, m)[0].failures === 0), "F: all six downgraded models are written ok with 0 failures", Object.keys(swap).map((m) => sweepWrite(t, m)));
+    ok(writes.every((x) => x.a[1] === "ok"), "F: no degraded or failing row is written anywhere in the sweep", writes.map((x) => x.a[0] + ":" + x.a[1]));
+    ok(!t.sql.some((x) => /INSERT INTO issue_ledger/.test(x.q) && x.a.some((v) => /model probe failing/.test(String(v)))), "F: no model probe failing issue is filed");
+  }
+
+  // Case G: the router honours no_downgrade (qnfo-ai 5.37.0: caller qnfo-ai-calibration, at most 512 output tokens). The ping reaches the model,
+  // passes on its own measurement and the downgraded branch is never taken: the primary path, with nothing rewritten.
+  {
+    const swap = {}, prevCf = {};
+    for (const m of ["kimi-k2.6", "kimi-k2.7-code", "gpt-oss-120b", "glm-5.3", "deepseek-v4-pro-wa", "deepseek-v4-flash-wa"]) { swap[m] = SWAP; prevCf[m] = 1; }
+    const t = mkEnv({ downgrade: swap, honour: true, prevCf, openFps: [fpOf("gpt-oss-120b")] });
+    const j = await run(t);
+    ok(Object.keys(swap).every((m) => { const p = rowsOf(j, "model", m); return p.length === 1 && p[0].status === "pass" && p[0].detail === "ok"; }), "G: with the flag honoured every ping row is a pass served by the asked model", Object.keys(swap).map((m) => rowsOf(j, "model", m)));
+    ok(Object.keys(swap).every((m) => sweepWrite(t, m).length === 1 && sweepWrite(t, m)[0].status === "ok" && sweepWrite(t, m)[0].failures === 0), "G: and each is written ok with 0 failures", Object.keys(swap).map((m) => sweepWrite(t, m)));
+    ok(resolved(t, "gpt-oss-120b").length === 1, "G: closeIssue resolves the open [ai-cal] model probe failing row on the passing ping");
+    ok(directCalls(t, GPT).length === 1, "G: the model gets its one ordinary budget probe, not a second probe after a swap", directCalls(t, GPT).length);
+    // the request shape qnfo-ai 5.37.0 needs: every routed probe that asks no_downgrade stays within the 512-token ceiling, and the binding names the caller
+    const asked = t.router.filter((c) => c.body && c.body.no_downgrade === true);
+    ok(asked.length > 0 && asked.every((c) => c.body.max_tokens > 0 && c.body.max_tokens <= 512), "G: every routed request that asks no_downgrade carries max_tokens of at most 512", asked.map((c) => c.body.max_tokens));
+    const toml = fs.readFileSync(new URL("./wrangler.toml", import.meta.url), "utf8");
+    ok(/binding = "QNFO_AI"[\s\S]{0,400}props = \{ caller = "qnfo-ai-calibration" \}/.test(toml), "G: the QNFO_AI binding identifies the caller qnfo-ai-calibration by props");
+  }
+}
+
 // 5. versions and mirror
 ok(versionAtLeast(api.VERSION, "1.6.1"), "qnfo-ai-calibration is at least 1.6.1 (1.6.0 new capability: what ok means; 1.6.1 refreshes rows probed before it)", api.VERSION);
+ok(versionAtLeast(api.VERSION, "1.6.4"), "qnfo-ai-calibration is at least 1.6.4 (SPEND-DOWNGRADE-INCONCLUSIVE-1)", api.VERSION);
 ok(versionAtLeast(api.PROBER_VERSION, "2.3.17"), "the member PROBER_VERSION is at least 2.3.17", api.PROBER_VERSION);
 ok(src === mirror, "deployed-current.worker.js is identical to worker.js");
 ok(!/\*\//.test(src.split("\n")[5].replace(/\/\*[\s\S]*?\*\//g, "")), "the VERSION note closes every block comment it opens");
