@@ -1,0 +1,77 @@
+name: fleet-graph
+
+# FLEET-GRAPH-1 (2026-10-19, pillar autonomy; also core and cost).
+#
+# Builds the fleet code + live topology graph (scripts/fleet_graph.mjs) into qnfo-graph D1 (fg_node, fg_edge, fg_finding,
+# fg_state), writes a node-link JSON snapshot to R2 qnfo-backups/fleet-graph/, the heartbeat fleet_heartbeat('fleet-graph')
+# and metric fleet_graph_findings_warn to qnfo-audit. qnfo-memory-mcp serves it (MCP tools fleet_graph_*, open GET
+# /fleet-graph/*). Writes are a diff against what is stored, so a push that touches one worker writes a few hundred rows.
+#
+# TRIGGERS  push to main that changes code, configuration, migrations, scripts or workflows (the graph follows main);
+#           repository_dispatch fleet-graph-tick and workflow_dispatch. The second path is qnfo-cloud-ops
+#           FLEET-GRAPH-CADENCE-1: its 10-minute Cloudflare tick sends fleet-graph-tick when this workflow has not run on main
+#           for 60 minutes. The GitHub `schedule` event is not relied on (SCHEDULE-EVENT-NEVER-FIRES-1).
+# PULL REQUESTS  the selftest plus a --dry-run build against the live account: the full extraction and the planned D1 diff
+#           are printed, nothing is written.
+# PUBLIC LOG  this repository is public: the step prints counts only. Secret NAMES stay in D1 (served to authenticated MCP
+#           clients); no graph file is uploaded as an Actions artifact.
+# DEPENDENCIES  acorn 8.19.0 (MIT), acorn-walk 8.3.5 (MIT), smol-toml 1.9.1 (BSD-3-Clause), pinned, installed with
+#           --ignore-scripts. No vendor service: the graph is SQL in D1 and a JSON file; scripts/fleet_graph.mjs --sqlite-out
+#           writes the same schema to a local SQLite file.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '*/worker.js'
+      - '*/wrangler.toml'
+      - '*/RETIRED'
+      - '*/FOLDED'
+      - 'migrations/**'
+      - 'scripts/**'
+      - '.github/workflows/**'
+  pull_request:
+    paths:
+      - 'scripts/fleet_graph.mjs'
+      - '.github/workflows/fleet-graph.yml'
+      - 'qnfo-memory-mcp/**'
+  workflow_dispatch:
+  repository_dispatch:
+    types: [fleet-graph-tick]
+
+permissions:
+  contents: read
+
+# The graph is idempotent (a diff against D1), so a newer main push supersedes a running build; PR runs group per PR.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event_name == 'pull_request' && github.event.pull_request.number || 'main' }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "22"
+
+      - name: Install the pinned parsers
+        run: npm install --no-save --no-package-lock --ignore-scripts --no-audit --no-fund acorn@8.19.0 acorn-walk@8.3.5 smol-toml@1.9.1
+
+      - name: Selftest (secret canary, SQL and trigger parsing, findings, AST)
+        run: node scripts/fleet_graph.mjs --selftest
+
+      - name: Build the graph (dry run on pull requests)
+        run: |
+          set -uo pipefail
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            node --no-warnings scripts/fleet_graph.mjs --dry-run
+          else
+            node --no-warnings scripts/fleet_graph.mjs
+          fi
