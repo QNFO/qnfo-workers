@@ -490,5 +490,27 @@ exp = os.path.join(tempfile.mkdtemp(), "al.txt")
 open(exp, "w").write("# comment\n# EXPIRES: 2020-01-01\nmigrations/a.sql\nb.sql\n")
 ok(M.load_allowlist(exp) == ({"a.sql", "b.sql"}, "2020-01-01"), "load_allowlist reads names (path or bare) and the EXPIRES date", M.load_allowlist(exp))
 
+# MIGRATION-NO-CLOBBER-1 (issue 3009): an edited, already-merged file may not rewrite a live definition row without a REAPPLY-OK line.
+HDR = "-- APPLY-BY: ci\n-- DB: qnfo-audit\n-- Rollback: DELETE FROM fleet_tasks WHERE id='t';\n"
+BASE_TXT = HDR + "INSERT OR REPLACE INTO fleet_tasks (id, definition) VALUES ('t', '{\"steps\":[1,2,3]}');\n"
+ok(M.clobber_problems(BASE_TXT, None) == [], "a new file is never refused by the clobber guard")
+ok(M.clobber_problems(BASE_TXT, BASE_TXT) == [], "an unchanged file is not refused")
+edited = BASE_TXT + "-- a comment added later\n"
+r = M.clobber_problems(edited, BASE_TXT)
+ok(len(r) == 1 and "fleet_tasks" in r[0] and "MIGRATION-NO-CLOBBER-1" in r[0], "an edited file that rewrites a fleet_tasks row is refused", r)
+ok(M.clobber_problems("-- REAPPLY-OK: the definition is intentionally re-asserted\n" + edited, BASE_TXT) == [], "a REAPPLY-OK line allows the re-run")
+ok(M.clobber_problems("-- REAPPLY-OK:\n" + edited, BASE_TXT) != [], "a REAPPLY-OK line without a reason does not count")
+safe = BASE_TXT.replace("INSERT OR REPLACE INTO fleet_tasks (id, definition) VALUES ('t', '{\"steps\":[1,2,3]}');", "INSERT OR IGNORE INTO fleet_tasks (id, definition) VALUES ('t', '{}');") + "-- edited\n"
+ok(M.clobber_problems(safe, BASE_TXT) == [], "an edit whose statements no longer rewrite a live row passes")
+for stmt in ("UPDATE fleet_crons SET cron_expr='*/10 * * * *' WHERE name='x';", "UPDATE ops_config SET value='1' WHERE key='k';", "REPLACE INTO ops_config (key, value) VALUES ('k','v');"):
+    r2 = M.clobber_problems(HDR + stmt + "\n-- edit\n", HDR + stmt + "\n")
+    ok(len(r2) == 1, "an edited file with '" + stmt[:28] + "' is refused", r2)
+ok(M.clobber_problems(HDR.replace("APPLY-BY: ci", "APPLY-BY: none (hand applied)") + "UPDATE fleet_tasks SET enabled=1;\n-- e\n", HDR.replace("APPLY-BY: ci", "APPLY-BY: none (hand applied)") + "UPDATE fleet_tasks SET enabled=1;\n") == [], "a file that never opted in to CI is not the runner's to re-apply, so it is not refused")
+ok(M.clobber_problems(HDR + "UPDATE agent_issues SET status='open' WHERE id=1;\n-- edit\n", HDR + "UPDATE agent_issues SET status='open' WHERE id=1;\n") == [], "other tables are not covered by this guard")
+# the repository's own edited files pass: the lifecycle migration carries its REAPPLY-OK line and no longer rewrites the row
+lf = open(os.path.join(mig_dir, "2026-10-18-portfolio-lifecycle.sql"), encoding="utf-8").read()
+ok(M.REAPPLY_OK.search(lf) and "INSERT OR REPLACE INTO fleet_tasks" not in lf and "INSERT OR IGNORE INTO fleet_tasks" in lf, "the portfolio-lifecycle migration no longer rewrites its fleet_tasks row on a re-run")
+ok("PORTFOLIO-IMPLEMENT-1" not in lf.split("-- APPLY-BY: ci", 1)[1].split("INSERT INTO fleet_crons", 1)[1], "the portfolio-lifecycle migration no longer files PORTFOLIO-IMPLEMENT-1 issues on a re-run")
+
 print(f"{passed} passed, {failed} failed")
 sys.exit(1 if failed else 0)

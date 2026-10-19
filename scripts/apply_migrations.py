@@ -67,6 +67,41 @@ APPEND_ONLY_WRITE = re.compile(r"^\s*(?:UPDATE(?:\s+OR\s+\w+)?|DELETE\s+FROM|(?:
 # tasks), 'http' 1. Every live step carries a type; 151 of 184 carry no "name" and ran fine, so name stays optional; no
 # sql step lacks db/sql and the one http step carries url. A file may name a type the runner gained with a
 # "-- STEP-TYPES: sql,http,<new>" header line, so a new capability is a one-line header and not a red PR.
+# MIGRATION-NO-CLOBBER-1 (2026-10-19, agent_issues 3009): the runner applies a file again whenever its sha256 changes, so EDITING a file that has
+# already merged re-runs all of it on the next merge. migrations/2026-10-18-portfolio-lifecycle.sql was edited two hours after
+# PORTFOLIO-ONE-OWNER-1 cut fleet_tasks portfolio-lifecycle from 14 steps to 8; the re-run (migration_runs 309, 2026-10-18T14:44:14Z) wrote the 14-step row
+# back with INSERT OR REPLACE and the issue was reopened a day later. An edited, already-merged file may therefore not rewrite a live definition row
+# (fleet_tasks, fleet_crons, ops_config): the change belongs in a NEW file. A file that must be re-applied on purpose says why on a
+# "-- REAPPLY-OK: <reason>" line, which also marks a repaired file that never applied ok.
+CLOBBER_WRITE = re.compile(r"^\s*(?:INSERT\s+OR\s+REPLACE\s+INTO|REPLACE\s+INTO|UPDATE(?:\s+OR\s+\w+)?)\s+\"?(fleet_tasks|fleet_crons|ops_config)\"?\b", re.I)
+REAPPLY_OK = re.compile(r"^--[ \t]*REAPPLY-OK:[ \t]*\S", re.M)
+
+
+def clobber_problems(text, base_text):
+    """base_text is the file as it stands on the base branch (None for a new file). Returns the refusal lines for an edited file that rewrites a live
+    definition row without a REAPPLY-OK line; an edit that only adds comments or touches other statements passes."""
+    if base_text is None or text == base_text or REAPPLY_OK.search(text):
+        return []
+    if header_value(header(base_text), "APPLY-BY") != "ci":
+        return []
+    bad = []
+    for st in statements(text):
+        m = CLOBBER_WRITE.match(body(st))
+        if m:
+            bad.append(m.group(1))
+    if not bad:
+        return []
+    return ["edited migration rewrites live " + ", ".join(sorted(set(bad))) + " row(s): the runner re-applies an edited file on merge and would overwrite the "
+            "newer definition (MIGRATION-NO-CLOBBER-1, issue 3009). Put the change in a new migration file, or add a '-- REAPPLY-OK: <reason>' line "
+            "if the re-run is intended"]
+
+
+def base_text_of(path, base):
+    import subprocess
+    r = subprocess.run(["git", "show", base + ":" + path], capture_output=True, text=True)
+    return r.stdout if r.returncode == 0 else None
+
+
 STEP_TYPES = ("sql", "http")
 LEDGER_DDL = ("CREATE TABLE IF NOT EXISTS migration_runs (id INTEGER PRIMARY KEY AUTOINCREMENT, file TEXT NOT NULL, "
               "sha256 TEXT NOT NULL, commit_sha TEXT, db TEXT, status TEXT NOT NULL, statements INTEGER, error TEXT, "
@@ -778,6 +813,7 @@ def main(argv=None):
     g.add_argument("--check", action="store_true")
     g.add_argument("--apply", action="store_true")
     ap.add_argument("--commit", default=os.environ.get("GITHUB_SHA", ""))
+    ap.add_argument("--base", default="", help="with --check: the base ref; an edited, already-merged file is checked for MIGRATION-NO-CLOBBER-1")
     ap.add_argument("files", nargs="*")
     a = ap.parse_args(argv)
     files = [f for f in a.files if f.endswith(".sql") and os.path.exists(f)]
@@ -786,6 +822,8 @@ def main(argv=None):
         for f in files:
             text = open(f, encoding="utf-8").read()
             ok, problems, info = plan(f, text)
+            if ok and a.base:
+                problems = list(problems) + clobber_problems(text, base_text_of(f, a.base))
             if not ok:
                 verdict, note = headerless_verdict(f, text)
                 if verdict == "refused":
