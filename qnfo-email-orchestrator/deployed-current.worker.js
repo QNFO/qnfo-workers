@@ -64,6 +64,7 @@ async function capSelfReport(db, name) {
 // cloud_ops_events row (id inbound-sla-q-<queue id>; no body text, sender domain only) and the queue row's skip_reason;
 // each run upserts inbound-sla-run-<day> (meta.last_ok), which the dashboard WATCHMAKER_OPS entry 'inbound-sla' reads.
 var INBOUND_SLA = { deadline_h: 72, ack_max_age_d: 14, ack_sender_window_d: 30, scan_limit: 40, max_sends_per_run: 2, max_sends_per_day: 6, max_sends_per_domain_day: 2, max_drafts_per_run: 3, max_send_failures: 2, from: "rowan.quni@qnfo.org" };
+INBOUND_SLA.first_action_min = 120;
 // The category -> action map. action: close | skip (terminal, nothing sent), hold (nothing sent; recorded for the weekly
 // identity review), hold_ack (one holding acknowledgement if the sender is a research correspondent, then hold), answer
 // (a gated short answer from the drafter, else as hold_ack). after_h: grace before acting (0 = at once).
