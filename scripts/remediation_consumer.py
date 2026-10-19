@@ -737,7 +737,14 @@ def _selftest():
         print(json.dumps({"ok": False, "case": "merge-out", "got": agg}))
         return 1
     g = globals()
-    saved = (g["d1"], g["MAX_ITEMS"], g["_req"])
+    saved = (g["d1"], g["MAX_ITEMS"], g["_req"], g["migrations_sweep"])
+    # SELFTEST-HERMETIC-1 (2026-10-19): main() below also runs the host census, the fleet journeys and the migration sweep.
+    # With the fake d1 every migration read as unapplied, so the sweep called apply_migrations.apply_file on all 266
+    # opted-in files with the real token: 8 of the job's 15 minutes went to that before a single contract was probed
+    # (run 39199001472: self-test 04:20:56-04:29:04, consumer 22 s), and a genuinely unapplied file would have been
+    # applied by a test. fleet_journeys.run and host_census.run likewise ran live off the fake d1's empty answers. The
+    # drain case now stubs all three; their own self-tests below still cover them.
+    stub_mods = {"host_census": None, "fleet_journeys": None}
     due = ["c%d" % i for i in range(9)]
     seen_sql = []
 
@@ -761,13 +768,27 @@ def _selftest():
         def no_net(*a, **k):
             raise RuntimeError("selftest: no network")
         g["_req"] = no_net
-        import io, contextlib
+        sweeps = []
+        g["migrations_sweep"] = lambda out, apply=None, root=None: sweeps.append(1) or out.setdefault("migrations", {"selftest": "stubbed"})
+        import io, contextlib, types
+        for name in stub_mods:
+            stub_mods[name] = sys.modules.get(name)
+            sys.modules[name] = types.SimpleNamespace(run=lambda *a, **k: {"skipped": "selftest"})
         buf = io.StringIO()
         with contextlib.redirect_stdout(buf):
             main()
         res = json.loads(buf.getvalue().strip().splitlines()[-1])
     finally:
-        g["d1"], g["MAX_ITEMS"], g["_req"] = saved
+        g["d1"], g["MAX_ITEMS"], g["_req"], g["migrations_sweep"] = saved
+        for name, mod in stub_mods.items():
+            if mod is None:
+                sys.modules.pop(name, None)
+            else:
+                sys.modules[name] = mod
+    if sweeps != [1] or res.get("migrations") != {"selftest": "stubbed"} or (res.get("fleet_journeys") or {}).get("skipped") != "selftest":
+        print(json.dumps({"ok": False, "case": "drain-hermetic", "sweeps": len(sweeps), "migrations": res.get("migrations"),
+                          "fleet_journeys": res.get("fleet_journeys")}))
+        return 1
     if res.get("due") != 9 or res.get("pass") != 9 or due:
         print(json.dumps({"ok": False, "case": "drain", "got": {k: res.get(k) for k in ("due", "pass", "fail", "skipped")}, "left": due}))
         return 1
