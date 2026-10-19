@@ -255,6 +255,9 @@ export async function wellbeingTick(env, deps = {}) {
   const out = { now, expired: await WB.expireStale(env.PERSONAL, now) };
   const pack = await context(env, now, c);
   out.drift = pack.drift;
+  // RED-TEAM-1 (personal-api 4.12.0): the pause he sets on /companion silences this ladder too (one budget of
+  // attention). A risk-words care touch still comes from personal-api's companion tick, never from here.
+  if (!deps.force && c.pause_until && Date.parse(c.pause_until) > Date.parse(now)) { out.skipped = "paused"; return out; }
   // Sunday evening review, independent of the ask ladder; silent without enough data.
   try { out.review = await weeklyReview(env, { send, nowIso: now, force: !!deps.forceReview }); } catch (eRv) { out.review = { error: String(eRv && eRv.message || eRv) }; }
 

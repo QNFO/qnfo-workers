@@ -61,6 +61,20 @@ scope, a bulk edit of 417 records, ...); of the 7 then open, one (#63, an ASK-TU
 The audit repeats itself: `v_autonomy_first_audit` is refreshed on every hourly `open_agent_issues` write, and each
 breach files one deduped METRIC-TRIGGER issue with its lever. No session or claude.ai schedule is involved.
 
+### The owner-queue objects are in the repo (OWNER-QUEUE-VERSIONED-1, 2026-10-19)
+Closing an `agent_issues` row of category `owner-request` leaves a card in `human_actions` (trigger `owner_request_requires_card`, the 2026-10-17
+rule that an owner request cannot close unseen). The card is the owner's review of a closed request: it stays open on fleet.qnfo.org, because
+the owner keeps that review and an attempt to post such notices pre-resolved was refused (that refusal stands, OWNER-NOTICE-GATE-1). The fleet
+neither closes nor re-grades them; `v_human_action_gate` reads source `owner-request-issue` as `notice` (an `IDENTITY-BOUND:` line keeps it
+`owner`), so `owner_queue_fleet_cards_open` and `owner_dispatch_7d` / `autonomy_rate_7d` never count it, and `human_actions_autonomy_first_ai`
+skips that source. What was missing was version control: the closure trigger, `autonomy_reroute_queue`, the QUEUE-BREAK-CYCLE-1 form of
+`human_actions_autonomy_first_ai` (it writes the queue, drained into `agent_issues` by the fleet task `autonomy-reroute-drain`, and never
+inserts into `agent_issues` from a `human_actions` trigger: agent_issues 99919), that task and the `fleet_crons` row `autonomy-reroute-drain-10m` that runs it lived only in D1, so a database rebuilt from
+`migrations/` got the cyclic 2026-10-08 form and a drain task that never fires. `migrations/2026-10-19-owner-queue-triggers-versioned.sql` puts the
+live text in the repo (same text modulo whitespace) and changes no behaviour on production; the queue also gets its QUEUE-SLA-1 row
+(`autonomy-reroute-undrained`, 10-minute cycle, SLA 120 minutes, fix = that cron) and the column `v_stuck_summary_kernel.reroute_queue_undrained_over_sla`. A request that really needs the owner is still a card, written by whoever needs the step, with an
+`IDENTITY-BOUND:` line in its `why`. Detector `fm-owner-queue-objects-outside-repo`; offline suite `migrations/owner-request-notice.test.mjs`.
+
 ## Owner-voice publishing (gated T1)
 Source: docs/STRATEGY.md section 5, which is authoritative; this is a summary. The system decides and executes inside these
 gates and records each act.

@@ -89,7 +89,7 @@
 // Carries forward v1.0.5-boundary-match-20260926 (fix #1168 FEED-GATE-SUBSTRING-COLLISION-1:
 //   single alphanumeric denylist tokens are matched with word boundaries
 //   (?<![a-z0-9])token(?![a-z0-9]); phrases keep substring matching).
-var VERSION = "1.10.11-codeagent";
+var VERSION = "1.11.2-codeagent"; /* 1.11.1 IDEAS-CAP-GENERATED-RELEASE-1 (2026-10-19, agent_issues 100047, pillar research): triage re-queues accepts the research admission cap held, oldest first, as many as fit under the cap; they were stranded for good before. */ // 1.11.0 REACH-IDEA-1 (2026-10-19, agent_issues 2480, pillar reach): every /s/ thread page carries the subscribe box the home page has (ideaSubBox, shared). Carries 1.10.12 IDEAS-INTAKE-OWNER-1 from main.
 // Diversity enforcement: ensure no topic exceeds 50% of accepted proposals in the last 30 days.
 const MAX_TOPIC_SHARE = 0.5;
 async function applyDiversityConstraint(proposal, getRecentAccepts) {
@@ -694,14 +694,18 @@ function mixShare(mix) {
   Object.keys(mix.by).forEach(function (k) { if (top === null || mix.by[k] > mix.by[top]) top = k; });
   return { n: mix.n, top: top, share: mix.n ? Math.round(1000 * mix.by[top] / mix.n) / 1000 : null, by_cluster: Object.assign({}, mix.by), clusters: (mix.clusters || []).map(function (c) { return c.label; }), topics: mix.topics || null };
 }
-async function enqueueAccepted(env, id, idea, score, now) {
+async function enqueueAccepted(env, id, idea, score, now, direct) {
   // RESEARCH-ADMISSION-CAP-1 (2026-10-17): triage ACCEPTs ~40% of ~240 proposals/day while the executor
   // publishes ~5-9/day, so every accept used to be enqueued and the overflow piled up as status 'deferred'
   // (440 rows on 2026-10-17 = 68% of the pipeline). RESEARCH-BACKPRESSURE-1 only DEMOTES overflow; nothing
   // bounded admission. The queue is now capped at RESEARCH_ADMISSION_CAP active+deferred rows. An accept
   // beyond it stays in idea_proposals as triaged_hold with a '[research admission cap]' rationale (not
   // lost, not queued) until the queue drains. Read failure admits (a D1 fault must not stop triage).
-  try {
+  // IDEAS-INTAKE-OWNER-1 (1.10.12): `direct` is true for an idea the owner wrote himself (proposalKind 'direct'). The cap
+  // bounds the machine producers (arXiv scan, think loop, re-entry, ask-gap); it never holds the owner's own idea, which the
+  // doctrine says never waits on a hold. Nothing re-admitted a cap-held row, so before 1.10.12 an owner idea filed while the
+  // queue was full stayed in triaged_hold for good (migrations/2026-10-19-owner-ideas-cap-requeue.sql re-queues those).
+  if (!direct) try {
     var qcap = await env.QNFO_AUDIT.prepare("SELECT COUNT(*) AS n FROM research_queue WHERE status IN ('queued','researching','review','deferred')").first();
     if (qcap && Number(qcap.n) >= RESEARCH_ADMISSION_CAP) {
       await env.QNFO_AUDIT.prepare("UPDATE idea_proposals SET status='triaged_hold', rationale=substr('[research admission cap ' || ?1 || '/' || ?2 || '] ' || COALESCE(rationale, ''), 1, 2000) WHERE id=?").bind(String(qcap.n), String(RESEARCH_ADMISSION_CAP), String(id)).run();
@@ -712,6 +716,21 @@ async function enqueueAccepted(env, id, idea, score, now) {
   }
   await env.QNFO_AUDIT.prepare("INSERT OR IGNORE INTO research_queue (id, source, source_id, idea, summary, score, decision, status, created_at) VALUES (?1,'proposal',?2,?3,'',?4,?5,'queued',?6)").bind(crypto.randomUUID(), String(id), String(idea || "").slice(0, 3000), score, "ACCEPT", now).run();
   return true;
+}
+async function capRelease(env, out) {
+  out.cap_released = 0;
+  var q = await env.QNFO_AUDIT.prepare("SELECT COUNT(*) AS n FROM research_queue WHERE status IN ('queued','researching','review','deferred')").first();
+  var room = Math.min(TRIAGE_BATCH, RESEARCH_ADMISSION_CAP - Number(q && q.n || 0));
+  if (!(room > 0)) return;
+  var held = (await env.QNFO_AUDIT.prepare("SELECT id, idea, score, rationale FROM idea_proposals WHERE decision = 'ACCEPT' AND status = 'triaged_hold' AND rationale LIKE '[research admission cap %' ORDER BY created_at ASC, id ASC LIMIT ?1").bind(room).all()).results || [];
+  var now = new Date().toISOString();
+  for (var i = 0; i < held.length; i++) {
+    var h = held[i], rationale = String(h.rationale || "").replace(/^\[research admission cap [^\]]*\] /, "");
+    var up = await env.QNFO_AUDIT.prepare("UPDATE idea_proposals SET status = 'triaged_accepted', rationale = ?1 WHERE id = ?2 AND status = 'triaged_hold'").bind(rationale, h.id).run();
+    if (!(Number(up && up.meta && up.meta.changes) > 0)) continue;
+    await env.QNFO_AUDIT.prepare("INSERT OR IGNORE INTO research_queue (id, source, source_id, idea, summary, score, decision, status, created_at) VALUES (?1,'proposal',?2,?3,'',?4,'ACCEPT','queued',?5)").bind(crypto.randomUUID(), String(h.id), String(h.idea || "").slice(0, 3000), h.score, now).run();
+    out.cap_released++;
+  }
 }
 // Expire held rows that left the window (terminal HOLD, score kept); then release the best held rows the current mix
 // allows, up to TRIAGE_BATCH a run. No model call either way. Since 1.6.0 (BUDGET-SOFT-ROUTE-1) a cap no longer holds
@@ -756,6 +775,16 @@ async function triageProposals(env, deadline) {
       var rel = await env.QNFO_AUDIT.prepare("UPDATE idea_proposals SET status='new' WHERE id IN (SELECT id FROM idea_proposals WHERE status='deferred_budget' ORDER BY created_at ASC LIMIT ?1)").bind(TRIAGE_BATCH).run();
       out.released = Number(rel && rel.meta && rel.meta.changes) || 0;
     } catch (e) { out.errors++; }
+  }
+  // IDEAS-CAP-GENERATED-RELEASE-1 (1.11.1, agent_issues 100047): enqueueAccepted holds a generated ACCEPT as triaged_hold with a
+  // '[research admission cap n/120]' rationale while the queue is full, and nothing ever re-admitted it (66 rows held since
+  // 2026-10-17 on 2026-10-19). Each run now re-queues held cap rows oldest first, as many as fit under RESEARCH_ADMISSION_CAP
+  // and at most TRIAGE_BATCH. The cap itself stays: a full queue releases nothing.
+  try {
+    await capRelease(env, out);
+    out.released = (out.released || 0) + (out.cap_released || 0);
+  } catch (e) {
+    out.errors++;
   }
   var rows = (await env.QNFO_AUDIT.prepare("SELECT id, idea, name, contact FROM idea_proposals WHERE status='new' ORDER BY created_at ASC LIMIT ?1").bind(TRIAGE_BATCH).all()).results || [];
   // IDEA-DIVERSITY-CAP-1: the 30-day accepted mix, read once and kept current as this run accepts. Unreadable: no cap
@@ -803,7 +832,7 @@ async function triageProposals(env, deadline) {
       await env.QNFO_AUDIT.prepare("UPDATE idea_proposals SET decision=?, score=?, rationale=?, triaged_at=?, status=? WHERE id=?").bind(s.decision, s.score, s.rationale || "", now, s.decision === "ACCEPT" ? "triaged_accepted" : "triaged_hold", row.id).run();
       out.triaged++;
       if (s.decision === "ACCEPT") {
-        await enqueueAccepted(env, row.id, row.idea, s.score, now);
+        await enqueueAccepted(env, row.id, row.idea, s.score, now, kind === "direct");
         out.accepted++;
         if (mix) { mix.n++; mix.by[cluster] = (mix.by[cluster] || 0) + 1; if (fq) mix.foundational++; }
       }
@@ -1304,6 +1333,16 @@ function ideaDate(s) { const d = new Date(s || 0); return Number.isNaN(d.getTime
 function ideaLd(o) {
   return '<script type="application/ld+json">' + JSON.stringify(Object.assign({ "@context": "https://schema.org", author: { "@type": "Person", name: "Rowan Brad Quni-Gudzinas", sameAs: ["https://orcid.org/" + QDS_OWNER_ORCID] }, publisher: { "@type": "Organization", name: "QNFO", url: "https://qnfo.org/" } }, o)).replace(/</g, "\\u003c") + "<\/script>";
 }
+// REACH-IDEA-1 (1.11.0, agent_issues 2480): the subscribe box is shared by the home page and every /s/ thread page, so the
+// share pages people land on from social posts (13 RUM views in 14 days on one of them) carry the same double opt-in form.
+function ideaSubBox() {
+  return '<section class="q-panel" id="subscribe" aria-labelledby="ideas-sub-h" style="margin-top:40px"><h2 class="q-h3" id="ideas-sub-h" style="margin:0 0 4px">Follow new work</h2><p class="q-meta" style="margin:0 0 12px">New threads by <a href="/rss.xml">RSS</a>. New papers by email: one short weekly digest, confirm by the link we send, unsubscribe any time.</p>' +
+    '<form id="ideas-sub-form" novalidate style="display:flex;gap:8px;flex-wrap:wrap"><label class="q-sr" for="ideas-sub-email">Email address</label><input class="q-input" id="ideas-sub-email" type="email" name="email" placeholder="you@example.com" autocomplete="email" required style="flex:1 1 220px;min-width:0"><input class="q-sr" type="text" id="ideas-sub-hp" name="website" tabindex="-1" autocomplete="off" aria-hidden="true"><button class="q-btn q-btn-accent" type="submit" id="ideas-sub-btn">Subscribe</button></form><p class="q-meta" id="ideas-sub-msg" role="status" aria-live="polite" style="min-height:1.4em;margin:8px 0 0"></p></section>';
+}
+var IDEA_SUB_JS = "<script>(function(){var f=document.getElementById('ideas-sub-form');if(!f)return;var m=document.getElementById('ideas-sub-msg'),b=document.getElementById('ideas-sub-btn');f.addEventListener('submit',function(e){e.preventDefault();var em=(document.getElementById('ideas-sub-email').value||'').trim(),hp=(document.getElementById('ideas-sub-hp')||{}).value||'';if(!em||em.indexOf('@')<1){m.textContent='Enter a valid email address.';return}b.disabled=true;m.textContent='Subscribing...';fetch('/api/subscribe',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email:em,hp:hp})}).then(function(r){return r.json().catch(function(){return {}})}).then(function(j){if(j&&j.ok){m.textContent='Check your inbox to confirm the subscription.';f.reset()}else{m.textContent=(j&&j.error)||'The subscription did not go through. Try again.'}}).catch(function(){m.textContent='Network error. Try again.'}).then(function(){b.disabled=false})})})();<\/script>";
+function ideaSubFooter() {
+  return '<div class="q-wrap" style="padding-bottom:64px">' + ideaSubBox() + "</div>" + IDEA_SUB_JS;
+}
 async function ideasHome(env) {
   let items = [];
   try { items = await all(env); } catch (e) { items = []; }
@@ -1325,10 +1364,9 @@ async function ideasHome(env) {
       : '<div class="q-note">No public threads right now. New questions appear here within five minutes of being asked; <a href="https://ask.qwav.tech/">ask the corpus</a> or read <a href="https://papers.qnfo.org/papers">the papers</a> meanwhile.</div>') +
     // REACH-IDEA-1 (1.5.7, agent_issues 2001): an inline subscribe box (email input) posting to /api/subscribe, which forwards to
     // the qnfo-subscribers double opt-in with source ideas.qnfo.org; the honeypot field is the same one qnfo.org uses.
-    '<section class="q-panel" id="subscribe" aria-labelledby="ideas-sub-h" style="margin-top:40px"><h2 class="q-h3" id="ideas-sub-h" style="margin:0 0 4px">Follow new work</h2><p class="q-meta" style="margin:0 0 12px">New threads by <a href="/rss.xml">RSS</a>. New papers by email: one short weekly digest, confirm by the link we send, unsubscribe any time.</p>' +
-    '<form id="ideas-sub-form" novalidate style="display:flex;gap:8px;flex-wrap:wrap"><label class="q-sr" for="ideas-sub-email">Email address</label><input class="q-input" id="ideas-sub-email" type="email" name="email" placeholder="you@example.com" autocomplete="email" required style="flex:1 1 220px;min-width:0"><input class="q-sr" type="text" id="ideas-sub-hp" name="website" tabindex="-1" autocomplete="off" aria-hidden="true"><button class="q-btn q-btn-accent" type="submit" id="ideas-sub-btn">Subscribe</button></form><p class="q-meta" id="ideas-sub-msg" role="status" aria-live="polite" style="min-height:1.4em;margin:8px 0 0"></p></section>' +
+    ideaSubBox() +
     "</div></section>";
-  const subJs = "<script>(function(){var f=document.getElementById('ideas-sub-form');if(!f)return;var m=document.getElementById('ideas-sub-msg'),b=document.getElementById('ideas-sub-btn');f.addEventListener('submit',function(e){e.preventDefault();var em=(document.getElementById('ideas-sub-email').value||'').trim(),hp=(document.getElementById('ideas-sub-hp')||{}).value||'';if(!em||em.indexOf('@')<1){m.textContent='Enter a valid email address.';return}b.disabled=true;m.textContent='Subscribing...';fetch('/api/subscribe',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email:em,hp:hp})}).then(function(r){return r.json().catch(function(){return {}})}).then(function(j){if(j&&j.ok){m.textContent='Check your inbox to confirm the subscription.';f.reset()}else{m.textContent=(j&&j.error)||'The subscription did not go through. Try again.'}}).catch(function(){m.textContent='Network error. Try again.'}).then(function(){b.disabled=false})})})();<\/script>";
+  const subJs = IDEA_SUB_JS;
   const js = subJs + '<script>(function(){if(/^#\\/s\\//.test(location.hash)){location.replace("/s/"+location.hash.slice(4));return}var f=document.getElementById("idea-f"),l=document.getElementById("idea-l"),n=document.getElementById("idea-n");if(!f||!l)return;f.addEventListener("input",function(){var q=f.value.trim().toLowerCase(),k=0;l.querySelectorAll("li").forEach(function(li){var h=!q||li.getAttribute("data-t").indexOf(q)>=0;li.hidden=!h;if(h)k++});n.textContent=q?k+" of "+l.children.length+" threads":""})})()<\/script>';
   return ideaPage({ title: "Ideas \u00b7 research questions as they develop \u00b7 QNFO", description: "Public research conversations from the QNFO research assistant: questions, answers written from the paper corpus, and automated triage scores.", canonical: BASE + "/", math: /\$|\\\(|\\\[/.test(rows),
     jsonld: ideaLd({ "@type": "CollectionPage", name: "QNFO Ideas", url: BASE + "/", description: "Public research conversations from the QNFO research assistant." }), head: "" }, body + js);
@@ -1351,7 +1389,7 @@ async function ideasQuestion(env, kind, num) {
     '<p class="q-meta">' + kindLabel + (created ? " \u00b7 " + ideaDate(created) : "") + ' \u00b7 generated autonomously by the QNFO research pipeline</p>' +
     '<p class="q-note" style="margin-top:24px">This is a question the QNFO pipeline is developing. Answers become <a href="https://papers.qnfo.org/papers">papers</a> when they hold up. <a href="https://ask.qwav.tech/?q=' + encodeURIComponent(title.slice(0, 300)) + '">Ask it against the current corpus</a>.</p></div>';
   return ideaPage({ title: title.slice(0, 90) + " \u00b7 QNFO Ideas", description: ideaTitle(clean(q, 300)), canonical: BASE + "/s/" + (kind === "q" ? "q-" : "p-") + num, math: /\$|\\\(|\\\[/.test(q),
-    jsonld: ideaLd({ "@type": "Question", name: title.slice(0, 110), url: BASE + "/s/" + (kind === "q" ? "q-" : "p-") + num }) }, body);
+    jsonld: ideaLd({ "@type": "Question", name: title.slice(0, 110), url: BASE + "/s/" + (kind === "q" ? "q-" : "p-") + num }) }, body + ideaSubFooter());
 }
 async function ideasThread(env, rawId) {
   let id = "";
@@ -1382,7 +1420,7 @@ async function ideasThread(env, rawId) {
     (turns || '<div class="q-note" style="margin-top:24px">No public answer yet.</div>') +
     '<p class="q-note" style="margin-top:40px">Answers here were written by an AI research assistant over the QNFO corpus and have not been reviewed. Cite <a href="https://papers.qnfo.org/papers">the papers</a>, not this thread.</p></div>';
   return ideaPage({ title: qTitle.slice(0, 90) + " \u00b7 QNFO Ideas", description: ideaTitle(clean(first.content, 300)), canonical: BASE + "/s/" + encodeURIComponent(id), math: /\$|\\\(|\\\[/.test(q + turns),
-    jsonld: ideaLd({ "@type": "DiscussionForumPosting", headline: qTitle.slice(0, 110), url: BASE + "/s/" + encodeURIComponent(id), datePublished: created, dateModified: updated }) }, body);
+    jsonld: ideaLd({ "@type": "DiscussionForumPosting", headline: qTitle.slice(0, 110), url: BASE + "/s/" + encodeURIComponent(id), datePublished: created, dateModified: updated }) }, body + ideaSubFooter());
 }
 async function ideasCached(req, ctx, make) {
   // IDEAS-SWR-1 (1.5.4): a cached copy is served at once; older than IDEAS_FRESH_MS it is rebuilt in the background, so a
@@ -1473,8 +1511,11 @@ async function intake(req,env){
     try{await env.QNFO_AUDIT.prepare("INSERT INTO agent_issues (title,description,source,category,priority,status,created_at,updated_at) VALUES (?,?,?,?,?,'open',?,?)").bind(title||'Owner-filed item',body||title,src,(b.category||'owner-intake'),(b.priority||'medium'),now,now).run()}catch(e){return json({error:'issue insert failed: '+(e&&e.message||e)},500)}
     return json({ok:true,kind:'issue',provenance:src,held:true});
   }
-  try{await env.QNFO_AUDIT.prepare("INSERT INTO idea_proposals (name,idea,contact,status,created_at) VALUES (?,?,?,?,datetime('now'))").bind(src,(title?title+'\n\n':'')+body,'owner','new').run()}catch(e){return json({error:'idea insert failed: '+(e&&e.message||e)},500)}
-  return json({ok:true,kind:'idea',provenance:src,status:'new',held:true});
+  // IDEAS-INTAKE-OWNER-1 (1.10.12): the reply carries the new row's id, so the owner can follow it in idea_proposals, and says
+  // what happens next. `held:true` stays for callers that read it; an owner-chat row is ACCEPTed by the next hourly triage.
+  var ins;
+  try{ins=await env.QNFO_AUDIT.prepare("INSERT INTO idea_proposals (name,idea,contact,status,created_at) VALUES (?,?,?,?,datetime('now'))").bind(src,(title?title+'\n\n':'')+body,'owner','new').run()}catch(e){return json({error:'idea insert failed: '+(e&&e.message||e)},500)}
+  return json({ok:true,kind:'idea',id:ins&&ins.meta&&ins.meta.last_row_id!=null?ins.meta.last_row_id:null,provenance:src,status:'new',held:true,next:'filed as owner-authored; the hourly triage accepts it and queues it for research'});
 }
 // REACH-IDEA-1 (1.5.7, agent_issues 2001): the home page's subscribe box posts here; the address goes to the qnfo-subscribers
 // double opt-in (the same endpoint and fields qnfo-gateway's /api/subscribe proxy uses) with source ideas.qnfo.org, so nothing

@@ -177,7 +177,9 @@ def live_dirs(root=REPO):
             if m:
                 name = m.group(1)
         with open(os.path.join(p, "worker.js"), encoding="utf-8", errors="replace") as f:
-            v = re.search(r'var VERSION = "([^"]*)"', f.read(200000))
+            # The declaration, not a comment that quotes it (qnfo-model-eval's `var VERSION = "..."` note, agent_issues 100008);
+            # minified bundles write it without spaces (qnfo-email, qnfo-gateway).
+            v = re.search(r'^[ \t]*var VERSION\s*=\s*"([^"\n]*)"', f.read(200000), re.M)
         out[name] = {"dir": d, "version": v.group(1) if v else None}
     return out
 

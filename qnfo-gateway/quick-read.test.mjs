@@ -109,7 +109,7 @@ const AI = { run: async (model, input) => {
 } };
 
 function mkEnv() {
-  const qr = new Map();
+  const qr = new Map(), plain = new Map();
   let n = 0;
   const stmt = (sql) => {
     const st = {
@@ -117,18 +117,20 @@ function mkEnv() {
       async first() {
         if (/INSERT INTO ask_rate/i.test(sql)) { n++; return { n }; }
         if (/FROM quick_read/i.test(sql)) return qr.get(st.a[0] + "|" + st.a[1]) || null;
+        if (/FROM plain_summary/i.test(sql)) return plain.get(st.a[0]) || null;
         if (/FROM papers/i.test(sql)) return papers[st.a[0]] || null;
         return null;
       },
       async run() {
         if (/INSERT INTO quick_read/i.test(sql)) { qr.set(st.a[0] + "|" + st.a[1], { payload: st.a[3] }); }
+        if (/INSERT INTO plain_summary/i.test(sql)) { plain.set(st.a[0], { rev: st.a[1], text: st.a[2], dropped: st.a[3], grade: st.a[4] }); }
         return {};
       },
-      async all() { return /FROM papers/i.test(sql) ? { results: Object.values(papers) } : { results: [] }; }
+      async all() { return /FROM papers/i.test(sql) ? { results: Object.values(papers).map((p) => Object.assign({}, p, { plain_rev: (plain.get(p.slug) || {}).rev || null })) } : { results: [] }; }
     };
     return st;
   };
-  return { LIVING_PAPER: { prepare: stmt }, DB: { prepare: stmt }, AI, RELEASES: { head: async () => null } };
+  return { LIVING_PAPER: { prepare: stmt }, DB: { prepare: stmt }, AI, RELEASES: { head: async () => null }, _plain: plain };
 }
 globalThis.fetch = async () => new Response("", { status: 404 });
 const gw = (await import(pathToFileURL(join(here, "worker.js")).href)).default;
@@ -448,6 +450,27 @@ const Q = "What did the controller measure about the energy cost of one solution
   ok(!/env\.AI/.test(block), "the digest block makes no model call at all");
   ok(/location\.search\.indexOf\('ask=1'\)/.test(src), "the paper page opens the Ask rail from ?ask=1, so the digest can link to a question instead of embedding one");
   ok(/title="The paper in about a minute/.test(src), "the paper page's Quick read button says what the page now does");
+}
+
+// ---- 20. PLAIN-FILL-1: plain-language summaries are built by the daily cron, never on a reader's GET
+{
+  const env = mkEnv();
+  aiOut = "The team ran 42 trials on the cryostat. Each solution used 1.7 joules under load, which is the main result.";
+  aiCalls = 0;
+  await call(env, "https://papers.qnfo.org/papers/" + SLUG + "/quickread");
+  await call(env, "https://papers.qnfo.org/api/quickread/" + SLUG);
+  ok(aiCalls === 0 && env._plain.size === 0, "a digest GET with no cached summary spends nothing and builds nothing", { aiCalls, cached: env._plain.size });
+  ok(/async function plainFill\(env\)/.test(src) && /await plainFill\(env\)/.test(src), "the scheduled run calls plainFill");
+  const m = await import(pathToFileURL(join(here, "worker.js")).href);
+  ok(typeof m.default.scheduled === "function", "the worker has a scheduled handler");
+  const PLAIN_FILL = new Function("return " + src.match(/var PLAIN_FILL_MAX = (\d+);/)[1])();
+  aiCalls = 0;
+  await m.default.scheduled({ cron: "0 6 * * *" }, env, { waitUntil() {} }).catch(() => {});
+  ok(aiCalls > 0 && env._plain.size > 0 && env._plain.size <= PLAIN_FILL, "the cron builds missing summaries, at most PLAIN_FILL_MAX a run", { aiCalls, cached: env._plain.size, max: PLAIN_FILL });
+  aiCalls = 0;
+  const r = await call(env, "https://papers.qnfo.org/api/quickread/" + SLUG);
+  const j = await r.json();
+  ok(aiCalls === 0 && j.plain && /42 trials/.test(j.plain.text) && j.plain.method === "cache", "the digest then shows the cached summary with no model call", { aiCalls, plain: j.plain });
 }
 
 console.log(pass + " passed, " + fail + " failed");

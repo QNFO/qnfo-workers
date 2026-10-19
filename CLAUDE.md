@@ -130,6 +130,21 @@ because each one was broken at least once; the linked issue holds the evidence.
   same rule (qnfo-fleet-control 0.4.130 -> 0.5.0 for its next feature). The owner's changelog (fleet.qnfo.org/changelog)
   lists only minor and major releases, so a feature shipped as a patch never reaches the owner.
 
+## Look up the blast radius first (FLEET-GRAPH-1)
+- The fleet code + live topology graph (docs/FLEET-GRAPH.md) answers in one call what depends on a worker, function, binding,
+  D1 table, view or trigger, cron, route or queue: `GET https://qnfo-memory-mcp.q08.workers.dev/fleet-graph/impact?id=<node>`
+  (open, read-only), or the MCP tools `fleet_graph_*` on the same host. Ids: `worker:<name>`, `fn:<worker>#<function>`,
+  `binding:<worker>.<NAME>`, `d1t:<db>.<table>`, `d1trg:<db>.<trigger>`, `cron:<worker>@<expr>`; `/fleet-graph/find?query=` gives
+  the exact id.
+- Before changing or removing a binding, a D1 table or trigger, a cron, a route or a function other workers call, run `impact` on
+  it and cover what it returns in the same change; before retiring a worker, `impact` on `worker:<name>` is the dependency check.
+  `/fleet-graph/worker?worker=<name>` shows declared versus live bindings and crons. Check `/fleet-graph/freshness` first: when the
+  graph is older than the change you reason about, read the code too. Edges marked INFERRED are leads, not facts.
+- Drift and dead references are findings (`/fleet-graph/findings?severity=warn`, metric `fleet_graph_findings_warn`); fix them at
+  the cause through the canonical path, never by editing fg_* rows. The graph is built by scripts/fleet_graph.mjs
+  (fleet-graph.yml on push, qnfo-cloud-ops FLEET-GRAPH-CADENCE-1 when main is quiet); a new binding type, handler shape or
+  table family the extractor misses is fixed there, with a selftest case.
+
 ## Migrations and tests run themselves (MIGRATION-RUNNER-1, SUITE-RUNNER-1, PROBE-TEMPLATES-1)
 - A D1 change to `qnfo-audit` is a file under `migrations/` that opts in with the header lines `-- APPLY-BY: ci`,
   `-- DB: qnfo-audit` and `-- Rollback: <sql>`. A file that runs DELETE or DROP also names `-- BACKUP: <table>`, either a
