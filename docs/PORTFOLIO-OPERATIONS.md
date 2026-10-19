@@ -43,7 +43,7 @@ Steps 2, 4 and 7 run unattended in `portfolioDailyRun`. Steps 1, 3, 5 and 6 are 
    STRATEGY-tagged agent_issues (source or title naming STRATEGY). Skip anything another contributor is visibly working on
    (an open PR or a comment within the last 2 hours).
 2. **Protect the owner's name** (before anything else ships):
-   - Bluesky `qnfo.bsky.social`, last 24 h (public AppView `getAuthorFeed`): every post on-pillar, no mojibake
+   - Bluesky `qnfo.org` (was qnfo.bsky.social until 2026-10-18), last 24 h (public AppView `getAuthorFeed`): every post on-pillar, no mojibake
      (`Ã`, `â€`, `â\x80`), no q08 essay, within cadence (1-2/week).
    - `outreach_log`, last 24 h: opt-out line present, no `Re:` follow-ups, at most 8 a day in total.
    - On a violation: set the stream's kill switch (`pipeline_state.external_sends_enabled`, the social pause flag), file
