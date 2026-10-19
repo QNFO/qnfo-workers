@@ -24,6 +24,8 @@ ok(src === mirror, "deployed-current.worker.js is identical to worker.js");
 
 const cut = (a, b) => { const i = src.indexOf(a), j = src.indexOf(b, i); ok(i > 0 && j > i, "anchor found: " + a); return i > 0 && j > i ? src.slice(i, j) : ""; };
 const parts = [
+  // LOG-REDACT-2: compatVerifyEvent passes its text and meta through the log redactor.
+  cut("var OPS_REDACT_MARK", "\n__name(redactLooksSecret"),
   cut("function b64Utf8(b64) {", "// ---- UTF8-DEPLOY-1:END"),
   cut("async function recordDeployLedger(env, row) {", "\n// CF-API-RETRY-1 (2.43.1"),
   cut("var CF_RETRY_MAX = ", "\nasync function cfWorkerDeploy("),
