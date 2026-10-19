@@ -89,7 +89,7 @@
 // Carries forward v1.0.5-boundary-match-20260926 (fix #1168 FEED-GATE-SUBSTRING-COLLISION-1:
 //   single alphanumeric denylist tokens are matched with word boundaries
 //   (?<![a-z0-9])token(?![a-z0-9]); phrases keep substring matching).
-var VERSION = "1.11.0-share-subscribe"; // 1.11.0 REACH-IDEA-1 (2026-10-19, agent_issues 2480, pillar reach): every /s/ thread page carries the subscribe box the home page has (ideaSubBox, shared).
+var VERSION = "1.11.0-share-subscribe"; // 1.11.0 REACH-IDEA-1 (2026-10-19, agent_issues 2480, pillar reach): every /s/ thread page carries the subscribe box the home page has (ideaSubBox, shared). Carries 1.10.12 IDEAS-INTAKE-OWNER-1 from main.
 // Diversity enforcement: ensure no topic exceeds 50% of accepted proposals in the last 30 days.
 const MAX_TOPIC_SHARE = 0.5;
 async function applyDiversityConstraint(proposal, getRecentAccepts) {
@@ -694,14 +694,18 @@ function mixShare(mix) {
   Object.keys(mix.by).forEach(function (k) { if (top === null || mix.by[k] > mix.by[top]) top = k; });
   return { n: mix.n, top: top, share: mix.n ? Math.round(1000 * mix.by[top] / mix.n) / 1000 : null, by_cluster: Object.assign({}, mix.by), clusters: (mix.clusters || []).map(function (c) { return c.label; }), topics: mix.topics || null };
 }
-async function enqueueAccepted(env, id, idea, score, now) {
+async function enqueueAccepted(env, id, idea, score, now, direct) {
   // RESEARCH-ADMISSION-CAP-1 (2026-10-17): triage ACCEPTs ~40% of ~240 proposals/day while the executor
   // publishes ~5-9/day, so every accept used to be enqueued and the overflow piled up as status 'deferred'
   // (440 rows on 2026-10-17 = 68% of the pipeline). RESEARCH-BACKPRESSURE-1 only DEMOTES overflow; nothing
   // bounded admission. The queue is now capped at RESEARCH_ADMISSION_CAP active+deferred rows. An accept
   // beyond it stays in idea_proposals as triaged_hold with a '[research admission cap]' rationale (not
   // lost, not queued) until the queue drains. Read failure admits (a D1 fault must not stop triage).
-  try {
+  // IDEAS-INTAKE-OWNER-1 (1.10.12): `direct` is true for an idea the owner wrote himself (proposalKind 'direct'). The cap
+  // bounds the machine producers (arXiv scan, think loop, re-entry, ask-gap); it never holds the owner's own idea, which the
+  // doctrine says never waits on a hold. Nothing re-admitted a cap-held row, so before 1.10.12 an owner idea filed while the
+  // queue was full stayed in triaged_hold for good (migrations/2026-10-19-owner-ideas-cap-requeue.sql re-queues those).
+  if (!direct) try {
     var qcap = await env.QNFO_AUDIT.prepare("SELECT COUNT(*) AS n FROM research_queue WHERE status IN ('queued','researching','review','deferred')").first();
     if (qcap && Number(qcap.n) >= RESEARCH_ADMISSION_CAP) {
       await env.QNFO_AUDIT.prepare("UPDATE idea_proposals SET status='triaged_hold', rationale=substr('[research admission cap ' || ?1 || '/' || ?2 || '] ' || COALESCE(rationale, ''), 1, 2000) WHERE id=?").bind(String(qcap.n), String(RESEARCH_ADMISSION_CAP), String(id)).run();
@@ -803,7 +807,7 @@ async function triageProposals(env, deadline) {
       await env.QNFO_AUDIT.prepare("UPDATE idea_proposals SET decision=?, score=?, rationale=?, triaged_at=?, status=? WHERE id=?").bind(s.decision, s.score, s.rationale || "", now, s.decision === "ACCEPT" ? "triaged_accepted" : "triaged_hold", row.id).run();
       out.triaged++;
       if (s.decision === "ACCEPT") {
-        await enqueueAccepted(env, row.id, row.idea, s.score, now);
+        await enqueueAccepted(env, row.id, row.idea, s.score, now, kind === "direct");
         out.accepted++;
         if (mix) { mix.n++; mix.by[cluster] = (mix.by[cluster] || 0) + 1; if (fq) mix.foundational++; }
       }
@@ -1482,8 +1486,11 @@ async function intake(req,env){
     try{await env.QNFO_AUDIT.prepare("INSERT INTO agent_issues (title,description,source,category,priority,status,created_at,updated_at) VALUES (?,?,?,?,?,'open',?,?)").bind(title||'Owner-filed item',body||title,src,(b.category||'owner-intake'),(b.priority||'medium'),now,now).run()}catch(e){return json({error:'issue insert failed: '+(e&&e.message||e)},500)}
     return json({ok:true,kind:'issue',provenance:src,held:true});
   }
-  try{await env.QNFO_AUDIT.prepare("INSERT INTO idea_proposals (name,idea,contact,status,created_at) VALUES (?,?,?,?,datetime('now'))").bind(src,(title?title+'\n\n':'')+body,'owner','new').run()}catch(e){return json({error:'idea insert failed: '+(e&&e.message||e)},500)}
-  return json({ok:true,kind:'idea',provenance:src,status:'new',held:true});
+  // IDEAS-INTAKE-OWNER-1 (1.10.12): the reply carries the new row's id, so the owner can follow it in idea_proposals, and says
+  // what happens next. `held:true` stays for callers that read it; an owner-chat row is ACCEPTed by the next hourly triage.
+  var ins;
+  try{ins=await env.QNFO_AUDIT.prepare("INSERT INTO idea_proposals (name,idea,contact,status,created_at) VALUES (?,?,?,?,datetime('now'))").bind(src,(title?title+'\n\n':'')+body,'owner','new').run()}catch(e){return json({error:'idea insert failed: '+(e&&e.message||e)},500)}
+  return json({ok:true,kind:'idea',id:ins&&ins.meta&&ins.meta.last_row_id!=null?ins.meta.last_row_id:null,provenance:src,status:'new',held:true,next:'filed as owner-authored; the hourly triage accepts it and queues it for research'});
 }
 // REACH-IDEA-1 (1.5.7, agent_issues 2001): the home page's subscribe box posts here; the address goes to the qnfo-subscribers
 // double opt-in (the same endpoint and fields qnfo-gateway's /api/subscribe proxy uses) with source ideas.qnfo.org, so nothing
