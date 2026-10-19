@@ -5,6 +5,8 @@
 // repository ("<guest> is FOLDED into <host>" or "folded into <host>") and fails when a denied guest's host is not denied;
 // it also holds the copies of the lists equal: fleet-control EVOLVE_DENY + the code loop (CM_CONTROL_PLANE), the transformation
 // loop's TP_CONTROL_PLANE and the code orchestrator's PLAN_CONTROL_PLANE.
+// CODE-LOOP-CONTROL-PLANE-1 (0.35.0): the owner named qnfo-fleet-control, qnfo-ops, qnfo-deploy-guard and the loop's own code; they are in
+// CM_LOOP_CANARIED now, each with its canary entries (the check below), and the scorer host stays out.
 // CONTROL-PLANE-FUNCTIONAL-CANARY-1 (0.20.0, agent_issues 2176): the code loop's deny list (CM_DENY, PLAN_DENY_WORKERS) is the
 // control-plane list minus the workers whose canonical deploy runs a functional canary with an automatic revert
 // (CM_LOOP_CANARIED = PLAN_LOOP_CANARIED). Every such worker must have a FUNCTIONAL entry and a CANARY_WORKERS entry in
@@ -40,7 +42,10 @@ ok(same(cm, planCp || []), "PLAN_CONTROL_PLANE equals CM_CONTROL_PLANE", { cm, p
 ok(same(cmCanaried || [], planCanaried || []), "PLAN_LOOP_CANARIED equals CM_LOOP_CANARIED", { cmCanaried, planCanaried });
 ok((cmCanaried || []).every((w) => cm.includes(w)), "every canaried worker is a control-plane worker (the lane still pairs and canaries it)", cmCanaried);
 ok((cmCanaried || []).every((w) => (cpCanary || []).includes(w) && (canaryWorkers || []).includes(w) && functional.includes(w)), "every canaried worker has a /health canary, a canary_revert.py CANARY_WORKERS entry and a FUNCTIONAL check", { cmCanaried, cpCanary, canaryWorkers, functional });
-for (const w of ["qnfo-fleet-control", "qnfo-ops", "qnfo-deploy-guard", "qnfo-code-orchestrator", "qnfo-observability"]) ok(!(cmCanaried || []).includes(w), w + " (a verifier or the scorer host) is never canaried into the loop's scope");
+// CODE-LOOP-CONTROL-PLANE-1 (0.35.0, owner directive 2026-10-19): the code loop may always change the three verifier workers and its own
+// orchestrator; the scorer host, the scorer and the container pilot are still denied.
+for (const w of ["qnfo-fleet-control", "qnfo-ops", "qnfo-deploy-guard", "qnfo-code-orchestrator"]) ok((cmCanaried || []).includes(w), w + " is in the loop's scope (owner directive 2026-10-19)");
+for (const w of ["qnfo-observability", "qnfo-autonomy-scorer", "qnfo-containers-pilot"]) ok(!(cmCanaried || []).includes(w), w + " (the scorer host, the scorer, the container pilot) is never canaried into the loop's scope");
 // Every FOLDED marker that names a host.
 const folds = [];
 for (const d of fs.readdirSync(root)) {
@@ -66,6 +71,7 @@ const r = scope("qnfo-observability/worker.js");
 ok(r && r.ok === false && /never auto-merges/.test(r.why), "cmScope refuses qnfo-observability/worker.js", r);
 ok(scope("qnfo-infra/worker.js").ok === true, "an ordinary worker is still in scope");
 ok(scope("qnfo-ai/worker.js").ok === true && scope("qnfo-gateway/worker.js").ok === true, "cmScope accepts the canaried control-plane workers (CONTROL-PLANE-FUNCTIONAL-CANARY-1)");
-ok(scope("qnfo-fleet-control/worker.js").ok === false && scope("qnfo-ops/worker.js").ok === false, "cmScope still refuses the verifier workers");
+ok(["qnfo-fleet-control", "qnfo-ops", "qnfo-deploy-guard", "qnfo-code-orchestrator"].every((w) => scope(w + "/worker.js").ok === true), "cmScope accepts the verifier workers and the orchestrator (CODE-LOOP-CONTROL-PLANE-1, owner directive 2026-10-19)");
+ok(["qnfo-observability", "qnfo-autonomy-scorer", "qnfo-containers-pilot", "qnfo-code-agent"].every((w) => scope(w + "/worker.js").ok === false), "cmScope still refuses the scorer host, the scorer, the container pilot and the retired code agent");
 console.log(pass + " passed, " + fail + " failed");
 process.exit(fail ? 1 : 0);

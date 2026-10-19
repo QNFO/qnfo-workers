@@ -327,8 +327,13 @@ because each one was broken at least once; the linked issue holds the evidence.
   it does not arrive, reverts the push on main (`scripts/canary_revert.py`, one level, never a revert of a revert), dispatches
   the deploy of the revert through the workflow that owns the worker and files `CONTROL-PLANE-REVERTED-1`. The canary proves the VERSION arrived, not
   that the worker works: LOOP-WATCH-1 and the metric triggers are the next line. `off` restores CONTROL-PLANE-MANUAL-1 without a
-  deploy. Workflows under `.github/` never auto-merge, and the code loop neither plans nor merges control-plane workers until
-  CODE-LOOP-CONTROL-PLANE-1 (lever T1.23) has its evidence: five lane merges of control-plane session PRs with no canary revert.
+  deploy. Workflows under `.github/` never auto-merge.
+  CODE-LOOP-CONTROL-PLANE-1 (lever T1.23; owner directive 2026-10-19, verbatim: "The code loop SHALL ALWAYS BE ABLE TO change
+  qnfo-fleet-control, qnfo-ops, qnfo-deploy-guard and the loop's own code."; qnfo-fleet-control 0.35.0, qnfo-code-orchestrator 0.19.0,
+  human_actions 115): the code loop plans and merges those three workers, qnfo-code-orchestrator and scripts/code-task-* like qnfo-ai
+  and qnfo-gateway, behind the same functional canary and automatic revert (`CM_LOOP_CANARIED` and `PLAN_LOOP_CANARIED`, held equal by
+  fold-guard.test.mjs, which also requires a canary entry for each). It replaces the earlier wait for five lane merges with no canary
+  revert. The scorer host (qnfo-observability), qnfo-autonomy-scorer and qnfo-containers-pilot stay denied.
 - RULE-8-RETIRED-1 (owner directive 2026-10-06, verbatim: "'Rule 8' is now deleted entirely. The system needs more flexibility
   and more autonomy to decide for itself and make it's own choices ad hoc. Proceed with all changes."; PR 736 retired it from the
   qnfo-ops prompt, the trigger texts and the policy documents): caps, guards, probes and deletions are the fleet's own decisions,

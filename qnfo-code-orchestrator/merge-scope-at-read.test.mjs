@@ -54,7 +54,7 @@ ok(first && first.ok === true, "a tick creates the schema and runs", first);
 const now = new Date().toISOString();
 const add = (id, p) => db.prepare("INSERT INTO code_tasks (id, repo, path, goal, status, step, attempts, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?)")
   .run(id, "QNFO/qnfo-workers", p, "g", "queued", "read", 0, now, now);
-add("ct_scope_cp", "qnfo-fleet-control/worker.js");
+add("ct_scope_cp", "qnfo-observability/worker.js");
 add("ct_scope_sc", "scripts/remediation_consumer.py");
 add("ct_scope_ok", "fxok/worker.js");
 await tick(); await tick();
