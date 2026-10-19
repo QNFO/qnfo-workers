@@ -318,7 +318,7 @@ export async function reconcile(db, rows, today, nowIso) {
   return { booked, expired };
 }
 
-// One hourly step. deps: { now (ms), ai(model, input) -> result, send(subject, body) -> {ok}, key }
+// One hourly step. deps: { now (ms), ai(model, input) -> result (required for proposals), send(subject, body) -> {ok}, key }
 export async function travelTick(env, deps = {}) {
   const db = env.PERSONAL;
   if (!db) return { skipped: "no PERSONAL binding" };
@@ -363,9 +363,11 @@ export async function travelTick(env, deps = {}) {
   const month = new Date(checkin + "T12:00:00Z").toLocaleString("en-GB", { month: "long", timeZone: "UTC" });
   const messages = promptFor(state, c, profile, reactions, month);
   let opts = [], model = null;
+  // the caller passes its attributed model runner (aiRunAttr in worker.js); this module never calls the AI binding itself
+  if (typeof deps.ai !== "function") { out.skipped = "no model caller"; return out; }
   for (const m of MODELS) {
     try {
-      const r = deps.ai ? await deps.ai(m, { messages, max_tokens: 900, temperature: 0.6 }) : await env.AI.run(m, { messages, max_tokens: 900, temperature: 0.6 });
+      const r = await deps.ai(m, { messages, max_tokens: 900, temperature: 0.6 });
       opts = rankAndMark(parseOptions(modelText(r)), reactions, state);
       if (opts.length >= 2) { model = m; break; }
     } catch (e) { console.error(JSON.stringify({ evt: "travel:model-failed", model: m, error: String(e && e.message || e).slice(0, 200) })); }

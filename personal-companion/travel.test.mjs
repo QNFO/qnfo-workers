@@ -3,6 +3,7 @@
 // TRAVEL-PLANNER-1. DDL is applied one statement per prepare(), as D1 requires. Fixtures are invented; no owner data.
 
 import { readFileSync } from "node:fs";
+import { travelBlock } from "../scripts/inline-companion-travel.mjs";
 import { DatabaseSync } from "node:sqlite";
 import {
   DDL, DEFAULTS, ensureTravel, cfg, addDays, localParts, tripState, bookingLink, parseOptions, rankAndMark,
@@ -224,6 +225,13 @@ console.log("\n[repository hygiene]");
   const src = readFileSync(new URL("./travel.js", import.meta.url), "utf8");
   ok("module holds no mail address", !/[a-z0-9._-]+@[a-z0-9.-]+\.[a-z]{2,}/i.test(src));
   ok("module never calls a booking or payment API", !/fetch\(/.test(src));
+}
+
+{
+  const w = readFileSync(new URL("./worker.js", import.meta.url), "utf8");
+  const m = /\/\/ TRAVEL-INLINE-BEGIN[^\n]*\n[\s\S]*?\/\/ TRAVEL-INLINE-END\n/.exec(w);
+  ok("worker.js carries travel.js inlined unchanged (run scripts/inline-companion-travel.mjs)", !!m && m[0] === travelBlock(readFileSync(new URL("./travel.js", import.meta.url), "utf8")));
+  ok("worker.js routes /travel/ and runs the hourly travel step", /TRV\.handleTravel\(/.test(w) && /TRV\.travelTick\(/.test(w));
 }
 
 console.log("\n" + pass + " passed, " + fail + " failed");
