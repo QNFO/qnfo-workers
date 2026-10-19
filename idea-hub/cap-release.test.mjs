@@ -1,7 +1,8 @@
-// IDEAS-CAP-GENERATED-RELEASE-1 (1.11.1) offline suite. Runs the worker's own triageProposals in a vm against in-memory SQLite.
-// Proves: with research_queue full a generated ACCEPT is held by the admission cap and nothing is released; once the queue drains
-// below the cap the held rows are re-queued oldest first, only as many as fit, with the cap note stripped; a full queue again
-// releases nothing.
+// IDEAS-CAP-GENERATED-RELEASE-1 (1.11.1) offline suite, updated for IDEAS-CAP-RATE-1 (1.12.0). Runs the worker's own triageProposals in
+// a vm against in-memory SQLite.
+// Proves the room path: with two slots under the cap, the held rows are re-queued oldest first, only as many as fit, with the cap note
+// stripped and no trickle counted; at the cap the remaining held row is admitted by the trickle (1.11.1 released nothing there, which
+// left 80 rows held with no expiry; idea-hub/cap-trickle.test.mjs covers the rate itself); with nothing held nothing is released.
 // Run: node idea-hub/cap-release.test.mjs
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
@@ -27,7 +28,7 @@ let pass = 0, fail = 0;
 const ok = (c, m, d) => { if (c) pass++; else { fail++; console.log("FAIL " + m + (d === undefined ? "" : " :: " + JSON.stringify(d))); } };
 const CAP = api.RESEARCH_ADMISSION_CAP;
 const fill = db.prepare("INSERT INTO research_queue (id, source, source_id, idea, summary, score, decision, status, created_at) VALUES (?, 'seed', ?, 'x', '', 0.5, 'ACCEPT', 'queued', datetime('now'))");
-for (let i = 0; i < CAP + 5; i++) fill.run("seed-" + i, "seed-" + i);
+for (let i = 0; i < CAP - 2; i++) fill.run("seed-" + i, "seed-" + i);
 const hold = db.prepare("INSERT INTO idea_proposals (name, idea, status, created_at, decision, score, rationale) VALUES ('auto-scan', ?, 'triaged_hold', ?, 'ACCEPT', 0.8, ?)");
 hold.run("held A oldest", "2026-10-17T10:00:00Z", "[research admission cap 130/120] good idea A");
 hold.run("held B", "2026-10-17T11:00:00Z", "[research admission cap 131/120] good idea B");
@@ -36,10 +37,7 @@ db.prepare("INSERT INTO idea_proposals (name, idea, status, created_at, decision
 const st = (idea) => db.prepare("SELECT status, rationale FROM idea_proposals WHERE idea = ?").get(idea);
 const queued = (idea) => !!db.prepare("SELECT 1 FROM research_queue WHERE idea = ?").get(idea);
 let out = await api.triageProposals(env);
-ok(out.cap_released === 0 && st("held A oldest").status === "triaged_hold", "a full queue releases nothing", out.cap_released);
-db.exec("DELETE FROM research_queue WHERE source_id IN ('seed-0','seed-1','seed-2','seed-3','seed-4','seed-5','seed-6')");
-out = await api.triageProposals(env);
-ok(out.cap_released === 2, "two slots under the cap release two rows", out.cap_released);
+ok(out.cap_released === 2 && out.cap_trickled === 0, "two slots under the cap release two rows by room, not by trickle", [out.cap_released, out.cap_trickled]);
 ok(st("held A oldest").status === "triaged_accepted" && st("held B").status === "triaged_accepted" && st("held C newest").status === "triaged_hold", "oldest first", [st("held A oldest"), st("held C newest")]);
 ok(st("held A oldest").rationale === "good idea A", "the cap note is stripped", st("held A oldest").rationale);
 ok(queued("held A oldest") && queued("held B") && !queued("held C newest"), "released rows are in research_queue");
@@ -47,6 +45,9 @@ ok(st("a real hold").status === "triaged_hold", "a hold for another reason is un
 const n = db.prepare("SELECT COUNT(*) AS n FROM research_queue WHERE status IN ('queued','researching','review','deferred')").get().n;
 ok(n === CAP, "the queue is filled exactly to the cap", n);
 out = await api.triageProposals(env);
-ok(out.cap_released === 0 && st("held C newest").status === "triaged_hold", "at the cap nothing more is released");
+ok(out.cap_released === 1 && out.cap_trickled === 1 && st("held C newest").status === "triaged_accepted" && queued("held C newest"), "at the cap the trickle admits the last held row (1.11.1 released nothing here)", [out.cap_released, out.cap_trickled]);
+out = await api.triageProposals(env);
+ok(out.cap_released === 0 && out.cap_trickled === 0, "nothing held, nothing released");
+ok(st("a real hold").status === "triaged_hold", "a hold for another reason is still untouched");
 console.log(`cap-release: ${pass} passed, ${fail} failed`);
 if (fail) process.exit(1);
