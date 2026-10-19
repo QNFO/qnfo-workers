@@ -1,6 +1,36 @@
-# personal-api - Agentic Personal Twin (v4.4.0)
+# personal-api - Agentic Personal Twin (v4.10.0)
 
 Rowan's personal-assistant endpoint: personal-api.q08.workers.dev/v1 (OpenAI-compatible).
+
+## v4.10.0 (2026-10-19) - the companion (pillar: personal, COMPANION-1)
+An active companion on top of the twin, built on the personal infrastructure that already existed. Source:
+`companion.js` (inlined into `worker.js` by `node personal-api/inline-companion.mjs`; edit companion.js, then re-run).
+Tests: `node personal-api/companion.test.mjs` (planner rules, FSRS, RFC 8291/8292 push crypto, capture, privacy, parity).
+
+- **Page**: `https://personal-api.q08.workers.dev/companion` (installable on the phone). Today (mood and energy taps with
+  tags, one thing that fits today's energy, open nudges with "did it / not today"), Capture (text, voice note, photo),
+  Talk (the twin in companion mode), Do (next actions by context), Learn (flashcards), Journal, Data (patterns, privacy,
+  export, delete). The personal API key is entered once and stays on the device.
+- **Capture and GTD**: `POST /companion/api/capture` takes text, audio (Whisper large-v3-turbo, fallback whisper) or an
+  image (vision description); files go to R2 `personal-media` under `companion/`. Each item is clarified (cheap model,
+  rules when it is down) into a next action (the twin's `tasks` table gains context, energy, minutes, gtd, project),
+  project, someday, reference note, journal entry or flashcard, and embedded into Vectorize `personal-life` as `cmp:<id>`.
+- **Mood**: 1-5 plus energy and tags, with a context snapshot (local time, weather, a sleep proxy from message times,
+  what was done). Every tap is also the day's `wellbeing_checkins` row, so the e-mail ladder (personal-companion
+  WELLBEING-LOOP-1) sees it.
+- **Spaced repetition**: FSRS-5 with the ts-fsrs default weights, implemented in companion.js (no bundler on the deploy path).
+- **Nudges**: the PersonalTwinAgent instance `companion` ticks every 15 minutes on its own alarm (the daily cron re-arms
+  it). One nudge at most per tick, sent by Web Push, recorded in the shared `companion_nudges` ledger, so the daily cap,
+  minimum gap and quiet hours in `wellbeing_config` bind both senders. Low days get care, never tasks; three unanswered
+  asks switch to presence; kinds that never land retire; risk language gets the fixed crisis lines. The e-mail ladder's
+  asks are pushed to the phone too, once each. The VAPID key is generated once and kept in the Durable Object.
+- **Everywhere**: every twin chat sees the companion state; `companion: true` adds the companion voice and long-term
+  memories. Tools `cmp_capture`, `cmp_mood`, `cmp_next`, `cmp_action_add`, `cmp_action_done`, `cmp_card_add`,
+  `cmp_cards_due`, `cmp_card_review`, `cmp_today`, `cmp_dashboard` join the chat loop and `/mcp`.
+  `POST /v1/audio/transcriptions` is OpenAI-compatible speech-to-text (`?capture=1` files it in the inbox).
+- **Privacy**: `GET /companion/api/privacy` lists every store, `GET /companion/api/export` downloads it all,
+  `POST /companion/api/delete` removes one row or everything the companion stored (typed confirmation).
+- All model calls use the Workers AI binding through AI Gateway `default`. No new worker, binding, cron or secret.
 RAG + live-web + live-weather over the personal-life D1 + Vectorize archive, now with an
 AGENTIC TOOL LOOP. Never calls the QNFO records oracle (PERSONAL-QNFO-SEPARATION-1).
 
