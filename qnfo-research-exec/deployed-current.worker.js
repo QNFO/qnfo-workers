@@ -804,12 +804,17 @@ async function publishStage(env, row) {
     await env.QNFO_AUDIT.prepare("UPDATE research_queue SET status='held', error=?, claimed_at=NULL WHERE id=?").bind('DLF-PUBLISH-HELD-1: publish held (agent_issue 1091)', row.id).run();
     return { ok: false, stage: 'publish', held: true };
   }
+  const gate = releaseGateVerdict(paper.body_md);
+  if (gate.pass !== 1) {
+    await env.LIVING_PAPER.prepare("UPDATE papers SET release_gate_pass=?2, release_gate_at=?3, release_gate_reason=?4, updated_at=datetime('now') WHERE slug=?1").bind(slug, gate.pass, nowIso(), gate.reason).run();
+    await markError(env, row, "PUB-GATE-BLOCK-1: release gate failed: " + gate.reason);
+    return { ok: false, stage: "publish" };
+  }
   const pub = await publishInHouse(env, paper.title, paper.abstract, paper.body_md, slug);
   if (!pub.ok) {
     await markError(env, row, "publish: " + pub.error);
     return { ok: false, stage: "publish" };
   }
-  const gate = releaseGateVerdict(paper.body_md);
   await env.LIVING_PAPER.prepare("UPDATE papers SET doi=NULL, zenodo_doi=NULL, zenodo_url=NULL, status='published', release_gate_pass=?2, release_gate_at=?3, release_gate_reason=?4, updated_at=datetime('now') WHERE slug=?1").bind(slug, gate.pass, nowIso(), gate.reason).run();
   try {
     await env.MIRROR.put("papers/" + slug + ".md", paper.body_md);
