@@ -178,7 +178,7 @@ function withQueue(env, db) {
   ok(home.find((l) => l[2]) && home.find((l) => l[2])[0] === "Overview" && home.filter((l) => l[2]).length === 1, "D2 the overview lights Overview only");
   const area = links(await (await call(env, "/area/reach")).text());
   ok(area.filter((l) => l[2]).map((l) => l[0]).join() === "Reach", "D3 an area page lights its area");
-  for (const [path, lit, subbar] of [["/kpi", "Platform", ["Overview", "Metrics", "Changelog", "Command line"]], ["/content", "Research", ["Overview", "Content pipeline"]], ["/changelog", "Platform", ["Overview", "Metrics", "Changelog", "Command line"]], ["/cmd", "Command line", ["Overview", "Metrics", "Changelog", "Command line"]]]) {
+  for (const [path, lit, subbar] of [["/kpi", "Platform", ["Overview", "Metrics", "Architecture", "Changelog", "Command line"]], ["/content", "Research", ["Overview", "Content pipeline"]], ["/changelog", "Platform", ["Overview", "Metrics", "Architecture", "Changelog", "Command line"]], ["/cmd", "Command line", ["Overview", "Metrics", "Architecture", "Changelog", "Command line"]]]) {
     const r = await call(env, path);
     const h = await r.text();
     ok(r.status === 200, "D4 " + path + " still answers (" + r.status + ")");
@@ -234,7 +234,7 @@ function withQueue(env, db) {
   const j = await (await call(env, "/api")).json();
   ok(IDS.every((id) => j.by_area.find((a) => a.id === id && a.page === "/area/" + id && Array.isArray(a.pages))), "G1 every by_area row names its page and tabs");
   const plat = j.by_area.find((a) => a.id === "platform");
-  ok(plat.pages.map((p) => p.href).join() === "/kpi,/changelog,/cmd" && plat.pages.every((p) => j.endpoints.some((e) => e.path === p.feed)), "G2 platform's tabs are /kpi, /changelog, /cmd and each has its feed in the index");
+  ok(plat.pages.map((p) => p.href).join() === "/kpi,/architecture,/changelog,/cmd" && plat.pages.every((p) => j.endpoints.some((e) => e.path === p.feed)), "G2 platform's tabs are /kpi, /architecture, /changelog, /cmd and each has its feed in the index");
   const f = await (await call(env, "/api/area/research")).json();
   ok(f.area.page === "/area/research", "G3 the area feed names its page");
   const health = await (await call(env, "/health")).json();
