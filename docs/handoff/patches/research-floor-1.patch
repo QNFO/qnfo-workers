@@ -37,7 +37,7 @@ Issues: QNFO/qnfo-workers (D1 agent_issues 99913, 99943, 100024, 100026; GitHub 
 research-pipeline-1/research-short-drafts-blind-reviewer-terminal-parks and research-pipeline-2/research-terminal-length-floor.
 
 Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>
-Claude-Session: https://claude.ai/code/session_01QpQv19uh1padRwZ3u1r766
+Claude-Session: session_01QpQv19uh1padRwZ3u1r766
 ---
  ...2026-10-19-research-rearm-after-repair.sql |  86 ++++++
  qnfo-research-exec/complete-to-floor.test.mjs | 277 ++++++++++++++++++

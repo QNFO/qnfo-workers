@@ -48,7 +48,7 @@ paths never reach the new one. Full orchestrator and scripts suite set: 41 passe
 Refs QNFO/qnfo-workers#2111 (agent_issues 2111, model-edit-format-reliability).
 
 Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>
-Claude-Session: https://claude.ai/code/session_01QpQv19uh1padRwZ3u1r766
+Claude-Session: session_01QpQv19uh1padRwZ3u1r766
 ---
  migrations/2026-10-19-search-nearest.sql      |  19 ++
  .../deployed-current.worker.js                | 128 ++++++++++-

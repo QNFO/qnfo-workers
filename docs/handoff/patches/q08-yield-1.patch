@@ -69,7 +69,7 @@ Issues: D1 agent_issues 99929 and 99930 (METRIC-TRIGGER-537 and 538) and 2606 (Q
 qnfo-audit ids, not GitHub numbers, and all three stay open until their probes pass.
 
 Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>
-Claude-Session: https://claude.ai/code/session_01QpQv19uh1padRwZ3u1r766
+Claude-Session: session_01QpQv19uh1padRwZ3u1r766
 ---
  .../2026-10-19-q08-gate-yield-metrics.sql     |  59 ++++++
  q08-signal-engine/deployed-current.worker.js  | 156 +++++++++++++--

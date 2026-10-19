@@ -46,7 +46,7 @@ which no probe in this worker covers.
 Issues: agent_issues 2829 (path A; the GitHub numbers 1777 and 1778 in the cluster are closed unrelated rows). Pillar: cost.
 
 Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>
-Claude-Session: https://claude.ai/code/session_01QpQv19uh1padRwZ3u1r766
+Claude-Session: session_01QpQv19uh1padRwZ3u1r766
 ---
  .../2026-10-19-model-health-budget-probe.sql  |  66 ++++++
  qnfo-ai-calibration/budget-probe.test.mjs     | 215 ++++++++++++++++++
