@@ -53,8 +53,12 @@
 // COMPANION-TRAVEL-TZ-1 (2026-10-19): abroad, the companion's day follows the traveller.
 //  22. While a lodging row in personal-life.events covers now, quiet hours, check-in windows, day keys and the Sunday look-back run
 //      in that place's time zone (a fixed table; an unknown place keeps home time), and Today says "Times follow you: <place>".
+// COMPANION-CALENDAR-AWARE-1 (2026-10-19): the companion looks at the day he is having before it asks anything.
+//  23. No ask while a timed calendar event is on; with three or more events the day is lighter (optional asks stop one short of
+//      the daily cap and offer the smallest step); and one short "after <event>" check-in once a social or heavy event ends.
+//      Risk-word care and presence are never held back by the calendar.
 
-export const COMPANION_VERSION = "1.7.0";
+export const COMPANION_VERSION = "1.8.0";
 export const TZ = "Europe/Amsterdam";
 export const CONTEXTS = [
   { name: "@home", hint: "chores, cooking, things in the flat" },
@@ -65,7 +69,7 @@ export const CONTEXTS = [
   { name: "@anywhere", hint: "thinking, reading, small things" }
 ];
 export const ENERGY = ["low", "medium", "high"];
-export const NUDGE_KINDS = ["cmp-checkin", "cmp-care", "cmp-reflect", "cmp-next", "cmp-review", "cmp-anchor", "cmp-presence", "cmp-measure", "cmp-connect", "cmp-week"];
+export const NUDGE_KINDS = ["cmp-checkin", "cmp-care", "cmp-reflect", "cmp-next", "cmp-review", "cmp-anchor", "cmp-presence", "cmp-measure", "cmp-connect", "cmp-week", "cmp-after"];
 // The e-mail ladder's asks are pushed to the phone too, so the two senders read as one companion.
 export const LADDER_KINDS = ["checkin", "micro", "body", "contact", "care", "presence"];
 
@@ -680,7 +684,7 @@ export function retiredFrom(rows, cfg, nowMs) {
   return out;
 }
 // What the lock screen shows (rule 14). The full text is always in the app.
-export const DISCREET_KINDS = ["cmp-care", "care", "cmp-presence", "presence", "crisis", "cmp-measure"];
+export const DISCREET_KINDS = ["cmp-care", "care", "cmp-presence", "presence", "crisis", "cmp-measure", "cmp-after"];
 export function discreetPayload(payload, mode) {
   const m = mode === undefined || mode === null || mode === "" ? "care" : String(mode);
   if (m === "off") return payload;
@@ -894,6 +898,12 @@ export function planNudge(st) {
     if (kindsToday.has("presence") || kindsToday.has("cmp-presence")) return { skip: "presence-already-sent" };
     return mk("cmp-presence", TEXTS.presence[0], 0, 360, "unanswered-streak=" + st.unansweredStreak);
   }
+  // Rule 23: the calendar. A timed event that is on now holds every ask (risk-word care above is never held); three or more
+  // events make a lighter day.
+  const events = st.events || [];
+  const busy = events.find((e) => !e.allDay && e.startMs <= nowMs && nowMs < e.endMs);
+  if (busy) return { skip: "during-event" };
+  const lightDay = events.length >= LIGHT_DAY_EVENTS;
   const noMood = mood.today === null || mood.today === undefined;
   // Morning: make the check-in reach the phone (the e-mail ladder may already have asked; this is the same ask).
   if (h >= 8.5 && h < 12 && noMood && !kindsToday.has("cmp-checkin") && !retired.has("cmp-checkin")) {
@@ -906,6 +916,12 @@ export function planNudge(st) {
     const helpedTitle = helped ? ((st.activityBank || []).find((b) => b.id === helped.key) || helped).title : "";
     const pool = helped ? TEXTS.care.concat(["Last time, " + helpedTitle + " helped a little. Only if it feels right; resting is fine too."]) : TEXTS.care;
     return mk("cmp-care", pickLru(pool, recentAsks), 2, 360, "low-day mood=" + mood.today + " avg2=" + mood.avg2 + " avg7=" + mood.avg7);
+  }
+  // Rule 23: a social or heavy event that ended within the last 75 minutes gets one short check-in, unless he has already told us.
+  const justEnded = events.filter((e) => !e.allDay && (e.social || e.heavy) && e.endMs <= nowMs && nowMs - e.endMs <= AFTER_EVENT_WINDOW_MS)
+    .filter((e) => !(st.lastMoodIso && Date.parse(st.lastMoodIso) >= e.endMs)).sort((a, b) => b.endMs - a.endMs)[0];
+  if (justEnded && !kindsToday.has("cmp-after") && !retired.has("cmp-after")) {
+    return mk("cmp-after", afterEventText(justEnded.title), 1, 120, "after-event " + (justEnded.heavy ? "heavy" : "social"));
   }
   // Rule 19: one Sunday-evening push when the week has something to show (gatherState sets weekReady).
   if (st.weekReady && h >= 18 && h < 21.5 && !kindsToday.has("cmp-week") && !retired.has("cmp-week")) {
@@ -926,10 +942,13 @@ export function planNudge(st) {
   const OPTIONAL = ["cmp-next", "cmp-anchor", "cmp-review", "cmp-connect"];
   const optionalRecently = (st.recent || []).some((r) => OPTIONAL.includes(r.kind) && nowMs - new Date(r.sent_at || r.ts).getTime() < 3 * 864e5);
   if (optionalRecently && st.receptive && st.receptive.size && ![Math.floor(h) - 1, Math.floor(h), Math.floor(h) + 1].some((x) => st.receptive.has(x))) return { skip: "not-a-receptive-hour" };
-  const action = chooseAction(st.nextActions, energyFor(mood));
+  // A lighter day: optional asks stop one short of the daily cap and offer only the smallest step.
+  if (lightDay && todays.length >= Number(cfg.max_per_day) - 1) return { skip: "light-day" };
+  const energy = lightDay ? "low" : energyFor(mood);
+  const action = chooseAction(st.nextActions, energy);
   if (h >= 11 && h < 16.5 && !(st.actionsDoneToday > 0) && !kindsToday.has("cmp-anchor") && !retired.has("cmp-anchor")) {
     // No next action fits: an activity from his bank, chosen by what he rated as helping (behavioral activation).
-    const act = action ? null : pickActivity(st.activityBank, st.helps, energyFor(mood), recentAsks);
+    const act = action ? null : pickActivity(st.activityBank, st.helps, energy, recentAsks);
     const what = action ? action.title + " (" + (action.minutes || 15) + " min)" : act ? act.title + " (" + (act.minutes || 10) + " min)" : "a ten-minute walk outside, no phone";
     return mk("cmp-anchor", pickLru(TEXTS.anchor, recentAsks) + what + ". That's all.", action ? (action.minutes || 15) : act ? (act.minutes || 10) : 10, 180, "shapeless-day", action ? { action_id: action.id } : act ? { activity_id: act.id } : {});
   }
@@ -938,7 +957,7 @@ export function planNudge(st) {
     return mk("cmp-connect", pickLru(TEXTS.connect, recentAsks), 5, 480, "no-social-" + st.daysSinceSocial + "d");
   }
   if (action && !kindsToday.has("cmp-next") && !retired.has("cmp-next")) {
-    return mk("cmp-next", "One small thing, if you have it in you: " + action.title + " (" + (action.minutes || 15) + " min, " + (action.context || "@anywhere") + ").", action.minutes || 15, 240, "idle " + Math.round(Math.min(idleMin, 9999)) + "m energy=" + energyFor(mood), { action_id: action.id });
+    return mk("cmp-next", "One small thing, if you have it in you: " + action.title + " (" + (action.minutes || 15) + " min, " + (action.context || "@anywhere") + ").", action.minutes || 15, 240, "idle " + Math.round(Math.min(idleMin, 9999)) + "m energy=" + energy + (lightDay ? " light-day" : ""), { action_id: action.id });
   }
   if ((st.dueCards || 0) >= 3 && !kindsToday.has("cmp-review") && !retired.has("cmp-review")) {
     return mk("cmp-review", st.dueCards + " cards are ready. Five minutes of review while you have a moment?", 5, 240, "cards-due=" + st.dueCards);
@@ -1158,6 +1177,96 @@ export async function localDay(env, atIso) {
   return dayKey(atIso, (await effectiveTz(env, atIso, cfg)).tz);
 }
 
+// ---------------------------------------------------------------- the calendar (COMPANION-CALENDAR-AWARE-1, rule 23)
+// planNudge used to decide on time, mood, sleep proxy and weather and never looked at the day he is having. It now reads the
+// same calendar the twin reads for ON TODAY/TOMORROW: personal-life.events (a row with a time in start_date/end_date is timed, a
+// date alone is "all day") and, when the worker gives it a reader (deps.calendar), the twin's calendar with Google's timed events.
+// What it does with them, and nothing else: no optional ask while a timed event is on; a lighter day when three or more things
+// are on (the last slot of the daily cap stays free and what is offered is the smallest step); and one short "after <event>"
+// check-in once a social or heavy event has ended. All-day items on the twin calendar (holidays, birthdays, reminders) are
+// not counted; an all-day row in personal-life.events (a trip day, a conference) counts toward the load but never blocks a slot.
+// Event titles stay in personal-life (the nudge row), never leave it.
+export const EVENT_DEFAULT_MIN = 90, EVENT_HEAVY_MIN = 120, AFTER_EVENT_WINDOW_MIN = 75, LIGHT_DAY_EVENTS = 3;
+const AFTER_EVENT_WINDOW_MS = AFTER_EVENT_WINDOW_MIN * 60000;
+const SOCIAL_CATEGORIES = ["social", "party", "dinner", "drinks", "meetup", "birthday", "friends", "family", "wedding", "date"];
+const SOCIAL_RE = /\b(party|dinner|drinks?|birthday|wedding|reunion|meet-?up|friends?|borrel|verjaardag|feest|diner|date night|bbq|brunch|housewarming|(lunch|coffee|tea) with)\b/i;
+const HEAVY_CATEGORIES = ["exam", "interview", "medical", "conference"];
+const HEAVY_RE = /\b(exam|interview|presentation|pitch|defen[cs]e|surgery|dentist|doctor|huisarts|funeral|court|hearing|therapy|therapist|appointment)\b/i;
+const HEAVY_LABEL_RE = /heavy|draining|intense|high|zwaar|exhaust/i;
+// An ISO date-time to epoch ms. With an offset or Z it is exact; without one it is local time in `tz`. A date alone is null.
+export function eventMs(v, tz) {
+  const t = String(v === null || v === undefined ? "" : v).trim();
+  if (!/^\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}/.test(t)) return null;
+  const iso = t.replace(" ", "T");
+  if (/(Z|[+-]\d{2}:?\d{2})$/.test(iso)) { const ms = Date.parse(iso); return Number.isFinite(ms) ? ms : null; }
+  const guess = Date.parse(iso.slice(0, 16) + ":00Z");
+  if (!Number.isFinite(guess)) return null;
+  let ms = guess - tzOffsetMinutes(tz || TZ, guess) * 60000;
+  ms = guess - tzOffsetMinutes(tz || TZ, ms) * 60000;
+  return ms;
+}
+// rows: [{ title, category, start, end, allDay, tag, energy_label }] from any source. Returns today's events, deduplicated,
+// each { title, startMs, endMs, allDay, social, heavy }; a timed event gets a default length when it has no end.
+export function normalizeEvents(rows, day, tz) {
+  const out = [], seen = new Set();
+  for (const r of rows || []) {
+    const title = s(r.title, 120);
+    if (!title) continue;
+    const cat = String(r.category || "").toLowerCase();
+    if (cat === "lodging" || cat === "suggestion") continue;
+    let startMs = r.allDay ? null : eventMs(r.start, tz), endMs = r.allDay ? null : eventMs(r.end, tz);
+    let allDay = startMs === null;
+    if (allDay) {
+      const sDay = String(r.start || "").slice(0, 10);
+      const eDay = String(r.end || "").slice(0, 10) || sDay;
+      if (!(sDay <= day && day <= eDay)) continue;
+    } else {
+      const sLocal = dayKey(new Date(startMs).toISOString(), tz);
+      const eLocal = endMs !== null ? dayKey(new Date(endMs).toISOString(), tz) : sLocal;
+      // A row that runs over several days is a stretch of days, not a slot inside this one: it counts toward the load only.
+      if (sLocal === day) { if (eLocal !== day && endMs - startMs > 20 * 36e5) allDay = true; }
+      else if (sLocal < day && eLocal >= day) allDay = true;
+      else continue;
+    }
+    const social = SOCIAL_CATEGORIES.includes(cat) || String(r.tag || "").toLowerCase() === "social" || SOCIAL_RE.test(title);
+    const heavy = HEAVY_CATEGORIES.includes(cat) || HEAVY_RE.test(title) || HEAVY_LABEL_RE.test(String(r.energy_label || ""));
+    if (!allDay && (endMs === null || endMs <= startMs)) endMs = startMs + (heavy ? EVENT_HEAVY_MIN : EVENT_DEFAULT_MIN) * 60000;
+    const key = title.slice(0, 60).toLowerCase() + "|" + (allDay ? day : startMs);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push({ title, startMs: allDay ? null : startMs, endMs: allDay ? null : endMs, allDay, social, heavy });
+  }
+  return out.sort((a, b) => (a.startMs === null ? -1 : a.startMs) - (b.startMs === null ? -1 : b.startMs));
+}
+let _evCache = { key: "", at: 0, events: null };
+export function clearEventCache() { _evCache = { key: "", at: 0, events: null }; }
+// Today's events for the local `day` in `tz`. Every read fails soft: no table, no calendar reader or a slow one means fewer
+// events, never a thrown tick. The calendar reader (Google and the twin store) is given 3 s and its answer is kept for 2 minutes.
+export async function loadEvents(env, deps, day, tz) {
+  const rows = [];
+  try {
+    for (const r of await all(env.PERSONAL, "SELECT title, category, start_date, end_date, energy_label FROM events WHERE COALESCE(category, '') != 'lodging' AND substr(start_date, 1, 10) <= ? AND COALESCE(NULLIF(substr(end_date, 1, 10), ''), substr(start_date, 1, 10)) >= ? LIMIT 40", day, day)) {
+      rows.push({ title: r.title, category: r.category, start: r.start_date, end: r.end_date, energy_label: r.energy_label });
+    }
+  } catch (e) { /* no events table */ }
+  if (deps && typeof deps.calendar === "function") {
+    const key = day + "|" + tz;
+    let cal = _evCache.key === key && Date.now() - _evCache.at < 12e4 ? _evCache.events : null;
+    if (!cal) {
+      try {
+        const r = await Promise.race([deps.calendar(env, day, day), new Promise((res) => setTimeout(() => res(null), Number(deps.calendarTimeoutMs) || 3000))]);
+        if (r && r.ok && Array.isArray(r.events)) {
+          cal = r.events.filter((e) => e && !e.all_day && e.calendar !== "suggestion" && e.source !== "personal-radar").map((e) => ({ title: e.title, category: e.domain || "", start: e.dtstart, end: e.dtend, allDay: false, tag: e.domain || e.tag || "" }));
+          _evCache = { key, at: Date.now(), events: cal };
+        }
+      } catch (e) { cal = null; }
+    }
+    for (const c of cal || []) rows.push(c);
+  }
+  return normalizeEvents(rows, day, tz);
+}
+export const afterEventText = (title) => "After " + s(title, 60) + ": how are you doing now? A number is plenty; nothing else needed.";
+
 // The longest quiet stretch overnight, read from when he wrote anything. A proxy, labelled as one.
 export function sleepFromTimestamps(isos, day, tz) {
   const start = new Date(dayStartIso(day, tz)).getTime() - 6 * 3600e3;   // 18:00 the evening before
@@ -1214,14 +1323,14 @@ export async function daysSinceSocial(env, atIso) {
   const last = [a && a.t, b && b.t].filter(Boolean).map((x) => Date.parse(x)).sort((x, y) => y - x)[0];
   return last ? Math.floor((now - last) / 864e5) : 14;
 }
-const ASK_KINDS = ["micro", "body", "contact", "care", "cmp-next", "cmp-anchor", "cmp-review", "cmp-reflect", "cmp-checkin", "cmp-care", "cmp-measure", "cmp-connect"];
+const ASK_KINDS = ["micro", "body", "contact", "care", "cmp-next", "cmp-anchor", "cmp-review", "cmp-reflect", "cmp-checkin", "cmp-care", "cmp-measure", "cmp-connect", "cmp-after"];
 export async function unansweredStreak(env) {
   const rows = await all(env.PERSONAL, "SELECT state FROM companion_nudges WHERE kind IN (" + ASK_KINDS.map(() => "?").join(",") + ") AND state IN ('sent','shown','done','declined','expired') ORDER BY ts DESC LIMIT 10", ...ASK_KINDS).catch(() => []);
   let n = 0;
   for (const r of rows) { if (r.state === "done" || r.state === "declined") break; n++; }
   return n;
 }
-export async function gatherState(env, at) {
+export async function gatherState(env, at, deps) {
   const now = at || nowIso();
   const cfg = await loadCfg(env);
   // COMPANION-TRAVEL-TZ-1: the day, the hour and the quiet hours are the traveller's own while a stay in another zone covers now.
@@ -1253,8 +1362,10 @@ export async function gatherState(env, at) {
       try { if ((await weekLookback(env, now, wk)).enough) weekReady = wk; } catch (e) { weekReady = null; }
     }
   }
-  const [bank, helps, who5, social] = await Promise.all([
-    activityBank(env), whatHelps(env, 90).catch(() => null), who5Status(env, cfg, now).catch(() => ({ due: false })), daysSinceSocial(env, now).catch(() => null)
+  const [bank, helps, who5, social, events, lastMood] = await Promise.all([
+    activityBank(env), whatHelps(env, 90).catch(() => null), who5Status(env, cfg, now).catch(() => ({ due: false })), daysSinceSocial(env, now).catch(() => null),
+    loadEvents(env, deps, lp.day, tz).catch(() => []),
+    one(db, "SELECT MAX(ts) AS t FROM (SELECT ts FROM cmp_mood WHERE day = ? UNION ALL SELECT ts FROM wellbeing_checkins WHERE day = ? AND mood IS NOT NULL)", lp.day, lp.day).catch(() => null)
   ]);
   return {
     activityBank: bank, helps, who5Due: !!who5.due, who5: who5.read || null, daysSinceSocial: social, paused: isPaused(cfg, Date.parse(now)),
@@ -1263,7 +1374,7 @@ export async function gatherState(env, at) {
     lastUserIso: lastUser.sort().pop() || null, actionsDoneToday: done ? Number(done.n) : 0, nextActions: next,
     dueCards: due ? Number(due.n) : 0, pushReady: !!(subs && subs.n > 0), crisisLevel24h,
     receptive: receptiveHours(answerRows.map((r) => r.ts ? Math.floor(localParts(r.ts, tz).hour) : NaN)),
-    tz, away: eff.away
+    tz, away: eff.away, events, lastMoodIso: lastMood && lastMood.t ? lastMood.t : null
   };
 }
 async function recentUserTexts(env, sinceIso) {
@@ -1336,7 +1447,7 @@ export async function recordMood(env, deps, a) {
   await env.PERSONAL.prepare(`INSERT INTO wellbeing_checkins (ts, day, mood, energy, note, source, raw_json) VALUES (?, ?, ?, ?, ?, 'companion', ?)
      ON CONFLICT(day, source) DO UPDATE SET ts = excluded.ts, mood = excluded.mood, energy = COALESCE(excluded.energy, energy), note = COALESCE(excluded.note, note), raw_json = excluded.raw_json`)
     .bind(now, day, score, energy, note, JSON.stringify({ tags, cmp_mood_id: id })).run();
-  if (day === await localDay(env, nowIso())) await closeOpen(env, ["checkin", "cmp-checkin"], "done", "mood " + score);
+  if (day === await localDay(env, nowIso())) await closeOpen(env, ["checkin", "cmp-checkin", "cmp-after"], "done", "mood " + score);
   if (note) await remember(env, deps, id, "mood", "Mood " + score + "/5" + (tags ? " (" + tags + ")" : "") + ": " + note);
   const sig = crisisSignal(note);
   return { ok: true, id, day, score, energy, tags, context: ctx, crisis: sig.level >= 2 ? crisisText(await loadCfg(env)) : null, reply: moodReply(score, sig.level) };
@@ -1517,9 +1628,9 @@ export async function processInbox(env, deps, limit) {
 export function pushPayloadFor(row) {
   const ask = ["micro", "body", "contact", "care", "cmp-next", "cmp-anchor", "cmp-review", "cmp-connect"].includes(row.kind);
   return {
-    title: row.kind === "cmp-care" || row.kind === "presence" || row.kind === "cmp-presence" ? "Here with you" : row.kind === "checkin" || row.kind === "cmp-checkin" ? "How's it landing?" : row.kind === "cmp-reflect" ? "Before the day closes" : row.kind === "cmp-measure" ? "Two-weekly check" : row.kind === "cmp-connect" ? "Someone to hear from" : row.kind === "cmp-week" ? "Your week" : "One small thing",
+    title: row.kind === "cmp-care" || row.kind === "presence" || row.kind === "cmp-presence" ? "Here with you" : row.kind === "checkin" || row.kind === "cmp-checkin" ? "How's it landing?" : row.kind === "cmp-reflect" ? "Before the day closes" : row.kind === "cmp-measure" ? "Two-weekly check" : row.kind === "cmp-connect" ? "Someone to hear from" : row.kind === "cmp-week" ? "Your week" : row.kind === "cmp-after" ? "How did it go?" : "One small thing",
     body: String(row.ask || "").slice(0, 300), tag: "cmp-" + row.id, id: row.id, kind: row.kind,
-    url: row.kind === "cmp-week" ? "/companion#week" : row.kind === "checkin" || row.kind === "cmp-checkin" ? "/companion#mood" : "/companion#n=" + row.id, ask
+    url: row.kind === "cmp-week" ? "/companion#week" : row.kind === "checkin" || row.kind === "cmp-checkin" || row.kind === "cmp-after" ? "/companion#mood" : "/companion#n=" + row.id, ask
   };
 }
 // deps.pushed: { has(id), add(id) } so a ladder row is pushed once. deps.keys: VAPID keys. deps.fetch: optional.
@@ -1549,7 +1660,7 @@ export async function companionTick(env, deps, opts) {
     }
   }
   // 2. At most one companion nudge per tick, under the shared rules.
-  const st = await gatherState(env, now);
+  const st = await gatherState(env, now, deps);
   if (o.force) Object.assign(st.cfg, { quiet_start: 0, quiet_end: 0, max_per_day: 99, min_gap_min: 0 });
   const plan = planNudge(st);
   out.plan = plan.skip ? { skip: plan.skip } : { kind: plan.kind, reason: plan.reason };
@@ -1574,7 +1685,7 @@ export async function companionTick(env, deps, opts) {
 
 export async function today(env, deps) {
   await ensureSchema(env.PERSONAL);
-  const st = await gatherState(env);
+  const st = await gatherState(env, undefined, deps);
   const db = env.PERSONAL;
   const greet = st.hour < 5 ? "Still up" : st.hour < 12 ? "Morning" : st.hour < 18 ? "Afternoon" : "Evening";
   const [open, sleep, inbox, lastJournal, projects] = await Promise.all([
@@ -1591,7 +1702,7 @@ export async function today(env, deps) {
   const wk = weekWindow({ day: st.day, hour: st.hour, dow: st.dow });
   if (wk && st.cfg.week_seen !== wk) { try { const w = await weekLookback(env, st.nowIso, wk); if (w.enough) week = { week: w.week, title: w.title, lines: w.lines }; } catch (e) { week = null; } }
   return {
-    day: st.day, greeting: greet, hour: Math.round(st.hour * 100) / 100, mood: st.mood, sleep, weather, week, travel: st.away,
+    day: st.day, greeting: greet, hour: Math.round(st.hour * 100) / 100, mood: st.mood, sleep, weather, week, travel: st.away, events_today: st.events.length, light_day: st.events.length >= LIGHT_DAY_EVENTS, busy_now: st.events.some((e) => !e.allDay && e.startMs <= Date.parse(st.nowIso) && Date.parse(st.nowIso) < e.endMs),
     low_day: (st.mood.today !== null && st.mood.today <= 2) || st.crisisLevel24h >= 1,
     one_thing: suggestion, next_actions: st.nextActions.slice(0, 12), actions_done_today: st.actionsDoneToday,
     due_cards: st.dueCards, open_nudges: open, inbox_unprocessed: inbox ? Number(inbox.n) : 0, last_journal: lastJournal,
@@ -2175,12 +2286,12 @@ function renderToday(t){$('login').classList.add('hide');var v=$('v-today');v.in
  if(t.week){var wkc=el('div',{cls:'card',id:'week'},[el('h2',{text:t.week.title})].concat(t.week.lines.map(function(x){return el('div',{text:x,style:'margin:4px 0'})})));wkc.appendChild(el('div',{cls:'row',style:'margin-top:8px'},[el('button',{text:'Thanks, hide this',onclick:function(){api('/companion/api/week/seen',{json:{week:t.week.week}}).then(function(r){wkc.innerHTML='';say(wkc,r.reply||r.error)})}})]));v.appendChild(wkc)}
  if(t.support_hint)v.appendChild(el('div',{cls:'card'},[el('div',{text:t.support_hint})]));
  if(t.who5_due){var wc=el('div',{cls:'card'},[el('h2',{text:'Two-weekly check'}),el('div',{cls:'mute',text:'Five questions about the last two weeks (WHO-5). About a minute, whenever you like.'})]);wc.appendChild(el('div',{cls:'row',style:'margin-top:8px'},[el('button',{cls:'p',text:'Start',onclick:function(){who5Form(wc)}})]));v.appendChild(wc)}
- (t.open_nudges||[]).forEach(function(n){if(n.kind==='cmp-week')return;var c=el('div',{cls:'card'},[el('div',{text:n.ask})]);if(['checkin','cmp-checkin','presence','cmp-presence','cmp-measure'].indexOf(n.kind)<0){c.appendChild(el('div',{cls:'row',style:'margin-top:8px'},[el('button',{cls:'p',text:'Did it',onclick:function(){answer(n.id,'done',c,['cmp-next','cmp-anchor','cmp-connect','micro','body','contact'].indexOf(n.kind)>=0?{nudge_id:n.id}:null)}}),el('button',{text:'Not today',onclick:function(){answer(n.id,'declined',c)}})]))}v.appendChild(c)});
+ (t.open_nudges||[]).forEach(function(n){if(n.kind==='cmp-week')return;var c=el('div',{cls:'card'},[el('div',{text:n.ask})]);if(['checkin','cmp-checkin','cmp-after','presence','cmp-presence','cmp-measure'].indexOf(n.kind)<0){c.appendChild(el('div',{cls:'row',style:'margin-top:8px'},[el('button',{cls:'p',text:'Did it',onclick:function(){answer(n.id,'done',c,['cmp-next','cmp-anchor','cmp-connect','micro','body','contact'].indexOf(n.kind)>=0?{nudge_id:n.id}:null)}}),el('button',{text:'Not today',onclick:function(){answer(n.id,'declined',c)}})]))}v.appendChild(c)});
  v.appendChild(moodCard(t));
  if(!t.push_ready)v.appendChild(el('div',{cls:'card'},[el('div',{text:'Let me reach you here: a few gentle notifications a day at most, never at night.'}),el('div',{cls:'row',style:'margin-top:8px'},[el('button',{cls:'p',text:'Turn on notifications',onclick:enablePush})])]));
  if(t.one_thing){var o=el('div',{cls:'card'},[el('h2',{text:'One thing, if you want it'}),el('div',{text:t.one_thing.title+' ('+(t.one_thing.minutes||15)+' min, '+(t.one_thing.context||'@anywhere')+')'})]);o.appendChild(el('div',{cls:'row',style:'margin-top:8px'},[el('button',{cls:'p',text:'Done',onclick:function(){api('/companion/api/actions/done',{json:{id:t.one_thing.id}}).then(function(r){o.innerHTML='';say(o,r.reply||r.error);if(r.ok)rateBox(o,{action_id:t.one_thing.id})})}})]));v.appendChild(o)}
  var info=[];if(t.sleep)info.push('Quiet overnight '+t.sleep.from+' to '+t.sleep.to+' (about '+t.sleep.hours+' h, from message times).');if(t.weather&&t.weather.weather)info.push('Weather: '+(typeof t.weather.weather==='string'?t.weather.weather:(t.weather.weather.summary||JSON.stringify(t.weather.weather))).slice(0,140));
- if(t.mood&&t.mood.avg7)info.push('Mood this week: '+t.mood.avg7+' on average.');if((t.what_helps||[]).length)info.push('What has helped you: '+t.what_helps.map(function(a){return a.title}).join('; ')+'.');function pl(n,w){return n+' '+w+(n===1?'':'s')}info.push(t.actions_done_today+' done today. '+pl(t.due_cards,'card')+' ready. '+pl(t.next_actions.length,'next action')+'.');
+ if(t.mood&&t.mood.avg7)info.push('Mood this week: '+t.mood.avg7+' on average.');if((t.what_helps||[]).length)info.push('What has helped you: '+t.what_helps.map(function(a){return a.title}).join('; ')+'.');if(t.light_day)info.push('A full day ('+t.events_today+' things on). I will keep nudges few and small.');function pl(n,w){return n+' '+w+(n===1?'':'s')}info.push(t.actions_done_today+' done today. '+pl(t.due_cards,'card')+' ready. '+pl(t.next_actions.length,'next action')+'.');
  v.appendChild(el('div',{cls:'card'},[el('h2',{text:'Today'})].concat(info.map(function(x){return el('div',{cls:'mute',text:x})}))));
  if(!t.paused_until)v.appendChild(el('div',{cls:'row',style:'margin:0 0 10px'},[el('span',{cls:'mute',text:'Need quiet? Pause reach-outs:'}),el('button',{cls:'chip',text:'4 h',onclick:function(){pause(4)}}),el('button',{cls:'chip',text:'1 day',onclick:function(){pause(24)}}),el('button',{cls:'chip',text:'3 days',onclick:function(){pause(72)}})]));
  v.appendChild(el('div',{cls:'mute',text:'Companion '+VERSION+'. Nudges today: '+t.nudges_today+' of '+t.cap+'.'+(t.tick_age_min!==null&&t.tick_age_min>45?' Reach-outs are delayed: my last check ran '+t.tick_age_min+' minutes ago. Everything here still works.':'')}))}
