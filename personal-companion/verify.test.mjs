@@ -301,5 +301,122 @@ const count = (p, t) => p.prepare("SELECT COUNT(*) n FROM " + t).get().n;
   ok(n.length === 2 && n[0] === "8.34" && n[1] === "Soft Actor Critic", "needles come from the real 'not in the source:' messages, deduplicated");
   ok(gn([]).length === 0 && gn(["essay length 10"]).length === 1, "empty input gives no needles");
 }
+// ---- COMPANION-STALL-YIELD-1 (1.37.0, agent_issues 100064) ---------------------------------------------------------------------
+// reading.q08.org published nothing for 13 h: 29 of 158 rejections in 24 h were lengths ("essay length 3741") rewritten from scratch, 46 of 61
+// runs ended "time budget spent after 2 attempts", and the fact-prune loop kept re-verifying drafts that drew the same kinds of invention.
+{
+  const wordsN = (n) => Array.from({ length: n }, (_, i) => "w" + i).join(" ");
+  const pc = (n) => ({ title: "A long piece", lede: "", body_md: wordsN(n) });
+  const sh = V.shortenFeedback;
+  const f = sh(["essay length 3741"], "essay", pc(3741));
+  ok(f && /3741 words against a ceiling of 3200/.test(f) && /cut to at most 3000 words/.test(f) && /Do not start over/.test(f) && /Add nothing/.test(f) && /removing the least-sourced passages/.test(f), "an over-length essay is told to cut to 200 words under the ceiling and add nothing", f && f.slice(0, 400));
+  ok(f && /# A long piece/.test(f) && f.indexOf("w0 w1 w2") > 0 && f.indexOf("w3740") > 0, "and receives its own draft in full, title first", f && f.length);
+  ok(/cut to at most 2600 words/.test(sh(["serial length 2950"], "serial", pc(2950)) || "") && /cut to at most 3000 words/.test(sh(["notes length 3300"], "notes", pc(3300)) || ""), "serial and notes use their own ceilings (2800 and 3200)");
+  ok(sh(["essay length 3200"], "essay", pc(3200)) === null && sh(["serial length 2800"], "serial", pc(2800)) === null, "a length at the ceiling gives no shorten feedback");
+  ok(sh(["essay length 1500"], "essay", pc(1500)) === null, "a length under the ceiling is the extend path's, not this one");
+  ok(sh(["essay length 3741", "banned: tapestry"], "essay", pc(3741)) === null && sh([], "essay", pc(3741)) === null && sh(null, "essay", pc(3741)) === null, "a multi-problem list, an empty one or none gives null");
+  ok(sh(["notes length 3741"], "essay", pc(3741)) === null && sh(["essay items 5"], "essay", pc(3741)) === null && sh(["essay length 3741"], "poem", pc(3741)) === null, "another form's length and other problems give null");
+  ok(sh(["essay length 4801"], "essay", pc(4801)) === null && sh(["essay length 4800"], "essay", pc(4800)) !== null, "a draft more than 1.5 times the ceiling is a broken one and is rewritten");
+  const withLede = sh(["essay length 3300"], "essay", { title: "T", lede: "Standalone lede paragraph.", body_md: "Body text only." });
+  ok(withLede && withLede.indexOf("Standalone lede paragraph.") < withLede.indexOf("Body text only."), "a lede stored apart from the body is part of the draft the writer is shown");
+  ok(V.LENGTH_CEILING.essay === 3200 && V.LENGTH_CEILING.serial === 2800 && V.LENGTH_CEILING.notes === 3200, "the ceiling table repeats the validator's: essay 3200, serial 2800, notes 3200");
+  // the validator is unchanged: it accepts the ceiling and rejects one word over, and the floors are untouched
+  const lenOf = (form, n) => mod.validatePiece({ title: "A long piece", body_md: wordsN(n), objection: "The strongest objection is that the readings are too few to separate drift from noise." }, form, undefined, {}).problems.filter((x) => /length/.test(x));
+  ok(lenOf("essay", 3200).length === 0 && lenOf("essay", 3201).length === 1, "validatePiece accepts an essay of 3200 words and rejects 3201");
+  ok(lenOf("serial", 2800).length === 0 && lenOf("serial", 2801).length === 1, "and a serial of 2800 and 2801");
+  ok(lenOf("notes", 3200).filter((x) => /^notes length/.test(x)).length === 0 && lenOf("notes", 3201).filter((x) => /^notes length/.test(x)).length === 1, "and notes of 3200 and 3201");
+  ok(/var LENGTH_FLOOR = \{ essay: 2000, serial: 1800, notes: 1700 \};/.test(src) && /wc > 3200\)\) problems\.push\("essay length "/.test(src) && /wc > 2800\)\) problems\.push\("serial length "/.test(src), "the floors and the literal ceilings in validatePiece are untouched");
+  // generate() uses it only after the extend path declined
+  const gen = src.slice(src.indexOf("async function generate("), src.indexOf("var CRON_TABLE"));
+  ok(/var shortOnly = expandFeedback\(v\.problems, form, piece\);\n\s+if \(shortOnly\) feedback = shortOnly;\n\s+else \{[\s\S]*?var longOnly = shortenFeedback\(v\.problems, form, piece\);/.test(gen), "generate() tries the extend path first, then the shorten path");
+}
+{
+  // the claim classes and the repeat rule
+  const C = V.pruneClassOf;
+  ok(C("unsupported claim: FACT: In 1863 Dr. Quill built the first index -- not in source") === "figure" && C("unsupported claim: 4000 readers used it -- x") === "figure", "a digit makes a claim a figure (year, count, percentage)");
+  ok(C('unsupported claim: He said "no one will come" -- not in source') === "quotation", "quotation marks make a quotation");
+  ok(C("unsupported claim: FACT: the board of Delmore Quill ruled -- not in source") === "name", "a capitalised word after the first makes a name");
+  ok(C("unsupported claim: INFERENCE: the surveyors worked without iron tools -- not in source") === "assertion" && C("unsupported claim: Surveyors worked without iron tools -- x") === "assertion", "anything else is an assertion; a capitalised first word is not a name");
+  ok(C("unsupported claim: the claim 1863 -- the reason says Quill") === "figure", "the class is read from the claim, not from the reviewer's reason");
+  ok(JSON.stringify(V.pruneClassesOf(["unsupported claim: a b -- x", "unsupported claim: In 1863 -- x", "unsupported claim: c d -- x"])) === '["assertion","figure"]', "a verdict's classes are unique and sorted");
+  const R = V.pruneRepeat, A = (n) => ({ classes: ["assertion"], n }), p = (n, label) => Array.from({ length: n }, () => "unsupported claim: " + (label || "the surveyors worked without iron tools") + " -- x");
+  ok(V.PRUNE_REPEAT_AFTER === 2, "the loop is cut only after two answered prune rounds");
+  ok(R([], p(3)).recurring === false && R([], p(3)).stop === false, "the first verdict is never a repeat");
+  ok(R([A(3)], p(3)).recurring === true && R([A(3)], p(3)).stop === false, "one earlier round with the same classes recurs but does not stop the loop");
+  ok(R([A(3), A(3)], p(3)).stop === true && /^repeat assertion \(3 items after 3\)$/.test(R([A(3), A(3)], p(3)).why), "two earlier rounds, the same classes and no fewer items: stop");
+  ok(R([A(8), A(8)], p(3)).stop === false && R([A(8), A(8)], p(3)).recurring === true, "the documented 8, 8, 3 path is converging and continues");
+  ok(R([A(8), A(8)], p(8)).stop === true, "8, 8, 8 stops");
+  ok(R([A(3), A(3)], p(3, "In 1863 Dr. Quill")).recurring === false && R([A(3), A(3)], p(3, "In 1863 Dr. Quill")).stop === false, "a new class of claim is not a repeat");
+  ok(R([A(3), A(3)], []).recurring === false && R([A(3), A(3)], null).stop === false, "an empty verdict is not a repeat");
+  // generate() wires it: before pruning, on a blocked prune, and ahead of the corrective revision
+  const gen = src.slice(src.indexOf("async function generate("), src.indexOf("var CRON_TABLE"));
+  ok(/var prep = pruneRepeat\(pruneSeen, vr\.problems\);\n\s+if \(prep\.stop\) \{ pruneStopped = prep\.why;/.test(gen) && /pruneSeen\.push\(\{ classes: prep\.classes, n: \(vr\.problems \|\| \[\]\)\.length \}\);/.test(gen), "generate() checks the repeat before each prune and records the verdict a prune answered");
+  ok(gen.indexOf("if (prep.recurring) { pruneStopped = prep.why;") > 0 && gen.indexOf("if (prep.recurring) { pruneStopped = prep.why;") < gen.indexOf("if (pruneBlockFixable(pv.problems, form)) prunedShort ="), "a blocked prune with recurring classes is decided before the extension draft is kept");
+  ok(/if \(!vr\.ok && !vr\.unavailable && !pruneStopped && Date\.now\(\) - t0 < REVISE_BEFORE_MS\) \{/.test(gen), "a stopped loop skips the corrective revision");
+}
+{
+  // the attempt budget
+  const S = V.attemptBudgetStop;
+  ok(S(0, 0, 600e3) === "" && S(599e3, 0, 600e3) === "", "the first attempt has no measure and always starts");
+  ok(S(250e3, 250e3, 600e3) === "" && S(350e3, 250e3, 600e3) === "", "an attempt that can finish inside the budget starts (350 s left, 250 s cost)");
+  ok(S(351e3, 250e3, 600e3) === "249 s left, an attempt cost 250 s", "less budget left than the measured cost: no attempt", S(351e3, 250e3, 600e3));
+  ok(S(700e3, 250e3, 600e3) === "0 s left, an attempt cost 250 s", "an overspent budget reads 0 s left");
+  ok(/var GEN_BUDGET_MS = 600e3;/.test(src), "the budget is still 600 s");
+  ok(/^time budget spent after 2 attempts \(100 s left, an attempt cost 250 s/.test("time budget spent after 2 attempts (" + S(500e3, 250e3, 600e3) + "; x)") && V.stallAttemptStage("time budget spent after 2 attempts (100 s left, an attempt cost 250 s; x)") === "time budget", "the stop keeps the lead the stall digest counts as the time-budget stage");
+}
+{
+  // end to end: an over-length essay is cut, not rewritten (companion_runs #11643 "essay length 3741")
+  installFetch();
+  const p = world();
+  const longBody = goodBody() + "\n\n" + paras(4);
+  let prompt2 = "";
+  const mw = modelWorld({ draft: (n, input) => { if (n === 2) prompt2 = input.messages[1].content; return n === 1 ? longBody : goodBody(); } });
+  const out = await V.generate(makeEnv(p, mw), "essay", {});
+  const rej = p.prepare("SELECT detail FROM companion_runs WHERE status = 'rejected' ORDER BY id LIMIT 1").get();
+  const m = rej && /^validate: essay length (\d+)/.exec(rej.detail);
+  ok(m && Number(m[1]) > 3200 && Number(m[1]) <= 4800, "the long draft is rejected for its length alone", rej && rej.detail.slice(0, 120));
+  ok(/too long: \d+ words against a ceiling of 3200/.test(prompt2) && /cut to at most 3000 words/.test(prompt2) && !/failed validation for these reasons/.test(prompt2), "the next attempt is asked to cut the draft, not to try again", prompt2.slice(0, 600));
+  ok(prompt2.indexOf("The strongest objection is that fourteen readings") > 0, "and is shown the draft it must cut");
+  ok(out.ok === true && mw.log.writer === 2 && count(p, "companion_pieces") === 1, "the second draft publishes through every gate", { out, log: mw.log });
+  ok(p.prepare("SELECT COUNT(*) n FROM companion_runs WHERE status = 'stage' AND detail LIKE 'shorten: essay length%against a ceiling of 3200%'").get().n === 1, "the run log has one shorten stage row");
+}
+{
+  // end to end: a draft that keeps drawing the same kind of invented claim is not pruned five times
+  installFetch();
+  const p = world();
+  const TREES = ["alder", "birch", "cedar", "dogwood", "elm", "fir", "gum", "hazel", "ironwood", "juniper", "kauri", "larch", "maple", "nutmeg", "oak", "pine", "quince", "rowan", "spruce", "teak", "upas", "viburnum", "willow", "yew", "zelkova", "ash", "beech", "cypress", "elder", "fig"];
+  const BAD = TREES.map((t) => "Yet the surveyors of the " + t + " crew worked without iron tools and wrote nothing of it down.");
+  const withBad = goodBody().replace("\n\n## What would falsify this", " " + BAD.join(" ") + "\n\n## What would falsify this");
+  const mw = modelWorld({
+    draft: () => withBad,
+    review: (m, sys) => {
+      const d = sys.indexOf("--- DRAFT ---") >= 0 ? sys.slice(sys.indexOf("--- DRAFT ---")) : sys;
+      const hits = BAD.filter((b) => d.indexOf(b.slice(0, 60)) !== -1).slice(0, 3);
+      return hits.length ? JSON.stringify({ unsupported: hits.map((b) => "FACT: " + b + " -- source does not mention iron tools"), verdict: "fail" }) : '{"unsupported":[],"verdict":"pass"}';
+    }
+  });
+  const out = await V.generate(makeEnv(p, mw), "essay", {});
+  const trail = p.prepare("SELECT detail FROM companion_runs WHERE detail LIKE 'fact prune trail:%' ORDER BY id LIMIT 1").get();
+  ok(trail && /^fact prune trail: r1 -3 \(\d+ words\), r2 -3 \(\d+ words\), r3 stopped: repeat assertion \(3 items after 3\)/.test(trail.detail) && !/ r4 /.test(trail.detail), "the first attempt's prune is cut at the third round with the repeat in the trail", trail && trail.detail);
+  ok(p.prepare("SELECT COUNT(*) n FROM companion_runs WHERE detail LIKE '%one corrective revision%' OR detail LIKE '%extending the pruned draft%'").get().n === 0, "and no corrective revision or extension is spent on it");
+  ok(out.ok === false && count(p, "companion_pieces") === 0, "nothing is published from a draft that keeps inventing (fail closed, the gate is unchanged)", out);
+  ok(p.prepare("SELECT COUNT(*) n FROM companion_runs WHERE status = 'rejected' AND detail LIKE 'fact-check factcheck: %'").get().n >= 1, "the attempt ends as a fact-check rejection and the next attempt writes a new draft");
+}
+{
+  // end to end: no attempt is started with less budget left than the longest attempt of the run cost (fake clock, 250 s per writer call)
+  installFetch();
+  const p = world();
+  const realNow = Date.now;
+  let clock = realNow.call(Date);
+  Date.now = () => clock;
+  const shortDraft = "# Drift in the readings\n\n" + LEDE + "\n\n" + paras(1);
+  const mw = modelWorld({ draft: () => { clock += 250e3; return shortDraft; } });
+  let out;
+  try { out = await V.generate(makeEnv(p, mw), "essay", {}); } finally { Date.now = realNow; }
+  const row = p.prepare("SELECT detail FROM companion_runs WHERE status = 'stage' AND detail LIKE 'time budget spent%' ORDER BY id").all();
+  ok(mw.log.writer === 2, "two attempts of 250 s start; the third would have 100 s left and does not", mw.log);
+  ok(row.length === 1 && /^time budget spent after 2 attempts \(100 s left, an attempt cost 250 s/.test(row[0].detail), "the stop is a stage row with the time-budget lead", row);
+  ok(out.ok === false && count(p, "companion_pieces") === 0, "the run fails closed", out);
+}
 console.log(pass + " passed, " + fail + " failed");
 if (fail) process.exit(1);
