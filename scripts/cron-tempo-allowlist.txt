@@ -6,5 +6,4 @@
 # crons of the 11 LIVE workers that are still slower than hourly on 2026-10-19; RETIRED and FOLDED directories are never
 # deployed and are not audited. Each worker has a CRON-HOURLY-FLOOR-1:<worker> issue in qnfo-audit.agent_issues with the
 # handler facts (branches on the cron string or not, side effects) and the gating the conversion needs. CRON-GRID-1
-# (2026-10-19) converted ten of them; personal-api is under another session's live work claim and follows next.
-personal-api|5 5 * * *|2026-11-02|CRON-HOURLY-FLOOR-1:personal-api
+# (2026-10-19) converted all eleven, so the list is empty; a new entry needs an expiry and a tracking issue.
