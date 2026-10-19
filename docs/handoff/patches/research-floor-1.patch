@@ -1,0 +1,1309 @@
+From 830fb5d0f5a4155134c3f8914019eebf791345da Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Mon, 19 Oct 2026 09:50:13 +0000
+Subject: [PATCH] RESEARCH-FLOOR-1: revise may not shrink a draft under the
+ publish floor, complete extends a short draft to it (qnfo-research-exec
+ 0.21.0-floor)
+
+Root cause: a complete draft under the 20,000-char publish floor (or under the reference floor) failed verify on gate-length /
+gate-refcount, and the only tool for those gates was the find/replace patch reviser, which cannot add text; its strict retry even
+asked the model to replace the offending sentence with an empty string. stageRevise also accepted any patch result of at least
+10,000 chars, so a revise could take a 41k paper to 17k. The complete stage exited as soon as the paper was structurally complete.
+Measured 2026-10-19: 113 of 255 complete events in 24 h under 20,000 chars, 21 gate-length / gate-refcount / HARD-unresolved
+RESEARCH-TERMINAL issues in 24 h, 15 poison-parks in one day. The reviewer bibliography truncation (defect a) was already fixed in 0.19.0.
+
+Change (qnfo-research-exec 0.19.6 -> 0.21.0, minor: new routes and a re-arm decision the worker takes on its own):
+- REVISE-SHRINK-GUARD-1: a patch that takes a paper from at or above its floor to below it, cuts more than 20% of it in one pass
+  (largest of 60 measured applied patches: 16%), or drops the cited references under the reference floor counts as not applied
+  (event revise-shrink-refused); the second-model path runs with the length floor and the allowed removal stated in the per-call
+  text (cached prefix unchanged). ops_config research_revise_shrink_guard = measure restores the old behaviour.
+- COMPLETE-TO-FLOOR-1: stageComplete extends a complete paper under the floor with one grounded section per round (new EXTEND task,
+  inserted before the Discussion, cites the uncited bibliography entries, at most 6 rounds, stall rule, goal 1.2x the floor because a
+  single patch shrinks up to 16%). stageVerify routes a first-pass gate-length / gate-refcount-only failure to complete with
+  verifyPass 1 (the second verify stays terminal); stageRevise routes floor-only fixes to complete without a patch call, and a patched
+  paper still short is extended before review. ops_config research_floor_extend = off restores the old exit.
+- FLOOR-REARM-1: the migration cannot re-queue anything (it runs at merge, before the deploy is live); it freezes the 31 candidates
+  in bak_20261019_research_parked and the corrected worker's hourly floorRearmTick returns 5 per run to complete, once each. A missing
+  backup table or park_rearm = off makes it a no-op.
+- Migration migrations/2026-10-19-research-rearm-after-repair.sql: the backup, control_registry rows (gate, guard, cap), failure_modes
+  research-draft-below-floor and research-revise-shrink with fm-<key> detector contracts, the closing probe of issue 99913 (its own was a
+  vacuous closure check) as a separate UPDATE plus a separate activation, and the decision_log row.
+
+Tests: qnfo-research-exec/revise-shrink-guard.test.mjs (28 checks) and complete-to-floor.test.mjs (59 checks, incl. the migration, the
+detectors and the 99913 probe on node:sqlite) run the real stageRevise, stageComplete, stageVerify, floorRearmTick and the migration.
+Against the base worker.js (with stubs for the functions it lacks) they fail 6 + crash and 26; with the change 28/28 and 59/59.
+
+Issues: QNFO/qnfo-workers (D1 agent_issues 99913, 99943, 100024, 100026; GitHub #2800 closed by 0.19.0); clusters
+research-pipeline-1/research-short-drafts-blind-reviewer-terminal-parks and research-pipeline-2/research-terminal-length-floor.
+
+Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>
+Claude-Session: session_01QpQv19uh1padRwZ3u1r766
+---
+ ...2026-10-19-research-rearm-after-repair.sql |  86 ++++++
+ qnfo-research-exec/complete-to-floor.test.mjs | 277 ++++++++++++++++++
+ qnfo-research-exec/deployed-current.worker.js | 227 ++++++++++++--
+ .../revise-shrink-guard.test.mjs              | 130 ++++++++
+ qnfo-research-exec/worker.js                  | 227 ++++++++++++--
+ 5 files changed, 911 insertions(+), 36 deletions(-)
+ create mode 100644 migrations/2026-10-19-research-rearm-after-repair.sql
+ create mode 100644 qnfo-research-exec/complete-to-floor.test.mjs
+ create mode 100644 qnfo-research-exec/revise-shrink-guard.test.mjs
+
+diff --git a/migrations/2026-10-19-research-rearm-after-repair.sql b/migrations/2026-10-19-research-rearm-after-repair.sql
+new file mode 100644
+index 00000000..35fcc8fd
+--- /dev/null
++++ b/migrations/2026-10-19-research-rearm-after-repair.sql
+@@ -0,0 +1,86 @@
++-- RESEARCH-FLOOR-1 data side (2026-10-19, pillar research; agent_issues 99913 RESEARCH-REVISE-LOOP-1, clusters
++-- research-pipeline-1/research-short-drafts-blind-reviewer-terminal-parks and research-pipeline-2/research-terminal-length-floor).
++-- qnfo-research-exec 0.21.0 stops a revise patch from shrinking a paper under the publish floor (REVISE-SHRINK-GUARD-1), makes the
++-- complete stage extend a short paper to the floor (COMPLETE-TO-FLOOR-1) and routes gate-length / gate-refcount findings there
++-- instead of to the find/replace reviser, which cannot add text. Measured 2026-10-19 on cloud_ops_events: 113 of 255 complete events
++-- in 24 h were under 20,000 chars; 21 gate-length / gate-refcount / HARD-unresolved RESEARCH-TERMINAL issues in 24 h; 15 poison-parks
++-- in one day. Single-patch shrink on 60 applied revise-patch events was at most 16% (20369 -> 18060, 40392 -> 34061).
++--
++-- WHY THIS FILE RE-QUEUES NOTHING. apply-migrations runs a file once, at merge, before the deploy is live. A re-arm UPDATE guarded on
++-- "the fixed worker is live" would therefore never fire, and an unguarded one would queue 31 rows into the code that parked them.
++-- Chosen instead: this file only FREEZES the candidates in bak_20261019_research_parked (rows parked as PARKED-POISON-1 with
++-- gate-length, gate-refcount, HARD findings unresolved or no applicable edit, terminal_rearms = 0). The re-arm itself is
++-- floorRearmTick in the corrected worker (FLOOR-REARM-1), which runs in its hourly sweep: it exists only in 0.21.0, reads the
++-- frozen list (no table, no re-arm), returns 5 rows per run to stage complete (the draft is in R2), once each (terminal_rearms
++-- 0 -> 1), and stops with ops_config park_rearm = off. No row can be queued before the fix is live, and the queue is metered
++-- (31 rows in about 7 hours), not flooded. Rows that park again are not re-armed a second time.
++--
++-- Also here: (1) control_registry rows for the gate, the guard and the cap the worker adds (DOCTRINE-1), (2) the failure modes with
++-- their fm-<key> detectors (ANTIFRAGILE-1), (3) a closing probe for issue 99913 that measures the defect (its own was a vacuous
++-- 'closed' check) as a statement of its own, (4) the decision_log row.
++-- APPLY-BY: ci
++-- DB: qnfo-audit
++-- BACKUP: bak_20261019_research_parked
++-- Rollback: UPDATE research_queue SET status = (SELECT b.status FROM bak_20261019_research_parked b WHERE b.id = research_queue.id), stage = (SELECT b.stage FROM bak_20261019_research_parked b WHERE b.id = research_queue.id), error = (SELECT b.error FROM bak_20261019_research_parked b WHERE b.id = research_queue.id), recover_count = (SELECT b.recover_count FROM bak_20261019_research_parked b WHERE b.id = research_queue.id), terminal_rearms = (SELECT b.terminal_rearms FROM bak_20261019_research_parked b WHERE b.id = research_queue.id), attempt = (SELECT b.attempt FROM bak_20261019_research_parked b WHERE b.id = research_queue.id), context = (SELECT b.context FROM bak_20261019_research_parked b WHERE b.id = research_queue.id) WHERE status = 'queued' AND instr(error, 'FLOOR-REARM-1') = 1 AND id IN (SELECT id FROM bak_20261019_research_parked); DELETE FROM control_registry WHERE control IN ('research-floor-extend', 'research-revise-shrink-guard', 'research-floor-rearm'); DELETE FROM remediation_contracts WHERE class IN ('fm-research-draft-below-floor', 'fm-research-revise-shrink'); DELETE FROM failure_modes WHERE fm_key IN ('research-draft-below-floor', 'research-revise-shrink'); UPDATE remediation_contracts SET verify_probe = 'SELECT ''closed'' AS expected, (SELECT CASE WHEN status IN (''closed'', ''resolved'') THEN ''closed'' ELSE NULL END FROM agent_issues WHERE id = 99913) AS observed', status = 'superseded' WHERE class = 'issue-99913'; decision_log is append-only and keeps its row.
++-- spof-review: no new single point of failure. The extension is one more writer call on the complete stage (the stage already calls the same writers);
++-- its second paths are the round budget (6) and the stall rule (3), after which verify decides as before, and ops_config research_floor_extend = off.
++
++CREATE TABLE IF NOT EXISTS bak_20261019_research_parked AS
++SELECT id, status, stage, error, recover_count, terminal_rearms, attempt, context, claimed_at, strftime('%Y-%m-%dT%H:%M:%SZ', 'now') AS backed_up_at
++FROM research_queue
++WHERE status = 'wontfix' AND stage = 'parked' AND terminal_rearms = 0
++  AND substr(error, 1, 16) = 'PARKED-POISON-1:'
++  AND (instr(error, 'gate-length') > 0 OR instr(error, 'gate-refcount') > 0 OR instr(error, 'HARD findings unresolved') > 0 OR instr(error, 'no applicable edit') > 0);
++
++INSERT OR REPLACE INTO control_registry (control, location, kind, guards_against, critical_path, disposition, disposition_state, alternate_path, alternate_tested_at, evidence, issue_id, reviewed_at) VALUES
++  ('research-floor-extend', 'qnfo-research-exec stageComplete (COMPLETE-TO-FLOOR-1), routeVerifyToFloor and the floor route in stageRevise; ops_config research_floor_extend', 'gate',
++   'a complete paper under the 20,000-char publish floor or under the reference floor reaching review and verify, failing gate-length / gate-refcount and parking', 1, 'keep', 'applied',
++   'ops_config research_floor_extend = off restores the old exit (the paper goes to review and verify decides); the extension gives up after 6 rounds or 3 stalled rounds and verify decides as before; the second verify pass stays terminal (verifyPass)',
++   NULL, 'cloud_ops_events 2026-10-19: 113 of 255 complete events under 20,000 chars in 24 h, 21 floor/HARD RESEARCH-TERMINAL issues in 24 h, 15 poison-parks in a day; the patch reviser (find/replace) cannot add text', 99913, strftime('%Y-%m-%dT%H:%M:%SZ', 'now')),
++  ('research-revise-shrink-guard', 'qnfo-research-exec stageRevise (REVISE-SHRINK-GUARD-1); ops_config research_revise_shrink_guard', 'guard',
++   'a revise patch that takes a paper from at or above the publish floor to below it, cuts more than 20% of it in one pass, or drops its cited references under the reference floor', 1, 'keep', 'applied',
++   'a refused answer falls into the existing second-model path with the limit stated; ops_config research_revise_shrink_guard = measure logs the refusal and applies the patch; the 20% bound is above the largest of 60 measured single-patch shrinks (16%)',
++   NULL, 'cloud_ops_events revise-patch 2026-10-19: 60 applied patches, out_chars versus the preceding complete chars, shrink 0-16%; a 41k paper was cut to 17k by one patch before the guard', 99913, strftime('%Y-%m-%dT%H:%M:%SZ', 'now')),
++  ('research-floor-rearm', 'qnfo-research-exec floorRearmTick (FLOOR-REARM-1), hourly sweep; bak_20261019_research_parked', 'cap',
++   'queueing the rows parked on the floor defects into the code that parked them, or all at once', 0, 'keep', 'applied',
++   'ops_config park_rearm = off stops it; 5 rows per run, once each (terminal_rearms 0 -> 1); a missing backup table is a no-op; the Rollback line restores each row from the backup',
++   NULL, 'research_queue 2026-10-19: 31 PARKED-POISON-1 rows with gate-length, gate-refcount, HARD findings unresolved or no applicable edit and terminal_rearms = 0', 99913, strftime('%Y-%m-%dT%H:%M:%SZ', 'now'));
++
++INSERT OR REPLACE INTO failure_modes (fm_key, failure_mode, root_cause, remediation, detector, probe_class, first_seen, issue_id, trigger_condition, symptom, blast_radius) VALUES
++  ('research-draft-below-floor', 'A stage that can only edit is asked to add text, so a draft under the length or reference floor cycles until it parks',
++   'a complete draft landed at 14.6k-19.9k chars under the 20,000-char publish floor; verify failed gate-length / gate-refcount and the only tool for it was the find/replace patch reviser, whose strict retry even asked to replace sentences with an empty string',
++   'qnfo-research-exec 0.21.0 COMPLETE-TO-FLOOR-1: complete extends a complete paper to 1.2x the floor with grounded sections that cite the uncited bibliography entries; verify and revise route floor-only findings to complete; the rows already parked are returned by FLOOR-REARM-1',
++   'fewer than 3 complete events with floor=gave-up in 24 h after the first event of the fixed worker', 'fm-research-draft-below-floor', '2026-10-19', 99913,
++   'a writer reply shorter than the floor, or a bibliography with entries the paper does not cite', '113 of 255 complete events in 24 h under 20,000 chars; gate-length / gate-refcount RESEARCH-TERMINAL issues filed every day',
++   'research throughput: about 45% of terminal rows lost to the length gates'),
++  ('research-revise-shrink', 'A revise patch deletes text to resolve a finding and takes the paper under the floor it must keep',
++   'applyRevisePatch accepted any result of at least 10,000 chars while verify requires 20,000, and the strict retry told the model to replace the offending sentence with an empty string; a 41k paper was cut to 17k',
++   'qnfo-research-exec 0.21.0 REVISE-SHRINK-GUARD-1: a patch under the floor, over 20% shorter or with fewer cited references than the floor is refused (revise-shrink-refused) and the second model runs with the limit and the allowed removal stated',
++   'fewer than 3 revise-noop events naming a refused shrink in 24 h after the first event of the fixed worker', 'fm-research-revise-shrink', '2026-10-19', 99913,
++   'a HARD finding whose only fix in the model reply is deleting a long block', 'revise-patch out_chars below the floor after a 41k draft; poison-parks on gate-length after revise',
++   'papers in revise: each refused patch is one more model call, bounded by the second-model path and the recover loop');
++
++INSERT OR REPLACE INTO remediation_contracts (class, issue_id, precondition, action, verify_probe, verify_transport, max_attempts, escalate_to, expected_cadence_h, status, next_due_at) VALUES
++  ('fm-research-draft-below-floor', NULL, 'COMPLETE-TO-FLOOR-1', 'failure-mode detector',
++   'SELECT ''1'' AS expected, CASE WHEN (SELECT COUNT(*) FROM cloud_ops_events WHERE job = ''qnfo-research-exec'' AND kind = ''complete'' AND instr(text, '' floor=gave-up'') > 0 AND ts > strftime(''%Y-%m-%dT%H:%M:%SZ'', ''now'', ''-24 hours'') AND ts > COALESCE((SELECT MIN(ts) FROM cloud_ops_events WHERE job = ''qnfo-research-exec'' AND kind = ''complete'' AND instr(text, '' floor_rounds='') > 0), ''9999'')) < 3 THEN ''1'' ELSE ''0'' END AS observed',
++   'd1-query', 3, 'qnfo-fleet-control', 1, 'active', datetime('now')),
++  ('fm-research-revise-shrink', NULL, 'REVISE-SHRINK-GUARD-1', 'failure-mode detector',
++   'SELECT ''1'' AS expected, CASE WHEN (SELECT COUNT(*) FROM cloud_ops_events WHERE job = ''qnfo-research-exec'' AND kind = ''revise-noop'' AND instr(text, ''shrink refused:'') > 0 AND ts > strftime(''%Y-%m-%dT%H:%M:%SZ'', ''now'', ''-24 hours'') AND ts > COALESCE((SELECT MIN(ts) FROM cloud_ops_events WHERE job = ''qnfo-research-exec'' AND kind = ''complete'' AND instr(text, '' floor_rounds='') > 0), ''9999'')) < 3 THEN ''1'' ELSE ''0'' END AS observed',
++   'd1-query', 3, 'qnfo-fleet-control', 1, 'active', datetime('now'));
++
++UPDATE remediation_contracts SET verify_probe = 'SELECT ''ok'' AS expected, CASE WHEN (SELECT COUNT(*) FROM cloud_ops_events WHERE job = ''qnfo-research-exec'' AND kind = ''complete'' AND instr(text, '' floor_rounds='') > 0 AND instr(text, '' complete=true'') > 0 AND ts >= strftime(''%Y-%m-%dT%H:%M:%SZ'', ''now'', ''-24 hours'')) >= 20 AND (SELECT COUNT(*) FROM cloud_ops_events WHERE job = ''qnfo-research-exec'' AND kind = ''complete'' AND instr(text, '' floor_rounds='') > 0 AND instr(text, '' floor=gave-up'') > 0 AND ts >= strftime(''%Y-%m-%dT%H:%M:%SZ'', ''now'', ''-24 hours'')) * 20 < (SELECT COUNT(*) FROM cloud_ops_events WHERE job = ''qnfo-research-exec'' AND kind = ''complete'' AND instr(text, '' floor_rounds='') > 0 AND instr(text, '' complete=true'') > 0 AND ts >= strftime(''%Y-%m-%dT%H:%M:%SZ'', ''now'', ''-24 hours'')) AND (SELECT COUNT(*) FROM agent_issues WHERE title LIKE ''RESEARCH-TERMINAL%'' AND (title LIKE ''%gate-length%'' OR title LIKE ''%gate-refcount%'' OR title LIKE ''%HARD findings unresolved%'') AND created_at > (CAST(strftime(''%s'', ''now'') AS INTEGER) - 86400) * 1000) = 0 THEN ''ok'' ELSE ''defect'' END AS observed'
++WHERE class = 'issue-99913';
++
++UPDATE remediation_contracts SET status = 'active', last_verdict = NULL, next_due_at = datetime('now')
++WHERE class = 'issue-99913' AND status = 'superseded';
++
++INSERT INTO decision_log (actor, assumption, action, evidence, outcome, blast_radius, rollback_path, capability_gain, predicted_outcome, reach_gain, surfaces_tested)
++SELECT 'session_01QpQv19uh1padRwZ3u1r766', 'a paper under the publish floor is extended by a writer, not edited by a find/replace reviser, and a revise patch must not take a paper under the floor it was above',
++ 'RESEARCH-FLOOR-1: qnfo-research-exec 0.21.0 REVISE-SHRINK-GUARD-1, COMPLETE-TO-FLOOR-1 and FLOOR-REARM-1; migrations/2026-10-19-research-rearm-after-repair.sql freezes the 31 parked candidates, adds the controls, the failure modes with fm-<key> detectors and a closing probe for issue 99913',
++ 'cloud_ops_events 2026-10-19: 113 of 255 complete events under 20,000 chars in 24 h, 21 floor/HARD RESEARCH-TERMINAL issues in 24 h, 15 poison-parks in a day; 60 applied revise patches shrank a paper by at most 16%; the auditors and verifiers upheld the diagnosis',
++ 'applied through the canonical path on merge; the re-arm runs in the deployed worker', 'research_queue rows in complete, revise and verify; model calls on the complete stage (about one writer call per short paper, 6 at most); the 31 parked rows return one at a time',
++ 'revert qnfo-research-exec; ops_config research_floor_extend = off, research_revise_shrink_guard = measure, park_rearm = off; the migration rollback line restores the re-armed rows from bak_20261019_research_parked',
++ 'the complete stage writes the missing length and citations; the fleet re-arms papers its own earlier code parked',
++ 'complete events with floor=gave-up under 5% of 20 or more in 24 h and no gate-length / gate-refcount RESEARCH-TERMINAL issue in 24 h', 'none',
++ 'real stageComplete, stageVerify, stageRevise, floorRearmTick and the migration against in-memory mocks and node:sqlite (complete-to-floor.test.mjs, revise-shrink-guard.test.mjs)'
++WHERE NOT EXISTS (SELECT 1 FROM decision_log WHERE instr(action, 'RESEARCH-FLOOR-1:') = 1);
+diff --git a/qnfo-research-exec/complete-to-floor.test.mjs b/qnfo-research-exec/complete-to-floor.test.mjs
+new file mode 100644
+index 00000000..d7fa1a46
+--- /dev/null
++++ b/qnfo-research-exec/complete-to-floor.test.mjs
+@@ -0,0 +1,277 @@
++// RESEARCH-FLOOR-1 (qnfo-research-exec 0.21.0, agent_issues 99913): complete-to-floor, the gate-length / gate-refcount routing and
++// the re-arm of the rows parked on the defect. Runs the worker's real stageComplete, stageVerify, stageRevise, floorShortfall,
++// floorRearmTick and parkRearmTick against in-memory R2, AI and D1 mocks (node:sqlite for the re-arm), and the real migration
++// file against synthetic rows. Offline, no network.
++// Run: node qnfo-research-exec/complete-to-floor.test.mjs   -> prints "N passed, 0 failed"
++import { DatabaseSync } from "node:sqlite";
++import { readFileSync } from "node:fs";
++import { stageComplete, stageVerify, stageRevise, floorShortfall, floorRearmTick, parkRearmTick, finalGates, paperCompleteness, FLOOR_EXTEND_TARGET } from "./worker.js";
++
++let pass = 0, fail = 0;
++const ok = (c, m, d) => { if (c) pass++; else { fail++; console.log("FAIL " + m + (d !== undefined ? " -- " + JSON.stringify(d).slice(0, 700) : "")); } };
++
++// ---- fixtures: a complete paper of 19,793..19,999 chars that cites 6 of 12 bibliography entries ----
++const S = (i) => "Step " + i + " of the derivation fixes the intermediate value " + (i * 7) + " from the stated inputs and carries it forward with the arithmetic shown. ";
++const run = (from, n, cite) => Array.from({ length: n }, (_, k) => S(from + k)).join("") + (cite ? "Prior work [" + cite + "] supplies the comparison used in this step. " : "");
++const sec = (h, from, n, cite) => "## " + h + "\n\n" + run(from, n, cite) + "\n\n";
++const BIB = 12;
++const grounding = "INPUT BLOCK\n\n## Bibliography\n" + Array.from({ length: BIB }, (_, i) => "[" + (i + 1) + "] arXiv:2401.0000" + (i + 1) + " | Work number " + (i + 1)).join("\n") + "\n";
++const refList = (nums) => "## References\n\n" + nums.map((k) => "[" + k + "] Work number " + k + ". arXiv:2401.0000" + k + ". https://arxiv.org/abs/2401.0000" + k).join("\n") + "\n";
++function mkPaper(analysisSentences, cited) {
++  return "# A paper about a model\n\n## Abstract\n\nContext, gap, approach, result and practice are stated here in order.\n\n"
++    + sec("1. Introduction", 1, 12, cited[0]) + sec("2. Background and Related Work", 20, 12, cited[1]) + sec("3. Methods", 40, 12, cited[2])
++    + sec("4. Analysis", 60, analysisSentences, cited[3]) + sec("5. Results", 400, 12, cited[4]) + sec("6. Discussion", 420, 12, cited[5])
++    + sec("7. Practical Implications and Engineering Pathways", 440, 12, cited[6]) + sec("8. Conclusion", 460, 6, cited[7]) + refList(cited.filter(Boolean));
++}
++const CITED = [1, 2, 3, 4, 5, 6];
++let SHORT = "";
++for (let n = 20; n < 400; n++) { SHORT = mkPaper(n, CITED); if (SHORT.length >= 19793) break; }
++ok(SHORT.length >= 19793 && SHORT.length < 20000 && paperCompleteness(SHORT).complete, "fixture: a complete paper of 19,793-19,999 chars", { len: SHORT.length, pc: paperCompleteness(SHORT) });
++const LONG = mkPaper(120, [1, 2, 3, 4, 5, 6, 7, 8]);
++ok(LONG.length >= 24000 && paperCompleteness(LONG).complete, "fixture: a complete paper above the extension goal", LONG.length);
++
++// The section a writer would return for the EXTEND task: a heading, long grounded text, and citations of the uncited entries.
++const EXT_SECTION = "## Extended Derivations and Worked Examples\n\n" + run(900, 40, "7") + run(950, 8, "8, 9") + "Further work [10] and [11] and [12] bears on the same step. " + run(960, 12) + "\n";
++
++function mkEnv(opts) {
++  const o = opts || {};
++  const store = { "pipeline/r1/reconciled.md": o.paper || SHORT, "pipeline/r1/grounding.md": o.grounding === undefined ? grounding : o.grounding };
++  if (o.fixes) store["pipeline/r1/fixes.json"] = o.fixes;
++  const sqls = [], calls = [];
++  const D1 = { prepare(sql) { let args = []; const q = { bind(...x) { args = x; return q; }, async run() { sqls.push({ sql, args }); return { meta: { changes: 1 } }; }, async first() { if (/FROM ops_config/.test(sql) && o.flags && o.flags[args[0]] !== undefined) return { value: o.flags[args[0]] }; return null; }, async all() { return { results: [] }; } }; return q; } };
++  const MIRROR = { async get(k) { const v = store[k]; return v == null ? null : { text: async () => v }; }, async put(k, v) { store[k] = v; } };
++  const AI = { async run(model, input) { const prompt = input.messages[0].content; calls.push({ model, prompt }); const a = o.answer; return { response: typeof a === "function" ? a(calls.length, prompt) : a === undefined ? "[]" : a }; } };
++  return { env: { AI, QNFO_AUDIT: D1, MIRROR }, sqls, calls, store };
++}
++const events = (t) => t.sqls.filter((s) => /INSERT INTO cloud_ops_events/.test(s.sql)).map((s) => ({ kind: s.args[2], text: s.args[3], status: s.args[6] }));
++const stageUpdate = (t) => t.sqls.filter((s) => /UPDATE research_queue SET stage=/.test(s.sql)).map((s) => ({ sql: s.sql, ctx: s.args[0] ? JSON.parse(s.args[0]) : null }));
++const row = (extra) => Object.assign({ id: "r1", context: "{}", recover_count: 0, source: "idea-hub", stage: "complete", status: "researching" }, extra || {});
++const gateOk = (paper) => finalGates(paper, { bibCount: BIB, minChars: 20000, structure: true });
++
++// 0. The fixture fails both floor gates before the change.
++{
++  const g = finalGates(SHORT, { bibCount: BIB, minChars: 20000, structure: true });
++  ok(!g.ok && g.fixes.some((f) => f.id === "gate-length") && g.fixes.some((f) => f.id === "gate-refcount"), "the short fixture fails gate-length and gate-refcount", g.reason);
++  const sh = floorShortfall(row(), SHORT, grounding, false);
++  ok(sh.need && sh.len && sh.refs && sh.floor === 20000 && sh.uncited.length === 6 && sh.target === Math.ceil(20000 * FLOOR_EXTEND_TARGET), "floorShortfall names the length, the references and the 6 uncited entries", sh);
++  ok(!floorShortfall(row(), LONG, grounding, false).need, "a paper above the floor with 8 references needs nothing");
++  ok(!floorShortfall(row({ source: "remediation" }), SHORT, grounding, false).len, "a remediation row keeps its own (8,000-char) length floor");
++  ok(FLOOR_EXTEND_TARGET >= 1.1, "the extension goal is at least 1.1x the floor");
++}
++
++// 1. complete extends a 19.8k paper with 6 cited references to the floor and cites 8 or more.
++{
++  const t = mkEnv({ answer: EXT_SECTION });
++  const res = await stageComplete(t.env, row());
++  const out = t.store["pipeline/r1/reconciled.md"];
++  ok(out.length >= 22000, "the stored paper reaches 22,000 chars or more", out.length);
++  ok(res && res.ok === true && res.stage === "complete->review" && res.floor === "ok", "the row advances to review once at the floor", res);
++  ok(gateOk(out).ok, "finalGates (the verify gate set) passes on the stored paper", gateOk(out).reason);
++  ok(((out.split("## References")[1] || "").match(/^\[\d+\]/gm) || []).length >= 8, "the rendered reference list holds 8 or more entries", (out.split("## References")[1] || "").slice(0, 200));
++  ok(/## 5\. Results[\s\S]*## 6\. Extended Derivations and Worked Examples[\s\S]*## 7\. Discussion/.test(out) && /## 8\. Practical/.test(out) && /## 9\. Conclusion/.test(out), "the section sits between Results and Discussion and the later headings are renumbered", out.match(/^## .*$/gm));
++  ok(paperCompleteness(out).complete, "the extended paper is still structurally complete", paperCompleteness(out).reasons);
++  ok(t.calls.length === 1 && /=== TASK: EXTEND ===/.test(t.calls[0].prompt) && /NOT YET CITED: \[7\], \[8\], \[9\], \[10\], \[11\], \[12\]/.test(t.calls[0].prompt) && /LENGTH: at least \d+ characters/.test(t.calls[0].prompt), "the EXTEND prompt names the length and the six uncited entries", t.calls.map((c) => c.prompt.slice(-420)));
++  const up = stageUpdate(t);
++  ok(up.length === 1 && /stage='review'/.test(up[0].sql) && up[0].ctx.extendFor === undefined && up[0].ctx.floorRounds === undefined, "the review context carries no floor fields", up);
++  const ev = events(t);
++  ok(ev.some((e) => e.kind === "floor-extend" && /round=1 chars \d+->\d+ floor=20000 target=24000 uncited=6/.test(e.text)) && ev.some((e) => e.kind === "complete" && / floor=ok floor_rounds=1/.test(e.text) && /chars=\d{5}/.test(e.text)), "floor-extend and complete events record the round", ev);
++}
++
++// 2. A paper at the extension goal makes no model call.
++{
++  const t = mkEnv({ paper: LONG, answer: "unused" });
++  const res = await stageComplete(t.env, row());
++  ok(t.calls.length === 0 && res.stage === "complete->review" && res.floor === "ok", "a paper above the floor goes to review with no call", res);
++}
++
++// 3. A writer that adds nothing: two stalled rounds stay in complete with the floor context, the third gives up to review
++//    (verify then decides, once); the stored paper is untouched.
++{
++  const t = mkEnv({ answer: "No." });
++  const r1 = await stageComplete(t.env, row());
++  ok(r1.ok && r1.stage === "complete" && t.calls.length >= 2, "two stalled extension rounds stay in complete", r1);
++  const up1 = stageUpdate(t).concat(t.sqls.filter((s) => /UPDATE research_queue SET context=/.test(s.sql)).map((s) => ({ ctx: JSON.parse(s.args[0]) })));
++  const c1 = up1[up1.length - 1].ctx;
++  ok(c1.extendFor === "floor" && c1.completeStall === 2 && c1.floorRounds === 2, "the context carries the floor rounds and the stall count", c1);
++  const t2 = mkEnv({ answer: "No." });
++  const r2 = await stageComplete(t2.env, row({ context: JSON.stringify(c1) }));
++  ok(r2.ok && r2.stage === "complete->review" && r2.floor === "gave-up", "the third stalled round hands the paper to review as gave-up", r2);
++  ok(t2.store["pipeline/r1/reconciled.md"] === SHORT, "a stalled extension leaves the stored paper unchanged");
++  ok(events(t2).some((e) => e.kind === "complete" && / floor=gave-up/.test(e.text) && e.status === "warn"), "the complete event says gave-up at warn");
++  // The round budget bounds the extension even when every round adds a little.
++  const t3 = mkEnv({ answer: () => "## Another Extra Section\n\n" + run(1000 + Math.floor(Math.random() * 1e5), 3) });
++  const r3 = await stageComplete(t3.env, row({ context: JSON.stringify({ extendFor: "floor", floorRounds: 5 }) }));
++  ok(t3.calls.length === 1 && r3.stage === "complete->review", "with 5 of 6 rounds spent only one more is made, then the paper moves on", { calls: t3.calls.length, r3 });
++}
++
++// 4. The ops_config lever restores the old exit.
++{
++  const t = mkEnv({ answer: EXT_SECTION, flags: { research_floor_extend: "off" } });
++  const res = await stageComplete(t.env, row());
++  ok(t.calls.length === 0 && res.stage === "complete->review" && t.store["pipeline/r1/reconciled.md"] === SHORT, "research_floor_extend = off: no extension, the paper goes to review as before", res);
++}
++
++// 5. verify: a first-pass failure on gate-length / gate-refcount only goes to complete, carrying verifyPass 1 and the cycle count.
++{
++  const t = mkEnv({ answer: "[]" });
++  const res = await stageVerify(t.env, row({ stage: "verify", context: JSON.stringify({ cycles: 3 }) }));
++  const up = stageUpdate(t);
++  ok(res && res.ok === true && res.stage === "verify->complete" && res.extendFor === "floor", "a floor-only verify failure routes to complete", res);
++  ok(up.length === 1 && /stage='complete'/.test(up[0].sql) && up[0].ctx.verifyPass === 1 && up[0].ctx.cycles === 3 && up[0].ctx.extendFor === "floor", "the route keeps cycles and sets verifyPass 1 (the second verify is terminal)", up);
++  ok(!up.some((s) => /stage='revise'/.test(s.sql)), "the row does not go to revise");
++}
++// 5b. Any other gate alongside the floor gates keeps the revise route.
++{
++  const t = mkEnv({ paper: SHORT.replace("## 2. Background and Related Work\n\n", "## 2. Background and Related Work\n\nThis claim is not yet checked [to verify]. "), answer: "[]" });
++  const res = await stageVerify(t.env, row({ stage: "verify" }));
++  ok(res && res.stage === "verify->revise" && /gate-toverify/.test(res.gate), "a floor failure with another gate still goes to revise", res);
++}
++// 5c. The second verify pass is terminal as before (no new extension loop).
++{
++  const t = mkEnv({ answer: "[]" });
++  const res = await stageVerify(t.env, row({ stage: "verify", context: JSON.stringify({ cycles: 2, verifyPass: 1 }) }));
++  ok(res && res.ok === false && res.withheld === "verify-unresolved" && /gate-length/.test(res.gate), "verifyPass 1 and still short: the pass fails (recover loop), no second extension", res);
++  ok(!stageUpdate(t).some((s) => /stage='complete'/.test(s.sql)), "no route back to complete");
++}
++// 5d. The lever restores the revise route.
++{
++  const t = mkEnv({ answer: "[]", flags: { research_floor_extend: "off" } });
++  const res = await stageVerify(t.env, row({ stage: "verify" }));
++  ok(res && res.stage === "verify->revise", "research_floor_extend = off: verify goes to revise as before", res);
++}
++
++// 6. revise: fixes that are only gate-length / gate-refcount go to complete with no patch call.
++{
++  const fixes = JSON.stringify([{ id: "gate-length", severity: "HARD", claim: "paper too short", reason: "body length 19800 < 20000", fix: "Expand" }, { id: "gate-refcount", severity: "HARD", claim: "too few references", reason: "rendered references 6 < 8", fix: "List more" }]);
++  const t = mkEnv({ fixes, answer: "should not be called" });
++  const res = await stageRevise(t.env, row({ stage: "revise" }));
++  const up = stageUpdate(t);
++  ok(res && res.stage === "revise->complete" && res.extendFor === "floor" && t.calls.length === 0, "floor-only fixes route to complete without a patch call", { res, calls: t.calls.length });
++  ok(up.length === 1 && /stage='complete'/.test(up[0].sql) && up[0].ctx.extendFor === "floor", "the row context asks for the floor extension", up);
++  ok(events(t).some((e) => e.kind === "floor-route" && /revise->complete ids=gate-length,gate-refcount/.test(e.text)), "a floor-route event is logged");
++  // A paper above the floor is not routed (the fixes are stale): the patch reviser runs as before.
++  const t2 = mkEnv({ paper: LONG, fixes, answer: "[]" });
++  const res2 = await stageRevise(t2.env, row({ stage: "revise" }));
++  ok(t2.calls.length >= 1 && res2.stage !== "revise->complete", "stale floor fixes on a paper above the floor go to the patch reviser", res2);
++}
++// 6b. A mixed fix list is patched; if the patched paper is still short it goes to complete, not to review.
++{
++  const fixes = JSON.stringify([{ id: "gate-length", severity: "HARD", claim: "paper too short", reason: "x", fix: "x" }, { id: "h1", severity: "HARD", claim: "the step value", reason: "stated without derivation", fix: "derive" }]);
++  const find = S(5), replace = "Step 5 of the derivation fixes the intermediate value 35 from the stated inputs and carries it forward with the arithmetic shown in full. ";
++  const t = mkEnv({ fixes, answer: JSON.stringify([{ find, replace }]) });
++  const res = await stageRevise(t.env, row({ stage: "revise", context: JSON.stringify({ cycles: 1 }) }));
++  const up = stageUpdate(t);
++  ok(res && res.patch === 1 && up.length === 1 && /stage='complete'/.test(up[0].sql) && up[0].ctx.extendFor === "floor" && up[0].ctx.cycles === 2, "a patched paper still under the floor is extended, not reviewed short", { res, up });
++}
++
++// ---- 7. FLOOR-REARM-1: the fixed worker returns frozen candidates, five per run, once each ----
++function d1Over(db) {
++  return { prepare(sql) { let args = []; const q = { bind(...x) { args = x; return q; }, async run() { const r = db.prepare(sql).run(...args); return { meta: { changes: Number(r.changes) } }; }, async first() { return db.prepare(sql).get(...args) || null; }, async all() { return { results: db.prepare(sql).all(...args) }; } }; return q; } };
++}
++const RQ = "CREATE TABLE research_queue (id TEXT PRIMARY KEY, status TEXT, stage TEXT, error TEXT, recover_count INTEGER DEFAULT 0, terminal_rearms INTEGER DEFAULT 0, attempt INTEGER DEFAULT 0, context TEXT, claimed_at TEXT, created_at TEXT, published_at TEXT, source TEXT)";
++const OTHER = "CREATE TABLE cloud_ops_events (id TEXT, ts TEXT, kind TEXT, text TEXT, meta TEXT, job TEXT, status TEXT); CREATE TABLE ops_config (key TEXT PRIMARY KEY, value TEXT, note TEXT, updated_at TEXT)";
++const P = "PARKED-POISON-1: recover_count exhausted (3); last error: ";
++function seed(db) {
++  const ins = db.prepare("INSERT INTO research_queue (id, status, stage, error, recover_count, terminal_rearms, created_at, context, source) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'proposal')");
++  const rows = [
++    ["a1", "wontfix", "parked", P + "verify: unresolved after revision - mismatch=false gates=gate-length", 3, 0, "2026-10-12T10:00:00Z"],
++    ["a2", "wontfix", "parked", P + "verify: unresolved after revision - mismatch=false gates=gate-length,gate-refcount", 3, 0, "2026-10-13T10:00:00Z"],
++    ["a3", "wontfix", "parked", P + "verify: unresolved after revision - mismatch=false gates=gate-refcount", 3, 0, "2026-10-14T10:00:00Z"],
++    ["a4", "wontfix", "parked", P + "review: 6 HARD findings unresolved after 6 revise cycles", 3, 0, "2026-10-12T11:00:00Z"],
++    ["a5", "wontfix", "parked", P + "revise: no applicable edit for 2 HARD fixes (h1,h2) from two models", 3, 0, "2026-10-13T11:00:00Z"],
++    ["a6", "wontfix", "parked", P + "revise: no applicable edit for 1 HARD fixes (verify-mismatch)", 3, 0, "2026-10-14T11:00:00Z"],
++    ["a7", "wontfix", "parked", P + "verify: unresolved after revision - mismatch=true gates=gate-length", 3, 0, "2026-10-11T11:00:00Z"],
++    ["x1", "wontfix", "parked", P + "ground: bibliography 4 < 5 entries", 3, 0, "2026-10-12T12:00:00Z"],
++    ["x2", "wontfix", "parked", P + "verify: unresolved after revision - mismatch=false gates=gate-length", 3, 1, "2026-10-12T13:00:00Z"],
++    ["x3", "wontfix", "parked", "PARKED-MATH-LATEX-2: 5 plain-text math tokens remain", 0, 0, "2026-10-12T14:00:00Z"],
++    ["x4", "researching", "verify", P + "verify: unresolved after revision - mismatch=false gates=gate-length", 1, 0, "2026-10-12T15:00:00Z"],
++    ["x5", "wontfix", "parked", "REVIEW-UNRESOLVED-PARK-1: prior stage revise; revise: no applicable edit", 0, 0, "2026-10-12T16:00:00Z"]
++  ];
++  for (const r of rows) ins.run(r[0], r[1], r[2], r[3], r[4], r[5], r[6], null);
++}
++const migSql = readFileSync(new URL("../migrations/2026-10-19-research-rearm-after-repair.sql", import.meta.url), "utf8");
++const BAK = "bak_20261019_research_parked";
++{
++  // The migration, applied to the pre-fix world, freezes the candidates and re-queues nothing.
++  const db = new DatabaseSync(":memory:");
++  db.exec(RQ + ";" + OTHER + ";");
++  db.exec("CREATE TABLE control_registry (control TEXT PRIMARY KEY, location TEXT NOT NULL, kind TEXT NOT NULL CHECK (kind IN ('hold','filter','pause','kill-switch','gate','cap','guard','lease')), guards_against TEXT, critical_path INTEGER NOT NULL DEFAULT 0, disposition TEXT NOT NULL CHECK (disposition IN ('remove','demote','replace','keep')), disposition_state TEXT NOT NULL DEFAULT 'planned' CHECK (disposition_state IN ('planned','applied')), alternate_path TEXT, alternate_tested_at TEXT, evidence TEXT NOT NULL, issue_id INTEGER, reviewed_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now')));"
++    + "CREATE TABLE failure_modes (fm_key TEXT PRIMARY KEY, failure_mode TEXT NOT NULL, root_cause TEXT NOT NULL, remediation TEXT NOT NULL, detector TEXT NOT NULL, probe_class TEXT, first_seen TEXT NOT NULL, issue_id INTEGER, trigger_condition TEXT, symptom TEXT, blast_radius TEXT);"
++    + "CREATE TABLE remediation_contracts (class TEXT PRIMARY KEY, issue_id INTEGER, precondition TEXT NOT NULL, action TEXT NOT NULL, verify_probe TEXT NOT NULL, verify_transport TEXT NOT NULL, max_attempts INTEGER NOT NULL DEFAULT 3, escalate_to TEXT NOT NULL, expected_cadence_h INTEGER, status TEXT DEFAULT 'active', ts TEXT DEFAULT (datetime('now')), last_attempt_at TEXT, last_verdict TEXT, module TEXT, budget_ms INTEGER DEFAULT 45000, next_due_at TEXT, max_items INTEGER DEFAULT 5, requires_container INTEGER DEFAULT 0, attempts INTEGER DEFAULT 0);"
++    + "CREATE TABLE agent_issues (id INTEGER PRIMARY KEY, title TEXT, status TEXT, created_at INTEGER);"
++    + "CREATE TABLE decision_log (id INTEGER PRIMARY KEY, actor TEXT, assumption TEXT, action TEXT, evidence TEXT, outcome TEXT, blast_radius TEXT, rollback_path TEXT, capability_gain TEXT, predicted_outcome TEXT, reach_gain TEXT, surfaces_tested TEXT, ts TEXT DEFAULT (datetime('now')));"
++    + "INSERT INTO remediation_contracts (class, issue_id, precondition, action, verify_probe, verify_transport, escalate_to, status) VALUES ('issue-99913', 99913, 'p', 'VACUOUS-PROBE-V3-1', 'SELECT ''closed'' AS expected, NULL AS observed', 'd1-query', 'qnfo-fleet-control', 'superseded');");
++  seed(db);
++  const before = JSON.stringify(db.prepare("SELECT * FROM research_queue ORDER BY id").all());
++  db.exec(migSql);
++  ok(JSON.stringify(db.prepare("SELECT * FROM research_queue ORDER BY id").all()) === before, "the migration changes no research_queue row (nothing is queued before the fixed worker runs)");
++  const bak = db.prepare("SELECT id FROM " + BAK + " ORDER BY id").all().map((r) => r.id);
++  ok(JSON.stringify(bak) === JSON.stringify(["a1", "a2", "a3", "a4", "a5", "a6", "a7"]), "the backup freezes exactly the parked rows of the corrected defects, once-armed and other parks excluded", bak);
++  db.exec(migSql);
++  ok(db.prepare("SELECT count(*) n FROM " + BAK).get().n === 7 && db.prepare("SELECT count(*) n FROM failure_modes").get().n === 2, "applying the file twice adds nothing");
++
++  // Worker side: the fixed worker re-arms five per run, newest first, once each.
++  const env = { QNFO_AUDIT: d1Over(db) };
++  const r1 = await floorRearmTick(env);
++  const queued = () => db.prepare("SELECT id FROM research_queue WHERE status = 'queued' ORDER BY id").all().map((r) => r.id);
++  ok(r1.rearmed === 5 && JSON.stringify(queued()) === JSON.stringify(["a2", "a3", "a4", "a5", "a6"]), "floorRearmTick returns the five newest candidates", { r1, queued: queued() });
++  const a3 = db.prepare("SELECT * FROM research_queue WHERE id = 'a3'").get();
++  ok(a3.stage === "complete" && a3.terminal_rearms === 1 && a3.recover_count === 0 && a3.claimed_at === null && /^FLOOR-REARM-1 .*Was: PARKED-POISON-1/.test(a3.error) && JSON.parse(a3.context).extendFor === "floor" && JSON.parse(a3.context).verifyPass === 0, "a re-armed row resumes at complete with a fresh budget and its prior error in the text", a3);
++  const r2 = await floorRearmTick(env);
++  ok(r2.rearmed === 2 && queued().length === 7, "the next run returns the rest", { r2, queued: queued() });
++  const r3 = await floorRearmTick(env);
++  ok(r3.rearmed === 0, "nothing is re-armed twice", r3);
++  const same = JSON.parse(before).filter((r) => r.id.startsWith("x")).every((r) => JSON.stringify(db.prepare("SELECT * FROM research_queue WHERE id = ?").get(r.id)) === JSON.stringify(r));
++  ok(same, "rows outside the frozen list are never touched");
++
++  // Without the backup table (migration not applied) the step is a no-op; park_rearm = off stops it with the sweep.
++  const db2 = new DatabaseSync(":memory:");
++  db2.exec(RQ + ";" + OTHER + ";");
++  seed(db2);
++  const n0 = await floorRearmTick({ QNFO_AUDIT: d1Over(db2) });
++  ok(n0.rearmed === 0 && db2.prepare("SELECT count(*) n FROM research_queue WHERE status = 'queued'").get().n === 0, "no backup table: the step is a quiet no-op");
++  db2.exec("CREATE TABLE " + BAK + " AS SELECT id FROM research_queue WHERE id IN ('a1','a2')");
++  db2.prepare("INSERT INTO ops_config (key, value) VALUES ('park_rearm', 'off')").run();
++  const off = await parkRearmTick({ QNFO_AUDIT: d1Over(db2) });
++  ok(off.enabled === false && db2.prepare("SELECT count(*) n FROM research_queue WHERE status = 'queued'").get().n === 0, "park_rearm = off stops the floor re-arm too");
++  db2.prepare("DELETE FROM ops_config").run();
++  const on = await parkRearmTick({ QNFO_AUDIT: d1Over(db2) });
++  ok(on.enabled === true && on.floor && on.floor.rearmed === 2, "the hourly sweep runs the floor re-arm", on);
++
++  // The failure-mode rows, controls and closing probe.
++  const fms = db.prepare("SELECT fm_key, probe_class FROM failure_modes ORDER BY fm_key").all();
++  ok(JSON.stringify(fms.map((f) => f.probe_class)) === JSON.stringify(["fm-research-draft-below-floor", "fm-research-revise-shrink"]), "two failure modes, each with its fm-<key> detector class", fms);
++  const cons = db.prepare("SELECT class, verify_probe, status FROM remediation_contracts WHERE class LIKE 'fm-research%' ORDER BY class").all();
++  ok(cons.length === 2 && cons.every((c) => c.status === "active" && c.verify_probe.indexOf(";") < 0 && /^SELECT '1' AS expected/.test(c.verify_probe)), "two detector contracts, each one SELECT", cons);
++  const ctl = db.prepare("SELECT control, kind, disposition, disposition_state, alternate_path FROM control_registry ORDER BY control").all();
++  ok(ctl.length === 3 && ctl.every((c) => c.disposition_state === "applied" && c.alternate_path), "three controls (gate, guard, cap), each applied with an alternate path", ctl);
++  const c99913 = db.prepare("SELECT verify_probe, status, issue_id FROM remediation_contracts WHERE class = 'issue-99913'").get();
++  ok(/'ok' AS expected/.test(c99913.verify_probe) && /gate-length/.test(c99913.verify_probe) && c99913.status === "active" && c99913.issue_id === 99913 && !/FROM agent_issues WHERE id = 99913/.test(c99913.verify_probe), "issue 99913 gets a probe that measures the defect (not its own closure) and is active", c99913);
++  ok(db.prepare("SELECT count(*) n FROM decision_log").get().n === 1, "one decision_log row");
++
++  // The 99913 probe on synthetic rows: observed ok only when the floor holds for 24 h.
++  const probe = c99913.verify_probe;
++  const evIns = db.prepare("INSERT INTO cloud_ops_events (id, ts, kind, text, job, status) VALUES (?, ?, ?, ?, 'qnfo-research-exec', ?)");
++  const ev = { run: (id, ts, kind, text, status) => evIns.run(id, ts, kind, text, status || "ok") };
++  const ago = (min) => new Date(Date.now() - min * 6e4).toISOString();
++  ok(db.prepare(probe).get().observed === "defect", "no complete events in 24 h: not ok");
++  for (let i = 0; i < 24; i++) ev.run("c" + i, ago(60 + i), "complete", "row=x rounds=1 total=1 gained=0 steps= chars=" + (i < 2 ? 18000 : 26000) + " complete=true floor=" + (i < 2 ? "gave-up" : "ok") + " floor_rounds=" + (i < 2 ? 6 : 1));
++  ok(db.prepare(probe).get().observed === "defect", "2 of 24 complete events that left under the floor (8%) is a defect", db.prepare(probe).get());
++  db.prepare("UPDATE cloud_ops_events SET text = replace(replace(text, 'chars=18000', 'chars=26000'), 'floor=gave-up', 'floor=ok')").run();
++  ok(db.prepare(probe).get().observed === "ok", "24 complete events all above the floor and no floor terminal: ok", db.prepare(probe).get());
++  db.prepare("INSERT INTO agent_issues (title, status, created_at) VALUES ('RESEARCH-TERMINAL abcd1234: verify: unresolved after revision - mismatch=false gates=gate-length', 'open', ?)").run(Date.now() - 3600e3);
++  ok(db.prepare(probe).get().observed === "defect", "a gate-length RESEARCH-TERMINAL issue filed in 24 h is a defect again");
++
++  // Detectors: quiet before the deploy marker, loud on recurrence after it.
++  const fmFloor = cons.find((c) => c.class === "fm-research-draft-below-floor").verify_probe, fmShrink = cons.find((c) => c.class === "fm-research-revise-shrink").verify_probe;
++  db.prepare("DELETE FROM cloud_ops_events").run();
++  for (let i = 0; i < 4; i++) { ev.run("o" + i, ago(600 + i), "complete", "row=x rounds=1 total=1 gained=0 steps= chars=18000 complete=true", "x"); ev.run("n" + i, ago(600 + i), "revise-noop", "row=x no applicable patch edit (proposed=1); revise failed, recover path", "x"); }
++  ok(db.prepare(fmFloor).get().observed === "1" && db.prepare(fmShrink).get().observed === "1", "events of the old worker (no floor_rounds marker) keep both detectors quiet");
++  ev.run("m", ago(300), "complete", "row=y chars=26000 complete=true floor=ok floor_rounds=0", "ok");
++  ok(db.prepare(fmFloor).get().observed === "1", "after the marker, a healthy complete event keeps it quiet");
++  for (let i = 0; i < 3; i++) { ev.run("g" + i, ago(100 + i), "complete", "row=z chars=19000 complete=true floor=gave-up floor_rounds=6", "warn"); ev.run("s" + i, ago(100 + i), "revise-noop", "row=z no applicable patch edit (proposed=1); shrink refused: below the 20000-char floor; revise failed", "warn"); }
++  ok(db.prepare(fmFloor).get().observed === "0" && db.prepare(fmShrink).get().observed === "0", "three recurrences after the marker trip both detectors");
++}
++
++console.log(pass + " passed, " + fail + " failed");
++if (fail) process.exit(1);
+diff --git a/qnfo-research-exec/deployed-current.worker.js b/qnfo-research-exec/deployed-current.worker.js
+index 6bf96062..18b51a80 100644
+--- a/qnfo-research-exec/deployed-current.worker.js
++++ b/qnfo-research-exec/deployed-current.worker.js
+@@ -33,7 +33,7 @@ var __name22222 = /* @__PURE__ */ __name2222((target, value) => __defProp22222(t
+ // an empty catch. CITE-CONSISTENCY-1 asks the reviewer to compare the draft against cited QNFO work.
+ // REVIEW-TRIAGE-CAP-1 is a defect fix: drift demotion at the cycle cap silently turned a blocking finding into a pass, so
+ // REVIEW-HARD-GATE-1 withheld nothing there (reviewer findings 2 -> 0 at the cap; an unparseable review advanced to verify).
+-var VERSION = "0.20.0-lean-width-1"; /* 0.20.0 LEAN-WIDTH-1 (2026-10-19, pillar cost; metrics workers_ai_run_rate_usd 410.84 vs 95, fleet_cost_run_rate_usd): while an ai_spend cap is breached (leanEnsemble), the stage width is at most ops_config research_parallel_lean (default 24, half of RESEARCH_PARALLEL_MAX) instead of the full ceiling. Measured: 10-09..10-12 at width 8 published 22-31 papers a day at about 13k neurons each; 10-18 at width 48 (research_parallel 96, clamped) made 7720 calls, 3140 of them errors (rate limits on glm-5.3-flash, retried and re-run), for 3.77M neurons and 24 papers. BUDGET-SOFT-ROUTE-1: fewer items per tick, never none; research_parallel_lean = 48 restores the old behaviour without a deploy. */ /* 0.19.2 (2026-10-19, RESOLVE-ALL-OPEN-1): merges main's 0.19.0 MATH-LATEX-AUTOFIX-1 with PR 2603's 0.19.0/0.19.1 fixes below. */ /* 0.19.1 EXTRACT-JSON-ROBUST-1 (issue 2877): parseExtractedClaims reads the first balanced JSON list or object (trailing prose no longer breaks it) and re-parses with lone LaTeX backslashes escaped; an empty extraction reply is asked once more in the tick. RETRY-NOT-ERROR-1 (issue 99990): a verify retry still in budget (retry: true) logs its done event as warn; only the pass that exhausts its retries is an error, so LOOP-BREAKER-1 counts real failures. WORKERS-BP-LOGGING (issue 2538): the 21 swallowed catches log a structured console.error (two trial parses carry a comment), control flow unchanged. */ /* 0.19.0 RESOLVE-ALL-OPEN-1 (2026-10-19, owner directive "RESOLVE/REMEDIATE ALL OPEN ISSUES"; pillar research): (a) RESEARCH-REVIEW-BIB-TRUNC-1 (#2800): the reviewer sees the index line of every bibliography entry, then bounded excerpts, instead of the first 8,000 chars (2-3 of 9-14 entries); (b) SLOP-SCAN-1 (#2407): a deterministic inflated-prose scan adds SOFT findings with locations against a corpus baseline read from its own slop-scan events; (c) REVISE-STRIDE-1 (#2847): queued rows at a resumable stage are claimed before ground rows; (d) EXTENSION-ACTIVATION-1 (#2824): extension rows (<= research_extension_per_day) bypass research_ready_cap, ops_config research_extension_cap_mode=respect restores it; (e) SWEEP-REARM-INLINE-1 (#2393): the completeness sweep re-arms remediation rows a 2026-10-17 cleanup closed as published without publishing; (f) RECONCILE-READ-1 (c) (#2725): an incomplete draft names its failed checks. */ /* 0.18.38 TICK-10M-1 + RECLAIM-KEEP-STAGE-1 + IDEA-TO-PUBLISH-METRIC-1 (2026-10-18, owner directive: idea to publication under 100 hours; pillar research): (a) the cron runs every 10 minutes (was 15; 144/day = CRON-MANDATE-1 ceiling, same schedule count); member windows are 10 minutes wide so each errata/reviser job still runs exactly once per slot; the 03:00 sweep window is 10 minutes; (b) a stale reclaim keeps a resumable stage (complete/review/revise/verify), and RESUME-DRAFT-1 at claim falls back to ground when reconciled.md is missing, so a stalled draft is not re-drafted from scratch; (c) idea_to_publish_h_p50_7d (median hours idea_proposals.created_at -> published_at, 7 days) is written to metric_registry on the :00 tick. */ /* 0.18.37 ERRATA-HIGHRISK-ROUTE-1 folded (errata member 1.6.2): a high-risk errata correction draft older than 6 h becomes a remediation research row instead of waiting audited forever; internal_errata closes with its queue row. */ /* 0.18.36 CLAIM-HEARTBEAT-1 + RESUME-DRAFT-1 + REVIEW-SECOND-MODEL-1 (2026-10-18): a stage returning ok refreshes claimed_at so the stale-claim reclaimer stops re-grounding papers still advancing (550 releases/24h, 302 ground claims of 72 rows); a resumable stage is kept when its draft exists in R2 (70 revise rows were re-drafted from ground); the review second path names its model (not kimi-k2.6 after #1429). */ /* 0.18.35 CLAIM-HEARTBEAT-1 (2026-10-18): a stage that returns ok refreshes claimed_at, so the 120-min stale-claim reclaimer no longer re-grounds papers that are still advancing (550 releases/24h, 302 ground claims of 72 rows). */ /* 0.18.34 REVIEW-EMPTY-SECOND-PATH-1 (2026-10-18): an unreadable review takes a second model family in the same tick and, still unreadable, re-runs review directly instead of sending the review-parse placeholder through two no-op patch calls (237 of 264 revise-noop events, 329 hard=1 cycles in 3 days). */ /* 0.18.33 PATCH-FLEX-REGEX-OVERFLOW-1 (2026-10-18, agent_issues 2886): findFlexible caps the flexible matcher at 400 tokens and fails closed on any regex error, so a whole-section find text no longer throws "Invalid regular expression: Stack overflow" out of the slot. */ /* 0.18.32 AI-RATE-FALLBACK-1 (2026-10-18): a 3021/3040/3046 on the primary model after backoff takes one call on another family (glm<->gpt-oss-120b) instead of failing the stage; 3040 no longer misread as a reasoning_effort rejection. */ /* 0.18.31 VERIFY-AUTOCORRECT-1 (2026-10-18): papers fail verify with REAL arithmetic errors (the reconcile/ensemble writer computes a number that does not match its own stated inputs) and the revise loop cannot reliably fix a bare number, so such papers cycle until park. Verify already holds both values — independently computed `computed` and the paper's stated `expected` — so stageVerify now corrects the number deterministically (autoCorrectNumeric) instead of sending it back through a model. Fail-closed: only a stated value found exactly once (verbatim or as an unambiguous bare mantissa in LaTeX/\\times 10^N) is corrected; anything ambiguous is skipped and falls through to revise. Every correction is logged as verify-autocorrect and appended to verification.md. */ /* 0.18.29 VERIFY-CYCLE-CAP-1 (2026-10-17, owner directive "REMEDIATE ALL ISSUES AND FAILURE MODES"): the verify->revise edge reset the review cycle counter to 0 (context={cycles:0,verifyPass:1}) while EVERY other edge preserves it (3716, 3735, 3753) and the review stage is the one that increments it. That single reset made MAX_REVIEW_CYCLES (6) unreachable, so an item that fails verify re-enters revise, resets to cycle 0, and loops until recover_count runs out — measured 2026-10-17: review-unresolved events exist ONLY at cycle 2 (193) and 3 (165), never 4; 96 rerun-route and 278 revise-patch events against ~100 rows; and stage='publish' is EMPTY, which is why 151 complete events produced 0 publications and why the publish quota (24) guarded an empty queue. The edge now preserves the count, so the existing six-cycle cap can terminate an item visibly instead of cycling forever. The gate itself (gates2) is unchanged: this does not let a failing draft through, it lets a draft that cannot pass STOP. */ // 0.18.28-codeagent /* 0.19.0 MATH-LATEX-AUTOFIX-1 (2026-10-19, agent_issues 100027, pillar research): 8 finished papers were parked from 2026-10-12 because gate-math-latex was left to the revise models' search/replace edits, which often did not apply. Plain-text math with one LaTeX spelling (Unicode super/subscripts, bare ^ and _ scripts, bra-kets, the scanner's operators) is now converted deterministically in review, revise and verify (event math-autofix); box drawings and lines holding currency still go to the models. */ /* 0.18.38 TICK-10M-1 + RECLAIM-KEEP-STAGE-1 + IDEA-TO-PUBLISH-METRIC-1 (2026-10-18, owner directive: idea to publication under 100 hours; pillar research): (a) the cron runs every 10 minutes (was 15; 144/day = CRON-MANDATE-1 ceiling, same schedule count); member windows are 10 minutes wide so each errata/reviser job still runs exactly once per slot; the 03:00 sweep window is 10 minutes; (b) a stale reclaim keeps a resumable stage (complete/review/revise/verify), and RESUME-DRAFT-1 at claim falls back to ground when reconciled.md is missing, so a stalled draft is not re-drafted from scratch; (c) idea_to_publish_h_p50_7d (median hours idea_proposals.created_at -> published_at, 7 days) is written to metric_registry on the :00 tick. */ /* 0.18.37 ERRATA-HIGHRISK-ROUTE-1 folded (errata member 1.6.2): a high-risk errata correction draft older than 6 h becomes a remediation research row instead of waiting audited forever; internal_errata closes with its queue row. */ /* 0.18.36 CLAIM-HEARTBEAT-1 + RESUME-DRAFT-1 + REVIEW-SECOND-MODEL-1 (2026-10-18): a stage returning ok refreshes claimed_at so the stale-claim reclaimer stops re-grounding papers still advancing (550 releases/24h, 302 ground claims of 72 rows); a resumable stage is kept when its draft exists in R2 (70 revise rows were re-drafted from ground); the review second path names its model (not kimi-k2.6 after #1429). */ /* 0.18.35 CLAIM-HEARTBEAT-1 (2026-10-18): a stage that returns ok refreshes claimed_at, so the 120-min stale-claim reclaimer no longer re-grounds papers that are still advancing (550 releases/24h, 302 ground claims of 72 rows). */ /* 0.18.34 REVIEW-EMPTY-SECOND-PATH-1 (2026-10-18): an unreadable review takes a second model family in the same tick and, still unreadable, re-runs review directly instead of sending the review-parse placeholder through two no-op patch calls (237 of 264 revise-noop events, 329 hard=1 cycles in 3 days). */ /* 0.18.33 PATCH-FLEX-REGEX-OVERFLOW-1 (2026-10-18, agent_issues 2886): findFlexible caps the flexible matcher at 400 tokens and fails closed on any regex error, so a whole-section find text no longer throws "Invalid regular expression: Stack overflow" out of the slot. */ /* 0.18.32 AI-RATE-FALLBACK-1 (2026-10-18): a 3021/3040/3046 on the primary model after backoff takes one call on another family (glm<->gpt-oss-120b) instead of failing the stage; 3040 no longer misread as a reasoning_effort rejection. */ /* 0.18.31 VERIFY-AUTOCORRECT-1 (2026-10-18): papers fail verify with REAL arithmetic errors (the reconcile/ensemble writer computes a number that does not match its own stated inputs) and the revise loop cannot reliably fix a bare number, so such papers cycle until park. Verify already holds both values — independently computed `computed` and the paper's stated `expected` — so stageVerify now corrects the number deterministically (autoCorrectNumeric) instead of sending it back through a model. Fail-closed: only a stated value found exactly once (verbatim or as an unambiguous bare mantissa in LaTeX/\\times 10^N) is corrected; anything ambiguous is skipped and falls through to revise. Every correction is logged as verify-autocorrect and appended to verification.md. */ /* 0.18.29 VERIFY-CYCLE-CAP-1 (2026-10-17, owner directive "REMEDIATE ALL ISSUES AND FAILURE MODES"): the verify->revise edge reset the review cycle counter to 0 (context={cycles:0,verifyPass:1}) while EVERY other edge preserves it (3716, 3735, 3753) and the review stage is the one that increments it. That single reset made MAX_REVIEW_CYCLES (6) unreachable, so an item that fails verify re-enters revise, resets to cycle 0, and loops until recover_count runs out — measured 2026-10-17: review-unresolved events exist ONLY at cycle 2 (193) and 3 (165), never 4; 96 rerun-route and 278 revise-patch events against ~100 rows; and stage='publish' is EMPTY, which is why 151 complete events produced 0 publications and why the publish quota (24) guarded an empty queue. The edge now preserves the count, so the existing six-cycle cap can terminate an item visibly instead of cycling forever. The gate itself (gates2) is unchanged: this does not let a failing draft through, it lets a draft that cannot pass STOP. */ // 0.18.28-codeagent
++var VERSION = "0.21.0-floor"; /* 0.21.0 RESEARCH-FLOOR-1 (2026-10-19, agent_issues 99913, pillar research): (a) REVISE-SHRINK-GUARD-1: a revise patch that would take a paper from at or above the publish floor (20,000 chars) to below it, cut more than 20% of it, or drop its cited references under the reference floor counts as not applied (event revise-shrink-refused), so the second model runs with the limit stated; (b) COMPLETE-TO-FLOOR-1: the complete stage extends a complete paper under the floor with grounded sections (event floor-extend, at most 6 rounds, goal 1.2x the floor) and gate-length / gate-refcount findings route verify and revise to complete instead of the patch reviser (event floor-route); (c) FLOOR-REARM-1: the hourly sweep returns the rows frozen in bak_20261019_research_parked to complete, 5 per run, once each. */ /* 0.20.0 LEAN-WIDTH-1 (2026-10-19, pillar cost; metrics workers_ai_run_rate_usd 410.84 vs 95, fleet_cost_run_rate_usd): while an ai_spend cap is breached (leanEnsemble), the stage width is at most ops_config research_parallel_lean (default 24, half of RESEARCH_PARALLEL_MAX) instead of the full ceiling. Measured: 10-09..10-12 at width 8 published 22-31 papers a day at about 13k neurons each; 10-18 at width 48 (research_parallel 96, clamped) made 7720 calls, 3140 of them errors (rate limits on glm-5.3-flash, retried and re-run), for 3.77M neurons and 24 papers. BUDGET-SOFT-ROUTE-1: fewer items per tick, never none; research_parallel_lean = 48 restores the old behaviour without a deploy. */ /* 0.19.2 (2026-10-19, RESOLVE-ALL-OPEN-1): merges main's 0.19.0 MATH-LATEX-AUTOFIX-1 with PR 2603's 0.19.0/0.19.1 fixes below. */ /* 0.19.1 EXTRACT-JSON-ROBUST-1 (issue 2877): parseExtractedClaims reads the first balanced JSON list or object (trailing prose no longer breaks it) and re-parses with lone LaTeX backslashes escaped; an empty extraction reply is asked once more in the tick. RETRY-NOT-ERROR-1 (issue 99990): a verify retry still in budget (retry: true) logs its done event as warn; only the pass that exhausts its retries is an error, so LOOP-BREAKER-1 counts real failures. WORKERS-BP-LOGGING (issue 2538): the 21 swallowed catches log a structured console.error (two trial parses carry a comment), control flow unchanged. */ /* 0.19.0 RESOLVE-ALL-OPEN-1 (2026-10-19, owner directive "RESOLVE/REMEDIATE ALL OPEN ISSUES"; pillar research): (a) RESEARCH-REVIEW-BIB-TRUNC-1 (#2800): the reviewer sees the index line of every bibliography entry, then bounded excerpts, instead of the first 8,000 chars (2-3 of 9-14 entries); (b) SLOP-SCAN-1 (#2407): a deterministic inflated-prose scan adds SOFT findings with locations against a corpus baseline read from its own slop-scan events; (c) REVISE-STRIDE-1 (#2847): queued rows at a resumable stage are claimed before ground rows; (d) EXTENSION-ACTIVATION-1 (#2824): extension rows (<= research_extension_per_day) bypass research_ready_cap, ops_config research_extension_cap_mode=respect restores it; (e) SWEEP-REARM-INLINE-1 (#2393): the completeness sweep re-arms remediation rows a 2026-10-17 cleanup closed as published without publishing; (f) RECONCILE-READ-1 (c) (#2725): an incomplete draft names its failed checks. */ /* 0.18.38 TICK-10M-1 + RECLAIM-KEEP-STAGE-1 + IDEA-TO-PUBLISH-METRIC-1 (2026-10-18, owner directive: idea to publication under 100 hours; pillar research): (a) the cron runs every 10 minutes (was 15; 144/day = CRON-MANDATE-1 ceiling, same schedule count); member windows are 10 minutes wide so each errata/reviser job still runs exactly once per slot; the 03:00 sweep window is 10 minutes; (b) a stale reclaim keeps a resumable stage (complete/review/revise/verify), and RESUME-DRAFT-1 at claim falls back to ground when reconciled.md is missing, so a stalled draft is not re-drafted from scratch; (c) idea_to_publish_h_p50_7d (median hours idea_proposals.created_at -> published_at, 7 days) is written to metric_registry on the :00 tick. */ /* 0.18.37 ERRATA-HIGHRISK-ROUTE-1 folded (errata member 1.6.2): a high-risk errata correction draft older than 6 h becomes a remediation research row instead of waiting audited forever; internal_errata closes with its queue row. */ /* 0.18.36 CLAIM-HEARTBEAT-1 + RESUME-DRAFT-1 + REVIEW-SECOND-MODEL-1 (2026-10-18): a stage returning ok refreshes claimed_at so the stale-claim reclaimer stops re-grounding papers still advancing (550 releases/24h, 302 ground claims of 72 rows); a resumable stage is kept when its draft exists in R2 (70 revise rows were re-drafted from ground); the review second path names its model (not kimi-k2.6 after #1429). */ /* 0.18.35 CLAIM-HEARTBEAT-1 (2026-10-18): a stage that returns ok refreshes claimed_at, so the 120-min stale-claim reclaimer no longer re-grounds papers that are still advancing (550 releases/24h, 302 ground claims of 72 rows). */ /* 0.18.34 REVIEW-EMPTY-SECOND-PATH-1 (2026-10-18): an unreadable review takes a second model family in the same tick and, still unreadable, re-runs review directly instead of sending the review-parse placeholder through two no-op patch calls (237 of 264 revise-noop events, 329 hard=1 cycles in 3 days). */ /* 0.18.33 PATCH-FLEX-REGEX-OVERFLOW-1 (2026-10-18, agent_issues 2886): findFlexible caps the flexible matcher at 400 tokens and fails closed on any regex error, so a whole-section find text no longer throws "Invalid regular expression: Stack overflow" out of the slot. */ /* 0.18.32 AI-RATE-FALLBACK-1 (2026-10-18): a 3021/3040/3046 on the primary model after backoff takes one call on another family (glm<->gpt-oss-120b) instead of failing the stage; 3040 no longer misread as a reasoning_effort rejection. */ /* 0.18.31 VERIFY-AUTOCORRECT-1 (2026-10-18): papers fail verify with REAL arithmetic errors (the reconcile/ensemble writer computes a number that does not match its own stated inputs) and the revise loop cannot reliably fix a bare number, so such papers cycle until park. Verify already holds both values — independently computed `computed` and the paper's stated `expected` — so stageVerify now corrects the number deterministically (autoCorrectNumeric) instead of sending it back through a model. Fail-closed: only a stated value found exactly once (verbatim or as an unambiguous bare mantissa in LaTeX/\\times 10^N) is corrected; anything ambiguous is skipped and falls through to revise. Every correction is logged as verify-autocorrect and appended to verification.md. */ /* 0.18.29 VERIFY-CYCLE-CAP-1 (2026-10-17, owner directive "REMEDIATE ALL ISSUES AND FAILURE MODES"): the verify->revise edge reset the review cycle counter to 0 (context={cycles:0,verifyPass:1}) while EVERY other edge preserves it (3716, 3735, 3753) and the review stage is the one that increments it. That single reset made MAX_REVIEW_CYCLES (6) unreachable, so an item that fails verify re-enters revise, resets to cycle 0, and loops until recover_count runs out — measured 2026-10-17: review-unresolved events exist ONLY at cycle 2 (193) and 3 (165), never 4; 96 rerun-route and 278 revise-patch events against ~100 rows; and stage='publish' is EMPTY, which is why 151 complete events produced 0 publications and why the publish quota (24) guarded an empty queue. The edge now preserves the count, so the existing six-cycle cap can terminate an item visibly instead of cycling forever. The gate itself (gates2) is unchanged: this does not let a failing draft through, it lets a draft that cannot pass STOP. */ // 0.18.28-codeagent /* 0.19.0 MATH-LATEX-AUTOFIX-1 (2026-10-19, agent_issues 100027, pillar research): 8 finished papers were parked from 2026-10-12 because gate-math-latex was left to the revise models' search/replace edits, which often did not apply. Plain-text math with one LaTeX spelling (Unicode super/subscripts, bare ^ and _ scripts, bra-kets, the scanner's operators) is now converted deterministically in review, revise and verify (event math-autofix); box drawings and lines holding currency still go to the models. */ /* 0.18.38 TICK-10M-1 + RECLAIM-KEEP-STAGE-1 + IDEA-TO-PUBLISH-METRIC-1 (2026-10-18, owner directive: idea to publication under 100 hours; pillar research): (a) the cron runs every 10 minutes (was 15; 144/day = CRON-MANDATE-1 ceiling, same schedule count); member windows are 10 minutes wide so each errata/reviser job still runs exactly once per slot; the 03:00 sweep window is 10 minutes; (b) a stale reclaim keeps a resumable stage (complete/review/revise/verify), and RESUME-DRAFT-1 at claim falls back to ground when reconciled.md is missing, so a stalled draft is not re-drafted from scratch; (c) idea_to_publish_h_p50_7d (median hours idea_proposals.created_at -> published_at, 7 days) is written to metric_registry on the :00 tick. */ /* 0.18.37 ERRATA-HIGHRISK-ROUTE-1 folded (errata member 1.6.2): a high-risk errata correction draft older than 6 h becomes a remediation research row instead of waiting audited forever; internal_errata closes with its queue row. */ /* 0.18.36 CLAIM-HEARTBEAT-1 + RESUME-DRAFT-1 + REVIEW-SECOND-MODEL-1 (2026-10-18): a stage returning ok refreshes claimed_at so the stale-claim reclaimer stops re-grounding papers still advancing (550 releases/24h, 302 ground claims of 72 rows); a resumable stage is kept when its draft exists in R2 (70 revise rows were re-drafted from ground); the review second path names its model (not kimi-k2.6 after #1429). */ /* 0.18.35 CLAIM-HEARTBEAT-1 (2026-10-18): a stage that returns ok refreshes claimed_at, so the 120-min stale-claim reclaimer no longer re-grounds papers that are still advancing (550 releases/24h, 302 ground claims of 72 rows). */ /* 0.18.34 REVIEW-EMPTY-SECOND-PATH-1 (2026-10-18): an unreadable review takes a second model family in the same tick and, still unreadable, re-runs review directly instead of sending the review-parse placeholder through two no-op patch calls (237 of 264 revise-noop events, 329 hard=1 cycles in 3 days). */ /* 0.18.33 PATCH-FLEX-REGEX-OVERFLOW-1 (2026-10-18, agent_issues 2886): findFlexible caps the flexible matcher at 400 tokens and fails closed on any regex error, so a whole-section find text no longer throws "Invalid regular expression: Stack overflow" out of the slot. */ /* 0.18.32 AI-RATE-FALLBACK-1 (2026-10-18): a 3021/3040/3046 on the primary model after backoff takes one call on another family (glm<->gpt-oss-120b) instead of failing the stage; 3040 no longer misread as a reasoning_effort rejection. */ /* 0.18.31 VERIFY-AUTOCORRECT-1 (2026-10-18): papers fail verify with REAL arithmetic errors (the reconcile/ensemble writer computes a number that does not match its own stated inputs) and the revise loop cannot reliably fix a bare number, so such papers cycle until park. Verify already holds both values — independently computed `computed` and the paper's stated `expected` — so stageVerify now corrects the number deterministically (autoCorrectNumeric) instead of sending it back through a model. Fail-closed: only a stated value found exactly once (verbatim or as an unambiguous bare mantissa in LaTeX/\\times 10^N) is corrected; anything ambiguous is skipped and falls through to revise. Every correction is logged as verify-autocorrect and appended to verification.md. */ /* 0.18.29 VERIFY-CYCLE-CAP-1 (2026-10-17, owner directive "REMEDIATE ALL ISSUES AND FAILURE MODES"): the verify->revise edge reset the review cycle counter to 0 (context={cycles:0,verifyPass:1}) while EVERY other edge preserves it (3716, 3735, 3753) and the review stage is the one that increments it. That single reset made MAX_REVIEW_CYCLES (6) unreachable, so an item that fails verify re-enters revise, resets to cycle 0, and loops until recover_count runs out — measured 2026-10-17: review-unresolved events exist ONLY at cycle 2 (193) and 3 (165), never 4; 96 rerun-route and 278 revise-patch events against ~100 rows; and stage='publish' is EMPTY, which is why 151 complete events produced 0 publications and why the publish quota (24) guarded an empty queue. The edge now preserves the count, so the existing six-cycle cap can terminate an item visibly instead of cycling forever. The gate itself (gates2) is unchanged: this does not let a failing draft through, it lets a draft that cannot pass STOP. */ // 0.18.28-codeagent
+ // WORKERS-AI-ATTRIBUTION-1 (2026-10-01, #1681): per-worker Workers AI attribution. Returns a shallow env copy whose AI
+ // binding records each .run() (calls, errors, ms, tokens, neurons) into qnfo-audit ai_call_counters (purpose 'binding').
+ // Neurons = usage tokens x Cloudflare's published per-model rates (neurons per M tokens). Fail-soft; env is never mutated.
+@@ -1673,12 +1673,35 @@ async function recoverMax(env) {
+ // converge stops costing AI instead of looping. Rows go back as status=queued so the backpressure cap meters them;
+ // the claim already resumes a queued row at its own stage. ops_config park_rearm = off stops the sweep.
+ var PARK_REARM_MAX = 1;
++// FLOOR-REARM-1 (RESEARCH-FLOOR-1, migrations/2026-10-19-research-rearm-after-repair.sql): the rows parked on a defect that
++// 0.21.0 corrects (gate-length, gate-refcount, HARD findings unresolved, no applicable edit) were frozen at merge in
++// bak_20261019_research_parked. This hourly step, which exists only in the corrected worker, returns FLOOR_REARM_PER_RUN of them
++// at a time to `complete` (the draft is in R2; RESUME-DRAFT-1 falls back to ground without it), once each (terminal_rearms 0
++// -> 1), so no row is queued before the fix is live and the queue is metered instead of flooded. ops_config park_rearm = off
++// stops it with the sweep above; a missing backup table (migration not applied) makes it a no-op.
++var FLOOR_REARM_PER_RUN = 5;
++async function floorRearmTick(env) {
++  var out = { rearmed: 0 };
++  try {
++    var cand = await env.QNFO_AUDIT.prepare("SELECT id, error FROM research_queue WHERE status = 'wontfix' AND stage = 'parked' AND terminal_rearms = 0 AND id IN (SELECT id FROM bak_20261019_research_parked) ORDER BY created_at DESC LIMIT " + FLOOR_REARM_PER_RUN).all();
++    var list = (cand && cand.results) || [];
++    for (var i = 0; i < list.length; i++) {
++      var r = await env.QNFO_AUDIT.prepare("UPDATE research_queue SET status = 'queued', stage = 'complete', attempt = 0, recover_count = 0, claimed_at = NULL, terminal_rearms = terminal_rearms + 1, error = ?1, context = ?2 WHERE id = ?3 AND status = 'wontfix' AND terminal_rearms = 0").bind(("FLOOR-REARM-1 (RESEARCH-FLOOR-1; prior state in bak_20261019_research_parked). Was: " + String(list[i].error || "")).slice(0, 300), JSON.stringify({ cycles: 0, verifyPass: 0, extendFor: "floor", floorRearm: 1 }), list[i].id).run();
++      if (!r || !r.meta || r.meta.changes !== 0) out.rearmed++;
++    }
++    if (out.rearmed) await logEvent(env, "floor-rearm", JSON.stringify(out), "ok");
++  } catch (e) {
++    console.error(JSON.stringify({ worker: "qnfo-research-exec", event: "floor-rearm", error: String(e && e.message || e).slice(0, 200) }));
++  }
++  return out;
++}
+ async function parkRearmTick(env) {
+   var out = { enabled: false, rearmed: 0, exhausted: 0 };
+   try {
+     var flag = await env.QNFO_AUDIT.prepare("SELECT value FROM ops_config WHERE key = 'park_rearm'").first();
+     if (flag && String(flag.value || "").trim().toLowerCase() === "off") return out;
+     out.enabled = true;
++    out.floor = await floorRearmTick(env);
+     var cand = await env.QNFO_AUDIT.prepare("SELECT id, context, error FROM research_queue WHERE status = 'wontfix' AND stage = 'parked' AND error LIKE 'REVIEW-UNRESOLVED-PARK-1%' ORDER BY created_at ASC LIMIT 5").all();
+     var list = (cand && cand.results) || [];
+     for (var i = 0; i < list.length; i++) {
+@@ -2271,6 +2294,7 @@ var RESEARCH_SHARED_PREAMBLE = [
+   "You are the revising author. Resolve each HARD fix below by editing the paper in place.",
+   'Return ONLY a JSON array, no prose and no code fence: [{"find":"<exact verbatim excerpt of the PAPER, 40 to 800 characters, occurring once>","replace":"<corrected text>"}].',
+   "Copy each find excerpt character for character from the PAPER. Use at most 8 edits. To remove a sentence, replace it with an empty string.",
++  "RESEARCH-FLOOR-1: the edited paper keeps the length floor given with the FIXES. Delete a single unsupported sentence only when the allowed removal covers it; otherwise replace the text with corrected text of about the same length, and never delete a whole section or the reference citations.",
+   "Every replace text writes its mathematics in LaTeX inside $...$ (inline) or $$...$$ (display), never as Unicode superscripts, subscripts or operators.",
+   "A replace text states only what the PAPER or the FIXES already state: it adds no name, citation, identifier, link, number or finding from memory. When a fix cannot be met from the PAPER and the FIXES, remove the sentence. A replace text never mentions bibliography entries, supplied or fetched text, summaries, abstracts, the input block or the grounding.",
+   "### TASK VERIFY_EXTRACT",
+@@ -2293,7 +2317,10 @@ var RESEARCH_SHARED_PREAMBLE = [
+   "Follow every WRITER requirement above: derivations with shown arithmetic, no invented data, cite only the numbered Bibliography in the grounding, LaTeX for all mathematics, no meta-commentary. Keep the paper's notation, numbering and conventions, and refer only to sections that exist or that you write now.",
+   "### TASK SECTION",
+   "Write ONE missing section of the PAPER in the shared context, named below, so it can be inserted in its required place. Output ONLY that section, starting with its '## N. Heading' line, consistent with the paper's existing notation, numbers and citations.",
+-  "Follow every WRITER requirement above for that section. State only what the paper already derives or what the grounding supports; label projections with their assumptions; never invent data, applications, costs or references."
++  "Follow every WRITER requirement above for that section. State only what the paper already derives or what the grounding supports; label projections with their assumptions; never invent data, applications, costs or references.",
++  "### TASK EXTEND",
++  "The PAPER in the shared context is complete but shorter than the length it must reach. Write ONE additional section, named below, that deepens the paper: worked derivations with shown arithmetic, sensitivity or limiting cases, or a closer comparison with the cited works. Output ONLY that section, starting with its '## Heading' line.",
++  "The section is inserted before the Discussion. It reaches at least the length asked for, cites the Bibliography entries listed as not yet cited by their numbers with a specific point from each entry's text, and states only what the paper already derives or what the grounding supports. Never invent data, applications, costs or references; do not write the References list; do not restate earlier sections; keep the paper's notation. Follow every WRITER requirement above."
+ ].join("\n");
+ 
+ function stagePrompt(name, body) {
+@@ -3485,6 +3512,98 @@ async function completeCall(env, prompt) {
+   }
+   return String(out || "");
+ }
++// RESEARCH-FLOOR-1 (0.21.0, 2026-10-19, agent_issues 99913; pillar research): a paper under the publish floor (20,000 chars,
++// minChars of finalGates for every non-remediation row) or under the reference floor failed verify and went to the patch
++// reviser, which has find/replace edits and cannot add text. Measured 2026-10-19: 113 of 255 complete events in 24 h were under
++// 20,000 chars, 21 gate-length / gate-refcount / HARD-unresolved RESEARCH-TERMINAL issues in 24 h, 15 poison-parks in one day.
++// The `complete` stage now also extends a complete paper to the floor: one grounded section per round (event floor-extend)
++// that cites the bibliography entries not yet cited, inserted before the Discussion, bounded by FLOOR_EXTEND_MAX_ROUNDS.
++// The goal is 1.2x the floor because a single revise patch shrinks a paper by up to 16% (60 applied revise-patch events,
++// 2026-10-19: 20369 -> 18060, 17046 -> 15018, 40392 -> 34061), so a paper that stops exactly at the floor falls under it again.
++var FLOOR_EXTEND_TARGET = 1.2;
++var FLOOR_EXTEND_MAX_ROUNDS = 6;
++var FLOOR_EXTEND_HEADINGS = ["Extended Derivations and Worked Examples", "Sensitivity, Limiting Cases and Robustness Checks", "Further Comparison with the Cited Literature", "Numerical Illustration and Error Budget", "Assumptions, Scope and Open Questions", "Additional Consequences of the Model"];
++// REVISE-SHRINK-GUARD-1: a revise patch may not take a paper that is at or above its floor below it, may not cut more than
++// REVISE_SHRINK_MAX of it in one pass (the largest of 60 applied patches measured on 2026-10-19 was 16%), and may not drop
++// the cited-reference count below the reference floor.
++var REVISE_SHRINK_MAX = 0.2;
++// ops_config levers without a deploy: research_floor_extend = off skips the extension and the floor routes (the paper goes to
++// review as before); research_revise_shrink_guard = measure logs a refusal and applies the patch.
++async function floorFlag(env, key) {
++  try {
++    var r = await env.QNFO_AUDIT.prepare("SELECT value FROM ops_config WHERE key = ?1").bind(key).first();
++    return r ? String(r.value || "").trim().toLowerCase() : "";
++  } catch (eFl) {
++    console.error(JSON.stringify({ worker: "qnfo-research-exec", where: "floor-flag", key: key, error: String(eFl && eFl.message || eFl).slice(0, 160) }));
++    return "";
++  }
++}
++async function floorExtendOn(env) {
++  return (await floorFlag(env, "research_floor_extend")) !== "off";
++}
++var FLOOR_OFF = { need: false, len: false, refs: false, floor: 0, target: 0, chars: 0, uncited: [] };
++function floorChars(row) {
++  return row && row.source === "remediation" ? MIN_PAPER_CHARS : PUBLISH_FLOOR_CHARS;
++}
++function bibNumbersOf(grounding) {
++  var tail = String(grounding || "").split("## Bibliography")[1] || "";
++  return (tail.match(/^\[\d+\] /gm) || []).map(function(h) { return h.replace(/\D+/g, ""); });
++}
++// The bibliography numbers a text cites in its body (the References list itself is not a citation).
++function citedBibNumbers(text) {
++  var cited = {}, body = paperBodyPart(text), re = /\[(\d+(?:\s*[,\u2013-]\s*\d+)*)\]/g, m;
++  while ((m = re.exec(body)) !== null) {
++    m[1].split(",").forEach(function(part) {
++      var rg = part.trim().split(/\s*[\u2013-]\s*/), a = parseInt(rg[0], 10), b = rg.length > 1 ? parseInt(rg[1], 10) : a;
++      if (Number.isFinite(a) && Number.isFinite(b) && b >= a && b - a < 50) for (var k = a; k <= b; k++) cited[String(k)] = 1;
++    });
++  }
++  return cited;
++}
++function citedBibCount(text, grounding) {
++  var c = citedBibNumbers(text);
++  return bibNumbersOf(grounding).filter(function(n) { return c[n]; }).length;
++}
++// What finalGates would say about length and reference count for this row, on the paper as verify will render it.
++// `extending` (a floor extension is already under way) raises the length goal from the floor to FLOOR_EXTEND_TARGET.
++function floorShortfall(row, paper, grounding, extending) {
++  var p = String(paper || "");
++  try {
++    var rr = renderReferences(p, grounding);
++    if (rr.cited) p = rr.paper;
++  } catch (eFs) {
++    console.error(JSON.stringify({ worker: "qnfo-research-exec", where: "floor-shortfall-render", error: String(eFs && eFs.message || eFs).slice(0, 160) }));
++  }
++  var floor = floorChars(row), target = Math.ceil(floor * FLOOR_EXTEND_TARGET);
++  var g = finalGates(p, { bibCount: bibCountFromGrounding(grounding), minChars: floor });
++  var ids = g.fixes.map(function(f) { return f.id; });
++  var cited = citedBibNumbers(p);
++  var uncited = bibNumbersOf(grounding).filter(function(n) { return !cited[n]; });
++  var len = ids.indexOf("gate-length") >= 0 || (!!extending && p.length < target);
++  var refs = ids.indexOf("gate-refcount") >= 0 && uncited.length > 0;
++  return { need: len || refs, len: len, refs: refs, floor: floor, target: target, chars: p.length, uncited: uncited };
++}
++function floorFixIds(ids) {
++  return ids.length > 0 && ids.every(function(id) { return id === "gate-length" || id === "gate-refcount"; });
++}
++function fixIdsOf(fixes) {
++  try {
++    var j = JSON.parse(fixes || "[]");
++    var list = Array.isArray(j) ? j : j && Array.isArray(j.hard) ? j.hard : [];
++    return list.filter(function(f) { return f && f.id; }).map(function(f) { return String(f.id); });
++  } catch (eFi) {
++    return [];
++  }
++}
++function reviseShrinkRefusal(row, before, after, grounding) {
++  var b = String(before || ""), a = String(after || ""), floor = floorChars(row);
++  if (b.length >= floor && a.length < floor) return "below the " + floor + "-char floor";
++  if (b.length > 0 && a.length < b.length * (1 - REVISE_SHRINK_MAX)) return "cuts " + Math.round((1 - a.length / b.length) * 100) + "% of the paper in one pass (limit " + Math.round(REVISE_SHRINK_MAX * 100) + "%)";
++  var minRefs = Math.max(MIN_GROUND_REFS, Math.min(MIN_REFS, bibCountFromGrounding(grounding)));
++  var rb = citedBibCount(b, grounding), ra = citedBibCount(a, grounding);
++  if (rb >= minRefs && ra < minRefs) return "drops the cited references " + rb + " -> " + ra + " under the floor of " + minRefs;
++  return "";
++}
+ async function stageComplete(env, row) {
+   __attrStageSet(env, "complete");
+   var t0 = Date.now();
+@@ -3502,11 +3621,33 @@ async function stageComplete(env, row) {
+   var groundBlock = "GROUNDING (the input block and the numbered Bibliography; cite only these):\n" + grounding;
+   var rounds = 0, gainedTotal = 0, steps = [];
+   var stall = ctx.completeStall || 0;
++  var floorUsed = 0, floorSpent = Number(ctx.floorRounds || 0);
++  var floorOn = await floorExtendOn(env);
+   while (rounds < COMPLETE_ROUNDS_PER_TICK && Date.now() - t0 < COMPLETE_TICK_BUDGET_MS) {
+     var pc = paperCompleteness(paper);
+-    if (pc.complete) break;
++    var fsh = floorOn ? floorShortfall(row, paper, grounding, ctx.extendFor === "floor" || floorUsed > 0) : FLOOR_OFF;
++    if (pc.complete && (!fsh.need || floorSpent + floorUsed >= FLOOR_EXTEND_MAX_ROUNDS)) break;
+     var next = paper, mode;
+-    if (pc.truncated) {
++    if (pc.complete) {
++      // RESEARCH-FLOOR-1: a complete paper under the floor gets one grounded section per round.
++      mode = "extend";
++      floorUsed++;
++      var want = Math.min(12000, Math.max(1500, fsh.target - fsh.chars));
++      var heading = FLOOR_EXTEND_HEADINGS[(floorSpent + floorUsed - 1) % FLOOR_EXTEND_HEADINGS.length];
++      var extOut = await completeCall(env, stageContextPrompt("EXTEND", "PAPER", paper, groundBlock + "\n\nSECTION TO WRITE: '## " + heading + "'\nLENGTH: at least " + want + " characters.\nBIBLIOGRAPHY ENTRIES NOT YET CITED: " + (fsh.uncited.length ? fsh.uncited.slice(0, 20).map(function(n) { return "[" + n + "]"; }).join(", ") : "(none)")));
++      var extSec = stitchContinuation("", extOut).trim();
++      if (extSec.length >= COMPLETE_MIN_GAIN) {
++        if (!/^## /.test(extSec)) extSec = "## " + heading + "\n\n" + extSec;
++        next = insertSection(paper, "Results", extSec);
++        try {
++          var _er = renderReferences(next, grounding);
++          if (_er.cited) next = _er.paper;
++        } catch (eEr) {
++          console.error(JSON.stringify({ worker: "qnfo-research-exec", where: "floor-extend-render", error: String(eEr && eEr.message || eEr).slice(0, 160) }));
++        }
++      }
++      await logEvent(env, "floor-extend", "row=" + row.id + " round=" + (floorSpent + floorUsed) + " chars " + paper.length + "->" + next.length + " floor=" + fsh.floor + " target=" + fsh.target + " uncited=" + fsh.uncited.length, next.length > paper.length ? "ok" : "warn");
++    } else if (pc.truncated) {
+       mode = "continue";
+       var base = completionBase(paper);
+       var remaining = pc.tailMissing.map(function(k) { var s = PAPER_SECTION_ORDER.find(function(x) { return x.key === k; }); return s ? s.heading : k; });
+@@ -3534,7 +3675,7 @@ async function stageComplete(env, row) {
+     }
+     var gain = next.length - paper.length;
+     steps.push(mode + ":" + gain);
+-    if (next === paper || gain < COMPLETE_MIN_GAIN && mode === "section") {
++    if (next === paper || gain < COMPLETE_MIN_GAIN && (mode === "section" || mode === "extend")) {
+       stall++;
+     } else {
+       stall = 0;
+@@ -3547,18 +3688,24 @@ async function stageComplete(env, row) {
+   }
+   var pcEnd = paperCompleteness(paper);
+   var total = (ctx.completeRounds || 0) + rounds;
+-  await logEvent(env, "complete", "row=" + row.id + " rounds=" + rounds + " total=" + total + " gained=" + gainedTotal + " steps=" + steps.join(",") + " chars=" + paper.length + " complete=" + pcEnd.complete + (pcEnd.complete ? "" : " left=" + pcEnd.reasons.join("; ").slice(0, 200)), pcEnd.complete ? "ok" : "warn");
+-  if (pcEnd.complete) {
++  // RESEARCH-FLOOR-1: a complete paper leaves this stage when it is at the floor, or when the extension is spent (the round
++  // budget, or COMPLETE_STALL_MAX rounds that added nothing); verify then decides, once (verifyPass), as before.
++  var fshEnd = floorOn ? floorShortfall(row, paper, grounding, ctx.extendFor === "floor" || floorUsed > 0) : FLOOR_OFF;
++  var floorGaveUp = fshEnd.need && (floorSpent + floorUsed >= FLOOR_EXTEND_MAX_ROUNDS || stall >= COMPLETE_STALL_MAX);
++  await logEvent(env, "complete", "row=" + row.id + " rounds=" + rounds + " total=" + total + " gained=" + gainedTotal + " steps=" + steps.join(",") + " chars=" + paper.length + " complete=" + pcEnd.complete + (pcEnd.complete ? "" : " left=" + pcEnd.reasons.join("; ").slice(0, 200)) + " floor=" + (fshEnd.need ? (floorGaveUp ? "gave-up" : "short") : "ok") + " floor_rounds=" + (floorSpent + floorUsed), pcEnd.complete && !floorGaveUp ? "ok" : "warn");
++  if (pcEnd.complete && (!fshEnd.need || floorGaveUp)) {
+     var nctx = Object.assign({}, ctx, { completeRounds: total, completeStall: 0 });
+     delete nctx.completeFrom;
++    delete nctx.extendFor;
++    delete nctx.floorRounds;
+     await env.QNFO_AUDIT.prepare("UPDATE research_queue SET stage='review', context=? WHERE id=?").bind(JSON.stringify(nctx).slice(0, 6e3), row.id).run();
+-    return { ok: true, stage: "complete->review", rounds: total, chars: paper.length };
++    return { ok: true, stage: "complete->review", rounds: total, chars: paper.length, floor: fshEnd.need ? "gave-up" : "ok" };
+   }
+   if (stall >= COMPLETE_STALL_MAX) {
+     await markError(env, row, "complete: " + stall + " rounds added nothing; still " + pcEnd.reasons.join("; ").slice(0, 160));
+     return { ok: false, stage: "complete", stalled: stall };
+   }
+-  await env.QNFO_AUDIT.prepare("UPDATE research_queue SET context=? WHERE id=?").bind(JSON.stringify(Object.assign({}, ctx, { completeRounds: total, completeStall: stall })).slice(0, 6e3), row.id).run();
++  await env.QNFO_AUDIT.prepare("UPDATE research_queue SET context=? WHERE id=?").bind(JSON.stringify(Object.assign({}, ctx, { completeRounds: total, completeStall: stall }, floorUsed || ctx.extendFor ? { extendFor: "floor", floorRounds: floorSpent + floorUsed } : {})).slice(0, 6e3), row.id).run();
+   return { ok: true, stage: "complete", rounds: total, chars: paper.length, left: pcEnd.reasons };
+ }
+ __name(stageComplete, "stageComplete");
+@@ -4248,10 +4395,22 @@ async function stageRevise(env, row) {
+     await env.QNFO_AUDIT.prepare("UPDATE research_queue SET stage='complete', context=? WHERE id=?").bind(JSON.stringify(Object.assign({}, ctx, { completeFrom: "revise" })).slice(0, 6e3), row.id).run();
+     return { ok: true, stage: "revise->complete" };
+   }
++  // RESEARCH-FLOOR-1: fixes that are only gate-length / gate-refcount ask for text the patch reviser cannot write; the
++  // paper goes to `complete`, which extends it to the floor, and then back through review and verify.
++  const _floorGround = await r2Get(env, String(row.id) + "/grounding.md") || "";
++  const _floorIds = fixIdsOf(fixes);
++  const _floorOn = await floorExtendOn(env);
++  if (_floorOn && floorFixIds(_floorIds) && floorShortfall(row, paper, _floorGround, false).need) {
++    await env.QNFO_AUDIT.prepare("UPDATE research_queue SET stage='complete', context=? WHERE id=?").bind(JSON.stringify(Object.assign({}, ctx, { completeFrom: "revise", extendFor: "floor" })).slice(0, 6e3), row.id).run();
++    await logEvent(env, "floor-route", "row=" + row.id + " revise->complete ids=" + _floorIds.join(",") + " chars=" + paper.length, "warn");
++    return { ok: true, stage: "revise->complete", extendFor: "floor" };
++  }
+   if (paper.length >= 1e4) {
+     // Workers AI directly at low reasoning effort: the gateway path ran the same model at default effort and aborted at
+     // its 240 s budget (12:08Z), and a short JSON answer does not need deep reasoning.
+-    const _pprompt = stageContextPrompt("REVISE_PATCH", "PAPER", paper, "FIXES (JSON):\n" + fixes.slice(0, 8e3));
++    // RESEARCH-FLOOR-1: the length floor and the removal this paper can absorb ride in the per-call text.
++    const _floorNote = "\n\nLENGTH FLOOR: " + floorChars(row) + " characters (the paper is " + paper.length + "); at most " + Math.max(0, paper.length - floorChars(row)) + " characters may be removed in total.";
++    const _pprompt = stageContextPrompt("REVISE_PATCH", "PAPER", paper, "FIXES (JSON):\n" + fixes.slice(0, 8e3) + _floorNote);
+     let _praw = await aiText(env, MODELS[0], _pprompt, 8192, "low");
+     // WRITER-FLASH-1: the retry for a short JSON patch uses gpt-oss-120b (another family, ~500 neurons) instead of glm-5.3 (~3,300).
+     let _pmodel = MODELS[0];
+@@ -4259,7 +4418,18 @@ async function stageRevise(env, row) {
+       _praw = await aiText(env, MODELS[2], _pprompt, 8192, "low");
+       _pmodel = MODELS[2];
+     }
+-    let _p = applyRevisePatch(paper, _praw);
++    // REVISE-SHRINK-GUARD-1 (RESEARCH-FLOOR-1): an answer whose edits would take the paper under its floor, cut more than
++    // REVISE_SHRINK_MAX of it, or drop its cited references under the reference floor counts as not applied, so the
++    // second-model path below runs (with the limit stated); the refused text is never stored.
++    const _shrinkMeasure = (await floorFlag(env, "research_revise_shrink_guard")) === "measure";
++    const _applyGuarded = async function(raw, model) {
++      const p = applyRevisePatch(paper, raw);
++      const why = p.applied > 0 ? reviseShrinkRefusal(row, paper, p.text, _floorGround) : "";
++      if (!why) return p;
++      await logEvent(env, "revise-shrink-refused", "row=" + row.id + " model=" + model + " applied=" + p.applied + " chars " + paper.length + "->" + p.text.length + ": " + why + (_shrinkMeasure ? " (mode=measure, applied)" : ""), "warn");
++      return _shrinkMeasure ? p : Object.assign({}, p, { applied: 0, refused: why });
++    };
++    let _p = await _applyGuarded(_praw, _pmodel);
+     let _fx = [];
+     try {
+       const _fj = JSON.parse(fixes || "[]");
+@@ -4280,21 +4450,24 @@ async function stageRevise(env, row) {
+     // so the cached preamble + paper prefix is unchanged. It runs on the other model family, or again on that family with
+     // the stricter text when the first fallback already used it.
+     const _strict = _p.proposed === 0 && _hardIds.length ? "\n\nSTRICT RETRY: the previous answer proposed no edit, which is not acceptable for a non-empty fix list. The HARD fixes to resolve are: " + _hardIds.join(", ") + ". Return at least one edit for EACH of these fix ids, as a JSON array of {\"find\",\"replace\"} objects and nothing else; an empty array is a wrong answer. Where a fix cannot be met from the PAPER and the FIXES, resolve it by replacing the offending sentence with an empty string." : "";
+-    if (!_p.applied && (_pmodel !== MODELS[2] || _strict)) {
+-      await logEvent(env, "revise-patch", "row=" + row.id + " model=" + _pmodel + " proposed=" + _p.proposed + " applied=0 raw_chars=" + String(_praw || "").length + " out_chars=" + _p.text.length + " second-model retry" + (_strict ? " (strict: " + _hardIds.join(",") + ")" : ""), "warn");
+-      const _praw2 = await aiText(env, MODELS[2], _pprompt + _strict, 8192, "low");
+-      const _p2 = applyRevisePatch(paper, _praw2);
++    const _shrinkNote = _p.refused ? "\n\nLENGTH RETRY: the previous answer's edits " + _p.refused + ". The paper is " + paper.length + " characters and must stay at least " + floorChars(row) + ". Resolve each HARD fix by replacing the text with corrected text of about the same length; do not delete sections or citations." : "";
++    if (!_p.applied && (_pmodel !== MODELS[2] || _strict || _shrinkNote)) {
++      await logEvent(env, "revise-patch", "row=" + row.id + " model=" + _pmodel + " proposed=" + _p.proposed + " applied=0 raw_chars=" + String(_praw || "").length + " out_chars=" + _p.text.length + (_p.refused ? " refused=" + _p.refused : "") + " second-model retry" + (_strict ? " (strict: " + _hardIds.join(",") + ")" : ""), "warn");
++      const _praw2 = await aiText(env, MODELS[2], _pprompt + _strict + _shrinkNote, 8192, "low");
++      const _p2 = await _applyGuarded(_praw2, MODELS[2]);
+       if (_p2.applied || !_praw) {
+         _praw = _praw2;
+         _p = _p2;
+       }
+       _pmodel = MODELS[2];
+     }
+-    await logEvent(env, "revise-patch", "row=" + row.id + " proposed=" + _p.proposed + " applied=" + _p.applied + " raw_chars=" + String(_praw || "").length + " out_chars=" + _p.text.length + (_p.ungrounded ? " ungrounded=" + _p.ungrounded : "") + (_p.flex ? " flex=" + _p.flex : ""), _p.applied ? "ok" : "warn");
++    await logEvent(env, "revise-patch", "row=" + row.id + " proposed=" + _p.proposed + " applied=" + _p.applied + " raw_chars=" + String(_praw || "").length + " out_chars=" + _p.text.length + (_p.ungrounded ? " ungrounded=" + _p.ungrounded : "") + (_p.flex ? " flex=" + _p.flex : "") + (_p.refused ? " refused=" + _p.refused : ""), _p.applied ? "ok" : "warn");
+     if (_p.applied > 0 && _p.text.length >= 1e4) {
+       await r2Put(env, String(row.id) + "/reconciled.md", _p.text);
+       const _c2 = (ctx.cycles || 0) + 1;
+-      await env.QNFO_AUDIT.prepare("UPDATE research_queue SET stage=" + (paperCompleteness(_p.text).complete ? "'review'" : "'complete'") + ", context=? WHERE id=?").bind(JSON.stringify({ cycles: _c2, patch: _p.applied, verifyPass: ctx.verifyPass || 0 }).slice(0, 6e3), row.id).run();
++      // RESEARCH-FLOOR-1: a patched paper that still lacks the length or references a floor fix asked for is extended, not reviewed short.
++      const _floorNext = _floorOn && _hardIds.some(function(id) { return id === "gate-length" || id === "gate-refcount"; }) && floorShortfall(row, _p.text, _floorGround, false).need;
++      await env.QNFO_AUDIT.prepare("UPDATE research_queue SET stage=" + (paperCompleteness(_p.text).complete && !_floorNext ? "'review'" : "'complete'") + ", context=? WHERE id=?").bind(JSON.stringify(Object.assign({ cycles: _c2, patch: _p.applied, verifyPass: ctx.verifyPass || 0 }, _floorNext ? { extendFor: "floor" } : {})).slice(0, 6e3), row.id).run();
+       return { ok: true, stage: "revise->review", cycle: _c2, patch: _p.applied };
+     }
+     // REVISE-WALL-1 (2026-10-01): a full rewrite of a paper this long cannot fit the 8192-token budget next to the reasoning
+@@ -4314,7 +4487,7 @@ async function stageRevise(env, row) {
+       const _onlyParse = _fx.length > 0 && _fx.every(function(f) {
+         return f && f.id === "review-parse";
+       });
+-      await logEvent(env, "revise-noop", "row=" + row.id + " no applicable patch edit (proposed=" + _p.proposed + ", raw=" + String(_praw || "").length + " chars, fixes=" + _fx.length + (_hardIds.length ? ", ids=" + _hardIds.join(",") : "") + ", strict_retry=" + (_strict ? "yes" : "no") + "); " + (_onlyParse ? "the review output was unreadable, review runs again" : "the paper does not advance unrevised; revise failed, recover path"), "warn");
++      await logEvent(env, "revise-noop", "row=" + row.id + " no applicable patch edit (proposed=" + _p.proposed + ", raw=" + String(_praw || "").length + " chars, fixes=" + _fx.length + (_hardIds.length ? ", ids=" + _hardIds.join(",") : "") + ", strict_retry=" + (_strict ? "yes" : "no") + "); " + (_p.refused ? "shrink refused: " + _p.refused + "; " : "") + (_onlyParse ? "the review output was unreadable, review runs again" : "the paper does not advance unrevised; revise failed, recover path"), "warn");
+       if (_onlyParse && (ctx.reparse || 0) < 2) {
+         await env.QNFO_AUDIT.prepare("UPDATE research_queue SET stage='review', context=? WHERE id=?").bind(JSON.stringify({ cycles: ctx.cycles || 0, patch: 0, verifyPass: ctx.verifyPass || 0, reparse: (ctx.reparse || 0) + 1 }).slice(0, 6e3), row.id).run();
+         return { ok: true, stage: "revise->review", cycle: ctx.cycles || 0, patch: 0, rereview: true };
+@@ -4750,6 +4923,16 @@ function parseExtractedClaims(raw) {
+   }
+   return { answered: false, claims: [], reason };
+ }
++// RESEARCH-FLOOR-1: verify failed only on length or reference count (first pass): `complete` writes the missing text and the
++// paper goes back through review and verify with verifyPass 1, so the second verify is terminal exactly as after a revise.
++function floorOnlyFailure(gates) {
++  return !gates.ok && floorFixIds(gates.fixes.map(function(f) { return f && f.id; }));
++}
++async function routeVerifyToFloor(env, row, ctx, gates) {
++  await env.QNFO_AUDIT.prepare("UPDATE research_queue SET stage='complete', context=? WHERE id=?").bind(JSON.stringify({ cycles: Number(ctx.cycles || 0), verifyPass: 1, extendFor: "floor" }).slice(0, 6e3), row.id).run();
++  await logEvent(env, "floor-route", "row=" + row.id + " verify->complete gate=" + gates.reason, "warn");
++  return { ok: true, stage: "verify->complete", gate: gates.reason, extendFor: "floor" };
++}
+ async function stageVerify(env, row) {
+   __attrStageSet(env, "verify");
+   let paper = await r2Get(env, String(row.id) + "/reconciled.md");
+@@ -4818,6 +5001,7 @@ async function stageVerify(env, row) {
+       await markError(env, row, "verify: unresolved after revision - gates=" + gates2.reason);
+       return { ok: false, stage: "verify", withheld: "verify-unresolved", gate: gates2.reason };
+     }
++    if (floorOnlyFailure(gates2) && await floorExtendOn(env)) return await routeVerifyToFloor(env, row, ctx, gates2);
+     if (!gates2.ok) {
+       await r2Put(env, String(row.id) + "/fixes.json", JSON.stringify(gates2.fixes));
+       await env.QNFO_AUDIT.prepare("UPDATE research_queue SET stage='revise', context=? WHERE id=?").bind(JSON.stringify({ cycles: Number(ctx.cycles || 0), verifyPass: 1 }).slice(0, 6e3), row.id).run();
+@@ -4918,6 +5102,7 @@ async function stageVerify(env, row) {
+     await parkMathRow(env, row, _pm);
+     return { ok: false, stage: "verify", gate: gates.reason, parked: true };
+   }
++  if (!mismatch && !ctx.verifyPass && floorOnlyFailure(gates) && await floorExtendOn(env)) return await routeVerifyToFloor(env, row, ctx, gates);
+   if ((mismatch || !gates.ok) && !ctx.verifyPass) {
+     const fixes = gates.fixes.slice();
+     if (mismatch) fixes.push({ id: "verify-mismatch", severity: "HARD", claim: "computed values do not match paper claims", reason: adj.rows.filter(function(r) {
+@@ -28953,6 +29138,12 @@ export {
+   rerunRoute,
+   releaseGateVerdict,
+   doneStatus,
++  stageComplete,
++  floorShortfall,
++  reviseShrinkRefusal,
++  floorRearmTick,
++  parkRearmTick,
++  FLOOR_EXTEND_TARGET,
+   CITATION_GATE
+ };
+ //# sourceMappingURL=worker.js.map
+diff --git a/qnfo-research-exec/revise-shrink-guard.test.mjs b/qnfo-research-exec/revise-shrink-guard.test.mjs
+new file mode 100644
+index 00000000..debacbfe
+--- /dev/null
++++ b/qnfo-research-exec/revise-shrink-guard.test.mjs
+@@ -0,0 +1,130 @@
++// REVISE-SHRINK-GUARD-1 (RESEARCH-FLOOR-1, qnfo-research-exec 0.21.0, agent_issues 99913): a revise patch may not take a paper from
++// at or above the publish floor to below it, may not cut more than 20% of it in one pass, and may not drop its cited references
++// under the reference floor. Runs the worker's real stageRevise and reviseShrinkRefusal against in-memory R2, AI and D1 mocks.
++// Measured on 2026-10-19 (60 applied revise-patch events against the preceding complete chars): a single patch shrank a paper by
++// 0-16%; one before the guard cut a 41k paper to 17k.
++// Run: node qnfo-research-exec/revise-shrink-guard.test.mjs   -> prints "N passed, 0 failed"
++import { stageRevise, reviseShrinkRefusal, paperCompleteness } from "./worker.js";
++
++let pass = 0, fail = 0;
++const ok = (c, m, d) => { if (c) pass++; else { fail++; console.log("FAIL " + m + (d !== undefined ? " -- " + JSON.stringify(d).slice(0, 700) : "")); } };
++
++const S = (i) => "Step " + i + " of the derivation fixes the intermediate value " + (i * 7) + " from the stated inputs and carries it forward with the arithmetic shown. ";
++const run = (from, n, cite) => Array.from({ length: n }, (_, k) => S(from + k)).join("") + (cite ? "Prior work [" + cite + "] supplies the comparison used in this step. " : "");
++const sec = (h, from, n, cite) => "## " + h + "\n\n" + run(from, n, cite) + "\n\n";
++const BIB = 12;
++const grounding = "INPUT BLOCK\n\n## Bibliography\n" + Array.from({ length: BIB }, (_, i) => "[" + (i + 1) + "] arXiv:2401.0000" + (i + 1) + " | Work number " + (i + 1)).join("\n") + "\n";
++const refList = (nums) => "## References\n\n" + nums.map((k) => "[" + k + "] Work number " + k + ". arXiv:2401.0000" + k).join("\n") + "\n";
++// n sentences per section (a section is about n * 140 chars); cites 1..9 in the body.
++function mkPaper(n) {
++  return "# A paper about a model\n\n## Abstract\n\nContext, gap, approach, result and practice are stated here in order.\n\n"
++    + sec("1. Introduction", 1, n, 1) + sec("2. Background and Related Work", 1000, n, 2) + sec("3. Methods", 2000, n, 3) + sec("4. Analysis", 3000, n, 4)
++    + sec("5. Results", 4000, n, 5) + sec("6. Discussion", 5000, n, 6) + sec("7. Practical Implications and Engineering Pathways", 6000, n, 7)
++    + sec("8. Conclusion", 7000, Math.max(3, Math.floor(n / 4)), "8, 9") + refList([1, 2, 3, 4, 5, 6, 7, 8, 9]);
++}
++const BIGP = mkPaper(41); // about 41k
++const SMALL = mkPaper(15); // about 15k, under the floor
++ok(BIGP.length > 38000 && BIGP.length < 46000 && paperCompleteness(BIGP).complete, "fixture: a complete paper of about 41k chars", BIGP.length);
++ok(SMALL.length > 12000 && SMALL.length < 19000 && paperCompleteness(SMALL).complete, "fixture: a complete paper under the floor", SMALL.length);
++
++const row = (extra) => Object.assign({ id: "r1", context: "{}", recover_count: 0, source: "idea-hub", stage: "revise", status: "researching" }, extra || {});
++
++// ---- reviseShrinkRefusal, the decision ----
++const cut = (paper, from, to) => paper.slice(0, from) + paper.slice(to);
++{
++  const a = BIGP.indexOf("## 2. Background"), b = BIGP.indexOf("## 7. Practical");
++  const big = cut(BIGP, a, b);
++  ok(big.length < 20000 && /below the 20000-char floor/.test(reviseShrinkRefusal(row(), BIGP, big, grounding)), "a patch that cuts 41k to under the floor is refused", { before: BIGP.length, after: big.length });
++  const mid = cut(BIGP, a, a + Math.floor(BIGP.length * 0.25));
++  ok(mid.length > 20000 && /cuts 2\d% of the paper in one pass/.test(reviseShrinkRefusal(row(), BIGP, mid, grounding)), "a 25% cut that stays above the floor is refused for its size", { after: mid.length, why: reviseShrinkRefusal(row(), BIGP, mid, grounding) });
++  const sentence = BIGP.replace(S(5), "");
++  ok(reviseShrinkRefusal(row(), BIGP, sentence, grounding) === "", "a one-sentence removal is allowed");
++  const tenPct = cut(BIGP, a, a + Math.floor(BIGP.length * 0.1));
++  ok(tenPct.length > 20000 && reviseShrinkRefusal(row(), BIGP, tenPct, grounding) === "", "a 10% cut that stays above the floor (the measured range is 0-16%) is allowed");
++  ok(reviseShrinkRefusal(row(), SMALL, SMALL.replace(S(1005), ""), grounding) === "", "a paper already under the floor may be patched (the complete stage extends it afterwards)");
++  // References: dropping the citations under the reference floor (min(MIN_REFS 8, 12 entries) = 8) is refused even when the length holds.
++  const stripped = BIGP.replace(/Prior work \[[0-9, ]+\] supplies the comparison used in this step\. /g, (m) => (/\[[1-5]\]/.test(m) ? m.replace(/Prior work \[\d\]/, "Prior work") : m));
++  ok(stripped.length > 38000 && /drops the cited references 9 -> 4 under the floor of 8/.test(reviseShrinkRefusal(row(), BIGP, stripped, grounding)), "a patch that leaves 4 cited references of 9 is refused", reviseShrinkRefusal(row(), BIGP, stripped, grounding));
++  const oneCite = BIGP.replace("Prior work [9] supplies", "Prior work supplies").replace(/\b8, 9\b/, "8");
++  ok(reviseShrinkRefusal(row(), BIGP, oneCite, grounding) === "", "citations that stay at or above the floor are allowed (9 -> 8)");
++  // A remediation row keeps its own floor (8,000 chars).
++  const rem = row({ source: "remediation" });
++  const mk12 = mkPaper(14);
++  ok(/below the 8000-char floor/.test(reviseShrinkRefusal(rem, mk12, cut(mk12, mk12.indexOf("## 2. Background"), mk12.indexOf("## 7. Practical")), grounding)), "a remediation row is judged against 8,000 chars, not 20,000");
++  ok(!/below the/.test(reviseShrinkRefusal(rem, mk12, cut(mk12, mk12.indexOf("## 6. Discussion"), mk12.indexOf("## 7. Practical")), grounding)), "a remediation paper above 8,000 chars is never refused for the 20,000 floor");
++}
++
++// ---- stageRevise end to end ----
++function mkEnv(answerFn, opts) {
++  const o = opts || {};
++  const store = { "pipeline/r1/reconciled.md": o.paper || BIGP, "pipeline/r1/grounding.md": grounding, "pipeline/r1/fixes.json": JSON.stringify({ hard: [{ id: "h1", severity: "HARD", claim: "the step value", reason: "stated without derivation", fix: "derive or remove" }], soft: [] }) };
++  const sqls = [], calls = [];
++  const D1 = { prepare(sql) { let args = []; const q = { bind(...x) { args = x; return q; }, async run() { sqls.push({ sql, args }); return { meta: { changes: 1 } }; }, async first() { if (/FROM ops_config/.test(sql) && o.flags && o.flags[args[0]] !== undefined) return { value: o.flags[args[0]] }; return null; }, async all() { return { results: [] }; } }; return q; } };
++  const MIRROR = { async get(k) { const v = store[k]; return v == null ? null : { text: async () => v }; }, async put(k, v) { store[k] = v; } };
++  const AI = { async run(model, input) { const prompt = input.messages[0].content; calls.push({ model, prompt }); return { response: answerFn(calls.length, prompt) }; } };
++  return { env: { AI, QNFO_AUDIT: D1, MIRROR }, sqls, calls, store };
++}
++const events = (t) => t.sqls.filter((s) => /INSERT INTO cloud_ops_events/.test(s.sql)).map((s) => ({ kind: s.args[2], text: s.args[3], status: s.args[6] }));
++const stageUpdates = (t) => t.sqls.filter((s) => /UPDATE research_queue SET stage=/.test(s.sql));
++const BIG_FIND = BIGP.slice(BIGP.indexOf("## 2. Background"), BIGP.indexOf("## 7. Practical"));
++const BIG_CUT = JSON.stringify([{ find: BIG_FIND, replace: "" }]);
++const SMALL_EDIT = JSON.stringify([{ find: S(5), replace: "Step 5 of the derivation fixes the intermediate value 35 from the stated inputs and carries it forward with the arithmetic shown in full detail. " }]);
++
++// 1. The destructive patch is refused, the second model (with the limit stated) edits a sentence, the row advances with that edit.
++{
++  const t = mkEnv((n) => n === 1 ? BIG_CUT : SMALL_EDIT);
++  const res = await stageRevise(t.env, row());
++  const stored = t.store["pipeline/r1/reconciled.md"];
++  ok(t.calls.length === 2 && t.calls[0].model !== t.calls[1].model, "the refused answer is retried once on the other model", t.calls.map((c) => c.model));
++  ok(/LENGTH FLOOR: 20000 characters \(the paper is \d+\); at most \d+ characters may be removed in total\./.test(t.calls[0].prompt), "the first prompt states the floor and the allowed removal");
++  ok(t.calls[1].prompt.startsWith(t.calls[0].prompt) && /LENGTH RETRY: the previous answer's edits below the 20000-char floor\./.test(t.calls[1].prompt.slice(t.calls[0].prompt.length)), "the retry keeps the cached prefix and names the refused shrink");
++  ok(res && res.ok === true && res.stage === "revise->review" && res.patch === 1, "the row advances with the second model's edit", res);
++  ok(stored.length > BIGP.length - 200 && stored.includes("in full detail") && stored.includes("## 4. Analysis"), "the stored paper keeps its sections and carries only the small edit", stored.length);
++  const ev = events(t);
++  ok(ev.some((e) => e.kind === "revise-shrink-refused" && /chars \d+->\d+: below the 20000-char floor/.test(e.text) && e.status === "warn"), "revise-shrink-refused is logged with the sizes and the reason", ev);
++  ok(ev.some((e) => e.kind === "revise-patch" && /refused=below the 20000-char floor/.test(e.text) && /applied=0/.test(e.text)), "the first revise-patch event records applied=0 and the refusal");
++}
++
++// 2. A one-sentence removal is applied by the first model: no refusal, no retry.
++{
++  const t = mkEnv(() => JSON.stringify([{ find: S(5), replace: "" }]));
++  const res = await stageRevise(t.env, row());
++  ok(t.calls.length === 1 && res.stage === "revise->review" && !t.store["pipeline/r1/reconciled.md"].includes(S(5)) && !events(t).some((e) => e.kind === "revise-shrink-refused"), "a one-sentence removal is applied with one call and no refusal", res);
++}
++
++// 3. Both models answer with the destructive patch: nothing is stored, the pass fails as revise-noop and names the refusal.
++{
++  const t = mkEnv(() => BIG_CUT);
++  const res = await stageRevise(t.env, row());
++  ok(t.calls.length === 2, "two answers, both refused", t.calls.length);
++  ok(t.store["pipeline/r1/reconciled.md"] === BIGP, "the stored paper is untouched");
++  ok(res && res.ok === false && res.withheld === "revise-noop", "the pass fails as revise-noop (recover path), it does not advance", res);
++  ok(!stageUpdates(t).some((s) => /stage='review'/.test(s.sql)), "the row is not advanced to review");
++  const ev = events(t);
++  ok(ev.filter((e) => e.kind === "revise-shrink-refused").length === 2 && ev.some((e) => e.kind === "revise-noop" && /shrink refused: below the 20000-char floor/.test(e.text)), "both refusals and the noop reason are logged", ev.map((e) => e.kind));
++}
++
++// 4. The same model family twice: the first fallback already ran on MODELS[2] (no '[' in the first answer), then a refused answer still gets its retry.
++{
++  const t = mkEnv((n) => n === 1 ? "I cannot find a suitable edit." : n === 2 ? BIG_CUT : SMALL_EDIT);
++  const res = await stageRevise(t.env, row());
++  ok(t.calls.length === 3 && /LENGTH RETRY/.test(t.calls[2].prompt) && res.stage === "revise->review", "a refusal after the no-bracket fallback is retried with the limit stated", { calls: t.calls.length, res });
++}
++
++// 5. ops_config research_revise_shrink_guard = measure logs the refusal and applies the patch (the reversible lever).
++{
++  const t = mkEnv(() => JSON.stringify([{ find: BIG_FIND, replace: "" }]), { flags: { research_revise_shrink_guard: "measure" } });
++  const res = await stageRevise(t.env, row());
++  ok(t.calls.length === 1 && res.stage === "revise->review" && t.store["pipeline/r1/reconciled.md"].length < 20000, "measure mode applies the patch", res);
++  ok(events(t).some((e) => e.kind === "revise-shrink-refused" && /mode=measure, applied/.test(e.text)), "measure mode still logs what it would have refused");
++}
++
++// 6. A paper already under the floor is patched as before (the guard only protects a paper that is at the floor).
++{
++  const t = mkEnv(() => SMALL_EDIT, { paper: SMALL });
++  const res = await stageRevise(t.env, row());
++  ok(t.calls.length === 1 && res.stage === "revise->review" && t.store["pipeline/r1/reconciled.md"].includes("in full detail"), "a sub-floor paper is patched with one call", res);
++}
++
++console.log(pass + " passed, " + fail + " failed");
++if (fail) process.exit(1);
+diff --git a/qnfo-research-exec/worker.js b/qnfo-research-exec/worker.js
+index 6bf96062..18b51a80 100644
+--- a/qnfo-research-exec/worker.js
++++ b/qnfo-research-exec/worker.js
+@@ -33,7 +33,7 @@ var __name22222 = /* @__PURE__ */ __name2222((target, value) => __defProp22222(t
+ // an empty catch. CITE-CONSISTENCY-1 asks the reviewer to compare the draft against cited QNFO work.
+ // REVIEW-TRIAGE-CAP-1 is a defect fix: drift demotion at the cycle cap silently turned a blocking finding into a pass, so
+ // REVIEW-HARD-GATE-1 withheld nothing there (reviewer findings 2 -> 0 at the cap; an unparseable review advanced to verify).
+-var VERSION = "0.20.0-lean-width-1"; /* 0.20.0 LEAN-WIDTH-1 (2026-10-19, pillar cost; metrics workers_ai_run_rate_usd 410.84 vs 95, fleet_cost_run_rate_usd): while an ai_spend cap is breached (leanEnsemble), the stage width is at most ops_config research_parallel_lean (default 24, half of RESEARCH_PARALLEL_MAX) instead of the full ceiling. Measured: 10-09..10-12 at width 8 published 22-31 papers a day at about 13k neurons each; 10-18 at width 48 (research_parallel 96, clamped) made 7720 calls, 3140 of them errors (rate limits on glm-5.3-flash, retried and re-run), for 3.77M neurons and 24 papers. BUDGET-SOFT-ROUTE-1: fewer items per tick, never none; research_parallel_lean = 48 restores the old behaviour without a deploy. */ /* 0.19.2 (2026-10-19, RESOLVE-ALL-OPEN-1): merges main's 0.19.0 MATH-LATEX-AUTOFIX-1 with PR 2603's 0.19.0/0.19.1 fixes below. */ /* 0.19.1 EXTRACT-JSON-ROBUST-1 (issue 2877): parseExtractedClaims reads the first balanced JSON list or object (trailing prose no longer breaks it) and re-parses with lone LaTeX backslashes escaped; an empty extraction reply is asked once more in the tick. RETRY-NOT-ERROR-1 (issue 99990): a verify retry still in budget (retry: true) logs its done event as warn; only the pass that exhausts its retries is an error, so LOOP-BREAKER-1 counts real failures. WORKERS-BP-LOGGING (issue 2538): the 21 swallowed catches log a structured console.error (two trial parses carry a comment), control flow unchanged. */ /* 0.19.0 RESOLVE-ALL-OPEN-1 (2026-10-19, owner directive "RESOLVE/REMEDIATE ALL OPEN ISSUES"; pillar research): (a) RESEARCH-REVIEW-BIB-TRUNC-1 (#2800): the reviewer sees the index line of every bibliography entry, then bounded excerpts, instead of the first 8,000 chars (2-3 of 9-14 entries); (b) SLOP-SCAN-1 (#2407): a deterministic inflated-prose scan adds SOFT findings with locations against a corpus baseline read from its own slop-scan events; (c) REVISE-STRIDE-1 (#2847): queued rows at a resumable stage are claimed before ground rows; (d) EXTENSION-ACTIVATION-1 (#2824): extension rows (<= research_extension_per_day) bypass research_ready_cap, ops_config research_extension_cap_mode=respect restores it; (e) SWEEP-REARM-INLINE-1 (#2393): the completeness sweep re-arms remediation rows a 2026-10-17 cleanup closed as published without publishing; (f) RECONCILE-READ-1 (c) (#2725): an incomplete draft names its failed checks. */ /* 0.18.38 TICK-10M-1 + RECLAIM-KEEP-STAGE-1 + IDEA-TO-PUBLISH-METRIC-1 (2026-10-18, owner directive: idea to publication under 100 hours; pillar research): (a) the cron runs every 10 minutes (was 15; 144/day = CRON-MANDATE-1 ceiling, same schedule count); member windows are 10 minutes wide so each errata/reviser job still runs exactly once per slot; the 03:00 sweep window is 10 minutes; (b) a stale reclaim keeps a resumable stage (complete/review/revise/verify), and RESUME-DRAFT-1 at claim falls back to ground when reconciled.md is missing, so a stalled draft is not re-drafted from scratch; (c) idea_to_publish_h_p50_7d (median hours idea_proposals.created_at -> published_at, 7 days) is written to metric_registry on the :00 tick. */ /* 0.18.37 ERRATA-HIGHRISK-ROUTE-1 folded (errata member 1.6.2): a high-risk errata correction draft older than 6 h becomes a remediation research row instead of waiting audited forever; internal_errata closes with its queue row. */ /* 0.18.36 CLAIM-HEARTBEAT-1 + RESUME-DRAFT-1 + REVIEW-SECOND-MODEL-1 (2026-10-18): a stage returning ok refreshes claimed_at so the stale-claim reclaimer stops re-grounding papers still advancing (550 releases/24h, 302 ground claims of 72 rows); a resumable stage is kept when its draft exists in R2 (70 revise rows were re-drafted from ground); the review second path names its model (not kimi-k2.6 after #1429). */ /* 0.18.35 CLAIM-HEARTBEAT-1 (2026-10-18): a stage that returns ok refreshes claimed_at, so the 120-min stale-claim reclaimer no longer re-grounds papers that are still advancing (550 releases/24h, 302 ground claims of 72 rows). */ /* 0.18.34 REVIEW-EMPTY-SECOND-PATH-1 (2026-10-18): an unreadable review takes a second model family in the same tick and, still unreadable, re-runs review directly instead of sending the review-parse placeholder through two no-op patch calls (237 of 264 revise-noop events, 329 hard=1 cycles in 3 days). */ /* 0.18.33 PATCH-FLEX-REGEX-OVERFLOW-1 (2026-10-18, agent_issues 2886): findFlexible caps the flexible matcher at 400 tokens and fails closed on any regex error, so a whole-section find text no longer throws "Invalid regular expression: Stack overflow" out of the slot. */ /* 0.18.32 AI-RATE-FALLBACK-1 (2026-10-18): a 3021/3040/3046 on the primary model after backoff takes one call on another family (glm<->gpt-oss-120b) instead of failing the stage; 3040 no longer misread as a reasoning_effort rejection. */ /* 0.18.31 VERIFY-AUTOCORRECT-1 (2026-10-18): papers fail verify with REAL arithmetic errors (the reconcile/ensemble writer computes a number that does not match its own stated inputs) and the revise loop cannot reliably fix a bare number, so such papers cycle until park. Verify already holds both values — independently computed `computed` and the paper's stated `expected` — so stageVerify now corrects the number deterministically (autoCorrectNumeric) instead of sending it back through a model. Fail-closed: only a stated value found exactly once (verbatim or as an unambiguous bare mantissa in LaTeX/\\times 10^N) is corrected; anything ambiguous is skipped and falls through to revise. Every correction is logged as verify-autocorrect and appended to verification.md. */ /* 0.18.29 VERIFY-CYCLE-CAP-1 (2026-10-17, owner directive "REMEDIATE ALL ISSUES AND FAILURE MODES"): the verify->revise edge reset the review cycle counter to 0 (context={cycles:0,verifyPass:1}) while EVERY other edge preserves it (3716, 3735, 3753) and the review stage is the one that increments it. That single reset made MAX_REVIEW_CYCLES (6) unreachable, so an item that fails verify re-enters revise, resets to cycle 0, and loops until recover_count runs out — measured 2026-10-17: review-unresolved events exist ONLY at cycle 2 (193) and 3 (165), never 4; 96 rerun-route and 278 revise-patch events against ~100 rows; and stage='publish' is EMPTY, which is why 151 complete events produced 0 publications and why the publish quota (24) guarded an empty queue. The edge now preserves the count, so the existing six-cycle cap can terminate an item visibly instead of cycling forever. The gate itself (gates2) is unchanged: this does not let a failing draft through, it lets a draft that cannot pass STOP. */ // 0.18.28-codeagent /* 0.19.0 MATH-LATEX-AUTOFIX-1 (2026-10-19, agent_issues 100027, pillar research): 8 finished papers were parked from 2026-10-12 because gate-math-latex was left to the revise models' search/replace edits, which often did not apply. Plain-text math with one LaTeX spelling (Unicode super/subscripts, bare ^ and _ scripts, bra-kets, the scanner's operators) is now converted deterministically in review, revise and verify (event math-autofix); box drawings and lines holding currency still go to the models. */ /* 0.18.38 TICK-10M-1 + RECLAIM-KEEP-STAGE-1 + IDEA-TO-PUBLISH-METRIC-1 (2026-10-18, owner directive: idea to publication under 100 hours; pillar research): (a) the cron runs every 10 minutes (was 15; 144/day = CRON-MANDATE-1 ceiling, same schedule count); member windows are 10 minutes wide so each errata/reviser job still runs exactly once per slot; the 03:00 sweep window is 10 minutes; (b) a stale reclaim keeps a resumable stage (complete/review/revise/verify), and RESUME-DRAFT-1 at claim falls back to ground when reconciled.md is missing, so a stalled draft is not re-drafted from scratch; (c) idea_to_publish_h_p50_7d (median hours idea_proposals.created_at -> published_at, 7 days) is written to metric_registry on the :00 tick. */ /* 0.18.37 ERRATA-HIGHRISK-ROUTE-1 folded (errata member 1.6.2): a high-risk errata correction draft older than 6 h becomes a remediation research row instead of waiting audited forever; internal_errata closes with its queue row. */ /* 0.18.36 CLAIM-HEARTBEAT-1 + RESUME-DRAFT-1 + REVIEW-SECOND-MODEL-1 (2026-10-18): a stage returning ok refreshes claimed_at so the stale-claim reclaimer stops re-grounding papers still advancing (550 releases/24h, 302 ground claims of 72 rows); a resumable stage is kept when its draft exists in R2 (70 revise rows were re-drafted from ground); the review second path names its model (not kimi-k2.6 after #1429). */ /* 0.18.35 CLAIM-HEARTBEAT-1 (2026-10-18): a stage that returns ok refreshes claimed_at, so the 120-min stale-claim reclaimer no longer re-grounds papers that are still advancing (550 releases/24h, 302 ground claims of 72 rows). */ /* 0.18.34 REVIEW-EMPTY-SECOND-PATH-1 (2026-10-18): an unreadable review takes a second model family in the same tick and, still unreadable, re-runs review directly instead of sending the review-parse placeholder through two no-op patch calls (237 of 264 revise-noop events, 329 hard=1 cycles in 3 days). */ /* 0.18.33 PATCH-FLEX-REGEX-OVERFLOW-1 (2026-10-18, agent_issues 2886): findFlexible caps the flexible matcher at 400 tokens and fails closed on any regex error, so a whole-section find text no longer throws "Invalid regular expression: Stack overflow" out of the slot. */ /* 0.18.32 AI-RATE-FALLBACK-1 (2026-10-18): a 3021/3040/3046 on the primary model after backoff takes one call on another family (glm<->gpt-oss-120b) instead of failing the stage; 3040 no longer misread as a reasoning_effort rejection. */ /* 0.18.31 VERIFY-AUTOCORRECT-1 (2026-10-18): papers fail verify with REAL arithmetic errors (the reconcile/ensemble writer computes a number that does not match its own stated inputs) and the revise loop cannot reliably fix a bare number, so such papers cycle until park. Verify already holds both values — independently computed `computed` and the paper's stated `expected` — so stageVerify now corrects the number deterministically (autoCorrectNumeric) instead of sending it back through a model. Fail-closed: only a stated value found exactly once (verbatim or as an unambiguous bare mantissa in LaTeX/\\times 10^N) is corrected; anything ambiguous is skipped and falls through to revise. Every correction is logged as verify-autocorrect and appended to verification.md. */ /* 0.18.29 VERIFY-CYCLE-CAP-1 (2026-10-17, owner directive "REMEDIATE ALL ISSUES AND FAILURE MODES"): the verify->revise edge reset the review cycle counter to 0 (context={cycles:0,verifyPass:1}) while EVERY other edge preserves it (3716, 3735, 3753) and the review stage is the one that increments it. That single reset made MAX_REVIEW_CYCLES (6) unreachable, so an item that fails verify re-enters revise, resets to cycle 0, and loops until recover_count runs out — measured 2026-10-17: review-unresolved events exist ONLY at cycle 2 (193) and 3 (165), never 4; 96 rerun-route and 278 revise-patch events against ~100 rows; and stage='publish' is EMPTY, which is why 151 complete events produced 0 publications and why the publish quota (24) guarded an empty queue. The edge now preserves the count, so the existing six-cycle cap can terminate an item visibly instead of cycling forever. The gate itself (gates2) is unchanged: this does not let a failing draft through, it lets a draft that cannot pass STOP. */ // 0.18.28-codeagent
++var VERSION = "0.21.0-floor"; /* 0.21.0 RESEARCH-FLOOR-1 (2026-10-19, agent_issues 99913, pillar research): (a) REVISE-SHRINK-GUARD-1: a revise patch that would take a paper from at or above the publish floor (20,000 chars) to below it, cut more than 20% of it, or drop its cited references under the reference floor counts as not applied (event revise-shrink-refused), so the second model runs with the limit stated; (b) COMPLETE-TO-FLOOR-1: the complete stage extends a complete paper under the floor with grounded sections (event floor-extend, at most 6 rounds, goal 1.2x the floor) and gate-length / gate-refcount findings route verify and revise to complete instead of the patch reviser (event floor-route); (c) FLOOR-REARM-1: the hourly sweep returns the rows frozen in bak_20261019_research_parked to complete, 5 per run, once each. */ /* 0.20.0 LEAN-WIDTH-1 (2026-10-19, pillar cost; metrics workers_ai_run_rate_usd 410.84 vs 95, fleet_cost_run_rate_usd): while an ai_spend cap is breached (leanEnsemble), the stage width is at most ops_config research_parallel_lean (default 24, half of RESEARCH_PARALLEL_MAX) instead of the full ceiling. Measured: 10-09..10-12 at width 8 published 22-31 papers a day at about 13k neurons each; 10-18 at width 48 (research_parallel 96, clamped) made 7720 calls, 3140 of them errors (rate limits on glm-5.3-flash, retried and re-run), for 3.77M neurons and 24 papers. BUDGET-SOFT-ROUTE-1: fewer items per tick, never none; research_parallel_lean = 48 restores the old behaviour without a deploy. */ /* 0.19.2 (2026-10-19, RESOLVE-ALL-OPEN-1): merges main's 0.19.0 MATH-LATEX-AUTOFIX-1 with PR 2603's 0.19.0/0.19.1 fixes below. */ /* 0.19.1 EXTRACT-JSON-ROBUST-1 (issue 2877): parseExtractedClaims reads the first balanced JSON list or object (trailing prose no longer breaks it) and re-parses with lone LaTeX backslashes escaped; an empty extraction reply is asked once more in the tick. RETRY-NOT-ERROR-1 (issue 99990): a verify retry still in budget (retry: true) logs its done event as warn; only the pass that exhausts its retries is an error, so LOOP-BREAKER-1 counts real failures. WORKERS-BP-LOGGING (issue 2538): the 21 swallowed catches log a structured console.error (two trial parses carry a comment), control flow unchanged. */ /* 0.19.0 RESOLVE-ALL-OPEN-1 (2026-10-19, owner directive "RESOLVE/REMEDIATE ALL OPEN ISSUES"; pillar research): (a) RESEARCH-REVIEW-BIB-TRUNC-1 (#2800): the reviewer sees the index line of every bibliography entry, then bounded excerpts, instead of the first 8,000 chars (2-3 of 9-14 entries); (b) SLOP-SCAN-1 (#2407): a deterministic inflated-prose scan adds SOFT findings with locations against a corpus baseline read from its own slop-scan events; (c) REVISE-STRIDE-1 (#2847): queued rows at a resumable stage are claimed before ground rows; (d) EXTENSION-ACTIVATION-1 (#2824): extension rows (<= research_extension_per_day) bypass research_ready_cap, ops_config research_extension_cap_mode=respect restores it; (e) SWEEP-REARM-INLINE-1 (#2393): the completeness sweep re-arms remediation rows a 2026-10-17 cleanup closed as published without publishing; (f) RECONCILE-READ-1 (c) (#2725): an incomplete draft names its failed checks. */ /* 0.18.38 TICK-10M-1 + RECLAIM-KEEP-STAGE-1 + IDEA-TO-PUBLISH-METRIC-1 (2026-10-18, owner directive: idea to publication under 100 hours; pillar research): (a) the cron runs every 10 minutes (was 15; 144/day = CRON-MANDATE-1 ceiling, same schedule count); member windows are 10 minutes wide so each errata/reviser job still runs exactly once per slot; the 03:00 sweep window is 10 minutes; (b) a stale reclaim keeps a resumable stage (complete/review/revise/verify), and RESUME-DRAFT-1 at claim falls back to ground when reconciled.md is missing, so a stalled draft is not re-drafted from scratch; (c) idea_to_publish_h_p50_7d (median hours idea_proposals.created_at -> published_at, 7 days) is written to metric_registry on the :00 tick. */ /* 0.18.37 ERRATA-HIGHRISK-ROUTE-1 folded (errata member 1.6.2): a high-risk errata correction draft older than 6 h becomes a remediation research row instead of waiting audited forever; internal_errata closes with its queue row. */ /* 0.18.36 CLAIM-HEARTBEAT-1 + RESUME-DRAFT-1 + REVIEW-SECOND-MODEL-1 (2026-10-18): a stage returning ok refreshes claimed_at so the stale-claim reclaimer stops re-grounding papers still advancing (550 releases/24h, 302 ground claims of 72 rows); a resumable stage is kept when its draft exists in R2 (70 revise rows were re-drafted from ground); the review second path names its model (not kimi-k2.6 after #1429). */ /* 0.18.35 CLAIM-HEARTBEAT-1 (2026-10-18): a stage that returns ok refreshes claimed_at, so the 120-min stale-claim reclaimer no longer re-grounds papers that are still advancing (550 releases/24h, 302 ground claims of 72 rows). */ /* 0.18.34 REVIEW-EMPTY-SECOND-PATH-1 (2026-10-18): an unreadable review takes a second model family in the same tick and, still unreadable, re-runs review directly instead of sending the review-parse placeholder through two no-op patch calls (237 of 264 revise-noop events, 329 hard=1 cycles in 3 days). */ /* 0.18.33 PATCH-FLEX-REGEX-OVERFLOW-1 (2026-10-18, agent_issues 2886): findFlexible caps the flexible matcher at 400 tokens and fails closed on any regex error, so a whole-section find text no longer throws "Invalid regular expression: Stack overflow" out of the slot. */ /* 0.18.32 AI-RATE-FALLBACK-1 (2026-10-18): a 3021/3040/3046 on the primary model after backoff takes one call on another family (glm<->gpt-oss-120b) instead of failing the stage; 3040 no longer misread as a reasoning_effort rejection. */ /* 0.18.31 VERIFY-AUTOCORRECT-1 (2026-10-18): papers fail verify with REAL arithmetic errors (the reconcile/ensemble writer computes a number that does not match its own stated inputs) and the revise loop cannot reliably fix a bare number, so such papers cycle until park. Verify already holds both values — independently computed `computed` and the paper's stated `expected` — so stageVerify now corrects the number deterministically (autoCorrectNumeric) instead of sending it back through a model. Fail-closed: only a stated value found exactly once (verbatim or as an unambiguous bare mantissa in LaTeX/\\times 10^N) is corrected; anything ambiguous is skipped and falls through to revise. Every correction is logged as verify-autocorrect and appended to verification.md. */ /* 0.18.29 VERIFY-CYCLE-CAP-1 (2026-10-17, owner directive "REMEDIATE ALL ISSUES AND FAILURE MODES"): the verify->revise edge reset the review cycle counter to 0 (context={cycles:0,verifyPass:1}) while EVERY other edge preserves it (3716, 3735, 3753) and the review stage is the one that increments it. That single reset made MAX_REVIEW_CYCLES (6) unreachable, so an item that fails verify re-enters revise, resets to cycle 0, and loops until recover_count runs out — measured 2026-10-17: review-unresolved events exist ONLY at cycle 2 (193) and 3 (165), never 4; 96 rerun-route and 278 revise-patch events against ~100 rows; and stage='publish' is EMPTY, which is why 151 complete events produced 0 publications and why the publish quota (24) guarded an empty queue. The edge now preserves the count, so the existing six-cycle cap can terminate an item visibly instead of cycling forever. The gate itself (gates2) is unchanged: this does not let a failing draft through, it lets a draft that cannot pass STOP. */ // 0.18.28-codeagent /* 0.19.0 MATH-LATEX-AUTOFIX-1 (2026-10-19, agent_issues 100027, pillar research): 8 finished papers were parked from 2026-10-12 because gate-math-latex was left to the revise models' search/replace edits, which often did not apply. Plain-text math with one LaTeX spelling (Unicode super/subscripts, bare ^ and _ scripts, bra-kets, the scanner's operators) is now converted deterministically in review, revise and verify (event math-autofix); box drawings and lines holding currency still go to the models. */ /* 0.18.38 TICK-10M-1 + RECLAIM-KEEP-STAGE-1 + IDEA-TO-PUBLISH-METRIC-1 (2026-10-18, owner directive: idea to publication under 100 hours; pillar research): (a) the cron runs every 10 minutes (was 15; 144/day = CRON-MANDATE-1 ceiling, same schedule count); member windows are 10 minutes wide so each errata/reviser job still runs exactly once per slot; the 03:00 sweep window is 10 minutes; (b) a stale reclaim keeps a resumable stage (complete/review/revise/verify), and RESUME-DRAFT-1 at claim falls back to ground when reconciled.md is missing, so a stalled draft is not re-drafted from scratch; (c) idea_to_publish_h_p50_7d (median hours idea_proposals.created_at -> published_at, 7 days) is written to metric_registry on the :00 tick. */ /* 0.18.37 ERRATA-HIGHRISK-ROUTE-1 folded (errata member 1.6.2): a high-risk errata correction draft older than 6 h becomes a remediation research row instead of waiting audited forever; internal_errata closes with its queue row. */ /* 0.18.36 CLAIM-HEARTBEAT-1 + RESUME-DRAFT-1 + REVIEW-SECOND-MODEL-1 (2026-10-18): a stage returning ok refreshes claimed_at so the stale-claim reclaimer stops re-grounding papers still advancing (550 releases/24h, 302 ground claims of 72 rows); a resumable stage is kept when its draft exists in R2 (70 revise rows were re-drafted from ground); the review second path names its model (not kimi-k2.6 after #1429). */ /* 0.18.35 CLAIM-HEARTBEAT-1 (2026-10-18): a stage that returns ok refreshes claimed_at, so the 120-min stale-claim reclaimer no longer re-grounds papers that are still advancing (550 releases/24h, 302 ground claims of 72 rows). */ /* 0.18.34 REVIEW-EMPTY-SECOND-PATH-1 (2026-10-18): an unreadable review takes a second model family in the same tick and, still unreadable, re-runs review directly instead of sending the review-parse placeholder through two no-op patch calls (237 of 264 revise-noop events, 329 hard=1 cycles in 3 days). */ /* 0.18.33 PATCH-FLEX-REGEX-OVERFLOW-1 (2026-10-18, agent_issues 2886): findFlexible caps the flexible matcher at 400 tokens and fails closed on any regex error, so a whole-section find text no longer throws "Invalid regular expression: Stack overflow" out of the slot. */ /* 0.18.32 AI-RATE-FALLBACK-1 (2026-10-18): a 3021/3040/3046 on the primary model after backoff takes one call on another family (glm<->gpt-oss-120b) instead of failing the stage; 3040 no longer misread as a reasoning_effort rejection. */ /* 0.18.31 VERIFY-AUTOCORRECT-1 (2026-10-18): papers fail verify with REAL arithmetic errors (the reconcile/ensemble writer computes a number that does not match its own stated inputs) and the revise loop cannot reliably fix a bare number, so such papers cycle until park. Verify already holds both values — independently computed `computed` and the paper's stated `expected` — so stageVerify now corrects the number deterministically (autoCorrectNumeric) instead of sending it back through a model. Fail-closed: only a stated value found exactly once (verbatim or as an unambiguous bare mantissa in LaTeX/\\times 10^N) is corrected; anything ambiguous is skipped and falls through to revise. Every correction is logged as verify-autocorrect and appended to verification.md. */ /* 0.18.29 VERIFY-CYCLE-CAP-1 (2026-10-17, owner directive "REMEDIATE ALL ISSUES AND FAILURE MODES"): the verify->revise edge reset the review cycle counter to 0 (context={cycles:0,verifyPass:1}) while EVERY other edge preserves it (3716, 3735, 3753) and the review stage is the one that increments it. That single reset made MAX_REVIEW_CYCLES (6) unreachable, so an item that fails verify re-enters revise, resets to cycle 0, and loops until recover_count runs out — measured 2026-10-17: review-unresolved events exist ONLY at cycle 2 (193) and 3 (165), never 4; 96 rerun-route and 278 revise-patch events against ~100 rows; and stage='publish' is EMPTY, which is why 151 complete events produced 0 publications and why the publish quota (24) guarded an empty queue. The edge now preserves the count, so the existing six-cycle cap can terminate an item visibly instead of cycling forever. The gate itself (gates2) is unchanged: this does not let a failing draft through, it lets a draft that cannot pass STOP. */ // 0.18.28-codeagent
+ // WORKERS-AI-ATTRIBUTION-1 (2026-10-01, #1681): per-worker Workers AI attribution. Returns a shallow env copy whose AI
+ // binding records each .run() (calls, errors, ms, tokens, neurons) into qnfo-audit ai_call_counters (purpose 'binding').
+ // Neurons = usage tokens x Cloudflare's published per-model rates (neurons per M tokens). Fail-soft; env is never mutated.
+@@ -1673,12 +1673,35 @@ async function recoverMax(env) {
+ // converge stops costing AI instead of looping. Rows go back as status=queued so the backpressure cap meters them;
+ // the claim already resumes a queued row at its own stage. ops_config park_rearm = off stops the sweep.
+ var PARK_REARM_MAX = 1;
++// FLOOR-REARM-1 (RESEARCH-FLOOR-1, migrations/2026-10-19-research-rearm-after-repair.sql): the rows parked on a defect that
++// 0.21.0 corrects (gate-length, gate-refcount, HARD findings unresolved, no applicable edit) were frozen at merge in
++// bak_20261019_research_parked. This hourly step, which exists only in the corrected worker, returns FLOOR_REARM_PER_RUN of them
++// at a time to `complete` (the draft is in R2; RESUME-DRAFT-1 falls back to ground without it), once each (terminal_rearms 0
++// -> 1), so no row is queued before the fix is live and the queue is metered instead of flooded. ops_config park_rearm = off
++// stops it with the sweep above; a missing backup table (migration not applied) makes it a no-op.
++var FLOOR_REARM_PER_RUN = 5;
++async function floorRearmTick(env) {
++  var out = { rearmed: 0 };
++  try {
++    var cand = await env.QNFO_AUDIT.prepare("SELECT id, error FROM research_queue WHERE status = 'wontfix' AND stage = 'parked' AND terminal_rearms = 0 AND id IN (SELECT id FROM bak_20261019_research_parked) ORDER BY created_at DESC LIMIT " + FLOOR_REARM_PER_RUN).all();
++    var list = (cand && cand.results) || [];
++    for (var i = 0; i < list.length; i++) {
++      var r = await env.QNFO_AUDIT.prepare("UPDATE research_queue SET status = 'queued', stage = 'complete', attempt = 0, recover_count = 0, claimed_at = NULL, terminal_rearms = terminal_rearms + 1, error = ?1, context = ?2 WHERE id = ?3 AND status = 'wontfix' AND terminal_rearms = 0").bind(("FLOOR-REARM-1 (RESEARCH-FLOOR-1; prior state in bak_20261019_research_parked). Was: " + String(list[i].error || "")).slice(0, 300), JSON.stringify({ cycles: 0, verifyPass: 0, extendFor: "floor", floorRearm: 1 }), list[i].id).run();
++      if (!r || !r.meta || r.meta.changes !== 0) out.rearmed++;
++    }
++    if (out.rearmed) await logEvent(env, "floor-rearm", JSON.stringify(out), "ok");
++  } catch (e) {
++    console.error(JSON.stringify({ worker: "qnfo-research-exec", event: "floor-rearm", error: String(e && e.message || e).slice(0, 200) }));
++  }
++  return out;
++}
+ async function parkRearmTick(env) {
+   var out = { enabled: false, rearmed: 0, exhausted: 0 };
+   try {
+     var flag = await env.QNFO_AUDIT.prepare("SELECT value FROM ops_config WHERE key = 'park_rearm'").first();
+     if (flag && String(flag.value || "").trim().toLowerCase() === "off") return out;
+     out.enabled = true;
++    out.floor = await floorRearmTick(env);
+     var cand = await env.QNFO_AUDIT.prepare("SELECT id, context, error FROM research_queue WHERE status = 'wontfix' AND stage = 'parked' AND error LIKE 'REVIEW-UNRESOLVED-PARK-1%' ORDER BY created_at ASC LIMIT 5").all();
+     var list = (cand && cand.results) || [];
+     for (var i = 0; i < list.length; i++) {
+@@ -2271,6 +2294,7 @@ var RESEARCH_SHARED_PREAMBLE = [
+   "You are the revising author. Resolve each HARD fix below by editing the paper in place.",
+   'Return ONLY a JSON array, no prose and no code fence: [{"find":"<exact verbatim excerpt of the PAPER, 40 to 800 characters, occurring once>","replace":"<corrected text>"}].',
+   "Copy each find excerpt character for character from the PAPER. Use at most 8 edits. To remove a sentence, replace it with an empty string.",
++  "RESEARCH-FLOOR-1: the edited paper keeps the length floor given with the FIXES. Delete a single unsupported sentence only when the allowed removal covers it; otherwise replace the text with corrected text of about the same length, and never delete a whole section or the reference citations.",
+   "Every replace text writes its mathematics in LaTeX inside $...$ (inline) or $$...$$ (display), never as Unicode superscripts, subscripts or operators.",
+   "A replace text states only what the PAPER or the FIXES already state: it adds no name, citation, identifier, link, number or finding from memory. When a fix cannot be met from the PAPER and the FIXES, remove the sentence. A replace text never mentions bibliography entries, supplied or fetched text, summaries, abstracts, the input block or the grounding.",
+   "### TASK VERIFY_EXTRACT",
+@@ -2293,7 +2317,10 @@ var RESEARCH_SHARED_PREAMBLE = [
+   "Follow every WRITER requirement above: derivations with shown arithmetic, no invented data, cite only the numbered Bibliography in the grounding, LaTeX for all mathematics, no meta-commentary. Keep the paper's notation, numbering and conventions, and refer only to sections that exist or that you write now.",
+   "### TASK SECTION",
+   "Write ONE missing section of the PAPER in the shared context, named below, so it can be inserted in its required place. Output ONLY that section, starting with its '## N. Heading' line, consistent with the paper's existing notation, numbers and citations.",
+-  "Follow every WRITER requirement above for that section. State only what the paper already derives or what the grounding supports; label projections with their assumptions; never invent data, applications, costs or references."
++  "Follow every WRITER requirement above for that section. State only what the paper already derives or what the grounding supports; label projections with their assumptions; never invent data, applications, costs or references.",
++  "### TASK EXTEND",
++  "The PAPER in the shared context is complete but shorter than the length it must reach. Write ONE additional section, named below, that deepens the paper: worked derivations with shown arithmetic, sensitivity or limiting cases, or a closer comparison with the cited works. Output ONLY that section, starting with its '## Heading' line.",
++  "The section is inserted before the Discussion. It reaches at least the length asked for, cites the Bibliography entries listed as not yet cited by their numbers with a specific point from each entry's text, and states only what the paper already derives or what the grounding supports. Never invent data, applications, costs or references; do not write the References list; do not restate earlier sections; keep the paper's notation. Follow every WRITER requirement above."
+ ].join("\n");
+ 
+ function stagePrompt(name, body) {
+@@ -3485,6 +3512,98 @@ async function completeCall(env, prompt) {
+   }
+   return String(out || "");
+ }
++// RESEARCH-FLOOR-1 (0.21.0, 2026-10-19, agent_issues 99913; pillar research): a paper under the publish floor (20,000 chars,
++// minChars of finalGates for every non-remediation row) or under the reference floor failed verify and went to the patch
++// reviser, which has find/replace edits and cannot add text. Measured 2026-10-19: 113 of 255 complete events in 24 h were under
++// 20,000 chars, 21 gate-length / gate-refcount / HARD-unresolved RESEARCH-TERMINAL issues in 24 h, 15 poison-parks in one day.
++// The `complete` stage now also extends a complete paper to the floor: one grounded section per round (event floor-extend)
++// that cites the bibliography entries not yet cited, inserted before the Discussion, bounded by FLOOR_EXTEND_MAX_ROUNDS.
++// The goal is 1.2x the floor because a single revise patch shrinks a paper by up to 16% (60 applied revise-patch events,
++// 2026-10-19: 20369 -> 18060, 17046 -> 15018, 40392 -> 34061), so a paper that stops exactly at the floor falls under it again.
++var FLOOR_EXTEND_TARGET = 1.2;
++var FLOOR_EXTEND_MAX_ROUNDS = 6;
++var FLOOR_EXTEND_HEADINGS = ["Extended Derivations and Worked Examples", "Sensitivity, Limiting Cases and Robustness Checks", "Further Comparison with the Cited Literature", "Numerical Illustration and Error Budget", "Assumptions, Scope and Open Questions", "Additional Consequences of the Model"];
++// REVISE-SHRINK-GUARD-1: a revise patch may not take a paper that is at or above its floor below it, may not cut more than
++// REVISE_SHRINK_MAX of it in one pass (the largest of 60 applied patches measured on 2026-10-19 was 16%), and may not drop
++// the cited-reference count below the reference floor.
++var REVISE_SHRINK_MAX = 0.2;
++// ops_config levers without a deploy: research_floor_extend = off skips the extension and the floor routes (the paper goes to
++// review as before); research_revise_shrink_guard = measure logs a refusal and applies the patch.
++async function floorFlag(env, key) {
++  try {
++    var r = await env.QNFO_AUDIT.prepare("SELECT value FROM ops_config WHERE key = ?1").bind(key).first();
++    return r ? String(r.value || "").trim().toLowerCase() : "";
++  } catch (eFl) {
++    console.error(JSON.stringify({ worker: "qnfo-research-exec", where: "floor-flag", key: key, error: String(eFl && eFl.message || eFl).slice(0, 160) }));
++    return "";
++  }
++}
++async function floorExtendOn(env) {
++  return (await floorFlag(env, "research_floor_extend")) !== "off";
++}
++var FLOOR_OFF = { need: false, len: false, refs: false, floor: 0, target: 0, chars: 0, uncited: [] };
++function floorChars(row) {
++  return row && row.source === "remediation" ? MIN_PAPER_CHARS : PUBLISH_FLOOR_CHARS;
++}
++function bibNumbersOf(grounding) {
++  var tail = String(grounding || "").split("## Bibliography")[1] || "";
++  return (tail.match(/^\[\d+\] /gm) || []).map(function(h) { return h.replace(/\D+/g, ""); });
++}
++// The bibliography numbers a text cites in its body (the References list itself is not a citation).
++function citedBibNumbers(text) {
++  var cited = {}, body = paperBodyPart(text), re = /\[(\d+(?:\s*[,\u2013-]\s*\d+)*)\]/g, m;
++  while ((m = re.exec(body)) !== null) {
++    m[1].split(",").forEach(function(part) {
++      var rg = part.trim().split(/\s*[\u2013-]\s*/), a = parseInt(rg[0], 10), b = rg.length > 1 ? parseInt(rg[1], 10) : a;
++      if (Number.isFinite(a) && Number.isFinite(b) && b >= a && b - a < 50) for (var k = a; k <= b; k++) cited[String(k)] = 1;
++    });
++  }
++  return cited;
++}
++function citedBibCount(text, grounding) {
++  var c = citedBibNumbers(text);
++  return bibNumbersOf(grounding).filter(function(n) { return c[n]; }).length;
++}
++// What finalGates would say about length and reference count for this row, on the paper as verify will render it.
++// `extending` (a floor extension is already under way) raises the length goal from the floor to FLOOR_EXTEND_TARGET.
++function floorShortfall(row, paper, grounding, extending) {
++  var p = String(paper || "");
++  try {
++    var rr = renderReferences(p, grounding);
++    if (rr.cited) p = rr.paper;
++  } catch (eFs) {
++    console.error(JSON.stringify({ worker: "qnfo-research-exec", where: "floor-shortfall-render", error: String(eFs && eFs.message || eFs).slice(0, 160) }));
++  }
++  var floor = floorChars(row), target = Math.ceil(floor * FLOOR_EXTEND_TARGET);
++  var g = finalGates(p, { bibCount: bibCountFromGrounding(grounding), minChars: floor });
++  var ids = g.fixes.map(function(f) { return f.id; });
++  var cited = citedBibNumbers(p);
++  var uncited = bibNumbersOf(grounding).filter(function(n) { return !cited[n]; });
++  var len = ids.indexOf("gate-length") >= 0 || (!!extending && p.length < target);
++  var refs = ids.indexOf("gate-refcount") >= 0 && uncited.length > 0;
++  return { need: len || refs, len: len, refs: refs, floor: floor, target: target, chars: p.length, uncited: uncited };
++}
++function floorFixIds(ids) {
++  return ids.length > 0 && ids.every(function(id) { return id === "gate-length" || id === "gate-refcount"; });
++}
++function fixIdsOf(fixes) {
++  try {
++    var j = JSON.parse(fixes || "[]");
++    var list = Array.isArray(j) ? j : j && Array.isArray(j.hard) ? j.hard : [];
++    return list.filter(function(f) { return f && f.id; }).map(function(f) { return String(f.id); });
++  } catch (eFi) {
++    return [];
++  }
++}
++function reviseShrinkRefusal(row, before, after, grounding) {
++  var b = String(before || ""), a = String(after || ""), floor = floorChars(row);
++  if (b.length >= floor && a.length < floor) return "below the " + floor + "-char floor";
++  if (b.length > 0 && a.length < b.length * (1 - REVISE_SHRINK_MAX)) return "cuts " + Math.round((1 - a.length / b.length) * 100) + "% of the paper in one pass (limit " + Math.round(REVISE_SHRINK_MAX * 100) + "%)";
++  var minRefs = Math.max(MIN_GROUND_REFS, Math.min(MIN_REFS, bibCountFromGrounding(grounding)));
++  var rb = citedBibCount(b, grounding), ra = citedBibCount(a, grounding);
++  if (rb >= minRefs && ra < minRefs) return "drops the cited references " + rb + " -> " + ra + " under the floor of " + minRefs;
++  return "";
++}
+ async function stageComplete(env, row) {
+   __attrStageSet(env, "complete");
+   var t0 = Date.now();
+@@ -3502,11 +3621,33 @@ async function stageComplete(env, row) {
+   var groundBlock = "GROUNDING (the input block and the numbered Bibliography; cite only these):\n" + grounding;
+   var rounds = 0, gainedTotal = 0, steps = [];
+   var stall = ctx.completeStall || 0;
++  var floorUsed = 0, floorSpent = Number(ctx.floorRounds || 0);
++  var floorOn = await floorExtendOn(env);
+   while (rounds < COMPLETE_ROUNDS_PER_TICK && Date.now() - t0 < COMPLETE_TICK_BUDGET_MS) {
+     var pc = paperCompleteness(paper);
+-    if (pc.complete) break;
++    var fsh = floorOn ? floorShortfall(row, paper, grounding, ctx.extendFor === "floor" || floorUsed > 0) : FLOOR_OFF;
++    if (pc.complete && (!fsh.need || floorSpent + floorUsed >= FLOOR_EXTEND_MAX_ROUNDS)) break;
+     var next = paper, mode;
+-    if (pc.truncated) {
++    if (pc.complete) {
++      // RESEARCH-FLOOR-1: a complete paper under the floor gets one grounded section per round.
++      mode = "extend";
++      floorUsed++;
++      var want = Math.min(12000, Math.max(1500, fsh.target - fsh.chars));
++      var heading = FLOOR_EXTEND_HEADINGS[(floorSpent + floorUsed - 1) % FLOOR_EXTEND_HEADINGS.length];
++      var extOut = await completeCall(env, stageContextPrompt("EXTEND", "PAPER", paper, groundBlock + "\n\nSECTION TO WRITE: '## " + heading + "'\nLENGTH: at least " + want + " characters.\nBIBLIOGRAPHY ENTRIES NOT YET CITED: " + (fsh.uncited.length ? fsh.uncited.slice(0, 20).map(function(n) { return "[" + n + "]"; }).join(", ") : "(none)")));
++      var extSec = stitchContinuation("", extOut).trim();
++      if (extSec.length >= COMPLETE_MIN_GAIN) {
++        if (!/^## /.test(extSec)) extSec = "## " + heading + "\n\n" + extSec;
++        next = insertSection(paper, "Results", extSec);
++        try {
++          var _er = renderReferences(next, grounding);
++          if (_er.cited) next = _er.paper;
++        } catch (eEr) {
++          console.error(JSON.stringify({ worker: "qnfo-research-exec", where: "floor-extend-render", error: String(eEr && eEr.message || eEr).slice(0, 160) }));
++        }
++      }
++      await logEvent(env, "floor-extend", "row=" + row.id + " round=" + (floorSpent + floorUsed) + " chars " + paper.length + "->" + next.length + " floor=" + fsh.floor + " target=" + fsh.target + " uncited=" + fsh.uncited.length, next.length > paper.length ? "ok" : "warn");
++    } else if (pc.truncated) {
+       mode = "continue";
+       var base = completionBase(paper);
+       var remaining = pc.tailMissing.map(function(k) { var s = PAPER_SECTION_ORDER.find(function(x) { return x.key === k; }); return s ? s.heading : k; });
+@@ -3534,7 +3675,7 @@ async function stageComplete(env, row) {
+     }
+     var gain = next.length - paper.length;
+     steps.push(mode + ":" + gain);
+-    if (next === paper || gain < COMPLETE_MIN_GAIN && mode === "section") {
++    if (next === paper || gain < COMPLETE_MIN_GAIN && (mode === "section" || mode === "extend")) {
+       stall++;
+     } else {
+       stall = 0;
+@@ -3547,18 +3688,24 @@ async function stageComplete(env, row) {
+   }
+   var pcEnd = paperCompleteness(paper);
+   var total = (ctx.completeRounds || 0) + rounds;
+-  await logEvent(env, "complete", "row=" + row.id + " rounds=" + rounds + " total=" + total + " gained=" + gainedTotal + " steps=" + steps.join(",") + " chars=" + paper.length + " complete=" + pcEnd.complete + (pcEnd.complete ? "" : " left=" + pcEnd.reasons.join("; ").slice(0, 200)), pcEnd.complete ? "ok" : "warn");
+-  if (pcEnd.complete) {
++  // RESEARCH-FLOOR-1: a complete paper leaves this stage when it is at the floor, or when the extension is spent (the round
++  // budget, or COMPLETE_STALL_MAX rounds that added nothing); verify then decides, once (verifyPass), as before.
++  var fshEnd = floorOn ? floorShortfall(row, paper, grounding, ctx.extendFor === "floor" || floorUsed > 0) : FLOOR_OFF;
++  var floorGaveUp = fshEnd.need && (floorSpent + floorUsed >= FLOOR_EXTEND_MAX_ROUNDS || stall >= COMPLETE_STALL_MAX);
++  await logEvent(env, "complete", "row=" + row.id + " rounds=" + rounds + " total=" + total + " gained=" + gainedTotal + " steps=" + steps.join(",") + " chars=" + paper.length + " complete=" + pcEnd.complete + (pcEnd.complete ? "" : " left=" + pcEnd.reasons.join("; ").slice(0, 200)) + " floor=" + (fshEnd.need ? (floorGaveUp ? "gave-up" : "short") : "ok") + " floor_rounds=" + (floorSpent + floorUsed), pcEnd.complete && !floorGaveUp ? "ok" : "warn");
++  if (pcEnd.complete && (!fshEnd.need || floorGaveUp)) {
+     var nctx = Object.assign({}, ctx, { completeRounds: total, completeStall: 0 });
+     delete nctx.completeFrom;
++    delete nctx.extendFor;
++    delete nctx.floorRounds;
+     await env.QNFO_AUDIT.prepare("UPDATE research_queue SET stage='review', context=? WHERE id=?").bind(JSON.stringify(nctx).slice(0, 6e3), row.id).run();
+-    return { ok: true, stage: "complete->review", rounds: total, chars: paper.length };
++    return { ok: true, stage: "complete->review", rounds: total, chars: paper.length, floor: fshEnd.need ? "gave-up" : "ok" };
+   }
+   if (stall >= COMPLETE_STALL_MAX) {
+     await markError(env, row, "complete: " + stall + " rounds added nothing; still " + pcEnd.reasons.join("; ").slice(0, 160));
+     return { ok: false, stage: "complete", stalled: stall };
+   }
+-  await env.QNFO_AUDIT.prepare("UPDATE research_queue SET context=? WHERE id=?").bind(JSON.stringify(Object.assign({}, ctx, { completeRounds: total, completeStall: stall })).slice(0, 6e3), row.id).run();
++  await env.QNFO_AUDIT.prepare("UPDATE research_queue SET context=? WHERE id=?").bind(JSON.stringify(Object.assign({}, ctx, { completeRounds: total, completeStall: stall }, floorUsed || ctx.extendFor ? { extendFor: "floor", floorRounds: floorSpent + floorUsed } : {})).slice(0, 6e3), row.id).run();
+   return { ok: true, stage: "complete", rounds: total, chars: paper.length, left: pcEnd.reasons };
+ }
+ __name(stageComplete, "stageComplete");
+@@ -4248,10 +4395,22 @@ async function stageRevise(env, row) {
+     await env.QNFO_AUDIT.prepare("UPDATE research_queue SET stage='complete', context=? WHERE id=?").bind(JSON.stringify(Object.assign({}, ctx, { completeFrom: "revise" })).slice(0, 6e3), row.id).run();
+     return { ok: true, stage: "revise->complete" };
+   }
++  // RESEARCH-FLOOR-1: fixes that are only gate-length / gate-refcount ask for text the patch reviser cannot write; the
++  // paper goes to `complete`, which extends it to the floor, and then back through review and verify.
++  const _floorGround = await r2Get(env, String(row.id) + "/grounding.md") || "";
++  const _floorIds = fixIdsOf(fixes);
++  const _floorOn = await floorExtendOn(env);
++  if (_floorOn && floorFixIds(_floorIds) && floorShortfall(row, paper, _floorGround, false).need) {
++    await env.QNFO_AUDIT.prepare("UPDATE research_queue SET stage='complete', context=? WHERE id=?").bind(JSON.stringify(Object.assign({}, ctx, { completeFrom: "revise", extendFor: "floor" })).slice(0, 6e3), row.id).run();
++    await logEvent(env, "floor-route", "row=" + row.id + " revise->complete ids=" + _floorIds.join(",") + " chars=" + paper.length, "warn");
++    return { ok: true, stage: "revise->complete", extendFor: "floor" };
++  }
+   if (paper.length >= 1e4) {
+     // Workers AI directly at low reasoning effort: the gateway path ran the same model at default effort and aborted at
+     // its 240 s budget (12:08Z), and a short JSON answer does not need deep reasoning.
+-    const _pprompt = stageContextPrompt("REVISE_PATCH", "PAPER", paper, "FIXES (JSON):\n" + fixes.slice(0, 8e3));
++    // RESEARCH-FLOOR-1: the length floor and the removal this paper can absorb ride in the per-call text.
++    const _floorNote = "\n\nLENGTH FLOOR: " + floorChars(row) + " characters (the paper is " + paper.length + "); at most " + Math.max(0, paper.length - floorChars(row)) + " characters may be removed in total.";
++    const _pprompt = stageContextPrompt("REVISE_PATCH", "PAPER", paper, "FIXES (JSON):\n" + fixes.slice(0, 8e3) + _floorNote);
+     let _praw = await aiText(env, MODELS[0], _pprompt, 8192, "low");
+     // WRITER-FLASH-1: the retry for a short JSON patch uses gpt-oss-120b (another family, ~500 neurons) instead of glm-5.3 (~3,300).
+     let _pmodel = MODELS[0];
+@@ -4259,7 +4418,18 @@ async function stageRevise(env, row) {
+       _praw = await aiText(env, MODELS[2], _pprompt, 8192, "low");
+       _pmodel = MODELS[2];
+     }
+-    let _p = applyRevisePatch(paper, _praw);
++    // REVISE-SHRINK-GUARD-1 (RESEARCH-FLOOR-1): an answer whose edits would take the paper under its floor, cut more than
++    // REVISE_SHRINK_MAX of it, or drop its cited references under the reference floor counts as not applied, so the
++    // second-model path below runs (with the limit stated); the refused text is never stored.
++    const _shrinkMeasure = (await floorFlag(env, "research_revise_shrink_guard")) === "measure";
++    const _applyGuarded = async function(raw, model) {
++      const p = applyRevisePatch(paper, raw);
++      const why = p.applied > 0 ? reviseShrinkRefusal(row, paper, p.text, _floorGround) : "";
++      if (!why) return p;
++      await logEvent(env, "revise-shrink-refused", "row=" + row.id + " model=" + model + " applied=" + p.applied + " chars " + paper.length + "->" + p.text.length + ": " + why + (_shrinkMeasure ? " (mode=measure, applied)" : ""), "warn");
++      return _shrinkMeasure ? p : Object.assign({}, p, { applied: 0, refused: why });
++    };
++    let _p = await _applyGuarded(_praw, _pmodel);
+     let _fx = [];
+     try {
+       const _fj = JSON.parse(fixes || "[]");
+@@ -4280,21 +4450,24 @@ async function stageRevise(env, row) {
+     // so the cached preamble + paper prefix is unchanged. It runs on the other model family, or again on that family with
+     // the stricter text when the first fallback already used it.
+     const _strict = _p.proposed === 0 && _hardIds.length ? "\n\nSTRICT RETRY: the previous answer proposed no edit, which is not acceptable for a non-empty fix list. The HARD fixes to resolve are: " + _hardIds.join(", ") + ". Return at least one edit for EACH of these fix ids, as a JSON array of {\"find\",\"replace\"} objects and nothing else; an empty array is a wrong answer. Where a fix cannot be met from the PAPER and the FIXES, resolve it by replacing the offending sentence with an empty string." : "";
+-    if (!_p.applied && (_pmodel !== MODELS[2] || _strict)) {
+-      await logEvent(env, "revise-patch", "row=" + row.id + " model=" + _pmodel + " proposed=" + _p.proposed + " applied=0 raw_chars=" + String(_praw || "").length + " out_chars=" + _p.text.length + " second-model retry" + (_strict ? " (strict: " + _hardIds.join(",") + ")" : ""), "warn");
+-      const _praw2 = await aiText(env, MODELS[2], _pprompt + _strict, 8192, "low");
+-      const _p2 = applyRevisePatch(paper, _praw2);
++    const _shrinkNote = _p.refused ? "\n\nLENGTH RETRY: the previous answer's edits " + _p.refused + ". The paper is " + paper.length + " characters and must stay at least " + floorChars(row) + ". Resolve each HARD fix by replacing the text with corrected text of about the same length; do not delete sections or citations." : "";
++    if (!_p.applied && (_pmodel !== MODELS[2] || _strict || _shrinkNote)) {
++      await logEvent(env, "revise-patch", "row=" + row.id + " model=" + _pmodel + " proposed=" + _p.proposed + " applied=0 raw_chars=" + String(_praw || "").length + " out_chars=" + _p.text.length + (_p.refused ? " refused=" + _p.refused : "") + " second-model retry" + (_strict ? " (strict: " + _hardIds.join(",") + ")" : ""), "warn");
++      const _praw2 = await aiText(env, MODELS[2], _pprompt + _strict + _shrinkNote, 8192, "low");
++      const _p2 = await _applyGuarded(_praw2, MODELS[2]);
+       if (_p2.applied || !_praw) {
+         _praw = _praw2;
+         _p = _p2;
+       }
+       _pmodel = MODELS[2];
+     }
+-    await logEvent(env, "revise-patch", "row=" + row.id + " proposed=" + _p.proposed + " applied=" + _p.applied + " raw_chars=" + String(_praw || "").length + " out_chars=" + _p.text.length + (_p.ungrounded ? " ungrounded=" + _p.ungrounded : "") + (_p.flex ? " flex=" + _p.flex : ""), _p.applied ? "ok" : "warn");
++    await logEvent(env, "revise-patch", "row=" + row.id + " proposed=" + _p.proposed + " applied=" + _p.applied + " raw_chars=" + String(_praw || "").length + " out_chars=" + _p.text.length + (_p.ungrounded ? " ungrounded=" + _p.ungrounded : "") + (_p.flex ? " flex=" + _p.flex : "") + (_p.refused ? " refused=" + _p.refused : ""), _p.applied ? "ok" : "warn");
+     if (_p.applied > 0 && _p.text.length >= 1e4) {
+       await r2Put(env, String(row.id) + "/reconciled.md", _p.text);
+       const _c2 = (ctx.cycles || 0) + 1;
+-      await env.QNFO_AUDIT.prepare("UPDATE research_queue SET stage=" + (paperCompleteness(_p.text).complete ? "'review'" : "'complete'") + ", context=? WHERE id=?").bind(JSON.stringify({ cycles: _c2, patch: _p.applied, verifyPass: ctx.verifyPass || 0 }).slice(0, 6e3), row.id).run();
++      // RESEARCH-FLOOR-1: a patched paper that still lacks the length or references a floor fix asked for is extended, not reviewed short.
++      const _floorNext = _floorOn && _hardIds.some(function(id) { return id === "gate-length" || id === "gate-refcount"; }) && floorShortfall(row, _p.text, _floorGround, false).need;
++      await env.QNFO_AUDIT.prepare("UPDATE research_queue SET stage=" + (paperCompleteness(_p.text).complete && !_floorNext ? "'review'" : "'complete'") + ", context=? WHERE id=?").bind(JSON.stringify(Object.assign({ cycles: _c2, patch: _p.applied, verifyPass: ctx.verifyPass || 0 }, _floorNext ? { extendFor: "floor" } : {})).slice(0, 6e3), row.id).run();
+       return { ok: true, stage: "revise->review", cycle: _c2, patch: _p.applied };
+     }
+     // REVISE-WALL-1 (2026-10-01): a full rewrite of a paper this long cannot fit the 8192-token budget next to the reasoning
+@@ -4314,7 +4487,7 @@ async function stageRevise(env, row) {
+       const _onlyParse = _fx.length > 0 && _fx.every(function(f) {
+         return f && f.id === "review-parse";
+       });
+-      await logEvent(env, "revise-noop", "row=" + row.id + " no applicable patch edit (proposed=" + _p.proposed + ", raw=" + String(_praw || "").length + " chars, fixes=" + _fx.length + (_hardIds.length ? ", ids=" + _hardIds.join(",") : "") + ", strict_retry=" + (_strict ? "yes" : "no") + "); " + (_onlyParse ? "the review output was unreadable, review runs again" : "the paper does not advance unrevised; revise failed, recover path"), "warn");
++      await logEvent(env, "revise-noop", "row=" + row.id + " no applicable patch edit (proposed=" + _p.proposed + ", raw=" + String(_praw || "").length + " chars, fixes=" + _fx.length + (_hardIds.length ? ", ids=" + _hardIds.join(",") : "") + ", strict_retry=" + (_strict ? "yes" : "no") + "); " + (_p.refused ? "shrink refused: " + _p.refused + "; " : "") + (_onlyParse ? "the review output was unreadable, review runs again" : "the paper does not advance unrevised; revise failed, recover path"), "warn");
+       if (_onlyParse && (ctx.reparse || 0) < 2) {
+         await env.QNFO_AUDIT.prepare("UPDATE research_queue SET stage='review', context=? WHERE id=?").bind(JSON.stringify({ cycles: ctx.cycles || 0, patch: 0, verifyPass: ctx.verifyPass || 0, reparse: (ctx.reparse || 0) + 1 }).slice(0, 6e3), row.id).run();
+         return { ok: true, stage: "revise->review", cycle: ctx.cycles || 0, patch: 0, rereview: true };
+@@ -4750,6 +4923,16 @@ function parseExtractedClaims(raw) {
+   }
+   return { answered: false, claims: [], reason };
+ }
++// RESEARCH-FLOOR-1: verify failed only on length or reference count (first pass): `complete` writes the missing text and the
++// paper goes back through review and verify with verifyPass 1, so the second verify is terminal exactly as after a revise.
++function floorOnlyFailure(gates) {
++  return !gates.ok && floorFixIds(gates.fixes.map(function(f) { return f && f.id; }));
++}
++async function routeVerifyToFloor(env, row, ctx, gates) {
++  await env.QNFO_AUDIT.prepare("UPDATE research_queue SET stage='complete', context=? WHERE id=?").bind(JSON.stringify({ cycles: Number(ctx.cycles || 0), verifyPass: 1, extendFor: "floor" }).slice(0, 6e3), row.id).run();
++  await logEvent(env, "floor-route", "row=" + row.id + " verify->complete gate=" + gates.reason, "warn");
++  return { ok: true, stage: "verify->complete", gate: gates.reason, extendFor: "floor" };
++}
+ async function stageVerify(env, row) {
+   __attrStageSet(env, "verify");
+   let paper = await r2Get(env, String(row.id) + "/reconciled.md");
+@@ -4818,6 +5001,7 @@ async function stageVerify(env, row) {
+       await markError(env, row, "verify: unresolved after revision - gates=" + gates2.reason);
+       return { ok: false, stage: "verify", withheld: "verify-unresolved", gate: gates2.reason };
+     }
++    if (floorOnlyFailure(gates2) && await floorExtendOn(env)) return await routeVerifyToFloor(env, row, ctx, gates2);
+     if (!gates2.ok) {
+       await r2Put(env, String(row.id) + "/fixes.json", JSON.stringify(gates2.fixes));
+       await env.QNFO_AUDIT.prepare("UPDATE research_queue SET stage='revise', context=? WHERE id=?").bind(JSON.stringify({ cycles: Number(ctx.cycles || 0), verifyPass: 1 }).slice(0, 6e3), row.id).run();
+@@ -4918,6 +5102,7 @@ async function stageVerify(env, row) {
+     await parkMathRow(env, row, _pm);
+     return { ok: false, stage: "verify", gate: gates.reason, parked: true };
+   }
++  if (!mismatch && !ctx.verifyPass && floorOnlyFailure(gates) && await floorExtendOn(env)) return await routeVerifyToFloor(env, row, ctx, gates);
+   if ((mismatch || !gates.ok) && !ctx.verifyPass) {
+     const fixes = gates.fixes.slice();
+     if (mismatch) fixes.push({ id: "verify-mismatch", severity: "HARD", claim: "computed values do not match paper claims", reason: adj.rows.filter(function(r) {
+@@ -28953,6 +29138,12 @@ export {
+   rerunRoute,
+   releaseGateVerdict,
+   doneStatus,
++  stageComplete,
++  floorShortfall,
++  reviseShrinkRefusal,
++  floorRearmTick,
++  parkRearmTick,
++  FLOOR_EXTEND_TARGET,
+   CITATION_GATE
+ };
+ //# sourceMappingURL=worker.js.map
+-- 
+2.43.0
+

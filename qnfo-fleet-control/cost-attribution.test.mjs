@@ -77,5 +77,47 @@ let threw = null;
 try { await costAttributionTick({}, db, "acct1", {}, "2026-10-06T11:00:00Z"); } catch (e) { threw = String(e && e.message || e); }
 check(threw && /aiGatewayRequestsAdaptiveGroups unreadable/.test(threw) && writes.length === 0, "an unreadable GraphQL answer throws (the caller records it under skipped) and writes nothing", { threw, writes: writes.length });
 
+// 4. COST-OWNER-SPLIT-1 (0.34.3): the owner's own gateway client spend (ai_spend_owner_local) is not the fleet's cost. The real functions are loaded
+// from worker.js: fleetCostAfterOwner (the cost_usd_30d basis and the 30-day fallback of the ai_spend caps) and costRunRate over the migration's own
+// v_cost_run_rate SQL, seeded with the 2026-10-18 shape (the gateway day total equals the owner term).
+const fa = src.indexOf("function fleetCostAfterOwner(");
+check(fa > 0, "worker.js defines fleetCostAfterOwner");
+const fleetCostAfterOwner = fa > 0 ? new Function("__name", src.slice(fa, src.indexOf("\n}\n", fa) + 2) + "\nreturn fleetCostAfterOwner;")(() => {}) : () => ({});
+let sp = fleetCostAfterOwner({ anthropic: 97.03, deepseek: 12.5, "workers-ai": 30 }, [{ provider: "anthropic", usd: 97.03 }]);
+check(sp.byProv.anthropic === 0 && sp.owner.anthropic === 97.03 && sp.byProv.deepseek === 12.5 && sp.total === 42.5 && sp.ownerUsd === 97.03, "an owner term equal to the provider's gateway cost leaves the fleet 0 of it", sp);
+sp = fleetCostAfterOwner({ deepseek: 10, openai: 4 }, [{ provider: "DeepSeek", usd: 3.5 }]);
+check(sp.byProv.deepseek === 6.5 && sp.owner.deepseek === 3.5 && sp.byProv.openai === 4 && sp.total === 10.5, "a partial owner term is subtracted per provider, case-insensitively", sp);
+sp = fleetCostAfterOwner({ deepseek: 2 }, [{ provider: "deepseek", usd: 5 }, { provider: "mistral", usd: 9 }, { provider: "workers-ai", usd: 9 }]);
+check(sp.byProv.deepseek === 0 && sp.owner.deepseek === 2 && sp.ownerUsd === 2 && !("mistral" in sp.owner) && sp.total === 0, "the owner term is capped at the provider's gateway cost; providers the gateway does not name and Workers AI are never taken", sp);
+sp = fleetCostAfterOwner({ deepseek: 7, "workers-ai": 3 }, []);
+check(sp.byProv.deepseek === 7 && sp.total === 10 && sp.ownerUsd === 0, "no owner rows (or an unreadable table) leave the measurement as it was", sp);
+check(fleetCostAfterOwner(null, null).total === 0, "null inputs are a measured zero");
+// the wiring: cost_usd_30d and the cap fallback read the fleet part; the account-wide figures stay in analytics_dash_meta
+check(/var split = fleetCostAfterOwner\(byProv, /.test(src) && /bind\(split\.total\.toFixed\(2\), nowIso/.test(src), "cost_usd_30d is written from the fleet part");
+check(/aiSpendCaps\(db, split\.byProv, split\.total, byBill, env\)/.test(src) && /\["ai_est_cost_30d", total\.toFixed\(2\)\]/.test(src), "the cap fallback reads the fleet part; ai_est_cost_30d keeps the account-wide figure");
+check(/ai_spend_owner_local WHERE day >= date\('now','-30 days'\) GROUP BY lower\(provider\)/.test(src), "the owner term is read from ai_spend_owner_local over 30 days");
+// the run-rate view of the migration with the 2026-10-18 shape: the ledger (scripts/cost_ledger.py) already wrote the fleet part as ai_gateway:* and the owner part as owner_gateway:*
+const { DatabaseSync } = await import("node:sqlite");
+const mig = readFileSync(join(here, "..", "migrations", "2026-10-19-cost-ledger-owner-split.sql"), "utf8");
+const vstart = mig.indexOf("\nCREATE VIEW v_cost_run_rate AS") + 1;
+const viewSql = mig.slice(vstart, mig.indexOf(";\n", vstart));
+const cdb = new DatabaseSync(":memory:");
+cdb.exec("CREATE TABLE cost_daily (date TEXT NOT NULL, source TEXT NOT NULL, scope TEXT NOT NULL DEFAULT 'fleet', usd REAL NOT NULL DEFAULT 0, requests INTEGER DEFAULT 0, note TEXT, updated_at TEXT, PRIMARY KEY (date, source))");
+for (let k = 1; k <= 8; k++) {
+  const day = new Date(Date.now() - k * 864e5).toISOString().slice(0, 10);
+  for (const [s, usd] of [["workers_ai", 2], ["ai_gateway:anthropic", 0], ["ai_gateway:deepseek", 0.4], ["owner_gateway:anthropic", 97.03], ["cloudflare_plan:daily", 0.2], ["direct_providers_external:daily", 15]]) cdb.prepare("INSERT INTO cost_daily (date, source, usd) VALUES (?, ?, ?)").run(day, s, usd);
+}
+cdb.exec(viewSql);
+const rrDb = { prepare(sql) { return { all: async () => ({ results: cdb.prepare(sql).all() }) }; } };
+const ca = src.indexOf("async function costRunRate(");
+const costRunRate = new Function("__name", src.slice(ca, src.indexOf("\n}\n", ca) + 2) + "\nreturn costRunRate;")(() => {});
+const rrAll = Object.fromEntries(cdb.prepare("SELECT source_group, run_rate_30d_7d AS v FROM v_cost_run_rate").all().map((r) => [r.source_group, r.v]));
+const rr = await costRunRate(rrDb, {});
+check(rr.byProv.anthropic === 0 && rr.byProv.deepseek === 12 && !("owner_gateway:anthropic" in rr.byProv), "ai_spend:anthropic reads 0 when the owner term equals the gateway total (it read 651.63 against a cap of 15)", rr);
+check(rrAll["total:cloudflare+gateway"] === 30 * (2 + 0.4 + 0.2) && rrAll["total:owner-gateway"] === 30 * 97.03, "fleet_cost_run_rate_usd's group holds no owner term; the owner term is its own measured group", rrAll);
+check(Math.abs(rrAll["total:all-billing"] - 30 * (2 + 0.4 + 0.2 + 97.03 + 15)) < 1e-6, "total:all-billing still includes the owner rows (the owner's total monthly budget includes actual usage)", rrAll);
+const vc = ((src.match(/var VERSION = "(\d+)\.(\d+)\.(\d+)/) || []).slice(1)).map(Number);
+check(vc.length === 3 && (vc[0] > 0 || vc[1] > 34 || (vc[1] === 34 && vc[2] >= 3)), "VERSION is at least 0.34.3 (the owner split)", vc);
+
 console.log(fails ? fails + " FAILED" : "cost-attribution: all assertions passed");
 process.exit(fails ? 1 : 0);

@@ -195,6 +195,16 @@ because each one was broken at least once; the linked issue holds the evidence.
   `sla_breaches_over_120m`; SLA-120M-2: issue age `issues_open_over_120m` and escalation every 120 minutes, content stages,
   repair-time triggers at 2 h). A freshness check on a loop slower than 120 minutes allows its cadence plus at most 120 minutes,
   so a missed run is acted on within 120 minutes of its due time. A new SLA, threshold or budget states minutes, never hours or days.
+- Cron cadence (CRON-HOURLY-FLOOR-1, owner directive 2026-10-19, verbatim: "ACCELERATE ALL SCHEDULED CRON EXECUTION. ALL CRON TICKS
+  SHALL BE MEASURED IN 5-MINUTE INTERVALS, AND NO CRON SHALL EXECUTE LESS THAN ONCE EVERY HOUR."; CRON-TICK-5M-1 made the dispatcher
+  tick every 5 minutes). `scripts/cron_rate_guard.py` (deploy-gate) fails a declared cron that fires less than hourly unless it is on
+  the shrink-only, expiring `scripts/cron-tempo-allowlist.txt`; an expired entry and an entry that no longer matches a slow cron
+  also fail. A `RETIRED` or `FOLDED` directory is never deployed, so its crons do not run and are not audited (24 of the 34
+  directories with a slow cron on 2026-10-19). Convert a live worker with CRON-SINGLE-TRIGGER-1 (qnfo-lifecycle is the reference
+  block, scripts/cron-single-trigger.test.mjs the test): one hourly tick plus a `CRON_TABLE` of the former expressions delivered
+  exactly once, so a daily email or post does not become 24 emails. A job that is idempotent and cheap should also move its
+  table entry to hourly. Each remaining worker has a `CRON-HOURLY-FLOOR-1:<worker>` issue in `agent_issues`; delete its allowlist
+  line in the PR that converts it.
 - `queue_sla` lists each known stuck type with its cycle, SLA (minutes) and automatic fix; `v_stuck_summary` measures them
   by age, not by count. The D1 trigger `queue_sla_tick_10m` runs the fixes every 10 minutes off the fleet cron heartbeat
   and logs each to `queue_sla_actions`; `ops_config queue_sla_autofix = off` stops the fixes, not the measurement.
