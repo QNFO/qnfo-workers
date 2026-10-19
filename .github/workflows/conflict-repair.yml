@@ -64,6 +64,12 @@ jobs:
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       INPUT_PR: ${{ github.event.inputs.pr }}
       INPUT_PUSH: ${{ github.event.inputs.push }}
+      # CONFLICT-REPAIR-INPLACE-1: the first push-triggered run (2026-10-19, PR 2753) stopped with "Committer identity unknown" in a git step
+      # that does not take -c; the runner has no global identity, so every git command here gets one from the environment.
+      GIT_AUTHOR_NAME: qnfo-conflict-repair
+      GIT_AUTHOR_EMAIL: conflict-repair@users.noreply.github.com
+      GIT_COMMITTER_NAME: qnfo-conflict-repair
+      GIT_COMMITTER_EMAIL: conflict-repair@users.noreply.github.com
     steps:
       # CONFLICT-REPAIR-INPLACE-1: on a push to main, look before paying for a checkout. GitHub computes mergeability on the first read after
       # main moves, so a null is read again (up to 3 times, 15 s apart). Any other trigger always runs the job.

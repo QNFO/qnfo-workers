@@ -719,17 +719,18 @@ def main(argv=None):
     if a.pr:
         work.append((a.pr, False))
     else:
-        if a.all:
-            try:
-                work += [(n, False) for n in open_issue_prs()[: max(1, a.max)]]
-            except Exception as e:  # noqa: BLE001
-                emit("::warning::conflict-repair: cannot read the repair issues: " + str(e)[:200])
+        dirty = []
         if a.dirty:
             try:
-                taken = {n for n, _ in work}
-                work += [(n, True) for n in dirty_prs(max(1, a.max), a.quiet_min) if n not in taken]
+                dirty = dirty_prs(max(1, a.max), a.quiet_min)
             except Exception as e:  # noqa: BLE001
                 emit("::warning::conflict-repair: cannot list the conflicting pull requests: " + str(e)[:200])
+        work += [(n, True) for n in dirty]  # a pull request found conflicting is updated in place, whether or not it also has a repair issue
+        if a.all:
+            try:
+                work += [(n, False) for n in open_issue_prs()[: max(1, a.max)] if n not in dirty]
+            except Exception as e:  # noqa: BLE001
+                emit("::warning::conflict-repair: cannot read the repair issues: " + str(e)[:200])
     if a.all or a.dirty:
         heartbeat(len(work), a.push)
     if not work:

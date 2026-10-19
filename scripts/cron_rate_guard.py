@@ -252,6 +252,54 @@ def toml_crons(path):
     return out
 
 
+TEMPO_ALLOWLIST = os.path.join("scripts", "cron-tempo-allowlist.txt")
+
+
+def load_tempo_allowlist(path):
+    """CRON-HOURLY-FLOOR-1: {(worker, cron): (expires 'YYYY-MM-DD', tracking)} from worker|cron|expires|tracking lines."""
+    out = {}
+    try:
+        with open(path, encoding="utf-8") as fh:
+            lines = fh.read().splitlines()
+    except OSError:
+        return out
+    for ln in lines:
+        ln = ln.strip()
+        if not ln or ln.startswith("#"):
+            continue
+        parts = [x.strip() for x in ln.split("|")]
+        if len(parts) >= 3:
+            out[(parts[0], parts[1])] = (parts[2], parts[3] if len(parts) > 3 else "")
+    return out
+
+
+def apply_tempo_allowlist(report, allow, today):
+    """CRON-HOURLY-FLOOR-1 (owner directive 2026-10-19: no cron shall execute less than once every hour).
+
+    A producer slower than hourly fails unless it is on the allowlist and the entry has not expired. The list is
+    shrink-only: an entry that no longer matches a slow cron is a violation until its line is removed, so a
+    converted worker cannot be silently re-slowed and a new slow cron cannot ride on an old entry.
+    """
+    seen = set()
+    for t in report.get("tempo") or []:
+        key = (t.get("worker"), t.get("cron"))
+        seen.add(key)
+        hit = allow.get(key)
+        if hit is None:
+            report["violations"].append(dict(t, reason="SLOW-PRODUCER %s: fire at least hourly (owner directive 2026-10-19) "
+                                              "or gate the heavy work inside the handler; not on %s" % (t.get("reason"), TEMPO_ALLOWLIST)))
+        elif hit[0] < today:
+            report["violations"].append(dict(t, reason="TEMPO-ALLOWLIST-EXPIRED %s (tracking %s): convert it" % (hit[0], hit[1] or "none")))
+        else:
+            t["allowlisted_until"] = hit[0]
+            t["tracking"] = hit[1]
+    for key in sorted(allow):
+        if key not in seen:
+            report["violations"].append({"worker": key[0], "cron": key[1],
+                                         "reason": "STALE-TEMPO-ALLOWLIST-ENTRY: no such slow cron any more; remove the line from %s" % TEMPO_ALLOWLIST})
+    return report
+
+
 def audit_repo(root, strict_worker=False):
     report = {"violations": [], "warnings": [], "tempo": [], "workers": 0, "expressions": 0}
     for name in sorted(os.listdir(root)):
@@ -263,6 +311,16 @@ def audit_repo(root, strict_worker=False):
             continue
         crons = toml_crons(wtoml)
         if not crons:
+            continue
+        # CRON-HOURLY-FLOOR-1 (2026-10-19): a RETIRED or FOLDED directory is never deployed by the canonical
+        # path, so its declared crons do not execute (24 of the 34 directories with a slow cron on 2026-10-19).
+        # Counting them made the migration look three times bigger than it is and hid the 11 live workers.
+        marker = [m for m in ("RETIRED", "FOLDED") if os.path.exists(os.path.join(wdir, m))]
+        # A worker the guard names as a heartbeat or an owner override is live whatever its directory says: fleet-exec
+        # carries a stale FOLDED file but is the live 5-minute dispatcher (service_registry state live, 2026-10-19), so
+        # its cron rules keep applying.
+        if marker and name not in HEARTBEAT_WORKERS and name not in OWNER_OVERRIDES:
+            report.setdefault("not_deployed", []).append({"worker": name, "marker": marker[0], "crons": crons})
             continue
         report["workers"] += 1
         lim = limits_for(name)
@@ -392,8 +450,12 @@ def render(report, source):
         lines.append("  WARN      %s  crons=%s  %s" % (w.get("worker"), w.get("crons"),
                                                       w.get("reason")))
     for t in report.get("tempo") or []:
-        lines.append("  TEMPO     %s  cron=%s  %s (max_gap=%s min) -- tracked migration"
-                     % (t.get("worker"), t.get("cron"), t.get("reason"), t.get("max_gap_minutes")))
+        lines.append("  TEMPO     %s  cron=%s  %s (max_gap=%s min) -- %s"
+                     % (t.get("worker"), t.get("cron"), t.get("reason"), t.get("max_gap_minutes"),
+                        ("allowlisted until %s (%s)" % (t.get("allowlisted_until"), t.get("tracking") or "no tracking")
+                         if t.get("allowlisted_until") else "NOT ALLOWLISTED")))
+    for n in report.get("not_deployed") or []:
+        lines.append("  SKIPPED   %s  (%s: never deployed, its crons do not run)" % (n.get("worker"), n.get("marker")))
     if not report["violations"]:
         lines.append("  OK - no cron exceeds the ceiling")
     return "\n".join(lines)
@@ -412,6 +474,8 @@ def main(argv):
         reports["live"] = audit_live()
     else:
         reports["repo"] = audit_repo(args.root, args.strict_worker)
+        today = os.environ.get("CRON_GUARD_TODAY") or _dt.date.today().isoformat()
+        apply_tempo_allowlist(reports["repo"], load_tempo_allowlist(os.path.join(args.root, TEMPO_ALLOWLIST)), today)
 
     failed = any(r["violations"] for r in reports.values())
     if args.json:
