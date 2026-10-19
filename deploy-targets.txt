@@ -10,6 +10,13 @@
 # both classes at the root: it writes the ledger row, takes the lock, and applies schedules.
 #
 # fleet-exec removed 2026-10-06: folded into qnfo-code-orchestrator (FLEET-EXEC-FOLD-1, #1756).
+# fleet-exec: the standalone script was deleted 2026-10-19 (cf-ops-actions delete-worker, run 39240334895); the host runs it as a member.
+# qnfo-artifacts (SCRIPT-SOURCE-RECONCILE-1, 2026-10-19): the control plane over both Cloudflare Artifacts namespaces that
+# artifacts-canonical-sync.yml (ARTIFACTS-CANONICAL-SYNC-1, owner directive 2026-10-18) depends on. Its directory carried a RETIRED marker from
+# 2026-10-01 although the worker was rebuilt and deployed (1.2.2, by hand) on 2026-10-18, so the canonical path skipped it and the fleet graph
+# reported a deployed script with no source. The marker is gone and the worker is listed here; it replaces fleet-exec in the worker count
+# (net zero, charter decision rule 2).
+qnfo-artifacts qnfo-artifacts/worker.js
 qnfo-social qnfo-social/worker.js
 # EVOLVE-1 (2026-10-17): the organ that turns the fleet's own gap registers into named work.
 # Listed here because a worker absent from this manifest gets its wrangler.toml crons applied as INERT.

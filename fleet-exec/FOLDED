@@ -10,3 +10,7 @@ fails with "no D1 binding" in fleet_runs instead of running. GET /fleet-exec/hea
 This directory is kept for reference; the separate script is removed with cf-ops-actions delete-worker once the host is
 verified running the member. canonical-deploy.yml skips any directory containing a RETIRED or FOLDED file. Un-folding is
 a charter net-zero decision recorded in a PR that removes this file, never a way to get a deploy through.
+
+Deleted 2026-10-19 (SCRIPT-SOURCE-RECONCILE-1): the standalone script was still deployed with a */5 cron beside the host's */2 member, and the
+fleet census could not read its health. cf-ops-actions delete-worker ran (run 39240334895, binder census clean, verify 404). The host serves the
+member at GET /fleet-exec/health (1.0.4-folded).
