@@ -4,7 +4,7 @@ REMEDIATION. THE SYSTEM SHALL AUTOMATICALLY SWEEP FOR ALL KNOWN ISSUES AND RESOL
 
 WHAT  Closes the loop between Cloudflare Workers Observability Issues and the fleet's own tracker:
       1. SWEEP   reads every page of /workers/observability/issues?status=active (Cloudflare API, read).
-      2. TRACK   every live group (seen in the last LIVE_H hours, not external scan noise) gets ONE open agent_issues row
+      2. TRACK   every live group (seen within FILE_H hours, i.e. not yet quiet; not external scan noise) gets ONE open agent_issues row
                  "CF-OBS-ISSUE-1: <service>: <title>", deduped on the Cloudflare id carried in its description, with:
                    - a code-task line for <service>/worker.js when that file exists, so the code loop attempts the fix;
                    - its issue-<id> contract re-pointed at a d1-query probe that passes once the group has not recurred for
@@ -13,9 +13,17 @@ WHAT  Closes the loop between Cloudflare Workers Observability Issues and the fl
       3. RESOLVE when a CF-OBS-ISSUE-1 issue is closed by verification and its group has been quiet QUIET_H hours, the
                  group is PATCHed to status=resolved in Cloudflare. Cloudflare re-activates a resolved group on its next
                  occurrence, and the next sweep then files a fresh issue (relapse is visible, never silent).
+      CF-OBS-BRIDGE-LOOP-1 (2026-10-19): FILE and RESOLVE share one boundary. Before, a group was filed while seen within 24 h but
+      the issue's own probe closed it after 6 h quiet, so a group quiet for 6 to 24 h was closed by the probe, filed again by the next
+      sweep (the D1 trigger issue_refile_reopen reopens a title closed within 24 h) and closed again, while the RESOLVE step only
+      ran on rows the FILE step had just reopened: 145 reopens on 27 issues in 24 h and no group told 'resolved'. Now a group quiet
+      for FILE_H or more is never filed (a closed one is PATCHed resolved at once), and a title closed within 24 h is not filed again
+      unless the group was observed after the close (a relapse, which the trigger reopens and the sweep counts as relapsed).
       One run row per sweep in cloud_ops_events (kind cf-obs-bridge); the fm-cf-obs-untracked contract audits the gap.
 WHY   Before this, pollObservability mirrored groups into fleet_issue_dispatch, but nothing turned a live group into a tracked,
       probed, closable issue, so 29 groups sat active (3824 occurrences) while the remediation loop never saw them.
+      A failing PATCH, closed-issue SELECT or Cloudflare list read is counted in `errors` and never skips the churn metric or the run row
+      (they are written in a finally); the suite is a PR gate in deploy-gate.yml and the consumer runs the sweep even if it fails.
 RUNS  A step of remediation-consumer.yml (runner, depth 0: an agent_issues insert from a D1 trigger nests past D1's limit).
       Deterministic, no model call. Never fails the job.
 """
@@ -28,8 +36,10 @@ import urllib.parse
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 PREFIX = "CF-OBS-ISSUE-1: "
-LIVE_H = 24          # a group last seen within this window is a live defect worth tracking
-QUIET_H = 6          # a tracked group quiet this long passes its probe
+QUIET_H = 6          # a tracked group quiet this long passes its probe and its Cloudflare group is resolved
+FILE_H = QUIET_H - 0.5   # a group is filed only while quieter than this; the margin keeps a group the probe would close in the
+                         # same cycle (fleet_issue_dispatch lags Cloudflare by up to one 10-minute refresh) from opening at all
+REFILE_H = 24        # issue_refile_reopen reopens a title closed within this window; the bridge never inserts into it blind
 NOISE = ("potential vulnerability scan",)
 MAX_NEW = 15         # bound new issues per run so a burst cannot flood the tracker
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -79,7 +89,19 @@ def list_active(cf):
 
 def sweep(d1, cf, now=None):
     now = now or now_ms()
-    res = {"active": 0, "live": 0, "noise": 0, "filed": [], "already": 0, "resolved_cf": [], "errors": 0}
+    res = {"active": 0, "live": 0, "noise": 0, "filed": [], "relapsed": [], "held_closed": 0, "already": 0, "resolved_cf": [], "errors": 0,
+           "reopened_24h": 0}
+    try:
+        _file_and_resolve(d1, cf, now, res)
+    except Exception:
+        res["errors"] += 1
+        raise
+    finally:
+        _record(d1, res, now)   # the guard metric and the run row are written even when a phase raised (CF-OBS-BRIDGE-LOOP-1)
+    return res
+
+
+def _file_and_resolve(d1, cf, now, res):
     items = list_active(cf)
     res["active"] = len(items)
     filed = 0
@@ -90,8 +112,8 @@ def sweep(d1, cf, now=None):
         if is_noise(it):
             res["noise"] += 1
             continue
-        if now - int(it.get("lastObserved") or 0) > LIVE_H * 3600 * 1000:
-            continue
+        if now - int(it.get("lastObserved") or 0) >= FILE_H * 3600 * 1000:
+            continue   # quiet: never filed; a closed issue for it is resolved below
         res["live"] += 1
         if d1("SELECT id FROM agent_issues WHERE status = 'open' AND title LIKE 'CF-OBS-ISSUE-1:%' AND instr(description, ?1) > 0 LIMIT 1", ["cf-obs-id: " + cid]):
             res["already"] += 1
@@ -101,6 +123,19 @@ def sweep(d1, cf, now=None):
         title = title_for(it)
         if d1("SELECT id FROM agent_issues WHERE status = 'open' AND lower(trim(title)) = lower(trim(?1)) LIMIT 1", [title]):
             res["already"] += 1
+            continue
+        # CF-OBS-BRIDGE-LOOP-1: a title closed within REFILE_H would be reopened by issue_refile_reopen. That is right for a
+        # recurrence and wrong for a group quiet since the close, so insert only when it was observed after the close.
+        try:
+            closed_row = d1("SELECT id, updated_at FROM agent_issues WHERE title LIKE 'CF-OBS-ISSUE-1:%' AND status IN ('closed', 'resolved', 'wontfix') "
+                            "AND typeof(updated_at) = 'integer' AND updated_at > ?1 AND (title = ?2 OR instr(description, ?3) > 0) "
+                            "ORDER BY updated_at DESC LIMIT 1", [now - REFILE_H * 3600 * 1000, title, "cf-obs-id: " + cid])
+        except Exception as e:  # noqa: BLE001   unknown whether the title is held: do not insert blind, retry next sweep
+            res["errors"] += 1
+            print(json.dumps({"evt": "cf-obs-bridge:closed-row", "id": cid, "error": str(e)[:200]}))
+            continue
+        if closed_row and int(it.get("lastObserved") or 0) <= int(closed_row[0]["updated_at"]):
+            res["held_closed"] += 1
             continue
         svc = str(it.get("service") or "")
         desc = ("Charter pillar: reliability. Cloudflare Workers Observability issue group, live: %s occurrence(s), first %s, last %s "
@@ -115,12 +150,19 @@ def sweep(d1, cf, now=None):
         try:
             d1("INSERT INTO agent_issues (title, description, source, category, priority, status, created_at, updated_at) "
                "VALUES (?1, ?2, 'cf-obs-bridge', 'reliability', ?3, 'open', ?4, ?4)", [title, desc, pri, now])
-            row = d1("SELECT id FROM agent_issues WHERE title = ?1 AND status = 'open' ORDER BY id DESC LIMIT 1", [title])
+            row = d1("SELECT id, created_at FROM agent_issues WHERE title = ?1 AND status = 'open' ORDER BY id DESC LIMIT 1", [title])
             if row:
                 iid = int(row[0]["id"])
-                d1("UPDATE remediation_contracts SET verify_probe = ?1, verify_transport = 'd1-query', status = 'active' WHERE class = ?2",
-                   [probe_for(cid), "issue-%d" % iid])
-                res["filed"].append(iid)
+                if int(row[0]["created_at"] or 0) != now:
+                    res["relapsed"].append(iid)   # issue_refile_reopen absorbed the INSERT and reopened an older row: not a new filing
+                    # The trigger leaves the reopened issue's contract in 'holding' (HOLDING-OPEN-REARM-1), probed at most daily, so
+                    # re-arm it here: due now, attempts reset, and pointed at this group in case the title matched another cf-obs-id.
+                    d1("UPDATE remediation_contracts SET verify_probe = ?1, verify_transport = 'd1-query', status = 'active', "
+                       "next_due_at = datetime('now'), attempts = 0 WHERE class = ?2", [probe_for(cid), "issue-%d" % iid])
+                else:
+                    d1("UPDATE remediation_contracts SET verify_probe = ?1, verify_transport = 'd1-query', status = 'active' WHERE class = ?2",
+                       [probe_for(cid), "issue-%d" % iid])
+                    res["filed"].append(iid)
                 filed += 1
         except Exception as e:  # noqa: BLE001
             res["errors"] += 1
@@ -136,20 +178,45 @@ def sweep(d1, cf, now=None):
             continue
         cid = desc[k + 11:].split("\n", 1)[0].strip()
         it = active_ids.get(cid)
-        if not it or now - int(it.get("lastObserved") or 0) < QUIET_H * 3600 * 1000:
+        if cid[:8] in res["resolved_cf"] or not it or now - int(it.get("lastObserved") or 0) < QUIET_H * 3600 * 1000:
             continue
-        r = cf("PATCH", "/workers/observability/issues/" + urllib.parse.quote(cid), {"status": "resolved"})
+        try:
+            r = cf("PATCH", "/workers/observability/issues/" + urllib.parse.quote(cid), {"status": "resolved"})
+        except Exception as e:  # noqa: BLE001   a timeout on one PATCH must not skip the others, the metric or the run row
+            res["errors"] += 1
+            print(json.dumps({"evt": "cf-obs-bridge:resolve", "id": cid[:8], "error": str(e)[:200]}))
+            continue
         if r.get("success"):
             res["resolved_cf"].append(cid[:8])
         else:
             res["errors"] += 1
+
+
+CHURN_SQL = ("SELECT COALESCE(MAX(n), 0) AS worst, COALESCE(SUM(n), 0) AS total FROM (SELECT l.issue_id, COUNT(*) AS n FROM issue_lifecycle l "
+             "JOIN agent_issues a ON a.id = l.issue_id WHERE l.event = 'reopened' AND a.title LIKE 'CF-OBS-ISSUE-1:%' "
+             "AND l.ts > strftime('%Y-%m-%dT%H:%M:%SZ', 'now', '-24 hours') "
+             "AND l.ts > COALESCE((SELECT strftime('%Y-%m-%dT%H:%M:%SZ', t.created_at, '+15 minutes') FROM analytics_metric_triggers t "
+             "WHERE t.metric_key = 'cf_obs_reopen_churn_24h'), strftime('%Y-%m-%dT%H:%M:%SZ', 'now')) GROUP BY l.issue_id)")
+
+
+def _record(d1, res, now):
+    # The bridge produces metric cf_obs_reopen_churn_24h (refresh_class worker-written): the most reopened events any one
+    # CF-OBS-ISSUE-1 issue logged in the last 24 h AFTER the metric's trigger was born (CHURN_SQL: the churn the old bridge logged
+    # before the fix is history, not a breach the fixed bridge could clear within the 120-minute issue SLA). 0 or 1 is a relapse;
+    # 3 or more is a loop.
+    try:
+        ch = d1(CHURN_SQL)
+        res["reopened_24h"] = int(ch[0]["total"]) if ch else 0
+        d1("UPDATE metric_registry SET last_value = ?1, last_refreshed = strftime('%Y-%m-%dT%H:%M:%SZ', 'now'), state = 'MEASURED' "
+           "WHERE metric = 'cf_obs_reopen_churn_24h'", [str(int(ch[0]["worst"])) if ch else "0"])
+    except Exception as e:  # noqa: BLE001
+        print(json.dumps({"evt": "cf-obs-bridge:churn-metric", "error": str(e)[:200]}))
     try:
         d1("INSERT INTO cloud_ops_events (id, ts, kind, text, job, status) VALUES (?1, strftime('%Y-%m-%dT%H:%M:%fZ', 'now'), "
            "'cf-obs-bridge', ?2, 'remediation-consumer', ?3)",
            ["cfb-%d-%s" % (now, os.urandom(4).hex()), json.dumps({k: (len(v) if isinstance(v, list) else v) for k, v in res.items()}), "ok" if not res["errors"] else "warn"])
     except Exception as e:  # noqa: BLE001
         print(json.dumps({"evt": "cf-obs-bridge:run-row", "error": str(e)[:200]}))
-    return res
 
 
 def live_cf():
@@ -176,57 +243,8 @@ def main():
 
 
 def selftest():
-    import sqlite3
-    c = sqlite3.connect(":memory:")
-    c.executescript("""
-CREATE TABLE agent_issues (id INTEGER PRIMARY KEY AUTOINCREMENT, title TEXT, description TEXT, source TEXT, category TEXT, priority TEXT, status TEXT, created_at INTEGER, updated_at INTEGER);
-CREATE UNIQUE INDEX open_title ON agent_issues(lower(trim(title))) WHERE status = 'open';
-CREATE TABLE remediation_contracts (class TEXT PRIMARY KEY, verify_probe TEXT, verify_transport TEXT, status TEXT, issue_id INTEGER);
-CREATE TRIGGER birth AFTER INSERT ON agent_issues BEGIN INSERT INTO remediation_contracts VALUES ('issue-' || NEW.id, 'needs', 'd1-query', 'needs-machine-probe', NEW.id); END;
-CREATE TABLE fleet_issue_dispatch (fingerprint TEXT PRIMARY KEY, category TEXT, payload TEXT, state TEXT);
-CREATE TABLE cloud_ops_events (id TEXT PRIMARY KEY, ts TEXT, kind TEXT, text TEXT, job TEXT, status TEXT);
-""")
-
-    def d1(sql, params=None):
-        cur = c.execute(sql, params or [])
-        cols = [d[0] for d in cur.description] if cur.description else []
-        return [dict(zip(cols, r)) for r in cur.fetchall()]
-    now = now_ms()
-    groups = [
-        {"id": "g-live-1", "service": "qnfo-ai", "title": "HttpServerError \u00b7 HTTP 502", "type": "exception", "count": 92, "firstObserved": now - 9e8, "lastObserved": now - 60e3},
-        {"id": "g-scan", "service": "qnfo-gateway", "title": "Potential vulnerability scan \u00b7 /wp-login.php \u00b7 low risk", "type": "exception", "count": 4, "firstObserved": now - 1e6, "lastObserved": now - 1e5},
-        {"id": "g-old", "service": "qnfo-ops", "title": "HttpServerError \u00b7 HTTP 502", "type": "exception", "count": 9, "firstObserved": now - 9e8, "lastObserved": now - 30 * 36e5},
-        {"id": "g-quiet", "service": "radar-hub", "title": "HttpServerError \u00b7 HTTP 503", "type": "exception", "count": 3, "firstObserved": now - 9e8, "lastObserved": now - 8 * 36e5},
-    ]
-    patched = []
-
-    def cf(method, path, body=None):
-        if method == "GET":
-            return {"success": True, "result": groups if "page=1" in path else []}
-        patched.append((path, body))
-        return {"success": True}
-    r1 = sweep(d1, cf, now)
-    assert r1["active"] == 4 and r1["noise"] == 1 and r1["live"] == 2 and len(r1["filed"]) == 2, r1
-    r2 = sweep(d1, cf, now)
-    assert r2["filed"] == [] and r2["already"] == 2, r2
-    rows = d1("SELECT id, title, description, priority FROM agent_issues ORDER BY id")
-    assert rows[0]["title"] == "CF-OBS-ISSUE-1: qnfo-ai: HttpServerError \u00b7 HTTP 502" and rows[0]["priority"] == "high", rows
-    assert "cf-obs-id: g-live-1" in rows[0]["description"]
-    pr = d1("SELECT verify_probe FROM remediation_contracts WHERE class = 'issue-%d'" % rows[0]["id"])[0]["verify_probe"]
-    assert pr.startswith("SELECT '1' AS expected") and "cf-obs-g-live-1" in pr, pr
-    # the probe fails while the dispatch row is live, passes once it is quiet
-    c.execute("INSERT INTO fleet_issue_dispatch VALUES ('cf-obs-g-live-1', 'worker-observability', ?, 'tracked')", [json.dumps({"lastObserved": now - 60e3})])
-    assert d1(pr)[0]["observed"] == "0"
-    c.execute("UPDATE fleet_issue_dispatch SET payload = ? WHERE fingerprint = 'cf-obs-g-live-1'", [json.dumps({"lastObserved": now - 7 * 36e5})])
-    assert d1(pr)[0]["observed"] == "1"
-    # a verified-closed issue whose group is quiet is resolved in Cloudflare; a live one is not
-    c.execute("UPDATE agent_issues SET status = 'closed', updated_at = ? WHERE description LIKE '%g-quiet%'", [now])
-    r3 = sweep(d1, cf, now)
-    assert any("g-quiet" in p for p, _ in patched) and all(b == {"status": "resolved"} for _, b in patched), patched
-    assert not any("g-live-1" in p for p, _ in patched)
-    assert d1("SELECT COUNT(*) n FROM cloud_ops_events WHERE kind = 'cf-obs-bridge'")[0]["n"] == 3
-    print("cf_obs_issue_bridge selftest: ok")
-    return 0
+    import cf_obs_issue_bridge_test as T  # noqa: E402   (CF-OBS-BRIDGE-LOOP-1: the suite models issue_refile_reopen and the lifecycle log)
+    return T.run()
 
 
 if __name__ == "__main__":
