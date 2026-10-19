@@ -1,8 +1,8 @@
 {
  "counts": {
-  "already-applied": 71,
+  "already-applied": 73,
   "error": 1,
-  "undetermined": 4
+  "undetermined": 3
  },
  "errored": [
   "scripts/checkin-scale-anchored-1-patch.py"
@@ -137,8 +137,8 @@
    "rc": 0,
    "script": "scripts/cloud-ops-cron-alias-dispatch-patch.py",
    "tail": [
-    "STATE worker.js alias=4 noop=1 syncerr=2 version=1.32.0-fleet-graph-cadence",
-    "STATE deployed-current.worker.js alias=4 noop=1 syncerr=2 version=1.32.0-fleet-graph-cadence",
+    "STATE worker.js alias=4 noop=1 syncerr=2 version=1.32.1-inbound-sla-grace-1",
+    "STATE deployed-current.worker.js alias=4 noop=1 syncerr=2 version=1.32.1-inbound-sla-grace-1",
     "TOTAL_EDITS 0"
    ],
    "verdict": "already-applied"
@@ -148,8 +148,8 @@
    "rc": 0,
    "script": "scripts/cloud-ops-cron-dow-patch.py",
    "tail": [
-    "STATE worker.js isoDowToCf=4 cron_fingerprint=2 version=1.32.0-fleet-graph-cadence",
-    "STATE deployed-current.worker.js isoDowToCf=4 cron_fingerprint=2 version=1.32.0-fleet-graph-cadence",
+    "STATE worker.js isoDowToCf=4 cron_fingerprint=2 version=1.32.1-inbound-sla-grace-1",
+    "STATE deployed-current.worker.js isoDowToCf=4 cron_fingerprint=2 version=1.32.1-inbound-sla-grace-1",
     "TOTAL_EDITS 0"
    ],
    "verdict": "already-applied"
@@ -160,6 +160,15 @@
    "script": "scripts/cloud-ops-health-auth-patch.py",
    "tail": [
     "ALREADY PATCHED (CLOUD-OPS-HEALTH-AUTH-1 present); no change"
+   ],
+   "verdict": "already-applied"
+  },
+  {
+   "changed_files": [],
+   "rc": 0,
+   "script": "scripts/code_task_publish_patch_size_test.py",
+   "tail": [
+    "6 passed, 0 failed"
    ],
    "verdict": "already-applied"
   },
@@ -208,22 +217,13 @@
    "verdict": "already-applied"
   },
   {
-   "changed_files": [
-    " M fleet-exec/deployed-current.worker.js",
-    " M fleet-exec/worker.js",
-    " M qnfo-fleet-control/deployed-current.worker.js",
-    " M qnfo-fleet-control/worker.js",
-    " M scripts/cron_rate_guard.py"
-   ],
-   "declared_signals": [
-    "CRON-TICK-5M-1"
-   ],
+   "changed_files": [],
    "rc": 0,
    "script": "scripts/cron-tick-5m-patch.py",
    "tail": [
-    "APPLIED qnfo-fleet-control/worker.js, qnfo-fleet-control/deployed-current.worker.js, fleet-exec/worker.js, fleet-exec/deployed-current.worker.js, scripts/cron_rate_guard.py"
+    "ALREADY-APPLIED"
    ],
-   "verdict": "undetermined"
+   "verdict": "already-applied"
   },
   {
    "changed_files": [],
@@ -314,7 +314,7 @@
    "script": "scripts/github-write-409-retry-patch.py",
    "tail": [
     "ALREADY REPAIRED (marker(s) GITHUB-409-RETRY-1); no change",
-    "bytes: 588400 (unchanged)",
+    "bytes: 647827 (unchanged)",
     "parity: source==mirror"
    ],
    "verdict": "already-applied"
@@ -336,7 +336,7 @@
    "script": "scripts/github409-variant-reread-patch.py",
    "tail": [
     "already applied (idempotent no-op): qnfo-ops/deployed-current.worker.js",
-    "mirror pair byte-identical (588402 bytes)",
+    "mirror pair byte-identical (647829 bytes)",
     "changed=false"
    ],
    "verdict": "already-applied"
@@ -383,8 +383,8 @@
    "script": "scripts/ops-deploy-ledger-patch.py",
    "tail": [
     "already patched (marker present) - no-op",
-    "  worker.js bytes=588402 marker=1",
-    "  deployed-current.worker.js bytes=588402 marker=1"
+    "  worker.js bytes=647829 marker=1",
+    "  deployed-current.worker.js bytes=647829 marker=1"
    ],
    "verdict": "already-applied"
   },
@@ -417,8 +417,8 @@
    "rc": 0,
    "script": "scripts/owner-sender-no-reply-1-patch.py",
    "tail": [
-    "STATE worker.js isOwnerSender=3 handoff_reply_guard=4 version=2.9.7-codeagent",
-    "STATE deployed-current.worker.js isOwnerSender=3 handoff_reply_guard=4 version=2.9.7-codeagent",
+    "STATE worker.js isOwnerSender=3 handoff_reply_guard=4 version=2.10.0-cron-grid",
+    "STATE deployed-current.worker.js isOwnerSender=3 handoff_reply_guard=4 version=2.10.0-cron-grid",
     "TOTAL_EDITS 0"
    ],
    "verdict": "already-applied"
@@ -652,7 +652,7 @@
    "rc": 0,
    "script": "scripts/routerfetch-host-order-body-patch.py",
    "tail": [
-    "already patched (marker '_lastRouterHost' present); no write. sha256=b5abffc4766b6bfd"
+    "already patched (marker '_lastRouterHost' present); no write. sha256=96cc239b50a99bce"
    ],
    "verdict": "already-applied"
   },
@@ -661,7 +661,7 @@
    "rc": 0,
    "script": "scripts/routerfetch-host-order-correction-patch.py",
    "tail": [
-    "already corrected (marker 'ROUTER-HOST-ORDER-CORRECTION-1' present); no write. sha256=b5abffc4766b6bfd"
+    "already corrected (marker 'ROUTER-HOST-ORDER-CORRECTION-1' present); no write. sha256=96cc239b50a99bce"
    ],
    "verdict": "already-applied"
   },
@@ -719,7 +719,7 @@
    "rc": 0,
    "script": "scripts/stale-gate-failclosed-patch.py",
    "tail": [
-    "{\"ok\": true, \"already_patched\": true, \"marker\": \"STALE-GATE-FAILCLOSED-1\", \"bytes\": 1058374}"
+    "{\"ok\": true, \"already_patched\": true, \"marker\": \"STALE-GATE-FAILCLOSED-1\", \"bytes\": 1230356}"
    ],
    "verdict": "already-applied"
   },
@@ -806,10 +806,9 @@
  ],
  "stale_anchor": [],
  "superseded": [],
- "total": 76,
- "ts": "2026-10-19T09:29:59.836Z",
+ "total": 77,
+ "ts": "2026-10-19T16:29:53.984Z",
  "undetermined": [
-  "scripts/cron-tick-5m-patch.py",
   "scripts/dashboard-agissue-undercount-patch.py",
   "scripts/math-sym-escape-patch.py",
   "scripts/outreach-cap-status-1-patch.py"
