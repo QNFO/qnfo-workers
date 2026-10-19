@@ -1,12 +1,76 @@
 {
  "ok": true,
  "marker": "REMEDIATION-CONSUMER-1",
- "verifier": "remediation-consumer@95f488494f79",
- "due": 355,
- "pass": 269,
- "fail": 86,
+ "verifier": "remediation-consumer@10530e39a0a3",
+ "due": 387,
+ "pass": 291,
+ "fail": 96,
  "skipped": 0,
  "contracts": [
+  {
+   "class": "issue-100136",
+   "issue_id": 100136,
+   "verdict": "fail",
+   "expected": "ok",
+   "observed": "missing-marker:qnfo-fleet-dashboard/worker.js",
+   "written": true
+  },
+  {
+   "class": "issue-100142",
+   "issue_id": 100142,
+   "verdict": "fail",
+   "expected": "ok",
+   "observed": "missing-marker",
+   "written": true
+  },
+  {
+   "class": "issue-100116",
+   "issue_id": 100116,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "issue-100126",
+   "issue_id": 100126,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "fm-fleet-graph-delete-depth",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "0",
+   "observed": "0",
+   "written": true
+  },
+  {
+   "class": "issue-100029",
+   "issue_id": 100029,
+   "verdict": "pass",
+   "expected": "0|1",
+   "observed": "0|1",
+   "written": true
+  },
+  {
+   "class": "issue-3010",
+   "issue_id": 3010,
+   "verdict": "pass",
+   "expected": "sync",
+   "observed": "sync",
+   "written": true
+  },
+  {
+   "class": "issue-2111",
+   "issue_id": 2111,
+   "verdict": "fail",
+   "expected": "ok",
+   "observed": "pending: SEARCH-NEAREST-1 live since 2026-10-19T11:46:58Z, measured over its first full day",
+   "written": true
+  },
   {
    "class": "issue-2818",
    "issue_id": 2818,
@@ -48,14 +112,6 @@
    "written": true
   },
   {
-   "class": "fm-script-live-without-source",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "0",
-   "observed": "0",
-   "written": true
-  },
-  {
    "class": "belief-no-untested-control-on-critical-path",
    "issue_id": null,
    "verdict": "fail",
@@ -72,10 +128,10 @@
    "written": true
   },
   {
-   "class": "fm-unprobed-issues",
+   "class": "fm-script-live-without-source",
    "issue_id": null,
-   "verdict": "fail",
-   "expected": "1",
+   "verdict": "pass",
+   "expected": "0",
    "observed": "0",
    "written": true
   },
@@ -96,14 +152,6 @@
    "written": true
   },
   {
-   "class": "fm-code-publish-waits-for-push",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "0",
-   "observed": "0",
-   "written": true
-  },
-  {
    "class": "fm-migration-unapplied",
    "issue_id": null,
    "verdict": "pass",
@@ -112,7 +160,23 @@
    "written": true
   },
   {
-   "class": "fm-consumer-gate-starvation",
+   "class": "fm-code-publish-waits-for-push",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "0",
+   "observed": "0",
+   "written": true
+  },
+  {
+   "class": "fm-unprobed-issues",
+   "issue_id": null,
+   "verdict": "fail",
+   "expected": "1",
+   "observed": "0",
+   "written": true
+  },
+  {
+   "class": "fm-dedup-id-gap",
    "issue_id": null,
    "verdict": "pass",
    "expected": "0",
@@ -128,7 +192,7 @@
    "written": true
   },
   {
-   "class": "fm-dedup-id-gap",
+   "class": "fm-consumer-gate-starvation",
    "issue_id": null,
    "verdict": "pass",
    "expected": "0",
@@ -152,6 +216,14 @@
    "written": true
   },
   {
+   "class": "issue-2346",
+   "issue_id": 2346,
+   "verdict": "fail",
+   "expected": "ok",
+   "observed": "pending: the newest workers best-practice audit reads 0 fail and 41 advisory findings at 2026-10-19T11:38:25Z (target 0)",
+   "written": true
+  },
+  {
    "class": "fm-removal-unprobeable",
    "issue_id": null,
    "verdict": "pass",
@@ -160,27 +232,19 @@
    "written": true
   },
   {
-   "class": "issue-100059",
-   "issue_id": 100059,
-   "verdict": "pass",
-   "expected": "ok",
-   "observed": "ok",
-   "written": true
-  },
-  {
-   "class": "issue-2346",
-   "issue_id": 2346,
-   "verdict": "fail",
-   "expected": "ok",
-   "observed": "pending: the newest workers best-practice audit reads 0 fail and 41 advisory findings at 2026-10-19T11:23:05Z (target 0)",
-   "written": true
-  },
-  {
    "class": "fm-metric-refresher-replaced",
    "issue_id": null,
    "verdict": "pass",
    "expected": "0",
    "observed": "0",
+   "written": true
+  },
+  {
+   "class": "issue-100059",
+   "issue_id": 100059,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
    "written": true
   },
   {
@@ -216,23 +280,7 @@
    "written": true
   },
   {
-   "class": "fm-owner-notice-counted-as-dispatch",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "0",
-   "observed": "0",
-   "written": true
-  },
-  {
    "class": "fm-companion-draft-cache-replay",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "1",
-   "observed": "1",
-   "written": true
-  },
-  {
-   "class": "fm-companion-gate-discards-repairable",
    "issue_id": null,
    "verdict": "pass",
    "expected": "1",
@@ -244,11 +292,19 @@
    "issue_id": null,
    "verdict": "fail",
    "expected": "0",
-   "observed": "3",
+   "observed": "2",
    "written": true
   },
   {
-   "class": "fm-code-task-retry-holds-file",
+   "class": "fm-companion-gate-discards-repairable",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "1",
+   "observed": "1",
+   "written": true
+  },
+  {
+   "class": "fm-registry-version-sweep-regex",
    "issue_id": null,
    "verdict": "pass",
    "expected": "0",
@@ -256,7 +312,7 @@
    "written": true
   },
   {
-   "class": "fm-registry-version-sweep-regex",
+   "class": "fm-owner-notice-counted-as-dispatch",
    "issue_id": null,
    "verdict": "pass",
    "expected": "0",
@@ -280,19 +336,11 @@
    "written": true
   },
   {
-   "class": "rt-ai-router",
+   "class": "fm-code-task-retry-holds-file",
    "issue_id": null,
    "verdict": "pass",
-   "expected": "ok",
-   "observed": "ok",
-   "written": true
-  },
-  {
-   "class": "rt-personal-api",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "ok",
-   "observed": "ok",
+   "expected": "0",
+   "observed": "0",
    "written": true
   },
   {
@@ -301,6 +349,14 @@
    "verdict": "fail",
    "expected": "ok",
    "observed": "missing-marker:qnfo-code-orchestrator/worker.js",
+   "written": true
+  },
+  {
+   "class": "rt-personal-api",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
    "written": true
   },
   {
@@ -328,31 +384,7 @@
    "written": true
   },
   {
-   "class": "rt-live-qnfo-ai-calibration",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "ok",
-   "observed": "ok",
-   "written": true
-  },
-  {
-   "class": "issue-100025",
-   "issue_id": 100025,
-   "verdict": "pass",
-   "expected": "ok",
-   "observed": "ok",
-   "written": true
-  },
-  {
-   "class": "fm-migration-headerless-silent-skip",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "ok",
-   "observed": "ok",
-   "written": true
-  },
-  {
-   "class": "rt-live-qnfo-ai-search",
+   "class": "rt-ai-router",
    "issue_id": null,
    "verdict": "pass",
    "expected": "ok",
@@ -364,41 +396,4 @@
    "issue_id": null,
    "verdict": "pass",
    "expected": "ok",
-   "observed": "ok",
-   "written": true
-  },
-  {
-   "class": "fm-ipatent-automated-drafts-counted",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "ok",
-   "observed": "ok",
-   "written": true
-  },
-  {
-   "class": "fm-paper-published-truncated",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "0",
-   "observed": "0",
-   "written": true
-  },
-  {
-   "class": "rt-live-qnfo-cloud-ops",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "ok",
-   "observed": "ok",
-   "written": true
-  },
-  {
-   "class": "rt-live-qnfo-code-orchestrator",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "ok",
-   "observed": "ok",
-   "written": true
-  },
-  {
-   "class": "rt-q08",
-  
+   "observed": "ok"
