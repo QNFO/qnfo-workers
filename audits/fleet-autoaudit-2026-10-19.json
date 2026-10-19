@@ -1,5 +1,5 @@
 {
-  "audited_at": "2026-10-19 20:12:11",
+  "audited_at": "2026-10-19 20:49:08",
   "d1_write_failures": [],
   "d1_writes_ok": 120,
   "guard": {
@@ -610,7 +610,7 @@
       },
       {
         "dir": "qnfo-fleet-dashboard",
-        "version": "1.51.11-codeagent",
+        "version": "1.51.12-codeagent",
         "worker": "qnfo-fleet-dashboard"
       },
       {
@@ -670,7 +670,7 @@
       },
       {
         "dir": "qnfo-research-exec",
-        "version": "0.27.4-codeagent",
+        "version": "0.27.5-revision-claimgate",
         "worker": "qnfo-research-exec"
       },
       {
@@ -1321,9 +1321,9 @@
       "worker": "qnfo-fleet-control"
     },
     "qnfo-fleet-dashboard": {
-      "before": "1.51.11-codeagent",
+      "before": "1.51.12-codeagent",
       "http": 200,
-      "live": "1.51.11-codeagent",
+      "live": "1.51.12-codeagent",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-fleet-dashboard"
@@ -1561,9 +1561,9 @@
       "worker": "qnfo-register-guard"
     },
     "qnfo-research-exec": {
-      "before": "0.27.4-codeagent",
+      "before": "0.27.5-revision-claimgate",
       "http": 200,
-      "live": "0.27.4-codeagent",
+      "live": "0.27.5-revision-claimgate",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-research-exec"
