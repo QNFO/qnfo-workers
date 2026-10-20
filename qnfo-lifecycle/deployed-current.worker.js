@@ -1,4 +1,4 @@
-var VERSION = "1.13.1-owner-reply-body-text"; /* 1.12.0 PAPER-LEARN-1 (2026-10-19, pillar autonomy, owner directive "THE SYSTEM/FLEET SHALL ALWAYS LEARN FROM ITS OWN RESEARCH PAPERS"): a new hourly step reads each new or revised published paper (up to ops_config paper_learn_per_tick, default 4, newest first), stores its fleet-relevant claims in qnfo-audit.paper_learnings with a verification status decided from the paper itself (unverified, derived-unchecked, cited-unchecked, assumption), routes errors a second model family confirms to internal_errata for the revision loop, files one PAPER-LEARN-1 follow-up issue with a closing probe for a strong direct learning, writes metric papers_unlearned_over_120m; GET /paper-learn/status and /paper-learn/learnings?slug=; paper_learn_mode = off stops it. */ /* 1.11.5 ping-404. */ /* 1.11.4 SLA-120M-7 (2026-10-14, pillar autonomy; owner directive 2026-10-14: no SLA exceeds 120 minutes): the advisor-noise sweep closes an OPEN-ISSUES snapshot after ADVISOR_NOISE_MAX_MIN (120 minutes), not 3 h, and its caught error is logged. */ /* 1.11.3 WORKERS-BP-LOGGING-qnfo-lifecycle-1 (2026-10-14, agent_issues 2536, child of 2342, pillar autonomy): the swallowed catches log as a structured console.error (worker, where, error); control flow unchanged. */ /* 1.11.2: backlog member 2.0.7 BACKLOG-LATEST-PASS-1, an issue closes only when its latest verification passed within 3 h (agent_issues 2222 was closed on a stale pass while its latest verification failed). */ /* 1.11.1: /noz-scrub/status answers a fixed message on failure and logs the error (CodeQL alerts 394, 395). */ /* 1.11.0-noz-scrub NOZ-SCRUB-LOOP-1 (2026-10-12, agent_issues 2273 and 2278, pillar research): a new hourly step cleans the stored living-paper.papers rows that still name the dead deposit registrar or carry its DOIs (up to 150 rows, 10 MB or 20 s a tick; line-local scrub; DOI/URL columns of the registrar set NULL; old value of every changed field kept first in living-paper.papers_bak_nozdoi; idempotent, residual rows marked and not retried; GET /noz-scrub/status; ledger cloud_ops_events job noz-scrub). Was 1.10.1-doi-scrub. 1.10.0-spare-domains SPARE-DOMAINS-1 (agent_issues 2077, pillar reach): twelve spare-domain hostnames (ipatent.me, qwav.net, qwav.uk, qwave.tech, q-wave.tech, empoweringchange.today and their www) answer 301 to their canonical site (ipatent.qnfo.org, qwav.org, qnfo.org), path and query kept. 1.9.1-retired-hosts RETIRED-HOSTS-1: twelve retired qnfo.org hostnames answer 410 Gone (noindex) instead of 522 via Workers routes on this worker (agent_issues 2010). 1.9.0-calendar-fold CALENDAR-FOLD-2 (2026-10-06, T3.10, agent_issues 2010, pillar cost, OWNER-STANDING-GRANT-1): calendar-api (ICS publish, notes intake, event feedback, owner questions) runs here as the member calendarApiFoldMod on the hourly tick, awaited; its feedback-link key is HMAC-derived from this worker's CF_API_TOKEN by the fold kit (CAL_KEY_SEED), never copied or minted; public /calendar/health, /calendar/e/<id> (GET page, POST answer) and /calendar/events.ics; binders personal-api, qnfo-intent-orchestrator and radar-hub reach it with props.member (FOLD-KIT-1). Was 1.8.1-one-worker-count. */ // 1.8.1 ONE-WORKER-COUNT-1 (2026-10-06, pillar core, transformation lever T5.10): runMetricFreshness no longer writes metric_registry.worker_count; qnfo-fleet-control 0.4.137 writes it from the live scripts census beside fleet_budget.workers (COUNT(service_registry) counted retired rows too, 32 against 31 on 2026-10-06). 1.8.0 BACKLOG-FOLD-1 (#1756, pillar cost): qnfo-backlog-exec runs here as a member (backlogMod) on the 02:00 tick; GET /backlog/health; qnfo-ops reaches its drain over the BACKLOG binding (props.member). qnfo-archive (retired: its KG seed got HTTP 401 on every batch) leaves runPing. 1.7.3 LIFECYCLE-PING-1042-1 (#1994): wrangler.toml sets global_fetch_strictly_public, so runPing and runSync reach *.q08.workers.dev (150 PING FAIL HTTP 404 rows were Cloudflare error 1042). 1.7.2 METRIC-CADENCE-UNITS-1 + METRIC-UNMEASURED-CLASS-1 (#1865): "*/3h" and "2h" cadences parse with their unit; never-measured UNMEASURED/n/a metrics are their own class. 1.7.0 CRON-SINGLE-TRIGGER-1 (#1785): one hourly trigger, CRON_TABLE in code. Worker Contract v1 VERSION constant (read by version-bump-guard / drift checks)
+var VERSION = "1.14.0-paper-learn-triage"; /* 1.14.0 PAPER-LEARN-TRIAGE-1 (2026-10-20, pillar autonomy, owner directive "clear all open issues server-side automatically within 24 hours"; agent_issues 100234, 100249, 100252, 100257, 100261; minor: a decision it now takes on its own): PAPER-LEARN-1 filed an issue per paper and nothing answered its learnings, so five issues sat at PL_ISSUE_OPEN_MAX and blocked every later paper. Each hourly tick now settles up to 12 proposed direct learnings, issue-bound first, against the catalogue paper_learning_mechanisms: already-in-place when a mechanism matches the claim or lever and its evidence probe is ok now (the note cites it), rejected only when two model families agree (or a named catalogue mechanism conflicts and its probe is ok), apply left proposed with the proposal in its note; ops_config paper_learn_triage = off stops it. The reader strips the pipeline's own notices (correction banner, Correction Notice, Version History, Provenance) before reading, so a notice is not learned as the paper's claim (11 of 18 learnings on the five open issues were the CLAIM-INTEGRITY-1 notice). paper-learn-triage.test.mjs. */ /* 1.12.0 PAPER-LEARN-1 (2026-10-19, pillar autonomy, owner directive "THE SYSTEM/FLEET SHALL ALWAYS LEARN FROM ITS OWN RESEARCH PAPERS"): a new hourly step reads each new or revised published paper (up to ops_config paper_learn_per_tick, default 4, newest first), stores its fleet-relevant claims in qnfo-audit.paper_learnings with a verification status decided from the paper itself (unverified, derived-unchecked, cited-unchecked, assumption), routes errors a second model family confirms to internal_errata for the revision loop, files one PAPER-LEARN-1 follow-up issue with a closing probe for a strong direct learning, writes metric papers_unlearned_over_120m; GET /paper-learn/status and /paper-learn/learnings?slug=; paper_learn_mode = off stops it. */ /* 1.11.5 ping-404. */ /* 1.11.4 SLA-120M-7 (2026-10-14, pillar autonomy; owner directive 2026-10-14: no SLA exceeds 120 minutes): the advisor-noise sweep closes an OPEN-ISSUES snapshot after ADVISOR_NOISE_MAX_MIN (120 minutes), not 3 h, and its caught error is logged. */ /* 1.11.3 WORKERS-BP-LOGGING-qnfo-lifecycle-1 (2026-10-14, agent_issues 2536, child of 2342, pillar autonomy): the swallowed catches log as a structured console.error (worker, where, error); control flow unchanged. */ /* 1.11.2: backlog member 2.0.7 BACKLOG-LATEST-PASS-1, an issue closes only when its latest verification passed within 3 h (agent_issues 2222 was closed on a stale pass while its latest verification failed). */ /* 1.11.1: /noz-scrub/status answers a fixed message on failure and logs the error (CodeQL alerts 394, 395). */ /* 1.11.0-noz-scrub NOZ-SCRUB-LOOP-1 (2026-10-12, agent_issues 2273 and 2278, pillar research): a new hourly step cleans the stored living-paper.papers rows that still name the dead deposit registrar or carry its DOIs (up to 150 rows, 10 MB or 20 s a tick; line-local scrub; DOI/URL columns of the registrar set NULL; old value of every changed field kept first in living-paper.papers_bak_nozdoi; idempotent, residual rows marked and not retried; GET /noz-scrub/status; ledger cloud_ops_events job noz-scrub). Was 1.10.1-doi-scrub. 1.10.0-spare-domains SPARE-DOMAINS-1 (agent_issues 2077, pillar reach): twelve spare-domain hostnames (ipatent.me, qwav.net, qwav.uk, qwave.tech, q-wave.tech, empoweringchange.today and their www) answer 301 to their canonical site (ipatent.qnfo.org, qwav.org, qnfo.org), path and query kept. 1.9.1-retired-hosts RETIRED-HOSTS-1: twelve retired qnfo.org hostnames answer 410 Gone (noindex) instead of 522 via Workers routes on this worker (agent_issues 2010). 1.9.0-calendar-fold CALENDAR-FOLD-2 (2026-10-06, T3.10, agent_issues 2010, pillar cost, OWNER-STANDING-GRANT-1): calendar-api (ICS publish, notes intake, event feedback, owner questions) runs here as the member calendarApiFoldMod on the hourly tick, awaited; its feedback-link key is HMAC-derived from this worker's CF_API_TOKEN by the fold kit (CAL_KEY_SEED), never copied or minted; public /calendar/health, /calendar/e/<id> (GET page, POST answer) and /calendar/events.ics; binders personal-api, qnfo-intent-orchestrator and radar-hub reach it with props.member (FOLD-KIT-1). Was 1.8.1-one-worker-count. */ // 1.8.1 ONE-WORKER-COUNT-1 (2026-10-06, pillar core, transformation lever T5.10): runMetricFreshness no longer writes metric_registry.worker_count; qnfo-fleet-control 0.4.137 writes it from the live scripts census beside fleet_budget.workers (COUNT(service_registry) counted retired rows too, 32 against 31 on 2026-10-06). 1.8.0 BACKLOG-FOLD-1 (#1756, pillar cost): qnfo-backlog-exec runs here as a member (backlogMod) on the 02:00 tick; GET /backlog/health; qnfo-ops reaches its drain over the BACKLOG binding (props.member). qnfo-archive (retired: its KG seed got HTTP 401 on every batch) leaves runPing. 1.7.3 LIFECYCLE-PING-1042-1 (#1994): wrangler.toml sets global_fetch_strictly_public, so runPing and runSync reach *.q08.workers.dev (150 PING FAIL HTTP 404 rows were Cloudflare error 1042). 1.7.2 METRIC-CADENCE-UNITS-1 + METRIC-UNMEASURED-CLASS-1 (#1865): "*/3h" and "2h" cadences parse with their unit; never-measured UNMEASURED/n/a metrics are their own class. 1.7.0 CRON-SINGLE-TRIGGER-1 (#1785): one hourly trigger, CRON_TABLE in code. Worker Contract v1 VERSION constant (read by version-bump-guard / drift checks)
 const QNFO_VERSION = VERSION;
 var __defProp = Object.defineProperty;
 var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
@@ -2759,6 +2759,7 @@ function plPrompt(title, version, body) {
     "- support: where the paper supports it (section and how), or none.\n" +
     "- fleet_lever: the concrete part of the fleet it bears on (a loop's cadence or batch size, a metric and its threshold, a budget rule, a review rule, a doctrine rule); application: one or two sentences on what the fleet would change and how it would measure it.\n" +
     "- applicability: direct (the fleet has this exact trade-off and can act on it), analogy (suggestive only), none.\n" +
+    "- The paper may carry notes written by the fleet's own pipeline (a correction banner, a Version History, a Provenance section). They describe the fleet, not the paper's subject; never turn them into a learning.\n" +
     "- errors: a derivation that does not follow, a number that does not match its own inputs, a conclusion the paper's own model contradicts. Show why in one or two sentences. Do not list style issues.\n" +
     "Answer with JSON only: {\"learnings\":[{\"claim\":\"\",\"section\":\"\",\"kind\":\"\",\"support\":\"\",\"fleet_lever\":\"\",\"application\":\"\",\"applicability\":\"\",\"confidence\":0.0}],\"errors\":[{\"claim\":\"\",\"why\":\"\"}]}\n\n" +
     "PAPER: " + String(title || "") + " (version " + String(version || "") + ")\n\n" + body;
@@ -2884,7 +2885,7 @@ async function plCandidates(env, now) {
 }
 async function plLearnOne(env, p, out) {
   var row = await env.LIVING_PAPER.prepare("SELECT body_md FROM papers WHERE slug = ?1").bind(p.slug).first();
-  var body = String(row && row.body_md || "").slice(0, PL_BODY_MAX);
+  var body = plStripNotices(String(row && row.body_md || "")).slice(0, PL_BODY_MAX);
   var read = await plRead(env, plPrompt(p.title, p.version, body), 4096);
   var res = { key: p.slug + "@" + p.version, slug: p.slug.slice(0, 80), version: p.version, learnings: 0, unverified: 0, direct: 0, errata: 0, issue: null };
   var now = new Date().toISOString();
@@ -2982,6 +2983,7 @@ async function paperLearnTick(env, opts) {
   try {
     await env.QNFO_AUDIT.prepare("UPDATE metric_registry SET last_value = ?1, last_refreshed = ?2, state = 'MEASURED' WHERE metric = 'papers_unlearned_over_120m'").bind(String(out.overdue), out.at).run();
   } catch (e) { out.errors.push("metric: " + String(e && e.message || e).slice(0, 120)); }
+  out.triage = await plTriageTick(env, o.triage);
   out.ms = Date.now() - t0;
   return out;
 }
@@ -2995,6 +2997,118 @@ async function paperLearnStatus(env, slug) {
   var l = (await env.QNFO_AUDIT.prepare("SELECT verification, applicability, fleet_status, COUNT(*) AS n FROM paper_learnings GROUP BY 1, 2, 3 ORDER BY n DESC").all()).results || [];
   var m = await env.QNFO_AUDIT.prepare("SELECT last_value, last_refreshed FROM metric_registry WHERE metric = 'papers_unlearned_over_120m'").first();
   return { marker: "PAPER-LEARN-1", version: typeof QNFO_VERSION === "string" ? QNFO_VERSION : "", state: s, learnings: l, papers_unlearned_over_120m: m ? m.last_value : null, cadence: "hourly (0 * * * *)", per_tick_default: PL_PER_TICK_DEFAULT };
+}
+// ---- PAPER-LEARN-TRIAGE-1 (1.14.0, 2026-10-20, pillar autonomy; owner directive "clear all open issues server-side automatically within 24 hours") ----
+// PAPER-LEARN-1 files one issue per paper with a strong direct learning, at most PL_ISSUE_OPEN_MAX open at once, and nothing ever answered the
+// learnings: five issues (100234, 100249, 100252, 100257, 100261) sat at the cap with 18 proposed learnings, 11 of them about one thing, the
+// pipeline's own CLAIM-INTEGRITY-1 correction notice that the reader took for the paper's claim, and a cap that only drains when somebody
+// applies or rejects each row blocks every later paper (169 direct learnings were proposed, 18 had an issue). Each hour the triage settles up to
+// PL_TRIAGE_EXAMINE proposed direct learnings, issue-bound ones first, against a catalogue of live fleet mechanisms (paper_learning_mechanisms):
+//   already-in-place  a mechanism whose terms occur in the claim or lever AND whose evidence probe (a SELECT on qnfo-audit) returns ok now; the
+//                     note cites the mechanism and the time, so the citation is verified when the row is settled, not taken from a model;
+//   rejected          two model families, asked separately, both say reject with a reason (the paper's own convention, an analogy only, or a
+//                     conflict with a catalogue mechanism whose probe is ok); a single reject, an apply or an unreadable answer settles nothing;
+//   apply             a model says the fleet has a gap: the row stays proposed with the proposal in its note and is not triaged again, so the
+//                     issue stays open for a doer.
+// The reader also strips the pipeline's own notices (correction banner, Correction Notice, Version History, Provenance) before it reads, so a
+// notice is not learned as the paper's claim. ops_config paper_learn_triage = off stops the triage. Revert one row:
+// UPDATE paper_learnings SET fleet_status = 'proposed' WHERE id = <id>.
+var PL_TRIAGE_EXAMINE = 12, PL_TRIAGE_MODEL_MAX = 4, PL_TRIAGE_MARK = "PL-TRIAGE-1";
+function plStripNotices(md) {
+  var s = String(md || "");
+  s = s.replace(/^> \*\*(?:Correction|Revised) \(version[^\n]*(?:\n>[^\n]*)*\n?/gm, "");
+  ["Correction Notice", "Version History", "Provenance and AI Involvement"].forEach(function (h) {
+    var re = new RegExp("^##[ \\t]+" + h + "[^\\n]*\\n[\\s\\S]*?(?=^##[ \\t]|(?![\\s\\S]))", "gm");
+    s = s.replace(re, "");
+  });
+  return s;
+}
+async function plMechanisms(env) {
+  return ((await env.QNFO_AUDIT.prepare("SELECT mech_key, title, terms, citation, evidence_probe FROM paper_learning_mechanisms WHERE status = 'active' ORDER BY mech_key").all()).results) || [];
+}
+// A probe is one SELECT whose first column reads ok; anything else (a write, a second statement, an error) is a failed probe.
+async function plRunProbe(env, sql) {
+  var q = String(sql || "").trim();
+  if (!/^select\s/i.test(q) || q.indexOf(";") >= 0) return false;
+  try {
+    var r = await env.QNFO_AUDIT.prepare(q).first();
+    return !!r && String(r[Object.keys(r)[0]]).toLowerCase() === "ok";
+  } catch (e) {
+    return false;
+  }
+}
+function plMatchMechanisms(mechs, claim, lever) {
+  var text = (String(claim || "") + " " + String(lever || "")).toLowerCase();
+  return mechs.filter(function (m) {
+    return String(m.terms || "").toLowerCase().split("|").some(function (t) { return t && text.indexOf(t) >= 0; });
+  });
+}
+function plTriagePrompt(L, mechs) {
+  return "You triage one learning that a research paper suggested for an autonomous fleet of Cloudflare Workers (loops, a D1 issue queue, remediation probes, a doctrine of rules, a trust ledger, model ensembles). " +
+    "Decide: reject (the learning is the paper's own authoring convention, or only an analogy, or conflicts with an existing fleet mechanism listed below) or apply (the fleet has a real gap this would close and no listed mechanism covers it).\n" +
+    "Existing fleet mechanisms:\n" + mechs.map(function (m) { return "- " + m.mech_key + ": " + m.title; }).join("\n") + "\n\n" +
+    "LEARNING: " + plStr(L.claim, 600) + "\nLEVER: " + plStr(L.fleet_lever, 200) + "\nAPPLICATION: " + plStr(L.application, 600) + "\nKIND: " + L.kind + " (" + L.verification + ")\n\n" +
+    "Answer with JSON only: {\"disposition\":\"reject|apply\",\"category\":\"paper-convention|analogy-only|conflicts|gap\",\"mechanism\":\"<a key above when category is conflicts, else empty>\",\"reason\":\"one or two specific sentences\"}";
+}
+async function plTriageModel(env, L, mechs, now) {
+  var prompt = plTriagePrompt(L, mechs), answers = [];
+  var orders = [[PL_PRIMARY], [PL_SECOND]];
+  for (var i = 0; i < orders.length; i++) {
+    var r = await plRead(env, prompt, 1024, orders[i]);
+    var j = r.json || {};
+    answers.push({ model: r.model, d: String(j.disposition || "").toLowerCase(), cat: String(j.category || "").toLowerCase(), mech: plStr(j.mechanism, 60), reason: plStr(j.reason, 400) });
+  }
+  var bothReject = answers.every(function (a) { return a.model && a.d === "reject" && a.reason.length >= 40 && ["paper-convention", "analogy-only", "conflicts"].indexOf(a.cat) >= 0; });
+  if (bothReject) {
+    var conf = answers.filter(function (a) { return a.cat === "conflicts"; });
+    if (conf.length && conf.length !== answers.length) return { settled: false, why: "the two families disagree on the category" };
+    var cited = null;
+    if (conf.length) {
+      var m = mechs.filter(function (x) { return x.mech_key === conf[0].mech; })[0];
+      if (!m || !(await plRunProbe(env, m.evidence_probe))) return { settled: false, why: "a conflict named a mechanism that is not in the catalogue or whose probe is not ok" };
+      cited = m;
+    }
+    return { settled: true, status: "rejected", note: PL_TRIAGE_MARK + " rejected (" + answers[0].cat + "; two model families agree, " + now + "): " + answers[0].reason + (cited ? " Conflicts with " + cited.mech_key + ": " + cited.citation + " (probe ok)" : "") };
+  }
+  var apply = answers.filter(function (a) { return a.d === "apply" && a.reason.length >= 20; })[0];
+  if (apply) return { settled: false, apply: PL_TRIAGE_MARK + " apply (" + String(apply.model || "").split("/").pop() + ", " + now + "): " + apply.reason };
+  return { settled: false, why: "no agreement" };
+}
+async function plTriageTick(env, opts) {
+  var o = opts || {}, out = { marker: PL_TRIAGE_MARK, examined: 0, in_place: 0, rejected: 0, apply: 0, kept: 0 };
+  try {
+    var flag = await env.QNFO_AUDIT.prepare("SELECT value FROM ops_config WHERE key = 'paper_learn_triage'").first();
+    if (flag && String(flag.value || "").trim().toLowerCase() === "off") { out.skipped = true; return out; }
+    var mechs = await plMechanisms(env);
+    if (!mechs.length) { out.skipped = "no mechanisms"; return out; }
+    var rows = ((await env.QNFO_AUDIT.prepare("SELECT id, slug, version, kind, verification, claim, fleet_lever, application, issue_id FROM paper_learnings WHERE fleet_status = 'proposed' AND applicability = 'direct' AND COALESCE(instr(status_note, 'PL-TRIAGE-1 apply'), 0) = 0 ORDER BY (issue_id IS NULL) ASC, id ASC LIMIT ?1").bind(o.examine || PL_TRIAGE_EXAMINE).all()).results) || [];
+    var now = new Date().toISOString(), modelBudget = o.modelMax == null ? PL_TRIAGE_MODEL_MAX : o.modelMax;
+    for (var i = 0; i < rows.length; i++) {
+      var L = rows[i];
+      out.examined++;
+      var hits = plMatchMechanisms(mechs, L.claim, L.fleet_lever), hit = null;
+      for (var k = 0; k < hits.length && !hit; k++) if (await plRunProbe(env, hits[k].evidence_probe)) hit = hits[k];
+      if (hit) {
+        await env.QNFO_AUDIT.prepare("UPDATE paper_learnings SET fleet_status = 'already-in-place', status_note = ?2, updated_at = ?3 WHERE id = ?1 AND fleet_status = 'proposed'")
+          .bind(L.id, (PL_TRIAGE_MARK + " in place (" + now + "): " + hit.mech_key + " - " + hit.citation + " (evidence probe ok)").slice(0, 600), now).run();
+        out.in_place++;
+        continue;
+      }
+      if (modelBudget <= 0 || !env.AI) { out.kept++; continue; }
+      modelBudget--;
+      var v = await plTriageModel(env, L, mechs, now);
+      if (v.settled) {
+        await env.QNFO_AUDIT.prepare("UPDATE paper_learnings SET fleet_status = ?2, status_note = ?3, updated_at = ?4 WHERE id = ?1 AND fleet_status = 'proposed'").bind(L.id, v.status, v.note.slice(0, 700), now).run();
+        out.rejected++;
+      } else if (v.apply) {
+        await env.QNFO_AUDIT.prepare("UPDATE paper_learnings SET status_note = ?2, updated_at = ?3 WHERE id = ?1 AND fleet_status = 'proposed'").bind(L.id, v.apply.slice(0, 700), now).run();
+        out.apply++;
+      } else out.kept++;
+    }
+  } catch (e) {
+    out.error = String(e && e.message || e).slice(0, 200);
+  }
+  return out;
 }
 function withPaperLearn(inner) {
   var out = Object.assign({}, inner, {
@@ -3029,7 +3143,7 @@ function withPaperLearn(inner) {
     }
   });
   ["__foldHost", "__foldMember", "__noz"].forEach(function (k) { if (inner[k] !== undefined) Object.defineProperty(out, k, { value: inner[k], enumerable: false }); });
-  Object.defineProperty(out, "__paperLearn", { value: { tick: paperLearnTick, status: paperLearnStatus, normalize: plNormalize, json: plJson, verification: plVerification, prompt: plPrompt, ddl: PL_DDL }, enumerable: false });
+  Object.defineProperty(out, "__paperLearn", { value: { tick: paperLearnTick, triage: plTriageTick, stripNotices: plStripNotices, matchMechanisms: plMatchMechanisms, status: paperLearnStatus, normalize: plNormalize, json: plJson, verification: plVerification, prompt: plPrompt, ddl: PL_DDL }, enumerable: false });
   return out;
 }
 var __paper_learn_default = withPaperLearn(__noz_scrub_default);
