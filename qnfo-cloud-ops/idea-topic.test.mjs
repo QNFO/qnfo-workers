@@ -81,6 +81,8 @@ for (let i = 0; i < 3; i++) ins.run("owner-corpus", "Lattice braid exchange note
 ins.run("auto-scan", "Glacier moraine dating", "ACCEPT", "", sq(2));
 ins.run("auto-scan", "Glacier moraine flow", "ACCEPT", "", sq(3));
 ins.run("auto-scan", "Glacier moraine survey", "ACCEPT", "braid braid", iso(4));
+for (let i = 0; i < 4; i++) ins.run("auto-scan", "Lattice braid exchange scan " + i, "ACCEPT", "", iso(5 + i));
+for (let i = 0; i < 3; i++) ins.run("intake:journal-x", "Sparrow flight energetics " + i, "ACCEPT", "", iso(6 + i));
 ins.run("auto-scan", "Lattice braid under noise", "HOLD", "", iso(1));
 ins.run("auto-scan", "Lattice braid old idea", "ACCEPT", "", iso(40));
 ins.run("auto-scan", "Lattice braid very old idea", "ACCEPT", "", iso(120));
@@ -88,12 +90,13 @@ db.prepare("INSERT INTO ops_config (key, value) VALUES (?, ?)").run(mod.__key, J
 const env = { AUDIT: { prepare: (sql) => stmtOn(db, sql) } };
 const r = await mod.__job(env);
 const row = db.prepare("SELECT last_value, last_refreshed FROM metric_registry WHERE metric='idea_topic_concentration_30d'").get();
-ok(r.status === "ok" && r.notes.accepted_30d === 6 && r.notes.share === 0.5 && r.notes.derived_docs === 7, "job derives over 90 days (7 accepts: HOLD and 120-day-old excluded) and counts 6 accepts in 30 days at share 0.5", r.notes);
+ok(r.status === "ok" && r.notes.accepted_30d === 10 && r.notes.owner_sourced_30d === 3 && r.notes.share === 0.4 && r.notes.derived_docs === 14, "job derives over 90 days (14 accepts: HOLD and 120-day-old excluded) and measures the 10 generated accepts of 30 days at share 0.4, the 3 owner rows counted apart (OWNER-EXEMPT-METRIC-1)", r.notes);
+ok(r.notes.all_sources.accepted_30d === 13 && r.notes.all_sources.top === "braid" && r.notes.all_sources.share === 0.538, "the all-sources share (owner rows included) rides in the notes, nothing is hidden", r.notes.all_sources);
 ok(!r.notes.clusters.includes("stale") && r.notes.clusters.length >= 2, "the daily job re-derives even when the cache is fresh", r.notes.clusters);
 ok(r.notes.by_cluster.glacier === 3, "the rationale does not move a row (glacier rows whose rationale says braid stay glacier)", r.notes.by_cluster);
 const cached = JSON.parse(db.prepare("SELECT value FROM ops_config WHERE key = ?").get(mod.__key).value);
-ok(cached.docs === 7 && JSON.stringify(cached.clusters) === JSON.stringify(r.notes.cluster_terms) && typeof cached.derived_at === "string", "the derived clusters are cached in ops_config for idea-hub", cached);
-ok(row.last_value === "0.5" && row.last_refreshed !== "2026-10-04T09:14:00Z", "registry row updated", row);
+ok(cached.docs === 14 && JSON.stringify(cached.clusters) === JSON.stringify(r.notes.cluster_terms) && typeof cached.derived_at === "string", "the derived clusters are cached in ops_config for idea-hub", cached);
+ok(row.last_value === "0.4" && row.last_refreshed !== "2026-10-04T09:14:00Z", "registry row updated", row);
 ok(db.prepare("SELECT last_value FROM metric_registry WHERE metric='other_metric'").get().last_value === "7", "no other registry row touched");
 
 // 7. loadTopicClusters: a fresh cache is served; a stale or broken one is re-derived.
@@ -112,8 +115,10 @@ db2.exec(`CREATE TABLE idea_proposals (id INTEGER PRIMARY KEY AUTOINCREMENT, nam
   INSERT INTO metric_registry VALUES ('idea_topic_concentration_30d', '0.9', 'then');`);
 const ins2 = db2.prepare("INSERT INTO idea_proposals (name, idea, decision, created_at) VALUES (?, ?, 'ACCEPT', ?)");
 for (let i = 0; i < 3; i++) ins2.run("owner", "Lattice braid exchange " + i, iso(1));
+for (let i = 0; i < 5; i++) ins2.run("auto-scan", "Lattice braid exchange " + i, iso(1));
+for (let i = 0; i < 5; i++) ins2.run("auto-scan", "Glacier moraine survey " + i, iso(1));
 const r2 = await mod.__job({ AUDIT: { prepare: (sql) => stmtOn(db2, sql) } });
-ok(r2.status === "error" && /ops_config idea_topic_clusters cache write: /.test(r2.reason || "") && db2.prepare("SELECT last_value FROM metric_registry").get().last_value === "1", "no ops_config table: status error with the reason, metric still written", r2);
+ok(r2.status === "error" && /ops_config idea_topic_clusters cache write: /.test(r2.reason || "") && db2.prepare("SELECT last_value FROM metric_registry").get().last_value === "0.5", "no ops_config table: status error with the reason, metric still written", r2);
 
 // 9. No accepted ideas: no clusters, no value, registry untouched.
 const db3 = new DatabaseSync(":memory:");
@@ -123,6 +128,24 @@ db3.exec(`CREATE TABLE idea_proposals (id INTEGER PRIMARY KEY AUTOINCREMENT, nam
   INSERT INTO metric_registry VALUES ('idea_topic_concentration_30d', '0.9', 'then');`);
 const r3 = await mod.__job({ AUDIT: { prepare: (sql) => stmtOn(db3, sql) } });
 ok(r3.status === "ok" && /no derived topic clusters/.test(r3.notes.skipped || "") && db3.prepare("SELECT last_value FROM metric_registry").get().last_value === "0.9", "no accepted ideas: skipped, registry untouched", r3);
+
+// 9b. OWNER-EXEMPT-METRIC-1: owner-sourced rows are exempt; fewer than 10 generated accepts leaves the registry untouched.
+const db4 = new DatabaseSync(":memory:");
+db4.exec(`CREATE TABLE idea_proposals (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT, idea TEXT NOT NULL, decision TEXT, rationale TEXT, created_at TEXT);
+  CREATE TABLE metric_registry (metric TEXT PRIMARY KEY, last_value TEXT, last_refreshed TEXT);
+  CREATE TABLE ops_config (key TEXT PRIMARY KEY, value TEXT, note TEXT, updated_at TEXT);
+  INSERT INTO metric_registry VALUES ('idea_topic_concentration_30d', '0.9', 'then');`);
+const ins4 = db4.prepare("INSERT INTO idea_proposals (name, idea, decision, created_at) VALUES (?, ?, 'ACCEPT', ?)");
+for (let i = 0; i < 32; i++) ins4.run("owner-corpus", "Lattice braid exchange note " + i, iso(1));
+for (let i = 0; i < 8; i++) ins4.run("owner-corpus", "Quasar jet spectra " + i, iso(1));
+for (let i = 0; i < 5; i++) ins4.run("auto-scan", "Glacier moraine survey " + i, iso(1));
+for (let i = 0; i < 4; i++) ins4.run("auto-scan", "Alpine lichen growth " + i, iso(1));
+const r4 = await mod.__job({ AUDIT: { prepare: (sql) => stmtOn(db4, sql) } });
+ok(r4.status === "ok" && /fewer than 10 generated/.test(r4.notes.skipped || "") && db4.prepare("SELECT last_value FROM metric_registry").get().last_value === "0.9" && r4.notes.owner_sourced_30d === 40, "9 generated accepts: skipped with the reason, registry untouched, the 40 owner rows counted apart", r4.notes);
+ins4.run("auto-scan", "Alpine lichen growth 4", iso(1));
+const r5 = await mod.__job({ AUDIT: { prepare: (sql) => stmtOn(db4, sql) } });
+ok(r5.notes.accepted_30d === 10 && r5.notes.top === "glacier" && r5.notes.share === 0.5 && r5.notes.all_sources.accepted_30d === 50 && r5.notes.all_sources.top === "braid" && r5.notes.all_sources.share === 0.64 && db4.prepare("SELECT last_value FROM metric_registry").get().last_value === "0.5", "10 generated accepts: the metric is the generated share (0.5) while the all-sources share (0.64, 32 owner notes in the braid cluster of 50) stays visible", r5.notes);
+ok(db4.prepare("SELECT COUNT(*) n FROM idea_proposals WHERE lower(name) LIKE '%owner%'").get().n === 40, "fixture control: 40 owner rows");
 
 // 10. Wiring: a companion of an existing daily slot, no new schedule entry.
 ok(typeof mod.__jobs["idea-topic-metric"] === "function", "job is in the dispatch map");
