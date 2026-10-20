@@ -304,6 +304,38 @@ def reapply(head_ref, base_ref, branch, cwd=None, message=None, in_place=False):
     return {"outcome": "reapplied" if conflicted else "clean", "workers": workers, "resolved": resolved, "changed": changed}
 
 
+def landed_on_main(head_ref, base_ref, cwd=None, min_len=12):
+    """MERGE-LANE-LANDED-1 (agent_issues 100293, PR 3093): returns the changed files when every substantive line the pull request adds
+    (its own diff against the merge base) is already in main's copy of that file, else None. The VERSION line and the deployed-current
+    mirror never count: a pull request's own bump is never on main, and the mirror is a copy of worker.js. Such a pull request has no
+    conflict to repair, its change reached main by another route, so it is closed as superseded instead of left with an issue that says
+    'needs judgement' (PR 3093 sat conflicted for hours although q08-signal-engine already carried its qwen switch)."""
+    out = git(["diff", "--unified=0", "--no-color", "%s...%s" % (base_ref, head_ref)], cwd)
+    added, cur = {}, None
+    for line in out.split("\n"):
+        if line.startswith("+++ "):
+            cur = line[6:] if line.startswith("+++ b/") else None
+            if cur and os.path.basename(cur) == "deployed-current.worker.js":
+                cur = None
+            if cur:
+                added.setdefault(cur, [])
+        elif line.startswith("+") and cur:
+            t = line[1:].strip()
+            if len(t) >= min_len and not re.match(r"var\s+VERSION\s*=", t):
+                added[cur].append(t)
+    files = [f for f, ls in added.items() if ls]
+    if not files:
+        return None
+    for f in files:
+        r = sh(["git", "show", "%s:%s" % (base_ref, f)], cwd, check=False)
+        if r.returncode != 0:
+            return None
+        have = {x.strip() for x in r.stdout.split("\n")}
+        if any(t not in have for t in added[f]):
+            return None
+    return sorted(files)
+
+
 def claimed_versions(worker, skip_pr=None):
     """VERSIONs that main and the open pull requests (except skip_pr) claim for a worker (REST, as CLAUDE.md prescribes)."""
     out = []
@@ -498,6 +530,14 @@ def repair(number, push=False, keep_branch=False, in_place=False):
     git(["fetch", "-q", "origin", "+refs/pull/%d/head:refs/remotes/origin/pr-%d" % (number, number)])
     res = {"pr": number, "branch": head_ref if in_place else branch, "in_place": in_place}
     try:
+        landed = landed_on_main("refs/remotes/origin/pr-%d" % number, "origin/main")
+        if landed:
+            res.update({"outcome": "already-on-main", "files": landed})
+            if push:
+                gh("repos/%s/issues/%d/comments" % (REPO, number), "POST", {"body": "MERGE-LANE-LANDED-1: every substantive line this pull request adds (%s) is already on main, so there is nothing left to merge or repair. Closing as superseded; the change reached main by another route." % ", ".join(landed)})
+                gh("repos/%s/pulls/%d" % (REPO, number), "PATCH", {"state": "closed"})
+                ledger(number, head_sha, "ok", "MERGE-LANE-LANDED-1 PR %d closed: its change is already on main (%s)" % (number, ", ".join(landed)), dict(meta, outcome="already-on-main", files=landed))
+            return res
         r = reapply("refs/remotes/origin/pr-%d" % number, "origin/main", branch, in_place=in_place)
         res.update(r)
         if r["outcome"] not in ("reapplied", "clean"):
@@ -695,6 +735,33 @@ def selftest():
         moved = bump_workers(r["workers"], 1, d, claims=lambda w, skip: ["1.0.3-main"])
         g("-c", "user.name=t", "-c", "user.email=a@b.c", "commit", "-qm", "merge main into pr")
         ok(moved == [("w", "1.0.1-pr", "1.0.4-pr")] and git(["log", "--first-parent", "--format=%s", "-3"], d).strip().split("\n")[1] == "pr change", "the merge commit sits on top of the pull request's own commits", moved)
+    # MERGE-LANE-LANDED-1: a pull request whose substantive added lines are already on main is detected; a different change is not
+    with tempfile.TemporaryDirectory() as d:
+        def g(*a):
+            return git(list(a), d)
+        g("init", "-q", "-b", "main"); g("config", "user.email", "a@b.c"); g("config", "user.name", "t")
+        os.mkdir(os.path.join(d, "w"))
+        base = 'var VERSION = "1.0.0";\nfunction f(m) {\n  if (m.indexOf("nemotron") >= 0) return 1;\n  return 0;\n}\n'
+        for f in ("worker.js", "deployed-current.worker.js"):
+            open(os.path.join(d, "w", f), "w").write(base)
+        g("add", "-A"); g("commit", "-qm", "base")
+        g("checkout", "-q", "-b", "same")
+        for f in ("worker.js", "deployed-current.worker.js"):
+            open(os.path.join(d, "w", f), "w").write(base.replace('"1.0.0"', '"1.0.1-same"').replace("  return 0;", '  if (m.indexOf("qwen") >= 0) return 2;\n  return 0;'))
+        g("commit", "-qam", "same change"); g("checkout", "-q", "-b", "other", "main")
+        for f in ("worker.js", "deployed-current.worker.js"):
+            open(os.path.join(d, "w", f), "w").write(base.replace('"1.0.0"', '"1.0.1-other"').replace("  return 0;", '  if (m.indexOf("gemma") >= 0) return 3;\n  return 0;'))
+        g("commit", "-qam", "other change"); g("checkout", "-q", "main")
+        for f in ("worker.js", "deployed-current.worker.js"):
+            open(os.path.join(d, "w", f), "w").write(base.replace('"1.0.0"', '"1.0.5-main"').replace("  return 0;", '  if (m.indexOf("qwen") >= 0) return 2; // landed elsewhere\n  return 0;').replace("return 1;", "return 1; /* x */"))
+        g("commit", "-qam", "main already has the qwen branch")
+        ok(landed_on_main("same", "main", d) is None, "landed_on_main: a line with a trailing comment on main is not the same line (strict, no false positive)")
+        g("checkout", "-q", "main")
+        for f in ("worker.js", "deployed-current.worker.js"):
+            open(os.path.join(d, "w", f), "w").write(base.replace('"1.0.0"', '"1.0.5-main"').replace("  return 0;", '  if (m.indexOf("qwen") >= 0) return 2;\n  return 0;'))
+        g("commit", "-qam", "main has the exact line")
+        ok(landed_on_main("same", "main", d) == ["w/worker.js"], "landed_on_main: the pull request's added line is on main; VERSION and the mirror are ignored", landed_on_main("same", "main", d))
+        ok(landed_on_main("other", "main", d) is None, "landed_on_main: a change main does not have is not landed")
     emit("conflict_repair selftest: " + ("ok" if not fails else "%d FAILED" % len(fails)))
     return 1 if fails else 0
 
