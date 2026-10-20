@@ -142,6 +142,32 @@ def chain_notes(pr_line, main_line):
     return mp.group(1) + '"' + mp.group(2) + '"; ' + " ".join(pb[: len(pb) - k] + mb)
 
 
+NOTE_LINE = re.compile(r"^[ \t]*/\*.*\*/[ \t]*$")
+
+
+def merge_note_hunk(pr_part, main_part):
+    """One conflict hunk -> its resolved lines, or None when it is a semantic overlap. A hunk resolves when each side is at most one
+    VERSION line plus release-note lines (a whole line that is one /* */ comment; VERSION-LINE-SPLIT-1 keeps a worker's notes one per
+    line below the statement, agent_issues 100220), with the VERSION line on both sides or on neither: the pull request's side is
+    kept (its VERSION line with main's same-line notes chained, see chain_notes) and main's note lines it lacks follow its last note."""
+    def split(part):
+        v = [k for k, l in enumerate(part) if VERSION_LINE.fullmatch(l)]
+        if len(v) > 1 or any(not NOTE_LINE.match(l) for k, l in enumerate(part) if k not in v):
+            return None
+        return v
+    pv, mv = split(pr_part), split(main_part)
+    if pv is None or mv is None or len(pv) != len(mv) or not (pr_part or main_part):
+        return None
+    res = list(pr_part)
+    if pv:
+        res[pv[0]] = chain_notes(pr_part[pv[0]], main_part[mv[0]])
+    have = set(l.strip() for l in pr_part)
+    extra = [l for k, l in enumerate(main_part) if k not in mv and l.strip() not in have]
+    notes_at = [k for k in range(len(res)) if not pv or k != pv[0]]
+    at = (notes_at[-1] + 1) if notes_at else len(res)
+    return res[:at] + extra + res[at:]
+
+
 def resolve_version_only(text, pr_side="theirs"):
     """A file with merge conflict markers -> its text with every hunk resolved to the pull request's VERSION line (its release notes
     chained with main's, see chain_notes), when every hunk is nothing but the VERSION line on both sides; None when any hunk carries
@@ -166,10 +192,11 @@ def resolve_version_only(text, pr_side="theirs"):
         if i >= len(lines):
             return None  # an unterminated hunk
         i += 1
-        if len(ours) != 1 or len(theirs) != 1 or not VERSION_LINE.fullmatch(ours[0]) or not VERSION_LINE.fullmatch(theirs[0]):
+        pr_part, main_part = (ours, theirs) if pr_side == "ours" else (theirs, ours)
+        merged = merge_note_hunk(pr_part, main_part)
+        if merged is None:
             return None
-        pr_line, main_line = (ours[0], theirs[0]) if pr_side == "ours" else (theirs[0], ours[0])
-        out.append(chain_notes(pr_line, main_line))
+        out.extend(merged)
         hunks += 1
     return "\n".join(out) if hunks else None
 
@@ -722,6 +749,12 @@ def selftest():
     ok(read_version(gw) == "3.26.4-codeagent" and set_version(gw, "3.26.5-codeagent") == 'var VERSION="3.26.5-codeagent"; /* 3.26.4 x */', "VERSION lines without spaces (qnfo-gateway) are read and rewritten in their own style")
     ok(resolve_version_only('<<<<<<< HEAD\n' + pn + '\n=======\n' + mn + '\n>>>>>>> main\n', "ours") == 'var VERSION = "1.46.2"; /* 1.46.2 pr note */ /* 1.47.0 main note */ /* 1.46.1 shared */\n'
        and resolve_version_only('<<<<<<< HEAD\n' + mn + '\n=======\n' + pn + '\n>>>>>>> pr\n') == 'var VERSION = "1.46.2"; /* 1.46.2 pr note */ /* 1.47.0 main note */ /* 1.46.1 shared */\n', "resolve_version_only: either direction yields the pull request's version with both note chains")
+    # VERSION-LINE-SPLIT-1: notes one per line below the statement; both sides add a note and bump the VERSION
+    sp = 'top\n<<<<<<< HEAD\nvar VERSION = "0.43.0-pr";\n/* 0.43.0 pr note */\n=======\nvar VERSION = "0.42.1-main";\n/* 0.42.1 main note */\n>>>>>>> main\n/* 0.42.0 shared */\n'
+    ok(resolve_version_only(sp, "ours") == 'top\nvar VERSION = "0.43.0-pr";\n/* 0.43.0 pr note */\n/* 0.42.1 main note */\n/* 0.42.0 shared */\n', "split notes: the pull request's VERSION, its note, then main's note", resolve_version_only(sp, "ours"))
+    ok(resolve_version_only('<<<<<<< HEAD\n/* a */\n=======\n/* b */\n/* a */\n>>>>>>> pr\n') == '/* b */\n/* a */\n', "a notes-only hunk keeps the pull request's notes and adds main's missing ones")
+    ok(resolve_version_only('<<<<<<< HEAD\nvar VERSION = "1";\n/* a */\n=======\n/* b */\n>>>>>>> pr\n') is None, "a VERSION line on one side only is refused")
+    ok(resolve_version_only('<<<<<<< HEAD\nvar VERSION = "1";\n=======\nvar VERSION = "2";\n/* n */ const z = 1;\n>>>>>>> pr\n') is None, "a note line that carries code is refused")
     ok(asks_to_wait({"title": "WIP: x"}) and asks_to_wait({"title": "hold: y"}) and asks_to_wait({"title": "z", "labels": [{"name": "do not merge"}]}) and asks_to_wait({"title": "z", "body": "please do-not-merge"}) and not asks_to_wait({"title": "Withhold nothing, shipping soon", "body": "ok"}), "asks_to_wait: WIP, hold and do-not-merge, not words that merely contain them")
     stamp = lambda secs: time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(1000000 + secs))
     prs = {1: dict(base_pr, number=1, mergeable=False, mergeable_state="dirty", head=dict(base_pr["head"], sha="a1", ref="codeagent-x")), 2: dict(base_pr, number=2, mergeable=False, mergeable_state="dirty", head=dict(base_pr["head"], sha="a2", ref="fix/y")),
