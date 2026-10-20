@@ -85,6 +85,13 @@ because each one was broken at least once; the linked issue holds the evidence.
   credentials, mailbox and name (IC-GATE-001), and the security and privacy limits (one-time codes, privacy, personal data, suppression,
   opt-out, consent); such a card keeps its old path. A decision card that carries an `IDENTITY-BOUND:` line and no hard marker is held
   open for the owner and its stated default is not adopted: a writer who labels a card so says it truly needs the owner.
+- Owner directive 2026-10-20 (HUMAN-ITEMS-AUTOMATIC-1), verbatim: "These items/issues shall always be handled automatically by the system." It covers needs_human code tasks,
+  owner-task cards (INTENT-TASK, OWNER-TASK) and the issues that mirror them: the fleet is the doer and closes them with evidence; only an item that is irreversible and
+  identity-bound stays with the owner, and says so with an `IDENTITY-BOUND:` line and a closing probe. `v_human_action_gate` grades an INTENT-TASK or OWNER-TASK card `fleet`
+  unless that line or a hard marker (credential, secret, token, password, payment, legal, signature ...) says `owner`; a weak keyword such as account, public or profile does not.
+  `fm-human-items-waiting` (migrations/2026-10-20-human-items-automatic.sql) reads a needs_human task or an owner-task card that waits 120 minutes, expected 0. It moves no limit:
+  the interrupt gate, the harness's permission checks, the secret lock and live work claims keep their precedence. Stored in `ops_config.OWNER_DIRECTIVE_2026_10_20_HUMAN_ITEMS_AUTOMATIC_1`
+  and docs/AUTONOMOUS-OPERATION-DOCTRINE.md (standing directive 2026-10-20).
 - The hourly metric tick audits it: `v_autonomy_first_audit`, metrics `owner_queue_fleet_cards_open` and
   `session_dependent_issues_open` (target 0 each), triggers on both and on `code_task_superseded_share_30d`.
 
