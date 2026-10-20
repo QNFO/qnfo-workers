@@ -181,6 +181,10 @@ eq(seeded.n >= 48, true, "the migration seeds the program's levers (" + seeded.n
 eq(seeded.landed >= 9 && seeded.session >= 8 && seeded.dispatched === 2 && seeded.owner === 1, true, "seed statuses adopt what the program's author already filed and what main landed on 2026-10-06: " + JSON.stringify(seeded));
 eq(db.prepare("SELECT COUNT(*) AS n FROM transformation_levers WHERE status IN ('landed','verified') AND landed_at IS NULL").get().n, 0, "every landed seed row carries a landed_at (the 14-day metric reads it)");
 eq(db.prepare("SELECT COUNT(*) AS n FROM transformation_levers WHERE status IN ('landed','verified') AND (note IS NULL OR note = '')").get().n, 0, "every landed seed row names its evidence");
+// TEST-CLOCK-2 (2026-10-20): the seed stamps its dispatched levers with their 2026-10-06 dates, so 14 days later every one of them
+// read as stalled on the first tick and T5.5 never reached its fallback. The integration ticks below run on today's clock, so the
+// seeded dispatch dates are moved to now; the stall case sets its own date further down.
+db.prepare("UPDATE transformation_levers SET dispatched_at = ? WHERE dispatched_at IS NOT NULL").run(new Date().toISOString());
 eq(db.prepare("SELECT value FROM ops_config WHERE key='code_merge_trusted_sources'").get().value.endsWith(",qnfo-fleet-control|TP-,TRANSFORMATION-PROGRAM-1|TP-"), true, "the merge runner's trusted origins gain the program's two");
 eq(db.prepare("SELECT COUNT(*) AS n FROM ops_config WHERE key LIKE 'code_merge_trusted_sources--bak-%'").get().n, 1, "with a backup key");
 db.exec(readFileSync(join(here, "..", "migrations", "2026-10-06-transformation-loop.sql"), "utf8"));

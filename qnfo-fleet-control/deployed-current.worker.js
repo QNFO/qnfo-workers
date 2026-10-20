@@ -1081,7 +1081,8 @@ function secretEq(a, b) {
 }
 __name(secretEq, "secretEq");
 // VERSION-LINE-SPLIT-1 (agent_issues 100220): the release notes sit one per line below this statement, newest first, so a VERSION bump is a one-line patch; add a new note as the first line under it.
-var VERSION = "0.42.1-version-line-split";
+var VERSION = "0.43.0-workflow-failure-intake";
+/* 0.43.0 WORKFLOW-FAILURE-INTAKE-1 (2026-10-20, agent_issues 100295, pillar autonomy; minor: a new loop step): each 10-minute tick reads the newest workflow runs on main, keeps every workflow's latest decided conclusion in workflow_main_state, records a failing run with its failed job and step in workflow_failures, files one WORKFLOW-FAILED-1: <workflow> issue with a d1-query probe, and closes it with close_evidence when a later main run succeeds; ops_config workflow_failure_intake = off stops it. */
 /* 0.42.1 VERSION-LINE-SPLIT-1 (2026-10-20, agent_issues 100220, pillar autonomy; patch: layout only): the release notes that sat on the VERSION line (199,469 chars) are one per line below it, so a bump no longer rewrites a 200 KB line and a code task's patch stays under the publisher cap; scripts/conflict_repair.py resolves note-line hunks (merge_note_hunk). No behaviour change. */
 /* 0.42.0 DEPLOY-ALL-MERGES-1 (2026-10-20, owner directive "The system shall always deploy all merges automatically."; pillar core; minor: a decision the loop now takes on its own): DEPLOY-DRIFT-CF-1 measured and redeployed only the workers qnfo-ops /ops/deploy may take, so a merge to a control-plane worker (qnfo-fleet-control, qnfo-ops, qnfo-deploy-guard, qnfo-ai, qnfo-gateway, qnfo-observability) or a container worker (qnfo-code-orchestrator, qnfo-containers-pilot) whose canonical run was cancelled, skipped or failed stayed behind main with nothing to notice it (8 rows read "skip" in deploy_drift_cf at 05:30Z). Those workers are now targets too: main ahead of live for 45 minutes, no active run of the owning workflow and the live script confirmed behind, the tick dispatches canonical-deploy.yml with workers=<name> (canary and automatic revert on the runner) or the container worker's own workflow, at most 2 a tick and once per main VERSION an hour (ddcRunner, ddcDispatchPending). Metric merges_undeployed_over_60m (migrations/2026-10-20-deploy-all-merges.sql). deploy-drift-cf.test.mjs 14. */
 /* 0.41.2 EXTERNAL-HTTPS-MASTODON-HOST-1 (2026-10-19, agent_issues 2925 INTEG-MASTODON-VERIFY-1; pillar autonomy; patch): RT_HTTP_HOSTS gains mstdn.science, the public Mastodon instance whose unauthenticated account lookup (GET /api/v1/accounts/lookup) qnfo-social already reads (MASTODON-PUBLIC-STATS-1), so the issue closing probe, which was parked probe-not-machine-executable on "host not allowed", can run. The rest of rtHttpSpec is unchanged: https only, GET or HEAD, no credentials, no redirect followed, 10 s, 1 MB; a host not on the list is still refused. */
@@ -6059,6 +6060,114 @@ async function ddcEvent(db, id, nowIso, status, text) {
   await db.prepare("INSERT INTO cloud_ops_events (id, ts, kind, text, job, status) VALUES (?1, ?2, '" + DDC_KIND + "', ?3, 'qnfo-fleet-control', ?4)").bind(id, nowIso, String(text).slice(0, 900), status).run();
 }
 __name(ddcEvent, "ddcEvent");
+// ---- WORKFLOW-FAILURE-INTAKE-1:BEGIN (0.43.0, agent_issues 100295, pillar autonomy) ----
+// Owner directive 2026-10-20: "The system shall always fix and redeploy all merge failures automatically." The audit in 100295
+// counted 2500+ failed workflow runs and none recorded with a cause, so a red workflow on main waited for a session to notice it.
+// Each 10-minute tick reads the newest runs on main (one GitHub call) and keeps each workflow's latest decided conclusion in
+// workflow_main_state; a failing latest run is recorded with its failed job and step in workflow_failures (at most WFI_JOB_READS
+// job reads a tick), one WORKFLOW-FAILED-1: <workflow> issue is filed per failing workflow with a d1-query probe on
+// workflow_main_state, and the issue is closed with close_evidence when a later main run of that workflow succeeds. A cancelled,
+// skipped or neutral run is no verdict and leaves the state as it was. Pull request branches are not filed here (the stale-branch
+// class is agent_issues 100293). ops_config workflow_failure_intake = off stops it without a deploy.
+var WFI_JOB_READS = 4, WFI_PREFIX = "WORKFLOW-FAILED-1: ", WFI_KIND = "workflow-failure-intake";
+var WFI_FAIL = { failure: 1, timed_out: 1, startup_failure: 1 }, WFI_NOVERDICT = { cancelled: 1, skipped: 1, neutral: 1, stale: 1 };
+function wfiLatest(runs) {
+  var by = {};
+  (runs || []).forEach(function (r) {
+    if (!r || r.status !== "completed" || !r.name || !r.conclusion || WFI_NOVERDICT[r.conclusion]) return;
+    var cur = by[r.name];
+    if (!cur || String(r.created_at || "") > String(cur.created_at || "")) by[r.name] = r;
+  });
+  return by;
+}
+__name(wfiLatest, "wfiLatest");
+function wfiFailedStep(jobs) {
+  var list = Array.isArray(jobs) ? jobs : [];
+  for (var i = 0; i < list.length; i++) {
+    var j = list[i];
+    if (!j || !WFI_FAIL[j.conclusion]) continue;
+    var steps = Array.isArray(j.steps) ? j.steps : [], st = null;
+    for (var k = 0; k < steps.length && !st; k++) if (steps[k] && WFI_FAIL[steps[k].conclusion]) st = steps[k];
+    return { job: String(j.name || "").slice(0, 200), step: st ? (st.number != null ? st.number + " " : "") + String(st.name || "").slice(0, 200) : null };
+  }
+  return { job: null, step: null };
+}
+__name(wfiFailedStep, "wfiFailedStep");
+function wfiProbe(name) {
+  return "SELECT 'success' AS expected, (SELECT conclusion FROM workflow_main_state WHERE workflow = '" + String(name).replace(/'/g, "''") + "') AS observed";
+}
+__name(wfiProbe, "wfiProbe");
+async function workflowFailureIntake(env, nowMs, io) {
+  var db = env.AUDIT, now = nowMs || Date.now(), nowIso = new Date(now).toISOString();
+  var out = { ok: true, ts: nowIso, workflows: 0, failing: [], recorded: 0, filed: 0, closed: 0, errors: [] };
+  io = io || ddcIo(env);
+  try {
+    var g = await db.prepare("SELECT value FROM ops_config WHERE key = 'workflow_failure_intake'").first();
+    if (g && String(g.value || "").trim().toLowerCase() === "off") return { ok: true, ts: nowIso, skipped: "ops_config workflow_failure_intake = off" };
+  } catch (eG) { out.errors.push("gate: " + String(eG && eG.message || eG).slice(0, 120)); }
+  await db.prepare("CREATE TABLE IF NOT EXISTS workflow_main_state (workflow TEXT PRIMARY KEY, run_id INTEGER, conclusion TEXT, run_at TEXT, html_url TEXT, seen_at TEXT)").run();
+  await db.prepare("CREATE TABLE IF NOT EXISTS workflow_failures (run_id INTEGER PRIMARY KEY, workflow TEXT, conclusion TEXT, run_at TEXT, html_url TEXT, head_sha TEXT, failed_job TEXT, failed_step TEXT, issue_id INTEGER, recorded_at TEXT)").run();
+  var res = await io.gh("/actions/runs?branch=main&exclude_pull_requests=true&per_page=100");
+  if (!res || !res.ok || !res.j || !Array.isArray(res.j.workflow_runs)) throw new Error("main workflow runs unreadable (HTTP " + (res && res.status) + ")");
+  var latest = wfiLatest(res.j.workflow_runs), names = Object.keys(latest).sort();
+  out.workflows = names.length;
+  for (var i = 0; i < names.length; i++) {
+    var r = latest[names[i]];
+    await db.prepare("INSERT INTO workflow_main_state (workflow, run_id, conclusion, run_at, html_url, seen_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6) ON CONFLICT(workflow) DO UPDATE SET run_id = excluded.run_id, conclusion = excluded.conclusion, run_at = excluded.run_at, html_url = excluded.html_url, seen_at = excluded.seen_at WHERE excluded.run_at >= COALESCE(workflow_main_state.run_at, '')")
+      .bind(names[i], Number(r.id) || null, r.conclusion, r.created_at || null, r.html_url || null, nowIso).run();
+  }
+  var open = {};
+  (((await db.prepare("SELECT id, title FROM agent_issues WHERE status = 'open' AND title LIKE 'WORKFLOW-FAILED-1: %'").all()).results) || []).forEach(function (x) { open[String(x.title).slice(WFI_PREFIX.length)] = x.id; });
+  var reads = 0;
+  for (var f = 0; f < names.length; f++) {
+    var name = names[f], run = latest[name];
+    if (!WFI_FAIL[run.conclusion]) continue;
+    out.failing.push(name);
+    var have = await db.prepare("SELECT failed_job, failed_step FROM workflow_failures WHERE run_id = ?1").bind(Number(run.id)).first();
+    var where = have ? { job: have.failed_job, step: have.failed_step } : { job: null, step: null };
+    if (!have) {
+      if (reads < WFI_JOB_READS) {
+        reads++;
+        var jr = await io.gh("/actions/runs/" + run.id + "/jobs?per_page=50");
+        if (jr && jr.ok && jr.j) where = wfiFailedStep(jr.j.jobs);
+        else out.errors.push(name + " jobs HTTP " + (jr && jr.status));
+      }
+      await db.prepare("INSERT OR IGNORE INTO workflow_failures (run_id, workflow, conclusion, run_at, html_url, head_sha, failed_job, failed_step, recorded_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)")
+        .bind(Number(run.id), name, run.conclusion, run.created_at || null, run.html_url || null, String(run.head_sha || "").slice(0, 40) || null, where.job, where.step, nowIso).run();
+      out.recorded++;
+    }
+    if (open[name]) continue;
+    try {
+      var desc = "AUTO-FILED by qnfo-fleet-control WORKFLOW-FAILURE-INTAKE-1 (agent_issues 100295; pillar autonomy). The latest decided run of workflow \"" + name + "\" on main ended " + run.conclusion + ": " + (run.html_url || "run " + run.id) + " (" + (run.created_at || "?") + ", head " + String(run.head_sha || "").slice(0, 12) + ")" + (where.job ? "; failed job \"" + where.job + "\"" + (where.step ? ", step " + where.step : "") : "") + ". Read the job log with the repository token, fix the cause by PR and record the failure mode. DoD: a later run of the workflow on main succeeds; WORKFLOW-FAILURE-INTAKE-1 then closes this issue itself with close_evidence, and its d1-query probe reads workflow_main_state.";
+      var ins = await db.prepare("INSERT INTO agent_issues (title, description, source, category, priority, status, created_at, updated_at) VALUES (?1, ?2, 'qnfo-fleet-control', 'reliability', 'high', 'open', ?3, ?3)").bind(WFI_PREFIX + name, desc, now).run();
+      var id = ins && ins.meta && ins.meta.last_row_id;
+      if (id) {
+        await db.prepare("UPDATE workflow_failures SET issue_id = ?2 WHERE run_id = ?1").bind(Number(run.id), id).run();
+        await db.prepare("UPDATE remediation_contracts SET verify_probe = ?2, verify_transport = 'd1-query', status = 'active', last_verdict = NULL, attempts = 0, deferred_since = NULL, next_due_at = datetime('now') WHERE class = ?1").bind("issue-" + id, wfiProbe(name)).run();
+      }
+      out.filed++;
+    } catch (eF) { out.errors.push(name + " file: " + String(eF && eF.message || eF).slice(0, 160)); }
+  }
+  for (var t in open) {
+    var lr = latest[t];
+    if (!lr || lr.conclusion !== "success") continue;
+    try {
+      await db.prepare("INSERT INTO issue_triage (issue_id, rc, triage_state, owner, sla_due_at, close_evidence) VALUES (?1, 'WORKFLOW-FAILURE-INTAKE-1', 'closed', 'qnfo-fleet-control', datetime('now'), ?2) ON CONFLICT(issue_id) DO UPDATE SET close_evidence = excluded.close_evidence, triage_state = 'closed'")
+        .bind(open[t], "WORKFLOW-FAILURE-INTAKE-1 " + nowIso + ": the latest decided run of \"" + t + "\" on main succeeded: " + (lr.html_url || "run " + lr.id) + " (" + (lr.created_at || "?") + ")").run();
+      await db.prepare("UPDATE agent_issues SET status = 'closed', updated_at = ?2 WHERE id = ?1").bind(open[t], now).run();
+      out.closed++;
+    } catch (eC) { out.errors.push(t + " close: " + String(eC && eC.message || eC).slice(0, 160)); }
+  }
+  if (out.filed || out.closed || out.recorded || out.errors.length) {
+    try {
+      await db.prepare("INSERT INTO cloud_ops_events (id, ts, kind, text, job, status) VALUES (?1, ?2, '" + WFI_KIND + "', ?3, 'qnfo-fleet-control', ?4)")
+        .bind("wfi-" + now, nowIso, JSON.stringify({ workflows: out.workflows, failing: out.failing, recorded: out.recorded, filed: out.filed, closed: out.closed, errors: out.errors }).slice(0, 900), out.errors.length ? "warn" : "ok").run();
+    } catch (eE) { console.error(JSON.stringify({ evt: "fleet-control:workflowFailureIntake:event", error: String(eE && eE.message || eE).slice(0, 160) })); }
+  }
+  return out;
+}
+__name(workflowFailureIntake, "workflowFailureIntake");
+// ---- WORKFLOW-FAILURE-INTAKE-1:END ----
 async function deployDriftCf(env, nowMs, io) {
   var db = env.AUDIT_DB || env.AUDIT, now = nowMs || Date.now(), nowIso = new Date(now).toISOString();
   var out = { ok: true, on: true, route: null, head: null, main: null, reads: 0, incomplete: false, targets: 0, drift: [], deployed: [], dispatched: [], failed: [], skipped: [], blocked: null, notes: [], errors: [] };
@@ -10738,6 +10847,8 @@ var worker_default2 = {
       // DEPLOY-DRIFT-CF-1 (0.26.0): the deploy's second runner: a worker whose main VERSION has been ahead of live for 45 minutes
       // with no canonical-deploy run active is deployed through qnfo-ops /ops/deploy (spof_registry 'GitHub Actions').
       ctx.waitUntil(deployDriftCf(env).catch((e) => console.error("deployDriftCf error:", e && e.message || e)));
+      // WORKFLOW-FAILURE-INTAKE-1 (0.43.0): a red workflow on main is recorded with its failed step and filed; a green run closes it.
+      ctx.waitUntil(workflowFailureIntake(env).catch((e) => console.error("workflowFailureIntake error:", e && e.message || e)));
       // SLA-TICK-10M-1 (0.30.0): SLA measurement and breach actions at 10-minute resolution (they ran hourly).
       ctx.waitUntil(slaTick10m(env).then(function (r) { console.log("sla tick (10m): " + JSON.stringify(r)); }).catch((e) => console.error("slaTick10m error:", e && e.message || e)));
       ctx.waitUntil(remediationContractsTick(env, { budgetMs: 25000 }).then(function (r) { console.log("remediation tick (10m): " + JSON.stringify({ due: r.due, pass: r.pass, fail: r.fail, skipped: r.skipped, budget_left: r.budget_left })); }).catch((e) => console.error("remediationContractsTick error:", e && e.message || e)));
