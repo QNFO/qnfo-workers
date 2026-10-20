@@ -86,7 +86,7 @@ rate to `qnfo-audit.model_ab_runs`:
 | pre-change answer | the fixture's recorded baseline reply; with `live_pre` the pre-change model is called instead |
 | post-change answer | the post-change model through qnfo-ai with `pin_model: true`, `hedge: false`, `cache: false` (the `QNFO_AI` service binding, props caller `qnfo-model-eval`); a reply served by another model is never scored: the prompt goes to the Workers AI id through the AI binding instead (`detail.post_paths` says which path answered) |
 | judges | two families outside the pair under test, at least one outside every family the worker uses; they see the two answers in opposite orders |
-| score | win 1, tie 0.5, loss 0 per judge, averaged; an empty post-change answer is a loss with no judge call |
+| score | win 1, tie 0.5, loss 0 per judge, averaged; an empty post-change answer is a loss with no judge call, except that one whose finish is `length` (the fixture's own token cap was spent, as a reasoning model does) is asked once more at `min(4096, max(2048, 4 x budget))` tokens first (AB-LENGTH-RETRY-1); a retry that cannot be made leaves the fixture unmeasured, not lost |
 | verdict | `win_rate >= 0.40` passes (parity is 0.5, margin 0.10); fewer than 6 verdicts, or judges that disagree on most fixtures, is `inconclusive`; an unreachable router is `error` (retried, at most 3 a day); a regression files an `agent_issues` row |
 
 `classification` lanes (`task_set: clef-classification`) pair `clefCanary` agreement over the same labelled
@@ -96,7 +96,13 @@ Triggers, on the hourly grid tick: a changed model for a worker in `scripts/mode
 seen for the first time is only recorded), and a model a worker newly uses in `ai_call_counters` (at least 20 calls
 yesterday or today, fewer than 3 in the 2 to 15 days before, against that worker's busiest earlier model). Bounded
 by `ab_max_runs_per_tick` (2) and `ab_daily_cap` (12), deduped on worker, pre and post model for 7 days, and
-stopped by `ab_enabled = 0`.
+stopped by `ab_enabled = 0`. Every row's `detail` starts with `harness_rev` (`AB_HARNESS_REV`, now 2, bumped when the
+harness changes how a row is scored); a `regression` row only suppresses its candidate when it carries the current
+revision, and a third trigger (`abStaleRevCandidates`) proposes every pair whose `regression` row of the last 7 days
+does not, whether or not `ai_call_counters` still shows a model change, so a regression found by an older scoring is
+measured again by the next hourly tick. A pass or an inconclusive row keeps the 7-day dedupe, except an inconclusive
+run that lost fixtures to an unavailable retry, which is tried again (at most 3 such rows a day, like an error); no
+row is edited.
 
 Not shown: the fixtures are generic and short; they catch empty, unsupported, wrong or truncated answers and are
 not a worker's own prompts. The seed baseline replies are authored reference answers, not machine recordings (use
