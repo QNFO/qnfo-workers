@@ -1,5 +1,5 @@
 {
-  "audited_at": "2026-10-20 11:59:09",
+  "audited_at": "2026-10-20 12:44:25",
   "d1_write_failures": [],
   "d1_writes_ok": 120,
   "guard": {
@@ -615,7 +615,7 @@
       },
       {
         "dir": "qnfo-gateway",
-        "version": "3.29.0-reader-report",
+        "version": "3.29.1-codeagent",
         "worker": "qnfo-gateway"
       },
       {
@@ -1347,9 +1347,9 @@
       "worker": "qnfo-fleet-feed"
     },
     "qnfo-gateway": {
-      "before": "3.29.0-reader-report",
+      "before": "3.29.1-codeagent",
       "http": 200,
-      "live": "3.29.0-reader-report",
+      "live": "3.29.1-codeagent",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-gateway"
