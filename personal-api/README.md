@@ -2,6 +2,24 @@
 
 Rowan's personal-assistant endpoint: personal-api.q08.workers.dev/v1 (OpenAI-compatible).
 
+## v4.22.0 (2026-10-20) - live, multi-venue answers and read-write REST (pillar: personal, PERSONAL-LIVE-1)
+Owner: "I'm getting answers that are too shallow. You've got to look at multiple venues. I want real-time data when I ask
+for it ... I want read-write real-time access through the personal API endpoint."
+- A going-out or day question reads the live programme pages of eleven Amsterdam venues and listings in parallel
+  (Concertgebouw, Bimhuis, Paradiso, Melkweg, Muziekgebouw, Tolhuistuin, Carré, Opera & Ballet, Eye, I amsterdam,
+  Resident Advisor), keeps the text around the asked day and hands the model one block per source with its URL and read
+  time. Sources live in personal-life `live_sources` (owner rows read first; `live_source_add`, `live_source_toggle`);
+  results are cached ten minutes in `live_cache`, and "now", "live", "latest" or "refresh" reads them fresh.
+- The travel planner (personal-companion TRAVEL-PLANNER-1) is part of the twin: `travel_get` (proposals, planned stops,
+  booked stays) and `travel_choose {id, action: pick|no}` (the same writes the planner page makes; nothing is booked).
+- `POST /v1/tools/<name>` runs any twin tool, read or write, with the args as JSON; `GET /v1/tools` lists them;
+  `GET /v1/live/whatson?date=&fresh=1` returns the live listing. Each takes the personal API key or the signed-in
+  companion device (cookie plus `X-Companion: 1`).
+- Chat no longer raises tasks more than three days past their date unless the question is about tasks (then they are
+  listed with the id that closes them); prime reminders are the last 14 days only; the Google Calendar note is said only
+  when asked about the calendar; the system prompt names no QNFO hosts and answers across venues without row ids.
+- Tests: node --no-warnings personal-api/personal-live.test.mjs
+
 ## v4.11.0 (2026-10-19) - the companion, evidence-based (pillar: personal, COMPANION-BEST-PRACTICE-1)
 Changes that follow from a review of the research on digital mental-health companions (the write-up is
 `COMPANION-BEST-PRACTICES.md` next to this file). Rules 8-15 in the head of `companion.js`.
