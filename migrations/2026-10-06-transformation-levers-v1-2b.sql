@@ -1,3 +1,4 @@
+-- APPLY-BY: manual (rows-only: applied by hand before MIGRATION-RUNNER-1; tables transformation_levers exist)
 -- TRANSFORMATION-PROGRAM-1 1.2, register fix (2026-10-06, pillar: autonomy). migrations/2026-10-06-transformation-levers-v1-2.sql
 -- inserted its rows with INSERT OR IGNORE on UNIQUE(tp, n) at 08:42Z; two of its slots had been taken at 08:40Z by another
 -- session's assessment ((1, 14) orchestrator-claims-first, (5, 10) one-worker-count), so its (1, 14) verify-parse-shape and

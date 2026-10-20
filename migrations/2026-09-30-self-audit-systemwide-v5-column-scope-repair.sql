@@ -1,3 +1,4 @@
+-- APPLY-BY: manual (rows-only: applied by hand before MIGRATION-RUNNER-1; tables fleet_tasks exist)
 -- SELF-AUDIT-SYSTEMWIDE-1 — v5 column-scope repair
 -- Applied live 2026-09-30T19:59:26Z by qnfo-ops; verified same turn.
 --

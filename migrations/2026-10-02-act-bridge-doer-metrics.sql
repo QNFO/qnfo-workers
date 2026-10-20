@@ -1,3 +1,4 @@
+-- APPLY-BY: manual (rows-only: applied by hand before MIGRATION-RUNNER-1; tables analytics_metric_triggers, fleet_tasks, metric_registry exist)
 -- ACT-BRIDGE-1 doer metrics (2026-10-02, pillar autonomy). Idempotent; applied live by the session that wrote it.
 --
 -- Owner directive 2026-10-02: "Filing an issue is not fixing it. Something still has to do the work: the fleet's code agent

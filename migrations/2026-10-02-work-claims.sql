@@ -1,3 +1,4 @@
+-- APPLY-BY: manual (applied live: table:work_claims, view:v_work_claims_active exist in qnfo-audit)
 -- WORK-CLAIMS-1 (2026-10-02, pillar: autonomy). Applied live by the session that wrote it; idempotent.
 --
 -- The problem. Several agent sessions and the code loop change this repository at the same time, and nothing says who

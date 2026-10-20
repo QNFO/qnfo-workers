@@ -1,3 +1,4 @@
+-- APPLY-BY: manual (applied live: trigger:worker_removals_from_consolidation_upd, trigger:worker_removals_from_consolidation_ins, trigger:worker_removals_from_live_audit exist in qnfo-audit)
 -- REMOVAL-LEDGER-WRITE-PATH-1 (2026-10-01, agent_issues 1674). Applied to qnfo-audit.
 --
 -- worker_removals was created and backfilled once (19 rows from worker_consolidation), but nothing

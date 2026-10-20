@@ -1,3 +1,4 @@
+-- APPLY-BY: manual (applied live: column:human_responses.credential exist in qnfo-audit)
 -- OBJECTIVE-AUTHORITY-TRUTH-1 (qnfo-fleet-dashboard 1.17.8, pillar: core; agent_issues 1765/1766). Record the truth about
 -- who made an owner-queue decision. The objective ratify route accepts the owner's emailed-code session or the fleet's
 -- LOOP_TOKEN (OWNER-QUEUE-DELEGATION-1), and human_responses did not record which one acted, so the apply step stamped

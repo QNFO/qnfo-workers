@@ -1,3 +1,4 @@
+-- APPLY-BY: manual (rows-only: applied by hand before MIGRATION-RUNNER-1; tables fleet_crons, fleet_tasks exist)
 -- BREACH-TICKET-REOPEN-1 (2026-10-18, pillar autonomy; a live breach must have an open ticket)
 --
 -- THE INVARIANT THIS RESTORES

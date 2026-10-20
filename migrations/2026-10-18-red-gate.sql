@@ -1,3 +1,4 @@
+-- APPLY-BY: manual (applied live: table:red_gate_state, view:v_open_issue_titles, view:v_recent_open_issues exist in qnfo-audit)
 -- RED-GATE-1 (owner directive 2026-10-18: "the fleet shall never stop or terminate with any outstanding
 -- breaches, failures, errors, issues or red items").  DB: qnfo-audit
 --

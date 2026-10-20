@@ -1,3 +1,4 @@
+-- APPLY-BY: manual (rows-only: applied by hand before MIGRATION-RUNNER-1; tables analytics_metric_triggers, metric_registry exist)
 -- OUTREACH-LEARNER-1 metrics (2026-10-02, pillar: reach). qnfo-cloud-ops 1.18.0 computes two metrics daily (job
 -- outreach-learner, a companion in the engagement slot) and writes them to metric_registry. METRIC-CLOSED-LOOP-1
 -- (CLAUDE.md): a change that registers a metric also adds its trigger, so this file registers both rows (identical to

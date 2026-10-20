@@ -1,3 +1,4 @@
+-- APPLY-BY: manual (applied live: view:v_metric_trigger_state exist in qnfo-audit)
 -- TRIGGER-PARSE-1 (2026-10-02). Pillar: core.
 --
 -- v_metric_trigger_state is the judge of every metric trigger. It read a value as a number only when the trimmed string

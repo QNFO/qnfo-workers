@@ -1,3 +1,4 @@
+-- APPLY-BY: manual (targets personal-life, a private database, not qnfo-audit: agent_memories is gone and the two archived tables exist, verified 2026-10-20 from sqlite_master only)
 -- TARGET DB: personal-life (e8d6c61a-10b7-4086-b81e-9e6e85afa407). PERSONAL-VESTIGIAL-PLANES-1 (2026-10-01).
 -- Resolves #935 PERSONAL-MEMORY-MAINTAIN-NOOP-POST-909 and the queries half of #938 PERSONAL-TELEMETRY-PLANES-INERT.
 --

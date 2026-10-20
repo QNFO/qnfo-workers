@@ -1,3 +1,4 @@
+-- APPLY-BY: manual (rows-only: applied by hand before MIGRATION-RUNNER-1; tables fleet_crons, fleet_tasks exist)
 -- SELF-AUDIT-SYSTEMWIDE-1  (applied live 2026-09-29T15:35Z by qnfo-ops, verified same turn)
 --
 -- WHY THIS IS DATA AND NOT CODE

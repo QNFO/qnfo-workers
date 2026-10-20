@@ -1,3 +1,4 @@
+-- APPLY-BY: manual (rows-only: applied by hand before MIGRATION-RUNNER-1; tables analytics_metric_triggers, metric_registry exist)
 -- BRANCH-HYGIENE-1 (2026-10-03, pillar: autonomy). Idempotent.
 --
 -- The problem. QNFO/qnfo-workers had 215 branches besides main on 2026-10-03: 166 merged (an ancestor of main, or the exact

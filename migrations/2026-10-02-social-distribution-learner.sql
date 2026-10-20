@@ -1,3 +1,4 @@
+-- APPLY-BY: manual (rows-only: applied by hand before MIGRATION-RUNNER-1; tables analytics_metric_triggers, metric_registry exist)
 -- SOCIAL-DISTRIBUTION-LEARNER-1 (2026-10-02, pillar: reach). qnfo-social 0.7.28. Idempotent (safe to re-run).
 -- Not applied by the session that wrote it (no D1 writes from that session); to be applied to qnfo-audit at integration.
 --

@@ -1,3 +1,4 @@
+-- APPLY-BY: manual (rows-only: applied by hand before MIGRATION-RUNNER-1; tables freshness_guard exist)
 -- FRESHNESS-REGISTERS-RETIRED-1 (2026-10-06, agent_issues #2028, charter pillar: autonomy).
 --
 -- qnfo-autonomy-scorer grades ooda_observe and s2_coordination from freshness_guard (fresh / total). On 2026-10-06T06:48Z

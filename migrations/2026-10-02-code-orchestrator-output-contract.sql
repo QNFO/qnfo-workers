@@ -1,3 +1,4 @@
+-- APPLY-BY: manual (rows-only: applied by hand before MIGRATION-RUNNER-1; tables worker_output_contracts exist)
 -- HEARTBEAT-ATTRIBUTION-GAP-1 (agent_issues 1831, 2026-10-02, pillar: autonomy). Record of a row applied live; idempotent.
 --
 -- The issue read "qnfo-code-orchestrator, qnfo-kaizen and qnfo-fleet-control have zero fleet_heartbeat rows" as these

@@ -1,3 +1,4 @@
+-- APPLY-BY: manual (rows-only: applied by hand before MIGRATION-RUNNER-1; tables analytics_metric_triggers, metric_registry exist)
 -- Q08-VOTES-TRIGGER-1 (2026-10-03, pillar: reach). Replaces the EXEMPTION on q08_verified_votes_7d (migrations/2026-10-02-q08-metrics.sql)
 -- with a trigger. Applied live against qnfo-audit by the session that wrote it, statement by statement, 2026-10-03; idempotent
 -- (each statement is guarded, so re-running it is a no-op). Previous registry values, kept here as the backup:

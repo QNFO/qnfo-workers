@@ -1,3 +1,4 @@
+-- APPLY-BY: manual (applied live: research_plans absent from qnfo-audit)
 -- RESEARCH-PLANS-DEAD-1 (#1622, 2026-10-01): research_plans is dropped as dead. Applied live.
 -- It was a legacy WBS-era table: wbs_code was a foreign key to projects, and it had phases_json and total_phases.
 -- It held 0 rows. No code in the repository read or wrote it, no view or trigger used it, and no table referenced it.

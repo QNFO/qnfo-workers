@@ -1,3 +1,4 @@
+-- APPLY-BY: manual (rows-only: applied by hand before MIGRATION-RUNNER-1; tables analytics_metric_triggers exist)
 -- ASK-LOOP-1 triggers (2026-10-02, pillars reach + autonomy). Idempotent; applied live by the session that wrote it.
 --
 -- qnfo-ai-search 2.0.0 registers eight ask_* metrics in metric_registry (hourly). METRIC-CLOSED-LOOP-1 asks every change

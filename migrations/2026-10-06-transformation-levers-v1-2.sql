@@ -1,3 +1,4 @@
+-- APPLY-BY: manual (rows-only: applied by hand before MIGRATION-RUNNER-1; tables transformation_levers exist)
 -- TRANSFORMATION-PROGRAM-1 version 1.2 (2026-10-06, pillar: autonomy). docs/TRANSFORMATION-PROGRAM.md section 1.12 (third
 -- read, 07:40-08:10Z) replaces T1 lever 8 and adds T1.13-T1.18, T3.10-T3.15 and T5.10. This file brings
 -- qnfo-audit.transformation_levers (the register TRANSFORMATION-LOOP-1 in qnfo-fleet-control reads every hour) in line:

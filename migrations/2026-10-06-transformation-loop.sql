@@ -1,3 +1,4 @@
+-- APPLY-BY: manual (applied live: table:transformation_levers, table:transformation_runs exist in qnfo-audit)
 -- TRANSFORMATION-LOOP-1 (2026-10-06, pillar: autonomy; owner directive 2026-10-06: a continuing program of transformational
 -- change, systemwide, fully automatic and 100% autonomous). docs/TRANSFORMATION-PROGRAM.md (TRANSFORMATION-PROGRAM-1) is the
 -- audit and the plan; qnfo-fleet-control 0.4.132 is the engine (transformationTick, hourly). This file seeds the engine's

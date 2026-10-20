@@ -1,3 +1,4 @@
+-- APPLY-BY: manual (applied live: trigger:agent_issues_autotriage2_ins exist in qnfo-audit)
 -- 2026-10-18 ISSUE-SLA-WINDOW-1 (closeout of the remediation verification audit)
 --
 -- Found while closing out: agent_issues_autotriage2_ins sets sla_due_at = datetime('now'), i.e. an issue is due

@@ -1,3 +1,4 @@
+-- APPLY-BY: manual (applied live 2026-10-05 against living-paper, not qnfo-audit: the papers_ai trigger exists there, verified 2026-10-20 from sqlite_master; its qnfo-audit statement is a comment)
 -- GUARD-TRIGGER-ORDER-1 + GUARD-SHADOW-DROP-1 (2026-10-05, agent_issues #1629, charter pillar: security).
 -- Applied live 2026-10-05 ~19:35Z by session_01KzS1yjXATqG3KDBSEyNTAs. Found by the offline negative tests
 -- (scripts/guard-registry-negative-tests.mjs, GUARD-VERIFY-OFFLINE-1).

@@ -1,3 +1,4 @@
+-- APPLY-BY: manual (applied live: table:ask_corpus_sync exist in qnfo-audit)
 -- ASK-CORPUS-FEEDER-1 (qnfo-ai-search 2.2.8, agent_issues 2029, charter pillar research).
 -- The AI Search instance qnfo-corpus is filled only through qnfo-ai-search POST /ingest, and nothing called it after
 -- 2026-08-11 (newest item timestamp 1786515360000); on 2026-10-06 none of the 22 golden papers was retrievable by vector

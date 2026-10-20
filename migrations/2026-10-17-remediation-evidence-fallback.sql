@@ -1,3 +1,4 @@
+-- APPLY-BY: manual (applied live: table:remediation_evidence, index:idx_remediation_evidence_class, view:v_remediation_evidence_all exist in qnfo-audit)
 -- SLA-AND-PATHS-1 (2026-10-17, owner directive): every step carries an SLA and more than one path to its
 -- definition of done. This migration adds path B for step 2 of the remediation pipeline, evidence persistence.
 --

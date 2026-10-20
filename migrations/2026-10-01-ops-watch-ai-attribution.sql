@@ -1,3 +1,4 @@
+-- APPLY-BY: manual (applied live: column:ai_call_counters.in_tok, column:ai_call_counters.out_tok, column:ai_call_counters.neurons exist in qnfo-audit)
 -- OPS-AGENT-WATCH-1 and WORKERS-AI-ATTRIBUTION-1 (2026-10-01, #1680 #1696 #1681). Applied live.
 -- The 7-day acceptance windows of #1680/#1696 become standing regression watches computed hourly by qnfo-fleet-control
 -- (opsAgentWatchMetrics), and Workers AI attribution coverage is computed hourly (aiAttributionCoverage).

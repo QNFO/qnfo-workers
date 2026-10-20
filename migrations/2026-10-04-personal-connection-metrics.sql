@@ -1,3 +1,4 @@
+-- APPLY-BY: manual (rows-only: applied by hand before MIGRATION-RUNNER-1; tables analytics_metric_triggers, metric_registry exist)
 -- CONNECTION-LEDGER-1 step 3 + CONNECTION-ENGAGEMENT-1 (2026-10-04, pillar: personal; agent_issues #1951, #1953).
 -- Registers two personal-plane metrics and their triggers. Applied live to qnfo-audit after the PR merged; idempotent
 -- (INSERT OR IGNORE, safe to re-run). Both values are written by personal-companion 1.10.0 in its hourly tick

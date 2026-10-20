@@ -1,3 +1,4 @@
+-- APPLY-BY: manual (targets living-paper, not qnfo-audit: paper_category and idx_paper_category_category exist there, verified 2026-10-20 from sqlite_master; the runner's DATABASES holds only qnfo-audit)
 -- PAPER-AUDIENCE-CATEGORIES-1 (owner directive 2026-10-18, pillar reach): the papers library filed
 -- papers by a five-way keyword guess (QEC / Number theory / Physics / CS / Other), and "Other" held 161 of
 -- 606 public papers (26%) -- the largest single bucket on the site, telling a reader nothing.

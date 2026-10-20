@@ -1,3 +1,4 @@
+-- APPLY-BY: manual (applied live: trigger:issue_close_evidence_required exist in qnfo-audit)
 -- CLOSE-BINDS-TO-PROBE-1 (2026-10-18, pillar autonomy)
 --
 -- Root cause found by auditing v_failure_mode_status: 5 of the 12 recurring failure modes were one defect seen from

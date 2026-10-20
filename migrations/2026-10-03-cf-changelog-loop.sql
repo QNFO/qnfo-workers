@@ -1,3 +1,4 @@
+-- APPLY-BY: manual (applied live: table:cf_changelog_items, table:cf_changelog_runs exist in qnfo-audit)
 -- CF-CHANGELOG-LOOP-1 (2026-10-03, pillar: autonomy; RM-CAPABILITY-PRODUCT-LOOP-1, #1675). Idempotent.
 --
 -- The problem. docs/CLOUDFLARE-CAPABILITY-INTEGRATION.md (2026-09-07) designed "Loop 1": a watcher that reads what Cloudflare

@@ -1,3 +1,4 @@
+-- APPLY-BY: manual (applied live: table:text_generator_inventory exist in qnfo-audit)
 -- TEXT-QUALITY-LOOP-1 (agent_issues 1895, pillar reach): the fleet's text generators, one row each, with the four fields
 -- ENSEMBLE-POLICY-1 asks for: who writes (writer_family), the deterministic check before anything is published or sent
 -- (non_model_gate), a reviewer from a different model family that can stop or rewrite the draft (cross_family_read),

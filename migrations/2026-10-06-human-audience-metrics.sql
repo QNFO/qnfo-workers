@@ -1,3 +1,4 @@
+-- APPLY-BY: manual (rows-only: applied by hand before MIGRATION-RUNNER-1; tables analytics_metric_triggers, metric_registry exist)
 -- HUMAN-AUDIENCE-1 (2026-10-06, pillar: reach). Owner directive 2026-10-06: "do real human people that are not AI crawler
 -- bots actually find out about and visit Quniverse pages, and are they interested enough to want to keep reading more?
 -- Metrics say clear no so far." Measured live before this change (Cloudflare RUM GraphQL, 7 days to 2026-10-06, bot: 0,

@@ -1,3 +1,4 @@
+-- APPLY-BY: manual (applied live: column:worker_output_contracts.output_sql exist in qnfo-audit)
 -- WORKER-CENSUS-DISCRIMINATING-1 (#1618, 2026-10-01): executable per-worker output probes. The census (qnfo-fleet-control
 -- workerCensus, daily) runs output_sql with the window tokens :since_iso / :since_sql / :since_date / :since_ms replaced
 -- by the window start, and derives PRODUCTIVE / DAILY-ONLY / LOW-YIELD / FIRING-NO-OUTPUT / DEGRADED / UNMEASURED from

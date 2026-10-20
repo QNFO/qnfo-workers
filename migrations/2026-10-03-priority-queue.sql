@@ -1,3 +1,4 @@
+-- APPLY-BY: manual (applied live: table:issue_triage_sla_backup_20261003, table:issue_triage_sla_backup_views_20261003, view:v_issue_queue ... exist in qnfo-audit)
 -- PRIORITY-QUEUE-1 (2026-10-03). Pillar: autonomy. Owner directive 2026-10-03 10:07 Amsterdam:
 --   "Dates aren't important. The order of priority is important. ... it needs to happen continuously every time the
 --    server-side loop runs."

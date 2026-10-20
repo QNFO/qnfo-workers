@@ -1,3 +1,4 @@
+-- APPLY-BY: manual (applied live: table:perf_levers, table:perf_experiments, table:perf_runs exist in qnfo-audit)
 -- PERFORMANCE-LOOP-1 (2026-10-02, pillar: autonomy; the KPIs serve core, cost and reach). Owner directive 2026-10-02:
 -- "automatically measure and improve internal and external performance and effectiveness metrics systemwide ... and
 -- constantly and consistently improve, adapt, and change yourself and the system to improve those metrics."

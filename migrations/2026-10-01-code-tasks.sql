@@ -1,3 +1,4 @@
+-- APPLY-BY: manual (applied live: table:code_tasks exist in qnfo-audit)
 -- CODE-TASK-LOOP-1 (2026-10-01). qnfo-code-orchestrator v0.2.0 durable code-task loop.
 --
 -- NOT YET APPLIED to qnfo-audit: the worker is not deployed. The worker also runs this exact DDL lazily

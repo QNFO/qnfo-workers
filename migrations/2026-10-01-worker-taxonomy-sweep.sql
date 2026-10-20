@@ -1,3 +1,4 @@
+-- APPLY-BY: manual (applied live: column:worker_output_contracts.worker_class, column:worker_output_contracts.class_disposition exist in qnfo-audit)
 -- REGISTER-TAXONOMY-SWEEP-1 (#1623, 2026-10-01): the taxonomy sweep declared in docs/REGISTER-EXECUTION-ARCHITECTURE.md
 -- ("full sweep = next phase, owner=agent"), executed. Every live worker (41 scripts, Cloudflare workers list 2026-10-01)
 -- is classified, and its consumer evidence and disposition are recorded on its output contract.

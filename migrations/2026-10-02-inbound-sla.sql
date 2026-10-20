@@ -1,3 +1,4 @@
+-- APPLY-BY: manual (rows-only: applied by hand before MIGRATION-RUNNER-1; tables analytics_metric_triggers, metric_registry, ops_config exist)
 -- INBOUND-SLA-1 (2026-10-02, pillar: reach). Owner directives: incoming communication is handled by the fleet with no
 -- manual action, and the fleet measures and improves its effectiveness (METRIC-CLOSED-LOOP-1). qnfo-email-orchestrator
 -- 0.5.0 gives every human inbound message a fleet action within 72h inside docs/STRATEGY.md section 5, and refreshes the

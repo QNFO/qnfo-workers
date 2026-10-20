@@ -1,3 +1,4 @@
+-- APPLY-BY: manual (applied live: trigger:queue_sla_tick_10m exist in qnfo-audit)
 -- QUEUE-SLA-2 (2026-10-17, owner directive "maximize autonomy and content publishing success"):
 -- the 10-minute tick parked work instead of advancing it.
 --

@@ -1,3 +1,4 @@
+-- APPLY-BY: manual (applied live: trigger:agent_issues_autotriage2_ins exist in qnfo-audit)
 -- AUTOTRIAGE-OWNER-ROUTE-1 (2026-10-02). Pillar: autonomy.
 --
 -- Evidence (qnfo-audit, 2026-10-02 09:30Z): 48 of 54 open agent_issues were owned by qnfo-ops, all 48 by the

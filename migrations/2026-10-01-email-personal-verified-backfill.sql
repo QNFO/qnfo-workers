@@ -1,3 +1,4 @@
+-- APPLY-BY: manual (rows-only: applied by hand before MIGRATION-RUNNER-1; tables emails exist)
 -- EMAIL-CLASSIFICATION-PERSONAL-CATCHALL-1 (#1474, 2026-10-01)
 -- qnfo-email 2.1.9 classifies alias mail as "personal" only for verified correspondents
 -- (contact_ledger, not suppressed, or an exact enabled owner command sender). This backfill applies

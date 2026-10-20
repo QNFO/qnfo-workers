@@ -1,3 +1,4 @@
+-- APPLY-BY: manual (applied live: trigger:email_reply_queue_terminal_parent_guard exist in qnfo-audit)
 -- EMAIL-REPLY-TERMINAL-PARENT-GUARD-1 (#1158, 2026-10-01)
 -- On 2026-09-23 12:45 a bulk "terminal-parent" sweep closed 18 email_reply_queue rows because the
 -- parent email was spam/archived/replied. Several parents had been archived by the empty-body MIME

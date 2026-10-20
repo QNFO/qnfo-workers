@@ -1,3 +1,4 @@
+-- APPLY-BY: manual (applied live: trigger:human_actions_no_claude_ins, trigger:human_actions_no_claude_upd exist in qnfo-audit)
 -- NO-CLAUDE-RUNTIME-DEPENDENCY-1 (owner directive 2026-10-01): an owner queue card (qnfo-audit.human_actions) never routes
 -- work to Claude or links claude.ai / anthropic.com. Three cards written directly into D1 by sessions told the owner
 -- "Claude can do it in your signed-in Chrome"; the dashboard's safeLink check only covers its own /api/human route, so the

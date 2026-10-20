@@ -1,3 +1,4 @@
+-- APPLY-BY: manual (applied live: trigger:trg_registry_audit_log, trigger:trg_dns_pages_fk exist in qnfo-audit)
 -- GUARD-TRIGGER-REPAIRS-1 (2026-10-05, agent_issues #1629 GUARD-REGISTRY-36-UNVERIFIED-1, charter pillar: security).
 --
 -- Two guard_registry triggers failed their offline negative tests against the live DDL

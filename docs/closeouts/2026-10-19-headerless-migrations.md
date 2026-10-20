@@ -1,5 +1,16 @@
 # Headerless migrations audit (MIGRATION-HEADER-GUARD-1)
 
+> Update 2026-10-20 (MIGRATION-HEADERLESS-AUDIT-1, agent_issues 100056): the allowlist is empty. `scripts/headerless_migration_audit.py` was run against a
+> live read of `qnfo-audit` (92 files left: 47 applied-live, 39 rows-only, 3 other-db, 2 partial, 1 unapplied), and each file now starts with one
+> `-- APPLY-BY: manual (<reason>)` line (no SQL line changed, none was applied again). Six were decided one by one: the three living-paper files
+> (`2026-10-05-guard-trigger-order-and-shadow.sql` is the `papers_ai` trigger, which exists in living-paper; `2026-10-18-paper-tags.sql` and
+> `2026-10-18-paper-audience-categories.sql` have `tag_registry`, `paper_tag`, `paper_category` and their indexes there), `2026-10-01-personal-life-vestigial-planes.sql`
+> (personal-life: `agent_memories` gone, both archived tables present), `2026-10-06-project-state-second-collision.sql` (applied: `project_state` has
+> the `snapshot_id` key; `project_state_v2` is absent because the file renames it) and `2026-10-18-artifacts-canonical-sync.sql` (its three indexes
+> are created by `migrations/2026-10-20-headerless-audit-followups.sql`; its two seed rows, `failure_modes` `artifacts-mirror-drift` and
+> `remediation_contracts` `artifacts-canonical-sync`, are absent live and were not re-created). The same migration records the control as
+> `remove` / `applied`. Suite: `migrations/headerless-audit-followups.test.mjs`.
+
 > Update (same PR, SUBSCRIBERS-ATTRIBUTION-CHAIN-1): `2026-10-18-subscribers-utm-attribution.sql` gained its `APPLY-BY: ci` header in the same change as this guard, so it has left the allowlist and CI applies it on merge. The counts below are as measured before that edit.
 
 Date: 2026-10-19. Charter pillar: autonomy. Related: QNFO/qnfo-workers#2489 (qnfo-subscribers `utm_*` columns), follow-up issue

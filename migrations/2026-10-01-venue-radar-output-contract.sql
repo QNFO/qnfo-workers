@@ -1,3 +1,4 @@
+-- APPLY-BY: manual (rows-only: applied by hand before MIGRATION-RUNNER-1; tables worker_output_contracts exist)
 -- VENUE-RADAR-CONTRACT-1 (2026-10-01): qnfo-venue-radar was redeployed at 08:11Z next to radar-hub
 -- (RADAR-HUB-REDEPLOY-1, PR 221) but had no output contract, so the worker census listed it as an
 -- uncontracted scheduled worker (UNMEASURED). Class detector with an output probe on kept items, so a

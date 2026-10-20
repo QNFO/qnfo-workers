@@ -1,3 +1,4 @@
+-- APPLY-BY: manual (rows-only: applied by hand before MIGRATION-RUNNER-1; tables fleet_tasks, infra_state, metric_registry exist)
 -- DEPLOY-FRESHNESS-BEHIND-MAIN-1 (2026-10-05, agent_issues 1979, pillar core). Idempotent. Applied to qnfo-audit on 2026-10-05.
 --
 -- Defect: fleet_tasks 'metric-refresh' computed deploy_freshness_h as hours since the newest fleet_deploys row of ANY kind:
