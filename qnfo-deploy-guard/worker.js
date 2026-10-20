@@ -2,7 +2,7 @@
 // Worker Contract v1: VERSION constant + GET /health
 // Data: https://ops.qnfo.org/fleet (modified_on per worker) + https://ops.qnfo.org/cost (spend)
 // NOTE: source of truth is this file; GET /workers/scripts/<name> TRUNCATES large bodies - never patch from a GET.
-var VERSION = "1.3.27-superseded-is-done"; /* CLAIM-TERMINAL-RELEASE-1 (2026-10-18): CODE_TASK_DONE now includes superseded, so the guard stops counting a superseded task as live work on its file. */
+var VERSION = "1.3.28-codeagent"; /* CLAIM-TERMINAL-RELEASE-1 (2026-10-18): CODE_TASK_DONE now includes superseded, so the guard stops counting a superseded task as live work on its file. */
 var WORKER = "qnfo-deploy-guard";
 var LOCK_PREFIX = "deploylock:";
 var DENY_PREFIX = "deploydeny:";
@@ -349,6 +349,20 @@ async function scan(env) {
 // longer live are removed so the conformance denominator is the live fleet.
 var CAP_EVERY_MS = 6 * 3600 * 1000;
 var CAP_KEY = "capsnap:last";
+function capJson(list, max) {
+  if (!Array.isArray(list)) list = [list];
+  list = list.slice();
+  for (var i = 0; i < list.length; i++) {
+    if (typeof list[i] === "string") list[i] = list[i].slice(0, 400);
+  }
+  while (JSON.stringify(list).length > max && list.length > 1) list.pop();
+  while (JSON.stringify(list).length > max && list.length && typeof list[list.length - 1] === "string") {
+    var s = list[list.length - 1];
+    if (s.length === 0) break;
+    list[list.length - 1] = s.slice(0, s.length - 1);
+  }
+  return JSON.stringify(list);
+}
 async function capabilitySnapshot(env, force) {
   var last = null;
   try { var lv = await env.FLEET_CONFIG.get(CAP_KEY); if (lv) last = JSON.parse(lv); } catch (e) { console.error(JSON.stringify({ evt: "deploy-guard:capabilitySnapshot:caught", error: String((e && e.message) || e) })); }
@@ -375,7 +389,7 @@ async function capabilitySnapshot(env, force) {
       if (!Array.isArray(caps)) caps = caps && typeof caps === "object" ? Object.keys(caps) : [];
       var lims = Array.isArray(j.limitations) ? j.limitations : [];
       var ver = j.version || j.VERSION || null;
-      var w = await auditRun(env, "INSERT INTO capability_audit_snapshot (service, version, capabilities, limitations, ts) VALUES (?1,?2,?3,?4,?5) ON CONFLICT(service) DO UPDATE SET version=excluded.version, capabilities=excluded.capabilities, limitations=excluded.limitations, ts=excluded.ts", [name, ver != null ? String(ver) : null, JSON.stringify(caps).slice(0, 4000), JSON.stringify(lims).slice(0, 4000), out.ts]);
+      var w = await auditRun(env, "INSERT INTO capability_audit_snapshot (service, version, capabilities, limitations, ts) VALUES (?1,?2,?3,?4,?5) ON CONFLICT(service) DO UPDATE SET version=excluded.version, capabilities=excluded.capabilities, limitations=excluded.limitations, ts=excluded.ts", [name, ver != null ? String(ver) : null, capJson(caps, 4000), capJson(lims, 4000), out.ts]);
       if (w && w.ok !== false) out.stored++;
       if (caps.length && lims.length) out.conforming++;
       else out.non_conforming.push(name + ":" + (!lims.length ? "missing-limitations" : "empty-capabilities"));
