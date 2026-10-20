@@ -53,7 +53,7 @@
 // AB-LENGTH-RETRY-1 (1.8.0, agent_issues 100277, pillar autonomy; minor: the hourly tick takes a decision it did not take before, it re-measures a pair whose newest regression came from an
 // older harness revision, abStaleRevCandidates): the release note is carried by the comment blocks at AB_RETRY_MAX_TOKENS, AB_HARNESS_REV and abStaleRevCandidates, and none is added to
 // the VERSION line below (VERSION-LINE-NOTES-1, 2026-10-19). The older notes stay on that line until the line is pruned.
-var VERSION = "1.8.0-ab-length-retry"; // 1.7.0 TYPED-INPUT-MODEL-1 (agent_issues 100250, pillar autonomy): a model whose input is a typed schema and not chat messages (the extraction model @cf/cloudflare/clairic, which takes {model, fields} and answers typed values; Workers AI refuses a chat call with "required properties at '/' are 'model,fields'", 5006) leaves the chat lane: modalityOf names clairic as 'extraction', and a chat run in which every probe fails with that schema error sets the catalog row to modality 'typed-input', status 'catalogued', with the reason in notes, and files no harness issue; the pick list no longer re-runs a ladder model whose modality is not chat or clef. Before this every sweep re-evaluated clairic and filed CF-MODEL-EVAL-1: harness cannot run. Tests: typed-input.test.mjs. // 1.6.1 HEALTH-CONTRACT-1 (agent_issues 2852, capability_contract_conformance, pillar autonomy): /health now declares capabilities[] and limitations[] (module constants CAPABILITIES and LIMITATIONS, the same lists /manifest returns), so the fleet snapshot counts this worker as conforming; before this /health carried only ok, version and the catalog count. No behaviour change. // 1.6.0 AB-HARNESS-1 (agent_issues 2828 MODEL-QUALITY-PARITY-1, pillar autonomy): a paired A/B quality harness. For one worker and task set it puts the pre-change answer (a recorded baseline reply, or the pre-change model live) and the post-change answer (the post-change model through qnfo-ai, pin_model true) in front of two judges from two other model families, at least one outside every family the worker uses, and writes the win rate against a stated threshold (0.40) to model_ab_runs. Triggers on the hourly tick: a changed model in scripts/model-policy.json, or a model a worker newly uses in ai_call_counters; classification lanes reuse clefCanary agreement. A regression files an issue. Routes GET /ab/runs, GET /ab/fixtures, POST /ab/run (x-eval-key). Switch: cf_model_eval_config ab_enabled = 0 (control_registry model-ab-switch). New QNFO_AI service binding (props caller qnfo-model-eval). Tests: ab-harness.test.mjs. // 1.5.0 CRON-GRID-1 (owner directive 2026-10-19, pillar autonomy): one hourly :20 trigger. The benchmark battery keeps its 6-hour cadence (slots 00:17, 06:17, 12:17, 18:17 run on the :20 fire) because it calls models while the Workers AI cap is breached; a failed run is retried hourly, at most 3 times, and now fails the run instead of being swallowed. Every fire is logged to cron_fire_log for CRON-WATCH-1. // 1.4.1 WORKERS-BP-LOGGING-1 (agent_issues 2342, RESOLVE-ALL-OPEN-1 2026-10-19): the scheduled() error-event write no longer swallows its own failure; it logs a structured console.error.
+var VERSION = "1.8.1-codeagent"; // 1.7.0 TYPED-INPUT-MODEL-1 (agent_issues 100250, pillar autonomy): a model whose input is a typed schema and not chat messages (the extraction model @cf/cloudflare/clairic, which takes {model, fields} and answers typed values; Workers AI refuses a chat call with "required properties at '/' are 'model,fields'", 5006) leaves the chat lane: modalityOf names clairic as 'extraction', and a chat run in which every probe fails with that schema error sets the catalog row to modality 'typed-input', status 'catalogued', with the reason in notes, and files no harness issue; the pick list no longer re-runs a ladder model whose modality is not chat or clef. Before this every sweep re-evaluated clairic and filed CF-MODEL-EVAL-1: harness cannot run. Tests: typed-input.test.mjs. // 1.6.1 HEALTH-CONTRACT-1 (agent_issues 2852, capability_contract_conformance, pillar autonomy): /health now declares capabilities[] and limitations[] (module constants CAPABILITIES and LIMITATIONS, the same lists /manifest returns), so the fleet snapshot counts this worker as conforming; before this /health carried only ok, version and the catalog count. No behaviour change. // 1.6.0 AB-HARNESS-1 (agent_issues 2828 MODEL-QUALITY-PARITY-1, pillar autonomy): a paired A/B quality harness. For one worker and task set it puts the pre-change answer (a recorded baseline reply, or the pre-change model live) and the post-change answer (the post-change model through qnfo-ai, pin_model true) in front of two judges from two other model families, at least one outside every family the worker uses, and writes the win rate against a stated threshold (0.40) to model_ab_runs. Triggers on the hourly tick: a changed model in scripts/model-policy.json, or a model a worker newly uses in ai_call_counters; classification lanes reuse clefCanary agreement. A regression files an issue. Routes GET /ab/runs, GET /ab/fixtures, POST /ab/run (x-eval-key). Switch: cf_model_eval_config ab_enabled = 0 (control_registry model-ab-switch). New QNFO_AI service binding (props caller qnfo-model-eval). Tests: ab-harness.test.mjs. // 1.5.0 CRON-GRID-1 (owner directive 2026-10-19, pillar autonomy): one hourly :20 trigger. The benchmark battery keeps its 6-hour cadence (slots 00:17, 06:17, 12:17, 18:17 run on the :20 fire) because it calls models while the Workers AI cap is breached; a failed run is retried hourly, at most 3 times, and now fails the run instead of being swallowed. Every fire is logged to cron_fire_log for CRON-WATCH-1. // 1.4.1 WORKERS-BP-LOGGING-1 (agent_issues 2342, RESOLVE-ALL-OPEN-1 2026-10-19): the scheduled() error-event write no longer swallows its own failure; it logs a structured console.error.
 const BATTERY_VERSION = "cfmb-2";
 const DOCS_INDEX = "https://developers.cloudflare.com/workers-ai/models/index.md";
 const docsModel = (slug) => `https://developers.cloudflare.com/workers-ai/models/${slug}/index.md`;
@@ -483,6 +483,21 @@ async function addRoadmapItem(env, item, title, artifactType, artifactRef, evide
 }
 
 // Side effects of a verdict. `control` is { model_id, score } or null.
+async function isModelFloorBanned(env, modelId) {
+  // MODEL-FLOOR-1: banned families come from config, not from literals in this file.
+  try {
+    const r = await env.AUDIT.prepare(
+      "SELECT value FROM cf_model_eval_config WHERE key='model_floor_banned'"
+    ).first();
+    if (r && r.value) {
+      const labels = String(r.value).split(",").map((s) => s.trim().toLowerCase()).filter(Boolean);
+      const id = String(modelId || "").toLowerCase();
+      return labels.some((l) => id.includes(l));
+    }
+  } catch (_) { /* config is optional */ }
+  return false;
+}
+
 async function decide(env, e, control) {
   const db = env.AUDIT;
   const cScore = control && control.score != null ? control.score : null;
@@ -492,6 +507,14 @@ async function decide(env, e, control) {
     kind: e.kind, score: e.score, controlScore: cScore,
     priceIn: price.priceIn, controlPriceIn: cPrice.priceIn, harness: e.harness,
   });
+  // MODEL-FLOOR-1: respect the fleet's routing guard; a model the floor bans must never
+  // file a promotion notice no worker can act on. The banned list is read from config
+  // (key 'model_floor_banned', comma-separated labels) so this worker carries no
+  // sub-frontier model names in code.
+  if (d.verdict === "promote" && (await isModelFloorBanned(env, e.model_id))) {
+    d.verdict = "reject";
+    d.reason = `${d.reason}; MODEL-FLOOR-1 bans ${e.model_id}`;
+  }
   // TYPED-INPUT-MODEL-1: a chat run that failed only on the input schema is a modality finding, not a harness gap
   const typedInput = d.verdict === "harness_error" && !DECISION_KINDS.has(e.kind) && isNonChatSchema(e.failed_probes);
   const status = typedInput ? "catalogued"
