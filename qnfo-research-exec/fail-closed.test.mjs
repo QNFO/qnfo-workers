@@ -60,6 +60,33 @@ ok(versionAtLeast((src.match(/var VERSION = "([^"]+)"/) || [])[1] || "0", "0.18.
   ok(p('[{"id":"Q1"}]').answered === false && p('[{"id":"Q1"},{"x":2}]').answered === false,"a list whose entries carry no statement is not an answer");
   ok(p("<think>[1,2]</think>[]").answered === true, "a reasoning block is dropped before reading");
 
+  // ---- PAIR-AWARE-ESCAPE-1 (0.28.2, agent_issues 2877): synthetic replies shaped like the live verify-extract-fail heads of
+  // 2026-10-19 (66 events in 24 h, 55 of them parse failures). BS is ONE backslash character; in JSON text a valid escaped
+  // backslash is two of them, a LaTeX command written with a single one is a lone backslash.
+  const BS = "\\";
+  const mixed1 = '[ { "id": "Q1", "statement": "Proximity $' + BS + 'Gamma^{*}=' + BS + BS + 'sqrt{' + BS + BS + 'alpha/2}$ holds.", "inputs": {}, "expected": "1" } ]';
+  let r = p(mixed1);
+  ok(r.answered === true && r.claims.length === 1 && r.claims[0].statement === "Proximity $" + BS + "Gamma^{*}=" + BS + "sqrt{" + BS + "alpha/2}$ holds.", "one statement mixing a lone \\Gamma with a double-backslash sqrt and alpha is read (and keeps one backslash each)", r);
+  const mixed2 = '[ { "id": "Q1", "statement": "Value $' + BS + BS + 'alpha=2$.", "expected": "2" }, { "id": "Q2", "statement": "Value $' + BS + 'Delta=3$.", "expected": "3" } ]';
+  r = p(mixed2);
+  ok(r.answered === true && r.claims.length === 2 && r.claims[1].statement === "Value $" + BS + "Delta=3$.", "a double-backslash alpha in one statement and a lone-backslash Delta in the next give both claims", r);
+  const pretty = '[\n  {\n    "id": "Q1",\n    "statement": "For $p=3$, $t=1$ the ball size is $n_{1}=5$.",\n    "expected": "5"\n  },\n  {\n    "id": "Q2",\n    "statement": "Gap $' + BS + 'Gamma=' + BS + BS + 'sqrt{2}$.",\n    "expected": "1.41"\n  }\n]';
+  r = p(pretty);
+  ok(r.answered === true && r.claims.length === 2 && !/after JSON/.test(r.reason), "a pretty-printed list whose first object is clean and second mixes escapes is read, not 'after JSON'", r);
+  ok(p('[ { "id": "Q1", "statement": "Value $' + BS + BS + 'alpha + ' + BS + BS + 'beta$.", "expected": "1" } ]').claims[0].statement === "Value $" + BS + "alpha + " + BS + "beta$.", "an all-double-backslash statement is unchanged");
+  ok(p('[ { "id": "Q1", "statement": "Value $' + BS + 'alpha + ' + BS + 'beta + ' + BS + 'Delta$.", "expected": "1" } ]').claims[0].statement === "Value $" + BS + "alpha + " + BS + "beta + " + BS + "Delta$.", "a lone \\beta before a letter is LaTeX in the escaped form, not a backspace");
+  ok(p('[ { "id": "Q1", "statement": "a' + BS + '"quoted' + BS + '" word, ' + BS + BS + 'u00e9 and ' + BS + 'Gamma", "expected": "1" } ]').claims[0].statement === 'a"quoted" word, ' + BS + "u00e9 and " + BS + "Gamma", "an escaped quote and an escaped backslash before u00e9 stay valid escapes next to a lone backslash");
+  ok(p('[ { "id": "Q1", "statement": "line1' + BS + 'n2 and ' + BS + 'Gamma", "expected": "1" } ]').claims[0].statement === "line1\n2 and " + BS + "Gamma", "a control escape not followed by a letter is still a control escape in the escaped form");
+
+  // The reason is the FIRST failing try's. The greedy first-brace-to-last-brace slice is tried last and always ends with
+  // "Unexpected non-whitespace character after JSON"; it used to overwrite the real failure.
+  const broken = '[\n  { "id": "Q1", "statement": "fine", "expected": "1" },\n  { "id": "Q2", "statement": "bad" "x": 1 }\n]';
+  r = p(broken);
+  ok(r.answered === false && /^unparseable: /.test(r.reason) && !/after JSON/.test(r.reason), "an unparseable list reports the balanced list's failure, not the greedy slice's 'after JSON'", r);
+  ok(typeof r.near === "string" && r.near.includes('"bad" "x"'), "the failure carries the text around the error position", r);
+  ok(p('{"verdict":"pass","hard":[],"soft":[]}').reason === "not-a-list", "a review-shaped object reports not-a-list (its first failing try), not the slice's parse error", p('{"verdict":"pass","hard":[],"soft":[]}'));
+  ok(p("I could not find any claims in this paper.").reason === "no-json-list" && p("").reason === "empty-reply", "prose and an empty reply keep their reasons");
+
   const SENT = "The derivation in this paragraph restates an input value with its source and shows the arithmetic step that follows from it. ";
   const sec = (h, n) => "## " + h + "\n\n" + SENT.repeat(n) + "\n\n";
   const PAPER = "# A paper about a plant\n\n## Abstract\n\nContext, gap, approach, result and practice are stated here in order.\n\n"
@@ -92,6 +119,17 @@ ok(versionAtLeast((src.match(/var VERSION = "([^"]+)"/) || [])[1] || "0", "0.18.
   t = mk("no list here");
   res = await quiet(() => stageVerify(t.env, row({ verifyExtractFail: 2 })));
   ok(res.ok === false && res.extractFailed === 3 && !toPublish(t.db) && updates(t.db).some((s) => /status='queued', stage='ground'/.test(s.sql) && /claim extraction gave no readable claim list in 3 attempts/.test(s.args[0])), "the third failed extraction fails the pass into markError (re-run from ground)", updates(t.db).map((s) => [s.sql, s.args[0]]));
+
+  // PAIR-AWARE-ESCAPE-1 (0.28.2): the event of an unparseable extraction names the first failing try's reason, the tail of the
+  // reply and the text around the error, so the next residual cause is visible (the 160-char head never reached it).
+  t = mk(broken);
+  res = await quiet(() => stageVerify(t.env, row({})));
+  const evx = events(t.db, "verify-extract-fail")[0] || "";
+  ok(res.ok === false && res.extractFailed === 1 && /reason=unparseable: Expected/.test(evx) && !/after JSON/.test(evx) && / tail=.*"x": 1 \} \] near=/.test(evx) && / near=.*"bad" "x"/.test(evx) && evx.length < 800, "an unparseable extraction logs reason, tail= and near=", evx);
+  // A mixed-escape reply that used to fail now parses far enough to leave the extraction branch (no verify-extract-fail event).
+  t = mk(mixed2);
+  res = await quiet(() => stageVerify(t.env, row({})));
+  ok(!events(t.db, "verify-extract-fail").length && res.extractFailed === undefined, "a mixed-escape reply no longer fails the extraction", { res, ev: events(t.db, "verify-extract-fail") });
 
   t = mk("[]");
   res = await quiet(() => stageVerify(t.env, row({})));
