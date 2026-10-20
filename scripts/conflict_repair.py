@@ -16,8 +16,8 @@ WHAT  The doer for STALE-PR-CONFLICT-REPAIR-1 issues (qnfo-fleet-control files o
         5. runs the checks a pull request gets: node --check, the changed workers' suites (scripts/run-suites.mjs),
            mirror-guard, version-bump-guard and the workers-standards guard;
         6. with --push: pushes the branch, opens the replacement pull request naming the old one, dispatches the check
-           workflows that accept a dispatch (a pull request opened with GITHUB_TOKEN starts none by itself), comments on
-           the old pull request and closes it as superseded by the new number.
+           workflows that accept a dispatch (a pull_request run on a GITHUB_TOKEN push starts no job, see DISPATCHABLE),
+           comments on the old pull request and closes it as superseded by the new number.
       Every run writes one cloud_ops_events row (kind conflict-repair-reapplied, status ok | warn) and a branch_hygiene_log
       row; a pull request head that was already re-applied and pushed is skipped. An --all run also writes an hourly
       heartbeat row (id conflict-repair-tick-<UTC hour>) so the watchmaker can prove the doer ran.
@@ -48,7 +48,21 @@ NOTE_BLOCK = re.compile(r"/\*.*?\*/", re.S)
 HOLD_RE = re.compile(r"(^|[\s\[(])(wip|do[\s-]*not[\s-]*merge|hold)([\s:\])]|$)", re.I)
 DIRTY_QUIET_MIN = 10  # a pull request whose newest commit is younger is still being worked on
 ISSUE_PR = re.compile(r"STALE-PR-CONFLICT-REPAIR-1\b[^\d#]{0,40}#?(\d+)")
-DISPATCHABLE = ["deploy-gate.yml", "version-bump-guard.yml", "charter-guard.yml", "version-compare.yml"]
+# The check workflows dispatched on a branch this script pushes (each declares workflow_dispatch; scripts/conflict_repair_test.py pins that).
+# PR-GUARD-FIXES-1 (2026-10-20, agent_issues 100295): a push with GITHUB_TOKEN does not "start no pull_request workflow". GitHub creates the
+# pull_request runs for the pusher github-actions[bot] and they never start a job: run 39318576612 (version-compare, PR 3106, created
+# 2026-10-19T20:21:07Z by this script's push) has 0 jobs, run_attempt 1, and was concluded `failure` at 22:34:28Z, the second the pull
+# request merged. The 2026-10-20 audit counted 36 such runs over PRs 2901, 2986, 3056, 3100 and 3106 (six workflows each), failed when
+# their pull request closed or merged, with no guard run on the repaired head. The wait is inferred to be an approval gate (the audit
+# read `action_required` on attempt 1 of sibling runs, which passed at once on a person's re-run, attempt 2), and nobody clicks it. A
+# workflow_dispatch run on the same head does start, so the checks the merge lane requires are dispatched here. mirror-guard.yml
+# (check `mirror-guard`, in EVOLVE_REQUIRED of qnfo-fleet-control) was missing, so a repaired head had no mirror-guard result until a
+# person re-ran it: PR 3106 waited four hours. A dispatched mirror-guard run is the strict global audit (no --scope-to-diff), so it
+# reads the whole tree of the repaired head.
+# Failed-run accounting must not count the zero-job runs: a pull_request run by github-actions[bot] with 0 jobs and conclusion failure,
+# ending the second its pull request closed or merged, is a gate artifact and no verdict on the change. (ci_watchdog.py classes a
+# zero-job run as invalid-workflow, so it would misdiagnose these if its scope widened from main to pull-request branches.)
+DISPATCHABLE = ["deploy-gate.yml", "version-bump-guard.yml", "mirror-guard.yml", "charter-guard.yml", "version-compare.yml"]
 
 
 def emit(msg):
@@ -621,8 +635,9 @@ def repair(number, push=False, keep_branch=False, in_place=False):
             return res
         if in_place:
             # CONFLICT-REPAIR-INPLACE-1: the merge commit goes on the pull request's own branch (a fast-forward, never forced, so an
-            # author's concurrent push wins and the next main push tries again). A push with GITHUB_TOKEN starts no pull_request workflow,
-            # so the check workflows that accept a dispatch are dispatched on the branch, as for a replacement.
+            # author's concurrent push wins and the next main push tries again). The pull_request runs that a GITHUB_TOKEN push creates
+            # start no job (see DISPATCHABLE), so the check workflows that accept a dispatch are dispatched on the branch, as for a
+            # replacement.
             pushed = sh(["git", "push", "origin", branch + ":refs/heads/" + head_ref], check=False, timeout=300)
             if pushed.returncode != 0:
                 res["outcome"] = "push-refused"
@@ -697,6 +712,7 @@ def selftest():
     ok(eligible(base_pr) is None and "closed" in eligible(dict(base_pr, state="closed")) and "draft" in eligible(dict(base_pr, draft=True)) and "fork" in eligible(dict(base_pr, head=dict(base_pr["head"], repo={"full_name": "x/r"})))
        and "does not conflict" in eligible(dict(base_pr, mergeable=True)) and "itself a repair" in eligible(dict(base_pr, head=dict(base_pr["head"], ref="repair/pr-1-abc"))) and eligible(None), "eligible: open, same repository, not a draft, conflicting, not a repair")
     ok(branch_name(base_pr) == "repair/pr-7-abcdef1", "the branch names the pull request and its head")
+    ok("mirror-guard.yml" in DISPATCHABLE and len(set(DISPATCHABLE)) == len(DISPATCHABLE), "PR-GUARD-FIXES-1: mirror-guard, a check the merge lane requires, is dispatched on a repaired head, each workflow once")
     t, b = replacement_text(base_pr, [("w", "1.0.0", "1.0.2")], [("suites", True)])
     ok(t == "fix x (re-applied from #7)" and "Supersedes #7" in b and "w 1.0.0 -> 1.0.2" in b and "suites ok" in b and "Charter pillar: autonomy" in b and replacement_text(dict(base_pr, title=t), [], [])[0] == t, "the replacement names the old pull request, the bumps and the checks, and the suffix is not stacked")
     ok(issue_prs(["STALE-PR-CONFLICT-REPAIR-1 PR 910: quiet and conflicting", "STALE-PR-CONFLICT-REPAIR-1: PR #870 x", "STALE-PR-CONFLICT-REPAIR-1 PR 910 again", "OTHER-1 PR 5"]) == [910, 870], "issue titles give their pull request numbers once")

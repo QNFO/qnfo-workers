@@ -44,6 +44,16 @@ WHAT IT DOES
   main from 2026-09-30 12:00 to 2026-10-02: 339 strictly ahead, 0 behind, 4 equal-core
   (qnfo-fleet-control 0.4.39-selfstate-obs1..4, which the comparator could never order).
 
+  VERSION-RE-ANCHOR-1 (2026-10-20, PR-GUARD-FIXES-1, agent_issues 100295): the constant is READ from a declaration that starts
+  a line. The first revision searched the whole text for `var VERSION = "..."` and took the first hit anywhere, so a comment that
+  quotes the form (qnfo-model-eval/worker.js line 50, "requires the literal `var VERSION = "..."` form") became the VERSION: both
+  sides read the placeholder "...", the guard said "unchanged VERSION after a byte change" about two real bumps (1.2.0 -> 1.3.0 and
+  1.3.0 -> 1.4.0; push runs 39126065745 and 39126418865, PR runs 39125992400 and 39126349048), and qnfo-ops wrote version_id '...'
+  into three deployment_history rows. VERSION_RE now starts at the beginning of a line (re.M), allows indentation, then the
+  declaration, so a comment line (starting with a double slash, a star or a slash-star) never matches;
+  scripts/version-bump-guard.test.mjs replays the case and checks that every worker bundle and mirror on main reads the same
+  VERSION as before.
+
 USAGE
   python3 scripts/version-bump-guard.py <base_ref> <head_ref>
   python3 scripts/version-bump-guard.py                 # falls back to HEAD~1..HEAD
@@ -62,7 +72,7 @@ import re
 import subprocess
 import sys
 
-VERSION_RE = re.compile(r'var\s+VERSION\s*=\s*"([^"]*)"')
+VERSION_RE = re.compile(r'^[ \t]*var\s+VERSION\s*=\s*"([^"\n]*)"', re.M)
 ENTRY_RE = re.compile(r'^(?P<dir>[^/]+)/worker\.js$')
 # Files that are copies/mirrors, not deploy sources.
 SKIP_SUFFIXES = ("deployed-current.worker.js",)

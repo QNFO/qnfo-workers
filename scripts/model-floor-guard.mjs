@@ -1,7 +1,8 @@
 // model-floor-guard.mjs - MODEL-FLOOR-1 enforcement (RECURRENCE-ZERO-1 gate).
 // Scans repo worker sources AND live deployed bundles for banned (sub-frontier) models.
-// Exit 0 = clean; exit 1 = code-level violation. Comment mentions + BANNED-list
-// declarations are skipped (a comment may name a banned model only for documentation).
+// Exit 0 = clean; exit 1 = code-level violation; exit 2 = the scan could not read what it must scan (PR-GUARD-FIXES-1 below) or the
+// policy table is malformed. Comment mentions + BANNED-list declarations are skipped (a comment may name a banned model only for
+// documentation).
 //
 // Usage:
 //   node model-floor-guard.mjs                 # repo scan (default)
@@ -17,14 +18,32 @@
 // MODEL-POLICY-SINGLE-SOURCE-1 (agent_issues 2833): scripts/model-policy.json carries an `allowed` table (id, family, wa, ctx, reasoning)
 // that this guard reads next to BANNED: every row is validated, a row that matches a BANNED rule is a conflict (exit 2), and a pinned
 // `@cf/` id that is not in the table is reported (`--unlisted`) or fails the run (`--strict-allowed`).
+// PR-GUARD-FIXES-1 (2026-10-20, agent_issues 100295): a failure to READ is not a finding. The repo root defaulted to the owner's laptop path,
+// so a run without QNFO_WORKERS scanned nothing and exited 1 with a sentinel row "(repo unreadable)" that the exit code counted as a
+// violation; "(no CF token)" and "(live list failed)" did the same, while a live bundle that answered an error or threw was skipped
+// without a trace, so a partial live sweep could pass. Now the root defaults to the directory above this script (QNFO_WORKERS still wins,
+// and CI sets it), and an unreadable root, a root with no <dir>/worker.js, an unreadable worker.js, a missing token, a failed or empty
+// worker list and any live bundle that could not be read (after one retry of a network error, 429 or 5xx) are reported as "cannot read"
+// and exit 2: never green, and never confused with a banned model. A finding still exits 1 when both occur.
 
 import fs from "node:fs";
 import path from "node:path";
 import { pathToFileURL, fileURLToPath } from "node:url";
 
-const REPO = process.env.QNFO_WORKERS || "C:/Users/LENOVO/Documents/GitHub/qnfo-workers";
+const REPO = process.env.QNFO_WORKERS || path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const ACCT = process.env.CF_ACCOUNT_ID || "edb167b78c9fb901ea5bca3ce58ccc4b";
 const TOKEN = process.env.CLOUDFLARE_API_TOKEN;
+const CF_API = "https://api.cloudflare.com/client/v4";
+const LIVE_RETRY_MS = 250;
+
+// PR-GUARD-FIXES-1: the scan could not read its input. `what` names the input (repo-root, worker-source, live-token, live-list); main()
+// reports it as "cannot read" and exits 2, so a read failure is never a finding and never a pass.
+class GuardReadError extends Error {
+  constructor(what, detail) { super(detail); this.name = "GuardReadError"; this.what = what; this.detail = detail; }
+}
+// 0 clean; 1 at least one finding (a finding is certain, an unread input is not); 2 nothing found but part of the input was not read.
+function exitCode(found, unread) { return found > 0 ? 1 : (unread > 0 ? 2 : 0); }
+const errText = (e) => String((e && (e.code || e.message)) || e).slice(0, 120);
 
 const BANNED = [
   { label: "llama", re: /(@cf\/(meta|meta-llama)\/llama[\w.-]*|\bllama-[\d.]+[\w.-]*)/i },
@@ -227,11 +246,20 @@ function repoMarkers(root) {
   return out;
 }
 
+// The worker directories under base. An unreadable root, or a root that holds no <dir>/worker.js at all (a wrong QNFO_WORKERS, or this
+// script copied away from its repository), reads nothing and must not pass as clean.
+function readRoot(base) {
+  let dirs;
+  try { dirs = fs.readdirSync(base, { withFileTypes: true }).filter((d) => d.isDirectory()).map((d) => d.name); }
+  catch (e) { throw new GuardReadError("repo-root", base + " (" + errText(e) + "); set QNFO_WORKERS to a checkout of qnfo-workers"); }
+  if (!dirs.some((d) => fs.existsSync(path.join(base, d, "worker.js")))) throw new GuardReadError("repo-root", base + " holds no <dir>/worker.js; set QNFO_WORKERS to a checkout of qnfo-workers");
+  return dirs;
+}
+
 function scanRepo(root) {
   const base = root || REPO;
   const res = [];
-  const dirs = listWorkerDirs(base);
-  if (!dirs) return [{ name: "(repo unreadable)", hits: [] }];
+  const dirs = readRoot(base);
   const markers = repoMarkers(base);
   const retired = new Set(markers.retired);
   const folded = new Map(markers.folded.map((x) => [x.name, x.host]));
@@ -239,7 +267,9 @@ function scanRepo(root) {
     if (retired.has(d)) continue;                                       // not deployed: nothing to attribute
     const f = path.join(base, d, "worker.js");
     if (!fs.existsSync(f)) continue;
-    const hits = scan(fs.readFileSync(f, "utf8"));
+    let text;
+    try { text = fs.readFileSync(f, "utf8"); } catch (e) { throw new GuardReadError("worker-source", f + " (" + errText(e) + ")"); }
+    const hits = scan(text);
     const v = hits.filter((h) => h.kind === "VIOLATION");
     if (!v.length) continue;
     res.push(folded.has(d) ? { name: d, folded: true, host: folded.get(d), hits: v } : { name: d, hits: v });
@@ -277,32 +307,59 @@ function scanRepoUnlisted(root, allowed) {
 }
 export { scanRepoUnlisted };
 
-async function scanLive() {
-  const res = [];
-  if (!TOKEN) return [{ name: "(no CF token)", hits: [] }];
-  let list = [];
+// The live sweep: every worker script of the account, fetched and scanned. opts (tests inject them): token, acct, fetchImpl, sleep, members.
+// Returns { findings, unreadable: [{ name, why }], scanned }. A missing token and a failed, non-200 or empty worker list throw GuardReadError
+// (the sweep read nothing); a bundle that cannot be fetched, after one retry of a network error, 429 or 5xx, is listed in `unreadable`, never
+// skipped.
+async function scanLive(opts) {
+  const o = opts || {};
+  const token = "token" in o ? o.token : TOKEN;
+  const acct = o.acct || ACCT;
+  const doFetch = o.fetchImpl || globalThis.fetch;
+  const sleep = o.sleep || ((ms) => new Promise((r) => setTimeout(r, ms)));
+  if (!token) throw new GuardReadError("live-token", "CLOUDFLARE_API_TOKEN is not set; the live sweep needs it to list the worker scripts");
+  const auth = { headers: { Authorization: "Bearer " + token } };
+  let list;
   try {
-    const r = await fetch("https://api.cloudflare.com/client/v4/accounts/" + ACCT + "/workers/scripts", { headers: { Authorization: "Bearer " + TOKEN } });
-    list = ((await r.json()).result || []).map((x) => x.id).sort();
-  } catch { return [{ name: "(live list failed)", hits: [] }]; }
+    const r = await doFetch(CF_API + "/accounts/" + acct + "/workers/scripts", auth);
+    if (!r.ok) throw new Error("HTTP " + r.status);
+    const body = await r.json();
+    if (!body || !Array.isArray(body.result)) throw new Error("the answer has no result list");
+    list = body.result.map((x) => x && x.id).filter(Boolean).sort();
+  } catch (e) { throw new GuardReadError("live-list", "the account's worker scripts (" + errText(e) + ")"); }
+  if (!list.length) throw new GuardReadError("live-list", "the account lists no worker scripts, so the live sweep would read nothing");
   // A live bundle that hosts FOLDED members names them, so a hit inside it can be traced to the member directory that carries the same text.
-  const liveMembers = {};
-  for (const f of repoMarkers().folded) if (f.host) (liveMembers[f.host] = liveMembers[f.host] || []).push(f.name);
+  const liveMembers = o.members || {};
+  if (!o.members) for (const f of repoMarkers().folded) if (f.host) (liveMembers[f.host] = liveMembers[f.host] || []).push(f.name);
+  const fetchBundle = async (name) => {
+    let why = "no answer";
+    for (let attempt = 0; attempt < 2; attempt++) {
+      try {
+        const r = await doFetch(CF_API + "/accounts/" + acct + "/workers/scripts/" + name + "/content/v2", auth);
+        if (r.ok) return { text: await r.text() };
+        why = "HTTP " + r.status;
+        if (r.status !== 429 && r.status < 500) break;                  // a refusal is final; a rate limit or a server error is tried once more
+      } catch (e) { why = errText(e); }
+      if (attempt === 0) await sleep(LIVE_RETRY_MS);
+    }
+    return { why };
+  };
+  const findings = [], unreadable = [];
   const cap = 6;
   for (let i = 0; i < list.length; i += cap) {
     const chunk = list.slice(i, i + cap);
     await Promise.all(chunk.map(async (name) => {
-      try {
-        const r = await fetch("https://api.cloudflare.com/client/v4/accounts/" + ACCT + "/workers/scripts/" + name + "/content/v2", { headers: { Authorization: "Bearer " + TOKEN } });
-        if (!r.ok) return;
-        const hits = scan(await r.text()).filter((h) => h.kind === "VIOLATION");
-        if (hits.length) res.push({ name, members: liveMembers[name] || [], hits });
-      } catch {}
+      const got = await fetchBundle(name);
+      if (got.text === undefined) { unreadable.push({ name, why: got.why }); return; }
+      const hits = scan(got.text).filter((h) => h.kind === "VIOLATION");
+      if (hits.length) findings.push({ name, members: liveMembers[name] || [], hits });
     }));
   }
-  res.sort((a, b) => a.name.localeCompare(b.name));
-  return res;
+  findings.sort((a, b) => a.name.localeCompare(b.name));
+  unreadable.sort((a, b) => a.name.localeCompare(b.name));
+  return { findings, unreadable, scanned: list.length - unreadable.length };
 }
+export { GuardReadError, exitCode, scanLive };
 
 // ENTRY-POINT-1 (2026-10-17): run the scan only when this file IS the process entry point, and compare paths
 // portably. `import.meta.url === "file://" + process.argv[1]` (the pattern run-suites.mjs had) never matches on
@@ -328,7 +385,7 @@ export { diffUnlisted };
 const rowLabel = (r) => r.name + (r.folded ? " (FOLDED into " + (r.host || "an unnamed host") + ")" : "");
 const argValue = (flag) => { const k = process.argv.indexOf(flag); return k > 0 ? process.argv[k + 1] : undefined; };
 
-async function main() {
+async function run() {
   const wantLive = process.argv.includes("--live");
   const wantJson = process.argv.includes("--json");
   const strictAllowed = process.argv.includes("--strict-allowed");
@@ -362,12 +419,14 @@ async function main() {
     process.exit(added.length + addedUnlisted.length > 0 ? 1 : 0);
   }
   const repo = scanRepo();
-  const live = wantLive ? await scanLive() : [];
+  const sweep = wantLive ? await scanLive() : { findings: [], unreadable: [], scanned: 0 };
+  const live = sweep.findings;
   const markers = repoMarkers();
   const unlisted = wantUnlisted ? scanRepoUnlisted(undefined, policy.allowed) : [];
 
   if (wantJson) {
     const out = { repo, live, artifacts: byArtifact(repo), markers: { retired_skipped: markers.retired, folded: markers.folded } };
+    if (wantLive) { out.live_scanned = sweep.scanned; out.live_unreadable = sweep.unreadable; }
     if (wantUnlisted) out.unlisted = unlisted;
     console.log(JSON.stringify(out, null, 1));
   } else {
@@ -379,7 +438,11 @@ async function main() {
       }
     };
     show("REPO SOURCES", repo);
-    if (wantLive) show("LIVE BUNDLES", live);
+    if (wantLive) {
+      show("LIVE BUNDLES", live);
+      console.log("== LIVE SWEEP: " + sweep.scanned + " bundles read, " + sweep.unreadable.length + " not read");
+      for (const u of sweep.unreadable) console.log("  cannot read " + u.name + " (" + u.why + ")");
+    }
     if (repo.some((r) => r.folded)) {
       console.log("== BY DEPLOYED ARTIFACT (FOLDED members roll up to the host bundle that runs them)");
       for (const a of byArtifact(repo)) console.log("  " + a.artifact + ": " + a.own + " own hits" + (a.members.length ? "; members " + a.members.map((m) => m.name + " " + m.hits).join(", ") : ""));
@@ -392,7 +455,17 @@ async function main() {
   }
 
   const total = repo.length + live.length + (strictAllowed ? unlisted.length : 0);
-  process.exit(total > 0 ? 1 : 0);
+  process.exit(exitCode(total, sweep.unreadable.length));
+}
+
+// PR-GUARD-FIXES-1: an input the scan could not read ends the run as "cannot read ..." with exit 2, apart from a finding (exit 1).
+async function main() {
+  try { await run(); } catch (e) {
+    if (!(e instanceof GuardReadError)) throw e;
+    if (process.argv.includes("--json")) console.log(JSON.stringify({ unreadable: [{ what: e.what, detail: e.detail }] }, null, 1));
+    else console.log("model-floor-guard: cannot read " + e.what + ": " + e.detail);
+    process.exit(2);
+  }
 }
 
 if (isEntry()) await main();

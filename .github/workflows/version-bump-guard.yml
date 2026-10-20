@@ -48,9 +48,17 @@ permissions:
 # ref so a newer push supersedes only an older run of the SAME ref. github.ref differs between
 # the push event (refs/heads/x) and the pull_request event (refs/pull/N/merge), so those two
 # never cancel each other either.
+# VERSION-BUMP-PUSH-SHA-1 (2026-10-20, PR-GUARD-FIXES-1, agent_issues 100295): the group was still the REF for a push to main, so a burst
+# of pushes there cancelled the earlier runs: 35 of 277 push-to-main runs from 2026-10-18 to 2026-10-20 (read from the runs API on
+# 2026-10-20) were `cancelled`, 9 of them in the 07:00Z hour of 2026-10-19, and the commits of that burst were never validated.
+# Three of them (4f20a3e9, 4343df37, 26e89a17) carried a stale copy of qnfo-code-orchestrator/worker.js whose VERSION went
+# backwards and whose fixes were absent; this guard would have flagged them (VERSION-AHEAD-1) and was cancelled instead. A push to
+# main now has one group per commit and is never cancelled, as mirror-guard.yml does (its group is per sha for a push). Every other
+# ref keeps the per-ref group and the cancel: a newer push to a branch or pull request supersedes the older run of the same ref,
+# which is all CONCURRENCY-PER-REF-1 wanted.
 concurrency:
-  group: version-bump-guard-${{ github.ref }}
-  cancel-in-progress: true
+  group: version-bump-guard-${{ github.ref == 'refs/heads/main' && github.sha || github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 jobs:
   guard:

@@ -127,5 +127,64 @@ cr.settle_issue = lambda n, e: True
 check(cr.repair(2144, push=True)["outcome"] == "settled", "repair() says settled when it did")
 cr.gh, cr.eligible, cr.settle_issue = orig_gh, orig_elig, orig_settle
 
+# 6. PR-GUARD-FIXES-1 (agent_issues 100295): a push with GITHUB_TOKEN creates pull_request runs that start no job (run 39318576612: 0 jobs,
+# failed the second PR 3106 merged), so the checks the merge lane requires are dispatched on the pushed branch. mirror-guard.yml was missing
+# from DISPATCHABLE, so a repaired head had no mirror-guard result until a person re-ran it (PR 3106 waited four hours).
+import re  # noqa: E402
+import types  # noqa: E402
+
+WF_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), ".github", "workflows")
+check("mirror-guard.yml" in cr.DISPATCHABLE and len(set(cr.DISPATCHABLE)) == len(cr.DISPATCHABLE), "DISPATCHABLE names mirror-guard.yml, each workflow once", cr.DISPATCHABLE)
+for wf_name in cr.DISPATCHABLE:
+    wf_path = os.path.join(WF_DIR, wf_name)
+    wf_text = open(wf_path, encoding="utf-8").read() if os.path.isfile(wf_path) else ""
+    check(re.search(r"^  workflow_dispatch:", wf_text, re.M) is not None, "%s exists and declares workflow_dispatch, so `gh workflow run` can start it (repair() runs that command with check=False, a workflow without the trigger would fail silently)" % wf_name)
+
+
+def drive(in_place):
+    """Run repair() for one conflicting pull request with git, GitHub and the checks stubbed; return (result, argv of every `gh workflow run`)."""
+    calls = []
+    pr = {"number": 5, "state": "open", "title": "fix x", "body": "", "head": {"sha": "abcdef1234567", "ref": "fix/x"}}
+
+    def fake_gh(path, method="GET", fields=None, raw=False):
+        if path.endswith("/pulls/5"):
+            return pr
+        if "/files" in path:
+            return []
+        if path.endswith("/pulls") and method == "POST":
+            return {"number": 9}
+        return {}
+
+    def fake_sh(args, cwd=None, check=True, timeout=900, env=None):
+        calls.append(list(args))
+        return types.SimpleNamespace(returncode=0, stdout="", stderr="")
+    names = ["gh", "eligible", "attempted", "landed_on_main", "reapply", "bump_workers", "git", "run_checks", "ledger", "sh"]
+    saved = {n: getattr(cr, n) for n in names}
+    cr.gh, cr.eligible, cr.attempted, cr.landed_on_main = fake_gh, (lambda p: None), (lambda n, s: False), (lambda *a, **k: [])
+    cr.reapply = lambda *a, **k: {"outcome": "reapplied", "workers": [], "resolved": []}
+    cr.bump_workers = lambda w, n: []
+    cr.git = lambda args, cwd=None, check=True: "0123456789abcdef\n"
+    cr.run_checks = lambda w, b, cwd=None: [("suites", True)]
+    cr.ledger = lambda *a, **k: None
+    cr.sh = fake_sh
+    try:
+        res = cr.repair(5, push=True, in_place=in_place)
+    finally:
+        for n, f in saved.items():
+            setattr(cr, n, f)
+    return res, [c for c in calls if c[:3] == ["gh", "workflow", "run"]]
+
+
+res, runs = drive(True)
+check(res.get("outcome") == "updated", "in-place repair of a conflicting pull request ends updated", res)
+check([c[3] for c in runs] == cr.DISPATCHABLE and "mirror-guard.yml" in [c[3] for c in runs], "in place: every DISPATCHABLE workflow, mirror-guard.yml included, is dispatched", runs)
+check(all(c[c.index("--ref") + 1] == "fix/x" for c in runs), "in place: each dispatch targets the pull request's own branch", runs)
+res, runs = drive(False)
+check(res.get("outcome") == "replaced", "a replacement pull request is opened and the old one superseded", res)
+check([c[3] for c in runs] == cr.DISPATCHABLE and "mirror-guard.yml" in [c[3] for c in runs], "replacement: every DISPATCHABLE workflow, mirror-guard.yml included, is dispatched", runs)
+check(all(c[c.index("--ref") + 1] == "repair/pr-5-abcdef1" for c in runs), "replacement: each dispatch targets the repair branch", runs)
+src = open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "conflict_repair.py"), encoding="utf-8").read()
+check("starts no pull_request workflow" not in src and "starts none by itself" not in src, "the comments no longer say a GITHUB_TOKEN push starts no pull_request workflow (it starts runs that never get a job)")
+
 print("FAILS=%d" % fails)
 sys.exit(1 if fails else 0)
