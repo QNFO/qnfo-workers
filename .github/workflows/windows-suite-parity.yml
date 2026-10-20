@@ -5,11 +5,18 @@ name: windows-suite-parity
 # 2026-10-18 with node 24 (a filesystem path where a URL is required, CRLF in a migration body, a suite that reads the network).
 # Nothing measured the difference on a runner, so "a local red means red" could not be checked. This workflow runs
 # `node scripts/run-suites.mjs --all` on windows-latest under node 22 and node 24 and REPORTS the failing suites in the job summary.
-# It is advisory by design: the run step is continue-on-error and the job stays green, so a Windows-only failure never blocks a merge;
-# the gate stays the ubuntu run in deploy-gate.yml. The issue is done when both legs of a run report an empty failing list.
-# No secrets and no network credentials are used; nothing is uploaded: the report is the job summary only.
+# It is advisory for merging: the workflow is not a required check and the gate stays the ubuntu run in deploy-gate.yml, so a
+# Windows-only failure never blocks a merge. WINDOWS-PARITY-PROBE-1 (2026-10-20): its CONCLUSION now reports parity. Until then the run
+# step was continue-on-error and the job always ended green, so run 2 of 2026-10-19 read success with 4 suites red on both legs
+# (576 passed, 4 failed), and nothing could probe a result that lived only in the job summary. The run step still continues on error and
+# the summary is unchanged; a last step turns the run red when the runner exit code was not 0 or any suite failed. Success therefore
+# means both node legs ran every suite with an empty failing list, failure means a Windows-only red. The issue is done when a run
+# is green: the contract issue-2832 (migrations/2026-10-19-windows-parity-probe.sql) reads the latest completed run on main
+# through the public GitHub API each hour. Runs before this change report nothing and are left out by a creation date in that probe.
+# No secrets and no network credentials are used; nothing is uploaded: the report is the job summary and the run conclusion.
 # Triggers: manual dispatch, and a push to main that changes the runner itself (scripts/run-suites.mjs) or this file. No schedule
-# (CRON-HOURLY-FLOOR-1 does not apply: it declares no cron). Step names are colon-free (WORKFLOW-YAML-LINT-1).
+# (CRON-HOURLY-FLOOR-1 does not apply: it declares no cron). Step names are colon-free (WORKFLOW-YAML-LINT-1). The probe reads the latest
+# completed run, so a fix to a Windows-red suite is seen once this workflow runs again: dispatch it after the fix lands.
 
 on:
   workflow_dispatch:
@@ -82,3 +89,16 @@ jobs:
             if [ -f suite-report.txt ]; then tail -n 12 suite-report.txt; fi
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
+      - name: Fail the run when a suite is red on Windows
+        if: always()
+        run: |
+          rc="${{ steps.suites.outputs.exit_code }}"
+          fails=0
+          if [ -f suite-report.txt ]; then
+            fails=$(grep -c '^FAIL ' suite-report.txt || true)
+          fi
+          if [ "$rc" != "0" ] || [ "${fails:-0}" -gt 0 ]; then
+            echo "windows suite parity is red on node ${{ matrix.node }}, run-suites exit code ${rc:-none}, ${fails:-0} failing suites"
+            exit 1
+          fi
+          echo "windows suite parity is green on node ${{ matrix.node }}, every suite passed and the failing list is empty"
