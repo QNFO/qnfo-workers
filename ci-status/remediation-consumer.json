@@ -1,19 +1,19 @@
 {
  "ok": true,
  "marker": "REMEDIATION-CONSUMER-1",
- "verifier": "remediation-consumer@da7fda48f71e",
- "due": 479,
- "pass": 396,
- "fail": 69,
- "skipped": 14,
- "deferred": 14,
+ "verifier": "remediation-consumer@ac071e6cc3a8",
+ "due": 509,
+ "pass": 419,
+ "fail": 77,
+ "skipped": 13,
+ "deferred": 13,
  "contracts": [
   {
-   "class": "plane-living-paper-fresh",
-   "issue_id": null,
-   "verdict": "pass",
+   "class": "issue-100347",
+   "issue_id": 100347,
+   "verdict": "fail",
    "expected": "ok",
-   "observed": "ok",
+   "observed": "missing-marker:qnfo-fleet-control/worker.js",
    "written": true
   },
   {
@@ -38,14 +38,6 @@
    "verdict": "fail",
    "expected": "ok",
    "observed": "present-marker:qnfo-research-exec/worker.js",
-   "written": true
-  },
-  {
-   "class": "issue-100347",
-   "issue_id": 100347,
-   "verdict": "fail",
-   "expected": "ok",
-   "observed": "missing-marker:qnfo-fleet-control/worker.js",
    "written": true
   },
   {
@@ -81,6 +73,14 @@
    "written": true
   },
   {
+   "class": "fm-migration-backup-empty-schema-only",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
    "class": "issue-100346",
    "issue_id": 100346,
    "verdict": "pass",
@@ -97,23 +97,7 @@
    "written": true
   },
   {
-   "class": "rt-live-qnfo-cloud-ops",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "ok",
-   "observed": "ok",
-   "written": true
-  },
-  {
    "class": "fm-migration-sql-parse-error",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "ok",
-   "observed": "ok",
-   "written": true
-  },
-  {
-   "class": "fm-migration-backup-empty-schema-only",
    "issue_id": null,
    "verdict": "pass",
    "expected": "ok",
@@ -129,7 +113,7 @@
    "written": true
   },
   {
-   "class": "rt-live-qnfo-ai-calibration",
+   "class": "rt-live-qnfo-cloud-ops",
    "issue_id": null,
    "verdict": "pass",
    "expected": "ok",
@@ -145,6 +129,22 @@
    "written": true
   },
   {
+   "class": "issue-2928",
+   "issue_id": 2928,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "rt-live-qnfo-ai-calibration",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
    "class": "issue-2829",
    "issue_id": 2829,
    "verdict": "pass",
@@ -153,8 +153,16 @@
    "written": true
   },
   {
-   "class": "issue-2928",
-   "issue_id": 2928,
+   "class": "issue-2830",
+   "issue_id": 2830,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "fm-migration-headerless-silent-skip",
+   "issue_id": null,
    "verdict": "pass",
    "expected": "ok",
    "observed": "ok",
@@ -177,14 +185,6 @@
    "written": true
   },
   {
-   "class": "issue-2830",
-   "issue_id": 2830,
-   "verdict": "pass",
-   "expected": "ok",
-   "observed": "ok",
-   "written": true
-  },
-  {
    "class": "issue-100041",
    "issue_id": 100041,
    "verdict": "pass",
@@ -193,24 +193,8 @@
    "written": true
   },
   {
-   "class": "fm-migration-headerless-silent-skip",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "ok",
-   "observed": "ok",
-   "written": true
-  },
-  {
    "class": "issue-100066",
    "issue_id": 100066,
-   "verdict": "pass",
-   "expected": "ok",
-   "observed": "ok",
-   "written": true
-  },
-  {
-   "class": "issue-100090",
-   "issue_id": 100090,
    "verdict": "pass",
    "expected": "ok",
    "observed": "ok",
@@ -227,6 +211,14 @@
   {
    "class": "issue-100081",
    "issue_id": 100081,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "issue-100090",
+   "issue_id": 100090,
    "verdict": "pass",
    "expected": "ok",
    "observed": "ok",
@@ -265,6 +257,14 @@
    "written": true
   },
   {
+   "class": "rt-fleet-dashboard",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
    "class": "issue-100025",
    "issue_id": 100025,
    "verdict": "pass",
@@ -281,14 +281,6 @@
    "written": true
   },
   {
-   "class": "issue-100322",
-   "issue_id": 100322,
-   "verdict": "pass",
-   "expected": "ok",
-   "observed": "ok",
-   "written": true
-  },
-  {
    "class": "issue-100097",
    "issue_id": 100097,
    "verdict": "pass",
@@ -297,15 +289,15 @@
    "written": true
   },
   {
-   "class": "fm-merge-boundary-load-unchecked",
-   "issue_id": null,
+   "class": "issue-100322",
+   "issue_id": 100322,
    "verdict": "pass",
    "expected": "ok",
    "observed": "ok",
    "written": true
   },
   {
-   "class": "rt-fleet-dashboard",
+   "class": "fm-merge-boundary-load-unchecked",
    "issue_id": null,
    "verdict": "pass",
    "expected": "ok",
@@ -393,14 +385,6 @@
    "written": true
   },
   {
-   "class": "rt-live-qnfo-intent-orchestrator",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "ok",
-   "observed": "ok",
-   "written": true
-  },
-  {
    "class": "fm-migration-reapply-clobber",
    "issue_id": null,
    "verdict": "pass",
@@ -409,7 +393,15 @@
    "written": true
   },
   {
-   "class": "rt-ipatent",
+   "class": "issue-2305",
+   "issue_id": 2305,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "rt-live-qnfo-code-orchestrator",
    "issue_id": null,
    "verdict": "pass",
    "expected": "ok",
@@ -417,7 +409,16 @@
    "written": true
   },
   {
-   "class": "rt-live-qnfo-deploy-guard",
+   "class": "rt-live-qnfo-intent-orchestrator",
    "issue_id": null,
    "verdict": "pass",
-   "expected": "ok
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "issue-100275",
+   "issue_id": 100275,
+   "verdict": "pass",
+   "expected": "ok",
+  
