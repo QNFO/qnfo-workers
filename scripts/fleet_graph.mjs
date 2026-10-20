@@ -671,7 +671,16 @@ export function computeFindings(ctx) {
       for (const [env, line] of cw.envReads) {
         if (live.has(env) || cw.declared.has(env)) continue;
         if (["CF_PAGES", "CF_VERSION_METADATA"].includes(env)) continue;
-        add("env-undeclared", name + "." + env, "warn", "worker.js reads env." + env + " (line " + line + ") but neither wrangler.toml nor the deployed script defines it (no binding, var or secret of that name), so it is undefined at run time");
+        // Demote optional config reads to info env-optional-unset.
+        const optional = !!(cw.optionalEnv && cw.optionalEnv.has(env));
+        add(
+          optional ? "env-optional-unset" : "env-undeclared",
+          name + "." + env,
+          optional ? "info" : "warn",
+          optional
+            ? "worker.js reads env." + env + " (line " + line + ") only as an optional config read with a default; neither wrangler.toml nor the deployed script defines it, so the default is used"
+            : "worker.js reads env." + env + " (line " + line + ") but neither wrangler.toml nor the deployed script defines it (no binding, var or secret of that name), so it is undefined at run time"
+        );
       }
       if (!cw.computedEnv) for (const [b, type] of live) {
         if (["secret_text", "secret_key", "plain_text", "json"].includes(type)) continue;
