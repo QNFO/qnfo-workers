@@ -175,5 +175,15 @@ const K = { Authorization: "Bearer " + GOOD_KEY };
   r = await req(t, "POST", "/internal/verify-key", K, undefined, undefined);
   ok(r.res.status === 404, "G6 verify-key hidden from public callers");
 }
+// H. OWNER-KEY-1: the dedicated owner key is a full key on its own.
+{
+  const t = mkr({ env: { OPS_OWNER_KEY: "owner-dedicated-key-xyz" } });
+  let r = await req(t, "POST", "/v1/ideas", { Authorization: "Bearer owner-dedicated-key-xyz" }, { title: "own" });
+  ok(r.j && r.j.ok === true, "H1 OPS_OWNER_KEY files an idea");
+  const c = await call(t, Q, { Authorization: "Bearer owner-dedicated-key-xyz" });
+  ok(c.res.status === 200 && c.res.headers.get("x-ops-access") !== "public-read", "H2 OPS_OWNER_KEY gets the full agent");
+  r = await req(t, "POST", "/internal/verify-key", { Authorization: "Bearer owner-dedicated-key-xyz" }, undefined, { caller: "qnfo-ai" });
+  ok(r.j && r.j.ok === true, "H3 qnfo-ai federation accepts OPS_OWNER_KEY");
+}
 say(pass + " passed, " + fail + " failed");
 process.exit(fail ? 1 : 0);
