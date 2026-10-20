@@ -32,7 +32,7 @@ function setup(sendImpl) {
 let T = setup();
 let r = await sendMorningBrief(T.env);
 ok(r.ok && r.via === "send_email" && T.sent.length === 1, "brief sent through the owner-notice path although the address is suppressed (" + JSON.stringify(r) + ")");
-ok(T.sent[0].to === "rwnquni@outlook.com" && T.sent[0].from === "rowan.quni@qnfo.org" && T.sent[0].subject === "Morning - " + today, "to the owner only, dated subject");
+ok(T.sent[0].to === "rwnquni@outlook.com" && T.sent[0].from.email === "companion@q08.org" && T.sent[0].subject === "Morning - " + today, "to the owner only, dated subject");
 ok(/Weather: mild/.test(T.sent[0].text), "brief body carries the weather");
 ok(T.p.prepare("SELECT date FROM companion_morning_brief").all().length === 1, "once-a-day row written");
 r = await sendMorningBrief(T.env);
@@ -62,7 +62,8 @@ const both = await Promise.all([sendMorningBrief(T.env), sendMorningBrief(T.env)
 ok(T.sent.length === 1, "two concurrent ticks send exactly one brief (sent " + T.sent.length + ")");
 ok(T.claimDuringSend === 1, "the day is claimed before the send happens");
 ok(both.filter((x) => x.skipped === "already sent").length === 1, "the losing tick skips");
-let n = 0; T = setup(async (m) => { if (n++ === 0) throw new Error("E_ONCE"); T.sent.push(m); });
+// both owner-notice senders (q08.org first, qnfo.org fallback, DOMAIN-PLANE-OWNER-MAIL-1) must fail for the send to fail
+let n = 0; T = setup(async (m) => { if (n++ < 2) throw new Error("E_ONCE"); T.sent.push(m); });
 r = await sendMorningBrief(T.env); ok(!r.ok && T.p.prepare("SELECT date FROM companion_morning_brief").all().length === 0, "failed send deletes the claim");
 r = await sendMorningBrief(T.env); ok(r.ok && T.sent.length === 1 && T.p.prepare("SELECT date FROM companion_morning_brief").all().length === 1, "next tick retries and keeps the claim after success");
 
