@@ -244,6 +244,11 @@ because each one was broken at least once; the linked issue holds the evidence.
   kept for history without a trigger), `issue_drain_ratio_24h` (>= 1.5)
   and `issue_auto_close_2h_share_24h` (1.0), each with its trigger (migrations/2026-10-13-issue-sla-2h.sql). A finding that is not
   a defect (a roadmap item, a report) belongs in `goals` or `objective_space` with the successor id, never closed as wontfix.
+- Owner directive 2026-10-20 (ISSUE-THROUGHPUT-1), verbatim: "The system shall always triage, prioritise, remediate, resolve, deploy, and close issues server-side, automatically and
+  faster than they open (throughput)." It extends ISSUE-SLA-2H-1 above: over 24 hours the issues closed with evidence outnumber those opened (`issue_drain_ratio_24h` at or above 1.5),
+  and no family hides a net inflow: `v_issue_family_throughput` (migrations/2026-10-20-issue-throughput.sql) lists, per family, opened, closed, open, net inflow and drain ratio. A family with
+  net inflow above 0 and an open backlog is missing a loop, a probe or a doer, and that is built next. Closure stays evidence-only (`issue_triage.close_evidence`), never `wontfix` to lower a count.
+  Recorded in `ops_config.OWNER_DIRECTIVE_2026_10_20_ISSUE_THROUGHPUT_1` and docs/AUTONOMOUS-OPERATION-DOCTRINE.md (standing directive 2026-10-20, throughput).
 - Every open issue's remediation contract is due hourly (trigger `remediation_contracts_cadence_1h_ai`). A new queue, status
   or loop that can hold items adds its `queue_sla` row and its `v_stuck_summary` column, with an automatic fix and its revert,
   in the PR that creates it. A chain or guard that checks only a count is incomplete: add the age of the oldest item.
