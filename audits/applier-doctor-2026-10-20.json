@@ -1,12 +1,9 @@
 {
  "counts": {
-  "already-applied": 73,
-  "error": 1,
+  "already-applied": 74,
   "undetermined": 3
  },
- "errored": [
-  "scripts/checkin-scale-anchored-1-patch.py"
- ],
+ "errored": [],
  "marker": "APPLIER-DOCTOR-2",
  "never_landed": [],
  "results": [
@@ -105,13 +102,13 @@
   },
   {
    "changed_files": [],
-   "rc": 1,
+   "rc": 0,
    "script": "scripts/checkin-scale-anchored-1-patch.py",
    "tail": [
     "already applied /home/runner/work/qnfo-workers/qnfo-workers/personal-companion/wellbeing-wire.js",
-    "FAIL-CLOSED: /home/runner/work/qnfo-workers/qnfo-workers/personal-companion/worker.js: VERSION anchor not found"
+    "already applied /home/runner/work/qnfo-workers/qnfo-workers/personal-companion/worker.js (VERSION is past var VERSION = \"1.30.0-checkin-anchored\"; and the worker carries SCALE-ANCHORED-1)"
    ],
-   "verdict": "error"
+   "verdict": "already-applied"
   },
   {
    "changed_files": [],
@@ -314,7 +311,7 @@
    "script": "scripts/github-write-409-retry-patch.py",
    "tail": [
     "ALREADY REPAIRED (marker(s) GITHUB-409-RETRY-1); no change",
-    "bytes: 655124 (unchanged)",
+    "bytes: 677589 (unchanged)",
     "parity: source==mirror"
    ],
    "verdict": "already-applied"
@@ -336,7 +333,7 @@
    "script": "scripts/github409-variant-reread-patch.py",
    "tail": [
     "already applied (idempotent no-op): qnfo-ops/deployed-current.worker.js",
-    "mirror pair byte-identical (655126 bytes)",
+    "mirror pair byte-identical (677591 bytes)",
     "changed=false"
    ],
    "verdict": "already-applied"
@@ -383,8 +380,8 @@
    "script": "scripts/ops-deploy-ledger-patch.py",
    "tail": [
     "already patched (marker present) - no-op",
-    "  worker.js bytes=655126 marker=1",
-    "  deployed-current.worker.js bytes=655126 marker=1"
+    "  worker.js bytes=677591 marker=1",
+    "  deployed-current.worker.js bytes=677591 marker=1"
    ],
    "verdict": "already-applied"
   },
@@ -807,7 +804,7 @@
  "stale_anchor": [],
  "superseded": [],
  "total": 77,
- "ts": "2026-10-20T08:23:21.882Z",
+ "ts": "2026-10-20T09:50:00.641Z",
  "undetermined": [
   "scripts/dashboard-agissue-undercount-patch.py",
   "scripts/math-sym-escape-patch.py",
