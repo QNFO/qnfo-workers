@@ -147,9 +147,16 @@ def attach_org_route(zone):
     st, j = req("GET", "/zones/%s/dns_records?name=%s" % (zone, HOSTNAME))
     recs = (j.get("result") or []) if st == 200 else []
     if not any(x.get("proxied") for x in recs):
-        report("dns-check", "failed", http=st,
-               error="no proxied DNS record for %s; a route would be inert (records: %s)" % (HOSTNAME, json.dumps(recs)[:400]))
-        return None
+        # DOMAIN-PLANE-1 issue #100349: the qwav.org zone has no record for ask.qwav.org, so create
+        # one exactly like attach-me-q08-route.py did for me.q08.org: a proxied AAAA 100:: dummy
+        # record so the hostname resolves to Cloudflare and the worker route is reachable.
+        st, j = req("POST", "/zones/%s/dns_records" % zone,
+                    {"type": "AAAA", "name": HOSTNAME, "content": "100::", "proxied": True,
+                     "comment": "DOMAIN-PLANE-1 issue #100349: dummy target for qnfo-ai-search worker route"})
+        if st not in (200, 201) or not j.get("success"):
+            report("dns-create", "failed", http=st, error="create AAAA record body=%s" % json.dumps(j)[:800])
+            return None
+        print("proxied AAAA 100:: record created for %s" % HOSTNAME)
     st, j = req("POST", "/zones/%s/workers/routes" % zone, {"pattern": HOSTNAME + "/*", "script": SERVICE})
     if st not in (200, 201) or not j.get("success"):
         report("route", "failed", http=st, error="create route body=%s" % json.dumps(j)[:800])
