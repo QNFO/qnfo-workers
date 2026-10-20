@@ -37,9 +37,9 @@ primary key or another consumer:
 |---|---|---|---|
 | ChatBox (phone) | https://ai.qnfo.org | qnfo | %APPDATA%/xyz.chatboxapp.app/config.json |
 | ChatBox (phone) | https://ops.qnfo.org | ops | %APPDATA%/xyz.chatboxapp.app/config.json |
-| ChatBox (phone) | https://personal.qnfo.org | personal | %APPDATA%/xyz.chatboxapp.app/config.json |
+| ChatBox (phone) | https://me.q08.org | personal | %APPDATA%/xyz.chatboxapp.app/config.json |
 | DeepChat | https://ops.qnfo.org | ops | agent.db provider/apiKey + Roaming app-settings.json |
-| DeepChat (personal twin) | https://personal.qnfo.org | personal | agent.db provider/apiKey |
+| DeepChat (personal twin) | https://me.q08.org | personal | agent.db provider/apiKey |
 
 **Rule (#1886):** a rotation or credential issue MUST NOT be closed without a PASSING owner-client
 probe. The probe is `scripts/issue_owner_client_keys.py check` (the `owner-client-keys` workflow): a

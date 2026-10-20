@@ -8,7 +8,7 @@ canonical deploy, rule 8 budget limits, no claude.ai links).
 
 | Thing | Value |
 |---|---|
-| Twin worker | `personal-api` (`personal-api.q08.workers.dev`, also `personal.qnfo.org`) |
+| Twin worker | `personal-api` (`personal-api.q08.workers.dev`; the owner address is `me.q08.org`, DOMAIN-PLANE-1; `personal.qnfo.org` still answers for clients configured before 2026-10-19) |
 | Personal D1 | `personal-life` `e8d6c61a-10b7-4086-b81e-9e6e85afa407` |
 | Audit D1 | `qnfo-audit` `35e2e573-92f3-46ac-83c6-22f6429fc5e5` |
 | Master queue | `SELECT * FROM v_issue_queue ORDER BY pos` (qnfo-audit) |
@@ -60,7 +60,7 @@ canonical deploy, rule 8 budget limits, no claude.ai links).
 ### 4. #1816 GCAL-1 Google Calendar (owner step, then agent verification)
 - Owner card: `human_actions` slug `gcal-1-link-google-calendar` (on fleet.qnfo.org). The owner creates a Google OAuth client
   (Web application; redirect URIs `https://personal-api.q08.workers.dev/google/callback` and
-  `https://personal.qnfo.org/google/callback`; consent screen In production), sets secrets `GOOGLE_CLIENT_ID` and
+  `https://me.q08.org/google/callback`; the older `https://personal.qnfo.org/google/callback` stays registered beside it; consent screen In production), sets secrets `GOOGLE_CLIENT_ID` and
   `GOOGLE_CLIENT_SECRET` on personal-api, opens `/google/connect` and approves.
 - Agent verification afterwards: `/health` field `google_calendar` must read `connected`; personal-life
   `SELECT email, last_error FROM google_oauth WHERE id='owner'` must have no `last_error`. The contract then closes #1816.

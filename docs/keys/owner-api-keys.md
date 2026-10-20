@@ -20,7 +20,7 @@ Keys exist only for what **changes the fleet or spends its money**. The table be
 |---|---|---|---|---|
 | `ROUTER_AUTH_KEY_2` | qnfo-ai | `https://ai.qnfo.org/v1` (model `qnfo`), full router | workflow `owner-client-keys` (mode `issue`) | private D1 `qnfo-identity.owner_client_keys`, host `ai` |
 | `OPS_ROUTER_AUTH_KEY_2` | qnfo-ops | `https://ops.qnfo.org/v1` (model `ops`), full agent | workflow `owner-client-keys` (mode `issue`) | private D1 `qnfo-identity.owner_client_keys`, host `ops` |
-| `API_KEY` | personal-api | `https://personal.qnfo.org/v1` (model `personal`) and `/microsoft/connect` | workflow `owner-client-keys` (mode `issue`) | private D1 `qnfo-identity.owner_client_keys`, host `personal` |
+| `API_KEY` | personal-api | `https://me.q08.org/v1` (model `personal`) and `/microsoft/connect` | workflow `owner-client-keys` (mode `issue`) | private D1 `qnfo-identity.owner_client_keys`, host `personal` |
 | `OWNER_TOKEN` | idea-hub | `POST https://ideas.qnfo.org/api/intake` (owner intake of an idea, issue or paper draft) | set 2026-10-04 09:16Z (IDEAS-PRIVATE-1) | private D1 `qnfo-identity.owner_client_keys`, host `ideas` |
 | emailed code (no stored key) | qnfo-fleet-dashboard | owner actions on https://fleet.qnfo.org: ratify or reject objective revisions, mark queue items done, owner documents | type `login` in the command line; a 6-digit code is emailed to the owner's address (`OWNER_CODE_TO`); session 12 h, destructive steps need a code from the last 15 min | `qnfo-audit.owner_sessions` holds only a hash of the session token |
 
@@ -31,7 +31,7 @@ by service-binding props instead of a copied key (#1703); an owner never needs t
 
 Live state (read 2026-10-05): `qnfo-identity.owner_client_keys` has one `active` row each for ai, ops, personal
 (issued 2026-10-04 09:14-09:15Z, verified 200 the same minute) and ideas; the earlier rows are `superseded`.
-Without a key, `ai.qnfo.org` and `personal.qnfo.org` answer 401 and `fleet.qnfo.org/api/owner/keys` answers 403.
+Without a key, `ai.qnfo.org` and `me.q08.org` (formerly `personal.qnfo.org`) answer 401 and `fleet.qnfo.org/api/owner/keys` answers 403.
 
 ### See your current keys
 
@@ -43,7 +43,7 @@ Paste a value once into the client that needs it:
 
 - ChatBox or DeepChat, QNFO: provider OpenAI-compatible, base URL `https://ai.qnfo.org/v1`, model `qnfo`, key = host `ai`.
 - ChatBox or DeepChat, fleet agent: base URL `https://ops.qnfo.org/v1`, model `ops`, key = host `ops`.
-- ChatBox or DeepChat, personal: base URL `https://personal.qnfo.org/v1`, model `personal`, key = host `personal`.
+- ChatBox or DeepChat, personal: base URL `https://me.q08.org/v1`, model `personal`, key = host `personal`.
 
 ### Issue new keys (rotation)
 
