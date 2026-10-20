@@ -155,6 +155,15 @@ p = plan([L({ id: 1, status: "superseded" })]);
 eq(p.dispatch.length + p.session.length + p.stalled.length, 0, "a superseded lever is done");
 
 // ---------- the tick over an in-memory D1 seeded from the migration ----------
+// TEST-CLOCK-SHIFT-1 (2026-10-20): this section's fixtures were written on 2026-10-06 and the tick reads the real clock, so every fixture date
+// that a window compares against "now" drifted: from 2026-10-20 the levers the migration seeds with dispatched_at 2026-10-06 were stalled by
+// an earlier tick (TP_STALL_DAYS = 14), and the suite failed on main and on every pull request that ran it ("TP-LEVER-STALLED-1 names the lever",
+// "T5.5 falls back to a session", "the lever reads session", ...). Pinning the clock cannot work (the worker mixes Date.now(), new Date() and the SQL clock);
+// instead every fixture date is shifted by the same amount, so "now" is always 2026-10-06T12:00Z relative to the fixtures, on any day the suite runs.
+const FIXTURE_NOW_MS = Date.parse("2026-10-06T12:00:00Z");
+const SHIFT_MS = Date.now() - FIXTURE_NOW_MS;
+const sh = (iso) => new Date(Date.parse(iso) + SHIFT_MS).toISOString().replace(/\.\d{3}Z$/, "Z");
+const shDay = (day) => sh(day + "T12:00:00Z").slice(0, 10);
 const db = new DatabaseSync(":memory:");
 db.exec(`
 CREATE TABLE agent_issues (id INTEGER PRIMARY KEY AUTOINCREMENT, title TEXT, description TEXT, source TEXT, category TEXT, priority TEXT, status TEXT, created_at INTEGER, updated_at INTEGER);
@@ -166,7 +175,7 @@ CREATE TABLE analytics_metric_triggers (id INTEGER PRIMARY KEY AUTOINCREMENT, me
 CREATE TABLE ops_config (key TEXT PRIMARY KEY, value TEXT, note TEXT, updated_at TEXT);
 CREATE TABLE cloud_ops_events (id TEXT PRIMARY KEY, ts TEXT, kind TEXT, text TEXT, meta TEXT, job TEXT, status TEXT);
 CREATE TABLE autonomy_scores (dimension TEXT PRIMARY KEY, score REAL, scored_at TEXT);
-INSERT INTO autonomy_scores (dimension, score, scored_at) VALUES ('ooda_observe', 3.8, '2026-10-06'), ('issue_flow', 3.3, '2026-10-06'), ('sai_weighted', 3.39, '2026-10-06'), ('overall', 4.3, '2026-10-06');
+INSERT INTO autonomy_scores (dimension, score, scored_at) VALUES ('ooda_observe', 3.8, '${shDay("2026-10-06")}'), ('issue_flow', 3.3, '${shDay("2026-10-06")}'), ('sai_weighted', 3.39, '${shDay("2026-10-06")}'), ('overall', 4.3, '${shDay("2026-10-06")}');
 INSERT INTO ops_config (key, value) VALUES ('code_merge_trusted_sources', 'qnfo-fleet-control|METRIC-TRIGGER-,session,qnfo-fleet-control|REACH-IDEA-');
 INSERT INTO fleet_budget (node_class, current) VALUES ('workers', 37), ('cron_schedules', 46), ('d1_databases', 10);
 INSERT INTO metric_registry (metric, last_value) VALUES ('code_task_success_rate_30d', '0.5'), ('breach_code_task_pct', '12'), ('watchmaker_index', '2');
@@ -176,6 +185,10 @@ INSERT INTO agent_issues (id, title, status, created_at) VALUES (2005, 'TP-1.1',
 INSERT INTO agent_issues (title, status, created_at) VALUES ('SEC-OPEN-1: x', 'open', 1);
 `);
 db.exec(readFileSync(join(here, "..", "migrations", "2026-10-06-transformation-loop.sql"), "utf8"));
+// The migration seeds lever dates as literals of 2026-10-06; move them with the fixtures.
+for (const col of ["dispatched_at", "landed_at", "verified_at", "stalled_at", "updated_at"]) {
+  for (const r of db.prepare(`SELECT id, ${col} AS v FROM transformation_levers WHERE ${col} IS NOT NULL AND ${col} LIKE '2026-%'`).all()) db.prepare(`UPDATE transformation_levers SET ${col} = ? WHERE id = ?`).run(sh(r.v.length === 10 ? r.v + "T12:00:00Z" : r.v), r.id);
+}
 const seeded = db.prepare("SELECT COUNT(*) AS n, SUM(status='landed') AS landed, SUM(status='session') AS session, SUM(status='dispatched') AS dispatched, SUM(kind='owner') AS owner FROM transformation_levers").get();
 eq(seeded.n >= 48, true, "the migration seeds the program's levers (" + seeded.n + ")");
 eq(seeded.landed >= 9 && seeded.session >= 8 && seeded.dispatched === 2 && seeded.owner === 1, true, "seed statuses adopt what the program's author already filed and what main landed on 2026-10-06: " + JSON.stringify(seeded));
@@ -199,15 +212,15 @@ const env = { AUDIT: { prepare(sql) {
 } } };
 
 // W0-LEADING-EXIT-1 (0.4.134): W0 exits on the engine success rate, over code tasks created after lever (1, 15) landed.
-db.exec("INSERT OR IGNORE INTO transformation_levers (tp, n, key, title, kind, wave, status, note, landed_at) VALUES (1, 15, 'merge-scope-intake', 'Merge-scope intake', 'code', 'W0', 'landed', 'test fixture', '2026-10-06T09:00:00Z')");
-db.exec("INSERT INTO code_tasks (id, status, created_at) VALUES ('old1', 'closed', '2026-10-03T00:00:00Z'), ('old2', 'failed', '2026-10-04T00:00:00Z'), ('e1', 'merged', '2026-10-06T10:00:00Z'), ('e2', 'merged', '2026-10-06T11:00:00Z'), ('e3', 'merged', '2026-10-06T12:00:00Z'), ('e4', 'merged', '2026-10-06T13:00:00Z'), ('e5', 'merged', '2026-10-06T14:00:00Z'), ('e6', 'closed', '2026-10-06T15:00:00Z'), ('e7', 'needs_human', '2026-10-06T16:00:00Z'), ('q1', 'queued', '2026-10-06T18:00:00Z')");
+db.exec(`INSERT OR IGNORE INTO transformation_levers (tp, n, key, title, kind, wave, status, note, landed_at) VALUES (1, 15, 'merge-scope-intake', 'Merge-scope intake', 'code', 'W0', 'landed', 'test fixture', '${sh("2026-10-06T09:00:00Z")}')`);
+db.exec(`INSERT INTO code_tasks (id, status, created_at) VALUES ('old1', 'closed', '${sh("2026-10-03T00:00:00Z")}'), ('old2', 'failed', '${sh("2026-10-04T00:00:00Z")}'), ('e1', 'merged', '${sh("2026-10-06T10:00:00Z")}'), ('e2', 'merged', '${sh("2026-10-06T11:00:00Z")}'), ('e3', 'merged', '${sh("2026-10-06T12:00:00Z")}'), ('e4', 'merged', '${sh("2026-10-06T13:00:00Z")}'), ('e5', 'merged', '${sh("2026-10-06T14:00:00Z")}'), ('e6', 'closed', '${sh("2026-10-06T15:00:00Z")}'), ('e7', 'needs_human', '${sh("2026-10-06T16:00:00Z")}'), ('q1', 'queued', '${sh("2026-10-06T18:00:00Z")}')`);
 {
   const r0 = await T.transformationTick(env, { force: true });
   const e0 = r0.scoreboard.find((r) => r.metric === "code_task_success_rate_engine");
   eq(e0 && e0.value === null && r0.wave === "W0", true, "seven finished tasks after the landing leave the engine rate unmeasured and W0 active");
   db.exec("DELETE FROM transformation_runs");
 }
-db.exec("INSERT INTO code_tasks (id, status, created_at) VALUES ('e8', 'closed', '2026-10-06T17:00:00Z')");
+db.exec(`INSERT INTO code_tasks (id, status, created_at) VALUES ('e8', 'closed', '${sh("2026-10-06T17:00:00Z")}')`);
 const r1 = await T.transformationTick(env, { force: true });
 eq(r1.scoreboard.find((r) => r.metric === "code_task_success_rate_engine").value, 0.63, "the engine rate counts only tasks created after the landing (5 merged of 8 finished; queued and older tasks left out)");
 eq(r1.ok === true && !r1.skipped, true, "the first tick runs");
@@ -229,9 +242,9 @@ eq(r1.scoreboard.find((r) => r.metric === "contracts_needing_probe").value === 2
 eq(r1.applied.wave_stalled, 0, "with no metric history nothing is judged a wave stall");
 
 // Landing: the adopted T1.1 task merges.
-db.exec("INSERT INTO code_tasks (id, goal, status, merge_state, pr_url, created_at) VALUES ('ct_a', '[issue #2005] trusted origin parity', 'merged', 'verified', 'https://github.com/QNFO/qnfo-workers/pull/701', '2026-10-06T08:00:00Z')");
+db.exec(`INSERT INTO code_tasks (id, goal, status, merge_state, pr_url, created_at) VALUES ('ct_a', '[issue #2005] trusted origin parity', 'merged', 'verified', 'https://github.com/QNFO/qnfo-workers/pull/701', '${sh("2026-10-06T08:00:00Z")}')`);
 // Fallback: the adopted T5.5 task fails twice.
-db.exec("INSERT INTO code_tasks (id, goal, status, last_error, created_at) VALUES ('ct_b', '[issue #2013] security metric', 'failed', 'merge-runner: control-plane worker, not merged', '2026-10-06T08:00:00Z'), ('ct_c', '[issue #2013] security metric', 'needs_human', 'anchor occurs 0 times', '2026-10-06T09:00:00Z')");
+db.exec(`INSERT INTO code_tasks (id, goal, status, last_error, created_at) VALUES ('ct_b', '[issue #2013] security metric', 'failed', 'merge-runner: control-plane worker, not merged', '${sh("2026-10-06T08:00:00Z")}'), ('ct_c', '[issue #2013] security metric', 'needs_human', 'anchor occurs 0 times', '${sh("2026-10-06T09:00:00Z")}')`);
 // Wave stall: breach_code_task_pct (unmet, W1) reads 12 today and 12 fifteen days ago; worker_count moved.
 db.prepare("INSERT INTO metric_history (metric, day, value) VALUES ('breach_code_task_pct', ?, '12'), ('breach_code_task_pct', ?, '12'), ('worker_count', ?, '42'), ('worker_count', ?, '37')").run(new Date(Date.now() - 15 * 864e5).toISOString().slice(0, 10), new Date().toISOString().slice(0, 10), new Date(Date.now() - 15 * 864e5).toISOString().slice(0, 10), new Date().toISOString().slice(0, 10));
 // Dispatch: a lever row gains a path and an anchor (data, no deploy) outside the control plane.
@@ -255,7 +268,7 @@ eq(r4.applied.dispatched + r4.applied.fallback + r4.applied.verified, 0, "a furt
 eq(db.prepare("SELECT COUNT(*) AS n FROM agent_issues WHERE title LIKE 'CODE-TASK-NEEDS-SESSION-1:%'").get().n, 1, "the fallback issue is filed once");
 eq(db.prepare("SELECT COUNT(*) AS n FROM agent_issues WHERE title LIKE 'TP-WAVE-EXIT-STALLED-1:%'").get().n, 1, "the wave-stall issue is filed once");
 // Stall: a session lever dispatched 35 days ago (T1.4, issue 2007).
-db.exec("UPDATE transformation_levers SET dispatched_at = '2026-09-01T00:00:00Z' WHERE tp=1 AND n=4");
+db.exec(`UPDATE transformation_levers SET dispatched_at = '${sh("2026-09-01T00:00:00Z")}' WHERE tp=1 AND n=4`);
 const r5 = await T.transformationTick(env, { force: true });
 eq(r5.applied.stalled, 1, "a session lever with no landing in 14 days is stalled");
 // TEST-CLOCK-PIN-1 (2026-10-20): the first TP-LEVER-STALLED-1 issue is not necessarily T1.4's. The migration seeds levers with dispatched_at on
