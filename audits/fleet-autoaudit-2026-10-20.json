@@ -1,5 +1,5 @@
 {
-  "audited_at": "2026-10-20 05:28:10",
+  "audited_at": "2026-10-20 06:02:51",
   "d1_write_failures": [],
   "d1_writes_ok": 120,
   "guard": {
@@ -605,7 +605,7 @@
       },
       {
         "dir": "qnfo-fleet-control",
-        "version": "0.41.2-mastodon-probe-host",
+        "version": "0.42.0-deploy-all-merges",
         "worker": "qnfo-fleet-control"
       },
       {
@@ -1313,9 +1313,9 @@
       "worker": "qnfo-fleet-calibrator"
     },
     "qnfo-fleet-control": {
-      "before": "0.41.2-mastodon-probe-host",
+      "before": "0.42.0-deploy-all-merges",
       "http": 200,
-      "live": "0.41.2-mastodon-probe-host",
+      "live": "0.42.0-deploy-all-merges",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-fleet-control"
