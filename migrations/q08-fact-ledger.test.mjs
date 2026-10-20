@@ -23,6 +23,7 @@
 import { DatabaseSync } from "node:sqlite";
 import { readFileSync } from "node:fs";
 import { execFileSync } from "node:child_process";
+import { fileURLToPath } from "node:url";
 const here = (f) => new URL("./" + f, import.meta.url);
 const sql = readFileSync(process.env.Q08_FACT_LEDGER_SQL || here("2026-10-19-q08-fact-ledger.sql"), "utf8");
 const worker = readFileSync(new URL("../q08-signal-engine/worker.js", import.meta.url), "utf8");
@@ -31,7 +32,7 @@ const ok = (c, m, d) => { if (c) pass++; else { fail++; console.log("FAIL " + m 
 const WRITE_KW = ["insert into", "update ", "delete from", "drop table", "drop index", "alter table", "create table", "create index", "create trigger", "attach ", "detach ", "pragma ", "replace into", "vacuum"];
 
 // The live deployment_history_version_monotonic_ins text, from the repo's own generator (identical to qnfo-audit sqlite_master on 2026-10-20).
-const MONOTONIC_TRIGGER = execFileSync("python3", ["-I", new URL("../scripts/test_version_monotonic_trigger.py", import.meta.url).pathname, "--emit"], { encoding: "utf8" }).split("\n").find((l) => l.startsWith("CREATE TRIGGER deployment_history_version_monotonic_ins"));
+const MONOTONIC_TRIGGER = execFileSync("python3", ["-I", fileURLToPath(new URL("../scripts/test_version_monotonic_trigger.py", import.meta.url)), "--emit"], { encoding: "utf8" }).split("\n").find((l) => l.startsWith("CREATE TRIGGER deployment_history_version_monotonic_ins"));
 const SCHEMA = `
 CREATE TABLE control_registry (
   control TEXT PRIMARY KEY,

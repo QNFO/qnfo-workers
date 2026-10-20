@@ -124,7 +124,7 @@ def version_of(src):
 def deploy_one(acct, token, worker, path, call=cf, read=None):
     read = read or read_file
     wdir = os.path.dirname(path) or "."
-    toml = os.path.join(wdir, "wrangler.toml")
+    toml = wdir.replace("\\", "/").rstrip("/") + "/wrangler.toml"  # forward slashes: the selftest keys and the repository paths are posix on every OS
     try:
         if "[[containers]]" in read(toml):
             return {"worker": worker, "ok": True, "skipped": "container worker (script-level config; deploy-code-orchestrator.yml owns it)"}
