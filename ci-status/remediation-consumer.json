@@ -1,15 +1,39 @@
 {
  "ok": true,
  "marker": "REMEDIATION-CONSUMER-1",
- "verifier": "remediation-consumer@8881ecc00f28",
- "due": 4,
- "pass": 2,
- "fail": 0,
+ "verifier": "remediation-consumer@fcd1fd038eb1",
+ "due": 19,
+ "pass": 13,
+ "fail": 4,
  "skipped": 2,
  "deferred": 2,
  "contracts": [
   {
-   "class": "fm-relapse-window-close-anchor",
+   "class": "issue-100329",
+   "issue_id": 100329,
+   "verdict": "fail",
+   "expected": "ok",
+   "observed": "missing-marker:qnfo-research-exec/worker.js",
+   "written": true
+  },
+  {
+   "class": "issue-100330",
+   "issue_id": 100330,
+   "verdict": "fail",
+   "expected": "ok",
+   "observed": "missing-marker:scripts/apply_migrations.py",
+   "written": true
+  },
+  {
+   "class": "issue-100331",
+   "issue_id": 100331,
+   "verdict": "fail",
+   "expected": "ok",
+   "observed": "present-marker:qnfo-fleet-dashboard/area-pages.test.mjs",
+   "written": true
+  },
+  {
+   "class": "fm-probe-line-unparsed",
    "issue_id": null,
    "verdict": "pass",
    "expected": "0",
@@ -17,15 +41,103 @@
    "written": true
   },
   {
-   "class": "goal-PUBLISH-MIRROR-CHECK-1",
+   "class": "fm-companion-gate-discards-repairable",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "1",
+   "observed": "1",
+   "written": true
+  },
+  {
+   "class": "issue-100064",
+   "issue_id": 100064,
+   "verdict": "deferred",
+   "expected": "ok",
+   "observed": "pending: no two-piece recovery with no stall between the pieces recorded for 100064",
+   "reason": "the probe cannot judge yet: pending: no two-piece recovery with no stall between the pieces recorded for 100064"
+  },
+  {
+   "class": "fm-cf-obs-bridge-refile-loop",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "0",
+   "observed": "0",
+   "written": true
+  },
+  {
+   "class": "fm-byok-provider-counted-unified",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "1",
+   "observed": "1",
+   "written": true
+  },
+  {
+   "class": "fm-companion-stall-closes-on-one-piece",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "0",
+   "observed": "0",
+   "written": true
+  },
+  {
+   "class": "fm-producer-lateness-in-hours",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "0",
+   "observed": "0",
+   "written": true
+  },
+  {
+   "class": "fm-merge-not-deployed",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "0",
+   "observed": "0",
+   "written": true
+  },
+  {
+   "class": "fm-social-channel-drain-silent",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "1",
+   "observed": "1",
+   "written": true
+  },
+  {
+   "class": "fm-pr-null-mergeable-silent-skip",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "1",
+   "observed": "1",
+   "written": true
+  },
+  {
+   "class": "fm-verify-comparator-stricter-than-stated",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "1",
+   "observed": "1",
+   "written": true
+  },
+  {
+   "class": "goal-TP-5-MEASURE-TO-ACT-1",
    "issue_id": null,
    "verdict": "deferred",
    "expected": "ok",
-   "observed": "pending: code tasks that failed on mirror-guard in 7 days: 2",
-   "reason": "the probe cannot judge yet: pending: code tasks that failed on mirror-guard in 7 days: 2"
+   "observed": "pending: breach_code_task_pct 6.3, needs-machine-probe contracts 34",
+   "reason": "the probe cannot judge yet: pending: breach_code_task_pct 6.3, needs-machine-probe contracts 34"
   },
   {
-   "class": "plane-living-paper-fresh",
+   "class": "goal-TWIN-FRONTIER-MODEL-1",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "1",
+   "observed": "1",
+   "written": true
+  },
+  {
+   "class": "goal-PRG-QNFO-INFRA-DEFECTS-0",
    "issue_id": null,
    "verdict": "pass",
    "expected": "ok",
@@ -33,12 +145,20 @@
    "written": true
   },
   {
-   "class": "research-terminal-a1387f26",
-   "issue_id": 100326,
-   "verdict": "deferred",
-   "expected": "resolved",
-   "observed": "pending",
-   "reason": "the probe cannot judge yet: pending"
+   "class": "issue-100327",
+   "issue_id": 100327,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "issue-100332",
+   "issue_id": 100332,
+   "verdict": "fail",
+   "expected": "ok",
+   "observed": "missing-marker",
+   "written": true
   }
  ],
  "trusted_transports": [
@@ -64,60 +184,14 @@
   "http",
   "runner-https"
  ],
+ "https": 1,
  "budget_exhausted": false,
- "runtime_verified_share_24h": 10,
+ "runtime_verified_share_24h": 10.1,
  "host_census": {
   "skipped": "ran within 6h"
  },
  "fleet_journeys": {
-  "at": "2026-10-20T09:07:41Z",
-  "journeys": 6,
-  "failing": [
-   "loop-heartbeats"
-  ],
-  "issues": {
-   "loop-heartbeats": "updated 2679"
-  },
-  "results": [
-   {
-    "journey": "deploy-coherence",
-    "ok": true,
-    "ms": 10839,
-    "failed": []
-   },
-   {
-    "journey": "binding-census",
-    "ok": true,
-    "ms": 3796,
-    "failed": []
-   },
-   {
-    "journey": "lock-roundtrip",
-    "ok": true,
-    "ms": 2087,
-    "failed": []
-   },
-   {
-    "journey": "papers-path",
-    "ok": true,
-    "ms": 1122,
-    "failed": []
-   },
-   {
-    "journey": "loop-heartbeats",
-    "ok": false,
-    "ms": 6774,
-    "failed": [
-     "dashboard state: no error-level issues"
-    ]
-   },
-   {
-    "journey": "ai-router",
-    "ok": true,
-    "ms": 512,
-    "failed": []
-   }
-  ]
+  "skipped": "ran within 50 min"
  },
  "cf_token_watch": {
   "ok": 1,
@@ -131,8 +205,8 @@
   "failed": [],
   "metric": 0
  },
- "spent_ms": 56838,
- "head": "8881ecc00f2875e6ef75feb4d5227c3022fce173",
+ "spent_ms": 15504,
+ "head": "fcd1fd038eb117169d60e971c537be71bd779b33",
  "job_status": "success",
- "ts": "2026-10-20T09:13:04Z"
+ "ts": "2026-10-20T09:34:35Z"
 }
