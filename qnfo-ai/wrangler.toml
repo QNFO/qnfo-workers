@@ -112,3 +112,11 @@ bucket_name = "qnfo-media"
 [[worker_loaders]]
 binding = "LOADER"
 
+
+# OWNER-RW-ANY-LLM-1 (5.38.0): service binding to qnfo-ops so a key qnfo-ops accepts is accepted here. qnfo-ops authenticates
+# this binding by ctx.props.caller and answers /internal/verify-key with yes or no only; no secret is copied between workers.
+[[services]]
+binding = "OPS"
+service = "qnfo-ops"
+environment = "production"
+props = { caller = "qnfo-ai" }
