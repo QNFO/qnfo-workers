@@ -41,11 +41,16 @@ def main():
     except Exception as e:
         return fail("unreadable report: %s" % e)
     print("checked=%(repos)s in_sync=%(in_sync)s (before repair %(pre)s) drifted=%(drifted)s "
-          "repaired=%(repaired)s errors=%(errors)s waived=%(waived)s" % {
+          "repaired=%(repaired)s errors=%(errors)s recovered=%(recovered)s waived=%(waived)s" % {
               "repos": summary.get("repos"), "in_sync": summary.get("in_sync"),
               "pre": summary.get("in_sync_before_repair", summary.get("in_sync")),
               "drifted": summary.get("drifted"), "repaired": summary.get("repaired"),
-              "errors": summary.get("errors"), "waived": summary.get("waived")})
+              "errors": summary.get("errors"), "recovered": summary.get("read_errors_recovered", 0),
+              "waived": summary.get("waived")})
+    if summary.get("read_errors_recovered"):
+        # READ-ERROR-RECOVERED-1: a read error the same run repaired and verified in sync does not fail the run, and is never silent.
+        print("::notice title=artifacts-sync::read errors recovered by a same-run repair (%s): %s"
+              % (summary.get("read_errors_recovered"), json.dumps(summary.get("recovered_sample"))[:300]))
     errors = summary.get("errors") or 0
     if errors:
         return fail("read failures (%s): %s" % (errors, json.dumps(summary.get("error_sample"))[:400]))

@@ -40,7 +40,7 @@ import { createHash } from "node:crypto";
 import { gzipSync } from "node:zlib";
 import { fileURLToPath } from "node:url";
 
-export const VERSION = "1.0.2"; // 1.0.2 FLEET-GRAPH-DELETE-ADAPT-1: a DELETE D1 still refuses for expression depth is retried with half the terms; 1.0.1 FLEET-GRAPH-DELETE-DEPTH-1: at most 80 OR terms per DELETE (D1 expression depth 100)
+export const VERSION = "1.0.3"; // release notes sit next to their code and in git history (VERSION-LINE-NOTES-1): DELETE-DEPTH-1 and DELETE-ADAPT-1 at writeScope, OPTIONAL-ENV-1 at addWorkerCode
 export const GRAPH_DB_ID = "a1954b92-d681-4d02-b1f6-f9a2eb4c265d"; // qnfo-graph (also in qnfo-memory-mcp/wrangler.toml)
 export const AUDIT_DB_ID = "35e2e573-92f3-46ac-83c6-22f6429fc5e5"; // qnfo-audit
 export const SNAPSHOT_BUCKET = "qnfo-backups";
@@ -276,7 +276,7 @@ export function addWorkerCode(g, worker, src, path, ctx) {
   const wid = "worker:" + worker;
   let ast;
   try { ast = acorn.parse(src, { ecmaVersion: "latest", sourceType: "module", allowHashBang: true, locations: true }); }
-  catch (e) { g.bump("parse_errors"); g.node(wid, "worker", worker, { attrs: { parse_error: String(e.message).slice(0, 200) } }); return { envReads: new Map(), computedEnv: false }; }
+  catch (e) { g.bump("parse_errors"); g.node(wid, "worker", worker, { attrs: { parse_error: String(e.message).slice(0, 200) } }); return { envReads: new Map(), computedEnv: false, optionalEnv: new Set() }; }
   const lineOf = (n) => (n && n.loc ? n.loc.start.line : null);
   // 1. Top-level units.
   const units = []; // {name, node, line, kind}
@@ -320,6 +320,14 @@ export function addWorkerCode(g, worker, src, path, ctx) {
   for (const u of units) { const id = unitId(u); g.node(id, u.kind === "handler" ? "handler" : "function", u.name, { worker, path, line: u.line, attrs: { kind: u.kind } }); g.edge(wid, "contains", id, { path }); }
   // 3. Body pass.
   const envReads = new Map(); // NAME -> first line
+  // OPTIONAL-ENV-1: a name is optional only when EVERY recorded read of it supplies its own fallback. noteRead counts each read and
+  // each defaulted read; a single bare read (env.X alone, env.X && f(), typeof env.X, an assignment) keeps the name a real finding.
+  const envReadCount = new Map(), envDefaultedCount = new Map();
+  const noteRead = (name, line, defaulted) => {
+    if (!envReads.has(name)) envReads.set(name, line);
+    envReadCount.set(name, (envReadCount.get(name) || 0) + 1);
+    if (defaulted) envDefaultedCount.set(name, (envDefaultedCount.get(name) || 0) + 1);
+  };
   let computedEnv = false;
   const declaredNames = declared;
   const ENV_OBJ = new Set(["env", "ENV", "environment", "bindings"]);
@@ -349,19 +357,40 @@ export function addWorkerCode(g, worker, src, path, ctx) {
       return null;
     };
     const sqlSeen = [];
+    // OPTIONAL-ENV-1 pre-pass (acorn-walk's `full` visits children before parents, so a read cannot see its parent): the left side of
+    // `a ?? d` / `a || d` is a defaulted read when d is a real fallback, including through a guard (`(env && env.X) || d`) and a
+    // chain (`env.A ?? env.B ?? "x"` defaults both). A fallback that is itself an env read (`env.A ?? env.B`) is not one, and
+    // neither is the undefined identifier. A coercion wrapper (`Number(env.X) || 5`) is not recognised: such a name stays a finding.
+    const envLike = (x) => { if (x && x.type === "ChainExpression") x = x.expression; return !!x && x.type === "MemberExpression" && isEnvObject(x.object); };
+    const isLogical = (x) => !!x && x.type === "LogicalExpression";
+    const isFallbackOp = (x) => isLogical(x) && (x.operator === "??" || x.operator === "||");
+    const isFallback = (x) => {
+      if (!x) return false;
+      if (isLogical(x)) return isFallback(x.right);
+      if (envLike(x)) return false;
+      return !(x.type === "Identifier" && x.name === "undefined");
+    };
+    const defaulted = new Set();
+    const markDefaulted = (x) => {
+      if (!x) return;
+      defaulted.add(x);
+      if (x.type === "ChainExpression") defaulted.add(x.expression);
+      if (isLogical(x)) { markDefaulted(x.left); markDefaulted(x.right); }
+    };
+    walk.full(u.node, (n) => { if (isFallbackOp(n) && isFallback(n.right)) markDefaulted(n.left); });
     walk.full(u.node, (n) => {
       if (n.type === "VariableDeclarator" && n.init) {
         const b = bindingOf(n.init);
         if (n.id.type === "Identifier" && b) aliases.set(n.id.name, b);
         if (n.id.type === "Identifier" && (n.init.type === "Literal" || n.init.type === "TemplateLiteral")) { const v = strValue(n.init); if (v !== null) localConsts.set(n.id.name, v); }
-        if (n.id.type === "ObjectPattern" && isEnvObject(n.init.type === "ChainExpression" ? n.init.expression : n.init)) for (const p of n.id.properties) if (p.type === "Property" && !p.computed && p.key.type === "Identifier") { const nm = p.key.name; if (!envReads.has(nm)) envReads.set(nm, lineOf(p)); if (p.value.type === "Identifier") aliases.set(p.value.name, nm); g.edge(uid, "uses_binding", "binding:" + worker + "." + nm, { path }); }
+        if (n.id.type === "ObjectPattern" && isEnvObject(n.init.type === "ChainExpression" ? n.init.expression : n.init)) for (const p of n.id.properties) if (p.type === "Property" && !p.computed && p.key.type === "Identifier") { const nm = p.key.name; noteRead(nm, lineOf(p), p.value.type === "AssignmentPattern" && isFallback(p.value.right)); if (p.value.type === "Identifier") aliases.set(p.value.name, nm); g.edge(uid, "uses_binding", "binding:" + worker + "." + nm, { path }); }
       }
       if (n.type === "MemberExpression") {
         if (n.computed && isEnvObject(n.object) && !(n.property.type === "Literal")) computedEnv = true;
         if (!n.computed && n.property.type === "Identifier" && /^[A-Z][A-Z0-9_]*$/.test(n.property.name)) {
           const name = n.property.name;
           const strict = (n.object.type === "Identifier" && n.object.name === "env") || (n.object.type === "MemberExpression" && !n.object.computed && n.object.object.type === "ThisExpression" && n.object.property.name === "env");
-          if (strict && !envReads.has(name)) envReads.set(name, lineOf(n));
+          if (strict) noteRead(name, lineOf(n), defaulted.has(n));
           if (strict || (isEnvObject(n.object) || declaredNames.has(name)) && bindingOf(n) === name) {
             g.edge(uid, "uses_binding", "binding:" + worker + "." + name, { path });
             if (declared.get(name) === "d1") usedD1.add(name);
@@ -427,7 +456,22 @@ export function addWorkerCode(g, worker, src, path, ctx) {
       g.bump("sql_statements");
     }
   }
-  return { envReads, computedEnv };
+  const optionalEnv = new Set();
+  for (const [name, count] of envReadCount) if (count > 0 && envDefaultedCount.get(name) === count && !isCredentialLikeEnvName(name)) optionalEnv.add(name);
+  return { envReads, computedEnv, optionalEnv };
+}
+
+// OPTIONAL-ENV-1 (issue 100084): the rule that demotes an undeclared env name from warn `env-undeclared` to info `env-optional-unset`.
+//   1. EVERY recorded read of the name supplies its own fallback: `env.X ?? d`, `env.X || d`, `(env && env.X) || d`, or the destructure
+//      default `const { X = d } = env`, where d is not itself an env read. One bare read (`env.X`, `if (env.X)`, `typeof env.X`, an
+//      assignment, a coercion wrapper such as `Number(env.X) || 5`) keeps the name a finding.
+//   2. The name is not credential-shaped. A defaulted read of a token, key, secret or password (`env.EVENTS_TOKEN || ""`) silently
+//      turns authentication or a call off when the secret is missing; that is exactly what a finding exists to show, so such a name
+//      stays a warn whatever its fallback.
+// The demoted finding is not dropped: it stays listed (info) with the line of its first read.
+export const CREDENTIAL_SEGMENTS = new Set(["TOKEN", "TOKENS", "KEY", "KEYS", "SECRET", "SECRETS", "PASS", "PASSWORD", "PASSWD", "PWD", "PAT", "CREDENTIAL", "CREDENTIALS", "COOKIE", "SALT", "PRIVATE", "CERT", "BEARER", "HMAC", "SIGNATURE"]);
+export function isCredentialLikeEnvName(name) {
+  return String(name).toUpperCase().split(/[^A-Z0-9]+/).some((seg) => CREDENTIAL_SEGMENTS.has(seg));
 }
 
 export function addMigrations(g, root) {
@@ -917,7 +961,7 @@ export async function buildCode(root, deps, live) {
     }
     const created = new Set(codeSql.filter((s) => s.worker === w && s.rel === "creates").map((s) => s.db + "." + s.table.toLowerCase()));
     for (const s of codeSql) if (s.worker === w && created.has(s.db + "." + s.table.toLowerCase())) s.createdInCode = true;
-    codeWorkers.set(w, { declared: wr.declared, crons: wr.crons, envReads: r.envReads, computedEnv: r.computedEnv, bindingUses });
+    codeWorkers.set(w, { declared: wr.declared, crons: wr.crons, envReads: r.envReads, computedEnv: r.computedEnv, optionalEnv: r.optionalEnv, bindingUses });
   }
   addMigrations(g, root);
   addWorkflows(g, root, liveTables);
@@ -1093,6 +1137,15 @@ export async function selftest(log = console.log) {
   const ids = new Set(f.map((x) => x.id));
   for (const want of ["env-undeclared:w1.NOPE", "binding-declared-not-live:w1.GONE", "binding-live-not-declared:w1.EXTRA", "cron-drift:w1", "untracked-worker:w2", "undeployed-dir:w9", "resource-orphan:d1:lonely", "sql-table-missing:w1:db1.missing_t", "trigger-depth:db1", "binding-unused:w1.EXTRA"]) ok(ids.has(want), "finding " + want);
   ok(!ids.has("env-undeclared:w1.S") && !ids.has("env-undeclared:w1.DB") && !ids.has("sql-table-missing:w1:db1.t1"), "no false findings for a secret, a binding or an existing table");
+  // OPTIONAL-ENV-1: a name the extractor marked optional is an info env-optional-unset (still listed), never a warn; an unmarked one stays a warn
+  {
+    const cwo = new Map([["w1", { declared: new Map(), crons: [], envReads: new Map([["OPT_KNOB", 5], ["REAL_MISSING", 6]]), computedEnv: false, optionalEnv: new Set(["OPT_KNOB"]), bindingUses: new Set() }], ["w3", { declared: new Map(), crons: [], envReads: new Map([["NO_SET_FIELD", 2]]), computedEnv: false, bindingUses: new Set() }]]);
+    const fo = new Map(computeFindings({ codeWorkers: cwo, snap: { workers: [{ name: "w1", bindings: [], crons: [] }, { name: "w3", bindings: [], crons: [] }], d1: [], kv: [], r2: [], queues: [], vectorize: [] }, triggersByDb: {}, codeSql: null, liveTables: null }).map((x) => [x.id, x]));
+    ok(fo.has("env-optional-unset:w1.OPT_KNOB") && fo.get("env-optional-unset:w1.OPT_KNOB").severity === "info" && !fo.has("env-undeclared:w1.OPT_KNOB") && /line 5/.test(fo.get("env-optional-unset:w1.OPT_KNOB").detail), "an optional undeclared name is an info env-optional-unset that keeps its line");
+    ok(fo.get("env-undeclared:w1.REAL_MISSING") && fo.get("env-undeclared:w1.REAL_MISSING").severity === "warn", "an undeclared name the extractor did not mark optional stays a warn");
+    ok(fo.get("env-undeclared:w3.NO_SET_FIELD") && fo.get("env-undeclared:w3.NO_SET_FIELD").severity === "warn", "a worker entry with no optionalEnv at all (older shape) keeps every undeclared name a warn");
+    ok(["EVENTS_TOKEN", "OPS_KEY", "API_KEY", "GMAIL_PASS", "BSKY_APP_PASS", "MS_CLIENT_SECRET", "QNFO_GH_PAT", "x.token"].every(isCredentialLikeEnvName) && ["OPS_PUBLIC_READ", "PLAN_MODEL", "MS_TENANT", "KEYWORDS", "MONKEY_MODE", "OWNER_AUTH_MODE", "QUALITY_MIN_LEN"].every((n) => !isCredentialLikeEnvName(n)), "credential-shaped names are recognised by whole segment (KEYWORDS and MONKEY are not keys)");
+  }
   // AST part
   let deps = null;
   try { deps = { acorn: await import("acorn"), walk: await import("acorn-walk") }; } catch (e) { log("skip AST cases: acorn/acorn-walk not installed (the fleet-graph workflow installs them)"); }
@@ -1120,6 +1173,27 @@ export async function selftest(log = console.log) {
     ok(has("fn:w1#default.fetch", "uses_binding", "binding:w1.OPS"), "service binding use");
     ok(has("fn:w1#steps", "refs", "fn:w1#helper"), "function reference");
     ok(r.envReads.has("MISSING_THING") && r.envReads.has("AUDIT"), "env reads collected");
+    ok(r.optionalEnv instanceof Set && !r.optionalEnv.has("MISSING_THING") && !r.optionalEnv.has("AUDIT"), "a bare read is never optional");
+    // OPTIONAL-ENV-1: which names the extractor calls optional. Every read of a name must carry its own fallback.
+    const g2 = new Graph("code");
+    const osrc = [
+      "async function a(env) { const n = env.OPT_NULLISH ?? 5; const s = env.OPT_OR || 'x'; const t = String((env && env.OPT_GUARDED) || 'd'); const c = env?.OPT_CHAIN ?? 2; return [n, s, t, c]; }",
+      "async function b(env) { const { OPT_DESTRUCT = 3, BARE_DESTRUCT } = env; return [OPT_DESTRUCT, BARE_DESTRUCT]; }",
+      "async function c(env) { return env.MIXED ?? 1; }",
+      "async function d(env) { return env.MIXED; }",
+      "async function e(env) { return [env.CHAIN_A ?? env.CHAIN_B, env.CHAIN_C ?? env.CHAIN_D ?? 'z']; }",
+      "async function f(env) { return [env.SECRET_TOKEN || '', env.PLAN_KEY ?? '', env.UNDEF_FALLBACK ?? undefined, Number(env.COERCED) || 5, typeof env.TYPEOF_ONLY, env.AND_ONLY && 1]; }",
+      "async function h(env) { return env.TWICE_A ?? 1; } async function i(env) { return (env.TWICE_A || 'q').length; }",
+      "var worker_default = { async fetch(req, env) { return new Response(String(env.FLAG_ON || '') + (env.OPTIONAL_URL ?? '')); } };",
+      "export { worker_default as default };",
+    ].join("\n");
+    const ro = addWorkerCode(g2, "w2", osrc, "w2/worker.js", { acorn: deps.acorn, walk: deps.walk, declared: new Map(), hosts: hostIndex(["w2"], []), d1ByBinding: new Map(), liveTables: null });
+    const opt = (n) => ro.optionalEnv.has(n);
+    ok(["OPT_NULLISH", "OPT_OR", "OPT_GUARDED", "OPT_CHAIN", "OPT_DESTRUCT", "TWICE_A", "FLAG_ON", "OPTIONAL_URL", "CHAIN_C", "CHAIN_D"].every(opt), "?? , ||, a guarded (env && env.X) ||, a chained env?.X ??, a destructure default and a fallback chain are optional reads", [...ro.optionalEnv]);
+    ok(!opt("MIXED") && !opt("BARE_DESTRUCT"), "one bare read among defaulted reads keeps the name a finding (every read must carry a fallback)");
+    ok(!opt("CHAIN_A") && !opt("CHAIN_B"), "env.A ?? env.B is not a defaulted read: the fallback is itself an env read");
+    ok(!opt("SECRET_TOKEN") && !opt("PLAN_KEY") && ro.envReads.has("SECRET_TOKEN") && ro.envReads.has("PLAN_KEY"), "a credential-shaped name stays a finding whatever its fallback");
+    ok(!opt("UNDEF_FALLBACK") && !opt("COERCED") && !opt("TYPEOF_ONLY") && !opt("AND_ONLY"), "an undefined fallback, a coercion wrapper, typeof and a bare && test are not fallbacks");
   }
   log(fail ? fail + " selftest case(s) failed" : "fleet_graph selftest ok");
   return fail;

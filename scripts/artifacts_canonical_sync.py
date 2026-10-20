@@ -165,7 +165,9 @@ def github_meta(ctx, owner, repo):
     it falls back to the default branch -- so a ledger that says "main" silently compares GitHub's
     default-branch HEAD against Artifacts' main HEAD and reports drift that does not exist.
     """
-    st, j = _call(GH + "/repos/" + owner + "/" + repo, ctx.gh_token)
+    # A read, so a transient 5xx or 429 is retried like the two head reads (WORKFLOW-SCRIPT-FIXES-1): a single
+    # github_meta_http_503 here would otherwise count as a read error and fail the run.
+    st, j = _call_retry(GH + "/repos/" + owner + "/" + repo, ctx.gh_token)
     if st == 200:
         return {"default_branch": j.get("default_branch"), "archived": bool(j.get("archived"))}, None
     if st == 404:
@@ -329,7 +331,7 @@ def main():
     # A waived repo is excluded from repair AND from the error count: its reason is recorded, so
     # counting it as a failure means the meter can never reach zero. Measured 2026-10-18: the
     # waived 76MB repo alone consumed a 900s clone timeout, 90% of a 1000s run.
-    errored = [r for r in rows if r["error"] and not r.get("waived")]
+    read_errors = [r for r in rows if r["error"] and not r.get("waived")]
 
     repaired, repair_attempts = [], 0
     if args.repair:
@@ -361,6 +363,14 @@ def main():
                 if again["in_sync"]:
                     repaired.append(r)
 
+    # READ-ERROR-RECOVERED-1 (WORKFLOW-SCRIPT-FIXES-1, run 39371123545): `errored` used to be fixed before the repair loop, so
+    # an `artifacts_*` read error (one transient artifacts_log_http_500) that the same run repaired and re-probed in sync still
+    # failed the assert although the replica had converged. A read error stays an error unless its repo was repaired AND
+    # verified in sync after the repair; an unrepaired, unverified or `github_*` error still fails, and the recovered ones are
+    # counted and listed, never dropped.
+    recovered = [r for r in read_errors if r.get("verified_in_sync")]
+    errored = [r for r in read_errors if not r.get("verified_in_sync")]
+
     # A waived repo is not convergable and not silently green either: it is reported separately
     # with the reason recorded in artifact_repos.waived_reason (rwnq8/Friend: one 76MB blob against
     # Artifacts' 32MB per-blob hard limit, so no honest mirror can contain it).
@@ -380,6 +390,9 @@ def main():
         "in_sync_before_repair": len(in_sync),
         "drifted": len(remaining),
         "errors": len(errored), "repaired": len(repaired), "waived": len(waived),
+        "read_errors_recovered": len(recovered),
+        "recovered_sample": [{"repo": r["namespace"] + "/" + r["name"], "error": r["error"]}
+                             for r in recovered[:10]],
         "waived_detail": [{"repo": r["namespace"] + "/" + r["name"], "reason": r["waived"]}
                           for r in waived],
         "namespaces": namespaces,
@@ -397,7 +410,8 @@ def main():
     d1(ctx, "INSERT INTO artifact_sync_runs (started_at, finished_at, checked, in_sync, drifted, "
             "repaired, failed, detail) VALUES (datetime('now'), datetime('now'), ?, ?, ?, ?, ?, ?)",
        [len(rows), len(in_sync), len(remaining), len(repaired), len(errored),
-        json.dumps({"duration_s": summary["duration_s"], "repair_attempts": repair_attempts})])
+        json.dumps({"duration_s": summary["duration_s"], "repair_attempts": repair_attempts,
+                    "read_errors_recovered": len(recovered)})])
 
     if args.json_out:
         with open(args.json_out, "w", encoding="utf-8") as f:

@@ -12,7 +12,9 @@
 //                              and the fleet's apps bypass), then read /rules/branches/main back to prove it.
 //          ruleset-main-revert delete the ruleset named `main-gate`, and only that name (dry by default).
 //          secret-scanning     enable secret scanning, push protection, validity checks and non-provider patterns, one PATCH per
-//                              feature so a refusal of one never hides the others; the answer of each is recorded.
+//                              feature so a refusal of one never hides the others; the answer of each is recorded. The run is ok when
+//                              the two core protections (secret scanning, push protection) are enabled; the plan-gated extras that stay
+//                              disabled are listed under limitations (SECRET-SCANNING-CORE-OK-1).
 // WHY    No session holds repository Administration rights (a session's GET /branches/main/protection answers 403 "Resource not
 //        accessible by integration", 2026-10-19), main has a ruleset that only blocks deletion and force pushes, and every concurrent
 //        session clobber in this repository traces to unreviewed direct pushes. The steward's token has administration rights
@@ -34,6 +36,7 @@ export const CONFIG_PATH = "scripts/github-main-ruleset.json";
 const REPO_RE = /^\/repos\/QNFO\/qnfo-workers(\/|$|\?)/;
 const ORG_RE = /^\/(orgs\/QNFO\/installations(\?|$)|apps\/[a-z0-9-]+$)/;
 export const SECRET_FEATURES = ["secret_scanning", "secret_scanning_push_protection", "secret_scanning_validity_checks", "secret_scanning_non_provider_patterns"];
+export const SECRET_CORE_FEATURES = ["secret_scanning", "secret_scanning_push_protection"];
 
 // ---- API client: one token, an allowlist of paths, every answer kept verbatim ----
 export function makeApi(fetchImpl, token) {
@@ -155,6 +158,9 @@ export function workflowPushPaths(root) {
     const lines = readFileSync(join(dir, f), "utf8").split("\n");
     for (let i = 0; i < lines.length; i++) {
       const line = lines[i];
+      // A YAML comment line is prose about a push, not a push path (apply-unmangle-worker-js.yml:13 and fleet-autodeploy.yml:229
+      // quoted `git push` in comments and were listed as two of the 18 problems the live ruleset action refuses on).
+      if (/^\s*#/.test(line)) continue;
       if (/\bgit\s+push\b/.test(line) && /\bmain\b/.test(line)) {
         out.push({ workflow: f, line: i + 1, snippet: line.trim() });
       }
@@ -176,15 +182,22 @@ async function seenContexts(api, repo, perPr = 8) {
 }
 
 // An app's numeric id: the public GET /apps/<slug> first (no credential needed), then the org's installations (needs an org-admin credential).
+// GitHub's own Actions app (id 15368, slug github-actions) is refused as a ruleset bypass actor: POST /rulesets answered 422 "Actor GitHub
+// Actions integration must be part of the ruleset source or owner organization" (run 39269046255, 2026-10-19), while the dry run at the same
+// commit passed. It is tested BEFORE the explicit actor_id shortcut, so a configured id is refused here, in dry and live alike.
+export const GITHUB_ACTIONS_APP_ID = 15368;
+export function isActionsApp(i) {
+  return Number(i && i.actor_id) === GITHUB_ACTIONS_APP_ID || (i && (i.slug === "github-actions" || i.slug === "github-actions[bot]"));
+}
 async function resolveIntegrations(api, cfg) {
-  const out = [], unresolved = [];
+  const out = [], unresolved = [], ineligible = [];
   let listing = null;
   for (const i of cfg.bypass.integrations) {
-    if (i.actor_id) { out.push({ slug: i.slug, actor_id: i.actor_id }); continue; }
-    if (i.slug === "github-actions" || i.slug === "github-actions[bot]") {
-      unresolved.push(i.slug + " is not a bypass-eligible actor (move direct pushes to a bypass-listed app identity): ruleset refused");
+    if (isActionsApp(i)) {
+      ineligible.push((i.slug || "github-actions") + " (actor_id " + (i.actor_id || GITHUB_ACTIONS_APP_ID) + ")");
       continue;
     }
+    if (i.actor_id) { out.push({ slug: i.slug, actor_id: i.actor_id }); continue; }
     const pub = await api.call("GET", "/apps/" + i.slug);
     if (pub.ok && pub.body && pub.body.id && pub.body.slug === i.slug) { out.push({ slug: i.slug, actor_id: pub.body.id }); continue; }
     if (!listing) listing = await api.call("GET", "/orgs/QNFO/installations?per_page=100");
@@ -192,7 +205,7 @@ async function resolveIntegrations(api, cfg) {
     if (hit && hit.app_id) out.push({ slug: i.slug, actor_id: hit.app_id });
     else unresolved.push(i.slug + " (GET /apps/" + i.slug + " answered " + pub.status + (pub.message ? " " + pub.message : "") + "; " + (listing.ok ? "not among the org installations" : "installations answered " + listing.status + ": " + listing.message) + ")");
   }
-  return { integrations: out, unresolved };
+  return { integrations: out, unresolved, ineligible };
 }
 
 // ---- actions ----
@@ -248,7 +261,8 @@ export async function actionRulesetMain(api, cfg, root, mode) {
   const pushPaths = workflowPushPaths(root);
   r.workflow_push_paths = pushPaths;
   for (const p of pushPaths) r.problems.push("workflow " + p.workflow + " line " + p.line + " pushes to main as github-actions[bot]; move this path to a bypass-listed identity: " + p.snippet);
-  const { integrations, unresolved } = await resolveIntegrations(api, cfg);
+  const { integrations, unresolved, ineligible } = await resolveIntegrations(api, cfg);
+  for (const x of ineligible) r.problems.push("bypass actor " + x + " is refused by GitHub (POST rulesets answers 422 'Actor GitHub Actions integration must be part of the ruleset source or owner organization'): remove it from " + CONFIG_PATH + " and move its direct pushes to a bypass-listed identity");
   for (const u of unresolved) r.problems.push("cannot resolve the app " + u + ": a ruleset without it would lock that app out of main");
   const cs = await seenContexts(api, repo);
   r.contexts_seen = cs.seen;
@@ -313,7 +327,14 @@ export async function actionSecretScanning(api, cfg, mode) {
     const sa2 = (after.body && after.body.security_and_analysis) || {};
     for (const f of SECRET_FEATURES) { r.features[f].after = sa2[f] ? sa2[f].status : "unknown"; if (r.features[f].after !== "enabled") r.features[f].limitation = (r.features[f].patch && r.features[f].patch.message) || "still " + r.features[f].after; }
     r.limitations = SECRET_FEATURES.filter((f) => r.features[f].after !== "enabled").map((f) => f + ": " + r.features[f].limitation);
-    r.ok = r.limitations.length === 0;
+    // SECRET-SCANNING-CORE-OK-1: the run's verdict is the two core protections. validity checks and non-provider patterns accept the PATCH
+    // (200) and stay disabled on this plan (run 39269201605, 2026-10-19; a plan limitation, issue 2927's close note), so they are
+    // reported under `limitations` and `optional_limitations` and no longer turn a run red in which both core protections are enabled.
+    r.core_features = SECRET_CORE_FEATURES;
+    r.core_enabled = SECRET_CORE_FEATURES.every((f) => r.features[f].after === "enabled");
+    r.optional_limitations = SECRET_FEATURES.filter((f) => !SECRET_CORE_FEATURES.includes(f) && r.features[f].after !== "enabled").map((f) => f + ": " + r.features[f].limitation);
+    r.ok = r.core_enabled;
+    if (r.core_enabled && r.limitations.length) r.note = "core secret scanning and push protection are enabled; " + r.optional_limitations.length + " optional feature(s) stay disabled (plan-gated, recorded under limitations)";
   }
   return r;
 }
