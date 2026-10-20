@@ -16,21 +16,6 @@ import os
 import sys
 
 
-def fail(msg):
-    """ASSERT-ANNOTATION-1 (WORKFLOW-FAILURE-AUDIT-1): the cause goes into an error annotation and the step summary, which are readable
-    without signing in to GitHub; before this, run 285 showed only 'exit code 1' and the error sample lived in the sync.json artifact."""
-    print(msg)
-    print("::error title=artifacts-sync assert::" + msg.replace("\n", " ")[:500])
-    summary = os.environ.get("GITHUB_STEP_SUMMARY")
-    if summary:
-        try:
-            with open(summary, "a", encoding="utf-8") as fh:
-                fh.write("### artifacts-sync assert failed\n\n" + msg + "\n")
-        except OSError:
-            pass
-    return 1
-
-
 def main():
     path = os.environ.get("SYNC_REPORT", "sync.json")
     if not os.path.exists(path):
@@ -39,7 +24,8 @@ def main():
     try:
         summary = json.load(open(path, encoding="utf-8"))["summary"]
     except Exception as e:
-        return fail("unreadable report: %s" % e)
+        print("unreadable report: %s" % e)
+        return 1
     print("checked=%(repos)s in_sync=%(in_sync)s (before repair %(pre)s) drifted=%(drifted)s "
           "repaired=%(repaired)s errors=%(errors)s waived=%(waived)s" % {
               "repos": summary.get("repos"), "in_sync": summary.get("in_sync"),
@@ -48,13 +34,15 @@ def main():
               "errors": summary.get("errors"), "waived": summary.get("waived")})
     errors = summary.get("errors") or 0
     if errors:
-        return fail("read failures (%s): %s" % (errors, json.dumps(summary.get("error_sample"))[:400]))
+        print("read failures: %s" % json.dumps(summary.get("error_sample"))[:400])
+        return 1
     # `in_sync` is post-repair; on a run that repaired nothing it equals the pre-repair count, so
     # the same formula covers both. Repaired repos are NOT also in `in_sync_before_repair`.
     accounted = ((summary.get("in_sync") or 0) + (summary.get("drifted") or 0)
                  + (summary.get("waived") or 0))
     if accounted != (summary.get("repos") or 0):
-        return fail("ACCOUNTING GAP: %d of %d repos classified" % (accounted, summary.get("repos")))
+        print("ACCOUNTING GAP: %d of %d repos classified" % (accounted, summary.get("repos")))
+        return 1
     return 0
 
 
