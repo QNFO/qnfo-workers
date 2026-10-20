@@ -104,10 +104,7 @@ def get_json(url, timeout=20, redirect_ok=False):
 
 def wait_worker():
     for i in range(1, 41):
-        try:
-            st, body = get_json(ORIGIN_HEALTH)[:1] + get_json(ORIGIN_HEALTH)[2], None
-        except TypeError:
-            pass
+        # redundant get_json call removed
         try:
             r = urllib.request.Request(ORIGIN_HEALTH, headers={"User-Agent": UA, "Cache-Control": "no-cache"})
             with urllib.request.urlopen(r, timeout=20) as resp:
@@ -171,7 +168,7 @@ def attach_tech_redirect(zone):
         "action_parameters": {
             "from_value": {
                 "status_code": 301,
-                "target_url": {"value": "https://%s" % HOSTNAME},
+                "target_url": {"value": "https://%s$uri" % HOSTNAME},
                 "preserve_query_string": True,
                 "preserve_path_suffix": True,
             }
@@ -236,7 +233,7 @@ def verify():
     for i in range(1, 13):
         if not ok_org:
             try:
-                st, body = get_json("https://%s/health" % HOSTNAME)[0], get_json("https://%s/health" % HOSTNAME)[2]
+                st, _, body = get_json("https://%s/health" % HOSTNAME)
                 w = ""
                 try:
                     w = json.loads(body).get("worker") or ""
