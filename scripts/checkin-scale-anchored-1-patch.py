@@ -135,6 +135,12 @@ def main():
     elif OLD_VER in wsrc:
         write(WORKER, wsrc.replace(OLD_VER, NEW_VER, 1))
         print("bumped %s -> %s" % (WORKER, NEW_VER))
+    elif MARK in wsrc:
+        # REAL-PROBES-3 (agent_issues 100320): the worker has moved past both version strings this script knows (1.29.0, 1.30.0) and
+        # carries the patch's own marker, so the patch landed and later releases replaced the version line. That is "already applied",
+        # not a missing anchor: applier-doctor counted the old FAIL-CLOSED exit as an error for a patch that is on main. A worker that
+        # carries neither the marker nor either version string still dies closed below.
+        print("already applied %s (VERSION is past %s and the worker carries %s)" % (WORKER, NEW_VER, MARK))
     else:
         die("%s: VERSION anchor not found" % WORKER)
     return 0
