@@ -57,7 +57,8 @@ concurrency:
 
 jobs:
   sync:
-    runs-on: ubuntu-latest
+    # RUNNER-PIN-1 (2026-10-20, WORKFLOW-FAILURE-AUDIT-1): ubuntu-latest migrates to Ubuntu 26 from 2026-10-19 (the notice is on every run); pinned until a trial run on ubuntu-26.04 is green.
+    runs-on: ubuntu-24.04
     # Measured 2026-10-18: a full reconcile that repaired two large repos took 1000s, and per-ref
     # pushing adds a round trip per branch. Waived repos are now skipped, so a normal run is far
     # shorter, but the ceiling must not cut a legitimate repair short.
