@@ -6,7 +6,7 @@ var __defProp2 = Object.defineProperty;
 var __name2 = /* @__PURE__ */ __name((target, value) => __defProp2(target, "name", { value, configurable: true }), "__name");
 var __defProp22 = Object.defineProperty;
 var __name22 = /* @__PURE__ */ __name2((target, value) => __defProp22(target, "name", { value, configurable: true }), "__name");
-var VERSION = "5.37.1-email-binding"; // 5.37.1 EMAIL-BINDING-RESTORE-1 (2026-10-19, human_actions 108, owner task op-mveqjo370c53, pillar core): the agent's email tools (email_check: stats, recent, body, search; email_send) answered "service binding missing: EMAIL" because qnfo-ai declared no EMAIL service binding. wrangler.toml now binds qnfo-email with props caller qnfo-ai, and qnfo-email authenticates a service-binding caller by ctx.props.caller (EMAIL-CALLER-PROPS-1), so callGatewayService no longer needs a copy of EMAIL_API_KEY for that route: with the binding present and no key it calls through the binding without a bearer; a configured key is still sent. Routes without the props flag (social, intent) keep the key requirement. 5.36.1 KERNEL-REPLY-2 (2026-10-13, metric false_stops_7d): the default system prompt that chat clients (ChatBox, DeepChat) receive ends with the kernel reply rule: no closing question, offer or menu; an ambiguous request gets a stated assumption. 5.36.0 FLEET-CAP-STEER-1 (AI-SPEND-1, agent_issues 1780, 2462, 2446, 2011, pillar cost): the router governs at the fleet's own caps, not only its own ledger. While fleet_budget ai_spend:workers-ai (the 7-day run rate x 30 that qnfo-fleet-control writes hourly) is over its cap, a router-served non-stream Workers AI call to glm-5.3 or deepseek-v4-pro is answered by the same-family cheaper model (glm-5.3-flash, deepseek-v4-flash; docs/ENSEMBLE-POLICY.md rule 7), with a per-request fallback to the requested model on an error or empty reply and an automatic revert for the rest of the UTC day when the cheaper model fails 20% of at least 10 steered calls (ai_call_counters purpose fleet-cap-steer). qnfo-ai-calibration and requests with pin_model: true are never steered; _router.fleet_cap_steer names each switch. The router's paid upstreams (direct DeepSeek key, gateway compat) are skipped to their Workers AI fallback while the fleet cap of that provider (or the unified total, for the gateway) is over, so router BYOK spend is governed by the fleet caps too. ops_config ai_fleet_cap_steer = off turns both off without a deploy. Tests: fleet-cap-steer.test.mjs. // 5.35.1 SEMANTIC-CACHE-EXACT-1: the semantic cache, serving for the first time since the 5.35.0 declaration fix, answers only when the logged prompt equals this prompt character for character; liveness probes and cache: false skip it. // 5.35.0 CMD-AI-TIMEOUT-1 (#2316, 2026-10-12, pillar core): measured cause of the fleet command line timeouts: a reasoning model given a small max_tokens spends the whole allowance on reasoning (glm-5.3-flash, max_tokens 700: 19-49 s, empty content, finish=length), the direct DeepSeek key answers 402 and its fallback led to the same slow model, and an id missing from MODELS was served by that dead route without a word. Now: small answers ask verified models for low reasoning effort (4.9 s, content present), a model id resolves explicitly (exact, alias, Workers AI id, or the logged unknown-id default; _router.requested_model and model_resolution), an unfunded DeepSeek route is served by its Workers AI twin, small or timeout_ms requests run under a budget with one hedge leg and answer 504 router_timeout instead of canned text, and context fetches have timeouts. AI-ROUTER-SECOND-PATH-1 (#2179): /health second_path contract and the router-down drill. Channel diversity (#2146): declared vendor and lineage per model, GET/POST /v1/ensemble/policy, a non-diverse ensemble is refused with a structured reason and the reviewer is never the primary's lineage. Cost (#2011): x-session-affinity for prefix caching, cached tokens in the ledger, the semantic cache serves again (it threw on a variable read before its declaration) and only for the same prompt, character for character; liveness probes never read it. Ids come from crypto.getRandomValues. Tests: router-resolve.test.mjs. // 5.34.1 carries the 5.33.1 narrative-prompt-guard process anchors onto the rebased prompt (the previous push changed bytes without a bump). 5.34.0 re-applies 5.33.0 and 5.33.1 onto main 5.33.2-doi-scrub (the venue line names papers.qnfo.org; PR 870 had conflicts). 5.33.1 keeps the narrative-prompt-guard process anchors (ground in the corpus first, place the answer in context, make it falsifiable) in the prompt. 5.33.0 ACCURACY-GROUND-1 (2026-10-10, pillar core, owner directive: answers are 100% verifiable against supplied text, no example nouns in prompts, fail closed): the system prompt no longer mandates key facts or quantities, citations "when known" or computational verification from memory; its only sources are the retrieved context, web context, fleet context and the user messages. handleChat wraps handleChatCore: a non-tool answer (streams are buffered) loses every sentence carrying a DOI, link, arXiv id, author citation or figure that is not in the supplied text, says so at the foot, and opens with a no-source notice when nothing was retrieved for a question. The ensemble validator fails unsupported statements and the review pass can only remove. Tests: accuracy-ground.test.mjs. // 5.32.0 BUDGET-SOFT-ROUTE-1 (2026-10-06, pillar cost, owner directive): the spend governor never refuses a caller; at any cap every caller is routed to the cheap Workers AI model (glm-5.3-flash, one leg, no ensemble) instead of HTTP 429. Paid upstreams over cap still fall back to Workers AI. // 5.31.5 ENSEMBLE-VALIDATOR-BUDGET-1 (#1889, 2026-10-05): the ensemble validator keeps a 30% slice of the 120s budget (36s, floor 15s) instead of a flat 15s that timed out behind 55-60s Workers AI primaries (both first 5.31.4 ensemble-run rows: verdict skipped); validator and reviewer outcomes are stage rows and the ensemble-run row carries them. // 5.31.4 ENSEMBLE-FAMILY-DISJOINT-1 (#1889 ENSEMBLE-POLICY-1, 2026-10-05): ENSEMBLE_POOL holds at most one model per family (science drops deepseek-v4-pro, general drops glm-5.3 and keeps the small glm-5.3-flash) and the validator is never the primary's family (a deepseek primary is judged by glm-5.3-flash instead of deepseek-v4-flash); same call count, smaller models, meta.validator_switched records the switch. // 5.31.3 ENSEMBLE-RUN-LOG-1 (#1889, 2026-10-05): one cloud_ops_events row (kind ensemble-run) per ensemble call with the primary and validator models and families, the validator verdict, whether the reviewer ran and a short hash of the text, so same-family vs cross-family agreement can be measured before the pool is thinned (docs/ENSEMBLE-POLICY.md); no extra model call. // 5.31.2 DEEPSEEK-402-BREAKER-1 (#1939): a DeepSeek 402 (balance exhausted) opens a 60-min per-isolate breaker (owner 2026-10-05: no DeepSeek top-up) so callDeepSeek fails fast to the free fallback; 5.31.1 AIG-BINDING-1 (#1784): gateway log entries carry metadata {worker, purpose}; 5.31.0 AIG-BINDING-1: embedding calls go through the AI Gateway (cached 24h, plain-binding fallback); 5.30.1 FLEET-CTL-ROLLOUT-1: the fleet command-line link on the chat page
+var VERSION = "5.38.0-owner-rw"; /* 5.38.0 OWNER-RW-ANY-LLM-1 (2026-10-20): idea_submit and queue_read gateway tools, REST /v1/ideas /v1/queue /v1/tools /v1/tools/call, /openapi.json and /mcp for any third-party LLM app, ROUTER_AUTH_KEY_2 accepted everywhere, a key qnfo-ops accepts is accepted here (service-binding check). */ // 5.37.1 EMAIL-BINDING-RESTORE-1 (2026-10-19, human_actions 108, owner task op-mveqjo370c53, pillar core): the agent's email tools (email_check: stats, recent, body, search; email_send) answered "service binding missing: EMAIL" because qnfo-ai declared no EMAIL service binding. wrangler.toml now binds qnfo-email with props caller qnfo-ai, and qnfo-email authenticates a service-binding caller by ctx.props.caller (EMAIL-CALLER-PROPS-1), so callGatewayService no longer needs a copy of EMAIL_API_KEY for that route: with the binding present and no key it calls through the binding without a bearer; a configured key is still sent. Routes without the props flag (social, intent) keep the key requirement. 5.36.1 KERNEL-REPLY-2 (2026-10-13, metric false_stops_7d): the default system prompt that chat clients (ChatBox, DeepChat) receive ends with the kernel reply rule: no closing question, offer or menu; an ambiguous request gets a stated assumption. 5.36.0 FLEET-CAP-STEER-1 (AI-SPEND-1, agent_issues 1780, 2462, 2446, 2011, pillar cost): the router governs at the fleet's own caps, not only its own ledger. While fleet_budget ai_spend:workers-ai (the 7-day run rate x 30 that qnfo-fleet-control writes hourly) is over its cap, a router-served non-stream Workers AI call to glm-5.3 or deepseek-v4-pro is answered by the same-family cheaper model (glm-5.3-flash, deepseek-v4-flash; docs/ENSEMBLE-POLICY.md rule 7), with a per-request fallback to the requested model on an error or empty reply and an automatic revert for the rest of the UTC day when the cheaper model fails 20% of at least 10 steered calls (ai_call_counters purpose fleet-cap-steer). qnfo-ai-calibration and requests with pin_model: true are never steered; _router.fleet_cap_steer names each switch. The router's paid upstreams (direct DeepSeek key, gateway compat) are skipped to their Workers AI fallback while the fleet cap of that provider (or the unified total, for the gateway) is over, so router BYOK spend is governed by the fleet caps too. ops_config ai_fleet_cap_steer = off turns both off without a deploy. Tests: fleet-cap-steer.test.mjs. // 5.35.1 SEMANTIC-CACHE-EXACT-1: the semantic cache, serving for the first time since the 5.35.0 declaration fix, answers only when the logged prompt equals this prompt character for character; liveness probes and cache: false skip it. // 5.35.0 CMD-AI-TIMEOUT-1 (#2316, 2026-10-12, pillar core): measured cause of the fleet command line timeouts: a reasoning model given a small max_tokens spends the whole allowance on reasoning (glm-5.3-flash, max_tokens 700: 19-49 s, empty content, finish=length), the direct DeepSeek key answers 402 and its fallback led to the same slow model, and an id missing from MODELS was served by that dead route without a word. Now: small answers ask verified models for low reasoning effort (4.9 s, content present), a model id resolves explicitly (exact, alias, Workers AI id, or the logged unknown-id default; _router.requested_model and model_resolution), an unfunded DeepSeek route is served by its Workers AI twin, small or timeout_ms requests run under a budget with one hedge leg and answer 504 router_timeout instead of canned text, and context fetches have timeouts. AI-ROUTER-SECOND-PATH-1 (#2179): /health second_path contract and the router-down drill. Channel diversity (#2146): declared vendor and lineage per model, GET/POST /v1/ensemble/policy, a non-diverse ensemble is refused with a structured reason and the reviewer is never the primary's lineage. Cost (#2011): x-session-affinity for prefix caching, cached tokens in the ledger, the semantic cache serves again (it threw on a variable read before its declaration) and only for the same prompt, character for character; liveness probes never read it. Ids come from crypto.getRandomValues. Tests: router-resolve.test.mjs. // 5.34.1 carries the 5.33.1 narrative-prompt-guard process anchors onto the rebased prompt (the previous push changed bytes without a bump). 5.34.0 re-applies 5.33.0 and 5.33.1 onto main 5.33.2-doi-scrub (the venue line names papers.qnfo.org; PR 870 had conflicts). 5.33.1 keeps the narrative-prompt-guard process anchors (ground in the corpus first, place the answer in context, make it falsifiable) in the prompt. 5.33.0 ACCURACY-GROUND-1 (2026-10-10, pillar core, owner directive: answers are 100% verifiable against supplied text, no example nouns in prompts, fail closed): the system prompt no longer mandates key facts or quantities, citations "when known" or computational verification from memory; its only sources are the retrieved context, web context, fleet context and the user messages. handleChat wraps handleChatCore: a non-tool answer (streams are buffered) loses every sentence carrying a DOI, link, arXiv id, author citation or figure that is not in the supplied text, says so at the foot, and opens with a no-source notice when nothing was retrieved for a question. The ensemble validator fails unsupported statements and the review pass can only remove. Tests: accuracy-ground.test.mjs. // 5.32.0 BUDGET-SOFT-ROUTE-1 (2026-10-06, pillar cost, owner directive): the spend governor never refuses a caller; at any cap every caller is routed to the cheap Workers AI model (glm-5.3-flash, one leg, no ensemble) instead of HTTP 429. Paid upstreams over cap still fall back to Workers AI. // 5.31.5 ENSEMBLE-VALIDATOR-BUDGET-1 (#1889, 2026-10-05): the ensemble validator keeps a 30% slice of the 120s budget (36s, floor 15s) instead of a flat 15s that timed out behind 55-60s Workers AI primaries (both first 5.31.4 ensemble-run rows: verdict skipped); validator and reviewer outcomes are stage rows and the ensemble-run row carries them. // 5.31.4 ENSEMBLE-FAMILY-DISJOINT-1 (#1889 ENSEMBLE-POLICY-1, 2026-10-05): ENSEMBLE_POOL holds at most one model per family (science drops deepseek-v4-pro, general drops glm-5.3 and keeps the small glm-5.3-flash) and the validator is never the primary's family (a deepseek primary is judged by glm-5.3-flash instead of deepseek-v4-flash); same call count, smaller models, meta.validator_switched records the switch. // 5.31.3 ENSEMBLE-RUN-LOG-1 (#1889, 2026-10-05): one cloud_ops_events row (kind ensemble-run) per ensemble call with the primary and validator models and families, the validator verdict, whether the reviewer ran and a short hash of the text, so same-family vs cross-family agreement can be measured before the pool is thinned (docs/ENSEMBLE-POLICY.md); no extra model call. // 5.31.2 DEEPSEEK-402-BREAKER-1 (#1939): a DeepSeek 402 (balance exhausted) opens a 60-min per-isolate breaker (owner 2026-10-05: no DeepSeek top-up) so callDeepSeek fails fast to the free fallback; 5.31.1 AIG-BINDING-1 (#1784): gateway log entries carry metadata {worker, purpose}; 5.31.0 AIG-BINDING-1: embedding calls go through the AI Gateway (cached 24h, plain-binding fallback); 5.30.1 FLEET-CTL-ROLLOUT-1: the fleet command-line link on the chat page
 // WORKERS-AI-ATTRIBUTION-1 (2026-10-01, #1681): per-worker Workers AI attribution. Returns a shallow env copy whose AI
 // binding records each .run() (calls, errors, ms, tokens, neurons) into qnfo-audit ai_call_counters (purpose 'binding').
 // Neurons = usage tokens x Cloudflare's published per-model rates (neurons per M tokens). Fail-soft; env is never mutated.
@@ -1816,7 +1816,16 @@ function wantsAgentTools(body, messages) {
     "suggest contacts",
     "suggest collaborators",
     "reach out to",
-    "contact "
+    "contact ",
+    "idea",
+    "research queue",
+    "the queue",
+    "to the queue",
+    "backlog",
+    "open issues",
+    "file an issue",
+    "file a task",
+    "submit "
   ];
   for (var j = 0; j < P.length; j++) {
     if (txt.indexOf(P[j]) !== -1) return true;
@@ -1833,6 +1842,8 @@ var GATEWAY_ACTION_TOOLS = [
   { type: "function", function: { name: "email_send", description: "Send an email from a QNFO domain account. Use ONLY after the user explicitly asks you to send to a specific address. Never send to external recipients unprompted.", parameters: { type: "object", properties: { to: { type: "string", description: "Recipient email address" }, subject: { type: "string", description: "Subject line" }, body: { type: "string", description: "Plain text body" }, reply_to_id: { type: "integer", description: "Optional: id of email being replied to" }, from: { type: "string", description: "Optional: QNFO-domain from address" } }, required: ["to", "subject", "body"] } } },
   { type: "function", function: { name: "social_post", description: "Post a short message to the QNFO Bluesky account. Use ONLY when the user explicitly asks to post.", parameters: { type: "object", properties: { text: { type: "string", description: "Post text, max 290 chars" } }, required: ["text"] } } },
   { type: "function", function: { name: "social_compose", description: "Compose a promotion thread for a paper (title + abstract + optional DOI). Fact-checks against the abstract and queues for review rather than posting immediately. Returns draft posts and any flagged issues.", parameters: { type: "object", properties: { title: { type: "string", description: "Paper title" }, abstract: { type: "string", description: "Paper abstract" }, doi: { type: "string", description: "Optional DOI" } }, required: ["title", "abstract"] } } },
+  { type: "function", function: { name: "idea_submit", description: "WRITE: file an owner idea, research item or task into the fleet. kind=idea (default) goes to the idea pipeline (auto-accepted as owner-authored, then queued for research); kind=issue files an open backlog item. Use whenever the user wants to feed an idea, research item or task into the system.", parameters: { type: "object", properties: { kind: { type: "string", enum: ["idea", "issue"] }, title: { type: "string" }, body: { type: "string" }, category: { type: "string" }, priority: { type: "string", enum: ["low", "medium", "high", "critical"] } } } } },
+  { type: "function", function: { name: "queue_read", description: "READ the fleet queues: open backlog items, recent owner ideas and the research queue. Optional filters status, category, q (title text).", parameters: { type: "object", properties: { which: { type: "string", enum: ["issues", "ideas", "all"] }, status: { type: "string" }, category: { type: "string" }, q: { type: "string" }, limit: { type: "number" } } } } },
   { type: "function", function: { name: "express_intent", description: "Record a note, task, reminder, event, or email request into the QNFO intent queue for routing and the daily digest. Use for requests like remind me to, add a task, or note that.", parameters: { type: "object", properties: { desire: { type: "string", description: "The desire, task, or note in natural language" } }, required: ["desire"] } } }
 ];
 var GATEWAY_TOOLS = [RUN_CODE_TOOL].concat(GATEWAY_ACTION_TOOLS);
@@ -1921,6 +1932,8 @@ async function executeGatewayTool(env, fnName, args) {
       if (args.doi) p2.doi = String(args.doi);
       return callGatewayService(env, "social", "/compose", { method: "POST", body: p2 });
     }
+    if (fnName === "idea_submit") return await ownerIdeaSubmit(env, args);
+    if (fnName === "queue_read") return await ownerQueueRead(env, args);
     if (fnName === "express_intent") {
       var desire = String(args.desire || "").slice(0, 4e3);
       if (!desire) return { ok: false, error: "desire required" };
@@ -2659,8 +2672,8 @@ async function handleChatCore(env, body, authHeader, ctx, ua, acc) {
   const enc = new TextEncoder();
   const a = await crypto.subtle.digest("SHA-256", enc.encode(provided));
   const b = await crypto.subtle.digest("SHA-256", enc.encode(expected));
-  if (!timingSafeEqual(a, b) && !(env.ROUTER_AUTH_KEY_2 && timingSafeEqual(a, await crypto.subtle.digest("SHA-256", enc.encode(env.ROUTER_AUTH_KEY_2))))) {
-    return json({ error: "Unauthorized" }, 401);
+  if (!timingSafeEqual(a, b) && !(env.ROUTER_AUTH_KEY_2 && timingSafeEqual(a, await crypto.subtle.digest("SHA-256", enc.encode(env.ROUTER_AUTH_KEY_2)))) && !await opsFederatedOk(env, authHeader)) {
+    return ownerKeyRejectedAi();
   }
   }
   const { model, messages: rawMessages, max_tokens, stream, temperature, top_p, tools, tool_choice } = body || {};
@@ -3557,17 +3570,122 @@ function internalCaller(ctx) {
 __name(internalCaller, "internalCaller");
 async function authOk(header, env, ctx) {
   if (internalCaller(ctx)) return true;
-  const expected = env.ROUTER_AUTH_KEY;
-  if (!header || !header.startsWith("Bearer ") || !expected) return false;
-  const provided = header.slice("Bearer ".length);
-  const enc = new TextEncoder();
-  const a = await crypto.subtle.digest("SHA-256", enc.encode(provided));
-  const b = await crypto.subtle.digest("SHA-256", enc.encode(expected));
-  return timingSafeEqual(a, b);
+  return await routerKeyMatch(header, env);
 }
 __name(authOk, "authOk");
 __name2(authOk, "authOk");
 __name22(authOk, "authOk");
+
+// OWNER-RW-ANY-LLM-1 (5.38.0): owner write/read intake (idea_submit / queue_read tools and the REST and MCP routes).
+async function ownerIdeaSubmit(env, args) {
+  var kind = String(args && args.kind || "idea").toLowerCase();
+  var title = String(args && args.title || "").trim().slice(0, 300);
+  var body = String(args && (args.body || args.text) || "").slice(0, 1e5);
+  if (!title && !body) return { ok: false, error: "title or body required" };
+  var now = Date.now();
+  try {
+    if (kind === "issue" || kind === "task") {
+      var pr = ["low", "medium", "high", "critical"].indexOf(String(args.priority || "")) >= 0 ? args.priority : "medium";
+      var r = await env.QNFO_AUDIT.prepare("INSERT INTO agent_issues (title, description, source, category, priority, status, created_at, updated_at) VALUES (?1, ?2, 'owner-chat', ?3, ?4, 'open', ?5, ?5)").bind(title || body.slice(0, 120), body || title, String(args.category || "owner-intake").slice(0, 60), pr, now).run();
+      return { ok: true, kind: "issue", id: r && r.meta && r.meta.last_row_id != null ? r.meta.last_row_id : null, status: "open" };
+    }
+    var r2 = await env.QNFO_AUDIT.prepare("INSERT INTO idea_proposals (name, idea, contact, status, created_at) VALUES ('owner-chat', ?1, 'owner', 'new', datetime('now'))").bind((title ? title + "\n\n" : "") + body).run();
+    return { ok: true, kind: "idea", id: r2 && r2.meta && r2.meta.last_row_id != null ? r2.meta.last_row_id : null, status: "new", next: "owner-authored; the hourly triage accepts it and queues it for research" };
+  } catch (e) {
+    return { ok: false, error: "insert failed: " + String(e && e.message || e).slice(0, 200) };
+  }
+}
+async function ownerQueueRead(env, args) {
+  var which = String(args && args.which || "all");
+  var limit = Math.min(Math.max(parseInt(args && args.limit || 20, 10) || 20, 1), 100);
+  var out = { ok: true };
+  try {
+    if (which === "issues" || which === "all") {
+      var st = String(args && args.status || "open"), cat = String(args && args.category || ""), q = String(args && args.q || "");
+      var r = await env.QNFO_AUDIT.prepare("SELECT id, title, category, priority, status, source, created_at FROM agent_issues WHERE status = ?1 AND (?2 = '' OR category = ?2) AND (?3 = '' OR title LIKE '%' || ?3 || '%') ORDER BY id DESC LIMIT ?4").bind(st, cat, q, limit).all();
+      out.issues = r.results || [];
+    }
+    if (which === "ideas" || which === "all") {
+      var r3 = await env.QNFO_AUDIT.prepare("SELECT id, name, substr(idea,1,300) AS idea, status, created_at FROM idea_proposals ORDER BY id DESC LIMIT ?1").bind(limit).all();
+      out.ideas = r3.results || [];
+    }
+  } catch (e) {
+    return { ok: false, error: "read failed: " + String(e && e.message || e).slice(0, 200) };
+  }
+  return out;
+}
+async function routerKeyMatch(header, env) {
+  if (!header || !header.startsWith("Bearer ")) return false;
+  var provided = header.slice(7);
+  if (!provided) return false;
+  var enc = new TextEncoder();
+  var a = await crypto.subtle.digest("SHA-256", enc.encode(provided));
+  var keys = [env.ROUTER_AUTH_KEY, env.ROUTER_AUTH_KEY_2];
+  for (var i = 0; i < keys.length; i++) {
+    if (keys[i] && timingSafeEqual(a, await crypto.subtle.digest("SHA-256", enc.encode(keys[i])))) return true;
+  }
+  return false;
+}
+// A key that qnfo-ops accepts is accepted here too: qnfo-ops answers only to the service binding and only says yes or no.
+async function opsFederatedOk(env, header) {
+  try {
+    if (!env.OPS || typeof env.OPS.fetch !== "function" || !header) return false;
+    var r = await env.OPS.fetch("https://qnfo-ops/internal/verify-key", { method: "POST", headers: { Authorization: header } });
+    if (!r.ok) return false;
+    var j = await r.json();
+    return !!(j && j.ok === true && j.scope === "owner");
+  } catch (e) {
+    return false;
+  }
+}
+function ownerKeyRejectedAi() {
+  return json({ error: { message: "API key rejected: the Bearer key you sent is not a valid qnfo-ai or qnfo-ops owner key. Fix the key in the app's API key field.", type: "invalid_api_key", code: "key_rejected" } }, 401);
+}
+var AI_REST_TOOL_NAMES = ["idea_submit", "queue_read", "express_intent", "search_research", "search_knowledge"];
+function aiRestTools() {
+  return GATEWAY_ACTION_TOOLS.filter(function(t) { return AI_REST_TOOL_NAMES.indexOf(t.function.name) >= 0; });
+}
+function aiOpenApi() {
+  return { openapi: "3.1.0", info: { title: "QNFO AI owner API", version: VERSION }, servers: [{ url: "https://ai.qnfo.org" }], components: { securitySchemes: { bearerAuth: { type: "http", scheme: "bearer" } } }, security: [{ bearerAuth: [] }], paths: {
+    "/v1/ideas": { post: { operationId: "submitIdea", summary: "File an idea, research item or task", requestBody: { content: { "application/json": { schema: { type: "object", properties: { kind: { type: "string", enum: ["idea", "issue"] }, title: { type: "string" }, body: { type: "string" }, category: { type: "string" }, priority: { type: "string" } } } } } }, responses: { "200": { description: "filed" } } } },
+    "/v1/queue": { get: { operationId: "readQueue", summary: "Read open backlog and ideas", parameters: ["which", "status", "category", "q", "limit"].map(function(n) { return { name: n, in: "query", schema: { type: "string" } }; }), responses: { "200": { description: "queue" } } } },
+    "/v1/tools": { get: { operationId: "listTools", responses: { "200": { description: "tool list" } } } },
+    "/v1/tools/call": { post: { operationId: "callTool", requestBody: { content: { "application/json": { schema: { type: "object", properties: { name: { type: "string" }, arguments: { type: "object" } } } } } }, responses: { "200": { description: "result" } } } }
+  } };
+}
+async function ownerRestRoutesAi(request, env, ctx, path, method) {
+  if (path === "/internal/verify-key" && method === "POST") {
+    var c = internalCaller(ctx);
+    if (c !== "qnfo-ops") return json({ error: "not found" }, 404);
+    return json(await routerKeyMatch(request.headers.get("Authorization") || "", env) ? { ok: true, scope: "owner" } : { ok: false });
+  }
+  var isRest = path === "/v1/ideas" || path === "/v1/queue" || path === "/v1/tools" || path === "/v1/tools/call" || path === "/mcp" || path === "/openapi.json";
+  if (!isRest) return null;
+  if (path === "/openapi.json" && method === "GET") return json(aiOpenApi());
+  var hdr = request.headers.get("Authorization") || "";
+  if (!(await authOk(hdr, env, ctx) || await routerKeyMatch(hdr, env) || await opsFederatedOk(env, hdr))) return ownerKeyRejectedAi();
+  var run = async function(name, args) {
+    if (AI_REST_TOOL_NAMES.indexOf(name) < 0) return { ok: false, result: { error: "unknown tool: " + name } };
+    var r = await executeGatewayTool(env, name, args || {});
+    return { ok: !!(r && r.ok), result: r };
+  };
+  if (path === "/v1/ideas" && method === "POST") { var b = {}; try { b = await request.json(); } catch (e) { return json({ error: "invalid JSON body" }, 400); } return json(await ownerIdeaSubmit(env, b)); }
+  if (path === "/v1/queue" && method === "GET") { var a = {}; new URL(request.url).searchParams.forEach(function(v, k) { a[k] = v; }); return json(await ownerQueueRead(env, a)); }
+  if (path === "/v1/tools" && method === "GET") return json({ object: "list", data: aiRestTools() });
+  if (path === "/v1/tools/call" && method === "POST") { var b2 = {}; try { b2 = await request.json(); } catch (e) { return json({ error: "invalid JSON body" }, 400); } if (!b2.name) return json({ error: "name required" }, 400); return json(await run(String(b2.name), b2.arguments || {})); }
+  if (path === "/mcp") {
+    if (method !== "POST") return json({ error: "POST JSON-RPC" }, 405);
+    var m = {}; try { m = await request.json(); } catch (e) { return json({ jsonrpc: "2.0", id: null, error: { code: -32700, message: "parse error" } }, 400); }
+    var id = m.id === undefined ? null : m.id;
+    if (m.id === undefined && String(m.method || "").indexOf("notifications/") === 0) return new Response(null, { status: 202 });
+    if (m.method === "initialize") return json({ jsonrpc: "2.0", id: id, result: { protocolVersion: "2025-03-26", capabilities: { tools: {} }, serverInfo: { name: "qnfo-ai", version: VERSION } } });
+    if (m.method === "ping") return json({ jsonrpc: "2.0", id: id, result: {} });
+    if (m.method === "tools/list") return json({ jsonrpc: "2.0", id: id, result: { tools: aiRestTools().map(function(t) { return { name: t.function.name, description: t.function.description, inputSchema: t.function.parameters }; }) } });
+    if (m.method === "tools/call") { var p = m.params || {}; var r = await run(String(p.name || ""), p.arguments || {}); return json({ jsonrpc: "2.0", id: id, result: { content: [{ type: "text", text: JSON.stringify(r.result) }], isError: !r.ok } }); }
+    return json({ jsonrpc: "2.0", id: id, error: { code: -32601, message: "method not found" } });
+  }
+  return json({ error: "method not allowed" }, 405);
+}
 var PLAYGROUND_HTML = `<!DOCTYPE html>
 <html lang="en"><head>
 <meta charset="utf-8"><meta name="viewport" content=
@@ -3985,6 +4103,7 @@ var worker_default = {
     const path = url.pathname;
     const method = request.method;
     if (method === "OPTIONS") return json({ ok: true });
+    { const _or = await ownerRestRoutesAi(request, env, ctx, path, method); if (_or) return _or; }
     if (path === "/health" && method === "GET") {
       return json({
         status: "ok",

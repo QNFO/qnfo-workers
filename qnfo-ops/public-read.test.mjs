@@ -174,11 +174,11 @@ const toolResults = (t) => t.ai.seen.flatMap((s) => s.messages.filter((m) => m.r
   ok(!t.fetches.some((f) => /containers|shell/.test(f.url)), "C shell_exec never reached a container");
 }
 
-// D. a stale or wrong key (the owner's ChatBox case) is public read too, not 401.
+// D. OWNER-RW-ANY-LLM-1 (2.53.0): a presented but wrong key is never answered in public read mode; it is a 401 that says the key was rejected.
 {
   const t = mk();
-  const { res } = await call(t, Q, { Authorization: "Bearer stale-key", "CF-Connecting-IP": "198.51.100.4" });
-  ok(res.status === 200 && res.headers.get("x-ops-access") === "public-read", "D stale key answered in public read mode");
+  const { res, text } = await call(t, Q, { Authorization: "Bearer stale-key", "CF-Connecting-IP": "198.51.100.4" });
+  ok(res.status === 401 && res.headers.get("x-ops-access") !== "public-read" && text.indexOf("key_rejected") >= 0, "D stale key is a 401 key_rejected, not public read mode");
 }
 
 // E. model ids that would pick a paid upstream or a raw relay are ignored in public mode.
