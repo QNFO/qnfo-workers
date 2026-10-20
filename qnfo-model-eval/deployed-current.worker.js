@@ -50,7 +50,10 @@
 // VERSION-BUMP-GUARD-1 requires the literal var-VERSION-equals-double-quoted-string form: this constant is
 // what fleet-autoaudit's strict numeric-ahead deploy check and deploy-drift's string
 // compare both read. `const` here would make the bundle invisible to deploy-drift.
-var VERSION = "1.7.0-typed-input-model"; // 1.7.0 TYPED-INPUT-MODEL-1 (agent_issues 100250, pillar autonomy): a model whose input is a typed schema and not chat messages (the extraction model @cf/cloudflare/clairic, which takes {model, fields} and answers typed values; Workers AI refuses a chat call with "required properties at '/' are 'model,fields'", 5006) leaves the chat lane: modalityOf names clairic as 'extraction', and a chat run in which every probe fails with that schema error sets the catalog row to modality 'typed-input', status 'catalogued', with the reason in notes, and files no harness issue; the pick list no longer re-runs a ladder model whose modality is not chat or clef. Before this every sweep re-evaluated clairic and filed CF-MODEL-EVAL-1: harness cannot run. Tests: typed-input.test.mjs. // 1.6.1 HEALTH-CONTRACT-1 (agent_issues 2852, capability_contract_conformance, pillar autonomy): /health now declares capabilities[] and limitations[] (module constants CAPABILITIES and LIMITATIONS, the same lists /manifest returns), so the fleet snapshot counts this worker as conforming; before this /health carried only ok, version and the catalog count. No behaviour change. // 1.6.0 AB-HARNESS-1 (agent_issues 2828 MODEL-QUALITY-PARITY-1, pillar autonomy): a paired A/B quality harness. For one worker and task set it puts the pre-change answer (a recorded baseline reply, or the pre-change model live) and the post-change answer (the post-change model through qnfo-ai, pin_model true) in front of two judges from two other model families, at least one outside every family the worker uses, and writes the win rate against a stated threshold (0.40) to model_ab_runs. Triggers on the hourly tick: a changed model in scripts/model-policy.json, or a model a worker newly uses in ai_call_counters; classification lanes reuse clefCanary agreement. A regression files an issue. Routes GET /ab/runs, GET /ab/fixtures, POST /ab/run (x-eval-key). Switch: cf_model_eval_config ab_enabled = 0 (control_registry model-ab-switch). New QNFO_AI service binding (props caller qnfo-model-eval). Tests: ab-harness.test.mjs. // 1.5.0 CRON-GRID-1 (owner directive 2026-10-19, pillar autonomy): one hourly :20 trigger. The benchmark battery keeps its 6-hour cadence (slots 00:17, 06:17, 12:17, 18:17 run on the :20 fire) because it calls models while the Workers AI cap is breached; a failed run is retried hourly, at most 3 times, and now fails the run instead of being swallowed. Every fire is logged to cron_fire_log for CRON-WATCH-1. // 1.4.1 WORKERS-BP-LOGGING-1 (agent_issues 2342, RESOLVE-ALL-OPEN-1 2026-10-19): the scheduled() error-event write no longer swallows its own failure; it logs a structured console.error.
+// AB-LENGTH-RETRY-1 (1.8.0, agent_issues 100277, pillar autonomy; minor: the hourly tick takes a decision it did not take before, it re-measures a pair whose newest regression came from an
+// older harness revision, abStaleRevCandidates): the release note is carried by the comment blocks at AB_RETRY_MAX_TOKENS, AB_HARNESS_REV and abStaleRevCandidates, and none is added to
+// the VERSION line below (VERSION-LINE-NOTES-1, 2026-10-19). The older notes stay on that line until the line is pruned.
+var VERSION = "1.8.0-ab-length-retry"; // 1.7.0 TYPED-INPUT-MODEL-1 (agent_issues 100250, pillar autonomy): a model whose input is a typed schema and not chat messages (the extraction model @cf/cloudflare/clairic, which takes {model, fields} and answers typed values; Workers AI refuses a chat call with "required properties at '/' are 'model,fields'", 5006) leaves the chat lane: modalityOf names clairic as 'extraction', and a chat run in which every probe fails with that schema error sets the catalog row to modality 'typed-input', status 'catalogued', with the reason in notes, and files no harness issue; the pick list no longer re-runs a ladder model whose modality is not chat or clef. Before this every sweep re-evaluated clairic and filed CF-MODEL-EVAL-1: harness cannot run. Tests: typed-input.test.mjs. // 1.6.1 HEALTH-CONTRACT-1 (agent_issues 2852, capability_contract_conformance, pillar autonomy): /health now declares capabilities[] and limitations[] (module constants CAPABILITIES and LIMITATIONS, the same lists /manifest returns), so the fleet snapshot counts this worker as conforming; before this /health carried only ok, version and the catalog count. No behaviour change. // 1.6.0 AB-HARNESS-1 (agent_issues 2828 MODEL-QUALITY-PARITY-1, pillar autonomy): a paired A/B quality harness. For one worker and task set it puts the pre-change answer (a recorded baseline reply, or the pre-change model live) and the post-change answer (the post-change model through qnfo-ai, pin_model true) in front of two judges from two other model families, at least one outside every family the worker uses, and writes the win rate against a stated threshold (0.40) to model_ab_runs. Triggers on the hourly tick: a changed model in scripts/model-policy.json, or a model a worker newly uses in ai_call_counters; classification lanes reuse clefCanary agreement. A regression files an issue. Routes GET /ab/runs, GET /ab/fixtures, POST /ab/run (x-eval-key). Switch: cf_model_eval_config ab_enabled = 0 (control_registry model-ab-switch). New QNFO_AI service binding (props caller qnfo-model-eval). Tests: ab-harness.test.mjs. // 1.5.0 CRON-GRID-1 (owner directive 2026-10-19, pillar autonomy): one hourly :20 trigger. The benchmark battery keeps its 6-hour cadence (slots 00:17, 06:17, 12:17, 18:17 run on the :20 fire) because it calls models while the Workers AI cap is breached; a failed run is retried hourly, at most 3 times, and now fails the run instead of being swallowed. Every fire is logged to cron_fire_log for CRON-WATCH-1. // 1.4.1 WORKERS-BP-LOGGING-1 (agent_issues 2342, RESOLVE-ALL-OPEN-1 2026-10-19): the scheduled() error-event write no longer swallows its own failure; it logs a structured console.error.
 const BATTERY_VERSION = "cfmb-2";
 const DOCS_INDEX = "https://developers.cloudflare.com/workers-ai/models/index.md";
 const docsModel = (slug) => `https://developers.cloudflare.com/workers-ai/models/${slug}/index.md`;
@@ -886,7 +889,8 @@ async function runLoop(env, trigger, opts) {
 //   verdict             two judges from two families outside the pair under test, at least one outside every family the worker
 //                       uses; each sees the two answers in the opposite order of the other (position bias cancels per fixture)
 //   score               win 1, tie 0.5, loss 0 per judge, averaged; an EMPTY post-change answer is a loss without a judge
-//                       (the kimi-k2.6 failure, 2026-10-17: a reasoning model spends the budget and returns nothing)
+//                       (the kimi-k2.6 failure, 2026-10-17: a reasoning model spends the budget and returns nothing), except that
+//                       an empty answer whose finish is "length" is first asked once more at a larger budget (AB-LENGTH-RETRY-1)
 // win_rate = mean score over fixtures with a verdict. Parity is 0.5; the pass line (AB_THRESHOLD 0.40, non-inferiority margin
 // 0.10) is the stated threshold; a run with fewer than AB_MIN_VALID fixtures, or judges that disagree on most fixtures, is
 // inconclusive and never a pass. A regression files an agent_issues row (fileIssue) so the finding has a doer.
@@ -899,9 +903,11 @@ async function runLoop(env, trigger, opts) {
 // TRIGGERS (abTick, the hourly grid tick): (1) scripts/model-policy.json on main, read from raw.githubusercontent.com, names the
 // model each governed worker uses; a changed model for a worker is a run, a worker seen for the first time is a baseline, not a
 // run; (2) ai_call_counters, for a change nobody declared: a model with >= 20 calls yesterday or today that the same worker did
-// not use (< 3 calls) in the 2 to 15 days before, against that worker's busiest earlier model. Both are bounded by
-// ab_max_runs_per_tick and ab_daily_cap, switched by ab_enabled (control_registry model-ab-switch), deduped on worker, pre and
-// post model for 7 days, and an errored run is retried up to 3 times a day.
+// not use (< 3 calls) in the 2 to 15 days before, against that worker's busiest earlier model; (3) AB-LENGTH-RETRY-1, a regression
+// row of the last 7 days that an older harness revision scored (abStaleRevCandidates), which needs no model change in the counters.
+// All are bounded by ab_max_runs_per_tick and ab_daily_cap, switched by ab_enabled (control_registry model-ab-switch), deduped on
+// worker, pre and post model for 7 days, and an errored run, or an inconclusive one that lost fixtures to an unavailable retry,
+// is tried again up to 3 times a day.
 const AB_THRESHOLD = 0.4;
 const AB_MIN_VALID = 6;
 const AB_FIXTURE_LIMIT = 8;
@@ -911,6 +917,23 @@ const AB_CLASSIFY_SET = "clef-classification";
 // again on the next tick.
 const AB_RUN_BUDGET_MS = 240000;
 const AB_TICK_START_GATE_MS = 300000;
+// AB-LENGTH-RETRY-1 (1.8.0, agent_issues 100277, pillar autonomy; minor): a post-change reply that is empty because the fixture's own
+// token cap was spent (finish "length": a reasoning model spends the whole budget on thought) is the harness's budget and not the model's
+// answer. Measured 2026-10-19 (model_ab_runs ids 1 and 4, the same pair, kimi-k2.6 against glm-5.3-flash, win rate 0.25 both times): every
+// loss of run 4 and two of the four losses of run 1 were "empty post-change reply (finish length)" at a 300-token fixture, while the
+// production confirm call of errata-hub sends thinking off at 2048 tokens. abOneFixture now asks such a reply once more at
+// Math.min(AB_RETRY_MAX_TOKENS, Math.max(AB_RETRY_MIN_TOKENS, 4 * the fixture budget)) through the same path, and never after the run
+// deadline. An empty reply with any other finish stays an immediate loss; a retry that cannot be made (call error, a reply from another
+// model, the deadline) leaves the fixture unmeasured, never a loss and never callFailed (callFailed means the router is down).
+const AB_RETRY_MIN_TOKENS = 2048;
+const AB_RETRY_MAX_TOKENS = 4096;
+// The scoring revision of the harness, written first in model_ab_runs.detail. Bump it when the harness changes how a row is scored:
+// abAlreadyRun counts a 'regression' row as done only when it carries the current revision, and abStaleRevCandidates proposes every
+// pair whose regression row (last 7 days) does not, so a regression found by an older scoring is measured again on the next hourly
+// tick whether or not ai_call_counters still shows a model change (rev 1 scored a length-empty reply as a loss; rev 2 retries it).
+// A pass or an inconclusive row keeps its 7-day dedupe, except an inconclusive row that lost fixtures to an unavailable retry (see
+// abAlreadyRun), and no row is edited or deleted (they are history).
+const AB_HARNESS_REV = 2;
 const AB_POLICY_URL = "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/scripts/model-policy.json";
 // Judges, in preference order. One model per family; the pair under test and (preferably) the worker's families are skipped.
 const AB_JUDGE_POOL = [
@@ -1148,15 +1171,28 @@ async function abPool(items, limit, fn) {
   return out;
 }
 
+function abRetryTokens(maxTokens) { return Math.min(AB_RETRY_MAX_TOKENS, Math.max(AB_RETRY_MIN_TOKENS, 4 * (maxTokens || 400))); }
+
 async function abOneFixture(env, c, fx, idx, judges, deadline) {
   if (Date.now() > deadline) return { id: fx.id, score: null, why: "deadline" };
-  const post = await abCall(env, c.post_model, fx.prompt, fx.max_tokens || 400);
+  const budget = fx.max_tokens || 400;
+  let post = await abCall(env, c.post_model, fx.prompt, budget);
   if (!post.ok) return { id: fx.id, score: null, why: "post-call " + post.error, callFailed: true };
   if (post.unpinned) return { id: fx.id, score: null, why: "unpinned: served " + (post.served || "nothing").slice(0, 60) };
-  if (!post.text) return { id: fx.id, score: 0, judge_scores: [], via: post.via, why: "empty post-change reply (finish " + post.finish + ")" };
+  let retried; // undefined unless this fixture was asked a second time (undefined is dropped from the row's JSON)
+  if (!post.text && post.finish === "length") {
+    // AB-LENGTH-RETRY-1: the model spent the fixture's own token cap, it did not choose silence. One more call, larger budget, same path.
+    if (Date.now() > deadline) return { id: fx.id, score: null, why: "retry unavailable: deadline" };
+    retried = abRetryTokens(budget);
+    const again = await abCall(env, c.post_model, fx.prompt, retried);
+    if (!again.ok) return { id: fx.id, score: null, why: "retry unavailable: " + again.error, retried };
+    if (again.unpinned) return { id: fx.id, score: null, why: "retry unavailable: unpinned: served " + (again.served || "nothing").slice(0, 60), retried };
+    post = again;
+    if (!post.text) return { id: fx.id, score: 0, judge_scores: [], via: post.via, retried, why: "empty post-change reply (finish " + post.finish + ") after retry at " + retried + " tokens" };
+  } else if (!post.text) return { id: fx.id, score: 0, judge_scores: [], via: post.via, why: "empty post-change reply (finish " + post.finish + ")" };
   let pre = fx.baseline;
   if (c.live_pre) {
-    const p = await abCall(env, c.pre_model, fx.prompt, fx.max_tokens || 400);
+    const p = await abCall(env, c.pre_model, fx.prompt, budget);
     if (!p.ok || p.unpinned || !p.text) return { id: fx.id, score: null, why: "live pre-change reply unavailable" };
     pre = p.text;
   }
@@ -1168,7 +1204,7 @@ async function abOneFixture(env, c, fx, idx, judges, deadline) {
   }));
   const valid = scores.filter((s) => s != null);
   if (!valid.length) return { id: fx.id, score: null, why: "no judge reached a verdict" };
-  return { id: fx.id, score: valid.reduce((a, b) => a + b, 0) / valid.length, judge_scores: valid, via: post.via, post: post.text.slice(0, 160) };
+  return { id: fx.id, score: valid.reduce((a, b) => a + b, 0) / valid.length, judge_scores: valid, via: post.via, post: post.text.slice(0, 160), retried };
 }
 
 // Classification lane: the same labelled agent_issues rows through both decision models (clefCanary), scored per row on the
@@ -1214,7 +1250,7 @@ async function abRunPair(env, c) {
   return Object.assign({}, s, {
     judges: pick.judges.map((j) => j.model), independent: pick.independent, pre_source: c.live_pre ? "live" : "baseline",
     skipped: items.filter((i) => i.score == null).map((i) => ({ id: i.id, why: i.why })),
-    items: items.filter((i) => i.score != null).map((i) => ({ id: i.id, s: i.score, js: i.judge_scores, via: i.via, why: i.why })),
+    items: items.filter((i) => i.score != null).map((i) => ({ id: i.id, s: i.score, js: i.judge_scores, via: i.via, why: i.why, retried: i.retried })),
     post_paths: items.reduce((a, i) => { if (i.via) a[i.via] = (a[i.via] || 0) + 1; return a; }, {}),
   });
 }
@@ -1227,8 +1263,9 @@ async function abWorkerModels(env, worker) {
 }
 
 async function abPersist(env, c, r) {
+  // harness_rev leads: the detail is cut at 6000 characters and abAlreadyRun and the issue-100277 probe read the prefix
   const detail = JSON.stringify({
-    reason: r.reason, wins: r.wins, ties: r.ties, losses: r.losses, judge_pairs: r.judge_pairs, min_valid: r.minValid,
+    harness_rev: AB_HARNESS_REV, reason: r.reason, wins: r.wins, ties: r.ties, losses: r.losses, judge_pairs: r.judge_pairs, min_valid: r.minValid,
     independent_families: r.independent, post_paths: r.post_paths, skipped: r.skipped, items: r.items, extra: r.extra, worker_models: c.worker_models,
   }).slice(0, 6000);
   const res = await env.AUDIT.prepare(
@@ -1325,11 +1362,45 @@ async function abObservedCandidates(env, notes) {
   return out;
 }
 
+// AB-LENGTH-RETRY-1, the second path to a pair that was scored by an older harness revision: every pair with a 'regression' row of the
+// last 7 days whose detail does not start with the current harness_rev. The first path (abObservedCandidates) needs the pair to still
+// look like a model change in ai_call_counters (>= 20 calls in the last 2 days, < 3 in the 2 to 15 days before), a window that closes on
+// its own: it closed for qnfo-research-exec/kimi-k2.6 at 00:00Z 2026-10-20 and closes for errata-hub/kimi-k2.6 at 00:00Z 2026-10-21, and
+// POST /ab/run needs the x-eval-key, which no session holds. This source needs only the stored row, so the re-measurement does not depend
+// on that window or on the day a deploy lands; it ends when the pair has a row of the current revision (abAlreadyRun) or the stale row is
+// 7 days old. The row's own task set, threshold and pre-change source are re-used. The newest row of a pair wins; abTick dedupes by pair.
+async function abStaleRevCandidates(env, notes) {
+  const defSet = await cfg(env, "ab_default_task_set", "grounded-qa");
+  const r = await env.AUDIT.prepare(
+    `SELECT worker, pre_model, post_model, task_set, threshold, pre_source FROM model_ab_runs
+      WHERE verdict = 'regression' AND (detail IS NULL OR detail NOT LIKE ?1) AND created_at >= datetime('now','-7 days')
+      ORDER BY id DESC LIMIT 50`
+  ).bind('{"harness_rev":' + AB_HARNESS_REV + ',%').all();
+  const out = [];
+  const seen = new Set();
+  for (const x of r.results || []) {
+    const k = x.worker + "|" + x.pre_model + "|" + x.post_model;
+    if (seen.has(k)) continue;
+    seen.add(k);
+    out.push({ worker: x.worker, pre_model: x.pre_model, post_model: x.post_model, task_set: x.task_set || defSet, threshold: Number(x.threshold), live_pre: x.pre_source === "live", source: "stale-rev" });
+  }
+  if (out.length) notes.push("regression rows scored by an older harness revision: " + out.length);
+  return out;
+}
+
+// A 'regression' row is done only when the harness revision that scored it is the current one (AB_HARNESS_REV): a regression found
+// by an older scoring is measured again. An 'inconclusive' row whose skipped fixtures include "retry unavailable" (the larger-budget
+// call failed, was served by another model or came after the run deadline: the harness could not measure, the model did not fail) is
+// not done either; it counts with the errors, so the pair is tried again on the next tick and stops after 3 such rows in a day, the
+// same bound an error row has. Other inconclusive rows (no independent judge family, judges that disagree) keep their 7-day dedupe.
+// The LIKE patterns are short (D1 refuses one over 50 bytes); the first matches abPersist's leading key.
 async function abAlreadyRun(env, c) {
   const r = await env.AUDIT.prepare(
-    `SELECT (SELECT COUNT(*) FROM model_ab_runs WHERE worker=?1 AND pre_model=?2 AND post_model=?3 AND verdict <> 'error' AND created_at >= datetime('now','-7 days')) AS done,
-            (SELECT COUNT(*) FROM model_ab_runs WHERE worker=?1 AND pre_model=?2 AND post_model=?3 AND verdict = 'error' AND created_at >= datetime('now','-1 day')) AS errs`
-  ).bind(c.worker, c.pre_model, c.post_model).first();
+    `SELECT (SELECT COUNT(*) FROM model_ab_runs WHERE worker=?1 AND pre_model=?2 AND post_model=?3 AND verdict <> 'error' AND (verdict <> 'regression' OR detail LIKE ?4)
+               AND (verdict <> 'inconclusive' OR detail IS NULL OR detail NOT LIKE '%retry unavailable%') AND created_at >= datetime('now','-7 days')) AS done,
+            (SELECT COUNT(*) FROM model_ab_runs WHERE worker=?1 AND pre_model=?2 AND post_model=?3
+               AND (verdict = 'error' OR (verdict = 'inconclusive' AND detail LIKE '%retry unavailable%')) AND created_at >= datetime('now','-1 day')) AS errs`
+  ).bind(c.worker, c.pre_model, c.post_model, '{"harness_rev":' + AB_HARNESS_REV + ',%').first();
   return { done: Number(r && r.done) > 0, exhausted: Number(r && r.errs) >= 3 };
 }
 
@@ -1341,7 +1412,7 @@ async function abTick(env) {
   catch (e) { out.notes.push("model_ab_runs not readable yet: " + String(e && e.message ? e.message : e).slice(0, 100)); return out; }
   const found = [];
   const seenKey = new Set();
-  for (const c of [].concat(await abPolicyCandidates(env, out.notes), await abObservedCandidates(env, out.notes))) {
+  for (const c of [].concat(await abPolicyCandidates(env, out.notes), await abObservedCandidates(env, out.notes), await abStaleRevCandidates(env, out.notes))) {
     const k = c.worker + "|" + c.pre_model + "|" + c.post_model;
     if (seenKey.has(k)) continue;
     seenKey.add(k);
@@ -1385,7 +1456,7 @@ const LIMITATIONS = [
   "a promotion is a recommendation, not a switch: the ladder row is written with active=0 and a roadmap item and a deduped agent_issue name the exact change, so routing never changes by surprise",
   "a model that rejects the system role or has no account config is recorded as harness_error and left a candidate, never rejected: a harness failure is not a quality verdict",
   "a model whose input is a typed schema and not chat messages (an extraction model such as @cf/cloudflare/clairic, which wants {model, fields}) is classified typed-input and is not benchmarked: the chat and decision batteries cannot measure it, and no harness issue is filed for it",
-  "the A/B fixtures are passage-grounded, short and generic: they catch empty, unsupported, wrong or truncated answers and are not a worker's own prompts",
+  "the A/B fixtures are passage-grounded, short and generic: they catch empty, unsupported, wrong or truncated answers and are not a worker's own prompts; a length-empty reply is retried once at a larger budget (2048 to 4096 tokens) before it is scored, so a reasoning model is not marked down for the fixture's own token cap; a regression row scored by an older harness revision (model_ab_runs.detail leads with harness_rev) is measured again by the hourly tick, and an inconclusive run that lost fixtures to an unavailable retry is tried again up to 3 times a day",
   "the A/B seed baselines are reference answers authored in worker.js, not machine recordings; only live_pre records real pre-change replies",
   "the decision-model canary over real labelled agent_issues runs only while cf_model_eval_config canary_enabled is 1 (default 0)",
   "bounded per run and per day: max_models_per_run (default 6) models per battery run, ab_max_runs_per_tick (default 2) and ab_daily_cap (default 12) A/B runs, switched by ab_enabled",
