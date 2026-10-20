@@ -67,6 +67,20 @@ def _call(url, token, method="GET", body=None, timeout=45):
         return 0, {"error": str(e)}
 
 
+RETRY_STATUS = (0, 429, 500, 502, 503, 504)
+
+
+def _call_retry(url, token, method="GET", body=None, timeout=45, attempts=3, pause=1.5):
+    """A read of a remote source. A network error, a 429 or a transient 5xx is retried a bounded number of times
+    (WORKFLOW-FAILURE-AUDIT-1: one artifacts_log_http_500 for 1 of 180 repos failed a whole run on 2026-10-20, #285).
+    Only for reads: never use it for a write."""
+    for i in range(attempts):
+        st, j = _call(url, token, method, body, timeout)
+        if st not in RETRY_STATUS or i == attempts - 1:
+            return st, j
+        time.sleep(pause * (i + 1))
+
+
 class Ctx:
     def __init__(self):
         self.cf_token = os.environ.get("CLOUDFLARE_API_TOKEN") or os.environ.get("CF_API_TOKEN")
@@ -117,7 +131,7 @@ def _iso(v):
 
 def artifacts_head(ctx, ns, name, branch):
     q = urllib.parse.urlencode({"ref": branch, "limit": 1})
-    st, j = _call(ctx.art + "/artifacts/namespaces/" + ns + "/repos/" + name + "/log?" + q, ctx.cf_token)
+    st, j = _call_retry(ctx.art + "/artifacts/namespaces/" + ns + "/repos/" + name + "/log?" + q, ctx.cf_token)
     if st == 200:
         log = j.get("result") or []
         if log:
@@ -131,7 +145,7 @@ def artifacts_head(ctx, ns, name, branch):
 def github_head(ctx, owner, repo, branch):
     url = GH + "/repos/" + owner + "/" + repo + "/commits?" + urllib.parse.urlencode(
         {"sha": branch, "per_page": 1})
-    st, j = _call(url, ctx.gh_token)
+    st, j = _call_retry(url, ctx.gh_token)
     if st == 200 and isinstance(j, list) and j:
         c = j[0]
         return {"sha": c.get("sha"),
