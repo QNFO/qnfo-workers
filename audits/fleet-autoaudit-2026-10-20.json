@@ -1,5 +1,5 @@
 {
-  "audited_at": "2026-10-20 09:20:27",
+  "audited_at": "2026-10-20 09:52:21",
   "d1_write_failures": [],
   "d1_writes_ok": 120,
   "guard": {
@@ -540,7 +540,7 @@
       },
       {
         "dir": "personal-api",
-        "version": "4.22.0-personal-live",
+        "version": "4.23.0-companion-package",
         "worker": "personal-api"
       },
       {
@@ -555,7 +555,7 @@
       },
       {
         "dir": "qnfo-ai",
-        "version": "5.38.0-owner-rw",
+        "version": "5.39.0-owner-otp",
         "worker": "qnfo-ai"
       },
       {
@@ -660,7 +660,7 @@
       },
       {
         "dir": "qnfo-ops",
-        "version": "2.53.0-owner-rw",
+        "version": "2.54.1-owner-otp",
         "worker": "qnfo-ops"
       },
       {
@@ -930,9 +930,9 @@
       "worker": "patches"
     },
     "personal-api": {
-      "before": "4.22.0-personal-live",
+      "before": "4.23.0-companion-package",
       "http": 200,
-      "live": "4.22.0-personal-live",
+      "live": "4.23.0-companion-package",
       "match": 1,
       "note": "SYNC",
       "worker": "personal-api"
@@ -1017,9 +1017,9 @@
       "worker": "qnfo-agent-ws"
     },
     "qnfo-ai": {
-      "before": "5.38.0-owner-rw",
+      "before": "5.39.0-owner-otp",
       "http": 200,
-      "live": "5.38.0-owner-rw",
+      "live": "5.39.0-owner-otp",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-ai"
@@ -1473,9 +1473,9 @@
       "worker": "qnfo-observability"
     },
     "qnfo-ops": {
-      "before": "2.53.0-owner-rw",
+      "before": "2.54.1-owner-otp",
       "http": 200,
-      "live": "2.53.0-owner-rw",
+      "live": "2.54.1-owner-otp",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-ops"
