@@ -122,7 +122,7 @@ async function call(t, body, headers = {}) {
 }
 const Q = { model: "ops", messages: [{ role: "user", content: "What are recent ipatent web queries?" }] };
 const PAID = /gateway\.ai\.cloudflare\.com|api\.deepseek\.com|api\.openai\.com/;
-const PUBLIC_SET = ["backlog_status", "fleet_status", "public_data"];
+const PUBLIC_SET = ["backlog_status", "fleet_status", "owner_login", "owner_verify", "public_data"];
 const toolResults = (t) => t.ai.seen.flatMap((s) => s.messages.filter((m) => m.role === "tool").map((m) => String(m.content)));
 
 // A. no key: answered in public read-only mode, from the free tier, with only the public tools.
@@ -174,11 +174,11 @@ const toolResults = (t) => t.ai.seen.flatMap((s) => s.messages.filter((m) => m.r
   ok(!t.fetches.some((f) => /containers|shell/.test(f.url)), "C shell_exec never reached a container");
 }
 
-// D. OWNER-RW-ANY-LLM-1 (2.53.0): a presented but wrong key is never answered in public read mode; it is a 401 that says the key was rejected.
+// D. OWNER-OTP-1 (2.54.0): a wrong key is the same as no key: public read mode, flagged with x-ops-key-status: rejected.
 {
   const t = mk();
-  const { res, text } = await call(t, Q, { Authorization: "Bearer stale-key", "CF-Connecting-IP": "198.51.100.4" });
-  ok(res.status === 401 && res.headers.get("x-ops-access") !== "public-read" && text.indexOf("key_rejected") >= 0, "D stale key is a 401 key_rejected, not public read mode");
+  const { res } = await call(t, Q, { Authorization: "Bearer stale-key", "CF-Connecting-IP": "198.51.100.4" });
+  ok(res.status === 200 && res.headers.get("x-ops-access") === "public-read" && res.headers.get("x-ops-key-status") === "rejected", "D stale key answered in public read mode and flagged rejected");
 }
 
 // E. model ids that would pick a paid upstream or a raw relay are ignored in public mode.

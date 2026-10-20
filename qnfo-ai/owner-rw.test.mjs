@@ -71,5 +71,18 @@ const K1 = { Authorization: "Bearer key-one" }, K2 = { Authorization: "Bearer ke
   r = await req(t, "POST", "/v1/ideas", { Authorization: "Bearer other" }, { title: "fed" });
   ok(r.res.status === 401, "H2 a key neither accepts is 401");
 }
+// I. OWNER-OTP-1: keyless or wrong-key chat and the owner login go to qnfo-ops over the binding.
+{
+  const seen = [];
+  const t = mk({ OPS: { async fetch(r) { seen.push(new URL(r.url).pathname); return new Response(JSON.stringify({ forwarded: true }), { status: 200 }); } } });
+  let r = await req(t, "POST", "/v1/chat/completions", {}, { model: "qnfo", messages: [{ role: "user", content: "hi" }] });
+  ok(r.j && r.j.forwarded === true && seen.indexOf("/v1/chat/completions") >= 0, "I1 keyless chat is answered by qnfo-ops");
+  r = await req(t, "POST", "/v1/chat/completions", { Authorization: "Bearer 003wrong" }, { model: "qnfo", messages: [{ role: "user", content: "hi" }] });
+  ok(r.j && r.j.forwarded === true, "I2 wrong-key chat is answered by qnfo-ops");
+  r = await req(t, "POST", "/v1/owner/login", {}, {});
+  ok(r.j && r.j.forwarded === true && seen.indexOf("/v1/owner/login") >= 0, "I3 owner login is handed to qnfo-ops");
+  r = await req(t, "POST", "/v1/owner/verify", {}, { code: "123456" });
+  ok(r.j && r.j.forwarded === true && seen.indexOf("/v1/owner/verify") >= 0, "I4 owner verify is handed to qnfo-ops");
+}
 say(pass + " passed, " + fail + " failed");
 process.exit(fail ? 1 : 0);

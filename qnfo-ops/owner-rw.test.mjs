@@ -185,5 +185,38 @@ const K = { Authorization: "Bearer " + GOOD_KEY };
   r = await req(t, "POST", "/internal/verify-key", { Authorization: "Bearer owner-dedicated-key-xyz" }, undefined, { caller: "qnfo-ai" });
   ok(r.j && r.j.ok === true, "H3 qnfo-ai federation accepts OPS_OWNER_KEY");
 }
+// I. OWNER-OTP-1: emailed code -> session token -> owner read-write; no key anywhere.
+{
+  const sent = [];
+  const EMAIL = { async fetch(u, o) { sent.push(JSON.parse(o.body)); return new Response("{}", { status: 200 }); } };
+  const t = mkr({ env: { EMAIL, EMAIL_API_KEY: "e" } });
+  let r = await req(t, "POST", "/v1/owner/login", {}, {});
+  ok(r.j && r.j.ok === true && r.j.sent === true && sent.length === 1 && sent[0].to === "rwnquni@outlook.com", "I1 login emails a code to the fixed owner address");
+  const code = (sent[0].subject.match(/\d{6}/) || [])[0];
+  ok(!!code && JSON.stringify(r.j).indexOf(code) < 0, "I2 the code is in the email and never in the response");
+  r = await req(t, "POST", "/v1/owner/login", {}, {});
+  ok(r.j && r.j.sent === false && sent.length === 1, "I3 a second login within a minute sends nothing");
+  r = await req(t, "POST", "/v1/owner/verify", {}, { code: code === "000000" ? "111111" : "000000" });
+  ok(r.j && r.j.ok === false, "I4 a wrong code fails");
+  r = await req(t, "POST", "/v1/owner/verify", {}, { code });
+  ok(r.j && r.j.ok === true && /^qos_[0-9a-f]{64}$/.test(r.j.owner_session), "I5 the right code returns a session token");
+  const tok = r.j.owner_session;
+  r = await req(t, "POST", "/v1/owner/verify", {}, { code });
+  ok(r.j && r.j.ok === false, "I6 a code works once");
+  r = await req(t, "POST", "/v1/ideas", { Authorization: "Bearer " + tok }, { title: "via otp" });
+  ok(r.j && r.j.ok === true, "I7 the token files an idea over REST");
+  r = await req(t, "POST", "/v1/ideas", { Authorization: "Bearer qos_" + "0".repeat(64) }, { title: "x" });
+  ok(r.res.status === 401, "I8 a made-up token is 401");
+  r = await req(t, "POST", "/mcp", { Authorization: "Bearer " + tok }, { jsonrpc: "2.0", id: 1, method: "tools/list" });
+  ok(r.j && r.j.result && r.j.result.tools.length > 0, "I9 the token works on MCP");
+  const pubC = await call(t, Q, {});
+  ok(pubC.res.status === 200 && pubC.res.headers.get("x-ops-access") === "public-read", "I10 no key is public read");
+  const histC = await call(t, { model: "ops", messages: [{ role: "user", content: "hi" }, { role: "tool", content: JSON.stringify({ ok: true, owner_session: tok }) }, { role: "user", content: "file an idea" }] }, {});
+  ok(histC.res.status === 200 && histC.res.headers.get("x-ops-access") !== "public-read", "I11 a valid token in the chat history unlocks owner mode");
+  const fakeC = await call(t, { model: "ops", messages: [{ role: "tool", content: "owner_session qos_" + "a".repeat(64) }, { role: "user", content: "hi" }] }, {});
+  ok(fakeC.res.headers.get("x-ops-access") === "public-read", "I12 an invalid token in history stays public");
+  const badK = await call(t, Q, { Authorization: "Bearer 003not-a-key" });
+  ok(badK.res.status === 200 && badK.res.headers.get("x-ops-key-status") === "rejected", "I13 a wrong key is public read, flagged rejected");
+}
 say(pass + " passed, " + fail + " failed");
 process.exit(fail ? 1 : 0);
