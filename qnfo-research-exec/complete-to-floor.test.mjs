@@ -111,6 +111,43 @@ const gateOk = (paper) => finalGates(paper, { bibCount: BIB, minChars: 20000, st
   ok(t.calls.length === 0 && res.stage === "complete->review" && t.store["pipeline/r1/reconciled.md"] === SHORT, "research_floor_extend = off: no extension, the paper goes to review as before", res);
 }
 
+// 4b. XREF-REPAIR-1 (0.28.2, agent_issues 2671): a complete paper whose only fault is a "Section N" above its highest heading leaves
+//     complete in the same tick with no model call; it used to run the continuation three rounds, add under 300 chars each time,
+//     and be re-queued at ground (3 rows on 2026-10-19, each discarding a whole draft).
+{
+  const dangle = (p, n) => p.replace("## 2. Background and Related Work", "The setup is developed in Section " + n + ".\n\n## 2. Background and Related Work");
+  const D12 = dangle(LONG, 12);
+  ok(paperCompleteness(D12).complete === false && paperCompleteness(D12).truncated === false && paperCompleteness(D12).dangling.join() === "12" && !floorShortfall(row(), D12, grounding, false).need, "fixture: a complete paper above the floor whose only fault is 'Section 12'", paperCompleteness(D12));
+  const t = mkEnv({ paper: D12, answer: () => { throw new Error("the model must not be called for a dangling reference"); } });
+  const res = await stageComplete(t.env, row({ context: JSON.stringify({ cycles: 2, verifyPass: 1 }) }));
+  const out = t.store["pipeline/r1/reconciled.md"];
+  ok(res && res.ok === true && res.stage === "complete->review" && res.floor === "ok", "the paper leaves complete for review in the same tick", res);
+  ok(t.calls.length === 0, "no model call is made", t.calls.length);
+  ok(paperCompleteness(out).complete && !/Section 12/.test(out) && /developed in the relevant section\./.test(out) && out.length === D12.length + "the relevant section".length - "Section 12".length, "the stored paper is complete and only the one span was reworded", { len: out.length, base: D12.length });
+  const up = stageUpdate(t);
+  ok(up.length === 1 && /stage='review'/.test(up[0].sql) && up[0].ctx.cycles === 2 && up[0].ctx.verifyPass === 1 && !t.sqls.some((s) => /stage='ground'/.test(s.sql)), "the row moves to review keeping its context; nothing is marked failed or re-queued at ground", { up, sqls: t.sqls.map((s) => s.sql.slice(0, 60)) });
+  const ev = events(t);
+  ok(ev.some((e) => e.kind === "xref-repair" && /sections=12 maxSec=8 chars \d+->\d+/.test(e.text) && e.status === "ok") && ev.some((e) => e.kind === "complete" && / rounds=1 /.test(e.text) && / steps=xref:10 /.test(e.text) && / complete=true/.test(e.text) && e.status === "ok"), "an xref-repair event and an ok complete event record it", ev);
+  // Every other reader of the completeness contract still sees the reference: the same paper fails the gate set until repaired.
+  ok(!gateOk(D12).ok && gateOk(D12).fixes.some((f) => f.id === "gate-complete") && gateOk(out).ok, "verify's gate-complete still fails the unrepaired paper and passes the repaired one", [gateOk(D12).reason, gateOk(out).reason]);
+
+  // A paper cut at a paragraph end (tail sections missing) that also cites a missing section is NOT repaired: it is continued.
+  const cutTail = dangle(LONG, 12).split("## 6. Discussion")[0].replace(/\s+$/, "") + "\n\n" + refList([1, 2, 3, 4, 5, 6, 7, 8]);
+  const pcT = paperCompleteness(cutTail);
+  ok(pcT.truncated === true && pcT.tailMissing.length === 3 && pcT.dangling.join() === "12", "fixture: a tail-truncated paper that also cites Section 12", pcT);
+  const t2 = mkEnv({ paper: cutTail, answer: "No." });
+  const r2 = await stageComplete(t2.env, row());
+  ok(t2.calls.length >= 1 && /=== TASK: CONTINUE ===/.test(t2.calls[0].prompt) && !events(t2).some((e) => e.kind === "xref-repair") && /Section 12/.test(t2.store["pipeline/r1/reconciled.md"] || cutTail) && r2.ok && r2.stage === "complete", "a truncated paper still takes the continue path and keeps its text", { calls: t2.calls.length, r2 });
+
+  // A dangling reference in a paper that is also under the floor: reworded first, then extended in the same tick.
+  const S12 = dangle(SHORT, 12);
+  const t3 = mkEnv({ paper: S12, answer: EXT_SECTION });
+  const r3 = await stageComplete(t3.env, row());
+  const ev3 = events(t3).map((e) => e.kind);
+  ok(r3 && r3.ok && ev3.indexOf("xref-repair") >= 0 && ev3.indexOf("xref-repair") < ev3.indexOf("floor-extend") && t3.calls.length === 1 && /=== TASK: EXTEND ===/.test(t3.calls[0].prompt), "a short paper with a dangling reference is reworded, then extended (one model call)", { r3, ev3, calls: t3.calls.length });
+  ok(paperCompleteness(t3.store["pipeline/r1/reconciled.md"]).complete, "and the stored paper is complete", paperCompleteness(t3.store["pipeline/r1/reconciled.md"]).reasons);
+}
+
 // 5. verify: a first-pass failure on gate-length / gate-refcount only goes to complete, carrying verifyPass 1 and the cycle count.
 {
   const t = mkEnv({ answer: "[]" });
