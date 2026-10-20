@@ -1,32 +1,24 @@
 {
  "ok": true,
  "marker": "REMEDIATION-CONSUMER-1",
- "verifier": "remediation-consumer@5a976bdfb2d5",
- "due": 245,
- "pass": 226,
- "fail": 19,
+ "verifier": "remediation-consumer@3c4c05d2244c",
+ "due": 243,
+ "pass": 223,
+ "fail": 20,
  "skipped": 0,
  "deferred": 0,
  "contracts": [
   {
-   "class": "issue-100124",
-   "issue_id": 100124,
-   "verdict": "pass",
+   "class": "goal-TWIN-NATIVE-TOOLS-1",
+   "issue_id": null,
+   "verdict": "fail",
    "expected": "ok",
-   "observed": "ok",
+   "observed": "present-marker:personal-api/worker.js",
    "written": true
   },
   {
-   "class": "issue-100169",
-   "issue_id": 100169,
-   "verdict": "pass",
-   "expected": "ok",
-   "observed": "ok",
-   "written": true
-  },
-  {
-   "class": "issue-2600",
-   "issue_id": 2600,
+   "class": "belief-deploy-loop-attempts-every-target",
+   "issue_id": null,
    "verdict": "pass",
    "expected": "ok",
    "observed": "ok",
@@ -41,16 +33,8 @@
    "written": true
   },
   {
-   "class": "fm-ops-job-prompt-sum",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "ok",
-   "observed": "ok",
-   "written": true
-  },
-  {
-   "class": "belief-deploy-loop-attempts-every-target",
-   "issue_id": null,
+   "class": "issue-2600",
+   "issue_id": 2600,
    "verdict": "pass",
    "expected": "ok",
    "observed": "ok",
@@ -73,16 +57,8 @@
    "written": true
   },
   {
-   "class": "fm-merge-boundary-load-unchecked",
+   "class": "fm-ops-job-prompt-sum",
    "issue_id": null,
-   "verdict": "pass",
-   "expected": "ok",
-   "observed": "ok",
-   "written": true
-  },
-  {
-   "class": "issue-100219",
-   "issue_id": 100219,
    "verdict": "pass",
    "expected": "ok",
    "observed": "ok",
@@ -105,6 +81,22 @@
    "written": true
   },
   {
+   "class": "issue-100219",
+   "issue_id": 100219,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "fm-merge-boundary-load-unchecked",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
    "class": "issue-100187",
    "issue_id": 100187,
    "verdict": "pass",
@@ -118,14 +110,6 @@
    "verdict": "fail",
    "expected": "ok",
    "observed": "present-marker:qnfo-ops/CHATBOX-SETUP.md",
-   "written": true
-  },
-  {
-   "class": "issue-100230",
-   "issue_id": 100230,
-   "verdict": "fail",
-   "expected": "ok",
-   "observed": "missing-marker:docs/DOMAINS.md",
    "written": true
   },
   {
@@ -145,8 +129,16 @@
    "written": true
   },
   {
-   "class": "issue-100081",
-   "issue_id": 100081,
+   "class": "issue-100230",
+   "issue_id": 100230,
+   "verdict": "fail",
+   "expected": "ok",
+   "observed": "missing-marker:docs/DOMAINS.md",
+   "written": true
+  },
+  {
+   "class": "rt-live-qnfo-ai-calibration",
+   "issue_id": null,
    "verdict": "pass",
    "expected": "ok",
    "observed": "ok",
@@ -161,32 +153,8 @@
    "written": true
   },
   {
-   "class": "issue-100140",
-   "issue_id": 100140,
-   "verdict": "fail",
-   "expected": "0",
-   "observed": "3",
-   "written": true
-  },
-  {
-   "class": "issue-100229",
-   "issue_id": 100229,
-   "verdict": "fail",
-   "expected": "ok",
-   "observed": "missing-marker:personal-companion/worker.js",
-   "written": true
-  },
-  {
-   "class": "rt-live-qnfo-ai-calibration",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "ok",
-   "observed": "ok",
-   "written": true
-  },
-  {
-   "class": "issue-100066",
-   "issue_id": 100066,
+   "class": "issue-100081",
+   "issue_id": 100081,
    "verdict": "pass",
    "expected": "ok",
    "observed": "ok",
@@ -201,11 +169,19 @@
    "written": true
   },
   {
-   "class": "issue-100274",
-   "issue_id": 100274,
+   "class": "issue-100229",
+   "issue_id": 100229,
    "verdict": "fail",
-   "expected": "0/0",
-   "observed": "0/20",
+   "expected": "ok",
+   "observed": "missing-marker:personal-companion/worker.js",
+   "written": true
+  },
+  {
+   "class": "issue-100066",
+   "issue_id": 100066,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
    "written": true
   },
   {
@@ -225,31 +201,15 @@
    "written": true
   },
   {
-   "class": "fm-q08-thin-source-composed",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "0",
-   "observed": "0",
-   "written": true
-  },
-  {
-   "class": "issue-100232",
-   "issue_id": 100232,
+   "class": "issue-100140",
+   "issue_id": 100140,
    "verdict": "fail",
-   "expected": "ok",
-   "observed": "missing-marker:personal-api/worker.js",
+   "expected": "0",
+   "observed": "3",
    "written": true
   },
   {
    "class": "rt-ai-router",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "ok",
-   "observed": "ok",
-   "written": true
-  },
-  {
-   "class": "fm-skip-token-in-merge-message",
    "issue_id": null,
    "verdict": "pass",
    "expected": "ok",
@@ -270,6 +230,38 @@
    "verdict": "pass",
    "expected": "ok",
    "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "issue-100232",
+   "issue_id": 100232,
+   "verdict": "fail",
+   "expected": "ok",
+   "observed": "missing-marker:personal-api/worker.js",
+   "written": true
+  },
+  {
+   "class": "issue-100274",
+   "issue_id": 100274,
+   "verdict": "fail",
+   "expected": "0/0",
+   "observed": "0/20",
+   "written": true
+  },
+  {
+   "class": "fm-skip-token-in-merge-message",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "fm-q08-thin-source-composed",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "0",
+   "observed": "0",
    "written": true
   },
   {
@@ -305,16 +297,16 @@
    "written": true
   },
   {
-   "class": "issue-100126",
-   "issue_id": 100126,
+   "class": "issue-2830-load-gate",
+   "issue_id": 2830,
    "verdict": "pass",
    "expected": "ok",
    "observed": "ok",
    "written": true
   },
   {
-   "class": "issue-2830-load-gate",
-   "issue_id": 2830,
+   "class": "issue-100126",
+   "issue_id": 100126,
    "verdict": "pass",
    "expected": "ok",
    "observed": "ok",
@@ -329,15 +321,15 @@
    "written": true
   },
   {
-   "class": "fm-q08-repeat-class-extension",
+   "class": "rt-fleet-dashboard",
    "issue_id": null,
    "verdict": "pass",
-   "expected": "0",
-   "observed": "0",
+   "expected": "ok",
+   "observed": "ok",
    "written": true
   },
   {
-   "class": "rt-fleet-dashboard",
+   "class": "rt-gateway",
    "issue_id": null,
    "verdict": "pass",
    "expected": "ok",
@@ -361,14 +353,6 @@
    "written": true
   },
   {
-   "class": "issue-100117",
-   "issue_id": 100117,
-   "verdict": "pass",
-   "expected": "ok",
-   "observed": "ok",
-   "written": true
-  },
-  {
    "class": "fm-migration-reapply-clobber",
    "issue_id": null,
    "verdict": "pass",
@@ -385,7 +369,39 @@
    "written": true
   },
   {
-   "class": "rt-gateway",
+   "class": "rt-live-qnfo-containers-pilot",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "issue-100117",
+   "issue_id": 100117,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "issue-100134",
+   "issue_id": 100134,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "fm-q08-repeat-class-extension",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "0",
+   "observed": "0",
+   "written": true
+  },
+  {
+   "class": "rt-personal-api",
    "issue_id": null,
    "verdict": "pass",
    "expected": "ok",
@@ -401,28 +417,8 @@
    "written": true
   },
   {
-   "class": "issue-100134",
-   "issue_id": 100134,
-   "verdict": "pass",
-   "expected": "ok",
-   "observed": "ok",
-   "written": true
-  },
-  {
    "class": "rt-papers",
    "issue_id": null,
    "verdict": "pass",
    "expected": "ok",
-   "observed": "ok",
-   "written": true
-  },
-  {
-   "class": "rt-live-qnfo-containers-pilot",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "ok",
-   "observed": "ok",
-   "written": true
-  },
-  {
- 
+   "
