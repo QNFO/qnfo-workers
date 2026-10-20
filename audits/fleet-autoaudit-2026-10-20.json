@@ -1,5 +1,5 @@
 {
-  "audited_at": "2026-10-20 13:14:24",
+  "audited_at": "2026-10-20 14:54:12",
   "d1_write_failures": [],
   "d1_writes_ok": 120,
   "guard": {
@@ -590,7 +590,7 @@
       },
       {
         "dir": "qnfo-deploy-guard",
-        "version": "1.3.27-superseded-is-done",
+        "version": "1.3.28-codeagent",
         "worker": "qnfo-deploy-guard"
       },
       {
@@ -615,7 +615,7 @@
       },
       {
         "dir": "qnfo-gateway",
-        "version": "3.29.2-codeagent",
+        "version": "3.29.4-codeagent",
         "worker": "qnfo-gateway"
       },
       {
@@ -1208,9 +1208,9 @@
       "worker": "qnfo-ddocs-indexer"
     },
     "qnfo-deploy-guard": {
-      "before": "1.3.27-superseded-is-done",
+      "before": "1.3.28-codeagent",
       "http": 200,
-      "live": "1.3.27-superseded-is-done",
+      "live": "1.3.28-codeagent",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-deploy-guard"
@@ -1347,9 +1347,9 @@
       "worker": "qnfo-fleet-feed"
     },
     "qnfo-gateway": {
-      "before": "3.29.2-codeagent",
+      "before": "3.29.4-codeagent",
       "http": 200,
-      "live": "3.29.2-codeagent",
+      "live": "3.29.4-codeagent",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-gateway"
