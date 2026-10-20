@@ -1081,7 +1081,7 @@ function secretEq(a, b) {
 }
 __name(secretEq, "secretEq");
 // VERSION-LINE-SPLIT-1 (agent_issues 100220): the release notes sit one per line below this statement, newest first, so a VERSION bump is a one-line patch; add a new note as the first line under it.
-var VERSION = "0.44.2-codeagent";
+var VERSION = "0.44.3-codeagent";
 /* 0.44.1 DEFERRAL-MEASURED-1 (2026-10-20, agent_issues 2954, 100245, 100246, pillar autonomy; patch): the remediation tick reads a measured pending (a number against a bound: "pending: ... reads 0.5058 (target <= 0.5)") as a verdict, as the consumer and the D1 relapse trigger already did, instead of deferring it for ever (rtIsMeasuredPending). deferral-measured.test.mjs. */ /* 0.42.0 DEPLOY-ALL-MERGES-1 (2026-10-20, owner directive "The system shall always deploy all merges automatically."; pillar core; minor: a decision the loop now takes on its own): DEPLOY-DRIFT-CF-1 measured and redeployed only the workers qnfo-ops /ops/deploy may take, so a merge to a control-plane worker (qnfo-fleet-control, qnfo-ops, qnfo-deploy-guard, qnfo-ai, qnfo-gateway, qnfo-observability) or a container worker (qnfo-code-orchestrator, qnfo-containers-pilot) whose canonical run was cancelled, skipped or failed stayed behind main with nothing to notice it (8 rows read "skip" in deploy_drift_cf at 05:30Z). Those workers are now targets too: main ahead of live for 45 minutes, no active run of the owning workflow and the live script confirmed behind, the tick dispatches canonical-deploy.yml with workers=<name> (canary and automatic revert on the runner) or the container worker's own workflow, at most 2 a tick and once per main VERSION an hour (ddcRunner, ddcDispatchPending). Metric merges_undeployed_over_60m (migrations/2026-10-20-deploy-all-merges.sql). deploy-drift-cf.test.mjs 14. */ /* 0.41.2 EXTERNAL-HTTPS-MASTODON-HOST-1 (2026-10-19, agent_issues 2925 INTEG-MASTODON-VERIFY-1; pillar autonomy; patch): RT_HTTP_HOSTS gains mstdn.science, the public Mastodon instance whose unauthenticated account lookup (GET /api/v1/accounts/lookup) qnfo-social already reads (MASTODON-PUBLIC-STATS-1), so the issue closing probe, which was parked probe-not-machine-executable on "host not allowed", can run. The rest of rtHttpSpec is unchanged: https only, GET or HEAD, no credentials, no redirect followed, 10 s, 1 MB; a host not on the list is still refused. */ /* 0.41.1 POOL-BOUND-SOURCES-1 (issue 100213, human_actions 107; patch): POOL-BOUND-1 parks notebook extractions (idea_proposals name owner-corpus) like any generated row and never parks a row an owner directive queued directly (source idea, chat, operator-prime). 0.41.0 REOPEN-LIVE-PATH-3 (issue 100271): the remediation tick files one deduped PROBE-NEEDED-1 issue per open issue left without a live contract. 0.40.1 VERSION-LINE-NOTES-1 (2026-10-19, agent_issues 100243, pillar autonomy; patch, a comment moved): the release notes of every earlier version rode on this line (178 notes, about 200,000 chars), so a version bump of this worker was an 820,000-char patch (worker and mirror, removed and added): 12 code tasks ended on the publisher size cap on 2026-10-19 and three issues were exhausted for three days. They are in git history (git log -S '<release tag>' -- qnfo-fleet-control/worker.js); the changelog is built from the deploy ledger and commits, and the guards read only the quoted version string. A new note goes on this line and stays short. */
 /* 0.44.0 GH-WEBHOOK-INTAKE-1 and GH-APP-FLEET-2 (2026-10-20, pillar autonomy; agent_issues 2582 and 2596; minor: two new routes). POST /gh/webhook receives pull_request, check_suite and push events for QNFO/qnfo-workers, verifies X-Hub-Signature-256 against GH_WEBHOOK_SECRET (503 and nothing accepted while it is unset), records each delivery once (cloud_ops_events kind gh-webhook, id gh-webhook-<delivery>) and runs the merge lane at once for a check_suite that completed with success or a pull request opened, reopened or ready, debounced to one run a minute; the 10-minute poll stays as the second path. POST /gh-app/token is the internal broker for the other GitHub-token workers: a service binding whose props.caller is a listed fleet worker gets the cached installation token (never the personal one, never logged); GET /gh-app reports broker service-binding. Registering the webhook on GitHub and converting each worker are the filed follow-ups. */
 /* 0.43.0 WORKFLOW-FAILURE-INTAKE-1 (2026-10-20, agent_issues 100295, pillar autonomy; minor: a new loop step): each 10-minute tick reads the newest workflow runs on main, keeps every workflow's latest decided conclusion in workflow_main_state, records a failing run with its failed job and step in workflow_failures, files one WORKFLOW-FAILED-1: <workflow> issue with a d1-query probe, and closes it with close_evidence when a later main run succeeds; ops_config workflow_failure_intake = off stops it. */
@@ -11829,9 +11829,97 @@ async function rtFileLivePathIssue(db, o) {
   } catch (eV) { /* the issue is the record; the event is a convenience */ }
   return row.id;
 }
+// PROBE-AUTHOR-LIVEPATH-1 (issue 100347, pillar autonomy; wave-4 RCA of issue 2954): a PROBE-NEEDED-1 issue waited for a session to
+// author the probe of an orphan, so the one-hour live-path rule relapsed (two PORTFOLIO-GAP orphans crossed 60 minutes at 11:20Z and
+// the issue-2954 contract failed on 7 of 8 reads). After rtFileLivePathIssue files the issue, one cheap Workers AI call (the
+// BUDGET-SOFT-ROUTE-1 cheapest model on the qnfo-ai binding) is asked for a read-only d1-query probe of the form
+// SELECT expected AS expected, observed AS observed that measures the issue definition of done. The probe is accepted only if it passes
+// a static check (a single SELECT or WITH, no write keyword, it does not read the status of the target in agent_issues, no
+// needs-machine-probe marker, its tables exist), a dry run in D1 that does NOT already pass (a probe that passes at birth is vacuous
+// and rejected) and ops_config rt_probe_author is not off. On accept the target contract goes to status active with that probe, module
+// probe-author-1, last_verdict NULL, a cloud_ops_events row of kind remediation.probe-authored is written and a decision_log row names
+// the revert path (set the contract back to superseded); the PROBE-NEEDED-1 issue then closes itself through its existing probe. On
+// reject or model failure the orphan and its PROBE-NEEDED-1 issue are left exactly as today. Bounds: RT_LIVEPATH_MAX_PER_DAY (12)
+// probe-authored per 24 hours and RT_PROBE_AUTHOR_MAX_PER_TICK (3) per tick. qnfo-cloud-ops PROBE-REVIEW-1 re-judges every active
+// d1-query probe with disjoint models, so authorship stays independent.
+var RT_PROBE_AUTHOR_MAX_PER_TICK = 3;
+var RT_PROBE_AUTHOR_MODEL = "@cf/meta/llama-3.1-8b-instruct";
+var rtProbeAuthorTickKey = 0, rtProbeAuthorTickStamp = -1, rtProbeAuthorTickN = 0;
+function rtProbeAuthorStrip(s) {
+  return String(s || "").replace(/```(sql)?/gi, "").trim();
+}
+async function rtProbeAuthorValidSql(db, sql, id) {
+  var q = rtProbeAuthorStrip(sql);
+  if (!q) return "empty";
+  if (!/^(select|with)\b/i.test(q)) return "not a single SELECT or WITH";
+  if (/;\s*\S/.test(q)) return "more than one statement";
+  if (/\b(insert|update|delete|replace|drop|alter|create|attach|detach|pragma|vacuum|reindex)\b/i.test(q)) return "write keyword";
+  if (q.indexOf("needs-machine" + "-probe") !== -1) return "needs-machine-probe marker";
+  if (/select\s+status\s+from\s+agent_issues/i.test(q)) return "reads the status of the target issue";
+  if (new RegExp("agent_issues\\s+where\\s+id\\s*=\\s*" + Number(id) + "\\b", "i").test(q)) return "reads the status of the target issue";
+  var tabs = {}, m, re = /(?:from|join)\s+([a-zA-Z_][a-zA-Z0-9_]*)/gi;
+  while ((m = re.exec(q))) tabs[m[1].toLowerCase()] = 1;
+  var names = Object.keys(tabs);
+  if (names.length) {
+    var have = {};
+    try {
+      var sm = (await db.prepare("SELECT name FROM sqlite_master WHERE type = 'table'").all()).results || [];
+      for (var k = 0; k < sm.length; k++) have[String(sm[k].name).toLowerCase()] = 1;
+    } catch (eS) { return "schema unreadable"; }
+    for (var k2 = 0; k2 < names.length; k2++) if (!have[names[k2]]) return "table " + names[k2] + " does not exist";
+  }
+  return null;
+}
+async function rtAuthorLivePathProbe(db, env, orphan) {
+  if (!orphan) return false;
+  var id = Number(orphan.id);
+  if (!(id > 0)) return false;
+  if (rtProbeAuthorTickStamp !== rtProbeAuthorTickKey) { rtProbeAuthorTickStamp = rtProbeAuthorTickKey; rtProbeAuthorTickN = 0; }
+  if (rtProbeAuthorTickN >= RT_PROBE_AUTHOR_MAX_PER_TICK) return false;
+  var ai = null;
+  try { ai = (env && (env["qnfo-ai"] || env.qnfo_ai)) || null; } catch (eB) { ai = null; }
+  if (!ai || typeof ai.run !== "function") return false;
+  if (await rtFlagOff(db, "rt_probe_author")) return false;
+  try {
+    var made = await db.prepare("SELECT COUNT(*) AS n FROM cloud_ops_events WHERE kind = 'remediation.probe-authored' AND ts > ?1").bind(new Date(Date.now() - 864e5).toISOString()).first();
+    if ((made ? Number(made.n) || 0 : 0) >= RT_LIVEPATH_MAX_PER_DAY) return false;
+  } catch (eC) { return false; }
+  var prompt = "You write read-only D1 (SQLite) verification probes. Issue " + id + " (" + String(orphan.title || "").slice(0, 160) + ") is open with no probe of its own. Reply with exactly one SQL statement of the form SELECT <expected literal> AS expected, <observed expression> AS observed that measures this issue's own definition of done over the tables the issue names: it reads pending while the defect stands and ok once it is fixed. It must be a single SELECT or WITH, must not write, must not read the status of issue " + id + " in agent_issues, must not mention needs-machine-probe, and must only use tables that exist. Reply with the SQL only.";
+  var r;
+  try { r = await ai.run(RT_PROBE_AUTHOR_MODEL, { messages: [{ role: "user", content: prompt }] }); }
+  catch (eR) { console.error(JSON.stringify({ evt: "fleet-control:probe-author:model", issue: id, error: String(eR && eR.message).slice(0, 200) })); return false; }
+  var body = r ? (Array.isArray(r) ? r[0] : r) : null;
+  var text = String(body && (body.response || body.result) || "").trim();
+  if (!text) { console.error(JSON.stringify({ evt: "fleet-control:probe-author:empty", issue: id })); return false; }
+  var probe = rtProbeAuthorStrip(text);
+  var bad = await rtProbeAuthorValidSql(db, probe, id);
+  if (bad) { console.error(JSON.stringify({ evt: "fleet-control:probe-author:static-reject", issue: id, reason: bad })); return false; }
+  var dry;
+  try { dry = await db.prepare(probe).all(); }
+  catch (eD) { console.error(JSON.stringify({ evt: "fleet-control:probe-author:dry-run", issue: id, error: String(eD && eD.message).slice(0, 200) })); return false; }
+  var row0 = dry && dry.results && dry.results[0];
+  if (!row0) { console.error(JSON.stringify({ evt: "fleet-control:probe-author:no-row", issue: id })); return false; }
+  if (String(row0.expected) === String(row0.observed)) { console.error(JSON.stringify({ evt: "fleet-control:probe-author:vacuous", issue: id })); return false; }
+  var cid = "issue-" + id;
+  var pre = "issue " + id + " is open and none of its contracts holds a probe that can judge it", act = "probe-author-1 wrote the probe that measures issue " + id;
+  var u = await db.prepare("UPDATE remediation_contracts SET verify_probe = ?2, verify_transport = 'd1-query', status = 'active', last_verdict = NULL, attempts = 0, next_due_at = NULL, module = 'probe-author-1' WHERE class = ?1").bind(cid, probe).run();
+  if (!(u && u.meta && Number(u.meta.changes) > 0)) {
+    await db.prepare("INSERT OR IGNORE INTO remediation_contracts (class, issue_id, precondition, action, verify_probe, verify_transport, max_attempts, escalate_to, expected_cadence_h, status, module) VALUES (?1, ?2, ?3, ?4, ?5, 'd1-query', 3, 'qnfo-fleet-control', 1, 'active', 'probe-author-1')").bind(cid, id, pre, act, probe).run();
+  }
+  try {
+    await db.prepare("INSERT INTO cloud_ops_events (id, ts, kind, text, job, status) VALUES (?1, strftime('%Y-%m-%dT%H:%M:%fZ','now'), 'remediation.probe-authored', ?2, 'qnfo-fleet-control', 'ok')").bind("pau-" + id + "-" + Date.now(), ("issue=" + id + " module=probe-author-1 probe=" + probe.slice(0, 240)).slice(0, 400)).run();
+  } catch (eV) { /* the contract is the record; the event is a convenience */ }
+  try {
+    await db.prepare("INSERT INTO decision_log (ts, decision, reason) VALUES (strftime('%Y-%m-%dT%H:%M:%fZ','now'), ?1, ?2)").bind("PROBE-AUTHOR-LIVEPATH-1 authored the probe of orphan issue " + id, "issue 100347: the model wrote a read-only d1-query probe for issue " + id + " (module probe-author-1); revert by UPDATE remediation_contracts SET status = 'superseded' WHERE class = 'issue-" + id + "'").run();
+  } catch (eL) { console.error(JSON.stringify({ evt: "fleet-control:probe-author:decision-log", issue: id, error: String(eL && eL.message).slice(0, 200) })); }
+  rtProbeAuthorTickN++;
+  return true;
+}
 var rtLivePathRetryAt = 0;
-async function rtEnsureLivePath(db, out) {
+async function rtEnsureLivePath(db, out, env) {
   if (out && !out.probe_needed_filed) out.probe_needed_filed = [];
+  if (out && !out.probe_authored) out.probe_authored = [];
+  rtProbeAuthorTickKey = Date.now();
   if (Date.now() < rtLivePathRetryAt) return;
   try {
     if (await rtFlagOff(db, "rt_ensure_live_path")) { out.ensure_live_path_off = 1; return; }
@@ -11843,7 +11931,11 @@ async function rtEnsureLivePath(db, out) {
     for (var i = 0; i < rows.length; i++) {
       try {
         var nid = await rtFileLivePathIssue(db, rows[i]);
-        if (nid != null) out.probe_needed_filed.push(rows[i].id);
+        if (nid != null) {
+          out.probe_needed_filed.push(rows[i].id);
+          try { if (await rtAuthorLivePathProbe(db, env, rows[i])) out.probe_authored.push(rows[i].id); }
+          catch (e3) { console.error(JSON.stringify({ evt: "fleet-control:remediationTick:probe-author", issue: rows[i].id, error: String(e3 && e3.message).slice(0, 200) })); }
+        }
       } catch (e2) { console.error(JSON.stringify({ evt: "fleet-control:remediationTick:probe-needed-file", issue: rows[i].id, error: String(e2 && e2.message).slice(0, 200) })); }
     }
   } catch (e) {
