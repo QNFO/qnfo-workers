@@ -91,7 +91,7 @@ function applyPatch(patch) {
   for (const k of Object.keys(FILES)) fs.writeFileSync(path.join(dir, k), FILES[k]);
   fs.writeFileSync(path.join(dir, "p.patch"), patch);
   spawnSync("git", ["init", "-q"], { cwd: dir });
-  const r = spawnSync("git", ["apply", "p.patch"], { cwd: dir, encoding: "utf8" });
+  const r = spawnSync("git", ["-c", "core.autocrlf=false", "apply", "p.patch"], { cwd: dir, encoding: "utf8" });
   const read = (f) => { try { return fs.readFileSync(path.join(dir, f), "utf8"); } catch (e) { return null; } };
   const out = { ok: r.status === 0, err: (r.stderr || "").slice(0, 300), worker: read(P), mirror: read("fx-worker/deployed-current.worker.js"), test: read(T), mig: read(M), readme: read(R) };
   fs.rmSync(dir, { recursive: true, force: true });

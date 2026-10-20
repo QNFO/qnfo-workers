@@ -26,7 +26,7 @@ function roundTrip(name, base, next) {
   fs.writeFileSync(path.join(dir, "w/worker.js"), base);
   const patch = hunkPatch("w/worker.js", base, next);
   fs.writeFileSync(path.join(dir, "p.patch"), patch);
-  const r = sh(dir, "git", "apply", "p.patch");
+  const r = sh(dir, "git", "-c", "core.autocrlf=false", "apply", "p.patch");
   const out = fs.readFileSync(path.join(dir, "w/worker.js"), "utf8");
   ok(r.status === 0, name + ": git apply accepts the patch", r.stderr);
   ok(out === next, name + ": the result is the proposed file byte for byte", { out: out.slice(-80), next: next.slice(-80) });

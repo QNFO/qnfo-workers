@@ -150,7 +150,7 @@ function fileIssue(env) {
   fs.mkdirSync(path.join(dir, "q08-signal-engine"));
   for (const f of Object.keys(FILES)) fs.writeFileSync(path.join(dir, f), FILES[f]);
   fs.writeFileSync(path.join(dir, "p.diff"), c2.patch || "");
-  const ap = spawnSync("git", ["apply", "p.diff"], { cwd: dir, encoding: "utf8" });
+  const ap = spawnSync("git", ["-c", "core.autocrlf=false", "apply", "p.diff"], { cwd: dir, encoding: "utf8" });
   const outSrc = fs.readFileSync(path.join(dir, "q08-signal-engine/worker.js"), "utf8");
   const outMir = fs.readFileSync(path.join(dir, "q08-signal-engine/deployed-current.worker.js"), "utf8");
   ok(ap.status === 0 && outSrc === WANT && outMir === WANT, "A4 git apply gives exactly the goal: both subqueries cut off, VERSION bumped, mirror identical, nothing else", { err: ap.stderr, same: outSrc === WANT });
