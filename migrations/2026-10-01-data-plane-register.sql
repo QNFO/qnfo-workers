@@ -1,3 +1,4 @@
+-- APPLY-BY: manual (applied live: table:data_plane_register exist in qnfo-audit)
 -- DATA-PLANE-REGISTER-1 (2026-10-01): dispositions for declared data planes that have no producer.
 -- Covers #1638, #1645, #1650, #1651, #1656 and #1657; see docs/DATA-PLANE-DISPOSITIONS-2026-10-01.md. Applied live.
 -- Audits that find an empty table should check this register before filing a "dead table" issue.

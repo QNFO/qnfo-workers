@@ -1,3 +1,4 @@
+-- APPLY-BY: manual (applied live: view:unified_open_issues exist in qnfo-audit)
 -- UNIFIED-OPEN-WORK-1 (#1625, 2026-10-01): one queryable surface for all open work with a per-store breakdown.
 -- unified_open_issues previously unioned agent_issues + issue_ledger only; task_dod_register (the register the
 -- fleet executes from, also behind v_fleet_open_work) was missing. qnfo-ops 2.38.22 backlog_status reports

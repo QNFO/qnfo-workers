@@ -1,3 +1,4 @@
+-- APPLY-BY: manual (applied live: trigger:remediation_reopen_on_relapse_d1, trigger:remediation_verification_autoclose_ins, trigger:remediation_verification_autoclose_upd exist in qnfo-audit)
 -- MEASURED-PENDING-1 (2026-10-17, pillar autonomy; fleet-wide audit).
 --
 -- WHY: the probe corpus writes its FAILURE branch as 'pending: <number> ... <target>' (257 contracts, 14,885 rows in 7 days),

@@ -1,3 +1,4 @@
+-- APPLY-BY: manual (rows-only: applied by hand before MIGRATION-RUNNER-1; tables fleet_tasks, infra_state exist)
 -- RECURRENCE-GUARD-SELFHEAL-JOIN-1 (2026-10-05, agent_issues 1863, pillar core). Idempotent. Applied to qnfo-audit on 2026-10-05.
 --
 -- Issue 1297 fix (b) verified this predicate: no self_heal_actions row stays status='dispatched' with verified_at NULL once the

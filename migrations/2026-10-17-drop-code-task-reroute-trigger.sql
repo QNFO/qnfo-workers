@@ -1,3 +1,4 @@
+-- APPLY-BY: manual (applied live: code_tasks_needs_human_reroute_au absent from qnfo-audit)
 -- CODE-TASK-STATUS-UNWEDGE-1 (2026-10-17, fleet-wide audit; owner directive: always decide, implement, deploy).
 --
 -- The 2026-10-13 reroute trigger inserts into agent_issues from its body. After today's growth of the agent_issues

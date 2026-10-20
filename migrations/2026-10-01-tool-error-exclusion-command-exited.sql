@@ -1,3 +1,4 @@
+-- APPLY-BY: manual (rows-only: applied by hand before MIGRATION-RUNNER-1; tables tool_error_exclusions exist)
 -- CONTAINER-EXIT-VISIBLE-1 (#1664, 2026-10-01): qnfo-ops 2.38.19 reports a shell command that exits
 -- non-zero as "command exited N: <stderr>" (with its output) instead of a bare "container error".
 -- A failing command is an agent-input error, not a tool fault; container/infra faults keep their

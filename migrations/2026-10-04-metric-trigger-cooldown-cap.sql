@@ -1,3 +1,4 @@
+-- APPLY-BY: manual (applied live: trigger:trg_metric_trigger_cooldown_cap_ins, trigger:trg_metric_trigger_cooldown_cap_upd exist in qnfo-audit)
 -- CYCLE-TIME-1 (2026-10-04, issue 1961 item H6): cap a metric trigger's cooldown_hours at 24.
 --
 -- New metric triggers kept arriving with cooldown_hours of 168 or 336 (ids 1214, 1234, 1235 and 1238 were

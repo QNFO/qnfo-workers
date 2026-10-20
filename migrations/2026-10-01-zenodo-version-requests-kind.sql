@@ -1,3 +1,4 @@
+-- APPLY-BY: manual (applied live: index:idx_zenodo_version_requests_kind, column:zenodo_version_requests.kind exist in qnfo-audit)
 -- ZENODO-METADATA-EDITS-1 (2026-10-01): one queue, two kinds (folding beats adding a table family, charter s8 rule 2).
 -- kind='version'  : new version of record_id with files_json replacing every file (ZENODO-VERSION-REQUESTS-1).
 -- kind='metadata' : in-place metadata edit of record_id; files_json is '[]' and metadata_json carries the patch, e.g.

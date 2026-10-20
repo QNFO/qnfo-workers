@@ -1,3 +1,4 @@
+-- APPLY-BY: manual (rows-only: applied by hand before MIGRATION-RUNNER-1; tables analytics_metric_triggers, fleet_tasks, metric_registry exist)
 -- INTEGRITY-GUARDS-1 (2026-10-02, pillar: autonomy). Applied live by the session that wrote it; idempotent.
 --
 -- The problem. METRIC-CLOSED-LOOP-1 grades the fleet on target metrics such as open_agent_issues, and every one of

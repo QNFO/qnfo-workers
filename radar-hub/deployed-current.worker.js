@@ -5,7 +5,7 @@ import { WorkflowEntrypoint } from "cloudflare:workers";
 // 1.1.3 (2026-10-02, pillar: reach): JOB-MARKET-INLINE-1 (the weekly job-market scan runs from the cron and records a
 // handoffs row with a claim_sheet), MENTION-RADAR-LEDGER-1 (one cloud_ops_events row per mention-radar run day),
 // EVENTS-RADAR-CF-DOW-1 (events cron moved from Sunday to Monday, the day its weekly sources are read).
-var VERSION = "1.4.4-bad-tag-filter"; // 1.4.3 WORKERS-BP-LOGGING-radar-hub-1 (2026-10-14, agent_issues 2540, child of 2342, pillar autonomy): the 13 swallowed catches log as a structured console.error (worker, where, error); control flow unchanged. // 1.4.2 FAMILIES-WINDOW-CLOCK-1: signal_source_families_7d counts its 7 days from the run clock, not the database clock.
+var VERSION = "1.5.0-venue-recovered"; // 1.5.0 RADAR-VENUE-RECOVERED-1 (agent_issues 2573, pillar personal; minor: a decision radar-hub now takes on its own): a venue that yields usable candidates again closes the open RADAR-VENUE-SILENT-1 issue this worker filed, through issue_triage.close_evidence (close_channel auto-recovery); the run result lists recoveredVenues. The counter already reset on recovery, but nothing closed the issue, so it sat open until the 48 h stale probe. venue-recovered.test.mjs. // 1.4.4 BAD-TAG-FILTER-1 (2026-10-19): HTML-to-text helpers handle odd end tags, unclosed blocks and entity order. // 1.4.3 WORKERS-BP-LOGGING-radar-hub-1 (2026-10-14, agent_issues 2540, child of 2342, pillar autonomy): the 13 swallowed catches log as a structured console.error (worker, where, error); control flow unchanged. // 1.4.2 FAMILIES-WINDOW-CLOCK-1: signal_source_families_7d counts its 7 days from the run clock, not the database clock.
 function rhex(n) { var b = new Uint8Array(Math.ceil(n / 2)); crypto.getRandomValues(b); return Array.prototype.map.call(b, function (x) { return ("0" + x.toString(16)).slice(-2); }).join("").slice(0, n); } // 1.3.5 CRYPTO-IDS-1: outreach_queue ids draw from crypto.getRandomValues. // 1.3.4-doi-scrub NOZ-DOI-1 (2026-10-10): the weekly attribution-audit job and its cron branch are gone; the citation watch tracks no static DOIs; the mention radar tracks only non-retired DOIs. // // 1.3.3 NO-TOPIC-HARDCODE-1 (owner directive 2026-10-10): the arXiv radar builds its query, keyword list and classes from the owner's accepted ideas in idea_proposals instead of fixed tables; with none on file it skips. // 1.3.2 RADAR-VENUE-SILENT-1 (2026-10-06, pillar: personal): a per-venue consecutive-zero counter kept as one row in the existing personal_radar table; a normally productive venue (>= 2 productive days) with zero usable candidates for 3 consecutive days files ONE agent_issues row "RADAR-VENUE-SILENT-1: <venue>" (source radar-hub, personal, low, epoch-ms), a failed fetch is a gap not a zero, a same-day re-run does not double count, and the run report names silent venues. 1.3.1 (2026-10-06): the intake run result never echoes exception text (CodeQL js/stack-trace-exposure on PR 662); details go to the worker log. 1.3.0 SIGNAL-INTAKE-SOURCES-1 (2026-10-06, agent_issues 1947, pillar: research): a D1-driven interdisciplinary feed intake (radar_sources kind 'signal': arXiv beyond quant-ph, journals, science news, community feeds) scored by lexicon with no model call into idea_proposals (name intake:<family>), bounded per run and per family, deduped by URL in signal_intake_seen, in the 08:30Z slot (no new cron); metric signal_source_families_7d; GET /intake, POST /intake/run; the events radar skips kind 'signal' rows. 1.2.4 RADAR-TASTE-SHRINK-1 + RADAR-TITLE-NOISE-2 (pillar: personal): taste prior shrunk by n/(n+3) with a 0.6 floor under 5 feedback rows and a half-the-day safety valve; Stedelijk date-range, Iamsterdam navigation and Eventbrite chrome titles dropped or cleaned. 1.2.3 RADAR-TITLE-NOISE-1 (pillar: personal): clean readable calendar titles for personal radar rows, dedupe key unchanged. 1.2.2 RADAR-TASTE-LEARN-1 (pillar: personal): the personal radar learns per-venue and per-domain taste from calendar_feedback. 1.2.1 AWAY-GATE-1 (pillar: personal): the personal radar skips Amsterdam events while a lodging row places the owner elsewhere. 1.2.0 CRON-SINGLE-TRIGGER-1 (#1785): one hourly trigger, CRON_TABLE in code
 var eventsMod = (function(){
 var __defProp = Object.defineProperty;
@@ -1526,8 +1526,25 @@ __name(isJunkCandidate, "isJunkCandidate");
 // was productive on at least 2 counted days and then yields nothing for 3 days files ONE agent_issues row (open-title unique index dedupes).
 var VENUE_ZERO_LIMIT = 3;
 var VENUE_PRODUCTIVE_DAYS = 2;
+// RADAR-VENUE-RECOVERED-1 (agent_issues 2573): the filing loop owns the close. A venue that yields again closes the RADAR-VENUE-SILENT-1 issue
+// this worker filed, through issue_triage.close_evidence (the only way a status may change). Without it the issue waited for a session or the
+// 48 h stale probe ("the filing loop radar-hub did not close it within 48h") although the counter had already reset.
+async function closeRecoveredVenueIssue(env, src, y, day) {
+  try {
+    const open = await env.AUDIT_DB.prepare("SELECT id FROM agent_issues WHERE title = ? AND status = 'open' ORDER BY id DESC LIMIT 1").bind("RADAR-VENUE-SILENT-1: " + src.name).first();
+    if (!open || !open.id) return false;
+    const ev = "RADAR-VENUE-RECOVERED-1 " + new Date().toISOString() + ": " + src.name + " (" + src.url + ") yielded " + y + " usable candidate(s) in the " + day + " run, so its consecutive-zero counter is 0 (personal_radar.venue_zero); radar-hub closes the issue it filed.";
+    await env.AUDIT_DB.prepare("INSERT INTO issue_triage (issue_id, rc, triage_state, owner, sla_due_at, close_evidence) VALUES (?, 'RADAR-VENUE-RECOVERED-1', 'closed', 'radar-hub', datetime('now'), ?) ON CONFLICT(issue_id) DO UPDATE SET close_evidence = excluded.close_evidence, triage_state = 'closed'").bind(open.id, ev).run();
+    await env.AUDIT_DB.prepare("UPDATE agent_issues SET status = 'closed', close_channel = 'auto-recovery', updated_at = ? WHERE id = ? AND status = 'open'").bind(Date.now(), open.id).run();
+    return true;
+  } catch (e) {
+    console.error(JSON.stringify({ worker: "radar-hub", where: "closeRecoveredVenueIssue", error: String(e && e.message || e).slice(0, 160) }));
+    return false;
+  }
+}
+__name(closeRecoveredVenueIssue, "closeRecoveredVenueIssue");
 async function updateVenueCounters(env, gated, venueErrors, day) {
-  const out = { silent: [], filed: [], state: null };
+  const out = { silent: [], filed: [], closed: [], state: null };
   try {
     const row = await env.AUDIT_DB.prepare("SELECT venue_zero FROM personal_radar WHERE venue_zero IS NOT NULL ORDER BY scanned_at DESC LIMIT 1").first();
     let st = {};
@@ -1542,6 +1559,7 @@ async function updateVenueCounters(env, gated, venueErrors, day) {
       const z = y > 0 ? 0 : baseZ + 1;
       const p = y > 0 ? Math.min(60, baseP + 1) : baseP;
       st[src.name] = { z, p, d: day, zb: baseZ, pb: baseP, y };
+      if (y > 0 && await closeRecoveredVenueIssue(env, src, y, day)) out.closed.push(src.name);
       if (z >= VENUE_ZERO_LIMIT && p >= VENUE_PRODUCTIVE_DAYS) {
         out.silent.push(src.name);
         const now = Date.now();
@@ -1684,6 +1702,7 @@ async function run(env) {
     venueErrors: venueErrors.length,
     budget,
     silentVenues: venueSilent.silent,
+    recoveredVenues: venueSilent.closed,
     taste: { active: taste.active, rows: taste.rows, droppedByFloor: taste.droppedByFloor || 0, restoredByValve: taste.restoredByValve || 0 },
     posted: postedList,
     delivery,

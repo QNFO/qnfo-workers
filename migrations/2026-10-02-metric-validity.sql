@@ -1,3 +1,4 @@
+-- APPLY-BY: manual (rows-only: applied by hand before MIGRATION-RUNNER-1; tables analytics_metric_triggers, fleet_tasks, infra_state exist)
 -- METRIC-VALIDITY-1 (2026-10-02, pillars: autonomy, cost, reach). NOT applied by the session that wrote it (its D1 access
 -- was read-only). Apply by hand against qnfo-audit, top to bottom. Idempotent: every statement is guarded.
 --

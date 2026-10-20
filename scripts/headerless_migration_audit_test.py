@@ -77,7 +77,7 @@ with tempfile.TemporaryDirectory() as d:
 # The real allowlist: every listed name exists, and a snapshot-less run extracts objects without failing.
 names, expires = M.load_allowlist()
 real = A.run(names)
-ok(len(names) > 0 and not [f for f in real["files"] if f["class"] == "missing-file"], "every name in migrations/headerless-allowlist.txt is a file in migrations/", [f["file"] for f in real["files"] if f["class"] == "missing-file"])
+ok(len(names) == 0 and not [f for f in real["files"] if f["class"] == "missing-file"], "migrations/headerless-allowlist.txt is empty (MIGRATION-HEADERLESS-AUDIT-1) and every name still listed would be a file in migrations/", [f["file"] for f in real["files"] if f["class"] == "missing-file"])
 
 print(f"{passed} passed, {failed} failed")
 sys.exit(1 if failed else 0)

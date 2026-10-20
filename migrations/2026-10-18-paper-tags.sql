@@ -1,3 +1,4 @@
+-- APPLY-BY: manual (targets living-paper, not qnfo-audit: tag_registry, paper_tag and their indexes exist there, verified 2026-10-20 from sqlite_master; the runner's DATABASES holds only qnfo-audit)
 -- PAPER-TAGS-1 (owner directive 2026-10-18, pillar reach): the library files each paper on one shelf, which
 -- answers "where does this live" but cannot show that a QEC paper is also a Bruhat-Tits paper, or that a
 -- number-theory result is usable for choosing a hardware platform. A shelf is exclusive by design; the

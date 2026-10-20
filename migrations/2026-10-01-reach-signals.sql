@@ -1,3 +1,4 @@
+-- APPLY-BY: manual (applied live: table:reach_signals, table:entity_map exist in qnfo-audit)
 -- REACH-SIGNALS-INGEST-1 (#1711, 2026-10-01). docs/STRATEGY.md 6.2: one schema for every reach signal.
 --
 -- qnfo-fleet-dashboard 1.7.48 creates both tables idempotently at runtime (same DDL as REACH_DDL in its worker.js)

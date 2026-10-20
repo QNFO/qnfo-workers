@@ -8,7 +8,7 @@ direct third-party provider.
 |---|---|---|---|---|
 | QNFO Ops | `https://ops.qnfo.org/v1` | `ops` | 1048576 | 65536 |
 | QNFO Router | `https://ai.qnfo.org/v1` | `qnfo` | 1310720 | 32768 |
-| Personal Twin | `https://personal.qnfo.org/v1` | `personal` | 1310720 | 200000 |
+| Personal Twin | `https://me.q08.org/v1` | `personal` | 1310720 | 200000 |
 
 Legacy ids (`ops-exec`, `ops-frontier*`, `deepseek-v4-flash`, `auto`, `ensemble`, …) remain
 accepted as server-side aliases, but the picker exposes only the single id above.

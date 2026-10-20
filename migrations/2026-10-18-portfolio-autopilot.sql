@@ -1,3 +1,4 @@
+-- APPLY-BY: manual (applied live: index:idx_portfolio_gaps_open, table:portfolio_autopilot_runs, column:portfolio_gaps.status ... exist in qnfo-audit)
 -- PORTFOLIO-AUTOPILOT-1 (owner directive 2026-10-18: "the system shall automatically maintain, implement,
 -- deploy and upgrade its own portfolio, programs and projects").  DB: qnfo-audit
 --

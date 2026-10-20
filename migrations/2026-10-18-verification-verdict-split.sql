@@ -1,3 +1,4 @@
+-- APPLY-BY: manual (applied live: view:v_verification_verdict_split exist in qnfo-audit)
 -- 2026-10-18 VERIFICATION-VERDICT-SPLIT-1 (qnfo-fleet-control 0.33.11-deferral-not-a-failure-1)
 --
 -- Why: on 2026-10-18 the fleet read "45% of verification runs fail (61,282 of 135,263)". That ratio is

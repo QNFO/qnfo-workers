@@ -1,3 +1,4 @@
+-- APPLY-BY: manual (applied live: table:process_contracts, view:v_process_contract_gaps, view:v_process_contract_violations exist in qnfo-audit)
 -- PROCESS-CONTRACT-1 (2026-10-17, owner directive: "ALL STEPS, ALL PROCESSES SHALL HAVE SLA AND MULTIPLE
 -- EXECUTION/REMEDIATION/WORKAROUND PATHS TO SUCCESSFUL DEFINITION OF DONE")
 --

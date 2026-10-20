@@ -1,3 +1,4 @@
+-- APPLY-BY: manual (rows-only: applied by hand before MIGRATION-RUNNER-1; tables analytics_metric_triggers, metric_registry exist)
 -- REACH-IDEATION-2 (2026-10-02, pillars: reach, autonomy). qnfo-fleet-control 0.4.95 grades its own reach ideation end to end:
 -- reach_ideas_shipped_30d = REACH-IDEA-1 issues the loop closed with evidence (the live page now passes) in 30 days, from
 -- qnfo-audit.reach_idea_outcomes. METRIC-CLOSED-LOOP-1 rule: a change that registers a metric adds its trigger.

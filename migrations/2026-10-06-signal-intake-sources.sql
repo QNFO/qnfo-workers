@@ -1,3 +1,4 @@
+-- APPLY-BY: manual (applied live: table:signal_intake_seen, index:idx_signal_intake_seen_at exist in qnfo-audit)
 -- SIGNAL-INTAKE-SOURCES-1 (2026-10-06, agent_issues 1947 SIGNAL-INTAKE-1; pillar: research). Owner directive 2026-10-06:
 -- the Quniverse must consider broader interdisciplinary signals, not only arXiv papers about quantum computing (QNFO) and
 -- Hacker News / GitHub (q08). Measured before (qnfo-audit, 30 days to 2026-10-06): `signals` rows by source were

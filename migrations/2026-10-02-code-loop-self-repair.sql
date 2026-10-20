@@ -1,3 +1,4 @@
+-- APPLY-BY: manual (rows-only: applied by hand before MIGRATION-RUNNER-1; tables analytics_metric_triggers, fleet_tasks, metric_registry exist)
 -- SELF-REPAIR-1 (qnfo-code-orchestrator 0.3.6, agent_issues #1768, pillar autonomy). Idempotent; apply after the 0.3.6 deploy.
 --
 -- Owner note on the dashboard card code:ct_qldqse7ngltdth: "this is not a user problem audit and fix yourself". From 0.3.6 a code

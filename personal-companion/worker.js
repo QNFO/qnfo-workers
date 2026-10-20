@@ -2951,7 +2951,8 @@ var __name22 = __name2;
 // the release note is carried by the comment blocks at STALL_MIN, shortenFeedback, pruneRepeat and attemptBudgetStop, and none is added to the VERSION
 // line below (VERSION-LINE-NOTES-1, 2026-10-19). Its older trailing notes stay until length-lede.test.mjs stops pinning "LENGTH-LEDE-1" on that line.
 // VERSION-NOTES-MOVED-1: release notes live in the block below
-var VERSION = "1.37.1-version-line-pruned";
+var VERSION = "1.37.2-owner-mail-q08";
+/* 1.37.2 DOMAIN-PLANE-OWNER-MAIL-1 (2026-10-20, agent_issues 100229, pillar personal; patch): owner notices (morning brief, check-ins, readings) are sent from companion@q08.org first and from rowan.quni@qnfo.org only when the SEND_EMAIL binding refuses the q08.org sender; subscriber mail keeps its sender. */
 /* 1.37.1 VERSION-LINE-NOTES-COMPANION-1 (2026-10-19, agent_issues 100253, pillar personal; patch, a comment moved): the release notes of every earlier version rode on the VERSION line (about 64,000 chars), so a version bump of this worker rewrote it in worker.js and in deployed-current.worker.js, a patch of about 257 KB, past the code loop's publish cap. The notes of 1.36.0 and earlier are in the git history of personal-companion/worker.js; new notes go in this block, never on the VERSION line (VERSION-LINE-NOTES-1, qnfo-fleet-control 0.40.1 and qnfo-fleet-dashboard 1.51.8, did the same for those two workers). 1.37.0 COMPANION-STALL-YIELD-1 (issue 100064): the stall issue closes only on two pieces since its filing with no two failed runs between them; the fresh-error digest; shortenFeedback; the prune-repeat and attempt-budget stops. */
 var MODELS = [
   "@cf/moonshotai/kimi-k2.6",
@@ -7063,6 +7064,7 @@ function emailKindAllowed(mode, kind) {
   if (mode === "all") return true;
   return mode === "daily" && kind === "brief";
 }
+var OWNER_NOTICE_FROM = [{ email: "companion@q08.org", name: "Companion" }, "rowan.quni@qnfo.org"];
 async function sendOwnerNotice(env, subject, text, kind) {
   if (!env.SEND_EMAIL && !env.EMAIL) return { ok: false, error: "no mail binding" };
   if (!(await ownerNoticeEnabled(env))) return { ok: false, disabled: true, error: "owner notices disabled (calendar_meta owner_notice_enabled)" };
@@ -7072,8 +7074,17 @@ async function sendOwnerNotice(env, subject, text, kind) {
   text = String(text == null ? "" : text).slice(0, 20000);
   try {
     if (env.SEND_EMAIL) {
-      await env.SEND_EMAIL.send({ to: PROMPT_OWNER, from: "rowan.quni@qnfo.org", subject: subject, text: text });
-      return { ok: true, via: "send_email" };
+      // DOMAIN-PLANE-1 / DOMAIN-PLANE-OWNER-MAIL-1 (issue 100229): personal mail comes from the personal domain first
+      // (companion@q08.org, the sender personal-api's sign-in code uses), then from the proven qnfo.org sender when the binding
+      // refuses it. Subscriber mail (sendOne) keeps its sender.
+      var _lastErr = null;
+      for (var _fi = 0; _fi < OWNER_NOTICE_FROM.length; _fi++) {
+        try {
+          await env.SEND_EMAIL.send({ to: PROMPT_OWNER, from: OWNER_NOTICE_FROM[_fi], subject: subject, text: text });
+          return { ok: true, via: "send_email", from: typeof OWNER_NOTICE_FROM[_fi] === "string" ? OWNER_NOTICE_FROM[_fi] : OWNER_NOTICE_FROM[_fi].email };
+        } catch (eFrom) { _lastErr = eFrom; }
+      }
+      throw _lastErr;
     }
     var resp = await env.EMAIL.fetch("https://email.internal/send", {
       method: "POST",

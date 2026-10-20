@@ -1,3 +1,4 @@
+-- APPLY-BY: manual (applied live: view:v_metric_trigger_state, table:cmd_log exist in qnfo-audit)
 -- METRIC-CLOSED-LOOP-1 (2026-10-02, pillar: autonomy). Owner directive 2026-10-02: the fleet measures and improves its
 -- own internal and external effectiveness, automatically and continuously, with or without the owner's commands.
 -- Applied live by the session that wrote it; idempotent (safe to re-run).

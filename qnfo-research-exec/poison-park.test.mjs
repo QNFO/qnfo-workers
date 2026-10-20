@@ -8,7 +8,7 @@ db.exec(`CREATE TABLE research_queue (id TEXT PRIMARY KEY, status TEXT DEFAULT '
 CREATE TABLE ops_config (key TEXT PRIMARY KEY, value TEXT);
 CREATE TABLE cloud_ops_events (id TEXT, ts TEXT, kind TEXT, text TEXT, meta TEXT, job TEXT, status TEXT);
 CREATE TABLE agent_issues (id INTEGER PRIMARY KEY, title TEXT, description TEXT, source TEXT, category TEXT, priority TEXT, status TEXT, created_at INTEGER, updated_at INTEGER);
-CREATE TABLE remediation_contracts (class TEXT PRIMARY KEY, issue_id INTEGER, precondition TEXT NOT NULL, action TEXT NOT NULL, verify_probe TEXT NOT NULL, verify_transport TEXT NOT NULL, max_attempts INTEGER NOT NULL DEFAULT 3, escalate_to TEXT NOT NULL, expected_cadence_h INTEGER, status TEXT DEFAULT 'active', ts TEXT DEFAULT (datetime('now')), next_due_at TEXT);`);
+CREATE TABLE remediation_contracts (class TEXT PRIMARY KEY, issue_id INTEGER, precondition TEXT NOT NULL, action TEXT NOT NULL, verify_probe TEXT NOT NULL, verify_transport TEXT NOT NULL, max_attempts INTEGER NOT NULL DEFAULT 3, escalate_to TEXT NOT NULL, expected_cadence_h INTEGER, status TEXT DEFAULT 'active', ts TEXT DEFAULT (datetime('now')), next_due_at TEXT, last_verdict TEXT, attempts INTEGER DEFAULT 0);`);
 // This suite's recover_count values (3) assert exhaustion, and the worker's default ceiling is now RECOVER_MAX = 6
 // (ops_config research_recover_max, raised from 3 on 2026-10-17). Pin the ceiling the assertions were written against
 // instead of moving every row, so the test keeps testing parking rather than the default.
@@ -58,7 +58,9 @@ await markError(env, get(U2), "verify: unresolved after revision - mismatch=true
 const c1 = db.prepare("SELECT * FROM remediation_contracts WHERE class = 'research-terminal-18826b2d'").get();
 const i1 = db.prepare("SELECT id FROM agent_issues WHERE title LIKE 'RESEARCH-TERMINAL 18826b2d%'").get();
 assert.ok(c1 && i1 && c1.issue_id === i1.id && c1.status === "active" && c1.verify_transport === "d1-query", "content-only terminal row gets an active d1-query contract on its issue");
-assert.equal(db.prepare("SELECT count(*) n FROM remediation_contracts WHERE class = 'research-terminal-196536e3'").get().n, 0, "a gate failure gets no self-closing contract");
+// RESEARCH-TERMINAL-REARMED-1: a gate failure (that can be a pipeline fault) gets a contract too, but it closes only on a re-arm or when every recovery is spent.
+const cg = db.prepare("SELECT * FROM remediation_contracts WHERE class = 'research-terminal-196536e3'").get();
+assert.ok(cg && cg.status === "active" && /pipeline fault/.test(cg.precondition), "a gate failure gets a self-closing contract that waits for a re-arm");
 assert.ok(/^select /i.test(c1.verify_probe) && !c1.verify_probe.includes(";"), "the probe is a literal SELECT the remediation tick will run");
 let pr = db.prepare(c1.verify_probe).get();
 assert.equal(pr.observed, "pending", "no stage advance yet: the probe waits");
@@ -66,7 +68,7 @@ db.prepare("INSERT INTO cloud_ops_events (id, ts, kind, text, job, status) VALUE
 pr = db.prepare(c1.verify_probe).get();
 assert.equal(pr.observed, pr.expected, "parked row plus an advancing queue passes the probe");
 await markError(env, get(U1), "verify: unresolved after revision - mismatch=true gates=");
-assert.equal(db.prepare("SELECT count(*) n FROM remediation_contracts").get().n, 1, "a repeat park files no second contract");
+assert.equal(db.prepare("SELECT count(*) n FROM remediation_contracts WHERE class = 'research-terminal-18826b2d'").get().n, 1, "a repeat park files no second contract");
 // 6. RESEARCH-TERMINAL-HARD-REVIEW-SELFCLOSE-1: a row parked because the review's HARD findings were not resolved by the revise cycles is the integrity gate
 // withholding the paper, so its issue gets the same self-closing contract; "revise: no applicable edit" (a model that could not apply a fix) can be a pipeline fault and gets none.
 const UH = "ab12cd34-0000-4000-8000-000000000001", UN = "ef56ab78-0000-4000-8000-000000000002";
@@ -77,11 +79,13 @@ const ch = db.prepare("SELECT * FROM remediation_contracts WHERE class = 'resear
 const ih = db.prepare("SELECT id FROM agent_issues WHERE title LIKE 'RESEARCH-TERMINAL ab12cd34%'").get();
 assert.ok(ch && ih && ch.issue_id === ih.id && ch.status === "active" && ch.verify_transport === "d1-query", "a HARD-review terminal row gets an active d1-query contract on its issue");
 assert.match(ch.precondition, /HARD review findings/, "the contract names the HARD-review reason");
-assert.equal(db.prepare("SELECT count(*) n FROM remediation_contracts WHERE class = 'research-terminal-ef56ab78'").get().n, 0, "no applicable edit gets no self-closing contract");
+const cn = db.prepare("SELECT * FROM remediation_contracts WHERE class = 'research-terminal-ef56ab78'").get();
+assert.ok(cn && /pipeline fault/.test(cn.precondition) && !/instr\(error, 'HARD/.test(cn.verify_probe), "no applicable edit gets a contract that closes only on a re-arm or spent recoveries");
+assert.equal(db.prepare(cn.verify_probe).get().observed, "pending", "a parked no-applicable-edit row with recoveries left stays pending even while the queue moves");
 assert.ok(/^select /i.test(ch.verify_probe) && !ch.verify_probe.includes(";") && !/LIKE '[^']{50,}'/.test(ch.verify_probe), "the probe is a literal SELECT with no LIKE literal over D1's 50 byte limit");
 let ph = db.prepare(ch.verify_probe).get();
 assert.equal(ph.observed, ph.expected, "parked row with its HARD reason plus an advancing queue passes the probe");
 db.prepare("UPDATE research_queue SET error = 'PARKED-POISON-1: recover_count exhausted (3); last error: revise: output too short' WHERE id = ?").run(UH);
 assert.equal(db.prepare(ch.verify_probe).get().observed, "pending", "a row parked for another reason does not pass it");
-assert.equal(db.prepare("SELECT count(*) n FROM remediation_contracts").get().n, 2, "one contract per self-closing kind, none for the pipeline-fault reason");
+assert.equal(db.prepare("SELECT count(*) n FROM remediation_contracts").get().n, 4, "one contract per terminal row: mismatch, gate failure, HARD review, no applicable edit");
 console.log("poison-park tests passed");

@@ -1,3 +1,4 @@
+-- APPLY-BY: manual (rows-only: applied by hand before MIGRATION-RUNNER-1; tables analytics_metric_triggers, metric_registry exist)
 -- RENDER-HEALTH-1 (2026-10-02, pillar reach). Applied live by the session that wrote it.
 --
 -- Why. On 2026-10-02 a session swept all 450 papers.qnfo.org pages by hand and found 446 with rendering defects (raw

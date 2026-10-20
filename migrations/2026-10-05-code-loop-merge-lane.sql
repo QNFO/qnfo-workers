@@ -1,3 +1,4 @@
+-- APPLY-BY: manual (rows-only: applied by hand before MIGRATION-RUNNER-1; tables analytics_metric_triggers, code_tasks, fleet_tasks exist)
 -- 2026-10-05 code loop and merge lane (session_01KzS1yjXATqG3KDBSEyNTAs/B1; agent_issues 1834, 1876, 1877, 1928, 1960, 1965, 1975, 1800).
 -- Pillar: autonomy. Applied live to qnfo-audit on 2026-10-05 ~16:15Z through the D1 API; this file is the record and is idempotent.
 -- Backup taken first: infra_state id 'backup-metric-refresh-20261005-b1-superseded-share' holds the previous

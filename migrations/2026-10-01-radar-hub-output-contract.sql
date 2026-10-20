@@ -1,3 +1,4 @@
+-- APPLY-BY: manual (rows-only: applied by hand before MIGRATION-RUNNER-1; tables worker_output_contracts exist)
 -- RADAR-HUB-CONTRACT-1 (2026-10-01): radar-hub was redeployed at 08:13Z (RADAR-HUB-REDEPLOY-1, PR 221) as the single
 -- radar worker. It gets an output contract (class executor, with an output probe) so the census and the taxonomy cover
 -- all live workers. Applied live.

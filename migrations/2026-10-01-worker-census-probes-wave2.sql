@@ -1,3 +1,4 @@
+-- APPLY-BY: manual (rows-only: applied by hand before MIGRATION-RUNNER-1; tables worker_output_contracts exist)
 -- WORKER-CENSUS-PROBES-2 (#1618 follow-up, 2026-10-01). The first census run (08:00Z) returned 18 PRODUCTIVE and 23
 -- UNMEASURED. This adds output probes for 12 more workers whose output lands in qnfo-audit.
 -- Attribution:

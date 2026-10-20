@@ -1,3 +1,4 @@
+-- APPLY-BY: manual (applied live: table:issue_plans exist in qnfo-audit)
 -- ISSUE-PLANNER-1 (2026-10-02, pillar: autonomy). Owner directive 2026-10-02: "Filing an issue is not fixing it. Something
 -- still has to do the work: the fleet's code agent for code changes it can handle." Applied live; idempotent.
 --

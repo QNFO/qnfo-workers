@@ -1,3 +1,4 @@
+-- APPLY-BY: manual (applied live: trigger:reconcile_dispatch_on_clear exist in qnfo-audit)
 -- STALE-DISP-RECONCILE-1 (2026-10-04)
 -- Problem: qnfo-fleet-dashboard's loopSync() verified-clear path sets
 --   fleet_issue_loop.gh_state='cleared' but never reconciles the matching

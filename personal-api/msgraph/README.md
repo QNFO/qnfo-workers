@@ -23,7 +23,7 @@ Microsoft credential (fleet audit `integration_state`, 2026-09-28: no `MS_`/`AZU
    - Supported account types: **Personal Microsoft accounts only** (or the "any organizational directory and personal
      Microsoft accounts" option; the worker uses the `/consumers` authority either way).
    - Redirect URI: platform **Web**, `https://<personal-api origin>/microsoft/callback` (both
-     `https://personal-api.q08.workers.dev/microsoft/callback` and `https://personal.qnfo.org/microsoft/callback`).
+     `https://personal-api.q08.workers.dev/microsoft/callback`, `https://me.q08.org/microsoft/callback`, and the older `https://personal.qnfo.org/microsoft/callback` while it is still registered).
 2. API permissions -> Add -> Microsoft Graph -> **Delegated**: `Mail.Read`, `offline_access` (openid, email, profile and
    `User.Read` are already there). Do not add any `ReadWrite`, `Send` or `Delete` permission.
 3. Certificates & secrets -> New client secret. Copy the **Value** now; it is shown once. Put a calendar reminder at its

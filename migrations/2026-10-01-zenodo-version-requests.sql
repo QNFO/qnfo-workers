@@ -1,3 +1,4 @@
+-- APPLY-BY: manual (applied live: table:zenodo_version_requests, index:idx_zenodo_version_requests_status exist in qnfo-audit)
 -- ZENODO-VERSION-REQUESTS-1 (2026-10-01): queue drained by qnfo-research-exec (one row per cron run).
 -- A row asks for a new version of an existing Zenodo record whose files are replaced by the listed files.
 -- files_json: [{"name": "RESUME.md", "url": "https://raw.githubusercontent.com/rwnq8/resume/<40-hex sha>/RESUME.md"}, ...]

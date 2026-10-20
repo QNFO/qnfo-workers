@@ -1,3 +1,4 @@
+-- APPLY-BY: manual (rows-only: applied by hand before MIGRATION-RUNNER-1; tables analytics_metric_triggers, metric_registry exist)
 -- Q08-ENSEMBLE-1 (2026-10-03, pillar: reach). Registers q08_panel_effective_votes_30d with its trigger, in the same migration
 -- (METRIC-CLOSED-LOOP-1). Applied live against qnfo-audit by the session that wrote it; idempotent (INSERT OR IGNORE, guarded INSERT).
 --

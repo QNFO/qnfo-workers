@@ -1,3 +1,4 @@
+-- APPLY-BY: manual (applied live: project_state has the snapshot_id primary key; project_state_v2 is absent because this file renames it, verified 2026-10-20)
 -- PROJECT-STATE-SECOND-COLLISION-1 (2026-10-06, agent_issues #1998, charter pillar: core).
 --
 -- project_state had PRIMARY KEY (project_code, snapshot_at) and the two fk-violation triggers wrote

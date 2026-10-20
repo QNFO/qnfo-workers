@@ -1,3 +1,4 @@
+-- APPLY-BY: manual (rows-only: applied by hand before MIGRATION-RUNNER-1; tables analytics_metric_triggers, metric_registry exist)
 -- Q08-METRICS-1 (2026-10-02, #1759, pillar: reach). q08-signal-engine measures itself for METRIC-CLOSED-LOOP-1.
 -- Applied live by the session that wrote it; idempotent (safe to re-run).
 --

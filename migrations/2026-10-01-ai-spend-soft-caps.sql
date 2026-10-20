@@ -1,3 +1,4 @@
+-- APPLY-BY: manual (rows-only: applied by hand before MIGRATION-RUNNER-1; tables fleet_budget exist)
 -- UNIFIED-AI-SPEND-1 (#1683, 2026-10-01): per-provider 30-day soft caps, BYOK included. qnfo-fleet-control
 -- 0.4.51 writes the measured 30d spend into fleet_budget.current every hour and raises one digest alert per
 -- breached cap per day. Caps sum to the $150/30d owner ceiling; target is the ~$110/month objective (2.3).

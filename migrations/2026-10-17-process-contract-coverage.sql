@@ -1,3 +1,4 @@
+-- APPLY-BY: manual (applied live: view:v_process_contract_coverage exist in qnfo-audit)
 -- SLA-AND-PATHS-1 coverage + seed (2026-10-17)
 -- Owner directive: ALL STEPS, ALL PROCESSES SHALL HAVE SLA AND MULTIPLE EXECUTION/REMEDIATION/WORKAROUND PATHS
 --                TO SUCCESSFUL DEFINITION OF DONE.

@@ -1,3 +1,4 @@
+-- APPLY-BY: manual (applied live except its three indexes, which migrations/2026-10-20-headerless-audit-followups.sql creates; its two seed rows are not re-applied here)
 -- ARTIFACTS-CANONICAL-SYNC-1 (2026-10-18)
 -- Owner directive: all repositories live in Cloudflare Artifacts AND stay canonically in sync
 -- with GitHub automatically; repository content is integrated with the fleet's Workers,

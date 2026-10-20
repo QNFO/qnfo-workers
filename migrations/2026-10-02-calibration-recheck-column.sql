@@ -1,3 +1,4 @@
+-- APPLY-BY: manual (rows-only: applied by hand before MIGRATION-RUNNER-1; tables fleet_tasks exist)
 -- CALIBRATION-RECHECK-COLUMN-1 (2026-10-02, pillars core + autonomy). Idempotent. NOT YET APPLIED: written read-only by the
 -- runtime-errors session (no D1 writes); apply with `wrangler d1 execute qnfo-audit --remote --file <this file>`.
 --

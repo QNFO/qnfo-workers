@@ -1,3 +1,4 @@
+-- APPLY-BY: manual (rows-only: applied by hand before MIGRATION-RUNNER-1; tables fleet_tasks exist)
 -- ZENODO-VERSIONS-FLAGSHIP-METRIC-1 (#1621, 2026-10-01). Applied live.
 --
 -- The problem. metric_registry.zenodo_versions_per_flagship read 1 (refreshed 2026-09-29), but nothing computed it:

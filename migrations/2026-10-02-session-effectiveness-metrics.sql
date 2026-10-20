@@ -1,3 +1,4 @@
+-- APPLY-BY: manual (rows-only: applied by hand before MIGRATION-RUNNER-1; tables fleet_tasks, metric_registry exist)
 -- SESSION-EFFECTIVENESS-1 (2026-10-02, pillar: autonomy). Applied live.
 --
 -- The problem. Agent sessions build the fleet, but nothing measured them: session_records had the right columns

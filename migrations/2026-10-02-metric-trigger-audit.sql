@@ -1,3 +1,4 @@
+-- APPLY-BY: manual (rows-only: applied by hand before MIGRATION-RUNNER-1; tables analytics_metric_triggers, code_tasks, fleet_tasks exist)
 -- METRIC-TRIGGER-AUDIT-1 (2026-10-02, pillars: reach, autonomy). Applied live against qnfo-audit by the session that wrote
 -- it (session_01GqJRHvJBRdDQ7aJgq79qTh/metric-triggers), statement by statement, 2026-10-02 10:50-11:20Z. Idempotent:
 -- every statement is guarded, so re-running it is a no-op.

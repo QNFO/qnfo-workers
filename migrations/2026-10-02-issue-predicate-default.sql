@@ -1,3 +1,4 @@
+-- APPLY-BY: manual (applied live: trigger:agent_issues_predicate_default_ins exist in qnfo-audit)
 -- ISSUE-PREDICATE-ON-FILE-1 (agent_issues 1828, 2026-10-02, pillar: autonomy). Record of a trigger applied live; idempotent.
 --
 -- The problem (measured 2026-10-02 ~10:40Z): 40 open agent_issues had predicate_id NULL. qnfo-fleet-control filed 19

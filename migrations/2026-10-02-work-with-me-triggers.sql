@@ -1,3 +1,4 @@
+-- APPLY-BY: manual (rows-only: applied by hand before MIGRATION-RUNNER-1; tables analytics_metric_triggers exist)
 -- WORK-WITH-ME-TRIGGERS-1 (2026-10-02, pillar: reach). METRIC-CLOSED-LOOP-1 rule: a change that registers a metric adds its
 -- trigger. qnfo-fleet-dashboard 1.17.2 registers inbound_contacts_30d (distinct senders of tagged mail from
 -- qnfo.org/work-with-me, 30d) and work_with_me_pageviews_30d (Cloudflare RUM views of the page, 30d) on its daily reach

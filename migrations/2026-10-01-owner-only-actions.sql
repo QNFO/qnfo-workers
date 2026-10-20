@@ -1,3 +1,4 @@
+-- APPLY-BY: manual (applied live: table:human_actions exist in qnfo-audit)
 -- OWNER-ONLY-SEED-1 (2026-10-01): the owner-only actions from docs/PORTFOLIO-OPERATIONS.md s5-6, docs/STRATEGY.md s10 and
 -- docs/QUNIVERSE-CHARTER.md s7, seeded into the human queue read by https://fleet.qnfo.org/ (owner approved seeding).
 -- Idempotent (INSERT OR IGNORE on the UNIQUE slug). Resolve a row when the owner says it is done:

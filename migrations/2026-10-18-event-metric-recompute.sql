@@ -1,3 +1,4 @@
+-- APPLY-BY: manual (rows-only: applied by hand before MIGRATION-RUNNER-1; tables fleet_crons, fleet_tasks, metric_registry exist)
 -- EVENT-METRIC-RECOMPUTE-1 (2026-10-18, pillar autonomy; a metric whose only writer is an event has no cadence)
 --
 -- THE PROBLEM

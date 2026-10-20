@@ -1,3 +1,4 @@
+-- APPLY-BY: manual (applied live: view:fleet_execution_coverage, column:worker_schedules.exec_engine, column:worker_schedules.retry_policy ... exist in qnfo-audit)
 -- FLEET-EXEC-SEMANTICS-DECLARED-1 (#1660 FLEET-TASK-ENGINE-PARTIAL-COVERAGE-1, 2026-10-01).
 --
 -- The problem. fleet_tasks (timeout_ms / retries / version) covers only the fleet-exec task engine. Every other scheduled

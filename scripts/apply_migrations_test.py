@@ -517,7 +517,7 @@ ok(M.headerless_verdict("migrations/y.sql", ddl, allow={"x.sql"})[0] == "refused
 # header (or lost its SQL) must leave the list, so the list cannot hide a file the runner now applies.
 names, expires = M.load_allowlist()
 mig_dir = os.path.join(HERE, "..", "migrations")
-ok(len(names) > 0 and expires is not None, "the allowlist parses (names and an EXPIRES date)", (len(names), expires))
+ok(len(names) == 0 and expires is not None, "the allowlist is empty (MIGRATION-HEADERLESS-AUDIT-1, 2026-10-20: every grandfathered file declares APPLY-BY) and still parses its EXPIRES date", (len(names), expires))
 stale = []
 for n in sorted(names):
     fp = os.path.join(mig_dir, n)

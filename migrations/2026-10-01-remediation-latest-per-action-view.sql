@@ -1,3 +1,4 @@
+-- APPLY-BY: manual (applied live: view:v_remediation_latest_per_action exist in qnfo-audit)
 -- ACT-HALF-PREDICATE-1 (#1285, 2026-10-01): "0 self_heal_actions rows with status=dispatched AND verified_at
 -- IS NULL" only measures verification coverage; a failing verification satisfies it. Outcome reads must use the
 -- LATEST remediation_verifications row per action_ref, so a later failure is never masked by an earlier pass.

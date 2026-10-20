@@ -1,3 +1,4 @@
+-- APPLY-BY: manual (applied live: table:attention_scorecard, table:attention_decisions exist in qnfo-audit)
 -- ATTENTION-LOOP-1 (2026-10-06, pillar reach; owner directive 2026-10-06 07:44Z: "track granular impressions/eyeballs (humans,
 -- not bots/crawlers/AI) from outreach channels and audit to do more of what gets noticed; if something isn't getting noticed
 -- it either needs to be promoted more/better or stop doing it and shift attention to higher-impact signals; track all
