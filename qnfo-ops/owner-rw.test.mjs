@@ -191,7 +191,7 @@ const K = { Authorization: "Bearer " + GOOD_KEY };
   const EMAIL = { async fetch(u, o) { sent.push(JSON.parse(o.body)); return new Response("{}", { status: 200 }); } };
   const t = mkr({ env: { EMAIL, EMAIL_API_KEY: "e" } });
   let r = await req(t, "POST", "/v1/owner/login", {}, {});
-  ok(r.j && r.j.ok === true && r.j.sent === true && sent.length === 1 && sent[0].to === "rwnquni@outlook.com", "I1 login emails a code to the fixed owner address");
+  ok(r.j && r.j.ok === true && r.j.sent === true && sent.length === 1 && sent[0].to === "rwnquni@outlook.com" && sent[0].handoff === true, "I1 login emails a code to the fixed owner address");
   const code = (sent[0].subject.match(/\d{6}/) || [])[0];
   ok(!!code && JSON.stringify(r.j).indexOf(code) < 0, "I2 the code is in the email and never in the response");
   r = await req(t, "POST", "/v1/owner/login", {}, {});
