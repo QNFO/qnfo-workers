@@ -258,7 +258,9 @@ eq(db.prepare("SELECT COUNT(*) AS n FROM agent_issues WHERE title LIKE 'TP-WAVE-
 db.exec("UPDATE transformation_levers SET dispatched_at = '2026-09-01T00:00:00Z' WHERE tp=1 AND n=4");
 const r5 = await T.transformationTick(env, { force: true });
 eq(r5.applied.stalled, 1, "a session lever with no landing in 14 days is stalled");
-const st = db.prepare("SELECT title FROM agent_issues WHERE title LIKE 'TP-LEVER-STALLED-1:%'").get();
+// TEST-CLOCK-1 (2026-10-20): another fixture lever's dispatch date passed 14 days before today's clock and filed its own stall issue on an
+// earlier tick, so the first TP-LEVER-STALLED-1 row is not necessarily this one; read the row of the lever this tick stalled.
+const st = db.prepare("SELECT title FROM agent_issues WHERE title LIKE 'TP-LEVER-STALLED-1: TP-1.4-%'").get();
 eq(!!st && /TP-1\.4-ANCHOR-REPAIR-1/.test(st.title), true, "TP-LEVER-STALLED-1 names the lever");
 db.exec("UPDATE agent_issues SET status='closed' WHERE id=2007");
 const r6 = await T.transformationTick(env, { force: true });
