@@ -4,10 +4,9 @@
   "service": "personal-companion",
   "token_present": true,
   "route_id": "f0428823014b467487c28eda6ede0f41",
-  "dns_created": "e4731acadbc8e08c8d42d7248434a2be",
+  "dns_created": null,
   "status": "ok",
   "detail": null,
-  "version": "1.33.0-travel-chat",
-  "ts": "2026-10-19T15:08:33Z",
-  "route_created": true
+  "version": "1.37.2-owner-mail-q08",
+  "ts": "2026-10-20T08:23:23Z"
 }
