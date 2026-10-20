@@ -367,6 +367,31 @@ ok(d.outcome_matched === null, "outcome_matched is left for the result to set");
     ok(exec("", OKS).code === 1 && /exit code none/.test(exec("", OKS).out), "no exit code at all (the run step never reached its output): the step fails");
     ok(exec("1", null).code === 1, "a non-zero exit code and no report file: the step fails");
     ok(exec("2", "").code === 1, "an empty report and exit code 2 (usage error): the step fails");
+
+    // WINDOWS-PARITY-DIAG-1: the report step under the runner's `bash -e -o pipefail`. A green report has no FAIL line, so a pipeline that
+    // greps for one must not abort the step (run 39398293898: 669 passed, 0 failed, and the step still ended with exit code 1).
+    const repScript = (() => { const m = /^        run: \|\n((?:          .*\n?|\n)+)/m.exec(rep + "\n"); return m ? m[1].split("\n").map((l) => l.replace(/^          /, "")).join("\n") : ""; })();
+    ok(repScript.length > 200, "the script of the report step was read");
+    const execRep = (rc, report) => {
+      const dir = mkdtempSync(join(tmpdir(), "wpp-rep-"));
+      mkdirSync(join(dir, "scripts"));
+      writeFileSync(join(dir, "scripts", "stop-commands.sh"), readFileSync(join(root, "scripts", "stop-commands.sh")));
+      if (report !== null) writeFileSync(join(dir, "suite-report.txt"), report);
+      const summary = join(dir, "summary.md");
+      writeFileSync(summary, "");
+      const s = repScript.replace(/\$\{\{ steps\.suites\.outputs\.exit_code \}\}/g, rc).replace(/\$\{\{ matrix\.node \}\}/g, "22");
+      const r = spawnSync("bash", ["--noprofile", "--norc", "-e", "-o", "pipefail", "-c", s], { cwd: dir, encoding: "utf8", env: { ...process.env, GITHUB_STEP_SUMMARY: summary } });
+      return { code: r.status, out: String(r.stdout), err: String(r.stderr), summary: readFileSync(summary, "utf8") };
+    };
+    const BADG = BAD + "::group::FAIL b/b.test.mjs (exit 1)\nboom\n::error::fixture error\n::endgroup::\n";
+    const gr = execRep("0", OKS);
+    ok(gr.code === 0 && !/::error title=/.test(gr.out) && /2 suites ok, 0 failed/.test(gr.summary), "report step, green report: it ends 0, raises no annotation and writes the summary", gr);
+    ok(execRep("0", "").code === 0 && execRep("", null).code === 0, "report step, empty report and no report file: it still ends 0");
+    const br = execRep("1", BADG);
+    ok(br.code === 0 && br.out.includes("::error title=windows suite parity node 22::failing suites: b/b.test.mjs"), "report step, one failing suite: one annotation names the suite", br);
+    const iStop = br.out.indexOf("::stop-commands::"), iGroup = br.out.indexOf("::group::FAIL b/b.test.mjs"), iFix = br.out.indexOf("::error::fixture error"), iResume = br.out.lastIndexOf("\n::");
+    ok(iStop >= 0 && iGroup > iStop && iFix > iGroup && iResume > iFix, "report step: the suite's own output goes to the log inside a stop-commands window, so its ::error:: line is not an annotation", { iStop, iGroup, iFix, iResume });
+    ok((br.out.match(/::error title=/g) || []).length === 1, "report step: exactly one annotation (the names), never one per fixture line");
   }
 }
 
