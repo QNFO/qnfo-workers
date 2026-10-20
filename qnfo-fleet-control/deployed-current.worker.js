@@ -1081,7 +1081,7 @@ function secretEq(a, b) {
 }
 __name(secretEq, "secretEq");
 // VERSION-LINE-SPLIT-1 (agent_issues 100220): the release notes sit one per line below this statement, newest first, so a VERSION bump is a one-line patch; add a new note as the first line under it.
-var VERSION = "0.44.1-deferral-measured";
+var VERSION = "0.44.2-codeagent";
 /* 0.44.1 DEFERRAL-MEASURED-1 (2026-10-20, agent_issues 2954, 100245, 100246, pillar autonomy; patch): the remediation tick reads a measured pending (a number against a bound: "pending: ... reads 0.5058 (target <= 0.5)") as a verdict, as the consumer and the D1 relapse trigger already did, instead of deferring it for ever (rtIsMeasuredPending). deferral-measured.test.mjs. */ /* 0.42.0 DEPLOY-ALL-MERGES-1 (2026-10-20, owner directive "The system shall always deploy all merges automatically."; pillar core; minor: a decision the loop now takes on its own): DEPLOY-DRIFT-CF-1 measured and redeployed only the workers qnfo-ops /ops/deploy may take, so a merge to a control-plane worker (qnfo-fleet-control, qnfo-ops, qnfo-deploy-guard, qnfo-ai, qnfo-gateway, qnfo-observability) or a container worker (qnfo-code-orchestrator, qnfo-containers-pilot) whose canonical run was cancelled, skipped or failed stayed behind main with nothing to notice it (8 rows read "skip" in deploy_drift_cf at 05:30Z). Those workers are now targets too: main ahead of live for 45 minutes, no active run of the owning workflow and the live script confirmed behind, the tick dispatches canonical-deploy.yml with workers=<name> (canary and automatic revert on the runner) or the container worker's own workflow, at most 2 a tick and once per main VERSION an hour (ddcRunner, ddcDispatchPending). Metric merges_undeployed_over_60m (migrations/2026-10-20-deploy-all-merges.sql). deploy-drift-cf.test.mjs 14. */ /* 0.41.2 EXTERNAL-HTTPS-MASTODON-HOST-1 (2026-10-19, agent_issues 2925 INTEG-MASTODON-VERIFY-1; pillar autonomy; patch): RT_HTTP_HOSTS gains mstdn.science, the public Mastodon instance whose unauthenticated account lookup (GET /api/v1/accounts/lookup) qnfo-social already reads (MASTODON-PUBLIC-STATS-1), so the issue closing probe, which was parked probe-not-machine-executable on "host not allowed", can run. The rest of rtHttpSpec is unchanged: https only, GET or HEAD, no credentials, no redirect followed, 10 s, 1 MB; a host not on the list is still refused. */ /* 0.41.1 POOL-BOUND-SOURCES-1 (issue 100213, human_actions 107; patch): POOL-BOUND-1 parks notebook extractions (idea_proposals name owner-corpus) like any generated row and never parks a row an owner directive queued directly (source idea, chat, operator-prime). 0.41.0 REOPEN-LIVE-PATH-3 (issue 100271): the remediation tick files one deduped PROBE-NEEDED-1 issue per open issue left without a live contract. 0.40.1 VERSION-LINE-NOTES-1 (2026-10-19, agent_issues 100243, pillar autonomy; patch, a comment moved): the release notes of every earlier version rode on this line (178 notes, about 200,000 chars), so a version bump of this worker was an 820,000-char patch (worker and mirror, removed and added): 12 code tasks ended on the publisher size cap on 2026-10-19 and three issues were exhausted for three days. They are in git history (git log -S '<release tag>' -- qnfo-fleet-control/worker.js); the changelog is built from the deploy ledger and commits, and the guards read only the quoted version string. A new note goes on this line and stays short. */
 /* 0.44.0 GH-WEBHOOK-INTAKE-1 and GH-APP-FLEET-2 (2026-10-20, pillar autonomy; agent_issues 2582 and 2596; minor: two new routes). POST /gh/webhook receives pull_request, check_suite and push events for QNFO/qnfo-workers, verifies X-Hub-Signature-256 against GH_WEBHOOK_SECRET (503 and nothing accepted while it is unset), records each delivery once (cloud_ops_events kind gh-webhook, id gh-webhook-<delivery>) and runs the merge lane at once for a check_suite that completed with success or a pull request opened, reopened or ready, debounced to one run a minute; the 10-minute poll stays as the second path. POST /gh-app/token is the internal broker for the other GitHub-token workers: a service binding whose props.caller is a listed fleet worker gets the cached installation token (never the personal one, never logged); GET /gh-app reports broker service-binding. Registering the webhook on GitHub and converting each worker are the filed follow-ups. */
 /* 0.43.0 WORKFLOW-FAILURE-INTAKE-1 (2026-10-20, agent_issues 100295, pillar autonomy; minor: a new loop step): each 10-minute tick reads the newest workflow runs on main, keeps every workflow's latest decided conclusion in workflow_main_state, records a failing run with its failed job and step in workflow_failures, files one WORKFLOW-FAILED-1: <workflow> issue with a d1-query probe, and closes it with close_evidence when a later main run succeeds; ops_config workflow_failure_intake = off stops it. */
@@ -8570,6 +8570,22 @@ async function ilFacts(env) {
   f.open_titles = (await charterRows(env, "SELECT title FROM agent_issues WHERE status = 'open' AND (title LIKE 'METRIC-REGRESSION-1:%' OR title LIKE 'METRIC-FIX-RELAPSED-1:%' OR title LIKE 'METRIC-TRIGGER-%' OR title LIKE 'OBJECTIVE-CONSTRAINT-BREACH-1:%')")).map(function(r) { return r.title; });
   return f;
 }
+// IL-CLOSE-VS-PROBE-1 (2026-10-20, #100344): true when an active-or-holding remediation contract for this issue still
+// fails its probe (issue_close_evidence_required / CLOSE-BINDS-TO-PROBE-1 would abort the close with
+// close-while-contract-fails every hour). The loop defers the write until the contract passes instead of erroring.
+async function closeBlockedByContract(env, issueId) {
+  if (!env.AUDIT || issueId == null) return false;
+  var rows = null;
+  try {
+    var res = await env.AUDIT.prepare("SELECT last_verdict FROM remediation_contracts WHERE issue_id = ?1 AND status IN ('active', 'holding')").bind(issueId).all();
+    rows = res && res.results ? res.results : (res || []);
+  } catch (e) { return false; }
+  var bad = { "fail": 1, "vacuous-probe-result": 1, "probe-error": 1, "probe-not-machine-executable": 1, "probe-same-account-host": 1 };
+  for (var i = 0; i < (rows || []).length; i++) {
+    if (bad[String(rows[i].last_verdict == null ? "" : rows[i].last_verdict).trim()]) return true;
+  }
+  return false;
+}
 async function improvementLoopTick(env) {
   if (!env.AUDIT) return { ok: false, error: "no AUDIT binding" };
   await ilSchema(env);
@@ -8620,7 +8636,7 @@ async function improvementLoopTick(env) {
   var openRows = await charterRows(env, "SELECT id, title FROM agent_issues WHERE status = 'open' AND (title LIKE 'METRIC-REGRESSION-1:%' OR title LIKE 'METRIC-FIX-RELAPSED-1:%')");
   var openByTitle = {};
   openRows.forEach(function(r) { openByTitle[r.title] = r.id; });
-  var filed = 0, closed = 0;
+  var filed = 0, closed = 0, close_deferred = 0;
   var order = Object.keys(toFile).sort(function(a, b) { return (toFile[a].severity === "high" ? 0 : 1) - (toFile[b].severity === "high" ? 0 : 1); });
   for (var j = 0; j < order.length && filed < IL_MAX_NEW_PER_TICK; j++) {
     var key = order[j];
@@ -8661,6 +8677,13 @@ async function improvementLoopTick(env) {
       if (tt.indexOf(IL_REG_PREFIX) === 0 && (!tr || tr.verdict === "unmeasured")) continue; // unknown is not a recovery
       ev = "IMPROVEMENT-LOOP-1 " + nowIso + ": " + (trText || "metric back inside its target") + "; no longer a finding.";
     }
+    if (await closeBlockedByContract(env, openByTitle[tt])) {
+      // IL-CLOSE-VS-PROBE-1: the contract for this issue still fails its probe; a close now would abort on
+      // issue_close_evidence_required every hour. Keep the issue open, count the defer, warn once with the id.
+      close_deferred++;
+      console.warn(JSON.stringify({ evt: "fleet-control:improvementLoopTick:close_deferred", issue_id: openByTitle[tt] }));
+      continue;
+    }
     try {
       await env.AUDIT.prepare("INSERT INTO issue_triage (issue_id, rc, triage_state, owner, sla_due_at, close_evidence) VALUES (?1, 'IMPROVEMENT-LOOP-1', 'closed', 'qnfo-fleet-control', datetime('now'), ?2) ON CONFLICT(issue_id) DO UPDATE SET close_evidence = excluded.close_evidence, triage_state = 'closed'")
         .bind(openByTitle[tt], ev).run();
@@ -8668,12 +8691,16 @@ async function improvementLoopTick(env) {
       closed++;
     } catch (e) { console.error(JSON.stringify({ evt: "fleet-control:improvementLoopTick:caught", error: String(e && e.message) })); }
   }
-  var state = { improvement_rate_7d: x.improvement_rate_7d, metric_regressions_7d: x.metric_regressions_7d, fix_hold_rate_30d: x.fix_hold_rate_30d, fix_target_hold_rate_30d: x.fix_target_hold_rate_30d, fixes_held_target: x.fixes_held_target, target_misses: x.target_misses.length, findings: x.findings.map(function(fd) { return fd.key; }), relapses: x.relapses.slice(0, 20) };
+  // IL-CLOSE-VS-PROBE-1: state.findings lists only the findings the loop keeps open (fileable and not covered_by);
+  // the file:false early warnings go in as a count, so an instr probe on state_json can never match a quoted title.
+  var keptKeys = [], earlyWarnings = 0;
+  x.findings.forEach(function(fd) { if (fd.file !== false && !fd.covered_by) keptKeys.push(fd.key); else earlyWarnings++; });
+  var state = { improvement_rate_7d: x.improvement_rate_7d, metric_regressions_7d: x.metric_regressions_7d, fix_hold_rate_30d: x.fix_hold_rate_30d, fix_target_hold_rate_30d: x.fix_target_hold_rate_30d, fixes_held_target: x.fixes_held_target, target_misses: x.target_misses.length, findings: keptKeys, early_warnings: earlyWarnings, close_deferred: close_deferred, relapses: x.relapses.slice(0, 20) };
   try {
     await env.AUDIT.prepare("INSERT INTO improvement_loop_runs (ts, worker_version, snapshotted, evaluable, improved, flat, regressed, fixes_judged, fixes_held, findings, filed, closed, state_json) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)")
       .bind(nowIso, VERSION, snap, x.evaluable, x.improved, x.flat, x.regressed, x.fixes_judged, x.fixes_held, x.findings.length, filed, closed, JSON.stringify(state).slice(0, 8000)).run();
   } catch (e) { console.error(JSON.stringify({ evt: "fleet-control:improvementLoopTick:caught", error: String(e && e.message) })); }
-  return { ok: true, ts: nowIso, surfaced: surfaced, run_rate: runRate, snapshotted: snap, evaluable: x.evaluable, improved: x.improved, flat: x.flat, regressed: x.regressed, improvement_rate_7d: x.improvement_rate_7d, fix_hold_rate_30d: x.fix_hold_rate_30d, fix_target_hold_rate_30d: x.fix_target_hold_rate_30d, findings: x.findings.length, filed: filed, closed: closed };
+  return { ok: true, ts: nowIso, surfaced: surfaced, run_rate: runRate, snapshotted: snap, evaluable: x.evaluable, improved: x.improved, flat: x.flat, regressed: x.regressed, improvement_rate_7d: x.improvement_rate_7d, fix_hold_rate_30d: x.fix_hold_rate_30d, fix_target_hold_rate_30d: x.fix_target_hold_rate_30d, findings: x.findings.length, filed: filed, closed: closed, close_deferred: close_deferred, early_warnings: earlyWarnings };
 }
 // ---- IMPROVEMENT-LOOP-1:END ----
 // ---- REACH-IDEATION-1:BEGIN (2026-10-02, owner directive: "the fleet shall ideate and shall build all next automatically") ----
