@@ -10,7 +10,7 @@ var __defProp222 = Object.defineProperty;
 var __name222 = /* @__PURE__ */ __name22((target, value) => __defProp222(target, "name", { value, configurable: true }), "__name");
 var __name2222 = /* @__PURE__ */ __name222((target, value) => Object.defineProperty(target, "name", { value, configurable: true }), "__name");
 // VERSION-LINE-SPLIT-1 (agent_issues 100220): the release notes sit one per line below this statement, newest first, so a VERSION bump is a one-line patch; add a new note as the first line under it.
-var VERSION = "1.51.19-version-line-split";
+var VERSION = "1.51.20-codeagent";
 /* 1.51.19 VERSION-LINE-SPLIT-1 (2026-10-20, agent_issues 100220, pillar autonomy; patch: layout only): the release notes that sat on the VERSION line (202,642 chars) are one per line below it, so a bump is a one-line patch and the publisher's size cap stops refusing dashboard code tasks (5 of 5 on 2026-10-19); scripts/conflict_repair.py resolves note-line hunks (merge_note_hunk). No behaviour change. */
 /* 1.51.17 COST-FEED-7D-WINDOW-1 (2026-10-19, agent_issues 100169, pillar cost; patch): /api/cost by_model_7d and by_worker_7d sum the 7 complete UTC days (today, a partial day, was a 8th bucket under the 7d label, +31.8 percent), and the body says which days (window_7d) and that est_usd is list price before the free tier (est_usd_basis). */
 /* 1.51.16 PARKED-CARD-REASON-1 (2026-10-19, agent_issues 100173, pillar autonomy; patch): the parked code-task card branches on the cause wherever it sits in last_error (the loop writes "model <id>: noop-proposal: ..." and "model <id> proposed no change", so a prefix test never matched), and the dead execOne edit of PR 3106 (fleet_issue_dispatch has no last_error) is removed. */
@@ -4491,9 +4491,10 @@ async function atChannelStats(env, from, to) {
     const s = stats.bluesky;
     s.items = items.length;
     try {
-    const ut = await d1all(A, "SELECT SUM(value) AS v FROM reach_signals WHERE source = 'utm' AND channel = 'bluesky' AND metric = 'clicks_human' AND date >= ? AND date <= ?", [from, to]);
-    if (ut.length && ut[0].v != null) s.clicks_human = Number(ut[0].v) || 0; else s.clicks_human = null;
-    } catch (e) { notes.push("bluesky utm clicks: " + reachErr(e)); s.clicks_human = null; }
+      const ut = await d1all(A, "SELECT channel, SUM(value) AS v FROM reach_signals WHERE source = 'utm' AND metric = 'clicks_human' AND date >= ? AND date <= ? GROUP BY channel", [from, to]);
+      for (const r of ut) { const ch = r.channel; if (stats[ch] && r.v != null) stats[ch].clicks_human = Number(r.v) || 0; }
+      for (const c of AT_CHANNELS) { const s = stats[c]; if (!("clicks_human" in s)) s.clicks_human = null; }
+    } catch (e) { notes.push("utm clicks: " + reachErr(e)); for (const c of AT_CHANNELS) stats[c].clicks_human = null; }
     for (const it of items) { const a = atBlueskyAttention(eng[it.uri], it.n); it.attention = a; s.attention += a; if (a > 0) s.noticed_items++; }
     s.top = items.filter(function(i) { return i.attention > 0; }).sort(function(a, b) { return b.attention - a.attention; }).slice(0, 5).map(function(i) { return { item: i.slug || i.key, attention: i.attention }; });
   } catch (e) { notes.push("bluesky: " + reachErr(e)); stats.bluesky.items = null; }
@@ -4601,7 +4602,7 @@ async function attentionScorecard(env, opts) {
   for (const c of AT_SOCIAL) {
     const ls = L.stats[c], ss = S.stats[c];
     if (ls.items == null) { verdicts[c] = null; continue; }
-    verdicts[c] = atVerdict({ items: ls.items, attention: ls.attention, visits: ls.visits, items7: ss.items, attention7: ss.attention, visits7: ss.visits }, prevV[c] || null, th, nowIso);
+    verdicts[c] = atVerdict({ items: ls.items, attention: ls.attention, visits: ls.visits, clicks_human: ls.clicks_human, items7: ss.items, attention7: ss.attention, visits7: ss.visits, clicks_human7: ss.clicks_human }, prevV[c] || null, th, nowIso);
   }
   const es = L.stats.email;
   const emailVerdict = es.items == null ? null : (es.items < th.min_items ? { verdict: "INSUFFICIENT", reason: es.items + " sends in 28 days" } : { verdict: es.positives > 0 ? "KEEP" : (es.attention > 0 ? "IMPROVE" : "STOP-CANDIDATE"), reason: es.items + " sends, " + es.attention + " replies, " + es.positives + " positive; the outreach learner's own stop rule (50 sends under 1%) governs, " + (es.stopped_segments || 0) + " segment(s) stopped" });
