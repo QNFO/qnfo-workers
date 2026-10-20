@@ -92,6 +92,17 @@ jobs:
             if [ -f suite-report.txt ]; then tail -n 12 suite-report.txt; fi
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
+          # WINDOWS-PARITY-DIAG-1 (2026-10-20, agent_issues 100324 and 2832): the run step above keeps only a 25-line tail in the log, and the
+          # failing list lived only in the job summary, which the REST API and the log tool cannot read, so a red run named no suite. The
+          # runner prints one `FAIL <ms> ms <suite>` line per failing suite and a group with the last 40 lines of its output; the names go out
+          # as ONE annotation (suite paths only, no fixture text, so it is a signal and not noise) and the groups go to the log with workflow
+          # commands off, because a suite that replays a failure prints `::error::` lines of its own.
+          if [ -f suite-report.txt ]; then
+            names=$(grep -E '^FAIL +[0-9]+ ms ' suite-report.txt | sed -E 's/^FAIL +[0-9]+ ms +//' | tr -d '\r' | tr '\n' ' ' | cut -c1-1500)
+            if [ -n "$names" ]; then echo "::error title=windows suite parity node ${{ matrix.node }}::failing suites: $names"; fi
+            sed -n '/^::group::FAIL /,/^::endgroup::/p' suite-report.txt | head -600 > failed-suites.txt
+            bash scripts/stop-commands.sh cat failed-suites.txt
+          fi
       - name: Fail the run when a suite is red on Windows
         if: always()
         run: |
