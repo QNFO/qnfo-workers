@@ -66,7 +66,9 @@ async function drain(o) {
     for (const [s, e] of Object.entries(o.errors || {})) d.prepare("INSERT OR REPLACE INTO worker_usage_daily VALUES (?, ?, 500, ?, 3000, ?, 'cf-graphql-workersInvocationsAdaptive', ?)").run(day, s, e, e, iso(snapAt));
   }
   for (const [s, n] of Object.entries(o.logErrors || {})) for (let i = 0; i < n; i++) d.prepare("INSERT INTO worker_logs (event_hash, ts_ms, ingested_at, script_name, event_type, outcome, exceptions_json) VALUES (?, ?, ?, ?, 'telemetry:fetch', 'exception', ?)").run("h" + s + i, NOW - 2 * H, iso(NOW - H), s, '[{"name":"Error"}]');
-  for (const [s, n] of Object.entries(o.alertsPerHour || {})) for (let i = 0; i < n; i++) d.prepare("INSERT INTO alerts (source, level, message, created_at) VALUES (?, 'warn', ?, ?)").run(s, "msg " + i, iso(NOW - 2 * H + i * 1000).slice(0, 19).replace("T", " "));
+  // CI-TEST-CLOCKS-1: the worker counts alerts per clock hour, so the burst is anchored at :30 of the hour that holds NOW - 2 h. Spread from
+  // NOW - 2 h itself it straddled an hour edge (2 and 1 in two buckets, 5c red) whenever NOW - 2 h fell in the last 2 s of an hour.
+  for (const [s, n] of Object.entries(o.alertsPerHour || {})) for (let i = 0; i < n; i++) d.prepare("INSERT INTO alerts (source, level, message, created_at) VALUES (?, 'warn', ?, ?)").run(s, "msg " + i, iso(Math.floor((NOW - 2 * H) / H) * H + 30 * 60e3 + i * 1000).slice(0, 19).replace("T", " "));
   for (const p of o.probes || []) d.prepare("INSERT INTO fleet_probe_log (ts, source, name, url, transport, ok, status) VALUES (?, 'qnfo-fleet-dashboard', ?, '', ?, ?, ?)").run(iso(NOW - (p.minAgo || 5) * 6e4), p.name, p.transport || "http", p.ok == null ? 1 : p.ok, p.ok === 0 ? 503 : 200);
   if (o.liveAudit) d.prepare("INSERT INTO worker_live_audit (worker, http, live_version, match, note, probed_at) VALUES (?, ?, '1.0.0', 1, 'SYNC', ?)").run(o.liveAudit.name, o.liveAudit.http || 200, iso(NOW - (o.liveAudit.hAgo || 1) * H).slice(0, 19).replace("T", " "));
   liveFetches = 0;

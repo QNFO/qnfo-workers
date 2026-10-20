@@ -138,7 +138,19 @@ function checkSyntax(root, file) {
   });
 }
 
-function runOne(root, suite, timeoutS) {
+// RUN-SUITES-HOUR-EDGE-1 (2026-10-20, CI-TEST-CLOCKS-1): a suite that reads the clock twice, or compares a clock-keyed digest across a few minutes, can
+// straddle an hour or a UTC midnight (deploy-gate main run 39343415552 failed for five minutes a day). The suites are fixed one by one in CI-TEST-CLOCKS-1;
+// this is the class fix: a suite is not started in the last HOUR_EDGE_GUARD_S seconds before an hour edge, so every suite runs whole on one side of every
+// hour and midnight while it takes under that long. Returns the wait in ms (0 when the start is clear of the edge).
+export const HOUR_EDGE_GUARD_S = 10;
+export function msUntilSafeStart(nowMs, guardS = HOUR_EDGE_GUARD_S) {
+  const toEdge = 3600000 - (nowMs % 3600000);
+  return toEdge <= guardS * 1000 ? toEdge + 1000 : 0;
+}
+
+async function runOne(root, suite, timeoutS) {
+  const wait = msUntilSafeStart(Date.now());
+  if (wait > 0) await new Promise((r) => setTimeout(r, wait));
   return new Promise((resolve) => {
     const t0 = Date.now();
     const child = spawn(process.execPath, ["--no-warnings", suite], { cwd: root, stdio: ["ignore", "pipe", "pipe"] });

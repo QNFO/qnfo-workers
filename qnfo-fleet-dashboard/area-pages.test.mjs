@@ -65,6 +65,10 @@ function mk() {
     autonomy: { overall: 3, self_heal: 3 }, fleet: { workers: 30 }, early_trigger: null, trend: null, gates_met: 1, gates_total: 5, survival: 0.5
   }));
   db.prepare("INSERT INTO human_actions (slug,title,why,action,due,source) VALUES ('rt-one','Top up the AI credit','why it is yours','act','','billing')").run();
+  // CI-TEST-CLOCKS-1 (2026-10-20): the worker adds the owner card "Decide: continue or stop (review gate due)" once REVIEW_GATE_DATE (2026-12-31) has passed with no
+  // return evidence attested, so from that day this fixture's queue held one card more than every count below says. One attested credibility event (the target is
+  // 2) gives the fixture the same verdict, CONTINUE, on either side of the gate.
+  db.prepare("INSERT INTO invest_facts (key,value,evidence,updated_at) VALUES ('credibility_events','2','fixture: attested, so the verdict does not turn on the review gate date',datetime('now'))").run();
   db.prepare("INSERT INTO analytics_metric_triggers (metric_key,title,operator,threshold,priority,action,owner) VALUES ('fleet_ai_run_rate_30d_usd','Fleet AI run-rate above $15/30d','gt',95,8,'code-task: repo=QNFO/qnfo-workers path=qnfo-fleet-control/worker.js','qnfo-fleet-control')").run();
   db.prepare("INSERT INTO metric_registry (metric,last_value,last_refreshed) VALUES ('fleet_ai_run_rate_30d_usd','281.14',?)").run(new Date().toISOString());
   db.prepare("INSERT INTO metric_history (metric,day,value) VALUES ('fleet_ai_run_rate_30d_usd',date('now','-1 day'),200)").run();
@@ -342,19 +346,33 @@ function withQueue(env, db) {
     CREATE TABLE v_sla_over_120m (issues_open_over_120m INTEGER, oldest_open_issue_min INTEGER, total_over_120m INTEGER);
     INSERT INTO v_sla_over_120m VALUES (3, 500, 3);`);
   for (let k = 1; k <= 3; k++) db.prepare("INSERT INTO metric_history (metric, day, value) VALUES ('fleet_ai_run_rate_30d_usd', date('now', ?), ?)").run("-" + k + " day", 200 + k);
+  // CI-TEST-CLOCKS-1 (2026-10-20): the two instants are pinned to noon UTC of the real day. The KPI document is keyed by the UTC day (a 14-day list
+  // and day-keyed series), so instants taken from the real clock plus 11m40s and 16m40s straddled 00:00Z for a real start in 23:43:20-23:48:20Z and
+  // L3 failed on main for five minutes a day (deploy-gate run 39343415552). The worker is right to change its digest at midnight; the test must not cross it.
+  // kpiData also keeps one copy for 60 s (only for an instant at or after the one it was made at), and section D read /api/kpi on the real clock: a pin
+  // within a minute after that read would be served D's document, not this section's, so the pin steps to 06:00Z when the real clock is within 10 minutes of noon.
   const realNow = Date.now;
-  Date.now = () => realNow() + 700000;
+  const day = new Date(realNow()); day.setUTCHours(12, 0, 0, 0);
+  const T0 = Math.abs(day.getTime() - realNow()) < 10 * 60000 ? day.getTime() - 6 * 3600000 : day.getTime();
+  Date.now = () => T0;
   const a = await call(env, "/api/kpi");
   const ja = await a.json();
-  Date.now = () => realNow() + 700000 + 5 * 60000;   // five minutes later, past the 60 s cache
+  Date.now = () => T0 + 5 * 60000;   // five minutes later, past the 60 s cache
   const b = await call(env, "/api/kpi");
   const jb = await b.json();
+  // the premise of the pin: the digest does follow the UTC day, so a pair of instants that straddles 00:00Z (three days on, clear of every cache entry above) differs
+  const M = Date.UTC(new Date(T0).getUTCFullYear(), new Date(T0).getUTCMonth(), new Date(T0).getUTCDate() + 3);
+  Date.now = () => M - 90000;
+  const c = await call(env, "/api/kpi");
+  Date.now = () => M + 210000;
+  const d = await call(env, "/api/kpi");
   Date.now = realNow;
   const row = (j) => (j.service_levels.metrics || []).find((m) => m.metric === "fleet_ai_run_rate_30d_usd");
   ok(row(ja) && row(ja).state === "BREACH" && row(jb).time_in_breach_min - row(ja).time_in_breach_min >= 4, "L1 time in breach grows with the clock: " + (row(ja) && row(ja).time_in_breach_min) + " then " + (row(jb) && row(jb).time_in_breach_min));
   const sla = (j) => (j.sla.classes || []).find((c) => c.class === "issues_open_over_120m");
   ok(sla(ja) && sla(ja).oldest_min === 500 && sla(ja).n === 3, "L2 the SLA class reports its count and the age of its oldest item");
   ok(a.headers.get("ETag") && a.headers.get("ETag") === b.headers.get("ETag"), "L3 the two counters are clock fields: five minutes later the ETag is unchanged (" + a.headers.get("ETag") + " vs " + b.headers.get("ETag") + ")");
+  ok(c.headers.get("ETag") && d.headers.get("ETag") && c.headers.get("ETag") !== d.headers.get("ETag"), "L4 the digest does follow the UTC day: 23:58:30Z and 00:03:30Z give different ETags (" + c.headers.get("ETag") + " vs " + d.headers.get("ETag") + "), which is why L3 pins both of its instants inside one day");
 }
 
 console.log(pass + " passed, " + fail + " failed");

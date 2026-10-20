@@ -33,7 +33,12 @@ const migDir = join(here, "..", "migrations");
 let passed = 0, failed = 0;
 function eq(actual, expected, label) { if (actual === expected) { passed++; return; } failed++; console.error(`FAIL ${label}: got ${JSON.stringify(actual)}, want ${JSON.stringify(expected)}`); }
 function ok(cond, label) { eq(!!cond, true, label); }
-const NOW = Date.parse("2026-10-20T10:00:00Z");
+// CI-TEST-CLOCKS-1 (2026-10-20): NOW was the literal 2026-10-20T10:00:00Z, written when that day was still ahead. The ledger section below judges
+// remedy_efficacy_30d with SQL on the real clock and re-dates the first decision to real yesterday with realIso(); "day 23" is NOW + 23 days and the
+// lever rests PERF_EXP_COOLDOWN_D = 7 days after a decision, so from the real day 2026-11-07 (NOW + 18 days) the re-dated decision was under 7 days
+// before "day 23" and the second step never started (seven assertions failed). NOW is now 10:00Z of the real day, so the pinned clock and the
+// real one stay within a day of each other whenever the suite runs.
+const NOW = (() => { const d = new Date(); d.setUTCHours(10, 0, 0, 0); return d.getTime(); })();
 const dayOf = (ms) => new Date(ms).toISOString().slice(0, 10);
 const day = (n, base) => dayOf((base || NOW) - n * 864e5);
 const h = (n, base) => new Date((base || NOW) - n * 36e5).toISOString();
@@ -295,7 +300,7 @@ CREATE TABLE invest_facts (key TEXT PRIMARY KEY, value TEXT, evidence TEXT, upda
   const env = { AUDIT: { prepare: (sql) => stmtOn(sql) } };
   const knob = () => { const x = one("SELECT value FROM ops_config WHERE key = 'q08_max_per_day'"); return x ? x.value : null; };
 
-  let t = await P.performanceLoopTick(env, { nowMs: Date.parse("2026-10-20T08:00:00Z") });
+  let t = await P.performanceLoopTick(env, { nowMs: NOW - 2 * 36e5 });
   ok(t.experiments && /after 9:00Z/.test(t.experiments.skipped), "before 09:00Z: the KPIs refresh, no experiment runs");
   eq(one("SELECT last_value v FROM metric_registry WHERE metric = 'issue_mttr_h_30d'").v, "7.5", "MTTR measured from 12 closures (median of 2..13h)");
   const unm = one("SELECT last_value v, state FROM metric_registry WHERE metric = 'credibility_events_90d'");

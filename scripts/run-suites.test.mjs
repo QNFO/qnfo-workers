@@ -10,7 +10,7 @@ import { tmpdir } from "node:os";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
-import { discover, select, syntaxTargets, isModuleSource, parseQuarantine, applyQuarantine, CONTROL_PLANE, SHARED, ALWAYS, QUARANTINE_FILE, QUARANTINE_MAX_DAYS } from "./run-suites.mjs";
+import { discover, select, syntaxTargets, isModuleSource, parseQuarantine, applyQuarantine, msUntilSafeStart, HOUR_EDGE_GUARD_S, CONTROL_PLANE, SHARED, ALWAYS, QUARANTINE_FILE, QUARANTINE_MAX_DAYS } from "./run-suites.mjs";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 let pass = 0, fail = 0;
@@ -97,6 +97,22 @@ ok(live.problems.length === 0, "the committed quarantine file parses with no mal
   r = run("2026-10-19");
   ok(r.status === 1 && /days away/.test(r.stdout), "CLI: an entry with a far horizon fails even a run whose suites are excused", r.stdout.slice(-400));
   rmSync(t, { recursive: true, force: true });
+}
+
+// RUN-SUITES-HOUR-EDGE-1: no suite starts in the last HOUR_EDGE_GUARD_S seconds before an hour edge (or a UTC midnight, which is one)
+{
+  const at = (iso) => Date.parse(iso);
+  ok(HOUR_EDGE_GUARD_S === 10, "the guard is 10 s", HOUR_EDGE_GUARD_S);
+  ok(msUntilSafeStart(at("2026-10-20T10:30:00Z")) === 0, "mid-hour: no wait");
+  ok(msUntilSafeStart(at("2026-10-20T10:59:49.999Z")) === 0, "10.001 s before the edge: no wait");
+  ok(msUntilSafeStart(at("2026-10-20T10:59:50Z")) === 11000, "10 s before the edge: waits the 10 s plus 1 s", msUntilSafeStart(at("2026-10-20T10:59:50Z")));
+  ok(msUntilSafeStart(at("2026-10-20T10:59:59.500Z")) === 1500, "0.5 s before the edge: waits 0.5 s plus 1 s", msUntilSafeStart(at("2026-10-20T10:59:59.500Z")));
+  ok(msUntilSafeStart(at("2026-10-20T11:00:00Z")) === 0, "on the edge itself the new hour has begun: no wait");
+  ok(msUntilSafeStart(at("2026-10-20T23:59:55Z")) === 6000, "before UTC midnight the wait ends one second after 00:00Z", msUntilSafeStart(at("2026-10-20T23:59:55Z")));
+  ok(msUntilSafeStart(at("2026-10-20T23:59:55Z")) + at("2026-10-20T23:59:55Z") === at("2026-10-21T00:00:01Z"), "the wait lands at 00:00:01Z");
+  ok(msUntilSafeStart(at("2026-10-20T10:59:45Z"), 20) === 16000, "the guard is a parameter", msUntilSafeStart(at("2026-10-20T10:59:45Z"), 20));
+  const src = readFileSync(join(root, "scripts", "run-suites.mjs"), "utf8");
+  ok(/async function runOne\([^)]*\) \{\s*const wait = msUntilSafeStart\(Date\.now\(\)\);/.test(src), "runOne waits for a safe start before it spawns a suite");
 }
 
 const fc = readFileSync(join(root, "qnfo-fleet-control", "worker.js"), "utf8");
