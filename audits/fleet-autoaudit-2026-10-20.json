@@ -1,5 +1,5 @@
 {
-  "audited_at": "2026-10-20 08:48:48",
+  "audited_at": "2026-10-20 09:20:27",
   "d1_write_failures": [],
   "d1_writes_ok": 120,
   "guard": {
@@ -540,7 +540,7 @@
       },
       {
         "dir": "personal-api",
-        "version": "4.21.0-mcp-consent-code",
+        "version": "4.22.0-personal-live",
         "worker": "personal-api"
       },
       {
@@ -555,7 +555,7 @@
       },
       {
         "dir": "qnfo-ai",
-        "version": "5.37.1-email-binding",
+        "version": "5.38.0-owner-rw",
         "worker": "qnfo-ai"
       },
       {
@@ -660,7 +660,7 @@
       },
       {
         "dir": "qnfo-ops",
-        "version": "2.52.1-codeagent",
+        "version": "2.53.0-owner-rw",
         "worker": "qnfo-ops"
       },
       {
@@ -930,9 +930,9 @@
       "worker": "patches"
     },
     "personal-api": {
-      "before": "4.21.0-mcp-consent-code",
+      "before": "4.22.0-personal-live",
       "http": 200,
-      "live": "4.21.0-mcp-consent-code",
+      "live": "4.22.0-personal-live",
       "match": 1,
       "note": "SYNC",
       "worker": "personal-api"
@@ -1017,9 +1017,9 @@
       "worker": "qnfo-agent-ws"
     },
     "qnfo-ai": {
-      "before": "5.37.1-email-binding",
+      "before": "5.38.0-owner-rw",
       "http": 200,
-      "live": "5.37.1-email-binding",
+      "live": "5.38.0-owner-rw",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-ai"
@@ -1473,9 +1473,9 @@
       "worker": "qnfo-observability"
     },
     "qnfo-ops": {
-      "before": "2.52.1-codeagent",
+      "before": "2.53.0-owner-rw",
       "http": 200,
-      "live": "2.52.1-codeagent",
+      "live": "2.53.0-owner-rw",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-ops"
