@@ -23,6 +23,7 @@ from __future__ import annotations
 import http.server
 import importlib.util
 import os
+import re
 import socketserver
 import sys
 import threading
@@ -333,6 +334,16 @@ def main() -> int:
     check("a cancelled job that ran steps is not starvation", cw.runner_not_acquired([{"conclusion": "cancelled", "steps": [{"name": "x"}]}]) is False)
     check("one starved job next to a real failure is not starvation", cw.runner_not_acquired([starved[0], {"conclusion": "failure", "steps": [{"name": "t"}]}]) is False)
     check("no jobs is not starvation (that is invalid-workflow)", cw.runner_not_acquired([]) is False and cw.runner_not_acquired(None) is False)
+
+    # SETUP-STEP-FLAKE-1 (ci-watchdog 3323): only runner setup steps failed -> none of the repository's code ran
+    def _job(*steps):
+        return {"name": "comparator", "conclusion": "failure", "steps": [{"name": n, "conclusion": c} for n, c in steps]}
+    check("a failed setup-node step alone is a setup-step flake", cw.setup_step_flake([_job(("Set up job", "success"), ("Run actions/checkout@3d3c42e5 # v7.0.1", "success"), ("Run actions/setup-node@949feb24", "failure"), ("Run node version-compare.test.mjs", "skipped"))]) is True)
+    check("a failed checkout step alone is a setup-step flake", cw.setup_step_flake([_job(("Run actions/checkout@3d3c42e5", "failure"))]) is True)
+    check("a failed repository step is not", cw.setup_step_flake([_job(("Run actions/setup-node@949feb24", "success"), ("Run node version-compare.test.mjs", "failure"))]) is False)
+    check("a setup step failing next to a repository step failing is not", cw.setup_step_flake([_job(("Run actions/setup-node@949feb24", "failure"), ("SUITE-RUNNER-1", "failure"))]) is False)
+    check("no failed step (cancelled, skipped) is not a setup flake", cw.setup_step_flake([_job(("Set up job", "success"), ("Run x", "cancelled"))]) is False and cw.setup_step_flake([]) is False and cw.setup_step_flake(None) is False)
+    check("the classifier is read before the name classes in the watchdog", re.search(r"elif stj == 200 and int\(r.get\(\"run_attempt\"\) or 1\) <= 1 and setup_step_flake", open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "ci_watchdog.py")).read()) is not None)
 
     print("\n%d failure(s)" % len(fails))
     return 1 if fails else 0

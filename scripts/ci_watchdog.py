@@ -335,6 +335,23 @@ def runner_not_acquired(jobs: list | None) -> bool:
     return bool(jobs) and all(j.get("conclusion") == "cancelled" and not j.get("steps") for j in jobs)
 
 
+# SETUP-STEP-FLAKE-1 (2026-10-20, ci-watchdog 3323): the failed step of a red run says whether the repository could have caused it. version-compare
+# on main (run 39406072271) failed in "Run actions/setup-node@..." before the comparator ran, the watchdog named it `comparator-regression` ("the
+# fail-closed comparator invariant regressed; do NOT relax rule 5"), and the re-run of the failed job passed. A run in which the only failed steps are
+# the runner's own setup (job setup, checkout, setup-* actions, a cache restore) ran none of the repository's code, so it is a flake of the
+# environment: one re-run, and a second failure is filed by the normal classes.
+SETUP_STEP_PREFIXES = ("Set up job", "Run actions/checkout", "Run actions/setup-", "Run actions/cache")
+
+
+def setup_step_flake(jobs: list | None) -> bool:
+    failed = []
+    for j in jobs or []:
+        for st in j.get("steps") or []:
+            if st.get("conclusion") == "failure":
+                failed.append(str(st.get("name") or ""))
+    return bool(failed) and all(n.startswith(SETUP_STEP_PREFIXES) for n in failed)
+
+
 def _absent(path: str, run: dict) -> bool:
     ref = run.get("head_branch") or "main"
     st, _ = gh(f"/repos/{REPO}/contents/{path}?ref={ref}")
@@ -718,6 +735,9 @@ def main() -> int:
             if stj == 200 and runner_not_acquired(jd.get("jobs")):
                 kl, hint = "runner-not-acquired", ("GitHub-hosted runner was not acquired; no step ran. "
                                                    "Re-run the failed jobs once; a second starvation is filed.")
+            elif stj == 200 and int(r.get("run_attempt") or 1) <= 1 and setup_step_flake(jd.get("jobs")):
+                kl, hint = "setup-step-flake", ("only a runner setup step failed (checkout, setup-*, cache), so none of the repository's code ran. "
+                                                "Re-run the failed jobs once; a second failure is filed by its normal class.")
             else:
                 kl, hint = classify_structural(name, r)
                 if name == "deploy-gate" and stj == 200:
@@ -773,6 +793,9 @@ def main() -> int:
         elif k == "mirror-lag":
             ok, how = dispatch("mirror-sync.yml")
             (acted if ok else unactionable).append((line, f"dispatched mirror-sync -> {how}"))
+        elif k == "setup-step-flake" and int(f.get("attempt") or 1) <= 1 and not f.get("retired"):
+            st, _ = gh(f"/repos/{REPO}/actions/runs/{f['run_id']}/rerun-failed-jobs", method="POST")
+            (acted if st in (201, 204) else unactionable).append((line, f"re-ran failed jobs once (only a setup step had failed) -> HTTP {st}"))
         elif k == "runner-not-acquired" and int(f.get("attempt") or 1) <= 1 and not f.get("retired"):
             # One re-run only (no step ran, so this is not retrying a test); a run that starves again on its
             # second attempt falls through to the filed finding below.
