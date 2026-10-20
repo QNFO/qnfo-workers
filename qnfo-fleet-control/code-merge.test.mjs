@@ -747,12 +747,14 @@ ok(gh.newPulls.length === 2 && r.opened.length === 1 && r.decided.length >= 1, "
 
 // ---------------------------------------------------------------- TP-1a TRUSTED-ORIGIN-PARITY-1 (agent_issues 2005, 0.4.132)
 // The runner's default list (CM_TRUSTED_SOURCES) trusts every (source, title-prefix) pair the orchestrator's planner trusts
-// (PLAN_TRUSTED, sliced from qnfo-code-orchestrator/worker.js), so a task the planner builds is never refused by cmProvenance.
+// (PLAN_TRUSTED_DEFAULT with planTrustRules, sliced from qnfo-code-orchestrator/worker.js; PLAN-TRUST-PARITY-1, 0.25.0: the planner reads the
+// runner's own ops_config list and falls back to this default), so a task the planner builds is never refused by cmProvenance.
 {
-  const p1 = orch.indexOf("const PLAN_TRUSTED = ["), p2 = orch.indexOf("const _planDbs");
-  ok(p1 > 0 && p2 > p1, "PLAN_TRUSTED and planTrusted are found in the orchestrator");
-  vm.runInContext(orch.slice(p1, p2) + "\n__export.planTrusted = planTrusted; __export.PLAN_TRUSTED = PLAN_TRUSTED;", sandbox, { filename: "plan-trusted" });
+  const p1 = orch.indexOf("const PLAN_TRUSTED_DEFAULT = "), p2 = orch.indexOf("const _planDbs");
+  ok(p1 > 0 && p2 > p1, "PLAN_TRUSTED_DEFAULT and planTrusted are found in the orchestrator");
+  vm.runInContext(orch.slice(p1, p2) + "\n__export.planTrusted = planTrusted; __export.PLAN_TRUSTED = planTrustRules(); __export.PLAN_TRUSTED_DEFAULT = PLAN_TRUSTED_DEFAULT;", sandbox, { filename: "plan-trusted" });
   ok(Array.isArray(W.PLAN_TRUSTED) && W.PLAN_TRUSTED.length >= 6, "the planner's list has its rows", W.PLAN_TRUSTED);
+  ok(W.PLAN_TRUSTED_DEFAULT === (/var CM_TRUSTED_SOURCES = "([^"]*)"/.exec(src) || [])[1], "the planner's default list is the runner's constant, character for character");
   W.PLAN_TRUSTED.forEach((r) => {
     const src = r.prefix ? r.src + "-x" : r.src, title = (r.title || "") + "something";
     ok(W.planTrusted(src, title) === true && W.cmTrusted(src, title) === true, "planner and runner both trust " + src + " / " + title);

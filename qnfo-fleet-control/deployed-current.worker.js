@@ -1081,7 +1081,9 @@ function secretEq(a, b) {
 }
 __name(secretEq, "secretEq");
 // VERSION-LINE-SPLIT-1 (agent_issues 100220): the release notes sit one per line below this statement, newest first, so a VERSION bump is a one-line patch; add a new note as the first line under it.
-var VERSION = "0.43.0-workflow-failure-intake";
+var VERSION = "0.44.1-deferral-measured";
+/* 0.44.1 DEFERRAL-MEASURED-1 (2026-10-20, agent_issues 2954, 100245, 100246, pillar autonomy; patch): the remediation tick reads a measured pending (a number against a bound: "pending: ... reads 0.5058 (target <= 0.5)") as a verdict, as the consumer and the D1 relapse trigger already did, instead of deferring it for ever (rtIsMeasuredPending). deferral-measured.test.mjs. */ /* 0.42.0 DEPLOY-ALL-MERGES-1 (2026-10-20, owner directive "The system shall always deploy all merges automatically."; pillar core; minor: a decision the loop now takes on its own): DEPLOY-DRIFT-CF-1 measured and redeployed only the workers qnfo-ops /ops/deploy may take, so a merge to a control-plane worker (qnfo-fleet-control, qnfo-ops, qnfo-deploy-guard, qnfo-ai, qnfo-gateway, qnfo-observability) or a container worker (qnfo-code-orchestrator, qnfo-containers-pilot) whose canonical run was cancelled, skipped or failed stayed behind main with nothing to notice it (8 rows read "skip" in deploy_drift_cf at 05:30Z). Those workers are now targets too: main ahead of live for 45 minutes, no active run of the owning workflow and the live script confirmed behind, the tick dispatches canonical-deploy.yml with workers=<name> (canary and automatic revert on the runner) or the container worker's own workflow, at most 2 a tick and once per main VERSION an hour (ddcRunner, ddcDispatchPending). Metric merges_undeployed_over_60m (migrations/2026-10-20-deploy-all-merges.sql). deploy-drift-cf.test.mjs 14. */ /* 0.41.2 EXTERNAL-HTTPS-MASTODON-HOST-1 (2026-10-19, agent_issues 2925 INTEG-MASTODON-VERIFY-1; pillar autonomy; patch): RT_HTTP_HOSTS gains mstdn.science, the public Mastodon instance whose unauthenticated account lookup (GET /api/v1/accounts/lookup) qnfo-social already reads (MASTODON-PUBLIC-STATS-1), so the issue closing probe, which was parked probe-not-machine-executable on "host not allowed", can run. The rest of rtHttpSpec is unchanged: https only, GET or HEAD, no credentials, no redirect followed, 10 s, 1 MB; a host not on the list is still refused. */ /* 0.41.1 POOL-BOUND-SOURCES-1 (issue 100213, human_actions 107; patch): POOL-BOUND-1 parks notebook extractions (idea_proposals name owner-corpus) like any generated row and never parks a row an owner directive queued directly (source idea, chat, operator-prime). 0.41.0 REOPEN-LIVE-PATH-3 (issue 100271): the remediation tick files one deduped PROBE-NEEDED-1 issue per open issue left without a live contract. 0.40.1 VERSION-LINE-NOTES-1 (2026-10-19, agent_issues 100243, pillar autonomy; patch, a comment moved): the release notes of every earlier version rode on this line (178 notes, about 200,000 chars), so a version bump of this worker was an 820,000-char patch (worker and mirror, removed and added): 12 code tasks ended on the publisher size cap on 2026-10-19 and three issues were exhausted for three days. They are in git history (git log -S '<release tag>' -- qnfo-fleet-control/worker.js); the changelog is built from the deploy ledger and commits, and the guards read only the quoted version string. A new note goes on this line and stays short. */
+/* 0.44.0 GH-WEBHOOK-INTAKE-1 and GH-APP-FLEET-2 (2026-10-20, pillar autonomy; agent_issues 2582 and 2596; minor: two new routes). POST /gh/webhook receives pull_request, check_suite and push events for QNFO/qnfo-workers, verifies X-Hub-Signature-256 against GH_WEBHOOK_SECRET (503 and nothing accepted while it is unset), records each delivery once (cloud_ops_events kind gh-webhook, id gh-webhook-<delivery>) and runs the merge lane at once for a check_suite that completed with success or a pull request opened, reopened or ready, debounced to one run a minute; the 10-minute poll stays as the second path. POST /gh-app/token is the internal broker for the other GitHub-token workers: a service binding whose props.caller is a listed fleet worker gets the cached installation token (never the personal one, never logged); GET /gh-app reports broker service-binding. Registering the webhook on GitHub and converting each worker are the filed follow-ups. */
 /* 0.43.0 WORKFLOW-FAILURE-INTAKE-1 (2026-10-20, agent_issues 100295, pillar autonomy; minor: a new loop step): each 10-minute tick reads the newest workflow runs on main, keeps every workflow's latest decided conclusion in workflow_main_state, records a failing run with its failed job and step in workflow_failures, files one WORKFLOW-FAILED-1: <workflow> issue with a d1-query probe, and closes it with close_evidence when a later main run succeeds; ops_config workflow_failure_intake = off stops it. */
 /* 0.42.1 VERSION-LINE-SPLIT-1 (2026-10-20, agent_issues 100220, pillar autonomy; patch: layout only): the release notes that sat on the VERSION line (199,469 chars) are one per line below it, so a bump no longer rewrites a 200 KB line and a code task's patch stays under the publisher cap; scripts/conflict_repair.py resolves note-line hunks (merge_note_hunk). No behaviour change. */
 /* 0.42.0 DEPLOY-ALL-MERGES-1 (2026-10-20, owner directive "The system shall always deploy all merges automatically."; pillar core; minor: a decision the loop now takes on its own): DEPLOY-DRIFT-CF-1 measured and redeployed only the workers qnfo-ops /ops/deploy may take, so a merge to a control-plane worker (qnfo-fleet-control, qnfo-ops, qnfo-deploy-guard, qnfo-ai, qnfo-gateway, qnfo-observability) or a container worker (qnfo-code-orchestrator, qnfo-containers-pilot) whose canonical run was cancelled, skipped or failed stayed behind main with nothing to notice it (8 rows read "skip" in deploy_drift_cf at 05:30Z). Those workers are now targets too: main ahead of live for 45 minutes, no active run of the owning workflow and the live script confirmed behind, the tick dispatches canonical-deploy.yml with workers=<name> (canary and automatic revert on the runner) or the container worker's own workflow, at most 2 a tick and once per main VERSION an hour (ddcRunner, ddcDispatchPending). Metric merges_undeployed_over_60m (migrations/2026-10-20-deploy-all-merges.sql). deploy-drift-cf.test.mjs 14. */
@@ -10491,6 +10493,142 @@ function ghAppStatus() {
   return { gh_app: ghAppCache.state, why: ghAppCache.why, minted_at: ghAppCache.minted_at, expires_at: ghAppCache.exp ? new Date(ghAppCache.exp).toISOString() : null, app_calls: ghAppCache.app_calls, pat_fallbacks: ghAppCache.fallbacks };
 }
 __name(ghAppStatus, "ghAppStatus");
+// ---- GH-WEBHOOK-INTAKE-1:BEGIN (pure; replayed by gh-webhook.test.mjs)
+// GH-WEBHOOK-INTAKE-1 (0.43.0, agent_issues 2582, pillar autonomy; owner directive 2026-10-14 "The system shall process PRs more rapidly and push to production."):
+// every fleet reaction to GitHub was polled (the stale-PR lane and the code loop every 10 minutes). POST /gh/webhook receives pull_request, check_suite and push events
+// for QNFO/qnfo-workers, verifies X-Hub-Signature-256 against the worker secret GH_WEBHOOK_SECRET, records each delivery once in cloud_ops_events (kind gh-webhook, id
+// gh-webhook-<delivery id>, so a redelivery is a no-op) and runs the merge lane at once when a pull request became decidable (a check_suite that completed with success, a pull
+// request opened, reopened or marked ready). The 10-minute poll stays as the second path: a missed delivery costs at most one cycle. Without the secret the route answers 503
+// and accepts nothing; it never trusts an unsigned payload. Registering the webhook on GitHub is a repository settings write (refused to sessions and loops) and the secret is
+// set under the secret lock: both are steps of the filed follow-up, not of this route.
+var GH_WEBHOOK_LANE_DEBOUNCE_S = 60;
+var GH_WEBHOOK_MAX_BYTES = 5e6;
+var GH_WEBHOOK_EVENTS = ["pull_request", "check_suite", "push"];
+async function ghWebhookSign(secret, body) {
+  var enc = new TextEncoder();
+  var key = await crypto.subtle.importKey("raw", enc.encode(String(secret)), { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
+  var mac = new Uint8Array(await crypto.subtle.sign("HMAC", key, enc.encode(String(body))));
+  var hex = "";
+  for (var i = 0; i < mac.length; i++) hex += (mac[i] < 16 ? "0" : "") + mac[i].toString(16);
+  return "sha256=" + hex;
+}
+function ghWebhookEqual(a, b) {
+  a = String(a); b = String(b);
+  var d = a.length ^ b.length;
+  for (var i = 0; i < Math.max(a.length, b.length); i++) d |= (a.charCodeAt(i) || 0) ^ (b.charCodeAt(i) || 0);
+  return d === 0;
+}
+async function ghWebhookVerify(secret, body, header) {
+  if (!secret || !header || String(header).indexOf("sha256=") !== 0) return false;
+  return ghWebhookEqual(await ghWebhookSign(secret, body), String(header).trim());
+}
+// Pure: the event name and payload -> what is recorded and whether the merge lane runs now. null for an event the route does not take.
+function ghWebhookClassify(event, p) {
+  p = p || {};
+  if (event === "pull_request") {
+    var pr = p.pull_request || {};
+    var act = String(p.action || "");
+    return { event: event, action: act, pr: Number(p.number || pr.number) || 0, sha: String(pr.head && pr.head.sha || "").slice(0, 12), ref: String(pr.head && pr.head.ref || "").slice(0, 80),
+      lane: act === "opened" || act === "reopened" || act === "ready_for_review",
+      summary: "pull_request " + act + " #" + (p.number || pr.number || "?") + " " + String(pr.head && pr.head.ref || "").slice(0, 60) };
+  }
+  if (event === "check_suite") {
+    var cs = p.check_suite || {};
+    var act2 = String(p.action || ""), concl = String(cs.conclusion || "");
+    var prs = Array.isArray(cs.pull_requests) ? cs.pull_requests.map(function (x) { return Number(x && x.number) || 0; }).filter(Boolean) : [];
+    return { event: event, action: act2, pr: prs[0] || 0, prs: prs.slice(0, 5), sha: String(cs.head_sha || "").slice(0, 12), conclusion: concl,
+      lane: act2 === "completed" && concl === "success" && prs.length > 0,
+      summary: "check_suite " + act2 + " " + (concl || "-") + " " + String(cs.head_sha || "").slice(0, 8) + (prs.length ? " PR #" + prs.join(",#") : " (no pull request)") };
+  }
+  if (event === "push") {
+    var n = Array.isArray(p.commits) ? p.commits.length : 0;
+    return { event: event, action: "push", pr: 0, sha: String(p.after || "").slice(0, 12), ref: String(p.ref || "").slice(0, 80), lane: false,
+      summary: "push " + String(p.ref || "") + " " + n + " commit" + (n === 1 ? "" : "s") + " " + String(p.after || "").slice(0, 8) };
+  }
+  return null;
+}
+// ---- GH-WEBHOOK-INTAKE-1:END
+async function ghWebhookHandle(request, env, ctx) {
+  var secret = env.GH_WEBHOOK_SECRET;
+  if (!secret) return json({ ok: false, error: "webhook secret not configured (GH_WEBHOOK_SECRET); nothing is accepted" }, 503);
+  var len = Number(request.headers.get("Content-Length") || 0);
+  if (len > GH_WEBHOOK_MAX_BYTES) return json({ ok: false, error: "payload too large" }, 413);
+  var body = await request.text();
+  if (body.length > GH_WEBHOOK_MAX_BYTES) return json({ ok: false, error: "payload too large" }, 413);
+  if (!(await ghWebhookVerify(secret, body, request.headers.get("X-Hub-Signature-256") || ""))) return json({ ok: false, error: "bad signature" }, 401);
+  var ev = String(request.headers.get("X-GitHub-Event") || "");
+  var delivery = String(request.headers.get("X-GitHub-Delivery") || "").replace(/[^A-Za-z0-9-]/g, "").slice(0, 64) || "nodelivery-" + Date.now().toString(36);
+  var payload = null;
+  try { payload = JSON.parse(body); } catch (e) { return json({ ok: false, error: "payload is not JSON" }, 400); }
+  var nowIso = new Date().toISOString();
+  if (ev === "ping") {
+    await ghWebhookRecord(env, delivery, nowIso, "ping", "GitHub ping for " + String(payload && payload.repository && payload.repository.full_name || "?") + " (hook " + String(payload && payload.hook_id || "?") + ")", { event: "ping", delivery: delivery }, "ok");
+    return json({ ok: true, pong: true });
+  }
+  var c = ghWebhookClassify(ev, payload);
+  if (!c) return json({ ok: true, ignored: "event " + ev + " is not taken (" + GH_WEBHOOK_EVENTS.join(", ") + ")" }, 202);
+  var repo = String(payload && payload.repository && payload.repository.full_name || "");
+  if (repo !== EVOLVE_REPO) return json({ ok: true, ignored: "repository " + repo + " is not " + EVOLVE_REPO }, 202);
+  var lane = false;
+  if (c.lane) {
+    try {
+      var since = new Date(Date.now() - GH_WEBHOOK_LANE_DEBOUNCE_S * 1000).toISOString();
+      var recent = await env.AUDIT.prepare("SELECT COUNT(*) AS n FROM cloud_ops_events WHERE kind = 'gh-webhook' AND status = 'lane-run' AND ts > ?1").bind(since).first();
+      lane = !(recent && Number(recent.n) > 0);
+    } catch (e) { lane = true; console.error(JSON.stringify({ worker: "qnfo-fleet-control", where: "gh-webhook-debounce", error: String(e && e.message || e).slice(0, 160) })); }
+  }
+  var fresh = await ghWebhookRecord(env, delivery, nowIso, "gh-webhook", "GH-WEBHOOK-INTAKE-1: " + c.summary, { event: c.event, action: c.action, pr: c.pr, sha: c.sha, ref: c.ref || null, conclusion: c.conclusion || null, delivery: delivery, lane: lane }, lane ? "lane-run" : "ok");
+  if (!fresh) return json({ ok: true, duplicate: true, delivery: delivery });
+  if (lane && ctx && typeof ctx.waitUntil === "function") {
+    ctx.waitUntil(Promise.resolve().then(function () { return branchHygieneTick(env, { laneOnly: true }); }).catch(function (e) { console.error(JSON.stringify({ worker: "qnfo-fleet-control", where: "gh-webhook-lane", error: String(e && e.message || e).slice(0, 200) })); }));
+  }
+  return json({ ok: true, event: c.event, action: c.action, pr: c.pr, recorded: true, lane: lane });
+}
+__name(ghWebhookHandle, "ghWebhookHandle");
+// One delivery, one row: INSERT OR IGNORE on the delivery id, so GitHub's redelivery of the same event is a no-op. True when the row is new.
+async function ghWebhookRecord(env, delivery, nowIso, kind, text, meta, status) {
+  try {
+    var r = await env.AUDIT.prepare("INSERT OR IGNORE INTO cloud_ops_events (id, ts, kind, text, meta, job, status) VALUES (?1, ?2, ?3, ?4, ?5, 'qnfo-fleet-control', ?6)")
+      .bind("gh-webhook-" + delivery, nowIso, kind, String(text).slice(0, 500), JSON.stringify(meta || {}).slice(0, 1000), status).run();
+    return !!(r && r.meta && Number(r.meta.changes) > 0);
+  } catch (e) {
+    console.error(JSON.stringify({ worker: "qnfo-fleet-control", where: "gh-webhook-record", error: String(e && e.message || e).slice(0, 200) }));
+    return true;
+  }
+}
+__name(ghWebhookRecord, "ghWebhookRecord");
+async function ghWebhookStatus(env) {
+  var last = null;
+  try { last = await env.AUDIT.prepare("SELECT ts, text, status FROM cloud_ops_events WHERE kind = 'gh-webhook' ORDER BY ts DESC LIMIT 1").first(); } catch (e) { last = null; }
+  return { ok: true, route: "gh-webhook-intake", worker_version: VERSION, configured: !!env.GH_WEBHOOK_SECRET, events: GH_WEBHOOK_EVENTS, signature: "X-Hub-Signature-256", poll_kept_as_second_path: true, last: last ? { ts: last.ts, text: last.text, status: last.status } : null };
+}
+__name(ghWebhookStatus, "ghWebhookStatus");
+// ---- GH-APP-FLEET-2:BEGIN (pure; replayed by gh-webhook.test.mjs)
+// GH-APP-FLEET-2 (0.43.0, agent_issues 2596, pillar autonomy and security): the other GitHub-token workers move onto the qnfo-fleet App token one at a time. POST /gh-app/token is
+// the internal broker route: a service-binding call whose ctx.props.caller names one of those workers (props are set by the deployer of the caller, never by a request) is answered
+// with the cached installation token and its expiry (at most an hour; the personal token is never served). A request on a public host, one without props, and a caller that is
+// not on the list are refused, and the token is never logged: the audit row names the caller and the hour only. The long-lived private key stays in this worker.
+var GH_APP_BROKER_CALLERS = ["agent-orchestrator", "qnfo-agent-orchestrator", "qnfo-autopilot", "qnfo-backlog-exec", "qnfo-cloud-ops", "qnfo-code-agent", "qnfo-code-orchestrator", "qnfo-fleet-dashboard", "qnfo-kaizen", "qnfo-lifecycle", "qnfo-ops", "qnfo-research-exec", "qnfo-skill-sync"];
+function ghAppBrokerCaller(props, hostname) {
+  if (/\.workers\.dev$|(^|\.)qnfo\.org$|(^|\.)q08\.org$|(^|\.)qwav\.org$/i.test(String(hostname || ""))) return null;
+  var c = props && typeof props.caller === "string" ? props.caller : "";
+  return GH_APP_BROKER_CALLERS.indexOf(c) >= 0 ? c : null;
+}
+// ---- GH-APP-FLEET-2:END
+async function ghAppBrokerHandle(request, env, ctx) {
+  var url = new URL(request.url);
+  var caller = ghAppBrokerCaller(ctx && ctx.props, url.hostname);
+  if (!caller) return json({ ok: false, error: "forbidden: the App token broker answers a service binding whose props.caller is a listed fleet worker (GH-APP-FLEET-2)" }, 403);
+  var t = await ghAppToken(env);
+  if (!t) return json({ ok: false, state: ghAppCache.state, why: ghAppCache.why, note: "no App token to serve; the caller keeps its own fallback" }, 503);
+  try {
+    var hour = new Date().toISOString().slice(0, 13);
+    await env.AUDIT.prepare("INSERT OR IGNORE INTO cloud_ops_events (id, ts, kind, text, meta, job, status) VALUES (?1, ?2, 'gh-app-broker', ?3, ?4, 'qnfo-fleet-control', 'ok')")
+      .bind("gh-app-broker-" + caller + "-" + hour, new Date().toISOString(), "GH-APP-FLEET-2: installation token served to " + caller + " (no token text recorded)", JSON.stringify({ caller: caller, hour: hour })).run();
+  } catch (e) { console.error(JSON.stringify({ worker: "qnfo-fleet-control", where: "gh-app-broker-audit", error: String(e && e.message || e).slice(0, 160) })); }
+  return new Response(JSON.stringify({ ok: true, token: t, expires_at: new Date(ghAppCache.exp).toISOString(), caller: caller }), { status: 200, headers: { "Content-Type": "application/json", "Cache-Control": "no-store" } });
+}
+__name(ghAppBrokerHandle, "ghAppBrokerHandle");
 // ---- CRON-GRID-1:BEGIN (owner directive 2026-10-19: "ALL CRON TICKS SHALL BE MEASURED IN 5-MINUTE INTERVALS, AND NO CRON
 // SHALL EXECUTE LESS THAN ONCE EVERY HOUR. ALL CRON FAILURES/ERRORS SHALL BE TRIAGED AND REMEDIATED AUTOMATICALLY BY THE FLEET.")
 // Cloudflare fires this worker only on triggers that repeat at least hourly, on minutes that are multiples of 5. A job that
@@ -10586,7 +10724,12 @@ var worker_default2 = {
     const p = url.pathname;
     // GH-APP-BROKER-1 (0.32.0): the App installation token is this invocation's GITHUB_TOKEN; GET /gh-app reports the path (no token text).
     env = await ghAppEnv(env);
-    if (p === "/gh-app" && request.method === "GET") return json(Object.assign({ ok: ghAppCache.state === "ok", worker_version: VERSION }, ghAppStatus()));
+    if (p === "/gh-app" && request.method === "GET") return json(Object.assign({ ok: ghAppCache.state === "ok", worker_version: VERSION, broker: "service-binding", broker_callers: GH_APP_BROKER_CALLERS.length }, ghAppStatus()));
+    // GH-APP-FLEET-2 (0.43.0): the internal token broker for the other GitHub-token workers (service binding with props.caller only).
+    if (p === "/gh-app/token" && request.method === "POST") return ghAppBrokerHandle(request, env, ctx);
+    // GH-WEBHOOK-INTAKE-1 (0.43.0): GitHub pull_request, check_suite and push events, signature-verified; GET reports the route (open read, OPEN-ACCESS-1).
+    if (p === "/gh/webhook" && request.method === "GET") return json(await ghWebhookStatus(env));
+    if (p === "/gh/webhook" && request.method === "POST") return ghWebhookHandle(request, env, ctx);
     // CHARTER-LOOP-1 (QUNIVERSE-CHARTER-1): the fleet's own account of itself. GET is public (it is what the charter
     // document publishes anyway); the tick is admin-gated like every other mutating route here.
     // PORTFOLIO-LOOP-1 (QNFO-PORTFOLIO-1): the organisation's repositories as one register.
@@ -11404,7 +11547,26 @@ function rtStandingDetector(cls) {
 // six contracts had the second form on 2026-10-06 (issue-ask-hung, issue-1876, issue-1877, issue-1960, issue-1965, issue-1975).
 // Before 0.4.128 only the bare word was a deferral, so a held or closed issue whose probe briefly read 'pending: ...' (a run
 // that did not measure its page, a window not yet open) counted those reads as relapses and could be reopened falsely. The SQL twin is NOT LIKE 'pending%' below.
-function rtIsDeferral(os) { return /^pending/i.test(String(os == null ? "" : os).trim()); }
+// DEFERRAL-MEASURED-1 (0.42.1, 2026-10-20, agent_issues 2954, 100245, 100246): a 'pending' read that carries a number and a bound
+// (ceiling, target, threshold, limit, "fewer than", "more than" or a comparison operator) is a measurement that is off target, not a
+// probe that cannot judge yet, so it is a verdict. This tick treated every 'pending...' as a deferral, so a contract that measured
+// its defect every hour and read "pending: unmanaged_direct_spend_share reads 0.5058 (target <= 0.5 ...)" deferred for 8 days with no
+// ledger row, no failure count and no doer, and the 7-day sweep then filed an escalation issue about the probe instead of the defect
+// (2446, 2346, goal-TP-1, goal-TP-3, goal-TP-4 on 2026-10-20: 5 of the 33 classes that deferred in 12 hours). The twins already read it
+// this way: scripts/remediation_consumer.py is_measured_pending (CONSUMER-PENDING-IS-DEFERRAL-1, 2026-10-19) and the D1 trigger
+// remediation_reopen_on_relapse_d1 (its WHEN clause). The tick was the third reader and the only one that disagreed, which is why the
+// verdict alternated between 'deferred' (this tick) and 'fail' (the consumer, every 22 minutes) on the same contract.
+var RT_MEASURED_WORDS = ["ceiling", "target", "threshold", "limit", "fewer than", "more than"];
+var RT_MEASURED_OPS = [" <= ", " >= ", " < ", " > "];
+function rtIsMeasuredPending(os) {
+  var s = String(os == null ? "" : os).trim();
+  if (!/^pending/i.test(s) || !/[0-9]/.test(s)) return false;
+  var low = s.toLowerCase(), i;
+  for (i = 0; i < RT_MEASURED_WORDS.length; i++) if (low.indexOf(RT_MEASURED_WORDS[i]) >= 0) return true;
+  for (i = 0; i < RT_MEASURED_OPS.length; i++) if (s.indexOf(RT_MEASURED_OPS[i]) >= 0) return true;
+  return false;
+}
+function rtIsDeferral(os) { return /^pending/i.test(String(os == null ? "" : os).trim()) && !rtIsMeasuredPending(os); }
 // Days since the first pass after the last real failure ('pending', 'pending: <reason>' and empty observations are deferrals).
 // HOLDING-OPEN-REARM-2: the issue's status now, after this tick's verification row (the autoclose trigger may have closed it).
 async function rtIssueOpen(db, id) {

@@ -46,6 +46,13 @@ service = "qnfo-email"
 # Installed by qnfo-ops BINDING-PROPS-APPLY-1 on the canonical deploy.
 props = { caller = "qnfo-cloud-ops" }
 
+# RESEARCH-WATCHDOG-1 (1.33.0, agent_issues 2838): the second trigger path of qnfo-research-exec. The watchdog forces one stage with
+# POST /run?sync=1 on an internal host (RUN-INTERNAL-1 lets a service binding in; no secret). Installed by the canonical deploy.
+[[services]]
+binding = "RESEARCH_EXEC"
+service = "qnfo-research-exec"
+props = { caller = "qnfo-cloud-ops" }
+
 # secret (set via wrangler secret put): EMAIL_API_KEY
 # secret (set via wrangler secret put): GH_TOKEN
 # secret (set via wrangler secret put): GMAIL_PASS
