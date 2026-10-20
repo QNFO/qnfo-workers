@@ -4,14 +4,14 @@
   "redirect_from": "ask.qwav.tech",
   "service": "qnfo-ai-search",
   "token_present": true,
-  "stage": "dns-check",
+  "stage": "redirect",
   "status": "failed",
-  "http": 200,
-  "error": "no proxied DNS record for ask.qwav.org; a route would be inert (records: [])",
+  "http": 400,
+  "error": "add rule body={\"result\": null, \"success\": false, \"errors\": [{\"message\": \"invalid JSON: unknown field \\\"name\\\"\"}], \"messages\": []}",
   "zone_id": "4df9cb76facef38e78f6f6fc61cbb7c7",
-  "route_id": null,
+  "route_id": "38a23917a5f448e692c4c225036bea5c",
   "redirect_rule_id": null,
-  "old_zone_id": null,
+  "old_zone_id": "331e4363fd05e8e4fc123ea7d2775411",
   "worker_version": "2.6.5-cron-grid-1",
-  "ts": "2026-10-20T08:23:19Z"
+  "ts": "2026-10-20T11:56:32Z"
 }
