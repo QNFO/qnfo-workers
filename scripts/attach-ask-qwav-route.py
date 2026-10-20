@@ -105,10 +105,6 @@ def get_json(url, timeout=20, redirect_ok=False):
 def wait_worker():
     for i in range(1, 41):
         try:
-            st, body = get_json(ORIGIN_HEALTH)[:1] + get_json(ORIGIN_HEALTH)[2], None
-        except TypeError:
-            pass
-        try:
             r = urllib.request.Request(ORIGIN_HEALTH, headers={"User-Agent": UA, "Cache-Control": "no-cache"})
             with urllib.request.urlopen(r, timeout=20) as resp:
                 st, body = resp.status, resp.read().decode(errors="replace")
@@ -236,7 +232,7 @@ def verify():
     for i in range(1, 13):
         if not ok_org:
             try:
-                st, body = get_json("https://%s/health" % HOSTNAME)[0], get_json("https://%s/health" % HOSTNAME)[2]
+                st, _, body = get_json("https://%s/health" % HOSTNAME)
                 w = ""
                 try:
                     w = json.loads(body).get("worker") or ""
