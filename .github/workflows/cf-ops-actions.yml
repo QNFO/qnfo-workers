@@ -64,7 +64,8 @@ concurrency:
 
 jobs:
   run:
-    runs-on: ubuntu-latest
+    # RUNNER-PIN-2 (2026-10-20, WORKFLOW-FAILURE-AUDIT-1): ubuntu-latest becomes Ubuntu 26 by 2026-11-19 (a notice on every job meanwhile); pinned to ubuntu-24.04 until an ubuntu-26.04 trial run is green.
+    runs-on: ubuntu-24.04
     # 60 (was 15): noz-scrub-graph live (run 136, 2026-10-12) writes about 3,000 D1 statements one REST call at a time and was
     # cancelled by the 15-minute limit with the scrub half done; every action here is re-runnable, so a long run is cheap to
     # finish and expensive to cut short.

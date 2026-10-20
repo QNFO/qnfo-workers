@@ -74,9 +74,15 @@ name: container-config-selfheal-cron
 #   probe as the deciding signal and reports the script exit separately.
 #
 # CONCURRENCY -- THE POINT OF THIS FILE
-#   `cancel-in-progress: true` on its OWN group. A run that fires while a previous self-heal
-#   is still running supersedes it instead of queueing behind it, so this workflow can never
-#   accumulate the backlog that starved the push-triggered one-shots.
+#   Its OWN group, so this workflow can never accumulate the backlog that starved the
+#   push-triggered one-shots: at most one run executes and ONE waits, and a newer trigger
+#   replaces the waiting run (GitHub keeps a single pending run per group, whatever
+#   cancel-in-progress says). RUNNER-PIN-ANNOTATIONS-1 (2026-10-20): `cancel-in-progress` is
+#   now false. With true, a trigger that arrived while a self-heal was RUNNING killed it
+#   mid-flight (6 of 14 sampled runs were cancelled in flight, each shown as a red
+#   "Canceling since a higher priority waiting request" annotation); the job holds
+#   contents: write and may be inside the /content PUT, and the kill bought nothing because the
+#   waiting run starts the moment the running one ends (a run lasts about ten seconds).
 #
 # FAIL-CLOSED / NO-REGRESSION
 #   A red run mutates nothing: the script exits before PUT when wrangler.toml declares no
@@ -121,11 +127,12 @@ permissions:
 
 concurrency:
   group: container-config-selfheal-cron
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
   selfheal:
-    runs-on: ubuntu-latest
+    # RUNNER-PIN-2 (2026-10-20, WORKFLOW-FAILURE-AUDIT-1): ubuntu-latest becomes Ubuntu 26 by 2026-11-19 (a notice on every job meanwhile); pinned to ubuntu-24.04 until an ubuntu-26.04 trial run is green.
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
     env:
       WORKER: qnfo-containers-pilot
@@ -241,6 +248,7 @@ jobs:
           hcode="$(curl -s -o /tmp/health.json -w '%{http_code}' --max-time 60 "$base/health" || true)"
           echo "GET /health -> $hcode"
           cat /tmp/health.json 2>/dev/null || true
+          echo
           if [ "$hcode" != "200" ]; then
             echo "rc=health-failed" >> "$GITHUB_OUTPUT"
             exit 0
@@ -249,6 +257,7 @@ jobs:
             scode="$(curl -s -o /tmp/status.json -w '%{http_code}' --max-time 60 -H "Authorization: Bearer $PILOT_TOKEN" "$base/status" || true)"
             echo "GET /status -> $scode"
             cat /tmp/status.json 2>/dev/null || true
+            echo
             if grep -q "Cannot read properties of undefined" /tmp/status.json 2>/dev/null; then
               echo "rc=ctx-container-undefined" >> "$GITHUB_OUTPUT"
             elif grep -q '"containerRunning": *true' /tmp/status.json 2>/dev/null; then
@@ -262,7 +271,13 @@ jobs:
             # signal available here -- it is WEAKER than /status and is reported as AMBER,
             # never as green.
             echo "rc=health-ok-no-pilot-token" >> "$GITHUB_OUTPUT"
-            echo "::warning::PILOT_TOKEN unavailable - functional probe is HEALTH-ONLY (amber); provision secrets.PILOT_TOKEN to get the authoritative /status signal"
+            # RUNNER-PIN-ANNOTATIONS-1 (2026-10-20): plain text, not a workflow command. The workflow-failure audit of 2026-10-20
+            # judged that copying the pilot shell's static bearer token into Actions secrets would widen its exposure, and left it
+            # unprovisioned (measured: probe_rc skipped-no-pilot-token). That is the audit's call, not a rule of any document in docs/:
+            # if the owner provisions secrets.PILOT_TOKEN, this step reads /status and the verdict can be GREEN. Until then this state does
+            # not clear on its own; the verdict step below records it once, as a notice, and the outcome artifact carries AMBER.
+            # restore-container-config-1485.yml and deploy-containers-pilot.yml still read the secret if it is present.
+            echo "PILOT_TOKEN unavailable - functional probe is HEALTH-ONLY (amber); /status needs the pilot shell's token, which is not provisioned in Actions secrets"
           fi
 
       - name: Verdict - honest red / amber / green
@@ -277,7 +292,9 @@ jobs:
               echo "GREEN: /status reports containerRunning=true - container fleet is alive" ;;
             health-ok-no-pilot-token)
               echo "rc=AMBER" >> "$GITHUB_OUTPUT"
-              echo "::warning::AMBER: /health 200 but /status unverified (no PILOT_TOKEN) - not proof of container liveness" ;;
+              # A notice, not a warning: AMBER is this workflow's steady state while the token is not provisioned, so a warning here
+              # was a permanent annotation on every run that no run could clear. RED below stays an error.
+              echo "::notice::AMBER: /health 200 but /status unverified (no PILOT_TOKEN) - not proof of container liveness" ;;
             *)
               echo "rc=RED" >> "$GITHUB_OUTPUT"
               echo "::error::RED: container fleet is NOT demonstrably alive (probe_rc=$rc) - issue #1485 class is live" ;;

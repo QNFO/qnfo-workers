@@ -42,7 +42,8 @@ concurrency:
 
 jobs:
   lint:
-    runs-on: ubuntu-latest
+    # RUNNER-PIN-2 (2026-10-20, WORKFLOW-FAILURE-AUDIT-1): ubuntu-latest becomes Ubuntu 26 by 2026-11-19 (a notice on every job meanwhile); pinned to ubuntu-24.04 until an ubuntu-26.04 trial run is green.
+    runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -62,8 +63,11 @@ jobs:
       - name: SECRET-LOCK-ENFORCE-1 guard (fail CI when a secrets or bindings mutation skips the secret-lock)
         run: python3 scripts/secret-mutation-guard.py
 
+      # ANNOTATION-FIXTURE-QUIET-1 (2026-10-20): the tests feed fake lock outages to scripts/secret_lock.py, which prints a real
+      # `::warning::SECRET-LOCK-UNAVAILABLE ...` workflow command; the runner turned the five fixture lines into five warning
+      # annotations on every green run, which read as a live lock outage. The helper switches commands off around the test only.
       - name: SECRET-LOCK-ENFORCE-1 offline tests
-        run: python3 scripts/secret-mutation-guard_test.py
+        run: bash scripts/stop-commands.sh python3 scripts/secret-mutation-guard_test.py
 
       - name: CANONICAL-DEPLOY-SKIP-1 offline tests (a refused creation of an absent worker is a skip, any other failure still fails)
         run: python3 scripts/canonical_deploy_skip_test.py

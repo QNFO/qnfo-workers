@@ -60,7 +60,10 @@ jobs:
           node scripts/run-suites.mjs --all --jobs 4 > suite-report.txt 2>&1
           rc=$?
           echo "exit_code=$rc" >> "$GITHUB_OUTPUT"
-          tail -n 25 suite-report.txt
+          # ANNOTATION-FIXTURE-QUIET-1 (2026-10-20): the report holds the suites' own stdout, and a suite that replays a failure prints
+          # `::error::fallback deploy failed for c` (scripts/direct_content_deploy.py); echoing the tail made it an error annotation on
+          # each leg. The summary below writes to a file, which the runner does not read for commands.
+          bash scripts/stop-commands.sh tail -n 25 suite-report.txt
           exit $rc
       - name: Report the failing suites
         if: always()

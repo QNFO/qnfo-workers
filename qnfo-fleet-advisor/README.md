@@ -32,3 +32,8 @@ Tier 1 (auto-applied, reversible, capped): gateway config mutations aligned to f
 Tier 2 (auto-filed, deduped): agent_issues tickets.
 Tier 3 (proposed only): kaizen_candidates -> review disposition.
 Self-improvement: the advisor's own metrics/version are part of every run digest.
+
+## Dependency note
+This directory is FOLDED (see FOLDED) and is never installed or deployed. `package.json` overrides `undici` to `^7.29.1`
+(RUNNER-PIN-ANNOTATIONS-1, 2026-10-20): `agents` and `@cloudflare/think` pull `undici@7.29.0` through `guarded-fetch`, 7.29.1 is the
+first fixed release, and the Dependabot security update for it could not resolve the tree and failed on 2026-10-18.
