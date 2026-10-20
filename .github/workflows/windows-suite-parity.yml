@@ -96,11 +96,13 @@ jobs:
           # failing list lived only in the job summary, which the REST API and the log tool cannot read, so a red run named no suite. The
           # runner prints one `FAIL <ms> ms <suite>` line per failing suite and a group with the last 40 lines of its output; the names go out
           # as ONE annotation (suite paths only, no fixture text, so it is a signal and not noise) and the groups go to the log with workflow
-          # commands off, because a suite that replays a failure prints `::error::` lines of its own.
+          # commands off, because a suite that replays a failure prints `::error::` lines of its own. The step runs under `bash -e -o pipefail`,
+          # so each pipeline that can legitimately find nothing (a green run has no FAIL line) ends in `|| true`: the first version of this block
+          # aborted the report step on every green run (run 39398293898: 669 passed, 0 failed, exit code 1).
           if [ -f suite-report.txt ]; then
-            names=$(grep -E '^FAIL +[0-9]+ ms ' suite-report.txt | sed -E 's/^FAIL +[0-9]+ ms +//' | tr -d '\r' | tr '\n' ' ' | cut -c1-1500)
+            names=$(grep -E '^FAIL +[0-9]+ ms ' suite-report.txt | sed -E 's/^FAIL +[0-9]+ ms +//' | tr -d '\r' | tr '\n' ' ' | cut -c1-1500 || true)
             if [ -n "$names" ]; then echo "::error title=windows suite parity node ${{ matrix.node }}::failing suites: $names"; fi
-            sed -n '/^::group::FAIL /,/^::endgroup::/p' suite-report.txt | head -600 > failed-suites.txt
+            sed -n '/^::group::FAIL /,/^::endgroup::/p' suite-report.txt | head -600 > failed-suites.txt || true
             bash scripts/stop-commands.sh cat failed-suites.txt
           fi
       - name: Fail the run when a suite is red on Windows
