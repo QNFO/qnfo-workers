@@ -195,7 +195,7 @@ const K = { Authorization: "Bearer " + GOOD_KEY };
   const code = (sent[0].subject.match(/\d{6}/) || [])[0];
   ok(!!code && JSON.stringify(r.j).indexOf(code) < 0, "I2 the code is in the email and never in the response");
   r = await req(t, "POST", "/v1/owner/login", {}, {});
-  ok(r.j && r.j.sent === false && sent.length === 1, "I3 a second login within a minute sends nothing");
+  ok(r.j && r.j.sent === false && sent.length === 1, "I3 a second login while a code is live sends nothing");
   r = await req(t, "POST", "/v1/owner/verify", {}, { code: code === "000000" ? "111111" : "000000" });
   ok(r.j && r.j.ok === false, "I4 a wrong code fails");
   r = await req(t, "POST", "/v1/owner/verify", {}, { code });
