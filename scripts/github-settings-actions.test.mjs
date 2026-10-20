@@ -4,12 +4,15 @@
 // app cannot be resolved; live creates, updates (idempotently) and reverts only the ruleset named main-gate; secret scanning is one PATCH
 // per feature and a refusal of one is a recorded limitation; only QNFO/qnfo-workers paths are reachable; a missing credential is a
 // refusal and not a write; the committed ruleset config names checks that real pull_request jobs produce.
+// WORKFLOW-SCRIPT-FIXES-1 adds: the two core secret protections decide a secret-scanning run's verdict (plan-gated extras are limitations, not a red run);
+// the github-actions app (15368) is refused as a bypass actor by id or slug in dry and live alike, and the committed config no longer lists it; a workflow
+// comment line that mentions a push to main is not a push path.
 // Run: node --no-warnings scripts/github-settings-actions.test.mjs   -> prints "N passed, 0 failed"
-import { mkdtempSync, mkdirSync, writeFileSync, rmSync, readFileSync } from "node:fs";
+import { mkdtempSync, mkdirSync, writeFileSync, rmSync, readFileSync, cpSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
-import { run, makeApi, workflowChecks, checkProblems, buildRuleset, rulesetDiff, activityActors, unlistedPushers, loadConfig, ACTIONS, SECRET_FEATURES } from "./github-settings-actions.mjs";
+import { run, makeApi, workflowChecks, workflowPushPaths, checkProblems, buildRuleset, rulesetDiff, activityActors, unlistedPushers, loadConfig, isActionsApp, ACTIONS, SECRET_FEATURES, SECRET_CORE_FEATURES, GITHUB_ACTIONS_APP_ID } from "./github-settings-actions.mjs";
 
 const repoRoot = join(dirname(fileURLToPath(import.meta.url)), "..");
 let pass = 0, fail = 0;
@@ -87,13 +90,13 @@ ok(real.length === 0, "the committed config's required checks are produced by un
 ok(JSON.stringify(loadConfig(repoRoot).required_checks) === JSON.stringify(["gate", "guard", "mirror-guard", "identity-guard"]), "the declared checks are the four named in agent_issues 2927");
 
 // payload
-const desired = buildRuleset(cfg, [{ slug: "github-actions", actor_id: 15368 }, { slug: "qnfo-fleet", actor_id: 424242 }]);
+const desired = buildRuleset(cfg, [{ slug: "qnfo-fleet", actor_id: 424242 }]);
 ok(desired.name === "main-gate" && desired.enforcement === "active" && desired.conditions.ref_name.include[0] === "~DEFAULT_BRANCH", "the ruleset targets the default branch by name main-gate");
 ok(desired.rules.map((r) => r.type).join() === "deletion,non_fast_forward,pull_request,required_status_checks", "rules: no deletion, no force push, pull request, required checks");
 const rsc = desired.rules.find((r) => r.type === "required_status_checks").parameters;
 ok(rsc.required_status_checks.map((c) => c.context).join() === "gate,guard,mirror-guard,identity-guard" && rsc.strict_required_status_checks_policy === false, "the four contexts, not strict (strict would stall every PR whenever main moves)");
 ok(desired.rules.find((r) => r.type === "pull_request").parameters.required_approving_review_count === 0, "no approving review is required (one account authors every pull request)");
-ok(desired.bypass_actors.some((b) => b.actor_type === "RepositoryRole" && b.actor_id === 5) && desired.bypass_actors.some((b) => b.actor_id === 424242 && b.actor_type === "Integration") && desired.bypass_actors.every((b) => b.bypass_mode === "always"), "admin role and both apps bypass", desired.bypass_actors);
+ok(desired.bypass_actors.some((b) => b.actor_type === "RepositoryRole" && b.actor_id === 5) && desired.bypass_actors.some((b) => b.actor_id === 424242 && b.actor_type === "Integration") && desired.bypass_actors.every((b) => b.bypass_mode === "always") && desired.bypass_actors.length === 2, "the admin role and the fleet app bypass, nothing else", desired.bypass_actors);
 ok(rulesetDiff(null, desired)[0].startsWith("absent") && rulesetDiff(JSON.parse(JSON.stringify(desired)), desired).length === 0 && rulesetDiff({ ...desired, enforcement: "disabled" }, desired).length === 1, "rulesetDiff: absent, equal, one change");
 const actors = activityActors([{ activity_type: "push", actor: { login: "github-actions[bot]" } }, { activity_type: "pr_merge", actor: { login: "rwnq8" } }, { activity_type: "push", actor: { login: "github-actions[bot]" } }, { activity_type: "push", actor: { login: "intruder" } }]);
 ok(actors["github-actions[bot]"].push === 2 && actors.rwnq8.pr_merge === 1 && unlistedPushers(actors, cfg).join() === "intruder", "activityActors counts by pusher and kind; unlistedPushers names a direct pusher nobody listed (a merger is not one)", actors);
@@ -130,7 +133,7 @@ res = await run("ruleset-main", "live", wfRoot, g.fetchImpl, { GH_ADMIN_TOKEN: "
 ok(!res.ok && res.problems.some((p) => /someone-else/.test(p) && /would block it/.test(p)) && !g.st.log.some((c) => c.method !== "GET"), "live refuses while an unlisted actor pushes directly to main (the ruleset would block it)");
 g = fakeGitHub();
 res = await run("ruleset-main", "dry", wfRoot, g.fetchImpl, { GH_ADMIN_TOKEN: "pat_admin" });
-ok(res.ok && res.problems.length === 0 && res.diff[0].startsWith("absent") && !g.st.log.some((c) => c.method !== "GET") && res.desired.bypass_actors.length === 3, "dry run is clean, shows the diff and writes nothing", res);
+ok(res.ok && res.problems.length === 0 && res.diff[0].startsWith("absent") && !g.st.log.some((c) => c.method !== "GET") && res.desired.bypass_actors.length === 2 && !res.desired.bypass_actors.some((b) => b.actor_id === 15368), "dry run is clean, shows the diff and writes nothing, and carries no github-actions bypass actor", res);
 res = await run("ruleset-main", "live", wfRoot, g.fetchImpl, { GH_ADMIN_TOKEN: "pat_admin" });
 ok(res.ok && res.write.status === 201 && res.rules_on_main_after.includes("required_status_checks") && res.rules_on_main_after.includes("pull_request") && g.st.rulesets.length === 2 && g.st.rulesets[0].name === "main-safety", "live creates main-gate beside main-safety and reads the rules back", res);
 const before = g.st.log.length;
@@ -143,6 +146,36 @@ res = await run("ruleset-main-revert", "dry", wfRoot, g.fetchImpl, { GH_ADMIN_TO
 ok(res.ok && /would delete ruleset 777/.test(res.note) && g.st.rulesets.length === 2, "revert dry run deletes nothing");
 res = await run("ruleset-main-revert", "live", wfRoot, g.fetchImpl, { GH_ADMIN_TOKEN: "pat_admin" });
 ok(res.ok && res.delete.status === 204 && g.st.rulesets.length === 1 && g.st.rulesets[0].name === "main-safety", "revert live deletes main-gate and never main-safety");
+
+// ---- the github-actions app is not a bypass actor (WORKFLOW-SCRIPT-FIXES-1) ----
+ok(isActionsApp({ slug: "github-actions" }) && isActionsApp({ slug: "github-actions[bot]" }) && isActionsApp({ slug: "renamed", actor_id: 15368 }) && isActionsApp({ slug: "x", actor_id: "15368" }) && !isActionsApp({ slug: "qnfo-fleet", actor_id: 424242 }) && !isActionsApp({ slug: "qnfo-fleet" }) && GITHUB_ACTIONS_APP_ID === 15368, "isActionsApp: by slug, by slug with [bot], by id 15368 (number or string); the fleet app is not");
+ok(!JSON.stringify(loadConfig(repoRoot).bypass.integrations).includes("15368") && !loadConfig(repoRoot).bypass.integrations.some(isActionsApp) && loadConfig(repoRoot).bypass.integrations.some((i) => i.slug === "qnfo-fleet"), "the committed ruleset config lists no github-actions bypass actor and still lists the fleet app");
+for (const mode of ["dry", "live"]) {
+  for (const entry of [{ slug: "github-actions", actor_id: 15368, why: "x" }, { slug: "github-actions", actor_id: null }, { slug: "ci", actor_id: 15368 }]) {
+    const root2 = mkdtempSync(join(tmpdir(), "gh-settings-ia-"));
+    mkdirSync(join(root2, ".github"), { recursive: true });
+    mkdirSync(join(root2, "scripts"), { recursive: true });
+    cpSync(join(wfRoot, ".github"), join(root2, ".github"), { recursive: true });
+    const withActions = JSON.parse(JSON.stringify(cfg));
+    withActions.bypass.integrations = [entry, ...withActions.bypass.integrations];
+    writeFileSync(join(root2, "scripts", "github-main-ruleset.json"), JSON.stringify(withActions));
+    g = fakeGitHub();
+    res = await run("ruleset-main", mode, root2, g.fetchImpl, { GH_ADMIN_TOKEN: "pat_admin" });
+    ok(res.problems.some((p) => /refused by GitHub/.test(p) && /422/.test(p) && (entry.actor_id ? p.includes(String(entry.actor_id)) : /github-actions/.test(p))) && !res.desired.bypass_actors.some((b) => b.actor_id === 15368), "ruleset-main " + mode + ": a configured github-actions entry (" + JSON.stringify(entry) + ") is a problem before any write, and is not in the payload", res.problems);
+    ok(!g.st.log.some((c) => c.method !== "GET") && (mode === "dry" ? res.ok === true && /problem\(s\) block live/.test(res.note) : !res.ok && /live refused/.test(res.note)), "ruleset-main " + mode + ": nothing is written (dry reports the problem, live refuses)", res.note);
+    rmSync(root2, { recursive: true, force: true });
+  }
+}
+
+// ---- a comment line is not a push path ----
+const pushRoot = mkdtempSync(join(tmpdir(), "gh-settings-pp-"));
+mkdirSync(join(pushRoot, ".github", "workflows"), { recursive: true });
+writeFileSync(join(pushRoot, ".github", "workflows", "p.yml"), "name: p\n# the old step ran a bare `git push origin HEAD:main` here\n  #   git push origin main  (indented comment)\njobs:\n  j:\n    steps:\n      - run: |\n          # git push origin main is documented above\n          git push origin HEAD:main\n      - run: git push origin feature\n");
+const pp = workflowPushPaths(pushRoot);
+ok(pp.length === 1 && pp[0].workflow === "p.yml" && pp[0].line === 9 && /^git push origin HEAD:main$/.test(pp[0].snippet), "only the real push to main is a push path; comment lines (also indented and inside a run block) and a push to another branch are not", pp);
+rmSync(pushRoot, { recursive: true, force: true });
+const realPaths = workflowPushPaths(repoRoot);
+ok(realPaths.length > 0 && realPaths.every((x) => !/^\s*#/.test(x.snippet)), "on this repository no listed push path is a comment line", realPaths.filter((x) => /^\s*#/.test(x.snippet)));
 
 // ---- refusals ----
 g = fakeGitHub({ admin403: true });
@@ -159,7 +192,17 @@ res = await run("secret-scanning", "dry", wfRoot, g.fetchImpl, { GH_ADMIN_TOKEN:
 ok(res.ok && res.features.secret_scanning.result === "already enabled" && /dry run/.test(res.features.secret_scanning_push_protection.result) && !g.st.log.some((c) => c.method !== "GET"), "secret-scanning dry run lists what it would enable and writes nothing", res.features);
 g = fakeGitHub({ refuse: ["secret_scanning_validity_checks", "secret_scanning_non_provider_patterns"] });
 res = await run("secret-scanning", "live", wfRoot, g.fetchImpl, { GH_ADMIN_TOKEN: "pat_admin" });
-ok(!res.ok && g.st.log.filter((c) => c.method === "PATCH").length === 3 && res.features.secret_scanning_push_protection.after === "enabled" && res.limitations.length === 2 && /Secret Protection/.test(res.limitations[0]), "one PATCH per feature: a refusal of two leaves push protection enabled and is recorded as two limitations", res);
+ok(res.ok && res.core_enabled && g.st.log.filter((c) => c.method === "PATCH").length === 3 && res.features.secret_scanning_push_protection.after === "enabled" && res.limitations.length === 2 && res.optional_limitations.length === 2 && /Secret Protection/.test(res.limitations[0]) && /optional feature/.test(res.note), "one PATCH per feature: a refusal of the two plan-gated extras leaves both core protections enabled, is recorded as two limitations and does not fail the run", res);
+g = fakeGitHub({ refuse: ["secret_scanning_push_protection"] });
+res = await run("secret-scanning", "live", wfRoot, g.fetchImpl, { GH_ADMIN_TOKEN: "pat_admin" });
+ok(!res.ok && !res.core_enabled && res.limitations.length >= 1 && /secret_scanning_push_protection/.test(res.limitations[0]), "a refused core protection (push protection) still fails the run", res);
+g = fakeGitHub({ sa: { secret_scanning: { status: "disabled" } }, refuse: ["secret_scanning"] });
+res = await run("secret-scanning", "live", wfRoot, g.fetchImpl, { GH_ADMIN_TOKEN: "pat_admin" });
+ok(!res.ok && !res.core_enabled, "a refused secret_scanning (the other core protection) still fails the run", res);
+g = fakeGitHub();
+res = await run("secret-scanning", "live", wfRoot, g.fetchImpl, { GH_ADMIN_TOKEN: "pat_admin" });
+ok(res.ok && res.core_enabled && res.limitations.length === 0 && res.optional_limitations.length === 0 && !res.note, "everything enabled: ok with no limitation and no note", res);
+ok(SECRET_CORE_FEATURES.join() === "secret_scanning,secret_scanning_push_protection" && SECRET_CORE_FEATURES.every((f) => SECRET_FEATURES.includes(f)), "the core features are the first two of the four");
 g = fakeGitHub({ noSa: true });
 res = await run("secret-scanning", "dry", wfRoot, g.fetchImpl, { GH_ADMIN_TOKEN: "pat_admin" });
 ok(res.visible_to_credential === false && res.features.secret_scanning.before === "unknown", "a credential that cannot see security_and_analysis says so");

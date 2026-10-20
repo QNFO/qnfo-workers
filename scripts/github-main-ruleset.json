@@ -16,8 +16,8 @@
   },
   "bypass": {
     "repository_roles": [{ "name": "admin", "actor_id": 5 }],
+    "_github_actions_not_listed": "WORKFLOW-SCRIPT-FIXES-1: the github-actions app (id 15368) is not listed. GitHub refuses it as a bypass actor (POST /rulesets 422 'Actor GitHub Actions integration must be part of the ruleset source or owner organization', run 39269046255, 2026-10-19), so the dry run and the live run now agree: resolveIntegrations refuses a configured 15368 in both. The workflows that push to main with GITHUB_TOKEN move to a bypass-listed identity first (issue 100168, MAIN-RULESET-PUSH-IDENTITY-1); until then workflowPushPaths keeps live refused.",
     "integrations": [
-      { "slug": "github-actions", "actor_id": 15368, "why": "workflows commit ci-status, mirrors, the charter and the portfolio straight to main with GITHUB_TOKEN" },
       { "slug": "qnfo-fleet", "actor_id": null, "why": "the code loop and the portfolio loop write through the qnfo-fleet GitHub App; its id is read from GET /orgs/QNFO/installations at apply time" }
     ]
   },

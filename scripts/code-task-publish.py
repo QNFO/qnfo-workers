@@ -155,6 +155,18 @@ class SqliteStore:
         return c.rowcount
 
 
+class SqliteD1Store(SqliteStore):
+    """Offline stand-in that counts like D1 (selftest and tests only). D1 reports meta.changes from the connection's total
+    changes, so a row an AFTER INSERT trigger writes is counted; SqliteStore's cursor.rowcount leaves it out and cannot show
+    the false 'successor row was not written' alarm (REPROPOSE-TRIGGER-COUNT-1)."""
+
+    def changes(self, sql, params=()):
+        before = self.db.total_changes
+        self.db.execute(sql, list(params))
+        self.db.commit()
+        return self.db.total_changes - before
+
+
 def list_ready(store):
     try:
         return store.rows(
@@ -330,15 +342,18 @@ def suite_feedback(results):
     return " ; ".join(parts)[:900]
 
 
-def suite_check(repo_dir, files, base):
-    """None when the touched worker's suites pass (or were red on the base already); else the feedback for the model."""
+def suite_check(repo_dir, files, base, log=print):
+    """None when the touched worker's suites pass (or were red on the base already); else the feedback for the model.
+    PUBLISH-SELFTEST-QUIET-1: `log` carries the ::notice:: and ::warning:: annotations; the offline selftest passes its own sink,
+    so a fixture suite that is red on purpose never reaches the Actions annotations of every run (the "w/red.test.mjs" notice
+    that sat on each green run read like a finding)."""
     # Shared paths select every suite in CI and are left to it; a worker directory changed beside one (MULTI-FILE-CODE-TASKS-1:
     # a worker and its migration) still has its own suites run here.
     dirs = sorted({f.split("/")[0] for f in files if "/" in f} - {"scripts", ".github", "migrations"})
     if not dirs:
         return None
     if node_major() < 22:
-        print("::warning::PUBLISH-SUITE-CHECK-1 skipped: node 22+ is not installed")
+        log("::warning::PUBLISH-SUITE-CHECK-1 skipped: node 22+ is not installed")
         return None
     after = run_suites(repo_dir, dirs)
     bad = {k: v for k, v in after.items() if not v[0]}
@@ -352,7 +367,7 @@ def suite_check(repo_dir, files, base):
             git(repo_dir, "stash", "pop", "-q", check=False)
     new = {k: v for k, v in bad.items() if before.get(k, (False, ""))[0]}
     if not new:
-        print("::notice::PUBLISH-SUITE-CHECK-1: failing suites are red on " + base + " too, not blamed on the change: " + ",".join(sorted(bad)))
+        log("::notice::PUBLISH-SUITE-CHECK-1: failing suites are red on " + base + " too, not blamed on the change: " + ",".join(sorted(bad)))
         return None
     return suite_feedback(new)
 
@@ -597,7 +612,11 @@ def publish_one(task, repo_dir, base, pr, delegate=False):
         patch, path = ctx.get("patch"), str(task.get("path") or "")
         branch = task.get("branch") or ("codeagent-" + str(task["id"])[3:15])
         if not isinstance(patch, str) or not patch.strip():
-            return "publish_failed", None, "task has no patch in ctx.patch", None
+            # PUBLISH-NOPATCH-ATTRIBUTION-1: the ctx keys, step and model name the producer path that parked a patch-less row
+            # (LEASE-FENCE-1 closed the known one); the leading text is unchanged for the fm-code-task-lease-lost-write detector.
+            ctx_keys = ",".join(sorted(str(k) for k in ctx)[:12]) if isinstance(ctx, dict) else type(ctx).__name__
+            return "publish_failed", None, ("task has no patch in ctx.patch (ctx keys: %s; step=%s; model=%s)"
+                                            % (ctx_keys or "none", str(task.get("step") or "none")[:20], str(task.get("model") or "none")[:40])), None
         if len(patch) > MAX_PATCH:
             return "publish_failed", None, f"patch larger than {MAX_PATCH} chars", None
         if not path or path.startswith("/") or ".." in path or DENY_PATH.search(path):
@@ -703,6 +722,13 @@ def _new_task_id():
     return "ct_" + "".join(secrets.choice(alphabet) for _ in range(14))
 
 
+def _row_exists(store, tid):
+    try:
+        return bool(store.rows("SELECT 1 AS present FROM code_tasks WHERE id=?", [tid]))
+    except Exception:  # noqa: BLE001 - an unreadable row is reported by the caller as not written; the caller logs it
+        return False
+
+
 def repropose(store, task, log=print):
     """STALE-PUBLISH-REPROPOSE-1: one new queued task with the superseded task's repo, path, goal and anchor, so the orchestrator
     rebuilds the change on current main (its ANCHOR-REPAIR-1 re-finds the anchor). The goal keeps its "[issue #N]" head, so
@@ -727,7 +753,11 @@ def repropose(store, task, log=print):
     except Exception as e:  # noqa: BLE001 - the superseded row already says why; a missing successor is logged, never silent
         log(f"::error::repropose {task['id']}: could not enqueue the successor: {e}")
         return None
-    if n != 1:
+    if n < 1 and not _row_exists(store, nid):
+        # D1's meta.changes counts rows an AFTER INSERT trigger writes too (queue_pulls_code_task_ai for a goal headed "[issue #N]",
+        # code_tasks_repo_slug_ai), so a clean insert reports 2; ct_n6u8tqjg0xalz4 raised a false "successor row was not written"
+        # while ct_6stuyid3pw7mfz existed (run 39124945342). An INSERT without OR IGNORE writes one row or raises, so only a
+        # count below one is doubtful, and the row itself settles it.
         log(f"::error::repropose {task['id']}: the successor row was not written")
         return None
     store.changes("UPDATE code_tasks SET ctx=json_set(COALESCE(ctx, '{}'), '$.reproposed_as', ?), updated_at=? WHERE id=?", [nid, now(), task["id"]])
@@ -1022,6 +1052,26 @@ def selftest():
     ta = row(store, "ct_rebaseanch01")
     sa = row(store, json.loads(ta["ctx"]).get("reproposed_as"))
     check("stale base: the anchor is carried to the successor", sa is not None and json.loads(sa["ctx"]).get("anchor") == "def f():" and r2.get("reproposed") == 1, dict(sa) if sa else None)
+    # 3c2. REPROPOSE-TRIGGER-COUNT-1: D1 counts trigger writes, so a clean "[issue #N]" successor insert reports 2 changes
+    remote, work, base_store = fixture()
+    store = SqliteD1Store(base_store.db)
+    store.db.execute("CREATE TABLE queue_pulls (puller TEXT, issue_id INTEGER, via TEXT, ref TEXT, UNIQUE (via, ref))")
+    store.db.execute("CREATE TRIGGER queue_pulls_code_task_ai AFTER INSERT ON code_tasks WHEN instr(COALESCE(NEW.goal, ''), '[issue #') = 1 "
+                     "BEGIN INSERT OR IGNORE INTO queue_pulls (puller, issue_id, via, ref) VALUES ('qnfo-code-orchestrator', CAST(substr(NEW.goal, 9) AS INTEGER), 'code_task', NEW.id); END")
+    _sh(work, "git", "fetch", "-q", "origin", "main")
+    pr = FakePR()
+    store.changes("INSERT INTO code_tasks (id,repo,path,goal,status,step,ctx,branch,created_at,updated_at) VALUES (?,?,?,?,?,'done',?,?,?,?)",
+                  ["ct_issuehead001", REPO_NAME, "scripts/x.py", "[issue #2727] return 2", "ready_to_publish",
+                   json.dumps({"patch": stale, "edits": [{"search": "    return 7", "replace": "    return 2"}]}), "codeagent-issuehead001", now(), now()])
+    logs = []
+    r = publish_all(store, work, "main", pr, logs.append)
+    told = row(store, "ct_issuehead001")
+    nid = json.loads(told["ctx"] or "{}").get("reproposed_as")
+    check("issue-headed successor: reproposed and linked, no false 'not written' alarm (D1 counts the queue_pulls trigger row)",
+          told["status"] == "superseded" and nid and row(store, nid)["status"] == "queued" and r.get("reproposed") == 1 and r["failed"] == 0
+          and not [m for m in logs if "::error::" in m], (dict(told), logs))
+    check("issue-headed successor: the trigger wrote its queue_pulls row for the successor",
+          store.rows("SELECT COUNT(*) AS c FROM queue_pulls WHERE ref=?", [nid])[0]["c"] == 1)
     check("rebase helpers: apply_edits refuses an ambiguous SEARCH and overlapping edits",
           apply_edits("a b a", [{"search": "a", "replace": "c"}])[1].startswith("edit 1: SEARCH text occurs 2 times")
           and apply_edits("abc", [{"search": "ab", "replace": "x"}, {"search": "bc", "replace": "y"}])[1] == "edits overlap"
@@ -1180,7 +1230,10 @@ def selftest():
         check("suite check: the working tree is restored after the base run", open(os.path.join(sroot, "w/worker.js")).read() == "export const v = 2;\n")
         with open(os.path.join(sroot, "w/worker.js"), "w") as fh:
             fh.write("export const v = 1; // comment\n")
-        check("suite check: only a suite already red on the base fails -> not blamed (None)", suite_check(sroot, ["w/worker.js"], "main") is None)
+        notes = []  # PUBLISH-SELFTEST-QUIET-1: the fixture's red suite is reported to a sink, never to the Actions annotations
+        check("suite check: only a suite already red on the base fails -> not blamed (None)", suite_check(sroot, ["w/worker.js"], "main", log=notes.append) is None)
+        check("suite check: the red-on-base notice goes to the log sink the caller passed",
+              len(notes) == 1 and notes[0].startswith("::notice::PUBLISH-SUITE-CHECK-1") and "w/red.test.mjs" in notes[0], notes)
         check("suite check: shared paths are left to CI", suite_check(sroot, ["scripts/x.py"], "main") is None)
     else:
         print("SKIP suite check selftest: node 22+ not installed")

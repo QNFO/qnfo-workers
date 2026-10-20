@@ -65,9 +65,12 @@ configuration, migrations, scripts or workflows (a dry run on pull requests), an
   never pass, enforced by a canary in the selftest), crons, workers.dev, routes, custom domains, D1, KV, R2, queues,
   Vectorize, Workflows, and the live schema of every D1 database except qnfo-identity and qnfo-outreach (tables, views,
   triggers; what each trigger fires on, reads and writes; what each view reads).
-- **findings** (both scopes): `env-undeclared`, `binding-declared-not-live`, `binding-live-not-declared`, `cron-drift`,
-  `untracked-worker`, `undeployed-dir`, `sql-table-missing`, `resource-orphan`, `binding-unused`, `trigger-depth`
-  (longest trigger cascade per database, and any cycle).
+- **findings** (both scopes): `env-undeclared`, `env-optional-unset`, `binding-declared-not-live`, `binding-live-not-declared`,
+  `cron-drift`, `untracked-worker`, `undeployed-dir`, `sql-table-missing`, `resource-orphan`, `binding-unused`, `trigger-depth`
+  (longest trigger cascade per database, and any cycle). `env-optional-unset` (info, OPTIONAL-ENV-1) is an undeclared env name
+  whose every read carries its own fallback (`env.X ?? d`, `env.X || d`, `(env && env.X) || d`, `const { X = d } = env`, where d
+  is not itself an env read) and that is not credential-shaped; a token, key, secret or password name stays a warn
+  `env-undeclared` whatever its fallback, and so does a name with even one bare read.
 
 Storage: qnfo-graph D1, tables `fg_node`, `fg_edge`, `fg_finding`, `fg_state` (the content knowledge graph's `nodes` and
 `edges` are untouched). Writes are a diff by content hash, so a push that changes one worker writes a few hundred rows; a
