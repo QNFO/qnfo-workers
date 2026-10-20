@@ -3,6 +3,7 @@
 // Offline, scripted D1s. Run: node qnfo-research-exec/revision-loop.test.mjs
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
+import * as W from "./worker.js";
 import { noticeRepairTick, rlStripNotices, ciStripPipeline, rlRegression, rlNextVersion, rlChangeSummary, rlWithHistory, rlIsRevision, rlEligible, rlErrataBlock, rlSourceId, revisionLoopTick } from "./worker.js";
 
 // Versions move forward from the live one; a rewrite is never a fixed 2.0.0.
@@ -69,9 +70,16 @@ function makeEnv(o) {
     });
     return Object.assign(stmt([]), { bind: (...a) => stmt(a) });
   } };
+  w.bodyReads = [];
   const papers = { prepare: (sql) => ({ bind: (...a) => ({ all: async () => {
     if (/slug IN/.test(sql)) { w.errataArgs = a; return { results: (o.errataPapers || []).filter((p) => a.indexOf(p.slug) > 0) }; }
     w.ageArg = a[0]; return { results: o.papers || [] };
+  }, first: async () => {
+    // REVISION-BRIEF-REFS-1: the live paper's body, read for the picked paper only.
+    if (!/SELECT body_md FROM papers WHERE slug = \?1/.test(sql)) return null;
+    w.bodyReads.push(a[0]);
+    if (o.bodyFail) throw new Error("D1 unavailable");
+    return o.bodies && a[0] in o.bodies ? { body_md: o.bodies[a[0]] } : null;
   } }) }) };
   return { env: { QNFO_AUDIT: audit, LIVING_PAPER: papers }, w };
 }
@@ -114,6 +122,92 @@ console.error = () => {};
   assert.equal(o4.queued[0].errata, 1);
   assert.equal(e.w.errataArgs[0], "-60 minutes");
   assert.match(e.w.queued[0][2], /Reported errors[\s\S]*duty cycle is not optimal \(confirmed by a second model\)/);
+}
+
+// REVISION-BRIEF-REFS-1 (0.28.6, issue 100287): the brief states the live reference count and the floor the guard enforces, so a
+// rewrite stops dropping references and being sent back through the whole pipeline (references 12 -> 8).
+{
+  assert.equal(typeof W.rlBrief, "function", "rlBrief is exported");
+  assert.equal(typeof W.rlRefFloor, "function", "rlRefFloor is exported");
+  // The brief as it was before 0.28.6, byte for byte.
+  const oldBrief = (title, version) => "Post-publication revision of the published paper \"" + title + "\" (version " + version + "). Write an improved version of the paper under revision: bring in the relevant work in the bibliography, especially newer work; strengthen the weakest arguments and derivations; correct every error; remove or qualify any claim the sources and derivations do not support; keep everything that is correct. The result is a complete paper, not a list of changes.";
+  const refs = (n) => "## References\n\n" + Array.from({ length: n }, (_, i) => "[" + (i + 1) + "] Ref " + i + ".").join("\n") + "\n";
+  const live = (n) => "# T\n\n## Abstract\n\nA.\n\n## 1. Introduction\n\nx y z\n\n" + refs(n);
+
+  // (a) no count, 0, under the guard's minimum of 3, or not a number: byte-identical to today's brief.
+  assert.equal(W.rlBrief("T", "1.0.0"), oldBrief("T", "1.0.0"));
+  for (const c of [undefined, null, 0, 1, 2, NaN, "", "x", -5, 2.9]) assert.equal(W.rlBrief("T", "1.0.0", c), oldBrief("T", "1.0.0"), "refCount " + String(c));
+  assert.equal(W.rlBrief("", "", 2), oldBrief("", "1.0.0"));
+
+  // (b) 3 or more: one sentence added after the old text, with the live count and the floor.
+  const b12 = W.rlBrief("T", "1.0.0", 12);
+  assert.ok(b12.startsWith(oldBrief("T", "1.0.0") + " "), "the old text is kept, the sentence follows");
+  assert.match(b12, /The live version lists 12 references\./);
+  assert.match(b12, /fewer than 9 references \(70 percent of 12, rounded up\) is rejected before publication/);
+  assert.match(b12, /Keep every reference you still rely on and add new ones/);
+  assert.match(b12, /drop a reference only when the claim it supports is removed or wrong\.$/);
+  assert.match(W.rlBrief("T", "1.0.0", 14), /lists 14 references\..*fewer than 10 references \(70 percent of 14/);
+  assert.match(W.rlBrief("T", "1.0.0", 10), /lists 10 references\..*fewer than 7 references/);
+  assert.match(W.rlBrief("T", "1.0.0", 3), /lists 3 references\..*fewer than 3 references/);
+  assert.match(W.rlBrief("T", "1.0.0", "12"), /lists 12 references\./, "a numeric string is read as its number");
+  assert.equal(W.rlRefCount(live(12)), 12);
+  assert.equal(W.rlBrief("T", "1.0.0", W.rlRefCount(live(0))), oldBrief("T", "1.0.0"), "a paper with no reference list gets the old brief");
+
+  // (c) one rule: the floor the brief states is the smallest count the guard accepts, for every size of reference list.
+  for (let n = 3; n <= 300; n++) {
+    const f = W.rlRefFloor(n);
+    assert.equal(W.rlRegression("# T\n\n" + refs(n), "# T\n\n" + refs(f)), "", "guard accepts " + f + " of " + n);
+    assert.match(W.rlRegression("# T\n\n" + refs(n), "# T\n\n" + refs(f - 1)), new RegExp("^references " + n + " -> " + (f - 1) + "$"), "guard rejects " + (f - 1) + " of " + n);
+    assert.match(W.rlBrief("T", "1.0.0", n), new RegExp("fewer than " + f + " references"));
+  }
+  // The constants are the only place the numbers live: change them in the source and both the guard and the brief move.
+  const src = readFileSync(new URL("./worker.js", import.meta.url), "utf8");
+  assert.match(src, /var RL_REF_KEEP = 0\.7, RL_REF_MIN = 3;/);
+  assert.match(src, /rb < ra \* RL_REF_KEEP/);
+  assert.ok(!/ra >= 3 && rb < ra \* 0\.7/.test(src), "the guard no longer carries its own copy of 0.7 and 3");
+  const alt = src.replace("var RL_REF_KEEP = 0.7, RL_REF_MIN = 3;", "var RL_REF_KEEP = 0.5, RL_REF_MIN = 4;");
+  assert.notEqual(alt, src, "the constants line was found");
+  const A = await import("data:text/javascript;base64," + Buffer.from(alt).toString("base64"));
+  assert.match(A.rlBrief("T", "1.0.0", 12), /fewer than 6 references \(50 percent of 12, rounded up\)/);
+  assert.equal(A.rlBrief("T", "1.0.0", 3), oldBrief("T", "1.0.0"), "below the new minimum of 4 the brief is the old one");
+  assert.equal(A.rlRegression("# T\n\n" + refs(10), "# T\n\n" + refs(5)), "", "the guard follows the constant: 5 of 10 passes at 50 percent");
+  assert.match(A.rlRegression("# T\n\n" + refs(10), "# T\n\n" + refs(4)), /^references 10 -> 4$/);
+  assert.equal(A.rlRegression("# T\n\n" + refs(3), "# T\n\n" + refs(0)), "", "the guard follows the minimum: 3 live references are not guarded at a minimum of 4");
+  assert.match(W.rlRegression("# T\n\n" + refs(10), "# T\n\n" + refs(5)), /^references 10 -> 5$/, "the shipped 70 percent still rejects 5 of 10");
+
+  // (d) the revision loop reads the picked paper's body and queues the brief with its count; the candidate select stays light.
+  const e1 = makeEnv({ papers: [P("a"), P("b"), P("c")], bodies: { a: live(12), b: live(40) } });
+  const r1 = await revisionLoopTick(e1.env);
+  assert.equal(r1.queued.length, 1);
+  assert.equal(e1.w.queued[0][3], "a");
+  assert.match(e1.w.queued[0][2], /^Original idea about a\n\nPost-publication revision/);
+  assert.match(e1.w.queued[0][2], /The live version lists 12 references\./);
+  assert.match(e1.w.queued[0][2], /fewer than 9 references/);
+  assert.deepEqual(e1.w.bodyReads, ["a"], "the body is read for the picked paper only, not for the candidates");
+  const cand = /"SELECT ([^"]*?) FROM papers WHERE status = 'published' AND slug IS NOT NULL AND slug <> '' AND length\(body_md\) >= 8000/.exec(src);
+  assert.ok(cand && /\bslug\b/.test(cand[1]) && !/body_md/.test(cand[1]), "the candidate select does not read body_md: " + (cand && cand[1]));
+
+  // A paper with errata: the reference sentence precedes the error list.
+  const e2 = makeEnv({ papers: [P("a")], errata: [{ target_ref: "g", claim_text: "duty cycle is not optimal", detected_by: "qnfo-lifecycle PAPER-LEARN-1" }], errataPapers: [P("g", { version: "1.0.1" })], bodies: { g: live(14) } });
+  await revisionLoopTick(e2.env);
+  assert.equal(e2.w.queued[0][3], "g");
+  assert.match(e2.w.queued[0][2], /lists 14 references\.[\s\S]*fewer than 10 references[\s\S]*Reported errors[\s\S]*duty cycle is not optimal/);
+
+  // Several per tick: each row carries its own paper's count.
+  const e3 = makeEnv({ papers: [P("a"), P("b"), P("c")], cfg: [{ key: "revision_loop_per_tick", value: "3" }], bodies: { a: live(12), b: live(40), c: live(7) } });
+  const r3 = await revisionLoopTick(e3.env);
+  assert.equal(r3.queued.length, 3);
+  assert.match(e3.w.queued[0][2], /lists 12 references/);
+  assert.match(e3.w.queued[1][2], /lists 40 references\..*fewer than 28 references/);
+  assert.match(e3.w.queued[2][2], /lists 7 references\..*fewer than 5 references/);
+
+  // Fail-soft: a failed read, a missing row, an empty body or a short list leaves the brief exactly as it was, and the paper is still queued.
+  for (const [name, o] of [["read fails", { bodyFail: true }], ["no row", { bodies: {} }], ["empty body", { bodies: { a: "" } }], ["no reference list", { bodies: { a: "# T\n\nNo references here.\n" } }], ["two references", { bodies: { a: live(2) } }]]) {
+    const f = makeEnv(Object.assign({ papers: [P("a")] }, o));
+    const rf = await revisionLoopTick(f.env);
+    assert.equal(rf.queued.length, 1, name + ": still queued");
+    assert.equal(f.w.queued[0][2], "Original idea about a\n\n" + oldBrief("Title a", "1.0.0"), name + ": the brief is the old one");
+  }
 }
 
 // remediationPublish carries the computed version and the history (source check: the fixed '2.0.0' literal is gone).
