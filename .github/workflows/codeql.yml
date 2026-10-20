@@ -50,7 +50,8 @@ concurrency:
 
 jobs:
   precheck:
-    runs-on: ubuntu-latest
+    # RUNNER-PIN-2 (2026-10-20, WORKFLOW-FAILURE-AUDIT-1): ubuntu-latest becomes Ubuntu 26 by 2026-11-19 (a notice on every job meanwhile); pinned to ubuntu-24.04 until an ubuntu-26.04 trial run is green.
+    runs-on: ubuntu-24.04
     timeout-minutes: 5
     permissions:
       actions: read
@@ -74,7 +75,8 @@ jobs:
     name: analyze (${{ matrix.language }})
     needs: precheck
     if: needs.precheck.outputs.default_setup != 'configured'
-    runs-on: ubuntu-latest
+    # RUNNER-PIN-2 (2026-10-20, WORKFLOW-FAILURE-AUDIT-1): ubuntu-latest becomes Ubuntu 26 by 2026-11-19 (a notice on every job meanwhile); pinned to ubuntu-24.04 until an ubuntu-26.04 trial run is green.
+    runs-on: ubuntu-24.04
     timeout-minutes: 30
     permissions:
       actions: read

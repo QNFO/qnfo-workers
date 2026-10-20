@@ -66,8 +66,14 @@ permissions:
 # ~745 executed at ~150 REST calls each, ~4,600 calls an hour from the bucket CodeQL's SARIF upload also
 # draws on ("API rate limit exceeded for installation" on PRs 435, 441, 466 and most Push-on-main runs).
 # With one group at most one sweep runs and one waits; a newer trigger replaces the waiting one.
+# RUNNER-PIN-ANNOTATIONS-1 (2026-10-20): the group follows the job's own `if:` below. Concurrency is decided when the run is
+# created, before the job's condition is read, so a workflow_run that the condition then skips (a green watched run on any branch
+# but mirror-sync) still took the one waiting slot and cancelled the waiting run that had real work. That is the one avoidable cause
+# of the cancelled runs in the audit sample (82 of 263 runs in 9 hours). A run whose job will be skipped now gets a group of its own,
+# costs nothing and evicts nothing; every run that sweeps shares `ci-watchdog` exactly as before. Keep the two predicates identical
+# (scripts/runner-pin-annotations.test.mjs evaluates both for every trigger).
 concurrency:
-  group: ci-watchdog
+  group: ${{ (github.event_name != 'workflow_run' || github.event.workflow_run.name == 'mirror-sync' || !contains(fromJSON('["success", "cancelled", "skipped", "neutral"]'), github.event.workflow_run.conclusion)) && 'ci-watchdog' || format('ci-watchdog-skip-{0}', github.run_id) }}
   cancel-in-progress: false
 
 jobs:
@@ -83,7 +89,8 @@ jobs:
       github.event_name != 'workflow_run' ||
       github.event.workflow_run.name == 'mirror-sync' ||
       !contains(fromJSON('["success", "cancelled", "skipped", "neutral"]'), github.event.workflow_run.conclusion)
-    runs-on: ubuntu-latest
+    # RUNNER-PIN-2 (2026-10-20, WORKFLOW-FAILURE-AUDIT-1): ubuntu-latest becomes Ubuntu 26 by 2026-11-19 (a notice on every job meanwhile); pinned to ubuntu-24.04 until an ubuntu-26.04 trial run is green.
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
