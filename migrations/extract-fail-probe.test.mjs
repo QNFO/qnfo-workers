@@ -1,6 +1,6 @@
 // EXTRACT-FAIL-PROBE-1 offline suite (agent_issues 2877): runs migrations/2026-10-19-extract-fail-probe.sql on node:sqlite and checks
 // the probe it installs against synthetic cloud_ops_events and deployment_history. The probe must (0) read not-live-300m until a
-// successful deploy of the fix release (a version_id at or past 0.28.3 parsed as numbers, or the tag extract-xref-fixes) is 300
+// successful deploy of the fix release (a version_id at or past 0.28.4 parsed as numbers, or the tag extract-xref-fixes) is 300
 // minutes old with no lower deploy after it, so that no event it counts predates the fix and it cannot pass on a measurement of
 // the old code, (1) read defect while a parse failure of the extraction is present in the last 300 minutes, whatever wording its
 // reason carries, (2) read ok only with real verify activity in the window and no failure, (3) read no-activity when the stage is
@@ -75,7 +75,7 @@ const FMT = {
   sp: (d) => d.toISOString().replace("T", " ").replace(/\.\d+Z$/, ""),
   z6: (d) => d.toISOString().replace(/Z$/, "789Z"),
 };
-const TAG_VERSION = "0.28.3-extract-xref-fixes";
+const TAG_VERSION = "0.28.4-extract-xref-fixes";
 const dep = (minAgo, o) => { o = o || {}; db.prepare("INSERT INTO deployment_history (resource_type, resource_name, action, version_id, deployed_by, deployed_at, status) VALUES (?,?,?,?,?,?,?)").run("worker", o.worker || "qnfo-research-exec", o.action || "deploy", ("version" in o ? o.version : TAG_VERSION), "canonical-deploy", (FMT[o.fmt || "z3"])(new Date(Date.now() - minAgo * 60000)), o.status || "success"); };
 const clearDeps = () => db.exec("DELETE FROM deployment_history");
 dep(400);
@@ -89,7 +89,7 @@ ok(read() === "ok/ok", "twenty verify events and no failure read ok", read());
 ev(10, "verify-extract-fail", UNP_OLD, "warn");
 ok(read() === "ok/defect", "an unparseable extraction in the window reads defect", read());
 clear(); activity(20); ev(10, "verify-extract-fail", UNP_NEW, "warn");
-ok(read() === "ok/defect", "the same failure under the wording 0.28.3 reports (first failing try, tail=, near=) still reads defect: a change of reason text cannot pass it", read());
+ok(read() === "ok/defect", "the same failure under the wording 0.28.4 reports (first failing try, tail=, near=) still reads defect: a change of reason text cannot pass it", read());
 clear(); activity(20); ev(310, "verify-extract-fail", UNP_OLD, "warn");
 ok(read() === "ok/ok", "a failure older than 300 minutes is outside the window", read());
 clear(); activity(20); ev(299, "verify-extract-fail", UNP_OLD, "warn");
@@ -127,33 +127,33 @@ ok(read() === "ok/ok", "another producer's events do not count", read());
   gate(() => dep(400, { action: "deploy-backfill" }), SHUT, "a backfill row is not a deploy of the release");
   gate(() => dep(400, { action: "deploy-direct" }), OPEN, "a successful deploy-direct (DEPLOY-SECOND-PATH-1) of the release opens it");
   gate(() => dep(400, { action: "deploy-direct", status: "failed" }), SHUT, "a failed deploy-direct does not");
-  gate(() => { dep(400); dep(20, { version: "0.28.4-something-else" }); }, OPEN, "a later bump past the release does not close it: the ledger row of the release is history");
-  gate(() => { dep(400); dep(20, { version: "0.28.4-something-else", status: "failed" }); }, OPEN, "nor does a later failed deploy");
+  gate(() => { dep(400); dep(20, { version: "0.28.5-something-else" }); }, OPEN, "a later bump past the release does not close it: the ledger row of the release is history");
+  gate(() => { dep(400); dep(20, { version: "0.28.5-something-else", status: "failed" }); }, OPEN, "nor does a later failed deploy");
 
   // the release is a version number, not a string (a re-bump by another PR need not keep the suffix)
   const rel = (v, want, msg) => gate(() => dep(400, { version: v }), want, "version_id " + v + " 400 minutes old " + msg);
-  rel("0.28.5-other", OPEN, "opens it without the tag (a re-bump past 0.28.3)");
-  rel("0.28.3", OPEN, "opens it at the release's own number");
+  rel("0.28.6-other", OPEN, "opens it without the tag (a re-bump past 0.28.4)");
+  rel("0.28.4", OPEN, "opens it at the release's own number");
   rel("0.28.10-x", OPEN, "opens it (10 is above 3 as numbers)");
   rel("0.29.0-x", OPEN, "opens it");
   rel("1.0.0", OPEN, "opens it");
-  rel("0.28.2-x", SHUT, "keeps it shut (below the release)");
-  rel("0.28.2", SHUT, "keeps it shut");
+  rel("0.28.3-x", SHUT, "keeps it shut (below the release)");
+  rel("0.28.3", SHUT, "keeps it shut");
   rel("0.27.9-x", SHUT, "keeps it shut");
-  rel("0.9.10", SHUT, "keeps it shut (a string compare would put 0.9.10 above 0.28.3)");
+  rel("0.9.10", SHUT, "keeps it shut (a string compare would put 0.9.10 above 0.28.4)");
   rel("12345678", SHUT, "keeps it shut (a bare number is not a version)");
   rel("abcdef0", SHUT, "keeps it shut");
-  rel("v0.28.3-extract-xref-fixes", OPEN, "opens it by the tag, the second path, although the number does not parse");
+  rel("v0.28.4-extract-xref-fixes", OPEN, "opens it by the tag, the second path, although the number does not parse");
   gate(() => dep(400, { version: null }), SHUT, "a row with no version_id does not open it");
-  gate(() => { dep(400, { version: "0.28.3" }); dep(20, { version: null }); }, OPEN, "nor does a later row with no version_id shut it (it proves no revert)");
+  gate(() => { dep(400, { version: "0.28.4" }); dep(20, { version: null }); }, OPEN, "nor does a later row with no version_id shut it (it proves no revert)");
 
   // a revert of the release shuts the gate again: the old code is live after it
-  gate(() => { dep(500); dep(100, { version: "0.28.2-x" }); }, SHUT, "a later deploy below the release (a revert) shuts the gate");
-  gate(() => { dep(500); dep(450, { version: "0.28.2-x" }); dep(100, { version: "0.28.4-y" }); }, SHUT, "a revert re-released 100 minutes ago keeps it shut: the window would still hold the old code");
-  gate(() => { dep(500); dep(450, { version: "0.28.2-x" }); dep(400, { version: "0.28.4-y" }); }, OPEN, "a revert re-released 400 minutes ago opens it");
-  gate(() => { dep(600, { version: "0.28.2-x" }); dep(400); }, OPEN, "a deploy below the release before it is history");
-  gate(() => { dep(500); dep(100, { version: "0.28.2-x", status: "failed" }); }, OPEN, "a failed deploy below the release changed nothing and does not shut it");
-  gate(() => { dep(500, { fmt: "z3" }); dep(100, { version: "0.28.2-x", fmt: "sp" }); }, SHUT, "the revert check compares deployed_at through datetime() too (mixed formats)");
+  gate(() => { dep(500); dep(100, { version: "0.28.3-x" }); }, SHUT, "a later deploy below the release (a revert) shuts the gate");
+  gate(() => { dep(500); dep(450, { version: "0.28.3-x" }); dep(100, { version: "0.28.5-y" }); }, SHUT, "a revert re-released 100 minutes ago keeps it shut: the window would still hold the old code");
+  gate(() => { dep(500); dep(450, { version: "0.28.3-x" }); dep(400, { version: "0.28.5-y" }); }, OPEN, "a revert re-released 400 minutes ago opens it");
+  gate(() => { dep(600, { version: "0.28.3-x" }); dep(400); }, OPEN, "a deploy below the release before it is history");
+  gate(() => { dep(500); dep(100, { version: "0.28.3-x", status: "failed" }); }, OPEN, "a failed deploy below the release changed nothing and does not shut it");
+  gate(() => { dep(500, { fmt: "z3" }); dep(100, { version: "0.28.3-x", fmt: "sp" }); }, SHUT, "the revert check compares deployed_at through datetime() too (mixed formats)");
 
   for (const f of Object.keys(FMT)) {
     gate(() => dep(400, { fmt: f }), OPEN, "a " + f + "-format deployed_at 400 minutes ago opens it");
@@ -180,7 +180,7 @@ ok(read() === "ok/ok", "another producer's events do not count", read());
   ok(!!vm, "the worker's VERSION literal is readable");
   if (vm) {
     // The gate reads the leading x.y.z (or the tag) of the version_id the ledger records, which is the worker's VERSION. Any VERSION at
-    // or past 0.28.3 opens it, with or without the tag, so a re-bump cannot strand the contract at not-live; a VERSION below fails here.
+    // or past 0.28.4 opens it, with or without the tag, so a re-bump cannot strand the contract at not-live; a VERSION below fails here.
     clear(); clearDeps(); activity(20); dep(400, { version: vm[1] });
     ok(read() === "ok/ok", "a ledger row carrying the worker's own VERSION (" + vm[1] + ") 400 minutes old opens the gate", read());
     dep(400); clear();
