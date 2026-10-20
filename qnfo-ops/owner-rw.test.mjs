@@ -218,5 +218,21 @@ const K = { Authorization: "Bearer " + GOOD_KEY };
   const badK = await call(t, Q, { Authorization: "Bearer 003not-a-key" });
   ok(badK.res.status === 200 && badK.res.headers.get("x-ops-key-status") === "rejected", "I13 a wrong key is public read, flagged rejected");
 }
+// J. OWNER-OTP-1 (2.54.2): owner_verify called by the model in a public chat carries its code argument to the check.
+{
+  const sent = [];
+  const EMAIL = { async fetch(u, o) { sent.push(JSON.parse(o.body)); return new Response("{}", { status: 200 }); } };
+  const script = (n, withTools, inputs) => {
+    if (withTools && n === 1) { const code = (sent[0].subject.match(/\d{6}/) || [])[0]; return { role: "assistant", content: "", tool_calls: [tc("v1", "owner_verify", { code })] }; }
+    return { role: "assistant", content: "done" };
+  };
+  const t = mkr({ env: { EMAIL, EMAIL_API_KEY: "e" }, script });
+  await req(t, "POST", "/v1/owner/login", {}, {});
+  const c = await call(t, { model: "ops", messages: [{ role: "user", content: "123456" }] }, {});
+  ok(c.res.status === 200, "J1 chat answered");
+  const s = t.audit.prepare("SELECT COUNT(*) AS n FROM owner_chat_sessions").get();
+  const u = t.audit.prepare("SELECT used_ms FROM owner_chat_codes").get();
+  ok(s.n === 1 && u.used_ms != null, "J2 the model's owner_verify call minted a session and used the code");
+}
 say(pass + " passed, " + fail + " failed");
 process.exit(fail ? 1 : 0);
