@@ -67,4 +67,21 @@ pr = db.prepare(c1.verify_probe).get();
 assert.equal(pr.observed, pr.expected, "parked row plus an advancing queue passes the probe");
 await markError(env, get(U1), "verify: unresolved after revision - mismatch=true gates=");
 assert.equal(db.prepare("SELECT count(*) n FROM remediation_contracts").get().n, 1, "a repeat park files no second contract");
+// 6. RESEARCH-TERMINAL-HARD-REVIEW-SELFCLOSE-1: a row parked because the review's HARD findings were not resolved by the revise cycles is the integrity gate
+// withholding the paper, so its issue gets the same self-closing contract; "revise: no applicable edit" (a model that could not apply a fix) can be a pipeline fault and gets none.
+const UH = "ab12cd34-0000-4000-8000-000000000001", UN = "ef56ab78-0000-4000-8000-000000000002";
+db.prepare("INSERT INTO research_queue (id,status,stage,recover_count) VALUES (?,'researching','review',3),(?,'researching','revise',3)").run(UH, UN);
+await markError(env, get(UH), "review: 6 HARD findings unresolved after 7 revise cycles (H1,H2,H3,H4,H5,H6)");
+await markError(env, get(UN), "revise: no applicable edit for 5 HARD fixes (H1,H2,H4,H5,H6) from two models, strict retry included (not advanced unrevised)");
+const ch = db.prepare("SELECT * FROM remediation_contracts WHERE class = 'research-terminal-ab12cd34'").get();
+const ih = db.prepare("SELECT id FROM agent_issues WHERE title LIKE 'RESEARCH-TERMINAL ab12cd34%'").get();
+assert.ok(ch && ih && ch.issue_id === ih.id && ch.status === "active" && ch.verify_transport === "d1-query", "a HARD-review terminal row gets an active d1-query contract on its issue");
+assert.match(ch.precondition, /HARD review findings/, "the contract names the HARD-review reason");
+assert.equal(db.prepare("SELECT count(*) n FROM remediation_contracts WHERE class = 'research-terminal-ef56ab78'").get().n, 0, "no applicable edit gets no self-closing contract");
+assert.ok(/^select /i.test(ch.verify_probe) && !ch.verify_probe.includes(";") && !/LIKE '[^']{50,}'/.test(ch.verify_probe), "the probe is a literal SELECT with no LIKE literal over D1's 50 byte limit");
+let ph = db.prepare(ch.verify_probe).get();
+assert.equal(ph.observed, ph.expected, "parked row with its HARD reason plus an advancing queue passes the probe");
+db.prepare("UPDATE research_queue SET error = 'PARKED-POISON-1: recover_count exhausted (3); last error: revise: output too short' WHERE id = ?").run(UH);
+assert.equal(db.prepare(ch.verify_probe).get().observed, "pending", "a row parked for another reason does not pass it");
+assert.equal(db.prepare("SELECT count(*) n FROM remediation_contracts").get().n, 2, "one contract per self-closing kind, none for the pipeline-fault reason");
 console.log("poison-park tests passed");
