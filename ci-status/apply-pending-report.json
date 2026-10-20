@@ -1,7 +1,7 @@
 {
   "workflow": "apply-pending-patches",
   "marker": "APPLY-PENDING-1",
-  "head": "9ebb80123b9f105f991f226b7a38013824a15e01",
+  "head": "3bdc28c196bc82d316cafd4fa13b34b051f1594d",
   "total": 77,
   "summary": {
     "already-applied": 73,
@@ -18,7 +18,7 @@
       "verdict": "already-applied",
       "changed": false,
       "reverted": [],
-      "seconds": 0.04,
+      "seconds": 0.05,
       "tail": "OK: ADR-009-AUDIT-TRAIL-UNWRITTEN-1 complete, 0 target(s) changed"
     },
     {
@@ -54,7 +54,7 @@
       "verdict": "already-applied",
       "changed": false,
       "reverted": [],
-      "seconds": 0.04,
+      "seconds": 0.08,
       "tail": "ALREADY APPLIED (SELFHEAL-EXCLUSION-TABLE-1 present)"
     },
     {
@@ -72,7 +72,7 @@
       "verdict": "already-applied",
       "changed": false,
       "reverted": [],
-      "seconds": 0.07,
+      "seconds": 0.17,
       "tail": "POST_CONDITIONS_OK /home/runner/work/qnfo-workers/qnfo-workers/scripts/applier-doctor.py"
     },
     {
@@ -153,7 +153,7 @@
       "verdict": "already-applied",
       "changed": false,
       "reverted": [],
-      "seconds": 0.15,
+      "seconds": 0.35,
       "tail": "10 passed, 0 failed"
     },
     {
@@ -334,7 +334,7 @@
       "changed": false,
       "reverted": [],
       "seconds": 0.04,
-      "tail": "  deployed-current.worker.js bytes=650395 marker=1"
+      "tail": "  deployed-current.worker.js bytes=655126 marker=1"
     },
     {
       "script": "outreach-cap-status-1-patch.py",
@@ -369,7 +369,7 @@
       "verdict": "already-applied",
       "changed": false,
       "reverted": [],
-      "seconds": 0.08,
+      "seconds": 0.07,
       "tail": "OK"
     },
     {
@@ -414,7 +414,7 @@
       "verdict": "already-applied",
       "changed": false,
       "reverted": [],
-      "seconds": 0.04,
+      "seconds": 0.03,
       "tail": "changed=0"
     },
     {
@@ -423,7 +423,7 @@
       "verdict": "already-applied",
       "changed": false,
       "reverted": [],
-      "seconds": 0.05,
+      "seconds": 0.04,
       "tail": "OK FLEET-EXEC-TICK-UNAUTH-1"
     },
     {
@@ -549,7 +549,7 @@
       "verdict": "already-applied",
       "changed": false,
       "reverted": [],
-      "seconds": 0.08,
+      "seconds": 0.1,
       "tail": "POST-CONDITIONS OK (4/4 literals extracted, incl. single-quoted)"
     },
     {
@@ -558,7 +558,7 @@
       "verdict": "already-applied",
       "changed": false,
       "reverted": [],
-      "seconds": 0.06,
+      "seconds": 0.05,
       "tail": "already-patched: qnfo-research-exec/deployed-current.worker.js"
     },
     {
@@ -567,8 +567,8 @@
       "verdict": "already-applied",
       "changed": false,
       "reverted": [],
-      "seconds": 0.04,
-      "tail": "already patched (marker '_lastRouterHost' present); no write. sha256=9710084be649ae1e"
+      "seconds": 0.05,
+      "tail": "already patched (marker '_lastRouterHost' present); no write. sha256=2fefb2a904e9547b"
     },
     {
       "script": "routerfetch-host-order-correction-patch.py",
@@ -577,7 +577,7 @@
       "changed": false,
       "reverted": [],
       "seconds": 0.05,
-      "tail": "already corrected (marker 'ROUTER-HOST-ORDER-CORRECTION-1' present); no write. sha256=9710084be649ae1e"
+      "tail": "already corrected (marker 'ROUTER-HOST-ORDER-CORRECTION-1' present); no write. sha256=2fefb2a904e9547b"
     },
     {
       "script": "samezone-fetch-fallback-patch.py",
@@ -631,7 +631,7 @@
       "changed": false,
       "reverted": [],
       "seconds": 0.04,
-      "tail": "{\"ok\": true, \"already_patched\": true, \"marker\": \"STALE-GATE-FAILCLOSED-1\", \"bytes\": 1232023}"
+      "tail": "{\"ok\": true, \"already_patched\": true, \"marker\": \"STALE-GATE-FAILCLOSED-1\", \"bytes\": 1043261}"
     },
     {
       "script": "tool-budget-pending-toolcalls-patch.py",
@@ -648,7 +648,7 @@
       "verdict": "already-applied",
       "changed": false,
       "reverted": [],
-      "seconds": 0.11,
+      "seconds": 0.1,
       "tail": "TOOLBUDGET-BAIL-1: APPLIED AND VERIFIED (0 target(s) changed)"
     },
     {
@@ -706,5 +706,5 @@
       "tail": "SUPERSEDED: UNAUTH-TRIGGER-1 already closed by patch-fleet-exec-tick-unauth-1.py (commit 81581bf); no-op"
     }
   ],
-  "ts": "2026-10-19T17:27:14Z"
+  "ts": "2026-10-20T08:23:53Z"
 }
