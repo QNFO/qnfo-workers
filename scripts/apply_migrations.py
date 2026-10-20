@@ -26,6 +26,14 @@ HEADERLESS (MIGRATION-HEADER-GUARD-1, 2026-10-19): a file with no "APPLY-BY: ci"
        INSERT, UPDATE, DELETE, DROP, REPLACE) and that declares neither "-- APPLY-BY: ci" nor "-- APPLY-BY: manual (<reason>)" /
        "-- APPLY-BY: none (<reason>)". The files that already existed are listed in migrations/headerless-allowlist.txt
        (shrink-only: a file that gains a header leaves the list). --apply is unchanged and still skips a file without "ci".
+PARSE-LINT (APPLY-MIGRATIONS-LINT-1, 2026-10-20): plan() also prepares every statement with EXPLAIN in an in-memory SQLite and refuses a
+       file when SQLite cannot parse one (syntax error, unrecognized token, incomplete input, unterminated); a missing table, column or
+       function is not a parse error and is ignored, so the lint needs no schema. A statement D1 refuses at parse time used to pass --check
+       and fail on main (migrations/2026-10-18-portfolio-lifecycle.sql, migration_runs 288: unquoted text in a VALUES list). A file that
+       needs syntax newer than the runner's SQLite says so on a "-- PARSE-LINT: off (<reason>)" header line; the lint is also skipped, and
+       says so in the --check line, when the runner's SQLite is older than PARSE_LINT_MIN_SQLITE.
+BACKUP-SCHEMA-ONLY (2026-10-20): an empty BACKUP table stops a file only when the file deletes rows (DELETE FROM, DROP TABLE). A file
+       whose destructive statements are all DROP TRIGGER / DROP INDEX / DROP VIEW loses no row, so an empty backup is accepted for it.
 """
 import argparse
 import datetime
@@ -55,6 +63,15 @@ CADENCE_REJECT_SQL = ("SELECT ?1 IS NOT NULL AND trim(?1) <> '' AND (instr(trim(
 METRIC_INSERT = re.compile(r"^\s*(?:INSERT|REPLACE)\s+(?:OR\s+\w+\s+)?INTO\s+\"?metric_registry\"?\s*\(", re.I)
 METRIC_UPDATE_CADENCE = re.compile(r"^\s*UPDATE\s+\"?metric_registry\"?\s+SET\b.*?\brefresh_cadence\s*=\s*'((?:[^']|'')*)'", re.I | re.S)
 DESTRUCTIVE = re.compile(r"^\s*(DELETE\s+FROM|DROP\s+(TABLE|INDEX|VIEW|TRIGGER))\b", re.I)
+# BACKUP-SCHEMA-ONLY-1 (2026-10-20, workflow failure audit; migration_runs 352, 355 and 361): the runner refused a backup table with no rows
+# before a destructive statement, and counted DROP TRIGGER like DELETE FROM. migrations/2026-10-19-repo-slug-any-depth.sql made its backup
+# with CREATE TABLE IF NOT EXISTS ... AS SELECT ... WHERE lower(repo) LIKE 'qnfo/%'; no row matched any more, the backup was empty, and the
+# DROP TRIGGER IF EXISTS at statement 3 stopped on "BACKUP table ... is empty" (three red runs on main; the retained empty table meant a
+# re-run could never pass). Dropping a trigger, index or view deletes no row: its definition is recoverable from the Rollback line, so an
+# empty backup protects nothing. Only a statement that destroys rows keeps the rule that the backup holds at least one row. The "table does
+# not exist" check is unchanged for every file. The earlier patches (BACKUP-CREATES-1/2, BACKUP-SELF-EMPTY-1) each fixed one shape; this one
+# states the rule by what the file can lose.
+ROW_DESTRUCTIVE = re.compile(r"^\s*(DELETE\s+FROM|DROP\s+TABLE)\b", re.I)
 # APPEND-ONLY-LINT-1 (GHA-AUDIT-1, 2026-10-13): decision_log and issue_lifecycle carry BEFORE UPDATE/DELETE triggers that
 # RAISE(ABORT) (decision_log_no_update/_no_delete, issue_lifecycle_no_update/_no_delete, read from sqlite_master
 # 2026-10-13). A migration that updates, deletes or REPLACEs a row there passed --check and failed on main (migration_runs
@@ -504,6 +521,72 @@ def step_violations(sql, allowed=None):
     return problems
 
 
+# APPLY-MIGRATIONS-LINT-1 (2026-10-20, workflow failure audit, agent_issues 100295): plan() and --check ran header and regex lints and never
+# parsed the SQL, so a statement SQLite cannot read passed the PR gate and failed on main. migrations/2026-10-18-portfolio-lifecycle.sql
+# statement 2 listed unquoted text in a VALUES clause (PORTFOLIO-LIFECYCLE-1: maintain, implement, ...); D1 answered 'unrecognized token ":"
+# at offset 167' (migration_runs 288, apply-migrations run 39126889193) and the fix landed seven minutes later. Every statement is now
+# prepared with EXPLAIN in an in-memory SQLite (nothing runs, nothing is written) and the file is refused when the PARSER rejects one.
+# Only parse-class messages count. EXPLAIN resolves names after parsing, so "no such table", "no such column", "no such function" and
+# the other schema questions of an empty database are ignored: the lint needs no schema and cannot disagree with D1 about what exists.
+# Measured 2026-10-20 on origin/main (SQLite 3.45.1, the ubuntu-latest runner's): it flags the e7d8b482 bytes of statement 2 with the same
+# text D1 returned ('unrecognized token: ":"'), refuses 0 of the 437 opted-in migrations (2735 statements) and 0 of the 447 distinct sha256
+# values migration_runs holds as ok (2841 statements); of the 671 historical contents of migrations/*.sql it refuses only that one. Two ways
+# a dialect gap could still produce a false refusal are closed here: an older SQLite than PARSE_LINT_MIN_SQLITE skips the lint (and the
+# --check line says so), and a file that needs syntax newer than the runner's SQLite carries "-- PARSE-LINT: off (<reason>)".
+# Limit, stated plainly: the parser stops at its first error of any kind, so a name-resolution error SQLite raises WHILE parsing (a duplicate
+# column, a trigger on a missing table) hides a later syntax error in the same statement. The trigger case is the common one, because a
+# trigger's table is looked up before its body is read: a stand-in table (or view, for INSTEAD OF) is created for it in the throwaway
+# database, which lets the body be parsed too (a column or table the body names is only resolved when the trigger fires, so none is needed).
+PARSE_ERROR = re.compile(r"syntax error|unrecognized token|incomplete input|unterminated", re.I)
+PARSE_LINT_MIN_SQLITE = (3, 39, 0)  # RIGHT/FULL JOIN, the newest syntax in routine use; D1 runs a newer SQLite than any runner image
+PARSE_LINT_OFF = re.compile(r"^off\s*\(\s*(\S.*?)\s*\)\s*$", re.I)
+EXPLAIN_HEAD = re.compile(r"^\s*EXPLAIN\b", re.I)
+INSTEAD_OF_TRIGGER = re.compile(r'(?is)^\s*CREATE\s+TRIGGER\s+(?:IF\s+NOT\s+EXISTS\s+)?"?\w+"?\s+INSTEAD\s+OF\b')
+
+
+def _stand_in_for_trigger_target(con, sql):
+    """Gives the parser the table (or view) a CREATE TRIGGER is on, so that the trigger body is read; TRIGGER_ON is defined further down."""
+    m = TRIGGER_ON.match(sql)
+    if not m:
+        return
+    view = bool(INSTEAD_OF_TRIGGER.match(sql))
+    try:
+        con.execute(('CREATE VIEW IF NOT EXISTS "%s" AS SELECT 1 AS x' if view else 'CREATE TABLE IF NOT EXISTS "%s" (x)') % m.group(2))
+    except sqlite3.Error:
+        pass  # a name already taken by the other kind: the trigger is then judged without a stand-in, as before
+
+
+def parse_problems(stmts, lines):
+    """(problems, note): a problem per statement SQLite's parser refuses, and a note when the lint did not run.
+    stmts is statements(text); lines is header(text)."""
+    switch = header_value(lines, "PARSE-LINT")
+    if switch is not None:
+        if PARSE_LINT_OFF.match(switch):
+            return [], "off: " + switch
+        return ["PARSE-LINT header must read '-- PARSE-LINT: off (<reason>)' (got '" + switch[:60] + "')"], None
+    if sqlite3.sqlite_version_info < PARSE_LINT_MIN_SQLITE:
+        return [], "skipped: sqlite " + sqlite3.sqlite_version + " is older than " + ".".join(map(str, PARSE_LINT_MIN_SQLITE))
+    problems = []
+    con = sqlite3.connect(":memory:")
+    try:
+        for n, s in enumerate(stmts, 1):
+            if s.startswith("__INCOMPLETE__"):
+                continue  # reported on its own line
+            sql = body(s)
+            _stand_in_for_trigger_target(con, sql)
+            try:
+                con.execute(sql if EXPLAIN_HEAD.match(sql) else "EXPLAIN " + sql)
+            except sqlite3.Error as e:
+                # OperationalError carries the parser's message; ProgrammingError/Warning (bound parameters, two statements on one
+                # line) are not parse refusals and make no claim.
+                if isinstance(e, sqlite3.OperationalError) and PARSE_ERROR.search(str(e)):
+                    problems.append("statement " + str(n) + " is not valid SQL: " + str(e)[:160] + " [" + " ".join(sql.split())[:70]
+                                    + "] (APPLY-MIGRATIONS-LINT-1: D1 refuses it at apply time)")
+    finally:
+        con.close()
+    return problems, None
+
+
 def plan(path, text):
     """Validate one file. Returns (opted_in, problems, info)."""
     lines = header(text)
@@ -521,6 +604,8 @@ def plan(path, text):
         problems.append("the file ends with an incomplete statement")
     if not [s for s in stmts if not s.startswith("__INCOMPLETE__")]:
         problems.append("no statement to apply")
+    parse_bad, parse_note = parse_problems(stmts, lines)
+    problems.extend(parse_bad)
     for s in stmts:
         for m in LIKE_LITERAL.finditer(body(s)):
             lit = m.group(1).replace("''", "'")
@@ -550,6 +635,7 @@ def plan(path, text):
         for bad in step_violations(body(s), step_types.split(",") if step_types else None):
             problems.append(bad + " (STEP-SCHEMA-LINT-1)")
     destructive = [s for s in stmts if DESTRUCTIVE.match(body(s))]
+    row_destructive = [s for s in destructive if ROW_DESTRUCTIVE.match(body(s))]
     backup = header_value(lines, "BACKUP")
     if destructive and not backup:
         problems.append(str(len(destructive)) + " destructive statement(s) (DELETE/DROP) need a '-- BACKUP: <table>' header line")
@@ -574,7 +660,8 @@ def plan(path, text):
         if not creates and any(mk_ddl.match(body(s2)) for s2 in stmts):
             problems.append("BACKUP " + backup + " is a table this file creates empty; the runner requires it to exist and hold rows "
                             "(BACKUP-SELF-EMPTY-1): remove the BACKUP line if nothing is deleted, or create it AS SELECT from the rows")
-    return True, problems, {"db": db, "statements": len(stmts), "destructive": len(destructive), "backup": backup, "creates_backup": creates}
+    return True, problems, {"db": db, "statements": len(stmts), "destructive": len(destructive), "row_destructive": len(row_destructive),
+                            "backup": backup, "creates_backup": creates, "parse_lint": parse_note or "ok"}
 
 
 def d1(acct, token, db_id, sql, params=None):
@@ -736,7 +823,9 @@ def apply_file(path, text, acct, token, commit, emit=print):
         if not n or int(n[0].get("n") or 0) == 0:
             return "BACKUP table " + info["backup"] + " does not exist"
         rows = d1(acct, token, db_id, 'SELECT COUNT(*) AS n FROM "' + info["backup"] + '"')
-        if not rows or int(rows[0].get("n") or 0) == 0:
+        # BACKUP-SCHEMA-ONLY-1: an empty backup stops only a file that destroys rows (DELETE FROM, DROP TABLE). A file whose destructive
+        # statements are all DROP TRIGGER / DROP INDEX / DROP VIEW loses no row, so there is nothing for the backup to hold.
+        if (not rows or int(rows[0].get("n") or 0) == 0) and info.get("row_destructive", 1):
             return "BACKUP table " + info["backup"] + " is empty"
         return None
     checked = not info["backup"]
@@ -827,17 +916,69 @@ def resolve_failure(path, sha, acct, token, db_id, done_n):
         print("resolve " + title + " failed: " + str(e)[:200], file=sys.stderr)
 
 
+ISSUE_NOW_MS = "CAST(strftime('%s','now') AS INTEGER) * 1000"
+ISSUE_OPEN = "status NOT IN ('closed','resolved','wontfix')"
+
+
+def file_failure_issue(acct, token, db_id, title, desc):
+    """Records the MIGRATION-APPLY-FAILED-1 issue once; returns 'select', 'values' or 'exists'. Raises when no form could be written.
+
+    APPLY-MIGRATIONS-LINT-1 (2026-10-20, workflow failure audit): the one-statement form, INSERT ... SELECT ... WHERE NOT EXISTS, is the shape
+    D1 refuses on agent_issues while its trigger chain is at the 10-level limit ("triggers nested too deep", measured 2026-10-18 13:14Z: every
+    INSERT ... SELECT is refused, a single-row INSERT ... VALUES succeeds). The failure was then only printed, so migration_runs 291, 293 and
+    296 left a red run and no issue (no-silent-drop). When the first form raises, the open duplicate is looked up with a SELECT and the row is
+    written with INSERT ... VALUES; the unique index on open titles (idx_agent_issues_open_title_ci) is the second guard against a duplicate."""
+    cols = "(title, description, source, category, priority, status, created_at, updated_at)"
+    try:
+        d1(acct, token, db_id, "INSERT INTO agent_issues " + cols + " "
+           "SELECT ?1, ?2, 'ci:apply-migrations', 'migration', 'high', 'open', " + ISSUE_NOW_MS + ", " + ISSUE_NOW_MS + " "
+           "WHERE NOT EXISTS (SELECT 1 FROM agent_issues WHERE title = ?1 AND " + ISSUE_OPEN + ")", [title, desc])
+        return "select"
+    except Exception as first:  # noqa: BLE001
+        try:
+            if d1(acct, token, db_id, "SELECT id FROM agent_issues WHERE title = ?1 AND " + ISSUE_OPEN + " LIMIT 1", [title]):
+                return "exists"
+        except Exception:  # noqa: BLE001 - the duplicate check unreadable: the insert below is still guarded by the unique index
+            pass
+        try:
+            d1(acct, token, db_id, "INSERT INTO agent_issues " + cols + " VALUES (?1, ?2, 'ci:apply-migrations', 'migration', 'high', 'open', "
+               + ISSUE_NOW_MS + ", " + ISSUE_NOW_MS + ")", [title, desc])
+            return "values"
+        except Exception as second:  # noqa: BLE001
+            if "UNIQUE constraint failed" in str(second):
+                return "exists"
+            raise RuntimeError("select form: " + str(first)[:160] + "; values form: " + str(second)[:160])
+
+
+def annotate_error(path, message):
+    """A GitHub Actions error annotation (workflow command) naming the file; '%' and line breaks are escaped as the runner requires.
+
+    Written to stderr, not stdout: remediation_consumer.migrations_sweep calls apply_file with emit=log (stderr) because the consumer's
+    stdout is one JSON document that the workflow tees into /tmp/remediation-consumer.json and parses. The runner processes workflow
+    commands from stderr as well, so the annotation stays visible."""
+    msg = str(message).replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A")
+    print("::error file=" + str(path).replace("%", "%25").replace(",", "%2C").replace(":", "%3A") + "::" + msg, file=sys.stderr)
+
+
 def record_failure(path, sha, commit, info, acct, token, db_id, err, emit, done_n=0):
+    title = "MIGRATION-APPLY-FAILED-1: " + os.path.basename(path)
+    desc = ("Charter pillar: autonomy (MIGRATION-RUNNER-1). " + path + " (sha256 " + sha[:12] + ", commit " + (commit or "?")[:12] + ") failed after " + str(done_n)
+            + " statement(s): " + err[:600] + ". Statements before the failure were applied; migrations are idempotent by convention, so fix the file and merge again (a new sha256 runs again).")
+    lost = []
+    # The ledger row and the issue are written independently: a refused ledger insert must not keep the issue from being filed.
     try:
         d1(acct, token, db_id, "INSERT INTO migration_runs (file, sha256, commit_sha, db, status, statements, error, applied_by) VALUES (?1, ?2, ?3, ?4, 'error', ?5, ?6, 'ci:apply-migrations')",
            [path, sha, commit or "", info.get("db") or "", str(done_n), err[:1000]])
-        title = "MIGRATION-APPLY-FAILED-1: " + os.path.basename(path)
-        d1(acct, token, db_id, "INSERT INTO agent_issues (title, description, source, category, priority, status, created_at, updated_at) "
-           "SELECT ?1, ?2, 'ci:apply-migrations', 'migration', 'high', 'open', CAST(strftime('%s','now') AS INTEGER) * 1000, CAST(strftime('%s','now') AS INTEGER) * 1000 "
-           "WHERE NOT EXISTS (SELECT 1 FROM agent_issues WHERE title = ?1 AND status NOT IN ('closed','resolved','wontfix'))",
-           [title, "Charter pillar: autonomy (MIGRATION-RUNNER-1). " + path + " (sha256 " + sha[:12] + ", commit " + (commit or "?")[:12] + ") failed after " + str(done_n) + " statement(s): " + err[:600] + ". Statements before the failure were applied; migrations are idempotent by convention, so fix the file and merge again (a new sha256 runs again)."])
     except Exception as e2:  # noqa: BLE001
-        emit(json.dumps({"file": path, "ledger_error": str(e2)[:300]}))
+        lost.append("migration_runs row not written: " + str(e2)[:200])
+    try:
+        file_failure_issue(acct, token, db_id, title, desc)
+    except Exception as e3:  # noqa: BLE001
+        lost.append("issue not filed: " + str(e3)[:300])
+    if lost:
+        emit(json.dumps({"file": path, "ledger_error": "; ".join(lost)[:500]}))
+        # A failure the ledger or the queue could not record must still be named outside the red status.
+        annotate_error(path, "MIGRATION-APPLY-FAILED-1 could not be recorded (" + "; ".join(lost)[:400] + ") after: " + err[:300])
     emit(json.dumps({"file": path, "ok": False, "error": err[:400], "applied_before_failure": done_n}))
     return 1
 

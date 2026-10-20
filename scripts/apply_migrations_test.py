@@ -13,6 +13,7 @@ Run: python3 scripts/apply_migrations_test.py   (prints "N passed, 0 failed")
 import glob
 import io
 import json
+import re
 import os
 import sqlite3
 import sys
@@ -559,6 +560,470 @@ ok(M.clobber_problems(HDR + "UPDATE agent_issues SET status='open' WHERE id=1;\n
 lf = open(os.path.join(mig_dir, "2026-10-18-portfolio-lifecycle.sql"), encoding="utf-8").read()
 ok(M.REAPPLY_OK.search(lf) and "INSERT OR REPLACE INTO fleet_tasks" not in lf and "INSERT OR IGNORE INTO fleet_tasks" in lf, "the portfolio-lifecycle migration no longer rewrites its fleet_tasks row on a re-run")
 ok("PORTFOLIO-IMPLEMENT-1" not in lf.split("-- APPLY-BY: ci", 1)[1].split("INSERT INTO fleet_crons", 1)[1], "the portfolio-lifecycle migration no longer files PORTFOLIO-IMPLEMENT-1 issues on a re-run")
+
+# BACKUP-SCHEMA-ONLY-1 (2026-10-20, migration_runs 352/355/361): an empty backup stops a file only when it destroys rows. 2026-10-19-repo-slug-any-depth.sql
+# made its backup with CREATE TABLE ... AS SELECT ... WHERE <nothing matched any more> and then dropped a trigger; the runner refused the file three times.
+db.execute("CREATE TABLE so_t (x)")
+db.execute("CREATE INDEX so_idx ON so_t (x)")
+db.execute("CREATE VIEW so_v AS SELECT x FROM so_t")
+db.execute("CREATE TRIGGER IF NOT EXISTS so_trg AFTER INSERT ON so_t BEGIN SELECT 1; END")
+db.execute("CREATE TABLE bak_so_empty (key TEXT, value TEXT)")  # exists, holds no row
+db.commit()
+
+
+def so_file(tag, backup, *stmts, make_backup=False):
+    head = "-- schema only " + tag + "\n-- APPLY-BY: ci\n-- DB: qnfo-audit\n-- BACKUP: " + backup + "\n-- Rollback: recreate the object from the BACKUP row or its definition\n"
+    mk = "CREATE TABLE IF NOT EXISTS " + backup + " AS SELECT * FROM ops_config WHERE 0;\n" if make_backup else ""
+    return head + mk + "".join(s + ";\n" for s in stmts)
+
+
+def exists(kind, name):
+    return db.execute("SELECT 1 FROM sqlite_master WHERE type = ? AND name = ?", (kind, name)).fetchone() is not None
+
+
+f_so = so_file("a", "bak_so_self", "DROP TRIGGER IF EXISTS so_trg", make_backup=True)
+_, pr, inf = M.plan("migrations/so-a.sql", f_so)
+ok(not pr and inf["destructive"] == 1 and inf.get("row_destructive") == 0 and inf["creates_backup"] is True, "plan counts a DROP TRIGGER as destructive but not as row-destroying", (pr, inf))
+rc = M.apply_file("migrations/so-a.sql", f_so, "a", "t", "so1", emit)
+ok(rc == 0 and json.loads(out[-1]).get("ok") and not exists("trigger", "so_trg"), "an empty self-made backup plus DROP TRIGGER applies (the 2026-10-19 repo-slug shape)", out[-1])
+db.execute("CREATE TRIGGER IF NOT EXISTS so_trg AFTER INSERT ON so_t BEGIN SELECT 1; END")
+db.commit()
+rc = M.apply_file("migrations/so-b.sql", so_file("b", "bak_so_empty", "DROP TRIGGER IF EXISTS so_trg"), "a", "t", "so2", emit)
+ok(rc == 0 and not exists("trigger", "so_trg"), "an existing but empty backup table is accepted for DROP TRIGGER only", out[-1])
+rc = M.apply_file("migrations/so-c.sql", so_file("c", "bak_so_empty", "DROP INDEX IF EXISTS so_idx", "DROP VIEW IF EXISTS so_v"), "a", "t", "so3", emit)
+ok(rc == 0 and not exists("index", "so_idx") and not exists("view", "so_v"), "DROP INDEX and DROP VIEW delete no row either", out[-1])
+db.execute("CREATE TRIGGER IF NOT EXISTS so_trg AFTER INSERT ON so_t BEGIN SELECT 1; END")
+db.commit()
+rc = M.apply_file("migrations/so-d.sql", so_file("d", "bak_so_missing", "DROP TRIGGER IF EXISTS so_trg"), "a", "t", "so4", emit)
+ok(rc == 1 and "does not exist" in out[-1] and exists("trigger", "so_trg"), "a backup table that does not exist still stops the file before any statement", out[-1])
+db.execute("CREATE TABLE so_rows (x)")
+db.execute("INSERT INTO so_rows VALUES (1)")
+db.commit()
+rc = M.apply_file("migrations/so-e.sql", so_file("e", "bak_so_empty", "DROP TABLE so_rows"), "a", "t", "so5", emit)
+ok(rc == 1 and "is empty" in out[-1] and db.execute("SELECT COUNT(*) FROM so_rows").fetchone()[0] == 1, "DROP TABLE keeps the strict rule: an empty backup stops it", out[-1])
+rc = M.apply_file("migrations/so-f.sql", so_file("f", "bak_so_empty", "DROP TRIGGER IF EXISTS so_trg", "DELETE FROM so_rows"), "a", "t", "so6", emit)
+ok(rc == 1 and "is empty" in out[-1] and exists("trigger", "so_trg") and db.execute("SELECT COUNT(*) FROM so_rows").fetchone()[0] == 1, "a file that drops a trigger AND deletes rows keeps the strict rule, checked before the first destructive statement", out[-1])
+rc = M.apply_file("migrations/so-g.sql", so_file("g", "bak_so_self2", "DELETE FROM so_rows", make_backup=True), "a", "t", "so7", emit)
+ok(rc == 1 and "is empty" in out[-1] and "before statement 2" in out[-1], "DELETE FROM keeps the strict rule for an empty self-made backup", out[-1])
+
+# APPLY-MIGRATIONS-LINT-1 (2026-10-20, migration_runs 288): plan() never parsed the SQL, so unquoted text in a VALUES list passed --check and failed on main.
+PL_HDR = "-- APPLY-BY: ci\n-- DB: qnfo-audit\n-- Rollback: DELETE FROM fleet_tasks WHERE id = 'portfolio-lifecycle';\n"
+PL_BAD = ("INSERT OR REPLACE INTO fleet_tasks (id, name, type, definition, timeout_ms, retries, version, enabled, updated_at)\n"
+          "VALUES ('portfolio-lifecycle', PORTFOLIO-LIFECYCLE-1: maintain, implement, deploy and upgrade the portfolio/programs/projects, 'workflow', "
+          "{\"steps\":[]}, 120000, 1, 1, 1, datetime('now'));\n")
+PL_GOOD = ("INSERT OR IGNORE INTO fleet_tasks (id, name, type, definition, timeout_ms, retries, version, enabled, updated_at)\n"
+           "VALUES ('portfolio-lifecycle', 'PORTFOLIO-LIFECYCLE-1: maintain, implement, deploy and upgrade the portfolio/programs/projects', 'workflow', "
+           "'{\"steps\":[]}', 120000, 1, 1, 1, datetime('now'));\n")
+
+
+def lint(sql, header=PL_HDR):
+    okp, pr, inf = M.plan("migrations/pl.sql", header + sql)
+    return okp, [p for p in pr if "APPLY-MIGRATIONS-LINT-1" in p or "PARSE-LINT" in p], inf
+
+
+_, lp, _ = lint("INSERT OR IGNORE INTO ops_config (key, value) VALUES ('a', '1');\n" + PL_BAD)
+ok(len(lp) == 1 and "statement 2 " in lp[0] and 'unrecognized token: ":"' in lp[0], "plan refuses the unquoted-text statement, names statement 2 and SQLite's own message", lp)
+_, lp, inf = lint("INSERT OR IGNORE INTO ops_config (key, value) VALUES ('a', '1');\n" + PL_GOOD)
+ok(not lp and inf.get("parse_lint") == "ok", "the quoted version of the same statement passes and --check reports the lint ran", (lp, inf))
+n_calls = len(calls)
+rc = M.apply_file("migrations/pl-bad.sql", PL_HDR + PL_BAD, "a", "t", "pl1", emit)
+ok(rc == 1 and "APPLY-MIGRATIONS-LINT-1" in out[-1] and len(calls) == n_calls, "apply_file refuses it before any D1 call", out[-1])
+rc, ls = check_file("2099-01-01-pl-bad.sql", PL_HDR + PL_BAD)
+ok(rc == 1 and ls and "APPLY-MIGRATIONS-LINT-1" in json.dumps(ls[0].get("refused")), "--check exits 1 on it", ls)
+rc, ls = check_file("2099-01-01-pl-good.sql", PL_HDR + PL_GOOD)
+ok(rc == 0 and ls and ls[0].get("ok") is True and ls[0].get("parse_lint") == "ok", "--check exits 0 on the corrected statement", ls)
+for sql, label in [("INSERT INTO t (a b) VALUES (1);", "a missing comma"), ("SELEC 1;", "a misspelt keyword"), ("UPDATE t SET a = = 1;", "a doubled operator"),
+                   ("INSERT INTO t (a) VALUES (1,;", "a dangling comma"), ("CREATE TABLE t (a TEXT,, b);", "an empty column definition"),
+                   ("INSERT INTO t (a) VALUES (1) WHERE 1;", "a WHERE on VALUES"),
+                   # A trigger's table is looked up before its body is read, so on an empty database the body would never be parsed:
+                   ("CREATE TRIGGER trg AFTER INSERT ON t BEGIN INSERT INTO u (a) VALUES (NEW.a); SELEC 2; END;", "a syntax error inside a trigger body"),
+                   ("CREATE TRIGGER trg AFTER UPDATE OF repo ON t WHEN NEW.repo LIKE 'q/%' BEGIN UPDATE t SET repo = = 1; END;", "a syntax error in an UPDATE OF trigger"),
+                   ("CREATE TRIGGER trg INSTEAD OF INSERT ON v BEGIN INSERT INTO u (a) VALUES (NEW.a,); END;", "a syntax error in an INSTEAD OF trigger body")]:
+    ok(len(lint(sql)[1]) == 1, "a parse error is refused: " + label, lint(sql)[1])
+# Only the parser's own verdict counts. Everything below is valid SQL whose names this empty in-memory database cannot know, or syntax D1 accepts
+# that a bundled SQLite could still read; none may be refused.
+for sql, label in [("INSERT INTO nosuch (a) VALUES (1);", "no such table"), ("UPDATE ops_config SET nosuch = 1 WHERE key = 'a';", "no such column"),
+                   ("SELECT frobnicate(1);", "no such function"), ("INSERT INTO nosuch2 (a) SELECT a FROM nosuch3 WHERE a > 1;", "INSERT ... SELECT on unknown tables"),
+                   ("INSERT INTO t (a) VALUES (1) ON CONFLICT(a) DO UPDATE SET a = excluded.a;", "UPSERT"),
+                   ("INSERT INTO t (a) VALUES (1) RETURNING a;", "RETURNING"), ("SELECT '{\"a\":1}' ->> '$.a';", "the ->> JSON operator"),
+                   ("SELECT a, row_number() OVER (PARTITION BY b ORDER BY c) FROM t;", "a window function"),
+                   ("WITH x AS (SELECT 1 a) INSERT OR IGNORE INTO t (a) SELECT a FROM x;", "a CTE write"),
+                   ("CREATE TRIGGER trg AFTER INSERT ON t BEGIN INSERT INTO u (a) VALUES (NEW.a); UPDATE u SET a = 1 WHERE a = NEW.a; END;", "a trigger with two body statements"),
+                   ("CREATE TRIGGER IF NOT EXISTS trg AFTER UPDATE OF repo ON t WHEN lower(COALESCE(NEW.repo, '')) LIKE 'q/%' BEGIN UPDATE t SET repo = NEW.nosuch WHERE id = NEW.id; END;", "an UPDATE OF trigger with a WHEN clause and a column that does not exist"),
+                   ("CREATE TRIGGER trg INSTEAD OF INSERT ON v BEGIN INSERT INTO u (a) VALUES (NEW.a); END;", "an INSTEAD OF trigger on a view"),
+                   ("CREATE TRIGGER trg BEFORE DELETE ON \"t\" BEGIN SELECT RAISE(ABORT, 'append-only'); END;", "a RAISE(ABORT) trigger on a quoted table name"),
+                   ("ALTER TABLE t ADD COLUMN extra TEXT;", "ADD COLUMN"), ("ALTER TABLE t DROP COLUMN extra;", "DROP COLUMN"),
+                   ("CREATE VIEW v AS SELECT * FROM t RIGHT JOIN u ON t.a = u.a;", "a RIGHT JOIN"),
+                   ("CREATE TABLE t2 (a INTEGER, b TEXT GENERATED ALWAYS AS (a * 2)) STRICT;", "a generated column in a STRICT table"),
+                   ("INSERT INTO t (a) VALUES ('it''s: fine, (really); -- not a comment');", "quotes, colons, parentheses and semicolons inside a literal"),
+                   ("SELECT 1; -- trailing comment", "a trailing comment"), ("SELECT 1; /* block */", "a trailing block comment"),
+                   ("EXPLAIN SELECT 1;", "a statement that already starts with EXPLAIN"), ("PRAGMA foreign_keys = off;", "a PRAGMA"),
+                   ("SELECT ?1;", "a bound parameter"), ("SELECT :name;", "a named parameter"),
+                   ("SELECT 1; SELECT 2;", "two statements on one line"), ("SELECT \"abc\";", "a double-quoted identifier")]:
+    ok(lint(sql)[1] == [], "not a parse error, so not refused: " + label, lint(sql)[1])
+# A statement is numbered as the runner numbers it (migration_runs says "statement N").
+_, lp, _ = lint("SELECT 1;\nSELECT 2;\nSELECT 3 FROM;\nSELECT 4;\n")
+ok(len(lp) == 1 and lp[0].startswith("statement 3 "), "the refused statement carries its position in the file", lp)
+# A file that needs syntax newer than the runner's SQLite says so in one header line; a malformed switch is a problem of its own.
+_, lp, inf = lint(PL_BAD, PL_HDR + "-- PARSE-LINT: off (uses syntax newer than the runner's bundled SQLite)\n")
+ok(lp == [] and str(inf.get("parse_lint")).startswith("off: "), "a '-- PARSE-LINT: off (<reason>)' header line skips the lint and --check says so", (lp, inf))
+for bad_switch in ("off", "off ()", "on", "off reason"):
+    _, lp, _ = lint(PL_GOOD, PL_HDR + "-- PARSE-LINT: " + bad_switch + "\n")
+    ok(len(lp) == 1 and "PARSE-LINT header must read" in lp[0], "a PARSE-LINT switch without a reason is a problem: '" + bad_switch + "'", lp)
+# An older SQLite than the floor makes no claim at all (its parser may not know syntax D1 accepts).
+real_ver = sqlite3.sqlite_version_info, sqlite3.sqlite_version
+sqlite3.sqlite_version_info, sqlite3.sqlite_version = (3, 31, 1), "3.31.1"
+try:
+    _, lp, inf = lint(PL_BAD)
+finally:
+    sqlite3.sqlite_version_info, sqlite3.sqlite_version = real_ver
+ok(lp == [] and str(inf.get("parse_lint")).startswith("skipped: sqlite 3.31.1"), "below PARSE_LINT_MIN_SQLITE the lint is skipped and says why", (lp, inf))
+# The lint prepares with EXPLAIN in a throwaway database: it must not run, create or write anything.
+_, lp, _ = lint("CREATE TABLE lint_must_not_exist (x);\nINSERT INTO ops_config (key, value) VALUES ('lint_must_not_write', '1');\n")
+ok(lp == [] and not exists("table", "lint_must_not_exist") and not db.execute("SELECT 1 FROM ops_config WHERE key = 'lint_must_not_write'").fetchone(), "the lint executes nothing against the fixture database")
+# Every opted-in migration on the branch parses; the lint really ran on them (the runner's SQLite meets the floor in CI). A file that carries
+# "-- PARSE-LINT: off (<reason>)" is the declared release valve: it is counted as switched off, not as a file the lint missed, so using the valve
+# in a pull request does not turn this gate red.
+def lint_sweep(items):
+    """(swept, linted, switched_off, stmts_checked, bad) over (path, text) pairs of the opted-in migrations."""
+    swept = linted = switched_off = stmts_checked = 0
+    bad = []
+    for fp, text in items:
+        okp, pr_, inf_ = M.plan(fp, text)
+        if not okp:
+            continue
+        swept += 1
+        note = str(inf_.get("parse_lint"))
+        if note.startswith("off: "):
+            switched_off += 1
+        elif note == "ok" and not any("PARSE-LINT" in p for p in pr_):
+            linted += 1
+            stmts_checked += inf_["statements"]
+        bad += [os.path.basename(fp) + ": " + p[:160] for p in pr_ if "APPLY-MIGRATIONS-LINT-1" in p or "PARSE-LINT" in p]
+    return swept, linted, switched_off, stmts_checked, bad
+
+
+swept, linted, switched_off, stmts_checked, sweep_bad = lint_sweep(
+    (fp, open(fp, encoding="utf-8").read()) for fp in sorted(glob.glob(os.path.join(HERE, "..", "migrations", "*.sql"))))
+ok(swept > 0 and not sweep_bad, "no opted-in migration in the repository has a statement SQLite cannot parse", sweep_bad[:3])
+floor = getattr(M, "PARSE_LINT_MIN_SQLITE", None)
+ok(floor is not None and (sqlite3.sqlite_version_info < floor or (linted + switched_off == swept and stmts_checked >= linted)),
+   "and the lint ran on every one of them that did not switch it off", (swept, linted, switched_off, stmts_checked))
+# The release valve in the tree must not break the sweep: a file with a valid off header is neither refused nor counted as a file the lint missed,
+# while a file with a bad statement and no header, or with a malformed switch, is still caught.
+lint_runs = floor is not None and sqlite3.sqlite_version_info >= floor
+sw = lint_sweep([("migrations/a.sql", PL_HDR + PL_GOOD),
+                 ("migrations/b.sql", PL_HDR + "-- PARSE-LINT: off (uses syntax newer than the runner's bundled SQLite)\n" + PL_BAD)])
+ok(sw[0] == 2 and sw[2] == 1 and sw[4] == [] and (not lint_runs or (sw[1] == 1 and sw[0] == sw[1] + sw[2] and sw[3] >= sw[1])),
+   "a file with a valid '-- PARSE-LINT: off (<reason>)' line is counted as switched off: not refused, not an unlinted file, the 'ran on every one' condition holds", sw)
+sw = lint_sweep([("migrations/c.sql", PL_HDR + PL_BAD), ("migrations/d.sql", PL_HDR + "-- PARSE-LINT: off\n" + PL_GOOD)])
+ok(sw[0] == 2 and sw[2] == 0 and (not lint_runs or (sw[1] == 1 and len(sw[4]) == 2)),
+   "the valve is no hole: a bad statement with no header is reported (the lint ran on it) and a malformed switch is reported, counted as neither linted nor switched off", sw)
+
+# APPLY-MIGRATIONS-LINT-1 (C): the failure is recorded even when D1 refuses the one-statement INSERT ... SELECT form on agent_issues
+# (migration_runs 291/293/296 left a red run and no issue). Fallback: look for an open duplicate, then INSERT ... VALUES.
+RF = ("-- record failure fixture TAG\n-- APPLY-BY: ci\n-- DB: qnfo-audit\n-- Rollback: none needed\n"
+      "INSERT INTO no_such_table_rf (x) VALUES (1);\n")
+NESTED = {"success": False, "errors": [{"code": 7500, "message": "triggers nested too deep: SQLITE_ERROR"}]}
+
+
+def select_form_refused(method, path, token, body=None, timeout=60):
+    s = body["sql"].lstrip().upper()
+    if s.startswith("INSERT INTO AGENT_ISSUES") and " SELECT " in s:
+        return 400, NESTED
+    return fake_call(method, path, token, body, timeout)
+
+
+def no_issue_inserts(method, path, token, body=None, timeout=60):
+    if body["sql"].lstrip().upper().startswith("INSERT INTO AGENT_ISSUES"):
+        return 400, NESTED
+    return fake_call(method, path, token, body, timeout)
+
+
+def no_error_ledger_rows(method, path, token, body=None, timeout=60):
+    s = body["sql"]
+    if s.lstrip().upper().startswith("INSERT INTO MIGRATION_RUNS") and "'error'" in s:
+        return 400, {"success": False, "errors": [{"message": "D1_ERROR: database is busy"}]}
+    return fake_call(method, path, token, body, timeout)
+
+
+failing_stdout = []
+
+
+def run_failing(tag, caller):
+    """Returns (rc, what apply_file wrote to STDERR). What it wrote to stdout is kept in failing_stdout: the annotation belongs on stderr."""
+    saved = C.call
+    C.call = caller
+    buf, err_buf = io.StringIO(), io.StringIO()
+    try:
+        with contextlib.redirect_stdout(buf), contextlib.redirect_stderr(err_buf):
+            rc_ = M.apply_file("migrations/rf-" + tag + ".sql", RF.replace("TAG", tag), "a", "t", "rf" + tag, emit)
+    finally:
+        C.call = saved
+    failing_stdout.append(buf.getvalue())
+    return rc_, err_buf.getvalue()
+
+
+def open_issues(tag):
+    return db.execute("SELECT COUNT(*) FROM agent_issues WHERE title = ? AND status = 'open'", ("MIGRATION-APPLY-FAILED-1: rf-" + tag + ".sql",)).fetchone()[0]
+
+
+rc, printed = run_failing("a", select_form_refused)
+ok(rc == 1 and open_issues("a") == 1 and "::error" not in printed, "when the INSERT ... SELECT form is refused the issue is filed with INSERT ... VALUES (and nothing is annotated)", (rc, out[-1], printed))
+ok(db.execute("SELECT priority, source, category FROM agent_issues WHERE title = 'MIGRATION-APPLY-FAILED-1: rf-a.sql'").fetchone() == ("high", "ci:apply-migrations", "migration"),
+   "the fallback row carries the same priority, source and category as the primary form")
+rc, printed = run_failing("a", select_form_refused)
+ok(open_issues("a") == 1, "a second failure of the same file finds the open issue and files no duplicate")
+rc, printed = run_failing("a2", fake_call)
+ok(rc == 1 and open_issues("a2") == 1 and "::error" not in printed, "the primary INSERT ... SELECT form is unchanged when D1 accepts it", (rc, printed))
+rc, printed = run_failing("b", no_issue_inserts)
+ok(rc == 1 and open_issues("b") == 0 and "::error file=migrations/rf-b.sql::MIGRATION-APPLY-FAILED-1 could not be recorded" in printed,
+   "when no form can be written the run still returns 1 and a ::error annotation names the file (on stderr)", (rc, printed))
+ok(failing_stdout[-1] == "", "the annotation is not written to stdout (the consumer's stdout is one JSON document)", failing_stdout[-1])
+ok(any('"ledger_error"' in o and "issue not filed" in o for o in out) and db.execute("SELECT status FROM migration_runs WHERE file = 'migrations/rf-b.sql'").fetchone() == ("error",),
+   "the ledger row is still written and the lost issue is reported as ledger_error")
+rc, printed = run_failing("c", no_error_ledger_rows)
+ok(rc == 1 and open_issues("c") == 1 and "::error file=migrations/rf-c.sql::" in printed and "migration_runs row not written" in printed,
+   "a refused ledger row no longer keeps the issue from being filed, and is annotated", (rc, printed))
+ok(db.execute("SELECT COUNT(*) FROM migration_runs WHERE file = 'migrations/rf-c.sql'").fetchone()[0] == 0, "(the fixture really refused the ledger row)")
+real_d1 = M.d1
+steps = []
+
+
+def unique_clash(acct_, token_, db_id_, sql_, params_=None):
+    steps.append(sql_[:30])
+    if len(steps) == 1:
+        raise RuntimeError("D1 HTTP 400: triggers nested too deep")
+    if len(steps) == 2:
+        raise RuntimeError("D1 HTTP 500: duplicate check unavailable")
+    raise RuntimeError("D1 HTTP 400: UNIQUE constraint failed: index 'idx_agent_issues_open_title_ci'")
+
+
+how = None
+M.d1 = unique_clash
+try:
+    if hasattr(M, "file_failure_issue"):
+        how = M.file_failure_issue("a", "t", "db", "MIGRATION-APPLY-FAILED-1: x.sql", "d")
+finally:
+    M.d1 = real_d1
+ok(how == "exists" and len(steps) == 3, "an unreadable duplicate check falls through to the insert, and the unique index on open titles counts as 'exists'", (how, steps))
+buf, err_buf = io.StringIO(), io.StringIO()
+if hasattr(M, "annotate_error"):
+    with contextlib.redirect_stdout(buf), contextlib.redirect_stderr(err_buf):
+        M.annotate_error("migrations/a,b.sql", "line one\nline 100% two")
+ok(err_buf.getvalue().strip() == "::error file=migrations/a%2Cb.sql::line one%0Aline 100%25 two", "the annotation escapes line breaks, percent signs and property separators", err_buf.getvalue())
+ok(buf.getvalue() == "", "annotate_error leaves stdout empty (the runner reads workflow commands from stderr too)", buf.getvalue())
+# The consumer path (remediation_consumer.migrations_sweep -> apply_file(..., emit=log), log writing to stderr): a failure that neither the ledger nor the
+# queue can record reaches the annotation, and stdout must still be empty so that json.loads of the consumer's own JSON document is not poisoned.
+def stderr_emit(msg):
+    print(msg, file=sys.stderr)
+
+
+def raise_nested(*_a, **_k):
+    raise RuntimeError("D1 HTTP 400: triggers nested too deep")
+
+
+real_d1_ann = M.d1
+buf, err_buf = io.StringIO(), io.StringIO()
+M.d1 = raise_nested
+try:
+    with contextlib.redirect_stdout(buf), contextlib.redirect_stderr(err_buf):
+        rc = M.record_failure("migrations/x-consumer.sql", "a" * 64, "c" * 40, {"db": "qnfo-audit"}, "a", "t", "db", "boom", stderr_emit)
+        print(json.dumps({"consumer": "document"}))
+finally:
+    M.d1 = real_d1_ann
+ok(rc == 1 and buf.getvalue() == json.dumps({"consumer": "document"}) + "\n" and json.loads(buf.getvalue()) == {"consumer": "document"},
+   "record_failure with a stderr emit leaves stdout empty, so the consumer's JSON document still parses", buf.getvalue())
+ok("::error file=migrations/x-consumer.sql::MIGRATION-APPLY-FAILED-1 could not be recorded" in err_buf.getvalue(),
+   "...and the annotation still reaches stderr, where the runner reads it", err_buf.getvalue())
+
+# The registry migration that records this change (DOCTRINE-1): it applies to the live table shapes (DDL read from qnfo-audit.sqlite_master on
+# 2026-10-20, CHECK constraints included), replaying it is a no-op, decision_log stays append-only, and every code-probe marker it registers
+# really occurs in scripts/apply_migrations.py (a detector that cannot pass would file its own issue). The control rows come with a tested-alternate
+# probe each (CONTROL-ALT-PROBES-1): a control with an alternate, no stamp and no probe reads 'no-probe', and the live hourly detector
+# fm-control-alternate-undrilled (SELECT controls_untested_without_probe FROM v_control_alternate_untested, expected 0) turns red on it. The fixture
+# therefore carries the live control_alternate_probes table and the live text of the three views that read it (v_control_alternate_status,
+# v_control_alternate_untested, v_path_coverage_gaps; read from qnfo-audit.sqlite_master on 2026-10-20), so that defect is visible here.
+REG = os.path.join(HERE, "..", "migrations", "2026-10-20-apply-migrations-lint.sql")
+reg_text = open(REG, encoding="utf-8").read()
+okp, pr, inf = M.plan(REG, reg_text)
+ok(okp and not pr and inf.get("parse_lint") == "ok" and inf["destructive"] == 0, "the registry migration passes plan() and the parse lint", (pr, inf))
+REG_DDL = """
+CREATE TABLE control_registry (control TEXT PRIMARY KEY, location TEXT NOT NULL, kind TEXT NOT NULL CHECK (kind IN ('hold', 'filter', 'pause', 'kill-switch', 'gate', 'cap', 'guard', 'lease')),
+  guards_against TEXT, critical_path INTEGER NOT NULL DEFAULT 0, disposition TEXT NOT NULL CHECK (disposition IN ('remove', 'demote', 'replace', 'keep')),
+  disposition_state TEXT NOT NULL DEFAULT 'planned' CHECK (disposition_state IN ('planned', 'applied')), alternate_path TEXT, alternate_tested_at TEXT, evidence TEXT NOT NULL,
+  issue_id INTEGER, reviewed_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')));
+CREATE TABLE control_alternate_probes (control TEXT PRIMARY KEY, probe_sql TEXT NOT NULL, window_note TEXT NOT NULL, enabled INTEGER NOT NULL DEFAULT 1, last_run_at TEXT,
+  last_pass INTEGER, last_pass_at TEXT, last_observed TEXT, created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')));
+CREATE TABLE process_contracts (process TEXT PRIMARY KEY, owner TEXT NOT NULL, sla_min INTEGER NOT NULL, definition_of_done TEXT NOT NULL, paths_json TEXT NOT NULL,
+  updated_at TEXT NOT NULL DEFAULT (datetime('now')), cadence_min INTEGER);
+CREATE VIEW v_control_alternate_status AS
+SELECT c.control AS control, c.critical_path AS critical_path, c.disposition AS disposition, c.disposition_state AS disposition_state,
+  c.alternate_path AS alternate_path, c.alternate_tested_at AS alternate_tested_at,
+  p.enabled AS probe_enabled, p.last_run_at AS last_run_at, p.last_pass AS last_pass, p.last_pass_at AS last_pass_at, p.last_observed AS last_observed,
+  p.window_note AS window_note,
+  CASE
+    WHEN c.alternate_path IS NULL OR trim(c.alternate_path) = '' THEN 'no-alternate'
+    WHEN c.disposition = 'remove' AND c.disposition_state = 'applied' THEN 'removed'
+    WHEN p.control IS NULL AND c.evidence LIKE '%ALTERNATE-NOT-EXERCISABLE%' THEN 'not-exercisable'
+    WHEN p.control IS NULL THEN 'no-probe'
+    WHEN p.enabled <> 1 THEN 'probe-disabled'
+    WHEN p.last_run_at IS NULL THEN 'probe-never-run'
+    WHEN p.last_pass IS NOT 1 THEN 'probe-failing'
+    WHEN p.last_pass_at IS NULL OR p.last_pass_at < strftime('%Y-%m-%dT%H:%M:%SZ', 'now', '-480 minutes') THEN 'probe-stale'
+    ELSE 'drilled'
+  END AS drill_state
+FROM control_registry c LEFT JOIN control_alternate_probes p ON p.control = c.control;
+CREATE VIEW v_control_alternate_untested AS
+SELECT
+  (SELECT COUNT(*) FROM control_registry WHERE critical_path = 1 AND NOT (disposition = 'remove' AND disposition_state = 'applied') AND alternate_tested_at IS NULL) AS critical_untested_by_register,
+  (SELECT COUNT(*) FROM v_control_alternate_status WHERE critical_path = 1 AND drill_state NOT IN ('no-alternate', 'removed', 'not-exercisable', 'drilled')) AS critical_untested_by_probe,
+  (SELECT COUNT(*) FROM v_control_alternate_status WHERE critical_path = 1 AND drill_state IN ('probe-disabled', 'probe-never-run', 'probe-failing', 'probe-stale')) AS critical_probe_not_drilled,
+  (SELECT COUNT(*) FROM v_control_alternate_status WHERE critical_path = 1 AND drill_state = 'no-probe') AS critical_without_probe,
+  (SELECT COUNT(*) FROM v_control_alternate_status WHERE drill_state = 'no-probe' AND alternate_tested_at IS NULL) AS controls_untested_without_probe,
+  (SELECT COUNT(*) FROM v_control_alternate_status WHERE drill_state = 'no-probe' AND alternate_tested_at IS NOT NULL) AS controls_hand_stamped_without_probe,
+  (SELECT COUNT(*) FROM v_control_alternate_status WHERE drill_state = 'probe-failing') AS probes_failing,
+  (SELECT COUNT(*) FROM control_alternate_probes WHERE enabled = 1) AS probes_enabled,
+  (SELECT COUNT(*) FROM control_alternate_probes) AS probes_total;
+CREATE VIEW v_path_coverage_gaps AS
+SELECT
+  'control_registry' AS source,
+  control AS process,
+  kind AS path_kind,
+  CASE
+    WHEN alternate_path IS NULL OR trim(alternate_path) = '' THEN 'no-alternate'
+    WHEN alternate_tested_at IS NULL AND evidence LIKE '%ALTERNATE-NOT-EXERCISABLE%' AND NOT EXISTS (SELECT 1 FROM control_alternate_probes p WHERE p.control = control_registry.control) THEN 'alternate-not-exercisable'
+    WHEN alternate_tested_at IS NULL THEN 'alternate-untested'
+    ELSE 'ok'
+  END AS path_state,
+  alternate_path AS alternate,
+  alternate_tested_at
+FROM control_registry
+UNION ALL
+SELECT
+  'process_contracts' AS source,
+  process,
+  'contract-paths' AS path_kind,
+  CASE
+    WHEN json_valid(paths_json) = 0 THEN 'paths-not-json'
+    WHEN json_array_length(paths_json) < 2 THEN 'single-path'
+    WHEN json_array_length(paths_json) = 2 THEN 'two-paths-no-spare'
+    ELSE 'ok'
+  END AS path_state,
+  NULL AS alternate,
+  NULL AS alternate_tested_at
+FROM process_contracts;
+CREATE TABLE failure_modes (fm_key TEXT PRIMARY KEY, failure_mode TEXT NOT NULL, root_cause TEXT NOT NULL, remediation TEXT NOT NULL, detector TEXT NOT NULL, probe_class TEXT,
+  first_seen TEXT NOT NULL, issue_id INTEGER, trigger_condition TEXT, symptom TEXT, blast_radius TEXT);
+CREATE TABLE remediation_contracts (class TEXT PRIMARY KEY, issue_id INTEGER, precondition TEXT NOT NULL, action TEXT NOT NULL, verify_probe TEXT NOT NULL, verify_transport TEXT NOT NULL,
+  max_attempts INTEGER NOT NULL DEFAULT 3, escalate_to TEXT NOT NULL, expected_cadence_h INTEGER, status TEXT DEFAULT 'active', ts TEXT DEFAULT (datetime('now')), last_attempt_at TEXT,
+  last_verdict TEXT, module TEXT, budget_ms INTEGER DEFAULT 45000, next_due_at TEXT, max_items INTEGER DEFAULT 5, requires_container INTEGER DEFAULT 0, attempts INTEGER DEFAULT 0, deferred_since TEXT);
+CREATE TABLE decision_log (id INTEGER PRIMARY KEY AUTOINCREMENT, ts TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')), actor TEXT NOT NULL, assumption TEXT NOT NULL, action TEXT NOT NULL,
+  evidence TEXT NOT NULL, outcome TEXT NOT NULL, blast_radius TEXT NOT NULL, rollback_path TEXT NOT NULL, capability_gain TEXT, predicted_outcome TEXT, reach_gain TEXT, surfaces_tested TEXT, outcome_matched INTEGER);
+CREATE TRIGGER decision_log_no_update BEFORE UPDATE ON decision_log BEGIN SELECT RAISE(ABORT, 'decision_log is append-only'); END;
+CREATE TRIGGER decision_log_no_delete BEFORE DELETE ON decision_log BEGIN SELECT RAISE(ABORT, 'decision_log is append-only'); END;
+"""
+REG_CONTROLS = ("migration-parse-lint", "migration-backup-nonempty")
+
+
+def reg_fixture():
+    con = sqlite3.connect(":memory:")
+    con.executescript(REG_DDL)
+    return con
+
+
+def reg_apply(con, text, skip=None):
+    """Runs the file's statements as the runner does (statements(), body()); skip is a predicate on a statement's SQL."""
+    for st in M.statements(text):
+        sql = M.body(st)
+        if not (skip and skip(sql)):
+            con.execute(sql)
+
+
+def alt_state(con):
+    """The numbers the live views give: the detector's count, how many controls read no-probe, each control's drill state, and the path-coverage rows that read untested."""
+    return {"untested_without_probe": con.execute("SELECT controls_untested_without_probe FROM v_control_alternate_untested").fetchone()[0],
+            "no_probe": con.execute("SELECT COUNT(*) FROM v_control_alternate_status WHERE drill_state = 'no-probe'").fetchone()[0],
+            "drill": dict(con.execute("SELECT control, drill_state FROM v_control_alternate_status ORDER BY control").fetchall()),
+            "stamped": con.execute("SELECT COUNT(*) FROM control_registry WHERE alternate_tested_at IS NOT NULL").fetchone()[0],
+            "path_untested": con.execute("SELECT COUNT(*) FROM v_path_coverage_gaps WHERE path_state = 'alternate-untested'").fetchone()[0]}
+
+
+reg = reg_fixture()
+before = alt_state(reg)
+ok(before["untested_without_probe"] == 0 and before["no_probe"] == 0, "before the migration the live detector's count (controls_untested_without_probe) reads 0 on the fixture", before)
+reg_err = None
+after = replayed = None
+try:
+    reg_apply(reg, reg_text)
+    after = alt_state(reg)
+    reg_apply(reg, reg_text)  # the replay
+    replayed = alt_state(reg)
+except sqlite3.Error as e:
+    reg_err = str(e)
+ok(reg_err is None, "the registry migration runs on the live table shapes, twice, without error", reg_err)
+want_drill = {c: "probe-never-run" for c in REG_CONTROLS}
+ok(after is not None and after["untested_without_probe"] == 0 and after["no_probe"] == 0 and after["drill"] == want_drill,
+   "after the migration controls_untested_without_probe stays 0: both new controls read probe-never-run, not no-probe (the hourly fm-control-alternate-undrilled contract stays green)", after)
+ok(replayed == after, "and after a replay the views read the same", (after, replayed))
+ok(after is not None and after["stamped"] == 0, "the file never hand-stamps alternate_tested_at (only a passing chaos drill does)", after)
+counts = [reg.execute("SELECT COUNT(*) FROM " + t).fetchone()[0] for t in ("control_registry", "control_alternate_probes", "failure_modes", "remediation_contracts", "decision_log")]
+ok(counts == [2, 2, 3, 3, 1], "and a replay adds nothing (2 controls, 2 control probes, 3 failure modes, 3 detector contracts, 1 decision)", counts)
+ok(after is not None and after["path_untested"] == 2, "path coverage reads the two new controls as alternate-untested until the first drill stamps them, as the sibling migration's two controls do (the probe is what makes them drillable)", after)
+# The defect this guards against: the same file without its control_alternate_probes rows leaves both controls at no-probe, and the live detector reads 2.
+bare = reg_fixture()
+reg_apply(bare, reg_text, skip=lambda sql: sql.lstrip().upper().startswith("INSERT OR IGNORE INTO CONTROL_ALTERNATE_PROBES"))
+bare_state = alt_state(bare)
+ok(bare_state["untested_without_probe"] == 2 and bare_state["no_probe"] == 2, "without its two probe rows the same file leaves controls_untested_without_probe at 2 (so the assertion above can fail)", bare_state)
+# Each probe is what the chaos drill and the consumer accept (one literal read-only SELECT with expected and observed), passes while its detector is in place and says what is wrong when it is not.
+import remediation_consumer as RC  # noqa: E402
+probe_of = dict(reg.execute("SELECT control, probe_sql FROM control_alternate_probes").fetchall())
+ok(set(probe_of) == set(REG_CONTROLS), "one control_alternate_probes row per new control", sorted(probe_of))
+ok(all(RC.is_literal_select(q)[0] for q in probe_of.values()) and all(len(M.statements(q)) == 1 for q in probe_of.values()),
+   "each probe is a single literal read-only SELECT by the consumer's own write-keyword guard", {c: RC.is_literal_select(q) for c, q in probe_of.items()})
+ok(all(r[0] == 1 for r in reg.execute("SELECT enabled FROM control_alternate_probes").fetchall()) and
+   all("minutes" in w and not re.search(r"\b\d+ ?(hours?|days?|h)\b", w) for (w,) in reg.execute("SELECT window_note FROM control_alternate_probes").fetchall()),
+   "the probes are enabled and their windows are stated in minutes")
+want_detector = {"migration-parse-lint": ("fm-migration-sql-parse-error", "APPLY-MIGRATIONS-LINT-1"),
+                 "migration-backup-nonempty": ("fm-migration-backup-empty-schema-only", "BACKUP-SCHEMA-ONLY-1")}
+
+
+def run_probe(con, control):
+    if control not in probe_of:
+        return None  # the migration under test carries no probe for it
+    row = con.execute(probe_of[control]).fetchall()
+    return row[0] if row else None
+
+
+for control, (cls, marker) in want_detector.items():
+    r = run_probe(reg, control)
+    ok(r is not None and r[0] == "ok" and r[1] == "ok", "probe " + control + " passes while its detector contract is present, active, code-read and reads " + marker, r)
+    for label, mutate in [("is missing", "DELETE FROM remediation_contracts WHERE class = '" + cls + "'"),
+                          ("is not active", "UPDATE remediation_contracts SET status = 'paused' WHERE class = '" + cls + "'"),
+                          ("is not code-read", "UPDATE remediation_contracts SET verify_transport = 'd1-query' WHERE class = '" + cls + "'"),
+                          ("no longer reads the marker", "UPDATE remediation_contracts SET verify_probe = '{\"paths\": [\"scripts/apply_migrations.py\"], \"contains\": \"gone\"}' WHERE class = '" + cls + "'")]:
+        broken = reg_fixture()
+        reg_apply(broken, reg_text)
+        broken.execute(mutate)
+        r = run_probe(broken, control)
+        ok(r is not None and r[0] == "ok" and r[1] != "ok" and cls in r[1], "probe " + control + " fails with the reason when the detector " + label, r)
+    r = run_probe(reg_fixture(), control)
+    ok(r is not None and r[1] != "ok", "probe " + control + " fails on an empty world (no probe passes by absence)", r)
+# The one-line Rollback header takes the file back out, probes included (an orphan probe would be run by the drill for a control that is gone), and the decision row stays.
+rb_lines = [l for l in reg_text.splitlines() if l.startswith("-- Rollback: ")]
+ok(len(rb_lines) == 1 and "control_alternate_probes" in rb_lines[0], "one Rollback line, and it removes the two control probes", rb_lines)
+rb = reg_fixture()
+reg_apply(rb, reg_text)
+rb.executescript(rb_lines[0][len("-- Rollback: "):].split("decision_log is append-only")[0])
+rb_counts = [rb.execute("SELECT COUNT(*) FROM " + t).fetchone()[0] for t in ("control_registry", "control_alternate_probes", "failure_modes", "remediation_contracts", "decision_log")]
+ok(rb_counts == [0, 0, 0, 0, 1] and alt_state(rb)["untested_without_probe"] == 0, "the Rollback line removes the controls, their probes, the failure modes and the detector contracts and keeps the append-only decision row", rb_counts)
+reg_apply(rb, reg_text)
+ok(alt_state(rb)["untested_without_probe"] == 0 and rb.execute("SELECT COUNT(*) FROM control_alternate_probes").fetchone()[0] == 2, "and the file applies again after its rollback")
+ok(reg.execute("SELECT COUNT(*) FROM failure_modes f JOIN remediation_contracts r ON r.class = f.probe_class WHERE r.class = 'fm-' || f.fm_key").fetchone()[0] == 3, "each failure mode has its fm-<key> detector contract")
+script_text = open(os.path.join(HERE, "apply_migrations.py"), encoding="utf-8").read()
+markers = [json.loads(r[0])["contains"] for r in reg.execute("SELECT verify_probe FROM remediation_contracts")]
+ok(len(markers) == 3 and all(m in script_text for m in markers), "every code-probe marker the migration registers occurs in scripts/apply_migrations.py", markers)
+ok("BACKUP-SCHEMA-ONLY-1" in script_text and "APPLY-MIGRATIONS-LINT-1" in script_text, "the markers named in the issue's closing code-probe are in the script")
 
 print(f"{passed} passed, {failed} failed")
 sys.exit(1 if failed else 0)
