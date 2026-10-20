@@ -1,5 +1,5 @@
 {
-  "audited_at": "2026-10-20 06:33:57",
+  "audited_at": "2026-10-20 07:16:24",
   "d1_write_failures": [],
   "d1_writes_ok": 120,
   "guard": {
@@ -575,7 +575,7 @@
       },
       {
         "dir": "qnfo-cloud-ops",
-        "version": "1.33.0-research-exec-watchdog",
+        "version": "1.33.1-codeagent",
         "worker": "qnfo-cloud-ops"
       },
       {
@@ -1166,9 +1166,9 @@
       "worker": "qnfo-citation-watch"
     },
     "qnfo-cloud-ops": {
-      "before": "1.33.0-research-exec-watchdog",
+      "before": "1.33.1-codeagent",
       "http": 200,
-      "live": "1.33.0-research-exec-watchdog",
+      "live": "1.33.1-codeagent",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-cloud-ops"
