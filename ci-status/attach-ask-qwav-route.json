@@ -1,14 +1,17 @@
 {
-  "marker": "ASK-QWAV-ROUTE-1",
-  "hostname": "ask.qwav.tech",
+  "marker": "DOMAIN-PLANE-1",
+  "hostname": "ask.qwav.org",
+  "redirect_from": "ask.qwav.tech",
   "service": "qnfo-ai-search",
   "token_present": true,
-  "stage": "verified",
-  "status": "success",
+  "stage": "dns-check",
+  "status": "failed",
   "http": 200,
-  "error": null,
-  "zone_id": "331e4363fd05e8e4fc123ea7d2775411",
-  "route_id": "19ab6769115a4f609558686b2b3ed16b",
-  "worker_version": "2.6.1-codeagent",
-  "ts": "2026-10-14T03:08:04Z"
+  "error": "no proxied DNS record for ask.qwav.org; a route would be inert (records: [])",
+  "zone_id": "4df9cb76facef38e78f6f6fc61cbb7c7",
+  "route_id": null,
+  "redirect_rule_id": null,
+  "old_zone_id": null,
+  "worker_version": "2.6.5-cron-grid-1",
+  "ts": "2026-10-20T07:00:55Z"
 }
