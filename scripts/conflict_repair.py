@@ -305,35 +305,68 @@ def reapply(head_ref, base_ref, branch, cwd=None, message=None, in_place=False):
 
 
 def landed_on_main(head_ref, base_ref, cwd=None, min_len=12):
-    """MERGE-LANE-LANDED-1 (agent_issues 100293, PR 3093): returns the changed files when every substantive line the pull request adds
-    (its own diff against the merge base) is already in main's copy of that file, else None. The VERSION line and the deployed-current
-    mirror never count: a pull request's own bump is never on main, and the mirror is a copy of worker.js. Such a pull request has no
-    conflict to repair, its change reached main by another route, so it is closed as superseded instead of left with an issue that says
-    'needs judgement' (PR 3093 sat conflicted for hours although q08-signal-engine already carried its qwen switch)."""
-    out = git(["diff", "--unified=0", "--no-color", "%s...%s" % (base_ref, head_ref)], cwd)
-    added, cur = {}, None
+    """MERGE-LANE-LANDED-1 and -2 (agent_issues 100293, PR 3093): returns the changed files when the pull request's change is already in main's
+    copy of each of them, else None. A pull request whose change reached main by another route has no conflict to repair, so it is closed as
+    superseded instead of left with an issue that says 'needs judgement' (PR 3093 sat conflicted for hours although q08-signal-engine already
+    carried its qwen switch).
+    The test is placement-aware (MERGE-LANE-LANDED-2): the first version asked only that each added line occur somewhere in main's file, so a
+    one-line pull request that adds a call main already has in another function (handleB gains the validateInput(...) that handleA has) read as
+    landed and would have been closed with valid work in it. Each change segment of the diff (unified=1) must now appear in main contiguously,
+    with its leading and trailing context line around the added lines (so a pure deletion needs the two context lines adjacent), and a line the
+    pull request removes must be gone from main's file altogether. The VERSION line and the deployed-current mirror never count: a pull
+    request's own bump is never on main and the mirror is a copy of worker.js. Anything uncertain (a changed neighbour, a file main lacks,
+    a segment that mixes a VERSION line) returns None and the pull request is repaired as before. min_len keeps its old meaning for removed lines."""
+    out = git(["diff", "--unified=1", "--no-color", "%s...%s" % (base_ref, head_ref)], cwd)
+    segs, cur, seg, ctx_before, in_hunk = {}, None, None, None, False
+
+    def flush():
+        nonlocal seg
+        if seg and (seg["added"] or seg["removed"]):
+            segs.setdefault(seg["file"], []).append(seg)
+        seg = None
+
     for line in out.split("\n"):
-        if line.startswith("+++ "):
+        if line.startswith("diff --git "):
+            flush(); cur = None; in_hunk = False; ctx_before = None
+        elif line.startswith("+++ "):
             cur = line[6:] if line.startswith("+++ b/") else None
             if cur and os.path.basename(cur) == "deployed-current.worker.js":
                 cur = None
-            if cur:
-                added.setdefault(cur, [])
-        elif line.startswith("+") and cur:
-            t = line[1:].strip()
-            if len(t) >= min_len and not re.match(r"var\s+VERSION\s*=", t):
-                added[cur].append(t)
-    files = [f for f, ls in added.items() if ls]
+        elif line.startswith("@@"):
+            flush(); in_hunk = True; ctx_before = None
+        elif cur and in_hunk and line[:1] in ("+", "-", " "):
+            kind, text = line[0], line[1:].strip()
+            if kind == " ":
+                if seg:
+                    seg["after"] = text
+                    flush()
+                ctx_before = text
+            else:
+                if re.match(r"var\s+VERSION\s*=", text):
+                    continue
+                if seg is None:
+                    seg = {"file": cur, "before": ctx_before, "after": None, "added": [], "removed": []}
+                (seg["added"] if kind == "+" else seg["removed"]).append(text)
+    flush()
+    files = sorted(segs)
     if not files:
         return None
     for f in files:
         r = sh(["git", "show", "%s:%s" % (base_ref, f)], cwd, check=False)
         if r.returncode != 0:
             return None
-        have = {x.strip() for x in r.stdout.split("\n")}
-        if any(t not in have for t in added[f]):
-            return None
-    return sorted(files)
+        main_lines = [x.strip() for x in r.stdout.split("\n")]
+        have = set(main_lines)
+        for sg in segs[f]:
+            if any(len(t) >= min_len and t in have for t in sg["removed"]):
+                return None
+            want = ([sg["before"]] if sg["before"] is not None else []) + sg["added"] + ([sg["after"]] if sg["after"] is not None else [])
+            if not want:
+                return None
+            n = len(want)
+            if not any(main_lines[i:i + n] == want for i in range(0, len(main_lines) - n + 1)):
+                return None
+    return files
 
 
 def claimed_versions(worker, skip_pr=None):
@@ -762,6 +795,37 @@ def selftest():
         g("commit", "-qam", "main has the exact line")
         ok(landed_on_main("same", "main", d) == ["w/worker.js"], "landed_on_main: the pull request's added line is on main; VERSION and the mirror are ignored", landed_on_main("same", "main", d))
         ok(landed_on_main("other", "main", d) is None, "landed_on_main: a change main does not have is not landed")
+    # MERGE-LANE-LANDED-2: placement matters. A line that occurs elsewhere in main's file does not make the change landed.
+    with tempfile.TemporaryDirectory() as d:
+        def g(*a):
+            return git(list(a), d)
+        def put(text):
+            for f in ("worker.js", "deployed-current.worker.js"):
+                open(os.path.join(d, "w", f), "w").write(text)
+        g("init", "-q", "-b", "main"); g("config", "user.email", "a@b.c"); g("config", "user.name", "t")
+        os.mkdir(os.path.join(d, "w"))
+        base = ('var VERSION = "1.0.0";\nasync function handleA(request, env) {\n  validateInput(request, env);\n  return doA(request);\n}\n'
+                'async function handleB(request, env) {\n  return doB(request);\n}\nfunction legacy() {\n  oldHelperCall(1);\n  return 1;\n}\n')
+        put(base); g("add", "-A"); g("commit", "-qm", "base")
+        g("checkout", "-q", "-b", "dup")
+        put(base.replace('"1.0.0"', '"1.0.1-dup"').replace("async function handleB(request, env) {\n", "async function handleB(request, env) {\n  validateInput(request, env);\n"))
+        g("commit", "-qam", "dup: handleB gains the call handleA already has")
+        g("checkout", "-q", "-b", "del", "main")
+        put(base.replace('"1.0.0"', '"1.0.1-del"').replace("  oldHelperCall(1);\n", ""))
+        g("commit", "-qam", "del: remove the helper call")
+        g("checkout", "-q", "-b", "rep", "main")
+        put(base.replace('"1.0.0"', '"1.0.1-rep"').replace("oldHelperCall(1);", "newHelperCall(1);"))
+        g("commit", "-qam", "rep: replace the helper call")
+        g("checkout", "-q", "main")
+        ok(landed_on_main("dup", "main", d) is None, "landed_on_main: a call main has in another function does not make a one-line change landed (the PR 3216 hole)")
+        put(base.replace('"1.0.0"', '"1.0.5-main"').replace("async function handleB(request, env) {\n", "async function handleB(request, env) {\n  validateInput(request, env);\n"))
+        g("commit", "-qam", "main gains the call in handleB")
+        ok(landed_on_main("dup", "main", d) == ["w/worker.js"], "landed_on_main: the same change is landed once handleB has the call itself", landed_on_main("dup", "main", d))
+        ok(landed_on_main("del", "main", d) is None, "landed_on_main: a deletion is not landed while main still has the removed line")
+        put(base.replace('"1.0.0"', '"1.0.6-main"').replace("  oldHelperCall(1);\n", ""))
+        g("commit", "-qam", "main removes the helper call")
+        ok(landed_on_main("del", "main", d) == ["w/worker.js"], "landed_on_main: a deletion is landed when main lacks the line and the two neighbours are adjacent", landed_on_main("del", "main", d))
+        ok(landed_on_main("rep", "main", d) is None, "landed_on_main: a replacement is not landed while main has neither the new line nor lost the old one in place")
     emit("conflict_repair selftest: " + ("ok" if not fails else "%d FAILED" % len(fails)))
     return 1 if fails else 0
 
