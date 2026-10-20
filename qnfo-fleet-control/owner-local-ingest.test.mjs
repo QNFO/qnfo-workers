@@ -29,7 +29,11 @@ function ok(c, label, extra) { if (c) { passed++; return; } failed++; console.er
 ok(vmatch && atLeast(vmatch[1], "0.11.0"), "VERSION is 0.11.0 or later", vmatch && vmatch[1]);
 
 // ---- D1 shim ----
-function makeD1() {
+// CI-TEST-CLOCKS-1 (2026-10-20): section 2 hands the worker the fixed instant NOW (2026-10-07) and its rows are dated that week, but the worker's 30-day
+// total reads SQL's own clock (date('now','-30 days')), so from 2026-11-06 the fixture rows aged out and "owner_local_cost_usd_30d is written for the
+// dashboard" read 0.00 (and 18.75 as the first rows left). sqlNow gives the shim database the same instant as the JS clock: 'now' in a statement becomes
+// that instant. Section 3 passes nothing, because it inserts its rows with date('now') on the real clock.
+function makeD1(sqlNow) {
   const db = new DatabaseSync(":memory:");
   db.exec(`CREATE TABLE ai_spend_ledger (day TEXT NOT NULL, provider TEXT NOT NULL, caller TEXT NOT NULL, model TEXT NOT NULL, calls INTEGER DEFAULT 0, in_tok INTEGER DEFAULT 0, out_tok INTEGER DEFAULT 0, usd REAL DEFAULT 0, downgraded INTEGER DEFAULT 0, refused INTEGER DEFAULT 0, PRIMARY KEY (day, provider, caller, model));
     CREATE TABLE ai_spend_owner_local (day TEXT NOT NULL, gateway TEXT NOT NULL, provider TEXT NOT NULL, model TEXT NOT NULL, calls INTEGER DEFAULT 0, in_tok INTEGER DEFAULT 0, out_tok INTEGER DEFAULT 0, usd REAL DEFAULT 0, PRIMARY KEY (day, gateway, provider, model));
@@ -38,7 +42,8 @@ function makeD1() {
     CREATE TABLE cloud_ops_events (id TEXT PRIMARY KEY, ts TEXT, kind TEXT, text TEXT, meta TEXT, job TEXT, status TEXT);
     CREATE TABLE metric_registry (metric TEXT PRIMARY KEY, last_value TEXT, last_refreshed TEXT, state TEXT);
     INSERT INTO metric_registry (metric) VALUES ('cost_attribution_gap_pct');`);
-  const wrap = (sql) => {
+  const wrap = (text) => {
+    const sql = sqlNow ? text.split("'now'").join("'" + sqlNow + "'") : text;
     let args = [];
     const st = {
       bind: (...a) => { args = a.map((v) => (v === undefined ? null : v)); return st; },
@@ -112,7 +117,7 @@ ok(W.olAggregate([], "c").taken === 0 && W.olAggregate(null, "c").max === "c", "
 const env = { CF_API_TOKEN: "t" };
 const NOW = "2026-10-07T09:00:00.000Z";
 {
-  const d1 = makeD1();
+  const d1 = makeD1(NOW);
   api.logs = { qnfo: rows.slice().sort((a, b) => (a.created_at < b.created_at ? 1 : -1)) };
   api.calls = [];
   const r = await W.ownerLocalIngest(env, d1, "acct", NOW);
@@ -147,7 +152,7 @@ const NOW = "2026-10-07T09:00:00.000Z";
 }
 // paging: more rows than one page after the cursor; the row before the cursor is filtered by the API; the v1 key is removed
 {
-  const d1 = makeD1();
+  const d1 = makeD1(NOW);
   d1._db.prepare("INSERT INTO ops_config (key, value) VALUES ('owner_local_cursor_v2:qnfo', '2026-10-07T00:00:00Z')").run();
   d1._db.prepare("INSERT INTO ops_config (key, value) VALUES ('owner_local_cursor:qnfo', '2026-10-07T16:00:28.873Z')").run(); // 0.11.0's cursor
   const many = [];
@@ -165,7 +170,7 @@ const NOW = "2026-10-07T09:00:00.000Z";
 }
 // 1b: a backfill larger than OL_MAX_PAGES pages continues on the next run from the cursor, nothing lost, nothing double counted
 {
-  const d1 = makeD1();
+  const d1 = makeD1(NOW);
   const cap = W.OL_MAX_PAGES * W.OL_PAGE, extra = 7, t0 = Date.parse("2026-10-05T00:00:00Z");
   const many = [];
   for (let i = 0; i < cap + extra; i++) many.push(row({ created_at: new Date(t0 + i * 1000).toISOString(), cost: 0.001 }));
@@ -182,13 +187,13 @@ const NOW = "2026-10-07T09:00:00.000Z";
 }
 // two gateways, one with a logs error: the other is still ingested and the error is recorded
 {
-  const d1 = makeD1();
+  const d1 = makeD1(NOW);
   api.gateways = [{ id: "qnfo" }, { id: "personal" }];
   api.logs = { qnfo: [row({ created_at: "2026-10-07T08:00:00Z", cost: 0.4 })], personal: [row({ created_at: "2026-10-07T08:00:00Z", cost: 0.6 })] };
   const r = await W.ownerLocalIngest(env, d1, "acct", NOW);
   ok(r.gateways === 2 && r.taken === 2 && Math.abs(r.owner_usd - 1) < 1e-9 && d1._db.prepare("SELECT COUNT(*) AS n FROM ai_spend_owner_local WHERE gateway = 'personal'").get().n === 1, "every gateway is read; rows carry their gateway", r);
   api.logsStatus = 403;
-  const d2 = makeD1();
+  const d2 = makeD1(NOW);
   const r2 = await W.ownerLocalIngest(env, d2, "acct", NOW);
   ok(r2.taken === 0 && r2.by_gateway.qnfo.error === "logs HTTP 403" && r2.by_gateway.personal.error === "logs HTTP 403", "a logs error is recorded per gateway, nothing thrown, nothing written", r2);
   api.logsStatus = 200; api.gatewayStatus = 500;

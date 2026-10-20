@@ -38,6 +38,12 @@ function mk(extra = {}) {
   CREATE TABLE agent_issues (id INTEGER PRIMARY KEY AUTOINCREMENT, title TEXT, description TEXT, source TEXT, category TEXT DEFAULT 'optimization', priority TEXT DEFAULT 'medium', status TEXT DEFAULT 'open', linked_session TEXT, created_at INTEGER, updated_at INTEGER);`);
   db.prepare("INSERT INTO fleet_dashboard_state VALUES (1,?,?,1)").run(new Date().toISOString(), JSON.stringify(STATE));
   db.prepare("INSERT INTO human_actions (slug,title,why,action,due,source) VALUES ('orcid-link-works','Add the selected works to ORCID','why','act','','owner-only:x')").run();
+  // CI-TEST-CLOCKS-1 (2026-10-20): the worker adds the owner card "Decide: continue or stop (review gate due)" once REVIEW_GATE_DATE (2026-12-31) has passed and the
+  // verdict is still UNKNOWN (no spend reading, or no return evidence attested), so from that day this fixture's queue held one card more than every count below
+  // says ("Needs you: 2"). A fresh money snapshot (spend within the cap) and one attested credibility event (the target is 2) give the fixture the same verdict,
+  // CONTINUE, on either side of the gate. The snapshot is fresh, so no background re-measure is started.
+  db.prepare("INSERT INTO fleet_loop_meta (k,v) VALUES ('human_gov_snapshot', ?)").run(JSON.stringify({ at: new Date().toISOString(), cost: { spend30: 120, cap: 150, balance: 40, metered30: 130, metered_top: [], total_est30: 130 }, ret: { subs_confirmed: 3, subs_total: 5, subs_new30: 1 }, early_trigger: null, trend: null }));
+  db.prepare("INSERT INTO invest_facts (key,value,evidence,updated_at) VALUES ('credibility_events','2','fixture: attested, so the verdict does not turn on the review gate date',datetime('now'))").run();
   db.prepare("INSERT INTO goals (id,goal_type,status,created_at,statement,alignment) VALUES (7,'objective-revision','proposed','2026-09-20T02:00:00Z','Increase the weight of external_impact from 0.10 to 0.15','rationale')").run();
   db.prepare("INSERT INTO owner_docs (key,title,body_md,visibility,updated_at) VALUES ('identity','Identity',?, 'private','2026-10-01 10:00:00')").run(SECRET_DOC);
   const prep = (sql) => { let a = []; const q = { bind(...x) { a = x.map((v) => (v === undefined ? null : v)); return q; }, async all() { return { results: db.prepare(sql).all(...a) }; }, async run() { const r = db.prepare(sql).run(...a); return { success: true, meta: { changes: Number(r.changes) } }; }, async first() { return db.prepare(sql).get(...a) || null; } }; return q; };

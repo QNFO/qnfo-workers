@@ -119,7 +119,9 @@ const judge = (w, p) => chaosJudge(w.prepare(p).all());
     add("r1", "failed", 700, "CODE-TASK-REROUTE-1: rerouted to agent_issues; file larger than 60000 chars needs an anchor");
     add("pf1", "publish_failed", 700, "publish: patch larger than 200000 chars");
     add("sup", "closed", 700, "superseded: landed as PR 719 before this task ran");
-    add("old", "failed", 20000, "anchor occurs 0 times in the file");
+    // CI-TEST-CLOCKS-1 (2026-10-20): "older than 14 days" was 20000 minutes, which is 13.9 days. It only read as old while the probe's own preflight bound
+    // (2026-10-12T18:00) also excluded it; from 2026-10-26 that row sat inside both windows and the three assertions below counted it. 15 days is old on any day.
+    add("old", "failed", 15 * 1440, "anchor occurs 0 times in the file");
     w.prepare("INSERT INTO code_tasks VALUES ('pre','failed','2026-10-10T10:00','anchor occurs 0 times in the file',NULL)").run();
     v = judge(w, p); ok(v.pass, "a REROUTE-1 refusal, a publish-size failure, a superseded close, a row older than 14 days and a row before the preflight do not read as dead-on-arrival", v);
     add("bad1", "failed", 100, "anchor occurs 0 times in the file; it must occur exactly once");

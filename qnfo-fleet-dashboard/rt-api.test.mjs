@@ -63,6 +63,10 @@ function mk() {
     autonomy: { overall: 3, self_heal: 3 }, fleet: { workers: 30 }, early_trigger: null, trend: null, gates_met: 1, gates_total: 5, survival: 0.5
   }));
   db.prepare("INSERT INTO human_actions (slug,title,why,action,due,source) VALUES ('rt-one','Top up the AI credit','why it is yours','act','','billing')").run();
+  // CI-TEST-CLOCKS-1 (2026-10-20): the worker adds the owner card "Decide: continue or stop (review gate due)" once REVIEW_GATE_DATE (2026-12-31) has passed with no
+  // return evidence attested, so from that day this fixture's queue held one card more than every count below says. One attested credibility event (the target is
+  // 2) gives the fixture the same verdict, CONTINUE, on either side of the gate.
+  db.prepare("INSERT INTO invest_facts (key,value,evidence,updated_at) VALUES ('credibility_events','2','fixture: attested, so the verdict does not turn on the review gate date',datetime('now'))").run();
   db.prepare("INSERT INTO analytics_metric_triggers (metric_key,title,operator,threshold,priority,action,owner) VALUES ('fleet_ai_run_rate_30d_usd','Fleet AI run-rate above $15/30d','gt',95,8,'code-task: repo=QNFO/qnfo-workers path=qnfo-fleet-control/worker.js','qnfo-fleet-control')").run();
   db.prepare("INSERT INTO metric_registry (metric,last_value,last_refreshed) VALUES ('fleet_ai_run_rate_30d_usd','281.14',?)").run(new Date().toISOString());
   db.prepare("INSERT INTO metric_history (metric,day,value) VALUES ('fleet_ai_run_rate_30d_usd',date('now','-1 day'),200)").run();

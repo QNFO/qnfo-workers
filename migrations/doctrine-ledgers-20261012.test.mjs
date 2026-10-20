@@ -210,8 +210,18 @@ db.exec(SEED);
 const all = (sql) => db.prepare(sql).all();
 const one = (sql) => db.prepare(sql).get();
 const metric = (m) => { const r = one("SELECT last_value v, last_refreshed r FROM metric_registry WHERE metric = '" + m + "'"); return r ? r.v : undefined; };
+// CI-TEST-CLOCKS-1 (2026-10-20): the calibration migration seeds decision 38's prediction as due 2026-10-25T15:01:06Z, and the scorer reads the real
+// clock when the migration's last statement ticks it. From that instant the suite's "a prediction that is not due is left unscored" failed on main and on
+// every full-suite pull request. The fixture applies the migration with that one due date moved to 30 days after the run, so decision 38 is not due on any
+// day the suite runs; the migration file itself is unchanged, and the assertion that the literal is still there keeps the substitution from going silent.
+const SEEDED_NOT_DUE = "2026-10-25T15:01:06Z";
+const NOT_DUE = new Date(Date.now() + 30 * 864e5).toISOString().replace(/\.\d{3}Z$/, "Z");
 for (const f of FILES) {
-  const sql = readFileSync(new URL("./" + f, import.meta.url), "utf8");
+  let sql = readFileSync(new URL("./" + f, import.meta.url), "utf8");
+  if (f === "2026-10-12-22-calibration-scorer.sql") {
+    ok(sql.split(SEEDED_NOT_DUE).length === 2, "the calibration migration seeds decision 38's prediction with the one due date this fixture moves out of reach");
+    sql = sql.replace(SEEDED_NOT_DUE, NOT_DUE);
+  }
   let err = null;
   try { db.exec(sql); db.exec(sql); } catch (e) { err = String(e && e.message || e); }
   ok(err === null, f + " applies, and applies again unchanged", err);

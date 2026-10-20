@@ -111,7 +111,9 @@ function mk2(opts) {
     "CREATE TABLE code_tasks (status TEXT, created_at TEXT); CREATE TABLE research_queue (status TEXT); CREATE TABLE outreach_queue (status TEXT); CREATE TABLE agent_issues (status TEXT, created_at INTEGER);");
   db.prepare("INSERT INTO trig VALUES ('guard_rcs','Security gap: a deploy guard exited non-zero','gt',0,'fleet-control','7',1,1)").run();
   db.prepare("INSERT INTO trig VALUES ('subscribers_growth_monthly','Reach gap: growth under +10/month','lt',10,'subs','8',0,1)").run();
-  for (const d of ["2026-10-14", "2026-10-15", "2026-10-16"]) db.prepare("INSERT INTO metric_history VALUES ('subscribers_growth_monthly', ?, ?)").run(d, d === "2026-10-16" ? 0 : 2);
+  // CI-TEST-CLOCKS-1 (2026-10-20): the three readings are the last three days on the clock the worker reads them with (its window is date('now','-14 day')).
+  // They were the literals 2026-10-14 to 2026-10-16, which left the 14-day window on 2026-10-30, and the sparkline then had no trend to judge.
+  for (const k of [2, 1, 0]) db.prepare("INSERT INTO metric_history VALUES ('subscribers_growth_monthly', date('now', ?), ?)").run("-" + k + " day", k === 0 ? 0 : 2);
   db.prepare("INSERT INTO code_tasks VALUES ('failed', ?)").run(new Date().toISOString());
   for (let i = 0; i < 30; i++) db.prepare("INSERT INTO research_queue VALUES ('deferred')").run();
   db.prepare("INSERT INTO agent_issues VALUES ('open', ?)").run(Date.now() - 9 * 864e5);
