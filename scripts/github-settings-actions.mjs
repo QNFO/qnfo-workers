@@ -164,6 +164,11 @@ export function workflowPushPaths(root) {
       if (/\bgit\s+push\b/.test(line) && /\bmain\b/.test(line)) {
         out.push({ workflow: f, line: i + 1, snippet: line.trim() });
       }
+      // MAIN-RULESET-STAGE0-1 (issue 100168): canonical-deploy status commits and the automatic canary revert push through these
+      // scripts, so a workflow that never writes `git push ... main` itself still pushes to main as github-actions[bot].
+      if (/(push_artifact\.sh|canary_revert\.py)/.test(line)) {
+        out.push({ workflow: f, line: i + 1, snippet: line.trim() });
+      }
     }
   }
   return out;
@@ -234,13 +239,16 @@ export async function actionReport(api, cfg, root) {
   for (const f of wfFiles) {
     const text = readFileSync(join(dir, f), "utf8");
     if (!text) continue;
+    // MAIN-RULESET-STAGE0-1 (issue 100168): a QNFO_GH_PAT mention inside a YAML comment is prose, not a converted push path,
+    // so only non-comment lines count when deciding which credential a workflow's writes to main use.
+    const codeText = text.split("\n").filter((l) => !/^\s*#/.test(l)).join("\n");
     const hasCheckoutToken = /persist-credentials:\s*false/.test(text) ? "checkout does not persist the default token" : "checkout persists the default GITHUB_TOKEN identity (github-actions[bot]) unless overridden";
     const pushes = [];
-    if (/\bgit\s+push\b/.test(text)) pushes.push("git push");
-    if (/\/contents\//.test(text) && /(PUT|patch)/i.test(text)) pushes.push("contents PUT/PATCH");
-    if (/\/git\/refs\//.test(text)) pushes.push("git refs PATCH/POST");
-    if (/canary_revert/.test(text)) pushes.push("canary_revert");
-    if (/QNFO_GH_PAT/.test(text)) pushIdentities.push({ workflow: f, credential: "QNFO_GH_PAT (admin PAT)", paths: pushes.length ? pushes : ["other"] });
+    if (/\bgit\s+push\b/.test(codeText)) pushes.push("git push");
+    if (/\/contents\//.test(codeText) && /(PUT|patch)/i.test(codeText)) pushes.push("contents PUT/PATCH");
+    if (/\/git\/refs\//.test(codeText)) pushes.push("git refs PATCH/POST");
+    if (/canary_revert/.test(codeText)) pushes.push("canary_revert");
+    if (/QNFO_GH_PAT/.test(codeText)) pushIdentities.push({ workflow: f, credential: "QNFO_GH_PAT (admin PAT)", paths: pushes.length ? pushes : ["other"] });
     else if (pushes.length) pushIdentities.push({ workflow: f, credential: hasCheckoutToken, paths: pushes, identity: "github-actions[bot] unless a bypass-listed app token is configured" });
   }
   r.main_push_paths = workflowPushPaths(root);
