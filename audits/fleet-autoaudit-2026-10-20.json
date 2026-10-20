@@ -1,5 +1,5 @@
 {
-  "audited_at": "2026-10-20 04:53:41",
+  "audited_at": "2026-10-20 05:28:10",
   "d1_write_failures": [],
   "d1_writes_ok": 120,
   "guard": {
@@ -670,7 +670,7 @@
       },
       {
         "dir": "qnfo-research-exec",
-        "version": "0.28.5-extract-xref-fixes",
+        "version": "0.28.7-terminal-hard-review-selfclose",
         "worker": "qnfo-research-exec"
       },
       {
@@ -1561,9 +1561,9 @@
       "worker": "qnfo-register-guard"
     },
     "qnfo-research-exec": {
-      "before": "0.28.5-extract-xref-fixes",
+      "before": "0.28.7-terminal-hard-review-selfclose",
       "http": 200,
-      "live": "0.28.5-extract-xref-fixes",
+      "live": "0.28.7-terminal-hard-review-selfclose",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-research-exec"
