@@ -1080,7 +1080,7 @@ function secretEq(a, b) {
   return diff === 0;
 }
 __name(secretEq, "secretEq");
-var VERSION = "0.41.2-mastodon-probe-host"; /* 0.41.2 EXTERNAL-HTTPS-MASTODON-HOST-1 (2026-10-19, agent_issues 2925 INTEG-MASTODON-VERIFY-1; pillar autonomy; patch): RT_HTTP_HOSTS gains mstdn.science, the public Mastodon instance whose unauthenticated account lookup (GET /api/v1/accounts/lookup) qnfo-social already reads (MASTODON-PUBLIC-STATS-1), so the issue closing probe, which was parked probe-not-machine-executable on "host not allowed", can run. The rest of rtHttpSpec is unchanged: https only, GET or HEAD, no credentials, no redirect followed, 10 s, 1 MB; a host not on the list is still refused. */ /* 0.41.1 POOL-BOUND-SOURCES-1 (issue 100213, human_actions 107; patch): POOL-BOUND-1 parks notebook extractions (idea_proposals name owner-corpus) like any generated row and never parks a row an owner directive queued directly (source idea, chat, operator-prime). 0.41.0 REOPEN-LIVE-PATH-3 (issue 100271): the remediation tick files one deduped PROBE-NEEDED-1 issue per open issue left without a live contract. 0.40.1 VERSION-LINE-NOTES-1 (2026-10-19, agent_issues 100243, pillar autonomy; patch, a comment moved): the release notes of every earlier version rode on this line (178 notes, about 200,000 chars), so a version bump of this worker was an 820,000-char patch (worker and mirror, removed and added): 12 code tasks ended on the publisher size cap on 2026-10-19 and three issues were exhausted for three days. They are in git history (git log -S '<release tag>' -- qnfo-fleet-control/worker.js); the changelog is built from the deploy ledger and commits, and the guards read only the quoted version string. A new note goes on this line and stays short. */
+var VERSION = "0.42.0-deploy-all-merges"; /* 0.42.0 DEPLOY-ALL-MERGES-1 (2026-10-20, owner directive "The system shall always deploy all merges automatically."; pillar core; minor: a decision the loop now takes on its own): DEPLOY-DRIFT-CF-1 measured and redeployed only the workers qnfo-ops /ops/deploy may take, so a merge to a control-plane worker (qnfo-fleet-control, qnfo-ops, qnfo-deploy-guard, qnfo-ai, qnfo-gateway, qnfo-observability) or a container worker (qnfo-code-orchestrator, qnfo-containers-pilot) whose canonical run was cancelled, skipped or failed stayed behind main with nothing to notice it (8 rows read "skip" in deploy_drift_cf at 05:30Z). Those workers are now targets too: main ahead of live for 45 minutes, no active run of the owning workflow and the live script confirmed behind, the tick dispatches canonical-deploy.yml with workers=<name> (canary and automatic revert on the runner) or the container worker's own workflow, at most 2 a tick and once per main VERSION an hour (ddcRunner, ddcDispatchPending). Metric merges_undeployed_over_60m (migrations/2026-10-20-deploy-all-merges.sql). deploy-drift-cf.test.mjs 14. */ /* 0.41.2 EXTERNAL-HTTPS-MASTODON-HOST-1 (2026-10-19, agent_issues 2925 INTEG-MASTODON-VERIFY-1; pillar autonomy; patch): RT_HTTP_HOSTS gains mstdn.science, the public Mastodon instance whose unauthenticated account lookup (GET /api/v1/accounts/lookup) qnfo-social already reads (MASTODON-PUBLIC-STATS-1), so the issue closing probe, which was parked probe-not-machine-executable on "host not allowed", can run. The rest of rtHttpSpec is unchanged: https only, GET or HEAD, no credentials, no redirect followed, 10 s, 1 MB; a host not on the list is still refused. */ /* 0.41.1 POOL-BOUND-SOURCES-1 (issue 100213, human_actions 107; patch): POOL-BOUND-1 parks notebook extractions (idea_proposals name owner-corpus) like any generated row and never parks a row an owner directive queued directly (source idea, chat, operator-prime). 0.41.0 REOPEN-LIVE-PATH-3 (issue 100271): the remediation tick files one deduped PROBE-NEEDED-1 issue per open issue left without a live contract. 0.40.1 VERSION-LINE-NOTES-1 (2026-10-19, agent_issues 100243, pillar autonomy; patch, a comment moved): the release notes of every earlier version rode on this line (178 notes, about 200,000 chars), so a version bump of this worker was an 820,000-char patch (worker and mirror, removed and added): 12 code tasks ended on the publisher size cap on 2026-10-19 and three issues were exhausted for three days. They are in git history (git log -S '<release tag>' -- qnfo-fleet-control/worker.js); the changelog is built from the deploy ledger and commits, and the guards read only the quoted version string. A new note goes on this line and stays short. */
 // (older release notes: git history of qnfo-fleet-control/worker.js)
 // 0.4.112 CF-CHANGELOG-LOOP-1 (pillar autonomy, RM-CAPABILITY-PRODUCT-LOOP-1): once a day, inside the existing hourly tick (no new worker, cron or model call), the fleet reads Cloudflare's changelog feed, classifies each recent item against cloudflare_capability_catalog and the service registry, files at most 2 deduped issues a day for billing/deprecation changes to products the fleet uses, reopens catalog rows that were rejected when the product launches or goes GA (max 2 a day), adds not_considered rows for unknown products (max 5), and measures itself (cf_changelog_audit_age_h, cf_changelog_open_proposals_14d); GET /cf-changelog, POST /cf-changelog/run.
 // 0.4.111 PRIORITY-QUEUE-1b/1c (issues 1912, 1913; owner directive 2026-10-03): self-repair (evPropose) admits critical
@@ -5885,6 +5885,29 @@ function ddcExclusion(row, controlPlane) {
   return null;
 }
 __name(ddcExclusion, "ddcExclusion");
+// DEPLOY-ALL-MERGES-1 (0.42.0, owner directive 2026-10-20: "The system shall always deploy all merges automatically."): the
+// workers this runner may not deploy through /ops/deploy still get deployed when main runs ahead of live. A control-plane
+// worker is deployed by dispatching canonical-deploy.yml with workers=<name>, which runs the /health canary and the automatic
+// revert (CONTROL-PLANE-CANARY-1/2); a container worker by dispatching the workflow that owns it. Nothing is deployed from here
+// directly, and a container worker with no owning workflow stays skipped. Pure: { workflow, inputs } or null.
+var DDC_RUNNER_WORKFLOWS = { "qnfo-code-orchestrator": "deploy-code-orchestrator.yml", "qnfo-containers-pilot": "deploy-containers-pilot.yml" };
+var DDC_DISPATCH_MAX_PER_TICK = 2;
+function ddcRunner(row, controlPlane) {
+  if (!row || row.marker || !row.toml_sha || !row.worker || /-legacy-dup$/.test(row.worker)) return null;
+  if (Object.prototype.hasOwnProperty.call(DDC_RUNNER_WORKFLOWS, row.worker)) return { workflow: DDC_RUNNER_WORKFLOWS[row.worker], inputs: null };
+  if (Number(row.containers) === 1) return null;
+  if ((controlPlane || []).indexOf(row.worker) >= 0) return { workflow: DDC_WORKFLOW, inputs: { workers: row.worker } };
+  return null;
+}
+__name(ddcRunner, "ddcRunner");
+// Pure: a dispatch for this main VERSION went out less than DDC_BACKOFF_MIN minutes ago, so its run is still the deploy.
+function ddcDispatchPending(row, nowMs) {
+  var a = String(row.last_action || "");
+  if (a.indexOf("dispatched ") !== 0 || a.indexOf(" for " + row.main_version) < 0) return false;
+  var t = ddcMs(row.last_action_at);
+  return !isNaN(t) && (nowMs - t) / 60000 < DDC_BACKOFF_MIN;
+}
+__name(ddcDispatchPending, "ddcDispatchPending");
 // Pure: the drift verdict of one target row against its D1 live version at nowMs: sync | live-ahead | unorderable |
 // confirmed-sync (the Cloudflare read already showed this main/live pair is not behind) | wait | due.
 function ddcDecide(row, live, nowMs, graceMin) {
@@ -5937,6 +5960,12 @@ function ddcIo(env) {
     gh: function (path) {
       if (typeof evApi !== "function" || !env.GITHUB_TOKEN) return Promise.resolve({ status: 0, ok: false, j: null });
       return evApi(env, "GET", path);
+    },
+    dispatch: function (workflow, inputs) {
+      if (typeof evApi !== "function" || !env.GITHUB_TOKEN) return Promise.resolve({ status: 0, ok: false, j: { message: "no GITHUB_TOKEN" } });
+      var b = { ref: "main" };
+      if (inputs) b.inputs = inputs;
+      return evApi(env, "POST", "/actions/workflows/" + workflow + "/dispatches", b);
     },
     liveVersion: async function (worker) {
       var acct = env.CF_ACCOUNT_ID || (typeof ACCOUNT !== "undefined" ? ACCOUNT : "");
@@ -6027,7 +6056,7 @@ async function ddcEvent(db, id, nowIso, status, text) {
 __name(ddcEvent, "ddcEvent");
 async function deployDriftCf(env, nowMs, io) {
   var db = env.AUDIT_DB || env.AUDIT, now = nowMs || Date.now(), nowIso = new Date(now).toISOString();
-  var out = { ok: true, on: true, route: null, head: null, main: null, reads: 0, incomplete: false, targets: 0, drift: [], deployed: [], failed: [], skipped: [], blocked: null, notes: [], errors: [] };
+  var out = { ok: true, on: true, route: null, head: null, main: null, reads: 0, incomplete: false, targets: 0, drift: [], deployed: [], dispatched: [], failed: [], skipped: [], blocked: null, notes: [], errors: [] };
   if (!db) return { ok: false, error: "no AUDIT binding" };
   io = io || ddcIo(env);
   var rowsByDir = null, orig = {};
@@ -6045,10 +6074,11 @@ async function deployDriftCf(env, nowMs, io) {
     var rows = (await db.prepare("SELECT * FROM deploy_drift_cf").all()).results || [];
     rows.forEach(function (r) { orig[r.dir] = ddcSig(r); });
     rowsByDir = await ddcScan(db, io, out, rows);
-    var cp = ddcControlPlane(), due = [], dirs = Object.keys(rowsByDir).sort();
+    var cp = ddcControlPlane(), due = [], dueRunner = [], runners = {}, dirs = Object.keys(rowsByDir).sort();
     for (var i = 0; i < dirs.length; i++) {
-      var row = rowsByDir[dirs[i]], why = ddcExclusion(row, cp);
-      if (why) { row.state = "skip: " + why; row.drift_since = null; row.drift_live = null; continue; }
+      var row = rowsByDir[dirs[i]], why = ddcExclusion(row, cp), rn = why ? ddcRunner(row, cp) : null;
+      if (why && !rn) { row.state = "skip: " + why; row.drift_since = null; row.drift_live = null; continue; }
+      if (rn) runners[row.dir] = rn;
       out.targets++;
       var L = live[row.worker] || null;
       row.live_version = L ? L.version : null; row.live_source = L ? L.source : null;
@@ -6065,7 +6095,7 @@ async function deployDriftCf(env, nowMs, io) {
       var dec = ddcDecide(row, L, now, DDC_GRACE_MIN);
       row.state = dec.state; row.drift_since = dec.drift_since; row.drift_live = dec.drift_live;
       if (dec.state === "wait" || dec.state === "due") out.drift.push(row.worker + " " + L.version + " -> " + row.main_version + " (" + dec.age_min + " min)");
-      if (dec.state === "due") due.push(row);
+      if (dec.state === "due") (runners[row.dir] ? dueRunner : due).push(row);
     }
     due.sort(function (a, b) { return ddcMs(a.drift_since) - ddcMs(b.drift_since); });
     if (due.length && out.route !== "ready") {
@@ -6117,6 +6147,44 @@ async function deployDriftCf(env, nowMs, io) {
         }
       }
     }
+    // DEPLOY-ALL-MERGES-1: control-plane and container workers behind main are deployed by dispatching the workflow that owns
+    // them (canary and revert stay on the runner). One dispatch per worker and main VERSION per DDC_BACKOFF_MIN; an active run
+    // of that workflow created within DDC_RUN_BLOCK_MIN minutes is the deploy already under way.
+    dueRunner.sort(function (a, b) { return ddcMs(a.drift_since) - ddcMs(b.drift_since); });
+    var sent = 0, runsByWf = {};
+    for (var q = 0; q < dueRunner.length; q++) {
+      var u = dueRunner[q], rn2 = runners[u.dir];
+      if (ddcDispatchPending(u, now)) { out.skipped.push(u.worker + ": " + u.last_action + " at " + u.last_action_at + "; waiting on that run"); continue; }
+      if (ddcBackoff(u, now)) { out.skipped.push(u.worker + ": backoff after " + u.last_action_at); continue; }
+      if (sent >= DDC_DISPATCH_MAX_PER_TICK) { out.skipped.push(u.worker + ": per-tick dispatch cap " + DDC_DISPATCH_MAX_PER_TICK); continue; }
+      if (!(rn2.workflow in runsByWf)) {
+        var rr = await io.gh("/actions/workflows/" + rn2.workflow + "/runs?per_page=20");
+        runsByWf[rn2.workflow] = rr && rr.ok && rr.j && Array.isArray(rr.j.workflow_runs) ? ddcRunsBlock(rr.j.workflow_runs, now, DDC_RUN_BLOCK_MIN) : null;
+      }
+      var blk = runsByWf[rn2.workflow];
+      if (blk) { out.skipped.push(u.worker + ": " + rn2.workflow + " run " + blk.id + " " + blk.status + " since " + blk.created_at); continue; }
+      var lv2 = await io.liveVersion(u.worker);
+      if (!lv2) { out.skipped.push(u.worker + ": live script unreadable from the Cloudflare API; not dispatched"); continue; }
+      var c3 = ddcCompare(u.main_version, lv2);
+      if (c3 !== 1) {
+        u.synced_key = u.main_version + "|" + u.live_version; u.state = c3 === -1 ? "live-ahead" : c3 === 0 ? "confirmed-sync" : "unorderable"; u.drift_since = null; u.drift_live = null;
+        out.skipped.push(u.worker + ": the live script reads " + lv2 + ", not behind main " + u.main_version);
+        continue;
+      }
+      sent++;
+      var dr = await io.dispatch(rn2.workflow, rn2.inputs);
+      var tag2 = u.worker + " " + lv2 + " -> " + u.main_version + " via " + rn2.workflow + (rn2.inputs ? " workers=" + rn2.inputs.workers : "");
+      if (dr && (dr.status === 204 || dr.ok)) {
+        out.dispatched.push(tag2);
+        u.last_action = "dispatched " + rn2.workflow + " for " + u.main_version; u.last_action_at = nowIso; u.state = "dispatched";
+        await ddcEvent(db, "deploy-drift-cf-" + u.worker + "-" + nowIso, nowIso, "ok", "DEPLOY-ALL-MERGES-1: dispatched " + tag2 + " (main ahead of live since " + u.drift_since + "; the workflow canaries and reverts on the runner)");
+      } else {
+        var em = String(dr && dr.j && (dr.j.message || dr.j.error) || "").slice(0, 160);
+        out.failed.push(tag2 + ": dispatch HTTP " + (dr && dr.status) + " " + em);
+        u.last_action = ("deploy-failed dispatch " + rn2.workflow + " for " + u.main_version + ": HTTP " + (dr && dr.status) + " " + em).slice(0, 300); u.last_action_at = nowIso;
+        await ddcEvent(db, "deploy-drift-cf-" + u.worker + "-" + nowIso, nowIso, "error", "DEPLOY-ALL-MERGES-1: dispatch of " + tag2 + " failed: HTTP " + (dr && dr.status) + " " + em + "; retried after " + DDC_BACKOFF_MIN + " min");
+      }
+    }
   } catch (e) {
     out.errors.push(String(e && e.message || e).slice(0, 200));
   }
@@ -6133,7 +6201,7 @@ async function deployDriftCf(env, nowMs, io) {
     }
     out.ok = out.errors.length === 0 && out.failed.length === 0;
     var status = !out.ok ? "error" : out.route === "ready" ? "ok" : "warn";
-    await ddcEvent(db, "deploy-drift-cf-" + nowIso, nowIso, status, ("DEPLOY-DRIFT-CF-1: route " + out.route + "; main " + (out.head || "?") + " " + (out.main || "?") + (out.incomplete ? " (scan continues next tick)" : "") + "; targets " + out.targets + "; drift " + (out.drift.join(", ") || "none") + "; deployed " + (out.deployed.join(", ") || "none") + (out.failed.length ? "; failed " + out.failed.join("; ") : "") + (out.skipped.length ? "; skipped " + out.skipped.join("; ") : "") + (out.notes.length ? "; " + out.notes.join("; ") : "") + (out.errors.length ? "; errors " + out.errors.join("; ") : "")));
+    await ddcEvent(db, "deploy-drift-cf-" + nowIso, nowIso, status, ("DEPLOY-DRIFT-CF-1: route " + out.route + "; main " + (out.head || "?") + " " + (out.main || "?") + (out.incomplete ? " (scan continues next tick)" : "") + "; targets " + out.targets + "; drift " + (out.drift.join(", ") || "none") + "; deployed " + (out.deployed.join(", ") || "none") + (out.dispatched.length ? "; dispatched " + out.dispatched.join(", ") : "") + (out.failed.length ? "; failed " + out.failed.join("; ") : "") + (out.skipped.length ? "; skipped " + out.skipped.join("; ") : "") + (out.notes.length ? "; " + out.notes.join("; ") : "") + (out.errors.length ? "; errors " + out.errors.join("; ") : "")));
     if (status === "ok") await db.prepare("UPDATE spof_alternate_probes SET enabled = 1 WHERE component = ?1 AND enabled = 0").bind(DDC_PROBE_COMPONENT).run();
   } catch (e) {
     console.error("DEPLOY-DRIFT-CF-1 ledger:", String(e && e.message || e).slice(0, 160));

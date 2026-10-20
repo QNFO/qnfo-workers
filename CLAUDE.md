@@ -249,6 +249,13 @@ because each one was broken at least once; the linked issue holds the evidence.
   and no family hides a net inflow: `v_issue_family_throughput` (migrations/2026-10-20-issue-throughput.sql) lists, per family, opened, closed, open, net inflow and drain ratio. A family with
   net inflow above 0 and an open backlog is missing a loop, a probe or a doer, and that is built next. Closure stays evidence-only (`issue_triage.close_evidence`), never `wontfix` to lower a count.
   Recorded in `ops_config.OWNER_DIRECTIVE_2026_10_20_ISSUE_THROUGHPUT_1` and docs/AUTONOMOUS-OPERATION-DOCTRINE.md (standing directive 2026-10-20, throughput).
+- Owner directives 2026-10-20 (DEPLOY-ALL-MERGES-1, ISSUE-AGE-24H-1, MERGE-RELIABILITY-1), verbatim: "The system shall always clear all open issues server-side automatically
+  within 24 hours. The system shall always fix and redeploy all merge failures automatically." and "The system shall always deploy all merges automatically." Every worker
+  behind main is redeployed by a runner: qnfo-ops /ops/deploy for ordinary workers, a dispatch of canonical-deploy.yml workers=<name> (canary and revert) for the control
+  plane and of the owning workflow for container workers (qnfo-fleet-control 0.42.0, deploy_drift_cf). Measured by `merges_undeployed_over_60m`, `code_pr_merge_share_7d`,
+  `code_prs_unmerged_over_120m` and `issues_over_24h_no_doer`, read per issue in `v_issue_age_ladder` (doer, planner verdict, rung); not-code verdicts older than 24 h are
+  re-planned daily (`issue_age_replans`, `ops_config issue_age_replan`). An issue is still closed only with evidence; PLAN_TRUSTED and the code loop's merge scope are unchanged.
+  Recorded in `ops_config.OWNER_DIRECTIVE_2026_10_20_DEPLOY_ALL_MERGES_1` (migrations/2026-10-20-deploy-all-merges.sql).
 - Every open issue's remediation contract is due hourly (trigger `remediation_contracts_cadence_1h_ai`). A new queue, status
   or loop that can hold items adds its `queue_sla` row and its `v_stuck_summary` column, with an automatic fix and its revert,
   in the PR that creates it. A chain or guard that checks only a count is incomplete: add the age of the oldest item.

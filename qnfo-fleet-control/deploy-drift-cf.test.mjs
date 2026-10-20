@@ -17,7 +17,7 @@ const a = src.indexOf("// BEGIN DEPLOY-DRIFT-CF-1"), b = src.indexOf("// END DEP
 ok(a > 0 && b > a, "the DEPLOY-DRIFT-CF-1 block is present");
 const sb = { __name: (f) => f, console: { log() {}, error() {} }, atob, TextDecoder };
 vm.createContext(sb);
-vm.runInContext(src.slice(a, b) + "\n__x = { deployDriftCf, ddcCompare, ddcDecide, ddcRunsBlock, ddcRoute, ddcToml, ddcLivePick, ddcExclusion, ddcControlPlane, DDC_COLS, DDC_GRACE_MIN, DDC_MAX_PER_TICK, DDC_PROBE_COMPONENT };", sb);
+vm.runInContext(src.slice(a, b) + "\n__x = { deployDriftCf, ddcCompare, ddcDecide, ddcRunsBlock, ddcRoute, ddcToml, ddcLivePick, ddcExclusion, ddcControlPlane, ddcRunner, DDC_COLS, DDC_GRACE_MIN, DDC_MAX_PER_TICK, DDC_PROBE_COMPONENT };", sb);
 const X = sb.__x;
 const T0 = Date.parse("2026-10-13T07:00:00Z");
 const at = (min) => T0 + min * 60000;
@@ -59,7 +59,7 @@ function repo(spec) {
   return files;
 }
 function makeIo(o) {
-  const calls = { gh: [], live: [], ops: [], preflight: 0 };
+  const calls = { gh: [], live: [], ops: [], preflight: 0, dispatch: [] };
   const io = {
     calls,
     gh: async (path) => {
@@ -72,9 +72,11 @@ function makeIo(o) {
         const p = Object.keys(files).find((k) => sha(k + "\n" + files[k]) === want);
         return p ? { status: 200, ok: true, j: { encoding: "base64", content: Buffer.from(files[p]).toString("base64").replace(/(.{60})/g, "$1\n") } } : { status: 404, ok: false, j: null };
       }
+      if (path.indexOf("/actions/workflows/") === 0 && path.indexOf("/runs") > 0 && path.indexOf("/actions/workflows/canonical-deploy.yml/") !== 0) return { status: 200, ok: true, j: { workflow_runs: (o.wfRuns || {})[path.split("/")[3]] || [] } };
       if (path.indexOf("/actions/workflows/canonical-deploy.yml/runs") === 0) return o.runsHttp ? { status: o.runsHttp, ok: false, j: null } : { status: 200, ok: true, j: { workflow_runs: o.runs || [] } };
       return { status: 404, ok: false, j: null };
     },
+    dispatch: async (wf, inputs) => { calls.dispatch.push({ wf, inputs }); return o.dispatchRes ? o.dispatchRes(wf, inputs) : { status: 204, ok: true, j: null }; },
     liveVersion: async (w) => { calls.live.push(w); return (o.cfLive || {})[w] || null; },
     ops: async (body) => {
       if (body && body.preflight) { calls.preflight++; return o.route || { status: 502, j: { ok: false, error: "worker and path are required", log: [] } }; }
@@ -127,7 +129,7 @@ const FLEET = repo({
   ghost: { "worker.js": wjs("3.0.0"), "wrangler.toml": toml("ghost") },
   dup: { "worker.js": wjs("5.0.0"), "wrangler.toml": toml("dup-legacy-dup") },
 });
-const FLEET_WLA = [wla("alpha", "1.1.0"), wla("beta", "2.0.0"), wla("gamma", "1.1.0"), wla("qnfo-ops", "2.45.0"), wla("qnfo-fleet-control", "0.25.0"), wla("pilot", "1.0.0"), wla("oldie", "1.0.0"), absent("ghost"), wla("dup-legacy-dup", "1.0.0")];
+const FLEET_WLA = [wla("alpha", "1.1.0"), wla("beta", "2.0.0"), wla("gamma", "1.1.0"), wla("qnfo-ops", "2.46.0"), wla("qnfo-fleet-control", "0.26.0"), wla("pilot", "1.0.0"), wla("oldie", "1.0.0"), absent("ghost"), wla("dup-legacy-dup", "1.0.0")];
 const env = (db) => ({ AUDIT_DB: db });
 const deploys = (io) => io.calls.ops.map((b) => b.worker);
 const lastEvent = (db) => db.st.events.filter((e) => /^deploy-drift-cf-\d{4}-/.test(e.id)).slice(-1)[0];
@@ -156,7 +158,7 @@ ok(dev && dev.status === "ok" && /deployed alpha 1\.1\.0 -> 1\.2\.0-new/.test(de
 ok(["qnfo-ops", "qnfo-fleet-control", "gamma", "pilot", "oldie", "ghost", "dup"].every((d) => deploys(io).indexOf(d) < 0), "no excluded or live-ahead worker is deployed");
 
 // 3. Exclusions as recorded on the rows.
-ok(/^skip: control-plane worker/.test(db.st.table["qnfo-ops"].state) && /^skip: control-plane worker/.test(db.st.table["qnfo-fleet-control"].state), "control-plane workers are skipped", [db.st.table["qnfo-ops"].state]);
+ok(db.st.table["qnfo-ops"].state === "sync" && db.st.table["qnfo-fleet-control"].state === "sync" && io.calls.dispatch.length === 0, "DEPLOY-ALL-MERGES-1: control-plane workers are measured (in sync here), not skipped", [db.st.table["qnfo-ops"].state]);
 ok(/container worker/.test(db.st.table.pilot.state) && /RETIRED marker/.test(db.st.table.oldie.state) && /no live version/.test(db.st.table.ghost.state) && /duplicate-name/.test(db.st.table.dup.state), "container, RETIRED, never-deployed and -legacy-dup directories are skipped");
 ok(db.st.table.gamma.state === "live-ahead" && db.st.table.beta.state === "sync", "live ahead of main is recorded, never deployed; equal is sync");
 ok(!("docs" in db.st.table) && !(".github" in db.st.table), "directories without worker.js and wrangler.toml are not tracked");
@@ -282,6 +284,41 @@ r = await X.deployDriftCf(env(db), at(0), io);
 ok(r.incomplete && db.st.lws.head === undefined, "45 tomls exceed the budget: the head is not stored, so the next tick scans again", db.st.lws);
 r = await X.deployDriftCf(env(db), at(20), io);
 ok(db.st.lws.head === "h5" && Object.values(db.st.table).every((x) => /no live version/.test(x.state)), "the next tick finishes the scan", db.st.lws);
+
+// 14. DEPLOY-ALL-MERGES-1: control-plane and container workers behind main are deployed by dispatching their own workflow.
+ok(X.ddcRunner({ toml_sha: "t", worker: "qnfo-ops", containers: 0 }, cp).workflow === "canonical-deploy.yml" && X.ddcRunner({ toml_sha: "t", worker: "qnfo-ops" }, cp).inputs.workers === "qnfo-ops", "a control-plane worker deploys through canonical-deploy.yml workers=<name>");
+ok(X.ddcRunner({ toml_sha: "t", worker: "qnfo-code-orchestrator", containers: 1 }, cp).workflow === "deploy-code-orchestrator.yml" && X.ddcRunner({ toml_sha: "t", worker: "pilot", containers: 1 }, cp) === null, "a container worker deploys through its own workflow; one without a workflow stays skipped");
+ok(X.ddcRunner({ toml_sha: "t", worker: "qnfo-ops", marker: "RETIRED" }, cp) === null && X.ddcRunner({ toml_sha: "t", worker: "alpha" }, cp) === null, "a marked directory is never dispatched; an ordinary worker is not a dispatch target");
+const CPF = repo({
+  "qnfo-fleet-control": { "worker.js": wjs("0.42.0"), "wrangler.toml": toml("qnfo-fleet-control") },
+  "qnfo-ops": { "worker.js": wjs("2.50.0"), "wrangler.toml": toml("qnfo-ops") },
+  "qnfo-deploy-guard": { "worker.js": wjs("1.5.0"), "wrangler.toml": toml("qnfo-deploy-guard") },
+  "qnfo-code-orchestrator": { "worker.js": wjs("0.25.0"), "wrangler.toml": toml("qnfo-code-orchestrator", "[[containers]]\nclass_name = \"C\"\n") },
+});
+const CPF_WLA = [wla("qnfo-fleet-control", "0.41.2"), wla("qnfo-ops", "2.50.0"), wla("qnfo-deploy-guard", "1.4.0"), wla("qnfo-code-orchestrator", "0.24.2")];
+db = makeDb({ wla: CPF_WLA });
+io = makeIo({ files: CPF, head: "h6", route: { status: 401, j: { error: "Unauthorized" } }, cfLive: { "qnfo-fleet-control": "0.41.2", "qnfo-deploy-guard": "1.4.0", "qnfo-code-orchestrator": "0.24.2" } });
+await X.deployDriftCf(env(db), at(0), io);
+ok(io.calls.dispatch.length === 0 && db.st.table["qnfo-fleet-control"].state === "wait", "inside the grace: no dispatch", db.st.table["qnfo-fleet-control"]);
+db.st.table["qnfo-fleet-control"].drift_since = iso(-30); db.st.table["qnfo-deploy-guard"].drift_since = iso(-20);
+r = await X.deployDriftCf(env(db), at(50), io);
+ok(io.calls.dispatch.length === 2 && io.calls.ops.length === 0, "past the grace: two dispatches (the cap), no /ops/deploy call, even with the route refused", io.calls.dispatch);
+ok(io.calls.dispatch.some((d) => d.wf === "canonical-deploy.yml" && d.inputs.workers === "qnfo-fleet-control") && r.skipped.some((x) => /per-tick dispatch cap/.test(x)), "the control-plane dispatch names the worker; the third waits for the cap", r);
+ok(db.st.table["qnfo-ops"].state === "sync", "a control-plane worker in sync is left alone");
+ok(db.st.events.some((e) => /DEPLOY-ALL-MERGES-1: dispatched qnfo-fleet-control 0\.41\.2 -> 0\.42\.0 via canonical-deploy\.yml workers=qnfo-fleet-control/.test(e.text)), "one ledger row per dispatch", db.st.events.map((e) => e.text));
+r = await X.deployDriftCf(env(db), at(60), io);
+ok(io.calls.dispatch.length === 3 && io.calls.dispatch[2].wf === "deploy-code-orchestrator.yml", "the oldest drift went first; the next tick dispatches the container worker's own workflow", io.calls.dispatch);
+ok(r.skipped.filter((x) => /waiting on that run/.test(x)).length === 2, "a dispatched worker is not dispatched again within the hour", r.skipped);
+r = await X.deployDriftCf(env(db), at(115), io);
+ok(io.calls.dispatch.length === 5, "still behind an hour after its dispatch: dispatched again", io.calls.dispatch.length);
+db = makeDb({ wla: CPF_WLA });
+io = makeIo({ files: CPF, head: "h6", wfRuns: { "deploy-code-orchestrator.yml": [{ id: 5, status: "in_progress", created_at: iso(40) }] }, dispatchRes: (wf) => wf === "canonical-deploy.yml" ? { status: 422, ok: false, j: { message: "Unexpected inputs" } } : { status: 204, ok: true }, cfLive: { "qnfo-fleet-control": "0.41.2", "qnfo-deploy-guard": "1.4.0", "qnfo-code-orchestrator": "0.24.2" } });
+await X.deployDriftCf(env(db), at(0), io);
+r = await X.deployDriftCf(env(db), at(50), io);
+ok(r.skipped.some((x) => /^qnfo-code-orchestrator: deploy-code-orchestrator\.yml run 5 in_progress/.test(x)), "an active run of the owning workflow blocks its dispatch", r.skipped);
+ok(r.failed.length === 2 && !r.ok && /^deploy-failed dispatch canonical-deploy\.yml/.test(db.st.table["qnfo-deploy-guard"].last_action), "a refused dispatch is a failure and backs off", r.failed);
+r = await X.deployDriftCf(env(db), at(70), io);
+ok(r.skipped.filter((x) => /backoff/.test(x)).length === 2, "after a refused dispatch: backoff", r.skipped);
 
 // 13. Wiring: the */20 tick, the binding with its caller props, the migration's probe component.
 const tick = src.slice(src.indexOf('if (cron === "*/10 * * * *")'), src.indexOf('if (cron === "0 3 * * *")'));
