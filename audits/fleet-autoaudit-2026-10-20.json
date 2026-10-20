@@ -1,5 +1,5 @@
 {
-  "audited_at": "2026-10-20 11:08:51",
+  "audited_at": "2026-10-20 11:59:09",
   "d1_write_failures": [],
   "d1_writes_ok": 120,
   "guard": {
@@ -605,12 +605,12 @@
       },
       {
         "dir": "qnfo-fleet-control",
-        "version": "0.44.1-deferral-measured",
+        "version": "0.44.2-codeagent",
         "worker": "qnfo-fleet-control"
       },
       {
         "dir": "qnfo-fleet-dashboard",
-        "version": "1.51.19-version-line-split",
+        "version": "1.51.20-codeagent",
         "worker": "qnfo-fleet-dashboard"
       },
       {
@@ -650,7 +650,7 @@
       },
       {
         "dir": "qnfo-model-eval",
-        "version": "1.8.0-ab-length-retry",
+        "version": "1.8.1-codeagent",
         "worker": "qnfo-model-eval"
       },
       {
@@ -1313,17 +1313,17 @@
       "worker": "qnfo-fleet-calibrator"
     },
     "qnfo-fleet-control": {
-      "before": "0.44.1-deferral-measured",
+      "before": "0.44.2-codeagent",
       "http": 200,
-      "live": "0.44.1-deferral-measured",
+      "live": "0.44.2-codeagent",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-fleet-control"
     },
     "qnfo-fleet-dashboard": {
-      "before": "1.51.19-version-line-split",
+      "before": "1.51.20-codeagent",
       "http": 200,
-      "live": "1.51.19-version-line-split",
+      "live": "1.51.20-codeagent",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-fleet-dashboard"
@@ -1457,9 +1457,9 @@
       "worker": "qnfo-memory-mcp-legacy-dup"
     },
     "qnfo-model-eval": {
-      "before": "1.8.0-ab-length-retry",
+      "before": "1.8.1-codeagent",
       "http": 200,
-      "live": "1.8.0-ab-length-retry",
+      "live": "1.8.1-codeagent",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-model-eval"
