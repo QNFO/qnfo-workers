@@ -258,7 +258,10 @@ eq(db.prepare("SELECT COUNT(*) AS n FROM agent_issues WHERE title LIKE 'TP-WAVE-
 db.exec("UPDATE transformation_levers SET dispatched_at = '2026-09-01T00:00:00Z' WHERE tp=1 AND n=4");
 const r5 = await T.transformationTick(env, { force: true });
 eq(r5.applied.stalled, 1, "a session lever with no landing in 14 days is stalled");
-const st = db.prepare("SELECT title FROM agent_issues WHERE title LIKE 'TP-LEVER-STALLED-1:%'").get();
+// TEST-CLOCK-PIN-1 (2026-10-20): the first TP-LEVER-STALLED-1 issue is not necessarily T1.4's. The migration seeds levers with dispatched_at on
+// 2026-10-06 and the tick reads the real clock, so from 2026-10-20 those levers are stalled by an earlier tick of this file and their issues come
+// first ("TP-LEVER-STALLED-1 names the lever": got false failed every pull request that ran the full suite). Select the lever's own issue.
+const st = db.prepare("SELECT title FROM agent_issues WHERE title LIKE 'TP-LEVER-STALLED-1:%TP-1.4-ANCHOR-REPAIR-1%'").get();
 eq(!!st && /TP-1\.4-ANCHOR-REPAIR-1/.test(st.title), true, "TP-LEVER-STALLED-1 names the lever");
 db.exec("UPDATE agent_issues SET status='closed' WHERE id=2007");
 const r6 = await T.transformationTick(env, { force: true });
