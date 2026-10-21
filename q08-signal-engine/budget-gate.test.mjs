@@ -1,0 +1,24 @@
+// COST-SUSTAIN-2 (0.33.0): q08 hard daily neuron budget, paced over the UTC day; work waits, nothing is skipped.
+const G = (await import("./worker.js")).__gen;
+let passes = 0, fails = 0;
+const check = (l, c, x) => { if (c) passes++; else { fails++; console.log("FAIL " + l + (x !== undefined ? " -- " + JSON.stringify(x).slice(0, 300) : "")); } };
+const env = (cfg, spent, err) => ({ AUDIT: { prepare: (sql) => ({ bind: () => ({ first: async () => { if (err) throw new Error("d1 down"); return { n: spent }; } }), first: async () => (cfg === undefined ? null : { value: cfg }) }) } });
+const noon = Date.UTC(2026, 9, 21, 11, 30);
+const r1 = await G.q08Budget(env(undefined, 10), noon);
+check("default budget applies", r1.budget === G.Q08_DAILY_NEURONS_DEFAULT && r1.ok, r1);
+check("pace at 11:30 UTC is half the day plus the burst", r1.pace === Math.round(150000 * (12 / 24 + 0.1)), r1);
+const r2 = await G.q08Budget(env("150000", 95000), noon);
+check("spend over the pace holds the tick", r2.ok === false, r2);
+const r3 = await G.q08Budget(env("150000", 140000), Date.UTC(2026, 9, 21, 23, 10));
+check("late in the day the full budget is the pace", r3.pace === 150000 && r3.ok === true, r3);
+const r4 = await G.q08Budget(env("150000", 150000), Date.UTC(2026, 9, 21, 23, 10));
+check("spend at the budget holds", r4.ok === false, r4);
+const r5 = await G.q08Budget(env("0", 9e9), noon);
+check("0 disables the gate (owner override)", r5.ok === true && r5.disabled === true, r5);
+const origErr = console.error; console.error = () => {};
+const r6 = await G.q08Budget(env("150000", 0, true), noon);
+console.error = origErr;
+check("an unreadable counter reads as ok", r6.ok === true && r6.unreadable === true, r6);
+check("no AUDIT binding reads as ok", (await G.q08Budget({}, noon)).ok === true);
+console.log("budget-gate.test.mjs: " + passes + " passed, " + fails + " failed");
+process.exit(fails ? 1 : 0);
