@@ -14,6 +14,8 @@ function mk(withCounters) {
   db.exec(`CREATE TABLE cost_daily (date TEXT, source TEXT, usd REAL);
   CREATE VIEW v_cost_run_rate AS SELECT 'total:all-billing' AS source_group, 3.0 AS daily_7d, 2.5 AS daily_10d, 90.0 AS run_rate_30d_7d, 75.0 AS run_rate_30d_10d UNION ALL SELECT 'workers_ai', 1.0, 1.0, 30.0, 30.0;
   CREATE TABLE ops_config (key TEXT PRIMARY KEY, value TEXT);
+  CREATE TABLE metric_registry (metric TEXT PRIMARY KEY, last_value TEXT, last_refreshed TEXT, target TEXT);
+  INSERT INTO metric_registry VALUES ('research_neurons_per_publication_7d', '15000', '2026-10-21', '<= 20000');
   CREATE VIEW v_cost_forecast AS SELECT 'fleet' AS scope, 100.0 AS mtd_complete_usd, 2.0 AS today_partial_usd, 6.0 AS daily_3d, 7.0 AS daily_7d, 180.0 AS pace_30d_usd, 166.0 AS forecast_month_usd, 31 AS days_in_month, 20 AS complete_days, 300 AS budget_month_usd, 'measured' AS basis;
   CREATE TABLE fleet_budget (node_class TEXT PRIMARY KEY, cap INTEGER NOT NULL, target INTEGER NOT NULL, current INTEGER NOT NULL, unit TEXT NOT NULL, updated_at TEXT NOT NULL);
   INSERT INTO fleet_budget VALUES ('ai_spend:fleet', 95, 75, 121, 'usd_30d', '2026-10-19'), ('ai_spend:ops', 20, 10, 5, 'usd_30d', '2026-10-19'), ('workers', 40, 30, 33, 'count', '2026-10-19');`);
@@ -48,6 +50,7 @@ ok(!/including partial today/.test(JSON.stringify(b)), "no label claims a partia
 ok(b.by_worker_7d.length === 2 && b.by_worker_7d[0].worker === "qnfo-ai", "by worker, largest first", b.by_worker_7d);
 ok(b.budgets.length === 2 && b.budgets_breached === 1 && b.budgets[0].node_class === "ai_spend:fleet" && b.budgets[0].headroom === -26, "spend budgets with headroom, breached first", b.budgets);
 ok(!b.blind, "no part is blind when every table exists");
+ok(b.fleet_forecast_bounded_month_usd === null && b.fleet_month_to_date_usd === 100 && Array.isArray(b.cost_metrics), "COST-SUSTAIN-3: bounded fields are null (never fabricated) when the view lacks them; month-to-date and the cost metrics part are surfaced", b);
 ok(b.fleet_pace_30d_usd === 180 && b.fleet_forecast_month_usd === 166 && b.fleet_budget_month_usd === 300 && b.forecast.length === 1, "COST-SUSTAIN-1: the fleet forecast is surfaced against the USD 300 budget", b);
 const tag = r.headers.get("ETag");
 ok(!!tag, "the feed carries an ETag");

@@ -10,7 +10,7 @@ var __defProp222 = Object.defineProperty;
 var __name222 = /* @__PURE__ */ __name22((target, value) => __defProp222(target, "name", { value, configurable: true }), "__name");
 var __name2222 = /* @__PURE__ */ __name222((target, value) => Object.defineProperty(target, "name", { value, configurable: true }), "__name");
 // VERSION-LINE-SPLIT-1 (agent_issues 100220): the release notes sit one per line below this statement, newest first, so a VERSION bump is a one-line patch; add a new note as the first line under it.
-var VERSION = "1.53.0-console-agent-1"; /* 1.52.0 COST-SUSTAIN-1 (2026-10-21, pillar cost): /api/cost adds forecast (v_cost_forecast: per-scope month-to-date, 3-day pace, month-end forecast vs the owner USD 300 fleet budget) and research_budget_today (neurons spent vs qnfo-research-exec research_daily_neurons). */
+var VERSION = "1.54.0-cost-bound"; /* 1.54.0 COST-SUSTAIN-3 (2026-10-21, owner: research and publication <= USD 300/month all-in, realistic use metrics and forecasting; pillar cost): /api/cost carries the cap-aware forecast (v_cost_forecast bound_daily_usd, bound_30d_usd, forecast_bounded_month_usd: month-to-date + remaining days x min(3-day pace, what the configured daily caps allow)), research neurons per published version and the provider-billed AI Gateway figure; the cost area headline is the month forecast instead of a 7-day mean x 30 that cannot see the caps. */ /* 1.52.0 COST-SUSTAIN-1 (2026-10-21, pillar cost): /api/cost adds forecast (v_cost_forecast: per-scope month-to-date, 3-day pace, month-end forecast vs the owner USD 300 fleet budget) and research_budget_today (neurons spent vs qnfo-research-exec research_daily_neurons). */
 /* 1.51.19 VERSION-LINE-SPLIT-1 (2026-10-20, agent_issues 100220, pillar autonomy; patch: layout only): the release notes that sat on the VERSION line (202,642 chars) are one per line below it, so a bump is a one-line patch and the publisher's size cap stops refusing dashboard code tasks (5 of 5 on 2026-10-19); scripts/conflict_repair.py resolves note-line hunks (merge_note_hunk). No behaviour change. */
 /* 1.51.17 COST-FEED-7D-WINDOW-1 (2026-10-19, agent_issues 100169, pillar cost; patch): /api/cost by_model_7d and by_worker_7d sum the 7 complete UTC days (today, a partial day, was a 8th bucket under the 7d label, +31.8 percent), and the body says which days (window_7d) and that est_usd is list price before the free tier (est_usd_basis). */
 /* 1.51.16 PARKED-CARD-REASON-1 (2026-10-19, agent_issues 100173, pillar autonomy; patch): the parked code-task card branches on the cause wherever it sits in last_error (the loop writes "model <id>: noop-proposal: ..." and "model <id> proposed no change", so a prefix test never matched), and the dead execOne edit of PR 3106 (fleet_issue_dispatch has no last_error) is removed. */
@@ -2216,7 +2216,7 @@ async function freshState(env, ctx, maxAgeMs) {
    falls into autonomy rather than disappearing (areaOf). "sources" is what the area feed reads at request time. */
 var AREA_REGISTRY = [
   { id: "cost", name: "Cost", short: "Cost", what: "what the fleet spends: model run-rate, spend per published piece, budget headroom", sources: ["v_metric_trigger_state", "metric_history"],
-    rx: /cost|run_rate|spend|_usd/, star: { key: "fleet_ai_run_rate_30d_usd", label: "Fleet AI run-rate, 30d", unit: "$", good: "down" },
+    rx: /cost|run_rate|spend|_usd/, star: { key: "fleet_cost_forecast_month_usd", label: "Fleet cost, month forecast", unit: "$", good: "down" },
     flows: [], widgets: ["invest"], controls: [], pages: [],
     queue: { sources: ["billing", "decision", "shutdown"], rx: /payment|credit|budget|spend|billing|invoice|cost|funding|revenue|money|\$\d/i } },
   { id: "research", name: "Research and content", short: "Research", what: "what the fleet produces and publishes: q08, papers, ideas, generators", sources: ["v_metric_trigger_state", "metric_history", "research_queue", "code_tasks"],
@@ -5146,7 +5146,9 @@ var COST_FEED_SQL = {
   run_rate: "SELECT source_group, daily_7d, daily_10d, run_rate_30d_7d, run_rate_30d_10d FROM v_cost_run_rate ORDER BY run_rate_30d_7d DESC",
   // COST-SUSTAIN-1 (1.52.0): month-to-date, 3-day pace and month-end forecast per scope (fleet measured / owner clients measured /
   // owner-direct UNVERIFIED), against the owner's USD 300/month fleet budget; the realistic number the owner plans with.
-  forecast: "SELECT scope, mtd_complete_usd, today_partial_usd, daily_3d, daily_7d, pace_30d_usd, forecast_month_usd, days_in_month, complete_days, budget_month_usd, basis FROM v_cost_forecast ORDER BY scope",
+  forecast: "SELECT * FROM v_cost_forecast ORDER BY scope",
+  // COST-SUSTAIN-3 (1.54.0): unit cost and the provider-billed figure, both written hourly by scripts/cost_ledger.py.
+  cost_metrics: "SELECT metric, last_value, last_refreshed, target FROM metric_registry WHERE metric IN ('fleet_cost_bound_month_usd', 'fleet_cost_forecast_month_usd', 'fleet_cost_pace_30d_usd', 'research_neurons_per_publication_7d', 'billed_ai_gateway_mtd_usd') ORDER BY metric",
   research_budget_today: "SELECT COALESCE(SUM(neurons), 0) AS neurons_today, (SELECT value FROM ops_config WHERE key = 'research_daily_neurons') AS budget_neurons FROM ai_call_counters WHERE day = date('now') AND worker IN ('qnfo-research-exec', 'errata-hub', 'qnfo-paper-reviser')",
   daily_14d: "SELECT date, ROUND(SUM(usd), 4) AS usd FROM cost_daily WHERE date >= date('now', '-14 days') AND (source = 'workers_ai' OR instr(source, 'ai_gateway:') = 1 OR instr(source, ':daily') > 0) GROUP BY date ORDER BY date",
   by_model_7d: "SELECT model, SUM(calls) AS calls, SUM(errors) AS errors, SUM(in_tok) AS in_tok, SUM(out_tok) AS out_tok, ROUND(SUM(neurons)) AS neurons, ROUND(SUM(neurons) * " + COST_USD_PER_KNEURON + " / 1000, 4) AS est_usd FROM ai_call_counters WHERE " + COST_WINDOW_SQL + " GROUP BY model ORDER BY SUM(neurons) DESC, SUM(calls) DESC LIMIT 20",
@@ -5163,6 +5165,10 @@ async function costFeedData(env) {
   const fl = (out.forecast || []).filter(function(r) { return r.scope === "fleet"; })[0];
   out.fleet_pace_30d_usd = fl ? fl.pace_30d_usd : null;
   out.fleet_forecast_month_usd = fl ? fl.forecast_month_usd : null;
+  // COST-SUSTAIN-3: the realistic month: actuals so far + the remaining days at the lower of the recent pace and what the caps allow.
+  out.fleet_forecast_bounded_month_usd = fl && fl.forecast_bounded_month_usd != null ? fl.forecast_bounded_month_usd : null;
+  out.fleet_bound_30d_usd = fl && fl.bound_30d_usd != null ? fl.bound_30d_usd : null;
+  out.fleet_month_to_date_usd = fl ? fl.mtd_complete_usd : null;
   out.fleet_budget_month_usd = 300;
   out.budgets_breached = (out.budgets || []).filter(function(b) { return Number(b.breached) === 1; }).length;
   // The window is read from the rows, never from intent; all null when the counters were unreadable or empty.

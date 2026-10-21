@@ -142,7 +142,7 @@ def write_forecast(d1):
     PRECONDITION: cost_daily rows for today were just upserted. POSTCONDITION: the two metrics carry the fleet scope's values, or
     the error is returned and nothing is written (never a fabricated zero)."""
     try:
-        rows = d1("SELECT scope, mtd_complete_usd, today_partial_usd, daily_3d, daily_7d, pace_30d_usd, forecast_month_usd, basis FROM v_cost_forecast")
+        rows = d1("SELECT * FROM v_cost_forecast")
     except Exception as e:  # noqa: BLE001
         return "v_cost_forecast missing: %s" % str(e)[:80]
     by = {r["scope"]: r for r in rows}
@@ -153,7 +153,45 @@ def write_forecast(d1):
     for metric, val in (("fleet_cost_pace_30d_usd", f["pace_30d_usd"]), ("fleet_cost_forecast_month_usd", f["forecast_month_usd"])):
         d1("UPDATE metric_registry SET last_value = CAST(?1 AS TEXT), last_refreshed = " + stamp + ", state = 'MEASURED' WHERE metric = ?2", [val, metric])
     d1("UPDATE fleet_budget SET current = ?1, updated_at = " + stamp + " WHERE node_class = 'cost:fleet_all_in_month'", [f["pace_30d_usd"]])
-    return {k: {"mtd": v["mtd_complete_usd"], "pace_30d": v["pace_30d_usd"], "forecast_month": v["forecast_month_usd"]} for k, v in by.items()}
+    # COST-SUSTAIN-3: the cap-aware bound (what the configured daily caps allow) and the bounded month-end forecast. A view without
+    # the columns (migration not applied yet) leaves the metric untouched rather than writing a fabricated value.
+    if f.get("bound_30d_usd") is not None:
+        d1("UPDATE metric_registry SET last_value = CAST(?1 AS TEXT), last_refreshed = " + stamp + ", state = 'MEASURED' WHERE metric = 'fleet_cost_bound_month_usd'", [f["bound_30d_usd"]])
+    return {k: {"mtd": v.get("mtd_complete_usd"), "pace_30d": v.get("pace_30d_usd"), "forecast_month": v.get("forecast_month_usd"),
+                "forecast_bounded_month": v.get("forecast_bounded_month_usd"), "bound_30d": v.get("bound_30d_usd")} for k, v in by.items()}
+
+
+def write_unit_cost(d1):
+    """COST-SUSTAIN-3: research neurons per published version over the 7 complete UTC days before today. POSTCONDITION: the metric
+    carries the ratio, or nothing is written when no version was published (a ratio over zero is not a measurement)."""
+    try:
+        r = d1("SELECT (SELECT COALESCE(SUM(neurons), 0) FROM ai_call_counters WHERE worker IN ('qnfo-research-exec', 'errata-hub', 'qnfo-paper-reviser') "
+               "AND day >= date('now', '-7 days') AND day < date('now')) AS n, (SELECT COUNT(*) FROM research_queue WHERE published_at >= date('now', '-7 days') "
+               "AND published_at < date('now')) AS pubs")
+    except Exception as e:  # noqa: BLE001
+        return "unit cost unreadable: %s" % str(e)[:80]
+    n, pubs = float(r[0]["n"] or 0), int(r[0]["pubs"] or 0)
+    if pubs <= 0:
+        return {"neurons_7d": n, "publications_7d": 0, "written": False}
+    val = round(n / pubs, 1)
+    d1("UPDATE metric_registry SET last_value = CAST(?1 AS TEXT), last_refreshed = strftime('%Y-%m-%dT%H:%M:%SZ', 'now'), state = 'MEASURED' WHERE metric = 'research_neurons_per_publication_7d'", [val])
+    return {"neurons_7d": n, "publications_7d": pubs, "per_publication": val}
+
+
+def billed_gateway(d1, call=cf):
+    """COST-SUSTAIN-3: the provider-billed AI Gateway figure for the current period (invoice-preview; amounts are CENTS, AI-GW-COST-UNIT-
+    CENTS-1). Billed = amount_due + every pretax credit applied (the credit balance pays most of it). POSTCONDITION: metric written, or the
+    refusal returned and nothing written."""
+    st, j = call("GET", "/accounts/%s/ai-gateway/billing/invoice-preview" % RC.ACCOUNT)
+    res = j.get("result") if isinstance(j, dict) else None
+    if not (200 <= (st or 0) < 300) or not isinstance(res, dict):
+        return "invoice-preview answered %s" % st
+    cents = 0
+    for ln in res.get("invoice_lines") or []:
+        cents += int(ln.get("amount") or 0)
+    usd = round(cents / 100.0, 2)
+    d1("UPDATE metric_registry SET last_value = CAST(?1 AS TEXT), last_refreshed = strftime('%Y-%m-%dT%H:%M:%SZ', 'now'), state = 'MEASURED' WHERE metric = 'billed_ai_gateway_mtd_usd'", [usd])
+    return {"billed_usd": usd, "lines": len(res.get("invoice_lines") or []), "period_start": res.get("period_start")}
 
 
 def main(d1=None, call=cf, today=None):
@@ -198,6 +236,11 @@ def main(d1=None, call=cf, today=None):
     except Exception as e:  # noqa: BLE001
         out["run_rate"] = "view missing: %s" % str(e)[:80]
     out["forecast"] = write_forecast(d1)
+    for k, fn in (("unit_cost", lambda: write_unit_cost(d1)), ("billed", lambda: billed_gateway(d1, call))):
+        try:
+            out[k] = fn()
+        except Exception as e:  # noqa: BLE001
+            out["errors"].append("%s: %s" % (k, str(e)[:100]))
     print(json.dumps(out)[:1500])
     return 0
 
@@ -276,6 +319,25 @@ def selftest():
     assert rr["ai_gateway:anthropic"] == 0.5 and rr["owner_gateway:anthropic"] == 10.0 and rr["total:owner-gateway"] == 10.0, rr
     assert rr["total:cloudflare+gateway"] == 3.5, rr  # workers_ai 2 + fleet gateway 0.5 + plan 1: fleet_cost_run_rate_usd, without the owner's 10
     assert rr["total:all-billing"] == 28.5, rr  # the owner's total monthly budget keeps its gateway spend: 3.5 + 10 + 15
+    # COST-SUSTAIN-3: invoice-preview lines are cents and include credit-paid usage; a refusal writes nothing
+    m = sqlite3.connect(":memory:")
+    m.executescript("CREATE TABLE metric_registry (metric TEXT PRIMARY KEY, last_value TEXT, last_refreshed TEXT, state TEXT); INSERT INTO metric_registry (metric) VALUES ('billed_ai_gateway_mtd_usd'), ('research_neurons_per_publication_7d');"
+                    "CREATE TABLE ai_call_counters (day TEXT, worker TEXT, neurons REAL); CREATE TABLE research_queue (published_at TEXT);")
+
+    def md1(sql, params=None):
+        sql = sql.replace("strftime('%Y-%m-%dT%H:%M:%SZ', 'now')", "'now'")
+        cur = m.execute(sql, params or [])
+        cols = [x[0] for x in cur.description] if cur.description else []
+        return [dict(zip(cols, r)) for r in cur.fetchall()]
+    inv = {"result": {"amount_due": 0, "invoice_lines": [{"amount": 0}, {"amount": 4522}]}}
+    assert billed_gateway(md1, lambda *a, **k: (200, inv))["billed_usd"] == 45.22
+    assert md1("SELECT last_value FROM metric_registry WHERE metric = 'billed_ai_gateway_mtd_usd'")[0]["last_value"] == "45.22"
+    assert isinstance(billed_gateway(md1, lambda *a, **k: (403, {})), str)
+    y = (dt.date.today() - dt.timedelta(days=1)).isoformat()
+    assert write_unit_cost(md1)["written"] is False  # no publication: no ratio
+    m.execute("INSERT INTO ai_call_counters VALUES (?, 'qnfo-research-exec', 300000), (?, 'q08-signal-engine', 999999)", [y, y])
+    m.executemany("INSERT INTO research_queue VALUES (?)", [[y + "T10:00:00Z"]] * 20)
+    assert write_unit_cost(md1)["per_publication"] == 15000.0
     print("cost_ledger selftest ok")
 
 
