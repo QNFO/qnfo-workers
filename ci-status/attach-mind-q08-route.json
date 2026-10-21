@@ -13,11 +13,11 @@
   },
   "subdomain": null,
   "route_id": "d94c0f6874a740e5adefe12a84d1e30c",
-  "route_reused": false,
-  "dns_created": true,
+  "route_reused": true,
+  "dns_created": false,
   "dns_record_id": "82a48e5ed0887d755faddc265bde839a",
   "verified": true,
   "entries": 36,
   "health_version": "1.0.0-mind-1",
-  "ts": "2026-10-21T14:16:02Z"
+  "ts": "2026-10-21T14:16:21Z"
 }
