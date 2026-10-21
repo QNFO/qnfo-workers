@@ -1,0 +1,14 @@
+{
+  "marker": "MIND-Q08-1",
+  "host": "mind.q08.org",
+  "service": "q08-mind",
+  "token_present": true,
+  "stage": "deploy",
+  "status": "failed",
+  "error": "https://q08-mind.q08.workers.dev/health never reported version >= 1.0 (last http=404 version=None body={})",
+  "worker_version": null,
+  "route_id": null,
+  "dns_created": null,
+  "verified": false,
+  "ts": "2026-10-21T14:00:38Z"
+}
