@@ -1,5 +1,5 @@
 {
-  "audited_at": "2026-10-21 09:57:16",
+  "audited_at": "2026-10-21 10:29:01",
   "d1_write_failures": [],
   "d1_writes_ok": 120,
   "guard": {
@@ -580,7 +580,7 @@
       },
       {
         "dir": "qnfo-code-orchestrator",
-        "version": "0.25.0-plan-trust-parity",
+        "version": "0.25.1-exhaust-self-retry",
         "worker": "qnfo-code-orchestrator"
       },
       {
@@ -605,7 +605,7 @@
       },
       {
         "dir": "qnfo-fleet-control",
-        "version": "0.44.3-codeagent",
+        "version": "0.44.4-pr-issue-link",
         "worker": "qnfo-fleet-control"
       },
       {
@@ -620,7 +620,7 @@
       },
       {
         "dir": "qnfo-github-steward",
-        "version": "0.7.4-health-contract-1",
+        "version": "0.7.5-close-provenance-1",
         "worker": "qnfo-github-steward"
       },
       {
@@ -1183,9 +1183,9 @@
       "worker": "qnfo-code-agent"
     },
     "qnfo-code-orchestrator": {
-      "before": "0.25.0-plan-trust-parity",
+      "before": "0.25.1-exhaust-self-retry",
       "http": 200,
-      "live": "0.25.0-plan-trust-parity",
+      "live": "0.25.1-exhaust-self-retry",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-code-orchestrator"
@@ -1313,9 +1313,9 @@
       "worker": "qnfo-fleet-calibrator"
     },
     "qnfo-fleet-control": {
-      "before": "0.44.3-codeagent",
+      "before": "0.44.4-pr-issue-link",
       "http": 200,
-      "live": "0.44.3-codeagent",
+      "live": "0.44.4-pr-issue-link",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-fleet-control"
@@ -1355,9 +1355,9 @@
       "worker": "qnfo-gateway"
     },
     "qnfo-github-steward": {
-      "before": "0.7.4-health-contract-1",
+      "before": "0.7.5-close-provenance-1",
       "http": 200,
-      "live": "0.7.4-health-contract-1",
+      "live": "0.7.5-close-provenance-1",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-github-steward"
