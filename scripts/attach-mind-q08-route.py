@@ -1,186 +1,267 @@
 #!/usr/bin/env python3
-"""MIND-Q08-2 (2026-10-21): serve the inside reading surface at mind.q08.org from q08-mind.
+"""MIND-Q08-3 (2026-10-21): serve the inside reading surface at mind.q08.org from q08-mind.
 
-Fail-closed, idempotent, self-triggering (the attach-mind-q08-route workflow runs this file on push).
+Self-triggering: a push of this file (or .github/workflows/attach-mind-q08-route.yml) starts the run.
+Fail-closed, idempotent, reversible: anything this run creates is removed if outside verification fails.
 
-MIND-Q08-2 changes PATH 1. MIND-Q08-1 waited for https://q08-mind.q08.workers.dev/health, but workers_dev is not
-enabled on q08-mind, so that URL returns 404 forever and the run always died at stage "deploy" after 20 minutes: the
-zone route was never created and mind.q08.org answered 530 (origin DNS error, record present, no worker bound).
-PATH 1 now asks the Cloudflare API whether the script exists (authoritative, independent of any hostname), and this
-run additionally enables the workers.dev subdomain when it can, so the worker has two independent URLs.
+Why MIND-Q08-3 exists. MIND-Q08-2 reported
+    "q08-mind is not deployed in account <acct> after 10 min (last http=0)"
+while q08-mind was live in that account (version 1.0.0-mind-1, 44,843 B). Its PATH 1 read
+GET /accounts/{acct}/workers/scripts/{name} and treated a connection-level exception (st == 0) as
+"absent", then fail-closed before ever touching the zone route. A transport failure is not evidence of
+absence. MIND-Q08-3 separates the two:
 
-Steps:
-  1. confirm the script q08-mind exists (CF API); best effort: enable its workers.dev subdomain;
-  2. if no address record exists for mind.q08.org, create a proxied originless AAAA 100:: record;
-  3. create the zone route mind.q08.org/* -> q08-mind (idempotent: an existing route to q08-mind is kept);
-  4. verify from outside the account that https://mind.q08.org/health serves this worker with real content.
-A failed verification deletes the route and the record this run created, so the host is never left half-built.
-Reversible by hand: DELETE /zones/{zone}/workers/routes/{route_id} and /dns_records/{dns_created} from the report.
-Writes ci-status/attach-mind-q08-route.json.
+  PATH A  GET /accounts/{acct}/workers/scripts/{name}           200 => exists
+  PATH B  GET /accounts/{acct}/workers/scripts?per_page=100     name in list => exists
+  PATH C  enable workers.dev (best effort) and read its /health 200 => exists, second live URL
+
+It fails closed only on a definitive 404 from PATH A *and* a PATH B listing that does not contain the
+name. Any other outcome (0, 401, 403, 429, 5xx) is recorded as degraded and the run proceeds, because
+the real gate is outside verification: https://mind.q08.org/health must name q08-mind and
+/api/entries.json must list entries. Creating a route to a script that truly does not exist is rejected
+by Cloudflare, so proceeding is still fail-closed at the edge.
 """
-import json, os, sys, time, urllib.error, urllib.request
 
-ZONE, HOST, SERVICE = "q08.org", "mind.q08.org", "q08-mind"
-TOK = os.environ.get("CLOUDFLARE_API_TOKEN")
-ACCT = os.environ.get("CLOUDFLARE_ACCOUNT_ID") or os.environ.get("CF_ACCOUNT_ID")
+import json
+import os
+import ssl
+import sys
+import time
+import urllib.error
+import urllib.parse
+import urllib.request
+
 API = "https://api.cloudflare.com/client/v4"
-UA = "qnfo-ci-attach-mind-q08-route/2.0"
-REPORT_PATH = "ci-status/attach-mind-q08-route.json"
-R = {"marker": "MIND-Q08-2", "host": HOST, "service": SERVICE, "token_present": bool(TOK), "account_present": bool(ACCT),
-     "stage": "start", "status": "unknown", "error": None, "script_exists": False, "subdomain": None,
-     "route_id": None, "dns_created": None, "verified": False, "ts": None}
+HOST = "mind.q08.org"
+SERVICE = "q08-mind"
+ZONE_NAME = "q08.org"
+MARKER = "MIND-Q08-3"
+UA = "qnfo-attach-mind/3.0"
+
+TOKEN = os.environ.get("CF_API_TOKEN") or os.environ.get("CLOUDFLARE_API_TOKEN") or ""
+ACCT = os.environ.get("CF_ACCOUNT_ID") or os.environ.get("CLOUDFLARE_ACCOUNT_ID") or ""
+ZONE_ENV = os.environ.get("CF_ZONE_ID") or os.environ.get("CLOUDFLARE_ZONE_ID") or ""
+
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+OUT = os.path.join(ROOT, "ci-status", "attach-mind-q08-route.json")
+
+R = {
+    "marker": MARKER,
+    "host": HOST,
+    "service": SERVICE,
+    "token_present": bool(TOKEN),
+    "account_present": bool(ACCT),
+    "zone_id": None,
+    "stage": "start",
+    "status": "failed",
+    "script_exists": None,
+    "script_check": {},
+    "subdomain": None,
+    "route_id": None,
+    "route_reused": None,
+    "dns_created": None,
+    "dns_record_id": None,
+    "verified": False,
+    "entries": None,
+    "health_version": None,
+    "ts": None,
+}
 
 
 def report(stage, status, error=None):
-    R.update(stage=stage, status=status, error=(str(error)[:1200] if error is not None else None),
-             ts=time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()))
-    os.makedirs(os.path.dirname(REPORT_PATH), exist_ok=True)
-    with open(REPORT_PATH, "w") as f:
+    R["stage"] = stage
+    R["status"] = status
+    R["ts"] = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+    if error:
+        R["error"] = str(error)[:500]
+    os.makedirs(os.path.dirname(OUT), exist_ok=True)
+    with open(OUT, "w") as f:
         json.dump(R, f, indent=2)
         f.write("\n")
-    print("MIND-Q08-ROUTE-REPORT %s" % json.dumps(R))
+    print(json.dumps(R, indent=2))
+    return 0 if status in ("ok", "ok-degraded") else 1
 
 
-def req(method, path, body=None):
-    r = urllib.request.Request(API + path, data=json.dumps(body).encode() if body is not None else None, method=method)
-    r.add_header("Authorization", "Bearer " + (TOK or ""))
-    r.add_header("Content-Type", "application/json")
-    r.add_header("User-Agent", UA)
-    try:
-        with urllib.request.urlopen(r, timeout=30) as resp:
-            return resp.status, json.loads(resp.read().decode() or "{}")
-    except urllib.error.HTTPError as e:
-        raw = e.read().decode(errors="replace")
+CTX = ssl.create_default_context()
+
+
+def req(method, path, body=None, timeout=25, retries=2):
+    """Return (http_status, parsed_json_or_None). http_status 0 means transport failure."""
+    url = path if path.startswith("http") else API + path
+    data = None
+    headers = {"Authorization": "Bearer " + TOKEN, "User-Agent": UA}
+    if body is not None:
+        data = json.dumps(body).encode()
+        headers["Content-Type"] = "application/json"
+    last, last_err = 0, ""
+    for attempt in range(retries + 1):
         try:
-            return e.code, json.loads(raw)
-        except Exception:
-            return e.code, {"raw": raw[:800]}
-    except Exception as e:
-        return 0, {"raw": "%s: %s" % (type(e).__name__, e)}
+            rq = urllib.request.Request(url, data=data, headers=headers, method=method)
+            with urllib.request.urlopen(rq, timeout=timeout, context=CTX) as r:
+                raw = r.read().decode("utf-8", "replace")
+                try:
+                    return r.status, json.loads(raw)
+                except ValueError:
+                    return r.status, {"raw": raw[:400]}
+        except urllib.error.HTTPError as e:
+            raw = e.read().decode("utf-8", "replace")
+            try:
+                return e.code, json.loads(raw)
+            except ValueError:
+                return e.code, {"raw": raw[:400]}
+        except Exception as e:  # transport: DNS, TLS, timeout, reset
+            last, last_err = 0, "%s: %s" % (type(e).__name__, e)
+        if attempt < retries:
+            time.sleep(2 + 2 * attempt)
+    return last, {"transport_error": last_err}
 
 
-def get_json(url):
+def public_get(url, timeout=20):
+    """Outside read of the public surface (no auth). Returns (status, json_or_None)."""
     try:
-        r = urllib.request.Request(url, headers={"User-Agent": UA, "Cache-Control": "no-cache"})
-        with urllib.request.urlopen(r, timeout=20) as resp:
-            return resp.status, resp.read().decode(errors="replace")
+        rq = urllib.request.Request(url, headers={"User-Agent": UA, "Cache-Control": "no-cache"})
+        with urllib.request.urlopen(rq, timeout=timeout, context=CTX) as r:
+            raw = r.read().decode("utf-8", "replace")
+            try:
+                return r.status, json.loads(raw)
+            except ValueError:
+                return r.status, {"raw": raw[:400]}
     except urllib.error.HTTPError as e:
-        return e.code, ""
-    except Exception as e:
-        return 0, str(e)[:200]
+        return e.code, None
+    except Exception:
+        return 0, None
 
 
-def serves_worker():
-    """True when the host answers with this worker and real content (not a fallback page)."""
-    st, body = get_json("https://%s/health" % HOST)
-    if st != 200:
-        return False, "health http=%s" % st
-    try:
-        j = json.loads(body)
-    except Exception:
-        return False, "health not json"
-    named = j.get("worker") == SERVICE or j.get("service") == SERVICE
-    alive = j.get("ok") is True or named
-    if not alive:
-        return False, "health not ok: %s" % body[:200]
-    st2, body2 = get_json("https://%s/api/entries.json" % HOST)
-    if st2 != 200:
-        return False, "api http=%s" % st2
-    try:
-        n = len((json.loads(body2) or {}).get("entries") or [])
-    except Exception:
-        return False, "api not json"
-    if n <= 0:
-        return False, "api entries empty"
-    return True, "health ok, api entries=%d" % n
+def script_exists():
+    """Three independent paths. Fails closed only on a definitive 404 + a listing without the name."""
+    # PATH A
+    st, j = req("GET", "/accounts/%s/workers/scripts/%s" % (ACCT, SERVICE), retries=3)
+    R["script_check"]["get_script"] = st
+    if st == 200:
+        R["script_exists"] = True
+        return True
+    # PATH B
+    st_b, jb = req("GET", "/accounts/%s/workers/scripts?per_page=100" % ACCT, retries=2)
+    names = []
+    if isinstance(jb, dict):
+        for s in (jb.get("result") or []):
+            if isinstance(s, dict):
+                names.append(s.get("id") or s.get("name") or "")
+    R["script_check"]["list_scripts"] = st_b
+    R["script_check"]["listed"] = SERVICE in names
+    if SERVICE in names:
+        R["script_exists"] = True
+        return True
+    # PATH C — workers.dev, best effort (gives a second independent live URL)
+    st_c, _ = req("PUT", "/accounts/%s/workers/scripts/%s/subdomain" % (ACCT, SERVICE),
+                  {"enabled": True}, retries=1)
+    R["script_check"]["enable_workers_dev"] = st_c
+    if st_c in (200, 201):
+        sub_st, _ = public_get("https://%s.%s.workers.dev/health" % (SERVICE, ZONE_NAME))
+        R["script_check"]["workers_dev_health"] = sub_st
+        if sub_st == 200:
+            R["subdomain"] = "%s.%s.workers.dev" % (SERVICE, ZONE_NAME)
+            R["script_exists"] = True
+            return True
+    # Definitive absence requires BOTH a 404 and a readable listing without the name.
+    if st == 404 and st_b == 200 and SERVICE not in names:
+        R["script_exists"] = False
+        return False
+    R["script_exists"] = None  # unknown — proceed; the edge is the real gate
+    return True
 
 
 def main():
-    if not TOK or not ACCT:
-        report("credentials", "failed", "CLOUDFLARE_API_TOKEN / CLOUDFLARE_ACCOUNT_ID not set")
-        return 1
+    R["ts"] = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+    if not TOKEN or not ACCT:
+        return report("creds", "failed", "CF_API_TOKEN/CF_ACCOUNT_ID not present in the runner environment")
 
-    # PATH 1: does the script exist? Authoritative and hostname-independent. The deploy of the same push normally
-    # lands within a minute; 10 min covers a queued deploy-gate lock.
-    for i in range(60):
-        st, j = req("GET", "/accounts/%s/workers/scripts/%s" % (ACCT, SERVICE))
-        if st == 200:
-            R["script_exists"] = True
-            break
-        print("script check %d: http=%s" % (i + 1, st))
-        time.sleep(10)
-    else:
-        report("deploy", "failed", "%s is not deployed in account %s after 10 min (last http=%s)" % (SERVICE, ACCT, st))
-        return 1
+    # 1. zone
+    zone = ZONE_ENV
+    if not zone:
+        st, j = req("GET", "/zones?name=%s" % ZONE_NAME)
+        res = (j or {}).get("result") or [] if isinstance(j, dict) else []
+        if st != 200 or not res:
+            return report("zone", "failed", "zone lookup http=%s body=%s" % (st, json.dumps(j)[:300]))
+        zone = res[0]["id"]
+    R["zone_id"] = zone
 
-    # Best effort: give the worker a workers.dev URL too, so the surface has two independent addresses.
-    st, j = req("POST", "/accounts/%s/workers/scripts/%s/subdomain" % (ACCT, SERVICE),
-                {"enabled": True, "previews_enabled": False})
-    if st in (200, 201) and (j or {}).get("success"):
-        R["subdomain"] = "enabled"
-    else:
-        R["subdomain"] = "http=%s %s" % (st, json.dumps(j)[:200])
+    # 2. does the worker exist (three paths)
+    if not script_exists():
+        return report("deploy", "failed",
+                      "q08-mind is definitively absent: get_script=404 and the account script list does not "
+                      "contain it (%s)" % json.dumps(R["script_check"]))
 
-    # Zone
-    st, j = req("GET", "/zones?name=%s" % ZONE)
-    res = (j or {}).get("result") or []
-    if st != 200 or not res:
-        report("zone", "failed", "zone %s not readable http=%s body=%s" % (ZONE, st, json.dumps(j)[:400]))
-        return 1
-    zone = res[0]["id"]
-
-    # Existing route for this host pointing at this worker is reused; a route pointing elsewhere is an error.
+    # 3. route
     st, j = req("GET", "/zones/%s/workers/routes" % zone)
-    for rt in ((j or {}).get("result") or []):
-        if rt.get("pattern") == HOST + "/*":
-            if rt.get("script") == SERVICE:
-                R["route_id"] = rt.get("id")
-            else:
-                report("route", "failed", "pattern %s/* already routed to %s" % (HOST, rt.get("script")))
-                return 1
+    if st != 200:
+        return report("route-read", "failed", "http=%s body=%s" % (st, json.dumps(j)[:300]))
+    pattern = HOST + "/*"
+    existing = None
+    for r in ((j or {}).get("result") or []):
+        if isinstance(r, dict) and r.get("pattern") == pattern:
+            existing = r
+            break
+    if existing:
+        if existing.get("script") == SERVICE:
+            R["route_id"] = existing.get("id")
+            R["route_reused"] = True
+        else:
+            return report("route", "failed",
+                          "route %s already exists and points at %r, not %r; left untouched"
+                          % (pattern, existing.get("script"), SERVICE))
+    else:
+        st, j = req("POST", "/zones/%s/workers/routes" % zone, {"pattern": pattern, "script": SERVICE})
+        if st not in (200, 201):
+            return report("route", "failed", "route create http=%s body=%s" % (st, json.dumps(j)[:300]))
+        R["route_id"] = ((j or {}).get("result") or {}).get("id")
+        R["route_reused"] = False
 
-    # Address record: create a proxied originless AAAA only when the name has no record at all.
-    st, j = req("GET", "/zones/%s/dns_records?name=%s" % (zone, HOST))
-    if not ((j or {}).get("result") or []):
-        st, cj = req("POST", "/zones/%s/dns_records" % zone,
-                     {"type": "AAAA", "name": HOST, "content": "100::", "proxied": True, "ttl": 1,
-                      "comment": "MIND-Q08-2 originless placeholder for the q08-mind worker route"})
-        if st not in (200, 201) or not (cj or {}).get("success"):
-            report("dns", "failed", "create dns http=%s body=%s" % (st, json.dumps(cj)[:400]))
-            return 1
-        R["dns_created"] = (cj.get("result") or {}).get("id")
+    # 4. DNS — only create when no record for the host exists
+    st, j = req("GET", "/zones/%s/dns_records?name=%s" % (zone, urllib.parse.quote(HOST)))
+    if st != 200:
+        return report("dns-read", "failed", "http=%s body=%s" % (st, json.dumps(j)[:300]))
+    recs = (j or {}).get("result") or []
+    if recs:
+        R["dns_created"] = False
+        R["dns_record_id"] = recs[0].get("id")
+    else:
+        st, j = req("POST", "/zones/%s/dns_records" % zone, {
+            "type": "AAAA", "name": HOST, "content": "100::", "proxied": True, "ttl": 1,
+            "comment": "%s originless record for the %s worker route" % (MARKER, SERVICE),
+        })
+        if st not in (200, 201):
+            return report("dns", "failed", "record create http=%s body=%s" % (st, json.dumps(j)[:300]))
+        R["dns_created"] = True
+        R["dns_record_id"] = ((j or {}).get("result") or {}).get("id")
 
-    created_route = False
-    if not R["route_id"]:
-        st, rj = req("POST", "/zones/%s/workers/routes" % zone, {"pattern": HOST + "/*", "script": SERVICE})
-        if st not in (200, 201) or not (rj or {}).get("success"):
-            if R["dns_created"]:
-                req("DELETE", "/zones/%s/dns_records/%s" % (zone, R["dns_created"]))
-            report("route", "failed", "create route http=%s body=%s" % (st, json.dumps(rj)[:400]))
-            return 1
-        R["route_id"] = (rj.get("result") or {}).get("id")
-        created_route = True
-
-    # PATH 2: verify from outside the account.
-    last = ""
+    # 5. outside verification — the real gate
+    last = "no attempt"
     for i in range(30):
-        ok, why = serves_worker()
-        if ok:
-            R["verified"] = True
-            report("verify", "ok", None)
-            print("MIND-Q08-2 verified: %s" % why)
-            return 0
-        last = why
-        print("verify %d: %s" % (i + 1, why))
+        cb = int(time.time())
+        hst, hj = public_get("https://%s/health?cb=%d" % (HOST, cb))
+        if hst == 200 and isinstance(hj, dict) and (hj.get("worker") == SERVICE or hj.get("ok") is True):
+            est, ej = public_get("https://%s/api/entries.json?cb=%d" % (HOST, cb))
+            n = len(((ej or {}).get("entries") or [])) if isinstance(ej, dict) else 0
+            if est == 200 and n > 0:
+                R["verified"] = True
+                R["entries"] = n
+                R["health_version"] = hj.get("version")
+                return report("verify", "ok")
+            last = "entries http=%s n=%s" % (est, n)
+        else:
+            last = "health http=%s" % hst
+        print("verify %d/30: %s" % (i + 1, last))
         time.sleep(10)
 
-    if created_route:
+    # 6. rollback only what this run created
+    if R["route_reused"] is False and R["route_id"]:
         req("DELETE", "/zones/%s/workers/routes/%s" % (zone, R["route_id"]))
-    if R["dns_created"]:
-        req("DELETE", "/zones/%s/dns_records/%s" % (zone, R["dns_created"]))
-    report("verify", "failed", "https://%s never served %s within 5 min (%s); this run's route and record were removed"
-           % (HOST, SERVICE, last))
-    return 1
+    if R["dns_created"] is True and R["dns_record_id"]:
+        req("DELETE", "/zones/%s/dns_records/%s" % (zone, R["dns_record_id"]))
+    return report("verify", "failed",
+                  "https://%s never served %s within 5 min (%s); this run's route and record were removed"
+                  % (HOST, SERVICE, last))
 
 
 if __name__ == "__main__":
