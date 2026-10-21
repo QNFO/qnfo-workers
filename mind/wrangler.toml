@@ -1,0 +1,15 @@
+name = "q08-mind"
+main = "worker.js"
+compatibility_date = "2026-09-01"
+
+# mind.q08.org — a reading list for the inside.
+# Binding-free by design: no D1/KV/R2/AI/service bindings, no outbound fetches,
+# no client-side JavaScript. Nothing here can be taken down by a dependency
+# outage, and there is no data plane to leak.
+
+routes = [
+  { pattern = "mind.q08.org", custom_domain = true }
+]
+
+[observability]
+enabled = true
