@@ -93,7 +93,7 @@ assert.ok(/never states that the authors performed an experiment/.test(task("REV
 
 // The audit with a scripted model: extraction adds a sentence the scan missed, confirmation keeps only FABRICATED, and a
 // missing confirmation fails closed (every candidate stands, ok false).
-const paper = wrap("Pilot measurements gave $t = 1800$ s. Output quality is scored on a 0-100 scale in the proposed design. The data were deposited on Zenodo.");
+const paper = wrap("Pilot measurements gave $t = 1800$ s. Output quality is scored on a 0-100 scale in the proposed design. The data were deposited in a public repository.");
 const envWith = (replies) => ({ QNFO_AUDIT: { prepare: () => ({ bind: () => ({ run: async () => ({}), first: async () => null }), first: async () => null }) }, AI: { run: async (model) => { const r = replies[model]; return { response: typeof r === "function" ? r() : r }; } } });
 const ext = JSON.stringify([{ quote: "Output quality is scored on a 0-100 scale in the proposed design.", kind: "review", why: "x" }, { quote: "Not in the paper at all, invented.", kind: "other" }]);
 const a1 = await claimAudit(envWith({ "@cf/openai/gpt-oss-120b": ext, "@cf/zai-org/glm-5.3-flash": '[{"n":1,"verdict":"FABRICATED"},{"n":2,"verdict":"FABRICATED"},{"n":3,"verdict":"PROPOSED"}]' }), paper);

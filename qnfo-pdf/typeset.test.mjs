@@ -58,7 +58,7 @@ const BIB = [
   "@misc{tateadelic,",
   "  author       = {Rowan Brad Quni-Gudzinas},",
   "  title        = {Tate's Thesis as a Template for Adelic Quantum Mechanics},",
-  "  howpublished = {Zenodo 10.5281/zenodo.21600741},",
+  "  howpublished = {10.5281/x.21600741},",
   "  year         = {2026}",
   "}",
   ""
@@ -88,7 +88,7 @@ const MD = [
 const META = {
   slug: "completeness-senses-levi-civita",
   authors: JSON.stringify(["Rowan Brad Quni-Gudzinas"]),
-  identifier: "10.5281/zenodo.22109086",
+  identifier: "10.5281/x.22109086",
   license: "QNFO-ULA-2.1",
   published: "2026-08-26",
   version: "1.1.1",
@@ -135,7 +135,7 @@ test("the reference list carries the full entry: authors, title, venue, volume, 
   assert.match(text, /Über einige Lösungen/);
   assert.match(text, /Acta Mathematica, vol\. 41, pp\. 271–284, 1916/);
   assert.match(text, /J\. H\. Conway\. On Numbers and Games\. London: Academic Press, 1976\./);
-  assert.match(r.refsHtml, /doi:<a href="https:\/\/doi\.org\/10\.5281\/zenodo\.21600741">/);
+  assert.match(r.refsHtml, /doi:<a href="https:\/\/doi\.org\/10\.5281\/x\.21600741">/);
   assert.match(r.refsHtml, /class="ref-num">\[1\]</);
   assert.ok(!/\\"|\{\}|--/.test(text), "no raw LaTeX survives into the reference text");
 });
@@ -151,7 +151,7 @@ test("the title block carries author, affiliations, ORCID, DOI, licence, keyword
   assert.match(r.front, /class="affiliation"><sup>1<\/sup>QNFO Research</);
   assert.match(r.front, /class="affiliation"><sup>2<\/sup>Independent</);
   assert.match(r.front, /https:\/\/orcid\.org\/0009-0002-4317-5604/);
-  assert.match(r.front, /https:\/\/doi\.org\/10\.5281\/zenodo\.22109086/);
+  assert.match(r.front, /https:\/\/doi\.org\/10\.5281\/x\.22109086/);
   assert.match(r.front, /QNFO-ULA-2\.1/);
   assert.match(r.front, /Ostrowski theorem/);
   assert.match(r.front, /mathematics/);
@@ -298,12 +298,12 @@ test("a body H1 that repeats the title is dropped (title appears once)", () => {
 });
 
 test("the print header and footer carry the short title, the author, the DOI and page x / y", () => {
-  const tpl = buildPrintTemplates({ title: "Completeness Senses and the Levi-Civita Field", authors: "Rowan Brad Quni-Gudzinas", doi: "10.5281/zenodo.22109086", license: "QNFO-ULA-2.1" });
+  const tpl = buildPrintTemplates({ title: "Completeness Senses and the Levi-Civita Field", authors: "Rowan Brad Quni-Gudzinas", doi: "10.5281/x.22109086", license: "QNFO-ULA-2.1" });
   assert.match(tpl.headerTemplate, /Completeness Senses/);
   assert.match(tpl.headerTemplate, /Rowan Brad Quni-Gudzinas/);
   assert.match(tpl.footerTemplate, /class="pageNumber"/);
   assert.match(tpl.footerTemplate, /class="totalPages"/);
-  assert.match(tpl.footerTemplate, /doi:10\.5281\/zenodo\.22109086/);
+  assert.match(tpl.footerTemplate, /doi:10\.5281\/x\.22109086/);
   const long = buildPrintTemplates({ title: "x".repeat(200) });
   assert.match(long.headerTemplate, /…/);
 });
@@ -328,7 +328,7 @@ test("the rendered page is UTF-8 clean (no mojibake) and declares citation metad
   assert.ok(!/â€|Ã[\u0080-\u00BF]|Â[\u0080-\u00BF]/.test(html), "no double-encoded characters");
   assert.match(html, /<meta name="citation_title" content="Completeness Senses and the Levi-Civita Field">/);
   assert.match(html, /<meta name="citation_author" content="Rowan Brad Quni-Gudzinas">/);
-  assert.match(html, /<meta name="citation_doi" content="10\.5281\/zenodo\.22109086">/);
+  assert.match(html, /<meta name="citation_doi" content="10\.5281\/x\.22109086">/);
   assert.match(html, /@page \{ size: A4/);
   assert.ok(!/\[@/.test(html), "no raw citation marker anywhere in the page, including the description tag");
 });

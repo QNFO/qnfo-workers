@@ -26,11 +26,11 @@ db.prepare("INSERT INTO remediation_contracts (class, issue_id, verify_probe, ve
 db.prepare("INSERT INTO remediation_contracts (class, issue_id, verify_probe, verify_transport, status, attempts, last_verdict) VALUES ('issue-2277', 2277, ?, 'code-read', 'active', 25, 'fail')").run(OLD2277);
 db.prepare("INSERT INTO remediation_contracts (class, issue_id, verify_probe, verify_transport, status) VALUES ('issue-9', 9, 'x', 'code-read', 'active')").run();
 const ins = db.prepare("INSERT INTO social_threads (slug, title, posts, status, created_at, doi) VALUES (?, ?, ?, ?, ?, ?)");
-const P184 = JSON.stringify(["Most energy in hybrid computing may be spent outside the chip.", "Author: Rowan Brad Quni-Gudzinas. Paper: https://doi.org/10.5281/zenodo.23122792. Open question?"]);
+const P184 = JSON.stringify(["Most energy in hybrid computing may be spent outside the chip.", "Author: Rowan Brad Quni-Gudzinas. Paper: https://doi.org/10.5281/x.23122792. Open question?"]);
 ins.run("scan-zenodo.23122792", "Energy model", P184, "suppressed", "2026-10-07 06:01:47", null);
-ins.run("scan-zenodo.22728635", "ML bound", JSON.stringify(["Check the open preprint: https://doi.org/10.5281/zenodo.22728635."]), "rejected", "2026-10-09 06:00:45", null);
+ins.run("scan-zenodo.22728635", "ML bound", JSON.stringify(["Check the open preprint: https://doi.org/10.5281/x.22728635."]), "rejected", "2026-10-09 06:00:45", null);
 ins.run("scan-zenodo.23170193", "Empty", "[]", "suppressed", "2026-10-06 06:00:59", null);
-ins.run("posted-old", "Posted", JSON.stringify(["DOI: 10.5281/zenodo.21803677. What then?"]), "posted", "2026-09-20 06:00:00", null);
+ins.run("posted-old", "Posted", JSON.stringify(["DOI: 10.5281/x.21803677. What then?"]), "posted", "2026-09-20 06:00:00", null);
 ins.run("clean-1", "Clean", JSON.stringify(["A clean post with doi 10.1103/x.y."]), "queued", "2026-10-11 06:00:00", "10.1103/x.y");
 const cl = db.prepare("INSERT INTO fleet_changelog (worker, version, level, released_at, title, subject, summary, marker) VALUES (?, ?, 'minor', '2026-10-10', ?, ?, ?, ?)");
 cl.run("qnfo-gateway", "3.14.0-doi-scrub", "Scrub Zenodo/10.5281 from gateway, dashboard (3.14.0)", "NOZ-DOI-1: scrub Zenodo/10.5281 from gateway", "", "NOZ-DOI-1");
@@ -62,11 +62,11 @@ ok(db.prepare("SELECT kind, disposition, issue_id FROM control_registry WHERE co
 ok(db.prepare("SELECT COUNT(*) AS n FROM decision_log").get().n === 1, "one decision_log row");
 
 // Any producer after the migration: /queue, /compose, a repair rewrite.
-db.prepare("INSERT INTO social_threads (slug, title, posts, status) VALUES ('scan-zenodo.999', 'T', ?, 'queued')").run(JSON.stringify(["Read it at https://zenodo.org/records/999"]));
+db.prepare("INSERT INTO social_threads (slug, title, posts, status) VALUES ('scan-zenodo.999', 'T', ?, 'queued')").run(JSON.stringify(["Read it at https://doi.org/10.5281/records/999"]));
 const g = db.prepare("SELECT * FROM social_threads WHERE id = (SELECT MAX(id) FROM social_threads)").get();
 ok(g.slug === "noz-guarded-" + g.id && g.posts === "[]" && g.status === "rejected", "insert trigger neutralises a new queued row from any producer", g);
 db.prepare("INSERT INTO social_threads (slug, title, posts, status) VALUES ('draft-x', 'T', ?, 'draft')").run(JSON.stringify(["fine text"]));
-db.prepare("UPDATE social_threads SET posts = ? WHERE slug = 'draft-x'").run(JSON.stringify(["now with DOI 10.5281/zenodo.123"]));
+db.prepare("UPDATE social_threads SET posts = ? WHERE slug = 'draft-x'").run(JSON.stringify(["now with DOI 10.5281/x.123"]));
 const u = db.prepare("SELECT * FROM social_threads WHERE id = (SELECT MAX(id) FROM social_threads)").get();
 ok(u.posts === "[]" && u.status === "rejected" && u.slug === "noz-guarded-" + u.id, "update trigger neutralises a rewrite that adds the registrar", u);
 db.prepare("INSERT INTO social_threads (slug, title, posts, status) VALUES ('ok-2', 'T', ?, 'queued')").run(JSON.stringify(["third-party doi 10.1038/abc"]));
@@ -77,7 +77,7 @@ ok(ch.every((r) => !/zenodo|10\.5281/i.test([r.title, r.subject, r.summary, r.ma
 ok(ch.find((r) => r.worker === "qnfo-gateway").title === "Scrub retired-registrar from gateway, dashboard (3.14.0)", "changelog title reworded", ch.find((r) => r.worker === "qnfo-gateway").title);
 ok(ch.find((r) => r.worker === "qnfo-ops").summary === "clean summary", "a clean changelog row is untouched");
 ok(db.prepare("SELECT COUNT(*) AS n FROM fleet_changelog_bak_nozdoi").get().n === 2, "two changelog rows backed up");
-db.prepare("INSERT INTO fleet_changelog (worker, version, level, released_at, title, summary) VALUES ('x', '1.0.0', 'minor', '2026-10-12', 'NO-ZENODO-DOI follow-up', 'drops zenodo.org links')").run();
+db.prepare("INSERT INTO fleet_changelog (worker, version, level, released_at, title, summary) VALUES ('x', '1.0.0', 'minor', '2026-10-12', 'NO-ZENODO-DOI follow-up', 'drops doi.org/10.5281 links')").run();
 const nx = db.prepare("SELECT title, summary FROM fleet_changelog WHERE worker = 'x'").get();
 ok(nx.title === "NO-RETIRED-REGISTRAR-DOI follow-up" && nx.summary === "drops retired-registrar links", "a new changelog row is reworded on insert", nx);
 db.prepare("UPDATE fleet_changelog SET summary = 'enriched: Zenodo gate' WHERE worker = 'qnfo-ops'").run();

@@ -14637,7 +14637,7 @@ var katex = {
 // The renderer never invents metadata: a field that is absent in the frontmatter, the in-body
 // byline block or the D1 row is left out rather than guessed.
 
-const RENDERER_VERSION = "2.2.0-typeset-pro-3";
+const RENDERER_VERSION = "2.3.0-no-registrar";
 
 /* ------------------------------------------------------------------ */
 /* escaping                                                            */
@@ -14997,13 +14997,12 @@ function formatBibEntry(entry) {
     // misc / online / unpublished / preprint / software / dataset
     const seg = [titlePart(false)];
     const howRaw = f.howpublished ? plainOf(f.howpublished) : "";
-    // a howpublished that is only an identifier (arXiv:…, Zenodo 10.5281/…) is a link, not a venue:
+    // a howpublished that is only an identifier (arXiv:…, a bare DOI) is a link, not a venue:
     // name the repository instead of printing a bare number
     const isId = /(10\.\d{4,9}\/|arxiv[:\s]*\d{4}\.)/i.test(howRaw);
     let venue = isId ? "" : howRaw;
     if (!venue) {
       if (/arxiv[:\s]*\d{4}\./i.test(howRaw)) venue = "arXiv preprint";
-      else if (/zenodo/i.test(howRaw)) venue = "Zenodo";
       else if (f.publisher) venue = plainOf(f.publisher);
       else if (f.institution) venue = plainOf(f.institution);
     }
@@ -15411,7 +15410,7 @@ function buildMeta(fm, byline, opts) {
       : toList(pick(fm.affiliation, byline.affiliation, byline.affiliations));
   const keywords = toList(D.keywords).length ? toList(D.keywords) : toList(fm.keywords);
   const subjects = toList(D.categories).length ? toList(D.categories) : toList(fm.categories);
-  const doi = pick(D.doi, D.zenodo_doi, D.identifier, fm.doi, byline.doi);
+  const doi = pick(D.doi, D.identifier, fm.doi, byline.doi);
   const dateRaw = pick(D.published, fm.date, byline.date);
   return {
     slug: pick(D.slug, fm.slug, opts && opts.slug),
@@ -15894,7 +15893,7 @@ function buildPrintTemplates(meta) {
 }
 
 // worker.js
-var VERSION = "1.5.2-typeset-biblio-3"; /* 1.5.2 TYPESET-PRO-3 (2026-10-18, red-team round 2): 511 of 624 public records carry their bibliography as a numbered list in their own body WITHOUT citation keys, so 1.5.1 left it in body prose; parseBodyReferences() now typesets an unkeyed list too, guarded by "closing section + three entries + a majority carrying a year or DOI". Ships scripts/pdf_corpus_audit.mjs, the executable guard named in failure_modes.pdf-typeset-bibliography-dropped. 1.5.1 TYPESET-PRO-2: a citation wrapped across a source line break printed as raw text; most papers bibliographies are the numbered list in their own body; an unmatched key was flagged even where no bibliography exists. 1.5.0 TYPESET-PRO-1 (owner directive professional typesetting with full bibliographic information and author/affiliation): title block with authors/affiliations/identifiers, BibTeX resolution from R2, numbered citations, hanging-indent reference list, live running head and page numbers. */
+var VERSION = "1.6.0-no-registrar"; /* 1.6.0-no-registrar NO-REGISTRAR-1 (2026-10-21): PDF metadata reads doi and identifier only; the registrar column and venue name are gone */ /* 1.5.2 TYPESET-PRO-3 (2026-10-18, red-team round 2): 511 of 624 public records carry their bibliography as a numbered list in their own body WITHOUT citation keys, so 1.5.1 left it in body prose; parseBodyReferences() now typesets an unkeyed list too, guarded by "closing section + three entries + a majority carrying a year or DOI". Ships scripts/pdf_corpus_audit.mjs, the executable guard named in failure_modes.pdf-typeset-bibliography-dropped. 1.5.1 TYPESET-PRO-2: a citation wrapped across a source line break printed as raw text; most papers bibliographies are the numbered list in their own body; an unmatched key was flagged even where no bibliography exists. 1.5.0 TYPESET-PRO-1 (owner directive professional typesetting with full bibliographic information and author/affiliation): title block with authors/affiliations/identifiers, BibTeX resolution from R2, numbered citations, hanging-indent reference list, live running head and page numbers. */
 function pdfHeaders(slug) {
   return {
     "Content-Type": "application/pdf",
@@ -15983,7 +15982,7 @@ var SCHOLAR_PDF_MAX_BYTES = 5 * 1024 * 1024;
 var PDF_FAIL_SKIP_AFTER = 3;
 // PDF-META-PLUMB-1: the bibliographic record the page already holds. "\"references\"" is a SQLite reserved word and must stay quoted
 // (D1-QUOTED-RESERVED-COLS-1).
-var PDF_META_COLUMNS = "slug, title, subtitle, body_md, authors, abstract, doi, zenodo_doi, identifier, license, keywords, version, published, paper_type, journal, pages, categories, domains, r2_path, updated_at, \"references\" AS bib";
+var PDF_META_COLUMNS = "slug, title, subtitle, body_md, authors, abstract, doi, identifier, license, keywords, version, published, paper_type, journal, pages, categories, domains, r2_path, updated_at, \"references\" AS bib";
 function pdfBacklogBatch(env) {
   var n = parseInt(env && env.PDF_BACKLOG_BATCH, 10);
   return n > 0 && n <= 20 ? n : 6;
@@ -16008,9 +16007,8 @@ function pdfList(v) {
 function buildPaperMeta(row) {
   row = row || {};
   var doiRaw = String(row.doi || "").trim();
-  var zen = String(row.zenodo_doi || "").trim();
   var ident = String(row.identifier || "").trim();
-  var doi = /^10\./.test(doiRaw) ? doiRaw : (/^10\./.test(zen) ? zen : (/^10\./.test(ident) ? ident : ""));
+  var doi = /^10\./.test(doiRaw) ? doiRaw : (/^10\./.test(ident) ? ident : "");
   return {
     slug: row.slug || "",
     title: row.title || "",
@@ -16327,7 +16325,7 @@ var worker_default = {
           if (j && (j.meta || j.authors || j.doi)) {
             const src = j.meta || j;
             row = Object.assign(row, {
-              authors: src.authors, doi: src.doi, zenodo_doi: src.zenodo_doi, identifier: src.identifier,
+              authors: src.authors, doi: src.doi, identifier: src.identifier,
               license: src.license, keywords: src.keywords, categories: src.categories, version: src.version,
               published: src.published, paper_type: src.paper_type, subtitle: src.subtitle, journal: src.journal,
               pages: src.pages, abstract: src.abstract, r2_path: src.r2_path, bib: j.bibtex || src.bib

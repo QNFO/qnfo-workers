@@ -38,14 +38,12 @@ on:
           - delete-d1
           - unbind-service
           - gen-activitypub-key
-          - noz-scrub-bodies
-          - noz-scrub-graph
       target:
         description: "worker name (worker-history, delete-worker), KV namespace id (kv-secret-scan), index name (delete-vectorize-index) ops-workspace path (r2-get) or zone (zaraz-remove-tool) or database name (d1-backup, delete-d1) or WORKER:BINDING (unbind-d1, unbind-service)"
         required: false
         default: ""
       model:
-        description: "model filter (gateway-logs), tool match (zaraz-remove-tool), or dry|live for zaraz-set-ga4, spare-domain-canon, noz-scrub-bodies and noz-scrub-graph"
+        description: "model filter (gateway-logs), tool match (zaraz-remove-tool), or dry|live for zaraz-set-ga4 and spare-domain-canon"
         required: false
         default: ""
       gateway:
@@ -66,7 +64,7 @@ jobs:
   run:
     # RUNNER-PIN-2 (2026-10-20, WORKFLOW-FAILURE-AUDIT-1): ubuntu-latest becomes Ubuntu 26 by 2026-11-19 (a notice on every job meanwhile); pinned to ubuntu-24.04 until an ubuntu-26.04 trial run is green.
     runs-on: ubuntu-24.04
-    # 60 (was 15): noz-scrub-graph live (run 136, 2026-10-12) writes about 3,000 D1 statements one REST call at a time and was
+    # 60 (was 15): a graph-wide live action (run 136, 2026-10-12) wrote about 3,000 D1 statements one REST call at a time and was
     # cancelled by the 15-minute limit with the scrub half done; every action here is re-runnable, so a long run is cheap to
     # finish and expensive to cut short.
     timeout-minutes: 60

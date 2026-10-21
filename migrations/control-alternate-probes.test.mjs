@@ -277,7 +277,7 @@ const BREAKS = {
   "zenodo-enabled": [
     ["a Zenodo switch is on again", "INSERT INTO ops_config (key, value) VALUES ('zenodo_enabled', '1');", /Zenodo switch/],
     ["nothing published in 48 h", "DELETE FROM research_queue;", /no paper/],
-    ["a published paper carries a Zenodo DOI", "UPDATE research_queue SET doi = '10.5281/zenodo.1';", /Zenodo DOI/]
+    ["a published paper carries a Zenodo DOI", "UPDATE research_queue SET doi = '10.5281/x.1';", /Zenodo DOI/]
   ],
   "social-weekly-caps": [
     ["two posts on one channel an hour apart", `INSERT INTO social_media_posts (id, platform, published_at) VALUES ('p9', 'buffer-x', '${iso(60 * 9)}');`, /under 6 h/],
