@@ -40,6 +40,7 @@ QUIET_H = 6          # a tracked group quiet this long passes its probe and its 
 FILE_H = QUIET_H - 0.5   # a group is filed only while quieter than this; the margin keeps a group the probe would close in the
                          # same cycle (fleet_issue_dispatch lags Cloudflare by up to one 10-minute refresh) from opening at all
 REFILE_H = 24        # issue_refile_reopen reopens a title closed within this window; the bridge never inserts into it blind
+CHURN_LIMIT = 2      # do not re-file a CF-OBS-ISSUE-1 row that has already reopened more than this many times in 24 hours
 NOISE = ("potential vulnerability scan",)
 MAX_NEW = 15         # bound new issues per run so a burst cannot flood the tracker
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -134,6 +135,19 @@ def _file_and_resolve(d1, cf, now, res):
             res["errors"] += 1
             print(json.dumps({"evt": "cf-obs-bridge:closed-row", "id": cid, "error": str(e)[:200]}))
             continue
+        if closed_row:
+            closed_id = int(closed_row[0]["id"])
+            try:
+                r = d1("SELECT COUNT(*) AS n FROM issue_lifecycle WHERE event = 'reopened' AND issue_id = ?1 "
+                       "AND ts > strftime('%Y-%m-%dT%H:%M:%SZ', 'now', '-24 hours')", [closed_id])
+                reopen_count = int(r[0]["n"]) if r else 0
+            except Exception as e:  # noqa: BLE001
+                res["errors"] += 1
+                print(json.dumps({"evt": "cf-obs-bridge:churn-count", "id": cid, "error": str(e)[:200]}))
+                continue
+            if reopen_count > CHURN_LIMIT:
+                res["held_closed"] += 1
+                continue
         if closed_row and int(it.get("lastObserved") or 0) <= int(closed_row[0]["updated_at"]):
             res["held_closed"] += 1
             continue
