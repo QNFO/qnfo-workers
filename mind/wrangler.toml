@@ -6,6 +6,9 @@ compatibility_date = "2026-09-01"
 # Binding-free by design: no D1/KV/R2/AI/service bindings, no outbound fetches,
 # no client-side JavaScript. Nothing here can be taken down by a dependency
 # outage, and there is no data plane to leak.
+# MIND-Q08-2 (2026-10-21): redeploy nudge so `wrangler deploy` materialises the
+# custom_domain route. The Worker exists live but the hostname was never bound
+# (mind.q08.org -> HTTP 530, fleet_graph domain node worker=null).
 
 routes = [
   { pattern = "mind.q08.org", custom_domain = true }
