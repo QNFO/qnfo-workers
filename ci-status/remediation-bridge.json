@@ -1,8 +1,231 @@
 {
- "ok": false,
+ "ok": true,
  "marker": "REMEDIATION-CONTRACT-BRIDGE-1",
- "error": "The read operation timed out",
- "head": "39c74535c8ef80ff14fc31324ff6c58060d7700a",
+ "probe_map_entries": 44,
+ "open_issues": 172,
+ "with_contract_before": 172,
+ "upgraded_sentinel_to_active": 0,
+ "inserted_active": 0,
+ "inserted_needs_machine_probe": 0,
+ "active_contracts": 682,
+ "active_with_executable_probe": 488,
+ "active_with_prose_probe": 194,
+ "prose_probe_contracts": [
+  {
+   "class": "issue-2017",
+   "issue_id": 2017,
+   "reason": "not-a-select"
+  },
+  {
+   "class": "issue-2305",
+   "issue_id": 2305,
+   "reason": "not-a-select"
+  },
+  {
+   "class": "issue-2342",
+   "issue_id": 2342,
+   "reason": "not-a-select"
+  },
+  {
+   "class": "issue-2397",
+   "issue_id": 2397,
+   "reason": "not-a-select"
+  },
+  {
+   "class": "issue-2402",
+   "issue_id": 2402,
+   "reason": "not-a-select"
+  },
+  {
+   "class": "issue-2403",
+   "issue_id": 2403,
+   "reason": "not-a-select"
+  },
+  {
+   "class": "issue-2404",
+   "issue_id": 2404,
+   "reason": "not-a-select"
+  },
+  {
+   "class": "issue-2405",
+   "issue_id": 2405,
+   "reason": "not-a-select"
+  },
+  {
+   "class": "issue-2407",
+   "issue_id": 2407,
+   "reason": "not-a-select"
+  },
+  {
+   "class": "belief-deploy-loop-attempts-every-target",
+   "issue_id": null,
+   "reason": "not-a-select"
+  },
+  {
+   "class": "fm-honeypot-named-for-autofill",
+   "issue_id": null,
+   "reason": "not-a-select"
+  },
+  {
+   "class": "fm-math-delim-pairing-shift",
+   "issue_id": null,
+   "reason": "not-a-select"
+  },
+  {
+   "class": "issue-2480",
+   "issue_id": 2480,
+   "reason": "not-a-select"
+  },
+  {
+   "class": "fm-factcheck-waits-for-slowest",
+   "issue_id": null,
+   "reason": "not-a-select"
+  },
+  {
+   "class": "fm-code-read-stale-checkout",
+   "issue_id": null,
+   "reason": "not-a-select"
+  },
+  {
+   "class": "fm-write-200-only",
+   "issue_id": null,
+   "reason": "not-a-select"
+  },
+  {
+   "class": "fm-watchdog-action-blind",
+   "issue_id": null,
+   "reason": "not-a-select"
+  },
+  {
+   "class": "fm-patch-calls-undefined-helper",
+   "issue_id": null,
+   "reason": "not-a-select"
+  },
+  {
+   "class": "fm-second-path-flagged-non-canonical",
+   "issue_id": null,
+   "reason": "not-a-select"
+  },
+  {
+   "class": "fm-companion-context-invented",
+   "issue_id": null,
+   "reason": "not-a-select"
+  },
+  {
+   "class": "fm-blockquote-quote-unchecked",
+   "issue_id": null,
+   "reason": "not-a-select"
+  },
+  {
+   "class": "fm-exec-log-shared-signature",
+   "issue_id": null,
+   "reason": "not-a-select"
+  },
+  {
+   "class": "fm-ci-excerpt-noise-first",
+   "issue_id": null,
+   "reason": "not-a-select"
+  },
+  {
+   "class": "fm-companion-analysis-judged-as-reporting",
+   "issue_id": null,
+   "reason": "not-a-select"
+  },
+  {
+   "class": "fm-companion-final-text-unread",
+   "issue_id": null,
+   "reason": "not-a-select"
+  },
+  {
+   "class": "fm-companion-split-lede-uncounted",
+   "issue_id": null,
+   "reason": "not-a-select"
+  },
+  {
+   "class": "fm-companion-length-lede-undercount",
+   "issue_id": null,
+   "reason": "not-a-select"
+  },
+  {
+   "class": "fm-companion-reasoning-stated-as-fact",
+   "issue_id": null,
+   "reason": "not-a-select"
+  },
+  {
+   "class": "issue-2521",
+   "issue_id": 2521,
+   "reason": "not-a-select"
+  },
+  {
+   "class": "issue-2521-radar",
+   "issue_id": 2521,
+   "reason": "not-a-select"
+  },
+  {
+   "class": "issue-2521-intent",
+   "issue_id": 2521,
+   "reason": "not-a-select"
+  },
+  {
+   "class": "issue-2521-outreach",
+   "issue_id": 2521,
+   "reason": "not-a-select"
+  },
+  {
+   "class": "issue-2538",
+   "issue_id": 2538,
+   "reason": "not-a-select"
+  },
+  {
+   "class": "fm-companion-analysis-line-misplaced",
+   "issue_id": null,
+   "reason": "not-a-select"
+  },
+  {
+   "class": "fm-companion-critic-no-date",
+   "issue_id": null,
+   "reason": "not-a-select"
+  },
+  {
+   "class": "fm-companion-ground-ascii-names",
+   "issue_id": null,
+   "reason": "not-a-select"
+  },
+  {
+   "class": "fm-companion-symbol-draft-discarded",
+   "issue_id": null,
+   "reason": "not-a-select"
+  },
+  {
+   "class": "fm-companion-year-range-flagged",
+   "issue_id": null,
+   "reason": "not-a-select"
+  },
+  {
+   "class": "fm-companion-edit-drops-analysis-line",
+   "issue_id": null,
+   "reason": "not-a-select"
+  },
+  {
+   "class": "fm-companion-century-ordinal-flagged",
+   "issue_id": null,
+   "reason": "not-a-select"
+  }
+ ],
+ "contracts_needs_machine_probe": 34,
+ "open_issues_without_active_contract": 9,
+ "residual_gap_ids": [
+  2826,
+  2827,
+  100435,
+  100438,
+  100439,
+  100440,
+  2758,
+  100436,
+  100437
+ ],
+ "head": "3b9b246864ced2e1345a72a80cca841d96d2e7b5",
  "job_status": "success",
- "ts": "2026-10-21T13:54:48Z"
+ "ts": "2026-10-21T13:55:38Z"
 }
