@@ -1081,7 +1081,7 @@ function secretEq(a, b) {
 }
 __name(secretEq, "secretEq");
 // VERSION-LINE-SPLIT-1 (agent_issues 100220): the release notes sit one per line below this statement, newest first, so a VERSION bump is a one-line patch; add a new note as the first line under it.
-var VERSION = "0.44.3-codeagent";
+var VERSION = "0.44.4-pr-issue-link"; // 0.44.4 PR-ISSUE-LINK-1: a fleet PR references its GitHub issue (Refs #N from gh_issue_links).
 /* 0.44.1 DEFERRAL-MEASURED-1 (2026-10-20, agent_issues 2954, 100245, 100246, pillar autonomy; patch): the remediation tick reads a measured pending (a number against a bound: "pending: ... reads 0.5058 (target <= 0.5)") as a verdict, as the consumer and the D1 relapse trigger already did, instead of deferring it for ever (rtIsMeasuredPending). deferral-measured.test.mjs. */ /* 0.42.0 DEPLOY-ALL-MERGES-1 (2026-10-20, owner directive "The system shall always deploy all merges automatically."; pillar core; minor: a decision the loop now takes on its own): DEPLOY-DRIFT-CF-1 measured and redeployed only the workers qnfo-ops /ops/deploy may take, so a merge to a control-plane worker (qnfo-fleet-control, qnfo-ops, qnfo-deploy-guard, qnfo-ai, qnfo-gateway, qnfo-observability) or a container worker (qnfo-code-orchestrator, qnfo-containers-pilot) whose canonical run was cancelled, skipped or failed stayed behind main with nothing to notice it (8 rows read "skip" in deploy_drift_cf at 05:30Z). Those workers are now targets too: main ahead of live for 45 minutes, no active run of the owning workflow and the live script confirmed behind, the tick dispatches canonical-deploy.yml with workers=<name> (canary and automatic revert on the runner) or the container worker's own workflow, at most 2 a tick and once per main VERSION an hour (ddcRunner, ddcDispatchPending). Metric merges_undeployed_over_60m (migrations/2026-10-20-deploy-all-merges.sql). deploy-drift-cf.test.mjs 14. */ /* 0.41.2 EXTERNAL-HTTPS-MASTODON-HOST-1 (2026-10-19, agent_issues 2925 INTEG-MASTODON-VERIFY-1; pillar autonomy; patch): RT_HTTP_HOSTS gains mstdn.science, the public Mastodon instance whose unauthenticated account lookup (GET /api/v1/accounts/lookup) qnfo-social already reads (MASTODON-PUBLIC-STATS-1), so the issue closing probe, which was parked probe-not-machine-executable on "host not allowed", can run. The rest of rtHttpSpec is unchanged: https only, GET or HEAD, no credentials, no redirect followed, 10 s, 1 MB; a host not on the list is still refused. */ /* 0.41.1 POOL-BOUND-SOURCES-1 (issue 100213, human_actions 107; patch): POOL-BOUND-1 parks notebook extractions (idea_proposals name owner-corpus) like any generated row and never parks a row an owner directive queued directly (source idea, chat, operator-prime). 0.41.0 REOPEN-LIVE-PATH-3 (issue 100271): the remediation tick files one deduped PROBE-NEEDED-1 issue per open issue left without a live contract. 0.40.1 VERSION-LINE-NOTES-1 (2026-10-19, agent_issues 100243, pillar autonomy; patch, a comment moved): the release notes of every earlier version rode on this line (178 notes, about 200,000 chars), so a version bump of this worker was an 820,000-char patch (worker and mirror, removed and added): 12 code tasks ended on the publisher size cap on 2026-10-19 and three issues were exhausted for three days. They are in git history (git log -S '<release tag>' -- qnfo-fleet-control/worker.js); the changelog is built from the deploy ledger and commits, and the guards read only the quoted version string. A new note goes on this line and stays short. */
 /* 0.44.0 GH-WEBHOOK-INTAKE-1 and GH-APP-FLEET-2 (2026-10-20, pillar autonomy; agent_issues 2582 and 2596; minor: two new routes). POST /gh/webhook receives pull_request, check_suite and push events for QNFO/qnfo-workers, verifies X-Hub-Signature-256 against GH_WEBHOOK_SECRET (503 and nothing accepted while it is unset), records each delivery once (cloud_ops_events kind gh-webhook, id gh-webhook-<delivery>) and runs the merge lane at once for a check_suite that completed with success or a pull request opened, reopened or ready, debounced to one run a minute; the 10-minute poll stays as the second path. POST /gh-app/token is the internal broker for the other GitHub-token workers: a service binding whose props.caller is a listed fleet worker gets the cached installation token (never the personal one, never logged); GET /gh-app reports broker service-binding. Registering the webhook on GitHub and converting each worker are the filed follow-ups. */
 /* 0.43.0 WORKFLOW-FAILURE-INTAKE-1 (2026-10-20, agent_issues 100295, pillar autonomy; minor: a new loop step): each 10-minute tick reads the newest workflow runs on main, keeps every workflow's latest decided conclusion in workflow_main_state, records a failing run with its failed job and step in workflow_failures, files one WORKFLOW-FAILED-1: <workflow> issue with a d1-query probe, and closes it with close_evidence when a later main run succeeds; ops_config workflow_failure_intake = off stops it. */
@@ -2818,6 +2818,19 @@ function evGh(env) {
   return { "Authorization": "Bearer " + env.GITHUB_TOKEN, "User-Agent": "qnfo-fleet-control/evolve", "Accept": "application/vnd.github+json", "X-GitHub-Api-Version": "2022-11-28", "Content-Type": "application/json" };
 }
 __name(evGh, "evGh");
+// PR-ISSUE-LINK-1 (0.44.4): the agent_issues id a code task serves ("[issue #N]" goal prefix, or the ct_imN intake id), and its GitHub mirror number.
+function cmIssueIdOf(t) {
+  var m = /^\[issue #(\d{1,9})\]/.exec(String(t && t.goal || "")) || /^ct_im(\d{1,9})$/.exec(String(t && t.id || ""));
+  return m ? Number(m[1]) : null;
+}
+__name(cmIssueIdOf, "cmIssueIdOf");
+async function cmIssueGhRef(env, t) {
+  var id = cmIssueIdOf(t);
+  if (!id) return null;
+  try { var r = await env.AUDIT.prepare("SELECT gh_number FROM gh_issue_links WHERE issue_id = ?").bind(id).first(); return r && r.gh_number ? Number(r.gh_number) : null; }
+  catch (e) { console.error(JSON.stringify({ evt: "fleet-control:cmIssueGhRef:caught", error: String(e && e.message) })); return null; }
+}
+__name(cmIssueGhRef, "cmIssueGhRef");
 async function evApi(env, method, path, body) {
   var r = await timedFetch("https://api.github.com/repos/" + EVOLVE_REPO + path, { method: method, headers: evGh(env), body: body ? JSON.stringify(body) : void 0 }, 15e3);
   var j = null;
@@ -4785,6 +4798,11 @@ async function cmOpenHandle(env, cx, t, cfg, out) {
     var goal = String(t.goal || "").replace(/\s+/g, " ").trim();
     var body = "Opened by qnfo-fleet-control CODE-TASK-MERGE-RUNNER-1 from verified code task `" + t.id + "` (branch pushed by code-task-publish).\n\nGoal: " + goal.slice(0, 500) +
       "\n\nThe patch passed the orchestrator's deterministic verifier. The fleet token opened this pull request, so the pull_request checks start by themselves; the runner merges it when the required checks pass and every merge gate holds, or says here why it will not.";
+    // PR-ISSUE-LINK-1 (0.44.4, 2026-10-21, pillar autonomy): a fleet pull request named no GitHub issue, so 300 of 300 tracker issues
+    // closed in the 7 days to 2026-10-21 showed no linked pull request although 109 of their code tasks merged. The body now carries
+    // "Refs #<gh>" from gh_issue_links (a cross-reference, not a closing keyword: the issue still closes only on its probe in qnfo-audit).
+    var ghRef = await cmIssueGhRef(env, t);
+    if (ghRef) body += "\n\nRefs #" + ghRef + " (agent_issues " + cmIssueIdOf(t) + ", mirrored by qnfo-github-steward; it closes on its verification probe, not on this merge).";
     var op = await evApi(env, "POST", "/pulls", { title: ("code-task: " + goal).slice(0, 80), head: branch, base: "main", body: body });
     if (op.ok && op.j && op.j.number) {
       res.pr = op.j.number;
