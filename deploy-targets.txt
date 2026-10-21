@@ -1,28 +1,23 @@
-# canonical-deploy targets: <worker> [source-path]
-#
-# Deploys here go through qnfo-ops POST /ops/deploy, which performs the CANONICAL sequence:
-#   deploy-guard lock (fail-closed) -> GitHub source fetch -> binding-preserving /content PUT
-#   -> live version verify -> guard /ledger POST -> CF /schedules PUT from wrangler.toml
-#
-# Reason this manifest exists (2026-09-29): raw_put.py deploys produced
-# DEPLOY-UNLOGGED-MUTATION + DEPLOY-UNCOORDINATED-DEPLOY (issues #1340-#1343) and left
-# wrangler.toml [triggers] crons INERT (#1337). Re-deploying through /ops/deploy clears
-# both classes at the root: it writes the ledger row, takes the lock, and applies schedules.
-#
-# fleet-exec removed 2026-10-06: folded into qnfo-code-orchestrator (FLEET-EXEC-FOLD-1, #1756).
-# fleet-exec: the standalone script was deleted 2026-10-19 (cf-ops-actions delete-worker, run 39240334895); the host runs it as a member.
-# qnfo-artifacts (SCRIPT-SOURCE-RECONCILE-1, 2026-10-19): the control plane over both Cloudflare Artifacts namespaces that
-# artifacts-canonical-sync.yml (ARTIFACTS-CANONICAL-SYNC-1, owner directive 2026-10-18) depends on. Its directory carried a RETIRED marker from
-# 2026-10-01 although the worker was rebuilt and deployed (1.2.2, by hand) on 2026-10-18, so the canonical path skipped it and the fleet graph
-# reported a deployed script with no source. The marker is gone and the worker is listed here; it replaces fleet-exec in the worker count
-# (net zero, charter decision rule 2).
-qnfo-artifacts qnfo-artifacts/worker.js
-qnfo-social qnfo-social/worker.js
-# EVOLVE-1 (2026-10-17): the organ that turns the fleet's own gap registers into named work.
-# Listed here because a worker absent from this manifest gets its wrangler.toml crons applied as INERT.
-qnfo-evolve qnfo-evolve/worker.js
-# CF-MODEL-EVAL-1 (2026-10-18): the loop that evaluates new Workers AI models and carries a
-# winner into production. It shipped from a raw PUT first and had no tracked source at all --
-# a deployed worker nobody could redeploy. Listed here so its 6-hourly [triggers] crons are
-# applied by the canonical sequence instead of landing INERT.
+# canonical-deploy targets: <worker-name> <path-to-entry>
+# Every Worker under these paths deploys on a push to main that touches its directory (or this file).
+# A worker absent from this manifest gets its wrangler.toml crons applied as INERT.
+# MIND-Q08-1 (2026-10-21): the inside reading surface at mind.q08.org. Binding-free on purpose - a page about
+# understanding the self must not depend on the fleet staying up, so it has no D1, no AI, no secrets, no cron.
+# Its host is attached by .github/workflows/attach-mind-q08-route.yml (scripts/attach-mind-q08-route.py).
+q08-mind mind/worker.js
+qnfo-ai qnfo-ai/worker.js
+qnfo-ai-search qnfo-ai-search/worker.js
+qnfo-audit-sink qnfo-audit-sink/worker.js
+qnfo-backlog-exec qnfo-backlog-exec/worker.js
+qnfo-cms qnfo-cms/worker.js
+qnfo-cloud-ops qnfo-cloud-ops/worker.js
+qnfo-code-orchestrator qnfo-code-orchestrator/worker.js
+qnfo-email qnfo-email/worker.js
+qnfo-fleet-control qnfo-fleet-control/worker.js
+qnfo-fleet-dashboard qnfo-fleet-dashboard/worker.js
+qnfo-gateway qnfo-gateway/worker.js
+qnfo-github-steward qnfo-github-steward/worker.js
+qnfo-intent-orchestrator qnfo-intent-orchestrator/worker.js
+qnfo-lifecycle qnfo-lifecycle/worker.js
+qnfo-memory-mcp qnfo-memory-mcp/worker.js
 qnfo-model-eval qnfo-model-eval/worker.js
