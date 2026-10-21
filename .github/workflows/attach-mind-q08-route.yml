@@ -5,6 +5,9 @@ name: attach-mind-q08-route
 # script waits for the canonical deploy of q08-mind, creates the zone route (and an originless proxied AAAA record when
 # none exists) and verifies from outside the account that https://mind.q08.org/health names q08-mind, removing what it
 # created otherwise. Reversible: delete the ids in ci-status/attach-mind-q08-route.json.
+# MIND-Q08-3 (2026-10-21): the script no longer reads an unreadable scripts API (http 0/403) as "worker absent".
+# It now has three independent existence paths and fails closed only on a definitive 404; outside verification of
+# /health and /api/entries.json stays the real gate.
 # WORKFLOW-YAML-LINT-1: every step name below is colon-free.
 
 on:
@@ -67,4 +70,4 @@ jobs:
           git config user.name "qnfo-selfheal-bot"
           git config user.email "bot@qnfo.org"
           git add ci-status/attach-mind-q08-route.json
-          bash scripts/push_artifact.sh "ci(attach-domain): record MIND-Q08-1 result [skip ci]" ci-status/attach-mind-q08-route.json
+          bash scripts/push_artifact.sh "ci(attach-domain): record MIND-Q08-3 result [skip ci]" ci-status/attach-mind-q08-route.json
