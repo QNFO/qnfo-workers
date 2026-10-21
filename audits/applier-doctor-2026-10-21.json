@@ -1,6 +1,6 @@
 {
  "counts": {
-  "already-applied": 74,
+  "already-applied": 75,
   "undetermined": 4
  },
  "errored": [],
@@ -170,21 +170,15 @@
    "verdict": "already-applied"
   },
   {
-   "changed_files": [
-    " M qnfo-fleet-dashboard/deployed-current.worker.js",
-    " M qnfo-fleet-dashboard/worker.js"
-   ],
-   "declared_signals": [
-    "FLEET-CONSOLE-AGENT-1"
-   ],
+   "changed_files": [],
    "rc": 0,
    "script": "scripts/console-agent-1-patch.py",
    "tail": [
-    "OK qnfo-fleet-dashboard/worker.js: +5307 bytes",
-    "OK qnfo-fleet-dashboard/deployed-current.worker.js: +5307 bytes",
-    "changed=2"
+    "SKIP qnfo-fleet-dashboard/worker.js: already applied",
+    "SKIP qnfo-fleet-dashboard/deployed-current.worker.js: already applied",
+    "changed=0"
    ],
-   "verdict": "undetermined"
+   "verdict": "already-applied"
   },
   {
    "changed_files": [],
@@ -377,6 +371,25 @@
    "tail": [
     "CLEAN qnfo-gateway/worker.js (already pure ASCII at 3.7.16-utf8-escape)",
     "VERSION-NOT-BUMPED qnfo-gateway/worker.js: neither 3.7.15-latex-feed nor 3.7.16-utf8-escape found"
+   ],
+   "verdict": "undetermined"
+  },
+  {
+   "changed_files": [
+    " M mind/worker.js"
+   ],
+   "declared_signals": [
+    "MIND-Q08-4",
+    "SLA-AND-PATHS-1",
+    "NEXT_OF",
+    "The outside view"
+   ],
+   "rc": 0,
+   "script": "scripts/mind_q08_patch.py",
+   "tail": [
+    "  \"ok\": true,",
+    "  \"bytes\": 48246",
+    "}"
    ],
    "verdict": "undetermined"
   },
@@ -733,7 +746,7 @@
    "rc": 0,
    "script": "scripts/stale-gate-failclosed-patch.py",
    "tail": [
-    "{\"ok\": true, \"already_patched\": true, \"marker\": \"STALE-GATE-FAILCLOSED-1\", \"bytes\": 1044754}"
+    "{\"ok\": true, \"already_patched\": true, \"marker\": \"STALE-GATE-FAILCLOSED-1\", \"bytes\": 1051265}"
    ],
    "verdict": "already-applied"
   },
@@ -820,12 +833,12 @@
  ],
  "stale_anchor": [],
  "superseded": [],
- "total": 78,
- "ts": "2026-10-21T13:17:31.198Z",
+ "total": 79,
+ "ts": "2026-10-21T14:21:28.415Z",
  "undetermined": [
-  "scripts/console-agent-1-patch.py",
   "scripts/dashboard-agissue-undercount-patch.py",
   "scripts/math-sym-escape-patch.py",
+  "scripts/mind_q08_patch.py",
   "scripts/outreach-cap-status-1-patch.py"
  ]
 }
