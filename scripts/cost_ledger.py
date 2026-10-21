@@ -136,6 +136,26 @@ def upsert(d1, date, source, scope, usd, reqs, note):
        [date, source, scope, round(usd, 4), int(reqs), note[:300]])
 
 
+def write_forecast(d1):
+    """COST-SUSTAIN-1 (2026-10-21): month-to-date, 3-day pace and month-end forecast per scope from v_cost_forecast; writes
+    fleet_cost_pace_30d_usd / fleet_cost_forecast_month_usd (metric_registry) and fleet_budget cost:fleet_all_in_month.current.
+    PRECONDITION: cost_daily rows for today were just upserted. POSTCONDITION: the two metrics carry the fleet scope's values, or
+    the error is returned and nothing is written (never a fabricated zero)."""
+    try:
+        rows = d1("SELECT scope, mtd_complete_usd, today_partial_usd, daily_3d, daily_7d, pace_30d_usd, forecast_month_usd, basis FROM v_cost_forecast")
+    except Exception as e:  # noqa: BLE001
+        return "v_cost_forecast missing: %s" % str(e)[:80]
+    by = {r["scope"]: r for r in rows}
+    f = by.get("fleet")
+    if not f:
+        return {"scopes": by, "error": "no fleet rows"}
+    stamp = "strftime('%Y-%m-%dT%H:%M:%SZ', 'now')"
+    for metric, val in (("fleet_cost_pace_30d_usd", f["pace_30d_usd"]), ("fleet_cost_forecast_month_usd", f["forecast_month_usd"])):
+        d1("UPDATE metric_registry SET last_value = CAST(?1 AS TEXT), last_refreshed = " + stamp + ", state = 'MEASURED' WHERE metric = ?2", [val, metric])
+    d1("UPDATE fleet_budget SET current = ?1, updated_at = " + stamp + " WHERE node_class = 'cost:fleet_all_in_month'", [f["pace_30d_usd"]])
+    return {k: {"mtd": v["mtd_complete_usd"], "pace_30d": v["pace_30d_usd"], "forecast_month": v["forecast_month_usd"]} for k, v in by.items()}
+
+
 def main(d1=None, call=cf, today=None):
     d1 = d1 or RC.d1
     today = today or dt.datetime.now(dt.timezone.utc).date()
@@ -177,6 +197,7 @@ def main(d1=None, call=cf, today=None):
         out["run_rate"] = {r["source_group"]: [r["run_rate_30d_7d"], r["run_rate_30d_10d"]] for r in rr}
     except Exception as e:  # noqa: BLE001
         out["run_rate"] = "view missing: %s" % str(e)[:80]
+    out["forecast"] = write_forecast(d1)
     print(json.dumps(out)[:1500])
     return 0
 
