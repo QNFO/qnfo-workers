@@ -1,5 +1,7 @@
 name: mind-q08-patch
 
+# MIND-Q08-4b (2026-10-21): retrigger marker. GitHub does not run a workflow for the push
+# that first creates it, so this touch is the event that actually starts the run.
 # MIND-Q08-4 (2026-10-21): apply the mind/worker.js patch, deploy it, and verify the live
 # host in the same run. Two independent paths reach the same Definition of Done:
 #   path 1 - direct `wrangler deploy` (primary, works with CLOUDFLARE_API_TOKEN)
