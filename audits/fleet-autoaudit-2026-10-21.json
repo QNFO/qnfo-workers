@@ -1,5 +1,5 @@
 {
-  "audited_at": "2026-10-21 11:33:55",
+  "audited_at": "2026-10-21 12:19:26",
   "d1_write_failures": [],
   "d1_writes_ok": 120,
   "guard": {
@@ -555,7 +555,7 @@
       },
       {
         "dir": "qnfo-ai",
-        "version": "5.39.2-codeagent",
+        "version": "5.39.3-codeagent",
         "worker": "qnfo-ai"
       },
       {
@@ -1017,9 +1017,9 @@
       "worker": "qnfo-agent-ws"
     },
     "qnfo-ai": {
-      "before": "5.39.2-codeagent",
+      "before": "5.39.3-codeagent",
       "http": 200,
-      "live": "5.39.2-codeagent",
+      "live": "5.39.3-codeagent",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-ai"
