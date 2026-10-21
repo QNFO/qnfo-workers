@@ -1,5 +1,6 @@
 -- APPLY-BY: ci
 -- DB: qnfo-audit
+-- BACKUP: bak_20261021_v_cost_forecast
 -- Rollback: DROP VIEW IF EXISTS v_cost_forecast; DELETE FROM fleet_budget WHERE node_class = 'cost:fleet_all_in_month'; DELETE FROM analytics_metric_triggers WHERE metric_key = 'fleet_cost_pace_30d_usd'; DELETE FROM metric_registry WHERE metric IN ('fleet_cost_pace_30d_usd', 'fleet_cost_forecast_month_usd'); DELETE FROM ops_config WHERE key IN ('research_daily_neurons', 'code_loop_daily_calls');
 -- COST-SUSTAIN-1 (2026-10-21, owner directive: fleet research and publication <= USD 300/month all-in, quality must not drop; pillar cost).
 -- Root causes this closes:
@@ -20,6 +21,7 @@ INSERT INTO ops_config (key, value, note, updated_at) VALUES ('research_daily_ne
 INSERT INTO ops_config (key, value, note, updated_at) VALUES ('code_loop_daily_calls', '100', 'COST-SUSTAIN-1 2026-10-21: code loop model calls per UTC day (default 1500 ~ USD 29/day at 0.0196/call measured 10-14..10-20). 100 ~ USD 2/day. Revert: delete row.', datetime('now'))
   ON CONFLICT(key) DO UPDATE SET value = excluded.value, note = excluded.note, updated_at = excluded.updated_at;
 
+CREATE TABLE IF NOT EXISTS bak_20261021_v_cost_forecast AS SELECT name, sql FROM sqlite_master WHERE name = 'v_cost_forecast';
 DROP VIEW IF EXISTS v_cost_forecast;
 CREATE VIEW v_cost_forecast AS
 WITH b AS (
