@@ -1,5 +1,5 @@
 {
-  "audited_at": "2026-10-21 10:29:01",
+  "audited_at": "2026-10-21 11:04:09",
   "d1_write_failures": [],
   "d1_writes_ok": 120,
   "guard": {
@@ -555,7 +555,7 @@
       },
       {
         "dir": "qnfo-ai",
-        "version": "5.39.0-owner-otp",
+        "version": "5.39.1-codeagent",
         "worker": "qnfo-ai"
       },
       {
@@ -615,7 +615,7 @@
       },
       {
         "dir": "qnfo-gateway",
-        "version": "3.29.4-codeagent",
+        "version": "3.29.5-codeagent",
         "worker": "qnfo-gateway"
       },
       {
@@ -670,7 +670,7 @@
       },
       {
         "dir": "qnfo-research-exec",
-        "version": "0.31.0-cost-sustain",
+        "version": "0.31.1-codeagent",
         "worker": "qnfo-research-exec"
       },
       {
@@ -1017,9 +1017,9 @@
       "worker": "qnfo-agent-ws"
     },
     "qnfo-ai": {
-      "before": "5.39.0-owner-otp",
+      "before": "5.39.1-codeagent",
       "http": 200,
-      "live": "5.39.0-owner-otp",
+      "live": "5.39.1-codeagent",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-ai"
@@ -1347,9 +1347,9 @@
       "worker": "qnfo-fleet-feed"
     },
     "qnfo-gateway": {
-      "before": "3.29.4-codeagent",
+      "before": "3.29.5-codeagent",
       "http": 200,
-      "live": "3.29.4-codeagent",
+      "live": "3.29.5-codeagent",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-gateway"
@@ -1561,9 +1561,9 @@
       "worker": "qnfo-register-guard"
     },
     "qnfo-research-exec": {
-      "before": "0.31.0-cost-sustain",
+      "before": "0.31.1-codeagent",
       "http": 200,
-      "live": "0.31.0-cost-sustain",
+      "live": "0.31.1-codeagent",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-research-exec"
