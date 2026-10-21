@@ -145,7 +145,7 @@ def _file_and_resolve(d1, cf, now, res):
                 res["errors"] += 1
                 print(json.dumps({"evt": "cf-obs-bridge:churn-count", "id": cid, "error": str(e)[:200]}))
                 continue
-            if reopen_count > CHURN_LIMIT:
+            if reopen_count >= CHURN_LIMIT:
                 res["held_closed"] += 1
                 continue
         if closed_row and int(it.get("lastObserved") or 0) <= int(closed_row[0]["updated_at"]):
