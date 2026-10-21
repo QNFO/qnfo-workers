@@ -13,6 +13,8 @@ function mk(withCounters) {
   const db = new DatabaseSync(":memory:");
   db.exec(`CREATE TABLE cost_daily (date TEXT, source TEXT, usd REAL);
   CREATE VIEW v_cost_run_rate AS SELECT 'total:all-billing' AS source_group, 3.0 AS daily_7d, 2.5 AS daily_10d, 90.0 AS run_rate_30d_7d, 75.0 AS run_rate_30d_10d UNION ALL SELECT 'workers_ai', 1.0, 1.0, 30.0, 30.0;
+  CREATE TABLE ops_config (key TEXT PRIMARY KEY, value TEXT);
+  CREATE VIEW v_cost_forecast AS SELECT 'fleet' AS scope, 100.0 AS mtd_complete_usd, 2.0 AS today_partial_usd, 6.0 AS daily_3d, 7.0 AS daily_7d, 180.0 AS pace_30d_usd, 166.0 AS forecast_month_usd, 31 AS days_in_month, 20 AS complete_days, 300 AS budget_month_usd, 'measured' AS basis;
   CREATE TABLE fleet_budget (node_class TEXT PRIMARY KEY, cap INTEGER NOT NULL, target INTEGER NOT NULL, current INTEGER NOT NULL, unit TEXT NOT NULL, updated_at TEXT NOT NULL);
   INSERT INTO fleet_budget VALUES ('ai_spend:fleet', 95, 75, 121, 'usd_30d', '2026-10-19'), ('ai_spend:ops', 20, 10, 5, 'usd_30d', '2026-10-19'), ('workers', 40, 30, 33, 'count', '2026-10-19');`);
   db.exec("INSERT INTO cost_daily VALUES (date('now','-1 day'), 'workers_ai', 1.25), (date('now','-1 day'), 'ai_gateway:openrouter', 0.5), (date('now','-1 day'), 'r2', 9), (date('now','-30 days'), 'workers_ai', 7)");
@@ -46,6 +48,7 @@ ok(!/including partial today/.test(JSON.stringify(b)), "no label claims a partia
 ok(b.by_worker_7d.length === 2 && b.by_worker_7d[0].worker === "qnfo-ai", "by worker, largest first", b.by_worker_7d);
 ok(b.budgets.length === 2 && b.budgets_breached === 1 && b.budgets[0].node_class === "ai_spend:fleet" && b.budgets[0].headroom === -26, "spend budgets with headroom, breached first", b.budgets);
 ok(!b.blind, "no part is blind when every table exists");
+ok(b.fleet_pace_30d_usd === 180 && b.fleet_forecast_month_usd === 166 && b.fleet_budget_month_usd === 300 && b.forecast.length === 1, "COST-SUSTAIN-1: the fleet forecast is surfaced against the USD 300 budget", b);
 const tag = r.headers.get("ETag");
 ok(!!tag, "the feed carries an ETag");
 r = await call(env, "/api/cost", { "If-None-Match": tag });
@@ -55,7 +58,7 @@ r = await call(mk(false), "/api/cost");
 j = await r.json();
 const b2 = j.data || j;
 ok(b2.window_7d === null && /list price/.test(b2.est_usd_basis), "a blind counters read keeps window_7d null and still states the basis", b2.window_7d);
-ok(r.status === 200 && b2.by_model_7d.length === 0 && b2.blind.length === 2 && /ai_call_counters/.test(b2.blind[0]) && b2.budgets.length === 2, "a missing table blanks only its parts, with the reason", b2);
+ok(r.status === 200 && b2.by_model_7d.length === 0 && b2.blind.length === 3 && /ai_call_counters/.test(b2.blind[0]) && b2.blind.some(function (x) { return /^research_budget_today: .*ai_call_counters/.test(x); }) && b2.budgets.length === 2, "a missing table blanks only its parts, with the reason", b2);
 
 r = await call(env, "/api");
 j = await r.json();
