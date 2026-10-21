@@ -1,7 +1,7 @@
 {
-  "audited_at": "2026-10-21 13:04:16",
+  "audited_at": "2026-10-21 13:43:39",
   "d1_write_failures": [],
-  "d1_writes_ok": 120,
+  "d1_writes_ok": 121,
   "guard": {
     "_guard_rc": 0,
     "ahead": [],
@@ -15,7 +15,12 @@
     "multi_version": [],
     "multi_version_count": 0,
     "name_resolution": true,
-    "no_health_route": [],
+    "no_health_route": [
+      {
+        "dir": "mind",
+        "worker": "q08-mind"
+      }
+    ],
     "no_live_version": [],
     "no_repo_version": [],
     "not_a_worker": [
@@ -605,12 +610,12 @@
       },
       {
         "dir": "qnfo-fleet-control",
-        "version": "0.44.4-pr-issue-link",
+        "version": "0.44.5-close-channel",
         "worker": "qnfo-fleet-control"
       },
       {
         "dir": "qnfo-fleet-dashboard",
-        "version": "1.52.0-cost-forecast",
+        "version": "1.53.0-console-agent-1",
         "worker": "qnfo-fleet-dashboard"
       },
       {
@@ -620,7 +625,7 @@
       },
       {
         "dir": "qnfo-github-steward",
-        "version": "0.7.5-close-provenance-1",
+        "version": "0.7.6-fleet-pr-share",
         "worker": "qnfo-github-steward"
       },
       {
@@ -640,7 +645,7 @@
       },
       {
         "dir": "qnfo-lifecycle",
-        "version": "1.14.0-paper-learn-triage",
+        "version": "1.14.1-close-channel",
         "worker": "qnfo-lifecycle"
       },
       {
@@ -981,6 +986,14 @@
       "retired": "RETIRED",
       "worker": "personal-life-search"
     },
+    "q08-mind": {
+      "before": null,
+      "http": 404,
+      "live": null,
+      "match": 0,
+      "note": "NO_HEALTH_ROUTE",
+      "worker": "q08-mind"
+    },
     "q08-signal-engine": {
       "before": "0.32.0-codeagent",
       "http": 200,
@@ -1313,17 +1326,17 @@
       "worker": "qnfo-fleet-calibrator"
     },
     "qnfo-fleet-control": {
-      "before": "0.44.4-pr-issue-link",
+      "before": "0.44.5-close-channel",
       "http": 200,
-      "live": "0.44.4-pr-issue-link",
+      "live": "0.44.5-close-channel",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-fleet-control"
     },
     "qnfo-fleet-dashboard": {
-      "before": "1.52.0-cost-forecast",
+      "before": "1.53.0-console-agent-1",
       "http": 200,
-      "live": "1.52.0-cost-forecast",
+      "live": "1.53.0-console-agent-1",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-fleet-dashboard"
@@ -1355,9 +1368,9 @@
       "worker": "qnfo-gateway"
     },
     "qnfo-github-steward": {
-      "before": "0.7.5-close-provenance-1",
+      "before": "0.7.6-fleet-pr-share",
       "http": 200,
-      "live": "0.7.5-close-provenance-1",
+      "live": "0.7.6-fleet-pr-share",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-github-steward"
@@ -1432,9 +1445,9 @@
       "worker": "qnfo-kaizen"
     },
     "qnfo-lifecycle": {
-      "before": "1.14.0-paper-learn-triage",
+      "before": "1.14.1-close-channel",
       "http": 200,
-      "live": "1.14.0-paper-learn-triage",
+      "live": "1.14.1-close-channel",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-lifecycle"
