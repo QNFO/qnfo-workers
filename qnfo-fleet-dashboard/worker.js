@@ -10,7 +10,7 @@ var __defProp222 = Object.defineProperty;
 var __name222 = /* @__PURE__ */ __name22((target, value) => __defProp222(target, "name", { value, configurable: true }), "__name");
 var __name2222 = /* @__PURE__ */ __name222((target, value) => Object.defineProperty(target, "name", { value, configurable: true }), "__name");
 // VERSION-LINE-SPLIT-1 (agent_issues 100220): the release notes sit one per line below this statement, newest first, so a VERSION bump is a one-line patch; add a new note as the first line under it.
-var VERSION = "1.52.0-cost-forecast"; /* 1.52.0 COST-SUSTAIN-1 (2026-10-21, pillar cost): /api/cost adds forecast (v_cost_forecast: per-scope month-to-date, 3-day pace, month-end forecast vs the owner USD 300 fleet budget) and research_budget_today (neurons spent vs qnfo-research-exec research_daily_neurons). */
+var VERSION = "1.53.0-console-agent-1"; /* 1.52.0 COST-SUSTAIN-1 (2026-10-21, pillar cost): /api/cost adds forecast (v_cost_forecast: per-scope month-to-date, 3-day pace, month-end forecast vs the owner USD 300 fleet budget) and research_budget_today (neurons spent vs qnfo-research-exec research_daily_neurons). */
 /* 1.51.19 VERSION-LINE-SPLIT-1 (2026-10-20, agent_issues 100220, pillar autonomy; patch: layout only): the release notes that sat on the VERSION line (202,642 chars) are one per line below it, so a bump is a one-line patch and the publisher's size cap stops refusing dashboard code tasks (5 of 5 on 2026-10-19); scripts/conflict_repair.py resolves note-line hunks (merge_note_hunk). No behaviour change. */
 /* 1.51.17 COST-FEED-7D-WINDOW-1 (2026-10-19, agent_issues 100169, pillar cost; patch): /api/cost by_model_7d and by_worker_7d sum the 7 complete UTC days (today, a partial day, was a 8th bucket under the 7d label, +31.8 percent), and the body says which days (window_7d) and that est_usd is list price before the free tier (est_usd_basis). */
 /* 1.51.16 PARKED-CARD-REASON-1 (2026-10-19, agent_issues 100173, pillar autonomy; patch): the parked code-task card branches on the cause wherever it sits in last_error (the loop writes "model <id>: noop-proposal: ..." and "model <id> proposed no change", so a prefix test never matched), and the dead execOne edit of PR 3106 (fleet_issue_dispatch has no last_error) is removed. */
@@ -11363,6 +11363,10 @@ var CON_BACKUP_CHARS = 19e5;
 var CON_OUT_MAX = 6e3;
 var CON_DDL = "CREATE TABLE IF NOT EXISTS console_backups (id INTEGER PRIMARY KEY AUTOINCREMENT, ts TEXT DEFAULT (datetime('now')), db TEXT NOT NULL, table_name TEXT NOT NULL, stmt TEXT NOT NULL, row_count INTEGER NOT NULL, rows_json TEXT NOT NULL)";
 var CON_OPS = {
+  agent: { destructive: false, label: "Ask the fleet agent (code, containers, deploys)" },
+  agentlogin: { destructive: false, label: "Email the agent sign-in code" },
+  agentverify: { destructive: false, label: "Exchange the agent code for a session" },
+  agentstatus: { destructive: false, label: "Agent job status" },
   iprio: { destructive: false, label: "Set priority" },
   iowner: { destructive: false, label: "Set owner" },
   icomment: { destructive: false, label: "Comment" },
@@ -11862,6 +11866,18 @@ async function conRead(env, text, c, owner) {
 // confirm button. Returns null when the text is not one.
 var CON_PRIOS = ["critical", "high", "medium", "low"];
 function conParse(text) {
+
+  // FLEET-CONSOLE-AGENT-1: free text goes to the fleet's real agent loop
+  // (qnfo-ops over the service binding) -- run_code, container shell, GitHub,
+  // D1 writes and deploys -- not the capped context-only completion.
+  {
+    const at = String(text == null ? "" : text).trim();
+    let am;
+    if ((am = /^agent\s+([\s\S]+)$/i.exec(at))) return { actions: [cmdAction("agent", { text: am[1].slice(0, 8000) })], auto: true, text: "Fleet agent: " + am[1].slice(0, 160) };
+    if (/^agent-login$/i.test(at)) return { actions: [cmdAction("agentlogin", {})], auto: true, text: "Email the agent sign-in code" };
+    if ((am = /^agent-verify\s+(\d{6})$/i.exec(at))) return { actions: [cmdAction("agentverify", { code: am[1] })], auto: true, text: "Verify the agent code" };
+    if ((am = /^agent-status\s+(\S+)$/i.exec(at))) return { actions: [cmdAction("agentstatus", { id: am[1] })], auto: true, text: "Agent job " + am[1] };
+  }
   const t = String(text || "").trim();
   const lo = t.toLowerCase();
   let m;
@@ -11929,6 +11945,16 @@ async function conIssueTouch(env, id) {
   const a = await env.AUDIT.prepare("SELECT id, status, priority, title FROM agent_issues WHERE id = ?1").bind(id).first();
   return a || null;
 }
+
+// FLEET-CONSOLE-AGENT-1: the stored qnfo-ops owner session, or null.
+async function conAgentToken(env) {
+  try {
+    const row = await env.AUDIT.prepare("SELECT token FROM console_agent_auth WHERE id = 1").first();
+    const t = row && row.token;
+    return t && /^qos_[0-9a-f]{64}$/.test(t) ? t : null;
+  } catch (e) { return null; }
+}
+
 async function conExec(env, owner, op, args) {
   if (!conIsOwner(owner)) return { ok: false, error: "Console actions need your own sign-in (type 'login'); the fleet's loop token cannot run them." };
   const now = Date.now();
@@ -12003,6 +12029,56 @@ async function conExec(env, owner, op, args) {
       const r = svc ? await svc.fetch(url, init) : await fetch(url, init);
       const body = await r.text();
       return { ok: r.status < 500, text: method + " " + worker + path + (svc ? " (service binding)" : "") + " -> HTTP " + r.status + " " + (r.headers.get("content-type") || "") + "\n" + conClip(body, 4e3), error: r.status >= 500 ? "HTTP " + r.status + ": " + conClip(body, 600) : void 0 };
+    }
+    // FLEET-CONSOLE-AGENT-1: proxy to the real fleet agent loop.
+    if (op === "agent" || op === "agentlogin" || op === "agentverify" || op === "agentstatus") {
+      const svc = env.SVC_QNFO_OPS;
+      if (!svc) return { ok: false, error: "no service binding to qnfo-ops (SVC_QNFO_OPS)" };
+      const opsCall = async (p, init, ms) => {
+        const r = await svc.fetch("https://ops.qnfo.org" + p, Object.assign({}, init || {}, { signal: AbortSignal.timeout(ms || 25e3) }));
+        const t = await r.text();
+        let j = null;
+        try { j = JSON.parse(t); } catch (e) {}
+        return { status: r.status, text: t, json: j };
+      };
+      if (op === "agentlogin") {
+        const r = await opsCall("/v1/owner/login", { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" });
+        const j = r.json || {};
+        return { ok: r.status < 400 && j.ok !== false, text: "agent sign-in: " + (j.note || j.error || ("HTTP " + r.status)) };
+      }
+      if (op === "agentverify") {
+        const code = String((args && args.code) || "").trim();
+        if (!/^\d{6}$/.test(code)) return { ok: false, error: "agent-verify needs the 6-digit code from the email" };
+        const r = await opsCall("/v1/owner/verify", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ code: code }) });
+        const j = r.json || {};
+        const tok = j.owner_session;
+        if (!tok) return { ok: false, error: "agent-verify: " + (j.error || ("HTTP " + r.status)) };
+        await env.AUDIT.prepare("CREATE TABLE IF NOT EXISTS console_agent_auth (id INTEGER PRIMARY KEY CHECK (id = 1), token TEXT NOT NULL, ts TEXT)").run();
+        await env.AUDIT.prepare("INSERT INTO console_agent_auth (id, token, ts) VALUES (1, ?1, datetime('now')) ON CONFLICT(id) DO UPDATE SET token = ?1, ts = datetime('now')").bind(tok).run();
+        return { ok: true, text: "agent session stored (" + (j.expires_in_hours || 12) + "h). Now: agent <what you want done>" };
+      }
+      if (op === "agentstatus") {
+        const tok = await conAgentToken(env);
+        if (!tok) return { ok: false, error: "no agent session: agent-login, then agent-verify <code>" };
+        const id = String((args && args.id) || "").trim();
+        const r = await opsCall("/v1/jobs/" + encodeURIComponent(id), { headers: { Authorization: "Bearer " + tok } }, 30e3);
+        if (r.status === 401) return { ok: false, error: "agent session expired: agent-login, then agent-verify <code>" };
+        return { ok: r.status < 400, text: "job " + id + " -> HTTP " + r.status + "\n" + String(r.text).slice(0, 3000) };
+      }
+      const text = String((args && args.text) || "").trim();
+      if (!text) return { ok: false, error: "agent needs a request: agent <what you want done>" };
+      const tok = await conAgentToken(env);
+      if (!tok) return { ok: false, error: "no agent session yet: type agent-login, then agent-verify <code>" };
+      const r = await opsCall("/v1/chat/completions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: "Bearer " + tok, "x-ops-async": "1" },
+        body: JSON.stringify({ model: "ops", messages: [{ role: "user", content: text.slice(0, 8000) }] })
+      }, 30e3);
+      if (r.status === 401) return { ok: false, error: "agent session expired: agent-login, then agent-verify <code>" };
+      if (r.status >= 400) return { ok: false, error: "agent -> HTTP " + r.status + ": " + String(r.text).slice(0, 400) };
+      const j = r.json || {};
+      const id = j.id || j.job_id;
+      return { ok: true, text: id ? ("agent job " + id + " queued. Track: agent-status " + id) : String(r.text).slice(0, 2000) };
     }
     if (op === "dispatch") {
       const wf = String(args.workflow || "");
