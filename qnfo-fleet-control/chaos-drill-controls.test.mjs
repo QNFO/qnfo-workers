@@ -28,7 +28,7 @@ CREATE TABLE spof_registry_resolved (component TEXT PRIMARY KEY, alternate_teste
 CREATE TABLE spof_registry (component TEXT PRIMARY KEY, alternate_tested_at TEXT, reviewed_at TEXT, alternate_path TEXT);
 CREATE TABLE control_alternate_probes (control TEXT PRIMARY KEY, probe_sql TEXT NOT NULL, window_note TEXT NOT NULL, enabled INTEGER NOT NULL DEFAULT 1, last_run_at TEXT, last_pass INTEGER, last_pass_at TEXT, last_observed TEXT, created_at TEXT);
 CREATE TABLE control_registry (control TEXT PRIMARY KEY, alternate_tested_at TEXT, reviewed_at TEXT);
-CREATE TABLE agent_issues (id INTEGER PRIMARY KEY AUTOINCREMENT, title TEXT, description TEXT, source TEXT, category TEXT, priority TEXT, status TEXT, created_at INTEGER, updated_at INTEGER);
+CREATE TABLE agent_issues (id INTEGER PRIMARY KEY AUTOINCREMENT, title TEXT, description TEXT, source TEXT, category TEXT, priority TEXT, status TEXT, created_at INTEGER, updated_at INTEGER, close_channel TEXT);
 CREATE TABLE issue_triage (issue_id INTEGER PRIMARY KEY, rc TEXT, triage_state TEXT, owner TEXT, sla_due_at TEXT, close_evidence TEXT, triaged_at TEXT);
 CREATE TABLE metric_registry (metric TEXT PRIMARY KEY, last_value TEXT, last_refreshed TEXT, state TEXT);
 CREATE TABLE cloud_ops_events (id TEXT, ts TEXT, kind TEXT, job TEXT, status TEXT, text TEXT);
