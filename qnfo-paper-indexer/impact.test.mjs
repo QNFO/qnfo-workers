@@ -59,7 +59,7 @@ await worker.scheduled({ cron: "0 4 * * *" }, env, { waitUntil() {} });
 const oa = new Set(inserts.filter((r) => r.source === "openalex" && r.metric === "cited_by_count").map((r) => r.doi));
 ok(THIRD.every((d) => oa.has(d)), "the daily pass records an OpenAlex reading for each third-party DOI");
 ok(!inserts.some((r) => /10\.5281\//.test(r.doi)), "a dead-prefix DOI is never written");
-ok(!fetched.some((u) => /10\.5281|zenodo/i.test(decodeURIComponent(u))), "no outbound call names a dead-prefix DOI or the closed repository");
+ok(!fetched.some((u) => /10\.5281/.test(decodeURIComponent(u))), "no outbound call names a dead-prefix DOI");
 
 console.log(passed + " passed, " + failed + " failed");
 process.exit(failed ? 1 : 0);

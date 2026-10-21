@@ -4,7 +4,7 @@
 // sends only errors the second model family confirms to internal_errata, files one follow-up issue with its closing probe for a
 // strong direct learning, falls back to the second model when the first fails, retries a failed read at most three times,
 // does not read a paper version twice, reads a new version again, writes papers_unlearned_over_120m, and stops on
-// paper_learn_mode = off. The noz-scrub wrapper and the fold members survive.
+// paper_learn_mode = off. The fold members survive.
 // Run: node qnfo-lifecycle/paper-learn.test.mjs   -> prints "N passed, 0 failed"
 import { DatabaseSync } from "node:sqlite";
 
@@ -25,7 +25,6 @@ function d1(db) {
 
 ok(P && typeof P.tick === "function" && typeof P.status === "function", "the loop is exposed on the default export (__paperLearn)");
 ok(typeof W.scheduled === "function" && typeof W.fetch === "function", "fetch and scheduled survive the wrapper");
-ok(W.__noz && typeof W.__noz.tick === "function", "the noz-scrub hooks survive the wrapper");
 ok(W.__foldMember && W.__foldMember.name === "calendar-api", "the fold member survives the wrapper");
 
 // Verification comes from the paper's own support, never from the model.

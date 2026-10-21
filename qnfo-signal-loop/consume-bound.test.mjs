@@ -25,7 +25,7 @@ function mk({ pendingNew = 0, signals = 6, questions = 15, permitted = 1 } = {})
     const s = db.prepare("INSERT INTO signals (id, ts, source, source_ref, content, open_questions, evidential_weight, domain, status, created_at) VALUES (?, ?, 'artifact_reentry', ?, 't', ?, 0.9, 'research', 'new', ?)");
     for (let i = 0; i < signals; i++) {
       const oq = Array.from({ length: questions }, (_, j) => "Open question " + j + " of paper " + i + " remains to be settled?");
-      s.run("artifact_reentry:p" + i, "2026-10-02T09:00:0" + i + "Z", "10.5281/zenodo." + i, JSON.stringify(oq), "2026-10-02T09:00:0" + i + "Z");
+      s.run("artifact_reentry:p" + i, "2026-10-02T09:00:0" + i + "Z", "10.5281/x." + i, JSON.stringify(oq), "2026-10-02T09:00:0" + i + "Z");
     }
   } };
 }

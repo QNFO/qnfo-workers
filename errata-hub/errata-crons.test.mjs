@@ -35,7 +35,7 @@ CREATE TABLE errata_actions (id INTEGER PRIMARY KEY AUTOINCREMENT, queue_id INTE
 CREATE TABLE email_suppression (email TEXT PRIMARY KEY, reason TEXT, source TEXT, created_at TEXT DEFAULT (datetime('now')));
 CREATE TABLE pipeline_flags (key TEXT PRIMARY KEY, value TEXT NOT NULL, updated_at TEXT);`);
 const papers = new DatabaseSync(":memory:");
-papers.exec("CREATE TABLE papers (slug TEXT PRIMARY KEY, title TEXT, version TEXT, doi TEXT, zenodo_doi TEXT, zenodo_url TEXT, body_md TEXT, r2_path TEXT, r2_key TEXT, updated_at TEXT)");
+papers.exec("CREATE TABLE papers (slug TEXT PRIMARY KEY, title TEXT, version TEXT, doi TEXT, body_md TEXT, r2_path TEXT, r2_key TEXT, updated_at TEXT)");
 const graph = new DatabaseSync(":memory:");
 graph.exec("CREATE TABLE nodes (id TEXT PRIMARY KEY, properties TEXT, updated_at TEXT)");
 
@@ -43,7 +43,7 @@ const SENDER = "author@example.edu";
 const DOI = "10.9999/test.1000001";
 const ANCHOR = "Equation (3) is taken from Doe et al.";
 const BODY = "# A paper\n\n**Version:** 1.0 (this version).\n\n" + ANCHOR + " It follows.\n\n## References\n\n1. Doe.\n";
-papers.prepare("INSERT INTO papers (slug, title, version, doi, zenodo_doi, body_md, r2_path) VALUES ('a-paper', 'A paper', '1.0', ?1, ?1, ?2, 'papers/a-paper')").run(DOI, BODY);
+papers.prepare("INSERT INTO papers (slug, title, version, doi, body_md, r2_path) VALUES ('a-paper', 'A paper', '1.0', ?1, ?2, 'papers/a-paper')").run(DOI, BODY);
 graph.prepare("INSERT INTO nodes (id, properties) VALUES ('paper:a-paper', '{}')").run();
 audit.prepare("INSERT INTO errata_watch (key, value) VALUES ('last_email_id', '0')").run();
 audit.prepare("INSERT INTO emails (message_id, sender, recipient, subject, body_text, classification) VALUES ('m1', ?1, 'qnfo@qnfo.org', 'Your paper ' || ?2, 'Equation (3) is nowhere mentioned in our work. Please correct.', 'personal')").run(SENDER, DOI);
@@ -53,7 +53,7 @@ audit.prepare("INSERT INTO emails (message_id, sender, recipient, subject, body_
 audit.prepare("INSERT INTO errata_queue (email_id, source, sender, subject, claim, confidence, status) VALUES (NULL, 'internal_audit', 'internal_audit', 'err-x', 'internal claim', 1.0, 'internal-open')").run();
 // A correction published earlier: the :30 tick still verifies it while the gate is off.
 audit.prepare("INSERT INTO errata_actions (queue_id, paper_doi, slug, version_from, version_to, status, updated_at) VALUES (99, '10.9999/test.900', 'old-paper', '0.4', '0.5', 'published', datetime('now', '-3 days'))").run();
-papers.prepare("INSERT INTO papers (slug, version, doi, zenodo_doi, body_md) VALUES ('old-paper', '0.5', '10.9999/test.901', '10.9999/test.901', 'x')").run();
+papers.prepare("INSERT INTO papers (slug, version, doi, body_md) VALUES ('old-paper', '0.5', '10.9999/test.901', 'x')").run();
 
 const aiCalls = [];
 const judgeCalls = [];
@@ -148,8 +148,8 @@ audit.prepare("INSERT INTO pipeline_flags (key, value) VALUES ('errata_publish_e
 await tick("30 * * * *");
 const p1 = tickRow("errata-publish");
 ok(p1.dry === false && p1.gate.enabled === true && p1.published.length === 1 && p1.errors.length === 0 && deposits().length === 0, "flag '1': errata-publish re-renders and re-points without any registrar call (" + JSON.stringify([p1.published, p1.errors]) + ")");
-{ const pr = papers.prepare("SELECT version, doi, zenodo_doi, zenodo_url FROM papers WHERE slug = 'a-paper'").get();
-  ok(pr.version === "1.1" && pr.doi === null && pr.zenodo_doi === null && pr.zenodo_url === null, "flag '1': the paper row carries the new version and NULL doi/zenodo_doi/zenodo_url (" + JSON.stringify(pr) + ")"); }
+{ const pr = papers.prepare("SELECT version, doi FROM papers WHERE slug = 'a-paper'").get();
+  ok(pr.version === "1.1" && pr.doi === null, "flag '1': the paper row carries the new version and a NULL doi (" + JSON.stringify(pr) + ")"); }
 ok(audit.prepare("SELECT status FROM errata_actions WHERE id = ?").get(acts[0].id).status === "published", "flag '1': the action is marked published");
 audit.exec("DELETE FROM pipeline_flags");
 

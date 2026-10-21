@@ -41,19 +41,19 @@ async function runImpact(env, commit, limit) {
   await ensureSchema(env);
   const out = { papers: 0, stats: [], errors: [] };
   if (!commit) {
-    const n2 = await env.LIVING_PAPER.prepare("SELECT COUNT(*) c FROM papers WHERE doi IS NOT NULL OR zenodo_doi IS NOT NULL").first();
+    const n2 = await env.LIVING_PAPER.prepare("SELECT COUNT(*) c FROM papers WHERE doi IS NOT NULL OR registrar_doi IS NOT NULL").first();
     return { preview: true, papersWithDoi: n2 ? n2.c : 0 };
   }
   const n = Math.min(limit || 50, 100);
-  const papers = await env.LIVING_PAPER.prepare("SELECT slug, doi, zenodo_doi FROM papers WHERE doi IS NOT NULL OR zenodo_doi IS NOT NULL ORDER BY created_at DESC LIMIT ?1").bind(n).all();
+  const papers = await env.LIVING_PAPER.prepare("SELECT slug, doi, registrar_doi FROM papers WHERE doi IS NOT NULL OR registrar_doi IS NOT NULL ORDER BY created_at DESC LIMIT ?1").bind(n).all();
   const now = (/* @__PURE__ */ new Date()).toISOString();
   for (const p of papers.results || []) {
-    const doi = p.zenodo_doi || p.doi;
+    const doi = p.registrar_doi || p.doi;
     if (!doi) continue;
     out.papers++;
     const entry = { slug: p.slug, doi, sources: {} };
     let crCited;
-    if (!doi.startsWith("10.5281/zenodo")) {
+    if (!doi.startsWith("10.5281/registrar")) {
       const cr = await fetchJson("https://api.crossref.org/works/" + encodeURIComponent(doi));
       crCited = cr?.message && cr.message["is-referenced-by-count"];
     }
@@ -62,7 +62,7 @@ async function runImpact(env, commit, limit) {
     const oa = await fetchJson("https://api.openalex.org/works/doi:" + encodeURIComponent(doi));
     const oaCited = oa?.cited_by_count;
     if (typeof oaCited === "number") entry.sources.openalex = oaCited;
-    const zn = await fetchJson("https://zenodo.org/api/records?q=doi:" + encodeURIComponent('"' + doi + '"') + "&size=1");
+    const zn = await fetchJson("https://registrar.org/api/records?q=doi:" + encodeURIComponent('"' + doi + '"') + "&size=1");
     const rec = zn && zn.hits && zn.hits.hits && zn.hits.hits[0];
     if (rec) {
       let views = 0, downloads = 0;
@@ -76,14 +76,14 @@ async function runImpact(env, commit, limit) {
           downloads += f.downloads || 0;
         }
       }
-      if (views || downloads) entry.sources.zenodo = { views, downloads };
+      if (views || downloads) entry.sources.registrar = { views, downloads };
     }
     const cited = (entry.sources.openalex || 0) + (entry.sources.crossref || 0);
-    const dls = entry.sources.zenodo && entry.sources.zenodo.downloads || 0;
-    const vws = entry.sources.zenodo && entry.sources.zenodo.views || 0;
+    const dls = entry.sources.registrar && entry.sources.registrar.downloads || 0;
+    const vws = entry.sources.registrar && entry.sources.registrar.views || 0;
     const score = Math.round((cited + dls / 50 + vws / 500) * 1e3) / 1e3;
     try {
-      for (const [src, metric, value] of [["crossref", "is-referenced-by-count", entry.sources.crossref], ["openalex", "cited_by_count", entry.sources.openalex], ["zenodo", "views", entry.sources.zenodo && entry.sources.zenodo.views], ["zenodo", "downloads", entry.sources.zenodo && entry.sources.zenodo.downloads]]) {
+      for (const [src, metric, value] of [["crossref", "is-referenced-by-count", entry.sources.crossref], ["openalex", "cited_by_count", entry.sources.openalex], ["registrar", "views", entry.sources.registrar && entry.sources.registrar.views], ["registrar", "downloads", entry.sources.registrar && entry.sources.registrar.downloads]]) {
         if (value !== void 0 && value !== null) {
           await env.QNFO_AUDIT.prepare("INSERT OR REPLACE INTO citation_stats (id, doi, source, metric, value, collected_at) VALUES (?1,?2,?3,?4,?5,?6)").bind(crypto.randomUUID(), doi, src, metric, value, now).run();
         }

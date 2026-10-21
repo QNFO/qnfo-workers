@@ -1,4 +1,4 @@
-var VERSION = "0.5.1-doi-scrub"; // 0.5.1 NOZ-DOI-1: no external record-service call or debug route, papers resolve by stored key or slug, receipt text names no DOI registrar; // ERRATA-GROUND-1 (2026-10-10): corrections state only what the errata email or the paper states
+var VERSION = "0.6.0-no-registrar"; // 0.5.1 NOZ-DOI-1: no external record-service call or debug route, papers resolve by stored key or slug, receipt text names no DOI registrar; // ERRATA-GROUND-1 (2026-10-10): corrections state only what the errata email or the paper states
 const MODEL = "@cf/zai-org/glm-5.3-flash"; // 2026-09-08 model audit swap
 
 function json(data, status) {
@@ -15,11 +15,11 @@ function authorized(request, env) {
 
 async function resolvePaper(env, doi) {
   // NOZ-DOI-1: lookup by the stored join key or the slug; no external record service is called.
-  const base = "SELECT slug, title, version, doi, zenodo_doi, body_md FROM papers WHERE doi = ?1 OR zenodo_doi = ?1 OR slug = ?1 LIMIT 1";
+  const base = "SELECT slug, title, version, doi, body_md FROM papers WHERE doi = ?1 OR slug = ?1 LIMIT 1";
   const row = await env.PAPERS_DB.prepare(base).bind(doi).first();
   return row || null;
 }
-var DEAD_DOI = /10\.5281\/|z[e]nodo/i; // NOZ-DOI-1: a dead-registrar DOI value is treated as absent in any emitted text
+var DEAD_DOI = /10\.5281\//; // NOZ-DOI-1: a dead-registrar DOI value is treated as absent in any emitted text
 function safeDoi(d) { return d && !DEAD_DOI.test(String(d)) ? String(d) : ""; }
 
 // ACCURACY-GROUND-1 (owner directive 2026-10-10: published or sent text is 100% accurate; every claim verifiable against supplied

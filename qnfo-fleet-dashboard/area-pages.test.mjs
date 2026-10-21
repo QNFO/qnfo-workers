@@ -107,7 +107,7 @@ ok(R.areaOfPage("queue") === null && R.areaOfPage("flow") === null && R.areaOfPa
 const qa = (source, title, key) => R.queueAreaOf({ source, title, key });
 ok(qa("billing", "AI credit runs out") === "cost" && qa("decision", "x") === "cost" && qa("shutdown", "Decision due") === "cost", "A10 billing, decision and shutdown cards are Cost");
 ok(qa("inbox", "Reply to someone") === "reach" && qa("code-loop", "Code task parked: x") === "autonomy" && qa("issue-loop", "x") === "autonomy" && qa("objectives", "Yes or no") === "autonomy" && qa("register", "x") === "autonomy" && qa("gtd", "x") === "autonomy", "A11 inbox is Reach; loop, objective and register cards are Autonomy");
-ok(qa("queue", "Payment decision: authorise a stronger model", "ha:pay") === "cost" && qa("queue", "Publish the paper to Zenodo", "ha:z") === "research" && qa("queue", "Rotate the access token", "ha:t") === "reliability" && qa("queue", "Reply to the Bluesky thread", "ha:b") === "reach", "A12 a queue card with no source of its own is placed by its words");
+ok(qa("queue", "Payment decision: authorise a stronger model", "ha:pay") === "cost" && qa("queue", "Publish the paper", "ha:z") === "research" && qa("queue", "Rotate the access token", "ha:t") === "reliability" && qa("queue", "Reply to the Bluesky thread", "ha:b") === "reach", "A12 a queue card with no source of its own is placed by its words");
 ok(qa("queue", "Something unrecognised", "ha:u") === "autonomy" && R.queueAreaOf(null) === "autonomy" && R.queueAreaOf({}) === "autonomy", "A13 an unrecognised card falls to Autonomy, never disappears");
 
 // ---- the shared fixtures

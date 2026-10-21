@@ -599,7 +599,7 @@
   },
   {
    "name": "biophoton-ultrametric-consilience",
-   "description": "Biophoton Ultrametricity: Consilient Synthesis \u2014 DOI 10.5281/zenodo.21651892",
+   "description": "Biophoton Ultrametricity: Consilient Synthesis \u2014 DOI 10.5281/x.21651892",
    "archived": true,
    "fork": false,
    "private": true,
@@ -1016,7 +1016,7 @@
   },
   {
    "name": "finite-precision-oc-convergence",
-   "description": "Finite Specification, Ontological Indeterminism: The Gisin-Del Santo Program Converges with Autaxys Ontological Closure (DOI: 10.5281/zenodo.21647362)",
+   "description": "Finite Specification, Ontological Indeterminism: The Gisin-Del Santo Program Converges with Autaxys Ontological Closure (DOI: 10.5281/x.21647362)",
    "archived": true,
    "fork": false,
    "private": false,
@@ -1835,7 +1835,7 @@
    "topics": [
     "academic-publishing",
     "qnfo",
-    "zenodo"
+    "deposit"
    ],
    "homepage": null,
    "language": null,
@@ -2901,8 +2901,8 @@
    "license": null
   },
   {
-   "name": "zenodo-automation",
-   "description": "One-command Zenodo DOI registration pipeline. Sandbox-tested, production-ready",
+   "name": "deposit-automation",
+   "description": "One-command DOI registration pipeline. Sandbox-tested, production-ready",
    "archived": true,
    "fork": false,
    "private": false,
@@ -2916,7 +2916,7 @@
     "publishing",
     "qnfo",
     "qwav",
-    "zenodo"
+    "deposit"
    ],
    "homepage": null,
    "language": "Python",

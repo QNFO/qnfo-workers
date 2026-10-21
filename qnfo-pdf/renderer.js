@@ -20,7 +20,7 @@
 // byline block or the D1 row is left out rather than guessed.
 import katex from "katex";
 
-export const RENDERER_VERSION = "2.2.0-typeset-pro-3";
+export const RENDERER_VERSION = "2.3.0-no-registrar";
 
 /* ------------------------------------------------------------------ */
 /* escaping                                                            */
@@ -380,13 +380,12 @@ function formatBibEntry(entry) {
     // misc / online / unpublished / preprint / software / dataset
     const seg = [titlePart(false)];
     const howRaw = f.howpublished ? plainOf(f.howpublished) : "";
-    // a howpublished that is only an identifier (arXiv:…, Zenodo 10.5281/…) is a link, not a venue:
+    // a howpublished that is only an identifier (arXiv:…, a bare DOI) is a link, not a venue:
     // name the repository instead of printing a bare number
     const isId = /(10\.\d{4,9}\/|arxiv[:\s]*\d{4}\.)/i.test(howRaw);
     let venue = isId ? "" : howRaw;
     if (!venue) {
       if (/arxiv[:\s]*\d{4}\./i.test(howRaw)) venue = "arXiv preprint";
-      else if (/zenodo/i.test(howRaw)) venue = "Zenodo";
       else if (f.publisher) venue = plainOf(f.publisher);
       else if (f.institution) venue = plainOf(f.institution);
     }
@@ -794,7 +793,7 @@ function buildMeta(fm, byline, opts) {
       : toList(pick(fm.affiliation, byline.affiliation, byline.affiliations));
   const keywords = toList(D.keywords).length ? toList(D.keywords) : toList(fm.keywords);
   const subjects = toList(D.categories).length ? toList(D.categories) : toList(fm.categories);
-  const doi = pick(D.doi, D.zenodo_doi, D.identifier, fm.doi, byline.doi);
+  const doi = pick(D.doi, D.identifier, fm.doi, byline.doi);
   const dateRaw = pick(D.published, fm.date, byline.date);
   return {
     slug: pick(D.slug, fm.slug, opts && opts.slug),

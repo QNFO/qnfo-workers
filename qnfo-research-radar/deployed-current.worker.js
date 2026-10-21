@@ -3,7 +3,7 @@ export default {
     const cron = event.cron;
     let out;
     try {
-      if (cron === "0 8 * * 7") out = await jobZenodo(env);
+      if (cron === "0 8 * * 7") out = await jobregistrar(env);
       else if (cron === "0 6 1 * *") out = await jobPhilpapers(env);
       else if (cron === "0 9 * * 7") out = await jobSeo(env);
       else out = { status: "skipped", cron: cron };
@@ -20,7 +20,7 @@ export default {
     if (url.pathname === "/run") {
       const mode = url.searchParams.get("job") || "all";
       const results = {};
-      if (mode === "zenodo" || mode === "all") results.zenodo = await jobZenodo(env);
+      if (mode === "registrar" || mode === "all") results.registrar = await jobregistrar(env);
       if (mode === "philpapers" || mode === "all") results.philpapers = await jobPhilpapers(env);
       if (mode === "seo" || mode === "all") results.seo = await jobSeo(env);
       return new Response(JSON.stringify(results), { headers: { "Content-Type": "application/json" } });
@@ -28,7 +28,7 @@ export default {
     return new Response("not found", { status: 404 });
   }
 };
-const ZENODO_DOIS = ["10.5281/zenodo.21803159","10.5281/zenodo.21786473","10.5281/zenodo.21784489","10.5281/zenodo.21784490","10.5281/zenodo.21786603"];
+const registrar_DOIS = ["10.5281/registrar.21803159","10.5281/registrar.21786473","10.5281/registrar.21784489","10.5281/registrar.21784490","10.5281/registrar.21786603"];
 const SITEMAPS = ["https://rwnq8.github.io/sitemap.xml","https://qnfo-landing.pages.dev/sitemap.xml"];
 function pad(n) { return String(n).padStart(2, "0"); }
 function todayKey() {
@@ -44,19 +44,19 @@ async function writeNote(env, name, body) {
   } catch (e) {}
   return null;
 }
-async function jobZenodo(env) {
+async function jobregistrar(env) {
   const lines = [];
   let ok = 0;
-  for (const doi of ZENODO_DOIS) {
+  for (const doi of registrar_DOIS) {
     try {
-      const r = await fetch("https://doi.org/api/handles/" + doi, { headers: { "User-Agent": "QNFO zenodo attribution audit (mailto:rwnquni@outlook.com)" } });
+      const r = await fetch("https://doi.org/api/handles/" + doi, { headers: { "User-Agent": "QNFO registrar attribution audit (mailto:rwnquni@outlook.com)" } });
       if (r.ok) { ok++; lines.push("- " + doi + " | resolve: OK (HTTP " + r.status + ")"); }
       else lines.push("- " + doi + " | resolve: FAIL (HTTP " + r.status + ")");
     } catch (e) { lines.push("- " + doi + " | resolve: ERROR " + String((e && e.message) || e)); }
   }
-  const body = "# Zenodo Attribution Audit " + todayKey().ymd + "\n\nDOIs checked: " + ZENODO_DOIS.length + " | resolving: " + ok + "\n\n" + lines.join("\n") + "\n";
-  const noteKey = await writeNote(env, "zenodo-attribution", body);
-  return { status: "ok", resolving: ok, total: ZENODO_DOIS.length, noteKey: noteKey };
+  const body = "# registrar Attribution Audit " + todayKey().ymd + "\n\nDOIs checked: " + registrar_DOIS.length + " | resolving: " + ok + "\n\n" + lines.join("\n") + "\n";
+  const noteKey = await writeNote(env, "registrar-attribution", body);
+  return { status: "ok", resolving: ok, total: registrar_DOIS.length, noteKey: noteKey };
 }
 async function jobPhilpapers(env) {
   let status = 0, len = 0, line = "no check";

@@ -20805,7 +20805,7 @@ var PUPPETEER_REVISIONS = Object.freeze({
 var puppeteer = new PuppeteerWorkers();
 var { connect, history, launch, limits, sessions, acquire } = puppeteer;
 var puppeteer_cloudflare_default = puppeteer;
-var VERSION = "0.8.0-doi-scrub"; // NOZ-DOI-1 (2026-10-10): no external deposit step; a publish re-renders the paper and re-points D1, graph and R2 only, with doi/zenodo_doi/zenodo_url left NULL.
+var VERSION = "0.9.0-no-registrar"; // NOZ-DOI-1 (2026-10-10): no external deposit step; a publish re-renders the paper and re-points D1, graph and R2 only, with doi left NULL.
 function json(data, status) {
   if (status === void 0) status = 200;
   return new Response(JSON.stringify(data), { status, headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" } });
@@ -20926,7 +20926,7 @@ __name22(publishNewVersion, "publishNewVersion");
 async function repointStores(env, action, paper, pub) {
   const status = {};
   await env.PAPERS_DB.prepare(
-    "UPDATE papers SET body_md=?1, version=?2, doi=NULL, zenodo_doi=NULL, zenodo_url=NULL, updated_at=datetime('now') WHERE slug=?3"
+    "UPDATE papers SET body_md=?1, version=?2, doi=NULL, updated_at=datetime('now') WHERE slug=?3"
   ).bind(action.corrected_md || "", action.version_to || paper.version, paper.slug).run();
   status.d1 = "ok";
   const kgId = "paper:" + paper.slug;
@@ -20939,7 +20939,6 @@ async function repointStores(env, action, paper, pub) {
       props = {};
     }
     delete props.doi;
-    delete props.zenodo_url;
     props.version = action.version_to || paper.version;
     await env.GRAPH_DB.prepare("UPDATE nodes SET properties=?1, updated_at=datetime('now') WHERE id=?2").bind(JSON.stringify(props), kgId).run();
     status.kg = "ok";
@@ -20985,7 +20984,7 @@ __name2(notifyUser, "notifyUser");
 __name22(notifyUser, "notifyUser");
 async function publishAction(env, action) {
   const paper = await env.PAPERS_DB.prepare(
-    "SELECT slug, title, version, doi, zenodo_doi, body_md, r2_path, r2_key FROM papers WHERE doi=?1 OR zenodo_doi=?1 OR slug=?2 LIMIT 1"
+    "SELECT slug, title, version, doi, body_md, r2_path, r2_key FROM papers WHERE doi=?1 OR slug=?2 LIMIT 1"
   ).bind(action.paper_doi, action.slug || "").first();
   if (!paper) {
     await env.WATCH_DB.prepare("UPDATE errata_actions SET status='error', updated_at=datetime('now') WHERE id=?").bind(action.id).run();
@@ -21043,7 +21042,7 @@ async function runPublish(env, mode) {
     const a = rows[i];
     if (dry) {
       const paper = await env.PAPERS_DB.prepare(
-        "SELECT slug, version, doi, r2_path, r2_key FROM papers WHERE doi=?1 OR zenodo_doi=?1 OR slug=?2 LIMIT 1"
+        "SELECT slug, version, doi, r2_path, r2_key FROM papers WHERE doi=?1 OR slug=?2 LIMIT 1"
       ).bind(a.paper_doi, a.slug || "").first();
       results.push({ action_id: a.id, dry: true, paper: paper ? paper.slug : null, r2_prefix: paper ? r2Prefix(paper) : null, version_to: a.version_to, corrected_md_len: (a.corrected_md || "").length, would_publish: true, pdf: "in-worker-render" });
       continue;
