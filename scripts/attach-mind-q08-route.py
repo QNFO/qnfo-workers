@@ -132,6 +132,16 @@ def public_get(url, timeout=20):
         return 0, None
 
 
+def secret_lock_acquire(lock_id):
+    """Acquire the repository secret-lock before mutating script bindings."""
+    return req("POST", "/secret-lock/acquire", {"lock_id": lock_id}, retries=1)
+
+
+def secret_lock_release(lock_id):
+    """Release the repository secret-lock in a finally block."""
+    req("POST", "/secret-lock/release", {"lock_id": lock_id}, retries=1)
+
+
 def script_exists():
     """Three independent paths. Fails closed only on a definitive 404 + a listing without the name."""
     # PATH A
@@ -153,8 +163,22 @@ def script_exists():
         R["script_exists"] = True
         return True
     # PATH C — workers.dev, best effort (gives a second independent live URL)
-    st_c, _ = req("PUT", "/accounts/%s/workers/scripts/%s/subdomain" % (ACCT, SERVICE),
-                  {"enabled": True}, retries=1)
+    # M4 requires that a workers/scripts PUT mutating bindings be wrapped in
+    # POST /secret-lock/acquire ... POST /secret-lock/release with try/finally.
+    lock_id = "%s:%s:%s" % (MARKER, ACCT, SERVICE)
+    st_c = 0
+    acquired = False
+    try:
+        lst, _ = secret_lock_acquire(lock_id)
+        if lst in (200, 201):
+            acquired = True
+            st_c, _ = req("PUT", "/accounts/%s/workers/scripts/%s/subdomain" % (ACCT, SERVICE),
+                          {"enabled": True}, retries=1)
+        else:
+            R["script_check"]["secret_lock_acquire"] = lst
+    finally:
+        if acquired:
+            secret_lock_release(lock_id)
     R["script_check"]["enable_workers_dev"] = st_c
     if st_c in (200, 201):
         sub_st, _ = public_get("https://%s.%s.workers.dev/health" % (SERVICE, ZONE_NAME))
