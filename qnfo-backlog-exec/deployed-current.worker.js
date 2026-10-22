@@ -2,7 +2,7 @@ var __defProp = Object.defineProperty;
 var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
 
 // worker.js
-var VERSION = "2.0.9-sla-120m"; // 2.0.9 SLA-120M-7 (2026-10-14): the advisor-noise sweep closes a snapshot after 120 minutes, not 3 h, and logs its caught error; host parity with qnfo-lifecycle 1.11.4. // 2.0.8 WORKERS-BP-LOGGING-qnfo-lifecycle-1 (2026-10-14, agent_issues 2536): the swallowed catches log as a structured console.error; host parity with qnfo-lifecycle 1.11.3. 2.0.7: BACKLOG-LATEST-PASS-1.
+var VERSION = "2.0.10-codeagent"; // 2.0.9 SLA-120M-7 (2026-10-14): the advisor-noise sweep closes a snapshot after 120 minutes, not 3 h, and logs its caught error; host parity with qnfo-lifecycle 1.11.4. // 2.0.8 WORKERS-BP-LOGGING-qnfo-lifecycle-1 (2026-10-14, agent_issues 2536): the swallowed catches log as a structured console.error; host parity with qnfo-lifecycle 1.11.3. 2.0.7: BACKLOG-LATEST-PASS-1.
 // PRIORITY-QUEUE-1 (2026-10-03, owner directive): the sweep ranks critical first. The old CASE ranked high, medium, else,
 // so critical issues sorted with low. Within a priority the least recently touched row still goes first (rotation).
 var WORKER = "qnfo-backlog-exec";
@@ -64,7 +64,7 @@ async function closeIssue(env, id, now, target, evidence) {
   const stamp = new Date().toISOString();
   const ev = "backlog-exec v1.6.1 evidence-first auto-close " + stamp + (target ? " | target=" + target : "") + (evidence ? " | " + evidence : "");
   await env.AUDIT.prepare("INSERT INTO issue_triage (issue_id, rc, triage_state, owner, sla_due_at, remediation, close_evidence, triaged_at) VALUES (?1,'RC-03','closed','qnfo-backlog-exec',datetime('now'),'auto-close by qnfo-backlog-exec v1.6.0 drain',?2,datetime('now')) ON CONFLICT(issue_id) DO UPDATE SET triage_state='closed', close_evidence=?2, triaged_at=datetime('now')").bind(id, ev).run();
-  return env.AUDIT.prepare("UPDATE agent_issues SET status='closed', updated_at=?1 WHERE id=?2 AND status='open'").bind(now, id).run();
+  return env.AUDIT.prepare("UPDATE agent_issues SET status='closed', close_channel=?3, updated_at=?1 WHERE id=?2 AND status='open'").bind(now, id, 'auto:backlog-exec').run();
 }
 // BACKLOG-EXEC-EVIDENCE-1 (2.0.4, agent_issues 1808): exception-class issues (WORKER-EXCEPTION-DETECTED <worker>,
 // ALERT-STORM-DETECTED <worker>, filed by qnfo-error-selfheal until it was retired on 2026-10-01) closed when alerts held no
