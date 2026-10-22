@@ -1,5 +1,5 @@
 {
-  "audited_at": "2026-10-22 03:47:40",
+  "audited_at": "2026-10-22 05:22:19",
   "d1_write_failures": [],
   "d1_writes_ok": 121,
   "guard": {
@@ -555,7 +555,7 @@
       },
       {
         "dir": "q08-signal-engine",
-        "version": "0.34.0-no-registrar",
+        "version": "0.34.1-codeagent",
         "worker": "q08-signal-engine"
       },
       {
@@ -585,7 +585,7 @@
       },
       {
         "dir": "qnfo-code-orchestrator",
-        "version": "0.25.1-exhaust-self-retry",
+        "version": "0.25.2-codeagent",
         "worker": "qnfo-code-orchestrator"
       },
       {
@@ -615,7 +615,7 @@
       },
       {
         "dir": "qnfo-fleet-dashboard",
-        "version": "1.55.0-no-registrar",
+        "version": "1.55.1-codeagent",
         "worker": "qnfo-fleet-dashboard"
       },
       {
@@ -995,9 +995,9 @@
       "worker": "q08-mind"
     },
     "q08-signal-engine": {
-      "before": "0.34.0-no-registrar",
+      "before": "0.34.1-codeagent",
       "http": 200,
-      "live": "0.34.0-no-registrar",
+      "live": "0.34.1-codeagent",
       "match": 1,
       "note": "SYNC",
       "worker": "q08-signal-engine"
@@ -1196,9 +1196,9 @@
       "worker": "qnfo-code-agent"
     },
     "qnfo-code-orchestrator": {
-      "before": "0.25.1-exhaust-self-retry",
+      "before": "0.25.2-codeagent",
       "http": 200,
-      "live": "0.25.1-exhaust-self-retry",
+      "live": "0.25.2-codeagent",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-code-orchestrator"
@@ -1334,9 +1334,9 @@
       "worker": "qnfo-fleet-control"
     },
     "qnfo-fleet-dashboard": {
-      "before": "1.55.0-no-registrar",
+      "before": "1.55.1-codeagent",
       "http": 200,
-      "live": "1.55.0-no-registrar",
+      "live": "1.55.1-codeagent",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-fleet-dashboard"
