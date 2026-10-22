@@ -1,21 +1,13 @@
 {
  "ok": true,
  "marker": "REMEDIATION-CONSUMER-1",
- "verifier": "remediation-consumer@ddf51b2e6945",
- "due": 608,
- "pass": 442,
- "fail": 91,
- "skipped": 75,
- "deferred": 75,
+ "verifier": "remediation-consumer@ae2c90ef2f09",
+ "due": 452,
+ "pass": 353,
+ "fail": 57,
+ "skipped": 42,
+ "deferred": 42,
  "contracts": [
-  {
-   "class": "plane-living-paper-fresh",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "ok",
-   "observed": "ok",
-   "written": true
-  },
   {
    "class": "issue-100114",
    "issue_id": 100114,
@@ -25,8 +17,16 @@
    "written": true
   },
   {
-   "class": "issue-100115",
-   "issue_id": 100115,
+   "class": "issue-100118",
+   "issue_id": 100118,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "issue-100119",
+   "issue_id": 100119,
    "verdict": "pass",
    "expected": "ok",
    "observed": "ok",
@@ -49,14 +49,6 @@
    "written": true
   },
   {
-   "class": "issue-100118",
-   "issue_id": 100118,
-   "verdict": "pass",
-   "expected": "ok",
-   "observed": "ok",
-   "written": true
-  },
-  {
    "class": "fm-outward-prose-source-starved",
    "issue_id": null,
    "verdict": "pass",
@@ -65,8 +57,8 @@
    "written": true
   },
   {
-   "class": "issue-100119",
-   "issue_id": 100119,
+   "class": "issue-100115",
+   "issue_id": 100115,
    "verdict": "pass",
    "expected": "ok",
    "observed": "ok",
@@ -102,14 +94,6 @@
    "verdict": "pass",
    "expected": "ok",
    "observed": "ok",
-   "written": true
-  },
-  {
-   "class": "fm-outward-prose-unjudged-final-text",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "0",
-   "observed": "0",
    "written": true
   },
   {
@@ -153,14 +137,6 @@
    "written": true
   },
   {
-   "class": "fm-journey-checkout-behind-main",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "ok",
-   "observed": "ok",
-   "written": true
-  },
-  {
    "class": "issue-100198",
    "issue_id": 100198,
    "verdict": "pass",
@@ -169,7 +145,15 @@
    "written": true
   },
   {
-   "class": "rt-q08",
+   "class": "fm-outward-prose-unjudged-final-text",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "0",
+   "observed": "0",
+   "written": true
+  },
+  {
+   "class": "fm-journey-checkout-behind-main",
    "issue_id": null,
    "verdict": "pass",
    "expected": "ok",
@@ -201,6 +185,14 @@
    "written": true
   },
   {
+   "class": "fm-code-loop-barred-from-control-plane",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
    "class": "issue-100197",
    "issue_id": 100197,
    "verdict": "pass",
@@ -209,7 +201,7 @@
    "written": true
   },
   {
-   "class": "fm-code-loop-barred-from-control-plane",
+   "class": "rt-q08",
    "issue_id": null,
    "verdict": "pass",
    "expected": "ok",
@@ -233,16 +225,16 @@
    "written": true
   },
   {
-   "class": "issue-100200",
-   "issue_id": 100200,
+   "class": "issue-100202",
+   "issue_id": 100202,
    "verdict": "pass",
    "expected": "ok",
    "observed": "ok",
    "written": true
   },
   {
-   "class": "issue-100202",
-   "issue_id": 100202,
+   "class": "issue-100200",
+   "issue_id": 100200,
    "verdict": "pass",
    "expected": "ok",
    "observed": "ok",
@@ -257,16 +249,16 @@
    "written": true
   },
   {
-   "class": "issue-100253",
-   "issue_id": 100253,
+   "class": "issue-100243",
+   "issue_id": 100243,
    "verdict": "pass",
    "expected": "ok",
    "observed": "ok",
    "written": true
   },
   {
-   "class": "issue-100243",
-   "issue_id": 100243,
+   "class": "issue-100253",
+   "issue_id": 100253,
    "verdict": "pass",
    "expected": "ok",
    "observed": "ok",
@@ -289,14 +281,6 @@
    "written": true
   },
   {
-   "class": "fm-q08-analysis-marker-rejected",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "0",
-   "observed": "0",
-   "written": true
-  },
-  {
    "class": "issue-100201",
    "issue_id": 100201,
    "verdict": "pass",
@@ -310,6 +294,14 @@
    "verdict": "pass",
    "expected": "ok",
    "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "fm-q08-analysis-marker-rejected",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "0",
+   "observed": "0",
    "written": true
   },
   {
@@ -329,30 +321,6 @@
    "written": true
   },
   {
-   "class": "fm-conflict-repair-skips-required-check",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "ok",
-   "observed": "ok",
-   "written": true
-  },
-  {
-   "class": "fm-model-floor-guard-read-failure-as-finding",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "ok",
-   "observed": "ok",
-   "written": true
-  },
-  {
-   "class": "issue-100264",
-   "issue_id": 100264,
-   "verdict": "pass",
-   "expected": "ok",
-   "observed": "ok",
-   "written": true
-  },
-  {
    "class": "slice-gh-app-broker-live",
    "issue_id": null,
    "verdict": "pass",
@@ -362,6 +330,22 @@
   },
   {
    "class": "fm-push-guard-cancelled-on-main",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "fm-conflict-repair-skips-required-check",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "fm-model-floor-guard-read-failure-as-finding",
    "issue_id": null,
    "verdict": "pass",
    "expected": "ok",
@@ -393,16 +377,8 @@
    "written": true
   },
   {
-   "class": "fm-selftest-fixture-annotations",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "ok",
-   "observed": "ok",
-   "written": true
-  },
-  {
-   "class": "fm-selfheal-cancels-in-flight",
-   "issue_id": null,
+   "class": "issue-100264",
+   "issue_id": 100264,
    "verdict": "pass",
    "expected": "ok",
    "observed": "ok",
@@ -419,4 +395,28 @@
   {
    "class": "fm-skipped-run-evicts-pending",
    "issue_id": null,
- 
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "fm-selfheal-cancels-in-flight",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "fm-selftest-fixture-annotations",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "issue-100327",
+   "issue_id": 100327,
+   "verdict
