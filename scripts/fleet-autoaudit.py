@@ -368,6 +368,15 @@ def classify(d):
     # match is forced to 0 by put() because a retired worker that exists is by definition not in sync.
     for it in d.get("retired_present", []):
         put(_w(it), None, None, None, 0, "RETIRED_PRESENT")
+    # UNMANAGED-PROBE-1: handle workers that are live but have no repo directory.
+    # The guard emits them in the `unmanaged_workers` class. Accept both dicts
+    # (with explicit fields) and legacy bare‑string entries.
+    for it in d.get("unmanaged_workers", []):
+        http = it.get("http") if isinstance(it, dict) else 200
+        live = it.get("live") if isinstance(it, dict) else None
+        if live is None and isinstance(it, dict):
+            live = it.get("version")
+        put(_w(it), http, live, None, 0, "UNMANAGED")
     return rows
 
 
