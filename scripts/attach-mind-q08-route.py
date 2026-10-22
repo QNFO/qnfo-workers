@@ -13,13 +13,22 @@ absence. MIND-Q08-3 separates the two:
 
   PATH A  GET /accounts/{acct}/workers/scripts/{name}           200 => exists
   PATH B  GET /accounts/{acct}/workers/scripts?per_page=100     name in list => exists
-  PATH C  enable workers.dev (best effort) and read its /health 200 => exists, second live URL
 
-It fails closed only on a definitive 404 from PATH A *and* a PATH B listing that does not contain the
-name. Any other outcome (0, 401, 403, 429, 5xx) is recorded as degraded and the run proceeds, because
-the real gate is outside verification: https://mind.q08.org/health must name q08-mind and
-/api/entries.json must list entries. Creating a route to a script that truly does not exist is rejected
-by Cloudflare, so proceeding is still fail-closed at the edge.
+and, crucially, it does NOT decide "absent" on a single observation. The attach run races the
+q08-mind deploy run: the route/DNS attach must WAIT for the deploy to land (bounded, ~10 min) before
+it is allowed to conclude the script is definitively absent. A 530 "record present, no worker bound"
+is exactly what an attach that aborted early leaves behind — so we never attach to nothing, and we
+never abort while the deploy may still be in flight.
+
+It fails closed only after the wait is exhausted, on a definitive 404 from PATH A *and* a PATH B
+listing that does not contain the name. Any other outcome (0, 401, 403, 429, 5xx) is recorded as
+degraded and the run proceeds, because the real gate is outside verification:
+https://mind.q08.org/health must name q08-mind and /api/entries.json must list entries. Creating a
+route to a script that truly does not exist is rejected by Cloudflare, so proceeding is still
+fail-closed at the edge.
+
+workers.dev is intentionally NOT touched: MIND-Q08-2 disables workers_dev by design
+(https://q08-mind.q08.workers.dev/ -> 404 is expected and must stay that way).
 """
 
 import json
@@ -36,7 +45,11 @@ HOST = "mind.q08.org"
 SERVICE = "q08-mind"
 ZONE_NAME = "q08.org"
 MARKER = "MIND-Q08-3"
-UA = "qnfo-attach-mind/3.0"
+UA = "qnfo-attach-mind/3.1"
+
+# Wait up to ~10 minutes for the q08-mind deploy to land before concluding absence.
+WAIT_ROUNDS = 20
+WAIT_SLEEP = 30
 
 TOKEN = os.environ.get("CF_API_TOKEN") or os.environ.get("CLOUDFLARE_API_TOKEN") or ""
 ACCT = os.environ.get("CF_ACCOUNT_ID") or os.environ.get("CLOUDFLARE_ACCOUNT_ID") or ""
@@ -56,6 +69,7 @@ R = {
     "status": "failed",
     "script_exists": None,
     "script_check": {},
+    "wait_rounds": 0,
     "subdomain": None,
     "route_id": None,
     "route_reused": None,
@@ -132,14 +146,14 @@ def public_get(url, timeout=20):
         return 0, None
 
 
-def script_exists():
-    """Three independent paths. Fails closed only on a definitive 404 + a listing without the name."""
+def script_probe():
+    """One observation round. Returns "exists", "absent", or "unknown" and fills R['script_check']."""
     # PATH A
     st, j = req("GET", "/accounts/%s/workers/scripts/%s" % (ACCT, SERVICE), retries=3)
     R["script_check"]["get_script"] = st
     if st == 200:
         R["script_exists"] = True
-        return True
+        return "exists"
     # PATH B
     st_b, jb = req("GET", "/accounts/%s/workers/scripts?per_page=100" % ACCT, retries=2)
     names = []
@@ -151,23 +165,45 @@ def script_exists():
     R["script_check"]["listed"] = SERVICE in names
     if SERVICE in names:
         R["script_exists"] = True
-        return True
-    # PATH C — workers.dev, best effort (gives a second independent live URL)
-    st_c, _ = req("PUT", "/accounts/%s/workers/scripts/%s/subdomain" % (ACCT, SERVICE),
-                  {"enabled": True}, retries=1)
-    R["script_check"]["enable_workers_dev"] = st_c
-    if st_c in (200, 201):
-        sub_st, _ = public_get("https://%s.%s.workers.dev/health" % (SERVICE, ZONE_NAME))
-        R["script_check"]["workers_dev_health"] = sub_st
-        if sub_st == 200:
-            R["subdomain"] = "%s.%s.workers.dev" % (SERVICE, ZONE_NAME)
-            R["script_exists"] = True
-            return True
+        return "exists"
     # Definitive absence requires BOTH a 404 and a readable listing without the name.
     if st == 404 and st_b == 200 and SERVICE not in names:
+        return "absent"
+    R["script_exists"] = None  # unknown — transport/auth/ratelimit; not evidence of absence
+    return "unknown"
+
+
+def wait_for_script():
+    """MIND-Q08-3 fix: this attach races the q08-mind deploy. Bounded-wait for it to land.
+
+    Only after WAIT_ROUNDS consecutive observations that are either "absent" or "unknown"
+    do we give up, and only a final "absent" is treated as definitive failure. A final
+    "unknown" proceeds degraded — the edge (route create + outside verify) is the real gate.
+    """
+    for i in range(WAIT_ROUNDS):
+        R["wait_rounds"] = i + 1
+        outcome = script_probe()
+        if outcome == "exists":
+            return True
+        if outcome == "unknown":
+            print("script_probe round %d/%d: unknown (transport/API degraded), waiting for deploy" % (i + 1, WAIT_ROUNDS))
+        else:
+            print("script_probe round %d/%d: not visible yet (deploy may still be landing), waiting" % (i + 1, WAIT_ROUNDS))
+        if i < WAIT_ROUNDS - 1:
+            time.sleep(WAIT_SLEEP)
+    # Wait exhausted. Definitive absence only on a clean 404 + listing without the name.
+    final = script_probe()
+    R["wait_rounds"] = WAIT_ROUNDS
+    if final == "absent":
         R["script_exists"] = False
         return False
-    R["script_exists"] = None  # unknown — proceed; the edge is the real gate
+    if final == "exists":
+        R["script_exists"] = True
+        return True
+    # Still unknown after 10 min: proceed degraded; Cloudflare rejects a route to a
+    # nonexistent script, so the edge remains fail-closed.
+    R["script_exists"] = None
+    R["script_check"]["degraded_after_wait"] = True
     return True
 
 
@@ -186,11 +222,12 @@ def main():
         zone = res[0]["id"]
     R["zone_id"] = zone
 
-    # 2. does the worker exist (three paths)
-    if not script_exists():
+    # 2. does the worker exist — with a bounded wait for the deploy to land
+    if not wait_for_script():
         return report("deploy", "failed",
-                      "q08-mind is definitively absent: get_script=404 and the account script list does not "
-                      "contain it (%s)" % json.dumps(R["script_check"]))
+                      "q08-mind is definitively absent after %d wait rounds: get_script=404 and the account "
+                      "script list does not contain it (%s)"
+                      % (WAIT_ROUNDS, json.dumps(R["script_check"])))
 
     # 3. route
     st, j = req("GET", "/zones/%s/workers/routes" % zone)
@@ -235,9 +272,9 @@ def main():
         R["dns_created"] = True
         R["dns_record_id"] = ((j or {}).get("result") or {}).get("id")
 
-    # 5. outside verification — the real gate
+    # 5. outside verification — the real gate (extended: the fresh route+record need time to bind)
     last = "no attempt"
-    for i in range(30):
+    for i in range(60):
         cb = int(time.time())
         hst, hj = public_get("https://%s/health?cb=%d" % (HOST, cb))
         if hst == 200 and isinstance(hj, dict) and (hj.get("worker") == SERVICE or hj.get("ok") is True):
@@ -247,11 +284,14 @@ def main():
                 R["verified"] = True
                 R["entries"] = n
                 R["health_version"] = hj.get("version")
+                if R["script_exists"] is None:
+                    return report("verify", "ok-degraded",
+                                  "script existence API read stayed degraded, but outside verification passed")
                 return report("verify", "ok")
             last = "entries http=%s n=%s" % (est, n)
         else:
             last = "health http=%s" % hst
-        print("verify %d/30: %s" % (i + 1, last))
+        print("verify %d/60: %s" % (i + 1, last))
         time.sleep(10)
 
     # 6. rollback only what this run created
@@ -260,7 +300,7 @@ def main():
     if R["dns_created"] is True and R["dns_record_id"]:
         req("DELETE", "/zones/%s/dns_records/%s" % (zone, R["dns_record_id"]))
     return report("verify", "failed",
-                  "https://%s never served %s within 5 min (%s); this run's route and record were removed"
+                  "https://%s never served %s within 10 min (%s); this run's route and record were removed"
                   % (HOST, SERVICE, last))
 
 
