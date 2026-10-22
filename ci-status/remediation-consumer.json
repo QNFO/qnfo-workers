@@ -1,16 +1,16 @@
 {
  "ok": true,
  "marker": "REMEDIATION-CONSUMER-1",
- "verifier": "remediation-consumer@107beef2dbfb",
- "due": 273,
+ "verifier": "remediation-consumer@9eb2301fe508",
+ "due": 272,
  "pass": 256,
  "fail": 16,
- "skipped": 1,
- "deferred": 1,
+ "skipped": 0,
+ "deferred": 0,
  "contracts": [
   {
-   "class": "plane-living-paper-fresh",
-   "issue_id": null,
+   "class": "issue-100170",
+   "issue_id": 100170,
    "verdict": "pass",
    "expected": "ok",
    "observed": "ok",
@@ -161,14 +161,6 @@
    "written": true
   },
   {
-   "class": "issue-100143",
-   "issue_id": 100143,
-   "verdict": "pass",
-   "expected": "ok",
-   "observed": "ok",
-   "written": true
-  },
-  {
    "class": "fm-ops-agent-history-resend",
    "issue_id": null,
    "verdict": "pass",
@@ -177,16 +169,16 @@
    "written": true
   },
   {
-   "class": "issue-100172",
-   "issue_id": 100172,
+   "class": "issue-100143",
+   "issue_id": 100143,
    "verdict": "pass",
    "expected": "ok",
    "observed": "ok",
    "written": true
   },
   {
-   "class": "issue-100198",
-   "issue_id": 100198,
+   "class": "issue-100172",
+   "issue_id": 100172,
    "verdict": "pass",
    "expected": "ok",
    "observed": "ok",
@@ -209,6 +201,14 @@
    "written": true
   },
   {
+   "class": "issue-100198",
+   "issue_id": 100198,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
    "class": "issue-100200",
    "issue_id": 100200,
    "verdict": "pass",
@@ -225,14 +225,6 @@
    "written": true
   },
   {
-   "class": "issue-100173",
-   "issue_id": 100173,
-   "verdict": "pass",
-   "expected": "ok",
-   "observed": "ok",
-   "written": true
-  },
-  {
    "class": "issue-100243",
    "issue_id": 100243,
    "verdict": "pass",
@@ -241,8 +233,8 @@
    "written": true
   },
   {
-   "class": "issue-100253",
-   "issue_id": 100253,
+   "class": "issue-100173",
+   "issue_id": 100173,
    "verdict": "pass",
    "expected": "ok",
    "observed": "ok",
@@ -273,8 +265,8 @@
    "written": true
   },
   {
-   "class": "rt-q08",
-   "issue_id": null,
+   "class": "issue-100253",
+   "issue_id": 100253,
    "verdict": "pass",
    "expected": "ok",
    "observed": "ok",
@@ -289,15 +281,7 @@
    "written": true
   },
   {
-   "class": "issue-100292",
-   "issue_id": 100292,
-   "verdict": "pass",
-   "expected": "ok",
-   "observed": "ok",
-   "written": true
-  },
-  {
-   "class": "fm-windows-parity-green-by-construction",
+   "class": "rt-q08",
    "issue_id": null,
    "verdict": "pass",
    "expected": "ok",
@@ -313,7 +297,7 @@
    "written": true
   },
   {
-   "class": "slice-gh-app-broker-live",
+   "class": "fm-windows-parity-green-by-construction",
    "issue_id": null,
    "verdict": "pass",
    "expected": "ok",
@@ -329,11 +313,19 @@
    "written": true
   },
   {
-   "class": "fm-q08-analysis-marker-rejected",
+   "class": "issue-100292",
+   "issue_id": 100292,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "slice-gh-app-broker-live",
    "issue_id": null,
    "verdict": "pass",
-   "expected": "0",
-   "observed": "0",
+   "expected": "ok",
+   "observed": "ok",
    "written": true
   },
   {
@@ -353,6 +345,30 @@
    "written": true
   },
   {
+   "class": "fm-selfheal-cancels-in-flight",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "fm-q08-analysis-marker-rejected",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "0",
+   "observed": "0",
+   "written": true
+  },
+  {
+   "class": "goal-TWIN-NATIVE-TOOLS-1",
+   "issue_id": null,
+   "verdict": "fail",
+   "expected": "ok",
+   "observed": "present-marker:personal-api/worker.js",
+   "written": true
+  },
+  {
    "class": "fm-conflict-repair-skips-required-check",
    "issue_id": null,
    "verdict": "pass",
@@ -366,30 +382,6 @@
    "verdict": "pass",
    "expected": "ok",
    "observed": "ok",
-   "written": true
-  },
-  {
-   "class": "fm-selfheal-cancels-in-flight",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "ok",
-   "observed": "ok",
-   "written": true
-  },
-  {
-   "class": "issue-100327",
-   "issue_id": 100327,
-   "verdict": "pass",
-   "expected": "ok",
-   "observed": "ok",
-   "written": true
-  },
-  {
-   "class": "goal-TWIN-NATIVE-TOOLS-1",
-   "issue_id": null,
-   "verdict": "fail",
-   "expected": "ok",
-   "observed": "present-marker:personal-api/worker.js",
    "written": true
   },
   {
@@ -417,4 +409,13 @@
    "written": true
   },
   {
-   "class": "fm-selftest-fixture-annota
+   "class": "issue-100327",
+   "issue_id": 100327,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "rt-fleet-dashboard",
+   "issue_id": 
