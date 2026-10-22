@@ -20,6 +20,13 @@ name. Any other outcome (0, 401, 403, 429, 5xx) is recorded as degraded and the 
 the real gate is outside verification: https://mind.q08.org/health must name q08-mind and
 /api/entries.json must list entries. Creating a route to a script that truly does not exist is rejected
 by Cloudflare, so proceeding is still fail-closed at the edge.
+
+Why this revision (issue #100447, RED-DRAIN-1 dispatch): the MIND-Q08-2-era run raced the q08-mind
+deploy and aborted while the deploy was still landing, leaving a DNS record with no worker bound —
+the exact shape of a 530. The deploy wait is therefore a poll loop: the script-existence check is
+retried across a full 15-minute window before absence is accepted, and even a definitive
+(get_script=404, list-without-name) result inside the window is re-checked until the window closes,
+because a deploy can land at any point during it.
 """
 
 import json
@@ -37,6 +44,11 @@ SERVICE = "q08-mind"
 ZONE_NAME = "q08.org"
 MARKER = "MIND-Q08-3"
 UA = "qnfo-attach-mind/3.0"
+
+# Deploy-wait window: total seconds to keep polling for the q08-mind script before
+# declaring it absent. Generously larger than the deploy pipeline (issue #100447).
+DEPLOY_WAIT_SECONDS = 15 * 60
+DEPLOY_POLL_INTERVAL = 20
 
 TOKEN = os.environ.get("CF_API_TOKEN") or os.environ.get("CLOUDFLARE_API_TOKEN") or ""
 ACCT = os.environ.get("CF_ACCOUNT_ID") or os.environ.get("CLOUDFLARE_ACCOUNT_ID") or ""
@@ -56,6 +68,8 @@ R = {
     "status": "failed",
     "script_exists": None,
     "script_check": {},
+    "script_poll_attempts": 0,
+    "script_poll_seconds": 0,
     "subdomain": None,
     "route_id": None,
     "route_reused": None,
@@ -133,7 +147,13 @@ def public_get(url, timeout=20):
 
 
 def script_exists():
-    """Three independent paths. Fails closed only on a definitive 404 + a listing without the name."""
+    """Three independent paths. Fails closed only on a definitive 404 + a listing without the name.
+
+    Returns True when existence is proven or unknown (proceed), False only on definitive absence.
+    A single poll's "definitive absence" is NOT final: the caller re-polls across the deploy window
+    (issue #100447 — the MIND-Q08-2 run raced the deploy and aborted early, leaving an unbound
+    record, i.e. a 530).
+    """
     # PATH A
     st, j = req("GET", "/accounts/%s/workers/scripts/%s" % (ACCT, SERVICE), retries=3)
     R["script_check"]["get_script"] = st
@@ -171,6 +191,32 @@ def script_exists():
     return True
 
 
+def wait_for_script():
+    """Poll script existence across the full deploy window before accepting absence.
+
+    Existence (or degraded-unknown) returns immediately. Definitive absence is only
+    conclusive once the window has elapsed, since the q08-mind deploy may still be
+    mid-flight (the #100447 race).
+    """
+    started = time.time()
+    attempt = 0
+    last_absent = None
+    while True:
+        attempt += 1
+        R["script_poll_attempts"] = attempt
+        elapsed = int(time.time() - started)
+        R["script_poll_seconds"] = elapsed
+        if script_exists():
+            return True
+        # definitive absence this poll — keep waiting until the window closes
+        last_absent = json.dumps(R["script_check"])
+        if elapsed >= DEPLOY_WAIT_SECONDS:
+            return False
+        print("deploy wait %d: q08-mind not visible yet (%ds elapsed of %ds window); "
+              "continuing to poll" % (attempt, elapsed, DEPLOY_WAIT_SECONDS))
+        time.sleep(DEPLOY_POLL_INTERVAL)
+
+
 def main():
     R["ts"] = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
     if not TOKEN or not ACCT:
@@ -186,11 +232,13 @@ def main():
         zone = res[0]["id"]
     R["zone_id"] = zone
 
-    # 2. does the worker exist (three paths)
-    if not script_exists():
+    # 2. does the worker exist (three paths, polled across the deploy window)
+    if not wait_for_script():
         return report("deploy", "failed",
-                      "q08-mind is definitively absent: get_script=404 and the account script list does not "
-                      "contain it (%s)" % json.dumps(R["script_check"]))
+                      "q08-mind is definitively absent after a %ds poll window "
+                      "(%d attempts; get_script=404 and the account script list does not contain it): %s"
+                      % (DEPLOY_WAIT_SECONDS, R["script_poll_attempts"],
+                         json.dumps(R["script_check"])))
 
     # 3. route
     st, j = req("GET", "/zones/%s/workers/routes" % zone)
