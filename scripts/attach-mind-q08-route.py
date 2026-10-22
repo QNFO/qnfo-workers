@@ -20,6 +20,11 @@ name. Any other outcome (0, 401, 403, 429, 5xx) is recorded as degraded and the 
 the real gate is outside verification: https://mind.q08.org/health must name q08-mind and
 /api/entries.json must list entries. Creating a route to a script that truly does not exist is rejected
 by Cloudflare, so proceeding is still fail-closed at the edge.
+
+Every mutation (the workers.dev subdomain PUT, the route POST, the DNS record POST, and the rollback
+DELETEs) is performed while holding the account secret-lock, acquired via POST /secret-lock/acquire and
+released via POST /secret-lock/release in a try/finally. The run fails closed if the lock cannot be
+acquired. No allowlist entry is used to bypass this.
 """
 
 import json
@@ -56,6 +61,7 @@ R = {
     "status": "failed",
     "script_exists": None,
     "script_check": {},
+    "secret_lock": None,
     "subdomain": None,
     "route_id": None,
     "route_reused": None,
@@ -116,6 +122,18 @@ def req(method, path, body=None, timeout=25, retries=2):
     return last, {"transport_error": last_err}
 
 
+def lock_acquire(reason):
+    """Acquire the account secret-lock. Returns (ok, http_status, body)."""
+    st, j = req("POST", "/secret-lock/acquire",
+                {"holder": MARKER, "reason": reason, "service": SERVICE}, retries=3)
+    return (st in (200, 201)), st, j
+
+
+def lock_release():
+    """Release the account secret-lock (best effort, always called from finally)."""
+    req("POST", "/secret-lock/release", {"holder": MARKER, "service": SERVICE}, retries=2)
+
+
 def public_get(url, timeout=20):
     """Outside read of the public surface (no auth). Returns (status, json_or_None)."""
     try:
@@ -133,7 +151,11 @@ def public_get(url, timeout=20):
 
 
 def script_exists():
-    """Three independent paths. Fails closed only on a definitive 404 + a listing without the name."""
+    """Three independent paths. Fails closed only on a definitive 404 + a listing without the name.
+
+    Must be called while the secret-lock is held: PATH C issues a mutating PUT
+    (workers/scripts/{name}/subdomain), which is only permitted under the lock.
+    """
     # PATH A
     st, j = req("GET", "/accounts/%s/workers/scripts/%s" % (ACCT, SERVICE), retries=3)
     R["script_check"]["get_script"] = st
@@ -152,7 +174,8 @@ def script_exists():
     if SERVICE in names:
         R["script_exists"] = True
         return True
-    # PATH C — workers.dev, best effort (gives a second independent live URL)
+    # PATH C — workers.dev, best effort (gives a second independent live URL).
+    # Mutating PUT: performed under the already-held secret-lock.
     st_c, _ = req("PUT", "/accounts/%s/workers/scripts/%s/subdomain" % (ACCT, SERVICE),
                   {"enabled": True}, retries=1)
     R["script_check"]["enable_workers_dev"] = st_c
@@ -186,56 +209,69 @@ def main():
         zone = res[0]["id"]
     R["zone_id"] = zone
 
-    # 2. does the worker exist (three paths)
-    if not script_exists():
-        return report("deploy", "failed",
-                      "q08-mind is definitively absent: get_script=404 and the account script list does not "
-                      "contain it (%s)" % json.dumps(R["script_check"]))
+    # 2. acquire the secret-lock; every mutation below runs under it (try/finally release).
+    ok, st_l, jl = lock_acquire("attach %s route/record for %s" % (HOST, SERVICE))
+    R["secret_lock"] = "acquired" if ok else "acquire-http=%s" % st_l
+    if not ok:
+        return report("secret-lock", "failed",
+                      "secret-lock acquire http=%s body=%s; refusing to mutate bindings without the lock"
+                      % (st_l, json.dumps(jl)[:300]))
 
-    # 3. route
-    st, j = req("GET", "/zones/%s/workers/routes" % zone)
-    if st != 200:
-        return report("route-read", "failed", "http=%s body=%s" % (st, json.dumps(j)[:300]))
-    pattern = HOST + "/*"
-    existing = None
-    for r in ((j or {}).get("result") or []):
-        if isinstance(r, dict) and r.get("pattern") == pattern:
-            existing = r
-            break
-    if existing:
-        if existing.get("script") == SERVICE:
-            R["route_id"] = existing.get("id")
-            R["route_reused"] = True
+    try:
+        # 3. does the worker exist (three paths; PATH C PUT covered by the held lock)
+        if not script_exists():
+            return report("deploy", "failed",
+                          "q08-mind is definitively absent: get_script=404 and the account script list does not "
+                          "contain it (%s)" % json.dumps(R["script_check"]))
+
+        # 4. route
+        st, j = req("GET", "/zones/%s/workers/routes" % zone)
+        if st != 200:
+            return report("route-read", "failed", "http=%s body=%s" % (st, json.dumps(j)[:300]))
+        pattern = HOST + "/*"
+        existing = None
+        for r in ((j or {}).get("result") or []):
+            if isinstance(r, dict) and r.get("pattern") == pattern:
+                existing = r
+                break
+        if existing:
+            if existing.get("script") == SERVICE:
+                R["route_id"] = existing.get("id")
+                R["route_reused"] = True
+            else:
+                return report("route", "failed",
+                              "route %s already exists and points at %r, not %r; left untouched"
+                              % (pattern, existing.get("script"), SERVICE))
         else:
-            return report("route", "failed",
-                          "route %s already exists and points at %r, not %r; left untouched"
-                          % (pattern, existing.get("script"), SERVICE))
-    else:
-        st, j = req("POST", "/zones/%s/workers/routes" % zone, {"pattern": pattern, "script": SERVICE})
-        if st not in (200, 201):
-            return report("route", "failed", "route create http=%s body=%s" % (st, json.dumps(j)[:300]))
-        R["route_id"] = ((j or {}).get("result") or {}).get("id")
-        R["route_reused"] = False
+            st, j = req("POST", "/zones/%s/workers/routes" % zone, {"pattern": pattern, "script": SERVICE})
+            if st not in (200, 201):
+                return report("route", "failed", "route create http=%s body=%s" % (st, json.dumps(j)[:300]))
+            R["route_id"] = ((j or {}).get("result") or {}).get("id")
+            R["route_reused"] = False
 
-    # 4. DNS — only create when no record for the host exists
-    st, j = req("GET", "/zones/%s/dns_records?name=%s" % (zone, urllib.parse.quote(HOST)))
-    if st != 200:
-        return report("dns-read", "failed", "http=%s body=%s" % (st, json.dumps(j)[:300]))
-    recs = (j or {}).get("result") or []
-    if recs:
-        R["dns_created"] = False
-        R["dns_record_id"] = recs[0].get("id")
-    else:
-        st, j = req("POST", "/zones/%s/dns_records" % zone, {
-            "type": "AAAA", "name": HOST, "content": "100::", "proxied": True, "ttl": 1,
-            "comment": "%s originless record for the %s worker route" % (MARKER, SERVICE),
-        })
-        if st not in (200, 201):
-            return report("dns", "failed", "record create http=%s body=%s" % (st, json.dumps(j)[:300]))
-        R["dns_created"] = True
-        R["dns_record_id"] = ((j or {}).get("result") or {}).get("id")
+        # 5. DNS — only create when no record for the host exists
+        st, j = req("GET", "/zones/%s/dns_records?name=%s" % (zone, urllib.parse.quote(HOST)))
+        if st != 200:
+            return report("dns-read", "failed", "http=%s body=%s" % (st, json.dumps(j)[:300]))
+        recs = (j or {}).get("result") or []
+        if recs:
+            R["dns_created"] = False
+            R["dns_record_id"] = recs[0].get("id")
+        else:
+            st, j = req("POST", "/zones/%s/dns_records" % zone, {
+                "type": "AAAA", "name": HOST, "content": "100::", "proxied": True, "ttl": 1,
+                "comment": "%s originless record for the %s worker route" % (MARKER, SERVICE),
+            })
+            if st not in (200, 201):
+                return report("dns", "failed", "record create http=%s body=%s" % (st, json.dumps(j)[:300]))
+            R["dns_created"] = True
+            R["dns_record_id"] = ((j or {}).get("result") or {}).get("id")
+    finally:
+        # release the secret-lock no matter how the mutation phase ended
+        lock_release()
+        R["secret_lock"] = "released"
 
-    # 5. outside verification — the real gate
+    # 6. outside verification — the real gate (read-only, no lock needed)
     last = "no attempt"
     for i in range(30):
         cb = int(time.time())
@@ -254,11 +290,18 @@ def main():
         print("verify %d/30: %s" % (i + 1, last))
         time.sleep(10)
 
-    # 6. rollback only what this run created
-    if R["route_reused"] is False and R["route_id"]:
-        req("DELETE", "/zones/%s/workers/routes/%s" % (zone, R["route_id"]))
-    if R["dns_created"] is True and R["dns_record_id"]:
-        req("DELETE", "/zones/%s/dns_records/%s" % (zone, R["dns_record_id"]))
+    # 7. rollback only what this run created — mutations, so re-acquire the secret-lock
+    ok_rb, st_rb, jrb = lock_acquire("rollback %s route/record for %s" % (HOST, SERVICE))
+    if ok_rb:
+        try:
+            if R["route_reused"] is False and R["route_id"]:
+                req("DELETE", "/zones/%s/workers/routes/%s" % (zone, R["route_id"]))
+            if R["dns_created"] is True and R["dns_record_id"]:
+                req("DELETE", "/zones/%s/dns_records/%s" % (zone, R["dns_record_id"]))
+        finally:
+            lock_release()
+    else:
+        print("secret-lock acquire for rollback failed http=%s; nothing was deleted" % st_rb)
     return report("verify", "failed",
                   "https://%s never served %s within 5 min (%s); this run's route and record were removed"
                   % (HOST, SERVICE, last))
