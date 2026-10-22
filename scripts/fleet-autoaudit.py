@@ -368,6 +368,16 @@ def classify(d):
     # match is forced to 0 by put() because a retired worker that exists is by definition not in sync.
     for it in d.get("retired_present", []):
         put(_w(it), None, None, None, 0, "RETIRED_PRESENT")
+    # UNMANAGED-PROBE-1 (#100448): the probe set is built from repo directories, so a worker
+    # that is live in the CF account but has no repo directory appeared in no class and was
+    # never probed. The guard now emits those workers explicitly; consume the class here so
+    # it is audited like any other. Tolerate the bare-string form, as everywhere else.
+    for it in d.get("unmanaged_workers", []):
+        _http = it.get("http") if isinstance(it, dict) else None
+        _live = it.get("live") if isinstance(it, dict) else None
+        if _live is None and isinstance(it, dict):
+            _live = it.get("version")
+        put(_w(it), _http, _live, None, 0, "UNMANAGED")
     return rows
 
 
