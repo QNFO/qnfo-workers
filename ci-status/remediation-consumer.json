@@ -1,16 +1,32 @@
 {
  "ok": true,
  "marker": "REMEDIATION-CONSUMER-1",
- "verifier": "remediation-consumer@eab3531d36d1",
- "due": 415,
- "pass": 328,
- "fail": 43,
- "skipped": 44,
- "deferred": 44,
+ "verifier": "remediation-consumer@9e458bdf1dac",
+ "due": 417,
+ "pass": 324,
+ "fail": 42,
+ "skipped": 51,
+ "deferred": 51,
  "contracts": [
   {
-   "class": "issue-2017",
-   "issue_id": 2017,
+   "class": "fm-backlog-close-on-stale-pass",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "goal-TWIN-NATIVE-TOOLS-1",
+   "issue_id": null,
+   "verdict": "fail",
+   "expected": "ok",
+   "observed": "present-marker:personal-api/worker.js",
+   "written": true
+  },
+  {
+   "class": "issue-100081",
+   "issue_id": 100081,
    "verdict": "pass",
    "expected": "ok",
    "observed": "ok",
@@ -49,7 +65,15 @@
    "written": true
   },
   {
-   "class": "fm-backlog-close-on-stale-pass",
+   "class": "issue-2017",
+   "issue_id": 2017,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "rt-gateway",
    "issue_id": null,
    "verdict": "pass",
    "expected": "ok",
@@ -57,16 +81,16 @@
    "written": true
   },
   {
-   "class": "goal-TWIN-NATIVE-TOOLS-1",
+   "class": "rt-ai-router",
    "issue_id": null,
-   "verdict": "fail",
+   "verdict": "pass",
    "expected": "ok",
-   "observed": "present-marker:personal-api/worker.js",
+   "observed": "ok",
    "written": true
   },
   {
-   "class": "issue-100081",
-   "issue_id": 100081,
+   "class": "issue-100118",
+   "issue_id": 100118,
    "verdict": "pass",
    "expected": "ok",
    "observed": "ok",
@@ -89,7 +113,7 @@
    "written": true
   },
   {
-   "class": "rt-fleet-dashboard",
+   "class": "fm-dead-binding-call-in-empty-catch",
    "issue_id": null,
    "verdict": "pass",
    "expected": "ok",
@@ -97,7 +121,7 @@
    "written": true
   },
   {
-   "class": "rt-gateway",
+   "class": "rt-fleet-dashboard",
    "issue_id": null,
    "verdict": "pass",
    "expected": "ok",
@@ -113,38 +137,6 @@
    "written": true
   },
   {
-   "class": "issue-100118",
-   "issue_id": 100118,
-   "verdict": "pass",
-   "expected": "ok",
-   "observed": "ok",
-   "written": true
-  },
-  {
-   "class": "fm-dead-binding-call-in-empty-catch",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "ok",
-   "observed": "ok",
-   "written": true
-  },
-  {
-   "class": "rt-ai-router",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "ok",
-   "observed": "ok",
-   "written": true
-  },
-  {
-   "class": "issue-2305",
-   "issue_id": 2305,
-   "verdict": "pass",
-   "expected": "ok",
-   "observed": "ok",
-   "written": true
-  },
-  {
    "class": "issue-100119",
    "issue_id": 100119,
    "verdict": "pass",
@@ -153,8 +145,8 @@
    "written": true
   },
   {
-   "class": "issue-100143",
-   "issue_id": 100143,
+   "class": "issue-2305",
+   "issue_id": 2305,
    "verdict": "pass",
    "expected": "ok",
    "observed": "ok",
@@ -177,6 +169,14 @@
    "written": true
   },
   {
+   "class": "issue-100143",
+   "issue_id": 100143,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
    "class": "fm-code-loop-barred-from-control-plane",
    "issue_id": null,
    "verdict": "pass",
@@ -185,8 +185,24 @@
    "written": true
   },
   {
+   "class": "issue-2342",
+   "issue_id": 2342,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
    "class": "issue-100162",
    "issue_id": 100162,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "fm-ops-agent-history-resend",
+   "issue_id": null,
    "verdict": "pass",
    "expected": "ok",
    "observed": "ok",
@@ -209,16 +225,8 @@
    "written": true
   },
   {
-   "class": "issue-2342",
-   "issue_id": 2342,
-   "verdict": "pass",
-   "expected": "ok",
-   "observed": "ok",
-   "written": true
-  },
-  {
-   "class": "fm-ops-agent-history-resend",
-   "issue_id": null,
+   "class": "issue-2397",
+   "issue_id": 2397,
    "verdict": "pass",
    "expected": "ok",
    "observed": "ok",
@@ -235,14 +243,6 @@
   {
    "class": "issue-100198",
    "issue_id": 100198,
-   "verdict": "pass",
-   "expected": "ok",
-   "observed": "ok",
-   "written": true
-  },
-  {
-   "class": "issue-2397",
-   "issue_id": 2397,
    "verdict": "pass",
    "expected": "ok",
    "observed": "ok",
@@ -313,14 +313,6 @@
    "written": true
   },
   {
-   "class": "issue-100220",
-   "issue_id": 100220,
-   "verdict": "pass",
-   "expected": "ok",
-   "observed": "ok",
-   "written": true
-  },
-  {
    "class": "issue-2407",
    "issue_id": 2407,
    "verdict": "pass",
@@ -329,8 +321,8 @@
    "written": true
   },
   {
-   "class": "issue-2403",
-   "issue_id": 2403,
+   "class": "issue-100220",
+   "issue_id": 100220,
    "verdict": "pass",
    "expected": "ok",
    "observed": "ok",
@@ -353,8 +345,32 @@
    "written": true
   },
   {
+   "class": "rt-live-qnfo-deploy-guard",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
    "class": "issue-2600",
    "issue_id": 2600,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "issue-2403",
+   "issue_id": 2403,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "rt-live-qnfo-containers-pilot",
+   "issue_id": null,
    "verdict": "pass",
    "expected": "ok",
    "observed": "ok",
@@ -370,22 +386,6 @@
   },
   {
    "class": "fm-companion-essay-over-ceiling-rewritten",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "ok",
-   "observed": "ok",
-   "written": true
-  },
-  {
-   "class": "rt-live-qnfo-containers-pilot",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "ok",
-   "observed": "ok",
-   "written": true
-  },
-  {
-   "class": "rt-live-qnfo-deploy-guard",
    "issue_id": null,
    "verdict": "pass",
    "expected": "ok",
