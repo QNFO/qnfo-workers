@@ -1,29 +1,13 @@
 {
  "ok": true,
  "marker": "REMEDIATION-CONSUMER-1",
- "verifier": "remediation-consumer@43568c809b7a",
- "due": 538,
- "pass": 384,
- "fail": 69,
- "skipped": 85,
- "deferred": 85,
+ "verifier": "remediation-consumer@6044a31b9a27",
+ "due": 512,
+ "pass": 383,
+ "fail": 76,
+ "skipped": 53,
+ "deferred": 53,
  "contracts": [
-  {
-   "class": "plane-living-paper-fresh",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "ok",
-   "observed": "ok",
-   "written": true
-  },
-  {
-   "class": "issue-100188",
-   "issue_id": 100188,
-   "verdict": "pass",
-   "expected": "ok",
-   "observed": "ok",
-   "written": true
-  },
   {
    "class": "issue-100081",
    "issue_id": 100081,
@@ -89,7 +73,7 @@
    "written": true
   },
   {
-   "class": "fm-code-loop-corrupt-splice-merged",
+   "class": "fm-fm-reconcile-cycle-reset",
    "issue_id": null,
    "verdict": "pass",
    "expected": "ok",
@@ -97,7 +81,7 @@
    "written": true
   },
   {
-   "class": "fm-fm-reconcile-cycle-reset",
+   "class": "fm-code-loop-corrupt-splice-merged",
    "issue_id": null,
    "verdict": "pass",
    "expected": "ok",
@@ -185,6 +169,14 @@
    "written": true
   },
   {
+   "class": "issue-100200",
+   "issue_id": 100200,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
    "class": "rt-page-q08-feed",
    "issue_id": null,
    "verdict": "pass",
@@ -193,15 +185,7 @@
    "written": true
   },
   {
-   "class": "issue-100197",
-   "issue_id": 100197,
-   "verdict": "pass",
-   "expected": "ok",
-   "observed": "ok",
-   "written": true
-  },
-  {
-   "class": "fm-outward-prose-unjudged-final-text",
+   "class": "fm-outward-prose-source-starved",
    "issue_id": null,
    "verdict": "pass",
    "expected": "0",
@@ -209,8 +193,16 @@
    "written": true
   },
   {
-   "class": "issue-100200",
-   "issue_id": 100200,
+   "class": "fm-writer-reasoning-models-excluded",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "0",
+   "observed": "0",
+   "written": true
+  },
+  {
+   "class": "issue-100197",
+   "issue_id": 100197,
    "verdict": "pass",
    "expected": "ok",
    "observed": "ok",
@@ -225,15 +217,7 @@
    "written": true
   },
   {
-   "class": "fm-outward-prose-source-starved",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "0",
-   "observed": "0",
-   "written": true
-  },
-  {
-   "class": "fm-writer-reasoning-models-excluded",
+   "class": "fm-outward-prose-unjudged-final-text",
    "issue_id": null,
    "verdict": "pass",
    "expected": "0",
@@ -297,22 +281,6 @@
    "written": true
   },
   {
-   "class": "rt-q08",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "ok",
-   "observed": "ok",
-   "written": true
-  },
-  {
-   "class": "issue-100253",
-   "issue_id": 100253,
-   "verdict": "pass",
-   "expected": "ok",
-   "observed": "ok",
-   "written": true
-  },
-  {
    "class": "fm-companion-essay-over-ceiling-rewritten",
    "issue_id": null,
    "verdict": "pass",
@@ -329,16 +297,16 @@
    "written": true
   },
   {
-   "class": "fm-q08-verdict-line-missing",
+   "class": "rt-q08",
    "issue_id": null,
    "verdict": "pass",
-   "expected": "0",
-   "observed": "0",
+   "expected": "ok",
+   "observed": "ok",
    "written": true
   },
   {
-   "class": "fm-windows-parity-green-by-construction",
-   "issue_id": null,
+   "class": "issue-100253",
+   "issue_id": 100253,
    "verdict": "pass",
    "expected": "ok",
    "observed": "ok",
@@ -353,6 +321,22 @@
    "written": true
   },
   {
+   "class": "issue-2305",
+   "issue_id": 2305,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "fm-q08-verdict-line-missing",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "0",
+   "observed": "0",
+   "written": true
+  },
+  {
    "class": "issue-100264",
    "issue_id": 100264,
    "verdict": "pass",
@@ -363,6 +347,14 @@
   {
    "class": "issue-100292",
    "issue_id": 100292,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "fm-windows-parity-green-by-construction",
+   "issue_id": null,
    "verdict": "pass",
    "expected": "ok",
    "observed": "ok",
@@ -385,16 +377,24 @@
    "written": true
   },
   {
-   "class": "issue-2305",
-   "issue_id": 2305,
+   "class": "issue-2342",
+   "issue_id": 2342,
    "verdict": "pass",
    "expected": "ok",
    "observed": "ok",
    "written": true
   },
   {
-   "class": "issue-2342",
-   "issue_id": 2342,
+   "class": "issue-2397",
+   "issue_id": 2397,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "issue-2404",
+   "issue_id": 2404,
    "verdict": "pass",
    "expected": "ok",
    "observed": "ok",
@@ -425,4 +425,5 @@
    "written": true
   },
   {
-   "class": "iss
+   "class": "issue-2402",
+   "issu
