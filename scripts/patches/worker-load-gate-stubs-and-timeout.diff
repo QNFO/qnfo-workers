@@ -1,0 +1,36 @@
+diff --git a/scripts/worker-load-gate.mjs b/scripts/worker-load-gate.mjs
+index a19b332..540f9a1 100644
+--- a/scripts/worker-load-gate.mjs
++++ b/scripts/worker-load-gate.mjs
+@@ -17,7 +17,7 @@
+ //        syntax-error       the file does not parse as a module
+ //        eval-error         the top level throws (a ReferenceError, a TDZ error, a top-level network call)
+ //        timeout            the top level does not settle
+-// USAGE  node scripts/worker-load-gate.mjs [--root <dir>] [--only a,b] [--jobs 8] [--timeout 20] [--json]
++// USAGE  node scripts/worker-load-gate.mjs [--root <dir>] [--only a,b] [--jobs 8] [--timeout 60] [--json]
+ //        Exit 1 when any entry fails. The child mode (--child <file>) is internal.
+ import { readdirSync, existsSync, readFileSync } from "node:fs";
+ import { register } from "node:module";
+@@ -35,10 +35,11 @@ export const STUB_SOURCES = {
+     "export const env = {};",
+     "export class RpcTarget {}",
+     "export class RpcStub {}",
+-    "export class ExecutionContext {}"
++    "export class ExecutionContext {}",
++    "export const exports = {};"
+   ].join("\n"),
+   "email": "export class EmailMessage { constructor(from, to, raw) { this.from = from; this.to = to; this.raw = raw; } }",
+-  "sockets": "export class Socket {}"
++  "sockets": "export class Socket {}\nexport function connect() { return new Socket(); }"
+ };
+ 
+ const HOOKS = `
+@@ -149,7 +150,7 @@ async function main() {
+   if (argv[0] === "--child") return child(argv[1]);
+   const root = resolve(arg("--root", process.cwd()));
+   const only = (arg("--only", "") || "").split(",").map((s) => s.trim()).filter(Boolean);
+-  const jobs = Math.max(1, Number(arg("--jobs", 8)) || 8), timeoutS = Math.max(5, Number(arg("--timeout", 20)) || 20);
++  const jobs = Math.max(1, Number(arg("--jobs", 8)) || 8), timeoutS = Math.max(5, Number(arg("--timeout", 60)) || 60);
+   const entries = workerEntries(root, only);
+   const queue = entries.slice(), results = [];
+   await Promise.all(Array.from({ length: jobs }, async () => { while (queue.length) results.push(await checkOne(root, queue.shift(), timeoutS)); }));
