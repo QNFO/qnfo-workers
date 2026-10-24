@@ -1,7 +1,12 @@
 {
-  "audited_at": "2026-10-24 19:28:49",
-  "d1_write_failures": [],
-  "d1_writes_ok": 121,
+  "audited_at": "2026-10-24 19:39:17",
+  "d1_write_failures": [
+    [
+      "qnfo-email-orchestrator",
+      "HTTP 500: b'{\"messages\":[],\"result\":null,\"success\":false,\"errors\":[{\"code\":7500,\"message\":\"internal error; reference = e"
+    ]
+  ],
+  "d1_writes_ok": 120,
   "guard": {
     "_guard_rc": 0,
     "ahead": [],
@@ -561,7 +566,7 @@
       },
       {
         "dir": "qnfo-ai",
-        "version": "5.39.7-codeagent",
+        "version": "5.39.8-codeagent",
         "worker": "qnfo-ai"
       },
       {
@@ -1031,9 +1036,9 @@
       "worker": "qnfo-agent-ws"
     },
     "qnfo-ai": {
-      "before": "5.39.7-codeagent",
+      "before": "5.39.8-codeagent",
       "http": 200,
-      "live": "5.39.7-codeagent",
+      "live": "5.39.8-codeagent",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-ai"
@@ -1747,5 +1752,5 @@
       "worker": "vault-indexer"
     }
   },
-  "stale_rows_purged": 0
+  "stale_rows_purged": 1
 }
