@@ -35,7 +35,7 @@ function __aiAttrEnv(env, worker, aiKey, dbKey) {
         // primary's backoff so the fallback starts with most of the budget left, and
         // give the fallback leg the same exponential-backoff retry on a rate limit.
         if (/rate limit|429|too many requests/i.test(errMsg)) {
-          for (var attempt = 1; attempt <= 2 && Date.now() - t0 < 5e3; attempt++) {
+          for (var attempt = 1; attempt <= 2 && Date.now() - t0 < 2e3; attempt++) {
             await new Promise(function (resolve) { setTimeout(resolve, Math.min(1000 * Math.pow(2, attempt - 1), 4000) + Date.now() % 250); });
             try {
               res = await t.run(model, input, opts);
@@ -54,7 +54,7 @@ function __aiAttrEnv(env, worker, aiKey, dbKey) {
         // (primary backoff + fallback legs) inside a 15s window so the fallback leg
         // still starts with most of the budget left and the call completes.
         if (model !== SPEND_CHEAP_WA) {
-          for (var fb = 0; fb <= 2 && Date.now() - t0 < 15e3; fb++) {
+          for (var fb = 0; fb <= 2 && Date.now() - t0 < 5e3; fb++) {
             if (fb) await new Promise(function (resolve) { setTimeout(resolve, Math.min(1000 * Math.pow(2, fb - 1), 2000) + Date.now() % 250); });
             try {
               // CF-OBS-ISSUE-1 (#100601): the free fallback timed out because it reused
