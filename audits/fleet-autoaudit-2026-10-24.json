@@ -1,5 +1,5 @@
 {
-  "audited_at": "2026-10-24 14:37:44",
+  "audited_at": "2026-10-24 15:08:53",
   "d1_write_failures": [],
   "d1_writes_ok": 121,
   "guard": {
@@ -15,12 +15,7 @@
     "multi_version": [],
     "multi_version_count": 0,
     "name_resolution": true,
-    "no_health_route": [
-      {
-        "dir": "mind",
-        "worker": "q08-mind"
-      }
-    ],
+    "no_health_route": [],
     "no_live_version": [],
     "no_repo_version": [],
     "not_a_worker": [
@@ -536,12 +531,17 @@
     "retired_present": [],
     "retired_present_count": 0,
     "scope": "all",
-    "sync": 32,
+    "sync": 33,
     "sync_workers": [
       {
         "dir": "idea-hub",
         "version": "1.13.0-scoring-backoff",
         "worker": "idea-hub"
+      },
+      {
+        "dir": "mind",
+        "version": "2.0.0-mind-2",
+        "worker": "q08-mind"
       },
       {
         "dir": "personal-api",
@@ -987,11 +987,11 @@
       "worker": "personal-life-search"
     },
     "q08-mind": {
-      "before": null,
-      "http": 404,
-      "live": null,
-      "match": 0,
-      "note": "NO_HEALTH_ROUTE",
+      "before": "2.0.0-mind-2",
+      "http": 200,
+      "live": "2.0.0-mind-2",
+      "match": 1,
+      "note": "SYNC",
       "worker": "q08-mind"
     },
     "q08-signal-engine": {
