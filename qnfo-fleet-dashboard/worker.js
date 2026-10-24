@@ -10,7 +10,7 @@ var __defProp222 = Object.defineProperty;
 var __name222 = /* @__PURE__ */ __name22((target, value) => __defProp222(target, "name", { value, configurable: true }), "__name");
 var __name2222 = /* @__PURE__ */ __name222((target, value) => Object.defineProperty(target, "name", { value, configurable: true }), "__name");
 // VERSION-LINE-SPLIT-1 (agent_issues 100220): the release notes sit one per line below this statement, newest first, so a VERSION bump is a one-line patch; add a new note as the first line under it.
-var VERSION = "1.55.1-codeagent"; /* 1.55.0 NO-REGISTRAR-1 (2026-10-21): area routing no longer names the closed registrar. */ /* 1.54.0 COST-SUSTAIN-3 (2026-10-21, owner: research and publication <= USD 300/month all-in, realistic use metrics and forecasting; pillar cost): /api/cost carries the cap-aware forecast (v_cost_forecast bound_daily_usd, bound_30d_usd, forecast_bounded_month_usd: month-to-date + remaining days x min(3-day pace, what the configured daily caps allow)), research neurons per published version and the provider-billed AI Gateway figure; the cost area headline is the month forecast instead of a 7-day mean x 30 that cannot see the caps. */ /* 1.52.0 COST-SUSTAIN-1 (2026-10-21, pillar cost): /api/cost adds forecast (v_cost_forecast: per-scope month-to-date, 3-day pace, month-end forecast vs the owner USD 300 fleet budget) and research_budget_today (neurons spent vs qnfo-research-exec research_daily_neurons). */
+var VERSION = "1.55.2-codeagent"; /* 1.55.0 NO-REGISTRAR-1 (2026-10-21): area routing no longer names the closed registrar. */ /* 1.54.0 COST-SUSTAIN-3 (2026-10-21, owner: research and publication <= USD 300/month all-in, realistic use metrics and forecasting; pillar cost): /api/cost carries the cap-aware forecast (v_cost_forecast bound_daily_usd, bound_30d_usd, forecast_bounded_month_usd: month-to-date + remaining days x min(3-day pace, what the configured daily caps allow)), research neurons per published version and the provider-billed AI Gateway figure; the cost area headline is the month forecast instead of a 7-day mean x 30 that cannot see the caps. */ /* 1.52.0 COST-SUSTAIN-1 (2026-10-21, pillar cost): /api/cost adds forecast (v_cost_forecast: per-scope month-to-date, 3-day pace, month-end forecast vs the owner USD 300 fleet budget) and research_budget_today (neurons spent vs qnfo-research-exec research_daily_neurons). */
 /* 1.51.19 VERSION-LINE-SPLIT-1 (2026-10-20, agent_issues 100220, pillar autonomy; patch: layout only): the release notes that sat on the VERSION line (202,642 chars) are one per line below it, so a bump is a one-line patch and the publisher's size cap stops refusing dashboard code tasks (5 of 5 on 2026-10-19); scripts/conflict_repair.py resolves note-line hunks (merge_note_hunk). No behaviour change. */
 /* 1.51.17 COST-FEED-7D-WINDOW-1 (2026-10-19, agent_issues 100169, pillar cost; patch): /api/cost by_model_7d and by_worker_7d sum the 7 complete UTC days (today, a partial day, was a 8th bucket under the 7d label, +31.8 percent), and the body says which days (window_7d) and that est_usd is list price before the free tier (est_usd_basis). */
 /* 1.51.16 PARKED-CARD-REASON-1 (2026-10-19, agent_issues 100173, pillar autonomy; patch): the parked code-task card branches on the cause wherever it sits in last_error (the loop writes "model <id>: noop-proposal: ..." and "model <id> proposed no change", so a prefix test never matched), and the dead execOne edit of PR 3106 (fleet_issue_dispatch has no last_error) is removed. */
@@ -812,6 +812,56 @@ __name2(remediationFor, "remediationFor");
 __name22(remediationFor, "remediationFor");
 __name222(remediationFor, "remediationFor");
 __name2222(remediationFor, "remediationFor");
+// HUMAN-ITEMS-AUTOMATIC-1 (2026-10-20) + SLA-120M-HUMAN-WAIT-1 (#100628): needs_human code-loop rows and
+// issue-loop dispatches are fleet-owned work, not owner decisions. Classify every human card into a lane:
+// lane "owner" only for irreversible AND identity-bound items (spend, credential, legal, deletion,
+// consent/opt-out, or an explicit IDENTITY-BOUND: line); everything else is lane "fleet" and must not
+// count toward attention.open or human_wait_oldest_min.
+var HUMAN_IDENTITY_BOUND_RE = /(IDENTITY-BOUND:|spend|credential|legal|deletion|consent|opt-out)/i;
+function humanLaneFor(card) {
+  const kind = String(card && card.kind || card && card.source || "");
+  const text = String(card && (card.text || card.detail || card.reason || card.why || card.action || card.title || "") || "");
+  if (text.indexOf("IDENTITY-BOUND:") >= 0) return "owner";
+  if (HUMAN_IDENTITY_BOUND_RE.test(text)) return "owner";
+  if (kind === "mail") return "owner";
+  return "fleet";
+}
+__name(humanLaneFor, "humanLaneFor");
+__name2(humanLaneFor, "humanLaneFor");
+__name22(humanLaneFor, "humanLaneFor");
+__name222(humanLaneFor, "humanLaneFor");
+__name2222(humanLaneFor, "humanLaneFor");
+function annotateHumanLanes(cards) {
+  const list = cards || [];
+  for (const c of list) {
+    const lane = humanLaneFor(c);
+    c.lane = lane;
+    if (lane === "fleet") {
+      c.gate = "fleet";
+      c.owning_loop = String(c.kind || c.source || "fleet-loop");
+      c.blocker = String(c.why || c.reason || c.text || c.detail || c.action || "").slice(0, 200) || "fleet-owned; no owner action required";
+    } else if (!String(c.text || c.detail || c.reason || "").includes("IDENTITY-BOUND:")) {
+      c.text = String(c.text || c.detail || c.reason || "") + "\nIDENTITY-BOUND: irreversible and identity-bound; stays with the owner";
+    }
+  }
+  return list;
+}
+__name(annotateHumanLanes, "annotateHumanLanes");
+__name2(annotateHumanLanes, "annotateHumanLanes");
+__name22(annotateHumanLanes, "annotateHumanLanes");
+__name222(annotateHumanLanes, "annotateHumanLanes");
+__name2222(annotateHumanLanes, "annotateHumanLanes");
+function humanLaneSplit(cards) {
+  const list = annotateHumanLanes(cards);
+  const owner = list.filter(function(c) { return c.lane === "owner"; });
+  const fleet = list.filter(function(c) { return c.lane === "fleet"; });
+  return { all: list, owner_cards: owner, fleet_cards: fleet, owner_open: owner.length, fleet_open: fleet.length, fleet_blocked: fleet.length };
+}
+__name(humanLaneSplit, "humanLaneSplit");
+__name2(humanLaneSplit, "humanLaneSplit");
+__name22(humanLaneSplit, "humanLaneSplit");
+__name222(humanLaneSplit, "humanLaneSplit");
+__name2222(humanLaneSplit, "humanLaneSplit");
 function enrichIssues(list, firstSeen) {
   const fs = firstSeen || {};
   const out = (list || []).map(function(i) {
