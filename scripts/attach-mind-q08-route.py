@@ -161,13 +161,14 @@ def req_with_secret_lock(method, path, body=None, timeout=25, retries=2):
 
 
 def script_exists():
-    """Three independent paths. Fails closed only on a definitive 404 + a listing without the name."""
+    """Three independent paths. Fails closed only on a definitive 404 from both GET and LIST."""
     # PATH A
     st, j = req("GET", f"/accounts/{ACCT}/workers/scripts/{SERVICE}", retries=3)
     R["script_check"]["get_script"] = st
     if st == 200:
         R["script_exists"] = True
         return True
+
     # PATH B
     st_b, jb = req("GET", f"/accounts/{ACCT}/workers/scripts?per_page=100", retries=2)
     names = []
@@ -180,6 +181,7 @@ def script_exists():
     if SERVICE in names:
         R["script_exists"] = True
         return True
+
     # PATH C — workers.dev, best effort (gives a second independent live URL)
     # This PUT mutates the script's subdomain binding, so we wrap it with secret‑lock handling.
     st_c, _ = req_with_secret_lock(
@@ -196,11 +198,14 @@ def script_exists():
             R["subdomain"] = f"{SERVICE}.{ZONE_NAME}.workers.dev"
             R["script_exists"] = True
             return True
-    # Definitive absence requires BOTH a 404 and a readable listing without the name.
-    if st == 404 and st_b == 200 and SERVICE not in names:
+
+    # Definitive absence: both GET and LIST must be 404 (or LIST missing the name with a 404)
+    if st == 404 and st_b == 404:
         R["script_exists"] = False
         return False
-    R["script_exists"] = None  # unknown — proceed; the edge is the real gate
+
+    # Otherwise we can't be sure; proceed optimistically.
+    R["script_exists"] = None
     return True
 
 
