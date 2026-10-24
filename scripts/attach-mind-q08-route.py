@@ -132,6 +132,34 @@ def public_get(url, timeout=20):
         return 0, None
 
 
+def _acquire_secret_lock():
+    """Acquire a secret‑lock for workers/scripts mutations."""
+    lock_body = {"resource": "workers/scripts", "account_id": ACCT}
+    st, _ = req("POST", "/secret-lock/acquire", lock_body, retries=1)
+    return st == 200
+
+
+def _release_secret_lock():
+    """Release the secret‑lock for workers/scripts mutations."""
+    lock_body = {"resource": "workers/scripts", "account_id": ACCT}
+    # We ignore the result; best‑effort release.
+    req("POST", "/secret-lock/release", lock_body, retries=1)
+
+
+def req_with_secret_lock(method, path, body=None, timeout=25, retries=2):
+    """
+    Perform a mutation that touches workers/scripts while holding the secret‑lock.
+    The lock is always released (try/finally). If the lock cannot be acquired,
+    a (0, {"error": "..."} ) tuple is returned to indicate failure.
+    """
+    if not _acquire_secret_lock():
+        return 0, {"error": "failed to acquire secret lock"}
+    try:
+        return req(method, path, body, timeout=timeout, retries=retries)
+    finally:
+        _release_secret_lock()
+
+
 def script_exists():
     """Three independent paths. Fails closed only on a definitive 404 from both GET and LIST."""
     # PATH A
@@ -155,8 +183,13 @@ def script_exists():
         return True
 
     # PATH C — workers.dev, best effort (gives a second independent live URL)
-    st_c, _ = req("PUT", f"/accounts/{ACCT}/workers/scripts/{SERVICE}/subdomain",
-                  {"enabled": True}, retries=1)
+    # This PUT mutates the script's subdomain binding, so we wrap it with secret‑lock handling.
+    st_c, _ = req_with_secret_lock(
+        "PUT",
+        f"/accounts/{ACCT}/workers/scripts/{SERVICE}/subdomain",
+        {"enabled": True},
+        retries=1,
+    )
     R["script_check"]["enable_workers_dev"] = st_c
     if st_c in (200, 201):
         sub_st, _ = public_get(f"https://{SERVICE}.{ZONE_NAME}.workers.dev/health")
@@ -196,7 +229,7 @@ def main():
         return report(
             "deploy",
             "failed",
-            "q08-mind is definitively absent: get_script=404 and list also 404 "
+            "q08-mind is definitively absent: get_script=404 and the account script list does not contain it "
             f"({json.dumps(R['script_check'])})",
         )
 

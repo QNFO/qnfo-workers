@@ -30,23 +30,28 @@ import { pathToFileURL, fileURLToPath } from "node:url";
 export const STUB_SOURCES = {
   "workers": [
     "export class DurableObject { constructor(ctx, env) { this.ctx = ctx; this.env = env; } }",
-    "export class WorkflowEntrypoint { constructor(ctx, env) { this.ctx = ctx; this.env = env; } }",
     "export class WorkerEntrypoint { constructor(ctx, env) { this.ctx = ctx; this.env = env; } }",
+    "export class WorkflowEntrypoint { constructor(ctx, env) { this.ctx = ctx; this.env = env; } }",
+    "export const env = {};",
     "export class RpcTarget {}",
-    "export const env = {}; export const exports = {}; export const waitUntil = () => {};",
-    "export const withEnv = (e, fn) => fn(); export const withExports = (e, fn) => fn(); export const withEnvAndExports = (e, x, fn) => fn();",
-    "export default {};"
+    "export class RpcStub {}",
+    "export class ExecutionContext {}"
   ].join("\n"),
-  "email": "export class EmailMessage { constructor(from, to, raw) { this.from = from; this.to = to; this.raw = raw; } }\nexport default {};",
-  "sockets": "export const connect = () => { throw new Error('load-gate: no sockets'); };\nexport default {};"
+  "email": "export class EmailMessage { constructor(from, to, raw) { this.from = from; this.to = to; this.raw = raw; } }",
+  "sockets": "export class Socket {}"
 };
 
 const HOOKS = `
+import { readFileSync } from "node:fs";
 let entry = "";
 export async function initialize(data) { entry = (data && data.entry) || ""; }
 export async function resolve(specifier, context, nextResolve) {
   if (specifier.startsWith("cloudflare:")) return { url: "lg-stub:" + specifier.slice(11), shortCircuit: true };
   if (context.parentURL === entry && (specifier.startsWith("./") || specifier.startsWith("../") || specifier.startsWith("/") || specifier.startsWith("file:"))) {
+    // MERGE-BOUNDARY-GATE-1 (2026-10-24): a static JSON data module is safe to load; it is resolved and
+    // evaluated here instead of being refused. Relative JS/TS imports still fail: the deploy transport
+    // uploads one module per worker, so a sibling module would not exist at the edge.
+    if (/\.json$/.test(specifier)) return { url: new URL(specifier, context.parentURL).href, shortCircuit: true };
     throw new Error("LOAD-GATE-RELATIVE-IMPORT " + specifier);
   }
   return nextResolve(specifier, context);
@@ -58,28 +63,30 @@ export async function load(url, context, nextLoad) {
     if (src === undefined) throw new Error("LOAD-GATE-UNKNOWN-STUB cloudflare:" + name);
     return { format: "module", source: src, shortCircuit: true };
   }
+  if (url.endsWith(".json")) {
+    return { format: "module", source: "export default " + readFileSync(new URL(url), "utf8"), shortCircuit: true };
+  }
   if (url === entry) return nextLoad(url, { ...context, format: "module" });
   return nextLoad(url, context);
 }
 `;
 
-// Worker-only globals a module may touch at its top level; everything else resolves from node 22.
+// Worker-only globals a top level may touch. Each is a harmless stand-in so that the load reaches the module's own code.
 function installGlobals() {
-  const g = globalThis;
-  if (typeof g.HTMLRewriter === "undefined") g.HTMLRewriter = class HTMLRewriter { on() { return this; } onDocument() { return this; } transform(r) { return r; } };
-  if (typeof g.WebSocketPair === "undefined") g.WebSocketPair = class WebSocketPair {};
-  if (typeof g.caches === "undefined") g.caches = { default: { match: async () => undefined, put: async () => {}, delete: async () => false } };
-  // service-worker syntax (ops-gateway): addEventListener("fetch", ...) at the top level
-  if (typeof g.addEventListener === "undefined") g.addEventListener = () => {};
-  g.fetch = () => Promise.reject(new Error("load-gate: no network at module load"));
+  if (typeof globalThis.HTMLRewriter === "undefined") globalThis.HTMLRewriter = class HTMLRewriter { on() { return this; } transform(r) { return r; } };
+  if (typeof globalThis.WebSocketPair === "undefined") globalThis.WebSocketPair = class WebSocketPair { constructor() { const s = { accept() {}, send() {}, close() {}, addEventListener() {} }; this[0] = s; this[1] = s; } };
+  if (typeof globalThis.caches === "undefined") globalThis.caches = { default: { match: async () => undefined, put: async () => undefined, delete: async () => false } };
+  // A service worker's own event registration is a no-op: the module body is what is under test.
+  if (typeof globalThis.addEventListener === "undefined") globalThis.addEventListener = () => {};
+  if (typeof globalThis.fetch === "undefined") globalThis.fetch = async () => { throw new Error("LOAD-GATE-NO-NETWORK"); };
 }
 
-// Pure: turns what the child reported into a failure class.
+// Pure: turns what the child reported into a failure class. Exported for the test suite.
 export function classify(msg) {
   const m = String(msg || "");
   if (/LOAD-GATE-RELATIVE-IMPORT/.test(m)) return "relative-import";
-  if (/ERR_MODULE_NOT_FOUND|ERR_UNSUPPORTED_ESM_URL_SCHEME|Cannot find (package|module)|ERR_PACKAGE_PATH_NOT_EXPORTED|ERR_UNSUPPORTED_RESOLVE_REQUEST|LOAD-GATE-UNKNOWN-STUB|does not provide an export named/.test(m)) return "unresolved-import";
-  if (/SyntaxError|Unexpected token|Invalid or unexpected token/.test(m)) return "syntax-error";
+  if (/ERR_MODULE_NOT_FOUND|Cannot find (package|module)|LOAD-GATE-UNKNOWN-STUB/.test(m)) return "unresolved-import";
+  if (/SyntaxError|Unexpected (token|identifier|end)|Invalid or unexpected token/.test(m)) return "syntax-error";
   return "eval-error";
 }
 

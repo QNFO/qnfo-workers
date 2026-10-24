@@ -1,5 +1,6 @@
 -- APPLY-BY: ci
 -- DB: qnfo-audit
+-- BACKUP: cost_daily_bak_20261019
 -- BACKUP: bak_20261021_v_cost_forecast
 -- Rollback: DROP VIEW IF EXISTS v_cost_forecast; DELETE FROM fleet_budget WHERE node_class = 'cost:fleet_all_in_month'; DELETE FROM analytics_metric_triggers WHERE metric_key = 'fleet_cost_pace_30d_usd'; DELETE FROM metric_registry WHERE metric IN ('fleet_cost_pace_30d_usd', 'fleet_cost_forecast_month_usd'); DELETE FROM ops_config WHERE key IN ('research_daily_neurons', 'code_loop_daily_calls');
 -- COST-SUSTAIN-1 (2026-10-21, owner directive: fleet research and publication <= USD 300/month all-in, quality must not drop; pillar cost).
