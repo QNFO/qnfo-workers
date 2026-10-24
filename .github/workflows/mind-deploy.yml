@@ -16,6 +16,13 @@ name: mind-deploy
 #   path 2  wrangler deploy, which bundles the imports itself
 # The live probe at the end is the definition of done: /health must report
 # 2.0.0-mind-2, retried for two minutes.
+#
+# SECRET-MUTATION-GUARD-1 (2026-10-24): both paths rewrite the worker's
+# bindings (the scripts PUT carries metadata; wrangler deploy reads
+# wrangler.toml), so the job holds the secrets:q08-mind lease for its whole
+# duration. Without it scripts/secret-mutation-guard.py fails the
+# workflow-lint job on main. The lease is released on always(), so a failed
+# upload cannot strand it; the TTL bounds a cancelled run.
 
 on:
   push:
@@ -40,6 +47,9 @@ jobs:
     steps:
       - name: Check out the repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Acquire the secrets:q08-mind lease
+        run: python3 scripts/secret_lock.py acquire q08-mind --token-file /tmp/secret-lock.token --owner ci/mind-deploy --ttl-sec 900
 
       - name: Upload the module bundle through the scripts api
         id: api
@@ -86,3 +96,7 @@ jobs:
           done
           echo "live version did not reach 2.0.0-mind-2"
           exit 1
+
+      - name: Release the secrets:q08-mind lease
+        if: always()
+        run: python3 scripts/secret_lock.py release q08-mind --token-file /tmp/secret-lock.token
