@@ -35,10 +35,11 @@ export const STUB_SOURCES = {
     "export const env = {};",
     "export class RpcTarget {}",
     "export class RpcStub {}",
-    "export class ExecutionContext {}"
+    "export class ExecutionContext {}",
+    "export const exports = {};"
   ].join("\n"),
   "email": "export class EmailMessage { constructor(from, to, raw) { this.from = from; this.to = to; this.raw = raw; } }",
-  "sockets": "export class Socket {}"
+  "sockets": "export class Socket {}\nexport function connect() { return new Socket(); }"
 };
 
 const HOOKS = `
