@@ -9,6 +9,7 @@
     "attach-ask-qwav-route.json",
     "attach-lifecycle-custom-domain.json",
     "attach-me-q08-route.json",
+    "attach-mind-q08-route.json",
     "attach-surface-routes.json",
     "attach-travel-host.json",
     "backlog-health-cheap.json",
@@ -36,6 +37,7 @@
     "github-read-404-hint-1.json",
     "github-write-409-retry.json",
     "guard-timebudget.json",
+    "mind-q08-patch.json",
     "ops-deploy-ledger.json",
     "ops-tool-meta-error-first.json",
     "panel6-mediated-count-2.json",
@@ -58,6 +60,6 @@
     "version-precedence-2.json",
     "version-quote-1.json"
   ],
-  "count": 55,
+  "count": 57,
   "note": "Only these filenames exist in ci-status/ for this run. Any other ci-status/<name>.json is absent by construction - do not poll it."
 }
