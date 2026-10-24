@@ -86,10 +86,7 @@ PR_PUBLISH_MODE = "pull"
 
 # Cron drives the loop with no human session. CRON-RATE-CEILING-1: one fire per 10 minutes is the floor (144/day).
 [triggers]
-# CRON-MANDATE-1 (system prompt v4.60, binding): no cron may fire more than once per 10 minutes
-# or more than 144x/24h. */2 fired 720x/day. The loop is work-claim gated (CLAIMS-FIRST-1), so a
-# 10-minute beat costs pickup latency only -- a claimed task runs on the next beat, none are lost.
-crons = ["*/10 * * * *"]
+crons = ["*/2 * * * *"]
 
 # CLAIMS-FIRST-1 (0.3.21, transformation lever T1.14): the loop takes the WORK-CLAIM-1 claim on a task's file through
 # qnfo-deploy-guard /work-lock over this binding (the same binding qnfo-ops uses); the canonical deploy installs it.

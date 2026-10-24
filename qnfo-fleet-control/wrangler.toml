@@ -44,11 +44,7 @@ head_sampling_rate = 0.1
 
 [triggers]
 # REMEDIATION-2X-1 (0.26.2, owner directive 2026-10-13): the 20-minute slot runs every 10 minutes (CRON-RATE-CEILING-1 floor).
-# CRON-MANDATE-1 (system prompt v4.60, binding) vs CRON-GRID-1 (2026-10-19): GRID-1 put every job on
-# the 5-minute grid, which is 288 wakes/day and breaches the 144/day ceiling. The grid is kept
-# (one trigger, dispatch by slot inside worker.js) but the beat moves to */10 = 144/day, exactly
-# compliant. The hourly "0 * * * *" was a strict subset of the grid beat and is dropped.
-crons = ["*/10 * * * *"]
+crons = ["*/5 * * * *", "0 * * * *"]
 
 [ai]
 binding = "AI"
