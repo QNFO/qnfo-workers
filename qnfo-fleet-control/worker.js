@@ -11808,7 +11808,7 @@ async function rtFileLivePathIssue(db, o) {
 // probe-authored per 24 hours and RT_PROBE_AUTHOR_MAX_PER_TICK (3) per tick. qnfo-cloud-ops PROBE-REVIEW-1 re-judges every active
 // d1-query probe with disjoint models, so authorship stays independent.
 var RT_PROBE_AUTHOR_MAX_PER_TICK = 3;
-var RT_PROBE_AUTHOR_MODEL = "@cf/meta/llama-3.1-8b-instruct";
+var RT_PROBE_AUTHOR_MODEL = "@cf/zai-org/glm-5.3-flash";
 var rtProbeAuthorTickKey = 0, rtProbeAuthorTickStamp = -1, rtProbeAuthorTickN = 0;
 function rtProbeAuthorStrip(s) {
   return String(s || "").replace(/```(sql)?/gi, "").trim();
