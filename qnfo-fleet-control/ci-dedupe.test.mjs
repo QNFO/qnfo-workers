@@ -29,7 +29,7 @@ const landBundle = grab("async function landBundleIssue(env, worker, depV, canV,
 ok(landBundle.includes("NOT EXISTS (SELECT 1 FROM agent_issues WHERE lower(trim(title)) = lower(trim(?1)) AND status = 'open')"), "landBundleIssue is found in worker.js with the index's own comparison", landBundle.length);
 
 const SCHEMA = `
-  CREATE TABLE agent_issues (id INTEGER PRIMARY KEY AUTOINCREMENT, title TEXT NOT NULL, description TEXT, source TEXT, category TEXT, priority TEXT, status TEXT NOT NULL DEFAULT 'open', created_at INTEGER, updated_at INTEGER);
+  CREATE TABLE agent_issues (id INTEGER PRIMARY KEY AUTOINCREMENT, title TEXT NOT NULL, description TEXT, source TEXT, category TEXT, priority TEXT, status TEXT NOT NULL DEFAULT 'open', created_at INTEGER, updated_at INTEGER, close_channel TEXT);
   CREATE UNIQUE INDEX idx_agent_issues_open_title_ci ON agent_issues(lower(trim(title))) WHERE status = 'open';
 `;
 const mkDb = () => {

@@ -361,7 +361,7 @@ def parse_https_probe(spec):
     if not isinstance(p, dict):
         return None, "not-an-object"
     # ABSENT-PROBE-1 (2026-10-11): "absent" is a case-insensitive token the body must NOT contain, so a removal (a scrub, a
-    # retired string) has a machine probe; before it the six NO-ZENODO-DOI issues could only carry needs-machine-probe.
+    # retired string) has a machine probe; before it the six NO-DEAD-DOI issues could only carry needs-machine-probe.
     # MIN-VERSION-PROBE-1 (2026-10-12): "min_version" passes when the JSON body's "version" is at or above it (numeric core
     # compared, any -suffix ignored), so a deploy check survives the next bump; an exact "contains": "0.16.0-x" failed for good
     # once 0.16.1 shipped (#2309, #2304, #2335).
@@ -717,8 +717,8 @@ def _selftest():
         ((200, 50, b"..gateway.."), "ok"), ((404, 50, b"gateway"), "status=404"),
         ((200, 50, b"nothing"), "missing-marker"), ((200, 1500, b"gateway"), "slow=1500ms"),
     ]
-    pa = {"url": "https://qnfo.org/", "status": 200, "contains": None, "absent": "Zenodo", "max_ms": None}
-    if judge_https(pa, 200, 5, b"see zenodo.org") != "present-marker" or judge_https(pa, 200, 5, b"clean") != "ok":
+    pa = {"url": "https://qnfo.org/", "status": 200, "contains": None, "absent": "10.5281/", "max_ms": None}
+    if judge_https(pa, 200, 5, b"see doi.org/10.5281/x") != "present-marker" or judge_https(pa, 200, 5, b"clean") != "ok":
         print(json.dumps({"ok": False, "case": "absent-marker"}))
         return 1
     import tempfile

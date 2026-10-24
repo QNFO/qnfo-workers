@@ -50,7 +50,7 @@ ok(/<ol>\n<li>First step with <code>code_value<\/code> kept<\/li>\n<li>Second st
 ok(/<li>a bullet with \\\(x\^2\\\) math<\/li>/.test(pg.text), "single-dollar math in a list item typesets");
 ok(/<blockquote><p>A quoted line with <em>italics<\/em><\/p><\/blockquote>/.test(pg.text), "block quote renders");
 ok(pg.text.includes("Snake_case_name and a*b*c stay literal."), "intraword markers stay literal");
-ok(!/each with a DOI|zenodo|10\.5281/i.test(pg.text), "no DOI claim and no Zenodo on the page");
+ok(!/each with a DOI|10\.5281/i.test(pg.text), "no DOI claim and no dead-prefix DOI on the page");
 ok(/Open-access research papers<\/a><\/li>/.test(pg.text), "funnel copy has no identifier claim");
 
 const pg2 = await get("/p/2026-10-09-two");

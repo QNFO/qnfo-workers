@@ -13,11 +13,11 @@ ok(!/^\s*if \(process\.env\./m.test(src), "no top-level block on process.env");
 ok(/mastodonProfileSync\(env\)/.test(src), "the engagement step calls mastodonProfileSync(env)");
 
 const W = mod.mastodonWantedFields;
-const dead = { name: "Zenodo Resume DOI", value: "10.5281/zenodo.1" };
+const dead = { name: "Resume DOI", value: "10.5281/x.1" };
 const orcid = { name: "ORCID", value: "https://orcid.org/0009-0002-4317-5604" };
 let w = W([orcid, dead, { name: "Website", value: "https://old.example" }]);
 ok(JSON.stringify(w) === JSON.stringify([orcid, { name: "Website", value: "https://qnfo.org" }]), "keeps ORCID, drops the dead entry, replaces Website", w);
-w = W([{ name: "Resume", value: "see zenodo.org/record/1" }]);
+w = W([{ name: "Resume", value: "see doi.org/10.5281/x.1" }]);
 ok(w.length === 1 && w[0].name === "Website", "a dead value is dropped whatever the field is called", w);
 ok(W(undefined).length === 1 && W(null)[0].value === "https://qnfo.org", "no fields: just the Website");
 ok(W([1, 2, 3, 4, 5].map((i) => ({ name: "f" + i, value: "v" + i }))).length === 4, "never more than the four fields Mastodon allows");

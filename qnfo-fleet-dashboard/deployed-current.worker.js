@@ -10,7 +10,7 @@ var __defProp222 = Object.defineProperty;
 var __name222 = /* @__PURE__ */ __name22((target, value) => __defProp222(target, "name", { value, configurable: true }), "__name");
 var __name2222 = /* @__PURE__ */ __name222((target, value) => Object.defineProperty(target, "name", { value, configurable: true }), "__name");
 // VERSION-LINE-SPLIT-1 (agent_issues 100220): the release notes sit one per line below this statement, newest first, so a VERSION bump is a one-line patch; add a new note as the first line under it.
-var VERSION = "1.52.0-cost-forecast"; /* 1.52.0 COST-SUSTAIN-1 (2026-10-21, pillar cost): /api/cost adds forecast (v_cost_forecast: per-scope month-to-date, 3-day pace, month-end forecast vs the owner USD 300 fleet budget) and research_budget_today (neurons spent vs qnfo-research-exec research_daily_neurons). */
+var VERSION = "1.55.1-codeagent"; /* 1.55.0 NO-REGISTRAR-1 (2026-10-21): area routing no longer names the closed registrar. */ /* 1.54.0 COST-SUSTAIN-3 (2026-10-21, owner: research and publication <= USD 300/month all-in, realistic use metrics and forecasting; pillar cost): /api/cost carries the cap-aware forecast (v_cost_forecast bound_daily_usd, bound_30d_usd, forecast_bounded_month_usd: month-to-date + remaining days x min(3-day pace, what the configured daily caps allow)), research neurons per published version and the provider-billed AI Gateway figure; the cost area headline is the month forecast instead of a 7-day mean x 30 that cannot see the caps. */ /* 1.52.0 COST-SUSTAIN-1 (2026-10-21, pillar cost): /api/cost adds forecast (v_cost_forecast: per-scope month-to-date, 3-day pace, month-end forecast vs the owner USD 300 fleet budget) and research_budget_today (neurons spent vs qnfo-research-exec research_daily_neurons). */
 /* 1.51.19 VERSION-LINE-SPLIT-1 (2026-10-20, agent_issues 100220, pillar autonomy; patch: layout only): the release notes that sat on the VERSION line (202,642 chars) are one per line below it, so a bump is a one-line patch and the publisher's size cap stops refusing dashboard code tasks (5 of 5 on 2026-10-19); scripts/conflict_repair.py resolves note-line hunks (merge_note_hunk). No behaviour change. */
 /* 1.51.17 COST-FEED-7D-WINDOW-1 (2026-10-19, agent_issues 100169, pillar cost; patch): /api/cost by_model_7d and by_worker_7d sum the 7 complete UTC days (today, a partial day, was a 8th bucket under the 7d label, +31.8 percent), and the body says which days (window_7d) and that est_usd is list price before the free tier (est_usd_basis). */
 /* 1.51.16 PARKED-CARD-REASON-1 (2026-10-19, agent_issues 100173, pillar autonomy; patch): the parked code-task card branches on the cause wherever it sits in last_error (the loop writes "model <id>: noop-proposal: ..." and "model <id> proposed no change", so a prefix test never matched), and the dead execOne edit of PR 3106 (fleet_issue_dispatch has no last_error) is removed. */
@@ -2216,13 +2216,13 @@ async function freshState(env, ctx, maxAgeMs) {
    falls into autonomy rather than disappearing (areaOf). "sources" is what the area feed reads at request time. */
 var AREA_REGISTRY = [
   { id: "cost", name: "Cost", short: "Cost", what: "what the fleet spends: model run-rate, spend per published piece, budget headroom", sources: ["v_metric_trigger_state", "metric_history"],
-    rx: /cost|run_rate|spend|_usd/, star: { key: "fleet_ai_run_rate_30d_usd", label: "Fleet AI run-rate, 30d", unit: "$", good: "down" },
+    rx: /cost|run_rate|spend|_usd/, star: { key: "fleet_cost_forecast_month_usd", label: "Fleet cost, month forecast", unit: "$", good: "down" },
     flows: [], widgets: ["invest"], controls: [], pages: [],
     queue: { sources: ["billing", "decision", "shutdown"], rx: /payment|credit|budget|spend|billing|invoice|cost|funding|revenue|money|\$\d/i } },
   { id: "research", name: "Research and content", short: "Research", what: "what the fleet produces and publishes: q08, papers, ideas, generators", sources: ["v_metric_trigger_state", "metric_history", "research_queue", "code_tasks"],
-    rx: /q08|paper|research|content_|idea_|publication|zenodo/, star: { key: "publications_30d", label: "Publications, 30d", unit: "", good: "up" },
+    rx: /q08|paper|research|content_|idea_|publication/, star: { key: "publications_30d", label: "Publications, 30d", unit: "", good: "up" },
     flows: ["research"], widgets: [], controls: [], pages: [{ key: "content", label: "Content pipeline", href: "/content", feed: "/api/content" }],
-    queue: { sources: [], rx: /paper|q08|research|publication|publish|zenodo|osf|manuscript|idea/i } },
+    queue: { sources: [], rx: /paper|q08|research|publication|publish|osf|manuscript|idea/i } },
   { id: "reach", name: "Reach and growth", short: "Reach", what: "who reads it: pageviews, referrers, search, outreach, subscribers, attention", sources: ["v_metric_trigger_state", "metric_history", "outreach_queue"],
     rx: /subscri|pageview|referr|social|outreach|work_with_me|inbound_contact|attention|impression|engage|reply_rate|distribution|buffer/, star: { key: "pageviews_30d", label: "Pageviews, 30d", unit: "", good: "up" },
     flows: ["outreach"], widgets: ["progress", "controls"], controls: ["social_paused"], pages: [],
@@ -2843,10 +2843,14 @@ if (path === "/health") {
     const humanHolder = !!(owner.authed || machine);
     if (humanHolder) {
       v.responses = await recentResponses(env);
+      if (owner.authed) {
+        v.prompts = await ownerPromptsView(env);
+      }
+      v.human_count = ((v.prompts || []).length);
       ownerMailView(v);
     }
     // RT-API-1: an answer that carries owner fields never gets a shared-cache policy; the public one may be reused 15 s.
-    const revH = rtDigest(rtQueueDigest(v));
+    const revH = rtDigest(Object.assign(rtQueueDigest(v), { human_count: v.human_count || 0 }));
     v.revision = revH;
     const hdrH = humanHolder ? { "Vary": "Cookie, x-loop-token", "X-Revision": revH } : { "X-Revision": revH, "X-Generated-At": String(v.generated_at || "") };
     const sinceH = (url.searchParams.get("since") || "").replace(/^rev:/, "");
@@ -5146,7 +5150,9 @@ var COST_FEED_SQL = {
   run_rate: "SELECT source_group, daily_7d, daily_10d, run_rate_30d_7d, run_rate_30d_10d FROM v_cost_run_rate ORDER BY run_rate_30d_7d DESC",
   // COST-SUSTAIN-1 (1.52.0): month-to-date, 3-day pace and month-end forecast per scope (fleet measured / owner clients measured /
   // owner-direct UNVERIFIED), against the owner's USD 300/month fleet budget; the realistic number the owner plans with.
-  forecast: "SELECT scope, mtd_complete_usd, today_partial_usd, daily_3d, daily_7d, pace_30d_usd, forecast_month_usd, days_in_month, complete_days, budget_month_usd, basis FROM v_cost_forecast ORDER BY scope",
+  forecast: "SELECT * FROM v_cost_forecast ORDER BY scope",
+  // COST-SUSTAIN-3 (1.54.0): unit cost and the provider-billed figure, both written hourly by scripts/cost_ledger.py.
+  cost_metrics: "SELECT metric, last_value, last_refreshed, target FROM metric_registry WHERE metric IN ('fleet_cost_bound_month_usd', 'fleet_cost_forecast_month_usd', 'fleet_cost_pace_30d_usd', 'research_neurons_per_publication_7d', 'billed_ai_gateway_mtd_usd') ORDER BY metric",
   research_budget_today: "SELECT COALESCE(SUM(neurons), 0) AS neurons_today, (SELECT value FROM ops_config WHERE key = 'research_daily_neurons') AS budget_neurons FROM ai_call_counters WHERE day = date('now') AND worker IN ('qnfo-research-exec', 'errata-hub', 'qnfo-paper-reviser')",
   daily_14d: "SELECT date, ROUND(SUM(usd), 4) AS usd FROM cost_daily WHERE date >= date('now', '-14 days') AND (source = 'workers_ai' OR instr(source, 'ai_gateway:') = 1 OR instr(source, ':daily') > 0) GROUP BY date ORDER BY date",
   by_model_7d: "SELECT model, SUM(calls) AS calls, SUM(errors) AS errors, SUM(in_tok) AS in_tok, SUM(out_tok) AS out_tok, ROUND(SUM(neurons)) AS neurons, ROUND(SUM(neurons) * " + COST_USD_PER_KNEURON + " / 1000, 4) AS est_usd FROM ai_call_counters WHERE " + COST_WINDOW_SQL + " GROUP BY model ORDER BY SUM(neurons) DESC, SUM(calls) DESC LIMIT 20",
@@ -5163,6 +5169,10 @@ async function costFeedData(env) {
   const fl = (out.forecast || []).filter(function(r) { return r.scope === "fleet"; })[0];
   out.fleet_pace_30d_usd = fl ? fl.pace_30d_usd : null;
   out.fleet_forecast_month_usd = fl ? fl.forecast_month_usd : null;
+  // COST-SUSTAIN-3: the realistic month: actuals so far + the remaining days at the lower of the recent pace and what the caps allow.
+  out.fleet_forecast_bounded_month_usd = fl && fl.forecast_bounded_month_usd != null ? fl.forecast_bounded_month_usd : null;
+  out.fleet_bound_30d_usd = fl && fl.bound_30d_usd != null ? fl.bound_30d_usd : null;
+  out.fleet_month_to_date_usd = fl ? fl.mtd_complete_usd : null;
   out.fleet_budget_month_usd = 300;
   out.budgets_breached = (out.budgets || []).filter(function(b) { return Number(b.breached) === 1; }).length;
   // The window is read from the rows, never from intent; all null when the counters were unreadable or empty.
@@ -11363,6 +11373,10 @@ var CON_BACKUP_CHARS = 19e5;
 var CON_OUT_MAX = 6e3;
 var CON_DDL = "CREATE TABLE IF NOT EXISTS console_backups (id INTEGER PRIMARY KEY AUTOINCREMENT, ts TEXT DEFAULT (datetime('now')), db TEXT NOT NULL, table_name TEXT NOT NULL, stmt TEXT NOT NULL, row_count INTEGER NOT NULL, rows_json TEXT NOT NULL)";
 var CON_OPS = {
+  agent: { destructive: false, label: "Ask the fleet agent (code, containers, deploys)" },
+  agentlogin: { destructive: false, label: "Email the agent sign-in code" },
+  agentverify: { destructive: false, label: "Exchange the agent code for a session" },
+  agentstatus: { destructive: false, label: "Agent job status" },
   iprio: { destructive: false, label: "Set priority" },
   iowner: { destructive: false, label: "Set owner" },
   icomment: { destructive: false, label: "Comment" },
@@ -11862,6 +11876,18 @@ async function conRead(env, text, c, owner) {
 // confirm button. Returns null when the text is not one.
 var CON_PRIOS = ["critical", "high", "medium", "low"];
 function conParse(text) {
+
+  // FLEET-CONSOLE-AGENT-1: free text goes to the fleet's real agent loop
+  // (qnfo-ops over the service binding) -- run_code, container shell, GitHub,
+  // D1 writes and deploys -- not the capped context-only completion.
+  {
+    const at = String(text == null ? "" : text).trim();
+    let am;
+    if ((am = /^agent\s+([\s\S]+)$/i.exec(at))) return { actions: [cmdAction("agent", { text: am[1].slice(0, 8000) })], auto: true, text: "Fleet agent: " + am[1].slice(0, 160) };
+    if (/^agent-login$/i.test(at)) return { actions: [cmdAction("agentlogin", {})], auto: true, text: "Email the agent sign-in code" };
+    if ((am = /^agent-verify\s+(\d{6})$/i.exec(at))) return { actions: [cmdAction("agentverify", { code: am[1] })], auto: true, text: "Verify the agent code" };
+    if ((am = /^agent-status\s+(\S+)$/i.exec(at))) return { actions: [cmdAction("agentstatus", { id: am[1] })], auto: true, text: "Agent job " + am[1] };
+  }
   const t = String(text || "").trim();
   const lo = t.toLowerCase();
   let m;
@@ -11929,6 +11955,16 @@ async function conIssueTouch(env, id) {
   const a = await env.AUDIT.prepare("SELECT id, status, priority, title FROM agent_issues WHERE id = ?1").bind(id).first();
   return a || null;
 }
+
+// FLEET-CONSOLE-AGENT-1: the stored qnfo-ops owner session, or null.
+async function conAgentToken(env) {
+  try {
+    const row = await env.AUDIT.prepare("SELECT token FROM console_agent_auth WHERE id = 1").first();
+    const t = row && row.token;
+    return t && /^qos_[0-9a-f]{64}$/.test(t) ? t : null;
+  } catch (e) { return null; }
+}
+
 async function conExec(env, owner, op, args) {
   if (!conIsOwner(owner)) return { ok: false, error: "Console actions need your own sign-in (type 'login'); the fleet's loop token cannot run them." };
   const now = Date.now();
@@ -12003,6 +12039,56 @@ async function conExec(env, owner, op, args) {
       const r = svc ? await svc.fetch(url, init) : await fetch(url, init);
       const body = await r.text();
       return { ok: r.status < 500, text: method + " " + worker + path + (svc ? " (service binding)" : "") + " -> HTTP " + r.status + " " + (r.headers.get("content-type") || "") + "\n" + conClip(body, 4e3), error: r.status >= 500 ? "HTTP " + r.status + ": " + conClip(body, 600) : void 0 };
+    }
+    // FLEET-CONSOLE-AGENT-1: proxy to the real fleet agent loop.
+    if (op === "agent" || op === "agentlogin" || op === "agentverify" || op === "agentstatus") {
+      const svc = env.SVC_QNFO_OPS;
+      if (!svc) return { ok: false, error: "no service binding to qnfo-ops (SVC_QNFO_OPS)" };
+      const opsCall = async (p, init, ms) => {
+        const r = await svc.fetch("https://ops.qnfo.org" + p, Object.assign({}, init || {}, { signal: AbortSignal.timeout(ms || 25e3) }));
+        const t = await r.text();
+        let j = null;
+        try { j = JSON.parse(t); } catch (e) {}
+        return { status: r.status, text: t, json: j };
+      };
+      if (op === "agentlogin") {
+        const r = await opsCall("/v1/owner/login", { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" });
+        const j = r.json || {};
+        return { ok: r.status < 400 && j.ok !== false, text: "agent sign-in: " + (j.note || j.error || ("HTTP " + r.status)) };
+      }
+      if (op === "agentverify") {
+        const code = String((args && args.code) || "").trim();
+        if (!/^\d{6}$/.test(code)) return { ok: false, error: "agent-verify needs the 6-digit code from the email" };
+        const r = await opsCall("/v1/owner/verify", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ code: code }) });
+        const j = r.json || {};
+        const tok = j.owner_session;
+        if (!tok) return { ok: false, error: "agent-verify: " + (j.error || ("HTTP " + r.status)) };
+        await env.AUDIT.prepare("CREATE TABLE IF NOT EXISTS console_agent_auth (id INTEGER PRIMARY KEY CHECK (id = 1), token TEXT NOT NULL, ts TEXT)").run();
+        await env.AUDIT.prepare("INSERT INTO console_agent_auth (id, token, ts) VALUES (1, ?1, datetime('now')) ON CONFLICT(id) DO UPDATE SET token = ?1, ts = datetime('now')").bind(tok).run();
+        return { ok: true, text: "agent session stored (" + (j.expires_in_hours || 12) + "h). Now: agent <what you want done>" };
+      }
+      if (op === "agentstatus") {
+        const tok = await conAgentToken(env);
+        if (!tok) return { ok: false, error: "no agent session: agent-login, then agent-verify <code>" };
+        const id = String((args && args.id) || "").trim();
+        const r = await opsCall("/v1/jobs/" + encodeURIComponent(id), { headers: { Authorization: "Bearer " + tok } }, 30e3);
+        if (r.status === 401) return { ok: false, error: "agent session expired: agent-login, then agent-verify <code>" };
+        return { ok: r.status < 400, text: "job " + id + " -> HTTP " + r.status + "\n" + String(r.text).slice(0, 3000) };
+      }
+      const text = String((args && args.text) || "").trim();
+      if (!text) return { ok: false, error: "agent needs a request: agent <what you want done>" };
+      const tok = await conAgentToken(env);
+      if (!tok) return { ok: false, error: "no agent session yet: type agent-login, then agent-verify <code>" };
+      const r = await opsCall("/v1/chat/completions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: "Bearer " + tok, "x-ops-async": "1" },
+        body: JSON.stringify({ model: "ops", messages: [{ role: "user", content: text.slice(0, 8000) }] })
+      }, 30e3);
+      if (r.status === 401) return { ok: false, error: "agent session expired: agent-login, then agent-verify <code>" };
+      if (r.status >= 400) return { ok: false, error: "agent -> HTTP " + r.status + ": " + String(r.text).slice(0, 400) };
+      const j = r.json || {};
+      const id = j.id || j.job_id;
+      return { ok: true, text: id ? ("agent job " + id + " queued. Track: agent-status " + id) : String(r.text).slice(0, 2000) };
     }
     if (op === "dispatch") {
       const wf = String(args.workflow || "");

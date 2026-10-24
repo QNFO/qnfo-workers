@@ -1081,7 +1081,7 @@ function secretEq(a, b) {
 }
 __name(secretEq, "secretEq");
 // VERSION-LINE-SPLIT-1 (agent_issues 100220): the release notes sit one per line below this statement, newest first, so a VERSION bump is a one-line patch; add a new note as the first line under it.
-var VERSION = "0.44.3-codeagent";
+var VERSION = "0.45.0-no-registrar"; /* 0.45.0-no-registrar NO-REGISTRAR-1 (2026-10-21, owner directive: the closed deposit registrar is fully deprecated and not named in any code): the profile scrub keeps only a dead-prefix line filter; literal registrar text pairs removed. prior 0.44.5-close-channel */ // 0.44.5 CLOSE-CHANNEL-REQUIRED-1 (agent_issues 100419): the ten fleet-control close sites that wrote no close_channel name themselves (auto:fleet-control/<tick>); PR-ISSUE-LINK-1 also reads the RED-DRAIN-1 "-- issue #N" goal form. // 0.44.4 PR-ISSUE-LINK-1: a fleet PR references its GitHub issue (Refs #N from gh_issue_links).
 /* 0.44.1 DEFERRAL-MEASURED-1 (2026-10-20, agent_issues 2954, 100245, 100246, pillar autonomy; patch): the remediation tick reads a measured pending (a number against a bound: "pending: ... reads 0.5058 (target <= 0.5)") as a verdict, as the consumer and the D1 relapse trigger already did, instead of deferring it for ever (rtIsMeasuredPending). deferral-measured.test.mjs. */ /* 0.42.0 DEPLOY-ALL-MERGES-1 (2026-10-20, owner directive "The system shall always deploy all merges automatically."; pillar core; minor: a decision the loop now takes on its own): DEPLOY-DRIFT-CF-1 measured and redeployed only the workers qnfo-ops /ops/deploy may take, so a merge to a control-plane worker (qnfo-fleet-control, qnfo-ops, qnfo-deploy-guard, qnfo-ai, qnfo-gateway, qnfo-observability) or a container worker (qnfo-code-orchestrator, qnfo-containers-pilot) whose canonical run was cancelled, skipped or failed stayed behind main with nothing to notice it (8 rows read "skip" in deploy_drift_cf at 05:30Z). Those workers are now targets too: main ahead of live for 45 minutes, no active run of the owning workflow and the live script confirmed behind, the tick dispatches canonical-deploy.yml with workers=<name> (canary and automatic revert on the runner) or the container worker's own workflow, at most 2 a tick and once per main VERSION an hour (ddcRunner, ddcDispatchPending). Metric merges_undeployed_over_60m (migrations/2026-10-20-deploy-all-merges.sql). deploy-drift-cf.test.mjs 14. */ /* 0.41.2 EXTERNAL-HTTPS-MASTODON-HOST-1 (2026-10-19, agent_issues 2925 INTEG-MASTODON-VERIFY-1; pillar autonomy; patch): RT_HTTP_HOSTS gains mstdn.science, the public Mastodon instance whose unauthenticated account lookup (GET /api/v1/accounts/lookup) qnfo-social already reads (MASTODON-PUBLIC-STATS-1), so the issue closing probe, which was parked probe-not-machine-executable on "host not allowed", can run. The rest of rtHttpSpec is unchanged: https only, GET or HEAD, no credentials, no redirect followed, 10 s, 1 MB; a host not on the list is still refused. */ /* 0.41.1 POOL-BOUND-SOURCES-1 (issue 100213, human_actions 107; patch): POOL-BOUND-1 parks notebook extractions (idea_proposals name owner-corpus) like any generated row and never parks a row an owner directive queued directly (source idea, chat, operator-prime). 0.41.0 REOPEN-LIVE-PATH-3 (issue 100271): the remediation tick files one deduped PROBE-NEEDED-1 issue per open issue left without a live contract. 0.40.1 VERSION-LINE-NOTES-1 (2026-10-19, agent_issues 100243, pillar autonomy; patch, a comment moved): the release notes of every earlier version rode on this line (178 notes, about 200,000 chars), so a version bump of this worker was an 820,000-char patch (worker and mirror, removed and added): 12 code tasks ended on the publisher size cap on 2026-10-19 and three issues were exhausted for three days. They are in git history (git log -S '<release tag>' -- qnfo-fleet-control/worker.js); the changelog is built from the deploy ledger and commits, and the guards read only the quoted version string. A new note goes on this line and stays short. */
 /* 0.44.0 GH-WEBHOOK-INTAKE-1 and GH-APP-FLEET-2 (2026-10-20, pillar autonomy; agent_issues 2582 and 2596; minor: two new routes). POST /gh/webhook receives pull_request, check_suite and push events for QNFO/qnfo-workers, verifies X-Hub-Signature-256 against GH_WEBHOOK_SECRET (503 and nothing accepted while it is unset), records each delivery once (cloud_ops_events kind gh-webhook, id gh-webhook-<delivery>) and runs the merge lane at once for a check_suite that completed with success or a pull request opened, reopened or ready, debounced to one run a minute; the 10-minute poll stays as the second path. POST /gh-app/token is the internal broker for the other GitHub-token workers: a service binding whose props.caller is a listed fleet worker gets the cached installation token (never the personal one, never logged); GET /gh-app reports broker service-binding. Registering the webhook on GitHub and converting each worker are the filed follow-ups. */
 /* 0.43.0 WORKFLOW-FAILURE-INTAKE-1 (2026-10-20, agent_issues 100295, pillar autonomy; minor: a new loop step): each 10-minute tick reads the newest workflow runs on main, keeps every workflow's latest decided conclusion in workflow_main_state, records a failing run with its failed job and step in workflow_failures, files one WORKFLOW-FAILED-1: <workflow> issue with a d1-query probe, and closes it with close_evidence when a later main run succeeds; ops_config workflow_failure_intake = off stops it. */
@@ -2818,6 +2818,19 @@ function evGh(env) {
   return { "Authorization": "Bearer " + env.GITHUB_TOKEN, "User-Agent": "qnfo-fleet-control/evolve", "Accept": "application/vnd.github+json", "X-GitHub-Api-Version": "2022-11-28", "Content-Type": "application/json" };
 }
 __name(evGh, "evGh");
+// PR-ISSUE-LINK-1 (0.44.4): the agent_issues id a code task serves ("[issue #N]" goal prefix, or the ct_imN intake id), and its GitHub mirror number.
+function cmIssueIdOf(t) {
+  var m = /^\[issue #(\d{1,9})\]/.exec(String(t && t.goal || "")) || /^ct_im(\d{1,9})$/.exec(String(t && t.id || "")) || /-- issue #(\d{1,9}) \(RED-DRAIN-1 dispatch\)/.exec(String(t && t.goal || "")); // 0.44.5: RED-DRAIN-1 goals carry "-- issue #N" mid-text (PRs 3464, 3467 had no Refs line)
+  return m ? Number(m[1]) : null;
+}
+__name(cmIssueIdOf, "cmIssueIdOf");
+async function cmIssueGhRef(env, t) {
+  var id = cmIssueIdOf(t);
+  if (!id) return null;
+  try { var r = await env.AUDIT.prepare("SELECT gh_number FROM gh_issue_links WHERE issue_id = ?").bind(id).first(); return r && r.gh_number ? Number(r.gh_number) : null; }
+  catch (e) { console.error(JSON.stringify({ evt: "fleet-control:cmIssueGhRef:caught", error: String(e && e.message) })); return null; }
+}
+__name(cmIssueGhRef, "cmIssueGhRef");
 async function evApi(env, method, path, body) {
   var r = await timedFetch("https://api.github.com/repos/" + EVOLVE_REPO + path, { method: method, headers: evGh(env), body: body ? JSON.stringify(body) : void 0 }, 15e3);
   var j = null;
@@ -4785,6 +4798,11 @@ async function cmOpenHandle(env, cx, t, cfg, out) {
     var goal = String(t.goal || "").replace(/\s+/g, " ").trim();
     var body = "Opened by qnfo-fleet-control CODE-TASK-MERGE-RUNNER-1 from verified code task `" + t.id + "` (branch pushed by code-task-publish).\n\nGoal: " + goal.slice(0, 500) +
       "\n\nThe patch passed the orchestrator's deterministic verifier. The fleet token opened this pull request, so the pull_request checks start by themselves; the runner merges it when the required checks pass and every merge gate holds, or says here why it will not.";
+    // PR-ISSUE-LINK-1 (0.44.4, 2026-10-21, pillar autonomy): a fleet pull request named no GitHub issue, so 300 of 300 tracker issues
+    // closed in the 7 days to 2026-10-21 showed no linked pull request although 109 of their code tasks merged. The body now carries
+    // "Refs #<gh>" from gh_issue_links (a cross-reference, not a closing keyword: the issue still closes only on its probe in qnfo-audit).
+    var ghRef = await cmIssueGhRef(env, t);
+    if (ghRef) body += "\n\nRefs #" + ghRef + " (agent_issues " + cmIssueIdOf(t) + ", mirrored by qnfo-github-steward; it closes on its verification probe, not on this merge).";
     var op = await evApi(env, "POST", "/pulls", { title: ("code-task: " + goal).slice(0, 80), head: branch, base: "main", body: body });
     if (op.ok && op.j && op.j.number) {
       res.pr = op.j.number;
@@ -6156,7 +6174,7 @@ async function workflowFailureIntake(env, nowMs, io) {
     try {
       await db.prepare("INSERT INTO issue_triage (issue_id, rc, triage_state, owner, sla_due_at, close_evidence) VALUES (?1, 'WORKFLOW-FAILURE-INTAKE-1', 'closed', 'qnfo-fleet-control', datetime('now'), ?2) ON CONFLICT(issue_id) DO UPDATE SET close_evidence = excluded.close_evidence, triage_state = 'closed'")
         .bind(open[t], "WORKFLOW-FAILURE-INTAKE-1 " + nowIso + ": the latest decided run of \"" + t + "\" on main succeeded: " + (lr.html_url || "run " + lr.id) + " (" + (lr.created_at || "?") + ")").run();
-      await db.prepare("UPDATE agent_issues SET status = 'closed', updated_at = ?2 WHERE id = ?1").bind(open[t], now).run();
+      await db.prepare("UPDATE agent_issues SET status = 'closed', close_channel = 'auto:fleet-control/workflow-failure-intake', updated_at = ?2 WHERE id = ?1").bind(open[t], now).run();
       out.closed++;
     } catch (eC) { out.errors.push(t + " close: " + String(eC && eC.message || eC).slice(0, 160)); }
   }
@@ -6795,7 +6813,7 @@ async function charterBreaches(env, ev) {
     try {
       await env.AUDIT.prepare("INSERT INTO issue_triage (issue_id, rc, triage_state, owner, sla_due_at, close_evidence) VALUES (?1, 'CHARTER-LOOP-1', 'closed', 'qnfo-fleet-control', datetime('now'), ?2) ON CONFLICT(issue_id) DO UPDATE SET close_evidence=excluded.close_evidence, triage_state='closed'")
         .bind(id, "CHARTER-LOOP-1 " + ev.ts + ": component serving again in worker_live_audit (live probe), charter snapshot mvp_up=" + ev.mvp_up + "/" + ev.mvp.length).run();
-      await env.AUDIT.prepare("UPDATE agent_issues SET status='closed', updated_at=?2 WHERE id=?1").bind(id, nowMs).run();
+      await env.AUDIT.prepare("UPDATE agent_issues SET status='closed', close_channel = 'auto:fleet-control/charter-breaches', updated_at=?2 WHERE id=?1").bind(id, nowMs).run();
       closed++;
     } catch (e) { console.error(JSON.stringify({ evt: "fleet-control:charterBreaches:caught", error: String(e && e.message) })); }
   }
@@ -7117,14 +7135,6 @@ function pfSplice(doc, block) {
 // profile/README.md before the commit. Each pair is a no-op once applied, so the scrub is idempotent, and text that has
 // drifted from `from` is left alone (the identity review reports it) rather than guessed at.
 var PF_PROFILE_SCRUB = [
-  ["**Selected work** (STRATEGY-1 s2.4):\n\n- [The Joules-per-Solution Metric](https://doi.org/10.5281/zenodo.21637028)\n- [Error Correction Is a Landauer Machine](https://doi.org/10.5281/zenodo.22261547)\n- [JPCUB Competitive Landscape v2.0](https://doi.org/10.5281/zenodo.21821767)\n- [Joules-per-Solution for Stochastic and Agentic Inference](https://doi.org/10.5281/zenodo.21945415)\n- [The Universal Ignorance Audit](https://doi.org/10.5281/zenodo.21901984)\n- [Epistemic Legibility in AI-Assisted Science](https://doi.org/10.5281/zenodo.22026592)\n- [Operating the Quniverse Fleet](https://doi.org/10.5281/zenodo.23079905)\n", // identity-guard: allow (the scrub must name the text it removes)
-   "**Selected work** (STRATEGY-1 s2.4):\n\n- [The Joules-per-Solution Metric](https://papers.qnfo.org/papers/joules-per-solution-metric)\n- [Error Correction Is a Landauer Machine](https://papers.qnfo.org/papers/jpcub-qec-landauer)\n- [JPCUB Competitive Landscape v2.0](https://papers.qnfo.org/papers/jpcub-competitive-landscape)\n- [Joules-per-Solution for Stochastic and Agentic Inference](https://papers.qnfo.org/papers/jpcub-llm-energy)\n- [The Universal Ignorance Audit](https://papers.qnfo.org/papers/universal-ignorance-audit)\n- [Epistemic Legibility in AI-Assisted Science](https://papers.qnfo.org/papers/ai4metascience-ignorance-audit)\n- [Operating the Quniverse Fleet](https://papers.qnfo.org/papers/quniverse-fleet-lessons)\n"],
-  ["All papers are open-access on Zenodo with registered DOIs. See the\n[full publication catalog](https://qnfo.github.io/ultrametric-tree-universality/pub-hub.html)\n(filterable by domain). Community archive:\n[zenodo.org/communities/qwav/](https://zenodo.org/communities/qwav/). QNFO subject-tagged corpus: [zenodo.org/search?q=QNFO](https://zenodo.org/search?q=QNFO).\n", // identity-guard: allow (the scrub must name the text it removes)
-   "All papers are open access at [papers.qnfo.org](https://papers.qnfo.org/papers). See the\n[full publication catalog](https://qnfo.github.io/ultrametric-tree-universality/pub-hub.html)\n(filterable by domain).\n"],
-  ["- **Publications.** All papers are deposited on Zenodo with DOIs: [community archive](https://zenodo.org/communities/qwav/), [QNFO-tagged corpus](https://zenodo.org/search?q=QNFO).", // identity-guard: allow (the scrub must name the text it removes)
-   "- **Publications.** All papers are open access at [papers.qnfo.org](https://papers.qnfo.org/papers)."],
-  [" Companion to [DOI 10.5281/zenodo.21817596](https://doi.org/10.5281/zenodo.21817596)", // identity-guard: allow (the scrub must name the text it removes)
-   ""],
   ["QNFO is a **scientific research incubator** founded and directed by Rowan Brad Quni-Gudzinas.",
    "QNFO is an **independent research imprint** founded and run by Rowan Brad Quni-Gudzinas."],
   ["- **National-scale data initiatives:** Managed the AARP Livability Index and\n  co-directed the $10M US DOT National Household Travel Survey (NHTS)\n- **Patented quantum computing technology:** Holds foundational US patents\n- **AI & data science leadership:** Led predictive analytics deployments at\n  Deloitte and Publicis\n", // identity-guard: allow (the scrub must name the claim it removes)
@@ -7134,60 +7144,15 @@ var PF_PROFILE_SCRUB = [
   ["(35+ publications, filterable by domain)", "(filterable by domain)"],
   ["| **Portfolio Status Ledger** | [Auto-generated from Cloudflare canonical (D1 + KG)](PORTFOLIO-STATUS.md) \u2014 regenerated weekly |\n| **Portfolio Status Ledger** | [Auto-generated from Cloudflare canonical (D1 + KG)](PORTFOLIO-STATUS.md) \u2014 regenerated weekly |\n", "| **Portfolio Status Ledger** | [Auto-generated from Cloudflare canonical (D1 + KG)](PORTFOLIO-STATUS.md) \u2014 regenerated weekly |\n"],
 ];
-// NOZ-DOI-1 (2026-10-10): generic safety net, line-local, so a sync can never publish Zenodo text or a 10.5281 DOI.
-// NOZ-DOI-1: remove Zenodo (the word, zenodo.org URLs, 10.5281/* DOIs) from text, touching only the lines that mention it.
-// Third-party DOIs are untouched.
-const Z = "10\\.5281\\/zenodo(?:[.,]?\\d+)?";
-const URLZ = "(?:https?:\\/\\/)?(?:dx\\.)?doi\\.org\\/" + Z;
-const ZURL = "(?:https?:\\/\\/)?(?:(?:dx\\.)?doi\\.org\\/" + Z + "|(?:www\\.|sandbox\\.)?zenodo\\.org[^\\s)\\]>\"']*)";
-const LABEL = "(?:\\*{0,2}(?:DOI|doi)\\s*:?\\s*\\*{0,2}\\s*)?";
-const WHOLE = [
-  new RegExp("^[ \\t]*(?:[-*] )?(?:\\*\\*)?DOI(?:\\*\\*)?\\s*:?(?:\\*\\*)?\\s*(?:\\[?`?" + Z + "`?\\]?(?:\\(" + URLZ + "\\))?|<a [^>]*" + Z + "[^>]*>[^<]*<\\/a>)\\s*$", "i"),
-  new RegExp("^[ \\t]*(?:<[^>]*>\\s*)*<strong>DOI:?<\\/strong>.*" + Z + ".*$", "i"),
-  new RegExp("^[ \\t]*(?:doi|zenodo_doi|zenodo_url|zenodo|concept_doi|related_doi)\\s*:\\s*[\"']?(?:https?:\\/\\/[^\\s\"']*)?(?:" + Z + ")?[\"']?\\s*$", "i"),
-  /^[ \t]*[-*] Zenodo(?: \(DOI\))?:.*$/i,
-  new RegExp("^[ \\t]*<td[^>]*>\\s*<code>\\s*\\[?(?:DOI:?\\s*)?" + Z + "\\]?\\s*<\\/code>\\s*<\\/td>\\s*$", "i"),
-  new RegExp("^[ \\t]*\\[?" + Z + "\\]?(?:\\(" + URLZ + "\\))?\\s*$", "i"),
-];
-const HAS = /zenodo|10\.5281/i;
-// returns the cleaned line, or null when the whole line goes
-function nozScrubLine(l) {
-  if (!HAS.test(l)) return l;
-  if (WHOLE.some((re) => re.test(l))) return null;
-  let s = l;
-  s = s.replace(new RegExp("\\[([^\\]]*)\\]\\(" + ZURL + "\\)", "g"), (m, t) => (/^\s*(?:DOI:?\s*)?`?(?:10\.5281|https?:|doi\.org|zenodo)/i.test(t) || /^\s*DOI\b/i.test(t) ? "\u0001" : t));
-  s = s.replace(new RegExp("<a [^>]*(?:" + Z + "|zenodo\\.org)[^>]*>([^<]*)<\\/a>", "gi"), (m, t) => (/10\.5281|zenodo|DOI/i.test(t) ? "\u0001" : t));
-  s = s.replace(new RegExp(LABEL + "`?(?:" + ZURL + "|" + Z + ")`?", "gi"), "\u0001");
-  for (let k = 0; k < 3; k++) {
-    s = s.replace(/[(\[]\s*\*{0,2}\s*(?:DOI:?\s*)?\*{0,2}\s*\u0001\s*\*{0,2}\s*[)\]]/g, "\u0001");
-    s = s.replace(/(?:\*{0,2}\b(?:DOI|doi)\b\s*:?\*{0,2}\s*)+\u0001/g, "\u0001");
-  }
-  s = s.replace(/[ \t]*\u0001+/g, "");
-  s = s.replace(/([.*_)])\s+\*?Zenodo\*?(?:,\s*\d{4})?\.(?=[\s.]|$)/g, "$1").replace(/\s*·\s*\|/g, " |");
-  s = s.replace(/[.,]\s*\*?Zenodo\*?(?:,\s*\d{4})?(?=[.,;\s]|$)/g, "");
-  s = s.replace(/[”"’]\s*\*?Zenodo\*?(?:,\s*\(?\d{4}\)?)?/g, (m) => m[0]);
-  s = s.replace(/\b(?:published |deposited |archived |hosted )?(?:on|to|at|in|via|through) Zenodo(?: with (?:registered )?DOIs?)?(?: at\b)?/gi, "");
-  s = s.replace(/\b(?:single-authored )?Zenodo (?:deposits?|records?)\b/gi, "publications").replace(/\bZenodo-registered\b/gi, "registered");
-  s = s.replace(/\s*DOI:?\s*<code>\s*<\/code>/g, "").replace(/\s*<code>\s*<\/code>/g, "").replace(/<p>\s*<strong>DOI:?<\/strong>\s*<\/p>/g, "").replace(/<strong>DOI:?<\/strong>\s*(?=<\/|$)/g, "").replace(/\s*\bDOI:?\s*$/g, "");
-  if (/zenodo/i.test(s)) {
-    const m = s.match(/^(\s*(?:[-*+]|\d+[.)]|\[\d+\])?\s*(?:<[^>]+>)*)([\s\S]*)$/);
-    const kept = m[2].split(/(?<=[.!?])\s+/).filter((p) => !/zenodo/i.test(p)).join(" ").replace(/\s+$/, "");
-    s = /[A-Za-z0-9]/.test(kept) ? m[1] + kept : null;
-    if (s === null) return null;
-  }
-  if (/\*\*\s*$/.test(s) && ((s.match(/\*/g) || []).length % 2) === 1) s = s.replace(/\*\*(\s*)$/, "*$1");
-  s = s.replace(/\(\s*[,;.]?\s*\)/g, "").replace(/,\s*([.)])/g, "$1").replace(/(\S)[ \t]+([.,;:)])/g, "$1$2").replace(/(\S)[ \t]{2,}(?=\S)/g, "$1 ").replace(/[ \t]+$/g, "").replace(/\.\.(?!\.)/g, ".");
-  s = s.replace(/\.\*\.$/, ".*");
-  return s.trim() === "" ? null : s;
-}
+// NO-REGISTRAR-1 (2026-10-21): the profile sync drops any line that still carries a DOI under the dead 10.5281 prefix; third-party
+// DOIs and every other line are byte-identical. (The earlier registrar-specific scrub finished: the live profile carries no match.)
+const DEAD_PREFIX = /10\.5281\//;
 function nozScrubText(text) {
   const t = String(text == null ? "" : text);
-  if (!HAS.test(t)) return t;
-  const out = [];
-  for (const l of t.split("\n")) { const r = nozScrubLine(l); if (r !== null) out.push(r); }
-  return out.join("\n").replace(/\n{4,}/g, "\n\n\n");
+  if (!DEAD_PREFIX.test(t)) return t;
+  return t.split("\n").filter((l) => !DEAD_PREFIX.test(l)).join("\n").replace(/\n{4,}/g, "\n\n\n");
 }
-function nozResidual(text) { return String(text).split("\n").map((l, i) => [i + 1, l]).filter(([, l]) => HAS.test(l)); }
+function nozResidual(text) { return String(text).split("\n").map((l, i) => [i + 1, l]).filter(([, l]) => DEAD_PREFIX.test(l)); }
 function pfScrubProfile(doc) {
   var out = String(doc || "");
   for (var i = 0; i < PF_PROFILE_SCRUB.length; i++) out = out.split(PF_PROFILE_SCRUB[i][0]).join(PF_PROFILE_SCRUB[i][1]);
@@ -7679,7 +7644,7 @@ async function loopWatch(env) {
     try {
       await env.AUDIT.prepare("INSERT INTO issue_triage (issue_id, rc, triage_state, owner, sla_due_at, close_evidence) VALUES (?1, 'LOOP-WATCH-1', 'closed', 'qnfo-fleet-control', datetime('now'), ?2) ON CONFLICT(issue_id) DO UPDATE SET close_evidence=excluded.close_evidence, triage_state='closed'")
         .bind(openByTitle[t], "LOOP-WATCH-1 " + nowIso + ": healthy; charter_last=" + (f.charter_last ? f.charter_last.ts : "none") + " portfolio_last_ok=" + (f.portfolio_last_ok ? f.portfolio_last_ok.ts : "none")).run();
-      await env.AUDIT.prepare("UPDATE agent_issues SET status='closed', updated_at=?2 WHERE id=?1").bind(openByTitle[t], nowMs).run();
+      await env.AUDIT.prepare("UPDATE agent_issues SET status='closed', close_channel = 'auto:fleet-control/loop-watch', updated_at=?2 WHERE id=?1").bind(openByTitle[t], nowMs).run();
       closed++;
     } catch (e) { console.error(JSON.stringify({ evt: "fleet-control:loopWatch:caught", error: String(e && e.message) })); }
   }
@@ -8214,7 +8179,7 @@ async function objectiveConstraintsTick(env) {
     try {
       await env.AUDIT.prepare("INSERT INTO issue_triage (issue_id, rc, triage_state, owner, sla_due_at, close_evidence) VALUES (?1, 'OBJECTIVE-CONSTRAINTS-1', 'closed', 'qnfo-fleet-control', datetime('now'), ?2) ON CONFLICT(issue_id) DO UPDATE SET close_evidence=excluded.close_evidence, triage_state='closed'")
         .bind(openByTitle[t], "OBJECTIVE-CONSTRAINTS-1 " + nowIso + ": " + x.metric + "=" + x.value + " meets " + x.target + " (delegated-ratified goals.id=" + x.goal + "); " + JSON.stringify(x.detail).slice(0, 400)).run();
-      await env.AUDIT.prepare("UPDATE agent_issues SET status='closed', updated_at=?2 WHERE id=?1 AND status='open'").bind(openByTitle[t], nowMs).run();
+      await env.AUDIT.prepare("UPDATE agent_issues SET status='closed', close_channel = 'auto:fleet-control/objective-constraints', updated_at=?2 WHERE id=?1 AND status='open'").bind(openByTitle[t], nowMs).run();
       closed++;
     } catch (e) { console.error(JSON.stringify({ evt: "fleet-control:objectiveConstraintsTick:caught", error: String(e && e.message) })); }
   }
@@ -8687,7 +8652,7 @@ async function improvementLoopTick(env) {
     try {
       await env.AUDIT.prepare("INSERT INTO issue_triage (issue_id, rc, triage_state, owner, sla_due_at, close_evidence) VALUES (?1, 'IMPROVEMENT-LOOP-1', 'closed', 'qnfo-fleet-control', datetime('now'), ?2) ON CONFLICT(issue_id) DO UPDATE SET close_evidence = excluded.close_evidence, triage_state = 'closed'")
         .bind(openByTitle[tt], ev).run();
-      await env.AUDIT.prepare("UPDATE agent_issues SET status = 'closed', updated_at = ?2 WHERE id = ?1").bind(openByTitle[tt], nowMs).run();
+      await env.AUDIT.prepare("UPDATE agent_issues SET status = 'closed', close_channel = 'auto:fleet-control/improvement-loop', updated_at = ?2 WHERE id = ?1").bind(openByTitle[tt], nowMs).run();
       closed++;
     } catch (e) { console.error(JSON.stringify({ evt: "fleet-control:improvementLoopTick:caught", error: String(e && e.message) })); }
   }
@@ -9022,7 +8987,7 @@ async function crawlHealthTick(env) {
     } else if (!bad && open) {
       await env.AUDIT.prepare("INSERT INTO issue_triage (issue_id, rc, triage_state, owner, sla_due_at, close_evidence) VALUES (?1, 'CRAWL-HEALTH-1', 'closed', 'qnfo-fleet-control', datetime('now'), ?2) ON CONFLICT(issue_id) DO UPDATE SET triage_state = 'closed', close_evidence = excluded.close_evidence")
         .bind(open.id, "CRAWL-HEALTH-1 " + now + ": every sitemap fetched by Googlebot with 2xx and no crawler-facing 5xx in 7 days.").run();
-      await env.AUDIT.prepare("UPDATE agent_issues SET status = 'closed', updated_at = ?2 WHERE id = ?1").bind(open.id, Date.now()).run();
+      await env.AUDIT.prepare("UPDATE agent_issues SET status = 'closed', close_channel = 'auto:fleet-control/crawl-health', updated_at = ?2 WHERE id = ?1").bind(open.id, Date.now()).run();
     }
     return { ok: true, sitemaps_ok: ev.sitemapsOk, requests: ev.total, err_pct: ev.errPct, failures: ev.failures.length, missing: ev.missing, spoofed: ev.spoofed, spoofed_top: ev.spoofedTop, ranges: ranges ? ranges.length : "fallback" };
   } catch (e) { return { ok: false, error: String(e && e.message || e).slice(0, 160) }; }
@@ -9133,7 +9098,7 @@ async function reachIdeationTick(env, force) {
     try {
       await env.AUDIT.prepare("INSERT INTO issue_triage (issue_id, rc, triage_state, owner, sla_due_at, close_evidence) VALUES (?1, 'REACH-IDEATION-1', 'closed', 'qnfo-fleet-control', datetime('now'), ?2) ON CONFLICT(issue_id) DO UPDATE SET close_evidence = excluded.close_evidence, triage_state = 'closed'")
         .bind(openByTitle[t], "REACH-IDEATION-1 " + nowIso + ": the live page now passes this check.").run();
-      await env.AUDIT.prepare("UPDATE agent_issues SET status = 'closed', updated_at = ?2 WHERE id = ?1").bind(openByTitle[t], nowMs).run();
+      await env.AUDIT.prepare("UPDATE agent_issues SET status = 'closed', close_channel = 'auto:fleet-control/reach-ideation', updated_at = ?2 WHERE id = ?1").bind(openByTitle[t], nowMs).run();
       closed++;
       var oc = await charterOne(env, "SELECT metric FROM reach_idea_outcomes WHERE issue_id = " + Number(openByTitle[t]));
       if (oc) await env.AUDIT.prepare("UPDATE reach_idea_outcomes SET closed_at = ?2, value_at_close = ?3 WHERE issue_id = ?1").bind(openByTitle[t], nowIso, await ideaMetricValue(env, oc.metric)).run();
@@ -12934,7 +12899,7 @@ async function evaluateMetricTriggers(env) {
       for (var oi = 0; oi < openIds.length; oi++) {
         try {
           await db.prepare("INSERT INTO issue_triage (issue_id, rc, triage_state, owner, sla_due_at, close_evidence) VALUES (?1, 'TRIGGER-RECOVERY-1', 'closed', 'qnfo-fleet-control', datetime('now'), ?2) ON CONFLICT(issue_id) DO UPDATE SET close_evidence=excluded.close_evidence, triage_state='closed'").bind(openIds[oi], evid).run();
-          await db.prepare("UPDATE agent_issues SET status='closed', updated_at=?2 WHERE id=?1 AND status='open'").bind(openIds[oi], Date.now()).run();
+          await db.prepare("UPDATE agent_issues SET status='closed', close_channel = 'auto:fleet-control/metric-trigger-recovered', updated_at=?2 WHERE id=?1 AND status='open'").bind(openIds[oi], Date.now()).run();
         } catch (e) { console.error(JSON.stringify({ evt: "fleet-control:evaluateMetricTriggers:caught", error: String(e && e.message) })); }
       }
       await db.prepare("INSERT INTO analytics_action_log (trigger_id, fired_at, metric_value, action, queue_target, status, notes) VALUES (?1, datetime('now'), ?2, 'closed on recovery', 'agent_issues', 'recovered', ?3)").bind(t.id, v, "closed " + openIds.join(",")).run().catch(function (e) { console.error(JSON.stringify({ evt: "fleet-control:evaluateMetricTriggers:caught", error: String(e && e.message) })); });
@@ -13050,7 +13015,7 @@ async function publicationPreflight(env) {
         await db.prepare("INSERT INTO cloud_ops_events (id, ts, kind, text, meta, job, status) VALUES (?1, ?2, 'publication_preflight_recovered', ?3, '{}', 'qnfo-fleet-control', 'ok')").bind("ppr-" + Date.now().toString(36), new Date().toISOString(), sf.name + " recovered; open issue " + open.id).run();
         // TRIGGER-RECOVERY-1: recovery used to be recorded but the issue stayed open; close it with the passing checks as evidence.
         await db.prepare("INSERT INTO issue_triage (issue_id, rc, triage_state, owner, sla_due_at, close_evidence) VALUES (?1, 'PUBLICATION-PREFLIGHT-1', 'closed', 'qnfo-fleet-control', datetime('now'), ?2) ON CONFLICT(issue_id) DO UPDATE SET close_evidence=excluded.close_evidence, triage_state='closed'").bind(open.id, "PUBLICATION-PREFLIGHT-1 " + new Date().toISOString() + ": all checks pass: " + JSON.stringify(checks).slice(0, 600)).run();
-        await db.prepare("UPDATE agent_issues SET status='closed', updated_at=?2 WHERE id=?1 AND status='open'").bind(open.id, Date.now()).run();
+        await db.prepare("UPDATE agent_issues SET status='closed', close_channel = 'auto:fleet-control/publication-preflight', updated_at=?2 WHERE id=?1 AND status='open'").bind(open.id, Date.now()).run();
       }
     } catch (e) { console.error(JSON.stringify({ evt: "fleet-control:publicationPreflight:caught", error: String(e && e.message) })); }
   }
@@ -13242,7 +13207,7 @@ async function chaosDrill(env, force) {
     try {
       await db.prepare("INSERT INTO issue_triage (issue_id, rc, triage_state, owner, sla_due_at, close_evidence) VALUES (?1, 'CHAOS-DRILL-1', 'closed', 'qnfo-fleet-control', datetime('now'), ?2) ON CONFLICT(issue_id) DO UPDATE SET close_evidence = excluded.close_evidence, triage_state = 'closed', triaged_at = datetime('now')")
         .bind(row.id, "CHAOS-DRILL-1 " + nowIso + ": the alternate's probe passed again (drill run)").run();
-      await db.prepare("UPDATE agent_issues SET status = 'closed', updated_at = ?2 WHERE id = ?1 AND status = 'open'").bind(row.id, nowMs).run();
+      await db.prepare("UPDATE agent_issues SET status = 'closed', close_channel = 'auto:fleet-control/chaos-drill', updated_at = ?2 WHERE id = ?1 AND status = 'open'").bind(row.id, nowMs).run();
       closed++;
     } catch (e5) { console.error(JSON.stringify({ step: "chaos-drill-close", error: String(e5 && e5.message || e5).slice(0, 200) })); }
   }

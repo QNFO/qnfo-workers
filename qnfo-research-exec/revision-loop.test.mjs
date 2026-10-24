@@ -28,7 +28,7 @@ assert.ok(!rlEligible({ slug: "chapter-1", identifier: "qnfo-2025-00-chapter-1",
 assert.ok(/ORDER BY CASE WHEN source = 'remediation' AND source_id LIKE 'revision:%' THEN 0 ELSE 1 END, CASE WHEN stage IN/.test(readFileSync(new URL("./worker.js", import.meta.url), "utf8")), "queued revisions are claimed ahead of resumable drafts and the 72-hour FIFO");
 assert.equal(rlErrataBlock([]), "");
 assert.match(rlErrataBlock([{ claim_text: "U = p(1-p) is concave", detected_by: "qnfo-lifecycle PAPER-LEARN-1" }]), /Reported errors[\s\S]*1\. U = p\(1-p\) is concave \(confirmed by a second model\)/);
-assert.ok(!rlEligible({ slug: "s", identifier: "10.5281/zenodo.1", authors: "" }, {}));
+assert.ok(!rlEligible({ slug: "s", identifier: "10.5281/x.1", authors: "" }, {}));
 
 const oldMd = "# T\n\n## Abstract\n\nA.\n\n## 1. Introduction\n\nx y z\n\n## References\n\n[1] One.\n[2] Two.\n";
 const newMd = "# T\n\n## Abstract\n\nA.\n\n## 1. Introduction\n\nx y z w\n\n## 2. Prior Work\n\np\n\n## References\n\n[1] One.\n[2] Two.\n[3] Three.\n\n## Provenance and AI Involvement\n\n- p\n";

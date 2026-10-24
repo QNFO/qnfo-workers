@@ -1,7 +1,7 @@
 // SOURCE-VOICE-1 offline suite (qnfo-infra 1.4.0, agent_issues 2468). Proves:
 //  1. a PAPER_VZ hit in retrieveRecords carries the body passage that matched (the indexer's chunk), after the abstract;
 //  2. a paper with a NULL abstract still carries its passage (it reached qnfo-ai as its title alone before);
-//  3. the enrichment no longer throws (isZenodoId was defined only inside the indexer member: every hit read "enrich error");
+//  3. the enrichment no longer throws (the dead-prefix check was defined only inside the indexer member: every hit read "enrich error");
 //  4. a retired registrar DOI is still hidden.
 // Run: node qnfo-infra/context-passage.test.mjs
 import { readFileSync } from "node:fs";
@@ -19,7 +19,7 @@ ok(idx > 0, "the fixture's passage lands in a later chunk", idx);
 
 const rows = {
   "qnr-justification-memo": { identifier: "qnr", title: "The Q-vs-R Question", authors: "[]", doi: null, slug: "qnr-justification-memo", status: "published", abstract: null, body_md: body },
-  "with-abstract": { identifier: "wa", title: "With Abstract", authors: "[]", doi: "10.5281/zenodo.123", slug: "with-abstract", status: "published", abstract: "A stored abstract of the paper.", body_md: body }
+  "with-abstract": { identifier: "wa", title: "With Abstract", authors: "[]", doi: "10.5281/x.123", slug: "with-abstract", status: "published", abstract: "A stored abstract of the paper.", body_md: body }
 };
 const env = {
   AI: { async run() { return { data: [new Array(768).fill(0.1)] }; } },

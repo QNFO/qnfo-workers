@@ -31,14 +31,14 @@ CREATE TABLE version_queue (id INTEGER PRIMARY KEY AUTOINCREMENT, paper_doi TEXT
 CREATE TABLE internal_errata (id TEXT PRIMARY KEY, target_kind TEXT NOT NULL, target_ref TEXT NOT NULL, detected_at TEXT NOT NULL, detected_by TEXT, severity TEXT DEFAULT 'high', claim_text TEXT, falsification TEXT, evidence TEXT, remediation TEXT, status TEXT DEFAULT 'open', owner TEXT, updated_at TEXT DEFAULT (datetime('now')));
 CREATE TABLE errata_queue (id INTEGER PRIMARY KEY AUTOINCREMENT, email_id INTEGER UNIQUE, source TEXT NOT NULL DEFAULT 'inbound-email', sender TEXT, subject TEXT, paper_doi TEXT, claim TEXT, confidence REAL, status TEXT DEFAULT 'detected', created_at TEXT DEFAULT (datetime('now')), updated_at TEXT DEFAULT (datetime('now')));`);
   const papers = new DatabaseSync(":memory:");
-  papers.exec("CREATE TABLE papers (slug TEXT PRIMARY KEY, doi TEXT, zenodo_doi TEXT, title TEXT, version TEXT, body_md TEXT, paper_type TEXT, status TEXT, created_at TEXT)");
+  papers.exec("CREATE TABLE papers (slug TEXT PRIMARY KEY, doi TEXT, title TEXT, version TEXT, body_md TEXT, paper_type TEXT, status TEXT, created_at TEXT)");
   return { audit, papers };
 }
 
 const BODY = "# A Paper\n\n## Abstract\n\nThe entropy term is defined in Section 2. The lattice term is used in Section 3 without a definition.\n\nThis sentense has a typo.\n\n" + "Body text with a claim. ".repeat(500);
 function seedPaper(papers, slug, recid) {
-  papers.prepare("INSERT INTO papers (slug, doi, zenodo_doi, title, version, body_md, paper_type, status, created_at) VALUES (?, ?, ?, ?, '1.0.0', ?, 'paper', 'published', datetime('now'))")
-    .run(slug, "10.9999/test." + recid, "10.9999/test." + recid, "Paper " + slug, BODY);
+  papers.prepare("INSERT INTO papers (slug, doi, title, version, body_md, paper_type, status, created_at) VALUES (?, ?, ?, '1.0.0', ?, 'paper', 'published', datetime('now'))")
+    .run(slug, "10.9999/test." + recid, "Paper " + slug, BODY);
 }
 let auditReply = "", lastPrompt = "";
 // REVISER-REREAD-1 (1.4.0): the second reader of an applied revision answers pass here; its own suite is

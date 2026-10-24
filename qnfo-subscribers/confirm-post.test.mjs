@@ -26,7 +26,7 @@ function makeEnv(opts) {
           return null;
         },
         async all() {
-          if (/FROM papers/.test(sql)) return { results: [{ slug: "p-1", title: "A paper", created_at: "2026-10-04 10:00:00", doi: "10.5281/zenodo.1" }] };
+          if (/FROM papers/.test(sql)) return { results: [{ slug: "p-1", title: "A paper", created_at: "2026-10-04 10:00:00", doi: "10.5281/x.1" }] };
           if (/FROM subscribers WHERE status='subscribed'/.test(sql)) return { results: row.status === "subscribed" ? [{ email: row.email, unsub_token: row.unsub_token }] : [] };
           return { results: [] };
         },

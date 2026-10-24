@@ -1,0 +1,23 @@
+{
+  "marker": "MIND-Q08-3",
+  "host": "mind.q08.org",
+  "service": "q08-mind",
+  "token_present": true,
+  "account_present": true,
+  "zone_id": "fa732a265dd53230b9777908734a74d5",
+  "stage": "verify",
+  "status": "ok",
+  "script_exists": true,
+  "script_check": {
+    "get_script": 200
+  },
+  "subdomain": null,
+  "route_id": "d94c0f6874a740e5adefe12a84d1e30c",
+  "route_reused": true,
+  "dns_created": false,
+  "dns_record_id": "82a48e5ed0887d755faddc265bde839a",
+  "verified": true,
+  "entries": 36,
+  "health_version": "1.0.0-mind-2",
+  "ts": "2026-10-22T03:51:27Z"
+}

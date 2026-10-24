@@ -42,9 +42,9 @@ def acc(pid, nid):
 def admit(pid, nid):
     return call("POST", "/proofs/%s/nodes/%s/admit" % (pid, nid), {"owner": "prover-001"})
 
-# ---- 1. p-adic metric is an ultrametric (10.5281/zenodo.21208346) ----
+# ---- 1. p-adic metric is an ultrametric (10.5281/x.21208346) ----
 p1 = init("The p-adic metric d_p(x, z) = p^(-v_p(x-z)) is an ultrametric: d_p(x, z) <= max(d_p(x, y), d_p(y, z)) for all x, y, z",
-          "the-ultrametric-foundation-a-unified-thesis-on-number-time-knowledge-and-computa", "10.5281/zenodo.21208346", "init p-adic")
+          "the-ultrametric-foundation-a-unified-thesis-on-number-time-knowledge-and-computa", "10.5281/x.21208346", "init p-adic")
 IDS["p-adic-ultrametric"] = p1
 ref(p1, "1", ["The p-adic valuation satisfies v_p(a + b) >= min(v_p(a), v_p(b)) (non-Archimedean property)", "For distinct x, y: d_p(x, y) = p^(-v_p(x-y)) (definition)", "Apply the valuation property to (x-y) + (y-z)", "Monotonic inversion gives the strong triangle inequality", "Therefore d_p(x, z) <= max(d_p(x, y), d_p(y, z)). QED"])
 ref(p1, "1.1", ["Write a = p^m u, b = p^n v with u, v p-adic units; WLOG m <= n", "Then a + b = p^m (u + p^(n-m) v), and u + p^(n-m) v is a p-adic integer", "Hence v_p(a + b) >= m = min(v_p(a), v_p(b))"])
@@ -54,9 +54,9 @@ resolve(p1, "1.4", c14["challenge_id"], "Justified by 1.4.1-1.4.2: the decreasin
 for nid in ["1.1.1", "1.1.2", "1.1.3", "1.2", "1.3", "1.4.1", "1.4.2", "1.5"]: acc(p1, nid)
 acc(p1, "1.1"); acc(p1, "1.4"); acc(p1, "1")
 
-# ---- 2. hierarchy distance is an ultrametric (10.5281/zenodo.22160404) ----
+# ---- 2. hierarchy distance is an ultrametric (10.5281/x.22160404) ----
 p2 = init("Hierarchy distance on the distinction tree is an ultrametric: with h(u, v) = depth of the deepest common ancestor, d(u, v) = c^(-h(u,v)) satisfies d(x, z) <= max(d(x, y), d(y, z))",
-          "distinction-primitive-research-framework", "10.5281/zenodo.22160404", "init hierarchy")
+          "distinction-primitive-research-framework", "10.5281/x.22160404", "init hierarchy")
 IDS["hierarchy-ultrametric"] = p2
 ref(p2, "1", ["Both LCA(x, y) and LCA(y, z) lie on the root-y path, so one is an ancestor of the other; WLOG depth(LCA(x, y)) <= depth(LCA(y, z))", "Then LCA(x, y) is an ancestor of LCA(y, z), hence an ancestor of z, and of x by definition: a common ancestor of x and z", "Therefore LCA(x, z) is a descendant of (or equal to) LCA(x, y), so h(x, z) >= min(h(x, y), h(y, z))", "Inverting with the decreasing map t -> c^(-t) yields the strong triangle inequality d(x, z) <= max(d(x, y), d(y, z))", "Hence hierarchy distance is an ultrametric. QED"])
 c24 = chal(p2, "1.4", "The step from h(x,z) >= min(h(x,y), h(y,z)) to the c^(-t) inequality needs the monotonicity argument spelled out.")
@@ -65,9 +65,9 @@ resolve(p2, "1.4", c24["challenge_id"], "Justified by 1.4.1-1.4.2.")
 for nid in ["1.1", "1.2", "1.3", "1.4.1", "1.4.2", "1.5"]: acc(p2, nid)
 acc(p2, "1.4"); acc(p2, "1")
 
-# ---- 3. math is not physics (10.5281/zenodo.21645350) - admitted premises -> tainted ----
+# ---- 3. math is not physics (10.5281/x.21645350) - admitted premises -> tainted ----
 p3 = init("Mathematical consistency does not imply physical realizability: there exist mathematically well-defined structures no finite measurement procedure can distinguish",
-          "measurable-vs-imaginable", "10.5281/zenodo.21645350", "init math-not-physics")
+          "measurable-vs-imaginable", "10.5281/x.21645350", "init math-not-physics")
 IDS["math-is-not-physics"] = p3
 ref(p3, "1", ["Every experiment reduces to a finite act of distinction (this reading, not that)", "The real field R is uncountable and contains non-computable elements", "Therefore there exist mathematically consistent structures that no finite measurement procedure can distinguish", "Hence consistency (syntax) and physical content (finite distinguishability) are distinct: math is not physics. QED"])
 c31 = chal(p3, "1.1", "Premise 1.1 is an empirical stance, not a theorem - it must be admitted or justified.", "critical", "scope")

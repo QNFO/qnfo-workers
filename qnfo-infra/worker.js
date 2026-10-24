@@ -5,7 +5,7 @@ var __name = (target, value) => __defProp(target, "name", { value, configurable:
 var __defProp2 = Object.defineProperty;
 var __name2 = /* @__PURE__ */ __name((target, value) => __defProp2(target, "name", { value, configurable: true }), "__name");
 var NL = String.fromCharCode(10);
-var VERSION = "1.6.0-cron-grid-1"; // 1.6.0 CRON-GRID-1 (owner directive 2026-10-19, pillar autonomy): one hourly :30 trigger. The 06:30 run (indexer member + state refresh) and the 18:00 refresh keep their slots on it and are retried hourly, at most 3 times, while their last good run is over 24.5 h old; every other hour runs the state refresh (it ran twice a day). Every fire is logged to cron_fire_log for CRON-WATCH-1. // 1.5.1 WORKERS-BP-LOGGING-qnfo-infra-1 (2026-10-14, agent_issues 2534, child of 2342, pillar autonomy): the 3 swallowed catches in handleWebhook log as a structured console.error (worker, where, error); control flow unchanged. // 1.5.0 CRON-ONLY-HEARTBEAT-1 (agent_issues 2397, pillar autonomy): scheduled() upserts its fleet_heartbeat row after the run, ok=0 when the work threw. // 1.4.0 SOURCE-VOICE-1 (agent_issues 2468, owner directive 2026-10-13 "Papers shall cite full texts, not merely reference work summaries"; pillar research): a PAPER_VZ hit in /context carries the passage of the paper's body that matched (the indexer's own chunk, from metadata.chunk), after the abstract when one is stored; it was title + status + abstract.slice(0, 220), so a paper with no abstract (269 of 575 published on 2026-10-13) reached qnfo-ai's retrieved context as its title alone. renderContext gives a paper hit up to 1300 characters (300 before). isZenodoId was defined only inside the folded indexer member, so the /context enrichment and metaLine threw a ReferenceError on every paper hit and returned "slug <x> (enrich error)"; it is now defined at module scope too. // 1.3.4 WORKERS-STANDARDS-1 (2026-10-12, pillar security): the indexer member compares X-Index-Token in constant time (same accepted value). // 1.3.1 INDEXER-FOLD-1 (#1756): qnfo-paper-indexer runs here as a member (its two jobs on this worker's existing 06:30 trigger, no cron added; /indexer/* read routes).
+var VERSION = "1.7.0-no-registrar"; /* 1.7.0-no-registrar NO-REGISTRAR-1 (2026-10-21): the registrar is not named; dead DOIs are recognised by the 10.5281 prefix only */ // 1.6.0 CRON-GRID-1 (owner directive 2026-10-19, pillar autonomy): one hourly :30 trigger. The 06:30 run (indexer member + state refresh) and the 18:00 refresh keep their slots on it and are retried hourly, at most 3 times, while their last good run is over 24.5 h old; every other hour runs the state refresh (it ran twice a day). Every fire is logged to cron_fire_log for CRON-WATCH-1. // 1.5.1 WORKERS-BP-LOGGING-qnfo-infra-1 (2026-10-14, agent_issues 2534, child of 2342, pillar autonomy): the 3 swallowed catches in handleWebhook log as a structured console.error (worker, where, error); control flow unchanged. // 1.5.0 CRON-ONLY-HEARTBEAT-1 (agent_issues 2397, pillar autonomy): scheduled() upserts its fleet_heartbeat row after the run, ok=0 when the work threw. // 1.4.0 SOURCE-VOICE-1 (agent_issues 2468, owner directive 2026-10-13 "Papers shall cite full texts, not merely reference work summaries"; pillar research): a PAPER_VZ hit in /context carries the passage of the paper's body that matched (the indexer's own chunk, from metadata.chunk), after the abstract when one is stored; it was title + status + abstract.slice(0, 220), so a paper with no abstract (269 of 575 published on 2026-10-13) reached qnfo-ai's retrieved context as its title alone. renderContext gives a paper hit up to 1300 characters (300 before). isDeadPrefixDoi was defined only inside the folded indexer member, so the /context enrichment and metaLine threw a ReferenceError on every paper hit and returned "slug <x> (enrich error)"; it is now defined at module scope too. // 1.3.4 WORKERS-STANDARDS-1 (2026-10-12, pillar security): the indexer member compares X-Index-Token in constant time (same accepted value). // 1.3.1 INDEXER-FOLD-1 (#1756): qnfo-paper-indexer runs here as a member (its two jobs on this worker's existing 06:30 trigger, no cron added; /indexer/* read routes).
 function auth(token, env) {
   const exp = env.INFRA_TOKEN;
   if (!exp || !token) return false;
@@ -301,7 +301,7 @@ function metaLine(doc, m) {
     }
     return "";
   }, "pick");
-  if (doc === "PAPER_VZ") return (pick(["title"]) ? pick(["title"]) + " \u2014 " : "") + (pick(["doi"]) && !isZenodoId(pick(["doi"])) ? "DOI " + pick(["doi"]) + " \u2014 " : "") + (pick(["abstract"]) ? pick(["abstract"]).slice(0, 300) : pick(["slug"]) ? "slug " + pick(["slug"]) + " chunk " + pick(["chunk"]) : "");
+  if (doc === "PAPER_VZ") return (pick(["title"]) ? pick(["title"]) + " \u2014 " : "") + (pick(["doi"]) && !isDeadPrefixDoi(pick(["doi"])) ? "DOI " + pick(["doi"]) + " \u2014 " : "") + (pick(["abstract"]) ? pick(["abstract"]).slice(0, 300) : pick(["slug"]) ? "slug " + pick(["slug"]) + " chunk " + pick(["chunk"]) : "");
   if (doc === "IPATENT_VZ") return pick(["title"]) + " \u2014 " + pick(["text"]).slice(0, 300) + (pick(["section"]) ? " [" + pick(["section"]) + "]" : "");
   if (doc === "TASKS_VZ") return (pick(["title"]) || pick(["summary"])) + (pick(["status"]) ? " [" + pick(["status"]) + "]" : "") + (pick(["source_id"]) ? " (source " + pick(["source_id"]) + ")" : "");
   if (doc === "LOG_VZ") return "Q: " + pick(["prompt"]).slice(0, 180) + " || A: " + pick(["response"]).slice(0, 180);
@@ -313,7 +313,7 @@ function metaLine(doc, m) {
 __name(metaLine, "metaLine");
 __name2(metaLine, "metaLine");
 // A retired registrar DOI is never shown (module scope; the indexer member keeps its own copy).
-function isZenodoId(d) { return /10\.5281\/|zenodo/i.test(String(d || "")); }
+function isDeadPrefixDoi(d) { return /10\.5281\//.test(String(d || "")); }
 // SOURCE-VOICE-1: the text of a paper hit is the passage that matched (the indexer's chunk number in the vector metadata),
 // after the abstract when one is stored; a hit with no usable chunk falls back to the body's opening.
 function paperHitPassage(row, chunk) {
@@ -345,7 +345,7 @@ async function retrieveRecords(env, q, scope, k) {
           if (slug && env.LIVING) {
             try {
               const row = await env.LIVING.prepare("SELECT identifier, title, authors, doi, slug, status, abstract, body_md FROM papers WHERE slug = ?1 LIMIT 1").bind(slug).first();
-              if (row) enriched.push({ score: h.score, id: h.id, text: (row.title || row.identifier || slug) + (row.doi && !isZenodoId(row.doi) ? " | DOI " + row.doi : "") + " | status " + (row.status || "") + " | " + paperHitPassage(row, (h.metadata || {}).chunk), meta: { ...h.metadata, title: row.title, doi: isZenodoId(row.doi) ? "" : (row.doi || ""), abstract: row.abstract || "" } });
+              if (row) enriched.push({ score: h.score, id: h.id, text: (row.title || row.identifier || slug) + (row.doi && !isDeadPrefixDoi(row.doi) ? " | DOI " + row.doi : "") + " | status " + (row.status || "") + " | " + paperHitPassage(row, (h.metadata || {}).chunk), meta: { ...h.metadata, title: row.title, doi: isDeadPrefixDoi(row.doi) ? "" : (row.doi || ""), abstract: row.abstract || "" } });
               else enriched.push({ score: h.score, id: h.id, text: "slug " + slug + " (not in living-paper)", meta: h.metadata });
             } catch (e) {
               enriched.push({ score: h.score, id: h.id, text: "slug " + slug + " (enrich error)", meta: h.metadata });
@@ -468,8 +468,8 @@ var indexerMod = (function() {
   // docs/STRATEGY.md s2.4. selected_works_citation_coverage counts how many have an OpenAlex reading in 3 days; it read 3
   // of 7 because runImpact measured only the newest papers and the ten most-downloaded DOIs, so older selected works fell
   // outside the window (STRATEGY s6.1: cover the selected works always). Keep this list equal to STRATEGY s2.4.
-  // NOZ-DOI-1 (2026-10-10): the Zenodo account is blocked; every 10.5281/zenodo.* DOI is dead and is never measured or emitted.
-  function isZenodoId(d) { return /10\.5281\/|zenodo/i.test(String(d || "")); }
+  // NO-REGISTRAR-1: a DOI under the dead 10.5281 prefix is never measured or emitted.
+  function isDeadPrefixDoi(d) { return /10\.5281\//.test(String(d || "")); }
 
   // WORKERS-STANDARDS-1 (host 1.3.4): the index token is compared in constant time; the accepted value is unchanged
   // (it was a direct inequality test). An unset secret accepts nothing.
@@ -521,7 +521,7 @@ var indexerMod = (function() {
     const have = new Set(list.map((p) => p.doi));
     for (const p of list) {
       const doi = p.doi;
-      if (!doi || isZenodoId(doi)) continue;
+      if (!doi || isDeadPrefixDoi(doi)) continue;
       out.papers++;
       const entry = { slug: p.slug, doi, sources: {} };
       let crCited;

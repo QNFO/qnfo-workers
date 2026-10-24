@@ -29,7 +29,7 @@ for (const m of src.matchAll(/(?:const|var|let)\s+(\w+)\s*=\s*await publishInHou
 }
 ok(binds.every((k) => keys.includes(k)), "every <result>.<field> a publishInHouse caller binds is one the result defines", [...new Set(binds)]);
 // No source line sets a papers / queue DOI column to a non-NULL value from a publish result.
-const bad = src.split("\n").filter((l) => /UPDATE papers SET[^"]*\b(doi|zenodo_doi|zenodo_url)=\?/.test(l));
+const bad = src.split("\n").filter((l) => /UPDATE papers SET[^"]*\bdoi=\?/.test(l));
 ok(bad.length === 0, "no papers UPDATE binds a DOI or record URL", bad.map((l) => l.slice(0, 80)));
 ok(!/z[e]nodo\.org|10\.5281\/|ZEN[O]DO_TOKEN/i.test(src.replace(/\/\*[\s\S]*?\*\//g, "")), "the worker names no deposit host, DOI prefix or deposit token outside comments");
 globalThis.fetch = realFetch;

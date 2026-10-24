@@ -1,5 +1,5 @@
 # QWAV-PAGES-DEPLOY-1 (2026-10-12, agent_issues 2424, 2307; charter pillar reach). qwav.org is the Cloudflare Pages project
-# "qwav", built from the public repository QNFO/qwav. On 2026-10-12 a merge to that repository's main (PR 131, the Zenodo
+# "qwav", built from the public repository QNFO/qwav. On 2026-10-12 a merge to that repository's main (PR 131, the deposit-registrar
 # scrub) produced no new deployment within 10 minutes, so the project is not git-connected; this workflow is the fleet's
 # deploy path for it: it checks out QNFO/qwav at the requested ref and runs a Pages direct upload with the repository's
 # Cloudflare token. Rollback: dispatch again with the previous ref (the Pages dashboard keeps every deployment).
@@ -47,7 +47,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          hits=$(grep -rIl -i -E 'zenodo|10\.5281/' site --include='*.html' --exclude-dir=.git || true)
+          hits=$(grep -rIl -i -E '10\.5281/' site --include='*.html' --exclude-dir=.git || true)
           if [ -n "$hits" ]; then echo "::error::public HTML still names the retired deposit service:"; echo "$hits"; exit 1; fi
           echo "public HTML clean"
       - name: Pages direct upload
@@ -76,7 +76,7 @@ jobs:
           set -uo pipefail
           for i in 1 2 3 4 5 6; do
             body=$(curl -s -m 20 https://qwav.org/ || true)
-            if [ -n "$body" ] && ! printf '%s' "$body" | grep -q -i -E 'zenodo|10\.5281/'; then echo "qwav.org clean on try $i"; exit 0; fi
+            if [ -n "$body" ] && ! printf '%s' "$body" | grep -q -i -E '10\.5281/'; then echo "qwav.org clean on try $i"; exit 0; fi
             sleep 20
           done
           echo "::warning::qwav.org still shows the old build after 2 minutes (edge cache or a custom domain on another project); the deployment itself succeeded"

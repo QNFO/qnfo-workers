@@ -29,7 +29,7 @@ PATTERNS = [
     (re.compile(r"clearance[- ]eligible", re.I), "clearance-eligible claim"),
     (re.compile(r"featured in national media", re.I), "unlinked media claim"),
     (re.compile(r"thermodynamic dead end", re.I), "physics headline claim"),
-    (re.compile(r"10\.5281/zenodo\.\d+|zenodo\.org|\bZenodo\b"), "dead deposit registrar (owner directive 2026-10-10, NOZ-DOI-1: the account is blocked; no output may name it or its DOIs)"),
+    (re.compile(r"10\.5281/[A-Za-z]*\.?\d{3,}"), "dead deposit DOI prefix (owner directive 2026-10-21, NO-REGISTRAR-1: the closed registrar is deprecated; no output may carry its DOIs)"),
     (re.compile(r"\b(649|891)\+\s*(publications|papers|records)", re.I), "shifting publication count"),
 ]
 COMMENT = re.compile(r"^\s*(//|/\*|\*|#)")

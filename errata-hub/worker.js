@@ -11,7 +11,7 @@ function rxSecretEqual(given, expected) {
   for (let i = 0; i < a.length; i++) d |= a[i] ^ b[i];
   return d === 0;
 }
-var VERSION = "1.6.3-bp-logging"; // 1.6.2 ERRATA-HIGHRISK-ROUTE-1 (2026-10-18): a high-risk correction draft older than 6 h is handed to qnfo-research-exec as a remediation row instead of waiting audited forever; internal_errata rows close when their queue row is terminal; 1.6.0 ERRATA-INTERNAL-CONFIRM-1 (agent_issues 2494, pillar research): the :00 watch tick confirms or rejects internal-open errata older than 30 minutes with one model of another family than the finding's (a RENDER-HEALTH measurement needs none), so a confirmed erratum reaches errata-respond as detected; AI-TOKEN-BUDGET-RESEARCH-EXEC-1 (agent_issues 2399): the classify and draft env.AI.run calls carry max_tokens 4096. Folded into qnfo-research-exec 0.18.0 as ERRATA_VERSION 1.6.0-folded. 1.5.3 WORKERS-BP-DEBT-1 (#2432, pillar security): the request-secret checks compare in constant time (rxSecretEqual) instead of with === or !==. 1.5.2 NOZ-DOI-1 (2026-10-11): no external DOI-registrar call, token, route or text: the publish member re-renders the paper and re-points D1, graph and R2 with doi/zenodo_doi/zenodo_url left NULL, respond resolves papers by slug, watch keys a paper by its slug, the internal sweep takes a slug; a DOI value of the dead registrar is treated as absent in every emitted text. 1.5.1 // 1.5.0 ERRATA-GROUND-1 (owner directive 2026-10-10): a correction states only what the errata email or the paper states; a name, year, figure, DOI or link in neither makes the draft high risk (never sent). 1.4.2 prompt-cache // 1.4.1 WORKERS-AI-ATTRIBUTION-2 (#1997): env.AI wrapped with __aiAttrEnv at the entry, so the members' glm-5.3-flash and gemma-4 calls are counted in ai_call_counters (worker errata-hub); 1.4.0 ERRATA-INTERNAL-SWEEP-1 (#1164, pillar: research): the :00 watch tick first moves open internal_errata rows that have no errata_queue row into errata_queue (email_id NULL, subject = the erratum id, status internal-open, at most 20 per tick, no model call), so a finding recorded straight into internal_errata (qnfo-ops err-20260926-001) reaches the queue; the queue insert is shared with POST /internal-errata and adds nothing when a row for the erratum exists; 1.3.1 ERRATA-JUDGE-1 (pillar: research): a correction the drafting model (zai glm-5.3-flash) rates low risk is read once by a small model from another family (google gemma-4) before it can stay low risk; no verdict or a failing verdict makes it high risk, which errata-publish never sends (fail closed; docs/ENSEMBLE-POLICY.md); 1.3.0 1.3.0 CRON-SINGLE-TRIGGER-1 (#1785): one hourly trigger runs watch, respond, publish in that order; 1.2.0 ERRATA-HUB-CRONS-UNDECLARED-1 (#1747): hourly crons declared, publish gated off, tick rows; 1.1.5 WORKER-CONTRACT (HUB-VERSIONING-1) + cfWorkerRead /ops/deploy guard
+var VERSION = "1.7.0-no-registrar"; // 1.7.0 NO-REGISTRAR-1 (2026-10-21): errata SQL reads and writes doi only; dead DOIs by prefix. // 1.6.2 ERRATA-HIGHRISK-ROUTE-1 (2026-10-18): a high-risk correction draft older than 6 h is handed to qnfo-research-exec as a remediation row instead of waiting audited forever; internal_errata rows close when their queue row is terminal; 1.6.0 ERRATA-INTERNAL-CONFIRM-1 (agent_issues 2494, pillar research): the :00 watch tick confirms or rejects internal-open errata older than 30 minutes with one model of another family than the finding's (a RENDER-HEALTH measurement needs none), so a confirmed erratum reaches errata-respond as detected; AI-TOKEN-BUDGET-RESEARCH-EXEC-1 (agent_issues 2399): the classify and draft env.AI.run calls carry max_tokens 4096. Folded into qnfo-research-exec 0.18.0 as ERRATA_VERSION 1.6.0-folded. 1.5.3 WORKERS-BP-DEBT-1 (#2432, pillar security): the request-secret checks compare in constant time (rxSecretEqual) instead of with === or !==. 1.5.2 NOZ-DOI-1 (2026-10-11): no external DOI-registrar call, token, route or text: the publish member re-renders the paper and re-points D1, graph and R2 with doi left NULL, respond resolves papers by slug, watch keys a paper by its slug, the internal sweep takes a slug; a DOI value of the dead registrar is treated as absent in every emitted text. 1.5.1 // 1.5.0 ERRATA-GROUND-1 (owner directive 2026-10-10): a correction states only what the errata email or the paper states; a name, year, figure, DOI or link in neither makes the draft high risk (never sent). 1.4.2 prompt-cache // 1.4.1 WORKERS-AI-ATTRIBUTION-2 (#1997): env.AI wrapped with __aiAttrEnv at the entry, so the members' glm-5.3-flash and gemma-4 calls are counted in ai_call_counters (worker errata-hub); 1.4.0 ERRATA-INTERNAL-SWEEP-1 (#1164, pillar: research): the :00 watch tick first moves open internal_errata rows that have no errata_queue row into errata_queue (email_id NULL, subject = the erratum id, status internal-open, at most 20 per tick, no model call), so a finding recorded straight into internal_errata (qnfo-ops err-20260926-001) reaches the queue; the queue insert is shared with POST /internal-errata and adds nothing when a row for the erratum exists; 1.3.1 ERRATA-JUDGE-1 (pillar: research): a correction the drafting model (zai glm-5.3-flash) rates low risk is read once by a small model from another family (google gemma-4) before it can stay low risk; no verdict or a failing verdict makes it high risk, which errata-publish never sends (fail closed; docs/ENSEMBLE-POLICY.md); 1.3.0 1.3.0 CRON-SINGLE-TRIGGER-1 (#1785): one hourly trigger runs watch, respond, publish in that order; 1.2.0 ERRATA-HUB-CRONS-UNDECLARED-1 (#1747): hourly crons declared, publish gated off, tick rows; 1.1.5 WORKER-CONTRACT (HUB-VERSIONING-1) + cfWorkerRead /ops/deploy guard
 // MEMBER-VERSION-IDENTS-1 (2026-10-01): the three folded members reported their /health versions as string literals,
 // so opsDeploy refused every errata-hub deploy with FM7-HEALTH-VERSION-PARITY-1 (canonical-deploy run 36802041421:
 // 1.1.1 with the internal errata intake never went live, and errata-hub stayed NOT_DEPLOYED). Each member's version
@@ -99,7 +99,7 @@ async function runCheck(env, mode) {
     }
     if (cls && cls.errata) {
       let doi = cls.paper_doi && ((e.subject || "") + " " + (e.body_text || "")).toLowerCase().indexOf(String(cls.paper_doi).toLowerCase()) >= 0 ? cls.paper_doi : null; /* ERRATA-GROUND-1: a DOI the model names must occur in the email */
-      if (doi && /10\.5281\/|z[e]nodo/i.test(doi)) doi = null; /* NOZ-DOI-1: a dead-registrar DOI value is treated as absent */
+      if (doi && /10\.5281\//.test(doi)) doi = null; /* NOZ-DOI-1: a dead-registrar DOI value is treated as absent */
       if (!doi) {
         const dm = ((e.subject || "") + " " + (e.body_text || "")).match(/papers\.qnfo\.org\/papers\/([a-z0-9][a-z0-9-]*)/);
         if (dm) doi = dm[1]; /* NOZ-DOI-1: the paper's slug is the join key; respond resolves it */
@@ -179,11 +179,11 @@ function authorized(request, env) {
 __name(authorized, "authorized");
 async function resolvePaper(env, doi) {
   // NOZ-DOI-1: lookup by the stored join key or the slug; no external record service is called.
-  const base = "SELECT slug, title, version, doi, zenodo_doi, body_md FROM papers WHERE doi = ?1 OR zenodo_doi = ?1 OR slug = ?1 LIMIT 1";
+  const base = "SELECT slug, title, version, doi, body_md FROM papers WHERE doi = ?1 OR slug = ?1 LIMIT 1";
   const row = await env.PAPERS_DB.prepare(base).bind(doi).first();
   return row || null;
 }
-var DEAD_DOI = /10\.5281\/|z[e]nodo/i; // NOZ-DOI-1: a dead-registrar DOI value is treated as absent in any emitted text
+var DEAD_DOI = /10\.5281\//; // NOZ-DOI-1: a dead-registrar DOI value is treated as absent in any emitted text
 function safeDoi(d) { return d && !DEAD_DOI.test(String(d)) ? String(d) : ""; }
 __name(resolvePaper, "resolvePaper");
 // ERRATA-JUDGE-1 (docs/ENSEMBLE-POLICY.md). The drafting model's own risk flag is a same-family opinion. Before a correction can stay
@@ -21300,8 +21300,8 @@ var PUPPETEER_REVISIONS = Object.freeze({
 var puppeteer = new PuppeteerWorkers();
 var { connect, history, launch, limits, sessions, acquire } = puppeteer;
 var puppeteer_cloudflare_default = puppeteer;
-// NOZ-DOI-1 (2026-10-10): no external deposit step; a publish re-renders the paper and re-points D1, graph and R2 only, with doi/zenodo_doi/zenodo_url left NULL.
-var DEAD_DOI = /10\.5281\/|z[e]nodo/i;
+// NOZ-DOI-1 (2026-10-10): no external deposit step; a publish re-renders the paper and re-points D1, graph and R2 only, with doi left NULL.
+var DEAD_DOI = /10\.5281\//;
 function safeDoi(d) { return d && !DEAD_DOI.test(String(d)) ? String(d) : ""; }
 function json(data, status) {
   if (status === void 0) status = 200;
@@ -21423,7 +21423,7 @@ __name22(publishNewVersion, "publishNewVersion");
 async function repointStores(env, action, paper, pub) {
   const status = {};
   await env.PAPERS_DB.prepare(
-    "UPDATE papers SET body_md=?1, version=?2, doi=NULL, zenodo_doi=NULL, zenodo_url=NULL, updated_at=datetime('now') WHERE slug=?3"
+    "UPDATE papers SET body_md=?1, version=?2, doi=NULL, updated_at=datetime('now') WHERE slug=?3"
   ).bind(action.corrected_md || "", action.version_to || paper.version, paper.slug).run();
   status.d1 = "ok";
   const kgId = "paper:" + paper.slug;
@@ -21436,7 +21436,6 @@ async function repointStores(env, action, paper, pub) {
       props = {};
     }
     delete props.doi;
-    delete props.zenodo_url;
     props.version = action.version_to || paper.version;
     await env.GRAPH_DB.prepare("UPDATE nodes SET properties=?1, updated_at=datetime('now') WHERE id=?2").bind(JSON.stringify(props), kgId).run();
     status.kg = "ok";
@@ -21482,7 +21481,7 @@ __name2(notifyUser, "notifyUser");
 __name22(notifyUser, "notifyUser");
 async function publishAction(env, action) {
   const paper = await env.PAPERS_DB.prepare(
-    "SELECT slug, title, version, doi, zenodo_doi, body_md, r2_path, r2_key FROM papers WHERE doi=?1 OR zenodo_doi=?1 OR slug=?2 LIMIT 1"
+    "SELECT slug, title, version, doi, body_md, r2_path, r2_key FROM papers WHERE doi=?1 OR slug=?2 LIMIT 1"
   ).bind(action.paper_doi, action.slug || "").first();
   if (!paper) {
     await env.WATCH_DB.prepare("UPDATE errata_actions SET status='error', updated_at=datetime('now') WHERE id=?").bind(action.id).run();
@@ -21618,7 +21617,7 @@ async function runPublish(env, mode) {
     const a = rows[i];
     if (dry) {
       const paper = await env.PAPERS_DB.prepare(
-        "SELECT slug, version, doi, r2_path, r2_key FROM papers WHERE doi=?1 OR zenodo_doi=?1 OR slug=?2 LIMIT 1"
+        "SELECT slug, version, doi, r2_path, r2_key FROM papers WHERE doi=?1 OR slug=?2 LIMIT 1"
       ).bind(a.paper_doi, a.slug || "").first();
       results.push({ action_id: a.id, dry: true, paper: paper ? paper.slug : null, r2_prefix: paper ? r2Prefix(paper) : null, version_to: a.version_to, corrected_md_len: (a.corrected_md || "").length, would_publish: true, pdf: "in-worker-render" });
       continue;
@@ -21851,7 +21850,7 @@ async function confirmInternalErrata(env) {
         continue;
       }
       const key = String(row.paper_doi || "").trim();
-      const paper = key ? await env.PAPERS_DB.prepare("SELECT slug, title, body_md FROM papers WHERE slug = ?1 OR doi = ?1 OR zenodo_doi = ?1 LIMIT 1").bind(key).first() : null;
+      const paper = key ? await env.PAPERS_DB.prepare("SELECT slug, title, body_md FROM papers WHERE slug = ?1 OR doi = ?1 LIMIT 1").bind(key).first() : null;
       if (!paper) {
         await settleInternalErratum(env, row, "no-paper", key ? "no paper in the corpus matches " + key.slice(0, 160) + ", so there is no text to check or correct" : "the finding names no paper, so there is no text to check or correct");
         out.no_paper++;

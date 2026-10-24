@@ -176,7 +176,7 @@ ok(versionAtLeast((src.match(/var VERSION = "([^"]+)"/) || [])[1] || "0", "0.18.
     audit.exec(`CREATE TABLE paper_revision_log (id INTEGER PRIMARY KEY AUTOINCREMENT, slug TEXT NOT NULL, doi TEXT, title TEXT, version_from TEXT, version_to TEXT, audit_summary TEXT, findings_json TEXT, status TEXT DEFAULT 'queued', changelog TEXT, new_doi TEXT, error TEXT, created_at TEXT DEFAULT (datetime('now')), updated_at TEXT DEFAULT (datetime('now')));
 CREATE TABLE version_queue (id INTEGER PRIMARY KEY AUTOINCREMENT, paper_doi TEXT, slug TEXT, title TEXT, version_from TEXT, version_to TEXT, corrected_md TEXT, status TEXT, references_bib TEXT, citation_audit TEXT, due_diligence TEXT, project_plan TEXT, readme_md TEXT, verify_script TEXT, verify_output TEXT, license_md TEXT, created_at TEXT, updated_at TEXT);`);
     const papers = new DatabaseSync(":memory:");
-    papers.exec("CREATE TABLE papers (slug TEXT PRIMARY KEY, doi TEXT, zenodo_doi TEXT, title TEXT, version TEXT, body_md TEXT, paper_type TEXT, status TEXT, created_at TEXT)");
+    papers.exec("CREATE TABLE papers (slug TEXT PRIMARY KEY, doi TEXT, title TEXT, version TEXT, body_md TEXT, paper_type TEXT, status TEXT, created_at TEXT)");
     papers.prepare("INSERT INTO papers (slug, title, version, body_md, paper_type, status, created_at) VALUES ('p1', 'A Paper', '1.0.0', ?, 'paper', 'published', datetime('now'))").run("# A Paper\n\n## Abstract\n\nThis sentense has a typo in the abstract.\n\n## 1. Body\n\n" + "The body states its argument in plain words. ".repeat(260));
     return { audit, papers };
   };
@@ -222,7 +222,7 @@ CREATE TABLE errata_watch (key TEXT PRIMARY KEY, value TEXT);
 CREATE TABLE emails (id INTEGER PRIMARY KEY AUTOINCREMENT, message_id TEXT UNIQUE NOT NULL, sender TEXT NOT NULL, recipient TEXT NOT NULL, subject TEXT, body_text TEXT, classification TEXT DEFAULT 'general', received_at TEXT DEFAULT (datetime('now')));
 CREATE TABLE email_suppression (email TEXT PRIMARY KEY, reason TEXT, source TEXT, created_at TEXT DEFAULT (datetime('now')));`);
   const papers = new DatabaseSync(":memory:");
-  papers.exec("CREATE TABLE papers (slug TEXT PRIMARY KEY, title TEXT, version TEXT, doi TEXT, zenodo_doi TEXT, body_md TEXT)");
+  papers.exec("CREATE TABLE papers (slug TEXT PRIMARY KEY, title TEXT, version TEXT, doi TEXT, body_md TEXT)");
   papers.prepare("INSERT INTO papers (slug, title, version, body_md) VALUES ('true-paper', 'True Paper', '1.0.0', 'The value is stated as measured in section 2.'), ('false-paper', 'False Paper', '1.0.0', 'Smith (2020) defines the term.'), ('render-paper', 'Render Paper', '1.0.0', 'x')").run();
   const OLD = "2026-10-01 00:00:00";
   const addQ = (id, sender, doi, claim, created) => {
