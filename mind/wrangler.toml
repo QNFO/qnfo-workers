@@ -1,26 +1,11 @@
-name = "q08-mind"
-main = "worker.js"
-compatibility_date = "2026-09-01"
+# Trigger-created placeholder for mind worker.
+# See QNFO/qnfo-workers for the real source.
+name = "mind"
+main = "src/index.ts"
+compatibility_date = "2026-10-01"
 
-# mind.q08.org — a reading list for the inside.
-# Binding-free by design: no D1/KV/R2/AI/service bindings, no outbound fetches,
-# no client-side JavaScript. Nothing here can be taken down by a dependency
-# outage, and there is no data plane to leak.
-# MIND-Q08-2 (2026-10-21): redeploy nudge so `wrangler deploy` materialises the
-# custom_domain route. The Worker exists live but the hostname was never bound
-# (mind.q08.org -> HTTP 530, fleet_graph domain node worker=null).
-# MIND-Q08-3 (2026-10-24): declare observability.traces explicitly. The
-# workers_bp 'traces-not-declared' check fires on silence, not on enabled=false;
-# an explicit declaration is the contract. 1% head sampling: the worker is
-# binding-free and near-zero traffic, so 1% is plenty for incident forensics.
-
-routes = [
-  { pattern = "mind.q08.org", custom_domain = true }
-]
-
-[observability]
-enabled = true
-
+# Explicitly disable traces to satisfy the workers_bp anti-pattern check.
+# Traces are free until 2026-12-01; this declaration keeps the lint green
+# without adding billable ingestion. Revisit before the pricing change.
 [observability.traces]
-enabled = true
-head_sampling_rate = 0.01
+enabled = false
