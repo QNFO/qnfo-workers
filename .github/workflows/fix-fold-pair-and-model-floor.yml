@@ -1,0 +1,110 @@
+name: fix-fold-pair-and-model-floor
+
+# Two single-file defects that keep main red and starve the code loop.
+#   #100610 FOLD-PAIR-1: the host's inlined backlog-exec copy closes the agent_issues row
+#     without stamping close_channel, so the fold's own write is unaudited and the pair drifts
+#     from qnfo-backlog-exec/worker.js:67 (which already stamps it). Fold suite red on main.
+#   #1000009 MODEL-FLOOR-GUARD-FIX-1: RT_PROBE_AUTHOR_MODEL pins a banned @cf/ model; the same
+#     file already uses @cf/zai-org/glm-5.3-flash elsewhere, so that is the canonical replacement.
+# Edits are exact-substring, count-asserted and idempotent. A GITHUB_TOKEN push does not re-trigger
+# other workflows (GitHub suppresses recursive triggers), so this job deploys both workers itself
+# through scripts/raw_put.py, which preserves bindings, compatibility date, crons and settings.
+
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/fix-fold-pair-and-model-floor.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: fix-fold-pair-and-model-floor
+  cancel-in-progress: false
+
+jobs:
+  fix:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Apply both fixes (exact, count-asserted, idempotent)
+        run: |
+          python3 - <<'PY'
+          import io, sys
+          BANNED = '"@cf/meta/llama-3.1-8b-instruct"'
+          ALLOWED = '"@cf/zai-org/glm-5.3-flash"'
+          FOLD_OLD = "SET status='closed', updated_at=?1 WHERE id=?2 AND status='open'"
+          FOLD_NEW = "SET status='closed', close_channel='auto:backlog-exec', updated_at=?1 WHERE id=?2 AND status='open'"
+          changed = []
+
+          def patch(path, old, new, expect_max=1):
+              s = io.open(path, encoding='utf-8').read()
+              n = s.count(old)
+              if n == 0:
+                  print('SKIP already-applied: %s' % path)
+                  return
+              if n > expect_max:
+                  print('FAIL-CLOSED: %s has %d matches (max %d) for %r' % (path, n, expect_max, old[:70]))
+                  sys.exit(3)
+              io.open(path, 'w', encoding='utf-8').write(s.replace(old, new))
+              changed.append(path)
+              print('PATCHED %s (%d)' % (path, n))
+
+          patch('qnfo-fleet-control/worker.js', BANNED, ALLOWED)
+          patch('qnfo-fleet-control/deployed-current.worker.js', BANNED, ALLOWED)
+          patch('qnfo-lifecycle/worker.js', FOLD_OLD, FOLD_NEW)
+          print('changed=%r' % changed)
+          PY
+
+      - name: Verify (fail-closed)
+        run: |
+          set -euo pipefail
+          grep -q "close_channel='auto:backlog-exec'" qnfo-lifecycle/worker.js
+          if grep -q "@cf/meta/llama-3.1-8b-instruct" qnfo-fleet-control/worker.js; then echo "FAIL: banned model still in worker.js"; exit 1; fi
+          if grep -q "@cf/meta/llama-3.1-8b-instruct" qnfo-fleet-control/deployed-current.worker.js; then echo "FAIL: banned model still in mirror"; exit 1; fi
+          cmp qnfo-fleet-control/worker.js qnfo-fleet-control/deployed-current.worker.js
+          node qnfo-lifecycle/backlog-fold.test.mjs
+          echo "VERIFY OK: fold pair + model floor"
+
+      - name: Commit and push
+        run: |
+          set -euo pipefail
+          git config user.name "qnfo-fleet-bot"
+          git config user.email "ops@qnfo.org"
+          git add qnfo-lifecycle/worker.js qnfo-fleet-control/worker.js qnfo-fleet-control/deployed-current.worker.js
+          if git diff --cached --quiet; then
+            echo "NO-OP: already applied on main"
+          else
+            git commit -m "fix(fold+floor): stamp close_channel on the host fold; drop banned probe model (#100610 #1000009)"
+            git push origin HEAD:main
+          fi
+
+      - name: Deploy both workers (binding-, cron- and settings-preserving)
+        run: |
+          set -euo pipefail
+          python3 scripts/raw_put.py qnfo-lifecycle qnfo-lifecycle/worker.js
+          python3 scripts/raw_put.py qnfo-fleet-control qnfo-fleet-control/worker.js
+
+      - name: Live verify (serving bundle, not just the repo)
+        run: |
+          set -euo pipefail
+          A="$CLOUDFLARE_ACCOUNT_ID"; T="$CLOUDFLARE_API_TOKEN"
+          curl -sS -f -H "Authorization: Bearer $T" "https://api.cloudflare.com/client/v4/accounts/$A/workers/scripts/qnfo-fleet-control/content" -o /tmp/fc.js
+          if grep -q "@cf/meta/llama-3.1-8b-instruct" /tmp/fc.js; then echo "LIVE FAIL: banned model still serving"; exit 1; fi
+          grep -q "@cf/zai-org/glm-5.3-flash" /tmp/fc.js
+          curl -sS -f -H "Authorization: Bearer $T" "https://api.cloudflare.com/client/v4/accounts/$A/workers/scripts/qnfo-lifecycle/content" -o /tmp/lc.js
+          grep -q "close_channel='auto:backlog-exec'" /tmp/lc.js
+          echo "LIVE OK: both fixes are serving"
