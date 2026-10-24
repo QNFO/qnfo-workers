@@ -1,0 +1,88 @@
+name: mind-deploy
+
+# DEPLOY-MODULES-1 (2026-10-24)
+# q08-mind 2.0.0 imports two local JSON modules (data/entries-a.json,
+# data/entries-b.json). Both fleet deploy paths ship a single content module:
+#   - qnfo-ops cf_worker_deploy PUTs one application/javascript+module body
+#   - scripts/canonical_deploy.py does the same via ops.qnfo.org/ops/deploy
+# Cloudflare therefore rejects the upload with error 10021 (No such module
+# data/entries-a.json imported from worker.js), and q08-mind stays stuck on
+# the older single-file generation while main carries 2.0.0-mind-2.
+#
+# This workflow adds the missing capability: a real module bundle upload that
+# carries worker.js plus every module it imports. Two independent paths reach
+# the same definition of done (SLA-AND-PATHS-1):
+#   path 1  Cloudflare workers scripts API, multipart, all modules inline
+#   path 2  wrangler deploy, which bundles the imports itself
+# The live probe at the end is the definition of done: /health must report
+# 2.0.0-mind-2, retried for two minutes.
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "mind/**"
+      - ".github/workflows/mind-deploy.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: mind-deploy-main
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+
+      - name: Upload the module bundle through the scripts api
+        id: api
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          set -uo pipefail
+          META='{"main_module":"worker.js","compatibility_date":"2026-09-01","observability":{"enabled":true}}'
+          code=$(curl -sS -X PUT "https://api.cloudflare.com/client/v4/accounts/${CLOUDFLARE_ACCOUNT_ID}/workers/scripts/q08-mind" -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" -F "metadata=${META};type=application/json" -F "worker.js=@mind/worker.js;type=application/javascript+module" -F "data/entries-a.json=@mind/data/entries-a.json;type=application/json" -F "data/entries-b.json=@mind/data/entries-b.json;type=application/json" -o /tmp/mind-deploy.json -w "%{http_code}")
+          echo "http_status=${code}"
+          head -c 1200 /tmp/mind-deploy.json || true
+          echo ""
+          if [ "${code}" = "200" ]; then
+            echo "api_upload=ok" >> "$GITHUB_OUTPUT"
+          else
+            echo "api_upload=failed" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Fall back to wrangler when the api upload failed
+        if: steps.api.outputs.api_upload != 'ok'
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          set -euo pipefail
+          sed '/^routes = \[/,/^\]/d' mind/wrangler.toml > mind/wrangler.deploy.toml
+          cat mind/wrangler.deploy.toml
+          npx --yes wrangler@3 deploy --config mind/wrangler.deploy.toml
+
+      - name: Verify the live version from the runner
+        run: |
+          set -uo pipefail
+          for i in 1 2 3 4 5 6 7 8 9 10 11 12; do
+            body=$(curl -fsS --max-time 10 https://mind.q08.org/health || true)
+            echo "$body"
+            case "$body" in
+              *2.0.0-mind-2*)
+                echo "live_version=2.0.0-mind-2"
+                exit 0
+                ;;
+            esac
+            sleep 10
+          done
+          echo "live version did not reach 2.0.0-mind-2"
+          exit 1
