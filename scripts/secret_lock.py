@@ -10,6 +10,11 @@ never blocks forever. No secret value is ever read or printed here.
 
     with secret_lock("qnfo-social", ttl_sec=900, owner="ci/rotate"):
         ...mutate...
+
+CLI (SECRET-LOCK-CLI-1), for workflow steps that cannot hold a Python context:
+
+    python3 scripts/secret_lock.py acquire <worker> --token-file /tmp/secret-lock.token
+    python3 scripts/secret_lock.py release <worker> --token-file /tmp/secret-lock.token
 """
 import contextlib
 import json
@@ -81,3 +86,43 @@ def secret_lock(worker, ttl_sec=DEFAULT_TTL, owner="ci/secret-mutation", call=No
         yield token
     finally:
         release(worker, token, call)
+
+
+def _main(argv=None):
+    import argparse
+    import sys
+
+    p = argparse.ArgumentParser(description="Acquire or release a worker secret lease.")
+    p.add_argument("action", choices=["acquire", "release"])
+    p.add_argument("worker")
+    p.add_argument("--token-file", default="/tmp/secret-lock.token")
+    p.add_argument("--ttl-sec", type=int, default=DEFAULT_TTL)
+    p.add_argument("--owner", default="ci/secret-mutation")
+    a = p.parse_args(argv)
+
+    if a.action == "acquire":
+        try:
+            token = acquire(a.worker, a.ttl_sec, a.owner)
+        except SecretLockError as e:
+            print("::error::%s" % e)
+            return 2
+        if token:
+            with open(a.token_file, "w", encoding="utf-8") as fh:
+                fh.write(token)
+            print("SECRET-LOCK: lease held for secrets:%s (ttl %ss)" % (a.worker, a.ttl_sec))
+        else:
+            print("::warning::SECRET-LOCK: no lease held for secrets:%s - service unavailable" % a.worker)
+        return 0
+
+    token = ""
+    try:
+        with open(a.token_file, encoding="utf-8") as fh:
+            token = fh.read().strip()
+    except OSError:
+        print("SECRET-LOCK: no token file at %s - nothing to release" % a.token_file)
+        return 0
+    return 0 if release(a.worker, token) else 1
+
+
+if __name__ == "__main__":
+    raise SystemExit(_main())
