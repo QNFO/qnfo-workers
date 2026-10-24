@@ -1,5 +1,5 @@
 {
-  "audited_at": "2026-10-24 15:08:53",
+  "audited_at": "2026-10-24 17:38:35",
   "d1_write_failures": [],
   "d1_writes_ok": 121,
   "guard": {
@@ -88,6 +88,7 @@
       "jnl-reviser",
       "jnl-watch",
       "memory-mcp",
+      "mind",
       "notes-intake",
       "obsidian-writer",
       "ops-gateway",
@@ -150,7 +151,7 @@
       "skills-discovery",
       "vault-indexer"
     ],
-    "not_deployed_notdrift": 75,
+    "not_deployed_notdrift": 76,
     "not_deployed_workers": [
       {
         "dir": "agent-orchestrator",
@@ -221,6 +222,11 @@
         "dir": "memory-mcp",
         "marker": "RETIRED",
         "worker": "qnfo-memory-mcp-legacy-dup"
+      },
+      {
+        "dir": "mind",
+        "marker": null,
+        "worker": "mind"
       },
       {
         "dir": "notes-intake",
@@ -531,17 +537,12 @@
     "retired_present": [],
     "retired_present_count": 0,
     "scope": "all",
-    "sync": 33,
+    "sync": 32,
     "sync_workers": [
       {
         "dir": "idea-hub",
         "version": "1.13.0-scoring-backoff",
         "worker": "idea-hub"
-      },
-      {
-        "dir": "mind",
-        "version": "2.0.0-mind-2",
-        "worker": "q08-mind"
       },
       {
         "dir": "personal-api",
@@ -610,12 +611,12 @@
       },
       {
         "dir": "qnfo-fleet-control",
-        "version": "0.45.0-no-registrar",
+        "version": "0.45.1-codeagent",
         "worker": "qnfo-fleet-control"
       },
       {
         "dir": "qnfo-fleet-dashboard",
-        "version": "1.55.2-codeagent",
+        "version": "1.55.3-codeagent",
         "worker": "qnfo-fleet-dashboard"
       },
       {
@@ -865,6 +866,14 @@
       "note": "NOT_A_WORKER",
       "worker": "migrations"
     },
+    "mind": {
+      "before": null,
+      "http": 404,
+      "live": null,
+      "match": 0,
+      "note": "NOT_DEPLOYED",
+      "worker": "mind"
+    },
     "notes-intake": {
       "before": null,
       "http": 404,
@@ -985,14 +994,6 @@
       "note": "NOT_DEPLOYED",
       "retired": "RETIRED",
       "worker": "personal-life-search"
-    },
-    "q08-mind": {
-      "before": "2.0.0-mind-2",
-      "http": 200,
-      "live": "2.0.0-mind-2",
-      "match": 1,
-      "note": "SYNC",
-      "worker": "q08-mind"
     },
     "q08-signal-engine": {
       "before": "0.34.2-codeagent",
@@ -1326,17 +1327,17 @@
       "worker": "qnfo-fleet-calibrator"
     },
     "qnfo-fleet-control": {
-      "before": "0.45.0-no-registrar",
+      "before": "0.45.1-codeagent",
       "http": 200,
-      "live": "0.45.0-no-registrar",
+      "live": "0.45.1-codeagent",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-fleet-control"
     },
     "qnfo-fleet-dashboard": {
-      "before": "1.55.2-codeagent",
+      "before": "1.55.3-codeagent",
       "http": 200,
-      "live": "1.55.2-codeagent",
+      "live": "1.55.3-codeagent",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-fleet-dashboard"
