@@ -84,5 +84,22 @@ assert.equal(one("SELECT COUNT(*) n FROM decision_log").n, 1, "reapply is idempo
 assert.equal(one("SELECT COUNT(*) n FROM fleet_tasks").n, 1);
 db.exec("UPDATE reach_signals SET date=date('now','-3 days')");
 assert.equal(health().attention_state, "unmeasured", "stale attention is not a zero-success fallback");
+assert.equal(one("SELECT meta LIKE '%ghp_%' AS matched FROM cloud_ops_events").matched, 1, "reproduce production scrubber match on explanatory prose");
+const repair = readFileSync(new URL("./2026-10-25-prd-funnel-evidence.sql", import.meta.url), "utf8");
+db.exec(repair);
+assert.equal(one("SELECT version FROM fleet_tasks").version, 2);
+const evidenceStep = JSON.parse(one("SELECT definition FROM fleet_tasks").definition).steps[1];
+db.prepare(evidenceStep.sql).all();
+const events = db.prepare("SELECT meta FROM cloud_ops_events").all();
+const compact = events.map(r => JSON.parse(r.meta)).find(r => r.stages.every(s => !Object.hasOwn(s, "limitation")));
+assert(compact, "v2 emits structured counts and timestamps, not prose");
+assert.equal(compact.stages.length, 6);
+for (const marker of ["%cfat_%", "%ghp_%", "%github_pat_%", "%sk-ant-%", "%AIza%", "%AKIA%"]) {
+  assert.equal(db.prepare("SELECT ? LIKE ? AS matched").get(JSON.stringify(compact), marker).matched, 0, "aggregate evidence survives unchanged production secret predicates");
+}
+const readableProbe = one("SELECT verify_probe FROM remediation_contracts WHERE class='fm-prd-funnel-evidence'").verify_probe;
+assert.equal(one(readableProbe).observed, 0);
+db.exec(repair);
+assert.equal(one("SELECT COUNT(*) n FROM decision_log").n, 2, "repair reapply is idempotent");
 db.close();
 console.log("PASS PRD funnel: stage joins, null/missing data, age, attention quality, freshness, task execution and idempotence");
