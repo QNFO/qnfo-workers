@@ -72,6 +72,18 @@ const cols = (db) => db.prepare("SELECT name FROM pragma_table_info('engine_runs
   ok(env.q08Meter.compose === 1 && env.q08Meter.verify === 2 && env.q08Meter.panel === 1 && env.q08Meter.factcheck === 1, "stage calls also preserve verify_calls as their total", env.q08Meter);
 }
 {
+  const { db, shim } = makeDb();
+  const env = { DB: shim, q08Meter: { compose: 0, verify: 0, panel: 0, factcheck: 0 }, AI: { run: async () => { throw new Error("model unavailable"); } } };
+  await mod.__quality.readerTest(env, "@cf/moonshotai/kimi-k2.6", "An essay");
+  await V.factCheck(env, "An essay", "Source material", "@cf/openai/gpt-oss-120b");
+  ok(env.q08Meter.panel === 1 && env.q08Meter.factcheck > 0 && env.q08Meter.verify === env.q08Meter.panel + env.q08Meter.factcheck, "actual reviewer call sites attribute failed attempts and retain their total", env.q08Meter);
+  await G.insertRun(env, { status: "gate_failed" });
+  await G.insertRun({ DB: shim }, { status: "skipped" });
+  const rows = db.prepare("SELECT panel_calls, factcheck_calls, verify_calls FROM engine_runs ORDER BY id").all();
+  ok(rows[0].panel_calls === 1 && rows[0].factcheck_calls > 0 && rows[0].verify_calls === rows[0].panel_calls + rows[0].factcheck_calls, "the run ledger persists attribution from actual calls", rows);
+  ok(rows[1].panel_calls === null && rows[1].factcheck_calls === null && rows[1].verify_calls === null, "an unmetered caller remains unknown rather than being reported as zero spend", rows[1]);
+}
+{
   // a database whose ALTER is refused still gets its row, with the old column list
   const { db, shim } = makeDb();
   const refusing = { prepare: (sql) => (/ALTER TABLE/.test(sql) ? { run: async () => { throw new Error("ALTER refused"); } } : shim.prepare(sql)) };
