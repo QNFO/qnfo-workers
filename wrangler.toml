@@ -31,3 +31,5 @@ name = "qnfo-workers"
 main = "worker.js"
 compatibility_date = "2026-08-10"
 workers_dev = true
+
+[previews]
