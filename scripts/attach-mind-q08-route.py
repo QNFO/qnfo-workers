@@ -225,12 +225,19 @@ def main():
     R["zone_id"] = zone
 
     # 2. does the worker exist (three paths)
-    if not script_exists():
+    # 2. does the worker exist (three paths)
+    # Retry a few times in case the script is still being deployed.
+    for _attempt in range(3):
+        if script_exists():
+            break
+        # Record a degraded status but keep trying.
+        report("deploy", "ok-degraded", f"script not yet visible, retry {_attempt + 1}")
+        time.sleep(5)
+    else:
         return report(
             "deploy",
             "failed",
-            "q08-mind is definitively absent: get_script=404 and the account script list does not contain it "
-            f"({json.dumps(R['script_check'])})",
+            "q08-mind is definitively absent after retries: " + json.dumps(R["script_check"]),
         )
 
     # 3. route

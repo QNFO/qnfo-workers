@@ -731,6 +731,30 @@ def main():
     mode = "--apply" if "--apply" in sys.argv else "--audit"
     d = run_guard()
     rows = classify(d)
+    # UNMANAGED-PROBE-1: probe live workers without a repo directory.
+    # Get list of all workers (CF script list) from guard data.
+    all_workers = set(d.get("cf_script_list", []))
+    known_workers = set(rows.keys())
+    # Optional per-worker health URL overrides via JSON env var.
+    health_overrides = {}
+    env_json = os.getenv("UNMANAGED_HEALTH_OVERRIDES")
+    if env_json:
+        try:
+            health_overrides = json.loads(env_json)
+        except Exception:
+            pass
+    for w in sorted(all_workers - known_workers):
+        health_url = health_overrides.get(w, f"https://{w}.q08.workers.dev/health")
+        try:
+            req = urllib.request.Request(health_url, headers={"User-Agent": "qnfo-fleet-autoaudit"})
+            with urllib.request.urlopen(req, timeout=20) as r:
+                code = r.getcode()
+        except urllib.error.HTTPError as e:
+            code = e.code
+        except Exception:
+            code = 0
+        note = "UNMANAGED_OK" if code == 200 else "UNMANAGED_NO_HEALTH" if code == 404 else "UNMANAGED_ERR"
+        rows[w] = {"worker": w, "http": code, "live": None, "before": None, "match": 0, "note": note}
     ok, failed, now = write_audit_rows(rows)
     purged, purge_err = (None, None)
     if d.get("scope") == "all":

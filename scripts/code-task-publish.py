@@ -147,7 +147,9 @@ class SqliteStore:
         db.row_factory = sqlite3.Row
 
     def rows(self, sql, params=()):
-        return [dict(r) for r in self.db.execute(sql, list(params)).fetchall()]
+        rows = [dict(r) for r in self.db.execute(sql, list(params)).fetchall()]
+        self.db.commit()
+        return rows
 
     def changes(self, sql, params=()):
         c = self.db.execute(sql, list(params))
@@ -181,9 +183,11 @@ def list_ready(store):
 
 def claim(store, task):
     """Compare-and-set: only one publisher run wins a task. A stale 'publishing' row (crashed run) is re-claimable."""
-    return store.changes(
-        "UPDATE code_tasks SET status='publishing', updated_at=? WHERE id=? AND (status='ready_to_publish' OR (status='publishing' AND updated_at < ?))",
-        [now(), task["id"], ago(STALE_PUBLISHING_MIN)]) == 1
+    # D1 meta.changes includes trigger writes (e.g. owner_queue_live_metric_ct_upd). RETURNING identifies only the
+    # row this CAS won, unlike a later status read that could mistake another run's claim for our own.
+    return bool(store.rows(
+        "UPDATE code_tasks SET status='publishing', updated_at=? WHERE id=? AND (status='ready_to_publish' OR (status='publishing' AND updated_at < ?)) RETURNING id",
+        [now(), task["id"], ago(STALE_PUBLISHING_MIN)]))
 
 
 def finish(store, tid, status, pr_url=None, err=None):

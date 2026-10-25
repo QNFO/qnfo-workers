@@ -162,6 +162,14 @@ const op = (m, k) => m.ops.find((o) => o.key === k);
   const u = op(await api.watchmakerMeasure(env, NOW), "tick-sequence-ledger");
   ok(u && !u.counted && /^ok/.test(u.state), "a fresh tick ledger row is ok (" + (u && u.state) + ")");
 }
+{ // READER-REPORT-WATCHMAKER-1: the exact hourly gateway tick must fail closed when stale and clear when fresh.
+  db.prepare("UPDATE cron_fire_log SET fired_at = ? WHERE task_id = 'qnfo-gateway' AND cron_expr = '0 * * * *'").run(ago(3));
+  const stale = op(await api.watchmakerMeasure(env, NOW), "reader-report");
+  ok(stale && stale.counted && stale.state === "stalled: last run 3h ago, cadence 1h", "a reader-report sweep silent for 3h counts as stalled");
+  db.prepare("UPDATE cron_fire_log SET fired_at = ? WHERE task_id = 'qnfo-gateway' AND cron_expr = '0 * * * *'").run(ago(0.4));
+  const fresh = op(await api.watchmakerMeasure(env, NOW), "reader-report");
+  ok(fresh && !fresh.counted && /^ok, last run 0.4h ago$/.test(fresh.state), "a fresh reader-report sweep clears the stall");
+}
 let m = await api.watchmakerMeasure(env, NOW);
 { const ce = op(m, "compat-exposure"); ok(ce && !ce.counted && ce.runner === "cron:qnfo-ops", "compat-exposure is listed, run by qnfo-ops, not counted when fresh (COMPAT-WATCHMAKER-1, " + (ce && ce.state) + ")"); }
 ok(m.index === 0 && m.counted.length === 0, "a fully fresh fleet reads 0 (got " + m.index + ": " + m.counted.join(",") + ")");

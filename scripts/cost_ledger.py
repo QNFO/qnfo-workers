@@ -180,8 +180,6 @@ def plan_monthly(d1, call=cf):
 def stated_external(d1):
     r = d1("SELECT usd FROM cost_daily WHERE source = 'direct_providers_external' ORDER BY date LIMIT 1")
     return float(r[0]["usd"]) if r else None
-
-
 def task_cost_outcomes(d1, start_ts, end_ts):
     """Return exact qnfo-ops workflow job/outcome links and their logged token-cost estimates."""
     aggregate_query = (
