@@ -28,6 +28,7 @@ import remediation_consumer as RC  # noqa: E402
 LOOKBACK_DAYS = int(os.environ.get("COST_LOOKBACK_DAYS", "10"))
 NEURON_USD_PER_1K = 0.011
 FREE_NEURONS_PER_DAY = 10000
+TASK_COST_DETAIL_LIMIT = 50
 
 
 def cf(method, path, body=None, timeout=30):
@@ -179,6 +180,108 @@ def plan_monthly(d1, call=cf):
 def stated_external(d1):
     r = d1("SELECT usd FROM cost_daily WHERE source = 'direct_providers_external' ORDER BY date LIMIT 1")
     return float(r[0]["usd"]) if r else None
+
+
+def task_cost_outcomes(d1, start_ts, end_ts):
+    """Return exact qnfo-ops workflow job/outcome links and their logged token-cost estimates."""
+    aggregate_query = (
+        "WITH task_cost AS ("
+        "SELECT j.id, j.status AS outcome, COUNT(l.id) AS log_rows, COUNT(l.cost_usd) AS priced_rows, "
+        "SUM(CASE WHEN l.cost_usd = 0 THEN 1 ELSE 0 END) AS zero_cost_rows, "
+        "SUM(CASE WHEN l.cost_usd > 0 THEN 1 ELSE 0 END) AS positive_cost_rows, SUM(l.cost_usd) AS cost_usd "
+        "FROM ops_jobs j LEFT JOIN ops_ai_log l ON l.job_id = j.id AND l.strategy = 'job-workflow' "
+        "WHERE j.status IN ('succeeded', 'failed') AND j.updated_at >= ?1 AND j.updated_at < ?2 "
+        "GROUP BY j.id, j.status"
+        ") "
+        "SELECT outcome, COUNT(*) AS task_count, "
+        "SUM(CASE WHEN COALESCE(c.priced_rows, 0) > 0 THEN 1 ELSE 0 END) AS cost_linked_task_count, "
+        "SUM(CASE WHEN COALESCE(c.log_rows, 0) = 0 OR COALESCE(c.priced_rows, 0) = 0 THEN 1 ELSE 0 END) AS missing_cost_link_tasks, "
+        "SUM(CASE WHEN COALESCE(c.zero_cost_rows, 0) > 0 THEN 1 ELSE 0 END) AS tasks_with_zero_cost_logs, "
+        "SUM(CASE WHEN COALESCE(c.positive_cost_rows, 0) > 0 THEN 1 ELSE 0 END) AS tasks_with_positive_cost_estimate, "
+        "SUM(CASE WHEN COALESCE(c.priced_rows, 0) > 0 THEN c.cost_usd END) AS logged_cost_usd_estimate "
+        "FROM task_cost c GROUP BY outcome"
+    )
+    detail_query = (
+        "SELECT j.id AS task_id, j.status AS outcome, COUNT(l.id) AS cost_log_rows, COUNT(l.cost_usd) AS priced_cost_rows, "
+        "SUM(CASE WHEN l.cost_usd = 0 THEN 1 ELSE 0 END) AS zero_cost_rows, "
+        "SUM(CASE WHEN l.cost_usd > 0 THEN 1 ELSE 0 END) AS positive_cost_rows, "
+        "SUM(l.cost_usd) AS logged_cost_usd_estimate "
+        "FROM ops_jobs j LEFT JOIN ops_ai_log l ON l.job_id = j.id AND l.strategy = 'job-workflow' "
+        "WHERE j.status IN ('succeeded', 'failed') AND j.updated_at >= ?1 AND j.updated_at < ?2 "
+        "GROUP BY j.id, j.status ORDER BY j.updated_at DESC, j.id LIMIT %d" % TASK_COST_DETAIL_LIMIT
+    )
+    try:
+        rows = d1(aggregate_query, [start_ts, end_ts])
+        details = d1(detail_query, [start_ts, end_ts])
+    except Exception as error:  # noqa: BLE001
+        return None, "qnfo-ops job-cost join unavailable (%s)" % type(error).__name__
+    by_outcome = {
+        "succeeded": {
+            "task_count": 0,
+            "cost_linked_task_count": 0,
+            "missing_cost_link_tasks": 0,
+            "tasks_with_zero_cost_logs": 0,
+            "tasks_with_positive_cost_estimate": 0,
+            "logged_cost_usd_estimate": None,
+            "mean_logged_cost_usd_estimate_per_task_with_positive_logged_cost": None,
+        },
+        "failed": {
+            "task_count": 0,
+            "cost_linked_task_count": 0,
+            "missing_cost_link_tasks": 0,
+            "tasks_with_zero_cost_logs": 0,
+            "tasks_with_positive_cost_estimate": 0,
+            "logged_cost_usd_estimate": None,
+            "mean_logged_cost_usd_estimate_per_task_with_positive_logged_cost": None,
+        },
+    }
+    for row in rows:
+        outcome = str(row.get("outcome") or "")
+        if outcome not in by_outcome:
+            continue
+        values = by_outcome[outcome]
+        values["task_count"] = int(row.get("task_count") or 0)
+        values["cost_linked_task_count"] = int(row.get("cost_linked_task_count") or 0)
+        values["missing_cost_link_tasks"] = int(row.get("missing_cost_link_tasks") or 0)
+        values["tasks_with_zero_cost_logs"] = int(row.get("tasks_with_zero_cost_logs") or 0)
+        values["tasks_with_positive_cost_estimate"] = int(row.get("tasks_with_positive_cost_estimate") or 0)
+        if values["cost_linked_task_count"] > 0 and row.get("logged_cost_usd_estimate") is not None:
+            values["logged_cost_usd_estimate"] = round(float(row["logged_cost_usd_estimate"]), 6)
+        if values["tasks_with_positive_cost_estimate"] > 0 and values["logged_cost_usd_estimate"] is not None:
+            values["mean_logged_cost_usd_estimate_per_task_with_positive_logged_cost"] = round(
+                values["logged_cost_usd_estimate"] / values["tasks_with_positive_cost_estimate"], 6
+            )
+    task_count = sum(values["task_count"] for values in by_outcome.values())
+    task_details = []
+    for row in details:
+        priced_rows = int(row.get("priced_cost_rows") or 0)
+        zero_cost_rows = int(row.get("zero_cost_rows") or 0)
+        positive_cost_rows = int(row.get("positive_cost_rows") or 0)
+        estimate = row.get("logged_cost_usd_estimate")
+        cost_link_status = (
+            "missing" if not priced_rows else
+            "unverified_zero" if not positive_cost_rows else
+            "partial_unverified" if zero_cost_rows else
+            "linked"
+        )
+        task_details.append({
+            "task_id": str(row.get("task_id") or ""),
+            "outcome": str(row.get("outcome") or ""),
+            "cost_link_status": cost_link_status,
+            "cost_log_rows": int(row.get("cost_log_rows") or 0),
+            "priced_cost_rows": priced_rows,
+            "zero_cost_rows": zero_cost_rows,
+            "positive_cost_rows": positive_cost_rows,
+            "logged_cost_usd_estimate": (
+                round(float(estimate), 6) if positive_cost_rows and estimate is not None else None
+            ),
+        })
+    return {
+        "by_outcome": by_outcome,
+        "task_id_outcome_sample": task_details,
+        "task_id_outcome_sample_limit": TASK_COST_DETAIL_LIMIT,
+        "task_id_outcome_sample_truncated": task_count > len(task_details),
+    }, None
 
 
 def upsert(d1, date, source, scope, usd, reqs, note):
@@ -353,6 +456,10 @@ def cost_reconciliation(d1, call=cf, today=None, plan_monthly_usd=None, plan_bas
         "last_refreshed": task.get("last_refreshed") if task else None,
         "scope": "successful qnfo-ops model-ladder calls, not all fleet tasks",
     }
+    task_coverage, task_outcome_error = task_cost_outcomes(d1, start_ts, end_ts)
+    if task_outcome_error:
+        source_errors.append(task_outcome_error)
+    task_outcomes = task_coverage["by_outcome"] if task_coverage else None
     workers_gateway = None
     if worker_usd is not None and gateway_total is not None:
         workers_gateway = round(worker_usd + gateway_total, 4)
@@ -442,9 +549,35 @@ def cost_reconciliation(d1, call=cf, today=None, plan_monthly_usd=None, plan_bas
         "plan_basis": plan_basis if plan_basis in ("subscriptions API", "seeded monthly baseline", "unavailable") else "unverified source",
         "task_cost_coverage": {
             "status": "partial",
+            "source": "qnfo-audit.ops_jobs.status joined to ops_ai_log.job_id",
+            "log_filter": "ops_ai_log.strategy = 'job-workflow'; unassociated and other-strategy calls are not inferred or included",
+            "window_start_at": start_ts,
+            "window_end_exclusive_at": end_ts,
+            "scope": "terminal qnfo-ops asynchronous workflow jobs only; not all fleet tasks",
+            "included_in_billing_total": False,
+            "cost_basis": (
+                "logged qnfo-ops model token-price estimates from ops_ai_log.cost_usd; "
+                "not provider invoice charges; qnfo-ops can log zero when upstream token usage is absent, "
+                "so zero-cost rows are unverified rather than evidence of zero spend"
+            ),
             "successful_call_metric": successful_call_metric,
+            "by_outcome": task_outcomes,
+            "task_id_outcome_sample": task_coverage["task_id_outcome_sample"] if task_coverage else None,
+            "task_id_outcome_sample_limit": TASK_COST_DETAIL_LIMIT,
+            "task_id_outcome_sample_truncated": task_coverage["task_id_outcome_sample_truncated"] if task_coverage else None,
             "failed_task_cost_usd": None,
-            "reason": "Current cost ledgers aggregate by worker/provider/day; they do not join spend to task id and final task outcome.",
+            "failed_task_cost_usd_estimate": (
+                task_outcomes["failed"]["logged_cost_usd_estimate"]
+                if task_outcomes and task_outcomes["failed"]["tasks_with_positive_cost_estimate"] > 0 else None
+            ),
+            "successful_task_cost_usd_estimate": (
+                task_outcomes["succeeded"]["logged_cost_usd_estimate"]
+                if task_outcomes and task_outcomes["succeeded"]["tasks_with_positive_cost_estimate"] > 0 else None
+            ),
+            "reason": (
+                task_outcome_error or
+                "Exact task IDs and final outcomes are joined for qnfo-ops workflow jobs; unlinked task cost remains unknown and other workers' ledgers remain aggregate."
+            ),
         },
     }
 
@@ -539,6 +672,8 @@ def selftest():
     c.executescript("""CREATE TABLE cost_daily (date TEXT NOT NULL, source TEXT NOT NULL, scope TEXT NOT NULL DEFAULT 'fleet', usd REAL NOT NULL DEFAULT 0,
       requests INTEGER DEFAULT 0, tokens_in INTEGER DEFAULT 0, tokens_out INTEGER DEFAULT 0, note TEXT, updated_at TEXT, PRIMARY KEY (date, source));
       INSERT INTO cost_daily (date, source, usd, note) VALUES ('2026-09-26', 'cloudflare_plan', 200, 'monthly baseline (seeded)'), ('2026-09-26', 'direct_providers_external', 450, 'user-stated');
+      CREATE TABLE ops_jobs (id TEXT PRIMARY KEY, status TEXT, updated_at TEXT);
+      CREATE TABLE ops_ai_log (id TEXT PRIMARY KEY, ts TEXT, strategy TEXT, job_id TEXT, cost_usd REAL);
       CREATE TABLE ai_spend_ledger (day TEXT, provider TEXT, calls INTEGER, usd REAL);
       CREATE TABLE analytics_dash_meta (key TEXT, value TEXT);
       INSERT INTO analytics_dash_meta VALUES ('unified_cost_usd_30d','50'),('byok_cost_usd_30d','48.7766'),('last_refresh','2026-10-09T23:00:00Z');
@@ -646,6 +781,8 @@ def selftest():
       CREATE TABLE analytics_dash_meta (key TEXT, value TEXT);
       CREATE TABLE metric_registry (metric TEXT, last_value TEXT, last_refreshed TEXT, formula TEXT, source_of_truth TEXT);
       CREATE TABLE cloud_ops_events (id TEXT PRIMARY KEY, ts TEXT, kind TEXT, text TEXT, meta TEXT, job TEXT, status TEXT);
+      CREATE TABLE ops_jobs (id TEXT PRIMARY KEY, status TEXT, updated_at TEXT);
+      CREATE TABLE ops_ai_log (id TEXT PRIMARY KEY, ts TEXT, strategy TEXT, job_id TEXT, cost_usd REAL);
       INSERT INTO analytics_dash_meta VALUES ('unified_cost_usd_30d','5'),('byok_cost_usd_30d','3'),('last_refresh','2026-10-09T23:00:00Z');
       INSERT INTO metric_registry VALUES ('cost_usd_30d','10.165','2026-10-09T23:00:00Z','all-provider AI estimate','gateway + Workers AI + direct');
       INSERT INTO metric_registry VALUES ('ai_est_cost_30d','8.165','2026-10-09T23:00:00Z','AI list cost','gateway + Workers AI');
@@ -653,6 +790,25 @@ def selftest():
       INSERT INTO cost_daily VALUES ('2026-10-09','workers_ai','fleet',1),('2026-10-09','ai_gateway:openai','fleet',5),
         ('2026-10-09','owner_gateway:openai','owner-clients',1),('2026-10-09','cloudflare_plan:daily','fleet',1),
         ('2026-10-09','direct_providers_external:daily','owner-direct',15);
+      INSERT INTO ops_jobs VALUES
+        ('job-success-linked','succeeded','2026-10-09T22:30:00Z'),
+        ('job-success-unlinked','succeeded','2026-10-09T22:40:00Z'),
+        ('job-retried','succeeded','2026-10-09T22:45:00Z'),
+        ('job-failed-linked','failed','2026-10-09T22:50:00Z'),
+        ('job-failed-unlinked','failed','2026-10-09T23:00:00Z'),
+        ('job-failed-zero','failed','2026-10-09T23:05:00Z'),
+        ('job-old','succeeded','2026-08-01T00:00:00Z'),
+        ('job-running','running','2026-10-09T23:10:00Z');
+      INSERT INTO ops_ai_log VALUES
+        ('log-success','2026-10-09T22:30:00Z','job-workflow','job-success-linked',0.12),
+        ('log-success-zero','2026-10-09T22:35:00Z','job-workflow','job-success-linked',0),
+        ('log-retry-1','2026-10-09T22:41:00Z','job-workflow','job-retried',0.02),
+        ('log-retry-2','2026-10-09T22:44:00Z','job-workflow','job-retried',0.03),
+        ('log-other-strategy','2026-10-09T22:45:00Z','model-ladder','job-retried',0.5),
+        ('log-failed','2026-10-09T22:50:00Z','job-workflow','job-failed-linked',0.03),
+        ('log-failed-zero','2026-10-09T23:05:00Z','job-workflow','job-failed-zero',0),
+        ('log-unassociated','2026-10-09T23:06:00Z','job-workflow',NULL,0.7),
+        ('log-old','2026-08-01T00:00:00Z','job-workflow','job-old',9.0);
       CREATE TRIGGER event_secret_guard_insert AFTER INSERT ON cloud_ops_events
       WHEN NEW.meta LIKE '%cfat_%' OR NEW.meta LIKE '%ghp_%' OR NEW.meta LIKE '%github_pat_%'
         OR NEW.meta LIKE '%sk-ant-%' OR NEW.meta LIKE '%AIza%' OR NEW.meta LIKE '%AKIA%' OR NEW.meta LIKE '%OPSKEYPX%'
@@ -724,6 +880,90 @@ def selftest():
     assert snapshot["cost_metric_cross_checks"]["ai_est_cost_30d"]["difference_from_measured_sources_usd"] == 0
     assert snapshot["window_start_at"] == "2026-09-10T00:00:00Z"
     assert snapshot["window_end_exclusive_at"] == "2026-10-10T00:00:00Z"
+    assert snapshot["task_cost_coverage"]["by_outcome"]["succeeded"] == {
+        "task_count": 3,
+        "cost_linked_task_count": 2,
+        "missing_cost_link_tasks": 1,
+        "tasks_with_zero_cost_logs": 1,
+        "tasks_with_positive_cost_estimate": 2,
+        "logged_cost_usd_estimate": 0.17,
+        "mean_logged_cost_usd_estimate_per_task_with_positive_logged_cost": 0.085,
+    }
+    assert snapshot["task_cost_coverage"]["by_outcome"]["failed"] == {
+        "task_count": 3,
+        "cost_linked_task_count": 2,
+        "missing_cost_link_tasks": 1,
+        "tasks_with_zero_cost_logs": 1,
+        "tasks_with_positive_cost_estimate": 1,
+        "logged_cost_usd_estimate": 0.03,
+        "mean_logged_cost_usd_estimate_per_task_with_positive_logged_cost": 0.03,
+    }
+    assert snapshot["task_cost_coverage"]["failed_task_cost_usd"] is None
+    assert snapshot["task_cost_coverage"]["included_in_billing_total"] is False
+    assert snapshot["task_cost_coverage"]["failed_task_cost_usd_estimate"] == 0.03
+    assert "not provider invoice charges" in snapshot["task_cost_coverage"]["cost_basis"]
+    assert "zero-cost rows are unverified" in snapshot["task_cost_coverage"]["cost_basis"]
+    assert "unassociated and other-strategy calls are not inferred or included" in snapshot["task_cost_coverage"]["log_filter"]
+    task_sample = {row["task_id"]: row for row in snapshot["task_cost_coverage"]["task_id_outcome_sample"]}
+    assert task_sample["job-success-linked"]["outcome"] == "succeeded"
+    assert task_sample["job-success-linked"]["cost_link_status"] == "partial_unverified"
+    assert task_sample["job-success-linked"]["zero_cost_rows"] == 1
+    assert task_sample["job-success-linked"]["logged_cost_usd_estimate"] == 0.12
+    assert task_sample["job-retried"]["cost_log_rows"] == 2
+    assert task_sample["job-retried"]["logged_cost_usd_estimate"] == 0.05
+    assert snapshot["task_cost_coverage"]["by_outcome"]["succeeded"]["task_count"] == 3
+    assert task_sample["job-failed-linked"]["outcome"] == "failed"
+    assert task_sample["job-failed-linked"]["logged_cost_usd_estimate"] == 0.03
+    assert task_sample["job-failed-zero"]["cost_link_status"] == "unverified_zero"
+    assert task_sample["job-failed-zero"]["logged_cost_usd_estimate"] is None
+    assert snapshot["task_cost_coverage"]["task_id_outcome_sample_truncated"] is False
+    task_db = sqlite3.connect(":memory:")
+    task_db.executescript("CREATE TABLE ops_jobs (id TEXT PRIMARY KEY, status TEXT, updated_at TEXT); CREATE TABLE ops_ai_log (id TEXT PRIMARY KEY, strategy TEXT, job_id TEXT, cost_usd REAL);"
+                         "INSERT INTO ops_jobs VALUES ('failed-unpriced','failed','2026-10-09T23:00:00Z'),"
+                         "('failed-zero','failed','2026-10-09T23:10:00Z');"
+                         "INSERT INTO ops_ai_log VALUES ('zero','job-workflow','failed-zero',0);")
+
+    def td1(sql, params=None):
+        cur = task_db.execute(sql, params or [])
+        cols = [col[0] for col in cur.description]
+        return [dict(zip(cols, row)) for row in cur.fetchall()]
+
+    task_rows, task_error = task_cost_outcomes(td1, "2026-09-10T00:00:00Z", "2026-10-10T00:00:00Z")
+    assert task_error is None
+    assert task_rows["by_outcome"]["failed"]["task_count"] == 2
+    assert task_rows["by_outcome"]["failed"]["missing_cost_link_tasks"] == 1
+    assert task_rows["by_outcome"]["failed"]["tasks_with_zero_cost_logs"] == 1
+    assert task_rows["by_outcome"]["failed"]["logged_cost_usd_estimate"] == 0
+    assert task_rows["task_id_outcome_sample"] == [
+        {
+            "task_id": "failed-zero",
+            "outcome": "failed",
+            "cost_link_status": "unverified_zero",
+            "cost_log_rows": 1,
+            "priced_cost_rows": 1,
+            "zero_cost_rows": 1,
+            "positive_cost_rows": 0,
+            "logged_cost_usd_estimate": None,
+        },
+        {
+            "task_id": "failed-unpriced",
+            "outcome": "failed",
+            "cost_link_status": "missing",
+            "cost_log_rows": 0,
+            "priced_cost_rows": 0,
+            "zero_cost_rows": 0,
+            "positive_cost_rows": 0,
+            "logged_cost_usd_estimate": None,
+        },
+    ]
+    task_db.executemany(
+        "INSERT INTO ops_jobs VALUES (?, 'succeeded', '2026-10-09T23:30:00Z')",
+        [("success-%02d" % index,) for index in range(TASK_COST_DETAIL_LIMIT)],
+    )
+    task_rows, task_error = task_cost_outcomes(td1, "2026-09-10T00:00:00Z", "2026-10-10T00:00:00Z")
+    assert task_error is None
+    assert len(task_rows["task_id_outcome_sample"]) == TASK_COST_DETAIL_LIMIT
+    assert task_rows["task_id_outcome_sample_truncated"] is True
     assert provider_label("throughput") == "other"
     assert provider_label("cfatX") == "other"
     assert "throughput" not in json.dumps(snapshot)
