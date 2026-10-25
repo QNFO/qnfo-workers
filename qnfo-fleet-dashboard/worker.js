@@ -2845,7 +2845,10 @@ if (path === "/health") {
   // when LOOP_TOKEN is set) and a public read of the latest review notes + runs.
   if (path === "/api/portfolio/strategic" && request.method === "POST") {
     const tokP = request.headers.get("x-loop-token") || "";
-    if (env.LOOP_TOKEN && !constEq(tokP, env.LOOP_TOKEN)) return json({ error: "unauthorized" }, 401);
+    const tokF = request.headers.get("x-portfolio-token") || "";
+    const okLoop = owner.loop || (env.LOOP_TOKEN && constEq(tokP, env.LOOP_TOKEN));
+    const okTrig = env.PORTFOLIO_TRIGGER_SECRET && constEq(tokF, env.PORTFOLIO_TRIGGER_SECRET);
+    if (!okLoop && !okTrig) return json({ error: "unauthorized" }, 401);
     const rP = await portfolioStrategicRun(env, { force: url.searchParams.get("force") === "1" }).catch(function(e) {
       return { error: reachErr(e) };
     });
