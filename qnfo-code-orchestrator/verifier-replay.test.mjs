@@ -11,14 +11,15 @@ const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "qnfo-verifier-replay-"));
 try {
   const workerPath = path.join(tempDir, "worker.mjs");
   const source = fs.readFileSync(path.join(here, "worker.js"), "utf8");
-  fs.writeFileSync(workerPath, `${source}\nexport { replayFailedCompileTask as testReplayFailedCompileTask };\n`);
-  const { testReplayFailedCompileTask } = await import(pathToFileURL(workerPath).href);
+  fs.writeFileSync(workerPath, `${source}\nexport { replayFailedCompileTask as testReplayFailedCompileTask, stepTask as testStepTask };\n`);
+  const { testReplayFailedCompileTask, testStepTask } = await import(pathToFileURL(workerPath).href);
 
   function makeEnv() {
     const db = new DatabaseSync(":memory:");
     db.exec(`CREATE TABLE code_tasks (
       id TEXT PRIMARY KEY, path TEXT, status TEXT, step TEXT, branch TEXT, pr_url TEXT,
-      last_error TEXT, ctx TEXT, attempts INTEGER, lease_until TEXT, updated_at TEXT
+      last_error TEXT, ctx TEXT, attempts INTEGER, lease_until TEXT, updated_at TEXT,
+      repo TEXT DEFAULT 'qnfo-workers', goal TEXT DEFAULT 'Fix the Python compile fixture'
     );
     CREATE TABLE cloud_ops_events (id TEXT, ts TEXT, kind TEXT, text TEXT, meta TEXT, job TEXT, status TEXT);`);
     return {
@@ -75,6 +76,31 @@ try {
     assert.equal(env.db.prepare("SELECT COUNT(*) AS n FROM cloud_ops_events WHERE kind='code-task.verifier-replay'").get().n, 1);
     assert.equal(await testReplayFailedCompileTask(env), null, "a task is replayed only once");
     assert.equal(env.db.prepare("SELECT COUNT(*) AS n FROM cloud_ops_events WHERE kind='code-task.verifier-replay'").get().n, 1);
+  }
+
+  {
+    const env = makeEnv();
+    addTask(env, { id: "ct_read_replay" });
+    await testReplayFailedCompileTask(env);
+    const before = JSON.parse(env.db.prepare("SELECT ctx FROM code_tasks WHERE id='ct_read_replay'").get().ctx);
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = async () => new Response("value = 1\n");
+    try {
+      for (let read = 0; read < 2; read++) {
+        const task = env.db.prepare("SELECT * FROM code_tasks WHERE id='ct_read_replay'").get();
+        const result = await testStepTask(env, task);
+        assert.equal(result.ok, true, "the real read step succeeds");
+        const after = JSON.parse(env.db.prepare("SELECT ctx FROM code_tasks WHERE id='ct_read_replay'").get().ctx);
+        assert.equal(after.verifier_replay_attempted, true, "read retains the one-time replay marker");
+        assert.equal(after.verifier_replay_at, before.verifier_replay_at, "read retains replay provenance");
+        assert.equal(after.verifier_replay_reason, before.verifier_replay_reason);
+        env.db.prepare("UPDATE code_tasks SET step='read' WHERE id='ct_read_replay'").run();
+      }
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+    env.db.prepare("UPDATE code_tasks SET status='failed',step='verify',last_error='verify failed: container compile failed' WHERE id='ct_read_replay'").run();
+    assert.equal(await testReplayFailedCompileTask(env), null, "a replay that fails after reading cannot replay again");
   }
 
   {
