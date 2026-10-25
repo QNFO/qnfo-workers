@@ -74,17 +74,36 @@ for (const it of items) {
   const i = Number(it.slug.slice(3));
   eq(it.authors, ROWS[i].a, "authors of row " + i + " (" + JSON.stringify(ROWS[i].authors) + ")");
   eq(it.keywords, ROWS[i].k, "keywords of row " + i + " (" + JSON.stringify(ROWS[i].keywords) + ")");
+  eq(it.quality_label, "High-quality scholarly research", "quality classification of row " + i);
+  eq(it.peer_review_status, "Not independently peer-reviewed", "peer-review status of row " + i);
+  ok(it.quality_basis.includes("not a claim of independent peer review"), "quality basis is transparent for row " + i);
 }
 ok(items.every((it) => it.authors.every((n) => !/^(null|true|false|-?\d[\d.]*|[{\[].*)$/.test(n) || n === "[not json")), "no author name is JSON text (null, a number, true, an object)", items.map((it) => it.authors));
+const record = await get("/api/papers/pf-0");
+ok(record.s === 200, "single-paper API record answers 200", record.s);
+const recordJson = JSON.parse(record.t);
+eq(recordJson.datacite.subjects.slice(-3).map((x) => x.subject), ["High-quality scholarly research", "open-access scholarly work", "versioned research publication"], "DataCite subjects carry publisher classification tags");
+ok(recordJson.datacite.descriptions.some((x) => x.descriptionType === "Other" && x.description.includes("not a claim of independent peer review")), "DataCite description documents the classification basis");
+const openapi = await get("/openapi.json");
+ok(openapi.s === 200, "OpenAPI answers 200", openapi.s);
+const openapiJson = JSON.parse(openapi.t);
+ok(openapiJson.components.schemas.Paper.properties.quality_label.type === "string", "OpenAPI documents quality metadata");
 const feed = await get("/feed.json");
 ok(feed.s === 200, "/feed.json answers 200", feed.s);
 let fi = [];
 try { fi = JSON.parse(feed.t).items || []; } catch (e) { ok(false, "/feed.json is JSON", feed.t.slice(0, 200)); }
 ok(fi.length === ROWS.length, "/feed.json carries every row", fi.length);
 const tagged = fi.find((x) => /pf-4$/.test(x.id));
-eq(tagged && tagged.tags, ["primon gas", "zeta function", "partition function"], "feed tags split on ';'");
+eq(tagged && tagged.tags, ["primon gas", "zeta function", "partition function", "High-quality scholarly research", "open-access scholarly work", "versioned research publication"], "feed tags split on ';' and include classification");
+eq(tagged && tagged._qnfo && tagged._qnfo.peer_review_status, "Not independently peer-reviewed", "feed identifies review status");
 const oai = await get("/oai?verb=ListRecords&metadataPrefix=oai_dc");
 ok(oai.s === 200, "/oai ListRecords answers 200", oai.s);
+ok(oai.t.includes("<dc:type>Peer review: Not independently peer-reviewed</dc:type>"), "OAI-DC states peer-review status");
+ok(oai.t.includes("<dc:type>Editorial quality: High-quality scholarly research</dc:type>"), "OAI-DC states publisher classification");
+const rss = await get("/rss.xml");
+ok(rss.s === 200, "new-paper RSS answers 200", rss.s);
+ok(rss.t.includes("<qnfo:quality>High-quality scholarly research</qnfo:quality>"), "RSS identifies publisher classification");
+ok(rss.t.includes("<qnfo:peer_review_status>Not independently peer-reviewed</qnfo:peer_review_status>"), "RSS identifies review status");
 console.error = origError;
 eq(errors.filter((e) => /SyntaxError|JSON|is not valid/.test(e)), [], "no JSON parse error is logged while serving plain-text authors and keywords");
 

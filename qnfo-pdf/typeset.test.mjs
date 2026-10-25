@@ -93,6 +93,11 @@ const META = {
   published: "2026-08-26",
   version: "1.1.1",
   keywords: JSON.stringify(["Ostrowski theorem", "Levi-Civita field"]),
+  quality_label: "High-quality scholarly research",
+  quality_basis: "QNFO publisher classification for open-access, versioned research with a public revision history and reader correction channel; this is not a claim of independent peer review.",
+  peer_review_status: "Not independently peer-reviewed",
+  quality_evidence_url: "https://qnfo.org/about",
+  quality_tags: JSON.stringify(["High-quality scholarly research", "open-access scholarly work", "versioned research publication"]),
   categories: JSON.stringify(["mathematics"])
 };
 
@@ -155,8 +160,25 @@ test("the title block carries author, affiliations, ORCID, DOI, licence, keyword
   assert.match(r.front, /QNFO-ULA-2\.1/);
   assert.match(r.front, /Ostrowski theorem/);
   assert.match(r.front, /mathematics/);
+  assert.match(r.front, /Publisher classification/);
+  assert.match(r.front, /High-quality scholarly research/);
+  assert.match(r.front, /Not independently peer-reviewed/);
+  assert.match(r.front, /not a claim of independent peer review/);
   assert.match(r.front, /Cite as/);
   assert.match(r.front, /August 26, 2026/);
+});
+
+test("PDF HTML exposes publisher classification to crawlers without implying independent review", () => {
+  const html = renderFullHTML(MD, { meta: META, bibtex: BIB });
+  assert.match(html, /<meta name="qnfo:quality-label" content="High-quality scholarly research">/);
+  assert.match(html, /<meta name="qnfo:peer-review-status" content="Not independently peer-reviewed">/);
+  assert.match(html, /<meta name="citation_keywords" content="High-quality scholarly research">/);
+  const jsonLd = /<script type="application\/ld\+json">([\s\S]*?)<\/script>/.exec(html);
+  assert.ok(jsonLd, "the PDF render has ScholarlyArticle JSON-LD");
+  const article = JSON.parse(jsonLd[1]);
+  assert.equal(article["@type"], "ScholarlyArticle");
+  assert.equal(article.genre, "High-quality scholarly research");
+  assert.equal(article.additionalProperty[1].value, "Not independently peer-reviewed");
 });
 
 test("an in-body byline block is lifted into the title block and removed from the prose", () => {
