@@ -9,7 +9,7 @@ let pass = 0, fail = 0;
 const ok = (c, m, x) => { if (c) pass++; else { fail++; console.log("FAIL " + m + (x !== undefined ? " :: " + String(x).slice(0, 300) : "")); } };
 const slice = (a, b) => { const i = src.indexOf(a); const j = src.indexOf(b, i + 1); return i < 0 || j < 0 ? "" : src.slice(i, j); };
 
-ok(src.includes('var VERSION="3.30.2-seo-index-3"'), "version is 3.30.2-seo-index-3");
+ok(src.includes('var VERSION="3.30.4-seo-index-5"'), "version is 3.30.4-seo-index-5");
 
 // (a) IndexNow reaches every engine: the loop must not stop at the first acceptance.
 const idx = slice("async function indexNowSubmit", "__name(indexNowSubmit");
@@ -68,6 +68,13 @@ ok(src.includes('isPartOf: { "@type": "WebSite"'), "JSON-LD isPartOf");
 
 // (k) weekly full submission, not only the 7-day window.
 ok(src.includes("weekly full submit"), "weekly full IndexNow pass");
+
+// CMD RED TEAM findings (3.30.4) - appended AFTER the sm/src slices exist
+ok(!sm.includes('"/about"'), "no qnfo.org-only route in the papers sitemap (REDTEAM-SITEMAP-404-1)");
+ok(src.includes("var SEO_PAPER_HUB_COUNT = 5"), "hub count is one named constant");
+ok(src.includes("slice(0, 4000)"), "indexnow detail budget holds a full-corpus submission");
+ok(src.includes("reAcc"), "engine count survives a truncated detail (TRUNCATED-DETAIL-1)");
+ok(src.includes("String(e.error).slice(0, 32)"), "per-engine error text is stored compactly");
 
 console.log(pass + " passed, " + fail + " failed");
 if (fail) process.exit(1);
