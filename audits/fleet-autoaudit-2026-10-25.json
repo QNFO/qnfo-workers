@@ -1,5 +1,5 @@
 {
-  "audited_at": "2026-10-25 15:44:00",
+  "audited_at": "2026-10-25 16:23:52",
   "d1_write_failures": [],
   "d1_writes_ok": 121,
   "guard": {
@@ -555,7 +555,7 @@
       },
       {
         "dir": "q08-signal-engine",
-        "version": "0.34.4",
+        "version": "0.34.5",
         "worker": "q08-signal-engine"
       },
       {
@@ -570,7 +570,7 @@
       },
       {
         "dir": "qnfo-ai-search",
-        "version": "2.8.0-webmcp-1",
+        "version": "2.9.0",
         "worker": "qnfo-ai-search"
       },
       {
@@ -580,7 +580,7 @@
       },
       {
         "dir": "qnfo-cloud-ops",
-        "version": "1.33.3-codeagent",
+        "version": "1.34.0",
         "worker": "qnfo-cloud-ops"
       },
       {
@@ -615,12 +615,12 @@
       },
       {
         "dir": "qnfo-fleet-dashboard",
-        "version": "1.59.2-portfolio-latest-roadmap-1",
+        "version": "1.60.0-agent-tracing",
         "worker": "qnfo-fleet-dashboard"
       },
       {
         "dir": "qnfo-gateway",
-        "version": "3.41.0",
+        "version": "3.41.1",
         "worker": "qnfo-gateway"
       },
       {
@@ -995,9 +995,9 @@
       "worker": "q08-mind"
     },
     "q08-signal-engine": {
-      "before": "0.34.4",
+      "before": "0.34.5",
       "http": 200,
-      "live": "0.34.4",
+      "live": "0.34.5",
       "match": 1,
       "note": "SYNC",
       "worker": "q08-signal-engine"
@@ -1046,9 +1046,9 @@
       "worker": "qnfo-ai-calibration"
     },
     "qnfo-ai-search": {
-      "before": "2.8.0-webmcp-1",
+      "before": "2.9.0",
       "http": 200,
-      "live": "2.8.0-webmcp-1",
+      "live": "2.9.0",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-ai-search"
@@ -1179,9 +1179,9 @@
       "worker": "qnfo-citation-watch"
     },
     "qnfo-cloud-ops": {
-      "before": "1.33.3-codeagent",
+      "before": "1.34.0",
       "http": 200,
-      "live": "1.33.3-codeagent",
+      "live": "1.34.0",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-cloud-ops"
@@ -1334,9 +1334,9 @@
       "worker": "qnfo-fleet-control"
     },
     "qnfo-fleet-dashboard": {
-      "before": "1.59.2-portfolio-latest-roadmap-1",
+      "before": "1.60.0-agent-tracing",
       "http": 200,
-      "live": "1.59.2-portfolio-latest-roadmap-1",
+      "live": "1.60.0-agent-tracing",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-fleet-dashboard"
@@ -1360,9 +1360,9 @@
       "worker": "qnfo-fleet-feed"
     },
     "qnfo-gateway": {
-      "before": "3.41.0",
+      "before": "3.41.1",
       "http": 200,
-      "live": "3.41.0",
+      "live": "3.41.1",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-gateway"
