@@ -4,13 +4,13 @@ ONE human page: https://fleet.qnfo.org/  answers "what do I have to do, and shou
 Mirror: https://qnfo-fleet-dashboard.q08.workers.dev/
 
 ## The page
-- **Organised by functional area (AREAS-1, 1.38.0; pages and navigation by area since AREA-PAGES-1, 1.45.0, below).** Five tiles under the verdict: Cost, Research and content, Reach and growth, Autonomy loop, Reliability and security. Each shows one star metric with its 14-day direction (improving or worsening is judged against the breach operator, so a falling run-rate is good and falling subscriber growth is bad). A tile is green with no breach, amber with breaches below priority 8, red with a priority 8 or higher breach or eight or more breaches.
-- **Management by exception.** Under the queue, each area lists only metrics in breach (qnfo-audit v_metric_trigger_state, hit = 1), worst three first (priority, then size of the gap), each with owner, 14-day sparkline from metric_history and a Diagnose control that fills the command line (nothing runs until the owner presses Enter). The remainder is a count that opens a command-line listing. A metric maps to one area by key (AREA_DEFS); an unmapped key falls into Autonomy loop rather than disappearing.
+- **Organised by functional area (AREAS-1, 1.38.0; pages and navigation by area since AREA-PAGES-1, 1.45.0, below).** Five tiles under the verdict: Cost, Research and content, Reach and growth, Autonomy loop, Reliability and security. Each shows one star metric with its 14-day direction (improving or worsening is judged against the breach operator, so a falling run-rate is good and falling subscriber growth is bad). A tile is green with no breach, amber with breaches below priority 8, red with a priority 8 or higher breach or eight or more breaches. The overview puts the failure/root-cause rows before the owner queue, so the cause is visible without scrolling past the actions.
+- **Management by exception.** Before the queue, each area lists only metrics in breach (qnfo-audit v_metric_trigger_state, hit = 1), worst three first (priority, then size of the gap), each with owner, 14-day sparkline from metric_history and a Diagnose control that fills the command line (nothing runs until the owner presses Enter). The remainder is a count that opens a command-line listing. A metric maps to one area by key (AREA_DEFS); an unmapped key falls into Autonomy loop rather than disappearing.
 - **Pipelines and bottlenecks** (on each area's page since 1.45.0; the overview shows a bottleneck on the area's row). The Code loop flow
   (30 days) splits "closed" by what happened to the pull request, from `code_task_pr_links` (CODE-FLOW-PR-SPLIT-1, 1.46.0): closed, never
   opened a PR; PR closed unmerged; superseded (`status` or `merge_state` superseded, or a `last_error` that starts with superseded), which is
   not a failure and stays out of the failure share. Open issues by age, code loop (30 days), research queue and outreach, one bar per stage. The bottleneck is named by rule: failing stages that hold over 40% of finished work, else the largest waiting stage with at least 5 items and 30% of the pipeline. Age buckets and declined items never qualify, but a stale bucket is flagged.
-- **Removed as redundant:** the four-number KPI strip (now the tiles and the verdict reasons), the Business case grid (every figure is a tile, a verdict reason or the Progress card), the Open data link card (the footer carries the JSON links). GET /api/areas returns the same model (fleet-areas/v1); a source that cannot be read is named in blind and its pipeline is left out, never shown as zero.
+- **Removed as redundant:** the four-number KPI strip (now the tiles and the verdict reasons), the Business case grid (every figure is a tile, a verdict reason or the Progress card), the Open data link card (the footer carries the JSON links). GET /api/areas returns the same model (fleet-areas/v3); a source that cannot be read is named in blind and its pipeline is left out, never shown as zero.
 - Banner: `N things need you` / `Nothing needs you` / `Can't confirm` (a source could not be read, or system data is >60 min old; it never claims all-clear blind).
 - One card per human action: what, why only you, what happens if you wait, what to do, link.
 - Money and clock: AI spend 30d vs the $150 cap, days to the 2026-12-31 review gate, pageviews vs prior 30d, subscribers.
@@ -19,7 +19,7 @@ Mirror: https://qnfo-fleet-dashboard.q08.workers.dev/
 - The page is public and unauthenticated: third-party mail is shown as sender domain, age, category and authentication verdict, never a subject or an address; the sender's display name, address and the subject are shown only to the signed-in owner (or a loop-token holder), and no message body is ever on the page (1.17.8).
 
 ## Real-time
-The queue is read live from D1 on every request and the page re-fetches `/?frag=1` every 10s (green/amber/red dot = how fresh the last update is, so a frozen page cannot pass as all-clear). System state is rebuilt on demand when >5 min old; money/return inputs are re-measured on demand when >5 min old (throttled to one run per 2 min) and by the */15 cron and the 10-min fleet-exec heartbeat. Cloudflare analytics and billing are themselves minutes behind; the page shows when each was measured.
+The queue is read live from D1 on every request and the page re-fetches `/?frag=1` every 15s (green/amber/red dot = how fresh the last update is, so a frozen page cannot pass as all-clear). The desktop navigation groups all six area pages under one **Areas** menu; the mobile menu retains the complete route list. System state is rebuilt on demand when >5 min old; money/return inputs are re-measured on demand when >5 min old (throttled to one run per 2 min) and by the */15 cron and the 10-min fleet-exec heartbeat. Cloudflare analytics and billing are themselves minutes behind; the page shows when each was measured.
 
 ## Keep investing? (INVEST-DECISION-1)
 `decideInvestment` applies the rule in `impact_thresholds.review_gate_2026_12_31` (continue iff credibility_events>=2 OR confirmed_subscribers>=50 OR funding_secured, AND spend within the cap, judged 2026-12-31) to measured inputs and shows the trajectory:
@@ -84,7 +84,7 @@ pipeline switches it owns and the owner-queue cards that are about it. `FEED_ARE
 `AREA_FLOW` are derived from it, so the page, `GET /api` and `GET /api/area/<id>` cannot disagree about which areas exist
 (`area-pages.test.mjs` holds them to each other).
 
-- **Navigation is the areas:** Overview, Cost, Research, Reach, Autonomy, Reliability, Platform, Command line. Metrics (`/kpi`), Content
+- **Navigation is the areas:** desktop navigation is Overview, one Areas menu (Cost, Research, Reach, Autonomy, Reliability, Platform), and Command line; the mobile menu retains all routes. Metrics (`/kpi`), Content
   (`/content`) and Changelog (`/changelog`) are pages of an area, not top-level tabs: they light their area in the navigation and show
   the area's sub-bar. The old anchors (`/#queue`, `/#areas`, `/#flow`, `/#invest`) still land on the overview.
 - **Overview (`/`):** the owner queue (each card names its area; a receipt for a request of yours that the fleet closed sits apart under
@@ -147,8 +147,9 @@ failed can never render as "all clear" (1.44.3).
 | `reliability` | `/area/reliability` | `/api/area/reliability` | `/api/integration` | live + snapshot |
 | `platform` | `/area/platform` (tabs: `/kpi`, `/changelog`, `/cmd`) | `/api/area/platform` | `/api`, `/api/live`, `/api/areas`, `/api/state`, `/api/decision`, `/api/kpi`, `/api/changelog`, `/api/cmd` | live + snapshot |
 
-Live means: `v_metric_trigger_state` and `metric_history` (and the area's queues) are read from D1 at request time, cached
-at most 60 s per isolate, and the body says `live: true`, `max_lag_s: 60` and which tables it read (`computed_from`). A
+Live means: `v_metric_trigger_state`, `metric_history` and the area's queues are read from D1 and cached at most 15 s per
+isolate; the body says `live: true`, `max_lag_s: 15` and which tables it read (`computed_from`). Other indexed reads
+declare their own worst-case lag in `GET /api`. A
 snapshot-backed read (`/api/state`, `/api/actions`, `/api/integration`, `/api/decision`, `/api/live`) serves
 `fleet_dashboard_state`; any of them now schedules a rebuild in the background once the record is older than 60 s
 (`freshState`), which `/api/actions` and `/api/integration` previously did not do at all, so a poller could keep receiving
@@ -160,13 +161,20 @@ therefore carries `data: {age_min, metrics}`, the age of the oldest metric it re
 is a clock field for the digest, so it never moves the revision while `metrics` and the values do). A stale number cannot
 hide behind a live-looking answer.
 
+`GET /api/live` (`fleet-live/v2`) is the consolidated poller contract: beside the verdict, queue, decision and area summary,
+`failure_summary` groups affected areas with their primary breach, root-cause explanation, ranked top breaches, owner, lever
+and recent attempts; `freshness` gives request time and the measured age/cache bound for state, queue and areas. Its revision
+excludes clock-only fields so clients can use `If-None-Match` or `?since=<revision>` without a new content revision each poll.
+The root `GET /api/cmd` endpoint is POST-only; other methods return 405 with `Allow: POST` and a structured
+`method_not_allowed` body, while the existing POST UI-header guard remains unchanged.
+
 The page's area renderer (`focusRowsHtml`, which `humanHtml` calls) already listed all five areas. Each row now ends with a
 link to that area's machine feed (`feed: /api/area/<id>`), including the rows that read `all clear`, so the page and the API
 describe the same boundary. (`areaSectionsHtml` is dead code and is not the page; it was left alone rather than rewired.)
 Since 1.45.0 each row's area name links to its own page, `/area/<id>`, and `GET /api` `by_area` and `GET /api/area/<id>` carry that page's path.
 
 In `by_area`, `all_members_live` is about the area's member reads (false when one is snapshot-backed); the area feed
-itself is always `live: true` with `max_lag_s: 60`. The two flags deliberately do not share a name.
+itself is always `live: true` with `max_lag_s: 15`. The two flags deliberately do not share a name.
 
 `GET /api/ga4` was answering **500** live ("GA4 property ID not set"): an older handler for the same path stood in front of
 the GA4-DATA-API-1 ledger read and called two retired helpers. Both the shadow handler and the orphaned helpers are gone, so
