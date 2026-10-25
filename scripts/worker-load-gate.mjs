@@ -36,6 +36,7 @@ export const STUB_SOURCES = {
     "export class RpcTarget {}",
     "export class RpcStub {}",
     "export class ExecutionContext {}",
+    "export const tracing = { enterSpan(_name, callback, ...args) { return callback({ setAttribute() {}, end() {} }, ...args); } };",
     "export const exports = {};"
   ].join("\n"),
   "email": "export class EmailMessage { constructor(from, to, raw) { this.from = from; this.to = to; this.raw = raw; } }",

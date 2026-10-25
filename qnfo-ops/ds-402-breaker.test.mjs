@@ -11,7 +11,7 @@
 import { DatabaseSync } from "node:sqlite";
 import { readFileSync } from "node:fs";
 
-const IMPORT = 'import { WorkflowEntrypoint, DurableObject } from "cloudflare:workers";';
+const IMPORT = 'import { WorkflowEntrypoint, DurableObject, tracing } from "cloudflare:workers";';
 const src = readFileSync(new URL("./worker.js", import.meta.url), "utf8");
 if (src.indexOf(IMPORT) < 0) throw new Error("worker.js import line changed: update the loader in this test");
 // The breaker row carries the worker's own VERSION (read from worker.js, so a version bump does not break this check).
@@ -19,7 +19,7 @@ const WORKER_VERSION = (src.match(/var VERSION = "([^"]+)"/) || [])[1];
 if (!WORKER_VERSION) throw new Error("worker.js VERSION line not found");
 // Each load is a fresh module, so the per-isolate breaker starts closed.
 let loads = 0;
-const load = async () => (await import("data:text/javascript;base64," + Buffer.from(src.replace(IMPORT, "var WorkflowEntrypoint = class {}; var DurableObject = class {};") + "\n// load " + (++loads)).toString("base64"))).default;
+const load = async () => (await import("data:text/javascript;base64," + Buffer.from(src.replace(IMPORT, "var WorkflowEntrypoint = class {}; var DurableObject = class {}; var tracing = { enterSpan(_name, callback) { return callback({ setAttribute() {} }); } };") + "\n// load " + (++loads)).toString("base64"))).default;
 
 const say = console.log.bind(console);
 console.log = () => {};
