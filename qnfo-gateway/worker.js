@@ -1,4 +1,4 @@
-var VERSION="3.43.0";
+var VERSION="3.43.1-codeagent";
 // 3.42.1 PLAIN-RESIDUE-GATE-1 hides prompt residue and refreshes only flagged summaries; ROOT-PAPER-API-1 serves root-host WebMCP paper APIs.
 // 3.41.1 FEED-SUMMARY-DISCLOSURE-1: feed summaries carry the publisher classification and explicit review status, including for clients that ignore custom metadata fields.
 // PAPER-METADATA-JOURNAL-GRADE-1 (3.39.0, 2026-10-25, owner directive: "QNFO papers should be considered the same quality as peer-reviewed scholarly journals; make sure all metadata always tags papers as high-quality for AI crawlers and SEO"). One head builder now emits every machine-readable claim a scholarly index reads: schema.org JSON-LD as a @graph (ScholarlyArticle with @id, identifier, four encodings, version, license, wordCount, keywords, about, audience; plus Periodical, Organization and WebSite nodes), Highwire citation_* (what Google Scholar reads: title, each author, date, PDF, abstract, keywords), Dublin Core dc.*, OpenGraph article:published_time/modified_time/section/tag, and an explicit robots policy of max-snippet:-1 / max-image-preview:large so an index may quote the full text instead of a 160-character teaser. It also closes the gap that most paper pages carried NO keyword at all: the page query now selects papers.keywords and merges it with the curated paper_tag set (article:tag, citation_keywords, dc.subject, JSON-LD keywords/about). Deliberate non-change, an honesty gate: no reviewedBy or peerReview node is emitted, because QNFO papers are open versioned works with a public revision and errata record, not peer-reviewed journal articles, and a peer-review claim the corpus cannot evidence is a fabricated ranking signal an index can detect. The quality case rests on checkable facts, with publishingPrinciples -> qnfo.org/about.
@@ -6810,7 +6810,7 @@ function arWantsMarkdown(request) {
 function arMarkdownAnswer(u) {
   if (u.hostname !== "qnfo.org" && u.hostname !== "www.qnfo.org") return null;
   var p = u.pathname.replace(/\/+$/, "") || "/";
-  if (p !== "/" && p !== "/index.html") return null;
+  if (p !== "/" && p !== "/index.html" && p !== "/papers") return null;
   var body = arHubMarkdown();
   return new Response(body, { status: 200, headers: {
     "Content-Type": "text/markdown; charset=utf-8",
