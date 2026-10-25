@@ -9,6 +9,10 @@
 -- A stale publishing->publishing retry does not fire that status-change trigger:
 -- the existing 30-minute retry remains unchanged. No production task is reset here.
 -- Only registry rows are added; no schema, route, binding, cron or gate changes.
+-- Orchestrator owner subsequently dispatched normal publisher run 40229385116
+-- on unchanged main at 20:08:52Z. Task ct_s6cvwtytdlavkm reached published/done,
+-- attempts=0, last_error=NULL at 20:10:49.988Z, with PR #4201. This proves the
+-- existing stale alternate, not the new initial-claim fix or all of US02.
 
 INSERT OR IGNORE INTO failure_modes
  (fm_key,failure_mode,root_cause,remediation,detector,probe_class,first_seen,issue_id,trigger_condition,symptom,blast_radius)
@@ -45,3 +49,17 @@ SELECT
  'none directly',
  'GitHub run/main source; existing UPDATE RETURNING prior art in remediation_consumer.py; real SQLite trigger and concurrent connections; D1 REST result/timeout fixtures'
 WHERE NOT EXISTS (SELECT 1 FROM decision_log WHERE instr(action,'PUBLISH-CLAIM-TRIGGER-COUNT-1:')=1);
+
+INSERT INTO session_records
+ (session_id,wbs_code,agent_name,summary,decisions_made,files_changed,commits,infrastructure_changes,handoff_notes,
+  execution_ratio,total_tasks,completed_tasks,started_at,completed_at,created_at)
+SELECT
+ 'bea766ec-8ef0-413c-b717-2dd0dc69f079','autonomy/US02-publisher-recovery','GitHub Copilot',
+ 'Reproduced the initial publisher false-loser with the exact live status-change trigger and implemented atomic UPDATE RETURNING ownership; preserved stale recovery, path policy and canonical gates.',
+ 'Use the directly matched row from the atomic statement, not trigger-inclusive counts or a later shared status read. Do not reset production tasks or claim the full roadmap from publisher green.',
+ 'scripts/code-task-publish.py; scripts/code-task-publish.test.mjs; scripts/code_task_publish_claim_test.py; migrations/2026-10-25-publisher-claim-trigger-count.sql',
+ 'PR #4203; initial source commit 3618242a',
+ 'Existing registry rows only; no Worker, credential, binding, cron, route or schema change.',
+ 'Nine targeted SQLite/D1 fixtures pass. Orchestrator owner reports normal unchanged-main publisher run 40229385116 recovered ct_s6cvwtytdlavkm at 20:10:49.988Z into PR #4201 with attempts=0 and no error. Issue1000111 and representative live defect closure remain with session6acb4f9a-36a5-4df9-a29c-b948c4fb0da6; underlying100448 is separate. This record does not assert all US02 or roadmap completion.',
+ 1.0,1,1,'2026-10-25T19:56:20Z',strftime('%Y-%m-%dT%H:%M:%SZ','now'),datetime('now')
+WHERE NOT EXISTS (SELECT 1 FROM session_records WHERE session_id='bea766ec-8ef0-413c-b717-2dd0dc69f079');
