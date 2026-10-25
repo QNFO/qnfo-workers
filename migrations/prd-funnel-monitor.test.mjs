@@ -5,7 +5,7 @@ import assert from "node:assert/strict";
 const db = new DatabaseSync(":memory:");
 db.exec(`
 CREATE TABLE research_queue(id TEXT,status TEXT,paper_slug TEXT,published_at TEXT,doi TEXT,paper_url TEXT);
-CREATE TABLE entity_map(slug TEXT,page_url TEXT);
+CREATE TABLE entity_map(slug TEXT,page_url TEXT,doi TEXT);
 CREATE TABLE social_media_posts(status TEXT,post_id TEXT,buffer_id TEXT,paper_doi TEXT);
 CREATE TABLE reach_signals(date TEXT,source TEXT,entity_type TEXT,metric TEXT,quality TEXT,value REAL);
 CREATE TABLE subscribers(status TEXT,confirmed_at TEXT);
@@ -36,7 +36,7 @@ db.exec(`INSERT INTO research_queue VALUES
  ('complete','published','complete',datetime('now','-1 day'),'doi:complete','https://papers.qnfo.org/complete'),
  ('ancient','published','ancient',datetime('now','-31 days'),NULL,NULL),
  ('queued','queued','queued',NULL,NULL,NULL);
- INSERT INTO entity_map VALUES('complete','https://papers.qnfo.org/complete');
+ INSERT INTO entity_map VALUES('complete','https://papers.qnfo.org/complete',NULL);
  INSERT INTO social_media_posts VALUES('published','post-1',NULL,'doi:complete'),
  ('published','unrelated',NULL,'doi:other'),('draft','draft',NULL,'');
  INSERT INTO subscribers VALUES('subscribed',NULL),('unsubscribed',datetime('now')),('subscribed',datetime('now'));
@@ -52,11 +52,14 @@ assert.equal(stages().distribution.value, 1, "do not count unrelated or draft po
 assert.equal(stages().human_pageviews.value, 5, "exclude bots, page/site duplication and partial day");
 assert.equal(stages().confirmed_subscribers.value, 1);
 db.exec(`UPDATE research_queue SET doi='doi:old',paper_url='https://papers.qnfo.org/old' WHERE id='old';
- INSERT INTO entity_map VALUES('old','https://papers.qnfo.org/old');
+ INSERT INTO entity_map VALUES('old','https://papers.qnfo.org/old',NULL);
  INSERT INTO social_media_posts VALUES('published','',NULL,'doi:old');`);
 assert.equal(health().missing_transitions, 1, "blank post ID is not distribution evidence");
 db.exec("UPDATE social_media_posts SET post_id='post-old' WHERE paper_doi='doi:old'");
 assert.equal(health().missing_transitions, 0);
+db.exec(`UPDATE research_queue SET paper_url=NULL,doi=NULL WHERE id='old';
+ UPDATE entity_map SET doi='doi:old' WHERE slug='old';`);
+assert.equal(health().missing_transitions, 0, "canonical mapping supplies URL and DOI when queue copies are absent");
 db.exec("INSERT INTO fleet_runs VALUES('prd-funnel-monitor','error',datetime('now'))");
 assert.equal(health().monitor_stale, 1, "failed runs never count as fresh");
 db.exec("INSERT INTO fleet_runs VALUES('prd-funnel-monitor','ok',datetime('now','-121 minutes'))");

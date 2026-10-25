@@ -8,17 +8,15 @@
 
 CREATE VIEW IF NOT EXISTS v_prd_funnel_publications AS
 SELECT q.id, q.paper_slug, q.published_at,
-  CASE WHEN trim(COALESCE(q.doi,''))<>'' THEN 1 ELSE 0 END AS has_deposit,
-  CASE WHEN trim(COALESCE(q.paper_url,''))<>'' AND EXISTS (
-    SELECT 1 FROM entity_map e WHERE e.slug=q.paper_slug AND trim(COALESCE(e.page_url,''))<>''
-  ) THEN 1 ELSE 0 END AS has_page_mapping,
+  CASE WHEN COALESCE(NULLIF(trim(q.doi),''),NULLIF(trim(e.doi),'')) IS NOT NULL THEN 1 ELSE 0 END AS has_deposit,
+  CASE WHEN trim(COALESCE(e.page_url,''))<>'' THEN 1 ELSE 0 END AS has_page_mapping,
   CASE WHEN EXISTS (
     SELECT 1 FROM social_media_posts p
     WHERE p.status='published' AND trim(COALESCE(NULLIF(trim(p.post_id),''),p.buffer_id,''))<>''
-      AND trim(COALESCE(q.doi,''))<>'' AND p.paper_doi=q.doi
+      AND p.paper_doi=COALESCE(NULLIF(trim(q.doi),''),NULLIF(trim(e.doi),''))
   ) THEN 1 ELSE 0 END AS has_distribution,
   MAX(0, CAST((julianday('now')-julianday(q.published_at))*1440 AS INTEGER)) AS age_min
-FROM research_queue q
+FROM research_queue q LEFT JOIN entity_map e ON e.slug=q.paper_slug
 WHERE q.status='published' AND julianday(q.published_at)>=julianday('now','-30 days');
 
 CREATE VIEW IF NOT EXISTS v_prd_funnel_publication_stages AS
