@@ -19,6 +19,7 @@ permissions:
 
 jobs:
   superseded:
+    # RUNNER-PIN-2: revisit after the 2026-11-19 ubuntu-26.04 rollout is validated.
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:
