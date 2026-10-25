@@ -31,5 +31,8 @@ ok(r.status === 0 && /\d+ passed, 0 failed/.test(r.stdout), "the patch-size test
 r = run("code_task_publish_repropose_test.py");
 ok(r.status === 0 && /\d+ passed, 0 failed/.test(r.stdout), "the repropose and no-patch test passes", (r.stdout || "").slice(-400) + (r.stderr || "").slice(-200));
 
+r = run("code_task_publish_claim_test.py");
+ok(r.status === 0 && /\bOK\b/.test(r.stderr), "atomic claim ownership survives trigger writes and concurrent publishers", (r.stdout || "").slice(-400) + (r.stderr || "").slice(-400));
+
 console.log("code-task-publish: " + pass + " passed, " + fail + " failed");
 process.exit(fail ? 1 : 0);
