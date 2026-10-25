@@ -14,6 +14,7 @@ permissions:
 
 jobs:
   copilot-setup-steps:
+    # RUNNER-PIN-2 (2026-10-25): Ubuntu 26 rollout ends 2026-11-19; keep ubuntu-24.04 until an ubuntu-26.04 trial is green.
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     permissions:
