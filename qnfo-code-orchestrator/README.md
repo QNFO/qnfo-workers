@@ -1,5 +1,22 @@
 # qnfo-code-orchestrator v0.3.0
 
+## v0.27.0: soft daily-call routing
+
+`ops_config.code_loop_daily_calls` remains the measured routing threshold. At or above
+it, work continues on one lane and one step per tick, with the configured coding ladder
+ordered by known input/output neuron rates. The cheapest priced rung runs first;
+the existing bounded retry/timeout ladder supplies fallbacks. If all configured prices
+are unknown, the supported `gpt-oss-120b` rung precedes them. Standalone planning also
+uses the cheap route. Below the threshold, model ordering and parallelism are unchanged.
+Verification, work claims, publication gates, and metric thresholds are unchanged.
+`code-task.spend-cap` reports `routed` rather than an idle-until-midnight hold.
+
+One-time terminal compile recovery retains its replay marker and provenance through
+fresh reads, including stale-base rereads, so the same task cannot replay indefinitely.
+`spend-cap.test.mjs` exercises the actual threshold boundary, complete verified task
+progression, fallback, and standalone planning. `verifier-replay.test.mjs` exercises
+marker persistence through the actual read step.
+
 ## Self-doc (FLEET-SELF-DOC-1)
 - **Purpose**: orchestrates the QNFO 100%-cloud autonomous code agent. v0.1.1 is the
   integration slice - reads repos via qnfo-code-agent (GitHub tool server) and executes

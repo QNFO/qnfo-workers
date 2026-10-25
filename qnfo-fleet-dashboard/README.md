@@ -161,10 +161,12 @@ therefore carries `data: {age_min, metrics}`, the age of the oldest metric it re
 is a clock field for the digest, so it never moves the revision while `metrics` and the values do). A stale number cannot
 hide behind a live-looking answer.
 
-`GET /api/live` (`fleet-live/v2`) is the consolidated poller contract: beside the verdict, queue, decision and area summary,
+`GET /api/live` (`fleet-live/v3`) is the consolidated poller contract: beside the verdict, queue, decision and area summary,
 `failure_summary` groups affected areas with their primary breach, root-cause explanation, ranked top breaches, owner, lever
-and recent attempts; `freshness` gives request time and the measured age/cache bound for state, queue and areas. Its revision
-excludes clock-only fields so clients can use `If-None-Match` or `?since=<revision>` without a new content revision each poll.
+and recent attempts. `remedy_history_available` and `unreadable_sources` distinguish a failed remedy-history read from a
+readable history with no recorded lever or attempts; unavailable remedy values are `null`, not zero. `freshness` gives
+request time and the measured age/cache bound for state, queue and areas, with the areas bound derived from the cache TTL.
+Its revision excludes clock-only fields so clients can use `If-None-Match` or `?since=<revision>` without a new content revision each poll.
 The root `GET /api/cmd` endpoint is POST-only; other methods return 405 with `Allow: POST` and a structured
 `method_not_allowed` body, while the existing POST UI-header guard remains unchanged.
 

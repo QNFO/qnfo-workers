@@ -8,6 +8,25 @@ Canonical source for the merged fleet-control hub worker (advisors + calibrator 
 - Do NOT deploy via wrangler: it would drop the script-API-managed bindings (BINDING-PRESERVATION-1).
 - Deployed version: 0.4.11 (qnfo-fleet-deploy / drift scanner).
 
+## ADVISOR-AGENT-TRACING-1 (0.46.0, pillar autonomy)
+
+The folded advisor is a custom application-owned harness, not an AI SDK/Think/Flue agent.
+Each audit that actually calls a model creates one `invoke_agent qnfo-fleet-advisor` span,
+with nested `chat <model>` spans for the proposal and each review. Cached advice, audits
+without findings, and audits without an AI binding create no agent spans. Both HTTP and
+scheduled entry points share this instrumentation in `runAudit`.
+
+Workers custom spans carry the shared agent name `qnfo-fleet-advisor`, stable agent ID
+`qnfo-fleet-control/advisor`, and a fresh opaque UUID per audit turn. Content is **metadata
+only**: no messages, prompts, instructions, tool payloads, results, or secrets are attached.
+Existing trace sampling remains `0.1` (10%); log sampling remains unchanged. No router or
+other fleet Worker is instrumented by this change.
+
+Run `node qnfo-fleet-control/agent-tracing.test.mjs` for offline coverage of nesting,
+identity, privacy, cache skips, and failure behavior. A Wrangler dry run validates the
+bundle but does not deploy or prove live trace ingestion; the Agents dashboard needs a
+sampled advisor turn after a separately authorized canonical deployment.
+
 ## 2026-09-12 change (self-heal wiring)
 `scan()` now writes a row to `self_heal_actions` (qnfo-audit D1) for every
 `drifted` / `stale-canon` / `health-ver` finding, with a `status`
@@ -140,4 +159,3 @@ their product launches (max 2), `not_considered` rows for unknown products (max 
 `cf_changelog_open_proposals_14d` are registered with triggers in `migrations/2026-10-03-cf-changelog-loop.sql`. Tests:
 `cf-changelog.test.mjs` replays real feed items (`cf-changelog.fixture.xml`); the feed shape, not the code, is what changes, so
 a feed that stops parsing shows up as `parse-empty` in `cf_changelog_runs` and breaches the age metric within 48 hours.
-
