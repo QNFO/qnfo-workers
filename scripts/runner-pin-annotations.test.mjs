@@ -173,7 +173,13 @@ if (haveBash) {
 const sh = rd(".github/workflows/container-config-selfheal-cron.yml");
 ok(/^concurrency:\n  group: container-config-selfheal-cron\n  cancel-in-progress: false$/m.test(sh), "selfheal no longer cancels a run that is in progress (it holds contents: write and calls the Cloudflare API; a newer trigger still replaces a WAITING one, so no queue builds)");
 ok(!/cancel-in-progress: true/.test(sh) && !/`cancel-in-progress: true` on its OWN group/.test(sh), "and the header no longer documents the old setting");
-ok(/on:\n  schedule:[\s\S]*cron: '13,43 \* \* \* \*'[\s\S]*workflow_run:[\s\S]*workflows: \[fleet-autodeploy, mirror-sync, deploy-qnfo-ops\][\s\S]*workflow_dispatch:/.test(sh) && /^permissions:\n  contents: write$/m.test(sh), "its triggers, schedule and permissions are unchanged");
+// SCHEDULE-PIN-PARITY-1 (2026-10-25): the cron below is a PIN, not a preference. #3950 (77cd356c, "ci: cut scheduled
+// Actions runs to daily") moved this workflow from '13,43 * * * *' (48/day) to '13 1 * * *' (1/day) and did not update
+// this expectation, so main went red at 08:00Z and deploy-gate failed every pull request for the rest of the day - the
+// merge lane was fully blocked by one stale integer. Keep the assertion as strict as it was: the schedule, the three
+// provably-firing workflow_run drivers, workflow_dispatch and contents: write must all stay, and a future cadence change
+// updates this line in the same commit.
+ok(/on:\n  schedule:[\s\S]*cron: '13 1 \* \* \*'[\s\S]*workflow_run:[\s\S]*workflows: \[fleet-autodeploy, mirror-sync, deploy-qnfo-ops\][\s\S]*workflow_dispatch:/.test(sh) && /^permissions:\n  contents: write$/m.test(sh), "its triggers, schedule and permissions are unchanged");
 const probe = step(sh, /Functional probe/), verdict = step(sh, /Verdict - honest red/);
 ok(probe && verdict, "the probe and verdict steps were found");
 ok(probe && /cat \/tmp\/health\.json 2>\/dev\/null \|\| true\n\s*echo\n/.test(probe.script) && /cat \/tmp\/status\.json 2>\/dev\/null \|\| true\n\s*echo\n/.test(probe.script), "the probe ends the file it prints with a newline, so the line after it starts a line");
