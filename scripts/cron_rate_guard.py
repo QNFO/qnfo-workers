@@ -63,7 +63,15 @@ MAX_FIRES_24H = 288
 MIN_GAP_MINUTES = 5
 # TEMPO-120M-5M-1: the slow side of the same policy.
 PRODUCER_MAX_GAP_MINUTES = 60
-HEARTBEAT_MAX_GAP_MINUTES = 5
+# CRON-MANDATE-1 (0.45.4, 2026-10-25) caps every Quniverse cron at 144 fires/24h and 10-minute spacing, and
+# qnfo-fleet-control's wrangler.toml was moved from */5 to */10 to comply. A heartbeat bound of 5 minutes then
+# demanded a cadence the binding mandate forbids, so the worker could satisfy EITHER the guard OR the mandate and
+# never both - the sweep failed on every push to main while the schedule was correct. The bound is the SLOW side of
+# the same policy ("a heartbeat must tick at least this often"), so it follows the mandate's 10-minute floor: a
+# heartbeat worker that drifts to hourly still fails, a worker ticking at the mandated 10 minutes passes.
+# NOTE: the OWNER_OVERRIDES below still permit */5 (fleet-exec) and */2 (qnfo-code-orchestrator), which are FASTER
+# than CRON-MANDATE-1 allows. That conflict predates this change and is recorded, not silently resolved here.
+HEARTBEAT_MAX_GAP_MINUTES = 10
 HEARTBEAT_WORKERS = ("fleet-exec", "qnfo-fleet-control", "qnfo-code-orchestrator")
 
 # ---- OWNER OVERRIDES (2026-10-17) -----------------------------------------------------------------

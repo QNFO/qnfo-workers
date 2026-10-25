@@ -68,10 +68,13 @@ g = guard(root);
 check(g.code === 0 && g.rep.tempo.length === 0 && g.rep.not_deployed.length === 2, "RETIRED and FOLDED directories are skipped and listed as not deployed");
 rmSync(root, { recursive: true, force: true });
 
-// 7. fleet-exec carries a stale FOLDED file but is the live dispatcher: it is still audited (a 10-minute trigger fails).
-root = fixture({ "fleet-exec": { crons: ["*/10 * * * *"], marker: "FOLDED" } }, "# empty\n");
+// 7. fleet-exec carries a stale FOLDED file but is the live dispatcher: it is still audited (a 15-minute trigger fails).
+// CRON-MANDATE-1 (0.45.4, 2026-10-25) makes 10 minutes the fastest permitted tempo, so the heartbeat bound follows it and
+// the fixture has to be slower than 10 minutes to still prove the assertion. The point under test - a FOLDED marker does
+// not exempt a live heartbeat worker from the tempo audit - is unchanged.
+root = fixture({ "fleet-exec": { crons: ["*/15 * * * *"], marker: "FOLDED" } }, "# empty\n");
 g = guard(root);
-check(g.code === 1 && g.rep.not_deployed === undefined, "a heartbeat/override worker is audited even with a FOLDED file (fleet-exec at */10 fails): " + reasons(g).slice(0, 90));
+check(g.code === 1 && g.rep.not_deployed === undefined, "a heartbeat/override worker is audited even with a FOLDED file (fleet-exec at */15 fails): " + reasons(g).slice(0, 90));
 rmSync(root, { recursive: true, force: true });
 
 // 8. The real repository passes, and its allowlist names exactly the slow crons of the live workers.
