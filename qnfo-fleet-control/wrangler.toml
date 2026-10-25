@@ -43,8 +43,13 @@ enabled = true
 head_sampling_rate = 0.1
 
 [triggers]
-# REMEDIATION-2X-1 (0.26.2, owner directive 2026-10-13): the 20-minute slot runs every 10 minutes (CRON-RATE-CEILING-1 floor).
-crons = ["*/5 * * * *", "0 * * * *"]
+# CRON-MANDATE-1 (0.45.4, 2026-10-25): */5 is 288 fires/day, over the 144 cap; */10 is 144/day and exactly compliant.
+# */10 also keeps the 20-minute grid intact (onTwentyGrid = slotMin % 20 < 5 is true at :00/:20/:40 on a */10 tick),
+# whereas a */15 tick would be true only at :00 and would silently drop the :20 and :40 steps.
+# The 0708e81d debloat was reverted (0276c347) because it went further and deleted the HOURLY trigger, which is the only
+# path into scheduledOnce's hourly fan-out (pollObservability, reassertObservability, refreshOwnedMetrics, codeMergeTick,
+# branchHygieneTick, publicationPreflight, workerCensusIfStale, usageSnapshotIfStale). Both triggers stay; the fast one halves.
+crons = ["*/10 * * * *", "0 * * * *"]
 
 [ai]
 binding = "AI"
