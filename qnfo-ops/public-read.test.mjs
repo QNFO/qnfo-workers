@@ -179,8 +179,10 @@ const toolResults = (t) => t.ai.seen.flatMap((s) => s.messages.filter((m) => m.r
 // privilege, which is the part of OWNER-OTP-1 that matters; anonymous requests (no Authorization header) are unchanged.
 {
   const t = mk();
-  const { res } = await call(t, Q, { Authorization: "Bearer stale-key", "CF-Connecting-IP": "198.51.100.4" });
-  ok(res.status === 401 && /authentication failure, not a rate limit/.test(await res.clone().text()), "D stale key answered 401 with the reason, got " + res.status);
+  // call() already read the body into `text`; cloning a consumed Response throws
+  // "Response.clone: Body has already been consumed", so read the text the helper returned.
+  const { res, text } = await call(t, Q, { Authorization: "Bearer stale-key", "CF-Connecting-IP": "198.51.100.4" });
+  ok(res.status === 401 && /authentication failure, not a rate limit/.test(text), "D stale key answered 401 with the reason, got " + res.status);
 }
 
 // E. model ids that would pick a paid upstream or a raw relay are ignored in public mode.
