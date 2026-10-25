@@ -442,9 +442,13 @@ def main(d1=None, call=cf, today=None):
     try:
         plan_m, plan_note = plan_monthly(d1, call)
     except Exception as e:  # noqa: BLE001
-        plan_m, plan_note = 0.0, "plan read failed: %s" % str(e)[:120]
+        plan_m, plan_note = None, "plan read failed: %s" % str(e)[:120]
         out["errors"].append(plan_note)
-    ext_m = stated_external(d1)
+    try:
+        ext_m = stated_external(d1)
+    except Exception as e:  # noqa: BLE001
+        ext_m = None
+        out["errors"].append("owner-stated external-provider amount unreadable: %s" % str(e)[:120])
     owner = owner_local_window(d1, days[0].isoformat())
     if owner is None:
         out["errors"].append("ai_spend_owner_local unreadable: gateway rows keep the owner term (scope fleet+owner-clients)")
@@ -647,6 +651,16 @@ def selftest():
     assert written["all_billing_including_unverified_usd"] == 492.2
     event = rd1("SELECT status, meta FROM cloud_ops_events WHERE id = 'cost-reconciliation-2026-10-09'")[0]
     assert event["status"] == "partial" and json.loads(event["meta"])["components_usd"]["ai_gateway_all_clients"] == 8
+    def failed_source_call(method, path, body=None, timeout=30):
+        return 403, {"errors": [{"message": "test source refusal"}]}
+    failed_snapshot = cost_reconciliation(
+        rd1, failed_source_call, dt.date(2026, 10, 9), 30, "subscriptions API", 450
+    )
+    assert failed_snapshot["components_usd"]["workers_ai_account_wide"] is None
+    assert failed_snapshot["components_usd"]["ai_gateway_all_clients"] is None
+    assert failed_snapshot["measured_source_subtotal_usd"] is None
+    assert any(error.startswith("Workers AI GraphQL:") for error in failed_snapshot["source_errors"])
+    assert any(error.startswith("AI Gateway GraphQL:") for error in failed_snapshot["source_errors"])
     print("cost_ledger selftest ok")
 
 
