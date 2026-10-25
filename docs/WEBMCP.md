@@ -65,7 +65,8 @@ own, and a proxy that accepted a caller-supplied absolute URL would be an SSRF s
 6. `node scripts/webmcp-verify.mjs` — live: the platform-injected tag on `*.qnfo.org`, the worker-injected tag/bridge
    elsewhere, the manifest and `/mcp` tool list on every host, and a real sample call per advertised HTTP tool. The
    verifier uses browser-like page headers and does not require the worker-owned `/.webmcp/packs.json` alias on
-   platform hosts; a missing advertised endpoint still fails the probe.
+   platform hosts; `list_site_pages` must return at least one `<loc>` entry, and any other missing advertised endpoint
+   still fails the probe.
 
 ## Honest limits
 

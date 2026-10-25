@@ -90,8 +90,9 @@ for (const host of targets) {
           const init = { method: tool.request.method || "GET" };
           if (init.method === "POST") { init.headers = { "content-type": "application/json" }; init.body = JSON.stringify(args); }
           const r = await get(url, init);
-          const ok = r.status >= 200 && r.status < 400;
-          (ok ? row.ends : row.failed_ends).push(tool.name + "=" + r.status);
+          const hasExtractedLocations = tool.request.extract !== "loc" || /<loc>[^<]+<\/loc>/i.test(r.body);
+          const ok = r.status >= 200 && r.status < 400 && hasExtractedLocations;
+          (ok ? row.ends : row.failed_ends).push(tool.name + "=" + r.status + (hasExtractedLocations ? "" : ":no-loc"));
         }
       }
       row.manifest_tool_count_ok = manifestTools.length === man.tool_count;
