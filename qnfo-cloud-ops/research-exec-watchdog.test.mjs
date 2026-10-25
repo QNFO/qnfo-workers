@@ -125,6 +125,8 @@ const mirror = readFileSync(join(here, "deployed-current.worker.js"), "utf8");
 check(mirror === src, "deployed-current.worker.js is identical to worker.js");
 const ver = /var VERSION = "(\d+)\.(\d+)\.(\d+)/.exec(src);
 check(ver && (Number(ver[1]) > 1 || (Number(ver[1]) === 1 && Number(ver[2]) >= 33)), "VERSION is at least 1.33.0 (a new capability raises the minor)", ver && ver[0]);
+const wdMs = Number((/var RESEARCH_WATCHDOG_TIMEOUT_MS = (\d+);/.exec(src) || [])[1]);
+check(wdMs >= 11 * 60000 && wdMs < 14 * 60000, "watchdog timeout covers a p99 stage (10.5 min) and stays under the 14-minute lease", wdMs);
 check(!/claude\.ai|anthropic\.com/i.test(jobSrc), "no claude.ai link in the job");
 console.log(fails ? fails + " FAILED" : "research-exec-watchdog: all assertions passed");
 process.exit(fails ? 1 : 0);
