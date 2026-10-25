@@ -94,6 +94,47 @@ try {
   {
     const { env, db, inputs } = makeEnv();
     await addTask(env, db);
+    db.prepare("UPDATE code_tasks SET created_at='2026-10-25T03:00:00Z' WHERE id='ct_budget'").run();
+    for (let i = 0; i < 3; i++) {
+      await addTask(env, db, "ct_held_" + i);
+      db.prepare("UPDATE code_tasks SET path=?,created_at=? WHERE id=?")
+        .run("held-" + i + "/worker.js", "2026-10-25T00:00:0" + i + "Z", "ct_held_" + i);
+    }
+    env.DEPLOY_GUARD.fetch = async (_url, init) => {
+      const body = JSON.parse(init.body);
+      return Response.json(body.key.includes("held-")
+        ? { acquired: false, holder: "another-live-session" }
+        : { acquired: true, token: "fixture-token", expires_at: new Date(Date.now() + 3600e3).toISOString() },
+      { status: body.key.includes("held-") ? 409 : 200 });
+    };
+    const result = await tick(env, opts);
+    assert.equal(result.done.filter((item) => item.deferred).length, 3, "live claims are deferred, never bypassed");
+    assert.equal(result.done.filter((item) => !item.deferred).length, 1, "deferrals do not spend the one executable step");
+    assert.equal(result.executed_steps, 1);
+    assert.equal(db.prepare("SELECT step FROM code_tasks WHERE id='ct_budget'").get().step, "propose",
+      "an unrelated runnable task progresses behind claimed paths");
+    assert.deepEqual(inputs, [], "scanning claims and reading cannot spend a model call");
+    assert.equal(db.prepare("SELECT COUNT(*) AS n FROM code_tasks WHERE id LIKE 'ct_held_%' AND step='read' AND attempts=0").get().n, 3,
+      "scanning does not execute or fail any held task");
+    db.close();
+  }
+
+  {
+    const { env, db } = makeEnv();
+    for (let i = 0; i < 65; i++) await addTask(env, db, "ct_scan_" + i);
+    let scans = 0;
+    env.DEPLOY_GUARD.fetch = async () => { scans++; return Response.json({ acquired: false, holder: "another-live-session" }, { status: 409 }); };
+    const result = await tick(env, opts);
+    assert.equal(scans, 64, "all-held queues have a bounded claim scan");
+    assert.equal(result.done.length, 64);
+    assert.equal(result.executed_steps, 0);
+    assert.ok(result.done.every((item) => item.deferred));
+    db.close();
+  }
+
+  {
+    const { env, db, inputs } = makeEnv();
+    await addTask(env, db);
     for (const step of ["propose", "verify", "commit", "done"]) {
       const result = await tick(env, opts);
       assert.equal(result.capped, true);

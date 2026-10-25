@@ -10,8 +10,10 @@ var __defProp222 = Object.defineProperty;
 var __name222 = /* @__PURE__ */ __name22((target, value) => __defProp222(target, "name", { value, configurable: true }), "__name");
 var __name2222 = /* @__PURE__ */ __name222((target, value) => Object.defineProperty(target, "name", { value, configurable: true }), "__name");
 // VERSION-LINE-SPLIT-1 (agent_issues 100220): the release notes sit one per line below this statement, newest first, so a VERSION bump is a one-line patch; add a new note as the first line under it.
-var VERSION = "1.61.2"; /* 1.59.1 PORTFOLIO-STRATEGIC-2 (2026-10-25, agent_issues 1000194 from the CMD RED TEAM audit): (a) the weekly summary no longer prints the portfolio total beside the constraint program as if it were that program's risk - it now reads "constraint <program> (program risk N); portfolio risk M"; (b) the review reads v_roadmap and goals per program and records roadmap_now/next/later and goals_adopted/completed in program_review_notes, flagging an active program with no now/next roadmap item and adopted goals with none completed; (c) psrScorecards is also called from portfolioDailyRun, so the deterministic program and portfolio scorecards are loop-owned daily instead of only when the weekly review runs. */ /* 1.59.0 PORTFOLIO-STRATEGIC-1 (2026-10-25, PORTFOLIO-MANAGER-1): the portfolio manager persona runs its weekly strategic review inside this worker's cron (no new worker or cron while fleet_budget caps are breached, CORE-PROMPT-1 rule 8): loop-owned program/portfolio scorecards, per-program verdicts and deterministic actions from v_program_health, portfolio decisions (constrain/accelerate/stable), program_review_notes + one weekly-strategic portfolio_runs row, owner cards only for spend above the A9 ceiling and RED verdicts persisting 3+ reviews, persona narratives only while no ai_spend fleet_budget cap is breached; new routes POST /api/portfolio/strategic and GET /api/portfolio/latest. */ /* 1.58.1-codeagent (main, 2026-10-25). */
+var VERSION = "1.61.3";
+/* 1.61.3 DASHBOARD-MAIL-PARALLEL-1 (pillar core): overlap bounded inbox hydration and inbound-SLA D1 reads; retain partial enrichment and log query failures without mail contents. */
 /* 1.61.2 REMEDY-HISTORY-AVAILABILITY-1 (2026-10-25, pillar autonomy): expose remedy-history read failures as unavailable instead of zero attempts/no lever, and report the area cache's TTL as its freshness bound. */
+/* 1.59.1 PORTFOLIO-STRATEGIC-2 (2026-10-25, agent_issues 1000194 from the CMD RED TEAM audit): (a) the weekly summary no longer prints the portfolio total beside the constraint program as if it were that program's risk - it now reads "constraint <program> (program risk N); portfolio risk M"; (b) the review reads v_roadmap and goals per program and records roadmap_now/next/later and goals_adopted/completed in program_review_notes, flagging an active program with no now/next roadmap item and adopted goals with none completed; (c) psrScorecards is also called from portfolioDailyRun, so the deterministic program and portfolio scorecards are loop-owned daily instead of only when the weekly review runs. */ /* 1.59.0 PORTFOLIO-STRATEGIC-1 (2026-10-25, PORTFOLIO-MANAGER-1): the portfolio manager persona runs its weekly strategic review inside this worker's cron (no new worker or cron while fleet_budget caps are breached, CORE-PROMPT-1 rule 8): loop-owned program/portfolio scorecards, per-program verdicts and deterministic actions from v_program_health, portfolio decisions (constrain/accelerate/stable), program_review_notes + one weekly-strategic portfolio_runs row, owner cards only for spend above the A9 ceiling and RED verdicts persisting 3+ reviews, persona narratives only while no ai_spend fleet_budget cap is breached; new routes POST /api/portfolio/strategic and GET /api/portfolio/latest. */ /* 1.58.1-codeagent (main, 2026-10-25). */
 /* 1.61.0 LIVE-FAILURE-OVERVIEW-1 (2026-10-25, pillar autonomy): fleet-live/v2 adds ranked breach, primary-root-cause and per-source freshness data; the overview shows failure rows before the owner queue, groups desktop area navigation, and refreshes every 15 s; /api/cmd now returns an explicit POST-only 405 contract. */
 /* 1.60.0 AGENT-TRACING-1 (2026-10-25, pillar autonomy; minor: add metadata-only agent, model, tool and approval spans; preserve 1% sampling); PSR-MODEL-FLOOR-1 (#4084, research): use allowlisted GLM-5.3-Flash for free portfolio summaries and preserve the paid fallback; WEBMCP-SITEMAP-1 (pillar reach): serve the canonical public sitemap for list_site_pages. */
 /* 1.59.2 PORTFOLIO-LATEST-ROADMAP-1 (2026-10-25, agent_issues 1000194): GET /api/portfolio/latest now returns the persisted roadmap_now, roadmap_next, roadmap_later, goals_adopted and goals_completed counts so dashboard consumers can read the program roadmap and goal measures directly. Additive response change; no new worker, cron or binding. */
@@ -6485,21 +6487,22 @@ async function mailFacts(env, rows) {
       return "?" + (i + 1);
     }).join(",");
   };
-  if (ids.length) {
+  // Both enrichments read independently from the pending-message list, so overlap their D1 latency on the 15s poll path.
+  const [extraRows, slaRows] = await Promise.all([
+    ids.length ? d1all(env.AUDIT, "SELECT id, recipient, headers_json, substr(COALESCE(body_text, ''), 1, 1200) AS body_head FROM emails WHERE id IN (" + ph(ids) + ")", ids).catch(function() {
+      console.error(JSON.stringify({ worker: "qnfo-fleet-dashboard", where: "mailFacts:headers", error: "D1 lookup failed" }));
+      return [];
+    }) : Promise.resolve([]),
+    all.length ? d1all(env.AUDIT, "SELECT q.email_id, d.meta FROM email_reply_queue q JOIN cloud_ops_events d ON d.id = 'inbound-sla-q-' || q.id WHERE q.email_id IN (" + ph(all) + ") ORDER BY q.id", all).catch(function() {
+      console.error(JSON.stringify({ worker: "qnfo-fleet-dashboard", where: "mailFacts:sla", error: "D1 lookup failed" }));
+      return [];
+    }) : Promise.resolve([])
+  ]);
+  for (const e of extraRows) extra[Number(e.id)] = e;
+  for (const d of slaRows) {
     try {
-      for (const e of await d1all(env.AUDIT, "SELECT id, recipient, headers_json, substr(COALESCE(body_text, ''), 1, 1200) AS body_head FROM emails WHERE id IN (" + ph(ids) + ")", ids)) extra[Number(e.id)] = e;
-    } catch (e) {
-    }
-  }
-  if (all.length) {
-    try {
-      for (const d of await d1all(env.AUDIT, "SELECT q.email_id, d.meta FROM email_reply_queue q JOIN cloud_ops_events d ON d.id = 'inbound-sla-q-' || q.id WHERE q.email_id IN (" + ph(all) + ") ORDER BY q.id", all)) {
-        try {
-          const m = JSON.parse(d.meta || "{}");
-          if (m && m.category) sla[Number(d.email_id)] = String(m.category);
-        } catch (e) {
-        }
-      }
+      const m = JSON.parse(d.meta || "{}");
+      if (m && m.category) sla[Number(d.email_id)] = String(m.category);
     } catch (e) {
     }
   }

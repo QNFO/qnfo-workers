@@ -252,7 +252,7 @@ const pkg = JSON.parse(rd("qnfo-fleet-advisor/package.json"));
 const minVer = (spec) => { const m = /^[\^~>=\s]*(\d+)\.(\d+)\.(\d+)/.exec(String(spec || "")); return m ? m.slice(1).map(Number) : null; };
 const ge = (a, b) => a && b && (a[0] - b[0] || a[1] - b[1] || a[2] - b[2]) >= 0;
 ok(pkg.overrides && ge(minVer(pkg.overrides.undici), [7, 29, 1]) && minVer(pkg.overrides.undici)[0] === 7, "qnfo-fleet-advisor overrides undici to 7.29.1 or later within 7.x, the first fixed version (agents and @cloudflare/think pin 7.29.0 through guarded-fetch)", pkg.overrides);
-ok(pkg.name === "qnfo-fleet-advisor" && pkg.private === true && pkg.dependencies && pkg.dependencies.agents === "^0.30.1" && pkg.dependencies["@cloudflare/think"] === "^0.21.0" && pkg.dependencies.ai === "^7.0.93" && !pkg.dependencies["workers-ai-provider"], "the manifest's name and direct dependencies are unchanged");
+ok(pkg.name === "qnfo-fleet-advisor" && pkg.private === true && pkg.dependencies && pkg.dependencies.agents === "^0.30.1" && pkg.dependencies["@cloudflare/think"] === "^0.21.0" && pkg.dependencies.ai === "^7.0.93" && Object.keys(pkg.dependencies).length === 3 && !Object.hasOwn(pkg.dependencies, "workers-ai-provider"), "the manifest retains the PR 4132 dependency upgrades without the deprecated workers-ai-provider");
 ok(existsSync(join(root, "qnfo-fleet-advisor", "FOLDED")) && /FOLDED into qnfo-fleet-control/.test(rd("qnfo-fleet-advisor/FOLDED")), "the FOLDED marker is kept: the directory is still never deployed");
 
 rmSync(scratch, { recursive: true, force: true });
