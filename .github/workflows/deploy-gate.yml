@@ -781,6 +781,10 @@ jobs:
       - name: D1-FOLD-1 offline suite (scripts/cf_ops_actions.py)
         if: ${{ !cancelled() }}
         run: python3 scripts/cf_ops_d1_fold_test.py
+      # ACCESS-PROBE-1: report the live IdP inventory and app allowlists without printing OAuth credentials.
+      - name: ACCESS-PROBE-1 offline suite (scripts/cf_ops_actions.py)
+        if: ${{ !cancelled() }}
+        run: python3 scripts/cf_ops_access_probe_test.py
       # 2026-10-05 remediation (session bold-thompson): suites added by clusters C2, D and E.
       - name: CALLER-PROPS-1 offline suite (calendar-api 0.7.1, #1987)
         if: ${{ !cancelled() }}
