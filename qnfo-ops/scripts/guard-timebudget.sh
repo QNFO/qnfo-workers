@@ -165,7 +165,11 @@ for f in worker.js deployed-current.worker.js; do
   if ! grep -q 'ops_tool_budget_bail' "$DIR/$f"; then
     echo "FAIL: ops_tool_budget_bail event missing from $f (budget-bail observability)"; FAIL=1
   fi
-  if ! grep -q 'TOOLBUDGET-DO-LOOP-PARITY-1' "$DIR/$f"; then
+  if ! grep -Fq 'for (let turn = 0; turn <= maxTurns; turn++)' "$DIR/$f" ||
+     ! grep -Fq 'const withTools = turn < maxTurns && !_promptCapHit;' "$DIR/$f" ||
+     ! grep -Fq 'work.push({ role: "system", content: BUDGET_EXHAUSTED_DIRECTIVE });' "$DIR/$f" ||
+     ! grep -Fq 'withTools ? jobToolsPayload() : null' "$DIR/$f" ||
+     ! grep -Fq 'if (toolCalls && !withTools)' "$DIR/$f"; then
     echo "FAIL: DO/WS tool loop lacks the final no-tools round in $f (TOOLBUDGET-DO-LOOP-PARITY-1)"; FAIL=1
   fi
 done

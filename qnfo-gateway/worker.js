@@ -1,4 +1,5 @@
-var VERSION="3.41.1";
+var VERSION="3.42.0";
+// 3.42.0 ROOT-PAPER-API-1: qnfo.org serves the public paper API endpoints used by its advertised WebMCP papers tools.
 // 3.41.1 FEED-SUMMARY-DISCLOSURE-1: feed summaries carry the publisher classification and explicit review status, including for clients that ignore custom metadata fields.
 // PAPER-METADATA-JOURNAL-GRADE-1 (3.39.0, 2026-10-25, owner directive: "QNFO papers should be considered the same quality as peer-reviewed scholarly journals; make sure all metadata always tags papers as high-quality for AI crawlers and SEO"). One head builder now emits every machine-readable claim a scholarly index reads: schema.org JSON-LD as a @graph (ScholarlyArticle with @id, identifier, four encodings, version, license, wordCount, keywords, about, audience; plus Periodical, Organization and WebSite nodes), Highwire citation_* (what Google Scholar reads: title, each author, date, PDF, abstract, keywords), Dublin Core dc.*, OpenGraph article:published_time/modified_time/section/tag, and an explicit robots policy of max-snippet:-1 / max-image-preview:large so an index may quote the full text instead of a 160-character teaser. It also closes the gap that most paper pages carried NO keyword at all: the page query now selects papers.keywords and merges it with the curated paper_tag set (article:tag, citation_keywords, dc.subject, JSON-LD keywords/about). Deliberate non-change, an honesty gate: no reviewedBy or peerReview node is emitted, because QNFO papers are open versioned works with a public revision and errata record, not peer-reviewed journal articles, and a peer-review claim the corpus cannot evidence is a fabricated ranking signal an index can detect. The quality case rests on checkable facts, with publishingPrinciples -> qnfo.org/about.
 // MOST-REVISED-1 (2026-10-25): a "Most revised" sort orders by version_count descending, then last_revised_at, so the most-revised papers surface instead of papers that merely started at a high version number. The highest-version sort is unchanged.
@@ -7121,6 +7122,10 @@ var gateway_worker_default = {
     // legal.qnfo.org.
     if ((host === "qnfo.org" || host === "www.qnfo.org") && (p === "/legal" || p.indexOf("/legal/") === 0 || p === "/license")) return new Response(null, { status: 301, headers: { Location: "https://legal.qnfo.org" + legalRedirectPath(p) } });
     if (host === "legal.qnfo.org") return handleLegal(p, env);
+    if ((host === "qnfo.org" || host === "www.qnfo.org") && (p === "/api/papers" || p.indexOf("/api/papers/") === 0)) {
+      const od = await handleOpenData(request, env, p);
+      if (od) return od;
+    }
     if (host === "papers.qnfo.org" || host === "qnfo-publications.pages.dev") {
       if (p === "/oai" || p === "/openapi.json" || p === "/feed.json" || p.indexOf("/api/papers") === 0 && p !== "/api/paper-context") {
         const od = await handleOpenData(request, env, p);
