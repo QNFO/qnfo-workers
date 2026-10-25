@@ -7,9 +7,9 @@
  "upgraded_sentinel_to_active": 0,
  "inserted_active": 0,
  "inserted_needs_machine_probe": 0,
- "active_contracts": 694,
+ "active_contracts": 693,
  "active_with_executable_probe": 500,
- "active_with_prose_probe": 194,
+ "active_with_prose_probe": 193,
  "prose_probe_contracts": [
   {
    "class": "issue-2017",
@@ -264,6 +264,7 @@
   1000032,
   1000035,
   1000155,
+  1000168,
   2375,
   2607,
   2826,
@@ -273,10 +274,9 @@
   100458,
   100516,
   100518,
-  100542,
-  100563
+  100542
  ],
- "head": "bfdf008f2ea05804df790a2237b11375a557e8e5",
+ "head": "04a4f1578f4ebf95c49e5b6c780534ad544d3140",
  "job_status": "success",
- "ts": "2026-10-25T10:19:15Z"
+ "ts": "2026-10-25T10:52:24Z"
 }
