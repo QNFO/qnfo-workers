@@ -1,5 +1,5 @@
 {
-  "audited_at": "2026-10-25 18:58:11",
+  "audited_at": "2026-10-25 19:29:08",
   "d1_write_failures": [],
   "d1_writes_ok": 121,
   "guard": {
@@ -610,7 +610,7 @@
       },
       {
         "dir": "qnfo-fleet-control",
-        "version": "0.46.0-agent-tracing",
+        "version": "0.47.0-remediation-budget-metric",
         "worker": "qnfo-fleet-control"
       },
       {
@@ -665,7 +665,7 @@
       },
       {
         "dir": "qnfo-ops",
-        "version": "2.56.0-agent-tracing",
+        "version": "2.56.1",
         "worker": "qnfo-ops"
       },
       {
@@ -1326,9 +1326,9 @@
       "worker": "qnfo-fleet-calibrator"
     },
     "qnfo-fleet-control": {
-      "before": "0.46.0-agent-tracing",
+      "before": "0.47.0-remediation-budget-metric",
       "http": 200,
-      "live": "0.46.0-agent-tracing",
+      "live": "0.47.0-remediation-budget-metric",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-fleet-control"
@@ -1486,9 +1486,9 @@
       "worker": "qnfo-observability"
     },
     "qnfo-ops": {
-      "before": "2.56.0-agent-tracing",
+      "before": "2.56.1",
       "http": 200,
-      "live": "2.56.0-agent-tracing",
+      "live": "2.56.1",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-ops"
