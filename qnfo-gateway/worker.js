@@ -629,7 +629,7 @@ function wellKnownAnswer(u) {
     const body = ["Contact: mailto:qnfo@qnfo.org", "Expires: " + exp, "Preferred-Languages: en", "Canonical: https://" + u.hostname + "/.well-known/security.txt", "Policy: https://legal.qnfo.org/", ""].join(String.fromCharCode(10));
     return new Response(body, { headers: { "Content-Type": "text/plain; charset=utf-8", "Cache-Control": "public, max-age=86400" } });
   }
-  // AGENT-READINESS-1 (3.32.0): three discovery documents, each naming something that exists. Served on every gateway host
+  // AGENT-READINESS-1 (3.32.0): discovery documents name live interfaces. Served on every gateway host
   // so www and the subdomains answer too; the scanner checks qnfo.org.
   if (u.pathname === "/.well-known/api-catalog") {
     return new Response(JSON.stringify(arApiCatalog()), { headers: { "Content-Type": "application/linkset+json; charset=utf-8", "Cache-Control": "public, max-age=3600", "Access-Control-Allow-Origin": "*" } });
@@ -6409,9 +6409,9 @@ function withPagePolicy(res, request) {
 // checks failed and an agent could learn nothing about the site beyond robots.txt and a sitemap. This block publishes the
 // discovery surface an agent actually reads, and every artifact points at something that exists: the API catalog names the
 // live OpenAPI document, auth.md documents the Bearer credential the endpoints really accept, and the Web Bot Auth directory
-// holds a key the fleet controls. Deliberate non-change: no A2A agent card, no MCP server card for a server qnfo.org does not
-// run, no OAuth/OIDC discovery metadata and no Agent Skills index, because advertising an endpoint that cannot answer is a
-// false capability claim on a public face (DECLARED-NOT-WORKING-1). Scoring map (isitagentready.com/llms-full.txt 245-261):
+// holds a key the fleet controls. The A2A card, MCP server card and Agent Skills index each have live handlers. No
+// OAuth/OIDC discovery metadata is absent because qnfo.org does not operate an authorization server. No capabilities
+// are advertised without a live handler (DECLARED-NOT-WORKING-1). Scoring map (isitagentready.com/llms-full.txt 245-261):
 // Content-Signal -> L2, markdown negotiation -> L3, API catalog -> L4, auth metadata + Web Bot Auth -> L5 (2 of 3 groups).
 // Markdown is answered BEFORE the page router, so the single-key hub cache (HUB_CACHE_KEY) never stores a markdown body:
 // the alternative, converting inside handleHubCached, would serve Markdown to browsers for the cache's lifetime.
@@ -6506,6 +6506,9 @@ function arAuthMd() {
     "## Discovery",
     "",
     "- API catalog: https://qnfo.org/.well-known/api-catalog",
+    "- A2A agent card: https://qnfo.org/.well-known/agent-card.json",
+    "- A2A endpoint: https://qnfo.org/a2a",
+    "- Agent Skills index: https://qnfo.org/.well-known/agent-skills/index.json",
     "- This document: https://qnfo.org/auth.md",
     "",
     "## Agent registration",

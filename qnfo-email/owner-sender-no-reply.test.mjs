@@ -6,7 +6,8 @@
 // carries them (that needs a live version read) and it does not cover an owner alias absent from OWNER_SENDERS
 // whose subject is not a [handoff] reply.
 import fs from "node:fs";
-const src = fs.readFileSync(new URL("./worker.js", import.meta.url), "utf8");
+import { stripWorkerDefaultExport } from "../scripts/worker-source-test.mjs";
+const src = stripWorkerDefaultExport(fs.readFileSync(new URL("./worker.js", import.meta.url), "utf8"));
 const { isOwnerSender, isHandoffNoticeReply, enqueueHumanReply, enqueueHandoff, VERSION } =
   new Function(src.replace(/export default\{/, "const __handler={") +
     "\nreturn {isOwnerSender,isHandoffNoticeReply,enqueueHumanReply,enqueueHandoff,VERSION};")();

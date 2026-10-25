@@ -6,8 +6,9 @@
 // Run: node personal-companion/causal-source.test.mjs   -> prints "N passed, 0 failed"
 import { readFileSync } from "node:fs";
 import { importWorker } from "./_harness-import-worker.mjs";
+import { stripWorkerDefaultExport } from "../scripts/worker-source-test.mjs";
 const IMPORT = 'import { WorkflowEntrypoint } from "cloudflare:workers";';
-const src = readFileSync(new URL("./worker.js", import.meta.url), "utf8");
+const src = stripWorkerDefaultExport(readFileSync(new URL("./worker.js", import.meta.url), "utf8"));
 const mod = await importWorker(() => (src.replace(IMPORT, "var WorkflowEntrypoint = class {};") + "\n//" + Math.random()), new URL("./", import.meta.url));
 const V = mod.__verify;
 const GMAX = V.GROUND_MAX, PRIM = Math.floor(V.GROUND_MAX * V.PRIMARY_SHARE); // FULLTEXT-BUDGET-1 (1.26.2)

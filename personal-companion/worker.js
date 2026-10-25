@@ -2951,7 +2951,9 @@ var __name22 = __name2;
 // the release note is carried by the comment blocks at STALL_MIN, shortenFeedback, pruneRepeat and attemptBudgetStop, and none is added to the VERSION
 // line below (VERSION-LINE-NOTES-1, 2026-10-19). Its older trailing notes stay until length-lede.test.mjs stops pinning "LENGTH-LEDE-1" on that line.
 // VERSION-NOTES-MOVED-1: release notes live in the block below
-var VERSION = "1.38.0-no-registrar"; // 1.38.0 NO-REGISTRAR-1 (2026-10-21): the prose filter list no longer names the closed registrar.
+var VERSION = "1.38.2-no-registrar"; // 1.38.0 NO-REGISTRAR-1 (2026-10-21): the prose filter list no longer names the closed registrar.
+/* 1.38.2 WEBMCP-CATCH-LOGGING-1 (2026-10-25): report WebMCP injection and header-rewrite errors to Workers Logs. */
+/* 1.38.1 COMPANION-FACTCHECK-FRESH-1 (2026-10-25, agent_issues 100064, pillar personal; patch): fact-check retries bypass cached verdicts so repeated drafts receive a fresh review. */
 /* 1.37.2 DOMAIN-PLANE-OWNER-MAIL-1 (2026-10-20, agent_issues 100229, pillar personal; patch): owner notices (morning brief, check-ins, readings) are sent from companion@q08.org first and from rowan.quni@qnfo.org only when the SEND_EMAIL binding refuses the q08.org sender; subscriber mail keeps its sender. */
 /* 1.37.1 VERSION-LINE-NOTES-COMPANION-1 (2026-10-19, agent_issues 100253, pillar personal; patch, a comment moved): the release notes of every earlier version rode on the VERSION line (about 64,000 chars), so a version bump of this worker rewrote it in worker.js and in deployed-current.worker.js, a patch of about 257 KB, past the code loop's publish cap. The notes of 1.36.0 and earlier are in the git history of personal-companion/worker.js; new notes go in this block, never on the VERSION line (VERSION-LINE-NOTES-1, qnfo-fleet-control 0.40.1 and qnfo-fleet-dashboard 1.51.8, did the same for those two workers). 1.37.0 COMPANION-STALL-YIELD-1 (issue 100064): the stall issue closes only on two pieces since its filing with no two failed runs between them; the fresh-error digest; shortenFeedback; the prune-repeat and attempt-budget stops. */
 var MODELS = [
@@ -5687,7 +5689,7 @@ function factCheckExtra(modelId) {
 async function factCheckOne(env, modelId, draft, ground) {
   try {
     var body = FACTCHECK_PROMPT + "\n\n" + todayLine() + "\n\n--- SOURCE MATERIAL ---\n" + String(ground).slice(0, GROUND_MAX + 2000) + "\n\n--- DRAFT ---\n" + String(draft).trim().slice(0, 30000);
-    var resp = await aiRunAttr(env, "personal-companion", "factcheck", modelId, Object.assign({ messages: [{ role: "user", content: body }], max_tokens: REVIEW_MAX_TOKENS, temperature: 0.1 }, factCheckExtra(modelId)), { gateway: { id: "default" }, signal: AbortSignal.timeout(REVIEW_TIMEOUT_MS) });
+    var resp = await aiRunAttr(env, "personal-companion", "factcheck", modelId, Object.assign({ messages: [{ role: "user", content: body }], max_tokens: REVIEW_MAX_TOKENS, temperature: 0.1 }, factCheckExtra(modelId)), { gateway: { id: "default", skipCache: true }, signal: AbortSignal.timeout(REVIEW_TIMEOUT_MS) });
     var out = aiReplyText(resp);
     var v = parseFactVerdict(out);
     if (v) { v.model = modelId; v.family = familyOf(modelId); return v; }
@@ -8219,7 +8221,7 @@ function wmInjector(host, workerName) {
   var tag = '<script type="module" src="' + WM_BRIDGE_PATH + '" data-webmcp="' + WM_VERSION + '" data-packs="' + packs + '" data-mcp-url="' + WM_MCP_PATH + '" data-worker="' + String(workerName || "").replace(/"/g, "") + '"></script>';
   return {
     element: function (el) {
-      try { el.append(tag, { html: true }); } catch (e) { }
+      try { el.append(tag, { html: true }); } catch (e) { logCaught("wmInjector.append", e); }
     }
   };
 }
@@ -8242,7 +8244,7 @@ function wmWithHtml(res, request, workerName) {
       out.headers.delete("Content-Length");
       out.headers.delete("ETag");
       out.headers.set("X-WebMCP", WM_VERSION);
-    } catch (e2) { }
+    } catch (e2) { logCaught("wmWithHtml.headers", e2); }
     return out;
   } catch (e) {
     return res;

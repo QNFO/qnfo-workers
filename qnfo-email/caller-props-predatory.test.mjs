@@ -6,9 +6,10 @@
 // Run: node qnfo-email/caller-props-predatory.test.mjs   -> prints "N passed, 0 failed"
 import fs from "node:fs";
 import { versionAtLeast } from "../scripts/version-at-least.mjs";
-const src = fs.readFileSync(new URL("./worker.js", import.meta.url), "utf8");
-const api = new Function(src.replace(/export default\{/, "const __handler={") +
-  "\nreturn {handler:__handler,heuristicSpam,predatoryBody,internalCaller,parseCommand,fwdNoCommand,VERSION};")();
+import { stripWorkerDefaultExport } from "../scripts/worker-source-test.mjs";
+const src = stripWorkerDefaultExport(fs.readFileSync(new URL("./worker.js", import.meta.url), "utf8"));
+const api = new Function(src +
+  "\nreturn {handler:__wm_default,heuristicSpam,predatoryBody,internalCaller,parseCommand,fwdNoCommand,VERSION};")();
 let pass = 0, fail = 0;
 const ok = (c, m, extra) => { if (c) pass++; else { fail++; console.log("FAIL " + m + (extra !== undefined ? " :: " + JSON.stringify(extra) : "")); } };
 

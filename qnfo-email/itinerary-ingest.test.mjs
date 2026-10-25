@@ -3,7 +3,8 @@
 // ADVERSARIAL: this proves the parser and the idempotent write against fakes. It does not prove a real KLM or Booking.com
 // mail parses (their layouts differ and change); an unparsed gated confirmation files ITINERARY-PARSE-MISS-1 instead.
 import fs from "node:fs";
-const src = fs.readFileSync(new URL("./worker.js", import.meta.url), "utf8");
+import { stripWorkerDefaultExport } from "../scripts/worker-source-test.mjs";
+const src = stripWorkerDefaultExport(fs.readFileSync(new URL("./worker.js", import.meta.url), "utf8"));
 const api = new Function(src.replace(/export default\{/, "const __handler={") +
   "\nreturn {itinParse,itinGate,itinWrite,itineraryIngest,freshnessGuard,itinOffset,itinLooksLikeBooking,VERSION};")();
 const fail = [];

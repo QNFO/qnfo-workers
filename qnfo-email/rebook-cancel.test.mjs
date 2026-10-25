@@ -2,7 +2,8 @@
 // ADVERSARIAL: fakes only; real airline/hotel cancellation wording differs. An unrecognised cancellation is simply not applied
 // (the row stays confirmed), which is the safe direction. Nothing here fabricates production mail.
 import fs from "node:fs";
-const src = fs.readFileSync(new URL("./worker.js", import.meta.url), "utf8");
+import { stripWorkerDefaultExport } from "../scripts/worker-source-test.mjs";
+const src = stripWorkerDefaultExport(fs.readFileSync(new URL("./worker.js", import.meta.url), "utf8"));
 const api = new Function(src.replace(/export default\{/, "const __handler={") +
   "\nreturn {itinParse,itinWrite,itineraryIngest,itinCancelIntent,itinSentIso,VERSION};")();
 const fail = [];

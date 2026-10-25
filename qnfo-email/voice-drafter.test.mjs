@@ -1,9 +1,10 @@
 // EMAIL-VOICE-DRAFTER-1 (2.8.0, agent_issues 2373): the pure parts of the tiered drafter, loaded from worker.js the way the
 // other qnfo-email suites do (the module as a function; no bindings).
 import fs from "node:fs";
-const src = fs.readFileSync(new URL("./worker.js", import.meta.url), "utf8");
+import { stripWorkerDefaultExport } from "../scripts/worker-source-test.mjs";
+const src = stripWorkerDefaultExport(fs.readFileSync(new URL("./worker.js", import.meta.url), "utf8"));
 const lib = new Function(src.replace(/export default\{/, "const __handler={") +
-  "\nreturn { VERSION, EMAIL_TICK_CRON, EMAIL_DAILY_CRON, VOICE_DEFAULT, voiceSection, voiceNeverList, neverListHits, ungroundedClaims, tierByRules, parseTierJson, noticeIntent, __handler };")();
+  "\nreturn { VERSION, EMAIL_TICK_CRON, EMAIL_DAILY_CRON, VOICE_DEFAULT, voiceSection, voiceNeverList, neverListHits, ungroundedClaims, tierByRules, parseTierJson, noticeIntent };")();
 
 let pass = 0, fail = 0;
 const ok = (c, m, x) => { if (c) pass++; else { fail++; console.log("FAIL " + m + (x !== undefined ? "  -- " + JSON.stringify(x).slice(0, 500) : "")); } };

@@ -5,7 +5,8 @@ run-name: cf-ops-actions ${{ inputs.action }} ${{ inputs.target }}
 
 # CF-OPS-ACTIONS-1 (2026-10-01). Allowlisted Cloudflare API actions for steps an agent session cannot
 # run (it holds no CF token): delete a script whose repo directory carries a RETIRED/FOLDED marker,
-# AI Gateway log attribution, Workers AI neurons by model, gateway cost by model, Access scope probe.
+# AI Gateway log attribution, Workers AI neurons by model, gateway cost by model, Access organisation/apps/IdP probes and
+# an idempotent Cloudflare-account IdP setup that does not overwrite existing IdPs.
 # All logic lives in scripts/cf_ops_actions.py; each action prints one RESULT_JSON line.
 # Dispatch only (GitHub schedule never fires on this repo). Never prints a secret.
 # Style: step names colon-free, no heredocs, no inline python (workflow-lint.py).
@@ -14,7 +15,7 @@ on:
   workflow_dispatch:
     inputs:
       action:
-        description: "report | worker-history | kv-secret-scan | delete-worker | delete-vectorize-index | gateway-logs | ai-neurons | gateway-cost | access-probe | r2-get"
+        description: "report | worker-history | kv-secret-scan | delete-worker | delete-vectorize-index | gateway-logs | ai-neurons | gateway-cost | access-probe | access-ensure-cloudflare | r2-get"
         required: true
         type: choice
         options:
@@ -27,6 +28,7 @@ on:
           - gateway-cost
           - gateway-logs
           - access-probe
+          - access-ensure-cloudflare
           - delete-worker
           - delete-vectorize-index
           - zaraz-remove-tool

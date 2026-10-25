@@ -34,7 +34,13 @@ ACTIONS
                          requests per UTC hour for that model over 48h (finds an unattributed consumer by schedule).
   gateway-cost           AI Gateway requests and cost by model and provider for the last 7d (GraphQL). With
                          --target daily, cost per UTC day and provider over 30d.
-  access-probe           Whether the token can read the Zero Trust organisation and Access apps.
+  access-probe           Read the Zero Trust organisation, Access apps and identity providers. Reports only provider
+                         names/types, Cloudflare account-membership restriction, OAuth client-ID presence and each
+                         app's allowed provider IDs; never prints client IDs, secrets, emails or policy contents.
+                         OAuth client-secret validity is not asserted.
+  access-ensure-cloudflare
+                         Add Cloudflare-account identity login with account-member restriction if absent; never changes
+                         an existing provider, and verifies the resulting provider list.
   r2-get PATH            Read one text object under qnfo-backups/ops-workspace/ (the qnfo-ops workspace), e.g. a draft
                          that must be reviewed before publication (#1163). Read-only and prefix-restricted.
   report                 ai-neurons + gateway-cost + gateway-logs + access-probe in one run.
@@ -308,12 +314,70 @@ def gateway_cost(acct: str, token: str) -> int:
 def access_probe(acct: str, token: str) -> int:
     st_o, j_o = call("GET", f"/accounts/{acct}/access/organizations", token)
     st_a, j_a = call("GET", f"/accounts/{acct}/access/apps", token)
+    st_i, j_i = call("GET", f"/accounts/{acct}/access/identity_providers", token)
     apps = j_a.get("result") or []
-    emit({"action": "access-probe", "ok": True, "organizations_http": st_o,
+    providers = j_i.get("result") or []
+    identity_providers = []
+    for provider in providers:
+        config = provider.get("config") or {}
+        item = {"id": provider.get("id"), "name": provider.get("name"), "type": provider.get("type")}
+        if provider.get("type") == "cloudflare":
+            item["restrict_to_account_members"] = bool(config.get("restrict_to_account_members"))
+        if "client_id" in config:
+            item["oauth_client_id_present"] = bool(config.get("client_id"))
+        identity_providers.append(item)
+    responses = (("organizations", st_o, j_o), ("apps", st_a, j_a), ("identity_providers", st_i, j_i))
+    ok = all(200 <= status < 300 and response.get("success") is not False for _, status, response in responses)
+    errors = []
+    for stage, status, response in responses:
+        if not 200 <= status < 300 or response.get("success") is False:
+            errors.extend({"stage": stage, **error} for error in (response.get("errors") or [{"message": "HTTP " + str(status)}]))
+    emit({"action": "access-probe", "ok": ok, "organizations_http": st_o,
           "organization": (j_o.get("result") or {}).get("auth_domain") if st_o == 200 else None,
-          "apps_http": st_a, "apps": [{"name": a.get("name"), "domain": a.get("domain"), "type": a.get("type")} for a in apps][:30],
-          "errors": (j_o.get("errors") or []) + (j_a.get("errors") or [])})
-    return 0
+          "apps_http": st_a,
+          "apps": [{"name": a.get("name"), "domain": a.get("domain"), "type": a.get("type"),
+                    "allowed_idps": a.get("allowed_idps") or []} for a in apps][:30],
+          "identity_providers_http": st_i, "identity_providers": identity_providers[:30], "errors": errors})
+    return 0 if ok else 1
+
+
+def access_ensure_cloudflare(acct: str, token: str) -> int:
+    """Ensure the Cloudflare-account IdP exists without changing or disclosing existing providers."""
+    path = f"/accounts/{acct}/access/identity_providers"
+    status, result = call("GET", path, token)
+    if not 200 <= status < 300 or result.get("success") is False:
+        emit({"action": "access-ensure-cloudflare", "ok": False, "stage": "list", "http": status,
+              "error_codes": [e.get("code") for e in (result.get("errors") or [])]})
+        return 1
+    providers = result.get("result") or []
+    existing = next((p for p in providers if p.get("type") == "cloudflare"), None)
+    if existing:
+        restricted = bool((existing.get("config") or {}).get("restrict_to_account_members"))
+        emit({"action": "access-ensure-cloudflare", "ok": restricted, "created": False,
+              "provider_id": existing.get("id"), "restrict_to_account_members": restricted,
+              "unchanged": True,
+              "error": None if restricted else "existing Cloudflare IdP is unrestricted; left unchanged"})
+        return 0 if restricted else 1
+
+    status, result = call("POST", path, token, {
+        "name": "Cloudflare account",
+        "type": "cloudflare",
+        "config": {"restrict_to_account_members": True},
+    })
+    if not 200 <= status < 300 or result.get("success") is False:
+        emit({"action": "access-ensure-cloudflare", "ok": False, "stage": "create", "http": status,
+              "error_codes": [e.get("code") for e in (result.get("errors") or [])]})
+        return 1
+
+    verify_status, verify = call("GET", path, token)
+    verified = next((p for p in (verify.get("result") or []) if p.get("type") == "cloudflare"), None)
+    restricted = bool((verified or {}).get("config", {}).get("restrict_to_account_members"))
+    ok = (200 <= verify_status < 300 and verify.get("success") is not False and bool(verified) and restricted)
+    emit({"action": "access-ensure-cloudflare", "ok": ok, "created": True, "http": status,
+          "verify_http": verify_status, "provider_id": (verified or {}).get("id"),
+          "restrict_to_account_members": restricted,
+          "error": None if ok else "created IdP did not verify with account-member restriction"})
+    return 0 if ok else 1
 
 
 def r2_get(acct: str, token: str, path: str) -> int:
@@ -1318,7 +1382,7 @@ def gen_activitypub_key(worker: str, acct: str, token: str, keygen=_rsa_keypair,
 
 def main() -> int:
     ap = argparse.ArgumentParser()
-    ap.add_argument("action", choices=["d1-backup", "unbind-d1", "delete-d1", "unbind-service", "worker-history", "kv-secret-scan", "ops-intake-probe", "report", "r2-get", "delete-worker", "delete-vectorize-index", "gateway-logs", "ai-neurons", "gateway-cost", "access-probe", "zaraz-remove-tool", "zaraz-get", "zaraz-set-ga4", "spare-domain-canon", "gen-activitypub-key"])
+    ap.add_argument("action", choices=["d1-backup", "unbind-d1", "delete-d1", "unbind-service", "worker-history", "kv-secret-scan", "ops-intake-probe", "report", "r2-get", "delete-worker", "delete-vectorize-index", "gateway-logs", "ai-neurons", "gateway-cost", "access-probe", "access-ensure-cloudflare", "zaraz-remove-tool", "zaraz-get", "zaraz-set-ga4", "spare-domain-canon", "gen-activitypub-key"])
     ap.add_argument("--target", default="")
     ap.add_argument("--model", default="")
     ap.add_argument("--gateway", default="default")
@@ -1327,6 +1391,10 @@ def main() -> int:
     if a.action == "ops-intake-probe":
         return ops_intake_probe()
     token, acct = env("CLOUDFLARE_API_TOKEN"), env("CLOUDFLARE_ACCOUNT_ID")
+    if a.action == "access-ensure-cloudflare":
+        return access_ensure_cloudflare(acct, token)
+    if a.action == "access-probe":
+        return access_probe(acct, token)
     if a.action in ("d1-backup", "unbind-d1", "delete-d1", "unbind-service"):
         if not a.target:
             print("::error::" + a.action + " needs --target")

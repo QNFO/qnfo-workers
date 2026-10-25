@@ -17,6 +17,11 @@ const gw = (await import(pathToFileURL(join(here, "worker.js")).href)).default;
 const get = async (u) => { const r = await gw.fetch(new Request(u), env, { waitUntil() {} }); return { s: r.status, t: await r.text() }; };
 const rb = await get("https://qnfo.org/robots.txt");
 ok(rb.s === 200 && /Sitemap: https:\/\/qnfo\.org\/sitemap\.xml/.test(rb.t) && /Sitemap: https:\/\/papers\.qnfo\.org\/sitemap\.xml/.test(rb.t), "qnfo.org robots lists both sitemaps", rb.t);
+const auth = await get("https://qnfo.org/auth.md");
+ok(auth.s === 200 && auth.t.includes("https://qnfo.org/.well-known/agent-card.json") &&
+  auth.t.includes("https://qnfo.org/a2a") &&
+  auth.t.includes("https://qnfo.org/.well-known/agent-skills/index.json"),
+  "auth.md links to live A2A and Agent Skills discovery");
 const kf = await get("https://qnfo.org/" + key + ".txt");
 ok(key && kf.s === 200 && kf.t === key, "qnfo.org serves the IndexNow key");
 ok((await get("https://papers.qnfo.org/" + key + ".txt")).s === 200, "papers.qnfo.org still serves it");
