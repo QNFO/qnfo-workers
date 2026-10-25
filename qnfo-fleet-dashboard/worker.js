@@ -10,7 +10,7 @@ var __defProp222 = Object.defineProperty;
 var __name222 = /* @__PURE__ */ __name22((target, value) => __defProp222(target, "name", { value, configurable: true }), "__name");
 var __name2222 = /* @__PURE__ */ __name222((target, value) => Object.defineProperty(target, "name", { value, configurable: true }), "__name");
 // VERSION-LINE-SPLIT-1 (agent_issues 100220): the release notes sit one per line below this statement, newest first, so a VERSION bump is a one-line patch; add a new note as the first line under it.
-var VERSION = "1.59.0-portfolio-strategic"; /* 1.59.0 PORTFOLIO-STRATEGIC-1 (2026-10-25, PORTFOLIO-MANAGER-1): the portfolio manager persona runs its weekly strategic review inside this worker's cron (no new worker or cron while fleet_budget caps are breached, CORE-PROMPT-1 rule 8): loop-owned program/portfolio scorecards, per-program verdicts and deterministic actions from v_program_health, portfolio decisions (constrain/accelerate/stable), program_review_notes + one weekly-strategic portfolio_runs row, owner cards only for spend above the A9 ceiling and RED verdicts persisting 3+ reviews, persona narratives only while no ai_spend fleet_budget cap is breached; new routes POST /api/portfolio/strategic and GET /api/portfolio/latest. */ /* 1.58.1-codeagent (main, 2026-10-25). */ 
+var VERSION = "1.59.1-portfolio-strategic-2"; /* 1.59.1 PORTFOLIO-STRATEGIC-2 (2026-10-25, agent_issues 1000194 from the CMD RED TEAM audit): (a) the weekly summary no longer prints the portfolio total beside the constraint program as if it were that program's risk - it now reads "constraint <program> (program risk N); portfolio risk M"; (b) the review reads v_roadmap and goals per program and records roadmap_now/next/later and goals_adopted/completed in program_review_notes, flagging an active program with no now/next roadmap item and adopted goals with none completed; (c) psrScorecards is also called from portfolioDailyRun, so the deterministic program and portfolio scorecards are loop-owned daily instead of only when the weekly review runs. */ /* 1.59.0 PORTFOLIO-STRATEGIC-1 (2026-10-25, PORTFOLIO-MANAGER-1): the portfolio manager persona runs its weekly strategic review inside this worker's cron (no new worker or cron while fleet_budget caps are breached, CORE-PROMPT-1 rule 8): loop-owned program/portfolio scorecards, per-program verdicts and deterministic actions from v_program_health, portfolio decisions (constrain/accelerate/stable), program_review_notes + one weekly-strategic portfolio_runs row, owner cards only for spend above the A9 ceiling and RED verdicts persisting 3+ reviews, persona narratives only while no ai_spend fleet_budget cap is breached; new routes POST /api/portfolio/strategic and GET /api/portfolio/latest. */ /* 1.58.1-codeagent (main, 2026-10-25). */ 
 /* 1.51.19 VERSION-LINE-SPLIT-1 (2026-10-20, agent_issues 100220, pillar autonomy; patch: layout only): the release notes that sat on the VERSION line (202,642 chars) are one per line below it, so a bump is a one-line patch and the publisher's size cap stops refusing dashboard code tasks (5 of 5 on 2026-10-19); scripts/conflict_repair.py resolves note-line hunks (merge_note_hunk). No behaviour change. */
 /* 1.51.17 COST-FEED-7D-WINDOW-1 (2026-10-19, agent_issues 100169, pillar cost; patch): /api/cost by_model_7d and by_worker_7d sum the 7 complete UTC days (today, a partial day, was a 8th bucket under the 7d label, +31.8 percent), and the body says which days (window_7d) and that est_usd is list price before the free tier (est_usd_basis). */
 /* 1.51.16 PARKED-CARD-REASON-1 (2026-10-19, agent_issues 100173, pillar autonomy; patch): the parked code-task card branches on the cause wherever it sits in last_error (the loop writes "model <id>: noop-proposal: ..." and "model <id> proposed no change", so a prefix test never matched), and the dead execOne edit of PR 3106 (fleet_issue_dispatch has no last_error) is removed. */
@@ -12962,6 +12962,14 @@ async function portfolioDailyRun(env, opts) {
   }
   out.summary = summary;
   out.violations = violations ? violations.length : null;
+  // PORTFOLIO-STRATEGIC-2 (2026-10-25, agent_issues 1000194c): compute the deterministic program scorecards here too,
+  // so the daily rollup is loop-owned instead of being written only when the weekly review happens to run.
+  try {
+    const scd = await psrScorecards(env, day);
+    out.program_scorecards = scd.programs.length;
+  } catch (e) {
+    out.skipped.push("program scorecards: " + reachErr(e));
+  }
   await record("ok", summary.slice(0, 500));
   return out;
 }
@@ -13767,11 +13775,31 @@ function psrNum(x) {
 __name(psrNum, "psrNum");
 
 async function psrNoteTable(env) {
-  return env.AUDIT.prepare("CREATE TABLE IF NOT EXISTS program_review_notes (day TEXT NOT NULL, program_code TEXT NOT NULL, manager_persona TEXT, verdict TEXT NOT NULL, risk_score REAL, open_issues INTEGER, high_open INTEGER, guard_breaches INTEGER, stalled_projects INTEGER, primary_metric TEXT, top_actions TEXT, narrative TEXT, computed_at TEXT, PRIMARY KEY (day, program_code))").run();
+  // PORTFOLIO-STRATEGIC-2 (2026-10-25, agent_issues 1000194): the note row now also carries the roadmap/goal counts the
+  // review reads, and this makes the scorecard tables land on a worker that has never run a review (the daily rollup calls
+  // psrScorecards directly). The ALTERs are best-effort: a duplicate column is not an error worth raising.
+  await env.AUDIT.prepare("CREATE TABLE IF NOT EXISTS program_review_notes (day TEXT NOT NULL, program_code TEXT NOT NULL, manager_persona TEXT, verdict TEXT NOT NULL, risk_score REAL, open_issues INTEGER, high_open INTEGER, guard_breaches INTEGER, stalled_projects INTEGER, primary_metric TEXT, top_actions TEXT, narrative TEXT, computed_at TEXT, PRIMARY KEY (day, program_code))").run();
+  for (const ddl of [
+    "CREATE TABLE IF NOT EXISTS program_scorecards (day TEXT NOT NULL, program_code TEXT NOT NULL, open_issues INTEGER DEFAULT 0, high_open INTEGER DEFAULT 0, guard_breaches INTEGER DEFAULT 0, active_projects INTEGER DEFAULT 0, stalled_projects INTEGER DEFAULT 0, unmapped_open INTEGER DEFAULT 0, charter_ok INTEGER DEFAULT 0, risk_score REAL DEFAULT 0, rank INTEGER, computed_at TEXT, PRIMARY KEY (day, program_code))",
+    "CREATE TABLE IF NOT EXISTS portfolio_scorecards (day TEXT PRIMARY KEY, open_issues INTEGER DEFAULT 0, high_open INTEGER DEFAULT 0, guard_breaches INTEGER DEFAULT 0, cost_month_usd REAL, programs INTEGER DEFAULT 0, charter_coverage_pct REAL, constraint_program TEXT, risk_score REAL DEFAULT 0, computed_at TEXT)"
+  ]) {
+    try {
+      await env.AUDIT.prepare(ddl).run();
+    } catch (e) {
+    }
+  }
+  for (const col of ["roadmap_now", "roadmap_next", "roadmap_later", "goals_adopted", "goals_completed"]) {
+    try {
+      await env.AUDIT.prepare("ALTER TABLE program_review_notes ADD COLUMN " + col + " INTEGER").run();
+    } catch (e) {
+    }
+  }
+  return { ok: true };
 }
 __name(psrNoteTable, "psrNoteTable");
 
 async function psrScorecards(env, day) {
+  await psrNoteTable(env);
   const rows = await d1all(env.AUDIT, "SELECT program_code, open_issues, high_open, active_projects, stalled_projects, guard_breaches, charter_ok FROM v_program_health");
   const out = [];
   for (const r of rows) {
@@ -13876,6 +13904,18 @@ async function psrReview(env, day) {
   });
   const breachMap = {};
   for (const b of breaches) (breachMap[b.metric_key] = breachMap[b.metric_key] || []).push(b.title || b.metric_key);
+  // PORTFOLIO-STRATEGIC-2 (2026-10-25, agent_issues 1000194b): the review now reads the roadmap and the goals surfaces,
+  // so the "high-level roadmap" half of the owner request is covered instead of only the issue backlog.
+  const rmRows = await d1all(env.AUDIT, "SELECT program_code, SUM(CASE WHEN horizon='now' THEN 1 ELSE 0 END) AS n_now, SUM(CASE WHEN horizon='next' THEN 1 ELSE 0 END) AS n_next, SUM(CASE WHEN horizon='later' THEN 1 ELSE 0 END) AS n_later, SUM(CASE WHEN horizon='done' THEN 1 ELSE 0 END) AS n_done FROM v_roadmap WHERE program_code IS NOT NULL GROUP BY program_code").catch(function() {
+    return [];
+  });
+  const rmMap = {};
+  for (const r of rmRows) rmMap[r.program_code] = r;
+  const glRows = await d1all(env.AUDIT, "SELECT program_code, SUM(CASE WHEN status='adopted' THEN 1 ELSE 0 END) AS adopted, SUM(CASE WHEN status='completed' THEN 1 ELSE 0 END) AS completed FROM goals WHERE program_code IS NOT NULL GROUP BY program_code").catch(function() {
+    return [];
+  });
+  const glMap = {};
+  for (const r of glRows) glMap[r.program_code] = r;
   const narrativeAllowed = await psrNarrativeAllowed(env);
   const notes = [];
   const jobs = [];
@@ -13904,10 +13944,16 @@ async function psrReview(env, day) {
       acts.push("unblock " + p.stalled + " stalled active project(s)");
     }
     if (!acts.length) acts.push("maintain; verify " + (charter.primary_metric || "primary metric") + " trend next week");
+    const rm = rmMap[p.program_code] || { n_now: 0, n_next: 0, n_later: 0, n_done: 0 };
+    const gl = glMap[p.program_code] || { adopted: 0, completed: 0 };
+    const rmNow = psrNum(rm.n_now), rmNext = psrNum(rm.n_next), rmLater = psrNum(rm.n_later);
+    const glAdopted = psrNum(gl.adopted), glCompleted = psrNum(gl.completed);
+    if (p.active > 0 && rmNow + rmNext === 0) acts.push("no roadmap item in now/next for " + p.active + " active project(s)");
+    if (glAdopted > 0 && glCompleted === 0) acts.push(glAdopted + " adopted goal(s), none completed");
     const prevOpen = openBy.prev[p.program_code];
     const curOpen = openBy.today[p.program_code];
     const trend = typeof prevOpen === "number" && typeof curOpen === "number" ? (curOpen - prevOpen) / Math.max(1, prevOpen) : null;
-    const note = { code: p.program_code, pm, verdict, risk: p.risk, open: p.open, high: p.high, guard: p.guard, stalled: p.stalled, primary: charter.primary_metric || null, acts: acts.join("; "), trend, narrative: null };
+    const note = { code: p.program_code, pm, verdict, risk: p.risk, open: p.open, high: p.high, guard: p.guard, stalled: p.stalled, primary: charter.primary_metric || null, acts: acts.join("; "), trend, rmNow, rmNext, rmLater, glAdopted, glCompleted, narrative: null };
     notes.push(note);
     if (narrativeAllowed) {
       const promptText = "Program " + p.program_code + ". Objective: " + (charter.objective || "-") + ". Today: " + p.open + " open issues (" + p.high + " high), " + p.guard + " guard breaches, " + p.stalled + " stalled projects, risk score " + p.risk.toFixed(1) + ". Week-over-week open-issue change: " + (trend == null ? "unknown" : Math.round(trend * 100) + "%") + ". Write one factual sentence: verdict, main risk, one next action.";
@@ -13925,7 +13971,7 @@ async function psrReview(env, day) {
     }).narrative = x.n;
   }
   for (const nt of notes) {
-    await env.AUDIT.prepare("INSERT OR REPLACE INTO program_review_notes (day, program_code, manager_persona, verdict, risk_score, open_issues, high_open, guard_breaches, stalled_projects, primary_metric, top_actions, narrative, computed_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, datetime('now'))").bind(day, nt.code, nt.pm, nt.verdict, nt.risk, nt.open, nt.high, nt.guard, nt.stalled, nt.primary, nt.acts, nt.narrative).run();
+    await env.AUDIT.prepare("INSERT OR REPLACE INTO program_review_notes (day, program_code, manager_persona, verdict, risk_score, open_issues, high_open, guard_breaches, stalled_projects, primary_metric, top_actions, narrative, roadmap_now, roadmap_next, roadmap_later, goals_adopted, goals_completed, computed_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, datetime('now'))").bind(day, nt.code, nt.pm, nt.verdict, nt.risk, nt.open, nt.high, nt.guard, nt.stalled, nt.primary, nt.acts, nt.narrative, nt.rmNow, nt.rmNext, nt.rmLater, nt.glAdopted, nt.glCompleted).run();
   }
   const decisions = [];
   for (const nt of notes) {
@@ -13953,7 +13999,10 @@ async function psrReview(env, day) {
   const redCount = notes.filter(function(n) {
     return n.verdict === "RED";
   }).length;
-  const summary = "weekly-strategic " + day + ": programs " + notes.length + "; RED " + redCount + "; constraint " + (sc.constraint || "-") + " risk " + psrNum(sc.totals.risk).toFixed(0) + "; cost " + (sc.cost == null ? "unknown" : sc.cost) + " (ceiling " + PSR_COST_CEILING + "); owner items " + needs.length + "; narrative " + (narrativeAllowed ? "on" : "off (ai_spend cap breached, rule 8)");
+  const constraintNote = notes.find(function(n) {
+    return n.code === sc.constraint;
+  });
+  const summary = "weekly-strategic " + day + ": programs " + notes.length + "; RED " + redCount + "; constraint " + (sc.constraint || "-") + " (program risk " + (constraintNote ? psrNum(constraintNote.risk).toFixed(0) : "?") + "); portfolio risk " + psrNum(sc.totals.risk).toFixed(0) + "; cost " + (sc.cost == null ? "unknown" : sc.cost) + " (ceiling " + PSR_COST_CEILING + "); owner items " + needs.length + "; narrative " + (narrativeAllowed ? "on" : "off (ai_spend cap breached, rule 8)");
   const runRes = await env.AUDIT.prepare("INSERT INTO portfolio_runs (run_date, kind, session, summary, scorecard_json, actions_json, needs_owner) VALUES (?1, 'weekly-strategic', ?2, ?3, ?4, ?5, ?6)").bind(day, NAME + "/" + VERSION, summary, JSON.stringify(sc), JSON.stringify(decisions), JSON.stringify(needs)).run();
   return { ok: true, day, run_id: runRes.meta && runRes.meta.last_row_id || null, summary, notes: notes.map(function(n) {
     return { code: n.code, verdict: n.verdict, risk: Math.round(n.risk * 10) / 10, trend_pct: n.trend == null ? null : Math.round(n.trend * 100) };
