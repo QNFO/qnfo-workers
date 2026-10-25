@@ -25,30 +25,12 @@ import shutil
 import subprocess
 import sys
 import tempfile
+from functools import partial
+
+from cloudflare_http import request_json
 
 CF = "https://api.cloudflare.com/client/v4"
-
-
-def http(url, token, method="GET", body=None, timeout=60):
-    import urllib.error
-    import urllib.request
-    data = json.dumps(body).encode() if body is not None else None
-    req = urllib.request.Request(url, data=data, method=method)
-    req.add_header("Authorization", "Bearer " + token)
-    req.add_header("Content-Type", "application/json")
-    req.add_header("User-Agent", "qnfo-artifacts-git-mirror/1.0")
-    try:
-        with urllib.request.urlopen(req, timeout=timeout) as r:
-            raw = r.read().decode("utf-8", "replace")
-            return r.status, (json.loads(raw) if raw else {})
-    except urllib.error.HTTPError as e:
-        raw = e.read().decode("utf-8", "replace")
-        try:
-            return e.code, json.loads(raw)
-        except Exception:
-            return e.code, {"raw": raw[:300]}
-    except Exception as e:
-        return 0, {"error": str(e)}
+http = partial(request_json, timeout=60, user_agent="qnfo-artifacts-git-mirror/1.0")
 
 
 def scrub(s, *secrets):
