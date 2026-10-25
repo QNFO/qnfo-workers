@@ -79,7 +79,7 @@ ok(ch.find((r) => r.worker === "qnfo-ops").summary === "clean summary", "a clean
 ok(db.prepare("SELECT COUNT(*) AS n FROM fleet_changelog_bak_nozdoi").get().n === 2, "two changelog rows backed up");
 db.prepare("INSERT INTO fleet_changelog (worker, version, level, released_at, title, summary) VALUES ('x', '1.0.0', 'minor', '2026-10-12', 'NO-ZENODO-DOI follow-up', 'drops doi.org/10.5281 links')").run();
 const nx = db.prepare("SELECT title, summary FROM fleet_changelog WHERE worker = 'x'").get();
-ok(nx.title === "NO-RETIRED-REGISTRAR-DOI follow-up" && nx.summary === "drops retired-registrar links", "a new changelog row is reworded on insert", nx);
+ok(nx.title === "NO-RETIRED-REGISTRAR-DOI follow-up" && nx.summary === "drops doi.org/retired-prefix links", "a new changelog row is reworded on insert", nx);
 db.prepare("UPDATE fleet_changelog SET summary = 'enriched: Zenodo gate' WHERE worker = 'qnfo-ops'").run();
 ok(db.prepare("SELECT summary FROM fleet_changelog WHERE worker = 'qnfo-ops'").get().summary === "enriched: retired-registrar gate", "an enrichment update is reworded");
 
