@@ -29,7 +29,9 @@ const apiUpload = workflow.split("      - name: Upload the module bundle through
 assert.ok(configMain, "mind/wrangler.toml declares a main entrypoint");
 assert.ok(configName, "mind/wrangler.toml declares a Worker name");
 assert.ok(compatibilityDate, "mind/wrangler.toml declares a compatibility date");
-assert.equal(configName, "mind", "the checked-in Wrangler file retains its placeholder identity");
+// MIND-DIR-CONVERGE-1 (0.33.2) renamed the checked-in identity to the production name; the invariant that matters is that
+// the GENERATED config targets q08-mind (asserted next), not that the source still carries the old placeholder.
+assert.ok(configName === "mind" || configName === "q08-mind", "the checked-in Wrangler file names the placeholder or the converged production identity");
 assert.equal(generatedName, "q08-mind", "the generated config targets the production Worker");
 assert.equal(generatedMain, "worker.js", "the generated main resolves relative to mind/");
 assert.equal(join(here, generatedMain), join(here, "worker.js"));
