@@ -1,5 +1,5 @@
-// CRON-SINGLE-TRIGGER-1: one tick, an in-code due table in Amsterdam time. The table must fire exactly the slots the 21
-// per-slot cron triggers fired (replayed minute by minute against the old cron list), across both daylight-saving states.
+// CRON-SINGLE-TRIGGER-1: one tick, an in-code due table in Amsterdam time. Every logical slot must fire exactly once
+// across both daylight-saving states, without adding another Worker cron trigger.
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -61,7 +61,7 @@ const replay = (dropEvery) => {
   return { oldFires, newFires, late, problems };
 };
 const r0 = replay(0);
-check(r0.problems.length === 0 && r0.oldFires === r0.newFires, "every fire of the 21 per-slot triggers happens exactly once (" + r0.newFires + " of " + r0.oldFires + " over 4 weeks)" + (r0.problems.length ? ": " + r0.problems.join("; ") : ""));
+check(r0.problems.length === 0 && r0.oldFires === r0.newFires, "every fire in the logical schedule happens exactly once (" + r0.newFires + " of " + r0.oldFires + " over 4 weeks)" + (r0.problems.length ? ": " + r0.problems.join("; ") : ""));
 check(r0.late <= 5, "no job runs more than 5 minutes after its slot (worst " + r0.late + " min)");
 const r7 = replay(7);
 check(r7.problems.length === 0 && r7.oldFires === r7.newFires && r7.late <= 15, "with every seventh tick lost, still exactly once (worst delay " + r7.late + " min)" + (r7.problems.length ? ": " + r7.problems.join("; ") : ""));

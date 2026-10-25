@@ -15,16 +15,21 @@ operations rather than a generic image-metadata reader.
 
 | Surface | Path | Served by |
 |---|---|---|
-| Bridge (browser module) | `/.webmcp/bridge.js` | every HTML worker below |
-| Tool manifest | `/api/webmcp/manifest.json` (what the bridge reads) and `/.webmcp/packs.json` (alias) | every HTML worker below |
-| Manifest + paths | `/.webmcp/manifest.json` | every HTML worker below |
-| Injection | one `<script type="module" src="/.webmcp/bridge.js" data-packs="...">` appended to `<head>` of every 200 HTML response | HTMLRewriter in the same worker |
+| Bridge (browser module) | `/.webmcp/bridge.js` on worker-owned hosts; Cloudflare's bridge on `*.qnfo.org` | the worker or Cloudflare's zone-level preview |
+| Tool manifest | `/api/webmcp/manifest.json` (what the bridge reads); `/.webmcp/packs.json` and `/.webmcp/manifest.json` are aliases where the worker owns that prefix | every WebMCP worker below |
+| MCP server | `/mcp` (server card on GET; JSON-RPC tools on POST) | every WebMCP worker below |
+| Injection | one `<script type="module" src="/.webmcp/bridge.js" data-packs="...">` appended to `<head>` of eligible 200 HTML responses | HTMLRewriter in the worker, except where Cloudflare injects its own bridge |
 
 Workers carrying it: `qnfo-gateway` (qnfo.org, www, papers, archive, legal, qwav.tech), `qnfo-fleet-dashboard`
 (fleet.qnfo.org), `idea-hub` (ideas.qnfo.org), `q08-signal-engine` (q08.org), `q08-mind` (mind.q08.org),
 `qnfo-ai-search` (ask.qwav.tech), `qnfo-ipatent` (ipatent.qnfo.org), `qnfo-lifecycle` (empoweringchange.today,
 ipatent.me, q-wave.tech, qwave.tech, qwav.net, qwav.uk and the retired-name subdomains), `personal-companion`
 (reading/travel.q08.org) (qnfo-email is deliberately excluded: `qnfo.org/email/` answers 401 to an anonymous visitor, so there is no public page to inject into).
+
+The Cloudflare WebMCP preview owns `/.webmcp/*` on the `qnfo.org` zone, so the worker suppresses its duplicate script
+tag on `qnfo.org` and `*.qnfo.org`. There the platform bridge discovers the same worker-served tools through `/mcp`;
+the worker's manifest remains available at `/api/webmcp/manifest.json`. On other hosts, the worker injects its own
+bridge and that bridge reads the same manifest.
 
 ## Packs
 
@@ -57,7 +62,11 @@ own, and a proxy that accepted a caller-supplied absolute URL would be an SSRF s
    export.
 5. Commit, then deploy through the canonical route (`POST /ops/deploy {worker, path}` — lock, GitHub source, binding-
    preserving PUT, live verify, schedules).
-6. `node scripts/webmcp-verify.mjs` — live: injected tag, bridge, manifest, and a real sample call per tool.
+6. `node scripts/webmcp-verify.mjs` — live: the platform-injected tag on `*.qnfo.org`, the worker-injected tag/bridge
+   elsewhere, the manifest and `/mcp` tool list on every host, and a real sample call per advertised HTTP tool. The
+   verifier uses browser-like page headers and does not require the worker-owned `/.webmcp/packs.json` alias on
+   platform hosts; `list_site_pages` must return at least one `<loc>` entry, and any other missing advertised endpoint
+   still fails the probe.
 
 ## Honest limits
 

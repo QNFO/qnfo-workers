@@ -147,10 +147,10 @@ const r5 = await mod.__job({ AUDIT: { prepare: (sql) => stmtOn(db4, sql) } });
 ok(r5.notes.accepted_30d === 10 && r5.notes.top === "glacier" && r5.notes.share === 0.5 && r5.notes.all_sources.accepted_30d === 50 && r5.notes.all_sources.top === "braid" && r5.notes.all_sources.share === 0.64 && db4.prepare("SELECT last_value FROM metric_registry").get().last_value === "0.5", "10 generated accepts: the metric is the generated share (0.5) while the all-sources share (0.64, 32 owner notes in the braid cluster of 50) stays visible", r5.notes);
 ok(db4.prepare("SELECT COUNT(*) n FROM idea_proposals WHERE lower(name) LIKE '%owner%'").get().n === 40, "fixture control: 40 owner rows");
 
-// 10. Wiring: a companion of an existing daily slot, no new schedule entry.
+// 10. Wiring: the metric keeps its own daily schedule slot.
 ok(typeof mod.__jobs["idea-topic-metric"] === "function", "job is in the dispatch map");
-ok((mod.__comp["quality-score"] || []).includes("idea-topic-metric") && mod.__sched["quality-score"].days === "*", "rides the every-day quality-score slot");
-ok(!("idea-topic-metric" in mod.__sched), "no new schedule slot (no new cron)");
+ok(mod.__sched["idea-topic-metric"] && mod.__sched["idea-topic-metric"].days === "*" && mod.__sched["idea-topic-metric"].times.join() === "06:25", "runs in its own daily slot");
+ok(!(mod.__comp["quality-score"] || []).includes("idea-topic-metric"), "does not run as an hourly quality-score companion");
 
 console.log(pass + " passed, " + fail + " failed");
 if (fail) process.exit(1);
