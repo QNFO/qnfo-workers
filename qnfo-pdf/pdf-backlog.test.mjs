@@ -10,6 +10,8 @@ const src = readFileSync(join(dirname(fileURLToPath(import.meta.url)), "worker.j
 const block = src.slice(src.indexOf("// SCHOLAR-PDF-ALL-1 begin"), src.indexOf("// SCHOLAR-PDF-ALL-1 end"));
 assert.ok(block.length > 500, "the SCHOLAR-PDF-ALL-1 block is present");
 const { renderPdfBacklog, pdfNeedsRefresh, pdfBacklogBatch } = new Function(block + "\nreturn { renderPdfBacklog, pdfNeedsRefresh, pdfBacklogBatch };")();
+const RENDERER_VERSION = /const RENDERER_VERSION = "([^"]+)"/.exec(src)?.[1];
+assert.ok(RENDERER_VERSION, "the renderer version is declared");
 
 function fakeD1(handler) {
   // handler(sql, params) -> rows (array) ; .first() returns rows[0]; .run() records the write
@@ -131,6 +133,37 @@ test("a stored PDF older than the paper's last change is re-rendered when the ba
   assert.equal(out.refreshed, 1);
   assert.equal(out.backlog_before, 0);
   assert.equal(out.backlog_after, 0);
+});
+
+test("PDFs with an older renderer stamp are regenerated for renderer metadata changes", async () => {
+  const paper = { slug: "cached", title: "Cached paper", body_md: BIG, created_at: "2026-10-01 00:00:00", updated_at: "2026-10-12 11:00:00", pdf_path: "pdf/cached.pdf" };
+  const living = fakeD1((sql) => {
+    if (/SELECT COUNT\(\*\) AS n FROM papers/.test(sql)) return [{ n: 0 }];
+    if (/pdf_path IS NULL OR pdf_path = ''\) ORDER BY created_at DESC LIMIT/.test(sql)) return [];
+    if (/slug IN/.test(sql)) return [paper];
+    return [];
+  });
+  const puts = [];
+  const env = {
+    LIVING: living,
+    AUDIT: null,
+    BROWSER: {},
+    RELEASES: {
+      list: async () => ({ objects: [{ key: "pdf/cached.pdf", uploaded: new Date("2026-10-12T10:00:00Z"), customMetadata: { renderer: "2.4.0" } }], truncated: false }),
+      put: async (key) => puts.push(key)
+    }
+  };
+  const deps = {
+    renderFullHTML: () => "<html/>",
+    renderPdf: async () => new Uint8Array(10).buffer,
+    stash: async (e, slug) => { await e.RELEASES.put("pdf/" + slug + ".pdf"); return "pdf/" + slug + ".pdf"; }
+  };
+
+  assert.notEqual(RENDERER_VERSION, "2.4.0", "the metadata change advances the renderer stamp");
+  const out = await renderPdfBacklog(env, deps, { rendererVersion: RENDERER_VERSION });
+  assert.deepEqual(out.slugs, ["cached"]);
+  assert.equal(out.refreshed, 1);
+  assert.deepEqual(puts, ["pdf/cached.pdf"]);
 });
 
 test("an oversize PDF is stored and flagged, since the gateway withholds citation_pdf_url above 5 MB", async () => {
