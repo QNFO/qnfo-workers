@@ -1,15 +1,8 @@
 {
-  "audited_at": "2026-10-25 11:26:45",
+  "audited_at": "2026-10-25 11:56:09",
   "d1_write_failures": [],
   "d1_writes_ok": 121,
   "guard": {
-    "_drift_confirm": {
-      "first_pass": [
-        "qnfo-gateway"
-      ],
-      "refreshed": true,
-      "second_pass": []
-    },
     "_guard_rc": 0,
     "ahead": [],
     "cf_script_list": true,
@@ -587,7 +580,7 @@
       },
       {
         "dir": "qnfo-cloud-ops",
-        "version": "1.33.2-codeagent",
+        "version": "1.33.3-codeagent",
         "worker": "qnfo-cloud-ops"
       },
       {
@@ -622,12 +615,12 @@
       },
       {
         "dir": "qnfo-fleet-dashboard",
-        "version": "1.58.0-ga4-quality",
+        "version": "1.59.1-portfolio-strategic-2",
         "worker": "qnfo-fleet-dashboard"
       },
       {
         "dir": "qnfo-gateway",
-        "version": "3.33.0-content-signal-owner-confirmed-1",
+        "version": "3.40.0-a2a-agent-1",
         "worker": "qnfo-gateway"
       },
       {
@@ -1186,9 +1179,9 @@
       "worker": "qnfo-citation-watch"
     },
     "qnfo-cloud-ops": {
-      "before": "1.33.2-codeagent",
+      "before": "1.33.3-codeagent",
       "http": 200,
-      "live": "1.33.2-codeagent",
+      "live": "1.33.3-codeagent",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-cloud-ops"
@@ -1341,9 +1334,9 @@
       "worker": "qnfo-fleet-control"
     },
     "qnfo-fleet-dashboard": {
-      "before": "1.58.0-ga4-quality",
+      "before": "1.59.1-portfolio-strategic-2",
       "http": 200,
-      "live": "1.58.0-ga4-quality",
+      "live": "1.59.1-portfolio-strategic-2",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-fleet-dashboard"
@@ -1367,9 +1360,9 @@
       "worker": "qnfo-fleet-feed"
     },
     "qnfo-gateway": {
-      "before": "3.33.0-content-signal-owner-confirmed-1",
+      "before": "3.40.0-a2a-agent-1",
       "http": 200,
-      "live": "3.33.0-content-signal-owner-confirmed-1",
+      "live": "3.40.0-a2a-agent-1",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-gateway"
