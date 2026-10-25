@@ -108,6 +108,8 @@ if (art) {
   ok(art.publisher && art.publisher["@id"] === org["@id"], "publisher resolves to the Organization node", art.publisher);
   ok(art.creativeWorkStatus === "Published", "creativeWorkStatus is Published", art.creativeWorkStatus);
   ok(art.publishingPrinciples === "https://qnfo.org/about", "publishingPrinciples names the public process page", art.publishingPrinciples);
+  ok((art.additionalProperty || []).some((p) => p.name === "Publisher quality classification" && p.value === "High-quality scholarly research"), "publisher quality classification is explicit", art.additionalProperty);
+  ok((art.additionalProperty || []).some((p) => p.name === "Peer review status" && p.value === "Not independently peer-reviewed"), "review status is transparent", art.additionalProperty);
   ok(art.datePublished === "2026-03-04" && art.dateModified === "2026-10-20", "both dates are emitted", [art.datePublished, art.dateModified]);
   ok(art.version === "1.2.0", "the version is emitted", art.version);
   ok(typeof art.license === "string" && art.license.indexOf("creativecommons.org") >= 0, "the license is a URL", art.license);
@@ -128,6 +130,13 @@ if (art) {
   ok(!("reviewedBy" in art) && !("peerReview" in art), "no peer-review claim is fabricated", Object.keys(art));
 }
 ok(!/"reviewedBy"|"peerReview"/.test(head), "the whole head carries no peer-review claim");
+const embedded = /<script type="application\/json" id="lp-data">([\s\S]*?)<\/script>/.exec(html);
+ok(!!embedded, "the embedded paper data is present");
+if (embedded) {
+  const paperData = JSON.parse(embedded[1]);
+  ok(paperData.quality && paperData.quality.label === "High-quality scholarly research", "embedded page data carries the publisher classification");
+  ok(paperData.quality.peer_review_status === "Not independently peer-reviewed", "embedded page data carries honest review status");
+}
 
 // --- Highwire citation_* (Google Scholar) ------------------------------------------------------------------------------
 ok(/<meta name="citation_title" content="P-Adic Error Correction/.test(head), "citation_title");
@@ -137,6 +146,8 @@ ok(/<meta name="citation_journal_title" content="QNFO Papers">/.test(head), "cit
 ok(/<meta name="citation_pdf_url" content="https:\/\/papers\.qnfo\.org\/papers\/meta-1\.pdf">/.test(head), "citation_pdf_url is absolute");
 ok(/<meta name="citation_doi" content="10\.99999\/meta\.1">/.test(head), "citation_doi");
 ok((head.match(/<meta name="citation_keywords"/g) || []).length >= 3, "citation_keywords carries every term");
+ok(/<meta name="citation_keywords" content="High-quality scholarly research">/.test(head), "citation_keywords carries publisher classification");
+ok(/<meta name="qnfo:peer-review-status" content="Not independently peer-reviewed">/.test(head), "the head distinguishes publisher classification from independent review");
 ok(/<meta name="citation_abstract" content="/.test(head), "citation_abstract");
 
 // --- Dublin Core / OpenGraph / robots -----------------------------------------------------------------------------------
@@ -144,6 +155,7 @@ ok(/<meta name="dc\.title" content="P-Adic Error Correction/.test(head), "dc.tit
 ok(/<meta name="dc\.creator" content="Rowan Brad Quni-Gudzinas">/.test(head), "dc.creator");
 ok(/<meta name="dc\.identifier" content="doi:10\.99999\/meta\.1">/.test(head), "dc.identifier carries the DOI");
 ok(/<meta name="dc\.rights" content="https:\/\/creativecommons\.org\/licenses\/by\/4\.0\/">/.test(head), "dc.rights is the license URL");
+ok(/<meta name="dc\.type" content="ScholarlyArticle">/.test(head), "Dublin Core identifies the scholarly article type");
 ok(/<meta property="article:published_time" content="2026-03-04T00:00:00Z">/.test(head), "article:published_time");
 ok(/<meta property="article:modified_time" content="2026-10-20T00:00:00Z">/.test(head), "article:modified_time");
 ok(/<meta property="article:tag" content="bruhat-tits">/.test(head), "article:tag carries a curated tag");
@@ -159,6 +171,14 @@ const rhead = rr.t.slice(0, rr.t.indexOf("</head>"));
 ok(/<meta name="robots" content="noindex,follow">/.test(rhead), "a retracted paper is noindex");
 ok(/"creativeWorkStatus":"Retracted"/.test(rhead), "a retracted paper says Retracted in JSON-LD");
 ok(!/<meta name="citation_pdf_url"/.test(rhead), "a retracted paper advertises no PDF");
+ok(!/High-quality scholarly research|qnfo:quality-label/.test(rhead), "a retracted paper receives no positive quality classification");
+const retractedData = /<script type="application\/json" id="lp-data">([\s\S]*?)<\/script>/.exec(rr.t);
+ok(!!retractedData && JSON.parse(retractedData[1]).quality === null, "embedded page data withholds positive classification on retracted work");
+
+const md = await get("/papers/meta-1.md");
+ok(md.s === 200, "the Markdown mirror answers 200", md.s);
+ok(/^quality_label: "High-quality scholarly research"$/m.test(md.t), "Markdown frontmatter carries the publisher classification");
+ok(/^peer_review_status: "Not independently peer-reviewed"$/m.test(md.t), "Markdown frontmatter carries review status");
 
 // --- robots.txt carries the AI content signal and names the crawlers ------------------------------------------------------
 const rob = await get("/robots.txt");

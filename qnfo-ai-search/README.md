@@ -17,3 +17,10 @@ Owner directive 2026-10-10: an answer is verifiable against supplied text, and g
 - `GLOSSARY` is a retrieval alias map (term to defining paper slug), not prompt text; it is extensible in `pipeline_flags`.
 
 Suite: `node qnfo-ai-search/ask-ground.test.mjs`.
+
+## Public sitemap
+
+`GET /sitemap.xml` lists the canonical ask page at `https://ask.qwav.tech/`; `robots.txt` points to it while continuing
+to disallow the private ask and feedback API routes. The `ask.qwav.org` alias serves the same canonical sitemap.
+
+Suite: `node qnfo-ai-search/sitemap.test.mjs`.
