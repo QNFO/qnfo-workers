@@ -11,6 +11,7 @@ const src = readFileSync(new URL("./worker.js", import.meta.url), "utf8");
 const orders = [...src.matchAll(/FROM research_queue WHERE status='queued' ORDER BY (CASE WHEN source = 'proposal'[^"]*?) LIMIT 1/g)].map((m) => m[1]);
 ok(orders.length === 3, "the claim ORDER BY appears in the atomic claim, its fallback and the legacy path", orders.length);
 ok(orders.every((o) => o === orders[0]) && /source = 'proposal' AND attempt = 0/.test(orders[0]) && /source IN \('idea','chat','operator-prime'\)/.test(orders[0]), "all three are identical and carry the proposal-fairness and owner-source ranks");
+ok(/status='researching' AND stage=\?1 ORDER BY CASE WHEN source='proposal' THEN 0 ELSE 1 END, claimed_at ASC LIMIT 1/.test(src), "the stage loop processes a researching proposal before a remediation row at the same stage");
 const db = new DatabaseSync(":memory:");
 db.exec("CREATE TABLE research_queue (id TEXT PRIMARY KEY, status TEXT, source TEXT, source_id TEXT, stage TEXT, created_at TEXT, score REAL, attempt INTEGER DEFAULT 0)");
 const iso = (h) => new Date(Date.now() - h * 36e5).toISOString().slice(0, 19) + "Z";
