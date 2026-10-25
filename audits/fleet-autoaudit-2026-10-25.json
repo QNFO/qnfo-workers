@@ -1,5 +1,5 @@
 {
-  "audited_at": "2026-10-25 18:29:07",
+  "audited_at": "2026-10-25 19:29:08",
   "d1_write_failures": [],
   "d1_writes_ok": 121,
   "guard": {
@@ -585,7 +585,7 @@
       },
       {
         "dir": "qnfo-code-orchestrator",
-        "version": "0.27.0-codeagent",
+        "version": "0.27.1-codeagent",
         "worker": "qnfo-code-orchestrator"
       },
       {
@@ -610,12 +610,12 @@
       },
       {
         "dir": "qnfo-fleet-control",
-        "version": "0.46.0-agent-tracing",
+        "version": "0.47.0-remediation-budget-metric",
         "worker": "qnfo-fleet-control"
       },
       {
         "dir": "qnfo-fleet-dashboard",
-        "version": "1.61.2",
+        "version": "1.61.3",
         "worker": "qnfo-fleet-dashboard"
       },
       {
@@ -665,7 +665,7 @@
       },
       {
         "dir": "qnfo-ops",
-        "version": "2.56.0-agent-tracing",
+        "version": "2.56.1",
         "worker": "qnfo-ops"
       },
       {
@@ -1196,9 +1196,9 @@
       "worker": "qnfo-code-agent"
     },
     "qnfo-code-orchestrator": {
-      "before": "0.27.0-codeagent",
+      "before": "0.27.1-codeagent",
       "http": 200,
-      "live": "0.27.0-codeagent",
+      "live": "0.27.1-codeagent",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-code-orchestrator"
@@ -1326,17 +1326,17 @@
       "worker": "qnfo-fleet-calibrator"
     },
     "qnfo-fleet-control": {
-      "before": "0.46.0-agent-tracing",
+      "before": "0.47.0-remediation-budget-metric",
       "http": 200,
-      "live": "0.46.0-agent-tracing",
+      "live": "0.47.0-remediation-budget-metric",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-fleet-control"
     },
     "qnfo-fleet-dashboard": {
-      "before": "1.61.2",
+      "before": "1.61.3",
       "http": 200,
-      "live": "1.61.2",
+      "live": "1.61.3",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-fleet-dashboard"
@@ -1486,9 +1486,9 @@
       "worker": "qnfo-observability"
     },
     "qnfo-ops": {
-      "before": "2.56.0-agent-tracing",
+      "before": "2.56.1",
       "http": 200,
-      "live": "2.56.0-agent-tracing",
+      "live": "2.56.1",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-ops"
