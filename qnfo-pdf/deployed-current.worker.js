@@ -14637,7 +14637,7 @@ var katex = {
 // The renderer never invents metadata: a field that is absent in the frontmatter, the in-body
 // byline block or the D1 row is left out rather than guessed.
 
-const RENDERER_VERSION = "2.4.0";
+const RENDERER_VERSION = "2.5.0";
 const PAPER_QUALITY_LABEL = "High-quality scholarly research";
 const PAPER_QUALITY_BASIS = "QNFO publisher classification for open-access, versioned research with a public revision history and reader correction channel; this is not a claim of independent peer review.";
 const PAPER_PEER_REVIEW_STATUS = "Not independently peer-reviewed";
@@ -15929,7 +15929,7 @@ function buildPrintTemplates(meta) {
 }
 
 // worker.js
-var VERSION = "1.7.0"; /* 1.7.0 PAPER-QUALITY-METADATA-1: generated paper artifacts expose the publisher quality classification and review status. */ /* 1.6.0-no-registrar NO-REGISTRAR-1 (2026-10-21): PDF metadata reads doi and identifier only; the registrar column and venue name are gone */ /* 1.5.2 TYPESET-PRO-3 (2026-10-18, red-team round 2): 511 of 624 public records carry their bibliography as a numbered list in their own body WITHOUT citation keys, so 1.5.1 left it in body prose; parseBodyReferences() now typesets an unkeyed list too, guarded by "closing section + three entries + a majority carrying a year or DOI". Ships scripts/pdf_corpus_audit.mjs, the executable guard named in failure_modes.pdf-typeset-bibliography-dropped. 1.5.1 TYPESET-PRO-2: a citation wrapped across a source line break printed as raw text; most papers bibliographies are the numbered list in their own body; an unmatched key was flagged even where no bibliography exists. 1.5.0 TYPESET-PRO-1 (owner directive professional typesetting with full bibliographic information and author/affiliation): title block with authors/affiliations/identifiers, BibTeX resolution from R2, numbered citations, hanging-indent reference list, live running head and page numbers. */
+var VERSION = "1.7.1"; /* 1.7.1 PDF-QUALITY-CACHE-INVALIDATION-1: bump renderer stamp so the backlog regenerates cached PDFs with publisher quality and review-status metadata. */ /* 1.7.0 PAPER-QUALITY-METADATA-1: generated paper artifacts expose the publisher quality classification and review status. */ /* 1.6.0-no-registrar NO-REGISTRAR-1 (2026-10-21): PDF metadata reads doi and identifier only; the registrar column and venue name are gone */ /* 1.5.2 TYPESET-PRO-3 (2026-10-18, red-team round 2): 511 of 624 public records carry their bibliography as a numbered list in their own body WITHOUT citation keys, so 1.5.1 left it in body prose; parseBodyReferences() now typesets an unkeyed list too, guarded by "closing section + three entries + a majority carrying a year or DOI". Ships scripts/pdf_corpus_audit.mjs, the executable guard named in failure_modes.pdf-typeset-bibliography-dropped. 1.5.1 TYPESET-PRO-2: a citation wrapped across a source line break printed as raw text; most papers bibliographies are the numbered list in their own body; an unmatched key was flagged even where no bibliography exists. 1.5.0 TYPESET-PRO-1 (owner directive professional typesetting with full bibliographic information and author/affiliation): title block with authors/affiliations/identifiers, BibTeX resolution from R2, numbered citations, hanging-indent reference list, live running head and page numbers. */
 function pdfHeaders(slug) {
   return {
     "Content-Type": "application/pdf",
