@@ -1,0 +1,1 @@
+multi-module worker: worker.js imports ./data/entries-a.json and ./data/entries-b.json, and the canonical POST /ops/deploy PUTs worker.js alone (CF API 400 10021 "No such module data/entries-a.json", canonical-deploy run 40176768374). Ship with wrangler deploy from q08-mind/, which bundles the JSON modules; the canonical path skips this directory while this marker exists.
