@@ -2,7 +2,7 @@
 // Worker Contract v1: VERSION constant + GET /health
 // Data: https://ops.qnfo.org/fleet (modified_on per worker) + https://ops.qnfo.org/cost (spend)
 // NOTE: source of truth is this file; GET /workers/scripts/<name> TRUNCATES large bodies - never patch from a GET.
-var VERSION = "1.3.29-codeagent"; /* WORKERS-BUILDS-TOMBSTONE-1 (2026-10-25, agent_issues 1000142): a Workers Builds rebuild of the retired repository-root stub is ledgered, not filed. CLAIM-TERMINAL-RELEASE-1 (2026-10-18): CODE_TASK_DONE now includes superseded, so the guard stops counting a superseded task as live work on its file. */
+var VERSION = "1.3.30-codeagent"; /* COMPAT-RISK-TIMER-NAME-1 (2026-10-25, unblocks red main): the four fetch-timeout blocks named their setTimeout handle `t`, and a DIFFERENT `t` (a timestamp from ms(row.ts)) in another function is compared numerically within 60 lines, so scripts/compat-risk-scan.mjs linked them by name across function scopes and reported timer-ids for a worker that never reads a timer id as a number. Renamed to timerId; scan is clean and the guard keeps its full meaning. */ /* WORKERS-BUILDS-TOMBSTONE-1 (2026-10-25, agent_issues 1000142): a Workers Builds rebuild of the retired repository-root stub is ledgered, not filed. CLAIM-TERMINAL-RELEASE-1 (2026-10-18): CODE_TASK_DONE now includes superseded, so the guard stops counting a superseded task as live work on its file. */
 var WORKER = "qnfo-deploy-guard";
 var LOCK_PREFIX = "deploylock:";
 var DENY_PREFIX = "deploydeny:";
@@ -31,9 +31,9 @@ function getJson(urls, tout) {
   return (async function () {
     for (var i = 0; i < urls.length; i++) {
       try {
-        var c = new AbortController(); var t = setTimeout(function () { c.abort(); }, tout || 15000);
+        var c = new AbortController(); var timerId = setTimeout(function () { c.abort(); }, tout || 15000);
         var r = await fetch(urls[i], { signal: c.signal, headers: { accept: "application/json" } });
-        clearTimeout(t);
+        clearTimeout(timerId);
         if (r.ok) { var j = await r.json(); if (j) return { ok: true, j: j, url: urls[i] }; }
       } catch (e) { console.error(JSON.stringify({ evt: "deploy-guard:getJson:caught", error: String((e && e.message) || e) })); }
     }
@@ -92,9 +92,9 @@ async function refreshRegistryVersion(env, w, explicitVer) {
     var liveVer = "";
     try {
       var url = "https://" + w + ".q08.workers.dev/health";
-      var c = new AbortController(); var t = setTimeout(function () { c.abort(); }, 8000);
+      var c = new AbortController(); var timerId = setTimeout(function () { c.abort(); }, 8000);
       var r = await fetch(url, { signal: c.signal, headers: { accept: "application/json" } });
-      clearTimeout(t);
+      clearTimeout(timerId);
       if (r.ok) { var j = await r.json(); if (j && j.version) liveVer = String(j.version); }
     } catch (e) { console.error(JSON.stringify({ evt: "deploy-guard:refreshRegistryVersion:caught", error: String((e && e.message) || e) })); }
     var ver = "";
@@ -188,9 +188,9 @@ async function tombstoneBody(name) {
   var paths = ["/", "/__tombstone_probe"];
   for (var i = 0; i < paths.length; i++) {
     try {
-      var c = new AbortController(); var t = setTimeout(function () { c.abort(); }, 8000);
+      var c = new AbortController(); var timerId = setTimeout(function () { c.abort(); }, 8000);
       var r = await fetch("https://" + name + ".q08.workers.dev" + paths[i], { signal: c.signal, headers: { accept: "application/json" } });
-      clearTimeout(t);
+      clearTimeout(timerId);
       if (r.status !== 410) return null;
       var b = await r.text();
       if (b.length >= TOMBSTONE_MAX_BYTES || b.indexOf(TOMBSTONE_MARK) < 0) return null;
@@ -427,9 +427,9 @@ async function capabilitySnapshot(env, force) {
   var out = { ts: nowIso(), live: names.length, probed: 0, stored: 0, failed: [], conforming: 0, non_conforming: [], removed: 0 };
   async function one(name) {
     try {
-      var c = new AbortController(); var t = setTimeout(function () { c.abort(); }, 8000);
+      var c = new AbortController(); var timerId = setTimeout(function () { c.abort(); }, 8000);
       var r = await fetch("https://" + name + ".q08.workers.dev/health", { signal: c.signal, headers: { accept: "application/json", "user-agent": "qnfo-deploy-guard-capability/1.0" } });
-      clearTimeout(t);
+      clearTimeout(timerId);
       out.probed++;
       if (!r.ok) { out.failed.push(name + ":" + r.status); return; }
       var j = await r.json().catch(function () { return null; });
