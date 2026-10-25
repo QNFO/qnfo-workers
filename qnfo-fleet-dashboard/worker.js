@@ -10,7 +10,7 @@ var __defProp222 = Object.defineProperty;
 var __name222 = /* @__PURE__ */ __name22((target, value) => __defProp222(target, "name", { value, configurable: true }), "__name");
 var __name2222 = /* @__PURE__ */ __name222((target, value) => Object.defineProperty(target, "name", { value, configurable: true }), "__name");
 // VERSION-LINE-SPLIT-1 (agent_issues 100220): the release notes sit one per line below this statement, newest first, so a VERSION bump is a one-line patch; add a new note as the first line under it.
-var VERSION = "1.56.0-agenttools"; /* 1.55.0 NO-REGISTRAR-1 (2026-10-21): area routing no longer names the closed registrar. */ /* 1.54.0 COST-SUSTAIN-3 (2026-10-21, owner: research and publication <= USD 300/month all-in, realistic use metrics and forecasting; pillar cost): /api/cost carries the cap-aware forecast (v_cost_forecast bound_daily_usd, bound_30d_usd, forecast_bounded_month_usd: month-to-date + remaining days x min(3-day pace, what the configured daily caps allow)), research neurons per published version and the provider-billed AI Gateway figure; the cost area headline is the month forecast instead of a 7-day mean x 30 that cannot see the caps. */ /* 1.52.0 COST-SUSTAIN-1 (2026-10-21, pillar cost): /api/cost adds forecast (v_cost_forecast: per-scope month-to-date, 3-day pace, month-end forecast vs the owner USD 300 fleet budget) and research_budget_today (neurons spent vs qnfo-research-exec research_daily_neurons). */
+var VERSION = "1.56.1-agenttools"; /* 1.55.0 NO-REGISTRAR-1 (2026-10-21): area routing no longer names the closed registrar. */ /* 1.54.0 COST-SUSTAIN-3 (2026-10-21, owner: research and publication <= USD 300/month all-in, realistic use metrics and forecasting; pillar cost): /api/cost carries the cap-aware forecast (v_cost_forecast bound_daily_usd, bound_30d_usd, forecast_bounded_month_usd: month-to-date + remaining days x min(3-day pace, what the configured daily caps allow)), research neurons per published version and the provider-billed AI Gateway figure; the cost area headline is the month forecast instead of a 7-day mean x 30 that cannot see the caps. */ /* 1.52.0 COST-SUSTAIN-1 (2026-10-21, pillar cost): /api/cost adds forecast (v_cost_forecast: per-scope month-to-date, 3-day pace, month-end forecast vs the owner USD 300 fleet budget) and research_budget_today (neurons spent vs qnfo-research-exec research_daily_neurons). */
 /* 1.51.19 VERSION-LINE-SPLIT-1 (2026-10-20, agent_issues 100220, pillar autonomy; patch: layout only): the release notes that sat on the VERSION line (202,642 chars) are one per line below it, so a bump is a one-line patch and the publisher's size cap stops refusing dashboard code tasks (5 of 5 on 2026-10-19); scripts/conflict_repair.py resolves note-line hunks (merge_note_hunk). No behaviour change. */
 /* 1.51.17 COST-FEED-7D-WINDOW-1 (2026-10-19, agent_issues 100169, pillar cost; patch): /api/cost by_model_7d and by_worker_7d sum the 7 complete UTC days (today, a partial day, was a 8th bucket under the 7d label, +31.8 percent), and the body says which days (window_7d) and that est_usd is list price before the free tier (est_usd_basis). */
 /* 1.51.16 PARKED-CARD-REASON-1 (2026-10-19, agent_issues 100173, pillar autonomy; patch): the parked code-task card branches on the cause wherever it sits in last_error (the loop writes "model <id>: noop-proposal: ..." and "model <id> proposed no change", so a prefix test never matched), and the dead execOne edit of PR 3106 (fleet_issue_dispatch has no last_error) is removed. */
@@ -10101,7 +10101,7 @@ var CMD_HELP = [
   "Tools (owner session; * needs a fresh code):",
 "  tools [word]           every fleet tool: Cloudflare API, D1, R2, KV, GitHub, shell, containers, deploys",
 "  tool <name> {json}     run one, e.g. tool fleet_status {}",
-"  agent <text>           one turn of the durable coding agent",
+"  agent: <text>          one turn of the durable coding agent (8 tool rounds)",
 "Sign in:  login (emails a 6-digit code)  then type the code.  logout",
   "Anything else is answered in plain English, with proposed actions you can tap."
 ].join("\n");
@@ -11425,6 +11425,15 @@ async function cmdRoutes(request, env, ctx, path, owner) {
     } catch (e) {
     }
     return ownerJson({ ok: r.ok, kind: "answer", text: cmdToolText(tname, r), tool: tname, http: r.http, ms: r.ms, holder }, r.ok ? 200 : 400);
+  }
+  // AGENT-TOOLS-1: one bounded turn of the durable ops agent. "agent:" (with the colon) is deliberate: "agent issues"
+  // must stay a normal question, not a model turn.
+  const am = /^agent:\s*([\s\S]+)$/i.exec(text.trim());
+  if (am) {
+    if (!holder) return ownerJson({ ok: false, kind: "answer", need: "code", error: "The agent needs your email code. Type login." }, 401);
+    const ar = await cmdOpsFetch(env, "/agents/ops-exec", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ op: "run", text: am[1].trim(), sid: "console", max_iters: 8 }) });
+    const aj = ar.json || {};
+    return ownerJson({ ok: !!aj.ok, kind: "answer", text: aj.ok ? String(aj.reply || "(empty reply)") + "\n\n\u00b7 " + (aj.turns || 0) + " tool rounds \u00b7 " + (ar.ms || 0) + "ms" : "agent failed: " + (ar.error || aj.error || ("http " + ar.http)), holder }, aj.ok ? 200 : 502);
   }
 
   if (/^(i-?patent|patent)( usage| queries| searches| metrics| stats)?\??$/i.test(text.trim())) return ownerJson({ ok: true, kind: "answer", text: ipatentText(await ipatentUsage(env)), links: [{ label: "iPatent metrics JSON", href: "https://ipatent.qnfo.org/api/metrics" }], holder });
