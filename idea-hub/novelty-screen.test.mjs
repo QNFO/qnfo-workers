@@ -12,10 +12,11 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import vm from "node:vm";
 import { DatabaseSync } from "node:sqlite";
+import { stripWorkerDefaultExport } from "../scripts/worker-source-test.mjs";
 const here = dirname(fileURLToPath(import.meta.url));
 let pass = 0, fail = 0;
 const ok = (c, m, d) => { if (c) pass++; else { fail++; console.log("FAIL " + m + (d === undefined ? "" : " :: " + JSON.stringify(d))); } };
-const src = readFileSync(join(here, "worker.js"), "utf8").replace(/export default\s*\{/, "var __default = {");
+const src = stripWorkerDefaultExport(readFileSync(join(here, "worker.js"), "utf8")).replace(/export default\s*\{/, "var __default = {");
 ok(src.includes("IDEA-NOVELTY-1"), "the worker names IDEA-NOVELTY-1 (the issue's code probe)");
 
 const fetches = [];

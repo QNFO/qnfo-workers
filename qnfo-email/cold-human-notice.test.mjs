@@ -6,7 +6,8 @@
 // ADVERSARIAL: it does not prove the deployed version; the closing probe on the issue reads live rows for that.
 // Run: node qnfo-email/cold-human-notice.test.mjs
 import fs from "node:fs";
-const src = fs.readFileSync(new URL("./worker.js", import.meta.url), "utf8");
+import { stripWorkerDefaultExport } from "../scripts/worker-source-test.mjs";
+const src = stripWorkerDefaultExport(fs.readFileSync(new URL("./worker.js", import.meta.url), "utf8"));
 const lib = new Function(src.replace(/export default\{/, "const __handler={") +
   "\nreturn {VERSION,enqueueHumanReply,NOTICE_COLD_SOLICIT_RX};")();
 const fail = [];
