@@ -733,7 +733,25 @@ def main():
     rows = classify(d)
     # UNMANAGED-PROBE-1: probe live workers without a repo directory.
     # Get list of all workers (CF script list) from guard data.
-    all_workers = set(d.get("cf_script_list", []))
+    # Build a set of worker names from the guard's CF script list.
+    # The list may contain plain strings or dicts with the name under a key such as "script", "name", or "worker".
+    raw_cf_list = d.get("cf_script_list", [])
+    all_workers = set()
+    for entry in raw_cf_list:
+        if isinstance(entry, dict):
+            # Prefer common keys; fall back to any string value.
+            for key in ("script", "name", "worker"):
+                if key in entry and isinstance(entry[key], str):
+                    all_workers.add(entry[key])
+                    break
+            else:
+                # If no known key, add the first string value found.
+                for v in entry.values():
+                    if isinstance(v, str):
+                        all_workers.add(v)
+                        break
+        elif isinstance(entry, str):
+            all_workers.add(entry)
     known_workers = set(rows.keys())
     # Optional per-worker health URL overrides via JSON env var.
     health_overrides = {}
