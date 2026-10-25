@@ -34,10 +34,10 @@ on:
       - 'scripts/remediation_probe_map.json'
       - '.github/workflows/remediation-bridge.yml'
   workflow_run:
-    workflows: ["apply-pending-patches", "fleet-autodeploy", "mirror-sync"]
+    workflows: ["apply-pending-patches", "fleet-autodeploy"]
     types: [completed]
   schedule:
-    - cron: '41 */2 * * *'
+    - cron: '41 9 * * *'
   workflow_dispatch:
 
 permissions:

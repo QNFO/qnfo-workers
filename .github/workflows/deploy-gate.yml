@@ -17,11 +17,11 @@ on:
   pull_request:
     branches: [main]
   # GATE-NIGHTLY-FULL-1 (2026-10-17): a PR validates only its changed directories (PRS-SCOPE-1), so
-  # without this the full 429-suite sweep ran only on a push to main - i.e. after the merge. Every two hours.
+  # without this the full 429-suite sweep ran only on a push to main - i.e. after the merge. Once a day (GHA-COST-1: was every two hours).
   # MERGE-BOUNDARY-GATE-1 (2026-10-19): a PR that touches a control-plane worker or a shared path runs the full set before the merge
   # (scripts/run-suites.mjs), every PR loads every worker, and ci-watchdog files a suite-red finding for a red full run on main.
   schedule:
-    - cron: "43 */2 * * *"
+    - cron: "43 6 * * *"
   # MERGE-BOUNDARY-GATE-1 (2026-10-19, agent_issues 2830): path A of the issue, switched on by a repository setting. When a merge queue
   # is enabled on main, the queue runs this workflow on the merge group's head; it takes the full-set branch below (not the
   # pull-request one), so the commit that would land is validated with every suite before it lands. Inert while no queue exists.
@@ -192,7 +192,7 @@ jobs:
 
       # SUITE-RUNNER-1 (transformation levers T1.10 + T5.4): every suite of each changed worker runs here. The full set runs when a
       # control-plane worker or a shared path (scripts, .github, migrations, _shared, a root file) changes, on push to main, in a merge
-      # queue's merge group, and on the 2-hourly schedule. A suite that is red for a reason outside the change is excused only by a
+      # queue's merge group, and on the daily schedule. A suite that is red for a reason outside the change is excused only by a
       # dated, referenced line in scripts/suite-quarantine.txt (the recorded override); see scripts/run-suites.mjs.
       # No suite depends on being hand-wired below (19 were not, and three had been failing on main unnoticed).
       - name: SUITE-RUNNER-1 changed-worker suites (full set for control-plane and shared changes)

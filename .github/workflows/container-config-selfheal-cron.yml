@@ -109,7 +109,7 @@ on:
   schedule:
     # Retained as a bonus only. SCHEDULE-EVENT-NEVER-FIRES-1: this event has never fired
     # on this repository, so it MUST NOT be the only driver (see DEFECT 1 above).
-    - cron: '13,43 * * * *'
+    - cron: '13 1 * * *'
   workflow_run:
     # The drivers that provably fire here.
     workflows: [fleet-autodeploy, mirror-sync, deploy-qnfo-ops]
