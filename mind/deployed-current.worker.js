@@ -11,7 +11,7 @@
 import A from "./data/entries-a.json";
 import B from "./data/entries-b.json";
 
-const VERSION = "2.0.0-mind-3";
+var VERSION = "2.0.0-mind-3";
 const BUILT = "2026-10-21";
 const ENTRIES = [...A, ...B];
 const BY_SLUG = new Map(ENTRIES.map((e) => [e.s, e]));

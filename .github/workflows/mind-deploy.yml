@@ -92,7 +92,7 @@ jobs:
       - name: Verify the live version from the runner
         run: |
           set -uo pipefail
-          EXPECTED_VERSION=$(sed -nE 's/^const VERSION = "([^"]+)";$/\1/p' mind/worker.js)
+          EXPECTED_VERSION=$(sed -nE 's/^var VERSION = "([^"]+)";$/\1/p' mind/worker.js)
           if [ -z "${EXPECTED_VERSION}" ]; then
             echo "could not read VERSION from mind/worker.js"
             exit 1

@@ -17,7 +17,7 @@ const configMain = sourceConfig.match(/^main\s*=\s*"([^"]+)"/m)?.[1];
 const configName = sourceConfig.match(/^name\s*=\s*"([^"]+)"/m)?.[1];
 const compatibilityDate = sourceConfig.match(/^compatibility_date\s*=\s*"([^"]+)"/m)?.[1];
 const workerSource = readFileSync(join(here, configMain || "missing"), "utf8");
-const version = workerSource.match(/^const VERSION = "([^"]+)";$/m)?.[1];
+const version = workerSource.match(/^var VERSION = "([^"]+)";$/m)?.[1];
 const imports = [...workerSource.matchAll(/from\s+["'](\.\/data\/[^"']+\.json)["']/g)].map((match) => match[1]);
 const generatedConfig = prepareDeployConfig(sourceConfig);
 const generatedName = generatedConfig.match(/^name\s*=\s*"([^"]+)"/m)?.[1];
