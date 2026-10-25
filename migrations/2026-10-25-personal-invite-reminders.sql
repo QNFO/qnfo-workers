@@ -118,3 +118,14 @@ SELECT 'copilot-dd20d15c-us08','Calendar MIME must never reach generic shared-ma
   'Synthetic positive/rejection privacy sentinels pass; provider failures retry without false sent timestamps',
   'None; no external outreach','Actual email and folded calendar handlers, synthetic SQLite, mocked native mail, feed privacy'
 WHERE NOT EXISTS(SELECT 1 FROM decision_log WHERE action='PERSONAL-CALENDAR-MAIL-1: ingest before generic archival and reuse email tick; preserve personal plane and consent');
+
+INSERT INTO session_records(session_id,wbs_code,agent_name,summary,decisions_made,files_changed,commits,
+  infrastructure_changes,handoff_notes,execution_ratio,total_tasks,completed_tasks,started_at,completed_at)
+SELECT 'dd20d15c-6d7b-4bce-a152-a651cb471888','US-08','Copilot App',
+  'Bounded US-08 source implementation and synthetic acceptance: private calendar MIME intake and retryable consent-aware reminders; not whole-roadmap completion.',
+  'Branch before shared mail/model queues; reuse existing email tick and authorization; support UTC single-event request/update/cancel; preserve unknown shared-view logic through an additive extension.',
+  '["qnfo-email/worker.js","qnfo-email/deployed-current.worker.js","qnfo-email/wrangler.toml","qnfo-email/personal-acceptance.test.mjs","qnfo-email/README.md","migrations/2026-10-25-personal-invite-reminders.sql"]',
+  '["af4c7843"]','Additive canonical audit migration and existing fleet-executor age observer; no new Worker, binding, credential or access path.',
+  'PR 4204 canonical migration/deployment and health verification remain rollout-owned until proven. Live mailbox receipt, subscription refresh and broader generic personal-mail isolation are not established. Active lifecycle subscriber SEQUENCE fidelity remains open; exact anchor and synthetic update/cancel/resurrection contract are in qnfo-email/README.md. No real personal records, events or sends used.',
+  1.0,3,3,'2026-10-25T19:26:14.669Z',datetime('now')
+WHERE NOT EXISTS(SELECT 1 FROM session_records WHERE session_id='dd20d15c-6d7b-4bce-a152-a651cb471888');
