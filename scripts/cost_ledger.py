@@ -15,6 +15,7 @@ RUNS  A step of remediation-consumer.yml (hourly; rewrites the same rows, so it 
 """
 import datetime as dt
 import json
+from math import isfinite
 import os
 import sqlite3
 import sys
@@ -85,6 +86,36 @@ def gateway_day(day, call=cf):
     return by
 
 
+def workers_ai_window(start, end, window_days, call=cf):
+    """Account-wide Workers AI cost for a 30-day UTC window, subtracting the free allowance once per day."""
+    acc = gql('query { viewer { accounts(filter: { accountTag: "%s" }) { aiInferenceAdaptiveGroups(limit: 1000, filter: { datetime_geq: "%s", datetime_lt: "%s" }) { count sum { totalNeurons } } } } }'
+              % (RC.ACCOUNT, start, end), call)
+    rows = acc.get("aiInferenceAdaptiveGroups") or []
+    neurons = sum(float((r.get("sum") or {}).get("totalNeurons") or 0) for r in rows)
+    requests = sum(int(r.get("count") or 0) for r in rows)
+    return max(0.0, neurons - FREE_NEURONS_PER_DAY * window_days) / 1000 * NEURON_USD_PER_1K, requests, neurons, window_days, len(rows)
+
+
+def gateway_window(start, end, call=cf):
+    """Provider-billed AI Gateway costs across the same 30-day UTC window."""
+    acc = gql('query { viewer { accounts(filter: { accountTag: "%s" }) { aiGatewayRequestsAdaptiveGroups(limit: 2000, filter: { datetime_geq: "%s", datetime_lt: "%s" }) { count sum { cost } dimensions { provider model } } } } }'
+              % (RC.ACCOUNT, start, end), call)
+    by = {}
+    rows = acc.get("aiGatewayRequestsAdaptiveGroups") or []
+    for row in rows:
+        dimensions = row.get("dimensions") or {}
+        provider = str(dimensions.get("provider") or "unknown").lower()
+        model = str(dimensions.get("model") or "")
+        if provider in ("compat", "unknown", "universal") and "/" in model:
+            provider = model.split("/")[0].lower()
+        if provider in ("workers-ai", "workers_ai"):
+            continue
+        amount, requests = by.get(provider, (0.0, 0))
+        by[provider] = (amount + float((row.get("sum") or {}).get("cost") or 0),
+                        requests + int(row.get("count") or 0))
+    return by, len(rows)
+
+
 def owner_local_window(d1, first_day):
     """COST-OWNER-SPLIT-1: {(day, provider): (usd, calls)} the owner's own gateway clients spent (qnfo-fleet-control OWNER-LOCAL-INGEST-1, untagged
     requests on the stored key, hourly). Provider names follow gateway_day(). None when the table cannot be read, so the caller labels the
@@ -121,13 +152,13 @@ def plan_monthly(d1, call=cf):
                 names.append("%s %.2f/%s" % (((s.get("rate_plan") or {}).get("public_name") or s.get("id") or "plan"), price, freq))
         return total, "subscriptions API: " + "; ".join(names)[:300]
     seeded = d1("SELECT usd FROM cost_daily WHERE source = 'cloudflare_plan' AND instr(COALESCE(note, ''), 'seeded') > 0 ORDER BY date LIMIT 1")
-    base = float(seeded[0]["usd"]) if seeded else 0.0
+    base = float(seeded[0]["usd"]) if seeded else None
     return base, "seeded monthly baseline (subscriptions API answered %s: %s)" % (st, json.dumps(j.get("errors") or "")[:120])
 
 
 def stated_external(d1):
     r = d1("SELECT usd FROM cost_daily WHERE source = 'direct_providers_external' ORDER BY date LIMIT 1")
-    return float(r[0]["usd"]) if r else 0.0
+    return float(r[0]["usd"]) if r else None
 
 
 def upsert(d1, date, source, scope, usd, reqs, note):
@@ -194,6 +225,215 @@ def billed_gateway(d1, call=cf):
     return {"billed_usd": usd, "lines": len(res.get("invoice_lines") or []), "period_start": res.get("period_start")}
 
 
+def cost_reconciliation(d1, call=cf, today=None, plan_monthly_usd=None, plan_basis="", external_monthly_usd=None):
+    """Build a disjoint 30-day total from billed sources, and report secondary ledgers as checks.
+
+    Unified/BYOK are a split of gateway usage, not extra costs. Account-wide
+    Workers AI includes router binding calls, so those are excluded from direct
+    provider ledger costs. cost_daily is a shorter rolling ledger, not the 30-day
+    source of truth.
+    """
+    today = today or dt.datetime.now(dt.timezone.utc).date()
+    start = (today - dt.timedelta(days=29)).isoformat()
+    end = today.isoformat()
+    start_ts = start + "T00:00:00Z"
+    now = dt.datetime.now(dt.timezone.utc)
+    end_ts = (
+        now.strftime("%Y-%m-%dT%H:%M:%SZ")
+        if now.date() == today else (today + dt.timedelta(days=1)).isoformat() + "T00:00:00Z"
+    )
+    source_errors = []
+    workers = None
+    gateway_by_provider = None
+    gateway_group_count = None
+    try:
+        workers = workers_ai_window(start_ts, end_ts, 30, call)
+    except Exception as error:  # noqa: BLE001
+        source_errors.append("Workers AI GraphQL: %s" % str(error)[:160])
+    try:
+        gateway_by_provider, gateway_group_count = gateway_window(start_ts, end_ts, call)
+    except Exception as error:  # noqa: BLE001
+        source_errors.append("AI Gateway GraphQL: %s" % str(error)[:160])
+    if workers is not None and workers[4] >= 1000:
+        source_errors.append("Workers AI response reached the 1000-group query limit")
+    if gateway_group_count is not None and gateway_group_count >= 2000:
+        source_errors.append("AI Gateway response reached the 2000-group query limit")
+
+    direct_rows = d1(
+        "SELECT day, provider, SUM(usd) AS usd, SUM(calls) AS calls FROM ai_spend_ledger "
+        "WHERE day >= ?1 AND day <= ?2 AND lower(provider) NOT IN ('workers-ai', 'workers_ai', 'gateway') GROUP BY day, provider",
+        [start, end],
+    )
+    meta_rows = d1("SELECT key, value FROM analytics_dash_meta WHERE key IN ('unified_cost_usd_30d', 'byok_cost_usd_30d', 'last_refresh')")
+    metrics = d1(
+        "SELECT metric, last_value, last_refreshed, formula, source_of_truth FROM metric_registry "
+        "WHERE metric IN ('cost_usd_30d', 'ai_est_cost_30d', 'cost_per_successful_task_by_class')"
+    )
+    direct_by_provider = {}
+    direct_calls_by_provider = {}
+    for row in direct_rows:
+        provider = str(row.get("provider") or "unknown").lower()
+        direct_by_provider[provider] = round(direct_by_provider.get(provider, 0.0) + float(row.get("usd") or 0), 4)
+        direct_calls_by_provider[provider] = direct_calls_by_provider.get(provider, 0) + int(row.get("calls") or 0)
+    direct_days = sorted({str(row.get("day")) for row in direct_rows if row.get("day")})
+
+    meta = {str(row.get("key")): row.get("value") for row in meta_rows}
+
+    def numeric(value):
+        try:
+            n = float(value)
+            return n if isfinite(n) else None
+        except (TypeError, ValueError):
+            return None
+
+    unified = numeric(meta.get("unified_cost_usd_30d"))
+    byok = numeric(meta.get("byok_cost_usd_30d"))
+    gateway_payment_total = unified + byok if unified is not None and byok is not None else None
+    gateway_total = round(sum(amount for amount, _ in gateway_by_provider.values()), 4) if gateway_by_provider is not None else None
+    gateway_delta = round(gateway_total - gateway_payment_total, 4) if gateway_total is not None and gateway_payment_total is not None else None
+    worker_usd, worker_requests, worker_neurons, worker_days, worker_group_count = workers if workers is not None else (None, None, None, None, None)
+    direct_total = round(sum(direct_by_provider.values()), 4)
+    plan = numeric(plan_monthly_usd)
+    external_unverified = numeric(external_monthly_usd)
+    if plan is None:
+        source_errors.append("Cloudflare plan amount is not measurable")
+    if external_unverified is None:
+        source_errors.append("owner-stated external-provider amount is unavailable")
+
+    try:
+        daily_coverage = d1(
+            "SELECT COUNT(DISTINCT date) AS days, MIN(date) AS first_day, MAX(date) AS last_day "
+            "FROM cost_daily WHERE date >= ?1 AND date <= ?2",
+            [start, end],
+        )[0]
+    except Exception as error:  # noqa: BLE001
+        daily_coverage = None
+        source_errors.append("cost_daily coverage: %s" % str(error)[:160])
+
+    if unified is None or byok is None:
+        source_errors.append("analytics_dash_meta unified/BYOK split is unavailable")
+    if gateway_delta is not None and gateway_delta != 0:
+        source_errors.append("AI Gateway GraphQL differs from the unified/BYOK cross-check")
+    if workers is None:
+        source_errors.append("Workers AI source total is unavailable")
+    if gateway_by_provider is None:
+        source_errors.append("AI Gateway source total is unavailable")
+    if plan_basis and "seeded" in plan_basis.lower():
+        source_errors.append("Cloudflare plan uses a seeded monthly baseline")
+    if external_unverified and external_unverified > 0:
+        source_errors.append("owner-stated external-provider cost is unverified")
+
+    metric_by_name = {str(row.get("metric")): row for row in metrics}
+    task = metric_by_name.get("cost_per_successful_task_by_class")
+    successful_call_metric = {
+        "value_usd": numeric(task.get("last_value")) if task else None,
+        "last_refreshed": task.get("last_refreshed") if task else None,
+        "formula": task.get("formula") if task else None,
+        "source_of_truth": task.get("source_of_truth") if task else None,
+        "scope": "successful qnfo-ops model-ladder calls, not all fleet tasks",
+    }
+    workers_gateway = None
+    if worker_usd is not None and gateway_total is not None:
+        workers_gateway = round(worker_usd + gateway_total, 4)
+    plan_is_unverified = plan is not None and "seeded" in plan_basis.lower()
+    measured_subtotal = (
+        round(workers_gateway + direct_total + (plan if not plan_is_unverified else 0.0), 4)
+        if workers_gateway is not None else None
+    )
+    all_billing_including_unverified = (
+        round(measured_subtotal + (plan if plan_is_unverified else 0.0) + external_unverified, 4)
+        if measured_subtotal is not None and plan is not None and external_unverified is not None else None
+    )
+    metric_cross_checks = {}
+    for name in ("cost_usd_30d", "ai_est_cost_30d"):
+        metric = metric_by_name.get(name)
+        metric_value = numeric(metric.get("last_value")) if metric else None
+        metric_cross_checks[name] = {
+            "value_usd": metric_value,
+            "last_refreshed": metric.get("last_refreshed") if metric else None,
+            "source_of_truth": metric.get("source_of_truth") if metric else None,
+            "formula": metric.get("formula") if metric else None,
+            "difference_from_measured_sources_usd": (
+                round(metric_value - measured_subtotal, 4)
+                if metric_value is not None and measured_subtotal is not None else None
+            ),
+            "included_in_total": False,
+        }
+
+    return {
+        "window_start": start,
+        "window_end": end,
+        "window_days": 30,
+        "billing_status": "partial" if source_errors else "reconciled",
+        "source_errors": source_errors,
+        "components_usd": {
+            "workers_ai_account_wide": round(worker_usd, 4) if worker_usd is not None else None,
+            "ai_gateway_all_clients": gateway_total,
+            "ai_gateway_payment_split": {
+                "unified": unified,
+                "byok": byok,
+                "reported_at": meta.get("last_refresh"),
+                "gateway_usage_total": gateway_total,
+                "difference_usd": gateway_delta,
+                "included_in_gateway_usage_total": True,
+            },
+            "direct_providers_metered": direct_total,
+            "cloudflare_plan_monthly_equivalent": plan,
+            "direct_providers_owner_stated_unverified_monthly": external_unverified,
+        },
+        "workers_ai_meter": {
+            "requests": worker_requests,
+            "neurons": worker_neurons,
+            "daily_free_allowance_days": worker_days,
+            "group_count": worker_group_count,
+        },
+        "ai_gateway_group_count": gateway_group_count,
+        "ai_gateway_usd_by_provider": {
+            provider: round(amount, 4) for provider, (amount, _) in (gateway_by_provider or {}).items()
+        },
+        "ai_gateway_requests_by_provider": {
+            provider: requests for provider, (_, requests) in (gateway_by_provider or {}).items()
+        },
+        "direct_provider_usd_by_provider": direct_by_provider,
+        "direct_provider_calls_by_provider": direct_calls_by_provider,
+        "measured_source_subtotal_usd": measured_subtotal,
+        "direct_provider_ledger_entries": len(direct_rows),
+        "direct_provider_ledger_coverage": {
+            "days_with_entries": len(direct_days),
+            "first_day": direct_days[0] if direct_days else None,
+            "last_day": direct_days[-1] if direct_days else None,
+        },
+        "all_billing_including_unverified_usd": all_billing_including_unverified,
+        "daily_ledger_coverage": daily_coverage,
+        "cost_metric_cross_checks": metric_cross_checks,
+        "plan_basis": plan_basis,
+        "task_cost_coverage": {
+            "status": "partial",
+            "successful_call_metric": successful_call_metric,
+            "failed_task_cost_usd": None,
+            "reason": "Current cost ledgers aggregate by worker/provider/day; they do not join spend to task id and final task outcome.",
+        },
+    }
+
+
+def write_cost_reconciliation(d1, today=None, call=cf, plan_monthly_usd=None, plan_basis="", external_monthly_usd=None):
+    snapshot = cost_reconciliation(
+        d1, call=call, today=today, plan_monthly_usd=plan_monthly_usd,
+        plan_basis=plan_basis, external_monthly_usd=external_monthly_usd,
+    )
+    event_day = snapshot["window_end"]
+    event_id = "cost-reconciliation-" + event_day
+    status = "ok" if snapshot["billing_status"] == "reconciled" and snapshot["task_cost_coverage"]["status"] == "complete" else "partial"
+    text = "30-day cost reconciliation " + status + ": " + str(len(snapshot["source_errors"])) + " billing/source gaps; failed-task cost attribution remains unmeasured"
+    d1(
+        "INSERT INTO cloud_ops_events (id, ts, kind, text, meta, job, status) "
+        "VALUES (?1, strftime('%Y-%m-%dT%H:%M:%SZ', 'now'), 'cost-reconciliation', ?2, ?3, 'cost-ledger', ?4) "
+        "ON CONFLICT(id) DO UPDATE SET ts=excluded.ts, text=excluded.text, meta=excluded.meta, status=excluded.status",
+        [event_id, text[:500], json.dumps(snapshot, separators=(",", ":")), status],
+    )
+    return snapshot
+
+
 def main(d1=None, call=cf, today=None):
     d1 = d1 or RC.d1
     today = today or dt.datetime.now(dt.timezone.utc).date()
@@ -226,9 +466,9 @@ def main(d1=None, call=cf, today=None):
                     upsert(d1, ds, "owner_gateway:" + prov, "owner-clients", ou, on, "ai_spend_owner_local (untagged owner clients on the stored key), at most the gateway day total %.4f" % by[prov][0])
         except Exception as e:  # noqa: BLE001
             out["errors"].append("gateway %s: %s" % (ds, str(e)[:100]))
-        if plan_m > 0:
+        if plan_m is not None and plan_m > 0:
             upsert(d1, ds, "cloudflare_plan:daily", "fleet", plan_m / 30.0, 0, "monthly %.2f / 30; %s" % (plan_m, plan_note))
-        if ext_m > 0:
+        if ext_m is not None and ext_m > 0:
             upsert(d1, ds, "direct_providers_external:daily", "owner-direct", ext_m / 30.0, 0, "owner-stated monthly %.2f / 30 (unverified; no API sees it)" % ext_m)
     try:
         rr = d1("SELECT source_group, run_rate_30d_7d, run_rate_30d_10d FROM v_cost_run_rate ORDER BY run_rate_30d_7d DESC")
@@ -241,6 +481,12 @@ def main(d1=None, call=cf, today=None):
             out[k] = fn()
         except Exception as e:  # noqa: BLE001
             out["errors"].append("%s: %s" % (k, str(e)[:100]))
+    try:
+        out["reconciliation"] = write_cost_reconciliation(
+            d1, today, call, plan_m, plan_note, ext_m
+        )
+    except Exception as e:  # noqa: BLE001
+        out["errors"].append("cost reconciliation: %s" % str(e)[:120])
     print(json.dumps(out)[:1500])
     return 0
 
@@ -250,11 +496,17 @@ def selftest():
     c.executescript("""CREATE TABLE cost_daily (date TEXT NOT NULL, source TEXT NOT NULL, scope TEXT NOT NULL DEFAULT 'fleet', usd REAL NOT NULL DEFAULT 0,
       requests INTEGER DEFAULT 0, tokens_in INTEGER DEFAULT 0, tokens_out INTEGER DEFAULT 0, note TEXT, updated_at TEXT, PRIMARY KEY (date, source));
       INSERT INTO cost_daily (date, source, usd, note) VALUES ('2026-09-26', 'cloudflare_plan', 200, 'monthly baseline (seeded)'), ('2026-09-26', 'direct_providers_external', 450, 'user-stated');
+      CREATE TABLE ai_spend_ledger (day TEXT, provider TEXT, calls INTEGER, usd REAL);
+      CREATE TABLE analytics_dash_meta (key TEXT, value TEXT);
+      INSERT INTO analytics_dash_meta VALUES ('unified_cost_usd_30d','50'),('byok_cost_usd_30d','48.7766'),('last_refresh','2026-10-09T23:00:00Z');
+      CREATE TABLE cloud_ops_events (id TEXT PRIMARY KEY, ts TEXT, kind TEXT, text TEXT, meta TEXT, job TEXT, status TEXT);
       CREATE TABLE ai_spend_owner_local (day TEXT NOT NULL, gateway TEXT NOT NULL, provider TEXT NOT NULL, model TEXT NOT NULL, calls INTEGER DEFAULT 0,
       in_tok INTEGER DEFAULT 0, out_tok INTEGER DEFAULT 0, usd REAL DEFAULT 0, PRIMARY KEY (day, gateway, provider, model));
       INSERT INTO ai_spend_owner_local (day, gateway, provider, model, calls, usd) VALUES
         ('2026-10-09', 'gw', 'anthropic', 'claude-opus-5.5', 1140, 97.026573), ('2026-10-09', 'gw', 'openai', 'gpt-5.5', 2, 0.2),
-        ('2026-10-09', 'gw', 'mistral', 'large', 4, 3.0);""")
+        ('2026-10-09', 'gw', 'mistral', 'large', 4, 3.0);
+      CREATE TABLE metric_registry (metric TEXT PRIMARY KEY, last_value TEXT, last_refreshed TEXT, state TEXT,
+        formula TEXT, source_of_truth TEXT);""")
 
     def d1(sql, params=None):
         sql = sql.replace("strftime('%Y-%m-%dT%H:%M:%SZ', 'now')", "'now'")
@@ -265,6 +517,8 @@ def selftest():
     def call(method, path, body=None, timeout=30):
         if path.endswith("/subscriptions"):
             return 403, {"success": False, "errors": [{"code": 10000, "message": "Authentication error"}]}
+        if path.endswith("/invoice-preview"):
+            return 200, {"result": {"invoice_lines": []}}
         q = body["query"]
         if "aiInferenceAdaptiveGroups" in q:
             return 200, {"data": {"viewer": {"accounts": [{"aiInferenceAdaptiveGroups": [{"count": 100, "sum": {"totalNeurons": 210000}}]}]}}}
@@ -338,6 +592,61 @@ def selftest():
     m.execute("INSERT INTO ai_call_counters VALUES (?, 'qnfo-research-exec', 300000), (?, 'q08-signal-engine', 999999)", [y, y])
     m.executemany("INSERT INTO research_queue VALUES (?)", [[y + "T10:00:00Z"]] * 20)
     assert write_unit_cost(md1)["per_publication"] == 15000.0
+
+    reconciliation_db = sqlite3.connect(":memory:")
+    reconciliation_db.executescript("""CREATE TABLE cost_daily (date TEXT, source TEXT, scope TEXT, usd REAL);
+      CREATE TABLE ai_spend_ledger (day TEXT, provider TEXT, calls INTEGER, usd REAL);
+      CREATE TABLE analytics_dash_meta (key TEXT, value TEXT);
+      CREATE TABLE metric_registry (metric TEXT, last_value TEXT, last_refreshed TEXT, formula TEXT, source_of_truth TEXT);
+      CREATE TABLE cloud_ops_events (id TEXT PRIMARY KEY, ts TEXT, kind TEXT, text TEXT, meta TEXT, job TEXT, status TEXT);
+      INSERT INTO analytics_dash_meta VALUES ('unified_cost_usd_30d','5'),('byok_cost_usd_30d','3'),('last_refresh','2026-10-09T23:00:00Z');
+      INSERT INTO metric_registry VALUES ('cost_usd_30d','42.2','2026-10-09T23:00:00Z','all-source estimate','gateway + Workers AI + plan + direct');
+      INSERT INTO metric_registry VALUES ('ai_est_cost_30d','11.5','2026-10-09T23:00:00Z','AI list cost','gateway + Workers AI');
+      INSERT INTO metric_registry VALUES ('cost_per_successful_task_by_class','0.01','2026-10-09T23:00:00Z','COST-PER-TASK-WINDOW-1: model ladder spend / successful calls','ops_ai_log');
+      INSERT INTO cost_daily VALUES ('2026-10-09','workers_ai','fleet',1),('2026-10-09','ai_gateway:openai','fleet',5),
+        ('2026-10-09','owner_gateway:openai','owner-clients',1),('2026-10-09','cloudflare_plan:daily','fleet',1),
+        ('2026-10-09','direct_providers_external:daily','owner-direct',15);""")
+
+    def rd1(sql, params=None):
+        cur = reconciliation_db.execute(sql, params or [])
+        cols = [x[0] for x in cur.description] if cur.description else []
+        return [dict(zip(cols, row)) for row in cur.fetchall()]
+
+    def reconciliation_call(method, path, body=None, timeout=30):
+        query = body["query"]
+        if "aiInferenceAdaptiveGroups" in query:
+            result = {"aiInferenceAdaptiveGroups": [{"count": 50, "sum": {"totalNeurons": 500000}}]}
+        else:
+            result = {"aiGatewayRequestsAdaptiveGroups": [
+                {"count": 10, "sum": {"cost": 5}, "dimensions": {"provider": "openai", "model": "gpt-5.5"}},
+                {"count": 5, "sum": {"cost": 3}, "dimensions": {"provider": "compat", "model": "deepseek/deepseek-flash"}},
+                {"count": 20, "sum": {"cost": 99}, "dimensions": {"provider": "workers-ai", "model": "x"}},
+            ]}
+        return 200, {"data": {"viewer": {"accounts": [result]}}}
+
+    reconciliation_db.executemany(
+        "INSERT INTO ai_spend_ledger VALUES (?, ?, ?, ?)",
+        [["2026-10-09", "deepseek", 7, 1.5], ["2026-10-09", "mistral", 2, 0.5],
+         ["2026-10-09", "gateway", 9, 99], ["2026-10-09", "workers-ai", 8, 99]],
+    )
+    snapshot = cost_reconciliation(
+        rd1, reconciliation_call, dt.date(2026, 10, 9), 30, "subscriptions API", 450
+    )
+    assert snapshot["billing_status"] == "partial"  # owner-stated external spend remains unverified
+    assert snapshot["components_usd"]["ai_gateway_all_clients"] == 8
+    assert snapshot["components_usd"]["ai_gateway_payment_split"]["difference_usd"] == 0
+    assert snapshot["components_usd"]["direct_providers_metered"] == 2
+    assert snapshot["measured_source_subtotal_usd"] == 42.2
+    assert snapshot["all_billing_including_unverified_usd"] == 492.2
+    assert snapshot["cost_metric_cross_checks"]["cost_usd_30d"]["included_in_total"] is False
+    assert snapshot["task_cost_coverage"]["successful_call_metric"]["scope"] == "successful qnfo-ops model-ladder calls, not all fleet tasks"
+    assert snapshot["task_cost_coverage"]["failed_task_cost_usd"] is None
+    written = write_cost_reconciliation(
+        rd1, dt.date(2026, 10, 9), reconciliation_call, 30, "subscriptions API", 450
+    )
+    assert written["all_billing_including_unverified_usd"] == 492.2
+    event = rd1("SELECT status, meta FROM cloud_ops_events WHERE id = 'cost-reconciliation-2026-10-09'")[0]
+    assert event["status"] == "partial" and json.loads(event["meta"])["components_usd"]["ai_gateway_all_clients"] == 8
     print("cost_ledger selftest ok")
 
 
