@@ -8,6 +8,10 @@ ordered by known input/output neuron rates. The cheapest priced rung runs first;
 the existing bounded retry/timeout ladder supplies fallbacks. If all configured prices
 are unknown, the supported `gpt-oss-120b` rung precedes them. Standalone planning also
 uses the cheap route. Below the threshold, model ordering and parallelism are unchanged.
+As of v0.27.1, a capped tick scans up to 64 claimable tasks within its existing time
+budget to find one executable step. A live claim still defers its task; that deferral
+does not consume the one-step allowance or prevent unrelated paths from progressing.
+The tick reports `executed_steps` separately from `steps` (which includes deferrals).
 Verification, work claims, publication gates, and metric thresholds are unchanged.
 `code-task.spend-cap` reports `routed` rather than an idle-until-midnight hold.
 
