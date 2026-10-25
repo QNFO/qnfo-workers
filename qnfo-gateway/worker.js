@@ -1,4 +1,4 @@
-var VERSION="3.18.10-identity-wellknown-1";; /* 3.18.10 IDENTITY-WELLKNOWN-1 (2026-10-18): /.well-known/security.txt (RFC 9116) on every gateway host, /.well-known/atproto-did on qnfo.org for the Bluesky domain handle, rel="me" to the Mastodon profile in every page head. */ /* 3.18.5 WORKERS-BP-LOGGING-qnfo-gateway-1 (2026-10-14, agent_issues 2533, child of 2342, pillar autonomy): the 6 server-side swallowed catches log (2 browser-script hits marked standards-ok or allowlisted) as a structured console.error (worker, where, error); control flow unchanged. */ /* 3.18.4 FLEET-HARDENING-2 (2026-10-13, agent_issues 2397, pillar autonomy): the daily cron ends with a qnfo-audit fleet_heartbeat upsert through a new AUDIT binding (ok=0 when the IndexNow step threw, which was swallowed before and is now logged). */ /* 3.18.3 HUB-CACHE-VERSION-1 (2026-10-13, pillar reach, failure mode zaraz-autoinject-worker-html): the qnfo.org hub copy in each colo's cache now carries the VERSION that built it, and a copy built by another version is rebuilt while the request waits up to 2.5 s instead of being served stale; the runner probe of 07:39 UTC read a pre-3.16.1 copy without /cdn-cgi/zaraz/i.js while every fresh render carried it. */ /* 3.18.2 PAGE-POLICY-1 (2026-10-13, pillar reach, agent_issues 2343 WEB-PERF-EDGE-1): every HTML response carries Referrer-Policy strict-origin-when-cross-origin (no-referrer when the query carries a token) and Permissions-Policy camera=(), microphone=(), geolocation=() from the worker (qnfo.org had neither; the subdomains had them only from a zone rule), and an HTML response without Cache-Control gets public, max-age=300, s-maxage=3600, stale-while-revalidate=86400 when it is a public GET 200, no-store otherwise; handlers that set their own are unchanged, JSON untouched. 3.18.1 RENDER-DEFECTS-2300 (2026-10-13, pillar reach, agent_issues 2300 2158 2357): PANDOC-FENCE-GLUE-1 reads a code fence glued to prose or to its last code line as a fence (ultrametric-intelligence printed its Python as prose and typeset its identifiers); MATH-RESIDUE-5 typesets a formula glued to a name by a product sign; RAIL-MATH-1 gives /api/paper-context title_tex and excerpt_tex (formulas kept as TeX, plain-text math typeset, currency escaped) and the Related and Versions panels paint them, since every residue the browser sample counted on chapter-1 and log20240505010101strangeloopbook on 2026-10-12 was panel text; a formula ending in an escaped brace is lifted as math; MathJax knows the Sha macro. 3.18.0 ACTIVITYPUB-KEY-1 (2026-10-12, pillar reach, #2249 #2413): the actor publishes publicKeyPem when AP_PUBLIC_KEY is set (cf-ops gen-activitypub-key); merged with main 3.17.1 (REACH-RENDER-1). */
+var VERSION="3.19.0-listing-version-1";; /* 3.18.10 IDENTITY-WELLKNOWN-1 (2026-10-18): /.well-known/security.txt (RFC 9116) on every gateway host, /.well-known/atproto-did on qnfo.org for the Bluesky domain handle, rel="me" to the Mastodon profile in every page head. */ /* 3.18.5 WORKERS-BP-LOGGING-qnfo-gateway-1 (2026-10-14, agent_issues 2533, child of 2342, pillar autonomy): the 6 server-side swallowed catches log (2 browser-script hits marked standards-ok or allowlisted) as a structured console.error (worker, where, error); control flow unchanged. */ /* 3.18.4 FLEET-HARDENING-2 (2026-10-13, agent_issues 2397, pillar autonomy): the daily cron ends with a qnfo-audit fleet_heartbeat upsert through a new AUDIT binding (ok=0 when the IndexNow step threw, which was swallowed before and is now logged). */ /* 3.18.3 HUB-CACHE-VERSION-1 (2026-10-13, pillar reach, failure mode zaraz-autoinject-worker-html): the qnfo.org hub copy in each colo's cache now carries the VERSION that built it, and a copy built by another version is rebuilt while the request waits up to 2.5 s instead of being served stale; the runner probe of 07:39 UTC read a pre-3.16.1 copy without /cdn-cgi/zaraz/i.js while every fresh render carried it. */ /* 3.18.2 PAGE-POLICY-1 (2026-10-13, pillar reach, agent_issues 2343 WEB-PERF-EDGE-1): every HTML response carries Referrer-Policy strict-origin-when-cross-origin (no-referrer when the query carries a token) and Permissions-Policy camera=(), microphone=(), geolocation=() from the worker (qnfo.org had neither; the subdomains had them only from a zone rule), and an HTML response without Cache-Control gets public, max-age=300, s-maxage=3600, stale-while-revalidate=86400 when it is a public GET 200, no-store otherwise; handlers that set their own are unchanged, JSON untouched. 3.18.1 RENDER-DEFECTS-2300 (2026-10-13, pillar reach, agent_issues 2300 2158 2357): PANDOC-FENCE-GLUE-1 reads a code fence glued to prose or to its last code line as a fence (ultrametric-intelligence printed its Python as prose and typeset its identifiers); MATH-RESIDUE-5 typesets a formula glued to a name by a product sign; RAIL-MATH-1 gives /api/paper-context title_tex and excerpt_tex (formulas kept as TeX, plain-text math typeset, currency escaped) and the Related and Versions panels paint them, since every residue the browser sample counted on chapter-1 and log20240505010101strangeloopbook on 2026-10-12 was panel text; a formula ending in an escaped brace is lifted as math; MathJax knows the Sha macro. 3.18.0 ACTIVITYPUB-KEY-1 (2026-10-12, pillar reach, #2249 #2413): the actor publishes publicKeyPem when AP_PUBLIC_KEY is set (cf-ops gen-activitypub-key); merged with main 3.17.1 (REACH-RENDER-1). */
 // UTM-CLICK-LEDGER-1 (3.10.0, 2026-10-06, transformation lever T7.9, pillar reach): a GET for an HTML page that carries
 // utm_source is counted into qnfo-graph utm_clicks (day, host, path, source, medium, campaign, bot/human, country; no cookie,
 // no IP), so a post or digest joins to the visits it caused; qnfo-fleet-dashboard reads it into reach_signals source utm.
@@ -1780,7 +1780,7 @@ function renderHubHTML(recentPapers, paperCount, nodesCount = 0) {
   let latest = "";
   if (recentPapers && recentPapers.length > 0) {
     latest = '<section class="q-section" aria-labelledby="latest-h"><div class="q-wrap"><div class="q-section-head"><h2 class="q-h2" id="latest-h">Latest papers</h2><a href="https://papers.qnfo.org/papers">Browse the library</a></div><ul class="q-list q-compact" style="max-width:860px">' + recentPapers.slice(0, 6).map(function(p) {
-      return '<li class="q-item"><a class="q-item-title" href="https://papers.qnfo.org/papers/' + escAttr(p.slug) + '">' + titleHTML(p.title) + '</a><div class="q-item-meta"><time>' + esc(String(p.created_at || "").slice(0, 10)) + "</time></div></li>";
+      return '<li class="q-item"><a class="q-item-title" href="https://papers.qnfo.org/papers/' + escAttr(p.slug) + '">' + titleHTML(p.title) + '</a><div class="q-item-meta"><time>' + esc(String(p.first_published_at || p.created_at || "").slice(0, 10)) + "</time><span>v" + esc(String(p.version_semver || "1.0.0")) + "</span>" + (p.version_count > 1 ? "<span>revised " + esc(String(p.last_revised_at || "").slice(0, 10)) + "</span>" : "") + "</div></li>";
     }).join("") + "</ul></div></section>";
   }
   const explore = [
@@ -1886,7 +1886,8 @@ function buildPaperJsonLd(paper) {
     sameAs: doi ? "https://doi.org/" + doi : "",
     author: authorObjs,
     abstract: abs,
-    datePublished: (paper.created_at || "").slice(0, 10) || void 0,
+    datePublished: (paper.first_published_at || paper.created_at || "").slice(0, 10) || void 0,
+    dateModified: (paper.last_revised_at || paper.first_published_at || paper.created_at || "").slice(0, 10) || void 0,
     inLanguage: "en",
     license: paperLicenseUrl(paper.license),
     publisher: { "@type": "Organization", name: "QNFO", url: "https://qnfo.org" },
@@ -1960,7 +1961,7 @@ async function handlePapers(request, env) {
     const search = (u.searchParams.get("search") || "").trim();
     const limit = Math.min(Math.max(parseInt(u.searchParams.get("limit") || "50", 10), 1), 200);
     const offset = Math.max(parseInt(u.searchParams.get("offset") || "0", 10), 0);
-    let sql = "SELECT slug,title,doi,abstract,created_at,status,version,authors FROM papers WHERE slug IS NOT NULL AND status IN ('published','distributed','external_preprint')";
+    let sql = "SELECT slug,title,doi,abstract,created_at,status,version,version_semver,version_sort,version_count,first_published_at,last_revised_at,authors FROM papers WHERE slug IS NOT NULL AND status IN ('published','distributed','external_preprint')";
     const params = [];
     if (search) {
       sql += " AND (title LIKE ? OR abstract LIKE ? OR authors LIKE ?)";
@@ -1976,18 +1977,24 @@ async function handlePapers(request, env) {
     // the newest date and the unfiltered total feed the index; ?sort=new|old|title.
     const facets = {};
     for (const p of all) { p._cat = detectCategory(p.title, p.abstract); facets[p._cat] = (facets[p._cat] || 0) + 1; }
-    const latest = all.length ? all[0].created_at : null;
+    const latest = all.length ? (all[0].first_published_at || all[0].created_at) : null;
     let allTotal = all.length;
     if (search) { try { const c = await env.LIVING_PAPER.prepare("SELECT COUNT(*) AS n FROM papers WHERE slug IS NOT NULL AND status IN ('published','distributed','external_preprint')").first(); allTotal = c ? c.n : allTotal; } catch (e) { console.error(JSON.stringify({ worker: "qnfo-gateway", where: "handlePapers", error: String(e && e.message || e) })); } }
     const months = [];
     { const now = new Date(); for (let k = 11; k >= 0; k--) { const d = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - k, 1)); const key = d.toISOString().slice(0, 7); months.push({ key, label: ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"][d.getUTCMonth()] + " '" + String(d.getUTCFullYear()).slice(2), n: 0 }); }
-      const idx = {}; months.forEach((m, i) => { idx[m.key] = i; }); for (const p of all) { const k = String(p.created_at || "").slice(0, 7); if (idx[k] != null) months[idx[k]].n++; } }
+      const idx = {}; months.forEach((m, i) => { idx[m.key] = i; }); for (const p of all) { const k = String(p.first_published_at || p.created_at || "").slice(0, 7); if (idx[k] != null) months[idx[k]].n++; } }
     if (category && category !== "all") {
       all = all.filter((p) => p._cat === category);
     }
-    const sort = ["old", "title"].indexOf(u.searchParams.get("sort")) >= 0 ? u.searchParams.get("sort") : "new";
-    if (sort === "old") all = all.slice().reverse();
-    if (sort === "title") all = all.slice().sort((x, y) => displayTitle(x.title).localeCompare(displayTitle(y.title)));
+    const sortParam = u.searchParams.get("sort");
+    const sort = ["old", "title", "revised", "version"].indexOf(sortParam) >= 0 ? sortParam : "new";
+    const firstKey = (p) => String(p.first_published_at || p.created_at || "");
+    const revKey = (p) => String(p.last_revised_at || firstKey(p));
+    if (sort === "old") all = all.slice().sort((x, y) => firstKey(x).localeCompare(firstKey(y)) || displayTitle(x.title).localeCompare(displayTitle(y.title)));
+    else if (sort === "title") all = all.slice().sort((x, y) => displayTitle(x.title).localeCompare(displayTitle(y.title)));
+    else if (sort === "revised") all = all.slice().sort((x, y) => revKey(y).localeCompare(revKey(x)) || firstKey(y).localeCompare(firstKey(x)));
+    else if (sort === "version") all = all.slice().sort((x, y) => (y.version_sort || 0) - (x.version_sort || 0) || firstKey(y).localeCompare(firstKey(x)));
+    else all = all.slice().sort((x, y) => firstKey(y).localeCompare(firstKey(x)) || revKey(y).localeCompare(revKey(x)));
     for (const p of all) delete p._cat;
     const total = all.length;
     const page = all.slice(offset, offset + limit);
@@ -2067,7 +2074,7 @@ async function handlePaperDetail(request, env, path) {
   }
   try {
     const paper = await env.LIVING_PAPER.prepare(
-      "SELECT slug,title,body_md,abstract,authors,doi,created_at,status,version,pdf_path,license FROM papers WHERE slug = ? AND status IN ('published','distributed','external_preprint') LIMIT 1"
+      "SELECT slug,title,body_md,abstract,authors,doi,created_at,status,version,version_semver,version_count,first_published_at,last_revised_at,pdf_path,license FROM papers WHERE slug = ? AND status IN ('published','distributed','external_preprint') LIMIT 1"
     ).bind(slug).first();
     if (!paper) return notFoundPage(request, env, "papers.qnfo.org", "/papers/" + slug, slug);
     paper.doi = lpDoi(paper.doi);
@@ -2103,7 +2110,7 @@ __name2222222222(handlePaperDetail, "handlePaperDetail");
 async function handleHub(env) {
   try {
     const [papersRes, countRes, nodesRes] = await Promise.all([
-      env.LIVING_PAPER.prepare("SELECT slug,title,created_at FROM papers WHERE slug IS NOT NULL AND status IN ('published','distributed','external_preprint') ORDER BY created_at DESC LIMIT 8").all(),
+      env.LIVING_PAPER.prepare("SELECT slug,title,created_at,first_published_at,last_revised_at,version_semver,version_count FROM papers WHERE slug IS NOT NULL AND status IN ('published','distributed','external_preprint') ORDER BY COALESCE(last_revised_at, first_published_at, created_at) DESC LIMIT 8").all(),
       env.LIVING_PAPER.prepare("SELECT COUNT(*) as cnt FROM papers WHERE slug IS NOT NULL AND status IN ('published','distributed','external_preprint')").first(),
       env.DB.prepare("SELECT COUNT(*) as count FROM nodes").first()
     ]);
@@ -2578,7 +2585,7 @@ async function handleRenderHealth(env) {
 }
 async function handleSitemap(env, sitemapHost) {
   try {
-    const res = await env.LIVING_PAPER.prepare("SELECT slug, created_at FROM papers WHERE slug IS NOT NULL AND status IN ('published','distributed','external_preprint') ORDER BY created_at DESC").all();
+    const res = await env.LIVING_PAPER.prepare("SELECT slug, COALESCE(last_revised_at, first_published_at, created_at) AS last_revised_at FROM papers WHERE slug IS NOT NULL AND status IN ('published','distributed','external_preprint') ORDER BY COALESCE(last_revised_at, first_published_at, created_at) DESC").all();
     const isSite = sitemapHost === "qnfo.org" || sitemapHost === "www.qnfo.org";
     const base = isSite ? "https://qnfo.org" : "https://papers.qnfo.org";
     const ALL = isSite
@@ -2595,7 +2602,7 @@ async function handleSitemap(env, sitemapHost) {
         { loc: "https://ipatent.qnfo.org/guide", priority: "0.7" }
       ].concat(res.results.map((p) => ({
         loc: "https://papers.qnfo.org/papers/" + encodeURIComponent(p.slug),
-        lastmod: p.created_at ? new Date(p.created_at).toISOString().slice(0, 10) : "",
+        lastmod: String(p.last_revised_at || "").slice(0, 10),
         priority: "0.8"
       })))
       : [
@@ -2605,7 +2612,7 @@ async function handleSitemap(env, sitemapHost) {
       ];
     const all = ALL.concat(isSite ? [] : res.results.map((p) => ({
       loc: base + "/papers/" + encodeURIComponent(p.slug),
-      lastmod: p.created_at ? new Date(p.created_at).toISOString().slice(0, 10) : "",
+      lastmod: String(p.last_revised_at || "").slice(0, 10),
       priority: "0.8"
     })));
     const body = '<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n' + all.map((u) => "  <url>\n    <loc>" + xmlEscape(u.loc) + "</loc>" + (u.lastmod ? "\n    <lastmod>" + u.lastmod + "</lastmod>" : "") + "\n    <priority>" + u.priority + "</priority>\n  </url>").join("\n") + "\n</urlset>";
@@ -2647,11 +2654,15 @@ __name222222222(handlePapersRobots, "handlePapersRobots");
 __name2222222222(handlePapersRobots, "handlePapersRobots");
 async function handleLlmsTxt(env) {
   try {
-    const res = await env.LIVING_PAPER.prepare("SELECT slug,title,doi,abstract,created_at FROM papers WHERE slug IS NOT NULL AND status IN ('published','distributed','external_preprint') ORDER BY created_at DESC LIMIT 200").all();
+    const res = await env.LIVING_PAPER.prepare("SELECT slug,title,doi,abstract,created_at,first_published_at,last_revised_at,version_semver,version_count FROM papers WHERE slug IS NOT NULL AND status IN ('published','distributed','external_preprint') ORDER BY COALESCE(last_revised_at,first_published_at,created_at) DESC, slug LIMIT 200").all();
     const base = "https://papers.qnfo.org";
-    let body = "# QNFO Papers\n\n> Open-science research across p-adic mathematics, ultrametric geometry, topological quantum computation.\n\n## Site\n\n- [About QNFO](https://qnfo.org/about)\n- [Work with me: assessments, reviews, talks, collaboration and roles](https://qnfo.org/work-with-me)\n\n## Papers\n\n";
-    body += "\n## Open data\n\n- [OAI-PMH 2.0](" + base + "/oai?verb=Identify)\n- [JSON API](" + base + "/api/papers)\n- [OpenAPI](" + base + "/openapi.json)\n- [JSON Feed](" + base + "/feed.json)\n\n## Papers\n\n";
-    body += res.results.map((p) => "- [" + displayTitle(p.title) + "](" + base + "/papers/" + encodeURIComponent(p.slug) + ")" + (lpDoi(p.doi) ? " (DOI: " + lpDoi(p.doi) + ")" : "")).join("\n");
+    let body = "# QNFO Papers\n\n> Open-science research across p-adic mathematics, ultrametric geometry, topological quantum computation.\n\n## Site\n\n- [About QNFO](https://qnfo.org/about)\n- [Work with me: assessments, reviews, talks, collaboration and roles](https://qnfo.org/work-with-me)\n";
+    body += "\n## Open data\n\n- [OAI-PMH 2.0](" + base + "/oai?verb=Identify)\n- [JSON API](" + base + "/api/papers)\n- [OpenAPI](" + base + "/openapi.json)\n- [JSON Feed](" + base + "/feed.json)\n- [New papers RSS](" + base + "/rss.xml)\n- [New versions RSS](" + base + "/rss/versions.xml)\n- [New versions JSON Feed](" + base + "/feed-versions.json)\n\n## Papers (most recently revised first)\n\n";
+    body += res.results.map((p) => {
+      const v = String(p.version_semver || "1.0.0");
+      const revised = String(p.last_revised_at || p.first_published_at || p.created_at || "").slice(0, 10);
+      return "- [" + displayTitle(p.title) + "](" + base + "/papers/" + encodeURIComponent(p.slug) + ") — v" + v + ", revised " + revised + (lpDoi(p.doi) ? " (DOI: " + lpDoi(p.doi) + ")" : "");
+    }).join("\n");
     return new Response(body, { headers: { "Content-Type": "text/plain; charset=utf-8", "Cache-Control": "public, max-age=3600" } });
   } catch (e) {
     return new Response(
@@ -2671,27 +2682,66 @@ __name2222222(handleLlmsTxt, "handleLlmsTxt");
 __name22222222(handleLlmsTxt, "handleLlmsTxt");
 __name222222222(handleLlmsTxt, "handleLlmsTxt");
 __name2222222222(handleLlmsTxt, "handleLlmsTxt");
+function rssPubDate(s) {
+  const raw = String(s || "").trim().slice(0, 19).replace(" ", "T");
+  if (!raw) return "";
+  const iso = raw.length === 10 ? raw + "T00:00:00Z" : raw + (raw.endsWith("Z") ? "" : "Z");
+  const d = new Date(iso);
+  return isNaN(d.getTime()) ? "" : d.toUTCString();
+}
+function rssVersionItem(p, base, kind) {
+  const link = base + "/papers/" + encodeURIComponent(p.slug);
+  const version = String(p.version_semver || "1.0.0");
+  const first = p.first_published_at || p.created_at || "";
+  const revised = p.last_revised_at || first;
+  const isVersion = kind === "version";
+  const title = displayTitle(p.title) + (isVersion ? " (v" + version + ")" : "");
+  const desc = mathPlain(p.abstract || "") + (isVersion ? " Version v" + version + " published " + String(revised).slice(0, 10) + "." : "") + " First published " + String(first).slice(0, 10) + "." + (Number(p.version_count) > 1 ? " " + Number(p.version_count) + " versions." : "");
+  const guid = isVersion ? link + "#v" + version : link;
+  return "  <item>\n    <title>" + xmlEscape(title) + "</title>\n    <link>" + xmlEscape(link) + '</link>\n    <guid isPermaLink="' + (isVersion ? "false" : "true") + '">' + xmlEscape(guid) + "</guid>\n    <description>" + xmlEscape(desc) + "</description>\n    <pubDate>" + rssPubDate(isVersion ? revised : first) + "</pubDate>\n    <category>" + (isVersion ? "new-version" : "new-paper") + "</category>\n    <qnfo:version>" + xmlEscape(version) + "</qnfo:version>\n    <qnfo:version_count>" + Number(p.version_count || 1) + "</qnfo:version_count>\n    <qnfo:first_published>" + xmlEscape(String(first).slice(0, 10)) + "</qnfo:first_published>\n  </item>";
+}
 async function handleRss(env) {
   try {
-    const res = await env.LIVING_PAPER.prepare("SELECT slug,title,doi,abstract,created_at FROM papers WHERE slug IS NOT NULL AND status IN ('published','distributed','external_preprint') ORDER BY created_at DESC LIMIT 50").all();
+    const res = await env.LIVING_PAPER.prepare("SELECT slug,title,doi,abstract,created_at,first_published_at,last_revised_at,version_semver,version_count FROM papers WHERE slug IS NOT NULL AND status IN ('published','distributed','external_preprint') ORDER BY COALESCE(first_published_at,created_at) DESC, slug LIMIT 50").all();
     const base = "https://papers.qnfo.org";
-    const now = (/* @__PURE__ */ new Date()).toUTCString();
-    const items = res.results.map((p) => {
-      let pubDate = now;
-      try {
-        pubDate = new Date(p.created_at).toUTCString();
-      } catch (e) {
-      }
-      const link = base + "/papers/" + encodeURIComponent(p.slug);
-      return "  <item>\n    <title>" + xmlEscape(displayTitle(p.title)) + "</title>\n    <link>" + xmlEscape(link) + '</link>\n    <guid isPermaLink="true">' + xmlEscape(link) + "</guid>\n    <description>" + xmlEscape(mathPlain(p.abstract || "")) + "</description>\n    <pubDate>" + pubDate + "</pubDate>\n  </item>";
-    }).join("\n");
-    const body = '<?xml version="1.0" encoding="UTF-8"?>\n<rss version="2.0">\n<channel>\n  <title>QNFO Papers</title>\n  <link>' + base + "/papers</link>\n  <description>Latest QNFO research publications</description>\n  <lastBuildDate>" + now + "</lastBuildDate>\n" + items + "\n</channel>\n</rss>";
-    return new Response(body, { headers: { "Content-Type": "application/rss+xml; charset=utf-8", "Cache-Control": "public, max-age=3600" } });
+    const rows = res.results || [];
+    const items = rows.map((p) => rssVersionItem(p, base, "paper")).join("\n");
+    const buildDate = rows.map((p) => String(p.first_published_at || p.created_at || "")).filter(Boolean).sort().slice(-1)[0] || "";
+    const body = '<?xml version="1.0" encoding="UTF-8"?>\n<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom" xmlns:qnfo="https://qnfo.org/ns/rss">\n<channel>\n  <title>QNFO Papers — new papers</title>\n  <link>' + base + "/papers</link>\n  <atom:link href=\"" + base + "/rss.xml\" rel=\"self\" type=\"application/rss+xml\"/>\n  <description>New QNFO research papers, newest first. Revisions are listed at /rss/versions.xml.</description>\n  <lastBuildDate>" + (rssPubDate(buildDate) || new Date(0).toUTCString()) + "</lastBuildDate>\n" + items + "\n</channel>\n</rss>";
+    return new Response(body, { headers: { "Content-Type": "application/rss+xml; charset=utf-8", "Cache-Control": "public, max-age=300" } });
   } catch (e) {
     return new Response(
       '<?xml version="1.0"?><rss version="2.0"><channel></channel></rss>',
       { status: 500, headers: { "Content-Type": "application/rss+xml; charset=utf-8" } }
     );
+  }
+}
+async function handleRssVersions(env) {
+  try {
+    const res = await env.LIVING_PAPER.prepare("SELECT slug,title,doi,abstract,created_at,first_published_at,last_revised_at,version_semver,version_count FROM papers WHERE slug IS NOT NULL AND status IN ('published','distributed','external_preprint') AND version_count > 1 ORDER BY COALESCE(last_revised_at,first_published_at,created_at) DESC, slug LIMIT 100").all();
+    const base = "https://papers.qnfo.org";
+    const rows = res.results || [];
+    const items = rows.map((p) => rssVersionItem(p, base, "version")).join("\n");
+    const buildDate = rows.map((p) => String(p.last_revised_at || p.first_published_at || p.created_at || "")).filter(Boolean).sort().slice(-1)[0] || "";
+    const body = '<?xml version="1.0" encoding="UTF-8"?>\n<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom" xmlns:qnfo="https://qnfo.org/ns/rss">\n<channel>\n  <title>QNFO Papers — new versions</title>\n  <link>' + base + "/papers?sort=revised</link>\n  <atom:link href=\"" + base + "/rss/versions.xml\" rel=\"self\" type=\"application/rss+xml\"/>\n  <description>Revised QNFO papers, newest version first. New papers are listed at /rss.xml.</description>\n  <lastBuildDate>" + (rssPubDate(buildDate) || new Date(0).toUTCString()) + "</lastBuildDate>\n" + items + "\n</channel>\n</rss>";
+    return new Response(body, { headers: { "Content-Type": "application/rss+xml; charset=utf-8", "Cache-Control": "public, max-age=300" } });
+  } catch (e) {
+    return new Response('<?xml version="1.0"?><rss version="2.0"><channel></channel></rss>', { status: 500, headers: { "Content-Type": "application/rss+xml; charset=utf-8" } });
+  }
+}
+async function handleRssVersionsJson(env) {
+  try {
+    const res = await env.LIVING_PAPER.prepare("SELECT slug,title,doi,abstract,created_at,first_published_at,last_revised_at,version_semver,version_count FROM papers WHERE slug IS NOT NULL AND status IN ('published','distributed','external_preprint') AND version_count > 1 ORDER BY COALESCE(last_revised_at,first_published_at,created_at) DESC, slug LIMIT 100").all();
+    const base = "https://papers.qnfo.org";
+    const items = (res.results || []).map((p) => {
+      const link = base + "/papers/" + encodeURIComponent(p.slug);
+      const version = String(p.version_semver || "1.0.0");
+      const revised = String(p.last_revised_at || p.first_published_at || p.created_at || "").slice(0, 19).replace(" ", "T") + "Z";
+      return { id: link + "#v" + version, url: link, title: displayTitle(p.title) + " (v" + version + ")", summary: mathPlain(p.abstract || "").slice(0, 600), date_published: revised, date_modified: revised, tags: ["new-version"], _qnfo: { version, version_count: Number(p.version_count || 1), first_published: String(p.first_published_at || p.created_at || "").slice(0, 10) } };
+    });
+    return new Response(JSON.stringify({ version: "https://jsonfeed.org/version/1.1", title: "QNFO Papers — new versions", home_page_url: base + "/papers?sort=revised", feed_url: base + "/feed-versions.json", language: "en", items }, null, 2), { headers: { "Content-Type": "application/feed+json; charset=utf-8", "Cache-Control": "public, max-age=300", "Access-Control-Allow-Origin": "*" } });
+  } catch (e) {
+    return new Response(JSON.stringify({ error: "feed unavailable" }), { status: 500, headers: { "Content-Type": "application/json" } });
   }
 }
 __name(handleRss, "handleRss");
@@ -2747,9 +2797,12 @@ function openRecord(p) {
     authors: paperAuthors(p),
     abstract: mdPlain(mdiCleanRetired(String(p.abstract == null ? "" : p.abstract))),
     abstract_markdown: mdiCleanRetired(String(p.abstract == null ? "" : p.abstract)),
-    date: String(p.created_at || "").slice(0, 10),
-    modified: oaiStamp(p.updated_at || p.created_at),
-    version: String(p.version || "").replace(/^v/i, "").replace(/-zeno\x64o[-\w]*/i, "") || null,
+    date: String(p.first_published_at || p.created_at || "").slice(0, 10),
+    first_published: String(p.first_published_at || p.created_at || "").slice(0, 10),
+    last_revised: oaiStamp(p.last_revised_at || p.updated_at || p.created_at),
+    modified: oaiStamp(p.last_revised_at || p.updated_at || p.created_at),
+    version: String(p.version_semver || String(p.version || "").replace(/^v/i, "").replace(/-zeno\x64o[-\w]*/i, "")) || null,
+    version_count: Number(p.version_count || 1),
     language: p.language || "en",
     keywords: paperKeywords(p),
     doi: doi,
@@ -2759,7 +2812,7 @@ function openRecord(p) {
     license_spdx: paperSpdx(p.license)
   };
 }
-var OPEN_COLS = "slug,title,authors,abstract,created_at,updated_at,doi,version,language,keywords,license";
+var OPEN_COLS = "slug,title,authors,abstract,created_at,updated_at,first_published_at,last_revised_at,version_semver,version_count,doi,version,language,keywords,license";
 var OPEN_WHERE = "slug IS NOT NULL AND status IN ('published','distributed','external_preprint')";
 function oaiXml(body, reqAttrs) {
   const now = (/* @__PURE__ */ new Date()).toISOString().replace(/\.\d{3}Z$/, "Z");
@@ -2898,9 +2951,9 @@ async function handleOpenData(request, env, p) {
       const where = OPEN_WHERE + (since ? " AND " + dateExpr + " >= ?" : "");
       const binds = since ? [since] : [];
       const total = (await env.LIVING_PAPER.prepare("SELECT COUNT(*) n FROM papers WHERE " + where).bind(...binds).first()).n;
-      const rows = (await env.LIVING_PAPER.prepare("SELECT " + OPEN_COLS + " FROM papers WHERE " + where + " ORDER BY created_at DESC, slug LIMIT ? OFFSET ?").bind(...binds, limit, offset).all()).results || [];
+      const rows = (await env.LIVING_PAPER.prepare("SELECT " + OPEN_COLS + " FROM papers WHERE " + where + " ORDER BY COALESCE(last_revised_at, first_published_at, created_at) DESC, slug LIMIT ? OFFSET ?").bind(...binds, limit, offset).all()).results || [];
       const recs = rows.map(openRecord);
-      if (p === "/feed.json") return openJson({ version: "https://jsonfeed.org/version/1.1", title: "QNFO Papers", home_page_url: "https://papers.qnfo.org/papers", feed_url: "https://papers.qnfo.org/feed.json", language: "en", authors: [{ name: "Rowan Brad Quni-Gudzinas", url: "https://orcid.org/" + OWNER_ORCID }], items: recs.map((r) => ({ id: r.url, url: r.url, title: r.title, summary: r.abstract.slice(0, 600), date_published: r.date + "T00:00:00Z", date_modified: r.modified, tags: r.keywords, external_url: r.doi_url || void 0 })) }, 200, { "Content-Type": "application/feed+json; charset=utf-8" });
+      if (p === "/feed.json") return openJson({ version: "https://jsonfeed.org/version/1.1", title: "QNFO Papers", home_page_url: "https://papers.qnfo.org/papers", feed_url: "https://papers.qnfo.org/feed.json", language: "en", authors: [{ name: "Rowan Brad Quni-Gudzinas", url: "https://orcid.org/" + OWNER_ORCID }], items: recs.map((r) => ({ id: r.url, url: r.url, title: r.title, summary: r.abstract.slice(0, 600), date_published: r.date + "T00:00:00Z", date_modified: r.modified, tags: r.keywords, external_url: r.doi_url || void 0, _qnfo: { version: r.version, version_count: r.version_count, first_published: r.first_published, last_revised: r.last_revised } })) }, 200, { "Content-Type": "application/feed+json; charset=utf-8" });
       return openJson({ total, limit, offset, next: offset + limit < total ? "https://papers.qnfo.org/api/papers?limit=" + limit + "&offset=" + (offset + limit) + (since ? "&since=" + encodeURIComponent(u.searchParams.get("since")) : "") : null, license_note: "Metadata is CC0 1.0; each paper carries its own license_url.", items: recs });
     }
     if (p.indexOf("/api/papers/") === 0) {
@@ -4019,8 +4072,12 @@ function lpPaperRow(p) {
   // The href is the ask page alone and is rel="nofollow"; LP_COMMON_JS adds the question when a person points at,
   // touches or focuses the link.
   const askQ = "What does \u201c" + displayTitle(p.title).slice(0, 140) + "\u201d show, and what would falsify it?";
-  const ver = p.version && !/^1(\.0)*$/.test(String(p.version)) ? '<span class="pc-v">v' + esc(String(p.version).replace(/^v/i, "")) + "</span>" : "";
-  return '<li class="pc" data-cat="' + cat + '"><div class="pc-meta"><span class="pc-cat" style="--c:var(' + (LP_CAT_VAR[cat] || "--muted") + ')">' + esc(cl) + '</span><time datetime="' + escAttr(String(p.created_at || "").slice(0, 10)) + '">' + esc(lpDate(p.created_at)) + "</time>" + ver + '</div><h3 class="pc-t"><a href="' + href + '">' + titleHTML(p.title) + '</a></h3><p class="pc-a">' + absHTML(p.abstract, 300) + '</p><div class="pc-x"><a href="' + href + '">Read</a><a href="' + LP_ASK + '/" rel="nofollow" data-ask-q="' + escAttr(askQ) + '">Ask about it</a>' + "" + "</div></li>";
+  const first = String(p.first_published_at || p.created_at || "");
+  const revised = p.version_count > 1 ? String(p.last_revised_at || "") : "";
+  const vnum = String(p.version_semver || p.version || "1.0.0").replace(/^v/i, "");
+  const ver = (p.version_count > 1 || !/^1(\.0)*$/.test(vnum)) ? '<span class="pc-v">v' + esc(vnum) + "</span>" : "";
+  const rev = revised ? '<span class="pc-v" title="Last revised">rev ' + esc(lpDate(revised)) + "</span>" : "";
+  return '<li class="pc" data-cat="' + cat + '"><div class="pc-meta"><span class="pc-cat" style="--c:var(' + (LP_CAT_VAR[cat] || "--muted") + ')">' + esc(cl) + '</span><time datetime="' + escAttr(first.slice(0, 10)) + '">' + esc(lpDate(first)) + "</time>" + rev + ver + '</div><h3 class="pc-t"><a href="' + href + '">' + titleHTML(p.title) + '</a></h3><p class="pc-a">' + absHTML(p.abstract, 300) + '</p><div class="pc-x"><a href="' + href + '">Read</a><a href="' + LP_ASK + '/" rel="nofollow" data-ask-q="' + escAttr(askQ) + '">Ask about it</a>' + "" + "</div></li>";
 }
 function lpHistogram(months) {
   if (!months || !months.length) return "";
@@ -4056,10 +4113,10 @@ function lpIndexHTML(papers, total, offset, hasMore, activeCategory, searchQuery
   const heading = searchQuery ? "Results for \u201c" + esc(searchQuery) + "\u201d" : activeCategory ? esc(CATEGORY_LABELS[activeCategory] || activeCategory) + " papers" : "All papers";
   const latest = extra.latest ? lpDate(extra.latest) : "";
   const title = searchQuery ? 'Search: "' + esc(searchQuery) + '" \u2014 QNFO Papers' : activeCategory ? (CATEGORY_LABELS[activeCategory] || activeCategory) + " Papers \u2014 QNFO" : "QNFO Papers \u2014 open research you can read, cite and question";
-  const head = "<title>" + title + '</title><meta name="description" content="' + escAttr(all + " open-access papers from the QNFO research program: p-adic and adelic physics, ultrametric information, topological quantum computing and computer science, all free to read.") + '"><link rel="canonical" href="https://papers.qnfo.org/papers"><link rel="alternate" type="application/rss+xml" title="QNFO Papers RSS" href="/rss.xml"><meta property="og:title" content="QNFO Papers"><meta property="og:type" content="website"><meta property="og:url" content="https://papers.qnfo.org/papers"><meta property="og:description" content="' + escAttr(all + " open research papers from the QNFO program.") + '">';
-  const body = '<main id="main"><section class="wrap ix-hero"><div class="ix-intro"><p class="q-eyebrow">Open research library</p><h1>Papers you can read, cite and question</h1><p class="lede">' + all + ' papers from the QNFO program on p-adic and adelic physics, ultrametric information, topological quantum computing and the computer science around them' + "" + '. Every page renders its mathematics and can be questioned in place. <a href="/reading">How a living paper works</a>.</p><form class="ix-search" method="get" action="/papers" role="search"><svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="9" cy="9" r="6" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M14 14l4 4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg><label class="sr" for="ix-q">Search papers</label><input id="ix-q" type="search" name="search" value="' + (searchQuery ? escAttr(searchQuery) : "") + '" placeholder="Search titles and abstracts" autocomplete="off">' + (activeCategory ? '<input type="hidden" name="category" value="' + escAttr(activeCategory) + '">' : "") + '<kbd>/</kbd></form><p class="ix-hint">Looking for an answer rather than a paper? <a href="' + LP_ASK + '">Ask the whole corpus</a>: answers cite the papers they come from.</p></div><aside class="ix-stats q-card" aria-label="Library at a glance"><div class="ix-n"><b>' + all + "</b><span>papers" + (latest ? "<br>newest " + esc(latest) : "") + "</span></div>" + lpHistogram(extra.months) + '<p class="ix-cap">Published per month</p>' + bar + '<ul class="ix-legend">' + LP_CAT_ORDER.map(function(c) {
+  const head = "<title>" + title + '</title><meta name="description" content="' + escAttr(all + " open-access papers from the QNFO research program: p-adic and adelic physics, ultrametric information, topological quantum computing and computer science, all free to read.") + '"><link rel="canonical" href="https://papers.qnfo.org/papers"><link rel="alternate" type="application/rss+xml" title="QNFO Papers RSS" href="/rss.xml"><link rel="alternate" type="application/rss+xml" title="QNFO Papers new versions" href="/rss/versions.xml"><meta property="og:title" content="QNFO Papers"><meta property="og:type" content="website"><meta property="og:url" content="https://papers.qnfo.org/papers"><meta property="og:description" content="' + escAttr(all + " open research papers from the QNFO program.") + '">';
+  const body = '<main id="main"><section class="wrap ix-hero"><div class="ix-intro"><p class="q-eyebrow">Open research library</p><h1>Papers you can read, cite and question</h1><p class="lede">' + all + ' papers from the QNFO program on p-adic and adelic physics, ultrametric information, topological quantum computing and the computer science around them' + "" + '. Every page renders its mathematics and can be questioned in place. <a href="/reading">How a living paper works</a>.</p><form class="ix-search" method="get" action="/papers" role="search"><svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="9" cy="9" r="6" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M14 14l4 4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg><label class="sr" for="ix-q">Search papers</label><input id="ix-q" type="search" name="search" value="' + (searchQuery ? escAttr(searchQuery) : "") + '" placeholder="Search titles and abstracts" autocomplete="off">' + (activeCategory ? '<input type="hidden" name="category" value="' + escAttr(activeCategory) + '">' : "") + '<kbd>/</kbd></form><p class="ix-hint">Looking for an answer rather than a paper? <a href="' + LP_ASK + '">Ask the whole corpus</a>: answers cite the papers they come from.</p></div><aside class="ix-stats q-card" aria-label="Library at a glance"><div class="ix-n"><b>' + all + "</b><span>papers" + (latest ? "<br>newest " + esc(latest) : "") + "</span></div>" + lpHistogram(extra.months) + '<p class="ix-cap">First published per month</p>' + bar + '<ul class="ix-legend">' + LP_CAT_ORDER.map(function(c) {
     return '<li><i class="dot" style="--c:var(' + LP_CAT_VAR[c] + ')"></i>' + esc(CATEGORY_LABELS[c] || c) + " <b>" + (facets[c] || 0) + "</b></li>";
-  }).join("") + '</ul></aside></section><section class="ix-controls"><div class="wrap"><div class="ix-chips" id="ix-chips" role="group" aria-label="Topic">' + chips + '</div><label class="ix-sort"><span>Sort</span><select id="ix-sort" aria-label="Sort papers"><option value="new"' + (sort === "new" ? " selected" : "") + '>Newest</option><option value="old"' + (sort === "old" ? " selected" : "") + '>Oldest</option><option value="title"' + (sort === "title" ? " selected" : "") + '>Title A\u2013Z</option></select></label></div></section><section class="wrap ix-list"><h2 class="ix-h"><span id="ix-head">' + heading + '</span> <span class="ix-count" id="paper-count">' + total + " paper" + (total === 1 ? "" : "s") + '</span></h2><ol class="plist paper-list" id="plist" data-offset="' + (offset + papers.length) + '" data-more="' + (hasMore ? "1" : "0") + '">' + (papers.length ? papers.map(lpPaperRow).join("") : '<li class="empty">No paper matches. <a href="' + LP_ASK + '/" rel="nofollow" data-ask-q="' + escAttr(searchQuery || "") + '">Ask the corpus instead</a>.</li>') + '</ol><div class="ix-more" id="ix-more">' + (hasMore ? '<button class="q-btn" id="load-more" type="button">Load more papers</button>' : "") + "</div>" + lpSubscribe("papers") + "</section></main>";
+  }).join("") + '</ul></aside></section><section class="ix-controls"><div class="wrap"><div class="ix-chips" id="ix-chips" role="group" aria-label="Topic">' + chips + '</div><label class="ix-sort"><span>Sort</span><select id="ix-sort" aria-label="Sort papers"><option value="new"' + (sort === "new" ? " selected" : "") + '>Newest papers</option><option value="revised"' + (sort === "revised" ? " selected" : "") + '>Recently revised</option><option value="version"' + (sort === "version" ? " selected" : "") + '>Highest version</option><option value="old"' + (sort === "old" ? " selected" : "") + '>Oldest</option><option value="title"' + (sort === "title" ? " selected" : "") + '>Title A\u2013Z</option></select></label></div></section><section class="wrap ix-list"><h2 class="ix-h"><span id="ix-head">' + heading + '</span> <span class="ix-count" id="paper-count">' + total + " paper" + (total === 1 ? "" : "s") + '</span></h2><ol class="plist paper-list" id="plist" data-offset="' + (offset + papers.length) + '" data-more="' + (hasMore ? "1" : "0") + '">' + (papers.length ? papers.map(lpPaperRow).join("") : '<li class="empty">No paper matches. <a href="' + LP_ASK + '/" rel="nofollow" data-ask-q="' + escAttr(searchQuery || "") + '">Ask the corpus instead</a>.</li>') + '</ol><div class="ix-more" id="ix-more">' + (hasMore ? '<button class="q-btn" id="load-more" type="button">Load more papers</button>' : "") + "</div>" + lpSubscribe("papers") + "</section></main>";
   return lpDoc({ head, body, math: true, nav: "papers", cls: "ix", js: LP_INDEX_JS });
 }
 function lpSubscribe(source) {
@@ -4123,19 +4180,21 @@ function lpPaperHTML(paper) {
   const minutes = Math.max(1, Math.round(words / 230));
   const t = displayTitle(paper.title) || "Untitled";
   const abstract = lpExcerpt(paper.abstract, 300);
-  const dateStr = paper.created_at ? paper.created_at.slice(0, 10) : "";
+  const dateStr = (paper.first_published_at || paper.created_at || "").slice(0, 10);
+  const revStr = paper.version_count > 1 ? String(paper.last_revised_at || "").slice(0, 10) : "";
+  const vCount = Number(paper.version_count || 1);
   const cat = detectCategory(paper.title, paper.abstract);
   const authors = paperAuthors(paper);
-  const ver = retiredTag(String(paper.version || "1.0.0")).replace(/^v/i, "");
+  const ver = String(paper.version_semver || retiredTag(String(paper.version || "1.0.0"))).replace(/^v/i, "");
   const url = "https://papers.qnfo.org/papers/" + paper.slug;
-  const data = { slug: paper.slug, title: t, doi: paper.doi || null, date: dateStr, version: ver, authors: authors.length ? authors : [AUTHOR_OF_RECORD], url, ask: LP_ASK, pdf: paper._pdf ? url + ".pdf" : null, words, cat: CATEGORY_LABELS[cat] || "Other" };
+  const data = { slug: paper.slug, title: t, doi: paper.doi || null, date: dateStr, first: dateStr, revised: revStr, versions: vCount, version: ver, authors: authors.length ? authors : [AUTHOR_OF_RECORD], url, ask: LP_ASK, pdf: paper._pdf ? url + ".pdf" : null, words, cat: CATEGORY_LABELS[cat] || "Other" };
   const head = buildPaperJsonLd(paper) + "<title>" + esc(t) + ' \u2014 QNFO Papers</title><meta name="description" content="' + escAttr(abstract) + '"><meta property="og:title" content="' + escAttr(t) + '"><meta property="og:type" content="article"><meta property="og:url" content="' + escAttr(url) + '"><meta property="og:description" content="' + escAttr(abstract) + '"><meta name="twitter:card" content="summary"><meta name="twitter:title" content="' + escAttr(t) + '"><meta name="twitter:description" content="' + escAttr(abstract) + '">' + (paper.doi ? '<meta name="citation_doi" content="' + escAttr(paper.doi) + '">' : "") + '<meta name="citation_title" content="' + escAttr(t) + '">' + citationAuthorsMeta(paper) + '<meta name="citation_publication_date" content="' + escAttr(dateStr || "Unknown") + '">' + (paper._pdf ? '<meta name="citation_pdf_url" content="' + escAttr(url) + '.pdf">' : "") + '<meta name="citation_publisher" content="QNFO"><link rel="canonical" href="' + escAttr(url) + '">';
   const byline = data.authors.map(function(n) {
     return n.indexOf("Quni-Gudzinas") >= 0 ? '<a href="https://orcid.org/' + OWNER_ORCID + '" rel="author">' + esc(n) + '<svg class="orcid" viewBox="0 0 20 20" aria-label="ORCID"><circle cx="10" cy="10" r="9" fill="#A6CE39"/><path d="M7 6.2v.01M7 8.5v6M9.5 8.5v6h2a3 3 0 0 0 0-6z" stroke="#fff" stroke-width="1.6" fill="none" stroke-linecap="round"/></svg></a>' : esc(n);
   }).join(", ");
   const toc = lpTocHTML(st.toc);
   const sugg = ["What is the main result, in plain terms?", "What would falsify this?", "Which assumptions does it rest on?", "How does it connect to other QNFO work?"];
-  const body = '<div class="rp" id="rp" aria-hidden="true"><span></span></div><main id="main" class="wrap pp"><nav class="crumbs" aria-label="Breadcrumb"><a href="/papers">Papers</a><span aria-hidden="true">/</span><a href="/papers?category=' + cat + '">' + esc(CATEGORY_LABELS[cat] || "Other") + '</a></nav><header class="ph"><h1>' + titleHTML(paper.title) + '</h1><p class="by">' + byline + '</p><div class="ph-meta"><span class="q-tag live" title="This paper is versioned: new versions keep the same address here"><i></i>Living paper \u00b7 v' + esc(ver) + "</span>" + (dateStr ? '<span>Published <time datetime="' + escAttr(dateStr) + '">' + esc(lpDate(dateStr)) + "</time></span>" : "") + "<span>" + minutes + " min read \u00b7 " + words.toLocaleString("en-US") + " words</span>" + '</div><div class="ph-act no-print"><button class="q-btn teal" type="button" data-go="ask">' + lpIcon("ask") + 'Ask this paper</button><button class="q-btn" type="button" id="b-cite">' + lpIcon("cite") + "Cite</button>" + (paper._pdf ? '<a class="q-btn" href="' + escAttr(url) + '.pdf">' + lpIcon("pdf") + "PDF</a>" : "") + '<button class="q-btn" type="button" id="b-share">' + lpIcon("share") + "Share</button></div></header>" + '<div class="pp-grid"><aside class="toc no-print" aria-label="Contents">' + (toc ? '<details class="toc-d" open><summary>Contents</summary>' + toc + "</details>" : "") + '</aside><article class="prose rendered-md" id="doc">' + st.html + '</article><aside class="rail no-print" id="rail" aria-label="Living paper"><div class="rail-in"><div class="tabs" role="tablist"><button role="tab" aria-selected="true" aria-controls="t-ask" id="tb-ask" data-tab="ask">Ask</button><button role="tab" aria-selected="false" aria-controls="t-ctx" id="tb-ctx" data-tab="ctx">Context</button><button role="tab" aria-selected="false" aria-controls="t-ver" id="tb-ver" data-tab="ver">Versions</button><button role="tab" aria-selected="false" aria-controls="t-rel" id="tb-rel" data-tab="rel">Related</button></div>' + '<section class="tp" id="t-ask" role="tabpanel" aria-labelledby="tb-ask"><form id="ask-f" autocomplete="off"><label class="sr" for="ask-q">Ask a question about this paper</label><textarea id="ask-q" rows="2" maxlength="1000" placeholder="Ask anything about this paper"></textarea><button class="q-btn pri" type="submit" id="ask-go">Ask</button></form><div class="sugg" id="ask-sugg">' + sugg.map(function(s) {
+  const body = '<div class="rp" id="rp" aria-hidden="true"><span></span></div><main id="main" class="wrap pp"><nav class="crumbs" aria-label="Breadcrumb"><a href="/papers">Papers</a><span aria-hidden="true">/</span><a href="/papers?category=' + cat + '">' + esc(CATEGORY_LABELS[cat] || "Other") + '</a></nav><header class="ph"><h1>' + titleHTML(paper.title) + '</h1><p class="by">' + byline + '</p><div class="ph-meta"><span class="q-tag live" title="This paper is versioned: new versions keep the same address here"><i></i>Living paper \u00b7 v' + esc(ver) + (vCount > 1 ? " \u00b7 " + vCount + " versions" : "") + "</span>" + (dateStr ? '<span>Published <time datetime="' + escAttr(dateStr) + '">' + esc(lpDate(dateStr)) + "</time></span>" : "") + (revStr ? '<span>Revised <time datetime="' + escAttr(revStr) + '">' + esc(lpDate(revStr)) + "</time></span>" : "") + "<span>" + minutes + " min read \u00b7 " + words.toLocaleString("en-US") + " words</span>" + '</div><div class="ph-act no-print"><button class="q-btn teal" type="button" data-go="ask">' + lpIcon("ask") + 'Ask this paper</button><button class="q-btn" type="button" id="b-cite">' + lpIcon("cite") + "Cite</button>" + (paper._pdf ? '<a class="q-btn" href="' + escAttr(url) + '.pdf">' + lpIcon("pdf") + "PDF</a>" : "") + '<button class="q-btn" type="button" id="b-share">' + lpIcon("share") + "Share</button></div></header>" + '<div class="pp-grid"><aside class="toc no-print" aria-label="Contents">' + (toc ? '<details class="toc-d" open><summary>Contents</summary>' + toc + "</details>" : "") + '</aside><article class="prose rendered-md" id="doc">' + st.html + '</article><aside class="rail no-print" id="rail" aria-label="Living paper"><div class="rail-in"><div class="tabs" role="tablist"><button role="tab" aria-selected="true" aria-controls="t-ask" id="tb-ask" data-tab="ask">Ask</button><button role="tab" aria-selected="false" aria-controls="t-ctx" id="tb-ctx" data-tab="ctx">Context</button><button role="tab" aria-selected="false" aria-controls="t-ver" id="tb-ver" data-tab="ver">Versions</button><button role="tab" aria-selected="false" aria-controls="t-rel" id="tb-rel" data-tab="rel">Related</button></div>' + '<section class="tp" id="t-ask" role="tabpanel" aria-labelledby="tb-ask"><form id="ask-f" autocomplete="off"><label class="sr" for="ask-q">Ask a question about this paper</label><textarea id="ask-q" rows="2" maxlength="1000" placeholder="Ask anything about this paper"></textarea><button class="q-btn pri" type="submit" id="ask-go">Ask</button></form><div class="sugg" id="ask-sugg">' + sugg.map(function(s) {
     return '<button type="button" class="q-chip">' + esc(s) + "</button>";
   }).join("") + '</div><div id="ask-out" aria-live="polite"></div><p class="fine">Answers are written from this paper first and other QNFO papers second, with numbered citations. Select any passage in the text to ask about it.</p></section><section class="tp" id="t-ctx" role="tabpanel" aria-labelledby="tb-ctx" hidden><div class="ld"><span class="q-skel"></span><span class="q-skel" style="width:70%"></span></div></section><section class="tp" id="t-ver" role="tabpanel" aria-labelledby="tb-ver" hidden><div class="ld"><span class="q-skel"></span></div></section><section class="tp" id="t-rel" role="tabpanel" aria-labelledby="tb-rel" hidden><div class="ld"><span class="q-skel"></span><span class="q-skel" style="width:80%"></span></div></section></div></aside></div>' + lpSubscribe("papers") + '</main><button class="fab no-print" type="button" data-go="ask" aria-label="Ask this paper">' + lpIcon("ask") + '<span>Ask</span></button><div class="selpop no-print" id="selpop" role="toolbar" aria-label="Selection" hidden><button type="button" data-sel="ask">' + lpIcon("ask") + 'Ask about this</button><button type="button" data-sel="quote">' + lpIcon("cite") + 'Copy quote</button></div><div class="refpop" id="refpop" role="tooltip" hidden></div><dialog id="cite-d" class="q-card"><form method="dialog"><h2>Cite this paper</h2><div class="cite-tabs" role="tablist"><button type="button" class="q-chip on" data-fmt="apa">APA</button><button type="button" class="q-chip" data-fmt="bibtex">BibTeX</button><button type="button" class="q-chip" data-fmt="plain">Plain</button></div><pre id="cite-t" tabindex="0"></pre><div class="cite-a"><button type="button" class="q-btn pri" id="cite-copy">Copy</button><button class="q-btn" value="close">Close</button></div></form></dialog><script type="application/json" id="lp-data">' + JSON.stringify(data).replace(/</g, "\\u003c") + "<\/script>";
   return lpDoc({ head, body, math: true, nav: "papers", cls: "paper", js: LP_PAPER_JS });
@@ -4449,6 +4508,8 @@ var gateway_worker_default = {
       if (p === "/" + INDEXNOW_KEY + ".txt") return new Response(INDEXNOW_KEY, { headers: { "Content-Type": "text/plain; charset=utf-8", "Cache-Control": "public, max-age=86400" } });
       if (p === "/api/indexnow" && (method === "GET" || method === "POST")) return handleIndexNow(env, u.searchParams.get("full") === "1");
       if (p === "/rss.xml" || p === "/feed.xml") return handleRss(env);
+      if (p === "/rss/versions.xml" || p === "/versions.xml") return handleRssVersions(env);
+      if (p === "/feed-versions.json") return handleRssVersionsJson(env);
       if (p.startsWith("/api/paper-context/") && method === "GET") return handlePaperContext(env, decodeURIComponent(p.slice(19))).catch(function (e) { console.error(JSON.stringify({ worker: "qnfo-gateway", where: "handlePaperContext", error: String(e && e.message || e).slice(0, 200) })); return json({ error: "paper context unavailable" }, 503); });
       if (p === "/api/render-health" && method === "GET") return handleRenderHealth(env);
       if (p === "/_audit/blank-papers") return handleBlankPapers(env);
@@ -4498,6 +4559,8 @@ var gateway_worker_default = {
       if (p === "/" + INDEXNOW_KEY + ".txt") return new Response(INDEXNOW_KEY, { headers: { "Content-Type": "text/plain; charset=utf-8", "Cache-Control": "public, max-age=86400" } }); // DISCOVERY-1: IndexNow key on qnfo.org too
       if (p === "/llms.txt") return handleLlmsTxt(env);
       if (p === "/rss.xml" || p === "/feed.xml") return handleRss(env);
+      if (p === "/rss/versions.xml" || p === "/versions.xml") return handleRssVersions(env);
+      if (p === "/feed-versions.json") return handleRssVersionsJson(env);
       if (method === "GET" && p === "/stats") return handleStats(env);
       if (method === "POST" && p === "/query") return handleQuery(request, env);
       if (method === "POST" && p === "/sync") return handleSync(request, env);
@@ -4525,6 +4588,8 @@ var gateway_worker_default = {
     if (p === "/robots.txt") return handlePapersRobots();
     if (p === "/llms.txt") return handleLlmsTxt(env);
     if (p === "/rss.xml" || p === "/feed.xml") return handleRss(env);
+      if (p === "/rss/versions.xml" || p === "/versions.xml") return handleRssVersions(env);
+      if (p === "/feed-versions.json") return handleRssVersionsJson(env);
     if (method === "GET" && p === "/stats") return handleStats(env);
     if (method === "POST" && p === "/query") return handleQuery(request, env);
     if (method === "POST" && p === "/sync") return handleSync(request, env);
