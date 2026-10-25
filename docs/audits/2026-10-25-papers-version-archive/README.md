@@ -10,7 +10,7 @@ Status: **FAIL**. The user-facing directive is not live. This directory preserve
 - Live chapter-1 HTML still contained `Provenance and AI Involvement` twice, `Restated for a non-expert reader` once, `C(A) = (1` four times, `NDCG` six times, `0.635` seven times.
 - `paper_version_history`: 160 rows / 88 papers; 140 multi-version papers need 218 prior versions; 61 papers still lack at least one prior body.
 - `plain_summary`: 703 rows; 606 contain a digit; 298 contain NDCG/quantum/algorithm; average grade 9.6; maximum 24.5.
-- Live gateway source sampled at 11:28Z was `3.34.0-agent-discovery-2`; main is `3.37.0-link-header-anchor-1` with 69 insertions / 21 deletions since 3.34.0.
+- Live gateway source sampled at 11:28Z was `3.34.0-agent-discovery-2`; main was `3.37.0-link-header-anchor-1` at audit time (69 insertions / 21 deletions since 3.34.0). By closeout main had advanced to `3.39.0`, so the candidate is further behind.
 
 ## What is applied
 
