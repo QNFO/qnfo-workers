@@ -62,7 +62,12 @@ let pass = 0, fail = 0;
 const ok = (c, m) => { if (c) pass++; else { fail++; console.log("FAIL " + m); } };
 // waitUntil work is collected so a test can await the background answer.
 const pending = [];
-const ctxW = { waitUntil(p) { pending.push(Promise.resolve(p).catch(() => {})); }, passThroughOnException() {} };
+const traceSpans = [];
+const ctxW = {
+  tracing: { enterSpan(name, run) { const attributes = {}; traceSpans.push({ name, attributes }); return run({ setAttribute(key, value) { attributes[key] = value; } }); } },
+  waitUntil(p) { pending.push(Promise.resolve(p).catch(() => {})); },
+  passThroughOnException() {}
+};
 const callW = (env, path, init) => worker.fetch(new Request(O + path, init), env, ctxW);
 const postW = (env, path, body, headers) => callW(env, path, { method: "POST", headers: Object.assign({ "Content-Type": "application/json", "x-fleet-ui": "1" }, headers || {}), body: JSON.stringify(body) });
 const cmd = (env, text, headers, from) => postW(env, "/api/cmd", { text, from: from || "" }, headers);
@@ -140,6 +145,7 @@ const cookieOf = (r) => { const c = r.headers.get("Set-Cookie") || ""; const m =
   ok(j.ok && !j.executed && j.actions[0].op === "done" && j.actions[0].destructive, "G14 done is never run straight from typing; it comes back as a button");
   r = await postW(env, "/api/cmd/run", { op: "done", args: { key: "ha:orcid-link-works" } }, C); j = await r.json();
   ok(r.status === 200 && j.ok && db.prepare("SELECT status FROM human_actions WHERE slug='orcid-link-works'").get().status === "resolved", "G15 within 15 minutes of the code a destructive action runs");
+  ok(traceSpans.some((s) => s.name === "tool_approval" && s.attributes["gen_ai.tool.approval"] === "approved") && traceSpans.some((s) => s.name === "execute_tool" && s.attributes["gen_ai.tool.name"] === "done"), "G15a an approved action records nested approval and tool spans");
   db.prepare("UPDATE owner_sessions SET verified_ms = verified_ms - 20 * 60000").run();
   r = await postW(env, "/api/cmd/run", { op: "ratify", args: { id: 7 } }, C); j = await r.json();
   ok(r.status === 401 && j.need === "stepup" && db.prepare("SELECT status FROM goals WHERE id=7").get().status === "proposed", "G16 after 15 minutes a destructive action asks for a fresh code");
@@ -184,6 +190,10 @@ const cookieOf = (r) => { const c = r.headers.get("Set-Cookie") || ""; const m =
   await flush();
   const jr = await (await callW(env, "/api/cmd/job/" + j.id)).json();
   ok(jr.status === "answered" && jr.answer === "ORCID works are waiting on you.", "H3 the answer arrives by polling");
+  const invoke = traceSpans.find((s) => s.name === "invoke_agent");
+  const chat = traceSpans.find((s) => s.name === "chat");
+  ok(invoke && invoke.attributes["gen_ai.agent.name"] === "qnfo-fleet-dashboard" && invoke.attributes["gen_ai.conversation.id"] === j.id, "H3a the answer turn has a stable agent identity and opaque conversation id");
+  ok(chat && chat.attributes["gen_ai.request.model"] && !JSON.stringify(traceSpans).includes("what should I do about ORCID"), "H3b model spans record metadata only, never the prompt payload");
   ok(jr.actions.length === 2 && jr.actions[0].op === "snooze" && jr.actions[0].args.days === 90 && jr.actions[1].op === "task", "H4 invented items, unknown ops and out-of-range values are dropped or clamped");
   ok(calls[0].messages[0].content.includes("queue_keys") && !calls[0].messages[0].content.includes(LOOP), "H5 the model sees queue keys and no secret");
   ok(!(await (await callW(env, "/api/cmd/job/cmd-00000000000000000000")).json()).answer, "H6 an unknown job id returns nothing");
