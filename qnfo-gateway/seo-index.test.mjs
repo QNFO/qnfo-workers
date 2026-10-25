@@ -9,13 +9,15 @@ let pass = 0, fail = 0;
 const ok = (c, m, x) => { if (c) pass++; else { fail++; console.log("FAIL " + m + (x !== undefined ? " :: " + String(x).slice(0, 300) : "")); } };
 const slice = (a, b) => { const i = src.indexOf(a); const j = src.indexOf(b, i + 1); return i < 0 || j < 0 ? "" : src.slice(i, j); };
 
-ok(src.includes('var VERSION="3.30.0-seo-index-1"'), "version is 3.30.0-seo-index-1");
+ok(src.includes('var VERSION="3.30.1-seo-index-2"'), "version is 3.30.1-seo-index-2");
 
 // (a) IndexNow reaches every engine: the loop must not stop at the first acceptance.
 const idx = slice("async function indexNowSubmit", "__name(indexNowSubmit");
 ok(idx.includes("for (let e = 0; e < _EPS.length; e++)"), "indexnow iterates every endpoint");
 ok(!idx.includes("_EPS.length && !hit"), "indexnow no longer stops at the first accepting endpoint");
 ok(idx.includes("eps.push") && idx.includes("eps: eps"), "indexnow records each engine answer");
+ok(idx.includes("error: errText"), "indexnow records the real failure per engine");
+ok(src.indexOf("/api/indexnow/urls") > 0, "public URL list for the off-Worker fallback");
 
 // (b) crawl telemetry exists and is wired into the request path.
 ok(src.includes("CREATE TABLE IF NOT EXISTS seo_crawl_log"), "seo_crawl_log table");

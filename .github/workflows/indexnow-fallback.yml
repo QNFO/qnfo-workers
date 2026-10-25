@@ -1,0 +1,47 @@
+name: IndexNow fallback (Bing + shared relay)
+
+# SEO-INDEX-2 (2026-10-25): papers.qnfo.org submits every changed URL to IndexNow from its hourly cron, and the
+# first live run of 3.30.0 proved the gap: yandex, seznam and naver answer 200 from the Cloudflare egress, while
+# api.indexnow.org and www.bing.com THROW from a Worker and answer 200 from an ordinary address. Bing is the index
+# behind ChatGPT search and Copilot, so a Worker-only submitter leaves the corpus out of exactly the surface the
+# owner reported missing. SLA-AND-PATHS-1: this workflow is the second, independent path to the same DoD. It reads
+# the public URL list the site publishes (GET /api/indexnow/urls) and posts it from GitHub's egress.
+on:
+  schedule:
+    - cron: "23 */6 * * *"
+  workflow_dispatch:
+    inputs:
+      full:
+        description: "Submit the whole corpus instead of the last 7 days"
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+jobs:
+  submit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Fetch the changed URL list from the site
+        run: |
+          set -euo pipefail
+          Q=""
+          if [ "${{ inputs.full }}" = "true" ]; then Q="?full=1"; fi
+          curl -fsS --max-time 60 "https://papers.qnfo.org/api/indexnow/urls${Q}" -o urls.json
+          python3 -c "import json;d=json.load(open('urls.json'));u=d['urlList'];print('urls',len(u));assert u, 'empty list';json.dump({'host':d['host'],'key':d['key'],'keyLocation':d['keyLocation'],'urlList':u},open('payload.json','w'))"
+
+      - name: Submit to www.bing.com/indexnow
+        run: |
+          set -euo pipefail
+          code=$(curl -sS --max-time 90 -o bing.out -w "%{http_code}" -X POST "https://www.bing.com/indexnow" -H "Content-Type: application/json; charset=utf-8" --data-binary @payload.json)
+          echo "bing=$code"; head -c 300 bing.out || true
+          if [ "$code" -ge 400 ]; then echo "Bing rejected the submission"; exit 1; fi
+
+      - name: Submit to api.indexnow.org/indexnow
+        run: |
+          set -euo pipefail
+          code=$(curl -sS --max-time 90 -o relay.out -w "%{http_code}" -X POST "https://api.indexnow.org/indexnow" -H "Content-Type: application/json; charset=utf-8" --data-binary @payload.json)
+          echo "relay=$code"; head -c 300 relay.out || true
+          if [ "$code" -ge 400 ] && [ "$code" -ne 429 ]; then echo "shared relay rejected the submission"; exit 1; fi
