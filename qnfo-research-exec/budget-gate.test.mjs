@@ -1,4 +1,5 @@
-// COST-SUSTAIN-1 (qnfo-research-exec 0.31.0) offline suite: researchBudget paces the daily neuron budget over the UTC day.
+// COST-SUSTAIN-1 / DAILY-BUDGET-SCHEDULE-1 (qnfo-research-exec 0.33.6) offline suite: researchBudget reports the UTC-day
+// pace but holds only at the hard daily neuron budget (agent_issues 100622: front-loading used to idle the pipeline for hours).
 // Run: node qnfo-research-exec/budget-gate.test.mjs -> prints "N passed, 0 failed"
 import { readFileSync } from "node:fs";
 import { DatabaseSync } from "node:sqlite";
@@ -21,9 +22,13 @@ let r = await researchBudget(mk(undefined, []), T(0));
 ok(r.ok && r.budget === 360000, "default budget 360k, nothing spent -> ok");
 ok(r.pace === Math.round(360000 * (1 / 24 + 0.1)), "pace at 00h is 1/24 + 10% burst");
 r = await researchBudget(mk(undefined, [["2026-10-21", "qnfo-research-exec", 70000]]), T(0));
-ok(!r.ok, "70k by 00:05 exceeds the 00h pace (~51k) -> held");
+ok(r.ok && r.overPace, "70k by 00:05 is over the 00h pace (~51k) but under the daily budget -> runs (100622)");
 r = await researchBudget(mk(undefined, [["2026-10-21", "qnfo-research-exec", 70000]]), T(5));
 ok(r.ok, "the same spend at 05h is under pace -> runs");
+r = await researchBudget(mk(undefined, [["2026-10-21", "qnfo-research-exec", 359999]]), T(0));
+ok(r.ok, "359,999 neurons by 00:05 is under the daily cap -> runs");
+r = await researchBudget(mk(undefined, [["2026-10-21", "qnfo-research-exec", 360000]]), T(0));
+ok(!r.ok, "360,000 neurons by 00:05 is the daily cap -> held");
 r = await researchBudget(mk(undefined, [["2026-10-21", "qnfo-research-exec", 300000], ["2026-10-21", "errata-hub", 100000], ["2026-10-21", "qnfo-paper-reviser", 60000]]), T(23));
 ok(!r.ok && r.spent === 460000, "folded members count toward the budget; 460k >= 360k at 23h -> held");
 r = await researchBudget(mk(undefined, [["2026-10-21", "q08-signal-engine", 900000], ["2026-10-20", "qnfo-research-exec", 900000]]), T(12));
@@ -32,6 +37,8 @@ r = await researchBudget(mk(0, [["2026-10-21", "qnfo-research-exec", 9e9]]), T(1
 ok(r.ok && r.disabled, "budget 0 disables the gate (explicit override)");
 r = await researchBudget(mk(200000, [["2026-10-21", "qnfo-research-exec", 150000]]), T(23));
 ok(r.ok && r.budget === 200000 && r.pace === 200000, "ops_config budget is read; pace never exceeds the budget");
+r = await researchBudget(mk(200000, [["2026-10-21", "qnfo-research-exec", 200000]]), T(23));
+ok(!r.ok, "the hard daily budget holds when spent reaches it");
 r = await researchBudget({ QNFO_AUDIT: { prepare() { throw new Error("d1 down"); } } }, T(3));
 ok(r.ok && r.unreadable, "unreadable counters fail open (verified work is not stopped by a D1 fault)");
 console.log(pass + " passed, " + fail + " failed");
