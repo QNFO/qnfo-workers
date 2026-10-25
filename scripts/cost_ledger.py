@@ -77,7 +77,7 @@ def gateway_day(day, call=cf):
         prov = str(d.get("provider") or "unknown").lower()
         model = str(d.get("model") or "")
         if prov in ("compat", "unknown", "universal") and "/" in model:
-            prov = model.split("/")[0].lower()
+            prov = provider_label(model.split("/")[0])
         if prov in ("workers-ai", "workers_ai"):
             continue  # neuron-billed, counted in workers_ai
         c = float((r.get("sum") or {}).get("cost") or 0)
@@ -127,7 +127,7 @@ def gateway_window(start, end, call=cf):
         provider = provider_label(dimensions.get("provider"))
         model = str(dimensions.get("model") or "")
         if provider in ("compat", "unknown", "universal") and "/" in model:
-            provider = model.split("/")[0].lower()
+            provider = provider_label(model.split("/")[0])
         if provider in ("workers-ai", "workers_ai"):
             continue
         amount, requests = by.get(provider, (0.0, 0))
@@ -696,7 +696,7 @@ def selftest():
         else:
             result = {"aiGatewayRequestsAdaptiveGroups": [
                 {"count": 10, "sum": {"cost": 5}, "dimensions": {"provider": "openai", "model": "gpt-5.5"}},
-                {"count": 5, "sum": {"cost": 3}, "dimensions": {"provider": "compat", "model": "deepseek/deepseek-flash"}},
+                {"count": 5, "sum": {"cost": 3}, "dimensions": {"provider": "compat", "model": "throughput/deepseek-flash"}},
                 {"count": 20, "sum": {"cost": 99}, "dimensions": {"provider": "workers-ai", "model": "x"}},
                 {"count": 1, "sum": {"cost": 0}, "dimensions": {"provider": "throughput", "model": "test"}},
             ]}
@@ -726,6 +726,15 @@ def selftest():
     assert snapshot["window_end_exclusive_at"] == "2026-10-10T00:00:00Z"
     assert provider_label("throughput") == "other"
     assert "throughput" not in json.dumps(snapshot)
+    daily_gateway = gateway_day(
+        dt.date(2026, 10, 9),
+        lambda *args, **kwargs: (200, {"data": {"viewer": {"accounts": [{
+            "aiGatewayRequestsAdaptiveGroups": [
+                {"count": 1, "sum": {"cost": 1}, "dimensions": {"provider": "compat", "model": "throughput/example"}}
+            ]
+        }]}}}),
+    )
+    assert daily_gateway["other"] == (1, 1)
     try:
         workers_ai_window(
             "2026-09-10T00:00:00Z", "2026-10-10T00:00:00Z", 30,
