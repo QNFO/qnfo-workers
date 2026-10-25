@@ -10,7 +10,8 @@ var __defProp222 = Object.defineProperty;
 var __name222 = /* @__PURE__ */ __name22((target, value) => __defProp222(target, "name", { value, configurable: true }), "__name");
 var __name2222 = /* @__PURE__ */ __name222((target, value) => Object.defineProperty(target, "name", { value, configurable: true }), "__name");
 // VERSION-LINE-SPLIT-1 (agent_issues 100220): the release notes sit one per line below this statement, newest first, so a VERSION bump is a one-line patch; add a new note as the first line under it.
-var VERSION = "1.61.0"; /* 1.59.1 PORTFOLIO-STRATEGIC-2 (2026-10-25, agent_issues 1000194 from the CMD RED TEAM audit): (a) the weekly summary no longer prints the portfolio total beside the constraint program as if it were that program's risk - it now reads "constraint <program> (program risk N); portfolio risk M"; (b) the review reads v_roadmap and goals per program and records roadmap_now/next/later and goals_adopted/completed in program_review_notes, flagging an active program with no now/next roadmap item and adopted goals with none completed; (c) psrScorecards is also called from portfolioDailyRun, so the deterministic program and portfolio scorecards are loop-owned daily instead of only when the weekly review runs. */ /* 1.59.0 PORTFOLIO-STRATEGIC-1 (2026-10-25, PORTFOLIO-MANAGER-1): the portfolio manager persona runs its weekly strategic review inside this worker's cron (no new worker or cron while fleet_budget caps are breached, CORE-PROMPT-1 rule 8): loop-owned program/portfolio scorecards, per-program verdicts and deterministic actions from v_program_health, portfolio decisions (constrain/accelerate/stable), program_review_notes + one weekly-strategic portfolio_runs row, owner cards only for spend above the A9 ceiling and RED verdicts persisting 3+ reviews, persona narratives only while no ai_spend fleet_budget cap is breached; new routes POST /api/portfolio/strategic and GET /api/portfolio/latest. */ /* 1.58.1-codeagent (main, 2026-10-25). */
+var VERSION = "1.61.2"; /* 1.59.1 PORTFOLIO-STRATEGIC-2 (2026-10-25, agent_issues 1000194 from the CMD RED TEAM audit): (a) the weekly summary no longer prints the portfolio total beside the constraint program as if it were that program's risk - it now reads "constraint <program> (program risk N); portfolio risk M"; (b) the review reads v_roadmap and goals per program and records roadmap_now/next/later and goals_adopted/completed in program_review_notes, flagging an active program with no now/next roadmap item and adopted goals with none completed; (c) psrScorecards is also called from portfolioDailyRun, so the deterministic program and portfolio scorecards are loop-owned daily instead of only when the weekly review runs. */ /* 1.59.0 PORTFOLIO-STRATEGIC-1 (2026-10-25, PORTFOLIO-MANAGER-1): the portfolio manager persona runs its weekly strategic review inside this worker's cron (no new worker or cron while fleet_budget caps are breached, CORE-PROMPT-1 rule 8): loop-owned program/portfolio scorecards, per-program verdicts and deterministic actions from v_program_health, portfolio decisions (constrain/accelerate/stable), program_review_notes + one weekly-strategic portfolio_runs row, owner cards only for spend above the A9 ceiling and RED verdicts persisting 3+ reviews, persona narratives only while no ai_spend fleet_budget cap is breached; new routes POST /api/portfolio/strategic and GET /api/portfolio/latest. */ /* 1.58.1-codeagent (main, 2026-10-25). */
+/* 1.61.2 REMEDY-HISTORY-AVAILABILITY-1 (2026-10-25, pillar autonomy): expose remedy-history read failures as unavailable instead of zero attempts/no lever, and report the area cache's TTL as its freshness bound. */
 /* 1.61.0 LIVE-FAILURE-OVERVIEW-1 (2026-10-25, pillar autonomy): fleet-live/v2 adds ranked breach, primary-root-cause and per-source freshness data; the overview shows failure rows before the owner queue, groups desktop area navigation, and refreshes every 15 s; /api/cmd now returns an explicit POST-only 405 contract. */
 /* 1.60.0 AGENT-TRACING-1 (2026-10-25, pillar autonomy; minor: add metadata-only agent, model, tool and approval spans; preserve 1% sampling); PSR-MODEL-FLOOR-1 (#4084, research): use allowlisted GLM-5.3-Flash for free portfolio summaries and preserve the paid fallback; WEBMCP-SITEMAP-1 (pillar reach): serve the canonical public sitemap for list_site_pages. */
 /* 1.59.2 PORTFOLIO-LATEST-ROADMAP-1 (2026-10-25, agent_issues 1000194): GET /api/portfolio/latest now returns the persisted roadmap_now, roadmap_next, roadmap_later, goals_adopted and goals_completed counts so dashboard consumers can read the program roadmap and goal measures directly. Additive response change; no new worker, cron or binding. */
@@ -2427,7 +2428,7 @@ function feedsByArea() {
 }
 var API_INDEX = [
   { path: "/api", area: "platform", source: "live", lag_s: 0, method: "GET", auth: "open", schema_version: "fleet-api-index/v2", cache: "public 15s, ETag", freshness: "static (this table)", what: "This index: every read endpoint, its functional area, its auth, its cache policy, whether it is computed live or from the rebuilt state, and what makes it change. Send If-None-Match or ?since=<revision>." },
-  { path: "/api/live", area: "platform", source: "mixed", lag_s: 900, method: "GET", auth: "open", schema_version: "fleet-live/v2", cache: "public 15s, ETag", freshness: "queue read at request time; area model cached 15 s; state refreshed by the */15 cron and on request when older than 300 s, with measured source ages in the response", what: "One consolidated snapshot for pollers: state verdict, queue counts, the five areas, the invest verdict, ranked breaches and root-cause explanations. Send If-None-Match, or ?since=<revision>." },
+  { path: "/api/live", area: "platform", source: "mixed", lag_s: 900, method: "GET", auth: "open", schema_version: "fleet-live/v3", cache: "public 15s, ETag", freshness: "queue read at request time; area model cached 15 s; state refreshed by the */15 cron and on request when older than 300 s, with measured source ages in the response", what: "One consolidated snapshot for pollers: state verdict, queue counts, the five areas, the invest verdict, ranked breaches and root-cause explanations. Send If-None-Match, or ?since=<revision>." },
   { path: "/api/human", area: "autonomy", source: "live", lag_s: 60, method: "GET", auth: "open (owner fields with a holder)", schema_version: "fleet-human/v2", cache: "public 15s open / private no-store with a holder, ETag", freshness: "queue read live from D1", what: "The owner queue the page renders: items, upcoming, blind sources, decision, system summary. Send If-None-Match or ?since=<revision>." },
   { path: "/api/areas", area: "platform", source: "live", lag_s: 15, method: "GET", auth: "open", schema_version: "fleet-areas/v3", cache: "public 15s, ETag", freshness: "v_metric_trigger_state and metric_history, cached 15 s per isolate", what: "Breaching metrics by functional area, with each area's constraint, lever and remedy history. Compact by default: the full lever text is only sent with ?full=1 (it was 55 KB of the 101 KB body). Send If-None-Match or ?since=<revision>." },
   { path: "/api/decision", area: "platform", source: "snapshot", lag_s: 900, method: "GET", auth: "open", schema_version: "fleet-decision/v1", cache: "public 15s, ETag", freshness: "governance snapshot, re-measured when older than 5 min", what: "Continue / scale back / stop, its reasons, and what would flip it." },
@@ -2609,6 +2610,7 @@ function liveAreas(m) {
   });
 }
 function liveFailureSummary(m) {
+  const remedyHistoryAvailable = !!m && m.remedy_history_available !== false;
   const affected = (m && m.areas || []).filter(function(a) { return Number(a.count) > 0; });
   const byArea = affected.map(function(a) {
     const f = a.focus || null;
@@ -2646,7 +2648,8 @@ function liveFailureSummary(m) {
   return {
     total_breaches: m ? Number(m.total) || 0 : null,
     areas_affected: affected.length,
-    unreadable_sources: m && m.blind || [],
+    remedy_history_available: remedyHistoryAvailable,
+    unreadable_sources: (m && m.blind || []).concat(remedyHistoryAvailable ? [] : ["remedy history"]),
     by_area: byArea,
     top: ranked.slice(0, 10)
   };
@@ -2657,7 +2660,7 @@ function liveView(st, v, m) {
   const probes = st && st.probes || [];
   const issues = st && st.issues || [];
   const body = {
-    schema_version: "fleet-live/v2",
+    schema_version: "fleet-live/v3",
     worker: NAME,
     version: VERSION,
     state: {
@@ -2673,7 +2676,7 @@ function liveView(st, v, m) {
     areas: { total: m ? m.total : null, blind: m && m.blind || [], by_area: liveAreas(m) },
     failure_summary: liveFailureSummary(m),
     decision: { verdict: v.decision.verdict, risk: v.decision.risk, level: v.decision.level, headline: v.decision.headline, days_to_gate: v.decision.gate ? v.decision.gate.days : null },
-    sources: { state: "fleet_dashboard_state (rebuilt by the */15 cron and refreshed on request when older than 300 s)", queue: "human_actions and the derived owners (read at request time)", areas: "v_metric_trigger_state + metric_history (cached for 15 s per isolate)" }
+    sources: { state: "fleet_dashboard_state (rebuilt by the */15 cron and refreshed on request when older than 300 s)", queue: "human_actions and the derived owners (read at request time)", areas: "v_metric_trigger_state + metric_history (cached for " + AREAS_CACHE_TTL_MS / 1e3 + " s per isolate)" }
   };
   body.revision = rtDigest(body);
   const now = Date.now();
@@ -2686,7 +2689,7 @@ function liveView(st, v, m) {
     request_at: body.generated_at,
     state: { generated_at: st && st.generated_at || null, age_seconds: ageSeconds(st && st.generated_at), refresh_when_older_than_seconds: 300 },
     queue: { as_of: body.generated_at, max_age_seconds: 0 },
-    areas: { generated_at: m && m.generated_at || null, cache_age_seconds: ageSeconds(m && m.generated_at), max_age_seconds: 15 }
+    areas: { generated_at: m && m.generated_at || null, cache_age_seconds: ageSeconds(m && m.generated_at), max_age_seconds: AREAS_CACHE_TTL_MS / 1e3 }
   };
   return body;
 }
@@ -2740,7 +2743,7 @@ async function handleRequest(request, env, ctx) {
     const live = liveView(stLive, vLive, mLive);
     const rtHeaders = { "X-Generated-At": live.generated_at, "X-Revision": live.revision };
     if (since && since === live.revision) {
-      return json({ schema_version: "fleet-live/v2", not_modified: true, revision: live.revision, generated_at: live.generated_at, freshness: live.freshness }, 200, { req: request, digest: live.revision, cache: RT_CACHE_PUBLIC, headers: rtHeaders });
+      return json({ schema_version: "fleet-live/v3", not_modified: true, revision: live.revision, generated_at: live.generated_at, freshness: live.freshness }, 200, { req: request, digest: live.revision, cache: RT_CACHE_PUBLIC, headers: rtHeaders });
     }
     return json(live, 200, { req: request, digest: live.revision, cache: RT_CACHE_PUBLIC, headers: rtHeaders });
   }
@@ -7508,10 +7511,11 @@ function bottleneckOf(stages) {
   if (best && best.n >= 5 && tot > 0 && best.n / tot >= 0.3) return { k: best.k, why: best.n + " items waiting here (" + Math.round(best.n / tot * 100) + "% of the pipeline)" };
   return null;
 }
-function buildAreas(rows, hist, flowsRaw, sys) {
+function buildAreas(rows, hist, flowsRaw, sys, remedyHistoryAvailable) {
   // PRECONDITION: rows = breaching trigger rows; hist = { metric: [{day,value}] } oldest-first; flowsRaw = [{id,name,stages}].
   // POSTCONDITION: { total, areas:[{id,name,status,star,count,top,more}], flows }; no area lists more than 3 rows.
   const by = {};
+  const remedyReadable = remedyHistoryAvailable !== false;
   for (const a of AREA_DEFS) by[a.id] = [];
   for (const r of rows || []) {
     const id = areaOf(r.metric_key);
@@ -7519,8 +7523,9 @@ function buildAreas(rows, hist, flowsRaw, sys) {
     by[id].push({
       key: r.metric_key, title: shortTitle(r.title), val: r.val, op: r.operator, thr: r.threshold, owner: r.owner || "fleet",
       prio: prioNum(r.priority), score: prioNum(r.priority) * 10 + gapOf(r.val, r.threshold), series, trend: trendOf(series, r.operator),
-      leverKind: leverKind(r.lever), lever: leverLine(r.lever), fullLever: String(r.lever || "").replace(/\s+/g, " ").trim(),
-      tries: Number(r.tries) || 0, last_try: r.last_try || null, area: id
+      leverKind: remedyReadable ? leverKind(r.lever) : null, lever: remedyReadable ? leverLine(r.lever) : null,
+      fullLever: remedyReadable ? String(r.lever || "").replace(/\s+/g, " ").trim() : null,
+      tries: remedyReadable ? Number(r.tries) || 0 : null, last_try: remedyReadable ? r.last_try || null : null, area: id
     });
   }
   // AREAS-2: one key -> {title, area} map across all areas, so a constraint can name the breaches it is believed to cause.
@@ -7670,9 +7675,9 @@ function focusRowsHtml(m, esc) {
     o += '<span class="fx-c">' + (f.root ? '<span class="tag u">root cause</span> ' : "") + esc(f.title) + '</span><span class="fx-v">' + esc(fmtNum(f.val)) +
       ' <small>target ' + esc(OP_SYM[f.op] || f.op) + " " + esc(fmtNum(f.thr)) + '</small></span><span class="tr-a ' + (f.trend.good === true ? "ok" : f.trend.good === false ? "act" : "") + '">' + esc(trendLabel(f.trend) || "no history") + "</span></div>";
     o += '<div class="fx-m"><span class="tag ' + (f.leverKind === "owner" ? "u" : "") + '">' + esc(f.leverKind === "code" ? "code loop" : f.leverKind === "owner" ? "your decision" : "fleet loops") + "</span>";
-    o += '<span class="fx-l">' + (f.lever ? esc(f.lever) : "no lever recorded on this trigger") + "</span>";
+    o += '<span class="fx-l">' + (m.remedy_history_available === false ? "Remedy history unavailable" : f.lever ? esc(f.lever) : "no lever recorded on this trigger") + "</span>";
     o += '<span class="fx-o">' + esc(f.owner) + "</span>";
-    o += '<span class="fx-t">' + (f.tries ? f.tries + " attempt" + (f.tries === 1 ? "" : "s") + " in 30d, still in breach" : "no attempt in 30d") + "</span>";
+    o += '<span class="fx-t">' + (m.remedy_history_available === false ? "Remedy history unavailable" : f.tries ? f.tries + " attempt" + (f.tries === 1 ? "" : "s") + " in 30d, still in breach" : "no attempt in 30d") + "</span>";
     if (a.count > 1) o += '<a class="fx-more" href="/area/' + a.id + '">' + (a.count - 1) + " more here &rarr;</a>";
     o += "</div>";
     if (f.explains && f.explains.length) {
@@ -7719,11 +7724,11 @@ function areaDetailHtml(a, m, esc, opts) {
   } else {
     const f = a.focus;
     if (f) {
-      o.push('<section class="card fx-r ' + a.status + '"><div class="fx-h"><span class="fx-c">constraint</span><span class="fx-v">' + esc(fmtNum(f.val)) + " <small>target " + esc(OP_SYM[f.op] || f.op) + " " + esc(fmtNum(f.thr)) + '</small></span><span class="tr-a ' + (f.trend.good === true ? "ok" : f.trend.good === false ? "act" : "") + '">' + esc(trendLabel(f.trend) || "no history") + "</span></div><div class=\"fx-c\"><b>" + esc(f.title) + "</b></div><div class=\"fx-m\">" + sparkSvg(f.series, f.trend.good) + '<span class="fx-o">' + esc(f.owner) + "</span><span class=\"fx-t\">" + (f.tries ? f.tries + " remedy attempt" + (f.tries === 1 ? "" : "s") + " in 30d, metric still in breach" : "no remedy attempt in 30d") + "</span></div>" + (f.lever ? '<div class="fx-l"><b>Lever (' + esc(f.leverKind) + '):</b> ' + esc(f.lever) + "</div>" : '<div class="fx-l meta">No lever recorded on this trigger; the fleet has no machine path to it.</div>') + "</section>");
+      o.push('<section class="card fx-r ' + a.status + '"><div class="fx-h"><span class="fx-c">constraint</span><span class="fx-v">' + esc(fmtNum(f.val)) + " <small>target " + esc(OP_SYM[f.op] || f.op) + " " + esc(fmtNum(f.thr)) + '</small></span><span class="tr-a ' + (f.trend.good === true ? "ok" : f.trend.good === false ? "act" : "") + '">' + esc(trendLabel(f.trend) || "no history") + "</span></div><div class=\"fx-c\"><b>" + esc(f.title) + "</b></div><div class=\"fx-m\">" + sparkSvg(f.series, f.trend.good) + '<span class="fx-o">' + esc(f.owner) + "</span><span class=\"fx-t\">" + (m.remedy_history_available === false ? "Remedy history unavailable" : f.tries ? f.tries + " remedy attempt" + (f.tries === 1 ? "" : "s") + " in 30d, metric still in breach" : "no remedy attempt in 30d") + "</span></div>" + (m.remedy_history_available === false ? '<div class="fx-l meta">Remedy history unavailable.</div>' : f.lever ? '<div class="fx-l"><b>Lever (' + esc(f.leverKind) + '):</b> ' + esc(f.lever) + "</div>" : '<div class="fx-l meta">No lever recorded on this trigger; the fleet has no machine path to it.</div>') + "</section>");
     }
     o.push('<h2 class="fl-h">Every breach in this area <span class="ct">' + a.count + "</span></h2><ul class=\"br-l\">");
     for (const r of a.all) {
-      o.push('<li class="br" id="' + esc(r.key) + '"><div class="br-t"><b>' + esc(r.title) + '</b><span class="br-v">' + esc(fmtNum(r.val)) + " <small>target " + esc(OP_SYM[r.op] || r.op) + " " + esc(fmtNum(r.thr)) + '</small></span></div><div class="br-m">' + sparkSvg(r.series, r.trend.good) + '<span class="tr-a ' + (r.trend.good === true ? "ok" : r.trend.good === false ? "act" : "") + '">' + esc(trendLabel(r.trend) || "no history") + '</span><span class="br-o">owner ' + esc(r.owner) + "</span><span>" + (r.tries ? r.tries + " attempt" + (r.tries === 1 ? "" : "s") + " in 30d" : "no attempt in 30d") + '</span><code class="fx-k">' + esc(r.key) + "</code></div>" + (r.lever ? '<div class="fx-l">' + esc(r.lever) + "</div>" : "") + "</li>");
+      o.push('<li class="br" id="' + esc(r.key) + '"><div class="br-t"><b>' + esc(r.title) + '</b><span class="br-v">' + esc(fmtNum(r.val)) + " <small>target " + esc(OP_SYM[r.op] || r.op) + " " + esc(fmtNum(r.thr)) + '</small></span></div><div class="br-m">' + sparkSvg(r.series, r.trend.good) + '<span class="tr-a ' + (r.trend.good === true ? "ok" : r.trend.good === false ? "act" : "") + '">' + esc(trendLabel(r.trend) || "no history") + '</span><span class="br-o">owner ' + esc(r.owner) + "</span><span>" + (m.remedy_history_available === false ? "Remedy history unavailable" : r.tries ? r.tries + " attempt" + (r.tries === 1 ? "" : "s") + " in 30d" : "no attempt in 30d") + '</span><code class="fx-k">' + esc(r.key) + "</code></div>" + (m.remedy_history_available === false ? '<div class="fx-l meta">Remedy history unavailable.</div>' : r.lever ? '<div class="fx-l">' + esc(r.lever) + "</div>" : "") + "</li>");
     }
     o.push("</ul>");
   }
@@ -7764,11 +7769,13 @@ async function areasModel(env, sys) {
   ]);
   const hist = {};
   for (const r of hr || []) (hist[r.metric] = hist[r.metric] || []).push({ day: r.day, value: Number(r.value) });
-  // AREAS-2: the lever and the remedy history behind each breach. Deliberately NOT routed through safe(): a database without
-  // analytics_metric_triggers (an older D1, or the offline test stub) must degrade to "no lever recorded", never to blind.
+  // AREAS-2: the lever and the remedy history behind each breach. Deliberately NOT routed through safe(): keep its read failure
+  // separate from breach-measurement availability so measured breaches remain visible while remedy data is marked unavailable.
   let lv = null;
+  let remedyHistoryAvailable = false;
   try {
     lv = await d1all(A, "SELECT s.metric_key AS k, t.action AS lever, (SELECT COUNT(*) FROM analytics_action_log a WHERE a.trigger_id = s.id AND a.fired_at >= datetime('now','-30 days')) AS tries, (SELECT MAX(a.fired_at) FROM analytics_action_log a WHERE a.trigger_id = s.id) AS last_try FROM v_metric_trigger_state s JOIN analytics_metric_triggers t ON t.id = s.id WHERE s.hit = 1");
+    remedyHistoryAvailable = true;
   } catch (e) {
     lv = null;
   }
@@ -7789,8 +7796,9 @@ async function areasModel(env, sys) {
   if (ct) flows.push({ id: "code", name: "Code loop, 30 days", stages: ctSplit ? codeFlowStages(ct) : [{ k: "queued", label: "queued", n: cnt(ct, "queued") + cnt(ct, "ready_to_publish"), kind: "wip" }, { k: "merged", label: "merged", n: cnt(ct, "merged"), kind: "done" }, { k: "closed", label: "closed, unmerged", n: cnt(ct, "closed"), kind: "fail" }, { k: "failed", label: "failed", n: cnt(ct, "failed"), kind: "fail" }] });
   if (rq) flows.push({ id: "research", name: "Research queue", stages: [{ k: "deferred", label: "deferred", n: cnt(rq, "deferred"), kind: "parked" }, { k: "queued", label: "queued", n: cnt(rq, "queued"), kind: "wip" }, { k: "researching", label: "researching", n: cnt(rq, "researching"), kind: "wip" }, { k: "published", label: "published", n: cnt(rq, "published"), kind: "done" }, { k: "wontfix", label: "declined", n: cnt(rq, "wontfix"), kind: "drop" }] });
   if (oq) flows.push({ id: "outreach", name: "Outreach", stages: [{ k: "pending", label: "pending", n: cnt(oq, "pending"), kind: "wip" }, { k: "needs-contact", label: "needs contact", n: cnt(oq, "needs-contact"), kind: "wip" }, { k: "sent", label: "sent", n: cnt(oq, "sent"), kind: "done" }] });
-  const model = buildAreas(rows || [], hist, flows, sys);
+  const model = buildAreas(rows || [], hist, flows, sys, remedyHistoryAvailable);
   model.blind = blind;
+  model.remedy_history_available = remedyHistoryAvailable;
   // AREAS-2: kill-switch state. A switch that stopped a pipeline is invisible in every metric until its queue ages out, so it is
   // reported from its own table, never inferred. Absent table = named, not zero.
   let flags = null;
