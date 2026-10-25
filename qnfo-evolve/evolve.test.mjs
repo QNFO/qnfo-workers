@@ -26,8 +26,8 @@ const ok = (c, m, d) => {
  * `export default {` is rewritten to a local binding so the same file that ships to Cloudflare is the
  * file under test. */
 const body = src.replace(/^export default /m, "var __default = ");
-const mod = new Function("console", body + "\n;return { isSinglePath, gapKey, buildIssue, pickNew, isDenied, DENY_WORKERS, VERSION, SOURCE, MAX_OPEN, MAX_NEW_PER_TICK, WIP_CEILING_DEFAULT, WIP_ATTEMPTS, WIP_STALE_MIN, WIP_PARK_PER_TICK, CAPABILITIES, LIMITATIONS, handlers: __default };")
-  ({ log() {} });
+const mod = new Function("console", body + "\n;return { isSinglePath, gapKey, buildIssue, pickNew, isDenied, DENY_WORKERS, VERSION, SOURCE, MAX_OPEN, MAX_NEW_PER_TICK, WIP_CEILING_DEFAULT, WIP_CEILING_MAX, WIP_TERMINAL_STATUSES, WIP_HANDOFF_STATUSES, WIP_EXCLUDED_STATUSES, WIP_ATTEMPTS, WIP_STALE_MIN, WIP_PARK_PER_TICK, recoverWip, CAPABILITIES, LIMITATIONS, handlers: __default };")
+  ({ log() {}, error() {} });
 
 ok(/^\d+\.\d+\.\d+/.test(mod.VERSION), "VERSION is semver-shaped", mod.VERSION);
 ok(mod.SOURCE === "qnfo-evolve|EVOLVE-1", "source carries the loop identity", mod.SOURCE);
@@ -125,9 +125,15 @@ ok(/close_evidence/.test(src), "the close path supplies close_evidence");
 ok(src.indexOf("close_evidence") < src.indexOf("close_channel = 'evolve-auto'"),
   "evidence is written before the status changes (issue_close_evidence_required)");
 
-/* 8. WIP-RECOVERY-1 must mirror the orchestrator's ceiling and stay timid. */
-ok(mod.WIP_CEILING_DEFAULT === 12, "the default matches the orchestrator's PLAN_WIP after 0.18.2", mod.WIP_CEILING_DEFAULT);
-ok(/evolve_wip_ceiling/.test(src), "the ceiling is read from ops_config, not hardcoded");
+/* 8. WIP-RECOVERY-1 uses the shared planner ceiling and active-task status set, while staying timid. */
+ok(mod.WIP_CEILING_DEFAULT === 12, "the fallback matches the planner's default", mod.WIP_CEILING_DEFAULT);
+ok(mod.WIP_CEILING_MAX === 48, "the shared ceiling is bounded by the planner's maximum", mod.WIP_CEILING_MAX);
+ok(/key = 'code_plan_wip'/.test(src), "the planner's shared ceiling is read from ops_config");
+ok(/status NOT IN \("\s*\+ placeholders/.test(src), "active WIP excludes terminal and handoff states");
+ok(JSON.stringify(mod.WIP_TERMINAL_STATUSES) === JSON.stringify(["merged", "closed", "publish_failed", "needs_human", "failed", "reverted", "superseded"]),
+  "terminal statuses match the planner's done set");
+ok(JSON.stringify(mod.WIP_HANDOFF_STATUSES) === JSON.stringify(["branch_pushed", "published", "pr_open"]),
+  "handoff statuses do not consume planner WIP");
 ok(mod.WIP_ATTEMPTS === 6, "a task is only parked after 6 attempts", mod.WIP_ATTEMPTS);
 ok(mod.WIP_STALE_MIN === 10, "a task is not parked while it may be mid-attempt", mod.WIP_STALE_MIN);
 ok(/if \(wip < ceiling\) return parked/.test(src), "recovery is inert while the queue is not blocked");
@@ -136,6 +142,70 @@ ok(src.indexOf("INSERT OR REPLACE INTO ops_config") < src.indexOf("SET status = 
   "the backup is written before the status changes");
 ok(/WHERE id = \? AND status = 'queued'/.test(src), "the park cannot clobber a task another actor moved");
 ok(/attempts >= \?/.test(src), "the attempt floor is a bound parameter, not a string");
+
+const wipEvents = [];
+const wipSql = [];
+const wipTask = { id: "stale-1", status: "queued", attempts: 6, updated_at: "2026-10-25T15:40:00Z" };
+const wipDb = {
+  prepare(sql) {
+    wipSql.push(sql);
+    let params = [];
+    return {
+      bind(...values) { params = values; return this; },
+      async all() {
+        if (/key = 'code_plan_wip'/.test(sql)) return { results: [{ value: "40" }] };
+        if (/FROM code_tasks WHERE status NOT IN/.test(sql)) {
+          wipEvents.push(["count-params", params]);
+          return { results: [{ n: 40, queued: 8, oldest_updated_at: "2026-10-25T15:40:00Z" }] };
+        }
+        if (/SELECT \* FROM code_tasks/.test(sql)) return { results: [wipTask] };
+        throw new Error("unexpected query: " + sql);
+      },
+      async run() {
+        if (/INSERT OR REPLACE INTO ops_config/.test(sql)) {
+          wipEvents.push(["backup", params[0]]);
+          return { meta: { changes: 1 } };
+        }
+        if (/UPDATE code_tasks SET status = 'failed'/.test(sql)) {
+          wipEvents.push(["park", params[2]]);
+          return { meta: { changes: 1 } };
+        }
+        throw new Error("unexpected write: " + sql);
+      }
+    };
+  }
+};
+const wipOut = { ts: "2026-10-25T16:00:00.000Z" };
+const parked = await mod.recoverWip({ AUDIT: wipDb }, wipOut);
+ok(parked[0] === "stale-1:6", "queued work can be parked at the shared planner ceiling", parked);
+ok(wipOut.wip === 40 && wipOut.wip_queued === 8 && wipOut.wip_ceiling === 40,
+  "recovery records total active WIP separately from queued candidates", wipOut);
+ok(wipOut.wip_oldest_age_min === 20, "the ledger measurement includes oldest active-task age", wipOut);
+ok(JSON.stringify(wipEvents[0][1]) === JSON.stringify(mod.WIP_EXCLUDED_STATUSES),
+  "the active-task count binds every planner terminal and handoff status", wipEvents);
+ok(wipEvents[1][0] === "backup" && wipEvents[2][0] === "park",
+  "the backup precedes parking", wipEvents);
+ok(wipEvents[1][1].endsWith("20261025160000"), "same-day recovery backups have distinct run timestamps", wipEvents);
+ok(wipSql.some((sql) => /status = 'queued' AND attempts >= \?/.test(sql)),
+  "only exhausted queued tasks are eligible for parking");
+const fractionalWipDb = {
+  prepare(sql) {
+    return {
+      bind() { return this; },
+      async all() {
+        if (/key = 'code_plan_wip'/.test(sql)) return { results: [{ value: "0.5" }] };
+        return { results: [{ n: 0, queued: 0, oldest_updated_at: null }] };
+      }
+    };
+  }
+};
+const fractionalOut = { ts: "2026-10-25T16:00:00.000Z" };
+await mod.recoverWip({ AUDIT: fractionalWipDb }, fractionalOut);
+ok(fractionalOut.wip_ceiling === 1, "a positive fractional config is bounded to a nonzero ceiling", fractionalOut);
+const unavailableConfigOut = { ts: "2026-10-25T16:00:00.000Z", skipped: [] };
+await mod.recoverWip({ AUDIT: { prepare() { throw new Error("D1 unavailable"); } } }, unavailableConfigOut);
+ok(unavailableConfigOut.skipped.some((s) => s.includes("wip-config: D1 unavailable")),
+  "a failed shared-setting read is reported and skips recovery instead of using a guessed ceiling", unavailableConfigOut);
 
 /* 9. HEALTH-CONTRACT-1 (agent_issues 2852, capability_contract_conformance): /health declares non-empty capabilities[] and
  * limitations[]. qnfo-deploy-guard snapshots exactly those two keys from every live /health and a worker with either one
