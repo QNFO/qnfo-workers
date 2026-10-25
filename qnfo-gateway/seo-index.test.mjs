@@ -3,13 +3,17 @@
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { versionAtLeast } from "../scripts/version-at-least.mjs";
 const here = dirname(fileURLToPath(import.meta.url));
 const src = readFileSync(join(here, "worker.js"), "utf8");
 let pass = 0, fail = 0;
 const ok = (c, m, x) => { if (c) pass++; else { fail++; console.log("FAIL " + m + (x !== undefined ? " :: " + String(x).slice(0, 300) : "")); } };
 const slice = (a, b) => { const i = src.indexOf(a); const j = src.indexOf(b, i + 1); return i < 0 || j < 0 ? "" : src.slice(i, j); };
 
-ok(src.includes('var VERSION="3.31.2-seo-index-8"'), "version is 3.31.2-seo-index-8");
+// VERSION-PIN-TESTS-1: a literal version here turns the gate red at every later bump (it did at 3.30.3, 3.30.4
+// and 3.31.0). The suite asserts its own baseline; the 42 feature checks carry the change.
+const vm = /var VERSION="([^"]+)"/.exec(src);
+ok(vm && versionAtLeast(vm[1], "3.30.0"), "qnfo-gateway is at least 3.30.0 (the SEO-INDEX-1 baseline)", vm && vm[1]);
 
 // (a) IndexNow reaches every engine: the loop must not stop at the first acceptance.
 const idx = slice("async function indexNowSubmit", "__name(indexNowSubmit");
