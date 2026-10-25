@@ -19,7 +19,7 @@ on:
     branches:
       - main
     paths:
-      - "mind/**"
+      - "q08-mind/**"
       - ".github/workflows/mind-deploy.yml"
   workflow_dispatch:
 
@@ -45,11 +45,11 @@ jobs:
       - name: Build and validate the Wrangler bundle
         run: |
           set -euo pipefail
-          node mind/prepare-deploy-config.mjs mind/wrangler.toml mind/wrangler.deploy.toml
-          mkdir -p mind/.deploy
+          node q08-mind/prepare-deploy-config.mjs q08-mind/wrangler.toml q08-mind/wrangler.deploy.toml
+          mkdir -p q08-mind/.deploy
           # WRANGLER-PIN-1: keep the API bundle and fallback on the version proven by this test; update after rerunning it.
-          npx --yes wrangler@3.114.17 deploy --dry-run --outdir mind/.deploy --config mind/wrangler.deploy.toml
-          test -s mind/.deploy/worker.js
+          npx --yes wrangler@3.114.17 deploy --dry-run --outdir q08-mind/.deploy --config q08-mind/wrangler.deploy.toml
+          test -s q08-mind/.deploy/worker.js
 
       - name: Upload the module bundle through the scripts api
         id: api
@@ -58,16 +58,16 @@ jobs:
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: |
           set -uo pipefail
-          COMPATIBILITY_DATE=$(sed -nE 's/^compatibility_date = "([^"]+)"/\1/p' mind/wrangler.toml)
+          COMPATIBILITY_DATE=$(sed -nE 's/^compatibility_date = "([^"]+)"/\1/p' q08-mind/wrangler.toml)
           if [ -z "${COMPATIBILITY_DATE}" ]; then
-            echo "could not read compatibility_date from mind/wrangler.toml"
+            echo "could not read compatibility_date from q08-mind/wrangler.toml"
             exit 1
           fi
           META=$(printf '{"main_module":"worker.js","compatibility_date":"%s","observability":{"enabled":false}}' "${COMPATIBILITY_DATE}")
           code=$(curl -sS -X PUT "https://api.cloudflare.com/client/v4/accounts/${CLOUDFLARE_ACCOUNT_ID}/workers/scripts/q08-mind" \
             -H "Authorization: ******" \
             -F "metadata=${META};type=application/json" \
-            -F "worker.js=@mind/.deploy/worker.js;type=application/javascript+module" \
+            -F "worker.js=@q08-mind/.deploy/worker.js;type=application/javascript+module" \
             -o /tmp/mind-deploy.json -w "%{http_code}")
           echo "http_status=${code}"
           head -c 1200 /tmp/mind-deploy.json || true
@@ -85,16 +85,16 @@ jobs:
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: |
           set -euo pipefail
-          cat mind/wrangler.deploy.toml
+          cat q08-mind/wrangler.deploy.toml
           # WRANGLER-PIN-1: keep the API bundle and fallback on the version proven by this test; update after rerunning it.
-          npx --yes wrangler@3.114.17 deploy --config mind/wrangler.deploy.toml
+          npx --yes wrangler@3.114.17 deploy --config q08-mind/wrangler.deploy.toml
 
       - name: Verify the live version from the runner
         run: |
           set -uo pipefail
-          EXPECTED_VERSION=$(sed -nE 's/^var VERSION = "([^"]+)";$/\1/p' mind/worker.js)
+          EXPECTED_VERSION=$(sed -nE 's/^var VERSION = "([^"]+)";$/\1/p' q08-mind/worker.js)
           if [ -z "${EXPECTED_VERSION}" ]; then
-            echo "could not read VERSION from mind/worker.js"
+            echo "could not read VERSION from q08-mind/worker.js"
             exit 1
           fi
           for i in 1 2 3 4 5 6 7 8 9 10 11 12; do
