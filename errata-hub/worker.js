@@ -21750,7 +21750,8 @@ async function sweepInternalErrata(env) {
 // finding is a deterministic render measurement and is confirmed without a model call. A finding whose paper is not in the
 // corpus (no slug or DOI matches) becomes no-paper: there is no text to check or correct. A failed call or an unreadable
 // verdict leaves the row internal-open for the next tick and is logged.
-var INTERNAL_CONFIRM_MAX = 3;
+var INTERNAL_CONFIRM_MAX = 12;
+var INTERNAL_CONFIRM_BUDGET_MS = 24e4;
 var INTERNAL_CONFIRM_MIN_AGE = "-30 minutes";
 var CONFIRM_MODEL_REVISER = "@cf/openai/gpt-oss-120b";
 var CONFIRM_MODEL_OTHER = "@cf/moonshotai/kimi-k2.6";
@@ -21758,9 +21759,22 @@ var CONFIRM_EXCERPT_MAX = 48e3;
 function internalConfirmModel(sender) {
   return /qnfo-paper-reviser/i.test(String(sender || "")) ? CONFIRM_MODEL_REVISER : CONFIRM_MODEL_OTHER;
 }
+function internalConfirmModels(sender) {
+  const first = internalConfirmModel(sender);
+  return [first, first === CONFIRM_MODEL_REVISER ? CONFIRM_MODEL_OTHER : CONFIRM_MODEL_REVISER];
+}
+async function logConfirmDefer(env, row, why) {
+  try {
+    await env.QNFO_AUDIT.prepare("INSERT INTO cloud_ops_events (ts, kind, job, text) VALUES (datetime('now'), 'errata_confirm_defer', 'qnfo-research-exec', ?)").bind(("queue row " + row.id + ": " + why).slice(0, 450)).run();
+  } catch (e) {
+  }
+}
 function confirmRunInput(model, prompt) {
-  const input = { messages: [{ role: "user", content: prompt }], max_tokens: 2048, temperature: 0 };
-  if (/kimi/.test(model)) input.chat_template_kwargs = { thinking: false };
+  const input = { messages: [{ role: "user", content: prompt }], max_tokens: 4096, temperature: 0 };
+  if (/kimi/.test(model)) {
+    input.chat_template_kwargs = { thinking: false };
+    input.reasoning_effort = "none";
+  }
   if (/gpt-oss/.test(model)) input.reasoning = { effort: "low" };
   return input;
 }
@@ -21790,8 +21804,12 @@ function parseConfirmVerdict(text) {
     console.error("[errata-hub] internal confirm: verdict is not JSON:", String(e && e.message || e).slice(0, 120));
     return null;
   }
-  if (!o || typeof o.confirmed !== "boolean") return null;
-  return { confirmed: o.confirmed, why: String(o.why || "").replace(/\s+/g, " ").trim().slice(0, 400) };
+  if (!o) return null;
+  let c = o.confirmed;
+  if (typeof c === "string") c = /^(true|yes)$/i.test(c.trim()) ? true : /^(false|no)$/i.test(c.trim()) ? false : c;
+  else if (c === 1 || c === 0) c = c === 1;
+  if (typeof c !== "boolean") return null;
+  return { confirmed: c, why: String(o.why || "").replace(/\s+/g, " ").trim().slice(0, 400) };
 }
 function confirmExcerpt(body, claim) {
   const md = String(body || "");
@@ -21827,7 +21845,7 @@ async function confirmInternalErrata(env) {
   const out = { ok: true, max: INTERNAL_CONFIRM_MAX, candidates: 0, confirmed: 0, rejected: 0, no_paper: 0, deferred: 0, ids: [] };
   let rows = [];
   try {
-    rows = (await env.WATCH_DB.prepare("SELECT id, sender, subject, paper_doi, claim FROM errata_queue WHERE status = 'internal-open' AND datetime(created_at) < datetime('now', ?1) ORDER BY id ASC LIMIT ?2")
+    rows = (await env.WATCH_DB.prepare("SELECT id, sender, subject, paper_doi, claim FROM errata_queue WHERE status = 'internal-open' AND datetime(created_at) < datetime('now', ?1) ORDER BY RANDOM() LIMIT ?2")
       .bind(INTERNAL_CONFIRM_MIN_AGE, INTERNAL_CONFIRM_MAX).all()).results || [];
   } catch (e) {
     out.ok = false;
@@ -21836,7 +21854,9 @@ async function confirmInternalErrata(env) {
     return out;
   }
   out.candidates = rows.length;
+  const startedAt = Date.now();
   for (const row of rows) {
+    if (Date.now() - startedAt > INTERNAL_CONFIRM_BUDGET_MS) break;
     try {
       if (/RENDER-HEALTH/i.test(String(row.sender || ""))) {
         await settleInternalErratum(env, row, "detected", "confirmed without a model call: the finding is a deterministic render measurement (RENDER-HEALTH)");
@@ -21862,19 +21882,22 @@ async function confirmInternalErrata(env) {
         console.error("[errata-hub] internal confirm: paper " + paper.slug + " has no body; queue row " + row.id + " waits");
         continue;
       }
-      const model = internalConfirmModel(row.sender);
-      let res;
-      try {
-        res = await env.AI.run(model, confirmRunInput(model, confirmPrompt(row, paper, confirmExcerpt(paper.body_md, row.claim))), { gateway: { id: "default" } });
-      } catch (e) {
-        out.deferred++;
-        console.error("[errata-hub] internal confirm: " + model + " failed for queue row " + row.id + ":", String(e && e.message || e).slice(0, 200));
-        continue;
+      let v = null, model = "", lastErr = "";
+      for (const m of internalConfirmModels(row.sender)) {
+        model = m;
+        try {
+          const res = await env.AI.run(m, confirmRunInput(m, confirmPrompt(row, paper, confirmExcerpt(paper.body_md, row.claim))), { gateway: { id: "default" } });
+          v = parseConfirmVerdict(confirmReplyText(res));
+          if (v) break;
+          lastErr = m + ": unreadable verdict";
+        } catch (e) {
+          lastErr = m + ": " + String(e && e.message || e).slice(0, 160);
+        }
       }
-      const v = parseConfirmVerdict(confirmReplyText(res));
       if (!v) {
         out.deferred++;
-        console.error("[errata-hub] internal confirm: no readable verdict from " + model + " for queue row " + row.id);
+        console.error("[errata-hub] internal confirm: no verdict for queue row " + row.id + " (" + lastErr + ")");
+        await logConfirmDefer(env, row, lastErr);
         continue;
       }
       const status = v.confirmed ? "detected" : "rejected";
