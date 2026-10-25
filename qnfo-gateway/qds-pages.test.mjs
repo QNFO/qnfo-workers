@@ -7,8 +7,10 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 const here = dirname(fileURLToPath(import.meta.url));
 const worker = (await import(pathToFileURL(join(here, "worker.js")).href)).default;
 const db = new DatabaseSync(":memory:");
-db.exec("CREATE TABLE papers (slug TEXT, title TEXT, body_md TEXT, abstract TEXT, authors TEXT, doi TEXT, created_at TEXT, updated_at TEXT, status TEXT, version TEXT, pdf_path TEXT, license TEXT)");
-for (const [s, t] of [["distinction-lattice-framework", "Distinction-Lattice Framework"], ["joules-per-solution-metric", "The Joules-per-Solution Metric"], ["hidden", "Hidden"]]) db.prepare("INSERT INTO papers VALUES (?,?,?,?,?,?,?,?,?,?,?,?)").run(s, t, "# x", "abs", "Rowan", "10.1234/x.1", "2026-09-24", "2026-09-24", s === "hidden" ? "quarantined" : "published", "1", null, s === "joules-per-solution-metric" ? "CC BY 4.0" : "QNFO-ULA");
+// 941c245 (gateway 3.31.0) added publication/revision columns to the paper SELECT; the shim has to carry them or
+// every query throws "no such column: version_semver" and six assertions fail on the mock rather than the code.
+db.exec("CREATE TABLE papers (slug TEXT, title TEXT, body_md TEXT, abstract TEXT, authors TEXT, doi TEXT, created_at TEXT, updated_at TEXT, status TEXT, version TEXT, pdf_path TEXT, license TEXT, version_semver TEXT, version_count INTEGER, first_published_at TEXT, last_revised_at TEXT)");
+for (const [s, t] of [["distinction-lattice-framework", "Distinction-Lattice Framework"], ["joules-per-solution-metric", "The Joules-per-Solution Metric"], ["hidden", "Hidden"]]) db.prepare("INSERT INTO papers VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)").run(s, t, "# x", "abs", "Rowan", "10.1234/x.1", "2026-09-24", "2026-09-24", s === "hidden" ? "quarantined" : "published", "1", null, s === "joules-per-solution-metric" ? "CC BY 4.0" : "QNFO-ULA", "1.0.0", 1, "2026-09-24", "2026-09-24");
 // D1-SHIM-NAMED-PARAMS-1: node:sqlite refuses positional binding for numbered placeholders (?1, ?2), and the worker
 // numbers them (a query may also reuse ?1, as the not-found suggester does). Bind by name instead, and let a failure be
 // loud: a shim that answered "no rows" on every error made a driver mismatch read as "the suggester found nothing".
