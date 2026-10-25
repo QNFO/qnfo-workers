@@ -1,143 +1,31 @@
 {
  "ok": true,
  "marker": "REMEDIATION-CONSUMER-1",
- "verifier": "remediation-consumer@6499614d544d",
- "due": 27,
- "pass": 9,
- "fail": 9,
- "skipped": 9,
- "deferred": 9,
+ "verifier": "remediation-consumer@5c2d21b0395e",
+ "due": 678,
+ "pass": 453,
+ "fail": 102,
+ "skipped": 123,
+ "deferred": 120,
  "contracts": [
   {
-   "class": "issue-100281-BACKFILL-1",
-   "issue_id": 100281,
-   "verdict": "deferred",
-   "expected": "closed-with-evidence",
-   "observed": "pending",
-   "reason": "the probe cannot judge yet: pending"
-  },
-  {
-   "class": "issue-100321-BACKFILL-1",
-   "issue_id": 100321,
-   "verdict": "deferred",
-   "expected": "closed-with-evidence",
-   "observed": "pending",
-   "reason": "the probe cannot judge yet: pending"
-  },
-  {
-   "class": "fm-workflow-failure-unrecorded",
-   "issue_id": null,
-   "verdict": "fail",
-   "expected": "0",
-   "observed": "1",
-   "written": true
-  },
-  {
-   "class": "fm-revise-refs-extend-unrestored",
+   "class": "fm-probe-reset-on-description-append",
    "issue_id": null,
    "verdict": "pass",
-   "expected": "0",
-   "observed": "0",
-   "written": true
-  },
-  {
-   "class": "issue-100309-BACKFILL-1",
-   "issue_id": 100309,
-   "verdict": "deferred",
-   "expected": "closed-with-evidence",
-   "observed": "pending",
-   "reason": "the probe cannot judge yet: pending"
-  },
-  {
-   "class": "issue-100530",
-   "issue_id": 100530,
-   "verdict": "deferred",
-   "expected": "ok",
-   "observed": "pending: issue 100453 has no probe of its own yet, a doer writes one",
-   "reason": "the probe cannot judge yet: pending: issue 100453 has no probe of its own yet, a doer writes one"
-  },
-  {
-   "class": "issue-2008",
-   "issue_id": 2008,
-   "verdict": "fail",
-   "expected": "ok",
-   "observed": "defect: a code-loop pull request failed a required check in the last 14 days",
-   "written": true
-  },
-  {
-   "class": "issue-100333-BACKFILL-1",
-   "issue_id": 100333,
-   "verdict": "deferred",
-   "expected": "closed-with-evidence",
-   "observed": "pending",
-   "reason": "the probe cannot judge yet: pending"
-  },
-  {
-   "class": "issue-100429-BACKFILL-1",
-   "issue_id": 100429,
-   "verdict": "deferred",
-   "expected": "closed-with-evidence",
-   "observed": "pending",
-   "reason": "the probe cannot judge yet: pending"
-  },
-  {
-   "class": "belief-repo-token-writes-routes",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "1",
-   "observed": "1",
-   "written": true
-  },
-  {
-   "class": "issue-100564",
-   "issue_id": 100564,
-   "verdict": "deferred",
-   "expected": "ok",
-   "observed": "pending: issue 100489 has no probe of its own yet, a doer writes one",
-   "reason": "the probe cannot judge yet: pending: issue 100489 has no probe of its own yet, a doer writes one"
-  },
-  {
-   "class": "belief-no-untested-control-on-critical-path",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "1",
-   "observed": "1",
-   "written": true
-  },
-  {
-   "class": "fm-registry-live-absent",
-   "issue_id": null,
-   "verdict": "fail",
-   "expected": "0",
-   "observed": "1",
-   "written": true
-  },
-  {
-   "class": "fm-monitoring-closed-completed",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "0",
-   "observed": "0",
-   "written": true
-  },
-  {
-   "class": "issue-100103",
-   "issue_id": 100103,
-   "verdict": "fail",
-   "expected": "1",
-   "observed": "0",
-   "written": true
-  },
-  {
-   "class": "issue-100325",
-   "issue_id": 100325,
-   "verdict": "fail",
-   "expected": "0",
+   "expected": "2",
    "observed": "2",
    "written": true
   },
   {
-   "class": "belief-issues-probed-hourly",
+   "class": "fm-breach-anchor-stale",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "1",
+   "observed": "1",
+   "written": true
+  },
+  {
+   "class": "belief-fleet-closure-subcritical",
    "issue_id": null,
    "verdict": "fail",
    "expected": "1",
@@ -145,15 +33,15 @@
    "written": true
   },
   {
-   "class": "issue-100301-BACKFILL-1",
-   "issue_id": 100301,
+   "class": "issue-99926-BACKFILL-1",
+   "issue_id": 99926,
    "verdict": "deferred",
    "expected": "closed-with-evidence",
    "observed": "pending",
    "reason": "the probe cannot judge yet: pending"
   },
   {
-   "class": "fm-code-review-noise-defect",
+   "class": "fm-selfheal-executed-unverified",
    "issue_id": null,
    "verdict": "pass",
    "expected": "0",
@@ -161,23 +49,231 @@
    "written": true
   },
   {
-   "class": "fm-probe-source-moved",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "0",
-   "observed": "0",
-   "written": true
-  },
-  {
-   "class": "issue-2805",
-   "issue_id": 2805,
+   "class": "issue-2562",
+   "issue_id": 2562,
    "verdict": "fail",
    "expected": "ok",
-   "observed": "no-claim: the prompt-store sync has taken no work claim on prompt-stores/sync_system_prompt.py in 14 days, so two sessions can still interleave writes to one prompt store",
+   "observed": "traffic-health failing or not run in 120 min",
    "written": true
   },
   {
-   "class": "fm-cf-obs-bridge-stale",
+   "class": "issue-100388-BACKFILL-1",
+   "issue_id": 100388,
+   "verdict": "deferred",
+   "expected": "closed-with-evidence",
+   "observed": "pending",
+   "reason": "the probe cannot judge yet: pending"
+  },
+  {
+   "class": "issue-2924",
+   "issue_id": 2924,
+   "verdict": "fail",
+   "expected": "1",
+   "observed": "0: no gsc rows in reach_signals",
+   "written": true
+  },
+  {
+   "class": "fm-cf-obs-nested-pin-stale",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "0",
+   "observed": "0",
+   "written": true
+  },
+  {
+   "class": "fm-autoclose-flap",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "2",
+   "observed": "2",
+   "written": true
+  },
+  {
+   "class": "fm-research-width-rate-limit",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "0",
+   "observed": "0",
+   "written": true
+  },
+  {
+   "class": "fm-schema-index-stale",
+   "issue_id": 100072,
+   "verdict": "pass",
+   "expected": "8",
+   "observed": "8",
+   "written": true
+  },
+  {
+   "class": "issue-100361-BACKFILL-1",
+   "issue_id": 100361,
+   "verdict": "deferred",
+   "expected": "closed-with-evidence",
+   "observed": "pending",
+   "reason": "the probe cannot judge yet: pending"
+  },
+  {
+   "class": "issue-100535",
+   "issue_id": 100535,
+   "verdict": "deferred",
+   "expected": "ok",
+   "observed": "pending: issue 100458 has no probe of its own yet, a doer writes one",
+   "reason": "the probe cannot judge yet: pending: issue 100458 has no probe of its own yet, a doer writes one"
+  },
+  {
+   "class": "goal-PRG-QNFO-OPS-DEFECTS-0",
+   "issue_id": null,
+   "verdict": "fail",
+   "expected": "ok",
+   "observed": "open defects in QNFO.OPS: 377",
+   "written": true
+  },
+  {
+   "class": "fm-migration-literal-outside-check-enum",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "0",
+   "observed": "0",
+   "written": true
+  },
+  {
+   "class": "fm-companion-draft-cache-replay",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "1",
+   "observed": "1",
+   "written": true
+  },
+  {
+   "class": "goal-PRG-QNFO-REACH-DEFECTS-0",
+   "issue_id": null,
+   "verdict": "fail",
+   "expected": "ok",
+   "observed": "open defects in QNFO.REACH: 12",
+   "written": true
+  },
+  {
+   "class": "fm-reader-report-pending",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "0",
+   "observed": "0",
+   "written": true
+  },
+  {
+   "class": "issue-100562",
+   "issue_id": 100562,
+   "verdict": "deferred",
+   "expected": "ok",
+   "observed": "pending: issue 100488 has no probe of its own yet, a doer writes one",
+   "reason": "the probe cannot judge yet: pending: issue 100488 has no probe of its own yet, a doer writes one"
+  },
+  {
+   "class": "issue-1000197",
+   "issue_id": 1000197,
+   "verdict": "fail",
+   "expected": "1",
+   "observed": "0",
+   "written": true
+  },
+  {
+   "class": "issue-2380",
+   "issue_id": 2380,
+   "verdict": "fail",
+   "expected": "1",
+   "observed": "0",
+   "written": true
+  },
+  {
+   "class": "fm-subscribe-send-failure-silent",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "0",
+   "observed": "0",
+   "written": true
+  },
+  {
+   "class": "fm-view-alias-capture",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "1",
+   "observed": "1",
+   "written": true
+  },
+  {
+   "class": "issue-100570",
+   "issue_id": 100570,
+   "verdict": "deferred",
+   "expected": "ok",
+   "observed": "pending: issue 100430 has no probe of its own yet, a doer writes one",
+   "reason": "the probe cannot judge yet: pending: issue 100430 has no probe of its own yet, a doer writes one"
+  },
+  {
+   "class": "issue-100600",
+   "issue_id": 100600,
+   "verdict": "deferred",
+   "expected": "ok",
+   "observed": "pending: issue 100577 has no probe of its own yet, a doer writes one",
+   "reason": "the probe cannot judge yet: pending: issue 100577 has no probe of its own yet, a doer writes one"
+  },
+  {
+   "class": "fm-companion-publish-stall",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "1",
+   "observed": "1",
+   "written": true
+  },
+  {
+   "class": "fm-fm-sla-due-at-mixed-format",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "0",
+   "observed": "0",
+   "written": true
+  },
+  {
+   "class": "fm-ab-length-empty-scored-as-loss",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "0",
+   "observed": "0",
+   "written": true
+  },
+  {
+   "class": "fm-claim-reaper-stalled",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "1",
+   "observed": "1",
+   "written": true
+  },
+  {
+   "class": "fm-code-patch-stale-dead-end",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "0",
+   "observed": "0",
+   "written": true
+  },
+  {
+   "class": "fm-collector-without-credential",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "1",
+   "observed": "1",
+   "written": true
+  },
+  {
+   "class": "fm-dissemination-queue-over-cadence",
+   "issue_id": null,
+   "verdict": "fail",
+   "expected": "0",
+   "observed": "1",
+   "written": true
+  },
+  {
+   "class": "fm-cf-obs-sweep-stale",
    "issue_id": null,
    "verdict": "pass",
    "expected": "fresh",
@@ -185,23 +281,7 @@
    "written": true
   },
   {
-   "class": "issue-2954",
-   "issue_id": 2954,
-   "verdict": "fail",
-   "expected": "0",
-   "observed": "188",
-   "written": true
-  },
-  {
-   "class": "fm-tracker-state-lag",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "ok",
-   "observed": "ok",
-   "written": true
-  },
-  {
-   "class": "fm-thin-papers-unremediated",
+   "class": "fm-cf-obs-untracked",
    "issue_id": null,
    "verdict": "fail",
    "expected": "0",
@@ -209,67 +289,68 @@
    "written": true
   },
   {
-   "class": "goal-TP-5-MEASURE-TO-ACT-1",
+   "class": "fm-parked-contract-unprobed",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "0",
+   "observed": "0",
+   "written": true
+  },
+  {
+   "class": "goal-WORKERS-STANDARDS-ADVISORY-0",
+   "issue_id": null,
+   "verdict": "fail",
+   "expected": "ok",
+   "observed": "above target: the newest workers best-practice audit reads 0 fail and 66 advisory findings at 2026-10-25T17:49:16Z (target 0)",
+   "written": true
+  },
+  {
+   "class": "fm-code-multi-file-refused",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "0",
+   "observed": "0",
+   "written": true
+  },
+  {
+   "class": "fm-code-publish-waits-for-push",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "0",
+   "observed": "0",
+   "written": true
+  },
+  {
+   "class": "fm-code-task-whole-file-over-window",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "0",
+   "observed": "0",
+   "written": true
+  },
+  {
+   "class": "fm-consumer-gate-starvation",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "0",
+   "observed": "0",
+   "written": true
+  },
+  {
+   "class": "goal-GH-APP-FLEET-2-CONVERSIONS-0",
    "issue_id": null,
    "verdict": "deferred",
    "expected": "ok",
-   "observed": "pending: breach_code_task_pct 7.8, needs-machine-probe contracts 34",
-   "reason": "the probe cannot judge yet: pending: breach_code_task_pct 7.8, needs-machine-probe contracts 34"
+   "observed": "pending: workers served by the App broker in 24 hours: 0 of 13",
+   "reason": "the probe cannot judge yet: pending: workers served by the App broker in 24 hours: 0 of 13"
   },
   {
-   "class": "goal-TWIN-FRONTIER-MODEL-1",
+   "class": "fm-revise-refs-refusal-waste",
    "issue_id": null,
    "verdict": "pass",
-   "expected": "1",
-   "observed": "1",
+   "expected": "0",
+   "observed": "0",
    "written": true
-  }
- ],
- "trusted_transports": [
-  "binding-http",
-  "cf-api",
-  "code-read",
-  "container",
-  "curl",
-  "d1-query",
-  "d1-query@ipatent-db",
-  "d1-query@living-paper",
-  "d1-query@personal-life",
-  "d1-query@portfolio-state",
-  "d1-query@q08-signal",
-  "d1-query@qnfo-cms",
-  "d1-query@qnfo-graph",
-  "dns",
-  "edge-ext",
-  "external",
-  "external-curl",
-  "external-http",
-  "external-https",
-  "http",
-  "runner-https"
- ],
- "budget_exhausted": false,
- "runtime_verified_share_24h": 8.4,
- "host_census": {
-  "skipped": "ran within 6h"
- },
- "fleet_journeys": {
-  "skipped": "ran within 50 min"
- },
- "cf_token_watch": {
-  "ok": 1,
-  "expires_in_min": 999999,
-  "path": "accounts"
- },
- "migrations": {
-  "opted_in": 433,
-  "unapplied": [],
-  "applied_now": [],
-  "failed": [],
-  "metric": 0
- },
- "spent_ms": 22127,
- "head": "6499614d544d12888c8ea48b4b5620f84d1ee797",
- "job_status": "success",
- "ts": "2026-10-25T15:35:55Z"
-}
+  },
+  {
+  

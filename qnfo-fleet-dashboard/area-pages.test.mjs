@@ -170,15 +170,32 @@ function withQueue(env, db) {
   ok((home.match(/<article class="card item[^"]*" data-area="(cost|research|reach|autonomy|reliability)"/g) || []).length === 2 && /class="it-area" href="\/area\/cost">Cost</.test(home) && /class="it-area" href="\/area\/reliability">Reliability</.test(home), "C12 every queue card on the overview names its area");
   const rowOf = (id) => (home.match(new RegExp('id="area-' + id + '"[\\s\\S]*?</section>')) || [""])[0];
   ok(/can't confirm: could not read/.test(rowOf("research")) && /code tasks/.test(rowOf("research")) && /research queue/.test(rowOf("research")) && /can't confirm: could not read outreach queue/.test(rowOf("reach")), "C12b an overview row whose sources could not be read says can't confirm, not all clear");
-  ok(home.includes('id="areas"') && IDS.slice(0, 5).every((i) => home.includes('id="area-' + i + '"')), "C13 the overview still has one row per metric area");
+  ok(home.includes('id="areas"') && IDS.slice(0, 5).every((i) => home.includes('id="area-' + i + '"')) && home.indexOf('id="areas"') < home.indexOf('id="queue"'), "C13 the overview shows failure/root-cause rows before the owner queue");
+}
+
+// ---- C2. a failed remedy-history read is visible without turning a measured breach into a false "no attempts"
+{
+  const { env, db } = mk();
+  db.exec("DROP TABLE analytics_action_log");
+  const failureWorker = (await import(pathToFileURL(join(here, "worker.js")).href + "?remedy-history-failure")).default;
+  const failureCall = (path) => failureWorker.fetch(new Request(O + path), env, ctx);
+  const home = await (await failureCall("/")).text();
+  const area = await (await failureCall("/area/cost")).text();
+  ok(home.includes("Remedy history unavailable") && !home.includes("no attempt in 30d"), "C13b overview does not present a failed remedy read as zero attempts");
+  ok(area.includes("Remedy history unavailable") && !area.includes("no attempt in 30d"), "C13c area page does not present a failed remedy read as zero attempts");
 }
 
 // ---- D. the navigation is the areas
 {
   const { env } = mk();
-  const links = (h) => [...h.split('<nav class="q-nav"')[1].split("</nav>")[0].matchAll(/<a href="([^"]*)"( aria-current="page")?>([^<]*)</g)].map((m) => [m[3], m[1], !!m[2]]);
-  const home = links(await (await call(env, "/")).text());
-  ok(home.map((l) => l[0]).join() === "Overview,Cost,Research,Reach,Autonomy,Reliability,Platform,Command line", "D1 the navigation is Overview, the six areas, the command line: " + home.map((l) => l[0]));
+  const nav = (h) => h.split('<nav class="q-nav"')[1].split("</nav>")[0];
+  const links = (h) => [...nav(h).matchAll(/<a href="([^"]*)"( aria-current="page")?>([^<]*)</g)].map((m) => [m[3], m[1], !!m[2]]);
+  const homeHtml = await (await call(env, "/")).text();
+  const home = links(homeHtml);
+  const homeNav = nav(homeHtml);
+  ok(home.map((l) => l[0]).join() === "Overview,Cost,Research,Reach,Autonomy,Reliability,Platform,Command line" && /<summary[^>]*>Areas<\/summary>/.test(homeNav), "D1 the navigation groups the six area links under Areas while retaining Overview and Command line: " + home.map((l) => l[0]));
+  const topNav = homeNav.replace(/<details class="q-nav-areas">[\s\S]*?<\/details>/, "<details></details>");
+  ok((topNav.match(/<(?:a|details)\b/g) || []).length === 3, "D1b desktop navigation has three top-level choices instead of eight tabs");
   ok(home.find((l) => l[2]) && home.find((l) => l[2])[0] === "Overview" && home.filter((l) => l[2]).length === 1, "D2 the overview lights Overview only");
   const area = links(await (await call(env, "/area/reach")).text());
   ok(area.filter((l) => l[2]).map((l) => l[0]).join() === "Reach", "D3 an area page lights its area");
@@ -216,7 +233,7 @@ function withQueue(env, db) {
   ok(t1b === t1, "E6 ages and the version live in the footer, so an unchanged area keeps its revision");
   db.prepare("UPDATE metric_registry SET last_value = '7' WHERE metric = 'fleet_ai_run_rate_30d_usd'").run();
   await new Promise((r) => setTimeout(r, 5));
-  // the model is cached 60 s per isolate; the revision of the page must still follow a change in the queue, which is read live
+  // the model is cached 15 s per isolate; the revision of the page must still follow a change in the queue, which is read live
   db.prepare("INSERT INTO human_actions (slug,title,why,action,due,source) VALUES ('rt-two','Another billing decision','w','a','','billing')").run();
   const moved = await call(env, "/area/cost?frag=1&rev=" + encodeURIComponent(t1));
   ok(moved.status === 200 && moved.headers.get("X-Content-Revision") !== t1, "E7 a new card in the area moves the revision and the poll gets the new fragment");
@@ -249,7 +266,7 @@ function withQueue(env, db) {
 {
   const { env, db } = mk();
   db.exec("DROP TABLE metric_history");
-  // the area model is cached 60 s per isolate and earlier sections filled it: step past the cache the way a later request would
+  // the area model is cached 15 s per isolate and earlier sections filled it: step past the cache the way a later request would
   const realNow = Date.now; Date.now = () => realNow() + 120000;
   const h = await (await call(env, "/area/cost")).text();
   Date.now = realNow;
