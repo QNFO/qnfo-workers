@@ -3253,7 +3253,7 @@ async function handleRssVersionsJson(env) {
       const revised = String(p.last_revised_at || p.first_published_at || p.created_at || "").slice(0, 19).replace(" ", "T") + "Z";
       return { id: link + "#v" + version, url: link, title: displayTitle(p.title) + " (v" + version + ")", summary: mathPlain(p.abstract || "").slice(0, 600), date_published: revised, date_modified: revised, tags: ["new-version"], _qnfo: { version, version_count: Number(p.version_count || 1), first_published: String(p.first_published_at || p.created_at || "").slice(0, 10) } };
     });
-    return new Response(JSON.stringify({ version: "https://jsonfeed.org/version/1.1", title: "QNFO Papers — new versions", home_page_url: base + "/papers?sort=revised", feed_url: base + "/feed-versions.json", language: "en", items }, null, 2), { headers: { "Content-Type": "application/feed+json; charset=utf-8", "Cache-Control": "public, max-age=300", "Access-Control-Allow-Origin": "*" } });
+    return new Response(JSON.stringify({ version: "https://jsonfeed.org/version/1.1", title: "QNFO Papers - new versions", home_page_url: base + "/papers?sort=revised", feed_url: base + "/feed-versions.json", language: "en", items }, null, 2), { headers: { "Content-Type": "application/feed+json; charset=utf-8", "Cache-Control": "public, max-age=300", "Access-Control-Allow-Origin": "*" } });
   } catch (e) {
     return new Response(JSON.stringify({ error: "feed unavailable" }), { status: 500, headers: { "Content-Type": "application/json" } });
   }
