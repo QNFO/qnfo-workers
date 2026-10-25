@@ -48,7 +48,7 @@ jobs:
           node q08-mind/prepare-deploy-config.mjs q08-mind/wrangler.toml q08-mind/wrangler.deploy.toml
           mkdir -p q08-mind/.deploy
           # WRANGLER-PIN-1: keep the API bundle and fallback on the version proven by this test; update after rerunning it.
-          npx --yes wrangler@3.114.17 deploy --dry-run --outdir q08-mind/.deploy --config q08-mind/wrangler.deploy.toml
+          npx --yes wrangler@3.114.17 deploy --dry-run --outdir "$GITHUB_WORKSPACE/q08-mind/.deploy" --config q08-mind/wrangler.deploy.toml
           test -s q08-mind/.deploy/worker.js
 
       - name: Upload the module bundle through the scripts api

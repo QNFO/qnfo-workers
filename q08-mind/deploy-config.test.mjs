@@ -83,7 +83,7 @@ try {
 }
 
 assert.match(workflow, /node q08-mind\/prepare-deploy-config\.mjs q08-mind\/wrangler\.toml q08-mind\/wrangler\.deploy\.toml/, "workflow generates the same config tested here");
-assert.match(workflow, new RegExp(`npx --yes wrangler@${wranglerVersion} deploy --dry-run --outdir q08-mind/\\.deploy --config q08-mind/wrangler\\.deploy\\.toml`), "workflow bundles with the validated Wrangler version");
+assert.match(workflow, new RegExp(`npx --yes wrangler@${wranglerVersion} deploy --dry-run --outdir "\\$GITHUB_WORKSPACE/q08-mind/\\.deploy" --config q08-mind/wrangler\\.deploy\\.toml`), "workflow bundles with the validated Wrangler version");
 assert.match(apiUpload, /"main_module":"worker\.js","compatibility_date":"%s","observability":\{"enabled":false\}/, "API metadata matches the generated config");
 assert.match(apiUpload, /workers\/scripts\/q08-mind/, "API upload targets the production Worker");
 assert.match(apiUpload, /worker\.js=@q08-mind\/\.deploy\/worker\.js;type=application\/javascript\+module/, "API upload uses the supported JavaScript module MIME");
