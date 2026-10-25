@@ -2,7 +2,8 @@
 // ADVERSARIAL: proves the copy is idempotent, capped, excludes spam/outbound, and that retired stores stop alerting.
 // It does not prove personal-life accepts the insert in production (verified live after deploy) nor that mail reaches qnfo.org.
 import fs from "node:fs";
-const src = fs.readFileSync(new URL("./worker.js", import.meta.url), "utf8");
+import { stripWorkerDefaultExport } from "../scripts/worker-source-test.mjs";
+const src = stripWorkerDefaultExport(fs.readFileSync(new URL("./worker.js", import.meta.url), "utf8"));
 const api = new Function(src.replace(/export default\{/, "const __handler={") +
   "\nreturn {emailIndexSync,emailIndexTime,freshnessGuard,RETIRED_STORES,EMAIL_INDEX_CAP,VERSION};")();
 const fail = [];
