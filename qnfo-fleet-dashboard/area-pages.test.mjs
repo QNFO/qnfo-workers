@@ -173,6 +173,18 @@ function withQueue(env, db) {
   ok(home.includes('id="areas"') && IDS.slice(0, 5).every((i) => home.includes('id="area-' + i + '"')) && home.indexOf('id="areas"') < home.indexOf('id="queue"'), "C13 the overview shows failure/root-cause rows before the owner queue");
 }
 
+// ---- C2. a failed remedy-history read is visible without turning a measured breach into a false "no attempts"
+{
+  const { env, db } = mk();
+  db.exec("DROP TABLE analytics_action_log");
+  const failureWorker = (await import(pathToFileURL(join(here, "worker.js")).href + "?remedy-history-failure")).default;
+  const failureCall = (path) => failureWorker.fetch(new Request(O + path), env, ctx);
+  const home = await (await failureCall("/")).text();
+  const area = await (await failureCall("/area/cost")).text();
+  ok(home.includes("Remedy history unavailable") && !home.includes("no attempt in 30d"), "C13b overview does not present a failed remedy read as zero attempts");
+  ok(area.includes("Remedy history unavailable") && !area.includes("no attempt in 30d"), "C13c area page does not present a failed remedy read as zero attempts");
+}
+
 // ---- D. the navigation is the areas
 {
   const { env } = mk();
