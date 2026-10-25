@@ -1,5 +1,5 @@
 // Q08-YIELD-1 offline suite (q08-signal-engine 0.31.0, charter pillar: research, cost second; agent_issues 99929, 99930).
-// Proves: (1) every generation insert logs source_chars, source_kind, compose_calls and verify_calls, through nullable columns the worker
+// Proves: (1) every generation insert logs source_chars, source_kind, compose_calls, verify_calls, panel_calls and factcheck_calls, through nullable columns the worker
 // adds itself to a table created elsewhere (pragma_table_info guard), and a failed bootstrap never costs a run its row; (2) the thin-source
 // test is the floor learned from the ok runs that logged a source size (flat THIN_MIN_ARTICLE until five exist), a source below it ends
 // the run as skipped before any compose call, and the skipped candidates are retried after 24 hours with the next ones ahead of them;
@@ -51,18 +51,37 @@ const cols = (db) => db.prepare("SELECT name FROM pragma_table_info('engine_runs
 // ---- 2. the schema bootstrap and the insert helper
 {
   const { db, shim } = makeDb();
-  const env = { DB: shim, q08Meter: { compose: 3, verify: 5 } };
+  const env = { DB: shim, q08Meter: { compose: 3, verify: 5, panel: 2, factcheck: 3 } };
   await G.insertRun(env, { scraped: 4, scored: 3, published: 0, top: "hn:x", model: "m", ms: 1200, status: "gate_failed", error: "e", sourceChars: 1834.4, sourceKind: "hn+fulltext" });
   const c = cols(db);
-  ok(["source_chars", "source_kind", "compose_calls", "verify_calls"].every((n) => c.includes(n)), "the worker adds the four columns to an engine_runs that lacks them", c);
+  ok(["source_chars", "source_kind", "compose_calls", "verify_calls", "panel_calls", "factcheck_calls"].every((n) => c.includes(n)), "the worker adds the six columns to an engine_runs that lacks them", c);
   const row = db.prepare("SELECT * FROM engine_runs ORDER BY id DESC LIMIT 1").get();
-  ok(row.source_chars === 1834 && row.source_kind === "hn+fulltext" && row.compose_calls === 3 && row.verify_calls === 5 && row.status === "gate_failed" && row.error === "e", "the insert binds source_chars, source_kind and the call counts", row);
-  ok(env.q08Meter.compose === 0 && env.q08Meter.verify === 0, "the meter restarts, so a second row of the same tick counts only its own calls");
+  ok(row.source_chars === 1834 && row.source_kind === "hn+fulltext" && row.compose_calls === 3 && row.verify_calls === 5 && row.panel_calls === 2 && row.factcheck_calls === 3 && row.status === "gate_failed" && row.error === "e", "the insert binds source_chars, source_kind and total plus per-stage call counts", row);
+  ok(env.q08Meter.compose === 0 && env.q08Meter.verify === 0 && env.q08Meter.panel === 0 && env.q08Meter.factcheck === 0, "the meter restarts, so a second row of the same tick counts only its own calls");
   await G.insertRun(env, { status: "ok", published: 1 });
   const r2 = db.prepare("SELECT * FROM engine_runs ORDER BY id DESC LIMIT 1").get();
-  ok(r2.compose_calls === 0 && r2.source_chars === null && r2.piece_published === 1, "a row with nothing to report leaves the source columns NULL", r2);
+  ok(r2.compose_calls === 0 && r2.verify_calls === 0 && r2.panel_calls === 0 && r2.factcheck_calls === 0 && r2.source_chars === null && r2.piece_published === 1, "a row with nothing to report leaves the source columns NULL and call counts at zero", r2);
   await G.ensureRunColumns(env);
   ok(cols(db).filter((n) => n === "source_chars").length === 1, "the bootstrap never adds a column twice");
+}
+{
+  const env = { q08Meter: { compose: 0, verify: 0, panel: 0, factcheck: 0 } };
+  G.meterCall(env, "compose");
+  G.meterCall(env, "panel");
+  G.meterCall(env, "factcheck");
+  ok(env.q08Meter.compose === 1 && env.q08Meter.verify === 2 && env.q08Meter.panel === 1 && env.q08Meter.factcheck === 1, "stage calls also preserve verify_calls as their total", env.q08Meter);
+}
+{
+  const { db, shim } = makeDb();
+  const env = { DB: shim, q08Meter: { compose: 0, verify: 0, panel: 0, factcheck: 0 }, AI: { run: async () => { throw new Error("model unavailable"); } } };
+  await mod.__quality.readerTest(env, "@cf/moonshotai/kimi-k2.6", "An essay");
+  await V.factCheck(env, "An essay", "Source material", "@cf/openai/gpt-oss-120b");
+  ok(env.q08Meter.panel === 1 && env.q08Meter.factcheck > 0 && env.q08Meter.verify === env.q08Meter.panel + env.q08Meter.factcheck, "actual reviewer call sites attribute failed attempts and retain their total", env.q08Meter);
+  await G.insertRun(env, { status: "gate_failed" });
+  await G.insertRun({ DB: shim }, { status: "skipped" });
+  const rows = db.prepare("SELECT panel_calls, factcheck_calls, verify_calls FROM engine_runs ORDER BY id").all();
+  ok(rows[0].panel_calls === 1 && rows[0].factcheck_calls > 0 && rows[0].verify_calls === rows[0].panel_calls + rows[0].factcheck_calls, "the run ledger persists attribution from actual calls", rows);
+  ok(rows[1].panel_calls === null && rows[1].factcheck_calls === null && rows[1].verify_calls === null, "an unmetered caller remains unknown rather than being reported as zero spend", rows[1]);
 }
 {
   // a database whose ALTER is refused still gets its row, with the old column list
@@ -178,11 +197,11 @@ const gen = src.slice(src.indexOf("async function generate(env) {"), src.indexOf
 ok(!/INSERT INTO engine_runs/.test(gen), "generate() writes engine_runs only through insertRun");
 ok((gen.match(/await insertRun\(env, \{/g) || []).length >= 3, "the skipped, gate_failed and ok exits all log through insertRun");
 ok(/sourceChars: storyGlen/.test(gen) && /sourceKind: sourceKindOf\(story,/.test(gen), "the essay rows carry the measured source size and kind");
-ok(/q08Meter: \{ compose: 0, verify: 0 \}/.test(gen), "generate() meters its model calls on a per-run copy of env");
-ok(/meterCall\(env, "compose"\)/.test(src) && /meterCall\(env, "verify"\)/.test(src), "compose and reviewer calls are counted");
+ok(/q08Meter: \{ compose: 0, verify: 0, panel: 0, factcheck: 0 \}/.test(gen), "generate() meters its model calls on a per-run copy of env");
+ok(/meterCall\(env, "compose"\)/.test(src) && /meterCall\(env, "panel"\)/.test(src) && /meterCall\(env, "factcheck"\)/.test(src), "compose, panel and fact-check calls are counted by stage");
 ok(/pragma_table_info\('engine_runs'\)/.test(src), "the bootstrap checks pragma_table_info before each ALTER");
 ok(/ordered\.length, 8\)/.test(gen) || /Math\.min\(ordered\.length, 8\)/.test(gen), "the candidate loop is unchanged (up to 8 per tick)");
 const ver = (src.match(/var VERSION = "(\d+)\.(\d+)\.(\d+)/) || []).slice(1).map(Number);
-ok(ver.length === 3 && (ver[0] > 0 || ver[1] > 31 || (ver[1] === 31 && ver[2] >= 0)), "VERSION is at least 0.31.0", ver);
+ok(ver.length === 3 && (ver[0] > 0 || ver[1] > 35 || (ver[1] === 35 && ver[2] >= 0)), "VERSION is at least 0.35.0 for stage-call attribution", ver);
 console.log("source-sufficiency.test.mjs: " + pass + " passed, " + fail + " failed");
 if (fail) process.exit(1);
