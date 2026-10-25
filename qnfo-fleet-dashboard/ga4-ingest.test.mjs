@@ -51,6 +51,7 @@ const fetchMock = async (url, init) => {
   }
   if (String(url).includes("analyticsdata.googleapis.com")) {
     if (mode === "403") return new Response(JSON.stringify({ error: { status: "PERMISSION_DENIED" } }), { status: 403 });
+    if (mode === "empty") return new Response(JSON.stringify({}), { status: 200 });
     const b = JSON.parse(init.body);
     if (b.dimensions[0].name === "hostName" && hostMode === "other") return new Response(JSON.stringify({ rows: [ { dimensionValues: [{ value: "qnfo-publications.pages.dev" }], metricValues: [{ value: "2" }, { value: "1" }, { value: "1" }, { value: "1" }] } ] }), { status: 200 });
     if (b.dimensions[0].name === "hostName") return new Response(JSON.stringify({ rows: [ { dimensionValues: [{ value: "qnfo.org" }], metricValues: [{ value: "120" }, { value: "40" }, { value: "55" }, { value: "30" }] }, { dimensionValues: [{ value: "(not set)" }], metricValues: [{ value: "9" }, { value: "1" }, { value: "1" }, { value: "0" }] } ] }), { status: 200 });
@@ -82,6 +83,7 @@ ok(!rows.some((x) => x.entity_id === "(not set)"), "a (not set) dimension is ski
 ok(rows.some((x) => x.entity_type === "source" && x.entity_id === "bsky.app" && x.metric === "engagedSessions" && x.value === 7), "engaged sessions per source");
 ok(["page", "channel", "country", "device"].every((k) => rows.some((x) => x.entity_type === k)), "the rich ingest stores page, channel, country and device rows", rows.map((x) => x.entity_type));
 ok(calls.filter((c) => c.url.includes(":runReport")).every((c) => JSON.parse(c.body).dateRanges[0].startDate === "2026-10-17"), "the report reads the complete UTC day before now");
+
 
 const n0 = calls.length;
 r = await G.ga4Ingest({ AUDIT: d1, GA4_SA_KEY: SA }, { nowMs: now });
@@ -135,6 +137,21 @@ db.exec("DELETE FROM ops_config; DELETE FROM cloud_ops_events; DELETE FROM reach
 hostMode = "other"; adminMode = "found";
 r = await G.ga4Ingest({ AUDIT: d1, GA4_SA_KEY: SA }, { nowMs: now + 8 * 864e5 });
 ok(!r.error && r.property_source === "discovered" && r.quality === "human", "a discovered property is trusted whatever its first host row is", r);
+
+// GA4-QUALITY-1: a 0-row day is "empty", waits 6h, then retries; it is never a final ok.
+db.exec("DELETE FROM ops_config; DELETE FROM cloud_ops_events; DELETE FROM reach_signals");
+mode = "empty";
+const emptyMs = now + 9 * 864e5;
+const emptyDay = new Date(emptyMs - 864e5).toISOString().slice(0, 10);
+r = await G.ga4Ingest({ AUDIT: d1, GA4_SA_KEY: SA }, { nowMs: emptyMs });
+ok(!r.error && r.written === 0 && r.status === "empty" && r.next_try_ms === emptyMs + 6 * 3600 * 1000, "a 0-row day is empty with a 6h retry", r);
+r = await G.ga4Ingest({ AUDIT: d1, GA4_SA_KEY: SA }, { nowMs: emptyMs + 3600 * 1000 });
+ok(r.waiting === emptyDay && r.written === undefined, "a retry before next_try waits", r);
+mode = "ok";
+r = await G.ga4Ingest({ AUDIT: d1, GA4_SA_KEY: SA }, { nowMs: emptyMs + 6 * 3600 * 1000 + 1 });
+ok(!r.error && r.written > 0 && r.status === "ok", "after next_try the day is read again", r);
+db.exec("DELETE FROM ops_config; DELETE FROM cloud_ops_events; DELETE FROM reach_signals");
+mode = "ok";
 
 console.log((fail ? "FAIL" : "PASS") + "  " + pass + " passed, " + fail + " failed");
 process.exit(fail ? 1 : 0);
