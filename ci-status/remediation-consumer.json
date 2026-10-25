@@ -1,28 +1,20 @@
 {
  "ok": true,
  "marker": "REMEDIATION-CONSUMER-1",
- "verifier": "remediation-consumer@1cc532f1b0ba",
- "due": 636,
- "pass": 437,
- "fail": 99,
- "skipped": 100,
- "deferred": 100,
+ "verifier": "remediation-consumer@1a116c04d4fa",
+ "due": 655,
+ "pass": 446,
+ "fail": 100,
+ "skipped": 109,
+ "deferred": 109,
  "contracts": [
   {
-   "class": "goal-TP-3-FOOTPRINT-TEARDOWN-1",
-   "issue_id": null,
-   "verdict": "fail",
-   "expected": "ok",
-   "observed": "pending: worker_count 35 (needs <= 24)",
-   "written": true
-  },
-  {
-   "class": "issue-1000134",
-   "issue_id": 1000134,
-   "verdict": "pass",
-   "expected": "1",
-   "observed": "1",
-   "written": true
+   "class": "issue-100284-BACKFILL-1",
+   "issue_id": 100284,
+   "verdict": "deferred",
+   "expected": "closed-with-evidence",
+   "observed": "pending",
+   "reason": "the probe cannot judge yet: pending"
   },
   {
    "class": "fm-code-review-dead-end-at-open",
@@ -41,28 +33,28 @@
    "written": true
   },
   {
-   "class": "goal-TP-7-REACH-SURVIVES-REVIEW-GATE-1",
-   "issue_id": null,
-   "verdict": "deferred",
-   "expected": "ok",
-   "observed": "pending: subscribers_growth_monthly 0, credibility_events_90d n/a: OpenAlex readings cover N of the N selected works in N days (needs N) and no event is attested",
-   "reason": "the probe cannot judge yet: pending: subscribers_growth_monthly 0, credibility_events_90d n/a: OpenAlex readings cover N of the N selected works in N days (needs N) and no event is atteste"
-  },
-  {
-   "class": "issue-100284-BACKFILL-1",
-   "issue_id": 100284,
-   "verdict": "deferred",
-   "expected": "closed-with-evidence",
-   "observed": "pending",
-   "reason": "the probe cannot judge yet: pending"
-  },
-  {
    "class": "issue-2679",
    "issue_id": 2679,
    "verdict": "fail",
    "expected": "ok",
    "observed": "latest loop-heartbeats run failing",
    "written": true
+  },
+  {
+   "class": "goal-TP-3-FOOTPRINT-TEARDOWN-1",
+   "issue_id": null,
+   "verdict": "fail",
+   "expected": "ok",
+   "observed": "pending: worker_count 35 (needs <= 24)",
+   "written": true
+  },
+  {
+   "class": "goal-TP-7-REACH-SURVIVES-REVIEW-GATE-1",
+   "issue_id": null,
+   "verdict": "deferred",
+   "expected": "ok",
+   "observed": "pending: subscribers_growth_monthly 0, credibility_events_90d n/a: OpenAlex readings cover N of the N selected works in N days (needs N) and no event is attested",
+   "reason": "the probe cannot judge yet: pending: subscribers_growth_monthly 0, credibility_events_90d n/a: OpenAlex readings cover N of the N selected works in N days (needs N) and no event is atteste"
   },
   {
    "class": "fm-health-ok-but-empty",
@@ -73,11 +65,11 @@
    "written": true
   },
   {
-   "class": "issue-1000137",
-   "issue_id": 1000137,
-   "verdict": "fail",
+   "class": "issue-1000134",
+   "issue_id": 1000134,
+   "verdict": "pass",
    "expected": "1",
-   "observed": "0",
+   "observed": "1",
    "written": true
   },
   {
@@ -86,22 +78,6 @@
    "verdict": "fail",
    "expected": "ok",
    "observed": "below target",
-   "written": true
-  },
-  {
-   "class": "fm-trigger-depth-compile",
-   "issue_id": null,
-   "verdict": "fail",
-   "expected": "ok",
-   "observed": "stale-or-failing",
-   "written": true
-  },
-  {
-   "class": "issue-1000139",
-   "issue_id": 1000139,
-   "verdict": "pass",
-   "expected": "1",
-   "observed": "1",
    "written": true
   },
   {
@@ -129,19 +105,19 @@
    "reason": "the probe cannot judge yet: pending: no two-piece recovery with no stall between the pieces recorded for 100064"
   },
   {
-   "class": "fm-relapse-window-close-anchor",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "0",
+   "class": "issue-1000137",
+   "issue_id": 1000137,
+   "verdict": "fail",
+   "expected": "1",
    "observed": "0",
    "written": true
   },
   {
-   "class": "fm-reader-report-pending",
-   "issue_id": null,
+   "class": "issue-1000139",
+   "issue_id": 1000139,
    "verdict": "pass",
-   "expected": "0",
-   "observed": "0",
+   "expected": "1",
+   "observed": "1",
    "written": true
   },
   {
@@ -150,6 +126,22 @@
    "verdict": "pass",
    "expected": "ok",
    "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "fm-trigger-depth-compile",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "fm-relapse-window-close-anchor",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "0",
+   "observed": "0",
    "written": true
   },
   {
@@ -201,6 +193,14 @@
    "written": true
   },
   {
+   "class": "fm-reader-report-pending",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "0",
+   "observed": "0",
+   "written": true
+  },
+  {
    "class": "issue-2403",
    "issue_id": 2403,
    "verdict": "pass",
@@ -217,14 +217,6 @@
    "written": true
   },
   {
-   "class": "issue-2405",
-   "issue_id": 2405,
-   "verdict": "fail",
-   "expected": "ok",
-   "observed": "missing-marker:qnfo-research-exec/worker.js",
-   "written": true
-  },
-  {
    "class": "issue-2407",
    "issue_id": 2407,
    "verdict": "pass",
@@ -238,6 +230,14 @@
    "verdict": "pass",
    "expected": "ok",
    "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "issue-2405",
+   "issue_id": 2405,
+   "verdict": "fail",
+   "expected": "ok",
+   "observed": "missing-marker:qnfo-research-exec/worker.js",
    "written": true
   },
   {
@@ -305,14 +305,6 @@
    "written": true
   },
   {
-   "class": "rt-live-qnfo-ops",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "ok",
-   "observed": "ok",
-   "written": true
-  },
-  {
    "class": "fm-backlog-close-on-stale-pass",
    "issue_id": null,
    "verdict": "pass",
@@ -329,16 +321,16 @@
    "written": true
   },
   {
-   "class": "issue-2600",
-   "issue_id": 2600,
+   "class": "rt-live-qnfo-ops",
+   "issue_id": null,
    "verdict": "pass",
    "expected": "ok",
    "observed": "ok",
    "written": true
   },
   {
-   "class": "issue-100114",
-   "issue_id": 100114,
+   "class": "issue-100081",
+   "issue_id": 100081,
    "verdict": "pass",
    "expected": "ok",
    "observed": "ok",
@@ -353,6 +345,14 @@
    "written": true
   },
   {
+   "class": "issue-2600",
+   "issue_id": 2600,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
    "class": "issue-2829",
    "issue_id": 2829,
    "verdict": "pass",
@@ -361,8 +361,8 @@
    "written": true
   },
   {
-   "class": "issue-100081",
-   "issue_id": 100081,
+   "class": "issue-100114",
+   "issue_id": 100114,
    "verdict": "pass",
    "expected": "ok",
    "observed": "ok",
@@ -386,4 +386,4 @@
   },
   {
    "class": "issue-100119",
-   "issue_
+   "issue_id": 100119,
