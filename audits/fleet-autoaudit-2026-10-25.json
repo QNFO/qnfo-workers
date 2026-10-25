@@ -1,8 +1,15 @@
 {
-  "audited_at": "2026-10-25 10:54:40",
+  "audited_at": "2026-10-25 11:26:45",
   "d1_write_failures": [],
   "d1_writes_ok": 121,
   "guard": {
+    "_drift_confirm": {
+      "first_pass": [
+        "qnfo-gateway"
+      ],
+      "refreshed": true,
+      "second_pass": []
+    },
     "_guard_rc": 0,
     "ahead": [],
     "cf_script_list": true,
@@ -615,12 +622,12 @@
       },
       {
         "dir": "qnfo-fleet-dashboard",
-        "version": "1.57.0-ga4-rich",
+        "version": "1.58.0-ga4-quality",
         "worker": "qnfo-fleet-dashboard"
       },
       {
         "dir": "qnfo-gateway",
-        "version": "3.31.3-revert-7a9d293",
+        "version": "3.33.0-content-signal-owner-confirmed-1",
         "worker": "qnfo-gateway"
       },
       {
@@ -1334,9 +1341,9 @@
       "worker": "qnfo-fleet-control"
     },
     "qnfo-fleet-dashboard": {
-      "before": "1.57.0-ga4-rich",
+      "before": "1.58.0-ga4-quality",
       "http": 200,
-      "live": "1.57.0-ga4-rich",
+      "live": "1.58.0-ga4-quality",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-fleet-dashboard"
@@ -1360,9 +1367,9 @@
       "worker": "qnfo-fleet-feed"
     },
     "qnfo-gateway": {
-      "before": "3.31.3-revert-7a9d293",
+      "before": "3.33.0-content-signal-owner-confirmed-1",
       "http": 200,
-      "live": "3.31.3-revert-7a9d293",
+      "live": "3.33.0-content-signal-owner-confirmed-1",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-gateway"
