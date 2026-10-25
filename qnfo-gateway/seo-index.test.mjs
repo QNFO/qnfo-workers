@@ -9,7 +9,7 @@ let pass = 0, fail = 0;
 const ok = (c, m, x) => { if (c) pass++; else { fail++; console.log("FAIL " + m + (x !== undefined ? " :: " + String(x).slice(0, 300) : "")); } };
 const slice = (a, b) => { const i = src.indexOf(a); const j = src.indexOf(b, i + 1); return i < 0 || j < 0 ? "" : src.slice(i, j); };
 
-ok(src.includes('var VERSION="3.30.5-seo-index-6"'), "version is 3.30.5-seo-index-6");
+ok(src.includes('var VERSION="3.31.1-seo-index-7"'), "version is 3.31.1-seo-index-7");
 
 // (a) IndexNow reaches every engine: the loop must not stop at the first acceptance.
 const idx = slice("async function indexNowSubmit", "__name(indexNowSubmit");
@@ -79,6 +79,10 @@ ok(src.includes("String(e.error).slice(0, 32)"), "per-engine error text is store
 // REDTEAM-DOUBLE-COUNT-1: the audit and the metric publisher must not each carry their own hub count
 ok(!/sitemapPaperUrls = Number\(sm && sm\.n \|\| 0\) \+ 6/.test(src), "audit does not carry a second literal hub count");
 ok((src.match(/SEO_PAPER_HUB_COUNT/g) || []).length >= 3, "one constant feeds definition, metric and audit");
+
+// TELEMETRY-COVERAGE-1: no 7-day verdict from a window younger than the data
+ok(src.includes("var covered = covDays >= 2"), "crawl metrics suppressed until the log covers 2+ days");
+ok(src.includes("seo_crawl_coverage_days"), "coverage is published alongside the count");
 
 console.log(pass + " passed, " + fail + " failed");
 if (fail) process.exit(1);
