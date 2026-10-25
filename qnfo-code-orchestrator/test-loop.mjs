@@ -341,7 +341,7 @@ function fakeLoader(spinMs) {
   fs.mkdirSync(path.join(dir, "scripts"));
   fs.writeFileSync(path.join(dir, "scripts/x.py"), "def f():\n    return 1\n");
   fs.writeFileSync(path.join(dir, "p.diff"), patch);
-  const ap = spawnSync("git", ["apply", "p.diff"], { cwd: dir, encoding: "utf8" });
+  const ap = spawnSync("git", ["-c", "core.autocrlf=false", "apply", "p.diff"], { cwd: dir, encoding: "utf8" });
   check("pull mode: stored patch applies with git apply and yields the proposal", ap.status === 0 && fs.readFileSync(path.join(dir, "scripts/x.py"), "utf8") === "def f():\n    return 2\n", ap.stderr);
 }
 // patch shape edge case: no trailing newline on the base
@@ -353,7 +353,7 @@ function fakeLoader(spinMs) {
   const row = await env.AUDIT_DB.prepare("SELECT status, ctx FROM code_tasks WHERE id=?").bind(enq.body.id).first();
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "pp-"));
   fs.writeFileSync(path.join(dir, "n.md"), "a\nb"); fs.writeFileSync(path.join(dir, "p.diff"), JSON.parse(row.ctx).patch);
-  const ap = spawnSync("git", ["apply", "p.diff"], { cwd: dir, encoding: "utf8" });
+  const ap = spawnSync("git", ["-c", "core.autocrlf=false", "apply", "p.diff"], { cwd: dir, encoding: "utf8" });
   check("pull mode: patch for a file without trailing newline applies", row.status === "ready_to_publish" && ap.status === 0, { st: row.status, err: ap.stderr });
 }
 
@@ -475,7 +475,7 @@ function fakeLoader(spinMs) {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), "pm-"));
     for (const [f, c] of Object.entries(files)) { fs.mkdirSync(path.dirname(path.join(dir, f)), { recursive: true }); fs.writeFileSync(path.join(dir, f), c); }
     fs.writeFileSync(path.join(dir, "p.diff"), patch);
-    const ap = spawnSync("git", ["apply", "p.diff"], { cwd: dir, encoding: "utf8" });
+    const ap = spawnSync("git", ["-c", "core.autocrlf=false", "apply", "p.diff"], { cwd: dir, encoding: "utf8" });
     return { ap, read: (f) => fs.readFileSync(path.join(dir, f), "utf8") };
   };
   check("patch mode fixture is larger than the whole-file cap", big.length > 60000, big.length);
