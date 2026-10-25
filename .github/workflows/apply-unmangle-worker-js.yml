@@ -21,7 +21,7 @@ name: apply-unmangle-worker-js
 #
 # SCHEDULE-EVENT-NEVER-FIRES-1
 #   On this repository the GitHub `schedule` event has NEVER fired: there are zero
-#   schedule-event runs in the entire run history, including the 06:17 deploy-drift
+#   schedule-event runs in the entire run history, including the deploy-drift
 #   and 06:23 indexnow-submit slots (established in ci-watchdog.yml's own header).
 #   A daily cron here is therefore dead on arrival. `repository_dispatch` is added so
 #   the Cloudflare side can fire this repair on its own cron, and the schedule entry
@@ -43,7 +43,7 @@ on:
   schedule:
     # daily, offset from deploy-drift (06:17) and mirror-sync. DECLARATION ONLY --
     # schedule events do not fire on this repository (SCHEDULE-EVENT-NEVER-FIRES-1).
-    - cron: "41 */2 * * *"
+    - cron: "41 4 * * *"
   workflow_dispatch:
 
 concurrency:
