@@ -63,7 +63,8 @@ const stmt = (sql) => { const st = { a: [], bind(...a) { st.a = a; return st; },
 const env = { LIVING_PAPER: { prepare: stmt }, DB: { prepare: stmt }, QNFO_BUCKET: { get: async () => null } };
 globalThis.fetch = async () => new Response("", { status: 404 });
 const gw = (await import(pathToFileURL(join(here, "worker.js")).href)).default;
-const get = async (path) => { const r = await gw.fetch(new Request("https://papers.qnfo.org" + path), env, { waitUntil() {} }); return { s: r.status, t: await r.text() }; };
+const getAt = async (host, path) => { const r = await gw.fetch(new Request("https://" + host + path), env, { waitUntil() {} }); return { s: r.status, t: await r.text() }; };
+const get = (path) => getAt("papers.qnfo.org", path);
 
 const api = await get("/api/papers?limit=50");
 ok(api.s === 200, "/api/papers answers 200", api.s);
@@ -79,6 +80,29 @@ for (const it of items) {
   ok(it.quality_basis.includes("not a claim of independent peer review"), "quality basis is transparent for row " + i);
 }
 ok(items.every((it) => it.authors.every((n) => !/^(null|true|false|-?\d[\d.]*|[{\[].*)$/.test(n) || n === "[not json")), "no author name is JSON text (null, a number, true, an object)", items.map((it) => it.authors));
+const rootApi = await getAt("qnfo.org", "/api/papers?limit=2");
+ok(rootApi.s === 200, "qnfo.org search_papers endpoint answers 200", rootApi.s);
+ok(JSON.parse(rootApi.t).items.length === 2, "qnfo.org search_papers endpoint returns paper records");
+const rootPaper = await getAt("qnfo.org", "/api/papers/pf-0");
+ok(rootPaper.s === 200 && JSON.parse(rootPaper.t).slug === "pf-0", "qnfo.org get_paper endpoint returns the requested paper", rootPaper.s);
+const wwwPaper = await getAt("www.qnfo.org", "/api/papers/pf-0");
+ok(wwwPaper.s === 200 && JSON.parse(wwwPaper.t).slug === "pf-0", "www.qnfo.org manifest tools reach the same public paper API", wwwPaper.s);
+const rootSearchMcp = await gw.fetch(new Request("https://qnfo.org/mcp", {
+  method: "POST",
+  headers: { "content-type": "application/json" },
+  body: JSON.stringify({ jsonrpc: "2.0", id: 2, method: "tools/call", params: { name: "search_papers", arguments: { q: "p-adic", limit: 2 } } })
+}), env, { waitUntil() {} });
+const rootSearchMcpBody = await rootSearchMcp.json();
+ok(rootSearchMcp.status === 200 && rootSearchMcpBody.result && !rootSearchMcpBody.result.isError, "qnfo.org WebMCP search_papers call succeeds", rootSearchMcpBody);
+ok(rootSearchMcpBody.result.content[0].text.includes('"items"'), "qnfo.org WebMCP search_papers returns a paper list");
+const rootMcp = await gw.fetch(new Request("https://qnfo.org/mcp", {
+  method: "POST",
+  headers: { "content-type": "application/json" },
+  body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/call", params: { name: "get_paper", arguments: { slug: "pf-0" } } })
+}), env, { waitUntil() {} });
+const rootMcpBody = await rootMcp.json();
+ok(rootMcp.status === 200 && rootMcpBody.result && !rootMcpBody.result.isError, "qnfo.org WebMCP get_paper call succeeds", rootMcpBody);
+ok(rootMcpBody.result.content[0].text.includes('"slug": "pf-0"'), "qnfo.org WebMCP returns the paper record");
 const record = await get("/api/papers/pf-0");
 ok(record.s === 200, "single-paper API record answers 200", record.s);
 const recordJson = JSON.parse(record.t);
