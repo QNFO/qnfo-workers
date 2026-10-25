@@ -1,5 +1,5 @@
 {
-  "audited_at": "2026-10-25 10:09:13",
+  "audited_at": "2026-10-25 10:54:40",
   "d1_write_failures": [],
   "d1_writes_ok": 121,
   "guard": {
@@ -620,7 +620,7 @@
       },
       {
         "dir": "qnfo-gateway",
-        "version": "3.31.3-seo-index-9",
+        "version": "3.31.3-revert-7a9d293",
         "worker": "qnfo-gateway"
       },
       {
@@ -675,7 +675,7 @@
       },
       {
         "dir": "qnfo-research-exec",
-        "version": "0.33.4-proposal-fairness-1",
+        "version": "0.33.6-daily-budget-schedule-1",
         "worker": "qnfo-research-exec"
       },
       {
@@ -1360,9 +1360,9 @@
       "worker": "qnfo-fleet-feed"
     },
     "qnfo-gateway": {
-      "before": "3.31.3-seo-index-9",
+      "before": "3.31.3-revert-7a9d293",
       "http": 200,
-      "live": "3.31.3-seo-index-9",
+      "live": "3.31.3-revert-7a9d293",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-gateway"
@@ -1574,9 +1574,9 @@
       "worker": "qnfo-register-guard"
     },
     "qnfo-research-exec": {
-      "before": "0.33.4-proposal-fairness-1",
+      "before": "0.33.6-daily-budget-schedule-1",
       "http": 200,
-      "live": "0.33.4-proposal-fairness-1",
+      "live": "0.33.6-daily-budget-schedule-1",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-research-exec"
