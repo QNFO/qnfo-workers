@@ -14637,7 +14637,11 @@ var katex = {
 // The renderer never invents metadata: a field that is absent in the frontmatter, the in-body
 // byline block or the D1 row is left out rather than guessed.
 
-const RENDERER_VERSION = "2.3.0-no-registrar";
+const RENDERER_VERSION = "2.5.0";
+const PAPER_QUALITY_LABEL = "High-quality scholarly research";
+const PAPER_QUALITY_BASIS = "QNFO publisher classification for open-access, versioned research with a public revision history and reader correction channel; this is not a claim of independent peer review.";
+const PAPER_PEER_REVIEW_STATUS = "Not independently peer-reviewed";
+const PAPER_QUALITY_TAGS = [PAPER_QUALITY_LABEL, "open-access scholarly work", "versioned research publication"];
 
 /* ------------------------------------------------------------------ */
 /* escaping                                                            */
@@ -15431,6 +15435,11 @@ function buildMeta(fm, byline, opts) {
     pages: pick(D.pages, fm.pages),
     keywords: keywords,
     subjects: subjects,
+    qualityLabel: pick(D.quality_label, fm.quality_label) || PAPER_QUALITY_LABEL,
+    qualityBasis: pick(D.quality_basis, fm.quality_basis) || PAPER_QUALITY_BASIS,
+    peerReviewStatus: pick(D.peer_review_status, fm.peer_review_status) || PAPER_PEER_REVIEW_STATUS,
+    qualityEvidenceUrl: pick(D.quality_evidence_url, fm.quality_evidence_url) || "https://qnfo.org/about",
+    qualityTags: toList(D.quality_tags).length ? toList(D.quality_tags) : toList(fm.quality_tags).length ? toList(fm.quality_tags) : PAPER_QUALITY_TAGS,
     abstract: pick(D.abstract, fm.abstract),
     url: pick(D.url, fm.url, byline.url),
     bibSource: pick(D.bib, D.bibtex, opts && opts.bibtex)
@@ -15481,6 +15490,8 @@ function buildFront(meta, ctx) {
 
   const kw = meta.keywords.length ? '<div class="kwline"><span class="kwlabel">Keywords</span> ' + esc(meta.keywords.join(" \u00b7 ")) + "</div>" : "";
   const subj = meta.subjects.length ? '<div class="kwline"><span class="kwlabel">Subjects</span> ' + esc(meta.subjects.join(" \u00b7 ")) + "</div>" : "";
+  const quality = '<div class="kwline"><span class="kwlabel">Publisher classification</span> ' + esc(meta.qualityLabel) + ' <span class="quality-basis">(' + esc(meta.qualityBasis) + ')</span></div>' +
+    '<div class="kwline"><span class="kwlabel">Peer-review status</span> ' + esc(meta.peerReviewStatus) + "</div>";
 
   let citeAs = "";
   const year = (meta.date || "").slice(0, 4);
@@ -15508,7 +15519,7 @@ function buildFront(meta, ctx) {
     (affilBits.length ? '<div class="paper-affils">' + affilBits.join("") + "</div>" : "") +
     (ids.length ? '<div class="paper-ids">' + ids.join('<span class="idsep">\u00b7</span>') + "</div>" : "") +
     abstractBlock +
-    (kw || subj ? '<div class="paper-kw">' + kw + subj + "</div>" : "") +
+    '<div class="paper-kw">' + quality + kw + subj + "</div>" +
     (citeAs || "") +
     '<hr class="head-rule">' +
     "</header>";
@@ -15736,6 +15747,11 @@ function renderPaperHTML(md, opts) {
     license: meta.license,
     abstract: meta.abstract,
     keywords: meta.keywords,
+    qualityLabel: meta.qualityLabel,
+    qualityBasis: meta.qualityBasis,
+    peerReviewStatus: meta.peerReviewStatus,
+    qualityEvidenceUrl: meta.qualityEvidenceUrl,
+    qualityTags: meta.qualityTags,
     bodyHtml: bodyHtml,
     refsHtml: refs.html,
     front: front.html,
@@ -15860,12 +15876,32 @@ function renderFullHTML(md, opts) {
     '<meta name="author" content="' + esc(r.author) + '">',
     r.abstract ? '<meta name="description" content="' + esc(description) + '">' : "",
     r.keywords && r.keywords.length ? '<meta name="keywords" content="' + esc(r.keywords.join(", ")) + '">' : "",
+    '<meta name="qnfo:quality-label" content="' + esc(r.qualityLabel) + '">',
+    '<meta name="qnfo:quality-basis" content="' + esc(r.qualityBasis) + '">',
+    '<meta name="qnfo:peer-review-status" content="' + esc(r.peerReviewStatus) + '">',
+    '<meta name="qnfo:quality-evidence" content="' + esc(r.qualityEvidenceUrl) + '">',
     r.date ? '<meta name="dcterms.created" content="' + esc(r.date) + '">' : "",
+    '<meta name="dcterms.type" content="ScholarlyArticle">',
+    '<meta name="citation_publication_type" content="research-article">',
     doi ? '<meta name="citation_doi" content="' + esc(doi) + '">' : "",
     '<meta name="citation_title" content="' + esc(r.title) + '">',
     r.authors.map(function (a) { return '<meta name="citation_author" content="' + esc(a) + '">'; }).join(""),
     r.date ? '<meta name="citation_publication_date" content="' + esc(r.date) + '">' : "",
-    '<meta name="citation_publisher" content="QNFO">'
+    '<meta name="citation_publisher" content="QNFO">',
+    r.qualityTags.map(function (tag) { return '<meta name="citation_keywords" content="' + esc(tag) + '">'; }).join(""),
+    '<script type="application/ld+json">' + JSON.stringify({
+      "@context": "https://schema.org",
+      "@type": "ScholarlyArticle",
+      headline: r.title,
+      author: r.authors.map(function (name) { return { "@type": "Person", name: name }; }),
+      publisher: { "@type": "Organization", name: "QNFO", publishingPrinciples: r.qualityEvidenceUrl },
+      genre: r.qualityLabel,
+      keywords: r.keywords.concat(r.qualityTags),
+      additionalProperty: [
+        { "@type": "PropertyValue", name: "Publisher quality classification", value: r.qualityLabel, description: r.qualityBasis },
+        { "@type": "PropertyValue", name: "Peer review status", value: r.peerReviewStatus }
+      ]
+    }).replace(/</g, "\\u003c") + "</script>"
   ].filter(Boolean).join("");
   return '<!DOCTYPE html><html lang="en"><head>' + metas +
     '<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.21/dist/katex.min.css">' +
@@ -15893,7 +15929,7 @@ function buildPrintTemplates(meta) {
 }
 
 // worker.js
-var VERSION = "1.6.0-no-registrar"; /* 1.6.0-no-registrar NO-REGISTRAR-1 (2026-10-21): PDF metadata reads doi and identifier only; the registrar column and venue name are gone */ /* 1.5.2 TYPESET-PRO-3 (2026-10-18, red-team round 2): 511 of 624 public records carry their bibliography as a numbered list in their own body WITHOUT citation keys, so 1.5.1 left it in body prose; parseBodyReferences() now typesets an unkeyed list too, guarded by "closing section + three entries + a majority carrying a year or DOI". Ships scripts/pdf_corpus_audit.mjs, the executable guard named in failure_modes.pdf-typeset-bibliography-dropped. 1.5.1 TYPESET-PRO-2: a citation wrapped across a source line break printed as raw text; most papers bibliographies are the numbered list in their own body; an unmatched key was flagged even where no bibliography exists. 1.5.0 TYPESET-PRO-1 (owner directive professional typesetting with full bibliographic information and author/affiliation): title block with authors/affiliations/identifiers, BibTeX resolution from R2, numbered citations, hanging-indent reference list, live running head and page numbers. */
+var VERSION = "1.7.1"; /* 1.7.1 PDF-QUALITY-CACHE-INVALIDATION-1: bump renderer stamp so the backlog regenerates cached PDFs with publisher quality and review-status metadata. */ /* 1.7.0 PAPER-QUALITY-METADATA-1: generated paper artifacts expose the publisher quality classification and review status. */ /* 1.6.0-no-registrar NO-REGISTRAR-1 (2026-10-21): PDF metadata reads doi and identifier only; the registrar column and venue name are gone */ /* 1.5.2 TYPESET-PRO-3 (2026-10-18, red-team round 2): 511 of 624 public records carry their bibliography as a numbered list in their own body WITHOUT citation keys, so 1.5.1 left it in body prose; parseBodyReferences() now typesets an unkeyed list too, guarded by "closing section + three entries + a majority carrying a year or DOI". Ships scripts/pdf_corpus_audit.mjs, the executable guard named in failure_modes.pdf-typeset-bibliography-dropped. 1.5.1 TYPESET-PRO-2: a citation wrapped across a source line break printed as raw text; most papers bibliographies are the numbered list in their own body; an unmatched key was flagged even where no bibliography exists. 1.5.0 TYPESET-PRO-1 (owner directive professional typesetting with full bibliographic information and author/affiliation): title block with authors/affiliations/identifiers, BibTeX resolution from R2, numbered citations, hanging-indent reference list, live running head and page numbers. */
 function pdfHeaders(slug) {
   return {
     "Content-Type": "application/pdf",

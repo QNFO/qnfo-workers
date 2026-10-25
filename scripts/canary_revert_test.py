@@ -1,10 +1,9 @@
 #!/usr/bin/env python3
 """Offline test for the canary's VERSION parse (CANARY-VERSION-REGEX-1, no network).
 
-qnfo-gateway/worker.js line 1 is `var VERSION="..";;` (no spaces around '=', doubled ';'). canary_revert.VERSION_RE required
-`var VERSION = "` with spaces, so canonical-deploy logged "has no VERSION line; qnfo-gateway is not watched" and a control-plane
-worker shipped with no canary and no revert protection. This suite parses the real worker files in the repo and asserts that
-the canary, version-bump-guard.py and canonical_deploy.py read the same VERSION, and that no CANARY_WORKERS entry is unwatched.
+qnfo-gateway may have generated or explanatory comments before its VERSION declaration. This suite parses the real worker
+files in the repo and asserts that the canary, version-bump-guard.py and canonical_deploy.py read the same VERSION, and that
+no CANARY_WORKERS entry is unwatched.
 """
 import glob
 import importlib.util
@@ -36,10 +35,10 @@ def read(path):
 
 
 class T(unittest.TestCase):
-    def test_gateway_first_line_is_watched(self):
-        first = read("qnfo-gateway/worker.js").split("\n", 1)[0]
-        self.assertTrue(first.startswith("var VERSION"), "qnfo-gateway line 1 is the VERSION declaration")
-        v = cr.read_version(read("qnfo-gateway/worker.js"))
+    def test_gateway_version_is_watched(self):
+        source = read("qnfo-gateway/worker.js")
+        self.assertRegex(source, r'(?m)^var\s+VERSION\s*=\s*["\']', "qnfo-gateway has a line-start VERSION declaration")
+        v = cr.read_version(source)
         self.assertTrue(v and re.match(r"^\d+\.\d+\.\d+", v), "canary reads a VERSION from qnfo-gateway/worker.js, got %r" % (v,))
 
     def test_forms_the_fleet_writes(self):

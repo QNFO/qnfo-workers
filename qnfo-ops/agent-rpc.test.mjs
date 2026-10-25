@@ -6,7 +6,7 @@
 // shared runTurn exist in the deployed file; it cannot prove the DO boots. The live proof is a POST to
 // /agents/ops-exec answering {ok:true, reply:...} and a WebSocket upgrade answering 101.
 import { readFileSync } from "node:fs";
-const src = readFileSync(new URL("./worker.js", import.meta.url), "utf8");
+const src = readFileSync(new URL("./worker.js", import.meta.url), "utf8").replace(/\r\n/g, "\n");
 let pass = 0, fail = 0;
 const ok = (c, m) => { if (c) pass++; else { fail++; console.log("FAIL " + m); } };
 
@@ -23,7 +23,13 @@ ok(/this\.runTurn\(sid, text, body && body\.max_iters\)/.test(body), "HTTP RPC r
 
 ok(/async runTurn\(sid, userContent, cap\)/.test(cls), "runTurn is the shared agent loop");
 ok(/webSocketMessage[\s\S]{0,900}await this\.runTurn\(sid, userContent\)/.test(cls), "the WebSocket path delegates to runTurn (no duplicated loop)");
-ok((cls.match(/callDeepSeek\(this\.env, messages/g) || []).length === 2, "exactly two model calls in runTurn (loop + final no-tools round)");
+ok((cls.match(/opsAgentChat\(this\.env/g) || []).length === 2, "exactly two model calls in runTurn (loop + final no-tools round)");
+ok(/opsAgentSpan\("invoke_agent", conversationId/.test(cls), "each durable runTurn emits one invoke_agent span");
+ok(/opsAgentChat\(this\.env, messages, DEFAULT_MAX_OUT, toolsPayload\(\), \{\}, conversationId\)/.test(cls), "model rounds are nested chat spans");
+ok(/opsAgentTool\(this\.env, fn\.name, fn\.arguments, userContent, 16e3, conversationId\)/.test(cls), "tool rounds are nested execute_tool spans");
+const traceHelpers = src.slice(src.indexOf("async function opsTraceConversationId"), src.indexOf("var AgenticOpsExec"));
+ok(/crypto\.subtle\.digest\("SHA-256"/.test(traceHelpers) && /gen_ai\.conversation\.id/.test(traceHelpers), "trace conversation identity is an opaque stable hash");
+ok(!/gen_ai\.(?:input|output)\.messages|gen_ai\.tool\.call\.(?:arguments|result)/.test(traceHelpers + cls), "agent tracing does not attach prompt, message, argument, or result payloads");
 
 const manifest = src.slice(src.indexOf("function manifest()"), src.indexOf("function manifest()") + 4000);
 ok(/"agent-http-rpc"/.test(manifest), "capability agent-http-rpc advertised");

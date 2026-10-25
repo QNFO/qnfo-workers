@@ -7,10 +7,10 @@
 import { DatabaseSync } from "node:sqlite";
 import { readFileSync } from "node:fs";
 
-const IMPORT = 'import { WorkflowEntrypoint, DurableObject } from "cloudflare:workers";';
+const IMPORT = 'import { WorkflowEntrypoint, DurableObject, tracing } from "cloudflare:workers";';
 const src = readFileSync(new URL("./worker.js", import.meta.url), "utf8");
 if (src.indexOf(IMPORT) < 0) throw new Error("worker.js import line changed: update the loader in this test");
-const mod = await import("data:text/javascript;base64," + Buffer.from(src.replace(IMPORT, "var WorkflowEntrypoint = class {}; var DurableObject = class {};")).toString("base64"));
+const mod = await import("data:text/javascript;base64," + Buffer.from(src.replace(IMPORT, "var WorkflowEntrypoint = class {}; var DurableObject = class {}; var tracing = { enterSpan(_name, callback) { return callback({ setAttribute() {} }); } };")).toString("base64"));
 const W = mod.default;
 
 // The worker logs routing notes on every call; keep the suite's output to its own verdicts.

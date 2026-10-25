@@ -1,6 +1,7 @@
 // ITIN-AUDIT-1 offline fixtures (#1881): skewed Date, meta line, whole-booking cancel, parse-miss dedupe, forwarded gate. Fakes only; nothing fabricates production mail.
 import fs from "node:fs";
-const src = fs.readFileSync(new URL("./worker.js", import.meta.url), "utf8");
+import { stripWorkerDefaultExport } from "../scripts/worker-source-test.mjs";
+const src = stripWorkerDefaultExport(fs.readFileSync(new URL("./worker.js", import.meta.url), "utf8"));
 const api = new Function(src.replace(/export default\{/, "const __handler={") + "\nreturn {itinParse,itineraryIngest,itinSentIso,itinGate,itinStripMeta,VERSION};")();
 const fail = [];
 const eq = (l, g, w) => { if (JSON.stringify(g) !== JSON.stringify(w)) fail.push(l + ": got " + JSON.stringify(g) + " want " + JSON.stringify(w)); };

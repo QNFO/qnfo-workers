@@ -5,7 +5,8 @@
 // ADVERSARIAL: it does not prove the deployed version; the closing probe on the issue reads live rows for that.
 // Run: node qnfo-email/freshness-guard.test.mjs
 import fs from "node:fs";
-const src = fs.readFileSync(new URL("./worker.js", import.meta.url), "utf8");
+import { stripWorkerDefaultExport } from "../scripts/worker-source-test.mjs";
+const src = stripWorkerDefaultExport(fs.readFileSync(new URL("./worker.js", import.meta.url), "utf8"));
 const lib = new Function(src.replace(/export default\{/, "const __handler={") +
   "\nreturn {VERSION,freshnessGuard,FRESH_LIMIT_DAYS,FRESH_LIMIT_DAYS_EVENTS};")();
 const fail = [];

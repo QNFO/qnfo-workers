@@ -10,7 +10,9 @@ var __defProp222 = Object.defineProperty;
 var __name222 = /* @__PURE__ */ __name22((target, value) => __defProp222(target, "name", { value, configurable: true }), "__name");
 var __name2222 = /* @__PURE__ */ __name222((target, value) => Object.defineProperty(target, "name", { value, configurable: true }), "__name");
 // VERSION-LINE-SPLIT-1 (agent_issues 100220): the release notes sit one per line below this statement, newest first, so a VERSION bump is a one-line patch; add a new note as the first line under it.
-var VERSION = "1.59.1-portfolio-strategic-2"; /* 1.59.1 PORTFOLIO-STRATEGIC-2 (2026-10-25, agent_issues 1000194 from the CMD RED TEAM audit): (a) the weekly summary no longer prints the portfolio total beside the constraint program as if it were that program's risk - it now reads "constraint <program> (program risk N); portfolio risk M"; (b) the review reads v_roadmap and goals per program and records roadmap_now/next/later and goals_adopted/completed in program_review_notes, flagging an active program with no now/next roadmap item and adopted goals with none completed; (c) psrScorecards is also called from portfolioDailyRun, so the deterministic program and portfolio scorecards are loop-owned daily instead of only when the weekly review runs. */ /* 1.59.0 PORTFOLIO-STRATEGIC-1 (2026-10-25, PORTFOLIO-MANAGER-1): the portfolio manager persona runs its weekly strategic review inside this worker's cron (no new worker or cron while fleet_budget caps are breached, CORE-PROMPT-1 rule 8): loop-owned program/portfolio scorecards, per-program verdicts and deterministic actions from v_program_health, portfolio decisions (constrain/accelerate/stable), program_review_notes + one weekly-strategic portfolio_runs row, owner cards only for spend above the A9 ceiling and RED verdicts persisting 3+ reviews, persona narratives only while no ai_spend fleet_budget cap is breached; new routes POST /api/portfolio/strategic and GET /api/portfolio/latest. */ /* 1.58.1-codeagent (main, 2026-10-25). */ 
+var VERSION = "1.60.0-agent-tracing"; /* 1.59.1 PORTFOLIO-STRATEGIC-2 (2026-10-25, agent_issues 1000194 from the CMD RED TEAM audit): (a) the weekly summary no longer prints the portfolio total beside the constraint program as if it were that program's risk - it now reads "constraint <program> (program risk N); portfolio risk M"; (b) the review reads v_roadmap and goals per program and records roadmap_now/next/later and goals_adopted/completed in program_review_notes, flagging an active program with no now/next roadmap item and adopted goals with none completed; (c) psrScorecards is also called from portfolioDailyRun, so the deterministic program and portfolio scorecards are loop-owned daily instead of only when the weekly review runs. */ /* 1.59.0 PORTFOLIO-STRATEGIC-1 (2026-10-25, PORTFOLIO-MANAGER-1): the portfolio manager persona runs its weekly strategic review inside this worker's cron (no new worker or cron while fleet_budget caps are breached, CORE-PROMPT-1 rule 8): loop-owned program/portfolio scorecards, per-program verdicts and deterministic actions from v_program_health, portfolio decisions (constrain/accelerate/stable), program_review_notes + one weekly-strategic portfolio_runs row, owner cards only for spend above the A9 ceiling and RED verdicts persisting 3+ reviews, persona narratives only while no ai_spend fleet_budget cap is breached; new routes POST /api/portfolio/strategic and GET /api/portfolio/latest. */ /* 1.58.1-codeagent (main, 2026-10-25). */
+/* 1.60.0 AGENT-TRACING-1 (2026-10-25, pillar autonomy; minor: add metadata-only agent, model, tool and approval spans; preserve 1% sampling); PSR-MODEL-FLOOR-1 (#4084, research): use allowlisted GLM-5.3-Flash for free portfolio summaries and preserve the paid fallback; WEBMCP-SITEMAP-1 (pillar reach): serve the canonical public sitemap for list_site_pages. */
+/* 1.59.2 PORTFOLIO-LATEST-ROADMAP-1 (2026-10-25, agent_issues 1000194): GET /api/portfolio/latest now returns the persisted roadmap_now, roadmap_next, roadmap_later, goals_adopted and goals_completed counts so dashboard consumers can read the program roadmap and goal measures directly. Additive response change; no new worker, cron or binding. */
 /* 1.51.19 VERSION-LINE-SPLIT-1 (2026-10-20, agent_issues 100220, pillar autonomy; patch: layout only): the release notes that sat on the VERSION line (202,642 chars) are one per line below it, so a bump is a one-line patch and the publisher's size cap stops refusing dashboard code tasks (5 of 5 on 2026-10-19); scripts/conflict_repair.py resolves note-line hunks (merge_note_hunk). No behaviour change. */
 /* 1.51.17 COST-FEED-7D-WINDOW-1 (2026-10-19, agent_issues 100169, pillar cost; patch): /api/cost by_model_7d and by_worker_7d sum the 7 complete UTC days (today, a partial day, was a 8th bucket under the 7d label, +31.8 percent), and the body says which days (window_7d) and that est_usd is list price before the free tier (est_usd_basis). */
 /* 1.51.16 PARKED-CARD-REASON-1 (2026-10-19, agent_issues 100173, pillar autonomy; patch): the parked code-task card branches on the cause wherever it sits in last_error (the loop writes "model <id>: noop-proposal: ..." and "model <id> proposed no change", so a prefix test never matched), and the dead execOne edit of PR 3106 (fleet_issue_dispatch has no last_error) is removed. */
@@ -2855,7 +2857,7 @@ if (path === "/health") {
     return json(rP);
   }
   if (path === "/api/portfolio/latest") {
-    const notesL = await d1all(env.AUDIT, "SELECT day, program_code, manager_persona, verdict, risk_score, top_actions, narrative FROM program_review_notes ORDER BY day DESC, program_code LIMIT 12").catch(function() { return []; });
+    const notesL = await d1all(env.AUDIT, "SELECT day, program_code, manager_persona, verdict, risk_score, top_actions, narrative, roadmap_now, roadmap_next, roadmap_later, goals_adopted, goals_completed FROM program_review_notes ORDER BY day DESC, program_code LIMIT 12").catch(function() { return []; });
     const runsL = await d1all(env.AUDIT, "SELECT run_date, kind, summary FROM portfolio_runs WHERE kind='weekly-strategic' ORDER BY id DESC LIMIT 4").catch(function() { return []; });
     return json({ ok: true, notes: notesL, runs: runsL });
   }
@@ -3339,7 +3341,24 @@ async function feedFallbackTick(env) {
 __name(feedFallbackTick, "feedFallbackTick");
 var worker_default = {
   async fetch(request, env, ctx) {
-    if (new URL(request.url).pathname === "/robots.txt") {
+    const requestUrl = new URL(request.url);
+    if (requestUrl.pathname === "/sitemap.xml" && request.method === "GET") {
+      const urls = [
+        "https://fleet.qnfo.org/",
+        "https://fleet.qnfo.org/cmd",
+        "https://fleet.qnfo.org/analytics",
+        "https://fleet.qnfo.org/architecture",
+        "https://fleet.qnfo.org/kpi",
+        "https://fleet.qnfo.org/content",
+        "https://fleet.qnfo.org/changelog"
+      ];
+      const xml = '<?xml version="1.0" encoding="UTF-8"?>\n'
+        + '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n'
+        + urls.map(function(loc) { return "  <url><loc>" + loc + "</loc></url>"; }).join("\n")
+        + "\n</urlset>\n";
+      return noIndex(new Response(xml, { headers: { "Content-Type": "application/xml; charset=utf-8", "Cache-Control": "public, max-age=3600", "X-Content-Type-Options": "nosniff" } }));
+    }
+    if (requestUrl.pathname === "/robots.txt") {
       return noIndex(new Response("User-agent: *\nDisallow: /\n", { headers: { "Content-Type": "text/plain; charset=utf-8" } }));
     }
     let res;
@@ -11052,7 +11071,7 @@ function cmdParseAi(content, c) {
 function cmdRouterTimeout(timeoutMs) {
   return Math.max(1e3, Math.round(timeoutMs) - 1500);
 }
-async function cmdModelCall(env, model, messages, timeoutMs) {
+async function cmdModelCallImpl(env, model, messages, timeoutMs) {
   const t0 = Date.now();
   const ac = new AbortController();
   const timer = setTimeout(function() {
@@ -11074,6 +11093,26 @@ async function cmdModelCall(env, model, messages, timeoutMs) {
   } finally {
     clearTimeout(timer);
   }
+}
+function cmdTraceSpan(ctx, name, conversationId, attributes, run) {
+  const tracing = ctx && ctx.tracing;
+  if (!tracing || typeof tracing.enterSpan !== "function") return run(null);
+  return tracing.enterSpan(name, async function(span) {
+    span.setAttribute("gen_ai.operation.name", name);
+    span.setAttribute("gen_ai.agent.name", "qnfo-fleet-dashboard");
+    span.setAttribute("gen_ai.agent.id", "qnfo-fleet-dashboard-production");
+    span.setAttribute("gen_ai.conversation.id", conversationId);
+    for (const key of Object.keys(attributes || {})) span.setAttribute(key, attributes[key]);
+    return await run(span);
+  });
+}
+async function cmdModelCall(env, model, messages, timeoutMs, ctx, conversationId) {
+  if (!ctx || !ctx.tracing || typeof ctx.tracing.enterSpan !== "function") return await cmdModelCallImpl(env, model, messages, timeoutMs);
+  return await cmdTraceSpan(ctx, "chat", conversationId, { "gen_ai.request.model": model }, async function(span) {
+    const result = await cmdModelCallImpl(env, model, messages, timeoutMs);
+    if (result && result.model) span.setAttribute("gen_ai.response.model", String(result.model).slice(0, 100));
+    return result;
+  });
 }
 // DASHBOARD-FULL-ACCESS-1 (1.31.0): the second path. When qnfo-ai refuses a leg (a binding that lost its props answers 401,
 // as on 2026-10-12 after a dashboard secret edit) or is down, the same Workers AI model runs through this worker's own AI
@@ -11112,7 +11151,7 @@ async function cmdDirectModel(env, model, messages, why, t0, timeoutMs) {
 }
 // CMD-ASK-FAST-1: race the models with a staggered start instead of trying them one after another. The first answer wins;
 // a model that fails or has not answered within ASK_HEDGE_MS lets the next one start; every failure is named in `error`.
-async function cmdRaceModels(env, messages, budgetMs) {
+async function cmdRaceModels(env, messages, budgetMs, ctx, conversationId) {
   const t0 = Date.now();
   const errs = [];
   return await new Promise(function(resolve) {
@@ -11136,7 +11175,7 @@ async function cmdRaceModels(env, messages, budgetMs) {
       }
       const model = ASK_MODELS[started++];
       pending++;
-      cmdModelCall(env, model, messages, left).then(function(r) {
+      cmdModelCall(env, model, messages, left, ctx, conversationId).then(function(r) {
         pending--;
         if (r.ok) finish(r);
         else {
@@ -11423,7 +11462,7 @@ async function mailSendLastDraft(env, text) {
   if (!send) return { text: "The last draft has no send action stored; ask for the draft again.", actions: edit ? [edit] : [] };
   return { text: "Send the last draft to message #" + send.args.id + " as shown:\n\n" + String(send.args.text || ""), actions: [send, edit].filter(Boolean) };
 }
-async function cmdAnswer(env, text, c) {
+async function cmdAnswerImpl(env, text, c, ctx, conversationId) {
   // MAIL-DRAFT-1: a request to draft a reply runs the grounded drafting path, never the general question prompt.
   if (MAIL_DRAFT_RX.test(text)) return await mailDraftReply(env, text, c);
   // OWNER-SURFACE-HONESTY-1: the stored facts of any message the question names (public or owner fields, by c.holder).
@@ -11433,7 +11472,7 @@ async function cmdAnswer(env, text, c) {
   if (Q08_Q.test(text)) c.q08 = await q08Facts(env);
   if (OUTREACH_Q.test(text)) c.outreach = await outreachFacts(env); // OUTREACH-ASK-FACTS-1
   const messages = [{ role: "system", content: CMD_AI_SYS + "\nCONTEXT: " + cmdAiContext(c) }, { role: "user", content: text }];
-  const r = await cmdRaceModels(env, messages, CMD_AI_BUDGET_MS);
+  const r = await cmdRaceModels(env, messages, CMD_AI_BUDGET_MS, ctx, conversationId);
   if (r.ok) {
     const p = cmdParseAi(r.text, c);
     return { ok: true, answer: p.answer, actions: p.actions, model: r.model };
@@ -11442,8 +11481,14 @@ async function cmdAnswer(env, text, c) {
   // OWNER-SURFACE-HONESTY-1: never a bare failure; the model's error is kept in `error`, the owner reads a plain answer.
   return { ok: false, answer: cmdFallback(c, last), actions: [], error: String(last).slice(0, 300) };
 }
-async function cmdRunAi(env, id, text, c) {
-  const a = await cmdAnswer(env, text, c);
+async function cmdAnswer(env, text, c, ctx, conversationId) {
+  if (!ctx || !ctx.tracing || typeof ctx.tracing.enterSpan !== "function") return await cmdAnswerImpl(env, text, c, ctx, conversationId);
+  return await cmdTraceSpan(ctx, "invoke_agent", conversationId, {}, function() {
+    return cmdAnswerImpl(env, text, c, ctx, conversationId);
+  });
+}
+async function cmdRunAi(env, id, text, c, ctx) {
+  const a = await cmdAnswer(env, text, c, ctx, id);
   if (a.ok) await env.AUDIT.prepare("UPDATE cmd_log SET status='answered', answer=?1, actions_json=?2, model=?3, done_ms=?4 WHERE id=?5").bind(a.answer, JSON.stringify(a.actions), a.model, Date.now(), id).run();
   else await env.AUDIT.prepare("UPDATE cmd_log SET status='fallback', answer=?1, error=?2, done_ms=?3 WHERE id=?4").bind(a.answer, a.error, Date.now(), id).run();
 }
@@ -11567,6 +11612,16 @@ async function cmdExec(request, env, ctx, owner, op, args) {
   const done = { done: "Marked done.", dismiss: "Marked not doing.", snooze: "Snoozed until " + String(j.until || "").slice(0, 10) + ".", note: "Note kept and filed as fleet work.", ratify: "Ratified" + (j.outcome ? " (" + j.outcome + ")" : "") + ".", reject: "Rejected.", task: "Filed as fleet work" + (j.issue_id ? ": issue " + j.issue_id : "") + (j.duplicate ? " (already queued)" : "") + "." };
   return { ok: true, text: done[op], result: j };
 }
+function cmdExecuteAction(request, env, ctx, owner, op, args, conversationId) {
+  return cmdTraceSpan(ctx, "execute_tool", conversationId, { "gen_ai.tool.name": op }, function() {
+    return cmdExec(request, env, ctx, owner, op, args);
+  });
+}
+function cmdApprovedAction(request, env, ctx, owner, op, args, conversationId) {
+  return cmdTraceSpan(ctx, "tool_approval", conversationId, { "gen_ai.tool.name": op, "gen_ai.tool.approval": "approved" }, function() {
+    return cmdExecuteAction(request, env, ctx, owner, op, args, conversationId);
+  });
+}
 // AGENT-TOOLS-1 (1.56.0, owner directive 2026-10-25: every Cloudflare agent tool reachable from the console):
 // the command line reaches the whole qnfo-ops tool surface through the SVC_QNFO_OPS service binding. qnfo-ops
 // authenticates this worker by ctx.props.caller (TOOL-BRIDGE-1) and scopes it to the catalogue, a tool call, chat
@@ -11596,11 +11651,17 @@ async function cmdToolList(env) {
   CMD_TOOL_ALLOWED = tools;
   return { ok: true, tools };
 }
-async function cmdToolCall(env, name, args) {
+async function cmdToolCallImpl(env, name, args) {
   const r = await cmdOpsFetch(env, "/v1/tools/call", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: name, arguments: args || {} }) });
   if (r.error) return { ok: false, http: r.http, ms: r.ms, error: r.error };
   const body = r.json || {};
   return { ok: r.http === 200 && body.ok !== false, http: r.http, ms: r.ms, result: body.result, error: body.error || null };
+}
+async function cmdToolCall(env, name, args, ctx, conversationId) {
+  if (!ctx || !ctx.tracing || typeof ctx.tracing.enterSpan !== "function") return await cmdToolCallImpl(env, name, args);
+  return await cmdTraceSpan(ctx, "execute_tool", conversationId, { "gen_ai.tool.name": name }, function() {
+    return cmdToolCallImpl(env, name, args);
+  });
 }
 function cmdToolText(name, r) {
   if (r.error && r.result === undefined) return name + " failed: " + r.error + (r.http ? " (http " + r.http + ")" : "");
@@ -11653,9 +11714,10 @@ async function cmdRoutes(request, env, ctx, path, owner) {
     if (!/^[a-z0-9_]{2,40}$/.test(name)) return ownerJson({ ok: false, error: "tool name required" }, 400);
     if (!cmdToolIsReadOnly(name) && !owner.loop && !(owner.session && owner.session.stepup) && !owner.legacy) return ownerJson({ ok: false, need: "stepup", error: "This tool changes state: enter a fresh code." }, 401);
     const args = b && b.arguments && typeof b.arguments === "object" ? b.arguments : {};
-    const r = await cmdToolCall(env, name, args);
+    const traceId = "cmd-" + cmdRandHex(10);
+    const r = await cmdToolCall(env, name, args, ctx, traceId);
     try {
-      await env.AUDIT.prepare("INSERT INTO cmd_log (id, text, kind, status, answer, error, owner, done_ms) VALUES (?1, ?2, 'tool', ?3, ?4, ?5, 1, ?6)").bind("cmd-" + cmdRandHex(10), (name + " " + JSON.stringify(args)).slice(0, 2e3), r.ok ? "done" : "failed", String(cmdToolText(name, r)).slice(0, 4e3), r.error || null, r.ms || null).run();
+      await env.AUDIT.prepare("INSERT INTO cmd_log (id, text, kind, status, answer, error, owner, done_ms) VALUES (?1, ?2, 'tool', ?3, ?4, ?5, 1, ?6)").bind(traceId, (name + " " + JSON.stringify(args)).slice(0, 2e3), r.ok ? "done" : "failed", String(cmdToolText(name, r)).slice(0, 4e3), r.error || null, r.ms || null).run();
     } catch (e) {
     }
     return ownerJson(r, r.ok ? 200 : 400);
@@ -11688,9 +11750,10 @@ async function cmdRoutes(request, env, ctx, path, owner) {
     if (!meta) return ownerJson({ error: "unknown action" }, 400);
     if (!meta.open && !holder) return ownerJson({ ok: false, need: "code", error: "Actions need your email code. Type 'login' (or press Email me a code)." }, 401);
     if (meta.destructive && !owner.loop && !(owner.session && owner.session.stepup) && !owner.legacy) return ownerJson({ ok: false, need: "stepup", error: "This one is destructive: enter a fresh code (it was more than 15 minutes ago)." }, 401);
-    const r = await cmdExec(request, env, ctx, owner, op, args);
+    const traceId = "cmd-" + cmdRandHex(10);
+    const r = await cmdApprovedAction(request, env, ctx, owner, op, args, traceId);
     try {
-      await env.AUDIT.prepare("INSERT INTO cmd_log (id, text, kind, status, answer, error, owner, done_ms) VALUES (?1, ?2, 'action', ?3, ?4, ?5, 1, ?6)").bind("cmd-" + cmdRandHex(10), (op + " " + JSON.stringify(args)).slice(0, 2e3), r.ok ? "done" : "failed", r.text || null, r.error || null, Date.now()).run();
+      await env.AUDIT.prepare("INSERT INTO cmd_log (id, text, kind, status, answer, error, owner, done_ms) VALUES (?1, ?2, 'action', ?3, ?4, ?5, 1, ?6)").bind(traceId, (op + " " + JSON.stringify(args)).slice(0, 2e3), r.ok ? "done" : "failed", r.text || null, r.error || null, Date.now()).run();
     } catch (e) {
     }
     return ownerJson(r, r.ok ? 200 : 400);
@@ -11719,9 +11782,10 @@ async function cmdRoutes(request, env, ctx, path, owner) {
       try { targs = JSON.parse(raw); } catch (e) { return ownerJson({ ok: false, kind: "answer", error: 'arguments must be JSON, e.g. tool ops_d1_query {"sql":"SELECT 1"}' }, 400); }
     }
     if (!cmdToolIsReadOnly(tname) && !owner.loop && !(owner.session && owner.session.stepup) && !owner.legacy) return ownerJson({ ok: false, kind: "answer", need: "stepup", error: "This tool changes state: enter a fresh code." }, 401);
-    const r = await cmdToolCall(env, tname, targs);
+    const traceId = "cmd-" + cmdRandHex(10);
+    const r = await cmdToolCall(env, tname, targs, ctx, traceId);
     try {
-      await env.AUDIT.prepare("INSERT INTO cmd_log (id, text, kind, status, answer, error, owner, done_ms) VALUES (?1, ?2, 'tool', ?3, ?4, ?5, 1, ?6)").bind("cmd-" + cmdRandHex(10), text.slice(0, 2e3), r.ok ? "done" : "failed", String(cmdToolText(tname, r)).slice(0, 4e3), r.error || null, r.ms || null).run();
+      await env.AUDIT.prepare("INSERT INTO cmd_log (id, text, kind, status, answer, error, owner, done_ms) VALUES (?1, ?2, 'tool', ?3, ?4, ?5, 1, ?6)").bind(traceId, text.slice(0, 2e3), r.ok ? "done" : "failed", String(cmdToolText(tname, r)).slice(0, 4e3), r.error || null, r.ms || null).run();
     } catch (e) {
     }
     return ownerJson({ ok: r.ok, kind: "answer", text: cmdToolText(tname, r), tool: tname, http: r.http, ms: r.ms, holder }, r.ok ? 200 : 400);
@@ -11768,9 +11832,10 @@ async function cmdRoutes(request, env, ctx, path, owner) {
       const a = p.actions[0];
       const allowed = a.open || holder && !a.destructive;
       if (allowed) {
-        const r = await cmdExec(request, env, ctx, owner, a.op, a.args);
+        const traceId = "cmd-" + cmdRandHex(10);
+        const r = await cmdExecuteAction(request, env, ctx, owner, a.op, a.args, traceId);
         try {
-          await env.AUDIT.prepare("INSERT INTO cmd_log (id, text, kind, status, answer, error, owner, done_ms) VALUES (?1, ?2, 'action', ?3, ?4, ?5, ?6, ?7)").bind("cmd-" + cmdRandHex(10), (a.op + " " + JSON.stringify(a.args)).slice(0, 2e3), r.ok ? "done" : "failed", r.text || null, r.error || null, holder ? 1 : 0, Date.now()).run();
+          await env.AUDIT.prepare("INSERT INTO cmd_log (id, text, kind, status, answer, error, owner, done_ms) VALUES (?1, ?2, 'action', ?3, ?4, ?5, ?6, ?7)").bind(traceId, (a.op + " " + JSON.stringify(a.args)).slice(0, 2e3), r.ok ? "done" : "failed", r.text || null, r.error || null, holder ? 1 : 0, Date.now()).run();
         } catch (e) {
         }
         return ownerJson({ ok: r.ok, kind: "answer", text: r.ok ? r.text : null, error: r.ok ? null : r.error, executed: a.op, holder });
@@ -11798,7 +11863,7 @@ async function cmdRoutes(request, env, ctx, path, owner) {
   if (!holder && mine >= ASK_VISITOR_CAP) return ownerJson({ ok: false, kind: "answer", error: "You have used today's " + ASK_VISITOR_CAP + " plain-English questions; commands (type 'help') still work. Resets 00:00 UTC." }, 429);
   const id = "cmd-" + cmdRandHex(10);
   await env.AUDIT.prepare("INSERT INTO cmd_log (id, text, from_url, kind, status, owner, visitor) VALUES (?1, ?2, ?3, 'ai', 'running', ?4, ?5)").bind(id, text, from || null, holder ? 1 : 0, visitor).run();
-  ctx.waitUntil(cmdRunAi(env, id, text, c).catch(function(e) {
+  ctx.waitUntil(cmdRunAi(env, id, text, c, ctx).catch(function(e) {
     return env.AUDIT.prepare("UPDATE cmd_log SET status='failed', error=?1 WHERE id=?2").bind(String(e && e.message || e).slice(0, 200), id).run();
   }));
   return ownerJson({ ok: true, kind: "pending", id, holder }, 202);
@@ -13765,7 +13830,7 @@ var PSR_RISK_GUARD = 15;
 var PSR_RISK_STALLED = 2;
 var PSR_COST_METRIC = "cost_usd_30d";
 var PSR_COST_CEILING = 200; // metric_registry cost_usd_30d target '<= 200 (A9 ceiling)'; kill_band '> 200'
-var PSR_FREE_MODEL = "@cf/meta/llama-3.3-70b-instruct-fp8-fast";
+var PSR_FREE_MODEL = "@cf/zai-org/glm-5.3-flash";
 var PSR_PAID_MODEL = "deepseek-v4-flash";
 
 function psrNum(x) {

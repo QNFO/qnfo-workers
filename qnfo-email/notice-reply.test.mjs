@@ -5,7 +5,8 @@
 // ADVERSARIAL: proves the guards in worker.js against a fake D1; it does not prove the deployed version or that the OPS
 // service binding is installed (that needs a live /health version read and a live "job" command).
 import fs from "node:fs";
-const src = fs.readFileSync(new URL("./worker.js", import.meta.url), "utf8");
+import { stripWorkerDefaultExport } from "../scripts/worker-source-test.mjs";
+const src = stripWorkerDefaultExport(fs.readFileSync(new URL("./worker.js", import.meta.url), "utf8"));
 const lib = new Function(src.replace(/export default\{/, "const __handler={") +
   "\nreturn {VERSION,heuristicSpam,noticeTyped,noticeIntent,noticeReply,enqueueHumanReply,opsFetch,isHandoffNoticeReply};")();
 const fail = [];
@@ -30,7 +31,7 @@ eq("intent: empty", lib.noticeIntent("  "), "none");
 // 3. noticeReply against a fake D1
 const fake = (queueRow) => {
   const calls = { sql: [], send: [] };
-  const mk = (q) => { const s = { bind: (...a) => { calls.sql.push([q, a]); return s; }, first: async () => (/FROM email_reply_queue/.test(q) ? queueRow : null), run: async () => ({ meta: { last_row_id: 7 } }) }; return s; };
+  const mk = (q) => { const s = { bind: (...a) => { calls.sql.push([q, a]); return s; }, first: async () => (/FROM email_reply_queue/.test(q) ? queueRow : null), all: async () => ({ results: [] }), run: async () => ({ meta: { last_row_id: 7 } }) }; return s; };
   return { calls, env: { AUDIT_DB: { prepare: mk }, SEND_EMAIL: { send: async (m) => { calls.send.push(m); } } } };
 };
 const q61 = { id: 61, email_id: 966, sender: "kavithakavi6162@gmail.com", subject: "Editorial update and paper inquiry", sent_at: null, decision: "escalate" };

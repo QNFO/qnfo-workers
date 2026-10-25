@@ -1,4 +1,4 @@
-// UTM-CLICK-LEDGER-1 offline suite (transformation lever T7.9; qnfo-gateway 3.10.0 + qnfo-fleet-dashboard 1.26.0).
+// UTM-CLICK-LEDGER-1 offline suite (transformation lever T7.9; qnfo-gateway 3.10.0+ + qnfo-fleet-dashboard 1.26.0).
 // The gateway half (utmClickRow, utmRecord) runs against an in-memory SQLite qnfo-graph; the dashboard half replays the real
 // reach ingest (REACH_DDL through reachIngestTick) with that same database as its GRAPH binding, so a tagged page load is
 // followed from the request to the reach_signals rows the attention loop reads. No network.
@@ -34,7 +34,8 @@ const shim = (db) => {
 
 // ---- gateway half ----
 const block = cut(gsrc, "// ---- UTM-CLICK-LEDGER-1:BEGIN ----", "// ---- UTM-CLICK-LEDGER-1:END ----");
-ok(/var VERSION="3\.(1[0-9]|[2-9]\d)\.\d+-/.test(gsrc), "qnfo-gateway VERSION is 3.10.x (a new capability raises the minor version)");
+const gatewayVersion = /var VERSION="(\d+)\.(\d+)\.(\d+)(?:-[^"]+)?"/.exec(gsrc);
+ok(!!gatewayVersion && Number(gatewayVersion[1]) === 3 && Number(gatewayVersion[2]) >= 10, "qnfo-gateway VERSION is at least 3.10.0 (a new capability raises the minor version)", gatewayVersion && gatewayVersion[0]);
 ok(gsrc.includes("const utmRow = utmClickRow(request, served);") && gsrc.includes("return withFleetCtl(await withReachLayer(served, request));"), "the fetch handler records after serve() and still returns the reach-layered, fleet-ctl answer");
 ok([...block].every((c) => c.charCodeAt(0) < 128), "block source is ASCII");
 const G = vm.runInContext(block + ";({ utmClickRow, utmRecord, utmClean, get count() { return utmIsolateCount; } })", vm.createContext({ URL, Date, String, Number }));

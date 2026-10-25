@@ -41,6 +41,9 @@ assert.doesNotMatch(generatedConfig, /^\[observability\.traces\]/m, "the generat
 assert.doesNotMatch(generatedConfig, /^routes\s*=/m, "the generated fallback has no placeholder routes");
 assert.equal(imports.length, 2, "worker.js imports both corpus JSON modules");
 assert.equal(readFileSync(join(here, "deployed-current.worker.js"), "utf8"), workerSource, "deployed-current.worker.js mirrors the deploy source exactly");
+assert.match(workerSource, /const CAPABILITIES = \["reading-list", "evidence-graded-corpus", "shelves", "entry-pages", "json-api", "rss-feed", "sitemap"\];/, "the Worker declares its actual read-only capabilities");
+assert.match(workerSource, /const LIMITATIONS = \["static, read-only content with no accounts or tracking", "no model inference, data bindings, or outbound requests"\];/, "the Worker declares its runtime limitations");
+assert.match(workerSource, /version: VERSION, capabilities: CAPABILITIES, limitations: LIMITATIONS/, "the public health contract advertises both non-empty arrays");
 for (const modulePath of imports) {
   assert.ok(existsSync(join(here, modulePath)), `imported JSON module exists: ${modulePath}`);
 }

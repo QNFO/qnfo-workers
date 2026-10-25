@@ -1,4 +1,4 @@
-// q08-mind — mind.q08.org  (2.0.0-mind-3)
+// q08-mind — mind.q08.org  (2.1.0)
 // A reading list for the inside. Primary sources, one question each, and a probe.
 // Binding-free by design: no D1/KV/R2/AI/service bindings, no outbound fetches,
 // no client-side JavaScript. The corpus is data (data/entries-*.json), so a wrong
@@ -11,10 +11,12 @@
 import A from "./data/entries-a.json";
 import B from "./data/entries-b.json";
 
-var VERSION = "2.0.0-mind-3";
+var VERSION = "2.1.0";
 const BUILT = "2026-10-21";
 const ENTRIES = [...A, ...B];
 const BY_SLUG = new Map(ENTRIES.map((e) => [e.s, e]));
+const CAPABILITIES = ["reading-list", "evidence-graded-corpus", "shelves", "entry-pages", "json-api", "rss-feed", "sitemap"];
+const LIMITATIONS = ["static, read-only content with no accounts or tracking", "no model inference, data bindings, or outbound requests"];
 
 const SHELVES = [
   { id: "attention", label: "Attention", blurb: "What you notice, and what noticing costs." },
@@ -222,7 +224,7 @@ var __wm_default = {
     const url = new URL(request.url);
     const p = url.pathname.replace(/\/+$/, "") || "/";
 
-    if (p === "/health") return text(JSON.stringify({ ok: true, worker: "q08-mind", version: VERSION, entries: ENTRIES.length, shelves: SHELVES.length, built: BUILT }), "application/json; charset=utf-8");
+    if (p === "/health") return text(JSON.stringify({ ok: true, worker: "q08-mind", version: VERSION, capabilities: CAPABILITIES, limitations: LIMITATIONS, entries: ENTRIES.length, shelves: SHELVES.length, built: BUILT }), "application/json; charset=utf-8");
     if (p === "/api/entries.json") return text(apiJson(), "application/json; charset=utf-8");
     if (p === "/feed.xml") return text(feed(), "application/rss+xml; charset=utf-8");
     if (p === "/sitemap.xml") return text(sitemap(), "application/xml; charset=utf-8");

@@ -55,7 +55,7 @@ eq(helpers.gwSplitAuthors('"Ada Lovelace"'), ["Ada Lovelace"], "gwSplitAuthors d
 const errors = [];
 const origError = console.error;
 console.error = (...a) => { errors.push(a.join(" ")); };
-const rows = ROWS.map((r, i) => ({ slug: "pf-" + i, title: "Paper " + i, authors: r.authors, abstract: "Abstract " + i, created_at: "2026-10-0" + (1 + (i % 9)) + " 00:00:00", updated_at: "", doi: "", version: "1.0.0", language: "en", keywords: r.keywords, license: "cc-by-4.0" }));
+const rows = ROWS.map((r, i) => ({ slug: "pf-" + i, title: "Paper " + i, authors: r.authors, abstract: "Abstract " + i, created_at: "2026-10-0" + (1 + (i % 9)) + " 00:00:00", first_published_at: "2026-10-0" + (1 + (i % 9)) + " 00:00:00", last_revised_at: "2026-10-10 00:00:00", updated_at: "", doi: "", version: "1.0.0", version_semver: "1.1.0", version_count: i === 0 ? 2 : 1, language: "en", keywords: r.keywords, license: "cc-by-4.0" }));
 const stmt = (sql) => { const st = { a: [], bind(...a) { st.a = a; return st; },
   async all() { if (/LIMIT \? OFFSET \?/.test(sql)) { const lim = st.a[st.a.length - 2], off = st.a[st.a.length - 1]; return { results: rows.slice(off, off + lim) }; } return { results: rows }; },
   async first() { if (/COUNT/.test(sql)) return { n: rows.length }; if (/MIN\(/.test(sql)) return { m: "2026-10-01 00:00:00" }; const slug = st.a[st.a.length - 1]; return rows.find((r) => r.slug === slug) || null; },
@@ -74,17 +74,49 @@ for (const it of items) {
   const i = Number(it.slug.slice(3));
   eq(it.authors, ROWS[i].a, "authors of row " + i + " (" + JSON.stringify(ROWS[i].authors) + ")");
   eq(it.keywords, ROWS[i].k, "keywords of row " + i + " (" + JSON.stringify(ROWS[i].keywords) + ")");
+  eq(it.quality_label, "High-quality scholarly research", "quality classification of row " + i);
+  eq(it.peer_review_status, "Not independently peer-reviewed", "peer-review status of row " + i);
+  ok(it.quality_basis.includes("not a claim of independent peer review"), "quality basis is transparent for row " + i);
 }
 ok(items.every((it) => it.authors.every((n) => !/^(null|true|false|-?\d[\d.]*|[{\[].*)$/.test(n) || n === "[not json")), "no author name is JSON text (null, a number, true, an object)", items.map((it) => it.authors));
+const record = await get("/api/papers/pf-0");
+ok(record.s === 200, "single-paper API record answers 200", record.s);
+const recordJson = JSON.parse(record.t);
+eq(recordJson.datacite.subjects.slice(-3).map((x) => x.subject), ["High-quality scholarly research", "open-access scholarly work", "versioned research publication"], "DataCite subjects carry publisher classification tags");
+ok(recordJson.datacite.descriptions.some((x) => x.descriptionType === "Other" && x.description.includes("not a claim of independent peer review")), "DataCite description documents the classification basis");
+const openapi = await get("/openapi.json");
+ok(openapi.s === 200, "OpenAPI answers 200", openapi.s);
+const openapiJson = JSON.parse(openapi.t);
+ok(openapiJson.components.schemas.Paper.properties.quality_label.type === "string", "OpenAPI documents quality metadata");
 const feed = await get("/feed.json");
 ok(feed.s === 200, "/feed.json answers 200", feed.s);
 let fi = [];
 try { fi = JSON.parse(feed.t).items || []; } catch (e) { ok(false, "/feed.json is JSON", feed.t.slice(0, 200)); }
 ok(fi.length === ROWS.length, "/feed.json carries every row", fi.length);
 const tagged = fi.find((x) => /pf-4$/.test(x.id));
-eq(tagged && tagged.tags, ["primon gas", "zeta function", "partition function"], "feed tags split on ';'");
+eq(tagged && tagged.tags, ["primon gas", "zeta function", "partition function", "High-quality scholarly research", "open-access scholarly work", "versioned research publication"], "feed tags split on ';' and include classification");
+eq(tagged && tagged._qnfo && tagged._qnfo.peer_review_status, "Not independently peer-reviewed", "feed identifies review status");
+ok(tagged.summary.includes("Publisher quality classification: High-quality scholarly research."), "feed summary exposes the classification to consumers that ignore custom fields");
+ok(tagged.summary.includes("Peer-review status: Not independently peer-reviewed."), "feed summary explicitly discloses review status");
+ok(tagged.summary.includes("Basis: QNFO publisher classification"), "feed summary explains the classification basis");
+const versionFeed = await get("/feed-versions.json");
+ok(versionFeed.s === 200, "new-version JSON Feed answers 200", versionFeed.s);
+const versionItems = JSON.parse(versionFeed.t).items;
+const versionItem = versionItems.find((x) => x.id.includes("/pf-0#v"));
+ok(versionItem && versionItem.summary.includes("Publisher quality classification: High-quality scholarly research."), "version feed summary exposes the classification", versionItems);
+ok(versionItem && versionItem.summary.includes("Peer-review status: Not independently peer-reviewed."), "version feed summary discloses review status", versionItems);
 const oai = await get("/oai?verb=ListRecords&metadataPrefix=oai_dc");
 ok(oai.s === 200, "/oai ListRecords answers 200", oai.s);
+ok(oai.t.includes("<dc:type>Peer review: Not independently peer-reviewed</dc:type>"), "OAI-DC states peer-review status");
+ok(oai.t.includes("<dc:type>Editorial quality: High-quality scholarly research</dc:type>"), "OAI-DC states publisher classification");
+const rss = await get("/rss.xml");
+ok(rss.s === 200, "new-paper RSS answers 200", rss.s);
+ok(rss.t.includes("<qnfo:quality>High-quality scholarly research</qnfo:quality>"), "RSS identifies publisher classification");
+ok(rss.t.includes("<qnfo:peer_review_status>Not independently peer-reviewed</qnfo:peer_review_status>"), "RSS identifies review status");
+ok(rss.t.includes("Publisher quality classification: High-quality scholarly research.") && rss.t.includes("Peer-review status: Not independently peer-reviewed."), "RSS description exposes classification and review status to basic feed readers", rss.t.slice(0, 1800));
+const versionRss = await get("/rss/versions.xml");
+ok(versionRss.s === 200, "new-version RSS answers 200", versionRss.s);
+ok(versionRss.t.includes("Publisher quality classification: High-quality scholarly research.") && versionRss.t.includes("Peer-review status: Not independently peer-reviewed."), "version RSS description includes classification and review status", versionRss.t.slice(0, 1800));
 console.error = origError;
 eq(errors.filter((e) => /SyntaxError|JSON|is not valid/.test(e)), [], "no JSON parse error is logged while serving plain-text authors and keywords");
 

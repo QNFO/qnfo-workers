@@ -277,19 +277,19 @@ const withTitle = (t, title) => t.replace(TITLE, title);
 {
   // grouped, ranged and two-digit tags (review finding): each form leaves no tag, a cosmetic tag in the lede cannot refuse the draft, a year is not a tag
   const N = mod.__carry.normalizeDraft, strip = F.stripLedgerTags;
-  const forms = ["[S1, S2]", "[S1,S2]", "[S2-S3]", "[S2\u2013S3]", "[S2\u2014S3]", "[S3;S4]", "[S3; S4]", "[S1, S2, S5]", "[S12]", "[S12, S14]", "[S10-S12]", "[S2-3]", "[S1][S2]"];
+  const forms = ["[S1, S2]", "[S1,S2]", "[S2 S3]", "[S2 S3 S4]", "[S1, S2 S3]", "[S2-S3]", "[S2\u2013S3]", "[S2\u2014S3]", "[S3;S4]", "[S3; S4]", "[S1, S2, S5]", "[S12]", "[S12, S14]", "[S10-S12]", "[S2-3]", "[S1][S2]"];
   for (const f of forms) {
     const out = strip("He archived the repositories " + f + ".");
     ok(out === "He archived the repositories.", "stripLedgerTags removes " + f + " with the space before it", out);
   }
   ok(strip("[S1, S2] He archived them. [S3;S4]\nA second line [S12].") === "He archived them.\nA second line.", "tags at the start of a line and of the text go with their space", strip("[S1, S2] He archived them. [S3;S4]\nA second line [S12]."));
   // text that only looks like a tag is left alone
-  for (const keep of ["Amazon Simple Storage Service (S3) stores objects.", "He archived them (S3).", "The sample [S&P 500] rose.", "He cited [S3, 2019] in the paper.", "He cited [S3, 1999] in the paper.", "The [S] key and the [S-curve] stay.", "See [S1 and S2] for the rest.", "A plain sentence."]) {
+  for (const keep of ["Amazon Simple Storage Service (S3) stores objects.", "He archived them (S3).", "The sample [S&P 500] rose.", "He cited [S3, 2019] in the paper.", "He cited [S3, 1999] in the paper.", "He cited [S3 2019] in the paper.", "The [S] key and the [S-curve] stay.", "See [S1 and S2] for the rest.", "A plain sentence."]) {
     ok(strip(keep) === keep, "stripLedgerTags leaves " + JSON.stringify(keep) + " untouched", strip(keep));
   }
   // the failure the widening removes: before it, [S1, S2] in the one-sentence lede reads as a name the source lacks and the pre-check refuses the draft
   const stripOld = (t) => /\[S\d{1,3}\]/.test(t) ? t.replace(/[ \t]*\[S\d{1,3}\]/g, "").replace(/^[ \t]+(?=\S)/gm, "") : t;
-  for (const f of ["[S1, S2]", "[S2-S3]", "[S3;S4]", "[S12]"]) {
+  for (const f of ["[S1, S2]", "[S1 S2]", "[S1, S2 S3]", "[S2-S3]", "[S3;S4]", "[S12]"]) {
     const raw = mkEssay(LEDE.replace(/\.$/, " " + f + "."));
     const viaOld = stripOld(raw.replace(/\r\n/g, "\n"));
     const flaggedOld = F.groundingProblems(viaOld, ground, { forecast: false });
