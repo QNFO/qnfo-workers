@@ -116,7 +116,7 @@ ok(mod.__verdict(mod.__score(junk)).decision === "demote", "a score under 25 is 
   const lim = mod.__maxChanges;
   ok(r.status === "degraded" && gated === Math.min(466, lim) && r.notes.gate_backlog === 466 - Math.min(466, lim), "first run reports the intentional gate backlog while gating up to PUB_GATE_MAX_CHANGES papers", { gated, notes: r.notes });
   ok(living.prepare("SELECT release_gate_at FROM papers WHERE slug='draft-1'").get().release_gate_at === null, "a draft is not gated or touched");
-  // Following daily runs drain the backlog, then write nothing when nothing changed.
+  // Following hourly runs drain the backlog without duplicating that day's score snapshots.
   let r2 = r;
   for (let k = 0; k < 5 && r2.notes.gate_backlog > 0; k++) r2 = await mod.__job(env);
   const all = living.prepare("SELECT SUM(release_gate_pass) p, COUNT(*) n, SUM(release_gate_at IS NOT NULL) g FROM papers WHERE status='published'").get();
@@ -124,6 +124,10 @@ ok(mod.__verdict(mod.__score(junk)).decision === "demote", "a score under 25 is 
   const auditN = living.prepare("SELECT COUNT(*) n FROM publication_gate_audit").get().n;
   const r3 = await mod.__job(env);
   ok(r3.notes.verdicts_changed === 0 && living.prepare("SELECT COUNT(*) n FROM publication_gate_audit").get().n === auditN, "an unchanged verdict is not rewritten or re-audited", r3.notes);
+  ok(r3.status === "ok" && r3.rows === 466 && r3.notes.score_snapshots_written === 0 && audit.prepare("SELECT COUNT(*) n FROM quality_scores").get().n === 466, "an hourly sweep still scores all papers without duplicate same-day snapshots", { r3, snapshots: audit.prepare("SELECT COUNT(*) n FROM quality_scores").get().n });
+  living.prepare("INSERT INTO papers (identifier, slug, status, body_md) VALUES (?, ?, ?, ?)").run("new-today", "new-today", "published", good);
+  const rNew = await mod.__job(env);
+  ok(rNew.rows === 467 && rNew.notes.score_snapshots_written === 1 && audit.prepare("SELECT COUNT(*) n FROM quality_scores WHERE slug='new-today'").get().n === 1, "an hourly sweep snapshots a newly published paper once", { rNew: rNew.notes });
   ok(auditN === 466 && living.prepare("SELECT COUNT(DISTINCT run_id) n FROM publication_gate_audit").get().n >= 2, "one audit row per verdict, each run with its own run_id");
   // A paper revised to pass flips its verdict and gets an audit row.
   living.prepare("UPDATE papers SET body_md = ? WHERE slug = 'p0'").run(good);
@@ -167,11 +171,12 @@ ok(mod.__verdict(mod.__score(junk)).decision === "demote", "a score under 25 is 
   ok(living.prepare("SELECT COUNT(*) n FROM papers WHERE status='published'").get().n === papers.length, "every paper stays published");
 }
 
-// 5. Wiring: still the existing every-day quality-score slot, no new schedule slot; minor release.
+// 5. Wiring: hourly quality enforcement, daily topic metric, no new Worker cron trigger.
 ok(mod.__jobs["quality-score"] === mod.__job, "quality-score dispatches to the gated sweep");
-ok(mod.__sched["quality-score"] && mod.__sched["quality-score"].days === "*", "runs in the existing daily slot");
+ok(mod.__sched["quality-score"] && mod.__sched["quality-score"].days === "*" && mod.__sched["quality-score"].times.length === 24 && mod.__sched["quality-score"].times.every((t, i) => t === String(i).padStart(2, "0") + ":20"), "publication gate runs every hour");
+ok(mod.__sched["idea-topic-metric"] && mod.__sched["idea-topic-metric"].times.join() === "06:25" && !(mod.__comp["quality-score"] || []).includes("idea-topic-metric"), "idea-topic metric retains its daily cadence outside the hourly companion slot");
 const [maj, min] = String(mod.__version).split(/[.-]/).map(Number);
-ok(maj > 1 || (maj === 1 && min >= 34), "VERSION is at least 1.34 (minor bump for a new capability)", mod.__version);
+ok(maj > 1 || (maj === 1 && min >= 35), "VERSION is at least 1.35 (minor bump for hourly publication enforcement)", mod.__version);
 
 console.log(pass + " passed, " + fail + " failed");
 if (fail) process.exit(1);
