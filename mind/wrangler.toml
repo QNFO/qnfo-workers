@@ -1,7 +1,7 @@
 # Trigger-created placeholder for mind worker.
 # See QNFO/qnfo-workers for the real source.
 name = "mind"
-main = "src/index.ts"
+main = "worker.js"
 compatibility_date = "2026-10-01"
 
 # Explicitly disable traces to satisfy the workers_bp anti-pattern check.

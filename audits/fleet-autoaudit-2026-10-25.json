@@ -1,8 +1,16 @@
 {
-  "audited_at": "2026-10-25 05:28:42",
+  "audited_at": "2026-10-25 07:12:49",
   "d1_write_failures": [],
   "d1_writes_ok": 121,
   "guard": {
+    "_drift_confirm": {
+      "first_pass": [
+        "qnfo-cloud-ops",
+        "qnfo-infra"
+      ],
+      "refreshed": true,
+      "second_pass": []
+    },
     "_guard_rc": 0,
     "ahead": [],
     "cf_script_list": true,
@@ -581,7 +589,7 @@
       },
       {
         "dir": "qnfo-cloud-ops",
-        "version": "1.33.1-codeagent",
+        "version": "1.33.2-codeagent",
         "worker": "qnfo-cloud-ops"
       },
       {
@@ -631,7 +639,7 @@
       },
       {
         "dir": "qnfo-infra",
-        "version": "1.7.0-no-registrar",
+        "version": "1.8.1-null-doi-cursor",
         "worker": "qnfo-infra"
       },
       {
@@ -1180,9 +1188,9 @@
       "worker": "qnfo-citation-watch"
     },
     "qnfo-cloud-ops": {
-      "before": "1.33.1-codeagent",
+      "before": "1.33.2-codeagent",
       "http": 200,
-      "live": "1.33.1-codeagent",
+      "live": "1.33.2-codeagent",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-cloud-ops"
@@ -1413,9 +1421,9 @@
       "worker": "qnfo-impact"
     },
     "qnfo-infra": {
-      "before": "1.7.0-no-registrar",
+      "before": "1.8.1-null-doi-cursor",
       "http": 200,
-      "live": "1.7.0-no-registrar",
+      "live": "1.8.1-null-doi-cursor",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-infra"

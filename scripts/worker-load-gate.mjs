@@ -79,14 +79,14 @@ function installGlobals() {
   if (typeof globalThis.caches === "undefined") globalThis.caches = { default: { match: async () => undefined, put: async () => undefined, delete: async () => false } };
   // A service worker's own event registration is a no-op: the module body is what is under test.
   if (typeof globalThis.addEventListener === "undefined") globalThis.addEventListener = () => {};
-  if (typeof globalThis.fetch === "undefined") globalThis.fetch = async () => { throw new Error("LOAD-GATE-NO-NETWORK"); };
+  globalThis.fetch = async () => { throw new Error("LOAD-GATE-NO-NETWORK: no network access"); };
 }
 
 // Pure: turns what the child reported into a failure class. Exported for the test suite.
 export function classify(msg) {
   const m = String(msg || "");
   if (/LOAD-GATE-RELATIVE-IMPORT/.test(m)) return "relative-import";
-  if (/ERR_MODULE_NOT_FOUND|Cannot find (package|module)|LOAD-GATE-UNKNOWN-STUB/.test(m)) return "unresolved-import";
+  if (/ERR_MODULE_NOT_FOUND|Cannot find (package|module)|LOAD-GATE-UNKNOWN-STUB|does not provide an export named/.test(m)) return "unresolved-import";
   if (/SyntaxError|Unexpected (token|identifier|end)|Invalid or unexpected token/.test(m)) return "syntax-error";
   return "eval-error";
 }
