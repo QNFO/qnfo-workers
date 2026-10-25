@@ -104,6 +104,16 @@ const breakerRows = (t) => t.audit.prepare("SELECT kind, status, meta FROM cloud
   const rows = breakerRows(t);
   ok(rows.length === 1 && rows[0].status === "open" && rows[0].meta.includes('"version":"' + WORKER_VERSION + '"'), "A one ds-402-breaker row with the version: " + JSON.stringify(rows));
 
+  // A1 (2.55.2 FREE-TIER-ZERO-COST-1): the free answer must not be priced at the paid DeepSeek rate.
+  const _ai = t.audit.prepare("SELECT upstream_model, cost_usd FROM ops_ai_log ORDER BY ts DESC LIMIT 1").all();
+  const _arow = (_ai && _ai[0]) || {};
+  ok(Number(_arow.cost_usd) === 0, "A1 the free-fallback answer is priced at 0, saw cost_usd=" + _arow.cost_usd);
+  ok(/free-fallback/.test(String(_arow.upstream_model)), "A1 the row records the free fallback: " + _arow.upstream_model);
+
+  // A2 (2.55.2 UPSTREAM-ERROR-VISIBILITY-1): the paid 402 must leave one readable ledger row.
+  const _ev = t.audit.prepare("SELECT status, meta FROM cloud_ops_events WHERE kind = 'ops_upstream_error'").all();
+  ok(_ev.length === 1 && String(_ev[0].meta).includes('"status":402'), "A2 one ops_upstream_error row for the paid 402: " + JSON.stringify(_ev));
+
   // B. same isolate, breaker open: no paid fetch on the non-streamed path, still answered, no second row.
   const t2 = mk(402);
   const b = await call(W, t2, Q(false));

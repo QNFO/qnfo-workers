@@ -1,7 +1,7 @@
 // OPS-PUBLIC-READ-1 offline suite (qnfo-ops 2.38.35, OPEN-ACCESS-1).
 // Loads the real worker.js (the cloudflare:workers import swapped for stubs) and drives its fetch handler against
 // in-memory SQLite D1 (qnfo-audit and an ipatent store seeded with inventor PII), a scripted Workers AI binding and a
-// recording fetch. Proves: a chat with no key, or a stale key, is answered (not 401) in public read-only mode and is
+// recording fetch. Proves: a chat with no key is answered (not 401) in public read-only mode and is
 // marked x-ops-access: public-read; only fleet_status, backlog_status and public_data are offered or executed; a model
 // that asks for ops_d1_query, ops_d1_write, shell_exec or kv_get gets a refusal and nothing runs; ipatent_activity
 // returns page views and redacted search text but never inventor names, emails, titles, disclosure text, IP addresses
@@ -174,11 +174,13 @@ const toolResults = (t) => t.ai.seen.flatMap((s) => s.messages.filter((m) => m.r
   ok(!t.fetches.some((f) => /containers|shell/.test(f.url)), "C shell_exec never reached a container");
 }
 
-// D. OWNER-OTP-1 (2.54.0): a wrong key is the same as no key: public read mode, flagged with x-ops-key-status: rejected.
+// D. KEY-REJECTED-NOT-RATE-LIMITED-1 (2.55.3): a PRESENTED but invalid key is an authentication failure (401 with the
+// reason), never a silent public-read session that later looks like a provider rate limit. A wrong key still buys no
+// privilege, which is the part of OWNER-OTP-1 that matters; anonymous requests (no Authorization header) are unchanged.
 {
   const t = mk();
   const { res } = await call(t, Q, { Authorization: "Bearer stale-key", "CF-Connecting-IP": "198.51.100.4" });
-  ok(res.status === 200 && res.headers.get("x-ops-access") === "public-read" && res.headers.get("x-ops-key-status") === "rejected", "D stale key answered in public read mode and flagged rejected");
+  ok(res.status === 401 && /authentication failure, not a rate limit/.test(await res.clone().text()), "D stale key answered 401 with the reason, got " + res.status);
 }
 
 // E. model ids that would pick a paid upstream or a raw relay are ignored in public mode.

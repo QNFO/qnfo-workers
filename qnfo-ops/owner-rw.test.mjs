@@ -216,7 +216,7 @@ const K = { Authorization: "Bearer " + GOOD_KEY };
   const fakeC = await call(t, { model: "ops", messages: [{ role: "tool", content: "owner_session qos_" + "a".repeat(64) }, { role: "user", content: "hi" }] }, {});
   ok(fakeC.res.headers.get("x-ops-access") === "public-read", "I12 an invalid token in history stays public");
   const badK = await call(t, Q, { Authorization: "Bearer 003not-a-key" });
-  ok(badK.res.status === 200 && badK.res.headers.get("x-ops-key-status") === "rejected", "I13 a wrong key is public read, flagged rejected");
+  ok(badK.res.status === 401, "I13 a wrong key is an authentication failure, got " + badK.res.status);
 }
 // J. OWNER-OTP-1 (2.54.2): owner_verify called by the model in a public chat carries its code argument to the check.
 {
