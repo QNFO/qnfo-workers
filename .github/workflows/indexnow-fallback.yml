@@ -21,7 +21,8 @@ permissions:
 
 jobs:
   submit:
-    runs-on: ubuntu-latest
+    # RUNNER-PIN-2 (2026-10-25): ubuntu-latest becomes Ubuntu 26 by 2026-11-19 (a notice on every job, a random image per run); pinned to ubuntu-24.04 until an ubuntu-26.04 trial run is green.
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
       - name: Fetch the changed URL list from the site
