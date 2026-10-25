@@ -1,24 +1,33 @@
-# RETIRED-DUPLICATE-STUB - DO NOT DEPLOY FROM THE REPOSITORY ROOT.
+# RETIRED-DUPLICATE-STUB - serves HTTP 410 for the retired repository-root worker.
 #
 # DUP-WORKER-NAME-GATE-1 (#1384) + SECRET-IN-PUBLIC-REPO-1, remediated 2026-09-29.
+#
+# Renamed to the Workers Builds target "qnfo-workers" on 2026-10-25. The Cloudflare
+# Git integration builds this repository as worker "qnfo-workers" and warned on
+# every deploy while the config carried the legacy name:
+#   "Failed to match Worker name. Your config file is using the Worker name
+#    qnfo-paper-indexer-root-legacy-dup, but the CI system expected qnfo-workers.
+#    Overriding using the CI provided Worker name."
+# The config now matches the build target so the override warning is gone. The
+# deployed artifact is unchanged: worker.js serves 410 {"status":"retired"} and
+# the live worker carries no bindings.
 #
 # This root-level config was the pre-move location of qnfo-paper-indexer. The worker
 # now lives in qnfo-paper-indexer/ and its canonical config is
 # qnfo-paper-indexer/wrangler.toml (main = "deployed-current.worker.js").
 #
-# Two defects were removed here on 2026-09-29:
+# Defects removed here on 2026-09-29 (still in force):
 #   1. name = "qnfo-paper-indexer" collided with qnfo-paper-indexer/wrangler.toml, so a
 #      deploy from the repository root silently clobbered the canonical worker.
 #      Detected by scripts/dup-worker-name-gate.py (GATE_EXIT=1).
 #   2. [vars] INDEX_TOKEN held a plaintext credential in a public repository.
 #
-# The name below is deliberately unique so the duplicate-worker-name gate passes.
-# Nothing deploys this config; deploy-targets.txt lists only fleet-exec and qnfo-social.
-name = "qnfo-paper-indexer-root-legacy-dup"
+# usage_model was removed on 2026-10-25: wrangler 4.x rejects it as an unexpected
+# top-level field ("Unexpected fields found in top-level field: usage_model").
+#
+# No d1_databases, no vectorize, no [ai], no [vars], no secrets.
+# This config must never carry a credential.
+name = "qnfo-workers"
 main = "worker.js"
 compatibility_date = "2026-08-10"
 workers_dev = true
-usage_model = "standard"
-
-# No d1_databases, no vectorize, no [ai], no [vars], no secrets.
-# This config must never be deployable and must never carry a credential.
