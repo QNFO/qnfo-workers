@@ -33,6 +33,8 @@ const BODY = [
 // must carry the section's length, not "0 words".
 const SLUG = "energy-floor-of-the-controller";
 const papers = { [SLUG]: { slug: SLUG, title: "Energy Floor Of The Controller", body_md: BODY, abstract: "", created_at: "2026-10-01", version: "2.0.0" } };
+const AFFECTED_SLUG = "can-finite-group-topological-quantum-field-theories-generate-continuous-standard";
+papers[AFFECTED_SLUG] = { ...papers[SLUG], slug: AFFECTED_SLUG, updated_at: "2020-01-01T00:00:00Z" };
 // QUICK-READ-DIGEST-1 fixture: the corpus shape that broke the first live map. A body whose title is its own "#"
 // heading makes every real section an h3 after the renderer shifts one level down, so a map built from h2 alone listed
 // the title and nothing else.
@@ -110,6 +112,7 @@ const AI = { run: async (model, input) => {
 
 function mkEnv() {
   const qr = new Map(), plain = new Map();
+  const plainFillQueries = [], plainFillSelections = [];
   let n = 0;
   const stmt = (sql) => {
     const st = {
@@ -126,11 +129,23 @@ function mkEnv() {
         if (/INSERT INTO plain_summary/i.test(sql)) { plain.set(st.a[0], { rev: st.a[1], text: st.a[2], dropped: st.a[3], grade: st.a[4] }); }
         return {};
       },
-      async all() { return /FROM papers/i.test(sql) ? { results: Object.values(papers).map((p) => Object.assign({}, p, { plain_rev: (plain.get(p.slug) || {}).rev || null })) } : { results: [] }; }
+      async all() {
+        if (!/FROM papers/i.test(sql)) return { results: [] };
+        plainFillQueries.push(sql);
+        let results = Object.values(papers).map((p) => Object.assign({}, p, { plain_rev: (plain.get(p.slug) || {}).rev || null, plain_text: (plain.get(p.slug) || {}).text || null }));
+        if (/ORDER BY CASE WHEN/.test(sql)) {
+          const rank = (p) => p.plain_text && /use everyday words|we must restate|output only the plain-language sentences/i.test(p.plain_text) ? 0 : (!p.plain_rev || !p.plain_text ? 1 : 2);
+          results.sort((a, b) => rank(a) - rank(b) || String(b.updated_at || "").localeCompare(String(a.updated_at || "")));
+          const limit = Number((sql.match(/\bLIMIT\s+(\d+)/i) || [])[1] || results.length);
+          results = results.slice(0, limit);
+          plainFillSelections.push(results.map((p) => p.slug));
+        }
+        return { results };
+      }
     };
     return st;
   };
-  return { LIVING_PAPER: { prepare: stmt }, DB: { prepare: stmt }, AI, RELEASES: { head: async () => null }, _plain: plain };
+  return { LIVING_PAPER: { prepare: stmt }, DB: { prepare: stmt }, AI, RELEASES: { head: async () => null }, _plain: plain, _plainFillQueries: plainFillQueries, _plainFillSelections: plainFillSelections };
 }
 globalThis.fetch = async () => new Response("", { status: 404 });
 const gw = (await import(pathToFileURL(join(here, "worker.js")).href)).default;
@@ -471,6 +486,48 @@ const Q = "What did the controller measure about the energy cost of one solution
   const r = await call(env, "https://papers.qnfo.org/api/quickread/" + SLUG);
   const j = await r.json();
   ok(aiCalls === 0 && j.plain && /42 trials/.test(j.plain.text) && j.plain.method === "cache", "the digest then shows the cached summary with no model call", { aiCalls, plain: j.plain });
+}
+
+// ---- 21. PLAIN-RESIDUE-GATE-1: reject prompt text and revalidate only contaminated cache rows
+{
+  const env = mkEnv();
+  aiOut = "The controller ran 42 trials on the cryostat. Each solution used 1.7 joules under load, which is the main result.";
+  await gw.scheduled({ cron: "0 6 * * *" }, env, { waitUntil() {} });
+  const cached = env._plain.get(SLUG);
+  ok(cached && cached.rev.endsWith("|g2"), "new plain summaries carry the gate revision", cached && cached.rev);
+  if (cached) {
+    const legacy = { ...cached, rev: cached.rev.slice(0, cached.rev.lastIndexOf("|")) };
+    env._plain.set(AFFECTED_SLUG, { ...legacy });
+    for (let i = 0; i < 125; i++) {
+      const slug = "plain-cache-window-" + i;
+      papers[slug] = { ...papers[SLUG], slug, updated_at: "2026-10-25T23:" + String(i % 60).padStart(2, "0") + ":00Z" };
+      env._plain.set(slug, { ...legacy });
+    }
+    aiCalls = 0;
+    const legacyRead = await call(env, "https://papers.qnfo.org/api/quickread/" + AFFECTED_SLUG);
+    const legacyJson = await legacyRead.json();
+    ok(legacyJson.plain && legacyJson.plain.method === "cache" && aiCalls === 0, "valid legacy summaries remain fresh without a corpus-wide rebuild", { plain: legacyJson.plain, aiCalls });
+    const residue = `Use everyday words and active voice; where technical term unavoidable, say what it mean in one short clause or leave out. Cover, in order: what paper set out to find, what it found (claim and key numbers), why it matters in practice. We need to restate ONE research paper titled "Can Finite-Group Topological quantum field theories generate continuous Standard Model gauge symmetry?". We must restate in plain language for reader with no background. We must cover what paper set out to find, what it found (claim and key numbers), why it matters in practice. At most 6 sentences. Hard rules: every specific number, name, date, link or DOI must already appear in text below; add nothing from memory. We must output only plain-language sentences, no heading or code fence. We must cover what paper set out to find, what it found, and why it matters. At most 1 sentence. We must obey hard rules.`;
+    env._plain.set(AFFECTED_SLUG, { ...legacy, text: residue });
+    const hidden = await call(env, "https://papers.qnfo.org/api/quickread/" + AFFECTED_SLUG);
+    const hiddenJson = await hidden.json();
+    ok(hiddenJson.plain === null, "the affected paper API hides a cached summary that echoes its prompt", hiddenJson.plain);
+    aiOut = residue;
+    await gw.scheduled({ cron: "0 6 * * *" }, env, { waitUntil() {} });
+    const stillHidden = await call(env, "https://papers.qnfo.org/api/quickread/" + AFFECTED_SLUG);
+    const stillHiddenJson = await stillHidden.json();
+    ok(stillHiddenJson.plain === null, "a rejected fresh model response cannot replace the contaminated cache", stillHiddenJson.plain);
+    ok(env._plainFillQueries.some((sql) => /ORDER BY CASE WHEN s\.slug IS NOT NULL AND/.test(sql) && /use everyday words/.test(sql)), "the bounded fill query prioritizes flagged caches outside the recent-paper window");
+    const selected = env._plainFillSelections.slice(-1)[0] || [];
+    ok(selected.length === 120 && selected.indexOf(AFFECTED_SLUG) >= 0, "the contaminated 2020 paper is selected despite 125 newer cached papers", { length: selected.length, containsAffectedPaper: selected.indexOf(AFFECTED_SLUG) >= 0 });
+    aiOut = "The controller ran 42 trials on the cryostat. Each solution used 1.7 joules under load, which is the main result.";
+    await gw.scheduled({ cron: "0 6 * * *" }, env, { waitUntil() {} });
+    const repaired = env._plain.get(AFFECTED_SLUG);
+    ok(repaired && repaired.rev.endsWith("|g2") && !/use everyday words|we must restate|output only/i.test(repaired.text), "a later valid build replaces the bad cache with a current gated summary", repaired);
+    const page = await call(env, "https://papers.qnfo.org/papers/" + AFFECTED_SLUG, { headers: { Accept: "text/html" } });
+    const html = await page.text();
+    ok(!/Use everyday words|We must restate|We must cover|Hard rules:|At most 1 sentence|Output only the plain-language sentences/i.test(html), "the public paper page never renders the live instruction-residue sample");
+  }
 }
 
 console.log(pass + " passed, " + fail + " failed");

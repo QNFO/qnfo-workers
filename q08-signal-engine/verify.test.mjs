@@ -177,7 +177,7 @@ globalThis.fetch = origFetch;
   // Q08-FACT-REVISION-FORMAT-1 (0.14.7, run 349): a fact revision that lost its title keeps the draft's title instead of failing the gate
   let rv = 0, revised = false;
   const longEssay = "# The queue nobody measured\n\n" + [0, 1, 2, 3, 4, 5, 0, 1, 2, 3, 4].map((i) => para(i)).join("\n\n") + "\n\nworth your time: yes - names the mechanism";
-  const body = longEssay.replace(/^# .*\n\n/, "").replace(/\n\nworth your time:.*$/, "");
+  const body = longEssay.replace(/^# .*\n\n/, "").replace(/\n\nworth your time:.*$/, "").replace("the database and not the disk beneath it", "the disk beneath the database");
   const envRev = { AI: { run: async (m, a2) => {
     const pr = (a2.messages || []).map((x) => x.content).join("\n") + (a2.prompt || "");
     if (/FACT REVISION/.test(pr)) { revised = true; return { response: body + "\n\nworth your time: yes - names the mechanism" }; }
@@ -188,7 +188,7 @@ globalThis.fetch = origFetch;
   // Q08-REVISION-FLOOR-1 (0.15.1, run 356): a revision under 2800 characters but above the prune floor is accepted
   let revised2 = false;
   const midEssay = "# The queue nobody measured\n\n" + [0, 1, 2, 3, 4, 5, 0, 1, 2, 3, 4].map((i) => para(i)).join("\n\n") + "\n\nworth your time: yes - names the mechanism";
-  const midBody = midEssay.replace(/^# .*\n\n/, "").replace(/\n\nworth your time:.*$/, "");
+  const midBody = midEssay.replace(/^# .*\n\n/, "").replace(/\n\nworth your time:.*$/, "").replace("the database and not the disk beneath it", "the disk beneath the database");
   const envMid = { AI: { run: async (m, a2) => {
     const pr = (a2.messages || []).map((x) => x.content).join("\n") + (a2.prompt || "");
     if (/FACT REVISION/.test(pr)) { revised2 = true; return { response: midBody + "\n\nworth your time: yes - names the mechanism" }; }

@@ -35,13 +35,13 @@
  *   GET /report  the last 20 filings and the last run (public read)
  *   POST /tick   same work as the cron; needs x-loop-token when LOOP_TOKEN is configured
  */
-var VERSION = "0.2.5-health-contract-1"; // 0.2.5 HEALTH-CONTRACT-1 (agent_issues 2852, capability_contract_conformance, pillar autonomy): /health declares capabilities[] and limitations[] (module constants CAPABILITIES and LIMITATIONS, read from this worker's own header and constants), so the fleet snapshot counts it as conforming. No behaviour change. // 0.2.4 CRON-GRID-1 (owner directive 2026-10-19: every cron tick on the 5-minute grid, none slower than hourly): trigger minute moved onto the 5-minute grid (2,17,32,47 -> 5,20,35,50).
+var VERSION = "0.2.6"; // 0.2.6 WIP-RECOVERY-PLANNER-ALIGNMENT-1: recoverWip counts the planner's active-task set and reads its shared code_plan_wip ceiling; the run ledger records queued work and oldest age.
 var WORKER = "qnfo-evolve";
 var SOURCE = "qnfo-evolve|EVOLVE-1";
 var MAX_OPEN = 5;
 var MAX_NEW_PER_TICK = 2;
 
-/* WIP-RECOVERY-1. qnfo-code-orchestrator refuses to plan while PLAN_WIP (6) unfinished code
+/* WIP-RECOVERY-1. qnfo-code-orchestrator refuses to plan while PLAN_WIP unfinished code
  * tasks exist. Measured 2026-10-17: 7 tasks queued, the planner had not planned since 15:21Z, and the
  * queue could only drain by a task SUCCEEDING -- which the builder was failing to do at roughly 3:2.
  * That is a closed loop with one exit, and the owner doctrine (SLA-AND-PATHS-1: every step needs two
@@ -51,10 +51,16 @@ var MAX_NEW_PER_TICK = 2;
  * WIP_STALE_MIN minutes is parked as 'failed' with its full row backed up to ops_config, which frees
  * a planning slot. It is deliberately timid -- it never touches a task with fewer than 6 attempts, it
  * never touches one that moved in the last 10 minutes (it may be mid-attempt), it acts at most twice a
- * tick, and it only acts while the queue is actually blocked. Restore is one statement:
+ * tick, and it only acts while active WIP reaches the shared planner ceiling. Restore is one statement:
  *   UPDATE code_tasks SET status='queued' WHERE id=(the id in the backup key).
  * The parked issue is not lost: the planner takes an issue again inside its 3-day window. */
 var WIP_CEILING_DEFAULT = 12;
+var WIP_CEILING_MAX = 48;
+var WIP_TERMINAL_STATUSES = [
+  "merged", "closed", "publish_failed", "needs_human", "failed", "reverted", "superseded"
+];
+var WIP_HANDOFF_STATUSES = ["branch_pushed", "published", "pr_open"];
+var WIP_EXCLUDED_STATUSES = WIP_TERMINAL_STATUSES.concat(WIP_HANDOFF_STATUSES);
 var WIP_ATTEMPTS = 6;
 var WIP_STALE_MIN = 10;
 var WIP_PARK_PER_TICK = 2;
@@ -296,27 +302,47 @@ async function closeResolved(env, filings) {
   return closed;
 }
 
-/* The drain path described at WIP_CEILING. Returns the ids it parked. */
+/* The drain path described at WIP-RECOVERY-1. Returns the ids it parked. */
 async function recoverWip(env, out) {
   var parked = [];
-  /* The ceiling belongs to qnfo-code-orchestrator, not to this worker, and it moved from 6 to 12 on
-   * 2026-10-17 (0.18.2 LANES-8-1). A hardcoded copy would have parked tasks the loop still wanted --
-   * so it is read from ops_config every tick, and the default only covers a missing row. */
+  /* Match the planner's shared setting and count the same unfinished statuses; queued tasks are only
+   * eligible for parking, not the whole planner WIP set. */
   var ceiling = WIP_CEILING_DEFAULT;
   try {
     var c = await env.AUDIT.prepare(
-      "SELECT value FROM ops_config WHERE key = 'evolve_wip_ceiling'"
+      "SELECT value FROM ops_config WHERE key = 'code_plan_wip'"
     ).all();
     var cv = ((c && c.results) || [])[0];
-    if (cv && Number(cv.value) > 0) ceiling = Number(cv.value);
-  } catch (e) { /* fall back to the default */ }
+    if (cv) {
+      var configured = Number(cv.value);
+      if (Number.isFinite(configured) && configured > 0) {
+        ceiling = Math.max(1, Math.floor(Math.min(WIP_CEILING_MAX, configured)));
+      }
+      else console.error(JSON.stringify({ evt: "evolve-wip-config-invalid", key: "code_plan_wip", value: cv.value }));
+    }
+  } catch (e) {
+    console.error(JSON.stringify({ evt: "evolve-wip-config-read-failed", error: errText(e) }));
+    out.skipped.push("wip-config: " + errText(e));
+    return parked;
+  }
   out.wip_ceiling = ceiling;
 
-  var w = await env.AUDIT.prepare(
-    "SELECT COUNT(*) AS n FROM code_tasks WHERE status = 'queued'"
-  ).all();
-  var wip = ((w && w.results) || [{}])[0].n || 0;
+  var placeholders = WIP_EXCLUDED_STATUSES.map(function () { return "?"; }).join(", ");
+  var activeQuery = env.AUDIT.prepare(
+    "SELECT COUNT(*) AS n, "
+    + "SUM(CASE WHEN status = 'queued' THEN 1 ELSE 0 END) AS queued, "
+    + "MIN(updated_at) AS oldest_updated_at "
+    + "FROM code_tasks WHERE status NOT IN (" + placeholders + ")"
+  );
+  var w = await activeQuery.bind(...WIP_EXCLUDED_STATUSES).all();
+  var counts = ((w && w.results) || [{}])[0];
+  var wip = Number(counts.n) || 0;
   out.wip = wip;
+  out.wip_queued = Number(counts.queued) || 0;
+  var oldestAt = counts.oldest_updated_at ? Date.parse(counts.oldest_updated_at) : NaN;
+  var runAt = Date.parse(out.ts);
+  out.wip_oldest_age_min = Number.isFinite(oldestAt) && Number.isFinite(runAt)
+    ? Math.max(0, Math.floor((runAt - oldestAt) / 60000)) : 0;
   if (wip < ceiling) return parked;
 
   var r = await env.AUDIT.prepare(
@@ -327,17 +353,17 @@ async function recoverWip(env, out) {
   var rows = (r && r.results) || [];
   for (var i = 0; i < rows.length; i++) {
     var t = rows[i];
-    var bakKey = "code_tasks--bak-" + t.id + "-" + out.ts.slice(0, 10).replace(/-/g, "");
+    var bakKey = "code_tasks--bak-" + t.id + "-" + out.ts.slice(0, 19).replace(/[-:T]/g, "");
     await env.AUDIT.prepare(
       "INSERT OR REPLACE INTO ops_config (key, value, note, updated_at) VALUES (?, ?, ?, datetime('now'))"
     ).bind(bakKey, JSON.stringify(t).slice(0, 900000),
       "EVOLVE-1 WIP-RECOVERY-1 backup before parking " + t.id + "; restore: UPDATE code_tasks SET status='queued', updated_at=strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id='" + t.id + "'").run();
-    await env.AUDIT.prepare(
+    var update = await env.AUDIT.prepare(
       "UPDATE code_tasks SET status = 'failed', updated_at = ?, "
       + "last_error = COALESCE(last_error, '') || ? WHERE id = ? AND status = 'queued'"
     ).bind(out.ts, " | EVOLVE-1 WIP-RECOVERY-1: " + t.attempts + " attempts and no movement while WIP was "
       + wip + " >= " + ceiling + "; parked to free a planning slot (backup: ops_config " + bakKey + ")", t.id).run();
-    parked.push(t.id + ":" + t.attempts);
+    if (update && update.meta && update.meta.changes > 0) parked.push(t.id + ":" + t.attempts);
   }
   return parked;
 }
@@ -348,12 +374,19 @@ async function ledger(env, out) {
       "INSERT INTO evolve_runs (ts, scanned, filed, closed, skipped, detail) VALUES (?, ?, ?, ?, ?, ?)"
     ).bind(out.ts, out.scanned, out.filed, out.closed,
       JSON.stringify(out.skipped).slice(0, 2000),
-      JSON.stringify({ filed: out.filed_keys, blocked_control_plane: out.blocked, wip: out.wip, parked_wip: out.parked }).slice(0, 2000)).run();
+      JSON.stringify({
+        filed: out.filed_keys, blocked_control_plane: out.blocked, wip: out.wip,
+        wip_ceiling: out.wip_ceiling, wip_queued: out.wip_queued,
+        wip_oldest_age_min: out.wip_oldest_age_min, parked_wip: out.parked
+      }).slice(0, 2000)).run();
   } catch (e) { /* the ledger must never fail the tick */ }
 }
 
 async function runTick(env) {
-  var out = { ts: iso(), scanned: 0, filed: 0, closed: 0, skipped: [], filed_keys: [], blocked: [], wip: 0, wip_ceiling: 0, parked: [] };
+  var out = {
+    ts: iso(), scanned: 0, filed: 0, closed: 0, skipped: [], filed_keys: [], blocked: [],
+    wip: 0, wip_ceiling: 0, wip_queued: 0, wip_oldest_age_min: 0, parked: []
+  };
   if (!env.AUDIT) { out.skipped.push("no AUDIT binding"); return out; }
 
   var targets = {};
@@ -406,7 +439,7 @@ async function report(env) {
     + "FROM evolve_filings ORDER BY filed_at DESC LIMIT 20"
   ).all();
   var runs = await env.AUDIT.prepare(
-    "SELECT ts, scanned, filed, closed FROM evolve_runs ORDER BY id DESC LIMIT 10"
+    "SELECT ts, scanned, filed, closed, detail FROM evolve_runs ORDER BY id DESC LIMIT 10"
   ).all();
   return { worker: WORKER, version: VERSION, filings: (filings && filings.results) || [], runs: (runs && runs.results) || [] };
 }
@@ -438,7 +471,7 @@ var CAPABILITIES = [
   "owner-worker-resolution: names the worker and file that own a gap from evolve_targets",
   "issue-filing: files one agent_issues row per gap with the live worker, the file, the reproduction SQL and a query as the definition of done",
   "auto-close: re-runs each filing's probe and closes the issue itself (close_channel evolve-auto) when the probe returns 0 rows",
-  "wip-recovery: parks a code task that has burned 6 attempts and not moved for 10 minutes while the planner queue is at its ceiling, after backing its row up to ops_config",
+  "wip-recovery: parks a queued code task that has burned 6 attempts and not moved for 10 minutes while active planner WIP reaches shared code_plan_wip, after backing its row up to ops_config",
   "control-plane-visibility: counts a gap whose owner the code loop may not change and reports it instead of filing it",
   "run-ledger: records every tick in evolve_runs",
   "report: GET /report returns the last 20 filings and the last run",
@@ -449,7 +482,7 @@ var LIMITATIONS = [
   "files at most " + MAX_NEW_PER_TICK + " issues per tick and holds at most " + MAX_OPEN + " open filings, so a wide register cannot flood the code loop",
   "files only a gap whose owning worker evolve_targets names; an unnamed owner is recorded as a skip, never re-worded into something easier",
   "never files against a control-plane worker in DENY_WORKERS, a hand-kept mirror of the orchestrator's plan denylist; such a gap is only counted",
-  "wip recovery never touches a task with fewer than " + WIP_ATTEMPTS + " attempts or one that moved in the last " + WIP_STALE_MIN + " minutes, acts at most " + WIP_PARK_PER_TICK + " times per tick and only while the queue is at its ceiling",
+  "wip recovery never touches a task with fewer than " + WIP_ATTEMPTS + " attempts or one that moved in the last " + WIP_STALE_MIN + " minutes, acts at most " + WIP_PARK_PER_TICK + " times per tick and only while active planner WIP reaches code_plan_wip",
   "reads and writes one D1 binding (AUDIT) and holds no other binding or secret; with no AUDIT binding a tick does nothing",
   "runs on a 5,20,35,50 minute cron; /health reports only the last recorded run"
 ];
@@ -463,7 +496,7 @@ async function handleFetch(request, env) {
       var last = null;
       try {
         var lr = await env.AUDIT.prepare(
-          "SELECT ts, scanned, filed, closed FROM evolve_runs ORDER BY id DESC LIMIT 1"
+          "SELECT ts, scanned, filed, closed, detail FROM evolve_runs ORDER BY id DESC LIMIT 1"
         ).all();
         last = ((lr && lr.results) || [])[0] || null;
       } catch (e) { last = { error: errText(e) }; }
