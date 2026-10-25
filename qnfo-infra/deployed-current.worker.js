@@ -5,7 +5,7 @@ var __name = (target, value) => __defProp(target, "name", { value, configurable:
 var __defProp2 = Object.defineProperty;
 var __name2 = /* @__PURE__ */ __name((target, value) => __defProp2(target, "name", { value, configurable: true }), "__name");
 var NL = String.fromCharCode(10);
-var VERSION = "1.8.3-analytics-untruncated"; /* 1.8.3-analytics-untruncated MCP-ANALYTICS-TRUNCATION-1 (2026-10-25, pillar honest-measure): /analytics read aiInferenceAdaptiveGroups with limit 100 over {date, modelId}; the real group set is 437, so Workers AI usage under-reported 7.7x (3,438,429 neurons / $37.8 vs 26,345,487 / $286.5). Total now from a dimension-free aggregate, breakdown from {modelId}, with shown/groups/truncated and the 10k/day free-tier deduction so it matches cost_daily. */ /* 1.8.2-mcp-state-full-lists MCP-STATE-TRUNCATION-1 (2026-10-25, pillar honest-measure): /state returned count=35 with only 30 worker names and count=11 with only 10 D1 rows, so a caller could not tell that five workers and qnfo-audit were omitted -- a silent false census. The list caps are now 60 workers / 25 D1 and both carry shown + truncated, so an omission is visible instead of inferred. */ /* 1.8.1-null-doi-cursor CITATION-PAGINATION-NULL-CURSOR-1 (2026-10-25, pillar reach): stable DOI pagination now traverses legacy rows with NULL created_at using slug-only cursors; the offline test covers 217 records, including the null-timestamp boundary across five pages. */ /* 1.8.0-all-doi-impact CITATION-TRACKING-ALL-DOIS-1 (2026-10-25, pillar reach): the daily impact run queried only the newest 50 (at most 100) DOIs; stable keyset pagination now collects the entire third-party DOI set without changing the cron grid. qnfo-infra/impact.test.mjs covers 217 records across five pages. */ /* 1.7.0-no-registrar NO-REGISTRAR-1 (2026-10-21): the registrar is not named; dead DOIs are recognised by the 10.5281 prefix only */ // 1.6.0 CRON-GRID-1 (owner directive 2026-10-19, pillar autonomy): one hourly :30 trigger. The 06:30 run (indexer member + state refresh) and the 18:00 refresh keep their slots on it and are retried hourly, at most 3 times, while their last good run is over 24.5 h old; every other hour runs the state refresh (it ran twice a day). Every fire is logged to cron_fire_log for CRON-WATCH-1. // 1.5.1 WORKERS-BP-LOGGING-qnfo-infra-1 (2026-10-14, agent_issues 2534, child of 2342, pillar autonomy): the 3 swallowed catches in handleWebhook log as a structured console.error (worker, where, error); control flow unchanged. // 1.5.0 CRON-ONLY-HEARTBEAT-1 (agent_issues 2397, pillar autonomy): scheduled() upserts its fleet_heartbeat row after the run, ok=0 when the work threw. // 1.4.0 SOURCE-VOICE-1 (agent_issues 2468, owner directive 2026-10-13 "Papers shall cite full texts, not merely reference work summaries"; pillar research): a PAPER_VZ hit in /context carries the passage of the paper's body that matched (the indexer's own chunk, from metadata.chunk), after the abstract when one is stored; it was title + status + abstract.slice(0, 220), so a paper with no abstract (269 of 575 published on 2026-10-13) reached qnfo-ai's retrieved context as its title alone. renderContext gives a paper hit up to 1300 characters (300 before). isDeadPrefixDoi was defined only inside the folded indexer member, so the /context enrichment and metaLine threw a ReferenceError on every paper hit and returned "slug <x> (enrich error)"; it is now defined at module scope too. // 1.3.4 WORKERS-STANDARDS-1 (2026-10-12, pillar security): the indexer member compares X-Index-Token in constant time (same accepted value). // 1.3.1 INDEXER-FOLD-1 (#1756): qnfo-paper-indexer runs here as a member (its two jobs on this worker's existing 06:30 trigger, no cron added; /indexer/* read routes).
+var VERSION = "1.8.4-cred-expiry"; /* 1.8.3-analytics-untruncated MCP-ANALYTICS-TRUNCATION-1 (2026-10-25, pillar honest-measure): /analytics read aiInferenceAdaptiveGroups with limit 100 over {date, modelId}; the real group set is 437, so Workers AI usage under-reported 7.7x (3,438,429 neurons / $37.8 vs 26,345,487 / $286.5). Total now from a dimension-free aggregate, breakdown from {modelId}, with shown/groups/truncated and the 10k/day free-tier deduction so it matches cost_daily. */ /* 1.8.2-mcp-state-full-lists MCP-STATE-TRUNCATION-1 (2026-10-25, pillar honest-measure): /state returned count=35 with only 30 worker names and count=11 with only 10 D1 rows, so a caller could not tell that five workers and qnfo-audit were omitted -- a silent false census. The list caps are now 60 workers / 25 D1 and both carry shown + truncated, so an omission is visible instead of inferred. */ /* 1.8.1-null-doi-cursor CITATION-PAGINATION-NULL-CURSOR-1 (2026-10-25, pillar reach): stable DOI pagination now traverses legacy rows with NULL created_at using slug-only cursors; the offline test covers 217 records, including the null-timestamp boundary across five pages. */ /* 1.8.0-all-doi-impact CITATION-TRACKING-ALL-DOIS-1 (2026-10-25, pillar reach): the daily impact run queried only the newest 50 (at most 100) DOIs; stable keyset pagination now collects the entire third-party DOI set without changing the cron grid. qnfo-infra/impact.test.mjs covers 217 records across five pages. */ /* 1.7.0-no-registrar NO-REGISTRAR-1 (2026-10-21): the registrar is not named; dead DOIs are recognised by the 10.5281 prefix only */ // 1.6.0 CRON-GRID-1 (owner directive 2026-10-19, pillar autonomy): one hourly :30 trigger. The 06:30 run (indexer member + state refresh) and the 18:00 refresh keep their slots on it and are retried hourly, at most 3 times, while their last good run is over 24.5 h old; every other hour runs the state refresh (it ran twice a day). Every fire is logged to cron_fire_log for CRON-WATCH-1. // 1.5.1 WORKERS-BP-LOGGING-qnfo-infra-1 (2026-10-14, agent_issues 2534, child of 2342, pillar autonomy): the 3 swallowed catches in handleWebhook log as a structured console.error (worker, where, error); control flow unchanged. // 1.5.0 CRON-ONLY-HEARTBEAT-1 (agent_issues 2397, pillar autonomy): scheduled() upserts its fleet_heartbeat row after the run, ok=0 when the work threw. // 1.4.0 SOURCE-VOICE-1 (agent_issues 2468, owner directive 2026-10-13 "Papers shall cite full texts, not merely reference work summaries"; pillar research): a PAPER_VZ hit in /context carries the passage of the paper's body that matched (the indexer's own chunk, from metadata.chunk), after the abstract when one is stored; it was title + status + abstract.slice(0, 220), so a paper with no abstract (269 of 575 published on 2026-10-13) reached qnfo-ai's retrieved context as its title alone. renderContext gives a paper hit up to 1300 characters (300 before). isDeadPrefixDoi was defined only inside the folded indexer member, so the /context enrichment and metaLine threw a ReferenceError on every paper hit and returned "slug <x> (enrich error)"; it is now defined at module scope too. // 1.3.4 WORKERS-STANDARDS-1 (2026-10-12, pillar security): the indexer member compares X-Index-Token in constant time (same accepted value). // 1.3.1 INDEXER-FOLD-1 (#1756): qnfo-paper-indexer runs here as a member (its two jobs on this worker's existing 06:30 trigger, no cron added; /indexer/* read routes).
 function auth(token, env) {
   const exp = env.INFRA_TOKEN;
   if (!exp || !token) return false;
@@ -989,6 +989,41 @@ async function cronGridRun(db, event, ctx, cfg, run) {
   if (firstErr) throw firstErr;
 }
 // ---- CRON-GRID-1:END ----
+async function ensureCredSchema(env) {
+  await env.AUDIT.prepare("CREATE TABLE IF NOT EXISTS credential_registry (slug TEXT PRIMARY KEY, title TEXT, kind TEXT, expires_on TEXT, rotate_before TEXT, owner TEXT, source TEXT, updated_at TEXT)").run();
+}
+async function credentialStatus(env) {
+  const res = { checked: 0, ok: 0, due: 0, expired: 0, nodate: 0, unknown: true, state: "unknown", source: "credential_registry" };
+  var rows = [];
+  try {
+    await ensureCredSchema(env);
+    var r = await env.AUDIT.prepare("SELECT slug, kind, expires_on, rotate_before, owner FROM credential_registry ORDER BY expires_on").all();
+    rows = (r && r.results) || [];
+  } catch (e) {
+    res.error = String(e && e.message || e);
+    return res;
+  }
+  if (!rows.length) return res;
+  var now = Date.now(), DAY = 864e5, items = [];
+  for (var i = 0; i < rows.length; i++) {
+    var row = rows[i];
+    var raw = row.rotate_before || row.expires_on || "";
+    var iso = raw && raw.indexOf("T") < 0 ? raw + "T00:00:00Z" : raw;
+    var t = iso ? Date.parse(iso) : NaN;
+    var daysLeft = Number.isFinite(t) ? Math.floor((t - now) / DAY) : null;
+    var state = "ok";
+    if (daysLeft === null) { state = "nodate"; res.nodate++; }
+    else if (daysLeft < 0) { state = "expired"; res.expired++; }
+    else if (daysLeft <= 60) { state = "due"; res.due++; }
+    else { res.ok++; }
+    res.checked++;
+    items.push({ slug: row.slug, kind: row.kind || null, due: raw || null, days_left: daysLeft, state: state, owner: row.owner || null });
+  }
+  res.unknown = false;
+  res.state = res.expired ? "expired" : res.due ? "due" : res.nodate ? "incomplete" : "ok";
+  res.items = items;
+  return res;
+}
 var CRON_GRID_CFG = {"worker": "qnfo-infra", "tick": "30 * * * *", "tickMin": 60, "jobs": [{"cron": "30 6 * * *", "periodMin": 1440, "retry": true}, {"cron": "0 18 * * *", "periodMin": 1440, "retry": true}], "own": "0 * * * *", "ownWhenDue": false};
 var worker_default = {
   async scheduled(event, env, ctx) {
@@ -1015,9 +1050,15 @@ var worker_default = {
       return indexerMod.fetch(new Request(iu.toString(), request), indexerEnv(env), {});
     }
     if (path === "/health" && method === "GET") {
-      return new Response(JSON.stringify({ ok: true, worker: "qnfo-infra", version: VERSION, capabilities: ["infra-retrieve", "context", "state-refresh", "analytics"], limitations: ["every route except /health needs a bearer token", "state refreshes hourly at :30 (CRON-GRID-1); the indexer member runs on the 06:30 fire"], oracle: { retrieve: "GET /retrieve?q=&scope=&k=", context: "GET /context?q=&scope=&k=" }, bindings: { audit: !!env.AUDIT, graph: !!env.GRAPH, living: !!env.LIVING, personal: !!env.PERSONAL, portfolio: !!env.PORTFOLIO, paper_vz: !!env.PAPER_VZ, notes_vz: !!env.NOTES_VZ, tasks_vz: !!env.TASKS_VZ, log_vz: !!env.LOG_VZ, handoffs_vz: !!env.HANDOFFS_VZ, ipatent_vz: !!env.IPATENT_VZ, infra_vz: !!env.VZ, ai: !!env.AI } }), { headers: { "Content-Type": "application/json", ...cors } });
+      return new Response(JSON.stringify({ ok: true, worker: "qnfo-infra", version: VERSION, capabilities: ["infra-retrieve", "context", "state-refresh", "analytics", "credential-expiry"], limitations: ["every route except /health needs a bearer token", "state refreshes hourly at :30 (CRON-GRID-1); the indexer member runs on the 06:30 fire"], oracle: { retrieve: "GET /retrieve?q=&scope=&k=", context: "GET /context?q=&scope=&k=" }, bindings: { audit: !!env.AUDIT, graph: !!env.GRAPH, living: !!env.LIVING, personal: !!env.PERSONAL, portfolio: !!env.PORTFOLIO, paper_vz: !!env.PAPER_VZ, notes_vz: !!env.NOTES_VZ, tasks_vz: !!env.TASKS_VZ, log_vz: !!env.LOG_VZ, handoffs_vz: !!env.HANDOFFS_VZ, ipatent_vz: !!env.IPATENT_VZ, infra_vz: !!env.VZ, ai: !!env.AI } }), { headers: { "Content-Type": "application/json", ...cors } });
     }
     const token = (request.headers.get("Authorization") || "").replace(/^Bearer\s+/i, "");
+    if (path === "/cred/status" && method === "GET") {
+      const full = auth(token, env);
+      const cred = await credentialStatus(env);
+      if (!full) delete cred.items;
+      return new Response(JSON.stringify(cred), { headers: { "Content-Type": "application/json", ...cors } });
+    }
     if (!auth(token, env)) return new Response("unauthorized", { status: 401, headers: cors });
     if (path === "/refresh" && method === "POST") {
       const s = await collectState(env);
