@@ -446,7 +446,7 @@ def purge_stale(now):
 # NOT_A_WORKER, 76 NOT_DEPLOYED that were all FOLDED/RETIRED directories). An open issue with nothing to do is a false open
 # item, and one that is always open cannot signal a real finding. These notes are expected states; anything else, a D1
 # write failure, a failed purge or a repo-ahead worker is a finding, and the issue is open exactly while one exists.
-EXPECTED_NOTES = {"SYNC", "NOT_A_WORKER", "CRON_ONLY"}
+EXPECTED_NOTES = {"SYNC", "NOT_A_WORKER", "CRON_ONLY", "UNMANAGED_OK"}
 
 
 def actionable(d, rows, failed, purge_err):
