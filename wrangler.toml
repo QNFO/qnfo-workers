@@ -29,7 +29,7 @@
 # This config must never carry a credential.
 name = "qnfo-workers"
 main = "worker.js"
-compatibility_date = "2026-08-10"
+compatibility_date = "2026-10-25"
 workers_dev = true
 
 [previews]
