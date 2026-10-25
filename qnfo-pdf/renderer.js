@@ -1251,7 +1251,7 @@ function renderFullHTML(md, opts) {
     '<meta name="citation_publisher" content="QNFO">'
   ].filter(Boolean).join("");
   return '<!DOCTYPE html><html lang="en"><head>' + metas +
-    '<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.21/dist/katex.min.css">' +
+    '<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.19.1/dist/katex.min.css">' +
     "<style>" + PRINT_CSS + "</style></head><body>" +
     r.front + r.bodyHtml + r.refsHtml + "</body></html>";
 }

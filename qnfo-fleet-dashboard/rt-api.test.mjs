@@ -3,7 +3,7 @@
 // revalidates; (B) GET /api/live is one consolidated snapshot whose numbers agree with /api/areas and /api/human, and it
 // answers If-None-Match with 304 and ?since=<revision> with not_modified; (C) /api/areas and /api/human issue an ETag over
 // CONTENT and answer 304 with an empty body while nothing moved; (D) a real change in D1 changes the ETag; (E) a response
-// carrying owner fields never gets a shared-cache policy, while the public one may be reused; (F) the page's 60 s poll is
+// carrying owner fields never gets a shared-cache policy, while the public one may be reused; (F) the page's 15 s poll is
 // conditional; (G) /health advertises the new capabilities.
 // Run: node qnfo-fleet-dashboard/rt-api.test.mjs   -> prints "N passed, 0 failed"
 import { DatabaseSync } from "node:sqlite";
@@ -14,6 +14,7 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const worker = (await import(pathToFileURL(join(here, "worker.js")).href)).default;
+const src = readFileSync(join(here, "worker.js"), "utf8");
 globalThis.fetch = async () => ({ ok: false, status: 503, json: async () => ({}), text: async () => "" });
 
 const STATE = { schema_version: "fleet-state/v1", generated_at: new Date().toISOString(), version: "t", verdict: "HEALTHY", window: {}, fleet: { workers: 30 }, totals: {}, scheduled: [], audits: [], probes: [{ name: "a", ok: true, status: 200 }, { name: "b", ok: true, status: 200 }], integration: {}, report_card: {}, chains: [], device: {}, issues: [], issue_counts: { err: 0, warn: 0, total: 0 }, queues: [], coverage: {}, unattributed_errors: 0, recovered_workers: [], error_workers: [], loop: {}, meta: {}, refresh_ms: 1 };
@@ -95,6 +96,7 @@ const etagOf = (r) => r.headers.get("ETag");
   for (const p of ["/api/live", "/api/human", "/api/areas", "/api/decision", "/api/state", "/health"]) {
     ok(j.endpoints.some((e) => e.path === p), "A4 index names " + p);
   }
+  ok(j.endpoints.find((e) => e.path === "/api/live").schema_version === "fleet-live/v3", "A4b the index advertises fleet-live/v3");
   const tag = etagOf(r);
   ok(!!tag, "A5 the index carries an ETag");
   const r304 = await call(env, "/api", { "If-None-Match": tag });
@@ -118,7 +120,7 @@ const etagOf = (r) => r.headers.get("ETag");
   const { env } = mk();
   const r = await call(env, "/api/live");
   const j = await r.json();
-  ok(r.status === 200 && j.schema_version === "fleet-live/v1", "B1 /api/live serves fleet-live/v1");
+  ok(r.status === 200 && j.schema_version === "fleet-live/v3", "B1 /api/live serves fleet-live/v3");
   ok(typeof j.revision === "string" && j.revision.length >= 4, "B2 it carries a content revision");
   const areas = await (await call(env, "/api/areas")).json();
   const human = await (await call(env, "/api/human")).json();
@@ -129,14 +131,37 @@ const etagOf = (r) => r.headers.get("ETag");
   ok(j.areas.by_area.length === 5 && j.areas.by_area.every((a) => a.id && a.status), "B7 the five areas are present with a status");
   const cost = j.areas.by_area.find((a) => a.id === "cost");
   ok(cost && cost.focus && cost.focus.key === "fleet_ai_run_rate_30d_usd" && cost.focus.lever_kind === "code", "B8 an area names its constraint and its lever type");
+  ok(j.failure_summary && j.failure_summary.total_breaches === j.areas.total && Array.isArray(j.failure_summary.by_area) && j.failure_summary.by_area.length > 0, "B8b failure summary groups actual breaches by affected area");
+  const failure = j.failure_summary.by_area.find((a) => a.area_id === "cost");
+  ok(failure && failure.primary && failure.primary.metric_key === cost.focus.key && failure.primary.lever_kind === "code" && Array.isArray(failure.top_breaches) && failure.top_breaches[0].metric_key === cost.focus.key, "B8c the area failure names its primary metric, lever and ranked breach");
+  ok(j.failure_summary.remedy_history_available === true && failure.top_breaches[0].attempts_30d === 0, "B8c1 remedy availability distinguishes a readable zero-attempt result");
+  ok(j.failure_summary.top.length > 0 && j.failure_summary.top[0].priority >= j.failure_summary.top[j.failure_summary.top.length - 1].priority, "B8d the cross-area top list is ranked by priority");
+  ok(j.freshness && j.freshness.request_at === j.generated_at && j.freshness.queue.max_age_seconds === 0 && j.freshness.areas.max_age_seconds === 15 && typeof j.freshness.state.age_seconds === "number", "B8e the response reports request, queue, area-cache and state freshness");
+  ok(src.includes("max_age_seconds: AREAS_CACHE_TTL_MS / 1e3"), "B8e1 the published area freshness bound derives from the cache TTL");
   const tag = etagOf(r);
   ok(!!tag && r.headers.get("Cache-Control").includes("public"), "B9 /api/live is public and carries an ETag");
   const r304 = await call(env, "/api/live", { "If-None-Match": tag });
   ok(r304.status === 304 && (await r304.text()) === "", "B10 /api/live revalidates to 304");
   const rs = await (await call(env, "/api/live?since=" + j.revision)).json();
-  ok(rs.not_modified === true && rs.revision === j.revision, "B11 ?since=<revision> answers not_modified (sent " + j.revision + ", got " + rs.revision + ", not_modified " + rs.not_modified + ")");
+  ok(rs.not_modified === true && rs.revision === j.revision && rs.schema_version === "fleet-live/v3", "B11 ?since=<revision> answers not_modified with fleet-live/v3 (sent " + j.revision + ", got " + rs.revision + ", not_modified " + rs.not_modified + ")");
   const rs2 = await (await call(env, "/api/live?since=rev:deadbeef")).json();
   ok(!rs2.not_modified && rs2.queue, "B12 an unknown revision gets the full snapshot");
+}
+
+// B2. Remedy source failures are not reported as an empty remedy history.
+{
+  const { env, db } = mk();
+  db.exec("DROP TABLE analytics_action_log");
+  const failureWorker = (await import(pathToFileURL(join(here, "worker.js")).href + "?remedy-history-failure")).default;
+  const failureCall = (path) => failureWorker.fetch(new Request(O + path), env, ctx);
+  const r = await failureCall("/api/live");
+  const j = await r.json();
+  const cost = j.failure_summary.by_area.find((a) => a.area_id === "cost");
+  ok(j.failure_summary.remedy_history_available === false && j.failure_summary.unreadable_sources.includes("remedy history"), "B13 a failed remedy-history query is explicitly unavailable");
+  ok(cost && cost.primary.lever === null && cost.primary.attempts_30d === null && cost.top_breaches[0].attempts_30d === null, "B14 unavailable remedy values are null, not a false zero or missing lever");
+  const areas = await (await failureCall("/api/areas")).json();
+  const costArea = areas.areas.find((a) => a.id === "cost");
+  ok(areas.remedy_history_available === false && costArea.focus.tries === null && costArea.focus.leverKind === null, "B15 the area feed preserves unavailable remedy values too");
 }
 
 // C. content ETags on the reads the page polls
@@ -161,7 +186,7 @@ const etagOf = (r) => r.headers.get("ETag");
   ok(f3.status === 204 && (await f3.text()) === "", "C7 ?rev=<revision> answers 204 with no body");
   ok(f3.headers.get("X-Content-Revision") === ftag, "C8 the revision travels in a header the edge keeps");
   const page = await (await call(env, "/")).text();
-  ok(page.includes("If-None-Match") && page.includes("&rev="), "C9 the poll is conditional on both the header and the param");
+  ok(page.includes("If-None-Match") && page.includes("&rev=") && page.includes("setInterval(tick,15000)"), "C9 the overview poll revalidates every 15 s with both the header and the param");
   ok(page.includes("r.status===304||r.status===204"), "C10 the poll treats 304 and 204 the same (no re-render)");
 }
 
@@ -208,10 +233,16 @@ const etagOf = (r) => r.headers.get("ETag");
   const { env } = mk();
   const r = await call(env, "/api/owner/prompts");
   ok(r.status === 403, "G1 /api/owner/* is not open (" + r.status + ")");
+  const getCmd = await call(env, "/api/cmd");
+  const methodBody = await getCmd.json();
+  ok(getCmd.status === 405 && getCmd.headers.get("Allow") === "POST", "G2 GET /api/cmd advertises POST as its only allowed method");
+  ok(methodBody.error === "method_not_allowed" && methodBody.path === "/api/cmd" && Array.isArray(methodBody.allow) && methodBody.allow.includes("POST"), "G3 /api/cmd method errors expose a machine-readable contract");
+  ok(typeof methodBody.hint === "string" && /POST/i.test(methodBody.hint) && /GET \/api/i.test(methodBody.hint), "G4 /api/cmd method hint explains POST and GET /api");
   const p = await worker.fetch(new Request(O + "/api/cmd", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ text: "queue" }) }), env, ctx);
-  ok(p.status === 400, "G2 /api/cmd refuses a write without x-fleet-ui (" + p.status + ")");
+  const postBody = await p.json();
+  ok(p.status === 400 && postBody.error === "missing x-fleet-ui header", "G5 /api/cmd preserves its POST missing-header response");
   const h = await call(env, "/health");
-  ok(h.status === 200 && h.headers.get("Cache-Control") === "no-store", "G3 /health stays open and uncached");
+  ok(h.status === 200 && h.headers.get("Cache-Control") === "no-store", "G6 /health stays open and uncached");
 }
 
 // H. compaction, paging and the digest contract (COMPACT-READS-1)

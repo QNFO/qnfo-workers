@@ -55,7 +55,7 @@ eq(helpers.gwSplitAuthors('"Ada Lovelace"'), ["Ada Lovelace"], "gwSplitAuthors d
 const errors = [];
 const origError = console.error;
 console.error = (...a) => { errors.push(a.join(" ")); };
-const rows = ROWS.map((r, i) => ({ slug: "pf-" + i, title: "Paper " + i, authors: r.authors, abstract: "Abstract " + i, created_at: "2026-10-0" + (1 + (i % 9)) + " 00:00:00", updated_at: "", doi: "", version: "1.0.0", language: "en", keywords: r.keywords, license: "cc-by-4.0" }));
+const rows = ROWS.map((r, i) => ({ slug: "pf-" + i, title: "Paper " + i, authors: r.authors, abstract: "Abstract " + i, created_at: "2026-10-0" + (1 + (i % 9)) + " 00:00:00", first_published_at: "2026-10-0" + (1 + (i % 9)) + " 00:00:00", last_revised_at: "2026-10-10 00:00:00", updated_at: "", doi: "", version: "1.0.0", version_semver: "1.1.0", version_count: i === 0 ? 2 : 1, language: "en", keywords: r.keywords, license: "cc-by-4.0" }));
 const stmt = (sql) => { const st = { a: [], bind(...a) { st.a = a; return st; },
   async all() { if (/LIMIT \? OFFSET \?/.test(sql)) { const lim = st.a[st.a.length - 2], off = st.a[st.a.length - 1]; return { results: rows.slice(off, off + lim) }; } return { results: rows }; },
   async first() { if (/COUNT/.test(sql)) return { n: rows.length }; if (/MIN\(/.test(sql)) return { m: "2026-10-01 00:00:00" }; const slug = st.a[st.a.length - 1]; return rows.find((r) => r.slug === slug) || null; },
@@ -63,7 +63,8 @@ const stmt = (sql) => { const st = { a: [], bind(...a) { st.a = a; return st; },
 const env = { LIVING_PAPER: { prepare: stmt }, DB: { prepare: stmt }, QNFO_BUCKET: { get: async () => null } };
 globalThis.fetch = async () => new Response("", { status: 404 });
 const gw = (await import(pathToFileURL(join(here, "worker.js")).href)).default;
-const get = async (path) => { const r = await gw.fetch(new Request("https://papers.qnfo.org" + path), env, { waitUntil() {} }); return { s: r.status, t: await r.text() }; };
+const getAt = async (host, path) => { const r = await gw.fetch(new Request("https://" + host + path), env, { waitUntil() {} }); return { s: r.status, t: await r.text() }; };
+const get = (path) => getAt("papers.qnfo.org", path);
 
 const api = await get("/api/papers?limit=50");
 ok(api.s === 200, "/api/papers answers 200", api.s);
@@ -79,6 +80,29 @@ for (const it of items) {
   ok(it.quality_basis.includes("not a claim of independent peer review"), "quality basis is transparent for row " + i);
 }
 ok(items.every((it) => it.authors.every((n) => !/^(null|true|false|-?\d[\d.]*|[{\[].*)$/.test(n) || n === "[not json")), "no author name is JSON text (null, a number, true, an object)", items.map((it) => it.authors));
+const rootApi = await getAt("qnfo.org", "/api/papers?limit=2");
+ok(rootApi.s === 200, "qnfo.org search_papers endpoint answers 200", rootApi.s);
+ok(JSON.parse(rootApi.t).items.length === 2, "qnfo.org search_papers endpoint returns paper records");
+const rootPaper = await getAt("qnfo.org", "/api/papers/pf-0");
+ok(rootPaper.s === 200 && JSON.parse(rootPaper.t).slug === "pf-0", "qnfo.org get_paper endpoint returns the requested paper", rootPaper.s);
+const wwwPaper = await getAt("www.qnfo.org", "/api/papers/pf-0");
+ok(wwwPaper.s === 200 && JSON.parse(wwwPaper.t).slug === "pf-0", "www.qnfo.org manifest tools reach the same public paper API", wwwPaper.s);
+const rootSearchMcp = await gw.fetch(new Request("https://qnfo.org/mcp", {
+  method: "POST",
+  headers: { "content-type": "application/json" },
+  body: JSON.stringify({ jsonrpc: "2.0", id: 2, method: "tools/call", params: { name: "search_papers", arguments: { q: "p-adic", limit: 2 } } })
+}), env, { waitUntil() {} });
+const rootSearchMcpBody = await rootSearchMcp.json();
+ok(rootSearchMcp.status === 200 && rootSearchMcpBody.result && !rootSearchMcpBody.result.isError, "qnfo.org WebMCP search_papers call succeeds", rootSearchMcpBody);
+ok(rootSearchMcpBody.result.content[0].text.includes('"items"'), "qnfo.org WebMCP search_papers returns a paper list");
+const rootMcp = await gw.fetch(new Request("https://qnfo.org/mcp", {
+  method: "POST",
+  headers: { "content-type": "application/json" },
+  body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/call", params: { name: "get_paper", arguments: { slug: "pf-0" } } })
+}), env, { waitUntil() {} });
+const rootMcpBody = await rootMcp.json();
+ok(rootMcp.status === 200 && rootMcpBody.result && !rootMcpBody.result.isError, "qnfo.org WebMCP get_paper call succeeds", rootMcpBody);
+ok(rootMcpBody.result.content[0].text.includes('"slug": "pf-0"'), "qnfo.org WebMCP returns the paper record");
 const record = await get("/api/papers/pf-0");
 ok(record.s === 200, "single-paper API record answers 200", record.s);
 const recordJson = JSON.parse(record.t);
@@ -96,6 +120,15 @@ ok(fi.length === ROWS.length, "/feed.json carries every row", fi.length);
 const tagged = fi.find((x) => /pf-4$/.test(x.id));
 eq(tagged && tagged.tags, ["primon gas", "zeta function", "partition function", "High-quality scholarly research", "open-access scholarly work", "versioned research publication"], "feed tags split on ';' and include classification");
 eq(tagged && tagged._qnfo && tagged._qnfo.peer_review_status, "Not independently peer-reviewed", "feed identifies review status");
+ok(tagged.summary.includes("Publisher quality classification: High-quality scholarly research."), "feed summary exposes the classification to consumers that ignore custom fields");
+ok(tagged.summary.includes("Peer-review status: Not independently peer-reviewed."), "feed summary explicitly discloses review status");
+ok(tagged.summary.includes("Basis: QNFO publisher classification"), "feed summary explains the classification basis");
+const versionFeed = await get("/feed-versions.json");
+ok(versionFeed.s === 200, "new-version JSON Feed answers 200", versionFeed.s);
+const versionItems = JSON.parse(versionFeed.t).items;
+const versionItem = versionItems.find((x) => x.id.includes("/pf-0#v"));
+ok(versionItem && versionItem.summary.includes("Publisher quality classification: High-quality scholarly research."), "version feed summary exposes the classification", versionItems);
+ok(versionItem && versionItem.summary.includes("Peer-review status: Not independently peer-reviewed."), "version feed summary discloses review status", versionItems);
 const oai = await get("/oai?verb=ListRecords&metadataPrefix=oai_dc");
 ok(oai.s === 200, "/oai ListRecords answers 200", oai.s);
 ok(oai.t.includes("<dc:type>Peer review: Not independently peer-reviewed</dc:type>"), "OAI-DC states peer-review status");
@@ -104,6 +137,10 @@ const rss = await get("/rss.xml");
 ok(rss.s === 200, "new-paper RSS answers 200", rss.s);
 ok(rss.t.includes("<qnfo:quality>High-quality scholarly research</qnfo:quality>"), "RSS identifies publisher classification");
 ok(rss.t.includes("<qnfo:peer_review_status>Not independently peer-reviewed</qnfo:peer_review_status>"), "RSS identifies review status");
+ok(rss.t.includes("Publisher quality classification: High-quality scholarly research.") && rss.t.includes("Peer-review status: Not independently peer-reviewed."), "RSS description exposes classification and review status to basic feed readers", rss.t.slice(0, 1800));
+const versionRss = await get("/rss/versions.xml");
+ok(versionRss.s === 200, "new-version RSS answers 200", versionRss.s);
+ok(versionRss.t.includes("Publisher quality classification: High-quality scholarly research.") && versionRss.t.includes("Peer-review status: Not independently peer-reviewed."), "version RSS description includes classification and review status", versionRss.t.slice(0, 1800));
 console.error = origError;
 eq(errors.filter((e) => /SyntaxError|JSON|is not valid/.test(e)), [], "no JSON parse error is logged while serving plain-text authors and keywords");
 

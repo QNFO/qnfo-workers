@@ -63,7 +63,14 @@ markers, then the worker logic. `renderer.js` is the source of truth for that re
 ```bash
 node build.mjs           # rewrite worker.js + refresh deployed-current.worker.js (mirror-guard)
 node build.mjs --check   # exit 1 when the inlined renderer is stale
+npm install              # install the locked KaTeX and esbuild versions
+npm run bundle:katex     # refresh the bundled KaTeX code + deployed-current.worker.js
+node bundle-katex.mjs --check
 ```
+
+When upgrading KaTeX, update the lockfile, regenerate the bundle with `npm run bundle:katex`, bump the worker patch version,
+and run the PDF suites. The deployment consumes the committed `worker.js`; changing the npm lockfile alone does not update
+the KaTeX code deployed to production.
 
 ## Backlog loop (SCHOLAR-PDF-ALL-1, 1.2.0)
 

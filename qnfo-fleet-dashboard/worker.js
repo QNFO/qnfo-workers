@@ -10,7 +10,9 @@ var __defProp222 = Object.defineProperty;
 var __name222 = /* @__PURE__ */ __name22((target, value) => __defProp222(target, "name", { value, configurable: true }), "__name");
 var __name2222 = /* @__PURE__ */ __name222((target, value) => Object.defineProperty(target, "name", { value, configurable: true }), "__name");
 // VERSION-LINE-SPLIT-1 (agent_issues 100220): the release notes sit one per line below this statement, newest first, so a VERSION bump is a one-line patch; add a new note as the first line under it.
-var VERSION = "1.60.0-agent-tracing"; /* 1.59.1 PORTFOLIO-STRATEGIC-2 (2026-10-25, agent_issues 1000194 from the CMD RED TEAM audit): (a) the weekly summary no longer prints the portfolio total beside the constraint program as if it were that program's risk - it now reads "constraint <program> (program risk N); portfolio risk M"; (b) the review reads v_roadmap and goals per program and records roadmap_now/next/later and goals_adopted/completed in program_review_notes, flagging an active program with no now/next roadmap item and adopted goals with none completed; (c) psrScorecards is also called from portfolioDailyRun, so the deterministic program and portfolio scorecards are loop-owned daily instead of only when the weekly review runs. */ /* 1.59.0 PORTFOLIO-STRATEGIC-1 (2026-10-25, PORTFOLIO-MANAGER-1): the portfolio manager persona runs its weekly strategic review inside this worker's cron (no new worker or cron while fleet_budget caps are breached, CORE-PROMPT-1 rule 8): loop-owned program/portfolio scorecards, per-program verdicts and deterministic actions from v_program_health, portfolio decisions (constrain/accelerate/stable), program_review_notes + one weekly-strategic portfolio_runs row, owner cards only for spend above the A9 ceiling and RED verdicts persisting 3+ reviews, persona narratives only while no ai_spend fleet_budget cap is breached; new routes POST /api/portfolio/strategic and GET /api/portfolio/latest. */ /* 1.58.1-codeagent (main, 2026-10-25). */
+var VERSION = "1.61.2"; /* 1.59.1 PORTFOLIO-STRATEGIC-2 (2026-10-25, agent_issues 1000194 from the CMD RED TEAM audit): (a) the weekly summary no longer prints the portfolio total beside the constraint program as if it were that program's risk - it now reads "constraint <program> (program risk N); portfolio risk M"; (b) the review reads v_roadmap and goals per program and records roadmap_now/next/later and goals_adopted/completed in program_review_notes, flagging an active program with no now/next roadmap item and adopted goals with none completed; (c) psrScorecards is also called from portfolioDailyRun, so the deterministic program and portfolio scorecards are loop-owned daily instead of only when the weekly review runs. */ /* 1.59.0 PORTFOLIO-STRATEGIC-1 (2026-10-25, PORTFOLIO-MANAGER-1): the portfolio manager persona runs its weekly strategic review inside this worker's cron (no new worker or cron while fleet_budget caps are breached, CORE-PROMPT-1 rule 8): loop-owned program/portfolio scorecards, per-program verdicts and deterministic actions from v_program_health, portfolio decisions (constrain/accelerate/stable), program_review_notes + one weekly-strategic portfolio_runs row, owner cards only for spend above the A9 ceiling and RED verdicts persisting 3+ reviews, persona narratives only while no ai_spend fleet_budget cap is breached; new routes POST /api/portfolio/strategic and GET /api/portfolio/latest. */ /* 1.58.1-codeagent (main, 2026-10-25). */
+/* 1.61.2 REMEDY-HISTORY-AVAILABILITY-1 (2026-10-25, pillar autonomy): expose remedy-history read failures as unavailable instead of zero attempts/no lever, and report the area cache's TTL as its freshness bound. */
+/* 1.61.0 LIVE-FAILURE-OVERVIEW-1 (2026-10-25, pillar autonomy): fleet-live/v2 adds ranked breach, primary-root-cause and per-source freshness data; the overview shows failure rows before the owner queue, groups desktop area navigation, and refreshes every 15 s; /api/cmd now returns an explicit POST-only 405 contract. */
 /* 1.60.0 AGENT-TRACING-1 (2026-10-25, pillar autonomy; minor: add metadata-only agent, model, tool and approval spans; preserve 1% sampling); PSR-MODEL-FLOOR-1 (#4084, research): use allowlisted GLM-5.3-Flash for free portfolio summaries and preserve the paid fallback; WEBMCP-SITEMAP-1 (pillar reach): serve the canonical public sitemap for list_site_pages. */
 /* 1.59.2 PORTFOLIO-LATEST-ROADMAP-1 (2026-10-25, agent_issues 1000194): GET /api/portfolio/latest now returns the persisted roadmap_now, roadmap_next, roadmap_later, goals_adopted and goals_completed counts so dashboard consumers can read the program roadmap and goal measures directly. Additive response change; no new worker, cron or binding. */
 /* 1.51.19 VERSION-LINE-SPLIT-1 (2026-10-20, agent_issues 100220, pillar autonomy; patch: layout only): the release notes that sat on the VERSION line (202,642 chars) are one per line below it, so a bump is a one-line patch and the publisher's size cap stops refusing dashboard code tasks (5 of 5 on 2026-10-19); scripts/conflict_repair.py resolves note-line hunks (merge_note_hunk). No behaviour change. */
@@ -78,7 +80,7 @@ __name2222(squash, "squash");
 // ---- RT-API-1 (1.42.0, pillar autonomy): the read API's revalidation contract ----
 // Measured on the live worker 2026-10-18: no read answered with an ETag, every read answered "Cache-Control: no-store",
 // and GET /api did not exist (404), so a poller had no way to ask "did anything change?" and no way to enumerate what it
-// may call. The page's own 60 s poll therefore re-downloaded and re-rendered the whole queue fragment whatever happened.
+// may call. The page's own 15 s poll therefore re-downloaded and re-rendered the whole queue fragment whatever happened.
 // A read now carries a weak ETag computed over its CONTENT (opts.digest), honours If-None-Match with 304 and an empty
 // body, and states a cache policy: a public read may be reused for 15 s, a response that carries owner fields never may.
 // The digest deliberately excludes time-derived fields (ages, generated_at): they change on every request, and hashing
@@ -2232,7 +2234,7 @@ var SCHEDULED_BUDGET_MS = 10 * 60 * 1e3;
 var LOOP_SYNC_BUDGET_MS = 4 * 60 * 1e3;
 var LOOP_SYNC_HARD_MS = 6 * 60 * 1e3;
 // Cached state for the human page: never blocks on a rebuild unless nothing is cached yet. maxAgeMs lets the
-// 10s page poll avoid triggering the heavy probe fan-out more than once per 5 min.
+// 15s page poll avoid triggering the heavy probe fan-out more than once per 5 min.
 async function currentState(env, ctx, maxAgeMs) {
   const rec = await loadState(env);
   if (!rec) {
@@ -2426,9 +2428,9 @@ function feedsByArea() {
 }
 var API_INDEX = [
   { path: "/api", area: "platform", source: "live", lag_s: 0, method: "GET", auth: "open", schema_version: "fleet-api-index/v2", cache: "public 15s, ETag", freshness: "static (this table)", what: "This index: every read endpoint, its functional area, its auth, its cache policy, whether it is computed live or from the rebuilt state, and what makes it change. Send If-None-Match or ?since=<revision>." },
-  { path: "/api/live", area: "platform", source: "mixed", lag_s: 900, method: "GET", auth: "open", schema_version: "fleet-live/v1", cache: "public 15s, ETag", freshness: "state refreshed by the */15 cron; queue read live from D1", what: "One consolidated snapshot for pollers: state verdict, queue counts, the five areas, the invest verdict. Send If-None-Match, or ?since=<revision>." },
+  { path: "/api/live", area: "platform", source: "mixed", lag_s: 900, method: "GET", auth: "open", schema_version: "fleet-live/v3", cache: "public 15s, ETag", freshness: "queue read at request time; area model cached 15 s; state refreshed by the */15 cron and on request when older than 300 s, with measured source ages in the response", what: "One consolidated snapshot for pollers: state verdict, queue counts, the five areas, the invest verdict, ranked breaches and root-cause explanations. Send If-None-Match, or ?since=<revision>." },
   { path: "/api/human", area: "autonomy", source: "live", lag_s: 60, method: "GET", auth: "open (owner fields with a holder)", schema_version: "fleet-human/v2", cache: "public 15s open / private no-store with a holder, ETag", freshness: "queue read live from D1", what: "The owner queue the page renders: items, upcoming, blind sources, decision, system summary. Send If-None-Match or ?since=<revision>." },
-  { path: "/api/areas", area: "platform", source: "live", lag_s: 60, method: "GET", auth: "open", schema_version: "fleet-areas/v3", cache: "public 15s, ETag", freshness: "v_metric_trigger_state and metric_history, cached 60 s per isolate", what: "Breaching metrics by functional area, with each area's constraint, lever and remedy history. Compact by default: the full lever text is only sent with ?full=1 (it was 55 KB of the 101 KB body). Send If-None-Match or ?since=<revision>." },
+  { path: "/api/areas", area: "platform", source: "live", lag_s: 15, method: "GET", auth: "open", schema_version: "fleet-areas/v3", cache: "public 15s, ETag", freshness: "v_metric_trigger_state and metric_history, cached 15 s per isolate", what: "Breaching metrics by functional area, with each area's constraint, lever and remedy history. Compact by default: the full lever text is only sent with ?full=1 (it was 55 KB of the 101 KB body). Send If-None-Match or ?since=<revision>." },
   { path: "/api/decision", area: "platform", source: "snapshot", lag_s: 900, method: "GET", auth: "open", schema_version: "fleet-decision/v1", cache: "public 15s, ETag", freshness: "governance snapshot, re-measured when older than 5 min", what: "Continue / scale back / stop, its reasons, and what would flip it." },
   { path: "/api/state", area: "platform", source: "snapshot", lag_s: 900, method: "GET", auth: "open", schema_version: "fleet-state/v1.1", cache: "public 15s, ETag", freshness: "fleet_dashboard_state, rebuilt by the */15 cron", what: "The full machine state: scheduled workers, probes, integration, issues." },
   { path: "/api/actions", area: "autonomy", source: "snapshot", lag_s: 900, method: "GET", auth: "open", schema_version: "fleet-actions/v1", cache: "public 15s, ETag", freshness: "same state as /api/state", what: "The issue list as machine actions with remediation." },
@@ -2447,7 +2449,7 @@ var API_INDEX = [
   { path: "/api/ga4/overview", area: "reach", source: "live", lag_s: 300, method: "GET", auth: "open", schema_version: "ga4-overview/v1", cache: "public 120s, stale 300s, in-isolate 5 min", freshness: "read from the GA4 Data API when the page opens; 28 complete UTC days and a 30-minute realtime count", what: "Google Analytics 4: 28-day totals with the previous window, the daily series, top pages, channels, countries, devices, hosts and realtime." },
   { path: "/api/cost", area: "cost", source: "live", lag_s: 60, method: "GET", auth: "open", schema_version: "fleet-cost/v1", cache: "public 15s, ETag", freshness: "v_cost_run_rate, cost_daily, ai_call_counters and fleet_budget read at request time", what: "Spend: the 30-day run-rate by source, 14 days of daily spend, Workers AI calls, errors and neurons by model and by worker over 7 days, and every spend budget with its headroom." },
   { path: "/api/q08-review", area: "research", source: "live", lag_s: 60, method: "GET", auth: "open", schema_version: "q08-review-status/v1", cache: "public 15s, ETag", freshness: "the one-shot 2026-10-31 review state", what: "q08's human-read review: decision, rule and last attempt." },
-  { path: "/api/area/<id>", method: "GET", auth: "open", area: "platform", source: "live", lag_s: 60, schema_version: "fleet-area-feed/v1", cache: "public 15s, ETag", freshness: "v_metric_trigger_state, metric_history, code_tasks, research_queue, outreach_queue, agent_issues read at request time (60 s at most in isolate memory)", what: "One functional area as its own feed: its star metric and trend, its breaches ranked, its named constraint, its pipelines, and the reads that belong to it with each one's declared lag (?full=1 adds the whole lever text and every breach row). Send If-None-Match or ?since=<revision>." },
+  { path: "/api/area/<id>", method: "GET", auth: "open", area: "platform", source: "live", lag_s: 15, schema_version: "fleet-area-feed/v1", cache: "public 15s, ETag", freshness: "v_metric_trigger_state, metric_history, code_tasks, research_queue, outreach_queue, agent_issues read at request time (15 s at most in isolate memory)", what: "One functional area as its own feed: its star metric and trend, its breaches ranked, its named constraint, its pipelines, and the reads that belong to it with each one's declared lag (?full=1 adds the whole lever text and every breach row). Send If-None-Match or ?since=<revision>." },
   { path: "/api/owner/*", area: "autonomy", source: "live", lag_s: 0, method: "GET/POST", auth: "owner (emailed code) or x-loop-token", schema_version: "owner/v1", cache: "private no-store", freshness: "read live", what: "Owner prompts, responses, keys and documents. Never cacheable." },
   { path: "/api/cmd", area: "platform", source: "live", lag_s: 0, method: "GET/POST", auth: "open to ask; actions need the owner code", schema_version: "cmd/v1", cache: "private no-store", freshness: "read live", what: "The command line: deterministic reads, plain-English answers, gated actions, and the whole fleet tool surface (tools / tool <name>)." },
   { path: "/health", area: "platform", source: "live", lag_s: 0, method: "GET", auth: "open", schema_version: "health/v1", cache: "no-store", freshness: "static", what: "Capabilities and limitations of this worker." }
@@ -2515,7 +2517,7 @@ function areaFeedView(a, fa, mA, full, data) {
   // A source that could not be read must be named here, exactly as /api/areas names it: an area feed that renders
   // breaches:0 because its table failed would read as "all clear", which is the false green AREAS-1 forbids.
   const blind = (mA && mA.blind) || [];
-  const self = { path: "/api/area/" + fa.id, method: "GET", schema_version: "fleet-area-feed/v1", source: "live", lag_s: 60, what: "This feed: the area, its star metric, its breaches and its pipelines." };
+  const self = { path: "/api/area/" + fa.id, method: "GET", schema_version: "fleet-area-feed/v1", source: "live", lag_s: 15, what: "This feed: the area, its star metric, its breaches and its pipelines." };
   const feeds = [self].concat(API_INDEX.filter(function(e) {
     return (e.area || "platform") === fa.id;
   }).map(function(e) {
@@ -2528,7 +2530,7 @@ function areaFeedView(a, fa, mA, full, data) {
     area: { id: fa.id, name: fa.name, what: fa.what, page: "/area/" + fa.id },
     generated_at: (/* @__PURE__ */ new Date()).toISOString(),
     live: true,
-    max_lag_s: 60,
+    max_lag_s: 15,
     computed_from: fa.sources,
     data: data || { age_min: null, metrics: 0 },
     total_in_breach: mA ? mA.total : null,
@@ -2607,13 +2609,58 @@ function liveAreas(m) {
     };
   });
 }
+function liveFailureSummary(m) {
+  const remedyHistoryAvailable = !!m && m.remedy_history_available !== false;
+  const affected = (m && m.areas || []).filter(function(a) { return Number(a.count) > 0; });
+  const byArea = affected.map(function(a) {
+    const f = a.focus || null;
+    const breaches = (a.top || []).map(function(r) {
+      return {
+        metric_key: r.key,
+        title: r.title,
+        value: r.val,
+        operator: r.op,
+        threshold: r.thr,
+        priority: r.prio,
+        rank_score: r.score,
+        owner: r.owner,
+        lever_kind: r.leverKind,
+        lever: r.lever || null,
+        attempts_30d: r.tries,
+        last_attempt_at: r.last_try || null,
+        is_root_cause: !!(f && f.root && f.key === r.key)
+      };
+    });
+    return {
+      area_id: a.id,
+      name: a.name,
+      status: a.status,
+      total_breaches: a.count,
+      omitted_breaches: a.more || 0,
+      primary: f ? { metric_key: f.key, title: f.title, value: f.val, operator: f.op, threshold: f.thr, priority: f.prio, owner: f.owner, lever_kind: f.leverKind, lever: f.lever || null, attempts_30d: f.tries, last_attempt_at: f.last_try || null } : null,
+      root_cause: f && f.root ? { metric_key: f.key, title: f.title, explains: f.explains || [] } : null,
+      top_breaches: breaches
+    };
+  });
+  const ranked = [];
+  for (const area of byArea) for (const breach of area.top_breaches) ranked.push(Object.assign({ area_id: area.area_id, area_name: area.name }, breach));
+  ranked.sort(function(a, b) { return (Number(b.priority) || 0) - (Number(a.priority) || 0) || (Number(b.rank_score) || 0) - (Number(a.rank_score) || 0) || String(a.metric_key).localeCompare(String(b.metric_key)); });
+  return {
+    total_breaches: m ? Number(m.total) || 0 : null,
+    areas_affected: affected.length,
+    remedy_history_available: remedyHistoryAvailable,
+    unreadable_sources: (m && m.blind || []).concat(remedyHistoryAvailable ? [] : ["remedy history"]),
+    by_area: byArea,
+    top: ranked.slice(0, 10)
+  };
+}
 // PRECONDITION: st = fleet state, v = humanView, m = areasModel. POSTCONDITION: a stable view plus a revision hash over
 // that view; time-derived fields (generated_at, ages) live outside the hash so an unchanged fleet keeps its revision.
 function liveView(st, v, m) {
   const probes = st && st.probes || [];
   const issues = st && st.issues || [];
   const body = {
-    schema_version: "fleet-live/v1",
+    schema_version: "fleet-live/v3",
     worker: NAME,
     version: VERSION,
     state: {
@@ -2627,11 +2674,23 @@ function liveView(st, v, m) {
     },
     queue: { verdict: v.verdict, open: v.count, urgent: v.urgent, oldest_days: v.attention ? v.attention.oldest_days : null },
     areas: { total: m ? m.total : null, blind: m && m.blind || [], by_area: liveAreas(m) },
+    failure_summary: liveFailureSummary(m),
     decision: { verdict: v.decision.verdict, risk: v.decision.risk, level: v.decision.level, headline: v.decision.headline, days_to_gate: v.decision.gate ? v.decision.gate.days : null },
-    sources: { state: "fleet_dashboard_state (rebuilt by the */15 cron)", queue: "human_actions and the derived owners (read live)", areas: "v_metric_trigger_state + metric_history" }
+    sources: { state: "fleet_dashboard_state (rebuilt by the */15 cron and refreshed on request when older than 300 s)", queue: "human_actions and the derived owners (read at request time)", areas: "v_metric_trigger_state + metric_history (cached for " + AREAS_CACHE_TTL_MS / 1e3 + " s per isolate)" }
   };
   body.revision = rtDigest(body);
-  body.generated_at = (/* @__PURE__ */ new Date()).toISOString();
+  const now = Date.now();
+  const ageSeconds = function(stamp) {
+    const at = Date.parse(stamp || "");
+    return Number.isFinite(at) ? Math.max(0, Math.floor((now - at) / 1e3)) : null;
+  };
+  body.generated_at = new Date(now).toISOString();
+  body.freshness = {
+    request_at: body.generated_at,
+    state: { generated_at: st && st.generated_at || null, age_seconds: ageSeconds(st && st.generated_at), refresh_when_older_than_seconds: 300 },
+    queue: { as_of: body.generated_at, max_age_seconds: 0 },
+    areas: { generated_at: m && m.generated_at || null, cache_age_seconds: ageSeconds(m && m.generated_at), max_age_seconds: AREAS_CACHE_TTL_MS / 1e3 }
+  };
   return body;
 }
 // What makes the queue change as far as a reader can see: the items themselves, their severity and due date, the
@@ -2684,7 +2743,7 @@ async function handleRequest(request, env, ctx) {
     const live = liveView(stLive, vLive, mLive);
     const rtHeaders = { "X-Generated-At": live.generated_at, "X-Revision": live.revision };
     if (since && since === live.revision) {
-      return json({ schema_version: "fleet-live/v1", not_modified: true, revision: live.revision, generated_at: live.generated_at }, 200, { req: request, digest: live.revision, cache: RT_CACHE_PUBLIC, headers: rtHeaders });
+      return json({ schema_version: "fleet-live/v3", not_modified: true, revision: live.revision, generated_at: live.generated_at, freshness: live.freshness }, 200, { req: request, digest: live.revision, cache: RT_CACHE_PUBLIC, headers: rtHeaders });
     }
     return json(live, 200, { req: request, digest: live.revision, cache: RT_CACHE_PUBLIC, headers: rtHeaders });
   }
@@ -2760,7 +2819,7 @@ if (path === "/health") {
       v.responses = await recentResponses(env);
       ownerMailView(v);
     }
-    // RT-API-1: the 60 s poll sends the fragment's last ETag. Nothing changed -> 304 and no body, so the browser keeps the
+    // RT-API-1: the 15 s poll sends the fragment's last ETag. Nothing changed -> 304 and no body, so the browser keeps the
     // DOM it already has (no re-render, no focus loss, no scroll jump). Ages are excluded from the digest on purpose.
     const fragDigest = { q: rtQueueDigest(v), a: rtAreasDigest(v.areas) };
     // An owner-only panel is part of what the fragment shows, so it is part of what makes it change.
@@ -5603,7 +5662,7 @@ async function reachScorecardData(env, nowMs) {
 //   - code_tasks          status=needs_human (code loop could not verify a change / has no PR credential)
 //   - v_email_human_pending_v2 inbound mail from real people (not bounces, bots, our own domains)
 //   - shutdown_manifest   owner-confirm gates once phase 1 has fired, and gates due within 45 days
-// REAL-TIME: the queue is read live from D1 on every request and the page re-fetches itself every 10s; money/return
+// REAL-TIME: the queue is read live from D1 on every request and the page re-fetches itself every 15s; money/return
 // inputs are re-measured on demand (>5 min old) and by the */15 cron + the 10-min fleet-exec heartbeat.
 // FAIL-CLOSED: a source that cannot be read is listed under `blind` and the verdict becomes UNCONFIRMED;
 // the page never claims "nothing needs you" while it could not look.
@@ -7452,10 +7511,11 @@ function bottleneckOf(stages) {
   if (best && best.n >= 5 && tot > 0 && best.n / tot >= 0.3) return { k: best.k, why: best.n + " items waiting here (" + Math.round(best.n / tot * 100) + "% of the pipeline)" };
   return null;
 }
-function buildAreas(rows, hist, flowsRaw, sys) {
+function buildAreas(rows, hist, flowsRaw, sys, remedyHistoryAvailable) {
   // PRECONDITION: rows = breaching trigger rows; hist = { metric: [{day,value}] } oldest-first; flowsRaw = [{id,name,stages}].
   // POSTCONDITION: { total, areas:[{id,name,status,star,count,top,more}], flows }; no area lists more than 3 rows.
   const by = {};
+  const remedyReadable = remedyHistoryAvailable !== false;
   for (const a of AREA_DEFS) by[a.id] = [];
   for (const r of rows || []) {
     const id = areaOf(r.metric_key);
@@ -7463,8 +7523,9 @@ function buildAreas(rows, hist, flowsRaw, sys) {
     by[id].push({
       key: r.metric_key, title: shortTitle(r.title), val: r.val, op: r.operator, thr: r.threshold, owner: r.owner || "fleet",
       prio: prioNum(r.priority), score: prioNum(r.priority) * 10 + gapOf(r.val, r.threshold), series, trend: trendOf(series, r.operator),
-      leverKind: leverKind(r.lever), lever: leverLine(r.lever), fullLever: String(r.lever || "").replace(/\s+/g, " ").trim(),
-      tries: Number(r.tries) || 0, last_try: r.last_try || null, area: id
+      leverKind: remedyReadable ? leverKind(r.lever) : null, lever: remedyReadable ? leverLine(r.lever) : null,
+      fullLever: remedyReadable ? String(r.lever || "").replace(/\s+/g, " ").trim() : null,
+      tries: remedyReadable ? Number(r.tries) || 0 : null, last_try: remedyReadable ? r.last_try || null : null, area: id
     });
   }
   // AREAS-2: one key -> {title, area} map across all areas, so a constraint can name the breaches it is believed to cause.
@@ -7614,9 +7675,9 @@ function focusRowsHtml(m, esc) {
     o += '<span class="fx-c">' + (f.root ? '<span class="tag u">root cause</span> ' : "") + esc(f.title) + '</span><span class="fx-v">' + esc(fmtNum(f.val)) +
       ' <small>target ' + esc(OP_SYM[f.op] || f.op) + " " + esc(fmtNum(f.thr)) + '</small></span><span class="tr-a ' + (f.trend.good === true ? "ok" : f.trend.good === false ? "act" : "") + '">' + esc(trendLabel(f.trend) || "no history") + "</span></div>";
     o += '<div class="fx-m"><span class="tag ' + (f.leverKind === "owner" ? "u" : "") + '">' + esc(f.leverKind === "code" ? "code loop" : f.leverKind === "owner" ? "your decision" : "fleet loops") + "</span>";
-    o += '<span class="fx-l">' + (f.lever ? esc(f.lever) : "no lever recorded on this trigger") + "</span>";
+    o += '<span class="fx-l">' + (m.remedy_history_available === false ? "Remedy history unavailable" : f.lever ? esc(f.lever) : "no lever recorded on this trigger") + "</span>";
     o += '<span class="fx-o">' + esc(f.owner) + "</span>";
-    o += '<span class="fx-t">' + (f.tries ? f.tries + " attempt" + (f.tries === 1 ? "" : "s") + " in 30d, still in breach" : "no attempt in 30d") + "</span>";
+    o += '<span class="fx-t">' + (m.remedy_history_available === false ? "Remedy history unavailable" : f.tries ? f.tries + " attempt" + (f.tries === 1 ? "" : "s") + " in 30d, still in breach" : "no attempt in 30d") + "</span>";
     if (a.count > 1) o += '<a class="fx-more" href="/area/' + a.id + '">' + (a.count - 1) + " more here &rarr;</a>";
     o += "</div>";
     if (f.explains && f.explains.length) {
@@ -7663,11 +7724,11 @@ function areaDetailHtml(a, m, esc, opts) {
   } else {
     const f = a.focus;
     if (f) {
-      o.push('<section class="card fx-r ' + a.status + '"><div class="fx-h"><span class="fx-c">constraint</span><span class="fx-v">' + esc(fmtNum(f.val)) + " <small>target " + esc(OP_SYM[f.op] || f.op) + " " + esc(fmtNum(f.thr)) + '</small></span><span class="tr-a ' + (f.trend.good === true ? "ok" : f.trend.good === false ? "act" : "") + '">' + esc(trendLabel(f.trend) || "no history") + "</span></div><div class=\"fx-c\"><b>" + esc(f.title) + "</b></div><div class=\"fx-m\">" + sparkSvg(f.series, f.trend.good) + '<span class="fx-o">' + esc(f.owner) + "</span><span class=\"fx-t\">" + (f.tries ? f.tries + " remedy attempt" + (f.tries === 1 ? "" : "s") + " in 30d, metric still in breach" : "no remedy attempt in 30d") + "</span></div>" + (f.lever ? '<div class="fx-l"><b>Lever (' + esc(f.leverKind) + '):</b> ' + esc(f.lever) + "</div>" : '<div class="fx-l meta">No lever recorded on this trigger; the fleet has no machine path to it.</div>') + "</section>");
+      o.push('<section class="card fx-r ' + a.status + '"><div class="fx-h"><span class="fx-c">constraint</span><span class="fx-v">' + esc(fmtNum(f.val)) + " <small>target " + esc(OP_SYM[f.op] || f.op) + " " + esc(fmtNum(f.thr)) + '</small></span><span class="tr-a ' + (f.trend.good === true ? "ok" : f.trend.good === false ? "act" : "") + '">' + esc(trendLabel(f.trend) || "no history") + "</span></div><div class=\"fx-c\"><b>" + esc(f.title) + "</b></div><div class=\"fx-m\">" + sparkSvg(f.series, f.trend.good) + '<span class="fx-o">' + esc(f.owner) + "</span><span class=\"fx-t\">" + (m.remedy_history_available === false ? "Remedy history unavailable" : f.tries ? f.tries + " remedy attempt" + (f.tries === 1 ? "" : "s") + " in 30d, metric still in breach" : "no remedy attempt in 30d") + "</span></div>" + (m.remedy_history_available === false ? '<div class="fx-l meta">Remedy history unavailable.</div>' : f.lever ? '<div class="fx-l"><b>Lever (' + esc(f.leverKind) + '):</b> ' + esc(f.lever) + "</div>" : '<div class="fx-l meta">No lever recorded on this trigger; the fleet has no machine path to it.</div>') + "</section>");
     }
     o.push('<h2 class="fl-h">Every breach in this area <span class="ct">' + a.count + "</span></h2><ul class=\"br-l\">");
     for (const r of a.all) {
-      o.push('<li class="br" id="' + esc(r.key) + '"><div class="br-t"><b>' + esc(r.title) + '</b><span class="br-v">' + esc(fmtNum(r.val)) + " <small>target " + esc(OP_SYM[r.op] || r.op) + " " + esc(fmtNum(r.thr)) + '</small></span></div><div class="br-m">' + sparkSvg(r.series, r.trend.good) + '<span class="tr-a ' + (r.trend.good === true ? "ok" : r.trend.good === false ? "act" : "") + '">' + esc(trendLabel(r.trend) || "no history") + '</span><span class="br-o">owner ' + esc(r.owner) + "</span><span>" + (r.tries ? r.tries + " attempt" + (r.tries === 1 ? "" : "s") + " in 30d" : "no attempt in 30d") + '</span><code class="fx-k">' + esc(r.key) + "</code></div>" + (r.lever ? '<div class="fx-l">' + esc(r.lever) + "</div>" : "") + "</li>");
+      o.push('<li class="br" id="' + esc(r.key) + '"><div class="br-t"><b>' + esc(r.title) + '</b><span class="br-v">' + esc(fmtNum(r.val)) + " <small>target " + esc(OP_SYM[r.op] || r.op) + " " + esc(fmtNum(r.thr)) + '</small></span></div><div class="br-m">' + sparkSvg(r.series, r.trend.good) + '<span class="tr-a ' + (r.trend.good === true ? "ok" : r.trend.good === false ? "act" : "") + '">' + esc(trendLabel(r.trend) || "no history") + '</span><span class="br-o">owner ' + esc(r.owner) + "</span><span>" + (m.remedy_history_available === false ? "Remedy history unavailable" : r.tries ? r.tries + " attempt" + (r.tries === 1 ? "" : "s") + " in 30d" : "no attempt in 30d") + '</span><code class="fx-k">' + esc(r.key) + "</code></div>" + (m.remedy_history_available === false ? '<div class="fx-l meta">Remedy history unavailable.</div>' : r.lever ? '<div class="fx-l">' + esc(r.lever) + "</div>" : "") + "</li>");
     }
     o.push("</ul>");
   }
@@ -7677,11 +7738,12 @@ function areaDetailHtml(a, m, esc, opts) {
   return o.join("");
 }
 var AREAS2_CSS = ".fl-sum{margin:9px 0 0;font-size:13.5px}.fl-sum a{color:var(--teal);text-decoration:none}.fx{display:grid;gap:10px;margin:12px 0 0}.fx-r{background:var(--surface);border:1px solid var(--rule);border-left:4px solid var(--green);border-radius:var(--r);padding:11px 13px}.fx-r.unk{border-left-color:var(--amber)}.fx-r.act{border-left-color:var(--red)}.fx-h{display:flex;gap:12px;align-items:baseline;flex-wrap:wrap}.fx-n{font:600 12px/1.2 var(--sans);letter-spacing:.05em;text-transform:uppercase;color:var(--muted);text-decoration:none;min-width:150px}.fx-n:hover{color:var(--teal)}.fx-c{font:400 15px/1.35 var(--serif);flex:1;min-width:180px}.fx-v{font:500 19px/1 var(--serif);white-space:nowrap;font-variant-numeric:tabular-nums;margin-left:auto}.fx-v small{font:400 12px var(--sans);color:var(--muted)}.fx-m{display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-top:6px;font-size:12.5px;color:var(--muted)}.fx-m .tag{border:1px solid var(--rule);border-radius:99px;padding:1px 8px;font-size:11.5px;white-space:nowrap}.fx-m .tag.u{border-color:var(--amber);color:var(--amber)}.fx-l{flex:1;min-width:200px;color:var(--ink);font-size:13.5px}.fx-o{font-family:var(--mono);font-size:11.5px}.fx-t{white-space:nowrap}.fx-more{color:var(--teal);text-decoration:none}.fx-x{margin-top:7px;padding:7px 10px;border-radius:var(--r-sm);background:var(--amber-wash);color:var(--ink);font-size:13px}.fx-k{font:400 11.5px var(--mono);color:var(--muted)}.ctl-l{list-style:none;margin:0;padding:0;display:grid;gap:8px}.ctl-l li{display:flex;gap:9px;align-items:baseline;flex-wrap:wrap;font-size:13px}.ctl-l .ok{color:var(--green)}.ctl-l .bad{color:var(--red);font-weight:600}.ctl-l button{margin-left:auto;border:1px solid var(--rule);background:var(--surface);color:var(--ink);border-radius:8px;padding:3px 10px;font-size:12.5px;cursor:pointer}.q-sub{border-bottom:1px solid var(--rule);background:var(--surface)}.q-sub .wrap{display:flex;gap:6px;align-items:center;flex-wrap:wrap;padding-top:6px;padding-bottom:6px;font-size:13.5px}.q-sub-n{color:var(--muted);margin-right:8px;font-weight:600;font-size:12px;letter-spacing:.05em;text-transform:uppercase}.q-sub a{text-decoration:none;padding:4px 10px;border-radius:8px;color:var(--muted)}.q-sub a:hover{background:var(--wash);color:var(--ink)}.q-sub a[aria-current]{color:var(--ink);background:var(--wash);font-weight:500}.it-area{font-size:11.5px;text-decoration:none;color:var(--muted);border:1px solid var(--rule);border-radius:99px;padding:0 8px}.it-area:hover{border-color:var(--teal);color:var(--teal)}.ap-head{margin:6px 0 4px}.ap-head h1{margin:2px 0 4px}.ap-what{margin:0 0 10px;color:var(--muted);max-width:70ch}.ap-top{display:flex;gap:14px;align-items:stretch;flex-wrap:wrap;margin:6px 0 4px}.ap-star{display:grid;gap:3px;background:var(--surface);border:1px solid var(--rule);border-left:4px solid var(--green);border-radius:var(--r);padding:11px 13px;min-width:210px}.ap-head.unk .ap-star{border-left-color:var(--amber)}.ap-head.act .ap-star{border-left-color:var(--red)}.ap-w{display:grid;grid-template-columns:repeat(auto-fit,minmax(340px,1fr));gap:14px;margin:14px 0;align-items:start}.ap-scroll{overflow-x:auto;-webkit-overflow-scrolling:touch}#live>.fl-h{margin-top:24px}#live>.empty{margin:8px 0}.ap-reads{width:100%;min-width:540px;border-collapse:collapse;font-size:13px}.ap-reads th,.ap-reads td{text-align:left;padding:6px 8px;border-top:1px solid var(--rule);vertical-align:top}.ap-reads th{font-size:11.5px;letter-spacing:.05em;text-transform:uppercase;color:var(--muted);border-top:0}.ap-reads code{font-family:var(--mono);font-size:12px}.ap-reads a{color:var(--teal);text-decoration:none}.ap-ask{margin:10px 0}.ap-ask button{border:1px solid var(--rule);background:var(--surface);color:var(--ink);border-radius:8px;padding:5px 12px;font-size:13px;cursor:pointer}.ap-ask button:hover{border-color:var(--teal);color:var(--teal)}";
+var AREAS_CACHE_TTL_MS = 15 * 1e3;
 var AREAS_CACHE = { at: 0, v: null };
 async function areasModel(env, sys) {
   // PRECONDITION: env.AUDIT is qnfo-audit. POSTCONDITION: never throws; an unreadable source is named in model.blind, never shown as zero.
   const now = Date.now();
-  if (AREAS_CACHE.v && now - AREAS_CACHE.at < 6e4) return AREAS_CACHE.v;
+  if (AREAS_CACHE.v && now - AREAS_CACHE.at < AREAS_CACHE_TTL_MS) return AREAS_CACHE.v;
   const A = env.AUDIT, blind = [];
   const safe = async function(name, sql) {
     try { return await d1all(A, sql); } catch (e) { blind.push(name); return null; }
@@ -7707,11 +7769,13 @@ async function areasModel(env, sys) {
   ]);
   const hist = {};
   for (const r of hr || []) (hist[r.metric] = hist[r.metric] || []).push({ day: r.day, value: Number(r.value) });
-  // AREAS-2: the lever and the remedy history behind each breach. Deliberately NOT routed through safe(): a database without
-  // analytics_metric_triggers (an older D1, or the offline test stub) must degrade to "no lever recorded", never to blind.
+  // AREAS-2: the lever and the remedy history behind each breach. Deliberately NOT routed through safe(): keep its read failure
+  // separate from breach-measurement availability so measured breaches remain visible while remedy data is marked unavailable.
   let lv = null;
+  let remedyHistoryAvailable = false;
   try {
     lv = await d1all(A, "SELECT s.metric_key AS k, t.action AS lever, (SELECT COUNT(*) FROM analytics_action_log a WHERE a.trigger_id = s.id AND a.fired_at >= datetime('now','-30 days')) AS tries, (SELECT MAX(a.fired_at) FROM analytics_action_log a WHERE a.trigger_id = s.id) AS last_try FROM v_metric_trigger_state s JOIN analytics_metric_triggers t ON t.id = s.id WHERE s.hit = 1");
+    remedyHistoryAvailable = true;
   } catch (e) {
     lv = null;
   }
@@ -7732,8 +7796,9 @@ async function areasModel(env, sys) {
   if (ct) flows.push({ id: "code", name: "Code loop, 30 days", stages: ctSplit ? codeFlowStages(ct) : [{ k: "queued", label: "queued", n: cnt(ct, "queued") + cnt(ct, "ready_to_publish"), kind: "wip" }, { k: "merged", label: "merged", n: cnt(ct, "merged"), kind: "done" }, { k: "closed", label: "closed, unmerged", n: cnt(ct, "closed"), kind: "fail" }, { k: "failed", label: "failed", n: cnt(ct, "failed"), kind: "fail" }] });
   if (rq) flows.push({ id: "research", name: "Research queue", stages: [{ k: "deferred", label: "deferred", n: cnt(rq, "deferred"), kind: "parked" }, { k: "queued", label: "queued", n: cnt(rq, "queued"), kind: "wip" }, { k: "researching", label: "researching", n: cnt(rq, "researching"), kind: "wip" }, { k: "published", label: "published", n: cnt(rq, "published"), kind: "done" }, { k: "wontfix", label: "declined", n: cnt(rq, "wontfix"), kind: "drop" }] });
   if (oq) flows.push({ id: "outreach", name: "Outreach", stages: [{ k: "pending", label: "pending", n: cnt(oq, "pending"), kind: "wip" }, { k: "needs-contact", label: "needs contact", n: cnt(oq, "needs-contact"), kind: "wip" }, { k: "sent", label: "sent", n: cnt(oq, "sent"), kind: "done" }] });
-  const model = buildAreas(rows || [], hist, flows, sys);
+  const model = buildAreas(rows || [], hist, flows, sys, remedyHistoryAvailable);
   model.blind = blind;
+  model.remedy_history_available = remedyHistoryAvailable;
   // AREAS-2: kill-switch state. A switch that stopped a pipeline is invisible in every metric until its queue ages out, so it is
   // reported from its own table, never inferred. Absent table = named, not zero.
   let flags = null;
@@ -7776,7 +7841,7 @@ async function areasModel(env, sys) {
 var AREA_POLL_JS = "<script>(function(){var live=document.getElementById('live'),foot=document.getElementById('ap-foot'),dot=document.getElementById('dot'),age=document.getElementById('age');if(!live||!foot)return;var last=Date.now(),busy=false,etag=live.getAttribute('data-rev')||'';function paint(){if(!dot||!age)return;var s=(Date.now()-last)/1000;age.textContent=s<30?'live':'updated '+Math.round(s)+'s ago';dot.className='dot '+(s<45?'g':s<120?'a':'r')}function tick(){if(document.hidden||busy)return;busy=true;var ops=[].map.call(live.querySelectorAll('details'),function(d){return d.open});fetch(location.pathname+'?frag=1'+(etag?'&rev='+encodeURIComponent(etag):''),{cache:'no-store'}).then(function(r){var t=r.headers.get('X-Content-Revision');if(r.status===204||r.status===304){last=Date.now();return null}if(!r.ok)throw 0;if(t)etag=t;return r.text()}).then(function(h){if(h===null)return;var i=h.indexOf('<!--ap-foot-->');live.innerHTML=i<0?h:h.slice(0,i);if(i>=0)foot.innerHTML=h.slice(i+14);[].forEach.call(live.querySelectorAll('details'),function(d,k){if(ops[k])d.open=true});last=Date.now()}).catch(function(e){console.debug('qnfo-fleet-dashboard: area refresh failed',e)}).then(function(){busy=false;paint()})}setInterval(tick,15000);setInterval(paint,5000);document.addEventListener('visibilitychange',function(){if(!document.hidden)tick()});paint()})()<\/script>";
 function areaReadRows(reg) {
   // Every read that belongs to the area: its own feed first, then the API_INDEX rows that name it. A page is attached to the read it shows.
-  const own = { path: "/api/area/" + reg.id, source: "live", lag_s: 60, what: "This area as one feed: headline metric, breaches, constraint, pipelines and these reads." };
+  const own = { path: "/api/area/" + reg.id, source: "live", lag_s: 15, what: "This area as one feed: headline metric, breaches, constraint, pipelines and these reads." };
   return [own].concat(API_INDEX.filter(function(x) { return (x.area || "platform") === reg.id; }));
 }
 function areaPageParts(reg, v, m, dataAge) {
@@ -7844,7 +7909,7 @@ function areaPageHtml(reg, parts, tag, holder) {
 function humanFragment(v) {
   // FLEET-UI-2 (1.18.0): the queue, the investment verdict, the business case and system health as one console in the
   // QNFO design system. Same view model (humanView) and the same control markup (.acts data-key/data-act, data-oid), so
-  // the 10 s refresh, the owner controls and the tests are unchanged.
+  // the 15 s refresh, the owner controls and the tests are unchanged.
   const o = [];
   const e = esc;
   const d = v.decision;
@@ -7863,6 +7928,7 @@ function humanFragment(v) {
   if (v.areas && v.areas.total) o.push('<p class="fl-sum"><a href="#areas">' + v.areas.total + (v.areas.total === 1 ? " metric" : " metrics") + " in breach across five areas &rarr;</a></p>");
   o.push("</section>");
   if (v.verdict === "ACTION" && v.blind.length) o.push('<div class="note">Also could not read: ' + e(v.blind.join("; ")) + "</div>");
+  if (v.areas) o.push(focusRowsHtml(v.areas, e));
   // ---- main column: the queue
   o.push('<div class="fl-grid"><div class="fl-main" id="queue"><h2 class="fl-h">Waiting on you <span class="ct">' + e(v.items.length) + "</span></h2>");
   if (!v.items.length) o.push('<div class="empty q-card"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.2 4.2L19 7" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg><div><b>Inbox zero.</b> Nothing here needs a decision from you.</div></div>');
@@ -7906,7 +7972,7 @@ function humanFragment(v) {
     }
     o.push("</ul></details>");
   }
-  // FLEET-CMD-1: the command line sits outside #live (humanHtml), so a 10s refresh can no longer wipe a question in flight.
+  // FLEET-CMD-1: the command line sits outside #live (humanHtml), so a 15s refresh can no longer wipe a question in flight.
   const holder = !!(v.owner && v.owner.authed);
   if (holder && v.prompts && v.prompts.length) {
     o.push('<h2 class="fl-h">Your recent requests</h2><section class="card">');
@@ -7921,7 +7987,6 @@ function humanFragment(v) {
       return e(r.kind) + " " + e(String(r.key).replace(/^ha:/, "")) + (r.until ? " until " + e(String(r.until).slice(0, 10)) : "") + (r.note ? " (" + e(String(r.note).slice(0, 60)) + ")" : "");
     }).join("; ") + (v.snoozed ? "; " + v.snoozed + " snoozed now" : "") + ".</div>");
   }
-  if (v.areas) o.push(focusRowsHtml(v.areas, e));
   o.push("</div>");
   // ---- rail: the two headline answers. AREA-PAGES-1 (1.45.0): pipelines, progress and pipeline controls moved to the area pages
   // (/area/<id>); the investment verdict (Cost) and system health (Reliability) stay on the overview because the page promises both,
@@ -7988,8 +8053,9 @@ var FLEET_MARK = '<svg viewBox="0 0 32 32" aria-hidden="true"><path d="M6 16h7M1
 var FLEET_THEME_BTN = '<button class="q-theme" id="q-theme" type="button" aria-label="Switch colour theme"><svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="6.2" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M8 1.8a6.2 6.2 0 0 1 0 12.4z" fill="currentColor"/></svg></button>';
 var FLEET_SHELL_JS = "<script>(function(){var r=document.documentElement,b=document.getElementById('q-theme');if(b)b.addEventListener('click',function(){var c=r.getAttribute('data-theme')||(matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light'),n=c==='dark'?'light':'dark';r.setAttribute('data-theme',n);try{localStorage.setItem('qnfo-theme',n)}catch(e){console.debug('qnfo-fleet-dashboard: browser storage unavailable',e)}});var t=document.getElementById('q-top');if(t){var f=function(){t.classList.toggle('scrolled',scrollY>4)};addEventListener('scroll',f,{passive:true});f()}})()<\/script>";
 function fleetHead(title) {
-  return '<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#F5F7FB" media="(prefers-color-scheme: light)"><meta name="theme-color" content="#141A33" media="(prefers-color-scheme: dark)"><title>' + esc(title) + '</title>' + FLEET_BOOT + FLEET_FONTS + '<style>' + FLEET_DS + CMD_CSS + FLEET_CSS + AREAS_CSS + AREAS2_CSS + '</style></head><body>';
+  return '<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#F5F7FB" media="(prefers-color-scheme: light)"><meta name="theme-color" content="#141A33" media="(prefers-color-scheme: dark)"><title>' + esc(title) + '</title>' + FLEET_BOOT + FLEET_FONTS + '<style>' + FLEET_DS + NAV_CSS + CMD_CSS + FLEET_CSS + AREAS_CSS + AREAS2_CSS + '</style></head><body>';
 }
+var NAV_CSS = ".q-nav-areas{position:relative}.q-nav-areas>summary{display:flex;align-items:center;gap:7px;list-style:none;cursor:pointer;padding:6px 10px;border-radius:8px;white-space:nowrap}.q-nav-areas>summary::-webkit-details-marker{display:none}.q-nav-areas>summary:after{content:'';width:6px;height:6px;border-right:1.5px solid currentColor;border-bottom:1.5px solid currentColor;transform:rotate(45deg);margin:-3px 0 0 2px}.q-nav-areas>summary:hover,.q-nav-areas[open]>summary,.q-nav-areas>summary[aria-current]{background:var(--wash);color:var(--ink)}.q-nav-area-panel{position:absolute;top:calc(100% + 8px);left:0;display:grid;min-width:200px;padding:6px;background:var(--surface);border:1px solid var(--rule);border-radius:10px;box-shadow:var(--shadow);z-index:50}.q-nav-area-panel a{text-decoration:none;padding:7px 10px;border-radius:7px;color:var(--muted)}.q-nav-area-panel a:hover,.q-nav-area-panel a[aria-current]{background:var(--wash);color:var(--ink)}";
 // ---- AREA-PAGES-1 (1.45.0): the navigation is the functional areas ----
 // Overview, one link per area (AREA_REGISTRY order), the command line. A tab page (Metrics, Content, Changelog) lights its area, and
 // the area's own pages sit in a sub-bar under the header, so the page you are on always says which area it belongs to. fleetTop keeps
@@ -8018,7 +8084,8 @@ function fleetSubBar(current) {
 function fleetTop(current, live, holder) {
   const nav = fleetNavItems();
   const cur = fleetNavCurrent(current);
-  return '<header class="q-top" id="q-top"><div class="wrap"><a class="q-mark" href="/" aria-label="QNFO Fleet home">' + FLEET_MARK + 'QNFO <small>Fleet</small></a><nav class="q-nav" aria-label="Dashboard">' + nav.map(function(n) { return '<a href="' + n[1] + '"' + (n[2] === cur ? ' aria-current="page"' : '') + '>' + n[0] + '</a>'; }).join('') + '</nav>' + '<details class="q-menu"><summary aria-label="Menu"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2 4h12M2 8h12M2 12h12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg></summary><div class="q-menu-panel">' + nav.map(function(n) { return '<a href="' + n[1] + '"' + (n[2] === cur ? ' aria-current="page"' : '') + '>' + n[0] + '</a>'; }).join('') + '<a href="https://qnfo.org/">QNFO public site</a></div></details>' + (live ? '<span class="live"><span id="dot" class="dot g"></span><span id="age">live</span>' + (holder ? '<a href="#" id="so">sign out</a>' : '') + '</span>' : '<span class="live"></span>') + FLEET_THEME_BTN + '</div></header>' + fleetSubBar(current);
+  const desktopNav = '<a href="/"' + (cur === "overview" ? ' aria-current="page"' : '') + '>Overview</a><details class="q-nav-areas"><summary' + (AREA_REGISTRY.some(function(a) { return a.id === cur; }) ? ' aria-current="page"' : '') + '>Areas</summary><div class="q-nav-area-panel">' + AREA_REGISTRY.map(function(a) { return '<a href="/area/' + a.id + '"' + (a.id === cur ? ' aria-current="page"' : '') + '>' + esc(a.short) + '</a>'; }).join("") + '</div></details><a href="/cmd"' + (cur === "cmd" ? ' aria-current="page"' : '') + '>Command line</a>';
+  return '<header class="q-top" id="q-top"><div class="wrap"><a class="q-mark" href="/" aria-label="QNFO Fleet home">' + FLEET_MARK + 'QNFO <small>Fleet</small></a><nav class="q-nav" aria-label="Dashboard">' + desktopNav + '</nav>' + '<details class="q-menu"><summary aria-label="Menu"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2 4h12M2 8h12M2 12h12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg></summary><div class="q-menu-panel">' + nav.map(function(n) { return '<a href="' + n[1] + '"' + (n[2] === cur ? ' aria-current="page"' : '') + '>' + n[0] + '</a>'; }).join('') + '<a href="https://qnfo.org/">QNFO public site</a></div></details>' + (live ? '<span class="live"><span id="dot" class="dot g"></span><span id="age">live</span>' + (holder ? '<a href="#" id="so">sign out</a>' : '') + '</span>' : '<span class="live"></span>') + FLEET_THEME_BTN + '</div></header>' + fleetSubBar(current);
 }
 // ---- FLEET-UI-2:END ----
 // ==== AREA-MAP platform: architecture self-model (ARCH-SELF-MODEL-1) ====
@@ -9797,7 +9864,7 @@ function changelogHtml(v, holder) {
   return fleetHead("Fleet changelog") + css + fleetTop("changelog", false, holder) + '<main class="wrap fl" style="max-width:980px"><h1 class="fl-h" style="font-size:30px;margin:10px 0 6px">Changelog</h1><p class="meta" style="margin:0 0 18px;max-width:90ch">What the fleet has shipped for itself: new capabilities (a major or minor version), new workers, and changes to public sites. Fixes and small improvements (patch versions) are counted, not listed' + (v.patches_30d != null ? ': ' + v.patches_30d + ' in the last 30 days' : '') + '. Updated every 15 minutes from the canonical deploy ledger. JSON: <a href="/api/changelog">/api/changelog</a>.</p><div class="fl-kpis cl-kpis" style="display:grid;gap:12px;margin:0 0 22px">' + kpi(c.releases_7d, "Releases, 7 days") + kpi(c.releases_30d, "Releases, 30 days") + kpi(c.autonomy_30d, "Autonomy releases, 30 days") + kpi(c.public_30d, "Public-facing, 30 days") + kpi(c.new_workers_30d, "New workers, 30 days") + '</div><section class="card" style="margin-bottom:22px"><h3 style="font:600 12px var(--sans);letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin:0 0 6px">Is the fleet getting more autonomous?</h3>' + trendRows + '</section><div class="cl-chips" role="group" aria-label="Filter releases">' + chips + '</div>' + (items || '<div class="card empty"><b>No releases recorded yet.</b> The first sync after this deploy reads the deploy ledger.</div>') + '<p class="fl-foot">' + esc(v.rule) + '</p></main>' + js + FLEET_SHELL_JS + '</body></html>';
 }
 // ---- FLEET-CHANGELOG-1:END ----
-// ==== AREA-MAP platform: overview page wrapper: humanHtml and its 10 s refresh ====
+// ==== AREA-MAP platform: overview page wrapper: humanHtml and its 15 s refresh ====
 function humanHtml(v) {
   const o = [];
   const holder = !!(v.owner && v.owner.authed);
@@ -9807,9 +9874,9 @@ function humanHtml(v) {
   o.push(cmdPanelHtml(holder, "", ""));
   o.push('<section id="since" class="card since" aria-live="polite" hidden></section>');
   o.push('<div id="live">' + humanFragment(v) + "</div>" + CHANGES_JS);
-  // Real-time: re-fetch the server-rendered fragment every 10s (queue is read live from D1 on each call). The dot
+  // Real-time: re-fetch the server-rendered fragment every 15s (queue is read live from D1 on each call). The dot
   // goes amber/red when updates stop arriving, so a frozen page cannot masquerade as an all-clear.
-o.push("</main><script>(function(){var live=document.getElementById('live'),dot=document.getElementById('dot'),age=document.getElementById('age'),last=Date.now(),busy=false,lastAns='';var H={'Content-Type':'application/json','x-fleet-ui':'1'},etag='';function paint(){var s=(Date.now()-last)/1000;age.textContent=s<15?'live':'updated '+Math.round(s)+'s ago';dot.className='dot '+(s<30?'g':s<90?'a':'r')}function tick(force){if((document.hidden&&!force)||busy)return;busy=true;var ops=[].map.call(live.querySelectorAll('details'),function(d){return d.open}),ta=document.getElementById('ptext'),tv=ta?ta.value:'',tf=ta&&document.activeElement===ta;fetch('/?frag=1'+(etag?'&rev='+encodeURIComponent(etag):''),{cache:'no-store',headers:etag?{'If-None-Match':etag}:{}}).then(function(r){if(r.status===401){location.reload();throw 0}var t=r.headers.get('X-Content-Revision')||r.headers.get('ETag');if(t)etag=t;if(r.status===304||r.status===204){last=Date.now();return null}if(!r.ok)throw 0;return r.text()}).then(function(h){if(h===null)return;live.innerHTML=h;[].forEach.call(live.querySelectorAll('details'),function(d,i){if(ops[i])d.open=true});var t=document.getElementById('ptext');if(t&&tv){t.value=tv;if(tf)t.focus()}var pa=document.getElementById('pans');if(pa&&lastAns)pa.textContent=lastAns;last=Date.now()}).catch(function(e){console.debug('qnfo-fleet-dashboard: request failed',e)}).then(function(){busy=false;paint()})}function post(u,b){return fetch(u,{method:'POST',headers:H,body:JSON.stringify(b)}).then(function(r){if(r.status===401){location.reload();throw 0}return r.json()})}live.addEventListener('click',function(ev){var t=ev.target;if(!t||t.tagName!=='BUTTON')return;var box=t.closest('.acts');if(t.id==='pask'||t.id==='ptask'){var ta=document.getElementById('ptext'),m=document.getElementById('pmsg');if(!ta.value.trim())return;var mode=t.id==='pask'?'ask':'task';t.disabled=true;m.textContent=mode==='ask'?'asking...':'queuing...';post('/api/owner/prompt',{text:ta.value,mode:mode}).then(function(j){m.textContent=j.ok?'':(j.error||'failed');if(j.ok){ta.value='';if(mode==='ask'){lastAns=j.answer||'';var pa=document.getElementById('pans');if(pa)pa.textContent=lastAns}}tick(true)}).catch(function(e){console.debug('qnfo-fleet-dashboard: request failed',e)}).then(function(){t.disabled=false});return}if(t.dataset.oid){if(!confirm((t.dataset.act==='ratify'?'Ratify':'Reject')+' this objective revision?'))return;t.disabled=true;post('/api/owner/objective',{id:Number(t.dataset.oid),decision:t.dataset.act}).then(function(j){if(!j.ok){alert(j.error||'failed');t.disabled=false;if(j.need){var c=document.getElementById('ctext');if(c){c.value='login';c.focus()}}}tick(true)}).catch(function(){t.disabled=false});return}if(!box||!t.dataset.act)return;var body={key:box.dataset.key,kind:t.dataset.act};if(t.dataset.act==='snooze')body.days=Number(t.dataset.days);if(t.dataset.act==='note'){var n=prompt('Note to the fleet (kept with this item and filed as fleet work):');if(!n)return;body.note=n}if(t.dataset.act==='done'&&!confirm('Mark this as done?'))return;t.disabled=true;post('/api/owner/respond',body).then(function(j){if(!j.ok){alert(j.error||'failed');if(j.need){var c=document.getElementById('ctext');if(c){c.value='login';c.focus()}}}tick(true)}).catch(function(){t.disabled=false})});var so=document.getElementById('so');if(so)so.addEventListener('click',function(ev){ev.preventDefault();post('/api/owner/logout',{}).then(function(){location.reload()})});window.fleetTick=tick;setInterval(tick,60000);setInterval(paint,1000);document.addEventListener('visibilitychange',function(){if(!document.hidden)tick()})})();</script>" + cmdScript(holder) + FLEET_SHELL_JS + "</body></html>");
+o.push("</main><script>(function(){var live=document.getElementById('live'),dot=document.getElementById('dot'),age=document.getElementById('age'),last=Date.now(),busy=false,lastAns='';var H={'Content-Type':'application/json','x-fleet-ui':'1'},etag='';function paint(){var s=(Date.now()-last)/1000;age.textContent=s<15?'live':'updated '+Math.round(s)+'s ago';dot.className='dot '+(s<30?'g':s<90?'a':'r')}function tick(force){if((document.hidden&&!force)||busy)return;busy=true;var ops=[].map.call(live.querySelectorAll('details'),function(d){return d.open}),ta=document.getElementById('ptext'),tv=ta?ta.value:'',tf=ta&&document.activeElement===ta;fetch('/?frag=1'+(etag?'&rev='+encodeURIComponent(etag):''),{cache:'no-store',headers:etag?{'If-None-Match':etag}:{}}).then(function(r){if(r.status===401){location.reload();throw 0}var t=r.headers.get('X-Content-Revision')||r.headers.get('ETag');if(t)etag=t;if(r.status===304||r.status===204){last=Date.now();return null}if(!r.ok)throw 0;return r.text()}).then(function(h){if(h===null)return;live.innerHTML=h;[].forEach.call(live.querySelectorAll('details'),function(d,i){if(ops[i])d.open=true});var t=document.getElementById('ptext');if(t&&tv){t.value=tv;if(tf)t.focus()}var pa=document.getElementById('pans');if(pa&&lastAns)pa.textContent=lastAns;last=Date.now()}).catch(function(e){console.debug('qnfo-fleet-dashboard: request failed',e)}).then(function(){busy=false;paint()})}function post(u,b){return fetch(u,{method:'POST',headers:H,body:JSON.stringify(b)}).then(function(r){if(r.status===401){location.reload();throw 0}return r.json()})}live.addEventListener('click',function(ev){var t=ev.target;if(!t||t.tagName!=='BUTTON')return;var box=t.closest('.acts');if(t.id==='pask'||t.id==='ptask'){var ta=document.getElementById('ptext'),m=document.getElementById('pmsg');if(!ta.value.trim())return;var mode=t.id==='pask'?'ask':'task';t.disabled=true;m.textContent=mode==='ask'?'asking...':'queuing...';post('/api/owner/prompt',{text:ta.value,mode:mode}).then(function(j){m.textContent=j.ok?'':(j.error||'failed');if(j.ok){ta.value='';if(mode==='ask'){lastAns=j.answer||'';var pa=document.getElementById('pans');if(pa)pa.textContent=lastAns}}tick(true)}).catch(function(e){console.debug('qnfo-fleet-dashboard: request failed',e)}).then(function(){t.disabled=false});return}if(t.dataset.oid){if(!confirm((t.dataset.act==='ratify'?'Ratify':'Reject')+' this objective revision?'))return;t.disabled=true;post('/api/owner/objective',{id:Number(t.dataset.oid),decision:t.dataset.act}).then(function(j){if(!j.ok){alert(j.error||'failed');t.disabled=false;if(j.need){var c=document.getElementById('ctext');if(c){c.value='login';c.focus()}}}tick(true)}).catch(function(){t.disabled=false});return}if(!box||!t.dataset.act)return;var body={key:box.dataset.key,kind:t.dataset.act};if(t.dataset.act==='snooze')body.days=Number(t.dataset.days);if(t.dataset.act==='note'){var n=prompt('Note to the fleet (kept with this item and filed as fleet work):');if(!n)return;body.note=n}if(t.dataset.act==='done'&&!confirm('Mark this as done?'))return;t.disabled=true;post('/api/owner/respond',body).then(function(j){if(!j.ok){alert(j.error||'failed');if(j.need){var c=document.getElementById('ctext');if(c){c.value='login';c.focus()}}}tick(true)}).catch(function(){t.disabled=false})});var so=document.getElementById('so');if(so)so.addEventListener('click',function(ev){ev.preventDefault();post('/api/owner/logout',{}).then(function(){location.reload()})});window.fleetTick=tick;setInterval(tick,15000);setInterval(paint,1000);document.addEventListener('visibilitychange',function(){if(!document.hidden)tick()})})();</script>" + cmdScript(holder) + FLEET_SHELL_JS + "</body></html>");
   return o.join("");
 }
 // ==== AREA-MAP autonomy: owner responses, prompts and Ask now (OWNER-RESPOND-1) ====
@@ -10203,7 +10270,7 @@ async function ownerRoutes(request, env, ctx, path, owner) {
 // and management, at fleet.qnfo.org (pinned on "/", full page at /cmd, and a discreet link on any fleet page via /ctl.js).
 //
 // Why the old Ask panel went dead (measured in qnfo-audit.owner_prompts, 2026-10-02): 3 of the last 5 asks never left
-// status 'running'. The panel sat inside the #live fragment that re-renders every 10s, so "asking..." and the button state
+// status 'running'. The panel sat inside the #live fragment that re-renders every 15s, so "asking..." and the button state
 // were wiped while the model was still thinking (~13s), and the request path ran currentState (which can start a full fleet
 // refresh in the same invocation) plus up to two un-cancellable 25s model calls, so the invocation could end before it
 // recorded a result. Now: the command line lives outside #live; AI answers run in waitUntil with a hard per-call abort and
@@ -11700,7 +11767,7 @@ async function cmdRoutes(request, env, ctx, path, owner) {
     const tl = await cmdToolList(env);
     return ownerJson({ ok: tl.ok, count: tl.ok ? tl.tools.length : 0, tools: tl.tools || [], error: tl.error || null, holder }, tl.ok ? 200 : 502);
   }
-  if (request.method !== "POST") return ownerJson({ error: "method" }, 405);
+  if (request.method !== "POST") return ownerJson({ error: "method_not_allowed", path: path, allow: ["POST"], hint: "Use POST /api/cmd to send a command; GET /api lists the read-only endpoints." }, 405, { Allow: "POST" });
   if (request.headers.get("x-fleet-ui") !== "1") return ownerJson({ error: "missing x-fleet-ui header" }, 400);
   let b = null;
   try {

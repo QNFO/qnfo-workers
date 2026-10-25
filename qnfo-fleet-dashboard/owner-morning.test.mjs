@@ -4,7 +4,7 @@
 //   C. /api/changes lists deploys by worker, issues closed/opened, code-loop merges and new owner cards since a time,
 //      clamped to 7 days, with titles cut to 90 characters;
 //   H. the health pill is not green when the verdict is not OK; pageviews exclude the dashboard host and bots;
-//   P. the page polls every 60 s and a public 'refresh' re-reads state younger than 10 minutes instead of re-measuring.
+//   P. the page polls every 15 s and a public 'refresh' re-reads state younger than 10 minutes instead of re-measuring.
 // Run: node qnfo-fleet-dashboard/owner-morning.test.mjs   -> prints "N passed, 0 failed"
 import { DatabaseSync } from "node:sqlite";
 import { readFileSync } from "node:fs";
@@ -80,7 +80,7 @@ ok(Math.abs(Date.now() - 864e5 - Date.parse(d.j.since)) < 5e3, "C10 a future sin
 // H + P. page wiring
 ok(/String\(s\.verdict\)\.toUpperCase\(\) !== "OK" \? "unk" : "ok"/.test(src), "H1 a non-OK verdict never shows a green pill");
 ok(/bot: 0 \}\) \{ count dimensions \{ date requestHost \}/.test(src) && /h !== "fleet\.qnfo\.org" && !\/\\\.workers\\\.dev\$\/\.test\(h\)/.test(src), "H2 pageviews are bot-filtered and exclude the dashboard's own hosts");
-ok(/setInterval\(tick,60000\)/.test(src) && !/setInterval\(tick,10000\)/.test(src), "P1 the page polls every 60 s");
+ok(/setInterval\(tick,15000\)/.test(src) && !/setInterval\(tick,60000\)/.test(src), "P1 the page polls every 15 s");
 ok(/if \(!\(owner && owner\.authed\)\) \{\s*const cached = await currentState\(env, ctx, 10 \* 6e4\)/.test(src), "P2 a public refresh re-reads state younger than 10 minutes");
 ok(/<section id="since"[^>]*hidden><\/section>/.test(src) && src.indexOf('id="since"') < src.indexOf('<div id="live">'), "P3 the changes strip sits outside the refreshed area");
 ok(/CHANGES_JS = "<script>/.test(src) && /localStorage\.setItem\(K/.test(src) && /catch\(e\)\{\}/.test(src), "P4 the last visit is kept in the browser and storage errors are ignored");
