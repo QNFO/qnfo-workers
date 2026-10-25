@@ -1,8 +1,16 @@
 {
-  "audited_at": "2026-10-25 08:03:19",
+  "audited_at": "2026-10-25 08:34:09",
   "d1_write_failures": [],
-  "d1_writes_ok": 121,
+  "d1_writes_ok": 120,
   "guard": {
+    "_drift_confirm": {
+      "first_pass": [
+        "qnfo-fleet-dashboard",
+        "qnfo-ops"
+      ],
+      "refreshed": true,
+      "second_pass": []
+    },
     "_guard_rc": 0,
     "ahead": [],
     "cf_script_list": true,
@@ -88,7 +96,6 @@
       "jnl-reviser",
       "jnl-watch",
       "memory-mcp",
-      "mind",
       "notes-intake",
       "obsidian-writer",
       "ops-gateway",
@@ -151,7 +158,7 @@
       "skills-discovery",
       "vault-indexer"
     ],
-    "not_deployed_notdrift": 76,
+    "not_deployed_notdrift": 75,
     "not_deployed_workers": [
       {
         "dir": "agent-orchestrator",
@@ -222,11 +229,6 @@
         "dir": "memory-mcp",
         "marker": "RETIRED",
         "worker": "qnfo-memory-mcp-legacy-dup"
-      },
-      {
-        "dir": "mind",
-        "marker": null,
-        "worker": "mind"
       },
       {
         "dir": "notes-intake",
@@ -571,7 +573,7 @@
       },
       {
         "dir": "qnfo-ai-search",
-        "version": "2.7.0-no-registrar",
+        "version": "2.7.1-close-channel",
         "worker": "qnfo-ai-search"
       },
       {
@@ -586,7 +588,7 @@
       },
       {
         "dir": "qnfo-code-orchestrator",
-        "version": "0.25.2-codeagent",
+        "version": "0.25.3-codeagent",
         "worker": "qnfo-code-orchestrator"
       },
       {
@@ -611,17 +613,17 @@
       },
       {
         "dir": "qnfo-fleet-control",
-        "version": "0.45.1-codeagent",
+        "version": "0.45.2-codeagent",
         "worker": "qnfo-fleet-control"
       },
       {
         "dir": "qnfo-fleet-dashboard",
-        "version": "1.55.3-codeagent",
+        "version": "1.56.0-agenttools",
         "worker": "qnfo-fleet-dashboard"
       },
       {
         "dir": "qnfo-gateway",
-        "version": "3.29.6-codeagent",
+        "version": "3.29.7-codeagent",
         "worker": "qnfo-gateway"
       },
       {
@@ -631,7 +633,7 @@
       },
       {
         "dir": "qnfo-infra",
-        "version": "1.8.1-null-doi-cursor",
+        "version": "1.8.2-mcp-state-full-lists",
         "worker": "qnfo-infra"
       },
       {
@@ -666,7 +668,7 @@
       },
       {
         "dir": "qnfo-ops",
-        "version": "2.54.4-codeagent",
+        "version": "2.55.0-agentrpc",
         "worker": "qnfo-ops"
       },
       {
@@ -676,7 +678,7 @@
       },
       {
         "dir": "qnfo-research-exec",
-        "version": "0.33.0-codeagent",
+        "version": "0.33.2-codeagent",
         "worker": "qnfo-research-exec"
       },
       {
@@ -866,14 +868,6 @@
       "note": "NOT_A_WORKER",
       "worker": "migrations"
     },
-    "mind": {
-      "before": null,
-      "http": 404,
-      "live": null,
-      "match": 0,
-      "note": "NOT_DEPLOYED",
-      "worker": "mind"
-    },
     "notes-intake": {
       "before": null,
       "http": 404,
@@ -1047,9 +1041,9 @@
       "worker": "qnfo-ai-calibration"
     },
     "qnfo-ai-search": {
-      "before": "2.7.0-no-registrar",
+      "before": "2.7.1-close-channel",
       "http": 200,
-      "live": "2.7.0-no-registrar",
+      "live": "2.7.1-close-channel",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-ai-search"
@@ -1197,9 +1191,9 @@
       "worker": "qnfo-code-agent"
     },
     "qnfo-code-orchestrator": {
-      "before": "0.25.2-codeagent",
+      "before": "0.25.3-codeagent",
       "http": 200,
-      "live": "0.25.2-codeagent",
+      "live": "0.25.3-codeagent",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-code-orchestrator"
@@ -1327,17 +1321,17 @@
       "worker": "qnfo-fleet-calibrator"
     },
     "qnfo-fleet-control": {
-      "before": "0.45.1-codeagent",
+      "before": "0.45.2-codeagent",
       "http": 200,
-      "live": "0.45.1-codeagent",
+      "live": "0.45.2-codeagent",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-fleet-control"
     },
     "qnfo-fleet-dashboard": {
-      "before": "1.55.3-codeagent",
+      "before": "1.56.0-agenttools",
       "http": 200,
-      "live": "1.55.3-codeagent",
+      "live": "1.56.0-agenttools",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-fleet-dashboard"
@@ -1361,9 +1355,9 @@
       "worker": "qnfo-fleet-feed"
     },
     "qnfo-gateway": {
-      "before": "3.29.6-codeagent",
+      "before": "3.29.7-codeagent",
       "http": 200,
-      "live": "3.29.6-codeagent",
+      "live": "3.29.7-codeagent",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-gateway"
@@ -1413,9 +1407,9 @@
       "worker": "qnfo-impact"
     },
     "qnfo-infra": {
-      "before": "1.8.1-null-doi-cursor",
+      "before": "1.8.2-mcp-state-full-lists",
       "http": 200,
-      "live": "1.8.1-null-doi-cursor",
+      "live": "1.8.2-mcp-state-full-lists",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-infra"
@@ -1487,9 +1481,9 @@
       "worker": "qnfo-observability"
     },
     "qnfo-ops": {
-      "before": "2.54.4-codeagent",
+      "before": "2.55.0-agentrpc",
       "http": 200,
-      "live": "2.54.4-codeagent",
+      "live": "2.55.0-agentrpc",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-ops"
@@ -1575,9 +1569,9 @@
       "worker": "qnfo-register-guard"
     },
     "qnfo-research-exec": {
-      "before": "0.33.0-codeagent",
+      "before": "0.33.2-codeagent",
       "http": 200,
-      "live": "0.33.0-codeagent",
+      "live": "0.33.2-codeagent",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-research-exec"
