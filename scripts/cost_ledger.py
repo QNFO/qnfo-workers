@@ -87,13 +87,33 @@ def gateway_day(day, call=cf):
 
 
 def workers_ai_window(start, end, window_days, call=cf):
-    """Account-wide Workers AI cost for a 30-day UTC window, subtracting the free allowance once per day."""
-    acc = gql('query { viewer { accounts(filter: { accountTag: "%s" }) { aiInferenceAdaptiveGroups(limit: 1000, filter: { datetime_geq: "%s", datetime_lt: "%s" }) { count sum { totalNeurons } } } } }'
+    """Account-wide Workers AI cost, applying the non-rollover free allowance to each UTC day."""
+    acc = gql('query { viewer { accounts(filter: { accountTag: "%s" }) { aiInferenceAdaptiveGroups(limit: 1000, filter: { datetime_geq: "%s", datetime_lt: "%s" }) { count sum { totalNeurons } dimensions { date } } } } }'
               % (RC.ACCOUNT, start, end), call)
     rows = acc.get("aiInferenceAdaptiveGroups") or []
-    neurons = sum(float((r.get("sum") or {}).get("totalNeurons") or 0) for r in rows)
+    neurons_by_day = {}
+    end_day = dt.date.fromisoformat(end[:10])
+    if end[10:19] == "T00:00:00":
+        end_day -= dt.timedelta(days=1)
+    for row in rows:
+        day = str((row.get("dimensions") or {}).get("date") or "")
+        if not day or day < start[:10] or day > end_day.isoformat():
+            raise RuntimeError("Workers AI daily grouping returned an invalid date")
+        neurons_by_day[day] = neurons_by_day.get(day, 0.0) + float((row.get("sum") or {}).get("totalNeurons") or 0)
+    neurons = sum(neurons_by_day.values())
     requests = sum(int(r.get("count") or 0) for r in rows)
-    return max(0.0, neurons - FREE_NEURONS_PER_DAY * window_days) / 1000 * NEURON_USD_PER_1K, requests, neurons, window_days, len(rows)
+    billable_neurons = sum(max(0.0, daily_neurons - FREE_NEURONS_PER_DAY) for daily_neurons in neurons_by_day.values())
+    cost = billable_neurons / 1000 * NEURON_USD_PER_1K
+    return cost, requests, neurons, window_days, len(rows), billable_neurons
+
+
+def provider_label(value):
+    label = str(value or "unknown").lower()
+    if not label or len(label) > 48 or not all(c.isalnum() or c in "._-" for c in label):
+        return "other"
+    if any(marker in label for marker in ("ghp", "github_pat_", "cfat_", "sk-ant-", "aiza", "akia", "opskeypx")):
+        return "other"
+    return label
 
 
 def gateway_window(start, end, call=cf):
@@ -104,7 +124,7 @@ def gateway_window(start, end, call=cf):
     rows = acc.get("aiGatewayRequestsAdaptiveGroups") or []
     for row in rows:
         dimensions = row.get("dimensions") or {}
-        provider = str(dimensions.get("provider") or "unknown").lower()
+        provider = provider_label(dimensions.get("provider"))
         model = str(dimensions.get("model") or "")
         if provider in ("compat", "unknown", "universal") and "/" in model:
             provider = model.split("/")[0].lower()
@@ -249,11 +269,11 @@ def cost_reconciliation(d1, call=cf, today=None, plan_monthly_usd=None, plan_bas
     try:
         workers = workers_ai_window(start_ts, end_ts, 30, call)
     except Exception as error:  # noqa: BLE001
-        source_errors.append("Workers AI GraphQL: %s" % str(error)[:160])
+        source_errors.append("Workers AI GraphQL unavailable (%s)" % type(error).__name__)
     try:
         gateway_by_provider, gateway_group_count = gateway_window(start_ts, end_ts, call)
     except Exception as error:  # noqa: BLE001
-        source_errors.append("AI Gateway GraphQL: %s" % str(error)[:160])
+        source_errors.append("AI Gateway GraphQL unavailable (%s)" % type(error).__name__)
     if workers is not None and workers[4] >= 1000:
         source_errors.append("Workers AI response reached the 1000-group query limit")
     if gateway_group_count is not None and gateway_group_count >= 2000:
@@ -272,7 +292,7 @@ def cost_reconciliation(d1, call=cf, today=None, plan_monthly_usd=None, plan_bas
     direct_by_provider = {}
     direct_calls_by_provider = {}
     for row in direct_rows:
-        provider = str(row.get("provider") or "unknown").lower()
+        provider = provider_label(row.get("provider"))
         direct_by_provider[provider] = round(direct_by_provider.get(provider, 0.0) + float(row.get("usd") or 0), 4)
         direct_calls_by_provider[provider] = direct_calls_by_provider.get(provider, 0) + int(row.get("calls") or 0)
     direct_days = sorted({str(row.get("day")) for row in direct_rows if row.get("day")})
@@ -291,7 +311,9 @@ def cost_reconciliation(d1, call=cf, today=None, plan_monthly_usd=None, plan_bas
     gateway_payment_total = unified + byok if unified is not None and byok is not None else None
     gateway_total = round(sum(amount for amount, _ in gateway_by_provider.values()), 4) if gateway_by_provider is not None else None
     gateway_delta = round(gateway_total - gateway_payment_total, 4) if gateway_total is not None and gateway_payment_total is not None else None
-    worker_usd, worker_requests, worker_neurons, worker_days, worker_group_count = workers if workers is not None else (None, None, None, None, None)
+    worker_usd, worker_requests, worker_neurons, worker_days, worker_group_count, worker_billable_neurons = (
+        workers if workers is not None else (None, None, None, None, None, None)
+    )
     direct_total = round(sum(direct_by_provider.values()), 4)
     plan = numeric(plan_monthly_usd)
     external_unverified = numeric(external_monthly_usd)
@@ -308,7 +330,7 @@ def cost_reconciliation(d1, call=cf, today=None, plan_monthly_usd=None, plan_bas
         )[0]
     except Exception as error:  # noqa: BLE001
         daily_coverage = None
-        source_errors.append("cost_daily coverage: %s" % str(error)[:160])
+        source_errors.append("cost_daily coverage unavailable (%s)" % type(error).__name__)
 
     if unified is None or byok is None:
         source_errors.append("analytics_dash_meta unified/BYOK split is unavailable")
@@ -326,10 +348,9 @@ def cost_reconciliation(d1, call=cf, today=None, plan_monthly_usd=None, plan_bas
     metric_by_name = {str(row.get("metric")): row for row in metrics}
     task = metric_by_name.get("cost_per_successful_task_by_class")
     successful_call_metric = {
+        "metric": "cost_per_successful_task_by_class",
         "value_usd": numeric(task.get("last_value")) if task else None,
         "last_refreshed": task.get("last_refreshed") if task else None,
-        "formula": task.get("formula") if task else None,
-        "source_of_truth": task.get("source_of_truth") if task else None,
         "scope": "successful qnfo-ops model-ladder calls, not all fleet tasks",
     }
     workers_gateway = None
@@ -348,14 +369,18 @@ def cost_reconciliation(d1, call=cf, today=None, plan_monthly_usd=None, plan_bas
     for name in ("cost_usd_30d", "ai_est_cost_30d"):
         metric = metric_by_name.get(name)
         metric_value = numeric(metric.get("last_value")) if metric else None
+        comparison_total = (
+            round(workers_gateway + direct_total, 4)
+            if name == "cost_usd_30d" and workers_gateway is not None else workers_gateway
+        )
         metric_cross_checks[name] = {
+            "metric": name,
             "value_usd": metric_value,
             "last_refreshed": metric.get("last_refreshed") if metric else None,
-            "source_of_truth": metric.get("source_of_truth") if metric else None,
-            "formula": metric.get("formula") if metric else None,
+            "comparison_basis": "measured Workers AI + AI Gateway + direct provider ledger" if name == "cost_usd_30d" else "measured Workers AI + AI Gateway",
             "difference_from_measured_sources_usd": (
-                round(metric_value - measured_subtotal, 4)
-                if metric_value is not None and measured_subtotal is not None else None
+                round(metric_value - comparison_total, 4)
+                if metric_value is not None and comparison_total is not None else None
             ),
             "included_in_total": False,
         }
@@ -364,6 +389,13 @@ def cost_reconciliation(d1, call=cf, today=None, plan_monthly_usd=None, plan_bas
         "window_start": start,
         "window_end": end,
         "window_days": 30,
+        "window_start_at": start_ts,
+        "window_end_exclusive_at": end_ts,
+        "window_basis": (
+            "29 complete UTC dates plus the current UTC date through snapshot time"
+            if now.date() == today else "30 UTC calendar dates through the supplied snapshot boundary"
+        ),
+        "snapshot_at": end_ts,
         "billing_status": "partial" if source_errors else "reconciled",
         "source_errors": source_errors,
         "components_usd": {
@@ -384,6 +416,7 @@ def cost_reconciliation(d1, call=cf, today=None, plan_monthly_usd=None, plan_bas
         "workers_ai_meter": {
             "requests": worker_requests,
             "neurons": worker_neurons,
+            "billable_neurons_after_daily_free_allowance": worker_billable_neurons,
             "daily_free_allowance_days": worker_days,
             "group_count": worker_group_count,
         },
@@ -406,7 +439,7 @@ def cost_reconciliation(d1, call=cf, today=None, plan_monthly_usd=None, plan_bas
         "all_billing_including_unverified_usd": all_billing_including_unverified,
         "daily_ledger_coverage": daily_coverage,
         "cost_metric_cross_checks": metric_cross_checks,
-        "plan_basis": plan_basis,
+        "plan_basis": plan_basis if plan_basis in ("subscriptions API", "seeded monthly baseline", "unavailable") else "unverified source",
         "task_cost_coverage": {
             "status": "partial",
             "successful_call_metric": successful_call_metric,
@@ -486,8 +519,14 @@ def main(d1=None, call=cf, today=None):
         except Exception as e:  # noqa: BLE001
             out["errors"].append("%s: %s" % (k, str(e)[:100]))
     try:
+        plan_basis = (
+            "unavailable" if plan_m is None else
+            "seeded monthly baseline" if "seeded" in plan_note.lower() else
+            "subscriptions API" if plan_note.lower().startswith("subscriptions api") else
+            "unverified source"
+        )
         out["reconciliation"] = write_cost_reconciliation(
-            d1, today, call, plan_m, plan_note, ext_m
+            d1, today, call, plan_m, plan_basis, ext_m
         )
     except Exception as e:  # noqa: BLE001
         out["errors"].append("cost reconciliation: %s" % str(e)[:120])
@@ -525,6 +564,10 @@ def selftest():
             return 200, {"result": {"invoice_lines": []}}
         q = body["query"]
         if "aiInferenceAdaptiveGroups" in q:
+            if "dimensions { date }" in q:
+                return 200, {"data": {"viewer": {"accounts": [{"aiInferenceAdaptiveGroups": [
+                    {"count": 100, "sum": {"totalNeurons": 210000}, "dimensions": {"date": "2026-10-09"}}
+                ]}]}}}
             return 200, {"data": {"viewer": {"accounts": [{"aiInferenceAdaptiveGroups": [{"count": 100, "sum": {"totalNeurons": 210000}}]}]}}}
         return 200, {"data": {"viewer": {"accounts": [{"aiGatewayRequestsAdaptiveGroups": [
             {"count": 3, "sum": {"cost": 0.5}, "dimensions": {"provider": "openai", "model": "gpt-5.5"}},
@@ -604,12 +647,39 @@ def selftest():
       CREATE TABLE metric_registry (metric TEXT, last_value TEXT, last_refreshed TEXT, formula TEXT, source_of_truth TEXT);
       CREATE TABLE cloud_ops_events (id TEXT PRIMARY KEY, ts TEXT, kind TEXT, text TEXT, meta TEXT, job TEXT, status TEXT);
       INSERT INTO analytics_dash_meta VALUES ('unified_cost_usd_30d','5'),('byok_cost_usd_30d','3'),('last_refresh','2026-10-09T23:00:00Z');
-      INSERT INTO metric_registry VALUES ('cost_usd_30d','42.2','2026-10-09T23:00:00Z','all-source estimate','gateway + Workers AI + plan + direct');
-      INSERT INTO metric_registry VALUES ('ai_est_cost_30d','11.5','2026-10-09T23:00:00Z','AI list cost','gateway + Workers AI');
+      INSERT INTO metric_registry VALUES ('cost_usd_30d','10.165','2026-10-09T23:00:00Z','all-provider AI estimate','gateway + Workers AI + direct');
+      INSERT INTO metric_registry VALUES ('ai_est_cost_30d','8.165','2026-10-09T23:00:00Z','AI list cost','gateway + Workers AI');
       INSERT INTO metric_registry VALUES ('cost_per_successful_task_by_class','0.01','2026-10-09T23:00:00Z','COST-PER-TASK-WINDOW-1: model ladder spend / successful calls','ops_ai_log');
       INSERT INTO cost_daily VALUES ('2026-10-09','workers_ai','fleet',1),('2026-10-09','ai_gateway:openai','fleet',5),
         ('2026-10-09','owner_gateway:openai','owner-clients',1),('2026-10-09','cloudflare_plan:daily','fleet',1),
-        ('2026-10-09','direct_providers_external:daily','owner-direct',15);""")
+        ('2026-10-09','direct_providers_external:daily','owner-direct',15);
+      CREATE TRIGGER event_secret_guard_insert AFTER INSERT ON cloud_ops_events
+      WHEN NEW.meta LIKE '%cfat_%' OR NEW.meta LIKE '%ghp_%' OR NEW.meta LIKE '%github_pat_%'
+        OR NEW.meta LIKE '%sk-ant-%' OR NEW.meta LIKE '%AIza%' OR NEW.meta LIKE '%AKIA%' OR NEW.meta LIKE '%OPSKEYPX%'
+      BEGIN UPDATE cloud_ops_events SET meta=CASE
+        WHEN instr(NEW.meta,'cfat_')>0 THEN substr(NEW.meta,1,instr(NEW.meta,'cfat_')-1)||'[REDACTED-CF-TOKEN]'
+        WHEN instr(NEW.meta,'github_pat_')>0 THEN substr(NEW.meta,1,instr(NEW.meta,'github_pat_')-1)||'[REDACTED-GH-PAT]'
+        WHEN instr(NEW.meta,'ghp_')>0 THEN substr(NEW.meta,1,instr(NEW.meta,'ghp_')-1)||'[REDACTED-GH-TOKEN]'
+        WHEN instr(NEW.meta,'sk-ant-')>0 THEN substr(NEW.meta,1,instr(NEW.meta,'sk-ant-')-1)||'[REDACTED-ANTHROPIC-KEY]'
+        WHEN instr(NEW.meta,'AIza')>0 THEN substr(NEW.meta,1,instr(NEW.meta,'AIza')-1)||'[REDACTED-GOOGLE-KEY]'
+        WHEN instr(NEW.meta,'AKIA')>0 THEN substr(NEW.meta,1,instr(NEW.meta,'AKIA')-1)||'[REDACTED-AWS-KEY]'
+        WHEN instr(NEW.meta,'OPSKEYPX')>0 THEN substr(NEW.meta,1,instr(NEW.meta,'OPSKEYPX')-1)||'[REDACTED-OPS-KEY]'
+        ELSE '[REDACTED-SECRET-ADJACENT]' END WHERE rowid=NEW.rowid; END;
+      CREATE TRIGGER event_secret_guard_update AFTER UPDATE OF meta ON cloud_ops_events
+      WHEN NEW.meta LIKE '%cfat_%' OR NEW.meta LIKE '%ghp_%' OR NEW.meta LIKE '%github_pat_%'
+        OR NEW.meta LIKE '%sk-ant-%' OR NEW.meta LIKE '%AIza%' OR NEW.meta LIKE '%AKIA%' OR NEW.meta LIKE '%OPSKEYPX%'
+      BEGIN UPDATE cloud_ops_events SET meta=CASE
+        WHEN instr(NEW.meta,'cfat_')>0 THEN substr(NEW.meta,1,instr(NEW.meta,'cfat_')-1)||'[REDACTED-CF-TOKEN]'
+        WHEN instr(NEW.meta,'github_pat_')>0 THEN substr(NEW.meta,1,instr(NEW.meta,'github_pat_')-1)||'[REDACTED-GH-PAT]'
+        WHEN instr(NEW.meta,'ghp_')>0 THEN substr(NEW.meta,1,instr(NEW.meta,'ghp_')-1)||'[REDACTED-GH-TOKEN]'
+        WHEN instr(NEW.meta,'sk-ant-')>0 THEN substr(NEW.meta,1,instr(NEW.meta,'sk-ant-')-1)||'[REDACTED-ANTHROPIC-KEY]'
+        WHEN instr(NEW.meta,'AIza')>0 THEN substr(NEW.meta,1,instr(NEW.meta,'AIza')-1)||'[REDACTED-GOOGLE-KEY]'
+        WHEN instr(NEW.meta,'AKIA')>0 THEN substr(NEW.meta,1,instr(NEW.meta,'AKIA')-1)||'[REDACTED-AWS-KEY]'
+        WHEN instr(NEW.meta,'OPSKEYPX')>0 THEN substr(NEW.meta,1,instr(NEW.meta,'OPSKEYPX')-1)||'[REDACTED-OPS-KEY]'
+        ELSE '[REDACTED-SECRET-ADJACENT]' END WHERE rowid=NEW.rowid; END;
+      CREATE TRIGGER event_meta_json_guard AFTER UPDATE OF meta ON cloud_ops_events
+      WHEN NEW.meta IS NOT NULL AND NOT json_valid(NEW.meta)
+      BEGIN UPDATE cloud_ops_events SET meta=json_object('_truncated',1,'_raw',NEW.meta) WHERE rowid=NEW.rowid; END;""")
 
     def rd1(sql, params=None):
         cur = reconciliation_db.execute(sql, params or [])
@@ -619,12 +689,16 @@ def selftest():
     def reconciliation_call(method, path, body=None, timeout=30):
         query = body["query"]
         if "aiInferenceAdaptiveGroups" in query:
-            result = {"aiInferenceAdaptiveGroups": [{"count": 50, "sum": {"totalNeurons": 500000}}]}
+            result = {"aiInferenceAdaptiveGroups": [
+                {"count": 2, "sum": {"totalNeurons": 20000}, "dimensions": {"date": "2026-09-10"}},
+                {"count": 3, "sum": {"totalNeurons": 15000}, "dimensions": {"date": "2026-10-09"}},
+            ]}
         else:
             result = {"aiGatewayRequestsAdaptiveGroups": [
                 {"count": 10, "sum": {"cost": 5}, "dimensions": {"provider": "openai", "model": "gpt-5.5"}},
                 {"count": 5, "sum": {"cost": 3}, "dimensions": {"provider": "compat", "model": "deepseek/deepseek-flash"}},
                 {"count": 20, "sum": {"cost": 99}, "dimensions": {"provider": "workers-ai", "model": "x"}},
+                {"count": 1, "sum": {"cost": 0}, "dimensions": {"provider": "throughput", "model": "test"}},
             ]}
         return 200, {"data": {"viewer": {"accounts": [result]}}}
 
@@ -639,18 +713,47 @@ def selftest():
     assert snapshot["billing_status"] == "partial"  # owner-stated external spend remains unverified
     assert snapshot["components_usd"]["ai_gateway_all_clients"] == 8
     assert snapshot["components_usd"]["ai_gateway_payment_split"]["difference_usd"] == 0
+    assert snapshot["workers_ai_meter"]["neurons"] == 35000  # the idle UTC date has no usage group
+    assert snapshot["workers_ai_meter"]["group_count"] == 2
+    assert snapshot["workers_ai_meter"]["billable_neurons_after_daily_free_allowance"] == 15000
+    assert snapshot["components_usd"]["workers_ai_account_wide"] == 0.165  # burst + idle + partial current date; allowance does not roll over
     assert snapshot["components_usd"]["direct_providers_metered"] == 2
-    assert snapshot["measured_source_subtotal_usd"] == 42.2
-    assert snapshot["all_billing_including_unverified_usd"] == 492.2
+    assert snapshot["measured_source_subtotal_usd"] == 40.165
+    assert snapshot["all_billing_including_unverified_usd"] == 490.165
+    assert snapshot["cost_metric_cross_checks"]["cost_usd_30d"]["difference_from_measured_sources_usd"] == 0
+    assert snapshot["cost_metric_cross_checks"]["ai_est_cost_30d"]["difference_from_measured_sources_usd"] == 0
+    assert snapshot["window_start_at"] == "2026-09-10T00:00:00Z"
+    assert snapshot["window_end_exclusive_at"] == "2026-10-10T00:00:00Z"
+    assert provider_label("throughput") == "other"
+    assert "throughput" not in json.dumps(snapshot)
+    try:
+        workers_ai_window(
+            "2026-09-10T00:00:00Z", "2026-10-10T00:00:00Z", 30,
+            lambda *args, **kwargs: (200, {"data": {"viewer": {"accounts": [{
+                "aiInferenceAdaptiveGroups": [
+                    {"count": 1, "sum": {"totalNeurons": 1}, "dimensions": {"date": "2026-10-10"}}
+                ]
+            }]}}}),
+        )
+        raise AssertionError("Workers AI window accepted its exclusive end date")
+    except RuntimeError as error:
+        assert "invalid date" in str(error)
     assert snapshot["cost_metric_cross_checks"]["cost_usd_30d"]["included_in_total"] is False
     assert snapshot["task_cost_coverage"]["successful_call_metric"]["scope"] == "successful qnfo-ops model-ladder calls, not all fleet tasks"
     assert snapshot["task_cost_coverage"]["failed_task_cost_usd"] is None
     written = write_cost_reconciliation(
         rd1, dt.date(2026, 10, 9), reconciliation_call, 30, "subscriptions API", 450
     )
-    assert written["all_billing_including_unverified_usd"] == 492.2
+    assert written["all_billing_including_unverified_usd"] == 490.165
     event = rd1("SELECT status, meta FROM cloud_ops_events WHERE id = 'cost-reconciliation-2026-10-09'")[0]
-    assert event["status"] == "partial" and json.loads(event["meta"])["components_usd"]["ai_gateway_all_clients"] == 8
+    assert event["status"] == "partial" and json.loads(event["meta"]) == written
+    for marker in ("%cfat_%", "%ghp_%", "%github_pat_%", "%sk-ant-%", "%AIza%", "%AKIA%", "%OPSKEYPX%"):
+        assert rd1("SELECT ?1 LIKE ?2 AS matched", [event["meta"], marker])[0]["matched"] == 0, marker
+    updated = write_cost_reconciliation(
+        rd1, dt.date(2026, 10, 9), reconciliation_call, 30, "subscriptions API", 450
+    )
+    updated_event = rd1("SELECT meta FROM cloud_ops_events WHERE id = 'cost-reconciliation-2026-10-09'")[0]["meta"]
+    assert updated_event == json.dumps(updated, separators=(",", ":")) and json.loads(updated_event) == updated
     def failed_source_call(method, path, body=None, timeout=30):
         return 403, {"errors": [{"message": "test source refusal"}]}
     failed_snapshot = cost_reconciliation(
@@ -659,8 +762,8 @@ def selftest():
     assert failed_snapshot["components_usd"]["workers_ai_account_wide"] is None
     assert failed_snapshot["components_usd"]["ai_gateway_all_clients"] is None
     assert failed_snapshot["measured_source_subtotal_usd"] is None
-    assert any(error.startswith("Workers AI GraphQL:") for error in failed_snapshot["source_errors"])
-    assert any(error.startswith("AI Gateway GraphQL:") for error in failed_snapshot["source_errors"])
+    assert any(error.startswith("Workers AI GraphQL unavailable") for error in failed_snapshot["source_errors"])
+    assert any(error.startswith("AI Gateway GraphQL unavailable") for error in failed_snapshot["source_errors"])
     print("cost_ledger selftest ok")
 
 
