@@ -1,5 +1,5 @@
 {
-  "audited_at": "2026-10-25 17:52:22",
+  "audited_at": "2026-10-25 18:29:07",
   "d1_write_failures": [],
   "d1_writes_ok": 121,
   "guard": {
@@ -555,7 +555,7 @@
       },
       {
         "dir": "q08-signal-engine",
-        "version": "0.34.5",
+        "version": "0.35.0",
         "worker": "q08-signal-engine"
       },
       {
@@ -585,7 +585,7 @@
       },
       {
         "dir": "qnfo-code-orchestrator",
-        "version": "0.26.0-codeagent",
+        "version": "0.27.0-codeagent",
         "worker": "qnfo-code-orchestrator"
       },
       {
@@ -610,12 +610,12 @@
       },
       {
         "dir": "qnfo-fleet-control",
-        "version": "0.45.4-cronfailopen",
+        "version": "0.46.0-agent-tracing",
         "worker": "qnfo-fleet-control"
       },
       {
         "dir": "qnfo-fleet-dashboard",
-        "version": "1.61.0",
+        "version": "1.61.2",
         "worker": "qnfo-fleet-dashboard"
       },
       {
@@ -995,9 +995,9 @@
       "worker": "q08-mind"
     },
     "q08-signal-engine": {
-      "before": "0.34.5",
+      "before": "0.35.0",
       "http": 200,
-      "live": "0.34.5",
+      "live": "0.35.0",
       "match": 1,
       "note": "SYNC",
       "worker": "q08-signal-engine"
@@ -1196,9 +1196,9 @@
       "worker": "qnfo-code-agent"
     },
     "qnfo-code-orchestrator": {
-      "before": "0.26.0-codeagent",
+      "before": "0.27.0-codeagent",
       "http": 200,
-      "live": "0.26.0-codeagent",
+      "live": "0.27.0-codeagent",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-code-orchestrator"
@@ -1326,17 +1326,17 @@
       "worker": "qnfo-fleet-calibrator"
     },
     "qnfo-fleet-control": {
-      "before": "0.45.4-cronfailopen",
+      "before": "0.46.0-agent-tracing",
       "http": 200,
-      "live": "0.45.4-cronfailopen",
+      "live": "0.46.0-agent-tracing",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-fleet-control"
     },
     "qnfo-fleet-dashboard": {
-      "before": "1.61.0",
+      "before": "1.61.2",
       "http": 200,
-      "live": "1.61.0",
+      "live": "1.61.2",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-fleet-dashboard"
