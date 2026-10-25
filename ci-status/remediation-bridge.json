@@ -213,11 +213,10 @@
   }
  ],
  "contracts_needs_machine_probe": 34,
- "open_issues_without_active_contract": 242,
+ "open_issues_without_active_contract": 244,
  "residual_gap_ids": [
   2226,
   2827,
-  100088,
   100279,
   100304,
   100317,
@@ -274,9 +273,10 @@
   100458,
   100516,
   100518,
+  100542,
   100563
  ],
- "head": "55863b5db1f83db0101a7ddd1e98cdb3c26dc801",
+ "head": "bfdf008f2ea05804df790a2237b11375a557e8e5",
  "job_status": "success",
- "ts": "2026-10-25T09:47:04Z"
+ "ts": "2026-10-25T10:19:15Z"
 }
