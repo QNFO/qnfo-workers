@@ -84,3 +84,21 @@ WHERE NOT EXISTS (
   SELECT 1 FROM decision_log
   WHERE action = 'Keep qnfo-agent-ws retired and hand its consumer, dependency, cap, and canonical deployment prerequisites to agent_issues with a versioned live-health closing probe; register the hold, alternate-path probe, and red-team evidence.'
 );
+
+INSERT INTO decision_log (actor, assumption, action, evidence, outcome, blast_radius, rollback_path, capability_gain, predicted_outcome, reach_gain, surfaces_tested)
+SELECT
+  'session_d8db78a0-537a-4635-b7e4-a8450a38b0b7',
+  'Cloudflare Workers Builds runs `npx wrangler preview` against the repository-root qnfo-workers config; that config represents only the retired HTTP 410 stub and has no bindings.',
+  'Add an empty [previews] table to the root Wrangler config so the existing Workers Builds preview command can validate the retired stub without changing qnfo-agent-ws or production.',
+  'Build 4129c0d6-c7e3-4f8c-986a-08dd788576b8 failed because the Wrangler config has no previews block. The root config identifies qnfo-workers as a retired duplicate stub; qnfo-agent-ws remains retired and its correct health host returns 404/code 1042.',
+  'Workers Builds can create its configured branch preview of the unchanged 410 stub; qnfo-agent-ws remains retired and undeployed.',
+  'The repository-root preview configuration only; no production worker, binding, route, or qnfo-agent-ws change.',
+  'Remove the empty [previews] table to restore the prior config; retain this append-only decision record.',
+  'Enables the existing Workers Builds preview check; adds no production capability.',
+  'The Workers Builds preview command accepts the config and the preview continues to return the retired stub response.',
+  'Allows the configured build check to complete without changing public service behavior.',
+  'Workers Builds failure log; root wrangler.toml; qnfo-workers root /health; qnfo-agent-ws /health'
+WHERE NOT EXISTS (
+  SELECT 1 FROM decision_log
+  WHERE action = 'Add an empty [previews] table to the root Wrangler config so the existing Workers Builds preview command can validate the retired stub without changing qnfo-agent-ws or production.'
+);
