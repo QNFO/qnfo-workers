@@ -42,16 +42,20 @@ in the loop.
 
 ## WIP-RECOVERY-1 (0.2.0): the second exit from a blocked planner
 
-`qnfo-code-orchestrator` refuses to plan while `PLAN_WIP` (6) unfinished tasks exist. Measured
-2026-10-17: 7 tasks queued, planner idle since 15:21Z, and the queue could only drain by a task
-**succeeding** — which the builder was failing to do. One exit from a step is a doctrine defect, so
-this worker supplies the other one:
+`qnfo-code-orchestrator` refuses to plan while its shared `code_plan_wip` ceiling is reached
+(default 12, bounded at 48 and tuned through `ops_config`). Recovery counts the planner's unfinished
+task set, excluding terminal (`merged`, `closed`, `publish_failed`, `needs_human`, `failed`,
+`reverted`, `superseded`) and handoff (`branch_pushed`, `published`, `pr_open`) states. Queued tasks
+are only the candidates that recovery may park. One exit from a step is a doctrine defect, so this
+worker supplies the other one:
 
-- a task with **≥6 attempts** that has not moved for **≥10 minutes**, while the queue is blocked, is
+- a task with **≥6 attempts** that has not moved for **≥10 minutes**, while active WIP reaches the shared ceiling, is
   parked as `failed` with its full row backed up to `ops_config`;
-- at most **2 per tick**, never while the queue is below the ceiling, never on a task that moved
+- at most **2 per tick**, never while active WIP is below the shared ceiling, never on a task that moved
   recently (it may be mid-attempt), and the update carries `WHERE status = 'queued'` so it cannot
   clobber a task another actor moved;
+- each tick records active WIP, queued candidates, the shared ceiling, and the oldest active task's
+  age, so planner pressure and recovery decisions can be compared from the run ledger;
 - restore is one statement, named in the backup note:
   `UPDATE code_tasks SET status='queued' WHERE id='<id>'`.
 
