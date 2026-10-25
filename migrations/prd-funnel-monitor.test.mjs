@@ -85,20 +85,52 @@ assert.equal(one("SELECT COUNT(*) n FROM fleet_tasks").n, 1);
 db.exec("UPDATE reach_signals SET date=date('now','-3 days')");
 assert.equal(health().attention_state, "unmeasured", "stale attention is not a zero-success fallback");
 assert.equal(one("SELECT meta LIKE '%ghp_%' AS matched FROM cloud_ops_events").matched, 1, "reproduce production scrubber match on explanatory prose");
+db.exec(`
+CREATE TRIGGER fixture_secret_guard AFTER INSERT ON cloud_ops_events
+WHEN NEW.meta LIKE '%ghp_%'
+BEGIN
+  UPDATE cloud_ops_events SET meta=CASE
+    WHEN instr(NEW.meta,'ghp_')>0 THEN substr(NEW.meta,1,instr(NEW.meta,'ghp_')-1)||'[REDACTED-GH-TOKEN]'
+    ELSE '[REDACTED-SECRET-ADJACENT]' END
+  WHERE rowid=NEW.rowid;
+END;
+CREATE TRIGGER fixture_json_guard AFTER UPDATE OF meta ON cloud_ops_events
+WHEN NEW.meta IS NOT NULL AND NOT json_valid(NEW.meta)
+BEGIN
+  UPDATE cloud_ops_events SET meta=json_object('_truncated',1,'_raw',NEW.meta) WHERE rowid=NEW.rowid;
+END;
+`);
+db.prepare(steps[1].sql).all();
+assert(db.prepare("SELECT meta FROM cloud_ops_events").all().some(r => JSON.parse(r.meta)._truncated === 1), "original payload is scrubbed and wrapped under the production guard behavior");
 const repair = readFileSync(new URL("./2026-10-25-prd-funnel-evidence.sql", import.meta.url), "utf8");
 db.exec(repair);
 assert.equal(one("SELECT version FROM fleet_tasks").version, 2);
 const evidenceStep = JSON.parse(one("SELECT definition FROM fleet_tasks").definition).steps[1];
 db.prepare(evidenceStep.sql).all();
 const events = db.prepare("SELECT meta FROM cloud_ops_events").all();
-const compact = events.map(r => JSON.parse(r.meta)).find(r => r.stages.every(s => !Object.hasOwn(s, "limitation")));
+const compact = events.map(r => JSON.parse(r.meta)).find(r => r.stages?.every(s => !Object.hasOwn(s, "limitation")));
 assert(compact, "v2 emits structured counts and timestamps, not prose");
 assert.equal(compact.stages.length, 6);
+for (const stage of compact.stages) {
+  assert.equal(typeof stage.stage, "string");
+  assert(stage.value === null || typeof stage.value === "number");
+  assert(stage.latest_at === null || typeof stage.latest_at === "string");
+}
 for (const marker of ["%cfat_%", "%ghp_%", "%github_pat_%", "%sk-ant-%", "%AIza%", "%AKIA%"]) {
   assert.equal(db.prepare("SELECT ? LIKE ? AS matched").get(JSON.stringify(compact), marker).matched, 0, "aggregate evidence survives unchanged production secret predicates");
 }
 const readableProbe = one("SELECT verify_probe FROM remediation_contracts WHERE class='fm-prd-funnel-evidence'").verify_probe;
 assert.equal(one(readableProbe).observed, 0);
+db.prepare("INSERT INTO cloud_ops_events(id,meta) VALUES('synthetic-secret',?)").run('{"fixture":"ghp_not-a-real-credential"}');
+const scrubbed = JSON.parse(one("SELECT meta FROM cloud_ops_events WHERE id='synthetic-secret'").meta);
+assert.equal(scrubbed._truncated, 1);
+assert(!scrubbed._raw.includes("ghp_"), "actual marker-shaped fixtures remain scrubbed");
+db.exec("UPDATE cloud_ops_events SET ts=datetime('now','-121 minutes')");
+assert.equal(one(readableProbe).observed, 1, "expired evidence is not fresh");
+db.prepare(evidenceStep.sql).all();
+assert.equal(one(readableProbe).observed, 0);
+db.exec("UPDATE cloud_ops_events SET meta='invalid-json'");
+assert.equal(one(readableProbe).observed, 1, "scrubbed or malformed events cannot satisfy the evidence probe");
 db.exec(repair);
 assert.equal(one("SELECT COUNT(*) n FROM decision_log").n, 2, "repair reapply is idempotent");
 db.close();
