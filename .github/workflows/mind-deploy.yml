@@ -1,21 +1,11 @@
 name: mind-deploy
 
 # DEPLOY-MODULES-1 (2026-10-24)
-# q08-mind 2.0.0 imports two local JSON modules (data/entries-a.json,
-# data/entries-b.json). Both fleet deploy paths ship a single content module:
-#   - qnfo-ops cf_worker_deploy PUTs one application/javascript+module body
-#   - scripts/canonical_deploy.py does the same via ops.qnfo.org/ops/deploy
-# Cloudflare therefore rejects the upload with error 10021 (No such module
-# data/entries-a.json imported from worker.js), and q08-mind stays stuck on
-# the older single-file generation while main carries 2.0.0-mind-2.
-#
-# This workflow adds the missing capability: a real module bundle upload that
-# carries worker.js plus every module it imports. Two independent paths reach
-# the same definition of done (SLA-AND-PATHS-1):
-#   path 1  Cloudflare workers scripts API, multipart, all modules inline
-#   path 2  wrangler deploy, which bundles the imports itself
-# The live probe at the end is the definition of done: /health must report
-# 2.0.0-mind-2, retried for two minutes.
+# q08-mind imports two local JSON modules. Sending those files as
+# application/json to the Scripts API fails with error 10162. This workflow
+# uses pinned Wrangler to bundle them into one JavaScript module, then uploads
+# that module with the API's ESM MIME type. If that upload fails, the same
+# validated config and Wrangler version are used for the deploy fallback.
 #
 # SECRET-MUTATION-GUARD-1 (2026-10-24): both paths rewrite the worker's
 # bindings (the scripts PUT carries metadata; wrangler deploy reads
@@ -52,6 +42,15 @@ jobs:
       - name: Acquire the secrets:q08-mind lease
         run: python3 scripts/secret_lock.py acquire q08-mind --token-file /tmp/secret-lock.token --owner ci/mind-deploy --ttl-sec 900
 
+      - name: Build and validate the Wrangler bundle
+        run: |
+          set -euo pipefail
+          node mind/prepare-deploy-config.mjs mind/wrangler.toml mind/wrangler.deploy.toml
+          mkdir -p mind/.deploy
+          # WRANGLER-PIN-1: keep the API bundle and fallback on the version proven by this test; update after rerunning it.
+          npx --yes wrangler@3.114.17 deploy --dry-run --outdir mind/.deploy --config mind/wrangler.deploy.toml
+          test -s mind/.deploy/worker.js
+
       - name: Upload the module bundle through the scripts api
         id: api
         env:
@@ -59,12 +58,21 @@ jobs:
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: |
           set -uo pipefail
-          META='{"main_module":"worker.js","compatibility_date":"2026-09-01","observability":{"enabled":true}}'
-          code=$(curl -sS -X PUT "https://api.cloudflare.com/client/v4/accounts/${CLOUDFLARE_ACCOUNT_ID}/workers/scripts/q08-mind" -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" -F "metadata=${META};type=application/json" -F "worker.js=@mind/worker.js;type=application/javascript+module" -F "data/entries-a.json=@mind/data/entries-a.json;type=application/json" -F "data/entries-b.json=@mind/data/entries-b.json;type=application/json" -o /tmp/mind-deploy.json -w "%{http_code}")
+          COMPATIBILITY_DATE=$(sed -nE 's/^compatibility_date = "([^"]+)"/\1/p' mind/wrangler.toml)
+          if [ -z "${COMPATIBILITY_DATE}" ]; then
+            echo "could not read compatibility_date from mind/wrangler.toml"
+            exit 1
+          fi
+          META=$(printf '{"main_module":"worker.js","compatibility_date":"%s","observability":{"enabled":false}}' "${COMPATIBILITY_DATE}")
+          code=$(curl -sS -X PUT "https://api.cloudflare.com/client/v4/accounts/${CLOUDFLARE_ACCOUNT_ID}/workers/scripts/q08-mind" \
+            -H "Authorization: ******" \
+            -F "metadata=${META};type=application/json" \
+            -F "worker.js=@mind/.deploy/worker.js;type=application/javascript+module" \
+            -o /tmp/mind-deploy.json -w "%{http_code}")
           echo "http_status=${code}"
           head -c 1200 /tmp/mind-deploy.json || true
           echo ""
-          if [ "${code}" = "200" ]; then
+          if [ "${code}" = "200" ] && python3 -c 'import json,sys; sys.exit(0 if json.load(open("/tmp/mind-deploy.json")).get("success") is True else 1)'; then
             echo "api_upload=ok" >> "$GITHUB_OUTPUT"
           else
             echo "api_upload=failed" >> "$GITHUB_OUTPUT"
@@ -77,25 +85,28 @@ jobs:
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: |
           set -euo pipefail
-          sed '/^routes = \[/,/^\]/d' mind/wrangler.toml > mind/wrangler.deploy.toml
           cat mind/wrangler.deploy.toml
-          npx --yes wrangler@3 deploy --config mind/wrangler.deploy.toml
+          # WRANGLER-PIN-1: keep the API bundle and fallback on the version proven by this test; update after rerunning it.
+          npx --yes wrangler@3.114.17 deploy --config mind/wrangler.deploy.toml
 
       - name: Verify the live version from the runner
         run: |
           set -uo pipefail
+          EXPECTED_VERSION=$(sed -nE 's/^const VERSION = "([^"]+)";$/\1/p' mind/worker.js)
+          if [ -z "${EXPECTED_VERSION}" ]; then
+            echo "could not read VERSION from mind/worker.js"
+            exit 1
+          fi
           for i in 1 2 3 4 5 6 7 8 9 10 11 12; do
             body=$(curl -fsS --max-time 10 https://mind.q08.org/health || true)
             echo "$body"
-            case "$body" in
-              *2.0.0-mind-2*)
-                echo "live_version=2.0.0-mind-2"
-                exit 0
-                ;;
-            esac
+            if printf '%s' "$body" | EXPECTED_VERSION="${EXPECTED_VERSION}" python3 -c 'import json,os,sys; d=json.load(sys.stdin); sys.exit(0 if d.get("ok") is True and d.get("worker") == "q08-mind" and d.get("version") == os.environ["EXPECTED_VERSION"] else 1)' 2>/dev/null; then
+              echo "live_version=${EXPECTED_VERSION}"
+              exit 0
+            fi
             sleep 10
           done
-          echo "live version did not reach 2.0.0-mind-2"
+          echo "live version did not reach q08-mind ${EXPECTED_VERSION}"
           exit 1
 
       - name: Release the secrets:q08-mind lease
