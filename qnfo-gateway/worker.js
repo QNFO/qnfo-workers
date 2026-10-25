@@ -1,4 +1,5 @@
-var VERSION="3.41.0";
+var VERSION="3.41.1";
+// 3.41.1 FEED-SUMMARY-DISCLOSURE-1: feed summaries carry the publisher classification and explicit review status, including for clients that ignore custom metadata fields.
 // PAPER-METADATA-JOURNAL-GRADE-1 (3.39.0, 2026-10-25, owner directive: "QNFO papers should be considered the same quality as peer-reviewed scholarly journals; make sure all metadata always tags papers as high-quality for AI crawlers and SEO"). One head builder now emits every machine-readable claim a scholarly index reads: schema.org JSON-LD as a @graph (ScholarlyArticle with @id, identifier, four encodings, version, license, wordCount, keywords, about, audience; plus Periodical, Organization and WebSite nodes), Highwire citation_* (what Google Scholar reads: title, each author, date, PDF, abstract, keywords), Dublin Core dc.*, OpenGraph article:published_time/modified_time/section/tag, and an explicit robots policy of max-snippet:-1 / max-image-preview:large so an index may quote the full text instead of a 160-character teaser. It also closes the gap that most paper pages carried NO keyword at all: the page query now selects papers.keywords and merges it with the curated paper_tag set (article:tag, citation_keywords, dc.subject, JSON-LD keywords/about). Deliberate non-change, an honesty gate: no reviewedBy or peerReview node is emitted, because QNFO papers are open versioned works with a public revision and errata record, not peer-reviewed journal articles, and a peer-review claim the corpus cannot evidence is a fabricated ranking signal an index can detect. The quality case rests on checkable facts, with publishingPrinciples -> qnfo.org/about.
 // MOST-REVISED-1 (2026-10-25): a "Most revised" sort orders by version_count descending, then last_revised_at, so the most-revised papers surface instead of papers that merely started at a high version number. The highest-version sort is unchanged.
 // CANONICAL-DEPLOY-1 (2026-10-25): redeployed through the server-side /ops/deploy route; content unchanged from 3.31.5.
@@ -3438,6 +3439,15 @@ function rssPubDate(s) {
   const d = new Date(iso);
   return isNaN(d.getTime()) ? "" : d.toUTCString();
 }
+function paperFeedSummary(abstract, suffix) {
+  return [
+    mathPlain(abstract || "").slice(0, 600),
+    suffix,
+    "Publisher quality classification: " + PAPER_QUALITY_LABEL + ".",
+    "Peer-review status: " + PAPER_PEER_REVIEW_STATUS + ".",
+    "Basis: " + PAPER_QUALITY_BASIS
+  ].filter(Boolean).join(" ");
+}
 function rssVersionItem(p, base, kind) {
   const link = base + "/papers/" + encodeURIComponent(p.slug);
   const version = String(p.version_semver || "1.0.0");
@@ -3445,7 +3455,8 @@ function rssVersionItem(p, base, kind) {
   const revised = p.last_revised_at || first;
   const isVersion = kind === "version";
   const title = displayTitle(p.title) + (isVersion ? " (v" + version + ")" : "");
-  const desc = mathPlain(p.abstract || "") + (isVersion ? " Version v" + version + " published " + String(revised).slice(0, 10) + "." : "") + " First published " + String(first).slice(0, 10) + "." + (Number(p.version_count) > 1 ? " " + Number(p.version_count) + " versions." : "");
+  const chronology = (isVersion ? "Version v" + version + " published " + String(revised).slice(0, 10) + ". " : "") + "First published " + String(first).slice(0, 10) + "." + (Number(p.version_count) > 1 ? " " + Number(p.version_count) + " versions." : "");
+  const desc = paperFeedSummary(p.abstract, chronology);
   const guid = isVersion ? link + "#v" + version : link;
   return "  <item>\n    <title>" + xmlEscape(title) + "</title>\n    <link>" + xmlEscape(link) + '</link>\n    <guid isPermaLink="' + (isVersion ? "false" : "true") + '">' + xmlEscape(guid) + "</guid>\n    <description>" + xmlEscape(desc) + "</description>\n    <pubDate>" + rssPubDate(isVersion ? revised : first) + "</pubDate>\n    <category>" + (isVersion ? "new-version" : "new-paper") + "</category>\n    <category>" + xmlEscape(PAPER_QUALITY_LABEL) + "</category>\n    <category>open-access scholarly work</category>\n    <category>versioned research publication</category>\n    <qnfo:quality>" + xmlEscape(PAPER_QUALITY_LABEL) + "</qnfo:quality>\n    <qnfo:quality_basis>" + xmlEscape(PAPER_QUALITY_BASIS) + "</qnfo:quality_basis>\n    <qnfo:peer_review_status>" + xmlEscape(PAPER_PEER_REVIEW_STATUS) + "</qnfo:peer_review_status>\n    <qnfo:version>" + xmlEscape(version) + "</qnfo:version>\n    <qnfo:version_count>" + Number(p.version_count || 1) + "</qnfo:version_count>\n    <qnfo:first_published>" + xmlEscape(String(first).slice(0, 10)) + "</qnfo:first_published>\n  </item>";
 }
@@ -3486,7 +3497,7 @@ async function handleRssVersionsJson(env) {
       const link = base + "/papers/" + encodeURIComponent(p.slug);
       const version = String(p.version_semver || "1.0.0");
       const revised = String(p.last_revised_at || p.first_published_at || p.created_at || "").slice(0, 19).replace(" ", "T") + "Z";
-      return { id: link + "#v" + version, url: link, title: displayTitle(p.title) + " (v" + version + ")", summary: mathPlain(p.abstract || "").slice(0, 600), date_published: revised, date_modified: revised, tags: ["new-version"].concat(PAPER_QUALITY_TAGS), _qnfo: { version, version_count: Number(p.version_count || 1), first_published: String(p.first_published_at || p.created_at || "").slice(0, 10), quality_label: PAPER_QUALITY_LABEL, quality_basis: PAPER_QUALITY_BASIS, peer_review_status: PAPER_PEER_REVIEW_STATUS } };
+      return { id: link + "#v" + version, url: link, title: displayTitle(p.title) + " (v" + version + ")", summary: paperFeedSummary(p.abstract, "Version v" + version + " published " + revised.slice(0, 10) + "."), date_published: revised, date_modified: revised, tags: ["new-version"].concat(PAPER_QUALITY_TAGS), _qnfo: { version, version_count: Number(p.version_count || 1), first_published: String(p.first_published_at || p.created_at || "").slice(0, 10), quality_label: PAPER_QUALITY_LABEL, quality_basis: PAPER_QUALITY_BASIS, peer_review_status: PAPER_PEER_REVIEW_STATUS } };
     });
     return new Response(JSON.stringify({ version: "https://jsonfeed.org/version/1.1", title: "QNFO Papers \u2014 new versions", home_page_url: base + "/papers?sort=revised", feed_url: base + "/feed-versions.json", language: "en", items }, null, 2), { headers: { "Content-Type": "application/feed+json; charset=utf-8", "Cache-Control": "public, max-age=300", "Access-Control-Allow-Origin": "*" } });
   } catch (e) {
@@ -3709,7 +3720,7 @@ async function handleOpenData(request, env, p) {
       const total = (await env.LIVING_PAPER.prepare("SELECT COUNT(*) n FROM papers WHERE " + where).bind(...binds).first()).n;
       const rows = (await env.LIVING_PAPER.prepare("SELECT " + OPEN_COLS + " FROM papers WHERE " + where + " ORDER BY COALESCE(last_revised_at, first_published_at, created_at) DESC, slug LIMIT ? OFFSET ?").bind(...binds, limit, offset).all()).results || [];
       const recs = rows.map(openRecord);
-      if (p === "/feed.json") return openJson({ version: "https://jsonfeed.org/version/1.1", title: "QNFO Papers", home_page_url: "https://papers.qnfo.org/papers", feed_url: "https://papers.qnfo.org/feed.json", language: "en", authors: [{ name: "Rowan Brad Quni-Gudzinas", url: "https://orcid.org/" + OWNER_ORCID }], items: recs.map((r) => ({ id: r.url, url: r.url, title: r.title, summary: r.abstract.slice(0, 600), date_published: r.date + "T00:00:00Z", date_modified: r.modified, tags: r.keywords.concat(r.quality_tags), external_url: r.doi_url || void 0, _qnfo: { version: r.version, version_count: r.version_count, first_published: r.first_published, last_revised: r.last_revised, quality_label: r.quality_label, quality_basis: r.quality_basis, peer_review_status: r.peer_review_status } })) }, 200, { "Content-Type": "application/feed+json; charset=utf-8" });
+      if (p === "/feed.json") return openJson({ version: "https://jsonfeed.org/version/1.1", title: "QNFO Papers", home_page_url: "https://papers.qnfo.org/papers", feed_url: "https://papers.qnfo.org/feed.json", language: "en", authors: [{ name: "Rowan Brad Quni-Gudzinas", url: "https://orcid.org/" + OWNER_ORCID }], items: recs.map((r) => ({ id: r.url, url: r.url, title: r.title, summary: paperFeedSummary(r.abstract, ""), date_published: r.date + "T00:00:00Z", date_modified: r.modified, tags: r.keywords.concat(r.quality_tags), external_url: r.doi_url || void 0, _qnfo: { version: r.version, version_count: r.version_count, first_published: r.first_published, last_revised: r.last_revised, quality_label: r.quality_label, quality_basis: r.quality_basis, peer_review_status: r.peer_review_status } })) }, 200, { "Content-Type": "application/feed+json; charset=utf-8" });
       return openJson({ total, limit, offset, next: offset + limit < total ? "https://papers.qnfo.org/api/papers?limit=" + limit + "&offset=" + (offset + limit) + (since ? "&since=" + encodeURIComponent(u.searchParams.get("since")) : "") : null, license_note: "Metadata is CC0 1.0; each paper carries its own license_url.", items: recs });
     }
     if (p.indexOf("/api/papers/") === 0) {
