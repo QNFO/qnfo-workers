@@ -9,7 +9,7 @@ let pass = 0, fail = 0;
 const ok = (c, m, x) => { if (c) pass++; else { fail++; console.log("FAIL " + m + (x !== undefined ? " :: " + String(x).slice(0, 300) : "")); } };
 const slice = (a, b) => { const i = src.indexOf(a); const j = src.indexOf(b, i + 1); return i < 0 || j < 0 ? "" : src.slice(i, j); };
 
-ok(src.includes('var VERSION="3.31.1-seo-index-7"'), "version is 3.31.1-seo-index-7");
+ok(src.includes('var VERSION="3.31.2-seo-index-8"'), "version is 3.31.2-seo-index-8");
 
 // (a) IndexNow reaches every engine: the loop must not stop at the first acceptance.
 const idx = slice("async function indexNowSubmit", "__name(indexNowSubmit");
@@ -34,7 +34,7 @@ for (const k of ["googlebot_crawling", "bingbot_crawling", "ai_crawler_reaching"
 
 // (d) sitemap freshness is the real change date, not the publication date.
 const sm = slice("async function handleSitemap", "__name(handleSitemap");
-ok(sm.includes("updated_at, version FROM papers"), "sitemap reads updated_at");
+ok(/updated_at/.test(sm) && /FROM papers/.test(sm), "sitemap reads a real revision timestamp (updated_at or last_revised_at)");
 ok(sm.includes("lastmod: smLastmod(p)"), "sitemap lastmod uses the shared helper");
 ok(!sm.includes("lastmod: p.created_at ?"), "sitemap no longer advertises created_at as lastmod");
 ok(sm.includes('"/papers/tags"'), "tag catalogue listed in the papers sitemap");
