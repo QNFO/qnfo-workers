@@ -18,7 +18,7 @@ Bindings: ARTIFACTS (namespace qnfo), AI, Durable Object ArtifactAgent.
 
 ## Build / deploy requirement (IMPORTANT)
 
-This worker imports the `agents` npm package (^0.22.0) and therefore MUST be bundled.
+This worker imports the `agents` npm package (^0.30.1) and therefore MUST be bundled.
 On the current Windows host the local esbuild toolchain does not bundle npm dependencies
 (`wrangler deploy --dry-run` emits a 5.17 KiB bundle with `Agent`/`routeAgentRequest`
 unresolved), so this worker is committed as source and deploys from a working build
