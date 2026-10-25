@@ -1,4 +1,4 @@
-var VERSION="3.29.7-codeagent"; /* 3.29.7 PLAIN-FILL-MEMORY-1 (2026-10-25, remediation sweep of the dashboard's 59 metric breaches; pillar reliability): the hourly cron had not completed since 2026-10-20 06:03 (fleet_heartbeat stuck at 3.29.0) and was killed with exceededMemory 21-24 times a day, starting the afternoon PLAIN-FILL-CADENCE-1 put plainFill on that cron. plainFill read p.body_md for every published paper (LIMIT 2000, 693 papers at >= 20,000 chars) into one isolate; it now takes 120 candidates ordered by need (no plain_summary row first) and still builds PLAIN_FILL_MAX=12 a run, so IndexNow, rate-limit pruning, quick-read pruning, render-health, the browser math sample and paper filing after it run again. */ /* 3.29.0 READER-REPORT-1 (2026-10-19, pillar research): a reader can report a typo, awkward wording, a factual error or a citation problem at the passage it is in (select text, then Report; or the line at the end of each paper). POST /api/paper-report stores it anonymously in qnfo-audit.reader_reports behind a hidden field, a minimum time on the page and per-address and daily caps; one model checks it against the paper, and a confirmed report becomes an internal_errata row the revision loop folds into the next version. The hourly tick retries pending checks. */ /* 3.28.1 ABOUT-LABEL-TRUNC-1 (2026-10-19, pillar reach, agent_issues 100158): the "How to check the work" links on /about carry each paper's full title; the last one was the slug cut at its length limit ("... via distinct lo"). */ /* 3.28.0 CLAIM-INTEGRITY-1 (2026-10-19, pillar research): /papers/<slug>/ serves a paper whose status is retracted (qnfo-research-exec 0.22.0 retracts a paper that described experiments or reviews as done that never took place), so its link shows the retraction notice instead of a 404; listings, feeds, the sitemap and the PDF route still read the published statuses only. */ /* 3.27.0 CRON-GRID-1 (owner directive 2026-10-19, pillar autonomy): the trigger is hourly; the daily 06:00 run (IndexNow, prunes, plain fill, render health, shelving) runs on the 06:00 fire and is retried hourly, at most 3 times, while its last good run is over 24.5 h old. Every fire is logged to cron_fire_log for CRON-WATCH-1. */ /* 3.26.5 GW-PAPER-AUTHORS-SCALAR-1 (2026-10-19, agent_issues 100061, pillar reach): paperAuthors fell back to splitting the raw text when the authors column held JSON that is neither a list nor a string, so "null", "123", "true" and an object became author names in the byline, the JSON-LD, the feeds and /api/papers. gwAuthorList now reads such text as no author (an object with a string name field is its one author) and splits only text that is not JSON; "Surname, Given" stays one author only when the given names are more than one word or the surname is Quni-Gudzinas, so "Alice, Bob" is two authors. Live rows hold none of these shapes today (744 arrays, 250 plain names, 1 comma list), so the change guards the next import. paper-fields.test.mjs carries the cases. paper-fields.test.mjs also asserts the gwSplitKeywords line that 3.26.4 (#2679, CF-OBS-ISSUE-1) added, which the squash of PR 2680 deleted with a VERSION rollback to 3.26.3 and 4f20a3e restored on main: a JSON string holding keywords reads as that one keyword. */ /* 3.26.1 (2026-10-19, RESOLVE-ALL-OPEN-1): carries the 3.25.x fixes of PR 2603 (GW-JSON-QUIET, PAPER-FIELDS-1, paper-context stack, FILL_MODEL floor) on top of 3.26.0 PLAIN-FILL-1; PLAIN-NEGATIVE-CACHE-1 is dropped because PLAIN-FILL-1 moved the build off the request path. */ /* 3.26.0 PLAIN-FILL-1 (2026-10-19): the digest (GET /papers/<slug>/quickread and /api/quickread/<slug> without q) read the plain-language summary through plainSummary, which built it with up to two model calls on a cache miss, so a crawler following a link spent money (QUICK-READ-DIGEST-1: nothing to type, no spend) and quick-read.test.mjs failed on main. Every GET now reads plain_summary only (plainGet); the daily cron builds missing or stale summaries, PLAIN_FILL_MAX per run, newest papers first (plainFill). */ /* 3.24.3 QUICK-READ-DIGEST-4 (2026-10-19, the third pass over live reads): (a) /api/quickread/<slug> answered bad_slug for the library's dotted slugs (x3.3-bosonic-codes-native-encoding) because the guard allowed only letters, digits and hyphens; it now allows the dot and still refuses "..". (b) the reading map ended with a "References" row; a bibliography is not a place to read the argument, so it is left out. */ /* 3.24.2 QUICK-READ-DIGEST-3 (2026-10-19, the rest of the first live map): the map listed the right sections but with "0 words" against every one whose prose lives in its h3 subsections (joules-per-solution-metric: 8 of 11 rows read 0), which is a row a reader cannot use. A section's length is now its own text plus every deeper section that follows it up to the next heading at its depth or above, and a heading with nothing under it at all is left out of the map. */ /* 3.24.1 QUICK-READ-DIGEST-2 (2026-10-19, first live reads of 3.24.0): the reading map listed ONE heading on joules-per-solution-metric because that paper carries its title as its own "#" heading, so every real section is an h3 after the renderer shifts the outline down a level and an h2-only map saw the title and nothing else. qdMap now skips the heading whose name is the paper's title and takes the first depth that yields a map (h2 when there are three or more, else h3, else whatever exists); quick-read.test.mjs carries that corpus shape (chaptered-work). */ /* 3.24.0 QUICK-READ-DIGEST-1 (2026-10-19, owner directive: "there is no difference between Quick Read and Ask this paper"): it was true  -  QUICK-READ-1..6 read the paper for a QUESTION, which is what the paper page's Ask rail already does, so the reader met two doors to one room. /papers/<slug>/quickread and /api/quickread/<slug> with no question now return a DIGEST: the abstract verbatim, the claim, the figures the paper reports, how it is done, what would falsify it, where the claim stops, and a map of where to read (each section with its length), every line a sentence of the paper with the section id the paper page publishes, no model call, no cache, no rate limit. The question view is unchanged at ?q= (old links, the API, the audit). The index row's Quick read no longer carries the query, and the paper page's Quick read button says what it now does. */ /* 3.23.2 QUICK-READ-6 (2026-10-19, found in the closeout sweep): a live payload said coverage "related" with passages 0 and chars 0 - the semantic pick had filtered every candidate out (the closest sections were shorter than the 80-character floor) and the page still claimed it had read them. qrPick now takes the mode (a semantic ranking gates on cosine, not on lexical hits), and the semantic branch falls back to the honest "none" verdict when nothing usable was picked rather than labelling an empty page "related". /* 3.23.1 QUICK-READ-5 (2026-10-19, claim audit): QUICK-READ-4 shipped /api/quickread and said in its PR body that openapi.json carried the endpoint; it did not. The path is now in the open index, and quick-read.test.mjs reads /openapi.json and fails if the endpoint disappears from it. /* 3.23.0 QUICK-READ-4 (2026-10-19, the two gaps the first live reads exposed): (a) the cache key was (paper, question) and a corrected paper kept serving its old quick read for up to 45 days, so the key now carries the paper's revision (pipeline version, version, updated_at, body length); (b) the ranking was exact-vocabulary, so a question phrased in other words was answered "this paper does not answer this question" - true of the words, false of the meaning - and the question and the sections are now embedded (bge-small, one batched call, vectors cached per revision in living-paper.quick_read_vec) before that verdict, with the closest sections labelled "related" on the page. Also: GET /_audit/quick-read reports which of the three paths answered and fails its invariant on an unreadable payload; /reading, llms.txt, openapi and /health carry the feature. QUICK-READ-3 (3.22.2): the quick read's first live reads took 12-16 s. On the same 2k-token prompt kimi-k2.6 answered the JSON in 9.7 s and gpt-oss-120b in 5.2 s with reasoning_effort "low" (14.0 s with the default; Harmony rejects "none" outright), so the quick read now asks gpt-oss-120b at effort low, the token ceiling stays 900 and the 15 s deadline stays with the extractive read behind it. QUICK-READ-2 (3.22.1), measured on the live corpus): QUICK-READ-1 shipped 3.21.0 and the first live reads took 12-16 s, one of them crossing the 20 s deadline, because the model was asked for up to ten items whose evidence could run to three sentences each. The model now returns ONE sentence of evidence per item, at most 3 answers and 2 of the other two, at 900 output tokens, and the deadline is 15 s with the deterministic extractive read behind it: the same page in roughly half the generation time, with the same guarantee that every line quotes the paper. /* 3.22.0 FILING-2 (2026-10-18, owner directive "fix all automatically", pillar autonomy): the daily pass now files BOTH layers. A newly published paper gets its shelf and its tags in the same run, so the tag vocabulary cannot thin out as the corpus grows; the tag prompt is built from tag_registry, so adding or retiring a tag is one D1 row and no deploy. The same pass sweeps orphan paper_tag rows. The index renders the whole vocabulary (up to 64 chips) instead of the top 14. */ /* 3.21.0-quick-read-1 /* 3.21.0 QUICK-READ-1 (2026-10-19, owner directive, pillar reach): Google Scholar's Quick Read (2026-08-25) shows one paper as it answers ONE question: overview, then Answers (each point with its supporting detail behind Show details), Approach and Considerations. This is that idea over the living-paper corpus, plus the one thing a corpus of full texts can do that a search index cannot  -  every line of the answer quotes a sentence of the paper, and a statement whose evidence is not found in the text is dropped and counted rather than shown. /papers/<slug>/quickread is the page (question form; POST renders server-side, no JavaScript needed), /api/quickread/<slug>?q= is the JSON, and living-paper.quick_read caches each (paper, question) pair for 45 days. Three paths to an answer: the cache under 300ms, one model call over the passages the question touches, and a deterministic extractive read of the paper's own sentences when the model fails or returns nothing quotable  -  so the page always answers and names which path ran. A question the paper never uses the words of is answered before any model call: coverage none, no spend. */ /* 3.18.12 ULA-V21-FOOTERS-1 (2026-10-18): QNFO-ULA v2.1 is live; the QWAV footer, papers footer, archive lede/description and ulaLatest fallback license labels changed v2.0 -> v2.1. */ /* 3.19.0 PAPER-AUDIENCE-CATEGORIES-1 (2026-10-18, owner directive, pillar reach): the papers library filed every paper into five keyword buckets and "Other" held 161 of 606 public papers (26%), the largest shelf on the site. Nine audience shelves replace them (energy per answer, error correction, physics, numbers & p-adics, logic & formalism, AI & knowledge, autonomous systems, assessments, cross-cutting essays), each named for the reader who looks for it; every paper's shelf is curated data in living-paper D1 (table paper_category), read first by the index, the archive, the paper page and the related panel, with the keyword classifier kept only as the fallback for a paper published before the daily filing job has seen it. ?category= other, number-theory and computer-science are aliased, so old links still land. */ /* 3.18.10 IDENTITY-WELLKNOWN-1 (2026-10-18): /.well-known/security.txt (RFC 9116) on every gateway host, /.well-known/atproto-did on qnfo.org for the Bluesky domain handle, rel="me" to the Mastodon profile in every page head. */ /* 3.18.5 WORKERS-BP-LOGGING-qnfo-gateway-1 (2026-10-14, agent_issues 2533, child of 2342, pillar autonomy): the 6 server-side swallowed catches log (2 browser-script hits marked standards-ok or allowlisted) as a structured console.error (worker, where, error); control flow unchanged. */ /* 3.18.4 FLEET-HARDENING-2 (2026-10-13, agent_issues 2397, pillar autonomy): the daily cron ends with a qnfo-audit fleet_heartbeat upsert through a new AUDIT binding (ok=0 when the IndexNow step threw, which was swallowed before and is now logged). */ /* 3.18.3 HUB-CACHE-VERSION-1 (2026-10-13, pillar reach, failure mode zaraz-autoinject-worker-html): the qnfo.org hub copy in each colo's cache now carries the VERSION that built it, and a copy built by another version is rebuilt while the request waits up to 2.5 s instead of being served stale; the runner probe of 07:39 UTC read a pre-3.16.1 copy without /cdn-cgi/zaraz/i.js while every fresh render carried it. */ /* 3.18.2 PAGE-POLICY-1 (2026-10-13, pillar reach, agent_issues 2343 WEB-PERF-EDGE-1): every HTML response carries Referrer-Policy strict-origin-when-cross-origin (no-referrer when the query carries a token) and Permissions-Policy camera=(), microphone=(), geolocation=() from the worker (qnfo.org had neither; the subdomains had them only from a zone rule), and an HTML response without Cache-Control gets public, max-age=300, s-maxage=3600, stale-while-revalidate=86400 when it is a public GET 200, no-store otherwise; handlers that set their own are unchanged, JSON untouched. 3.18.1 RENDER-DEFECTS-2300 (2026-10-13, pillar reach, agent_issues 2300 2158 2357): PANDOC-FENCE-GLUE-1 reads a code fence glued to prose or to its last code line as a fence (ultrametric-intelligence printed its Python as prose and typeset its identifiers); MATH-RESIDUE-5 typesets a formula glued to a name by a product sign; RAIL-MATH-1 gives /api/paper-context title_tex and excerpt_tex (formulas kept as TeX, plain-text math typeset, currency escaped) and the Related and Versions panels paint them, since every residue the browser sample counted on chapter-1 and log20240505010101strangeloopbook on 2026-10-12 was panel text; a formula ending in an escaped brace is lifted as math; MathJax knows the Sha macro. 3.18.0 ACTIVITYPUB-KEY-1 (2026-10-12, pillar reach, #2249 #2413): the actor publishes publicKeyPem when AP_PUBLIC_KEY is set (cf-ops gen-activitypub-key); merged with main 3.17.1 (REACH-RENDER-1). */ /* 3.20.0 PAPER-TAGS-1 (2026-10-18, owner directive, pillar reach): a shelf is exclusive and answers "where does this live"; it cannot show that a QEC paper is also a Bruhat-Tits paper, or that a number-theory result helps choose a hardware platform. Tags are the second, multi-label layer over the nine shelves: method (what the paper works with), topic (what it is about), use (what a reader could do with it). 1,400 curated assignments over 606 papers, 41 controlled tags, in living-paper D1 (paper_tag + tag_registry), so a wrong tag is a DELETE. The index gains a tag row that composes with the shelf filter and search (?tag= + ?category=), paper cards show up to two tags, the paper page shows its full tag set, and /papers/tags is the catalogue grouped by kind with counts and definitions. Tag and shelf reads are per-isolate cached and degrade to shelves alone when the tables are absent. */ /* 3.18.12 ULA-V21-FOOTERS-1 (2026-10-18): QNFO-ULA v2.1 is live; the QWAV footer, papers footer, archive lede/description and ulaLatest fallback license labels changed v2.0 -> v2.1. */ /* 3.19.0 PAPER-AUDIENCE-CATEGORIES-1 (2026-10-18, owner directive, pillar reach): the papers library filed every paper into five keyword buckets and "Other" held 161 of 606 public papers (26%), the largest shelf on the site. Nine audience shelves replace them (energy per answer, error correction, physics, numbers & p-adics, logic & formalism, AI & knowledge, autonomous systems, assessments, cross-cutting essays), each named for the reader who looks for it; every paper's shelf is curated data in living-paper D1 (table paper_category), read first by the index, the archive, the paper page and the related panel, with the keyword classifier kept only as the fallback for a paper published before the daily filing job has seen it. ?category= other, number-theory and computer-science are aliased, so old links still land. */ /* 3.18.10 IDENTITY-WELLKNOWN-1 (2026-10-18): /.well-known/security.txt (RFC 9116) on every gateway host, /.well-known/atproto-did on qnfo.org for the Bluesky domain handle, rel="me" to the Mastodon profile in every page head. */ /* 3.18.5 WORKERS-BP-LOGGING-qnfo-gateway-1 (2026-10-14, agent_issues 2533, child of 2342, pillar autonomy): the 6 server-side swallowed catches log (2 browser-script hits marked standards-ok or allowlisted) as a structured console.error (worker, where, error); control flow unchanged. */ /* 3.18.4 FLEET-HARDENING-2 (2026-10-13, agent_issues 2397, pillar autonomy): the daily cron ends with a qnfo-audit fleet_heartbeat upsert through a new AUDIT binding (ok=0 when the IndexNow step threw, which was swallowed before and is now logged). */ /* 3.18.3 HUB-CACHE-VERSION-1 (2026-10-13, pillar reach, failure mode zaraz-autoinject-worker-html): the qnfo.org hub copy in each colo's cache now carries the VERSION that built it, and a copy built by another version is rebuilt while the request waits up to 2.5 s instead of being served stale; the runner probe of 07:39 UTC read a pre-3.16.1 copy without /cdn-cgi/zaraz/i.js while every fresh render carried it. */ /* 3.18.2 PAGE-POLICY-1 (2026-10-13, pillar reach, agent_issues 2343 WEB-PERF-EDGE-1): every HTML response carries Referrer-Policy strict-origin-when-cross-origin (no-referrer when the query carries a token) and Permissions-Policy camera=(), microphone=(), geolocation=() from the worker (qnfo.org had neither; the subdomains had them only from a zone rule), and an HTML response without Cache-Control gets public, max-age=300, s-maxage=3600, stale-while-revalidate=86400 when it is a public GET 200, no-store otherwise; handlers that set their own are unchanged, JSON untouched. 3.18.1 RENDER-DEFECTS-2300 (2026-10-13, pillar reach, agent_issues 2300 2158 2357): PANDOC-FENCE-GLUE-1 reads a code fence glued to prose or to its last code line as a fence (ultrametric-intelligence printed its Python as prose and typeset its identifiers); MATH-RESIDUE-5 typesets a formula glued to a name by a product sign; RAIL-MATH-1 gives /api/paper-context title_tex and excerpt_tex (formulas kept as TeX, plain-text math typeset, currency escaped) and the Related and Versions panels paint them, since every residue the browser sample counted on chapter-1 and log20240505010101strangeloopbook on 2026-10-12 was panel text; a formula ending in an escaped brace is lifted as math; MathJax knows the Sha macro. 3.18.0 ACTIVITYPUB-KEY-1 (2026-10-12, pillar reach, #2249 #2413): the actor publishes publicKeyPem when AP_PUBLIC_KEY is set (cf-ops gen-activitypub-key); merged with main 3.17.1 (REACH-RENDER-1). */
+var VERSION="3.30.0-seo-index-1"; /* 3.30.0 SEO-INDEX-1 (2026-10-25, owner report: Google Search Console is not crawling QNFO papers; papers do not show in search results or AI prompts). Discovery is now measured at our own edge and pushed on EVERY engine: IndexNow fans out to all five endpoints instead of stopping at yandex (Bing, the index behind ChatGPT search and Copilot, had never received a URL); crawler requests are logged to living-paper.seo_crawl_log and summarised by /api/seo/crawl; /api/seo/audit is the metric source of truth; the sitemap advertises updated_at (a revised paper used to look unchanged); /papers/<slug>/ 308s to the canonical slug; /papers/<slug>.md serves the paper as Markdown for agents; robots.txt names the AI crawlers; llms.txt lists the whole corpus under one heading. Deliberate non-change: lpDoi() still drops every identifier of the retired deposit prefix, because all 575 recorded ones are 410 tombstones (the depositing account was blocked 2026-10-07, reason out-of-scope) and publishing a dead identifier is worse than publishing none. */  /* 3.29.7 PLAIN-FILL-MEMORY-1 (2026-10-25, remediation sweep of the dashboard's 59 metric breaches; pillar reliability): the hourly cron had not completed since 2026-10-20 06:03 (fleet_heartbeat stuck at 3.29.0) and was killed with exceededMemory 21-24 times a day, starting the afternoon PLAIN-FILL-CADENCE-1 put plainFill on that cron. plainFill read p.body_md for every published paper (LIMIT 2000, 693 papers at >= 20,000 chars) into one isolate; it now takes 120 candidates ordered by need (no plain_summary row first) and still builds PLAIN_FILL_MAX=12 a run, so IndexNow, rate-limit pruning, quick-read pruning, render-health, the browser math sample and paper filing after it run again. */ /* 3.29.0 READER-REPORT-1 (2026-10-19, pillar research): a reader can report a typo, awkward wording, a factual error or a citation problem at the passage it is in (select text, then Report; or the line at the end of each paper). POST /api/paper-report stores it anonymously in qnfo-audit.reader_reports behind a hidden field, a minimum time on the page and per-address and daily caps; one model checks it against the paper, and a confirmed report becomes an internal_errata row the revision loop folds into the next version. The hourly tick retries pending checks. */ /* 3.28.1 ABOUT-LABEL-TRUNC-1 (2026-10-19, pillar reach, agent_issues 100158): the "How to check the work" links on /about carry each paper's full title; the last one was the slug cut at its length limit ("... via distinct lo"). */ /* 3.28.0 CLAIM-INTEGRITY-1 (2026-10-19, pillar research): /papers/<slug>/ serves a paper whose status is retracted (qnfo-research-exec 0.22.0 retracts a paper that described experiments or reviews as done that never took place), so its link shows the retraction notice instead of a 404; listings, feeds, the sitemap and the PDF route still read the published statuses only. */ /* 3.27.0 CRON-GRID-1 (owner directive 2026-10-19, pillar autonomy): the trigger is hourly; the daily 06:00 run (IndexNow, prunes, plain fill, render health, shelving) runs on the 06:00 fire and is retried hourly, at most 3 times, while its last good run is over 24.5 h old. Every fire is logged to cron_fire_log for CRON-WATCH-1. */ /* 3.26.5 GW-PAPER-AUTHORS-SCALAR-1 (2026-10-19, agent_issues 100061, pillar reach): paperAuthors fell back to splitting the raw text when the authors column held JSON that is neither a list nor a string, so "null", "123", "true" and an object became author names in the byline, the JSON-LD, the feeds and /api/papers. gwAuthorList now reads such text as no author (an object with a string name field is its one author) and splits only text that is not JSON; "Surname, Given" stays one author only when the given names are more than one word or the surname is Quni-Gudzinas, so "Alice, Bob" is two authors. Live rows hold none of these shapes today (744 arrays, 250 plain names, 1 comma list), so the change guards the next import. paper-fields.test.mjs carries the cases. paper-fields.test.mjs also asserts the gwSplitKeywords line that 3.26.4 (#2679, CF-OBS-ISSUE-1) added, which the squash of PR 2680 deleted with a VERSION rollback to 3.26.3 and 4f20a3e restored on main: a JSON string holding keywords reads as that one keyword. */ /* 3.26.1 (2026-10-19, RESOLVE-ALL-OPEN-1): carries the 3.25.x fixes of PR 2603 (GW-JSON-QUIET, PAPER-FIELDS-1, paper-context stack, FILL_MODEL floor) on top of 3.26.0 PLAIN-FILL-1; PLAIN-NEGATIVE-CACHE-1 is dropped because PLAIN-FILL-1 moved the build off the request path. */ /* 3.26.0 PLAIN-FILL-1 (2026-10-19): the digest (GET /papers/<slug>/quickread and /api/quickread/<slug> without q) read the plain-language summary through plainSummary, which built it with up to two model calls on a cache miss, so a crawler following a link spent money (QUICK-READ-DIGEST-1: nothing to type, no spend) and quick-read.test.mjs failed on main. Every GET now reads plain_summary only (plainGet); the daily cron builds missing or stale summaries, PLAIN_FILL_MAX per run, newest papers first (plainFill). */ /* 3.24.3 QUICK-READ-DIGEST-4 (2026-10-19, the third pass over live reads): (a) /api/quickread/<slug> answered bad_slug for the library's dotted slugs (x3.3-bosonic-codes-native-encoding) because the guard allowed only letters, digits and hyphens; it now allows the dot and still refuses "..". (b) the reading map ended with a "References" row; a bibliography is not a place to read the argument, so it is left out. */ /* 3.24.2 QUICK-READ-DIGEST-3 (2026-10-19, the rest of the first live map): the map listed the right sections but with "0 words" against every one whose prose lives in its h3 subsections (joules-per-solution-metric: 8 of 11 rows read 0), which is a row a reader cannot use. A section's length is now its own text plus every deeper section that follows it up to the next heading at its depth or above, and a heading with nothing under it at all is left out of the map. */ /* 3.24.1 QUICK-READ-DIGEST-2 (2026-10-19, first live reads of 3.24.0): the reading map listed ONE heading on joules-per-solution-metric because that paper carries its title as its own "#" heading, so every real section is an h3 after the renderer shifts the outline down a level and an h2-only map saw the title and nothing else. qdMap now skips the heading whose name is the paper's title and takes the first depth that yields a map (h2 when there are three or more, else h3, else whatever exists); quick-read.test.mjs carries that corpus shape (chaptered-work). */ /* 3.24.0 QUICK-READ-DIGEST-1 (2026-10-19, owner directive: "there is no difference between Quick Read and Ask this paper"): it was true  -  QUICK-READ-1..6 read the paper for a QUESTION, which is what the paper page's Ask rail already does, so the reader met two doors to one room. /papers/<slug>/quickread and /api/quickread/<slug> with no question now return a DIGEST: the abstract verbatim, the claim, the figures the paper reports, how it is done, what would falsify it, where the claim stops, and a map of where to read (each section with its length), every line a sentence of the paper with the section id the paper page publishes, no model call, no cache, no rate limit. The question view is unchanged at ?q= (old links, the API, the audit). The index row's Quick read no longer carries the query, and the paper page's Quick read button says what it now does. */ /* 3.23.2 QUICK-READ-6 (2026-10-19, found in the closeout sweep): a live payload said coverage "related" with passages 0 and chars 0 - the semantic pick had filtered every candidate out (the closest sections were shorter than the 80-character floor) and the page still claimed it had read them. qrPick now takes the mode (a semantic ranking gates on cosine, not on lexical hits), and the semantic branch falls back to the honest "none" verdict when nothing usable was picked rather than labelling an empty page "related". /* 3.23.1 QUICK-READ-5 (2026-10-19, claim audit): QUICK-READ-4 shipped /api/quickread and said in its PR body that openapi.json carried the endpoint; it did not. The path is now in the open index, and quick-read.test.mjs reads /openapi.json and fails if the endpoint disappears from it. /* 3.23.0 QUICK-READ-4 (2026-10-19, the two gaps the first live reads exposed): (a) the cache key was (paper, question) and a corrected paper kept serving its old quick read for up to 45 days, so the key now carries the paper's revision (pipeline version, version, updated_at, body length); (b) the ranking was exact-vocabulary, so a question phrased in other words was answered "this paper does not answer this question" - true of the words, false of the meaning - and the question and the sections are now embedded (bge-small, one batched call, vectors cached per revision in living-paper.quick_read_vec) before that verdict, with the closest sections labelled "related" on the page. Also: GET /_audit/quick-read reports which of the three paths answered and fails its invariant on an unreadable payload; /reading, llms.txt, openapi and /health carry the feature. QUICK-READ-3 (3.22.2): the quick read's first live reads took 12-16 s. On the same 2k-token prompt kimi-k2.6 answered the JSON in 9.7 s and gpt-oss-120b in 5.2 s with reasoning_effort "low" (14.0 s with the default; Harmony rejects "none" outright), so the quick read now asks gpt-oss-120b at effort low, the token ceiling stays 900 and the 15 s deadline stays with the extractive read behind it. QUICK-READ-2 (3.22.1), measured on the live corpus): QUICK-READ-1 shipped 3.21.0 and the first live reads took 12-16 s, one of them crossing the 20 s deadline, because the model was asked for up to ten items whose evidence could run to three sentences each. The model now returns ONE sentence of evidence per item, at most 3 answers and 2 of the other two, at 900 output tokens, and the deadline is 15 s with the deterministic extractive read behind it: the same page in roughly half the generation time, with the same guarantee that every line quotes the paper. /* 3.22.0 FILING-2 (2026-10-18, owner directive "fix all automatically", pillar autonomy): the daily pass now files BOTH layers. A newly published paper gets its shelf and its tags in the same run, so the tag vocabulary cannot thin out as the corpus grows; the tag prompt is built from tag_registry, so adding or retiring a tag is one D1 row and no deploy. The same pass sweeps orphan paper_tag rows. The index renders the whole vocabulary (up to 64 chips) instead of the top 14. */ /* 3.21.0-quick-read-1 /* 3.21.0 QUICK-READ-1 (2026-10-19, owner directive, pillar reach): Google Scholar's Quick Read (2026-08-25) shows one paper as it answers ONE question: overview, then Answers (each point with its supporting detail behind Show details), Approach and Considerations. This is that idea over the living-paper corpus, plus the one thing a corpus of full texts can do that a search index cannot  -  every line of the answer quotes a sentence of the paper, and a statement whose evidence is not found in the text is dropped and counted rather than shown. /papers/<slug>/quickread is the page (question form; POST renders server-side, no JavaScript needed), /api/quickread/<slug>?q= is the JSON, and living-paper.quick_read caches each (paper, question) pair for 45 days. Three paths to an answer: the cache under 300ms, one model call over the passages the question touches, and a deterministic extractive read of the paper's own sentences when the model fails or returns nothing quotable  -  so the page always answers and names which path ran. A question the paper never uses the words of is answered before any model call: coverage none, no spend. */ /* 3.18.12 ULA-V21-FOOTERS-1 (2026-10-18): QNFO-ULA v2.1 is live; the QWAV footer, papers footer, archive lede/description and ulaLatest fallback license labels changed v2.0 -> v2.1. */ /* 3.19.0 PAPER-AUDIENCE-CATEGORIES-1 (2026-10-18, owner directive, pillar reach): the papers library filed every paper into five keyword buckets and "Other" held 161 of 606 public papers (26%), the largest shelf on the site. Nine audience shelves replace them (energy per answer, error correction, physics, numbers & p-adics, logic & formalism, AI & knowledge, autonomous systems, assessments, cross-cutting essays), each named for the reader who looks for it; every paper's shelf is curated data in living-paper D1 (table paper_category), read first by the index, the archive, the paper page and the related panel, with the keyword classifier kept only as the fallback for a paper published before the daily filing job has seen it. ?category= other, number-theory and computer-science are aliased, so old links still land. */ /* 3.18.10 IDENTITY-WELLKNOWN-1 (2026-10-18): /.well-known/security.txt (RFC 9116) on every gateway host, /.well-known/atproto-did on qnfo.org for the Bluesky domain handle, rel="me" to the Mastodon profile in every page head. */ /* 3.18.5 WORKERS-BP-LOGGING-qnfo-gateway-1 (2026-10-14, agent_issues 2533, child of 2342, pillar autonomy): the 6 server-side swallowed catches log (2 browser-script hits marked standards-ok or allowlisted) as a structured console.error (worker, where, error); control flow unchanged. */ /* 3.18.4 FLEET-HARDENING-2 (2026-10-13, agent_issues 2397, pillar autonomy): the daily cron ends with a qnfo-audit fleet_heartbeat upsert through a new AUDIT binding (ok=0 when the IndexNow step threw, which was swallowed before and is now logged). */ /* 3.18.3 HUB-CACHE-VERSION-1 (2026-10-13, pillar reach, failure mode zaraz-autoinject-worker-html): the qnfo.org hub copy in each colo's cache now carries the VERSION that built it, and a copy built by another version is rebuilt while the request waits up to 2.5 s instead of being served stale; the runner probe of 07:39 UTC read a pre-3.16.1 copy without /cdn-cgi/zaraz/i.js while every fresh render carried it. */ /* 3.18.2 PAGE-POLICY-1 (2026-10-13, pillar reach, agent_issues 2343 WEB-PERF-EDGE-1): every HTML response carries Referrer-Policy strict-origin-when-cross-origin (no-referrer when the query carries a token) and Permissions-Policy camera=(), microphone=(), geolocation=() from the worker (qnfo.org had neither; the subdomains had them only from a zone rule), and an HTML response without Cache-Control gets public, max-age=300, s-maxage=3600, stale-while-revalidate=86400 when it is a public GET 200, no-store otherwise; handlers that set their own are unchanged, JSON untouched. 3.18.1 RENDER-DEFECTS-2300 (2026-10-13, pillar reach, agent_issues 2300 2158 2357): PANDOC-FENCE-GLUE-1 reads a code fence glued to prose or to its last code line as a fence (ultrametric-intelligence printed its Python as prose and typeset its identifiers); MATH-RESIDUE-5 typesets a formula glued to a name by a product sign; RAIL-MATH-1 gives /api/paper-context title_tex and excerpt_tex (formulas kept as TeX, plain-text math typeset, currency escaped) and the Related and Versions panels paint them, since every residue the browser sample counted on chapter-1 and log20240505010101strangeloopbook on 2026-10-12 was panel text; a formula ending in an escaped brace is lifted as math; MathJax knows the Sha macro. 3.18.0 ACTIVITYPUB-KEY-1 (2026-10-12, pillar reach, #2249 #2413): the actor publishes publicKeyPem when AP_PUBLIC_KEY is set (cf-ops gen-activitypub-key); merged with main 3.17.1 (REACH-RENDER-1). */ /* 3.20.0 PAPER-TAGS-1 (2026-10-18, owner directive, pillar reach): a shelf is exclusive and answers "where does this live"; it cannot show that a QEC paper is also a Bruhat-Tits paper, or that a number-theory result helps choose a hardware platform. Tags are the second, multi-label layer over the nine shelves: method (what the paper works with), topic (what it is about), use (what a reader could do with it). 1,400 curated assignments over 606 papers, 41 controlled tags, in living-paper D1 (paper_tag + tag_registry), so a wrong tag is a DELETE. The index gains a tag row that composes with the shelf filter and search (?tag= + ?category=), paper cards show up to two tags, the paper page shows its full tag set, and /papers/tags is the catalogue grouped by kind with counts and definitions. Tag and shelf reads are per-isolate cached and degrade to shelves alone when the tables are absent. */ /* 3.18.12 ULA-V21-FOOTERS-1 (2026-10-18): QNFO-ULA v2.1 is live; the QWAV footer, papers footer, archive lede/description and ulaLatest fallback license labels changed v2.0 -> v2.1. */ /* 3.19.0 PAPER-AUDIENCE-CATEGORIES-1 (2026-10-18, owner directive, pillar reach): the papers library filed every paper into five keyword buckets and "Other" held 161 of 606 public papers (26%), the largest shelf on the site. Nine audience shelves replace them (energy per answer, error correction, physics, numbers & p-adics, logic & formalism, AI & knowledge, autonomous systems, assessments, cross-cutting essays), each named for the reader who looks for it; every paper's shelf is curated data in living-paper D1 (table paper_category), read first by the index, the archive, the paper page and the related panel, with the keyword classifier kept only as the fallback for a paper published before the daily filing job has seen it. ?category= other, number-theory and computer-science are aliased, so old links still land. */ /* 3.18.10 IDENTITY-WELLKNOWN-1 (2026-10-18): /.well-known/security.txt (RFC 9116) on every gateway host, /.well-known/atproto-did on qnfo.org for the Bluesky domain handle, rel="me" to the Mastodon profile in every page head. */ /* 3.18.5 WORKERS-BP-LOGGING-qnfo-gateway-1 (2026-10-14, agent_issues 2533, child of 2342, pillar autonomy): the 6 server-side swallowed catches log (2 browser-script hits marked standards-ok or allowlisted) as a structured console.error (worker, where, error); control flow unchanged. */ /* 3.18.4 FLEET-HARDENING-2 (2026-10-13, agent_issues 2397, pillar autonomy): the daily cron ends with a qnfo-audit fleet_heartbeat upsert through a new AUDIT binding (ok=0 when the IndexNow step threw, which was swallowed before and is now logged). */ /* 3.18.3 HUB-CACHE-VERSION-1 (2026-10-13, pillar reach, failure mode zaraz-autoinject-worker-html): the qnfo.org hub copy in each colo's cache now carries the VERSION that built it, and a copy built by another version is rebuilt while the request waits up to 2.5 s instead of being served stale; the runner probe of 07:39 UTC read a pre-3.16.1 copy without /cdn-cgi/zaraz/i.js while every fresh render carried it. */ /* 3.18.2 PAGE-POLICY-1 (2026-10-13, pillar reach, agent_issues 2343 WEB-PERF-EDGE-1): every HTML response carries Referrer-Policy strict-origin-when-cross-origin (no-referrer when the query carries a token) and Permissions-Policy camera=(), microphone=(), geolocation=() from the worker (qnfo.org had neither; the subdomains had them only from a zone rule), and an HTML response without Cache-Control gets public, max-age=300, s-maxage=3600, stale-while-revalidate=86400 when it is a public GET 200, no-store otherwise; handlers that set their own are unchanged, JSON untouched. 3.18.1 RENDER-DEFECTS-2300 (2026-10-13, pillar reach, agent_issues 2300 2158 2357): PANDOC-FENCE-GLUE-1 reads a code fence glued to prose or to its last code line as a fence (ultrametric-intelligence printed its Python as prose and typeset its identifiers); MATH-RESIDUE-5 typesets a formula glued to a name by a product sign; RAIL-MATH-1 gives /api/paper-context title_tex and excerpt_tex (formulas kept as TeX, plain-text math typeset, currency escaped) and the Related and Versions panels paint them, since every residue the browser sample counted on chapter-1 and log20240505010101strangeloopbook on 2026-10-12 was panel text; a formula ending in an escaped brace is lifted as math; MathJax knows the Sha macro. 3.18.0 ACTIVITYPUB-KEY-1 (2026-10-12, pillar reach, #2249 #2413): the actor publishes publicKeyPem when AP_PUBLIC_KEY is set (cf-ops gen-activitypub-key); merged with main 3.17.1 (REACH-RENDER-1). */
 // UTM-CLICK-LEDGER-1 (3.10.0, 2026-10-06, transformation lever T7.9, pillar reach): a GET for an HTML page that carries
 // utm_source is counted into qnfo-graph utm_clicks (day, host, path, source, medium, campaign, bot/human, country; no cookie,
 // no IP), so a post or digest joins to the visits it caused; qnfo-fleet-dashboard reads it into reach_signals source utm.
@@ -2261,11 +2261,19 @@ function buildPaperJsonLd(paper) {
     author: authorObjs,
     abstract: abs,
     datePublished: (paper.created_at || "").slice(0, 10) || void 0,
+    // SEO-INDEX-1: a revised paper now states when it changed, and the record says what it is part of. dateModified was
+    // absent, so a corpus that revises constantly looked frozen; isPartOf ties 693 pages to one WebSite entity.
+    dateModified: (String(paper.updated_at || paper.created_at || "").slice(0, 10)) || void 0,
     inLanguage: "en",
     license: paperLicenseUrl(paper.license),
     publisher: { "@type": "Organization", name: "QNFO", url: "https://qnfo.org" },
+    isPartOf: { "@type": "WebSite", name: "QNFO Papers", url: "https://papers.qnfo.org/" },
     isAccessibleForFree: true
   };
+  // Keywords and the paper's own version are only emitted when the row carries them, so the JSON-LD never invents a term.
+  const _kw = String(paper.keywords || "").trim();
+  if (_kw) jsonLd.keywords = _kw.replace(/[\[\]"]/g, "").split(",").map(function (x) { return x.trim(); }).filter(Boolean).slice(0, 20).join(", ");
+  if (paper.version) jsonLd.version = String(paper.version).replace(/^v/i, "");
   const jsonStr = JSON.stringify(jsonLd).replace(/</g, "\\u003c").replace(/>/g, "\\u003e").replace(/&/g, "\\u0026");
   return '<script type="application/ld+json">' + jsonStr + "<\/script>";
 }
@@ -2890,20 +2898,29 @@ async function indexNowSubmit(urls, host) {
   for (let i = 0; i < urls.length; i += CHUNK) {
     const chunk = urls.slice(i, i + CHUNK);
     const body = JSON.stringify({ host: host, key: INDEXNOW_KEY, keyLocation: "https://" + host + "/" + INDEXNOW_KEY + ".txt", urlList: chunk });
+    // SEO-INDEX-1 (2026-10-25): this loop stopped at the FIRST endpoint that accepted, and yandex.com is listed first
+    // because it is the only endpoint that answers the Cloudflare egress without a 429. Every hourly run therefore
+    // recorded yandex only, and Bing - whose index backs ChatGPT search and Copilot - never received a single URL.
+    // Every participating endpoint is now submitted on every chunk; status keeps the first acceptance so existing
+    // readers of indexnow_log are unchanged, and eps records each engine own answer.
+    const eps = [];
     let hit = null, last = null;
-    for (let e = 0; e < _EPS.length && !hit; e++) {
-      for (let attempt = 0; attempt < 2 && !hit; attempt++) {
+    for (let e = 0; e < _EPS.length; e++) {
+      let got = null;
+      for (let attempt = 0; attempt < 2 && !got; attempt++) {
         try {
           const r = await fetch(_EPS[e], { method: "POST", headers: { "Content-Type": "application/json; charset=utf-8" }, body });
           last = _EPS[e] + ":" + r.status;
-          if (r.status < 400) hit = { ep: _EPS[e], status: r.status };
+          if (r.status < 400) got = { ep: _EPS[e], status: r.status };
         } catch (err) {
           last = _EPS[e] + ":err";
         }
-        if (!hit) await new Promise((res) => setTimeout(res, 1200 * (attempt + 1)));
+        if (!got && attempt === 0) await new Promise((res) => setTimeout(res, 900));
       }
+      eps.push(got ? { ep: _EPS[e], status: got.status } : { ep: _EPS[e], status: last ? String(last).split(":")[1] : "err" });
+      if (!hit && got) hit = got;
     }
-    out.push(hit ? { chunk: chunk.length, ep: hit.ep, status: hit.status } : { chunk: chunk.length, status: 429, note: "no endpoint accepted", last });
+    out.push(hit ? { chunk: chunk.length, ep: hit.ep, status: hit.status, eps: eps } : { chunk: chunk.length, status: 429, note: "no endpoint accepted", last: last, eps: eps });
     if (i + CHUNK < urls.length) await new Promise((res) => setTimeout(res, 1000));
   }
   return out;
@@ -3025,9 +3042,18 @@ async function handleRenderHealth(env) {
     return json({ error: "render health unavailable" }, 503);
   }
 }
+// SEO-INDEX-1: a W3C date from the row's real last change; an unparseable value yields "" (no lastmod) rather than a lie.
+function smLastmod(p) {
+  const raw = String((p && (p.updated_at || p.created_at)) || "").trim();
+  if (!raw) return "";
+  const d = new Date(/T/.test(raw) ? raw : raw.replace(" ", "T") + "Z");
+  return isNaN(d) ? "" : d.toISOString().slice(0, 10);
+}
 async function handleSitemap(env, sitemapHost) {
   try {
-    const res = await env.LIVING_PAPER.prepare("SELECT slug, created_at FROM papers WHERE slug IS NOT NULL AND status IN ('published','distributed','external_preprint') ORDER BY created_at DESC").all();
+    // SEO-INDEX-1: lastmod is the last REAL change, not the publication date. A corrected paper advertised its original
+    // created_at, so a crawler that trusts lastmod saw nothing new and did not return. updated_at is the honest signal.
+    const res = await env.LIVING_PAPER.prepare("SELECT slug, created_at, updated_at, version FROM papers WHERE slug IS NOT NULL AND status IN ('published','distributed','external_preprint') ORDER BY COALESCE(updated_at, created_at) DESC").all();
     const isSite = sitemapHost === "qnfo.org" || sitemapHost === "www.qnfo.org";
     const base = isSite ? "https://qnfo.org" : "https://papers.qnfo.org";
     const ALL = isSite
@@ -3044,17 +3070,20 @@ async function handleSitemap(env, sitemapHost) {
         { loc: "https://ipatent.qnfo.org/guide", priority: "0.7" }
       ].concat(res.results.map((p) => ({
         loc: "https://papers.qnfo.org/papers/" + encodeURIComponent(p.slug),
-        lastmod: p.created_at ? new Date(p.created_at).toISOString().slice(0, 10) : "",
+        lastmod: smLastmod(p),
         priority: "0.8"
       })))
       : [
         { loc: base + "/", priority: "1.0" },
         { loc: base + "/papers", priority: "0.9" },
-        { loc: base + "/reading", priority: "0.9" }
+        { loc: base + "/reading", priority: "0.9" },
+        { loc: base + "/papers/tags", priority: "0.7" },
+        { loc: base + "/about", priority: "0.6" },
+        { loc: base + "/rss.xml", priority: "0.5" }
       ];
     const all = ALL.concat(isSite ? [] : res.results.map((p) => ({
       loc: base + "/papers/" + encodeURIComponent(p.slug),
-      lastmod: p.created_at ? new Date(p.created_at).toISOString().slice(0, 10) : "",
+      lastmod: smLastmod(p),
       priority: "0.8"
     })));
     const body = '<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n' + all.map((u) => "  <url>\n    <loc>" + xmlEscape(u.loc) + "</loc>" + (u.lastmod ? "\n    <lastmod>" + u.lastmod + "</lastmod>" : "") + "\n    <priority>" + u.priority + "</priority>\n  </url>").join("\n") + "\n</urlset>";
@@ -3079,7 +3108,25 @@ __name222222222(handleSitemap, "handleSitemap");
 __name2222222222(handleSitemap, "handleSitemap");
 function handlePapersRobots() {
   return new Response(
-    "User-agent: *\nAllow: /\nDisallow: /*quickread\nSitemap: https://papers.qnfo.org/sitemap.xml\n",
+    // SEO-INDEX-1: name the AI crawlers instead of relying on the wildcard. Google-Extended governs Gemini/Vertex
+    // grounding, and the retrieval bots below are how a paper becomes a citation inside an assistant answer; an
+    // unlisted bot is a bot a future managed-robots rule can silently drop. The content is the corpus, so all are allowed.
+    "User-agent: *\nAllow: /\nDisallow: /*quickread\n\n" +
+    "User-agent: Googlebot\nAllow: /\n\n" +
+    "User-agent: Google-Extended\nAllow: /\n\n" +
+    "User-agent: Bingbot\nAllow: /\n\n" +
+    "User-agent: GPTBot\nAllow: /\n\n" +
+    "User-agent: OAI-SearchBot\nAllow: /\n\n" +
+    "User-agent: ChatGPT-User\nAllow: /\n\n" +
+    "User-agent: ClaudeBot\nAllow: /\n\n" +
+    "User-agent: Claude-SearchBot\nAllow: /\n\n" +
+    "User-agent: PerplexityBot\nAllow: /\n\n" +
+    "User-agent: Applebot\nAllow: /\n\n" +
+    "User-agent: DuckDuckBot\nAllow: /\n\n" +
+    "User-agent: YandexBot\nAllow: /\n\n" +
+    "User-agent: CCBot\nAllow: /\n\n" +
+    "User-agent: Amazonbot\nAllow: /\n\n" +
+    "Sitemap: https://papers.qnfo.org/sitemap.xml\n",
     { headers: { "Content-Type": "text/plain; charset=utf-8", "Cache-Control": "public, max-age=86400" } }
   );
 }
@@ -3096,11 +3143,17 @@ __name222222222(handlePapersRobots, "handlePapersRobots");
 __name2222222222(handlePapersRobots, "handlePapersRobots");
 async function handleLlmsTxt(env) {
   try {
-    const res = await env.LIVING_PAPER.prepare("SELECT slug,title,doi,abstract,created_at FROM papers WHERE slug IS NOT NULL AND status IN ('published','distributed','external_preprint') ORDER BY created_at DESC LIMIT 200").all();
+    const res = await env.LIVING_PAPER.prepare("SELECT slug,title,doi,abstract,created_at,updated_at,version FROM papers WHERE slug IS NOT NULL AND status IN ('published','distributed','external_preprint') ORDER BY COALESCE(updated_at,created_at) DESC LIMIT 800").all();
     const base = "https://papers.qnfo.org";
-    let body = "# QNFO Papers\n\n> Open-science research across p-adic mathematics, ultrametric geometry, topological quantum computation.\n\n## Site\n\n- [About QNFO](https://qnfo.org/about)\n- [Work with me: assessments, reviews, talks, collaboration and roles](https://qnfo.org/work-with-me)\n\n## Papers\n\n";
-    body += "\n## Open data\n\n- [OAI-PMH 2.0](" + base + "/oai?verb=Identify)\n- [JSON API](" + base + "/api/papers)\n- [OpenAPI](" + base + "/openapi.json)\n- [Quick read](https://papers.qnfo.org/papers/<slug>/quickread?q=<question>) and [Quick read API](" + base + "/api/quickread/<slug>?q=<question>) - how one paper answers one question, quoted from its own text\n- [JSON Feed](" + base + "/feed.json)\n\n## Papers\n\n";
-    body += res.results.map((p) => "- [" + displayTitle(p.title) + "](" + base + "/papers/" + encodeURIComponent(p.slug) + ")" + (lpDoi(p.doi) ? " (DOI: " + lpDoi(p.doi) + ")" : "")).join("\n");
+    // SEO-INDEX-1: the index carried an empty Papers heading before the open-data block and a second Papers heading
+    // after it, and stopped at 200 of 693 papers - an assistant reading llms.txt saw a truncated corpus under a
+    // duplicated heading. One heading, whole corpus, a Markdown mirror per paper.
+    let body = "# QNFO Papers\n\n> Open-science research across p-adic mathematics, ultrametric geometry, topological quantum computation. Every paper has a full-text Markdown mirror at /papers/<slug>.md, a PDF at /papers/<slug>.pdf, and a record at /api/papers/<slug>.\n\n## Site\n\n- [About QNFO](https://qnfo.org/about)\n- [Work with me: assessments, reviews, talks, collaboration and roles](https://qnfo.org/work-with-me)\n\n## Open data\n\n- [OAI-PMH 2.0](" + base + "/oai?verb=Identify)\n- [JSON API](" + base + "/api/papers)\n- [OpenAPI](" + base + "/openapi.json)\n- [Quick read](https://papers.qnfo.org/papers/<slug>/quickread?q=<question>) and [Quick read API](" + base + "/api/quickread/<slug>?q=<question>) - how one paper answers one question, quoted from its own text\n- [JSON Feed](" + base + "/feed.json)\n\n## Papers\n\n";
+    body += res.results.map((p) => "- [" + displayTitle(p.title) + "](" + base + "/papers/" + encodeURIComponent(p.slug) + ")" +
+      " - Markdown: " + base + "/papers/" + encodeURIComponent(p.slug) + ".md" +
+      (lpDoi(p.doi) ? " - DOI: " + lpDoi(p.doi) : "") +
+      (p.version ? " - v" + String(p.version).replace(/^v/i, "") : "") +
+      (smLastmod(p) ? " - updated " + smLastmod(p) : "")).join("\n");
     return new Response(body, { headers: { "Content-Type": "text/plain; charset=utf-8", "Cache-Control": "public, max-age=3600" } });
   } catch (e) {
     return new Response(
@@ -3382,7 +3435,7 @@ var OPENAPI_DOC = {
   } }
 };
 function health() {
-  return json({ status: "ok", worker: "qnfo-gateway", version: VERSION, capabilities: ["papers-site", "reader-reports", "paper-pages", "living-paper-reader", "paper-context-api", "graph-api", "ask-a-paper", "quick-read", "quick-read-digest", "legal-pages", "activitypub-read", "subscribe-page", "work-with-me-page"], limitations: ["paper pages ask through ask.qwav.tech /api/ask (qnfo-ai-search 2.1+, the paper pinned as source [1], capped per address); without JavaScript the page is the full static paper", "GET /api/paper-context/<slug> matches qnfo-graph nodes on title terms (two terms, or one of 6+ letters), so a paper outside the graph shows an empty Context tab; versions are papers whose normalized titles match", "qnfo.org/work-with-me has no form: each offer is a mailto to rowan.quni@qnfo.org whose subject starts with [work-with-me:<offer>], counted by qnfo-fleet-dashboard", "Quick read is two things and they are not the same page: /papers/<slug>/quickread and /api/quickread/<slug> with NO question return the digest (the abstract verbatim, the claim, the figures the paper reports, how it is done, what would falsify it, where the claim stops, and a reading map), computed from the text with no model call, no cache and no rate limit; with ?q= they return ONE question's view over three paths (cache, one model call, a deterministic read of the paper itself), every shown line quoted and unquotable statements dropped and counted, and a question whose words the paper never uses is read semantically only when a section clears the cosine floor", "Ask-a-paper (POST /api/ask) uses one model (kimi-k2.6 with reasoning off) with a 1200-token cap and only the first 6000 characters of the named paper", "Ask-a-paper allows 10 questions per address per hour and 300 per day in total, questions up to 1000 characters; duplicate, kg-backfill and quarantined papers are excluded", "graph-api reads are public; /query and /sync need the sync token"] });
+  return json({ status: "ok", worker: "qnfo-gateway", version: VERSION, capabilities: ["papers-site", "reader-reports", "paper-pages", "living-paper-reader", "paper-context-api", "seo-crawl-telemetry", "paper-markdown", "indexnow-multi-engine", "seo-audit", "graph-api", "ask-a-paper", "quick-read", "quick-read-digest", "legal-pages", "activitypub-read", "subscribe-page", "work-with-me-page"], limitations: ["paper pages ask through ask.qwav.tech /api/ask (qnfo-ai-search 2.1+, the paper pinned as source [1], capped per address); without JavaScript the page is the full static paper", "GET /api/paper-context/<slug> matches qnfo-graph nodes on title terms (two terms, or one of 6+ letters), so a paper outside the graph shows an empty Context tab; versions are papers whose normalized titles match", "qnfo.org/work-with-me has no form: each offer is a mailto to rowan.quni@qnfo.org whose subject starts with [work-with-me:<offer>], counted by qnfo-fleet-dashboard", "Quick read is two things and they are not the same page: /papers/<slug>/quickread and /api/quickread/<slug> with NO question return the digest (the abstract verbatim, the claim, the figures the paper reports, how it is done, what would falsify it, where the claim stops, and a reading map), computed from the text with no model call, no cache and no rate limit; with ?q= they return ONE question's view over three paths (cache, one model call, a deterministic read of the paper itself), every shown line quoted and unquotable statements dropped and counted, and a question whose words the paper never uses is read semantically only when a section clears the cosine floor", "Ask-a-paper (POST /api/ask) uses one model (kimi-k2.6 with reasoning off) with a 1200-token cap and only the first 6000 characters of the named paper", "Ask-a-paper allows 10 questions per address per hour and 300 per day in total, questions up to 1000 characters; duplicate, kg-backfill and quarantined papers are excluded", "graph-api reads are public; /query and /sync need the sync token"] });
 }
 __name(health, "health");
 __name2(health, "health");
@@ -4675,7 +4728,7 @@ function lpPaperHTML(paper) { const plainHtml = (paper._plain && paper._plain.te
   const ver = retiredTag(String(paper.version || "1.0.0")).replace(/^v/i, "");
   const url = "https://papers.qnfo.org/papers/" + paper.slug;
   const data = { slug: paper.slug, title: t, doi: paper.doi || null, date: dateStr, version: ver, authors: authors.length ? authors : [AUTHOR_OF_RECORD], url, ask: LP_ASK, pdf: paper._pdf ? url + ".pdf" : null, words, cat: CATEGORY_LABELS[cat] || CATEGORY_LABELS.synthesis, filed_under: secondaries.map(function(c) { return CATEGORY_LABELS[c]; }) };
-  const head = buildPaperJsonLd(paper) + "<title>" + esc(t) + ' \u2014 QNFO Papers</title><meta name="description" content="' + escAttr(abstract) + '"><meta property="og:title" content="' + escAttr(t) + '"><meta property="og:type" content="article"><meta property="og:url" content="' + escAttr(url) + '"><meta property="og:description" content="' + escAttr(abstract) + '"><meta name="twitter:card" content="summary"><meta name="twitter:title" content="' + escAttr(t) + '"><meta name="twitter:description" content="' + escAttr(abstract) + '">' + (paper.doi ? '<meta name="citation_doi" content="' + escAttr(paper.doi) + '">' : "") + '<meta name="citation_title" content="' + escAttr(t) + '">' + citationAuthorsMeta(paper) + '<meta name="citation_publication_date" content="' + escAttr(dateStr || "Unknown") + '">' + (paper._pdf ? '<meta name="citation_pdf_url" content="' + escAttr(url) + '.pdf">' : "") + '<meta name="citation_publisher" content="QNFO"><link rel="canonical" href="' + escAttr(url) + '">';
+  const head = buildPaperJsonLd(paper) + "<title>" + esc(t) + ' \u2014 QNFO Papers</title><meta name="description" content="' + escAttr(abstract) + '"><meta property="og:title" content="' + escAttr(t) + '"><meta property="og:type" content="article"><meta property="og:url" content="' + escAttr(url) + '"><meta property="og:description" content="' + escAttr(abstract) + '"><meta name="twitter:card" content="summary"><meta name="twitter:title" content="' + escAttr(t) + '"><meta name="twitter:description" content="' + escAttr(abstract) + '">' + (paper.doi ? '<meta name="citation_doi" content="' + escAttr(paper.doi) + '">' : "") + '<meta name="citation_title" content="' + escAttr(t) + '">' + citationAuthorsMeta(paper) + '<meta name="citation_publication_date" content="' + escAttr(dateStr || "Unknown") + '">' + (paper._pdf ? '<meta name="citation_pdf_url" content="' + escAttr(url) + '.pdf">' : "") + '<meta name="citation_publisher" content="QNFO"><link rel="canonical" href="' + escAttr(url) + '">' + '<link rel="alternate" type="text/markdown" href="' + escAttr(url) + '.md" title="This paper as Markdown">';
   const byline = data.authors.map(function(n) {
     return n.indexOf("Quni-Gudzinas") >= 0 ? '<a href="https://orcid.org/' + OWNER_ORCID + '" rel="author">' + esc(n) + '<svg class="orcid" viewBox="0 0 20 20" aria-label="ORCID"><circle cx="10" cy="10" r="9" fill="#A6CE39"/><path d="M7 6.2v.01M7 8.5v6M9.5 8.5v6h2a3 3 0 0 0 0-6z" stroke="#fff" stroke-width="1.6" fill="none" stroke-linecap="round"/></svg></a>' : esc(n);
   }).join(", ");
@@ -6035,6 +6088,163 @@ function withPagePolicy(res, request) {
   }
 }
 // ---- PAGE-POLICY-1:END ----
+// ---- SEO-INDEX-1:BEGIN (3.30.0, 2026-10-25)
+// Owner report: "Google Search Console isn't crawling QNFO papers. Fleet dashboard reach metrics are dismal, meaning papers
+// are not showing up in search results and AI prompts." The site itself was technically clean when measured on 2026-10-25
+// (701/701 sitemap URLs answered 200, every page carried a self-canonical, median paper length 4,350 words, 25/25 sampled
+// PDFs present, zero noindex), so the failure is DISCOVERY, not markup. Nothing measured discovery: the fleet had no
+// first-party crawl signal and IndexNow only ever reached one engine. This block makes the crawl path observable and pushes
+// every engine. Every row is a fact about a request the site actually served.
+var SEO_BOTS = [
+  [/Googlebot-Image/i, "googlebot-image"],
+  [/Google-InspectionTool/i, "google-inspection"],
+  [/Googlebot/i, "googlebot"],
+  [/Google-Extended/i, "google-extended"],
+  [/BingPreview/i, "bingpreview"],
+  [/bingbot/i, "bingbot"],
+  [/OAI-SearchBot/i, "oai-searchbot"],
+  [/ChatGPT-User/i, "chatgpt-user"],
+  [/GPTBot/i, "gptbot"],
+  [/Claude-SearchBot|Claude-User|ClaudeBot/i, "claudebot"],
+  [/PerplexityBot/i, "perplexitybot"],
+  [/Applebot/i, "applebot"],
+  [/DuckDuckBot|DuckDuckGo/i, "duckduckbot"],
+  [/YandexBot/i, "yandexbot"],
+  [/CCBot/i, "ccbot"],
+  [/Amazonbot/i, "amazonbot"],
+  [/SemrushBot|AhrefsBot|MJ12bot|DotBot|Bytespider/i, "seo-tool"]
+];
+function seoBot(ua) {
+  var a = String(ua || "");
+  if (!a) return null;
+  for (var i = 0; i < SEO_BOTS.length; i++) if (SEO_BOTS[i][0].test(a)) return SEO_BOTS[i][1];
+  return null;
+}
+// A path kind keeps the table small enough to read: the question a crawler answers for us is "did it fetch PAPERS, and
+// did it get them", not which 693 slugs on which day.
+function seoPathKind(p) {
+  var x = String(p || "/");
+  if (x === "/robots.txt") return "robots";
+  if (x === "/sitemap.xml") return "sitemap";
+  if (x === "/llms.txt") return "llms";
+  if (/^\/papers\/.+\.md$/.test(x)) return "paper-md";
+  if (/^\/papers\/.+\.pdf$/.test(x)) return "paper-pdf";
+  if (x.indexOf("/papers/") === 0) return "paper";
+  if (x === "/papers" || x === "/" || x === "/reading") return "hub";
+  if (x.indexOf("/api/") === 0) return "api";
+  return "other";
+}
+var seoCrawlReady = false;
+async function seoLogCrawl(env, row) {
+  if (!env || !env.LIVING_PAPER || !row) return;
+  try {
+    if (!seoCrawlReady) {
+      await env.LIVING_PAPER.prepare("CREATE TABLE IF NOT EXISTS seo_crawl_log (day TEXT NOT NULL, bot TEXT NOT NULL, host TEXT NOT NULL, kind TEXT NOT NULL, status INTEGER NOT NULL DEFAULT 0, n INTEGER NOT NULL DEFAULT 1, last_ts TEXT NOT NULL, PRIMARY KEY (day, bot, host, kind, status))").run();
+      seoCrawlReady = true;
+    }
+    await env.LIVING_PAPER.prepare("INSERT INTO seo_crawl_log (day, bot, host, kind, status, n, last_ts) VALUES (?1,?2,?3,?4,?5,1,?6) ON CONFLICT(day,bot,host,kind,status) DO UPDATE SET n = n + 1, last_ts = excluded.last_ts")
+      .bind(row.day, row.bot, row.host, row.kind, Number(row.status || 0), new Date().toISOString()).run();
+  } catch (e) {
+    console.error(JSON.stringify({ worker: "qnfo-gateway", where: "seoLogCrawl", error: String(e && e.message || e).slice(0, 200) }));
+  }
+}
+function seoCrawlRow(request, status) {
+  try {
+    var u = new URL(request.url);
+    var bot = seoBot(request.headers.get("User-Agent"));
+    if (!bot) return null;
+    return { day: new Date().toISOString().slice(0, 10), bot: bot, host: u.hostname, kind: seoPathKind(u.pathname), status: Number(status || 0) };
+  } catch (e) { return null; }
+}
+async function handleSeoCrawl(env, days) {
+  var d = Math.min(Math.max(Number(days) || 14, 1), 90);
+  try {
+    var byBot = await env.LIVING_PAPER.prepare("SELECT bot, SUM(n) AS n, MAX(last_ts) AS last_ts FROM seo_crawl_log WHERE day >= date('now','-' || ?1 || ' days') GROUP BY bot ORDER BY n DESC").bind(String(d)).all();
+    var byDay = await env.LIVING_PAPER.prepare("SELECT day, SUM(CASE WHEN bot LIKE 'googlebot%' THEN n ELSE 0 END) AS google, SUM(CASE WHEN bot = 'bingbot' THEN n ELSE 0 END) AS bing, SUM(CASE WHEN bot LIKE 'gptbot%' OR bot = 'oai-searchbot' OR bot = 'perplexitybot' OR bot = 'claudebot' OR bot = 'chatgpt-user' THEN n ELSE 0 END) AS ai FROM seo_crawl_log WHERE day >= date('now','-' || ?1 || ' days') GROUP BY day ORDER BY day DESC").bind(String(d)).all();
+    var byKind = await env.LIVING_PAPER.prepare("SELECT kind, status, SUM(n) AS n FROM seo_crawl_log WHERE day >= date('now','-' || ?1 || ' days') GROUP BY kind, status ORDER BY n DESC LIMIT 40").bind(String(d)).all();
+    return json({ days: d, byBot: (byBot && byBot.results) || [], byDay: (byDay && byDay.results) || [], byKind: (byKind && byKind.results) || [], note: "Counts are crawler requests this Worker answered; a bot absent for 7 days is a bot not crawling the corpus." });
+  } catch (e) {
+    return json({ error: "crawl log unavailable", detail: String(e && e.message || e).slice(0, 160) }, 503);
+  }
+}
+async function handleSeoAudit(env) {
+  var out = { at: new Date().toISOString(), version: VERSION, checks: {} };
+  try {
+    var pub = await env.LIVING_PAPER.prepare("SELECT COUNT(*) AS n FROM papers WHERE status IN ('published','distributed','external_preprint') AND slug IS NOT NULL").first();
+    out.publicPapers = Number(pub && pub.n || 0);
+    var withDoi = await env.LIVING_PAPER.prepare("SELECT COUNT(*) AS n FROM papers WHERE status IN ('published','distributed','external_preprint') AND doi IS NOT NULL AND doi <> ''").first();
+    out.papersWithDoi = Number(withDoi && withDoi.n || 0);
+  } catch (e) { out.publicPapers = null; }
+  try {
+    var sm = await env.LIVING_PAPER.prepare("SELECT COUNT(*) AS n, COUNT(DISTINCT COALESCE(updated_at, created_at)) AS days FROM papers WHERE status IN ('published','distributed','external_preprint') AND slug IS NOT NULL").first();
+    out.sitemapPaperUrls = Number(sm && sm.n || 0) + 6;
+    out.sitemapDistinctLastmod = Number(sm && sm.days || 0);
+  } catch (e) { out.sitemapPaperUrls = null; }
+  try {
+    var ix = await env.LIVING_PAPER.prepare("SELECT ts, host, urls, accepted, detail FROM indexnow_log ORDER BY ts DESC LIMIT 3").all();
+    out.indexNowRecent = ((ix && ix.results) || []).map(function (r) {
+      var eps = [];
+      try { (JSON.parse(r.detail) || []).forEach(function (d) { (d.eps || []).forEach(function (x) { if (eps.indexOf(x.ep) < 0) eps.push(x.ep); }); }); } catch (e) { eps = ["unparsed"]; }
+      return { ts: r.ts, host: r.host, urls: r.urls, accepted: r.accepted, engines: eps };
+    });
+  } catch (e) { out.indexNowRecent = null; }
+  try {
+    var cr = await env.LIVING_PAPER.prepare("SELECT bot, SUM(n) AS n FROM seo_crawl_log WHERE day >= date('now','-7 days') GROUP BY bot").all();
+    var map = {};
+    ((cr && cr.results) || []).forEach(function (r) { map[r.bot] = Number(r.n || 0); });
+    out.crawl7d = map;
+  } catch (e) { out.crawl7d = {}; }
+  var g = Number((out.crawl7d || {}).googlebot || 0) + Number((out.crawl7d || {})["googlebot-image"] || 0);
+  var b = Number((out.crawl7d || {}).bingbot || 0);
+  var ai = 0;
+  ["gptbot", "oai-searchbot", "perplexitybot", "claudebot", "chatgpt-user", "google-extended"].forEach(function (k) { ai += Number((out.crawl7d || {})[k] || 0); });
+  out.checks.googlebot_crawling = g > 0;
+  out.checks.bingbot_crawling = b > 0;
+  out.checks.ai_crawler_reaching = ai > 0;
+  out.checks.sitemap_covers_corpus = !!out.sitemapPaperUrls && out.sitemapPaperUrls >= Number(out.publicPapers || 0);
+  out.checks.indexnow_multi_engine = (out.indexNowRecent || []).some(function (r) { return (r.engines || []).length > 1; });
+  out.checks.doi_published = Number(out.papersWithDoi || 0) > 0;
+  out.verdict = Object.keys(out.checks).every(function (k) { return out.checks[k]; }) ? "PASS" : "ATTENTION";
+  return json(out);
+}
+async function handlePaperMarkdown(env, slug, host) {
+  var s = String(slug || "").replace(/\.md$/i, "");
+  if (!s || s.indexOf("..") >= 0) return new Response("Not found\n", { status: 404, headers: { "Content-Type": "text/plain; charset=utf-8" } });
+  var paper = null;
+  try {
+    paper = await env.LIVING_PAPER.prepare("SELECT slug,title,abstract,authors,doi,created_at,updated_at,version,license,keywords,body_md,status FROM papers WHERE slug = ?1 LIMIT 1").bind(s).first();
+  } catch (e) { paper = null; }
+  if (!paper || ["published", "distributed", "external_preprint", "retracted"].indexOf(paper.status) < 0) {
+    return new Response("Not found\n", { status: 404, headers: { "Content-Type": "text/plain; charset=utf-8" } });
+  }
+  var canonical = "https://papers.qnfo.org/papers/" + paper.slug;
+  var authors = [];
+  try { var a = JSON.parse(paper.authors || "[]"); authors = Array.isArray(a) ? a : (a ? [String(a)] : []); } catch (e) { authors = String(paper.authors || "").split(",").map(function (x) { return x.trim(); }).filter(Boolean); }
+  var doi = lpDoi(paper.doi);
+  var fm = ["---"];
+  fm.push("title: " + JSON.stringify(displayTitle(paper.title) || "Untitled"));
+  fm.push("slug: " + JSON.stringify(paper.slug));
+  fm.push("url: " + canonical);
+  if (authors.length) fm.push("authors: [" + authors.map(function (x) { return JSON.stringify(String(x)); }).join(", ") + "]");
+  if (doi) fm.push("doi: " + JSON.stringify(doi));
+  if (paper.version) fm.push("version: " + JSON.stringify(String(paper.version).replace(/^v/i, "")));
+  if (paper.created_at) fm.push("published: " + JSON.stringify(String(paper.created_at).slice(0, 10)));
+  if (paper.updated_at) fm.push("updated: " + JSON.stringify(String(paper.updated_at).slice(0, 10)));
+  if (paper.license) fm.push("license: " + JSON.stringify(String(paper.license)));
+  if (paper.status) fm.push("status: " + JSON.stringify(String(paper.status)));
+  fm.push("---");
+  var head = "# " + (displayTitle(paper.title) || "Untitled") + "\n\n" + (paper.abstract ? String(paper.abstract).trim() + "\n\n" : "");
+  var body = fm.join("\n") + "\n\n" + head + String(paper.body_md || "").trim() + "\n";
+  return new Response(body, {
+    headers: {
+      "Content-Type": "text/markdown; charset=utf-8",
+      "Cache-Control": "public, max-age=3600",
+      "Link": "<" + canonical + ">; rel=\"canonical\"",
+      "Access-Control-Allow-Origin": "*"
+    }
+  });
+}
+// ---- SEO-INDEX-1:END
 var gateway_worker_default = {
   async fetch(request, env, ctx) {
     // IDENTITY-WELLKNOWN-1 (3.18.9, 2026-10-18): RFC 9116 security.txt on every gateway host, and the AT Protocol handle
@@ -6051,6 +6261,11 @@ var gateway_worker_default = {
     }
     // PAGE-POLICY-1 (3.18.2): policy headers and the Cache-Control default; the reach layer and fleet ctl below keep headers.
     const served = withPagePolicy(await gateway_worker_default.serve(request, env, ctx), request);
+    // SEO-INDEX-1: one row per crawler request the site actually served, so "is Google crawling the corpus?" is answered
+    // from our own edge and not inferred from a third-party dashboard the fleet cannot read. A non-crawler UA returns
+    // null before any work, so visitor traffic costs nothing here.
+    const seoRow = seoCrawlRow(request, served && served.status);
+    if (seoRow && ctx && typeof ctx.waitUntil === "function") ctx.waitUntil(seoLogCrawl(env, seoRow).catch(function (e) { console.error(JSON.stringify({ worker: "qnfo-gateway", where: "seoLogCrawl", error: String(e && e.message || e).slice(0, 160) })); }));
     // UTM-CLICK-LEDGER-1: count a tagged page load after the answer is built; never delays or changes the response.
     const utmRow = utmClickRow(request, served);
     if (utmRow && ctx && typeof ctx.waitUntil === "function") ctx.waitUntil(utmRecord(env, utmRow).catch(function(e) { console.error(JSON.stringify({ worker: "qnfo-gateway", where: "fetch", error: String(e && e.message || e) })); }));
@@ -6062,6 +6277,12 @@ var gateway_worker_default = {
     const origin = request.headers.get("Origin") || "https://qnfo.org";
     const host = u.hostname;
     const method = request.method.toUpperCase();
+    // SEO-INDEX-1: /papers/<slug>/ was a SECOND 200 copy of every paper - the router strips the trailing slash and
+    // renders the same page, so a crawler following a slash link recorded a duplicate URL (Bing had indexed several).
+    // One canonical address: 308 (permanent, method-preserving) to the slug without the slash.
+    if ((method === "GET" || method === "HEAD") && /^\/papers\/[^/]+\/+$/.test(u.pathname)) {
+      return new Response(null, { status: 308, headers: { Location: "https://" + host + u.pathname.replace(/\/+$/, "") + (u.search || ""), "Cache-Control": "public, max-age=86400" } });
+    }
     if (method === "OPTIONS") {
       return new Response(null, {
         status: 204,
@@ -6118,10 +6339,13 @@ var gateway_worker_default = {
       if (p === "/rss.xml" || p === "/feed.xml") return handleRss(env);
       if (p === "/api/paper-report" && method === "POST") return handleReaderReport(request, env, ctx).catch(function (e) { console.error(JSON.stringify({ worker: "qnfo-gateway", where: "handleReaderReport", error: String(e && e.message || e).slice(0, 200) })); return new Response(JSON.stringify({ error: "The report could not be stored; please try again." }), { status: 500, headers: { "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store" } }); });
       if (p.startsWith("/api/paper-context/") && method === "GET") return handlePaperContext(env, decodeURIComponent(p.slice(19))).catch(function (e) { console.error(JSON.stringify({ worker: "qnfo-gateway", where: "handlePaperContext", slug: p.slice(19, 140), error: String(e && e.message || e).slice(0, 200), stack: String(e && e.stack || "").slice(0, 1200) })); return json({ error: "paper context unavailable" }, 503); });
+      if (p === "/api/seo/audit" && method === "GET") return handleSeoAudit(env);
+      if (p === "/api/seo/crawl" && method === "GET") return handleSeoCrawl(env, u.searchParams.get("days"));
       if (p === "/api/render-health" && method === "GET") return handleRenderHealth(env);
       if (p === "/_audit/blank-papers") return handleBlankPapers(env);
       if (p === "/_audit/quick-read" && method === "GET") return handleQuickReadAudit(env);
       if (p.indexOf("/papers/") === 0 && p.slice(-10) === "/quickread" && p.split("/").length === 4) return handleQuickReadPage(request, env, p.split("/")[2], u, method).catch(function (e) { console.error(JSON.stringify({ worker: "qnfo-gateway", where: "handleQuickReadPage", error: String(e && e.message || e).slice(0, 200) })); return new Response("Quick read unavailable", { status: 503, headers: { "Content-Type": "text/plain; charset=utf-8" } }); });
+      if (p.indexOf("/papers/") === 0 && /\.md$/i.test(p)) return handlePaperMarkdown(env, p.slice(8), host);
       if (p.startsWith("/papers/") && p.split("/").length >= 3) return handlePaperDetail(request, env, p);
       if (p === "/ipatent" || p === "/ipatent/") return new Response(null, { status: 301, headers: { Location: "https://ipatent.qnfo.org/" } });
       if (p === "/reading" || p === "/reading/") return renderReadingHTML();
@@ -6161,10 +6385,13 @@ var gateway_worker_default = {
       if (p === "/api/confirm" && (method === "GET" || method === "POST")) return handleConfirmProxy(request, env);
       if (p === "/api/paper-report" && method === "POST") return handleReaderReport(request, env, ctx).catch(function (e) { console.error(JSON.stringify({ worker: "qnfo-gateway", where: "handleReaderReport", error: String(e && e.message || e).slice(0, 200) })); return new Response(JSON.stringify({ error: "The report could not be stored; please try again." }), { status: 500, headers: { "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store" } }); });
       if (p.startsWith("/api/paper-context/") && method === "GET") return handlePaperContext(env, decodeURIComponent(p.slice(19))).catch(function (e) { console.error(JSON.stringify({ worker: "qnfo-gateway", where: "handlePaperContext", slug: p.slice(19, 140), error: String(e && e.message || e).slice(0, 200), stack: String(e && e.stack || "").slice(0, 1200) })); return json({ error: "paper context unavailable" }, 503); });
+      if (p === "/api/seo/audit" && method === "GET") return handleSeoAudit(env);
+      if (p === "/api/seo/crawl" && method === "GET") return handleSeoCrawl(env, u.searchParams.get("days"));
       if (p === "/api/render-health" && method === "GET") return handleRenderHealth(env);
       if (p === "/_audit/blank-papers") return handleBlankPapers(env);
       if (p === "/_audit/quick-read" && method === "GET") return handleQuickReadAudit(env);
       if (p.indexOf("/papers/") === 0 && p.slice(-10) === "/quickread" && p.split("/").length === 4) return handleQuickReadPage(request, env, p.split("/")[2], u, method).catch(function (e) { console.error(JSON.stringify({ worker: "qnfo-gateway", where: "handleQuickReadPage", error: String(e && e.message || e).slice(0, 200) })); return new Response("Quick read unavailable", { status: 503, headers: { "Content-Type": "text/plain; charset=utf-8" } }); });
+      if (p.indexOf("/papers/") === 0 && /\.md$/i.test(p)) return handlePaperMarkdown(env, p.slice(8), host);
       if (p.startsWith("/papers/") && p.split("/").length >= 3) return handlePaperDetail(request, env, p);
       if (p === "/papers" || p.startsWith("/papers?")) return handlePapers(request, env);
       if (p === "/sitemap.xml") return handleSitemap(env, host);
@@ -6196,6 +6423,7 @@ var gateway_worker_default = {
     if (p === "/_audit/blank-papers") return handleBlankPapers(env);
       if (p === "/_audit/quick-read" && method === "GET") return handleQuickReadAudit(env);
     if (p.indexOf("/papers/") === 0 && p.slice(-10) === "/quickread" && p.split("/").length === 4) return handleQuickReadPage(request, env, p.split("/")[2], u, method).catch(function (e) { console.error(JSON.stringify({ worker: "qnfo-gateway", where: "handleQuickReadPage", error: String(e && e.message || e).slice(0, 200) })); return new Response("Quick read unavailable", { status: 503, headers: { "Content-Type": "text/plain; charset=utf-8" } }); });
+      if (p.indexOf("/papers/") === 0 && /\.md$/i.test(p)) return handlePaperMarkdown(env, p.slice(8), host);
       if (p.startsWith("/papers/") && p.split("/").length >= 3) return handlePaperDetail(request, env, p);
     if (p.startsWith("/papers") || p === "/") return handlePapers(request, env);
     if (p === "/sitemap.xml") return handleSitemap(env, host);
@@ -6239,7 +6467,18 @@ async function gatewayDaily(event, env, ctx) {
       if (new Date().getUTCDay() === 1) {
         const qr = await indexNowSubmit(QNFO_CORE_URLS, "qnfo.org");
         await indexNowLog(env, "qnfo.org", qr);
+        // SEO-INDEX-1: the hourly window is 7 days, so a paper published eight days ago was NEVER submitted again after
+        // its first week - the corpus could not be re-crawled by an engine that had dropped it. Monday submits the whole
+        // public corpus; the endpoints' own rate budgets absorb a weekly full pass.
+        try {
+          const fr = await indexNowSubmit(await collectPaperUrls(env, null), "papers.qnfo.org");
+          await indexNowLog(env, "papers.qnfo.org", fr);
+          console.log("SEO-INDEX-1 weekly full submit: " + JSON.stringify(fr.map(function (x) { return { chunk: x.chunk, ep: x.ep, status: x.status }; })));
+        } catch (e) { console.log("SEO-INDEX-1 weekly full submit failed: " + String(e && e.message || e).slice(0, 200)); }
       }
+      // SEO-INDEX-1: 90 days of crawl rows is enough to tell a crawl drought from a crawl wave; older rows are pruned so
+      // the table stays a signal rather than a log.
+      try { await env.LIVING_PAPER.prepare("DELETE FROM seo_crawl_log WHERE day < date('now','-90 days')").run(); } catch (e) {}
     } catch (e) {
       console.log("DISCOVERY-1 indexnow failed: " + String(e && e.message || e).slice(0, 200));
       cronOk = false;
