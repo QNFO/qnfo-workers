@@ -117,7 +117,7 @@ run-name: ${{ github.event_name == 'workflow_dispatch' && format('fleet-autodepl
 
 on:
   schedule:
-    - cron: "43 */2 * * *"
+    - cron: "43 8 * * *"
   push:
     branches: [main]
     # CI-RUNAWAY-LOOP-1 (2026-09-30): pure-artifact commits must not start the

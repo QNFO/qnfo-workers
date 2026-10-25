@@ -22,7 +22,7 @@ name: code-task-publish
 
 on:
   workflow_run:
-    workflows: ["mirror-sync", "fleet-autodeploy"]
+    workflows: ["fleet-autodeploy"]
     types: [completed]
   workflow_dispatch:
 

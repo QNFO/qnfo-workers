@@ -34,7 +34,7 @@ on:
       - "qnfo-ops/scripts/guard-timebudget.sh"
       - ".github/workflows/guard-timebudget.yml"
   schedule:
-    - cron: "*/30 * * * *"
+    - cron: "30 7 * * *"
   workflow_dispatch:
 
 concurrency:

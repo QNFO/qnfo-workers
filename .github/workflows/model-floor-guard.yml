@@ -34,7 +34,7 @@ on:
   # worker that reintroduced a sub-frontier model was invisible for up to seven days. Every worker change
   # now scans the repo sources at once; the live-bundle sweep stays daily + weekly + manual.
   schedule:
-    - cron: "17 */2 * * *"
+    - cron: "17 3 * * *"
   workflow_dispatch:
 
 permissions:
