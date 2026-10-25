@@ -4,7 +4,7 @@
 // verifications and the prune stopped with 3 items left. Proves: two quick verdicts end the check without waiting for a hanging reviewer;
 // a failed reviewer is replaced at once; a third reviewer is asked after the hedge delay when one hangs; a reviewer failing half of its
 // calls today is asked last; the two-family rule is unchanged (two valid verdicts from two families other than the writer's, a failing
-// verdict still fails, every reviewer failing still fails closed).
+// verdict still fails, every reviewer failing still fails closed, and fact-check calls bypass cached verdicts).
 // Run: node personal-companion/factcheck-race.test.mjs   -> prints "N passed, 0 failed"
 import { readFileSync } from "node:fs";
 import { importWorker } from "./_harness-import-worker.mjs";
@@ -29,7 +29,7 @@ const draft = "# Drift in the readings\n\nThe Alpha Subject recorded 14 measurem
 // A scripted AI binding: per model, a delay in ms and a reply (string, or Error to throw). Unlisted models hang "forever" (2 s here).
 function world(plan) {
   const calls = [];
-  const AI = { run: async (model) => { calls.push({ model, at: Date.now() }); const p = plan[model] || { ms: 2000, reply: new Error("The operation was aborted due to timeout") }; await sleep(p.ms); if (p.reply instanceof Error) throw p.reply; return { response: p.reply }; } };
+  const AI = { run: async (model, input, options) => { calls.push({ model, at: Date.now(), options }); const p = plan[model] || { ms: 2000, reply: new Error("The operation was aborted due to timeout") }; await sleep(p.ms); if (p.reply instanceof Error) throw p.reply; return { response: p.reply }; } };
   return { env: { AI }, calls };
 }
 const ids = V.pickReviewers(["openai"], 5, 7);
@@ -42,6 +42,7 @@ ok(ids.length === 4 && !ids.some((id) => /openai/.test(id)), "four reviewers fro
   const t0 = Date.now();
   const g = await V.gatherVerdicts(w.env, ids, draft, source, 500);
   ok(g.got.length === 2 && w.calls.length === 2 && Date.now() - t0 < 400, "two quick valid verdicts: two calls, no hedge, no wait", { n: w.calls.length, ms: Date.now() - t0 });
+  ok(w.calls.every((c) => c.options && c.options.gateway && c.options.gateway.id === "default" && c.options.gateway.skipCache === true), "each fact-check call bypasses cached verdicts", w.calls.map((c) => c.options));
 }
 {
   // the 11:00 UTC shape: the first reviewer hangs, the second answers; the hedge brings a third and the check ends without the hanging one
