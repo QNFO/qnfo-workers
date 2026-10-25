@@ -64,6 +64,7 @@ research corpus, the audit log, or any QNFO registry.
 ## Routes
 
 - `GET /health` — version, piece count, last piece (public)
+- `GET /sitemap.xml` — index and accuracy-passed, non-retracted reading pages; still excluded from crawling by `robots.txt`
 - `GET /` — reading index
 - `GET /p/<slug>` — one piece
 - `GET /api/pieces` — JSON list
