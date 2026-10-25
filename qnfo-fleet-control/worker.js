@@ -3360,7 +3360,19 @@ function cmScope(path) {
   if ((/^docs\/[A-Za-z0-9._\/-]+\.md$/.test(path) || /^[a-z0-9][a-z0-9-]*\/README\.md$/.test(path)) && path.indexOf("..") < 0) return { ok: true, kind: "doc" };
   // SCOPE-SCRIPTS-1 (0.10.0): a fleet script that is not a CI gate, a suite, a deploy primitive or the loop's own runner.
   if (/^scripts\/[A-Za-z0-9._-]+\.(py|mjs)$/.test(path) && !CM_SCRIPT_DENY.test(path.slice(8))) return { ok: true, kind: "script" };
-  return { ok: false, why: "path " + path + " is outside the auto-merge scope (a worker.js with its mirror, docs/**.md, <dir>/README.md, scripts/*.py|*.mjs outside CM_SCRIPT_DENY)" };
+  // MERGE-SCOPE-DATA-SURFACES-1 (agent_issues 100617, owner directive CODE-LOOP-SCOPE-LIFT-1): the loop is asked to remediate
+  // schema and content surfaces this allowlist refused, so five tasks were superseded with no merge (ct_im100419
+  // migrations/2026-10-22-close-channel-required.sql, ct_im100467/100468 mind/data/entries-a|b.json, ct_im100442
+  // mind/wrangler.toml). A migration applies itself ONLY when it opts in with the MIGRATION-RUNNER-1 header
+  // (-- APPLY-BY: ci / -- DB: ...), so a merged file without the header is inert; mind/ is the q08-mind content and config
+  // surface. Mirrored in qnfo-code-orchestrator mergeScopeWhy (MERGE-SCOPE-PARITY-1).
+  if (/^migrations\/[A-Za-z0-9._-]+\.sql$/.test(path) && path.indexOf("..") < 0) return { ok: true, kind: "migration" };
+  if (/^mind\/(?:data\/)?[A-Za-z0-9._-]+\.(?:json|toml)$/.test(path) && path.indexOf("..") < 0) return { ok: true, kind: "mind-data" };
+  // STILL DENIED on purpose: .github/workflows/** is verification infrastructure (a guard may not widen its own gate), and
+  // every other worker config stays out. A spurious "workers/" prefix names a directory that does not exist in
+  // qnfo-workers, so it is refused WITH the correction instead of spending model calls on a path that cannot exist.
+  if (/^workers\//.test(path)) return { ok: false, why: "path " + path + " does not exist in qnfo-workers: the repository root holds " + path.slice(8).split("/")[0] + "/, not workers/; re-author the task against " + path.slice(8) };
+  return { ok: false, why: "path " + path + " is outside the auto-merge scope (a worker.js with its mirror, docs/**.md, <dir>/README.md, scripts/*.py|*.mjs outside CM_SCRIPT_DENY, migrations/*.sql, mind/**/*.json|*.toml)" };
 }
 __name(cmScope, "cmScope");
 // The required checks are EVOLVE_REQUIRED where their workflows run for these paths (version-bump-guard, job 'guard', runs

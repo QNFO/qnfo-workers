@@ -785,6 +785,13 @@ function mergeScopeWhy(repo, path) {
   if (s) return null;
   // MERGE-SCOPE-PARITY-1 (0.18.29): the rest of qnfo-fleet-control cmScope; any other path is built and then refused at merge.
   if ((/^docs\/[A-Za-z0-9._\/-]+\.md$/.test(p) || /^[a-z0-9][a-z0-9-]*\/README\.md$/.test(p)) && p.indexOf("..") < 0) return null;
+  // MERGE-SCOPE-DATA-SURFACES-1 (agent_issues 100617, owner directive CODE-LOOP-SCOPE-LIFT-1): kept character-for-character in
+  // step with cmScope() in qnfo-fleet-control (MERGE-SCOPE-PARITY-1). A migration applies itself ONLY when it opts in with the
+  // MIGRATION-RUNNER-1 header, so a merged file without the header is inert. .github/workflows/** stays denied: it is
+  // verification infrastructure, and a guard may not widen its own gate.
+  if (/^migrations\/[A-Za-z0-9._-]+\.sql$/.test(p) && p.indexOf("..") < 0) return null;
+  if (/^mind\/(?:data\/)?[A-Za-z0-9._-]+\.(?:json|toml)$/.test(p) && p.indexOf("..") < 0) return null;
+  if (/^workers\//.test(p)) return "path " + p + " does not exist in qnfo-workers: the repository root holds " + p.slice(8).split("/")[0] + "/, not workers/; re-author the task against " + p.slice(8);
   return "path " + p + " is outside the merge runner's auto-merge scope (a worker.js with its mirror, docs/**.md, <dir>/README.md, scripts/*.py|*.mjs outside CM_SCRIPT_DENY): the loop cannot ship a change to it, so it is a session task";
 }
 async function enqueue(env, b) {
