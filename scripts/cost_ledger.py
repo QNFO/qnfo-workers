@@ -111,7 +111,7 @@ def provider_label(value):
     label = str(value or "unknown").lower()
     if not label or len(label) > 48 or not all(c.isalnum() or c in "._-" for c in label):
         return "other"
-    if any(marker in label for marker in ("ghp", "github_pat_", "cfat_", "sk-ant-", "aiza", "akia", "opskeypx")):
+    if any(marker in label for marker in ("ghp", "github", "cfat", "sk-ant-", "aiza", "akia", "opskeypx")):
         return "other"
     return label
 
@@ -725,6 +725,7 @@ def selftest():
     assert snapshot["window_start_at"] == "2026-09-10T00:00:00Z"
     assert snapshot["window_end_exclusive_at"] == "2026-10-10T00:00:00Z"
     assert provider_label("throughput") == "other"
+    assert provider_label("cfatX") == "other"
     assert "throughput" not in json.dumps(snapshot)
     daily_gateway = gateway_day(
         dt.date(2026, 10, 9),
