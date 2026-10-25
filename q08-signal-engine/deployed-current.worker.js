@@ -37,7 +37,8 @@
 // Q08-ASCII-SOURCE-1 (2026-10-01): this file is ASCII-only; every typographic character is a \uXXXX escape. The deploy path
 // double-encoded raw UTF-8, so live pages read "... \u00e2 q08" and posts "\u00e2\u0080\u0094". Keep new literals escaped.
 // VERSION-NOTES-MOVED-1: release notes live in the block below
-var VERSION = "0.34.5"; // 0.34.0 NO-REGISTRAR-1 (2026-10-21): release notes no longer name the closed registrar.
+var VERSION = "0.35.0"; // 0.34.0 NO-REGISTRAR-1 (2026-10-21): release notes no longer name the closed registrar.
+/* 0.35.0 Q08-RUN-STAGE-ATTRIBUTION-1: engine_runs now records reader-panel and fact-check calls separately while preserving verify_calls as their total. The latest q08.org/api/runs?limit=60 response returned 20 rows (IDs 952–933), not 60; 13 were gate_failed and 7 deferred. No quality gate, spend policy, or generation behavior changed. */
 /* 0.34.4 Q08-LEDGER-WHITESPACE-GROUPS-1: the grounding normalizer now removes grouped source-ledger citations such as [S2 S3] and [S1, S2 S3] before any gate reads the draft. The factual and reader-quality gates are unchanged. */
 /* 0.34.5 Q08-WRITER-YIELD-1 (2026-10-25): live 30-day q08_reader_tests showed writer-gate pass rates of 66.1% for gpt-oss (342 attempts), 60.2% for kimi (108), and 21.2% for nemotron (472), while the old order led with nemotron. Put the highest-yield, lowest-neuron writer first; the uncapped fallback favors yield, while the capped fallback favors the lower-cost nemotron. Quality thresholds are unchanged; revert by restoring the prior writer arrays. */
 // 0.33.0 COST-SUSTAIN-2 (2026-10-21, owner directive: research and publication <= USD 300/month all-in, quality must not drop; pillar cost): a hard daily neuron budget for q08 (ops_config q08_daily_neurons, default 150000 = USD 1.65/day at USD 0.011/1k; measured 135-288k/day on 10-14..10-20) paced over the UTC day (spent <= budget x (hour+1)/24 + 10% burst) gates generate() and auditPublished(): over the pace the tick writes a deferred engine_runs row and waits, nothing is skipped and no gate, reader panel or fact check changes. Root cause it closes: q08 had a publish cap and an attempt cap but no spend bound, so retries and stall retries could spend without limit. GET /budget.
@@ -285,10 +286,10 @@ async function ensurePropertyColumn(env) {
 }
 // Q08-YIELD-1 (agent_issues 99929, 99930): engine_runs recorded the outcome of a run but not what it read or spent, so nobody could say
 // which share of 266 gate_failed runs in 7 days came from sources too thin to ground a 2800-character piece. engine_runs is created outside
-// this file, so the worker adds the four nullable columns itself (pragma_table_info guard; a column that already exists is never added
+// this file, so the worker adds the six nullable columns itself (pragma_table_info guard; a column that already exists is never added
 // twice) and writes them at every generation insert. A failed ALTER, or an insert that fails with the new columns, falls back to the old
 // column list: logging can never cost a run its row.
-var RUN_COLUMNS = [["source_chars", "INTEGER"], ["source_kind", "TEXT"], ["compose_calls", "INTEGER"], ["verify_calls", "INTEGER"]];
+var RUN_COLUMNS = [["source_chars", "INTEGER"], ["source_kind", "TEXT"], ["compose_calls", "INTEGER"], ["verify_calls", "INTEGER"], ["panel_calls", "INTEGER"], ["factcheck_calls", "INTEGER"]];
 var __runColsOk = false, __runColsTried = 0;
 async function ensureRunColumns(env) {
   if (__runColsOk) return true;
@@ -308,9 +309,12 @@ async function ensureRunColumns(env) {
     return false;
   }
 }
-// The per-run model-call meter: generate() gives its env copy a q08Meter, compose-side calls count as compose_calls and reviewer calls
-// (fact-check, reader panels) as verify_calls. A caller without a meter (a test, another handler) counts nothing.
-function meterCall(env, kind) { if (env && env.q08Meter) env.q08Meter[kind] = (env.q08Meter[kind] || 0) + 1; }
+// verify_calls remains the total for compatibility; the stage counters split it into reader-panel and fact-check calls.
+function meterCall(env, kind) {
+  if (!env || !env.q08Meter) return;
+  env.q08Meter[kind] = (env.q08Meter[kind] || 0) + 1;
+  if (kind === "panel" || kind === "factcheck") env.q08Meter.verify = (env.q08Meter.verify || 0) + 1;
+}
 // RED-DRAIN-1 (#100453, Q08-GATE-PREFLIGHT-1): the structural gate (min refs, prior-work section, table-or-code) used to run
 // AFTER the expensive compose call, so at a 3.2% pass rate ~31 compose calls were burned per published piece and the whole
 // daily neuron cap could be spent on failed attempts. The gate inputs are deterministic and need no model, so it is hoisted
@@ -341,13 +345,13 @@ function structuralPreflight(src) {
 }
 // r: { scraped, scored, published, top, model, ms, status, error, sourceChars, sourceKind }
 async function insertRun(env, r) {
-  var m = (env && env.q08Meter) ? { compose: env.q08Meter.compose || 0, verify: env.q08Meter.verify || 0 } : null;
-  if (m) { env.q08Meter.compose = 0; env.q08Meter.verify = 0; } // a tick can write two rows (a failed forecast, then the essay): each counts its own calls
+  var m = (env && env.q08Meter) ? { compose: env.q08Meter.compose || 0, verify: env.q08Meter.verify || 0, panel: env.q08Meter.panel || 0, factcheck: env.q08Meter.factcheck || 0 } : null;
+  if (m) { env.q08Meter.compose = 0; env.q08Meter.verify = 0; env.q08Meter.panel = 0; env.q08Meter.factcheck = 0; } // a tick can write two rows (a failed forecast, then the essay): each counts its own calls
   var base = [r.scraped || 0, r.scored || 0, r.published ? 1 : 0, r.top || "", r.model || "", r.ms || 0, r.status, r.error == null ? null : String(r.error)];
   if (await ensureRunColumns(env)) {
     try {
-      var st = env.DB.prepare("INSERT INTO engine_runs (signals_scraped, signals_scored, piece_published, top_signal, model, ms, status, error, source_chars, source_kind, compose_calls, verify_calls) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)");
-      return await st.bind.apply(st, base.concat([r.sourceChars == null ? null : Math.round(r.sourceChars), r.sourceKind || null, m ? m.compose : null, m ? m.verify : null])).run();
+      var st = env.DB.prepare("INSERT INTO engine_runs (signals_scraped, signals_scored, piece_published, top_signal, model, ms, status, error, source_chars, source_kind, compose_calls, verify_calls, panel_calls, factcheck_calls) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)");
+      return await st.bind.apply(st, base.concat([r.sourceChars == null ? null : Math.round(r.sourceChars), r.sourceKind || null, m ? m.compose : null, m ? m.verify : null, m ? m.panel : null, m ? m.factcheck : null])).run();
     } catch (e) {
       __runColsOk = false;
       console.error(JSON.stringify({ worker: "q08-signal-engine", event: "run-columns-insert", error: String(e && e.message || e).slice(0, 160) }));
@@ -858,7 +862,7 @@ function seedOf(str) { var h = 0, t = String(str || ""); for (var i = 0; i < t.l
 async function readerTest(env, modelId, text, rprompt) {
   try {
     var essay = stripAnalysisMark(String(text || "").replace(/\n?worth your time:[^\n]*$/im, "").trim()).slice(0, 9000);
-    meterCall(env, "verify");
+    meterCall(env, "panel");
     var resp = await env.AI.run(modelId, Object.assign({ messages: [{ role: "user", content: (rprompt || READER_PROMPT) + "\n\n--- ESSAY ---\n" + essay }], max_tokens: READER_MAX_TOKENS, temperature: 0.2 }, factCheckExtra(modelId)), { signal: AbortSignal.timeout(90000) });
     var out = aiReplyText(resp);
     var v = parseReaderVerdict(String(out).replace(/<think>[\s\S]*?<\/think>/gi, ""));
@@ -1922,8 +1926,8 @@ function orderCandidates(candidates, lastSource) {
 }
 async function generate(env) {
   var t0 = Date.now();
-  // Q08-YIELD-1: a per-run copy of env carries the model-call meter written to engine_runs (compose_calls, verify_calls).
-  env = Object.assign({}, env, { q08Meter: { compose: 0, verify: 0 } });
+  // Q08-RUN-STAGE-ATTRIBUTION-1: verify_calls remains the total; panel_calls and factcheck_calls split reviewer spend by stage.
+  env = Object.assign({}, env, { q08Meter: { compose: 0, verify: 0, panel: 0, factcheck: 0 } });
   // Q08-TICK-BUDGET-1 (0.17.4, agent_issues 2479): every early exit writes an engine_runs row (status skipped or deferred) so a quiet tick
   // can be told apart from one the runtime killed; the attempt cap counts only ok and gate_failed rows, so these never use an attempt.
   async function quit(status, reason, scraped, scored, srcInfo) {
@@ -2910,7 +2914,7 @@ function factCheckExtra(modelId) {
   return {};
 }
 async function factCheckOne(env, modelId, essay, ground, prompt) {
-  meterCall(env, "verify");
+  meterCall(env, "factcheck");
   try {
     var body = (prompt || FACTCHECK_PROMPT) + "\n\n--- SOURCE MATERIAL ---\n" + String(ground).slice(0, FACTCHECK_GROUND_MAX) + "\n\n--- DRAFT ---\n" + String(essay).replace(/^[ \t]*FORECAST-JSON:.*$/gim, "").replace(/\n?worth your time:[^\n]*$/im, "").trim().slice(0, 9000);
     var resp = await env.AI.run(modelId, Object.assign({ messages: [{ role: "user", content: body }], max_tokens: FACTCHECK_MAX_TOKENS, temperature: 0.1 }, factCheckExtra(modelId)), { signal: AbortSignal.timeout(75000) });
@@ -4044,7 +4048,7 @@ function cleanNote(v) {
 }
 // Q08-QUALITY-1: pure helpers exposed for the offline suite (quality.test.mjs); no route uses this export.
 export const __forecast = { forecastPostText: forecastPostText, gatherEvidence: gatherEvidence, forecastDue: forecastDue, resolveForecasts: resolveForecasts, ensureForecastSchema: ensureForecastSchema, generateForecast: generateForecast, forecastStats: forecastStats, parseForecastBlock: parseForecastBlock, validateForecast: validateForecast, forecastXform: forecastXform, forecastProblems: forecastProblems, buildForecastPrompt: buildForecastPrompt, calibration: calibration, parseJudgeVerdict: parseJudgeVerdict, aggregateJudges: aggregateJudges, parseForecastCap: parseForecastCap, publicHttpsUrl: publicHttpsUrl, fcStatus: fcStatus, renderForecastBox: renderForecastBox, renderForecasts: renderForecasts, FORECAST_DIRECTIVE: FORECAST_DIRECTIVE, FORECAST_EVERY: FORECAST_EVERY, FORECAST_MAX_CHECKS: FORECAST_MAX_CHECKS };
-export const __gen = { q08Budget: q08Budget, Q08_DAILY_NEURONS_DEFAULT: Q08_DAILY_NEURONS_DEFAULT, resetRunColumns: function () { __runColsOk = false; __runColsTried = 0; }, sourceFloorFrom: sourceFloorFrom, learnedSourceFloor: learnedSourceFloor, thinSourceVerdict: thinSourceVerdict, sourceKindOf: sourceKindOf, markThinSkipped: markThinSkipped, ensureRunColumns: ensureRunColumns, insertRun: insertRun, claimClassesOf: claimClassesOf, get SOURCE_FLOOR_MIN_OK() { return SOURCE_FLOOR_MIN_OK; }, get THIN_MIN_ARTICLE() { return THIN_MIN_ARTICLE; }, get MIN_GROUND_CHARS() { return MIN_GROUND_CHARS; }, composeOrder: composeOrder, COMPOSE_MODELS: COMPOSE_MODELS, COMPOSE_MODELS_AT_CAP: COMPOSE_MODELS_AT_CAP, generate: generate, get TICK_BUDGET_MS() { return TICK_BUDGET_MS; }, get ESSAY_AFTER_FORECAST_MS() { return ESSAY_AFTER_FORECAST_MS; } };
+export const __gen = { q08Budget: q08Budget, Q08_DAILY_NEURONS_DEFAULT: Q08_DAILY_NEURONS_DEFAULT, resetRunColumns: function () { __runColsOk = false; __runColsTried = 0; }, sourceFloorFrom: sourceFloorFrom, learnedSourceFloor: learnedSourceFloor, thinSourceVerdict: thinSourceVerdict, sourceKindOf: sourceKindOf, markThinSkipped: markThinSkipped, ensureRunColumns: ensureRunColumns, insertRun: insertRun, meterCall: meterCall, claimClassesOf: claimClassesOf, get SOURCE_FLOOR_MIN_OK() { return SOURCE_FLOOR_MIN_OK; }, get THIN_MIN_ARTICLE() { return THIN_MIN_ARTICLE; }, get MIN_GROUND_CHARS() { return MIN_GROUND_CHARS; }, composeOrder: composeOrder, COMPOSE_MODELS: COMPOSE_MODELS, COMPOSE_MODELS_AT_CAP: COMPOSE_MODELS_AT_CAP, generate: generate, get TICK_BUDGET_MS() { return TICK_BUDGET_MS; }, get ESSAY_AFTER_FORECAST_MS() { return ESSAY_AFTER_FORECAST_MS; } };
 export const __stall = { stallRetryDue: stallRetryDue, stallDetector: stallDetector, stallDigest: stallDigest, stallStage: stallStage, get STALL_RETRY_H() { return STALL_RETRY_H; } };
 export const __factledger = { groundPreCheck: groundPreCheck, sourceLedger: sourceLedger, ledgerBlock: ledgerBlock, stripLedgerTags: stripLedgerTags, groundPreCheckMode: groundPreCheckMode, resetGroundPreCheck: function () { __groundPre = { at: 0, mode: "on" }; __groundPreCalls = 0; }, get groundPreCalls() { return __groundPreCalls; }, stallStage: stallStage, buildPrompt: buildPrompt, labelledGround: labelledGround, groundingProblems: groundingProblems, normalizeDraft: normalizeDraft, runLevels: runLevels, generate: generate, generateForecast: generateForecast, Q08_DIRECTIVE: Q08_DIRECTIVE, get LEDGER_MAX_LINES() { return LEDGER_MAX_LINES; }, get LEDGER_MAX_CHARS() { return LEDGER_MAX_CHARS; } };
 export const __cuts = { readerCutIndices: readerCutIndices, applyReaderCuts: applyReaderCuts };
