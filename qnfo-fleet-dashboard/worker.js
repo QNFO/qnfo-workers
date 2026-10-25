@@ -10,7 +10,7 @@ var __defProp222 = Object.defineProperty;
 var __name222 = /* @__PURE__ */ __name22((target, value) => __defProp222(target, "name", { value, configurable: true }), "__name");
 var __name2222 = /* @__PURE__ */ __name222((target, value) => Object.defineProperty(target, "name", { value, configurable: true }), "__name");
 // VERSION-LINE-SPLIT-1 (agent_issues 100220): the release notes sit one per line below this statement, newest first, so a VERSION bump is a one-line patch; add a new note as the first line under it.
-var VERSION = "1.58.1-codeagent"; /* 1.58.0 GA4-QUALITY-1 (2026-10-25, CMD RED TEAM findings on 1.57.0): the summary no longer presents a suspect cohort as reach. The API adds quality {top_country, suspected_non_human, collection_gap_days, property_matches_site, headline_metric} and coverage {covered, not_covered}; the page shows a warning above the tiles, leads with engaged sessions when the top country holds >=50% of active users with <10% engagement, names the days in the window with no GA4 data, and says the page is a rich core, not every GA4 surface. A 0-row day is now status empty with a 6-hour backoff (three attempts across 12h) instead of a final ok, so a day read before GA4 processed it is retried. The API edge cache is 120s. The property pin is checked against the host report on every read; no site host means a warning, not silent trust. Evidence: 28d 1,434 users, Singapore 1,073 (74.8%), 36 engaged, 201/1,608 engaged sessions; 10-13, 10-16 and 10-24 are null. */ /* 1.57.0 GA4-RICH-1 (2026-10-25, pillar reach; owner directive 2026-10-25: "ensure fleet dashboard metrics contain full-scope of rich Google Analytics data"): new /analytics page and /api/ga4/overview JSON read the GA4 Data API for property 486253526 (measurement id G-LV7RHRVW6R) at request time: 28 complete-day totals beside the previous 28 days, the daily series, top pages, channels, countries, devices, hosts and a 30-minute realtime count, each panel naming its source and a failed report null with its reason. The daily ingest also stores page, channel, country and device rows in reach_signals, and judges the property by a 7-day host probe so one zero-traffic day cannot mark a correct property foreign. GA4-COLLECT-RESTORE-1 in qnfo-gateway 3.30.1 restores the gtag.js tag the ZARAZ-GA4-1 change removed on 2026-10-12; this page is the read side of that fix. */ /* 1.55.0 NO-REGISTRAR-1 (2026-10-21): area routing no longer names the closed registrar. */ /* 1.54.0 COST-SUSTAIN-3 (2026-10-21, owner: research and publication <= USD 300/month all-in, realistic use metrics and forecasting; pillar cost): /api/cost carries the cap-aware forecast (v_cost_forecast bound_daily_usd, bound_30d_usd, forecast_bounded_month_usd: month-to-date + remaining days x min(3-day pace, what the configured daily caps allow)), research neurons per published version and the provider-billed AI Gateway figure; the cost area headline is the month forecast instead of a 7-day mean x 30 that cannot see the caps. */ /* 1.52.0 COST-SUSTAIN-1 (2026-10-21, pillar cost): /api/cost adds forecast (v_cost_forecast: per-scope month-to-date, 3-day pace, month-end forecast vs the owner USD 300 fleet budget) and research_budget_today (neurons spent vs qnfo-research-exec research_daily_neurons). */
+var VERSION = "1.59.0-portfolio-strategic"; /* 1.59.0 PORTFOLIO-STRATEGIC-1 (2026-10-25, PORTFOLIO-MANAGER-1): the portfolio manager persona runs its weekly strategic review inside this worker's cron (no new worker or cron while fleet_budget caps are breached, CORE-PROMPT-1 rule 8): loop-owned program/portfolio scorecards, per-program verdicts and deterministic actions from v_program_health, portfolio decisions (constrain/accelerate/stable), program_review_notes + one weekly-strategic portfolio_runs row, owner cards only for spend above the A9 ceiling and RED verdicts persisting 3+ reviews, persona narratives only while no ai_spend fleet_budget cap is breached; new routes POST /api/portfolio/strategic and GET /api/portfolio/latest. */ /* 1.58.1-codeagent (main, 2026-10-25). */ 
 /* 1.51.19 VERSION-LINE-SPLIT-1 (2026-10-20, agent_issues 100220, pillar autonomy; patch: layout only): the release notes that sat on the VERSION line (202,642 chars) are one per line below it, so a bump is a one-line patch and the publisher's size cap stops refusing dashboard code tasks (5 of 5 on 2026-10-19); scripts/conflict_repair.py resolves note-line hunks (merge_note_hunk). No behaviour change. */
 /* 1.51.17 COST-FEED-7D-WINDOW-1 (2026-10-19, agent_issues 100169, pillar cost; patch): /api/cost by_model_7d and by_worker_7d sum the 7 complete UTC days (today, a partial day, was a 8th bucket under the 7d label, +31.8 percent), and the body says which days (window_7d) and that est_usd is list price before the free tier (est_usd_basis). */
 /* 1.51.16 PARKED-CARD-REASON-1 (2026-10-19, agent_issues 100173, pillar autonomy; patch): the parked code-task card branches on the cause wherever it sits in last_error (the loop writes "model <id>: noop-proposal: ..." and "model <id> proposed no change", so a prefix test never matched), and the dead execOne edit of PR 3106 (fleet_issue_dispatch has no last_error) is removed. */
@@ -2841,6 +2841,21 @@ if (path === "/health") {
     const rowsG = await d1all(env.AUDIT, "SELECT id, ts, status, text FROM cloud_ops_events WHERE kind = 'ga4-ingest' ORDER BY id DESC LIMIT 14").catch(function() { return []; });
     return rtRead(request, url, { ok: true, version: VERSION, key_present: !!env.GA4_SA_KEY, runs: rowsG }, { schema: "ga4/v1" });
   }
+  // PORTFOLIO-STRATEGIC-1 routes (2026-10-25): manual trigger for the strategic review (loop-token gated
+  // when LOOP_TOKEN is set) and a public read of the latest review notes + runs.
+  if (path === "/api/portfolio/strategic" && request.method === "POST") {
+    const tokP = request.headers.get("x-loop-token") || "";
+    if (env.LOOP_TOKEN && !constEq(tokP, env.LOOP_TOKEN)) return json({ error: "unauthorized" }, 401);
+    const rP = await portfolioStrategicRun(env, { force: url.searchParams.get("force") === "1" }).catch(function(e) {
+      return { error: reachErr(e) };
+    });
+    return json(rP);
+  }
+  if (path === "/api/portfolio/latest") {
+    const notesL = await d1all(env.AUDIT, "SELECT day, program_code, manager_persona, verdict, risk_score, top_actions, narrative FROM program_review_notes ORDER BY day DESC, program_code LIMIT 12").catch(function() { return []; });
+    const runsL = await d1all(env.AUDIT, "SELECT run_date, kind, summary FROM portfolio_runs WHERE kind='weekly-strategic' ORDER BY id DESC LIMIT 4").catch(function() { return []; });
+    return json({ ok: true, notes: notesL, runs: runsL });
+  }
   if (path === "/api/reach/ingest" && request.method === "POST") {
     const tok = request.headers.get("x-loop-token") || "";
     if (!env.LOOP_TOKEN || !constEq(tok || "", env.LOOP_TOKEN)) return json({ error: "unauthorized" }, 401);
@@ -3416,6 +3431,11 @@ var worker_default = {
       // IDENTITY-WEEKLY-1 (moved from qnfo-cloud-ops with IDENTITY-STORE-1): Mondays after 06:00Z, throttled inside on the
       // cloud_ops_events row identity-weekly-<day>.
       ctx.waitUntil(within(identityWeeklyRun(env).catch(function() {
+      })));
+      // PORTFOLIO-STRATEGIC-1 (2026-10-25, PORTFOLIO-MANAGER-1): the portfolio manager persona runs its weekly strategic
+      // review inside this cron (no new worker or cron while fleet_budget caps are breached, CORE-PROMPT-1 rule 8),
+      // Mondays after 06:00Z, throttled on the cloud_ops_events row portfolio-strategic-<day>.
+      ctx.waitUntil(within(portfolioStrategicRun(env).catch(function() {
       })));
       // FLEET-CHANGELOG-1 (1.25.0): new releases from the deploy ledger into fleet_changelog, described from their commits.
       ctx.waitUntil(within(changelogTick(env).catch(function() {
@@ -13710,6 +13730,274 @@ async function ownerRoute(request, env, path, ownerCk) {
   }
   return ownerHtml("Owner", parts.join("\n"));
 }
+// ==== PORTFOLIO-STRATEGIC-1 (2026-10-25, PORTFOLIO-MANAGER-1) ====
+// The portfolio manager persona as a loop, hosted in this worker's existing cron (no new worker, no new cron:
+// fleet_budget caps are breached, CORE-PROMPT-1 rule 8). Mondays after 06:00Z, throttled on the cloud_ops_events
+// row 'portfolio-strategic-<day>' exactly like identityWeeklyRun; POST /api/portfolio/strategic (force=1) runs it
+// on demand. The run:
+//   1. recomputes today's program + portfolio scorecards, so the scorecard computation is loop-owned rather than
+//      session-written (scorecard drift fix);
+//   2. verdicts each program from the fleet's own health view: RED = guard breaches > 0 or the charter's primary
+//      metric is breaching, AMBER = high-open or stalled projects, else GREEN;
+//   3. writes deterministic top actions and portfolio decisions (constrain = highest-risk program, accelerate =
+//      open issues fell >= 20% week over week, stable otherwise);
+//   4. attempts one short narrative per program via its charter persona prompt (fleet_agents) ONLY while no
+//      ai_spend fleet_budget cap is breached; otherwise the deterministic text stands (SLA-AND-PATHS-1: the review's
+//      definition of done never depends on a model call);
+//   5. writes program_review_notes + one portfolio_runs row (kind 'weekly-strategic') and files owner cards
+//      (human_actions) ONLY for genuinely owner-bound items: spend above the A9 ceiling and RED verdicts persisting
+//      for 3+ consecutive review weeks.
+// NEVER: deploys, deletes data, raises caps, edits code.
+var PSR_RISK_HIGH = 3;
+var PSR_RISK_OPEN = 0.3;
+var PSR_RISK_GUARD = 15;
+var PSR_RISK_STALLED = 2;
+var PSR_COST_METRIC = "cost_usd_30d";
+var PSR_COST_CEILING = 200; // metric_registry cost_usd_30d target '<= 200 (A9 ceiling)'; kill_band '> 200'
+var PSR_FREE_MODEL = "@cf/meta/llama-3.3-70b-instruct-fp8-fast";
+var PSR_PAID_MODEL = "deepseek-v4-flash";
+
+function psrNum(x) {
+  const n = Number(x);
+  return isFinite(n) ? n : 0;
+}
+__name(psrNum, "psrNum");
+
+async function psrNoteTable(env) {
+  return env.AUDIT.prepare("CREATE TABLE IF NOT EXISTS program_review_notes (day TEXT NOT NULL, program_code TEXT NOT NULL, manager_persona TEXT, verdict TEXT NOT NULL, risk_score REAL, open_issues INTEGER, high_open INTEGER, guard_breaches INTEGER, stalled_projects INTEGER, primary_metric TEXT, top_actions TEXT, narrative TEXT, computed_at TEXT, PRIMARY KEY (day, program_code))").run();
+}
+__name(psrNoteTable, "psrNoteTable");
+
+async function psrScorecards(env, day) {
+  const rows = await d1all(env.AUDIT, "SELECT program_code, open_issues, high_open, active_projects, stalled_projects, guard_breaches, charter_ok FROM v_program_health");
+  const out = [];
+  for (const r of rows) {
+    out.push({
+      program_code: r.program_code,
+      open: psrNum(r.open_issues),
+      high: psrNum(r.high_open),
+      guard: psrNum(r.guard_breaches),
+      stalled: psrNum(r.stalled_projects),
+      active: psrNum(r.active_projects),
+      charter_ok: psrNum(r.charter_ok),
+      risk: psrNum(r.high_open) * PSR_RISK_HIGH + psrNum(r.open_issues) * PSR_RISK_OPEN + psrNum(r.guard_breaches) * PSR_RISK_GUARD + psrNum(r.stalled_projects) * PSR_RISK_STALLED
+    });
+  }
+  out.sort(function(a, b) {
+    return b.risk - a.risk;
+  });
+  let rank = 0;
+  let totalOpen = 0, totalHigh = 0, totalGuard = 0, totalRisk = 0, constraint = null;
+  for (const p of out) {
+    rank += 1;
+    p.rank = rank;
+    totalOpen += p.open;
+    totalHigh += p.high;
+    totalGuard += p.guard;
+    totalRisk += p.risk;
+    if (constraint == null) constraint = p.program_code;
+    await env.AUDIT.prepare("INSERT OR REPLACE INTO program_scorecards (day, program_code, open_issues, high_open, guard_breaches, active_projects, stalled_projects, charter_ok, risk_score, rank, computed_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, datetime('now'))").bind(day, p.program_code, p.open, p.high, p.guard, p.active, p.stalled, p.charter_ok, p.risk, p.rank).run();
+  }
+  let cost = null;
+  const cm = (await d1all(env.AUDIT, "SELECT last_value FROM metric_registry WHERE metric = ?", [PSR_COST_METRIC]))[0];
+  if (cm && cm.last_value != null) {
+    const c = Number(String(cm.last_value).replace(/[^0-9.\-]/g, ""));
+    if (isFinite(c)) cost = c;
+  }
+  const charterCount = out.filter(function(p) {
+    return p.charter_ok > 0;
+  }).length;
+  const coverage = out.length ? Math.round(100 * charterCount / out.length) : null;
+  await env.AUDIT.prepare("INSERT OR REPLACE INTO portfolio_scorecards (day, open_issues, high_open, guard_breaches, cost_month_usd, programs, charter_coverage_pct, constraint_program, risk_score, computed_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, datetime('now'))").bind(day, totalOpen, totalHigh, totalGuard, cost, out.length, coverage, constraint, totalRisk).run();
+  return { programs: out, totals: { open: totalOpen, high: totalHigh, guard: totalGuard, risk: totalRisk }, cost, constraint };
+}
+__name(psrScorecards, "psrScorecards");
+
+async function psrNarrativeAllowed(env) {
+  try {
+    const fb = await d1all(env.AUDIT, "SELECT cap, current FROM fleet_budget WHERE node_class LIKE 'ai_spend:%'");
+    for (const r of fb) if (psrNum(r.current) > psrNum(r.cap)) return false;
+    return true;
+  } catch (e) {
+    return false; // budget unreadable: stay model-silent (fail toward rule 8)
+  }
+}
+__name(psrNarrativeAllowed, "psrNarrativeAllowed");
+
+async function psrNarrative(env, personaId, promptText, freeOnly) {
+  const models = freeOnly ? [PSR_FREE_MODEL] : [PSR_FREE_MODEL, PSR_PAID_MODEL];
+  let persona = "";
+  try {
+    const fa = (await d1all(env.AUDIT, "SELECT system_prompt FROM fleet_agents WHERE id = ?", [personaId]))[0];
+    persona = fa && fa.system_prompt || "";
+  } catch (e) {
+  }
+  for (const model of models) {
+    try {
+      const ctl = new AbortController();
+      const t = setTimeout(function() {
+        ctl.abort();
+      }, 8000);
+      const r = await env.SVC_QNFO_AI.fetch("https://ai.qnfo.org/v1/chat/completions", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ model, messages: [{ role: "system", content: persona || "You are the QNFO portfolio manager. Report facts only, one short paragraph." }, { role: "user", content: promptText }], max_tokens: 300, temperature: 0.3 }),
+        signal: ctl.signal
+      });
+      clearTimeout(t);
+      if (!r.ok) continue;
+      const j = await r.json();
+      const txt = j && j.choices && j.choices[0] && j.choices[0].message && j.choices[0].message.content;
+      if (txt && String(txt).trim()) return String(txt).trim().slice(0, 700);
+    } catch (e) {
+    }
+  }
+  return null;
+}
+__name(psrNarrative, "psrNarrative");
+
+async function psrReview(env, day) {
+  await psrNoteTable(env);
+  const charters = await d1all(env.AUDIT, "SELECT program_code, objective, primary_metric, manager_persona FROM program_charters WHERE status = 'active'");
+  const sc = await psrScorecards(env, day);
+  const d = new Date(day + "T00:00:00Z");
+  d.setUTCDate(d.getUTCDate() - 7);
+  const prevDay = d.toISOString().slice(0, 10);
+  const histRows = await d1all(env.AUDIT, "SELECT program_code, day, open_issues FROM program_scorecards WHERE day IN (?1, ?2)", [day, prevDay]).catch(function() {
+    return [];
+  });
+  const openBy = { prev: {}, today: {} };
+  for (const r of histRows) openBy[r.day === day ? "today" : "prev"][r.program_code] = psrNum(r.open_issues);
+  const breaches = await d1all(env.AUDIT, "SELECT metric_key, title FROM v_metric_trigger_state WHERE hit = 1").catch(function() {
+    return [];
+  });
+  const breachMap = {};
+  for (const b of breaches) (breachMap[b.metric_key] = breachMap[b.metric_key] || []).push(b.title || b.metric_key);
+  const narrativeAllowed = await psrNarrativeAllowed(env);
+  const notes = [];
+  const jobs = [];
+  for (const p of sc.programs) {
+    const charter = charters.find(function(c) {
+      return c.program_code === p.program_code;
+    }) || {};
+    const pm = charter.manager_persona || "program-manager:" + p.program_code;
+    const primaryBreach = charter.primary_metric ? breachMap[charter.primary_metric] : null;
+    let verdict = "GREEN";
+    const acts = [];
+    if (p.guard > 0) {
+      verdict = "RED";
+      acts.push("close " + p.guard + " guard breach(es)");
+    }
+    if (primaryBreach) {
+      verdict = "RED";
+      acts.push("primary metric " + charter.primary_metric + " breaching: " + primaryBreach.slice(0, 3).join(", "));
+    }
+    if (p.high > 0 && verdict !== "RED") {
+      verdict = "AMBER";
+      acts.push("triage " + p.high + " high-priority open issue(s)");
+    }
+    if (p.stalled > 0 && verdict === "GREEN") {
+      verdict = "AMBER";
+      acts.push("unblock " + p.stalled + " stalled active project(s)");
+    }
+    if (!acts.length) acts.push("maintain; verify " + (charter.primary_metric || "primary metric") + " trend next week");
+    const prevOpen = openBy.prev[p.program_code];
+    const curOpen = openBy.today[p.program_code];
+    const trend = typeof prevOpen === "number" && typeof curOpen === "number" ? (curOpen - prevOpen) / Math.max(1, prevOpen) : null;
+    const note = { code: p.program_code, pm, verdict, risk: p.risk, open: p.open, high: p.high, guard: p.guard, stalled: p.stalled, primary: charter.primary_metric || null, acts: acts.join("; "), trend, narrative: null };
+    notes.push(note);
+    if (narrativeAllowed) {
+      const promptText = "Program " + p.program_code + ". Objective: " + (charter.objective || "-") + ". Today: " + p.open + " open issues (" + p.high + " high), " + p.guard + " guard breaches, " + p.stalled + " stalled projects, risk score " + p.risk.toFixed(1) + ". Week-over-week open-issue change: " + (trend == null ? "unknown" : Math.round(trend * 100) + "%") + ". Write one factual sentence: verdict, main risk, one next action.";
+      jobs.push(psrNarrative(env, pm, promptText, false).then(function(n) {
+        return { code: p.program_code, n };
+      }).catch(function() {
+        return { code: p.program_code, n: null };
+      }));
+    }
+  }
+  if (jobs.length) {
+    const nar = await Promise.all(jobs);
+    for (const x of nar) if (x && x.n) notes.find(function(nt) {
+      return nt.code === x.code;
+    }).narrative = x.n;
+  }
+  for (const nt of notes) {
+    await env.AUDIT.prepare("INSERT OR REPLACE INTO program_review_notes (day, program_code, manager_persona, verdict, risk_score, open_issues, high_open, guard_breaches, stalled_projects, primary_metric, top_actions, narrative, computed_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, datetime('now'))").bind(day, nt.code, nt.pm, nt.verdict, nt.risk, nt.open, nt.high, nt.guard, nt.stalled, nt.primary, nt.acts, nt.narrative).run();
+  }
+  const decisions = [];
+  for (const nt of notes) {
+    if (nt.code === sc.constraint) decisions.push({ program: nt.code, decision: "constrain", why: "highest portfolio risk " + nt.risk.toFixed(1) + "; close guard breaches and high-priority issues first" });
+    else if (nt.trend != null && nt.trend <= -0.2 && nt.verdict !== "RED") decisions.push({ program: nt.code, decision: "accelerate", why: "open issues fell " + Math.round(nt.trend * 100) + "% week-over-week" });
+    else decisions.push({ program: nt.code, decision: "stable", why: "no trigger" });
+  }
+  const needs = [];
+  if (sc.cost != null && sc.cost > PSR_COST_CEILING) {
+    needs.push({ key: "portfolio-cost", action: "Spend decision: " + PSR_COST_METRIC + " = " + sc.cost + " USD/30d above the A9 ceiling (" + PSR_COST_CEILING + "). Raise the ceiling (owner policy) or cut paid calls.", due: null, why: "cost kill-band" });
+    await env.AUDIT.prepare("INSERT OR IGNORE INTO human_actions (slug, title, why, default_in_effect, action, url, sev, due, source) VALUES (?1, ?2, ?3, ?4, ?5, '/owner', 'urgent', ?6, 'portfolio-strategic')").bind("portfolio-cost-" + day, "Portfolio: AI spend above the A9 ceiling", PSR_COST_METRIC + " = " + sc.cost + " USD/30d, ceiling " + PSR_COST_CEILING, "Nothing changes automatically: the loop never raises a cap (CORE-PROMPT-1 rule 8).", "Decide: raise the ceiling, or cut paid calls. The review loop stays model-silent while any ai_spend cap is breached.", day).run();
+  }
+  for (const nt of notes) {
+    if (nt.verdict !== "RED") continue;
+    const hist = await d1all(env.AUDIT, "SELECT verdict FROM program_review_notes WHERE program_code = ?1 AND day < ?2 ORDER BY day DESC LIMIT 2", [nt.code, day]).catch(function() {
+      return [];
+    });
+    if (hist.length === 2 && hist.every(function(h) {
+      return h.verdict === "RED";
+    })) {
+      needs.push({ key: "portfolio-red-" + nt.code, action: nt.code + " RED for 3 consecutive reviews: " + nt.acts, due: null, why: "persistent RED verdict" });
+      await env.AUDIT.prepare("INSERT OR IGNORE INTO human_actions (slug, title, why, default_in_effect, action, url, sev, due, source) VALUES (?1, ?2, ?3, ?4, ?5, '/owner', 'normal', ?6, 'portfolio-strategic')").bind("portfolio-red-" + nt.code + "-" + day, "Portfolio: " + nt.code + " RED for 3 consecutive reviews", nt.acts, "The program manager persona keeps working the program; this card is the escalation.", "Review " + nt.code + ": unblock the loop or accept the program as the constraint for another cycle.", day).run();
+    }
+  }
+  const redCount = notes.filter(function(n) {
+    return n.verdict === "RED";
+  }).length;
+  const summary = "weekly-strategic " + day + ": programs " + notes.length + "; RED " + redCount + "; constraint " + (sc.constraint || "-") + " risk " + psrNum(sc.totals.risk).toFixed(0) + "; cost " + (sc.cost == null ? "unknown" : sc.cost) + " (ceiling " + PSR_COST_CEILING + "); owner items " + needs.length + "; narrative " + (narrativeAllowed ? "on" : "off (ai_spend cap breached, rule 8)");
+  const runRes = await env.AUDIT.prepare("INSERT INTO portfolio_runs (run_date, kind, session, summary, scorecard_json, actions_json, needs_owner) VALUES (?1, 'weekly-strategic', ?2, ?3, ?4, ?5, ?6)").bind(day, NAME + "/" + VERSION, summary, JSON.stringify(sc), JSON.stringify(decisions), JSON.stringify(needs)).run();
+  return { ok: true, day, run_id: runRes.meta && runRes.meta.last_row_id || null, summary, notes: notes.map(function(n) {
+    return { code: n.code, verdict: n.verdict, risk: Math.round(n.risk * 10) / 10, trend_pct: n.trend == null ? null : Math.round(n.trend * 100) };
+  }), decisions, needs, narrative_allowed: narrativeAllowed };
+}
+__name(psrReview, "psrReview");
+
+async function portfolioStrategicRun(env, opts) {
+  opts = opts || {};
+  const nowMs = opts.nowMs || Date.now();
+  const now = new Date(nowMs);
+  if (!env || !env.AUDIT) return { skipped: "AUDIT binding absent" };
+  if (!opts.force && (now.getUTCDay() !== 1 || now.getUTCHours() < 6)) return { not_now: true };
+  const day = now.toISOString().slice(0, 10);
+  const evId = "portfolio-strategic-" + day;
+  let attempts = 1;
+  try {
+    const prev = await d1all(env.AUDIT, "SELECT ts, status, meta FROM cloud_ops_events WHERE id = ?", [evId]);
+    if (prev.length) {
+      let pm = {};
+      try {
+        pm = JSON.parse(prev[0].meta || "{}") || {};
+      } catch (e) {
+      }
+      const att = Number(pm.attempts) || 1;
+      if (prev[0].status === "ok" || prev[0].status === "degraded") return { throttled: day };
+      if (prev[0].status === "running" && nowMs - Date.parse(prev[0].ts) < PORTFOLIO_RUNNING_STALE_MS) return { in_progress: day };
+      if (att >= PORTFOLIO_MAX_ATTEMPTS) return { gave_up: day, attempts: att };
+      attempts = att + 1;
+    }
+  } catch (e) {
+    return { error: reachErr(e) };
+  }
+  const meta = JSON.stringify({ attempts });
+  await env.AUDIT.prepare("INSERT INTO cloud_ops_events (id, ts, kind, text, meta, job, status) VALUES (?1, ?2, 'portfolio-strategic', 'running', ?3, 'qnfo-fleet-dashboard', 'running') ON CONFLICT(id) DO UPDATE SET ts=excluded.ts, status='running', meta=excluded.meta").bind(evId, new Date().toISOString(), meta).run();
+  try {
+    const r = await psrReview(env, day);
+    await env.AUDIT.prepare("UPDATE cloud_ops_events SET status='ok', text=?1 WHERE id=?2").bind(String(r.summary || "ok").slice(0, 400), evId).run();
+    return r;
+  } catch (e) {
+    const msg = "portfolio-strategic error: " + reachErr(e);
+    await env.AUDIT.prepare("UPDATE cloud_ops_events SET status='error', text=?1 WHERE id=?2").bind(msg.slice(0, 400), evId).run();
+    return { error: reachErr(e) };
+  }
+}
+__name(portfolioStrategicRun, "portfolioStrategicRun");
+
 export {
   worker_default as default
 };
