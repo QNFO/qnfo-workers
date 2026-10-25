@@ -40,7 +40,7 @@ import { createHash } from "node:crypto";
 import { gzipSync } from "node:zlib";
 import { fileURLToPath } from "node:url";
 
-export const VERSION = "1.0.3"; // release notes sit next to their code and in git history (VERSION-LINE-NOTES-1): DELETE-DEPTH-1 and DELETE-ADAPT-1 at writeScope, OPTIONAL-ENV-1 at addWorkerCode
+export const VERSION = "1.0.4"; // release notes sit next to their code and in git history (VERSION-LINE-NOTES-1): root-level Workers are inventoried by wrangler.toml name
 export const GRAPH_DB_ID = "a1954b92-d681-4d02-b1f6-f9a2eb4c265d"; // qnfo-graph (also in qnfo-memory-mcp/wrangler.toml)
 export const AUDIT_DB_ID = "35e2e573-92f3-46ac-83c6-22f6429fc5e5"; // qnfo-audit
 export const SNAPSHOT_BUCKET = "qnfo-backups";
@@ -202,6 +202,7 @@ function rank(c) { return { AMBIGUOUS: 0, INFERRED: 1, EXTRACTED: 2, OBSERVED: 3
 // ---------------------------------------------------------------------------------------------------------------------------
 export function liveWorkerDirs(root) {
   const out = [];
+  if (existsSync(join(root, "worker.js")) && existsSync(join(root, "wrangler.toml"))) out.push(".");
   for (const d of readdirSync(root).sort()) {
     if (d.startsWith(".") || d === "node_modules") continue;
     const p = join(root, d);
@@ -931,37 +932,41 @@ export async function buildCode(root, deps, live) {
   const routes = [];
   const parsedToml = new Map();
   for (const w of workers) {
-    const toml = deps.TOML.parse(readFileSync(join(root, w, "wrangler.toml"), "utf8"));
+    const dir = w === "." ? "" : w;
+    const toml = deps.TOML.parse(readFileSync(join(root, dir, "wrangler.toml"), "utf8"));
     parsedToml.set(w, toml);
-    for (const r of [].concat(toml.routes || [])) { const pat = typeof r === "string" ? r : r && r.pattern; if (pat) routes.push([routeHost(pat), w]); }
+    for (const r of [].concat(toml.routes || [])) { const pat = typeof r === "string" ? r : r && r.pattern; if (pat) routes.push([routeHost(pat), toml.name || w]); }
   }
+  const codeNames = workers.map((w) => parsedToml.get(w).name || w);
   if (live) { for (const r of live.routes) routes.push([routeHost(r.pattern), r.script]); for (const d of live.domains) routes.push([d.hostname.toLowerCase(), d.service]); }
-  const hosts = hostIndex(workers.concat(live ? live.workers.map((x) => x.name) : []), routes);
+  const hosts = hostIndex(codeNames.concat(live ? live.workers.map((x) => x.name) : []), routes);
   const liveTables = liveTableIndex(live);
   const codeSql = [];
   for (const w of workers) {
-    const src = readFileSync(join(root, w, "worker.js"), "utf8");
-    const path = w + "/worker.js";
+    const dir = w === "." ? "" : w;
+    const worker = parsedToml.get(w).name || w;
+    const src = readFileSync(join(root, dir, "worker.js"), "utf8");
+    const path = dir ? dir + "/worker.js" : "worker.js";
     const ver = (/var VERSION\s*=\s*["']([^"']+)["']/.exec(src) || [])[1] || null;
-    const pillar = (/#\s*charter-pillar:\s*([\w-]+)/.exec(readFileSync(join(root, w, "wrangler.toml"), "utf8")) || [])[1] || null;
-    g.node("worker:" + w, "worker", w, { worker: w, path: w, attrs: { version: ver, pillar, bytes: src.length } });
-    const wr = addWrangler(g, w, parsedToml.get(w), w + "/wrangler.toml");
+    const pillar = (/#\s*charter-pillar:\s*([\w-]+)/.exec(readFileSync(join(root, dir, "wrangler.toml"), "utf8")) || [])[1] || null;
+    g.node("worker:" + worker, "worker", worker, { worker, path: dir || ".", attrs: { version: ver, pillar, bytes: src.length } });
+    const wr = addWrangler(g, worker, parsedToml.get(w), (dir ? dir + "/" : "") + "wrangler.toml");
     const d1ByBinding = new Map();
     for (const b of [].concat(parsedToml.get(w).d1_databases || [])) d1ByBinding.set(b.binding, b.database_name);
     const before = new Set(g.edges.keys());
-    const r = addWorkerCode(g, w, src, path, { acorn: deps.acorn, walk: deps.walk, declared: wr.declared, hosts, d1ByBinding, liveTables });
+    const r = addWorkerCode(g, worker, src, path, { acorn: deps.acorn, walk: deps.walk, declared: wr.declared, hosts, d1ByBinding, liveTables });
     const bindingUses = new Set();
     for (const [k, e] of g.edges) {
       if (before.has(k)) continue;
       if (e.rel === "uses_binding") bindingUses.add(e.dst.split(".").slice(1).join("."));
       if ((e.rel === "reads" || e.rel === "writes" || e.rel === "creates") && e.dst.startsWith("d1t:")) {
         const [db, ...t] = e.dst.slice(4).split(".");
-        codeSql.push({ worker: w, unit: e.src.split("#")[1], rel: e.rel, db, table: t.join("."), confidence: e.confidence });
+        codeSql.push({ worker, unit: e.src.split("#")[1], rel: e.rel, db, table: t.join("."), confidence: e.confidence });
       }
     }
-    const created = new Set(codeSql.filter((s) => s.worker === w && s.rel === "creates").map((s) => s.db + "." + s.table.toLowerCase()));
-    for (const s of codeSql) if (s.worker === w && created.has(s.db + "." + s.table.toLowerCase())) s.createdInCode = true;
-    codeWorkers.set(w, { declared: wr.declared, crons: wr.crons, envReads: r.envReads, computedEnv: r.computedEnv, optionalEnv: r.optionalEnv, bindingUses });
+    const created = new Set(codeSql.filter((s) => s.worker === worker && s.rel === "creates").map((s) => s.db + "." + s.table.toLowerCase()));
+    for (const s of codeSql) if (s.worker === worker && created.has(s.db + "." + s.table.toLowerCase())) s.createdInCode = true;
+    codeWorkers.set(worker, { declared: wr.declared, crons: wr.crons, envReads: r.envReads, computedEnv: r.computedEnv, optionalEnv: r.optionalEnv, bindingUses });
   }
   addMigrations(g, root);
   addWorkflows(g, root, liveTables);
@@ -1067,6 +1072,8 @@ export async function main(argv) {
 export async function selftest(log = console.log) {
   let fail = 0;
   const ok = (c, m) => { if (!c) { fail++; log("FAIL " + m); } };
+  const repoRoot = join(fileURLToPath(new URL(".", import.meta.url)), "..");
+  ok(liveWorkerDirs(repoRoot).includes("."), "root-level Worker source is inventoried");
   // FLEET-GRAPH-SECRET-1: a secret's value can never reach the graph.
   const canary = "fg-canary-" + "9f3c1a7e";
   const sb = safeBinding({ name: "X_TOKEN", type: "secret_text", text: canary, json: { v: canary }, extra: { deep: canary } });
@@ -1131,11 +1138,12 @@ export async function selftest(log = console.log) {
   const del = deleteStatements("fg_edge", "scope = 'code'", ["src", "rel", "dst"], ["s" + EDGE_SEP + "r" + EDGE_SEP + "d"]);
   ok(del[0].includes("src = 's' AND rel = 'r' AND dst = 'd'"), "delete statement for an edge key");
   // findings
-  const cw = new Map([["w1", { declared: new Map([["DB", "d1"], ["GONE", "kv_namespace"]]), crons: ["5 * * * *"], envReads: new Map([["DB", 3], ["NOPE", 9], ["S", 4]]), computedEnv: false, bindingUses: new Set(["DB"]) }], ["w9", { declared: new Map(), crons: [], envReads: new Map(), computedEnv: false, bindingUses: new Set() }]]);
-  const snap = { workers: [{ name: "w1", bindings: [{ name: "DB", type: "d1", database_id: "id1" }, { name: "S", type: "secret_text" }, { name: "EXTRA", type: "r2_bucket", bucket_name: "b" }], crons: ["0 * * * *"] }, { name: "w2", bindings: [], crons: [] }], d1: [{ name: "db1", id: "id1" }, { name: "lonely", id: "id2" }], kv: [], r2: [{ name: "b" }], queues: [], vectorize: [] };
+  const cw = new Map([["w1", { declared: new Map([["DB", "d1"], ["GONE", "kv_namespace"]]), crons: ["5 * * * *"], envReads: new Map([["DB", 3], ["NOPE", 9], ["S", 4]]), computedEnv: false, bindingUses: new Set(["DB"]) }], ["w9", { declared: new Map(), crons: [], envReads: new Map(), computedEnv: false, bindingUses: new Set() }], ["qnfo-workers", { declared: new Map(), crons: [], envReads: new Map(), computedEnv: false, bindingUses: new Set() }]]);
+  const snap = { workers: [{ name: "w1", bindings: [{ name: "DB", type: "d1", database_id: "id1" }, { name: "S", type: "secret_text" }, { name: "EXTRA", type: "r2_bucket", bucket_name: "b" }], crons: ["0 * * * *"] }, { name: "w2", bindings: [], crons: [] }, { name: "qnfo-workers", bindings: [], crons: [] }], d1: [{ name: "db1", id: "id1" }, { name: "lonely", id: "id2" }], kv: [], r2: [], queues: [], vectorize: [] };
   const f = computeFindings({ codeWorkers: cw, snap, triggersByDb: { db1: [{ name: "a", table: "t1", writes: ["t2"] }] }, codeSql: [{ worker: "w1", unit: "u", rel: "reads", db: "db1", table: "missing_t", confidence: "EXTRACTED" }, { worker: "w1", unit: "u", rel: "reads", db: "db1", table: "t1", confidence: "EXTRACTED" }], liveTables: new Map([["db1", new Set(["t1"])]]) });
   const ids = new Set(f.map((x) => x.id));
   for (const want of ["env-undeclared:w1.NOPE", "binding-declared-not-live:w1.GONE", "binding-live-not-declared:w1.EXTRA", "cron-drift:w1", "untracked-worker:w2", "undeployed-dir:w9", "resource-orphan:d1:lonely", "sql-table-missing:w1:db1.missing_t", "trigger-depth:db1", "binding-unused:w1.EXTRA"]) ok(ids.has(want), "finding " + want);
+  ok(!ids.has("untracked-worker:qnfo-workers"), "root-level Worker with tracked source is not untracked");
   ok(!ids.has("env-undeclared:w1.S") && !ids.has("env-undeclared:w1.DB") && !ids.has("sql-table-missing:w1:db1.t1"), "no false findings for a secret, a binding or an existing table");
   // OPTIONAL-ENV-1: a name the extractor marked optional is an info env-optional-unset (still listed), never a warn; an unmarked one stays a warn
   {
