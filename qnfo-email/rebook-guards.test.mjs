@@ -1,6 +1,7 @@
 // ITIN-STALE-CONFIRM-1 + ITIN-CANCEL-AMBIGUOUS-1 offline fixtures (#1881 gap D). Fakes only; nothing fabricates production mail.
 import fs from "node:fs";
-const src = fs.readFileSync(new URL("./worker.js", import.meta.url), "utf8");
+import { stripWorkerDefaultExport } from "../scripts/worker-source-test.mjs";
+const src = stripWorkerDefaultExport(fs.readFileSync(new URL("./worker.js", import.meta.url), "utf8"));
 const api = new Function(src.replace(/export default\{/, "const __handler={") + "\nreturn {itinParse,itineraryIngest,itinSentIso,VERSION};")();
 const fail = [];
 const eq = (l, g, w) => { if (JSON.stringify(g) !== JSON.stringify(w)) fail.push(l + ": got " + JSON.stringify(g) + " want " + JSON.stringify(w)); };

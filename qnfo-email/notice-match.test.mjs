@@ -5,7 +5,8 @@
 // ADVERSARIAL: it does not prove the deployed version; the closing probes on the issues read live rows for that.
 // Run: node qnfo-email/notice-match.test.mjs
 import fs from "node:fs";
-const src = fs.readFileSync(new URL("./worker.js", import.meta.url), "utf8");
+import { stripWorkerDefaultExport } from "../scripts/worker-source-test.mjs";
+const src = stripWorkerDefaultExport(fs.readFileSync(new URL("./worker.js", import.meta.url), "utf8"));
 const lib = new Function(src.replace(/export default\{/, "const __handler={") +
   "\nreturn {VERSION,isHandoffNoticeReply,noticeSubjectOf,noticeQueueBySubject,noticeReply,itineraryIngest,keyEq,cmdAgent};")();
 const fail = [];

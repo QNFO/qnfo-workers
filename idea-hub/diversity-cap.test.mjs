@@ -16,6 +16,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import vm from "node:vm";
 import { DatabaseSync } from "node:sqlite";
+import { stripWorkerDefaultExport } from "../scripts/worker-source-test.mjs";
 const here = dirname(fileURLToPath(import.meta.url));
 let pass = 0, fail = 0;
 const ok = (c, m, d) => { if (c) pass++; else { fail++; console.log("FAIL " + m + (d === undefined ? "" : " :: " + JSON.stringify(d))); } };
@@ -35,7 +36,7 @@ ok(typeof metric.ideaTopicConcentration === "function", "the metric's ideaTopicC
 const CLUSTERS = [{ label: "quantum", terms: ["quantum", "qubit"] }, { label: "ultrametric", terms: ["ultrametric", "adic", "bruhat", "adelic", "archimedean"] }, { label: "energy", terms: ["landauer", "entropy"] }];
 
 // 2. Harness.
-const src = hubSrc.replace(/export default\s*\{/, "var __default = {");
+const src = stripWorkerDefaultExport(hubSrc.replace(/export default\s*\{/, "var __default = {"));
 const sb = { console: { log: () => {}, error: () => {} }, Date, JSON, Math, Number, String, RegExp, Set, Map, Array, Object, Promise, URL, Response, Request, Headers, TextEncoder, crypto, fetch: async () => { throw new Error("no network"); } };
 vm.createContext(sb);
 vm.runInContext(src + "\n__x = { triageProposals, proposalCluster, diversityBlocks, loadTopicClusters, TOPIC_CACHE_KEY, DIVERSITY_MAX_SHARE, DIVERSITY_MIN_N };", sb);
