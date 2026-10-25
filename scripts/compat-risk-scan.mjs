@@ -25,6 +25,11 @@ import { fileURLToPath } from "node:url";
 
 // Comments are blanked (line count kept) so prose that names process.env is not a hit. A // inside a string (a URL) is
 // kept because it follows a colon or a quote, never whitespace or a statement boundary.
+/**
+ * Replaces JavaScript comments with spaces while preserving source line numbers.
+ * @param {string} src Worker source text.
+ * @returns {string} Source with comment contents blanked.
+ */
 export function stripComments(src) {
   let s = String(src).replace(/\/\*[\s\S]*?\*\//g, (m) => m.replace(/[^\n]/g, " "));
   s = s.replace(/(^|[\s;{}(),])\/\/[^\n]*/g, (m, p) => p + " ".repeat(m.length - p.length));
@@ -33,6 +38,11 @@ export function stripComments(src) {
 
 // String literals on one line are emptied before the checks that would otherwise read prose as code ("keep-alive",
 // a sentence ending in "process."). A template literal that interpolates is kept, because its ${...} is code.
+/**
+ * Blanks string literals from one source line while retaining interpolated template expressions.
+ * @param {string} line One line of JavaScript source.
+ * @returns {string} The line with non-interpolated strings replaced by empty strings.
+ */
 export function blankStrings(line) {
   return String(line).replace(/"(?:[^"\\\n]|\\.)*"|'(?:[^'\\\n]|\\.)*'/g, '""').replace(/`(?:[^`\\]|\\.)*`/g, (m) => m.includes("${") ? m : '""');
 }
@@ -49,6 +59,11 @@ function linesOf(src, re, cap, blank) {
 // Timer results that are kept: `x = setTimeout(`, `x: setTimeout(`, `return setTimeout(`, `.push(setTimeout(`.
 // For a kept name, a numeric use within the next 60 lines is the risk: arithmetic, ordering, typeof, Number(), String(),
 // JSON.stringify, comparison with a digit, or storage (put / set / bind).
+/**
+ * Heuristically detects timer handles that are used as numeric IDs after creation.
+ * @param {string} src Worker source text.
+ * @returns {{kept: number, numeric: {line: number, name: string}[], literal_clear: number[]}}
+ */
 export function timerRisks(src) {
   const lines = src.split("\n");
   const kept = [], numeric = [];
@@ -71,6 +86,7 @@ export function timerRisks(src) {
       new RegExp("(?:^|[^\\w$.])" + v + "\\s*[!=]==?\\s*-?\\d"),
       new RegExp("\\.(?:put|set|bind)\\(\\s*(?:[^)]*[^\\w$.\"'])?" + v + "(?![\\w$\"'])")
     ];
+    // Keep this look-ahead bounded: matching every later use of a common variable name creates unrelated hits.
     for (let k = i; k < Math.min(lines.length, i + 60); k++) {
       const t = blankStrings(k === i ? l.replace(m[0], "") : lines[k]);
       // the timer callback's own delay arithmetic is not a use of the id
@@ -82,6 +98,11 @@ export function timerRisks(src) {
   return { kept: kept.length, numeric, literal_clear: literalClear };
 }
 
+/**
+ * Extracts compatibility settings and relevant resource declarations from Wrangler TOML.
+ * @param {string} toml Wrangler configuration text.
+ * @returns {{compatibility_date: string|null, flags: string[], nodejs_compat: boolean, durable_objects: boolean, containers: boolean, marker: string|null}}
+ */
 export function tomlFacts(toml) {
   const t = String(toml || "");
   const head = t.split(/^\s*\[/m)[0];
@@ -99,6 +120,13 @@ export function tomlFacts(toml) {
   };
 }
 
+/**
+ * Scans Worker source against the compatibility settings for likely runtime-sensitive patterns.
+ * Findings are pattern-based leads for review, not proof of a behavioral incompatibility.
+ * @param {string} source Worker JavaScript source.
+ * @param {string} toml Its Wrangler configuration.
+ * @returns {object} Compatibility facts, line-based findings, risks, and canary eligibility.
+ */
 export function scan(source, toml) {
   const src = stripComments(source);
   const tf = tomlFacts(toml);
@@ -130,6 +158,11 @@ export function scan(source, toml) {
   };
 }
 
+/**
+ * Lists deployable worker directories, excluding hidden, retired, and folded directories.
+ * @param {string} root Repository root.
+ * @returns {string[]} Sorted directory names with both `worker.js` and `wrangler.toml`.
+ */
 export function liveWorkerDirs(root) {
   const out = [];
   for (const d of readdirSync(root).sort()) {
