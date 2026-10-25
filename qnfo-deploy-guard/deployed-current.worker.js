@@ -1,8 +1,8 @@
-// qnfo-deploy-guard v1.3.25 (SECOND-PATH-CANONICAL-1: a successful deploy by canonical-deploy.yml's second path, direct_content_deploy, is not a non-canonical deploy; 1.3.24 LEASE-TOKEN-CSPRNG-1: lease tokens come from crypto.getRandomValues; 1.3.23 SECRET-ONLY-LEDGER-1: a ledgered secret rotation is not a code deploy for NON-CANONICAL-DEPLOY-1) - deploy lock + secret lock + work claims (one procedure: the D1 work_claims ledger and the code loop's tasks are read and written by /work-lock) + concurrent-mutation detector + cost watchdog + heartbeat (expected_version enforcement + per-session attribution + registry version refresh on redeploy + NON-CANONICAL-DEPLOY-1 detection excluding synthetic/test rows AND failed canonical attempts + SETTINGS-ONLY ledger rows + DEPLOY-TICKET-AUTORESOLVE-1 + CAPABILITY-SNAPSHOT-1 + WORK-CLAIM-1 + WORK-CLAIM-UNIFY-1)
+// qnfo-deploy-guard v1.3.29 (WORKERS-BUILDS-TOMBSTONE-1: a content-verified Workers Builds deploy of the retired repository-root stub is LEDGERED as TOMBSTONE-STUB instead of filing UNLOGGED-MUTATION/UNCOORDINATED-DEPLOY; 1.3.28 CLAIM-TERMINAL-RELEASE-1; SECOND-PATH-CANONICAL-1: a successful deploy by canonical-deploy.yml's second path, direct_content_deploy, is not a non-canonical deploy; 1.3.24 LEASE-TOKEN-CSPRNG-1: lease tokens come from crypto.getRandomValues; 1.3.23 SECRET-ONLY-LEDGER-1: a ledgered secret rotation is not a code deploy for NON-CANONICAL-DEPLOY-1) - deploy lock + secret lock + work claims (one procedure: the D1 work_claims ledger and the code loop's tasks are read and written by /work-lock) + concurrent-mutation detector + cost watchdog + heartbeat (expected_version enforcement + per-session attribution + registry version refresh on redeploy + NON-CANONICAL-DEPLOY-1 detection excluding synthetic/test rows AND failed canonical attempts + SETTINGS-ONLY ledger rows + DEPLOY-TICKET-AUTORESOLVE-1 + CAPABILITY-SNAPSHOT-1 + WORK-CLAIM-1 + WORK-CLAIM-UNIFY-1)
 // Worker Contract v1: VERSION constant + GET /health
 // Data: https://ops.qnfo.org/fleet (modified_on per worker) + https://ops.qnfo.org/cost (spend)
 // NOTE: source of truth is this file; GET /workers/scripts/<name> TRUNCATES large bodies - never patch from a GET.
-var VERSION = "1.3.28-codeagent"; /* CLAIM-TERMINAL-RELEASE-1 (2026-10-18): CODE_TASK_DONE now includes superseded, so the guard stops counting a superseded task as live work on its file. */
+var VERSION = "1.3.29-codeagent"; /* WORKERS-BUILDS-TOMBSTONE-1 (2026-10-25, agent_issues 1000142): a Workers Builds rebuild of the retired repository-root stub is ledgered, not filed. CLAIM-TERMINAL-RELEASE-1 (2026-10-18): CODE_TASK_DONE now includes superseded, so the guard stops counting a superseded task as live work on its file. */
 var WORKER = "qnfo-deploy-guard";
 var LOCK_PREFIX = "deploylock:";
 var DENY_PREFIX = "deploydeny:";
@@ -163,6 +163,49 @@ function isSecretOnly(row) {
 // A failed attempt of the second path (ok 0) is still flagged, as a failed canonical attempt is.
 var SECOND_PATH_ACTOR = "canonical-deploy/direct_content_deploy";
 function isSecondPath(row) { return String(row && row.actor || "") === SECOND_PATH_ACTOR; }
+// WORKERS-BUILDS-TOMBSTONE-1 (v1.3.29, 2026-10-25, agent_issues 1000142): the repository root of QNFO/qnfo-workers
+// carries a RETIRED stub (worker.js answers 410 for every path) and the Cloudflare Workers Builds (git integration)
+// rebuilds it as worker "qnfo-workers" on every non-[skip ci] push. That path writes no fleet_deploys row and holds no
+// lock, so every build filed UNLOGGED-MUTATION + UNCOORDINATED-DEPLOY (agent_issues 1000135/1000136, 2026-10-25 07:37Z).
+// The deploy is benign and owner-configured; the correct record is a ledger row, not a ticket.
+//
+// The test is CONTENT, never name alone, so it cannot launder a real deploy:
+//   * two DISTINCT paths must return the SAME 410 body (the stub's fetch ignores the request; a real worker would 404
+//     on the random path, and a worker that special-cased / to look inert would fail the second path);
+//   * that body must carry the retired-stub marker and stay under 1024 bytes;
+//   * only worker "qnfo-workers" is eligible.
+// A code deploy through the root config answers 200 or a different body, and still fires both tickets.
+var TOMBSTONE_WORKER = "qnfo-workers";
+var TOMBSTONE_MARK = "stale duplicate of qnfo-paper-indexer";
+var TOMBSTONE_MAX_BYTES = 1024;
+// Like isSettingsOnly/isSecretOnly, a tombstone row is a real mutation but NOT a code deploy: it satisfies the
+// unlogged-mutation rule and must never stand in for the worker's last code deploy (NON-CANONICAL-DEPLOY-1) nor
+// supersede unknown code in workerSettled().
+function isTombstoneOnly(note) { return String(note || "").indexOf("TOMBSTONE-STUB") === 0; }
+async function tombstoneBody(name) {
+  if (name !== TOMBSTONE_WORKER) return null;
+  var out = [];
+  var paths = ["/", "/__tombstone_probe"];
+  for (var i = 0; i < paths.length; i++) {
+    try {
+      var c = new AbortController(); var t = setTimeout(function () { c.abort(); }, 8000);
+      var r = await fetch("https://" + name + ".q08.workers.dev" + paths[i], { signal: c.signal, headers: { accept: "application/json" } });
+      clearTimeout(t);
+      if (r.status !== 410) return null;
+      var b = await r.text();
+      if (b.length >= TOMBSTONE_MAX_BYTES || b.indexOf(TOMBSTONE_MARK) < 0) return null;
+      out.push(b);
+    } catch (e) { console.error(JSON.stringify({ evt: "deploy-guard:tombstoneBody:caught", error: String((e && e.message) || e) })); return null; }
+  }
+  return out[0] === out[1] ? out[0] : null;
+}
+async function ledgerTombstone(env, name) {
+  var body = await tombstoneBody(name);
+  if (!body) return false;
+  var note = "TOMBSTONE-STUB: Workers Builds deploy of the retired repository-root stub for " + name + " (HTTP 410, " + body.length + " B, identical body on / and /__tombstone_probe, no bindings); benign and owner-configured (qnfo-workers/wrangler.toml). Not a code deploy.";
+  var r = await auditRun(env, "INSERT INTO fleet_deploys (worker, actor, session_id, from_sha, to_sha, source_path, ok, note, ts) VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9)", [name, "workers-builds/git-integration", null, null, null, "workers-builds", 1, note.slice(0, 400), nowIso()]);
+  return !(r && r.ok === false);
+}
 var MUT_SLACK_MS = 180000;
 // WRANGLER-CONTAINER-LEDGER-1 (#1708/#1709): qnfo-code-orchestrator is also a container worker deployed by wrangler
 // (deploy-code-orchestrator.yml) because canonical-deploy skips any directory with [[containers]]. It is NOT in qnfo-ops
@@ -180,7 +223,7 @@ function workerSettled(w, since, rc) {
     var t = ms(rows[i].ts);
     if (!isFinite(t)) continue;
     if (t > lastLogged) lastLogged = t;
-    if (!isSettingsOnly(rows[i].note) && t > since && (!best || t > best.t)) best = { t: t, r: rows[i] };
+    if (!isSettingsOnly(rows[i].note) && !isTombstoneOnly(rows[i].note) && t > since && (!best || t > best.t)) best = { t: t, r: rows[i] };
   }
   if (best && (!isFinite(mo) || mo <= lastLogged + MUT_SLACK_MS)) return "superseded by ledgered deploy fleet_deploys.id=" + best.r.id + " at " + best.r.ts + " (" + String(best.r.note || "").slice(0, 60) + ")";
   var au = rc.audit[w];
@@ -260,7 +303,7 @@ async function scan(env) {
   var fleet = (fp.ok && fp.j && fp.j.fleet) ? fp.j.fleet : [];
   var regAdded = [];
   try { regAdded = await ensureRegistry(env, fleet); } catch (e) { console.error(JSON.stringify({ evt: "deploy-guard:scan:caught", error: String((e && e.message) || e) })); }
-  var snapshot = {}; var changed = []; var anomalies = [];
+  var snapshot = {}; var changed = []; var anomalies = []; var tombstoned = [];
   for (var k = 0; k < fleet.length; k++) {
     var ww = fleet[k]; var mo = ww.modified_on || null;
     snapshot[ww.name] = { mo: mo, at: nowIso() };
@@ -273,6 +316,13 @@ async function scan(env) {
       // ok=0). The failure itself is still surfaced by the non-canonical-deploy pass below
       // (nlr.ok === 0), so no signal is lost.
       var logged = !!(lg && isFinite(ms(lg.ts)) && isFinite(ms(mo)) && ms(lg.ts) >= ms(mo) - 180000);
+      // WORKERS-BUILDS-TOMBSTONE-1: a Workers Builds rebuild of the retired repo-root stub is a real mutation with no
+      // lock and no ledger row. Content-verify it against the live response and LEDGER it instead of filing. Any doubt
+      // (probe failed, unexpected status/body/size, name mismatch) returns false and the normal anomaly path still runs.
+      if (!logged && ww.name === TOMBSTONE_WORKER) {
+        try { if (await ledgerTombstone(env, ww.name)) { logged = true; tombstoned.push(ww.name); } }
+        catch (e) { console.error(JSON.stringify({ evt: "deploy-guard:scan:caught", error: String((e && e.message) || e) })); }
+      }
       var rec = { type: logged ? "deploy-observed" : "unlogged-mutation", worker: ww.name, from_mod: was.mo, to_mod: mo, ledger_to: lg ? lg.to_sha : null, ledger_ts: lg ? lg.ts : null, lock_owner: active[ww.name] ? active[ww.name].owner : null, lock_held: !!active[ww.name] };
       changed.push(rec);
       if (!logged) anomalies.push(rec);
@@ -291,7 +341,7 @@ async function scan(env) {
   // modified_on without touching code, so its mutator now ledgers it with a "SETTINGS-ONLY" note. That row must
   // satisfy the unlogged-mutation rule above (it IS logged) but must NOT stand in for the worker's last CODE
   // deploy here, or every reassert would make a canonically deployed worker look non-canonical.
-  var lastCode = {}; for (var lc = 0; lc < ledger.length; lc++) { if (!isSettingsOnly(ledger[lc].note) && !isSecretOnly(ledger[lc])) lastCode[ledger[lc].worker] = ledger[lc]; }
+  var lastCode = {}; for (var lc = 0; lc < ledger.length; lc++) { if (!isSettingsOnly(ledger[lc].note) && !isSecretOnly(ledger[lc]) && !isTombstoneOnly(ledger[lc].note)) lastCode[ledger[lc].worker] = ledger[lc]; }
   var nonCanon = [];
   for (var ncw in lastCode) {
     if (ncw.indexOf("__") === 0) continue; // test namespace (e.g. __e2e__) - not a real deploy target
@@ -333,7 +383,7 @@ async function scan(env) {
   }
   var ok = fp.ok ? 1 : 0;
   try { await auditRun(env, "INSERT INTO fleet_heartbeat (worker,version,ts,ok) VALUES (?1,?2,?3,?4) ON CONFLICT(worker) DO UPDATE SET version=excluded.version, ts=excluded.ts, ok=excluded.ok", [WORKER, VERSION, nowIso(), ok]); } catch (e) { console.error(JSON.stringify({ evt: "deploy-guard:scan:caught", error: String((e && e.message) || e) })); }
-  var report = { ts: nowIso(), version: VERSION, fleet_probe_ok: fp.ok, fleet_url: fp.url, workers_seen: fleet.length, changed_since_last: changed.length, anomalies: uniq, filed: filed, resolved: resolved, non_canonical: nonCanon, active_locks: Object.keys(active), recent_denials: denials.length, registry_added: regAdded, cost: cost, baseline: Object.keys(prev).length === 0, elapsed_ms: Date.now() - t0 };
+  var report = { ts: nowIso(), version: VERSION, fleet_probe_ok: fp.ok, fleet_url: fp.url, workers_seen: fleet.length, changed_since_last: changed.length, tombstoned: tombstoned, anomalies: uniq, filed: filed, resolved: resolved, non_canonical: nonCanon, active_locks: Object.keys(active), recent_denials: denials.length, registry_added: regAdded, cost: cost, baseline: Object.keys(prev).length === 0, elapsed_ms: Date.now() - t0 };
   try { await env.FLEET_CONFIG.put(SNAP_KEY, JSON.stringify(snapshot), { expirationTtl: 604800 }); } catch (e) { console.error(JSON.stringify({ evt: "deploy-guard:scan:caught", error: String((e && e.message) || e) })); }
   try { await env.FLEET_CONFIG.put(REPORT_KEY, JSON.stringify(report), { expirationTtl: 604800 }); } catch (e) { console.error(JSON.stringify({ evt: "deploy-guard:scan:caught", error: String((e && e.message) || e) })); }
   if (fp.ok) { try { var dn2 = await env.FLEET_CONFIG.list({ prefix: DENY_PREFIX }); for (var z = 0; z < dn2.keys.length; z++) { await env.FLEET_CONFIG.delete(dn2.keys[z].name); } } catch (e) { console.error(JSON.stringify({ evt: "deploy-guard:scan:caught", error: String((e && e.message) || e) })); } }
