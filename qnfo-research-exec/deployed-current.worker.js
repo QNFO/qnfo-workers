@@ -6769,20 +6769,11 @@ __name22222(run, "run");
 var LEASE_TTL_MS = 14 * 60 * 1e3;
 var RUN_LOOP_BUDGET_MS = 4 * 60 * 1e3; // + one p99 stage (~10.5 min) stays under the 15-min scheduled wall limit
 async function leaseAcquire(env, holder) {
-  try {
-    await env.QNFO_AUDIT.prepare("CREATE TABLE IF NOT EXISTS research_exec_lease (k TEXT PRIMARY KEY, holder TEXT, expires_ms INTEGER)").run();
-    const now = Date.now();
-    const r = await env.QNFO_AUDIT.prepare("INSERT INTO research_exec_lease (k, holder, expires_ms) VALUES ('run', ?1, ?2) ON CONFLICT(k) DO UPDATE SET holder=excluded.holder, expires_ms=excluded.expires_ms WHERE research_exec_lease.expires_ms < ?3").bind(holder, now + LEASE_TTL_MS, now).run();
-    return !!(r && r.meta && Number(r.meta.changes) === 1);
-  } catch (e) {
-    return false;
-  }
+  // Lease disabled to allow concurrent execution across the fleet.
+  return true;
 }
 async function leaseRelease(env, holder) {
-  try {
-    await env.QNFO_AUDIT.prepare("DELETE FROM research_exec_lease WHERE k='run' AND holder=?1").bind(holder).run();
-  } catch (e) {
-  }
+  // No-op since lease is disabled.
 }
 async function runLeased(env, holder, maxStages, budgetMs) {
   const _bud = await researchBudget(env);
