@@ -24,7 +24,7 @@ function worker(dir, files) {
 const GOOD = 'export default { fetch() { return new Response("ok"); } };\n';
 
 worker("good", { "worker.js": GOOD, "deployed-current.worker.js": GOOD });
-worker("cfmods", { "worker.js": 'import { DurableObject, WorkflowEntrypoint, RpcTarget, env } from "cloudflare:workers";\nimport { EmailMessage } from "cloudflare:email";\nimport { connect } from "cloudflare:sockets";\nimport { Buffer } from "node:buffer";\nexport class D extends DurableObject {}\nexport class W extends WorkflowEntrypoint {}\n' + GOOD });
+worker("cfmods", { "worker.js": 'import { DurableObject, WorkflowEntrypoint, RpcTarget, env, tracing } from "cloudflare:workers";\nimport { EmailMessage } from "cloudflare:email";\nimport { connect } from "cloudflare:sockets";\nimport { Buffer } from "node:buffer";\nexport class D extends DurableObject {}\nexport class W extends WorkflowEntrypoint {}\n' + GOOD });
 worker("svcworker", { "worker.js": 'addEventListener("fetch", (e) => e.respondWith(new Response("ok")));\n' });
 // the 2026-10-17 break: valid syntax, a sibling module that exists on disk, a deploy that uploads one module
 worker("wellbeing", { "worker.js": 'import { wellbeingTick } from "./wellbeing-wire.js";\nexport default { fetch() { return new Response(String(wellbeingTick)); } };\n', "wellbeing-wire.js": "export const wellbeingTick = 1;\n" });
@@ -46,7 +46,7 @@ ok(workerEntries(root, ["good"]).join() === "good/worker.js", "--only narrows to
 const by = {};
 for (const e of entries) by[e] = await checkOne(root, e, 20);
 ok(by["good/worker.js"].ok, "a plain module worker loads", by["good/worker.js"]);
-ok(by["cfmods/worker.js"].ok, "cloudflare:workers, :email, :sockets and node: builtins load against the stubs", by["cfmods/worker.js"]);
+ok(by["cfmods/worker.js"].ok, "cloudflare:workers tracing, :email, :sockets and node: builtins load against the stubs", by["cfmods/worker.js"]);
 ok(by["svcworker/worker.js"].ok, "service-worker syntax (addEventListener at the top level) loads", by["svcworker/worker.js"]);
 ok(!by["wellbeing/worker.js"].ok && by["wellbeing/worker.js"].cls === "relative-import", "WELLBEING-LOOP-1 replay: a relative import in worker.js is rejected as relative-import", by["wellbeing/worker.js"]);
 ok(!by["parentrel/worker.js"].ok && by["parentrel/worker.js"].cls === "relative-import", "a ../ import is rejected the same way", by["parentrel/worker.js"]);
