@@ -22,7 +22,7 @@
 // 'read' with attempts >= 1, CROSS-FAMILY-1 (ct_im2403) among them. repoSlug() now strips one leading owner segment at
 // intake and at read, so the live queue drains without a data migration and no future owner-qualified row can wedge the
 // loop. The 16 existing rows are repaired in D1 separately. */
-var VERSION = "0.27.0-codeagent"; // CODE-LOOP-SOFT-BUDGET-1: a breached daily call threshold routes to cheaper rungs and one step per tick, never stops the loop; replay provenance survives fresh reads.
+var VERSION = "0.27.1-codeagent"; // CODE-LOOP-BUDGET-CLAIM-SCAN-1: bounded scans past held claims do not consume the capped tick's one executable step.
 /* 0.26.0 VERIFIER-FAILURE-REPLAY-1 (2026-10-25, issue 1000111; pillar autonomy; minor: the loop now recovers terminal tasks after a verifier fix): once, a failed verify-step task with the generic container compile failure is reset to read and retried after deployment, only when it has no branch/PR or active task on the same path. The fresh read and all existing verifiers still gate publication. */
 /* 0.25.4 ARRAYBUFFER-EXEC-OUTPUT-1 (2026-10-25, issue 1000111): Container.exec exposes stdout/stderr as ArrayBuffer; treating them as non-Uint8Array discarded COMPILE_OK and made valid Python fail verification. Normalize both before the existing byte cap; container-output.test.mjs covers the fix. */
 /* 0.25.0 PLAN-TRUST-PARITY-1 + PLAN-RELAPSE-BRIEF-1 (2026-10-20, agent_issues 100303, owner task op-mvg9vjkbaedc; pillar autonomy; minor: the planner now decides on a list it did not decide on before): plan accepts every source the merge runner trusts (ops_config code_merge_trusted_sources, one list), and a metric-relapse issue is planned from the structured fields of metric_registry and analytics_metric_triggers instead of its prose. */
@@ -3413,13 +3413,15 @@ async function tick(env, opts) {
   const lanes = gate.capped ? 1 : Math.max(1, Math.min(Number(opts && opts.lanes) || await opsInt(env, "code_tick_lanes", TICK_LANES, 1, 16), 16));
   const t0 = Date.now();
   const done = [];
+  let executed = 0, scanned = 0;
   // A lane that finds nothing claimable ends ITSELF and no other lane: the other lanes hold live steps whose saves free
   // the next rows, and stopping them was measured (test-loop) as a regression to one step per tick.
   const lane = async function () {
-    while (done.length < maxSteps && Date.now() - t0 < laneBudget) {
+    while ((gate.capped ? executed : done.length) < maxSteps && (!gate.capped || scanned < 64) && Date.now() - t0 < laneBudget) {
       // The claim is atomic (UPDATE ... RETURNING): two lanes can never be handed the same row.
       const task = await claim(env);
       if (!task) return;
+      scanned++;
       // CLAIMS-FIRST-1: a file a session holds is not built against; the task waits for the claim to lapse.
       let holder = null;
       try { holder = await claimEnsure(env, task); } catch (eH) { holder = null; }
@@ -3429,6 +3431,7 @@ async function tick(env, opts) {
         done.push({ id: task.id, step: task.step, ok: false, error: "claim held by " + holder, deferred: true });
         continue;
       }
+      executed++;
       const res = await stepTask(env, task);
       done.push({ id: task.id, step: task.step, ok: res.ok, error: res.error || null, timeout: res.timeout === true ? true : undefined, retry_at: res.timeout === true ? res.retry_at : undefined });
     }
@@ -3445,7 +3448,7 @@ async function tick(env, opts) {
   // is claimable by the next tick instead of at the end of that wait.
   let sla = null;
   if (!opts || opts.sla !== false) { try { sla = await slaSweep(env); } catch (e) { sla = { error: String((e && e.message) || e).slice(0, 200) }; await audit(env, "code-task.sla-error", sla.error, null, "error"); } }
-  return { ok: true, steps: done.length, lanes: lanes, budget_ms: Date.now() - t0, capped: gate.capped === true, calls_today: gate.used, daily_cap: gate.cap, done: done, plan: plan, claims: claims, sla: sla };
+  return { ok: true, steps: done.length, executed_steps: executed, lanes: lanes, budget_ms: Date.now() - t0, capped: gate.capped === true, calls_today: gate.used, daily_cap: gate.cap, done: done, plan: plan, claims: claims, sla: sla };
 }
 async function handleV1(req, env, url) {
   if (!env.AUDIT_DB) return json({ ok: false, error: "AUDIT_DB binding missing" }, 503);
