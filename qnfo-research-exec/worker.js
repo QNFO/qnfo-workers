@@ -328,6 +328,7 @@ async function logEvent(env, kind, text, status) {
     const id = "re-" + Date.now().toString(36) + "-" + crypto.randomUUID().slice(0, 8);
     await env.QNFO_AUDIT.prepare("INSERT INTO cloud_ops_events (id, ts, kind, text, meta, job, status) VALUES (?,?,?,?,?,?,?)").bind(id, nowIso(), kind, String(text).slice(0, 800), "{}", WORKER, status || "ok").run();
   } catch (e) {
+    console.error("[errata-hub] internal confirm: defer event write failed:", String(e && e.message || e).slice(0, 160));
   }
 }
 __name(logEvent, "logEvent");
@@ -6744,6 +6745,7 @@ async function leaseRelease(env, holder) {
   try {
     await env.QNFO_AUDIT.prepare("DELETE FROM research_exec_lease WHERE k='run' AND holder=?1").bind(holder).run();
   } catch (e) {
+    console.error("[errata-hub] internal confirm: defer event write failed:", String(e && e.message || e).slice(0, 160));
   }
 }
 async function runLeased(env, holder, maxStages, budgetMs) {
@@ -29457,6 +29459,7 @@ async function logConfirmDefer(env, row, why) {
   try {
     await env.QNFO_AUDIT.prepare("INSERT INTO cloud_ops_events (ts, kind, job, text) VALUES (datetime('now'), 'errata_confirm_defer', 'qnfo-research-exec', ?)").bind(("queue row " + row.id + ": " + why).slice(0, 450)).run();
   } catch (e) {
+    console.error("[errata-hub] internal confirm: defer event write failed:", String(e && e.message || e).slice(0, 160));
   }
 }
 function confirmRunInput(model, prompt) {
@@ -29546,7 +29549,10 @@ async function confirmInternalErrata(env) {
   out.candidates = rows.length;
   const startedAt = Date.now();
   for (const row of rows) {
-    if (Date.now() - startedAt > INTERNAL_CONFIRM_BUDGET_MS) break;
+    if (Date.now() - startedAt > INTERNAL_CONFIRM_BUDGET_MS) {
+      out.skipped_budget = rows.length - rows.indexOf(row);
+      break;
+    }
     try {
       if (/RENDER-HEALTH/i.test(String(row.sender || ""))) {
         await settleInternalErratum(env, row, "detected", "confirmed without a model call: the finding is a deterministic render measurement (RENDER-HEALTH)");
