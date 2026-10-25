@@ -16,7 +16,7 @@ operations rather than a generic image-metadata reader.
 | Surface | Path | Served by |
 |---|---|---|
 | Bridge (browser module) | `/.webmcp/bridge.js` | every HTML worker below |
-| Tool manifest | `/.webmcp/packs.json` | every HTML worker below |
+| Tool manifest | `/api/webmcp/manifest.json` (what the bridge reads) and `/.webmcp/packs.json` (alias) | every HTML worker below |
 | Manifest + paths | `/.webmcp/manifest.json` | every HTML worker below |
 | Injection | one `<script type="module" src="/.webmcp/bridge.js" data-packs="...">` appended to `<head>` of every 200 HTML response | HTMLRewriter in the same worker |
 
@@ -24,7 +24,7 @@ Workers carrying it: `qnfo-gateway` (qnfo.org, www, papers, archive, legal, qwav
 (fleet.qnfo.org), `idea-hub` (ideas.qnfo.org), `q08-signal-engine` (q08.org), `q08-mind` (mind.q08.org),
 `qnfo-ai-search` (ask.qwav.tech), `qnfo-ipatent` (ipatent.qnfo.org), `qnfo-lifecycle` (empoweringchange.today,
 ipatent.me, q-wave.tech, qwave.tech, qwav.net, qwav.uk and the retired-name subdomains), `personal-companion`
-(reading/travel.q08.org), `qnfo-email` (qnfo.org/email).
+(reading/travel.q08.org) (qnfo-email is deliberately excluded: `qnfo.org/email/` answers 401 to an anonymous visitor, so there is no public page to inject into).
 
 ## Packs
 
@@ -74,3 +74,13 @@ own, and a proxy that accepted a caller-supplied absolute URL would be an SSRF s
 
 Revert the worker's version (the block is inert for any client without `modelContext`) or re-deploy the previous
 commit. No data, binding, route or schedule changes were made by this feature.
+
+## Correction, v1.2.0 (2026-10-25, from the red-team FAIL)
+
+Four measured defects, each fixed and each now locked by a test or a live probe:
+
+1. **The deployed artifact was not the source.** The first deploy shipped v1.0.0 while the module had moved to v1.1.0: `webmcp-apply.mjs --check` reported 10/10 stale. `--check` is now the gate, and it exits 0.
+2. **The manifest sat under a prefix Cloudflare owns.** On a zone with the WebMCP preview on, the edge answers `/.webmcp/bridge.js` (75,756 bytes of the platform bundle) and `/.webmcp/packs.json` 404s without reaching the worker. The bridge now reads `/api/webmcp/manifest.json`; `/.webmcp/packs.json` stays as an alias for hosts where the prefix is free.
+3. **A tool was advertised that answers 503.** `ideas /api/proposals` was removed from the manifest; probes on 2026-10-25 gave `ideas /api/sessions` 200, `q08 /api/metrics` 200, `POST ask.qwav.tech/api/ask` 200.
+4. **A duplicate bridge on the flagship zone.** Read out of the platform bundle, `selectActivePacks()` keeps only the pack names it bundles and does **not** fall back to its defaults, so a second tag carrying `site,papers` downloads the same bundle, registers zero tools and logs two warnings. `wmPlatformOn()` now suppresses our tag on `qnfo.org` and `*.qnfo.org`; the worker supplies `/mcp` and the platform bridge registers it.
+5. **`/mcp` did not exist, so the platform registered nothing.** The MCP server (Streamable HTTP, `initialize` / `notifications/initialized` / `tools/list` / `tools/call`) is the integration point; without it the platform site pack proxies a 404.

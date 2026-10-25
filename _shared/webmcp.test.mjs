@@ -14,7 +14,7 @@ import vm from "node:vm";
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 const BLOCK = readFileSync(join(ROOT, "_shared", "webmcp.js"), "utf8");
 
-const EXPORTS = "\n;globalThis.__wm = { wmManifest, wmPacks, wmRoute, wmBridgeSource, wmAttach, wmPackIds, WM_PACK_DEFS, WM_HOST_PACKS, WM_VERSION, WM_BRIDGE_PATH, WM_PACKS_PATH, WM_MANIFEST_PATH };";
+const EXPORTS = "\n;globalThis.__wm = { wmManifest, wmPacks, wmRoute, wmBridgeSource, wmAttach, wmPackIds, wmMcp, wmMcpCard, wmToolUrl, wmExecTool, WM_PACK_DEFS, WM_HOST_PACKS, WM_VERSION, WM_BRIDGE_PATH, WM_PACKS_PATH, WM_MANIFEST_PATH, WM_MANIFEST_URL, WM_MCP_PATH, wmPlatformOn };";
 
 function loadBlock() {
   const sandbox = { URL, URLSearchParams, Response, Headers, console, String, Number, Array, Object, JSON, RegExp, Math, Date };
@@ -86,7 +86,7 @@ test("route answers exactly the three bridge paths and nothing else", async () =
   assert.equal(js.includes("export "), false, "bridge has no export statements");
   new vm.Script(js); // parses
 
-  const packs = wm.wmRoute(new Request(base + wm.WM_PACKS_PATH), "qnfo-gateway");
+  const packs = wm.wmRoute(new Request(base + wm.WM_MANIFEST_URL), "qnfo-gateway");
   const body = await packs.json();
   assert.equal(body.host, "papers.qnfo.org");
   assert.equal(body.worker, "qnfo-gateway");
@@ -94,6 +94,9 @@ test("route answers exactly the three bridge paths and nothing else", async () =
 
   const man = await wm.wmRoute(new Request(base + wm.WM_MANIFEST_PATH), "qnfo-gateway").json();
   assert.equal(man.paths.bridge, wm.WM_BRIDGE_PATH);
+  assert.equal(man.paths.mcp, wm.WM_MCP_PATH);
+  const legacy = await wm.wmRoute(new Request(base + wm.WM_PACKS_PATH), "qnfo-gateway").json();
+  assert.equal(legacy.tool_count, body.tool_count, "the legacy packs path is the same manifest");
 
   assert.equal(wm.wmRoute(new Request(base + "/api/papers"), "qnfo-gateway"), null, "any other path is not ours");
   assert.equal(wm.wmRoute(new Request(base + "/.webmcp/other"), "qnfo-gateway"), null);
@@ -153,7 +156,7 @@ test("bridge registers every tool and calls the site with a relative path, even 
     location: { href: "https://papers.qnfo.org/papers", pathname: "/papers" },
     fetch: async (url, init) => {
       fetches.push({ url: String(url), init });
-      if (String(url).endsWith("/.webmcp/packs.json")) return new Response(JSON.stringify(manifest), { headers: { "Content-Type": "application/json" } });
+      if (String(url).includes("/api/webmcp/manifest.json")) return new Response(JSON.stringify(manifest), { headers: { "Content-Type": "application/json" } });
       return new Response(JSON.stringify({ ok: true, got: String(url) }), { headers: { "Content-Type": "application/json" } });
     }
   };
@@ -212,4 +215,50 @@ test("a browser without modelContext gets no registration and no error", async (
   assert.equal(sandbox.__webmcp.mode, "standalone");
   assert.equal(sandbox.__webmcp.registered, 0);
   assert.equal(sandbox.__webmcp.tools.length, manifest.tool_count, "the tools are still discoverable to an agent that reads the page state");
+});
+
+test("the bridge stands down where Cloudflare's own WebMCP bridge is already on the page", async () => {
+  // Measured live 2026-10-25: the qnfo.org zone has the platform toggle on, so the edge injects its own bridge and
+  // resolves /.webmcp/bridge.js to the platform bundle before the worker is reached. Registering the same tool names a
+  // second time would collide, so ours must detect that tag and register nothing, while still publishing what it found.
+  const wm = loadBlock();
+  const manifest = wm.wmManifest("papers.qnfo.org", "qnfo-gateway");
+  const registered = [];
+  const sandbox = {
+    console, URL, URLSearchParams, JSON, String, Number, Array, Object, RegExp, Math, Promise, setTimeout,
+    document: {
+      title: "QNFO Papers",
+      querySelectorAll: () => [],
+      querySelector: (sel) => (String(sel).includes("/.webmcp/bridge.js") ? { tagName: "SCRIPT" } : null),
+      documentElement: { getAttribute: () => "en" },
+      modelContext: { registerTool: (t) => { registered.push(t); } }
+    },
+    navigator: {},
+    location: { href: "https://papers.qnfo.org/", pathname: "/" },
+    fetch: async () => new Response(JSON.stringify(manifest), { headers: { "Content-Type": "application/json" } })
+  };
+  sandbox.window = sandbox;
+  sandbox.globalThis = sandbox;
+  vm.createContext(sandbox);
+  new vm.Script(wm.wmBridgeSource()).runInContext(sandbox);
+  await new Promise((r) => setTimeout(r, 30));
+  const state = sandbox.__webmcp;
+  assert.equal(state.supported, true);
+  assert.equal(state.platform_bridge, true);
+  assert.equal(state.mode, "platform");
+  assert.equal(state.registered, 0);
+  assert.equal(registered.length, 0, "no tool was registered twice");
+  assert.ok(state.tools.length > 0, "the tool list is still published for inspection");
+});
+
+test("a platform-toggled zone is left to the platform bridge, and no 503 endpoint is advertised", () => {
+  const wm = loadBlock();
+  assert.equal(wm.wmPlatformOn("qnfo.org"), true);
+  assert.equal(wm.wmPlatformOn("papers.qnfo.org"), true, "every host on the qnfo.org zone is owned by the platform bridge");
+  assert.equal(wm.wmPlatformOn("q08.org"), false);
+  assert.equal(wm.wmPlatformOn("ask.qwav.tech"), false, "a qwav host is not qnfo.org");
+  assert.equal(wm.wmPlatformOn("qnfo.net"), false, "a different zone is not qnfo.org");
+  const names = [];
+  for (const host of Object.keys(wm.WM_HOST_PACKS)) for (const p of wm.wmPacks(host)) for (const tool of p.tools) names.push(tool.name);
+  assert.equal(names.includes("list_proposals"), false, "GET /api/proposals answered 503; a 503 endpoint must not be advertised");
 });

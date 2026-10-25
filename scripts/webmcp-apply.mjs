@@ -34,8 +34,7 @@ export const TARGETS = [
   "qnfo-ai-search",
   "qnfo-ipatent",
   "qnfo-lifecycle",
-  "personal-companion",
-  "qnfo-email"
+  "personal-companion"
 ];
 
 function stripAttach(src) {
