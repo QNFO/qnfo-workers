@@ -1,19 +1,8 @@
 {
-  "audited_at": "2026-10-25 14:35:29",
+  "audited_at": "2026-10-25 15:05:39",
   "d1_write_failures": [],
   "d1_writes_ok": 121,
   "guard": {
-    "_drift_confirm": {
-      "first_pass": [
-        "personal-companion",
-        "q08-mind",
-        "qnfo-fleet-dashboard",
-        "qnfo-gateway",
-        "qnfo-ops"
-      ],
-      "refreshed": true,
-      "second_pass": []
-    },
     "_guard_rc": 0,
     "ahead": [],
     "cf_script_list": true,
@@ -546,7 +535,7 @@
     "sync_workers": [
       {
         "dir": "idea-hub",
-        "version": "1.13.1-ga4-collect-restore",
+        "version": "1.14.0-webmcp-1",
         "worker": "idea-hub"
       },
       {
@@ -581,7 +570,7 @@
       },
       {
         "dir": "qnfo-ai-search",
-        "version": "2.7.1-close-channel",
+        "version": "2.8.0-webmcp-1",
         "worker": "qnfo-ai-search"
       },
       {
@@ -631,7 +620,7 @@
       },
       {
         "dir": "qnfo-gateway",
-        "version": "3.40.1-a2a-agent-1",
+        "version": "3.41.0",
         "worker": "qnfo-gateway"
       },
       {
@@ -651,7 +640,7 @@
       },
       {
         "dir": "qnfo-ipatent",
-        "version": "3.17.2-bp-logging",
+        "version": "3.18.0-webmcp-1",
         "worker": "qnfo-ipatent"
       },
       {
@@ -681,7 +670,7 @@
       },
       {
         "dir": "qnfo-pdf",
-        "version": "1.6.0-no-registrar",
+        "version": "1.7.0",
         "worker": "qnfo-pdf"
       },
       {
@@ -691,7 +680,7 @@
       },
       {
         "dir": "qnfo-social",
-        "version": "0.19.0-no-registrar",
+        "version": "0.19.1-no-registrar",
         "worker": "qnfo-social"
       },
       {
@@ -817,9 +806,9 @@
       "worker": "funding"
     },
     "idea-hub": {
-      "before": "1.13.1-ga4-collect-restore",
+      "before": "1.14.0-webmcp-1",
       "http": 200,
-      "live": "1.13.1-ga4-collect-restore",
+      "live": "1.14.0-webmcp-1",
       "match": 1,
       "note": "SYNC",
       "worker": "idea-hub"
@@ -1057,9 +1046,9 @@
       "worker": "qnfo-ai-calibration"
     },
     "qnfo-ai-search": {
-      "before": "2.7.1-close-channel",
+      "before": "2.8.0-webmcp-1",
       "http": 200,
-      "live": "2.7.1-close-channel",
+      "live": "2.8.0-webmcp-1",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-ai-search"
@@ -1371,9 +1360,9 @@
       "worker": "qnfo-fleet-feed"
     },
     "qnfo-gateway": {
-      "before": "3.40.1-a2a-agent-1",
+      "before": "3.41.0",
       "http": 200,
-      "live": "3.40.1-a2a-agent-1",
+      "live": "3.41.0",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-gateway"
@@ -1439,9 +1428,9 @@
       "worker": "qnfo-intent-orchestrator"
     },
     "qnfo-ipatent": {
-      "before": "3.17.2-bp-logging",
+      "before": "3.18.0-webmcp-1",
       "http": 200,
-      "live": "3.17.2-bp-logging",
+      "live": "3.18.0-webmcp-1",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-ipatent"
@@ -1541,9 +1530,9 @@
       "worker": "qnfo-paper-reviser"
     },
     "qnfo-pdf": {
-      "before": "1.6.0-no-registrar",
+      "before": "1.7.0",
       "http": 200,
-      "live": "1.6.0-no-registrar",
+      "live": "1.7.0",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-pdf"
@@ -1647,9 +1636,9 @@
       "worker": "qnfo-skills-discovery"
     },
     "qnfo-social": {
-      "before": "0.19.0-no-registrar",
+      "before": "0.19.1-no-registrar",
       "http": 200,
-      "live": "0.19.0-no-registrar",
+      "live": "0.19.1-no-registrar",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-social"
