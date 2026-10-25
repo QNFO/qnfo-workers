@@ -199,10 +199,31 @@ def script_exists():
             R["script_exists"] = True
             return True
 
-    # Definitive absence: both GET and LIST must be 404 (or LIST missing the name with a 404)
-    if st == 404 and st_b == 404:
-        R["script_exists"] = False
-        return False
+    # Definitive absence: both GET and LIST returned 404 after a short retry loop.
+    # Deployment may still be propagating, so we retry a few times before giving up.
+    for _ in range(5):
+        # Re‑check GET path.
+        st_retry, _ = req("GET", f"/accounts/{ACCT}/workers/scripts/{SERVICE}", retries=0)
+        if st_retry == 200:
+            R["script_exists"] = True
+            return True
+        # Re‑check LIST path.
+        st_b_retry, jb_retry = req("GET", f"/accounts/{ACCT}/workers/scripts?per_page=100", retries=0)
+        if st_b_retry == 200:
+            names_retry = []
+            if isinstance(jb_retry, dict):
+                for s in (jb_retry.get("result") or []):
+                    if isinstance(s, dict):
+                        names_retry.append(s.get("id") or s.get("name") or "")
+            if SERVICE in names_retry:
+                R["script_exists"] = True
+                return True
+        # If either call gave a non‑404 (e.g., a transient error), break early.
+        if st_retry != 404 or st_b_retry != 404:
+            break
+        time.sleep(2)
+    R["script_exists"] = False
+    return False
 
     # Otherwise we can't be sure; proceed optimistically.
     R["script_exists"] = None
