@@ -9,7 +9,7 @@ let pass = 0, fail = 0;
 const ok = (c, m, x) => { if (c) pass++; else { fail++; console.log("FAIL " + m + (x !== undefined ? " :: " + String(x).slice(0, 300) : "")); } };
 const slice = (a, b) => { const i = src.indexOf(a); const j = src.indexOf(b, i + 1); return i < 0 || j < 0 ? "" : src.slice(i, j); };
 
-ok(src.includes('var VERSION="3.30.4-seo-index-5"'), "version is 3.30.4-seo-index-5");
+ok(src.includes('var VERSION="3.30.5-seo-index-6"'), "version is 3.30.5-seo-index-6");
 
 // (a) IndexNow reaches every engine: the loop must not stop at the first acceptance.
 const idx = slice("async function indexNowSubmit", "__name(indexNowSubmit");
@@ -75,6 +75,10 @@ ok(src.includes("var SEO_PAPER_HUB_COUNT = 5"), "hub count is one named constant
 ok(src.includes("slice(0, 4000)"), "indexnow detail budget holds a full-corpus submission");
 ok(src.includes("reAcc"), "engine count survives a truncated detail (TRUNCATED-DETAIL-1)");
 ok(src.includes("String(e.error).slice(0, 32)"), "per-engine error text is stored compactly");
+
+// REDTEAM-DOUBLE-COUNT-1: the audit and the metric publisher must not each carry their own hub count
+ok(!/sitemapPaperUrls = Number\(sm && sm\.n \|\| 0\) \+ 6/.test(src), "audit does not carry a second literal hub count");
+ok((src.match(/SEO_PAPER_HUB_COUNT/g) || []).length >= 3, "one constant feeds definition, metric and audit");
 
 console.log(pass + " passed, " + fail + " failed");
 if (fail) process.exit(1);
