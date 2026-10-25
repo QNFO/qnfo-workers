@@ -322,7 +322,9 @@ if (typeof lib.redactJobBody === "function") {
   ok(/UPDATE ops_jobs SET\s+payload/.test(mig) && /'cancelled'/.test(mig) && /-1 day/.test(mig), "the scrub blanks payload for terminal rows (cancelled included) older than a day");
   ok(/INTO control_registry/.test(mig) && /ops-jobs-terminal-sweep/.test(mig) && /ops-jobs-payload-redaction/.test(mig) && /INTO queue_sla/.test(mig), "the migration records the retention rule and the continuation tradeoff");
   ok(/continuation/i.test(mig) && /redacted tool output/i.test(mig), "the tradeoff (continuations replay redacted tool output) is recorded in the migration");
-  ok(/continuation/i.test(src.slice(0, src.indexOf("var VERSION") + 8000)) && /redacted tool output/i.test(src.slice(0, src.indexOf("var VERSION") + 8000)), "the VERSION note records that continuations replay redacted tool output");
+  // The window is a slice of the VERSION changelog comment, which grows with every release; widen it
+  // rather than reordering history when a new entry is prepended (2026-10-25, 2.55.2).
+  ok(/continuation/i.test(src.slice(0, src.indexOf("var VERSION") + 20000)) && /redacted tool output/i.test(src.slice(0, src.indexOf("var VERSION") + 20000)), "the VERSION note records that continuations replay redacted tool output");
 }
 
 console.log(pass + " passed, " + fail + " failed");
