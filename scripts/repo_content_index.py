@@ -31,10 +31,10 @@ import json
 import os
 import sys
 import time
-import urllib.error
-import urllib.parse
-import urllib.request
 from concurrent.futures import ThreadPoolExecutor
+from functools import partial
+
+from cloudflare_http import request_json
 
 CF = "https://api.cloudflare.com/client/v4"
 AUDIT_D1 = os.environ.get("QNFO_AUDIT_D1_ID", "35e2e573-92f3-46ac-83c6-22f6429fc5e5")
@@ -59,26 +59,7 @@ SKIP_FILES = {"package-lock.json", "yarn.lock", "pnpm-lock.yaml", "Cargo.lock", 
 SKIP_PATTERNS = ("deployed-current.worker.js",)  # byte-identical mirrors of worker.js
 
 
-def http(url, token, method="GET", body=None, timeout=90, raw=False):
-    data = json.dumps(body).encode() if body is not None else None
-    req = urllib.request.Request(url, data=data, method=method)
-    req.add_header("Authorization", "Bearer " + token)
-    req.add_header("Content-Type", "application/json")
-    req.add_header("User-Agent", "qnfo-repo-content-index/1.0")
-    try:
-        with urllib.request.urlopen(req, timeout=timeout) as r:
-            payload = r.read()
-            if raw:
-                return r.status, payload
-            return r.status, (json.loads(payload.decode("utf-8", "replace")) if payload else {})
-    except urllib.error.HTTPError as e:
-        body_txt = e.read().decode("utf-8", "replace")
-        try:
-            return e.code, json.loads(body_txt)
-        except Exception:
-            return e.code, {"raw": body_txt[:300]}
-    except Exception as e:
-        return 0, {"error": str(e)}
+http = partial(request_json, timeout=90, user_agent="qnfo-repo-content-index/1.0")
 
 
 def d1(acct, token, db, sql, params=None):
