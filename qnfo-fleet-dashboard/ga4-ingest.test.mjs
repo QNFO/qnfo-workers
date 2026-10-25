@@ -74,12 +74,13 @@ ok(db.prepare("SELECT status FROM cloud_ops_events WHERE id='ga4-ingest-2026-10-
 
 db.exec("DELETE FROM cloud_ops_events");
 r = await G.ga4Ingest({ AUDIT: d1, GA4_SA_KEY: SA }, { nowMs: now });
-ok(!r.error && r.written === 6 && r.property === "486253526", "a granted key writes 4 host rows and 2 source rows", r);
+ok(!r.error && r.written === 14 && r.property === "486253526", "a granted key writes 4 host + 2 source + 8 page/channel/country/device rows", r);
 ok(r.property_source === "default" && /no property the service account can read carries G-LV7RHRVW6R \(0 scanned\); reading the default 486253526/.test(r.property_warning || ""), "no accessible property carries the tag: warning, default read", r);
 const rows = db.prepare("SELECT entity_type, entity_id, metric, value, quality FROM reach_signals WHERE source='ga4' ORDER BY entity_type, metric").all();
 ok(rows.some((x) => x.entity_id === "qnfo.org" && x.metric === "screenPageViews" && x.value === 120 && x.quality === "human"), "page views per host", rows);
 ok(!rows.some((x) => x.entity_id === "(not set)"), "a (not set) dimension is skipped");
 ok(rows.some((x) => x.entity_type === "source" && x.entity_id === "bsky.app" && x.metric === "engagedSessions" && x.value === 7), "engaged sessions per source");
+ok(["page", "channel", "country", "device"].every((k) => rows.some((x) => x.entity_type === k)), "the rich ingest stores page, channel, country and device rows", rows.map((x) => x.entity_type));
 ok(calls.filter((c) => c.url.includes(":runReport")).every((c) => JSON.parse(c.body).dateRanges[0].startDate === "2026-10-17"), "the report reads the complete UTC day before now");
 
 const n0 = calls.length;
@@ -129,7 +130,7 @@ ok(/quality unknown/.test(db.prepare("SELECT text FROM cloud_ops_events WHERE ki
 db.exec("DELETE FROM ops_config; DELETE FROM cloud_ops_events; DELETE FROM reach_signals");
 hostMode = "site";
 r = await G.ga4Ingest({ AUDIT: d1, GA4_SA_KEY: SA }, { nowMs: now + 7 * 864e5 });
-ok(!r.error && r.quality === "human" && db.prepare("SELECT COUNT(*) n FROM reach_signals WHERE source='ga4' AND quality='human'").get().n === 6, "a site host in the report keeps quality human", r);
+ok(!r.error && r.quality === "human" && db.prepare("SELECT COUNT(*) n FROM reach_signals WHERE source='ga4' AND quality='human'").get().n === 14, "a site host in the report keeps quality human", r);
 db.exec("DELETE FROM ops_config; DELETE FROM cloud_ops_events; DELETE FROM reach_signals");
 hostMode = "other"; adminMode = "found";
 r = await G.ga4Ingest({ AUDIT: d1, GA4_SA_KEY: SA }, { nowMs: now + 8 * 864e5 });

@@ -10,7 +10,7 @@ var __defProp222 = Object.defineProperty;
 var __name222 = /* @__PURE__ */ __name22((target, value) => __defProp222(target, "name", { value, configurable: true }), "__name");
 var __name2222 = /* @__PURE__ */ __name222((target, value) => Object.defineProperty(target, "name", { value, configurable: true }), "__name");
 // VERSION-LINE-SPLIT-1 (agent_issues 100220): the release notes sit one per line below this statement, newest first, so a VERSION bump is a one-line patch; add a new note as the first line under it.
-var VERSION = "1.56.2-agenttools"; /* 1.55.0 NO-REGISTRAR-1 (2026-10-21): area routing no longer names the closed registrar. */ /* 1.54.0 COST-SUSTAIN-3 (2026-10-21, owner: research and publication <= USD 300/month all-in, realistic use metrics and forecasting; pillar cost): /api/cost carries the cap-aware forecast (v_cost_forecast bound_daily_usd, bound_30d_usd, forecast_bounded_month_usd: month-to-date + remaining days x min(3-day pace, what the configured daily caps allow)), research neurons per published version and the provider-billed AI Gateway figure; the cost area headline is the month forecast instead of a 7-day mean x 30 that cannot see the caps. */ /* 1.52.0 COST-SUSTAIN-1 (2026-10-21, pillar cost): /api/cost adds forecast (v_cost_forecast: per-scope month-to-date, 3-day pace, month-end forecast vs the owner USD 300 fleet budget) and research_budget_today (neurons spent vs qnfo-research-exec research_daily_neurons). */
+var VERSION = "1.57.0-ga4-rich"; /* 1.57.0 GA4-RICH-1 (2026-10-25, pillar reach; owner directive 2026-10-25: "ensure fleet dashboard metrics contain full-scope of rich Google Analytics data"): new /analytics page and /api/ga4/overview JSON read the GA4 Data API for property 486253526 (measurement id G-LV7RHRVW6R) at request time: 28 complete-day totals beside the previous 28 days, the daily series, top pages, channels, countries, devices, hosts and a 30-minute realtime count, each panel naming its source and a failed report null with its reason. The daily ingest also stores page, channel, country and device rows in reach_signals, and judges the property by a 7-day host probe so one zero-traffic day cannot mark a correct property foreign. GA4-COLLECT-RESTORE-1 in qnfo-gateway 3.30.1 restores the gtag.js tag the ZARAZ-GA4-1 change removed on 2026-10-12; this page is the read side of that fix. */ /* 1.55.0 NO-REGISTRAR-1 (2026-10-21): area routing no longer names the closed registrar. */ /* 1.54.0 COST-SUSTAIN-3 (2026-10-21, owner: research and publication <= USD 300/month all-in, realistic use metrics and forecasting; pillar cost): /api/cost carries the cap-aware forecast (v_cost_forecast bound_daily_usd, bound_30d_usd, forecast_bounded_month_usd: month-to-date + remaining days x min(3-day pace, what the configured daily caps allow)), research neurons per published version and the provider-billed AI Gateway figure; the cost area headline is the month forecast instead of a 7-day mean x 30 that cannot see the caps. */ /* 1.52.0 COST-SUSTAIN-1 (2026-10-21, pillar cost): /api/cost adds forecast (v_cost_forecast: per-scope month-to-date, 3-day pace, month-end forecast vs the owner USD 300 fleet budget) and research_budget_today (neurons spent vs qnfo-research-exec research_daily_neurons). */
 /* 1.51.19 VERSION-LINE-SPLIT-1 (2026-10-20, agent_issues 100220, pillar autonomy; patch: layout only): the release notes that sat on the VERSION line (202,642 chars) are one per line below it, so a bump is a one-line patch and the publisher's size cap stops refusing dashboard code tasks (5 of 5 on 2026-10-19); scripts/conflict_repair.py resolves note-line hunks (merge_note_hunk). No behaviour change. */
 /* 1.51.17 COST-FEED-7D-WINDOW-1 (2026-10-19, agent_issues 100169, pillar cost; patch): /api/cost by_model_7d and by_worker_7d sum the 7 complete UTC days (today, a partial day, was a 8th bucket under the 7d label, +31.8 percent), and the body says which days (window_7d) and that est_usd is list price before the free tier (est_usd_basis). */
 /* 1.51.16 PARKED-CARD-REASON-1 (2026-10-19, agent_issues 100173, pillar autonomy; patch): the parked code-task card branches on the cause wherever it sits in last_error (the loop writes "model <id>: noop-proposal: ..." and "model <id> proposed no change", so a prefix test never matched), and the dead execOne edit of PR 3106 (fleet_issue_dispatch has no last_error) is removed. */
@@ -2279,7 +2279,8 @@ var AREA_REGISTRY = [
     queue: { sources: [], rx: /paper|q08|research|publication|publish|osf|manuscript|idea/i } },
   { id: "reach", name: "Reach and growth", short: "Reach", what: "who reads it: pageviews, referrers, search, outreach, subscribers, attention", sources: ["v_metric_trigger_state", "metric_history", "outreach_queue"],
     rx: /subscri|pageview|referr|social|outreach|work_with_me|inbound_contact|attention|impression|engage|reply_rate|distribution|buffer/, star: { key: "pageviews_30d", label: "Pageviews, 30d", unit: "", good: "up" },
-    flows: ["outreach"], widgets: ["progress", "controls"], controls: ["social_paused"], pages: [],
+    flows: ["outreach"], widgets: ["progress", "controls"], controls: ["social_paused"],
+    pages: [{ key: "analytics", label: "Google Analytics 4", href: "/analytics", feed: "/api/ga4/overview" }],
     queue: { sources: ["inbox"], rx: /subscriber|social|bluesky|linkedin|mastodon|outreach|audience|inbox|pageview|referrer|buffer|newsletter|substack/i } },
   { id: "autonomy", name: "Autonomy loop", short: "Autonomy", what: "how the fleet works on itself: issues, the code loop, remedies, dispatches, the owner queue", sources: ["v_metric_trigger_state", "metric_history", "agent_issues", "code_tasks", "human_actions"],
     rx: /issue|code_|remedy|fix_|mttr|driver|watchmaker|contracts|session_|owner_dispatch|human_wait|backlog/, star: { key: "open_agent_issues", label: "Open issues", unit: "", good: "down" },
@@ -2441,6 +2442,7 @@ var API_INDEX = [
   { path: "/api/content", area: "research", source: "live", lag_s: 60, method: "GET", auth: "open", schema_version: "content-pipeline/v1", cache: "public 15s, ETag (60 s in isolate memory)", freshness: "v_content_pipeline, living-paper, q08-signal", what: "The content production line end to end." },
   { path: "/api/changelog", area: "platform", source: "live", lag_s: 60, method: "GET", auth: "open (personal releases for a holder)", schema_version: "changelog/v2", cache: "public 15s, ETag", freshness: "deployment_history, enriched every 15 min", what: "What the fleet shipped for itself, newest first. One page of 20 by default (?limit=1..200, ?offset=, ?limit=all for the 267-release history it used to send whole). Send If-None-Match or ?since=<revision>." },
   { path: "/api/ga4", area: "reach", source: "live", lag_s: 60, method: "GET", auth: "open", schema_version: "ga4/v1", cache: "public 15s, ETag", freshness: "one ga4-ingest ledger row a day", what: "GA4 ingest runs and whether the service-account key is present." },
+  { path: "/api/ga4/overview", area: "reach", source: "live", lag_s: 300, method: "GET", auth: "open", schema_version: "ga4-overview/v1", cache: "public 60s, in-isolate 5 min", freshness: "read from the GA4 Data API when the page opens; 28 complete UTC days and a 30-minute realtime count", what: "Google Analytics 4: 28-day totals with the previous window, the daily series, top pages, channels, countries, devices, hosts and realtime." },
   { path: "/api/cost", area: "cost", source: "live", lag_s: 60, method: "GET", auth: "open", schema_version: "fleet-cost/v1", cache: "public 15s, ETag", freshness: "v_cost_run_rate, cost_daily, ai_call_counters and fleet_budget read at request time", what: "Spend: the 30-day run-rate by source, 14 days of daily spend, Workers AI calls, errors and neurons by model and by worker over 7 days, and every spend budget with its headroom." },
   { path: "/api/q08-review", area: "research", source: "live", lag_s: 60, method: "GET", auth: "open", schema_version: "q08-review-status/v1", cache: "public 15s, ETag", freshness: "the one-shot 2026-10-31 review state", what: "q08's human-read review: decision, rule and last attempt." },
   { path: "/api/area/<id>", method: "GET", auth: "open", area: "platform", source: "live", lag_s: 60, schema_version: "fleet-area-feed/v1", cache: "public 15s, ETag", freshness: "v_metric_trigger_state, metric_history, code_tasks, research_queue, outreach_queue, agent_issues read at request time (60 s at most in isolate memory)", what: "One functional area as its own feed: its star metric and trend, its breaches ranked, its named constraint, its pipelines, and the reads that belong to it with each one's declared lag (?full=1 adds the whole lever text and every breach row). Send If-None-Match or ?since=<revision>." },
@@ -2818,6 +2820,16 @@ if (path === "/health") {
   }
   // GA4-DATA-API-1: GET is open (the ledger rows only: day, status, row count, reason; no numbers beyond the count);
   // POST ?day=YYYY-MM-DD&force=1 re-reads a day on the loop token.
+  // GA4-RICH-1 (1.57.0): the full GA4 read and its page, open and read-only.
+  if ((path === "/analytics" || path === "/analytics/" || path === "/api/ga4/overview") && request.method === "GET") {
+    let gv = null;
+    try { gv = await ga4OverviewData(env); } catch (e) { console.error(JSON.stringify({ worker: NAME, where: "ga4Overview", error: reachErr(e) })); }
+    if (path === "/api/ga4/overview") {
+      if (!gv) return json({ ok: false, error: "GA4 overview unavailable" }, 503);
+      return rtRead(request, url, gv, { schema: "ga4-overview/v1" });
+    }
+    return new Response(ga4Html(gv, !!(owner.authed || owner.loop)), { headers: { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "public, max-age=60" } });
+  }
   if (path === "/api/ga4") {
     if (request.method === "POST") {
       const tokG = request.headers.get("x-loop-token") || "";
@@ -4899,11 +4911,32 @@ async function ga4Ingest(env, opts) {
     // 2026-10-01, human_actions card 3) the default property is read on trust. When its host report carries none of the site hosts it
     // is a different property: the rows are kept for the record as quality "unknown" and the ledger line says why.
     const hostRowsProbe = ga4Rows(day, byHost, "host", hostMetrics);
-    const carriesSite = hostRowsProbe.some(function(r) { return GA4_SITE_HOST_RE.test(String(r.entity_id || "")); });
+    let carriesSite = hostRowsProbe.some(function(r) { return GA4_SITE_HOST_RE.test(String(r.entity_id || "")); });
+    // GA4-RICH-1: a day with no traffic carries no host row, so a single zero day would mark a correct property foreign.
+    // Judge the property over the 7 days ending on the day being read before writing quality "unknown".
+    if (!carriesSite) {
+      try {
+        const wkFrom = new Date(nowMs - 7 * 864e5).toISOString().slice(0, 10);
+        const wkRep = await ga4RunReport(token, property, { dateRanges: [{ startDate: wkFrom, endDate: day }], dimensions: [{ name: "hostName" }], metrics: [{ name: "screenPageViews" }], limit: 100 });
+        carriesSite = ga4Rows(day, wkRep, "host", ["screenPageViews"]).some(function(r) { return GA4_SITE_HOST_RE.test(String(r.entity_id || "")); });
+      } catch (e) { /* stays false; the ledger line says why */ }
+    }
     const rowQuality = carriesSite || out.property_source === "discovered" || pinned ? "human" : "unknown";
     if (rowQuality === "unknown") out.property_warning = (out.property_warning ? out.property_warning + "; " : "") + "the property read carries none of the site hosts, rows stored as quality unknown (not a site measurement)";
     out.quality = rowQuality;
-    const rows = ga4Rows(day, byHost, "host", hostMetrics, rowQuality).concat(ga4Rows(day, bySource, "source", ["sessions", "engagedSessions"], rowQuality));
+    let rows = ga4Rows(day, byHost, "host", hostMetrics, rowQuality).concat(ga4Rows(day, bySource, "source", ["sessions", "engagedSessions"], rowQuality));
+    // GA4-RICH-1: store the page, channel, country and device rows too, so reach_signals carries the same scope the
+    // dashboard renders and a later question needs no second API read.
+    const richDims = [
+      { dim: "pagePath", type: "page", metrics: ["screenPageViews", "activeUsers", "sessions"] },
+      { dim: "sessionDefaultChannelGroup", type: "channel", metrics: ["sessions", "engagedSessions", "activeUsers"] },
+      { dim: "country", type: "country", metrics: ["activeUsers", "sessions", "screenPageViews"] },
+      { dim: "deviceCategory", type: "device", metrics: ["activeUsers", "sessions"] }
+    ];
+    for (const rd of richDims) {
+      const rep = await ga4Safe([], "ingest " + rd.type, token, property, { dateRanges: range, dimensions: [{ name: rd.dim }], metrics: rd.metrics.map(function(n) { return { name: n }; }), limit: 20, orderBys: [{ metric: { metricName: rd.metrics[0] }, desc: true }] });
+      if (rep) rows = rows.concat(ga4Rows(day, rep, rd.type, rd.metrics, rowQuality));
+    }
     for (let i = 0; i < rows.length; i += 12) {
       const chunk = rows.slice(i, i + 12);
       const binds = [];
@@ -4924,6 +4957,199 @@ async function ga4Ingest(env, opts) {
   if (out.error) console.error(JSON.stringify({ worker: NAME, where: "ga4Ingest", day, error: out.error }));
   return out;
 }
+// ==== GA4-RICH-1 (1.57.0, 2026-10-25): the full Google Analytics 4 read ====
+// GA4-RICH-1 (1.57.0, pillar reach; owner directive 2026-10-25: "ensure fleet dashboard metrics contain full-scope of rich
+// Google Analytics data"). GET /api/ga4/overview and GET /analytics read the GA4 Data API (property 486253526, measurement
+// id G-LV7RHRVW6R) when the page is opened: 28 complete-day totals beside the previous 28 days, the daily series, the top
+// pages, channels, countries, devices and hosts, and a 30-minute realtime count. Every panel names its source, a failed
+// report is null with its reason, never a fabricated zero. Property discovery through the Analytics Admin API cannot run:
+// the Admin API is disabled in the service account's project (SERVICE_DISABLED, project 254457120993), so the property is
+// pinned in ops_config ga4_property_id and the page says so. GA4 drops known bots itself; Cloudflare RUM stays the
+// independent second source on /kpi. The read is cached for GA4_OVERVIEW_TTL_MS so a refresh does not spend quota.
+var GA4_OVERVIEW_TTL_MS = 3e5;
+var GA4_OVERVIEW_DAYS = 28;
+var ga4OverviewCache = null;
+var GA4_TOTAL_METRICS = ["activeUsers", "newUsers", "totalUsers", "sessions", "engagedSessions", "screenPageViews", "eventCount", "engagementRate", "averageSessionDuration", "bounceRate"];
+var GA4_METRIC_LABEL = {
+  activeUsers: "Active users", newUsers: "New users", totalUsers: "Total users", sessions: "Sessions",
+  engagedSessions: "Engaged sessions", screenPageViews: "Page views", eventCount: "Events",
+  engagementRate: "Engagement rate", averageSessionDuration: "Avg session duration", bounceRate: "Bounce rate"
+};
+function ga4DimsOf(report) {
+  const dims = ((report && report.dimensionHeaders) || []).map(function(h) { return h.name; });
+  const mets = ((report && report.metricHeaders) || []).map(function(h) { return h.name; });
+  const rows = ((report && report.rows) || []).map(function(r) {
+    const d = {}, m = {};
+    (r.dimensionValues || []).forEach(function(v, i) { d[dims[i]] = String(v.value || ""); });
+    (r.metricValues || []).forEach(function(v, i) { m[mets[i]] = Number(v.value); });
+    return { d: d, m: m };
+  });
+  return { dims: dims, mets: mets, rows: rows };
+}
+function ga4TotalsOf(report) {
+  const p = ga4DimsOf(report);
+  const m = p.rows.length ? p.rows[0].m : {};
+  const out = {};
+  for (const k of GA4_TOTAL_METRICS) out[k] = Number.isFinite(m[k]) ? m[k] : null;
+  return out;
+}
+function ga4Day(day) {
+  const s = String(day || "");
+  return /^\d{8}$/.test(s) ? s.slice(0, 4) + "-" + s.slice(4, 6) + "-" + s.slice(6, 8) : s;
+}
+async function ga4PropertyPinned(env) {
+  try {
+    const c = await d1all(env.AUDIT, "SELECT value FROM ops_config WHERE key = 'ga4_property_id'");
+    if (c.length && /^\d+$/.test(String(c[0].value).trim())) return { id: String(c[0].value).trim(), source: "pinned in ops_config ga4_property_id" };
+  } catch (e) { /* the note on the page says the source; a missing table is not a failed report */ }
+  return { id: GA4_PROPERTY_ID_DEFAULT, source: "the code default (no ops_config pin)" };
+}
+async function ga4Safe(errors, panel, token, property, body) {
+  try { return await ga4RunReport(token, property, body); }
+  catch (e) { errors.push({ panel: panel, error: reachErr(e) }); return null; }
+}
+async function ga4RealtimeReport(token, property) {
+  const r = await fetch("https://analyticsdata.googleapis.com/v1beta/properties/" + encodeURIComponent(property) + ":runRealtimeReport", {
+    method: "POST",
+    headers: { Authorization: "Bearer " + token, "Content-Type": "application/json" },
+    body: JSON.stringify({ metrics: [{ name: "activeUsers" }], dimensions: [{ name: "unifiedScreenName" }], limit: 10 }),
+    signal: AbortSignal.timeout(15000)
+  });
+  const j = await r.json().catch(function() { return {}; });
+  if (!r.ok) throw new Error("runRealtimeReport " + r.status + " " + String(j.error && j.error.status || "").slice(0, 40));
+  return j;
+}
+async function ga4OverviewData(env, opts) {
+  const now = (opts && opts.nowMs) || Date.now();
+  if (ga4OverviewCache && now - ga4OverviewCache.at < GA4_OVERVIEW_TTL_MS) return ga4OverviewCache.v;
+  const asOf = new Date(now).toISOString();
+  const errors = [];
+  const key = ga4ParseKey(env.GA4_SA_KEY);
+  if (!key) throw new Error(env.GA4_SA_KEY ? "GA4_SA_KEY is not a service-account JSON key" : "GA4_SA_KEY is not set");
+  const token = await ga4AccessToken(key, now);
+  const prop = await ga4PropertyPinned(env);
+  const DAY = 864e5;
+  const iso = function(ms) { return new Date(ms).toISOString().slice(0, 10); };
+  const end = iso(now - DAY);
+  const start = iso(now - GA4_OVERVIEW_DAYS * DAY);
+  const prevEnd = iso(now - (GA4_OVERVIEW_DAYS + 1) * DAY);
+  const prevStart = iso(now - (2 * GA4_OVERVIEW_DAYS + 1) * DAY);
+  const range = [{ startDate: start, endDate: end }];
+  const prevRange = [{ startDate: prevStart, endDate: prevEnd }];
+  const metrics = GA4_TOTAL_METRICS.map(function(n) { return { name: n }; });
+  const results = await Promise.all([
+    ga4Safe(errors, "totals", token, prop.id, { dateRanges: range, metrics: metrics }),
+    ga4Safe(errors, "previous totals", token, prop.id, { dateRanges: prevRange, metrics: metrics }),
+    ga4Safe(errors, "daily series", token, prop.id, { dateRanges: range, dimensions: [{ name: "date" }], metrics: [{ name: "activeUsers" }, { name: "sessions" }, { name: "screenPageViews" }], limit: 60, orderBys: [{ dimension: { dimensionName: "date" } }] }),
+    ga4Safe(errors, "top pages", token, prop.id, { dateRanges: range, dimensions: [{ name: "pagePath" }], metrics: [{ name: "screenPageViews" }, { name: "activeUsers" }, { name: "sessions" }], limit: 25, orderBys: [{ metric: { metricName: "screenPageViews" }, desc: true }] }),
+    ga4Safe(errors, "channels", token, prop.id, { dateRanges: range, dimensions: [{ name: "sessionDefaultChannelGroup" }], metrics: [{ name: "sessions" }, { name: "engagedSessions" }, { name: "activeUsers" }], limit: 20, orderBys: [{ metric: { metricName: "sessions" }, desc: true }] }),
+    ga4Safe(errors, "countries", token, prop.id, { dateRanges: range, dimensions: [{ name: "country" }], metrics: [{ name: "activeUsers" }, { name: "sessions" }, { name: "screenPageViews" }], limit: 25, orderBys: [{ metric: { metricName: "activeUsers" }, desc: true }] }),
+    ga4Safe(errors, "devices", token, prop.id, { dateRanges: range, dimensions: [{ name: "deviceCategory" }], metrics: [{ name: "activeUsers" }, { name: "sessions" }], limit: 10, orderBys: [{ metric: { metricName: "activeUsers" }, desc: true }] }),
+    ga4Safe(errors, "hosts", token, prop.id, { dateRanges: range, dimensions: [{ name: "hostName" }], metrics: [{ name: "screenPageViews" }, { name: "activeUsers" }, { name: "sessions" }, { name: "engagedSessions" }], limit: 50, orderBys: [{ metric: { metricName: "screenPageViews" }, desc: true }] })
+  ]);
+  let realtime = null;
+  try {
+    const rt = await ga4RealtimeReport(token, prop.id);
+    const p = ga4DimsOf(rt);
+    realtime = {
+      active_users: p.rows.reduce(function(a, r) { return a + (r.m.activeUsers || 0); }, 0),
+      screens: p.rows.map(function(r) { return { screen: r.d.unifiedScreenName, users: r.m.activeUsers }; }).filter(function(x) { return x.screen && x.screen !== "(not set)"; }).slice(0, 10)
+    };
+  } catch (e) { errors.push({ panel: "realtime", error: reachErr(e) }); }
+  const totals = ga4TotalsOf(results[0]);
+  const prevTotals = ga4TotalsOf(results[1]);
+  const deltas = {};
+  for (const k of GA4_TOTAL_METRICS) deltas[k] = totals[k] !== null && prevTotals[k] !== null && prevTotals[k] !== 0 ? (totals[k] - prevTotals[k]) / prevTotals[k] : null;
+  // GA4-RICH-1: GA4 omits a day with no data, so the series is built over the whole window with null for a missing day.
+  // null is drawn as "not measured", never as zero: zero traffic and a broken collection look identical in the API.
+  const dailySeen = {};
+  for (const r of ga4DimsOf(results[2]).rows) dailySeen[ga4Day(r.d.date)] = { users: r.m.activeUsers, sessions: r.m.sessions, pageviews: r.m.screenPageViews };
+  const daily = [];
+  for (let i = 0; i < GA4_OVERVIEW_DAYS; i++) {
+    const d = iso(now - (GA4_OVERVIEW_DAYS - i) * DAY);
+    const seen = dailySeen[d];
+    daily.push({ day: d, users: seen ? seen.users : null, sessions: seen ? seen.sessions : null, pageviews: seen ? seen.pageviews : null });
+  }
+  const pages = ga4DimsOf(results[3]).rows.map(function(r) { return { path: r.d.pagePath, pageviews: r.m.screenPageViews, users: r.m.activeUsers, sessions: r.m.sessions }; });
+  const channels = ga4DimsOf(results[4]).rows.map(function(r) { return { channel: r.d.sessionDefaultChannelGroup, sessions: r.m.sessions, engaged: r.m.engagedSessions, users: r.m.activeUsers }; });
+  const countries = ga4DimsOf(results[5]).rows.map(function(r) { return { country: r.d.country, users: r.m.activeUsers, sessions: r.m.sessions, pageviews: r.m.screenPageViews }; });
+  const devices = ga4DimsOf(results[6]).rows.map(function(r) { return { device: r.d.deviceCategory, users: r.m.activeUsers, sessions: r.m.sessions }; });
+  const hosts = ga4DimsOf(results[7]).rows.map(function(r) { return { host: r.d.hostName, pageviews: r.m.screenPageViews, users: r.m.activeUsers, sessions: r.m.sessions, engaged: r.m.engagedSessions }; });
+  const v = {
+    ok: true, schema: "ga4-overview/v1", as_of: asOf, version: VERSION,
+    property: prop.id, property_source: prop.source, measurement_id: GA4_MEASUREMENT_ID,
+    range: { start: start, end: end, days: GA4_OVERVIEW_DAYS },
+    previous: { start: prevStart, end: prevEnd },
+    totals: totals, previous_totals: prevTotals, deltas: deltas,
+    daily: daily, pages: pages, channels: channels, countries: countries, devices: devices, hosts: hosts, realtime: realtime,
+    errors: errors,
+    notes: [
+      "GA4 drops known bots itself; Cloudflare RUM (bot-filtered) stays the independent second source on /kpi.",
+      "Property discovery through the Analytics Admin API is unavailable: the Admin API is disabled in the service account's project (SERVICE_DISABLED, project 254457120993). The property is " + prop.source + ".",
+      "Standard GA4 reports cover complete UTC days and can lag by up to 48 hours; realtime covers the last 30 minutes.",
+      "A failed report is null with its reason, never a zero."
+    ]
+  };
+  ga4OverviewCache = { at: now, v: v };
+  return v;
+}
+function ga4Delta(ratio) {
+  if (ratio === null || ratio === undefined || !isFinite(ratio)) return '<span class="ga-d">no prior window</span>';
+  const pct = Math.round(ratio * 1000) / 10;
+  return '<span class="ga-d ' + (pct >= 0 ? "ga-up" : "ga-down") + '">' + (pct >= 0 ? "+" : "") + pct + "% vs previous 28 days</span>";
+}
+function ga4MetricText(k, v) {
+  if (v === null || v === undefined || !isFinite(v)) return kpiU("the report did not return this metric");
+  if (k === "engagementRate" || k === "bounceRate") return esc((Math.round(v * 1000) / 10) + "%");
+  if (k === "averageSessionDuration") return esc(Math.floor(v / 60) + "m " + Math.round(v % 60) + "s");
+  return esc(kpiFmt(v));
+}
+function ga4Html(v, holder) {
+  const head = fleetHead("Google Analytics 4");
+  const css = '<style>' + KPI_CSS + '.ga-d{display:block;font-size:11px;opacity:.75;margin-top:2px}.ga-up{color:#0a7a3d}.ga-down{color:#b3261e}.ga-rt{font-size:28px;font-weight:600}</style>';
+  if (!v) {
+    return head + css + fleetTop("analytics", false, holder) + '<main class="wrap fl kp"><h1>Google Analytics 4</h1>'
+      + '<p class="kp-lede">The GA4 Data API read failed, so this page shows no number. The reason is in the ledger at <a href="/api/ga4">/api/ga4</a> and in the worker logs; a failed read is never shown as a zero.</p>'
+      + '<p><a href="/api/ga4/overview">The read as JSON</a> &middot; <a href="/kpi">Fleet metrics</a></p></main>' + FLEET_SHELL_JS + '</body></html>';
+  }
+  const T = v.totals || {};
+  const D = v.deltas || {};
+  const tiles = [
+    ["activeUsers", T.activeUsers], ["newUsers", T.newUsers], ["sessions", T.sessions], ["engagedSessions", T.engagedSessions],
+    ["screenPageViews", T.screenPageViews], ["engagementRate", T.engagementRate], ["averageSessionDuration", T.averageSessionDuration], ["bounceRate", T.bounceRate]
+  ].map(function(p) {
+    return kpiTile(GA4_METRIC_LABEL[p[0]] || p[0], ga4MetricText(p[0], p[1]), ga4Delta(D[p[0]]));
+  }).join("");
+  const rt = v.realtime;
+  const rtHtml = rt ? '<div class="kp-card"><h3>Realtime, last 30 minutes</h3>' + kpiSrc("GA4 Data API runRealtimeReport", v.as_of)
+    + '<p class="ga-rt">' + esc(kpiFmt(rt.active_users)) + ' active users</p>'
+    + (rt.screens.length ? kpiTable([["Screen"], ["Active users", 1]], rt.screens.map(function(s) { return '<tr><td>' + esc(s.screen) + '</td><td class="n">' + esc(kpiFmt(s.users)) + '</td></tr>'; })) : '<p class="meta">No screen is active right now.</p>')
+    + '</div>' : '<div class="kp-card"><h3>Realtime, last 30 minutes</h3><p>' + kpiU("the realtime report failed") + '</p></div>';
+  const pagesHtml = '<div class="kp-card"><h3>Top pages</h3>' + kpiSrc("GA4 pagePath, " + v.range.days + " complete days", v.as_of, v.range.end)
+    + (v.pages.length ? kpiTable([["Page"], ["Page views", 1], ["Users", 1], ["Sessions", 1]], v.pages.map(function(p) { return '<tr><td>' + esc(p.path) + '</td><td class="n">' + esc(kpiFmt(p.pageviews)) + '</td><td class="n">' + esc(kpiFmt(p.users)) + '</td><td class="n">' + esc(kpiFmt(p.sessions)) + '</td></tr>'; })) : '<p class="meta">GA4 returned no page rows for this window.</p>') + '</div>';
+  const chanHtml = '<div class="kp-card"><h3>Acquisition channels</h3>' + kpiSrc("GA4 sessionDefaultChannelGroup, " + v.range.days + " complete days", v.as_of, v.range.end)
+    + (v.channels.length ? kpiTable([["Channel"], ["Sessions", 1], ["Engaged", 1], ["Users", 1]], v.channels.map(function(c) { return '<tr><td>' + esc(c.channel) + '</td><td class="n">' + esc(kpiFmt(c.sessions)) + '</td><td class="n">' + esc(kpiFmt(c.engaged)) + '</td><td class="n">' + esc(kpiFmt(c.users)) + '</td></tr>'; })) : '<p class="meta">GA4 returned no channel rows for this window.</p>') + '</div>';
+  const hostHtml = '<div class="kp-card"><h3>Hosts</h3>' + kpiSrc("GA4 hostName, " + v.range.days + " complete days", v.as_of, v.range.end)
+    + (v.hosts.length ? kpiTable([["Host"], ["Page views", 1], ["Users", 1], ["Sessions", 1], ["Engaged", 1]], v.hosts.map(function(h) { return '<tr><td>' + esc(h.host) + '</td><td class="n">' + esc(kpiFmt(h.pageviews)) + '</td><td class="n">' + esc(kpiFmt(h.users)) + '</td><td class="n">' + esc(kpiFmt(h.sessions)) + '</td><td class="n">' + esc(kpiFmt(h.engaged)) + '</td></tr>'; })) : '<p class="meta">GA4 returned no host rows for this window.</p>') + '</div>';
+  const geoHtml = '<div class="kp-card"><h3>Countries</h3>' + kpiSrc("GA4 country, " + v.range.days + " complete days", v.as_of, v.range.end)
+    + (v.countries.length ? kpiTable([["Country"], ["Users", 1], ["Sessions", 1], ["Page views", 1]], v.countries.map(function(c) { return '<tr><td>' + esc(c.country) + '</td><td class="n">' + esc(kpiFmt(c.users)) + '</td><td class="n">' + esc(kpiFmt(c.sessions)) + '</td><td class="n">' + esc(kpiFmt(c.pageviews)) + '</td></tr>'; })) : '<p class="meta">GA4 returned no country rows for this window.</p>') + '</div>';
+  const devHtml = '<div class="kp-card"><h3>Devices</h3>' + kpiSrc("GA4 deviceCategory, " + v.range.days + " complete days", v.as_of, v.range.end)
+    + (v.devices.length ? kpiTable([["Device"], ["Users", 1], ["Sessions", 1]], v.devices.map(function(d) { return '<tr><td>' + esc(d.device) + '</td><td class="n">' + esc(kpiFmt(d.users)) + '</td><td class="n">' + esc(kpiFmt(d.sessions)) + '</td></tr>'; })) : '<p class="meta">GA4 returned no device rows for this window.</p>') + '</div>';
+  const trend = '<div class="kp-card"><h3>Daily series</h3>' + kpiSrc("GA4 date, " + v.range.days + " complete days", v.as_of, v.range.end)
+    + (v.daily.length ? kpiDualBars(v.daily, "users", "pageviews", "users", "page views") + '<details><summary>Table</summary>' + kpiTable([["Day"], ["Users", 1], ["Sessions", 1], ["Page views", 1]], v.daily.map(function(d) { return '<tr><td>' + esc(d.day) + '</td><td class="n">' + esc(kpiFmt(d.users)) + '</td><td class="n">' + esc(kpiFmt(d.sessions)) + '</td><td class="n">' + esc(kpiFmt(d.pageviews)) + '</td></tr>'; })) + '</details>' : '<p class="meta">GA4 returned no daily rows for this window.</p>') + '</div>';
+  return head + css + fleetTop("analytics", false, holder) + '<main class="wrap fl kp"><h1>Google Analytics 4</h1>'
+    + '<p class="kp-lede">Google Analytics 4 for the QNFO properties, read from the GA4 Data API when you open this page: page views, users, sessions, engagement, the pages readers open, where they come from, and the countries and devices they read on. The property is <b>' + esc(v.property) + '</b> (measurement id <b>' + esc(v.measurement_id) + '</b>), ' + esc(v.property_source) + '. The window is the ' + v.range.days + ' complete UTC days ending ' + esc(v.range.end) + ', compared with the ' + v.range.days + ' days before it.</p>'
+    + '<nav class="kp-jump" aria-label="Sections"><a href="#summary">Summary</a><a href="#trend">Daily</a><a href="#pages">Pages</a><a href="#audience">Audience</a><a href="#hosts">Hosts</a><a href="/api/ga4/overview">The same data as JSON</a><a href="/kpi">Fleet metrics</a></nav>'
+    + '<section class="kp-sec" id="summary"><h2>Summary</h2><div class="kp-tiles">' + tiles + '</div>' + kpiSrc("GA4 Data API runReport, property " + v.property + ", " + v.range.days + " complete days", v.as_of, v.range.end) + '</section>'
+    + '<section class="kp-sec" id="trend"><h2>Daily</h2>' + trend + '</section>'
+    + '<section class="kp-sec" id="pages"><h2>Pages</h2><div class="kp-two">' + pagesHtml + rtHtml + '</div></section>'
+    + '<section class="kp-sec" id="audience"><h2>Audience</h2><div class="kp-two">' + chanHtml + geoHtml + '</div><div class="kp-two">' + devHtml + '</div></section>'
+    + '<section class="kp-sec" id="hosts"><h2>Hosts</h2>' + hostHtml + '</section>'
+    + '<section class="kp-sec" id="notes"><h2>What this page does and does not see</h2>' + kpiNotes(v.notes)
+    + (v.errors.length ? '<p class="meta">Reports that failed in this read: ' + esc(v.errors.map(function(e) { return e.panel + " (" + e.error + ")"; }).join(", ")) + '. Those panels are shown as not measured.</p>' : '<p class="meta">Every report in this read succeeded.</p>') + '</section>'
+    + '<p class="fl-foot">Computed ' + esc(String(v.as_of).slice(0, 19).replace("T", " ")) + ' UTC by qnfo-fleet-dashboard ' + esc(v.version) + '; cached for ' + (GA4_OVERVIEW_TTL_MS / 1000) + ' s. GA4 data through ' + esc(v.range.end) + '.</p></main>' + FLEET_SHELL_JS + '</body></html>';
+}
+
 async function reachIngestTick(env, opts) {
   opts = opts || {};
   const live = await ingestReachSignals(env, opts.nowMs ? { nowMs: opts.nowMs } : {});
@@ -8960,7 +9186,7 @@ function kpiHtml(v, holder) {
       return '<tr>' + post(p) + '<td>' + esc(p.buffer_status || "") + '</td>' + cell(p.impressions, why) + cell(p.likes, why) + cell(p.reposts, why) + cell(p.replies_all, why) + cell(p.buffer_clicks, why) + cell(p.clicks, "the post has no campaign tag") + '</tr>';
     })) : '<p class="meta">No post has gone out through Buffer.</p>') + kpiNotes(B.notes) + '</div></section>';
   return fleetHead("Fleet metrics") + '<style>' + KPI_CSS + '</style>' + fleetTop("kpi", false, holder) + '<main class="wrap fl kp"><h1>Metrics</h1><p class="kp-lede">Every figure on this page is read from the fleet\'s own database when you open it, and each panel names the table it comes from. Where nothing measures a value the page says so and shows no number.</p>'
-    + '<nav class="kp-jump" aria-label="Sections"><a href="#service">Service levels</a><a href="#issues">Issues</a><a href="#reach">Reach</a><a href="#buffer">Buffer</a><a href="/api/kpi">The same data as JSON</a></nav>'
+    + '<nav class="kp-jump" aria-label="Sections"><a href="#service">Service levels</a><a href="#issues">Issues</a><a href="#reach">Reach</a><a href="#buffer">Buffer</a><a href="/analytics">Google Analytics 4</a><a href="/api/kpi">The same data as JSON</a></nav>'
     + kpiServiceHtml(v.service_levels, v.sla) + issuesHtml + reachHtml + bufHtml
     + '<p class="fl-foot">Computed ' + esc(v.as_of.slice(0, 19).replace("T", " ")) + ' UTC by qnfo-fleet-dashboard ' + esc(v.version) + ' and kept for ' + v.cache_ttl_s + ' s. ' + (v.unreadable.length ? esc(String(v.unreadable.length)) + ' reads returned nothing: ' + esc(v.unreadable.map(function(u) { return u.read + " (" + u.reason + ")"; }).join(", ")) + '.' : 'Every read succeeded.') + '</p></main>' + FLEET_SHELL_JS + '</body></html>';
 }
