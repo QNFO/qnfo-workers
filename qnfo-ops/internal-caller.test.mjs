@@ -25,9 +25,11 @@ const guard = lines.find((l) => /^\s*try \{ const _ic = /.test(l));
 ok(!!guard, "the guard is one try line");
 const callers = (src.match(/var OPS_INTERNAL_DEPLOY_CALLERS = (\[[^\]]*\]);/) || [])[1];
 ok(callers === '["qnfo-fleet-control"]', "OPS_INTERNAL_DEPLOY_CALLERS names qnfo-fleet-control only");
-const run = new Function("request", "ctx", "env", "OPS_INTERNAL_DEPLOY_CALLERS", guard.trim() + "\nreturn request.headers.get(\"Authorization\");");
+const toolCallers = (src.match(/var OPS_TOOL_CALL_CALLERS = (\[[^\]]*\]);/) || [])[1];
+ok(toolCallers === '["qnfo-fleet-dashboard"]', "OPS_TOOL_CALL_CALLERS names the owner console only");
+const run = new Function("request", "ctx", "env", "OPS_INTERNAL_DEPLOY_CALLERS", "OPS_TOOL_CALL_CALLERS", guard.trim() + "\nreturn request.headers.get(\"Authorization\");");
 const KEY = "router-key-for-test";
-const auth = (caller, method, url, env) => run(new Request(url, { method, headers: { "Content-Type": "application/json" }, body: method === "POST" ? "{}" : undefined }), caller === null ? {} : { props: { caller } }, env || { OPS_ROUTER_AUTH_KEY: KEY }, JSON.parse(callers));
+const auth = (caller, method, url, env) => run(new Request(url, { method, headers: { "Content-Type": "application/json" }, body: method === "POST" ? "{}" : undefined }), caller === null ? {} : { props: { caller } }, env || { OPS_ROUTER_AUTH_KEY: KEY }, JSON.parse(callers), JSON.parse(toolCallers));
 ok(auth("qnfo-fleet-control", "POST", "https://qnfo-ops/ops/deploy") === "Bearer " + KEY, "qnfo-fleet-control on POST /ops/deploy is authenticated");
 ok(auth("qnfo-fleet-control", "POST", "https://qnfo-ops/ops/deploy/") === "Bearer " + KEY, "a trailing slash routes the same way and is trusted the same way");
 ok(auth("qnfo-fleet-control", "POST", "https://qnfo-ops/v1/chat/completions") === null, "qnfo-fleet-control on the chat route is not authenticated");
@@ -35,6 +37,11 @@ ok(auth("qnfo-fleet-control", "POST", "https://qnfo-ops/ops/compat-verify") === 
 ok(auth("qnfo-fleet-control", "GET", "https://qnfo-ops/ops/deploy") === null, "qnfo-fleet-control with GET is not authenticated");
 ok(auth("qnfo-fleet-control", "POST", "https://qnfo-ops/ops/deploy", {}) === null, "no router key bound: nothing is set");
 ok(auth("qnfo-email", "POST", "https://qnfo-ops/v1/chat/completions") === "Bearer " + KEY, "qnfo-email keeps its full trust");
+ok(auth("qnfo-fleet-dashboard", "GET", "https://qnfo-ops/v1/tools") === "Bearer " + KEY, "TOOL-BRIDGE-1: the owner console lists tools through its binding");
+ok(auth("qnfo-fleet-dashboard", "POST", "https://qnfo-ops/v1/tools/call") === "Bearer " + KEY, "TOOL-BRIDGE-1: the owner console calls a tool through its binding");
+ok(auth("qnfo-fleet-dashboard", "POST", "https://qnfo-ops/agents/ops-exec") === "Bearer " + KEY, "TOOL-BRIDGE-1: the owner console drives the durable agent over HTTP");
+ok(auth("qnfo-fleet-dashboard", "POST", "https://qnfo-ops/ops/deploy") === null, "TOOL-BRIDGE-1: the owner console cannot reach the deploy route");
+ok(auth("qnfo-fleet-dashboard", "POST", "https://qnfo-ops/v1/tools/call/") === "Bearer " + KEY, "TOOL-BRIDGE-1: a trailing slash normalises to the same tool route");
 ok(auth("qnfo-dashboard", "POST", "https://qnfo-ops/ops/deploy") === null && auth(null, "POST", "https://qnfo-ops/ops/deploy") === null, "any other caller, or no props, is not authenticated");
 ok(/catch \(_e\) \{ console\.error\(/.test(guard), "a guard error is logged, not swallowed");
 

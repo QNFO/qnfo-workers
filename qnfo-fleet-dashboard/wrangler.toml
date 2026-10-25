@@ -97,6 +97,11 @@ environment = "production"
 binding = "SVC_QNFO_OPS"
 service = "qnfo-ops"
 environment = "production"
+# AGENT-TOOLS-1 (1.56.0): the command line reads the ops tool catalogue and calls any tool through this binding.
+# qnfo-ops trusts ctx.props.caller = qnfo-fleet-dashboard on /v1/tools, /v1/tools/call, /v1/chat/completions and
+# /agents/ops-exec only (TOOL-BRIDGE-1) - never on the deploy route. The console enforces the owner session and a
+# fresh code for a mutating tool before it gets here, so no ops key is copied into this worker.
+props = { caller = "qnfo-fleet-dashboard" }
 
 # SVC_QNFO_KAIZEN (qnfo-kaizen) removed 2026-10-06: worker retired (WORKER-RETIRE-WAVE-2, #1756).
 

@@ -10,7 +10,7 @@ var __defProp222 = Object.defineProperty;
 var __name222 = /* @__PURE__ */ __name22((target, value) => __defProp222(target, "name", { value, configurable: true }), "__name");
 var __name2222 = /* @__PURE__ */ __name222((target, value) => Object.defineProperty(target, "name", { value, configurable: true }), "__name");
 // VERSION-LINE-SPLIT-1 (agent_issues 100220): the release notes sit one per line below this statement, newest first, so a VERSION bump is a one-line patch; add a new note as the first line under it.
-var VERSION = "1.55.3-codeagent"; /* 1.55.0 NO-REGISTRAR-1 (2026-10-21): area routing no longer names the closed registrar. */ /* 1.54.0 COST-SUSTAIN-3 (2026-10-21, owner: research and publication <= USD 300/month all-in, realistic use metrics and forecasting; pillar cost): /api/cost carries the cap-aware forecast (v_cost_forecast bound_daily_usd, bound_30d_usd, forecast_bounded_month_usd: month-to-date + remaining days x min(3-day pace, what the configured daily caps allow)), research neurons per published version and the provider-billed AI Gateway figure; the cost area headline is the month forecast instead of a 7-day mean x 30 that cannot see the caps. */ /* 1.52.0 COST-SUSTAIN-1 (2026-10-21, pillar cost): /api/cost adds forecast (v_cost_forecast: per-scope month-to-date, 3-day pace, month-end forecast vs the owner USD 300 fleet budget) and research_budget_today (neurons spent vs qnfo-research-exec research_daily_neurons). */
+var VERSION = "1.56.0-agenttools"; /* 1.55.0 NO-REGISTRAR-1 (2026-10-21): area routing no longer names the closed registrar. */ /* 1.54.0 COST-SUSTAIN-3 (2026-10-21, owner: research and publication <= USD 300/month all-in, realistic use metrics and forecasting; pillar cost): /api/cost carries the cap-aware forecast (v_cost_forecast bound_daily_usd, bound_30d_usd, forecast_bounded_month_usd: month-to-date + remaining days x min(3-day pace, what the configured daily caps allow)), research neurons per published version and the provider-billed AI Gateway figure; the cost area headline is the month forecast instead of a 7-day mean x 30 that cannot see the caps. */ /* 1.52.0 COST-SUSTAIN-1 (2026-10-21, pillar cost): /api/cost adds forecast (v_cost_forecast: per-scope month-to-date, 3-day pace, month-end forecast vs the owner USD 300 fleet budget) and research_budget_today (neurons spent vs qnfo-research-exec research_daily_neurons). */
 /* 1.51.19 VERSION-LINE-SPLIT-1 (2026-10-20, agent_issues 100220, pillar autonomy; patch: layout only): the release notes that sat on the VERSION line (202,642 chars) are one per line below it, so a bump is a one-line patch and the publisher's size cap stops refusing dashboard code tasks (5 of 5 on 2026-10-19); scripts/conflict_repair.py resolves note-line hunks (merge_note_hunk). No behaviour change. */
 /* 1.51.17 COST-FEED-7D-WINDOW-1 (2026-10-19, agent_issues 100169, pillar cost; patch): /api/cost by_model_7d and by_worker_7d sum the 7 complete UTC days (today, a partial day, was a 8th bucket under the 7d label, +31.8 percent), and the body says which days (window_7d) and that est_usd is list price before the free tier (est_usd_basis). */
 /* 1.51.16 PARKED-CARD-REASON-1 (2026-10-19, agent_issues 100173, pillar autonomy; patch): the parked code-task card branches on the cause wherever it sits in last_error (the loop writes "model <id>: noop-proposal: ..." and "model <id> proposed no change", so a prefix test never matched), and the dead execOne edit of PR 3106 (fleet_issue_dispatch has no last_error) is removed. */
@@ -2445,7 +2445,7 @@ var API_INDEX = [
   { path: "/api/q08-review", area: "research", source: "live", lag_s: 60, method: "GET", auth: "open", schema_version: "q08-review-status/v1", cache: "public 15s, ETag", freshness: "the one-shot 2026-10-31 review state", what: "q08's human-read review: decision, rule and last attempt." },
   { path: "/api/area/<id>", method: "GET", auth: "open", area: "platform", source: "live", lag_s: 60, schema_version: "fleet-area-feed/v1", cache: "public 15s, ETag", freshness: "v_metric_trigger_state, metric_history, code_tasks, research_queue, outreach_queue, agent_issues read at request time (60 s at most in isolate memory)", what: "One functional area as its own feed: its star metric and trend, its breaches ranked, its named constraint, its pipelines, and the reads that belong to it with each one's declared lag (?full=1 adds the whole lever text and every breach row). Send If-None-Match or ?since=<revision>." },
   { path: "/api/owner/*", area: "autonomy", source: "live", lag_s: 0, method: "GET/POST", auth: "owner (emailed code) or x-loop-token", schema_version: "owner/v1", cache: "private no-store", freshness: "read live", what: "Owner prompts, responses, keys and documents. Never cacheable." },
-  { path: "/api/cmd", area: "platform", source: "live", lag_s: 0, method: "GET/POST", auth: "open to ask; actions need the owner code", schema_version: "cmd/v1", cache: "private no-store", freshness: "read live", what: "The command line: deterministic reads, plain-English answers, gated actions." },
+  { path: "/api/cmd", area: "platform", source: "live", lag_s: 0, method: "GET/POST", auth: "open to ask; actions need the owner code", schema_version: "cmd/v1", cache: "private no-store", freshness: "read live", what: "The command line: deterministic reads, plain-English answers, gated actions, and the whole fleet tool surface (tools / tool <name>)." },
   { path: "/health", area: "platform", source: "live", lag_s: 0, method: "GET", auth: "open", schema_version: "health/v1", cache: "no-store", freshness: "static", what: "Capabilities and limitations of this worker." }
 ];
 // The clock fields, and only these, are excluded from a content digest: they move on every request, and hashing them
@@ -10098,7 +10098,11 @@ var CMD_HELP = [
   "                         ('code-task: repo=<r> path=<f> ...' goes to the code loop)",
   "  done <item> / dismiss <item>, ratify <id> / reject <id>   (destructive: fresh code)",
   "  refresh                re-measure the fleet now (open)",
-  "Sign in:  login (emails a 6-digit code)  then type the code.  logout",
+  "Tools (owner session; * needs a fresh code):",
+"  tools [word]           every fleet tool: Cloudflare API, D1, R2, KV, GitHub, shell, containers, deploys",
+"  tool <name> {json}     run one, e.g. tool fleet_status {}",
+"  agent <text>           one turn of the durable coding agent",
+"Sign in:  login (emails a 6-digit code)  then type the code.  logout",
   "Anything else is answered in plain English, with proposed actions you can tap."
 ].join("\n");
 var CMD_PAGES = { kpi: "/kpi", metrics: "/kpi", content: "/content", pipeline: "/content", queue: "/", home: "/", owner: "/owner", docs: "/owner", watchmaker: "/api/watchmaker", decision: "/api/decision", state: "/api/state", human: "/api/human", reach: "/api/reach", health: "/health", actions: "/api/actions", loop: "/api/loop" };
@@ -11263,6 +11267,48 @@ async function cmdExec(request, env, ctx, owner, op, args) {
   const done = { done: "Marked done.", dismiss: "Marked not doing.", snooze: "Snoozed until " + String(j.until || "").slice(0, 10) + ".", note: "Note kept and filed as fleet work.", ratify: "Ratified" + (j.outcome ? " (" + j.outcome + ")" : "") + ".", reject: "Rejected.", task: "Filed as fleet work" + (j.issue_id ? ": issue " + j.issue_id : "") + (j.duplicate ? " (already queued)" : "") + "." };
   return { ok: true, text: done[op], result: j };
 }
+// AGENT-TOOLS-1 (1.56.0, owner directive 2026-10-25: every Cloudflare agent tool reachable from the console):
+// the command line reaches the whole qnfo-ops tool surface through the SVC_QNFO_OPS service binding. qnfo-ops
+// authenticates this worker by ctx.props.caller (TOOL-BRIDGE-1) and scopes it to the catalogue, a tool call, chat
+// and the agent DO - never the deploy route. A call here still needs the owner session; a mutating tool also needs
+// a fresh code, the same step-up the console's destructive actions already ask for.
+var CMD_TOOL_ALLOWED = null;
+var CMD_TOOL_READ_ONLY = { fleet_status: 1, ops_issues_list: 1, ops_d1_query: 1, vectorize_query: 1, r2_list: 1, r2_get: 1, kv_get: 1, queue_read: 1, intents_query: 1, candidates_query: 1, service_discover: 1, backlog_status: 1, cf_analytics: 1, telemetry_report: 1, telemetry_analyze: 1, email_check: 1, email_stats: 1, ops_fleet_log: 1, fleet_graph: 1, dashboard_feed: 1, cf_docs: 1, workspace_read: 1, workspace_list: 1, workspace_grep: 1, workspace_glob: 1, workspace_diff: 1, workspace_stat: 1, workspace_read_multi: 1, cf_worker_read: 1, cf_worker_bindings: 1, github_repo_read: 1, github_issues_list: 1, github_issue_get: 1, github_projects_list: 1, git_op: 1, dr_validate_schema: 1, container_status: 1, web_search: 1, web_fetch: 1, run_code: 1, run_python: 1, run_code_net: 1, exec_pipeline: 1 };
+function cmdToolIsReadOnly(name) { return !!CMD_TOOL_READ_ONLY[name]; }
+async function cmdOpsFetch(env, path, init) {
+  if (!env || !env.SVC_QNFO_OPS || typeof env.SVC_QNFO_OPS.fetch !== "function") return { http: 0, error: "ops binding unavailable" };
+  const t0 = Date.now();
+  try {
+    const r = await env.SVC_QNFO_OPS.fetch("https://qnfo-ops" + path, init || {});
+    const text = await r.text();
+    let j = null;
+    try { j = JSON.parse(text); } catch (e) { j = null; }
+    return { http: r.status, ms: Date.now() - t0, json: j, text };
+  } catch (e) {
+    return { http: 0, ms: Date.now() - t0, error: String(e && e.message || e) };
+  }
+}
+async function cmdToolList(env) {
+  if (CMD_TOOL_ALLOWED) return { ok: true, tools: CMD_TOOL_ALLOWED };
+  const r = await cmdOpsFetch(env, "/v1/tools", { method: "GET" });
+  if (!r.json || !Array.isArray(r.json.data)) return { ok: false, error: r.error || ("tool list unavailable (http " + r.http + ")") };
+  const tools = r.json.data.map(function(t) { const f = t.function || t; return { name: String(f.name || ""), description: String(f.description || ""), readonly: cmdToolIsReadOnly(f.name) }; });
+  CMD_TOOL_ALLOWED = tools;
+  return { ok: true, tools };
+}
+async function cmdToolCall(env, name, args) {
+  const r = await cmdOpsFetch(env, "/v1/tools/call", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: name, arguments: args || {} }) });
+  if (r.error) return { ok: false, http: r.http, ms: r.ms, error: r.error };
+  const body = r.json || {};
+  return { ok: r.http === 200 && body.ok !== false, http: r.http, ms: r.ms, result: body.result, error: body.error || null };
+}
+function cmdToolText(name, r) {
+  if (r.error && r.result === undefined) return name + " failed: " + r.error + (r.http ? " (http " + r.http + ")" : "");
+  let out = "";
+  try { out = JSON.stringify(r.result, null, 2); } catch (e) { out = String(r.result); }
+  if (out && out.length > 4000) out = out.slice(0, 4000) + "\n... (" + (out.length - 4000) + " more characters)";
+  return name + " " + (r.ok ? "ok" : "failed") + " \u00b7 http " + r.http + " \u00b7 " + r.ms + "ms\n" + out;
+}
 async function cmdRoutes(request, env, ctx, path, owner) {
   if (path === "/ctl.js") return new Response(CTL_JS, { headers: { "Content-Type": "application/javascript; charset=utf-8", "Cache-Control": "public, max-age=3600", "Access-Control-Allow-Origin": "*" } });
   if (path === "/cmd" || path === "/cmd/") {
@@ -11289,6 +11335,10 @@ async function cmdRoutes(request, env, ctx, path, owner) {
     return ownerJson({ ok: row.status !== "failed", status: row.status, answer: row.answer || null, actions, model: row.model || null, error: row.status === "failed" ? cmdPlainFailure(row.error) : null, holder });
   }
   if (request.method === "GET" && path === "/api/cmd/whoami") return ownerJson({ holder, session: !!owner.session, stepup: !!(owner.session && owner.session.stepup) || !!owner.loop, code_to: cmdMaskedTo() });
+  if (request.method === "GET" && path === "/api/cmd/tools") {
+    const tl = await cmdToolList(env);
+    return ownerJson({ ok: tl.ok, count: tl.ok ? tl.tools.length : 0, tools: tl.tools || [], error: tl.error || null, holder }, tl.ok ? 200 : 502);
+  }
   if (request.method !== "POST") return ownerJson({ error: "method" }, 405);
   if (request.headers.get("x-fleet-ui") !== "1") return ownerJson({ error: "missing x-fleet-ui header" }, 400);
   let b = null;
@@ -11296,6 +11346,27 @@ async function cmdRoutes(request, env, ctx, path, owner) {
     b = await request.json();
   } catch (e) {
     return ownerJson({ error: "invalid JSON" }, 400);
+  }
+  if (path === "/api/cmd/tool") {
+    if (!holder) return ownerJson({ ok: false, need: "code", error: "Tools need your email code. Type login." }, 401);
+    const name = String(b && b.name || "").trim();
+    if (!/^[a-z0-9_]{2,40}$/.test(name)) return ownerJson({ ok: false, error: "tool name required" }, 400);
+    if (!cmdToolIsReadOnly(name) && !owner.loop && !(owner.session && owner.session.stepup) && !owner.legacy) return ownerJson({ ok: false, need: "stepup", error: "This tool changes state: enter a fresh code." }, 401);
+    const args = b && b.arguments && typeof b.arguments === "object" ? b.arguments : {};
+    const r = await cmdToolCall(env, name, args);
+    try {
+      await env.AUDIT.prepare("INSERT INTO cmd_log (id, text, kind, status, answer, error, owner, done_ms) VALUES (?1, ?2, 'tool', ?3, ?4, ?5, 1, ?6)").bind("cmd-" + cmdRandHex(10), (name + " " + JSON.stringify(args)).slice(0, 2e3), r.ok ? "done" : "failed", String(cmdToolText(name, r)).slice(0, 4e3), r.error || null, r.ms || null).run();
+    } catch (e) {
+    }
+    return ownerJson(r, r.ok ? 200 : 400);
+  }
+  if (path === "/api/cmd/agent") {
+    if (!holder) return ownerJson({ ok: false, need: "code", error: "The agent needs your email code. Type login." }, 401);
+    const text = String(b && b.text || "").trim();
+    if (text.length < 1 || text.length > 8e3) return ownerJson({ ok: false, error: "type 1-8000 characters" }, 400);
+    const r = await cmdOpsFetch(env, "/agents/ops-exec", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ op: "run", text: text, sid: String(b && b.sid || "dashboard").slice(0, 80), max_iters: 8 }) });
+    const j = r.json || {};
+    return ownerJson({ ok: !!j.ok, http: r.http, ms: r.ms, reply: j.reply || null, turns: j.turns || 0, sid: j.sid || null, error: r.error || j.error || null }, j.ok ? 200 : 502);
   }
   if (path === "/api/cmd/code") {
     const r = await cmdSendCode(env, request);
@@ -11329,6 +11400,33 @@ async function cmdRoutes(request, env, ctx, path, owner) {
   const from = String(b && b.from || "").slice(0, 500);
   if (text.length < 1 || text.length > (/^reply\s/i.test(text) ? 8e3 : 2e3)) return ownerJson({ error: /^reply\s/i.test(text) ? "a reply is 1-8000 characters" : "type 1-2000 characters" }, 400);
   const c = await cmdContext(env, from, holder);
+  // AGENT-TOOLS-1: deterministic tool commands, before any model call.
+  if (/^tools?(\s+\S+)?$/i.test(text.trim())) {
+    const tl = await cmdToolList(env);
+    if (!tl.ok) return ownerJson({ ok: false, kind: "answer", error: tl.error, holder }, 502);
+    const q = (text.trim().split(/\s+/)[1] || "").toLowerCase();
+    const rows = tl.tools.filter(function(t) { return !q || t.name.indexOf(q) >= 0 || t.description.toLowerCase().indexOf(q) >= 0; });
+    const body = rows.slice(0, 60).map(function(t) { return "  " + t.name + (t.readonly ? "" : " *") + "  " + t.description.slice(0, 110); }).join("\n");
+    return ownerJson({ ok: true, kind: "answer", text: tl.tools.length + " fleet tools" + (q ? ' matching "' + q + '"' : "") + (rows.length > 60 ? " (first 60 of " + rows.length + ")" : "") + ":\n" + (body || "  (none)") + "\n\n* changes state and needs a fresh code. Run one: tool <name> {\"arg\":\"value\"}", holder });
+  }
+  const tm = /^tool\s+([a-z0-9_]{2,40})\s*([\s\S]*)$/i.exec(text.trim());
+  if (tm) {
+    if (!holder) return ownerJson({ ok: false, kind: "answer", need: "code", error: "Tools need your email code. Type login." }, 401);
+    const tname = tm[1].toLowerCase();
+    let targs = {};
+    const raw = (tm[2] || "").trim();
+    if (raw) {
+      try { targs = JSON.parse(raw); } catch (e) { return ownerJson({ ok: false, kind: "answer", error: 'arguments must be JSON, e.g. tool ops_d1_query {"sql":"SELECT 1"}' }, 400); }
+    }
+    if (!cmdToolIsReadOnly(tname) && !owner.loop && !(owner.session && owner.session.stepup) && !owner.legacy) return ownerJson({ ok: false, kind: "answer", need: "stepup", error: "This tool changes state: enter a fresh code." }, 401);
+    const r = await cmdToolCall(env, tname, targs);
+    try {
+      await env.AUDIT.prepare("INSERT INTO cmd_log (id, text, kind, status, answer, error, owner, done_ms) VALUES (?1, ?2, 'tool', ?3, ?4, ?5, 1, ?6)").bind("cmd-" + cmdRandHex(10), text.slice(0, 2e3), r.ok ? "done" : "failed", String(cmdToolText(tname, r)).slice(0, 4e3), r.error || null, r.ms || null).run();
+    } catch (e) {
+    }
+    return ownerJson({ ok: r.ok, kind: "answer", text: cmdToolText(tname, r), tool: tname, http: r.http, ms: r.ms, holder }, r.ok ? 200 : 400);
+  }
+
   if (/^(i-?patent|patent)( usage| queries| searches| metrics| stats)?\??$/i.test(text.trim())) return ownerJson({ ok: true, kind: "answer", text: ipatentText(await ipatentUsage(env)), links: [{ label: "iPatent metrics JSON", href: "https://ipatent.qnfo.org/api/metrics" }], holder });
   // FLEET-CONSOLE-1: console reads first ("issue 12" would otherwise be read as an issue filter), then the console's actions.
   const cr = await conRead(env, text, c, owner);
@@ -12177,7 +12275,7 @@ var CON_AI_CMD = /^(mail( [\w .@:#-]{1,80})?|issue \d{1,7}|backlog( [\w .:-]{1,6
 // ---- UI ----
 var CMD_CSS = ".cmd{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:12px 14px;margin-bottom:14px}.cmd form{display:flex;gap:8px;align-items:flex-start}.cmd .pr0{font:600 15px/34px ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;color:var(--link)}#ctext{flex:1;min-width:0;resize:none;padding:7px 10px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--ink);font:15px/1.4 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;height:36px;max-height:160px}#ctext:focus{outline:2px solid var(--link);outline-offset:0}.cmd button{padding:7px 12px;border-radius:8px;border:1px solid var(--line);background:var(--bg);color:var(--ink);font-size:13px;cursor:pointer;white-space:nowrap}.cmd button.p{background:var(--link);border-color:var(--link);color:#fff;font-weight:600}.cmd button.d{border-color:var(--act);color:var(--act)}.cmd button:disabled{opacity:.5;cursor:default}#cout{margin-top:8px}.co{border-top:1px solid var(--line);padding:8px 0 4px;font-size:14px}.co .q{font:13px ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;color:var(--mute)}.co pre{white-space:pre-wrap;word-break:break-word;margin:4px 0 0;font:13.5px/1.45 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}.co .err{color:var(--act)}.co .acts{margin-top:6px}.co .acts button{white-space:normal;text-align:left;max-width:100%}.co .why{font-size:12px;color:var(--mute);margin:2px 0 0 2px}.cmeta{display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;font-size:12px;color:var(--mute);margin-top:6px}.cmeta a{color:var(--mute)}.chips{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}.chips button{font-size:12px;padding:3px 9px;border-radius:99px}.spin{display:inline-block;width:10px;height:10px;border:2px solid var(--line);border-top-color:var(--link);border-radius:50%;animation:sp .8s linear infinite;vertical-align:-1px;margin-right:6px}@keyframes sp{to{transform:rotate(360deg)}}";
 function cmdPanelHtml(holder, from, q) {
-  return '<section class="cmd" id="cmd" data-from="' + esc(from || "") + '" data-q="' + esc(q || "") + '"><form id="cform" autocomplete="off"><span class="pr0">&rsaquo;</span><textarea id="ctext" rows="1" maxlength="8000" placeholder="Ask or tell the fleet" aria-label="Fleet command line"></textarea><button class="p" id="cgo" type="submit">Run</button></form><div class="chips" id="cchips"><button type="button" data-c="status">status</button><button type="button" data-c="queue">queue</button><button type="button" data-c="suggest">suggest</button><button type="button" data-c="issues">issues</button><button type="button" data-c="spend">spend</button><button type="button" data-c="help">help</button></div><div id="cout" aria-live="polite"></div><div class="cmeta"><span id="cwho">' + (holder ? "Signed in: actions enabled" : "Reading and asking are open to everyone. Actions need your email code.") + '</span><span>' + (holder ? '<a href="#" id="clogout">sign out</a>' : '<a href="#" id="clogin">email me a code</a>') + (from ? ' &middot; from <a href="' + esc(from) + '">' + esc(String(from).replace(/^https?:\/\//, "").slice(0, 48)) + "</a>" : "") + "</span></div></section>";
+  return '<section class="cmd" id="cmd" data-from="' + esc(from || "") + '" data-q="' + esc(q || "") + '"><form id="cform" autocomplete="off"><span class="pr0">&rsaquo;</span><textarea id="ctext" rows="1" maxlength="8000" placeholder="Ask or tell the fleet" aria-label="Fleet command line"></textarea><button class="p" id="cgo" type="submit">Run</button></form><div class="chips" id="cchips"><button type="button" data-c="status">status</button><button type="button" data-c="queue">queue</button><button type="button" data-c="suggest">suggest</button><button type="button" data-c="issues">issues</button><button type="button" data-c="tools">tools</button><button type="button" data-c="spend">spend</button><button type="button" data-c="help">help</button></div><div id="cout" aria-live="polite"></div><div class="cmeta"><span id="cwho">' + (holder ? "Signed in: actions enabled" : "Reading and asking are open to everyone. Actions need your email code.") + '</span><span>' + (holder ? '<a href="#" id="clogout">sign out</a>' : '<a href="#" id="clogin">email me a code</a>') + (from ? ' &middot; from <a href="' + esc(from) + '">' + esc(String(from).replace(/^https?:\/\//, "").slice(0, 48)) + "</a>" : "") + "</span></div></section>";
 }
 // Client: submit, history (Up/Down), "/" to focus, background polling, action buttons, inline code sign-in.
 var CMD_JS = "(function(){var f=document.getElementById('cform');if(!f)return;var box=document.getElementById('cmd'),ta=document.getElementById('ctext'),out=document.getElementById('cout'),go=document.getElementById('cgo'),who=document.getElementById('cwho'),from=box.getAttribute('data-from')||'',H={'Content-Type':'application/json','x-fleet-ui':'1'},hist=[],hi=-1,holder=" + "HOLDER" + ";try{hist=JSON.parse(sessionStorage.getItem('fleetcmd')||'[]')}catch(e){}function el(t,c,x){var e=document.createElement(t);if(c)e.className=c;if(x!=null)e.textContent=x;return e}function fit(){ta.style.height='36px';if(ta.value)ta.style.height=Math.min(160,ta.scrollHeight+2)+'px'}function post(u,b){return fetch(u,{method:'POST',headers:H,body:JSON.stringify(b),credentials:'same-origin'}).then(function(r){return r.json().catch(function(){return{ok:false,error:'HTTP '+r.status}})})}function setHolder(h){holder=h;who.textContent=h?'Signed in: actions enabled':'Reading and asking are open to everyone. Actions need your email code.'}function card(q){var c=el('div','co');if(q)c.appendChild(el('div','q','\\u203a '+q));out.insertBefore(c,out.firstChild);while(out.children.length>8)out.removeChild(out.lastChild);return c}function body(c,j){var w=c.querySelector('.wait');if(w)c.removeChild(w);if(j.error)c.appendChild(el('pre','err',j.error));var t=j.text||j.answer;if(t)c.appendChild(el('pre',null,t));if(j.need)codeUi(c,j.need);if(j.links)j.links.forEach(function(l){var a=el('a',null,l.label);a.href=l.href;c.appendChild(a);c.appendChild(document.createTextNode(' '))});if(j.go&&/^\\//.test(j.go)&&j.go!=='/'){location.href=j.go;return}if(j.actions&&j.actions.length){var a=el('div','acts');j.actions.forEach(function(x){var b=el('button',x.destructive?'d':null,x.label);b.type='button';b.onclick=function(){if(x.fill){ta.value=x.fill;fit();ta.focus()}else if(x.cmd)send(x.cmd);else run(x,b,c)};a.appendChild(b);if(x.why){a.appendChild(el('div','why',x.why))}});c.appendChild(a)}if(j.signed_in)setHolder(true);if(j.signed_out)setHolder(false);if(j.executed&&window.fleetTick)window.fleetTick(true)}function codeUi(c,need){var a=el('div','acts'),i=el('input');i.inputMode='numeric';i.maxLength=6;i.placeholder='6-digit code';i.style.cssText='width:9em;padding:6px 8px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--ink)';var s=el('button','p','Email me a code');s.type='button';var v=el('button',null,'Verify');v.type='button';s.onclick=function(){s.disabled=true;post('/api/cmd/code',{}).then(function(j){a.appendChild(el('div','why',j.note||j.error||''));i.focus()}).then(function(){s.disabled=false})};v.onclick=function(){post('/api/cmd/verify',{code:i.value}).then(function(j){if(j.ok){setHolder(true);a.appendChild(el('div','why',j.text));if(c._retry)c._retry()}else a.appendChild(el('div','why',j.error||'failed'))})};i.onkeydown=function(e){if(e.key==='Enter'){e.preventDefault();v.click()}};a.appendChild(s);a.appendChild(i);a.appendChild(v);c.appendChild(a)}function run(x,b,c){b.disabled=true;var w=el('div','why');w.innerHTML='<span class=\"spin\"></span>working...';c.appendChild(w);post('/api/cmd/run',{op:x.op,args:x.args}).then(function(j){c.removeChild(w);if(j.ok){b.textContent='\\u2713 '+x.label;c.appendChild(el('div','why',j.text||'done'));if(window.fleetTick)window.fleetTick(true)}else{b.disabled=false;c.appendChild(el('div','why',j.error||'failed'));if(j.need){c._retry=function(){run(x,b,c)};codeUi(c,j.need)}}}).catch(function(){b.disabled=false;c.removeChild(w);c.appendChild(el('div','why','network error'))})}function poll(c,id,t0){fetch('/api/cmd/job/'+id,{cache:'no-store',credentials:'same-origin'}).then(function(r){return r.json()}).then(function(j){if(j.status==='running'&&Date.now()-t0<45000){var w=c.querySelector('.wait span.t');if(w)w.textContent='thinking '+Math.round((Date.now()-t0)/1000)+'s';setTimeout(function(){poll(c,id,t0)},1200);return}if(j.status==='running')j={error:'No answer after 45s; the fleet may be busy. Try again, or use a command (type help).'};body(c,j);done()}).catch(function(){setTimeout(function(){poll(c,id,t0)},2000)})}function done(){go.disabled=false;ta.disabled=false;ta.focus()}function send(q){q=(q||'').trim();if(!q)return;hist=hist.filter(function(h){return h!==q});hist.unshift(q);hist=hist.slice(0,30);hi=-1;try{sessionStorage.setItem('fleetcmd',JSON.stringify(hist))}catch(e){}ta.value='';fit();var c=card(q);var w=el('div','why wait');w.innerHTML='<span class=\"spin\"></span><span class=\"t\">working</span>';c.appendChild(w);go.disabled=true;post('/api/cmd',{text:q,from:from}).then(function(j){if(j.holder!=null&&j.holder!==holder)setHolder(j.holder);if(j.kind==='pending'&&j.id){poll(c,j.id,Date.now());return}body(c,j);done()}).catch(function(){body(c,{error:'Network error - nothing was sent.'});done()})}f.addEventListener('submit',function(e){e.preventDefault();send(ta.value)});ta.addEventListener('input',fit);ta.addEventListener('keydown',function(e){if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();send(ta.value)}else if(e.key==='ArrowUp'&&(!ta.value||hi>=0)&&hist.length){e.preventDefault();hi=Math.min(hist.length-1,hi+1);ta.value=hist[hi];fit()}else if(e.key==='ArrowDown'&&hi>=0){e.preventDefault();hi--;ta.value=hi>=0?hist[hi]:'';fit()}else if(e.key==='Escape'){ta.value='';hi=-1;fit()}});document.getElementById('cchips').addEventListener('click',function(e){var c=e.target&&e.target.getAttribute&&e.target.getAttribute('data-c');if(c)send(c)});var li=document.getElementById('clogin');if(li)li.addEventListener('click',function(e){e.preventDefault();var c=card('login');codeUi(c,'code')});var lo=document.getElementById('clogout');if(lo)lo.addEventListener('click',function(e){e.preventDefault();send('logout')});document.addEventListener('keydown',function(e){if(e.key==='/'&&document.activeElement&&!/^(TEXTAREA|INPUT)$/.test(document.activeElement.tagName)){e.preventDefault();ta.focus()}});document.addEventListener('click',function(e){var t=e.target&&e.target.closest&&e.target.closest('[data-fleet-cmd]');if(!t)return;e.preventDefault();send(t.getAttribute('data-fleet-cmd'));if(box.scrollIntoView)box.scrollIntoView({behavior:'smooth',block:'start'})});document.addEventListener('click',function(e){var t=e.target&&e.target.closest&&e.target.closest('[data-fleet-fill]');if(!t)return;e.preventDefault();ta.value=t.getAttribute('data-fleet-fill');fit();ta.focus();if(box.scrollIntoView)box.scrollIntoView({behavior:'smooth',block:'start'})});var q0=box.getAttribute('data-q');if(q0)send(q0)})();"; // standards-ok: a browser script in a string; its catch blocks guard sessionStorage in the visitor's browser, where Workers Logs cannot see them
