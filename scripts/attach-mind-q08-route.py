@@ -36,7 +36,7 @@ HOST = "mind.q08.org"
 SERVICE = "q08-mind"
 ZONE_NAME = "q08.org"
 MARKER = "MIND-Q08-3"
-UA = "qnfo-attach-mind/3.0"
+UA = "qnfo-attach-mind/3.0-r2"
 
 TOKEN = os.environ.get("CF_API_TOKEN") or os.environ.get("CLOUDFLARE_API_TOKEN") or ""
 ACCT = os.environ.get("CF_ACCOUNT_ID") or os.environ.get("CLOUDFLARE_ACCOUNT_ID") or ""
