@@ -6710,7 +6710,7 @@ var gateway_worker_default = {
       if (p.startsWith("/papers/") && p.split("/").length >= 3) return handlePaperDetail(request, env, p);
       if (p === "/papers" || p.startsWith("/papers?")) return handlePapers(request, env);
       if (p === "/sitemap.xml") return handleSitemap(env, host);
-      if (p === "/robots.txt") return new Response("User-agent: *\nAllow: /Sitemap: https://qnfo.org/sitemap.xml\nSitemap: https://papers.qnfo.org/sitemap.xml\n", { headers: { "Content-Type": "text/plain; charset=utf-8", "Cache-Control": "public, max-age=86400" } }); // DISCOVERY-1: qnfo.org lists its own sitemap; AGENT-READINESS-1 3.32.1: NO Content-Signal until the owner names the three values (a durable public declaration is never inferred from llms.txt)
+      if (p === "/robots.txt") return new Response("User-agent: *\nAllow: /\nSitemap: https://qnfo.org/sitemap.xml\nSitemap: https://papers.qnfo.org/sitemap.xml\n", { headers: { "Content-Type": "text/plain; charset=utf-8", "Cache-Control": "public, max-age=86400" } }); // DISCOVERY-1: qnfo.org lists its own sitemap; AGENT-READINESS-1 3.32.1: NO Content-Signal until the owner names the three values (a durable public declaration is never inferred from llms.txt)
       if (p === "/" + INDEXNOW_KEY + ".txt") return new Response(INDEXNOW_KEY, { headers: { "Content-Type": "text/plain; charset=utf-8", "Cache-Control": "public, max-age=86400" } }); // DISCOVERY-1: IndexNow key on qnfo.org too
       if (p === "/llms.txt") return handleLlmsTxt(env);
       if (p === "/rss.xml" || p === "/feed.xml") return handleRss(env);
