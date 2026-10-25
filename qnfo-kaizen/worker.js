@@ -6,7 +6,7 @@ var __defProp2 = Object.defineProperty;
 var __name2 = /* @__PURE__ */ __name((target, value) => __defProp2(target, "name", { value, configurable: true }), "__name");
 var __defProp22 = Object.defineProperty;
 var __name22 = /* @__PURE__ */ __name2((target, value) => __defProp22(target, "name", { value, configurable: true }), "__name");
-var VERSION = "0.3.4-cf-monday"; // 0.3.4 KAIZEN-CF-MONDAY-1: the drift scan cron is "0 10 * * 2" (Cloudflare weekday 2 = Monday; "1" fired on Sundays); // 2026-09-08 model audit: sub-frontier -> glm-5.3-flash (MODEL-FLOOR-OK) (fc+reasoning 1.3M ctx, ~-89% cost) + disposition pass
+var VERSION = "0.3.5-cred-expiry"; // 0.3.4 KAIZEN-CF-MONDAY-1: the drift scan cron is "0 10 * * 2" (Cloudflare weekday 2 = Monday; "1" fired on Sundays); // 2026-09-08 model audit: sub-frontier -> glm-5.3-flash (MODEL-FLOOR-OK) (fc+reasoning 1.3M ctx, ~-89% cost) + disposition pass
 var MAX_CLAIM_PER_RUN = 20;
 var MAX_APPLY_PER_RUN = 5;
 function json(data, status = 200) {
@@ -98,6 +98,47 @@ function findDrift(body, skillName) {
 __name(findDrift, "findDrift");
 __name2(findDrift, "findDrift");
 __name22(findDrift, "findDrift");
+async function ensureCredSchema(env) {
+  await env.QNFO_AUDIT.prepare("CREATE TABLE IF NOT EXISTS credential_registry (slug TEXT PRIMARY KEY, title TEXT, kind TEXT, expires_on TEXT, rotate_before TEXT, owner TEXT, source TEXT, updated_at TEXT)").run();
+}
+__name22(ensureCredSchema, "ensureCredSchema");
+async function credentialStatus(env) {
+  const out = { checked: 0, ok: 0, due: 0, expired: 0, nodate: 0, unknown: true, state: "unknown", source: "registry", items: [] };
+  try {
+    await ensureCredSchema(env);
+  } catch (e) {
+    out.error = "schema: " + (e && e.message ? e.message : String(e));
+    return out;
+  }
+  let rows = [];
+  try {
+    const r = await env.QNFO_AUDIT.prepare("SELECT slug, kind, expires_on, rotate_before, owner FROM credential_registry ORDER BY expires_on").all();
+    rows = (r && r.results) || [];
+  } catch (e) {
+    out.error = "query: " + (e && e.message ? e.message : String(e));
+    return out;
+  }
+  if (!rows.length) return out;
+  const now = Date.now();
+  const DAY = 864e5;
+  for (const row of rows) {
+    const raw = row.rotate_before || row.expires_on || "";
+    const iso = raw && raw.indexOf("T") < 0 ? raw + "T00:00:00Z" : raw;
+    const t = iso ? Date.parse(iso) : NaN;
+    const daysLeft = Number.isFinite(t) ? Math.floor((t - now) / DAY) : null;
+    let state = "ok";
+    if (daysLeft === null) { state = "nodate"; out.nodate++; }
+    else if (daysLeft < 0) { state = "expired"; out.expired++; }
+    else if (daysLeft <= 60) { state = "due"; out.due++; }
+    else { out.ok++; }
+    out.checked++;
+    out.items.push({ slug: row.slug, kind: row.kind || null, due: raw || null, days_left: daysLeft, state, owner: row.owner || null });
+  }
+  out.unknown = false;
+  out.state = out.expired ? "expired" : out.due ? "due" : out.nodate ? "incomplete" : "ok";
+  return out;
+}
+__name22(credentialStatus, "credentialStatus");
 async function runScan(env) {
   const started = Date.now();
   const files = await listSkillFiles(env);
@@ -138,7 +179,19 @@ async function runScan(env) {
   scored.sort((a, b) => b.composite - a.composite);
   const flagged = scored.filter((s) => s.composite > 0.7);
   const reportDate = (/* @__PURE__ */ new Date()).toISOString().slice(0, 10);
-  const findingsMd = "# Kaizen Report \u2014 " + reportDate + "\n\n- Worker: qnfo-kaizen v" + VERSION + "\n- Generated: " + (/* @__PURE__ */ new Date()).toISOString() + "\n- Skills scanned: " + scored.length + "\n- Flagged (composite > 0.7): " + flagged.length + "\n\n## Flagged\n" + (flagged.length ? flagged.map((f) => "- **" + f.skill + "** v" + f.version + " composite=" + f.composite + " (staleness " + f.stalenessDays + "d, incidents " + (incidents[f.skill.toLowerCase()] || 0) + ", refs " + f.crossRefs + ")").join("\n") : "- none") + "\n\n## Ops AI Gateway (7d)\n- chats: " + (opsStats.chats7d || 0) + "\n- failures: " + (opsStats.failures7d || 0) + "\n- by model: " + ((opsStats.byModel || []).join(", ") || "none") + "\n\n## Top 10 by composite\n" + scored.slice(0, 10).map((s) => "- " + s.skill + " v" + s.version + ": " + s.composite).join("\n");
+  let credLine = "- UNKNOWN: credential registry is empty or unreadable - this is NOT a pass";
+  try {
+    const cred = await credentialStatus(env);
+    if (!cred.unknown) {
+      credLine = String(cred.checked) + " credentials checked; expired " + String(cred.expired || 0) + ", due (<=60d) " + String(cred.due || 0) + (cred.items.length ? " [" + cred.items.map(function(i) { return i.slug + "=" + i.state + "(" + (i.days_left === null ? "?" : String(i.days_left) + "d") + ")"; }).join(", ") + "]" : "");
+    } else if (cred.error) {
+      credLine = "- UNKNOWN: credential registry unreadable (" + cred.error + ") - this is NOT a pass";
+    }
+  } catch (e) {
+    credLine = "- UNKNOWN: credential check threw (" + (e && e.message ? e.message : String(e)) + ") - this is NOT a pass";
+  }
+  const findingsMdBase = "# Kaizen Report \u2014 " + reportDate + "\n\n- Worker: qnfo-kaizen v" + VERSION + "\n- Generated: " + (/* @__PURE__ */ new Date()).toISOString() + "\n- Skills scanned: " + scored.length + "\n- Flagged (composite > 0.7): " + flagged.length + "\n\n## Flagged\n" + (flagged.length ? flagged.map((f) => "- **" + f.skill + "** v" + f.version + " composite=" + f.composite + " (staleness " + f.stalenessDays + "d, incidents " + (incidents[f.skill.toLowerCase()] || 0) + ", refs " + f.crossRefs + ")").join("\n") : "- none") + "\n\n## Ops AI Gateway (7d)\n- chats: " + (opsStats.chats7d || 0) + "\n- failures: " + (opsStats.failures7d || 0) + "\n- by model: " + ((opsStats.byModel || []).join(", ") || "none") + "\n\n## Top 10 by composite\n" + scored.slice(0, 10).map((s) => "- " + s.skill + " v" + s.version + ": " + s.composite).join("\n");
+  const findingsMd = findingsMdBase + "\n\n## Credential expiry\n" + credLine;
   const reportId = "kaizen-" + reportDate + "-" + Date.now();
   try {
     await env.QNFO_AUDIT.prepare("INSERT INTO kaizen_reports (id, session_id, report_date, findings, improvements_applied, wbs_code) VALUES (?, ?, ?, ?, ?, ?)").bind(
@@ -379,7 +432,7 @@ var worker_default = {
           status: "ok",
           worker: "qnfo-kaizen",
           version: VERSION,
-          capabilities: ["improvement-scan", "meta-loop", "skill-drift-watch"],
+          capabilities: ["improvement-scan", "meta-loop", "skill-drift-watch", "credential-expiry-watch"],
           limitations: ["scheduled daily at 02:00 and Mondays at 10:00", "/run/scan on a public hostname and /run/meta?commit=1 require KAIZEN_TOKEN; service-binding callers are internal"],
           bindings: { r2: !!env.SKILLS_BUCKET, d1: !!env.QNFO_AUDIT, ai: !!env.AI },
           secrets: { kaizen_token: !!env.KAIZEN_TOKEN, github_token: !!env.GITHUB_TOKEN },
@@ -419,6 +472,9 @@ var worker_default = {
       if (p === "/claims") {
         const rows = await env.QNFO_AUDIT.prepare("SELECT id, skill_target, gate_name, claim, confidence, status, applied_at FROM meta_claims ORDER BY created_at DESC LIMIT 20").all();
         return json({ claims: rows.results });
+      }
+      if (p === "/cred/status") {
+        return json(await credentialStatus(env));
       }
       return json({ error: "not found", path: p }, 404);
     } catch (e) {
