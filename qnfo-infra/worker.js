@@ -5,7 +5,7 @@ var __name = (target, value) => __defProp(target, "name", { value, configurable:
 var __defProp2 = Object.defineProperty;
 var __name2 = /* @__PURE__ */ __name((target, value) => __defProp2(target, "name", { value, configurable: true }), "__name");
 var NL = String.fromCharCode(10);
-var VERSION = "1.8.2-mcp-state-full-lists"; /* 1.8.2-mcp-state-full-lists MCP-STATE-TRUNCATION-1 (2026-10-25, pillar honest-measure): /state returned count=35 with only 30 worker names and count=11 with only 10 D1 rows, so a caller could not tell that five workers and qnfo-audit were omitted -- a silent false census. The list caps are now 60 workers / 25 D1 and both carry shown + truncated, so an omission is visible instead of inferred. */ /* 1.8.1-null-doi-cursor CITATION-PAGINATION-NULL-CURSOR-1 (2026-10-25, pillar reach): stable DOI pagination now traverses legacy rows with NULL created_at using slug-only cursors; the offline test covers 217 records, including the null-timestamp boundary across five pages. */ /* 1.8.0-all-doi-impact CITATION-TRACKING-ALL-DOIS-1 (2026-10-25, pillar reach): the daily impact run queried only the newest 50 (at most 100) DOIs; stable keyset pagination now collects the entire third-party DOI set without changing the cron grid. qnfo-infra/impact.test.mjs covers 217 records across five pages. */ /* 1.7.0-no-registrar NO-REGISTRAR-1 (2026-10-21): the registrar is not named; dead DOIs are recognised by the 10.5281 prefix only */ // 1.6.0 CRON-GRID-1 (owner directive 2026-10-19, pillar autonomy): one hourly :30 trigger. The 06:30 run (indexer member + state refresh) and the 18:00 refresh keep their slots on it and are retried hourly, at most 3 times, while their last good run is over 24.5 h old; every other hour runs the state refresh (it ran twice a day). Every fire is logged to cron_fire_log for CRON-WATCH-1. // 1.5.1 WORKERS-BP-LOGGING-qnfo-infra-1 (2026-10-14, agent_issues 2534, child of 2342, pillar autonomy): the 3 swallowed catches in handleWebhook log as a structured console.error (worker, where, error); control flow unchanged. // 1.5.0 CRON-ONLY-HEARTBEAT-1 (agent_issues 2397, pillar autonomy): scheduled() upserts its fleet_heartbeat row after the run, ok=0 when the work threw. // 1.4.0 SOURCE-VOICE-1 (agent_issues 2468, owner directive 2026-10-13 "Papers shall cite full texts, not merely reference work summaries"; pillar research): a PAPER_VZ hit in /context carries the passage of the paper's body that matched (the indexer's own chunk, from metadata.chunk), after the abstract when one is stored; it was title + status + abstract.slice(0, 220), so a paper with no abstract (269 of 575 published on 2026-10-13) reached qnfo-ai's retrieved context as its title alone. renderContext gives a paper hit up to 1300 characters (300 before). isDeadPrefixDoi was defined only inside the folded indexer member, so the /context enrichment and metaLine threw a ReferenceError on every paper hit and returned "slug <x> (enrich error)"; it is now defined at module scope too. // 1.3.4 WORKERS-STANDARDS-1 (2026-10-12, pillar security): the indexer member compares X-Index-Token in constant time (same accepted value). // 1.3.1 INDEXER-FOLD-1 (#1756): qnfo-paper-indexer runs here as a member (its two jobs on this worker's existing 06:30 trigger, no cron added; /indexer/* read routes).
+var VERSION = "1.8.3-analytics-untruncated"; /* 1.8.3-analytics-untruncated MCP-ANALYTICS-TRUNCATION-1 (2026-10-25, pillar honest-measure): /analytics read aiInferenceAdaptiveGroups with limit 100 over {date, modelId}; the real group set is 437, so Workers AI usage under-reported 7.7x (3,438,429 neurons / $37.8 vs 26,345,487 / $286.5). Total now from a dimension-free aggregate, breakdown from {modelId}, with shown/groups/truncated and the 10k/day free-tier deduction so it matches cost_daily. */ /* 1.8.2-mcp-state-full-lists MCP-STATE-TRUNCATION-1 (2026-10-25, pillar honest-measure): /state returned count=35 with only 30 worker names and count=11 with only 10 D1 rows, so a caller could not tell that five workers and qnfo-audit were omitted -- a silent false census. The list caps are now 60 workers / 25 D1 and both carry shown + truncated, so an omission is visible instead of inferred. */ /* 1.8.1-null-doi-cursor CITATION-PAGINATION-NULL-CURSOR-1 (2026-10-25, pillar reach): stable DOI pagination now traverses legacy rows with NULL created_at using slug-only cursors; the offline test covers 217 records, including the null-timestamp boundary across five pages. */ /* 1.8.0-all-doi-impact CITATION-TRACKING-ALL-DOIS-1 (2026-10-25, pillar reach): the daily impact run queried only the newest 50 (at most 100) DOIs; stable keyset pagination now collects the entire third-party DOI set without changing the cron grid. qnfo-infra/impact.test.mjs covers 217 records across five pages. */ /* 1.7.0-no-registrar NO-REGISTRAR-1 (2026-10-21): the registrar is not named; dead DOIs are recognised by the 10.5281 prefix only */ // 1.6.0 CRON-GRID-1 (owner directive 2026-10-19, pillar autonomy): one hourly :30 trigger. The 06:30 run (indexer member + state refresh) and the 18:00 refresh keep their slots on it and are retried hourly, at most 3 times, while their last good run is over 24.5 h old; every other hour runs the state refresh (it ran twice a day). Every fire is logged to cron_fire_log for CRON-WATCH-1. // 1.5.1 WORKERS-BP-LOGGING-qnfo-infra-1 (2026-10-14, agent_issues 2534, child of 2342, pillar autonomy): the 3 swallowed catches in handleWebhook log as a structured console.error (worker, where, error); control flow unchanged. // 1.5.0 CRON-ONLY-HEARTBEAT-1 (agent_issues 2397, pillar autonomy): scheduled() upserts its fleet_heartbeat row after the run, ok=0 when the work threw. // 1.4.0 SOURCE-VOICE-1 (agent_issues 2468, owner directive 2026-10-13 "Papers shall cite full texts, not merely reference work summaries"; pillar research): a PAPER_VZ hit in /context carries the passage of the paper's body that matched (the indexer's own chunk, from metadata.chunk), after the abstract when one is stored; it was title + status + abstract.slice(0, 220), so a paper with no abstract (269 of 575 published on 2026-10-13) reached qnfo-ai's retrieved context as its title alone. renderContext gives a paper hit up to 1300 characters (300 before). isDeadPrefixDoi was defined only inside the folded indexer member, so the /context enrichment and metaLine threw a ReferenceError on every paper hit and returned "slug <x> (enrich error)"; it is now defined at module scope too. // 1.3.4 WORKERS-STANDARDS-1 (2026-10-12, pillar security): the indexer member compares X-Index-Token in constant time (same accepted value). // 1.3.1 INDEXER-FOLD-1 (#1756): qnfo-paper-indexer runs here as a member (its two jobs on this worker's existing 06:30 trigger, no cron added; /indexer/* read routes).
 function auth(token, env) {
   const exp = env.INFRA_TOKEN;
   if (!exp || !token) return false;
@@ -141,17 +141,33 @@ async function collectAnalytics(env) {
   const out = { ts: (/* @__PURE__ */ new Date()).toISOString() };
   const since = new Date(Date.now() - 30 * 864e5).toISOString().slice(0, 10);
   try {
-    const q = '{ viewer { accounts(filter: {accountTag: "' + env.CF_ACCOUNT + '"}) { aiInferenceAdaptiveGroups(limit: 100, filter: {date_geq: "' + since + '"}) { sum { totalNeurons } dimensions { date modelId } } } } }';
-    const j = await gql(env, q);
-    const rows = j.data && j.data.viewer.accounts[0] && j.data.viewer.accounts[0].aiInferenceAdaptiveGroups || [];
-    let neurons = 0;
-    const byModel = {};
-    for (const r of rows) {
-      neurons += r.sum && r.sum.totalNeurons || 0;
-      const m = r.dimensions && r.dimensions.modelId || "unknown";
-      byModel[m] = (byModel[m] || 0) + (r.sum && r.sum.totalNeurons || 0);
-    }
-    out.ai_30d = { neurons, est_cost_usd: Math.round(neurons * 0.011 / 1e3 * 100) / 100, by_model: Object.entries(byModel).slice(0, 8).map(([m, n]) => ({ model: m, neurons: n })) };
+    // MCP-ANALYTICS-TRUNCATION-1 (1.8.3, 2026-10-25, pillar honest-measure): this read
+    // aiInferenceAdaptiveGroups with limit 100 over {date, modelId}. That group set is 437 rows for 30 days, so
+    // the API returned the first 100 and the account's Workers AI usage under-reported 7.7x: 3,438,429 neurons /
+    // $37.8 reported against a measured 26,345,487 / $286.5 - a false LOW on the cost surface an MCP caller
+    // trusts most (fleet_budget ai_spend:workers-ai was simultaneously reading 787.72 and looked like the bug).
+    // The total now comes from a dimension-free aggregate (one row, nothing to truncate); the breakdown uses a
+    // {modelId} group set (45 rows). shown/groups/truncated make a cap visible if one is ever hit again.
+    const qTot = '{ viewer { accounts(filter: {accountTag: "' + env.CF_ACCOUNT + '"}) { aiInferenceAdaptiveGroups(limit: 1, filter: {date_geq: "' + since + '"}) { sum { totalNeurons } } } } }';
+    const jTot = await gql(env, qTot);
+    const totRows = jTot.data && jTot.data.viewer.accounts[0] && jTot.data.viewer.accounts[0].aiInferenceAdaptiveGroups || [];
+    const neurons = totRows.reduce((a, r) => a + (r.sum && r.sum.totalNeurons || 0), 0);
+    let byModel = {}, modelGroups = 0;
+    try {
+      const qM = '{ viewer { accounts(filter: {accountTag: "' + env.CF_ACCOUNT + '"}) { aiInferenceAdaptiveGroups(limit: 200, filter: {date_geq: "' + since + '"}) { sum { totalNeurons } dimensions { modelId } } } } }';
+      const jM = await gql(env, qM);
+      const mRows = jM.data && jM.data.viewer.accounts[0] && jM.data.viewer.accounts[0].aiInferenceAdaptiveGroups || [];
+      modelGroups = mRows.length;
+      for (const r of mRows) {
+        const m = r.dimensions && r.dimensions.modelId || "unknown";
+        byModel[m] = (byModel[m] || 0) + (r.sum && r.sum.totalNeurons || 0);
+      }
+    } catch (eM) { console.error(JSON.stringify({ worker: "qnfo-infra", where: "analytics-bymodel", error: String(eM && eM.message || eM) })); }
+    const byModelAll = Object.entries(byModel).sort((a, b) => b[1] - a[1]);
+    // 10,000 neurons/day are free on the Workers AI allowance; the published rate above it is $0.011/1k. The
+    // deduction keeps this figure on the same basis as qnfo-audit.cost_daily (source='workers_ai').
+    const billable = Math.max(0, neurons - 1e4 * 30);
+    out.ai_30d = { neurons, est_cost_usd: Math.round(billable / 1e3 * 0.011 * 100) / 100, basis: "list estimate: max(0, totalNeurons - 10000/day x 30) / 1000 x $0.011", by_model: byModelAll.slice(0, 8).map(([m, n]) => ({ model: m, neurons: n })), by_model_shown: Math.min(8, byModelAll.length), by_model_groups: modelGroups, truncated: modelGroups >= 200 };
   } catch (e) {
     out.ai_30d = { error: String(e) };
   }
