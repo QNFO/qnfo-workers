@@ -37,7 +37,8 @@
 // Q08-ASCII-SOURCE-1 (2026-10-01): this file is ASCII-only; every typographic character is a \uXXXX escape. The deploy path
 // double-encoded raw UTF-8, so live pages read "... \u00e2 q08" and posts "\u00e2\u0080\u0094". Keep new literals escaped.
 // VERSION-NOTES-MOVED-1: release notes live in the block below
-var VERSION = "0.35.0"; // 0.34.0 NO-REGISTRAR-1 (2026-10-21): release notes no longer name the closed registrar.
+var VERSION = "0.35.1"; // 0.34.0 NO-REGISTRAR-1 (2026-10-21): release notes no longer name the closed registrar.
+/* 0.35.1 Q08-RETRY-PROGRESS-1: a repair that returns exactly a draft already rejected in the same verifyAndRevise invocation stops as an accuracy failure before spending another verification. Changed drafts still receive the full verification; no claim-count heuristic, quality threshold, reviewer family, retry ceiling or spend control changes. Run 955 spent 16 fact-check calls on multiple repairs; its log does not retain draft text, so savings on that run are not claimed. */
 /* 0.35.0 Q08-RUN-STAGE-ATTRIBUTION-1: engine_runs now records reader-panel and fact-check calls separately while preserving verify_calls as their total. The q08.org/api/runs?limit=60 evidence sample returned 20 rows (IDs 952 through 933), not 60; 13 were gate_failed and 7 deferred. No quality gate, spend policy, or generation behavior changed. */
 /* 0.34.4 Q08-LEDGER-WHITESPACE-GROUPS-1: the grounding normalizer now removes grouped source-ledger citations such as [S2 S3] and [S1, S2 S3] before any gate reads the draft. The factual and reader-quality gates are unchanged. */
 /* 0.34.5 Q08-WRITER-YIELD-1 (2026-10-25): live 30-day q08_reader_tests showed writer-gate pass rates of 66.1% for gpt-oss (342 attempts), 60.2% for kimi (108), and 21.2% for nemotron (472), while the old order led with nemotron. Put the highest-yield, lowest-neuron writer first; the uncapped fallback favors yield, while the capped fallback favors the lower-cost nemotron. Quality thresholds are unchanged; revert by restoring the prior writer arrays. */
@@ -3180,6 +3181,7 @@ async function verifyAndRevise(env, a) {
   var cur = a.piece, problems = depthHeld || vr.problems, pruned = 0, revised = 0, trail = depthHeld ? ["r0 passed; analysis held: " + depthHeld[0].slice(0, 50)] : [];
   var shortPruned = null, cutClaims = []; // Q08-PRUNE-EXTEND-1
   var seenClasses = {}; // Q08-YIELD-1
+  var reviewedDrafts = [a.piece.text];
   function fail(extra) { return { ok: false, piece: a.piece, vr: vr, problems: problems.concat(extra || [], ["repair trail: " + trail.join(", ") + (vr && vr.analysisMode ? "; analysis section: " + vr.analysisMode : "")]) }; }
   // Q08-PRUNE-ROUNDS-2 (0.14.8, run 350): the model revision passed and the next prune left 3691 characters, and the run ended because the
   // fifth round was the last. Rounds past PRUNE_ROUNDS run up to PRUNE_ROUNDS_MAX while the repair has used less than PRUNE_BUDGET_MS
@@ -3236,6 +3238,9 @@ async function verifyAndRevise(env, a) {
       trail.push("r" + (round + 1) + (shortPruned ? " length revision (" + publishBody(rev.text).length + " chars of body)" : " model revision"));
       cand = rev; shortPruned = null;
     }
+    // Re-reading identical failed text can buy a different verdict, not a better draft. Scope this history to this repair only.
+    if (reviewedDrafts.indexOf(cand.text) >= 0) { trail.push("r" + (round + 1) + " stopped: repair repeated an already rejected draft"); return fail(); }
+    reviewedDrafts.push(cand.text);
     vr = await verifyPiece(env, cand.text, a.ground, cand.model, a.seedText, opts);
     if (vr.ok) {
       var pi1 = pruneInferences(cand, vr, a.banned, a.forecast);
