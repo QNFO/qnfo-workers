@@ -60,5 +60,9 @@ service = "qnfo-pdf"
 
 # Secrets (wrangler secret put): SYNC_TOKEN, TURNSTILE_SECRET
 
+# CRON-DETACH-1 (2026-10-25, agent_issues 100450): a raw PUT /content deploy on 2026-10-20 left this trigger
+# unattached for ~5 days (last cron_fire_log row 2026-10-20T12:00:43Z, 113 consecutive worker-silent fails).
+# [triggers] is applied only by PUT /schemas/deployments/schedules in the canonical path (/ops/deploy), never by
+# PUT /content alone. This comment ships the re-attach deploy.
 [triggers]
 crons = ["0 * * * *"]
