@@ -55,7 +55,8 @@ configuration, migrations, scripts or workflows (a dry run on pull requests), an
 `fleet-graph-tick`, which qnfo-cloud-ops FLEET-GRAPH-CADENCE-1 sends from its 10-minute tick when main has been quiet for
 60 minutes (the second path; GitHub `schedule` never fires here).
 
-- **code scope**: every live worker directory (worker.js + wrangler.toml, no RETIRED/FOLDED). worker.js is parsed with
+- **code scope**: every live worker directory (worker.js + wrangler.toml, no RETIRED/FOLDED), plus a root-level
+  worker.js + wrangler.toml pair when present (identified by its configured worker name). worker.js is parsed with
   acorn 8.19.0 (MIT); wrangler.toml with smol-toml 1.9.1 (BSD-3). Extracted: top-level functions, handlers and class
   methods; calls between them; `env.X` reads (direct, `this.env.X`, destructured, aliased); SQL in string and template
   literals (tables read/written/created, resolved to the bound database); `fetch()` to literal or constant URLs (fleet
