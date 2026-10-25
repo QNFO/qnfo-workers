@@ -26,6 +26,11 @@ export const CONTROL_PLANE = ["qnfo-fleet-control", "qnfo-ops", "qnfo-deploy-gua
 export const SHARED = ["scripts", ".github", "migrations", "_shared", "."];
 
 // Every suite file in the repository, as relative paths, sorted.
+/**
+ * Finds the top-level test suites in a checkout.
+ * @param {string} root Repository root.
+ * @returns {string[]} Sorted suite paths relative to `root`.
+ */
 export function discover(root) {
   const out = [];
   for (const d of readdirSync(root).sort()) {
@@ -52,6 +57,13 @@ export const ALWAYS = ["scripts/version-pin-guard.test.mjs", "scripts/cron-singl
 // ("../qnfo-gateway/worker.js", 15 suites on 2026-10-19, e.g. qnfo-email/unsub-link.test.mjs and qnfo-research-exec/ground.test.mjs)
 // did not run when only that other directory changed, so a PR could merge green and break it on main. With a reader (the CLI
 // passes one), select() also takes every suite whose text names "../<changed dir>/"; without one it is unchanged.
+/**
+ * Finds suites outside changed directories that read files from those directories.
+ * @param {string[]} all Discovered suite paths.
+ * @param {string[]} dirs Changed top-level directories.
+ * @param {(suite: string) => string} read Reads a suite's source text.
+ * @returns {string[]} Dependent suite paths.
+ */
 export function dependents(all, dirs, read) {
   if (typeof read !== "function" || !dirs.length) return [];
   const out = [];
@@ -63,6 +75,13 @@ export function dependents(all, dirs, read) {
   }
   return out;
 }
+/**
+ * Selects suites for a change, widening to the full set for shared or control-plane paths.
+ * @param {string[]} all Discovered suite paths.
+ * @param {string[]} changedDirs Changed top-level directories; `"."` denotes a root-file change.
+ * @param {(suite: string) => string} [read] Reads suite source to identify cross-directory dependencies.
+ * @returns {{suites: string[], reason: string}} The selected suites and an explanation of the selection.
+ */
 export function select(all, changedDirs, read) {
   const dirs = Array.from(new Set((changedDirs || []).map((d) => String(d).trim()).filter(Boolean)));
   const wide = dirs.filter((d) => SHARED.includes(d) || CONTROL_PLANE.includes(d));
@@ -81,6 +100,12 @@ export function select(all, changedDirs, read) {
 // block a green fleet.
 export const QUARANTINE_FILE = "scripts/suite-quarantine.txt";
 export const QUARANTINE_MAX_DAYS = 7;
+/**
+ * Parses expiring suite-quarantine entries and reports malformed or stale entries.
+ * @param {string} text Quarantine file contents.
+ * @param {string} today Current date in `YYYY-MM-DD` form.
+ * @returns {{active: Map<string, {suite: string, expires: string, ref: string, reason: string}>, problems: string[], warnings: string[]}}
+ */
 export function parseQuarantine(text, today) {
   const active = new Map(), problems = [], warnings = [];
   const t0 = Date.parse(today + "T00:00:00Z");
@@ -99,6 +124,12 @@ export function parseQuarantine(text, today) {
 }
 // failed: result rows ({suite, code}). Returns the failures that still fail the run, the ones an override covers, and the live
 // entries whose suite passed (stale: delete the line).
+/**
+ * Separates actual failures, quarantined failures, and quarantine entries for passing suites.
+ * @param {{suite: string, code: number}[]} results Suite results.
+ * @param {Map<string, {suite: string, expires: string, ref: string, reason: string}>} active Valid, unexpired overrides.
+ * @returns {{real: object[], quarantined: object[], stale: object[]}}
+ */
 export function applyQuarantine(results, active) {
   const real = [], quarantined = [];
   for (const r of results.filter((x) => x.code !== 0)) { const q = active.get(r.suite); if (q) quarantined.push({ ...r, q }); else real.push(r); }
@@ -110,6 +141,13 @@ export function applyQuarantine(results, active) {
 // deployed-current.worker.js of the changed worker directories (all worker directories with --all), before any suite. Only
 // charter-guard (qnfo-fleet-control) and code-loop-test (qnfo-code-orchestrator) syntax-checked a worker before, so a
 // VERSION note containing the two characters that close a block comment broke a worker that has no suite.
+/**
+ * Lists Worker entrypoint files that need syntax checks for the selected change.
+ * @param {string} root Repository root.
+ * @param {string[]} changedDirs Changed top-level directories.
+ * @param {boolean} everyWorker Whether to include all directories containing `worker.js`.
+ * @returns {string[]} Existing Worker entrypoints and deployment mirrors.
+ */
 export function syntaxTargets(root, changedDirs, everyWorker) {
   let dirs;
   if (everyWorker) dirs = readdirSync(root).filter((d) => !d.startsWith(".") && existsSync(join(root, d, "worker.js")));
@@ -121,6 +159,11 @@ export function syntaxTargets(root, changedDirs, everyWorker) {
 
 // node 22 "--check" on a .js file that is an ES module exits 0 without parsing it as a module (module detection), so a
 // worker with "export default" passed even with a syntax error; a module-shaped file is checked as a .mjs copy instead.
+/**
+ * Detects source with an import or export declaration that needs module-mode syntax checking.
+ * @param {string} text Source text.
+ * @returns {boolean} Whether the source appears to be an ES module.
+ */
 export function isModuleSource(text) { return /^\s*(export\s|import\s*[\w{*"'])/m.test(String(text || "")); }
 function checkSyntax(root, file) {
   return new Promise((resolve) => {
@@ -143,6 +186,12 @@ function checkSyntax(root, file) {
 // this is the class fix: a suite is not started in the last HOUR_EDGE_GUARD_S seconds before an hour edge, so every suite runs whole on one side of every
 // hour and midnight while it takes under that long. Returns the wait in ms (0 when the start is clear of the edge).
 export const HOUR_EDGE_GUARD_S = 10;
+/**
+ * Returns a delay when starting now would put a suite across an hour boundary.
+ * @param {number} nowMs Current time in milliseconds since the Unix epoch.
+ * @param {number} [guardS=HOUR_EDGE_GUARD_S] Guard interval before the boundary, in seconds.
+ * @returns {number} Milliseconds to wait, or zero when the start is safe.
+ */
 export function msUntilSafeStart(nowMs, guardS = HOUR_EDGE_GUARD_S) {
   const toEdge = 3600000 - (nowMs % 3600000);
   return toEdge <= guardS * 1000 ? toEdge + 1000 : 0;
