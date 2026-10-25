@@ -13,8 +13,8 @@ for (const name of ["qnfo-gateway", "qnfo-ai-search", "qnfo-research-exec", "qnf
 const research = new DatabaseSync(":memory:");
 const identity = new DatabaseSync(":memory:");
 research.exec(`
-  CREATE TABLE papers(slug TEXT,title TEXT,abstract TEXT,authors TEXT,doi TEXT,created_at TEXT,updated_at TEXT,version TEXT,license TEXT,keywords TEXT,body_md TEXT,status TEXT);
-  INSERT INTO papers VALUES('synthetic-us07','Synthetic public research fixture','Public abstract','[]',NULL,'2000-01-01','2000-01-01','1.0.0','test','[]','PUBLIC-RESEARCH-BODY-US07','published');
+  CREATE TABLE papers(slug TEXT,title TEXT,abstract TEXT,authors TEXT,doi TEXT,created_at TEXT,updated_at TEXT,version TEXT,license TEXT,keywords TEXT,body_md TEXT,status TEXT,first_published_at TEXT,last_revised_at TEXT);
+  INSERT INTO papers VALUES('synthetic-us07','Synthetic public research fixture','Public abstract','[]',NULL,'2000-01-01','2000-01-01','1.0.0','test','[]','PUBLIC-RESEARCH-BODY-US07','published','2000-01-01',NULL);
 `);
 identity.exec("CREATE TABLE owner_docs(key TEXT,body_md TEXT,visibility TEXT)");
 identity.prepare("INSERT INTO owner_docs VALUES(?,?,?)").run("identity", "PRIVATE-IDENTITY-US07-SYNTHETIC", "private");
