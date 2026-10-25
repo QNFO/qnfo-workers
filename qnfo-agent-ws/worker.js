@@ -28870,7 +28870,7 @@ var marker21 = `vercel.ai.error.${name21}`;
 var symbol21 = Symbol.for(marker21);
 var _a21;
 _a21 = symbol21;
-var VERSION = "7.0.63-doi-scrub";
+var VERSION = "7.1.0-agents-sdk-runtime";
 var download = /* @__PURE__ */ __name2(async ({
   url: url2,
   maxBytes,
@@ -61812,7 +61812,7 @@ ${JSON.stringify(milestone.data, null, 2)}` : "";
     await super.destroy();
   }
 };
-var VERSION2 = "2.0.0";
+var VERSION2 = "2.1.0";
 var MAX_BODY = 64 * 1024;
 var CLOUDFLARE_API_MCP_URL = "https://mcp.cloudflare.com/mcp";
 var SYSTEM_PROMPT = `You are a QNFO research agent running on the Cloudflare Quniverse fleet (account: quniverse, ~54 workers). You have access to tools that query the QNFO knowledge infrastructure (D1 papers database, Vectorize semantic search, graph database). QNFO is not an acronym.
@@ -62146,7 +62146,7 @@ async function handleChatCompletions(request, env2) {
   if (!messages.length) return json3({ error: "messages required" }, 400);
   const model = typeof body.model === "string" ? body.model : "qnfo-agent";
   const wantStream = body.stream === true;
-  const id = "chatcmpl-" + Math.random().toString(16).slice(2, 10);
+  const id = "chatcmpl-" + crypto.randomUUID().replaceAll("-", "");
   const created = Math.floor(Date.now() / 1e3);
   try {
     const result = await runAgentTurn(env2, messages, {});
@@ -62199,7 +62199,8 @@ async function handleChatCompletions(request, env2) {
       usage: { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0 }
     });
   } catch (e2) {
-    return json3({ error: e2.message }, 502);
+    console.error("[chat] request failed:", e2?.message || e2);
+    return json3({ error: "Agent request failed" }, 502);
   }
 }
 __name(handleChatCompletions, "handleChatCompletions");
@@ -62213,12 +62214,12 @@ function handleModels(env2) {
       owned_by: "qnfo",
       _agent: {
         version: VERSION2,
-        model: env2.DEEPSEEK_API_KEY ? "deepseek-chat" : "workers-ai glm-5.3 (structured tool calls)",
+        model: "QNFO AI router",
         tools: [
           "search_papers",
           "get_paper_context",
           "query_graph",
-          ...env2.CF_API_TOKEN ? ["cloudflare_api (search/execute \u2014 2,500+ endpoints)"] : []
+          "Cloudflare API MCP (if configured)"
         ],
         transport: ["websocket", "http-sse"]
       }
@@ -62251,15 +62252,7 @@ var QnfoAgent = class extends AIChatAgent {
   // outbound via sendEmail(). Uses the EMAIL send_email binding.
   async onEmail(email3) {
     try {
-      const raw = await email3.getRaw();
-      const from = email3.from;
-      const subject = email3.subject || "";
-      const text2 = typeof raw === "string" ? raw.slice(0, 8e3) : "[binary]";
-      console.log("[email] from=" + from + " subject=" + subject.slice(0, 80));
-      await this.env.LIVING_PAPER.prepare(
-        "INSERT INTO email_logs (ts, from_addr, subject, body) VALUES (?, ?, ?, ?)"
-      ).bind((/* @__PURE__ */ new Date()).toISOString(), String(from), subject.slice(0, 200), text2.slice(0, 4e3)).run().catch(() => {
-      });
+      console.log("[email] inbound message routed to QnfoAgent");
     } catch (err) {
       console.log("[email] onEmail error: " + String(err).slice(0, 160));
     }
@@ -62353,7 +62346,9 @@ var QnfoAgent = class extends AIChatAgent {
         { abortSignal: options?.abortSignal, onFinish, mcp: this.mcp }
       );
     } catch (e2) {
-      return new Response("AGENT ERROR: " + (e2?.message || String(e2)), {
+      console.error("[chat] agent turn failed:", e2?.message || e2);
+      return new Response("Agent request failed", {
+        status: 502,
         headers: { "Content-Type": "text/plain; charset=utf-8" }
       });
     }
@@ -62407,7 +62402,7 @@ var agent_ws_default = {
         return { agent: "QnfoAgent", instance: email3.to?.includes("agent@") ? "agent" : "default" };
       }, "resolver"),
       onNoRoute: /* @__PURE__ */ __name2((email3) => {
-        console.warn("No route for email from " + (email3?.from || "?"));
+        console.warn("No route for inbound email");
         email3?.setReject?.("Unknown recipient");
       }, "onNoRoute")
     });
@@ -62415,6 +62410,7 @@ var agent_ws_default = {
   async fetch(request, env2, ctx) {
     const url2 = new URL(request.url);
     const path = url2.pathname;
+    const normalizedPath = "/" + path.split("/").filter(Boolean).join("/");
     const method = request.method;
     if (method === "OPTIONS") {
       return new Response(null, {
@@ -62426,24 +62422,12 @@ var agent_ws_default = {
         }
       });
     }
-    const requiresAuth = method === "POST" || path.startsWith("/agents/");
+    const requiresAuth = method === "POST" || normalizedPath.startsWith("/agents/");
     if (requiresAuth && !isAuthorized(request, env2)) {
       return json3({ error: "Unauthorized: missing or invalid X-Sync-Token" }, 401);
     }
     const agentResponse = await routeAgentRequest(request, env2);
     if (agentResponse) return agentResponse;
-    if (path === "/debug/agent" && method === "GET") {
-      try {
-        const agent = await getAgentByName(env2.QnfoAgent, "debug-probe");
-        const resp = await agent.fetch(new Request("https://internal/mcp-status"));
-        return new Response(resp.body, {
-          status: resp.status,
-          headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" }
-        });
-      } catch (e2) {
-        return json3({ error: e2?.message || String(e2) }, 500);
-      }
-    }
     if (path === "/v1/reports/run" && method === "POST") {
       try {
         const agent = await getAgentByName(env2.QnfoAgent, "reporter");
@@ -62458,58 +62442,31 @@ var agent_ws_default = {
         status: "ok",
         worker: "qnfo-agent-ws",
         version: VERSION2,
+        capabilities: [
+          "durable-agent-storage",
+          "persistent-chat-history",
+          "authenticated-agent-websocket",
+          "scheduled-daily-reports",
+          "mcp-tool-integration",
+          "email-routing",
+          "workers-ai-and-qnfo-ai",
+          "openai-compatible-chat-api"
+        ],
+        limitations: [
+          "POST and /agents/* require X-Sync-Token or Bearer authentication; unset SYNC_TOKEN fails closed",
+          "Cloudflare API MCP tools are unavailable unless CF_API_TOKEN is configured",
+          "Chat responses are generated before delivery; the OpenAI-compatible SSE endpoint emits a single content chunk",
+          "Inbound email is routed to an agent but does not produce an automatic reply",
+          "Voice, browser automation, push notifications, and external Workflows are not configured"
+        ],
         bindings: {
           d1_living_paper: !!env2.LIVING_PAPER,
           d1_graph: !!env2.QNFO_GRAPH,
           vectorize: !!env2.PAPER_VZ,
           ai: !!env2.AI,
-          deepseek_key: !!env2.DEEPSEEK_API_KEY,
-          auth: !!env2.SYNC_TOKEN,
-          mcp_cloudflare_api: !!env2.CF_API_TOKEN,
           email: !!env2.EMAIL
         }
       });
-    }
-    if (path === "/debug/router" && method === "GET") {
-      try {
-        const doFetch = env2.QNFO_AI ? (u2, init) => env2.QNFO_AI.fetch(u2, init) : fetch;
-        const r2 = await doFetch("https://qnfo-ai-any-host/v1/models", {
-          headers: { Authorization: "Bearer " + (env2.ROUTER_AUTH_KEY || "") }
-        });
-        const t2 = await r2.text();
-        return json3({ binding: !!env2.QNFO_AI, hasKey: !!env2.ROUTER_AUTH_KEY, status: r2.status, body: t2.slice(0, 300) });
-      } catch (e2) {
-        return json3({ error: e2.message }, 500);
-      }
-    }
-    if (path === "/debug/mcp" && method === "GET") {
-      try {
-        const initResp = await fetch(CLOUDFLARE_API_MCP_URL, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Accept: "application/json, text/event-stream",
-            Authorization: `Bearer ${env2.CF_API_TOKEN}`
-          },
-          body: JSON.stringify({
-            jsonrpc: "2.0",
-            id: 1,
-            method: "initialize",
-            params: {
-              protocolVersion: "2025-11-25",
-              capabilities: {},
-              clientInfo: { name: "qnfo-agent-ws-debug", version: VERSION2 }
-            }
-          })
-        });
-        const text2 = await initResp.text();
-        return json3({
-          status: initResp.status,
-          body: text2.slice(0, 3e3)
-        });
-      } catch (e2) {
-        return json3({ error: e2?.message || String(e2) }, 500);
-      }
     }
     if (path === "/" && method === "GET") {
       return json3({
@@ -62517,7 +62474,6 @@ var agent_ws_default = {
         version: VERSION2,
         endpoints: {
           "GET /health": "Health and binding check",
-          "GET /debug/mcp": "Direct MCP probe (auth/token test)",
           "GET /v1/models": "OpenAI-compatible model list",
           "POST /v1/chat/completions": "OpenAI-compatible chat (stream=true for SSE)",
           "WS /agents/qnfo-agent/:name": "Native Agents SDK WebSocket chat"
