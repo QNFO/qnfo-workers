@@ -24,7 +24,7 @@ function worker(dir, files) {
 const GOOD = 'export default { fetch() { return new Response("ok"); } };\n';
 
 worker("good", { "worker.js": GOOD, "deployed-current.worker.js": GOOD });
-worker("cfmods", { "worker.js": 'import { DurableObject, WorkflowEntrypoint, RpcTarget, env, tracing } from "cloudflare:workers";\nimport { EmailMessage } from "cloudflare:email";\nimport { connect } from "cloudflare:sockets";\nimport { Buffer } from "node:buffer";\nexport class D extends DurableObject {}\nexport class W extends WorkflowEntrypoint {}\n' + GOOD });
+worker("cfmods", { "worker.js": 'import { DurableObject, WorkflowEntrypoint, RpcTarget, env, tracing } from "cloudflare:workers";\nimport { EmailMessage } from "cloudflare:email";\nimport { connect } from "cloudflare:sockets";\nimport { Buffer } from "node:buffer";\nexport class D extends DurableObject {}\nexport class W extends WorkflowEntrypoint {}\ntracing.enterSpan("probe", (span) => span);\n' + GOOD });
 worker("svcworker", { "worker.js": 'addEventListener("fetch", (e) => e.respondWith(new Response("ok")));\n' });
 // the 2026-10-17 break: valid syntax, a sibling module that exists on disk, a deploy that uploads one module
 worker("wellbeing", { "worker.js": 'import { wellbeingTick } from "./wellbeing-wire.js";\nexport default { fetch() { return new Response(String(wellbeingTick)); } };\n', "wellbeing-wire.js": "export const wellbeingTick = 1;\n" });

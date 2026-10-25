@@ -12,7 +12,7 @@
 // Run: node qnfo-ops/context-compact.test.mjs   -> prints "N passed, 0 failed"   (CC_WORKER=<file> tests another worker.js, e.g. the pre-change one: it must fail)
 import { readFileSync } from "node:fs";
 import { DatabaseSync } from "node:sqlite";
-const src = readFileSync(process.env.CC_WORKER || new URL("./worker.js", import.meta.url), "utf8");
+const src = readFileSync(process.env.CC_WORKER || new URL("./worker.js", import.meta.url), "utf8").replace(/\r\n/g, "\n");
 let pass = 0, fail = 0;
 const ok = (c, m, x) => { if (c) pass++; else { fail++; console.log("FAIL " + m + (x !== undefined ? " :: " + JSON.stringify(x) : "")); } };
 const grab = (start, end) => { const i = src.indexOf(start), j = src.indexOf(end, i); return i >= 0 && j > i ? src.slice(i, j) : ""; };
@@ -232,7 +232,7 @@ try {
   ok(/op find \(query -> exact node id\)/.test(lean("fleet_graph")) && /impact \(id, depth, direction/.test(lean("fleet_graph")) && /Read-only/.test(lean("fleet_graph")), "fleet_graph keeps what each op needs");
   ok(!/Returns ok\/http\/version/.test(lean("fleet_status")) && !/Use when papers wait/.test(lean("ops_research_kick")) && !/Returns bundle_snippet/.test(lean("cf_worker_read")) && !/Supports expected_version/.test(lean("cf_worker_deploy")), "background sentences are what goes");
   ok(cc3.opsLeanDescription && cc3.opsLeanDescription(cc3.opsLeanDescription(fullP[0].function.description)) === cc3.opsLeanDescription(fullP[0].function.description) && cc3.opsLeanDescription(null) === "" && cc3.opsLeanDescription("One sentence only") === "One sentence only", "the clipper is idempotent and safe on empty and one-sentence input");
-  ok(/\? publicToolsPayload\(\) : codeMode \? codeToolsPayload\(\) : toolsPayload\(\)/.test(src) && /callDeepSeek\(this\.env, messages, DEFAULT_MAX_OUT, toolsPayload\(\), \{\}\)/.test(src) && (src.match(/jobToolsPayload\(\)/g) || []).length === 3, "chat, code mode and the agent loop still use toolsPayload; jobToolsPayload is called only by the job loop (its upstream call and its no-usage estimate) and defined once");
+  ok(/\? publicToolsPayload\(\) : codeMode \? codeToolsPayload\(\) : toolsPayload\(\)/.test(src) && /opsAgentChat\(this\.env, messages, DEFAULT_MAX_OUT, toolsPayload\(\), \{\}, conversationId\)/.test(src) && (src.match(/jobToolsPayload\(\)/g) || []).length === 3, "chat, code mode and the agent loop still use toolsPayload; jobToolsPayload is called only by the job loop (its upstream call and its no-usage estimate) and defined once");
 
   // (b) the ceiling test.
   const R = cc3.reached || (() => null);
@@ -253,9 +253,9 @@ try {
     ok(finalTools === false && rounds < 41 && used < 800000 && used > 600000, "on the 6k-result replay the ceiling ends the job before turn 40 with the total near the cap and under 800000 (the tool-less final round is smaller than the one before it)", { rounds, used }); }
 
   // (e) the REAL job loop. OpsExecWorkflow.run against a stubbed upstream (fetch), node:sqlite for qnfo-audit, and kv_get as the tool.
-  const IMPORT = 'import { WorkflowEntrypoint, DurableObject } from "cloudflare:workers";';
+  const IMPORT = 'import { WorkflowEntrypoint, DurableObject, tracing } from "cloudflare:workers";';
   ok(src.indexOf(IMPORT) >= 0, "worker.js import line is the one this loader replaces");
-  const mod = await import("data:text/javascript;base64," + Buffer.from(src.replace(IMPORT, "var WorkflowEntrypoint = class {}; var DurableObject = class {};")).toString("base64"));
+  const mod = await import("data:text/javascript;base64," + Buffer.from(src.replace(IMPORT, "var WorkflowEntrypoint = class {}; var DurableObject = class {}; var tracing = { enterSpan(_name, callback) { return callback({ setAttribute() {} }); } };")).toString("base64"));
   const d1w = (db) => ({ prepare(sql) { let a = []; const q = { bind(...x) { a = x.map((v) => (v === undefined ? null : v)); return q; }, async all() { return { results: db.prepare(sql).all(...a) }; }, async first() { return db.prepare(sql).get(...a) || null; }, async run() { const r = db.prepare(sql).run(...a); return { success: true, meta: { changes: Number(r.changes) } }; } }; return q; }, async batch(l) { const o = []; for (const s of l) o.push(await s.run()); return o; } });
   const realFetch = globalThis.fetch, say = console.log.bind(console);
   async function runJob(label, o) {
