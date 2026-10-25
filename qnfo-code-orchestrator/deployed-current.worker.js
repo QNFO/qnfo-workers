@@ -22,7 +22,7 @@
 // 'read' with attempts >= 1, CROSS-FAMILY-1 (ct_im2403) among them. repoSlug() now strips one leading owner segment at
 // intake and at read, so the live queue drains without a data migration and no future owner-qualified row can wedge the
 // loop. The 16 existing rows are repaired in D1 separately. */
-var VERSION = "0.26.0-codeagent"; // MERGE-SCOPE-DATA-SURFACES-1: mergeScopeWhy() mirrors qnfo-fleet-control cmScope() for migrations/*.sql and mind/**/*.json|*.toml (MERGE-SCOPE-PARITY-1), so the loop no longer spends model calls on a task the runner would refuse. // 0.25.1 EXHAUST-SELF-RETRY-1: an exhausted issue names the loop's own retry time (no hand-off to a session) and its event is deduped in D1 (one per issue per 24 h).
+var VERSION = "0.27.0-codeagent"; // CODE-LOOP-SOFT-BUDGET-1: a breached daily call threshold routes to cheaper rungs and one step per tick, never stops the loop; replay provenance survives fresh reads.
 /* 0.26.0 VERIFIER-FAILURE-REPLAY-1 (2026-10-25, issue 1000111; pillar autonomy; minor: the loop now recovers terminal tasks after a verifier fix): once, a failed verify-step task with the generic container compile failure is reset to read and retried after deployment, only when it has no branch/PR or active task on the same path. The fresh read and all existing verifiers still gate publication. */
 /* 0.25.4 ARRAYBUFFER-EXEC-OUTPUT-1 (2026-10-25, issue 1000111): Container.exec exposes stdout/stderr as ArrayBuffer; treating them as non-Uint8Array discarded COMPILE_OK and made valid Python fail verification. Normalize both before the existing byte cap; container-output.test.mjs covers the fix. */
 /* 0.25.0 PLAN-TRUST-PARITY-1 + PLAN-RELAPSE-BRIEF-1 (2026-10-20, agent_issues 100303, owner task op-mvg9vjkbaedc; pillar autonomy; minor: the planner now decides on a list it did not decide on before): plan accepts every source the merge runner trusts (ops_config code_merge_trusted_sources, one list), and a metric-relapse issue is planned from the structured fields of metric_registry and analytics_metric_triggers instead of its prose. */
@@ -269,10 +269,7 @@ const MAX_OPEN_TASKS = 48;
 // LANES-8-1 (0.18.2, owner directive "MORE PARALLEL WORKERS"): was 4; measured 5 distinct tasks per tick at 4 lanes, so the
 // queue (MAX_OPEN_TASKS) and the planner's work-in-progress cap were raised with it, or the lanes would idle.
 const TICK_LANES = 8;
-// SPEND-CAP-1 (0.18.2, owner directive "MORE THROUGHPUT"): throughput and cost are the same dial here, so the dial has a stop.
-// Before a tick starts its lanes it reads today's model calls for this worker from ai_call_counters and stops when the day's
-// budget is spent, recording ONE code-task.spend-cap event per hour. ops_config code_loop_daily_calls tunes it without a deploy;
-// the default is sized from the measured 2026-10-17 cost (39 calls = $0.42, so ~$0.011 a call: 1500 calls is about $16 a day).
+// CODE-LOOP-SOFT-BUDGET-1: the unchanged daily call threshold steers model order and batch size, never stops a tick.
 const DAILY_MODEL_CALLS_DEFAULT = 1500;
 // LEASE-FENCE-1 (0.18.23): was 90 s. Measured in ai_call_counters 2026-10-18/19, a ladder call averages 44 s (gpt-oss-120b), 106 s
 // (kimi-k2.7-code) and 175 s (glm-5.3), so most propose steps outlived their lease and a second lane ran the same step: two model
@@ -1968,8 +1965,8 @@ async function ai(env, model, messages) {
     const r = LADDER_RATES[model] || [127273, 400000];
     neurons = (inTok * r[0] + outTok * r[1]) / 1e6;
     const usd = neurons * (0.011 / 1000);
-    if (env.AUDIT_DB) await env.AUDIT_DB.prepare("INSERT INTO ai_spend_ledger (day, provider, caller, model, calls, in_tok, out_tok, usd, downgraded, refused) VALUES (?1,'workers-ai','qnfo-code-orchestrator',?2,1,?3,?4,?5,0,0) ON CONFLICT(day, provider, caller, model) DO UPDATE SET calls=calls+1, in_tok=in_tok+excluded.in_tok, out_tok=out_tok+excluded.out_tok, usd=usd+excluded.usd")
-      .bind(new Date().toISOString().slice(0, 10), String(model).slice(0, 120), Math.round(inTok), Math.round(outTok), usd).run();
+    if (env.AUDIT_DB) await env.AUDIT_DB.prepare("INSERT INTO ai_spend_ledger (day, provider, caller, model, calls, in_tok, out_tok, usd, downgraded, refused) VALUES (?1,'workers-ai','qnfo-code-orchestrator',?2,1,?3,?4,?5,?6,0) ON CONFLICT(day, provider, caller, model) DO UPDATE SET calls=calls+1, in_tok=in_tok+excluded.in_tok, out_tok=out_tok+excluded.out_tok, usd=usd+excluded.usd, downgraded=downgraded+excluded.downgraded")
+      .bind(new Date().toISOString().slice(0, 10), String(model).slice(0, 120), Math.round(inTok), Math.round(outTok), usd, env._budgetModel === model ? 1 : 0).run();
   } catch (e) { console.error(JSON.stringify({ worker: "qnfo-code-orchestrator", where: "ai", error: String(e && e.message || e).slice(0, 300) })); }
   // ORCH-NEURON-ATTR-1 (0.7.0, agent_issues 2097): the same call counted in ai_call_counters, which workers_ai_attribution_coverage_pct
   // reads (the ledger above is not); the loop's ladder calls, about 30k neurons a day on 2026-10-07, were the largest Workers AI
@@ -2332,6 +2329,11 @@ async function stepTask(env, task) {
       if (Array.isArray(ctx.sigs)) nctx.sigs = ctx.sigs; // FAIL-SIGNATURE-STOP-1: the signature run outlives the rebuild
       if (ctx.sig_n != null) nctx.sig_n = ctx.sig_n;
       if (ctx.last_new_sig_at) nctx.last_new_sig_at = ctx.last_new_sig_at; // NO-PROGRESS-CEILING-1: so does the progress clock
+      if (ctx.verifier_replay_attempted) {
+        nctx.verifier_replay_attempted = true;
+        nctx.verifier_replay_at = ctx.verifier_replay_at;
+        nctx.verifier_replay_reason = ctx.verifier_replay_reason;
+      }
       const gv = goalVersion(task.goal); // GOAL-VERSION-1 (a rebuild by the publisher takes the patch bump, which the merge runner's REBASE-INTEGRITY-1 expects)
       if (gv) nctx.version_want = gv.text;
       if (anchor) {
@@ -3121,6 +3123,7 @@ const PLAN_SYS = "You plan code changes for an autonomous code loop that edits O
 // One plan per call. Returns { planned, outcome, ... } and never throws to the caller of tick().
 async function planIssues(env, opts) {
   opts = opts || {};
+  env = budgetEnv(env, await spendGate(env));
   await ensureSchema(env);
   await ensurePlanSchema(env);
   const now = Date.now();
@@ -3237,9 +3240,7 @@ async function planIssues(env, opts) {
 // Two guards that make a one-minute trigger safe rather than merely faster.
 // SINGLE-FLIGHT-1: the lock row in loop_lock is the mutex. A tick that finds the lock held by a live tick skips this
 // minute instead of stacking a second set of eight lanes on the same queue; an expired lock (a crashed isolate) is taken.
-// SPEND-CAP-1: throughput and spend are the same dial. Before a tick spends anything it reads today's model calls for
-// this worker from ai_call_counters; at the cap the lanes idle until UTC midnight, with ONE event an hour. An unreadable
-// meter never blocks the loop (fail-open): a metering gap is not a reason to stop working.
+// The daily call meter remains a routing threshold; an unreadable meter is reported and never stops the loop.
 async function loopLock(env, ms) {
   const holder = WORKER + ":" + crypto.randomUUID();
   const exp = new Date(Date.now() + ms).toISOString();
@@ -3259,7 +3260,10 @@ async function modelCallsToday(env) {
   try {
     const r = await env.AUDIT_DB.prepare("SELECT COALESCE(SUM(calls), 0) AS n FROM ai_call_counters WHERE day = date('now') AND worker = ?").bind(WORKER).first();
     return Number((r && r.n) || 0);
-  } catch (e) { return -1; }
+  } catch (e) {
+    console.error(JSON.stringify({ worker: WORKER, where: "modelCallsToday", error: String((e && e.message) || e).slice(0, 200) }));
+    return -1;
+  }
 }
 // CODE-LOOP-CEILINGS-TUNABLE-1 (0.18.26, agent_issues 100075): the planner's daily cap and the tick's lane count read
 // ops_config (code_plan_daily_cap, code_tick_lanes) so they move without a deploy and revert by deleting the row; the
@@ -3287,11 +3291,27 @@ async function spendGate(env) {
   if (used < cap) return { ok: true, used: used, cap: cap };
   if (Date.now() - spendGate.lastAudit > 3600e3) {
     spendGate.lastAudit = Date.now();
-    await audit(env, "code-task.spend-cap", "today's model calls " + used + " >= cap " + cap + " (ops_config code_loop_daily_calls); the lanes idle until UTC midnight", { used: used, cap: cap }, "held");
+    await audit(env, "code-task.spend-cap", "today's model calls " + used + " >= threshold " + cap + "; cheapest-first ladder, one lane and one step per tick; work continues", { used: used, cap: cap, model: budgetLadder(env)[0] }, "routed");
   }
-  return { ok: false, used: used, cap: cap };
+  return { ok: true, capped: true, used: used, cap: cap };
 }
 spendGate.lastAudit = 0;
+function budgetLadder(env) {
+  const models = ladder(env).slice();
+  // Unknown prices are not evidence of a cheaper model. Keep those rungs as fallbacks to a priced coding model.
+  if (!models.some(function (model) { return !!LADDER_RATES[model]; })) models.unshift("@cf/openai/gpt-oss-120b");
+  return models.sort(function (a, b) {
+    const ra = LADDER_RATES[a], rb = LADDER_RATES[b];
+    if (!ra) return rb ? 1 : 0;
+    if (!rb) return -1;
+    return (ra[0] + ra[1]) - (rb[0] + rb[1]);
+  });
+}
+function budgetEnv(env, gate) {
+  if (!gate.capped) return env;
+  const models = budgetLadder(env);
+  return Object.assign({}, env, { MODEL_LADDER: models.join(","), PLAN_MODEL: models[0], _budgetModel: models[0] });
+}
 // ---- SINGLE-FLIGHT-1 / SPEND-CAP-1:END ----
 // ---- STEP-SLA-1:BEGIN (0.18.0, owner directive "ALL STEPS, ALL PROCESSES SHALL HAVE SLA AND MULTIPLE
 // EXECUTION/REMEDIATION/WORKAROUND PATHS") ----
@@ -3382,20 +3402,15 @@ async function tick(env, opts) {
     await audit(env, "code-task.verifier-replay-error", String((e && e.message) || e).slice(0, 200), null, "error");
   }
   if (!opts || opts.intake !== false) { try { await intakeIssues(env, 8); } catch (e) { await audit(env, "code-task.intake-error", String((e && e.message) || e).slice(0, 200), null, "error"); } }
-  // SPEND-CAP-1 (0.18.2): the cheapest possible early return -- one indexed read -- before any lane spends a model call.
   const gate = await spendGate(env);
-  if (!gate.ok) {
-    let claimsCap = null;
-    if (!opts || opts.claims !== false) { try { claimsCap = await claimsSweep(env); } catch (e) { claimsCap = { error: String((e && e.message) || e).slice(0, 200) }; await audit(env, "code-task.claims-error", claimsCap.error, null, "error"); } }
-    return { ok: true, steps: 0, lanes: 0, capped: true, calls_today: gate.used, daily_cap: gate.cap, done: [], plan: null, claims: claimsCap, sla: null };
-  }
+  env = budgetEnv(env, gate);
   const budget = Math.min(Number(opts && opts.budgetMs) || 20000, 50000); // PLAN-RESERVE-1 (0.18.3): the plan step runs AFTER the lanes and the lanes spend the whole budget, so with a failing queue the tick never reached planning -- measured 2026-10-17: fleet_tick every 10 min, code_tasks moving every minute, WIP below PLAN_WIP, cap headroom, 40 candidates waiting, and issue_plans recorded nothing from 15:21:02Z. Planning gets a reserved slice instead of whatever is left over. The reserve never starves the lanes: it is skipped when the budget is too small to split.
   const PLAN_RESERVE_MS = 15000;
   const laneBudget = budget > PLAN_RESERVE_MS * 2 ? budget - PLAN_RESERVE_MS : budget; // CODE-LOOP-2X-1: caps 50 s / 48 steps (were 25 s / 12)
-  const maxSteps = Math.min(Number(opts && opts.maxSteps) || 8, 64);
+  const maxSteps = Math.min(Number(opts && opts.maxSteps) || 8, gate.capped ? 1 : 64);
   // TICK-PARALLEL-N (0.18.0): up to TICK_LANES task lanes run at once. Before, one lane took one step and awaited it, so a
   // single 20-40 s model call consumed the whole budget and the other 15 allowed steps never ran.
-  const lanes = Math.max(1, Math.min(Number(opts && opts.lanes) || await opsInt(env, "code_tick_lanes", TICK_LANES, 1, 16), 16));
+  const lanes = gate.capped ? 1 : Math.max(1, Math.min(Number(opts && opts.lanes) || await opsInt(env, "code_tick_lanes", TICK_LANES, 1, 16), 16));
   const t0 = Date.now();
   const done = [];
   // A lane that finds nothing claimable ends ITSELF and no other lane: the other lanes hold live steps whose saves free
@@ -3430,7 +3445,7 @@ async function tick(env, opts) {
   // is claimable by the next tick instead of at the end of that wait.
   let sla = null;
   if (!opts || opts.sla !== false) { try { sla = await slaSweep(env); } catch (e) { sla = { error: String((e && e.message) || e).slice(0, 200) }; await audit(env, "code-task.sla-error", sla.error, null, "error"); } }
-  return { ok: true, steps: done.length, lanes: lanes, budget_ms: Date.now() - t0, calls_today: gate.used, daily_cap: gate.cap, done: done, plan: plan, claims: claims, sla: sla };
+  return { ok: true, steps: done.length, lanes: lanes, budget_ms: Date.now() - t0, capped: gate.capped === true, calls_today: gate.used, daily_cap: gate.cap, done: done, plan: plan, claims: claims, sla: sla };
 }
 async function handleV1(req, env, url) {
   if (!env.AUDIT_DB) return json({ ok: false, error: "AUDIT_DB binding missing" }, 503);
@@ -3801,7 +3816,7 @@ export default {
     const url = new URL(req.url);
     if (url.pathname === "/fleet-exec/health" && req.method === "GET") return fleetExecMod.fetch(new Request(new URL("/health", url)), fleetExecEnv(env));
     if (url.pathname === "/health") {
-      return json({ ok: true, worker: WORKER, version: VERSION, capabilities: ["orchestrator", "github-read", "container-exec", "server-side", "task-loop", "model-ladder", "pr-gated", "patch-mode", "issue-planner", "self-repair", "noop-gate", "large-file-window", "anchor-locator", "intake-preflight", "timeout-retry", "folded-redirect", "neuron-attr", "edit-indent", "search-fuzzy", "search-nearest", "window-clamp", "dangling-ref-gate", "repair-shows-edits", "verify-deferred", "goal-version", "multi-file", "plan-trusted-first", "refusal-relocate", "reasoning-low", "anchor-route", "plan-trust-parity", "plan-relapse-brief"], limitations: ["LARGE-FILE-WINDOW-1: a file over " + MAX_PATCH_FILE_CHARS + " chars (up to " + MAX_LARGE_FILE_CHARS + ") is edited from its anchor window alone: the base is re-read from main at every step and never stored, a window that moved is found again, one that vanished re-reads the file from the anchor at most " + LARGE_REREADS + " times", "ANCHOR-LOCATOR-1: a missing or non-unique anchor gets one model pick (the cheapest rung) among the file lines near the goal's keywords before the task parks; the pick must occur exactly once in the file", "NOOP-PROPOSAL-GATE-1: a js/mjs proposal that changes only the words inside string literals or comments (prose, not a code-like value) is refused before verify and retried on the next rung; " + NOOP_MAX + " such proposals in a row end the task needs_human","every route except /health needs ORCH_TOKEN", "changes ship only as pull requests: commits to main or master are refused, and in pull mode a workflow opens the PR", "the task loop runs on a ONE-MINUTE cron with a 40-second budget, 48 steps and up to " + TICK_LANES + " concurrent lanes per tick (TICK-PARALLEL-N, owner-ordered CRON-RATE-CEILING-1 override); a lane that finds nothing claimable ends without work", "SINGLE-FLIGHT-1: the loop_lock row makes one tick run at a time, so a minute that arrives while a tick is still working is skipped, not stacked", "SPEND-CAP-1: a tick spends nothing once today's model calls reach ops_config code_loop_daily_calls (default " + DAILY_MODEL_CALLS_DEFAULT + "); the lanes idle until UTC midnight with one code-task.spend-cap event an hour", "STEP-SLA-1: every step carries an SLA (" + Object.keys(STEP_SLA_MIN).map(function (k) { return k + " " + STEP_SLA_MIN[k] + "m"; }).join(", ") + ") and a queued task past its step's SLA whose lease still runs is made claimable at once (event code-task.sla-unstick); the step itself is unchanged", "SELF-REPAIR-1: a task whose " + MAX_ATTEMPTS + " model attempts all fail waits (" + RETRY_BACKOFF_MS.map(function (ms) { return ms / 60000 + "m"; }).join(", then ") + ") and retries from the first rung, " + RETRY_ROUNDS + " rounds in all; then it is 'failed' and filed once to agent_issues for the fleet, never as an owner card. Policy refusals (path, anchor, no verifier, no-op) still end needs_human", "ISSUE-PLANNER-1 turns open issues into code tasks at most one per tick, up to " + PLAN_DAILY_CAP + " a day and " + PLAN_WIP + " unfinished tasks in flight; a metric-trigger issue that names no worker is attributed to the owner named in metric_registry (PLAN-METRIC-OWNER-ATTR-1), and the planner still never plans security, governance or outreach issues, secrets, caps or deletions, or a control-plane worker", "CLAIMS-FIRST-1: every task holds the WORK-CLAIM-1 claim on its file (qnfo-deploy-guard /work-lock, holder qnfo-code-orchestrator:<task>) from its first step to its end and waits while a session holds it; the guard unreachable is counted, not fatal", "CLAIM-AT-RUN-1: a queued task that has not started a step (step read, no attempt) holds no claim: none is taken at enqueue, the sweep never takes or renews one for it and releases one it still holds", "CLAIM-HELD-IN-BACKOFF-1: a queued task whose next attempt is over " + (CLAIM_BACKOFF_MS / 60000) + " minutes away (a SELF-REPAIR-1 backoff) releases its claim and is never renewed while it waits; it takes the claim again when it resumes and, if a session holds the file then, waits CLAIM_WAIT_MS", "CODE-TASK-PREFLIGHT-1: intake reads the target from main once before it creates a task, and refuses with no model call a file over " + MAX_LARGE_FILE_CHARS + " chars or an issue key that shipped in fleet_changelog within 72h; the issue keeps a session-task line with the reason, an unreadable file is let through, a re-wrapped anchor is repaired at intake, and the other anchor cases are left to the read step and ANCHOR-LOCATOR-1", "CODE-DISPATCH-DEDUPE-1: one change per file at a time; a task on a file with an unfinished code task or a live session work claim (work_claims) is refused and retried later, and a worker.js of a RETIRED or FOLDED worker is refused", "files over 60000 characters need a code-anchor line (patch mode, pull mode only); without one, or with one that is not unique, ANCHOR-LOCATOR-1 makes one pick before the task parks", "verifies py, json, md and txt; js and mjs only while the platform-enforced Dynamic Workers check is on (see js_verify)"],
+      return json({ ok: true, worker: WORKER, version: VERSION, capabilities: ["orchestrator", "github-read", "container-exec", "server-side", "task-loop", "model-ladder", "pr-gated", "patch-mode", "issue-planner", "self-repair", "noop-gate", "large-file-window", "anchor-locator", "intake-preflight", "timeout-retry", "folded-redirect", "neuron-attr", "edit-indent", "search-fuzzy", "search-nearest", "window-clamp", "dangling-ref-gate", "repair-shows-edits", "verify-deferred", "goal-version", "multi-file", "plan-trusted-first", "refusal-relocate", "reasoning-low", "anchor-route", "plan-trust-parity", "plan-relapse-brief", "soft-budget-routing"], limitations: ["LARGE-FILE-WINDOW-1: a file over " + MAX_PATCH_FILE_CHARS + " chars (up to " + MAX_LARGE_FILE_CHARS + ") is edited from its anchor window alone: the base is re-read from main at every step and never stored, a window that moved is found again, one that vanished re-reads the file from the anchor at most " + LARGE_REREADS + " times", "ANCHOR-LOCATOR-1: a missing or non-unique anchor gets one model pick (the cheapest rung) among the file lines near the goal's keywords before the task parks; the pick must occur exactly once in the file", "NOOP-PROPOSAL-GATE-1: a js/mjs proposal that changes only the words inside string literals or comments (prose, not a code-like value) is refused before verify and retried on the next rung; " + NOOP_MAX + " such proposals in a row end the task needs_human","every route except /health needs ORCH_TOKEN", "changes ship only as pull requests: commits to main or master are refused, and in pull mode a workflow opens the PR", "the task loop runs on a two-minute cron with a 40-second budget, 48 steps and up to " + TICK_LANES + " concurrent lanes per tick below the daily call threshold; a lane that finds nothing claimable ends without work", "SINGLE-FLIGHT-1: the loop_lock row makes one tick run at a time, so a tick that arrives while another is still working is skipped, not stacked", "CODE-LOOP-SOFT-BUDGET-1: ops_config code_loop_daily_calls (default " + DAILY_MODEL_CALLS_DEFAULT + ") remains measured; at the threshold work continues with a cheapest-first coding ladder and one lane/step per tick, including verification and publication; the existing bounded retry ladder is the fallback", "STEP-SLA-1: every step carries an SLA (" + Object.keys(STEP_SLA_MIN).map(function (k) { return k + " " + STEP_SLA_MIN[k] + "m"; }).join(", ") + ") and a queued task past its step's SLA whose lease still runs is made claimable at once (event code-task.sla-unstick); the step itself is unchanged", "SELF-REPAIR-1: a task whose " + MAX_ATTEMPTS + " model attempts all fail waits (" + RETRY_BACKOFF_MS.map(function (ms) { return ms / 60000 + "m"; }).join(", then ") + ") and retries from the first rung, " + RETRY_ROUNDS + " rounds in all; then it is 'failed' and filed once to agent_issues for the fleet, never as an owner card. Policy refusals (path, anchor, no verifier, no-op) still end needs_human", "ISSUE-PLANNER-1 turns open issues into code tasks at most one per tick, up to " + PLAN_DAILY_CAP + " a day and " + PLAN_WIP + " unfinished tasks in flight; a metric-trigger issue that names no worker is attributed to the owner named in metric_registry (PLAN-METRIC-OWNER-ATTR-1), and the planner still never plans security, governance or outreach issues, secrets, caps or deletions, or a control-plane worker", "CLAIMS-FIRST-1: every task holds the WORK-CLAIM-1 claim on its file (qnfo-deploy-guard /work-lock, holder qnfo-code-orchestrator:<task>) from its first step to its end and waits while a session holds it; the guard unreachable is counted, not fatal", "CLAIM-AT-RUN-1: a queued task that has not started a step (step read, no attempt) holds no claim: none is taken at enqueue, the sweep never takes or renews one for it and releases one it still holds", "CLAIM-HELD-IN-BACKOFF-1: a queued task whose next attempt is over " + (CLAIM_BACKOFF_MS / 60000) + " minutes away (a SELF-REPAIR-1 backoff) releases its claim and is never renewed while it waits; it takes the claim again when it resumes and, if a session holds the file then, waits CLAIM_WAIT_MS", "CODE-TASK-PREFLIGHT-1: intake reads the target from main once before it creates a task, and refuses with no model call a file over " + MAX_LARGE_FILE_CHARS + " chars or an issue key that shipped in fleet_changelog within 72h; the issue keeps a session-task line with the reason, an unreadable file is let through, a re-wrapped anchor is repaired at intake, and the other anchor cases are left to the read step and ANCHOR-LOCATOR-1", "CODE-DISPATCH-DEDUPE-1: one change per file at a time; a task on a file with an unfinished code task or a live session work claim (work_claims) is refused and retried later, and a worker.js of a RETIRED or FOLDED worker is refused", "files over 60000 characters need a code-anchor line (patch mode, pull mode only); without one, or with one that is not unique, ANCHOR-LOCATOR-1 makes one pick before the task parks", "verifies py, json, md and txt; js and mjs only while the platform-enforced Dynamic Workers check is on (see js_verify)"],
         verifiers: VERIFIABLE.concat((await jsVerifyOn(env)) ? ["js", "mjs"] : []), js_verify: env.JS_VERIFY === "dynamic" ? "dynamic" : env.JS_VERIFY === "auto" ? ((await jsVerifyOn(env)) ? "auto-on" : "auto-off") : "off", patch_mode: true, ladder: ladder(env), bindings: { ai: !!env.AI, audit_db: !!env.AUDIT_DB, container: !!env.PY_CONTAINER } });
     }
     if (!(await authed(env, req))) return json({ ok: false, error: "unauthorized (ORCH_TOKEN required)" }, 401);
