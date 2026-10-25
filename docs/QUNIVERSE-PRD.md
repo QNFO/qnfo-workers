@@ -202,6 +202,17 @@ Deployment acceptance requires an `ok` migration_runs row followed by an `ok`
 and the independently queried `v_prd_funnel_health` verdict. Installing the
 migration alone does not satisfy all US-04/US-09 criteria.
 
+Production evidence: the canonical migration completed at 18:26:40Z on
+2026-10-25; `fleet_runs` 31133 and 31150 completed `ok`. The second tick refreshed
+`prd_funnel_monitor_stale` to `0`; the independent health view agrees. The
+missing-transition count is `448`: these are missing bookkeeping associations,
+not proof that all publications failed distribution. The first event's stage
+prose was scrubbed by an existing secret guard. The additive
+[`2026-10-25-prd-funnel-evidence.sql`](../migrations/2026-10-25-prd-funnel-evidence.sql)
+keeps those guards unchanged and records typed counts/timestamps instead of
+prose. Its independent probe requires a recent, intact six-stage event; task
+installation alone is not evidence that this repair has executed successfully.
+
 Live reconciliation on 2026-10-25 found RM-SUBSCRIBE-CTA-1 recorded as built
 with existing double-opt-in evidence; it must not be rebuilt from the old
 snapshot's `not-built` label. All other roadmap rows retain their canonical
@@ -216,13 +227,13 @@ The canonical roadmap remains the execution queue for the open portions.
 
 | Story | Verified existing evidence / implemented slice | Acceptance still open |
 |---|---|---|
-| US-01 | Public dashboard `/api/reach` returns 200 with ingestion/window data; fleet `/loops` reports healthy with no findings. | Reconcile every displayed count and stale/missing-source behavior, not just route availability. Dashboard source is under another session's live claim at reconciliation. |
+| US-01 | Public dashboard `/api/reach` returns 200 and explicitly reports partial ingestion, missing OpenAlex dates and 28/30 RUM days; fleet `/loops` reports healthy with no findings. | Reconcile every displayed count and stale/missing-source behavior, not just route availability. Dashboard source is under another session's live claim at reconciliation. |
 | US-02 | The canonical PR gate and migration workflow are wired; existing code-orchestrator status is `partial`. | A complete representative defect-to-live-behavior-to-evidence-backed-closure trace. Code-loop/control-plane changes are actively claimed by other sessions; no parallel rewrite. |
-| US-03 | The live research queue records 448 publications in the preceding 30 days; existing grounding/review suites cover portions of the pipeline. | Independently exercise the complete idea/review/page/PDF/KG path and verify full-text grounding for its resulting artifact. The publication Worker has an active code-loop claim. |
+| US-03 | The live research queue records 448 publications in the preceding 30 days; existing grounding/review suites cover portions of the pipeline. A public sample page exposes ScholarlyArticle JSON-LD, author, version, date and an absolute citation PDF URL. | Independently exercise the complete idea/review/page/PDF/KG path and verify full-text grounding for its resulting artifact. Metadata presence alone does not prove PDF availability or source fidelity. The publication Worker has an active code-loop claim. |
 | US-04 | Subscription health returns 200 (`1.5.0-no-registrar`); canonical RM-SUBSCRIBE-CTA-1 is built with existing double-opt-in evidence. New funnel views account for page and distribution associations. | A fresh opt-in/out delivery canary and publication metadata/content probes; counts and historical evidence alone do not prove current delivery. |
-| US-05 | Live `workers_ai_attribution_coverage_pct` reads 100; `cost_usd_30d` is measured at 417.46 at 18:01Z, not equated to gateway-only spend. Existing `qnfo-ai/spend-soft.test.mjs` covers soft-budget routing. | Reconcile provider totals/double-counting and verify every paid path's successful/failed-task costs and breach continuation. RM-COST-UNIFIED-SPEND-1 remains partial. |
-| US-06 | `/loops` is healthy; RM-WATCHMAKER-INDEX-1 is built and `owner_queue_fleet_cards_open` reads 0. | `watchmaker_index` still reads 2; RM-DURABLE-AGENT-EXECUTION-1 and RM-MONITOR-THE-MONITORS-1 remain not-built. At 18:10Z, `issues_open_over_120m` reads 420 and the drain ratio 0.714, so the SLA/throughput requirements are not satisfied. |
+| US-05 | Live `workers_ai_attribution_coverage_pct` reads 100; `cost_usd_30d` is measured at 417.46 at 18:01Z, not equated to gateway-only spend. Existing `qnfo-ai/spend-soft.test.mjs` covers soft-budget routing. | Reconcile provider totals/double-counting and verify every paid path's successful/failed-task costs and breach continuation. RM-COST-UNIFIED-SPEND-1 remains partial; reconciliation is assigned to coordinated session `90ad5c48-82ae-40e5-9ae6-c2276df3242f`. |
+| US-06 | `/loops` is healthy; RM-WATCHMAKER-INDEX-1 is built and `owner_queue_fleet_cards_open` reads 0. | `watchmaker_index` still reads 2; the durable-execution and monitor-monitor registry entries need live reconciliation, assigned to coordinated session `582f671e-91e1-4905-84ba-7546f6fe2986`. At 18:10Z, `issues_open_over_120m` reads 420 and the drain ratio 0.714, so the SLA/throughput requirements are not satisfied. |
 | US-07 | Existing authentication, privacy, secret-lock and suppression controls are retained unchanged; public reads used here are tokenless. | A scoped negative-test evidence bundle for protected writes, private-document isolation and external-message suppression. This work grants no new access and does not rotate credentials or modify personal state. |
 | US-08 | Existing personal utility remains the charter baseline and is outside the research P&L. | Fresh email-to-calendar/reminder/brief evidence and private-history isolation verification; this change neither reads personal documents nor sends a synthetic owner command. |
 | US-09 | The funnel observer implements stage accounting, missing-transition alerts, freshness checks and explicit unmeasured attention. | External credibility evidence, complete citation coverage, brand-separated subscription attribution and actual per-publication conversion remain independently verifiable work. |
-| US-10 | Research oracle health returns 200 (`2.9.0`); Ask and concept navigation are canonically partial. | Living papers, reproduction and consistency engine are canonically not-built. The charter's H2/review prerequisites remain in force; endpoint health is not proof of grounded answers or reproducibility. |
+| US-10 | Research oracle health returns 200 (`2.9.0`); Ask and concept navigation are canonically partial. The public `/reading` page advertises living-paper Ask, versions and KG capabilities. | Verify actual version preservation, reproduction, consistency and answer grounding. Historical registry `not-built` labels are not proof of current absence; advertised UI capabilities are not proof of completed acceptance. The charter's H2/review prerequisites remain in force. |
