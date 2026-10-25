@@ -1,4 +1,4 @@
-// q08-mind — mind.q08.org  (2.0.0-mind-2)
+// q08-mind — mind.q08.org  (2.0.0-mind-3)
 // A reading list for the inside. Primary sources, one question each, and a probe.
 // Binding-free by design: no D1/KV/R2/AI/service bindings, no outbound fetches,
 // no client-side JavaScript. The corpus is data (data/entries-*.json), so a wrong
@@ -11,7 +11,7 @@
 import A from "./data/entries-a.json";
 import B from "./data/entries-b.json";
 
-const VERSION = "2.0.0-mind-2";
+const VERSION = "2.0.0-mind-3";
 const BUILT = "2026-10-21";
 const ENTRIES = [...A, ...B];
 const BY_SLUG = new Map(ENTRIES.map((e) => [e.s, e]));
