@@ -124,6 +124,7 @@ function stmt(sql0) {
 }
 const D1 = { prepare: stmt, async batch(list) { for (const s of list) await s.run(); return []; } };
 sq.exec("CREATE TABLE pipeline_flags (key TEXT PRIMARY KEY, value TEXT NOT NULL, updated_at TEXT)");
+sq.exec("INSERT INTO pipeline_flags (key, value) VALUES ('ask_config', '{\"champion\":{\"id\":\"c0\",\"model\":\"@cf/meta/llama-3.3-70b-instruct-fp8-fast\"},\"challenger\":{\"id\":\"ch1\",\"model\":\"@cf/qwen/qwen3.8-27b\"}}')");
 sq.exec("CREATE TABLE fleet_heartbeat (worker TEXT PRIMARY KEY, version TEXT, ts TEXT, ok INTEGER)");
 sq.exec("CREATE TABLE fleet_budget (node_class TEXT PRIMARY KEY, cap REAL, target REAL, current REAL, unit TEXT, updated_at TEXT)");
 sq.exec("INSERT INTO fleet_budget (node_class, cap, current) VALUES ('ai_spend:total', 150, 10)");
@@ -147,7 +148,7 @@ const AI = { async run(model, input) {
   calls.push(input.messages);
   const text = outs[Math.min(calls.length - 1, outs.length - 1)];
   const enc = new TextEncoder();
-  return new ReadableStream({ start(c) { for (const p of text.match(/[\s\S]{1,24}/g)) c.enqueue(enc.encode("data: " + JSON.stringify({ response: p }) + "\n\n")); c.enqueue(enc.encode("data: " + JSON.stringify({ usage: { prompt_tokens: 100, completion_tokens: 50 } }) + "\n\n")); c.enqueue(enc.encode("data: [DONE]\n\n")); c.close(); } });
+  return new ReadableStream({ start(c) { for (const p of (text.match(/[\s\S]{1,24}/g) || [])) c.enqueue(enc.encode("data: " + JSON.stringify({ response: p }) + "\n\n")); c.enqueue(enc.encode("data: " + JSON.stringify({ usage: { prompt_tokens: 100, completion_tokens: 50 } }) + "\n\n")); c.enqueue(enc.encode("data: [DONE]\n\n")); c.close(); } });
 } };
 globalThis.caches = { default: { async match() { return undefined; }, async put() {} } };
 const env = { AI, AI_SEARCH, QNFO_AUDIT: D1, GATEWAY: { fetch: gatewayFetch }, IDEAS: { fetch: async () => J({ sessions: [] }) }, SPEND_CAP_TOTAL_USD: "60" };
@@ -163,6 +164,7 @@ const ask = async (q, paper) => {
 const sse = (t, ev) => t.split("\n\n").filter((x) => x.startsWith("event: " + ev)).map((x) => JSON.parse(x.split("data: ")[1]));
 const answerOf = (t) => (sse(t, "token")[0] || { t: "" }).t.split("FOLLOWUPS")[0];
 const Q = 'Explain "' + T + '"';
+let rnd = 0.5; Math.random = () => rnd; // 0.5: the champion arm; 0.1: the challenger arm (20%)
 
 // 1. echo first, plain second: the plain rewrite is sent, and the writer saw the right excerpt
 outs = [ECHO + "\n\nFOLLOWUPS:\n- What is a survivor in this paper?\n- How is a part folded into the base part?\n- What does the example show?", PLAIN + "\n\nFOLLOWUPS:\n- What is a survivor in this paper?\n- How is a part folded into the base part?\n- What does the example show?"];
@@ -209,6 +211,32 @@ row = sq.prepare("SELECT plain FROM ask_events ORDER BY rowid DESC LIMIT 1").get
 ok(row.plain === 4, "its dense opening is recorded (4), without the explain flag", row);
 ok(!/Passages that define/.test(calls[0][calls[0].length - 1].content) && !/wants this wording explained/.test(calls[0][calls[0].length - 1].content), "no explain instruction for an ordinary question");
 
+// 4b. ASK-PLAIN-4: an empty answer on the challenger arm is retried once on the champion's model
+sq.prepare("CREATE TABLE IF NOT EXISTS _x (a)").run();
+const models = []; const aiRun = AI.run; AI.run = async function (m, input) { models.push(m); return aiRun.call(AI, m, input); };
+outs = ["", PLAIN];
+calls = []; rnd = 0.1;
+t = await ask("What does the paper say about merging?", "widget-paper");
+rnd = 0.5;
+ok(calls.length === 2 && models.length === 2 && /qwen/.test(models[0]) && /llama/.test(models[1]), "an empty answer from the challenger is retried on the champion's model", models);
+ok(/folded into the base part/.test(answerOf(t)) && /llama/.test(sse(t, "done")[0].model), "the retry's answer is sent and reports the model that wrote it", sse(t, "done")[0]);
+row = sq.prepare("SELECT error, model FROM ask_events ORDER BY rowid DESC LIMIT 1").get();
+ok(/^empty answer from @cf\/qwen/.test(row.error) && /llama/.test(row.model), "the empty first try still counts against the challenger arm", row);
+outs = ["", ""];
+calls = []; models.length = 0; rnd = 0.1;
+t = await ask("What does the paper say about merging again?", "widget-paper");
+rnd = 0.5;
+ok(calls.length === 2 && sse(t, "token").length === 0 && sse(t, "done").length === 1, "two empty tries end as before: no text and a done event, no third try", calls.length);
+AI.run = aiRun;
+
+// 4c. the wording's own sentence is not in the excerpt's body sections, and a listed sentence is not repeated
+outs = [PLAIN];
+calls = [];
+t = await ask('Explain "' + T + '"', "widget-paper");
+const user4 = calls[0][calls[0].length - 1].content;
+ok(user4.indexOf("Widget merging is a familiar idea") < 0, "the wording's own sentence is left out of the body sections too", user4.slice(0, 600));
+ok(user4.split("are called survivors").length === 2, "a sentence in the definition list is not repeated by a section", user4.split("are called survivors").length);
+
 // 5. the measure: ask_plain_share_7d from ask_events.plain
 sq.exec("CREATE TABLE IF NOT EXISTS metric_registry (metric TEXT PRIMARY KEY, layer TEXT NOT NULL, kind TEXT NOT NULL, formula TEXT, source_of_truth TEXT, baseline TEXT, target TEXT, owner TEXT, disposition_actor TEXT, refresh_cadence TEXT, warning_band TEXT, kill_band TEXT, state TEXT, refresh_class TEXT, last_value TEXT, last_refreshed TEXT)");
 sq.exec("CREATE TABLE IF NOT EXISTS ask_evals (id INTEGER PRIMARY KEY AUTOINCREMENT, ts TEXT NOT NULL, kind TEXT NOT NULL, cfg TEXT, n INTEGER, score REAL, detail TEXT)");
@@ -224,6 +252,6 @@ ok(mv && Number(mv.last_value) === Math.round((1 - total.bad / total.n) * 1e4) /
 ok(/ask_plain_share_7d/.test(src) && /plain: "- Write in plain language "/.test(src) && /m\.fix === "plain"/.test(src), "the metric has its fix anchor and its example query");
 
 // 6. a cached answer from an older prompt is not replayed
-ok(/var ANSWER_REV = "r5-"/.test(src) && /__answer\/" \+ ANSWER_REV \+ cfg\.id/.test(src), "the answer cache is keyed by the revision of what an answer says");
+ok(/var ANSWER_REV = "r6-"/.test(src) && /__answer\/" \+ ANSWER_REV \+ cfg\.id/.test(src), "the answer cache is keyed by the revision of what an answer says");
 console.log(pass + " passed, " + fail + " failed");
 if (fail) process.exit(1);
