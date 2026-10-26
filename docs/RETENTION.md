@@ -26,8 +26,8 @@ Status: **DRAFT, 2026-10-26** (BP26-RETENTION-1, agent_issues 1000344). Written 
 | `email_calendar_delivery_90d` | qnfo-audit `email_calendar_delivery` | finished rows | 90 days | A finished reminder or acknowledgement | 0 |
 | `handoffs_email_180d` | qnfo-audit `handoffs` | summary, pending_work, next_action of strategic-mail handoffs | 180 days | A handoff summarises a sender and a snippet | 0 |
 | `emails_metadata_365d` | qnfo-audit `emails` | the row (who, when, subject) | 365 days | Reply and audit trail for a year | 0 |
-| `ipatent_sessions_90d` | ipatent-db `sessions` | the row (raw IP address, user agent) | 90 days | Counters keep what is needed | **11** (runner) |
-| `ipatent_analytics_90d` | ipatent-db `analytics` | the row | 90 days | Per-event analytics with a raw IP address | **41** (runner) |
+| `ipatent_sessions_90d` | ipatent-db `sessions` | the row (raw IP address, user agent; a legacy table, last written 2026-07-12) | 90 days | Counters keep what is needed | **11** (runner) |
+| `ipatent_analytics_90d` | ipatent-db `analytics` | the row | 90 days | Legacy per-event analytics (last written 2026-07-12) with a raw IP address | **41** (runner) |
 | `ipatent_submission_ip_90d` | ipatent-db `submissions` | ip_address, user_agent | 90 days | Not needed once the draft is delivered | **41** (runner) |
 | `ipatent_submissions_730d` | ipatent-db `submissions` | the row | 730 days | Two years after writing unless the submitter asks to keep it | 0 (runner) |
 | `q08_subscribers_pending_30d` | q08-signal `subscribers` | the row | 30 days | Unconfirmed opt-in | 0 (runner) |
