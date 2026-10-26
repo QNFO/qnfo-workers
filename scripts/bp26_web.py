@@ -31,7 +31,10 @@ One collector (collect_web) so a page is fetched once per run and every metric r
                                the last 14 days (qnfo-audit social_media_posts previews are cut at 200 characters, social_threads.posts is whole).
   ai_interaction_disclosure    interactive AI surfaces whose first screen or first reply carries the AI disclosure / all of them: ipatent (live first screen), the twin (live first
                                screen of me.q08.org), the e-mail agent (code-state: qnfo-email/worker.js on the checkout, since it must not be mailed).
-  a11y_violations_serious      NOT measured here: axe-core needs a headless browser and an npm install, and the consume job has neither step. Stays unmeasured; see the issue.
+  a11y_violations_serious      a static LOWER BOUND of the serious and critical axe-core violations on the fetched pages (html-has-lang, document-title, image-alt, meta-viewport,
+                               form-field label, button-name, link-name). axe-core itself needs a headless browser and an npm install, and the consume job has neither, so colour
+                               contrast, ARIA validity and focus order are not seen. A count above zero proves the target (0) missed and is written; a count of zero proves nothing
+                               and is not written (None), so this metric can breach but never pass until an axe run exists.
 
 Usage:
   python3 scripts/bp26_web.py --selftest     offline suite (fake pages, no network, no secrets)
@@ -251,6 +254,53 @@ def header_verdict(resp):
     if xfo not in ("DENY", "SAMEORIGIN") and not (fa and fa.group(1).strip() != "*"):
         miss.append("frame")
     return (not miss), ("ok" if not miss else "missing " + ",".join(miss)), miss
+
+
+def a11y_findings(page):
+    """[(rule, impact)] of a static pass over one page, limited to axe-core rules that a regular expression can decide with few false positives: html-has-lang, document-title,
+    image-alt, meta-viewport, label (form fields), button-name, link-name. It is a LOWER BOUND of what axe-core reports (colour contrast, ARIA validity, focus order and more
+    need a browser), so a count above zero proves the target missed and a count of zero proves nothing."""
+    out, doc = [], page or ""
+    m = re.search(r"<html\b([^>]*)>", doc, re.I)
+    if m and not re.search(r"\blang\s*=\s*[\"']?[A-Za-z]", m.group(1)):
+        out.append(("html-has-lang", "serious"))
+    t = re.search(r"<title\b[^>]*>(.*?)</title\s*>", doc, re.S | re.I)
+    if not t or not htmllib.unescape(re.sub(r"<[^>]*>", "", t.group(1))).strip():
+        out.append(("document-title", "serious"))
+    for im in re.finditer(r"<img\b([^>]*)>", doc, re.I):
+        a = im.group(1)
+        if not re.search(r"\balt\s*=", a, re.I) and not re.search(r"role\s*=\s*[\"']?(?:presentation|none)", a, re.I) and not re.search(r"aria-hidden\s*=\s*[\"']?true", a, re.I):
+            out.append(("image-alt", "critical"))
+    if re.search(r"<meta\b[^>]*name\s*=\s*[\"']viewport[\"'][^>]*(?:user-scalable\s*=\s*(?:no|0)|maximum-scale\s*=\s*1(?:\.0)?(?![0-9]))", doc, re.I):
+        out.append(("meta-viewport", "critical"))
+    for_ids = set(re.findall(r"<label\b[^>]*\bfor\s*=\s*[\"']([^\"']+)", doc, re.I))
+    spans = [(lm.start(), lm.end()) for lm in re.finditer(r"<label\b.*?</label\s*>", doc, re.S | re.I)]
+    for fm in re.finditer(r"<(input|textarea|select)\b([^>]*)>", doc, re.I):
+        tag, a = fm.group(1).lower(), fm.group(2)
+        typ = (re.search(r"\btype\s*=\s*[\"']?(\w+)", a, re.I) or [None, "text"])[1].lower()
+        if tag == "input" and typ in ("hidden", "submit", "button", "reset", "image"):
+            continue
+        if re.search(r"aria-label(?:ledby)?\s*=\s*[\"'][^\"']+|\btitle\s*=\s*[\"'][^\"']+|\bplaceholder\s*=\s*[\"'][^\"']+|role\s*=\s*[\"']?(?:presentation|none)|aria-hidden\s*=\s*[\"']?true", a, re.I):
+            continue
+        fid = re.search(r"\bid\s*=\s*[\"']([^\"']+)", a, re.I)
+        if fid and fid.group(1) in for_ids:
+            continue
+        if any(s <= fm.start() < e for s, e in spans):
+            continue
+        out.append(("label", "critical"))
+    for bm in re.finditer(r"<button\b([^>]*)>(.*?)</button\s*>", doc, re.S | re.I):
+        a, inner = bm.group(1), bm.group(2)
+        if re.search(r"aria-label(?:ledby)?\s*=\s*[\"'][^\"']+|\btitle\s*=\s*[\"'][^\"']+", a, re.I) or re.search(r"<img\b[^>]*\balt\s*=\s*[\"'][^\"']+|<svg\b", inner, re.I):
+            continue
+        if not htmllib.unescape(re.sub(r"<[^>]*>", "", inner)).strip():
+            out.append(("button-name", "critical"))
+    for lm in re.finditer(r"<a\b([^>]*\bhref\s*=[^>]*)>(.*?)</a\s*>", doc, re.S | re.I):
+        a, inner = lm.group(1), lm.group(2)
+        if re.search(r"aria-label(?:ledby)?\s*=\s*[\"'][^\"']+|\btitle\s*=\s*[\"'][^\"']+", a, re.I) or re.search(r"<img\b[^>]*\balt\s*=\s*[\"'][^\"']+|<svg\b", inner, re.I):
+            continue
+        if not htmllib.unescape(re.sub(r"<[^>]*>", "", inner)).strip():
+            out.append(("link-name", "serious"))
+    return out
 
 
 def tracker_of(host):
@@ -550,6 +600,23 @@ def collect_web(ctx):
     else:
         results.append(Result("structured_data_valid", None, "only %d of %d templates could be fetched" % (judged, len(tmpl)), s_rows))
 
+    # --- accessibility: a static lower bound of axe-core's serious and critical violations (a value only when it proves the target missed)
+    a_rows, a_total, a_pages = [], 0, 0
+    for label, r in sorted(pages.items()):
+        if r.error or r.status != 200 or "html" not in (r.headers.get("content-type") or "").lower():
+            continue
+        fs = a11y_findings(r.text)
+        a_pages += 1
+        a_total += len(fs)
+        tally = {}
+        for rule, _imp in fs:
+            tally[rule] = tally.get(rule, 0) + 1
+        a_rows.append((label, 0 if fs else 1, ("; ".join("%s x%d" % kv for kv in sorted(tally.items()))) if fs else "no violation found by the static rules"))
+    if a_pages >= len(HTML_HOSTS) // 2 and a_total > 0:
+        results.append(Result("a11y_violations_serious", a_total, "static LOWER BOUND of serious and critical axe-core violations over %d fetched pages (rules html-has-lang, document-title, image-alt, meta-viewport, label, button-name, link-name); axe-core would add colour contrast, ARIA validity and more" % a_pages, a_rows))
+    else:
+        results.append(Result("a11y_violations_serious", None, "the static rules found %d violation(s) on %d pages; zero cannot be certified without axe-core (a headless browser the consume job does not have), so no value is written" % (a_total, a_pages), a_rows))
+
     # --- AI labels
     l_rows, l_total, l_ok = [], 0, 0
     for name, key in (("q08 piece", "q08_piece"), ("reading piece", "reading_piece"), ("paper page", "paper_page"), ("qnfo.org page", "home:qnfo.org")):
@@ -607,7 +674,7 @@ def collect_web(ctx):
 
 COLLECTORS = [
     Collector("collect_web", collect_web, ["security_headers_pass", "slo_attainment_28d_min", "third_party_trackers", "non_essential_cookies_set", "turnstile_on_public_forms",
-                                           "structured_data_valid", "ai_label_coverage", "ai_interaction_disclosure"], 50),
+                                           "structured_data_valid", "ai_label_coverage", "ai_interaction_disclosure", "a11y_violations_serious"], 50),
 ]
 
 
@@ -669,6 +736,10 @@ def selftest():
     forms = submitting_forms(_page(body=fm))
     ok([k for k, _m in forms] == ["/subscribe", "ld-sub-form"], "data-collecting forms are found, dialog and search are not: %r" % forms)
     ok(cookie_names(good._replace(set_cookies=["ipatent_ab=1; Path=/", "__cf_bm=zz; Path=/"])) == ["ipatent_ab", "__cf_bm"], "cookie names")
+    bad = ('<html><head><title></title><meta name="viewport" content="width=device-width, user-scalable=no"></head><body><img src="a.png"><input type="text" id="q"><button></button><a href="/x"></a>'
+           '<label for="ok">L</label><input id="ok"><label>Wrapped <input type="email"></label><input placeholder="Email"><input type="hidden"><img src="b.png" alt=""><a href="/y"><svg></svg></a></body></html>')
+    ok(sorted(r for r, _i in a11y_findings(bad)) == ["button-name", "document-title", "html-has-lang", "image-alt", "label", "link-name", "meta-viewport"], "static a11y rules: %r" % a11y_findings(bad))
+    ok(a11y_findings('<html lang="en"><head><title>T</title><meta name="viewport" content="width=device-width, initial-scale=1"></head><body><a href="/">Home</a><button>Go</button><img src="a.png" alt="a"><label>Q <input></label></body></html>') == [], "a clean page has no static finding")
     crx = re.compile(CODE_COOKIES[0][1])
     ok(crx.search('const cookie = fresh ? AB_COOKIE + "=" + arm + "; Path=/; Max-Age=2592000; SameSite=Lax; Secure" : null;') is not None, "the code that sets ipatent_ab with a value is found")
     ok(crx.search('const m = /(?:^|;\\s*)ipatent_ab=([12])(?:;|$)/.exec(c); const cookie = x ? AB_COOKIE + "=; Path=/; Max-Age=0; SameSite=Lax; Secure" : null;') is None, "a reader of the cookie and the header that deletes it are not the cookie being set")
