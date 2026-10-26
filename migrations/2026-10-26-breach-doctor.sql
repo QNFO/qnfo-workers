@@ -258,7 +258,7 @@ WHERE class = 'issue-' || (SELECT id FROM agent_issues WHERE title LIKE 'BREACH-
 UPDATE remediation_contracts SET precondition = 'code-probe line in the issue (PROBE-BIRTH-2)',
   action = 'the doer changes the code on main; scripts/remediation_consumer.py reads its checkout of main and a pass closes the issue',
   verify_probe = '{"paths": ["qnfo-fleet-dashboard/worker.js"], "contains": "key: \"breach-doctor\""}',
-  verify_transport = 'code-read', max_attempts = 3, expected_cadence_h = 6, status = 'active', module = 'code-probe-line-v1'
+  verify_transport = 'code-read', max_attempts = 3, expected_cadence_h = 1, status = 'active', module = 'code-probe-line-v1'
 WHERE class = 'issue-' || (SELECT id FROM agent_issues WHERE title LIKE 'BREACH-DOCTOR-WATCHMAKER-1:%' ORDER BY id DESC LIMIT 1);
 
 UPDATE remediation_contracts SET precondition = 'BREACH-DOCTOR-1: two older writers stay installed until the doctor has proved its replacement',
