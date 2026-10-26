@@ -1099,6 +1099,7 @@ function secretEq(a, b) {
 __name(secretEq, "secretEq");
 // VERSION-LINE-SPLIT-1 (agent_issues 100220): the release notes sit one per line below this statement, newest first, so a VERSION bump is a one-line patch; add a new note as the first line under it.
 // 0.53.0 BREACH-DOCTOR-FIX-1 (2026-10-26, agent_issues 1000266, pillar autonomy; minor: a decision the worker now takes on its own): review of 0.52.0. (1) bdWriteWhy enforces what the ledger asserts: every action and revert statement carries a top-level id = ?1 / issue_id = ?1 predicate and no OR beside it (no-id-predicate, or-widens), and ops_config and human_actions are off BD_WRITE_TABLES, so a playbook can no longer reach the kill switch or the trust list. (2) A demotion is a pause with a release: after BD_RELEASE_MIN (60) minutes the rule runs again as a trial of one case a tick, a failed trial case demotes it again, a verified one lifts the cap, and failures count from the rule's last change of standing; an action that changes no row on an issue closed meanwhile supersedes the case instead of failing it. (3) breaches_undiagnosed_over_60m flags at min(120, breach_doctor_min_age_min + 60) minutes and the age gate defaults to 60 (migrations/2026-10-26-breach-doctor-fix.sql sets it), so no threshold exceeds 120 minutes. breach-doctor.test.mjs, migrations/breach-doctor-fix.test.mjs.
+// 0.52.1 PROBE-AUTHOR-HARDEN-1 (2026-10-26, agent_issues 1000266 BREACH-DOCTOR-1, pillar security; patch: follow-up to PROBE-AUTHOR-BINDING-1 0.49.2): the probe author reads only operational tables (RT_PROBE_AUTHOR_ALLOW, checked in probe-author.test.mjs against the live sqlite_master names; a private family by name, or any object off the list, is refused through a quote-aware scan that sees subquery, join, CTE, comma-join, quoted, bracketed and string-literal table names), refuses a probe that reads the loop's own bookkeeping (issue ledger, decision_log, remediation_*, remediation.* event kinds, its own module, the target's contract class) and a dry run whose observed value is empty or starts with pending, and bounds the probe at 600 and the observed value at 200 characters. Each reject is the existing remediation.probe-author-reject event with an enum reason (private-table, self-confirming, deferral-shape, not-allowlisted, too-long) and never the probe text. The remediation tick now passes env to rtEnsureLivePath: until now the author was handed no AI binding at the call site and ended in no-ai-binding on every call.
 // 0.52.0 BREACH-DOCTOR-1 (2026-10-26, agent_issues 1000266, pillar autonomy; minor: a decision the worker now takes on its own): breachDoctorTick on every */10 tick diagnoses each unowned open issue older than 120 minutes (breach_doctor_min_age_min, SLA-120M-1; family, cause_class, enum facts), applies the validated per-issue playbook action (CODE-MERGE-REFUSED-1 and CODE-LOOP-EXHAUSTED-1 first), verifies it twice, and writes breach_diagnoses, breach_diagnosis_events and decision_log; ops_config breach_doctor = off stops it before any write. Playbooks are data (migrations/2026-10-26-breach-doctor.sql), a new one runs in measure for 30 minutes, a rule with 2 failures in 24 hours demotes itself, and free text never reaches an issue, a probe or a task. The generic playbook-gap row is seeded in measure and files no issue (a gap issue carries no anchor the code loop can edit); the self issue after 3 failed cases is the only issue the doctor files by itself, and migrations/2026-10-26-breach-doctor-trust.sql makes the planner read its BREACH-DOCTOR-1: title as trusted. No model call, no D1 trigger. breach-doctor.test.mjs.
 // 0.47.0 REMEDIATION-OVER-BUDGET-METRIC-1 (2026-10-25, pillar autonomy): refreshes the over-budget metric from the exact RED-DRAIN eligibility set instead of lifetime probe counts.
 // ADVISOR-AGENT-TRACING-1 (pillar autonomy): metadata-only turn and model spans for the folded advisor.
@@ -11768,7 +11769,7 @@ async function remediationContractsTick(env, opts) {
   // VERIFICATION-PATH-1 (b): a deferral older than RT_DEFERRAL_ESCALATE_MIN names its unblocker in an issue (once per class).
   await rtEscalateStaleDeferrals(db, out);
   // REOPEN-LIVE-PATH-3 (issue 100271): an open issue left without a live contract gets one deduped PROBE-NEEDED-1 issue naming the probe to write.
-  await rtEnsureLivePath(db, out);
+  await rtEnsureLivePath(db, out, env);
   // SLA-PATHS-1 path-count check (docs/SLA-AND-PATHS-1.md s3). A process with two paths on paper and one in practice is
   // worse than one path, because it is believed safe: today the registry read 12 processes / 0 violations while evidence
   // persistence had one live path and it was refused. Liveness is AVAILABILITY, not recent use - a fallback is never used
@@ -12106,26 +12107,174 @@ var rtProbeAuthorTickKey = 0, rtProbeAuthorTickStamp = -1, rtProbeAuthorTickN = 
 function rtProbeAuthorStrip(s) {
   return String(s || "").replace(/```(sql)?/gi, "").trim();
 }
+// PROBE-AUTHOR-HARDEN-1 (qnfo-fleet-control 0.52.1, pillar security, agent_issues 1000266; follow-up to PROBE-AUTHOR-BINDING-1): the author runs now, so three
+// weaknesses that were harmless while it never ran are closed here, each with an enum reason on the existing remediation.probe-author-reject event
+// (RT_PROBE_AUTHOR_REASONS) that never carries the probe text. (1) private-table / not-allowlisted (doctrine section 9, personal/research separation): a
+// model-authored probe reads only the operational objects in RT_PROBE_AUTHOR_ALLOW, and a private family (mail, message, contact, subscriber, identity, owner,
+// personal, credential, session, chat, outreach, suppression, calendar, draft) is refused by name first. The scan is a quote-aware lexer, not a FROM regex, so
+// a subquery, join, CTE, comma-join, schema-qualified, quoted, backticked, bracketed or string-literal table name is seen, and every identifier that names a
+// sqlite_master table or view is held to the same two rules. probe-author.test.mjs checks the constant against a fixture of the live sqlite_master names, so it
+// cannot name a private table, and sweeps every live name: only an allowlisted one passes. (2) self-confirming: the probe may not read the loop's own
+// bookkeeping (the issue ledger and its views, decision_log, remediation_*, closure and verification tables, work_claims), cloud_ops_events rows of the
+// remediation.* kinds, the author's own module name, or the target's own contract class, because those flip to ok because of the author's own writes.
+// (3) deferral-shape: a dry run whose observed value is empty or starts with pending (any case) is a deferral to rtIsDeferral, so the contract could never
+// fail or pass. A probe is at most RT_PROBE_AUTHOR_MAX_SQL (600) characters and its observed value at most RT_PROBE_AUTHOR_MAX_OBSERVED (200), so what reaches
+// remediation_contracts, cloud_ops_events, the append-only decision_log and the open verification ledger is bounded. rt_probe_author = off still stops it.
+var RT_PROBE_AUTHOR_MAX_SQL = 600;
+var RT_PROBE_AUTHOR_MAX_OBSERVED = 200;
+var RT_PROBE_AUTHOR_REASONS = ["private-table", "self-confirming", "deferral-shape", "not-allowlisted", "too-long"];
+// Operational objects only (verified against live qnfo-audit sqlite_master on 2026-10-26 and drawn from what the active d1-query contracts already probe).
+// Never add a table that holds mail, identity, contact, subscriber, credential, chat or owner text; probe-author.test.mjs fails if one is named.
+var RT_PROBE_AUTHOR_ALLOW = [
+  "ai_call_counters", "ai_model_health", "analytics_metric_triggers", "branch_hygiene_log", "cadence_sla", "capability_audit_snapshot",
+  "cloud_ops_events", "code_task_pr_links", "code_tasks", "content_stages", "control_registry", "cost_daily", "cron_fire_log",
+  "deploy_drift_cf", "deployment_history", "dissemination_tracker", "evolve_runs", "failure_modes", "fleet_budget", "fleet_crons",
+  "fleet_heartbeat", "fleet_improvements", "fleet_runs", "fleet_tasks", "fleet_tick", "github_steward_runs", "improvement_loop_runs",
+  "journey_runs", "metric_history", "metric_improvement_now", "metric_registry", "migration_runs", "model_ab_runs", "paper_claim_audits",
+  "perf_experiments", "perf_levers", "portfolio_gaps", "portfolio_sync_runs", "pr_sla_state", "queue_sla", "report_card_history",
+  "research_queue", "research_ready", "roadmap_implementation", "self_heal_actions", "service_registry", "spof_registry", "task_dod_register",
+  "v_metric_trigger_state", "v_pr_merge_sla", "worker_compat_state", "worker_live_audit", "worker_removals", "worker_usage_daily",
+  "workers_bp_findings", "workers_bp_runs", "workflow_failures", "workflow_main_state"
+];
+var RT_PROBE_AUTHOR_ALLOW_SET = (function () { var o = Object.create(null); for (var i = 0; i < RT_PROBE_AUTHOR_ALLOW.length; i++) o[RT_PROBE_AUTHOR_ALLOW[i]] = 1; return o; })();
+// Private families by object name (lower case). Deliberately wide: a false positive costs one authored probe, a false negative puts private text in an open ledger.
+var RT_PROBE_AUTHOR_PRIVATE = [
+  ["mail", /mail|inbox|imap|smtp/],
+  ["message", /message|(^|_)msgs?(_|$)|repl(y|ies)|thread/],
+  ["contact", /contact/],
+  ["subscriber", /subscri|newsletter/],
+  ["identity", /identity|(^|_)cv(_|$)/],
+  ["owner", /(^|_)owner(_|$)/],
+  ["personal", /personal|(^|_)(invest|ipatent|notes_intake|device)|(^|_)human(_|$)/],
+  ["credential", /credential|token|secret|passw|(^|_)keys?(_|$)|cookie|oauth|(^|_)auth(_|$)/],
+  ["session", /session/],
+  ["chat", /chat|conversation|(^|_)ask_|prompt|(^|_)llm_|mcp_log|ops_ai_log|(^|_)ai_log|question|response/],
+  ["outreach", /outreach|(^|_)social_/],
+  ["suppression", /suppress|opt_?out|unsubscrib/],
+  ["calendar", /calendar|^events?(_|$)|^event_/],
+  ["draft", /draft/]
+];
+// The loop's own bookkeeping by object name: what the author, the verification engine and the issue closers write.
+var RT_PROBE_AUTHOR_SELF_RE = /(^|_)issues?(_|$)|(^|_)decisions?(_|$)|decision_|remediation|closure|work_claims|triage|lifecycle|verification/;
+var RT_PROBE_AUTHOR_SELF_LITERAL_RE = /remediation|probe[-_ ]?(author|needed)/;
+// the text and ids the author and the live-path filer write into cloud_ops_events ("issue=<id> ...", par-/pau-/pnf- ids): a LIKE on them reads the loop's own bookkeeping without naming a kind
+var RT_PROBE_AUTHOR_SELF_TEXT_RE = /issue\s*=|^(par|pau|pnf)-/;
+var RT_PROBE_AUTHOR_ENGINE_RE = /^(sqlite_|pragma_|dbstat)/;
+var RT_PROBE_AUTHOR_FROM_END_RE = /^(where|group|order|limit|having|union|intersect|except|window|select|values|returning)$/;
+function rtProbeAuthorFamily(name) {
+  var n = String(name || "").toLowerCase();
+  for (var i = 0; i < RT_PROBE_AUTHOR_PRIVATE.length; i++) if (RT_PROBE_AUTHOR_PRIVATE[i][1].test(n)) return RT_PROBE_AUTHOR_PRIVATE[i][0];
+  return null;
+}
+// Tokens: w bare word (lower case), q quoted identifier ("x", `x`, [x]), s string literal, n number, p punctuation. Comments are skipped as SQLite skips them.
+// null when a quote or comment is unterminated. A string literal is kept because SQLite reads 'name' as an identifier after FROM, JOIN and IN.
+function rtProbeAuthorLex(q) {
+  var toks = [], i = 0, n = q.length, c, j, d;
+  while (i < n) {
+    c = q.charAt(i);
+    if (c === " " || c === "\t" || c === "\n" || c === "\r") { i++; continue; }
+    if (c === "-" && q.charAt(i + 1) === "-") { j = q.indexOf("\n", i); i = j < 0 ? n : j + 1; continue; }
+    if (c === "/" && q.charAt(i + 1) === "*") { j = q.indexOf("*/", i + 2); i = j < 0 ? n : j + 2; continue; }
+    if (c === "'" || c === '"' || c === "`") {
+      d = c; j = i + 1;
+      while (j < n) { if (q.charAt(j) === d) { if (q.charAt(j + 1) === d) { j += 2; continue; } break; } j++; }
+      if (j >= n) return null;
+      toks.push({ k: d === "'" ? "s" : "q", v: q.slice(i + 1, j).split(d + d).join(d) });
+      i = j + 1; continue;
+    }
+    if (c === "[") { j = q.indexOf("]", i + 1); if (j < 0) return null; toks.push({ k: "q", v: q.slice(i + 1, j) }); i = j + 1; continue; }
+    if (/[A-Za-z_]/.test(c)) { j = i + 1; while (j < n && /[A-Za-z0-9_$]/.test(q.charAt(j))) j++; toks.push({ k: "w", v: q.slice(i, j).toLowerCase() }); i = j; continue; }
+    if (/[0-9]/.test(c)) { j = i + 1; while (j < n && /[A-Za-z0-9_.]/.test(q.charAt(j))) j++; toks.push({ k: "n", v: q.slice(i, j) }); i = j; continue; }
+    toks.push({ k: "p", v: c }); i++;
+  }
+  return toks;
+}
+// refs: the names in table position (after FROM or JOIN, after a comma of a FROM list, schema-qualified or not); idents: every word, quoted or string token, lower case;
+// cte: names defined as name AS (. null on unbalanced parentheses.
+function rtProbeAuthorScan(toks) {
+  var refs = [], cte = Object.create(null), idents = [], depth = 0, inFrom = [false], expect = false, i, t, v, n1, n2;
+  for (i = 0; i < toks.length; i++) {
+    t = toks[i];
+    if (t.k === "p") {
+      if (t.v === "(") { expect = false; depth++; inFrom[depth] = false; }
+      else if (t.v === ")") { depth--; if (depth < 0) return null; }
+      else if (t.v === "," && inFrom[depth]) expect = true;
+      continue;
+    }
+    if (t.k === "n") { expect = false; continue; }
+    v = String(t.v).toLowerCase();
+    idents.push(v);
+    n1 = toks[i + 1]; n2 = toks[i + 2];
+    if (t.k !== "s" && n1 && n1.k === "w" && n1.v === "as" && n2 && n2.k === "p" && n2.v === "(") cte[v] = 1;
+    if (t.k === "w") {
+      if (v === "from" && i > 0 && toks[i - 1].k === "w" && toks[i - 1].v === "distinct") continue;   // x IS [NOT] DISTINCT FROM y is no table list
+      if (v === "from" || v === "join") { expect = true; if (v === "from") inFrom[depth] = true; continue; }
+      if (RT_PROBE_AUTHOR_FROM_END_RE.test(v)) { inFrom[depth] = false; expect = false; continue; }
+      if (v === "on" || v === "using") { expect = false; continue; }
+    }
+    if (expect) {
+      expect = false;
+      if (n1 && n1.k === "p" && n1.v === "." && n2 && n2.k !== "p" && n2.k !== "n") refs.push(String(n2.v).toLowerCase());
+      else refs.push(v);
+    }
+  }
+  return depth === 0 ? { refs: refs, cte: cte, idents: idents } : null;
+}
+// A reason that starts with one of RT_PROBE_AUTHOR_REASONS is returned as "<code>: <detail>"; any other string is the older static-reject text.
+function rtProbeAuthorCode(bad) {
+  var m = /^(private-table|self-confirming|deferral-shape|not-allowlisted|too-long)\b/.exec(String(bad || ""));
+  return m ? m[1] : "static-reject";
+}
 async function rtProbeAuthorValidSql(db, sql, id) {
   var q = rtProbeAuthorStrip(sql);
   if (!q) return "empty";
+  if (q.length > RT_PROBE_AUTHOR_MAX_SQL) return "too-long: probe " + q.length + " characters, limit " + RT_PROBE_AUTHOR_MAX_SQL;
   if (!/^(select|with)\b/i.test(q)) return "not a single SELECT or WITH";
   if (/;\s*\S/.test(q)) return "more than one statement";
   if (/\b(insert|update|delete|replace|drop|alter|create|attach|detach|pragma|vacuum|reindex)\b/i.test(q)) return "write keyword";
   if (q.indexOf("needs-machine" + "-probe") !== -1) return "needs-machine-probe marker";
-  if (/select\s+status\s+from\s+agent_issues/i.test(q)) return "reads the status of the target issue";
-  if (new RegExp("agent_issues\\s+where\\s+id\\s*=\\s*" + Number(id) + "\\b", "i").test(q)) return "reads the status of the target issue";
-  var tabs = {}, m, re = /(?:from|join)\s+([a-zA-Z_][a-zA-Z0-9_]*)/gi;
-  while ((m = re.exec(q))) tabs[m[1].toLowerCase()] = 1;
-  var names = Object.keys(tabs);
-  if (names.length) {
-    var have = {};
-    try {
-      var sm = (await db.prepare("SELECT name FROM sqlite_master WHERE type = 'table'").all()).results || [];
-      for (var k = 0; k < sm.length; k++) have[String(sm[k].name).toLowerCase()] = 1;
-    } catch (eS) { return "schema unreadable"; }
-    for (var k2 = 0; k2 < names.length; k2++) if (!have[names[k2]]) return "table " + names[k2] + " does not exist";
+  if (/select\s+status\s+from\s+agent_issues/i.test(q)) return "self-confirming: reads the status of the target issue";
+  if (new RegExp("agent_issues\\s+where\\s+id\\s*=\\s*" + Number(id) + "\\b", "i").test(q)) return "self-confirming: reads the status of the target issue";
+  if (/[^\t\n\r\x20-\x7e]/.test(q)) return "non-ASCII or control character";
+  var toks = rtProbeAuthorLex(q), scan = toks ? rtProbeAuthorScan(toks) : null;
+  if (!scan) return "SQL does not parse (unterminated quote or comment, or unbalanced parentheses)";
+  var have = Object.create(null), k;
+  try {
+    var sm = (await db.prepare("SELECT name FROM sqlite_master WHERE type IN ('table', 'view')").all()).results || [];
+    for (k = 0; k < sm.length; k++) have[String(sm[k].name).toLowerCase()] = 1;
+  } catch (eS) { return "schema unreadable"; }
+  var names = [], seen = Object.create(null);
+  for (k = 0; k < scan.refs.length; k++) if (!seen[scan.refs[k]]) { seen[scan.refs[k]] = 1; names.push(scan.refs[k]); }
+  for (k = 0; k < scan.idents.length; k++) if (have[scan.idents[k]] && !seen[scan.idents[k]]) { seen[scan.idents[k]] = 1; names.push(scan.idents[k]); }
+  var priv = "", selfc = "", notal = "", missing = "", nm, fam;
+  for (k = 0; k < names.length; k++) {
+    nm = names[k];
+    if (scan.cte[nm] && !have[nm]) continue;
+    fam = rtProbeAuthorFamily(nm);
+    if (fam) { if (!priv) priv = "private-table: family=" + fam + (have[nm] ? " object=" + nm : ""); continue; }
+    if (RT_PROBE_AUTHOR_SELF_RE.test(nm)) { if (!selfc) selfc = "self-confirming: " + (have[nm] ? "reads the loop's own bookkeeping, object=" + nm : "reads the loop's own bookkeeping"); continue; }
+    if (RT_PROBE_AUTHOR_ENGINE_RE.test(nm)) { if (!notal) notal = "not-allowlisted: engine table or function"; continue; }
+    if (!have[nm]) { if (!missing) missing = "table " + nm.slice(0, 60) + " does not exist"; continue; }
+    if (RT_PROBE_AUTHOR_ALLOW_SET[nm] !== 1 && !notal) notal = "not-allowlisted: object=" + nm;
   }
+  // cloud_ops_events holds the rows of every loop, among them kinds of private families (outreach, subscribers-send, owner-local-ingest, identity-weekly, secret-watch-tick): a kind or text filter that names a private family is refused too
+  if (seen.cloud_ops_events === 1 && !priv) {
+    for (k = 0; k < toks.length; k++) {
+      if (toks[k].k !== "s" || String(toks[k].v).length > 80) continue;
+      fam = rtProbeAuthorFamily(String(toks[k].v).toLowerCase().replace(/[-.:\/ %]+/g, "_").replace(/^_+|_+$/g, ""));
+      if (fam) { priv = "private-table: family=" + fam + " (an event kind or text filter of cloud_ops_events)"; break; }
+    }
+  }
+  // an engine table or table-valued function anywhere (expr IN pragma_table_info(...) names no FROM) is the same refusal
+  for (k = 0; k < scan.idents.length; k++) if (RT_PROBE_AUTHOR_ENGINE_RE.test(scan.idents[k]) && !notal) notal = "not-allowlisted: engine table or function";
+  if (priv) return priv;
+  if (selfc) return selfc;
+  if (notal) return notal;
+  if (missing) return missing;
+  var low = q.toLowerCase();
+  if (RT_PROBE_AUTHOR_SELF_LITERAL_RE.test(low)) return "self-confirming: names a remediation event kind or the author's own module";
+  for (k = 0; k < toks.length; k++) if (toks[k].k === "s" && RT_PROBE_AUTHOR_SELF_TEXT_RE.test(String(toks[k].v).toLowerCase())) return "self-confirming: matches the loop's own event text or ids";
+  if (new RegExp("issue[-_ ]?" + Number(id) + "(?![0-9])").test(low)) return "self-confirming: names the target's own contract class";
   return null;
 }
 // One event per issue per hour for a probe the author could not write, so the reason is readable from D1 and a loop that never succeeds is visible (before, it was console.error only).
@@ -12149,7 +12298,7 @@ async function rtAuthorLivePathProbe(db, env, orphan) {
     var made = await db.prepare("SELECT COUNT(*) AS n FROM cloud_ops_events WHERE kind = 'remediation.probe-authored' AND ts > ?1").bind(new Date(Date.now() - 864e5).toISOString()).first();
     if ((made ? Number(made.n) || 0 : 0) >= RT_LIVEPATH_MAX_PER_DAY) return false;
   } catch (eC) { return false; }
-  var prompt = "You write read-only D1 (SQLite) verification probes. Issue " + id + " (" + String(orphan.title || "").slice(0, 160) + ") is open with no probe of its own. Reply with exactly one SQL statement of the form SELECT <expected literal> AS expected, <observed expression> AS observed that measures this issue's own definition of done over the tables the issue names: it reads pending while the defect stands and ok once it is fixed. It must be a single SELECT or WITH, must not write, must not read the status of issue " + id + " in agent_issues, must not mention needs-machine-probe, and must only use tables that exist. Reply with the SQL only.";
+  var prompt = "You write read-only D1 (SQLite) verification probes. Issue " + id + " (" + String(orphan.title || "").slice(0, 160) + ") is open with no probe of its own. Reply with exactly one SQL statement of the form SELECT <expected literal> AS expected, <observed expression> AS observed that measures this issue's own definition of done: expected is the value that means done (for example 0 or 'ok') and observed is a measured count or value that differs from expected while the defect stands and equals it once the defect is fixed. observed must never be empty and must never start with the word pending. Read only these operational tables and views, and no other: " + RT_PROBE_AUTHOR_ALLOW.join(", ") + ". Do not read the loop's own bookkeeping (issue, decision, remediation or verification tables, rows whose kind starts with remediation., issue " + id + " itself). It must be a single SELECT or WITH of at most " + RT_PROBE_AUTHOR_MAX_SQL + " characters, must not write, and must not mention needs-machine-probe. Reply with the SQL only.";
   var r, input = { messages: [{ role: "user", content: prompt }], max_tokens: 1500 };
   try { r = await aiRunAttr(env, "qnfo-fleet-control", "probe-author", RT_PROBE_AUTHOR_MODEL, Object.assign({ reasoning_effort: CM_REVIEW_EFFORT[RT_PROBE_AUTHOR_MODEL] || "low" }, input)); }
   catch (eR) {
@@ -12163,12 +12312,23 @@ async function rtAuthorLivePathProbe(db, env, orphan) {
   if (!text) { await rtProbeAuthorNote(db, id, "empty", "finish=" + rep.finish + " tokens=" + rep.tokens); return false; }
   var probe = rtProbeAuthorStrip(text);
   var bad = await rtProbeAuthorValidSql(db, probe, id);
-  if (bad) { await rtProbeAuthorNote(db, id, "static-reject", bad); return false; }
+  if (bad) {
+    // a PROBE-AUTHOR-HARDEN-1 code is the reason of its own event; the detail never repeats the probe text
+    var code = rtProbeAuthorCode(bad);
+    await rtProbeAuthorNote(db, id, code, code === "static-reject" ? bad : String(bad).slice(code.length + 2));
+    return false;
+  }
   var dry;
   try { dry = await db.prepare(probe).all(); }
   catch (eD) { await rtProbeAuthorNote(db, id, "dry-run", String(eD && eD.message || eD)); return false; }
   var row0 = dry && dry.results && dry.results[0];
   if (!row0) { await rtProbeAuthorNote(db, id, "no-row", "the dry run returned no row"); return false; }
+  // deferral-shape: rtIsDeferral reads an empty or pending observation as "not measured yet", so such a contract could never fail or pass
+  var obs = row0.observed == null ? "" : String(row0.observed).trim();
+  if (!("expected" in row0) || !("observed" in row0)) { await rtProbeAuthorNote(db, id, "deferral-shape", "the probe has no expected and observed columns"); return false; }
+  if (!obs) { await rtProbeAuthorNote(db, id, "deferral-shape", "observed is empty"); return false; }
+  if (/^pending/i.test(obs)) { await rtProbeAuthorNote(db, id, "deferral-shape", "observed starts with pending"); return false; }
+  if (obs.length > RT_PROBE_AUTHOR_MAX_OBSERVED) { await rtProbeAuthorNote(db, id, "too-long", "observed " + obs.length + " characters, limit " + RT_PROBE_AUTHOR_MAX_OBSERVED); return false; }
   if (String(row0.expected) === String(row0.observed)) { await rtProbeAuthorNote(db, id, "vacuous", "expected equals observed at birth"); return false; }
   var cid = "issue-" + id;
   var pre = "issue " + id + " is open and none of its contracts holds a probe that can judge it", act = "probe-author-1 wrote the probe that measures issue " + id;
@@ -12183,7 +12343,7 @@ async function rtAuthorLivePathProbe(db, env, orphan) {
     await db.prepare("INSERT INTO decision_log (ts, actor, assumption, action, evidence, outcome, blast_radius, rollback_path, capability_gain, predicted_outcome) VALUES (strftime('%Y-%m-%dT%H:%M:%fZ','now'), 'qnfo-fleet-control:probe-author-1', ?1, ?2, ?3, ?4, ?5, ?6, 'a probe written for an orphan issue without a session', ?7)").bind(
       "Issue " + id + " is open with no contract that can judge it; a read-only d1-query probe that is not vacuous at birth and passes a static check is a safe way to give it one.",
       "PROBE-AUTHOR-LIVEPATH-1 authored the probe of orphan issue " + id,
-      "model " + RT_PROBE_AUTHOR_MODEL + " answered; static check passed; the dry run returned expected <> observed; probe: " + probe.slice(0, 300),
+      "model " + RT_PROBE_AUTHOR_MODEL + " answered; static check passed (operational tables only); the dry run returned expected <> observed (observed: " + obs.slice(0, RT_PROBE_AUTHOR_MAX_OBSERVED) + "); probe: " + probe.slice(0, RT_PROBE_AUTHOR_MAX_SQL),
       "contract issue-" + id + " is active with module probe-author-1",
       "one remediation_contracts row; qnfo-cloud-ops PROBE-REVIEW-1 re-judges it with disjoint models",
       "UPDATE remediation_contracts SET status = 'superseded' WHERE class = 'issue-" + id + "'",

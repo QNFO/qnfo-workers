@@ -4,6 +4,10 @@
 //   1. it read the model from env["qnfo-ai"] || env.qnfo_ai, a binding this worker has never had (wrangler.toml declares [ai] binding AI), and returned false silently;
 //   2. it read the reply only as body.response or body.result, while a chat model answers choices[0].message.content;
 //   3. its decision_log insert used the columns (ts, decision, reason), which the table does not have (it requires ts, actor, assumption, action, evidence, outcome, blast_radius, rollback_path).
+// PROBE-AUTHOR-HARDEN-1 (0.52.1, agent_issues 1000266) adds the second half, once the author could run: it must refuse (1) private tables, (2) self-confirming probes, (3) deferral-shaped
+// probes, with an enum reason on the existing remediation.probe-author-reject event that never carries the probe text. probe-author.fixture.json holds the live qnfo-audit sqlite_master
+// names (captured 2026-10-26, 603 tables, 194 views, names only) and the live definitions of the allowlisted views, so the allowlist constant is checked against the real schema and every live
+// object is swept: only an allowlisted one may pass the static check.
 // Slices rtFlagOff, the reply reader, aiRunAttr and the probe-author block out of worker.js and runs them against an in-memory SQLite D1 and a fake env.AI.
 // Output MUST contain "0 failed" on success.   node qnfo-fleet-control/probe-author.test.mjs
 import { DatabaseSync } from "node:sqlite";
@@ -12,6 +16,7 @@ import vm from "node:vm";
 
 const src = readFileSync(new URL("./worker.js", import.meta.url), "utf8");
 const mirror = readFileSync(new URL("./deployed-current.worker.js", import.meta.url), "utf8");
+const fixture = JSON.parse(readFileSync(new URL("./probe-author.fixture.json", import.meta.url), "utf8"));
 let pass = 0, fail = 0;
 const ok = (c, m, d) => { if (c) pass++; else { fail++; console.log("FAIL " + m + (d === undefined ? "" : " :: " + JSON.stringify(d).slice(0, 400))); } };
 
@@ -25,10 +30,15 @@ const code = [
   cut("var RT_PROBE_AUTHOR_MAX_PER_TICK = 3;", "var rtLivePathRetryAt = 0;"),
 ].join("\n");
 const cx = vm.createContext({ Date, Number, String, parseInt, Math, JSON, Object, Array, RegExp, isFinite, console: { error() {}, log() {} }, __name: (f) => f });
-vm.runInContext(code + "\nthis.api = { rtAuthorLivePathProbe, setTick(k) { rtProbeAuthorTickKey = k; } };", cx);
-const { rtAuthorLivePathProbe, setTick } = cx.api;
+// the names the hardening adds are looked up one by one, so this suite still loads (and fails its own checks) against a worker that predates them
+vm.runInContext(code + `
+this.api = { rtAuthorLivePathProbe, setTick(k) { rtProbeAuthorTickKey = k; } };
+for (const n of ["rtProbeAuthorValidSql", "rtProbeAuthorFamily", "RT_PROBE_AUTHOR_ALLOW", "RT_PROBE_AUTHOR_REASONS", "RT_PROBE_AUTHOR_SELF_RE", "RT_PROBE_AUTHOR_MAX_SQL", "RT_PROBE_AUTHOR_MAX_OBSERVED"]) { try { this.api[n] = eval(n); } catch (e) { } }`, cx);
+const api = cx.api;
+const { rtAuthorLivePathProbe, setTick } = api;
 
-function mk() {
+const liveTables = fixture.tables, liveViews = fixture.views, liveObjects = liveTables.concat(liveViews);
+function mk(withLiveNames) {
   const db = new DatabaseSync(":memory:");
   db.exec(`
 CREATE TABLE agent_issues (id INTEGER PRIMARY KEY AUTOINCREMENT, title TEXT, status TEXT DEFAULT 'open', priority TEXT);
@@ -36,14 +46,18 @@ CREATE TABLE remediation_contracts (class TEXT PRIMARY KEY, issue_id INTEGER, pr
 CREATE TABLE cloud_ops_events (id TEXT PRIMARY KEY, ts TEXT, kind TEXT, text TEXT, meta TEXT, job TEXT, status TEXT);
 CREATE TABLE ops_config (key TEXT PRIMARY KEY, value TEXT);
 CREATE TABLE decision_log (id INTEGER PRIMARY KEY AUTOINCREMENT, ts TEXT NOT NULL, actor TEXT NOT NULL, assumption TEXT NOT NULL, action TEXT NOT NULL, evidence TEXT NOT NULL, outcome TEXT NOT NULL, blast_radius TEXT NOT NULL, rollback_path TEXT NOT NULL, capability_gain TEXT, predicted_outcome TEXT, reach_gain TEXT, surfaces_tested TEXT, outcome_matched INTEGER);
-CREATE TABLE widgets (id INTEGER PRIMARY KEY, done INTEGER);
-INSERT INTO widgets VALUES (1, 0), (2, 0), (3, 1);`);
+CREATE TABLE portfolio_gaps (id INTEGER PRIMARY KEY, status TEXT);
+INSERT INTO portfolio_gaps VALUES (1, 'open'), (2, 'open'), (3, 'closed');`);
+  if (withLiveNames) {
+    // every live object name exists as a one-column table so that a probe naming it is syntactically real; sqlite_ names are the engine's own
+    for (const n of liveObjects) if (!/^sqlite_/.test(n)) db.exec('CREATE TABLE IF NOT EXISTS "' + n + '" (id INTEGER)');
+  }
   const stmt = (sql) => { let args = []; const self = { bind(...x) { args = x.map((v) => (v === undefined ? null : v)); return self; }, async all() { return { results: db.prepare(sql).all(...args) }; }, async first() { return db.prepare(sql).get(...args) ?? null; }, async run() { const r = db.prepare(sql).run(...args); return { success: true, meta: { changes: Number(r.changes) } }; } }; return self; };
   return { db, h: { prepare: stmt } };
 }
-const goodProbe = "SELECT 0 AS expected, COUNT(*) AS observed FROM widgets WHERE done = 0";           // 0 expected, 2 observed: not vacuous
+const goodProbe = "SELECT 0 AS expected, COUNT(*) AS observed FROM portfolio_gaps WHERE status = 'open'";           // 0 expected, 2 observed: not vacuous, an operational table
 const chat = (text) => ({ choices: [{ message: { role: "assistant", content: text }, finish_reason: "stop" }], usage: { prompt_tokens: 10, completion_tokens: 5 } });
-const orphan = (db, id = 4242) => { db.prepare("INSERT INTO agent_issues (id, title, status, priority) VALUES (?, 'ORPHAN-1: widgets are not done', 'open', 'medium')").run(id); return { id, title: "ORPHAN-1: widgets are not done" }; };
+const orphan = (db, id = 4242) => { db.prepare("INSERT INTO agent_issues (id, title, status, priority) VALUES (?, 'ORPHAN-1: portfolio gaps are not closed', 'open', 'medium')").run(id); return { id, title: "ORPHAN-1: portfolio gaps are not closed" }; };
 const events = (db, kind) => db.prepare("SELECT * FROM cloud_ops_events WHERE kind = ?").all(kind);
 
 { // the reply in the chat shape, through the binding this worker really has: the probe is authored, recorded and logged
@@ -58,6 +72,7 @@ const events = (db, kind) => db.prepare("SELECT * FROM cloud_ops_events WHERE ki
   ok(events(db, "remediation.probe-authored").length === 1, "a remediation.probe-authored event is written");
   const d = db.prepare("SELECT * FROM decision_log").all();
   ok(d.length === 1 && /4242/.test(d[0].action) && /superseded/.test(d[0].rollback_path) && d[0].actor && d[0].evidence && d[0].outcome && d[0].blast_radius, "a decision_log row is written with the table's real columns", d);
+  ok(d.length === 1 && /observed: 2\)/.test(d[0].evidence) && d[0].evidence.indexOf(goodProbe) > 0, "the decision_log evidence names the observed value and the probe", d[0] && d[0].evidence);
 }
 { // the reply in the legacy shape
   const { db, h } = mk(); const o = orphan(db); setTick(2);
@@ -84,7 +99,7 @@ const events = (db, kind) => db.prepare("SELECT * FROM cloud_ops_events WHERE ki
   setTick(6); await rtAuthorLivePathProbe(h, vac, o);
   const ev = events(db, "remediation.probe-author-reject");
   ok(ev.length === 1 && /vacuous/.test(ev[0].text), "the vacuous reject is one event for the hour", ev);
-  const w = { AI: { run: async () => chat("WITH t AS (SELECT 1) DELETE FROM widgets") }, AUDIT: h };
+  const w = { AI: { run: async () => chat("WITH t AS (SELECT 1) DELETE FROM portfolio_gaps") }, AUDIT: h };
   setTick(7); ok((await rtAuthorLivePathProbe(h, w, orphan(db, 4243))) === false, "a write statement is rejected");
   ok(events(db, "remediation.probe-author-reject").some((e) => /write keyword/.test(e.text)), "the static reject names its reason");
   const cl = db.prepare("SELECT COUNT(*) n FROM remediation_contracts").get().n;
@@ -105,6 +120,311 @@ const events = (db, kind) => db.prepare("SELECT * FROM cloud_ops_events WHERE ki
   ok(JSON.stringify(r) === "[true,true,true,false]", "three probes a tick, then the bound", r);
   setTick(11); db.prepare("INSERT INTO ops_config (key, value) VALUES ('rt_probe_author', 'off')").run();
   ok((await rtAuthorLivePathProbe(h, env, orphan(db, 5005))) === false, "ops_config rt_probe_author = off stops it");
+}
+
+// ---- PROBE-AUTHOR-HARDEN-1 ----
+// against a worker that predates the hardening these fall back to "nothing is private, nothing is allowlisted", so every check below fails on its own merits instead of the suite crashing
+const REASONS = api.RT_PROBE_AUTHOR_REASONS || [], ALLOW = api.RT_PROBE_AUTHOR_ALLOW || [], valid = api.rtProbeAuthorValidSql, family = api.rtProbeAuthorFamily || (() => null);
+ok(Array.isArray(REASONS) && JSON.stringify(Array.from(REASONS)) === JSON.stringify(["private-table", "self-confirming", "deferral-shape", "not-allowlisted", "too-long"]), "the reject reasons are the five-code enum", REASONS);
+ok(typeof valid === "function" && typeof api.rtProbeAuthorFamily === "function" && Array.isArray(ALLOW) && ALLOW.length > 20, "the hardening exposes its validator, family test and allowlist");
+const allow = Array.isArray(ALLOW) ? Array.from(ALLOW) : [];
+const reasonOf = (bad) => { const m = /^(private-table|self-confirming|deferral-shape|not-allowlisted|too-long)\b/.exec(String(bad)); return m ? m[1] : bad; };
+const live1 = mk(true);   // one database that has every live object name, for the static checks
+const check = async (sql, id = 4242) => (typeof valid === "function" ? valid(live1.h, sql, id) : "validator missing");
+const nameWords = (text) => (String(text).toLowerCase().match(/[a-z_][a-z0-9_]*/g) || []);
+const selfRe = api.RT_PROBE_AUTHOR_SELF_RE || /(?!)/;
+
+{ // the allowlist is a constant checked against the live schema: it cannot name a private or bookkeeping object, or one that is not there
+  const liveSet = new Set(liveObjects);
+  ok(liveTables.length >= 590 && liveViews.length >= 190, "the fixture mirrors the live sqlite_master (tables and views)", [liveTables.length, liveViews.length]);
+  ok(new Set(allow).size === allow.length, "the allowlist has no duplicate");
+  ok(allow.every((n) => liveSet.has(n)), "every allowlisted object exists in the live schema fixture", allow.filter((n) => !liveSet.has(n)));
+  ok(allow.every((n) => family(n) === null), "no allowlisted object belongs to a private family", allow.filter((n) => family(n) !== null));
+  ok(selfRe && allow.every((n) => !selfRe.test(n)), "no allowlisted object is the loop's own bookkeeping", selfRe && allow.filter((n) => selfRe.test(n)));
+  ok(allow.every((n) => !/^sqlite_|^pragma_/.test(n)), "no engine table is allowlisted");
+  const allowedViews = allow.filter((n) => liveViews.includes(n));
+  ok(allowedViews.length > 0 && allowedViews.every((v) => typeof fixture.view_sql[v] === "string"), "every allowlisted view has its live definition in the fixture", allowedViews);
+  for (const v of allowedViews) {
+    const touched = nameWords(fixture.view_sql[v]).filter((w) => w !== v && liveSet.has(w));
+    ok(touched.length > 0 && touched.every((w) => family(w) === null && !(selfRe && selfRe.test(w))), "the definition of allowlisted view " + v + " reads no private or bookkeeping object", touched);
+  }
+  // the families are real: many live objects are private, and each of the spec's families has at least one live (or named) member
+  const privLive = liveObjects.filter((n) => family(n) !== null);
+  ok(privLive.length > 100, "the private families cover more than 100 live objects", privLive.length);
+  const spec = { mail: ["emails", "email_raw_archive", "event_inbox", "email_reply_queue"], message: ["social_replies", "social_threads"], contact: ["contact_ledger"], subscriber: ["subscribers", "subscriber_digest_runs"], identity: ["saas_identity_anchors"],
+    owner: ["owner_codes", "owner_sessions", "owner_docs", "owner_prompts", "owner_chat_codes"], personal: ["personal_radar", "invest_facts", "ipatent_submissions", "human_responses", "human_actions", "notes_intake", "device_tasks"], credential: ["credential_registry", "deploy_tokens"],
+    session: ["audit_sessions", "chat_sessions"], chat: ["chat", "chat_logs", "chatbox_conversations", "llm_gateway_log", "mcp_log", "ops_ai_log", "ask_events"], outreach: ["outreach_queue", "outreach_log"], suppression: ["email_suppression", "opt_out_list"], calendar: ["calendar", "calendar_feedback", "events", "event_prefs"], draft: ["notes_drafts", "reply_drafts"] };
+  for (const f of Object.keys(spec)) for (const n of spec[f]) ok(family(n) !== null, "family " + f + ": " + n + " is private", [n, family(n)]);
+  for (const f of Object.keys(spec)) ok(spec[f].some((n) => family(n) === f), "family " + f + " is named by its own label for at least one member", f);
+  ok(["cloud_ops_events", "metric_registry", "portfolio_gaps", "code_tasks", "cost_daily"].every((n) => family(n) === null), "the operational objects the fleet probes are not private");
+}
+{ // fail closed: every live object is swept; only an allowlisted one passes the static check, every other one is refused with an enum reason
+  const accepted = [], byCode = {}, wrong = [];
+  for (const n of liveObjects) {
+    const bad = await check("SELECT 0 AS expected, COUNT(*) AS observed FROM " + n);
+    if (bad === null) { accepted.push(n); continue; }
+    const code = reasonOf(bad); byCode[code] = (byCode[code] || 0) + 1;
+    if (!REASONS.includes(code)) wrong.push([n, bad]);
+    if (family(n) !== null && code !== "private-table") wrong.push([n, bad]);
+  }
+  ok(accepted.length === allow.length && accepted.every((n) => allow.includes(n)) && allow.every((n) => accepted.includes(n)), "only the allowlisted objects pass the static check across the whole live schema", { accepted: accepted.length, allow: allow.length, extra: accepted.filter((n) => !allow.includes(n)), missing: allow.filter((n) => !accepted.includes(n)) });
+  ok(wrong.length === 0, "every refused live object carries an enum reason, and a private one is private-table", wrong.slice(0, 5));
+  ok((byCode["private-table"] || 0) > 100 && (byCode["self-confirming"] || 0) > 20 && (byCode["not-allowlisted"] || 0) > 100, "the sweep produces all three object reasons", byCode);
+}
+
+// the forms a table name can take in SQLite; the first group must also be real SQLite (checked below), so the bypass being closed is not a fiction
+const forms = (X) => [
+  ["plain", `SELECT 0 AS expected, COUNT(*) AS observed FROM ${X}`, true],
+  ["upper case", `SELECT 0 AS expected, COUNT(*) AS observed FROM ${X.toUpperCase()}`, true],
+  ["subquery", `SELECT 0 AS expected, (SELECT COUNT(*) FROM ${X}) AS observed FROM portfolio_gaps`, true],
+  ["exists", `SELECT 0 AS expected, COUNT(*) AS observed FROM portfolio_gaps WHERE EXISTS (SELECT 1 FROM ${X})`, true],
+  ["join", `SELECT 0 AS expected, COUNT(*) AS observed FROM portfolio_gaps g JOIN ${X} x ON x.id = g.id`, true],
+  ["left join", `SELECT 0 AS expected, COUNT(*) AS observed FROM portfolio_gaps g LEFT JOIN ${X} x ON x.id = g.id`, true],
+  ["comma join", `SELECT 0 AS expected, COUNT(*) AS observed FROM portfolio_gaps g, ${X} x`, true],
+  ["comma join first", `SELECT 0 AS expected, COUNT(*) AS observed FROM ${X} x, portfolio_gaps g`, true],
+  ["cte", `WITH t AS (SELECT * FROM ${X}) SELECT 0 AS expected, COUNT(*) AS observed FROM t`, true],
+  ["double quoted", `SELECT 0 AS expected, COUNT(*) AS observed FROM "${X}"`, true],
+  ["backtick", "SELECT 0 AS expected, COUNT(*) AS observed FROM `" + X + "`", true],
+  ["bracketed", `SELECT 0 AS expected, COUNT(*) AS observed FROM [${X}]`, true],
+  ["schema qualified", `SELECT 0 AS expected, COUNT(*) AS observed FROM main.${X}`, true],
+  ["schema qualified quoted", `SELECT 0 AS expected, COUNT(*) AS observed FROM "main"."${X}"`, true],
+  ["string literal as identifier", `SELECT 0 AS expected, COUNT(*) AS observed FROM '${X}'`, true],
+  ["IN table", `SELECT 0 AS expected, COUNT(*) AS observed FROM portfolio_gaps WHERE id IN ${X}`, true],
+  ["IN string", `SELECT 0 AS expected, COUNT(*) AS observed FROM portfolio_gaps WHERE id IN '${X}'`, true],
+  ["block comment", `SELECT 0 AS expected, COUNT(*) AS observed FROM /* hidden */ ${X}`, true],
+  ["line comment", `SELECT 0 AS expected, COUNT(*) AS observed FROM -- hidden\n ${X}`, true],
+  ["tabs and newlines", `SELECT 0 AS expected, COUNT(*) AS observed FROM\n\t${X}`, true],
+  ["apostrophe in a double-quoted alias", `SELECT 0 AS expected, (SELECT COUNT(*) AS "a'b" FROM ${X}) AS observed, 5 AS "c'd"`, true],
+  ["apostrophe in a backtick alias", "SELECT 0 AS expected, (SELECT COUNT(*) AS `a'b` FROM " + X + ") AS observed, 5 AS `c'd`", true],
+  ["apostrophe in a bracket alias", `SELECT 0 AS expected, (SELECT COUNT(*) AS [a'b] FROM ${X}) AS observed, 5 AS [c'd]`, true],
+  ["quoted string holding a FROM", `SELECT 0 AS expected, COUNT(*) AS observed FROM portfolio_gaps WHERE status <> 'from ${X}' OR EXISTS (SELECT 1 FROM ${X})`, true],
+];
+{ // the SQL really runs in SQLite for these shapes: a stricter or looser parser than the real one would make this suite a fiction
+  const { db } = mk(true);
+  let badForms = [];
+  for (const [label, sql] of forms("emails")) { try { db.prepare(sql).all(); } catch (e) { badForms.push([label, String(e.message).slice(0, 80)]); } }
+  ok(badForms.length === 0, "every table-name form tested below is accepted by SQLite itself", badForms);
+}
+{ // (1) PRIVACY: every private family, every form, refused as private-table before anything runs
+  const reps = { mail: "emails", "mail archive": "email_raw_archive", inbox: "event_inbox", message: "social_replies", thread: "social_threads", contact: "contact_ledger", subscriber: "subscribers", identity: "saas_identity_anchors",
+    owner: "owner_codes", "owner sessions": "owner_sessions", "owner docs": "owner_docs", personal: "personal_radar", credential: "credential_registry", token: "deploy_tokens", session: "chat_sessions", chat: "chat_logs", conversation: "chatbox_conversations",
+    outreach: "outreach_queue", suppression: "email_suppression", calendar: "calendar", draft: "notes_drafts", invest: "invest_facts", human: "human_responses", "llm log": "llm_gateway_log" };
+  const missed = [];
+  for (const [fam, tbl] of Object.entries(reps)) {
+    if (!liveObjects.includes(tbl)) { live1.db.exec('CREATE TABLE IF NOT EXISTS "' + tbl + '" (id INTEGER)'); }   // a family member the live schema does not have today is created for the check
+    for (const [label, sql] of forms(tbl)) {
+      const bad = await check(sql);
+      if (reasonOf(bad) !== "private-table") missed.push([fam, tbl, label, String(bad).slice(0, 60)]);
+    }
+  }
+  ok(missed.length === 0, "private tables of every family are refused in every form (subquery, join, comma-join, CTE, quoted, bracketed, string, comment, apostrophe tricks)", missed.slice(0, 6));
+  ok(missed.length === 0 && Object.keys(reps).length >= 24, "the privacy sweep covered " + Object.keys(reps).length + " tables x " + forms("x").length + " forms");
+  // a private name that does not exist is still refused as private, never reported as a missing table
+  const ghost = await check("SELECT 0 AS expected, COUNT(*) AS observed FROM portfolio_gaps, subscribers_ghost_copy");
+  ok(reasonOf(ghost) === "private-table", "a private-looking name that is not in the schema is still private-table", ghost);
+  // cloud_ops_events carries the rows of every loop, private families among them (live kinds: outreach, subscribers-send, owner-local-ingest, identity-weekly, secret-watch-tick, secret-change)
+  for (const lit of ["kind = 'outreach'", "kind = 'outreach-learner'", "kind = 'subscribers-send'", "kind = 'owner-local-ingest'", "kind = 'identity-weekly'", "kind = 'secret-watch-tick'", "kind = 'secret-change'", "kind LIKE 'owner%'", "text LIKE '%email%'", "text LIKE '%send an email to the contact%'"]) {
+    const bad = await check("SELECT 0 AS expected, COUNT(*) AS observed FROM cloud_ops_events WHERE " + lit);
+    ok(reasonOf(bad) === "private-table", "an event filter naming a private family is private-table: " + lit, bad);
+  }
+  const okKind = await check("SELECT 0 AS expected, COUNT(*) AS observed FROM cloud_ops_events WHERE kind = 'workflow-failure-intake' AND ts > strftime('%Y-%m-%dT%H:%M:%SZ','now','-1 day') AND status = 'error' AND text NOT LIKE '%timeout%'");
+  const okSession = await check("SELECT 0 AS expected, COUNT(*) AS observed FROM pr_sla_state WHERE waits_on = 'session'");
+  ok(okKind === null && okSession === null, "an ordinary event kind passes, and the word session in another table's filter is not an event filter", [okKind, okSession]);
+  // a CTE alias that only looks private is not a table: its body is what is scanned
+  const alias = await check("WITH mail_counts AS (SELECT COUNT(*) AS n FROM portfolio_gaps) SELECT 0 AS expected, n AS observed FROM mail_counts");
+  ok(alias === null, "a CTE alias named like a private family is not itself a table", alias);
+  // comments are skipped as SQLite skips them: an apostrophe or a private name inside one is neither a parse error nor a table read
+  const cmt = await check("SELECT 0 AS expected, COUNT(*) AS observed FROM portfolio_gaps /* it's not the emails table */");
+  const cmt2 = await check("SELECT 0 AS expected, COUNT(*) AS observed FROM portfolio_gaps -- it's the subscribers note");
+  ok(cmt === null && cmt2 === null, "a comment holding an apostrophe or a private name is skipped, not parsed", [cmt, cmt2]);
+  const sneaky = await check("WITH mail_counts AS (SELECT COUNT(*) AS n FROM emails) SELECT 0 AS expected, n AS observed FROM mail_counts");
+  ok(reasonOf(sneaky) === "private-table", "the body of that CTE is still scanned", sneaky);
+}
+{ // (1b) a table that is neither private nor bookkeeping but not on the list is refused too; so are engine tables and functions
+  for (const t of ["ops_config", "fleet_probe_log", "cmd_log", "worker_logs", "cf_agent_requests", "analytics_dash_records", "portfolio_health", "v_cost_forecast", "v_fleet_metrics", "tasks", "goals", "projects"]) {
+    const bad = await check("SELECT 0 AS expected, COUNT(*) AS observed FROM " + t);
+    ok(reasonOf(bad) === "not-allowlisted", "an operational table off the list is not-allowlisted: " + t, bad);
+  }
+  for (const sql of ["SELECT 0 AS expected, COUNT(*) AS observed FROM sqlite_master", "SELECT 0 AS expected, COUNT(*) AS observed FROM sqlite_schema", "SELECT 0 AS expected, COUNT(*) AS observed FROM pragma_table_info('portfolio_gaps')", "SELECT 0 AS expected, COUNT(*) AS observed FROM main.sqlite_master"]) {
+    const bad = await check(sql);
+    ok(reasonOf(bad) === "not-allowlisted", "an engine table or function is not-allowlisted: " + sql.slice(46, 80), bad);
+  }
+  const inFn = await check("SELECT 0 AS expected, COUNT(*) AS observed FROM portfolio_gaps WHERE status IN pragma_table_info('portfolio_gaps')");
+  ok(reasonOf(inFn) === "not-allowlisted", "an engine table function in an IN clause (no FROM) is not-allowlisted", inFn);
+  const hit = await check("SELECT 0 AS expected, COUNT(*) AS observed FROM portfolio_gaps WHERE status IN (SELECT name FROM ops_config)");
+  ok(reasonOf(hit) === "not-allowlisted", "an unlisted table reached through a subquery is not-allowlisted", hit);
+  const prototype = await check("SELECT 0 AS expected, COUNT(*) AS observed FROM constructor");
+  const proto2 = await check("SELECT 0 AS expected, COUNT(*) AS observed FROM __proto__");
+  ok(/does not exist/.test(prototype) && /does not exist/.test(proto2), "an Object.prototype name is a missing table, not an accepted one", [prototype, proto2]);
+}
+
+{ // (2) SELF-CONFIRMING: the loop's own bookkeeping, the author's own events and module, the target's own contract class
+  const cases = {
+    "decision_log": "SELECT 'ok' AS expected, CASE WHEN EXISTS (SELECT 1 FROM decision_log WHERE actor LIKE '%probe-author%' AND action LIKE '%issue 4242%') THEN 'ok' ELSE 'no log' END AS observed",
+    "decision_log plain": "SELECT 1 AS expected, COUNT(*) AS observed FROM decision_log WHERE action LIKE '%4242%'",
+    "decision_predictions": "SELECT 0 AS expected, COUNT(*) AS observed FROM decision_predictions",
+    "decision_outcomes": "SELECT 0 AS expected, COUNT(*) AS observed FROM decision_outcomes",
+    "remediation_contracts": "SELECT 'active' AS expected, status AS observed FROM remediation_contracts WHERE class = 'issue-4242'",
+    "remediation_contracts other class": "SELECT 0 AS expected, COUNT(*) AS observed FROM remediation_contracts WHERE status = 'failed'",
+    "remediation_verifications": "SELECT 0 AS expected, COUNT(*) AS observed FROM remediation_verifications WHERE pass = 0",
+    "remediation_evidence": "SELECT 0 AS expected, COUNT(*) AS observed FROM remediation_evidence",
+    "v_remediation_evidence_all": "SELECT 0 AS expected, COUNT(*) AS observed FROM v_remediation_evidence_all WHERE pass = 0",
+    "v_remediation_latest_per_action": "SELECT 0 AS expected, COUNT(*) AS observed FROM v_remediation_latest_per_action",
+    "issue_triage": "SELECT 'closed' AS expected, close_evidence AS observed FROM issue_triage",
+    "issue_lifecycle": "SELECT 0 AS expected, COUNT(*) AS observed FROM issue_lifecycle WHERE status = 'open'",
+    "issue_events": "SELECT 0 AS expected, COUNT(*) AS observed FROM issue_events",
+    "agent_issues count of open": "SELECT 0 AS expected, COUNT(*) AS observed FROM agent_issues WHERE status = 'open' AND title LIKE 'ORPHAN-1%'",
+    "agent_issues other row": "SELECT 0 AS expected, COUNT(*) AS observed FROM agent_issues WHERE id = 4243",
+    "agent_issues target status": "SELECT 'closed' AS expected, status AS observed FROM agent_issues WHERE id = 4242",
+    "agent_issues tombstone": "SELECT 0 AS expected, COUNT(*) AS observed FROM agent_issues_tombstone",
+    "an issues view": "SELECT 0 AS expected, COUNT(*) AS observed FROM v_issue_age",
+    "work_claims": "SELECT 0 AS expected, COUNT(*) AS observed FROM work_claims",
+    "closure view": "SELECT 0 AS expected, COUNT(*) AS observed FROM v_closure_relapses",
+    "authored event kind": "SELECT 'ok' AS expected, CASE WHEN EXISTS (SELECT 1 FROM cloud_ops_events WHERE kind = 'remediation.probe-authored') THEN 'ok' ELSE 'none' END AS observed",
+    "reject event kind": "SELECT 0 AS expected, COUNT(*) AS observed FROM cloud_ops_events WHERE kind = 'remediation.probe-author-reject'",
+    "filed event kind": "SELECT 0 AS expected, COUNT(*) AS observed FROM cloud_ops_events WHERE kind='remediation.probe-needed-filed'",
+    "remediation kind wildcard": "SELECT 0 AS expected, COUNT(*) AS observed FROM cloud_ops_events WHERE kind LIKE 'remediation.%'",
+    "remediation kind in list": "SELECT 0 AS expected, COUNT(*) AS observed FROM cloud_ops_events WHERE kind IN ('x', 'REMEDIATION.probe-error')",
+    "remediation kind prefix without the dot": "SELECT 0 AS expected, COUNT(*) AS observed FROM cloud_ops_events WHERE kind LIKE 'remediation%'",
+    "event text of the author": "SELECT 0 AS expected, COUNT(*) AS observed FROM cloud_ops_events WHERE text LIKE 'issue=4242%'",
+    "event text of the author, spaced": "SELECT 0 AS expected, COUNT(*) AS observed FROM cloud_ops_events WHERE text LIKE '%issue = 4243 %'",
+    "event id of the author": "SELECT 0 AS expected, COUNT(*) AS observed FROM cloud_ops_events WHERE id LIKE 'par-%'",
+    "event id of the filer": "SELECT 0 AS expected, COUNT(*) AS observed FROM cloud_ops_events WHERE id LIKE 'PNF-%'",
+    "author module literal": "SELECT 0 AS expected, COUNT(*) AS observed FROM code_tasks WHERE model = 'probe-author-1'",
+    "author module underscore": "SELECT 0 AS expected, COUNT(*) AS observed FROM code_tasks WHERE model = 'probe_author'",
+    "probe-needed family": "SELECT 0 AS expected, COUNT(*) AS observed FROM code_tasks WHERE goal LIKE 'PROBE-NEEDED-1%'",
+    "own contract class": "SELECT 0 AS expected, COUNT(*) AS observed FROM code_tasks WHERE goal = 'issue-4242'",
+    "own contract class underscore": "SELECT 0 AS expected, COUNT(*) AS observed FROM code_tasks WHERE goal = 'Issue_4242'",
+    "own contract class spaced": "SELECT 0 AS expected, COUNT(*) AS observed FROM code_tasks WHERE goal LIKE '%issue 4242%'",
+    "decision_log through a join": "SELECT 0 AS expected, COUNT(*) AS observed FROM portfolio_gaps g JOIN decision_log d ON d.id = g.id",
+    "decision_log through a quoted name": 'SELECT 0 AS expected, COUNT(*) AS observed FROM "decision_log"',
+    "remediation in a CTE": "WITH r AS (SELECT * FROM remediation_verifications) SELECT 0 AS expected, COUNT(*) AS observed FROM r",
+  };
+  const missed = [];
+  for (const [label, sql] of Object.entries(cases)) { const bad = await check(sql); if (reasonOf(bad) !== "self-confirming") missed.push([label, String(bad).slice(0, 70)]); }
+  ok(missed.length === 0, "self-confirming probes are refused as self-confirming (" + Object.keys(cases).length + " forms)", missed);
+  // a probe about another issue's class, and a legitimate read of the event ledger, are not
+  const other = await check("SELECT 0 AS expected, COUNT(*) AS observed FROM code_tasks WHERE goal = 'issue-4243'");
+  const prefix = await check("SELECT 0 AS expected, COUNT(*) AS observed FROM code_tasks WHERE goal = 'issue-42421'");
+  ok(other === null && prefix === null, "another issue's class (and a longer number that starts with the same digits) is not the target's own", [other, prefix]);
+  const distinctFrom = await check("SELECT 0 AS expected, COUNT(*) AS observed FROM portfolio_gaps WHERE status IS DISTINCT FROM 'closed' AND status IS NOT DISTINCT FROM 'open'");
+  ok(distinctFrom === null, "IS DISTINCT FROM is not a table list", distinctFrom);
+  const legit = await check("SELECT 0 AS expected, COUNT(*) AS observed FROM cloud_ops_events WHERE kind = 'workflow.failed' AND ts > strftime('%Y-%m-%dT%H:%M:%SZ','now','-1 day')");
+  ok(legit === null, "a read of cloud_ops_events for an ordinary kind is accepted", legit);
+}
+
+// end to end: the fake model answers a probe, the real function decides
+let tickN = 100;
+async function attempt(sql, { id = 4242, live = true } = {}) {
+  const { db, h } = mk(live); const o = orphan(db, id); setTick(++tickN);
+  const seen = [];
+  const env = { AI: { run: async (model, input) => { seen.push(input); return chat(sql); } }, AUDIT: h };
+  const done = await rtAuthorLivePathProbe(h, env, o);
+  return { done, db, seen, rejects: events(db, "remediation.probe-author-reject"), authored: events(db, "remediation.probe-authored"), contract: db.prepare("SELECT * FROM remediation_contracts WHERE class = ?").get("issue-" + id), log: db.prepare("SELECT * FROM decision_log").all() };
+}
+const refused = (r, code) => r.done === false && !r.contract && r.authored.length === 0 && r.log.length === 0 && r.rejects.length === 1 && r.rejects[0].kind === "remediation.probe-author-reject" && new RegExp("issue=\\d+ " + code + ":").test(r.rejects[0].text);
+{ // a legitimate operational probe is still authored end to end, and the prompt lists operational tables only
+  const r = await attempt(goodProbe);
+  ok(r.done === true && r.contract && r.contract.status === "active" && r.contract.verify_probe === goodProbe && r.rejects.length === 0, "a legitimate operational probe is accepted end to end", r.rejects.map((e) => e.text));
+  const prompt = r.seen.length ? r.seen[0].messages[0].content : "";
+  const promptWords = nameWords(prompt);
+  ok(allow.length > 0 && allow.every((n) => prompt.indexOf(n) >= 0), "the prompt lists every allowlisted object");
+  const named = Array.from(new Set(promptWords.filter((w) => liveObjects.includes(w))));
+  ok(named.every((w) => allow.includes(w)), "the prompt names no live object outside the allowlist, and so no private table", named.filter((w) => !allow.includes(w)));
+  ok(/never start with the word pending/.test(prompt) && /at most 600 characters/.test(prompt), "the prompt asks for a non-pending observed value within 600 characters");
+  ok(!/reads pending while the defect stands/.test(prompt), "the prompt no longer asks for a pending observation");
+  // the rows that reach the open ledgers are bounded
+  const ev = r.authored[0], dl = r.log[0];
+  ok(ev && ev.text.length <= 400 && dl && dl.evidence.length < 1000, "the authored event is at most 400 characters and the decision_log evidence under 1000", [ev && ev.text.length, dl && dl.evidence.length]);
+}
+{ // the privacy refusal end to end, with the closing probe's wording in the event, and no probe text
+  const marker = "zzmark7731";
+  const sql = "SELECT 0 AS expected, (SELECT COUNT(*) FROM emails WHERE subject = 'a" + marker + "') AS observed";
+  const r = await attempt(sql);
+  ok(refused(r, "private-table"), "an emails probe is refused with a private-table reject event and no contract", [r.done, r.rejects.map((e) => e.text)]);
+  ok(r.rejects.length === 1 && /private-table/.test(r.rejects[0].text) && r.rejects[0].text.indexOf(marker) < 0 && r.rejects[0].text.toLowerCase().indexOf("subject") < 0 && r.rejects[0].text.indexOf("SELECT") < 0, "the reject event holds the code and never the probe text", r.rejects[0] && r.rejects[0].text);
+  const closing = r.db.prepare("SELECT 'ok' AS expected, CASE WHEN EXISTS (SELECT 1 FROM cloud_ops_events WHERE kind='remediation.probe-author-reject' AND ts > strftime('%Y-%m-%dT%H:%M:%SZ','now','-1 day') AND text LIKE '%private-table%') THEN 'ok' ELSE 'none' END AS observed").get();
+  ok(closing.observed === "ok", "the closing probe of issue 1000266 reads ok after a private-table reject", closing);
+  for (const [tbl, forms2] of [["subscribers", [1, 9, 14, 15]], ["owner_codes", [0, 4, 16]], ["chat_logs", [5, 13, 20]], ["credential_registry", [2, 10, 22]]]) {
+    const fl = forms(tbl);
+    for (const ix of forms2) {
+      const rr = await attempt(fl[ix][1] + " /* " + marker + " */");
+      ok(refused(rr, "private-table") && rr.rejects[0].text.indexOf(marker) < 0, "e2e " + tbl + " (" + fl[ix][0] + ") is refused as private-table without the probe text", rr.rejects.map((e) => e.text));
+    }
+  }
+}
+{ // the self-confirming attack of the adversarial review, end to end: the install itself must not be able to make the probe pass
+  const attack = "SELECT 'ok' AS expected, CASE WHEN EXISTS (SELECT 1 FROM decision_log WHERE actor LIKE '%probe-author%' AND action LIKE '%issue 4242%') THEN 'ok' ELSE 'zzmark8842' END AS observed";
+  const r = await attempt(attack);
+  ok(refused(r, "self-confirming") && r.rejects[0].text.indexOf("zzmark8842") < 0, "the decision_log self-confirming probe is refused, no contract, no event text with the probe", r.rejects.map((e) => e.text));
+  const kinds = await attempt("SELECT 'ok' AS expected, CASE WHEN EXISTS (SELECT 1 FROM cloud_ops_events WHERE kind = 'remediation.probe-authored') THEN 'ok' ELSE 'no' END AS observed");
+  ok(refused(kinds, "self-confirming"), "the probe-authored event self-confirming probe is refused", kinds.rejects.map((e) => e.text));
+  const ownClass = await attempt("SELECT 0 AS expected, COUNT(*) AS observed FROM code_tasks WHERE goal LIKE '%issue-4242%'");
+  ok(refused(ownClass, "self-confirming"), "a probe on the target's own contract class is refused", ownClass.rejects.map((e) => e.text));
+  const issuesRead = await attempt("SELECT 0 AS expected, COUNT(*) AS observed FROM agent_issues WHERE status = 'open'");
+  ok(refused(issuesRead, "self-confirming"), "a probe that counts open issues is refused (the issue ledger is the loop's own bookkeeping)", issuesRead.rejects.map((e) => e.text));
+}
+{ // (3) DEFERRAL SHAPE: pending and empty observations are deferrals to rtIsDeferral, so the contract could never fail or pass
+  const shapes = {
+    "pending": "SELECT 'ok' AS expected, 'pending' AS observed FROM portfolio_gaps LIMIT 1",
+    "pending with reason": "SELECT 'ok' AS expected, 'pending: ' || COUNT(*) || ' gaps open' AS observed FROM portfolio_gaps",
+    "PENDING upper": "SELECT 'ok' AS expected, 'PENDING: 2 gaps' AS observed FROM portfolio_gaps LIMIT 1",
+    "Pending mixed": "SELECT 'ok' AS expected, 'Pending - 2 gaps' AS observed FROM portfolio_gaps LIMIT 1",
+    "pending then padded": "SELECT 'ok' AS expected, '   pending: 2' AS observed FROM portfolio_gaps LIMIT 1",
+    "measured pending": "SELECT 'ok' AS expected, 'pending: ' || COUNT(*) || ' > 0 (target 0)' AS observed FROM portfolio_gaps WHERE status = 'open'",
+    "empty string": "SELECT 'ok' AS expected, '' AS observed FROM portfolio_gaps LIMIT 1",
+    "blank": "SELECT 'ok' AS expected, '   ' AS observed FROM portfolio_gaps LIMIT 1",
+    "null": "SELECT 'ok' AS expected, NULL AS observed FROM portfolio_gaps LIMIT 1",
+    "no observed column": "SELECT 'ok' AS expected, COUNT(*) AS n FROM portfolio_gaps",
+    "no expected column": "SELECT COUNT(*) AS observed FROM portfolio_gaps",
+  };
+  for (const [label, sql] of Object.entries(shapes)) {
+    const r = await attempt(sql);
+    ok(refused(r, "deferral-shape"), "deferral shape refused: " + label, [r.done, r.rejects.map((e) => e.text), r.contract]);
+  }
+  const fine = await attempt("SELECT 'ok' AS expected, CASE WHEN COUNT(*) = 0 THEN 'ok' ELSE COUNT(*) || ' gaps open' END AS observed FROM portfolio_gaps WHERE status = 'open'");
+  ok(fine.done === true && fine.contract && fine.rejects.length === 0, "a probe that reads a count against ok (no pending text) is accepted", fine.rejects.map((e) => e.text));
+  const word = await attempt("SELECT 0 AS expected, COUNT(*) AS observed FROM portfolio_gaps WHERE status = 'pending'");
+  ok(word.done === false && word.rejects.length === 1 && !/deferral-shape/.test(word.rejects[0].text) && /vacuous/.test(word.rejects[0].text), "the literal 'pending' in a WHERE clause is not the observed value (here the vacuity gate, not the shape gate, answers)", word.rejects.map((e) => e.text));
+}
+{ // too-long: a probe over 600 characters, an observed value over 200
+  const base = "SELECT 0 AS expected, COUNT(*) AS observed FROM portfolio_gaps WHERE status = 'open'";
+  const exact = (base + " /* " + "x".repeat(600 - base.length - 7) + " */");
+  ok(exact.length === 600, "the fixture probe is exactly 600 characters", exact.length);
+  const r600 = await attempt(exact);
+  ok(r600.done === true, "a probe of exactly 600 characters is accepted", r600.rejects.map((e) => e.text));
+  const over = base + " /* " + "x".repeat(601 - base.length - 7) + " */";
+  ok(over.length === 601, "the long probe is 601 characters", over.length);
+  const r601 = await attempt(over);
+  ok(refused(r601, "too-long") && r601.rejects[0].text.indexOf("xxxx") < 0, "a probe of 601 characters is refused as too-long, without its text", r601.rejects.map((e) => e.text));
+  const longObs = await attempt("SELECT 'ok' AS expected, '" + "y".repeat(201) + "' AS observed FROM portfolio_gaps LIMIT 1");
+  ok(refused(longObs, "too-long") && longObs.rejects[0].text.indexOf("yyyy") < 0, "an observed value over 200 characters is refused as too-long, without the value", longObs.rejects.map((e) => e.text));
+  const okObs = await attempt("SELECT 'ok' AS expected, '" + "y".repeat(200) + "' AS observed FROM portfolio_gaps LIMIT 1");
+  ok(okObs.done === true && okObs.log.length === 1 && okObs.log[0].evidence.indexOf("y".repeat(200)) > 0 && okObs.log[0].evidence.indexOf("y".repeat(201)) < 0, "an observed value of 200 characters is accepted and stored whole, never longer", okObs.rejects.map((e) => e.text));
+}
+{ // every new reject is the existing event kind, with a code from the enum, once, and the fast static checks still answer their own way
+  const outcomes = [];
+  for (const sql of ["SELECT 0 AS expected, COUNT(*) AS observed FROM emails", "SELECT 0 AS expected, COUNT(*) AS observed FROM decision_log", "SELECT 'ok' AS expected, 'pending: 2' AS observed FROM portfolio_gaps LIMIT 1", "SELECT 0 AS expected, COUNT(*) AS observed FROM ops_config", "SELECT 0 AS expected, COUNT(*) AS observed FROM portfolio_gaps " + "-- " + "z".repeat(600)]) {
+    const r = await attempt(sql); outcomes.push([r.rejects.length === 1 ? r.rejects[0].kind : "none", r.rejects.length === 1 ? /^issue=\d+ ([a-z-]+):/.exec(r.rejects[0].text)?.[1] : null]);
+  }
+  ok(outcomes.every((o) => o[0] === "remediation.probe-author-reject" && REASONS.includes(o[1])) && JSON.stringify(outcomes.map((o) => o[1])) === JSON.stringify(["private-table", "self-confirming", "deferral-shape", "not-allowlisted", "too-long"]), "each of the five codes is written as remediation.probe-author-reject", outcomes);
+  const unparse = await check("SELECT 0 AS expected, COUNT(*) AS observed FROM portfolio_gaps WHERE status = 'open");
+  const paren = await check("SELECT 0 AS expected, COUNT(*) AS observed FROM (SELECT 1 FROM portfolio_gaps");
+  const ascii = await check("SELECT 0 AS expected, COUNT(*) AS observed FROM portfolio_gaps WHERE status = 'é'");
+  ok(/does not parse/.test(unparse) && /does not parse/.test(paren) && /ASCII/.test(ascii) && [unparse, paren, ascii].every((b) => reasonOf(b) === b), "unterminated quotes, unbalanced parentheses and non-ASCII are the older static-reject text", [unparse, paren, ascii]);
+  const old = [await check("SELECT 0 AS expected, COUNT(*) AS observed FROM portfolio_gaps; DELETE FROM portfolio_gaps"), await check("UPDATE portfolio_gaps SET status = 'x'"), await check("SELECT needs-machine-probe AS expected, 1 AS observed")];
+  ok(old[0] === "more than one statement" && old[1] === "not a single SELECT or WITH" && old[2] === "needs-machine-probe marker", "the older static rejects keep their text", old);
+}
+{ // the tick hands the author its AI binding: until 0.52.1 the call site passed none and every call ended in no-ai-binding
+  const tickSrc = src.slice(src.indexOf("await rtEscalateStaleDeferrals(db, out);"));
+  ok(tickSrc.indexOf("await rtEnsureLivePath(db, out, env);") > 0 && tickSrc.indexOf("await rtEnsureLivePath(db, out, env);") < 400, "the remediation tick passes env to rtEnsureLivePath");
+  ok(/function rtEnsureLivePath\(db, out, env\)/.test(src) && /rtAuthorLivePathProbe\(db, env, rows\[i\]\)/.test(src), "rtEnsureLivePath hands env on to the author");
+}
+{ // VERSION: a patch above main's 0.52.0 (the doctor engine); the note is a // line under the VERSION-LINE-SPLIT-1 header, as its neighbours are, and not on the VERSION line
+  const v = /var VERSION = "(\d+)\.(\d+)\.(\d+)/.exec(src), vAt = src.search(/var VERSION = "/), hAt = src.indexOf("// VERSION-LINE-SPLIT-1 (agent_issues 100220)");
+  ok(v && (Number(v[1]) > 0 || Number(v[2]) > 52 || (Number(v[2]) === 52 && Number(v[3]) >= 1)), "VERSION is at least 0.52.1", v && v[0]);
+  ok(hAt > 0 && hAt < vAt && /\n\/\/ 0\.52\.1 PROBE-AUTHOR-HARDEN-1 /.test(src.slice(hAt, vAt)), "the release note is a comment line between the VERSION-LINE-SPLIT-1 header and the VERSION statement");
+  ok(src.slice(vAt, src.indexOf("\n", vAt)).indexOf("PROBE-AUTHOR-HARDEN-1") < 0, "the release note is not on the VERSION line");
 }
 ok(mirror === src, "the deployed-current mirror is identical to worker.js");
 console.log(pass + " passed, " + fail + " failed");
