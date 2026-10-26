@@ -2,7 +2,7 @@ var __defProp = Object.defineProperty;
 var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
 
 // worker.js
-var VERSION = "2.0.10-codeagent"; // 2.0.9 SLA-120M-7 (2026-10-14): the advisor-noise sweep closes a snapshot after 120 minutes, not 3 h, and logs its caught error; host parity with qnfo-lifecycle 1.11.4. // 2.0.8 WORKERS-BP-LOGGING-qnfo-lifecycle-1 (2026-10-14, agent_issues 2536): the swallowed catches log as a structured console.error; host parity with qnfo-lifecycle 1.11.3. 2.0.7: BACKLOG-LATEST-PASS-1.
+var VERSION = "2.0.11-codeagent"; // 2.0.9 SLA-120M-7 (2026-10-14): the advisor-noise sweep closes a snapshot after 120 minutes, not 3 h, and logs its caught error; host parity with qnfo-lifecycle 1.11.4. // 2.0.8 WORKERS-BP-LOGGING-qnfo-lifecycle-1 (2026-10-14, agent_issues 2536): the swallowed catches log as a structured console.error; host parity with qnfo-lifecycle 1.11.3. 2.0.7: BACKLOG-LATEST-PASS-1.
 // PRIORITY-QUEUE-1 (2026-10-03, owner directive): the sweep ranks critical first. The old CASE ranked high, medium, else,
 // so critical issues sorted with low. Within a priority the least recently touched row still goes first (rotation).
 var WORKER = "qnfo-backlog-exec";
@@ -355,6 +355,12 @@ async function run(env) {
   let closed = 0, rechecked = 0, escalated = 0;
   const detail = [];
   for (const row of items) {
+    // Auto‑attach a doer, 120‑minute SLA and a placeholder next‑action to any
+    // untriaged open issue. This ensures every open issue has an owner,
+    // a deadline and a remediation hint before any other processing.
+    await env.AUDIT.prepare(
+      "INSERT OR IGNORE INTO issue_triage (issue_id, rc, triage_state, owner, sla_due_at, remediation, triaged_at) VALUES (?1, NULL, 'triaged', 'qnfo-backlog-exec', datetime('now', '+120 minutes'), 'auto‑attach doer, SLA and next‑action', datetime('now'))"
+    ).bind(row.id).run();
     const title = String(row.title || "");
     const name = workerTarget(title + " " + String(row.description || ""));
     const isHealthAvailability = /\b(health|heartbeat|availability|unreachable|endpoint down|is down|down)\b/i.test(title);
