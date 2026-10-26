@@ -10,7 +10,7 @@ var __defProp222 = Object.defineProperty;
 var __name222 = /* @__PURE__ */ __name22((target, value) => __defProp222(target, "name", { value, configurable: true }), "__name");
 var __name2222 = /* @__PURE__ */ __name222((target, value) => Object.defineProperty(target, "name", { value, configurable: true }), "__name");
 // VERSION-LINE-SPLIT-1 (agent_issues 100220): the release notes sit one per line below this statement, newest first, so a VERSION bump is a one-line patch; add a new note as the first line under it.
-var VERSION = "1.69.0"; // 1.69.0 FLEET-STATUS-1 (2026-10-26, minor): one status document GET /api/status (fleet-status/v1) and a new home page rendered from it (needs you, what the fleet did, why metrics are off target, programs, output quality, what the fleet is handling); the old overview moved to /classic. prior 1.68.1-codeagent (ATTENTION-STICKY-STOP-1)
+var VERSION = "1.69.1-codeagent"; // 1.69.0 FLEET-STATUS-1 (2026-10-26, minor): one status document GET /api/status (fleet-status/v1) and a new home page rendered from it (needs you, what the fleet did, why metrics are off target, programs, output quality, what the fleet is handling); the old overview moved to /classic. prior 1.68.1-codeagent (ATTENTION-STICKY-STOP-1)
 // 1.68.0 OWNER-QUEUE-IDENTITY-ONLY-1 (2026-10-26, minor): code-loop and issue-loop items leave the owner count and show as "The fleet is handling"; only identity-bound items say they need the owner. prior 1.67.3-codeagent // 1.67.1 SUITE-IDLE-TIMER-1 (2026-10-26, patch): runRefresh clears its REFRESH-DEADLINE-1 timer when the race settles. prior 1.67.0
 /* 1.67.0 MANAGEMENT-PERSONAS-3 / ECOSYSTEM-LOOP-1 (2026-10-26, pillar autonomy): /managers and /api/managers show the fleet's quality index (share of measured metrics on target) for the fleet and each program with its 24-hour change, the issue families that keep reopening, and the root-cause issues the managers filed for them (quality_trend, issue_recurrence_now). */
 /* 1.66.0 MANAGEMENT-PERSONAS-2 (2026-10-26, pillar autonomy): /managers and /api/managers show the issue decisions the managers now take on their own (persona_actions, last 24 h: promote, restore, close on a recovered metric, supersede a duplicate, demote a stale fleet critical) with the evidence of each. The weekly portfolio review no longer files an owner card when a program is RED for 3 reviews: the hourly portfolio manager makes the riskiest program the constraint and its program manager acts on it; only the money card (AI spend above the ceiling) stays with the owner. */
@@ -2581,6 +2581,13 @@ function changelogDigest(b) {
 // eight hex characters and can never equal an ISO date, so the comparison simply does not match.
 function rtRead(request, url, body, opts) {
   const o = opts || {};
+  // Compute revision after potentially adjusting STOP verdict based on fresh human clicks.
+  // If a STOPped channel has fresh human clicks in the short window, lift the stop early.
+  if (body && body.verdict === "stop" && typeof body.clicks_human === "number") {
+    if (body.clicks_human > 0) {
+      body.verdict = "continue";
+    }
+  }
   const rev = rtDigest(body);
   // A COPY, never the argument: kpiData and contentData hand back an isolate-cached object, and writing `revision`
   // onto it made the next request's digest include the previous revision, so the ETag moved on every call and the
