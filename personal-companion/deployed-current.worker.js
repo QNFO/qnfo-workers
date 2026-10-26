@@ -3176,7 +3176,8 @@ var __name22 = __name2;
 // the release note is carried by the comment blocks at STALL_MIN, shortenFeedback, pruneRepeat and attemptBudgetStop, and none is added to the VERSION
 // line below (VERSION-LINE-NOTES-1, 2026-10-19). Its older trailing notes stay until length-lede.test.mjs stops pinning "LENGTH-LEDE-1" on that line.
 // VERSION-NOTES-MOVED-1: release notes live in the block below
-var VERSION = "1.43.1-codeagent";
+var VERSION = "1.43.2-serial-title";
+/* 1.43.2 COMPANION-SERIAL-TITLE-1 (2026-10-26, pillar personal; patch): a serial installment takes the running title with its number ("<title>, part N", N from companion_series.chapters plus one) before the duplicate-title check, so the check no longer rejects a full compose for keeping the title the prompt tells the writer to keep; every other form keeps the check as it was. */
 // 1.43.0 BP26-AI-LABEL-1 (2026-10-26, pillar reach; EU AI Act Art. 50(4), applicable since 2026-08-02): every reading.q08.org piece says in its meta line that it is AI-generated and has no human review before publication.
 /* 1.42.0 TRAVEL-PICKS-1 (2026-10-26, pillar personal; minor): the owner's pillars (2026-10-24: "where to go, where to sleep, what to eat, how to get around, and what to do ... basically only two"). Each upcoming stop on the travel Places tab now carries three places to eat and three things to do, made from the profile on the hourly tick (one stop per tick, within 60 days) or by "Suggest now"/"Fresh ideas", each with a map-search link and a "Not for me" that is remembered (travel_reactions kind eat|do) and never bans the city from stop ideas. New table travel_picks; routes POST /travel/api/picks and /travel/api/pick-no. Nothing is booked. */
 /* 1.41.0 READING-NO-SOURCE-LEDE-1 (2026-10-26, pillar personal; minor): the owner (2026-10-21): "you also don't need to say lead every article was from Wikipedia". The writer no longer credits its source in the lede or the prose; each piece page lists its sources in a quiet footer instead, built from anchor_json refs; pieces already stored lose the "according to the Wikipedia article on ..." clause at display time (plainCredit), so the stored text, the grounding check and the fact-check are unchanged. */
@@ -6241,6 +6242,56 @@ function attemptBudgetStop(elapsedMs, attemptCostMs, budgetMs) {
   if (!(attemptCostMs > 0) || left >= attemptCostMs) return "";
   return Math.max(0, Math.round(left / 1000)) + " s left, an attempt cost " + Math.round(attemptCostMs / 1000) + " s";
 }
+// COMPANION-SERIAL-TITLE-1 (agent_issues 1000299, pillar personal; patch): the serial prompt tells the writer to keep the running work's
+// title, and the duplicate-title check in generate() then rejected a draft for doing exactly that, after a full 1,800 to 2,400 word compose,
+// and told the writer to choose a completely different title, which the prompt forbids: the same input retried against a check it cannot
+// pass. For the serial form the installment title is now set here, from the running title and the number of chapters already published
+// plus one ("<running title>, part N"); the duplicate-title check is unchanged and still runs on the result, and every other form is
+// untouched. A title the writer chose that is not the running title is left alone. The counts in the issue (167 rejections in 14 days,
+// 153 full composes with no piece on 2026-10-17, 129 with one on 2026-10-24) were read by the issue's audit, not re-read here.
+var SERIAL_PART_SUFFIX_RE = /[\s,:;.\-–—]*\(?\b(?:part|installment|chapter|episode)\s+(?:\d{1,6}|[ivx]{1,5})\)?\s*$/i;
+var SERIAL_TITLE_BUMP_MAX = 25;
+function serialBaseTitle(t) {
+  var s = String(t == null ? "" : t).replace(/\s+/g, " ").trim();
+  var b = s.replace(SERIAL_PART_SUFFIX_RE, "").trim();
+  return b || s;
+}
+// chapters already published: a number from companion_series.chapters; null, empty, text, negative, NaN or absurd counts are 0
+function serialChaptersDone(chapters) {
+  var n = Number(chapters);
+  return Number.isFinite(n) && n > 0 && n <= 99999 ? Math.floor(n) : 0;
+}
+function serialInstallmentTitle(runningTitle, chapters) {
+  var base = serialBaseTitle(runningTitle).slice(0, 270);
+  if (!base) return "";
+  return base + ", part " + (serialChaptersDone(chapters) + 1);
+}
+function serialTitleKey(t) { return serialBaseTitle(t).toLowerCase().replace(/[^\p{L}\p{N}]+/gu, " ").trim(); }
+// the writer's title is the running title (case, punctuation and an installment suffix aside)
+function serialTitleMatches(title, runningTitle) {
+  var a = serialTitleKey(title);
+  return a.length > 0 && a === serialTitleKey(runningTitle);
+}
+// the piece with its installment title; the same object when it is not a serial piece, there is no running work or the writer chose another title
+function withInstallmentTitle(piece, form, run) {
+  if (form !== "serial" || !piece || !run || !serialTitleMatches(piece.title, run.title)) return piece;
+  var t = serialInstallmentTitle(run.title, run.chapters);
+  return t && t !== piece.title ? Object.assign({}, piece, { title: t }) : piece;
+}
+// the same, stepping past a number a published piece already holds (a series row whose count fell behind its pieces would otherwise
+// reject the same title on every run); titleExists(lowercased title) answers from companion_pieces
+async function freeInstallmentPiece(piece, form, run, titleExists) {
+  var first = withInstallmentTitle(piece, form, run);
+  if (first === piece) return piece;
+  var done = serialChaptersDone(run.chapters);
+  for (var k = 0; k < SERIAL_TITLE_BUMP_MAX; k++) {
+    var cand = serialInstallmentTitle(run.title, done + k);
+    var taken = false;
+    try { taken = await titleExists(cand.toLowerCase().trim()); } catch (eTx) { logCaught("freeInstallmentPiece", eTx); }
+    if (!taken) return cand === piece.title ? piece : Object.assign({}, piece, { title: cand });
+  }
+  return first;
+}
 async function generate(env, form, opts) {
   var t0 = Date.now();
   opts = opts || {};
@@ -6257,12 +6308,17 @@ async function generate(env, form, opts) {
     var continuity = await loadContinuity(env, form);
     await logRun(env, form, "", topic.id, "stage", "context " + profile.length + "/" + life.length + "/" + continuity.length, Date.now() - t0);
     var anchors = (topic.anchors || []).slice();
+    var serialRun = null; // COMPANION-SERIAL-TITLE-1: the running work's title and chapter count, null for a first installment
     if (form === "serial") {
       try {
-        var sr = await env.PERSONAL.prepare("SELECT title, thesis, last_lines FROM companion_series ORDER BY id DESC LIMIT 1").first();
-        if (sr) anchors.push({ kind: "previous installment", ref: "previous installment", title: squish(sr.title || ""), text: squish(String(sr.thesis || "") + " " + String(sr.last_lines || "")).slice(0, 1600) });
+        var sr = await env.PERSONAL.prepare("SELECT title, thesis, last_lines, chapters FROM companion_series ORDER BY id DESC LIMIT 1").first();
+        if (sr) {
+          anchors.push({ kind: "previous installment", ref: "previous installment", title: squish(sr.title || ""), text: squish(String(sr.thesis || "") + " " + String(sr.last_lines || "")).slice(0, 1600) });
+          serialRun = { title: squish(sr.title || ""), chapters: sr.chapters };
+        }
       } catch (eSr) { logCaught("generate", eSr); }
     }
+    var installmentTitle = ""; // COMPANION-SERIAL-TITLE-1: the title this attempt gave the installment, "" when none
     await logRun(env, form, "", topic.id, "stage", "anchorKinds " + anchors.map(function(x) {
       return x.kind;
     }).join(","), Date.now() - t0);
@@ -6360,6 +6416,20 @@ async function generate(env, form, opts) {
             continue;
           }
         } catch (e) { logCaught("generate", e); }
+      }
+      // COMPANION-SERIAL-TITLE-1: a serial installment takes the running title with its number before the duplicate-title check below,
+      // which stays as it was for the result and for every other form
+      installmentTitle = "";
+      if (form === "serial" && serialRun) {
+        var sPiece = await freeInstallmentPiece(piece, form, serialRun, async function (low) {
+          var tx = await env.PERSONAL.prepare("SELECT slug FROM companion_pieces WHERE lower(title) = ? LIMIT 1").bind(low).all();
+          return (tx.results || []).length > 0;
+        });
+        if (sPiece !== piece) {
+          piece = sPiece;
+          installmentTitle = sPiece.title;
+          await logRun(env, form, model, topic.id, "stage", "serial title: the installment takes the running title with its number (COMPANION-SERIAL-TITLE-1)", Date.now() - t0);
+        }
       }
       var titleLow = String(piece.title || "").toLowerCase().trim();
       if (titleLow.length > 4) {
@@ -6566,6 +6636,8 @@ async function generate(env, form, opts) {
       }
       q.gate = "passed";
       q.factcheck = { stage: vr.stage, models: (vr.judges || []).map(function (j) { return j.model; }), pruned: pruneTrail.join(", ") };
+      // COMPANION-SERIAL-TITLE-1: a reframe, a prune or the fact revision can hand the title back as the bare running title
+      if (installmentTitle && finalPiece.title !== installmentTitle && serialTitleMatches(finalPiece.title, serialRun && serialRun.title)) finalPiece = Object.assign({}, finalPiece, { title: installmentTitle });
       best = { piece: finalPiece, quality: q, words: v.words, vr: vr };
       break;
     }
@@ -7850,7 +7922,7 @@ function groundingNeedles(problems) {
   });
   return needles.filter(function (n, i, a) { return n.length > 0 && a.indexOf(n) === i; });
 }
-var __verify = { stallRecurred: stallRecurred, shortenFeedback: shortenFeedback, LENGTH_CEILING: LENGTH_CEILING, pruneClassOf: pruneClassOf, pruneClassesOf: pruneClassesOf, pruneRepeat: pruneRepeat, PRUNE_REPEAT_AFTER: PRUNE_REPEAT_AFTER, attemptBudgetStop: attemptBudgetStop, STALL_MIN: STALL_MIN, pruneHeadings: pruneHeadings, mirrorPipeline: mirrorPipeline, pipeItem: pipeItem, pipeSince: pipeSince, PIPE_SELECT: PIPE_SELECT, PIPE_PROPERTY: PIPE_PROPERTY, PIPE_ID_PREFIX: PIPE_ID_PREFIX, qualityWorst: qualityWorst, gateWorst: gateWorst, criticGroundingGates: criticGroundingGates, STARVED_RETRY_QUIET_MS: STARVED_RETRY_QUIET_MS, quotesAllSourced: quotesAllSourced, sourcedPassage: sourcedPassage, sourceSentences: sourceSentences, sourcedRereadNote: sourcedRereadNote, SOURCED_COVER: SOURCED_COVER, SENT_ABBREV_RE: SENT_ABBREV_RE, GROUND_MAX: GROUND_MAX, PRIMARY_SHARE: PRIMARY_SHARE, deleteSentences: deleteSentences, rubricNoQuoteNote: rubricNoQuoteNote, quotesAllInAnalysis: quotesAllInAnalysis, rubricRereadNote: rubricRereadNote, eventTitles: eventTitles, eventDay: eventDay, fetchEventTitles: fetchEventTitles, EVENT_POOL: EVENT_POOL, WRITER_LEAD: WRITER_LEAD, CF_FALLBACK_GPT_OSS: CF_FALLBACK_GPT_OSS, loadWriterOrder: loadWriterOrder, fallbackChain: fallbackChain, cutAtSentence: cutAtSentence, causalScore: causalScore, CAUSAL_MIN: CAUSAL_MIN, CAUSAL_CHARS: CAUSAL_CHARS, fitAnchors: fitAnchors, logCaught: logCaught, foldAccents: foldAccents, todayLine: todayLine, reframePiece: reframePiece, parseDraftMd: parseDraftMd, P_REFRAME: P_REFRAME, REFRAME_BAND: REFRAME_BAND, REFRAME_START_BEFORE_MS: REFRAME_START_BEFORE_MS, CF_FALLBACK: CF_FALLBACK, pieceWords: pieceWords, splitText: splitText, autoMarkAnalysis: autoMarkAnalysis, withAutoMark: withAutoMark, analysisSplitInfo: analysisSplitInfo, CRITIC_INVENTED_MAX: CRITIC_INVENTED_MAX, writerBand: writerBand, writerIsFallback: writerIsFallback, WRITER_TEMPERATURE_FB: WRITER_TEMPERATURE_FB, CRITIC_TEMPERATURE: CRITIC_TEMPERATURE, ANALYSIS_MARK: ANALYSIS_MARK, stripAnalysisMark: stripAnalysisMark, analysisSplitOk: analysisSplitOk, reviewText: reviewText, stripPieceMark: stripPieceMark, persistPiece: persistPiece, STARVED_RETRY_MAX_24H: STARVED_RETRY_MAX_24H, fetchWikiIntros: fetchWikiIntros, introScore: introScore, screenTopics: screenTopics, wikiAnchors: wikiAnchors, TOPIC_POOL: TOPIC_POOL, pruneBlockFixable: pruneBlockFixable, pruneRepairFeedback: pruneRepairFeedback, expandFeedback: expandFeedback, rankLinked: rankLinked, linkMentionScore: linkMentionScore, CRITIC_PRUNE_ROUNDS: CRITIC_PRUNE_ROUNDS, criticQuotes: criticQuotes, critiqueWorst: critiqueWorst, QUOTE_MIN_WORDS: QUOTE_MIN_WORDS, systemsFit: systemsFit, generationHold: generationHold, gatherVerdicts: gatherVerdicts, orderByHealth: orderByHealth, sickReviewers: sickReviewers, FACTCHECK_HEDGE_MS: FACTCHECK_HEDGE_MS, starvedRetryDue: starvedRetryDue, arxivWindow: arxivWindow, fetchWiki: fetchWiki, splitLongLede: splitLongLede, stallAttemptStage: stallAttemptStage, companionStallDigest: companionStallDigest, arxivIdOf: arxivIdOf, paperFullTextUrls: paperFullTextUrls, paperHtmlText: paperHtmlText, ledeProblems: ledeProblems, ledeOf: ledeOf, pruneUnsupported: pruneUnsupported, deleteSentences: deleteSentences, splitFactItems: splitFactItems, sourceLabel: sourceLabel, anchorsText: anchorsText, floorFor: floorFor, critiquePiece: critiquePiece, REPAIR_FLOOR_SHARE: REPAIR_FLOOR_SHARE, FALLBACK_FLOOR_RATIO: FALLBACK_FLOOR_RATIO, NOTES_OBJECTION_PLACEHOLDER: NOTES_OBJECTION_PLACEHOLDER, groundingNeedles: groundingNeedles, stemGrounded: stemGrounded, repairGroundingDraft: repairGroundingDraft, GROUNDING_PREFIX: GROUNDING_PREFIX, problemContext: problemContext, factCheckExtra: factCheckExtra, blockedRetryDue: blockedRetryDue, steward: steward, fetchCfg: fetchCfg, fetchUA: fetchUA, groundingProblems: groundingProblems, parseFactVerdict: parseFactVerdict, factCheck: factCheck, verifyPiece: verifyPiece, auditPublished: auditPublished, retractPiece: retractPiece, pieceVerified: pieceVerified, recordAudit: recordAudit, generate: generate, pickTopic: pickTopic, sendMail: sendMail, pickReviewers: pickReviewers, familyOf: familyOf, anchorsBlock: anchorsBlock, plainCredit: plainCredit, sourcesFoot: sourcesFoot, renderPiece: renderPiece, prompts: { P_STYLE: P_STYLE, P_ESSAY: P_ESSAY, P_NOTES: P_NOTES, P_SERIAL: P_SERIAL, P_CRITIQUE: P_CRITIQUE, FACTCHECK_PROMPT: FACTCHECK_PROMPT }, VISIBLE_SQL: VISIBLE_SQL, REVIEW_POOL: REVIEW_POOL };
+var __verify = { stallRecurred: stallRecurred, shortenFeedback: shortenFeedback, LENGTH_CEILING: LENGTH_CEILING, pruneClassOf: pruneClassOf, pruneClassesOf: pruneClassesOf, pruneRepeat: pruneRepeat, PRUNE_REPEAT_AFTER: PRUNE_REPEAT_AFTER, attemptBudgetStop: attemptBudgetStop, STALL_MIN: STALL_MIN, pruneHeadings: pruneHeadings, mirrorPipeline: mirrorPipeline, pipeItem: pipeItem, pipeSince: pipeSince, PIPE_SELECT: PIPE_SELECT, PIPE_PROPERTY: PIPE_PROPERTY, PIPE_ID_PREFIX: PIPE_ID_PREFIX, qualityWorst: qualityWorst, gateWorst: gateWorst, criticGroundingGates: criticGroundingGates, STARVED_RETRY_QUIET_MS: STARVED_RETRY_QUIET_MS, quotesAllSourced: quotesAllSourced, sourcedPassage: sourcedPassage, sourceSentences: sourceSentences, sourcedRereadNote: sourcedRereadNote, SOURCED_COVER: SOURCED_COVER, SENT_ABBREV_RE: SENT_ABBREV_RE, GROUND_MAX: GROUND_MAX, PRIMARY_SHARE: PRIMARY_SHARE, deleteSentences: deleteSentences, rubricNoQuoteNote: rubricNoQuoteNote, quotesAllInAnalysis: quotesAllInAnalysis, rubricRereadNote: rubricRereadNote, eventTitles: eventTitles, eventDay: eventDay, fetchEventTitles: fetchEventTitles, EVENT_POOL: EVENT_POOL, WRITER_LEAD: WRITER_LEAD, CF_FALLBACK_GPT_OSS: CF_FALLBACK_GPT_OSS, loadWriterOrder: loadWriterOrder, fallbackChain: fallbackChain, cutAtSentence: cutAtSentence, causalScore: causalScore, CAUSAL_MIN: CAUSAL_MIN, CAUSAL_CHARS: CAUSAL_CHARS, fitAnchors: fitAnchors, logCaught: logCaught, foldAccents: foldAccents, todayLine: todayLine, reframePiece: reframePiece, parseDraftMd: parseDraftMd, P_REFRAME: P_REFRAME, REFRAME_BAND: REFRAME_BAND, REFRAME_START_BEFORE_MS: REFRAME_START_BEFORE_MS, CF_FALLBACK: CF_FALLBACK, pieceWords: pieceWords, splitText: splitText, autoMarkAnalysis: autoMarkAnalysis, withAutoMark: withAutoMark, analysisSplitInfo: analysisSplitInfo, CRITIC_INVENTED_MAX: CRITIC_INVENTED_MAX, writerBand: writerBand, writerIsFallback: writerIsFallback, WRITER_TEMPERATURE_FB: WRITER_TEMPERATURE_FB, CRITIC_TEMPERATURE: CRITIC_TEMPERATURE, ANALYSIS_MARK: ANALYSIS_MARK, stripAnalysisMark: stripAnalysisMark, analysisSplitOk: analysisSplitOk, reviewText: reviewText, stripPieceMark: stripPieceMark, persistPiece: persistPiece, STARVED_RETRY_MAX_24H: STARVED_RETRY_MAX_24H, fetchWikiIntros: fetchWikiIntros, introScore: introScore, screenTopics: screenTopics, wikiAnchors: wikiAnchors, TOPIC_POOL: TOPIC_POOL, pruneBlockFixable: pruneBlockFixable, pruneRepairFeedback: pruneRepairFeedback, expandFeedback: expandFeedback, rankLinked: rankLinked, linkMentionScore: linkMentionScore, CRITIC_PRUNE_ROUNDS: CRITIC_PRUNE_ROUNDS, criticQuotes: criticQuotes, critiqueWorst: critiqueWorst, QUOTE_MIN_WORDS: QUOTE_MIN_WORDS, systemsFit: systemsFit, generationHold: generationHold, gatherVerdicts: gatherVerdicts, orderByHealth: orderByHealth, sickReviewers: sickReviewers, FACTCHECK_HEDGE_MS: FACTCHECK_HEDGE_MS, starvedRetryDue: starvedRetryDue, arxivWindow: arxivWindow, fetchWiki: fetchWiki, splitLongLede: splitLongLede, stallAttemptStage: stallAttemptStage, companionStallDigest: companionStallDigest, arxivIdOf: arxivIdOf, paperFullTextUrls: paperFullTextUrls, paperHtmlText: paperHtmlText, ledeProblems: ledeProblems, ledeOf: ledeOf, pruneUnsupported: pruneUnsupported, deleteSentences: deleteSentences, splitFactItems: splitFactItems, sourceLabel: sourceLabel, anchorsText: anchorsText, floorFor: floorFor, critiquePiece: critiquePiece, REPAIR_FLOOR_SHARE: REPAIR_FLOOR_SHARE, FALLBACK_FLOOR_RATIO: FALLBACK_FLOOR_RATIO, NOTES_OBJECTION_PLACEHOLDER: NOTES_OBJECTION_PLACEHOLDER, groundingNeedles: groundingNeedles, stemGrounded: stemGrounded, repairGroundingDraft: repairGroundingDraft, GROUNDING_PREFIX: GROUNDING_PREFIX, problemContext: problemContext, factCheckExtra: factCheckExtra, blockedRetryDue: blockedRetryDue, steward: steward, fetchCfg: fetchCfg, fetchUA: fetchUA, groundingProblems: groundingProblems, parseFactVerdict: parseFactVerdict, factCheck: factCheck, verifyPiece: verifyPiece, auditPublished: auditPublished, retractPiece: retractPiece, pieceVerified: pieceVerified, recordAudit: recordAudit, generate: generate, serialInstallmentTitle: serialInstallmentTitle, serialBaseTitle: serialBaseTitle, serialChaptersDone: serialChaptersDone, serialTitleMatches: serialTitleMatches, withInstallmentTitle: withInstallmentTitle, freeInstallmentPiece: freeInstallmentPiece, pickTopic: pickTopic, sendMail: sendMail, pickReviewers: pickReviewers, familyOf: familyOf, anchorsBlock: anchorsBlock, plainCredit: plainCredit, sourcesFoot: sourcesFoot, renderPiece: renderPiece, prompts: { P_STYLE: P_STYLE, P_ESSAY: P_ESSAY, P_NOTES: P_NOTES, P_SERIAL: P_SERIAL, P_CRITIQUE: P_CRITIQUE, FACTCHECK_PROMPT: FACTCHECK_PROMPT }, VISIBLE_SQL: VISIBLE_SQL, REVIEW_POOL: REVIEW_POOL };
 export {
   __verify,
   GenerationFlow,
