@@ -98,16 +98,21 @@ not a sweep step; it is listed as a decision below.
 - Workflows in QNFO/.github: `zenodo-publish.yml` is `disabled_manually`; `release-pipeline.yml` (active) still has a job that calls it with the token secrets, and its last five runs failed.
 - QNFO/ignorance-audit: README.md, CITATION.cff, .zenodo.json, pyproject.toml, `instrument.py` and `__init__.py` cite 10.5281/..21901984 and ..22026592 (agent_issues 100140 item 6).
 
-## 5. What changed (migration 2026-10-26-rem-a7-doi-sweep.sql, backups bak_noz2_*_20261026)
+## 5. What changed (migrations 2026-10-26-rem-a7-doi-sweep.sql and -sweep-2.sql, backups bak_noz2_*_20261026 and bak_noz2b_*)
 
 - paper_index: 161 doi values (120 closed-registry, 40 CHAPTER-FRAGMENT markers, 1 test value), 80 zenodo_id, 1 zenodo_url, 1 related id list set to NULL. No row removed.
-- content_entries: 5 doi values set to NULL; the sentence "All papers receive ... DOIs and IPFS content identifiers" lost its registry clause; the list item "Zenodo Archiving" now reads "Stable addresses:
-  every published paper keeps one address at papers.qnfo.org, and new versions keep that address" (the live pages state the same thing).
+- content_entries: 5 doi values set to NULL; two cms pages (qnfo-publications, living-papers) reworded without the registry, 4 sentences in two steps. The first file reworded the first mention on each page
+  ("All papers receive ... DOIs and IPFS content identifiers" lost its registry clause; the list item "Zenodo Archiving" became "Stable addresses: every published paper keeps one address at papers.qnfo.org,
+  and new versions keep that address", which the live pages state too). It left three more mentions, because the inspection read only the first occurrence on each page; the contract probe of 100587 read 2 instead of 0 and
+  the evidence guard of the first file correctly staged nothing. The second file finished them: the list item "A registry DOI when formally published" now reads "A stable address at papers.qnfo.org", the statistics line
+  "6 with registry DOIs" is removed, and the lifecycle stage "Published: DOI assigned" reads "Formally published at papers.qnfo.org".
 - discovery_projects: 4 doi values set to NULL; "(supersedes v2.0, DOI: ...)" and "(supersedes v1.9, DOI: ...)" lost the DOI; "(Zenodo + Pages deploy)" reads "(Pages deploy)".
 - research_code_libraries.companion_doi: 3 values set to NULL.
 - Failure mode `code-publish-registry-doi` with detector `fm-code-publish-registry-doi` (reads a closed-registry DOI re-entering companion_doi).
-- Issues filed with a doer and a closing probe: NOZ-DOI-SWEEP-2A, NOZ-DOI-SWEEP-2B.
-- The contract probe of issue 100587 (the count of those fields) read 173 before and reads 0 after; it is unchanged.
+- Issues filed with a doer and a closing probe: NOZ-DOI-SWEEP-2A (agent_issues 1000479), NOZ-DOI-SWEEP-2B (1000480).
+- The contract probe of issue 100587 (the count of those fields) read 173 before and 0 after the second file; it is unchanged. Four contracts were added to the issue so that its close rests on the sweep and not on three tables:
+  `noz-sweep-100587-no-reentry` (no ledger or stats table of section 3 holds more closed-registry identifiers than on 2026-10-26, the cleared tables hold none; a re-entry names the table),
+  `-surface-api` (papers.qnfo.org/api/papers?limit=100 carries no 10.5281), `-surface-llms` (qnfo.org/llms.txt carries no registry name) and `-inventory` (this report and its tool are on main).
 
 Not changed: no paper, no worker, no secret, no public GitHub content.
 
