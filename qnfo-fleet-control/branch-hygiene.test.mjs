@@ -386,7 +386,7 @@ const scenario = () => ({
   const ann = [{ path: "qnfo-social/promote-route.test.mjs", start_line: 31, annotation_level: "warning", title: "Incomplete URL substring sanitization", message: "'linkedin.com' can be anywhere in the URL" }];
   const p70 = mkpr(70, "r70"), p71 = mkpr(71, "r71");
   const mk = () => ({ branches: [br("main", 0, true)], compare: {}, prs: { 70: p70, 71: p71 }, pulls: [p70, p71].map((p) => ({ number: p.number, state: "open", updated_at: p.updated_at, head: p.head })), files: { 70: files, 71: files },
-    checks: { r70: req.concat([codeql]), r71: req.slice(1).concat([{ id: 99, name: "gate", status: "completed", conclusion: "failure" }, codeql]) }, annotations: { 777: ann } });
+    checks: { r70: req.concat([codeql]), r71: req.filter((c) => c.name !== "comparator").concat([{ id: 99, name: "comparator", status: "completed", conclusion: "failure" }, codeql]) }, annotations: { 777: ann } });
   const s1 = mk();
   const r1 = await run(s1);
   const iss = () => r1.d1.db.prepare("SELECT title, description, status FROM agent_issues ORDER BY id").all();
