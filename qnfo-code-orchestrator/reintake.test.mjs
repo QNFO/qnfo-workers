@@ -65,6 +65,8 @@ function mkEnv(issues, tasks, opts) {
       },
       async first() {
         if (/FROM ops_config/.test(q)) return opts.trusted ? { value: opts.trusted } : null;
+        // INTAKE-IDLE-BEAT-1 (0.29.2): the idle beat reads whether an intake event exists in the last 50 minutes; the stub answers from its own audit list like the real table would
+        if (/FROM cloud_ops_events WHERE job = \?1 AND kind LIKE 'code-task\.intake%' AND ts > \?2/.test(q)) { const hit = audits.find((x) => String(x[2]).startsWith("code-task.intake") && x[5] === a[0] && String(x[1]) > String(a[1])); return hit ? { x: 1 } : null; }
         if (/^SELECT status FROM agent_issues WHERE id = \?/.test(q)) { if (opts.depUnreadable) throw new Error("D1_ERROR: unavailable"); const st = (opts.dep || {})[a[0]]; return st ? { status: st } : null; }
         if (/COUNT\(\*\) AS n FROM code_tasks/.test(q)) return { n: 0 };
         return null;
