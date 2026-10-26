@@ -49,8 +49,14 @@ const now = Date.now();
 const ins = db.prepare("INSERT INTO agent_issues (id, title, source, category, status, created_at) VALUES (?, ?, ?, ?, 'open', ?)");
 ins.run(201, "fix a", "qnfo-fleet-control", "reliability", now); ins.run(202, "add b", "session", "optimization", now); ins.run(203, "research c", "x", "research", now);
 db.prepare("INSERT INTO issue_triage (issue_id, owner) VALUES (202, 'qnfo-social')").run();
+// PS-KEEP-CATALOGUE-PROJECT-1 (0.9.1, agent_issues 2993): 204 is a catalogue issue placed by its catalogue on an active BP26 project, 205 sits on a W.<worker> project
+// that is not the one its triage owner names, 206 sits on a BP26 project that is not active, 207 is a catalogue issue whose project is not in the table at all.
+db.prepare("INSERT INTO projects (project_code, program_code, name, status) VALUES ('BP26.TEST', 'QNFO.OPS', 'BP26 test', 'active'), ('BP26.OLD', 'QNFO.OPS', 'BP26 old', 'completed')").run();
+ins.run(204, "bp26 item", "bp26-catalogue", "enhancement", now); ins.run(205, "moved item", "session", "optimization", now); ins.run(206, "old item", "bp26-catalogue", "enhancement", now); ins.run(207, "orphan item", "bp26-catalogue", "enhancement", now);
+db.prepare("INSERT INTO issue_triage (issue_id, owner) VALUES (205, 'qnfo-social')").run();
+db.prepare("INSERT INTO issue_project_map (issue_id, project_code, program_code, kind) VALUES (204, 'BP26.TEST', 'QNFO.OPS', 'enhancement'), (205, 'W.qnfo-ops', 'QNFO.OPS', 'enhancement'), (206, 'BP26.OLD', 'QNFO.OPS', 'enhancement'), (207, 'BP26.GONE', 'QNFO.OPS', 'enhancement')").run();
 let gIssues = [], gNext = 7000, gMs = [], msNext = 1, gLabels = [{ name: "bug" }], calls = [], failMs = false, gqlFail = true;
-for (const [id, num] of [[201, 6001], [202, 6002], [203, 6003]]) { db.prepare("INSERT INTO gh_issue_links VALUES (?, ?, 'open', 'open', '')").run(id, num); gIssues.push({ number: num, node_id: "N" + num, title: "[#" + id + "] x", labels: [{ name: "fleet-issue" }, { name: "bug" }], state: "open", milestone: null }); }
+for (const [id, num] of [[201, 6001], [202, 6002], [203, 6003], [204, 6004], [205, 6005], [206, 6006], [207, 6007]]) { db.prepare("INSERT INTO gh_issue_links VALUES (?, ?, 'open', 'open', '')").run(id, num); gIssues.push({ number: num, node_id: "N" + num, title: "[#" + id + "] x", labels: [{ name: "fleet-issue" }, { name: "bug" }], state: "open", milestone: null }); }
 db.prepare("INSERT INTO trig VALUES ('open_agent_issues','too many issues','qnfo-fleet-control','gt',0,227,1)").run();
 db.prepare("INSERT INTO trig VALUES ('drift_total','drift','qnfo-fleet-control','gt',0,0,0)").run();
 db.prepare("INSERT INTO roadmap_implementation (item, source, title, artifact_type, artifact_ref, status) VALUES ('RM-X','charter','build x','worker','qnfo-research-exec 1.0','not-built')").run();
@@ -104,6 +110,11 @@ const map = Object.fromEntries(db.prepare("SELECT issue_id, project_code, kind F
 assert.equal(map[201].project_code, "W.qnfo-fleet-control"); assert.equal(map[201].kind, "fix");
 assert.equal(map[202].project_code, "W.qnfo-social", "the triage owner places the issue"); assert.equal(map[202].kind, "enhancement");
 assert.equal(map[203].kind, "research");
+assert.equal(map[204].project_code, "BP26.TEST", "PS-KEEP-CATALOGUE-PROJECT-1: an open issue on an active catalogue project (not a W.<worker> project) keeps it");
+assert.equal(db.prepare("SELECT program_code FROM issue_project_map WHERE issue_id = 204").get().program_code, "QNFO.OPS", "the kept row is left as the catalogue wrote it");
+assert.equal(map[205].project_code, "W.qnfo-social", "an open issue on a W.<worker> project is still placed by its triage owner");
+assert.equal(map[206].project_code, "W.qnfo-fleet-control", "an issue on a catalogue project that is not active is placed by owner (no active project to keep)");
+assert.equal(map[207].project_code, "W.qnfo-fleet-control", "an issue whose project is not in the table is placed by owner");
 assert.ok(gLabels.some((l) => l.name === "program:reach") && gLabels.some((l) => l.name === "kind:fix") && gLabels.some((l) => l.name === "roadmap"));
 assert.equal(r1.milestones_created, 15, "milestone creation is capped per tick");
 assert.ok(r1.limitations.some((l) => /projects-v2/.test(l)), "a board failure is a limitation, not an error");
