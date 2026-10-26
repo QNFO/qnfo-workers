@@ -47,10 +47,30 @@ ok(block(src) === block(libSrc), "the DEGENERATE-TEXT block in worker.js is byte
 {
   const f = finalGates(failure, { structure: true });
   ok(!f.ok && f.fixes.some((x) => x.id === "gate-degenerate" && x.severity === "HARD"), "finalGates raises a HARD gate-degenerate fix for the loop", f.fixes.map((x) => x.id));
-  const wall = finalGates("\n" + "A paragraph of prose that is not a heading. ".repeat(60) + "\n\n" + real, { structure: true });
+  // The text ahead of the heading is distinct sentences: the repeated sentence this fixture used to be is a loop itself, so a correct finalGates could report the loop and not the position.
+  const lexw = (i) => { let s = "", k = i + 1; while (k > 0) { s += "abcdefghijklmnopqrstuvwxyz"[k % 26]; k = Math.floor(k / 26); } return "w" + s; };
+  const wall = finalGates("\n" + Array.from({ length: 60 }, (_, i) => "Paragraph sentence " + lexw(i) + " is not a heading.").join(" ") + "\n\n" + real, { structure: true });
   ok(wall.fixes.some((x) => x.id === "gate-degenerate" && /ahead of the first heading/.test(x.claim || x.reason || "")), "finalGates raises it for more than 1,500 characters of text ahead of the first heading", wall.fixes.map((x) => [x.id, x.claim]));
+  ok(wall.fixes.filter((x) => x.id === "gate-degenerate").length === 1, "and only for the position: the distinct sentences are no loop", wall.fixes.map((x) => [x.id, x.claim]));
   const clean = finalGates(real, { structure: true });
   ok(!clean.fixes.some((x) => x.id === "gate-degenerate"), "finalGates raises nothing of the kind for a clean paper", clean.fixes.map((x) => x.id));
+}
+// STRUCTURE-NUMBERING-1 (item 8 of agent_issues 1000535): a numbered subsection (### a.b) under a different numbered section (## c) is a HARD gate-structure-numbering fix for a new paper.
+// Paper qnf-d66c40b5 had 4.3 to 4.9 under "## 6. Extended Derivations and Worked Examples". Until worker.js carries the gate this part prints PENDING and passes (the file was under the code loop's live work claim).
+if (!/gate-structure-numbering/.test(src)) {
+  console.log("PENDING STRUCTURE-NUMBERING-1: qnfo-research-exec/worker.js has no gate-structure-numbering yet (agent_issues 1000540, item 8 of 1000535); the checks below run once it does.");
+} else {
+  const sect = (h, subs) => "## " + h + "\n\nA sentence that states the section.\n\n" + subs.map((s) => "### " + s + "\n\nA sentence that states the subsection.\n").join("\n") + "\n";
+  const num = (...parts) => "# A Paper\n\n" + parts.join("\n");
+  const fixesOf = (md, structure) => finalGates(md, structure ? { structure: true } : {}).fixes.filter((x) => x.id === "gate-structure-numbering");
+  const incident = num(sect("4. Analysis", ["4.1 Setup", "4.2 Result"]), sect("6. Extended Derivations and Worked Examples", ["4.3 Exact logical error for finite trees", "4.4 Finite-size scaling"]), sect("7. Discussion", ["7.1 Limitations"]));
+  let f = fixesOf(incident, true);
+  ok(f.length === 1 && f[0].severity === "HARD" && /4\.3 Exact logical error/.test(f[0].claim) && /section 6/.test(f[0].claim), "a numbered subsection under a different numbered section is one HARD gate-structure-numbering fix that names the heading and the section", f);
+  ok(fixesOf(incident, false).length === 0, "a remediation paper (no structure option) keeps its own heading numbers");
+  ok(fixesOf(num(sect("4. Analysis", ["4.1 Setup", "4.2 Result"]), sect("5. Results", ["5.1 Table"])), true).length === 0, "consistent numbering raises nothing");
+  ok(fixesOf(num("## 6. Extended Derivations\n\n```\n### 4.3 a comment line inside code\n```\n\n### 6.1 Real subsection\n\nText.\n"), true).length === 0, "a heading-looking line inside fenced code is not a heading");
+  ok(fixesOf(num(sect("4. Analysis", ["4.1 Setup"]), "## Appendix A. Derivations\n\n### 4.3 Carried over\n\nText.\n"), true).length === 0, "an unnumbered section ends the numbered one");
+  ok(fixesOf(num("## 2. Background\n\n#### 4.3 A fourth-level heading\n\nText.\n\n### B.1 A lettered subsection\n\nText.\n"), true).length === 0, "only third-level a.b headings are read");
 }
 {
   const rec = fnText(src, "stageReconcile");
