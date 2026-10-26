@@ -37,7 +37,7 @@
 // Q08-ASCII-SOURCE-1 (2026-10-01): this file is ASCII-only; every typographic character is a \uXXXX escape. The deploy path
 // double-encoded raw UTF-8, so live pages read "... \u00e2 q08" and posts "\u00e2\u0080\u0094". Keep new literals escaped.
 // VERSION-NOTES-MOVED-1: release notes live in the block below
-var VERSION = "0.37.6-codeagent"; // 0.37.5 Q08-THIN-PASSED-OVER-1 (2026-10-26), see the note below.
+var VERSION = "0.37.7-codeagent"; // 0.37.5 Q08-THIN-PASSED-OVER-1 (2026-10-26), see the note below.
 /* 0.37.5 (2026-10-26, charter pillar reach, agent_issues 100439, 100607): Q08-THIN-PASSED-OVER-1 marks a candidate that was measured thin and passed over for a richer one, so a paper without an HTML rendering no longer holds the arXiv lane for a day (the lane ran at 02:02 and 03:04 on 2026-10-26 and then not for 16 hours); the 24-hour retry window is the existing one. */
 /* 0.37.4 (2026-10-26, charter pillar reach, agent_issues 100607, 100439): Q08-GATE-GROUND-BLIND-1 removes the two checks of the writer gate that refused every comma-grouped dollar amount and every score, rating, ratio or reputation of 0.85 as fabricated without reading the source; the grounding check that runs on every draft before any panel call and on the final text already refuses a figure the source does not hold. */
 /* 0.37.3 (2026-10-26, charter pillar reach, agent_issues 100607): Q08-DOTTED-NAMES-1 stops the grounding check refusing a dotted name (Qwen3.8-27B, PLAN.md, Node.js) or a possessive plural that stands in the source; the ground word set only gains words, so nothing accepted before is refused. */
@@ -1032,11 +1032,47 @@ function pickPanel(exclude, k, seed, flagged, mode) {
   return out;
 }
 function seedOf(str) { var h = 0, t = String(str || ""); for (var i = 0; i < t.length; i++) h = (h * 31 + t.charCodeAt(i)) | 0; return Math.abs(h); }
+// BP26-AI-GATEWAY-BUDGETS-1 (issue 1000351): every model call from this worker is routed through AI Gateway, which applies the
+// cache, the rate limits and the (beta, eventually consistent, up to 20 rules) spend limits configured on the gateway as a
+// backstop. Each call carries metadata (worker, loop_id, session_id, purpose) so gateway logs can be attributed per loop.
+// Deterministic calls (temperature 0 / fixed judge prompts) are cached (cf-aig-cache-ttl); anything else skips the cache.
+// The per-loop hard budget is enforced in code: a breached budget steers the call to a cheaper model (BUDGET-SOFT-ROUTE-1),
+// never refuses it, so the pipeline keeps working and the spend stops growing at the expensive models.
+var AIG_GATEWAY_DEFAULT_ID = "qnfo-infra";
+var AIG_CACHE_TTL_SECONDS = 21600; // cf-aig-cache-ttl: 6 h
+var AIG_BUDGET_FALLBACK_MODEL = "@cf/moonshotai/kimi-k2.6";
+var AIG_LOOP_MAX_TOKENS = 60000;
+function loopBudget(env, loopId, maxTokens) {
+  if (!env) return null;
+  if (!env.__aigLoopBudget || env.__aigLoopBudget.id !== String(loopId || "")) {
+    env.__aigLoopBudget = { id: String(loopId || ""), max: Number(maxTokens) || AIG_LOOP_MAX_TOKENS, used: 0 };
+  }
+  return env.__aigLoopBudget;
+}
+async function aiGatewayRun(env, modelId, input, meta) {
+  var m = meta || {};
+  var b = env && env.__aigLoopBudget, model = modelId;
+  if (b && b.used >= b.max) model = AIG_BUDGET_FALLBACK_MODEL; // BUDGET-SOFT-ROUTE-1: cheaper model, never a stop
+  var gw = {
+    id: (env && env.AIG_GATEWAY_ID) || AIG_GATEWAY_DEFAULT_ID,
+    collectLog: true,
+    metadata: { worker: "q08-signal-engine", loop_id: m.loop_id || "", session_id: m.session_id || "", purpose: m.purpose || "" }
+  };
+  if (m.deterministic) { gw.cacheKey = m.cacheKey || String(model) + "-" + seedOf(JSON.stringify(input && input.messages || input)); gw.cacheTtl = AIG_CACHE_TTL_SECONDS; }
+  else { gw.skipCache = true; }
+  var opts = { gateway: gw };
+  if (m.signal) opts.signal = m.signal;
+  var resp = await env.AI.run(model, input, opts);
+  var u = (resp && resp.usage) || {};
+  if (b) b.used += (Number(u.prompt_tokens) || 0) + (Number(u.completion_tokens) || 0);
+  return resp;
+}
 async function readerTest(env, modelId, text, rprompt) {
   try {
     var essay = stripAnalysisMark(String(text || "").replace(/\n?worth your time:[^\n]*$/im, "").trim()).slice(0, 9000);
     meterCall(env, "panel");
-    var resp = await env.AI.run(modelId, Object.assign({ messages: [{ role: "user", content: (rprompt || READER_PROMPT) + "\n\n--- ESSAY ---\n" + essay }], max_tokens: READER_MAX_TOKENS, temperature: 0.2 }, factCheckExtra(modelId)), { signal: AbortSignal.timeout(90000) });
+    // BP26-AI-GATEWAY-BUDGETS-1: through AI Gateway with loop metadata; the fixed judge prompt per essay is deterministic, so it is cached.
+    var resp = await aiGatewayRun(env, modelId, Object.assign({ messages: [{ role: "user", content: (rprompt || READER_PROMPT) + "\n\n--- ESSAY ---\n" + essay }], max_tokens: READER_MAX_TOKENS, temperature: 0.2 }, factCheckExtra(modelId)), { loop_id: env && env.__aigLoopBudget && env.__aigLoopBudget.id, purpose: "panel", deterministic: true, cacheKey: String(modelId) + "-panel-" + seedOf(essay), signal: AbortSignal.timeout(90000) });
     var out = aiReplyText(resp);
     var v = parseReaderVerdict(String(out).replace(/<think>[\s\S]*?<\/think>/gi, ""));
     if (v) { v.model = modelId; v.family = familyOf(modelId); }
