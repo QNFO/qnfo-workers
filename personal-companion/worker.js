@@ -3176,7 +3176,8 @@ var __name22 = __name2;
 // the release note is carried by the comment blocks at STALL_MIN, shortenFeedback, pruneRepeat and attemptBudgetStop, and none is added to the VERSION
 // line below (VERSION-LINE-NOTES-1, 2026-10-19). Its older trailing notes stay until length-lede.test.mjs stops pinning "LENGTH-LEDE-1" on that line.
 // VERSION-NOTES-MOVED-1: release notes live in the block below
-var VERSION = "1.43.2-serial-title";
+var VERSION = "1.43.3-reviewer-hygiene";
+/* 1.43.3 COMPANION-REVIEWER-HYGIENE-1 (2026-10-26, pillar personal; patch; port of q08-signal-engine 0.36.0 Q08-REVIEWER-HYGIENE-1): a fact-check reviewer's object printed as a string is unwrapped, an item with no claim text is set aside (a fail that names nothing else still fails closed), and an item whose closing clause says it is supported ("matches source", "so supported", "which the source supports") is acquitted unless that clause also denies it. No check on names, years, figures or the two-family rule changed. */
 /* 1.43.2 COMPANION-SERIAL-TITLE-1 (2026-10-26, pillar personal; patch): a serial installment takes the running title with its number ("<title>, part N", N from companion_series.chapters plus one) before the duplicate-title check, so the check no longer rejects a full compose for keeping the title the prompt tells the writer to keep; every other form keeps the check as it was. */
 // 1.43.0 BP26-AI-LABEL-1 (2026-10-26, pillar reach; EU AI Act Art. 50(4), applicable since 2026-08-02): every reading.q08.org piece says in its meta line that it is AI-generated and has no human review before publication.
 /* 1.42.0 TRAVEL-PICKS-1 (2026-10-26, pillar personal; minor): the owner's pillars (2026-10-24: "where to go, where to sleep, what to eat, how to get around, and what to do ... basically only two"). Each upcoming stop on the travel Places tab now carries three places to eat and three things to do, made from the profile on the hourly tick (one stop per tick, within 60 days) or by "Suggest now"/"Fresh ideas", each with a map-search link and a "Not for me" that is remembered (travel_reactions kind eat|do) and never bans the city from stop ideas. New table travel_picks; routes POST /travel/api/picks and /travel/api/pick-no. Nothing is booked. */
@@ -5859,8 +5860,6 @@ function reasonIsInference(item) {
   var reason = String(item).slice(i + 4);
   var saysSupported = /\bin (?:the )?source\b/i.test(reason) && !/\bnot (?:[\w-]+ ){0,2}in (?:the )?source\b/i.test(reason) && !/\b(?:no|nothing|absent|missing|lacks?)\b/i.test(reason);
   if (wordingOnly(reason)) return true;
-  // Treat reasons ending with "matches source" or "so supported" as inference (do not cause a fail)
-  if (/\b(matches source|so supported)$/i.test(reason.trim())) return true;
   return (INFERENCE_REASON_RE.test(reason) || saysSupported) && !FACT_REASON_RE.test(reason);
 }
 var REASONING_MARK_RE = /\b(incentives?|pressures?|mechanisms?|structures?|repeats?|wherever|whenever|because|therefore|thus|hence|so that|cannot|can|could|may|might|would|should|tends?|likely|underscores?|suggests?|implies|means|translates?|prevent\w*|despite|based on|leads? to|result\w* in|unless|if|weak|stronger|weaker)\b/i;
@@ -5876,9 +5875,58 @@ function claimIsReasoning(item, labelledFact) {
   // analysis or interpretation ("analytical claims not stated in source") is reasoning when its shape carries no name, number or quotation.
   return labelledFact ? (GENERAL_MARK_RE.test(claim) || INFERENCE_REASON_RE.test(reason)) : REASONING_MARK_RE.test(claim);
 }
+// COMPANION-REVIEWER-HYGIENE-1 (1.43.3, agent_issues 1000298, pillar personal; patch; port of q08-signal-engine 0.36.0 Q08-REVIEWER-HYGIENE-1; PR 4447
+// had added one regex line to reasonIsInference and no test, which this replaces). Reviewer output is read as what it is before it is classified:
+// (1) an item the reviewer printed as an object inside a string (JSON text such as {"fact":"FACT: ... -- reason"} or {"claim": ..., "verdict": ...},
+// also fenced) is unwrapped to its claim and reason, so the prune has the sentence and not JSON to look for; (2) an item with no claim text at all
+// (the word "reason", an empty claim, only a reason) is set aside, and a fail that names nothing else still fails closed (parseFactVerdict);
+// (3) an item whose own closing clause says the claim is supported ("..., so supported", "... matches source", "..., which the source supports")
+// is acquitted, neither deleted nor failed, unless that clause also says not, no, absent, missing, lacks and the like. A label (FACT) does not
+// skip the test. A fail that names any other item still fails, and no check on names, years, figures or the two-family rule is touched.
+function unwrapJsonItem(str) {
+  var t = String(str);
+  if (/^\s*```/.test(t)) t = t.replace(/^\s*```[a-z]*\s*/i, "").replace(/\s*```\s*$/, "");
+  if (!/^\s*\{\s*"/.test(t)) return t;
+  try { var o = JSON.parse(t); if (o && typeof o === "object" && !Array.isArray(o)) { var r = factItemText(o); if (r) return r; } } catch (e) { /* truncated or malformed: take the value below */ }
+  var m = t.match(/^\s*\{\s*"(fact|inference)"\s*:\s*"((?:[^"\\]|\\.)*)/i);
+  if (!m) return t;
+  var v = m[2].replace(/\\"/g, '"').replace(/\\n/g, " ").trim();
+  return /^\**\s*(FACT|INFERENCE)\s*\**\s*[:\-]/i.test(v) ? v : m[1].toUpperCase() + ": " + v;
+}
+function itemHasNoClaim(item) {
+  var s = String(item).replace(/^\s*\**\s*(?:FACT|INFERENCE)\s*\**\s*[:\-]\s*/i, "").trim();
+  if (/^--/.test(s)) return true;
+  var i = s.lastIndexOf(" -- "), claim = i >= 0 ? s.slice(0, i) : s;
+  return normForMatch(claim).replace(/\b(?:reason|claim|fact|inference|none|null|na|n a)\b/g, "").trim().length < 1;
+}
+var SUPPORT_SRC = "(?:the )?(?:source|source material|source text|article)";
+var SUPPORT_SUBJ = "(?:it|this|that|the claim|the sentence|the statement)";
+// the whole closing clause says supported (q08's forms, plus "matches source" and "the source supports it" for PR 4447's phrase and its kin)
+var SUPPORTED_CLAUSE_RE = new RegExp("^(?:(?:so|therefore|thus|hence|and|still|yet|which)\\s+)*(?:"
+  + "(?:" + SUPPORT_SUBJ + "\\s+(?:is|are)\\s+)?(?:(?:fully|directly|in fact)\\s+)?(?:supported(?:\\s+by\\s+" + SUPPORT_SRC + ")?|(?:in|stated in|found in)\\s+" + SUPPORT_SRC + ")"
+  + "|(?:" + SUPPORT_SUBJ + "\\s+)?(?:matches|matched)\\s+" + SUPPORT_SRC
+  + "|" + SUPPORT_SRC + "\\s+(?:supports|confirms|states|backs|says so)(?:\\s+(?:it|this|that|the claim))?"
+  + ")$");
+// PR 4447's own two endings, kept: a clause that ends "matches source" or "so supported" after other plain words
+var SUPPORTED_ENDING_RE = new RegExp("(?:^|\\s)(?:(?:matches|matched)\\s+" + SUPPORT_SRC + "|so\\s+supported|which\\s+" + SUPPORT_SRC + "\\s+(?:supports|confirms))$");
+// a clause that denies, doubts or qualifies the support is never an acquittal
+var SUPPORT_DENIAL_RE = /\b(?:not|no|never|none|nothing|neither|nor|un\w+|partly|partially|only|but|cannot|can't|absent|missing|lacks?|lacking|without|invented|fabricated|wrong|incorrect|false|contradict\w*)\b|n't|\?/;
+// the reason, anywhere in it, says the source lacks the claim: "missing from source, so supported" contradicts itself and stays a failure
+var SUPPORT_GAP_RE = /\b(?:absent|missing|lacks?|lacking|nowhere|no mention|not mentioned|does not mention|doesn't mention)\b|\bnot (?:[\w-]+ ){0,2}(?:in|stated in|found in|mentioned in) (?:the )?(?:source|article|text)\b/;
+function reviewerSaysSupported(item) {
+  var s = String(item), i = s.lastIndexOf(" -- ");
+  if (i < 0) return false;
+  if (SUPPORT_GAP_RE.test(s.slice(i + 4).toLowerCase())) return false;
+  var parts = s.slice(i + 4).split(/\s+--\s+|[;,.:\u2014]/).map(function (x) { return x.trim().toLowerCase(); }).filter(Boolean);
+  var last = (parts.length ? parts[parts.length - 1] : "").replace(/[\s!)\]'"\u2019\u201d*_]+$/, "");
+  return !!last && !SUPPORT_DENIAL_RE.test(last) && (SUPPORTED_CLAUSE_RE.test(last) || SUPPORTED_ENDING_RE.test(last));
+}
 function factItemText(x) {
   if (x == null) return "";
+  if (typeof x === "string") return unwrapJsonItem(x);
   if (typeof x !== "object") return String(x);
+  var lk = Object.keys(x).filter(function (k) { return /^(fact|inference)$/i.test(k) && typeof x[k] === "string" && x[k].trim(); });
+  if (lk.length === 1) { var kv = x[lk[0]].trim(); return /^\**\s*(FACT|INFERENCE)\s*\**\s*[:\-]/i.test(kv) ? kv : lk[0].toUpperCase() + ": " + kv; }
   var pick = function (keys) { for (var i = 0; i < keys.length; i++) { if (x[keys[i]] != null && String(x[keys[i]]).trim()) return String(x[keys[i]]).trim(); } return ""; };
   var label = pick(["label", "type", "kind", "category"]).toUpperCase();
   var claim = pick(["claim", "quote", "quotation", "text", "sentence", "item", "excerpt"]);
@@ -5887,10 +5935,12 @@ function factItemText(x) {
   return ((label === "FACT" || label === "INFERENCE") ? label + ": " : "") + claim + (reason ? " -- " + reason : "");
 }
 function splitFactItems(items) {
-  var facts = [], inferences = [];
+  var facts = [], inferences = [], acquitted = [];
   (items || []).forEach(function (x) {
     var s = String(x).replace(/\s+/g, " ").trim();
     if (!s) return;
+    if (itemHasNoClaim(s)) return; // COMPANION-REVIEWER-HYGIENE-1: no claim text to check, delete or fail on; a fail that names nothing else still fails closed (parseFactVerdict)
+    if (reviewerSaysSupported(s)) { acquitted.push(s.slice(0, 260)); return; } // COMPANION-REVIEWER-HYGIENE-1: the reviewer's own closing clause says it is supported
     var m = s.match(/^\**\s*(FACT|INFERENCE)\s*\**\s*[:\-]\s*/i);
     var rest = m ? s.slice(m[0].length) : s;
     var cut = rest.lastIndexOf(" -- ");
@@ -5898,7 +5948,7 @@ function splitFactItems(items) {
     else if (!m && (reasonIsInference(s) || claimIsReasoning(s))) inferences.push(s.slice(0, 260));
     else facts.push(rest.slice(0, 260));
   });
-  return { facts: facts.filter(Boolean), inferences: inferences.filter(Boolean) };
+  return { facts: facts.filter(Boolean), inferences: inferences.filter(Boolean), acquitted: acquitted };
 }
 function parseFactVerdict(text) {
   // VERDICT-TOLERANT-1: a reviewer that wraps its JSON in prose, trails off before the closing brace or prints the JSON twice still gave a verdict.
@@ -5920,9 +5970,9 @@ function parseFactVerdict(text) {
   // names only INFERENCE items is a pass with those sentences to delete when the draft can spare them.
   var sp = splitFactItems(listed), u = sp.facts;
   if (u.length) v = "fail";
-  else if (v === "fail" && !sp.inferences.length) u = ["the reviewer rejected the draft without naming a claim"];
+  else if (v === "fail" && !sp.inferences.length && !sp.acquitted.length) u = ["the reviewer rejected the draft without naming a claim"]; // COMPANION-REVIEWER-HYGIENE-1: contentless items are set aside, so a fail that names nothing else still fails closed
   else v = "pass";
-  return { verdict: v, unsupported: u, inferences: sp.inferences };
+  return { verdict: v, unsupported: u, inferences: sp.inferences, acquitted: sp.acquitted.length };
 }
 // Workers AI returns `response` as a parsed OBJECT when a model replies with bare JSON (llama, qwen): String() of it is "[object Object]",
 // so the verdict parser rejected it (found in q08-signal-engine run 312). Normalise any reply shape to text.
@@ -7922,7 +7972,7 @@ function groundingNeedles(problems) {
   });
   return needles.filter(function (n, i, a) { return n.length > 0 && a.indexOf(n) === i; });
 }
-var __verify = { stallRecurred: stallRecurred, shortenFeedback: shortenFeedback, LENGTH_CEILING: LENGTH_CEILING, pruneClassOf: pruneClassOf, pruneClassesOf: pruneClassesOf, pruneRepeat: pruneRepeat, PRUNE_REPEAT_AFTER: PRUNE_REPEAT_AFTER, attemptBudgetStop: attemptBudgetStop, STALL_MIN: STALL_MIN, pruneHeadings: pruneHeadings, mirrorPipeline: mirrorPipeline, pipeItem: pipeItem, pipeSince: pipeSince, PIPE_SELECT: PIPE_SELECT, PIPE_PROPERTY: PIPE_PROPERTY, PIPE_ID_PREFIX: PIPE_ID_PREFIX, qualityWorst: qualityWorst, gateWorst: gateWorst, criticGroundingGates: criticGroundingGates, STARVED_RETRY_QUIET_MS: STARVED_RETRY_QUIET_MS, quotesAllSourced: quotesAllSourced, sourcedPassage: sourcedPassage, sourceSentences: sourceSentences, sourcedRereadNote: sourcedRereadNote, SOURCED_COVER: SOURCED_COVER, SENT_ABBREV_RE: SENT_ABBREV_RE, GROUND_MAX: GROUND_MAX, PRIMARY_SHARE: PRIMARY_SHARE, deleteSentences: deleteSentences, rubricNoQuoteNote: rubricNoQuoteNote, quotesAllInAnalysis: quotesAllInAnalysis, rubricRereadNote: rubricRereadNote, eventTitles: eventTitles, eventDay: eventDay, fetchEventTitles: fetchEventTitles, EVENT_POOL: EVENT_POOL, WRITER_LEAD: WRITER_LEAD, CF_FALLBACK_GPT_OSS: CF_FALLBACK_GPT_OSS, loadWriterOrder: loadWriterOrder, fallbackChain: fallbackChain, cutAtSentence: cutAtSentence, causalScore: causalScore, CAUSAL_MIN: CAUSAL_MIN, CAUSAL_CHARS: CAUSAL_CHARS, fitAnchors: fitAnchors, logCaught: logCaught, foldAccents: foldAccents, todayLine: todayLine, reframePiece: reframePiece, parseDraftMd: parseDraftMd, P_REFRAME: P_REFRAME, REFRAME_BAND: REFRAME_BAND, REFRAME_START_BEFORE_MS: REFRAME_START_BEFORE_MS, CF_FALLBACK: CF_FALLBACK, pieceWords: pieceWords, splitText: splitText, autoMarkAnalysis: autoMarkAnalysis, withAutoMark: withAutoMark, analysisSplitInfo: analysisSplitInfo, CRITIC_INVENTED_MAX: CRITIC_INVENTED_MAX, writerBand: writerBand, writerIsFallback: writerIsFallback, WRITER_TEMPERATURE_FB: WRITER_TEMPERATURE_FB, CRITIC_TEMPERATURE: CRITIC_TEMPERATURE, ANALYSIS_MARK: ANALYSIS_MARK, stripAnalysisMark: stripAnalysisMark, analysisSplitOk: analysisSplitOk, reviewText: reviewText, stripPieceMark: stripPieceMark, persistPiece: persistPiece, STARVED_RETRY_MAX_24H: STARVED_RETRY_MAX_24H, fetchWikiIntros: fetchWikiIntros, introScore: introScore, screenTopics: screenTopics, wikiAnchors: wikiAnchors, TOPIC_POOL: TOPIC_POOL, pruneBlockFixable: pruneBlockFixable, pruneRepairFeedback: pruneRepairFeedback, expandFeedback: expandFeedback, rankLinked: rankLinked, linkMentionScore: linkMentionScore, CRITIC_PRUNE_ROUNDS: CRITIC_PRUNE_ROUNDS, criticQuotes: criticQuotes, critiqueWorst: critiqueWorst, QUOTE_MIN_WORDS: QUOTE_MIN_WORDS, systemsFit: systemsFit, generationHold: generationHold, gatherVerdicts: gatherVerdicts, orderByHealth: orderByHealth, sickReviewers: sickReviewers, FACTCHECK_HEDGE_MS: FACTCHECK_HEDGE_MS, starvedRetryDue: starvedRetryDue, arxivWindow: arxivWindow, fetchWiki: fetchWiki, splitLongLede: splitLongLede, stallAttemptStage: stallAttemptStage, companionStallDigest: companionStallDigest, arxivIdOf: arxivIdOf, paperFullTextUrls: paperFullTextUrls, paperHtmlText: paperHtmlText, ledeProblems: ledeProblems, ledeOf: ledeOf, pruneUnsupported: pruneUnsupported, deleteSentences: deleteSentences, splitFactItems: splitFactItems, sourceLabel: sourceLabel, anchorsText: anchorsText, floorFor: floorFor, critiquePiece: critiquePiece, REPAIR_FLOOR_SHARE: REPAIR_FLOOR_SHARE, FALLBACK_FLOOR_RATIO: FALLBACK_FLOOR_RATIO, NOTES_OBJECTION_PLACEHOLDER: NOTES_OBJECTION_PLACEHOLDER, groundingNeedles: groundingNeedles, stemGrounded: stemGrounded, repairGroundingDraft: repairGroundingDraft, GROUNDING_PREFIX: GROUNDING_PREFIX, problemContext: problemContext, factCheckExtra: factCheckExtra, blockedRetryDue: blockedRetryDue, steward: steward, fetchCfg: fetchCfg, fetchUA: fetchUA, groundingProblems: groundingProblems, parseFactVerdict: parseFactVerdict, factCheck: factCheck, verifyPiece: verifyPiece, auditPublished: auditPublished, retractPiece: retractPiece, pieceVerified: pieceVerified, recordAudit: recordAudit, generate: generate, serialInstallmentTitle: serialInstallmentTitle, serialBaseTitle: serialBaseTitle, serialChaptersDone: serialChaptersDone, serialTitleMatches: serialTitleMatches, withInstallmentTitle: withInstallmentTitle, freeInstallmentPiece: freeInstallmentPiece, pickTopic: pickTopic, sendMail: sendMail, pickReviewers: pickReviewers, familyOf: familyOf, anchorsBlock: anchorsBlock, plainCredit: plainCredit, sourcesFoot: sourcesFoot, renderPiece: renderPiece, prompts: { P_STYLE: P_STYLE, P_ESSAY: P_ESSAY, P_NOTES: P_NOTES, P_SERIAL: P_SERIAL, P_CRITIQUE: P_CRITIQUE, FACTCHECK_PROMPT: FACTCHECK_PROMPT }, VISIBLE_SQL: VISIBLE_SQL, REVIEW_POOL: REVIEW_POOL };
+var __verify = { stallRecurred: stallRecurred, shortenFeedback: shortenFeedback, LENGTH_CEILING: LENGTH_CEILING, pruneClassOf: pruneClassOf, pruneClassesOf: pruneClassesOf, pruneRepeat: pruneRepeat, PRUNE_REPEAT_AFTER: PRUNE_REPEAT_AFTER, attemptBudgetStop: attemptBudgetStop, STALL_MIN: STALL_MIN, pruneHeadings: pruneHeadings, mirrorPipeline: mirrorPipeline, pipeItem: pipeItem, pipeSince: pipeSince, PIPE_SELECT: PIPE_SELECT, PIPE_PROPERTY: PIPE_PROPERTY, PIPE_ID_PREFIX: PIPE_ID_PREFIX, qualityWorst: qualityWorst, gateWorst: gateWorst, criticGroundingGates: criticGroundingGates, STARVED_RETRY_QUIET_MS: STARVED_RETRY_QUIET_MS, quotesAllSourced: quotesAllSourced, sourcedPassage: sourcedPassage, sourceSentences: sourceSentences, sourcedRereadNote: sourcedRereadNote, SOURCED_COVER: SOURCED_COVER, SENT_ABBREV_RE: SENT_ABBREV_RE, GROUND_MAX: GROUND_MAX, PRIMARY_SHARE: PRIMARY_SHARE, deleteSentences: deleteSentences, rubricNoQuoteNote: rubricNoQuoteNote, quotesAllInAnalysis: quotesAllInAnalysis, rubricRereadNote: rubricRereadNote, eventTitles: eventTitles, eventDay: eventDay, fetchEventTitles: fetchEventTitles, EVENT_POOL: EVENT_POOL, WRITER_LEAD: WRITER_LEAD, CF_FALLBACK_GPT_OSS: CF_FALLBACK_GPT_OSS, loadWriterOrder: loadWriterOrder, fallbackChain: fallbackChain, cutAtSentence: cutAtSentence, causalScore: causalScore, CAUSAL_MIN: CAUSAL_MIN, CAUSAL_CHARS: CAUSAL_CHARS, fitAnchors: fitAnchors, logCaught: logCaught, foldAccents: foldAccents, todayLine: todayLine, reframePiece: reframePiece, parseDraftMd: parseDraftMd, P_REFRAME: P_REFRAME, REFRAME_BAND: REFRAME_BAND, REFRAME_START_BEFORE_MS: REFRAME_START_BEFORE_MS, CF_FALLBACK: CF_FALLBACK, pieceWords: pieceWords, splitText: splitText, autoMarkAnalysis: autoMarkAnalysis, withAutoMark: withAutoMark, analysisSplitInfo: analysisSplitInfo, CRITIC_INVENTED_MAX: CRITIC_INVENTED_MAX, writerBand: writerBand, writerIsFallback: writerIsFallback, WRITER_TEMPERATURE_FB: WRITER_TEMPERATURE_FB, CRITIC_TEMPERATURE: CRITIC_TEMPERATURE, ANALYSIS_MARK: ANALYSIS_MARK, stripAnalysisMark: stripAnalysisMark, analysisSplitOk: analysisSplitOk, reviewText: reviewText, stripPieceMark: stripPieceMark, persistPiece: persistPiece, STARVED_RETRY_MAX_24H: STARVED_RETRY_MAX_24H, fetchWikiIntros: fetchWikiIntros, introScore: introScore, screenTopics: screenTopics, wikiAnchors: wikiAnchors, TOPIC_POOL: TOPIC_POOL, pruneBlockFixable: pruneBlockFixable, pruneRepairFeedback: pruneRepairFeedback, expandFeedback: expandFeedback, rankLinked: rankLinked, linkMentionScore: linkMentionScore, CRITIC_PRUNE_ROUNDS: CRITIC_PRUNE_ROUNDS, criticQuotes: criticQuotes, critiqueWorst: critiqueWorst, QUOTE_MIN_WORDS: QUOTE_MIN_WORDS, systemsFit: systemsFit, generationHold: generationHold, gatherVerdicts: gatherVerdicts, orderByHealth: orderByHealth, sickReviewers: sickReviewers, FACTCHECK_HEDGE_MS: FACTCHECK_HEDGE_MS, starvedRetryDue: starvedRetryDue, arxivWindow: arxivWindow, fetchWiki: fetchWiki, splitLongLede: splitLongLede, stallAttemptStage: stallAttemptStage, companionStallDigest: companionStallDigest, arxivIdOf: arxivIdOf, paperFullTextUrls: paperFullTextUrls, paperHtmlText: paperHtmlText, ledeProblems: ledeProblems, ledeOf: ledeOf, pruneUnsupported: pruneUnsupported, deleteSentences: deleteSentences, splitFactItems: splitFactItems, sourceLabel: sourceLabel, anchorsText: anchorsText, floorFor: floorFor, critiquePiece: critiquePiece, REPAIR_FLOOR_SHARE: REPAIR_FLOOR_SHARE, FALLBACK_FLOOR_RATIO: FALLBACK_FLOOR_RATIO, NOTES_OBJECTION_PLACEHOLDER: NOTES_OBJECTION_PLACEHOLDER, groundingNeedles: groundingNeedles, stemGrounded: stemGrounded, repairGroundingDraft: repairGroundingDraft, GROUNDING_PREFIX: GROUNDING_PREFIX, problemContext: problemContext, factCheckExtra: factCheckExtra, blockedRetryDue: blockedRetryDue, steward: steward, fetchCfg: fetchCfg, fetchUA: fetchUA, groundingProblems: groundingProblems, parseFactVerdict: parseFactVerdict, factCheck: factCheck, verifyPiece: verifyPiece, auditPublished: auditPublished, retractPiece: retractPiece, pieceVerified: pieceVerified, recordAudit: recordAudit, generate: generate, unwrapJsonItem: unwrapJsonItem, itemHasNoClaim: itemHasNoClaim, reviewerSaysSupported: reviewerSaysSupported, factItemText: factItemText, splitFactItems: splitFactItems, serialInstallmentTitle: serialInstallmentTitle, serialBaseTitle: serialBaseTitle, serialChaptersDone: serialChaptersDone, serialTitleMatches: serialTitleMatches, withInstallmentTitle: withInstallmentTitle, freeInstallmentPiece: freeInstallmentPiece, pickTopic: pickTopic, sendMail: sendMail, pickReviewers: pickReviewers, familyOf: familyOf, anchorsBlock: anchorsBlock, plainCredit: plainCredit, sourcesFoot: sourcesFoot, renderPiece: renderPiece, prompts: { P_STYLE: P_STYLE, P_ESSAY: P_ESSAY, P_NOTES: P_NOTES, P_SERIAL: P_SERIAL, P_CRITIQUE: P_CRITIQUE, FACTCHECK_PROMPT: FACTCHECK_PROMPT }, VISIBLE_SQL: VISIBLE_SQL, REVIEW_POOL: REVIEW_POOL };
 export {
   __verify,
   GenerationFlow,
