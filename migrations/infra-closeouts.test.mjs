@@ -66,5 +66,31 @@ ok(st((() => { const w = world([]); w.exec(sql); return w; })(), 1000271) === "o
   ok(JSON.stringify(w.prepare("SELECT * FROM issue_triage ORDER BY issue_id").all()) === before, "an issue that is already closed gets no new triage text");
 }
 
+// the live failure of the first run: an active contract of the issue with a failing last verdict makes the trigger refuse the close (close-while-contract-fails)
+function withContract(verdict, status = "active") {
+  const w = world([[DASH, 12]]);
+  w.prepare("INSERT INTO remediation_contracts (class, issue_id, precondition, action, verify_probe, verify_transport, escalate_to, expected_cadence_h, status, last_verdict, module) VALUES ('issue-1000271', 1000271, 'p', 'a', 'SELECT 1', 'd1-query', 'qnfo-fleet-control', 1, ?, ?, 'probe-template-v3-generic')").run(status, verdict);
+  return w;
+}
+{
+  const w = withContract("fail");
+  let threw = null;
+  try { w.exec(sql); } catch (e) { threw = String(e.message || e); }
+  ok(threw === null, "an active contract with a failing verdict does not abort the file (the first run did, on close-while-contract-fails)", threw);
+  ok(st(w, 1000271) === "open" && q1(w, "SELECT rc FROM issue_triage WHERE issue_id = 1000271").rc === "AUTOTRIAGE-1", "and the issue is left to its own contract: still open, triage row untouched");
+  // control: closing it directly while that contract fails is what the live trigger refuses
+  let ctl = null;
+  try { w.exec("UPDATE agent_issues SET status = 'closed' WHERE id = 1000271; "); } catch (e) { ctl = String(e.message || e); }
+  ok(/close-without-evidence|close-while-contract-fails/.test(String(ctl)), "control: the live trigger refuses a direct close here", ctl);
+}
+{
+  const w = withContract("pass");
+  w.exec(sql);
+  ok(st(w, 1000271) === "closed", "an active contract whose last verdict passed does not stop the close");
+  const w2 = withContract("fail", "superseded");
+  w2.exec(sql);
+  ok(st(w2, 1000271) === "closed", "a failing contract that is superseded does not stop it either");
+}
+
 console.log(pass + " passed, " + fail + " failed");
 process.exit(fail ? 1 : 0);
