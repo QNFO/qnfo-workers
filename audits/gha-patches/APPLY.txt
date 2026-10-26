@@ -37,3 +37,8 @@ How to land them
 
 Closing probe (remediation_contracts issue-2507, external-https, hourly): zenodo-publish.yml on QNFO/.github master no longer contains
   --title "${{ inputs.title }}"
+
+NOZ-DOI-SWEEP-2B (2026-10-26, agent_issues 1000480, owner approval "APPROVE ALL" the same day): release-pipeline.yml no longer has the zenodo-publish and
+update-readme jobs or the Zenodo sandbox input (the closed registry is retired); report-failure waits on build-pdf only and trigger-gitbook follows the
+PDF build without a DOI gate. The line "# NOZ-DOI-1: no registry stage" is the closing probe's marker. zenodo-publish.yml stays staged (hardened, disabled in
+QNFO/.github) because the issue-2507 probe reads it; nothing calls it any more.
