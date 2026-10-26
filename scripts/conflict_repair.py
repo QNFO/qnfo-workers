@@ -70,11 +70,15 @@ ISSUE_PR = re.compile(r"STALE-PR-CONFLICT-REPAIR-1\b[^\d#]{0,40}#?(\d+)")
 # ending the second its pull request closed or merged, is a gate artifact and no verdict on the change. (ci_watchdog.py classes a
 # zero-job run as invalid-workflow, so it would misdiagnose these if its scope widened from main to pull-request branches.)
 DISPATCHABLE = ["deploy-gate.yml", "version-bump-guard.yml", "mirror-guard.yml", "charter-guard.yml", "version-compare.yml"]
-# PHANTOM-RUN-CANCEL-1 (2026-10-26, owner directive "remediate all failing workflows"): the zero-job pull_request runs described above were two
-# thirds of every failure on the Actions page (56 of 84 in 24 h: seven repaired pull request heads x eight workflows, each shown red for 27
-# minutes and concluded `failure` the second the pull request closed). They carry no verdict, so after the dispatch the runs this push created
-# for the head (event pull_request, actor github-actions[bot], not completed) are cancelled while they are still open; a run that cannot be
-# cancelled is only logged. The dispatched workflow_dispatch runs are another event and are never touched.
+# PHANTOM-RUN-CLEAR-1 (2026-10-26, owner directive "remediate all failing workflows"; corrects PHANTOM-RUN-CANCEL-1 of the same day): the zero-job
+# pull_request runs described above were two thirds of every failure on the Actions page (56 of 84 in 24 h: seven repaired pull request heads x
+# eight workflows). MEASURED on the next repair push (claude/project-thread-0hsmo1, 06:58Z): they are approval-gated runs, status `completed`,
+# conclusion `action_required`, zero jobs, by github-actions[bot]; GitHub concludes them `failure` the second the pull request closes. A
+# completed run cannot be cancelled (HTTP 409), so the first version of this step, which cancelled only runs that were not completed, caught
+# none of them. A completed zero-job run carries no verdict and no log, so it is deleted (HTTP 204 for a completed run); a run that is still in
+# flight is cancelled. Nothing is APPROVED here: the approval gate is a security control (POST .../approve starts such a run for real, measured
+# once as a probe) and relaxing it is the owner's decision, not this script's. The dispatched workflow_dispatch runs are another event and
+# are never touched.
 PHANTOM_PASSES = 3
 PHANTOM_WAIT_S = 8
 
@@ -83,11 +87,12 @@ def emit(msg):
     print(msg, flush=True)
 
 
-def cancel_phantom_runs(sha, api=None, sleep=None, passes=None, wait=None):
-    """Cancel the open pull_request runs that a GITHUB_TOKEN push of `sha` created. Returns [(run id, workflow name, cancelled)].
+def clear_phantom_runs(sha, api=None, sleep=None, passes=None, wait=None):
+    """Clear the pull_request runs that a GITHUB_TOKEN push of `sha` created. Returns [(run id, workflow name, action, done)].
 
-    GitHub creates those runs a few seconds after the push, so the list is read `passes` times, `wait` seconds apart, and each run is
-    cancelled once. Nothing here can fail the repair: gh() answers None on any error and that is recorded as not cancelled.
+    action is "delete" for a completed, action_required, zero-job run and "cancel" for a run still in flight. GitHub creates the runs a few
+    seconds after the push, so the list is read `passes` times, `wait` seconds apart, and each run is handled once. Nothing here can fail the
+    repair: gh() answers None on any error and that is recorded as not done. A run is never approved.
     """
     api = api or gh
     sleep = sleep or time.sleep
@@ -100,13 +105,17 @@ def cancel_phantom_runs(sha, api=None, sleep=None, passes=None, wait=None):
         data = api("repos/%s/actions/runs?head_sha=%s&event=pull_request&per_page=50" % (REPO, sha))
         for run in (data or {}).get("workflow_runs", []) if isinstance(data, dict) else []:
             rid = run.get("id")
-            if not rid or rid in seen or run.get("status") == "completed":
+            if not rid or rid in seen:
                 continue
             if (run.get("actor") or {}).get("login") != "github-actions[bot]" or run.get("event") != "pull_request":
                 continue
-            done = api("repos/%s/actions/runs/%d/cancel" % (REPO, rid), "POST")
-            seen[rid] = (run.get("name"), done is not None)
-    return [(rid, name, ok) for rid, (name, ok) in sorted(seen.items())]
+            if run.get("status") != "completed":
+                seen[rid] = (run.get("name"), "cancel", api("repos/%s/actions/runs/%d/cancel" % (REPO, rid), "POST") is not None)
+            elif run.get("conclusion") == "action_required":
+                jobs = api("repos/%s/actions/runs/%d/jobs" % (REPO, rid))
+                if isinstance(jobs, dict) and jobs.get("total_count") == 0:
+                    seen[rid] = (run.get("name"), "delete", api("repos/%s/actions/runs/%d" % (REPO, rid), "DELETE") is not None)
+    return [(rid, name, act, ok) for rid, (name, act, ok) in sorted(seen.items())]
 
 
 SECRET_ENV = re.compile(r"TOKEN|SECRET|KEY|PASSWORD|CLOUDFLARE|CF_ACCOUNT", re.I)
@@ -687,10 +696,10 @@ def repair(number, push=False, keep_branch=False, in_place=False):
             meta["pushed"] = 1
             for wf in DISPATCHABLE:
                 sh(["gh", "workflow", "run", wf, "--repo", REPO, "--ref", head_ref], check=False, timeout=60)
-            phantoms = cancel_phantom_runs(res["sha"])
+            phantoms = clear_phantom_runs(res["sha"])
             if phantoms:
-                emit("PHANTOM-RUN-CANCEL-1 PR %d: %d zero-job pull_request run(s) on %s, cancelled %d (%s)" % (
-                    number, len(phantoms), res["sha"][:7], sum(1 for _, _, c in phantoms if c), ", ".join(n or "?" for _, n, _ in phantoms)))
+                emit("PHANTOM-RUN-CLEAR-1 PR %d: %d gated pull_request run(s) on %s, cleared %d (%s)" % (
+                    number, len(phantoms), res["sha"][:7], sum(1 for _, _, _, c in phantoms if c), ", ".join("%s %s" % (a, n or "?") for _, n, a, _ in phantoms)))
             note = ("CONFLICT-REPAIR-INPLACE-1: this pull request conflicted with main and was quiet, so main was merged into `%s` "
                     "(only VERSION-line and mirror conflicts were resolved: %s; VERSION: %s). The checks ran on the runner before the push (%s) "
                     "and are dispatched again on the branch.") % (
@@ -709,7 +718,7 @@ def repair(number, push=False, keep_branch=False, in_place=False):
             res["new_pr"] = new["number"]
             for wf in DISPATCHABLE:
                 sh(["gh", "workflow", "run", wf, "--repo", REPO, "--ref", branch], check=False, timeout=60)
-            cancel_phantom_runs(res["sha"])
+            clear_phantom_runs(res["sha"])
             gh("repos/%s/issues/%d/comments" % (REPO, number), "POST", {"body": "Superseded by #%d: CONFLICT-REPAIR-DOER-1 re-applied this change onto main (%s)." % (new["number"], "; ".join("%s %s -> %s" % b for b in bumped) or "no VERSION change")})
             gh("repos/%s/pulls/%d" % (REPO, number), "PATCH", {"state": "closed"})
             res["outcome"] = "replaced"
@@ -738,27 +747,33 @@ def selftest():
     ce = clean_env()
     ok("CONFLICT_REPAIR_SELFTEST_TOKEN" not in ce and not any(SECRET_ENV.search(k) for k in ce) and "PATH" in ce, "clean_env drops every credential-named variable and keeps PATH")
     ok(core("0.14.0-conflict-repair") == (0, 14, 0) and core("x") is None, "core reads the numeric part")
-    # PHANTOM-RUN-CANCEL-1
+    # PHANTOM-RUN-CLEAR-1: the measured shape is completed + action_required + zero jobs; in-flight runs are cancelled; nothing is approved
     bot = {"login": "github-actions[bot]"}
     runs = [
-        {"id": 1, "name": "mirror-guard", "status": "queued", "event": "pull_request", "actor": bot},
-        {"id": 2, "name": "deploy-gate", "status": "action_required", "event": "pull_request", "actor": bot},
-        {"id": 3, "name": "done", "status": "completed", "event": "pull_request", "actor": bot},
-        {"id": 4, "name": "a person's run", "status": "in_progress", "event": "pull_request", "actor": {"login": "rwnq8"}},
-        {"id": 5, "name": "dispatched", "status": "in_progress", "event": "workflow_dispatch", "actor": bot},
+        {"id": 1, "name": "mirror-guard", "status": "completed", "conclusion": "action_required", "event": "pull_request", "actor": bot},
+        {"id": 2, "name": "deploy-gate", "status": "completed", "conclusion": "action_required", "event": "pull_request", "actor": bot},
+        {"id": 3, "name": "ran-for-real", "status": "completed", "conclusion": "action_required", "event": "pull_request", "actor": bot},
+        {"id": 4, "name": "queued-one", "status": "queued", "conclusion": None, "event": "pull_request", "actor": bot},
+        {"id": 5, "name": "green", "status": "completed", "conclusion": "success", "event": "pull_request", "actor": bot},
+        {"id": 6, "name": "a person's run", "status": "completed", "conclusion": "action_required", "event": "pull_request", "actor": {"login": "rwnq8"}},
+        {"id": 7, "name": "dispatched", "status": "completed", "conclusion": "action_required", "event": "workflow_dispatch", "actor": bot},
     ]
     calls, napped = [], []
     def fake_api(path, method="GET", fields=None):
         calls.append((method, path))
+        if method == "GET" and path.endswith("/jobs"):
+            return {"total_count": 2 if "/runs/3/" in path else 0, "jobs": []}
         if method == "GET":
             return {"workflow_runs": runs}
-        return None if path.endswith("/2/cancel") else {}
-    got = cancel_phantom_runs("abc1234", api=fake_api, sleep=napped.append, passes=3, wait=8)
-    posts = [p for m, p in calls if m == "POST"]
-    ok(got == [(1, "mirror-guard", True), (2, "deploy-gate", False)], "only open pull_request runs of github-actions[bot] are cancelled; a refusal is recorded, not raised", got)
-    ok(len(posts) == 2 and all("/cancel" in p for p in posts) and not any("/3/" in p or "/4/" in p or "/5/" in p for p in posts), "a completed run, a person's run and a dispatched run are never touched", posts)
-    ok(len([1 for m, _ in calls if m == "GET"]) == 3 and napped == [8, 8], "the list is read three times, 8 s apart, and each run is cancelled once", (calls, napped))
-    ok(cancel_phantom_runs("abc1234", api=lambda *a, **k: None, sleep=lambda s: None) == [], "an unreadable run list cancels nothing and does not raise")
+        return None if path.endswith("/runs/2") else {}
+    got = clear_phantom_runs("abc1234", api=fake_api, sleep=napped.append, passes=3, wait=8)
+    mutating = [(m, p) for m, p in calls if m != "GET"]
+    ok(got == [(1, "mirror-guard", "delete", True), (2, "deploy-gate", "delete", False), (4, "queued-one", "cancel", True)],
+       "a completed action_required zero-job run is deleted, a run in flight is cancelled, a refusal is recorded and never raised", got)
+    ok(not any(m == "POST" and "approve" in p for m, p in mutating) and all(m in ("DELETE", "POST") for m, _ in mutating), "nothing is approved", mutating)
+    ok(not any("/runs/3" in p or "/runs/5" in p or "/runs/6" in p or "/runs/7" in p for m, p in mutating), "a run that has jobs, a green run, a person's run and a dispatched run are never touched", mutating)
+    ok(len([1 for m, p in calls if m == "GET" and "head_sha" in p]) == 3 and napped == [8, 8], "the list is read three times, 8 s apart, and each run is handled once", (calls, napped))
+    ok(clear_phantom_runs("abc1234", api=lambda *a, **k: None, sleep=lambda s: None) == [], "an unreadable run list clears nothing and does not raise")
     ok(settled_evidence({"number": 1417, "state": "closed", "merged_at": "2026-10-18T08:57:52Z"}) == "CONFLICT-REPAIR-SETTLE-1: GitHub reads PR #1417 merged at 2026-10-18T08:57:52Z, so there is no conflict left to repair."
        and "closed unmerged" in settled_evidence({"number": 9, "state": "closed", "merged_at": None, "closed_at": "x"})
        and settled_evidence({"number": 9, "state": "open"}) is None and settled_evidence(None) is None,
