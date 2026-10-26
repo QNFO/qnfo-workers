@@ -175,6 +175,19 @@ def ensure_root(d1, day, seq, head, total, stamp, r2_put):
     return "root %s written to D1%s" % (day, " and R2" if r2_ok else " (R2 refused: status %s)" % st)
 
 
+def collect_audit_seal(ctx):
+    """Sealing runs on every consumer run (no metric, so the framework never skips it): a row is exposed to rewriting only between its insert and its seal, so the gap should be one
+    consumer run (10 to 20 minutes), not the 50-minute cadence of the verifier, and the first backlog (the 8-day backfill, 1200 rows a run) drains in a few runs."""
+    if ctx.dry:
+        return []
+    try:
+        seal(ctx.d1, iso(ctx.now))
+    except Exception as e:  # noqa: BLE001
+        # not a metric result: the framework would count it as an unknown metric on every run; a failed seal shows as rows awaiting sealing (evidence row `unsealed` of audit_chain_verify)
+        print(json.dumps({"bp26_auditchain": "seal-failed", "error": str(e)[:160]}))
+    return []
+
+
 def collect_audit_chain(ctx):
     rows_out, stamp, day = [], iso(ctx.now), time.strftime("%Y-%m-%d", time.gmtime(ctx.now))
     sealed, note = 0, []
@@ -475,6 +488,7 @@ def collect_kill_switch_age(ctx):
 
 
 COLLECTORS = [
+    Collector("audit_seal", collect_audit_seal, [], 0),                                  # every run: keeps the unsealed window to one consumer run
     Collector("audit_chain", collect_audit_chain, ["audit_chain_verify"], 50),
     Collector("mirror_publishes", collect_mirror_publishes, ["audit_coverage"], 50),   # before the coverage collector: the denominators come from the source databases, never from this mirror
     Collector("audit_coverage", collect_audit_coverage, ["audit_coverage"], 50),
@@ -584,6 +598,13 @@ def selftest():
     c.execute("DELETE FROM agent_actions WHERE id = 2")
     c.commit()
     ok(verify(d1)[0] is False and "missing" in verify(d1)[2], "a deleted agent_actions row is detected as missing: %r" % (verify(d1),))
+    # ---- the seal collector (every run, no metric)
+    c, d1 = _world()
+    ok(collect_audit_seal(P.Ctx(d1=d1, now=now)) == [] and collect_audit_seal(P.Ctx(d1=d1, now=now, dry=True)) == [], "the seal collector reports nothing when there is nothing to seal and never writes in a dry run")
+    deploy("w5", now - 20)
+    ok(collect_audit_seal(P.Ctx(d1=d1, now=now, dry=True)) == [] and d1("SELECT COUNT(*) AS n FROM agent_action_chain")[0]["n"] == 0, "dry: a new row stays unsealed")
+    r = collect_audit_seal(P.Ctx(d1=d1, now=now))
+    ok(r == [] and d1("SELECT COUNT(*) AS n FROM agent_action_chain")[0]["n"] == 1, "the seal collector seals the new row and returns no metric result: %r" % (r,))
     # ---- a dry run seals nothing
     c, d1 = _world()
     deploy("w0", now - 60)
@@ -696,7 +717,8 @@ def selftest():
     c.commit()
     v = collect_kill_switch_age(P.Ctx(d1=d1, now=now))[0].value
     ok(v is not None and abs(v - 3.0) < 0.05, "a live pass three days ago reads 3.0 and a later failed drill does not reset it: %r" % (v,))
-    ok([x.name for x in COLLECTORS] == ["audit_chain", "mirror_publishes", "audit_coverage", "kill_switch_age"] and all(isinstance(x.every_min, int) for x in COLLECTORS), "four collectors registered, the mirror before the coverage")
+    ok([x.name for x in COLLECTORS] == ["audit_seal", "audit_chain", "mirror_publishes", "audit_coverage", "kill_switch_age"] and all(isinstance(x.every_min, int) for x in COLLECTORS), "five collectors registered, the seal first and the mirror before the coverage")
+    ok(COLLECTORS[0].metrics == [] , "the seal collector has no metric, so the framework never skips it")
     print("bp26_auditchain selftest %s" % ("ok" if not fails else "FAILED %d" % len(fails)))
     return 1 if fails else 0
 
