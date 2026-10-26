@@ -57,6 +57,9 @@ ok(X.explainTarget("Explain this passage and how it fits the paper: “" + T + "
 ok(X.explainTarget("What is load balancing?").target === "load balancing" && X.explainTarget("Define quantum dimension").target === "quantum dimension", "what is X / define X give X");
 ok(X.explainTarget("What does hysteresis mean?").target === "hysteresis" && X.explainTarget("Explain load balancing in simple terms").target === "load balancing", "what does X mean / in simple terms are read");
 ok(X.explainTarget("What does the paper measure?") === null && X.explainTarget("How many cases are computed?") === null && X.explainTarget("What is the main result of this paper?") === null, "questions about the paper are not explain questions");
+ok(X.explainTarget("What is the main result, in plain language?") === null && X.explainTarget("Explain the main result of this paper") === null && X.explainTarget("Explain how it fits the paper") === null && X.explainTarget("Define the key result in simple terms") === null, "a plain-language request about the paper or its result is not an explain question about a wording");
+ok(X.explainTarget("Explain anyon condensation in plain words").target === "anyon condensation" && X.explainTarget("What does hysteresis mean in simple terms?").target === "hysteresis", "a term with a plain-language modifier is still an explain question");
+ok(src.includes('"@cf/qwen/qwen3.8-27b": 8000'), "the qwen3.8-27b reasoning model gets the reasoning output budget (it returned no text with 1800)");
 ok(X.explainTarget("What does “Some Paper Title” show, and what would falsify it?") === null, "the paper page's title question is not an explain question");
 ok(X.stripRefMarks("of the parent [2]. Also [3, 4] and [5–7] and x[1] hold, see below [12]") === "of the parent. Also and and x[1] hold, see below", "reference markers are removed, an index attached to a symbol is not");
 
@@ -266,6 +269,6 @@ ok(mv && Number(mv.last_value) === Math.round((1 - total.bad / total.n) * 1e4) /
 ok(/ask_plain_share_7d/.test(src) && /plain: "- Write in plain language "/.test(src) && /m\.fix === "plain"/.test(src), "the metric has its fix anchor and its example query");
 
 // 6. a cached answer from an older prompt is not replayed
-ok(/var ANSWER_REV = "r7-"/.test(src) && /__answer\/" \+ ANSWER_REV \+ cfg\.id/.test(src), "the answer cache is keyed by the revision of what an answer says");
+ok(/var ANSWER_REV = "r8-"/.test(src) && /__answer\/" \+ ANSWER_REV \+ cfg\.id/.test(src), "the answer cache is keyed by the revision of what an answer says");
 console.log(pass + " passed, " + fail + " failed");
 if (fail) process.exit(1);
