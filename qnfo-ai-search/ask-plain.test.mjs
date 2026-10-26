@@ -261,11 +261,21 @@ sq.exec("UPDATE ask_events SET limited = NULL, error = NULL, cached = 0, answer_
 const nowIso = new Date().toISOString();
 for (let i = 0; i < 12; i++) sq.prepare("INSERT INTO ask_events (id, ts, cached, answer_chars, plain) VALUES (?, ?, 0, 200, ?)").run("m" + i, nowIso, i < 3 ? 2 : i < 4 ? 4 : 1);
 sq.prepare("INSERT INTO ask_events (id, ts, cached, answer_chars, plain) VALUES ('old', ?, 0, 200, NULL)").run(nowIso);
-const sched = await worker.scheduled({ scheduledTime: Date.now() }, env, ctx).catch((e) => e);
+// ASK-PLAIN-7: rows written before the verdict existed keep the stored answer; the measure tick computes the verdict from it
+const oldIns = sq.prepare("INSERT INTO ask_events (id, ts, cached, answer_chars, plain, query, answer) VALUES (?, ?, 0, 200, NULL, ?, ?)");
+oldIns.run("bf1", nowIso, '[paper:widget-paper] Explain "' + T + '"', ECHO);
+oldIns.run("bf2", nowIso, '[paper:widget-paper] Explain "' + T + '"', PLAIN);
+oldIns.run("bf3", nowIso, "[paper:widget-paper] How many assemblies does the paper study?", PLAIN);
+oldIns.run("bf4", nowIso, "[paper:widget-paper] How many assemblies does the paper study?", "too short");
+const sched =await worker.scheduled({ scheduledTime: Date.now() }, env, ctx).catch((e) => e);
 await Promise.allSettled(waits.splice(0));
 const mv = sq.prepare("SELECT last_value, formula FROM metric_registry WHERE metric = 'ask_plain_share_7d'").get();
 const total = sq.prepare("SELECT COUNT(*) n, SUM(CASE WHEN (plain & 6) > 0 THEN 1 ELSE 0 END) bad FROM ask_events WHERE plain IS NOT NULL AND answer_chars > 80 AND limited IS NULL AND error IS NULL AND cached = 0").get();
 ok(mv && Number(mv.last_value) === Math.round((1 - total.bad / total.n) * 1e4) / 1e4 && /ASK-PLAIN-1/.test(mv.formula), "ask_plain_share_7d is measured from the plain flags and rows without a verdict do not count", { mv, total, sched: String(sched && sched.message || "") });
+const bf = Object.fromEntries(sq.prepare("SELECT id, plain FROM ask_events WHERE id LIKE 'bf%' OR id = 'old'").all().map((r) => [r.id, r.plain]));
+ok(bf.bf1 === 1 + 2 + 4 && bf.bf2 === 1 && bf.bf3 === 0, "a row with a stored answer and no verdict gets one: echo and dense explain answer 7, plain explain answer 1, plain ordinary answer 0", bf);
+ok(bf.bf4 === null && bf.old === null, "a row with no usable answer text keeps no verdict", bf);
+ok(mv && /plain_backfilled/.test(String(sq.prepare("SELECT note FROM ask_loop_runs WHERE kind = 'measure' ORDER BY id DESC LIMIT 1").get().note)), "the measure note says how many rows were backfilled");
 ok(/ask_plain_share_7d/.test(src) && /plain: "- Write in plain language "/.test(src) && /m\.fix === "plain"/.test(src), "the metric has its fix anchor and its example query");
 
 // 6. a cached answer from an older prompt is not replayed
