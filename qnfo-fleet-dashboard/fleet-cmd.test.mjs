@@ -79,7 +79,7 @@ const cookieOf = (r) => { const c = r.headers.get("Set-Cookie") || ""; const m =
 // F. the command line is on the page, outside the 10s refresh area, and its read commands are open
 {
   const { env } = mk();
-  const h = await (await callW(env, "/")).text();
+  const h = await (await callW(env, "/classic")).text();
   const live = h.indexOf('id="live"'), cl = h.indexOf('id="ctext"');
   ok(cl > 0 && live > 0 && cl < live, "F1 the command line sits outside #live, so a refresh cannot wipe a question in flight");
   const fr = await (await callW(env, "/?frag=1")).text();
@@ -153,7 +153,7 @@ const cookieOf = (r) => { const c = r.headers.get("Set-Cookie") || ""; const m =
   ok(r.status === 401 && j.need === "stepup", "G17 the queue-card buttons follow the same rule");
   r = await postW(env, "/api/cmd/run", { op: "note", args: { key: "ha:orcid-link-works", note: "waiting on ORCID" } }, C);
   ok(r.status === 200, "G18 non-destructive actions still run on the 12h session");
-  const ph = await (await callW(env, "/", { headers: C })).text();
+  const ph = await (await callW(env, "/classic", { headers: C })).text();
   ok(ph.includes("Signed in: actions enabled") && ph.includes('data-act="snooze"'), "G19 signed in, the page shows the owner's controls");
   r = await cmd(env, "logout", C);
   r = await postW(env, "/api/cmd/run", { op: "note", args: { key: "ha:orcid-link-works", note: "x" } }, C);

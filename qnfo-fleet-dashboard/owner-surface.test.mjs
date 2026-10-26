@@ -160,11 +160,11 @@ const ok = (c, m) => { if (c) pass++; else { fail++; console.log("FAIL " + m); }
   ok(!keys.includes("mail:think-tank.example") && j.mail_handled.some((m) => m.domain === "think-tank.example" && m.category === "solicitation"), "M8 INBOUND-SLA-1's category wins: a message it classed as a solicitation gets no card");
   const lee = j.items.find((i) => i.key === "mail:lab.example");
   ok(lee && /INBOUND-SLA-1 held it for you: a named person outside the research-outreach campaign/.test(lee.why), "M9 a message INBOUND-SLA-1 held for the owner keeps its card and says so");
-  let h = await (await call(env, "/")).text();
+  let h = await (await call(env, "/classic")).text();
   ok(h.includes("someone at example-univ.edu") && !h.includes("Question about your resonance preprint") && !h.includes("Foresight AI Nodes RFP") && !h.includes("jane.doe@") && !/real person/i.test(h), "M10 the public page names the domain, never the subject or the address");
   ok(/Inbox: \d+ messages owe you no reply: [^<]*foresight\.org \(a funder&#39;s automated submission receipt|Inbox: \d+ messages owe you no reply: [^<]*foresight\.org \(a funder's automated submission receipt/.test(h), "M11 the page explains why foresight.org has no card");
   const S = session(db);
-  h = await (await call(env, "/", { headers: S })).text();
+  h = await (await call(env, "/classic", { headers: S })).text();
   ok(h.includes("Reply to Jane Doe &lt;jane.doe@example-univ.edu&gt;: Question about your resonance preprint") && h.includes("Dr Lee Kim &lt;lee@lab.example&gt;"), "M12 the signed-in owner sees the sender's display name and address");
   const jo = await (await call(env, "/api/human", { headers: T })).json();
   const jj = jo.items.find((i) => i.key === "mail:example-univ.edu");
@@ -228,7 +228,7 @@ const ok = (c, m) => { if (c) pass++; else { fail++; console.log("FAIL " + m); }
   const jr = await (await call(env, "/api/cmd/job/" + j.id)).json();
   ok(jr.ok && jr.status === "fallback" && /did not answer just now \(the model service answered HTTP 500\)/.test(jr.answer) && /Fleet: HEALTHY/.test(jr.answer) && /Instant commands/.test(jr.answer) && !JSON.stringify(jr).includes("internal model detail"), "F15 a model failure still answers plainly from the fleet's data");
   db.prepare("INSERT INTO owner_prompts (id, ts, mode, prompt, status, error) VALUES ('op-muqis3j0ba09', '2026-10-02 05:25:44', 'ask', 'Fix all the issues automatically', 'failed', 'abandoned: the worker stopped before answering')").run();
-  const h = await (await call(env, "/", { headers: session(db) })).text();
+  const h = await (await call(env, "/classic", { headers: session(db) })).text();
   ok(h.includes("Not answered: this request was cut off before the fleet saved an answer. Nothing was changed.") && !h.includes("abandoned: the worker stopped"), "F16 a request left unanswered reads as a plain sentence, not a bare error");
   db.prepare("INSERT INTO cmd_log (id, ts, text, kind, status) VALUES ('cmd-bbbbbbbbbbbbbbbbbbbb', datetime('now','-10 minutes'), 'old', 'ai', 'running')").run();
   const js = await (await call(env, "/api/cmd/job/cmd-bbbbbbbbbbbbbbbbbbbb")).json();
@@ -315,7 +315,7 @@ const ok = (c, m) => { if (c) pass++; else { fail++; console.log("FAIL " + m); }
 }
 {
   const { env } = mk();
-  const h = await (await call(env, "/")).text();
+  const h = await (await call(env, "/classic")).text();
   const esc = (s) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
   ok(h.includes(esc(LONG_STATEMENT)) && h.includes(esc(LONG_ALIGNMENT)), "O7 the objective card shows the full statement and rationale");
   const j = await (await call(env, "/api/human")).json();

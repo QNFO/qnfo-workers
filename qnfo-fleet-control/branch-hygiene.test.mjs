@@ -240,6 +240,7 @@ const scenario = () => ({
   };
   const sc = {
     branches: [br("main", 0, true)], compare: {}, prs,
+    config: [["stale_pr_merge_workflows", "off"]], // OWNER-AUTO-APPROVE-ALL-1 (0.50.0): the lane merges a workflow change by default; this scenario pins the switch that restores the refusal
     pulls: Object.values(prs).map(lite),
     files: { 31: W2(), 32: W2(), 33: W2(), 34: W2([".github/workflows/x.yml"]), 35: W2(), 36: W2(), 37: W2() },
     checks: { a31: green("a31", ALL), a32: green("a32", ["mirror-guard", "comparator", "guard"]).concat([{ id: 99, name: "gate", status: "completed", conclusion: "failure" }]), a33: green("a33", ALL), a34: green("a34", ALL), a35: green("a35", ALL), a36: green("a36", ALL), a37: green("a37", ALL) },
@@ -263,6 +264,14 @@ const scenario = () => ({
   eq(decD(prj(45, "x", "h", { draft: true }), W2(), green("h", ALL)).merge, true, "pure: with drafts on, a green clean draft merges");
   eq(decD(prj(45, "x", "h", { draft: true }), W2(), green("h", ALL)).draft, true, "pure: and the decision says it is a draft");
   eq(decD(prj(46, "x", "h"), W2(), green("h", ALL)).draft, false, "pure: a ready pull request is not marked as a draft");
+  // OWNER-AUTO-APPROVE-ALL-1 (0.50.0): opts.workflows lets a change under .github/ through every other gate; the decision names the files so the merge message can say so.
+  const decW = (pr, files, checks, o) => W.bhMergeDecide(pr, files, checks, { state: "pending", total_count: 0 }, Object.assign({ workflows: true }, o || {}));
+  eq(decW(prj(140, "x", "h"), W2([".github/workflows/x.yml"]), green("h", ALL)).merge, true, "pure: with workflows on, a green clean pull request that changes .github/ merges");
+  eq(decW(prj(140, "x", "h"), W2([".github/workflows/x.yml", "a/worker.js"]), green("h", ALL)).workflow_files, [".github/workflows/x.yml"], "pure: and the decision lists the .github files");
+  eq(dec(prj(141, "x", "h"), W2([".github/workflows/x.yml"]), green("h", ALL)).merge, false, "pure: without the option (the switch off) the .github refusal stands");
+  eq(decW(prj(142, "x", "h", { title: "WIP: wf" }), W2([".github/workflows/x.yml"]), green("h", ALL)).merge, false, "pure: a workflow change is still held by a WIP title");
+  eq(decW(prj(143, "x", "h"), W2([".github/workflows/x.yml"]), green("h", ["gate", "mirror-guard", "comparator"])).merge, false, "pure: and by a missing required check");
+  eq(decW(prj(144, "x", "h", { mergeable: false, mergeable_state: "dirty" }), W2([".github/workflows/x.yml"]), green("h", ALL)).merge, false, "pure: and by a conflict");
   eq(decD(prj(47, "x", "h", { draft: true, title: "WIP: not done" }), W2(), green("h", ALL)).merge, false, "pure: a WIP-titled draft is never merged, switch or not");
   eq(decD(prj(48, "x", "h", { draft: true, labels: [{ name: "hold" }] }), W2(), green("h", ALL)).merge, false, "pure: a held draft is never merged");
   eq(decD(prj(49, "x", "h", { draft: true, body: "do not merge" }), W2(), green("h", ALL)).merge, false, "pure: a do-not-merge draft is never merged");

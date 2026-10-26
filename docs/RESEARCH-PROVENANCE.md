@@ -34,6 +34,17 @@ SELECT * FROM v_research_run_deposit_failures;                          -- expec
 python3 tools/provenance.py verify                                      -- in QNFO/qnfo-research: integrity, completeness, linkage
 ```
 
+## When the history link fails
+
+`repoCatchupTick` only dispatches `ensemble-catchup.yml` in `QNFO/qnfo-research` (at most every 6 hours) and records the time; it does not read the run.
+The failure is seen by the detector `fm-research-catchup-failed` (migration `2026-10-26-research-catchup-failure-mode.sql`, `external-https`): it passes
+while the latest completed run of the workflow concluded `success`. The first run (2026-10-26 08:11Z) failed on a `runs/README.md` conflict (the legacy
+README had become a notice); the step is now `tools/ensemble_catchup.sh` in that repository, with offline tests (`tools/test_catchup.py`). To recover:
+read the failed run's log, fix the script or the conflicting file there by pull request, then dispatch the workflow by hand (do not wait for the 6 hour
+pacing; `UPDATE ops_config SET value = '0' WHERE key = 'research_repo_catchup_at'` lets the next tick do it). A conflict inside a `runs/cycle-*` path stops
+the run on purpose: it means a run's record diverged and a person or a fix decides which side is true. Pushes made by the workflow's own token do not
+start `provenance.yml`, so run `python3 tools/provenance.py verify` on `main` after a catch-up.
+
 ## Turning it off (no deploy)
 
 ```

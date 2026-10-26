@@ -2,7 +2,7 @@
 -- Owner, 2026-10-24 and again 2026-10-26: "FLEET IS NOT SELF-DIAGNOSING ITS OWN BREACHES AND AUTOMATICALLY REMEDIATING". Measured 2026-10-26 06:36Z on qnfo-audit:
 -- 447 open agent_issues, 371 with no doer in v_issue_age_ladder; the code planner marks them untrusted or not-code and no other loop owns the diagnosis of a family.
 -- BREACH-SELFHEAL-1 (a D1 trigger on fleet_tick) was dropped by FLEET-TICK-SPLIT-1 (it caused the SQLITE_NOMEM heartbeat outage), so the doctor is WORKER CODE:
--- qnfo-fleet-control breachDoctorTick (0.50.0) on the */10 slot. This file is the data it reads and writes. It adds no D1 trigger, and none on fleet_tick (S7).
+-- qnfo-fleet-control breachDoctorTick (0.51.0) on the */10 slot. This file is the data it reads and writes. It adds no D1 trigger, and none on fleet_tick (S7).
 --
 -- WHAT THE ENGINE DOES WITH THESE TABLES (qnfo-fleet-control/worker.js, block BREACH-DOCTOR-1)
 --   S1  Playbooks are data. breach_playbooks.trigger_sql and verify_sql are one read-only SELECT each (the remediation tick's write-keyword guard). Each action_sql / revert_sql
@@ -15,9 +15,14 @@
 --   S3  A playbook younger than breach_doctor_playbook_cooldown_min (30) runs in measure (the would-do diagnosis only); a rule with 2 or more failed or reverted cases in 24 hours
 --       demotes itself to measure; max_per_tick and max_per_day per rule; a live work claim on issue:<id> skips the case; every applied action stores its revert_sql in the ledger
 --       and writes a decision_log row and a breach_diagnosis_events row; lease_until is never more than 120 minutes ahead and is renewed only by a progress event.
+--       An issue whose last case failed is retried after 60 minutes; after 3 failed or reverted cases it is retried at most once in 120 minutes (a rate with a release, never a
+--       permanent exclusion: control breach-doctor-strike-cap) and the self issue BREACH-DOCTOR-1: self <rule> <code> is filed once for a fix of the playbook row.
 --   S4  Every unowned open issue older than breach_doctor_min_age_min (120 minutes, SLA-120M-1: action starts at the first tick past 120 minutes; bounds 10..120) is classified
 --       (family from a code table of title prefixes, cause_class from the playbook that matched or unclassified, facts_json from numbers, ids and enum codes only), critical
---       first, up to breach_doctor_max_cases a tick. The generic playbook-gap row is seeded in MEASURE and files nothing (review 2026-10-26): the planner records a
+--       first, up to breach_doctor_max_cases a tick. An issue titled BREACH-DOCTOR-1: (a gap or a self issue) is classified and counted like any other (family BREACH-DOCTOR-1,
+--       cause unclassified) but takes no playbook hit and no action (control breach-doctor-own-issue-guard), so the doctor cannot act on its own issues and cannot hide them
+--       from its own metric. breaches_undiagnosed_over_60m counts an issue until a case FOUND its cause (cause_class other than unclassified): classification coverage is not a diagnosis.
+--       The generic playbook-gap row is seeded in MEASURE and files nothing (review 2026-10-26): the planner records a
 --       "BREACH-DOCTOR-1:" title from source qnfo-fleet-control as untrusted (it is on no code_merge_trusted_sources entry), so a gap issue would have no doer and could only age.
 --       The migration of issue BREACH-DOCTOR-ARM-1 (filed below) that adds 'qnfo-fleet-control|BREACH-DOCTOR-1:' to code_merge_trusted_sources sets the row to 'on' in the same file. Armed, the engine files one
 --       "BREACH-DOCTOR-1: playbook gap <family>" issue per family per 24 hours, never for OWNER-CHAT, OWNER-REQUEST or other (owner prose and a catch-all no playbook can close),
@@ -35,7 +40,7 @@
 -- (the second path, the guard if that workflow stops, and the end-to-end proof of the engine). CM-R3 has a live hit (100382 superseded by 100392): no other loop closes a twin.
 -- APPLY-BY: ci
 -- DB: qnfo-audit
--- Rollback: UPDATE ops_config SET value = 'off' WHERE key = 'breach_doctor'; UPDATE breach_playbooks SET enabled = 0, mode = 'measure'; DROP VIEW IF EXISTS v_breach_doctor_status; DROP VIEW IF EXISTS v_breach_owner; DROP VIEW IF EXISTS v_breach_diagnosis_current; DELETE FROM analytics_metric_triggers WHERE metric_key IN ('breaches_undiagnosed_over_60m', 'breaches_auto_remediated_24h', 'doctor_actions_failed_24h', 'doctor_tick_age_min', 'doctor_taint_violations_24h'); DELETE FROM metric_registry WHERE metric IN ('breaches_undiagnosed_over_60m', 'breaches_auto_remediated_24h', 'doctor_actions_failed_24h', 'doctor_tick_age_min', 'doctor_taint_violations_24h'); DELETE FROM ops_config WHERE key LIKE 'breach_doctor_%'; DELETE FROM control_registry WHERE control LIKE 'breach-doctor-%'; DELETE FROM spof_registry WHERE component LIKE 'breach doctor%'; DELETE FROM belief_registry WHERE belief_key = 'belief-doctor-structured-facts-suffice'; DELETE FROM remediation_contracts WHERE class IN ('belief-doctor-structured-facts-suffice', 'fm-breach-doctor-stalled', 'fm-breach-doctor-rule-demoted', 'fm-breach-doctor-case-age'); DELETE FROM failure_modes WHERE fm_key IN ('breach-doctor-stalled', 'breach-doctor-rule-demoted', 'breach-doctor-case-age'); DELETE FROM queue_sla WHERE stuck_type = 'breach-doctor-case-in-flight'; DELETE FROM capability_ledger WHERE capability = 'breach-doctor:remediate-unowned-breaches'; the three breach_* tables stay as the ledger (breach_doctor = off stops the engine), the five BREACH-DOCTOR-*-1 issues and their issue-<id> contracts stay (an issue is closed only with close_evidence) and the decision_log row stays (append-only).
+-- Rollback: UPDATE ops_config SET value = 'off' WHERE key = 'breach_doctor'; UPDATE breach_playbooks SET enabled = 0, mode = 'measure'; DROP VIEW IF EXISTS v_breach_doctor_status; DROP VIEW IF EXISTS v_breach_owner; DROP VIEW IF EXISTS v_breach_diagnosis_current; DELETE FROM analytics_metric_triggers WHERE metric_key IN ('breaches_undiagnosed_over_60m', 'breaches_auto_remediated_24h', 'doctor_actions_failed_24h', 'doctor_tick_age_min', 'doctor_taint_violations_24h'); DELETE FROM metric_registry WHERE metric IN ('breaches_undiagnosed_over_60m', 'breaches_auto_remediated_24h', 'doctor_actions_failed_24h', 'doctor_tick_age_min', 'doctor_taint_violations_24h'); DELETE FROM ops_config WHERE key LIKE 'breach_doctor_%'; DELETE FROM control_registry WHERE control LIKE 'breach-doctor-%'; DELETE FROM spof_registry WHERE component LIKE 'breach doctor%'; DELETE FROM belief_registry WHERE belief_key = 'belief-doctor-structured-facts-suffice'; DELETE FROM remediation_contracts WHERE class IN ('belief-doctor-structured-facts-suffice', 'fm-breach-doctor-stalled', 'fm-breach-doctor-rule-demoted', 'fm-breach-doctor-case-age'); DELETE FROM failure_modes WHERE fm_key IN ('breach-doctor-stalled', 'breach-doctor-rule-demoted', 'breach-doctor-case-age'); DELETE FROM queue_sla WHERE stuck_type = 'breach-doctor-case-in-flight'; DELETE FROM capability_ledger WHERE capability = 'breach-doctor:remediate-unowned-breaches'; DELETE FROM metric_breach_cause WHERE note = 'BREACH-DOCTOR-1'; DELETE FROM breach_causes WHERE cause_key = 'breach-doctor' AND NOT EXISTS (SELECT 1 FROM metric_breach_cause WHERE cause_key = 'breach-doctor'); the three breach_* tables stay as the ledger (breach_doctor = off stops the engine), the four BREACH-DOCTOR-*-1 issues and their issue-<id> contracts stay (an issue is closed only with close_evidence) and the decision_log row stays (append-only).
 -- spof-review: no new cron, worker or binding. The engine rides qnfo-fleet-control's */10 slot; its second path (qnfo-cloud-ops jobBreachDoctorWatch, reading doctor_tick_age_min) is the issue BREACH-DOCTOR-WATCH-1 filed below, and the spof_registry row points at it.
 -- charter-pillar: autonomy. Table family +3 (breach_diagnoses, breach_diagnosis_events, breach_playbooks); the writers of breach_selfheal_actions and issue_age_replans (the D1 triggers breach_selfheal_heavy_tick and deploy_merge_age_tick) are retired by the issue BREACH-DOCTOR-RETIRE-1 filed below, with its probe (both tables stay readable).
 
@@ -155,7 +160,7 @@ INSERT OR IGNORE INTO breach_playbooks (rule_id, version, family, cause_class, a
   ('playbook-gap', 1, '*', 'unclassified', 'file-issue', 'SELECT NULL AS issue_id, d.family AS subject, json_object(''unclassified_cases'', COUNT(*)) AS facts_json FROM v_breach_diagnosis_current d WHERE d.state = ''diagnosed'' AND d.cause_class = ''unclassified'' GROUP BY d.family', '[]', '[]', 'SELECT ''closed'' AS expected, COALESCE((SELECT status FROM agent_issues WHERE id = ?1), ''missing'') AS observed', 'delegated', 3, 24, 1, 'measure', 'Not a per-issue rule: the engine reads this row for the switch, mode and cap of the family-level issue ''BREACH-DOCTOR-1: playbook gap <family>'' (at most one per family per 24 hours, never for OWNER-CHAT, OWNER-REQUEST or other, none while 3 are open). Seeded in MEASURE and files nothing: the planner records a BREACH-DOCTOR-1: title as untrusted (no doer) until code_merge_trusted_sources lists qnfo-fleet-control|BREACH-DOCTOR-1:. The later migration that adds that entry sets this row to on (control breach-doctor-gap-hold). A new family gets its own playbook row by migration.');
 
 INSERT OR IGNORE INTO metric_registry (metric, layer, kind, formula, source_of_truth, baseline, target, owner, disposition_actor, refresh_cadence, warning_band, kill_band, last_value, last_refreshed, state, refresh_class) VALUES
- ('breaches_undiagnosed_over_60m', 'operational', 'target', 'open issues older than breach_doctor_min_age_min + 60 minutes (180 by default) with no doer (code-task line, live code task, live work claim) and no breach_diagnoses row that has diagnosed_at set; written by the doctor tick, never by a D1 trigger',
+ ('breaches_undiagnosed_over_60m', 'operational', 'target', 'open issues older than breach_doctor_min_age_min + 60 minutes (180 by default) with no doer (code-task line, live code task, live work claim) and no breach_diagnoses row whose cause was found (diagnosed_at set and cause_class other than unclassified). An issue classified unclassified was looked at and matched no playbook: that is classification coverage, not a cause, so it stays counted until a playbook finds its cause or it gets a doer or closes. Issues titled BREACH-DOCTOR-1: are counted like any other. Written by the doctor tick, never by a D1 trigger',
   'qnfo-audit.breach_diagnoses (BREACH-DOCTOR-1)', '417 old open issues, none diagnosed, 2026-10-26', '0', 'qnfo-fleet-control', 'trigger gt 0', '*/10', '> 0', '> 60', NULL, NULL, 'MEASURED', 'computed'),
  ('breaches_auto_remediated_24h', 'outcome', 'target', 'breach_diagnoses rows that reached state verified in the last 24 hours (two consecutive verify passes after the action)',
   'qnfo-audit.breach_diagnoses (BREACH-DOCTOR-1)', '0 on 2026-10-26', '>= 12 (1.5 x the 8 unowned issues opened a day, ISSUE-THROUGHPUT-1)', 'qnfo-fleet-control', 'trigger lt 12', '*/10', '< 12', '< 4', NULL, NULL, 'MEASURED', 'computed'),
@@ -166,12 +171,43 @@ INSERT OR IGNORE INTO metric_registry (metric, layer, kind, formula, source_of_t
  ('doctor_taint_violations_24h', 'operational', 'guard', 'playbooks or fact values the doctor dropped in the last 24 hours because they were not a playbook constant, a number, an id or an enum code (taint-drop events); above 0 means a playbook is copying free text',
   'qnfo-audit.breach_diagnosis_events (BREACH-DOCTOR-1)', '0', '0', 'qnfo-fleet-control', 'trigger gt 0', '*/10', '> 0', '> 0', NULL, NULL, 'MEASURED', 'computed');
 
+-- BREACH-ONE-MEANING-1 (migrations/2026-10-26-breach-one-meaning.sql, applied 08:44Z) reads a metric in breach that has no metric_breach_cause row as cause 'unmapped', counts it in
+-- breaches_unmapped (target 0) and watches it with the detector fm-breach-unmapped. Two doctor metrics breach on the first tick (breaches_undiagnosed_over_60m, breaches_auto_remediated_24h), so
+-- this file maps all five in the same change, the way BREACH-ONE-MEANING-2 maps the metrics it registers (a mapping left to a later issue is a new breach the fleet filed against itself).
+-- The two tables are created here with the live column lists (IF NOT EXISTS: a no-op on qnfo-audit, where BREACH-ONE-MEANING-1 made them; migrations apply in file-name order and this name sorts first).
+-- INSERT OR IGNORE: a mapping a later migration changed is not overwritten on a replay.
+CREATE TABLE IF NOT EXISTS breach_causes (
+  cause_key TEXT PRIMARY KEY,
+  title TEXT NOT NULL,
+  plain TEXT NOT NULL,
+  lever TEXT NOT NULL,
+  doer TEXT NOT NULL,
+  needs_owner INTEGER NOT NULL DEFAULT 0,
+  updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
+);
+CREATE TABLE IF NOT EXISTS metric_breach_cause (
+  metric_key TEXT PRIMARY KEY,
+  cause_key TEXT NOT NULL,
+  note TEXT
+);
+INSERT OR IGNORE INTO breach_causes (cause_key, title, plain, lever, doer, needs_owner) VALUES
+ ('breach-doctor', 'The breach doctor''s own playbooks misfire',
+  'A rule the breach doctor runs failed its verify, changed no row, or carried a value that is not an id, a number or an enum code. After two failures in 24 hours the rule demotes itself to measure, so it changes nothing further until its row is fixed.',
+  'Fix the breach_playbooks row named by rule_id by migration (its action_sql guard or its verify_sql) and set it back to on; after three failures on one issue the doctor files BREACH-DOCTOR-1: self <rule> <code> once.',
+  'qnfo-fleet-control (breach doctor)', 0);
+INSERT OR IGNORE INTO metric_breach_cause (metric_key, cause_key, note) VALUES
+ ('breaches_undiagnosed_over_60m', 'issue-backlog', 'BREACH-DOCTOR-1'),
+ ('breaches_auto_remediated_24h', 'issue-backlog', 'BREACH-DOCTOR-1'),
+ ('doctor_tick_age_min', 'heartbeat', 'BREACH-DOCTOR-1'),
+ ('doctor_actions_failed_24h', 'breach-doctor', 'BREACH-DOCTOR-1'),
+ ('doctor_taint_violations_24h', 'breach-doctor', 'BREACH-DOCTOR-1');
+
 -- No trigger action below carries a code-task or code-anchor line (review 2026-10-26, ACT-BRIDGE-1): that bridge is for a remedy that is one named edit in one file. The levers of these five
 -- metrics are ops_config switches, a breach_playbooks row by migration, or waiting; the one edit that could make "undiagnosed > 0" read 0 is to the engine's own metric (a Goodhart move),
 -- and breaches_undiagnosed_over_60m clears itself as the engine drains the backlog. Pointing the trusted auto-merge lane at the engine for that would be a task with no stated edit.
 INSERT INTO analytics_metric_triggers (metric_key, title, source_table, operator, threshold, priority, action, owner, queue_target, cooldown_hours, enabled, notes)
 SELECT 'breaches_undiagnosed_over_60m', 'Open issues with no doer wait without a diagnosis', 'registry', 'gt', 0, 1,
-  'Pillar autonomy (owner, 2026-10-24: the fleet must diagnose and remediate its own breaches). Read: SELECT * FROM v_breach_doctor_status; SELECT event, detail, ts FROM breach_diagnosis_events WHERE event IN (''tick'', ''budget-skip'', ''taint-drop'') ORDER BY id DESC LIMIT 30; SELECT family, cause_class, COUNT(*) FROM v_breach_diagnosis_current GROUP BY 1, 2. Levers: the tick is not running (see doctor_tick_age_min), breach_doctor is off or measure (ops_config), or breach_doctor_max_cases / breach_doctor_budget_ms are too small for the backlog (raise by migration with its note). Done when the metric reads 0 and stays 0 for 3 ticks.',
+  'Pillar autonomy (owner, 2026-10-24: the fleet must diagnose and remediate its own breaches). Read: SELECT * FROM v_breach_doctor_status; SELECT event, detail, ts FROM breach_diagnosis_events WHERE event IN (''tick'', ''budget-skip'', ''taint-drop'') ORDER BY id DESC LIMIT 30; SELECT family, cause_class, COUNT(*) FROM v_breach_diagnosis_current GROUP BY 1, 2. An issue the doctor classified unclassified is still counted: the cause is not found until a playbook matches it. Levers: the tick is not running (see doctor_tick_age_min), breach_doctor is off or measure (ops_config), breach_doctor_max_cases / breach_doctor_budget_ms are too small for the backlog (raise by migration with its note), or the largest family has no playbook (SELECT family, COUNT(*) FROM v_breach_diagnosis_current WHERE cause_class = ''unclassified'' GROUP BY 1 ORDER BY 2 DESC; add a breach_playbooks row for it by migration, see the shape in migrations/2026-10-26-breach-doctor.sql). Done when the metric reads 0 and stays 0 for 3 ticks.',
   'qnfo-fleet-control', 'agent_issues', 2, 1, 'BREACH-DOCTOR-1 (migrations/2026-10-26-breach-doctor.sql)'
 WHERE NOT EXISTS (SELECT 1 FROM analytics_metric_triggers x WHERE x.metric_key = 'breaches_undiagnosed_over_60m');
 
@@ -199,7 +235,7 @@ SELECT 'doctor_taint_violations_24h', 'A doctor playbook or fact carried free te
   'qnfo-fleet-control', 'agent_issues', 2, 1, 'BREACH-DOCTOR-1 (migrations/2026-10-26-breach-doctor.sql)'
 WHERE NOT EXISTS (SELECT 1 FROM analytics_metric_triggers x WHERE x.metric_key = 'doctor_taint_violations_24h');
 
--- OWNER-NO-LOOSE-ENDS-1 / ANTIFRAGILE-1 (review 2026-10-26): the five follow-ups this file leaves are agent_issues rows with a named doer and a closing probe, not prose.
+-- OWNER-NO-LOOSE-ENDS-1 / ANTIFRAGILE-1 (review 2026-10-26): the four follow-ups this file leaves are agent_issues rows with a named doer and a closing probe, not prose.
 -- Source 'session' is on ops_config code_merge_trusted_sources (live list read 2026-10-26), so each row is plannable; none carries a code-task line except BREACH-DOCTOR-WATCHMAKER-1, whose lever is one named
 -- edit in one file (ACT-BRIDGE-1). Each row's contract is born by the issue-birth trigger as needs-machine-probe in D1; the INSERT OR IGNORE below only gives a replay (and the offline suite) the same row,
 -- and the UPDATE sets the probe the hourly remediation tick runs. No probe reads true today.
@@ -239,17 +275,9 @@ SELECT 'BREACH-DOCTOR-RETIRE-1: retire the two older writers the doctor replaces
   'session', 'autonomy', 'medium', 'open', CAST(strftime('%s', 'now') AS INTEGER) * 1000, CAST(strftime('%s', 'now') AS INTEGER) * 1000
 WHERE NOT EXISTS (SELECT 1 FROM agent_issues WHERE title LIKE 'BREACH-DOCTOR-RETIRE-1:%');
 
-INSERT INTO agent_issues (title, description, source, category, priority, status, created_at, updated_at)
-SELECT 'BREACH-DOCTOR-CAUSE-1: map the five breach doctor metrics to a root cause in metric_breach_cause',
-  'Charter pillar: autonomy. BREACH-ONE-MEANING-1 (migrations/2026-10-26-breach-one-meaning.sql, merged to main as PR 4444 after this file was written) reads a metric in breach that has no metric_breach_cause row as cause unmapped, counts it in breaches_unmapped (target 0) and watches it with the detector fm-breach-unmapped. The doctor metrics breach in the normal first days: breaches_undiagnosed_over_60m (about 257 old unowned issues in the 2026-10-26 review, until the backlog drains), breaches_auto_remediated_24h (0 against 12 until the first verified closes) and, when it misbehaves, doctor_actions_failed_24h, doctor_tick_age_min and doctor_taint_violations_24h. Each would be one more unmapped breach.' || char(10) ||
-  'Doer: a session. Change: one migration, applied after BREACH-ONE-MEANING-1 (metric_breach_cause and breach_causes exist then), that INSERT OR IGNOREs one metric_breach_cause row per doctor metric: the backlog and remediation metrics onto the existing issue-backlog cause, the three guards onto the cause that names the fleet loops own health (a new breach_causes row only if none fits, with its plain words, lever and doer). This file cannot do it: it applies independently of that migration and a write to a table that does not exist yet would fail the whole file.' || char(10) ||
-  'Definition of done: all five doctor metrics have a metric_breach_cause row (the closing probe of this issue) and breaches_unmapped reads 0 while they are in breach.',
-  'session', 'autonomy', 'medium', 'open', CAST(strftime('%s', 'now') AS INTEGER) * 1000, CAST(strftime('%s', 'now') AS INTEGER) * 1000
-WHERE NOT EXISTS (SELECT 1 FROM agent_issues WHERE title LIKE 'BREACH-DOCTOR-CAUSE-1:%');
-
 INSERT OR IGNORE INTO remediation_contracts (class, issue_id, precondition, action, verify_probe, verify_transport, max_attempts, escalate_to, expected_cadence_h, status, module)
 SELECT 'issue-' || id, id, 'born with the issue (ORPHAN-GUARD-BIRTH-1)', 'needs-machine-probe', 'needs-machine-probe', 'd1-query', 3, 'qnfo-fleet-control', 1, 'needs-machine-probe', 'birth'
-FROM agent_issues WHERE title LIKE 'BREACH-DOCTOR-ARM-1:%' OR title LIKE 'BREACH-DOCTOR-WATCH-1:%' OR title LIKE 'BREACH-DOCTOR-WATCHMAKER-1:%' OR title LIKE 'BREACH-DOCTOR-RETIRE-1:%' OR title LIKE 'BREACH-DOCTOR-CAUSE-1:%';
+FROM agent_issues WHERE title LIKE 'BREACH-DOCTOR-ARM-1:%' OR title LIKE 'BREACH-DOCTOR-WATCH-1:%' OR title LIKE 'BREACH-DOCTOR-WATCHMAKER-1:%' OR title LIKE 'BREACH-DOCTOR-RETIRE-1:%';
 
 UPDATE remediation_contracts SET precondition = 'BREACH-DOCTOR-1: playbook-gap is held in measure until the planner trusts the doctor''s titles',
   action = 'a session writes the arming migration; the stale-PR lane merges it and CI applies it',
@@ -275,12 +303,6 @@ UPDATE remediation_contracts SET precondition = 'BREACH-DOCTOR-1: two older writ
   verify_transport = 'd1-query', max_attempts = 1000, expected_cadence_h = 1, status = 'active', module = 'breach-doctor'
 WHERE class = 'issue-' || (SELECT id FROM agent_issues WHERE title LIKE 'BREACH-DOCTOR-RETIRE-1:%' ORDER BY id DESC LIMIT 1);
 
-UPDATE remediation_contracts SET precondition = 'BREACH-DOCTOR-1: the doctor metrics have no root cause row, so each breach would read unmapped',
-  action = 'a session writes the mapping migration after BREACH-ONE-MEANING-1; the stale-PR lane merges it and CI applies it',
-  verify_probe = 'SELECT ''5'' AS expected, CAST((SELECT COUNT(*) FROM metric_breach_cause WHERE metric_key IN (''breaches_undiagnosed_over_60m'', ''breaches_auto_remediated_24h'', ''doctor_actions_failed_24h'', ''doctor_tick_age_min'', ''doctor_taint_violations_24h'')) AS TEXT) AS observed',
-  verify_transport = 'd1-query', max_attempts = 1000, expected_cadence_h = 1, status = 'active', module = 'breach-doctor'
-WHERE class = 'issue-' || (SELECT id FROM agent_issues WHERE title LIKE 'BREACH-DOCTOR-CAUSE-1:%' ORDER BY id DESC LIMIT 1);
-
 INSERT OR IGNORE INTO control_registry (control, location, kind, guards_against, critical_path, disposition, disposition_state, alternate_path, alternate_tested_at, evidence) VALUES
  ('breach-doctor-switch', 'ops_config breach_doctor (on|measure|off), read by qnfo-fleet-control bdConfig() at the start of every tick', 'kill-switch', 'a doctor action that proves wrong', 0, 'keep', 'planned',
   'per-rule stop (breach_playbooks.enabled = 0), automatic demotion to measure after 2 failures in 24 hours, every applied action carries its revert_sql; the qnfo-cloud-ops watch (separate package) reads the same switch', NULL,
@@ -299,7 +321,13 @@ INSERT OR IGNORE INTO control_registry (control, location, kind, guards_against,
   'reviewed 2026-10-26 on a fixture shaped like live (259 unowned issues, 22 families): 19 gap issues in 7 ticks, none with a doer; recorded reason; expiry 2026-10-27T00:00:00Z at the latest, released by issue BREACH-DOCTOR-ARM-1 (a session writes the migration; its closing probe reads ops_config and breach_playbooks hourly and the issue is due within 120 minutes of opening); no live evidence against it'),
  ('breach-doctor-gap-caps', 'qnfo-fleet-control BD_GAP_SKIP_FAMILIES and BD_GAP_OPEN_MAX in bdGapPhase(): no gap issue for OWNER-CHAT, OWNER-REQUEST or other, none while 3 are open', 'cap', 'gap issues for families no playbook can close (owner prose, a catch-all, real escalations) that would fail their probe for good', 0, 'keep', 'planned',
   'backpressure, not a stop: the next family is filed as soon as an open gap issue closes; breach_playbooks playbook-gap max_per_tick and max_per_day bound the rate', NULL,
-  'the closing probe of a gap issue needs zero unclassified cases in the family, which a hand-written playbook cannot reach for owner prose or a catch-all');
+  'the closing probe of a gap issue needs zero unclassified cases in the family, which a hand-written playbook cannot reach for owner prose or a catch-all'),
+ ('breach-doctor-own-issue-guard', 'qnfo-fleet-control bdSelect(): an issue titled BREACH-DOCTOR-1: takes no playbook hit and no action; it is still classified (family BREACH-DOCTOR-1, cause unclassified) and counted in breaches_undiagnosed_over_60m', 'guard', 'a playbook acting on an issue the doctor itself filed (a gap or a self issue), which could file an issue about an issue without end', 0, 'keep', 'planned',
+  'none needed: the guard stops the action only. Classification, the metric and the case ledger include the doctor''s own issues (the first draft excluded them from the metric, which hid an issue with no doer); family BREACH-DOCTOR-1 is in BD_GAP_SKIP_FAMILIES so no gap issue is filed about one; a session or the code loop closes them like any other issue', NULL,
+  'recorded reason: recursion guard on a self-referential loop, reviewed 2026-10-26; no live evidence against it; review again at the first migration that adds a playbook for family BREACH-DOCTOR-1, and by 2026-11-02 at the latest'),
+ ('breach-doctor-strike-cap', 'qnfo-fleet-control bdSelect() eligible(): after BD_STRIKES (3) failed or reverted cases of one issue it is retried at most once in BD_STRIKE_RETRY_MIN (120) minutes; before that, once in 60 minutes', 'cap', 'one issue the doctor cannot fix failing on every tick and spending the tick''s action and case budget', 0, 'demote', 'applied',
+  'backpressure with a release, never a stop: the retry window is 120 minutes after the third failure (SLA-120M-1); breach_playbooks.enabled = 0 stops the rule; the self issue BREACH-DOCTOR-1: self <rule> <code> is filed once (deduped on the open title) so a session or the code loop fixes the playbook row',  NULL,
+  'the first draft excluded the issue for good with no window and the self issue did not release it (review 2026-10-26): a hold with no expiry; demoted to a rate before it shipped; measured by doctor_actions_failed_24h and the automatic demotion of a rule after 2 failures in 24 hours; review 2026-11-02');
 
 -- The hold and the switch's alternate path wait on a follow-up: each points at the live issue that builds it (the issues are filed above, OWNER-NO-LOOSE-ENDS-1).
 UPDATE control_registry SET issue_id = (SELECT id FROM agent_issues WHERE title LIKE 'BREACH-DOCTOR-ARM-1:%' ORDER BY id DESC LIMIT 1) WHERE control = 'breach-doctor-gap-hold' AND issue_id IS NULL;
@@ -345,7 +373,7 @@ INSERT OR IGNORE INTO queue_sla (stuck_type, queue, definition, cycle_min, sla_m
   'qnfo-fleet-control', 'none: measured by contract fm-breach-doctor-case-age');
 
 INSERT OR IGNORE INTO capability_ledger (capability, provenance, prerequisites, reliability, acquired_at, last_exercised_at, evidence) VALUES
- ('breach-doctor:remediate-unowned-breaches', 'BREACH-DOCTOR-1 (qnfo-fleet-control 0.50.0 breachDoctorTick, migrations/2026-10-26-breach-doctor.sql)',
+ ('breach-doctor:remediate-unowned-breaches', 'BREACH-DOCTOR-1 (qnfo-fleet-control 0.51.0 breachDoctorTick, migrations/2026-10-26-breach-doctor.sql)',
   'qnfo-fleet-control */10 slot, breach_playbooks rows, ops_config breach_doctor = on', 'unmeasured until the first verified case: breaches_auto_remediated_24h', strftime('%Y-%m-%dT%H:%M:%SZ', 'now'), NULL,
   'the fleet diagnoses every unowned open issue older than 120 minutes and closes, with evidence and a stored revert, the ones a playbook proves done (CODE-MERGE-REFUSED-1, CODE-LOOP-EXHAUSTED-1 first), without a session');
 
@@ -354,10 +382,10 @@ SELECT 'session_01QpQv19uh1padRwZ3u1r766',
   'the doctor must be worker code on the */10 slot (never a D1 trigger on fleet_tick, FLEET-TICK-SPLIT-1), reversible by construction, and its trust attaches to its authoring pipeline (source qnfo-fleet-control, title prefix BREACH-DOCTOR-1:) so PLAN_TRUSTED and code_merge_trusted_sources stay exactly as they are',
   'BREACH-DOCTOR-1 v1 with the session''s binding simplifications: S1 playbooks are data (breach_playbooks) validated by the engine before it runs them; S2 three closed action kinds (sql, file-issue, owner-card) and no model call; S3 a 30-minute measure period per playbook, demotion after 2 failures in 24 hours, per-rule caps, a claim check, stored revert_sql, decision_log and ledger events; S4 classification of every unowned open issue older than 120 minutes (SLA-120M-1), critical first, with the playbook-gap row seeded in measure until the planner trusts the doctor''s titles; S5 verify by two consecutive passes; S6 metrics written first, single flight, kill switch, wall budget, no read of v_issue_age_ladder; S7 no D1 trigger on fleet_tick. Seed playbooks CM-R1, CM-R2, CM-R3, CM-R5 in per-issue form.',
   'qnfo-audit 2026-10-26 06:36Z: 447 open agent_issues, 371 with no doer; CODE-MERGE-REFUSED-1 10 open (every task merged after the refusal), CODE-LOOP-EXHAUSTED-1 15 open (6 with a closed source issue, 1 twin, 1 with a merged sibling); nothing owned their diagnosis; the candidate query on the v_issue_age_ladder shape read 211,166 rows in 712 ms, the doctor state reads take about 5,500 and its four CM triggers about 7,000',
-  'migration merged and qnfo-fleet-control 0.50.0 deployed through the canonical path',
+  'migration merged and qnfo-fleet-control 0.51.0 deployed through the canonical path',
   'issue_triage, agent_issues (close and reopen only through the issue_triage close-sync triggers), breach_diagnoses, breach_diagnosis_events, breach_playbooks, decision_log, metric_registry, loop_lock; cases act only after a playbook is 30 minutes old and only on issues with no doer and no live work claim',
   'ops_config breach_doctor = off stops the engine without a deploy; breach_playbooks.enabled = 0 stops one rule; every applied action stores its revert_sql in breach_diagnoses; the Rollback header',
   'the fleet diagnoses every unowned breach older than 120 minutes and closes, with evidence and a stored revert, the ones a playbook proves done, without a session',
-  'breaches_undiagnosed_over_60m <= 5 within 24 h',
+  'breaches_auto_remediated_24h >= 1 within 24 h',
   'none', 'breach_diagnoses, breach_diagnosis_events, breach_playbooks, v_breach_owner, issue_triage, agent_issues, code_tasks, work_claims, loop_lock; migrations/breach-doctor.test.mjs; qnfo-fleet-control/breach-doctor.test.mjs'
 WHERE NOT EXISTS (SELECT 1 FROM decision_log WHERE action LIKE 'BREACH-DOCTOR-1 v1%');

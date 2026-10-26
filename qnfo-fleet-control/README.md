@@ -8,7 +8,7 @@ Canonical source for the merged fleet-control hub worker (advisors + calibrator 
 - Do NOT deploy via wrangler: it would drop the script-API-managed bindings (BINDING-PRESERVATION-1).
 - Deployed version: 0.4.11 (qnfo-fleet-deploy / drift scanner).
 
-## BREACH-DOCTOR-1 (0.50.0, pillar autonomy; agent_issues 1000266)
+## BREACH-DOCTOR-1 (0.51.0, pillar autonomy; agent_issues 1000266)
 
 `breachDoctorTick` (block `BREACH-DOCTOR-1` in `worker.js`) runs on every `*/10` tick. It is worker code, not a D1 trigger on `fleet_tick`
 (FLEET-TICK-SPLIT-1). Per tick: the five `doctor_*` / `breaches_*` metrics are written first; each enabled `breach_playbooks` row is validated
@@ -23,6 +23,10 @@ migration adds `qnfo-fleet-control|BREACH-DOCTOR-1:` to `ops_config code_merge_t
 `queued`, `applied` or `verifying` with an expired lease is failed by the verify phase (`lease-expired`); `queue_sla` row `breach-doctor-case-in-flight` and the contract
 `fm-breach-doctor-case-age` watch the oldest one (120 minutes), which also covers `breach_doctor = off`, where no tick writes.
 
+- What the metrics mean: `breaches_undiagnosed_over_60m` counts an unowned issue until a case found its cause (a playbook matched); an issue classified `unclassified` was only looked at and stays
+  counted, so classifying the backlog does not make it read 0. `breaches_auto_remediated_24h` (verified cases) is the outcome the doctor has to earn. Issues titled `BREACH-DOCTOR-1:` are classified
+  and counted like any other (family `BREACH-DOCTOR-1`) but match no playbook and take no action (control `breach-doctor-own-issue-guard`). After 3 failed or reverted cases an issue is retried at
+  most once in 120 minutes (control `breach-doctor-strike-cap`), never excluded for good. The five metrics are mapped to a root cause in `metric_breach_cause` by the same migration.
 - Stop it: `UPDATE ops_config SET value = 'off' WHERE key = 'breach_doctor'` (no write follows), `'measure'` (diagnose, act on nothing), or one rule
   with `UPDATE breach_playbooks SET enabled = 0 WHERE rule_id = '...'`. A rule with 2 failed or reverted cases in 24 hours demotes itself to measure.
 - Add a playbook: an `INSERT OR IGNORE INTO breach_playbooks` in a migration; see `migrations/2026-10-26-breach-doctor.sql` (CM-R1..CM-R5) for the shape.

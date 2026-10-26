@@ -97,6 +97,33 @@ export function clip(s, n) {
   return t && t.length > n ? t.slice(0, n) + "... (" + (t.length - n) + " more characters)" : t;
 }
 
+// EMPTY-TURN-ANSWER-1: a turn that ends on a tool step (the step budget ran out, or the model only reasoned) has no final text,
+// and 9 of the first 14 loop requests came back "(the model returned no text)". The last step that did write text is the answer;
+// when no step wrote any, the caller asks once more without tools over a transcript of what the tools returned.
+export const EMPTY_TEXT = "(the model returned no text)";
+export const FINAL_ANSWER_ASK = "Stop calling tools. Using only what the tool results above show, answer the request now, in plain text, in the format it asked for. If the results were not enough, say what is known and what is not.";
+
+export function lastStepText(steps) {
+  const s = Array.isArray(steps) ? steps : [];
+  for (let i = s.length - 1; i >= 0; i--) {
+    const t = String(s[i] && s[i].text || "").trim();
+    if (t) return t;
+  }
+  return "";
+}
+
+export function toolTranscript(steps, maxChars) {
+  const out = [];
+  for (const st of Array.isArray(steps) ? steps : []) {
+    for (const tr of st && st.toolResults || []) {
+      const v = tr && (tr.output !== undefined ? tr.output : tr.result);
+      out.push("tool " + (tr && tr.toolName || "?") + " " + clip(JSON.stringify(tr && (tr.input !== undefined ? tr.input : tr.args) || {}), 300) + " -> " + clip(v, 1500));
+    }
+  }
+  const t = out.join("\n");
+  return t.length > maxChars ? t.slice(t.length - maxChars) : t;
+}
+
 export function runId() {
   const b = new Uint8Array(6);
   crypto.getRandomValues(b);

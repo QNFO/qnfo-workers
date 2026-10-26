@@ -60,7 +60,7 @@ const ok = (c, m) => { if (c) pass++; else { fail++; console.log("FAIL " + m); }
 // A. open page and JSON, no owner key configured
 {
   const { env } = mk();
-  let r = await call(env, "/"); let h = await r.text();
+  let r = await call(env, "/classic"); let h = await r.text();
   ok(r.status === 200, "A1 page opens with no token");
   ok(h.includes("Add the selected works to ORCID"), "A2 the queue is shown to everyone");
   ok(!/OWNER_TOKEN|owner key|Sign in|sign out/i.test(h), "A3 nothing asks anyone for a token or a sign-in");
@@ -75,7 +75,7 @@ const ok = (c, m) => { if (c) pass++; else { fail++; console.log("FAIL " + m); }
 // B. an owner key configured elsewhere must not close the page
 {
   const { env } = mk({ env: { OWNER_TOKEN: "k".repeat(32) } });
-  const r = await call(env, "/"); const h = await r.text();
+  const r = await call(env, "/classic"); const h = await r.text();
   ok(r.status === 200 && h.includes("Add the selected works to ORCID") && !/Owner key|locked/i.test(h), "B1 the page stays open even if an owner key is configured");
   const j = await (await call(env, "/api/human")).json();
   ok(Array.isArray(j.items) && !j.locked, "B2 /api/human stays open");
@@ -112,7 +112,7 @@ const ok = (c, m) => { if (c) pass++; else { fail++; console.log("FAIL " + m); }
   ok(calls.length === 1 && /CONTEXT/.test(calls[0].messages[0].content) && !calls[0].messages[0].content.includes(LOOP) && calls[0].max_tokens <= 700, "D2 it is grounded in page data, bounded, and carries no secret");
   const row = db.prepare("SELECT visitor, prompt, mode FROM owner_prompts").get();
   ok(row && /^[0-9a-f]{16}$/.test(row.visitor) && !JSON.stringify(row).includes("203.0.113.9") && row.mode === "ask", "D3 only an anonymous hash is kept, never the IP");
-  let h = await (await call(env, "/")).text();
+  let h = await (await call(env, "/classic")).text();
   ok(!h.includes("How much did we spend"), "D4 a visitor's question is not shown to other visitors");
   const codes = [];
   for (let i = 0; i < 5; i++) codes.push((await ask(env, "question number " + i, "203.0.113.9")).status);

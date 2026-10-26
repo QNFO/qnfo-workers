@@ -1,9 +1,11 @@
-// BREACH-DOCTOR-1 offline suite (qnfo-fleet-control 0.50.0, agent_issues 1000266): slices the BREACH-DOCTOR-1 block out of worker.js and replays it against an in-memory
+// BREACH-DOCTOR-1 offline suite (qnfo-fleet-control 0.51.0, agent_issues 1000266): slices the BREACH-DOCTOR-1 block out of worker.js and replays it against an in-memory
 // node:sqlite D1 stub that carries the live column lists, the live close-sync triggers and migrations/2026-10-26-breach-doctor.sql.
 // Proves: the validators refuse a playbook that writes free text, a second statement, a table off the allowlist or a DELETE; kill switch off writes nothing; measure mode records the
 // would-do and acts on nothing; a playbook younger than 30 minutes runs in measure and an older one acts, bound to one issue each, with revert_sql, decision_log and events; the
 // caps defer and never stop; verify needs two passes and a failed verify, an SQL error, an expired lease or a no-op action is failed; two failures in 24 hours demote the rule and
-// three failures of one issue file one self issue; unowned issues are classified critical first, owned, young and doctor-authored issues never; a playbook-gap issue is filed once
+// three failures of one issue file one self issue and slow its retries to once in 120 minutes (a rate with a release, not a permanent stop); unowned issues are classified critical first, owned and young
+// issues never; the doctor's own BREACH-DOCTOR-1: issues are classified and counted but match no playbook and take no action; breaches_undiagnosed_over_60m keeps counting an issue classified
+// "unclassified" (coverage is not a diagnosis); a playbook-gap issue is filed once
 // per family and only once the planner trusts the doctor's titles (the seeded row is measure and files nothing; owner prose and the catch-all are skipped; none while 3 are open); the age
 // gate is 120 minutes and bounded to 10..120; an in-flight case with an expired lease is failed in measure and left alone only when the switch is off; the owner-card and file-issue kinds work; an injection payload in an issue body or plan reason reaches no table the doctor writes; one tick at a time, the lock is
 // released after an error; the tick never throws; the call site is on every */10 tick; the mirror and VERSION match.
@@ -27,7 +29,7 @@ if (!(a > 0 && b > a)) { console.log(pass + " passed, " + fail + " failed"); pro
 const kw = src.match(/^var __RT_WRITE_KW = \[[^\]]*\];$/m)[0];
 const block = src.slice(a, b);
 const loadApi = () => {
-  const cx = vm.createContext({ Date, Number, String, parseInt, Math, JSON, Object, Array, RegExp, Error, Promise, isFinite, console: process.env.BD_DEBUG ? console : { error() {}, log() {} }, VERSION: "0.50.0-test", crypto: globalThis.crypto, TextEncoder, Uint8Array });
+  const cx = vm.createContext({ Date, Number, String, parseInt, Math, JSON, Object, Array, RegExp, Error, Promise, isFinite, console: process.env.BD_DEBUG ? console : { error() {}, log() {} }, VERSION: "0.51.0-test", crypto: globalThis.crypto, TextEncoder, Uint8Array });
   vm.runInContext(kw + "\n" + block + "\nthis.api = { breachDoctorTick, bdConfig, bdRung, bdValidateRule, bdReadOnlyWhy, bdWriteWhy, bdFactsSafe, bdFamily, bdReasonCode, bdTopVerb, bdStrip };", cx);
   return cx.api;
 };
@@ -40,7 +42,7 @@ ok(callLine && !/onTwentyGrid/.test(callLine) && slot.indexOf("breachDoctorTick(
 ok(slot.indexOf("remediationContractsTick(env") > 0 && Math.abs(slot.indexOf("breachDoctorTick(env") - slot.indexOf("remediationContractsTick(env")) < 2500, "it sits next to remediationContractsTick");
 const ver = (src.match(/^var VERSION = "([^"]*)"/m) || [])[1] || "";
 const vn = ver.split("-")[0].split(".").map(Number);
-ok(vn[0] > 0 || vn[1] >= 50, "VERSION is at least 0.50.0 (a new capability is a minor bump, ahead of 0.49.0 pr-merge-sla)", ver);
+ok(vn[0] > 0 || vn[1] >= 51, "VERSION is at least 0.51.0 (a new capability is a minor bump, ahead of 0.50.0 workflows-merge)", ver);
 if (!process.env.BD_WORKER_PATH) ok(src === mirror, "deployed-current.worker.js is identical to worker.js");
 const codeOnly = block.split("\n").filter((l) => !l.trim().startsWith("//")).join("\n");
 ok(!/fleet_tick/.test(codeOnly) && !/CREATE\s+TRIGGER/i.test(codeOnly), "S7: the engine touches no fleet_tick and creates no trigger");
@@ -90,7 +92,7 @@ ok(!/\b(ai|model|llm)\.run\(|aiRunAttr|env\.AI\b/.test(codeOnly), "v1 makes no m
   ok(api.bdValidateRule(row({ action_sql: JSON.stringify(["UPDATE ops_config SET value = description WHERE key = ?1"]) })).why === "action-free-text-column", "the reason names the part: action-free-text-column");
   const f = api.bdFactsSafe;
   ok(f({ a: 1, b: "ct_im1:2026-10-22T03:44:53Z", c: null, d: true, e: [1, "x"], g: { h: 2 } }) && !f({ a: "two words" }) && !f({ a: "x".repeat(200) }) && !f({ A: 1 }) && !f({ a: "line\nbreak" }) && !f({ a: "<script>" }) && !f(NaN), "facts hold numbers, ids, tokens and enum codes only");
-  ok(api.bdFamily("CODE-MERGE-REFUSED-1: code task ct_x", "s") === "CODE-MERGE-REFUSED-1" && api.bdFamily("TOOL-FAILURE: git [error]", "") === "TOOL-FAILURE" && api.bdFamily("zzz unknown", "owner-chat") === "OWNER-CHAT" && api.bdFamily("zzz unknown", "") === "other" && api.bdFamily("[self-heal] tool git_clone failing", "") === "SELF-HEAL-TOOL", "the family comes from a code table of title prefixes and sources");
+  ok(api.bdFamily("CODE-MERGE-REFUSED-1: code task ct_x", "s") === "CODE-MERGE-REFUSED-1" && api.bdFamily("TOOL-FAILURE: git [error]", "") === "TOOL-FAILURE" && api.bdFamily("zzz unknown", "owner-chat") === "OWNER-CHAT" && api.bdFamily("zzz unknown", "") === "other" && api.bdFamily("[self-heal] tool git_clone failing", "") === "SELF-HEAL-TOOL" && api.bdFamily("BREACH-DOCTOR-1: playbook gap TOOL-FAILURE", "qnfo-fleet-control") === "BREACH-DOCTOR-1" && api.bdFamily("BREACH-DOCTOR-1: self CM-R1 sql-error", "qnfo-fleet-control") === "BREACH-DOCTOR-1", "the family comes from a code table of title prefixes and sources (the doctor's own issues are family BREACH-DOCTOR-1, not other)");
   const rc = api.bdReasonCode;
   ok(rc("") === "none" && rc("the issue names no worker the code loop may change") === "names-no-worker" && rc("read failed: raw read HTTP 404 for x") === "raw-read-404" && rc("this is an owner-task") === "owner-task" && rc("needs a multi-file edit") === "multi-file" && rc("only a data surface .json") === "data-config" && rc("anything else the model said") === "model-other", "a plan reason becomes one of seven codes and the text is dropped");
 }
@@ -207,7 +209,7 @@ const metric = (raw, m) => (q1(raw, "SELECT last_value v FROM metric_registry WH
 }
 
 // ---- measure mode: diagnose everything unowned, act on nothing
-const NEVER = [900, 901, 902, 100997, 910, 911, 2047, 555];
+const NEVER = [900, 901, 902, 100997, 910, 2047, 555];
 {
   const raw = world(); cfg(raw, "breach_doctor", "measure"); old(raw);
   const before = q1(raw, "SELECT COUNT(*) n FROM agent_issues WHERE status = 'open'").n;
@@ -216,10 +218,12 @@ const NEVER = [900, 901, 902, 100997, 910, 911, 2047, 555];
   ok(q1(raw, "SELECT COUNT(*) n FROM agent_issues WHERE status = 'open'").n === before && q1(raw, "SELECT COUNT(*) n FROM decision_log").n === 1 && q1(raw, "SELECT COUNT(*) n FROM issue_triage WHERE rc LIKE 'breach-doctor:%'").n === 0, "measure mode closes nothing and writes no decision_log row");
   const rows = qa(raw, "SELECT * FROM breach_diagnoses");
   const ids = rows.map((x) => x.issue_id).sort((x, y) => x - y);
-  // parity with the SQL view: the issues without a doer, old enough, not authored by the doctor
-  const viewIds = qa(raw, "SELECT o.issue_id FROM v_breach_owner o JOIN agent_issues a ON a.id = o.issue_id WHERE o.owner_kind IS NULL AND a.created_at <= ? AND a.title NOT LIKE 'BREACH-DOCTOR-1:%'", Date.now() - 120 * 60000).map((x) => x.issue_id).sort((x, y) => x - y);
-  ok(JSON.stringify(ids) === JSON.stringify(viewIds) && ids.length >= 14, "every unowned old issue is diagnosed once, the same set v_breach_owner names (JS reads instead of the 211k-row view)", { ids, viewIds });
-  ok(NEVER.every((i) => !ids.includes(i)), "owned (code-task line, live code task, live claim), young, doctor-authored and closed issues are never cases", ids);
+  // parity with the SQL view: the issues without a doer and old enough (the doctor's own issue 911 is one of them: it is classified, never acted on)
+  const viewIds = qa(raw, "SELECT o.issue_id FROM v_breach_owner o JOIN agent_issues a ON a.id = o.issue_id WHERE o.owner_kind IS NULL AND a.created_at <= ?", Date.now() - 120 * 60000).map((x) => x.issue_id).sort((x, y) => x - y);
+  ok(JSON.stringify(ids) === JSON.stringify(viewIds) && ids.length >= 15 && ids.includes(911), "every unowned old issue is diagnosed once, the same set v_breach_owner names (JS reads instead of the 211k-row view)", { ids, viewIds });
+  ok(NEVER.every((i) => !ids.includes(i)), "owned (code-task line, live code task, live claim), young and closed issues are never cases", ids);
+  const own = diag(raw, 911);
+  ok(own && own.family === "BREACH-DOCTOR-1" && own.rule_id === "unclassified" && own.cause_class === "unclassified" && own.action_kind === "none" && own.state === "diagnosed", "the doctor's own issue (911) is classified like any other: family BREACH-DOCTOR-1, unclassified, no action", own);
   const cm = diag(raw, 100500);
   ok(cm.rule_id === "CM-R1" && cm.cause_class === "merged-after-refusal" && cm.state === "diagnosed" && cm.mode === "measure" && cm.action_kind === "none" && cm.family === "CODE-MERGE-REFUSED-1" && cm.case_key === "CM-R1:merged-after-refusal", "a matched case carries rule, cause, family, case key; measure mode, no action", cm);
   const facts = JSON.parse(cm.facts_json);
@@ -241,7 +245,9 @@ const NEVER = [900, 901, 902, 100997, 910, 911, 2047, 555];
   const snap = JSON.stringify(qa(raw, "SELECT * FROM breach_diagnoses")), ev = q1(raw, "SELECT COUNT(*) n FROM breach_diagnosis_events WHERE event <> 'tick'").n;
   const r2 = await tick(raw);
   ok(snap === JSON.stringify(qa(raw, "SELECT * FROM breach_diagnoses")) && ev === q1(raw, "SELECT COUNT(*) n FROM breach_diagnosis_events WHERE event <> 'tick'").n && r2.diagnosed === 0, "a repeat measure tick rewrites no diagnosis and adds no case event", r2);
-  ok(Number(metric(raw, "breaches_undiagnosed_over_60m")) === 0, "the backlog metric then reads 0");
+  // coverage is not a diagnosis: only the five issues a playbook matched have a cause; every unclassified case, the doctor's own issue included, is still counted
+  const matched = qa(raw, "SELECT issue_id FROM breach_diagnoses WHERE cause_class <> 'unclassified'").length;
+  ok(matched === 5 && Number(metric(raw, "breaches_undiagnosed_over_60m")) === ids.length - matched && Number(metric(raw, "breaches_undiagnosed_over_60m")) >= 10, "the backlog metric then counts every case that found no cause (classified unclassified stays undiagnosed): all but the five a playbook matched", [metric(raw, "breaches_undiagnosed_over_60m"), ids.length, matched]);
   ok(r2._db.log.n < 45, "an idle tick costs fewer than 45 statements", r2._db.log.n);
 }
 
@@ -369,10 +375,42 @@ const NEVER = [900, 901, 902, 100997, 910, 911, 2047, 555];
   const c = q1(raw, "SELECT * FROM remediation_contracts WHERE class = ?", "issue-" + si.id);
   ok(c && c.status === "active" && c.verify_transport === "d1-query" && c.module === "breach-doctor-1" && !c.verify_probe.includes(";") && /^SELECT '0' AS expected/.test(c.verify_probe), "it carries a closing d1-query contract", c);
   ok(q1(raw, "SELECT COUNT(*) n FROM human_actions").n === 0, "nothing is routed to the owner");
-  raw.prepare("UPDATE breach_diagnoses SET last_progress_at = ? WHERE state = 'failed'").run(new Date(Date.now() - 30 * H).toISOString().slice(0, 19) + "Z");
+  // strike cap (control breach-doctor-strike-cap): 3 failures slow the retry to once in 120 minutes; they never exclude the issue for good
+  const failedAgo = (min) => raw.prepare("UPDATE breach_diagnoses SET last_progress_at = ? WHERE state = 'failed'").run(new Date(Date.now() - min * 60000).toISOString().slice(0, 19) + "Z");
+  const nFailed = () => q1(raw, "SELECT COUNT(*) n FROM breach_diagnoses WHERE issue_id = 912 AND state = 'failed'").n;
+  const nRows = () => q1(raw, "SELECT COUNT(*) n FROM breach_diagnoses WHERE issue_id = 912").n;
+  failedAgo(90);
+  const rw = await tick(raw);
+  ok(rw.failed === 0 && rw.diagnosed === 0 && nRows() === 3, "3 failures, the last 90 minutes ago: inside the 120-minute window, no new case (an issue with 2 failures would be retried: its wait is 60)", rw);
+  failedAgo(130);
+  const rr = await tick(raw);
+  ok(rr.diagnosed === 1 && nRows() === 4 && diag(raw, 912).state === "diagnosed", "3 failures, the last 130 minutes ago: the stop has a release, the issue is a case again (the rule is demoted to measure by its 2 failures in 24 hours, so it only diagnoses)", rr);
+  // a migration fixes the playbook and sets it back to on, and the failures age out of the 24-hour demotion window
+  raw.prepare("UPDATE breach_playbooks SET mode = 'on' WHERE rule_id = 'T-FAIL'").run();
+  failedAgo(25 * 60);
+  const rt = await tick(raw);
+  ok(rt.failed === 1 && nFailed() === 4 && diag(raw, 912).attempts === 4, "fixed and re-enabled, the rule acts on the released issue again and fails a 4th time: attempts 4", rt);
+  ok(rt.self_issues === 0 && q1(raw, "SELECT COUNT(*) n FROM agent_issues WHERE title LIKE 'BREACH-DOCTOR-1: self%'").n === 1, "and the self issue is not filed twice (deduped on the open title)", rt);
+  const rn = await tick(raw);
+  ok(rn.failed === 0 && rn.diagnosed === 0 && nFailed() === 4, "right after the retry the window is shut again: one attempt in 120 minutes, not one per tick", rn);
+  // the self issue is the doctor's own: once old enough it is classified and counted, matches no playbook and takes no action, and no gap issue or self-of-self issue follows
+  const selfId = q1(raw, "SELECT id FROM agent_issues WHERE title LIKE 'BREACH-DOCTOR-1: self%'").id;
+  ok(!diag(raw, selfId), "a young self issue is not a case");
+  raw.prepare("UPDATE agent_issues SET created_at = ? WHERE id = ?").run(Date.now() - 30 * H, selfId);
+  raw.prepare("UPDATE breach_playbooks SET mode = 'on' WHERE rule_id = 'playbook-gap'").run();
   await tick(raw);
-  ok(q1(raw, "SELECT COUNT(*) n FROM agent_issues WHERE title LIKE 'BREACH-DOCTOR-1: self%'").n === 1, "the issue has 3 failures: it is not diagnosed again and no second self issue is filed");
-  ok(!qa(raw, "SELECT 1 FROM breach_diagnoses WHERE issue_id = (SELECT id FROM agent_issues WHERE title LIKE 'BREACH-DOCTOR-1: self%')").length, "the doctor never diagnoses its own issues");
+  const sd = diag(raw, selfId);
+  ok(sd && sd.family === "BREACH-DOCTOR-1" && sd.rule_id === "unclassified" && sd.action_kind === "none" && sd.state === "diagnosed", "an old self issue is classified (family BREACH-DOCTOR-1, unclassified, no action): the doctor does not hide its own issue from its own metric", sd);
+  ok(q1(raw, "SELECT COUNT(*) n FROM agent_issues WHERE title LIKE 'BREACH-DOCTOR-1: self%'").n === 1 && q1(raw, "SELECT COUNT(*) n FROM agent_issues WHERE title LIKE '%playbook gap BREACH-DOCTOR-1%'").n === 0, "and no issue is filed about it (the family is on the gap skip list)");
+}
+{
+  // own-issue guard: even a playbook whose trigger names a doctor-titled issue neither matches nor acts on it, and the case is still written
+  const raw = world(); old(raw); raw.prepare("UPDATE breach_playbooks SET enabled = 0").run();
+  raw.prepare("INSERT INTO breach_playbooks (rule_id, family, cause_class, action_kind, trigger_sql, action_sql, revert_sql, verify_sql, max_per_tick, max_per_day, enabled, mode) VALUES ('T-OWN', 'TEST', 'test-cause', 'sql', 'SELECT 911 AS issue_id, ''own'' AS subject, ''{}'' AS facts_json', ?, ?, 'SELECT ''ok'' AS expected, ''ok'' AS observed', 3, 12, 1, 'on')")
+    .run(JSON.stringify(["UPDATE issue_triage SET sla_due_at = 'touched' WHERE issue_id = ?1"]), JSON.stringify(["UPDATE issue_triage SET sla_due_at = 'x' WHERE issue_id = ?1"]));
+  old(raw);
+  const r = await tick(raw);
+  ok(r.acted === 0 && !q1(raw, "SELECT 1 FROM issue_triage WHERE issue_id = 911 AND sla_due_at = 'touched'") && diag(raw, 911) && diag(raw, 911).rule_id === "unclassified" && diag(raw, 911).action_kind === "none", "own-issue guard: a playbook that names the doctor's own issue does not match or act on it, and the issue is still a classified case", r);
 }
 {
   // lease expiry and the write-ahead state
@@ -460,7 +498,8 @@ const ownerProse = (raw) => { for (let i = 0; i < 6; i++) { raw.prepare("INSERT 
   for (let i = 0; i < 4; i++) await tick(raw);
   ok(r.mode === "on" && r.gap_issues === 0 && gapTitles(raw).length === 0, "seeded in measure: no playbook-gap issue is filed (the planner would record it untrusted and it would have no doer)", gapTitles(raw));
   ok(qa(raw, "SELECT 1 FROM breach_diagnoses WHERE cause_class = 'unclassified' AND state = 'diagnosed'").length >= 10, "and the unclassified cases are still diagnosed, so the measure is the ledger");
-  ok(Number(metric(raw, "breaches_undiagnosed_over_60m")) === 0, "the backlog metric still reaches 0 with the gap rule in measure");
+  const unc = q1(raw, "SELECT COUNT(*) n FROM breach_diagnoses WHERE cause_class = 'unclassified' AND state = 'diagnosed'").n;
+  ok(unc >= 10 && Number(metric(raw, "breaches_undiagnosed_over_60m")) === unc, "and the backlog metric keeps counting them: with the gap rule in measure the cause of those issues is still unfound, so the metric does not reach 0", [metric(raw, "breaches_undiagnosed_over_60m"), unc]);
 }
 {
   // armed without the trust entry: the description does not name the code loop as the doer
@@ -496,7 +535,7 @@ const ownerProse = (raw) => { for (let i = 0; i < 6; i++) { raw.prepare("INSERT 
   ok(r2.gap_issues === 1 && gapTitles(raw).length === 3 && !gapTitles(raw).some((t) => / (OWNER-CHAT|OWNER-REQUEST|other)$/.test(t)), "a closed gap issue frees one slot: one more family is filed, still never owner prose or other", gapTitles(raw));
   const titles = qa(raw, "SELECT lower(title) t FROM agent_issues WHERE title LIKE 'BREACH-DOCTOR-1: playbook gap %'").map((x) => x.t);
   ok(new Set(titles).size === titles.length, "no family has two gap issues, and the closed family is not refiled within 24 hours");
-  ok(qa(raw, "SELECT 1 FROM breach_diagnoses WHERE issue_id IN (SELECT id FROM agent_issues WHERE title LIKE 'BREACH-DOCTOR-1:%')").length === 0, "the doctor's own issues are never cases");
+  ok(qa(raw, "SELECT 1 FROM breach_diagnoses WHERE issue_id IN (SELECT id FROM agent_issues WHERE title LIKE 'BREACH-DOCTOR-1:%') AND (rule_id <> 'unclassified' OR action_kind <> 'none' OR family <> 'BREACH-DOCTOR-1')").length === 0 && !gapTitles(raw).some((t) => / BREACH-DOCTOR-1$/.test(t)), "the doctor's own issues are classified, never matched to a rule or acted on, and never the family of a gap issue");
   const raw2 = world(); old(raw2); arm(raw2, true); raw2.prepare("UPDATE breach_playbooks SET enabled = 0 WHERE rule_id = 'playbook-gap'").run();
   await tick(raw2);
   ok(gapTitles(raw2).length === 0, "playbook-gap disabled (the per-rule stop) files nothing");
@@ -534,13 +573,16 @@ const ownerProse = (raw) => { for (let i = 0; i < 6; i++) { raw.prepare("INSERT 
   ok(!diag(raw, 5001) && !!diag(raw, 5002) && !!diag(raw, 5003), "an issue 100 minutes old is not a case, one 130 minutes old is", [!!diag(raw, 5001), !!diag(raw, 5002)]);
   ok(Number(metric(raw, "breaches_undiagnosed_over_60m")) >= 1 && JSON.parse(diag(raw, 5002).facts_json).rung === "2h" && JSON.parse(diag(raw, 5003).facts_json).rung === "2h" && JSON.parse(diag(raw, 100500).facts_json).rung === "24h", "the rung label of a 2 to 8 hour issue is 2h, a 30 hour issue 24h", [diag(raw, 5002).facts_json]);
   await tick(raw);
-  ok(Number(metric(raw, "breaches_undiagnosed_over_60m")) === 0, "the metric (cases older than 180 minutes with no diagnosis) reads 0 once they are diagnosed");
+  const matchedIds = new Set(qa(raw, "SELECT issue_id FROM breach_diagnoses WHERE cause_class <> 'unclassified'").map((x) => x.issue_id));
+  const uncOld = qa(raw, "SELECT d.issue_id FROM breach_diagnoses d JOIN agent_issues a ON a.id = d.issue_id WHERE d.cause_class = 'unclassified' AND a.status = 'open' AND a.created_at <= ?", Date.now() - 180 * 60000).filter((x) => !matchedIds.has(x.issue_id)).length;
+  ok(uncOld >= 3 && Number(metric(raw, "breaches_undiagnosed_over_60m")) === uncOld, "the metric (cases older than 180 minutes with no cause found) counts the classified-unclassified ones, 5003 included: classifying them all does not make it read 0", [metric(raw, "breaches_undiagnosed_over_60m"), uncOld]);
   const raw2 = world(); cfg(raw2, "breach_doctor", "measure"); old(raw2);
   await tick(raw2);
+  const base = q1(raw2, "SELECT COUNT(*) n FROM breach_diagnoses d JOIN agent_issues a ON a.id = d.issue_id WHERE d.cause_class = 'unclassified' AND a.status = 'open' AND a.created_at <= ?", Date.now() - 180 * 60000).n;
   raw2.prepare("INSERT INTO agent_issues (id, title, source, priority, status, created_at, updated_at) VALUES (5010, 'AGE-5010 test', 'x', 'critical', 'open', ?, ?)").run(Date.now() - 150 * 60000, Date.now());
   raw2.prepare("INSERT INTO agent_issues (id, title, source, priority, status, created_at, updated_at) VALUES (5011, 'AGE-5011 test', 'x', 'critical', 'open', ?, ?)").run(Date.now() - 200 * 60000, Date.now());
   const st = await tick(raw2);
-  ok(st.undiagnosed === 1, "the metric counts an undiagnosed issue older than 180 minutes at tick start (5011) and not one of 150 (5010)", st.undiagnosed);
+  ok(st.undiagnosed === base + 1, "the metric counts an undiagnosed issue older than 180 minutes at tick start (5011) and not one of 150 (5010), on top of the classified-unclassified ones", [st.undiagnosed, base]);
   const per = qa(raw2, "SELECT issue_id FROM breach_diagnoses WHERE issue_id IN (5010, 5011) ORDER BY issue_id").map((x) => x.issue_id);
   ok(per.join(",") === "5010,5011", "and both are diagnosed in that tick", per);
   ok(!/min_age_h|hour/i.test(JSON.stringify(qa(raw2, "SELECT detail FROM breach_diagnosis_events WHERE event = 'tick'"))), "the tick event names no hour threshold");

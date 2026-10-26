@@ -1098,10 +1098,10 @@ function secretEq(a, b) {
 }
 __name(secretEq, "secretEq");
 // VERSION-LINE-SPLIT-1 (agent_issues 100220): the release notes sit one per line below this statement, newest first, so a VERSION bump is a one-line patch; add a new note as the first line under it.
-// 0.50.0 BREACH-DOCTOR-1 (2026-10-26, agent_issues 1000266, pillar autonomy; minor: a decision the worker now takes on its own): breachDoctorTick on every */10 tick diagnoses each unowned open issue older than 120 minutes (breach_doctor_min_age_min, SLA-120M-1; family, cause_class, enum facts), applies the validated per-issue playbook action (CODE-MERGE-REFUSED-1 and CODE-LOOP-EXHAUSTED-1 first), verifies it twice, and writes breach_diagnoses, breach_diagnosis_events and decision_log; ops_config breach_doctor = off stops it before any write. Playbooks are data (migrations/2026-10-26-breach-doctor.sql), a new one runs in measure for 30 minutes, a rule with 2 failures in 24 hours demotes itself, and free text never reaches an issue, a probe or a task. No model call, no D1 trigger. breach-doctor.test.mjs.
+// 0.51.0 BREACH-DOCTOR-1 (2026-10-26, agent_issues 1000266, pillar autonomy; minor: a decision the worker now takes on its own): breachDoctorTick on every */10 tick diagnoses each unowned open issue older than 120 minutes (breach_doctor_min_age_min, SLA-120M-1; family, cause_class, enum facts), applies the validated per-issue playbook action (CODE-MERGE-REFUSED-1 and CODE-LOOP-EXHAUSTED-1 first), verifies it twice, and writes breach_diagnoses, breach_diagnosis_events and decision_log; ops_config breach_doctor = off stops it before any write. Playbooks are data (migrations/2026-10-26-breach-doctor.sql), a new one runs in measure for 30 minutes, a rule with 2 failures in 24 hours demotes itself, and free text never reaches an issue, a probe or a task. No model call, no D1 trigger. breach-doctor.test.mjs.
 // 0.47.0 REMEDIATION-OVER-BUDGET-METRIC-1 (2026-10-25, pillar autonomy): refreshes the over-budget metric from the exact RED-DRAIN eligibility set instead of lifetime probe counts.
 // ADVISOR-AGENT-TRACING-1 (pillar autonomy): metadata-only turn and model spans for the folded advisor.
-var VERSION = "0.50.0-breach-doctor"; /* 0.49.3 PR-MERGE-SLA-GROUPS-1 (2026-10-26): a hold phrase inside a fenced block or an inline code span no longer holds a pull request (a body that documents the rule held itself 14 minutes); pr_sla_state.waits_on records 'hold' or 'session' (a .github/ or settings change a session merges by hand) when the lane refuses for that reason, and v_pr_merge_sla counts them as held_over_10m and session_over_10m apart from pr_open_over_10m, which counts only what the fleet itself should have merged. prior 0.49.2-probe-author-binding */ /* 0.49.2 PROBE-AUTHOR-BINDING-1 (2026-10-26, pillar autonomy, agent_issues PROBE-NEEDED-1): the probe author (rtAuthorLivePathProbe, PROBE-AUTHOR-LIVEPATH-1) never ran: remediation.probe-authored holds 0 events ever against 77 PROBE-NEEDED-1 filings in 7 days. It read the model from env["qnfo-ai"], a binding this worker does not have (the Workers AI binding is AI), read the reply only as response/result although the model answers choices[0].message.content, and wrote decision_log rows with columns the table lacks (ts, decision, reason). It now calls aiRunAttr on env.AI with one plain retry when reasoning_effort is refused, reads the reply through cmReviewReply, writes decision_log with its real columns, and records every reject as one remediation.probe-author-reject event per issue per hour instead of a console line nobody reads. probe-author.test.mjs (21 checks) fails 13 on 0.49.1. */ /* 0.49.1 PR-MERGE-SLA-10M-1 review: the body phrases "draft until", "stays a draft", "keep it a draft" and "not ready for review/merge" hold a pull request like "do not merge" does (a session that keeps its pull request as a draft on purpose says so there; the lane now merges drafts). PR-AGE-RECONCILE-1 (2026-10-26): pr_sla_state resolves a pull request that left the open list (merged by the code-loop runner, a person or a session) with one read each, at most 8 a tick; before this its row stayed open and counted as past 10 minutes for up to 30 minutes after it merged, so pr_open_over_10m read 2 with one held pull request and one that had merged. prior 0.49.0-pr-merge-sla */ /* 0.49.0 PR-MERGE-SLA-10M-1 (2026-10-26, pillar autonomy; owner directive 2026-10-26: every pull request merges within 10 minutes of opening; minor: a route and a decision the lane now takes on its own): (a) POST /gh/poke runs the merge lane and the code-loop runner at once, with no secret, debounced to one run a minute (the signed /gh/webhook has never received a delivery: its secret and the GitHub registration are owner-only steps, and CRON-MANDATE-1 forbids a faster cron); .github/workflows/lane-poke.yml sends it; (b) the stale-PR lane merges a draft that is green, quiet and free of hold and WIP markers by marking it ready (GraphQL) and deciding it once more, switch ops_config stale_pr_merge_drafts, because the harness opens every session pull request as a draft; (c) the quiet window defaults to 3 minutes with a floor of 1 (was 20 and 10); (d) every pull request into main is recorded in pr_sla_state, graded by v_pr_merge_sla and the metric pr_open_over_10m. */ /* 0.48.1 MERGE-VERSION-AHEAD-1 (2026-10-26, ci-watchdog #4319): cmIntegrity compares the pull request head's VERSION with main's now; one that is not strictly ahead (another merge took the version) is stale and is rebuilt on current main with a fresh bump instead of merging with a repeated VERSION. prior 0.48.0-deployed-unblock */ /* MERGE-DEPLOYED-UNBLOCK-1 (2026-10-26, session fix for the 2026-10-25 audit freeze): the merge runner no longer lets a runner merge in merge_state 'deployed' hold its worker forever. It holds it for CM_DEPLOYED_BUSY_MIN (5) minutes, and after CM_LIVE_AUDIT_WAIT_MIN (30) minutes with no worker_live_audit row newer than the deploy it becomes 'unverifiable' (an error event, never a revert on a missing probe); the deferral message names the task that holds the worker. Four tasks sat 'deployed' for nine hours and five green qnfo-research-exec pull requests were deferred until they aged out. MERGEABLE-POLL-LONGER-1: the mergeability poll waits 25 s (6 reads, 5 s apart) instead of 6 s. prior 0.47.0-remediation-budget-metric */ /* MERGE-SCOPE-DATA-SURFACES-1 (agent_issues 100617, owner directive CODE-LOOP-SCOPE-LIFT-1): cmScope() now auto-merges a migration SQL file and a mind data or config file, the two surfaces the loop is asked to remediate but could never merge; a GitHub workflow file stays denied and a spurious workers prefix is refused with the corrected path. prior 0.45.1-codeagent */ /* 0.45.0-no-registrar NO-REGISTRAR-1 (2026-10-21, owner directive: the closed deposit registrar is fully deprecated and not named in any code): the profile scrub keeps only a dead-prefix line filter; literal registrar text pairs removed. prior 0.44.5-close-channel */ // 0.44.5 CLOSE-CHANNEL-REQUIRED-1 (agent_issues 100419): the ten fleet-control close sites that wrote no close_channel name themselves (auto:fleet-control/<tick>); PR-ISSUE-LINK-1 also reads the RED-DRAIN-1 "-- issue #N" goal form. // 0.44.4 PR-ISSUE-LINK-1: a fleet PR references its GitHub issue (Refs #N from gh_issue_links).
+var VERSION = "0.51.0-breach-doctor"; /* 0.50.0 OWNER-AUTO-APPROVE-ALL-1 (2026-10-26, pillar autonomy; minor: a decision the lane now takes on its own): the owner answered "Yes, auto-approve all" to the two items listed as waiting on them, so the stale-PR lane merges a pull request that changes .github/ through every other gate unchanged (required checks green, clean, quiet window, no hold or WIP, canary and revert), recorded in the merge message; ops_config stale_pr_merge_workflows = off restores the refusal (PR-MERGE-SLA-GROUPS-1 then classes it as waits_on session again). The code loop's own merge scope (cmScope) still denies .github/workflows/**: that was not asked. prior 0.49.3-pr-sla-groups */ /* 0.49.3 PR-MERGE-SLA-GROUPS-1 (2026-10-26): a hold phrase inside a fenced block or an inline code span no longer holds a pull request (a body that documents the rule held itself 14 minutes); pr_sla_state.waits_on records 'hold' or 'session' (a .github/ or settings change a session merges by hand) when the lane refuses for that reason, and v_pr_merge_sla counts them as held_over_10m and session_over_10m apart from pr_open_over_10m, which counts only what the fleet itself should have merged. prior 0.49.2-probe-author-binding */ /* 0.49.2 PROBE-AUTHOR-BINDING-1 (2026-10-26, pillar autonomy, agent_issues PROBE-NEEDED-1): the probe author (rtAuthorLivePathProbe, PROBE-AUTHOR-LIVEPATH-1) never ran: remediation.probe-authored holds 0 events ever against 77 PROBE-NEEDED-1 filings in 7 days. It read the model from env["qnfo-ai"], a binding this worker does not have (the Workers AI binding is AI), read the reply only as response/result although the model answers choices[0].message.content, and wrote decision_log rows with columns the table lacks (ts, decision, reason). It now calls aiRunAttr on env.AI with one plain retry when reasoning_effort is refused, reads the reply through cmReviewReply, writes decision_log with its real columns, and records every reject as one remediation.probe-author-reject event per issue per hour instead of a console line nobody reads. probe-author.test.mjs (21 checks) fails 13 on 0.49.1. */ /* 0.49.1 PR-MERGE-SLA-10M-1 review: the body phrases "draft until", "stays a draft", "keep it a draft" and "not ready for review/merge" hold a pull request like "do not merge" does (a session that keeps its pull request as a draft on purpose says so there; the lane now merges drafts). PR-AGE-RECONCILE-1 (2026-10-26): pr_sla_state resolves a pull request that left the open list (merged by the code-loop runner, a person or a session) with one read each, at most 8 a tick; before this its row stayed open and counted as past 10 minutes for up to 30 minutes after it merged, so pr_open_over_10m read 2 with one held pull request and one that had merged. prior 0.49.0-pr-merge-sla */ /* 0.49.0 PR-MERGE-SLA-10M-1 (2026-10-26, pillar autonomy; owner directive 2026-10-26: every pull request merges within 10 minutes of opening; minor: a route and a decision the lane now takes on its own): (a) POST /gh/poke runs the merge lane and the code-loop runner at once, with no secret, debounced to one run a minute (the signed /gh/webhook has never received a delivery: its secret and the GitHub registration are owner-only steps, and CRON-MANDATE-1 forbids a faster cron); .github/workflows/lane-poke.yml sends it; (b) the stale-PR lane merges a draft that is green, quiet and free of hold and WIP markers by marking it ready (GraphQL) and deciding it once more, switch ops_config stale_pr_merge_drafts, because the harness opens every session pull request as a draft; (c) the quiet window defaults to 3 minutes with a floor of 1 (was 20 and 10); (d) every pull request into main is recorded in pr_sla_state, graded by v_pr_merge_sla and the metric pr_open_over_10m. */ /* 0.48.1 MERGE-VERSION-AHEAD-1 (2026-10-26, ci-watchdog #4319): cmIntegrity compares the pull request head's VERSION with main's now; one that is not strictly ahead (another merge took the version) is stale and is rebuilt on current main with a fresh bump instead of merging with a repeated VERSION. prior 0.48.0-deployed-unblock */ /* MERGE-DEPLOYED-UNBLOCK-1 (2026-10-26, session fix for the 2026-10-25 audit freeze): the merge runner no longer lets a runner merge in merge_state 'deployed' hold its worker forever. It holds it for CM_DEPLOYED_BUSY_MIN (5) minutes, and after CM_LIVE_AUDIT_WAIT_MIN (30) minutes with no worker_live_audit row newer than the deploy it becomes 'unverifiable' (an error event, never a revert on a missing probe); the deferral message names the task that holds the worker. Four tasks sat 'deployed' for nine hours and five green qnfo-research-exec pull requests were deferred until they aged out. MERGEABLE-POLL-LONGER-1: the mergeability poll waits 25 s (6 reads, 5 s apart) instead of 6 s. prior 0.47.0-remediation-budget-metric */ /* MERGE-SCOPE-DATA-SURFACES-1 (agent_issues 100617, owner directive CODE-LOOP-SCOPE-LIFT-1): cmScope() now auto-merges a migration SQL file and a mind data or config file, the two surfaces the loop is asked to remediate but could never merge; a GitHub workflow file stays denied and a spurious workers prefix is refused with the corrected path. prior 0.45.1-codeagent */ /* 0.45.0-no-registrar NO-REGISTRAR-1 (2026-10-21, owner directive: the closed deposit registrar is fully deprecated and not named in any code): the profile scrub keeps only a dead-prefix line filter; literal registrar text pairs removed. prior 0.44.5-close-channel */ // 0.44.5 CLOSE-CHANNEL-REQUIRED-1 (agent_issues 100419): the ten fleet-control close sites that wrote no close_channel name themselves (auto:fleet-control/<tick>); PR-ISSUE-LINK-1 also reads the RED-DRAIN-1 "-- issue #N" goal form. // 0.44.4 PR-ISSUE-LINK-1: a fleet PR references its GitHub issue (Refs #N from gh_issue_links).
 /* 0.44.1 DEFERRAL-MEASURED-1 (2026-10-20, agent_issues 2954, 100245, 100246, pillar autonomy; patch): the remediation tick reads a measured pending (a number against a bound: "pending: ... reads 0.5058 (target <= 0.5)") as a verdict, as the consumer and the D1 relapse trigger already did, instead of deferring it for ever (rtIsMeasuredPending). deferral-measured.test.mjs. */ /* 0.42.0 DEPLOY-ALL-MERGES-1 (2026-10-20, owner directive "The system shall always deploy all merges automatically."; pillar core; minor: a decision the loop now takes on its own): DEPLOY-DRIFT-CF-1 measured and redeployed only the workers qnfo-ops /ops/deploy may take, so a merge to a control-plane worker (qnfo-fleet-control, qnfo-ops, qnfo-deploy-guard, qnfo-ai, qnfo-gateway, qnfo-observability) or a container worker (qnfo-code-orchestrator, qnfo-containers-pilot) whose canonical run was cancelled, skipped or failed stayed behind main with nothing to notice it (8 rows read "skip" in deploy_drift_cf at 05:30Z). Those workers are now targets too: main ahead of live for 45 minutes, no active run of the owning workflow and the live script confirmed behind, the tick dispatches canonical-deploy.yml with workers=<name> (canary and automatic revert on the runner) or the container worker's own workflow, at most 2 a tick and once per main VERSION an hour (ddcRunner, ddcDispatchPending). Metric merges_undeployed_over_60m (migrations/2026-10-20-deploy-all-merges.sql). deploy-drift-cf.test.mjs 14. */ /* 0.41.2 EXTERNAL-HTTPS-MASTODON-HOST-1 (2026-10-19, agent_issues 2925 INTEG-MASTODON-VERIFY-1; pillar autonomy; patch): RT_HTTP_HOSTS gains mstdn.science, the public Mastodon instance whose unauthenticated account lookup (GET /api/v1/accounts/lookup) qnfo-social already reads (MASTODON-PUBLIC-STATS-1), so the issue closing probe, which was parked probe-not-machine-executable on "host not allowed", can run. The rest of rtHttpSpec is unchanged: https only, GET or HEAD, no credentials, no redirect followed, 10 s, 1 MB; a host not on the list is still refused. */ /* 0.41.1 POOL-BOUND-SOURCES-1 (issue 100213, human_actions 107; patch): POOL-BOUND-1 parks notebook extractions (idea_proposals name owner-corpus) like any generated row and never parks a row an owner directive queued directly (source idea, chat, operator-prime). 0.41.0 REOPEN-LIVE-PATH-3 (issue 100271): the remediation tick files one deduped PROBE-NEEDED-1 issue per open issue left without a live contract. 0.40.1 VERSION-LINE-NOTES-1 (2026-10-19, agent_issues 100243, pillar autonomy; patch, a comment moved): the release notes of every earlier version rode on this line (178 notes, about 200,000 chars), so a version bump of this worker was an 820,000-char patch (worker and mirror, removed and added): 12 code tasks ended on the publisher size cap on 2026-10-19 and three issues were exhausted for three days. They are in git history (git log -S '<release tag>' -- qnfo-fleet-control/worker.js); the changelog is built from the deploy ledger and commits, and the guards read only the quoted version string. A new note goes on this line and stays short. */
 /* 0.44.0 GH-WEBHOOK-INTAKE-1 and GH-APP-FLEET-2 (2026-10-20, pillar autonomy; agent_issues 2582 and 2596; minor: two new routes). POST /gh/webhook receives pull_request, check_suite and push events for QNFO/qnfo-workers, verifies X-Hub-Signature-256 against GH_WEBHOOK_SECRET (503 and nothing accepted while it is unset), records each delivery once (cloud_ops_events kind gh-webhook, id gh-webhook-<delivery>) and runs the merge lane at once for a check_suite that completed with success or a pull request opened, reopened or ready, debounced to one run a minute; the 10-minute poll stays as the second path. POST /gh-app/token is the internal broker for the other GitHub-token workers: a service binding whose props.caller is a listed fleet worker gets the cached installation token (never the personal one, never logged); GET /gh-app reports broker service-binding. Registering the webhook on GitHub and converting each worker are the filed follow-ups. */
 /* 0.43.0 WORKFLOW-FAILURE-INTAKE-1 (2026-10-20, agent_issues 100295, pillar autonomy; minor: a new loop step): each 10-minute tick reads the newest workflow runs on main, keeps every workflow's latest decided conclusion in workflow_main_state, records a failing run with its failed job and step in workflow_failures, files one WORKFLOW-FAILED-1: <workflow> issue with a d1-query probe, and closes it with close_evidence when a later main run succeeds; ops_config workflow_failure_intake = off stops it. */
@@ -5161,14 +5161,14 @@ var BH_STALE_PR_H = 24; // CYCLE-TIME-1: an open PR idle this long with no live 
 // before. Now an open session PR idle the lane window (PR-LANE-FAST-1: ops_config stale_pr_merge_idle_min, default 20 min) is merged when every required check of its files (cmRequired: gate,
 // mirror-guard, comparator, guard for worker sources, charter for charter or fleet-control files, test for the code loop) ended
 // success on the head, no other check failed or is running, the commit status is not failing and GitHub says mergeable_state
-// clean; never a draft, a PR that says do-not-merge or WIP, a PR that changes .github/, a fork, or a codeagent-/evolve/ branch
+// clean; never a draft, a PR that says do-not-merge or WIP, a PR that changes .github/ (unless ops_config stale_pr_merge_workflows is off: OWNER-AUTO-APPROVE-ALL-1, 0.50.0), a fork, or a codeagent-/evolve/ branch
 // (their own runners decide). Only what is still not mergeable at BH_STALE_PR_H is closed, with the reason in the comment.
 // Kill switch: ops_config stale_pr_merge_enabled ('0' / 'off'); every merge is a branch_hygiene_log row 'merge-stale-pr'.
 // PR-LANE-FAST-1 (0.29.0, owner directive 2026-10-14: "The system shall process PRs more rapidly and push to production."): the quiet
 // window before the lane merges a green, clean pull request is ops_config stale_pr_merge_idle_min (default 20 minutes, floor 10),
 // not 2 hours. The lane already runs every 10 minutes (laneOnly), so a green PR now reaches main within about 30 minutes and the
 // canonical deploy ships it from there. Every other gate is unchanged: required checks green on the head, mergeable_state clean,
-// no HOLD: comment newer than the head, no .github/ change, no draft or WIP, and the post-deploy canary revert.
+// no HOLD: comment newer than the head, no draft or WIP, and the post-deploy canary revert (a .github/ change is merged since 0.50.0 unless ops_config stale_pr_merge_workflows is off).
 // PR-MERGE-SLA-10M-1 (0.49.0, owner directive 2026-10-26: every pull request merges within 10 minutes of opening): the quiet window is 3 minutes (floor 1),
 // not 20 (floor 10). The gate itself runs 5 minutes after every push and a new push resets the clock, so the window only has to cover the author's last
 // comment; at 20 minutes a pull request that was green 5 minutes after opening still waited 15 more. ops_config stale_pr_merge_idle_min = 20 restores the old window.
@@ -5271,9 +5271,9 @@ function bhDecide(f) {
 }
 __name(bhDecide, "bhDecide");
 async function bhConfig(env) {
-  var cfg = { enabled: true, dry: false, raw: "(unset)", mergeStale: true, controlPlane: true, nudge: true, conflictRepair: true, holds: true, drafts: true, idleMin: BH_MERGE_IDLE_MIN_DEFAULT };
+  var cfg = { enabled: true, dry: false, raw: "(unset)", mergeStale: true, controlPlane: true, nudge: true, conflictRepair: true, holds: true, drafts: true, workflows: true, idleMin: BH_MERGE_IDLE_MIN_DEFAULT };
   try {
-    var rows = (await env.AUDIT.prepare("SELECT key, value FROM ops_config WHERE key IN ('branch_hygiene_enabled', 'branch_hygiene_dry_run', 'stale_pr_merge_enabled', 'control_plane_self_merge', 'stale_pr_nudge_enabled', 'stale_pr_conflict_repair_enabled', 'stale_pr_merge_idle_min', 'stale_pr_holds_enabled', 'stale_pr_merge_drafts')").all()).results || [];
+    var rows = (await env.AUDIT.prepare("SELECT key, value FROM ops_config WHERE key IN ('branch_hygiene_enabled', 'branch_hygiene_dry_run', 'stale_pr_merge_enabled', 'control_plane_self_merge', 'stale_pr_nudge_enabled', 'stale_pr_conflict_repair_enabled', 'stale_pr_merge_idle_min', 'stale_pr_holds_enabled', 'stale_pr_merge_drafts', 'stale_pr_merge_workflows')").all()).results || [];
     rows.forEach(function(r) {
       var v = String(r.value == null ? "" : r.value).trim().toLowerCase();
       if (r.key === "branch_hygiene_enabled" && v) { cfg.raw = v; cfg.enabled = ["0", "off", "false", "no", "disabled"].indexOf(v) < 0; }
@@ -5287,6 +5287,8 @@ async function bhConfig(env) {
       // STALE-PR-LANE-READS-HOLDS-1 (0.20.0): off stops the comment read, never the other gates.
       // PR-MERGE-SLA-10M-1: a draft that is green, quiet and carries no hold or WIP marker is marked ready and merged; off restores "a draft is never merged".
       if (r.key === "stale_pr_merge_drafts" && v) cfg.drafts = ["0", "off", "false", "no", "disabled"].indexOf(v) < 0;
+      // OWNER-AUTO-APPROVE-ALL-1 (0.50.0, owner "Yes, auto-approve all", 2026-10-26): a pull request that changes .github/ is merged like any other when this is on (the default); off restores the refusal.
+      if (r.key === "stale_pr_merge_workflows" && v) cfg.workflows = ["0", "off", "false", "no", "disabled"].indexOf(v) < 0;
       if (r.key === "stale_pr_holds_enabled" && v) cfg.holds = ["0", "off", "false", "no", "disabled"].indexOf(v) < 0;
       // PR-LANE-FAST-1: minutes of quiet before a merge; a value below the floor or unreadable keeps the floor or the default.
       if (r.key === "stale_pr_merge_idle_min" && v && isFinite(Number(v))) cfg.idleMin = Math.max(BH_MERGE_IDLE_MIN_FLOOR, Math.round(Number(v)));
@@ -5336,7 +5338,9 @@ function bhMergeDecide(pr, files, runs, statusJ, opts) {
   if (!Array.isArray(files) || !files.length || files.length >= 100) return no("its changed files could not be read (or 100+)");
   var names = files.map(function(f) { return String(f && f.filename || ""); });
   var gh = names.filter(function(n) { return /^\.github\//.test(n); });
-  if (gh.length) return no("it changes " + gh[0] + "; workflows and repository settings are never merged automatically");
+  // OWNER-AUTO-APPROVE-ALL-1 (0.50.0): the owner answered "Yes, auto-approve all" to "may the lane merge pull requests that change .github/". opts.workflows (cfg.workflows, ops_config
+  // stale_pr_merge_workflows, default on) lets the change through every other gate unchanged (required checks green on the head, clean, quiet, no hold); without it the old refusal stands.
+  if (gh.length && !(opts && opts.workflows)) return no("it changes " + gh[0] + "; workflows and repository settings are never merged automatically");
   // CONTROL-PLANE-SELF-MERGE-1 (0.7.0, owner directive 2026-10-06) replaces CONTROL-PLANE-MANUAL-1 (decision (a),
   // human_responses 27 / human_actions 21, 2026-10-02), which held only because nothing could revert a bad control-plane
   // deploy: canonical-deploy.yml now reverts a push whose VERSION never reaches /health (scripts/canary_revert.py).
@@ -5350,7 +5354,7 @@ function bhMergeDecide(pr, files, runs, statusJ, opts) {
   if (ck.pending.length) return no("check(s) still running on " + sha7 + ": " + ck.pending.join(", "));
   if (ck.other.length) return no("check(s) failed on " + sha7 + ": " + ck.other.join(", "));
   if (ck.status === "failure" || ck.status === "error" || ck.status === "pending") return no("the commit status on " + sha7 + " is " + ck.status);
-  return { merge: true, draft: !!pr.draft, why: "required checks " + req.join(", ") + " green on " + sha7 + ", no other check failing, mergeable_state " + pr.mergeable_state, required: req, control_plane: cpd.workers };
+  return { merge: true, draft: !!pr.draft, workflow_files: gh, why: "required checks " + req.join(", ") + " green on " + sha7 + ", no other check failing, mergeable_state " + pr.mergeable_state, required: req, control_plane: cpd.workers };
 }
 __name(bhMergeDecide, "bhMergeDecide");
 // STALE-PR-CHECK-REPAIR-1 (0.12.3, agent_issues 2122, pillar autonomy): a quiet session PR whose required checks are all green
@@ -5519,7 +5523,7 @@ async function bhTryMerge(env, p, cfg) {
   var cr = await evApi(env, "GET", "/commits/" + head + "/check-runs?per_page=100");
   var st = await evApi(env, "GET", "/commits/" + head + "/status");
   if (!fl.ok || !cr.ok || !st.ok) return { merged: false, why: "files HTTP " + fl.status + ", check-runs HTTP " + cr.status + ", status HTTP " + st.status };
-  var mopts = { controlPlane: !cfg || cfg.controlPlane !== false, drafts: !cfg || cfg.drafts !== false };
+  var mopts = { controlPlane: !cfg || cfg.controlPlane !== false, drafts: !cfg || cfg.drafts !== false, workflows: !cfg || cfg.workflows !== false };
   var d = bhMergeDecide(pr.j, fl.j, (cr.j && cr.j.check_runs) || [], st.j, mopts);
   if (!d.merge) {
     var why = d.why;
@@ -5558,6 +5562,7 @@ async function bhTryMerge(env, p, cfg) {
   }
   var title = String(pr.j.title || "pull request " + n).replace(/\s+/g, " ").slice(0, 200) + " (#" + n + ")";
   var msg = "Merged by qnfo-fleet-control STALE-PR-MERGE-FIRST-1 after " + ((cfg && cfg.idleMin) || BH_MERGE_IDLE_MIN_DEFAULT) + " min without activity: " + d.why + ". Owner directive 2026-10-04: merges never wait on the owner.";
+  if (d.workflow_files && d.workflow_files.length) msg += " OWNER-AUTO-APPROVE-ALL-1 (owner 2026-10-26, \"Yes, auto-approve all\"): this change touches " + d.workflow_files[0] + (d.workflow_files.length > 1 ? " and " + (d.workflow_files.length - 1) + " more .github file(s)" : "") + "; ops_config stale_pr_merge_workflows = off restores the refusal.";
   if (d.control_plane && d.control_plane.length) msg += " CONTROL-PLANE-SELF-MERGE-1: the canonical deploy canaries /health of " + d.control_plane.join(", ") + " for the new VERSION and reverts this push on its own if it does not arrive (scripts/canary_revert.py).";
   var mg = await evMergePr(env, n, head, title, msg, { holdsRead: true }); // the lane read the hold above (or its kill switch is off)
   if (!mg.ok) return { merged: false, keep: mg.status === 405 || mg.status === 409, why: "merge HTTP " + mg.status + " " + String(mg.j && mg.j.message || "").slice(0, 100) };
@@ -11270,7 +11275,7 @@ var worker_default2 = {
       ctx.waitUntil(workflowFailureIntake(env).catch((e) => console.error("workflowFailureIntake error:", e && e.message || e)));
       // SLA-TICK-10M-1 (0.30.0): SLA measurement and breach actions at 10-minute resolution (they ran hourly).
       ctx.waitUntil(slaTick10m(env).then(function (r) { console.log("sla tick (10m): " + JSON.stringify(r)); }).catch((e) => console.error("slaTick10m error:", e && e.message || e)));
-      // BREACH-DOCTOR-1 (0.50.0, agent_issues 1000266): the fleet diagnoses and remediates its own unowned breaches on EVERY 10-minute tick (not behind onTwentyGrid). It is worker code, never a D1 trigger on
+      // BREACH-DOCTOR-1 (0.51.0, agent_issues 1000266): the fleet diagnoses and remediates its own unowned breaches on EVERY 10-minute tick (not behind onTwentyGrid). It is worker code, never a D1 trigger on
       // fleet_tick; ops_config breach_doctor = off stops it before any write, and it never throws out of the slot.
       ctx.waitUntil(breachDoctorTick(env, {}).then(function (r) { console.log("breach doctor (10m): " + JSON.stringify({ ok: r.ok, mode: r.mode, diagnosed: r.diagnosed, acted: r.acted, verified: r.verified, failed: r.failed, taint: r.taint_dropped, undiagnosed: r.undiagnosed, error: r.error || null, ms: r.ms })); }).catch((e) => console.error("breachDoctorTick error:", e && e.message || e)));
       ctx.waitUntil(remediationContractsTick(env, { budgetMs: 25000 }).then(function (r) { console.log("remediation tick (10m): " + JSON.stringify({ due: r.due, pass: r.pass, fail: r.fail, skipped: r.skipped, budget_left: r.budget_left })); }).catch((e) => console.error("remediationContractsTick error:", e && e.message || e)));
@@ -12217,14 +12222,17 @@ async function rtEnsureLivePath(db, out, env) {
 }
 // ---- REOPEN-LIVE-PATH-3:END ----
 // ---- BREACH-DOCTOR-1:BEGIN ----
-// BREACH-DOCTOR-1 (0.50.0, 2026-10-26, agent_issues 1000266, pillar autonomy; owner directive 2026-10-24, repeated 2026-10-26: "FLEET IS NOT SELF-DIAGNOSING ITS OWN BREACHES AND AUTOMATICALLY
+// BREACH-DOCTOR-1 (0.51.0, 2026-10-26, agent_issues 1000266, pillar autonomy; owner directive 2026-10-24, repeated 2026-10-26: "FLEET IS NOT SELF-DIAGNOSING ITS OWN BREACHES AND AUTOMATICALLY
 // REMEDIATING"). Measured that day: 447 open agent_issues, 371 with no doer, and no loop owned the diagnosis of a family. This tick classifies every unowned open issue older than
 // breach_doctor_min_age_min (120 minutes, SLA-120M-1), matches it against breach_playbooks (data, validated here before it runs), applies the allowlisted action, verifies it, and writes its ledger
 // (breach_diagnoses, breach_diagnosis_events, decision_log). It is worker code on the */10 slot and never a D1 trigger on fleet_tick (FLEET-TICK-SPLIT-1, the SQLITE_NOMEM outage).
 // Safety, in the order a tick enforces it: ops_config breach_doctor = off returns before any write; the metrics are written first (a dead heartbeat cannot hide); one tick at a time
 // (loop_lock k = breach-doctor, 4 minutes); a playbook younger than breach_doctor_playbook_cooldown_min runs in measure; a rule with 2 failed or reverted cases in 24 hours
 // demotes itself to measure; per-rule max_per_tick and max_per_day, max_actions and max_cases per tick; a wall budget with no new case after 85% of it; a live work claim skips a case;
-// every applied action stores its revert_sql and writes decision_log. TAINT RULE: free text (issue bodies, cloud_ops_events text, exceptions_json, plan reasons) never reaches an
+// every applied action stores its revert_sql and writes decision_log. An issue whose last case failed is retried after BD_RETRY_MIN (60) minutes; after BD_STRIKES (3) failed or reverted cases it
+// is retried at most once in BD_STRIKE_RETRY_MIN (120) minutes (a rate with a release, never a permanent exclusion; control breach-doctor-strike-cap). An issue titled BREACH-DOCTOR-1: is classified
+// and counted like any other but takes no playbook hit and no action (control breach-doctor-own-issue-guard), so the doctor cannot act on its own issues and cannot hide them from its own
+// metric. breaches_undiagnosed_over_60m counts an issue until a case FOUND its cause: a classification of "unclassified" is coverage, never a diagnosis. TAINT RULE: free text (issue bodies, cloud_ops_events text, exceptions_json, plan reasons) never reaches an
 // issue, a probe, a task or a prompt: the engine reads such text only to turn it into an enum code, playbook action SQL may not name those columns, and every fact is a number, an id or a token.
 // The read cost is fixed by design: about 15,000 rows a tick (measured on live D1 2026-10-26: the state reads 5,500, the four CM triggers 7,000), never v_issue_age_ladder
 // (211,166 rows and 712 ms on the same question). No model call in v1.
@@ -12236,8 +12244,12 @@ var BD_TITLE_PREFIX = "BREACH-DOCTOR-1:";
 var BD_ISSUE_SOURCE = "qnfo-fleet-control";
 // S4 gap guard (review 2026-10-26): a family of owner prose (OWNER-CHAT, OWNER-REQUEST) or the catch-all "other" can never reach zero unclassified cases by a playbook, so no gap issue is filed for
 // it, and no more than BD_GAP_OPEN_MAX gap issues are open at once (backpressure: the next family waits until one closes).
-var BD_GAP_SKIP_FAMILIES = ["OWNER-CHAT", "OWNER-REQUEST", "other"];
+var BD_GAP_SKIP_FAMILIES = ["OWNER-CHAT", "OWNER-REQUEST", "other", "BREACH-DOCTOR-1"];
 var BD_GAP_OPEN_MAX = 3;
+// retry rate for an issue whose case failed or was reverted (control breach-doctor-strike-cap): minutes between attempts, before and after BD_STRIKES failures. 120 is the SLA-120M-1 ceiling.
+var BD_RETRY_MIN = 60;
+var BD_STRIKES = 3;
+var BD_STRIKE_RETRY_MIN = 120;
 var BD_ACTION_KINDS = ["sql", "file-issue", "owner-card"];
 var BD_WRITE_TABLES = ["issue_triage", "agent_issues", "remediation_contracts", "issue_plans", "ops_config", "human_actions"];
 var BD_FREE_TEXT_RE = /\b(description|exceptions_json|cloud_ops_events|worker_logs|last_error|detail|meta)\b/i;
@@ -12258,7 +12270,7 @@ var BD_OWNER_REASONS = {
 };
 // The family of an issue comes from this code table of title prefixes and sources, never from the text; an unknown title is "other".
 var BD_FAMILIES = [
-  ["CODE-MERGE-REFUSED-1:", "CODE-MERGE-REFUSED-1"], ["CODE-LOOP-EXHAUSTED-1:", "CODE-LOOP-EXHAUSTED-1"], ["PROBE-NEEDED-1:", "PROBE-NEEDED-1"],
+  ["BREACH-DOCTOR-1:", "BREACH-DOCTOR-1"], ["CODE-MERGE-REFUSED-1:", "CODE-MERGE-REFUSED-1"], ["CODE-LOOP-EXHAUSTED-1:", "CODE-LOOP-EXHAUSTED-1"], ["PROBE-NEEDED-1:", "PROBE-NEEDED-1"],
   ["METRIC-TRIGGER-", "METRIC-TRIGGER"], ["METRIC-REGRESSION-1:", "METRIC-REGRESSION-1"], ["METRIC-FIX-RELAPSED-1:", "METRIC-FIX-RELAPSED-1"],
   ["TOOL-FAILURE:", "TOOL-FAILURE"], ["[self-heal] tool", "SELF-HEAL-TOOL"], ["SELF-AUDIT-TOOLERR", "SELF-AUDIT-TOOLERR"],
   ["CHAOS-DRILL-FAILED-1:", "CHAOS-DRILL-FAILED-1"], ["FLEET-JOURNEY-FAILED-1:", "FLEET-JOURNEY-FAILED-1"], ["PAPER-LEARN-1", "PAPER-LEARN-1"],
@@ -12473,8 +12485,9 @@ async function bdLoadState(ctx) {
   var rv = await db.prepare("SELECT id, issue_id, state, rule_id, cause_class, mode, evidence_hash, action_kind, action_ref, attempts, verify_passes, lease_until, family, case_key FROM breach_diagnoses WHERE state NOT IN ('verified', 'superseded', 'reverted', 'failed')").all();
   st.liveRows = (rv && rv.results) || [];
   st.liveRows.forEach(function (r) { st.live[r.issue_id] = r; });
-  var rg = await db.prepare("SELECT DISTINCT issue_id FROM breach_diagnoses").all();
-  ((rg && rg.results) || []).forEach(function (r) { st.diagnosed[r.issue_id] = 1; });
+  // diagnosed = some case FOUND the cause (a playbook matched). An "unclassified" case records that the issue was looked at; it is coverage, so the issue stays counted by the metric.
+  var rg = await db.prepare("SELECT issue_id, MAX(CASE WHEN cause_class <> 'unclassified' AND diagnosed_at IS NOT NULL THEN 1 ELSE 0 END) AS found FROM breach_diagnoses GROUP BY issue_id").all();
+  ((rg && rg.results) || []).forEach(function (r) { st.diagnosed[r.issue_id] = Number(r.found) === 1 ? 1 : 0; });
   var rf = await db.prepare("SELECT issue_id, COUNT(*) AS n, MAX(last_progress_at) AS last FROM breach_diagnoses WHERE state IN ('failed', 'reverted') GROUP BY issue_id").all();
   ((rf && rf.results) || []).forEach(function (r) { st.failedCount[r.issue_id] = Number(r.n) || 0; st.failedLast[r.issue_id] = String(r.last || ""); });
   return st;
@@ -12482,7 +12495,7 @@ async function bdLoadState(ctx) {
 // ---- metrics first (S6), written by this code and not by a trigger
 async function bdWriteMetrics(ctx) {
   var db = ctx.db, st = ctx.st, since = bdIso(ctx.nowMs - 864e5), cutoff = ctx.nowMs - (ctx.cfg.min_age_min + 60) * 60000;
-  var undiag = st.old.filter(function (i) { return i.created_at <= cutoff && !st.owned[i.id] && i.title.indexOf(BD_TITLE_PREFIX) !== 0 && !st.diagnosed[i.id]; }).length;
+  var undiag = st.old.filter(function (i) { return i.created_at <= cutoff && !st.owned[i.id] && !st.diagnosed[i.id]; }).length;
   var q = await db.prepare("SELECT (SELECT COUNT(*) FROM breach_diagnoses WHERE state = 'verified' AND verified_at > ?1) AS verified, (SELECT COUNT(*) FROM breach_diagnoses WHERE state IN ('failed', 'reverted') AND last_progress_at > ?1) AS failed, (SELECT COUNT(*) FROM breach_diagnosis_events WHERE event = 'taint-drop' AND ts > ?1) AS taint, (SELECT MAX(ts) FROM breach_diagnosis_events WHERE event = 'tick') AS last_tick").bind(since).first();
   var lastTick = q && q.last_tick ? Date.parse(q.last_tick) : NaN;
   var age = isFinite(lastTick) ? Math.max(0, Math.round((ctx.nowMs - lastTick) / 60000)) : 0;
@@ -12564,10 +12577,17 @@ function bdCaseFacts(ctx, item) {
 // ---- the case phase: select, diagnose, act
 function bdSelect(ctx, hits) {
   var st = ctx.st, items = [], picked = {};
-  var retryAfter = bdIso(ctx.nowMs - 3600000);
-  var eligible = function (i) {
-    return i.title.indexOf(BD_TITLE_PREFIX) !== 0 && !st.owned[i.id] && (st.failedCount[i.id] || 0) < 3 && !(st.failedLast[i.id] && st.failedLast[i.id] > retryAfter) && (!st.live[i.id] || st.live[i.id].state === "diagnosed");
+  // strike cap: before BD_STRIKES failures an issue is retried after BD_RETRY_MIN minutes, after them at most once in BD_STRIKE_RETRY_MIN minutes
+  var waitingOut = function (i) {
+    var last = st.failedLast[i.id];
+    if (!last) return false;
+    return last > bdIso(ctx.nowMs - ((st.failedCount[i.id] || 0) >= BD_STRIKES ? BD_STRIKE_RETRY_MIN : BD_RETRY_MIN) * 60000);
   };
+  var eligible = function (i) {
+    return !st.owned[i.id] && !waitingOut(i) && (!st.live[i.id] || st.live[i.id].state === "diagnosed");
+  };
+  // own-issue guard: an issue the doctor filed is classified like any other but matches no playbook, so nothing acts on it
+  var isOwn = function (i) { return i.title.indexOf(BD_TITLE_PREFIX) === 0; };
   var needs = function (i, hit) {
     var lv = st.live[i.id];
     if (!lv) return true;
@@ -12575,7 +12595,7 @@ function bdSelect(ctx, hits) {
     return lv.rule_id !== hit.rule.id || lv.mode !== hit.rule.eff || hit.rule.eff === "on";
   };
   st.old.forEach(function (i) {
-    var h = hits[i.id] && hits[i.id][0];
+    var h = isOwn(i) ? null : hits[i.id] && hits[i.id][0];
     if (h && eligible(i) && needs(i, h)) { items.push({ issue: i, hit: h, family: bdFamily(i.title, i.source) }); picked[i.id] = 1; }
   });
   st.old.forEach(function (i) {
@@ -12637,7 +12657,7 @@ async function bdFail(ctx, diag, item, from, code, detail) {
   ctx.st.failedCount[item.issue.id] = attempts;
   ctx.st.failedLast[item.issue.id] = ctx.nowIso;
   delete ctx.st.live[item.issue.id];
-  if (attempts >= 3) await bdFileSelfIssue(ctx, diag.rule_id, code);
+  if (attempts >= BD_STRIKES) await bdFileSelfIssue(ctx, diag.rule_id, code);
 }
 // the lease of a case the doctor drives itself is 3 ticks; the case whose artefact is an issue another loop works (file-issue) gets the 120-minute ceiling (SLA-120M-1)
 function bdLeaseIso(ctx, minutes) { return bdIso(ctx.nowMs + Math.min(BD_LEASE_MAX_MIN, minutes || BD_LEASE_MIN) * 60000); }
@@ -12760,12 +12780,12 @@ async function bdActOwnerCard(ctx, item, diag, rule) {
   ]);
   ctx.out.acted++;
 }
-// S3: three failures of one issue file a self issue for the code loop (the doctor never diagnoses its own issues)
+// S3: three failures of one issue file a self issue for the code loop, once (deduped on the open title); the doctor classifies that issue like any other and never acts on it
 async function bdFileSelfIssue(ctx, ruleId, code) {
   try {
     var title = BD_TITLE_PREFIX + " self " + ruleId + " " + code;
     var probe = "SELECT '0' AS expected, CAST((SELECT COUNT(*) FROM breach_diagnoses WHERE rule_id = '" + ruleId + "' AND state IN ('failed', 'reverted') AND last_progress_at > strftime('%Y-%m-%dT%H:%M:%SZ', 'now', '-24 hours')) AS TEXT) AS observed";
-    var f = await bdFileIssue(ctx, title, ["Charter pillar: autonomy. AUTO-FILED by qnfo-fleet-control BREACH-DOCTOR-1 (" + VERSION + ").", "An issue reached 3 failed cases of rule " + ruleId + " (last error " + code + "). The doctor stops diagnosing that issue.",
+    var f = await bdFileIssue(ctx, title, ["Charter pillar: autonomy. AUTO-FILED by qnfo-fleet-control BREACH-DOCTOR-1 (" + VERSION + ").", "An issue reached " + BD_STRIKES + " failed cases of rule " + ruleId + " (last error " + code + "). The doctor now retries that issue at most once in " + BD_STRIKE_RETRY_MIN + " minutes until the rule is fixed.",
       "Read: SELECT id, issue_id, state, error_code, attempts FROM breach_diagnoses WHERE rule_id = '" + ruleId + "' AND state IN ('failed', 'reverted') ORDER BY id DESC LIMIT 10; SELECT event, detail FROM breach_diagnosis_events WHERE event IN ('fail', 'demote') ORDER BY id DESC LIMIT 10.",
       ((await bdTitleTrusted(ctx, title)) ? "Doer: the code loop or a session" : bdUntrustedDoer() + " A session") + " fixes the playbook row by migration (its action_sql guard or its verify_sql) or the engine step named by the error code.", "Definition of done: no case of rule " + ruleId + " failed in the last 24 hours."], "high", probe);
     if (f && !f.existed) ctx.out.self_issues++;

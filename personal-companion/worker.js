@@ -3176,7 +3176,7 @@ var __name22 = __name2;
 // the release note is carried by the comment blocks at STALL_MIN, shortenFeedback, pruneRepeat and attemptBudgetStop, and none is added to the VERSION
 // line below (VERSION-LINE-NOTES-1, 2026-10-19). Its older trailing notes stay until length-lede.test.mjs stops pinning "LENGTH-LEDE-1" on that line.
 // VERSION-NOTES-MOVED-1: release notes live in the block below
-var VERSION = "1.43.0-ai-label";
+var VERSION = "1.43.1-codeagent";
 // 1.43.0 BP26-AI-LABEL-1 (2026-10-26, pillar reach; EU AI Act Art. 50(4), applicable since 2026-08-02): every reading.q08.org piece says in its meta line that it is AI-generated and has no human review before publication.
 /* 1.42.0 TRAVEL-PICKS-1 (2026-10-26, pillar personal; minor): the owner's pillars (2026-10-24: "where to go, where to sleep, what to eat, how to get around, and what to do ... basically only two"). Each upcoming stop on the travel Places tab now carries three places to eat and three things to do, made from the profile on the hourly tick (one stop per tick, within 60 days) or by "Suggest now"/"Fresh ideas", each with a map-search link and a "Not for me" that is remembered (travel_reactions kind eat|do) and never bans the city from stop ideas. New table travel_picks; routes POST /travel/api/picks and /travel/api/pick-no. Nothing is booked. */
 /* 1.41.0 READING-NO-SOURCE-LEDE-1 (2026-10-26, pillar personal; minor): the owner (2026-10-21): "you also don't need to say lead every article was from Wikipedia". The writer no longer credits its source in the lede or the prose; each piece page lists its sources in a quiet footer instead, built from anchor_json refs; pieces already stored lose the "according to the Wikipedia article on ..." clause at display time (plainCredit), so the stored text, the grounding check and the fact-check are unchanged. */
@@ -5858,6 +5858,8 @@ function reasonIsInference(item) {
   var reason = String(item).slice(i + 4);
   var saysSupported = /\bin (?:the )?source\b/i.test(reason) && !/\bnot (?:[\w-]+ ){0,2}in (?:the )?source\b/i.test(reason) && !/\b(?:no|nothing|absent|missing|lacks?)\b/i.test(reason);
   if (wordingOnly(reason)) return true;
+  // Treat reasons ending with "matches source" or "so supported" as inference (do not cause a fail)
+  if (/\b(matches source|so supported)$/i.test(reason.trim())) return true;
   return (INFERENCE_REASON_RE.test(reason) || saysSupported) && !FACT_REASON_RE.test(reason);
 }
 var REASONING_MARK_RE = /\b(incentives?|pressures?|mechanisms?|structures?|repeats?|wherever|whenever|because|therefore|thus|hence|so that|cannot|can|could|may|might|would|should|tends?|likely|underscores?|suggests?|implies|means|translates?|prevent\w*|despite|based on|leads? to|result\w* in|unless|if|weak|stronger|weaker)\b/i;
