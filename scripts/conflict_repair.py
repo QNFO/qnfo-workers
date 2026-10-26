@@ -47,6 +47,13 @@ VERSION_LINE = re.compile(r'^(var VERSION ?= ?)"([^"\n]*)"(;?.*)$', re.M)  # gro
 NOTE_BLOCK = re.compile(r"/\*.*?\*/", re.S)
 HOLD_RE = re.compile(r"(^|[\s\[(])(wip|do[\s-]*not[\s-]*merge|hold)([\s:\])]|$)", re.I)
 DIRTY_QUIET_MIN = 10  # a pull request whose newest commit is younger is still being worked on
+# CONFLICT-REPAIR-BOT-QUIET-1 (2026-10-26): a code-loop branch (codeagent-*) has no author mid-edit, so waiting ten minutes only adds latency.
+# Each merge to a hot worker (qnfo-research-exec took six queued code tasks at once on 2026-10-26) makes every other pull request on it
+# conflict, and the wait is paid once per merge: 5 pull requests x 10 minutes of quiet = 50 minutes of a 120-minute SLA. A repair is
+# followed by a gate of 5 to 9 minutes and conflicts recur only after another merge to the same worker (one per runner tick, >= 10 minutes
+# apart), so 3 minutes cannot start a repair loop.
+BOT_BRANCH_PREFIX = "codeagent-"
+BOT_QUIET_MIN = 3
 ISSUE_PR = re.compile(r"STALE-PR-CONFLICT-REPAIR-1\b[^\d#]{0,40}#?(\d+)")
 # The check workflows dispatched on a branch this script pushes (each declares workflow_dispatch; scripts/conflict_repair_test.py pins that).
 # PR-GUARD-FIXES-1 (2026-10-20, agent_issues 100295): a push with GITHUB_TOKEN does not "start no pull_request workflow". GitHub creates the
@@ -279,7 +286,7 @@ def dirty_prs(limit, quiet_min=DIRTY_QUIET_MIN, now=None, ghf=None, sleep=time.s
             age = (now - calendar.timegm(time.strptime(stamp, "%Y-%m-%dT%H:%M:%SZ"))) / 60.0
         except ValueError:
             age = 1e9
-        if age >= quiet_min:
+        if age >= (min(quiet_min, BOT_QUIET_MIN) if ref.startswith(BOT_BRANCH_PREFIX) else quiet_min):
             found.append((age, n))
     found.sort(reverse=True)
     return [n for _, n in found[: max(1, limit)]]
@@ -853,6 +860,14 @@ def selftest():
     got = dirty_prs(5, 10, now=1000000 + 4000, ghf=fake_gh, sleep=lambda x: None)
     ok(got == [2, 1], "dirty_prs: conflicting quiet pull requests, longest quiet first; a clean one, a repair branch, a hold, a draft and one committed 30 s ago are left; a null mergeability is read again", got)
     ok(dirty_prs(1, 10, now=1000000 + 4000, ghf=fake_gh, sleep=lambda x: None) == [2], "dirty_prs: the limit is honoured")
+    # CONFLICT-REPAIR-BOT-QUIET-1: a codeagent-* branch waits 3 minutes, a person's branch still waits the full ten
+    saved_ages = dict(ages)
+    ages["a1"], ages["a2"] = 240, 240
+    got = dirty_prs(5, 10, now=1000000 + 4000, ghf=fake_gh, sleep=lambda x: None)
+    ok(1 in got and 2 not in got, "dirty_prs: a code-loop branch committed 4 minutes ago is taken, a person's branch committed 4 minutes ago is left", got)
+    ages["a1"] = 120
+    ok(1 not in dirty_prs(5, 10, now=1000000 + 4000, ghf=fake_gh, sleep=lambda x: None), "dirty_prs: a code-loop branch committed 2 minutes ago is still left (it may be mid-push)")
+    ages.clear(); ages.update(saved_ages)
     # in-place: main is merged into the pull request's own branch; the pull request keeps its commits and gets main's
     with tempfile.TemporaryDirectory() as d:
         def g(*a):
