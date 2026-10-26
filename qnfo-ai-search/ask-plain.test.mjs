@@ -237,6 +237,20 @@ const user4 = calls[0][calls[0].length - 1].content;
 ok(user4.indexOf("Widget merging is a familiar idea") < 0, "the wording's own sentence is left out of the body sections too", user4.slice(0, 600));
 ok(user4.split("are called survivors").length === 2, "a sentence in the definition list is not repeated by a section", user4.split("are called survivors").length);
 
+// 4d. ASK-PLAIN-5: an explain question is written by EXPLAIN_MODEL (reasoning off), outside the champion/challenger arms
+const seen = []; const aiRun2 = AI.run; AI.run = async function (m, input) { seen.push({ m, reasoning_effort: input.reasoning_effort, max_tokens: input.max_tokens }); return aiRun2.call(AI, m, input); };
+outs = [PLAIN]; calls = []; rnd = 0.1; // the challenger arm would have drawn qwen
+t = await ask('Explain "' + T + '" once more', "widget-paper");
+rnd = 0.5;
+ok(seen.length === 1 && seen[0].m === "@cf/moonshotai/kimi-k2.6" && seen[0].reasoning_effort === "none", "an explain question is written by the explain model with reasoning off", seen);
+row = sq.prepare("SELECT arm, model FROM ask_events ORDER BY rowid DESC LIMIT 1").get();
+ok(row.arm === "explain" && /kimi/.test(row.model), "its event is outside the champion and challenger arms", row);
+seen.length = 0; outs = [PLAIN]; calls = [];
+t = await ask("How many assemblies are there in the paper?", "widget-paper");
+ok(seen.length === 1 && /llama/.test(seen[0].m) && seen[0].reasoning_effort === undefined, "an ordinary question still uses the arm's model, no reasoning switch", seen);
+AI.run = aiRun2;
+ok(src.includes('var EXPLAIN_MODEL = "@cf/moonshotai/kimi-k2.6"') && src.includes('"@cf/moonshotai/kimi-k2.6": [86364, 363636]'), "the explain model is priced in RATES");
+
 // 5. the measure: ask_plain_share_7d from ask_events.plain
 sq.exec("CREATE TABLE IF NOT EXISTS metric_registry (metric TEXT PRIMARY KEY, layer TEXT NOT NULL, kind TEXT NOT NULL, formula TEXT, source_of_truth TEXT, baseline TEXT, target TEXT, owner TEXT, disposition_actor TEXT, refresh_cadence TEXT, warning_band TEXT, kill_band TEXT, state TEXT, refresh_class TEXT, last_value TEXT, last_refreshed TEXT)");
 sq.exec("CREATE TABLE IF NOT EXISTS ask_evals (id INTEGER PRIMARY KEY AUTOINCREMENT, ts TEXT NOT NULL, kind TEXT NOT NULL, cfg TEXT, n INTEGER, score REAL, detail TEXT)");
@@ -252,6 +266,6 @@ ok(mv && Number(mv.last_value) === Math.round((1 - total.bad / total.n) * 1e4) /
 ok(/ask_plain_share_7d/.test(src) && /plain: "- Write in plain language "/.test(src) && /m\.fix === "plain"/.test(src), "the metric has its fix anchor and its example query");
 
 // 6. a cached answer from an older prompt is not replayed
-ok(/var ANSWER_REV = "r6-"/.test(src) && /__answer\/" \+ ANSWER_REV \+ cfg\.id/.test(src), "the answer cache is keyed by the revision of what an answer says");
+ok(/var ANSWER_REV = "r7-"/.test(src) && /__answer\/" \+ ANSWER_REV \+ cfg\.id/.test(src), "the answer cache is keyed by the revision of what an answer says");
 console.log(pass + " passed, " + fail + " failed");
 if (fail) process.exit(1);
