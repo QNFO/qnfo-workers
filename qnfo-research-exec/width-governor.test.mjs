@@ -143,7 +143,7 @@ const tick = () => new Promise((r) => setTimeout(r, 4));
 const i0 = src.indexOf("\nasync function aiText(env, model, prompt, maxTokens, effort) {");
 const AI_SRC = line("__AI_ATTR_RATES") + line("AI_RATE_FALLBACK") + line("AI_TIMEOUT_SKIP") + line("AI_TRANSIENT_RE") + line("AI_MODEL_SKIP_MS") + line("_aiRateSkip") + line("_aiSkipLogged")
   + fn("function aiInputRate(") + fn("function aiFallbackFor(") + fn("async function aiSkipLog(")
-  + "\nvar AI_TEXT_MAX_OUT = {};\nasync function aiRunOpts() { return undefined; }\nvar _evs = [];\nasync function logEvent(env, kind, text) { _evs.push(kind + ': ' + text); }\n"
+  + "\nvar MODELS_COST_ORDER = [\"@cf/zai-org/glm-5.3-flash\", \"@cf/openai/gpt-oss-120b\"];\nvar _costFirst = false;\nvar AI_TEXT_MAX_OUT = {};\nasync function aiRunOpts() { return undefined; }\nvar _evs = [];\nasync function logEvent(env, kind, text) { _evs.push(kind + ': ' + text); }\n"
   + src.slice(i0, src.indexOf("\n}\n", i0) + 2)
   + "\nreturn { aiText, aiFallbackFor, aiInputRate, AI_RATE_FALLBACK, __AI_ATTR_RATES, evs: _evs, skip: _aiRateSkip, reset: function() { for (var k in _aiRateSkip) delete _aiRateSkip[k]; for (var k2 in _aiSkipLogged) delete _aiSkipLogged[k2]; _evs.length = 0; } };";
 const G = new Function(AI_SRC)();

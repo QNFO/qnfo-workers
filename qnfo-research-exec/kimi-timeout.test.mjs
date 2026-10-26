@@ -10,7 +10,7 @@ const i = src.indexOf("\nasync function aiText(env, model, prompt, maxTokens, ef
 const fn = (head) => { const a = src.indexOf("\n" + head); if (a < 0) throw new Error("missing " + head); return src.slice(a, src.indexOf("\n}\n", a) + 2); };
 const body = line("__AI_ATTR_RATES") + line("AI_RATE_FALLBACK") + line("AI_TIMEOUT_SKIP") + line("AI_TRANSIENT_RE") + line("AI_MODEL_SKIP_MS") + line("_aiRateSkip") + line("_aiSkipLogged")
   + fn("function aiInputRate(") + fn("function aiFallbackFor(") + fn("async function aiSkipLog(")
-  + "\nvar AI_TEXT_MAX_OUT = {};\nasync function aiRunOpts() { return undefined; }\nasync function logEvent() {}\n" + src.slice(i, j + 2)
+  + "\nvar MODELS_COST_ORDER = [\"@cf/zai-org/glm-5.3-flash\", \"@cf/openai/gpt-oss-120b\"];\nvar _costFirst = false;\nvar AI_TEXT_MAX_OUT = {};\nasync function aiRunOpts() { return undefined; }\nasync function logEvent() {}\n" + src.slice(i, j + 2)
   + "\nreturn { aiText, reset: function() { for (var k in _aiRateSkip) delete _aiRateSkip[k]; for (var k2 in _aiSkipLogged) delete _aiSkipLogged[k2]; } };";
 const { aiText, reset } = new Function(body)();
 const realSet = globalThis.setTimeout; globalThis.setTimeout = (f) => realSet(f, 0);
