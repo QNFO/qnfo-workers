@@ -257,6 +257,12 @@ binding = "CONTAINERS_PILOT"
 service = "qnfo-containers-pilot"
 environment = "production"
 
+# CF-AGENTS-1 (2.57.0): the fleet's Cloudflare Agents SDK agent behind /v1/agents/*. qnfo-agents trusts caller "qnfo-ops".
+[[services]]
+binding = "AGENTS"
+service = "qnfo-agents"
+props = { caller = "qnfo-ops" }
+
 # SERVER-SIDE-DEPLOY-1 (2026-09-19): service binding to the deploy-guard lock service.
 # A Worker on *.q08.workers.dev CANNOT fetch another Worker on the same zone (Cloudflare
 # error 1042), so the lock/ledger calls go through this binding, not global fetch.
