@@ -26,8 +26,8 @@ Status: **DRAFT, 2026-10-26** (BP26-RETENTION-1, agent_issues 1000344). Written 
 | `email_calendar_delivery_90d` | qnfo-audit `email_calendar_delivery` | finished rows | 90 days | A finished reminder or acknowledgement | 0 |
 | `handoffs_email_180d` | qnfo-audit `handoffs` | summary, pending_work, next_action of strategic-mail handoffs | 180 days | A handoff summarises a sender and a snippet | 0 |
 | `emails_metadata_365d` | qnfo-audit `emails` | the row (who, when, subject) | 365 days | Reply and audit trail for a year | 0 |
-| `ipatent_sessions_90d` | ipatent-db `sessions` | the row (raw IP address, user agent) | 90 days | Counters keep what is needed | **11** (runner) |
-| `ipatent_analytics_90d` | ipatent-db `analytics` | the row | 90 days | Per-event analytics with a raw IP address | **41** (runner) |
+| `ipatent_sessions_90d` | ipatent-db `sessions` | the row (raw IP address, user agent; a legacy table, last written 2026-07-12) | 90 days | Counters keep what is needed | **11** (runner) |
+| `ipatent_analytics_90d` | ipatent-db `analytics` | the row | 90 days | Legacy per-event analytics (last written 2026-07-12) with a raw IP address | **41** (runner) |
 | `ipatent_submission_ip_90d` | ipatent-db `submissions` | ip_address, user_agent | 90 days | Not needed once the draft is delivered | **41** (runner) |
 | `ipatent_submissions_730d` | ipatent-db `submissions` | the row | 730 days | Two years after writing unless the submitter asks to keep it | 0 (runner) |
 | `q08_subscribers_pending_30d` | q08-signal `subscribers` | the row | 30 days | Unconfirmed opt-in | 0 (runner) |
@@ -39,7 +39,7 @@ Total: 793 on qnfo-audit at apply, 886 after the runner's first count of the ipa
 
 - **R2 objects and lifecycle rules.** The BP26 item also names R2 lifecycle rules. Which buckets hold personal data (ipatent `r2_key` documents, mail attachments if any) has not been read; this is a code task for the owners of qnfo-ipatent and qnfo-email.
 - **AI Gateway.** Read from the Cloudflare API on 2026-10-26, gateway `default` has payload logging on (`collect_logs`), keeps up to 2,000,000 logs and deletes the oldest first (a count, not a period), caches responses for 2,628,288 s (about 30 days), has Logpush off and zero data retention off. Calls that name this gateway are stored there. The twin (personal-api) names it on every model call with no `collectLog` or `skipCache` option, so the owner's prompts and answers are held in the logs and the cache (docs/dpia/personal-twin.md, risk 2); the reply path of the e-mail agent and every model call of qnfo-ipatent name no gateway (read from the code the same day). BP26 item 4.3 asks for payload logging off on mail calls.
-- **Workers Logs and GitHub Actions logs.** Retention of Workers Logs is set by the Cloudflare plan, not by a table. The measured exposure is `pii_in_logs`: crawler `From` headers in Workers Logs, 57 to 68 address matches in each 2,000-event sample on 2026-10-26.
+- **Workers Logs and GitHub Actions logs.** Retention of Workers Logs is set by the Cloudflare plan, not by a table. The measured exposure is `pii_in_logs`: crawler `From` request headers in Workers Logs, 57 to 83 address matches in each 2,000-event sample on 2026-10-26 (the runner's measurement was 83, in qnfo-gateway, idea-hub and q08-signal-engine).
 - **Social replies metadata** (`social_replies`: a hash of the author and a text length) and **cloud_ops_events**: no personal content; a period of 365 days is proposed for the first and is not registered yet.
 - **Published artifacts** (papers, essays, forecasts) are permanent by design; corrections and retractions follow BP26-CORRECTIONS-FEED-1.
 

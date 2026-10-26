@@ -19,8 +19,12 @@ PRODUCTION USE."*
    the control. Results land in `cf_model_evals` (score, latency, cost, per-probe
    detail).
 3. **Decide** — `decideVerdict()` is pure and unit-tested; see `eval-logic.test.mjs`.
-4. **Carry the winner** — a promotion writes the ladder row (`active=0`), a
-   `roadmap_implementation` item and a deduped `agent_issue` naming the switch.
+4. **Carry the winner** — a promotion writes the ladder row (`active=0`) and a
+   `roadmap_implementation` item at once; the deduped `agent_issue` naming the
+   switch is filed at the end of the pass (PROMOTE-TICKET-AFTER-RECONCILE-1, 1.8.2),
+   after step 5 and the one-winner reconcile, and only for a model whose promotion
+   still stands (catalog `recommended` or `in_production`, or a ladder row). A
+   promotion the same pass withdraws files no ticket.
 5. **Canary** (decision models) — runs the winner over real open `agent_issues`
    rows that already carry `category`/`priority`, and records agreement with the
    fleet's own labels in `cf_model_canary`. A battery score is not an adoption.
