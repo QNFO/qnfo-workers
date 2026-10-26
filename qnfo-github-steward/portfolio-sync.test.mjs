@@ -31,6 +31,10 @@ db.prepare("INSERT INTO projects (project_code, program_code, name, status, gith
 
 const mig = readFileSync(join(here, "..", "migrations", "2026-10-18-portfolio-sync.sql"), "utf8");
 for (const stmt of mig.split(/;\s*\n/).map((s) => s.replace(/^\s*--.*$/gm, "").trim()).filter(Boolean)) db.exec(stmt);
+// PORTFOLIO-NOT-ISSUES-1: the scope table, its seed and the drift view that reads it (only those statements: the rest of the file writes registers this fixture does not have).
+const scopeMig = readFileSync(join(here, "..", "migrations", "2026-10-26-roadmap-mirror-scope.sql"), "utf8");
+for (const stmt of scopeMig.split(/;\s*\n/).map((s) => s.replace(/^\s*--.*$/gm, "").trim()).filter((s) => /^(CREATE TABLE IF NOT EXISTS roadmap_mirror_scope|INSERT OR IGNORE INTO roadmap_mirror_scope|DROP VIEW IF EXISTS v_portfolio_drift_roadmap|CREATE VIEW v_portfolio_drift_roadmap)/i.test(s))) db.exec(stmt);
+assert.equal(db.prepare("SELECT COUNT(*) c FROM roadmap_mirror_scope WHERE mirrored = 0").get().c, 3, "the scope seed takes three sources out of the mirror");
 assert.equal(db.prepare("SELECT github_repo FROM projects WHERE project_code='QNFO.RSCH.PAPER'").get().github_repo, "QNFO/qnfo-workers", "404 repo repointed");
 assert.equal(db.prepare("SELECT status FROM projects WHERE project_code='QNFO.RSCH.APH'").get().status, "archived", "archived-repo project archived");
 assert.equal(db.prepare("SELECT count(*) c FROM programs").get().c, 5);
@@ -112,7 +116,8 @@ assert.equal(db.prepare("SELECT last_value FROM metric_registry WHERE metric='po
 const i202 = gIssues.find((x) => x.number === 6002);
 assert.ok(i202.milestone && i202.labels.some((l) => l.name === "program:reach") && i202.labels.some((l) => l.name === "bug"), "milestone + managed labels set, unmanaged labels kept");
 const rmIssues = gIssues.filter((x) => x.labels.some((l) => l.name === "roadmap"));
-assert.equal(rmIssues.length, 2, "open roadmap items (RM-X + metric objective) mirrored; verified item and agent_issues copy are not");
+assert.equal(rmIssues.length, 1, "only the open work item (RM-X) is mirrored; the metric objective is out of scope (PORTFOLIO-NOT-ISSUES-1), the verified item and the agent_issues copy are not");
+assert.ok(!gIssues.some((i) => /RM-METRIC/.test(i.title)), "a metric-breach objective is never filed as a GitHub issue: its METRIC-TRIGGER ticket tracks the breach");
 assert.ok(!gIssues.some((i) => /AI-201/.test(i.title)), "an agent_issues copy is never filed twice");
 assert.ok(rmIssues.find((x) => /RM-X/.test(x.title)).milestone, "roadmap item lands in its worker's project milestone");
 assert.ok(gMs.find((m) => /^QNFO\.RSCH\.APH/.test(m.title)) === undefined, "archived project gets no milestone");
@@ -128,8 +133,7 @@ db.prepare("UPDATE trig SET val=0, hit=0 WHERE metric_key='open_agent_issues'").
 const rmx = rmIssues.find((x) => /RM-X/.test(x.title)); rmx.state = "closed";
 const r6 = await tick();
 assert.equal(r6.objectives_verified, 1);
-assert.equal(r6.roadmap_closed, 1); assert.equal(r6.roadmap_reopened, 1);
-assert.equal(rmIssues.find((x) => /RM-METRIC/.test(x.title)).state, "closed");
+assert.equal(r6.roadmap_closed, 0, "the metric objective had no GitHub issue to close"); assert.equal(r6.roadmap_reopened, 1);
 assert.equal(rmx.state, "open", "D1 is authoritative for roadmap state");
 assert.match(db.prepare("SELECT evidence FROM roadmap_implementation WHERE item='RM-METRIC-open_agent_issues'").get().evidence, /^cleared: measured 0/);
 
