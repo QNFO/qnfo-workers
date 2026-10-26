@@ -100,5 +100,5 @@ SELECT 'claude-code-session_01LZjc7uUB8m8Nz9UBDuVGUY',
   'a verified single-commit deposit with read-back, a per-run D1 ledger and a repository that the verifier can fail; the research record is complete or lists exactly what is missing',
   'fm-research-run-deposit observed = 0 within 24 h of the deploy; research_run_ledger has an ok row for every paper published after it',
   'every pipeline paper has a path from papers.qnfo.org to its run, sources and verification, and back',
-  'git (subtree import, 3,324 commits), GitHub Git Data API (fake in the suite), D1 qnfo-audit and living-paper (read), R2 (read by key, in the restore path), Python 3.13 re-execution of all 388 verification scripts'
+  'git (subtree import, 3,324 commits), GitHub Git Data API (fake in the suite), D1 qnfo-audit and living-paper (read), R2 (read by key, in the restore path), CPython 3.12 (reference) re-execution of all 388 verification scripts'
 WHERE NOT EXISTS (SELECT 1 FROM decision_log WHERE actor = 'claude-code-session_01LZjc7uUB8m8Nz9UBDuVGUY' AND instr(action, 'fold qnfo-ensemble-research') = 1);
