@@ -218,6 +218,13 @@ const looped = (n) => withLoop(good, "Te", 900 + n);
   ok(audit.prepare("SELECT COUNT(*) n FROM cloud_ops_events WHERE kind = 'quality-fresh'").get().n === 1, "a lane that changed something records one event");
   const r2 = await mod.__fresh(env);
   ok(r2.notes.withdrawn === 0 && audit.prepare("SELECT COUNT(*) n FROM cloud_ops_events WHERE kind = 'quality-fresh'").get().n === 1 && living.prepare("SELECT COUNT(*) n FROM publication_gate_audit WHERE slug = 'new-loop'").get().n === 1, "a quiet lane records nothing and withdraws nothing twice", r2.notes);
+  // DEGENERATE-TEXT-1b: a failure before the sweep's own event (the setting read) is written to the event ledger, so the lane cannot be down in silence
+  const broken = freshEnv({ papers: [["x", "published", good]] });
+  const realPrepare = broken.env.AUDIT.prepare;
+  broken.env.AUDIT.prepare = (sql) => { if (/publication_gate_mode/.test(sql)) throw new Error("audit read refused"); return realPrepare(sql); };
+  const rb = await mod.__fresh(broken.env);
+  const ev = broken.audit.prepare("SELECT kind, status, text FROM cloud_ops_events WHERE kind = 'quality-fresh'").all();
+  ok(rb.status === "error" && ev.length === 1 && ev[0].status === "error" && /fresh quality lane failed: .*audit read refused/.test(ev[0].text), "a fresh lane that fails before its own event leaves one error event", { rb, ev });
   // the hourly run and the fresh lane meeting on one paper leave one audit row
   const both = freshEnv({ papers: [["dup", "published", looped(3)]] });
   const [a, b] = await Promise.all([mod.__job(both.env), mod.__fresh(both.env)]);
