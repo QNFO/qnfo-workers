@@ -101,6 +101,9 @@ try {
       acquired_at TEXT,evidence TEXT);
     CREATE TABLE decision_log(actor TEXT,assumption TEXT,action TEXT,evidence TEXT,outcome TEXT,blast_radius TEXT,
       rollback_path TEXT,capability_gain TEXT,predicted_outcome TEXT,reach_gain TEXT,surfaces_tested TEXT);
+    CREATE TABLE session_records(session_id TEXT PRIMARY KEY,wbs_code TEXT,agent_name TEXT,summary TEXT,
+      decisions_made TEXT,files_changed TEXT,commits TEXT,infrastructure_changes TEXT,handoff_notes TEXT,
+      execution_ratio REAL,total_tasks INTEGER,completed_tasks INTEGER,started_at TEXT,completed_at TEXT);
   `);
   const doctrine = readFileSync(new URL("../migrations/2026-10-08-12-doctrine.sql", import.meta.url), "utf8");
   for (const table of ["control_registry", "belief_registry", "spof_registry"])
@@ -114,6 +117,8 @@ try {
   assert.equal(extended.personal_calendar_delivery_over_120m, 0);
   assert.equal(extended.personal_calendar_delivery_oldest_min, 0);
   assert.equal(audit.prepare("SELECT count(*) n FROM decision_log").get().n, 1, "migration registration is rerunnable");
+  assert.equal(audit.prepare("SELECT count(*) n FROM session_records").get().n, 1);
+  assert.match(audit.prepare("SELECT handoff_notes FROM session_records").get().handoff_notes, /not established/);
   assert.equal(audit.prepare("SELECT sla_min FROM queue_sla WHERE stuck_type='personal-calendar-delivery'").get().sla_min, 120);
   const observer = JSON.parse(audit.prepare("SELECT definition FROM fleet_tasks WHERE id='personal-calendar-monitor'").get().definition);
   const measure = () => { for (const step of observer.steps) audit.exec(step.sql); };
