@@ -717,7 +717,10 @@ def publish_one(task, repo_dir, base, pr, delegate=False):
         return "publish_failed", None, str(e)[:300], None
 
 
-STALE_SEARCH_RE = re.compile(r"edit \d+: SEARCH text occurs 0 times")
+# A hand-filed task (ct_im*, ct_revnoop*) parks a verified patch and no ctx.edits. When main moves under it the rebase has nothing to
+# re-apply ("no SEARCH/REPLACE edits parked"), which is the same stale base as a gone SEARCH: ct_im100458 (2026-10-22) and
+# ct_revnoop20261024a (2026-10-24) ended publish_failed with the whole goal intact (agent_issues 2380 reopened on them).
+STALE_SEARCH_RE = re.compile(r"edit \d+: SEARCH text occurs 0 times|no SEARCH/REPLACE edits parked in ctx\.edits")
 REPROPOSE_NOTE = "[reproposed from {old}: main moved under the task before publish (STALE-PUBLISH-REPROPOSE-1); rebuild the same change on current main]"
 
 
@@ -1002,14 +1005,20 @@ def selftest():
     main_show = subprocess.run(["git", "--git-dir", remote, "show", "main:scripts/x.py"], capture_output=True, text=True)
     check("main is untouched (never merged)", main_show.stdout == "def f():\n    return 1\n")
 
-    # 3. patch fails to apply -> publish_failed with a reason, no PR, no push
+    # 3. patch fails to apply and parks no edits to rebuild from -> superseded with the reason and one re-proposed successor (STALE-PUBLISH-REPROPOSE-1,
+    #    agent_issues 2380: ct_im100458 and ct_revnoop20261024a ended publish_failed here with their goals intact), no PR, no push
     remote, work, store = fixture()
     _sh(work, "git", "fetch", "-q", "origin", "main")
     pr = FakePR()
     add(store, "ct_applybad0001", stale)
     r = publish_all(store, work, "main", pr, quiet)
     t = row(store, "ct_applybad0001")
-    check("patch fails: publish_failed with reason, never silent", r["failed"] == 1 and t["status"] == "publish_failed" and "does not apply" in (t["last_error"] or ""), t)
+    nid = json.loads(t["ctx"] or "{}").get("reproposed_as")
+    succ = row(store, nid) if nid else None
+    check("patch fails with no parked edits: superseded with the reason and a queued successor, never silent",
+          r["failed"] == 0 and r.get("reproposed") == 1 and t["status"] == "superseded" and "does not apply" in (t["last_error"] or "")
+          and "no SEARCH/REPLACE edits parked" in (t["last_error"] or "") and succ is not None and succ["status"] == "queued"
+          and "reproposed from ct_applybad0001" in succ["goal"], (dict(t), dict(succ) if succ else nid))
     br = subprocess.run(["git", "--git-dir", remote, "branch", "--list", "codeagent-applybad0001"], capture_output=True, text=True)
     check("patch fails: no PR and nothing pushed", not pr.created and br.stdout.strip() == "")
     add(store, "ct_policybad001", good, path=".github/workflows/x.yml")
