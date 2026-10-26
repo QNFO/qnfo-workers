@@ -55,6 +55,7 @@ INSERT INTO metric_registry VALUES ('audit_coverage', 'agent_actions (to build) 
   sp.run("p2", "bluesky-rollup", null, null, day(2), "published", day(2));
   sp.run("p3", "buffer-x", "3", null, day(2), "failed", day(2));                                                                                 // not published
   sp.run("p4", "buffer-x", "4", null, day(20), "published", day(20));                                                                            // outside the window
+  w.prepare("INSERT INTO social_media_posts (id, platform, post_id, url, published_at, status, created_at) VALUES (NULL, ?, ?, ?, ?, ?, ?)").run("buffer-linkedin", "7", null, day(1), "published", day(1)); // NULL ledger id, in the window
   const th = w.prepare("INSERT INTO social_threads (slug, status, posted_at) VALUES (?, ?, ?)");
   th.run("t-posted", "posted", day(3)); th.run("t-queued", "queued", null); th.run("t-old", "posted", day(40));
   const wc = w.prepare("INSERT INTO work_claims (path, intent, holder, claimed_at, expires_at, released_at, outcome) VALUES (?, 'x', ?, ?, ?, ?, ?)");
@@ -91,7 +92,8 @@ ok(kind(w, "social_media_posts", "p1") === "publish" && kind(w, "social_media_po
 ok(q1(w, "SELECT target t FROM agent_actions WHERE source_id = 'p1'").t.includes("117506044806056387") && q1(w, "SELECT target t FROM agent_actions WHERE source_id = 'p2'").t === "bluesky-rollup:p2", "a post's target is its public URL, else platform:id");
 ok(kind(w, "social_threads", 1) === "publish" && kind(w, "social_threads", 2) === undefined && kind(w, "social_threads", 3) === undefined, "threads: posted inside the window only");
 const before = q1(w, "SELECT COUNT(*) n FROM agent_actions").n;
-ok(before === 7 + 1 + 2 + 1, "row count after backfill: 7 deploy-ledger rows, 1 mail, 2 posts, 1 thread", before);
+ok(before === 7 + 1 + 3 + 1, "row count after backfill: 7 deploy-ledger rows, 1 mail, 3 posts (one with a NULL ledger id), 1 thread", before);
+ok(qa(w, "SELECT source_id s FROM agent_actions WHERE source_table = 'social_media_posts' AND source_id LIKE 'rowid:%'").length === 1, "a post with a NULL ledger id is recorded under rowid:<n>, not skipped");
 
 // writers
 w.prepare("INSERT INTO fleet_deploys (worker, actor, to_sha, ok, note, ts) VALUES ('qnfo-ai', 'qnfo-ops/ops-deploy', '2.0.0', 1, 'server-side deploy', ?)").run(day(0));
@@ -100,6 +102,7 @@ w.prepare("INSERT INTO emails (message_id, sender, recipient, status, received_a
 w.prepare("INSERT INTO emails (message_id, sender, recipient, status, received_at) VALUES ('n2', 'q@z.org', 'qnfo@qnfo.org', 'received', ?)").run(day(0));
 w.prepare("INSERT INTO social_media_posts (id, platform, post_id, status, published_at) VALUES ('p5', 'buffer-linkedin', '5', 'published', ?)").run(day(0));
 w.prepare("INSERT INTO social_media_posts (id, platform, post_id, status, published_at) VALUES ('p6', 'buffer-linkedin', '6', 'failed', ?)").run(day(0));
+w.prepare("INSERT INTO social_media_posts (id, platform, post_id, status, published_at) VALUES (NULL, 'buffer-x', '8', 'published', ?)").run(day(0));
 w.prepare("UPDATE social_threads SET status = 'posted', posted_at = ? WHERE slug = 't-queued'").run(day(0));
 w.prepare("UPDATE social_threads SET status = 'posted' WHERE slug = 't-posted'").run();      // already posted: no second row
 ok(kind(w, "fleet_deploys", 10) === "deploy" && kind(w, "fleet_deploys", 11) === "secret-write", "writer on fleet_deploys: a deploy and a SECRET-ONLY secret-write", [kind(w, "fleet_deploys", 10), kind(w, "fleet_deploys", 11)]);
@@ -107,7 +110,7 @@ ok(q1(w, "SELECT via v FROM agent_actions WHERE source_table = 'fleet_deploys' A
 ok(qa(w, "SELECT * FROM agent_actions WHERE source_table = 'emails'").length === 2 && q1(w, "SELECT target t FROM agent_actions WHERE source_table = 'emails' AND source_id = '5'").t === "mail:foo.org", "writer on emails: an outbound row inserted as replied is recorded by domain, an inbound received row is not");
 ok(kind(w, "social_media_posts", "p5") === "publish" && kind(w, "social_media_posts", "p6") === undefined, "writer on social_media_posts: published yes, failed no");
 ok(kind(w, "social_threads", 2) === "publish" && qa(w, "SELECT * FROM agent_actions WHERE source_table = 'social_threads'").length === 2, "writer on social_threads: queued to posted records once, posted to posted nothing");
-ok(q1(w, "SELECT COUNT(*) n FROM agent_actions").n === before + 2 + 1 + 1 + 1, "exactly the five new side effects were added");
+ok(q1(w, "SELECT COUNT(*) n FROM agent_actions").n === before + 2 + 1 + 1 + 1 + 1, "exactly the six new side effects were added (two deploy-ledger rows, one mail, two posts, one thread)");
 w.prepare("INSERT OR IGNORE INTO agent_actions (ts, action_kind, source_table, source_id) VALUES ('2026-10-26T00:00:00Z', 'deploy', 'fleet_deploys', '10')").run();
 ok(q1(w, "SELECT COUNT(*) n FROM agent_actions WHERE source_table = 'fleet_deploys' AND source_id = '10'").n === 1, "the unique source index refuses a second row for one ledger row");
 

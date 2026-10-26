@@ -6,7 +6,7 @@
 -- WHAT THIS DOES:
 --  1. agent_actions: one append-only row per side effect (deploy, settings, secret-write, rollback, publish, send). Writers are D1 AFTER INSERT triggers on the ledgers that already record the side effect
 --     (fleet_deploys, emails, social_media_posts, social_threads), so no worker code changes and nothing is double-written (UNIQUE source_table + source_id). fleet_deploys rows are classified by the rules
---     qnfo-deploy-guard already uses (SETTINGS-ONLY, SECRET-ONLY, rollback markers). A mail row stores the recipient DOMAIN only, never the address. The last 8 days of each ledger are backfilled (via = backfill)
+--     qnfo-deploy-guard already uses (SETTINGS-ONLY, SECRET-ONLY, rollback markers). A mail row stores the recipient DOMAIN only, never the address. A post whose ledger id is NULL (3 rows today: id TEXT PRIMARY KEY allows it) is recorded under rowid:<n>, never silently skipped. The last 8 days of each ledger are backfilled (via = backfill)
 --     so the 7-day coverage window is meaningful from the first run; rows sealed late say so (sealed_at).
 --  2. agent_action_chain + agent_action_roots: SQLite has no sha256, so scripts/bp26_auditchain.py (runner, hourly) seals new rows: row_hash = sha256(prev_hash | canonical json of the row), re-verifies the whole
 --     chain and every daily root, and writes each day's head to R2 qnfo-backups/audit-chain/<day>.json (a copy outside D1). BEFORE UPDATE and BEFORE DELETE triggers on all four tables abort: append-only in code paths.
@@ -126,7 +126,7 @@ WHEN NEW.status = 'published'
 BEGIN
   INSERT OR IGNORE INTO agent_actions (ts, actor, session, tool, action_kind, target, version_id, outcome, source_table, source_id, via)
   VALUES (COALESCE(strftime('%Y-%m-%dT%H:%M:%SZ', COALESCE(NEW.published_at, NEW.created_at)), strftime('%Y-%m-%dT%H:%M:%SZ', 'now')), 'qnfo-social', NULL, NEW.platform, 'publish',
-    COALESCE(NEW.url, NEW.platform || ':' || COALESCE(NEW.post_id, NEW.id)), NULL, 'ok', 'social_media_posts', CAST(NEW.id AS TEXT), 'trigger');
+    COALESCE(NEW.url, NEW.platform || ':' || COALESCE(NEW.post_id, NEW.id)), NULL, 'ok', 'social_media_posts', COALESCE(CAST(NEW.id AS TEXT), 'rowid:' || NEW.rowid), 'trigger');
 END;
 
 CREATE TRIGGER IF NOT EXISTS agent_actions_from_social_threads AFTER UPDATE OF status ON social_threads
@@ -162,7 +162,7 @@ WHERE e.status = 'sent' AND e.recipient IS NOT NULL AND instr(e.recipient, '@') 
 ORDER BY e.id;
 
 INSERT OR IGNORE INTO agent_actions (ts, actor, session, tool, action_kind, target, version_id, outcome, source_table, source_id, via)
-SELECT strftime('%Y-%m-%dT%H:%M:%SZ', COALESCE(p.published_at, p.created_at)), 'qnfo-social', NULL, p.platform, 'publish', COALESCE(p.url, p.platform || ':' || COALESCE(p.post_id, p.id)), NULL, 'ok', 'social_media_posts', CAST(p.id AS TEXT), 'backfill'
+SELECT strftime('%Y-%m-%dT%H:%M:%SZ', COALESCE(p.published_at, p.created_at)), 'qnfo-social', NULL, p.platform, 'publish', COALESCE(p.url, p.platform || ':' || COALESCE(p.post_id, p.id)), NULL, 'ok', 'social_media_posts', COALESCE(CAST(p.id AS TEXT), 'rowid:' || p.rowid), 'backfill'
 FROM social_media_posts p
 WHERE p.status = 'published' AND strftime('%Y-%m-%dT%H:%M:%SZ', COALESCE(p.published_at, p.created_at)) >= strftime('%Y-%m-%dT%H:%M:%SZ', 'now', '-8 days')
 ORDER BY p.created_at;
