@@ -48,6 +48,7 @@ function world(o = {}) {
   const db = new DatabaseSync(":memory:");
   db.exec(`
 CREATE TABLE remediation_contracts (class TEXT PRIMARY KEY, issue_id INTEGER, precondition TEXT NOT NULL DEFAULT 'p', action TEXT NOT NULL DEFAULT 'a', verify_probe TEXT NOT NULL, verify_transport TEXT NOT NULL DEFAULT 'd1-query', escalate_to TEXT NOT NULL DEFAULT 'x', status TEXT, last_verdict TEXT, attempts INTEGER DEFAULT 0, module TEXT, next_due_at TEXT);
+CREATE TABLE agent_issues (id INTEGER PRIMARY KEY AUTOINCREMENT, title TEXT, description TEXT, source TEXT, category TEXT, priority TEXT, status TEXT DEFAULT 'open', created_at INTEGER, updated_at INTEGER);
 CREATE TABLE portfolio_runs (id INTEGER PRIMARY KEY AUTOINCREMENT, run_date TEXT, kind TEXT, session TEXT, summary TEXT);
 CREATE TABLE program_review_notes (day TEXT, program_code TEXT, roadmap_now INTEGER, goals_adopted INTEGER);
 CREATE TABLE program_scorecards (day TEXT, program_code TEXT);
@@ -85,12 +86,15 @@ for (const [label, o, re] of [["notes without counts", { now: null }, /no roadma
 ok(c.last_verdict === null && c.attempts === 0 && c.next_due_at !== null && c.status === "active", "the contract is re-armed (verdict NULL, attempts 0, due now)", c);
 
 // idempotent, repaired probe untouched, rollback
-const snap = (db) => JSON.stringify([db.prepare("SELECT * FROM remediation_contracts").all(), db.prepare("SELECT COUNT(*) AS n FROM decision_log").all()]);
+const snap = (db) => JSON.stringify([db.prepare("SELECT * FROM remediation_contracts").all(), db.prepare("SELECT COUNT(*) AS n FROM decision_log").all(), db.prepare("SELECT id, title FROM agent_issues").all()]);
 const s0 = snap(a); a.exec(sql);
 ok(snap(a) === s0, "a second apply changes nothing");
 const b = world(); b.prepare("UPDATE remediation_contracts SET verify_probe = 'SELECT ''ok'' AS expected, ''ok'' AS observed', attempts = 7 WHERE class = 'issue-1000194'").run(); b.exec(sql);
 ok(one(b, "SELECT attempts AS n FROM remediation_contracts WHERE class = 'issue-1000194'").n === 7 && one(b, "SELECT verify_probe AS p FROM remediation_contracts WHERE class = 'issue-1000194'").p.startsWith("SELECT 'ok' AS expected, 'ok'"), "a probe that is not the corrupted one is left alone");
 ok(one(a, "SELECT COUNT(*) AS n FROM decision_log WHERE instr(action, 'REM-A4-PORTFOLIO-2:') = 1").n === 1, "the decision is logged once");
+const lint = one(a, "SELECT * FROM agent_issues WHERE instr(title, 'PROBE-SEMICOLON-LINT-1:') = 1");
+ok(lint && lint.status === "open" && lint.priority === "medium" && /session-task: repo=qnfo-workers path=scripts\/apply_migrations\.py/.test(lint.description) && !/^code-task:/m.test(lint.description) && /code-probe: \{"paths": \["scripts\/apply_migrations\.py"\], "contains": "PROBE-SEMICOLON-LINT-1"\}/.test(lint.description) && one(a, "SELECT COUNT(*) AS n FROM agent_issues WHERE instr(title, 'PROBE-SEMICOLON-LINT-1:') = 1").n === 1, "the lint gap is filed once for a session (not a code-task: the code loop may not change apply_migrations) with a code-probe");
+
 for (const s of rollback.split("; ")) a.exec(s);
 const rb = one(a, "SELECT * FROM remediation_contracts WHERE class = 'issue-1000194'");
 ok(rb.verify_probe === backup0 && rb.last_verdict === "fail" && rb.attempts === 1, "Rollback restores the saved probe, verdict and attempts");

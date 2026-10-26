@@ -8,7 +8,7 @@
 --
 -- WHAT THIS FILE DOES
 --   Rewrites the probe of issue-1000194 without a semicolon: it asks for the two labels separately ('(program risk ' and ' portfolio risk '), which the summary of run 32 (constraint QNFO.OPS risk 801) has neither of.
---   Guarded by the corrupted text, so a probe another session repaired is left alone. The old probe is saved. One decision_log row.
+--   Guarded by the corrupted text, so a probe another session repaired is left alone. The old probe is saved. One decision_log row. The lint gap is filed as PROBE-SEMICOLON-LINT-1 for a session (the Rollback line leaves that issue open: it is harmless).
 -- APPLY-BY: ci
 -- DB: qnfo-audit
 -- Rollback: UPDATE remediation_contracts SET verify_probe = (SELECT b.verify_probe FROM bak_20261026_rem_a4_portfolio_2_contract b WHERE b.class = remediation_contracts.class), last_verdict = (SELECT b.last_verdict FROM bak_20261026_rem_a4_portfolio_2_contract b WHERE b.class = remediation_contracts.class), attempts = (SELECT b.attempts FROM bak_20261026_rem_a4_portfolio_2_contract b WHERE b.class = remediation_contracts.class) WHERE class IN (SELECT class FROM bak_20261026_rem_a4_portfolio_2_contract)
@@ -29,3 +29,14 @@ SELECT 'rem-a4-portfolio',
   'none beyond the corrected probe', '1000194 closes on its next passing verification (reopened_count 0)', 'none',
   'd1:qnfo-audit sqlite_master (trigger text), remediation_verifications, portfolio_runs (SELECT only); offline node:sqlite replay with the live trigger'
 WHERE NOT EXISTS (SELECT 1 FROM decision_log WHERE instr(action, 'REM-A4-PORTFOLIO-2:') = 1);
+
+-- The lint gap that let it through is filed for a session (scripts/apply_migrations.py is in CM_SCRIPT_DENY: the code loop cannot change it), with a closing probe on the code.
+INSERT INTO agent_issues (title, description, source, category, priority, status, created_at, updated_at)
+SELECT 'PROBE-SEMICOLON-LINT-1: scripts/apply_migrations.py --check does not refuse a semicolon inside a d1-query verify_probe literal, and a D1 trigger rewrites it to a comma',
+  'Charter pillar: autonomy. REM-A4-PORTFOLIO-2 (2026-10-26): a d1-query verify_probe that contains a semicolon, also inside a string literal, is stored with a comma by the D1 triggers remediation_probe_semicolon_ins and remediation_probe_semicolon_upd (so a probe stays one statement). A probe that matches a text holding a semicolon then compares against the wrong text and fails for ever: the probe of issue 1000194 ("); portfolio risk ") read "label missing" (remediation_verifications 332685) although the label was live, and cost one extra pull request. scripts/apply_migrations.py --check refuses write keywords, LIKE patterns over 50 bytes and unparsable SQL, but not this.' || char(10) ||
+  'Change: in plan() refuse a statement that sets remediation_contracts.verify_probe (UPDATE ... SET verify_probe, or INSERT INTO remediation_contracts) when the verify_probe literal contains a semicolon and the transport is d1-query (or unset on an update), naming the literal. Tag the change PROBE-SEMICOLON-LINT-1 and add the cases to scripts/apply_migrations_test.py (a probe with a semicolon inside a literal fails, one without passes, a code-read JSON probe is exempt).' || char(10) ||
+  'Doer: a session. scripts/apply_migrations.py is in CM_SCRIPT_DENY (the code loop cannot change it) and file:scripts/apply_migrations.py was claimed by session-old-issues-6d-2038 at the time of writing: read /work-locks, take the file when the claim lapses or review that session''s change. Definition of done: the code on main holds PROBE-SEMICOLON-LINT-1.' || char(10) ||
+  'session-task: repo=qnfo-workers path=scripts/apply_migrations.py' || char(10) ||
+  'code-probe: {"paths": ["scripts/apply_migrations.py"], "contains": "PROBE-SEMICOLON-LINT-1"}',
+  'session', 'autonomy', 'medium', 'open', CAST(strftime('%s', 'now') AS INTEGER) * 1000, CAST(strftime('%s', 'now') AS INTEGER) * 1000
+WHERE NOT EXISTS (SELECT 1 FROM agent_issues WHERE instr(title, 'PROBE-SEMICOLON-LINT-1:') = 1);
