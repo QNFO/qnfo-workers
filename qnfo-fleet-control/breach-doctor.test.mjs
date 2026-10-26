@@ -79,7 +79,7 @@ ok(!/\b(ai|model|llm)\.run\(|aiRunAttr|env\.AI\b/.test(codeOnly), "v1 makes no m
   ];
   for (const [sql, why] of review) ok(wr(sql) === why, "review statement refused (" + why + "): " + sql.slice(0, 70), wr(sql));
   ok(wr("UPDATE ops_config SET value = 'off' WHERE key = 'breach_doctor' AND id = ?1") === "table-not-allowed" && wr("UPDATE human_actions SET status = 'resolved' WHERE id = ?1") === "table-not-allowed", "ops_config and human_actions are refused even with an id predicate: no playbook writes the kill switch, the trust list or an owner card");
-  ok(!/\bBD_WRITE_TABLES = \[[^\]]*"(ops_config|human_actions)"/.test(src) && /\bBD_WRITE_TABLES = \["issue_triage", "agent_issues", "remediation_contracts", "issue_plans"\];/.test(src), "BD_WRITE_TABLES holds the four tables a v1 rule writes");
+  ok(!/\bBD_WRITE_TABLES = \[[^\]]*"(ops_config|human_actions)"/.test(src) && /\bBD_WRITE_TABLES = \["issue_triage", "agent_issues", "remediation_contracts", "issue_plans", "tool_error_exclusions", "goals", "paper_learnings"\];/.test(src), "BD_WRITE_TABLES holds the four engine tables plus the three of the tool-loop playbooks (migrations/2026-10-26-breach-playbooks-tool-loop.sql) and neither ops_config nor human_actions");
   const bad = [
     ["UPDATE issue_triage SET a = 1 WHERE issue_id = ?1; DELETE FROM agent_issues", "semicolon"],
     ["DELETE FROM issue_triage WHERE issue_id = ?1", "forbidden-keyword"],
