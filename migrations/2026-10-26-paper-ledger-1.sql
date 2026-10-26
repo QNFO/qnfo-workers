@@ -144,24 +144,12 @@ VALUES (
   'failure-mode'
 );
 
-INSERT INTO agent_issues (title, description, source, category, priority, status, created_at, updated_at)
-SELECT
-  'PAPER-LEDGER-ATTRIBUTION-1: the publication gate sets change_actor and change_reason on its papers updates',
-  'Charter pillar: research. The paper ledger records a change as unattributed unless the writer sets papers.change_actor ("<worker>:<run id>") and papers.change_reason (different text for each change; the same pair twice in a row reads as unattributed) in the same UPDATE. Measured at 07:22Z on 2026-10-26: all 252 restores of the publication gate were recorded as unattributed, so a future withdrawal could not be traced to its writer from the ledger alone.' || char(10) ||
-  'Doer: qnfo-code-orchestrator (one writer, one file). Change: in qnfo-cloud-ops jobQualityScore, the verdict UPDATE and the restore UPDATE set change_actor to "qnfo-cloud-ops:" + runId and change_reason to the verdict reason plus the slug. Other writers (qnfo-research-exec has 17 UPDATE papers sites, qnfo-errata-publish 1) are a session task because the fold-pair parity suites bind those files in pairs; they are tracked by PAPER-LEDGER-ATTRIBUTION-2.' || char(10) ||
-  'Definition of done: after the next hourly sweep that changes a verdict or restores a paper, its ledger rows carry the actor qnfo-cloud-ops:<run id>; the cloud-ops suite has a case with the ledger triggers installed.' || char(10) ||
-  'code-task: repo=qnfo-workers path=qnfo-cloud-ops/worker.js' || char(10) ||
-  'code-anchor: async function jobQualityScore(env) {' || char(10) ||
-  'code-probe: {"paths": ["qnfo-cloud-ops/worker.js"], "contains": "change_actor"}',
-  'session', 'research', 'medium', 'open',
-  CAST(strftime('%s', 'now') AS INTEGER) * 1000,
-  CAST(strftime('%s', 'now') AS INTEGER) * 1000
-WHERE NOT EXISTS (SELECT 1 FROM agent_issues WHERE title = 'PAPER-LEDGER-ATTRIBUTION-1: the publication gate sets change_actor and change_reason on its papers updates' AND status = 'open');
+-- PAPER-LEDGER-ATTRIBUTION-1 (the publication gate own writes) is fixed in this PR (qnfo-cloud-ops 1.37.0), so no issue is filed for it.
 
 INSERT INTO agent_issues (title, description, source, category, priority, status, created_at, updated_at)
 SELECT
   'PAPER-LEDGER-ATTRIBUTION-2: research-exec and errata writers set change_actor and change_reason on every papers update',
-  'Charter pillar: research. Same convention as PAPER-LEDGER-ATTRIBUTION-1. qnfo-research-exec has 17 UPDATE papers sites (publish, revise, retract, doi, gate verdict, slug rename) and qnfo-errata-publish one; the reviser and errata members are folded into research-exec and bound by fold-pair parity suites, so the edit is made in the member source and the host together (a one-file code task ends needs_human: FOLD-PAIR-TASK-1).' || char(10) ||
+  'Charter pillar: research. Same convention as the one qnfo-cloud-ops 1.37.0 applies to the publication gate restore (change_actor "qnfo-cloud-ops:<run id>", change_reason naming the quarantine it undoes). qnfo-research-exec has 17 UPDATE papers sites (publish, revise, retract, doi, gate verdict, slug rename) and qnfo-errata-publish one; the reviser and errata members are folded into research-exec and bound by fold-pair parity suites, so the edit is made in the member source and the host together (a one-file code task ends needs_human: FOLD-PAIR-TASK-1).' || char(10) ||
   'Doer: a session (two-file change). Change: each UPDATE papers SET ... also sets change_actor = "<worker>:<stage>:<row id>" and change_reason = a sentence naming what the stage did to this paper. Sites are listed by: grep -n "UPDATE papers SET" qnfo-research-exec/worker.js qnfo-errata-publish/worker.js.' || char(10) ||
   'Definition of done: v_paper_ledger_health.unattributed_24h is under 10 percent of changes_24h for 24 hours of normal publishing.' || char(10) ||
   'Blocked now by live claims on qnfo-research-exec/worker.js (RESEARCH-PROVENANCE-1, until 08:59Z); take the claim when it lapses.',
