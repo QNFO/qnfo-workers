@@ -1,0 +1,22 @@
+-- APPLY-BY: ci
+-- DB: qnfo-audit
+-- Rollback: DELETE FROM agent_issues WHERE title LIKE 'ONE-TAP-DECISIONS-1:%' AND status = 'open' AND source = 'claude-session';
+--
+-- ONE-TAP-DECISIONS-1 (2026-10-26, charter pillar: autonomy). Owner request, 2026-10-26, verbatim: "I need one click/tap actions: approve, etc. Also this issue should be
+-- handled automatically. The dashboard needs to be action oriented, at a glance, one tap" (a phone screenshot of the 100140 card on fleet.qnfo.org/classic: Details only,
+-- no decision button for a signed-out phone, and a signed-in tap only previewed). The second sentence is handled by migrations/2026-10-26-owner-auto-100140.sql (PR 4603,
+-- live). This file files the first and third: the dashboard change is built and tested (qnfo-fleet-dashboard 1.71.0, cmd-decide.test.mjs 431 checks) and waits on another
+-- session's work claim on qnfo-fleet-dashboard/worker.js (BREACH-DOCTOR-1, until 2026-10-26T13:05Z), so its diff is kept in docs/one-tap-decisions/ and this issue gives it a
+-- doer and a closing probe on the code (code-probe), so it cannot be lost if the session that built it ends first.
+-- No DELETE or DROP runs here (the DELETE belongs to the Rollback line and removes only the row this file inserts), so no BACKUP is taken.
+
+INSERT INTO agent_issues (title, description, source, category, priority, status, created_at, updated_at)
+SELECT 'ONE-TAP-DECISIONS-1: Approve and Decline run at the tap on the dashboard decision cards (the diff is built and tested, it waits on a work claim)',
+  'Charter pillar: autonomy. Parent: agent_issues 100360 (DASH-OWNER-ACTIONS-1). Owner request 2026-10-26: "I need one click/tap actions: approve, etc ... The dashboard needs to be action oriented, at a glance, one tap".
+Fact: on fleet.qnfo.org/classic a signed-out phone shows a decision card with Details only; a signed-in owner''s tap on Approve only previews (a second tap confirms, a fresh emailed code stands behind it).
+Doer: the diff is docs/one-tap-decisions/worker.js.patch and docs/one-tap-decisions/cmd-decide.test.mjs.patch (apply with patch -p0 from the repository root; it applies to main at 81a8eeb). It is qnfo-fleet-dashboard 1.71.0 (a minor: a capability): (1) Approve and Decline (the card, the undecided rest, one numbered item) are buttons carrying data-dec-op and data-dec-args that a delegated script (DEC_JS, in cmdScript) posts to /api/cmd/run at the tap and answers on the card; (2) a missing session or a lapsed 15-minute step-up asks for the emailed code in place (the code is sent at once, the tap repeats on Verify), so approve stays the owner-session''s own, behind the code from the last 15 minutes, refused for the loop token and for a hard-marker card; (3) the owner''s non-hard decision card opens with its buttons (52 px) and folds the parts and the reading; a hard card keeps its reading open; (4) a signed-out visitor gets one button, Email me a code to decide (the words sign in stay off the public page: open-access.test.mjs A3), and still no decision button, item text or owner script. Offline suite: cmd-decide.test.mjs T30-T34 (431 checks), attention, human-audience, open-access, pageviews-human pass; a Chromium run at 390 px tapped Approve, the code step and the sign-in button.
+Work claim: qnfo-fleet-dashboard/worker.js, its mirror and cmd-decide.test.mjs are held by session_01QpQv19uh1padRwZ3u1r766 (BREACH-DOCTOR-1) until 2026-10-26T13:05Z. Take them over when the claim lapses with this undone, or review that session''s change instead of writing a second one. Bump VERSION above the last line on main and keep deployed-current.worker.js identical.
+Closing probe: code-probe: {"paths": ["qnfo-fleet-dashboard/worker.js"], "contains": "ONE-TAP-DECISIONS-1"}
+Definition of done: the change is on main and live (GET https://fleet.qnfo.org/health reports 1.71.0 or later) and the owner can approve a decision card in one tap on a phone; close with the live version read in issue_triage.close_evidence, then delete docs/one-tap-decisions/.',
+  'claude-session', 'autonomy', 'high', 'open', CAST(strftime('%s', 'now') AS INTEGER) * 1000, CAST(strftime('%s', 'now') AS INTEGER) * 1000
+WHERE NOT EXISTS (SELECT 1 FROM agent_issues WHERE title LIKE 'ONE-TAP-DECISIONS-1:%');
