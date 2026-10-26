@@ -1,4 +1,4 @@
-// READING-NO-SOURCE-LEDE-1 offline suite (personal-companion 1.40.0, charter pillar: personal). The owner (2026-10-21): "you also don't
+// READING-NO-SOURCE-LEDE-1 offline suite (personal-companion 1.41.0, charter pillar: personal). The owner (2026-10-21): "you also don't
 // need to say lead every article was from Wikipedia". Proves: the writer prompt no longer asks the lede to name its source; stored pieces
 // lose the credit clause at display time only; a sentence about the article itself is left alone; the piece page lists its sources.
 // Run: node personal-companion/no-source-lede.test.mjs   -> prints "N passed, 0 failed"
