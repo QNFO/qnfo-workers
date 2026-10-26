@@ -368,5 +368,29 @@ ok(models.includes("@cf/deepseek-ai/deepseek-v4-flash-0731"), "the judge is a di
   const mn = JSON.parse(sq.prepare("SELECT note FROM ask_loop_runs WHERE kind='measure' ORDER BY id DESC LIMIT 1").get().note);
   ok(mn.grounded_claims_7d === 24, "the measure note records the judged claims behind the share: " + JSON.stringify(mn.grounded_claims_7d));
 }
+// 9. ASK-METRIC-STALE-1 (agent_issues 1000478): a metric the tick cannot compute goes back to UNMEASURED, a computed one keeps its 0..1 value
+{
+  sq.exec("DELETE FROM ask_feedback");
+  sq.prepare("INSERT INTO ask_feedback (event_id, ts, helpful) VALUES ('fb1', ?, 1)").run(new Date().toISOString());
+  sq.exec("UPDATE metric_registry SET last_value='33.3', last_refreshed='2026-10-25T08:45:00Z', state='MEASURED' WHERE metric='ask_helpful_rate_30d'");
+  await worker.scheduled({ scheduledTime: Date.UTC(2026, 9, 14, 5, 41) }, env, ctx);
+  await Promise.allSettled(waits.splice(0));
+  const stale = sq.prepare("SELECT last_value v, last_refreshed r, state s, formula f FROM metric_registry WHERE metric='ask_helpful_rate_30d'").get();
+  ok(stale.v === null && stale.r === null && stale.s === "UNMEASURED" && stale.f && stale.f.length > 20, "1 rating (under 10): the stale 33.3 is cleared to UNMEASURED and the formula stays: " + JSON.stringify(stale));
+  const keep = sq.prepare("SELECT last_value v, state s FROM metric_registry WHERE metric='ask_grounded_share_7d'").get();
+  ok(keep.s === "MEASURED" && Number(keep.v) > 0 && Number(keep.v) <= 1, "a metric the tick can compute keeps its value: " + JSON.stringify(keep));
+  for (let i = 0; i < 12; i++) sq.prepare("INSERT INTO ask_feedback (event_id, ts, helpful) VALUES (?, ?, ?)").run("fbm" + i, new Date().toISOString(), i < 8 ? 1 : 0);
+  await worker.scheduled({ scheduledTime: Date.UTC(2026, 9, 15, 5, 41) }, env, ctx);
+  await Promise.allSettled(waits.splice(0));
+  const back = sq.prepare("SELECT last_value v, state s FROM metric_registry WHERE metric='ask_helpful_rate_30d'").get();
+  ok(back.s === "MEASURED" && Number(back.v) >= 0 && Number(back.v) <= 1 && Math.abs(Number(back.v) - 9 / 13) < 0.001, "13 ratings (9 helpful): the value is measured again, as a share in 0..1: " + JSON.stringify(back));
+  sq.exec("DELETE FROM ask_feedback");
+  await worker.scheduled({ scheduledTime: Date.UTC(2026, 9, 16, 5, 41) }, env, ctx);
+  await Promise.allSettled(waits.splice(0));
+  const again = sq.prepare("SELECT last_value v, state s FROM metric_registry WHERE metric='ask_helpful_rate_30d'").get();
+  ok(again.v === null && again.s === "UNMEASURED", "ratings gone again: cleared again, never stale: " + JSON.stringify(again));
+  const unmeasuredAll = sq.prepare("SELECT COUNT(*) n FROM metric_registry WHERE owner='qnfo-ai-search' AND state='MEASURED' AND last_value IS NULL").get().n;
+  ok(unmeasuredAll === 0, "no ask metric is MEASURED without a value");
+}
 console.log(passed + " passed, " + failed + " failed");
 process.exit(failed ? 1 : 0);
