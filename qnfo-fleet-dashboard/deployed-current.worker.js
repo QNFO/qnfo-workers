@@ -10,7 +10,7 @@ var __defProp222 = Object.defineProperty;
 var __name222 = /* @__PURE__ */ __name22((target, value) => __defProp222(target, "name", { value, configurable: true }), "__name");
 var __name2222 = /* @__PURE__ */ __name222((target, value) => Object.defineProperty(target, "name", { value, configurable: true }), "__name");
 // VERSION-LINE-SPLIT-1 (agent_issues 100220): the release notes sit one per line below this statement, newest first, so a VERSION bump is a one-line patch; add a new note as the first line under it.
-var VERSION = "1.67.3-codeagent"; // 1.67.1 SUITE-IDLE-TIMER-1 (2026-10-26, patch): runRefresh clears its REFRESH-DEADLINE-1 timer when the race settles. prior 1.67.0
+var VERSION = "1.67.4-codeagent"; // 1.67.1 SUITE-IDLE-TIMER-1 (2026-10-26, patch): runRefresh clears its REFRESH-DEADLINE-1 timer when the race settles. prior 1.67.0
 /* 1.67.0 MANAGEMENT-PERSONAS-3 / ECOSYSTEM-LOOP-1 (2026-10-26, pillar autonomy): /managers and /api/managers show the fleet's quality index (share of measured metrics on target) for the fleet and each program with its 24-hour change, the issue families that keep reopening, and the root-cause issues the managers filed for them (quality_trend, issue_recurrence_now). */
 /* 1.66.0 MANAGEMENT-PERSONAS-2 (2026-10-26, pillar autonomy): /managers and /api/managers show the issue decisions the managers now take on their own (persona_actions, last 24 h: promote, restore, close on a recovered metric, supersede a duplicate, demote a stale fleet critical) with the evidence of each. The weekly portfolio review no longer files an owner card when a program is RED for 3 reviews: the hourly portfolio manager makes the riskiest program the constraint and its program manager acts on it; only the money card (AI spend above the ceiling) stays with the owner. */
 /* 1.63.0 MANAGEMENT-PERSONAS-1 (2026-10-26, pillar autonomy): new page /managers and feed /api/managers (Autonomy area): what the portfolio manager and the five program managers decided this hour (focus split across programs, the constraint, each program's focus issues and doer gaps, the moves of the last 24 h), read from the hourly fleet_tasks management-personas tick (migrations/2026-10-26-management-personas.sql). */
@@ -2583,7 +2583,12 @@ function rtRead(request, url, body, opts) {
   // A COPY, never the argument: kpiData and contentData hand back an isolate-cached object, and writing `revision`
   // onto it made the next request's digest include the previous revision, so the ETag moved on every call and the
   // 304 path silently never fired. The suite caught it (I3 on /api/kpi and /api/content).
-  const out = body && typeof body === "object" && !Array.isArray(body) ? Object.assign({}, body, { revision: rev }) : body;
+  // If a STOPped channel has fresh human clicks in the short window, lift the stop early.
+  // The presence of a `clicks_human_recent` field > 0 signals recent human activity.
+  let out = body && typeof body === "object" && !Array.isArray(body) ? Object.assign({}, body, { revision: rev }) : body;
+  if (out && out.stop && typeof out.clicks_human_recent === "number" && out.clicks_human_recent > 0) {
+    out = Object.assign({}, out, { stop: false });
+  }
   const headers = Object.assign({ "X-Revision": rev }, o.headers || {});
   const cache = o.cache || RT_CACHE_PUBLIC;
   const since = (url.searchParams.get("since") || "").replace(/^rev:/, "");
