@@ -658,7 +658,9 @@ SETTLE_TRIAGE_SQL = ("INSERT INTO issue_triage (issue_id, rc, owner, sla_due_at,
                      "WHERE NOT EXISTS (SELECT 1 FROM issue_triage WHERE issue_id = ?1)")
 SETTLE_EVIDENCE_SQL = "UPDATE issue_triage SET close_evidence = ?2 WHERE issue_id = ?1"
 # CLOSE-CHANNEL-REQUIRED-1 (agent_issues 100419): a close with no close_channel cannot be attributed to a fix, a probe or a sweep. This
-# close wrote none, so four settled repair issues (1000254, 1000256, 1000270, 100422) and, after them, 1000365 carried NULL.
+# close wrote none, so the settled repair issues 100422, 1000256, 1000270 and 1000365 carried NULL (1000254 was closed by a session as a
+# duplicate pull request, not by this statement). The close_evidence this script writes ("CONFLICT-REPAIR-SETTLE-1: ...") is what the
+# closing probe of issue 100419 keys on.
 SETTLE_CLOSE_CHANNEL = "auto:conflict-repair-settle"
 SETTLE_CLOSE_SQL = ("UPDATE agent_issues SET status = 'closed', close_channel = '" + SETTLE_CLOSE_CHANNEL + "', "
                     "updated_at = CAST(strftime('%s','now') AS INTEGER) * 1000 WHERE id = ?1 AND status = 'open'")
