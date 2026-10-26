@@ -37,7 +37,7 @@
 // Q08-ASCII-SOURCE-1 (2026-10-01): this file is ASCII-only; every typographic character is a \uXXXX escape. The deploy path
 // double-encoded raw UTF-8, so live pages read "... \u00e2 q08" and posts "\u00e2\u0080\u0094". Keep new literals escaped.
 // VERSION-NOTES-MOVED-1: release notes live in the block below
-var VERSION = "0.37.5-thin-passed-over"; // 0.37.5 Q08-THIN-PASSED-OVER-1 (2026-10-26), see the note below.
+var VERSION = "0.37.6-codeagent"; // 0.37.5 Q08-THIN-PASSED-OVER-1 (2026-10-26), see the note below.
 /* 0.37.5 (2026-10-26, charter pillar reach, agent_issues 100439, 100607): Q08-THIN-PASSED-OVER-1 marks a candidate that was measured thin and passed over for a richer one, so a paper without an HTML rendering no longer holds the arXiv lane for a day (the lane ran at 02:02 and 03:04 on 2026-10-26 and then not for 16 hours); the 24-hour retry window is the existing one. */
 /* 0.37.4 (2026-10-26, charter pillar reach, agent_issues 100607, 100439): Q08-GATE-GROUND-BLIND-1 removes the two checks of the writer gate that refused every comma-grouped dollar amount and every score, rating, ratio or reputation of 0.85 as fabricated without reading the source; the grounding check that runs on every draft before any panel call and on the final text already refuses a figure the source does not hold. */
 /* 0.37.3 (2026-10-26, charter pillar reach, agent_issues 100607): Q08-DOTTED-NAMES-1 stops the grounding check refusing a dotted name (Qwen3.8-27B, PLAN.md, Node.js) or a possessive plural that stands in the source; the ground word set only gains words, so nothing accepted before is refused. */
@@ -436,6 +436,127 @@ var UA        = "q08-signal-engine/0.1.0 (+https://q08.org)";
 var ORIGIN = "https://q08.org";
 // IndexNow: search-engine instant indexing (Bing, Yandex, Seznam, Naver).
 var INDEXNOW_KEY = "3f8a1c9e7b2d6045a1f3c8e5b9d20147";
+
+// Q08-FORECAST-LEDGER-1 (issue 1000512, RED-DRAIN-1 dispatch; charter pillar: reach): forecast ground = the source essay
+// plus a research ledger of verbatim sentences. Slice 1, default off (enabled only when ops_config q08_forecast_ledger
+// is "1"). No model writes or rewords a ledger line.
+var FORECAST_LEDGER_MAX_LINES = 60;
+var FORECAST_LEDGER_MAX_DOCS = 10;
+var FORECAST_LEDGER_MAX_CHARS = 40000;
+var FORECAST_LEDGER_TIMEOUT_MS = 15000;
+
+var FORECAST_EVIDENCE_SOURCES = [
+  {
+    name: "HackerNews",
+    buildUrl: function (term) { return "https://hn.algolia.com/api/v1/search?query=" + encodeURIComponent(term) + "&hitsPerPage=10"; },
+    parse: function (data) {
+      return (data.hits || []).map(function (hit) {
+        return { text: hit.title || "", url: hit.url || "", date: hit.created_at || "" };
+      });
+    }
+  },
+  {
+    name: "GDELT",
+    buildUrl: function (term) { return "https://api.gdeltproject.org/api/v2/doc/doc?query=" + encodeURIComponent(term) + "&mode=artlist&maxrecords=10&format=json"; },
+    parse: function (data) {
+      return (data.articles || []).map(function (a) {
+        return { text: a.title || "", url: a.url || "", date: a.seendate || "" };
+      });
+    }
+  },
+  {
+    name: "Wikipedia",
+    buildUrl: function (term) { return "https://en.wikipedia.org/w/api.php?action=query&list=search&srsearch=" + encodeURIComponent(term) + "&format=json&utf8=&srlimit=10&origin=*"; },
+    parse: function (data) {
+      return ((data.query && data.query.search) || []).map(function (entry) {
+        return { text: entry.snippet ? String(entry.snippet).replace(/<\/?[^>]+(>|$)/g, "") : "", url: "https://en.wikipedia.org/wiki/" + encodeURIComponent(entry.title || ""), date: "" };
+      });
+    }
+  },
+  {
+    name: "arXiv",
+    buildUrl: function (term) { return "https://export.arxiv.org/api/query?search_query=all:" + encodeURIComponent(term) + "&max_results=10"; },
+    parse: function (text) {
+      var out = [];
+      var blocks = String(text).split(/<entry>/).slice(1);
+      for (var i = 0; i < blocks.length; i++) {
+        var b = blocks[i];
+        var pick = function (tag) {
+          var m = b.match(new RegExp("<" + tag + ">([\\s\\S]*?)</" + tag + ">"));
+          return m ? m[1].replace(/<[^>]+>/g, "").trim() : "";
+        };
+        out.push({ text: pick("title"), url: pick("id"), date: pick("published") });
+      }
+      return out;
+    }
+  }
+];
+
+// At most 6 capitalised names from the source essay and its signal.
+function forecastLedgerNames(sourceEssay, signal) {
+  var combined = String(sourceEssay || "") + "\n" + String(signal || "");
+  var seen = {}, names = [];
+  var m, re = /\b[A-Z][a-zA-Z]{2,}\b/g;
+  while ((m = re.exec(combined)) !== null) {
+    if (!seen[m[0]]) {
+      seen[m[0]] = 1;
+      names.push(m[0]);
+      if (names.length >= 6) break;
+    }
+  }
+  return names;
+}
+
+// Verbatim sentences of 25 to 280 characters copied from fetched text; no rewording.
+function forecastLedgerSentences(text, host, date, out, maxLines) {
+  var sentences = String(text || "").match(/[^.!?]+[.!?]+/g) || [];
+  for (var i = 0; i < sentences.length && out.length < maxLines; i++) {
+    var trimmed = sentences[i].replace(/\s+/g, " ").trim();
+    if (trimmed.length >= 25 && trimmed.length <= 280) {
+      out.push({ sentence: trimmed, host: host, date: date || "unknown" });
+    }
+  }
+}
+
+// One evidence source, one term: at most 10 documents, 40000 chars read each, 15 s timeout, failures independent.
+async function forecastLedgerFetchTerm(src, term, out, maxLines) {
+  var docs = 0;
+  try {
+    var resp = await fetch(src.buildUrl(term), { headers: { "User-Agent": UA }, signal: AbortSignal.timeout(FORECAST_LEDGER_TIMEOUT_MS) });
+    if (!resp.ok) return;
+    var body = src.name === "arXiv" ? await resp.text() : await resp.json();
+    var items = src.parse(body);
+    for (var i = 0; i < items.length && docs < FORECAST_LEDGER_MAX_DOCS && out.length < maxLines; i++) {
+      var it = items[i];
+      if (!it.url || !/^https:\/\//i.test(it.url)) continue; // publicHttpsUrl only; no http or private/local host
+      var u = null;
+      try { u = new URL(it.url); } catch (e) { continue; }
+      if (/^(localhost|127\.|0\.0\.0\.0|10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.)/.test(u.hostname)) continue;
+      var text = String(it.text || "");
+      if (!text) continue;
+      forecastLedgerSentences(text.slice(0, FORECAST_LEDGER_MAX_CHARS), u.host, it.date, out, maxLines);
+      docs++;
+    }
+  } catch (e) {
+    console.error(JSON.stringify({ evt: "q08-signal-engine:forecastLedgerFetchTerm:caught", error: String((e && e.message) || e) }));
+  }
+}
+
+// Ledger lines "[R<n>] <sentence> (<host>, <date>)", numbered in order, at most 60.
+async function forecastLedger(sourceEssay, signal) {
+  var out = [], maxLines = FORECAST_LEDGER_MAX_LINES;
+  var names = forecastLedgerNames(sourceEssay, signal);
+  for (var i = 0; i < names.length && out.length < maxLines; i++) {
+    for (var s = 0; s < FORECAST_EVIDENCE_SOURCES.length && out.length < maxLines; s++) {
+      await forecastLedgerFetchTerm(FORECAST_EVIDENCE_SOURCES[s], names[i], out, maxLines);
+    }
+  }
+  var lines = [];
+  for (var j = 0; j < out.length; j++) {
+    lines.push("[R" + (j + 1) + "] " + out[j].sentence + " (" + out[j].host + ", " + out[j].date + ")");
+  }
+  return lines;
+}
 
 // ---------------------------------------------------------------------------
 // Utilities
