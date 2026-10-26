@@ -18,6 +18,8 @@
 //    are in control_registry once each with a valid kind, disposition keep, critical path 0, an alternate and evidence, the model-free decision path is in
 //    capability_ledger, and the re-ask probe passes only once the approval has reached the fleet (never while the card is merely open); the verb detector reads
 //    120 minutes; the decision rows state their predictions in minutes;
+//  * review round 5: belief_registry holds the belief behind the card reopen once (probe_class belief-<key>, confidence below 1, the evidence for and against it),
+//    its contract is an active hourly d1-query that reads 0 until the owner presses Done a second time, and the reopen itself stops at a second Done;
 //  * the Rollback line removes only what the file added, restores the issue-100360 contract and the card, and never touches decision_log.
 // Run: node migrations/dash-owner-actions.test.mjs
 import { DatabaseSync } from "node:sqlite";
@@ -45,6 +47,7 @@ CREATE TABLE owner_prompts (id TEXT PRIMARY KEY, ts TEXT DEFAULT (datetime('now'
 CREATE TABLE default_approve_markers (kind TEXT NOT NULL, pattern TEXT NOT NULL, note TEXT, PRIMARY KEY (kind, pattern));
 CREATE TABLE control_registry (control TEXT PRIMARY KEY, location TEXT NOT NULL, kind TEXT NOT NULL CHECK (kind IN ('hold', 'filter', 'pause', 'kill-switch', 'gate', 'cap', 'guard', 'lease')), guards_against TEXT, critical_path INTEGER NOT NULL DEFAULT 0, disposition TEXT NOT NULL CHECK (disposition IN ('remove', 'demote', 'replace', 'keep')), disposition_state TEXT NOT NULL DEFAULT 'planned' CHECK (disposition_state IN ('planned', 'applied')), alternate_path TEXT, alternate_tested_at TEXT, evidence TEXT NOT NULL, issue_id INTEGER, reviewed_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')));
 CREATE TABLE capability_ledger (capability TEXT PRIMARY KEY, provenance TEXT NOT NULL, prerequisites TEXT, reliability TEXT, acquired_at TEXT NOT NULL, last_exercised_at TEXT, evidence TEXT NOT NULL);
+CREATE TABLE belief_registry (belief_key TEXT PRIMARY KEY, claim TEXT NOT NULL, confidence REAL, evidence TEXT NOT NULL, probe_class TEXT NOT NULL, built_on TEXT, created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')));
 INSERT INTO default_approve_markers (kind, pattern) VALUES ('hard', '% legal %'), ('hard', '%renew%'), ('hard', '%token%'), ('decision_action', '%approve:%');
 -- the live birth and template triggers: a new open issue gets a placeholder contract that a template then rewrites
 CREATE TRIGGER agent_issues_birth_contract_ins AFTER INSERT ON agent_issues WHEN NEW.status = 'open' AND NOT EXISTS (SELECT 1 FROM remediation_contracts c WHERE c.issue_id = NEW.id) BEGIN INSERT OR IGNORE INTO remediation_contracts (class, issue_id, precondition, action, verify_probe, verify_transport, max_attempts, escalate_to, expected_cadence_h, status, module) VALUES ('issue-' || NEW.id, NEW.id, 'born with the issue (ORPHAN-GUARD-BIRTH-1)', 'needs-machine-probe', 'needs-machine-probe', 'd1-query', 3, 'qnfo-fleet-control', 1, 'needs-machine-probe', 'birth'); END;
@@ -52,6 +55,7 @@ CREATE TRIGGER contract_probe_templates_v3_generic AFTER INSERT ON remediation_c
 -- the live rows this file acts on (read from qnfo-audit 2026-10-26)
 INSERT INTO agent_issues (id, title, description, source, category, priority, status, created_at, updated_at) VALUES (100140, 'UIA-SOURCE-FIDELITY-1: fix factual inconsistencies', 'seven items', 'x', 'pipeline', 'medium', 'open', 1, 1);
 INSERT INTO agent_issues (id, title, description, source, category, priority, status, created_at, updated_at) VALUES (100360, 'DASH-OWNER-ACTIONS-1: the fleet command line does not execute an approval', 'owner_decisions', 'claude-session', 'reliability', 'critical', 'open', 1, 1);
+INSERT INTO human_responses (key, kind, credential) VALUES ('ha:uia-source-fidelity-100140', 'note', 'owner-session'), ('ha:uia-source-fidelity-100140', 'note', 'owner-session'), ('ha:uia-source-fidelity-100140', 'done', 'owner-session');
 INSERT INTO human_actions (slug, title, why, default_in_effect, action, status, created_at, updated_at, resolved_at, resolution) VALUES ('uia-source-fidelity-100140', 'UIA-SOURCE-FIDELITY-1: authorize the seven fixes', 'IDENTITY-BOUND: edits to the author''s own paper bodies', 'The papers stay as published.', 'Approve or decline each of the seven fixes in agent_issues 100140.', 'resolved', '2026-10-20T06:40:06Z', '2026-10-24 00:11:33', '2026-10-24 00:11:33', '${DONE_RES}');
 `;
 const CLS = ["fm-cmd-owner-verb-unparsed", "fm-owner-approval-without-handoff", "fm-owner-decision-on-hard-card"];
@@ -77,15 +81,15 @@ for (let i = 0; i < 3; i++) {
   const c = one("SELECT * FROM remediation_contracts WHERE class = ?", CLS[i]);
   ok(c && c.verify_transport === "d1-query" && c.status === "active" && c.module === "failure-mode" && c.expected_cadence_h === 1 && c.max_attempts === 3 && c.issue_id === null, "one active hourly d1-query detector " + CLS[i], c && { t: c.verify_transport, s: c.status });
 }
-ok(n("SELECT COUNT(*) n FROM decision_log") === 3 && n("SELECT COUNT(*) n FROM decision_log WHERE action LIKE 'DASH-OWNER-ACTIONS-1: %'") === 1 && n("SELECT COUNT(*) n FROM decision_log WHERE action LIKE 'DASH-OWNER-ACTIONS-1-REVIEW: %'") === 1 && n("SELECT COUNT(*) n FROM decision_log WHERE action LIKE 'DASH-OWNER-ACTIONS-1-REVIEW-4: %'") === 1, "three decision_log rows: the feature, the review round and the home-page round");
+ok(n("SELECT COUNT(*) n FROM decision_log") === 4 && n("SELECT COUNT(*) n FROM decision_log WHERE action LIKE 'DASH-OWNER-ACTIONS-1: %'") === 1 && n("SELECT COUNT(*) n FROM decision_log WHERE action LIKE 'DASH-OWNER-ACTIONS-1-REVIEW: %'") === 1 && n("SELECT COUNT(*) n FROM decision_log WHERE action LIKE 'DASH-OWNER-ACTIONS-1-REVIEW-4: %'") === 1 && n("SELECT COUNT(*) n FROM decision_log WHERE action LIKE 'DASH-OWNER-ACTIONS-1-REVIEW-5: %'") === 1, "four decision_log rows: the feature, the review round, the home-page round and the belief round");
 // QUEUE-SLA-1: no threshold or prediction in hours or days (the historical facts in the symptom and evidence texts are dates and counts, not windows)
 for (const dl of db.prepare("SELECT predicted_outcome p FROM decision_log").all()) ok(!/\b\d+\s*(h|hours?|days?|d|weeks?)\b|\ban hour\b/i.test(dl.p) && /\b\d+ minutes?\b/.test(dl.p), "the prediction is stated in minutes", dl.p);
 ok(!/'-\d+ (hours?|days?)'/.test(sql.split("\n").filter((l) => !l.startsWith("--")).join("\n")) && /''-120 minutes''/.test(sql), "no SQL window in hours or days: the verb detector reads 120 minutes");
 for (const dl of db.prepare("SELECT * FROM decision_log").all()) ok(dl.capability_gain && dl.predicted_outcome && dl.surfaces_tested && dl.rollback_path && dl.reach_gain, "decision row carries capability_gain, predicted_outcome, reach_gain, surfaces_tested and a rollback path");
 
 // every probe in the file: one read, no write keywords, short LIKE and GLOB literals
-const probes = db.prepare("SELECT class, verify_probe FROM remediation_contracts WHERE class IN (?, ?, ?, 'issue-100360') OR class LIKE 'issue-1003%'").all(...CLS);
-ok(probes.length === 5, "five probes: the three detectors, issue 100360 and the re-ask issue", probes.map((p) => p.class));
+const probes = db.prepare("SELECT class, verify_probe FROM remediation_contracts WHERE class IN (?, ?, ?, 'issue-100360', 'belief-dash-owner-done-not-a-decision') OR class LIKE 'issue-1003%'").all(...CLS);
+ok(probes.length === 6, "six probes: the three detectors, issue 100360, the re-ask issue and the belief probe", probes.map((p) => p.class));
 const WRITE_KW = ["insert into", "update ", "delete from", "drop table", "drop index", "alter table", "create table", "create index", "create trigger", "attach ", "detach ", "pragma ", "replace into", "vacuum"];
 const RT_WRITE_KW = ["insert ", "update ", "delete ", "drop ", "alter ", "create ", "attach ", "detach ", "pragma ", "replace ", "vacuum", "reindex"];
 for (const p of probes) {
@@ -210,6 +214,44 @@ db.prepare("UPDATE agent_issues SET status = 'open' WHERE id = 100140").run();
 db.exec(sql);
 ok(one("SELECT status FROM human_actions WHERE slug = 'uia-source-fidelity-100140'").status === "open", "with the issue open, no decision and the Done resolution it reopens (the guard is exactly that)");
 
+// the reopen stops at a second Done: one Done is the press the owner made for lack of an Approve; a second on the reopened card makes the first deliberate
+{
+  const KEY2 = "ha:uia-source-fidelity-100140";
+  const st = () => one("SELECT status FROM human_actions WHERE slug = 'uia-source-fidelity-100140'").status;
+  db.exec("DELETE FROM human_responses");
+  db.prepare("UPDATE human_actions SET status = 'resolved', resolution = ? WHERE slug = 'uia-source-fidelity-100140'").run(DONE_RES);
+  resp(KEY2, "done"); resp(KEY2, "note");
+  db.exec(sql);
+  ok(st() === "open", "one Done (and notes) on the card: the reopen still applies");
+  db.prepare("UPDATE human_actions SET status = 'resolved', resolution = ? WHERE slug = 'uia-source-fidelity-100140'").run(DONE_RES);
+  resp(KEY2, "done");
+  db.exec(sql);
+  ok(st() === "resolved", "a second Done by the owner is never undone: a replay leaves the card closed");
+  db.exec("DELETE FROM human_responses");
+  db.prepare("UPDATE human_actions SET status = 'open', resolved_at = NULL, resolution = NULL WHERE slug = 'uia-source-fidelity-100140'").run();
+}
+
+// review round 5, DOCTRINE-1: the belief behind the reopen is in belief_registry with a belief-<key> probe that can refute it
+const BK = "dash-owner-done-not-a-decision", BC = "belief-" + BK;
+const bel = db.prepare("SELECT * FROM belief_registry").all();
+ok(bel.length === 1 && bel[0].belief_key === BK && bel[0].probe_class === BC && bel[0].probe_class === "belief-" + bel[0].belief_key && /DASH-OWNER-ACTIONS-1/.test(bel[0].built_on), "belief_registry holds the one belief, its probe_class is belief-<key> and it names its build", bel.map((b) => b.belief_key));
+ok(bel[0].confidence > 0.5 && bel[0].confidence < 0.9 && /human_actions 135/.test(bel[0].claim) && /re-asks the owner and decides nothing for him/.test(bel[0].claim), "it is held below certainty and says the reopen decides nothing for the owner", bel[0].confidence);
+ok(/^For: /.test(bel[0].evidence) && /Against: /.test(bel[0].evidence) && /cmd_log 2026-10-20 11:20:44, 11:21:48 and 11:34:22/.test(bel[0].evidence) && /cmd_log 2026-10-24 00:10:03, 00:10:32 and 00:10:59/.test(bel[0].evidence) && /human_responses 49 and 50/.test(bel[0].evidence) && /human_responses 51 \(kind done\)/.test(bel[0].evidence) && /agent_issues 100576/.test(bel[0].evidence) && /now owner-authorized/.test(bel[0].evidence), "its evidence cites the 2026-10-20 and 2026-10-24 approval lines, the notes and the Done, and the counter-evidence (the model-worded task of issue 100576)");
+const bc = one("SELECT * FROM remediation_contracts WHERE class = ?", BC);
+ok(bc && bc.verify_transport === "d1-query" && bc.status === "active" && bc.module === "belief" && bc.expected_cadence_h === 1 && bc.max_attempts === 1000 && bc.issue_id === null && bc.escalate_to === "qnfo-fleet-control" && /second time/.test(bc.action), "the belief has one active hourly d1-query contract that says what a reading above 0 means", bc);
+{
+  const KEY3 = "ha:uia-source-fidelity-100140";
+  db.exec("DELETE FROM human_responses");
+  ok(same(read(BC), { expected: "0", observed: "0" }), "the belief probe reads 0 on a clean table", read(BC));
+  resp(KEY3, "done");
+  ok(read(BC).observed === "0", "one Done (the owner's press of 2026-10-24) does not refute the belief", read(BC));
+  resp(KEY3, "note"); resp(KEY3, "decline"); resp("ha:other-card", "done"); resp("ha:other-card", "done");
+  ok(read(BC).observed === "0", "notes, a decline and Done presses on other cards do not refute it", read(BC));
+  resp(KEY3, "done");
+  ok(same(read(BC), { expected: "0", observed: "1" }), "a second Done on the reopened card refutes it (reads 1)", read(BC));
+  db.exec("DELETE FROM human_responses");
+}
+
 // the re-ask issue and its probe
 const TITLE = "DASH-OWNER-ACTIONS-1: re-ask the owner for the seven decisions of agent_issues 100140 (owner card ha:uia-source-fidelity-100140 was closed with Done because Approve did not exist)";
 const reask = one("SELECT * FROM agent_issues WHERE title = ?", TITLE);
@@ -283,7 +325,7 @@ db.prepare("UPDATE remediation_contracts SET attempts = 9 WHERE class = 'issue-1
 db.prepare("UPDATE agent_issues SET status = 'closed' WHERE id = ?").run(reask.id);
 const probeBefore = one("SELECT verify_probe p FROM remediation_contracts WHERE class = ?", "issue-" + reask.id).p;
 db.exec(sql);
-ok(n("SELECT COUNT(*) n FROM failure_modes") === 3 && n("SELECT COUNT(*) n FROM remediation_contracts WHERE class LIKE 'fm-%'") === 3 && n("SELECT COUNT(*) n FROM decision_log") === 3 && n("SELECT COUNT(*) n FROM control_registry") === 3 && n("SELECT COUNT(*) n FROM capability_ledger") === 1 && one("SELECT max_attempts m FROM remediation_contracts WHERE class = ?", CLS[0]).m === 7, "a replay is a no-op: no duplicate failure mode, contract or decision row, and a later edit survives");
+ok(n("SELECT COUNT(*) n FROM failure_modes") === 3 && n("SELECT COUNT(*) n FROM remediation_contracts WHERE class LIKE 'fm-%'") === 3 && n("SELECT COUNT(*) n FROM decision_log") === 4 && n("SELECT COUNT(*) n FROM control_registry") === 3 && n("SELECT COUNT(*) n FROM capability_ledger") === 1 && n("SELECT COUNT(*) n FROM belief_registry") === 1 && n("SELECT COUNT(*) n FROM remediation_contracts WHERE class = ?", BC) === 1 && one("SELECT max_attempts m FROM remediation_contracts WHERE class = ?", CLS[0]).m === 7, "a replay is a no-op: no duplicate failure mode, contract, belief or decision row, and a later edit survives");
 ok(n("SELECT COUNT(*) n FROM agent_issues WHERE title = ?", TITLE) === 1 && one("SELECT status s FROM agent_issues WHERE id = ?", reask.id).s === "closed" && one("SELECT verify_probe p FROM remediation_contracts WHERE class = ?", "issue-" + reask.id).p === probeBefore && one("SELECT attempts a FROM remediation_contracts WHERE class = ?", "issue-" + reask.id).a === 5 && one("SELECT attempts a FROM remediation_contracts WHERE class = 'issue-100360'").a === 9, "nor does it re-file or reopen the re-ask issue, rewrite its probe or reset either contract's attempts");
 
 // rollback: what the file added goes; the contract and the card are restored; decision_log stays
@@ -296,7 +338,8 @@ const back = one("SELECT * FROM remediation_contracts WHERE class = 'issue-10036
 ok(back.verify_probe === OLD_PROBE && back.action === OLD_ACTION && back.precondition === OLD_PRE && back.module === "probe-template-v3-generic", "the Rollback line restores the issue-100360 contract text exactly as the live row held it", back);
 const card2 = one("SELECT * FROM human_actions WHERE slug = 'uia-source-fidelity-100140'");
 ok(card2.status === "resolved" && card2.resolution === DONE_RES && card2.resolved_at === "2026-10-24 00:11:33" && card2.updated_at === "2026-10-24 00:11:33", "and re-resolves the card with its old resolution and times", card2);
-ok(n("SELECT COUNT(*) n FROM failure_modes") === 0 && n("SELECT COUNT(*) n FROM remediation_contracts WHERE class LIKE 'fm-%'") === 0 && n("SELECT COUNT(*) n FROM decision_log") === 3 && n("SELECT COUNT(*) n FROM control_registry") === 0 && n("SELECT COUNT(*) n FROM capability_ledger") === 0, "removes the failure modes, detector contracts, control_registry rows and the capability row, never the decision_log rows");
+ok(n("SELECT COUNT(*) n FROM failure_modes") === 0 && n("SELECT COUNT(*) n FROM remediation_contracts WHERE class LIKE 'fm-%'") === 0 && n("SELECT COUNT(*) n FROM decision_log") === 4 && n("SELECT COUNT(*) n FROM control_registry") === 0 && n("SELECT COUNT(*) n FROM capability_ledger") === 0, "removes the failure modes, detector contracts, control_registry rows and the capability row, never the decision_log rows");
+ok(n("SELECT COUNT(*) n FROM belief_registry") === 0 && n("SELECT COUNT(*) n FROM remediation_contracts WHERE class = ?", BC) === 0, "and the belief row with its contract");
 const re2 = one("SELECT status s, last_verdict v FROM remediation_contracts WHERE class = ?", "issue-" + reask.id);
 ok(re2.s === "superseded" && re2.v === "superseded:rollback", "and supersedes the re-ask contract (the issue itself stays, to be closed with evidence)", re2);
 

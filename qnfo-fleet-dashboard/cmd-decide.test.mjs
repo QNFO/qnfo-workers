@@ -12,7 +12,7 @@
 // Review round (1.70.0): the hand-off is filed BEFORE anything is recorded and an approval never spends an Ask slot (T17); Approve and Decline
 // are offered only for a card that asks for a decision and is not a legal, signing, money, credential or account step (T18); a card with
 // no issue still hands the fleet a task it can act on, and a pick-one card needs the option (T19); a sentence that merely starts with a
-// verb belongs to the model, and retry runs unasked only for 'retry <reference>' (T20).
+// verb belongs to the model, and retry runs unasked only for 'retry <reference>' (T20); 'investigate ...' and 'diagnose ...' sentences go to the model too, while the verb alone or with a reference stays a command (T20m, T20n).
 // Review round 2 (1.70.0): the Ask cap exempts only the server's own hand-off marker, never text a stranger controls (T17h-l); a PR, run or
 // commit number in a card's text is never an issue id (T21).
 // Review round 3 (1.70.0): two approvals are two tasks under main's OWNER-PROMPT-TWIN-LINK-1 twin check, because the hand-off opens with what tells decisions apart and
@@ -626,6 +626,46 @@ const preview100140 = async (e, C) => (await (await cmd(e.env, "approve 100140",
   }
   j = await (await cmd(e.env, "Approve all")).json();
   ok(!(j.actions || []).some((x) => x.op) && /Pick one/.test(j.text), "T20k 'Approve all' with two decisions waiting asks which, and runs nothing", j);
+}
+// T20m. 'investigate ...' and 'diagnose ...' follow the same rule as approve, decline, retry and resolve: a sentence that merely starts with the verb is the
+// model's (reviewers' reproduction at c65c6538: 'Investigate why the dashboard is slow' answered "Nothing matches", and 'investigate the Ignorance Audit papers'
+// answered with the 100140 card because the single word 'papers' matched its title). The verb is a command only alone, or when a reference opens the argument.
+{
+  const e = mk({ second: true });
+  e.db.prepare("INSERT INTO human_actions (slug,title,why,default_in_effect,action,source) VALUES ('dash-copy','Review the dashboard copy','The owner words the copy.','The copy stays.','Read the dashboard copy and say what to change.','claude-session')").run();
+  const C = await signIn(e.env, e.db, e.m);
+  const SENT = ["Investigate why the dashboard is slow", "investigate the slow dashboard", "diagnose the stuck integration chain", "diagnose why metrics are off target", "Investigate why https://papers.qnfo.org/papers/foo returns 404 and fix it", "investigate the Ignorance Audit papers", "Investigate why the deploy of qnfo-ops failed yesterday", "diagnose the deploy failures this week", "diagnose the dashboard latency and fix it", "investigate real-time lag", "diagnose real-time dashboard lag", "diagnose qnfo-ops deploy failures", "Diagnosis the stuck integration chain", "investigate cross-platform pricing model drift"];
+  let ip = 0;
+  for (const l of SENT) {
+    for (const H of [{ "CF-Connecting-IP": "203.0.114." + (++ip) }, C]) {
+      const j = await (await cmd(e.env, l, H)).json();
+      ok(j.kind === "pending" && !/Nothing matches|Diagnosis of/.test(j.text || "") && !(j.actions || []).some((x) => x.op || /^diagnose/.test(x.cmd || "")) && !j.executed, "T20m '" + l.slice(0, 44) + "' (" + (H === C ? "owner" : "visitor") + ") goes to the model, not to the diagnose grammar", j);
+    }
+  }
+  await flush();
+  ok(e.aiCalls.length >= SENT.length * 2, "T20m1 the model was called for every one of them, owner and visitor", e.aiCalls.length);
+  ok(rows(e.db, "SELECT id FROM cmd_log WHERE kind = 'answer'").length === 0 && one(e.db, "SELECT COUNT(*) n FROM cmd_log WHERE kind = 'action'").n === 0, "T20m2 none was answered in code and no action ran");
+}
+{
+  // the strict forms stay commands and never call a model
+  const e = mk({ second: true });
+  e.db.prepare("INSERT INTO human_actions (slug,title,why,default_in_effect,action,source) VALUES ('dash-copy','Review the dashboard copy','The owner words the copy.','The copy stays.','Read the dashboard copy and say what to change.','claude-session')").run();
+  const st = Object.assign({}, STATE, { scheduled: [{ name: "qnfo-ops", status: "OK", purpose: "ops", req24: 10, expected24: 10 }] });
+  e.db.prepare("UPDATE fleet_dashboard_state SET state_json = ?").run(JSON.stringify(st));
+  const C = await signIn(e.env, e.db, e.m);
+  const CMD = [["Diagnose", /blocked/], ["diagnose UIA-SOURCE-FIDELITY-1", /Diagnosis of the owner card ha:uia-source-fidelity-100140|Diagnosis of #100140/], ["Investigate UIA-SOURCE-FIDELITY-1", /Diagnosis of/], ["investigate 100140", /Diagnosis of #100140/], ["diagnose #100140", /Diagnosis of #100140/], ["diagnose issue 100140", /Diagnosis of #100140/], ["diagnose ha:" + SLUG, /Diagnosis of the owner card ha:uia-source-fidelity-100140/], ["Diagnose HA:" + SLUG.toUpperCase(), /Nothing matches|Diagnosis of/], ["diagnose dash-copy", /Diagnosis of the owner card ha:dash-copy/], ["diagnose 100140 please", /Diagnosis of #100140/], ["diagnose qnfo-ops", /qnfo-ops - OK/], ["Diagnose Qnfo-Ops", /qnfo-ops - OK/], ["diagnose 424242", /Nothing matches|No issue/], ["diagnose 424242 please", /Nothing matches|No issue/], ["diagnose issue 424242", /Nothing matches|No issue/], ["investigate ha:no-such-card", /Nothing matches/], ["diagnose UIA-NO-SUCH-THING-1", /Nothing matches/]];
+  let ip = 0;
+  for (const [l, re] of CMD) {
+    for (const H of [{ "CF-Connecting-IP": "203.0.115." + (++ip) }, C]) {
+      const j = await (await cmd(e.env, l, H)).json();
+      ok(j.kind === "answer" && re.test(j.text || ""), "T20n '" + l + "' (" + (H === C ? "owner" : "visitor") + ") is answered in code", j);
+    }
+  }
+  await flush();
+  ok(noModel(e), "T20n1 no model was called for any of them", { ai: e.aiCalls.length, svc: e.svcCalls.length });
+  // a stranger's answer to the sentences carries no card title (the one-word 'dashboard' match used to name the dash-copy card)
+  const j = await (await cmd(e.env, "investigate why the dashboard is slow", { "CF-Connecting-IP": "203.0.116.1" })).json();
+  ok(j.kind === "pending" && !/dashboard copy|dash-copy/i.test(JSON.stringify(j)), "T20n2 the sentence names no card for a stranger", j);
 }
 // T21. a PR, run or commit number in a card's own text is never read as an agent_issues id (agent_issues 1001 exists and is unrelated)
 {
