@@ -475,6 +475,19 @@ console.log("\n[trip: visa counter, plan, weather, fog, check-in, import]");
   ok("the tick mails a visa overstay once", vm.length === 1 && /overstays Nepal/.test(vm[0].sub) && /travel\.q08\.org/.test(vm[0].b), sent.map((m) => m.sub));
 }
 
+console.log("\n[sign-in mail]");
+{
+  const { raw, env } = freshEnv();
+  const got = [];
+  const deps = { now: NOW, key: "k", send: async () => ({ ok: false, error: "companion e-mail is off (wellbeing_config email_mode)" }), sendCode: async (s, b) => { got.push(s); return { ok: true }; } };
+  const r = await handleTravel(new Request("https://travel.q08.org/travel/login", { method: "POST" }), env, deps);
+  ok("the code goes through the sign-in sender even when travel mail is off", r.status === 200 && got.length === 1 && /^Travel planner code: \d{6}$/.test(got[0]), got);
+  const bad = await handleTravel(new Request("https://travel.q08.org/travel/login", { method: "POST" }), env, { now: NOW, key: "k", sendCode: async () => ({ ok: false, error: "companion e-mail is off (wellbeing_config email_mode)" }) });
+  const html = await bad.text();
+  ok("a failed send shows plain words, not a config key", /the code didn.t go out/.test(html) && !/wellbeing_config|email_mode/.test(html), html.slice(0, 300));
+  ok("a failed send leaves no live code behind", raw.prepare("SELECT COUNT(*) n FROM travel_logins").get().n === 1);
+}
+
 console.log("\n[repository hygiene]");
 {
   const src = readFileSync(new URL("./travel.js", import.meta.url), "utf8");

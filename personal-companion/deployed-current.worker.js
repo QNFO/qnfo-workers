@@ -2457,11 +2457,13 @@ async function handleTravel(request, env, deps = {}) {
     const exp = Math.floor(nowMs / 1000) + LOGIN_TTL_MIN * 60;
     await db.prepare("INSERT INTO travel_logins (id, code_mac, exp, created_at) VALUES (?, ?, ?, ?)").bind(id, await codeMac(key, id, code), exp, nowIso).run();
     const tok = await makeToken(key, "login:" + id, exp);
-    const send = deps.send || (async () => ({ ok: false, error: "no sender" }));
+    // TRAVEL-SIGNIN-MAIL-1: the code goes through the sign-in sender, which the "less email" setting does not silence
+    const send = deps.sendCode || deps.send || (async () => ({ ok: false, error: "no sender" }));
     const r = await send("Travel planner code: " + code, "Your sign-in code: " + code + "\n\nOr tap: " + u.origin + "/travel/auth?i=" + id + "&t=" + encodeURIComponent(tok) + "\n\nIt works once, for " + LOGIN_TTL_MIN + " minutes. If you did not ask for it, ignore this mail.");
     if (!r || !r.ok) {
       await db.prepare("DELETE FROM travel_logins WHERE id = ?").bind(id).run();
-      return signInPage("The email could not be sent (" + esc(String(r && r.error || "unknown").slice(0, 120)) + ").");
+      console.error(JSON.stringify({ evt: "travel:code-mail-failed", error: String(r && r.error || "unknown").slice(0, 200) }));
+      return signInPage("Sorry, the code didn't go out. Wait a minute and tap the button again.");
     }
     return codePage("");
   }
@@ -2951,7 +2953,8 @@ var __name22 = __name2;
 // the release note is carried by the comment blocks at STALL_MIN, shortenFeedback, pruneRepeat and attemptBudgetStop, and none is added to the VERSION
 // line below (VERSION-LINE-NOTES-1, 2026-10-19). Its older trailing notes stay until length-lede.test.mjs stops pinning "LENGTH-LEDE-1" on that line.
 // VERSION-NOTES-MOVED-1: release notes live in the block below
-var VERSION = "1.39.0-reading-sitemap";
+var VERSION = "1.39.1-travel-signin";
+/* 1.39.1 TRAVEL-SIGNIN-MAIL-1 (2026-10-26, pillar personal, owner screenshot; patch): the travel planner's "Email me a code" was refused while companion e-mail is off (wellbeing_config email_mode), so the owner could not sign in. Sign-in codes go through sendOwnerNotice kind "signin", which skips email_mode and owner_notice_enabled (the owner asked for that mail that minute); a failed send says "Sorry, the code didn't go out" instead of a config key and logs the detail. */
 /* 1.39.0 READING-SITEMAP-1 (issue 4120, pillar personal; minor): expose only accuracy-passed, non-retracted reading pages through /sitemap.xml; keep the existing robots.txt exclusion and route authorization, separate from issue 100064. */
 /* 1.38.2 WEBMCP-CATCH-LOGGING-1 (2026-10-25): report WebMCP injection and header-rewrite errors to Workers Logs. */
 /* 1.38.1 COMPANION-FACTCHECK-FRESH-1 (2026-10-25, agent_issues 100064, pillar personal; patch): fact-check retries bypass cached verdicts so repeated drafts receive a fresh review. */
@@ -7082,8 +7085,11 @@ function emailKindAllowed(mode, kind) {
 var OWNER_NOTICE_FROM = [{ email: "companion@q08.org", name: "Companion" }, "rowan.quni@qnfo.org"];
 async function sendOwnerNotice(env, subject, text, kind) {
   if (!env.SEND_EMAIL && !env.EMAIL) return { ok: false, error: "no mail binding" };
-  if (!(await ownerNoticeEnabled(env))) return { ok: false, disabled: true, error: "owner notices disabled (calendar_meta owner_notice_enabled)" };
-  var _mode = await companionEmailMode(env);
+  // TRAVEL-SIGNIN-MAIL-1 (2026-10-26, owner screenshot: "Email me a code" refused with "companion e-mail is off"): a sign-in
+  // code is mail the owner asked for that minute, so it skips the quiet-inbox settings; without it no one can sign in.
+  var _signin = kind === "signin";
+  if (!_signin && !(await ownerNoticeEnabled(env))) return { ok: false, disabled: true, error: "owner notices disabled (calendar_meta owner_notice_enabled)" };
+  var _mode = _signin ? "all" : await companionEmailMode(env);
   if (!emailKindAllowed(_mode, kind || "other")) return { ok: false, disabled: true, app: true, mode: _mode, error: "companion e-mail is " + _mode + " (wellbeing_config email_mode); the app and push carry " + (kind || "this") };
   subject = String(subject == null ? "" : subject).replace(/[\r\n]+/g, " ").slice(0, 200);
   text = String(text == null ? "" : text).slice(0, 20000);
@@ -7116,6 +7122,7 @@ function wellbeingSend(env, to, subject, body, kind) { return sendOwnerNotice(en
 function travelDeps(env) {
   return {
     send: function (subject, body) { return sendOwnerNotice(env, subject, body, "travel"); },
+    sendCode: function (subject, body) { return sendOwnerNotice(env, subject, body, "signin"); },
     ai: function (model, input) { return aiRunAttr(env, "personal-companion", "travel-planner", model, input); },
     // TRAVEL-CHAT-1: the chat's model menu obeys the same ban list as every other model call here
     modelAllowed: modelAllowed,

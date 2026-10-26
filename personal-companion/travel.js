@@ -1099,11 +1099,13 @@ export async function handleTravel(request, env, deps = {}) {
     const exp = Math.floor(nowMs / 1000) + LOGIN_TTL_MIN * 60;
     await db.prepare("INSERT INTO travel_logins (id, code_mac, exp, created_at) VALUES (?, ?, ?, ?)").bind(id, await codeMac(key, id, code), exp, nowIso).run();
     const tok = await makeToken(key, "login:" + id, exp);
-    const send = deps.send || (async () => ({ ok: false, error: "no sender" }));
+    // TRAVEL-SIGNIN-MAIL-1: the code goes through the sign-in sender, which the "less email" setting does not silence
+    const send = deps.sendCode || deps.send || (async () => ({ ok: false, error: "no sender" }));
     const r = await send("Travel planner code: " + code, "Your sign-in code: " + code + "\n\nOr tap: " + u.origin + "/travel/auth?i=" + id + "&t=" + encodeURIComponent(tok) + "\n\nIt works once, for " + LOGIN_TTL_MIN + " minutes. If you did not ask for it, ignore this mail.");
     if (!r || !r.ok) {
       await db.prepare("DELETE FROM travel_logins WHERE id = ?").bind(id).run();
-      return signInPage("The email could not be sent (" + esc(String(r && r.error || "unknown").slice(0, 120)) + ").");
+      console.error(JSON.stringify({ evt: "travel:code-mail-failed", error: String(r && r.error || "unknown").slice(0, 200) }));
+      return signInPage("Sorry, the code didn't go out. Wait a minute and tap the button again.");
     }
     return codePage("");
   }
