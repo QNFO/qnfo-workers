@@ -1,7 +1,8 @@
 // BREACH-DOCTOR-1 offline suite: replays migrations/2026-10-26-breach-doctor.sql on node:sqlite over the live column lists.
 // Proves: the header opts in (APPLY-BY ci, DB qnfo-audit, one Rollback line, no trigger, no DELETE or DROP in the body); the file creates the three ledger tables, the
-// current-diagnosis, owner and status views, the doctor switches (breach_doctor seeded on, breach_doctor_ai off), five playbooks, five metrics with their triggers (every
-// code-anchor occurs once in qnfo-fleet-control/worker.js), the registries, the failure modes with working detector probes, one capability and one decision_log row whose
+// current-diagnosis, owner and status views, the doctor switches (breach_doctor seeded on, breach_doctor_ai off, the age gate in minutes), five playbooks (playbook-gap in measure), five
+// metrics with their triggers (every code-anchor occurs once in qnfo-fleet-control/worker.js), the registries, the failure modes with working detector probes, the queue_sla row of
+// the in-flight case and its fm- detector, one capability and one decision_log row whose
 // prediction decision_predictions_parse turns into a scored prediction; a second apply changes nothing; the Rollback line removes what the file added and keeps the ledger;
 // every seed playbook passes the engine's own validators (bdValidateRule); and over fixtures each seed rule's trigger_sql names the issues the audit named, its per-issue
 // action touches only the issue it is bound to, closes it through the live close-sync triggers with evidence and close_channel auto:triage-sync:breach-doctor, its
@@ -28,7 +29,7 @@ ok(!/claude\.ai|anthropic\.com/i.test(sql), "no claude.ai or anthropic.com link"
 const a = workerSrc.indexOf("// ---- BREACH-DOCTOR-1:BEGIN ----"), b = workerSrc.indexOf("// ---- BREACH-DOCTOR-1:END ----");
 const kwLine = workerSrc.match(/^var __RT_WRITE_KW = \[[^\]]*\];$/m);
 ok(a > 0 && b > a && kwLine, "the worker carries the BREACH-DOCTOR-1 block and the write-keyword list");
-const cx = vm.createContext({ Date, Number, String, parseInt, Math, JSON, Object, Array, RegExp, isFinite, console: { error() {}, log() {} }, VERSION: "0.49.0-test", crypto: globalThis.crypto, TextEncoder, Uint8Array });
+const cx = vm.createContext({ Date, Number, String, parseInt, Math, JSON, Object, Array, RegExp, isFinite, console: { error() {}, log() {} }, VERSION: "0.50.0-test", crypto: globalThis.crypto, TextEncoder, Uint8Array });
 vm.runInContext(kwLine[0] + "\n" + workerSrc.slice(a, b) + "\nthis.api = { bdValidateRule, bdReadOnlyWhy, bdWriteWhy, bdFactsSafe };", cx);
 const { bdValidateRule } = cx.api;
 
@@ -50,6 +51,7 @@ CREATE TABLE control_registry (control TEXT PRIMARY KEY, location TEXT NOT NULL,
 CREATE TABLE spof_registry (component TEXT PRIMARY KEY, critical_path TEXT NOT NULL, alternate_path TEXT, alternate_tested_at TEXT, evidence TEXT NOT NULL, issue_id INTEGER, reviewed_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')));
 CREATE TABLE belief_registry (belief_key TEXT PRIMARY KEY, claim TEXT NOT NULL, confidence REAL, evidence TEXT NOT NULL, probe_class TEXT NOT NULL, built_on TEXT, created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')));
 CREATE TABLE failure_modes (fm_key TEXT PRIMARY KEY, failure_mode TEXT NOT NULL, root_cause TEXT NOT NULL, remediation TEXT NOT NULL, detector TEXT NOT NULL, probe_class TEXT, first_seen TEXT NOT NULL, issue_id INTEGER, trigger_condition TEXT, symptom TEXT, blast_radius TEXT);
+CREATE TABLE queue_sla (stuck_type TEXT PRIMARY KEY, queue TEXT NOT NULL, definition TEXT NOT NULL, cycle_min INTEGER NOT NULL, sla_min INTEGER NOT NULL, auto_fix TEXT NOT NULL, owner TEXT NOT NULL, summary_column TEXT NOT NULL, producer_cycle_min INTEGER);
 CREATE TABLE capability_ledger (capability TEXT PRIMARY KEY, provenance TEXT NOT NULL, prerequisites TEXT, reliability TEXT, acquired_at TEXT NOT NULL, last_exercised_at TEXT, evidence TEXT NOT NULL);
 CREATE TABLE decision_log (id INTEGER PRIMARY KEY AUTOINCREMENT, ts TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')), actor TEXT NOT NULL, assumption TEXT NOT NULL, action TEXT NOT NULL, evidence TEXT NOT NULL, outcome TEXT NOT NULL, blast_radius TEXT NOT NULL, rollback_path TEXT NOT NULL, capability_gain TEXT, predicted_outcome TEXT, reach_gain TEXT, surfaces_tested TEXT, outcome_matched INTEGER);
 CREATE TRIGGER decision_log_no_update BEFORE UPDATE ON decision_log BEGIN SELECT RAISE(ABORT, 'DOCTRINE-1: decision_log is append-only (doctrine section 12)'); END;
@@ -79,10 +81,14 @@ for (const t of ["breach_diagnoses", "breach_diagnosis_events", "breach_playbook
 for (const v of ["v_breach_diagnosis_current", "v_breach_owner", "v_breach_doctor_status"]) ok(q1("SELECT name FROM sqlite_master WHERE type = 'view' AND name = ?", v), "view " + v);
 ok(q1("SELECT name FROM sqlite_master WHERE name = 'uq_breach_diag_live'"), "one live case per issue is a unique partial index");
 const cfg = (k) => (q1("SELECT value FROM ops_config WHERE key = ?", k) || {}).value;
-ok(cfg("breach_doctor") === "on" && cfg("breach_doctor_ai") === "off" && cfg("breach_doctor_playbook_cooldown_min") === "30" && cfg("breach_doctor_min_age_h") === "8", "switches seeded: breach_doctor on, breach_doctor_ai off, cooldown 30, min age 8");
+ok(cfg("breach_doctor") === "on" && cfg("breach_doctor_ai") === "off" && cfg("breach_doctor_playbook_cooldown_min") === "30" && cfg("breach_doctor_min_age_min") === "120", "switches seeded: breach_doctor on, breach_doctor_ai off, cooldown 30, min age 120 minutes");
+ok(cfg("breach_doctor_min_age_h") === undefined && qa("SELECT key FROM ops_config WHERE key LIKE 'breach_doctor%'").every((r) => !/_h$/.test(r.key)), "SLA-120M-1: no doctor threshold is stated in hours");
+ok(Number(cfg("breach_doctor_min_age_min")) >= 10 && Number(cfg("breach_doctor_min_age_min")) <= 120 && Number(cfg("breach_doctor_playbook_cooldown_min")) <= 120, "SLA-120M-1: no doctor age or cooldown threshold exceeds 120 minutes");
 for (const k of ["breach_doctor_max_cases", "breach_doctor_max_actions", "breach_doctor_budget_ms"]) ok(Number(cfg(k)) > 0, k + " is seeded");
 ok(n("breach_playbooks") === 5 && qa("SELECT rule_id FROM breach_playbooks ORDER BY rule_id").map((r) => r.rule_id).join(",") === "CM-R1,CM-R2,CM-R3,CM-R5,playbook-gap", "five playbooks: CM-R1, CM-R2, CM-R3, CM-R5 and the generic playbook-gap");
-ok(qa("SELECT rule_id FROM breach_playbooks WHERE enabled = 1 AND mode = 'on'").length === 5, "all five are enabled and mode on (the engine holds each in measure for 30 minutes from created_at)");
+ok(qa("SELECT rule_id FROM breach_playbooks WHERE enabled = 1 AND mode = 'on' ORDER BY rule_id").map((r) => r.rule_id).join(",") === "CM-R1,CM-R2,CM-R3,CM-R5", "the four per-issue playbooks are enabled and mode on (the engine holds each in measure for 30 minutes from created_at)");
+ok(q1("SELECT enabled, mode FROM breach_playbooks WHERE rule_id = 'playbook-gap'").enabled === 1 && q1("SELECT mode FROM breach_playbooks WHERE rule_id = 'playbook-gap'").mode === "measure", "playbook-gap is seeded in measure (it files issues the planner records untrusted, so it is armed only with the trust entry)");
+ok(/code_merge_trusted_sources/.test(q1("SELECT note FROM breach_playbooks WHERE rule_id = 'playbook-gap'").note) && /breach-doctor-gap-hold/.test(q1("SELECT note FROM breach_playbooks WHERE rule_id = 'playbook-gap'").note), "its note names the release condition and the control that records the hold");
 ok(q1("SELECT action_kind FROM breach_playbooks WHERE rule_id = 'playbook-gap'").action_kind === "file-issue" && JSON.parse(q1("SELECT action_sql a FROM breach_playbooks WHERE rule_id = 'playbook-gap'").a).length === 0, "playbook-gap is the file-issue row with no SQL action");
 const metrics = ["breaches_undiagnosed_over_60m", "breaches_auto_remediated_24h", "doctor_actions_failed_24h", "doctor_tick_age_min", "doctor_taint_violations_24h"];
 ok(n("metric_registry") === 5 && n("analytics_metric_triggers") === 5, "five metrics and five triggers");
@@ -96,8 +102,14 @@ for (const t of qa("SELECT action FROM analytics_metric_triggers WHERE action LI
   ok(workerSrc.split(anchor).length === 2 && /code-task: repo=qnfo-workers path=qnfo-fleet-control\/worker\.js\ncode-anchor:/.test(t.action), "each code-anchor occurs exactly once in qnfo-fleet-control/worker.js", anchor); anchors++;
 }
 ok(anchors === 3, "three triggers hand the code loop the engine anchor", anchors);
-ok(n("control_registry") === 4 && n("spof_registry") === 1 && n("belief_registry") === 1 && n("failure_modes") === 2 && n("capability_ledger") === 1, "registries: 4 controls, 1 spof, 1 belief, 2 failure modes, 1 capability");
-ok(qa("SELECT class FROM remediation_contracts ORDER BY class").map((r) => r.class).join(",") === "belief-doctor-structured-facts-suffice,fm-breach-doctor-rule-demoted,fm-breach-doctor-stalled", "detector and belief contracts");
+ok(n("control_registry") === 6 && n("spof_registry") === 1 && n("belief_registry") === 1 && n("failure_modes") === 3 && n("capability_ledger") === 1, "registries: 6 controls, 1 spof, 1 belief, 3 failure modes, 1 capability");
+ok(qa("SELECT control FROM control_registry WHERE kind IN ('hold', 'cap') ORDER BY control").map((r) => r.control).join(",") === "breach-doctor-caps,breach-doctor-gap-caps,breach-doctor-gap-hold", "every hold and cap of the doctor is in control_registry (DOCTRINE-1)");
+ok(qa("SELECT class FROM remediation_contracts ORDER BY class").map((r) => r.class).join(",") === "belief-doctor-structured-facts-suffice,fm-breach-doctor-case-age,fm-breach-doctor-rule-demoted,fm-breach-doctor-stalled", "detector and belief contracts");
+// QUEUE-SLA-1: a loop that holds items has its queue_sla row, an automatic fix with its revert, and the age of the oldest item
+const qs = q1("SELECT * FROM queue_sla WHERE stuck_type = 'breach-doctor-case-in-flight'");
+ok(n("queue_sla") === 1 && qs && qs.queue === "breach_diagnoses" && qs.sla_min === 120 && qs.cycle_min === 10 && qs.owner === "qnfo-fleet-control", "queue_sla row breach-doctor-case-in-flight: cycle 10, SLA 120 minutes, owner qnfo-fleet-control", qs);
+ok(/lease-expired/.test(qs.auto_fix) && /Revert: ops_config breach_doctor = off/.test(qs.auto_fix) && /fm-breach-doctor-case-age/.test(qs.summary_column), "it states the automatic fix and its revert, and names the age contract as its measurement", qs);
+ok(q1("SELECT 1 x FROM failure_modes WHERE fm_key = 'breach-doctor-case-age' AND probe_class = 'fm-breach-doctor-case-age' AND issue_id = 1000266") && q1("SELECT 1 x FROM remediation_contracts WHERE class = 'fm-breach-doctor-case-age' AND status = 'active' AND verify_transport = 'd1-query'"), "the fm-breach-doctor-case-age failure mode and its active d1-query detector exist");
 for (const c of qa("SELECT class, verify_probe FROM remediation_contracts")) {
   const r = q1(c.verify_probe);
   ok(r && typeof r.expected === "string" && typeof r.observed === "string", "probe runs: " + c.class, r);
@@ -120,7 +132,7 @@ for (const r of qa("SELECT * FROM breach_playbooks")) {
 }
 
 // ---- idempotence
-const counts = () => ["breach_diagnoses", "breach_diagnosis_events", "breach_playbooks", "ops_config", "metric_registry", "analytics_metric_triggers", "control_registry", "spof_registry", "belief_registry", "failure_modes", "remediation_contracts", "capability_ledger", "decision_log", "decision_predictions"].map((t) => n(t)).join(",");
+const counts = () => ["queue_sla", "breach_diagnoses", "breach_diagnosis_events", "breach_playbooks", "ops_config", "metric_registry", "analytics_metric_triggers", "control_registry", "spof_registry", "belief_registry", "failure_modes", "remediation_contracts", "capability_ledger", "decision_log", "decision_predictions"].map((t) => n(t)).join(",");
 const before = counts(), beforePb = JSON.stringify(qa("SELECT * FROM breach_playbooks"));
 d.exec(sql);
 ok(before === counts() && beforePb === JSON.stringify(qa("SELECT * FROM breach_playbooks")), "a second apply changes nothing", [before, counts()]);
@@ -226,8 +238,13 @@ ok(owner(900) === "code-task line" && owner(901) === "live code task" && owner(9
 ok(owner(903) === "breach doctor", "a live, progressing, backed doctor lease is an owner");
 ok(owner(904) === null && owner(905) === null && owner(907) === null, "an expired lease, a measure-mode case and an unowned issue are not owners");
 ok(owner(906) === "owner card (identity-bound)", "an open identity-bound card is an owner, reported apart");
+const caseAge = () => q1(q1("SELECT verify_probe p FROM remediation_contracts WHERE class = 'fm-breach-doctor-case-age'").p);
+ok(caseAge().expected === "0" && caseAge().observed === "0", "fm-breach-doctor-case-age reads 0 while every in-flight case progressed within 120 minutes", caseAge());
 d.prepare("UPDATE breach_diagnoses SET last_progress_at = ? WHERE issue_id = 903").run(iso(130));
 ok(owner(903) === null, "a lease without progress in 120 minutes stops counting");
+ok(Number(caseAge().observed) >= 130 && Number(caseAge().observed) < 140, "and fm-breach-doctor-case-age then reads the age in minutes of the oldest in-flight case", caseAge());
+d.prepare("UPDATE breach_diagnoses SET state = 'failed' WHERE issue_id = 903").run();
+ok(caseAge().observed === "0", "a settled (failed) case is not in flight: the detector reads 0 again", caseAge());
 d.prepare("UPDATE human_actions SET status = 'resolved' WHERE slug = 'breach-doctor-r-906'").run();
 ok(owner(906) === null, "a resolved card is no owner");
 
@@ -235,7 +252,7 @@ ok(owner(906) === null, "a resolved card is no owner");
 const rollback = sql.match(/^-- Rollback: (.*)$/m)[1].replace(/; the three breach_\* tables stay.*$/, ";");
 d.exec(rollback);
 ok(!qa("SELECT name FROM sqlite_master WHERE type = 'view' AND name LIKE 'v_breach_%' AND name <> 'v_breach_selfheal'").length, "Rollback drops the three views");
-ok(n("metric_registry") === 0 && n("analytics_metric_triggers") === 0 && n("control_registry") === 0 && n("spof_registry") === 0 && n("belief_registry") === 0 && n("failure_modes") === 0 && n("capability_ledger") === 0 && n("remediation_contracts") === 1, "Rollback removes the metrics, triggers, registries, failure modes and capability (the fixture's own contract stays)", [n("metric_registry"), n("remediation_contracts")]);
+ok(n("metric_registry") === 0 && n("analytics_metric_triggers") === 0 && n("control_registry") === 0 && n("spof_registry") === 0 && n("belief_registry") === 0 && n("failure_modes") === 0 && n("capability_ledger") === 0 && n("queue_sla") === 0 && n("remediation_contracts") === 1, "Rollback removes the metrics, triggers, registries, failure modes, queue_sla row and capability (the fixture's own contract stays)", [n("metric_registry"), n("remediation_contracts"), n("queue_sla")]);
 ok(cfg("breach_doctor") === "off" && !cfg("breach_doctor_ai") && q1("SELECT COUNT(*) n FROM breach_playbooks WHERE enabled = 1").n === 0, "Rollback leaves breach_doctor = off (the engine stops) and disables every playbook");
 ok(q1("SELECT name FROM sqlite_master WHERE name = 'breach_diagnoses'") && n("decision_log") === 1, "the ledger tables and the decision_log row stay");
 console.log(pass + " passed, " + fail + " failed");

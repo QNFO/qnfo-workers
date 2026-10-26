@@ -1098,10 +1098,10 @@ function secretEq(a, b) {
 }
 __name(secretEq, "secretEq");
 // VERSION-LINE-SPLIT-1 (agent_issues 100220): the release notes sit one per line below this statement, newest first, so a VERSION bump is a one-line patch; add a new note as the first line under it.
-// 0.49.0 BREACH-DOCTOR-1 (2026-10-26, agent_issues 1000266, pillar autonomy; minor: a decision the worker now takes on its own): breachDoctorTick on every */10 tick diagnoses each unowned open issue older than 8 hours (family, cause_class, enum facts), applies the validated per-issue playbook action (CODE-MERGE-REFUSED-1 and CODE-LOOP-EXHAUSTED-1 first), verifies it twice, and writes breach_diagnoses, breach_diagnosis_events and decision_log; ops_config breach_doctor = off stops it before any write. Playbooks are data (migrations/2026-10-26-breach-doctor.sql), a new one runs in measure for 30 minutes, a rule with 2 failures in 24 hours demotes itself, and free text never reaches an issue, a probe or a task. No model call, no D1 trigger. breach-doctor.test.mjs.
+// 0.50.0 BREACH-DOCTOR-1 (2026-10-26, agent_issues 1000266, pillar autonomy; minor: a decision the worker now takes on its own): breachDoctorTick on every */10 tick diagnoses each unowned open issue older than 120 minutes (breach_doctor_min_age_min, SLA-120M-1; family, cause_class, enum facts), applies the validated per-issue playbook action (CODE-MERGE-REFUSED-1 and CODE-LOOP-EXHAUSTED-1 first), verifies it twice, and writes breach_diagnoses, breach_diagnosis_events and decision_log; ops_config breach_doctor = off stops it before any write. Playbooks are data (migrations/2026-10-26-breach-doctor.sql), a new one runs in measure for 30 minutes, a rule with 2 failures in 24 hours demotes itself, and free text never reaches an issue, a probe or a task. No model call, no D1 trigger. breach-doctor.test.mjs.
 // 0.47.0 REMEDIATION-OVER-BUDGET-METRIC-1 (2026-10-25, pillar autonomy): refreshes the over-budget metric from the exact RED-DRAIN eligibility set instead of lifetime probe counts.
 // ADVISOR-AGENT-TRACING-1 (pillar autonomy): metadata-only turn and model spans for the folded advisor.
-var VERSION = "0.49.0-breach-doctor"; /* 0.48.1 MERGE-VERSION-AHEAD-1 (2026-10-26, ci-watchdog #4319): cmIntegrity compares the pull request head's VERSION with main's now; one that is not strictly ahead (another merge took the version) is stale and is rebuilt on current main with a fresh bump instead of merging with a repeated VERSION. prior 0.48.0-deployed-unblock */ /* MERGE-DEPLOYED-UNBLOCK-1 (2026-10-26, session fix for the 2026-10-25 audit freeze): the merge runner no longer lets a runner merge in merge_state 'deployed' hold its worker forever. It holds it for CM_DEPLOYED_BUSY_MIN (5) minutes, and after CM_LIVE_AUDIT_WAIT_MIN (30) minutes with no worker_live_audit row newer than the deploy it becomes 'unverifiable' (an error event, never a revert on a missing probe); the deferral message names the task that holds the worker. Four tasks sat 'deployed' for nine hours and five green qnfo-research-exec pull requests were deferred until they aged out. MERGEABLE-POLL-LONGER-1: the mergeability poll waits 25 s (6 reads, 5 s apart) instead of 6 s. prior 0.47.0-remediation-budget-metric */ /* MERGE-SCOPE-DATA-SURFACES-1 (agent_issues 100617, owner directive CODE-LOOP-SCOPE-LIFT-1): cmScope() now auto-merges a migration SQL file and a mind data or config file, the two surfaces the loop is asked to remediate but could never merge; a GitHub workflow file stays denied and a spurious workers prefix is refused with the corrected path. prior 0.45.1-codeagent */ /* 0.45.0-no-registrar NO-REGISTRAR-1 (2026-10-21, owner directive: the closed deposit registrar is fully deprecated and not named in any code): the profile scrub keeps only a dead-prefix line filter; literal registrar text pairs removed. prior 0.44.5-close-channel */ // 0.44.5 CLOSE-CHANNEL-REQUIRED-1 (agent_issues 100419): the ten fleet-control close sites that wrote no close_channel name themselves (auto:fleet-control/<tick>); PR-ISSUE-LINK-1 also reads the RED-DRAIN-1 "-- issue #N" goal form. // 0.44.4 PR-ISSUE-LINK-1: a fleet PR references its GitHub issue (Refs #N from gh_issue_links).
+var VERSION = "0.50.0-breach-doctor"; /* 0.49.0 PR-MERGE-SLA-10M-1 (2026-10-26, pillar autonomy; owner directive 2026-10-26: every pull request merges within 10 minutes of opening; minor: a route and a decision the lane now takes on its own): (a) POST /gh/poke runs the merge lane and the code-loop runner at once, with no secret, debounced to one run a minute (the signed /gh/webhook has never received a delivery: its secret and the GitHub registration are owner-only steps, and CRON-MANDATE-1 forbids a faster cron); .github/workflows/lane-poke.yml sends it; (b) the stale-PR lane merges a draft that is green, quiet and free of hold and WIP markers by marking it ready (GraphQL) and deciding it once more, switch ops_config stale_pr_merge_drafts, because the harness opens every session pull request as a draft; (c) the quiet window defaults to 3 minutes with a floor of 1 (was 20 and 10); (d) every pull request into main is recorded in pr_sla_state, graded by v_pr_merge_sla and the metric pr_open_over_10m. */ /* 0.48.1 MERGE-VERSION-AHEAD-1 (2026-10-26, ci-watchdog #4319): cmIntegrity compares the pull request head's VERSION with main's now; one that is not strictly ahead (another merge took the version) is stale and is rebuilt on current main with a fresh bump instead of merging with a repeated VERSION. prior 0.48.0-deployed-unblock */ /* MERGE-DEPLOYED-UNBLOCK-1 (2026-10-26, session fix for the 2026-10-25 audit freeze): the merge runner no longer lets a runner merge in merge_state 'deployed' hold its worker forever. It holds it for CM_DEPLOYED_BUSY_MIN (5) minutes, and after CM_LIVE_AUDIT_WAIT_MIN (30) minutes with no worker_live_audit row newer than the deploy it becomes 'unverifiable' (an error event, never a revert on a missing probe); the deferral message names the task that holds the worker. Four tasks sat 'deployed' for nine hours and five green qnfo-research-exec pull requests were deferred until they aged out. MERGEABLE-POLL-LONGER-1: the mergeability poll waits 25 s (6 reads, 5 s apart) instead of 6 s. prior 0.47.0-remediation-budget-metric */ /* MERGE-SCOPE-DATA-SURFACES-1 (agent_issues 100617, owner directive CODE-LOOP-SCOPE-LIFT-1): cmScope() now auto-merges a migration SQL file and a mind data or config file, the two surfaces the loop is asked to remediate but could never merge; a GitHub workflow file stays denied and a spurious workers prefix is refused with the corrected path. prior 0.45.1-codeagent */ /* 0.45.0-no-registrar NO-REGISTRAR-1 (2026-10-21, owner directive: the closed deposit registrar is fully deprecated and not named in any code): the profile scrub keeps only a dead-prefix line filter; literal registrar text pairs removed. prior 0.44.5-close-channel */ // 0.44.5 CLOSE-CHANNEL-REQUIRED-1 (agent_issues 100419): the ten fleet-control close sites that wrote no close_channel name themselves (auto:fleet-control/<tick>); PR-ISSUE-LINK-1 also reads the RED-DRAIN-1 "-- issue #N" goal form. // 0.44.4 PR-ISSUE-LINK-1: a fleet PR references its GitHub issue (Refs #N from gh_issue_links).
 /* 0.44.1 DEFERRAL-MEASURED-1 (2026-10-20, agent_issues 2954, 100245, 100246, pillar autonomy; patch): the remediation tick reads a measured pending (a number against a bound: "pending: ... reads 0.5058 (target <= 0.5)") as a verdict, as the consumer and the D1 relapse trigger already did, instead of deferring it for ever (rtIsMeasuredPending). deferral-measured.test.mjs. */ /* 0.42.0 DEPLOY-ALL-MERGES-1 (2026-10-20, owner directive "The system shall always deploy all merges automatically."; pillar core; minor: a decision the loop now takes on its own): DEPLOY-DRIFT-CF-1 measured and redeployed only the workers qnfo-ops /ops/deploy may take, so a merge to a control-plane worker (qnfo-fleet-control, qnfo-ops, qnfo-deploy-guard, qnfo-ai, qnfo-gateway, qnfo-observability) or a container worker (qnfo-code-orchestrator, qnfo-containers-pilot) whose canonical run was cancelled, skipped or failed stayed behind main with nothing to notice it (8 rows read "skip" in deploy_drift_cf at 05:30Z). Those workers are now targets too: main ahead of live for 45 minutes, no active run of the owning workflow and the live script confirmed behind, the tick dispatches canonical-deploy.yml with workers=<name> (canary and automatic revert on the runner) or the container worker's own workflow, at most 2 a tick and once per main VERSION an hour (ddcRunner, ddcDispatchPending). Metric merges_undeployed_over_60m (migrations/2026-10-20-deploy-all-merges.sql). deploy-drift-cf.test.mjs 14. */ /* 0.41.2 EXTERNAL-HTTPS-MASTODON-HOST-1 (2026-10-19, agent_issues 2925 INTEG-MASTODON-VERIFY-1; pillar autonomy; patch): RT_HTTP_HOSTS gains mstdn.science, the public Mastodon instance whose unauthenticated account lookup (GET /api/v1/accounts/lookup) qnfo-social already reads (MASTODON-PUBLIC-STATS-1), so the issue closing probe, which was parked probe-not-machine-executable on "host not allowed", can run. The rest of rtHttpSpec is unchanged: https only, GET or HEAD, no credentials, no redirect followed, 10 s, 1 MB; a host not on the list is still refused. */ /* 0.41.1 POOL-BOUND-SOURCES-1 (issue 100213, human_actions 107; patch): POOL-BOUND-1 parks notebook extractions (idea_proposals name owner-corpus) like any generated row and never parks a row an owner directive queued directly (source idea, chat, operator-prime). 0.41.0 REOPEN-LIVE-PATH-3 (issue 100271): the remediation tick files one deduped PROBE-NEEDED-1 issue per open issue left without a live contract. 0.40.1 VERSION-LINE-NOTES-1 (2026-10-19, agent_issues 100243, pillar autonomy; patch, a comment moved): the release notes of every earlier version rode on this line (178 notes, about 200,000 chars), so a version bump of this worker was an 820,000-char patch (worker and mirror, removed and added): 12 code tasks ended on the publisher size cap on 2026-10-19 and three issues were exhausted for three days. They are in git history (git log -S '<release tag>' -- qnfo-fleet-control/worker.js); the changelog is built from the deploy ledger and commits, and the guards read only the quoted version string. A new note goes on this line and stays short. */
 /* 0.44.0 GH-WEBHOOK-INTAKE-1 and GH-APP-FLEET-2 (2026-10-20, pillar autonomy; agent_issues 2582 and 2596; minor: two new routes). POST /gh/webhook receives pull_request, check_suite and push events for QNFO/qnfo-workers, verifies X-Hub-Signature-256 against GH_WEBHOOK_SECRET (503 and nothing accepted while it is unset), records each delivery once (cloud_ops_events kind gh-webhook, id gh-webhook-<delivery>) and runs the merge lane at once for a check_suite that completed with success or a pull request opened, reopened or ready, debounced to one run a minute; the 10-minute poll stays as the second path. POST /gh-app/token is the internal broker for the other GitHub-token workers: a service binding whose props.caller is a listed fleet worker gets the cached installation token (never the personal one, never logged); GET /gh-app reports broker service-binding. Registering the webhook on GitHub and converting each worker are the filed follow-ups. */
 /* 0.43.0 WORKFLOW-FAILURE-INTAKE-1 (2026-10-20, agent_issues 100295, pillar autonomy; minor: a new loop step): each 10-minute tick reads the newest workflow runs on main, keeps every workflow's latest decided conclusion in workflow_main_state, records a failing run with its failed job and step in workflow_failures, files one WORKFLOW-FAILED-1: <workflow> issue with a d1-query probe, and closes it with close_evidence when a later main run succeeds; ops_config workflow_failure_intake = off stops it. */
@@ -2888,6 +2888,16 @@ async function evApi(env, method, path, body) {
   return { status: r.status, ok: r.status >= 200 && r.status < 300, j: j };
 }
 __name(evApi, "evApi");
+// PR-MERGE-SLA-10M-1: the one GraphQL call the lane needs (markPullRequestReadyForReview; REST has no draft toggle). Same token and headers as evApi.
+async function evGraphql(env, query, variables) {
+  try {
+    var r = await timedFetch("https://api.github.com/graphql", { method: "POST", headers: evGh(env), body: JSON.stringify({ query: query, variables: variables || {} }) }, 15e3);
+    var raw = await r.text().catch(function() { return ""; }), j = null;
+    if (raw) { try { j = JSON.parse(raw); } catch (e) { console.error(JSON.stringify({ evt: "fleet-control:evGraphql:caught", status: r.status, error: String(e && e.message) })); } }
+    return { status: r.status, ok: r.status >= 200 && r.status < 300, j: j };
+  } catch (e) { return { status: 0, ok: false, j: { message: String(e && e.message || e).slice(0, 120) } }; }
+}
+__name(evGraphql, "evGraphql");
 function evDecode(b64) {
   return new TextDecoder().decode(Uint8Array.from(atob(String(b64 || "").replace(/\s+/g, "")), function(c) { return c.charCodeAt(0); }));
 }
@@ -5159,8 +5169,12 @@ var BH_STALE_PR_H = 24; // CYCLE-TIME-1: an open PR idle this long with no live 
 // not 2 hours. The lane already runs every 10 minutes (laneOnly), so a green PR now reaches main within about 30 minutes and the
 // canonical deploy ships it from there. Every other gate is unchanged: required checks green on the head, mergeable_state clean,
 // no HOLD: comment newer than the head, no .github/ change, no draft or WIP, and the post-deploy canary revert.
-var BH_MERGE_IDLE_MIN_DEFAULT = 20;
-var BH_MERGE_IDLE_MIN_FLOOR = 10;
+// PR-MERGE-SLA-10M-1 (0.49.0, owner directive 2026-10-26: every pull request merges within 10 minutes of opening): the quiet window is 3 minutes (floor 1),
+// not 20 (floor 10). The gate itself runs 5 minutes after every push and a new push resets the clock, so the window only has to cover the author's last
+// comment; at 20 minutes a pull request that was green 5 minutes after opening still waited 15 more. ops_config stale_pr_merge_idle_min = 20 restores the old window.
+var BH_MERGE_IDLE_MIN_DEFAULT = 3;
+var BH_MERGE_IDLE_MIN_FLOOR = 1;
+var BH_READY_WAIT_MS = 1500; // PR-MERGE-SLA-10M-1: GitHub answers draft:true for a moment after markPullRequestReadyForReview
 var BH_MERGE_MAX = 10; // pull requests evaluated for a merge per tick (4 GitHub reads each)
 // MERGEABILITY-REQUERY-1 (0.18.0): at the 08:00Z and 09:00Z lane ticks of 2026-10-12 five green quiet pull requests (941, 943,
 // 944, 946, 960) were passed over because GitHub answered mergeable null right after main moved, while a plain GET a few
@@ -5248,9 +5262,9 @@ function bhDecide(f) {
 }
 __name(bhDecide, "bhDecide");
 async function bhConfig(env) {
-  var cfg = { enabled: true, dry: false, raw: "(unset)", mergeStale: true, controlPlane: true, nudge: true, conflictRepair: true, holds: true, idleMin: BH_MERGE_IDLE_MIN_DEFAULT };
+  var cfg = { enabled: true, dry: false, raw: "(unset)", mergeStale: true, controlPlane: true, nudge: true, conflictRepair: true, holds: true, drafts: true, idleMin: BH_MERGE_IDLE_MIN_DEFAULT };
   try {
-    var rows = (await env.AUDIT.prepare("SELECT key, value FROM ops_config WHERE key IN ('branch_hygiene_enabled', 'branch_hygiene_dry_run', 'stale_pr_merge_enabled', 'control_plane_self_merge', 'stale_pr_nudge_enabled', 'stale_pr_conflict_repair_enabled', 'stale_pr_merge_idle_min', 'stale_pr_holds_enabled')").all()).results || [];
+    var rows = (await env.AUDIT.prepare("SELECT key, value FROM ops_config WHERE key IN ('branch_hygiene_enabled', 'branch_hygiene_dry_run', 'stale_pr_merge_enabled', 'control_plane_self_merge', 'stale_pr_nudge_enabled', 'stale_pr_conflict_repair_enabled', 'stale_pr_merge_idle_min', 'stale_pr_holds_enabled', 'stale_pr_merge_drafts')").all()).results || [];
     rows.forEach(function(r) {
       var v = String(r.value == null ? "" : r.value).trim().toLowerCase();
       if (r.key === "branch_hygiene_enabled" && v) { cfg.raw = v; cfg.enabled = ["0", "off", "false", "no", "disabled"].indexOf(v) < 0; }
@@ -5262,6 +5276,8 @@ async function bhConfig(env) {
       if (r.key === "stale_pr_nudge_enabled" && v) cfg.nudge = ["0", "off", "false", "no", "disabled"].indexOf(v) < 0;
       if (r.key === "stale_pr_conflict_repair_enabled" && v) cfg.conflictRepair = ["0", "off", "false", "no", "disabled"].indexOf(v) < 0;
       // STALE-PR-LANE-READS-HOLDS-1 (0.20.0): off stops the comment read, never the other gates.
+      // PR-MERGE-SLA-10M-1: a draft that is green, quiet and carries no hold or WIP marker is marked ready and merged; off restores "a draft is never merged".
+      if (r.key === "stale_pr_merge_drafts" && v) cfg.drafts = ["0", "off", "false", "no", "disabled"].indexOf(v) < 0;
       if (r.key === "stale_pr_holds_enabled" && v) cfg.holds = ["0", "off", "false", "no", "disabled"].indexOf(v) < 0;
       // PR-LANE-FAST-1: minutes of quiet before a merge; a value below the floor or unreadable keeps the floor or the default.
       if (r.key === "stale_pr_merge_idle_min" && v && isFinite(Number(v))) cfg.idleMin = Math.max(BH_MERGE_IDLE_MIN_FLOOR, Math.round(Number(v)));
@@ -5302,7 +5318,7 @@ function bhMergeDecide(pr, files, runs, statusJ, opts) {
   var no = function(why) { return { merge: false, why: why }; };
   if (!pr || typeof pr !== "object" || Array.isArray(pr) || !pr.number) return no("pull request not read");
   if (pr.state !== "open" || pr.merged) return no("not open");
-  if (pr.draft) return no("a draft");
+  if (pr.draft && !(opts && opts.drafts)) return no("a draft");
   var head = pr.head || {}, base = pr.base || {}, ref = String(head.ref || "");
   if (/^codeagent-/.test(ref) || /^evolve\//.test(ref)) return no("a code-loop or evolve branch: its own runner decides");
   if (!head.repo || head.repo.full_name !== EVOLVE_REPO || base.ref !== "main" || !base.repo || base.repo.full_name !== EVOLVE_REPO) return no("not a branch of " + EVOLVE_REPO + " into main");
@@ -5325,7 +5341,7 @@ function bhMergeDecide(pr, files, runs, statusJ, opts) {
   if (ck.pending.length) return no("check(s) still running on " + sha7 + ": " + ck.pending.join(", "));
   if (ck.other.length) return no("check(s) failed on " + sha7 + ": " + ck.other.join(", "));
   if (ck.status === "failure" || ck.status === "error" || ck.status === "pending") return no("the commit status on " + sha7 + " is " + ck.status);
-  return { merge: true, why: "required checks " + req.join(", ") + " green on " + sha7 + ", no other check failing, mergeable_state " + pr.mergeable_state, required: req, control_plane: cpd.workers };
+  return { merge: true, draft: !!pr.draft, why: "required checks " + req.join(", ") + " green on " + sha7 + ", no other check failing, mergeable_state " + pr.mergeable_state, required: req, control_plane: cpd.workers };
 }
 __name(bhMergeDecide, "bhMergeDecide");
 // STALE-PR-CHECK-REPAIR-1 (0.12.3, agent_issues 2122, pillar autonomy): a quiet session PR whose required checks are all green
@@ -5394,9 +5410,9 @@ __name(bhFileRepair, "bhFileRepair");
 // from branch_hygiene_log), so a PR GitHub never resolves is refused and logged, not nudged for ever.
 // Kill switch: ops_config stale_pr_nudge_enabled ('0' / 'off').
 var BH_NUDGE_MAX = 3;
-function bhNudgeDecide(pr, d) {
+function bhNudgeDecide(pr, d, opts) {
   var no = function(why) { return { nudge: false, why: why }; };
-  if (!pr || typeof pr !== "object" || pr.state !== "open" || pr.merged || pr.draft) return no("not an open, ready pull request");
+  if (!pr || typeof pr !== "object" || pr.state !== "open" || pr.merged || (pr.draft && !(opts && opts.drafts))) return no("not an open, ready pull request");
   if (!d || d.merge || !/^GitHub reports mergeable /.test(String(d.why || ""))) return no("mergeability is not what stops the merge");
   var st = String(pr.mergeable_state || "");
   if (pr.mergeable == null) return { nudge: true, why: "GitHub left mergeable null (mergeable_state " + (st || "unknown") + ")" };
@@ -5428,7 +5444,7 @@ __name(bhNudge, "bhNudge");
 async function bhLogNonMerge(env, iso, p, action, why) {
   var w = String(why || "").slice(0, 500), sha = (p.head && p.head.sha) || null;
   try {
-    if (action === "merge-nudge") await env.AUDIT.prepare("INSERT INTO branch_hygiene_log (ts, branch, sha, action, why, pr, archive_ref, ok, dry) VALUES (?1, ?2, ?3, 'merge-nudge', ?4, ?5, NULL, 1, 0)").bind(iso, p.head.ref, sha, w, p.number).run();
+    if (action === "merge-nudge" || action === "draft-ready") await env.AUDIT.prepare("INSERT INTO branch_hygiene_log (ts, branch, sha, action, why, pr, archive_ref, ok, dry) VALUES (?1, ?2, ?3, ?4, ?5, ?6, NULL, 1, 0)").bind(iso, p.head.ref, sha, action, w, p.number).run();
     else await env.AUDIT.prepare("INSERT INTO branch_hygiene_log (ts, branch, sha, action, why, pr, archive_ref, ok, dry) SELECT ?1, ?2, ?3, 'merge-refused', ?4, ?5, NULL, 1, 0 WHERE NOT EXISTS (SELECT 1 FROM branch_hygiene_log WHERE action = 'merge-refused' AND pr = ?5 AND COALESCE(sha, '') = COALESCE(?3, '') AND why = ?4)").bind(iso, p.head.ref, sha, w, p.number).run();
   } catch (e) { console.error(JSON.stringify({ evt: "fleet-control:bhLogNonMerge:caught", error: String(e && e.message) })); }
 }
@@ -5440,10 +5456,10 @@ __name(bhLogNonMerge, "bhLogNonMerge");
 // line that would have undone a newer change on main. Pure: { conflict: true, files } or { conflict: false, why }. A hold, a
 // draft, a code-loop or evolve branch, a fork or a PR not into main is not repaired here.
 // Kill switch: ops_config stale_pr_conflict_repair_enabled ('0' / 'off').
-function bhConflictDecide(pr, files) {
+function bhConflictDecide(pr, files, opts) {
   var no = function(why) { return { conflict: false, why: why }; };
   if (!pr || typeof pr !== "object" || Array.isArray(pr) || !pr.number) return no("pull request not read");
-  if (pr.state !== "open" || pr.merged || pr.draft) return no("not an open, ready pull request");
+  if (pr.state !== "open" || pr.merged || (pr.draft && !(opts && opts.drafts))) return no("not an open, ready pull request");
   var head = pr.head || {}, base = pr.base || {}, ref = String(head.ref || "");
   if (/^codeagent-/.test(ref) || /^evolve\//.test(ref)) return no("a code-loop or evolve branch");
   if (!head.repo || head.repo.full_name !== EVOLVE_REPO || base.ref !== "main" || !base.repo || base.repo.full_name !== EVOLVE_REPO) return no("not a branch of " + EVOLVE_REPO + " into main");
@@ -5494,14 +5510,15 @@ async function bhTryMerge(env, p, cfg) {
   var cr = await evApi(env, "GET", "/commits/" + head + "/check-runs?per_page=100");
   var st = await evApi(env, "GET", "/commits/" + head + "/status");
   if (!fl.ok || !cr.ok || !st.ok) return { merged: false, why: "files HTTP " + fl.status + ", check-runs HTTP " + cr.status + ", status HTTP " + st.status };
-  var d = bhMergeDecide(pr.j, fl.j, (cr.j && cr.j.check_runs) || [], st.j, { controlPlane: !cfg || cfg.controlPlane !== false });
+  var mopts = { controlPlane: !cfg || cfg.controlPlane !== false, drafts: !cfg || cfg.drafts !== false };
+  var d = bhMergeDecide(pr.j, fl.j, (cr.j && cr.j.check_runs) || [], st.j, mopts);
   if (!d.merge) {
     var why = d.why;
     if (!cfg || cfg.nudge !== false) {
-      var nd = bhNudgeDecide(pr.j, d);
+      var nd = bhNudgeDecide(pr.j, d, mopts);
       // Only a PR that would merge once GitHub answers is nudged: the same decision is replayed with mergeability assumed clean,
       // so a PR with a failing, missing or running check gets no update (its checks would only run again to the same end).
-      if (nd.nudge && bhMergeDecide(Object.assign({}, pr.j, { mergeable: true, mergeable_state: "clean" }), fl.j, (cr.j && cr.j.check_runs) || [], st.j, { controlPlane: !cfg || cfg.controlPlane !== false }).merge) {
+      if (nd.nudge && bhMergeDecide(Object.assign({}, pr.j, { mergeable: true, mergeable_state: "clean" }), fl.j, (cr.j && cr.j.check_runs) || [], st.j, mopts).merge) {
         var ng = await bhNudge(env, pr.j, nd, cfg && cfg.now);
         if (ng.nudged) return { merged: false, keep: true, nudged: true, why: ng.why };
         // keep: the pull request is not closed on the tick that first reads null; the refusal is still a merge-refused row.
@@ -5510,7 +5527,7 @@ async function bhTryMerge(env, p, cfg) {
       }
     }
     var rep = bhRepairDecide(pr.j, fl.j, (cr.j && cr.j.check_runs) || [], st.j);
-    var cfl = !cfg || cfg.conflictRepair !== false ? bhConflictDecide(pr.j, fl.j) : { conflict: false };
+    var cfl = !cfg || cfg.conflictRepair !== false ? bhConflictDecide(pr.j, fl.j, mopts) : { conflict: false };
     return { merged: false, why: why, repair: rep.repair ? rep : null, conflict: cfl.conflict ? cfl : null, pr: pr.j };
   }
   // STALE-PR-LANE-READS-HOLDS-1 (0.20.0): the last gate before the merge call. keep: a held PR is not closed on this tick.
@@ -5518,6 +5535,17 @@ async function bhTryMerge(env, p, cfg) {
     var hd = await bhReadHold(env, n, head, cfg && cfg.now);
     if (hd.hold) return { merged: false, keep: true, held: true, why: hd.why, pr: pr.j };
     if (hd.expired) d.why += "; " + hd.why;
+  }
+  // PR-MERGE-SLA-10M-1: the REST merge refuses a draft, so a draft that passed every gate above is marked ready first (GraphQL) and decided once more on the
+  // fresh read; when GitHub is not clean yet the next lane tick (a poke, the event of the ready mark itself, or the 10-minute cron) merges it.
+  if (d.draft) {
+    if (cfg && cfg.afterReady) return { merged: false, keep: true, why: "still a draft after it was marked ready" };
+    var rdy = await bhReadyForReview(env, pr.j);
+    if (!rdy.ok) return { merged: false, keep: true, why: "the draft passed every gate but could not be marked ready: " + rdy.why };
+    if (BH_READY_WAIT_MS > 0) await new Promise(function(res) { setTimeout(res, BH_READY_WAIT_MS); });
+    var again = await bhTryMerge(env, p, Object.assign({}, cfg, { afterReady: true }));
+    if (again.merged) { again.why = "the draft was marked ready (PR-MERGE-SLA-10M-1), then " + again.why; return again; }
+    return { merged: false, keep: true, readied: true, why: "the draft was marked ready; " + again.why };
   }
   var title = String(pr.j.title || "pull request " + n).replace(/\s+/g, " ").slice(0, 200) + " (#" + n + ")";
   var msg = "Merged by qnfo-fleet-control STALE-PR-MERGE-FIRST-1 after " + ((cfg && cfg.idleMin) || BH_MERGE_IDLE_MIN_DEFAULT) + " min without activity: " + d.why + ". Owner directive 2026-10-04: merges never wait on the owner.";
@@ -5529,6 +5557,8 @@ async function bhTryMerge(env, p, cfg) {
 __name(bhTryMerge, "bhTryMerge");
 async function bhSchema(env) {
   await env.AUDIT.prepare("CREATE TABLE IF NOT EXISTS branch_hygiene_log (id INTEGER PRIMARY KEY AUTOINCREMENT, ts TEXT NOT NULL, branch TEXT NOT NULL, sha TEXT, action TEXT NOT NULL, why TEXT, pr INTEGER, archive_ref TEXT, ok INTEGER DEFAULT 1, dry INTEGER DEFAULT 0)").run();
+  // PR-MERGE-SLA-10M-1: the same table migrations/2026-10-26-pr-merge-sla-10m-lane.sql creates, so a tick never depends on the order the two land.
+  await env.AUDIT.prepare("CREATE TABLE IF NOT EXISTS pr_sla_state (pr INTEGER PRIMARY KEY, opened_at TEXT NOT NULL, head_ref TEXT, draft INTEGER DEFAULT 0, state TEXT NOT NULL DEFAULT 'open', last_seen TEXT, closed_at TEXT)").run();
 }
 __name(bhSchema, "bhSchema");
 async function bhPages(env, path, maxPages) {
@@ -5565,6 +5595,7 @@ async function branchHygieneTick(env, opts) {
   var prs = await bhPages(env, lane ? "/pulls?state=open&sort=updated&direction=desc" : "/pulls?state=all&sort=updated&direction=desc", lane ? 3 : 10);
   if (lane) out.lane_only = true;
   if (!prs.ok) { await beat("error", { pulls_http: prs.status }); return { ok: false, why: "pulls HTTP " + prs.status }; }
+  if (!dry) out.pr_age_rows = await bhRecordPrAge(env, prs.items, iso); // PR-MERGE-SLA-10M-1: the clock the 10-minute SLA is graded on
   var byRef = {};
   prs.items.forEach(function(p) {
     if (!p || !p.head || !p.head.ref || !p.head.repo || p.head.repo.full_name !== EVOLVE_REPO) return;
@@ -5624,7 +5655,7 @@ async function branchHygieneTick(env, opts) {
   // MERGEABILITY-REQUERY-1, the pre-warm: one read of every lane candidate starts GitHub's mergeability computation for all
   // of them before the first is decided, so the answers are ready when the loop below reads them.
   var laneOk = function(q) {
-    if (!q || q.state !== "open" || q.draft || !q.head || !q.head.ref || !q.head.repo || q.head.repo.full_name !== EVOLVE_REPO) return false;
+    if (!q || q.state !== "open" || (q.draft && cfg.drafts === false) || !q.head || !q.head.ref || !q.head.repo || q.head.repo.full_name !== EVOLVE_REPO) return false;
     if (BH_PRESERVE.indexOf(q.head.ref) >= 0 || live[q.head.ref] || /^(codeagent-|evolve\/)/.test(q.head.ref)) return false;
     var u = q.updated_at ? Date.parse(q.updated_at) : NaN;
     return !isNaN(u) && (nowMs - u) >= cfg.idleMin * 6e4;
@@ -5636,7 +5667,7 @@ async function branchHygieneTick(env, opts) {
   }
   for (var pi = 0; pi < prs.items.length && prClosed < BH_MAX_ACTIONS; pi++) {
     var p = prs.items[pi];
-    if (!p || p.state !== "open" || p.draft) continue;
+    if (!p || p.state !== "open" || (p.draft && cfg.drafts === false)) continue;
     if (!p.head || !p.head.ref || !p.head.repo || p.head.repo.full_name !== EVOLVE_REPO) continue;
     if (BH_PRESERVE.indexOf(p.head.ref) >= 0 || live[p.head.ref]) continue;
     var updMs = p.updated_at ? Date.parse(p.updated_at) : NaN;
@@ -5652,11 +5683,12 @@ async function branchHygieneTick(env, opts) {
         await evApi(env, "POST", "/issues/" + p.number + "/comments", { body: "STALE-PR-MERGE-FIRST-1 (qnfo-fleet-control): merged after " + cfg.idleMin + " min without activity because " + tm.why + ". The canonical deploy ships it from main." });
         try { await env.AUDIT.prepare("INSERT INTO branch_hygiene_log (ts, branch, sha, action, why, pr, archive_ref, ok, dry) VALUES (?1, ?2, ?3, 'merge-stale-pr', ?4, ?5, NULL, 1, 0)").bind(iso, p.head.ref, tm.sha || p.head.sha || null, String(tm.why).slice(0, 500), p.number).run(); } catch (e) { console.error(JSON.stringify({ evt: "fleet-control:branchHygieneTick:caught", error: String(e && e.message) })); }
         out.merged_prs.push(p.number);
+        await bhMarkPrMerged(env, p.number, iso);
         prClosed++;
         continue;
       }
       // MERGE-REFUSAL-LOG-1: no non-merge is silent.
-      await bhLogNonMerge(env, iso, p, tm.nudged ? "merge-nudge" : "merge-refused", tm.why);
+      await bhLogNonMerge(env, iso, p, tm.nudged ? "merge-nudge" : tm.readied ? "draft-ready" : "merge-refused", tm.why);
       if (tm.nudged) (out.nudged_prs = out.nudged_prs || []).push(p.number);
       if (tm.held) (out.held_prs = out.held_prs || []).push(p.number); // STALE-PR-LANE-READS-HOLDS-1: refused on a review comment, kept open
       if (tm.keep) continue; // GitHub is bringing the branch up to date; its checks run again, so it is not idle any more
@@ -5679,6 +5711,8 @@ async function branchHygieneTick(env, opts) {
         }
       }
     }
+    // PR-MERGE-SLA-10M-1: a draft is merged when it is green, never closed as stale by this loop (CYCLE-TIME-1 closes non-drafts only).
+    if (p.draft) continue;
     // NO-UNTRACKED-CLOSE-1 part 2 (0.33.14, 2026-10-18 owner audit): 2 of the 32 loop pull requests closed unmerged were
     // closed on age alone while a successor for the same issue was still in flight (PR 768, PR 752). Age is not evidence
     // that a change is unwanted: before closing, the same "[issue #N]" must not be carried by another OPEN pull request.
@@ -5718,6 +5752,41 @@ async function branchHygieneTick(env, opts) {
   return out;
 }
 __name(branchHygieneTick, "branchHygieneTick");
+// PR-MERGE-SLA-10M-1 (0.49.0): REST refuses to merge a draft, so a draft that passed every merge gate is marked ready through GraphQL on its node id.
+// Pure on the response shape: { ok: true } | { ok: false, why }.
+async function bhReadyForReview(env, pr) {
+  var id = pr && pr.node_id;
+  if (!id) return { ok: false, why: "the pull request has no node_id" };
+  var r = await evGraphql(env, "mutation($id: ID!) { markPullRequestReadyForReview(input: { pullRequestId: $id }) { pullRequest { number isDraft } } }", { id: id });
+  if (r.ok && r.j && !r.j.errors && r.j.data && r.j.data.markPullRequestReadyForReview) return { ok: true };
+  var m = (r.j && r.j.errors && r.j.errors[0] && r.j.errors[0].message) || (r.j && r.j.message) || "";
+  return { ok: false, why: "GraphQL HTTP " + r.status + (m ? " " + String(m).replace(/\s+/g, " ").slice(0, 120) : "") };
+}
+__name(bhReadyForReview, "bhReadyForReview");
+// PR-MERGE-SLA-10M-1: one pr_sla_state row per pull request into main of this repository, from the list the tick already reads (no extra GitHub call).
+// opened_at is GitHub's created_at, the clock the owner's 10 minutes run on; state is open | merged | closed. Pure.
+function bhPrAgeRow(p, iso) {
+  if (!p || typeof p !== "object" || !p.number || !p.created_at) return null;
+  var base = p.base || {};
+  if (base.ref !== "main" || (base.repo && base.repo.full_name !== EVOLVE_REPO)) return null;
+  var state = p.merged_at ? "merged" : p.state === "open" ? "open" : "closed";
+  return { pr: Number(p.number), opened_at: String(p.created_at), head_ref: String(p.head && p.head.ref || "").slice(0, 120), draft: p.draft ? 1 : 0, state: state, last_seen: iso, closed_at: state === "open" ? null : String(p.merged_at || p.closed_at || iso) };
+}
+__name(bhPrAgeRow, "bhPrAgeRow");
+async function bhRecordPrAge(env, items, iso) {
+  try {
+    var rows = (items || []).map(function(p) { return bhPrAgeRow(p, iso); }).filter(Boolean).slice(0, 80);
+    if (!rows.length) return 0;
+    var sql = "INSERT INTO pr_sla_state (pr, opened_at, head_ref, draft, state, last_seen, closed_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7) ON CONFLICT(pr) DO UPDATE SET head_ref = excluded.head_ref, draft = excluded.draft, state = excluded.state, last_seen = excluded.last_seen, closed_at = COALESCE(excluded.closed_at, pr_sla_state.closed_at)";
+    await env.AUDIT.batch(rows.map(function(r) { return env.AUDIT.prepare(sql).bind(r.pr, r.opened_at, r.head_ref, r.draft, r.state, r.last_seen, r.closed_at); }));
+    return rows.length;
+  } catch (e) { console.error(JSON.stringify({ evt: "fleet-control:bhRecordPrAge:caught", error: String(e && e.message) })); return 0; }
+}
+__name(bhRecordPrAge, "bhRecordPrAge");
+async function bhMarkPrMerged(env, n, iso) {
+  try { await env.AUDIT.prepare("UPDATE pr_sla_state SET state = 'merged', closed_at = ?2, last_seen = ?2 WHERE pr = ?1").bind(n, iso).run(); } catch (e) { console.error(JSON.stringify({ evt: "fleet-control:bhMarkPrMerged:caught", error: String(e && e.message) })); }
+}
+__name(bhMarkPrMerged, "bhMarkPrMerged");
 // ---- BRANCH-HYGIENE-1:END ----
 // Folded autopilot activity snapshot: one row per scheduled worker per day (dashboard req24).
 async function activitySnapshotDaily(env) {
@@ -10720,6 +10789,52 @@ function ghAppBrokerCaller(props, hostname) {
   return GH_APP_BROKER_CALLERS.indexOf(c) >= 0 ? c : null;
 }
 // ---- GH-APP-FLEET-2:END
+// ---- PR-MERGE-SLA-10M-1:BEGIN (0.49.0, 2026-10-26, pillar autonomy; replayed by pr-merge-sla.test.mjs)
+// POST /gh/poke runs the merge lane and the code-loop merge runner now. GH-WEBHOOK-INTAKE-1 (0.44.0) built the same trigger behind an X-Hub-Signature-256 secret,
+// and that secret was never set and the webhook never registered on GitHub (both are owner-only repository-settings steps): cloud_ops_events kind gh-webhook has 0 rows
+// ever, so for six days both merge loops ran on the 10-minute poll alone, and CRON-MANDATE-1 (at most 144 fires a day per worker) forbids a faster cron. A poke needs no
+// secret because it trusts nothing it carries: it is a hint to run the loops, which read every pull request, check run and hold from GitHub with their own token and decide
+// from that, so a forged poke can only start a pass the next cron tick would run anyway. It is debounced to one run a minute (an atomic scheduler_state slot), refuses to run
+// when ops_config gh_poke_enabled is off, and fails closed when the slot cannot be taken. A small workflow (.github/workflows/lane-poke.yml) sends it when a pull request
+// opens or becomes ready and when a check workflow completes, so a green pull request merges within seconds of its last check instead of at the next 10-minute tick.
+var GH_POKE_DEBOUNCE_S = 60;
+async function ghPokeEnabled(env) {
+  try {
+    var r = await env.AUDIT.prepare("SELECT value FROM ops_config WHERE key = 'gh_poke_enabled'").first();
+    var v = String(r && r.value != null ? r.value : "").trim().toLowerCase();
+    return ["0", "off", "false", "no", "disabled"].indexOf(v) < 0;
+  } catch (e) { return true; }
+}
+async function ghPokeClaim(env, nowMs) {
+  var iso = new Date(nowMs).toISOString(), floor = new Date(nowMs - GH_POKE_DEBOUNCE_S * 1000).toISOString();
+  try {
+    var r = await env.AUDIT.prepare("INSERT INTO scheduler_state (key, value, updated_at) VALUES ('gh_poke', ?1, ?1) ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at WHERE scheduler_state.updated_at < ?2").bind(iso, floor).run();
+    return !!(r && r.meta && Number(r.meta.changes) > 0);
+  } catch (e) {
+    console.error(JSON.stringify({ worker: "qnfo-fleet-control", where: "gh-poke-claim", error: String(e && e.message || e).slice(0, 200) }));
+    return false;
+  }
+}
+async function ghPokeHandle(request, env, ctx) {
+  if (!(await ghPokeEnabled(env))) return json({ ok: true, enabled: false, ran: false }, 202);
+  var nowMs = Date.now(), iso = new Date(nowMs).toISOString();
+  if (!(await ghPokeClaim(env, nowMs))) return json({ ok: true, debounced: true, ran: false }, 202);
+  var hint = String(request.headers.get("X-Poke-Event") || "").replace(/[^A-Za-z0-9_ .-]/g, "").slice(0, 40);
+  var run = Promise.resolve().then(async function() {
+    var e2 = await ghAppEnv(env);
+    var lane = await branchHygieneTick(e2, { laneOnly: true });
+    var cm = await codeMergeTick(e2, {});
+    await ghWebhookRecord(env, "poke-" + nowMs, iso, "gh-poke", "PR-MERGE-SLA-10M-1: poke" + (hint ? " (" + hint + ")" : "") + ": lane merged " + ((lane && lane.merged_prs) || []).length + ", runner merges " + ((cm && cm.merges) || 0), { hint: hint, lane_merged: (lane && lane.merged_prs) || [], runner_merges: (cm && cm.merges) || 0 }, "lane-run");
+  }).catch(function(e) { console.error(JSON.stringify({ worker: "qnfo-fleet-control", where: "gh-poke-run", error: String(e && e.message || e).slice(0, 200) })); });
+  if (ctx && typeof ctx.waitUntil === "function") ctx.waitUntil(run);
+  return json({ ok: true, poked: true, ran: true }, 202);
+}
+async function ghPokeStatus(env) {
+  var last = null;
+  try { last = await env.AUDIT.prepare("SELECT ts, text FROM cloud_ops_events WHERE kind = 'gh-poke' ORDER BY ts DESC LIMIT 1").first(); } catch (e) { last = null; }
+  return { ok: true, route: "gh-poke", worker_version: VERSION, enabled: await ghPokeEnabled(env), debounce_s: GH_POKE_DEBOUNCE_S, signature: "none (a poke trusts nothing it carries)", poll_kept_as_second_path: true, last: last ? { ts: last.ts, text: last.text } : null };
+}
+// ---- PR-MERGE-SLA-10M-1:END
 async function ghAppBrokerHandle(request, env, ctx) {
   var url = new URL(request.url);
   var caller = ghAppBrokerCaller(ctx && ctx.props, url.hostname);
@@ -10835,6 +10950,9 @@ var worker_default2 = {
     // GH-WEBHOOK-INTAKE-1 (0.43.0): GitHub pull_request, check_suite and push events, signature-verified; GET reports the route (open read, OPEN-ACCESS-1).
     if (p === "/gh/webhook" && request.method === "GET") return json(await ghWebhookStatus(env));
     if (p === "/gh/webhook" && request.method === "POST") return ghWebhookHandle(request, env, ctx);
+    // PR-MERGE-SLA-10M-1: the unsigned poke (no secret, debounced); see the block above ghPokeHandle.
+    if (p === "/gh/poke" && request.method === "GET") return json(await ghPokeStatus(env));
+    if (p === "/gh/poke" && request.method === "POST") return ghPokeHandle(request, env, ctx);
     // CHARTER-LOOP-1 (QUNIVERSE-CHARTER-1): the fleet's own account of itself. GET is public (it is what the charter
     // document publishes anyway); the tick is admin-gated like every other mutating route here.
     // PORTFOLIO-LOOP-1 (QNFO-PORTFOLIO-1): the organisation's repositories as one register.
@@ -11099,7 +11217,7 @@ var worker_default2 = {
       ctx.waitUntil(workflowFailureIntake(env).catch((e) => console.error("workflowFailureIntake error:", e && e.message || e)));
       // SLA-TICK-10M-1 (0.30.0): SLA measurement and breach actions at 10-minute resolution (they ran hourly).
       ctx.waitUntil(slaTick10m(env).then(function (r) { console.log("sla tick (10m): " + JSON.stringify(r)); }).catch((e) => console.error("slaTick10m error:", e && e.message || e)));
-      // BREACH-DOCTOR-1 (0.49.0, agent_issues 1000266): the fleet diagnoses and remediates its own unowned breaches on EVERY 10-minute tick (not behind onTwentyGrid). It is worker code, never a D1 trigger on
+      // BREACH-DOCTOR-1 (0.50.0, agent_issues 1000266): the fleet diagnoses and remediates its own unowned breaches on EVERY 10-minute tick (not behind onTwentyGrid). It is worker code, never a D1 trigger on
       // fleet_tick; ops_config breach_doctor = off stops it before any write, and it never throws out of the slot.
       ctx.waitUntil(breachDoctorTick(env, {}).then(function (r) { console.log("breach doctor (10m): " + JSON.stringify({ ok: r.ok, mode: r.mode, diagnosed: r.diagnosed, acted: r.acted, verified: r.verified, failed: r.failed, taint: r.taint_dropped, undiagnosed: r.undiagnosed, error: r.error || null, ms: r.ms })); }).catch((e) => console.error("breachDoctorTick error:", e && e.message || e)));
       ctx.waitUntil(remediationContractsTick(env, { budgetMs: 25000 }).then(function (r) { console.log("remediation tick (10m): " + JSON.stringify({ due: r.due, pass: r.pass, fail: r.fail, skipped: r.skipped, budget_left: r.budget_left })); }).catch((e) => console.error("remediationContractsTick error:", e && e.message || e)));
@@ -12027,9 +12145,9 @@ async function rtEnsureLivePath(db, out, env) {
 }
 // ---- REOPEN-LIVE-PATH-3:END ----
 // ---- BREACH-DOCTOR-1:BEGIN ----
-// BREACH-DOCTOR-1 (0.49.0, 2026-10-26, agent_issues 1000266, pillar autonomy; owner directive 2026-10-24, repeated 2026-10-26: "FLEET IS NOT SELF-DIAGNOSING ITS OWN BREACHES AND AUTOMATICALLY
+// BREACH-DOCTOR-1 (0.50.0, 2026-10-26, agent_issues 1000266, pillar autonomy; owner directive 2026-10-24, repeated 2026-10-26: "FLEET IS NOT SELF-DIAGNOSING ITS OWN BREACHES AND AUTOMATICALLY
 // REMEDIATING"). Measured that day: 447 open agent_issues, 371 with no doer, and no loop owned the diagnosis of a family. This tick classifies every unowned open issue older than
-// breach_doctor_min_age_h, matches it against breach_playbooks (data, validated here before it runs), applies the allowlisted action, verifies it, and writes its ledger
+// breach_doctor_min_age_min (120 minutes, SLA-120M-1), matches it against breach_playbooks (data, validated here before it runs), applies the allowlisted action, verifies it, and writes its ledger
 // (breach_diagnoses, breach_diagnosis_events, decision_log). It is worker code on the */10 slot and never a D1 trigger on fleet_tick (FLEET-TICK-SPLIT-1, the SQLITE_NOMEM outage).
 // Safety, in the order a tick enforces it: ops_config breach_doctor = off returns before any write; the metrics are written first (a dead heartbeat cannot hide); one tick at a time
 // (loop_lock k = breach-doctor, 4 minutes); a playbook younger than breach_doctor_playbook_cooldown_min runs in measure; a rule with 2 failed or reverted cases in 24 hours
@@ -12043,6 +12161,11 @@ var BD_LOCK_TTL_MS = 240000;
 var BD_LEASE_MIN = 30;
 var BD_LEASE_MAX_MIN = 120;
 var BD_TITLE_PREFIX = "BREACH-DOCTOR-1:";
+var BD_ISSUE_SOURCE = "qnfo-fleet-control";
+// S4 gap guard (review 2026-10-26): a family of owner prose (OWNER-CHAT, OWNER-REQUEST) or the catch-all "other" can never reach zero unclassified cases by a playbook, so no gap issue is filed for
+// it, and no more than BD_GAP_OPEN_MAX gap issues are open at once (backpressure: the next family waits until one closes).
+var BD_GAP_SKIP_FAMILIES = ["OWNER-CHAT", "OWNER-REQUEST", "other"];
+var BD_GAP_OPEN_MAX = 3;
 var BD_ACTION_KINDS = ["sql", "file-issue", "owner-card"];
 var BD_WRITE_TABLES = ["issue_triage", "agent_issues", "remediation_contracts", "issue_plans", "ops_config", "human_actions"];
 var BD_FREE_TEXT_RE = /\b(description|exceptions_json|cloud_ops_events|worker_logs|last_error|detail|meta)\b/i;
@@ -12097,7 +12220,7 @@ function bdVerdictCode(v) {
   var m = /^[a-z][a-z0-9-]{1,40}/.exec(String(v == null ? "" : v).toLowerCase());
   return m ? m[0] : "none";
 }
-function bdRung(ageH) { return ageH >= 168 ? "7d" : ageH >= 48 ? "48h" : ageH >= 24 ? "24h" : ageH >= 16 ? "16h" : "8h"; }
+function bdRung(ageH) { return ageH >= 168 ? "7d" : ageH >= 48 ? "48h" : ageH >= 24 ? "24h" : ageH >= 16 ? "16h" : ageH >= 8 ? "8h" : "2h"; }
 function bdKv(o) {
   var parts = [];
   Object.keys(o).forEach(function (k) { var v = o[k]; parts.push(k + "=" + (typeof v === "number" || (typeof v === "string" && BD_FACT_STR_RE.test(v)) ? v : "?")); });
@@ -12204,7 +12327,7 @@ async function bdConfig(db) {
   return {
     mode: /^(off|0|false|no|disabled)$/.test(mode) ? "off" : mode === "on" ? "on" : "measure",
     max_cases: num("breach_doctor_max_cases", 40, 1, 60), max_actions: num("breach_doctor_max_actions", 6, 0, 20),
-    budget_ms: num("breach_doctor_budget_ms", 20000, 5000, 40000), min_age_h: num("breach_doctor_min_age_h", 8, 1, 72),
+    budget_ms: num("breach_doctor_budget_ms", 20000, 5000, 40000), min_age_min: num("breach_doctor_min_age_min", 120, 10, 120),
     cooldown_min: num("breach_doctor_playbook_cooldown_min", 30, 0, 120)
   };
 }
@@ -12252,7 +12375,7 @@ async function bdLock(db, holder, nowMs) {
 // ---- state: one fixed set of reads per tick (about 5,500 rows)
 async function bdLoadState(ctx) {
   var db = ctx.db, cfg = ctx.cfg, st = { old: [], oldById: {}, owned: {}, claims: {}, live: {}, liveRows: [], diagnosed: {}, failedCount: {}, failedLast: {}, dead: {} };
-  var rs = await db.prepare("SELECT id, title, source, priority, created_at FROM agent_issues WHERE status = 'open' AND created_at <= ?1").bind(ctx.nowMs - cfg.min_age_h * 3600000).all();
+  var rs = await db.prepare("SELECT id, title, source, priority, created_at FROM agent_issues WHERE status = 'open' AND created_at <= ?1").bind(ctx.nowMs - cfg.min_age_min * 60000).all();
   st.old = ((rs && rs.results) || []).map(function (r) {
     return { id: Number(r.id), title: String(r.title || ""), source: r.source, priority: BD_PRIORITY_RANK[r.priority] == null ? "medium" : r.priority, created_at: Number(r.created_at) || 0 };
   });
@@ -12286,7 +12409,7 @@ async function bdLoadState(ctx) {
 }
 // ---- metrics first (S6), written by this code and not by a trigger
 async function bdWriteMetrics(ctx) {
-  var db = ctx.db, st = ctx.st, since = bdIso(ctx.nowMs - 864e5), cutoff = ctx.nowMs - (ctx.cfg.min_age_h + 1) * 3600000;
+  var db = ctx.db, st = ctx.st, since = bdIso(ctx.nowMs - 864e5), cutoff = ctx.nowMs - (ctx.cfg.min_age_min + 60) * 60000;
   var undiag = st.old.filter(function (i) { return i.created_at <= cutoff && !st.owned[i.id] && i.title.indexOf(BD_TITLE_PREFIX) !== 0 && !st.diagnosed[i.id]; }).length;
   var q = await db.prepare("SELECT (SELECT COUNT(*) FROM breach_diagnoses WHERE state = 'verified' AND verified_at > ?1) AS verified, (SELECT COUNT(*) FROM breach_diagnoses WHERE state IN ('failed', 'reverted') AND last_progress_at > ?1) AS failed, (SELECT COUNT(*) FROM breach_diagnosis_events WHERE event = 'taint-drop' AND ts > ?1) AS taint, (SELECT MAX(ts) FROM breach_diagnosis_events WHERE event = 'tick') AS last_tick").bind(since).first();
   var lastTick = q && q.last_tick ? Date.parse(q.last_tick) : NaN;
@@ -12498,6 +12621,22 @@ async function bdActSql(ctx, item, diag, rule) {
   ]);
   ctx.out.acted++;
 }
+// Who takes an issue the doctor files is decided by the planner's trust list (PLAN-TRUST-PARITY-1: ops_config code_merge_trusted_sources, entries "source|title-prefix", a trailing * on the
+// source is a prefix match), not by the doctor. A BREACH-DOCTOR-1: title that no entry covers is recorded "untrusted" and has no doer, so the description says so instead of naming the code loop.
+async function bdTitleTrusted(ctx, title) {
+  try {
+    var r = await ctx.db.prepare("SELECT value FROM ops_config WHERE key = 'code_merge_trusted_sources'").first();
+    var list = String(r && r.value != null ? r.value : "").split(","), t = String(title || "");
+    for (var i = 0; i < list.length; i++) {
+      var p = list[i].trim().split("|"), sp = p[0] || "", tp = p[1] || "";
+      if (!sp) continue;
+      var srcOk = sp.slice(-1) === "*" ? BD_ISSUE_SOURCE.indexOf(sp.slice(0, -1)) === 0 : sp === BD_ISSUE_SOURCE;
+      if (srcOk && (!tp || t.indexOf(tp) === 0)) return true;
+    }
+  } catch (e) { /* no row to read: the planner falls back to a default list without this prefix, so untrusted */ }
+  return false;
+}
+function bdUntrustedDoer() { return "Doer: none yet. The code loop records a " + BD_TITLE_PREFIX + " title as untrusted until ops_config code_merge_trusted_sources lists " + BD_ISSUE_SOURCE + "|" + BD_TITLE_PREFIX + "."; }
 // file-issue: one deduped issue per rule and subject, source qnfo-fleet-control, a description made only of enums and ids
 async function bdFileIssue(ctx, title, descLines, priority, probe) {
   var db = ctx.db;
@@ -12524,7 +12663,7 @@ async function bdActFileIssue(ctx, item, diag, rule) {
   var f;
   try {
     f = await bdFileIssue(ctx, title, ["Charter pillar: autonomy. AUTO-FILED by qnfo-fleet-control BREACH-DOCTOR-1 (" + VERSION + ").", "Rule " + rule.id + " (cause " + diag.cause + ") matched issue " + id + " in family " + item.family + " (subject " + subject + ").",
-      "Facts: " + bdKv(Object.assign({}, item.hit.facts)), "Doer: the fleet. Definition of done: issue " + id + " has a doer or is closed with evidence."], "medium", probe);
+      "Facts: " + bdKv(Object.assign({}, item.hit.facts)), ((await bdTitleTrusted(ctx, title)) ? "Doer: the fleet." : bdUntrustedDoer()) + " Definition of done: issue " + id + " has a doer or is closed with evidence."], "medium", probe);
   } catch (e) { f = null; console.error(JSON.stringify({ evt: "fleet-control:breachDoctor:file-issue", rule: rule.id, error: String(e && e.message).slice(0, 200) })); }
   if (!f) { await bdFail(ctx, diag, item, "queued", "sql-error", ""); return; }
   await bdBatch(ctx.db, [
@@ -12556,7 +12695,7 @@ async function bdFileSelfIssue(ctx, ruleId, code) {
     var probe = "SELECT '0' AS expected, CAST((SELECT COUNT(*) FROM breach_diagnoses WHERE rule_id = '" + ruleId + "' AND state IN ('failed', 'reverted') AND last_progress_at > strftime('%Y-%m-%dT%H:%M:%SZ', 'now', '-24 hours')) AS TEXT) AS observed";
     var f = await bdFileIssue(ctx, title, ["Charter pillar: autonomy. AUTO-FILED by qnfo-fleet-control BREACH-DOCTOR-1 (" + VERSION + ").", "An issue reached 3 failed cases of rule " + ruleId + " (last error " + code + "). The doctor stops diagnosing that issue.",
       "Read: SELECT id, issue_id, state, error_code, attempts FROM breach_diagnoses WHERE rule_id = '" + ruleId + "' AND state IN ('failed', 'reverted') ORDER BY id DESC LIMIT 10; SELECT event, detail FROM breach_diagnosis_events WHERE event IN ('fail', 'demote') ORDER BY id DESC LIMIT 10.",
-      "Doer: the code loop or a session fixes the playbook row by migration (its action_sql guard or its verify_sql) or the engine step named by the error code.", "Definition of done: no case of rule " + ruleId + " failed in the last 24 hours."], "high", probe);
+      ((await bdTitleTrusted(ctx, title)) ? "Doer: the code loop or a session" : bdUntrustedDoer() + " A session") + " fixes the playbook row by migration (its action_sql guard or its verify_sql) or the engine step named by the error code.", "Definition of done: no case of rule " + ruleId + " failed in the last 24 hours."], "high", probe);
     if (f && !f.existed) ctx.out.self_issues++;
   } catch (e) { console.error(JSON.stringify({ evt: "fleet-control:breachDoctor:self-issue", rule: ruleId, error: String(e && e.message).slice(0, 200) })); }
 }
@@ -12608,16 +12747,22 @@ async function bdVerifyPhase(ctx, rules) {
     }
   }
 }
-// S4: one playbook-gap issue per family per 24 hours, to the code loop, naming counts and enum facts only
+// S4: one playbook-gap issue per family per 24 hours, naming counts and enum facts only. Seeded in measure (the row is not "on", so nothing is filed) until the trust entry
+// qnfo-fleet-control|BREACH-DOCTOR-1: is in code_merge_trusted_sources: a gap issue is untrusted to the planner without it and has no doer. Armed, it still skips the families a playbook
+// cannot close (BD_GAP_SKIP_FAMILIES) and files nothing while BD_GAP_OPEN_MAX gap issues are open.
 async function bdGapPhase(ctx, rules) {
   var gap = null;
   rules.forEach(function (r) { if (r.id === "playbook-gap") gap = r; });
   if (!gap || gap.eff !== "on") return;
   var db = ctx.db, filed = 0;
+  var open = await db.prepare("SELECT COUNT(*) AS n FROM agent_issues WHERE title LIKE 'BREACH-DOCTOR-1: playbook gap %' AND status = 'open'").first();
+  var openN = open ? Number(open.n) || 0 : 0;
+  if (openN >= BD_GAP_OPEN_MAX) { ctx.out.gap_held = 1; return; }
   var day = await db.prepare("SELECT COUNT(*) AS n FROM agent_issues WHERE title LIKE 'BREACH-DOCTOR-1: playbook gap %' AND created_at > ?1").bind(ctx.nowMs - 864e5).first();
-  var room = Math.min(gap.max_per_tick, gap.max_per_day - (day ? Number(day.n) || 0 : 0));
+  var room = Math.min(gap.max_per_tick, gap.max_per_day - (day ? Number(day.n) || 0 : 0), BD_GAP_OPEN_MAX - openN);
   if (room <= 0) return;
-  var rs = await db.prepare("SELECT family, COUNT(*) AS n FROM breach_diagnoses WHERE state = 'diagnosed' AND cause_class = 'unclassified' GROUP BY family ORDER BY n DESC LIMIT 20").all();
+  var skip = BD_GAP_SKIP_FAMILIES.map(function (f) { return "'" + f + "'"; }).join(", ");
+  var rs = await db.prepare("SELECT family, COUNT(*) AS n FROM breach_diagnoses WHERE state = 'diagnosed' AND cause_class = 'unclassified' AND family NOT IN (" + skip + ") GROUP BY family ORDER BY n DESC LIMIT 20").all();
   var fams = (rs && rs.results) || [];
   for (var i = 0; i < fams.length && filed < room; i++) {
     var fam = String(fams[i].family), n = Number(fams[i].n) || 0;
@@ -12630,8 +12775,8 @@ async function bdGapPhase(ctx, rules) {
     var probe = "SELECT '0' AS expected, CAST((SELECT COUNT(*) FROM v_breach_diagnosis_current WHERE family = '" + fam + "' AND state = 'diagnosed' AND cause_class = 'unclassified') AS TEXT) AS observed";
     try {
       var f = await bdFileIssue(ctx, title, ["Charter pillar: autonomy. AUTO-FILED by qnfo-fleet-control BREACH-DOCTOR-1 (" + VERSION + ").",
-        "Family " + fam + ": " + n + " open issues older than " + ctx.cfg.min_age_h + " hours have no doer and match no playbook (cause_class unclassified).", "Counts by enum: " + (counts.join(" | ") || "none"),
-        "Doer: the code loop. Add a breach_playbooks row for this family by migration: trigger_sql returns issue_id, subject, facts_json; action_sql and revert_sql statements bind ?1; verify_sql returns expected and observed. See migrations/2026-10-26-breach-doctor.sql for the shape. A new row runs in measure for 30 minutes.",
+        "Family " + fam + ": " + n + " open issues older than " + ctx.cfg.min_age_min + " minutes have no doer and match no playbook (cause_class unclassified).", "Counts by enum: " + (counts.join(" | ") || "none"),
+        ((await bdTitleTrusted(ctx, title)) ? "Doer: the code loop." : bdUntrustedDoer()) + " Add a breach_playbooks row for this family by migration: trigger_sql returns issue_id, subject, facts_json; action_sql and revert_sql statements bind ?1; verify_sql returns expected and observed. See migrations/2026-10-26-breach-doctor.sql for the shape. A new row runs in measure for 30 minutes.",
         "Definition of done: SELECT COUNT(*) FROM v_breach_diagnosis_current WHERE family = '" + fam + "' AND state = 'diagnosed' AND cause_class = 'unclassified' reads 0."], "medium", probe);
       if (f && !f.existed) { filed++; ctx.out.gap_issues++; await bdEventNow(ctx, { event: "diagnosed", detail: "playbook-gap family=" + fam + " unclassified=" + n + " issue=" + f.id }); }
     } catch (e) { console.error(JSON.stringify({ evt: "fleet-control:breachDoctor:gap", family: fam, error: String(e && e.message).slice(0, 200) })); }
@@ -12654,7 +12799,7 @@ async function bdSupersede(ctx) {
 }
 async function breachDoctorTick(env, opts) {
   var db = env && (env.AUDIT_DB || env.AUDIT || env.DB_AUDIT);
-  var out = { ok: false, mode: "none", diagnosed: 0, rediagnosed: 0, acted: 0, verified: 0, verified_checked: 0, failed: 0, demoted: 0, taint_dropped: 0, rule_errors: 0, claim_skipped: 0, actions_deferred: 0, budget_skipped: 0, superseded: 0, gap_issues: 0, self_issues: 0, undiagnosed: 0 };
+  var out = { ok: false, mode: "none", diagnosed: 0, rediagnosed: 0, acted: 0, verified: 0, verified_checked: 0, failed: 0, demoted: 0, taint_dropped: 0, rule_errors: 0, claim_skipped: 0, actions_deferred: 0, budget_skipped: 0, superseded: 0, gap_issues: 0, gap_held: 0, self_issues: 0, undiagnosed: 0 };
   if (!db) return out;
   if (Date.now() < bdRetryAt) { out.paused = 1; return out; }
   var t0 = Date.now(), holder = "bd-" + t0.toString(36) + "-" + crypto.randomUUID().slice(0, 8), locked = false, ctx = null;

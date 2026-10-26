@@ -80,6 +80,21 @@ class Redirector(http.server.BaseHTTPRequestHandler):
         self.end_headers()
 
 
+class AnyOk(http.server.BaseHTTPRequestHandler):
+    """200 {} for every GET: the contents lookup of _absent() answers at once (the workflow file exists on the ref)."""
+
+    def log_message(self, *a):
+        pass
+
+    def do_GET(self):
+        body = b"{}"
+        self.send_response(200)
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+
+
 class Forbidden(http.server.BaseHTTPRequestHandler):
     def log_message(self, *a):
         pass
@@ -151,6 +166,12 @@ def main() -> int:
     check("403 on hop1 -> empty string, no crash", cw._raw_log(1) == "")
     srv2.shutdown()
 
+    # PR-GATE-SPEED-1 (2026-10-26): classify_structural() reads the workflow file through gh() (_absent). cw.API still named srv2, whose
+    # socket listens but is no longer served, so each of the two lookups waited out gh()'s 30 s socket timeout: 60 of this selftest's 63
+    # seconds, in every pull request's gate (measured on run 40283000069), and the cases passed only because a timeout reads as "not 404".
+    # A server that answers makes them instant and states what they mean: the file exists on the ref, so the workflow is invalid.
+    srv_ok = _serve(AnyOk)
+    cw.API = "http://127.0.0.1:%d" % srv_ok.server_address[1]
     k, h = cw.classify_structural(".github/workflows/deploy-qnfo-ops.yml", {"head_branch": "main"})
     check("unparseable workflow named structurally", k == "invalid-workflow", (k, h))
     k2, _ = cw.classify_structural("mirror-guard", {})
@@ -159,6 +180,7 @@ def main() -> int:
     check("self-workflow never self-files", k3 == "self", k3)
     k4, _ = cw.classify_structural("version-compare", {"head_branch": "main"})
     check("version-compare reaches the comparator branch", k4 in ("missing-module", "comparator-regression"), k4)
+    srv_ok.shutdown()
 
     # DEPLOY-AUTH-CLASS-1 (issue 212): log shapes taken from canonical-deploy runs 36831942233 / 36832200123.
     auth_log = (

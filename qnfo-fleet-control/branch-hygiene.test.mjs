@@ -232,7 +232,7 @@ const scenario = () => ({
   const prs = {
     31: prj(31, "clef-candidate-1", "a31"),                                   // green, clean, 3h quiet: merged
     32: prj(32, "claude/red-gate", "a32", { updated_at: hAgo(30) }),            // gate failed, 30h: closed with the reason
-    33: prj(33, "claude/fresh", "a33", { updated_at: hAgo(0.1) }),             // 6 min quiet: inside the 20-min lane window (PR-LANE-FAST-1), left alone
+    33: prj(33, "claude/fresh", "a33", { updated_at: hAgo(0.02) }),            // 72 s quiet: inside the 3-min lane window (PR-MERGE-SLA-10M-1; was 6 min inside 20), left alone
     34: prj(34, "claude/wf", "a34"),                                            // changes a workflow: not merged
     35: prj(35, "claude/hold", "a35", { title: "WIP: do not merge yet" }),      // asks not to be merged
     36: prj(36, "claude/dirty", "a36", { mergeable: false, mergeable_state: "dirty", updated_at: hAgo(30) }), // conflict, 30h: closed
@@ -257,7 +257,20 @@ const scenario = () => ({
   eq(dec(prj(41, "x", "h", { mergeable: null, mergeable_state: "unknown" }), W2(), green("h", ALL)).merge, false, "pure: mergeability not computed: no merge");
   eq(dec(prj(42, "x", "h"), W2(), green("h", ["gate", "mirror-guard", "comparator"])).why.indexOf("guard never ran") >= 0, true, "pure: a missing required check blocks the merge");
   eq(dec(prj(43, "x", "h"), W2(), green("h", ALL).concat([{ id: 50, name: "Analyze (python)", status: "in_progress", conclusion: null }])).merge, false, "pure: a running check blocks the merge");
-  eq(dec(prj(44, "x", "h", { draft: true }), W2(), green("h", ALL)).merge, false, "pure: a draft is never merged");
+  eq(dec(prj(44, "x", "h", { draft: true }), W2(), green("h", ALL)).merge, false, "pure: a draft is not merged unless the drafts switch is passed (default options)");
+  // PR-MERGE-SLA-10M-1: with the switch a green, clean draft is decided like any pull request and says it is a draft (the tick marks it ready first); every hold still wins.
+  const decD = (pr, files, checks) => W.bhMergeDecide(pr, files, checks, { state: "pending", total_count: 0 }, { drafts: true });
+  eq(decD(prj(45, "x", "h", { draft: true }), W2(), green("h", ALL)).merge, true, "pure: with drafts on, a green clean draft merges");
+  eq(decD(prj(45, "x", "h", { draft: true }), W2(), green("h", ALL)).draft, true, "pure: and the decision says it is a draft");
+  eq(decD(prj(46, "x", "h"), W2(), green("h", ALL)).draft, false, "pure: a ready pull request is not marked as a draft");
+  eq(decD(prj(47, "x", "h", { draft: true, title: "WIP: not done" }), W2(), green("h", ALL)).merge, false, "pure: a WIP-titled draft is never merged, switch or not");
+  eq(decD(prj(48, "x", "h", { draft: true, labels: [{ name: "hold" }] }), W2(), green("h", ALL)).merge, false, "pure: a held draft is never merged");
+  eq(decD(prj(49, "x", "h", { draft: true, body: "do not merge" }), W2(), green("h", ALL)).merge, false, "pure: a do-not-merge draft is never merged");
+  eq(decD(prj(50, "x", "h", { draft: true }), W2([".github/workflows/x.yml"]), green("h", ALL)).merge, false, "pure: a draft that changes a workflow is never merged");
+  eq(decD(prj(51, "x", "h", { draft: true }), W2(), green("h", ["gate", "mirror-guard", "comparator"])).merge, false, "pure: a draft with a required check missing is not merged");
+  eq(decD(prj(52, "codeagent-x", "h", { draft: true }), W2(), green("h", ALL)).merge, false, "pure: a code-loop draft is still its own runner's");
+  eq(W.bhNudgeDecide(prj(53, "x", "h", { draft: true, mergeable: true, mergeable_state: "behind" }), { merge: false, why: "GitHub reports mergeable true, mergeable_state behind" }).nudge, false, "pure: a behind draft is not nudged by default");
+  eq(W.bhNudgeDecide(prj(53, "x", "h", { draft: true, mergeable: true, mergeable_state: "behind" }), { merge: false, why: "GitHub reports mergeable true, mergeable_state behind" }, { drafts: true }).nudge, true, "pure: with drafts on a behind draft is brought up to date");
   eq(dec(prj(45, "codeagent-abc", "h"), W2(), green("h", ALL)).merge, false, "pure: a code-loop branch is the merge runner's");
   eq(dec(prj(46, "x", "h", { head: { ref: "x", sha: "h", repo: { full_name: "evil/fork" } } }), W2(), green("h", ALL)).merge, false, "pure: a fork is never merged");
   eq(dec(prj(47, "x", "h", { labels: [{ name: "hold" }] }), W2(), green("h", ALL)).merge, false, "pure: a hold label blocks the merge");

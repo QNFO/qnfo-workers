@@ -8,16 +8,20 @@ Canonical source for the merged fleet-control hub worker (advisors + calibrator 
 - Do NOT deploy via wrangler: it would drop the script-API-managed bindings (BINDING-PRESERVATION-1).
 - Deployed version: 0.4.11 (qnfo-fleet-deploy / drift scanner).
 
-## BREACH-DOCTOR-1 (0.49.0, pillar autonomy; agent_issues 1000266)
+## BREACH-DOCTOR-1 (0.50.0, pillar autonomy; agent_issues 1000266)
 
 `breachDoctorTick` (block `BREACH-DOCTOR-1` in `worker.js`) runs on every `*/10` tick. It is worker code, not a D1 trigger on `fleet_tick`
 (FLEET-TICK-SPLIT-1). Per tick: the five `doctor_*` / `breaches_*` metrics are written first; each enabled `breach_playbooks` row is validated
 (`trigger_sql` and `verify_sql` one read-only SELECT, every `action_sql` / `revert_sql` statement one INSERT or UPDATE on `issue_triage`,
 `agent_issues` (UPDATE only), `remediation_contracts`, `issue_plans`, `ops_config` or `human_actions`, bound to `?1` = the issue id, no
-free-text column); every open issue older than `breach_doctor_min_age_h` (8) with no doer is classified (`breach_diagnoses`: family from a code
+free-text column); every open issue older than `breach_doctor_min_age_min` (120 minutes, SLA-120M-1; bounds 10..120) with no doer is classified (`breach_diagnoses`: family from a code
 table, `cause_class` from the matching playbook or `unclassified`, facts from numbers, ids and enum codes only); a rule that is 30 minutes old
 and `on` applies its action (revert stored, `decision_log` row, `breach_diagnosis_events` row); two consecutive passes of `verify_sql` are
-verified. An unclassified family files one `BREACH-DOCTOR-1: playbook gap <family>` issue per 24 hours to the code loop.
+verified. The `playbook-gap` row is seeded in `measure`, so no gap issue is filed: the code loop treats a `BREACH-DOCTOR-1:` title as untrusted until a later
+migration adds `qnfo-fleet-control|BREACH-DOCTOR-1:` to `ops_config code_merge_trusted_sources` and sets the row to `on` in the same file. Armed, it files at most one
+`BREACH-DOCTOR-1: playbook gap <family>` issue per family per 24 hours, never for OWNER-CHAT, OWNER-REQUEST or other, and none while 3 gap issues are open. A case in
+`queued`, `applied` or `verifying` with an expired lease is failed by the verify phase (`lease-expired`); `queue_sla` row `breach-doctor-case-in-flight` and the contract
+`fm-breach-doctor-case-age` watch the oldest one (120 minutes), which also covers `breach_doctor = off`, where no tick writes.
 
 - Stop it: `UPDATE ops_config SET value = 'off' WHERE key = 'breach_doctor'` (no write follows), `'measure'` (diagnose, act on nothing), or one rule
   with `UPDATE breach_playbooks SET enabled = 0 WHERE rule_id = '...'`. A rule with 2 failed or reverted cases in 24 hours demotes itself to measure.
