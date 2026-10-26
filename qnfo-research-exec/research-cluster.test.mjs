@@ -78,6 +78,37 @@ function d1(db) {
   ok(!/function confirmExcerpt\(claim, text\)/.test(src), "the misplaced dead helper inside parseExtractedClaims is gone");
 }
 
+// ---------------------------------------------------------------- (1b) confirm order: oldest first, a deferring row sinks (ERRATA-DEFER-SINK-1, agent_issues 100449)
+{
+  const block = src.slice(src.indexOf("// ---- ERRATA-INTERNAL-CONFIRM-1:BEGIN"), src.indexOf("// ---- ERRATA-INTERNAL-CONFIRM-1:END"));
+  const mod = new Function(block + "\nreturn { confirmInternalErrata };")();
+  const db = new DatabaseSync(":memory:");
+  db.exec(`CREATE TABLE errata_queue (id INTEGER PRIMARY KEY AUTOINCREMENT, email_id INTEGER, source TEXT, sender TEXT, subject TEXT, paper_doi TEXT, claim TEXT, status TEXT DEFAULT 'internal-open', created_at TEXT, updated_at TEXT);
+CREATE TABLE internal_errata (id TEXT PRIMARY KEY, status TEXT DEFAULT 'open', remediation TEXT, updated_at TEXT);
+CREATE TABLE papers (slug TEXT, title TEXT, body_md TEXT, doi TEXT);
+CREATE TABLE ops_config (key TEXT PRIMARY KEY, value TEXT);
+CREATE TABLE cloud_ops_events (id TEXT, ts TEXT, kind TEXT, text TEXT, meta TEXT, job TEXT, status TEXT);`);
+  db.prepare("INSERT INTO papers VALUES (?, ?, ?, NULL)").run("good", "Good", "The paper text is here. ".repeat(50));
+  db.prepare("INSERT INTO papers VALUES (?, ?, ?, NULL)").run("empty", "Empty", "   ");
+  const add = (subj, doi, created) => db.prepare("INSERT INTO errata_queue (source, sender, subject, paper_doi, claim, status, created_at, updated_at) VALUES ('internal_audit', 'qnfo-lifecycle PAPER-LEARN-1', ?, ?, 'a claim', 'internal-open', ?, ?)").run(subj, doi, created, created);
+  add("poison-a", "empty", "2026-10-20 00:00:00"); add("poison-b", "empty", "2026-10-20 01:00:00"); add("poison-c", "empty", "2026-10-20 02:00:00");
+  add("ok-1", "good", "2026-10-20 03:00:00"); add("ok-2", "good", "2026-10-20 04:00:00"); add("ok-3", "good", "2026-10-20 05:00:00");
+  db.prepare("INSERT INTO ops_config VALUES ('errata_confirm_max', '3')").run();
+  const env = { WATCH_DB: d1(db), QNFO_AUDIT: d1(db), PAPERS_DB: d1(db), AI: { run: async () => ({ choices: [{ message: { content: '{"confirmed": true, "why": "quoted"}' } }] }) } };
+  const out1 = await mod.confirmInternalErrata(env);
+  ok(out1.candidates === 3 && out1.deferred === 3 && out1.confirmed === 0, "the first run takes the three oldest rows (all three have an empty paper and defer)", out1);
+  const touched = db.prepare("SELECT subject, updated_at FROM errata_queue WHERE subject LIKE 'poison-%' ORDER BY id").all();
+  ok(touched.every((r) => r.updated_at > "2026-10-21"), "each deferred row is touched, so it is visible and sinks", touched);
+  const out2 = await mod.confirmInternalErrata(env);
+  ok(out2.candidates === 3 && out2.deferred === 0 && out2.confirmed === 3, "the second run reaches the rows behind the poison rows: they no longer hold the three slots", out2);
+  const states = db.prepare("SELECT subject, status FROM errata_queue ORDER BY id").all().map((r) => r.subject + ":" + r.status);
+  ok(states.join() === "poison-a:internal-open,poison-b:internal-open,poison-c:internal-open,ok-1:detected,ok-2:detected,ok-3:detected", "the good rows settled, the poison rows stay open for a later try", states);
+  const out3 = await mod.confirmInternalErrata(env);
+  ok(out3.candidates === 3 && out3.deferred === 3, "once nothing else is waiting the poison rows are tried again, oldest first", out3);
+  ok(db.prepare("SELECT count(*) AS n FROM cloud_ops_events WHERE kind = 'errata_confirm_defer'").get().n === 0, "an empty paper is a no-body defer (console only); a model failure writes the cloud_ops_events row");
+  ok(!/ORDER BY RANDOM\(\) LIMIT \?2/.test(src) && /ORDER BY updated_at ASC, id ASC LIMIT \?2/.test(src), "the selector is oldest-first, not random");
+}
+
 // ---------------------------------------------------------------- (2) routing
 {
   const a = src.indexOf("var ERRATA_ROUTE_ROWS_PER_RUN"), b = src.indexOf("async function runPublish(env, mode) {");
@@ -242,7 +273,7 @@ CREATE TABLE research_queue (id TEXT PRIMARY KEY, source TEXT, source_id TEXT, i
   ok(src.indexOf("daily publication cap of 5 reached") < 0, "the dead 5-a-day publication cap is gone (code-probe absent)");
   ok(/await logEvent\(env, "park-rearm-heartbeat"/.test(src) && /_sMin === 0\) await logEvent\(env, "park-rearm-heartbeat"/.test(src), "the hourly park sweep leaves a park-rearm-heartbeat event whether or not it re-armed a row");
   ok(/var VERSION = "0\.(3[7-9]|[4-9]\d)\.\d+-codeagent"/.test(src) || /var VERSION = "[1-9]/.test(src), "the host is 0.37.0 or later");
-  ok(/ERRATA_VERSION = "1\.9\.\d+-folded"/.test(src) && /var VERSION = "1\.9\.\d+-route-per-paper"/.test(hub), "the member is 1.9.x in the host and in errata-hub");
+  ok(/ERRATA_VERSION = "1\.9\.\d+-folded"/.test(src) && /var VERSION = "1\.9\.\d+-[a-z-]+"/.test(hub), "the member is 1.9.x in the host and in errata-hub");
 }
 
 console.log(pass + " passed, " + fail + " failed");
