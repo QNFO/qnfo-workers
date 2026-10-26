@@ -1,5 +1,5 @@
 {
-  "audited_at": "2026-10-26 14:38:53",
+  "audited_at": "2026-10-26 15:11:07",
   "d1_write_failures": [],
   "d1_writes_ok": 123,
   "guard": {
@@ -555,7 +555,7 @@
       },
       {
         "dir": "q08-signal-engine",
-        "version": "0.37.0",
+        "version": "0.37.1-codeagent",
         "worker": "q08-signal-engine"
       },
       {
@@ -565,7 +565,7 @@
       },
       {
         "dir": "qnfo-ai",
-        "version": "5.40.0",
+        "version": "5.40.1",
         "worker": "qnfo-ai"
       },
       {
@@ -590,7 +590,7 @@
       },
       {
         "dir": "qnfo-code-orchestrator",
-        "version": "0.29.0-sql-verify",
+        "version": "0.29.1-folded-target-read",
         "worker": "qnfo-code-orchestrator"
       },
       {
@@ -615,12 +615,12 @@
       },
       {
         "dir": "qnfo-fleet-control",
-        "version": "0.55.0-breach-doctor-watch-2",
+        "version": "0.55.1-codeagent",
         "worker": "qnfo-fleet-control"
       },
       {
         "dir": "qnfo-fleet-dashboard",
-        "version": "1.71.0",
+        "version": "1.71.1",
         "worker": "qnfo-fleet-dashboard"
       },
       {
@@ -670,7 +670,7 @@
       },
       {
         "dir": "qnfo-ops",
-        "version": "2.57.6",
+        "version": "2.58.0",
         "worker": "qnfo-ops"
       },
       {
@@ -1009,9 +1009,9 @@
       "worker": "q08-mind"
     },
     "q08-signal-engine": {
-      "before": "0.37.0",
+      "before": "0.37.1-codeagent",
       "http": 200,
-      "live": "0.37.0",
+      "live": "0.37.1-codeagent",
       "match": 1,
       "note": "SYNC",
       "worker": "q08-signal-engine"
@@ -1052,9 +1052,9 @@
       "worker": "qnfo-agents"
     },
     "qnfo-ai": {
-      "before": "5.40.0",
+      "before": "5.40.1",
       "http": 200,
-      "live": "5.40.0",
+      "live": "5.40.1",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-ai"
@@ -1218,9 +1218,9 @@
       "worker": "qnfo-code-agent"
     },
     "qnfo-code-orchestrator": {
-      "before": "0.29.0-sql-verify",
+      "before": "0.29.1-folded-target-read",
       "http": 200,
-      "live": "0.29.0-sql-verify",
+      "live": "0.29.1-folded-target-read",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-code-orchestrator"
@@ -1348,17 +1348,17 @@
       "worker": "qnfo-fleet-calibrator"
     },
     "qnfo-fleet-control": {
-      "before": "0.55.0-breach-doctor-watch-2",
+      "before": "0.55.1-codeagent",
       "http": 200,
-      "live": "0.55.0-breach-doctor-watch-2",
+      "live": "0.55.1-codeagent",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-fleet-control"
     },
     "qnfo-fleet-dashboard": {
-      "before": "1.71.0",
+      "before": "1.71.1",
       "http": 200,
-      "live": "1.71.0",
+      "live": "1.71.1",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-fleet-dashboard"
@@ -1508,9 +1508,9 @@
       "worker": "qnfo-observability"
     },
     "qnfo-ops": {
-      "before": "2.57.6",
+      "before": "2.58.0",
       "http": 200,
-      "live": "2.57.6",
+      "live": "2.58.0",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-ops"
