@@ -25,8 +25,7 @@ if (!hosts || hosts.indexOf("HA_FLEET_HOST_RE") < 0) throw new Error("HUMAN-AUDI
 let pass = 0, fail = 0;
 const ok = (c, m) => { if (c) pass++; else { fail++; console.log("FAIL " + m); } };
 
-const db = new DatabaseSync(":memory:");
-db.exec(`CREATE TABLE reach_signals (date TEXT NOT NULL, source TEXT NOT NULL, channel TEXT NOT NULL, entity_type TEXT NOT NULL, entity_id TEXT NOT NULL, metric TEXT NOT NULL, value REAL, quality TEXT, collected_at TEXT DEFAULT (datetime('now')), PRIMARY KEY (date, source, channel, entity_type, entity_id, metric));
+const DDL = `CREATE TABLE reach_signals (date TEXT NOT NULL, source TEXT NOT NULL, channel TEXT NOT NULL, entity_type TEXT NOT NULL, entity_id TEXT NOT NULL, metric TEXT NOT NULL, value REAL, quality TEXT, collected_at TEXT DEFAULT (datetime('now')), PRIMARY KEY (date, source, channel, entity_type, entity_id, metric));
 CREATE TABLE social_threads (id INTEGER PRIMARY KEY, slug TEXT, title TEXT, posts TEXT, status TEXT, posted_at TEXT, post_uri TEXT);
 CREATE TABLE dissemination_tracker (id TEXT PRIMARY KEY, paper_slug TEXT, paper_title TEXT, channel TEXT, action TEXT, post_id TEXT, posted_at TEXT);
 CREATE TABLE social_media_posts (id TEXT PRIMARY KEY, platform TEXT, post_id TEXT, buffer_id TEXT, project_id TEXT, published_at TEXT, status TEXT);
@@ -36,7 +35,9 @@ CREATE TABLE subscribers (email TEXT PRIMARY KEY, status TEXT, source TEXT, crea
 CREATE TABLE ops_config (key TEXT PRIMARY KEY, value TEXT, note TEXT, updated_at TEXT);
 CREATE TABLE metric_registry (metric TEXT PRIMARY KEY, last_value TEXT, last_refreshed TEXT, state TEXT);
 CREATE TABLE cloud_ops_events (id TEXT PRIMARY KEY, ts TEXT, kind TEXT, text TEXT, meta TEXT, job TEXT, status TEXT);
-INSERT INTO metric_registry (metric) VALUES ('attention_events_7d'), ('attention_per_post_7d'), ('pages_noticed_7d'), ('attention_channels_stopped'), ('attention_decision_efficacy_30d');`);
+INSERT INTO metric_registry (metric) VALUES ('attention_events_7d'), ('attention_per_post_7d'), ('pages_noticed_7d'), ('attention_channels_stopped'), ('attention_decision_efficacy_30d');`;
+const db = new DatabaseSync(":memory:");
+db.exec(DDL);
 function d1(dbx) {
   return { prepare(sql) {
     let args = [];
@@ -83,6 +84,24 @@ ok(V({ items: 12, attention: 1, attention7: 0 }, { verdict: "RETEST", retest_at:
 ok(V({ items: 12, attention: 1, attention7: 2 }, { verdict: "RETEST", retest_at: "2026-10-01T00:00:00Z" }).verdict === "IMPROVE", "a re-test that drew attention comes back at half share");
 v = V({ items: 12, attention: 1, attention7: 0, visits7: 0 }, { verdict: "RETEST", retest_at: "2026-10-01T00:00:00Z" });
 ok(v.verdict === "STOP" && v.retest_at === "2026-11-04T00:00:00Z", "a re-test that drew nothing stops again for another 28 days");
+// ATTENTION-STOP-RELEASE-1 (agent_issues 100190): a stop needs no referred visit, so a stopped channel that has since drawn a referred
+// visit or a utm human click is judged again by the normal rules; one with still none stays stopped until its re-test date.
+const STOPPED = { verdict: "STOP", retest_at: "2026-11-04T00:00:00Z" };
+v = V({ items: 209, attention: 4, visits: 0, clicks_human: 496 }, STOPPED);
+ok(v.verdict === "IMPROVE" && v.share === 0.5 && v.retest_at === null && /engagements per item over 209 items/.test(v.reason), "a stopped channel with 496 utm human clicks leaves STOP: IMPROVE at half share (the 2026-10-26 Bluesky numbers)");
+v = V({ items: 12, attention: 1, visits: 3 }, STOPPED);
+ok(v.verdict === "IMPROVE" && v.share === 0.5, "a stopped channel with referred visits is judged again too");
+v = V({ items: 12, attention: 14, visits: 0, clicks_human: 5 }, STOPPED);
+ok(v.verdict === "PROMOTE" && v.share === 1, "a released channel that earns 1.17 engagements per item is promoted");
+v = V({ items: 4, attention: 0, visits: 0, clicks_human: 12 }, STOPPED);
+ok(v.verdict === "INSUFFICIENT" && v.share === 1, "a released channel under 5 items is explored at full share");
+v = V({ items: 12, attention: 1, visits: 0, clicks_human: 9 }, { verdict: "STOP", retest_at: "2026-10-01T00:00:00Z" });
+ok(v.verdict === "IMPROVE" && v.share === 0.5, "past its re-test date a channel with clicks is judged on its numbers, not sent to a re-test");
+v = V({ items: 12, attention: 1, visits: 0, clicks_human: 0 }, STOPPED);
+ok(v.verdict === "STOP" && v.share === 0 && v.retest_at === "2026-11-04T00:00:00Z", "a stop with no visit and no click stays stopped until its re-test date");
+v = V({ items: 12, attention: 1, visits: 0, clicks_human: null }, STOPPED);
+ok(v.verdict === "STOP" && v.share === 0, "unread utm clicks (null) are not a click: the channel stays stopped");
+ok(V({ items: 12, attention: 1, visits: 0, clicks_human: 40 }).verdict === "IMPROVE", "the first-time rule is unchanged: with clicks the same numbers are not a stop");
 ok(JSON.stringify(T.atShares({ bluesky: { share: 0 }, linkedin: { share: 0.5 }, x: null })) === JSON.stringify({ bluesky: 0, linkedin: 0.5, mastodon: 1, x: 1 }), "the share map carries every social channel; unmeasured ones read 1");
 // ATTENTION-STOP-GRADE-1 (agent_issues 2467): a STOP is graded on the other channels, pooled; no rows reads unmeasured.
 ok(T.atPooledRow([]) === null && T.atPooledRow([{ items: 4, attention: 1 }, { items: 0, attention: 0 }, { items: 4, attention: 3 }]).per_item === 0.5 && T.atPooledRow([{ items: 0, attention: 0 }]).per_item === 0, "pooled row: attention over items across channels, null without rows");
@@ -169,6 +188,40 @@ const r4 = await T.attentionScorecard(env, { nowMs: Date.parse("2026-11-05T05:00
 ok(r4.channels.bluesky.verdict.verdict === "RETEST" && r4.shares.bluesky === 0.25 && r4.decisions.some((d) => d.channel === "bluesky" && d.to === "RETEST"), "28 days after the stop, Bluesky is re-tested at a quarter share and the change is a decision");
 const latest = await T.attentionLatest(env);
 ok(latest.ok && latest.day === "2026-11-04" && latest.scorecard.length === 11 && latest.decisions.length >= 5 && latest.shares.value.bluesky === 0.25 && latest.rules.thresholds.stop_items === 10, "GET /api/attention serves the latest day, the decisions, the shares and the rules");
+
+// ---------- ATTENTION-STOP-RELEASE-1 end to end (agent_issues 100190): the scorecard releases a stop that has utm human clicks ----------
+// The 2026-10-06 shape: 12 Bluesky threads with one like and no referred visit, stopped on 2026-10-06 with a re-test on 2026-11-03.
+// Twenty days later the channel has utm human clicks (reach_signals source utm, channel bluesky): the daily pass must not hold it at share 0.
+async function stopWorld(clicks) {
+  const d2 = new DatabaseSync(":memory:");
+  d2.exec(DDL);
+  const put = d2.prepare("INSERT INTO reach_signals (date, source, channel, entity_type, entity_id, metric, value, quality) VALUES (?, ?, ?, ?, ?, ?, ?, ?)");
+  for (let i = 1; i <= 12; i++) {
+    const uri = "at://did:plc:q/app.bsky.feed.post/" + i;
+    d2.prepare("INSERT INTO social_threads (id, slug, title, posts, status, posted_at, post_uri) VALUES (?, ?, ?, ?, 'posted', ?, ?)").run(i, "slug-" + i, "Post " + i, JSON.stringify(["a https://papers.qnfo.org/papers/slug-" + i + "/", "b"]), "2026-10-" + String(1 + i).padStart(2, "0") + " 10:00:00", uri);
+    put.run("2026-10-19", "bluesky", "bluesky", "post", uri, "likes", i === 5 ? 1 : 0, "human");
+    put.run("2026-10-19", "bluesky", "bluesky", "post", uri, "replies", 1, "human");
+    put.run("2026-10-19", "bluesky", "bluesky", "post", uri, "reposts", 0, "human");
+  }
+  if (clicks) put.run("2026-10-18", "utm", "bluesky", "campaign", "slug-5", "clicks_human", clicks, "human");
+  d2.exec("CREATE TABLE IF NOT EXISTS attention_scorecard (day TEXT NOT NULL, window_days INTEGER NOT NULL, channel TEXT NOT NULL, items INTEGER, attention REAL, per_item REAL, visits REAL, impressions REAL, verdict TEXT, share REAL, reason TEXT, retest_at TEXT, extra TEXT, created_at TEXT, PRIMARY KEY (day, window_days, channel))");
+  d2.prepare("INSERT INTO attention_scorecard (day, window_days, channel, items, attention, per_item, visits, impressions, verdict, share, reason, retest_at, extra, created_at) VALUES ('2026-10-06', 28, 'bluesky', 12, 1, 0.083, 0, NULL, 'STOP', 0, '12 items drew 1 engagements', '2026-11-03T00:00:00Z', '{}', '2026-10-06T05:00:00Z')").run();
+  return d2;
+}
+{
+  const NOW3 = Date.parse("2026-10-20T05:00:00.000Z");
+  const wc = await stopWorld(40);
+  const rc = await T.attentionScorecard({ AUDIT: d1(wc) }, { nowMs: NOW3 });
+  ok(rc.day === "2026-10-19" && rc.channels.bluesky.d28.items === 12 && rc.channels.bluesky.d28.clicks_human === 40, "the scorecard reads the 40 utm human clicks of the 28 days for Bluesky", rc.channels.bluesky.d28);
+  ok(rc.channels.bluesky.verdict.verdict === "IMPROVE" && rc.shares.bluesky === 0.5, "a Bluesky stopped on 2026-10-06 with 40 utm human clicks is IMPROVE at half share on 2026-10-19, not held at 0", rc.channels.bluesky.verdict);
+  const cfg = JSON.parse(wc.prepare("SELECT value FROM ops_config WHERE key = 'attention_channel_share'").get().value);
+  ok(cfg.bluesky === 0.5 && cfg.verdicts.bluesky === "IMPROVE" && cfg.day === "2026-10-19", "ops_config attention_channel_share, the row qnfo-social reads, carries Bluesky at 0.5");
+  ok(rc.decisions.some((d) => d.channel === "bluesky" && d.from === "STOP" && d.to === "IMPROVE" && d.share === 0.5), "the release is one recorded decision from STOP to IMPROVE", rc.decisions);
+  ok(wc.prepare("SELECT last_value FROM metric_registry WHERE metric = 'attention_channels_stopped'").get().last_value === "0", "attention_channels_stopped reads 0");
+  const wn = await stopWorld(0);
+  const rn = await T.attentionScorecard({ AUDIT: d1(wn) }, { nowMs: NOW3 });
+  ok(rn.channels.bluesky.verdict.verdict === "STOP" && rn.shares.bluesky === 0 && !rn.decisions.some((d) => d.channel === "bluesky"), "the same channel with no click stays stopped until its re-test date, and no Bluesky decision is recorded", rn.channels.bluesky.verdict);
+}
 
 // ---------- the source stays ASCII (ASCII-SOURCE-1) ----------
 ok(!/[^\x00-\x7F]/.test(src), "worker.js is ASCII-only");
