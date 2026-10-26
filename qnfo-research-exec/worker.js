@@ -1501,6 +1501,43 @@ __name2(programFor, "programFor");
 __name22(programFor, "programFor");
 __name222(programFor, "programFor");
 __name2222(programFor, "programFor");
+async function prunePaperBodyBackups(env, slug) {
+  if (!env || !env.LIVING_PAPER) return;
+  var perSlugMax = Math.max(2, Math.min(100, Number(env.PAPER_BODY_BACKUP_PER_SLUG_MAX || 20)));
+  var totalCharsMax = Math.max(1e7, Number(env.PAPER_BODY_BACKUP_TOTAL_CHARS_MAX || 5e8));
+  try {
+    var perSlug = await env.LIVING_PAPER.prepare(
+      "DELETE FROM paper_body_backups WHERE slug=? AND rowid NOT IN (SELECT rowid FROM paper_body_backups WHERE slug=? ORDER BY created_at DESC, rowid DESC LIMIT ?)"
+    ).bind(slug, slug, perSlugMax).run();
+    var prunedSlug = (perSlug && perSlug.meta && perSlug.meta.changes) || 0;
+    var total = await env.LIVING_PAPER.prepare(
+      "SELECT COALESCE(SUM(LENGTH(body_md)),0) AS total_chars, COUNT(*) AS row_count FROM paper_body_backups"
+    ).first();
+    var totalChars = Number(total && total.total_chars || 0);
+    if (totalChars > totalCharsMax) {
+      var over = totalChars - totalCharsMax;
+      var avg = Math.max(1, Math.floor(totalChars / Math.max(1, Number(total && total.row_count || 1))));
+      var batch = Math.min(10000, Math.max(1, Math.ceil(over / avg) + 1));
+      var globalPrune = await env.LIVING_PAPER.prepare(
+        "DELETE FROM paper_body_backups WHERE rowid IN (SELECT rowid FROM paper_body_backups ORDER BY created_at ASC, rowid ASC LIMIT ?)"
+      ).bind(batch).run();
+      var prunedGlobal = (globalPrune && globalPrune.meta && globalPrune.meta.changes) || 0;
+      await env.QNFO_AUDIT.prepare(
+        "INSERT INTO cloud_ops_events (ts, kind, job, text) VALUES (datetime('now'), 'backup-size-guard', 'qnfo-research-exec', ?)"
+      ).bind(("paper_body_backups size guard: " + totalChars + " chars > " + totalCharsMax + "; pruned " + prunedGlobal + " oldest rows (slug=" + String(slug || "?") + ")").slice(0, 450)).run();
+    } else if (prunedSlug > 0) {
+      await env.QNFO_AUDIT.prepare(
+        "INSERT INTO cloud_ops_events (ts, kind, job, text) VALUES (datetime('now'), 'backup-prune', 'qnfo-research-exec', ?)"
+      ).bind(("paper_body_backups per-slug prune: removed " + prunedSlug + " old rows for slug=" + String(slug || "?")).slice(0, 450)).run();
+    }
+  } catch (ePbpr) {
+  }
+}
+__name(prunePaperBodyBackups, "prunePaperBodyBackups");
+__name2(prunePaperBodyBackups, "prunePaperBodyBackups");
+__name22(prunePaperBodyBackups, "prunePaperBodyBackups");
+__name222(prunePaperBodyBackups, "prunePaperBodyBackups");
+__name2222(prunePaperBodyBackups, "prunePaperBodyBackups");
 async function publishV2(env, row) {
   var slug = row.slug || "paper";
   var minLen = Number(env.QUALITY_MIN_LEN || 8e3);
@@ -1636,6 +1673,10 @@ async function publishV2(env, row) {
   }
   await env.QNFO_AUDIT.prepare("UPDATE version_queue SET status='published', new_doi=NULL, updated_at=datetime('now') WHERE id=?").bind(row.id).run();
   await depositToGithub(env, vSlug, row.title, vBody);
+  try {
+    await prunePaperBodyBackups(env, vSlug);
+  } catch (ePbpr) {
+  }
   return { ok: true, stage: vFirst ? "first-deposit" : "v2", doi: null, slug: vSlug };
 }
 __name(publishV2, "publishV2");
