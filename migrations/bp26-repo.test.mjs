@@ -1,5 +1,5 @@
 // BP26-REPO-1 offline suite: replays migrations/2026-10-26-bp26-repo.sql on node:sqlite.
-// Proves: the header opts in (APPLY-BY ci, DB qnfo-audit, one Rollback line, nothing deleted or dropped by the body); migration_runs gains bookmark and bookmark_source; credential_registry holds
+// Proves: the header opts in (APPLY-BY ci, DB qnfo-audit, one Rollback line, nothing deleted or dropped by the body); migration_runs gains bookmark and bookmark_source; bp26_credential_registry holds
 // credential NAMES only (no value-shaped text), exactly one with a readable expiry (the Cloudflare repository token) and the rest registered as no-expiry-mechanism; d1_restore_drills exists
 // with the columns scripts/bp26_repo.py reads; the eight metrics get their real source_of_truth and keep the [BP26] tag while another metric is untouched; the decision is logged once;
 // a replay (without the ALTERs, which SQLite cannot repeat and the runner treats as done) changes nothing; the Rollback line puts everything back.
@@ -33,15 +33,15 @@ INSERT INTO migration_runs (file, sha256, db, status) VALUES ('a.sql', 'x', 'qnf
   return w;
 };
 const cols = (w, t) => w.prepare(`PRAGMA table_info(${t})`).all().map((c) => c.name);
-const snap = (w) => JSON.stringify([w.prepare("SELECT * FROM credential_registry ORDER BY credential").all(), w.prepare("SELECT metric, source_of_truth FROM metric_registry ORDER BY metric").all(), w.prepare("SELECT COUNT(*) n FROM decision_log").get()]);
+const snap = (w) => JSON.stringify([w.prepare("SELECT * FROM bp26_credential_registry ORDER BY credential").all(), w.prepare("SELECT metric, source_of_truth FROM metric_registry ORDER BY metric").all(), w.prepare("SELECT COUNT(*) n FROM decision_log").get()]);
 
 const w = world();
 w.exec(sql);
 ok(cols(w, "migration_runs").includes("bookmark") && cols(w, "migration_runs").includes("bookmark_source"), "migration_runs gains bookmark and bookmark_source", cols(w, "migration_runs"));
 ok(w.prepare("SELECT bookmark FROM migration_runs").get().bookmark === null, "existing rows keep a NULL bookmark (never invented)");
-const need = { credential_registry: ["credential", "holder_worker", "expiry_mechanism", "expires_at", "renewal_issue_id"], d1_restore_drills: ["ts", "source_db", "scratch_db", "bookmark", "rows_checked", "outcome", "evidence"] };
+const need = { bp26_credential_registry: ["credential", "holder_worker", "expiry_mechanism", "expires_at", "renewal_issue_id"], d1_restore_drills: ["ts", "source_db", "scratch_db", "bookmark", "rows_checked", "outcome", "evidence"] };
 for (const [t, cs] of Object.entries(need)) ok(cs.every((c) => cols(w, t).includes(c)), t + " has the columns scripts/bp26_repo.py reads", cols(w, t));
-const creds = w.prepare("SELECT * FROM credential_registry ORDER BY credential").all();
+const creds = w.prepare("SELECT * FROM bp26_credential_registry ORDER BY credential").all();
 ok(creds.length === 9, "nine external credentials are registered by name", creds.map((c) => c.credential));
 ok(creds.filter((c) => c.expiry_mechanism === "cf-token-verify").map((c) => c.credential).join() === "CLOUDFLARE_API_TOKEN", "only the Cloudflare repository token has a readable expiry");
 ok(creds.filter((c) => c.expiry_mechanism !== "cf-token-verify").every((c) => c.expiry_mechanism === "no-expiry-mechanism" && c.expires_at === null), "every other credential is registered as no-expiry-mechanism, with no date invented");
@@ -58,7 +58,7 @@ ok(snap(w) === before, "a replay (without the ALTERs) changes nothing");
 
 w.exec(rollback);
 ok(!cols(w, "migration_runs").includes("bookmark") && !cols(w, "migration_runs").includes("bookmark_source"), "the Rollback line drops both columns", cols(w, "migration_runs"));
-const gone = w.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name IN ('credential_registry', 'd1_restore_drills')").all();
+const gone = w.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name IN ('bp26_credential_registry', 'd1_restore_drills')").all();
 ok(gone.length === 0, "the Rollback line drops both tables", gone);
 const back = Object.fromEntries(w.prepare("SELECT metric, source_of_truth s FROM metric_registry").all().map((r) => [r.metric, r.s]));
 ok(METRICS.every((k) => /\(to (build|compute|poll|extend|build or wire)\) \[BP26\]$/.test(back[k])) && back.orphaned_leases === "qnfo-audit.work_claims [BP26]", "the Rollback line returns the eight metrics to a to-build text and leaves the other alone", back);

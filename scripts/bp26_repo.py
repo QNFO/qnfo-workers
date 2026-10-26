@@ -24,7 +24,7 @@ or stores a secret: the secret scan reports file:line and a pattern NAME only.
         expire. The value is the number of unallowlisted hits; a hit's text is never printed or stored. It is a pattern scan, not a replacement for a full scanner with entropy
         checks; the note says so.
   collect_credential_expiry   secret_expiry_warnings_open
-        Reads qnfo-audit.credential_registry (migrations/2026-10-26-bp26-repo.sql): external credentials by NAME, with the way their expiry can be known. The value is the number of
+        Reads qnfo-audit.bp26_credential_registry (migrations/2026-10-26-bp26-repo.sql): external credentials by NAME, with the way their expiry can be known. The value is the number of
         credentials with a KNOWN expiry inside 14 days and no open renewal issue. A credential with no expiry mechanism (X, Bluesky app password, Mastodon, Buffer, a Google service
         account key) is listed in the evidence rows as no-expiry-mechanism and is NOT counted as fine: the note names exactly which credentials the figure covers.
   collect_d1_size_and_drill   d1_db_size_pct, d1_restore_drill_age_days
@@ -344,13 +344,30 @@ def collect_secrets_in_repo(ctx):
 
 
 # ---------------------------------------------------------------- credential expiry
+def parse_epoch(s):
+    """Epoch seconds of 'YYYY-MM-DDTHH:MM:SS...' or a bare 'YYYY-MM-DD' (UTC), else None."""
+    s = str(s or "")
+    for fmt, n in (("%Y-%m-%dT%H:%M:%S", 19), ("%Y-%m-%d", 10)):
+        try:
+            return datetime.datetime.strptime(s[:n], fmt).replace(tzinfo=datetime.timezone.utc).timestamp()
+        except ValueError:
+            continue
+    return None
+
+
 def collect_credential_expiry(ctx):
     try:
-        reg = ctx.d1("SELECT credential, holder_worker, expiry_mechanism, expires_at, renewal_issue_id FROM credential_registry ORDER BY credential")
+        reg = ctx.d1("SELECT credential, holder_worker, expiry_mechanism, expires_at, renewal_issue_id FROM bp26_credential_registry ORDER BY credential")
     except Exception as e:  # noqa: BLE001
-        return [Result("secret_expiry_warnings_open", None, "credential_registry unreadable (migration 2026-10-26-bp26-repo.sql not applied?): " + str(e)[:100], [])]
+        return [Result("secret_expiry_warnings_open", None, "bp26_credential_registry unreadable (migration 2026-10-26-bp26-repo.sql not applied?): " + str(e)[:100], [])]
     if not reg:
-        return [Result("secret_expiry_warnings_open", None, "credential_registry is empty or unreadable", [])]
+        return [Result("secret_expiry_warnings_open", None, "bp26_credential_registry is empty or unreadable", [])]
+    # The earlier credential_registry (qnfo-infra /cred/status) holds credentials whose expiry IS dated; its rows are read, never written.
+    try:
+        reg = list(reg) + ctx.d1("SELECT slug AS credential, owner AS holder_worker, 'dated' AS expiry_mechanism, expires_on AS expires_at, NULL AS renewal_issue_id FROM credential_registry "
+                                 "WHERE expires_on IS NOT NULL AND trim(expires_on) <> '' ORDER BY slug")
+    except Exception:  # noqa: BLE001
+        pass
     cf_mins = None
     try:
         r = ctx.d1("SELECT last_value, last_refreshed FROM metric_registry WHERE metric = 'cloudflare_token_expires_in_min'")
@@ -370,11 +387,8 @@ def collect_credential_expiry(ctx):
                 known.append(name)
                 continue
         elif c.get("expires_at"):
-            try:
-                t = datetime.datetime.strptime(str(c["expires_at"])[:19], "%Y-%m-%dT%H:%M:%S").replace(tzinfo=datetime.timezone.utc).timestamp()
-                days = (t - now) / 86400.0
-            except ValueError:
-                days = None
+            t = parse_epoch(c["expires_at"])
+            days = None if t is None else (t - now) / 86400.0
         if days is None:
             unknown.append(name)
             rows.append((name, None, "no-expiry-mechanism" if mech in ("", "none") or mech.startswith("no-expiry") else "expiry-unknown (%s)" % mech[:60]))
@@ -609,18 +623,21 @@ def selftest():
         # ---- credential expiry, D1 size, drills, bookmarks on an in-memory ledger
         c = sqlite3.connect(":memory:")
         c.executescript("""
-CREATE TABLE credential_registry (credential TEXT PRIMARY KEY, holder_worker TEXT, expiry_mechanism TEXT, expires_at TEXT, renewal_issue_id INTEGER);
+CREATE TABLE bp26_credential_registry (credential TEXT PRIMARY KEY, holder_worker TEXT, expiry_mechanism TEXT, expires_at TEXT, renewal_issue_id INTEGER);
 CREATE TABLE metric_registry (metric TEXT PRIMARY KEY, last_value TEXT, last_refreshed TEXT);
 CREATE TABLE agent_issues (id INTEGER PRIMARY KEY, status TEXT);
 CREATE TABLE d1_restore_drills (id INTEGER PRIMARY KEY AUTOINCREMENT, ts TEXT, source_db TEXT, scratch_db TEXT, bookmark TEXT, rows_checked INTEGER, outcome TEXT, evidence TEXT);
 CREATE TABLE migration_runs (id INTEGER PRIMARY KEY AUTOINCREMENT, file TEXT, db TEXT, status TEXT, applied_at TEXT, bookmark TEXT, bookmark_source TEXT);
 INSERT INTO metric_registry VALUES ('cloudflare_token_expires_in_min', '999999', '2026-10-26T00:00:00Z');
-INSERT INTO credential_registry VALUES ('CLOUDFLARE_API_TOKEN', 'ci', 'cf-token-verify', NULL, NULL);
-INSERT INTO credential_registry VALUES ('BSKY_APP_PASS', 'qnfo-social', 'no-expiry-mechanism', NULL, NULL);
-INSERT INTO credential_registry VALUES ('SOON_NO_ISSUE', 'w', 'dated', strftime('%Y-%m-%dT%H:%M:%SZ','now','+5 days'), NULL);
-INSERT INTO credential_registry VALUES ('SOON_WITH_ISSUE', 'w', 'dated', strftime('%Y-%m-%dT%H:%M:%SZ','now','+3 days'), 7);
-INSERT INTO credential_registry VALUES ('LATER', 'w', 'dated', strftime('%Y-%m-%dT%H:%M:%SZ','now','+200 days'), NULL);
+INSERT INTO bp26_credential_registry VALUES ('CLOUDFLARE_API_TOKEN', 'ci', 'cf-token-verify', NULL, NULL);
+INSERT INTO bp26_credential_registry VALUES ('BSKY_APP_PASS', 'qnfo-social', 'no-expiry-mechanism', NULL, NULL);
+INSERT INTO bp26_credential_registry VALUES ('SOON_NO_ISSUE', 'w', 'dated', strftime('%Y-%m-%dT%H:%M:%SZ','now','+5 days'), NULL);
+INSERT INTO bp26_credential_registry VALUES ('SOON_WITH_ISSUE', 'w', 'dated', strftime('%Y-%m-%dT%H:%M:%SZ','now','+3 days'), 7);
+INSERT INTO bp26_credential_registry VALUES ('LATER', 'w', 'dated', strftime('%Y-%m-%dT%H:%M:%SZ','now','+200 days'), NULL);
 INSERT INTO agent_issues VALUES (7, 'open');
+CREATE TABLE credential_registry (slug TEXT PRIMARY KEY, title TEXT, kind TEXT, expires_on TEXT, rotate_before TEXT, owner TEXT, source TEXT, updated_at TEXT);
+INSERT INTO credential_registry VALUES ('workers-ai-token', 'Workers AI token', 'cloudflare-api-token', '2099-10-25', '2099-09-25', 'self', 'r2', 'now');
+INSERT INTO credential_registry VALUES ('no-date', 'x', 'k', NULL, NULL, 'self', 'r2', 'now');
 """)
 
         def d1(sql, params=None):
@@ -632,7 +649,10 @@ INSERT INTO agent_issues VALUES (7, 'open');
         ok(r.value == 1, "one credential expires inside 14 days with no open renewal issue: %r" % r.value)
         ok(any(x[0] == "BSKY_APP_PASS" and x[1] is None and x[2] == "no-expiry-mechanism" for x in r.rows) and "BSKY_APP_PASS" in r.note and "gap, not a pass" in r.note,
            "a credential with no expiry mechanism is listed as such and named in the note")
-        c.execute("DELETE FROM credential_registry")
+        ok(any(x[0] == "workers-ai-token" and x[1] == 1 for x in r.rows) and "workers-ai-token" in r.note and not any(x[0] == "no-date" for x in r.rows),
+           "a dated row of the earlier credential_registry is read and covered; an undated one is not part of the figure")
+        ok(parse_epoch("2027-10-25") is not None and parse_epoch("2027-10-25T10:00:00Z") is not None and parse_epoch("soon") is None, "parse_epoch reads a date or a timestamp")
+        c.execute("DELETE FROM bp26_credential_registry")
         ok(collect_credential_expiry(ctx)[0].value is None, "an empty registry is unknown, not zero")
         # D1 size and drill
         def cf2(path):
