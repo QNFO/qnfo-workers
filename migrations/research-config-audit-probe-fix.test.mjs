@@ -51,7 +51,7 @@ CREATE TABLE research_queue (id TEXT PRIMARY KEY, status TEXT, published_at TEXT
     w.prepare("INSERT INTO remediation_contracts (class, issue_id, precondition, action, verify_probe, verify_transport, escalate_to, expected_cadence_h, status, module) VALUES (?,?,?,?,?,?,?,?,?,?)")
       .run("issue-" + id, id, "no earlier birth template matched this issue (ORPHAN-GUARD-BIRTH-1)", BORN + ".", "SELECT 'closed' AS expected, NULL AS observed", "d1-query", "qnfo-fleet-control", 1, "superseded", "probe-template-v3-generic");
   }
-  w.prepare("INSERT INTO agent_issues VALUES (1000029, 'REVISE-NOOP-WAIVE-1', 'filed text', 'open'), (100439, 'Q08-GATE-ECONOMICS', 'filed text', 'open'), (100453, 'q08 preflight', 'filed text', 'open')").run();
+  w.prepare("INSERT INTO agent_issues VALUES (1000029, 'REVISE-NOOP-WAIVE-1', 'filed text', 'open'), (100439, 'Q08-GATE-ECONOMICS', 'filed text', 'open'), (100453, 'q08 preflight', 'filed text', 'open'), (100626, 'research config thrash', 'filed text', 'open')").run();
   w.prepare("INSERT INTO ops_config (key, value, note) VALUES ('research_daily_neurons', '360000', NULL)").run();
   return w;
 }
@@ -80,6 +80,39 @@ if (!SKIP) {
   ok(w.prepare("SELECT COUNT(*) c FROM remediation_contracts WHERE class = 'issue-100626'").get().c === 1, "the fix is re-runnable");
   w.exec(hdr("Rollback"));
   ok(w.prepare("SELECT verify_probe FROM remediation_contracts WHERE class = 'issue-100626'").get().verify_probe.includes("the update audit trigger is missing"), "the Rollback restores the earlier words");
+}
+
+// ---- the reactivation (PR 4675 matched no row: the fleet had superseded the contract first) ----
+const react = read("2026-10-26-research-config-audit-reactivate.sql");
+const rhdr = (k) => ((react.split(NL).find((l) => l.startsWith("-- " + k + ": ")) || "").slice(("-- " + k + ": ").length));
+const SUPERSEDED = "superseded:probe-unusable (no machine-executable probe; the issue stays open and needs a real one)";
+const q = (w) => w.prepare("SELECT status, last_verdict, attempts, verify_probe FROM remediation_contracts WHERE class = 'issue-100626'").get();
+{
+  ok(rhdr("APPLY-BY") === "ci" && rhdr("DB") === "qnfo-audit" && rhdr("Rollback").startsWith("UPDATE remediation_contracts SET status = 'superseded'"), "the reactivation opts in with APPLY-BY, DB and a single-line Rollback");
+  ok(!/\b(DELETE\s+FROM|DROP)\b/i.test(strip(react)), "the reactivation deletes and drops nothing");
+  const w = world(); w.exec(strip(first));
+  w.prepare("UPDATE remediation_contracts SET status = 'superseded', last_verdict = ? WHERE class = 'issue-100626'").run(SUPERSEDED);   // what the fleet did at 16:36:47Z
+  w.exec(strip(fix));
+  let c = q(w);
+  ok(c.status === "superseded" && c.verify_probe.includes("the update audit trigger is missing"), "the first fix matches no superseded row (the live miss this file repairs)", c.status);
+  w.exec(strip(react));
+  c = q(w);
+  ok(c.status === "active" && c.last_verdict === null && c.attempts === 0 && c.verify_probe.includes("the audit trigger for changes is missing") && !c.verify_probe.includes("the update audit trigger"), "a superseded contract is repaired and active again", c);
+  ok(literalSelect(c.verify_probe) === "ok", "and its probe passes the runner's guard", literalSelect(c.verify_probe));
+  w.exec(strip(react));
+  ok(q(w).status === "active", "the reactivation is re-runnable");
+  w.exec(rhdr("Rollback"));
+  c = q(w);
+  ok(c.status === "superseded" && c.last_verdict === SUPERSEDED && c.verify_probe.includes("the update audit trigger is missing"), "the Rollback restores the superseded state", c);
+  const wc = world(); wc.exec(strip(first));
+  wc.prepare("UPDATE remediation_contracts SET status = 'superseded', last_verdict = ? WHERE class = 'issue-100626'").run(SUPERSEDED);
+  wc.prepare("UPDATE agent_issues SET status = 'closed' WHERE id = 100626").run();
+  wc.exec(strip(react));
+  ok(q(wc).status === "superseded", "a closed issue's contract is left alone");
+  const wx = world(); wx.exec(strip(first)); wx.exec(strip(fix));
+  wx.prepare("UPDATE remediation_contracts SET status = 'closed' WHERE class = 'issue-100626'").run();
+  wx.exec(strip(react));
+  ok(q(wx).status === "closed", "a closed contract is left alone");
 }
 
 console.log((fail ? "FAILED " : "all assertions passed: ") + pass + " passed, " + fail + " failed");
