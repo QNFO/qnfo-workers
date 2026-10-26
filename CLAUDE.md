@@ -480,6 +480,16 @@ because each one was broken at least once; the linked issue holds the evidence.
   the SLA views report only untriaged issues. Never write "+7 days" or another future date into it.
   See migrations/2026-10-03-priority-queue.sql (backups and rollback in its header).
 
+## Paper revisions and withdrawals (PAPER-LEDGER-1, PAPER-WITHDRAW-GUARD-1)
+- Owner directive 2026-10-26: "papers should never disappear en masse; versioning needs to preserve changes across multiple revisions for auditing and provenance."
+  `docs/PAPER-LEDGER.md` has the detail; the DDL is in `migrations/living-paper/`.
+- Every change to a paper's body, status, version, title, abstract or metadata is one immutable row in living-paper `paper_change_ledger` (full prior body in
+  `paper_change_bodies`): read a paper's history from `v_paper_revisions`, never from `paper_version_history` (it keeps one body per version). A writer that changes `papers`
+  sets `change_actor` (`<worker>:<run id>`) and `change_reason` (different text for each change) in the same UPDATE, or its change is recorded as `unattributed`.
+- A trigger refuses more than 25 papers an hour (80 a day) leaving published, distributed or external_preprint, and more than 5 deleted an hour. An intended larger withdrawal
+  first inserts a reasoned, expiring `paper_withdrawal_override` row. Never drop the trigger to get a statement through; a refusal is the guard working.
+- A new trigger on `papers` must not run an FTS5 statement for an update that leaves `title` and `abstract` alone (PAPERS-FTS-DRIFT-1: it corrupted `papers_fts`).
+
 ## Issues and evidence
 - Open work lives in D1 `qnfo-audit.agent_issues`. Close an issue only with evidence in `issue_triage.close_evidence`
   (a live measurement, not "deployed").

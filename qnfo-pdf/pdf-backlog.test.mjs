@@ -189,3 +189,69 @@ test("the worker declares the scheduled handler, the cron and the version", () =
   assert.ok(/crons = \["\*\/10 \* \* \* \*"\]/.test(toml), "one */10 cron");
   assert.ok(/binding = "AUDIT"/.test(toml), "AUDIT binding declared");
 });
+
+// PDF-STALE-AFTER-BODY-EDIT-1 (1.7.3, 2026-10-26): the cron always passes a renderer version, and the body-changed check used to run only without one,
+// so a corrected body kept its old public PDF (135 papers lost their leaked appendices from the page and kept them in the download).
+function staleBodiesEnv({ rows, objects, listThrows, rendererStamp }) {
+  const living = fakeD1((sql, params) => {
+    if (/SELECT COUNT\(\*\) AS n FROM papers/.test(sql)) return [{ n: 0 }];
+    if (/pdf_path IS NULL OR pdf_path = ''\) ORDER BY created_at DESC LIMIT/.test(sql)) return [];
+    if (/SELECT slug, updated_at, pdf_path FROM papers/.test(sql)) return rows.map((r) => ({ slug: r.slug, updated_at: r.updated_at, pdf_path: "pdf/" + r.slug + ".pdf" }));
+    if (/slug IN/.test(sql)) return rows.filter((r) => params.includes(r.slug)).map((r) => ({ slug: r.slug, title: r.slug, body_md: BIG, updated_at: r.updated_at, pdf_path: "pdf/" + r.slug + ".pdf" }));
+    return [];
+  });
+  const puts = [];
+  const env = {
+    LIVING: living, AUDIT: null, BROWSER: {},
+    RELEASES: {
+      list: async () => { if (listThrows) throw new Error("R2 list failed"); return { objects: objects.map((o) => ({ key: "pdf/" + o.slug + ".pdf", uploaded: new Date(o.uploaded), customMetadata: { renderer: rendererStamp || RENDERER_VERSION } })), truncated: false }; },
+      put: async (k) => puts.push(k),
+    },
+  };
+  const deps = { renderFullHTML: () => "<html/>", renderPdf: async () => new Uint8Array(10).buffer, stash: async (e, slug) => "pdf/" + slug + ".pdf" };
+  return { env, deps, puts };
+}
+
+test("a corrected body re-renders its stored PDF even when the renderer stamp is current", async () => {
+  const rows = [{ slug: "corrected", updated_at: "2026-10-26 07:00:00" }, { slug: "untouched", updated_at: "2026-10-26 05:00:00" }];
+  const objects = [{ slug: "corrected", uploaded: "2026-10-26T06:00:00Z" }, { slug: "untouched", uploaded: "2026-10-26T06:00:00Z" }];
+  const { env, deps } = staleBodiesEnv({ rows, objects });
+  const out = await renderPdfBacklog(env, deps, { rendererVersion: RENDERER_VERSION });
+  assert.deepEqual(out.slugs, ["corrected"]);
+  assert.equal(out.refreshed, 1);
+});
+
+test("an old stale PDF is found behind many fresh newer ones (no window of the newest N papers)", async () => {
+  const rows = [];
+  const objects = [];
+  for (let i = 0; i < 40; i++) {
+    rows.push({ slug: "fresh-" + i, updated_at: "2026-10-26 0" + (i % 6) + ":00:00" });
+    objects.push({ slug: "fresh-" + i, uploaded: "2026-10-26T08:00:00Z" });
+  }
+  rows.push({ slug: "old-stale", updated_at: "2026-10-19 10:00:00" });
+  objects.push({ slug: "old-stale", uploaded: "2026-10-18T10:00:00Z" });
+  const { env, deps } = staleBodiesEnv({ rows, objects });
+  const out = await renderPdfBacklog(env, deps, { rendererVersion: RENDERER_VERSION });
+  assert.deepEqual(out.slugs, ["old-stale"]);
+});
+
+test("a corrected body is refreshed before a typesetting refresh, and a paper in both lists is rendered once", async () => {
+  const rows = [{ slug: "typeset-only", updated_at: "2026-10-26 05:00:00" }, { slug: "both", updated_at: "2026-10-26 07:00:00" }, { slug: "body-only", updated_at: "2026-10-26 07:30:00" }];
+  const { env, deps } = staleBodiesEnv({ rows, objects: [{ slug: "typeset-only", uploaded: "2026-10-26T06:00:00Z" }, { slug: "both", uploaded: "2026-10-26T06:00:00Z" }, { slug: "body-only", uploaded: "2026-10-26T06:00:00Z" }] });
+  // "typeset-only" and "both" carry an older renderer stamp; "both" and "body-only" changed after their upload
+  const stamps = { "pdf/typeset-only.pdf": "1.0.0", "pdf/both.pdf": "1.0.0" };
+  env.RELEASES.list = async () => ({ truncated: false, objects: ["typeset-only", "both", "body-only"].map((s) => ({ key: "pdf/" + s + ".pdf", uploaded: new Date("2026-10-26T06:00:00Z"), customMetadata: { renderer: stamps["pdf/" + s + ".pdf"] || RENDERER_VERSION } })) });
+  const out = await renderPdfBacklog(env, deps, { rendererVersion: RENDERER_VERSION, batch: 2 });
+  assert.equal(out.slugs.length, 2);
+  assert.deepEqual([...out.slugs].sort(), ["body-only", "both"], "the two corrected bodies come before the typesetting-only refresh");
+  const all = await renderPdfBacklog(env, deps, { rendererVersion: RENDERER_VERSION, batch: 6 });
+  assert.deepEqual([...all.slugs].sort(), ["body-only", "both", "typeset-only"]);
+  assert.equal(new Set(all.slugs).size, all.slugs.length, "no paper is rendered twice");
+});
+
+test("a failing R2 listing does not stop the tick or throw", async () => {
+  const { env, deps } = staleBodiesEnv({ rows: [{ slug: "x", updated_at: "2026-10-26 07:00:00" }], objects: [], listThrows: true });
+  const out = await renderPdfBacklog(env, deps, { rendererVersion: RENDERER_VERSION });
+  assert.equal(out.ok, true);
+  assert.equal(out.rendered, 0);
+});

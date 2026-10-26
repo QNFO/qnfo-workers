@@ -5,7 +5,7 @@
 // full-set rule follows the control plane the transformation loop and the merge runner use; and the recorded override
 // (scripts/suite-quarantine.txt) excuses a red suite only while its dated, referenced line is live.
 // Run: node --no-warnings scripts/run-suites.test.mjs   -> prints "N passed, 0 failed"
-import { readFileSync, mkdtempSync, mkdirSync, writeFileSync, rmSync } from "node:fs";
+import { readFileSync, mkdtempSync, mkdirSync, writeFileSync, rmSync, existsSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
@@ -119,6 +119,29 @@ const fc = readFileSync(join(root, "qnfo-fleet-control", "worker.js"), "utf8");
 const m = /var TP_CONTROL_PLANE = (\[[^\]]*\]);/.exec(fc);
 const tp = m ? JSON.parse(m[1]) : null;
 ok(tp && tp.slice().sort().join(",") === CONTROL_PLANE.slice().sort().join(","), "CONTROL_PLANE equals qnfo-fleet-control TP_CONTROL_PLANE", { tp, CONTROL_PLANE });
+
+// PR-GATE-SPEED-1: the runner publishes mode=full|scoped to $GITHUB_OUTPUT, so deploy-gate can skip the named steps that repeat a discovered suite
+{
+  const t = mkdtempSync(join(tmpdir(), "run-suites-mode-"));
+  for (const d of ["a", "b", "scripts", "qnfo-fleet-control"]) { mkdirSync(join(t, d)); writeFileSync(join(t, d, "x.test.mjs"), "process.exit(0);\n"); }
+  const mode = (args, changed) => {
+    const out = join(t, "gh-output-" + Math.random().toString(36).slice(2));
+    if (changed != null) writeFileSync(join(t, "changed.txt"), changed);
+    const r = spawnSync(process.execPath, ["--no-warnings", join(root, "scripts", "run-suites.mjs"), ...args, "--list"], { cwd: t, encoding: "utf8", env: { ...process.env, GITHUB_OUTPUT: out } });
+    return { status: r.status, mode: existsSync(out) ? readFileSync(out, "utf8").trim() : null, stdout: r.stdout };
+  };
+  let m = mode(["--changed-file", join(t, "changed.txt")], "a\n");
+  ok(m.status === 0 && m.mode === "mode=scoped", "mode: one ordinary worker changed -> scoped", m);
+  m = mode(["--changed-file", join(t, "changed.txt")], "scripts\n");
+  ok(m.mode === "mode=full", "mode: a shared path (scripts) changed -> full", m);
+  m = mode(["--changed-file", join(t, "changed.txt")], "qnfo-fleet-control\n");
+  ok(m.mode === "mode=full", "mode: a control-plane worker changed -> full", m);
+  m = mode(["--all"]);
+  ok(m.mode === "mode=full", "mode: --all -> full", m);
+  const noOut = spawnSync(process.execPath, ["--no-warnings", join(root, "scripts", "run-suites.mjs"), "--all", "--list"], { cwd: t, encoding: "utf8", env: { ...process.env, GITHUB_OUTPUT: "" } });
+  ok(noOut.status === 0, "mode: no GITHUB_OUTPUT (local run) is not an error", noOut.stderr);
+  rmSync(t, { recursive: true, force: true });
+}
 
 console.log(pass + " passed, " + fail + " failed");
 process.exit(fail ? 1 : 0);

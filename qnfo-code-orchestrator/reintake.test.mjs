@@ -72,7 +72,7 @@ function mkEnv(issues, tasks, opts) {
       async all() {
         if (/FROM code_tasks/.test(q) && (opts.tasksUnreadable || (opts.noMergeNote && /merge_note/.test(q)))) throw new Error("D1_ERROR: no such column: merge_note");
         if (/FROM agent_issues (a LEFT JOIN v_issue_queue_v2 q ON q\.id = a\.id )?WHERE (a\.)?status='open' AND (a\.)?description LIKE '%code-task:%'/.test(q)) return { results: issues.filter((r) => r.description.includes("code-task:")) };
-        if (/FROM code_tasks WHERE goal LIKE \?/.test(q)) { const tag = String(a[0]).replace(/%$/, ""); return { results: tasks.filter((t) => t.goal.indexOf(tag) === 0).sort((x, y) => (x.created_at < y.created_at ? 1 : -1)) }; }
+        if (/FROM code_tasks WHERE goal LIKE \?/.test(q)) { const tag = String(a[0]).replace(/%$/, ""); return { results: tasks.filter((t) => t.goal.indexOf(tag) === 0 || (/ OR id = \?/.test(q) && a[1] && t.id === a[1])).sort((x, y) => (x.created_at < y.created_at ? 1 : -1)) }; }
         if (/FROM service_registry/.test(q)) return { results: [{ service: "qnfo-infra" }, { service: "qnfo-cloud-ops" }] };
         return { results: [] };
       },
@@ -154,6 +154,27 @@ function mkEnv(issues, tasks, opts) {
   const w2 = mkEnv(issues, tasks);
   await __intake(w2.env, 2);
   ok(w2.inserted.length === 1 && w2.inserted[0].goal.length <= 6000 && /^\[issue #2085\] \[retry 1\] METRIC-TRIGGER-806-X: panel\nPREVIOUS ATTEMPT ct_0jiys30uonkcps FAILED: required check\(s\) failed on c9d25b5: gate=failure; failing: gate: FAIL q08-signal-engine\/quality\.test\.mjs/.test(w2.inserted[0].goal) && /4000 !== 2000/.test(w2.inserted[0].goal), "end to end: the retried task's goal carries the failing suite and values ahead of the long issue body", w2.inserted[0] && w2.inserted[0].goal.slice(0, 300));
+}
+// INTAKE-IM-DEDUPE-1: the RED-DRAIN-1 dispatch inserts ct_im<issue> directly, its goal names the issue in the middle ("-- issue #N"), not as the
+// "[issue #N]" prefix, so intake built a second task for an issue the dispatch already held (issue 1000209: ct_im1000209 and ct_i81nluzo0dt3hf, PRs 4282 and 4278).
+{
+  const issue = () => [{ id: 1000209, title: "PUB-STRUCTURE-ORDER-1: enforce ordered unique sections", source: "claude-session:im-dedupe", description: "Do it.\ncode-task: repo=qnfo-workers path=qnfo-infra/worker.js" }];
+  const im = (status, extra) => Object.assign({ id: "ct_im1000209", goal: "PUB-STRUCTURE-ORDER-1: enforce ordered unique sections before research publication -- issue #1000209 (RED-DRAIN-1 dispatch).", status, created_at: "2026-10-25 16:36:46", updated_at: "2026-10-25T16:40:00Z" }, extra || {});
+  let w = mkEnv(issue(), [im("published")]);
+  await __intake(w.env, 2);
+  ok(w.inserted.length === 0, "an issue whose ct_im task is published (in flight) gets no second task", w.inserted);
+  w = mkEnv(issue(), [im("queued")]);
+  await __intake(w.env, 2);
+  ok(w.inserted.length === 0, "an issue whose ct_im task is queued gets no second task", w.inserted);
+  w = mkEnv(issue(), [im("merged")]);
+  await __intake(w.env, 2);
+  ok(w.inserted.length === 0, "an issue whose ct_im task merged is not taken again (it closes on its own probe)", w.inserted);
+  w = mkEnv(issue(), [im("failed", { last_error: "stale base", updated_at: "2026-10-20T00:00:00Z", created_at: "2026-10-20 00:00:00" })]);
+  await __intake(w.env, 2);
+  ok(w.inserted.length === 1 && /^\[issue #1000209\] \[retry 1\] PUB-STRUCTURE-ORDER-1/.test(w.inserted[0].goal), "a ct_im task that ended long ago is retried once, as retry 1 of the same issue", w.inserted);
+  w = mkEnv(issue(), [{ id: "ct_im1000210", goal: "OTHER-1 -- issue #1000210", status: "published", created_at: "2026-10-25 16:36:46", updated_at: "2026-10-25T16:40:00Z" }]);
+  await __intake(w.env, 2);
+  ok(w.inserted.length === 1 && /^\[issue #1000209\] PUB-STRUCTURE-ORDER-1/.test(w.inserted[0].goal), "another issue's ct_im task does not hold this one", w.inserted);
 }
 console.log(pass + " passed, " + fail + " failed");
 process.exit(fail ? 1 : 0);

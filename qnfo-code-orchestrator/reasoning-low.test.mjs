@@ -121,5 +121,18 @@ ok(Array.isArray(h.capabilities) && h.capabilities.includes("reasoning-low"), "h
   ok(c.ok && inputs.length === 1 && inputs[0].input.reasoning_effort === "low", "7 a missing ops_config leaves the option on", inputs.length && inputs[0].input.reasoning_effort);
 }
 
+// 8. EMPTY-REPLY-NOTHINK-1: an empty kimi reply is asked once more with thinking off, and that answer is used
+{
+  const { env, inputs, id } = await run(KIMI, ["", EDIT]);
+  ok(inputs.length === 2 && !("chat_template_kwargs" in inputs[0].input) && inputs[1].input.chat_template_kwargs && inputs[1].input.chat_template_kwargs.thinking === false, "8a the second call turns thinking off", inputs.map((x) => Object.keys(x.input)));
+  ok(row(env, id).step === "verify" || row(env, id).status === "ready_to_publish", "8b the retried reply is used", { step: row(env, id).step, status: row(env, id).status });
+  const ev = env.AUDIT_DB._db.prepare("SELECT text FROM cloud_ops_events WHERE kind = 'code-task.empty-retry'").all();
+  ok(ev.length === 1 && /thinking off/.test(ev[0].text), "8c event code-task.empty-retry", ev);
+}
+{
+  const { inputs } = await run(GLM, ["", EDIT]);
+  ok(inputs.length === 1, "8d glm-5.3 (reasoning cannot be turned off) is not asked again in the same call", inputs.length);
+}
+
 console.log("reasoning-low.test: " + pass + " passed, " + fail + " failed");
 process.exit(fail ? 1 : 0);
