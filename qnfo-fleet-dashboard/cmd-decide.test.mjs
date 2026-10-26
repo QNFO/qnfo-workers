@@ -1,4 +1,4 @@
-// DASH-OWNER-ACTIONS-1 offline suite (qnfo-fleet-dashboard 1.68.0, agent_issues 100360). Owner report 2026-10-20: "Fleet command line
+// DASH-OWNER-ACTIONS-1 offline suite (qnfo-fleet-dashboard 1.69.0, agent_issues 100360). Owner report 2026-10-20: "Fleet command line
 // not executing. Need easier way to approve owner items and diagnose/resolve issues and problems from fleet dashboard." The approvals
 // the owner typed (11:20, 11:21 and 11:34Z) went to the AI path and, when three router legs timed out, nothing executed.
 // Proves: approve, decline, diagnose, retry and resolve are parsed in code and never call a model (T1, T12); a bare approve lists the
@@ -9,13 +9,13 @@
 // model does not answer, the matched intent comes back as tappable buttons that are stored (T10); resolve closes only on a passing
 // probe (T11); diagnose is an open read that hides titles from a stranger (T12); cmdFallback keeps working alone in a vm (T13); the
 // card buttons are the owner's only, 44 px, wrapped for a 360 px phone and delegated so the 15 s refresh keeps them (T14); retry (T15).
-// Review round (1.68.0): the hand-off is filed BEFORE anything is recorded and an approval never spends an Ask slot (T17); Approve and Decline
+// Review round (1.69.0): the hand-off is filed BEFORE anything is recorded and an approval never spends an Ask slot (T17); Approve and Decline
 // are offered only for a card that asks for a decision and is not a legal, signing, money, credential or account step (T18); a card with
 // no issue still hands the fleet a task it can act on, and a pick-one card needs the option (T19); a sentence that merely starts with a
 // verb belongs to the model, and retry runs unasked only for 'retry <reference>' (T20).
-// Review round 2 (1.68.0): the Ask cap exempts only the server's own hand-off marker, never text a stranger controls (T17h-l); a PR, run or
+// Review round 2 (1.69.0): the Ask cap exempts only the server's own hand-off marker, never text a stranger controls (T17h-l); a PR, run or
 // commit number in a card's text is never an issue id (T21).
-// Review round 3 (1.68.0): two approvals are two tasks under main's OWNER-PROMPT-TWIN-LINK-1 twin check, because the hand-off opens with what tells decisions apart and
+// Review round 3 (1.69.0): two approvals are two tasks under main's OWNER-PROMPT-TWIN-LINK-1 twin check, because the hand-off opens with what tells decisions apart and
 // is never twin-linked (T22); a card in any status other than open is read by key only by the signed-in owner or a token holder, never by a stranger (T23).
 // Run: node qnfo-fleet-dashboard/cmd-decide.test.mjs   -> prints "N passed, 0 failed"
 import { DatabaseSync } from "node:sqlite";

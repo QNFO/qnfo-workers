@@ -1,12 +1,7 @@
 {
-  "audited_at": "2026-10-26 08:38:43",
-  "d1_write_failures": [
-    [
-      "qnfo-observability",
-      "The read operation timed out (after 3 attempts, D1-TRANSIENT-RETRY-1)"
-    ]
-  ],
-  "d1_writes_ok": 122,
+  "audited_at": "2026-10-26 08:45:11",
+  "d1_write_failures": [],
+  "d1_writes_ok": 123,
   "guard": {
     "_guard_rc": 0,
     "ahead": [],
@@ -620,7 +615,7 @@
       },
       {
         "dir": "qnfo-fleet-control",
-        "version": "0.49.2-probe-author-binding",
+        "version": "0.49.3-pr-sla-groups",
         "worker": "qnfo-fleet-control"
       },
       {
@@ -1353,9 +1348,9 @@
       "worker": "qnfo-fleet-calibrator"
     },
     "qnfo-fleet-control": {
-      "before": "0.49.2-probe-author-binding",
+      "before": "0.49.3-pr-sla-groups",
       "http": 200,
-      "live": "0.49.2-probe-author-binding",
+      "live": "0.49.3-pr-sla-groups",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-fleet-control"
@@ -1781,5 +1776,5 @@
       "worker": "voice-stt"
     }
   },
-  "stale_rows_purged": 1
+  "stale_rows_purged": 0
 }

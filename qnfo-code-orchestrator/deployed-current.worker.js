@@ -22,7 +22,7 @@
 // 'read' with attempts >= 1, CROSS-FAMILY-1 (ct_im2403) among them. repoSlug() now strips one leading owner segment at
 // intake and at read, so the live queue drains without a data migration and no future owner-qualified row can wedge the
 // loop. The 16 existing rows are repaired in D1 separately. */
-var VERSION = "0.28.2-codeagent"; // 0.28.1 EMPTY-REPLY-NOTHINK-1: an empty kimi-k2.7-code reply (its reasoning used the whole output budget, about a third of its calls on 2026-10-25/26) is asked once more in the same call with thinking off, instead of spending a failed attempt. 0.28.0 FLEET-TICK-SPLIT-1: a second heartbeat statement (fleet_tick_heavy) for heavy D1 steps. 0.27.1 CODE-LOOP-BUDGET-CLAIM-SCAN-1: bounded scans past held claims do not consume the capped tick's one executable step.
+var VERSION = "0.29.0-sql-verify"; // 0.29.0 SQL-VERIFY-1 (2026-10-26, pillar autonomy; minor: a file type the loop can now verify): a task on a migrations/*.sql file is scanned and checked (quotes, comments, parentheses, terminated, header lines kept, size 0.5x to 4x of a base of 400 characters or more) instead of parking as needs_human "no deterministic verifier for .sql" (LOOP-BREAKER-1 issue 1000330). prior 0.28.2-codeagent // 0.28.1 EMPTY-REPLY-NOTHINK-1: an empty kimi-k2.7-code reply (its reasoning used the whole output budget, about a third of its calls on 2026-10-25/26) is asked once more in the same call with thinking off, instead of spending a failed attempt. 0.28.0 FLEET-TICK-SPLIT-1: a second heartbeat statement (fleet_tick_heavy) for heavy D1 steps. 0.27.1 CODE-LOOP-BUDGET-CLAIM-SCAN-1: bounded scans past held claims do not consume the capped tick's one executable step.
 /* 0.26.0 VERIFIER-FAILURE-REPLAY-1 (2026-10-25, issue 1000111; pillar autonomy; minor: the loop now recovers terminal tasks after a verifier fix): once, a failed verify-step task with the generic container compile failure is reset to read and retried after deployment, only when it has no branch/PR or active task on the same path. The fresh read and all existing verifiers still gate publication. */
 /* 0.25.4 ARRAYBUFFER-EXEC-OUTPUT-1 (2026-10-25, issue 1000111): Container.exec exposes stdout/stderr as ArrayBuffer; treating them as non-Uint8Array discarded COMPILE_OK and made valid Python fail verification. Normalize both before the existing byte cap; container-output.test.mjs covers the fix. */
 /* 0.25.0 PLAN-TRUST-PARITY-1 + PLAN-RELAPSE-BRIEF-1 (2026-10-20, agent_issues 100303, owner task op-mvg9vjkbaedc; pillar autonomy; minor: the planner now decides on a list it did not decide on before): plan accepts every source the merge runner trusts (ops_config code_merge_trusted_sources, one list), and a metric-relapse issue is planned from the structured fields of metric_registry and analytics_metric_triggers instead of its prose. */
@@ -339,7 +339,7 @@ const DEFAULT_LADDER = ["@cf/moonshotai/kimi-k2.7-code", "@cf/zai-org/glm-5.3", 
 const REASONING_OUT = { "@cf/moonshotai/kimi-k2.7-code": 9216, "@cf/zai-org/glm-5.3": 16384 };
 const LADDER_RATES = { "@cf/openai/gpt-oss-120b": [31818, 68182], "@cf/moonshotai/kimi-k2.7-code": [86364, 363636], "@cf/zai-org/glm-5.3": [127273, 400000], "@cf/meta/llama-3.3-70b-instruct-fp8-fast": [26668, 204805] };
 const DENY_PATH = /^(\.github\/|\.git\/)|(^|\/)(wrangler\.toml|deploy-targets\.txt|\.env[^/]*)$/i;
-const VERIFIABLE = ["py", "json", "md", "txt"];
+const VERIFIABLE = ["py", "json", "md", "txt", "sql"];
 const _schemaDbs = new WeakSet(); // schema is ensured once per D1 binding object, not once per module
 
 function ladder(env) {
@@ -2114,6 +2114,40 @@ async function probeDynamicCpu(env) {
   return { ok: true, enforced: !timedOut, ms: ms, wall_timeout_ms: DYN_TIMEOUT_MS, error: msg.slice(0, 200),
     advice: timedOut ? "NOT enforced within " + DYN_TIMEOUT_MS + "ms: keep JS_VERIFY off" : "enforced: safe to set JS_VERIFY=dynamic" };
 }
+// SQL-VERIFY-1 (0.29.0, LOOP-BREAKER-1 issue 1000330, 2026-10-26): a task on a migrations/*.sql file parked as needs_human "no deterministic verifier for .sql" three
+// times in 24 h (migrations/2026-10-26-management-personas.sql), although the merge runner has merged migration files since MERGE-SCOPE-DATA-SURFACES-1: the
+// worker could not tell a good proposal from a broken one, so it never produced one. This is the deterministic part that needs no database: the statements are
+// scanned (quotes with '' escapes, -- and block comments, parentheses), the file must end in a ';', a proposal may not lose a header line the base opts in with
+// (APPLY-BY, DB, Rollback, BACKUP) and, for a base of 400 characters or more, may not shrink below half or grow past four times it (a small file may grow without bound). What the file does to the database is verified by the pull request
+// gate (scripts/apply_migrations.py --check on every changed migration) and by migration-runner's own run, as for every other migration.
+function sqlScan(text) {
+  var depth = 0, quote = "", last = "", i = 0, n = text.length;
+  while (i < n) {
+    var c = text.charAt(i), d = text.charAt(i + 1);
+    if (quote) { if (c === quote) { if (d === quote) { i += 2; continue; } quote = ""; } i++; continue; }
+    if (c === "-" && d === "-") { while (i < n && text.charAt(i) !== "\n") i++; continue; }
+    if (c === "/" && d === "*") { var end = text.indexOf("*/", i + 2); if (end < 0) return { problem: "unterminated block comment" }; i = end + 2; continue; }
+    if (c === "'" || c === '"' || c === "`") { quote = c; last = c; i++; continue; }
+    if (c === "(") depth++;
+    else if (c === ")") { depth--; if (depth < 0) return { problem: "unbalanced ')'" }; }
+    if (!/\s/.test(c)) last = c;
+    i++;
+  }
+  if (quote) return { problem: "unterminated quote " + quote };
+  if (depth !== 0) return { problem: "unbalanced '('" };
+  return { last: last };
+}
+function sqlVerify(proposal, base) {
+  var sc = sqlScan(proposal);
+  if (sc.problem) return { verdict: "fail", error: "SQL does not scan: " + sc.problem };
+  if (sc.last !== ";") return { verdict: "fail", error: "the last statement is not terminated with ';' (a truncated rewrite?)" };
+  var heads = String(base || "").split("\n").map(function(l) { var m = /^--\s*(APPLY-BY|DB|Rollback|BACKUP)\s*:/i.exec(l); return m ? m[1].toLowerCase() : null; }).filter(Boolean);
+  var have = String(proposal).split("\n").map(function(l) { var m = /^--\s*(APPLY-BY|DB|Rollback|BACKUP)\s*:/i.exec(l); return m ? m[1].toLowerCase() : null; }).filter(Boolean);
+  for (var h = 0; h < heads.length; h++) if (have.indexOf(heads[h]) < 0) return { verdict: "fail", error: "the proposal drops the '-- " + heads[h].toUpperCase() + ":' header line the file opts in with" };
+  var ratio = proposal.length / Math.max(String(base || "").length, 1);
+  if (String(base || "").length >= 400 && (ratio < 0.5 || ratio > 4)) return { verdict: "fail", error: "size changed by x" + ratio.toFixed(2) + " (allowed 0.5x to 4x for a migration): looks truncated or runaway" };
+  return { verdict: "ok" };
+}
 async function verify(env, task, base, proposal) {
   const e = ext(task.path);
   if ((e === "js" || e === "mjs") && !(await jsVerifyOn(env))) return { verdict: "no-verifier", error: "JavaScript verification via Dynamic Workers is off (set JS_VERIFY=dynamic after POST /v1/probe/dynamic-cpu reports enforced:true)" };
@@ -2121,6 +2155,7 @@ async function verify(env, task, base, proposal) {
   if (/\u0000/.test(proposal)) return { verdict: "fail", error: "proposal contains NUL bytes" };
   if (!proposal.trim()) return { verdict: "fail", error: "proposal is empty" };
   if (e === "js" || e === "mjs") return await jsSyntaxCheck(env, proposal);
+  if (e === "sql") return sqlVerify(proposal, base);
   if (e === "json") { try { JSON.parse(proposal); return { verdict: "ok" }; } catch (x) { return { verdict: "fail", error: "invalid JSON: " + String(x.message).slice(0, 200) }; } }
   if (e === "py") {
     if (proposal.length > MAX_PY_CHARS) return { verdict: "fail", error: "python proposal too large to verify (" + proposal.length + " > " + MAX_PY_CHARS + ")" };

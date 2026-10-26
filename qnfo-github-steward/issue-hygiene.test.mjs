@@ -163,4 +163,41 @@ const h = await (await w.fetch(new Request("https://s.test/health"), env)).json(
 assert.ok(h.capabilities.some((c) => /^roadmap-scope/.test(c)) && h.limitations.some((l) => /roadmap source taken out of the mirror scope/.test(l)));
 const [maj, min] = String(h.version).split("-")[0].split(".").map(Number);
 assert.ok(maj === 0 && min >= 8, "VERSION is at least 0.8.0: " + h.version);
+assert.ok(h.capabilities.some((c) => /ROADMAP-TWIN-ROWS-1/.test(c)), "the capability line names the twin rule");
+// 9. ROADMAP-TWIN-ROWS-1 (0.9.0): a roadmap row whose artifact is an agent issue is that issue's twin, whatever source wrote it. Measured 2026-10-26:
+// the source best-practice-2026 wrote 31 rows in an hour (30 of artifact_type agent_issue, item AI-<id>, plus one goal) and each doubled a [#id] ticket.
+const twinIns = db.prepare("INSERT INTO roadmap_implementation (item, source, title, artifact_type, artifact_ref, status, created_at) VALUES (?, 'best-practice-2026', ?, 'agent_issue', 'BP26.X', 'planned', ?)");
+const twinMirrored = Number(twinIns.run("AI-1000347", "BP26 2.10 twin", created).lastInsertRowid);
+rmLink.run(twinMirrored, ++num, "planned");
+gIssues.push({ number: num, node_id: "N" + num, title: "[RM-" + twinMirrored + "] AI-1000347", labels: [{ name: "roadmap" }, { name: "program:ops" }], state: "open", milestone: null });
+const twinGh = num;
+const twinUnlinked = Number(twinIns.run("AI-1000348", "BP26 2.11 twin", created).lastInsertRowid);
+const goalRow = seed("GL-BP26-CATALOGUE", "best-practice-2026", "planned", false);
+calls = []; comments = [];
+const rt = await tick();
+const twinIssue = gIssues.find((i) => i.number === twinGh);
+assert.equal(twinIssue.state, "closed", "the twin's mirror, filed before the rule, is closed");
+assert.equal(twinIssue.reason, "not_planned", "closed not_planned, never as completed");
+assert.ok(comments.some((c) => c.n === twinGh && /PORTFOLIO-NOT-ISSUES-1/.test(c.body) && /twin/.test(c.body) && /not a verification/.test(c.body)), "the close says why and claims no verification");
+assert.ok(!gIssues.some((i) => /AI-1000348/.test(i.title)), "an unlinked twin row is never filed");
+assert.equal(db.prepare("SELECT COUNT(*) c FROM roadmap_gh_links WHERE roadmap_id = ?").get(twinUnlinked).c, 0, "and no link is created for it");
+assert.ok(gIssues.some((i) => /GL-BP26-CATALOGUE/.test(i.title) && i.state === "open"), "a non-twin row of the same new source (the goal) is filed like any roadmap item");
+assert.ok(!rt.errors.some((e) => /mass state flip/.test(e.why)), "the twin close is an explained decision, not a GitHub anomaly");
+assert.equal(db.prepare("SELECT status FROM roadmap_implementation WHERE id = ?").get(twinMirrored).status, "planned", "D1 is untouched: the roadmap row stays planned");
+// a converged tick writes nothing; a hand reopen is closed again; the twin is not reopened by D1 status.
+calls = [];
+await tick();
+assert.deepEqual(writes(), [], "a converged tick writes nothing to GitHub: " + writes().join(","));
+twinIssue.state = "open";
+await tick();
+assert.equal(twinIssue.state, "closed", "a hand reopen of a twin mirror is closed again");
+// the rule is on artifact_type, not on the source: the same row under the 'agent_issues' source name or any other behaves the same.
+const otherSrc = Number(db.prepare("INSERT INTO roadmap_implementation (item, source, title, artifact_type, artifact_ref, status, created_at) VALUES ('AI-1000349', 'some-future-batch', 't', 'agent_issue', 'X', 'planned', ?)").run(created).lastInsertRowid);
+await tick();
+assert.ok(!gIssues.some((i) => /AI-1000349/.test(i.title)), "a twin row from a source nobody has seen is not filed either");
+assert.equal(db.prepare("SELECT COUNT(*) c FROM roadmap_gh_links WHERE roadmap_id = ?").get(otherSrc).c, 0);
+// the public tree counts work items only.
+const tree2 = await (await w.fetch(new Request("https://s.test/roadmap"), env)).json();
+assert.ok(JSON.stringify(tree2).length > 0);
+
 console.log("issue-hygiene.test.mjs ok");

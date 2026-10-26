@@ -10,8 +10,9 @@ var __defProp222 = Object.defineProperty;
 var __name222 = /* @__PURE__ */ __name22((target, value) => __defProp222(target, "name", { value, configurable: true }), "__name");
 var __name2222 = /* @__PURE__ */ __name222((target, value) => Object.defineProperty(target, "name", { value, configurable: true }), "__name");
 // VERSION-LINE-SPLIT-1 (agent_issues 100220): the release notes sit one per line below this statement, newest first, so a VERSION bump is a one-line patch; add a new note as the first line under it.
-var VERSION = "1.68.0";
-/* 1.68.0 DASH-OWNER-ACTIONS-1 (2026-10-26, agent_issues 100360, pillar autonomy; minor: the command line decides owner cards without a model): approve, decline, diagnose, retry and resolve are parsed in code and resolve their target (issue id, #id, card key, UPPER-DASH keyword, queue number, bare verb) from the queue and qnfo-audit; a verb is a command only when it stands alone or names its target, so a sentence that merely starts with one ("Resolve next fleet open item and deploy", "Retry the failed deploy of PR #1001") stays with the model and retry runs unasked only for "retry <reference>"; approve is destructive (a code from the last 15 minutes) and, like decline, the owner session's own (the loop token is refused); an approval is filed with the fleet FIRST as ONE task that carries the card's title, ask and why, the approved items, the chosen option, the doer and the closing probe (ownerTaskFile: no Ask cap, and the row carries a server-set marker, owner_prompts.visitor = owner-decision, that alone keeps it out of the Ask count; text a stranger types never does), a PR, run or commit number in a card's text is never read as an issue id, and only then recorded (human_responses, the card, an OWNER-DECISION line on the issues it names), so a failed hand-off records nothing and a retry finds the same task; Approve / Decline / Diagnose buttons (per item on a numbered card) appear only on a card whose action or title asks for a decision, a pick-one card needs the option, and a card that matches default_approve_markers kind hard (money, legal, signing, credential, account) gets Diagnose and Done only and is refused by the server; the hand-off opens with the approved items, the card key and the decision number and is never linked to another ticket by the owner-prompt twin check, so two approvals are two tasks, and a card that is not open on the page is read by key only by the signed-in owner; a bare six-digit line is a sign-in code only while a code waits; reject/ratify of a non-objective id read as decline/approve; when the model does not answer, the fleet returns the matched intent as tappable buttons and stores them. */
+var VERSION = "1.69.0";
+/* 1.69.0 DASH-OWNER-ACTIONS-1 (2026-10-26, agent_issues 100360, pillar autonomy; minor: the command line decides owner cards without a model): approve, decline, diagnose, retry and resolve are parsed in code and resolve their target (issue id, #id, card key, UPPER-DASH keyword, queue number, bare verb) from the queue and qnfo-audit; a verb is a command only when it stands alone or names its target, so a sentence that merely starts with one ("Resolve next fleet open item and deploy", "Retry the failed deploy of PR #1001") stays with the model and retry runs unasked only for "retry <reference>"; approve is destructive (a code from the last 15 minutes) and, like decline, the owner session's own (the loop token is refused); an approval is filed with the fleet FIRST as ONE task that carries the card's title, ask and why, the approved items, the chosen option, the doer and the closing probe (ownerTaskFile: no Ask cap, and the row carries a server-set marker, owner_prompts.visitor = owner-decision, that alone keeps it out of the Ask count; text a stranger types never does), a PR, run or commit number in a card's text is never read as an issue id, and only then recorded (human_responses, the card, an OWNER-DECISION line on the issues it names), so a failed hand-off records nothing and a retry finds the same task; Approve / Decline / Diagnose buttons (per item on a numbered card) appear only on a card whose action or title asks for a decision, a pick-one card needs the option, and a card that matches default_approve_markers kind hard (money, legal, signing, credential, account) gets Diagnose and Done only and is refused by the server; the hand-off opens with the approved items, the card key and the decision number and is never linked to another ticket by the owner-prompt twin check, so two approvals are two tasks, and a card that is not open on the page is read by key only by the signed-in owner; a bare six-digit line is a sign-in code only while a code waits; reject/ratify of a non-objective id read as decline/approve; when the model does not answer, the fleet returns the matched intent as tappable buttons and stores them. */
+/* 1.68.0 OWNER-QUEUE-IDENTITY-ONLY-1 (2026-10-26, minor): code-loop and issue-loop items leave the owner count and show as "The fleet is handling"; only identity-bound items say they need the owner. */
 /* 1.67.2-codeagent FLEET-TICK-HEAVY-SECOND-PRODUCER-1 (2026-10-26, issue 1000271, patch): the scheduled tick also inserts a guarded fleet_tick_heavy row (one per 9 minutes), so heavy D1 steps keep running when qnfo-code-orchestrator is down. */
 /* 1.67.1 SUITE-IDLE-TIMER-1 (2026-10-26, patch): runRefresh clears its REFRESH-DEADLINE-1 timer when the race settles. */
 /* 1.67.0 MANAGEMENT-PERSONAS-3 / ECOSYSTEM-LOOP-1 (2026-10-26, pillar autonomy): /managers and /api/managers show the fleet's quality index (share of measured metrics on target) for the fleet and each program with its 24-hour change, the issue families that keep reopening, and the root-cause issues the managers filed for them (quality_trend, issue_recurrence_now). */
@@ -2715,6 +2716,7 @@ function rtQueueDigest(v) {
     urgent: v.urgent,
     items: v.items || [],
     receipts: v.receipts || [],
+    fleet_handling: v.fleet_handling ? v.fleet_handling.count : 0,
     upcoming: v.upcoming || [],
     blind: v.blind || [],
     decision: v.decision,
@@ -6605,6 +6607,7 @@ function ownerMailView(v) {
   }
   return v;
 }
+var FLEET_HANDLED_SOURCES = ["code-loop", "issue-loop"];
 async function collectHumanActions(env) {
   const items = [];
   const blind = [];
@@ -7303,6 +7306,15 @@ async function humanView(env, st, ctx) {
   h.items = h.items.filter(function(i) {
     return !i.receipt;
   });
+  // OWNER-QUEUE-IDENTITY-ONLY-1 (owner 2026-10-26: "Why do so many things need me? I'm not doing any of them."): a parked code task or an
+  // issue-loop dispatch is fleet work (HUMAN-ITEMS-AUTOMATIC-1; BREACH-ONE-MEANING-1 (PR 4444) returns it to the fleet as failed at birth).
+  // It is listed apart as "The fleet is handling", never in the count, the banner or the area queues.
+  const fleetHandling = h.items.filter(function(i) {
+    return FLEET_HANDLED_SOURCES.indexOf(i.source) >= 0;
+  });
+  h.items = h.items.filter(function(i) {
+    return FLEET_HANDLED_SOURCES.indexOf(i.source) < 0;
+  });
   let gov = null;
   try {
     gov = meta.human_gov_snapshot ? JSON.parse(meta.human_gov_snapshot) : null;
@@ -7395,6 +7407,9 @@ if (gov && gov.cost) {
     }).length,
     items,
     receipts,
+    fleet_handling: { count: fleetHandling.length, items: fleetHandling.map(function(i) {
+      return { key: i.key, source: i.source, title: i.title, why: i.why, age: i.age };
+    }) },
     upcoming,
     blind: h.blind,
     // OWNER-SURFACE-HONESTY-1: inbox mail that owes no reply (sender domain, category, reason; never a subject), so a missing
@@ -8038,6 +8053,12 @@ function humanFragment(v) {
   if (v.upcoming && v.upcoming.length) {
     o.push('<details class="card up"><summary>Coming up <span class="ct">' + v.upcoming.length + "</span></summary><ul>");
     for (const it of v.upcoming) o.push("<li><b>" + e(it.due) + "</b> " + e(it.title) + (it.action ? ' <span class="meta">&mdash; ' + e(it.action) + "</span>" : "") + (/^https:\/\//.test(it.url || "") ? ' <a href="' + e(it.url) + '" rel="noopener">open</a>' : "") + "</li>");
+    o.push("</ul></details>");
+  }
+  // OWNER-QUEUE-IDENTITY-ONLY-1: fleet work the owner can read about but is never asked to do.
+  if (v.fleet_handling && v.fleet_handling.count) {
+    o.push('<details class="card up" id="fleet-handling"><summary>The fleet is handling <span class="ct">' + e(v.fleet_handling.count) + '</span></summary><p class="meta">Parked code tasks and issue-loop items. The fleet re-plans each one; none of these needs you.</p><ul>');
+    for (const it of v.fleet_handling.items) o.push("<li><b>" + e(String(it.title || "").slice(0, 140)) + "</b> <span class=\"meta\">" + e(String(it.source || "")) + "</span></li>");
     o.push("</ul></details>");
   }
   // OWNER-REQUEST-RECEIPT-1: how the owner's own requests ended. Title and issue number only: the issue text can quote private notes.
@@ -12972,7 +12993,7 @@ async function conExec(env, owner, op, args) {
   }
   return { ok: false, error: "unknown console action " + op };
 }
-// DASH-OWNER-ACTIONS-1 (1.65.0 build, reviewed and corrected in 1.68.0; agent_issues 100360; owner report 2026-10-20: "Fleet command line not executing. Need easier way to
+// DASH-OWNER-ACTIONS-1 (1.65.0 build, reviewed and corrected in 1.69.0; agent_issues 100360; owner report 2026-10-20: "Fleet command line not executing. Need easier way to
 // approve owner items and diagnose/resolve issues and problems from fleet dashboard."). The words an owner types to decide are
 // commands, not questions for a model: approve, decline, diagnose, retry and resolve are parsed here, find their target in the
 // queue and in qnfo-audit, and never call a model, so a stalled router (three router_timeout legs at 11:20, 11:21 and 11:34Z on
@@ -12981,16 +13002,16 @@ async function conExec(env, owner, op, args) {
 // is recorded (human_responses, the card, an OWNER-DECISION line on each issue the card names) and an approval is handed to the
 // fleet as ONE task that carries the card, the approved items, the doer and the issue's closing probe; the dashboard never says that
 // the thing approved has changed, because only the doer's work and the issue's own probe can show it.
-// 1.68.0 review: (1) the hand-off is filed BEFORE anything is recorded (ownerTaskFile, no Ask cap) so an approval cannot be lost; (2) Approve
+// 1.69.0 review: (1) the hand-off is filed BEFORE anything is recorded (ownerTaskFile, no Ask cap) so an approval cannot be lost; (2) Approve
 // and Decline exist only for a card that ASKS for a decision (approve, authorize, decline, pick one, choose one) and is not a hard-marker
 // step (default_approve_markers kind hard: money, legal, signing, credential, account): those get Diagnose and Done; (3) a pick-one card needs
 // the option and the hand-off always carries the card's title, ask and why; (4) a verb is a command only when it stands alone or names its
 // target, so "Resolve next fleet open item and deploy" and "Retry the failed deploy of PR #1001" stay with the model, and retry runs unasked
 // only for "retry <reference>".
-// 1.68.0 review round 2: (5) the Ask cap leaves out the hand-off by the marker the server writes (OWNER_HANDOFF_VISITOR), never by its text, so a
+// 1.69.0 review round 2: (5) the Ask cap leaves out the hand-off by the marker the server writes (OWNER_HANDOFF_VISITOR), never by its text, so a
 // stranger's Ask that starts "OWNER-DECISION from" still counts; (6) decIssueIds skips "#NNN" after PR, run, workflow or commit (decGithubNumber,
 // shared with decRefs): agent_issues ids pass 100,000, so a PR number is usually also a real, unrelated issue row.
-// 1.68.0 review round 3: (7) OWNER-PROMPT-TWIN-LINK-1 (main) links a new owner-request ticket to an open one whose title text after the first ': ' is equal and
+// 1.69.0 review round 3: (7) OWNER-PROMPT-TWIN-LINK-1 (main) links a new owner-request ticket to an open one whose title text after the first ': ' is equal and
 // the title keeps ~152 prompt characters, so a hand-off that opened with 150 characters of fixed wording filed a second card's approval under the first
 // card's ticket: the hand-off now opens with the approved items, the card key and the decision number (decHandoffText) and ownerNotesRoute never twin-links a
 // row carrying the server's hand-off marker (ownerRequestIssue opts.noTwin); (8) decResolve reads a card of any status (resolved, dismissed, rerouted) by
