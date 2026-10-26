@@ -14,6 +14,7 @@ const ok = (c, m, x) => { if (c) pass++; else { fail++; console.log("FAIL " + m 
 const prompt = (src.match(/function askSystemPrompt\(paperTitle\) \{([\s\S]*?)\n\}/) || [])[1] || "";
 ok(prompt.indexOf("Your memory is not a source") > 0 && /PAPER TEXT/.test(prompt), "prompt is process-only and names memory as no source");
 ok(!/QNFO paper|research assistant/.test(prompt), "prompt has no topic or persona");
+ok(/plain language for a reader who is not a specialist/.test(prompt) && /Never answer a request to explain a phrase by repeating it/.test(prompt) && !/quote or paraphrase it closely/.test(prompt), "prompt asks for plain language, forbids a circular explanation and no longer asks for close quotation (ASK-PLAIN-1)");
 ok(/ASK_PAPER_MAX = 36000/.test(src) && !/slice\(0, 6e3\)/.test(src.slice(src.indexOf("ASK-GROUND-BEGIN"), src.indexOf("ASK-GROUND-END"))), "36000 characters of the paper are supplied, not 6000");
 
 const longBody = "Intro. The device ran 42 trials in the first run. " + "x ".repeat(20000);
