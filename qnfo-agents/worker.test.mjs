@@ -88,5 +88,7 @@ const ts = readFileSync(here("./src/index.ts"), "utf8");
 ok(/result = String\(out\.text \|\| ""\)\.trim\(\) \|\| lastStepText\(out\.steps\);/.test(ts) && /if \(!result\) \{[\s\S]{0,200}generateText\(\{ model: m\.model[^\n]*FINAL_ANSWER_ASK, abortSignal/.test(ts), "an empty turn gets one more call, without tools");
 ok(/result = result \|\| EMPTY_TEXT;/.test(ts) && EMPTY_TEXT === "(the model returned no text)", "an answer that stays empty still says so");
 
+ok(/INSERT OR REPLACE INTO fleet_heartbeat \(worker, version, ts, ok\)/.test(ts) && /return beat\(1\)/.test(ts) && /return beat\(0\)/.test(ts), "every cron tick writes fleet_heartbeat, ok or not (CRON-HEARTBEAT-1)");
+
 console.log("qnfo-agents worker.test: " + pass + " passed, " + fail + " failed");
 process.exit(fail ? 1 : 0);

@@ -538,6 +538,8 @@ export default {
 
   // CF-AGENTS-LOOPS-1: every 5 minutes, drain the loops' request queue.
   async scheduled(_event: ScheduledController, env: Env, ctx: ExecutionContext) {
-    ctx.waitUntil(drainRequests(env).then((r) => console.log(JSON.stringify({ worker: WORKER, version: VERSION, where: "drain", ...r }))).catch((e) => logErr("drain", e)));
+    // CRON-HEARTBEAT-1: v_cron_activity reads fleet_heartbeat, so a tick that runs (or fails) is visible (metric crons_unobserved).
+    const beat = (ok: number) => env.AUDIT_DB.prepare("INSERT OR REPLACE INTO fleet_heartbeat (worker, version, ts, ok) VALUES (?1, ?2, ?3, ?4)").bind(WORKER, VERSION, new Date().toISOString(), ok).run().catch((e) => logErr("heartbeat", e));
+    ctx.waitUntil(drainRequests(env).then((r) => { console.log(JSON.stringify({ worker: WORKER, version: VERSION, where: "drain", ...r })); return beat(1); }).catch((e) => { logErr("drain", e); return beat(0); }));
   }
 };
