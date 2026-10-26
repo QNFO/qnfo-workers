@@ -1099,6 +1099,7 @@ function secretEq(a, b) {
 __name(secretEq, "secretEq");
 // VERSION-LINE-SPLIT-1 (agent_issues 100220): the release notes sit one per line below this statement, newest first, so a VERSION bump is a one-line patch; add a new note as the first line under it.
 // 0.54.0 BREACH-PLAYBOOKS-TOOL-LOOP-1 (2026-10-26, agent_issues 1000266, pillar autonomy; minor: a decision the worker now takes on its own): the doctor may now write tool_error_exclusions (BD_WRITE_TABLES, the one table the tool playbooks of migrations/2026-10-26-breach-playbooks-tool-loop.sql add: it classes a reviewed tool-error literal so the same caller error stops filing a TOOL-FAILURE issue), and it waits for an effect another loop produces: a verify_sql that reads pending-<reason> on an applied case keeps the case open until its lease ends (then lease-expired, as before) and supersedes it when the issue closed meanwhile, so a rule can be verified on the independent effect (the planner re-reading a re-armed verdict) and not on the marker the action wrote. Review fixes: the owner card of the owner-card kind carries an empty default_in_effect (the default is in its why), because human_actions_default_adopt_ai closes any open card with a non-empty default at birth when it is not decision-shaped, and a handed-owner case verifies only on a card the owner resolved, not on one a trigger closed (DEFAULT-ADOPTED-1, DEFAULT-APPROVE-1, AUTONOMY-FIRST-1). ops_config and human_actions stay off the list, and the statement validators (one INSERT or UPDATE, a top-level id = ?1 predicate, no OR, no free-text column) are unchanged.
+// 0.53.2 BREACH-DOCTOR-GATE-2 (2026-10-26, agent_issues 1000266, pillar autonomy; patch: a second fix to the validator of 0.53.0, from the adversarial review of the merged 0.53.1 head; a fuzz of 60,000 statements: 9,053 accepted, 249 changed or created a row of another issue): (1) the issue_id item of an INSERT ... SELECT must be ?1 or the very reference the binding conjunct names (a.id = ?1 allows a.id and not a.issue_id; bare id = ?1 allows bare id and not bare issue_id: a CTE, a derived table or a bare cross join gives the two columns different values); (2) every ON CONFLICT clause is read, not the first only: DO NOTHING, or DO UPDATE keyed by (issue_id) alone, and a clause keyed by anything else (a class, no target) needs its own WHERE with issue_id = ?1 on the existing row (remediation_contracts is keyed by class, which a literal can set to another issue's contract); (3) an UPDATE SET list and a DO UPDATE SET list may not assign id, issue_id or class (a re-keyed row is a row of another issue; the right-hand side may still read them); (4) a C0 control character or DEL is refused (SQLite ends a statement at the first NUL, so the text after it never ran but the gate read it). breach-doctor.test.mjs adds the class-hijack, re-key, id/issue_id mixing and NUL forms as must-refuse, runs each in SQLite with ?1 = 1, and changes the legitimate class-keyed upsert to end in WHERE remediation_contracts.issue_id = ?1; the five seed playbooks pass unchanged. prior 0.53.1-breach-doctor-gate
 // 0.53.1 BREACH-DOCTOR-GATE-1 (2026-10-26, agent_issues 1000266, pillar autonomy; patch: a fix to the validator of 0.53.0): two reviewers ran forms through bdWriteWhy and then through real SQLite (?1 = 1) and found statements it accepted that change rows of other issues, although the ledger says every action and revert statement is bound to the issue: bdBoundWhy tested that the WHERE text CONTAINED `id = ?1` with no OR, and it took the first WHERE of the whole text (the DO UPDATE ... WHERE of an upsert bound an INSERT ... SELECT over every issue; WHERE NOT issue_id = ?1, issue_id = ?1 = 0, issue_id = ?1 NOT NULL and UPDATE ... FROM passed). The check is now structural: the statement is read as top-level items (a parenthesised group is one item), cut at its first ON CONFLICT, its first top-level WHERE is split into AND conjuncts (BETWEEN ... AND and CASE ... END do not split) and one conjunct must be EXACTLY [alias.]id|issue_id = ?1, ?1 = [alias.]id|issue_id or [alias.]id|issue_id IN (?1); an OR anywhere after the WHERE (or-widens), a compound SELECT, UPDATE ... FROM (update-from), an unbalanced paren and a quoted identifier are refused, and an INSERT ... SELECT must name its columns and fill issue_id from ?1 or from the id of the alias the predicate binds (insert-id-unbound, insert-no-column-list). bdStrip reads the text in one pass the way SQLite does: `/* -- */ OR 1 = 1` hid an OR behind two regex passes. The five seed playbooks pass unchanged, so there is no migration. breach-doctor.test.mjs adds every reproduced form, a table of legitimate shapes and a real-SQLite property test (12468 generated statements, every one the gate accepts changes only issue 1); it fails 20 checks on 0.53.0.
 // 0.53.0 BREACH-DOCTOR-FIX-1 (2026-10-26, agent_issues 1000266, pillar autonomy; minor: a decision the worker now takes on its own): review of 0.52.0. (1) bdWriteWhy enforces what the ledger asserts: every action and revert statement carries a top-level id = ?1 / issue_id = ?1 predicate and no OR beside it (no-id-predicate, or-widens), and ops_config and human_actions are off BD_WRITE_TABLES, so a playbook can no longer reach the kill switch or the trust list. (2) A demotion is a pause with a release: after BD_RELEASE_MIN (60) minutes the rule runs again as a trial of one case a tick, a failed trial case demotes it again, a verified one lifts the cap, and failures count from the rule's last change of standing; an action that changes no row on an issue closed meanwhile supersedes the case instead of failing it. (3) breaches_undiagnosed_over_60m flags at min(120, breach_doctor_min_age_min + 60) minutes and the age gate defaults to 60 (migrations/2026-10-26-breach-doctor-fix.sql sets it), so no threshold exceeds 120 minutes. breach-doctor.test.mjs, migrations/breach-doctor-fix.test.mjs.
 // 0.52.1 PROBE-AUTHOR-HARDEN-1 (2026-10-26, agent_issues 1000266 BREACH-DOCTOR-1, pillar security; patch: follow-up to PROBE-AUTHOR-BINDING-1 0.49.2): the probe author reads only operational tables (RT_PROBE_AUTHOR_ALLOW, checked in probe-author.test.mjs against the live sqlite_master names; a private family by name, or any object off the list, is refused through a quote-aware scan that sees subquery, join, CTE, comma-join, quoted, bracketed and string-literal table names), refuses a probe that reads the loop's own bookkeeping (issue ledger, decision_log, remediation_*, remediation.* event kinds, its own module, the target's contract class) and a dry run whose observed value is empty or starts with pending, and bounds the probe at 600 and the observed value at 200 characters. Each reject is the existing remediation.probe-author-reject event with an enum reason (private-table, self-confirming, deferral-shape, not-allowlisted, too-long) and never the probe text. The remediation tick now passes env to rtEnsureLivePath: until now the author was handed no AI binding at the call site and ended in no-ai-binding on every call.
@@ -12557,20 +12558,35 @@ function bdItems(s) {
   }
   return depth === 0 ? items : null;
 }
-// The alias of an item run that is exactly [alias.]id|issue_id: "" for a bare column, the lowercased alias, or null when the run is anything else.
+// BREACH-DOCTOR-GATE-2: the reference of an item run that is exactly [alias.]id|issue_id, as the string "alias.column" or "column" (the column is part of the reference: id and issue_id are different values in a CTE, a derived table or a cross join), or null when the run is anything else.
 function bdIdRef(run) {
   var q = "", c = run;
   if (run.length === 3 && run[1].t === ".") { q = run[0].t; c = [run[2]]; }
   if (c.length !== 1 || (c[0].t !== "id" && c[0].t !== "issue_id") || !/^[a-z_]\w*$/.test(q + "x")) return null;
-  return q;
+  return q ? q + "." + c[0].t : c[0].t;
 }
-// A conjunct that binds: the alias it names ("" for none), or null.
+// A conjunct that binds: the reference it names (see bdIdRef), or null.
 function bdIdConjunct(c) {
   var n = c.length;
   if (n >= 3 && c[n - 2].t === "=" && c[n - 1].t === "?1") return bdIdRef(c.slice(0, n - 2));
   if (n >= 3 && c[0].t === "?1" && c[1].t === "=") return bdIdRef(c.slice(2));
   if (n >= 3 && c[n - 1].t === "()" && c[n - 1].g === "?1" && c[n - 2].t === "in") return bdIdRef(c.slice(0, n - 2));
   return null;
+}
+// key columns an assignment may not name (a re-keyed row is a row of another issue)
+function bdSetsKey(toks) {
+  var cur = [], list = [], k;
+  for (k = 0; k < toks.length; k++) { if (toks[k].t === ",") { list.push(cur); cur = []; } else cur.push(toks[k]); }
+  list.push(cur);
+  for (k = 0; k < list.length; k++) {
+    var l = [], x;
+    for (x = 0; x < list[k].length && list[k][x].t !== "="; x++) l.push(list[k][x]);
+    var names = [];
+    if (l.length && l[0].t === "()") names = l[0].g.toLowerCase().split(",").map(function (y) { return y.trim().replace(/^.*\./, ""); });
+    else if (l.length) names = [l[l.length - 1].t];
+    if (names.some(function (y) { return y === "id" || y === "issue_id" || y === "class"; })) return true;
+  }
+  return false;
 }
 function bdBoundWhy(s) {
   var it = bdItems(s), v = 0;
@@ -12584,9 +12600,40 @@ function bdBoundWhy(s) {
   var has = function (w) { return body.some(function (x) { return x.t === w; }); };
   if (has("union") || has("intersect") || has("except")) return "compound-select";
   if (verb === "update" && has("from")) return "update-from";
+  // every ON CONFLICT clause (SQLite takes several): DO NOTHING, or DO UPDATE keyed by (issue_id) alone and never naming a key column
+  for (k = end; k < it.length - 1; k++) {
+    if (!(it[k].t === "on" && it[k + 1].t === "conflict")) continue;
+    var m = k + 2, tgt = null;
+    if (it[m] && it[m].t === "()") { tgt = it[m].g.toLowerCase().replace(/\s+/g, ""); m++; }
+    if (!it[m] || it[m].t !== "do") return "upsert-shape";
+    if (it[m + 1] && it[m + 1].t === "nothing") continue;
+    if (!it[m + 1] || it[m + 1].t !== "update") return "upsert-shape";
+    var sIdx = m + 2;
+    if (!it[sIdx] || it[sIdx].t !== "set") return "upsert-shape";
+    var sEnd = it.length, cEnd = it.length;
+    for (var y = sIdx + 1; y < it.length; y++) if (it[y].t === "where" || it[y].t === "returning" || (it[y].t === "on" && it[y + 1] && it[y + 1].t === "conflict")) { sEnd = y; break; }
+    if (bdSetsKey(it.slice(sIdx + 1, sEnd))) return "sets-key-column";
+    if (tgt !== "issue_id") {
+      // a clause keyed by anything but issue_id (class, no target) may hit a row of another issue: its own WHERE (the EXISTING row, unqualified or by table name) must bind issue_id = ?1
+      if (!it[sEnd] || it[sEnd].t !== "where") return "upsert-not-keyed-by-issue";
+      for (y = sEnd + 1; y < it.length; y++) if (it[y].t === "returning" || (it[y].t === "on" && it[y + 1] && it[y + 1].t === "conflict")) { cEnd = y; break; }
+      var seg = it.slice(sEnd + 1, cEnd), okw = false, cj = [], cu = [];
+      if (seg.some(function (x) { return x.t === "or" || x.t === "case" || x.t === "between"; })) return "upsert-where-shape";
+      for (y = 0; y < seg.length; y++) { if (seg[y].t === "and") { cj.push(cu); cu = []; } else cu.push(seg[y]); }
+      cj.push(cu);
+      var tn = it[j + 1] ? it[j + 1].t : "", al = it[j + 2] && it[j + 2].t === "as" && it[j + 3] ? it[j + 3].t : "";
+      cj.forEach(function (c2) { var r2 = bdIdConjunct(c2); if (r2 === "issue_id" || r2 === tn + ".issue_id" || (al && r2 === al + ".issue_id")) okw = true; });
+      if (!okw) return "upsert-not-keyed-by-issue";
+    }
+  }
   var w = -1;
   for (k = 0; k < body.length; k++) if (body[k].t === "where") { w = k; break; }
   if (w < 0) return "no-id-predicate";
+  if (verb === "update") {
+    var si = -1;
+    for (k = 0; k < w; k++) if (body[k].t === "set") { si = k; break; }
+    if (si < 0 || bdSetsKey(body.slice(si + 1, w))) return "sets-key-column";
+  }
   var tail = body.slice(w + 1), stop = tail.length;
   for (k = 0; k < tail.length; k++) if (/^(group|having|window|order|limit|returning)$/.test(tail[k].t)) { stop = k; break; }
   if (tail.some(function (x) { return x.t === "or"; })) return "or-widens";
@@ -12631,6 +12678,7 @@ function bdWriteWhy(sql) {
   var q = String(sql == null ? "" : sql).trim();
   if (!q) return "empty";
   if (q.indexOf(";") !== -1) return "semicolon";
+  if (/[\u0000-\u0008\u000b\u000e-\u001f\u007f]/.test(q)) return "control-char";
   var s = bdStrip(q).replace(/\s+/g, " ").trim();
   if (BD_FREE_TEXT_RE.test(s)) return "free-text-column";
   if (BD_FORBIDDEN_KW_RE.test(s)) return "forbidden-keyword";

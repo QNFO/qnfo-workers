@@ -1008,6 +1008,7 @@ CREATE TABLE remediation_contracts (class TEXT PRIMARY KEY, issue_id INTEGER, pr
   // 1. the forms the reviewers ran (all accepted by 0.53.0 and each changes rows other than issue 1); harm: the statement really writes other issues' rows when run
   const I = "INSERT INTO issue_triage (issue_id, rc, triage_state, owner, sla_due_at, close_evidence)";
   const UPS = " ON CONFLICT(issue_id) DO UPDATE SET rc = excluded.rc, triage_state = excluded.triage_state, close_evidence = excluded.close_evidence";
+  const RC = "INSERT INTO remediation_contracts (class, issue_id, precondition, action, verify_probe, verify_transport, escalate_to) SELECT 'c2', a.id, 'p', 'a', 'SELECT 1', 'd1-query', 'e' FROM agent_issues a WHERE a.id = ?1";
   const refused = [
     ["(1) INSERT ... SELECT ... GROUP BY id ON CONFLICT DO UPDATE ... WHERE issue_id = ?1 (the first WHERE found is the upsert's)", I + " SELECT id, 'r', 'closed', 'o', 'x', 'ev' FROM agent_issues GROUP BY id ON CONFLICT(issue_id) DO UPDATE SET rc = excluded.rc, triage_state = excluded.triage_state WHERE issue_id = ?1", "no-id-predicate", true],
     ["(1) the ORDER BY id variant", I + " SELECT id, 'r', 'closed', 'o', 'x', 'ev' FROM agent_issues ORDER BY id ON CONFLICT(issue_id) DO UPDATE SET rc = excluded.rc, triage_state = excluded.triage_state WHERE issue_id = ?1", "no-id-predicate", true],
@@ -1023,6 +1024,30 @@ CREATE TABLE remediation_contracts (class TEXT PRIMARY KEY, issue_id INTEGER, pr
     ["(5) the predicate binds another alias than the one that fills issue_id (cross join)", I + " SELECT p.issue_id, 'r', 'closed', 'o', 'x', 'ev' FROM agent_issues a, issue_plans p WHERE a.id = ?1" + UPS, "insert-id-unbound", true],
     ["(5) a compound SELECT: the second SELECT has no predicate", I + " SELECT a.id, 'r', 'closed', 'o', 'x', 'ev' FROM agent_issues a WHERE a.id = ?1 UNION SELECT id, 'r', 'closed', 'o', 'x', 'ev' FROM agent_issues WHERE 1" + UPS, "compound-select", true],
     ["(5) INSERT ... SELECT with no column list (issue_id position unknown)", "INSERT INTO issue_triage SELECT p.issue_id, 'r', 'closed', 'o', 'x', NULL, NULL, 0 FROM agent_issues a, issue_plans p WHERE a.id = ?1 ON CONFLICT(issue_id) DO UPDATE SET rc = 'r'", "insert-no-column-list", true],
+    // BREACH-DOCTOR-GATE-2 (0.53.2): the second review of the merged 0.53.1 head
+    ["(G2-1) a CTE gives id and issue_id different values: the item is x.issue_id, the predicate binds x.id", "WITH x(id, issue_id) AS (VALUES (1, 2), (1, 3)) INSERT INTO issue_triage (issue_id, rc, triage_state, owner, sla_due_at) SELECT x.issue_id, 'r', 'closed', 'o', 'x' FROM x WHERE x.id = ?1 ON CONFLICT(issue_id) DO UPDATE SET triage_state = 'closed'", "insert-id-unbound", true],
+    ["(G2-1) a derived table gives id and issue_id different values", "INSERT INTO issue_triage (issue_id, rc, triage_state, owner, sla_due_at) SELECT x.issue_id, 'r', 'closed', 'o', 'x' FROM (SELECT 1 AS id, 2 AS issue_id UNION ALL SELECT 1, 3) x WHERE x.id = ?1 ON CONFLICT(issue_id) DO UPDATE SET triage_state = 'closed'", "insert-id-unbound", true],
+    ["(G2-1) a bare cross join: the item is the bare issue_id of issue_plans, the predicate binds the bare id of agent_issues", "INSERT INTO issue_triage (issue_id, rc, triage_state, owner, sla_due_at) SELECT issue_id, 'r', 'closed', 'o', 'x' FROM agent_issues, issue_plans WHERE id = ?1 ON CONFLICT(issue_id) DO UPDATE SET triage_state = 'closed'", "insert-id-unbound", true],
+    ["(G2-1) the same cross join with INSERT OR IGNORE", "INSERT OR IGNORE INTO issue_triage (issue_id, rc, triage_state, owner, sla_due_at) SELECT issue_id, 'r', 'closed', 'o', 'x' FROM agent_issues, issue_plans WHERE id = ?1", "insert-id-unbound", null],
+    ["(G2-1) the item is a.issue_id while the predicate binds a.id", "INSERT INTO issue_triage (issue_id, rc, triage_state, owner, sla_due_at) SELECT a.issue_id, 'r', 'closed', 'o', 'x' FROM (SELECT 1 AS id, 2 AS issue_id) a WHERE a.id = ?1 ON CONFLICT(issue_id) DO UPDATE SET triage_state = 'closed'", "insert-id-unbound", true],
+    ["(G2-2) ON CONFLICT(class) DO UPDATE pauses another issue's contract (class is a literal)", RC + " ON CONFLICT(class) DO UPDATE SET status = 'paused'", "upsert-not-keyed-by-issue", true],
+    ["(G2-2) ON CONFLICT with no target applies to any unique constraint", RC + " ON CONFLICT DO UPDATE SET status = 'paused'", "upsert-not-keyed-by-issue", true],
+    ["(G2-2) a second ON CONFLICT clause after a harmless first one", RC + " ON CONFLICT(issue_id) DO NOTHING ON CONFLICT(class) DO UPDATE SET status = 'paused'", "upsert-not-keyed-by-issue", null],
+    ["(G2-2) a class-keyed clause whose WHERE binds nothing", RC + " ON CONFLICT(class) DO UPDATE SET status = 'paused' WHERE status = 'active'", "upsert-not-keyed-by-issue", true],
+    ["(G2-2) a class-keyed clause whose WHERE widens with an OR", RC + " ON CONFLICT(class) DO UPDATE SET status = 'paused' WHERE issue_id = ?1 OR 1", "upsert-where-shape", true],
+    ["(G2-2) a class-keyed clause that binds EXCLUDED (the new row), not the existing one", RC + " ON CONFLICT(class) DO UPDATE SET status = 'paused' WHERE excluded.issue_id = ?1", "upsert-not-keyed-by-issue", true],
+    ["(G2-3) the class-hijack that also moves the contract to issue 1", RC + " ON CONFLICT(class) DO UPDATE SET issue_id = excluded.issue_id", "sets-key-column", true],
+    ["(G2-3) UPDATE agent_issues SET id", "UPDATE agent_issues SET id = 5 WHERE id = ?1", "sets-key-column", true],
+    ["(G2-3) UPDATE issue_triage SET issue_id", "UPDATE issue_triage SET issue_id = 5 WHERE issue_id = ?1", "sets-key-column", true],
+    ["(G2-3) UPDATE remediation_contracts SET issue_id gives another issue a contract", "UPDATE remediation_contracts SET issue_id = 2 WHERE issue_id = ?1", "sets-key-column", true],
+    ["(G2-3) a row-value assignment that names issue_id", "UPDATE issue_triage SET (issue_id, rc) = (5, 'x') WHERE issue_id = ?1", "sets-key-column", true],
+    ["(G2-3) DO UPDATE SET issue_id", I + " SELECT a.id, 'r', 'closed', 'o', 'x', 'ev' FROM agent_issues a WHERE a.id = ?1 ON CONFLICT(issue_id) DO UPDATE SET issue_id = 5", "sets-key-column", true],
+    ["(G2-3) a qualified key column on the left of an assignment", "UPDATE issue_triage SET issue_triage.issue_id = 5 WHERE issue_id = ?1", "sets-key-column", null],
+    ["(G2-3) UPDATE ... SET class (re-keys issue 1's own row; conservative)", "UPDATE remediation_contracts SET class = 'zz' WHERE issue_id = ?1", "sets-key-column", false],
+    ["(G2-4) a NUL ends the statement in SQLite, the text after it never ran: the SET list has no WHERE", "UPDATE agent_issues SET status = 'closed', priority = ?1\u0000 WHERE id = ?1", "control-char", true],
+    ["(G2-4) a NUL inside a string literal", "UPDATE agent_issues SET status = 'a\u0000b' WHERE id = ?1", "control-char", null],
+    ["(G2-4) a vertical tab", "UPDATE agent_issues SET status = 'closed'\u000bWHERE id = ?1", "control-char", null],
+    ["(G2-4) DEL", "UPDATE agent_issues SET status = 'closed' WHERE id = ?1\u007f", "control-char", null],
     ["an OR beside the predicate", "UPDATE issue_triage SET triage_state = 'closed' WHERE issue_id = ?1 OR 1 = 1", "or-widens", true],
     ["an OR in front of the predicate", "UPDATE issue_triage SET triage_state = 'closed' WHERE ?1 > 0 OR issue_id = ?1", "or-widens", true],
     ["an OR in the tail after the predicate (RETURNING is no reason to stop looking)", "UPDATE issue_triage SET triage_state = 'closed' WHERE issue_id = ?1 AND 1 RETURNING issue_id, 1 OR 1", "or-widens", false],
@@ -1051,6 +1076,24 @@ CREATE TABLE remediation_contracts (class TEXT PRIMARY KEY, issue_id INTEGER, pr
       const r = both(sql);
       ok(harm ? r.err === null && r.others === true : r.others === false, harm ? "and it really does write other issues' rows in SQLite: " + name : "(no row of another issue changes: this refusal is conservative) " + name, r);
     }
+  }
+
+  // 1b. SQLite takes several ON CONFLICT clauses, each keyed by one unique constraint: a table with two (class, issue_id) shows the second clause being the one that fires
+  {
+    const two = (withOne) => { const x = fixture(withOne); x.exec("CREATE UNIQUE INDEX ux_rc_issue ON remediation_contracts (issue_id)"); return x; };
+    const T1 = two(true), T2 = two(false);
+    const clause = RC + " ON CONFLICT(issue_id) DO NOTHING ON CONFLICT(class) DO UPDATE SET status = 'paused'";
+    const r1 = run(T1, clause), r2 = run(T2, clause);
+    ok(wr(clause) === "upsert-not-keyed-by-issue", "a second ON CONFLICT clause keyed by class is read and refused");
+    ok((r1.err === null && r2.err === null) && (r1.others || r2.others), "and it really pauses another issue's contract when the first clause does not fire", [r1, r2]);
+    const fine = RC + " ON CONFLICT(issue_id) DO NOTHING ON CONFLICT(class) DO NOTHING";
+    ok(wr(fine) === null, "two DO NOTHING clauses are accepted");
+    const f1 = run(T1, fine), f2 = run(T2, fine);
+    ok(f1.err === null && f2.err === null && !f1.others && !f2.others, "and change no row of another issue", [f1, f2]);
+    const fine2 = RC + " ON CONFLICT(issue_id) DO UPDATE SET status = 'active' ON CONFLICT(class) DO UPDATE SET status = 'active' WHERE remediation_contracts.issue_id = ?1";
+    ok(wr(fine2) === null, "a class-keyed DO UPDATE after an issue_id-keyed one is accepted when its own WHERE binds the existing row");
+    const g1 = run(T1, fine2), g2 = run(T2, fine2);
+    ok(g1.err === null && g2.err === null && !g1.others && !g2.others, "and in SQLite changes no row of another issue", [g1, g2]);
   }
 
   // 2. the legitimate shapes: accepted, and on real SQLite with ?1 = 1 only issue 1's rows change (and issue 1's rows do change)
@@ -1086,7 +1129,13 @@ CREATE TABLE remediation_contracts (class TEXT PRIMARY KEY, issue_id INTEGER, pr
     "WITH e AS (SELECT 'ev' AS ev) " + I + " SELECT a.id, 'r', 'closed', 'o', 'x', e.ev FROM agent_issues a, e WHERE e.ev <> '' AND a.id = ?1" + UPS + " WHERE rc <> 'zzz' OR 1 = 1",
     I + " SELECT a.id, 'r', 'closed', 'o', 'x', (SELECT MAX(p.outcome) FROM issue_plans p WHERE p.issue_id = a.id) FROM agent_issues a WHERE NOT EXISTS (SELECT 1 FROM issue_plans q WHERE q.outcome = 'zzz') AND a.id = ?1" + UPS,
     "INSERT OR IGNORE INTO issue_plans (issue_id, planned_at, outcome) SELECT a.id, 'now', 'x' FROM agent_issues a WHERE a.id = ?1",
-    "INSERT INTO remediation_contracts (class, issue_id, precondition, action, verify_probe, verify_transport, escalate_to) SELECT 'c-' || a.id, a.id, 'p', 'a', 'SELECT 1', 'd1-query', 'e' FROM agent_issues a WHERE a.id = ?1 ON CONFLICT(class) DO UPDATE SET status = 'active'"
+    "INSERT INTO remediation_contracts (class, issue_id, precondition, action, verify_probe, verify_transport, escalate_to) SELECT 'c-' || a.id, a.id, 'p', 'a', 'SELECT 1', 'd1-query', 'e' FROM agent_issues a WHERE a.id = ?1 ON CONFLICT(class) DO UPDATE SET status = 'active' WHERE remediation_contracts.issue_id = ?1",
+    "INSERT INTO remediation_contracts (class, issue_id, precondition, action, verify_probe, verify_transport, escalate_to) SELECT 'c-' || a.id, a.id, 'p', 'a', 'SELECT 1', 'd1-query', 'e' FROM agent_issues a WHERE a.id = ?1 ON CONFLICT(class) DO UPDATE SET status = excluded.status WHERE issue_id = ?1 AND status <> 'done'",
+    "INSERT INTO remediation_contracts (class, issue_id, precondition, action, verify_probe, verify_transport, escalate_to) SELECT 'c-' || a.id, a.id, 'p', 'a', 'SELECT 1', 'd1-query', 'e' FROM agent_issues a WHERE a.id = ?1 ON CONFLICT(class) DO NOTHING",
+    "INSERT INTO remediation_contracts (class, issue_id, precondition, action, verify_probe, verify_transport, escalate_to) SELECT 'c-' || a.id, a.id, 'p', 'a', 'SELECT 1', 'd1-query', 'e' FROM agent_issues a WHERE a.id = ?1 ON CONFLICT DO NOTHING",
+    "UPDATE issue_triage SET rc = 'x' || issue_id, reopened_count = reopened_count + issue_id WHERE issue_id = ?1",
+    "UPDATE issue_triage SET triage_state = 'closed',\n\trc = 'z'\r\nWHERE issue_id = ?1",
+    "UPDATE issue_triage SET (rc, owner) = ('r', 'o') WHERE issue_id = ?1"
   ];
   for (const sql of shapes) {
     const got = wr(sql), r = both(sql);
@@ -1144,6 +1193,55 @@ CREATE TABLE remediation_contracts (class TEXT PRIMARY KEY, issue_id INTEGER, pr
     ok(violations.length === 0, "property: no statement the gate accepts changes a row of another issue (" + total + " generated, " + accepted + " accepted, " + executed + " executed)", violations.slice(0, 3));
     ok(accepted >= 150 && executed >= accepted * 0.9, "property: the generator is not vacuous (the gate accepts the bound shapes and SQLite runs them)", { total, accepted, executed });
     ok(perTemplate.slice(0, 5).every((n) => n > 20) && perTemplate[5] === 0, "property: each of the five bound templates has accepted cases, the cross-join template none", perTemplate);
+  }
+
+  // 5. BREACH-DOCTOR-GATE-2 property: item sources (a CTE-like derived table and cross joins give id and issue_id different values), ON CONFLICT clause chains, key-column assignments and
+  // injected NULs, on both fixtures and on the two with a second unique key. Every accepted statement must change no row of another issue.
+  {
+    const T = [true, false].map((w) => { const x = fixture(w); x.exec("CREATE UNIQUE INDEX ux_rc_issue ON remediation_contracts (issue_id)"); return x; });
+    const worlds = [A, B, C, ...T];
+    const srcs = [
+      ["FROM agent_issues a WHERE a.id = ?1", ["a.id", "?1"]],
+      ["FROM agent_issues WHERE id = ?1", ["id"]],
+      ["FROM issue_plans p WHERE p.issue_id = ?1", ["p.issue_id"]],
+      ["FROM agent_issues a, issue_plans p WHERE a.id = ?1", ["a.id", "p.issue_id"]],
+      ["FROM agent_issues, issue_plans WHERE id = ?1", ["id", "issue_id"]],
+      ["FROM (SELECT 1 AS id, 2 AS issue_id UNION ALL SELECT 1, 3) x WHERE x.id = ?1", ["x.id", "x.issue_id"]],
+      ["FROM (SELECT 1 AS id, 2 AS issue_id UNION ALL SELECT 1, 3) x WHERE x.issue_id = ?1", ["x.issue_id", "x.id"]]
+    ];
+    const tri = ["", " ON CONFLICT(issue_id) DO NOTHING", " ON CONFLICT(issue_id) DO UPDATE SET rc = 'r2'", " ON CONFLICT(issue_id) DO UPDATE SET issue_id = 5", " ON CONFLICT DO UPDATE SET rc = 'r2'", " ON CONFLICT(issue_id) DO UPDATE SET (rc, issue_id) = ('r', 7)"];
+    const rc = ["", " ON CONFLICT(class) DO NOTHING", " ON CONFLICT(class) DO UPDATE SET status = 'paused'", " ON CONFLICT(class) DO UPDATE SET status = 'paused' WHERE issue_id = ?1", " ON CONFLICT(class) DO UPDATE SET status = 'paused' WHERE remediation_contracts.issue_id = ?1",
+      " ON CONFLICT(class) DO UPDATE SET status = 'paused' WHERE excluded.issue_id = ?1", " ON CONFLICT(class) DO UPDATE SET issue_id = excluded.issue_id", " ON CONFLICT DO UPDATE SET status = 'paused'", " ON CONFLICT(issue_id) DO NOTHING ON CONFLICT(class) DO UPDATE SET status = 'paused'",
+      " ON CONFLICT(issue_id) DO UPDATE SET status = 'paused' ON CONFLICT(class) DO NOTHING", " ON CONFLICT(issue_id) DO UPDATE SET status = 'paused' ON CONFLICT(class) DO UPDATE SET status = 'paused' WHERE issue_id = ?1"];
+    const stmts = [];
+    for (const [src, items] of srcs) for (const it of items) {
+      for (const cf of tri) stmts.push("INSERT INTO issue_triage (issue_id, rc, triage_state, owner, sla_due_at) SELECT " + it + ", 'r', 'x', 'o', 'x' " + src + cf);
+      stmts.push("INSERT OR IGNORE INTO issue_triage (issue_id, rc, triage_state, owner, sla_due_at) SELECT " + it + ", 'r', 'x', 'o', 'x' " + src);
+      for (const cls of ["'c2'", "'c-' || " + it]) for (const cf of rc) stmts.push("INSERT INTO remediation_contracts (class, issue_id, precondition, action, verify_probe, verify_transport, escalate_to) SELECT " + cls + ", " + it + ", 'p', 'a', 'v', 't', 'e' " + src + cf);
+    }
+    for (const set of ["status = 'x'", "issue_id = 5", "issue_id = 2", "class = 'zz'", "(issue_id, status) = (5, 'x')", "status = 'x', issue_id = issue_id + 1", "status = 'x' || issue_id"])
+      for (const wh of ["issue_id = ?1", "issue_id = ?1 AND status = 'active'", "issue_id = ?1 OR 1"]) stmts.push("UPDATE remediation_contracts SET " + set + " WHERE " + wh);
+    for (const set of ["priority = 'x'", "id = 5", "id = id + 10", "(id, priority) = (6, 'x')"]) for (const wh of ["id = ?1", "id = ?1 OR 1"]) stmts.push("UPDATE agent_issues SET " + set + " WHERE " + wh);
+    for (const set of ["rc = 'x'", "issue_id = 5", "rc = 'x', issue_id = 6"]) stmts.push("UPDATE issue_triage SET " + set + " WHERE issue_id = ?1");
+    // NULs: before the WHERE and before an ON CONFLICT of every statement
+    const withNul = [];
+    for (const st of stmts) for (const v of [st.replace(" WHERE", "\u0000 WHERE"), st.replace(" ON CONFLICT", "\u0000 ON CONFLICT")]) if (v.includes("\u0000")) withNul.push(v);
+    let tot2 = 0, acc2 = 0, exec2 = 0, nulAccepted = 0;
+    const bad = [];
+    for (const [list, isNul] of [[stmts, false], [withNul, true]]) for (const st of list) {
+      tot2++;
+      if (wr(st) !== null) continue;
+      if (isNul) { nulAccepted++; continue; }
+      acc2++;
+      let others = false, err = true;
+      for (const x of worlds) { const r = run(x, st); if (r.err === null) err = false; if (r.others) others = true; }
+      if (!err) exec2++;
+      if (others) bad.push(st);
+    }
+    console.log("gate-2 property: " + tot2 + " generated statements, " + acc2 + " accepted, " + exec2 + " executed, " + bad.length + " changed another issue, " + nulAccepted + " with a NUL accepted");
+    ok(bad.length === 0, "property 2: no accepted statement changes a row of another issue (" + tot2 + " generated, " + acc2 + " accepted, " + exec2 + " executed)", bad.slice(0, 3));
+    ok(withNul.length > 100 && nulAccepted === 0, "property 2: a statement with a NUL is never accepted (" + withNul.length + " tried)");
+    ok(acc2 >= 60 && exec2 >= acc2 * 0.8, "property 2: the generator is not vacuous", { tot2, acc2, exec2 });
   }
 }
 
