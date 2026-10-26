@@ -167,13 +167,32 @@ const scenario = (prs, extra) => Object.assign({ branches: [{ name: "main", prot
   const nochk = prj(68, "claude/nochk", "a68", { draft: true });
   const young = prj(69, "claude/young", "a69", { draft: true, updated_at: hAgo(0.02) });
   const prs = { 64: wip, 65: held, 66: dnm, 67: wf, 68: nochk, 69: young };
-  const sc = scenario(prs, { prSeq: Object.fromEntries(Object.entries(prs).map(([n, x]) => [n, [x]])) });
+  const sc = scenario(prs, { prSeq: Object.fromEntries(Object.entries(prs).map(([n, x]) => [n, [x]])), config: [["stale_pr_merge_workflows", "off"]] }); // OWNER-AUTO-APPROVE-ALL-1: the switch that restores the .github refusal
   sc.files[67] = W2([".github/workflows/x.yml"]);
   sc.checks.a68 = green("a68", ["gate", "mirror-guard", "comparator"]);
   const { out } = await run(sc);
   eq(sc.gql || [], [], "no hold, WIP marker, workflow change, missing check or young draft is ever marked ready");
   eq(sc.merges || [], [], "and none is merged");
   eq(out.merged_prs, [], "merged_prs is empty");
+}
+{
+  // OWNER-AUTO-APPROVE-ALL-1 (0.50.0, owner "Yes, auto-approve all", 2026-10-26): by default the lane merges a green, quiet pull request that changes .github/, draft or not, and the
+  // merge message says why; every other gate still applies (a hold, a missing check, a conflict); ops_config stale_pr_merge_workflows = off restores the refusal (pinned by the scenarios above)
+  const wfReady = prj(170, "claude/wf-ready", "a170");
+  const wfDraft = prj(171, "claude/wf-draft", "a171", { draft: true });
+  const wfHeld = prj(172, "claude/wf-held", "a172", { title: "WIP: workflow tweak" });
+  const wfNoChk = prj(173, "claude/wf-nochk", "a173");
+  const prs = { 170: wfReady, 171: wfDraft, 172: wfHeld, 173: wfNoChk };
+  const sc = scenario(prs, { prSeq: Object.fromEntries(Object.entries(prs).map(([n, x]) => [n, n == 171 ? [x, x, Object.assign({}, x, { draft: false })] : [x]])) });
+  [170, 171, 172, 173].forEach((n) => { sc.files[n] = W2([".github/workflows/x.yml"]); });
+  sc.checks.a173 = green("a173", ["gate", "mirror-guard", "comparator"]);
+  const { out, d1 } = await run(sc);
+  eq(sc.merges.map((m) => m.pr).sort(), [170, 171], "a ready and a draft pull request that change .github/ merge by default; a WIP title and a missing check still hold them");
+  const m170 = sc.merges.find((m) => m.pr === 170);
+  eq(/OWNER-AUTO-APPROVE-ALL-1/.test(String(m170.body.commit_message || "")) && /\.github\/workflows\/x\.yml/.test(String(m170.body.commit_message || "")), true, "the merge message names the owner decision and the workflow file");
+  eq(out.merged_prs.sort(), [170, 171], "merged_prs lists both");
+  const w = Object.fromEntries(d1.db.prepare("SELECT pr, waits_on FROM pr_sla_state").all().map((r) => [r.pr, r.waits_on]));
+  eq([w[170], w[172]], [null, "hold"], "a merged workflow pull request waits on nobody and the WIP one waits on 'hold', never on 'session'");
 }
 {
   // PR-MERGE-SLA-10M-1 review (session_01LJNL3L): the harness opens every session pull request as a draft, so a body that says it is kept as a draft on purpose holds it
@@ -215,7 +234,7 @@ const scenario = (prs, extra) => Object.assign({ branches: [{ name: "main", prot
   const wf = prj(161, "claude/wf-change", "a161");
   const plainRed = prj(162, "claude/plain", "a162");
   const prs = { 160: held, 161: wf, 162: plainRed };
-  const sc = scenario(prs, { prSeq: Object.fromEntries(Object.entries(prs).map(([n, x]) => [n, [x]])) });
+  const sc = scenario(prs, { prSeq: Object.fromEntries(Object.entries(prs).map(([n, x]) => [n, [x]])), config: [["stale_pr_merge_workflows", "off"]] }); // OWNER-AUTO-APPROVE-ALL-1: waits_on 'session' is the refusal's class, which exists while the switch is off
   sc.files[161] = W2([".github/workflows/x.yml"]);
   sc.checks.a162 = green("a162", ["gate", "mirror-guard", "comparator"]); // guard missing: refused for a check, waits on nobody
   const t = await run(sc);

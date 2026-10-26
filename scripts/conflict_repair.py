@@ -87,9 +87,15 @@ DISPATCHABLE = ["deploy-gate.yml", "version-bump-guard.yml", "mirror-guard.yml",
 # conclusion `action_required`, zero jobs, by github-actions[bot]; GitHub concludes them `failure` the second the pull request closes. A
 # completed run cannot be cancelled (HTTP 409), so the first version of this step, which cancelled only runs that were not completed, caught
 # none of them. A completed zero-job run carries no verdict and no log, so it is deleted (HTTP 204 for a completed run); a run that is still in
-# flight is cancelled. Nothing is APPROVED here: the approval gate is a security control (POST .../approve starts such a run for real, measured
-# once as a probe) and relaxing it is the owner's decision, not this script's. The dispatched workflow_dispatch runs are another event and
-# are never touched.
+# flight is cancelled. The first version approved nothing: the approval gate is a security control (POST .../approve starts such a run for real, measured
+# once as a probe) and relaxing it was the owner's decision; the owner has since decided it (OWNER-AUTO-APPROVE-ALL-1 below). The dispatched workflow_dispatch runs are another
+# event and are never touched.
+# OWNER-AUTO-APPROVE-ALL-1 (2026-10-26): the owner answered "Yes, auto-approve all" to the question whether a repair push's approval-gated runs may be approved instead of
+# deleted. They are now approved (POST .../approve), so the pull_request checks run for real on the repaired head and the pull request no longer carries a failed zero-job run when
+# it closes. Only a run of THIS push (head_sha), of THIS repository's own branch (head_repository), event pull_request, by github-actions[bot], concluded action_required with zero
+# jobs is approved: a fork run, a person's run and a dispatched run are never touched. An approval GitHub refuses falls back to the deletion above. CONFLICT_REPAIR_APPROVE=off
+# restores "nothing is approved" without a deploy of anything but the workflow env.
+APPROVE_PHANTOM = (os.environ.get("CONFLICT_REPAIR_APPROVE") or "on").strip().lower() not in ("0", "off", "false", "no", "disabled")
 PHANTOM_PASSES = 3
 PHANTOM_WAIT_S = 8
 
@@ -98,15 +104,17 @@ def emit(msg):
     print(msg, flush=True)
 
 
-def clear_phantom_runs(sha, api=None, sleep=None, passes=None, wait=None):
+def clear_phantom_runs(sha, api=None, sleep=None, passes=None, wait=None, approve=None):
     """Clear the pull_request runs that a GITHUB_TOKEN push of `sha` created. Returns [(run id, workflow name, action, done)].
 
-    action is "delete" for a completed, action_required, zero-job run and "cancel" for a run still in flight. GitHub creates the runs a few
+    action is "approve" for a completed, action_required, zero-job run of this repository's own branch while approval is on (OWNER-AUTO-APPROVE-ALL-1; a refused approval
+    falls back to the deletion), "delete" for such a run otherwise and "cancel" for a run still in flight. GitHub creates the runs a few
     seconds after the push, so the list is read `passes` times, `wait` seconds apart, and each run is handled once. Nothing here can fail the
-    repair: gh() answers None on any error and that is recorded as not done. A run is never approved.
+    repair: gh() answers None on any error and that is recorded as not done.
     """
     api = api or gh
     sleep = sleep or time.sleep
+    approve = APPROVE_PHANTOM if approve is None else approve
     passes = PHANTOM_PASSES if passes is None else passes
     wait = PHANTOM_WAIT_S if wait is None else wait
     seen = {}
@@ -125,6 +133,10 @@ def clear_phantom_runs(sha, api=None, sleep=None, passes=None, wait=None):
             elif run.get("conclusion") == "action_required":
                 jobs = api("repos/%s/actions/runs/%d/jobs" % (REPO, rid))
                 if isinstance(jobs, dict) and jobs.get("total_count") == 0:
+                    own = (run.get("head_repository") or {}).get("full_name") == REPO and run.get("head_sha", sha) == sha
+                    if approve and own and api("repos/%s/actions/runs/%d/approve" % (REPO, rid), "POST") is not None:
+                        seen[rid] = (run.get("name"), "approve", True)
+                        continue
                     seen[rid] = (run.get("name"), "delete", api("repos/%s/actions/runs/%d" % (REPO, rid), "DELETE") is not None)
     return [(rid, name, act, ok) for rid, (name, act, ok) in sorted(seen.items())]
 
@@ -809,14 +821,41 @@ def selftest():
         if method == "GET":
             return {"workflow_runs": runs}
         return None if path.endswith("/runs/2") else {}
-    got = clear_phantom_runs("abc1234", api=fake_api, sleep=napped.append, passes=3, wait=8)
+    got = clear_phantom_runs("abc1234", api=fake_api, sleep=napped.append, passes=3, wait=8, approve=False)
     mutating = [(m, p) for m, p in calls if m != "GET"]
     ok(got == [(1, "mirror-guard", "delete", True), (2, "deploy-gate", "delete", False), (4, "queued-one", "cancel", True)],
        "a completed action_required zero-job run is deleted, a run in flight is cancelled, a refusal is recorded and never raised", got)
-    ok(not any(m == "POST" and "approve" in p for m, p in mutating) and all(m in ("DELETE", "POST") for m, _ in mutating), "nothing is approved", mutating)
+    ok(not any(m == "POST" and "approve" in p for m, p in mutating) and all(m in ("DELETE", "POST") for m, _ in mutating), "with approval off (CONFLICT_REPAIR_APPROVE=off) nothing is approved", mutating)
     ok(not any("/runs/3" in p or "/runs/5" in p or "/runs/6" in p or "/runs/7" in p for m, p in mutating), "a run that has jobs, a green run, a person's run and a dispatched run are never touched", mutating)
     ok(len([1 for m, p in calls if m == "GET" and "head_sha" in p]) == 3 and napped == [8, 8], "the list is read three times, 8 s apart, and each run is handled once", (calls, napped))
     ok(clear_phantom_runs("abc1234", api=lambda *a, **k: None, sleep=lambda s: None) == [], "an unreadable run list clears nothing and does not raise")
+    # OWNER-AUTO-APPROVE-ALL-1: with approval on, only a gated zero-job run of this push on this repository's own branch is approved; a refused approval falls back to the deletion
+    own = {"full_name": REPO}
+    runs = [
+        {"id": 11, "name": "mirror-guard", "status": "completed", "conclusion": "action_required", "event": "pull_request", "actor": bot, "head_repository": own, "head_sha": "abc1234"},
+        {"id": 12, "name": "deploy-gate", "status": "completed", "conclusion": "action_required", "event": "pull_request", "actor": bot, "head_repository": own, "head_sha": "abc1234"},
+        {"id": 13, "name": "a fork run", "status": "completed", "conclusion": "action_required", "event": "pull_request", "actor": bot, "head_repository": {"full_name": "someone/fork"}, "head_sha": "abc1234"},
+        {"id": 14, "name": "no repository field", "status": "completed", "conclusion": "action_required", "event": "pull_request", "actor": bot},
+        {"id": 15, "name": "another sha", "status": "completed", "conclusion": "action_required", "event": "pull_request", "actor": bot, "head_repository": own, "head_sha": "ffff999"},
+        {"id": 16, "name": "ran-for-real", "status": "completed", "conclusion": "action_required", "event": "pull_request", "actor": bot, "head_repository": own, "head_sha": "abc1234"},
+        {"id": 17, "name": "a person's run", "status": "completed", "conclusion": "action_required", "event": "pull_request", "actor": {"login": "rwnq8"}, "head_repository": own, "head_sha": "abc1234"},
+        {"id": 18, "name": "dispatched", "status": "completed", "conclusion": "action_required", "event": "workflow_dispatch", "actor": bot, "head_repository": own, "head_sha": "abc1234"},
+    ]
+    calls2 = []
+    def fake_api2(path, method="GET", fields=None):
+        calls2.append((method, path))
+        if method == "GET" and path.endswith("/jobs"):
+            return {"total_count": 2 if "/runs/16/" in path else 0, "jobs": []}
+        if method == "GET":
+            return {"workflow_runs": runs}
+        return None if path.endswith("/runs/12/approve") else {}
+    got2 = clear_phantom_runs("abc1234", api=fake_api2, sleep=lambda s: None, passes=1, wait=0, approve=True)
+    mut2 = [(m, p.split("/actions/")[1]) for m, p in calls2 if m != "GET"]
+    ok(got2 == [(11, "mirror-guard", "approve", True), (12, "deploy-gate", "delete", True), (13, "a fork run", "delete", True), (14, "no repository field", "delete", True), (15, "another sha", "delete", True)],
+       "approval on: an own-branch gated run is approved, a refused approval falls back to the deletion, a fork, an unknown repository and another sha are only deleted", got2)
+    ok(mut2 == [("POST", "runs/11/approve"), ("POST", "runs/12/approve"), ("DELETE", "runs/12"), ("DELETE", "runs/13"), ("DELETE", "runs/14"), ("DELETE", "runs/15")],
+       "approval is attempted only on runs 11 and 12; a run with jobs, a person's run and a dispatched run are never touched", mut2)
+    ok(APPROVE_PHANTOM is True or os.environ.get("CONFLICT_REPAIR_APPROVE"), "approval is on by default (owner decision 2026-10-26)")
     ok(settled_evidence({"number": 1417, "state": "closed", "merged_at": "2026-10-18T08:57:52Z"}) == "CONFLICT-REPAIR-SETTLE-1: GitHub reads PR #1417 merged at 2026-10-18T08:57:52Z, so there is no conflict left to repair."
        and "closed unmerged" in settled_evidence({"number": 9, "state": "closed", "merged_at": None, "closed_at": "x"})
        and settled_evidence({"number": 9, "state": "open"}) is None and settled_evidence(None) is None,

@@ -95,6 +95,12 @@ because each one was broken at least once; the linked issue holds the evidence.
 - The hourly metric tick audits it: `v_autonomy_first_audit`, metrics `owner_queue_fleet_cards_open` and
   `session_dependent_issues_open` (target 0 each), triggers on both and on `code_task_superseded_share_30d`.
 
+- Owner directive 2026-10-26 (OWNER-AUTO-APPROVE-ALL-1), verbatim: "Yes, auto-approve all", the answer to two items a session had left waiting on the owner. (1) The stale-PR lane may merge a
+  pull request that changes `.github/` (`ops_config stale_pr_merge_workflows`, default on), every other gate unchanged; (2) `scripts/conflict_repair.py` approves the approval-gated zero-job runs of its own
+  push on this repository's own branch (`CONFLICT_REPAIR_APPROVE=off` restores the deletion). It moves no limit: the interrupt gate, the harness's permission checks, the secret lock and live work
+  claims keep their precedence, and a merge GitHub refuses (a workflow file needs the App's `workflows` permission) is an IDENTITY-BOUND card, not a workaround. Stored in
+  `ops_config.OWNER_DIRECTIVE_2026_10_26_AUTO_APPROVE_ALL_1` and docs/AUTONOMOUS-OPERATION-DOCTRINE.md (standing directive 2026-10-26, auto-approve all).
+
 ## Shared secrets (#1701)
 - Before you PUT, rotate or delete any worker secret, take the lease:
   `POST https://qnfo-deploy-guard.q08.workers.dev/secret-lock/acquire {"worker":"<script>","owner":"<session>","ttl_sec":300}`.
@@ -352,7 +358,8 @@ because each one was broken at least once; the linked issue holds the evidence.
   it does not arrive, reverts the push on main (`scripts/canary_revert.py`, one level, never a revert of a revert), dispatches
   the deploy of the revert through the workflow that owns the worker and files `CONTROL-PLANE-REVERTED-1`. The canary proves the VERSION arrived, not
   that the worker works: LOOP-WATCH-1 and the metric triggers are the next line. `off` restores CONTROL-PLANE-MANUAL-1 without a
-  deploy. Workflows under `.github/` never auto-merge.
+  deploy. Workflows under `.github/`: the lane merges them since qnfo-fleet-control 0.50.0 (OWNER-AUTO-APPROVE-ALL-1, owner 2026-10-26: "Yes, auto-approve all"; `ops_config stale_pr_merge_workflows = off`
+  restores the refusal); the code loop's own merge scope (`cmScope`) still denies `.github/workflows/**`.
   CODE-LOOP-CONTROL-PLANE-1 (lever T1.23; owner directive 2026-10-19, verbatim: "The code loop SHALL ALWAYS BE ABLE TO change
   qnfo-fleet-control, qnfo-ops, qnfo-deploy-guard and the loop's own code."; qnfo-fleet-control 0.37.0, qnfo-code-orchestrator 0.22.0,
   human_actions 115): the code loop plans and merges those three workers, qnfo-code-orchestrator and scripts/code-task-* like qnfo-ai
