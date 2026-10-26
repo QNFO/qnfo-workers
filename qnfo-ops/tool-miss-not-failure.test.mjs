@@ -3,6 +3,8 @@
 // not_found result as status ok (meta keeps resultOk false and the error text, so nothing is hidden and the calibration join on meta.resultOk is unchanged); every other failure stays status error, a
 // refusal stays rejected. Covered here: github_repo_read on a missing path (1000393, 1000394), github_issue_get on a missing number (100437: GitHub 404 for the D1 issue id 100350), web_search called with
 // query instead of q (1000443: "q required" for {"query": ...}), and the self-fetch refusal of web_fetch (1000115) recorded as rejected, a correct refusal, not an error.
+// ISSUE-TOOL-REPO-ARGS-1 (2.59.5, agent_issues 100437): github_issue_get still failed at 17:48Z and 19:42Z with "repo (owner/name) and number required" because the model sends {owner, repo, number}; the three issue tools
+// (github_issue_get, github_issues_list, github_issue_comment) now resolve the repo with fpaRepoArg, which keeps every shape that worked before.
 // Run: node qnfo-ops/tool-miss-not-failure.test.mjs   -> prints "N passed, 0 failed"
 import { readFileSync } from "node:fs";
 const src = readFileSync(new URL("./worker.js", import.meta.url), "utf8");
@@ -14,13 +16,16 @@ const parts = [
   grab("function encPath(s) {", "\n__name(encPath"),
   grab("var FPA_REPO_RE =", "\n"),
   grab("var FPA_GH_ERR = function(res) {", "};\n") + "};\n",
+  grab("function fpaRepoArg(args) {", "\nfunction fpaCap"),
   grab("function fpaCap(s, n) {", "\nfunction fpaIssueRow"),
   grab("function fpaIssueRow(i) {", "\nasync function githubIssuesList"),
+  grab("async function githubIssuesList(env, args) {", "\nasync function githubIssueGet"),
   grab("async function githubRepoRead(env, args) {", "\n__name(githubRepoRead"),
   grab("async function githubIssueGet(env, args) {", "\nasync function githubIssueComment"),
+  grab("async function githubIssueComment(env, args) {", "\nvar FPA_FIELD"),
   grab("async function webSearchTool(env, args) {", "\n__name(webSearchTool"),
 ];
-ok(parts.every((p) => p.length > 30), "githubApi, encPath, FPA_REPO_RE, FPA_GH_ERR, fpaCap, fpaIssueRow, githubRepoRead, githubIssueGet and webSearchTool are found in worker.js", parts.map((p) => p.length));
+ok(parts.every((p) => p.length > 30), "githubApi, encPath, FPA_REPO_RE, FPA_GH_ERR, fpaRepoArg, fpaCap, fpaIssueRow, githubIssuesList, githubRepoRead, githubIssueGet, githubIssueComment and webSearchTool are found in worker.js", parts.map((p) => p.length));
 const logSrc = grab("async function logToolEvent(env, name, args, res, ms) {", "\n__name(logToolEvent");
 ok(logSrc.length > 100, "logToolEvent is found in worker.js");
 
@@ -29,7 +34,7 @@ const stripHtml = (s) => String(s || "").replace(/<[^>]+>/g, "").trim();
 let calls = [];
 let responder = () => new Response("{}", { status: 404 });
 globalThis.fetch = async (url, init) => { calls.push(String(url)); return responder(String(url), init || {}); };
-const tools = new Function("decodeBase64", "stripHtml", parts.join("\n") + "\nreturn { githubRepoRead, githubIssueGet, webSearchTool };")(decodeBase64, stripHtml);
+const tools = new Function("decodeBase64", "stripHtml", parts.join("\n") + "\nreturn { githubRepoRead, githubIssueGet, githubIssuesList, githubIssueComment, webSearchTool, fpaRepoArg };")(decodeBase64, stripHtml);
 const env = { GITHUB_TOKEN: "t" };
 const J = (o, s) => new Response(JSON.stringify(o), { status: s || 200, headers: { "content-type": "application/json" } });
 
@@ -60,6 +65,37 @@ r = await tools.githubIssueGet(env, { number: 7, comments: false });
 ok(r.ok === true && r.number === 7 && !r.not_found, "a found issue is unchanged", r);
 r = await tools.githubIssueGet(env, { number: 0 });
 ok(r.ok === false && !r.not_found && /number required/.test(r.error), "a missing number stays an argument error", r);
+
+// ---- the issue tools take {owner, repo, number} (100437, ISSUE-TOOL-REPO-ARGS-1, 2.59.5: github_issue_get failed at 17:48Z and 19:42Z with this shape)
+ok(tools.fpaRepoArg({ owner: "QNFO", repo: "qnfo-workers" }) === "QNFO/qnfo-workers" && tools.fpaRepoArg({ repo: "QNFO/qnfo-workers" }) === "QNFO/qnfo-workers" && tools.fpaRepoArg({}) === "QNFO/qnfo-workers" && tools.fpaRepoArg(undefined) === "QNFO/qnfo-workers", "fpaRepoArg: owner plus bare repo joins, owner/name is kept, nothing at all is QNFO/qnfo-workers");
+ok(tools.fpaRepoArg({ owner: "QNFO" }) === "QNFO/qnfo-workers" && tools.fpaRepoArg({ repo: "qnfo-workers" }) === "QNFO/qnfo-workers" && tools.fpaRepoArg({ owner: "Cloudflare", repo: "workers-sdk" }) === "Cloudflare/workers-sdk" && tools.fpaRepoArg({ owner: "x", repo: "a/b" }) === "a/b", "fpaRepoArg: an owner alone keeps the default (as before), a bare name is QNFO/name, another owner is honoured, an owner/name repo wins over owner");
+const okIssue = () => J({ number: 580, title: "t", state: "open", body: "b", comments: 0, user: { login: "u" }, html_url: "x" }, 200);
+responder = okIssue; calls = [];
+r = await tools.githubIssueGet(env, { owner: "QNFO", repo: "qnfo-workers", number: 580 });
+ok(r.ok === true && r.number === 580 && r.repo === "QNFO/qnfo-workers" && calls.length === 1 && /\/repos\/QNFO\/qnfo-workers\/issues\/580$/.test(calls[0]), "github_issue_get with {owner, repo, number} (the call that failed at 19:42Z) reads QNFO/qnfo-workers issue 580", { r, calls });
+calls = [];
+r = await tools.githubIssueGet(env, { repo: "QNFO/qnfo-workers", number: 552 });
+ok(r.ok === true && /\/repos\/QNFO\/qnfo-workers\/issues\/552$/.test(calls[0]), "the owner/name shape that worked before still works", calls);
+calls = [];
+r = await tools.githubIssueGet(env, { number: 552 });
+ok(r.ok === true && /\/repos\/QNFO\/qnfo-workers\/issues\/552$/.test(calls[0]), "no repo at all still defaults to QNFO/qnfo-workers", calls);
+calls = [];
+r = await tools.githubIssueGet(env, { owner: "Cloudflare", repo: "workers-sdk", number: 1 });
+ok(r.ok === true && r.repo === "Cloudflare/workers-sdk" && /\/repos\/Cloudflare\/workers-sdk\/issues\/1$/.test(calls[0]), "another owner is honoured, not replaced by QNFO", { r, calls });
+calls = [];
+r = await tools.githubIssueGet(env, { owner: "x y", repo: "bad repo!", number: 5 });
+ok(r.ok === false && /repo \(owner\/name\) and number required/.test(r.error) && calls.length === 0, "a repo that is not owner/name after joining stays an argument error and makes no request", { r, calls });
+r = await tools.githubIssueGet(env, { owner: "QNFO", repo: "qnfo-workers", number: 0 });
+ok(r.ok === false && /number required/.test(r.error) && calls.length === 0, "owner and repo with no number stays an argument error", r);
+responder = () => J([{ number: 1, title: "t", state: "open", user: { login: "u" } }], 200); calls = [];
+r = await tools.githubIssuesList(env, { owner: "QNFO", repo: "qnfo-workers", limit: 5 });
+ok(r.ok === true && r.repo === "QNFO/qnfo-workers" && /\/repos\/QNFO\/qnfo-workers\/issues\?/.test(calls[0]), "github_issues_list takes {owner, repo} too", { r, calls });
+responder = () => J({ id: 9, html_url: "u" }, 201); calls = [];
+r = await tools.githubIssueComment(env, { owner: "QNFO", repo: "qnfo-workers", number: 580, body: "hello" });
+ok(r.ok === true && r.repo === "QNFO/qnfo-workers" && /\/repos\/QNFO\/qnfo-workers\/issues\/580\/comments$/.test(calls[0]), "github_issue_comment takes {owner, repo, number} too", { r, calls });
+r = await tools.githubIssueComment(env, { owner: "QNFO", repo: "qnfo-workers", number: 580 });
+ok(r.ok === false && /body required/.test(r.error), "a comment with no body is still an argument error", r);
+ok([...src.matchAll(/const repo = fpaRepoArg\(args\);/g)].length === 3, "exactly the three issue tools resolve the repo with fpaRepoArg", [...src.matchAll(/const repo = fpaRepoArg\(args\);/g)].length);
 
 // ---- web_search (1000443)
 responder = () => new Response("<html></html>", { status: 200 });
