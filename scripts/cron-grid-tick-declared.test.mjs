@@ -7,7 +7,9 @@
 // (2) with the worker's own cronGridMatch/cronGridSlot code executed, every slot of every job falls in exactly one tick window over
 // 400 days (a tick that is declared but too sparse for tickMin leaves a slot uncovered; an overlap would run a job twice).
 // Run: node scripts/cron-grid-tick-declared.test.mjs   (exit 0 = all passed)
-import { readFileSync, readdirSync, existsSync } from "node:fs";
+import { readFileSync, readdirSync, existsSync, writeFileSync } from "node:fs";
+import { spawnSync } from "node:child_process";
+import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -34,6 +36,12 @@ for (const dir of readdirSync(root, { withFileTypes: true })) {
   const m = /var CRON_GRID_CFG = (\{[^\n]*\});/.exec(src);
   if (!m) continue;
   seen++;
+  // CRON-GRID-TICK-SYNTAX-1: the 0.55.2 version note carried a star-slash pair inside a block comment, the script stopped parsing, and the
+  // deploy was refused (CF 10021) after a lane merge that does not run the gate job. The scanned worker must parse as a module.
+  const tmp = join(tmpdir(), "cgtd-" + dir.name + ".mjs");
+  writeFileSync(tmp, src);
+  const chk = spawnSync(process.execPath, ["--check", tmp], { encoding: "utf8" });
+  ok(chk.status === 0, dir.name + ": worker.js parses (node --check)", (chk.stderr || "").split("\n").slice(0, 4).join(" | "));
   let cfg;
   try { cfg = new Function("return " + m[1])(); } catch (e) { ok(false, dir.name + ": CRON_GRID_CFG is a readable object literal", String(e)); continue; }
   const toml = readFileSync(join(w, "wrangler.toml"), "utf8");
