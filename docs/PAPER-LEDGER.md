@@ -1,0 +1,53 @@
+# Paper ledger and withdrawal guard (PAPER-LEDGER-1, PAPER-WITHDRAW-GUARD-1)
+
+Owner directive 2026-10-26: "papers should never disappear en masse; versioning needs to preserve changes across multiple revisions for auditing and provenance."
+The DDL is in `migrations/living-paper/` (applied to the living-paper D1 on 2026-10-26 after a 42-case test on a scratch D1 built from production's own DDL).
+The registers are `migrations/2026-10-26-paper-ledger-1.sql`.
+
+## What is kept
+
+Every insert, update and delete on `papers` that changes the body, status, version, title, abstract, slug, identifier or the bibliographic metadata writes one row to
+`paper_change_ledger` (immutable): the fields changed, version, status and gate reason before and after, body length and a fingerprint before and after, the prior
+title, abstract and metadata, the actor and the reason. The full prior body is in `paper_change_bodies` under the same `seq`. The legacy archive
+(`paper_version_history`) keeps one body per (slug, version) and stays as it was; the ledger is the record.
+
+```sql
+SELECT * FROM v_paper_revisions WHERE slug = '<slug>' ORDER BY seq;      -- the chain of changes to one paper
+SELECT * FROM v_paper_withdrawals_24h;                                   -- who moved papers out of public status
+SELECT * FROM v_paper_ledger_health;                                     -- volume, unattributed share, withdrawals in the hour and day
+SELECT body_md FROM paper_change_bodies WHERE seq = <seq>;               -- the body a change replaced
+```
+
+## Writers set who and why
+
+A writer sets `papers.change_actor` (`<worker>:<run id>`) and `papers.change_reason` in the same UPDATE. Use text that differs for each change: the same pair twice in a
+row reads as unattributed. A change that does not set them is recorded as `unattributed` (`v_paper_ledger_health.unattributed_24h`). Adopted so far: this session's
+repairs. Open: PAPER-LEDGER-ATTRIBUTION-1 (qnfo-cloud-ops) and PAPER-LEDGER-ATTRIBUTION-2 (qnfo-research-exec and qnfo-errata-publish).
+
+## Nothing disappears en masse
+
+`trg_papers_mass_withdraw_guard` refuses a status change that takes a 26th paper out of published, distributed or external_preprint within an hour (or an 81st within a day);
+`trg_papers_mass_delete_guard` refuses a 6th `DELETE FROM papers` within an hour. A refused statement raises `MASS-WITHDRAWAL-BLOCKED` (or `MASS-DELETE-BLOCKED`) and a D1 batch
+containing it rolls back whole. A larger withdrawal that is intended (a deduplication sweep, a retraction of a whole series) first inserts a row:
+
+```sql
+INSERT INTO paper_withdrawal_override (expires_at, max_papers, reason, created_by, scope)
+VALUES (strftime('%Y-%m-%dT%H:%M:%fZ','now','+2 hours'), 60, '<why, and who decided>', '<worker or session>', 'withdraw');   -- scope 'delete' for deletes
+```
+
+An override needs a reason and a creator, covers at most 500 papers, expires within 24 hours, and can never be edited or deleted. Restores (to published) are not withdrawals and
+are never counted. The publication gate itself no longer withdraws any paper (`pub-gate-v4-no-withdraw`); it marks a failing paper for revision and leaves it published.
+
+## Bodies and size
+
+Stored bodies grow by roughly 30 KB per revision. A row of `paper_change_bodies` can be deleted only after `paper_change_body_archive` holds an off-database copy of the same
+size (a trigger enforces it); the archiving job is PAPER-LEDGER-ARCHIVE-1. Ledger rows themselves are never removed.
+
+## Rollback
+
+`DROP TRIGGER paper_ledger_ai, paper_ledger_au, paper_ledger_ad, trg_papers_mass_withdraw_guard, trg_papers_mass_delete_guard` (one statement each). The tables, views and data stay.
+
+## Also found while building it
+
+`papers_fts` (the full-text index) failed its integrity check in production because `papers_au` ran an FTS5 delete on every update; see
+`migrations/living-paper/2026-10-26-papers-fts-drift.sql`. A new trigger on `papers` must not issue an FTS statement for an update that leaves `title` and `abstract` alone.
