@@ -103,6 +103,13 @@ environment = "production"
 # fresh code for a mutating tool before it gets here, so no ops key is copied into this worker.
 props = { caller = "qnfo-fleet-dashboard" }
 
+# CF-AGENTS-1 (1.64.0): the Cloudflare Agents SDK agent (qnfo-agents). It trusts ctx.props.caller qnfo-fleet-dashboard for turns and
+# reads (read scope); the console sends x-agent-scope: write only for cfagent! and agent changes, after a fresh owner code.
+[[services]]
+binding = "SVC_QNFO_AGENTS"
+service = "qnfo-agents"
+props = { caller = "qnfo-fleet-dashboard" }
+
 # SVC_QNFO_KAIZEN (qnfo-kaizen) removed 2026-10-06: worker retired (WORKER-RETIRE-WAVE-2, #1756).
 
 [[services]]

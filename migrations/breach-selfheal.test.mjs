@@ -9,6 +9,7 @@ import { DatabaseSync } from "node:sqlite";
 import { readFileSync } from "node:fs";
 const sql = readFileSync(new URL("./2026-10-26-breach-selfheal.sql", import.meta.url), "utf8");
 const sqlWindow = readFileSync(new URL("./2026-10-26-breach-selfheal-post-deploy-window.sql", import.meta.url), "utf8");
+const sqlSplit = readFileSync(new URL("./2026-10-26-fleet-tick-split.sql", import.meta.url), "utf8");
 let pass = 0, fail = 0;
 const ok = (c, m, d) => { if (c) pass++; else { fail++; console.log("FAIL " + m + (d === undefined ? "" : " :: " + JSON.stringify(d).slice(0, 500))); } };
 const d = new DatabaseSync(":memory:");
@@ -31,13 +32,17 @@ const dt = (agoH) => iso(agoH).slice(0, 19).replace("T", " ");
 const today = new Date(now).toISOString().slice(0, 10);
 d.exec(sql);
 d.exec(sqlWindow);
+d.exec(sqlSplit);
 const row = (cls, subj) => d.prepare("SELECT hit, diagnosis, evidence FROM v_breach_selfheal WHERE check_class = ? AND subject = ?").get(cls, subj);
 const cfg = (k) => (d.prepare("SELECT value FROM ops_config WHERE key = ?").get(k) || {}).value;
 const metric = (m) => (d.prepare("SELECT last_value FROM metric_registry WHERE metric = ?").get(m) || {}).last_value;
-const tick = () => d.prepare("INSERT INTO fleet_tick (source) VALUES ('test')").run();
+// FLEET-TICK-SPLIT-1: the self-heal step runs on its own heartbeat statement, never inside fleet_tick's.
+const tick = () => { d.prepare("INSERT INTO fleet_tick (source) VALUES ('test')").run(); d.prepare("INSERT INTO fleet_tick_heavy (source) VALUES ('test')").run(); };
+ok(!d.prepare("SELECT name FROM sqlite_master WHERE type = 'trigger' AND tbl_name = 'fleet_tick' AND instr(sql, 'breach_selfheal') > 0").all().length, "no breach self-heal trigger on fleet_tick");
+ok(d.prepare("SELECT tbl_name FROM sqlite_master WHERE name = 'breach_selfheal_heavy_tick'").get().tbl_name === "fleet_tick_heavy", "the self-heal trigger is on fleet_tick_heavy");
 
 ok(cfg("breach_selfheal") === "on" && cfg("errata_confirm_max") === "12", "the switch and the confirm rate are seeded");
-ok(d.prepare("SELECT COUNT(*) n FROM analytics_metric_triggers").get().n === 5 && d.prepare("SELECT COUNT(*) n FROM failure_modes").get().n === 6 && d.prepare("SELECT COUNT(*) n FROM remediation_contracts").get().n === 6, "five triggers, six failure modes, six detector contracts");
+ok(d.prepare("SELECT COUNT(*) n FROM analytics_metric_triggers").get().n === 5 && d.prepare("SELECT COUNT(*) n FROM failure_modes").get().n === 7 && d.prepare("SELECT COUNT(*) n FROM remediation_contracts").get().n === 7, "five triggers, seven failure modes, seven detector contracts");
 ok(/code-task: repo=qnfo-workers path=qnfo-research-exec\/worker\.js\ncode-anchor: async function confirmInternalErrata\(env\) \{/.test(d.prepare("SELECT action FROM analytics_metric_triggers WHERE metric_key = 'errata_confirm_stalled'").get().action), "the errata stall trigger hands the code loop a file and an anchor");
 const workerSrc = readFileSync(new URL("../qnfo-research-exec/worker.js", import.meta.url), "utf8");
 for (const a of d.prepare("SELECT action FROM analytics_metric_triggers WHERE action LIKE '%code-anchor:%'").all()) {
@@ -137,7 +142,9 @@ for (const c of d.prepare("SELECT class, verify_probe FROM remediation_contracts
 const before = JSON.stringify(d.prepare("SELECT COUNT(*) n FROM analytics_metric_triggers").get()) + JSON.stringify(d.prepare("SELECT COUNT(*) n FROM decision_log").get()) + cfg("breach_selfheal");
 d.exec(sql);
 d.exec(sqlWindow);
+d.exec(sqlSplit);
 ok(before === JSON.stringify(d.prepare("SELECT COUNT(*) n FROM analytics_metric_triggers").get()) + JSON.stringify(d.prepare("SELECT COUNT(*) n FROM decision_log").get()) + cfg("breach_selfheal"), "a second apply changes nothing");
+d.exec(sqlSplit.match(/^-- Rollback: (.*)$/m)[1].replace(/ fleet_tick_heavy stays.*$/, ""));
 const rollback = sql.match(/^-- Rollback: (.*)$/m)[1];
 d.exec(rollback.replace(/; breach_selfheal_actions keeps.*$/, ";"));
 ok(!d.prepare("SELECT name FROM sqlite_master WHERE name IN ('v_breach_selfheal', 'v_breach_selfheal_inputs', 'v_breach_selfheal_chains', 'v_breach_selfheal_spend', 'breach_selfheal_tick')").all().length && d.prepare("SELECT COUNT(*) n FROM analytics_metric_triggers").get().n === 0 && !cfg("errata_confirm_max"), "the Rollback line removes what the file added");
