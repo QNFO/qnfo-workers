@@ -15527,7 +15527,7 @@ function buildPrintTemplates(meta) {
 }
 
 // worker.js
-var VERSION = "1.7.3"; /* 1.7.3 PDF-STALE-AFTER-BODY-EDIT-1 (2026-10-26, pillar reach): the tick re-renders a stored PDF whose paper changed after the upload, whatever the renderer stamp says; a corrected body is refreshed before a typesetting refresh. The check compares one R2 list with one D1 read over the whole corpus, so an old stale PDF behind many fresh ones is still found. */ /* 1.7.2 KATEX-0.19.1-1: refresh the bundled KaTeX runtime. */ /* 1.7.1 PDF-QUALITY-CACHE-INVALIDATION-1: bump renderer stamp so the backlog regenerates cached PDFs with publisher quality and review-status metadata. */ /* 1.7.0 PAPER-QUALITY-METADATA-1: generated paper artifacts expose the publisher quality classification and review status. */ /* 1.6.0-no-registrar NO-REGISTRAR-1 (2026-10-21): PDF metadata reads doi and identifier only; the registrar column and venue name are gone */ /* 1.5.2 TYPESET-PRO-3 (2026-10-18, red-team round 2): 511 of 624 public records carry their bibliography as a numbered list in their own body WITHOUT citation keys, so 1.5.1 left it in body prose; parseBodyReferences() now typesets an unkeyed list too, guarded by "closing section + three entries + a majority carrying a year or DOI". Ships scripts/pdf_corpus_audit.mjs, the executable guard named in failure_modes.pdf-typeset-bibliography-dropped. 1.5.1 TYPESET-PRO-2: a citation wrapped across a source line break printed as raw text; most papers bibliographies are the numbered list in their own body; an unmatched key was flagged even where no bibliography exists. 1.5.0 TYPESET-PRO-1 (owner directive professional typesetting with full bibliographic information and author/affiliation): title block with authors/affiliations/identifiers, BibTeX resolution from R2, numbered citations, hanging-indent reference list, live running head and page numbers. */
+var VERSION = "1.7.4-codeagent"; /* 1.7.3 PDF-STALE-AFTER-BODY-EDIT-1 (2026-10-26, pillar reach): the tick re-renders a stored PDF whose paper changed after the upload, whatever the renderer stamp says; a corrected body is refreshed before a typesetting refresh. The check compares one R2 list with one D1 read over the whole corpus, so an old stale PDF behind many fresh ones is still found. */ /* 1.7.2 KATEX-0.19.1-1: refresh the bundled KaTeX runtime. */ /* 1.7.1 PDF-QUALITY-CACHE-INVALIDATION-1: bump renderer stamp so the backlog regenerates cached PDFs with publisher quality and review-status metadata. */ /* 1.7.0 PAPER-QUALITY-METADATA-1: generated paper artifacts expose the publisher quality classification and review status. */ /* 1.6.0-no-registrar NO-REGISTRAR-1 (2026-10-21): PDF metadata reads doi and identifier only; the registrar column and venue name are gone */ /* 1.5.2 TYPESET-PRO-3 (2026-10-18, red-team round 2): 511 of 624 public records carry their bibliography as a numbered list in their own body WITHOUT citation keys, so 1.5.1 left it in body prose; parseBodyReferences() now typesets an unkeyed list too, guarded by "closing section + three entries + a majority carrying a year or DOI". Ships scripts/pdf_corpus_audit.mjs, the executable guard named in failure_modes.pdf-typeset-bibliography-dropped. 1.5.1 TYPESET-PRO-2: a citation wrapped across a source line break printed as raw text; most papers bibliographies are the numbered list in their own body; an unmatched key was flagged even where no bibliography exists. 1.5.0 TYPESET-PRO-1 (owner directive professional typesetting with full bibliographic information and author/affiliation): title block with authors/affiliations/identifiers, BibTeX resolution from R2, numbered citations, hanging-indent reference list, live running head and page numbers. */
 function pdfHeaders(slug) {
   return {
     "Content-Type": "application/pdf",
@@ -15818,9 +15818,9 @@ async function pdfBacklogRows(env, batch, skip, opts) {
   var refresh = [];
   var rendererVersion = opts && opts.rendererVersion;
   if (backlog.length < batch && env.RELEASES) {
+    var wanted = Math.max(1, batch - backlog.length);
+    var slugs = [];
     if (rendererVersion) {
-      var wanted = Math.max(1, batch - backlog.length);
-      var slugs = [];
       // A corrected body is refreshed before a typesetting refresh: what readers download matters more than how it is set.
       var changed = await staleBodies(env, wanted);
       for (var c = 0; c < changed.length; c++) if (changed[c].slug && (skip[changed[c].slug] || 0) < PDF_FAIL_SKIP_AFTER && slugs.indexOf(changed[c].slug) < 0) slugs.push(changed[c].slug);
@@ -15834,11 +15834,15 @@ async function pdfBacklogRows(env, batch, skip, opts) {
         for (var b = 0; b < ((recS && recS.results) || []).length; b++) bySlug[recS.results[b].slug] = recS.results[b];
         for (var a = 0; a < slugs.length && backlog.length + refresh.length < batch; a++) if (bySlug[slugs[a]]) refresh.push(bySlug[slugs[a]]);
       }
-    } else {
+    }
+    {
       var rec = await env.LIVING.prepare("SELECT " + PDF_META_COLUMNS + ", pdf_path FROM papers WHERE status IN " + PDF_PUBLIC_STATUSES + " AND pdf_path IS NOT NULL AND pdf_path <> '' AND updated_at > strftime('%Y-%m-%d %H:%M:%S','now','-2 days') ORDER BY updated_at DESC LIMIT 20").all();
       for (var j = 0; j < ((rec && rec.results) || []).length && backlog.length + refresh.length < batch; j++) {
         var qq = rec.results[j];
         if ((skip[qq.slug] || 0) >= PDF_FAIL_SKIP_AFTER) continue;
+        var already = false;
+        for (var d = 0; d < refresh.length; d++) if (refresh[d].slug === qq.slug) already = true;
+        if (already) continue;
         var h = null;
         try { h = await env.RELEASES.head(String(qq.pdf_path)); } catch (e) { h = null; }
         var up = h && h.uploaded ? { date: h.uploaded, stamp: (h.customMetadata && h.customMetadata.renderer) || "" } : null;

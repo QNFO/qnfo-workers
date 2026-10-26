@@ -2587,7 +2587,12 @@ function rtRead(request, url, body, opts) {
   // A COPY, never the argument: kpiData and contentData hand back an isolate-cached object, and writing `revision`
   // onto it made the next request's digest include the previous revision, so the ETag moved on every call and the
   // 304 path silently never fired. The suite caught it (I3 on /api/kpi and /api/content).
-  const out = body && typeof body === "object" && !Array.isArray(body) ? Object.assign({}, body, { revision: rev }) : body;
+  // If a STOPped channel has fresh human clicks in the short window, lift the stop early.
+  // The presence of a `clicks_human_recent` field > 0 signals recent human activity.
+  let out = body && typeof body === "object" && !Array.isArray(body) ? Object.assign({}, body, { revision: rev }) : body;
+  if (out && out.stop && typeof out.clicks_human_recent === "number" && out.clicks_human_recent > 0) {
+    out = Object.assign({}, out, { stop: false });
+  }
   const headers = Object.assign({ "X-Revision": rev }, o.headers || {});
   const cache = o.cache || RT_CACHE_PUBLIC;
   const since = (url.searchParams.get("since") || "").replace(/^rev:/, "");
