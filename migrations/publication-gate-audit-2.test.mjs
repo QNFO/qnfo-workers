@@ -1,13 +1,13 @@
-// PUBLICATION-GATE-AUDIT-1 offline suite: runs migrations/2026-10-26-publication-gate-audit.sql on SQLite after the output-quality ledger migration it builds on (already live).
+// PUBLICATION-GATE-AUDIT-2 offline suite: runs migrations/2026-10-26-publication-gate-audit-2.sql on SQLite after the output-quality ledger migration it builds on (already live).
 // Proves: the q08 retraction rate is classified as a lower-is-better outcome and registered as worker-written with no trigger of its own (its exemption is named); the verdict view
 // lists it as insufficient_history until it has history; three failure modes, two decisions (each with a parseable prediction and a revert path that names the ops_config override) and
 // one capability are recorded; a second apply writes nothing; the Rollback header removes only the two rows it added and leaves the append-only evidence.
-// Run: node migrations/publication-gate-audit.test.mjs
+// Run: node migrations/publication-gate-audit-2.test.mjs
 import { DatabaseSync } from "node:sqlite";
 import { readFileSync } from "node:fs";
 const dir = new URL("./", import.meta.url);
 const ledger = readFileSync(new URL("2026-10-26-output-quality-ledger.sql", dir), "utf8");
-const audit = readFileSync(new URL("2026-10-26-publication-gate-audit.sql", dir), "utf8");
+const audit = readFileSync(new URL("2026-10-26-publication-gate-audit-2.sql", dir), "utf8");
 const SCHEMA = (readFileSync(new URL("output-quality-ledger.test.mjs", dir), "utf8").match(/const SCHEMA = `([\s\S]*?)`;/) || [])[1];
 let pass = 0, fail = 0;
 const ok = (c, m, d) => { if (c) pass++; else { fail++; console.log("FAIL " + m + (d === undefined ? "" : " :: " + JSON.stringify(d))); } };
@@ -37,7 +37,7 @@ ok(one("SELECT moved FROM v_output_quality_verdict WHERE metric = 'q08_retractio
 
 const fms = all("SELECT fm_key FROM failure_modes WHERE fm_key IN ('reviewer-output-shape-drift', 'ledger-tag-form-leak', 'writer-order-by-proxy')");
 ok(fms.length === 3 && one("SELECT COUNT(*) AS n FROM failure_modes").n === before.fms + 3, "three failure modes recorded", fms);
-const dls = all("SELECT * FROM decision_log WHERE instr(action, 'PUBLICATION-GATE-AUDIT-1') > 0");
+const dls = all("SELECT * FROM decision_log WHERE instr(action, 'PUBLICATION-GATE-AUDIT-2') > 0");
 ok(dls.length === 2 && dls.every((d) => /^[a-z0-9_]+ (>=|<=|>|<) [0-9.]+ within [0-9]+ h$/.test(d.predicted_outcome) && d.rollback_path && d.capability_gain && d.blast_radius && d.surfaces_tested), "two decisions, each with a parseable prediction, a revert path, a gain and a blast radius", dls.map((d) => d.predicted_outcome));
 ok(/q08_compose_order/.test(dls[0].rollback_path) && /INSERT OR REPLACE INTO ops_config/.test(dls[0].rollback_path), "the writer-order decision names the override that reverts it without a deploy");
 ok(one("SELECT COUNT(*) AS n FROM capability_ledger WHERE capability LIKE 'q08 reviewer-output hygiene%'").n === 1, "one capability recorded");
@@ -68,5 +68,5 @@ if (rb) {
 }
 ok(/^-- APPLY-BY: ci$/m.test(audit) && /^-- DB: qnfo-audit$/m.test(audit), "APPLY-BY and DB headers");
 ok(!/\b(DELETE|DROP)\b/i.test(audit.replace(/^--.*$/gm, "")), "no DELETE or DROP in the body, so no BACKUP header is owed");
-console.log(`publication-gate-audit: ${pass} pass, ${fail} fail`);
+console.log(`publication-gate-audit-2: ${pass} pass, ${fail} fail`);
 if (fail) process.exit(1);

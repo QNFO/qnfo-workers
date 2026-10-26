@@ -1,0 +1,34 @@
+// TOOL-ISSUE-SELFCLOSE-1 offline suite: tool-failure issues get a probe on their tool's 24 h error share, now and whenever the birth
+// contract is superseded; other issues are untouched. Run: node migrations/tool-issue-selfclose.test.mjs
+import { DatabaseSync } from "node:sqlite"; import { readFileSync } from "node:fs";
+const db = new DatabaseSync(":memory:");
+db.exec(`CREATE TABLE agent_issues (id INTEGER PRIMARY KEY, title TEXT, status TEXT);
+CREATE TABLE remediation_contracts (class TEXT PRIMARY KEY, issue_id INTEGER, precondition TEXT NOT NULL DEFAULT '', action TEXT NOT NULL DEFAULT '', verify_probe TEXT NOT NULL DEFAULT '', verify_transport TEXT NOT NULL DEFAULT '', max_attempts INTEGER DEFAULT 3, escalate_to TEXT NOT NULL DEFAULT '', expected_cadence_h INTEGER, status TEXT DEFAULT 'active', ts TEXT, last_attempt_at TEXT, last_verdict TEXT, module TEXT, budget_ms INTEGER, next_due_at TEXT, max_items INTEGER, requires_container INTEGER, attempts INTEGER DEFAULT 0, deferred_since TEXT);
+CREATE TABLE cloud_ops_events (id TEXT, ts TEXT, kind TEXT, text TEXT, meta TEXT, job TEXT, status TEXT);
+CREATE TABLE failure_modes (fm_key TEXT, failure_mode TEXT, root_cause TEXT, remediation TEXT, detector TEXT, probe_class TEXT, first_seen TEXT, issue_id INTEGER, trigger_condition TEXT, symptom TEXT, blast_radius TEXT);
+CREATE TABLE decision_log (actor TEXT, assumption TEXT, action TEXT, evidence TEXT, outcome TEXT, blast_radius TEXT, rollback_path TEXT, capability_gain TEXT, predicted_outcome TEXT, surfaces_tested TEXT);
+INSERT INTO agent_issues VALUES (1,'TOOL-FAILURE: web_fetch [error]','open'),(2,'SELF-AUDIT-TOOLERR: fleet_graph','open'),(3,'[self-heal] tool git_clone_exec failing (x)','open'),(4,'OTHER: x','open'),(5,'TOOL-FAILURE: shell_exec [error]','open');
+INSERT INTO remediation_contracts (class, issue_id, status) VALUES ('issue-1',1,'superseded'),('issue-2',2,'superseded'),('issue-3',3,'probe-review-refused'),('issue-4',4,'superseded'),('issue-5',5,'active');`);
+const now = new Date().toISOString().slice(0,19)+"Z";
+for (let i=0;i<10;i++) db.prepare("INSERT INTO cloud_ops_events (ts,kind,text,status) VALUES (?,?,?,?)").run(now,'ops_ai_tool','web_fetch', i<4?'error':'ok');
+for (let i=0;i<10;i++) db.prepare("INSERT INTO cloud_ops_events (ts,kind,text,status) VALUES (?,?,?,?)").run(now,'ops_ai_tool','fleet_graph', i<1?'error':'ok');
+db.exec(readFileSync(new URL("./2026-10-26-tool-issue-selfclose.sql", import.meta.url),"utf8"));
+let pass = 0, fail = 0; const ok = (c, m, x) => { if (c) pass++; else { fail++; console.log("FAIL " + m + (x !== undefined ? " -- " + JSON.stringify(x) : "")); } };
+const c = (k) => db.prepare("SELECT * FROM remediation_contracts WHERE class = ?").get(k);
+const obs = (k) => db.prepare(c(k).verify_probe).get();
+ok(c("issue-1").status === "active" && obs("issue-1").observed === "errors 4/10 in 24h", "a tool still failing stays open with its live count", obs("issue-1"));
+ok(c("issue-2").status === "active" && obs("issue-2").observed === "ok", "a recovered tool reads ok");
+ok(c("issue-3").status === "active" && obs("issue-3").observed === "ok", "a refused probe is replaced; a tool with no calls reads ok");
+ok(c("issue-4").status === "superseded", "a non-tool issue is untouched");
+ok(c("issue-5").verify_probe === "", "an active contract is not rewritten");
+ok(JSON.stringify(db.prepare("SELECT tool FROM v_tool_issue_probe ORDER BY issue_id").all().map(x=>x.tool)) === JSON.stringify(["web_fetch","fleet_graph","git_clone_exec","shell_exec"]), "tool names parse from all three title families");
+db.prepare("INSERT INTO agent_issues VALUES (6,'TOOL-FAILURE: cf_docs [error]','open')").run();
+db.prepare("INSERT INTO remediation_contracts (class, issue_id, status) VALUES ('issue-6',6,'active')").run();
+db.prepare("UPDATE remediation_contracts SET status='superseded' WHERE class='issue-6'").run();
+ok(c("issue-6").status === "active" && /ops_ai_tool/.test(c("issue-6").verify_probe), "the trigger applies the probe when a new tool issue's contract is superseded");
+db.prepare("UPDATE remediation_contracts SET status='superseded' WHERE class='issue-4'").run();
+ok(c("issue-4").status === "superseded", "the trigger ignores other issues");
+ok(obs("fm-tool-issue-no-probe").observed === "0", "the failure-mode detector reads 0");
+db.exec(readFileSync(new URL("./2026-10-26-tool-issue-selfclose.sql", import.meta.url),"utf8")); ok(db.prepare("SELECT COUNT(*) n FROM decision_log").get().n === 1, "the file is idempotent");
+console.log("tool-issue-selfclose.test: " + pass + " passed, " + fail + " failed");
+process.exit(fail ? 1 : 0);

@@ -1,4 +1,4 @@
-// PUBLICATION-GATE-AUDIT-1 offline suite (q08-signal-engine 0.36.0, charter pillar reach). Evidence: engine_runs, 14 days to 2026-10-26: 20 ok of 537
+// PUBLICATION-GATE-AUDIT-2 offline suite (q08-signal-engine 0.36.0, charter pillar reach). Evidence: engine_runs, 14 days to 2026-10-26: 20 ok of 537
 // finished runs; 517 gate failures; 38 accuracy failures listed ledger numbers as figures ("figure not in the source: 40,") and tags as names ("name not in
 // the source: S28 S29"); seven of 18 fact-check failures read on 2026-10-24..26 were not claims the draft makes. Proves:
 //  (1) ledger tags a writer prints in round, curly, fullwidth and lenticular brackets, in lists, after a dagger and as [ledger S3] are removed before any check,
