@@ -165,4 +165,17 @@ with tempfile.TemporaryDirectory() as t4:
     r = guard(t4); ok(r.returncode == 1 and "write-200-only" in r.stdout and "scripts/act.py:3" in r.stdout, "scripts/*.py is checked too: " + r.stdout)
     (q / "scripts/act_test.py").write_text('st, j = call("POST", "/x", t, b)\nassert st == 200\n'); (q / "scripts/act.py").write_text("x = 1\n")
     sh(t4, "git", "add", "-A"); r = guard(t4); ok(r.returncode == 0, "test files may assert 200: " + r.stdout)
+# GENERATED-BUNDLE-1: a worker.js built from src/ by build.mjs is judged by its src/ files, never by the vendored bundle lines
+with tempfile.TemporaryDirectory() as t5:
+    q = pathlib.Path(t5); sh(t5, "git", "init", "-q"); sh(t5, "git", "config", "user.email", "a@b.c"); sh(t5, "git", "config", "user.name", "t")
+    (q / "g/src").mkdir(parents=True); (q / "g/src/index.ts").write_text("export default {};\n"); (q / "g/build.mjs").write_text("// build\n")
+    (q / "g/worker.js").write_text('var VERSION = "0.1.0"; // g bundle, generated from src/ by build.mjs\nexport default {};\n')
+    (q / "g/wrangler.toml").write_text('name="g"\n[observability]\nenabled=true\nhead_sampling_rate=1\n[observability.traces]\nenabled=true\n')
+    sh(t5, "git", "add", "-A"); sh(t5, "git", "commit", "-qm", "base")
+    (q / "g/worker.js").write_text('var VERSION = "0.1.1"; // g bundle, generated from src/ by build.mjs\nvar id = Math.random().toString(36).slice(2);\nexport default {};\n')
+    r = guard(t5); ok(r.returncode == 0, "a vendored line in a generated bundle passes: " + r.stdout)
+    (q / "g/src/index.ts").write_text("export default {};\nconst id = Math.random().toString(36).slice(2);\n")
+    r = guard(t5); ok(r.returncode == 1 and "g/src/index.ts:2" in r.stdout and "math-random-token" in r.stdout, "the bundle's source is checked with the same rules: " + r.stdout)
+    (q / "g/src/index.ts").write_text("export default {};\n"); (q / "g/worker.js").write_text('var VERSION = "0.1.1";\nvar id = Math.random().toString(36).slice(2);\nexport default {};\n')
+    r = guard(t5); ok(r.returncode == 1 and "math-random-token" in r.stdout, "a worker.js without the generated line is checked as usual: " + r.stdout)
 print("workers_standards_guard: %s" %("FAILED %d" % fails if fails else "all passed")); sys.exit(1 if fails else 0)

@@ -1,0 +1,104 @@
+// qnfo-agents pure helpers (CF-AGENTS-1). No imports: worker.test.mjs loads this file directly with node, without node_modules.
+
+// Service-binding callers this worker trusts. Only a service binding can set ctx.props, and only a deploy of the caller sets its
+// value (the OPS-INTERNAL-CALLER-1 rule in qnfo-ops). Both callers verify the owner before they call: the dashboard by the emailed
+// code session (FLEET-CMD-1), qnfo-ops by its own authOk (owner session or router key).
+export const TRUSTED_CALLERS = ["qnfo-fleet-dashboard", "qnfo-ops"];
+
+export function callerOf(ctx) {
+  const c = ctx && ctx.props && typeof ctx.props.caller === "string" ? ctx.props.caller : "";
+  return TRUSTED_CALLERS.indexOf(c) >= 0 ? c : "";
+}
+
+// public: open to everyone (catalogue, health, public repository reads). read: a trusted caller, read-only tools.
+// write: a trusted caller that asked for write (the dashboard sends it only after a fresh owner code, like sql! and merge).
+export function scopeOf(caller, header) {
+  if (!caller) return "public";
+  return String(header || "").trim().toLowerCase() === "write" ? "write" : "read";
+}
+
+// The qnfo-ops tools that change nothing. Mirrors CMD_TOOL_READ_ONLY in qnfo-fleet-dashboard/worker.js (AGENT-TOOLS-1), so the
+// console and this agent agree on what needs the write scope. Any other ops tool runs only with scope write.
+export const OPS_READ_ONLY = ["fleet_status", "ops_issues_list", "ops_d1_query", "vectorize_query", "r2_list", "r2_get", "kv_get", "queue_read", "intents_query", "candidates_query", "service_discover", "backlog_status", "cf_analytics", "telemetry_report", "telemetry_analyze", "email_check", "email_stats", "ops_fleet_log", "fleet_graph", "dashboard_feed", "cf_docs", "workspace_read", "workspace_list", "workspace_grep", "workspace_glob", "workspace_diff", "workspace_stat", "workspace_read_multi", "cf_worker_read", "cf_worker_bindings", "github_repo_read", "github_issues_list", "github_issue_get", "github_projects_list", "git_op", "dr_validate_schema", "container_status", "web_search", "web_fetch", "run_code", "run_python", "run_code_net", "exec_pipeline"];
+
+export function opsToolAllowed(name, scope) {
+  if (scope === "write") return true;
+  if (scope === "read") return OPS_READ_ONLY.indexOf(String(name)) >= 0;
+  return false;
+}
+
+// A tool name the model can call as a JavaScript identifier inside Code Mode.
+export function safeToolName(name) {
+  const s = String(name || "").replace(/[^A-Za-z0-9_]/g, "_");
+  return /^[A-Za-z_]/.test(s) ? s : "t_" + s;
+}
+
+// Read-only SQL for qnfo-audit: one SELECT or WITH statement, no write keyword, no sign-in or secret tables, and a row cap.
+const SQL_WRITE = /\b(insert|update|delete|drop|alter|create|attach|detach|replace|vacuum|reindex|pragma|upsert|truncate)\b/i;
+const SQL_PRIVATE = /\b(owner_sessions|owner_codes|console_agent_auth|ops_sessions|owner_docs|\w*secrets?|\w*_tokens?|\w*_passwords?)\b/i;
+export function readOnlySql(sql, maxRows) {
+  const cap = Math.max(1, Math.min(500, Number(maxRows) || 200));
+  let s = String(sql || "").replace(/\/\*[\s\S]*?\*\//g, " ").replace(/--[^\n]*/g, " ").trim().replace(/;\s*$/, "");
+  if (!s) return { error: "empty SQL" };
+  if (s.indexOf(";") >= 0) return { error: "one statement at a time" };
+  if (!/^(select|with)\b/i.test(s)) return { error: "read-only: the statement must start with SELECT or WITH" };
+  if (SQL_WRITE.test(s)) return { error: "read-only: write keywords are refused here (file the change as a code task or use the console's sql!)" };
+  if (SQL_PRIVATE.test(s)) return { error: "sign-in, session, token and secret tables are not readable through the agent" };
+  if (!/\blimit\s+\d+\s*$/i.test(s)) s += " LIMIT " + cap;
+  return { sql: s };
+}
+
+// A repository path the agent may read: relative, no traversal, no NUL.
+export function repoPathOk(path) {
+  const p = String(path || "");
+  return p.length > 0 && p.length <= 300 && p.indexOf("..") < 0 && p.indexOf("\0") < 0 && !/^\//.test(p) && /^[A-Za-z0-9._\/-]+$/.test(p);
+}
+
+// Slice a text file by 1-based line range, capped in characters.
+export function sliceLines(text, from, count, maxChars) {
+  const lines = String(text).split("\n");
+  const a = Math.max(1, Number(from) || 1);
+  const n = Math.max(1, Math.min(4000, Number(count) || 400));
+  const cap = Math.max(1000, Math.min(120000, Number(maxChars) || 60000));
+  let out = lines.slice(a - 1, a - 1 + n).map(function (l, i) { return (a + i) + "\t" + l; }).join("\n");
+  const truncated = out.length > cap;
+  if (truncated) out = out.slice(0, cap);
+  return { total_lines: lines.length, from: a, to: Math.min(lines.length, a - 1 + n), truncated, text: out };
+}
+
+// A code-task proposal in the form the code loop reads (ISSUE-INTAKE-1 in qnfo-code-orchestrator): the dashboard files it as an
+// owner task when the owner taps it, so the issue carries the owner-request provenance the planner trusts.
+export function codeTaskText(p) {
+  const path = String(p && p.path || "").trim();
+  const goal = String(p && p.goal || "").replace(/\s+/g, " ").trim();
+  const anchor = String(p && p.anchor || "").replace(/[\r\n]+/g, " ").trim();
+  if (!repoPathOk(path)) return { error: "path must be a repository path like qnfo-ops/worker.js" };
+  if (goal.length < 12) return { error: "say what the change does in at least 12 characters" };
+  const lines = [goal.slice(0, 1500), "code-task: repo=qnfo-workers path=" + path];
+  if (anchor) lines.push("code-anchor: " + anchor.slice(0, 300));
+  return { text: lines.join("\n") };
+}
+
+// When a schedule runs: a cron expression (five fields), or a delay in seconds (60 s to 30 days).
+export function scheduleWhen(input) {
+  const cron = String(input && input.cron || "").trim();
+  if (cron) {
+    if (!/^(\S+\s+){4}\S+$/.test(cron)) return { error: "cron needs five fields, e.g. 0 * * * *" };
+    if (/^\*\s/.test(cron) || /^\*\/[1-4]\s/.test(cron)) return { error: "a scheduled agent turn runs at most every 5 minutes" };
+    return { when: cron, kind: "cron" };
+  }
+  const d = Number(input && input.delay_s);
+  if (!Number.isFinite(d) || d < 60 || d > 30 * 86400) return { error: "give cron, or delay_s between 60 and 2592000" };
+  return { when: Math.round(d), kind: "delay" };
+}
+
+export function clip(s, n) {
+  const t = typeof s === "string" ? s : (function () { try { return JSON.stringify(s); } catch (e) { return String(s); } })();
+  return t && t.length > n ? t.slice(0, n) + "... (" + (t.length - n) + " more characters)" : t;
+}
+
+export function runId() {
+  const b = new Uint8Array(6);
+  crypto.getRandomValues(b);
+  return "run_" + Date.now().toString(36) + "_" + Array.from(b, function (x) { return x.toString(16).padStart(2, "0"); }).join("");
+}
