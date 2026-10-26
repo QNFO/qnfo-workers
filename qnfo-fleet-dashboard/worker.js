@@ -10,7 +10,8 @@ var __defProp222 = Object.defineProperty;
 var __name222 = /* @__PURE__ */ __name22((target, value) => __defProp222(target, "name", { value, configurable: true }), "__name");
 var __name2222 = /* @__PURE__ */ __name222((target, value) => Object.defineProperty(target, "name", { value, configurable: true }), "__name");
 // VERSION-LINE-SPLIT-1 (agent_issues 100220): the release notes sit one per line below this statement, newest first, so a VERSION bump is a one-line patch; add a new note as the first line under it.
-var VERSION = "1.65.0";
+var VERSION = "1.66.0";
+/* 1.66.0 MANAGEMENT-PERSONAS-2 (2026-10-26, pillar autonomy): /managers and /api/managers show the issue decisions the managers now take on their own (persona_actions, last 24 h: promote, restore, close on a recovered metric, supersede a duplicate, demote a stale fleet critical) with the evidence of each. The weekly portfolio review no longer files an owner card when a program is RED for 3 reviews: the hourly portfolio manager makes the riskiest program the constraint and its program manager acts on it; only the money card (AI spend above the ceiling) stays with the owner. */
 /* 1.63.0 MANAGEMENT-PERSONAS-1 (2026-10-26, pillar autonomy): new page /managers and feed /api/managers (Autonomy area): what the portfolio manager and the five program managers decided this hour (focus split across programs, the constraint, each program's focus issues and doer gaps, the moves of the last 24 h), read from the hourly fleet_tasks management-personas tick (migrations/2026-10-26-management-personas.sql). */
 /* 1.61.3 DASHBOARD-MAIL-PARALLEL-1 (pillar core): overlap bounded inbox hydration and inbound-SLA D1 reads; retain partial enrichment and log query failures without mail contents. */
 /* 1.61.2 REMEDY-HISTORY-AVAILABILITY-1 (2026-10-25, pillar autonomy): expose remedy-history read failures as unavailable instead of zero attempts/no lever, and report the area cache's TTL as its freshness bound. */
@@ -14246,18 +14247,8 @@ async function psrReview(env, day) {
     needs.push({ key: "portfolio-cost", action: "Spend decision: " + PSR_COST_METRIC + " = " + sc.cost + " USD/30d above the A9 ceiling (" + PSR_COST_CEILING + "). Raise the ceiling (owner policy) or cut paid calls.", due: null, why: "cost kill-band" });
     await env.AUDIT.prepare("INSERT OR IGNORE INTO human_actions (slug, title, why, default_in_effect, action, url, sev, due, source) VALUES (?1, ?2, ?3, ?4, ?5, '/owner', 'urgent', ?6, 'portfolio-strategic')").bind("portfolio-cost-" + day, "Portfolio: AI spend above the A9 ceiling", PSR_COST_METRIC + " = " + sc.cost + " USD/30d, ceiling " + PSR_COST_CEILING, "Nothing changes automatically: the loop never raises a cap (CORE-PROMPT-1 rule 8).", "Decide: raise the ceiling, or cut paid calls. The review loop stays model-silent while any ai_spend cap is breached.", day).run();
   }
-  for (const nt of notes) {
-    if (nt.verdict !== "RED") continue;
-    const hist = await d1all(env.AUDIT, "SELECT verdict FROM program_review_notes WHERE program_code = ?1 AND day < ?2 ORDER BY day DESC LIMIT 2", [nt.code, day]).catch(function() {
-      return [];
-    });
-    if (hist.length === 2 && hist.every(function(h) {
-      return h.verdict === "RED";
-    })) {
-      needs.push({ key: "portfolio-red-" + nt.code, action: nt.code + " RED for 3 consecutive reviews: " + nt.acts, due: null, why: "persistent RED verdict" });
-      await env.AUDIT.prepare("INSERT OR IGNORE INTO human_actions (slug, title, why, default_in_effect, action, url, sev, due, source) VALUES (?1, ?2, ?3, ?4, ?5, '/owner', 'normal', ?6, 'portfolio-strategic')").bind("portfolio-red-" + nt.code + "-" + day, "Portfolio: " + nt.code + " RED for 3 consecutive reviews", nt.acts, "The program manager persona keeps working the program; this card is the escalation.", "Review " + nt.code + ": unblock the loop or accept the program as the constraint for another cycle.", day).run();
-    }
-  }
+  // MANAGEMENT-PERSONAS-2 (1.66.0): a program RED for 3 reviews no longer files an owner card; the hourly portfolio manager
+  // makes it the constraint and its program manager acts on its focus issues (fleet.qnfo.org/managers).
   const redCount = notes.filter(function(n) {
     return n.verdict === "RED";
   }).length;
@@ -14278,7 +14269,7 @@ __name(psrReview, "psrReview");
 // (program_focus) and moves them to the front of the code loop's queue, and each persona writes a plain brief (persona_briefs).
 // This page only reads them. A table that cannot be read is named in `unavailable`, never shown as an empty decision.
 async function managersView(env) {
-  const out = { schema_version: "fleet-managers/v1", ok: true, tick: null, portfolio: null, programs: [], focus_moves_24h: [], history: [], unavailable: [] };
+  const out = { schema_version: "fleet-managers/v1", ok: true, tick: null, portfolio: null, programs: [], focus_moves_24h: [], decisions_24h: [], decision_counts_24h: {}, history: [], unavailable: [] };
   const read = async function(name, sql, params) {
     try {
       return await d1all(env.AUDIT, sql, params || []);
@@ -14294,6 +14285,8 @@ async function managersView(env) {
   const alloc = await read("portfolio_allocations", "SELECT program_code, manager_persona, verdict, risk_score, risk_24h, open_issues, slots, decision, reason FROM portfolio_allocations WHERE tick = ?1 ORDER BY risk_score DESC, program_code", [out.tick]);
   const focus = await read("program_focus", "SELECT f.program_code, f.issue_id, f.rank, f.reason, f.has_doer, f.entered_at, i.title, i.priority FROM program_focus f LEFT JOIN agent_issues i ON i.id = f.issue_id ORDER BY f.program_code, f.rank");
   out.focus_moves_24h = await read("program_focus_log", "SELECT ts, program_code, issue_id, action, reason FROM program_focus_log WHERE ts >= strftime('%Y-%m-%dT%H:%M:%SZ', 'now', '-24 hours') ORDER BY id DESC LIMIT 40");
+  out.decisions_24h = await read("persona_actions", "SELECT ts, persona_key, kind, issue_id, from_value, to_value, evidence, reverted_at FROM persona_actions WHERE ts >= strftime('%Y-%m-%dT%H:%M:%SZ', 'now', '-24 hours') ORDER BY id DESC LIMIT 60");
+  for (const c of await read("persona_actions", "SELECT kind, COUNT(*) AS n FROM persona_actions WHERE ts >= strftime('%Y-%m-%dT%H:%M:%SZ', 'now', '-24 hours') GROUP BY kind")) out.decision_counts_24h[c.kind] = c.n;
   out.history = await read("portfolio_allocations", "SELECT tick, program_code, verdict, risk_score, slots, decision FROM portfolio_allocations WHERE tick >= strftime('%Y-%m-%dT%H:00Z', 'now', '-24 hours') ORDER BY tick DESC, program_code");
   const pb = briefs.find(function(b) { return b.level === "portfolio"; });
   out.portfolio = pb ? { persona: pb.persona_key, verdict: pb.verdict, summary: pb.summary } : null;
@@ -14317,7 +14310,7 @@ function managersHtml(v, holder) {
   const css = "<style>.mg-hero{font-size:15.5px;line-height:1.6;max-width:95ch;margin:0 0 18px}.mg-grid{display:grid;gap:14px;grid-template-columns:repeat(auto-fill,minmax(min(100%,420px),1fr))}.mg-p h2{font-size:18px;margin:0 0 6px;display:flex;gap:8px;align-items:center;flex-wrap:wrap}.mg-p .mg-why{font-size:13.5px;color:var(--muted);margin:0 0 10px}.mg-p ol{margin:0;padding-left:20px;font-size:13.5px;line-height:1.5}.mg-p li{margin:0 0 4px}.mg-nd{color:var(--red);font-weight:600}.mg-b{font-size:13px;line-height:1.55;color:var(--muted);margin:10px 0 0}.mg-t{width:100%;border-collapse:collapse;font-size:13px}.mg-t td,.mg-t th{padding:4px 8px;border-bottom:1px solid var(--rule);text-align:left}.good{color:var(--teal)}.warn{color:#b7791f}.bad{color:var(--red)}</style>";
   const head = fleetHead("Portfolio and program managers") + css + fleetTop("managers", false, holder);
   let body = '<main class="wrap fl" style="max-width:1180px"><h1 class="fl-h" style="font-size:30px;margin:10px 0 6px">Portfolio and program managers</h1>';
-  body += '<p class="meta" style="margin:0 0 14px;max-width:95ch">Every hour the portfolio manager decides how the fleet\'s attention is split across the five programs and which one is the constraint; each program manager then picks its focus issues inside that share and moves them to the front of the code loop\'s queue. This page shows what they decided' + (v.tick ? ' at <b>' + esc(v.tick) + '</b>' : '') + '. Feed: <a href="/api/managers">/api/managers</a>.</p>';
+  body += '<p class="meta" style="margin:0 0 14px;max-width:95ch">Every hour the portfolio manager decides how the fleet\'s attention is split across the five programs and which one is the constraint; each program manager then picks its focus issues inside that share, moves them to the front of the code loop\'s queue and raises them to high. The managers also decide issues on their own: a metric issue whose metric has recovered is closed with the reading as evidence, a duplicate metric issue is superseded by the newer one, and a critical a fleet loop filed more than a day ago with nobody working it becomes high. Only money, credentials, legal or signing acts and the owner\'s own accounts and papers wait for the owner. This page shows what they decided' + (v.tick ? ' at <b>' + esc(v.tick) + '</b>' : '') + '. Feed: <a href="/api/managers">/api/managers</a>.</p>';
   if (v.unavailable && v.unavailable.length) body += '<p class="bad">Could not read: ' + esc(v.unavailable.join(", ")) + '.</p>';
   if (!v.tick) return head + body + '<p>The first management tick has not run yet (hourly at :35).</p></main></body></html>';
   if (v.portfolio) body += '<section class="card mg-hero"><h2 style="margin:0 0 6px">Portfolio manager <span class="tag ' + vcls(v.portfolio.verdict) + '">' + esc(v.portfolio.verdict) + '</span></h2>' + esc(v.portfolio.summary) + '</section>';
@@ -14333,6 +14326,13 @@ function managersHtml(v, holder) {
     body += '</section>';
   }
   body += '</div>';
+  if (v.decisions_24h && v.decisions_24h.length) {
+    const kinds = { promote: "raised to high", restore: "priority restored", close: "closed, metric recovered", supersede: "superseded by a newer issue", demote: "critical lowered to high" };
+    const counts = Object.keys(v.decision_counts_24h || {}).map(function(k) { return esc(String(v.decision_counts_24h[k])) + ' ' + esc(kinds[k] || k); }).join(", ");
+    body += '<section class="card" style="margin-top:16px"><h2 style="font-size:18px;margin:0 0 8px">Decisions the managers took, last 24 hours</h2><p class="meta" style="margin:0 0 8px">' + counts + '. Each one records the value it replaced, so it can be undone.</p><table class="mg-t"><tr><th>When</th><th>Manager</th><th>Issue</th><th>Decision</th><th>Evidence</th></tr>';
+    for (const d of v.decisions_24h) body += '<tr><td>' + esc(String(d.ts || "").slice(0, 16).replace("T", " ")) + '</td><td>' + esc(d.persona_key) + '</td><td>#' + esc(String(d.issue_id)) + '</td><td>' + esc(kinds[d.kind] || d.kind) + (d.from_value ? ' (' + esc(d.from_value) + ' to ' + esc(d.to_value || "") + ')' : '') + (d.reverted_at ? ' <span class="meta">undone ' + esc(String(d.reverted_at).slice(0, 16).replace("T", " ")) + '</span>' : '') + '</td><td>' + esc(String(d.evidence || "").slice(0, 240)) + '</td></tr>';
+    body += '</table></section>';
+  }
   if (v.focus_moves_24h.length) {
     body += '<section class="card" style="margin-top:16px"><h2 style="font-size:18px;margin:0 0 8px">Focus moves, last 24 hours</h2><table class="mg-t"><tr><th>When</th><th>Program</th><th>Issue</th><th>Move</th><th>Why</th></tr>';
     for (const m of v.focus_moves_24h) body += '<tr><td>' + esc(String(m.ts || "").slice(0, 16).replace("T", " ")) + '</td><td>' + esc(m.program_code) + '</td><td>#' + esc(String(m.issue_id)) + '</td><td>' + esc(m.action) + '</td><td>' + esc(m.reason || "") + '</td></tr>';
