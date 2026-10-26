@@ -253,10 +253,10 @@ CREATE TABLE email_suppression (email TEXT PRIMARY KEY, reason TEXT, source TEXT
   const cRev = calls.find((c) => c.input.messages[0].content.includes("CLAIM: [quantitative-justification]")), cOps = calls.find((c) => c.input.messages[0].content.includes("misattributes"));
   ok(calls.length === 2, "RENDER-HEALTH is confirmed without a model call", calls.map((c) => c.model));
   ok(/gpt-oss-120b/.test(cRev.model) && cRev.input.max_tokens > 0, "a reviser finding is checked by gpt-oss-120b (another family than the reviser's model)", cRev.model);
-  ok(/kimi-k2\.6/.test(cOps.model) && cOps.input.reasoning_effort === "none" && cOps.input.max_tokens >= 4096, "any other finding is checked by kimi-k2.6 with reasoning_effort none", cOps);
+  ok(/deepseek-v4-flash/.test(cOps.model) && cOps.input.chat_template_kwargs && cOps.input.chat_template_kwargs.thinking === false && cOps.input.max_tokens >= 4096, "any other finding is checked by deepseek-v4-flash with thinking off (ERRATA-CONFIRM-COST-1; kimi-k2.6 is the second path)", cOps);
   ok(cRev.input.messages[0].content.includes("The value is stated as measured in section 2."))
   ok(cRev.input.messages[0].content.includes("CLAIM: [quantitative-justification]"), "the checker reads the claim and the paper text");
-  ok(ie("ops-false").status === "rejected" && /not confirmed by .*kimi.*Jones/.test(ie("ops-false").remediation), "a rejected finding is rejected in internal_errata with the reason", ie("ops-false"));
+  ok(ie("ops-false").status === "rejected" && /not confirmed by .*deepseek.*Jones/.test(ie("ops-false").remediation), "a rejected finding is rejected in internal_errata with the reason", ie("ops-false"));
   ok(ie("rev-true").status === "open" && /confirmed by .*gpt-oss/.test(ie("rev-true").remediation) && /RENDER-HEALTH/.test(ie("render-1").remediation), "a confirmed finding records who confirmed it");
   const w = JSON.parse(audit.prepare("SELECT value FROM errata_watch WHERE key = 'tick:errata-watch'").get().value);
   ok(w.internal_confirm && w.internal_confirm.candidates === 4 && w.internal_confirm.confirmed === 2 && w.internal_confirm.rejected === 1, "tick:errata-watch records internal_confirm", w.internal_confirm);
@@ -271,9 +271,9 @@ CREATE TABLE email_suppression (email TEXT PRIMARY KEY, reason TEXT, source TEXT
   ok(q("throw-1") === "detected" && q("fresh-1") === "internal-open", "the next tick confirms it; the fresh row still waits");
   calls.length = 0; mode = "fallback";
   addQ("fb-1", "qnfo-ops", "true-paper", "fallback finding");
-  AI.run = async (model, input) => { calls.push(model); if (/kimi/.test(model)) return { response: "" }; return { response: "{\"confirmed\": \"yes\", \"why\": \"ok\"}" }; };
+  AI.run = async (model, input) => { calls.push(model); if (/deepseek/.test(model)) return { response: "" }; return { response: "{\"confirmed\": \"yes\", \"why\": \"ok\"}" }; };
   await tick();
-  ok(q("fb-1") === "detected" && calls.length === 2 && /gpt-oss/.test(calls[1]), "an empty reply from the first model falls back to the second and a lenient verdict is accepted", calls);
+  ok(q("fb-1") === "detected" && calls.length === 2 && /kimi/.test(calls[1]), "an empty reply from the first model falls back to the second and a lenient verdict is accepted", calls);
   // The respond member now sees the confirmed rows.
   ok(audit.prepare("SELECT COUNT(*) n FROM errata_queue WHERE status = 'detected'").get().n === 4, "four rows reach errata-respond as detected");
   // The issue-2494 probe, verbatim, on this database.

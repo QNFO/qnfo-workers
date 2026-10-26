@@ -223,6 +223,17 @@ def load_allowlist(path=ALLOWLIST):
 def allowed(allow, path, rule, text):
     return any(p == path and r in (rule, "*") and needle in text for p, r, needle in allow)
 
+# GENERATED-BUNDLE-1 (CF-AGENTS-1, 2026-10-26): a worker.js that is the esbuild bundle of its src/ (qnfo-agents: the Agents SDK, the
+# MCP server and the AI SDK inlined, about 1.8 MB minified) is judged by the source it was built from: the rules are about code a
+# person or a loop writes, and a minified vendored line can neither carry a `// standards-ok:` comment nor a stable allowlist text.
+# The directory says so with a build.mjs and a first worker.js line naming it generated from src/; its src/*.js|ts files are then
+# checked with the same rules, and its deploy workflow rebuilds the bundle and fails when the committed one differs.
+def generated_bundle(d):
+    w = os.path.join(d, "worker.js")
+    if not (os.path.isfile(os.path.join(d, "build.mjs")) and os.path.isdir(os.path.join(d, "src")) and os.path.isfile(w)): return False
+    with open(w, encoding="utf-8", errors="replace") as f: first = f.readline()
+    return "generated from src/ by build.mjs" in first
+
 def added_lines(base, path):
     """(lineno, text) of lines the change adds to path."""
     out, ln = [], 0
@@ -392,7 +403,9 @@ def main():
         for n in names:
             d = n.split("/")[0]
             if os.path.exists(os.path.join(d, "RETIRED")) or os.path.exists(os.path.join(d, "FOLDED")): continue
-            if re.fullmatch(r"[^/]+/worker\.js", n) and os.path.exists(n):
+            if re.fullmatch(r"[^/]+/worker\.js", n) and os.path.exists(n) and generated_bundle(d):
+                continue  # GENERATED-BUNDLE-1: judged by its src/ files below; the bundle is mostly vendored SDK code
+            if (re.fullmatch(r"[^/]+/worker\.js", n) or (re.fullmatch(r"[^/]+/src/[^/]+\.(js|ts|mjs)", n) and generated_bundle(d))) and os.path.exists(n):
                 full = open(n, encoding="utf-8", errors="replace").read().split("\n")
                 added = added_lines(base, n)
                 viol += [(n, *v) for v in check_code(added, full)]

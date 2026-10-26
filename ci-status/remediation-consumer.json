@@ -1,28 +1,36 @@
 {
  "ok": true,
  "marker": "REMEDIATION-CONSUMER-1",
- "verifier": "remediation-consumer@a763e8788f46",
- "due": 655,
- "pass": 452,
- "fail": 94,
- "skipped": 109,
- "deferred": 108,
+ "verifier": "remediation-consumer@2bf61fc018fa",
+ "due": 679,
+ "pass": 458,
+ "fail": 105,
+ "skipped": 116,
+ "deferred": 115,
  "contracts": [
   {
-   "class": "goal-TP-6-DURABLE-EXECUTION-1",
-   "issue_id": null,
-   "verdict": "deferred",
+   "class": "issue-100155",
+   "issue_id": 100155,
+   "verdict": "pass",
    "expected": "ok",
-   "observed": "pending: ops_tool_budget_bail_7d 214",
-   "reason": "the probe cannot judge yet: pending: ops_tool_budget_bail_7d 214"
+   "observed": "ok",
+   "written": true
   },
   {
-   "class": "research-terminal-rem-0039",
-   "issue_id": 100205,
-   "verdict": "deferred",
-   "expected": "resolved",
-   "observed": "pending",
-   "reason": "the probe cannot judge yet: pending"
+   "class": "issue-100158",
+   "issue_id": 100158,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "fm-holding-open-overdue",
+   "issue_id": null,
+   "verdict": "fail",
+   "expected": "0",
+   "observed": "1",
+   "written": true
   },
   {
    "class": "fm-producer-lateness-in-hours",
@@ -41,6 +49,14 @@
    "written": true
   },
   {
+   "class": "fm-reconcile-close-aborts-batch",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
    "class": "fm-revision-loop-stalled",
    "issue_id": null,
    "verdict": "pass",
@@ -53,40 +69,8 @@
    "issue_id": 100299,
    "verdict": "fail",
    "expected": "0",
-   "observed": "277",
+   "observed": "287",
    "written": true
-  },
-  {
-   "class": "issue-100226-BACKFILL-1",
-   "issue_id": 100226,
-   "verdict": "deferred",
-   "expected": "closed-with-evidence",
-   "observed": "pending",
-   "reason": "the probe cannot judge yet: pending"
-  },
-  {
-   "class": "issue-99915-BACKFILL-1",
-   "issue_id": 99915,
-   "verdict": "deferred",
-   "expected": "closed-with-evidence",
-   "observed": "pending",
-   "reason": "the probe cannot judge yet: pending"
-  },
-  {
-   "class": "fm-reconcile-close-aborts-batch",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "ok",
-   "observed": "ok",
-   "written": true
-  },
-  {
-   "class": "issue-99938-BACKFILL-1",
-   "issue_id": 99938,
-   "verdict": "deferred",
-   "expected": "closed-with-evidence",
-   "observed": "pending",
-   "reason": "the probe cannot judge yet: pending"
   },
   {
    "class": "issue-99948-BACKFILL-1",
@@ -97,7 +81,23 @@
    "reason": "the probe cannot judge yet: pending"
   },
   {
-   "class": "fm-pdf-backlog-stalled",
+   "class": "issue-100565",
+   "issue_id": 100565,
+   "verdict": "deferred",
+   "expected": "ok",
+   "observed": "pending: issue 100523 has no probe of its own yet, a doer writes one",
+   "reason": "the probe cannot judge yet: pending: issue 100523 has no probe of its own yet, a doer writes one"
+  },
+  {
+   "class": "fm-measured-pending-deferred",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "0",
+   "observed": "0",
+   "written": true
+  },
+  {
+   "class": "fm-silent-refile-drop",
    "issue_id": null,
    "verdict": "pass",
    "expected": "1",
@@ -105,11 +105,19 @@
    "written": true
   },
   {
-   "class": "fm-holding-open-overdue",
+   "class": "fm-github-token-lapse",
    "issue_id": null,
    "verdict": "pass",
-   "expected": "0",
-   "observed": "0",
+   "expected": "1",
+   "observed": "1",
+   "written": true
+  },
+  {
+   "class": "fm-code-task-timeout-over-ceiling",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "1",
+   "observed": "1",
    "written": true
   },
   {
@@ -118,38 +126,6 @@
    "verdict": "pass",
    "expected": "1",
    "observed": "1",
-   "written": true
-  },
-  {
-   "class": "issue-99916-BACKFILL-1",
-   "issue_id": 99916,
-   "verdict": "deferred",
-   "expected": "closed-with-evidence",
-   "observed": "pending",
-   "reason": "the probe cannot judge yet: pending"
-  },
-  {
-   "class": "issue-99927-BACKFILL-1",
-   "issue_id": 99927,
-   "verdict": "deferred",
-   "expected": "closed-with-evidence",
-   "observed": "pending",
-   "reason": "the probe cannot judge yet: pending"
-  },
-  {
-   "class": "issue-99945-BACKFILL-1",
-   "issue_id": 99945,
-   "verdict": "deferred",
-   "expected": "closed-with-evidence",
-   "observed": "pending",
-   "reason": "the probe cannot judge yet: pending"
-  },
-  {
-   "class": "fm-judge-context-narrower-than-writer",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "0",
-   "observed": "0",
    "written": true
   },
   {
@@ -169,20 +145,20 @@
    "written": true
   },
   {
-   "class": "fm-measured-pending-deferred",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "0",
-   "observed": "0",
-   "written": true
-  },
-  {
    "class": "issue-100353",
    "issue_id": 100353,
    "verdict": "fail",
    "expected": "0",
    "observed": "1",
    "written": true
+  },
+  {
+   "class": "issue-2522-BACKFILL-1",
+   "issue_id": 2522,
+   "verdict": "deferred",
+   "expected": "closed-with-evidence",
+   "observed": "pending",
+   "reason": "the probe cannot judge yet: pending"
   },
   {
    "class": "issue-3003-BACKFILL-1",
@@ -201,31 +177,7 @@
    "reason": "the probe cannot judge yet: pending"
   },
   {
-   "class": "issue-2017",
-   "issue_id": 2017,
-   "verdict": "pass",
-   "expected": "ok",
-   "observed": "ok",
-   "written": true
-  },
-  {
-   "class": "issue-2342",
-   "issue_id": 2342,
-   "verdict": "pass",
-   "expected": "ok",
-   "observed": "ok",
-   "written": true
-  },
-  {
-   "class": "issue-2397",
-   "issue_id": 2397,
-   "verdict": "pass",
-   "expected": "ok",
-   "observed": "ok",
-   "written": true
-  },
-  {
-   "class": "fm-code-task-timeout-over-ceiling",
+   "class": "belief-evolve-wip-planner-alignment",
    "issue_id": null,
    "verdict": "pass",
    "expected": "1",
@@ -233,19 +185,51 @@
    "written": true
   },
   {
-   "class": "belief-hourly-publication-gate-meets-detection-sla",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "ok",
-   "observed": "ok",
+   "class": "issue-1000247",
+   "issue_id": 1000247,
+   "verdict": "fail",
+   "expected": "1",
+   "observed": "0",
    "written": true
   },
   {
-   "class": "fm-dashboard-mail-serial-reads",
+   "class": "fm-queue-sla-review-proxy",
    "issue_id": null,
    "verdict": "pass",
+   "expected": "1",
+   "observed": "1",
+   "written": true
+  },
+  {
+   "class": "fm-default-approve-issue-unexecuted",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "0",
+   "observed": "0",
+   "written": true
+  },
+  {
+   "class": "issue-2957",
+   "issue_id": 2957,
+   "verdict": "fail",
    "expected": "ok",
-   "observed": "ok",
+   "observed": "regressed: 7d mean 282.6 vs prior 7d 177.6",
+   "written": true
+  },
+  {
+   "class": "fm-code-task-scope-late",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "0",
+   "observed": "0",
+   "written": true
+  },
+  {
+   "class": "fm-code-task-search-invented",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "0",
+   "observed": "0",
    "written": true
   },
   {
@@ -253,128 +237,109 @@
    "issue_id": null,
    "verdict": "fail",
    "expected": "0",
-   "observed": "189",
+   "observed": "199",
    "written": true
   },
   {
-   "class": "fm-code-loop-budget-claim-starvation",
+   "class": "issue-100405-BACKFILL-1",
+   "issue_id": 100405,
+   "verdict": "deferred",
+   "expected": "closed-with-evidence",
+   "observed": "pending",
+   "reason": "the probe cannot judge yet: pending"
+  },
+  {
+   "class": "issue-100122-BACKFILL-1",
+   "issue_id": 100122,
+   "verdict": "deferred",
+   "expected": "closed-with-evidence",
+   "observed": "pending",
+   "reason": "the probe cannot judge yet: pending"
+  },
+  {
+   "class": "issue-100364-BACKFILL-1",
+   "issue_id": 100364,
+   "verdict": "deferred",
+   "expected": "closed-with-evidence",
+   "observed": "pending",
+   "reason": "the probe cannot judge yet: pending"
+  },
+  {
+   "class": "issue-1000174",
+   "issue_id": 1000174,
+   "verdict": "deferred",
+   "expected": "ok",
+   "observed": "pending: issue 1000032 has no probe of its own yet, a doer writes one",
+   "reason": "the probe cannot judge yet: pending: issue 1000032 has no probe of its own yet, a doer writes one"
+  },
+  {
+   "class": "fm-code-task-dies-at-ci",
    "issue_id": null,
-   "verdict": "pass",
-   "expected": "ok",
-   "observed": "ok",
+   "verdict": "fail",
+   "expected": "0",
+   "observed": "2",
    "written": true
   },
   {
-   "class": "rt-gateway",
+   "class": "fm-code-task-unplaceable-large-file",
    "issue_id": null,
-   "verdict": "pass",
-   "expected": "ok",
-   "observed": "ok",
+   "verdict": "fail",
+   "expected": "0",
+   "observed": "18",
    "written": true
   },
   {
-   "class": "rt-ai-router",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "ok",
-   "observed": "ok",
-   "written": true
-  },
-  {
-   "class": "issue-2305",
-   "issue_id": 2305,
-   "verdict": "pass",
-   "expected": "ok",
-   "observed": "ok",
-   "written": true
-  },
-  {
-   "class": "issue-2402",
-   "issue_id": 2402,
+   "class": "issue-100211",
+   "issue_id": 100211,
    "verdict": "fail",
    "expected": "ok",
-   "observed": "missing-marker:qnfo-research-exec/worker.js",
+   "observed": "gpt-oss-120b is over half of yesterday research-exec neurons",
    "written": true
   },
   {
-   "class": "issue-2403",
-   "issue_id": 2403,
-   "verdict": "pass",
-   "expected": "ok",
-   "observed": "ok",
-   "written": true
-  },
-  {
-   "class": "issue-2407",
-   "issue_id": 2407,
-   "verdict": "pass",
-   "expected": "ok",
-   "observed": "ok",
-   "written": true
-  },
-  {
-   "class": "issue-1000210",
-   "issue_id": 1000210,
-   "verdict": "pass",
-   "expected": "quarantined",
-   "observed": "quarantined",
-   "written": true
-  },
-  {
-   "class": "belief-q08-review-stage-call-sites",
+   "class": "belief-alt-unexercisable-model_floor_pr_check",
    "issue_id": null,
-   "verdict": "pass",
-   "expected": "ok",
-   "observed": "ok",
-   "written": true
-  },
-  {
-   "class": "belief-code-loop-budget-claim-scan",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "ok",
-   "observed": "ok",
-   "written": true
-  },
-  {
-   "class": "rt-fleet-dashboard",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "ok",
-   "observed": "ok",
-   "written": true
-  },
-  {
-   "class": "issue-2405",
-   "issue_id": 2405,
    "verdict": "fail",
    "expected": "ok",
-   "observed": "missing-marker:qnfo-research-exec/worker.js",
+   "observed": "a table or view that records workflow runs now exists, so a green run of the model-floor-guard workflow can be read: add a control_alternate_probes row for model_floor_pr_check and retire its ALTERNATE-NOT-EXERCISABLE reason",
    "written": true
   },
   {
-   "class": "rt-live-qnfo-ai-search",
-   "issue_id": null,
-   "verdict": "pass",
+   "class": "issue-99933-BACKFILL-1",
+   "issue_id": 99933,
+   "verdict": "deferred",
+   "expected": "closed-with-evidence",
+   "observed": "pending",
+   "reason": "the probe cannot judge yet: pending"
+  },
+  {
+   "class": "issue-99950-BACKFILL-1",
+   "issue_id": 99950,
+   "verdict": "deferred",
+   "expected": "closed-with-evidence",
+   "observed": "pending",
+   "reason": "the probe cannot judge yet: pending"
+  },
+  {
+   "class": "issue-100138-BACKFILL-1",
+   "issue_id": 100138,
+   "verdict": "deferred",
+   "expected": "closed-with-evidence",
+   "observed": "pending",
+   "reason": "the probe cannot judge yet: pending"
+  },
+  {
+   "class": "issue-100310-BACKFILL-1",
+   "issue_id": 100310,
+   "verdict": "deferred",
+   "expected": "closed-with-evidence",
+   "observed": "pending",
+   "reason": "the probe cannot judge yet: pending"
+  },
+  {
+   "class": "issue-100479",
+   "issue_id": 100479,
+   "verdict": "deferred",
    "expected": "ok",
-   "observed": "ok",
-   "written": true
-  },
-  {
-   "class": "issue-2404",
-   "issue_id": 2404,
-   "verdict": "pass",
-   "expected": "ok",
-   "observed": "ok",
-   "written": true
-  },
-  {
-   "class": "belief-deploy-loop-attempts-every-target",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "ok",
-   "observed": "ok",
-   "written": true
-  },
-  {
-   "class": "rt-live-qnfo-ai-calib
+   "observed": "pending: issue 100436 has no probe of its own yet, a doer writes one",
+   "reason": "the probe cannot judge yet: pending: issu
