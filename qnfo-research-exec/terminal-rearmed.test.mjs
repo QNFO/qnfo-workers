@@ -108,7 +108,7 @@ assert.equal(on.enabled, true); assert.equal(on.reground.regrounded, 1, "the hou
 
 // ---- NOTICE-REPAIR-SKIP-BLOCKED-1 ------------------------------------------------------------------------------------------------------
 const lp = new DatabaseSync(":memory:");
-lp.exec(`CREATE TABLE papers (slug TEXT PRIMARY KEY, identifier TEXT, version TEXT, status TEXT, title TEXT, abstract TEXT, body_md TEXT, updated_at TEXT, paper_type TEXT);
+lp.exec(`CREATE TABLE papers (slug TEXT PRIMARY KEY, identifier TEXT, version TEXT, status TEXT, title TEXT, abstract TEXT, body_md TEXT, updated_at TEXT, paper_type TEXT, change_actor TEXT, change_reason TEXT);
 CREATE TRIGGER trg_papers_pub_floor_upd3 BEFORE UPDATE ON papers FOR EACH ROW WHEN NEW.status = 'published' AND ((COALESCE(OLD.status,'') <> 'published' AND (LENGTH(TRIM(COALESCE(NEW.body_md,''))) < 20000 OR LOWER(COALESCE(NEW.paper_type,'')) IN ('poster','abstract','slides','section','fragment'))) OR (COALESCE(OLD.status,'') = 'published' AND (LENGTH(TRIM(COALESCE(NEW.body_md,''))) < 8000 OR LENGTH(TRIM(COALESCE(NEW.body_md,'')))*2 < LENGTH(TRIM(COALESCE(OLD.body_md,''))))))
 BEGIN SELECT RAISE(ABORT, 'PUBLISH-FLOOR-BLOCKED MIN-PAPER-LENGTH-3 (update): cannot publish below 20000 chars'); END;`);
 const au = new DatabaseSync(":memory:");

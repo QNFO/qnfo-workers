@@ -24,8 +24,8 @@ const CLEAN = body("[4] proves the lemma and [5] bounds the depth by 4.");
 assert.ok(paperCompleteness(META, { legacy: true }).complete, "the fixture is a complete paper");
 
 const lp = new DatabaseSync(":memory:");
-lp.exec("CREATE TABLE papers (slug TEXT, title TEXT, abstract TEXT, body_md TEXT, status TEXT)");
-const ins = lp.prepare("INSERT INTO papers VALUES (?,?,?,?, 'published')");
+lp.exec("CREATE TABLE papers (slug TEXT, title TEXT, abstract TEXT, body_md TEXT, status TEXT, change_actor TEXT, change_reason TEXT)");
+const ins = lp.prepare("INSERT INTO papers (slug, title, abstract, body_md, status) VALUES (?,?,?,?, 'published')");
 ins.run("meta-paper", "Meta", null, META);
 ins.run("clean-paper", "Clean", "A stored abstract that is long enough to keep as it is.", CLEAN);
 ins.run("hand-written", "Hand", null, META);

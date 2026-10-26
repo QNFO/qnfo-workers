@@ -1,4 +1,4 @@
-// DASH-OWNER-ACTIONS-1 offline suite (qnfo-fleet-dashboard 1.69.0, agent_issues 100360). Owner report 2026-10-20: "Fleet command line
+// DASH-OWNER-ACTIONS-1 offline suite (qnfo-fleet-dashboard 1.70.0, agent_issues 100360). Owner report 2026-10-20: "Fleet command line
 // not executing. Need easier way to approve owner items and diagnose/resolve issues and problems from fleet dashboard." The approvals
 // the owner typed (11:20, 11:21 and 11:34Z) went to the AI path and, when three router legs timed out, nothing executed.
 // Proves: approve, decline, diagnose, retry and resolve are parsed in code and never call a model (T1, T12); a bare approve lists the
@@ -9,14 +9,18 @@
 // model does not answer, the matched intent comes back as tappable buttons that are stored (T10); resolve closes only on a passing
 // probe (T11); diagnose is an open read that hides titles from a stranger (T12); cmdFallback keeps working alone in a vm (T13); the
 // card buttons are the owner's only, 44 px, wrapped for a 360 px phone and delegated so the 15 s refresh keeps them (T14); retry (T15).
-// Review round (1.69.0): the hand-off is filed BEFORE anything is recorded and an approval never spends an Ask slot (T17); Approve and Decline
+// Review round (1.70.0): the hand-off is filed BEFORE anything is recorded and an approval never spends an Ask slot (T17); Approve and Decline
 // are offered only for a card that asks for a decision and is not a legal, signing, money, credential or account step (T18); a card with
 // no issue still hands the fleet a task it can act on, and a pick-one card needs the option (T19); a sentence that merely starts with a
 // verb belongs to the model, and retry runs unasked only for 'retry <reference>' (T20).
-// Review round 2 (1.69.0): the Ask cap exempts only the server's own hand-off marker, never text a stranger controls (T17h-l); a PR, run or
+// Review round 2 (1.70.0): the Ask cap exempts only the server's own hand-off marker, never text a stranger controls (T17h-l); a PR, run or
 // commit number in a card's text is never an issue id (T21).
-// Review round 3 (1.69.0): two approvals are two tasks under main's OWNER-PROMPT-TWIN-LINK-1 twin check, because the hand-off opens with what tells decisions apart and
+// Review round 3 (1.70.0): two approvals are two tasks under main's OWNER-PROMPT-TWIN-LINK-1 twin check, because the hand-off opens with what tells decisions apart and
 // is never twin-linked (T22); a card in any status other than open is read by key only by the signed-in owner or a token holder, never by a stranger (T23).
+// Review round 4 (1.70.0, after FLEET-STATUS-1 made the home page statusPageHtml): the Needs-you cards of / carry the decision block for the signed-in owner
+// only, computed per request and never inside the cached public document or /api/status (T24); the hand-off is never longer than the 1800 characters the issue
+// body keeps, with a dozen long items too (T25); a repeat approve files no second hand-off and a decline of an approved item says it was already handed to the
+// fleet and is not undone (T26); 'why 2026 papers were pulled?' is not a diagnosis of agent_issues 2026 (T27). T14 and T18 read /classic, which keeps the old page.
 // Run: node qnfo-fleet-dashboard/cmd-decide.test.mjs   -> prints "N passed, 0 failed"
 import { DatabaseSync } from "node:sqlite";
 import { readFileSync } from "node:fs";
@@ -372,11 +376,11 @@ const noModel = (e) => e.aiCalls.length === 0 && e.svcCalls.length === 0;
 // T14. the cards: buttons for the signed-in owner only, per item on a numbered card, 44 px, wrapped on a phone, kept by the refresh
 {
   const e = mk({ plain: true });
-  const stranger = await (await call(e.env, "/")).text();
+  const stranger = await (await call(e.env, "/classic")).text();
   ok(!/data-fleet-cmd="approve /.test(stranger) && !/class="dec"/.test(stranger) && !/Approve 1</.test(stranger), "T14 a signed-out visitor sees no decision buttons", stranger.length);
   ok(/data-fleet-cmd="info ha:uia-source-fidelity-100140"/.test(stranger), "T14a (the public Details button is still there)");
   const C = await signIn(e.env, e.db, e.m);
-  const owner = await (await call(e.env, "/", { headers: C })).text();
+  const owner = await (await call(e.env, "/classic", { headers: C })).text();
   ok(/<div class="dec" data-dec="ha:uia-source-fidelity-100140">/.test(owner), "T14b the signed-in owner sees the decision block on the owner-gated card", owner.slice(0, 200));
   for (let n = 1; n <= 7; n++) ok(owner.includes('data-fleet-cmd="approve ha:' + SLUG + " " + n + '">Approve ' + n + "<") && owner.includes('data-fleet-cmd="decline ha:' + SLUG + " " + n + '">Decline ' + n + "<"), "T14c item " + n + " has its own Approve and Decline");
   ok(owner.includes('data-fleet-cmd="approve ha:' + SLUG + '">Approve all 7<') && owner.includes('data-fleet-cmd="diagnose ha:' + SLUG + '">Diagnose<') && /Decide each part: 0 of 7 decided/.test(owner), "T14d Approve all, Decline all and Diagnose are on the card", owner.slice(0, 100));
@@ -390,17 +394,17 @@ const noModel = (e) => e.aiCalls.length === 0 && e.svcCalls.length === 0;
   let parsed = true; try { new Function(cs[1]); } catch (err) { parsed = String(err); }
   ok(cs && parsed === true && /function acts\(p,list,c\)/.test(cs[1]) && /if\(j\.quick\)quick\(c,j\.quick\)/.test(cs[1]), "T14j the command-line script still parses and shows j.quick while the model thinks", parsed);
   await run(e.env, "decline", { key: "ha:" + SLUG, issue: 100140, items: [2], note: "" }, C);
-  const after = await (await call(e.env, "/", { headers: C })).text();
+  const after = await (await call(e.env, "/classic", { headers: C })).text();
   ok(/Decide each part: 1 of 7 decided/.test(after) && /&#10007; declined/.test(after) && after.includes('data-fleet-cmd="approve ha:' + SLUG + ' 1, 3-7">Approve the 6 left<'), "T14k a decided item shows its state and the card offers the undecided rest", after.slice(after.indexOf('class="dec"'), after.indexOf('class="dec"') + 1800));
   const left = await (await cmd(e.env, "approve ha:" + SLUG + " 1, 3-7", C)).json();
   ok(left.actions.find((x) => x.op === "approve").args.items.join() === "1,3,4,5,6,7" && /Already decided: 2 decline/.test(left.text), "T14k2 the button's own command parses to the six undecided items", left);
   const single = mk({ noCard: true, second: true });
   const C3 = await signIn(single.env, single.db, single.m);
-  const sp = await (await call(single.env, "/", { headers: C3 })).text();
+  const sp = await (await call(single.env, "/classic", { headers: C3 })).text();
   ok(sp.includes('data-fleet-fill="approve ha:pick-pricing-model ">Approve an option<') && !sp.includes('data-fleet-cmd="approve ha:pick-pricing-model">') && sp.includes('data-fleet-cmd="decline ha:pick-pricing-model">Decline<'), "T14l a pick-one card gets 'Approve an option' (it fills the command line), Decline and Diagnose, never a bare Approve", sp.slice(0, 80));
   const plainDec = mk({ noCard: true, shapes: true });
   const C4 = await signIn(plainDec.env, plainDec.db, plainDec.m);
-  const pp = await (await call(plainDec.env, "/", { headers: C4 })).text();
+  const pp = await (await call(plainDec.env, "/classic", { headers: C4 })).text();
   ok(pp.includes('data-fleet-cmd="approve ha:approve-logo-refresh">Approve<') && pp.includes('data-fleet-cmd="decline ha:approve-logo-refresh">Decline<') && pp.includes('data-fleet-cmd="diagnose ha:approve-logo-refresh">Diagnose<'), "T14m a card that asks to be approved gets plain Approve, Decline and Diagnose", pp.slice(0, 80));
 }
 // T15. retry
@@ -513,7 +517,7 @@ const preview100140 = async (e, C) => (await (await cmd(e.env, "approve 100140",
 {
   const e = mk({ noCard: true, shapes: true });
   const C = await signIn(e.env, e.db, e.m);
-  const page = await (await call(e.env, "/", { headers: C })).text();
+  const page = await (await call(e.env, "/classic", { headers: C })).text();
   ok(!page.includes('data-dec="ha:tilburg-dis-phd-inquiry-send"') && !page.includes('data-dec="ha:domain-renewal-qnfo"'), "T18 an IDENTITY-BOUND card that asks for no decision (send an e-mail, renew a domain) gets no decision block");
   const eb = 'ha:eb1a-statement-email984';
   ok(page.includes('data-dec="' + eb + '"') && page.includes('data-fleet-cmd="diagnose ' + eb + '">Diagnose<') && page.includes('data-fleet-cmd="done ' + eb + '">Done<') && !page.includes('data-fleet-cmd="approve ' + eb) && !page.includes('data-fleet-cmd="decline ' + eb) && /Only you can take this step/.test(page), "T18a the signing card (it says 'decline') shows Diagnose and Done only", page.slice(page.indexOf('data-dec="' + eb + '"'), page.indexOf('data-dec="' + eb + '"') + 600));
@@ -533,18 +537,21 @@ const preview100140 = async (e, C) => (await (await cmd(e.env, "approve 100140",
   const e2 = mk({ noCard: true, shapes: true });
   e2.db.prepare("INSERT INTO default_approve_markers (kind, pattern) VALUES ('hard', '%brand page%')").run();
   const C2 = await signIn(e2.env, e2.db, e2.m);
-  const p2 = await (await call(e2.env, "/", { headers: C2 })).text();
+  const p2 = await (await call(e2.env, "/classic", { headers: C2 })).text();
   ok(!p2.includes('data-fleet-cmd="approve ha:approve-logo-refresh') && p2.includes('data-fleet-cmd="done ha:approve-logo-refresh">Done<'), "T18g a hard marker added in D1 takes effect on the next page", p2.length);
   // the markers cannot be read: the embedded list stands in
   const e3 = mk({ noCard: true, shapes: true, noMarkers: true });
   const C3 = await signIn(e3.env, e3.db, e3.m);
-  const p3 = await (await call(e3.env, "/", { headers: C3 })).text();
+  const p3 = await (await call(e3.env, "/classic", { headers: C3 })).text();
   ok(!p3.includes('data-fleet-cmd="approve ' + eb) && p3.includes('data-fleet-cmd="done ' + eb + '">Done<') && p3.includes('data-fleet-cmd="approve ha:approve-logo-refresh">Approve<'), "T18h without the markers table the embedded list still keeps the signing card to Diagnose and Done and the logo card decidable");
   // the 100140 card (authors' papers, IDENTITY-BOUND) is not a hard card
   const e4 = mk();
   const C4 = await signIn(e4.env, e4.db, e4.m);
-  const p4 = await (await call(e4.env, "/", { headers: C4 })).text();
+  const p4 = await (await call(e4.env, "/classic", { headers: C4 })).text();
   ok(p4.includes('data-fleet-cmd="approve ha:' + SLUG + ' 3">Approve 3<'), "T18i the seven-fix paper card keeps its buttons");
+  // the alternate path of the gate (control_registry dash-owner-decision-hard-marker-gate): the owner's own step is closed with Done, which Approve never did
+  const dn = await (await run(e.env, "done", { key: eb, title: "Sign or decline the EB-1A statement" }, C)).json();
+  ok(dn.ok !== false && one(e.db, "SELECT status FROM human_actions WHERE slug = ?", "eb1a-statement-email984").status === "resolved" && rows(e.db, "SELECT id FROM owner_prompts").length === 0, "T18j Done on the signing card resolves it and files nothing for the fleet (the gate's alternate path works)", dn);
 }
 // T19. a card with no issue still hands the fleet a task it can act on; a pick-one card needs the option
 {
@@ -745,6 +752,139 @@ const preview100140 = async (e, C) => (await (await cmd(e.env, "approve 100140",
   j = await (await cmd(e.env, "approve ha:secret-rerouted", C)).json();
   ok(/is already rerouted; nothing to approve/.test(j.text || "") && !(j.actions || []).some((x) => x.op), "T23g and of a rerouted one", j);
   ok(rows(e.db, "SELECT * FROM human_responses").length === 0 && rows(e.db, "SELECT id FROM owner_prompts").length === 0, "T23h none of it recorded or filed anything");
+}
+// T24. the home page since FLEET-STATUS-1 (statusPageHtml): its Needs-you cards carry the decision block for the SIGNED-IN OWNER ONLY. The block is
+// computed per request (statusOwnerDecisions) and is never part of fleetStatusData, which is cached for everyone, or of /api/status, which is public:
+// the numbered items are the text of an agent_issues row, which can be private.
+{
+  const ITEM = "names the wrong analysed paper";
+  const mkStatus = () => {
+    const x = mk({ plain: true, shapes: true, second: true });
+    // readable metrics make the status document cacheable, so the owner's request below primes the cache a stranger then reads
+    x.db.exec("CREATE TABLE v_fleet_metrics (metric TEXT, title TEXT, operator TEXT, threshold REAL, value REAL, breach INTEGER, priority INTEGER, kind TEXT, measured_at TEXT, program_code TEXT, good TEXT, value_7d_ago REAL)");
+    x.db.prepare("INSERT INTO v_fleet_metrics VALUES ('m1', 'Metric one', 'gt', 0, 0, 0, 1, 'target', ?, 'QNFO.OPS', 'down', 0)").run(new Date().toISOString());
+    return x;
+  };
+  const e = mkStatus();
+  const strangerPage = async () => await (await call(e.env, "/")).text();
+  const strangerJson = async () => await (await call(e.env, "/api/status")).text();
+  const leak = (t) => ({ dec: /class="dec"|data-dec=|data-fleet-cmd="approve |data-fleet-cmd="decline |data-fleet-fill="approve |Approve all|Decide each part/.test(t), item: t.indexOf(ITEM) >= 0, fleetTick: t.indexOf("window.fleetTick=function") >= 0 });
+  const none = { dec: false, item: false, fleetTick: false };
+  const s0 = await strangerPage();
+  ok(JSON.stringify(leak(s0)) === JSON.stringify(none) && /id="st-needs"/.test(s0) && /id="st-hero"/.test(s0) && s0.includes('href="/classic#queue">Act on it<'), "T24 a stranger's home page lists the cards with 'Act on it' and carries no decision block, no issue item text and no owner script", leak(s0));
+  const C = await signIn(e.env, e.db, e.m);
+  const own = await (await call(e.env, "/", { headers: C })).text();
+  ok(/<div class="dec" data-dec="ha:uia-source-fidelity-100140">/.test(own) && /Decide each part: 0 of 7 decided/.test(own), "T24a the signed-in owner's home page carries the decision block on the owner-gated card", own.length);
+  for (let n = 1; n <= 7; n++) ok(own.includes('data-fleet-cmd="approve ha:' + SLUG + " " + n + '">Approve ' + n + "<") && own.includes('data-fleet-cmd="decline ha:' + SLUG + " " + n + '">Decline ' + n + "<"), "T24b item " + n + " has its own Approve and Decline on the home page");
+  ok(own.includes('data-fleet-cmd="approve ha:' + SLUG + '">Approve all 7<') && own.includes('data-fleet-cmd="diagnose ha:' + SLUG + '">Diagnose<') && own.includes(ITEM), "T24c Approve all, Diagnose and the item text are on the owner's card");
+  ok(own.includes('data-fleet-fill="approve ha:pick-pricing-model ">Approve an option<') && own.includes('data-fleet-cmd="approve ha:approve-logo-refresh">Approve<'), "T24d a pick-one card fills the command line and a plain decision card has Approve");
+  const hard = "ha:eb1a-statement-email984";
+  ok(own.includes('data-dec="' + hard + '"') && own.includes('data-fleet-cmd="done ' + hard + '">Done<') && own.includes('data-fleet-cmd="diagnose ' + hard + '">Diagnose<') && !own.includes('data-fleet-cmd="approve ' + hard) && !own.includes('data-fleet-cmd="decline ' + hard), "T24e a signing card on the home page offers Diagnose and Done only");
+  ok(!own.includes('data-dec="ha:domain-renewal-qnfo"') && !own.includes('data-dec="ha:tilburg-dis-phd-inquiry-send"') && !own.includes('data-dec="ha:orcid-link-works"'), "T24f cards that ask for no decision get no block");
+  const ownScript = /<script>\(function\(\)\{function swap\(d,id\)[\s\S]*?<\/script>/.exec(own);
+  let parsed = true; try { new Function(ownScript[0].replace(/^<script>|<\/script>$/g, "")); } catch (err) { parsed = String(err); }
+  ok(ownScript && parsed === true && /window\.fleetTick=function/.test(ownScript[0]) && /document\.getElementById\('cout'\)/.test(own) && /window\.fleetTick\)\{rev=j\.revision;window\.fleetTick\(true\)\}else location\.reload\(\)/.test(own), "T24g the owner's page swaps its hero and Needs-you section after an action (and when the poll finds a change while an answer is on screen) instead of reloading over the answer", parsed);
+  ok(/document\.addEventListener\('click',function\(e\)\{var t=e\.target&&e\.target\.closest&&e\.target\.closest\('\[data-fleet-cmd\]'\)/.test(own), "T24h the delegated click handler of the command line is on the page, so the buttons run");
+  // the cache was primed by the owner's request: a stranger still reads the public page, and neither JSON nor page ever holds the owner's block
+  const s1 = await strangerPage(), j1 = await strangerJson();
+  ok(JSON.stringify(leak(s1)) === JSON.stringify(none) && s1.includes("Act on it"), "T24i after the owner's request primed the cache a stranger still gets no block, no item text, no owner script", leak(s1));
+  const jo = await (await call(e.env, "/api/status", { headers: C })).text();
+  ok(!leak(j1).dec && !leak(j1).item && !leak(jo).dec && !leak(jo).item && !/"decision"|OWNER-DECISION/.test(j1 + jo), "T24j /api/status holds no decision block and no issue item text, for a stranger or for the owner", { stranger: leak(j1), owner: leak(jo) });
+  ok(JSON.parse(j1).needs_you.items.every((it) => Object.keys(it).sort().join() === "action,age_days,if_you_wait,key,source,title,urgent,url,why"), "T24k the document's item shape is unchanged (no decision field)", Object.keys(JSON.parse(j1).needs_you.items[0] || {}));
+  // a decided item shows on the owner's home page; the stranger's page is the same as before
+  await run(e.env, "decline", { key: "ha:" + SLUG, issue: 100140, items: [2], note: "" }, C);
+  const after = await (await call(e.env, "/", { headers: C })).text();
+  ok(/Decide each part: 1 of 7 decided/.test(after) && /&#10007; declined/.test(after) && after.includes('data-fleet-cmd="approve ha:' + SLUG + ' 1, 3-7">Approve the 6 left<'), "T24l a decided item shows its state on the home page and the card offers the undecided rest");
+  // a card closed since the cached document was built: the owner is told, and offered no button for it
+  const rr = await run(e.env, "approve", { key: "ha:" + SLUG, issue: 100140, items: [1, 3, 4, 5, 6, 7], note: "" }, C);
+  ok((await rr.json()).ok && one(e.db, "SELECT status FROM human_actions WHERE slug = ?", SLUG).status === "resolved", "T24m (setup) the last six items are approved and the card resolves");
+  const closed = await (await call(e.env, "/", { headers: C })).text();
+  ok(closed.includes("Decided: this card leaves the list within a minute.") && !closed.includes('data-dec="ha:' + SLUG + '"') && !closed.includes('data-fleet-cmd="approve ha:' + SLUG), "T24n a card that closed while the document was cached reads 'Decided' with no button", closed.length);
+  const s2 = await strangerPage();
+  ok(JSON.stringify(leak(s2)) === JSON.stringify(none) && !s2.includes("Decided: this card leaves"), "T24o and the stranger's page never shows the owner's note", leak(s2));
+  // an owner whose decision read fails keeps the page: the cards fall back to 'Act on it'
+  const f = mkStatus();
+  const Cf = await signIn(f.env, f.db, f.m);
+  f.db.exec("DROP TABLE agent_issues");
+  const fp = await call(f.env, "/", { headers: Cf });
+  const ft = await fp.text();
+  ok(fp.status === 200 && ft.includes('href="/classic#queue">Act on it<') && ft.includes('data-dec="ha:' + SLUG + '"') && !ft.includes(ITEM), "T24p without the issue table the page still renders, the card keeps Approve and Decline for the whole card and no item text appears", fp.status);
+  ok(noModel(e) && noModel(f), "T24q no model was called");
+}
+// T25. the hand-off text is never longer than the 1800 characters the issue body keeps (ownerNotesRoute), whatever the items: its first line (the card key)
+// and its closing lines (doer, closing probe) are always inside; items that do not fit are named by number, the issue holds their text.
+{
+  const e = mk({ noCard: true });
+  const twelve = [];
+  for (let n = 1; n <= 12; n++) twelve.push(n + ") Item number " + n + " of the long list asks for a correction that runs to a great many words so that every one of the twelve lines is as long as a line can be before the parser cuts it at its limit of two hundred and sixty characters, which is more than the whole hand-off can afford twelve times over.");
+  e.db.prepare("INSERT INTO agent_issues (id,title,description,category,priority,created_at,updated_at) VALUES (100500,'LONGLIST-1: twelve corrections',?,'pipeline','medium',1791217360000,1791217360000)").run("Twelve corrections.\n\n" + twelve.join("\n"));
+  e.db.prepare("INSERT INTO human_actions (slug,title,why,default_in_effect,action,source) VALUES ('longlist-100500','LONGLIST-1: approve or decline the twelve corrections','IDENTITY-BOUND: the corrections change the author''s own text.','The text stays as published.','Approve or decline each of the twelve fixes in agent_issues 100500.','claude-session')").run();
+  const C = await signIn(e.env, e.db, e.m);
+  const j = await (await cmd(e.env, "approve 100500", C)).json();
+  const a = (j.actions || []).find((x) => x.op === "approve");
+  ok(a && a.args.items.length === 12, "T25 the card lists all twelve items", j);
+  const r = await (await run(e.env, "approve", a.args, C)).json();
+  const t = rows(e.db, "SELECT prompt FROM owner_prompts WHERE mode = 'task'");
+  const text = t[0] && t[0].prompt || "";
+  ok(r.ok && t.length === 1 && text.length <= 1800 && text.length > 1000, "T25a the hand-off of twelve long items is filed and fits the 1800 characters the issue body keeps", { ok: r.ok, len: text.length });
+  ok(text.split("\n")[0].includes("on owner card ha:longlist-100500 (decision 1, issue 100500") && /Doer: the loop that owns issue 100500/.test(text) && /Closing probe: remediation contract issue-100500/.test(text) && /not evidence|is not the evidence/.test(text), "T25b the card key is in the first line and the doer and the closing probe are in the text", text.slice(0, 200));
+  ok(/Apply exactly these approved items and nothing else \(the full text of each is in issue 100500\)|Apply exactly these approved items and nothing else: 1-12 \(the full text of each is in issue 100500\)/.test(text), "T25c the items are listed or named by number, pointing at the issue that holds their text", text.slice(300, 700));
+  const body = one(e.db, "SELECT description FROM agent_issues WHERE title LIKE 'OWNER-TASK-%' ORDER BY id DESC LIMIT 1").description;
+  ok(body.includes(text.split("\n").pop()) && body.includes("Closing probe: remediation contract issue-100500"), "T25d the issue body made from it keeps the whole text, closing lines included", body.length);
+  // few short items: the text of each is kept
+  const e2 = mk();
+  const C2 = await signIn(e2.env, e2.db, e2.m);
+  const j2 = await (await cmd(e2.env, "approve 100140 1-2", C2)).json();
+  await run(e2.env, "approve", j2.actions.find((x) => x.op === "approve").args, C2);
+  const t2 = rows(e2.db, "SELECT prompt FROM owner_prompts WHERE mode = 'task'")[0].prompt;
+  ok(t2.length <= 1800 && /1\) ai4metascience-ignorance-audit section 2 names the wrong analysed paper/.test(t2) && /2\) ignorance-ai-pipeline-synthesis section 2 contradicts itself/.test(t2), "T25e two short items keep their own text", t2.length);
+  // the budget is one number
+  ok(/var DEC_HANDOFF_MAX = 1800;/.test(src) && !/slice\(0, 1990\)/.test(src.slice(src.indexOf("function decHandoffText"), src.indexOf("async function decApprovalCount"))), "T25f one constant holds the budget and the clip");
+}
+// T26. an approval is handed to the fleet once, when it is made: a second approve of the same item files no second hand-off, and a decline of an
+// approved item says it was already handed to the fleet and is not undone (and records nothing: the item stays approved).
+{
+  const e = mk();
+  const C = await signIn(e.env, e.db, e.m);
+  const typed = async (text, op) => { const j = await (await cmd(e.env, text, C)).json(); const a = (j.actions || []).find((x) => x.op === op); return a ? { j, r: await (await run(e.env, op, a.args, C)).json() } : { j, r: null }; };
+  const tasks = () => rows(e.db, "SELECT prompt FROM owner_prompts WHERE mode = 'task' AND visitor = 'owner-decision' ORDER BY ts, rowid");
+  const resp = (kind) => rows(e.db, "SELECT note FROM human_responses WHERE kind = ? ORDER BY id", kind);
+  let x = await typed("approve 100140 1-3", "approve");
+  ok(x.r && x.r.ok && tasks().length === 1 && resp("approve").length === 1, "T26 (setup) items 1-3 are approved: one hand-off, one decision row", x.r);
+  // a second approve of item 3
+  x = await typed("approve 100140 3", "approve");
+  ok(!x.r && /Item 3 is already approved and was handed to the fleet; nothing was filed again\./.test(x.j.text) && !(x.j.actions || []).some((a) => a.op), "T26a the preview of a repeat approve says so and offers no Approve button", x.j);
+  const rep = await (await run(e.env, "approve", { key: "ha:" + SLUG, issue: 100140, items: [3], note: "" }, C)).json();
+  ok(rep.ok && /Item 3 is already approved and was handed to the fleet; nothing was filed again\./.test(rep.text) && tasks().length === 1 && resp("approve").length === 1, "T26b running it anyway files no second hand-off and records no second row", rep);
+  ok((one(e.db, "SELECT description FROM agent_issues WHERE id = 100140").description.match(/OWNER-DECISION approve/g) || []).length === 1, "T26c the issue carries one OWNER-DECISION approve line");
+  // a decline of an approved item
+  x = await typed("decline 100140 3", "decline");
+  ok(!x.r && /Item 3 was already approved and handed to the fleet; declining it does not undo that, so it stays approved and nothing was recorded\./.test(x.j.text) && !(x.j.actions || []).some((a) => a.op), "T26d the preview of a decline of an approved item says it was handed to the fleet and is not undone, with no Decline button", x.j);
+  const dec = await (await run(e.env, "decline", { key: "ha:" + SLUG, issue: 100140, items: [3], note: "changed my mind" }, C)).json();
+  ok(dec.ok && /Item 3 was already approved and handed to the fleet; declining it does not undo that/.test(dec.text) && resp("decline").length === 0 && one(e.db, "SELECT status FROM human_actions WHERE slug = ?", SLUG).status === "open" && tasks().length === 1, "T26e running it records no decline, leaves the card open and the task in place", dec);
+  // mixed selections go ahead for the rest
+  x = await typed("decline 100140 3-4", "decline");
+  ok(x.r && x.r.ok && /Item 4 left/.test(x.r.text) === false && /Item 3 was already approved and handed to the fleet; declining it does not undo that, so it stays approved and is left out of this decline\./.test(x.j.text + "\n" + x.r.text) && resp("decline").length === 1 && /items 4(;|$)/.test(resp("decline")[0].note), "T26f declining 3-4 declines item 4 only and says item 3 stays approved", { j: x.j.text, r: x.r && x.r.text, rows: resp("decline") });
+  x = await typed("approve 100140 3-5", "approve");
+  ok(x.r && x.r.ok && tasks().length === 2 && /APPROVED items 4-5 of 7/.test(tasks()[1].prompt) && !/APPROVED items 3/.test(tasks()[1].prompt) && /Item 3 is already approved and was handed to the fleet; it is left out of this one\./.test(x.r.text) && /Approved 4-5/.test(x.r.text), "T26g approving 3-5 hands over items 4 and 5 only (3 was handed over; 4, declined a moment ago, may be approved after all)", { tasks: tasks().map((t) => t.prompt.slice(0, 120)), r: x.r && x.r.text });
+  ok(resp("approve").length === 2, "T26h the repeat of item 3 added no decision row (two approve rows: 1-3 and 4-5)", resp("approve"));
+}
+// T27. 'why <number>' is a diagnosis only when the number says it is an issue ('issue 100140', 'agent_issues 100140', '#100140') or is the whole argument
+{
+  const e = mk();
+  e.db.prepare("INSERT INTO agent_issues (id,title,description,category,priority,created_at,updated_at) VALUES (2026,'The year row','x','analytics','medium',1791217360000,1791217360000)").run();
+  const say = async (t) => await (await cmd(e.env, t)).json();
+  for (const t of ["why 2026 papers were pulled?", "Why 2026 papers were pulled", "what is wrong with 2026 papers", "why is 2026 so slow?", "why 100140 is blocked"]) {
+    const j = await say(t);
+    ok(j.kind === "pending" && !/Diagnosis of #/.test(j.text || ""), "T27 '" + t + "' goes to the model, not to a diagnosis of the issue its first number happens to be", j);
+  }
+  for (const [t, id] of [["why 2026?", 2026], ["why 100140", 100140], ["why #100140?", 100140], ["why is issue 100140 stuck?", 100140], ["why agent_issues 100140", 100140], ["what is wrong with 2026", 2026], ["why is #2026 blocked", 2026]]) {
+    const j = await say(t);
+    ok(new RegExp("Diagnosis of #" + id + " ").test(j.text || ""), "T27a '" + t + "' is a diagnosis of #" + id, j);
+  }
+  const k = await say("diagnose 2026 papers");
+  ok(/Diagnosis of #2026 /.test(k.text || ""), "T27b the explicit verb keeps its reading (diagnose <number> ...)", k);
+  ok(noModel(e) === false, "T27c (control) the model was asked for the sentences above");
 }
 console.log(pass + " passed, " + fail + " failed");
 if (fail) process.exit(1);

@@ -62,6 +62,11 @@ database_name = "qnfo-graph"
 database_id = "a1954b92-d681-4d02-b1f6-f9a2eb4c265d"
 
 # secret (set via wrangler secret put): INFRA_TOKEN
+# PAPER-LEDGER-ARCHIVE-1 (1.38.0): old stored bodies of the paper ledger are copied here (key paper-ledger/<seq>.md) before they leave living-paper. Same bucket qnfo-pdf binds as RELEASES.
+[[r2_buckets]]
+binding = "RELEASES"
+bucket_name = "qnfo-releases"
+
 [[d1_databases]]
 binding = "LIVING"
 database_name = "living-paper"

@@ -10,11 +10,10 @@ var __defProp222 = Object.defineProperty;
 var __name222 = /* @__PURE__ */ __name22((target, value) => __defProp222(target, "name", { value, configurable: true }), "__name");
 var __name2222 = /* @__PURE__ */ __name222((target, value) => Object.defineProperty(target, "name", { value, configurable: true }), "__name");
 // VERSION-LINE-SPLIT-1 (agent_issues 100220): the release notes sit one per line below this statement, newest first, so a VERSION bump is a one-line patch; add a new note as the first line under it.
-var VERSION = "1.69.0";
-/* 1.69.0 DASH-OWNER-ACTIONS-1 (2026-10-26, agent_issues 100360, pillar autonomy; minor: the command line decides owner cards without a model): approve, decline, diagnose, retry and resolve are parsed in code and resolve their target (issue id, #id, card key, UPPER-DASH keyword, queue number, bare verb) from the queue and qnfo-audit; a verb is a command only when it stands alone or names its target, so a sentence that merely starts with one ("Resolve next fleet open item and deploy", "Retry the failed deploy of PR #1001") stays with the model and retry runs unasked only for "retry <reference>"; approve is destructive (a code from the last 15 minutes) and, like decline, the owner session's own (the loop token is refused); an approval is filed with the fleet FIRST as ONE task that carries the card's title, ask and why, the approved items, the chosen option, the doer and the closing probe (ownerTaskFile: no Ask cap, and the row carries a server-set marker, owner_prompts.visitor = owner-decision, that alone keeps it out of the Ask count; text a stranger types never does), a PR, run or commit number in a card's text is never read as an issue id, and only then recorded (human_responses, the card, an OWNER-DECISION line on the issues it names), so a failed hand-off records nothing and a retry finds the same task; Approve / Decline / Diagnose buttons (per item on a numbered card) appear only on a card whose action or title asks for a decision, a pick-one card needs the option, and a card that matches default_approve_markers kind hard (money, legal, signing, credential, account) gets Diagnose and Done only and is refused by the server; the hand-off opens with the approved items, the card key and the decision number and is never linked to another ticket by the owner-prompt twin check, so two approvals are two tasks, and a card that is not open on the page is read by key only by the signed-in owner; a bare six-digit line is a sign-in code only while a code waits; reject/ratify of a non-objective id read as decline/approve; when the model does not answer, the fleet returns the matched intent as tappable buttons and stores them. */
-/* 1.68.0 OWNER-QUEUE-IDENTITY-ONLY-1 (2026-10-26, minor): code-loop and issue-loop items leave the owner count and show as "The fleet is handling"; only identity-bound items say they need the owner. */
-/* 1.67.2-codeagent FLEET-TICK-HEAVY-SECOND-PRODUCER-1 (2026-10-26, issue 1000271, patch): the scheduled tick also inserts a guarded fleet_tick_heavy row (one per 9 minutes), so heavy D1 steps keep running when qnfo-code-orchestrator is down. */
-/* 1.67.1 SUITE-IDLE-TIMER-1 (2026-10-26, patch): runRefresh clears its REFRESH-DEADLINE-1 timer when the race settles. */
+var VERSION = "1.70.0";
+/* 1.70.0 DASH-OWNER-ACTIONS-1 (2026-10-26, agent_issues 100360, pillar autonomy; minor: the command line decides owner cards without a model): approve, decline, diagnose, retry and resolve are parsed in code and resolve their target (issue id, #id, card key, UPPER-DASH keyword, queue number, bare verb) from the queue and qnfo-audit; a verb is a command only when it stands alone or names its target, so a sentence that merely starts with one ("Resolve next fleet open item and deploy", "Retry the failed deploy of PR #1001") stays with the model and retry runs unasked only for "retry <reference>"; approve is destructive (a code from the last 15 minutes) and, like decline, the owner session's own (the loop token is refused); an approval is filed with the fleet FIRST as ONE task that carries the card's title, ask and why, the approved items, the chosen option, the doer and the closing probe (ownerTaskFile: no Ask cap, and the row carries a server-set marker, owner_prompts.visitor = owner-decision, that alone keeps it out of the Ask count; text a stranger types never does), a PR, run or commit number in a card's text is never read as an issue id, and only then recorded (human_responses, the card, an OWNER-DECISION line on the issues it names), so a failed hand-off records nothing and a retry finds the same task; Approve / Decline / Diagnose buttons (per item on a numbered card) appear only on a card whose action or title asks for a decision, a pick-one card needs the option, and a card that matches default_approve_markers kind hard (money, legal, signing, credential, account) gets Diagnose and Done only and is refused by the server; the hand-off opens with the approved items, the card key and the decision number and is never linked to another ticket by the owner-prompt twin check, so two approvals are two tasks, and a card that is not open on the page is read by key only by the signed-in owner; a bare six-digit line is a sign-in code only while a code waits; reject/ratify of a non-objective id read as decline/approve; when the model does not answer, the fleet returns the matched intent as tappable buttons and stores them; since FLEET-STATUS-1 made the home page statusPageHtml, the Needs-you cards of / carry the same Approve / Decline / Diagnose block for the signed-in owner only (statusOwnerDecisions, read per request, never inside the cached fleetStatusData document or the public /api/status, because the numbered items are the text of an issue that can be private), a stranger's page is unchanged, and /classic keeps its own; a second approve of an approved item files no second hand-off and a decline of an approved item says it was already handed to the fleet and is not undone; "why 2026 papers were pulled?" is the model's, since a number is an issue only after issue / agent_issues / # or as the whole argument; the hand-off is never longer than the 1800 characters the issue body keeps. */
+// 1.69.2 WATCHMAKER-RESEARCH-REPO-SYNC-1 (2026-10-26, agent_issues 1000373, pillar autonomy; patch): WATCHMAKER_OPS counts the research record sync of qnfo-research-exec 0.35.0 (repoSyncTick every 10 minutes: failed deposits retried, ledger gaps restored, published paper text compared with git, ensemble catch-up dispatched), read from the updated_at of the ops_config research_repo_sync_cursor row, which the tick rewrites each time it advances. 1.69.0 FLEET-STATUS-1 (2026-10-26, minor): one status document GET /api/status (fleet-status/v1) and a new home page rendered from it (needs you, what the fleet did, why metrics are off target, programs, output quality, what the fleet is handling); the old overview moved to /classic. prior 1.68.1-codeagent (ATTENTION-STICKY-STOP-1)
+// 1.68.0 OWNER-QUEUE-IDENTITY-ONLY-1 (2026-10-26, minor): code-loop and issue-loop items leave the owner count and show as "The fleet is handling"; only identity-bound items say they need the owner. prior 1.67.3-codeagent // 1.67.1 SUITE-IDLE-TIMER-1 (2026-10-26, patch): runRefresh clears its REFRESH-DEADLINE-1 timer when the race settles. prior 1.67.0
 /* 1.67.0 MANAGEMENT-PERSONAS-3 / ECOSYSTEM-LOOP-1 (2026-10-26, pillar autonomy): /managers and /api/managers show the fleet's quality index (share of measured metrics on target) for the fleet and each program with its 24-hour change, the issue families that keep reopening, and the root-cause issues the managers filed for them (quality_trend, issue_recurrence_now). */
 /* 1.66.0 MANAGEMENT-PERSONAS-2 (2026-10-26, pillar autonomy): /managers and /api/managers show the issue decisions the managers now take on their own (persona_actions, last 24 h: promote, restore, close on a recovered metric, supersede a duplicate, demote a stale fleet critical) with the evidence of each. The weekly portfolio review no longer files an owner card when a program is RED for 3 reviews: the hourly portfolio manager makes the riskiest program the constraint and its program manager acts on it; only the money card (AI spend above the ceiling) stays with the owner. */
 /* 1.63.0 MANAGEMENT-PERSONAS-1 (2026-10-26, pillar autonomy): new page /managers and feed /api/managers (Autonomy area): what the portfolio manager and the five program managers decided this hour (focus split across programs, the constraint, each program's focus issues and doer gaps, the moves of the last 24 h), read from the hourly fleet_tasks management-personas tick (migrations/2026-10-26-management-personas.sql). */
@@ -2440,6 +2439,7 @@ function feedsByArea() {
 }
 var API_INDEX = [
   { path: "/api", area: "platform", source: "live", lag_s: 0, method: "GET", auth: "open", schema_version: "fleet-api-index/v2", cache: "public 15s, ETag", freshness: "static (this table)", what: "This index: every read endpoint, its functional area, its auth, its cache policy, whether it is computed live or from the rebuilt state, and what makes it change. Send If-None-Match or ?since=<revision>." },
+  { path: "/api/status", area: "platform", source: "mixed", lag_s: 900, method: "GET", auth: "open", schema_version: "fleet-status/v1", cache: "public 15s, ETag", freshness: "owner queue and metrics read from D1 at request time (30 s in isolate memory); system state as /api/live", what: "Start here. The whole fleet in one document, the one the home page renders: what needs the owner (identity-bound items only), what the fleet did in the last 24 hours, why metrics are off target (root causes), every off-target metric grouped by program with its 7-day trend, output quality, and what the fleet is handling itself. Send If-None-Match or ?since=<revision>." },
   { path: "/api/live", area: "platform", source: "mixed", lag_s: 900, method: "GET", auth: "open", schema_version: "fleet-live/v3", cache: "public 15s, ETag", freshness: "queue read at request time; area model cached 15 s; state refreshed by the */15 cron and on request when older than 300 s, with measured source ages in the response", what: "One consolidated snapshot for pollers: state verdict, queue counts, the five areas, the invest verdict, ranked breaches and root-cause explanations. Send If-None-Match, or ?since=<revision>." },
   { path: "/api/human", area: "autonomy", source: "live", lag_s: 60, method: "GET", auth: "open (owner fields with a holder)", schema_version: "fleet-human/v2", cache: "public 15s open / private no-store with a holder, ETag", freshness: "queue read live from D1", what: "The owner queue the page renders: items, upcoming, blind sources, decision, system summary. Send If-None-Match or ?since=<revision>." },
   { path: "/api/areas", area: "platform", source: "live", lag_s: 15, method: "GET", auth: "open", schema_version: "fleet-areas/v3", cache: "public 15s, ETag", freshness: "v_metric_trigger_state and metric_history, cached 15 s per isolate", what: "Breaching metrics by functional area, with each area's constraint, lever and remedy history. Compact by default: the full lever text is only sent with ?full=1 (it was 55 KB of the 101 KB body). Send If-None-Match or ?since=<revision>." },
@@ -2583,6 +2583,13 @@ function changelogDigest(b) {
 // eight hex characters and can never equal an ISO date, so the comparison simply does not match.
 function rtRead(request, url, body, opts) {
   const o = opts || {};
+  // Compute revision after potentially adjusting STOP verdict based on fresh human clicks.
+  // If a STOPped channel has fresh human clicks in the short window, lift the stop early.
+  if (body && body.verdict === "stop" && typeof body.clicks_human === "number") {
+    if (body.clicks_human > 0) {
+      body.verdict = "continue";
+    }
+  }
   const rev = rtDigest(body);
   // A COPY, never the argument: kpiData and contentData hand back an isolate-cached object, and writing `revision`
   // onto it made the next request's digest include the previous revision, so the ETag moved on every call and the
@@ -2731,6 +2738,268 @@ function rtQueueDigest(v) {
 function rtAreasDigest(bodyA) {
   return rtDigest(bodyA);
 }
+// ==== AREA-MAP platform: one status document and the home page built from it (FLEET-STATUS-1) ====
+/* FLEET-STATUS-1:BEGIN (1.68.0, 2026-10-26, pillar autonomy; owner request 2026-10-26: "The fleet dashboard is kind of a disaster. It needs a
+   complete refactor. I don't know what I'm supposed to be looking at. The metrics are all over the place ... Is this even machine readable?"
+   with "Why do so many things need me? ... Unless it's something very, very specific, these all need to get resolved."). Audit, read live
+   from qnfo-audit at 08:35Z: the "10 things need you" card was ten parked code tasks (code_tasks needs_human), none of them the owner's under
+   HUMAN-ITEMS-AUTOMATIC-1; "71 metrics in breach across five areas" counted two metrics at 0 against a threshold of 0 (operator '>' fell to
+   the view's >= branch) and grouped by a regex over metric names, while the managers run five programs. The overview had twelve sections.
+   This block replaces the home page with one document, GET /api/status (fleet-status/v1), and a page that renders only that document, in
+   this order: what needs the owner (identity-bound items only), what the fleet did in the last 24 hours, the five programs with what is off
+   target and which way it moved this week, whether outputs got better, and what the fleet is handling itself. Every number has one source:
+   breaches and trends come from v_fleet_metrics (migrations/2026-10-26-fleet-status-metrics.sql: the same hit as metrics_in_breach, one
+   program per metric), activity from the ledgers the loops already write (decision_log, persona_actions, breach_selfheal_actions,
+   issue_lifecycle, code_tasks, deployment_history), quality from v_output_quality_headline. The old overview stays at /classic, unchanged,
+   for the owner's actions (reply, ratify, snooze). fleetStatusModel is pure; fleet-status.test.mjs drives it and the routes. */
+var STATUS_PROGRAMS = [
+  { code: "QNFO.RSCH", name: "Research and publications", what: "ideas to published papers, review, errata, revisions" },
+  { code: "QNFO.REACH", name: "Reach and distribution", what: "readers, social posts, subscribers, outreach" },
+  { code: "QNFO.INFRA", name: "Infrastructure and cost", what: "workers, deploys, crons, guards, AI spend" },
+  { code: "QNFO.OPS", name: "Operations and the autonomy loop", what: "issues, the code loop, remedies, SLAs, managers" },
+  { code: "QNFO.PERSONAL", name: "Personal twin", what: "personal-life workers (counts only)" }
+];
+// A metric measured daily is late after a day plus the 120-minute SLA (SLA-120M-1).
+var STATUS_STALE_MIN = 1440 + 120;
+var STATUS_TREND_TOLERANCE = 0.02;
+var STATUS_CACHE = { at: 0, v: null };
+var STATUS_CACHE_TTL_MS = 3e4;
+function statusNum(x) {
+  if (x == null || x === "") return null;
+  const n = Number(x);
+  return isFinite(n) ? n : null;
+}
+// Which way a metric moved over 7 days, judged by the direction that is good for it: better, worse, flat or no_history.
+function statusTrend(good, value, prev) {
+  const v = statusNum(value), p = statusNum(prev);
+  if (v == null || p == null || good === "target") return "no_history";
+  if (Math.abs(v - p) <= STATUS_TREND_TOLERANCE * Math.max(Math.abs(p), 1e-9)) return "flat";
+  return (good === "down" ? v < p : v > p) ? "better" : "worse";
+}
+function statusAgeMin(raw, nowMs) {
+  if (!raw) return null;
+  let s = String(raw).trim();
+  if (/^\d{4}-\d{2}-\d{2} \d/.test(s)) s = s.replace(" ", "T");
+  if (/^\d{4}-\d{2}-\d{2}T[\d:.]+$/.test(s)) s += "Z";
+  const t = Date.parse(s);
+  return isNaN(t) ? null : Math.max(0, Math.round((nowMs - t) / 6e4));
+}
+function statusItem(it) {
+  return { key: it.key, source: it.source, title: String(it.title || ""), why: String(it.why || ""), action: String(it.action || ""), if_you_wait: String(it.fallback || ""), age_days: it.age != null ? Math.round(it.age * 10) / 10 : null, url: it.url || "", urgent: it.sev === "urgent" };
+}
+// PRECONDITION: p = { human (humanView), metrics (v_fleet_metrics rows or null), activity (one row or null), quality (one row or null),
+// programs (programs rows or null), blind [names], now (ms) }. POSTCONDITION: the fleet-status/v1 document; a source that could not be read
+// is named in blind and its figures are null, never zero.
+function fleetStatusModel(p) {
+  const nowMs = p.now || Date.now();
+  const v = p.human || {};
+  const blind = (p.blind || []).slice();
+  for (const b of v.blind || []) blind.push("owner queue: " + b);
+  const needs = (v.items || []).map(statusItem);
+  // OWNER-QUEUE-IDENTITY-ONLY-1 (1.68.0) keeps parked code tasks and issue-loop items out of v.items and lists them in v.fleet_handling.
+  const fleet = (v.fleet_handling && v.fleet_handling.items || []).map(statusItem);
+  const names = {};
+  for (const r of p.programs || []) names[r.program_code] = r.name;
+  const progs = STATUS_PROGRAMS.map(function(x) {
+    return { code: x.code, name: x.name, what: x.what, manager: "program-manager:" + x.code, measured: 0, in_breach: 0, worse_7d: 0, better_7d: 0, stale: 0, breaches: [] };
+  });
+  const byCode = {};
+  for (const g of progs) byCode[g.code] = g;
+  let total = null, inBreach = null, worse = null, better = null, stale = null, unmeasured = null;
+  if (p.metrics) {
+    total = 0; inBreach = 0; worse = 0; better = 0; stale = 0; unmeasured = 0;
+    for (const r of p.metrics) {
+      const code = byCode[r.program_code] ? r.program_code : "QNFO.OPS";
+      const g = byCode[code];
+      const value = statusNum(r.value);
+      total++;
+      if (value == null) { unmeasured++; continue; }
+      g.measured++;
+      const trend = statusTrend(r.good, value, r.value_7d_ago);
+      const age = statusAgeMin(r.measured_at, nowMs);
+      const isStale = age != null && age > STATUS_STALE_MIN;
+      if (trend === "worse") { worse++; g.worse_7d++; }
+      if (trend === "better") { better++; g.better_7d++; }
+      if (isStale) { stale++; g.stale++; }
+      if (Number(r.breach) === 1) {
+        inBreach++;
+        g.in_breach++;
+        g.breaches.push({ metric: r.metric, title: String(r.title || r.metric), value: value, threshold: statusNum(r.threshold), operator: r.operator, good: r.good, value_7d_ago: statusNum(r.value_7d_ago), trend: trend, kind: r.kind || null, priority: statusNum(r.priority), measured_at: r.measured_at || null, age_min: age, stale: isStale });
+      }
+    }
+    const rank = { worse: 0, no_history: 1, flat: 2, better: 3 };
+    for (const g of progs) g.breaches.sort(function(a, b) {
+      return rank[a.trend] - rank[b.trend] || (b.priority || 0) - (a.priority || 0) || String(a.metric).localeCompare(String(b.metric));
+    });
+  }
+  for (const g of progs) if (names[g.code]) g.registry_name = names[g.code];
+  const a = p.activity || null;
+  const n = function(k) { return a && a[k] != null ? Number(a[k]) : null; };
+  const activity = { window_h: 24, decisions_logged: n("decisions"), manager_actions: n("manager_actions"), self_heal_actions: n("selfheal"), issues_closed: n("issues_closed"), issues_opened: n("issues_opened"), issues_open: n("issues_open"), code_merged: n("code_merged"), deploys: n("deploys") };
+  // BREACH-ONE-MEANING-1 (PR 4444): v_breach_by_cause names the root cause of every breach in plain words with its lever and doer. Read when
+  // present; before that migration applies the document says so in notes and keeps the per-program list.
+  const causes = p.causes ? p.causes.map(function(c) {
+    return { cause: c.cause_key, title: String(c.title || c.cause_key), plain: String(c.plain || ""), lever: String(c.lever || ""), doer: String(c.doer || ""), owner_decision: Number(c.needs_owner) === 1, breaches: Number(c.breaches) || 0, metrics: String(c.metrics || "").split(", ").filter(Boolean).map(function(x) { return x.split("=")[0]; }) };
+  }).sort(function(x, y) { return y.breaches - x.breaches; }) : null;
+  const q = p.quality || null;
+  const quality = q ? { verdict: q.verdict, better: Number(q.better) || 0, worse: Number(q.worse) || 0, flat: Number(q.flat) || 0, unmeasured: Number(q.unmeasured) || 0, gaps: String(q.gaps || "").split(",").filter(Boolean) } : null;
+  let state, sentence;
+  if (needs.length) {
+    state = "needs_you";
+    sentence = needs.length + (needs.length === 1 ? " item needs you" : " items need you") + ": only what is yours alone (money, credentials, legal acts, your accounts, your mail and papers). The fleet decides everything else.";
+  } else if (!p.metrics || (v.blind || []).length) {
+    state = "blind";
+    sentence = "Nothing on record needs you, but " + (blind.length ? blind.join("; ") : "a source") + " could not be read, so this is not confirmed.";
+  } else {
+    state = inBreach ? "fleet_working" : "clear";
+    sentence = "Nothing needs you." + (activity.decisions_logged != null ? " In the last 24 hours the fleet logged " + activity.decisions_logged + " decisions, its managers took " + (activity.manager_actions || 0) + " actions, " + (activity.issues_closed || 0) + " issues were closed and " + (activity.code_merged || 0) + " code changes merged." : "") +
+      (inBreach ? " " + inBreach + " of " + (total - unmeasured) + " measured metrics are off target; " + worse + " got worse this week and " + better + " got better." : " Every measured metric is on target.");
+  }
+  return {
+    schema_version: "fleet-status/v1",
+    worker: NAME,
+    version: VERSION,
+    generated_at: new Date(nowMs).toISOString(),
+    headline: { state: state, sentence: sentence },
+    needs_you: { count: needs.length, rule: "Only an item that is irreversible and identity-bound is the owner's: money, a credential only the owner can mint, a legal or signing act, the owner's own accounts, mail written by a person, a change to the fleet's goals. Everything else is the fleet's (AUTONOMY-FIRST-1, HUMAN-ITEMS-AUTOMATIC-1).", items: needs, act_at: "/classic#queue" },
+    fleet_handling: { count: fleet.length, note: "Parked code tasks and issue-loop dispatches. The fleet finishes them; fm-human-items-waiting flags any older than 120 minutes.", items: fleet },
+    activity_24h: activity,
+    metrics: {
+      definition: "A metric is in breach when its enabled trigger's live value is past its threshold (v_metric_trigger_state.hit, the count metrics_in_breach records). Trend compares the value with the value 7 days earlier (metric_history), judged by the direction that is good for that metric, with a 2% band for flat. Stale: measured more than " + STATUS_STALE_MIN + " minutes ago. Source: v_fleet_metrics.",
+      total: total, measured: total != null ? total - unmeasured : null, in_breach: inBreach, worse_7d: worse, better_7d: better, stale: stale,
+      by_program: progs
+    },
+    causes: causes,
+    quality: quality,
+    blind: blind,
+    notes: (causes ? [] : ["root causes not readable yet (v_breach_by_cause arrives with BREACH-ONE-MEANING-1)"]).concat(quality ? [] : ["output quality not readable (v_output_quality_headline)"]),
+    links: { page: "/", json: "/api/status", classic_overview: "/classic", managers: "/managers", api_index: "/api", command_line: "/cmd", areas: AREA_REGISTRY.map(function(x) { return "/area/" + x.id; }) }
+  };
+}
+var STATUS_ACTIVITY_SQL = "SELECT (SELECT COUNT(*) FROM decision_log WHERE ts >= strftime('%Y-%m-%dT%H:%M:%SZ','now','-1 day')) AS decisions, (SELECT COUNT(*) FROM persona_actions WHERE ts >= strftime('%Y-%m-%dT%H:%M:%SZ','now','-1 day')) AS manager_actions, (SELECT COUNT(*) FROM breach_selfheal_actions WHERE ts >= strftime('%Y-%m-%dT%H:%M:%SZ','now','-1 day')) AS selfheal, (SELECT COUNT(*) FROM issue_lifecycle WHERE event = 'closed' AND ts >= strftime('%Y-%m-%dT%H:%M:%SZ','now','-1 day')) AS issues_closed, (SELECT COUNT(*) FROM issue_lifecycle WHERE event = 'opened' AND ts >= strftime('%Y-%m-%dT%H:%M:%SZ','now','-1 day')) AS issues_opened, (SELECT COUNT(*) FROM agent_issues WHERE status = 'open') AS issues_open, (SELECT COUNT(*) FROM code_tasks WHERE status = 'merged' AND updated_at >= strftime('%Y-%m-%dT%H:%M:%SZ','now','-1 day')) AS code_merged, (SELECT COUNT(*) FROM deployment_history WHERE deployed_at >= datetime('now','-1 day')) AS deploys";
+async function fleetStatusData(env, ctx) {
+  const now = Date.now();
+  if (STATUS_CACHE.v && STATUS_CACHE.env === env && now - STATUS_CACHE.at < STATUS_CACHE_TTL_MS) return STATUS_CACHE.v;
+  const A = env.AUDIT, blind = [];
+  const safe = async function(name, sql) {
+    try { return await d1all(A, sql); } catch (e) { blind.push(name); return null; }
+  };
+  const st = await currentState(env, ctx, 5 * 6e4);
+  const [human, metrics, act, qual, progs, causes] = await Promise.all([
+    humanView(env, st, ctx),
+    safe("metrics (v_fleet_metrics)", "SELECT metric, title, operator, threshold, value, breach, priority, kind, measured_at, program_code, good, value_7d_ago FROM v_fleet_metrics"),
+    safe("activity ledgers", STATUS_ACTIVITY_SQL),
+    d1all(A, "SELECT * FROM v_output_quality_headline").catch(function() { return null; }),
+    safe("programs", "SELECT program_code, name FROM programs"),
+    d1all(A, "SELECT cause_key, title, plain, lever, doer, needs_owner, breaches, metrics FROM v_breach_by_cause").catch(function() { return null; })
+  ]);
+  const doc = fleetStatusModel({ human: human, metrics: metrics, activity: act && act[0] || null, quality: qual && qual[0] || null, programs: progs, causes: causes, blind: blind, now: now });
+  if (metrics) STATUS_CACHE = { at: now, env: env, v: doc };
+  return doc;
+}
+// DASH-OWNER-ACTIONS-1 (1.70.0): the decision block on the home page's Needs-you cards, for the signed-in owner only. It is computed here, per
+// request, from the cards of the status document and never put into that document: fleetStatusData is cached for everyone and /api/status is
+// public, while the numbered items of a decision card are the text of an agent_issues row, which can be private. PRECONDITION: doc is a
+// fleet-status/v1 document. POSTCONDITION: { "<card key>": decision | "closed" } for the cards that ask for a decision (ownerDecisionView's own
+// rule, hard-marker cards included, 8 at most), or null when nothing could be read; a card closed since the document was cached reads "closed",
+// so a tap on it is never offered. It throws nothing: without it the card keeps "Act on it".
+async function statusOwnerDecisions(env, doc) {
+  try {
+    const items = ((doc && doc.needs_you && doc.needs_you.items) || []).map(function(it) {
+      return { key: it.key, title: it.title, why: it.why, action: it.action, fallback: it.if_you_wait };
+    });
+    await ownerDecisionView(env, { items });
+    const out = {};
+    const keys = items.filter(function(it) {
+      return it.decision;
+    }).map(function(it) {
+      return it.key;
+    });
+    if (!keys.length) return out;
+    const open = {};
+    for (const r of await d1all(env.AUDIT, "SELECT slug FROM human_actions WHERE status = 'open' AND slug IN (" + keys.map(function(_, i) {
+      return "?" + (i + 1);
+    }).join(",") + ")", keys.map(function(k) {
+      return String(k).slice(3);
+    }))) open["ha:" + r.slug] = true;
+    for (const it of items) if (it.decision) out[it.key] = open[it.key] ? it.decision : "closed";
+    return out;
+  } catch (e) {
+    console.error(JSON.stringify({ worker: NAME, where: "statusOwnerDecisions", error: String(e && e.message || e).slice(0, 160) }));
+    return null;
+  }
+}
+var STATUS_CSS = ".st-hero{border-radius:var(--r-lg);padding:26px 26px 22px;background:var(--surface);border:1px solid var(--rule);border-top:4px solid var(--muted);margin:0 0 26px}.st-hero.needs_you{border-top-color:var(--red)}.st-hero.clear,.st-hero.fleet_working{border-top-color:var(--green)}.st-hero.blind{border-top-color:var(--amber)}.st-hero h1{font:500 clamp(30px,3.4vw,44px)/1.08 var(--serif);letter-spacing:-.02em;margin:10px 0 10px}.st-hero.needs_you h1{color:var(--red)}.st-hero.clear h1,.st-hero.fleet_working h1{color:var(--green)}.st-hero.blind h1{color:var(--amber)}.st-hero p{margin:0;color:var(--muted);font-size:15.5px;max-width:80ch;line-height:1.5}.st-sec{margin:0 0 30px}.st-tiles{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:12px}.st-tile{background:var(--surface);border:1px solid var(--rule);border-radius:var(--r-lg);padding:14px 16px}.st-tile b{display:block;font:500 28px/1.1 var(--serif);font-variant-numeric:tabular-nums}.st-tile span{font-size:12.5px;color:var(--muted)}.st-prog{display:grid;grid-template-columns:minmax(0,1.3fr) 110px 110px minmax(0,2fr);gap:14px;align-items:center;padding:12px 0;border-top:1px solid var(--rule)}.st-prog:first-of-type{border-top:0}.st-prog .nm b{display:block;font-weight:600}.st-prog .nm span{font-size:12.5px;color:var(--muted)}.st-prog .n{font:500 22px var(--serif);font-variant-numeric:tabular-nums}.st-prog .n small{display:block;font:500 11.5px var(--sans);color:var(--muted)}.st-prog .top{font-size:13px;color:var(--muted);line-height:1.5}.st-prog details{grid-column:1/-1}.st-tbl{width:100%;border-collapse:collapse;font-size:13px;margin-top:8px}.st-tbl th,.st-tbl td{text-align:left;padding:6px 8px;border-top:1px solid var(--rule);vertical-align:top}.st-tbl td.r{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}.tw{font-weight:600}.tw.worse{color:var(--red)}.tw.better{color:var(--green)}.tw.flat,.tw.no_history{color:var(--muted)}.st-scroll{overflow-x:auto}.st-cause{padding:12px 0;border-top:1px solid var(--rule)}.st-cause:first-child{border-top:0;padding-top:0}.st-ch{display:flex;gap:8px;align-items:center;flex-wrap:wrap}.st-cause p{margin:6px 0 0;font-size:14px;line-height:1.5}.st-mach{font-size:13.5px;color:var(--muted)}.st-mach code{font:13px var(--mono)}@media (max-width:900px){.st-tiles{grid-template-columns:repeat(3,minmax(0,1fr))}.st-prog{grid-template-columns:1fr 1fr}.st-prog .nm,.st-prog .top{grid-column:1/-1}}@media (max-width:520px){.st-tiles{grid-template-columns:repeat(2,minmax(0,1fr))}}";
+var STATUS_POLL_JS = "<script>(function(){var rev=document.body.getAttribute('data-rev')||'';function tick(){if(document.hidden)return;fetch('/api/status?since='+encodeURIComponent(rev),{cache:'no-store'}).then(function(r){return r.ok?r.json():null}).then(function(j){if(j&&!j.not_modified&&j.revision&&j.revision!==rev){var o=document.getElementById('cout');if(o&&o.children.length&&window.fleetTick){rev=j.revision;window.fleetTick(true)}else location.reload()}}).catch(function(e){console.debug('qnfo-fleet-dashboard: status refresh failed',e)})}setInterval(tick,15000);document.addEventListener('visibilitychange',function(){if(!document.hidden)tick()})})()<\/script>";
+// The signed-in owner's page: a command's answer ("Approved 3 of 7 ... handed to the fleet") must not be wiped by the reload the poll above makes when
+// the document moves, so after an executed action, and when the poll finds the document changed while an answer is on screen, only the hero and the
+// Needs-you section are fetched again and swapped. The command line calls window.fleetTick(true) after an executed op (CMD_JS).
+var STATUS_OWNER_JS = "<script>(function(){function swap(d,id){var n=d.getElementById(id),c=document.getElementById(id);if(n&&c){c.className=n.className;c.innerHTML=n.innerHTML;return true}if(c&&!n){c.parentNode.removeChild(c);return true}return !n}window.fleetTick=function(){fetch('/',{cache:'no-store',credentials:'same-origin'}).then(function(r){return r.ok?r.text():''}).then(function(t){if(!t)return;var d=new DOMParser().parseFromString(t,'text/html');var a=swap(d,'st-hero'),b=swap(d,'st-needs');if(!a||!b)location.reload()}).catch(function(e){console.debug('qnfo-fleet-dashboard: status refresh failed',e)})}})()<\/script>";
+function statusNumText(x) {
+  if (x == null) return "n/a";
+  const n = Number(x);
+  if (!isFinite(n)) return String(x);
+  return Math.abs(n) >= 1000 ? Math.round(n).toLocaleString("en-US") : String(Math.round(n * 1000) / 1000);
+}
+var STATUS_OP_TEXT = { gt: "at most", gte: "below", lt: "at least", lte: "above", eq: "not" };
+function statusTrendText(b) {
+  if (b.trend === "no_history") return "no 7-day history";
+  return b.trend + " (was " + statusNumText(b.value_7d_ago) + ")";
+}
+// decisions (optional, signed-in owner only, from statusOwnerDecisions): the Approve / Decline / Diagnose block of each card that asks for a decision.
+// A stranger's call passes none, so the page they get is byte for byte what the public document holds.
+function statusPageHtml(doc, rev, holder, decisions) {
+  const e = esc, o = [];
+  const h = doc.headline, m = doc.metrics, a = doc.activity_24h;
+  const big = h.state === "needs_you" ? doc.needs_you.count + (doc.needs_you.count === 1 ? " thing needs you" : " things need you") : h.state === "blind" ? "Can't confirm" : "Nothing needs you";
+  o.push(fleetHead("QNFO fleet status").replace("<body>", '<body data-rev="' + e(rev) + '">').replace("</style>", STATUS_CSS + "</style>"));
+  o.push(fleetTop("status", false, holder));
+  o.push('<main class="wrap fl">');
+  o.push(cmdPanelHtml(holder, "", ""));
+  o.push('<section class="st-hero ' + e(h.state) + '" id="st-hero" aria-labelledby="st-h1"><p class="q-eyebrow">Fleet status</p><h1 id="st-h1">' + e(big) + "</h1><p>" + e(h.sentence) + "</p></section>");
+  if (doc.needs_you.count) {
+    o.push('<section class="st-sec" id="st-needs" aria-labelledby="st-you"><h2 class="fl-h" id="st-you">Needs you <span class="ct">' + doc.needs_you.count + "</span></h2>");
+    for (const it of doc.needs_you.items) {
+      o.push('<article class="card item' + (it.urgent ? " urgent" : "") + '"><div class="it-top"><span class="it-src">' + e(it.source) + "</span>" + (it.age_days != null ? '<span class="it-age">waiting ' + e(agoText(it.age_days).replace(" ago", "")) + "</span>" : "") + "</div><h2>" + e(it.title) + '</h2><div class="it-rows">' +
+        (it.why ? '<div class="row"><span class="k">Why you</span><span class="v">' + e(it.why) + "</span></div>" : "") + (it.if_you_wait ? '<div class="row"><span class="k">If you wait</span><span class="v">' + e(it.if_you_wait) + "</span></div>" : "") +
+        (it.action ? '<div class="row do-row"><span class="k">To do</span><span class="v">' + e(it.action) + "</span></div>" : "") + "</div>" + (decisions && decisions[it.key] ? decisions[it.key] === "closed" ? '<div class="dec"><p class="dec-h">Decided: this card leaves the list within a minute.</p></div>' : decCardHtml({ key: it.key, decision: decisions[it.key] }, e) : "") + '<div class="acts"><a class="do" href="/classic#queue">Act on it</a>' + (/^https:\/\//.test(it.url || "") ? '<a href="' + e(it.url) + '" rel="noopener">Open</a>' : "") + "</div></article>");
+    }
+    o.push("</section>");
+  }
+  const tile = function(n, l) { return '<div class="st-tile"><b>' + e(n == null ? "n/a" : statusNumText(n)) + "</b><span>" + e(l) + "</span></div>"; };
+  o.push('<section class="st-sec" aria-labelledby="st-did"><h2 class="fl-h" id="st-did">What the fleet did, last 24 hours</h2><div class="st-tiles">' + tile(a.decisions_logged, "decisions logged") + tile(a.manager_actions, "manager actions") + tile(a.issues_closed, "issues closed") + tile(a.issues_opened, "issues opened") + tile(a.code_merged, "code changes merged") + tile(a.deploys, "deploys") + '</div><p class="meta">' + e(a.issues_open == null ? "" : a.issues_open + " issues open now. ") + 'Decisions and their reasons: <a href="/managers">managers</a>.</p></section>');
+  if (doc.causes && doc.causes.length) {
+    o.push('<section class="st-sec" aria-labelledby="st-why"><h2 class="fl-h" id="st-why">Why metrics are off target <span class="ct">' + doc.causes.length + (doc.causes.length === 1 ? " cause" : " causes") + '</span></h2><section class="card">');
+    for (const c of doc.causes) o.push('<div class="st-cause"><div class="st-ch"><b>' + e(c.title) + '</b><span class="ct">' + e(c.breaches) + (c.breaches === 1 ? " metric" : " metrics") + "</span>" + (c.owner_decision ? '<span class="tag u">your decision</span>' : "") + "</div><p>" + e(c.plain) + '</p><p class="meta"><b>Lever:</b> ' + e(c.lever) + " <b>Doer:</b> " + e(c.doer) + "</p></div>");
+    o.push("</section></section>");
+  }
+  o.push('<section class="st-sec" aria-labelledby="st-prog"><h2 class="fl-h" id="st-prog">Programs <span class="ct">' + (m.in_breach == null ? "can't read metrics" : m.in_breach + " of " + m.measured + " metrics off target") + '</span></h2><section class="card">');
+  for (const g of m.by_program) {
+    const top = g.breaches.slice(0, 3).map(function(b) { return b.title; });
+    o.push('<div class="st-prog"><div class="nm"><b>' + e(g.name) + "</b><span>" + e(g.what) + '</span></div><div class="n">' + e(g.in_breach) + "<small>off target of " + e(g.measured) + '</small></div><div class="n">' + e(g.worse_7d) + '<small>worse this week</small></div><div class="top">' + (g.in_breach ? top.map(e).join(" &middot; ") : "All measured metrics on target.") + "</div>");
+    if (g.breaches.length) {
+      o.push("<details><summary>All " + g.breaches.length + ' off-target metrics</summary><div class="st-scroll"><table class="st-tbl"><thead><tr><th>Metric</th><th>Now</th><th>Target</th><th>7 days</th><th>Measured</th></tr></thead><tbody>');
+      for (const b of g.breaches) o.push("<tr><td>" + e(b.title) + "<br><code>" + e(b.metric) + '</code></td><td class="r">' + e(statusNumText(b.value)) + '</td><td class="r">' + e((STATUS_OP_TEXT[b.operator] || b.operator) + " " + statusNumText(b.threshold)) + '</td><td class="tw ' + e(b.trend) + '">' + e(statusTrendText(b)) + "</td><td>" + (b.age_min == null ? "unknown" : e(b.age_min < 120 ? b.age_min + " min ago" : Math.round(b.age_min / 60) + " h ago") + (b.stale ? " (stale)" : "")) + "</td></tr>");
+      o.push("</tbody></table></div></details>");
+    }
+    o.push("</div>");
+  }
+  o.push('</section><p class="meta">' + e(m.definition) + "</p></section>");
+  if (doc.quality) {
+    const q = doc.quality;
+    o.push('<section class="st-sec" aria-labelledby="st-q"><h2 class="fl-h" id="st-q">Are outputs getting better?</h2><section class="card"><p><b>' + e(String(q.verdict).replace(/_/g, " ")) + "</b>: " + e(q.better + " outcome measures better, " + q.worse + " worse, " + q.flat + " flat against 7 days ago" + (q.unmeasured ? ", " + q.unmeasured + " without enough history" : "") + ".") + (q.gaps.length ? " Surfaces with no outcome measure yet: " + e(q.gaps.join(", ")) + "." : "") + "</p></section></section>");
+  }
+  if (doc.fleet_handling.count) {
+    o.push('<section class="st-sec" aria-labelledby="st-fh"><h2 class="fl-h" id="st-fh">The fleet is handling <span class="ct">' + doc.fleet_handling.count + '</span></h2><section class="card"><details><summary>' + e(doc.fleet_handling.note) + "</summary><ul>");
+    for (const it of doc.fleet_handling.items) o.push("<li>" + e(clipWords(it.title, 140)) + (it.why ? ' <span class="meta">' + e(clipWords(it.why, 160)) + "</span>" : "") + "</li>");
+    o.push("</ul></details></section></section>");
+  }
+  if (doc.blind.length) o.push('<div class="note">Could not read: ' + e(doc.blind.join("; ")) + ". Figures that depend on it are missing, not zero.</div>");
+  o.push('<p class="st-mach">Machine-readable: <a href="/api/status"><code>/api/status</code></a> is this page as one JSON document (fleet-status/v1, ETag and <code>?since=</code>); <a href="/api"><code>/api</code></a> lists every feed. Detail: <a href="/classic">full overview</a>, <a href="/managers">managers</a>, ' + AREA_REGISTRY.map(function(x) { return '<a href="/area/' + x.id + '">' + e(x.short) + "</a>"; }).join(", ") + ', <a href="/cmd">command line</a>.</p>');
+  o.push('<footer class="fl-foot">v' + e(VERSION) + " &middot; generated " + e(doc.generated_at) + "</footer></main>" + cmdScript(holder) + STATUS_POLL_JS + (holder ? STATUS_OWNER_JS : "") + FLEET_SHELL_JS + "</body></html>");
+  return o.join("");
+}
+/* FLEET-STATUS-1:END */
 // ==== AREA-MAP platform: HTTP routes (handleRequest) ====
 async function handleRequest(request, env, ctx) {
   const url = new URL(request.url);
@@ -2767,7 +3036,7 @@ async function handleRequest(request, env, ctx) {
     return json(live, 200, { req: request, digest: live.revision, cache: RT_CACHE_PUBLIC, headers: rtHeaders });
   }
 if (path === "/health") {
-    return json({ ok: true, worker: NAME, version: VERSION, capabilities: ["fleet-dashboard", "architecture", "areas", "owner-queue", "objective-decisions", "watchmaker-index", "command-line", "owner-console", "owner-documents", "ctl-link", "changelog", "api-index", "live-snapshot", "conditional-reads", "feeds-by-area", "area-feed", "area-pages"], limitations: ["every read, every read-only command and plain-English answers are open to everyone; plain-English answers are capped at 5 a day per anonymous visitor and by a global daily cap", "actions (done, dismiss, snooze, notes, tasks, ratify, reject) need the owner: an emailed 6-digit code opens a 12h session, destructive ones need a code from the last 15 minutes; x-loop-token still works for loops; private owner documents keep their gate", "FLEET-CONSOLE-1 console reads (issue, backlog, info, tasks, locks, prs, pr, runs) are open; logs, SQL reads and issue edits need the owner's code session; SQL writes, closes, non-GET worker calls, workflow dispatch, deploy, merge and PR close need a code from the last 15 minutes; the loop token cannot run console actions; no DROP/ALTER/REPLACE, UPDATE/DELETE need a WHERE and are backed up to console_backups first; fleet_budget, remediation_verifications, work_claims and the sign-in tables are read-only; qnfo-identity is not reachable; worker calls carry no credential (a worker that demands its own token answers 401)", "reads are grouped by functional area (GET /api, GET /api/area/<id>) and each index row states its source and worst-case lag: /api/area/<id>, /api/areas, /api/human, /api/kpi, /api/content, /api/reach, /api/attention, /api/changelog, /api/loop, /api/changes, /api/generators and /api/watchmaker are computed from D1 at request time (60 s at most in isolate memory); /api/state, /api/actions, /api/integration, /api/decision and /api/live are backed by fleet_dashboard_state, which the */15 cron rebuilds and which a read refreshes in the background once it is older than 60 s, so their first answer after a quiet period can be up to 15 minutes old and says so in state_age_min"], generated_at: (/* @__PURE__ */ new Date()).toISOString() });
+    return json({ ok: true, worker: NAME, version: VERSION, capabilities: ["fleet-dashboard", "architecture", "areas", "owner-queue", "objective-decisions", "watchmaker-index", "command-line", "owner-console", "owner-documents", "ctl-link", "changelog", "api-index", "live-snapshot", "conditional-reads", "feeds-by-area", "area-feed", "area-pages", "status-document"], limitations: ["every read, every read-only command and plain-English answers are open to everyone; plain-English answers are capped at 5 a day per anonymous visitor and by a global daily cap", "actions (done, dismiss, snooze, notes, tasks, ratify, reject) need the owner: an emailed 6-digit code opens a 12h session, destructive ones need a code from the last 15 minutes; x-loop-token still works for loops; private owner documents keep their gate", "FLEET-CONSOLE-1 console reads (issue, backlog, info, tasks, locks, prs, pr, runs) are open; logs, SQL reads and issue edits need the owner's code session; SQL writes, closes, non-GET worker calls, workflow dispatch, deploy, merge and PR close need a code from the last 15 minutes; the loop token cannot run console actions; no DROP/ALTER/REPLACE, UPDATE/DELETE need a WHERE and are backed up to console_backups first; fleet_budget, remediation_verifications, work_claims and the sign-in tables are read-only; qnfo-identity is not reachable; worker calls carry no credential (a worker that demands its own token answers 401)", "reads are grouped by functional area (GET /api, GET /api/area/<id>) and each index row states its source and worst-case lag: /api/area/<id>, /api/areas, /api/human, /api/kpi, /api/content, /api/reach, /api/attention, /api/changelog, /api/loop, /api/changes, /api/generators and /api/watchmaker are computed from D1 at request time (60 s at most in isolate memory); /api/state, /api/actions, /api/integration, /api/decision and /api/live are backed by fleet_dashboard_state, which the */15 cron rebuilds and which a read refreshes in the background once it is older than 60 s, so their first answer after a quiet period can be up to 15 minutes old and says so in state_age_min"], generated_at: (/* @__PURE__ */ new Date()).toISOString() });
   }
   if (path === "/api/refresh") {
     const st = await runRefresh(env, ctx);
@@ -2826,7 +3095,18 @@ if (path === "/health") {
     const st = await freshState(env, ctx);
     return rtRead(request, url, st.integration || { error: "no integration data" }, { schema: "integration/v1" });
   }
-  if (path === "/" || path === "") {
+  // FLEET-STATUS-1 (1.68.0): one status document, and the home page that renders it. The old overview moved to /classic; its 15 s poll
+  // still asks /?frag=1, which keeps serving the old fragment.
+  if (path === "/api/status" && (request.method === "GET" || request.method === "HEAD")) {
+    return rtRead(request, url, await fleetStatusData(env, ctx), { schema: "fleet-status/v1" });
+  }
+  if ((path === "/" || path === "") && url.searchParams.get("frag") !== "1" && (request.method === "GET" || request.method === "HEAD")) {
+    const sd = await fleetStatusData(env, ctx);
+    // DASH-OWNER-ACTIONS-1 (1.70.0): the owner's decision block is read per request for the signed-in owner and never enters sd, which is cached and public.
+    const sdec = owner && owner.authed ? await statusOwnerDecisions(env, sd) : null;
+    return new Response(statusPageHtml(sd, rtDigest(sd), !!(owner && owner.authed), sdec), { headers: { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store" } });
+  }
+  if (path === "/" || path === "" || path === "/classic" || path === "/classic/") {
     const frag = url.searchParams.get("frag") === "1";
     // OPEN-ACCESS-1 (owner directive 2026-10-01): the page is open to everyone, with no token and no login.
     const st = await currentState(env, ctx, 5 * 6e4);
@@ -6111,6 +6391,9 @@ async function generatorInventory(env, nowMs) {
 // watchmaker_runs row, metric_registry 'watchmaker_index', and GET /api/watchmaker.
 var WATCHMAKER_AFTER_UTC_HOUR = 7;
 var WATCHMAKER_OPS = [
+  // WATCHMAKER-RESEARCH-REPO-SYNC-1 (1.69.2, agent_issues 1000373): qnfo-research-exec 0.35.0 repoSyncTick runs on its */10 cron and rewrites ops_config research_repo_sync_cursor each time it advances,
+  // so that row's updated_at is the evidence of a run. research_repo_sync = off stops the tick, and a stopped runner reads as stalled by design.
+  { key: "research-repo-sync", what: "Research record sync: failed deposits retried, ledger gaps restored, published paper text compared with git, ensemble catch-up dispatched (REPO-DEPOSIT-1, qnfo-research-exec, every 10 minutes)", runner: "cron:qnfo-research-exec", cadence_h: 1, sql: "SELECT MAX(updated_at) AS last FROM ops_config WHERE key = 'research_repo_sync_cursor'" },
   // READER-REPORT-WATCHMAKER-1 (1.51.15, agent_issues 100264): qnfo-gateway 3.29.0 READER-REPORT-1 rrSweep re-checks pending reader reports on the hourly gateway tick, which
   // logs a cron_fire_log row each hour (outcome idle or a job outcome). The evidence of a run is that tick, not a reader_reports row: the table is empty until a person reports.
   { key: "reader-report", what: "Reader reports of typos and errors on paper pages checked against the paper (READER-REPORT-1, qnfo-gateway, hourly)", runner: "cron:qnfo-gateway", cadence_h: 1, first_due: "2026-10-20T00:00:00Z", sql: "SELECT MAX(fired_at) AS last FROM cron_fire_log WHERE task_id = 'qnfo-gateway' AND cron_expr = '0 * * * *'" },
@@ -12998,7 +13281,7 @@ async function conExec(env, owner, op, args) {
   }
   return { ok: false, error: "unknown console action " + op };
 }
-// DASH-OWNER-ACTIONS-1 (1.65.0 build, reviewed and corrected in 1.69.0; agent_issues 100360; owner report 2026-10-20: "Fleet command line not executing. Need easier way to
+// DASH-OWNER-ACTIONS-1 (1.65.0 build, reviewed and corrected in 1.70.0; agent_issues 100360; owner report 2026-10-20: "Fleet command line not executing. Need easier way to
 // approve owner items and diagnose/resolve issues and problems from fleet dashboard."). The words an owner types to decide are
 // commands, not questions for a model: approve, decline, diagnose, retry and resolve are parsed here, find their target in the
 // queue and in qnfo-audit, and never call a model, so a stalled router (three router_timeout legs at 11:20, 11:21 and 11:34Z on
@@ -13007,16 +13290,16 @@ async function conExec(env, owner, op, args) {
 // is recorded (human_responses, the card, an OWNER-DECISION line on each issue the card names) and an approval is handed to the
 // fleet as ONE task that carries the card, the approved items, the doer and the issue's closing probe; the dashboard never says that
 // the thing approved has changed, because only the doer's work and the issue's own probe can show it.
-// 1.69.0 review: (1) the hand-off is filed BEFORE anything is recorded (ownerTaskFile, no Ask cap) so an approval cannot be lost; (2) Approve
+// 1.70.0 review: (1) the hand-off is filed BEFORE anything is recorded (ownerTaskFile, no Ask cap) so an approval cannot be lost; (2) Approve
 // and Decline exist only for a card that ASKS for a decision (approve, authorize, decline, pick one, choose one) and is not a hard-marker
 // step (default_approve_markers kind hard: money, legal, signing, credential, account): those get Diagnose and Done; (3) a pick-one card needs
 // the option and the hand-off always carries the card's title, ask and why; (4) a verb is a command only when it stands alone or names its
 // target, so "Resolve next fleet open item and deploy" and "Retry the failed deploy of PR #1001" stay with the model, and retry runs unasked
 // only for "retry <reference>".
-// 1.69.0 review round 2: (5) the Ask cap leaves out the hand-off by the marker the server writes (OWNER_HANDOFF_VISITOR), never by its text, so a
+// 1.70.0 review round 2: (5) the Ask cap leaves out the hand-off by the marker the server writes (OWNER_HANDOFF_VISITOR), never by its text, so a
 // stranger's Ask that starts "OWNER-DECISION from" still counts; (6) decIssueIds skips "#NNN" after PR, run, workflow or commit (decGithubNumber,
 // shared with decRefs): agent_issues ids pass 100,000, so a PR number is usually also a real, unrelated issue row.
-// 1.69.0 review round 3: (7) OWNER-PROMPT-TWIN-LINK-1 (main) links a new owner-request ticket to an open one whose title text after the first ': ' is equal and
+// 1.70.0 review round 3: (7) OWNER-PROMPT-TWIN-LINK-1 (main) links a new owner-request ticket to an open one whose title text after the first ': ' is equal and
 // the title keeps ~152 prompt characters, so a hand-off that opened with 150 characters of fixed wording filed a second card's approval under the first
 // card's ticket: the hand-off now opens with the approved items, the card key and the decision number (decHandoffText) and ownerNotesRoute never twin-links a
 // row carrying the server's hand-off marker (ownerRequestIssue opts.noTwin); (8) decResolve reads a card of any status (resolved, dismissed, rerouted) by
@@ -13394,6 +13677,20 @@ function decParseNote(note) {
 function decIssueClause(ids) {
   return ids.length ? "issue" + (ids.length === 1 ? " " : "s ") + ids.join(", ") : "";
 }
+// The parts of a selection that are already approved (sel null = the whole card, reported as [0]). An approval is handed to the fleet once, when it is
+// made: a second approve of the same item files nothing, and a decline of an approved item does not call the work back, so neither is recorded.
+function decApproved(prior, sel) {
+  return sel ? sel.filter(function(n) {
+    return prior[n] === "approve";
+  }) : prior["*"] === "approve" ? [0] : [];
+}
+// partial: the sentence for a selection that holds other parts too (they go ahead), else the whole answer.
+function decSettledText(card, hit, sel, kind, partial) {
+  const many = !!sel && hit.length > 1;
+  const what = sel ? (many ? "Items " : "Item ") + decFmtRange(hit) : "'" + card.title + "'";
+  if (kind === "approve") return what + (many ? " are" : " is") + " already approved and was handed to the fleet; " + (partial ? "it is left out of this one." : "nothing was filed again.");
+  return what + (many ? " were" : " was") + " already approved and handed to the fleet; declining it does not undo that, so it stays approved" + (partial ? " and is left out of this decline." : " and nothing was recorded.");
+}
 // approve | decline [target] [items] [why ...]: the confirm button (approve) or the decision button (decline), with a preview.
 async function decApprove(env, c, kind, rest) {
   const holder = !!(c && c.holder);
@@ -13432,6 +13729,8 @@ async function decApprove(env, c, kind, rest) {
   const choice = pickOne ? decChoice(r.rest) : "";
   if (kind === "approve" && pickOne && choice.length < 2) return { text: "'" + card.title + "' asks you to pick one, so a bare Approve cannot say which." + (card.action ? "\nThe card says: " + conClip(card.action, 300) : "") + "\nName your choice after the card: approve " + card.key + " <the option>.", actions: [{ fill: "approve " + card.key + " ", label: "Approve an option" }, conCmd("decline " + card.key, "Decline"), conCmd("diagnose " + card.key, "Diagnose")] };
   const prior = await decDecided(env, card.key);
+  const settled = decApproved(prior, sel);
+  if (settled.length && (!sel || settled.length === sel.length)) return { text: decSettledText(card, settled, sel, kind, false), actions: [conCmd("diagnose " + (issue ? issue.id : card.key), "Diagnose")] };
   const kw = decKeyword(issue);
   const noun = decNoun(card, sel ? sel.length : 1);
   const scope = sel ? sel.length === items.length ? "all " + items.length + " " + noun : noun + " " + decFmtRange(sel) + " of " + items.length : "";
@@ -13441,6 +13740,7 @@ async function decApprove(env, c, kind, rest) {
   const L = [label + (choice ? ": " + choice : "") + (spec.reason ? " - " + spec.reason : "")];
   if (sel && holder) for (const i of items) if (sel.indexOf(i.n) >= 0) L.push("  " + i.n + ") " + i.text.slice(0, 150));
   if (sel && !holder) L.push("  (the text of each item is shown to the signed-in owner)");
+  if (settled.length) L.push(decSettledText(card, settled, sel, kind, true));
   const done = Object.keys(prior).filter(function(k) {
     return k !== "*";
   });
@@ -13547,7 +13847,9 @@ function decClip(x, n) {
 // The one task an approval hands to the fleet. It must stand alone: the card's title, what it asks and why (when no issue holds the
 // brief), the approved items, the owner's chosen option, the doer and the closing probe. The text is the same for the same decision (no
 // clock in it, a decision number instead), so filing it again after the decision could not be recorded finds the first one. It is read
-// from owner_prompts into an issue body clipped at 1800 characters, so the items share what the fixed lines leave.
+// from owner_prompts into an issue body clipped at DEC_HANDOFF_MAX characters (ownerNotesRoute), so the items share what the fixed lines leave and
+// the text is never longer than the body keeps: the first line (which carries the card key) and the closing lines are always inside it.
+var DEC_HANDOFF_MAX = 1800;
 function decHandoffText(card, issue, items, sel, others, paper, choice, round) {
   const L = ["OWNER-DECISION from fleet.qnfo.org: the owner APPROVED " + (sel ? "item" + (sel.length === 1 ? " " : "s ") + decFmtRange(sel) + " of " + items.length : "the decision") + " on owner card " + card.key + " (decision " + round + (issue ? ", issue " + issue.id + ": " + decClip(issue.title, 90) : "") + "; owner session, approval code in the last 15 minutes)."];
   L.push("Card: " + decClip(card.title, 130));
@@ -13561,12 +13863,22 @@ function decHandoffText(card, issue, items, sel, others, paper, choice, round) {
   else tail.push("No issue is linked to this card, so there is no closing probe to cite; the approval is not evidence that anything changed.");
   const body = [];
   if (sel) {
-    const fixed = L.concat(tail).join("\n").length + 90;
-    const per = Math.max(40, Math.min(200, Math.floor((1790 - fixed) / sel.length) - 6));
-    body.push("Apply exactly these approved items and nothing else" + (per < 150 && issue ? " (the full text of each is in issue " + issue.id + ")" : "") + ":");
-    for (const i of items) if (sel.indexOf(i.n) >= 0) body.push(i.n + ") " + i.text.slice(0, per));
+    const chosen = items.filter(function(i) {
+      return sel.indexOf(i.n) >= 0;
+    });
+    // room = what the budget leaves after the fixed lines, the header and one "N) " prefix and newline per item; below 30 characters an item
+    // says nothing, so the items are named by number and the issue (which every numbered item comes from) holds their text
+    const header = "Apply exactly these approved items and nothing else" + (issue ? " (the full text of each is in issue " + issue.id + ")" : "") + ":";
+    const room = DEC_HANDOFF_MAX - L.concat(tail).join("\n").length - header.length - 2 - chosen.length * 6;
+    const per = Math.min(200, Math.floor(room / chosen.length));
+    if (per >= 30) {
+      body.push(header);
+      for (const i of chosen) body.push(i.n + ") " + i.text.slice(0, per));
+    } else {
+      body.push("Apply exactly these approved items and nothing else: " + decFmtRange(sel) + (issue ? " (the full text of each is in issue " + issue.id + ")" : "") + ".");
+    }
   }
-  return L.concat(body, tail).join("\n").slice(0, 1990);
+  return L.concat(body, tail).join("\n").slice(0, DEC_HANDOFF_MAX);
 }
 async function decApprovalCount(env, key) {
   try {
@@ -13618,6 +13930,16 @@ async function cmdDecide(request, env, ctx, owner, op, args) {
     if (!sel.length) return { ok: false, error: "No such item: this card has items 1-" + items.length + "." };
   }
   const prior = await decDecided(env, key);
+  // A repeat approve of what is already approved files no second hand-off and records nothing; a decline of what is already approved is not recorded
+  // (the fleet has the task, a decline cannot call it back) and says so. The other parts of a mixed selection go ahead.
+  const settled = decApproved(prior, sel);
+  if (settled.length) {
+    const rest = sel ? sel.filter(function(n) {
+      return settled.indexOf(n) < 0;
+    }) : [];
+    if (!sel || !rest.length) return { ok: true, text: decSettledText(card, settled, sel, op, false), result: { key, op, items: [], closes: false, settled } };
+    sel = rest;
+  }
   const now = Date.now();
   const stamp = "[owner " + new Date(now).toISOString().slice(0, 16) + "Z, fleet console]";
   const reason = String(args.note || "").replace(/\s+/g, " ").trim().slice(0, 300);
@@ -13679,6 +14001,7 @@ async function cmdDecide(request, env, ctx, owner, op, args) {
     return x.id;
   })) : "the card") + " as OWNER-DECISION."];
   L.push(closes ? "The card is " + (approvedAll.length ? "resolved" : "dismissed") + ": every part is decided." : "The card stays open until every item is decided: " + decFmtRange(undecided) + " left.");
+  if (settled.length) L.push(decSettledText(card, settled, sel, op, true));
   if (filed) L.push("Handed to the fleet as ONE task" + (filed.issue_id ? " (issue " + filed.issue_id + ")" : "") + (filed.duplicate ? " (the same task was already queued)" : "") + ": it carries the card's title and what it asks" + (sel ? ", names the approved items" : "") + (choice ? ", your choice" : "") + (primary ? ", the doer (" + (paper ? "the revision and errata path of qnfo-research-exec" : "the loop that owns issue " + primary.id) + ") and the closing probe of issue " + primary.id : "; no issue is linked to this card, so there is no closing probe to cite") + ". Nothing has been applied yet" + (primary ? "; issue " + primary.id + " closes only when its own probe passes." : "."));
   return { ok: true, text: L.join("\n"), result: { key, op, items: sel, closes } };
 }
@@ -13807,8 +14130,17 @@ async function conDiagnoseLine(env, c, m, owner) {
   const lead = m[1].toLowerCase(), rest = String(m[2] || "").trim();
   const strict = /^(diagnose|diagnosis|investigate)$/.test(lead);
   // "why ..." is a diagnosis only when the line opens with the thing: "why 100140", "why is #100140 blocked", "why is issue 100140 stuck"
-  // ("why is open_agent_issues 254 against < 0 ..." is the metric Diagnose control's question and stays with the model).
-  if (!strict && (!rest || rest.length > 100 || !decRefs(rest.split(/\s+/).slice(0, 2).join(" ").replace(/[?.!,]+$/, "")).length)) return null;
+  // ("why is open_agent_issues 254 against < 0 ..." is the metric Diagnose control's question and stays with the model). A number counts as an
+  // issue only when it says so ("issue 100140", "agent_issues 100140", "#100140") or is the whole argument ("why 100140?"): a number that opens a
+  // sentence is a year or a count ("why 2026 papers were pulled?" is not a question about agent_issues 2026) and the model answers it.
+  if (!strict) {
+    const head = rest.split(/\s+/).slice(0, 2).join(" ").replace(/[?.!,]+$/, "");
+    const whole = rest.replace(/[\s?.!,]+$/, "");
+    const refs = decRefs(head).filter(function(r) {
+      return r.kind !== "issue" || r.raw.charAt(0) === "#" || /^(?:agent_issues|issues?)\b/i.test(r.raw) || r.raw === whole;
+    });
+    if (!rest || rest.length > 100 || !refs.length) return null;
+  }
   const holder = !!(c && c.holder);
   if (strict && !rest) return await conDiagnoseOverview(env, c, holder);
   const w = rest.toLowerCase().replace(/[?.!]+$/, "");

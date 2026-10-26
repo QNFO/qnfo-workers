@@ -164,7 +164,7 @@ function withQueue(env, db) {
   ok(note(res).includes("research queue") && note(res).includes("code tasks") && !note(res).includes("outreach queue"), "C14 an area names the unreadable sources it is built from (Research: its queue and code tasks): " + note(res));
   ok(/can't confirm/.test(res) && !/all clear/.test(res.split('id="ap-queue"')[0]) && !res.includes("is on target") && res.includes("not an all clear"), "C14b an area whose sources could not be read says can't confirm, never all clear or on target");
   ok(note(reach).includes("outreach queue") && !note(reach).includes("research queue") && !note(cost).includes("research queue") && !note(cost).includes("outreach queue"), "C15 and not the ones other areas use (Reach: outreach queue; Cost: neither): " + note(reach) + " | " + note(cost));
-  const home = await get("/");
+  const home = await get("/classic");
   ok(home.includes('id="invest"') && home.includes('id="system"'), "C10 the overview keeps the two headline answers");
   ok(!home.includes("Pipelines and bottlenecks") && !home.includes('id="flow"') && !home.includes('id="progress"') && !home.includes('id="controls"'), "C11 pipelines, progress and controls moved off the overview");
   ok((home.match(/<article class="card item[^"]*" data-area="(cost|research|reach|autonomy|reliability)"/g) || []).length === 2 && /class="it-area" href="\/area\/cost">Cost</.test(home) && /class="it-area" href="\/area\/reliability">Reliability</.test(home), "C12 every queue card on the overview names its area");
@@ -179,7 +179,7 @@ function withQueue(env, db) {
   db.exec("DROP TABLE analytics_action_log");
   const failureWorker = (await import(pathToFileURL(join(here, "worker.js")).href + "?remedy-history-failure")).default;
   const failureCall = (path) => failureWorker.fetch(new Request(O + path), env, ctx);
-  const home = await (await failureCall("/")).text();
+  const home = await (await failureCall("/classic")).text();
   const area = await (await failureCall("/area/cost")).text();
   ok(home.includes("Remedy history unavailable") && !home.includes("no attempt in 30d"), "C13b overview does not present a failed remedy read as zero attempts");
   ok(area.includes("Remedy history unavailable") && !area.includes("no attempt in 30d"), "C13c area page does not present a failed remedy read as zero attempts");
@@ -190,7 +190,7 @@ function withQueue(env, db) {
   const { env } = mk();
   const nav = (h) => h.split('<nav class="q-nav"')[1].split("</nav>")[0];
   const links = (h) => [...nav(h).matchAll(/<a href="([^"]*)"( aria-current="page")?>([^<]*)</g)].map((m) => [m[3], m[1], !!m[2]]);
-  const homeHtml = await (await call(env, "/")).text();
+  const homeHtml = await (await call(env, "/classic")).text();
   const home = links(homeHtml);
   const homeNav = nav(homeHtml);
   ok(home.map((l) => l[0]).join() === "Overview,Cost,Research,Reach,Autonomy,Reliability,Platform,Command line" && /<summary[^>]*>Areas<\/summary>/.test(homeNav), "D1 the navigation groups the six area links under Areas while retaining Overview and Command line: " + home.map((l) => l[0]));
@@ -242,7 +242,7 @@ function withQueue(env, db) {
 // ---- F. styles that were defined and never sent
 {
   const { env } = mk();
-  const h = await (await call(env, "/")).text();
+  const h = await (await call(env, "/classic")).text();
   ok(h.includes(".fx-r{") && h.includes(".ctl-l{") && h.includes(".fl-sum{"), "F1 the per-area row, switch-list and summary styles are in the page head (AREAS2_CSS)");
   const plat = await (await call(env, "/area/platform")).text();
   ok((plat.match(/<div class="ap-scroll"><table class="ap-reads"/g) || []).length === 2 && h.includes(".ap-scroll{overflow-x:auto"), "F3 the area tables scroll inside their card, so a phone does not get a sideways page");
@@ -343,7 +343,7 @@ function withQueue(env, db) {
   const titles = (hv.items || []).map((i) => i.title);
   ok(hv.receipts.length === 2 && !titles.some((t) => /HANDOFF|restore a binding/.test(t)), "K1 /api/human lists the two receipts apart from items");
   ok(hv.count === (hv.items || []).length && hv.count === 1 && titles.includes("Top up the AI credit"), "K2 the count and the banner leave receipts out (one real card remains): " + hv.count);
-  const home = await (await call(env, "/")).text();
+  const home = await (await call(env, "/classic")).text();
   ok(/<details class="card up" id="receipts"><summary>Closed for you <span class="ct">2<\/span>/.test(home) && home.includes("issue #2783") && home.includes("issue #100023"), "K3 the overview lists them under Closed for you, with the issue number");
   ok(!home.includes("PRIVATE-NOTE-TEXT") && !home.includes("another private note"), "K4 the receipt shows no issue text, which can quote private notes");
   ok(/<h1 id="fl-h1">1 thing needs you<\/h1>/.test(home), "K5 the headline counts what waits on the owner only");

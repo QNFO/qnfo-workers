@@ -32,7 +32,7 @@ import { DynamicWorkerExecutor } from "@cloudflare/codemode";
 import { createCodeTool } from "@cloudflare/codemode/ai";
 import { generateText, jsonSchema, stepCountIs, tool } from "ai";
 import { z } from "zod";
-import { callerOf, clip, scopeOf, codeTaskText, opsToolAllowed, readOnlySql, repoPathOk, runId, safeToolName, scheduleWhen, sliceLines, DRAIN_PER_TICK, loopInstance, validateRequest } from "./lib.js";
+import { callerOf, clip, scopeOf, codeTaskText, opsToolAllowed, readOnlySql, repoPathOk, runId, safeToolName, scheduleWhen, sliceLines, DRAIN_PER_TICK, loopInstance, validateRequest, EMPTY_TEXT, FINAL_ANSWER_ASK, lastStepText, toolTranscript } from "./lib.js";
 
 // VERSION is the first line of the bundle (build.mjs writes `var VERSION = "<package.json version>"` there for the fleet guards).
 declare var VERSION: string;
@@ -43,6 +43,7 @@ const DEFAULT_MODEL = "@cf/moonshotai/kimi-k2.7-code";
 const FALLBACK_MODEL = "@cf/zai-org/glm-5.3-flash";
 const MAX_STEPS = 16;
 const TURN_TIMEOUT_MS = 10 * 60 * 1000;
+const FINAL_ANSWER_TIMEOUT_MS = 2 * 60 * 1000;
 const STALE_RUN_MIN = 20;
 
 type Scope = "public" | "read" | "write" | "loop";
@@ -315,9 +316,18 @@ export class FleetCodeAgent extends Agent<Env, State> {
       modelId = m.id;
       const tools = await allTools({ env: this.env, scope: r.scope, caller: r.caller, agent: this, proposals });
       const out: any = await generateText({ model: m.model, system: SYSTEM + "\nScope of this turn: " + r.scope + ".", prompt: r.prompt, tools, stopWhen: stepCountIs(MAX_STEPS), abortSignal: AbortSignal.timeout(TURN_TIMEOUT_MS) } as any);
-      result = String(out.text || "").trim() || "(the model returned no text)";
+      result = String(out.text || "").trim() || lastStepText(out.steps);
       steps = Array.isArray(out.steps) ? out.steps.length : 0;
       for (const s of out.steps || []) for (const tc of s.toolCalls || []) if (used.indexOf(tc.toolName) < 0) used.push(tc.toolName);
+      // EMPTY-TURN-ANSWER-1: no step wrote text, so one more call without tools turns what the tools returned into the answer.
+      if (!result) {
+        try {
+          const fin: any = await generateText({ model: m.model, system: SYSTEM + "\nScope of this turn: " + r.scope + ".", prompt: "Request:\n" + clip(r.prompt, 6000) + "\n\nTool results so far:\n" + (toolTranscript(out.steps, 24000) || "(none)") + "\n\n" + FINAL_ANSWER_ASK, abortSignal: AbortSignal.timeout(FINAL_ANSWER_TIMEOUT_MS) } as any);
+          result = String(fin.text || "").trim();
+          if (result) used.push("final-answer");
+        } catch (eF) { logErr("final-answer", eF); }
+      }
+      result = result || EMPTY_TEXT;
     } catch (e) {
       status = "failed";
       error = errText(e);
@@ -528,6 +538,8 @@ export default {
 
   // CF-AGENTS-LOOPS-1: every 5 minutes, drain the loops' request queue.
   async scheduled(_event: ScheduledController, env: Env, ctx: ExecutionContext) {
-    ctx.waitUntil(drainRequests(env).then((r) => console.log(JSON.stringify({ worker: WORKER, version: VERSION, where: "drain", ...r }))).catch((e) => logErr("drain", e)));
+    // CRON-HEARTBEAT-1: v_cron_activity reads fleet_heartbeat, so a tick that runs (or fails) is visible (metric crons_unobserved).
+    const beat = (ok: number) => env.AUDIT_DB.prepare("INSERT OR REPLACE INTO fleet_heartbeat (worker, version, ts, ok) VALUES (?1, ?2, ?3, ?4)").bind(WORKER, VERSION, new Date().toISOString(), ok).run().catch((e) => logErr("heartbeat", e));
+    ctx.waitUntil(drainRequests(env).then((r) => { console.log(JSON.stringify({ worker: WORKER, version: VERSION, where: "drain", ...r })); return beat(1); }).catch((e) => { logErr("drain", e); return beat(0); }));
   }
 };

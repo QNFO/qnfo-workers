@@ -14,6 +14,10 @@
 //  * the re-ask issue is filed once with a probe of its own (the birth and template triggers of the live database are in the fixture), a replay neither
 //    duplicates nor reopens it, and its probe fails before the reopen and passes after;
 //  * every probe is one read free of the write keywords the runners refuse, with LIKE and GLOB literals under D1's 50 byte limit;
+//  * review round 4: the three controls the change adds or leans on (hard-marker gate, owner-session gate, the exemption of the owner's hand-off from the Ask cap)
+//    are in control_registry once each with a valid kind, disposition keep, critical path 0, an alternate and evidence, the model-free decision path is in
+//    capability_ledger, and the re-ask probe passes only once the approval has reached the fleet (never while the card is merely open); the verb detector reads
+//    120 minutes; the decision rows state their predictions in minutes;
 //  * the Rollback line removes only what the file added, restores the issue-100360 contract and the card, and never touches decision_log.
 // Run: node migrations/dash-owner-actions.test.mjs
 import { DatabaseSync } from "node:sqlite";
@@ -39,6 +43,8 @@ CREATE TABLE human_actions (id INTEGER PRIMARY KEY AUTOINCREMENT, slug TEXT UNIQ
 CREATE TABLE human_responses (id INTEGER PRIMARY KEY AUTOINCREMENT, key TEXT NOT NULL, kind TEXT NOT NULL, note TEXT, until TEXT, ts TEXT DEFAULT (datetime('now')), issue_id INTEGER, credential TEXT);
 CREATE TABLE owner_prompts (id TEXT PRIMARY KEY, ts TEXT DEFAULT (datetime('now')), mode TEXT, prompt TEXT, status TEXT, intent_id TEXT, issue_id INTEGER, visitor TEXT);
 CREATE TABLE default_approve_markers (kind TEXT NOT NULL, pattern TEXT NOT NULL, note TEXT, PRIMARY KEY (kind, pattern));
+CREATE TABLE control_registry (control TEXT PRIMARY KEY, location TEXT NOT NULL, kind TEXT NOT NULL CHECK (kind IN ('hold', 'filter', 'pause', 'kill-switch', 'gate', 'cap', 'guard', 'lease')), guards_against TEXT, critical_path INTEGER NOT NULL DEFAULT 0, disposition TEXT NOT NULL CHECK (disposition IN ('remove', 'demote', 'replace', 'keep')), disposition_state TEXT NOT NULL DEFAULT 'planned' CHECK (disposition_state IN ('planned', 'applied')), alternate_path TEXT, alternate_tested_at TEXT, evidence TEXT NOT NULL, issue_id INTEGER, reviewed_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')));
+CREATE TABLE capability_ledger (capability TEXT PRIMARY KEY, provenance TEXT NOT NULL, prerequisites TEXT, reliability TEXT, acquired_at TEXT NOT NULL, last_exercised_at TEXT, evidence TEXT NOT NULL);
 INSERT INTO default_approve_markers (kind, pattern) VALUES ('hard', '% legal %'), ('hard', '%renew%'), ('hard', '%token%'), ('decision_action', '%approve:%');
 -- the live birth and template triggers: a new open issue gets a placeholder contract that a template then rewrites
 CREATE TRIGGER agent_issues_birth_contract_ins AFTER INSERT ON agent_issues WHEN NEW.status = 'open' AND NOT EXISTS (SELECT 1 FROM remediation_contracts c WHERE c.issue_id = NEW.id) BEGIN INSERT OR IGNORE INTO remediation_contracts (class, issue_id, precondition, action, verify_probe, verify_transport, max_attempts, escalate_to, expected_cadence_h, status, module) VALUES ('issue-' || NEW.id, NEW.id, 'born with the issue (ORPHAN-GUARD-BIRTH-1)', 'needs-machine-probe', 'needs-machine-probe', 'd1-query', 3, 'qnfo-fleet-control', 1, 'needs-machine-probe', 'birth'); END;
@@ -71,7 +77,10 @@ for (let i = 0; i < 3; i++) {
   const c = one("SELECT * FROM remediation_contracts WHERE class = ?", CLS[i]);
   ok(c && c.verify_transport === "d1-query" && c.status === "active" && c.module === "failure-mode" && c.expected_cadence_h === 1 && c.max_attempts === 3 && c.issue_id === null, "one active hourly d1-query detector " + CLS[i], c && { t: c.verify_transport, s: c.status });
 }
-ok(n("SELECT COUNT(*) n FROM decision_log") === 2 && n("SELECT COUNT(*) n FROM decision_log WHERE action LIKE 'DASH-OWNER-ACTIONS-1: %'") === 1 && n("SELECT COUNT(*) n FROM decision_log WHERE action LIKE 'DASH-OWNER-ACTIONS-1-REVIEW: %'") === 1, "two decision_log rows: the feature and the review round");
+ok(n("SELECT COUNT(*) n FROM decision_log") === 3 && n("SELECT COUNT(*) n FROM decision_log WHERE action LIKE 'DASH-OWNER-ACTIONS-1: %'") === 1 && n("SELECT COUNT(*) n FROM decision_log WHERE action LIKE 'DASH-OWNER-ACTIONS-1-REVIEW: %'") === 1 && n("SELECT COUNT(*) n FROM decision_log WHERE action LIKE 'DASH-OWNER-ACTIONS-1-REVIEW-4: %'") === 1, "three decision_log rows: the feature, the review round and the home-page round");
+// QUEUE-SLA-1: no threshold or prediction in hours or days (the historical facts in the symptom and evidence texts are dates and counts, not windows)
+for (const dl of db.prepare("SELECT predicted_outcome p FROM decision_log").all()) ok(!/\b\d+\s*(h|hours?|days?|d|weeks?)\b|\ban hour\b/i.test(dl.p) && /\b\d+ minutes?\b/.test(dl.p), "the prediction is stated in minutes", dl.p);
+ok(!/'-\d+ (hours?|days?)'/.test(sql.split("\n").filter((l) => !l.startsWith("--")).join("\n")) && /''-120 minutes''/.test(sql), "no SQL window in hours or days: the verb detector reads 120 minutes");
 for (const dl of db.prepare("SELECT * FROM decision_log").all()) ok(dl.capability_gain && dl.predicted_outcome && dl.surfaces_tested && dl.rollback_path && dl.reach_gain, "decision row carries capability_gain, predicted_outcome, reach_gain, surfaces_tested and a rollback path");
 
 // every probe in the file: one read, no write keywords, short LIKE and GLOB literals
@@ -106,8 +115,11 @@ const before = read(V).observed;
 for (const t of ["resolved issues today?", "Resolve next fleet open item and deploy", "Resolve all content queues", "Approve the Living Papers launch post", "Retry the failed deploy of PR #1001 and tell me why", "Resolve GitHub PR #3608 and #3445 conflicts and merge to main", "approve papers", "approve all", "approve 1-5", "please approve 100140", "what is the state of the fleet", "retrying later", "approved 100140", "declined"]) addLog(t);
 ok(read(V).observed === before, "ordinary sentences, other verbs, filler and verb look-alikes ('resolved', 'retrying', 'approved') stay uncounted", read(V));
 addLog("approve 100140", "action", "done"); addLog("approve 100140", "data", "answered"); addLog("approve 100140", "tool", "done");
-addLog("approve 100140", "ai", "fallback", 25 * 60);
-ok(read(V).observed === before, "other kinds of cmd_log row and a line older than 24 hours do not count", read(V));
+addLog("approve 100140", "ai", "fallback", 125);
+ok(read(V).observed === before, "other kinds of cmd_log row and a line older than 120 minutes do not count", read(V));
+addLog("approve 100140", "ai", "fallback", 115);
+ok(Number(read(V).observed) === Number(before) + 1, "a line from 115 minutes ago still counts", read(V));
+db.prepare("DELETE FROM cmd_log WHERE ts < ? AND text = 'approve 100140' AND kind = 'ai' AND ts > ?").run(ts(100), ts(120));
 db.prepare("UPDATE migration_runs SET applied_at = ?").run(ranAt(30));
 ok(read(V).observed === "0", "with the migration run 30 minutes ago the 60 minute grace (the worker deploy lag) has not passed: nothing counts yet", read(V));
 db.prepare("UPDATE migration_runs SET applied_at = ?").run(ranAt(70));
@@ -204,16 +216,65 @@ const reask = one("SELECT * FROM agent_issues WHERE title = ?", TITLE);
 ok(reask && reask.status === "open" && reask.priority === "high" && /Doer: migrations\/2026-10-26-dash-owner-actions\.sql reopens the card/.test(reask.description) && /Closing probe: remediation contract issue-<id>/.test(reask.description) && !/runtime-probe:|code-probe:|code-task:/.test(reask.description) && n("SELECT COUNT(*) n FROM agent_issues WHERE title = ?", TITLE) === 1, "the re-ask issue is filed once, names its doer and its closing probe, and carries no probe line that would start another contract", reask && reask.description.slice(0, 120));
 const cre = one("SELECT * FROM remediation_contracts WHERE class = ?", "issue-" + reask.id);
 ok(cre.status === "active" && cre.module === "doer-authored" && cre.verify_probe.indexOf("reask-100140") >= 0 && cre.verify_transport === "d1-query" && cre.attempts === 0, "its contract is the card probe, not the generic template the birth trigger put there", cre);
+ok(/Closing probe: remediation contract issue-<id> passes once the owner's decision has reached the fleet/.test(reask.description) && /does not pass while the card is merely open/.test(reask.description) && !/passes while an open human_actions row/.test(reask.description), "the issue text says what the probe measures: the decision reaching the fleet, not an open card");
 const reaskObserved = () => String(db.prepare(cre.verify_probe).get().observed);
-ok(reaskObserved() === "reask-100140-card-open-or-decided", "its probe passes while the card is open");
-db.prepare("UPDATE human_actions SET status = 'resolved', resolution = ? WHERE slug = 'uia-source-fidelity-100140'").run(DONE_RES);
-ok(reaskObserved() === "no-open-card", "and FAILS when the card is closed with no decision recorded (so it is the card, not a constant)");
-resp("ha:uia-source-fidelity-100140", "approve", "owner-key");
-ok(reaskObserved() === "no-open-card", "an approve under another credential is not the owner's decision");
-resp("ha:uia-source-fidelity-100140", "approve");
-ok(reaskObserved() === "reask-100140-card-open-or-decided", "an owner-session approve passes it once the card is closed");
-db.exec("DELETE FROM human_responses");
-db.prepare("UPDATE human_actions SET status = 'open', resolution = NULL, resolved_at = NULL WHERE slug = 'uia-source-fidelity-100140'").run();
+const DECIDED = "reask-100140-decided", NONE = "reask-100140-no-decision-reached-the-fleet";
+const KEY = "ha:uia-source-fidelity-100140";
+const handoffRow = (visitor = "owner-decision", text = "OWNER-DECISION from fleet.qnfo.org: the owner APPROVED the decision on owner card " + KEY + " (decision 1)") => db.prepare("INSERT INTO owner_prompts (id, mode, prompt, status, visitor) VALUES (?, 'task', ?, 'queued', ?)").run("ra-" + (++k), text, visitor);
+const clearDecisions = () => db.exec("DELETE FROM human_responses; DELETE FROM owner_prompts");
+const card135 = (status) => db.prepare("UPDATE human_actions SET status = ?, resolution = ? WHERE slug = 'uia-source-fidelity-100140'").run(status, status === "open" ? null : DONE_RES);
+clearDecisions();
+ok(one("SELECT status FROM human_actions WHERE slug = 'uia-source-fidelity-100140'").status === "open" && reaskObserved() === NONE, "right after this file reopens the card the probe FAILS (an open card is not a decision: it cannot pass the moment the migration ran)", reaskObserved());
+card135("resolved");
+ok(reaskObserved() === NONE, "and it FAILS when the card is closed with no decision recorded", reaskObserved());
+card135("open");
+resp(KEY, "approve");
+ok(reaskObserved() === NONE, "an owner-session approve with no hand-off task does not pass it (the approval did not reach the fleet)");
+clearDecisions();
+handoffRow();
+ok(reaskObserved() === NONE, "a hand-off task with no recorded approve does not pass it");
+clearDecisions();
+resp(KEY, "approve", "owner-key"); handoffRow();
+ok(reaskObserved() === NONE, "an approve under another credential is not the owner's decision");
+clearDecisions();
+resp(KEY, "approve"); handoffRow(null);
+ok(reaskObserved() === NONE, "a task without the server's hand-off marker does not count (a stranger's Ask can carry the same words)");
+clearDecisions();
+resp(KEY, "approve"); handoffRow("owner-decision", "OWNER-DECISION from fleet.qnfo.org: the owner APPROVED the decision on owner card ha:another-card (decision 1)");
+ok(reaskObserved() === NONE, "a hand-off for another card does not count");
+clearDecisions();
+resp(KEY, "approve"); handoffRow();
+ok(reaskObserved() === DECIDED, "an owner-session approve of the card together with its hand-off task (the server's marker) passes it, even while the card still waits on other items", reaskObserved());
+clearDecisions();
+resp(KEY, "decline");
+ok(reaskObserved() === NONE, "a decline while the card is still open does not pass it (parts are undecided)");
+card135("dismissed");
+ok(reaskObserved() === DECIDED, "an owner-session decline that closed the card passes it (the owner decided; there is nothing to hand over)", reaskObserved());
+resp(KEY, "approve");
+ok(reaskObserved() === NONE, "a decline of some parts and an approve with no hand-off is not a decision that reached the fleet");
+clearDecisions();
+card135("open");
+
+// control_registry and capability_ledger (DOCTRINE-1): the gate, the gate and the cap this change adds or leans on, and the capability it gives the fleet
+const CTRL = { "dash-owner-decision-hard-marker-gate": "gate", "dash-owner-decision-session-gate": "gate", "owner-prompts-cap-owner-decision-exempt": "cap" };
+const ctrlRows = db.prepare("SELECT * FROM control_registry ORDER BY control").all();
+ok(ctrlRows.length === 3 && ctrlRows.every((r) => CTRL[r.control] === r.kind), "control_registry holds the three controls with kind gate, gate and cap", ctrlRows.map((r) => r.control + ":" + r.kind));
+for (const r of ctrlRows) {
+  ok(r.disposition === "keep" && r.disposition_state === "applied" && r.critical_path === 0 && r.issue_id === 100360 && r.location.length > 40 && r.guards_against.length > 40 && r.alternate_path.length > 20 && r.evidence.length > 80 && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/.test(r.reviewed_at), r.control + " is kept, applied, off the critical path, tied to issue 100360, and names its location, what it guards against, an alternate and its evidence", r);
+}
+const hg = one("SELECT * FROM control_registry WHERE control = 'dash-owner-decision-hard-marker-gate'");
+ok(hg.alternate_path === "Done on the card; default_approve_markers is data, edited by migration" && hg.alternate_tested_at && /T18j/.test(hg.evidence) && /fm-owner-decision-on-hard-card/.test(hg.evidence), "the hard-marker gate names its alternate (Done on the card; the markers are data) with the date the suite ran it, and its detector");
+const ck = one("SELECT * FROM control_registry WHERE control = 'owner-prompts-cap-owner-decision-exempt'");
+ok(/owner-decision/.test(ck.location) && /OWNER_PROMPTS_DAILY_CAP/.test(ck.location) && /cannot reach the exemption/.test(ck.evidence) && /ownerCredential\(owner\) is owner-session/.test(ck.evidence) && /askVisitor/.test(ck.evidence) && /T17j/.test(ck.evidence) && /T17k/.test(ck.evidence), "the cap row records why a stranger cannot reach the exemption: the marker is set server-side only after a verified owner session", ck.evidence.slice(0, 200));
+const sg = one("SELECT * FROM control_registry WHERE control = 'dash-owner-decision-session-gate'");
+ok(sg.alternate_tested_at === null && /T5/.test(sg.evidence) && /T6/.test(sg.evidence) && /T7/.test(sg.evidence) && /fleet never waits on a decision/.test(sg.alternate_path), "the owner-session gate says it has no critical-path alternate to test, and cites the suites that prove it");
+// every test label the evidence cites exists in the dashboard suite (the evidence is checkable, not a story)
+const decideSuite = readFileSync(new URL("../qnfo-fleet-dashboard/cmd-decide.test.mjs", import.meta.url), "utf8");
+const cited = new Set(); for (const r of ctrlRows) for (const m of r.evidence.matchAll(/\bT\d+[a-z]?\b/g)) cited.add(m[0]);
+const missing = [...cited].filter((t) => !new RegExp("[\"'\\s/]" + t + "[\\s\"':a-z(]").test(decideSuite));
+ok(cited.size >= 8 && missing.length === 0, "every T-label the control evidence cites is in qnfo-fleet-dashboard/cmd-decide.test.mjs", { cited: [...cited], missing });
+const cap = one("SELECT * FROM capability_ledger");
+ok(cap.capability === "owner-decisions-without-a-model" && /migrations\/2026-10-26-dash-owner-actions\.sql/.test(cap.provenance) && /no model/.test(cap.prerequisites) && cap.last_exercised_at === null && /not yet used live/.test(cap.reliability) && /router_timeout x3/.test(cap.evidence) && /^\d{4}-\d{2}-\d{2}T/.test(cap.acquired_at), "capability_ledger records the model-free decision path, with the evidence and the fact that it has not yet been used live", cap);
 
 // replay: no duplicates, no overwrite of a later edit, no reopened issue
 db.prepare("UPDATE remediation_contracts SET max_attempts = 7 WHERE class = ?").run(CLS[0]);
@@ -222,7 +283,7 @@ db.prepare("UPDATE remediation_contracts SET attempts = 9 WHERE class = 'issue-1
 db.prepare("UPDATE agent_issues SET status = 'closed' WHERE id = ?").run(reask.id);
 const probeBefore = one("SELECT verify_probe p FROM remediation_contracts WHERE class = ?", "issue-" + reask.id).p;
 db.exec(sql);
-ok(n("SELECT COUNT(*) n FROM failure_modes") === 3 && n("SELECT COUNT(*) n FROM remediation_contracts WHERE class LIKE 'fm-%'") === 3 && n("SELECT COUNT(*) n FROM decision_log") === 2 && one("SELECT max_attempts m FROM remediation_contracts WHERE class = ?", CLS[0]).m === 7, "a replay is a no-op: no duplicate failure mode, contract or decision row, and a later edit survives");
+ok(n("SELECT COUNT(*) n FROM failure_modes") === 3 && n("SELECT COUNT(*) n FROM remediation_contracts WHERE class LIKE 'fm-%'") === 3 && n("SELECT COUNT(*) n FROM decision_log") === 3 && n("SELECT COUNT(*) n FROM control_registry") === 3 && n("SELECT COUNT(*) n FROM capability_ledger") === 1 && one("SELECT max_attempts m FROM remediation_contracts WHERE class = ?", CLS[0]).m === 7, "a replay is a no-op: no duplicate failure mode, contract or decision row, and a later edit survives");
 ok(n("SELECT COUNT(*) n FROM agent_issues WHERE title = ?", TITLE) === 1 && one("SELECT status s FROM agent_issues WHERE id = ?", reask.id).s === "closed" && one("SELECT verify_probe p FROM remediation_contracts WHERE class = ?", "issue-" + reask.id).p === probeBefore && one("SELECT attempts a FROM remediation_contracts WHERE class = ?", "issue-" + reask.id).a === 5 && one("SELECT attempts a FROM remediation_contracts WHERE class = 'issue-100360'").a === 9, "nor does it re-file or reopen the re-ask issue, rewrite its probe or reset either contract's attempts");
 
 // rollback: what the file added goes; the contract and the card are restored; decision_log stays
@@ -235,7 +296,7 @@ const back = one("SELECT * FROM remediation_contracts WHERE class = 'issue-10036
 ok(back.verify_probe === OLD_PROBE && back.action === OLD_ACTION && back.precondition === OLD_PRE && back.module === "probe-template-v3-generic", "the Rollback line restores the issue-100360 contract text exactly as the live row held it", back);
 const card2 = one("SELECT * FROM human_actions WHERE slug = 'uia-source-fidelity-100140'");
 ok(card2.status === "resolved" && card2.resolution === DONE_RES && card2.resolved_at === "2026-10-24 00:11:33" && card2.updated_at === "2026-10-24 00:11:33", "and re-resolves the card with its old resolution and times", card2);
-ok(n("SELECT COUNT(*) n FROM failure_modes") === 0 && n("SELECT COUNT(*) n FROM remediation_contracts WHERE class LIKE 'fm-%'") === 0 && n("SELECT COUNT(*) n FROM decision_log") === 2, "removes the failure modes and detector contracts, never the decision_log rows");
+ok(n("SELECT COUNT(*) n FROM failure_modes") === 0 && n("SELECT COUNT(*) n FROM remediation_contracts WHERE class LIKE 'fm-%'") === 0 && n("SELECT COUNT(*) n FROM decision_log") === 3 && n("SELECT COUNT(*) n FROM control_registry") === 0 && n("SELECT COUNT(*) n FROM capability_ledger") === 0, "removes the failure modes, detector contracts, control_registry rows and the capability row, never the decision_log rows");
 const re2 = one("SELECT status s, last_verdict v FROM remediation_contracts WHERE class = ?", "issue-" + reask.id);
 ok(re2.s === "superseded" && re2.v === "superseded:rollback", "and supersedes the re-ask contract (the issue itself stays, to be closed with evidence)", re2);
 

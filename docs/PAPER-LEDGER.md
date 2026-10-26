@@ -40,8 +40,12 @@ are never counted. The publication gate itself no longer withdraws any paper (`p
 
 ## Bodies and size
 
-Stored bodies grow by roughly 30 KB per revision. A row of `paper_change_bodies` can be deleted only after `paper_change_body_archive` holds an off-database copy of the same
-size (a trigger enforces it); the archiving job is PAPER-LEDGER-ARCHIVE-1. Ledger rows themselves are never removed.
+Stored bodies grow by roughly 50 KB per revision (881 rows held about 44 MB on 2026-10-26). A row of `paper_change_bodies` can be deleted only after `paper_change_body_archive` holds an
+off-database copy of the same size (a trigger enforces it). Since qnfo-cloud-ops 1.38.0 (PAPER-LEDGER-ARCHIVE-1) the hourly quality sweep archives the oldest bodies once the table exceeds 300 MB:
+it writes the text unchanged to the `qnfo-releases` bucket as `paper-ledger/<seq>.md`, reads the object back and compares its SHA-256, then inserts the proof (`r2_key`, `bytes` = SQLite
+`length()`, `fingerprint` = `sha256:<hex>`) and deletes the stored body in one atomic batch. To read a revision, take `body_md` from `paper_change_bodies`; if the row is gone, `r2_key` in
+`paper_change_body_archive` names the object, and `paperLedgerBody(env, seq)` in qnfo-cloud-ops returns either with the fingerprint checked. Ledger rows themselves are never removed.
+Detector `fm-paper-ledger-bodies-unbounded` fails above 330 MB.
 
 ## Rollback
 

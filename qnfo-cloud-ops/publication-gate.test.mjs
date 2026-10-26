@@ -193,6 +193,7 @@ for (const mode of ["enforce", "shadow"]) {
   const r = await mod.__job(env);
   const rows = living.prepare("SELECT slug, kind, fields_changed, actor, reason, status_before, status_after, withdrawal FROM paper_change_ledger WHERE seq > ? ORDER BY seq").all(before);
   ok(r.status === "ok" && r.notes.verdicts_changed === 2 && r.notes.restored === 1 && rows.length === 1 && rows[0].slug === "lg-q", "a sweep that flips two verdicts and restores one paper writes one ledger row, the restore", { notes: r.notes, rows: JSON.stringify(rows) });
+  ok(r.notes.ledger_archive && r.notes.ledger_archive.limit_bytes > 0 && r.notes.ledger_archive.archived === 0 && r.status === "ok", "the sweep also measures the ledger bodies (PAPER-LEDGER-ARCHIVE-1) and archives none under the limit", r.notes.ledger_archive);
   const restore = rows[0] || {};
   ok(/^qnfo-cloud-ops:pg-\d{4}-\d{2}-\d{2}-/.test(restore.actor), "the restore names the qnfo-cloud-ops run that wrote it, it is not unattributed", restore);
   ok(restore.status_before === "quarantined" && restore.status_after === "published" && restore.withdrawal === 0 && /restore of a quality quarantine: quality:internal-artifact/.test(restore.reason), "the restore says which quarantine it undoes and is not a withdrawal", restore);
