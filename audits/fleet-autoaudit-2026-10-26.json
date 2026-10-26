@@ -1,16 +1,8 @@
 {
-  "audited_at": "2026-10-26 12:10:21",
+  "audited_at": "2026-10-26 13:24:04",
   "d1_write_failures": [],
   "d1_writes_ok": 123,
   "guard": {
-    "_drift_confirm": {
-      "first_pass": [
-        "idea-hub",
-        "qnfo-research-exec"
-      ],
-      "refreshed": true,
-      "second_pass": []
-    },
     "_guard_rc": 0,
     "ahead": [],
     "cf_script_list": true,
@@ -573,7 +565,7 @@
       },
       {
         "dir": "qnfo-ai",
-        "version": "5.39.10-codeagent",
+        "version": "5.40.0",
         "worker": "qnfo-ai"
       },
       {
@@ -623,12 +615,12 @@
       },
       {
         "dir": "qnfo-fleet-control",
-        "version": "0.53.1-breach-doctor-gate",
+        "version": "0.54.0-probe-author-values",
         "worker": "qnfo-fleet-control"
       },
       {
         "dir": "qnfo-fleet-dashboard",
-        "version": "1.70.0",
+        "version": "1.70.2",
         "worker": "qnfo-fleet-dashboard"
       },
       {
@@ -678,7 +670,7 @@
       },
       {
         "dir": "qnfo-ops",
-        "version": "2.57.5-codeagent",
+        "version": "2.57.6",
         "worker": "qnfo-ops"
       },
       {
@@ -1060,9 +1052,9 @@
       "worker": "qnfo-agents"
     },
     "qnfo-ai": {
-      "before": "5.39.10-codeagent",
+      "before": "5.40.0",
       "http": 200,
-      "live": "5.39.10-codeagent",
+      "live": "5.40.0",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-ai"
@@ -1356,17 +1348,17 @@
       "worker": "qnfo-fleet-calibrator"
     },
     "qnfo-fleet-control": {
-      "before": "0.53.1-breach-doctor-gate",
+      "before": "0.54.0-probe-author-values",
       "http": 200,
-      "live": "0.53.1-breach-doctor-gate",
+      "live": "0.54.0-probe-author-values",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-fleet-control"
     },
     "qnfo-fleet-dashboard": {
-      "before": "1.70.0",
+      "before": "1.70.2",
       "http": 200,
-      "live": "1.70.0",
+      "live": "1.70.2",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-fleet-dashboard"
@@ -1516,9 +1508,9 @@
       "worker": "qnfo-observability"
     },
     "qnfo-ops": {
-      "before": "2.57.5-codeagent",
+      "before": "2.57.6",
       "http": 200,
-      "live": "2.57.5-codeagent",
+      "live": "2.57.6",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-ops"
