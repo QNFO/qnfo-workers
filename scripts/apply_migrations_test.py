@@ -1037,5 +1037,42 @@ ledger_paths = [pp for pp, sq in paths if "migration_runs" in sq]
 ok(rc == 0 and stmt_paths and all(lid in pp for pp in stmt_paths), "a living-paper file runs its statements on living-paper", stmt_paths)
 ok(ledger_paths and all(aid in pp for pp in ledger_paths), "and records migration_runs in qnfo-audit", ledger_paths)
 
+# CLOSE-CHANNEL-REQUIRED-1 (agent_issues 100419): MIGRATION-APPLY-RESOLVE-1 closed the MIGRATION-APPLY-FAILED-1 issue with no close_channel
+# (1000212 closed NULL). Run it against the live close trigger (issue_close_evidence_required) on its own database, so the tables the shared
+# fixture above lacks (issue_triage, close_channel) do not change what the earlier cases saw.
+shared_db = db
+db = sqlite3.connect(":memory:")
+db.executescript("""
+CREATE TABLE agent_issues (id INTEGER PRIMARY KEY AUTOINCREMENT, title TEXT, description TEXT, source TEXT, category TEXT, priority TEXT, status TEXT, created_at INTEGER, updated_at INTEGER, close_channel TEXT);
+CREATE TABLE issue_triage (issue_id INTEGER PRIMARY KEY, close_evidence TEXT);
+CREATE TABLE ops_config (key TEXT PRIMARY KEY, value TEXT);
+CREATE TRIGGER issue_close_evidence_required BEFORE UPDATE OF status ON agent_issues
+WHEN NEW.status IN ('closed','resolved','wontfix') AND OLD.status NOT IN ('closed','resolved','wontfix')
+BEGIN
+  SELECT RAISE(ABORT,'close-without-evidence')
+    WHERE NOT EXISTS (SELECT 1 FROM issue_triage t WHERE t.issue_id = NEW.id AND t.close_evidence IS NOT NULL AND TRIM(t.close_evidence) <> '');
+END;
+""")
+RES_BAD = GOOD.replace("INSERT OR REPLACE INTO ops_config (key, value) VALUES ('b;c', 'it''s; fine');", "INSERT INTO no_such_table VALUES (1);")
+RES_FIXED = GOOD.replace("'x; y'", "'resolved-run'")
+rc = M.apply_file("migrations/resolve-chan.sql", RES_BAD, "a", "t", "r1", emit)
+fail_id = db.execute("SELECT id FROM agent_issues WHERE title = 'MIGRATION-APPLY-FAILED-1: resolve-chan.sql' AND status = 'open'").fetchone()
+ok(rc == 1 and fail_id is not None, "a failing file files its MIGRATION-APPLY-FAILED-1 issue (fixture for the resolve close)", out[-1])
+db.execute("INSERT INTO issue_triage (issue_id) VALUES (?)", (fail_id[0],))  # the AUTOTRIAGE row every live issue has
+db.execute("INSERT INTO agent_issues (title, status) VALUES ('MIGRATION-APPLY-FAILED-1: other.sql', 'open')")
+db.commit()
+rc = M.apply_file("migrations/resolve-chan.sql", RES_FIXED, "a", "t", "r2", emit)
+row = db.execute("SELECT status, close_channel, description FROM agent_issues WHERE id = ?", (fail_id[0],)).fetchone()
+ok(rc == 0 and row[0] == "closed", "a later ok run closes the MIGRATION-APPLY-FAILED-1 issue of the file", (rc, row))
+ok(row[1] == "auto:migration-apply-resolve", "the resolve close writes close_channel 'auto:migration-apply-resolve' (1000212 closed with NULL)", row[1])
+ok("MIGRATION-APPLY-RESOLVE-1: migration_runs ok for migrations/resolve-chan.sql" in row[2], "the close still appends its evidence to the description", row[2])
+ok(db.execute("SELECT status, close_channel FROM agent_issues WHERE title = 'MIGRATION-APPLY-FAILED-1: other.sql'").fetchone() == ("open", None), "another file's open issue is neither closed nor stamped")
+ok(M.RESOLVE_CLOSE_CHANNEL in M.RESOLVE_CLOSE_SQL and "close_channel" in M.RESOLVE_CLOSE_SQL.split("WHERE")[0], "the resolve statement names its channel in the SET list")
+db.execute("UPDATE agent_issues SET close_channel = 'kept' WHERE id = ?", (fail_id[0],))
+db.commit()
+M.resolve_failure("migrations/resolve-chan.sql", "f" * 64, "a", "t", M.DATABASES["qnfo-audit"], 1)
+ok(db.execute("SELECT close_channel FROM agent_issues WHERE id = ?", (fail_id[0],)).fetchone()[0] == "kept", "a second resolve never rewrites an already closed issue's channel")
+db = shared_db
+
 print(f"{passed} passed, {failed} failed")
 sys.exit(1 if failed else 0)

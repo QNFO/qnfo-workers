@@ -905,6 +905,15 @@ def apply_file(path, text, acct, token, commit, emit=print):
     return 0
 
 
+# CLOSE-CHANNEL-REQUIRED-1 (agent_issues 100419): this close wrote no close_channel, so MIGRATION-APPLY-FAILED-1 issue 1000212 closed with
+# NULL and could not be attributed to a fix, a probe or a sweep. Named like the other loop closes ("auto:<loop>-<step>").
+RESOLVE_CLOSE_CHANNEL = "auto:migration-apply-resolve"
+RESOLVE_CLOSE_SQL = ("UPDATE agent_issues SET status = 'closed', close_channel = '" + RESOLVE_CLOSE_CHANNEL + "', "
+                     "updated_at = CAST(strftime('%s','now') AS INTEGER) * 1000, "
+                     "description = COALESCE(description, '') || char(10) || 'MIGRATION-APPLY-RESOLVE-1: ' || ?2 WHERE title = ?1 "
+                     "AND status NOT IN ('closed','resolved','wontfix')")
+
+
 def resolve_failure(path, sha, acct, token, db_id, done_n):
     """MIGRATION-APPLY-RESOLVE-1 (2026-10-08): a later ok run closes the MIGRATION-APPLY-FAILED-1 issue this runner filed
     for the file, with the ok run as evidence. Before, nothing closed it: its birth probe read pending for 48h and then
@@ -914,9 +923,7 @@ def resolve_failure(path, sha, acct, token, db_id, done_n):
     try:
         d1(acct, token, db_id, "UPDATE issue_triage SET close_evidence = ?2 WHERE issue_id IN (SELECT id FROM agent_issues WHERE title = ?1 "
            "AND status NOT IN ('closed','resolved','wontfix'))", [title, ev])
-        d1(acct, token, db_id, "UPDATE agent_issues SET status = 'closed', updated_at = CAST(strftime('%s','now') AS INTEGER) * 1000, "
-           "description = COALESCE(description, '') || char(10) || 'MIGRATION-APPLY-RESOLVE-1: ' || ?2 WHERE title = ?1 "
-           "AND status NOT IN ('closed','resolved','wontfix')", [title, ev])
+        d1(acct, token, db_id, RESOLVE_CLOSE_SQL, [title, ev])
     except Exception as e:  # noqa: BLE001
         print("resolve " + title + " failed: " + str(e)[:200], file=sys.stderr)
 
