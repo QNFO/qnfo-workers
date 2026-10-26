@@ -2,7 +2,7 @@
 // Worker Contract v1: VERSION constant + GET /health
 // Data: https://ops.qnfo.org/fleet (modified_on per worker) + https://ops.qnfo.org/cost (spend)
 // NOTE: source of truth is this file; GET /workers/scripts/<name> TRUNCATES large bodies - never patch from a GET.
-var VERSION = "1.3.33-codeagent"; /* COMPAT-RISK-TIMER-NAME-1 (2026-10-25, unblocks red main): the four fetch-timeout blocks named their setTimeout handle `t`, and a DIFFERENT `t` (a timestamp from ms(row.ts)) in another function is compared numerically within 60 lines, so scripts/compat-risk-scan.mjs linked them by name across function scopes and reported timer-ids for a worker that never reads a timer id as a number. Renamed to timerId; scan is clean and the guard keeps its full meaning. */ /* WORKERS-BUILDS-TOMBSTONE-1 (2026-10-25, agent_issues 1000142): a Workers Builds rebuild of the retired repository-root stub is ledgered, not filed. CLAIM-TERMINAL-RELEASE-1 (2026-10-18): CODE_TASK_DONE now includes superseded, so the guard stops counting a superseded task as live work on its file. */
+var VERSION = "1.3.34-codeagent"; /* LEASE-EXPIRY-SWEEP-1 (2026-10-26, orphaned_leases 215): a work_claims row past expires_at and never released is closed with outcome expired on every acquire and on the 20-minute tick, so the BP26 lease metric counts sessions that died holding a claim and then settles. */ /* COMPAT-RISK-TIMER-NAME-1 (2026-10-25, unblocks red main): the four fetch-timeout blocks named their setTimeout handle `t`, and a DIFFERENT `t` (a timestamp from ms(row.ts)) in another function is compared numerically within 60 lines, so scripts/compat-risk-scan.mjs linked them by name across function scopes and reported timer-ids for a worker that never reads a timer id as a number. Renamed to timerId; scan is clean and the guard keeps its full meaning. */ /* WORKERS-BUILDS-TOMBSTONE-1 (2026-10-25, agent_issues 1000142): a Workers Builds rebuild of the retired repository-root stub is ledgered, not filed. CLAIM-TERMINAL-RELEASE-1 (2026-10-18): CODE_TASK_DONE now includes superseded, so the guard stops counting a superseded task as live work on its file. */
 var WORKER = "qnfo-deploy-guard";
 var LOCK_PREFIX = "deploylock:";
 var DENY_PREFIX = "deploydeny:";
@@ -553,6 +553,12 @@ async function codeLoopRows(env, wk) {
   var rows = await auditAll(env, "SELECT id, path, substr(goal,1,200) AS goal, status, created_at FROM code_tasks WHERE status NOT IN (" + ph + ") AND (path = ?1 OR (?2 IS NOT NULL AND goal LIKE '[issue #' || ?2 || ']%')) ORDER BY created_at", [t.path, t.issue == null ? null : String(t.issue)].concat(CODE_TASK_DONE));
   return rows.map(function (x) { return { kind: "code-loop", path: x.path, intent: x.goal, holder: "qnfo-code-orchestrator:" + x.id, status: x.status, since: x.created_at }; });
 }
+// LEASE-EXPIRY-SWEEP-1: an expired claim is already free (every read filters expires_at > now); closing the row makes the ledger say so
+// (released_at = expires_at, outcome expired) instead of leaving it for orphaned_leases to count. Never touches a live claim.
+async function sweepExpiredClaims(env, nowMs) {
+  var r = await auditRun(env, "UPDATE work_claims SET released_at = expires_at, outcome = COALESCE(outcome, 'expired') WHERE released_at IS NULL AND expires_at <= ?1", [isoS(nowMs)]);
+  return changes(r) || 0;
+}
 function ledgerView(x) { return { kind: "session", path: x.path, intent: x.intent, holder: x.holder, issue_id: x.issue_id, pr: x.pr, since: x.claimed_at, expires_at: x.expires_at }; }
 async function workAcquire(env, b) {
   b = (b && typeof b === "object") ? b : {};
@@ -567,6 +573,7 @@ async function workAcquire(env, b) {
   var intent = String(b.intent || "").trim().slice(0, 300) || ("claimed via /work-lock by " + wo);
   var prN = Number(b.pr); prN = (isFinite(prN) && prN > 0) ? Math.floor(prN) : null;
   var nowA = Date.now();
+  await sweepExpiredClaims(env, nowA);
   var loop = await codeLoopRows(env, wk);
   if (b.token) {
     var up = await auditRun(env, "UPDATE deploy_locks SET expires_at=?1 WHERE worker=?2 AND token_hash=?3 AND typeof(expires_at) IN ('integer','real') AND expires_at > ?4", [nowA + ttl * 1000, lk, await sha256hex(String(b.token)), nowA]);
@@ -617,7 +624,7 @@ async function workList(env) {
   return [200, { claims: claims, count: claims.length, in_flight: inf, in_flight_count: inf.length, now: new Date(now6).toISOString(), rule: "take POST /work-lock/acquire {key, owner, intent} before starting an issue or a file; skip a key another session holds; review in_flight work on the same path instead of writing a second fix" }];
 }
 export default {
-  async scheduled(event, env, ctx) { ctx.waitUntil(scan(env).catch(function (e) { console.error(JSON.stringify({ evt: "deploy-guard:workList:caught", error: String((e && e.message) || e) })); })); ctx.waitUntil(capabilitySnapshot(env, false).catch(function (e) { console.error(JSON.stringify({ evt: "deploy-guard:workList:caught", error: String((e && e.message) || e) })); })); },
+  async scheduled(event, env, ctx) { ctx.waitUntil(sweepExpiredClaims(env, Date.now()).catch(function (e) { console.error(JSON.stringify({ evt: "deploy-guard:claim-sweep:caught", error: String((e && e.message) || e) })); })); ctx.waitUntil(scan(env).catch(function (e) { console.error(JSON.stringify({ evt: "deploy-guard:workList:caught", error: String((e && e.message) || e) })); })); ctx.waitUntil(capabilitySnapshot(env, false).catch(function (e) { console.error(JSON.stringify({ evt: "deploy-guard:workList:caught", error: String((e && e.message) || e) })); })); },
   async fetch(request, env, ctx) {
     var url = new URL(request.url); var p = url.pathname;
     // CONCURRENT-SESSION-SHARED-SECRET-CLOBBER-1 (#1701): shared-secret mutations (rotate/PUT of a worker secret) are

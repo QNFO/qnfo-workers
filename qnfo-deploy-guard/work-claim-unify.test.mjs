@@ -125,5 +125,28 @@ const ok = (c, m) => { if (c) pass++; else { fail++; console.log("FAIL " + m); }
   ok(/^1\.3\.(2[2-9]|[3-9]\d)-/.test(String(h.j.version)), "X4 /health reports 1.3.22 or a later 1.3.x (" + h.j.version + ")");
 }
 
+// S. LEASE-EXPIRY-SWEEP-1 (1.3.34): a claim past expires_at and never released is closed as expired by the next acquire; a live claim and a
+// claim released with an outcome are untouched.
+{
+  const { env, db } = mk();
+  const ins = db.prepare("INSERT INTO work_claims (path, intent, holder, claimed_at, expires_at, released_at, outcome) VALUES (?1,'x',?2,?3,?4,?5,?6)");
+  ins.run("old/dead.js", "session-dead", isoS(T - 7200_000), isoS(T - 3600_000), null, null);
+  ins.run("old/live.js", "session-live", isoS(T - 60_000), isoS(T + 3600_000), null, null);
+  ins.run("old/done.js", "session-done", isoS(T - 7200_000), isoS(T - 3600_000), isoS(T - 3700_000), "merged");
+  const a = await post(env, "/work-lock/acquire", { key: "file:old/other.js", owner: "session-new", ttl_sec: 600 });
+  ok(a.status === 200 && a.j.acquired === true, "S1 an acquire still succeeds with an expired row in the ledger");
+  const row = (pth) => db.prepare("SELECT released_at, outcome, expires_at FROM work_claims WHERE path = ?1").get(pth);
+  const dead = row("old/dead.js");
+  ok(dead.outcome === "expired" && dead.released_at === dead.expires_at, "S2 the expired unreleased claim is closed with outcome expired at its expiry");
+  const live = row("old/live.js");
+  ok(live.released_at === null && live.outcome === null, "S3 a live claim is not touched");
+  const done = row("old/done.js");
+  ok(done.outcome === "merged" && done.released_at === isoS(T - 3700_000), "S4 a claim released with an outcome keeps both");
+  const n = db.prepare("SELECT COUNT(*) AS c FROM work_claims WHERE released_at IS NULL AND expires_at <= ?1").get(isoS(T)).c;
+  ok(n === 0, "S5 no expired unreleased claim remains (orphaned_leases 0)");
+  const lk = await get(env, "/work-locks");
+  ok(!JSON.stringify(lk.j).includes("session-dead"), "S6 the open read lists no expired claim");
+}
+
 console.log(pass + " passed, " + fail + " failed");
 if (fail) process.exit(1);
