@@ -393,8 +393,5 @@ binding = "CH_QNFO_MODEL_EVAL"
 service = "qnfo-model-eval"
 environment = "production"
 
-# CENSUS-ARTIFACTS-1 (2.50.1): qnfo-artifacts is back on the canonical path (SCRIPT-SOURCE-RECONCILE-1) and its /health is read through this binding.
-[[services]]
-binding = "CH_QNFO_ARTIFACTS"
-service = "qnfo-artifacts"
-environment = "production"
+# qnfo-artifacts was RETIRED 2026-10-26 (worker_count 36 against the cap of 30): its CH_QNFO_ARTIFACTS probe binding is gone with it.
+# compatHealthProbe tolerates a missing binding (state unknown), so the COMPAT_HEALTH_BINDINGS entry in worker.js needs no edit.

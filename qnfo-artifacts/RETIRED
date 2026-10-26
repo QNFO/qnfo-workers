@@ -1,0 +1,21 @@
+qnfo-artifacts is RETIRED (2026-10-26, worker_count breach: 36 live Cloudflare scripts against the charter cap of 30, trigger 344, agent_issues 99923;
+owner standing grant OWNER-STANDING-GRANT-1 / charter decision rule 9: retire a low-value worker after a dependency check, no idle proof needed; session rem-a5).
+
+What it did: a Worker-side control plane over the two Cloudflare Artifacts namespaces (qnfo, rwnq8): GET /registry, /repos, /repos/:ns/:name/(log|tree|file),
+POST /repos, /repos/:ns/:name/token and /workspace (ARTIFACTS-MIGRATION-ALL-1).
+
+Dependency check, read 2026-10-26 on origin/main, live D1 and the fleet graph (GET /fleet-graph/impact?id=worker:qnfo-artifacts):
+- Binders: one, qnfo-ops CH_QNFO_ARTIFACTS, a /health probe that the compatibility snapshot reads (COMPAT_HEALTH_BINDINGS in qnfo-ops/worker.js). It is
+  removed from qnfo-ops/wrangler.toml in the same PR and unbound live with cf-ops-actions unbind-service before the script is deleted. The map entry in
+  worker.js stays: compatHealthProbe falls through to the service_registry lookup when a binding is absent and answers state unknown, never an error.
+- URL callers: none in any worker, script or workflow of the repository (git grep for qnfo-artifacts.q08.workers.dev and CH_QNFO_ARTIFACTS, .github included).
+  The only references are the fleet's own /health probes (the rt-live-qnfo-artifacts runtime contract and the binding census).
+- Tables: it writes none (no INSERT, UPDATE or DELETE in worker.js); its AUDIT binding only reads the registry fallback.
+- Crons: none. Workers AI calls: none.
+- ARTIFACTS-CANONICAL-SYNC-1 (owner directive 2026-10-18) does not run through this worker. scripts/artifacts_canonical_sync.py, scripts/artifacts_git_mirror.py
+  and scripts/repo_content_index.py call the Cloudflare REST API (api.cloudflare.com/client/v4/accounts/<id>/artifacts/namespaces/...) with the repository
+  CLOUDFLARE_API_TOKEN and mint their own per-repository tokens there; artifacts-canonical-sync.yml never names the worker.
+
+What stays: both Artifacts namespaces, every repository replica and the sync job are untouched. The script is removed with cf-ops-actions delete-worker.
+Bringing the worker back is a charter net-zero decision recorded in a PR that removes this file and redeploys the code in this directory, never a way to get a
+deploy through. canonical-deploy.yml skips any directory containing a RETIRED or FOLDED file.
