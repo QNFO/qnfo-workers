@@ -1,137 +1,161 @@
 {
  "ok": true,
  "marker": "REMEDIATION-CONSUMER-1",
- "verifier": "remediation-consumer@7834fb95044a",
- "due": 16,
- "pass": 1,
- "fail": 14,
- "skipped": 1,
- "deferred": 0,
+ "verifier": "remediation-consumer@9c8efb8a16ad",
+ "due": 19,
+ "pass": 9,
+ "fail": 3,
+ "skipped": 7,
+ "deferred": 6,
  "contracts": [
   {
-   "class": "issue-1000292",
-   "issue_id": 1000292,
+   "class": "issue-1000332",
+   "issue_id": 1000332,
    "verdict": "fail",
-   "expected": "ok",
-   "observed": "missing-marker:qnfo-research-exec/worker.js",
+   "expected": "success",
+   "observed": "failure",
    "written": true
   },
   {
-   "class": "issue-1000293",
-   "issue_id": 1000293,
-   "verdict": "fail",
-   "expected": "ok",
-   "observed": "missing-marker:qnfo-research-exec/worker.js",
-   "written": true
-  },
-  {
-   "class": "issue-1000294",
-   "issue_id": 1000294,
-   "verdict": "fail",
-   "expected": "ok",
-   "observed": "missing-marker:qnfo-research-exec/worker.js",
-   "written": true
-  },
-  {
-   "class": "issue-1000295",
-   "issue_id": 1000295,
-   "verdict": "fail",
-   "expected": "ok",
-   "observed": "missing-marker:qnfo-research-exec/worker.js",
-   "written": true
-  },
-  {
-   "class": "issue-1000296",
-   "issue_id": 1000296,
-   "verdict": "fail",
-   "expected": "ok",
-   "observed": "missing-marker:qnfo-fleet-dashboard/worker.js",
-   "written": true
-  },
-  {
-   "class": "issue-1000297",
-   "issue_id": 1000297,
-   "verdict": "fail",
-   "expected": "ok",
-   "observed": "missing-marker:qnfo-cloud-ops/worker.js",
-   "written": true
-  },
-  {
-   "class": "issue-1000298",
-   "issue_id": 1000298,
-   "verdict": "fail",
-   "expected": "ok",
-   "observed": "missing-marker:personal-companion/worker.js",
-   "written": true
-  },
-  {
-   "class": "issue-1000299",
-   "issue_id": 1000299,
-   "verdict": "fail",
-   "expected": "ok",
-   "observed": "missing-marker:personal-companion/worker.js",
-   "written": true
-  },
-  {
-   "class": "issue-1000311",
-   "issue_id": 1000311,
-   "verdict": "fail",
-   "expected": "1",
-   "observed": "0",
-   "written": true
-  },
-  {
-   "class": "issue-1000312",
-   "issue_id": 1000312,
-   "verdict": "pass",
-   "expected": "ok",
-   "observed": "ok",
-   "written": true
-  },
-  {
-   "class": "issue-1000313",
-   "issue_id": 1000313,
-   "verdict": "fail",
-   "expected": "ok",
-   "observed": "errors 4/8 in 24h",
-   "written": true
-  },
-  {
-   "class": "issue-1000314",
-   "issue_id": 1000314,
-   "verdict": "fail",
-   "expected": "ok",
-   "observed": "version=0.34.3-codeagent",
-   "written": true
-  },
-  {
-   "class": "issue-1000315",
-   "issue_id": 1000315,
+   "class": "issue-1000275",
+   "issue_id": 1000275,
    "verdict": "probe-not-machine-executable",
    "reason": "url-not-allowlisted"
   },
   {
-   "class": "issue-1000316",
-   "issue_id": 1000316,
-   "verdict": "fail",
-   "expected": "ok",
-   "observed": "status=404",
-   "written": true
-  },
-  {
-   "class": "fm-pr-open-over-10m",
+   "class": "fm-mail-draft-fabrication",
    "issue_id": null,
-   "verdict": "fail",
+   "verdict": "pass",
    "expected": "0",
-   "observed": "2",
+   "observed": "0",
    "written": true
   },
   {
-   "class": "fm-gh-poke-silent",
+   "class": "goal-TP-6-DURABLE-EXECUTION-1",
+   "issue_id": null,
+   "verdict": "deferred",
+   "expected": "ok",
+   "observed": "pending: ops_tool_budget_bail_7d 209",
+   "reason": "the probe cannot judge yet: pending: ops_tool_budget_bail_7d 209"
+  },
+  {
+   "class": "fm-revise-refs-refusal-waste",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "0",
+   "observed": "0",
+   "written": true
+  },
+  {
+   "class": "fm-judge-context-narrower-than-writer",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "0",
+   "observed": "0",
+   "written": true
+  },
+  {
+   "class": "fm-research-complete-xref-stall",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "1",
+   "observed": "1",
+   "written": true
+  },
+  {
+   "class": "issue-100382-BACKFILL-1",
+   "issue_id": 100382,
+   "verdict": "deferred",
+   "expected": "closed-with-evidence",
+   "observed": "pending",
+   "reason": "the probe cannot judge yet: pending"
+  },
+  {
+   "class": "issue-100491",
+   "issue_id": 100491,
+   "verdict": "deferred",
+   "expected": "ok",
+   "observed": "pending: issue 100450 has no probe of its own yet, a doer writes one",
+   "reason": "the probe cannot judge yet: pending: issue 100450 has no probe of its own yet, a doer writes one"
+  },
+  {
+   "class": "issue-100531",
+   "issue_id": 100531,
+   "verdict": "deferred",
+   "expected": "ok",
+   "observed": "pending: issue 100454 has no probe of its own yet, a doer writes one",
+   "reason": "the probe cannot judge yet: pending: issue 100454 has no probe of its own yet, a doer writes one"
+  },
+  {
+   "class": "fm-probe-vacuous-open-fail",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "0",
+   "observed": "0",
+   "written": true
+  },
+  {
+   "class": "goal-Q08-SELF-TUNE-1",
+   "issue_id": null,
+   "verdict": "deferred",
+   "expected": "ok",
+   "observed": "pending",
+   "reason": "the probe cannot judge yet: pending"
+  },
+  {
+   "class": "fm-revise-second-model-timeout",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "0",
+   "observed": "0",
+   "written": true
+  },
+  {
+   "class": "fm-parked-task-outlives-issue",
    "issue_id": null,
    "verdict": "fail",
    "expected": "0",
    "observed": "1",
+   "written": true
+  },
+  {
+   "class": "fm-reopen-hits-open-twin",
+   "issue_id": null,
+   "verdict": "fail",
+   "expected": "0",
+   "observed": "39",
+   "written": true
+  },
+  {
+   "class": "fm-tick-reopen-dup-title",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "0",
+   "observed": "0",
+   "written": true
+  },
+  {
+   "class": "fm-verification-deferral-unaged",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "0",
+   "observed": "0",
+   "written": true
+  },
+  {
+   "class": "research-terminal-rem-0039",
+   "issue_id": 100205,
+   "verdict": "deferred",
+   "expected": "resolved",
+   "observed": "pending",
+   "reason": "the probe cannot judge yet: pending"
+  },
+  {
+   "class": "fm-calibration-ping-swapped",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "0",
+   "observed": "0",
    "written": true
   }
  ],
@@ -158,68 +182,13 @@
   "http",
   "runner-https"
  ],
- "https": 2,
  "budget_exhausted": false,
  "runtime_verified_share_24h": 9.2,
  "host_census": {
   "skipped": "ran within 6h"
  },
  "fleet_journeys": {
-  "at": "2026-10-26T07:49:18Z",
-  "journeys": 6,
-  "failing": [
-   "binding-census",
-   "loop-heartbeats"
-  ],
-  "issues": {
-   "binding-census": "updated 100166",
-   "loop-heartbeats": "updated 2679"
-  },
-  "results": [
-   {
-    "journey": "deploy-coherence",
-    "ok": true,
-    "ms": 14219,
-    "failed": []
-   },
-   {
-    "journey": "binding-census",
-    "ok": false,
-    "ms": 4287,
-    "failed": [
-     "census sees every worker (blind <= 0)"
-    ]
-   },
-   {
-    "journey": "lock-roundtrip",
-    "ok": true,
-    "ms": 2679,
-    "failed": []
-   },
-   {
-    "journey": "papers-path",
-    "ok": true,
-    "ms": 1727,
-    "failed": []
-   },
-   {
-    "journey": "loop-heartbeats",
-    "ok": false,
-    "ms": 8872,
-    "failed": [
-     "fleet-control LOOP-WATCH healthy",
-     "fresh: fleet-control charter_last",
-     "chaos drill: every component tested in 24 h",
-     "chaos drill: no enabled component failing"
-    ]
-   },
-   {
-    "journey": "ai-router",
-    "ok": true,
-    "ms": 1574,
-    "failed": []
-   }
-  ]
+  "skipped": "ran within 50 min"
  },
  "cf_token_watch": {
   "ok": 1,
@@ -227,14 +196,14 @@
   "path": "accounts"
  },
  "migrations": {
-  "opted_in": 477,
+  "opted_in": 486,
   "unapplied": [],
   "applied_now": [],
   "failed": [],
   "metric": 0
  },
- "spent_ms": 62615,
- "head": "7834fb95044afd68f487892f2a4bba95f9cb6677",
+ "spent_ms": 20194,
+ "head": "9c8efb8a16adbc3d4c82d76655f0e6755b2e6293",
  "job_status": "success",
- "ts": "2026-10-26T07:54:10Z"
+ "ts": "2026-10-26T08:39:00Z"
 }
